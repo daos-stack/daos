@@ -1558,7 +1558,7 @@ uri_cache_invalidate(struct crt_context	*ctx, struct crt_rpc_priv *rpc_priv)
 
 	D_RWLOCK_WRLOCK(&my_grp_priv->gp_rwlock);
 	rlink = d_hash_rec_find(&my_grp_priv->gp_lookup_cache[ctx->cc_idx],
-				(void *)&rank, sizeof (rank));
+				(void *)&rank, sizeof(rank));
 	if (rlink == NULL) {
 		D_GOTO(out, 0);
 	}
@@ -1573,28 +1573,22 @@ uri_cache_invalidate(struct crt_context	*ctx, struct crt_rpc_priv *rpc_priv)
 		}
 	}
 	d_hash_rec_decref(&my_grp_priv->gp_lookup_cache[ctx->cc_idx], rlink);
-	
+
 	/* invalidate all none 0 tags in gp_uri_lookup_cache */
 	rlink = d_hash_rec_find(&my_grp_priv->gp_uri_lookup_cache,
 				(void *)&rank, sizeof(rank));
-	if(rlink == NULL) {
+	if (rlink == NULL) {
 		D_GOTO(out, 0);
 	}
 	ui = container_of(rlink, struct crt_uri_item, ui_link);
-	for( tag = 1; tag < CRT_SRV_CONTEXT_NUM; tag++) {
-#if 0
-		if( atomic_load_consume(&ui->ui_uri[tag]) != NULL) {
-			D_FREE(ui->ui_uri[tag]);
-			atomic_store_release(&ui->ui_uri[tag], NULL);
-		}
-#endif
-		if(ui->ui_uri[tag] != NULL) {
+	for (tag = 1; tag < CRT_SRV_CONTEXT_NUM; tag++) {
+		if (ui->ui_uri[tag] != NULL) {
 			D_FREE(ui->ui_uri[tag]);
 			ui->ui_uri[tag] = NULL;
 		}
 	}
 	d_hash_rec_decref(&my_grp_priv->gp_uri_lookup_cache, rlink);
-	D_RWLOCK_UNLOCK( &my_grp_priv->gp_rwlock);
+	D_RWLOCK_UNLOCK(&my_grp_priv->gp_rwlock);
 out:
 	;
 }
