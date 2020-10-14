@@ -957,7 +957,7 @@ ec_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		return -DER_INVAL;
 
 	rc = umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
-	if (rc) 
+	if (rc)
 		return rc;
 
 	r->er_counter = *(uint64_t *)val->iov_buf;

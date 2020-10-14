@@ -236,8 +236,8 @@ err_obj:
 		rc = daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
 				      0, NULL, &close_task);
 		if (rc != 0) {
-			 D_ERROR("Failed to create object_close task\n");
-			 return rc;
+			D_ERROR("Failed to create object_close task\n");
+			return rc;
 		}
 
 		close_args = daos_task_get_args(close_task);

@@ -182,7 +182,8 @@ dtx_batched_commit(void *arg)
 				rc = dtx_commit(cont->sc_pool->spc_uuid,
 						cont->sc_uuid, dtes, rc, true);
 				if (rc != 0) {
-					D_ERROR("Fail to commit dtx: "DF_RC"\n", DP_RC(rc));
+					D_ERROR("Fail to commit dtx: "DF_RC"\n",
+						DP_RC(rc));
 					goto check;
 				}
 

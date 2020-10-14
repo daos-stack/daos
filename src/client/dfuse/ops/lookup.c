@@ -321,8 +321,8 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	rc = dfs_lookup_rel(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
 			    O_RDONLY, &ie->ie_obj, NULL, &ie->ie_stat);
 	if (rc) {
-		DFUSE_TRA_DEBUG(parent, "dfs_lookup() failed: "DF_RC"",
-				DP_RC(rc));
+		DFUSE_TRA_DEBUG(parent, "dfs_lookup() failed: (%s)",
+				strerror(rc));
 
 		if (rc == ENOENT && ie->ie_dfs->dfs_attr_timeout > 0) {
 			struct fuse_entry_param entry = {};
