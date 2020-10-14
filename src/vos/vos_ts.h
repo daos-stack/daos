@@ -736,7 +736,7 @@ struct vos_ts_state {
 /** Save the current state of the set
  *
  * \param[in]	ts_set	The timestamp set
- * \param[out]	statep	Target to save state to
+ * \param[out]	state	Target to save state to
  */
 static inline void
 vos_ts_set_save(struct vos_ts_set *ts_set, struct vos_ts_state *state)
