@@ -187,7 +187,7 @@ func (cmd *usageQueryCmd) Execute(_ []string) error {
 	}
 	// Infof prints raw string and doesn't try to expand "%"
 	// preserving column formatting in txtfmt table
-	cmd.log.Infof("%s", bld)
+	cmd.log.Infof("%s", bld.String())
 
 	return resp.Errors()
 }
