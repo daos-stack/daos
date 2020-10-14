@@ -62,6 +62,8 @@ class OSAOnlineExtend(TestWithServers):
                                                  '/run/ior/iorflags/*')
         self.ior_daos_oclass = self.params.get("obj_class",
                                                '/run/ior/iorflags/*')
+        self.ior_dfs_oclass = self.params.get(
+            "obj_class", '/run/ior/iorflags/*')
         # Start an additional server.
         self.extra_servers = self.params.get("test_servers",
                                              "/run/extra_servers/*")
@@ -94,7 +96,6 @@ class OSAOnlineExtend(TestWithServers):
         data = self.dmg_command.pool_query(self.pool.uuid)
         return int(data["version"])
 
-
     def ior_thread(self, pool, oclass, api, test, flags, results):
         """Start threads and wait until all threads are finished.
         Args:
@@ -115,6 +116,7 @@ class OSAOnlineExtend(TestWithServers):
         ior_cmd = IorCommand()
         ior_cmd.get_params(self)
         ior_cmd.set_daos_params(self.server_group, self.pool)
+        ior_cmd.dfs_oclass.update(oclass)
         ior_cmd.api.update(api)
         ior_cmd.transfer_size.update(test[2])
         ior_cmd.block_size.update(test[3])
@@ -169,12 +171,12 @@ class OSAOnlineExtend(TestWithServers):
 
         # Extend the pool_uuid, rank and targets
         for val in range(0, num_pool):
-            for oclass, api, test, flags in product(self.ior_daos_oclass,
+            for oclass, api, test, flags in product(self.ior_dfs_oclass,
                                                     self.ior_apis,
                                                     self.ior_test_sequence,
                                                     self.ior_flags):
                 threads = []
-                for thrd in range(0, num_jobs):
+                for _ in range(0, num_jobs):
                     # Add a thread for these IOR arguments
                     threads.append(threading.Thread(target=self.ior_thread,
                                                     kwargs={"pool": pool[val],
