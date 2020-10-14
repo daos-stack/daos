@@ -311,8 +311,8 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	daos_anchor_t		 akey_anchor;
 	daos_ofeat_t		 obj_feats;
 	daos_epoch_range_t	 obj_epr = {0};
-	struct vos_ts_state	 akey_save = {0};
-	struct vos_ts_state	 dkey_save = {0};
+	struct vos_ts_set	 akey_save = {0};
+	struct vos_ts_set	 dkey_save = {0};
 	uint32_t		 cflags = 0;
 	int			 rc = 0;
 	int			 nr_akeys = 0;
