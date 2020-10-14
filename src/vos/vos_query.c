@@ -311,8 +311,8 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	daos_anchor_t		 akey_anchor;
 	daos_ofeat_t		 obj_feats;
 	daos_epoch_range_t	 obj_epr = {0};
-	int			 akey_save = 0;
-	int			 dkey_save = 0;
+	struct vos_ts_set	 akey_save = {0};
+	struct vos_ts_set	 dkey_save = {0};
 	uint32_t		 cflags = 0;
 	int			 rc = 0;
 	int			 nr_akeys = 0;
@@ -469,7 +469,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 					vos_ts_set_update(query.qt_ts_set,
 							  obj_epr.epr_hi);
 					vos_ts_set_restore(query.qt_ts_set,
-							   akey_save);
+							   &akey_save);
 					continue;
 				}
 			}
@@ -479,7 +479,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		    query.qt_flags & VOS_GET_DKEY) {
 			/** Go ahead and save timestamps for things we read */
 			vos_ts_set_update(query.qt_ts_set, obj_epr.epr_hi);
-			vos_ts_set_restore(query.qt_ts_set, dkey_save);
+			vos_ts_set_restore(query.qt_ts_set, &dkey_save);
 			continue;
 		}
 		break;
