@@ -155,7 +155,7 @@ extern "C" {
 #define D_FOREACH_DAOS_ERR(ACTION)					\
 	/** Generic I/O error */					\
 	ACTION(DER_IO,			(DER_ERR_DAOS_BASE + 1),	\
-	       Input / output error)					\
+	       I/O error)						\
 	/** Memory free error */					\
 	ACTION(DER_FREE_MEM,		(DER_ERR_DAOS_BASE + 2),	\
 	       Memory free error)					\
@@ -194,7 +194,7 @@ extern "C" {
 	       Record is too large)					\
 	/** IO buffers can't match object extents */			\
 	ACTION(DER_IO_INVAL,		(DER_ERR_DAOS_BASE + 14),	\
-	       Input / output buffers do not match object extents)	\
+	       I/O buffers do not match object extents)			\
 	/** Event queue is busy */					\
 	ACTION(DER_EQ_BUSY,		(DER_ERR_DAOS_BASE + 15),	\
 	       Event queue is busy)					\
@@ -236,7 +236,10 @@ extern "C" {
 	       Operation canceled)					\
 	/** TX is not committed, not sure whether committable or not */	\
 	ACTION(DER_TX_BUSY,		(DER_ERR_DAOS_BASE + 28),	\
-	       TX is not committed)
+	       TX is not committed)					\
+	/** Agent is incompatible with libdaos */			\
+	ACTION(DER_AGENT_INCOMPAT,	(DER_ERR_DAOS_BASE + 29),	\
+	       Agent is incompatible with libdaos)
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\

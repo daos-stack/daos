@@ -26,7 +26,7 @@ following steps:
 
 - [Format](#storage-formatting) the DAOS system
 
-- [Set up and start the agent](#agent-configuration-and-startup) on the client nodes
+- [Set up and start the agent](#agent-startup) on the client nodes
 
 - [Validate](#system-validation) that the DAOS system is operational
 

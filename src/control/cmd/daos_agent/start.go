@@ -29,6 +29,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
@@ -36,7 +37,7 @@ import (
 )
 
 const (
-	agentSockName = "agent.sock"
+	agentSockName = "daos_agent.sock"
 )
 
 type startCmd struct {
@@ -47,6 +48,7 @@ type startCmd struct {
 
 func (cmd *startCmd) Execute(_ []string) error {
 	cmd.log.Infof("Starting %s:", versionString())
+	startedAt := time.Now()
 
 	ctx, shutdown := context.WithCancel(context.Background())
 	defer shutdown()
@@ -93,6 +95,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 		return err
 	}
 
+	cmd.log.Debugf("startup complete in %s", time.Since(startedAt))
 	cmd.log.Infof("Listening on %s", sockPath)
 
 	// Setup signal handlers so we can block till we get SIGINT or SIGTERM

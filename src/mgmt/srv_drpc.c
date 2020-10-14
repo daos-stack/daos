@@ -455,7 +455,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to create pool\n");
+	D_INFO("Received request to create pool on %zu ranks\n", req->n_ranks);
 
 	if (req->n_ranks > 0) {
 		targets = uint32_array_to_rank_list(req->ranks, req->n_ranks);
@@ -653,8 +653,9 @@ pool_change_target_state(char *id, size_t n_targetidx, uint32_t *targetidx,
 	if (n_targetidx > 0) {
 		for (i = 0; i < n_targetidx; ++i)
 			target_id_list.pti_ids[i].pti_id = targetidx[i];
-	} else
+	} else {
 		target_id_list.pti_ids[0].pti_id = -1;
+	}
 
 	rc = ds_mgmt_pool_target_update_state(uuid, rank, &target_id_list,
 					      state);
@@ -1792,7 +1793,6 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp->power_on_hours = stats.power_on_hours;
 	resp->unsafe_shutdowns = stats.unsafe_shutdowns;
 	resp->err_log_entries = stats.err_log_entries;
-	resp->err_count = stats.err_count;
 	resp->temperature = stats.temperature;
 	resp->media_errs = stats.media_errs;
 	resp->bio_read_errs = stats.bio_read_errs;

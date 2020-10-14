@@ -59,8 +59,23 @@
 
 #include <gurt/common.h>
 
-
 #define URI_MAX 4096
+
+/*
+ * Start port from which crt_launch will hand out ports to launched
+ * servers. This start port has to match system-reserved range of ports
+ * which can be set via following command as a super-user.
+ *
+ * Command below will reserve 100 ports from 31415. Those ports will not
+ * be handed out to random cart contexts.
+ *
+ * echo 31416-31516 > /proc/sys/net/ipv4/ip_local_reserved_ports
+ *
+ * Alternatively a port selected must be outside of the local port
+ * range specified by:
+ * /proc/sys/net/ipv4/ip_local_port_range
+ */
+#define START_PORT 31416
 
 struct host {
 	int	my_rank;
@@ -76,6 +91,7 @@ struct options_t {
 	int	show_help;
 	char	*app_to_exec;
 	int	app_args_indx;
+	int	start_port;
 };
 
 struct options_t g_opt;
@@ -85,9 +101,10 @@ show_usage(const char *msg)
 {
 	printf("----------------------------------------------\n");
 	printf("%s\n", msg);
-	printf("Usage: crt_launch [-ch] <-e app_to_exec app_args>\n");
+	printf("Usage: crt_launch [-cph] <-e app_to_exec app_args>\n");
 	printf("Options:\n");
 	printf("-c	: Indicate app is a client\n");
+	printf("-p	: Optional argument to set first port to use\n");
 	printf("-h	: Print this help and exit\n");
 	printf("----------------------------------------------\n");
 }
@@ -99,13 +116,16 @@ parse_args(int argc, char **argv)
 	int				rc = 0;
 	struct option			long_options[] = {
 		{"client",	no_argument,		0, 'c'},
+		{"port",	required_argument,	0, 'p'},
 		{"help",	no_argument,		0, 'h'},
 		{"exec",	required_argument,	0, 'e'},
 		{0, 0, 0, 0}
 	};
 
+	g_opt.start_port = START_PORT;
+
 	while (1) {
-		rc = getopt_long(argc, argv, "e:ch", long_options,
+		rc = getopt_long(argc, argv, "e:p:ch", long_options,
 				 &option_index);
 		if (rc == -1)
 			break;
@@ -120,6 +140,9 @@ parse_args(int argc, char **argv)
 			g_opt.app_to_exec = optarg;
 			g_opt.app_args_indx = optind - 1;
 			return 0;
+		case 'p':
+			g_opt.start_port = atoi(optarg);
+			break;
 		default:
 			g_opt.show_help = true;
 			return 1;
@@ -131,13 +154,21 @@ parse_args(int argc, char **argv)
 
 /* Retrieve self uri via CART */
 static int
-get_self_uri(struct host *h)
+get_self_uri(struct host *h, int rank)
 {
 	char		*uri;
 	crt_context_t	ctx;
 	char		*p;
 	int		len;
 	int		rc;
+	char		*str_port = NULL;
+
+	/* Assign ports sequentually to each rank */
+	D_ASPRINTF(str_port, "%d", g_opt.start_port + rank);
+	if (str_port == NULL)
+		return -DER_NOMEM;
+
+	setenv("OFI_PORT", str_port, 1);
 
 	rc = crt_init(0, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	if (rc != 0) {
@@ -175,7 +206,6 @@ get_self_uri(struct host *h)
 
 	p++;
 	h->ofi_port = atoi(p);
-
 	D_FREE(uri);
 
 	rc = crt_context_destroy(ctx, 1);
@@ -191,6 +221,7 @@ get_self_uri(struct host *h)
 	}
 
 out:
+	D_FREE(str_port);
 	return rc;
 }
 
@@ -265,6 +296,12 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
+	if (access(g_opt.app_to_exec, F_OK) == -1) {
+		fprintf(stderr, "ERROR: Unable to locate '%s'\n",
+			g_opt.app_to_exec);
+		return -1;
+	}
+
 	/*
 	 * Using MPI negotiate ranks between each process and retrieve
 	 * URI.
@@ -288,7 +325,7 @@ int main(int argc, char **argv)
 
 	hostbuf->is_client = g_opt.is_client;
 	hostbuf->my_rank = my_rank;
-	rc = get_self_uri(hostbuf);
+	rc = get_self_uri(hostbuf, my_rank);
 	if (rc != 0) {
 		D_ERROR("Failed to retrieve self uri\n");
 		D_GOTO(exit, rc);
