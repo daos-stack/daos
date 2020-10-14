@@ -50,15 +50,12 @@ class DmgPoolEvictTest(TestWithServers):
 
         :avocado: tags=all,small,full_regression,control,dmg_pool_evict
         """
-        # Create 2 pools.
+        # Create 2 pools and create a container in each pool.
         self.pool = []
-        self.pool.append(self.get_pool())
-        self.pool.append(self.get_pool())
-
-        # Create a container in each pool.
         self.container = []
-        self.container.append(self.get_container(self.pool[0]))
-        self.container.append(self.get_container(self.pool[1]))
+        for _ in range(2):
+            self.pool.append(self.get_pool())
+            self.container.append(self.get_container(self.pool[-1]))
 
         # Call dmg pool evict on the second pool.
         self.get_dmg_command().pool_evict(pool=self.pool[1].uuid)
