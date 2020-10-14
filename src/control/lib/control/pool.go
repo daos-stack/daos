@@ -269,13 +269,6 @@ func PoolEvict(ctx context.Context, rpcClient UnaryInvoker, req *PoolEvictReq) e
 }
 
 type (
-	// PoolQueryReq contains the parameters for a pool query request.
-	PoolQueryReq struct {
-		msRequest
-		unaryRequest
-		UUID string
-	}
-
 	// StorageUsageStats represents DAOS storage usage statistics.
 	StorageUsageStats struct {
 		Total uint64
@@ -299,7 +292,7 @@ type (
 	// PoolInfo contains information about the pool.
 	PoolInfo struct {
 		TotalTargets    uint32
-		ActiveTargets   uint32
+		QueriedTargets  uint32
 		TotalNodes      uint32
 		DisabledTargets uint32
 		Version         uint32
@@ -309,11 +302,20 @@ type (
 		Nvme            *StorageUsageStats
 	}
 
+	// PoolQueryReq contains the parameters for a pool query request.
+	PoolQueryReq struct {
+		msRequest
+		unaryRequest
+		UUID	  string
+		Targetlist []uint32
+	}
+
 	// PoolQueryResp contains the pool query response.
 	PoolQueryResp struct {
 		Status int32
 		UUID   string
 		PoolInfo
+		TargetList []uint32
 	}
 )
 
@@ -337,7 +339,10 @@ func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (
 		return nil, err
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).PoolQuery(ctx, &mgmtpb.PoolQueryReq{Uuid: req.UUID})
+		return mgmtpb.NewMgmtSvcClient(conn).PoolQuery(ctx, &mgmtpb.PoolQueryReq{
+			Uuid:       req.UUID,
+			Targetlist: req.Targetlist,
+		})
 	})
 
 	rpcClient.Debugf("Query DAOS pool request: %v\n", req)

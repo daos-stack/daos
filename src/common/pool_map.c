@@ -2112,6 +2112,20 @@ pool_map_find_failed_tgts_by_rank(struct pool_map *map,
 					    rank);
 }
 
+/**
+ * Find all targets with UP|UPINT state in specific rank.
+ */
+int
+pool_map_find_active_tgts_by_rank(struct pool_map *map,
+				  struct pool_target ***tgt_ppp,
+				  unsigned int *tgt_cnt, d_rank_t rank)
+{
+	unsigned int status;
+
+	status = PO_COMP_ST_UP | PO_COMP_ST_UPIN;
+	return pool_map_find_by_rank_status(map, tgt_ppp, tgt_cnt, status,
+					    rank);
+}
 
 /**
  * Find all targets in UP state. (but not included in the pool for active I/O

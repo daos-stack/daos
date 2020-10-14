@@ -203,7 +203,10 @@ CRT_RPC_DECLARE(pool_disconnect, DAOS_ISEQ_POOL_DISCONNECT,
 #define DAOS_ISEQ_POOL_QUERY	/* input fields */		 \
 	((struct pool_op_in)	(pqi_op)		CRT_VAR) \
 	((crt_bulk_t)		(pqi_map_bulk)		CRT_VAR) \
-	((uint64_t)		(pqi_query_bits)	CRT_VAR)
+	((uint64_t)		(pqi_query_bits)	CRT_VAR) \
+	((uint32_t)		(pqi_tgtidx)		CRT_ARRAY) \
+	((int32_t)		(pqi_n_tgtidx)		CRT_VAR) \
+	((bool)			(pqi_alltgts)		CRT_VAR)
 
 #define DAOS_OSEQ_POOL_QUERY	/* output fields */		 \
 	((struct pool_op_out)	(pqo_op)		CRT_VAR) \
@@ -341,7 +344,10 @@ CRT_RPC_DECLARE(pool_tgt_disconnect, DAOS_ISEQ_POOL_TGT_DISCONNECT,
 		DAOS_OSEQ_POOL_TGT_DISCONNECT)
 
 #define DAOS_ISEQ_POOL_TGT_QUERY	/* input fields */	 \
-	((struct pool_op_in)	(tqi_op)		CRT_VAR)
+	((struct pool_op_in)	(tqi_op)		CRT_VAR) \
+	((uint32_t)		(tqi_tgtidx)		CRT_ARRAY) \
+	((int32_t)		(tqi_n_tgtidx)		CRT_VAR) \
+	((bool)			(tqi_alltgts)		CRT_VAR)
 
 #define DAOS_OSEQ_POOL_TGT_QUERY	/* output fields */	 \
 	((struct daos_pool_space) (tqo_space)		CRT_VAR) \

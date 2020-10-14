@@ -314,6 +314,7 @@ func TestControl_PoolQuery(t *testing.T) {
 		"invalid UUID": {
 			req: &PoolQueryReq{
 				UUID: "bad",
+				Targetlist: []uint32{1, 2, 3},
 			},
 			expErr: errors.New("invalid UUID"),
 		},
@@ -323,7 +324,7 @@ func TestControl_PoolQuery(t *testing.T) {
 					&mgmtpb.PoolQueryResp{
 						Uuid:            MockUUID,
 						Totaltargets:    42,
-						Activetargets:   16,
+						Queriedtargets:   16,
 						Disabledtargets: 17,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
@@ -344,6 +345,7 @@ func TestControl_PoolQuery(t *testing.T) {
 							Max:   2,
 							Mean:  3,
 						},
+						Targetlist: []uint32{1, 2, 3},
 					},
 				),
 			},
@@ -373,6 +375,7 @@ func TestControl_PoolQuery(t *testing.T) {
 						Mean:  3,
 					},
 				},
+				Targetlist: []uint32{1, 2, 3},
 			},
 		},
 	} {
@@ -384,6 +387,7 @@ func TestControl_PoolQuery(t *testing.T) {
 			if req == nil {
 				req = &PoolQueryReq{
 					UUID: MockUUID,
+					Targetlist: []uint32{1, 2, 3},
 				}
 			}
 			mic := tc.mic

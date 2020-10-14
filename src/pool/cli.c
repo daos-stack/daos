@@ -1326,6 +1326,12 @@ out_task:
 	return rc;
 }
 
+int
+dc_pool_query_target(tse_task_t *task)
+{
+	return -DER_NOSYS;
+}
+
 struct pool_lc_arg {
 	crt_rpc_t			*rpc;
 	struct dc_pool			*lca_pool;
@@ -1624,14 +1630,6 @@ dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver)
 
 	return 0;
 }
-
-int
-dc_pool_query_target(tse_task_t *task)
-{
-	return -DER_NOSYS;
-}
-
-
 
 struct pool_req_arg {
 	struct dc_pool	*pra_pool;

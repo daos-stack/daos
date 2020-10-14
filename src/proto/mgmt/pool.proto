@@ -150,7 +150,24 @@ message ListContResp {
 
 // PoolQueryReq represents a pool query request.
 message PoolQueryReq {
-	string uuid = 1;
+	string uuid = 1; // uuid of pool to query
+	repeated uint32 targetlist = 3; // list of targets to query
+}
+
+// PoolQueryResp represents a pool query response.
+message PoolQueryResp {
+	int32 status = 1; // DAOS error code
+	string uuid = 2; // pool uuid
+	uint32 totaltargets = 3; // total targets in pool
+	uint32 queriedtargets = 4; // queried targets in pool
+	uint32 disabledtargets = 5; // number of disabled targets in pool
+	PoolRebuildStatus rebuild = 6; // pool rebuild status
+	StorageUsageStats scm = 7; // SCM storage usage stats
+	StorageUsageStats nvme = 8; // NVMe storage usage stats
+	uint32 totalnodes = 9; // total nodes in pool
+	uint32 version = 10; // latest pool map version
+	uint32 leader = 11; // current raft leader
+	repeated uint32 targetlist = 12; // list of targets queried
 }
 
 // StorageUsageStats represents usage statistics for a storage subsystem.
@@ -200,19 +217,3 @@ message PoolSetPropResp {
 		uint64 numval = 5; // pool property numeric value
 	}
 }
-
-// PoolQueryResp represents a pool query response.
-message PoolQueryResp {
-	int32 status = 1; // DAOS error code
-	string uuid = 2; // pool uuid
-	uint32 totaltargets = 3; // total targets in pool
-	uint32 activetargets = 4; // active targets in pool
-	uint32 disabledtargets = 5; // number of disabled targets in pool
-	PoolRebuildStatus rebuild = 6; // pool rebuild status
-	StorageUsageStats scm = 7; // SCM storage usage stats
-	StorageUsageStats nvme = 8; // NVMe storage usage stats
-	uint32 totalnodes = 9; // total nodes in pool
-	uint32 version = 10; // latest pool map version
-	uint32 leader = 11; // current raft leader
-}
-

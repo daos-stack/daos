@@ -46,7 +46,11 @@ func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...c
 	fmt.Fprintf(w, "Pool %s, ntarget=%d, disabled=%d, leader=%d, version=%d\n",
 		pqr.UUID, pqr.TotalTargets, pqr.DisabledTargets, pqr.Leader, pqr.Version)
 	fmt.Fprintln(w, "Pool space info:")
-	fmt.Fprintf(w, "- Target(VOS) count:%d\n", pqr.ActiveTargets)
+	if pqr.TargetList != nil {
+		fmt.Fprintf(w, "- Target(VOS) count:%d, tgtidxs:%v\n", pqr.QueriedTargets, pqr.TargetList)
+	} else {
+		fmt.Fprintf(w, "- Target(VOS) count:%d (all targets)\n", pqr.QueriedTargets)
+	}
 	if pqr.Scm != nil {
 		fmt.Fprintln(w, "- SCM:")
 		fmt.Fprintf(w, "  Total size: %s\n", humanize.Bytes(pqr.Scm.Total))

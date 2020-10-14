@@ -364,7 +364,8 @@ daos_pool_info_t	ds_mgmt_pool_query_info_out;
 daos_pool_info_t	ds_mgmt_pool_query_info_in;
 void			*ds_mgmt_pool_query_info_ptr;
 int
-ds_mgmt_pool_query(uuid_t pool_uuid, daos_pool_info_t *pool_info)
+ds_mgmt_pool_query(uuid_t pool_uuid, daos_pool_info_t *pool_info,
+		   uint32_t *tgtidx, int n_tgtidx, bool query_all_tgts)
 {
 	uuid_copy(ds_mgmt_pool_query_uuid, pool_uuid);
 	ds_mgmt_pool_query_info_ptr = (void *)pool_info;

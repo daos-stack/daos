@@ -174,7 +174,8 @@ int ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 			   const char *principal_name);
 
 int ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ranks,
-		      daos_pool_info_t *pool_info);
+		      daos_pool_info_t *pool_info, uint32_t *tgt_idx,
+		      int n_tgt_idx, bool query_all_tgts);
 
 int ds_pool_prop_fetch(struct ds_pool *pool, unsigned int bit,
 		       daos_prop_t **prop_out);
@@ -234,6 +235,9 @@ int ds_pool_get_ranks(const uuid_t pool_uuid, int status,
 
 int ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts,
 			       unsigned int *failed_tgts_cnt);
+int ds_pool_exclude_all_except_list(const uuid_t pool_uuid, int **failed_tgts,
+			       unsigned int *failed_tgts_cnt, uint32_t *tgtlist,
+			       int n_tgtlist);
 int ds_pool_svc_list_cont(uuid_t uuid, d_rank_list_t *ranks,
 			  struct daos_pool_cont_info **containers,
 			  uint64_t *ncontainers);

@@ -605,6 +605,106 @@ output:
 	return rc;
 }
 
+/*
+ * Get and exclude all active target indexes on the current node, except for
+ * any matching the indexes in the "targetlist". This is used to query only a
+ * set of target indexes, opposed to all targets by default in the collective
+ * RPC call for pool query.
+ */
+int ds_pool_exclude_all_except_list(const uuid_t pool_uuid, int **excluded_tgts,
+				    unsigned int *excluded_tgts_cnt,
+				    uint32_t *targetlist, int n_targetlist)
+{
+	struct ds_pool		*pool;
+	struct pool_target	**active_tgts = NULL;
+	d_rank_t		myrank;
+	unsigned int		active_tgts_cnt;
+	int			i, j, e = 0;
+	bool			exclude;
+	int			rc;
+
+	*excluded_tgts_cnt = 0;
+	pool = ds_pool_lookup(pool_uuid);
+	if (pool == NULL || pool->sp_map == NULL)
+		D_GOTO(output, rc = 0);
+
+	/* Check if we need excluded the failure targets, NB:
+	 * since the ranks in the pool map are ranks of primary
+	 * group, so we have to use primary group here.
+	 */
+	rc = crt_group_rank(NULL, &myrank);
+	if (rc) {
+		D_ERROR("Cannot get rank, rc: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(output, rc);
+	}
+
+	rc = pool_map_find_active_tgts_by_rank(pool->sp_map, &active_tgts,
+					       &active_tgts_cnt, myrank);
+	if (rc) {
+		D_ERROR("Get active pool targets failed, rc: "DF_RC"\n",
+			DP_RC(rc));
+		D_GOTO(output, rc);
+	}
+
+	if (active_tgts_cnt == 0) {
+		D_ERROR("No active pool targets\n");
+		D_FREE(active_tgts);
+		D_GOTO(output, rc = -DER_INVAL);
+	}
+
+	if (active_tgts_cnt < n_targetlist) {
+		D_ERROR("Active pool tgts < tgts for pool query (%d < %d)\n",
+			active_tgts_cnt, n_targetlist);
+		D_FREE(active_tgts);
+		D_GOTO(output, rc = -DER_INVAL);
+	}
+
+	*excluded_tgts_cnt = active_tgts_cnt - n_targetlist;
+
+	D_ALLOC(*excluded_tgts, *excluded_tgts_cnt * sizeof(int));
+	if (*excluded_tgts == NULL) {
+		D_FREE(active_tgts);
+		*excluded_tgts_cnt = 0;
+		D_GOTO(output, rc = -DER_NOMEM);
+	}
+
+	for (i = 0; i < active_tgts_cnt; i++) {
+		exclude = true;
+		for (j = 0; j < n_targetlist; j++) {
+			if (active_tgts[i]->ta_comp.co_index == targetlist[j]) {
+				/* don't exclude tgts in list */
+				exclude = false;
+				break;
+			}
+		}
+		if (exclude) {
+			/*
+			 * If excluded list attempts to become longer than
+			 * expected, most likely a pool target in the target
+			 * query list is invalid.
+			 */
+			if (e >= *excluded_tgts_cnt) {
+				D_ERROR("Invalid pool target ID(s) for query\n");
+				D_FREE(active_tgts);
+				D_FREE(*excluded_tgts);
+				*excluded_tgts_cnt = 0;
+				D_GOTO(output, rc = -DER_INVAL);
+			}
+			(*excluded_tgts)[e] = active_tgts[i]->ta_comp.co_index;
+			e++;
+		}
+	}
+
+	D_FREE(active_tgts);
+
+output:
+	if (pool)
+		ds_pool_put(pool);
+
+	return rc;
+}
+
+
 /* See nvme_faulty_reaction() for return values */
 static int
 check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, d_rank_t *pl_rank)

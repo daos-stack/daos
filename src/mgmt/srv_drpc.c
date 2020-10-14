@@ -1512,6 +1512,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__PoolRebuildStatus	rebuild = MGMT__POOL_REBUILD_STATUS__INIT;
 	uuid_t			uuid;
 	daos_pool_info_t	pool_info = {0};
+	bool			query_all_tgts = true;
 	size_t			len;
 	uint8_t			*body;
 
@@ -1531,7 +1532,16 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	pool_info.pi_bits = DPI_ALL;
-	rc = ds_mgmt_pool_query(uuid, &pool_info);
+
+	/**
+	 * Only query certain pool targets if specified in pool query
+	 * command, otherwise by default query all pool targets.
+	 */
+	if (req->n_targetlist > 0)
+		query_all_tgts = false;
+
+	rc = ds_mgmt_pool_query(uuid, &pool_info, req->targetlist, req->n_targetlist,
+				query_all_tgts);
 	if (rc != 0) {
 		D_ERROR("Failed to query the pool, rc=%d\n", rc);
 		D_GOTO(out, rc);
@@ -1541,10 +1551,12 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp.uuid = req->uuid;
 	resp.totaltargets = pool_info.pi_ntargets;
 	resp.disabledtargets = pool_info.pi_ndisabled;
-	resp.activetargets = pool_info.pi_space.ps_ntargets;
+	resp.queriedtargets = pool_info.pi_space.ps_ntargets;
 	resp.totalnodes = pool_info.pi_nnodes;
 	resp.leader = pool_info.pi_leader;
 	resp.version = pool_info.pi_map_ver;
+	resp.n_targetlist = req->n_targetlist;
+	resp.targetlist = req->targetlist;
 
 	storage_usage_stats_from_pool_space(&scm, &pool_info.pi_space,
 					    DAOS_MEDIA_SCM);

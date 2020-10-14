@@ -904,7 +904,8 @@ out:
 }
 
 static int
-pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
+pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps, uint32_t *tgt_idx,
+	       int n_tgt_idx, bool query_all_tgts)
 {
 	struct dss_coll_ops		coll_ops;
 	struct dss_coll_args		coll_args = { 0 };
@@ -927,21 +928,42 @@ pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 	coll_args.ca_aggregator		= &agg_arg;
 	coll_args.ca_func_args		= &coll_args.ca_stream_args;
 
+
+	if (!query_all_tgts)
+		goto query_target_list;
+
+	/* exclude all failed target indexes from query */
 	rc = ds_pool_get_failed_tgt_idx(pool->sp_uuid,
 					&coll_args.ca_exclude_tgts,
 					&coll_args.ca_exclude_tgts_cnt);
 	if (rc) {
-		D_ERROR(DF_UUID "failed to get index : rc "DF_RC"\n",
+		D_ERROR(DF_UUID " failed to get index, rc: "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc));
 		return rc;
 	}
 
+	goto query_all_targets;
+
+query_target_list:
+	/* only query certain targets if specified, exclude all other targets */
+	rc = ds_pool_exclude_all_except_list(pool->sp_uuid,
+					     &coll_args.ca_exclude_tgts,
+					     &coll_args.ca_exclude_tgts_cnt,
+					     tgt_idx, n_tgt_idx);
+	if (rc) {
+		D_ERROR(DF_UUID " failed to get index, rc: "DF_RC"\n",
+			DP_UUID(pool->sp_uuid), DP_RC(rc));
+		return rc;
+	}
+
+query_all_targets:
+	/* calling dss_thread_collective for query on all tgts */
 	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0,
 					  DSS_ULT_IO);
 	if (coll_args.ca_exclude_tgts)
 		D_FREE(coll_args.ca_exclude_tgts);
 	if (rc) {
-		D_ERROR("Pool query on pool "DF_UUID" failed, "DF_RC"\n",
+		D_ERROR("Pool query on pool "DF_UUID" failed, rc: "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc));
 		return rc;
 	}
@@ -1240,7 +1262,8 @@ ds_pool_tgt_query_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
-	rc = pool_tgt_query(pool, &out->tqo_space);
+	rc = pool_tgt_query(pool, &out->tqo_space, in->tqi_tgtidx.ca_arrays,
+			    in->tqi_n_tgtidx, in->tqi_alltgts);
 	ds_pool_put(pool);
 out:
 	out->tqo_rc = (rc == 0 ? 0 : 1);

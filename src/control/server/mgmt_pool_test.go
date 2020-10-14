@@ -876,18 +876,21 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 			mgmtSvc: missingSB,
 			req: &mgmtpb.PoolQueryReq{
 				Uuid: mockUUID,
+				Targetlist: []uint32{1, 2}}
 			},
 			expErr: errors.New("not an access point"),
 		},
 		"dRPC send fails": {
 			req: &mgmtpb.PoolQueryReq{
 				Uuid: mockUUID,
+				Targetlist: []uint32{1, 2}}
 			},
 			expErr: errors.New("send failure"),
 		},
 		"garbage resp": {
 			req: &mgmtpb.PoolQueryReq{
 				Uuid: mockUUID,
+				Targetlist: []uint32{1, 2}}
 			},
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
 				// dRPC call returns junk in the message body
@@ -900,9 +903,11 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 		"successful query": {
 			req: &mgmtpb.PoolQueryReq{
 				Uuid: mockUUID,
+				Targetlist: []uint32{1, 2}}
 			},
 			expResp: &mgmtpb.PoolQueryResp{
 				Uuid: mockUUID,
+				Targetlist: []uint32{1, 2}}
 			},
 		},
 	} {

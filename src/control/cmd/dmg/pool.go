@@ -405,12 +405,24 @@ type PoolQueryCmd struct {
 	ctlInvokerCmd
 	jsonOutputCmd
 	UUID string `long:"pool" required:"1" description:"UUID of DAOS pool to query"`
+	Targetlist string `long:"tgtidx" description:"Comma-separated list of pool targets to be queried on the rank"`
 }
 
 // Execute is run when PoolQueryCmd subcommand is activated
 func (c *PoolQueryCmd) Execute(args []string) error {
+	var targetlist []uint32
+
+	if err := common.ParseNumberList(c.Targetlist, &targetlist); err != nil {
+		err = errors.WithMessage(err, "parsing pool target list")
+		if c.jsonOutputEnabled() {
+			return c.errorJSON(err)
+		}
+		return err
+	}
+
 	req := &control.PoolQueryReq{
 		UUID: c.UUID,
+		Targetlist: targetlist,
 	}
 
 	ctx := context.Background()
@@ -428,6 +440,7 @@ func (c *PoolQueryCmd) Execute(args []string) error {
 	if err := pretty.PrintPoolQueryResponse(resp, &bld); err != nil {
 		return err
 	}
+
 	c.log.Info(bld.String())
 	return nil
 }

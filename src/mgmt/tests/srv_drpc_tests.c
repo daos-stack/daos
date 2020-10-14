@@ -1181,6 +1181,8 @@ setup_pool_query_drpc_call(Drpc__Call *call, char *uuid)
 	Mgmt__PoolQueryReq req = MGMT__POOL_QUERY_REQ__INIT;
 
 	req.uuid = uuid;
+	req.n_targetlist = 3;
+	req.targetlist = TEST_IDXS;
 	pack_pool_query_req(call, &req);
 }
 
@@ -1312,8 +1314,10 @@ expect_query_resp_with_info(daos_pool_info_t *exp_info,
 	assert_string_equal(pq_resp->uuid, TEST_UUID);
 	assert_int_equal(pq_resp->totaltargets, exp_info->pi_ntargets);
 	assert_int_equal(pq_resp->disabledtargets, exp_info->pi_ndisabled);
-	assert_int_equal(pq_resp->activetargets,
+	assert_int_equal(pq_resp->queriedtargets,
 			 exp_info->pi_space.ps_ntargets);
+	assert_int_equal(pq_resp->n_targetlist, 3);
+	assert_string_equal(pq_resp->targetlist, TEST_IDXS);
 
 	assert_non_null(pq_resp->scm);
 	expect_storage_usage(&exp_info->pi_space, DAOS_MEDIA_SCM, pq_resp->scm);
