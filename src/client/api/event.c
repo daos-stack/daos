@@ -478,16 +478,20 @@ daos_event_complete(struct daos_event *ev, int rc)
 		D_MUTEX_LOCK(&eqx->eqx_lock);
 	}
 
-	D_ASSERT(evx->evx_status == DAOS_EVS_RUNNING ||
-		 evx->evx_status == DAOS_EVS_ABORTED);
+	if (evx->evx_status == DAOS_EVS_READY ||
+	    evx->evx_status == DAOS_EVS_COMPLETED ||
+	    evx->evx_status == DAOS_EVS_ABORTED)
+		goto out;
+
+	D_ASSERT(evx->evx_status == DAOS_EVS_RUNNING);
 
 	daos_event_complete_locked(eqx, evx, rc);
 
-	if (eqx != NULL)
+out:
+	if (eqx != NULL) {
 		D_MUTEX_UNLOCK(&eqx->eqx_lock);
-
-	if (eqx != NULL)
 		daos_eq_putref(eqx);
+	}
 }
 
 struct ev_progress_arg {
@@ -1052,6 +1056,11 @@ daos_event_fini(struct daos_event *ev)
 		D_MUTEX_LOCK(&eqx->eqx_lock);
 	}
 
+	if (evx->evx_status == DAOS_EVS_RUNNING) {
+		rc = -DER_BUSY;
+		goto out;
+	}
+
 	/* If there are child events */
 	while (!d_list_empty(&evx->evx_child)) {
 		struct daos_event_private *tmp;
@@ -1072,12 +1081,19 @@ daos_event_fini(struct daos_event *ev)
 			goto out;
 		}
 
+		if (eqx != NULL)
+			D_MUTEX_UNLOCK(&eqx->eqx_lock);
+
 		rc = daos_event_fini(daos_evx2ev(tmp));
 		if (rc < 0) {
 			D_ERROR("Failed to finalize child event "DF_RC"\n",
 				DP_RC(rc));
 			goto out;
 		}
+
+		if (eqx != NULL)
+			D_MUTEX_LOCK(&eqx->eqx_lock);
+
 		tmp->evx_status = DAOS_EVS_READY;
 		tmp->evx_parent = NULL;
 	}
@@ -1106,10 +1122,9 @@ daos_event_fini(struct daos_event *ev)
 	/* Remove from the evx_link */
 	if (!d_list_empty(&evx->evx_link)) {
 		d_list_del(&evx->evx_link);
-		if (evx->evx_status == DAOS_EVS_RUNNING && eq != NULL) {
-			eq->eq_n_running--;
-		} else if (evx->evx_status == DAOS_EVS_COMPLETED &&
-			   eq != NULL) {
+		D_ASSERT(evx->evx_status != DAOS_EVS_RUNNING);
+
+		if (evx->evx_status == DAOS_EVS_COMPLETED && eq != NULL) {
 			D_ASSERTF(eq->eq_n_comp > 0, "eq %p\n", eq);
 			eq->eq_n_comp--;
 		}

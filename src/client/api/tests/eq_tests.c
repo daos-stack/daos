@@ -191,8 +191,9 @@ eq_test_2()
 
 	print_message("Poll EQ with timeout\n");
 	rc = daos_eq_poll(my_eqh, 1, 10, EQT_EV_COUNT, eps);
-	if (rc != -DER_TIMEDOUT) {
+	if (rc != 0) {
 		print_error("Expect to poll zero event: %d\n", rc);
+		rc = -1;
 		goto out;
 	}
 
@@ -757,7 +758,11 @@ eq_test_5()
 out:
 	for (i = 0; i < EQT_EV_COUNT; i++) {
 		if (events[i] != NULL) {
-			daos_event_fini(events[i]);
+			rc = daos_event_fini(events[i]);
+			if (rc == -DER_BUSY) {
+				daos_event_complete(events[i], 0);
+				rc = daos_event_fini(events[i]);
+			}
 			free(events[i]);
 		}
 	}
@@ -870,7 +875,11 @@ out_ev:
 	for (i = 0; i < EQ_COUNT; i++) {
 		for (j = 0; j < EQT_EV_COUNT; j++) {
 			if (events[i][j] != NULL) {
-				daos_event_fini(events[i][j]);
+				rc = daos_event_fini(events[i][j]);
+				if (rc == -DER_BUSY) {
+					daos_event_complete(events[i][j], 0);
+					rc = daos_event_fini(events[i][j]);
+				}
 				free(events[i][j]);
 			}
 		}
