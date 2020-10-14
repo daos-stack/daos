@@ -219,6 +219,8 @@ vc_4(void **state)
 	struct ioreq	 req;
 	int		 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("verify with different rec\n");
 
 	if (!test_runable(arg, dts_vc_replica_cnt))
@@ -282,6 +284,9 @@ vc_test_lost_data(void **state, int type)
 static void
 vc_5(void **state)
 {
+
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("verify with lost rec\n");
 	vc_test_lost_data(state, VTLT_REC);
 }
@@ -289,6 +294,9 @@ vc_5(void **state)
 static void
 vc_6(void **state)
 {
+
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("verify with lost akey\n");
 	vc_test_lost_data(state, VTLT_AKEY);
 }
@@ -296,6 +304,9 @@ vc_6(void **state)
 static void
 vc_7(void **state)
 {
+
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("verify with lost dkey\n");
 	vc_test_lost_data(state, VTLT_DKEY);
 }
@@ -307,6 +318,8 @@ vc_8(void **state)
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 	int		 rc;
+
+	FAULT_INJECTION_REQUIRED();
 
 	print_message("verify with lost replica\n");
 
@@ -341,6 +354,8 @@ vc_9(void **state)
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 	int		 rc;
+
+	FAULT_INJECTION_REQUIRED();
 
 	print_message("verify with different dkey\n");
 

@@ -2058,6 +2058,8 @@ test_enumerate_object(void **state)
 	uint32_t		 nr;
 	int			 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	memset(kds, 0, enum_nr * sizeof(*kds));
 
 	d_iov_set(&csum_iov, csum_buf, 1024);

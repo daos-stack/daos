@@ -196,6 +196,7 @@ dtx_io_test_fail(void **state, uint64_t fail_loc)
 static void
 dtx_3(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
 	print_message("failed to update/punch on leader\n");
 	dtx_io_test_fail(state, DAOS_DTX_LEADER_ERROR | DAOS_FAIL_ALWAYS);
 }
@@ -203,6 +204,7 @@ dtx_3(void **state)
 static void
 dtx_4(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
 	print_message("failed to update/punch on non-leader\n");
 	dtx_io_test_fail(state, DAOS_DTX_NONLEADER_ERROR | DAOS_FAIL_ALWAYS);
 }
@@ -577,6 +579,7 @@ dtx_15(void **state)
 static void
 dtx_16(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
 	test_arg_t	*arg = *state;
 	char		*update_buf;
 	const char	*dkey = dts_dtx_dkey;
