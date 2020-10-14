@@ -190,10 +190,6 @@ Summary: The DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
 Requires: python2-tabulate
-Requires: mpich
-Requires: openmpi3
-Requires: ndctl
-Requires: hwloc
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
 %endif
@@ -201,9 +197,19 @@ Requires: libpsm_infinipath1
 %description tests
 This is the package needed to run the DAOS test suite
 
+%package tests-common
+Summary: The DAOS test suite common files
+Requires: %{name}-tests = %{version}-%{release}
+Requires: mpich
+Requires: openmpi3
+Requires: ndctl
+
+%description tests-common
+This is the package provides the common files for the DAOS test suites
+
 %package tests-ior
 Summary: The DAOS test suite for ior tests
-Requires: %{name}-tests = %{version}-%{release}
+Requires: %{name}-tests-common = %{version}-%{release}
 Requires: ior-hpc-daos-0
 Requires: hdf5-mpich2-daos-0
 Requires: hdf5-openmpi3-daos-0
@@ -213,7 +219,7 @@ This is the package needed to run the DAOS test suite with ior
 
 %package tests-fio
 Summary: The DAOS test suite for fio tests
-Requires: %{name}-tests = %{version}-%{release}
+Requires: %{name}-tests-common = %{version}-%{release}
 Requires: fio
 
 %description tests-fio
@@ -233,7 +239,7 @@ This is the package needed to run the DAOS test suite with mpiio
 
 %package tests-hdf5-vol
 Summary: The DAOS test suite for hdf5 vol tests
-Requires: %{name}-tests = %{version}-%{release}
+Requires: %{name}-tests-common = %{version}-%{release}
 Requires: hdf5-vol-daos-mpich2-tests-daos-0
 Requires: hdf5-vol-daos-openmpi3-tests-daos-0
 
@@ -316,6 +322,9 @@ install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
 mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
 mv %{?buildroot}/%{_prefix}/etc/bash_completion.d %{?buildroot}/%{_sysconfdir}
 
+output="daos-tests-base.files"
+echo "%{_prefix}/lib/daos/TESTING/ftest/cart/util/cart_logtest.py" > ${output}
+
 output="daos-tests-ior.files"
 ftest_path=%{?_prefix}/lib/daos/TESTING
 files=(%{?buildroot}%{?_prefix}/lib/daos/TESTING/ftest/util/ior_utils.py \
@@ -343,30 +352,31 @@ exclude="${exclude} --exclude=hdf5_vol_utils.py"
 files=%{?buildroot}%{?_prefix}/lib/daos/TESTING/ftest/util/macsio_utils.py
 %create_file_list ${output} ${files} %{?buildroot} ${ftest_path} ${exclude}
 
-touch daos-tests-soak.files
+output="daos-tests-soak.files"
+touch ${output}
 for file in $(find %{?buildroot}${ftest_path}/ftest/soak -type f | sort)
 do
-  echo ${file#%{?buildroot}} >> daos-tests-soak.files
+  echo ${file#%{?buildroot}} >> ${output}
 done
-cat daos-tests-soak.files
+cat ${output}
 
-touch daos-tests.files
+output="daos-tests-common.files"
+touch ${output}
 for file in $(find %{?buildroot}${ftest_path}/ftest -type f | sort)
 do
-  echo ${file#%{?buildroot}} >> daos-tests.files
+  echo ${file#%{?buildroot}} >> ${output}
 done
-for name in ior fio mpiio hdf5-vol macsio soak
+for name in base ior fio mpiio hdf5-vol macsio soak
 do
-  grep -Fvxf daos-tests-${name}.files daos-tests.files > daos-tests.files_new
-  mv daos-tests.files{_new,}
+  grep -Fvxf daos-tests-${name}.files ${output} > ${output}_new
+  mv ${output}{_new,}
 done
-cat daos-tests.files
+cat ${output}
 
 %if (0%{?rhel} >= 7)
-for name in tests tests-ior tests-fio tests-mpiio tests-hdf5-vol tests-macsio \
-  tests-soak
+for name in base common ior fio mpiio hdf5-vol macsio soak
 do
-  file="daos-${name}.files"
+  file="daos-tests-${name}.files"
   cat ${file} | sed -ne 's/\(.*\)\.py/\1.pyc\n\1.pyo/p' >> ${file}
   sort ${file}
 done
@@ -513,7 +523,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_mandir}/man8/daos.8*
 %{_mandir}/man8/dmg.8*
 
-%files tests -f daos-tests.files
+%files tests -f daos-tests-base.files
 %dir %{_prefix}/lib/daos
 %{_prefix}/lib/daos/TESTING/scripts
 %{_prefix}/lib/daos/TESTING/tests
@@ -529,6 +539,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_bindir}/daos_run_io_conf
 %{_bindir}/crt_launch
 %{_prefix}/etc/fault-inject-cart.yaml
+
+%files tests-common -f daos-tests-common.files
 # For avocado tests
 %{_prefix}/lib/daos/.build_vars.json
 %{_prefix}/lib/daos/.build_vars.sh
@@ -538,6 +550,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %files tests-fio -f daos-tests-fio.files
 
 %files tests-mpiio -f daos-tests-mpiio.files
+
+%files tests-hdf5-vol -f daos-tests-hdf5-vol.files
 
 %files tests-macsio -f daos-tests-macsio.files
 
