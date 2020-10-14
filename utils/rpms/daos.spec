@@ -335,11 +335,11 @@ files=%{?buildroot}%{?_prefix}/lib/daos/TESTING/ftest/util/mpio_utils.py
 
 output="daos-tests-hdf5-vol.files"
 exclude="${exclude} --exclude=mpio_utils.py"
-files=%{?buildroot}%{?_prefix}/lib/daos/TESTING/ftest/util/vol_test_base.py
+files=%{?buildroot}%{?_prefix}/lib/daos/TESTING/ftest/util/hdf5_vol_utils.py
 %create_file_list ${output} ${files} %{?buildroot} ${ftest_path} ${exclude}
 
 output="daos-tests-macsio.files"
-exclude="${exclude} --exclude=vol_test_base.py"
+exclude="${exclude} --exclude=hdf5_vol_utils.py"
 files=%{?buildroot}%{?_prefix}/lib/daos/TESTING/ftest/util/macsio_utils.py
 %create_file_list ${output} ${files} %{?buildroot} ${ftest_path} ${exclude}
 

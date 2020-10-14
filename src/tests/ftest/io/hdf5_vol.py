@@ -21,11 +21,11 @@ provided in Contract No. B609815.
 Any reproduction of computer software, computer software documentation, or
 portions thereof marked with this legend must also reproduce the markings.
 """
-from vol_test_base import VolTestBase
+from hdf5_vol_test_base import Hdf5VolTestBase
 
 
 # pylint: disable=too-many-ancestors
-class DaosVol(VolTestBase):
+class Hdf5VolTest(Hdf5VolTestBase):
     """Runs HDF5 test suites with daos vol connector.
 
     :avocado: recursive
@@ -40,7 +40,7 @@ class DaosVol(VolTestBase):
             self.cancelForTicket("DAOS-5469")
         if testname == "h5_partest_t_bigio":
             self.cancelForTicket("DAOS-5496")
-        super(DaosVol, self).setUp()
+        super(Hdf5VolTest, self).setUp()
 
     def test_daos_vol(self):
         """Jira ID: DAOS-3656.

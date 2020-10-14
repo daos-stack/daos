@@ -31,7 +31,7 @@ mpi: !mux
         mpi_type: openmpi
         plugin_path: /usr/lib64/openmpi3/lib
         daos_vol_repo: /usr/lib64/hdf5_vol_daos/openmpi3/tests
-daos_vol_tests:  !mux
+hdf5_vol: !mux
     test1:
         testname: h5_partest_t_shapesame
         client_processes: 6

@@ -21,20 +21,36 @@ License as provided in Contract No. B609815.
 Any reproduction of computer software, computer software documentation, or
 portions thereof marked with this legend must also reproduce the markings.
 """
-
-import os
-
 from dfuse_test_base import DfuseTestBase
 from command_utils_base import EnvironmentVariables, CommandFailure
 from job_manager_utils import Mpirun, Orterun
+from hdf5_vol_utils import Hdf5VolCommand
 
 
-class VolTestBase(DfuseTestBase):
+class Hdf5VolTestBase(DfuseTestBase):
     # pylint: disable=too-few-public-methods
     """Runs HDF5 vol test suites.
 
     :avocado: recursive
     """
+
+    def __init__(self, *args, **kwargs):
+        """Initialize a Hdf5VolTestBase object."""
+        super(Hdf5VolTestBase, self).__init__(*args, **kwargs)
+        self.hdf5_vol_cmd = None
+
+    def setUp(self):
+        """Set up each test case."""
+        # obtain separate logs
+        self.update_log_file_names()
+
+        # Start the servers and agents
+        super(Hdf5VolTestBase, self).setUp()
+
+        # Get the parameters for the HDF5 VOL command
+        hdf5_vol_path = self.params.get("daos_vol_repo")
+        self.hdf5_vol_cmd = Hdf5VolCommand(hdf5_vol_path)
+        self.hdf5_vol_cmd.get_params(self)
 
     def run_test(self):
         """Run the HDF5 VOL testsuites.
@@ -45,10 +61,7 @@ class VolTestBase(DfuseTestBase):
         """
         # initialize test specific variables
         mpi_type = self.params.get("mpi_type", default="mpich")
-        test_repo = self.params.get("daos_vol_repo")
         plugin_path = self.params.get("plugin_path")
-        # test_list = self.params.get("daos_vol_tests", default=[])
-        testname = self.params.get("testname")
         client_processes = self.params.get("client_processes")
 
         # create pool, container and dfuse mount
@@ -61,14 +74,11 @@ class VolTestBase(DfuseTestBase):
         # create dfuse container
         self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
-        # for test_param in test_list:
-        # testname = test_param[0][1]
-        # client_processes = test_param[1][1]
-        exe = os.path.join(test_repo, testname)
+        # Setup the job manager
         if mpi_type == "openmpi":
-            manager = Orterun(exe, subprocess=False)
+            manager = Orterun(self.hdf5_vol_cmd)
         else:
-            manager = Mpirun(exe, subprocess=False, mpitype="mpich")
+            manager = Mpirun(self.hdf5_vol_cmd, mpitype="mpich")
 
         env = EnvironmentVariables()
         env["DAOS_POOL"] = "{}".format(self.pool.uuid)
@@ -86,4 +96,4 @@ class VolTestBase(DfuseTestBase):
             manager.run()
         except CommandFailure as _error:
             self.fail("{} FAILED> \nException occurred: {}".format(
-                exe, str(_error)))
+                self.hdf5_vol_cmd, str(_error)))

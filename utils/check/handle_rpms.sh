@@ -38,17 +38,52 @@ if ! grep "gpgcheck = false" "${repo_file}"; then
   echo "gpgcheck = false" | sudo tee -a "${repo_file}"
 fi
 
-sudo yum -y remove cart cart-debuginfo cart-devel cart-tests \
-                   daos daos-client daos-debuginfo daos-devel daos-server \
-                   daos-tests daos-tests-ior daos-tests-fio daos-tests-mpiio \
-                   daos-tests-macsio daos-tests-soak CUnit dpdk fio fuse \
-                   fuse-lib hwloc libabt0 libcmocka libfabric libfabric-devel \
-                   libisa-l libisa-l_crypto libopa1 libpmem libpmemblk mercury \
-                   ndctl ompi openmpi3 openpa-devel \
-                   pexpect protobuf-c pmix \
-                   python-configshell python-urwid \
-                   raft raft-debuginfo raft-devel \
-                   spdk spdk-tools
+sudo yum -y remove cart \
+                   cart-debuginfo \
+                   cart-devel \
+                   cart-tests \
+                   daos \
+                   daos-client \
+                   daos-debuginfo \
+                   daos-devel \
+                   daos-server \
+                   daos-tests \
+                   daos-tests-fio \
+                   daos-tests-hdf5-vol \
+                   daos-tests-ior \
+                   daos-tests-macsio \
+                   daos-tests-mpiio \
+                   daos-tests-soak \
+                   CUnit \
+                   dpdk \
+                   fio \
+                   fuse \
+                   fuse-lib \
+                   hwloc \
+                   libabt0 \
+                   libcmocka \
+                   libfabric \
+                   libfabric-devel \
+                   libisa-l \
+                   libisa-l_crypto \
+                   libopa1 \
+                   libpmem \
+                   libpmemblk \
+                   mercury \
+                   ndctl \
+                   ompi \
+                   openmpi3 \
+                   openpa-devel \
+                   pexpect \
+                   protobuf-c \
+                   pmix \
+                   python-configshell \
+                   python-urwid \
+                   raft \
+                   raft-debuginfo \
+                   raft-devel \
+                   spdk \
+                   spdk-tools
 
 sudo yum -y install "${RPM_DIR}"/*.rpm
 
