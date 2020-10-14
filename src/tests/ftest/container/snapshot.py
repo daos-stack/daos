@@ -477,8 +477,9 @@ class Snapshot(TestWithServers):
                           ss_number, snapshot.epoch)
             try:
                 snapshot.destroy(coh, snapshot.epoch)
-                self.log.info("  ==snapshot.epoch %s successfully destroyed",
-                             snapshot.epoch)
+                self.log.info(
+                    "  ==snapshot.epoch %s successfully destroyed", 
+                    snapshot.epoch)
             except Exception as error:
                 self.fail("##(6)Error on snapshot.destroy: {}"
                           .format(str(error)))
@@ -501,7 +502,8 @@ class Snapshot(TestWithServers):
         #Still able to open the snapshot and read data after destroyed.
         try:
             ss_list = snapshot.list(coh, snapshot.epoch)
-            self.log.info("  -->snapshot.list(coh, snapshot.epoch)= %s", ss_list)
+            self.log.info(
+                "  -->snapshot.list(coh, snapshot.epoch)= %s", ss_list)
         except Exception as error:
             self.fail("##(7)Error when calling the snapshot list: {}"
                       .format(str(error)))
