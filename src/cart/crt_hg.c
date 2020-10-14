@@ -1035,14 +1035,15 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	crt_cbinfo.cci_rc = rc;
 
 	if (rc != 0 && rpc_pub->cr_ep.ep_tag != 0 &&
-	   crt_req_set_retry(rpc_priv) == 0) {
+			!rpc_priv->crp_rpc_retry) {
+		rpc_priv->crp_rpc_retry = true;
 		retry_rc = crt_req_retry(rpc_priv);
 		if (retry_rc == 0) {
 			D_GOTO(out1, hg_ret);
 		}
 
 	}
-	crt_req_reset_retry(rpc_priv);
+	rpc_priv->crp_rpc_retry = false;
 
 	if (crt_cbinfo.cci_rc != 0)
 		RPC_ERROR(rpc_priv, "RPC failed; rc: %d\n",

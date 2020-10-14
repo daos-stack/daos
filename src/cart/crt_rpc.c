@@ -29,19 +29,6 @@
 
 #define CRT_CTL_MAX_LOG_MSG_SIZE 256
 
-int
-crt_req_set_retry(struct crt_rpc_priv *rpc_priv) {
-	return atomic_fetch_or_relaxed(&rpc_priv->crp_rpc_retry, 
-		CRT_RPC_RETRY) & ~CRT_RPC_RETRY;
-}
-
-int
-crt_req_reset_retry(struct crt_rpc_priv *rpc_priv)
-{
-	return atomic_fetch_and_relaxed(&rpc_priv->crp_rpc_retry, 
-		~CRT_RPC_RETRY);
-}
-
 void
 crt_hdlr_ctl_fi_toggle(crt_rpc_t *rpc_req)
 {
@@ -1543,12 +1530,9 @@ out:
 	return rc;
 }
 
-static int
-ctx_traverse_cb(d_list_t *link, void *arg)
+static void
+uri_cache_invalidate(struct crt_context	*ctx, struct crt_rpc_priv *rpc_priv)
 {
-	struct crt_context	*ctx;
-	struct crt_rpc_priv	*rpc_priv = (struct crt_rpc_priv *)arg;
-	int			rc = 0;
 	d_list_t		*rlink;
 	crt_endpoint_t	        *tgt_ep = &rpc_priv->crp_pub.cr_ep;
 	struct crt_grp_priv	*grp_priv = crt_grp_pub2priv(tgt_ep->ep_grp);
@@ -1558,13 +1542,9 @@ ctx_traverse_cb(d_list_t *link, void *arg)
 	struct crt_lookup_item	*li;
 	uint32_t		tag;
 
-	if (d_list_empty(link)) {
-		D_GOTO(out, rc = -DER_INVAL);
-	}
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
 	rank = tgt_ep->ep_rank;
 	grp_priv = crt_grp_pub2priv(tgt_ep->ep_grp);
-	ctx = container_of(link, struct crt_context, cc_link);
 
 	/* invalidate all none 0 tags gp_lookup_cache */
 	my_grp_priv = grp_priv;
@@ -1580,7 +1560,7 @@ ctx_traverse_cb(d_list_t *link, void *arg)
 	rlink = d_hash_rec_find(&my_grp_priv->gp_lookup_cache[ctx->cc_idx],
 				(void *)&rank, sizeof (rank));
 	if (rlink == NULL) {
-		D_GOTO(out, rc = -DER_NONEXIST);
+		D_GOTO(out, 0);
 	}
 	li = crt_li_link2ptr(rlink);
 	D_ASSERT(li->li_grp_priv == my_grp_priv);
@@ -1598,19 +1578,25 @@ ctx_traverse_cb(d_list_t *link, void *arg)
 	rlink = d_hash_rec_find(&my_grp_priv->gp_uri_lookup_cache,
 				(void *)&rank, sizeof(rank));
 	if(rlink == NULL) {
-		D_GOTO(out, rc = -DER_NONEXIST);
+		D_GOTO(out, 0);
 	}
 	ui = container_of(rlink, struct crt_uri_item, ui_link);
 	for( tag = 1; tag < CRT_SRV_CONTEXT_NUM; tag++) {
+#if 0
 		if( atomic_load_consume(&ui->ui_uri[tag]) != NULL) {
 			D_FREE(ui->ui_uri[tag]);
 			atomic_store_release(&ui->ui_uri[tag], NULL);
+		}
+#endif
+		if(ui->ui_uri[tag] != NULL) {
+			D_FREE(ui->ui_uri[tag]);
+			ui->ui_uri[tag] = NULL;
 		}
 	}
 	d_hash_rec_decref(&my_grp_priv->gp_uri_lookup_cache, rlink);
 	D_RWLOCK_UNLOCK( &my_grp_priv->gp_rwlock);
 out:
-	return rc;
+	;
 }
 /* Retrying RPC request due to the failure */
 int
@@ -1622,8 +1608,7 @@ crt_req_retry(struct crt_rpc_priv *rpc_priv)
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 
 	d_list_for_each_entry(ctx, &crt_gdata.cg_ctx_list, cc_link) {
-		rc = d_hash_table_traverse(&ctx->cc_epi_table,
-					   ctx_traverse_cb, rpc_priv);
+		uri_cache_invalidate(ctx, rpc_priv);
 	}
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 	if (rc != 0) {

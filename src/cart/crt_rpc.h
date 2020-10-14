@@ -195,8 +195,7 @@ struct crt_rpc_priv {
 	struct crt_common_hdr	crp_reply_hdr; /* common header for reply */
 	struct crt_common_hdr	crp_req_hdr; /* common header for request */
 	struct crt_corpc_hdr	crp_coreq_hdr; /* collective request header */
-	ATOMIC 	int		crp_rpc_retry; /* RPC internal retry flag */
-
+	bool		        crp_rpc_retry; /* RPC internal retry flag */
 };
 
 #define CRT_PROTO_INTERNAL_VERSION 2
