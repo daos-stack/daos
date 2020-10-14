@@ -185,7 +185,9 @@ func (cmd *usageQueryCmd) Execute(_ []string) error {
 	if err := pretty.PrintHostStorageUsageMap(resp.HostStorage, &bld); err != nil {
 		return err
 	}
-	cmd.log.Info(bld.String())
+	// Infof prints raw string and doesn't try to expand "%"
+	// preserving column formatting in txtfmt table
+	cmd.log.Infof("%s", bld)
 
 	return resp.Errors()
 }

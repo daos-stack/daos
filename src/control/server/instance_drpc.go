@@ -27,7 +27,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dustin/go-humanize"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
@@ -265,9 +264,8 @@ func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[
 		smdDev.TotalBytes = pbStats.TotalBytes
 		smdDev.AvailBytes = pbStats.AvailBytes
 
-		srv.log.Debugf("SMD @ %s: %s Total/%s Avail on ctrlr %s", dev.GetUuid(),
-			humanize.Bytes(smdDev.TotalBytes), humanize.Bytes(smdDev.AvailBytes),
-			ctrlr.PciAddr)
+		srv.log.Debugf("update smd/bs %s usage on ctrlr %s: %+v",
+			dev.GetUuid(), ctrlr.PciAddr, smdDev)
 
 		ctrlr.UpdateSmd(smdDev)
 	}
