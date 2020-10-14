@@ -155,8 +155,10 @@ crt_proc_struct_dcs_csum_info(crt_proc_t proc, struct dcs_csum_info **p_csum)
 	}
 
 	if (FREEING(proc_op)) {
-		rc = proc_struct_dcs_csum_info(proc, *p_csum);
-		D_FREE(*p_csum);
+		if (*p_csum) {
+			rc = proc_struct_dcs_csum_info(proc, *p_csum);
+			D_FREE(*p_csum);
+		}
 	}
 
 	return rc;

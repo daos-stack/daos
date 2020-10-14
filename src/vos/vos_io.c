@@ -2020,7 +2020,8 @@ abort:
 		update_cancel(ioc);
 	}
 
-	D_FREE(daes);
+	if (daes)
+		D_FREE(daes);
 
 	if (err == 0)
 		vos_ts_set_upgrade(ioc->ic_ts_set);
