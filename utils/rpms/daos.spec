@@ -205,10 +205,8 @@ This is the package needed to run the DAOS test suite
 Summary: The DAOS test suite for ior tests
 Requires: %{name}-tests = %{version}-%{release}
 Requires: ior-hpc-daos-0
-Requires: hdf5-mpich2-tests-daos-0
-Requires: hdf5-openmpi3-tests-daos-0
-Requires: hdf5-vol-daos-mpich2-tests-daos-0
-Requires: hdf5-vol-daos-openmpi3-tests-daos-0
+Requires: hdf5-mpich2-daos-0
+Requires: hdf5-openmpi3-daos-0
 
 %description tests-ior
 This is the package needed to run the DAOS test suite with ior
@@ -227,9 +225,20 @@ Requires: %{name}-tests-ior = %{version}-%{release}
 Requires: romio-tests-cart-4-daos-0
 Requires: testmpio-cart-4-daos-0
 Requires: mpi4py-tests-cart-4-daos-0
+Requires: hdf5-mpich2-tests-daos-0
+Requires: hdf5-openmpi3-tests-daos-0
 
 %description tests-mpiio
 This is the package needed to run the DAOS test suite with mpiio
+
+%package tests-hdf5-vol
+Summary: The DAOS test suite for hdf5 vol tests
+Requires: %{name}-tests = %{version}-%{release}
+Requires: hdf5-vol-daos-mpich2-tests-daos-0
+Requires: hdf5-vol-daos-openmpi3-tests-daos-0
+
+%description tests-hdf5-vol
+This is the package needed to run the DAOS test suite with hdf5 vol
 
 %package tests-macsio
 Summary: The DAOS test suite for macsio tests
@@ -242,7 +251,6 @@ This is the package needed to run the DAOS test suite with  macsio
 
 %package tests-soak
 Summary: The DAOS soak test suite
-Requires: %{name}-tests = %{version}-%{release}
 Requires: %{name}-tests-ior = %{version}-%{release}
 Requires: %{name}-tests-fio = %{version}-%{release}
 Requires: slurm
@@ -325,8 +333,13 @@ exclude="${exclude} --exclude=fio_utils.py"
 files=%{?buildroot}%{?_prefix}/lib/daos/TESTING/ftest/util/mpio_utils.py
 %create_file_list ${output} ${files} %{?buildroot} ${ftest_path} ${exclude}
 
+output="daos-tests-hdf5-vol.files"
+exclude="${exclude} --exclude=mpio_utils.py"
+files=%{?buildroot}%{?_prefix}/lib/daos/TESTING/ftest/util/vol_test_base.py
+%create_file_list ${output} ${files} %{?buildroot} ${ftest_path} ${exclude}
+
 output="daos-tests-macsio.files"
-exclude="${exclude} --exclude=mpiio_utils.py"
+exclude="${exclude} --exclude=vol_test_base.py"
 files=%{?buildroot}%{?_prefix}/lib/daos/TESTING/ftest/util/macsio_utils.py
 %create_file_list ${output} ${files} %{?buildroot} ${ftest_path} ${exclude}
 
@@ -342,7 +355,7 @@ for file in $(find %{?buildroot}${ftest_path}/ftest -type f | sort)
 do
   echo ${file#%{?buildroot}} >> daos-tests.files
 done
-for name in ior fio mpiio macsio soak
+for name in ior fio mpiio hdf5-vol macsio soak
 do
   grep -Fvxf daos-tests-${name}.files daos-tests.files > daos-tests.files_new
   mv daos-tests.files{_new,}
@@ -350,7 +363,8 @@ done
 cat daos-tests.files
 
 %if (0%{?rhel} >= 7)
-for name in tests tests-ior tests-fio tests-mpiio tests-macsio tests-soak
+for name in tests tests-ior tests-fio tests-mpiio tests-hdf5-vol tests-macsio \
+  tests-soak
 do
   file="daos-${name}.files"
   cat ${file} | sed -ne 's/\(.*\)\.py/\1.pyc\n\1.pyo/p' >> ${file}
@@ -535,7 +549,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Tue Oct 13 2020 Phillip Henderson <phillip.henderson@intel.com> 1.1.1-3
+* Wed Oct 14 2020 Phillip Henderson <phillip.henderson@intel.com> 1.1.1-3
 - Separated the daos-tests package into multiple packages based upon external
   package requirements.
 
