@@ -314,7 +314,7 @@ class Snapshot(TestWithServers):
 
 
     def test_snapshots(self):
-        # pylint: disable=no-member
+        # pylint: disable=no-member,too-many-locals
         """
         Test ID: DAOS-1386 Test container SnapShot information
                  DAOS-1371 Test list snapshots
