@@ -479,7 +479,7 @@ class Snapshot(TestWithServers):
                 snapshot.destroy(coh, snapshot.epoch)
                 self.log.info(
                     "  ==snapshot.epoch %s successfully destroyed",
-                   snapshot.epoch)
+                    snapshot.epoch)
             except Exception as error:
                 self.fail("##(6)Error on snapshot.destroy: {}"
                           .format(str(error)))
