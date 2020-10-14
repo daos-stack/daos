@@ -921,7 +921,7 @@ def compress_log_files(avocado_logs_dir):
     print("Compressing files in {}".format(socket.gethostname().split(".")[0]))
     logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs", "*.log*")
     command = [
-        get_remote_file_command(), "-z", "-x", "-v", "-f {}".format(logs_dir)]
+        get_remote_file_command(), "-z", "-x", "-f {}".format(logs_dir)]
     print(get_output(command, check=False))
 
 
@@ -1111,7 +1111,7 @@ def check_big_files(avocado_logs_dir, task, test_name, args):
     for output, nodelist in task.iter_buffers():
         node_set = NodeSet.fromlist(nodelist)
         hosts.update(node_set)
-        big_files = re.findall(r"Y:(.*)", str(output))
+        big_files = re.findall(r"Y:\s([0-9]+)", str(output))
         if big_files:
             cdata.append(
                 "The following log files on {} exceeded the {} "

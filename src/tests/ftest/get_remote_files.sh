@@ -81,18 +81,18 @@ This script has 4 modes that can be executed independently if needed.
 #   1: Missing the log files argument
 #######################################
 check_files_input() {
+    rc=0
     if [ -n "${1}" ]; then
         # shellcheck disable=SC2086
         if ls -d ${1} 2> /dev/null; then
             echo "Files found that match ${1}."
         else
             echo "No files matched ${1}. Nothing to do."
-            exit 0
         fi
     else
-        echo "Please specify -f option."
-        exit 1
+        rc=1
     fi
+    return ${rc}
 }
 
 #######################################
@@ -203,7 +203,7 @@ run_cartlogtest() {
         # shellcheck disable=SC2045,SC2086
         for file in $(ls -d ${1})
         do
-            if [ -f ${file} ]; then
+            if [ -f ${file} ] && [[ ! ${file} =~ "cart_logtest" ]]; then
                 logtest_log="${file%.*}.cart_logtest.${file##*.}"
                 if ! ${CART_LOGTEST_PATH} ${file} > ${logtest_log} 2>&1; then
                     echo "  Error: details in ${file}_cart_testlog"
@@ -282,7 +282,10 @@ set -ex
 trap 'if [ -f "${log_file}" ]; then cat "${log_file}"; fi' ERR
 
 # Verify files have been specified and they exist on this host
-check_files_input "${FILES_TO_PROCESS}"
+if ! check_files_input "{$FILES_TO_PROCESS}"; then
+    echo "Please specify -f option."
+    exit 1
+fi
 
 # Display big files to stdout
 if [ -n "${THRESHOLD}" ]; then
@@ -299,9 +302,7 @@ if "${CART_LOGTEST:-false}"; then
     fi
 
     echo "Running ${CART_LOGTEST_PATH} ..."
-    run_cartlogtest "${FILES_TO_PROCESS}"
-    ret=$?
-    if [ ${ret} -ne 0 ]; then
+    if ! run_cartlogtest "${FILES_TO_PROCESS}"; then
         rc=1
     fi
 fi
