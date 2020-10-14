@@ -731,8 +731,8 @@ daos_recx_merge(daos_recx_t *src, daos_recx_t *dst)
 {
 	uint64_t	end;
 
+	end = max(DAOS_RECX_PTR_END(src), DAOS_RECX_PTR_END(dst));
 	dst->rx_idx = min(src->rx_idx, dst->rx_idx);
-	end = max(DAOS_RECX_PTR_END(dst), DAOS_RECX_PTR_END(src));
 	dst->rx_nr = end - dst->rx_idx;
 }
 

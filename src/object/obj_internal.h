@@ -172,7 +172,9 @@ struct obj_reasb_req {
 	/* only with single target flag */
 					 orr_single_tgt:1,
 	/* only for single-value IO flag */
-					 orr_singv_only:1;
+					 orr_singv_only:1,
+	/* the flag of IOM re-allocable (used for EC IOM merge) */
+					 orr_iom_realloc:1;
 };
 
 static inline void
@@ -713,6 +715,41 @@ daos_iom_sort(daos_iom_t *map)
 		return;
 	qsort(map->iom_recxs, map->iom_nr_out,
 	      sizeof(*map->iom_recxs), recx_compare);
+}
+
+static inline void
+daos_iom_dump(daos_iom_t *iom)
+{
+	uint32_t	i;
+
+	if (iom == NULL)
+		return;
+
+	if (iom->iom_type == DAOS_IOD_ARRAY)
+		D_PRINT("iom_type array\n");
+	else if (iom->iom_type == DAOS_IOD_SINGLE)
+		D_PRINT("iom_type single\n");
+	else
+		D_PRINT("iom_type bad (%d)\n", iom->iom_type);
+
+	D_PRINT("iom_nr %d, iom_nr_out %d, iom_flags %d\n",
+		iom->iom_nr, iom->iom_nr_out, iom->iom_flags);
+	D_PRINT("iom_size "DF_U64"\n", iom->iom_size);
+	D_PRINT("iom_recx_lo - "DF_RECX"\n", DP_RECX(iom->iom_recx_lo));
+	D_PRINT("iom_recx_hi - "DF_RECX"\n", DP_RECX(iom->iom_recx_hi));
+
+	if (iom->iom_recxs == NULL) {
+		D_PRINT("NULL iom_recxs array\n");
+		return;
+	}
+
+	D_PRINT("iom_recxs array -\n");
+	for (i = 0; i < iom->iom_nr_out; i++) {
+		D_PRINT("[%d] "DF_RECX" ", i, DP_RECX(iom->iom_recxs[i]));
+		if (i % 8 == 7)
+			D_PRINT("\n");
+	}
+	D_PRINT("\n");
 }
 
 int  obj_utils_init(void);

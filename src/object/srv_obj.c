@@ -1108,6 +1108,8 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod)
 			  map->iom_nr, map->iom_nr_out);
 		map->iom_recx_lo = map->iom_recxs[0];
 		map->iom_recx_hi = map->iom_recxs[map->iom_nr - 1];
+		if (orw->orw_flags & ORF_CREATE_MAP_DETAIL)
+			map->iom_flags = DAOS_IOMF_DETAIL;
 	}
 
 	orwo->orw_maps.ca_count = iods_nr;
