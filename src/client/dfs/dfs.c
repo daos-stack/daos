@@ -571,7 +571,7 @@ check_name(const char *name)
 {
 	if (name == NULL || strchr(name, '/'))
 		return EINVAL;
-	if (strnlen(name, DFS_MAX_PATH) > DFS_MAX_PATH)
+	if (strnlen(name, DFS_MAX_PATH + 1) > DFS_MAX_PATH)
 		return EINVAL;
 	return 0;
 }
@@ -824,8 +824,8 @@ open_symlink(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 	int			rc;
 
 	if (flags & O_CREAT) {
-		if (value == NULL || strnlen(value, PATH_MAX-1) > PATH_MAX-1)
-			return -DER_INVAL;
+		if (value == NULL || strnlen(value, PATH_MAX) > PATH_MAX - 1)
+			return EINVAL;
 
 		rc = oid_gen(dfs, 0, false, &sym->oid);
 		if (rc != 0)
@@ -1143,6 +1143,9 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	int			amode, obj_mode;
 	int			rc;
 
+	if (_dfs == NULL)
+		return EINVAL;
+
 	amode = (flags & O_ACCMODE);
 	obj_mode = get_daos_obj_mode(flags);
 	if (obj_mode == -1)
@@ -1277,7 +1280,7 @@ dfs_umount(dfs_t *dfs)
 int
 dfs_query(dfs_t *dfs, dfs_attr_t *attr)
 {
-	if (dfs == NULL || !dfs->mounted)
+	if (dfs == NULL || !dfs->mounted || attr == NULL)
 		return EINVAL;
 
 	memcpy(attr, &dfs->attr, sizeof(dfs_attr_t));
@@ -1329,6 +1332,9 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob)
 	uuid_t			cont_uuid;
 	daos_size_t		glob_buf_size;
 	int			rc = 0;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
 
 	if (glob == NULL) {
 		D_ERROR("Invalid parameter, NULL glob pointer.\n");
@@ -1499,7 +1505,7 @@ dfs_set_prefix(dfs_t *dfs, const char *prefix)
 		return 0;
 	}
 
-	if (prefix[0] != '/' || strnlen(prefix, PATH_MAX) > PATH_MAX-1)
+	if (prefix[0] != '/' || strnlen(prefix, PATH_MAX) > PATH_MAX - 1)
 		return EINVAL;
 
 	D_STRNDUP(dfs->prefix, prefix, PATH_MAX - 1);
@@ -1602,7 +1608,7 @@ remove_dir_contents(dfs_t *dfs, daos_handle_t th, struct dfs_entry entry)
 	daos_handle_t	oh;
 	daos_key_desc_t	kds[ENUM_DESC_NR];
 	daos_anchor_t	anchor = {0};
-	d_iov_t	iov;
+	d_iov_t		iov;
 	char		enum_buf[ENUM_DESC_BUF] = {0};
 	d_sg_list_t	sgl;
 	int		rc;
@@ -1794,7 +1800,7 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 		return EINVAL;
 	if (_obj == NULL)
 		return EINVAL;
-	if (path == NULL || strnlen(path, PATH_MAX-1) > PATH_MAX-1)
+	if (path == NULL || strnlen(path, PATH_MAX) > PATH_MAX - 1)
 		return EINVAL;
 	if (path[0] != '/')
 		return EINVAL;
@@ -2576,7 +2582,7 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 	/** Check container uuid mismatch */
 	rc = dc_cont_hdl2uuid(dfs->coh, &coh_uuid, &cont_uuid);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		D_GOTO(out, rc = daos_der2errno(rc));
 	if (uuid_compare(cont_uuid, obj_glob->cont_uuid) != 0) {
 		D_ERROR("Container uuid mismatch, in coh: "DF_UUID", "
 			"in obj_glob:" DF_UUID"\n", DP_UUID(cont_uuid),
@@ -3990,7 +3996,7 @@ out:
 int
 dfs_obj2id(dfs_obj_t *obj, daos_obj_id_t *oid)
 {
-	if (oid == NULL)
+	if (obj == NULL || oid == NULL)
 		return EINVAL;
 	oid_cp(oid, obj->oid);
 	return 0;

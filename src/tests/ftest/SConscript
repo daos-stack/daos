@@ -12,11 +12,15 @@ def scons():
     dirs = ['aggregation', 'checksum', 'container', 'control',
             'daos_test', 'data', 'io', 'network', 'nvme',
             'object', 'osa', 'pool', 'rebuild', 'security',
-            'server', 'soak', 'unittest']
+            'server', 'soak', 'unittest', 'erasurecode']
 
     for sub_dir in dirs:
         env.Install(os.path.join(ftest_install_dir, sub_dir),
                     Glob("%s/*.*" % sub_dir))
+
+    # Glob doesn't recurse, and CaRT test dir nests deeper than the others
+    env.Install(os.path.join(ftest_install_dir, 'cart'),
+                Glob("%s/*/*.*" % 'cart'))
 
     # Builders
     SConscript('cart/SConscript')

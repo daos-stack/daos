@@ -90,6 +90,11 @@ var (
 		fmt.Sprintf("%s instance not started or not responding on dRPC", build.DataPlaneName),
 		"retry the operation or check server logs for more details",
 	)
+	FaultConfigFaultDomainInvalid = serverFault(
+		code.ServerConfigFaultDomainInvalid,
+		"invalid fault domain",
+		"specify a valid fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
+	)
 )
 
 func FaultInstancesNotStopped(action string, rank system.Rank) *fault.Fault {

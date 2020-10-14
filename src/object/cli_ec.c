@@ -1329,8 +1329,9 @@ obj_ec_singv_split(daos_obj_id_t oid, uint32_t shard, daos_size_t iod_size,
 	uint32_t shard_idx = shard % obj_ec_data_tgt_nr(oca);
 	char	*data = sgl->sg_iovs[0].iov_buf;
 
+	D_ASSERT(iod_size != DAOS_REC_ANY);
 	if (shard_idx > 0)
-		memmove(data, data + shard_idx *c_bytes, c_bytes);
+		memmove(data, data + shard_idx * c_bytes, c_bytes);
 
 	sgl->sg_iovs[0].iov_len = c_bytes;
 
@@ -1364,11 +1365,12 @@ out:
 }
 
 int
-obj_ec_singv_encode_buf(daos_obj_id_t oid, daos_iod_t *iod,
+obj_ec_singv_encode_buf(daos_obj_id_t oid, int p_shard, daos_iod_t *iod,
 			struct daos_oclass_attr *oca,
 			d_sg_list_t *sgl, d_iov_t *e_iov)
 {
 	struct obj_ec_recx_array recxs = { 0 };
+	int idx;
 	int rc;
 
 	/* calculated the parity */
@@ -1383,11 +1385,13 @@ obj_ec_singv_encode_buf(daos_obj_id_t oid, daos_iod_t *iod,
 	if (rc)
 		D_GOTO(out, rc);
 
+	p_shard = p_shard % obj_ec_tgt_nr(oca);
+	D_ASSERT(p_shard >= obj_ec_data_tgt_nr(oca));
+	idx = p_shard - obj_ec_data_tgt_nr(oca);
+	D_ASSERT(e_iov->iov_buf_len >=
+		 obj_ec_singv_cell_bytes(iod->iod_size, oca));
 	e_iov->iov_len = obj_ec_singv_cell_bytes(iod->iod_size, oca);
-	e_iov->iov_buf = recxs.oer_pbufs[0];
-	e_iov->iov_buf_len = e_iov->iov_len; 
-
-	recxs.oer_pbufs[0] = NULL;
+	memcpy(e_iov->iov_buf, recxs.oer_pbufs[idx], e_iov->iov_len);
 out:
 	obj_ec_recxs_fini(&recxs);
 	return rc;

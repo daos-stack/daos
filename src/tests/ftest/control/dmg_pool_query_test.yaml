@@ -5,7 +5,7 @@ hosts:
     - server-A
   test_clients:
     - client-B
-timeout: 200
+timeout: 80
 server_config:
   name: daos_server
   port: 10001
@@ -39,16 +39,33 @@ ior:
   dfs_destroy: False
 
 exp_vals:
-  pool_info: ['8', '0', '0', '1']
-  target_cnt: ['8']
-  scm_info: ['16 GB', '16 GB', '2.0 GB', '2.0 GB', '2.0 GB']
-  nvme_info: ['32 GB', '32 GB', '4.0 GB', '4.0 GB', '4.0 GB']
-  rebuild_info: ['0', '0']
+  uuid: "TBD"
+  ntarget: "8"
+  disabled: "0"
+  leader: "0"
+  version: "1"
+  target_count: "8"
+  scm:
+    total: "16 GB"
+    free: "16 GB"
+    free_min: "2.0 GB"
+    free_max: "2.0 GB"
+    free_mean: "2.0 GB"
+  nvme:
+    total: "32 GB"
+    free: "32 GB"
+    free_min: "4.0 GB"
+    free_max: "4.0 GB"
+    free_mean: "4.0 GB"
+  rebuild:
+    status: "idle"
+    objects: "0"
+    records: "0"
 
 pool_uuids:
   uuids:
     -
-      #alpha_upper
+      # alpha_upper
       - "WWWWWWWW-YYYY-ZZZZ-VVVV-AAAAABBCCDDE"
       - "FAIL"
     -
@@ -76,6 +93,6 @@ pool_uuids:
       - "! @#$%^&*()_+{}|:<>?-=[];,./"
       - "FAIL"
     -
-      # special_aplanumeric_chars
+      # special_alphanumeric_chars
       - "abc-=*12----1@3c-4%DE-&5_,0+.k"
       - "FAIL"

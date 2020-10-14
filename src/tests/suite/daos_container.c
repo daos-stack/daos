@@ -2046,6 +2046,41 @@ co_attribute_access(void **state)
 	test_teardown((void **)&arg);
 }
 
+static void
+co_open_fail_destroy(void **state)
+{
+	test_arg_t	*arg = *state;
+	uuid_t		 uuid;
+	daos_handle_t	 coh;
+	daos_cont_info_t info;
+	int		 rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	uuid_generate(uuid);
+
+	print_message("creating container ... ");
+	rc = daos_cont_create(arg->pool.poh, uuid, NULL, NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("setting DAOS_CONT_OPEN_FAIL ... ");
+	rc = daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				  DAOS_CONT_OPEN_FAIL | DAOS_FAIL_ONCE,
+				  0, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_open(arg->pool.poh, uuid, DAOS_COO_RW, &coh, &info,
+			    NULL);
+	assert_int_equal(rc, -DER_IO);
+
+	print_message("destroying container ... ");
+	rc = daos_cont_destroy(arg->pool.poh, uuid, 1 /* force */, NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+}
+
 static int
 co_setup_sync(void **state)
 {
@@ -2114,6 +2149,8 @@ static const struct CMUnitTest co_tests[] = {
 	  co_owner_implicit_access, NULL, test_case_teardown},
 	{ "CONT22: container get/set attribute access by ACL",
 	  co_attribute_access, NULL, test_case_teardown},
+	{ "CONT23: container open failed/destroy",
+	  co_open_fail_destroy, NULL, test_case_teardown},
 };
 
 int

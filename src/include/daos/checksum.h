@@ -436,8 +436,8 @@ ci2csum(struct dcs_csum_info ci);
 
 #define	DF_CI_BUF "%"PRIu64
 #define	DP_CI_BUF(buf, len) ci_buf2uint64(buf, len)
-#define	DF_CI "{nr: %d, len: %d, first_csum: %lu}"
-#define	DP_CI(ci) (ci).cs_nr, (ci).cs_len, ci2csum(ci)
+#define	DF_CI "{nr: %d, len: %d, first_csum: %lu, csum_buf_len: %d}"
+#define	DP_CI(ci) (ci).cs_nr, (ci).cs_len, ci2csum(ci), (ci).cs_buf_len
 
 /**
  * return the number of bytes needed to serialize a dcs_csum_info into a

@@ -48,12 +48,6 @@ type (
 	// HostResponseChan defines a channel of *HostResponse items returned
 	// from asynchronous unary RPC invokers.
 	HostResponseChan chan *HostResponse
-
-	// hostErrorsGetter define an interface for responses which return
-	// a HostErrorsMap.
-	hostErrorsGetter interface {
-		getHostErrors() HostErrorsMap
-	}
 )
 
 type HostErrorsResp struct {
@@ -67,7 +61,7 @@ func (her *HostErrorsResp) addHostError(hostAddr string, hostErr error) error {
 	return her.HostErrors.Add(hostAddr, hostErr)
 }
 
-func (her *HostErrorsResp) getHostErrors() HostErrorsMap {
+func (her *HostErrorsResp) GetHostErrors() HostErrorsMap {
 	return her.HostErrors
 }
 
