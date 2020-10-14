@@ -193,6 +193,7 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	daos_iod_t		*iods;
 	struct dcs_iod_csums	*iods_csums;
 	daos_iom_t		*maps;
+	struct obj_reasb_req	*reasb_req;
 	struct dcs_layout	*singv_lo, *singv_los;
 	struct obj_io_desc	*oiods;
 	uint32_t		 shard_idx;
@@ -235,10 +236,10 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		/** Got csum successfully from server. Now poison it!! */
 		orwo->orw_iod_csums.ca_arrays->ic_data->cs_csum[0]++;
 
+	reasb_req = rw_args->shard_args->reasb_req;
 	shard_idx = rw_args->shard_args->auxi.shard -
 		    rw_args->shard_args->auxi.start_shard;
-	singv_los = dc_rw_cb_singv_lo_get(iods, sgls, orw->orw_nr,
-					  rw_args->shard_args->reasb_req);
+	singv_los = dc_rw_cb_singv_lo_get(iods, sgls, orw->orw_nr, reasb_req);
 	for (i = 0; i < orw->orw_nr; i++) {
 		daos_iod_t		*iod = &iods[i];
 		daos_iod_t		 shard_iod = *iod;
@@ -267,20 +268,40 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 					     &shard_sgl, iod_csum, singv_lo,
 					     shard_idx, map);
 		if (rc != 0) {
+			bool			 is_ec_obj;
+
 			if (iod->iod_type == DAOS_IOD_SINGLE) {
 				D_ERROR("Data Verification failed (object: "
-					DF_OID"): "DF_RC"\n",
-					DP_OID(orw->orw_oid.id_pub),
+					DF_OID" shard %d): "DF_RC"\n",
+					DP_OID(orw->orw_oid.id_pub), shard_idx,
 					DP_RC(rc));
 			} else  if (iod->iod_type == DAOS_IOD_ARRAY) {
 				D_ERROR("Data Verification failed (object: "
-						DF_OID" , extent: "DF_RECX"):"
-						" "DF_RC"\n",
+					DF_OID" shard %d, extent: "DF_RECX"):"
+					" "DF_RC"\n",
 					DP_OID(orw->orw_oid.id_pub),
-					DP_RECX(iod->iod_recxs[i]),
+					shard_idx, DP_RECX(iod->iod_recxs[i]),
 					DP_RC(rc));
 			}
 
+			is_ec_obj = (reasb_req != NULL) &&
+				DAOS_OC_IS_EC(reasb_req->orr_oca);
+			if (rc == -DER_CSUM && is_ec_obj) {
+				struct shard_auxi_args	*sa;
+				uint32_t		 tgt_idx;
+
+				sa = &rw_args->shard_args->auxi;
+				tgt_idx = sa->shard - sa->start_shard;
+				rc = obj_ec_get_degrade(reasb_req, tgt_idx,
+							NULL, false);
+				if (rc) {
+					D_ERROR(DF_OID" obj_ec_get_degrade "
+						DF_RC"\n",
+						DP_OID(orw->orw_oid.id_pub),
+						DP_RC(rc));
+				}
+				rc = -DER_CSUM;
+			}
 			break;
 		}
 	}
@@ -316,10 +337,12 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	daos_handle_t		th;
 	daos_iod_t		*iods;
 	uint64_t		*sizes;
-	int			opc;
-	int                     ret = task->dt_result;
-	int			i;
-	int			rc = 0;
+	struct obj_reasb_req	*reasb_req;
+	bool			 is_ec_obj;
+	int			 opc;
+	int			 ret = task->dt_result;
+	int			 i;
+	int			 rc = 0;
 
 	opc = opc_get(rw_args->rpc->cr_opc);
 	D_DEBUG(DB_IO, "rpc %p opc:%d completed, dt_result %d.\n",
@@ -358,7 +381,6 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	}
 
 	rc = obj_reply_get_status(rw_args->rpc);
-
 	/*
 	 * orwo->orw_epoch may be set even when the status is nonzero (e.g.,
 	 * -DER_TX_RESTART and -DER_INPROGRESS).
@@ -384,26 +406,49 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				"need retry: "DF_RC"\n", rw_args->rpc, opc,
 				rw_args->rpc->cr_ep.ep_rank,
 				rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
+			D_GOTO(out, rc);
 		} else if (rc == -DER_STALE) {
 			D_INFO("rpc %p got DER_STALE, pool map update needed\n",
 			       rw_args->rpc);
-		} else {
-			/*
-			 * don't log errors in-case of possible conditionals or
-			 * rec2big errors which can be expected.
-			 */
-			if (rc == -DER_REC2BIG || rc == -DER_NONEXIST ||
-			    rc == -DER_EXIST)
-				D_DEBUG(DB_IO, "rpc %p opc %d to rank %d tag %d"
-					" failed: "DF_RC"\n", rw_args->rpc, opc,
-					rw_args->rpc->cr_ep.ep_rank,
-					rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
-			else
-				D_ERROR("rpc %p opc %d to rank %d tag %d"
-					" failed: "DF_RC"\n", rw_args->rpc, opc,
-					rw_args->rpc->cr_ep.ep_rank,
-					rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
-			if (rc == -DER_REC2BIG && opc == DAOS_OBJ_RPC_FETCH) {
+			D_GOTO(out, rc);
+		}
+
+		/*
+		 * don't log errors in-case of possible conditionals or
+		 * rec2big errors which can be expected.
+		 */
+		if (rc == -DER_REC2BIG || rc == -DER_NONEXIST ||
+		    rc == -DER_EXIST)
+			D_DEBUG(DB_IO, "rpc %p opc %d to rank %d tag %d"
+				" failed: "DF_RC"\n", rw_args->rpc, opc,
+				rw_args->rpc->cr_ep.ep_rank,
+				rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
+		else
+			D_ERROR("rpc %p opc %d to rank %d tag %d"
+				" failed: "DF_RC"\n", rw_args->rpc, opc,
+				rw_args->rpc->cr_ep.ep_rank,
+				rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
+
+		if (opc == DAOS_OBJ_RPC_FETCH) {
+			reasb_req = rw_args->shard_args->reasb_req;
+			is_ec_obj = (reasb_req != NULL) &&
+				    DAOS_OC_IS_EC(reasb_req->orr_oca);
+			if (rc == -DER_CSUM && is_ec_obj &&
+			    (orw->orw_flags & ORF_CSUM_REPORT) == 0) {
+				struct shard_auxi_args	*sa;
+				uint32_t		 tgt_idx;
+
+				sa = &rw_args->shard_args->auxi;
+				tgt_idx = sa->shard - sa->start_shard;
+				rc = obj_ec_get_degrade(reasb_req, tgt_idx,
+							NULL, false);
+				if (rc)
+					D_ERROR(DF_OID" obj_ec_get_degrade "
+						DF_RC"\n",
+						DP_OID(orw->orw_oid.id_pub),
+						DP_RC(rc));
+				rc = -DER_CSUM;
+			} else if (rc == -DER_REC2BIG) {
 				/* update the sizes in iods */
 				iods = orw->orw_iod_array.oia_iods;
 				sizes = orwo->orw_iod_sizes.ca_arrays;
@@ -416,9 +461,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	*rw_args->map_ver = obj_reply_map_version_get(rw_args->rpc);
 
 	if (opc == DAOS_OBJ_RPC_FETCH) {
-		struct obj_reasb_req	*reasb_req =
-						rw_args->shard_args->reasb_req;
-		bool			 is_ec_obj;
+		reasb_req = rw_args->shard_args->reasb_req;
 
 		if (rw_args->shard_args->auxi.flags & DRF_CHECK_EXISTENCE)
 			goto out;
@@ -899,9 +942,8 @@ csum_enum_verify_recx(struct daos_csummer *csummer,
 	tmp_iod_csum.ic_nr = 1;
 	tmp_iod_csum.ic_data = csum_info;
 
-	return daos_csummer_verify_iod(csummer,
-				       &tmp_iod, &tmp_sgl, &tmp_iod_csum,
-				       NULL, 0, NULL);
+	return daos_csummer_verify_iod(csummer, &tmp_iod, &tmp_sgl,
+				       &tmp_iod_csum, NULL, 0, NULL);
 }
 
 /**
@@ -929,9 +971,8 @@ csum_enum_verify_sv(struct daos_csummer *csummer,
 	tmp_iod_csum.ic_nr = 1;
 	tmp_iod_csum.ic_data = tmp_csum_info;
 
-	return daos_csummer_verify_iod(csummer,
-				       &tmp_iod, &tmp_sgl, &tmp_iod_csum,
-				       NULL, 0, NULL);
+	return daos_csummer_verify_iod(csummer, &tmp_iod, &tmp_sgl,
+				       &tmp_iod_csum, NULL, 0, NULL);
 }
 
 static int

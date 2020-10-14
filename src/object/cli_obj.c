@@ -748,10 +748,18 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 	struct dc_obj_shard	*obj_shard;
 	bool			 ec_degrade = false;
 	uint32_t		 ec_deg_tgt = 0, start_shard;
+	bool			 csum_err = false;
 	int			 rc;
 
 	shard_tgt->st_ec_tgt = ec_tgt_idx;
 	start_shard = shard - ec_tgt_idx;
+
+	if (obj_auxi->is_ec_obj && obj_auxi->csum_retry) {
+		obj_auxi->csum_retry = 0;
+		csum_err = true;
+		ec_degrade = true;
+		goto ec_deg_get;
+	}
 shard_open:
 	rc = obj_shard_open(obj, shard, map_ver, &obj_shard);
 	if (obj_auxi->opc == DAOS_OBJ_RPC_FETCH &&
@@ -784,11 +792,16 @@ shard_open:
 			D_GOTO(out, rc);
 	}
 
+ec_deg_get:
 	if (ec_degrade) {
 		rc = obj_ec_get_degrade(&obj_auxi->reasb_req,
 					shard - start_shard, &ec_deg_tgt,
 					false);
 		if (rc) {
+			if (csum_err) {
+				obj_auxi->no_retry = 1;
+				rc = -DER_CSUM;
+			}
 			D_ERROR(DF_OID" obj_ec_get_degrade failed, rc "
 				DF_RC".\n", DP_OID(obj->cob_md.omd_id),
 				DP_RC(rc));
@@ -3321,11 +3334,13 @@ obj_comp_cb(tse_task_t *task, void *data)
 
 		if (task->dt_result == -DER_CSUM) {
 			if (!obj_auxi->spec_shard && !obj_auxi->no_retry &&
-			    obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
+			    !obj_auxi->ec_wait_recov &&
+			     obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
 				if (!obj_auxi->csum_retry &&
 				    !obj_auxi->csum_report) {
 					obj_auxi->csum_report = 1;
 				} else if (obj_auxi->csum_report) {
+					obj_auxi->flags &= ~ORF_CSUM_REPORT;
 					obj_auxi->csum_report = 0;
 					obj_auxi->csum_retry = 1;
 				}
@@ -3425,7 +3440,13 @@ obj_comp_cb(tse_task_t *task, void *data)
 		fail_info = obj_auxi->reasb_req.orr_fail;
 		new_tgt_fail = obj_auxi->ec_wait_recov &&
 			       task->dt_result == -DER_BAD_TARGET;
-		if (fail_info != NULL &&
+		/* for original failed EC obj fetch task, try with EC recovery
+		 * 1. create EC recovery task (with ec_in_recov flag) and mark
+		 *    original obj fetch task with ec_wait_recov flag.
+		 * 2. when ec_in_recov task done, the ec_wait_recov task can
+		 *    recover the data.
+		 */
+		if (fail_info != NULL && !obj_auxi->ec_in_recov &&
 		    ((obj_auxi->reasb_req.orr_singv_only &&
 		     (task->dt_result == -DER_BAD_TARGET ||
 		      task->dt_result == 0)) ||
@@ -3440,7 +3461,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 				obj_reasb_req_fini(&obj_auxi->reasb_req,
 						   obj_auxi->iod_nr);
 				memset(obj_auxi, 0, sizeof(*obj_auxi));
-			} else if (!obj_auxi->ec_in_recov || new_tgt_fail) {
+			} else {
 				task->dt_result = 0;
 				obj_ec_recov_cb(task, obj, obj_auxi);
 			}
@@ -3622,8 +3643,8 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 
 	/** Calc 'a' key checksum and value checksum */
 	rc = daos_csummer_calc_iods(csummer_copy, args->sgls, args->iods, NULL,
-				    args->nr,
-				    false, obj_auxi->reasb_req.orr_singv_los,
+				    args->nr, false,
+				    obj_auxi->reasb_req.orr_singv_los,
 				    -1, &iod_csums);
 	if (rc != 0) {
 		daos_csummer_free_ci(csummer_copy, &dkey_csum);
@@ -3721,16 +3742,9 @@ obj_retry_csum_err(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 		     uint64_t dkey_hash, unsigned int map_ver, uint8_t *bitmap)
 {
 	D_WARN("Retrying replica because of checksum error.\n");
-	struct daos_oclass_attr	*oca;
 	unsigned int		 next_shard, retry_size, shard_cnt, shard_idx;
 	int			 rc = 0;
 
-	/* CSUM retry for EC object is not supported yet */
-	if (daos_oclass_is_ec(obj->cob_md.omd_id, &oca)) {
-		obj_auxi->no_retry = 1;
-		rc = -DER_CSUM;
-		goto out;
-	}
 	rc = obj_dkey2grpmemb(obj, dkey_hash, map_ver,
 			      &shard_idx, &shard_cnt);
 	if (rc != 0)
@@ -3748,7 +3762,6 @@ obj_retry_csum_err(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 		goto out;
 	}
 	setbit(bitmap, next_shard - shard_idx);
-	obj_auxi->flags &= ~ORF_CSUM_REPORT;
 out:
 	return rc;
 }
@@ -3832,7 +3845,7 @@ dc_obj_fetch_task(tse_task_t *task)
 		 */
 		shard = obj_auxi->req_tgts.ort_shard_tgts[0].st_shard;
 		obj_auxi->spec_shard = 1;
-	} else if (obj_auxi->csum_retry) {
+	} else if (obj_auxi->csum_retry && !obj_auxi->is_ec_obj) {
 		rc = obj_retry_csum_err(obj, obj_auxi, dkey_hash, map_ver,
 					&csum_bitmap);
 		if (rc)
