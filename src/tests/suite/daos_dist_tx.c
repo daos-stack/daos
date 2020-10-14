@@ -378,7 +378,7 @@ dtx_10(void **state)
 	punch_dkey_with_flags(dkey2, th, &req, DAOS_COND_PUNCH);
 
 	/** Remove the test for the dkey because it can't work with client
-	 *  side cacheing and punch propagation.   The dkey will have been
+	 *  side caching and punch propagation.   The dkey will have been
 	 *  removed by the akey punch above.  The problem is the server
 	 *  doesn't know that due to caching so there is no way to make it
 	 *  work.
