@@ -73,17 +73,6 @@ This script has 4 modes that can be executed independently if needed.
 }
 
 #######################################
-# CONSTANT variables.
-#######################################
-if "${CART_LOGTEST}"; then
-    rel_path="/cart/cart_logtest.py"
-    if ! CART_LOGTEST_PATH="$(dirname "$(readlink -f "${0}")")${rel_path}"; then
-        echo "Failed to get path to cart_logtest.py ..."
-        exit 1
-    fi
-fi
-
-#######################################
 # Check if the files exist on this host.
 # Arguments:
 #   $1: local logs to process
@@ -94,7 +83,7 @@ fi
 check_files_input() {
     if [ -n "${1}" ]; then
         # shellcheck disable=SC2086
-        if ! ls -d ${1} 2> /dev/null; then
+        if ls -d ${1} 2> /dev/null; then
             echo "Files found that match ${1}."
         else
             echo "No files matched ${1}. Nothing to do."
@@ -303,6 +292,12 @@ fi
 
 # Run cart_logtest.py on FILES_TO_PROCESS
 if "${CART_LOGTEST:-false}"; then
+    rel_path="/cart/cart_logtest.py"
+    if ! CART_LOGTEST_PATH="$(dirname "$(readlink -f "${0}")")${rel_path}"; then
+        echo "Failed to get path to cart_logtest.py ..."
+        exit 1
+    fi
+
     echo "Running ${CART_LOGTEST_PATH} ..."
     run_cartlogtest "${FILES_TO_PROCESS}"
     ret=$?
