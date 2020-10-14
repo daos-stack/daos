@@ -246,7 +246,6 @@ rebuild_objects_send_ult(void *data)
 		if (rc < 0) {
 			D_ERROR("dbtree iterate failed: rc "DF_RC"\n",
 				DP_RC(rc));
-			tls->rebuild_pool_status = rc;
 			break;
 		}
 		ABT_thread_yield();
@@ -261,6 +260,8 @@ out:
 		D_FREE(shards);
 	if (ephs != NULL)
 		D_FREE(ephs);
+	if (rc != 0 && tls->rebuild_pool_status == 0)
+		tls->rebuild_pool_status = rc;
 
 	rpt_put(rpt);
 }
@@ -555,7 +556,8 @@ out:
 	if (ult_send != ABT_THREAD_NULL)
 		ABT_thread_join(ult_send);
 
-	tls->rebuild_pool_status = rc;
+	if (tls->rebuild_pool_status == 0 && rc != 0)
+		tls->rebuild_pool_status = rc;
 
 	D_DEBUG(DB_TRACE, DF_UUID" iterate pool done: rc %d\n",
 		DP_UUID(rpt->rt_pool_uuid), rc);
@@ -615,7 +617,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 {
 	struct rebuild_scan_in		*rsi;
 	struct rebuild_scan_out		*ro;
-	struct rebuild_pool_tls		*tls;
+	struct rebuild_pool_tls		*tls = NULL;
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
 	int				 rc;
 
@@ -703,6 +705,9 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	}
 
 out:
+	if (tls && tls->rebuild_pool_status == 0 && rc != 0)
+		tls->rebuild_pool_status = rc;
+
 	if (rpt)
 		rpt_put(rpt);
 	ro = crt_reply_get(rpc);
