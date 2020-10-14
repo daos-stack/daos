@@ -687,7 +687,7 @@ open_file(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 	}
 
 	/* Check if parent has the filename entry */
-	rc = fetch_entry(parent->oh, th, file->name, false, &exists, &entry);
+	rc = fetch_entry(parent->oh, th, file->name, true, &exists, &entry);
 	if (rc) {
 		D_ERROR("fetch_entry %s failed %d.\n", file->name, rc);
 		return rc;
@@ -697,11 +697,38 @@ open_file(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 		return ENOENT;
 
 fopen:
-	if (!S_ISREG(entry.mode)) {
-		if (entry.value) {
-			D_ASSERT(S_ISLNK(entry.mode));
-			D_FREE(entry.value);
+	if (S_ISLNK(entry.mode)) {
+		/* conditionally dereference symbolic links */
+		if (entry.value == NULL) {
+			D_ERROR("Null Symlink value\n");
+			return EIO;
 		}
+
+		if (flags & O_NOFOLLOW) {
+			D_FREE(entry.value);
+			return ELOOP;
+		}
+
+		dfs_obj_t *sym;
+		rc = dfs_lookup(dfs, entry.value, flags, &sym, NULL, NULL);
+		if (rc) {
+			D_FREE(entry.value);
+			return rc;
+		}
+
+		if (!S_ISREG(sym->mode)) {
+			D_FREE(entry.value);
+			D_FREE(sym);
+			return EINVAL;
+		}
+
+		D_FREE(entry.value);
+		*file = *sym;
+		D_FREE(sym);
+		return 0;
+	}
+
+	if (!S_ISREG(entry.mode)) {
 		return EINVAL;
 	}
 
@@ -790,12 +817,43 @@ open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
 		return EINVAL;
 
 	/* Check if parent has the dirname entry */
-	rc = fetch_entry(parent_oh, th, dir->name, false, &exists, &entry);
+	rc = fetch_entry(parent_oh, th, dir->name, true, &exists, &entry);
 	if (rc)
 		return rc;
 
 	if (!exists)
 		return ENOENT;
+
+	if (S_ISLNK(entry.mode)) {
+		if (entry.value == NULL) {
+			D_ERROR("Null Symlink value\n");
+			return EIO;
+		}
+
+		/* conditionally dereference symbolic links */
+		if (flags & O_NOFOLLOW) {
+			D_FREE(entry.value);
+			return ELOOP;
+		}
+
+		dfs_obj_t *sym;
+		rc = dfs_lookup(dfs, entry.value, flags, &sym, NULL, NULL);
+		if (rc) {
+			D_FREE(entry.value);
+			return rc;
+		}
+
+		if (!S_ISDIR(sym->mode)) {
+			D_FREE(entry.value);
+			D_FREE(sym);
+			return ENOTDIR;
+		}
+
+		D_FREE(entry.value);
+		*dir = *sym;
+		D_FREE(sym);
+		return 0;
+	}
 
 	if (!S_ISDIR(entry.mode))
 		return ENOTDIR;
@@ -1926,6 +1984,7 @@ dfs_lookup_loop:
 					D_GOTO(err_obj, rc);
 				}
 
+				obj->oh = sym->oh;
 				parent.oh = sym->oh;
 				D_FREE(sym);
 				D_FREE(entry.value);
@@ -1935,6 +1994,29 @@ dfs_lookup_loop:
 				 * already did the strtok.
 				 */
 				goto dfs_lookup_loop;
+			}
+
+			/* 
+			 * This is the last entry.
+			 * conditionally dereference the symbolic link.
+			 */
+			if (!(flags & O_NOFOLLOW)) {
+				dfs_obj_t *sym;
+
+				rc = dfs_lookup(dfs, entry.value, flags, &sym,
+						NULL, NULL);
+				if (rc) {
+					D_DEBUG(DB_TRACE,
+						"Failed to lookup symlink %s\n",
+						entry.value);
+					D_FREE(sym);
+					D_GOTO(err_obj, rc);
+				}
+
+				D_FREE(entry.value);
+				D_FREE(obj);
+				obj = sym;
+				break;
 			}
 
 			obj->value = entry.value;
@@ -2001,12 +2083,31 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
-	if (obj == NULL || !S_ISDIR(obj->mode))
+	if (obj == NULL || !(S_ISDIR(obj->mode) || S_ISLNK(obj->mode)))
 		return ENOTDIR;
 	if (*nr == 0)
 		return 0;
 	if (dirs == NULL || anchor == NULL)
 		return EINVAL;
+
+	if (S_ISLNK(obj->mode)) {
+		/* dereference symbolic links */
+		dfs_obj_t *sym;
+		rc = dfs_lookup(dfs, obj->value, obj->flags, &sym, NULL, NULL);
+		if (rc) {
+			return rc;
+		}
+
+		if (!S_ISDIR(sym->mode)) {
+			D_FREE(sym);
+			return ENOTDIR;
+		}
+
+		/* Use the dereferenced symlink as a reference point */
+		rc = dfs_readdir(dfs, sym, anchor, nr, dirs);
+		D_FREE(sym);
+		return rc;
+	}
 
 	rc = check_access(dfs, geteuid(), getegid(), obj->mode, R_OK);
 	if (rc)
