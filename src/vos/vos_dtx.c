@@ -1578,7 +1578,7 @@ again:
 	count -= slots;
 
 	if (slots > 1) {
-		D_ALLOC(dce_df, sizeof(*dce_df) * slots);
+		D_ALLOC_ARRAY(dce_df, slots);
 		if (dce_df == NULL) {
 			D_ERROR("Not enough DRAM to commit "DF_DTI"\n",
 				DP_DTI(&dtis[cur]));
@@ -1661,7 +1661,7 @@ new_blob:
 		  count, dbd->dbd_cap);
 
 	if (count > 1) {
-		D_ALLOC(dce_df, sizeof(*dce_df) * count);
+		D_ALLOC_ARRAY(dce_df, count);
 		if (dce_df == NULL) {
 			D_ERROR("Not enough DRAM to commit "DF_DTI"\n",
 				DP_DTI(&dtis[cur]));

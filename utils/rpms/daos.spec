@@ -13,7 +13,7 @@
 
 Name:          daos
 Version:       1.1.1
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -234,7 +234,7 @@ mv %{?buildroot}/%{_prefix}/etc/bash_completion.d %{?buildroot}/%{_sysconfdir}
 
 %pre server
 getent group daos_admins >/dev/null || groupadd -r daos_admins
-getent passwd daos_server >/dev/null || useradd -M daos_server
+getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r daos_server
 %post server
 /sbin/ldconfig
 %systemd_post %{server_svc_name}
@@ -244,6 +244,8 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 /sbin/ldconfig
 %systemd_postun %{server_svc_name}
 
+%pre client
+getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %post client
 %systemd_post %{agent_svc_name}
 %preun client
@@ -397,8 +399,12 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
-* Tue Oct 13 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.1-2
+
+* Tue Oct 14 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.1-3
 - add fault_status to daos-tests files list
+
+* Tue Oct 13 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.1-2
+- Create unprivileged user for daos_agent
 
 * Mon Oct 12 2020 Johann Lombardi <johann.lombardi@intel.com> 1.1.1-1
 - Version bump up to 1.1.1
