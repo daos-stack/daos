@@ -118,6 +118,7 @@ opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
 	int			rc;
 	size_t			count = opts->num_pci_addr;
 	struct spdk_pci_addr   *tmp = *list;
+	struct spdk_pci_addr   *new;
 
 	rc = is_addr_in_whitelist(traddr, *list, count);
 	if (rc < 0) {
@@ -127,13 +128,11 @@ opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
 		return 0;
 	}
 
-	tmp = realloc(tmp, sizeof(struct spdk_pci_addr) * (count + 1));
-	if (tmp == NULL) {
-		D_ERROR("realloc error\n");
+	D_REALLOC_ARRAY(new, tmp, count + 1);
+	if (new == NULL)
 		return -DER_NOMEM;
-	}
 
-	*list = tmp;
+	*list = new;
 	if (spdk_pci_addr_parse(*list + count, traddr) < 0) {
 		D_ERROR("Invalid address %s\n", traddr);
 		return -DER_INVAL;

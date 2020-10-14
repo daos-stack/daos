@@ -55,24 +55,24 @@ daos_tests:
     test_d:
       daos_test: d
       test_name: DAOS degraded-mode tests
-      timeout: 450
+      test_timeout: 450
       scalable_endpoint: True
     test_m:
       daos_test: m
       test_name: Management tests
-      timeout: 110
+      test_timeout: 110
     test_p:
       daos_test: p
       test_name: Pool tests
-      timeout: 120
+      test_timeout: 120
     test_c:
       daos_test: c
       test_name: DAOS container tests
-      timeout: 135
+      test_timeout: 135
     test_e:
       daos_test: e
       test_name: DAOS epoch tests
-      timeout: 125
+      test_timeout: 125
     test_t:
       daos_test: t
       test_name: Single RDG TX tests

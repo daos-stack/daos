@@ -360,8 +360,8 @@ daos_test_cb_add(test_arg_t *arg, struct test_op_record *op,
 {
 	print_message("add rank %u\n", op->ae_arg.ua_rank);
 	test_rebuild_wait(&arg, 1);
-	daos_add_server(arg->pool.pool_uuid, arg->group, arg->dmg_config,
-			arg->pool.svc, op->ae_arg.ua_rank);
+	daos_reint_server(arg->pool.pool_uuid, arg->group, arg->dmg_config,
+			  arg->pool.svc, op->ae_arg.ua_rank);
 	return 0;
 }
 

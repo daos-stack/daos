@@ -1132,13 +1132,13 @@ dc_pool_exclude(tse_task_t *task)
 }
 
 int
-dc_pool_add(tse_task_t *task)
+dc_pool_reint(tse_task_t *task)
 {
 	daos_pool_update_t *args;
 
 	args = dc_task_get_args(task);
 
-	return dc_pool_update_internal(task, args, POOL_ADD);
+	return dc_pool_update_internal(task, args, POOL_REINT);
 }
 
 int
