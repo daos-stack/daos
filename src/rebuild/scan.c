@@ -138,8 +138,8 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 				       arg->tgt_id, rpt->rt_rebuild_ver,
 				       rpt->rt_stable_epoch, arg->oids,
 				       arg->ephs, arg->shards, arg->count,
-				       /* Clear containers for add/reint */
-				       rpt->rt_rebuild_op == RB_OP_ADD);
+				       /* Clear containers for reint */
+				       rpt->rt_rebuild_op == RB_OP_REINT);
 		/* If it does not need retry */
 		if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_GRPVER &&
 		    rc != -DER_AGAIN && !daos_crt_network_error(rc)))
@@ -246,7 +246,6 @@ rebuild_objects_send_ult(void *data)
 		if (rc < 0) {
 			D_ERROR("dbtree iterate failed: rc "DF_RC"\n",
 				DP_RC(rc));
-			tls->rebuild_pool_status = rc;
 			break;
 		}
 		ABT_thread_yield();
@@ -261,6 +260,8 @@ out:
 		D_FREE(shards);
 	if (ephs != NULL)
 		D_FREE(ephs);
+	if (rc != 0 && tls->rebuild_pool_status == 0)
+		tls->rebuild_pool_status = rc;
 
 	rpt_put(rpt);
 }
@@ -379,15 +380,21 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 						 rpt->rt_rebuild_ver,
 						 tgts, shards,
 						 rpt->rt_tgts_num, -1);
-	} else if (rpt->rt_rebuild_op == RB_OP_ADD) {
+	} else if (rpt->rt_rebuild_op == RB_OP_REINT) {
 		rebuild_nr = pl_obj_find_reint(map, &md, NULL,
 					       rpt->rt_rebuild_ver,
 					       tgts, shards,
 					       rpt->rt_tgts_num, myrank);
+	} else if (rpt->rt_rebuild_op == RB_OP_EXTEND) {
+		rebuild_nr = pl_obj_find_addition(map, &md, NULL,
+						  rpt->rt_rebuild_ver,
+						  tgts, shards,
+						  rpt->rt_tgts_num, myrank);
 	} else {
 		D_ASSERT(rpt->rt_rebuild_op == RB_OP_FAIL ||
 			 rpt->rt_rebuild_op == RB_OP_DRAIN ||
-			 rpt->rt_rebuild_op == RB_OP_ADD);
+			 rpt->rt_rebuild_op == RB_OP_REINT ||
+			 rpt->rt_rebuild_op == RB_OP_EXTEND);
 	}
 	if (rebuild_nr <= 0) /* No need rebuild */
 		D_GOTO(out, rc = rebuild_nr);
@@ -492,9 +499,11 @@ rebuild_scanner(void *data)
 	struct umem_attr		uma;
 	int				rc;
 
-	if (is_current_tgt_unavail(rpt) ||
-	   (!rebuild_status_match(rpt, PO_COMP_ST_DRAIN) &&
-	    rpt->rt_rebuild_op == RB_OP_DRAIN)) {
+	if (rebuild_status_match(rpt, PO_COMP_ST_DOWNOUT |
+				      PO_COMP_ST_DOWN |
+				      PO_COMP_ST_NEW) ||
+	    (!rebuild_status_match(rpt, PO_COMP_ST_DRAIN) &&
+	     rpt->rt_rebuild_op == RB_OP_DRAIN)) {
 		D_DEBUG(DB_TRACE, DF_UUID" skip scan\n",
 			DP_UUID(rpt->rt_pool_uuid));
 		return 0;
@@ -547,7 +556,8 @@ out:
 	if (ult_send != ABT_THREAD_NULL)
 		ABT_thread_join(ult_send);
 
-	tls->rebuild_pool_status = rc;
+	if (tls->rebuild_pool_status == 0 && rc != 0)
+		tls->rebuild_pool_status = rc;
 
 	D_DEBUG(DB_TRACE, DF_UUID" iterate pool done: rc %d\n",
 		DP_UUID(rpt->rt_pool_uuid), rc);
@@ -607,7 +617,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 {
 	struct rebuild_scan_in		*rsi;
 	struct rebuild_scan_out		*ro;
-	struct rebuild_pool_tls		*tls;
+	struct rebuild_pool_tls		*tls = NULL;
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
 	int				 rc;
 
@@ -695,10 +705,30 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	}
 
 out:
+	if (tls && tls->rebuild_pool_status == 0 && rc != 0)
+		tls->rebuild_pool_status = rc;
+
 	if (rpt)
 		rpt_put(rpt);
 	ro = crt_reply_get(rpc);
 	ro->rso_status = rc;
 	ro->rso_stable_epoch = crt_hlc_get();
 	dss_rpc_reply(rpc, DAOS_REBUILD_DROP_SCAN);
+}
+
+int
+rebuild_tgt_scan_aggregator(crt_rpc_t *source, crt_rpc_t *result,
+			    void *priv)
+{
+	struct rebuild_scan_out	*src = crt_reply_get(source);
+	struct rebuild_scan_out *dst = crt_reply_get(result);
+
+	if (dst->rso_status == 0)
+		dst->rso_status = src->rso_status;
+
+	if (src->rso_status == 0 &&
+	    dst->rso_stable_epoch < src->rso_stable_epoch)
+		dst->rso_stable_epoch = src->rso_stable_epoch;
+
+	return 0;
 }
