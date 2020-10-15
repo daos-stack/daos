@@ -82,8 +82,8 @@ class ConnectTest(TestWithServers):
                     "Pool {0} not found on host {1}.\n".format(
                         data["uuid"], host2))
 
-            result = dmg.pool_query(data["uuid"])
-            if result.exit_status != 0:
+            dmg.pool_query(data["uuid"])
+            if dmg.result.exit_status != 0:
                 self.fail("Could not connect to Pool {}\n".format(data["uuid"]))
 
             if expected_result == 'FAIL':

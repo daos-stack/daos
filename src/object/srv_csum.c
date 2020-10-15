@@ -320,12 +320,6 @@ cc_biovcsum_incr(struct csum_context *ctx, uint32_t nr)
 	ctx->cc_biov_csum_idx += nr;
 }
 
-static uint64_t
-cc2biov_csums_nr(struct csum_context *ctx)
-{
-	return ctx->cc_biov_csum_idx + 1;
-}
-
 /**
  * determine if a new checksum is needed for the chunk given a record index.
  * A biov will have a prefix or suffix if the raw extent is partly covered by
@@ -658,7 +652,11 @@ ds_csum_add2iod_array(daos_iod_t *iod, struct daos_csummer *csummer,
 
 	/** return the count of biov csums used. */
 	if (biov_csums_used != NULL)
-		*biov_csums_used = cc2biov_csums_nr(&ctx);
+		/**
+		 * ctx.cc_biov_csums_idx will have the number of
+		 * csums processed
+		 */
+		*biov_csums_used = ctx.cc_biov_csums_idx;
 	return rc;
 }
 
