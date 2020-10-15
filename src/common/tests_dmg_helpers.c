@@ -250,7 +250,7 @@ parse_pool_info(struct json_object *json_pool, daos_mgmt_pool_info_t *pool_info)
 	struct json_object	*tmp, *rank;
 	int			n_svcranks;
 	const char		*uuid_str;
-	int			i;
+	int			i, rc;
 
 	if (json_pool == NULL || pool_info == NULL)
 		return -DER_INVAL;
@@ -264,7 +264,11 @@ parse_pool_info(struct json_object *json_pool, daos_mgmt_pool_info_t *pool_info)
 		D_ERROR("unable to extract UUID string from JSON\n");
 		return -DER_INVAL;
 	}
-	uuid_parse(uuid_str, pool_info->mgpi_uuid);
+	rc = uuid_parse(uuid_str, pool_info->mgpi_uuid);
+	if (rc != 0) {
+		D_ERROR("failed parsing uuid_str\n");
+		return -DER_INVAL;
+	}
 
 	if (!json_object_object_get_ex(json_pool, "Svcreps", &tmp)) {
 		D_ERROR("unable to parse pool svcreps from JSON\n");
