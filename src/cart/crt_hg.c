@@ -1035,7 +1035,7 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	crt_cbinfo.cci_rc = rc;
 
 	if (rc != 0 && rpc_pub->cr_ep.ep_tag != 0 &&
-		!rpc_priv->crp_rpc_retry) {
+	    !rpc_priv->crp_rpc_retry) {
 		rpc_priv->crp_rpc_retry = true;
 		retry_rc = crt_req_retry(rpc_priv);
 		if (retry_rc == 0) {
