@@ -26,7 +26,7 @@ following steps:
 
 - [Format](#storage-formatting) the DAOS system
 
-- [Set up and start the agent](#agent-configuration-and-startup) on the client nodes
+- [Set up and start the agent](#agent-startup) on the client nodes
 
 - [Validate](#system-validation) that the DAOS system is operational
 
@@ -405,24 +405,29 @@ processes over the management network.
 
 `sudo daos_server storage scan` can be used to query `daos_server`
 directly (scans locally-attached SSDs and Intel Persistent Memory
-Modules usable by DAOS).
+Modules usable by DAOS). Output will be equivalent running
+`dmg storage scan --verbose` remotely.
 
 ```bash
-[daos@wolf-72 daos_m]$ dmg -l wolf-7[1-2] -i storage scan --verbose
-wolf-[71-72]:10001: connected
+bash-4.2$ dmg storage scan
+Hosts        SCM Total             NVMe Total
+-----        ---------             ----------
+wolf-[71-72] 6.4 TB (2 namespaces) 3.1 TB (3 controllers)
+
+bash-4.2$ dmg storage scan --verbose
 ------------
 wolf-[71-72]
 ------------
 SCM Namespace Socket ID Capacity
 ------------- --------- --------
-pmem0         0         2.90TB
-pmem1         1         2.90TB
+pmem0         0         3.2 TB
+pmem1         1         3.2 TB
 
 NVMe PCI     Model                FW Revision Socket ID Capacity
 --------     -----                ----------- --------- --------
-0000:81:00.0 INTEL SSDPED1K750GA  E2010325    1         750.00GB
-0000:87:00.0 INTEL SSDPEDMD016T4  8DV10171    1         1.56TB
-0000:da:00.0 INTEL SSDPED1K750GA  E2010325    1         750.00GB
+0000:81:00.0 INTEL SSDPED1K750GA  E2010325    1         750 GB
+0000:87:00.0 INTEL SSDPEDMD016T4  8DV10171    1         1.6 TB
+0000:da:00.0 INTEL SSDPED1K750GA  E2010325    1         750 GB
 ```
 
 The NVMe PCI field above is what should be used in the server
@@ -431,31 +436,101 @@ configuration file to identified NVMe SSDs.
 Devices with the same NUMA node/socket should be used in the same per-server
 section of the server configuration file for best performance.
 
-Note that other storage query commands are also available,
-`dmg storage --help` for listings.
+For further info on command usage run `dmg storage --help`.
 
 SSD health state can be verified via `dmg storage scan --nvme-health`:
 
 ```bash
-$ dmg -l wolf-71 storage scan --nvme-health
-wolf-71:10001: connected
-wolf-71:10001
-        NVMe controllers and namespaces detail with health statistics:
-                PCI:0000:81:00.0 Model:INTEL SSDPED1K750GA  FW:E2010325 Socket:1 Capacity:750TB
-                Health Stats:
-                        Temperature:288K(15C)
-                        Controller Busy Time:5h26m0s
-                        Power Cycles:4
-                        Power On Duration:16488h0m0s
-                        Unsafe Shutdowns:2
-                        Media Errors:0
-                        Error Log Entries:0
-                        Critical Warnings:
-                                Temperature: OK
-                                Available Spare: OK
-                                Device Reliability: OK
-                                Read Only: OK
-                                Volatile Memory Backup: OK
+bash-4.2$ dmg storage scan --nvme-health
+-------
+wolf-71
+-------
+PCI:0000:81:00.0 Model:INTEL SSDPED1K750GA  FW:E2010325 Socket:1 Capacity:750 GB
+  Health Stats:
+    Temperature:318K(44.85C)
+    Controller Busy Time:0s
+    Power Cycles:15
+    Power On Duration:10402h0m0s
+    Unsafe Shutdowns:13
+    Error Count:0
+    Media Errors:0
+    Read Errors:0
+    Write Errors:0
+    Unmap Errors:0
+    Checksum Errors:0
+    Error Log Entries:0
+  Critical Warnings:
+    Temperature: OK
+    Available Spare: OK
+    Device Reliability: OK
+    Read Only: OK
+    Volatile Memory Backup: OK
+
+PCI:0000:da:00.0 Model:INTEL SSDPED1K750GA  FW:E2010325 Socket:1 Capacity:750 GB
+  Health Stats:
+    Temperature:320K(46.85C)
+    Controller Busy Time:0s
+    Power Cycles:15
+    Power On Duration:10402h0m0s
+    Unsafe Shutdowns:13
+    Error Count:0
+    Media Errors:0
+    Read Errors:0
+    Write Errors:0
+    Unmap Errors:0
+    Checksum Errors:0
+    Error Log Entries:0
+  Critical Warnings:
+    Temperature: OK
+    Available Spare: OK
+    Device Reliability: OK
+    Read Only: OK
+    Volatile Memory Backup: OK
+
+-------
+wolf-72
+-------
+PCI:0000:81:00.0 Model:INTEL SSDPED1K750GA  FW:E2010435 Socket:1 Capacity:750 GB
+  Health Stats:
+    Temperature:316K(42.85C)
+    Controller Busy Time:8m0s
+    Power Cycles:23
+    Power On Duration:10399h0m0s
+    Unsafe Shutdowns:18
+    Error Count:0
+    Media Errors:0
+    Read Errors:0
+    Write Errors:0
+    Unmap Errors:0
+    Checksum Errors:0
+    Error Log Entries:0
+  Critical Warnings:
+    Temperature: OK
+    Available Spare: OK
+    Device Reliability: OK
+    Read Only: OK
+    Volatile Memory Backup: OK
+
+PCI:0000:da:00.0 Model:INTEL SSDPED1K750GA  FW:E2010435 Socket:1 Capacity:750 GB
+  Health Stats:
+    Temperature:320K(46.85C)
+    Controller Busy Time:1m0s
+    Power Cycles:23
+    Power On Duration:10399h0m0s
+    Unsafe Shutdowns:19
+    Error Count:0
+    Media Errors:0
+    Read Errors:0
+    Write Errors:0
+    Unmap Errors:0
+    Checksum Errors:0
+    Error Log Entries:0
+  Critical Warnings:
+    Temperature: OK
+    Available Spare: OK
+    Device Reliability: OK
+    Read Only: OK
+    Volatile Memory Backup: OK
 ```
 
 The next step consists of adjusting in the server configuration the storage
@@ -482,7 +557,6 @@ configurations that returns the following from scan for each host:
 
 ```bash
 [daos@wolf-72 daos_m]$ dmg -l wolf-7[1-2] -i storage scan --verbose
-wolf-7[1-2]:10001: connected
 -------
 wolf-7[1-2]
 -------

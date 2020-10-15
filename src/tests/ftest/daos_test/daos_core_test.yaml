@@ -51,25 +51,28 @@ dmg:
 daos_tests:
   num_clients:
     num_clients: 1
-  num_replicas:
-    num_replicas: 1
   Tests: !mux
     test_d:
       daos_test: d
       test_name: DAOS degraded-mode tests
+      test_timeout: 450
       scalable_endpoint: True
     test_m:
       daos_test: m
       test_name: Management tests
+      test_timeout: 110
     test_p:
       daos_test: p
       test_name: Pool tests
+      test_timeout: 120
     test_c:
       daos_test: c
       test_name: DAOS container tests
+      test_timeout: 135
     test_e:
       daos_test: e
       test_name: DAOS epoch tests
+      test_timeout: 125
     test_t:
       daos_test: t
       test_name: Single RDG TX tests
@@ -79,48 +82,55 @@ daos_tests:
     test_V:
       daos_test: V
       test_name: DAOS verify consistency tests
-      test_timeout: 900
+      test_timeout: 105
     test_i:
       daos_test: i
       test_name: IO test
-      test_timeout: 900
+      test_timeout: 130
     test_A:
       daos_test: A
       test_name: DAOS Object Array tests
+      test_timeout: 105
     test_D:
       daos_test: D
       test_name: DAOS Array tests
+      test_timeout: 106
     test_K:
       daos_test: K
       test_name: DAOS KV tests
+      test_timeout: 105
     test_F:
       daos_test: F
       test_name: DAOS File System tests
+      test_timeout: 140
     test_C:
       daos_test: C
       test_name: DAOS capability tests
+      test_timeout: 104
     test_o:
       daos_test: o
       test_name: Epoch recovery tests
+      test_timeout: 104
     test_R:
       daos_test: R
       test_name: DAOS MD replication tests
+      test_timeout: 104
     test_v:
       daos_test: v
       test_name: DAOS rebuild simple tests
-      test_timeout: 1500
+      test_timeout: 500
     test_b:
       daos_test: b
       test_name: DAOS drain simple tests
-      test_timeout: 1500
+      test_timeout: 500
     test_O:
       daos_test: O
       test_name: OID Allocator tests
-      test_timeout: 1350
+      test_timeout: 320
     test_z:
       daos_test: z
       test_name: Checksum tests
-      test_timeout: 900
+      test_timeout: 220
     test_S:
       daos_test: S 
       test_name: DAOS rebuild ec tests

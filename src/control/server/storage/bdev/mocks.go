@@ -59,17 +59,22 @@ func DefaultMockBackend() *MockBackend {
 	return NewMockBackend(nil)
 }
 
-func (mb *MockBackend) Scan(_ ScanRequest) (*ScanResponse, error) {
+func (mb *MockBackend) Scan(req ScanRequest) (*ScanResponse, error) {
 	if mb.cfg.ScanRes == nil {
 		mb.cfg.ScanRes = new(ScanResponse)
 	}
-	return mb.cfg.ScanRes, mb.cfg.ScanErr
+	// hack: filter based on request here because mock
+	// provider has forwarding disabled and filter is
+	// therefore skipped in test
+	return mb.cfg.ScanRes.filter(req.DeviceList...),
+		mb.cfg.ScanErr
 }
 
 func (mb *MockBackend) Format(req FormatRequest) (*FormatResponse, error) {
 	if mb.cfg.FormatRes == nil {
 		mb.cfg.FormatRes = new(FormatResponse)
 	}
+
 	return mb.cfg.FormatRes, mb.cfg.FormatErr
 }
 

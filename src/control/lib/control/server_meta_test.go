@@ -89,7 +89,7 @@ func TestControl_SmdQuery(t *testing.T) {
 				},
 			},
 			expResp: &SmdQueryResp{
-				HostErrorsResp: mockHostErrorsResp(t, &mockHostError{"host1", "remote failed"}),
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "remote failed"}),
 			},
 		},
 		"nil request": {
@@ -209,7 +209,7 @@ func TestControl_SmdQuery(t *testing.T) {
 				HostStorage: mockSmdQueryMap(t, &mockSmdQueryResp{
 					Hosts: "host-0",
 					SmdInfo: &SmdInfo{
-						Devices: []*SmdDevice{
+						Devices: []*storage.SmdDevice{
 							{
 								UUID:      common.MockUUID(0),
 								Rank:      system.Rank(0),
@@ -242,7 +242,6 @@ func TestControl_SmdQuery(t *testing.T) {
 												TgtIds: []int32{0},
 												Health: &mgmtpb.BioHealthResp{
 													DevUuid:            common.MockUUID(0),
-													ErrCount:           1,
 													Temperature:        2,
 													MediaErrs:          3,
 													BioReadErrs:        4,
@@ -269,13 +268,12 @@ func TestControl_SmdQuery(t *testing.T) {
 				HostStorage: mockSmdQueryMap(t, &mockSmdQueryResp{
 					Hosts: "host-0",
 					SmdInfo: &SmdInfo{
-						Devices: []*SmdDevice{
+						Devices: []*storage.SmdDevice{
 							{
 								UUID:      common.MockUUID(0),
 								Rank:      system.Rank(0),
 								TargetIDs: []int32{0},
 								Health: &storage.NvmeControllerHealth{
-									ErrorCount:      1,
 									Temperature:     2,
 									MediaErrors:     3,
 									ReadErrors:      4,

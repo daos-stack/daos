@@ -48,7 +48,8 @@ from dmg_utils_params import \
 from dmg_utils import DmgCommand
 from daos_utils import DaosCommand
 from server_utils import DaosServerCommand, DaosServerManager
-from general_utils import get_partition_hosts, stop_processes
+from general_utils import \
+    get_partition_hosts, stop_processes, get_job_manager_class
 from logger_utils import TestLogger
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
@@ -181,7 +182,9 @@ class TestWithoutServers(Test):
     def setUp(self):
         """Set up run before each test."""
         super(TestWithoutServers, self).setUp()
+
         load_mpi('openmpi')
+
         self.orterun = find_executable('orterun')
         if self.orterun is None:
             self.fail("Could not find orterun")
@@ -285,6 +288,7 @@ class TestWithServers(TestWithoutServers):
             os.path.split(self.filename)[1], self.name.str_uid)
         # self.debug = False
         # self.config = None
+        self.job_manager = None
 
     def setUp(self):
         """Set up each test case."""
@@ -362,6 +366,17 @@ class TestWithServers(TestWithoutServers):
         # Start the servers
         if self.setup_start_servers:
             self.start_servers()
+
+        # Setup a job manager command for running the test command
+        manager_class_name = self.params.get(
+            "job_manager_class_name", default=None)
+        manager_subprocess = self.params.get(
+            "job_manager_subprocess", default=False)
+        manager_mpi_type = self.params.get(
+            "job_manager_mpi_type", default="mpich")
+        if manager_class_name is not None:
+            self.job_manager = get_job_manager_class(
+                manager_class_name, None, manager_subprocess, manager_mpi_type)
 
     def stop_leftover_processes(self, processes, hosts):
         """Stop leftover processes on the specified hosts before starting tests.
@@ -470,7 +485,7 @@ class TestWithServers(TestWithoutServers):
         filename = "{}_{}_{}.yaml".format(self.config_file_base, name, command)
         return os.path.join(self.tmp, filename)
 
-    def add_agent_manager(self, config_file=None, common_cfg=None, timeout=30):
+    def add_agent_manager(self, config_file=None, common_cfg=None, timeout=15):
         """Add a new daos agent manager object to the agent manager list.
 
         Args:
@@ -497,7 +512,7 @@ class TestWithServers(TestWithoutServers):
             DaosAgentManager(agent_cmd, self.manager_class))
 
     def add_server_manager(self, config_file=None, dmg_config_file=None,
-                           common_cfg=None, timeout=90):
+                           common_cfg=None, timeout=20):
         """Add a new daos server manager object to the server manager list.
 
         When adding multiple server managers unique yaml config file names
@@ -592,6 +607,9 @@ class TestWithServers(TestWithoutServers):
         # Tear down any test-specific items
         errors = self.pre_tear_down()
 
+        # Stop any test jobs that may still be running
+        errors.extend(self.stop_job_managers())
+
         # Destroy any containers first
         errors.extend(self.destroy_containers(self.container))
 
@@ -626,6 +644,20 @@ class TestWithServers(TestWithoutServers):
         """
         self.log.info("teardown() started")
         return []
+
+    def stop_job_managers(self):
+        """Stop the test job manager.
+
+        Returns:
+            list: a list of exceptions raised stopping the agents
+
+        """
+        error_list = []
+        if self.job_manager:
+            self.test_log.info("Stopping test job manager")
+            error_list = self._stop_managers(
+                [self.job_manager], "test job manager")
+        return error_list
 
     def destroy_containers(self, containers):
         """Close and destroy one or more containers.

@@ -246,10 +246,11 @@ dtx_act_ent_update(struct btr_instance *tins, struct btr_record *rec,
 	struct vos_dtx_act_ent	*dae_old;
 
 	dae_old = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	D_ASSERTF(0, "NOT allow to update act DTX entry for "DF_DTI
-		  " from epoch "DF_X64" to "DF_X64"\n",
-		  DP_DTI(&DAE_XID(dae_old)),
-		  DAE_EPOCH(dae_old), DAE_EPOCH(dae_new));
+	if (DAE_EPOCH(dae_old) != DAE_EPOCH(dae_new))
+		D_ASSERTF(0, "NOT allow to update act DTX entry for "DF_DTI
+			  " from epoch "DF_X64" to "DF_X64"\n",
+			  DP_DTI(&DAE_XID(dae_old)),
+			  DAE_EPOCH(dae_old), DAE_EPOCH(dae_new));
 
 	return 0;
 }
@@ -811,6 +812,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 				if (umoff_is_null(rec_off)) {
 					D_ERROR("No space to store CMT DTX OID "
 						DF_DTI"\n", DP_DTI(dti));
+					*fatal = true;
 					D_GOTO(out, rc = -DER_NOSPACE);
 				}
 
@@ -999,21 +1001,21 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth)
 
 	cont_df = cont->vc_cont_df;
 
+	dbd = umem_off2ptr(umm, cont_df->cd_dtx_active_tail);
+	if (dbd == NULL || dbd->dbd_index >= dbd->dbd_cap) {
+		rc = vos_dtx_extend_act_table(cont);
+		if (rc != 0)
+			return rc;
+
+		dbd = umem_off2ptr(umm, cont_df->cd_dtx_active_tail);
+	}
+
 	rc = lrua_allocx(cont->vc_dtx_array, &idx, dth->dth_epoch, &dae);
 	if (rc != 0) {
 		/** The array is full, need to commit some transactions first */
 		if (rc == -DER_BUSY)
 			return -DER_INPROGRESS;
 		return rc;
-	}
-
-	dbd = umem_off2ptr(umm, cont_df->cd_dtx_active_tail);
-	if (dbd == NULL || dbd->dbd_index >= dbd->dbd_cap) {
-		rc = vos_dtx_extend_act_table(cont);
-		if (rc != 0)
-			goto out;
-
-		dbd = umem_off2ptr(umm, cont_df->cd_dtx_active_tail);
 	}
 
 	DAE_LID(dae) = idx + DTX_LID_RESERVED;
@@ -1048,11 +1050,9 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth)
 	if (rc == 0) {
 		dth->dth_ent = dae;
 		dth->dth_active = 1;
-	}
-
-out:
-	if (rc != 0)
+	} else {
 		dtx_evict_lid(cont, dae);
+	}
 
 	return rc;
 }
@@ -1578,7 +1578,7 @@ again:
 	count -= slots;
 
 	if (slots > 1) {
-		D_ALLOC(dce_df, sizeof(*dce_df) * slots);
+		D_ALLOC_ARRAY(dce_df, slots);
 		if (dce_df == NULL) {
 			D_ERROR("Not enough DRAM to commit "DF_DTI"\n",
 				DP_DTI(&dtis[cur]));
@@ -1647,7 +1647,7 @@ new_blob:
 	if (umoff_is_null(dbd_off)) {
 		D_ERROR("No space to store committed DTX %d "DF_DTI"\n",
 			count, DP_DTI(&dtis[cur]));
-		return committed > 0 ? committed : -DER_NOSPACE;
+		return -DER_NOSPACE;
 	}
 
 	dbd = umem_off2ptr(umm, dbd_off);
@@ -1661,7 +1661,7 @@ new_blob:
 		  count, dbd->dbd_cap);
 
 	if (count > 1) {
-		D_ALLOC(dce_df, sizeof(*dce_df) * count);
+		D_ALLOC_ARRAY(dce_df, count);
 		if (dce_df == NULL) {
 			D_ERROR("Not enough DRAM to commit "DF_DTI"\n",
 				DP_DTI(&dtis[cur]));
@@ -2238,6 +2238,9 @@ void
 vos_dtx_cleanup(struct dtx_handle *dth)
 {
 	struct vos_container	*cont;
+	daos_unit_oid_t		*oids;
+	int			 max;
+	int			 i;
 
 	if (!dtx_is_valid_handle(dth) || !dth->dth_active)
 		return;
@@ -2247,6 +2250,20 @@ vos_dtx_cleanup(struct dtx_handle *dth)
 	 *  vos_dtx_cleanup_internal
 	 */
 	vos_tx_end(cont, dth, NULL, NULL, true /* don't care */, -DER_CANCELED);
+
+	if (dth->dth_oid_array != NULL) {
+		oids = dth->dth_oid_array;
+		max = dth->dth_oid_cnt;
+	} else if (dth->dth_touched_leader_oid) {
+		oids = &dth->dth_leader_oid;
+		max = 1;
+	} else {
+		oids = NULL;
+		max = 0;
+	}
+
+	for (i = 0; i < max; i++)
+		vos_obj_evict_by_oid(vos_obj_cache_current(), cont, oids[i]);
 }
 
 /** Allocate space for saving the vos reservations and deferred actions */

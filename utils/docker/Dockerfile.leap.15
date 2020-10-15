@@ -63,7 +63,7 @@ RUN zypper --non-interactive --no-gpg-checks refresh; \
            readline-devel sg3_utils which yasm                        \
            python-devel python3-devel valgrind-devel hwloc-devel      \
            openmpi3-devel man fuse3-devel patchelf scons lua-lmod     \
-           libjson-c-devel
+           libjson-c-devel liblz4-devel
 # Monkey-patch MODULEPATH
 RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then        \
         sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/' /etc/profile.d/lmod.sh; \
@@ -74,7 +74,7 @@ RUN zypper --non-interactive install --allow-unsigned-rpm lua-lmod
 RUN zypper --non-interactive addrepo \
     https://download.opensuse.org/repositories/devel:languages:go/openSUSE_Leap_15.1/devel:languages:go.repo; \
     zypper --non-interactive --gpg-auto-import-keys refresh; \
-    zypper --non-interactive install -y ipmctl-devel go
+    zypper --non-interactive install -y ipmctl-devel go go-race
 
 # Add DAOS user
 ENV USER daos
