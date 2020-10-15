@@ -216,7 +216,7 @@ test_filled_stripe(void **statep)
 	len = oca->u.ec.e_len;
 	for (i = 0; i < 256; i++) {
 		ec_setup_single_recx_data(&ctx, EC_SPECIFIED, i * (len / 2),
-					  len /2);
+					  len / 2);
 		rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey,
 				     1, &ctx.update_iod, &ctx.update_sgl, NULL);
 		assert_int_equal(rc, 0);
