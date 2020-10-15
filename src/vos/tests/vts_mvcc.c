@@ -716,7 +716,7 @@ tx_query(daos_handle_t coh, struct tx_helper *txh, daos_epoch_t epoch,
 
 static int
 querymaxd_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	   daos_epoch_t epoch)
+	    daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	uint64_t	 dkey_val = 0;
@@ -728,7 +728,7 @@ querymaxd_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 static int
 querymaxa_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	   daos_epoch_t epoch)
+	    daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	uint64_t	 dkey_val;
@@ -744,7 +744,7 @@ querymaxa_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 static int
 querymaxr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	   daos_epoch_t epoch)
+	    daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	uint64_t	 dkey_val;
@@ -762,7 +762,7 @@ querymaxr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 static int
 querymaxda_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	    daos_epoch_t epoch)
+	     daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	uint64_t	 dkey_val;
@@ -777,7 +777,7 @@ querymaxda_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 static int
 querymaxdr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	    daos_epoch_t epoch)
+	     daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	uint64_t	 dkey_val;
@@ -795,7 +795,7 @@ querymaxdr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 static int
 querymaxar_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	    daos_epoch_t epoch)
+	     daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	uint64_t	 dkey_val;
@@ -813,7 +813,7 @@ querymaxar_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 static int
 querymaxdar_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	     daos_epoch_t epoch)
+	      daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	uint64_t	 dkey_val;
@@ -829,7 +829,7 @@ querymaxdar_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 static int
 querymind_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	   daos_epoch_t epoch)
+	    daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	uint64_t	 dkey_val = 0;
@@ -841,7 +841,7 @@ querymind_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 static int
 querymina_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	   daos_epoch_t epoch)
+	    daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	uint64_t	 dkey_val;
@@ -857,7 +857,7 @@ querymina_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 static int
 queryminr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	   daos_epoch_t epoch)
+	    daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	uint64_t	 dkey_val;
@@ -875,7 +875,7 @@ queryminr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 static int
 queryminda_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	    daos_epoch_t epoch)
+	     daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	uint64_t	 dkey_val;
@@ -890,7 +890,7 @@ queryminda_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 static int
 querymindr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	    daos_epoch_t epoch)
+	     daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	uint64_t	 dkey_val;
@@ -908,7 +908,7 @@ querymindr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 static int
 queryminar_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	    daos_epoch_t epoch)
+	     daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	uint64_t	 dkey_val;
@@ -926,7 +926,7 @@ queryminar_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 static int
 querymindar_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	     daos_epoch_t epoch)
+	      daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	uint64_t	 dkey_val;
@@ -955,14 +955,14 @@ static struct op operations[] = {
 	{"querymaxa",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymaxa_f},
 	{"querymaxr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymaxr_f},
 	{"querymaxda",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymaxda_f},
-	{"querymaxdr",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymaxdr_f},
+	{"querymaxdr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymaxdr_f},
 	{"querymaxar",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymaxar_f},
 	{"querymaxdar",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymaxdar_f},
 	{"querymind",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymind_f},
 	{"querymina",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymina_f},
 	{"queryminr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	queryminr_f},
 	{"queryminda",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	queryminda_f},
-	{"querymindr",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymindr_f},
+	{"querymindr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymindr_f},
 	{"queryminar",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	queryminar_f},
 	{"querymindar",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymindar_f},
 	/* Read timestamp update only cases */
