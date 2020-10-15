@@ -77,17 +77,18 @@ This script has 4 modes that can be executed independently if needed.
 # Arguments:
 #   $1: local logs to process
 # Returns:
-#   0: Files exist or no matches were found
+#   0: Files exist
 #   1: Missing the log files argument
+#   2: No matches were found
 #######################################
 check_files_input() {
-    rc=0
+    local rc=0
     if [ -n "${1}" ]; then
         # shellcheck disable=SC2086
-        if ls -d ${1} 2> /dev/null; then
-            echo "Files found that match ${1}."
+        if ! ls -d ${1} 2> /dev/null; then
+            rc=2
         else
-            echo "No files matched ${1}. Nothing to do."
+            echo "Files found that match ${1}."
         fi
     else
         rc=1
@@ -162,7 +163,7 @@ compress_files() {
 #   1: Failure detected with at least one command
 #######################################
 scp_files() {
-    rc=0
+    local rc=0
     copied=()
     # shellcheck disable=SC2045,SC2086
     for file in $(ls -d ${1})
@@ -181,6 +182,7 @@ scp_files() {
             rc=1
         fi
     done
+    ((SCP_CNT=SCP_CNT+1))
     echo "  The following files were archived:"
     for file in "${copied[@]:-no files}"
     do
@@ -198,12 +200,12 @@ scp_files() {
 #   1: Failure detected with cart_logtest
 #######################################
 run_cartlogtest() {
-    rc=0
+    local rc=0
     if [ -f "${CART_LOGTEST_PATH}" ]; then
         # shellcheck disable=SC2045,SC2086
         for file in $(ls -d ${1})
         do
-            if [ -f ${file} ] && [[ ! ${file} == *"cart_logtest"* ]]; then
+            if [ -f ${file} ] && [[ ! ${file} == *".cart_logtest."* ]]; then
                 logtest_log="${file%.*}.cart_logtest.${file##*.}"
                 if ! ${CART_LOGTEST_PATH} ${file} > ${logtest_log} 2>&1; then
                     echo "  Error: details in ${file}_cart_testlog"
@@ -226,17 +228,11 @@ run_cartlogtest() {
 cleanup() {
     if [ -f "${1}" ]; then
         cat "${1}"
-        if [ "${SCP_CNT}" -eq 1 ]; then
-            echo "Archiving scripts log file ${1} after failture ..."
+        if [ "${SCP_CNT}" -lt 2 ]; then
+            echo "Archiving scripts log file ${1} after failure ..."
             if ! scp_files "${1}" "${ARCHIVE_DEST}"; then
                 echo "Cleanup ERR: archiving ${1} to ${ARCHIVE_DEST}"
             fi
-        fi
-    fi
-    if [ "${SCP_CNT}" -eq 0 ] && [ -n "${ARCHIVE_DEST}" ]; then
-        echo "Archiving after failure to ${ARCHIVE_DEST} ..."
-        if ! scp_files "${FILES_TO_PROCESS}" "${ARCHIVE_DEST}"; then
-            echo "Cleanup ERR: archiving ${FILES_TO_PROCESS} to ${ARCHIVE_DEST}"
         fi
     fi
 }
@@ -306,9 +302,14 @@ set -ex
 trap 'cleanup "${log_file}"' ERR
 
 # Verify files have been specified and they exist on this host
-if ! check_files_input "{$FILES_TO_PROCESS}"; then
-    echo "Please specify -f option."
-    exit 1
+if ! check_files_input "${FILES_TO_PROCESS}"; then
+    if [[ $? -eq 1 ]]; then
+        echo "Please specify -f option."
+        exit 1
+    elif [[ $? -eq 2 ]]; then
+        echo "No files matched ${FILES_TO_PROCESS}. Nothing to do."
+        exit 0
+    fi
 fi
 
 # Display big files to stdout
@@ -349,14 +350,12 @@ if [ -n "${ARCHIVE_DEST}" ]; then
     if ! scp_files "${FILES_TO_PROCESS}" "${ARCHIVE_DEST}"; then
         rc=1
     fi
-    SCP_CNT=1
 
     if ! "${VERBOSE}"; then
         # Finally archive this script's log file
         if ! scp_files "${log_file}" "${ARCHIVE_DEST}"; then
             rc=1
         fi
-        SCP_CNT=2
     fi
 fi
 
