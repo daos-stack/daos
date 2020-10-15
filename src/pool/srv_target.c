@@ -488,13 +488,10 @@ ds_pool_put(struct ds_pool *pool)
 	ABT_mutex_unlock(pool_cache_lock);
 }
 
-#define STACK_HDL_BUF_SIZE	1024
 void
 pool_fetch_hdls_ult(void *data)
 {
 	struct ds_pool	*pool = data;
-	char		buf[STACK_HDL_BUF_SIZE];
-	d_iov_t		iov = { 0 };
 	int		rc = 0;
 
 	/* sp_map == NULL means the IV ns is not setup yet, i.e.
@@ -505,32 +502,15 @@ pool_fetch_hdls_ult(void *data)
 	if (pool->sp_map == NULL)
 		ABT_cond_wait(pool->sp_fetch_hdls_cond, pool->sp_mutex);
 	ABT_mutex_unlock(pool->sp_mutex);
-retry:
+
 	if (pool->sp_stopping) {
 		D_DEBUG(DB_MD, DF_UUID" skip fetching hdl due to stop\n",
 			DP_UUID(pool->sp_uuid));
 		D_GOTO(out, rc);
 	}
-	memset(buf, 0, STACK_HDL_BUF_SIZE);
-	d_iov_set(&iov, buf, STACK_HDL_BUF_SIZE);
-	rc = ds_pool_iv_conn_hdl_fetch(pool, NULL, &iov);
+	rc = ds_pool_iv_conn_hdl_fetch(pool);
 	if (rc) {
-		if (rc == -DER_REC2BIG) {
-			char		*new_buf;
-			uint64_t	new_size = iov.iov_len;
-
-			D_ALLOC(new_buf, new_size);
-			if (new_buf == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-			if (iov.iov_buf != buf)
-				daos_iov_free(&iov);
-			iov.iov_buf = new_buf;
-			iov.iov_buf_len = new_size;
-			iov.iov_len = 0;
-			D_DEBUG(DB_MD, "realloc "DF_U64" and retry.\n",
-				new_size);
-			D_GOTO(retry, rc);
-		}
+		D_ERROR("iv conn fetch %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
@@ -540,9 +520,6 @@ out:
 	ABT_mutex_unlock(pool->sp_mutex);
 
 	pool->sp_fetch_hdls = 0;
-
-	if (iov.iov_buf != NULL && iov.iov_buf != buf)
-		D_FREE(iov.iov_buf);
 }
 
 static void

@@ -1599,23 +1599,20 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 		D_ERROR("Stale container handle "DF_UUID" != "DF_UUID"\n",
 			DP_UUID(cont_uuid), DP_UUID(coh->sch_uuid));
 		D_GOTO(failed, rc = -DER_NONEXIST);
+	} else {
+		/**
+		 * The server handle is a dummy and never attached by
+		 * a real container
+		 */
+		D_DEBUG(DB_TRACE, DF_UUID"/%p is server cont hdl\n",
+			DP_UUID(coh_uuid), coh);
 	}
 
-	if (!is_container_from_srv(pool_uuid, coh_uuid)) {
-		D_ERROR("Empty container "DF_UUID" (ref=%d) handle?\n",
-			DP_UUID(cont_uuid), coh->sch_ref);
-		D_GOTO(failed, rc = -DER_NO_HDL);
-	}
-
-	/* rebuild handle is a dummy and never attached by a real container */
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_NO_HDL))
 		D_GOTO(failed, rc = -DER_NO_HDL);
 
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_STALE_POOL))
 		D_GOTO(failed, rc = -DER_STALE);
-
-	D_DEBUG(DB_TRACE, DF_UUID"/%p is rebuild cont hdl\n",
-		DP_UUID(coh_uuid), coh);
 
 	/* load VOS container on demand for rebuild */
 	rc = ds_cont_child_lookup(pool_uuid, cont_uuid, &coc);
