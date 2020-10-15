@@ -22,7 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import time
-import random
 import uuid
 import threading
 
@@ -35,6 +34,7 @@ from job_manager_utils import Mpirun
 from write_host_file import write_host_file
 from command_utils import CommandFailure
 from mpio_utils import MpioUtils
+from daos_racer_utils import DaosRacerCommand
 
 try:
     # python 3.x
@@ -72,7 +72,8 @@ class OSAOnlineExtend(TestWithServers):
             self.hostlist_clients, self.workdir, None)
         self.pool = None
         self.out_queue = queue.Queue()
-
+        self.ds_racer_queue = queue.Queue()
+        self.daos_racer = None
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):
@@ -95,6 +96,15 @@ class OSAOnlineExtend(TestWithServers):
         """
         data = self.dmg_command.pool_query(self.pool.uuid)
         return int(data["version"])
+
+    def daos_racer_thread(self):
+        """Start the daos_racer thread."""
+        self.daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0],
+                                           self.dmg_command)
+        self.daos_racer.get_params(self)
+        self.daos_racer.set_environment(
+            self.daos_racer.get_environment(self.server_managers[0]))
+        self.daos_racer.run()
 
     def ior_thread(self, pool, oclass, api, test, flags, results):
         """Start threads and wait until all threads are finished.
@@ -156,6 +166,11 @@ class OSAOnlineExtend(TestWithServers):
         # Extend one of the ranks (or server)
         # rank index starts from zero
         rank = total_servers
+
+        # Start the daos_racer thread
+        daos_racer_thread = threading.Thread(target=self.daos_racer_thread)
+        daos_racer_thread.start()
+        time.sleep(30)
 
         for val in range(0, num_pool):
             pool[val] = TestPool(self.context,
@@ -223,6 +238,13 @@ class OSAOnlineExtend(TestWithServers):
             # Wait to finish the threads
             for thrd in threads:
                 thrd.join()
+                
+        # Check data consistency for IOR in future
+        # Presently, we are running daos_racer in parallel
+        # to IOR and checking the data consistency only
+        # for the daos_racer objects after exclude
+        # and reintegration.
+        daos_racer_thread.join()
 
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
