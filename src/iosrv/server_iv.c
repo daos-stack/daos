@@ -778,11 +778,8 @@ void
 ds_iv_init()
 {
 	D_INIT_LIST_HEAD(&ds_iv_ns_list);
-	/* Let's set the topo to 32 to avoid cart IV failover,
-	 * which is not supported yet. XXX
-	 */
-	ds_iv_ns_tree_topo = crt_tree_topo(CRT_TREE_KNOMIAL, 32);
 	D_INIT_LIST_HEAD(&ds_iv_class_list);
+	ds_iv_ns_tree_topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
 }
 
 void

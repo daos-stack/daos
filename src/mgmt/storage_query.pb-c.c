@@ -538,7 +538,7 @@ const ProtobufCMessageDescriptor mgmt__bio_health_req__descriptor =
   (ProtobufCMessageInit) mgmt__bio_health_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__bio_health_resp__field_descriptors[24] =
+static const ProtobufCFieldDescriptor mgmt__bio_health_resp__field_descriptors[23] =
 {
   {
     "model",
@@ -571,18 +571,6 @@ static const ProtobufCFieldDescriptor mgmt__bio_health_resp__field_descriptors[2
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
     offsetof(Mgmt__BioHealthResp, timestamp),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "err_count",
-    4,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__BioHealthResp, err_count),
     NULL,
     NULL,
     0,             /* flags */
@@ -830,35 +818,35 @@ static const ProtobufCFieldDescriptor mgmt__bio_health_resp__field_descriptors[2
   },
 };
 static const unsigned mgmt__bio_health_resp__field_indices_by_name[] = {
-  18,   /* field[18] = avail_spare_warn */
-  12,   /* field[12] = bio_read_errs */
-  14,   /* field[14] = bio_unmap_errs */
-  13,   /* field[13] = bio_write_errs */
-  15,   /* field[15] = checksum_errs */
-  5,   /* field[5] = crit_temp_time */
-  6,   /* field[6] = ctrl_busy_time */
-  19,   /* field[19] = dev_reliability_warn */
-  23,   /* field[23] = dev_uuid */
-  3,   /* field[3] = err_count */
-  11,   /* field[11] = err_log_entries */
-  10,   /* field[10] = media_errs */
+  17,   /* field[17] = avail_spare_warn */
+  11,   /* field[11] = bio_read_errs */
+  13,   /* field[13] = bio_unmap_errs */
+  12,   /* field[12] = bio_write_errs */
+  14,   /* field[14] = checksum_errs */
+  4,   /* field[4] = crit_temp_time */
+  5,   /* field[5] = ctrl_busy_time */
+  18,   /* field[18] = dev_reliability_warn */
+  22,   /* field[22] = dev_uuid */
+  10,   /* field[10] = err_log_entries */
+  9,   /* field[9] = media_errs */
   0,   /* field[0] = model */
-  7,   /* field[7] = power_cycles */
-  8,   /* field[8] = power_on_hours */
-  20,   /* field[20] = read_only_warn */
+  6,   /* field[6] = power_cycles */
+  7,   /* field[7] = power_on_hours */
+  19,   /* field[19] = read_only_warn */
   1,   /* field[1] = serial */
-  22,   /* field[22] = status */
-  17,   /* field[17] = temp_warn */
-  16,   /* field[16] = temperature */
+  21,   /* field[21] = status */
+  16,   /* field[16] = temp_warn */
+  15,   /* field[15] = temperature */
   2,   /* field[2] = timestamp */
-  9,   /* field[9] = unsafe_shutdowns */
-  21,   /* field[21] = volatile_mem_warn */
-  4,   /* field[4] = warn_temp_time */
+  8,   /* field[8] = unsafe_shutdowns */
+  20,   /* field[20] = volatile_mem_warn */
+  3,   /* field[3] = warn_temp_time */
 };
-static const ProtobufCIntRange mgmt__bio_health_resp__number_ranges[1 + 1] =
+static const ProtobufCIntRange mgmt__bio_health_resp__number_ranges[2 + 1] =
 {
   { 1, 0 },
-  { 0, 24 }
+  { 5, 3 },
+  { 0, 23 }
 };
 const ProtobufCMessageDescriptor mgmt__bio_health_resp__descriptor =
 {
@@ -868,10 +856,10 @@ const ProtobufCMessageDescriptor mgmt__bio_health_resp__descriptor =
   "Mgmt__BioHealthResp",
   "mgmt",
   sizeof(Mgmt__BioHealthResp),
-  24,
+  23,
   mgmt__bio_health_resp__field_descriptors,
   mgmt__bio_health_resp__field_indices_by_name,
-  1,  mgmt__bio_health_resp__number_ranges,
+  2,  mgmt__bio_health_resp__number_ranges,
   (ProtobufCMessageInit) mgmt__bio_health_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
@@ -916,7 +904,7 @@ static const ProtobufCFieldDescriptor mgmt__smd_dev_resp__device__field_descript
     offsetof(Mgmt__SmdDevResp__Device, tgt_ids),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -1049,7 +1037,7 @@ static const ProtobufCFieldDescriptor mgmt__smd_pool_resp__pool__field_descripto
     offsetof(Mgmt__SmdPoolResp__Pool, tgt_ids),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -1061,7 +1049,7 @@ static const ProtobufCFieldDescriptor mgmt__smd_pool_resp__pool__field_descripto
     offsetof(Mgmt__SmdPoolResp__Pool, blobs),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -1382,7 +1370,7 @@ static const ProtobufCFieldDescriptor mgmt__smd_query_resp__device__field_descri
     offsetof(Mgmt__SmdQueryResp__Device, tgt_ids),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -1459,7 +1447,7 @@ static const ProtobufCFieldDescriptor mgmt__smd_query_resp__pool__field_descript
     offsetof(Mgmt__SmdQueryResp__Pool, tgt_ids),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -1471,7 +1459,7 @@ static const ProtobufCFieldDescriptor mgmt__smd_query_resp__pool__field_descript
     offsetof(Mgmt__SmdQueryResp__Pool, blobs),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };

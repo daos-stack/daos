@@ -21,8 +21,10 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from daos_utils_base import DaosCommandBase
 import re
+import traceback
+
+from daos_utils_base import DaosCommandBase
 
 
 class DaosCommand(DaosCommandBase):
@@ -463,10 +465,11 @@ class DaosCommand(DaosCommandBase):
         # Container's `&()\;'"!<> attribute value: attr12
         match = re.findall(
             r"Container's\s+([\S ]+)\s+attribute\s+value:\s+(.+)$",
-            self.result.stdout)[0]
+            self.result.stdout)
         data = {}
-        data["attr"] = match[0]
-        data["value"] = match[1]
+        if match:
+            data["attr"] = match[0][0]
+            data["value"] = match[0][1]
 
         return data
 
@@ -594,4 +597,71 @@ class DaosCommand(DaosCommandBase):
         match = re.findall(r"(\d{19})", self.result.stdout)
         if match:
             data["epochs"] = match
+        return data
+
+    def object_query(self, pool, svc, cont, oid, sys_name=None):
+        """Call daos object query and return its output with a dictionary.
+
+        Args:
+            pool (str): Pool UUID
+            svc (str): Service replicas. If there are multiple, numbers must be
+                separated by comma like 1,2,3
+            cont (str): Container UUID
+            oid (str): oid hi lo value in the format <hi>.<lo>
+            sys_name (str, optional): System name. Defaults to None.
+
+        Returns:
+            dict: cmd output
+                oid: (oid.hi, oid.lo)
+                ver: num
+                grp_nr: num
+                layout: [{grp: num, replica: [(n0, n1), (n2, n3)...]}, ...]
+                Each row of replica nums is a tuple and stored top->bottom.
+
+        Raises:
+            CommandFailure: if the daos object query command fails.
+        """
+        self._get_result(
+            ("object", "query"), pool=pool, svc=svc, cont=cont,
+            oid=oid, sys_name=sys_name)
+
+        # Sample daos object query output.
+        # oid: 1152922453794619396.1 ver 0 grp_nr: 2
+        # grp: 0
+        # replica 0 1
+        # replica 1 0
+        # grp: 1
+        # replica 0 0
+        # replica 1 1
+        data = {}
+        vals = re.findall(
+            r"oid:\s+([\d.]+)\s+ver\s+(\d+)\s+grp_nr:\s+(\d+)|"\
+            r"grp:\s+(\d+)\s+|"\
+            r"replica\s+(\d+)\s+(\d+)\s*", self.result.stdout)
+
+        try:
+            oid_vals = vals[0][0]
+            oid_list = oid_vals.split(".")
+            oid_hi = oid_list[0]
+            oid_lo = oid_list[1]
+            data["oid"] = (oid_hi, oid_lo)
+            data["ver"] = vals[0][1]
+            data["grp_nr"] = vals[0][2]
+
+            data["layout"] = []
+            for i in range(1, len(vals)):
+                if vals[i][3] == "":
+                    if "replica" in data["layout"][-1]:
+                        data["layout"][-1]["replica"].append(
+                            (vals[i][4], vals[i][5]))
+                    else:
+                        data["layout"][-1]["replica"] = [(
+                            vals[i][4], vals[i][5])]
+                else:
+                    data["layout"].append({"grp": vals[i][3]})
+        except IndexError:
+            traceback.print_exc()
+            self.log.error("--- re.findall output ---")
+            self.log.error(vals)
+
         return data
