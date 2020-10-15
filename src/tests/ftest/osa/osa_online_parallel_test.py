@@ -67,7 +67,7 @@ class OSAOnlineParallelTest(TestWithServers):
         self.ior_test_sequence = self.params.get("ior_test_sequence",
                                                  '/run/ior/iorflags/*')
         self.ior_dfs_oclass = self.params.get("obj_class",
-                                               '/run/ior/iorflags/*')
+                                              '/run/ior/iorflags/*')
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
@@ -105,6 +105,7 @@ class OSAOnlineParallelTest(TestWithServers):
         self.daos_racer.set_environment(
             self.daos_racer.get_environment(self.server_managers[0]))
         self.daos_racer.run()
+        results.put("Daos Racer Started")
 
     def ior_thread(self, pool, oclass, api, test, flags, results):
         """Start threads and wait until all threads are finished.
@@ -168,7 +169,6 @@ class OSAOnlineParallelTest(TestWithServers):
         """
         # Give sometime for IOR threads to start
         dmg = copy.copy(self.dmg_command)
-        self.log.info("Action: {0}".format(action))
         try:
             if action == "exclude":
                 dmg.pool_exclude(puuid, (rank + 1), target)
@@ -266,10 +266,17 @@ class OSAOnlineParallelTest(TestWithServers):
                     self.log.info("Thread : %s", thrd)
                     thrd.start()
                     time.sleep(3)
-                
+
                 # Wait to finish the threads
                 for thrd in threads:
                     thrd.join()
+
+            # Check data consistency for IOR in future
+            # Presently, we are running daos_racer in parallel
+            # to IOR and checking the data consistency only
+            # for the daos_racer objects after exclude
+            # and reintegration.
+            daos_racer_thread.join()
 
             for val in range(0, num_pool):
                 display_string = "Pool{} space at the End".format(val)

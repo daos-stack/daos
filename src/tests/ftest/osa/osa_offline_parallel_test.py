@@ -142,9 +142,7 @@ class OSAOfflineParallelTest(TestWithServers):
                               like drain, reintegration, extend
             results (queue) : dmg command output queue.
         """
-        # dmg = DmgCommand(os.path.join(self.prefix, "bin"))
         dmg = copy.copy(self.dmg_command)
-        self.log.info("Action: {0}".format(action))
         try:
             if action == "exclude":
                 dmg.pool_exclude(puuid, (rank + 1), target)
@@ -157,6 +155,7 @@ class OSAOfflineParallelTest(TestWithServers):
                 self.fail("Invalid action for dmg thread")
         except CommandFailure as _error:
             results.put("{} failed".format(action))
+            # TODO:
             # elif action == "extend":
             #    dmg.pool_extend(puuid, (rank + 2))
 
