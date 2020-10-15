@@ -5,7 +5,9 @@ sudo yum -y install --exclude ompi daos{,-client}-"${DAOS_PKG_VERSION}"
 sudo yum -y history rollback last-1
 sudo yum -y install --exclude ompi daos{,-{server,client}}-"${DAOS_PKG_VERSION}"
 sudo yum -y install --exclude ompi \
-  daos-tests{,-{common,ior,fio,mpiio,hdf5-vol,macsio,soak}}-"${DAOS_PKG_VERSION}"
+  daos-tests{,-{common,ior,fio,mpiio,hdf5-vol,macsio,soak}}-\
+  "${DAOS_PKG_VERSION}"
+
 
 me=$(whoami)
 for dir in server agent; do

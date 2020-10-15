@@ -28,7 +28,7 @@ from hdf5_vol_utils import Hdf5VolCommand
 
 
 class Hdf5VolTestBase(DfuseTestBase):
-    # pylint: disable=too-few-public-methods
+    # pylint: disable=too-few-public-methods,too-many-ancestors
     """Runs HDF5 vol test suites.
 
     :avocado: recursive
@@ -48,8 +48,8 @@ class Hdf5VolTestBase(DfuseTestBase):
         super(Hdf5VolTestBase, self).setUp()
 
         # Get the parameters for the HDF5 VOL command
-        hdf5_vol_path = self.params.get("daos_vol_repo")
-        self.hdf5_vol_cmd = Hdf5VolCommand(hdf5_vol_path)
+        hdf5_vol_repo = self.params.get("hdf5_vol_repo")
+        self.hdf5_vol_cmd = Hdf5VolCommand(hdf5_vol_repo)
         self.hdf5_vol_cmd.get_params(self)
 
     def run_test(self):
@@ -74,11 +74,8 @@ class Hdf5VolTestBase(DfuseTestBase):
         # create dfuse container
         self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
-        # Setup the job manager
-        if mpi_type == "openmpi":
-            manager = Orterun(self.hdf5_vol_cmd)
-        else:
-            manager = Mpirun(self.hdf5_vol_cmd, mpitype="mpich")
+        # Assign the test to run
+        self.job_manager.job = self.hdf5_vol_cmd
 
         env = EnvironmentVariables()
         env["DAOS_POOL"] = "{}".format(self.pool.uuid)
@@ -86,14 +83,14 @@ class Hdf5VolTestBase(DfuseTestBase):
         env["DAOS_CONT"] = "{}".format(self.container.uuid)
         env["HDF5_VOL_CONNECTOR"] = "daos"
         env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)
-        manager.assign_hosts(self.hostlist_clients)
-        manager.assign_processes(client_processes)
-        manager.assign_environment(env, True)
-        manager.working_dir.value = self.dfuse.mount_dir.value
+        self.job_manager.assign_hosts(self.hostlist_clients)
+        self.job_manager.assign_processes(client_processes)
+        self.job_manager.assign_environment(env, True)
+        self.job_manager.working_dir.value = self.dfuse.mount_dir.value
 
-        # run VOL Command
+        # Run the HDF5 test with the VOL connector
         try:
-            manager.run()
+            self.job_manager.run()
         except CommandFailure as _error:
             self.fail("{} FAILED> \nException occurred: {}".format(
-                self.hdf5_vol_cmd, str(_error)))
+                self.job_manager.job, str(_error)))

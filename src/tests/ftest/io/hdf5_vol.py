@@ -34,7 +34,7 @@ class Hdf5VolTest(Hdf5VolTestBase):
     def setUp(self):
         """Set up each test case."""
         # Cancel h5_test_testhdf5 with MPICH
-        mpi_type = self.params.get("mpi_type")
+        mpi_type = self.params.get("job_manager_mpi_type")
         testname = self.params.get("testname")
         if mpi_type == "mpich" and testname == "h5_test_testhdf5":
             self.cancelForTicket("DAOS-5469")

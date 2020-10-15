@@ -48,6 +48,7 @@ sudo yum -y remove cart \
                    daos-devel \
                    daos-server \
                    daos-tests \
+                   daos-tests-common \
                    daos-tests-fio \
                    daos-tests-hdf5-vol \
                    daos-tests-ior \
