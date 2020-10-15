@@ -730,28 +730,28 @@ vos_ts_set_update(struct vos_ts_set *ts_set, daos_epoch_t read_time)
 /** Save the current state of the set
  *
  * \param[in]	ts_set	The timestamp set
- * \param[out]	statep	Target to save state to
+ * \param[out]	save	Target to save state to
  */
 static inline void
-vos_ts_set_save(struct vos_ts_set *ts_set, int *statep)
+vos_ts_set_save(struct vos_ts_set *ts_set, struct vos_ts_set *save)
 {
 	if (ts_set == NULL)
 		return;
 
-	*statep = ts_set->ts_init_count;
+	*save = *ts_set;
 }
 
 /** Restore previously saved state of the set
  *
  * \param[in]	ts_set	The timestamp set
- * \param[in]	state	The saved state
+ * \param[in]	restore	The saved state
  */
 static inline void
-vos_ts_set_restore(struct vos_ts_set *ts_set, int state)
+vos_ts_set_restore(struct vos_ts_set *ts_set, const struct vos_ts_set *restore)
 {
 	if (ts_set == NULL)
 		return;
 
-	ts_set->ts_init_count = state;
+	*ts_set = *restore;
 }
 #endif /* __VOS_TS__ */
