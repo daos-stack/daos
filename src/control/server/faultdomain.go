@@ -92,5 +92,14 @@ func getFaultDomainFromCallback(callbackPath string) (*system.FaultDomain, error
 		return nil, FaultConfigFaultCallbackFailed(err)
 	}
 
-	return newFaultDomainFromConfig(string(output))
+	fd, err := newFaultDomainFromConfig(string(output))
+	if err != nil {
+		return nil, err
+	}
+
+	if fd.Empty() {
+		return nil, FaultConfigFaultCallbackEmpty
+	}
+
+	return fd, nil
 }
