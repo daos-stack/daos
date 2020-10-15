@@ -388,6 +388,48 @@ read_ts_a_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 }
 
 static int
+checkexisto_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	      daos_epoch_t epoch)
+{
+	return read_ts_o(arg, txh, path, epoch, VOS_OF_FETCH_CHECK_EXISTENCE,
+			 NULL, NULL, 0);
+}
+
+
+static int
+checkexistd_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	      daos_epoch_t epoch)
+{
+	return read_ts_d(arg, txh, path, epoch, VOS_OF_FETCH_CHECK_EXISTENCE,
+			 NULL, 0);
+}
+
+static int
+checkexista_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	      daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	daos_iod_t	 iod;
+	char		 akey_buf[64];
+	daos_key_t	 akey = {akey_buf, sizeof(akey_buf), 1};
+	char		 value_buf[64] = {0};
+	daos_recx_t	 recx;
+
+	set_akey(mvcc_arg->i, path, &akey);
+	memset(&iod, 0, sizeof(iod));
+	iod.iod_name = akey;
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = 1;
+	iod.iod_nr = 1;
+	iod.iod_recxs = &recx;
+	recx.rx_idx = 1;
+	recx.rx_nr = sizeof(value_buf);
+
+	return read_ts_d(arg, txh, path, epoch, VOS_OF_FETCH_CHECK_EXISTENCE,
+			 &iod, iod.iod_nr);
+}
+
+static int
 tx_update(daos_handle_t coh, struct tx_helper *txh, daos_unit_oid_t oid,
 	  daos_epoch_t epoch, uint64_t flags, daos_key_t *dkey,
 	  unsigned int iod_nr, daos_iod_t *iod, d_sg_list_t *sgl)
@@ -712,7 +754,10 @@ static struct op operations[] = {
 	{"read_ts_o",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	read_ts_o_f},
 	{"read_ts_d",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	read_ts_d_f},
 	{"read_ts_a",	T_R,	L_A,	L_NIL,	R_R,	W_NIL,	read_ts_a_f},
-
+	/* Check existence */
+	{"checkexisto",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	checkexisto_f},
+	{"checkexistd",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	checkexistd_f},
+	{"checkexista",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	checkexista_f},
 	/*
 	 * Readwrites
 	 *
