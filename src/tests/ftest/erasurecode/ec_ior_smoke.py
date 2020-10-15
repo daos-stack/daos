@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,27 +21,27 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
+from ior_test_base import IorTestBase
 
-from daos_core_base import DaosCoreBase
-
-
-class DaosCoreTestRebuild(DaosCoreBase):
+class ErasureCodeIor(IorTestBase):
     # pylint: disable=too-many-ancestors
-    """Run just the daos_test rebuild tests.
-
+    """
+    Test Class Description: To validate Erasure code object type classes.
     :avocado: recursive
     """
 
-    def test_rebuild(self):
-        """Jira ID: DAOS-2770.
+    def test_ec(self):
+        """Jira ID: DAOS-5812.
 
-        Test Description:
-            Purpose of this test is to run just the daos_test rebuild tests.
+        Test Description: Test Erasure code object with IOR.
+        Use Case: Create the medium size of pool and run IOR with supported
+                  EC object type class for sanity purpose.
 
-        Use case:
-            Balance testing load between hardware and VM clusters.
-
-        :avocado: tags=all,pr,hw,medium,ib2,unittest,daos_test_rebuild
-        :avocado: tags=DAOS_5610
+        :avocado: tags=all,pr,hw,large,ec,ec_smoke,ec_ior
         """
-        DaosCoreBase.run_subtest(self)
+        obj_class = self.params.get("dfs_oclass", '/run/ior/objectclass/*')
+
+        for oclass in obj_class:
+            self.ior_cmd.dfs_oclass.update(oclass)
+            self.ior_cmd.dfs_dir_oclass.update(oclass)
+            self.run_ior_with_pool()
