@@ -288,7 +288,7 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 
 	rply_rc = rpc_priv->crp_reply_hdr.cch_rc;
 	if (rply_rc != 0 && rpc_priv->crp_pub.cr_ep.ep_tag != 0 &&
-			!rpc_priv->crp_rpc_retry) {
+		!rpc_priv->crp_rpc_retry) {
 		rpc_priv->crp_rpc_retry = true;
 		retry_rc = crt_req_retry(rpc_priv);
 		if (retry_rc == 0) {

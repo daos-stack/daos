@@ -1592,7 +1592,7 @@ uri_cache_invalidate(struct crt_context	*ctx, struct crt_rpc_priv *rpc_priv)
 out:
 	;
 }
-/* Retrying RPC request due to the failure */
+
 int
 crt_req_retry(struct crt_rpc_priv *rpc_priv)
 {
