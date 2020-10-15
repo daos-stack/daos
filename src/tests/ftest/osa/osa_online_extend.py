@@ -238,7 +238,7 @@ class OSAOnlineExtend(TestWithServers):
             # Wait to finish the threads
             for thrd in threads:
                 thrd.join()
-                
+
         # Check data consistency for IOR in future
         # Presently, we are running daos_racer in parallel
         # to IOR and checking the data consistency only
@@ -259,5 +259,4 @@ class OSAOnlineExtend(TestWithServers):
         :avocado: tags=all,pr,hw,large,osa,osa_extend,online_extend
         """
         # Perform extend testing with 1 to 2 pools
-        for pool_num in range(1, 3):
-            self.run_online_extend_test(pool_num)
+        self.run_online_extend_test(1)
