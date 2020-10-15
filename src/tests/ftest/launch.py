@@ -801,7 +801,7 @@ def run_tests(test_files, tag_filter, args):
                     avocado_logs_dir, test_file, args)
 
                 # Compress any log file that haven't been remotely compressed.
-                compress_log_files(avocado_logs_dir)
+                compress_log_files(avocado_logs_dir, args)
 
             # Optionally rename the test results directory for this test
             if args.rename:
@@ -912,7 +912,7 @@ def get_remote_file_command():
     return "{}/get_remote_files.sh".format(os.path.abspath(os.getcwd()))
 
 
-def compress_log_files(avocado_logs_dir):
+def compress_log_files(avocado_logs_dir, args):
     """Compress log files.
 
     Args:
@@ -922,6 +922,8 @@ def compress_log_files(avocado_logs_dir):
     logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs", "*.log*")
     command = [
         get_remote_file_command(), "-z", "-x", "-f {}".format(logs_dir)]
+    if args.verbose:
+        command.append("-v")
     print(get_output(command, check=False))
 
 

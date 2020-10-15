@@ -182,7 +182,6 @@ scp_files() {
             rc=1
         fi
     done
-    ((SCP_CNT=SCP_CNT+1))
     echo "  The following files were archived:"
     for file in "${copied[@]:-no files}"
     do
@@ -228,12 +227,7 @@ run_cartlogtest() {
 cleanup() {
     if [ -f "${1}" ]; then
         cat "${1}"
-        if [ "${SCP_CNT}" -lt 2 ]; then
-            echo "Archiving scripts log file ${1} after failure ..."
-            if ! scp_files "${1}" "${ARCHIVE_DEST}"; then
-                echo "Cleanup ERR: archiving ${1} to ${ARCHIVE_DEST}"
-            fi
-        fi
+        scp_files "${1}" "${ARCHIVE_DEST}"
     fi
 }
 
@@ -251,7 +245,6 @@ VERBOSE="false"
 CART_LOGTEST="false"
 EXCLUDE_ZIP="false"
 THRESHOLD=""
-SCP_CNT=0
 rc=0
 
 # Step through arguments
