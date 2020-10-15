@@ -385,6 +385,7 @@ dtx_10(void **state)
 	 */
 	MUST(daos_tx_commit(th, NULL));
 
+	req.arg->expect_result = 0;
 	lookup_single(dkey, akey, 0, fetch_buf, DTX_IO_SMALL,
 		      DAOS_TX_NONE, &req);
 	assert_int_equal(req.iod[0].iod_size, 0);

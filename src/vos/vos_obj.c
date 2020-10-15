@@ -220,7 +220,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 	}
 	}
 
-	if (rc == 0) {
+	if (rc == 0 && (flags & VOS_OF_REPLAY_PC) == 0) {
 		/** Check if we need to propagate the punch */
 		rc = vos_propagate_check(obj, toh, ts_set, &epr,
 					 VOS_ITER_AKEY);
@@ -241,7 +241,7 @@ punch_dkey:
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	if (rc == 0) {
+	if (rc == 0 && (flags & VOS_OF_REPLAY_PC) == 0) {
 		/** Check if we need to propagate to object */
 		rc = vos_propagate_check(obj, obj->obj_toh, ts_set,
 					 &epr, VOS_ITER_DKEY);
@@ -814,7 +814,8 @@ akey_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 		return 0;
 
 failed:
-	D_ERROR("Could not prepare akey iterator "DF_RC"\n", DP_RC(rc));
+	VOS_TX_LOG_FAIL(rc, "Could not prepare akey iterator "DF_RC"\n",
+			DP_RC(rc));
 	return rc;
 }
 
