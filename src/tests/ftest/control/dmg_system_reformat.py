@@ -26,7 +26,7 @@ from __future__ import print_function
 import os
 
 from avocado import fail_on
-from avocado.utils import process
+from avocado.core.exceptions import TestFail
 from apricot import TestWithServers
 from server_utils import ServerFailed
 from general_utils import human_to_bytes
@@ -93,11 +93,12 @@ class DmgSystemReformatTest(TestWithServers):
 
         self.log.info("Check that new pool will fail with DER_NOSPACE")
         try:
-            self.create_pool_at_capacity(0.7)
-        except process.CmdError as error:
-            self.log.info("Pool create failed: %s", error.result.stderr)
-            if "DER_NOSPACE" not in error.result.stderr:
-                self.fail("Pool create did not fail do to DER_NOSPACE!")
+            pool = self.create_pool_at_capacity(0.7)
+        except TestFail as err:
+            self.log.info("Pool create failed: %s", str(err))
+            if pool.dmg.result.stderr:
+                if "DER_NOSPACE" not in pool.dmg.result.stderr:
+                    self.fail("Pool create did not fail do to DER_NOSPACE!")
 
         self.log.info("Re-enable raising exceptions for dmg.")
         self.get_dmg_command().exit_status_exception = True
