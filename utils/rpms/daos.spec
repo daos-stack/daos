@@ -6,7 +6,7 @@
 
 Name:          daos
 Version:       1.1.1
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -388,6 +388,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Thu Oct 15 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.1-3
+- Update to mercury 2.0.0rc2
 
 * Tue Oct 13 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.1-2
 - Create unprivileged user for daos_agent
