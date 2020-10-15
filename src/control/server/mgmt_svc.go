@@ -169,13 +169,19 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		return nil, errors.New("clientNetworkCfg is missing")
 	}
 
-	resp := new(mgmtpb.GetAttachInfoResp)
-	replicas, err := svc.sysdb.ReplicaRanks()
+	var groupMap *system.GroupMap
+	var err error
+	if req.GetAllRanks() {
+		groupMap, err = svc.sysdb.GroupMap()
+	} else {
+		groupMap, err = svc.sysdb.ReplicaRanks()
+	}
 	if err != nil {
 		return nil, err
 	}
 
-	for rank, uri := range replicas.RankURIs {
+	resp := new(mgmtpb.GetAttachInfoResp)
+	for rank, uri := range groupMap.RankURIs {
 		resp.Psrs = append(resp.Psrs, &mgmtpb.GetAttachInfoResp_Psr{
 			Rank: rank.Uint32(),
 			Uri:  uri,
