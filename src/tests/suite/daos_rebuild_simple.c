@@ -53,6 +53,7 @@ rebuild_dkeys(void **state)
 	daos_obj_id_t		oid;
 	struct ioreq		req;
 	d_rank_t		kill_rank = 0;
+	int			kill_rank_nr;
 	int			i;
 
 	if (!test_runable(arg, 4))
@@ -82,7 +83,7 @@ rebuild_dkeys(void **state)
 			     data, DATA_SIZE, &req);
 	}
 
-	kill_rank = get_killing_rank_by_oid(arg, oid, true);
+	get_killing_rank_by_oid(arg, oid, 1, 0, &kill_rank, &kill_rank_nr);
 	ioreq_fini(&req);
 
 	rebuild_single_pool_target(arg, kill_rank, -1, false);
@@ -97,6 +98,7 @@ rebuild_akeys(void **state)
 	daos_obj_id_t		oid;
 	struct ioreq		req;
 	d_rank_t		kill_rank = 0;
+	int			kill_rank_nr;
 	int			tgt = -1;
 	int			i;
 
@@ -127,7 +129,7 @@ rebuild_akeys(void **state)
 			     data, DATA_SIZE, &req);
 
 	}
-	kill_rank = get_killing_rank_by_oid(arg, oid, false);
+	get_killing_rank_by_oid(arg, oid, 1, 0, &kill_rank, &kill_rank_nr);
 	ioreq_fini(&req);
 
 	rebuild_single_pool_target(arg, kill_rank, tgt, false);

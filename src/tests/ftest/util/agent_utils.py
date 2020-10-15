@@ -52,7 +52,7 @@ def include_local_host(hosts):
 class DaosAgentCommand(YamlCommand):
     """Defines an object representing a daos_agent command."""
 
-    def __init__(self, path="", yaml_cfg=None, timeout=30):
+    def __init__(self, path="", yaml_cfg=None, timeout=15):
         """Create a daos_agent command object.
 
         Args:

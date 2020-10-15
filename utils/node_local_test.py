@@ -2,6 +2,9 @@
 
 """Test code for dfuse"""
 
+# pylint: disable=too-many-lines
+# pylint: disable=too-few-public-methods
+
 import os
 import sys
 import time
@@ -109,6 +112,7 @@ class WarningsFactory():
         entry = {}
         entry['fileName'] = os.path.basename(self._file)
         entry['directory'] = os.path.dirname(self._file)
+        # pylint: disable=protected-access
         entry['lineStart'] = sys._getframe().f_lineno
         entry['message'] = 'Tests exited without shutting down properly'
         entry['severity'] = 'ERROR'
@@ -207,6 +211,7 @@ class WarningsFactory():
             entry = {}
             entry['fileName'] = os.path.basename(self._file)
             entry['directory'] = os.path.dirname(self._file)
+            # pylint: disable=protected-access
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'
             entry['message'] = 'Tests are still running'
@@ -306,6 +311,8 @@ class DaosServer():
                                                        delete=False)
         scyaml = yaml.load(scfd)
         scyaml['servers'][0]['log_file'] = self._log_file
+        if self.conf.args.server_debug:
+            scyaml['servers'][0]['log_mask'] = self.conf.args.server_debug
         scyaml['control_log_file'] = control_log_file.name
 
         self._yaml_file = tempfile.NamedTemporaryFile(
@@ -865,7 +872,7 @@ def setup_log_test(conf):
     """Setup and import the log tracing code"""
     file_self = os.path.dirname(os.path.abspath(__file__))
     logparse_dir = os.path.join(file_self,
-                                '../src/cart/test/util')
+                                '../src/tests/ftest/cart/util')
     crt_mod_dir = os.path.realpath(logparse_dir)
     if crt_mod_dir not in sys.path:
         sys.path.append(crt_mod_dir)
@@ -1271,7 +1278,7 @@ def test_pydaos_kv(server, conf):
     print('Closing container and opening new one')
     kv = container.get_kv_by_name('my_test_kv')
 
-def test_alloc_fail(conf):
+def test_alloc_fail(server, conf):
     """run 'daos' client binary with fault injection
 
     Enable the fault injection for the daos binary, injecting
@@ -1287,10 +1294,10 @@ def test_alloc_fail(conf):
 
     pools = get_pool_list()
 
-    if len(pools) > 1:
-        pool = pools[0]
-    else:
-        pool = '5848df55-a97c-46e3-8eca-45adf85591d6'
+    while len(pools) < 1:
+        pools = make_pool(server)
+
+    pool = pools[0]
 
     cmd = ['pool', 'list-containers', '--svc', '0', '--pool', pool]
 
@@ -1299,6 +1306,8 @@ def test_alloc_fail(conf):
     fatal_errors = False
 
     while True:
+        print()
+
         fc = {}
         fc['fault_config'] = [{'id': 0,
                                'probability_x': 1,
@@ -1340,6 +1349,7 @@ def main():
 
     parser = argparse.ArgumentParser(description='Run DAOS client on local node')
     parser.add_argument('--output-file', default='nlt-errors.json')
+    parser.add_argument('--server-debug', default=None)
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
     parser.add_argument('mode', nargs='?')
@@ -1367,13 +1377,13 @@ def main():
     elif args.mode == 'overlay':
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
     elif args.mode == 'fi':
-        fatal_errors.add_result(test_alloc_fail(conf))
+        fatal_errors.add_result(test_alloc_fail(server, conf))
     elif args.mode == 'all':
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
         test_pydaos_kv(server, conf)
-        fatal_errors.add_result(test_alloc_fail(conf))
+        fatal_errors.add_result(test_alloc_fail(server, conf))
     else:
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))

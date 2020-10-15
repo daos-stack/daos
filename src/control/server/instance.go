@@ -64,6 +64,7 @@ type IOServerInstance struct {
 	ready             atm.Bool
 	startLoop         chan bool // restart loop
 	fsRoot            string
+	hostFaultDomain   *system.FaultDomain
 
 	sync.RWMutex
 	// these must be protected by a mutex in order to
@@ -89,6 +90,13 @@ func NewIOServerInstance(log logging.Logger,
 		storageReady:      make(chan bool),
 		startLoop:         make(chan bool),
 	}
+}
+
+// WithHostFaultDomain adds a fault domain for the host this instance is running
+// on.
+func (srv *IOServerInstance) WithHostFaultDomain(fd *system.FaultDomain) *IOServerInstance {
+	srv.hostFaultDomain = fd
+	return srv
 }
 
 // isAwaitingFormat indicates whether IOServerInstance is waiting
@@ -161,12 +169,10 @@ func (srv *IOServerInstance) removeSocket() error {
 	return nil
 }
 
-// setRank determines the instance rank and sends a SetRank dRPC request
-// to the IOServer.
-func (srv *IOServerInstance) setRank(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
+func (srv *IOServerInstance) determineRank(ctx context.Context, ready *srvpb.NotifyReadyReq) (system.Rank, error) {
 	superblock := srv.getSuperblock()
 	if superblock == nil {
-		return errors.New("nil superblock in setRank()")
+		return system.NilRank, errors.New("nil superblock while determining rank")
 	}
 
 	r := system.NilRank
@@ -176,16 +182,17 @@ func (srv *IOServerInstance) setRank(ctx context.Context, ready *srvpb.NotifyRea
 
 	if !superblock.ValidRank || !superblock.MS {
 		resp, err := srv.msClient.Join(ctx, &mgmtpb.JoinReq{
-			Uuid:  superblock.UUID,
-			Rank:  r.Uint32(),
-			Uri:   ready.Uri,
-			Nctxs: ready.Nctxs,
+			Uuid:           superblock.UUID,
+			Rank:           r.Uint32(),
+			Uri:            ready.Uri,
+			Nctxs:          ready.Nctxs,
+			SrvFaultDomain: srv.hostFaultDomain.String(),
 			// Addr member populated in msClient
 		})
 		if err != nil {
-			return err
+			return system.NilRank, err
 		} else if resp.State == mgmtpb.JoinResp_OUT {
-			return errors.Errorf("rank %d excluded", resp.Rank)
+			return system.NilRank, errors.Errorf("rank %d excluded", resp.Rank)
 		}
 		r = system.Rank(resp.Rank)
 
@@ -195,9 +202,20 @@ func (srv *IOServerInstance) setRank(ctx context.Context, ready *srvpb.NotifyRea
 			superblock.ValidRank = true
 			srv.setSuperblock(superblock)
 			if err := srv.WriteSuperblock(); err != nil {
-				return err
+				return system.NilRank, err
 			}
 		}
+	}
+
+	return r, nil
+}
+
+// setRank determines the instance rank and sends a SetRank dRPC request
+// to the IOServer.
+func (srv *IOServerInstance) setRank(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
+	r, err := srv.determineRank(ctx, ready)
+	if err != nil {
+		return err
 	}
 
 	if err := srv.callSetRank(ctx, r); err != nil {

@@ -934,6 +934,7 @@ class PreReqComponent():
         defines -- Defines needed to use the component
         package -- Name of package to install
         commands -- A list of commands to run to build the component
+        config_cb -- Custom config callback
         retriever -- A retriever object to download component
         extra_lib_path -- Subdirectories to add to dependent component path
         extra_include_path -- Subdirectories to add to dependent component path
@@ -1190,6 +1191,7 @@ class _Component():
         requires -- A list of names of required component definitions
         commands -- A list of commands to run to build the component
         package -- Name of package to install
+        config_cb -- Custom config callback
         retriever -- A retriever object to download component
         extra_lib_path -- Subdirectories to add to dependent component path
         extra_include_path -- Subdirectories to add to dependent component path
@@ -1217,6 +1219,7 @@ class _Component():
         self.progs = kw.get("progs", [])
         self.libs = kw.get("libs", [])
         self.libs_cc = kw.get("libs_cc", None)
+        self.config_cb = kw.get("config_cb", None)
         self.required_libs = kw.get("required_libs", [])
         self.required_progs = kw.get("required_progs", [])
         if self.patch_rpath:
@@ -1389,6 +1392,13 @@ class _Component():
             return True
 
         config = Configure(env)
+        if self.config_cb:
+            if not self.config_cb(config):
+                config.Finish()
+                if self.__check_only:
+                    env.SetOption('no_exec', True)
+                return True
+
         for prog in self.progs:
             if not config.CheckProg(prog):
                 config.Finish()

@@ -148,9 +148,9 @@ int ds_pool_create(const uuid_t pool_uuid, const char *path,
 		   uuid_t target_uuid);
 int ds_pool_start(uuid_t uuid);
 void ds_pool_stop(uuid_t uuid);
-int ds_pool_add(uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
-		const d_rank_list_t *rank_list, int ndomains,
-		const int *domains, d_rank_list_t *svc_ranks);
+int ds_pool_extend(uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
+		   const d_rank_list_t *rank_list, int ndomains,
+		   const int *domains, d_rank_list_t *svc_ranks);
 int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 				uint32_t rank,
 				struct pool_target_id_list *target_list,

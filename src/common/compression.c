@@ -43,24 +43,16 @@ daos_contprop2compresstype(int contprop_compress_val)
 	switch (contprop_compress_val) {
 	case DAOS_PROP_CO_COMPRESS_LZ4:
 		return COMPRESS_TYPE_LZ4;
-	case DAOS_PROP_CO_COMPRESS_GZIP1:
-		return COMPRESS_TYPE_GZIP1;
-	case DAOS_PROP_CO_COMPRESS_GZIP2:
-		return COMPRESS_TYPE_GZIP2;
-	case DAOS_PROP_CO_COMPRESS_GZIP3:
-		return COMPRESS_TYPE_GZIP3;
-	case DAOS_PROP_CO_COMPRESS_GZIP4:
-		return COMPRESS_TYPE_GZIP4;
-	case DAOS_PROP_CO_COMPRESS_GZIP5:
-		return COMPRESS_TYPE_GZIP5;
-	case DAOS_PROP_CO_COMPRESS_GZIP6:
-		return COMPRESS_TYPE_GZIP6;
-	case DAOS_PROP_CO_COMPRESS_GZIP7:
-		return COMPRESS_TYPE_GZIP7;
-	case DAOS_PROP_CO_COMPRESS_GZIP8:
-		return COMPRESS_TYPE_GZIP8;
-	case DAOS_PROP_CO_COMPRESS_GZIP9:
-		return COMPRESS_TYPE_GZIP9;
+	case DAOS_PROP_CO_COMPRESS_DEFLATE:
+		return DAOS_PROP_CO_COMPRESS_DEFLATE;
+	case DAOS_PROP_CO_COMPRESS_DEFLATE1:
+		return DAOS_PROP_CO_COMPRESS_DEFLATE1;
+	case DAOS_PROP_CO_COMPRESS_DEFLATE2:
+		return DAOS_PROP_CO_COMPRESS_DEFLATE2;
+	case DAOS_PROP_CO_COMPRESS_DEFLATE3:
+		return DAOS_PROP_CO_COMPRESS_DEFLATE3;
+	case DAOS_PROP_CO_COMPRESS_DEFLATE4:
+		return DAOS_PROP_CO_COMPRESS_DEFLATE4;
 	default:
 		return COMPRESS_TYPE_UNKNOWN;
 	}
@@ -72,24 +64,16 @@ daos_compresstype2contprop(enum DAOS_COMPRESS_TYPE daos_compress_type)
 	switch (daos_compress_type) {
 	case COMPRESS_TYPE_LZ4:
 		return DAOS_PROP_CO_COMPRESS_LZ4;
-	case COMPRESS_TYPE_GZIP1:
-		return DAOS_PROP_CO_COMPRESS_GZIP1;
-	case COMPRESS_TYPE_GZIP2:
-		return DAOS_PROP_CO_COMPRESS_GZIP2;
-	case COMPRESS_TYPE_GZIP3:
-		return DAOS_PROP_CO_COMPRESS_GZIP3;
-	case COMPRESS_TYPE_GZIP4:
-		return DAOS_PROP_CO_COMPRESS_GZIP4;
-	case COMPRESS_TYPE_GZIP5:
-		return DAOS_PROP_CO_COMPRESS_GZIP5;
-	case COMPRESS_TYPE_GZIP6:
-		return DAOS_PROP_CO_COMPRESS_GZIP6;
-	case COMPRESS_TYPE_GZIP7:
-		return DAOS_PROP_CO_COMPRESS_GZIP7;
-	case COMPRESS_TYPE_GZIP8:
-		return DAOS_PROP_CO_COMPRESS_GZIP8;
-	case COMPRESS_TYPE_GZIP9:
-		return DAOS_PROP_CO_COMPRESS_GZIP9;
+	case COMPRESS_TYPE_DEFLATE:
+		return DAOS_PROP_CO_COMPRESS_DEFLATE;
+	case COMPRESS_TYPE_DEFLATE1:
+		return DAOS_PROP_CO_COMPRESS_DEFLATE1;
+	case COMPRESS_TYPE_DEFLATE2:
+		return DAOS_PROP_CO_COMPRESS_DEFLATE2;
+	case COMPRESS_TYPE_DEFLATE3:
+		return DAOS_PROP_CO_COMPRESS_DEFLATE3;
+	case COMPRESS_TYPE_DEFLATE4:
+		return DAOS_PROP_CO_COMPRESS_DEFLATE4;
 	default:
 		return DAOS_PROP_CO_COMPRESS_OFF;
 	}
@@ -134,4 +118,80 @@ daos_str2compresscontprop(const char *value)
 		return DAOS_PROP_CO_COMPRESS_OFF;
 
 	return -DER_INVAL;
+}
+
+/**
+ * struct daos_compressor functions
+ */
+
+int
+daos_compressor_init(struct daos_compressor **obj, struct compress_ft *ft)
+{
+	struct daos_compressor *result;
+	int rc = 0;
+
+	if (!ft) {
+		D_ERROR("No function table");
+		return -DER_INVAL;
+	}
+
+	D_ALLOC_PTR(result);
+	if (result == NULL)
+		return -DER_NOMEM;
+
+	result->dc_algo = ft;
+
+	if (result->dc_algo->cf_init)
+		rc = result->dc_algo->cf_init(&result->dc_ctx, ft->cf_level);
+
+	if (rc == 0)
+		*obj = result;
+
+	return rc;
+}
+
+int
+daos_compressor_init_with_type(struct daos_compressor **obj,
+			       enum DAOS_COMPRESS_TYPE type)
+{
+	return daos_compressor_init(obj, daos_compress_type2algo(type));
+}
+
+int
+daos_compressor_compress(struct daos_compressor *obj,
+			 uint8_t *src_buf, size_t src_len,
+			 uint8_t *dst_buf, size_t dst_len)
+{
+	if (obj->dc_algo->cf_compress)
+		return obj->dc_algo->cf_compress(obj->dc_ctx,
+			src_buf, src_len, dst_buf, dst_len);
+
+	return 0;
+}
+
+int
+daos_compressor_decompress(struct daos_compressor *obj,
+			   uint8_t *src_buf, size_t src_len,
+			   uint8_t *dst_buf, size_t dst_len)
+{
+	if (obj->dc_algo->cf_decompress)
+		return obj->dc_algo->cf_decompress(obj->dc_ctx,
+			src_buf, src_len, dst_buf, dst_len);
+
+	return 0;
+}
+
+void
+daos_compressor_destroy(struct daos_compressor **obj)
+{
+	struct daos_compressor *compressor = *obj;
+
+	if (!*obj)
+		return;
+
+	if (compressor->dc_algo->cf_destroy)
+		compressor->dc_algo->cf_destroy(compressor->dc_ctx);
+
+	D_FREE(compressor);
+	*obj = NULL;
 }
