@@ -405,7 +405,7 @@ type PoolQueryCmd struct {
 	ctlInvokerCmd
 	jsonOutputCmd
 	UUID string `long:"pool" required:"1" description:"UUID of DAOS pool to query"`
-	Targetlist string `long:"tgtidx" description:"Comma-separated list of pool targets to be queried on the rank"`
+	Targetlist string `long:"tgtidx" description:"Comma-separated list of pool targets to be queried"`
 }
 
 // Execute is run when PoolQueryCmd subcommand is activated

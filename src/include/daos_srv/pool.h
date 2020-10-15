@@ -175,7 +175,7 @@ int ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 
 int ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ranks,
 		      daos_pool_info_t *pool_info, uint32_t *tgt_idx,
-		      int n_tgt_idx, bool query_all_tgts);
+		      int n_tgt_idx);
 
 int ds_pool_prop_fetch(struct ds_pool *pool, unsigned int bit,
 		       daos_prop_t **prop_out);

@@ -904,8 +904,8 @@ out:
 }
 
 static int
-pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps, uint32_t *tgt_idx,
-	       int n_tgt_idx, bool query_all_tgts)
+pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps,
+	       uint32_t *tgt_idx, int n_tgt_idx)
 {
 	struct dss_coll_ops		coll_ops;
 	struct dss_coll_args		coll_args = { 0 };
@@ -929,7 +929,11 @@ pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps, uint32_t *tgt_i
 	coll_args.ca_func_args		= &coll_args.ca_stream_args;
 
 
-	if (!query_all_tgts)
+	/**
+	 * Only query certain pool targets if specified in pool query
+	 * command, otherwise by default query all pool targets.
+	 */
+	if (n_tgt_idx > 0)
 		goto query_target_list;
 
 	/* exclude all failed target indexes from query */
@@ -945,7 +949,6 @@ pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps, uint32_t *tgt_i
 	goto query_all_targets;
 
 query_target_list:
-	/* only query certain targets if specified, exclude all other targets */
 	rc = ds_pool_exclude_all_except_list(pool->sp_uuid,
 					     &coll_args.ca_exclude_tgts,
 					     &coll_args.ca_exclude_tgts_cnt,
@@ -1263,7 +1266,7 @@ ds_pool_tgt_query_handler(crt_rpc_t *rpc)
 	}
 
 	rc = pool_tgt_query(pool, &out->tqo_space, in->tqi_tgtidx.ca_arrays,
-			    in->tqi_n_tgtidx, in->tqi_alltgts);
+			    in->tqi_n_tgtidx);
 	ds_pool_put(pool);
 out:
 	out->tqo_rc = (rc == 0 ? 0 : 1);

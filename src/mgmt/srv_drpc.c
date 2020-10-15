@@ -1512,7 +1512,6 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__PoolRebuildStatus	rebuild = MGMT__POOL_REBUILD_STATUS__INIT;
 	uuid_t			uuid;
 	daos_pool_info_t	pool_info = {0};
-	bool			query_all_tgts = true;
 	size_t			len;
 	uint8_t			*body;
 
@@ -1533,15 +1532,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	pool_info.pi_bits = DPI_ALL;
 
-	/**
-	 * Only query certain pool targets if specified in pool query
-	 * command, otherwise by default query all pool targets.
-	 */
-	if (req->n_targetlist > 0)
-		query_all_tgts = false;
-
-	rc = ds_mgmt_pool_query(uuid, &pool_info, req->targetlist, req->n_targetlist,
-				query_all_tgts);
+	rc = ds_mgmt_pool_query(uuid, &pool_info, req->targetlist, req->n_targetlist);
 	if (rc != 0) {
 		D_ERROR("Failed to query the pool, rc=%d\n", rc);
 		D_GOTO(out, rc);

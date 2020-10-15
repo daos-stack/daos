@@ -1112,8 +1112,6 @@ out:
  * \param[in][out]	pool_info	Query results
  * \param[in]		pooltgts	List of pool targets to query
  * \param[in]		n_pooltgts	Number of tgts in pooltgts
- * \param[in]		query_all_tgts	Query all targets in the pool (True if
- *					pooltgts is empty, otherwise False)
  *
  * \return		0		Success
  *			-DER_INVAL	Invalid inputs
@@ -1121,7 +1119,7 @@ out:
  */
 int
 ds_mgmt_pool_query(uuid_t pool_uuid, daos_pool_info_t *pool_info,
-		   uint32_t *pooltgts, int n_pooltgts, bool query_all_tgts)
+		   uint32_t *pooltgts, int n_pooltgts)
 {
 	int			rc;
 	struct mgmt_svc		*svc;
@@ -1142,8 +1140,8 @@ ds_mgmt_pool_query(uuid_t pool_uuid, daos_pool_info_t *pool_info,
 	if (rc != 0)
 		goto out_svc;
 
-	rc = ds_pool_svc_query(pool_uuid, ranks, pool_info, pooltgts, n_pooltgts,
-			       query_all_tgts);
+	rc = ds_pool_svc_query(pool_uuid, ranks, pool_info, pooltgts,
+			       n_pooltgts);
 
 	d_rank_list_free(ranks);
 out_svc:

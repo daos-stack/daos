@@ -69,8 +69,7 @@ static int pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc,
 			  uint64_t bits, daos_prop_t **prop_out);
 static int pool_space_query_bcast(crt_context_t ctx, struct pool_svc *svc,
 				  uuid_t pool_hdl, struct daos_pool_space *ps,
-				  uint32_t *tgt_idx, int n_tgt_idx,
-				  bool query_all_tgts);
+				  uint32_t *tgt_idx, int n_tgt_idx);
 
 static struct pool_svc *
 pool_svc_obj(struct ds_rsvc *rsvc)
@@ -2062,7 +2061,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 
 	if (in->pci_query_bits & DAOS_PO_QUERY_SPACE)
 		rc = pool_space_query_bcast(rpc->cr_ctx, svc, in->pci_op.pi_hdl,
-					    &out->pco_space, NULL, 0, true);
+					    &out->pco_space, NULL, 0);
 out_map_version:
 	out->pco_op.po_map_version = pool_map_get_version(svc->ps_pool->sp_map);
 	if (map_buf)
@@ -2236,7 +2235,7 @@ out:
 static int
 pool_space_query_bcast(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
 		       struct daos_pool_space *ps, uint32_t *tgt_idx,
-		       int n_tgt_idx, bool query_all_tgts)
+		       int n_tgt_idx)
 {
 	struct pool_tgt_query_in	*in;
 	struct pool_tgt_query_out	*out;
@@ -2255,7 +2254,6 @@ pool_space_query_bcast(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
 	in->tqi_tgtidx.ca_count = n_tgt_idx;
 	in->tqi_tgtidx.ca_arrays = (uint32_t *)tgt_idx;
 	in->tqi_n_tgtidx = n_tgt_idx;
-	in->tqi_alltgts = query_all_tgts;
 	rc = dss_rpc_send(rpc);
 	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_QUERY_FAIL_CORPC))
 		rc = -DER_TIMEDOUT;
@@ -2727,8 +2725,7 @@ out_svc:
 					    in->pqi_op.pi_hdl,
 					    &out->pqo_space,
 					    in->pqi_tgtidx.ca_arrays,
-					    in->pqi_n_tgtidx,
-					    in->pqi_alltgts);
+					    in->pqi_n_tgtidx);
 	pool_svc_put_leader(svc);
 out:
 	out->pqo_op.po_rc = rc;
@@ -2776,6 +2773,9 @@ out:
  * \param[in]	pool_uuid	UUID of the pool
  * \param[in]	ranks		Ranks of pool svc replicas
  * \param[out]	pool_info	Results of the pool query
+ * \param[in]	pooltgts	List of pool tgts to query
+ * \param[in]	n_pooltgts	Number of pool targets to query
+ * 				If 0, all target are queried
  *
  * \return	0		Success
  *		-DER_INVAL	Invalid input
@@ -2784,7 +2784,7 @@ out:
 int
 ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ranks,
 		  daos_pool_info_t *pool_info, uint32_t *pooltgts,
-		  int n_pooltgts, bool query_all_tgts)
+		  int n_pooltgts)
 {
 	int			rc;
 	struct rsvc_client	client;
@@ -2829,7 +2829,6 @@ realloc:
 	in->pqi_tgtidx.ca_count = n_pooltgts;
 	in->pqi_tgtidx.ca_arrays = (uint32_t *)pooltgts;
 	in->pqi_n_tgtidx = n_pooltgts;
-	in->pqi_alltgts = query_all_tgts;
 
 	rc = map_bulk_create(info->dmi_ctx, &in->pqi_map_bulk, &map_buf,
 			     map_size);
