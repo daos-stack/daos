@@ -715,7 +715,7 @@ tx_query(daos_handle_t coh, struct tx_helper *txh, daos_epoch_t epoch,
 }
 
 static int
-querymax_d(struct io_test_args *arg, struct tx_helper *txh, char *path,
+querymaxd_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	   daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
@@ -727,7 +727,7 @@ querymax_d(struct io_test_args *arg, struct tx_helper *txh, char *path,
 }
 
 static int
-querymax_a(struct io_test_args *arg, struct tx_helper *txh, char *path,
+querymaxa_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	   daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
@@ -743,7 +743,7 @@ querymax_a(struct io_test_args *arg, struct tx_helper *txh, char *path,
 }
 
 static int
-querymax_r(struct io_test_args *arg, struct tx_helper *txh, char *path,
+querymaxr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	   daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
@@ -761,7 +761,7 @@ querymax_r(struct io_test_args *arg, struct tx_helper *txh, char *path,
 }
 
 static int
-querymax_da(struct io_test_args *arg, struct tx_helper *txh, char *path,
+querymaxda_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	    daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
@@ -776,7 +776,7 @@ querymax_da(struct io_test_args *arg, struct tx_helper *txh, char *path,
 }
 
 static int
-querymax_dr(struct io_test_args *arg, struct tx_helper *txh, char *path,
+querymaxdr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	    daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
@@ -794,7 +794,7 @@ querymax_dr(struct io_test_args *arg, struct tx_helper *txh, char *path,
 }
 
 static int
-querymax_ar(struct io_test_args *arg, struct tx_helper *txh, char *path,
+querymaxar_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	    daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
@@ -812,7 +812,7 @@ querymax_ar(struct io_test_args *arg, struct tx_helper *txh, char *path,
 }
 
 static int
-querymax_dar(struct io_test_args *arg, struct tx_helper *txh, char *path,
+querymaxdar_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	     daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
@@ -828,7 +828,7 @@ querymax_dar(struct io_test_args *arg, struct tx_helper *txh, char *path,
 }
 
 static int
-querymin_d(struct io_test_args *arg, struct tx_helper *txh, char *path,
+querymind_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	   daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
@@ -840,7 +840,7 @@ querymin_d(struct io_test_args *arg, struct tx_helper *txh, char *path,
 }
 
 static int
-querymin_a(struct io_test_args *arg, struct tx_helper *txh, char *path,
+querymina_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	   daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
@@ -856,7 +856,7 @@ querymin_a(struct io_test_args *arg, struct tx_helper *txh, char *path,
 }
 
 static int
-querymin_r(struct io_test_args *arg, struct tx_helper *txh, char *path,
+queryminr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	   daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
@@ -874,7 +874,7 @@ querymin_r(struct io_test_args *arg, struct tx_helper *txh, char *path,
 }
 
 static int
-querymin_da(struct io_test_args *arg, struct tx_helper *txh, char *path,
+queryminda_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	    daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
@@ -889,7 +889,7 @@ querymin_da(struct io_test_args *arg, struct tx_helper *txh, char *path,
 }
 
 static int
-querymin_dr(struct io_test_args *arg, struct tx_helper *txh, char *path,
+querymindr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	    daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
@@ -907,7 +907,7 @@ querymin_dr(struct io_test_args *arg, struct tx_helper *txh, char *path,
 }
 
 static int
-querymin_ar(struct io_test_args *arg, struct tx_helper *txh, char *path,
+queryminar_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	    daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
@@ -925,7 +925,7 @@ querymin_ar(struct io_test_args *arg, struct tx_helper *txh, char *path,
 }
 
 static int
-querymin_dar(struct io_test_args *arg, struct tx_helper *txh, char *path,
+querymindar_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	     daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
@@ -947,24 +947,24 @@ static struct op operations[] = {
 	{"fetch",	T_R,	L_A,	L_NIL,	R_R,	W_NIL,	fetch_f},
 	{"fetch_dne",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	fetch_dne_f},
 	{"fetch_ane",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	fetch_ane_f},
-	{"listo",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	listo_f},
-	{"listd",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	listd_f},
-	{"lista",	T_R,	L_A,	L_NIL,	R_R,	W_NIL,	lista_f},
+	{"listo",	T_R,	L_C,	L_NIL,	R_R,	W_NIL,	listo_f},
+	{"listd",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	listd_f},
+	{"lista",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	lista_f},
 	{"listr",	T_R,	L_A,	L_NIL,	R_R,	W_NIL,	listr_f},
-	{"querymaxd",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymax_d},
-	{"querymaxa",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymax_a},
-	{"querymaxr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymax_r},
-	{"querymaxda",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymax_da},
-	{"querymaxdr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymax_dr},
-	{"querymaxar",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymax_ar},
-	{"querymaxdar",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymax_dar},
-	{"querymind",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymin_d},
-	{"querymina",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymin_a},
-	{"queryminr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymin_r},
-	{"queryminda",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymin_da},
-	{"querymindr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymin_dr},
-	{"queryminar",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymin_ar},
-	{"querymindar",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymin_dar},
+	{"querymaxd",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymaxd_f},
+	{"querymaxa",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymaxa_f},
+	{"querymaxr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymaxr_f},
+	{"querymaxda",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymaxda_f},
+	{"querymaxdr",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymaxdr_f},
+	{"querymaxar",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymaxar_f},
+	{"querymaxdar",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymaxdar_f},
+	{"querymind",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymind_f},
+	{"querymina",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymina_f},
+	{"queryminr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	queryminr_f},
+	{"queryminda",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	queryminda_f},
+	{"querymindr",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymindr_f},
+	{"queryminar",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	queryminar_f},
+	{"querymindar",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymindar_f},
 	/* Read timestamp update only cases */
 	{"read_ts_o",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	read_ts_o_f},
 	{"read_ts_d",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	read_ts_d_f},
