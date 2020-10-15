@@ -335,18 +335,40 @@ class CommandWithParameters(ObjectWithParameters):
         """
         # Join all the parameters that have been assigned a value with the
         # command to create the command string
+        return self._str_assemble_command(self._str_get_params())
+
+    def _str_get_params(self):
+        """Get the list of command parameters for the command string.
+
+        Returns:
+            list: a list of command parameters
+
+        """
+        # Generate a list of all the parameters that have been assigned a value
         params = []
         for name in self.get_str_param_names():
             value = str(getattr(self, name))
             if value != "":
                 params.append(value)
+        return params
 
+    def _str_assemble_command(self, params):
+        """Assemble the command string.
+
+        Args:
+            params (list): a list of command parameters to include after the
+                command as a space-separated string
+
+        Returns:
+            str: the command with all the defined parameters
+
+        """
         # Append the path to the command and prepend it with any other
         # specified commands
         command_list = [] if self._pre_command is None else [self._pre_command]
         command_list.append(os.path.join(self._path, self._command))
 
-        # Return the command and its parameters
+        # Join all the parameters with the command to create the command string
         return " ".join(command_list + params)
 
     def get_str_param_names(self):

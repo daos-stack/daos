@@ -37,4 +37,23 @@ class Hdf5VolCommand(ExecutableCommand):
         """
         super(Hdf5VolCommand, self).__init__("/run/hdf5_vol/*", None, path)
 
-        self.testname = BasicParameter(default="hostname")
+        self.testname = BasicParameter(None, default="hostname")
+
+    def _str_get_params(self):
+        """Get the list of command parameters for the command string.
+
+        Returns:
+            list: a list of command parameters
+
+        """
+        # Generate a list of all the parameters that have been assigned a value
+        params = []
+        for name in self.get_str_param_names():
+            value = str(getattr(self, name))
+            if value != "":
+                if name == "testname":
+                    # Use the testname parameter to override the command
+                    self._command = value
+                else:
+                    params.append(value)
+        return params

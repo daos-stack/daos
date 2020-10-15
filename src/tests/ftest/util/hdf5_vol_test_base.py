@@ -23,7 +23,6 @@ portions thereof marked with this legend must also reproduce the markings.
 """
 from dfuse_test_base import DfuseTestBase
 from command_utils_base import EnvironmentVariables, CommandFailure
-from job_manager_utils import Mpirun, Orterun
 from hdf5_vol_utils import Hdf5VolCommand
 
 
@@ -60,7 +59,6 @@ class Hdf5VolTestBase(DfuseTestBase):
 
         """
         # initialize test specific variables
-        mpi_type = self.params.get("mpi_type", default="mpich")
         plugin_path = self.params.get("plugin_path")
         client_processes = self.params.get("client_processes")
 
