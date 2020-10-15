@@ -41,7 +41,6 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
@@ -470,10 +469,6 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 		c.AccessPoints[i] = fmt.Sprintf("%s:%s", host, port)
 	}
 
-	if err = c.validateFaultDomain(log); err != nil {
-		return err
-	}
-
 	netCtx, err := netdetect.Init(context.Background())
 	defer netdetect.CleanUp(netCtx)
 	if err != nil {
@@ -512,17 +507,6 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 		}
 	}
 
-	return nil
-}
-
-func (c *Configuration) validateFaultDomain(log logging.Logger) error {
-	if c.FaultPath != "" {
-		_, err := system.NewFaultDomainFromString(c.FaultPath)
-		if err != nil {
-			return FaultConfigFaultDomainInvalid
-		}
-	}
-	// TODO DAOS-4449: Check the fault callback
 	return nil
 }
 
