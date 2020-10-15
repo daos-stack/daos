@@ -63,7 +63,6 @@ class StorageRatio(TestWithServers):
             try:
                 # Create a pool
                 pool.create()
-                dmg_output = pool.dmg.result.stdout
                 if 'FAIL' in test[2]:
                     results[num] = 'FAIL'
                 elif 'PASS' in test[2]:
