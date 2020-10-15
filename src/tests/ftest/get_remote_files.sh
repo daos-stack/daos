@@ -121,26 +121,6 @@ list_tag_files() {
 }
 
 #######################################
-# Check if this host is a VM.
-# Arguments:
-#   $1: whether or not to skip the check
-# Returns:
-#   0: VM detected
-#   1: No VM detected or skipped
-#######################################
-check_hw() {
-    if dmesg | grep -q "Hypervisor detected"; then
-        # This host is a VM
-        if "${1:-false}"; then
-            echo "  Running compression on a VM host"
-            return 1
-        fi
-        return 0
-    fi
-    return 1
-}
-
-#######################################
 # Compress any files exceeding 1M.
 # Arguments:
 #   $1: local logs to compress
@@ -219,18 +199,6 @@ run_cartlogtest() {
     return ${rc}
 }
 
-#######################################
-# Clean up after an error.
-# Arguments:
-#   $1: script log file
-#######################################
-cleanup() {
-    if [ -f "${1}" ]; then
-        cat "${1}"
-        scp_files "${1}" "${ARCHIVE_DEST}"
-    fi
-}
-
 ####### MAIN #######
 if [[ $# -eq 0 ]] ; then
     usage
@@ -292,7 +260,6 @@ if ! "${VERBOSE}"; then
     echo "Logging ${script_name} output to ${log_file}"
 fi
 set -ex
-trap 'cleanup "${log_file}"' ERR
 
 # Verify files have been specified and they exist on this host
 if ! check_files_input "${FILES_TO_PROCESS}"; then
@@ -328,12 +295,19 @@ fi
 # Compress files in FILES_TO_PROCESS if not running on VM host.
 if "${COMPRESS:-false}"; then
     echo "Compressing files larger than 1M ..."
-    if check_hw "${EXCLUDE_ZIP}"; then
-        echo "VM system detected, skipping compression ..."
-    else
-        if ! compress_files "${FILES_TO_PROCESS}"; then
-            rc=1
+    check_str="Hypervisor detected"
+    if output=$(dmesg); then
+        if ! grep -q "${check_str}" <<< "${output}" || "${EXCLUDE_ZIP:-false}";
+        then
+            if ! compress_files "${FILES_TO_PROCESS}"; then
+                rc=1
+            fi
+        elif ! "${EXCLUDE_ZIP:-false}"; then
+            echo "VM system detected, skipping compression ..."
         fi
+    else
+        echo "Error: dmesg command failure: ${output}"
+        rc=1
     fi
 fi
 
