@@ -1855,8 +1855,7 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 	}
 	epoch_range.epr_lo = 0ULL;
 	epoch_range.epr_hi = oer->er_epoch;
-	recx.rx_idx = (oer->er_stripenum * oca->u.ec.e_len) |
-						PARITY_INDICATOR;
+	recx.rx_idx = (oer->er_stripenum * oca->u.ec.e_len) | PARITY_INDICATOR;
 	recx.rx_nr = oca->u.ec.e_len;
 	rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oer->er_oid,
 				  &epoch_range, dkey, &iod->iod_name, &recx);

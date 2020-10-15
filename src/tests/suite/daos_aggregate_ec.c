@@ -209,7 +209,7 @@ test_filled_stripe(void **statep)
 	unsigned int		 len, shard = 2; /* 2+2, group leadeer */
 	int			 i, rc;
 
-	ec_setup_from_test_args(&ctx, (test_arg_t *) *statep);
+	ec_setup_from_test_args(&ctx, (test_arg_t *)*statep);
 	ec_setup_cont_obj(&ctx, dts_ec_agg_oc);
 	assert_int_equal(daos_oclass_is_ec(ctx.oid, &oca), true);
 	assert_int_equal(oca->u.ec.e_k, 2);

@@ -636,7 +636,6 @@ agg_overlap(daos_recx_t *recx, unsigned int cell, unsigned int k,
 /* Initializes the object handle of for the object represented by the entry.
  * No way to do this until pool handle uuid and container handle uuid are
  * initialized and share to other servers at higher(pool/container) layer.
- *
  */
 static int
 agg_get_obj_handle(struct ec_agg_entry *entry)
