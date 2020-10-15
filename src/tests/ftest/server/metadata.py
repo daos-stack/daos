@@ -99,6 +99,10 @@ class ObjectMetadata(TestWithServers):
                              dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
         self.pool.create()
+        self.log.info("Created pool %s: svcranks:",
+                      self.pool.pool.get_uuid_str())
+        for r in range(len(self.pool.svc_ranks)):
+            self.log.info("[%d]: %d", r, self.pool.svc_ranks[r])
 
     def thread_control(self, threads, operation):
         """Start threads and wait until all threads are finished.
@@ -189,8 +193,13 @@ class ObjectMetadata(TestWithServers):
                         container.create(self.pool.pool.handle)
                         big_array.append(container)
                         if in_failure:
+                            self.log.info("Phase 3: nospace -> available "
+                                          "transition, cont %d", _cont)
                             in_failure = False
                     except DaosApiError:
+                        if not in_failure:
+                            self.log.info("Phase 3: available -> nospace "
+                                          "transition, cont %d", _cont)
                         in_failure = True
 
                 self.log.info("Phase 3: passed (created %d / %d containers)",
