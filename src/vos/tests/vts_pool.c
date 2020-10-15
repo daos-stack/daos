@@ -281,7 +281,7 @@ pool_unit_teardown(void **state)
 			ret = remove(arg->fname[i]);
 			if (ret != 0) {
 				D_ERROR("failed to remove %s: %d\n",
-					 arg->fname[i], errno);
+					arg->fname[i], errno);
 				/* keep this errno info in rc to return */
 				rc = daos_errno2der(errno);
 			}
