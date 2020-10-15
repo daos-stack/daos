@@ -124,22 +124,26 @@ test_time(void **state)
 		assert_string_equal(value, "DER_UNKNOWN");	\
 	} while (0);
 
-#define D_CHECK_ERR_IN_RANGE(name, value)			\
+#define D_CHECK_ERR_IN_RANGE(name, value, errstr)		\
 	do {							\
-		const char	*str = d_errstr(name);		\
+		const char	*str = d_errstr(-name);		\
 		assert_string_not_equal(str, "DER_UNKNOWN");	\
 	} while (0);
 
-#define D_CHECK_IN_RANGE(name, base)		\
+#define D_CHECK_IN_RANGE(name, base)	\
 	D_FOREACH_##name##_ERR(D_CHECK_ERR_IN_RANGE)
 
 #define D_FOREACH_CUSTOM1_ERR(ACTION)				\
-	ACTION(DER_CUSTOM1,	(DER_ERR_CUSTOM1_BASE + 1))	\
-	ACTION(DER_CUSTOM2,	(DER_ERR_CUSTOM1_BASE + 2))
+	ACTION(DER_CUSTOM1,	(DER_ERR_CUSTOM1_BASE + 1),	\
+	       "Custom error description 1")			\
+	ACTION(DER_CUSTOM2,	(DER_ERR_CUSTOM1_BASE + 2),	\
+	       "Custom error description 2")
 
 #define D_FOREACH_CUSTOM2_ERR(ACTION)				\
-	ACTION(DER_CUSTOM3,	(DER_ERR_CUSTOM2_BASE + 1))	\
-	ACTION(DER_CUSTOM4,	(DER_ERR_CUSTOM2_BASE + 2))
+	ACTION(DER_CUSTOM3,	(DER_ERR_CUSTOM2_BASE + 1),	\
+	       "Custom error description 3")			\
+	ACTION(DER_CUSTOM4,	(DER_ERR_CUSTOM2_BASE + 2),	\
+	       "Custom error description 4")
 
 D_DEFINE_RANGE_ERRNO(CUSTOM1, 2000)
 D_DEFINE_RANGE_ERRNO(CUSTOM2, 3000)
@@ -158,34 +162,34 @@ void test_d_errstr_v2(void **state)
 	rc = D_REGISTER_RANGE(CUSTOM2);
 	assert_int_equal(rc, 0);
 
-	value = d_errstr(DER_CUSTOM1);
+	value = d_errstr(-DER_CUSTOM1);
 	assert_string_equal(value, "DER_CUSTOM1");
 
-	value = d_errstr(DER_CUSTOM2);
+	value = d_errstr(-DER_CUSTOM2);
 	assert_string_equal(value, "DER_CUSTOM2");
 
-	value = d_errstr(DER_CUSTOM3);
+	value = d_errstr(-DER_CUSTOM3);
 	assert_string_equal(value, "DER_CUSTOM3");
 
-	value = d_errstr(DER_CUSTOM4);
+	value = d_errstr(-DER_CUSTOM4);
 	assert_string_equal(value, "DER_CUSTOM4");
 
 	D_DEREGISTER_RANGE(CUSTOM1);
 	D_DEREGISTER_RANGE(CUSTOM2);
 
 	/* CUSTOM1 and CUSTOM2 overlap with DAOS codes */
-	value = d_errstr(DER_CUSTOM1);
+	value = d_errstr(-DER_CUSTOM1);
 	assert_string_not_equal(value, "DER_CUSTOM1");
 	assert_string_not_equal(value, "DER_UNKNOWN");
 
-	value = d_errstr(DER_CUSTOM2);
+	value = d_errstr(-DER_CUSTOM2);
 	assert_string_not_equal(value, "DER_CUSTOM2");
 	assert_string_not_equal(value, "DER_UNKNOWN");
 
-	value = d_errstr(DER_CUSTOM3);
+	value = d_errstr(-DER_CUSTOM3);
 	assert_string_equal(value, "DER_UNKNOWN");
 
-	value = d_errstr(DER_CUSTOM4);
+	value = d_errstr(-DER_CUSTOM4);
 	assert_string_equal(value, "DER_UNKNOWN");
 }
 
@@ -198,7 +202,7 @@ void test_d_errstr(void **state)
 	value = d_errstr(-DER_INVAL);
 	assert_string_equal(value, "DER_INVAL");
 	value = d_errstr(DER_INVAL);
-	assert_string_equal(value, "DER_INVAL");
+	assert_string_equal(value, "DER_UNKNOWN");
 	value = d_errstr(5000000);
 	assert_string_equal(value, "DER_UNKNOWN");
 	value = d_errstr(3);
@@ -220,6 +224,36 @@ void test_d_errstr(void **state)
 #else
 	test_d_errstr_v2(state);
 #endif
+}
+
+void test_d_errdesc(void **state)
+{
+	const char	*value;
+
+	value = d_errdesc(-DER_INVAL);
+	assert_string_equal(value, "Invalid parameters");
+	value = d_errdesc(DER_INVAL);
+	assert_string_equal(value, "Unknown error code 1003");
+	value = d_errdesc(5000000);
+	assert_string_equal(value, "Unknown error code 5000000");
+	value = d_errdesc(3);
+	assert_string_equal(value, "Unknown error code 3");
+	value = d_errdesc(-3);
+	assert_string_equal(value, "Unknown error code -3");
+	value = d_errdesc(0);
+	assert_string_equal(value, "Success");
+	value = d_errdesc(DER_SUCCESS);
+	assert_string_equal(value, "Success");
+	value = d_errdesc(-DER_NOTDIR);
+	assert_string_equal(value, "Not a directory");
+	value = d_errdesc(-2028);
+	assert_string_equal(value, "TX is not committed");
+	value = d_errdesc(-2030);
+	assert_string_equal(value, "Unknown error code -2030");
+	value = d_errdesc(-DER_UNKNOWN);
+	assert_string_equal(value, "Unknown error");
+	value = d_errdesc(-501001);
+	assert_string_equal(value, "Unknown error code -501001");
 }
 
 static int
@@ -1977,6 +2011,7 @@ main(int argc, char **argv)
 	const struct CMUnitTest	tests[] = {
 		cmocka_unit_test(test_time),
 		cmocka_unit_test(test_d_errstr),
+		cmocka_unit_test(test_d_errdesc),
 		cmocka_unit_test(test_gurt_list),
 		cmocka_unit_test(test_gurt_hlist),
 		cmocka_unit_test(test_gurt_circular_list),

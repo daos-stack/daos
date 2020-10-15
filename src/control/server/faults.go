@@ -27,6 +27,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
@@ -81,13 +82,33 @@ var (
 	)
 	FaultHarnessNotStarted = serverFault(
 		code.ServerHarnessNotStarted,
-		fmt.Sprintf("%s harness not started", DataPlaneName),
+		fmt.Sprintf("%s harness not started", build.DataPlaneName),
 		"retry the operation or check server logs for more details",
 	)
 	FaultDataPlaneNotStarted = serverFault(
 		code.ServerDataPlaneNotStarted,
-		fmt.Sprintf("%s instance not started or not responding on dRPC", DataPlaneName),
+		fmt.Sprintf("%s instance not started or not responding on dRPC", build.DataPlaneName),
 		"retry the operation or check server logs for more details",
+	)
+	FaultConfigFaultDomainInvalid = serverFault(
+		code.ServerConfigFaultDomainInvalid,
+		"invalid fault domain",
+		"specify a valid fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
+	)
+	FaultConfigFaultCallbackNotFound = serverFault(
+		code.ServerConfigFaultCallbackNotFound,
+		"fault domain callback script not found",
+		"specify a valid fault domain callback script ('fault_cb' parameter) and restart the control server",
+	)
+	FaultConfigFaultCallbackBadPerms = serverFault(
+		code.ServerConfigFaultCallbackBadPerms,
+		"fault domain callback cannot be executed",
+		"ensure that permissions for the DAOS server user are properly set on the fault domain callback script ('fault_cb' parameter) and restart the control server",
+	)
+	FaultConfigBothFaultPathAndCb = serverFault(
+		code.ServerConfigBothFaultPathAndCb,
+		"both fault domain and fault path are defined in the configuration",
+		"remove either the fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
 	)
 )
 
@@ -192,6 +213,16 @@ func dupeValue(code code.Code, name string, curIdx, seenIdx int) *fault.Fault {
 	return serverFault(code,
 		fmt.Sprintf("the %s value in IO server %d is a duplicate of server %d", name, curIdx, seenIdx),
 		fmt.Sprintf("ensure that each IO server has a unique %s value and restart", name),
+	)
+}
+
+// FaultConfigFaultCallbackFailed creates a Fault for the scenario where the
+// fault domain callback failed with some error.
+func FaultConfigFaultCallbackFailed(err error) *fault.Fault {
+	return serverFault(
+		code.ServerConfigFaultCallbackFailed,
+		fmt.Sprintf("fault domain callback script failed during execution: %s", err.Error()),
+		"specify a valid fault domain callback script ('fault_cb' parameter) and restart the control server",
 	)
 }
 

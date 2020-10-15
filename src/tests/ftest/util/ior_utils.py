@@ -259,6 +259,7 @@ class IorCommand(ExecutableCommand):
                 env["DAOS_POOL"] = self.dfs_pool.value
                 env["DAOS_SVCL"] = self.dfs_svcl.value
                 env["DAOS_CONT"] = self.dfs_cont.value
+                env["DAOS_BYPASS_DUNS"] = "1"
                 env["IOR_HINT__MPI__romio_daos_obj_class"] = \
                     self.dfs_oclass.value
         return env

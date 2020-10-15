@@ -2995,9 +2995,9 @@ out:
 }
 
 int
-ds_pool_add(uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
-		const d_rank_list_t *rank_list, int ndomains,
-		const int *domains, d_rank_list_t *svc_ranks)
+ds_pool_extend(uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
+	       const d_rank_list_t *rank_list, int ndomains,
+	       const int *domains, d_rank_list_t *svc_ranks)
 {
 	int				rc;
 	struct rsvc_client		client;
@@ -3090,7 +3090,7 @@ rechoose:
 		opcode = POOL_EXCLUDE;
 		break;
 	case PO_COMP_ST_UP:
-		opcode = POOL_ADD;
+		opcode = POOL_REINT;
 		break;
 	case PO_COMP_ST_DRAIN:
 		opcode = POOL_DRAIN;
@@ -4094,11 +4094,14 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 	case POOL_EXCLUDE:
 		op = RB_OP_FAIL;
 		break;
-	case POOL_ADD:
-		op = RB_OP_ADD;
-		break;
 	case POOL_DRAIN:
 		op = RB_OP_DRAIN;
+		break;
+	case POOL_REINT:
+		op = RB_OP_REINT;
+		break;
+	case POOL_EXTEND:
+		op = RB_OP_EXTEND;
 		break;
 	default:
 		D_GOTO(out, rc);
@@ -4138,14 +4141,18 @@ out:
 	return rc;
 }
 
+/*
+ * Currently can only add racks/top level domains. There's not currently
+ * any way to specify fault domain at a better level
+ */
 static int
-ds_pool_extend_internal(struct rdb_tx *tx, struct pool_svc *svc,
+pool_extend_map(struct rdb_tx *tx, struct pool_svc *svc,
 		uint32_t nnodes, uuid_t target_uuids[],
 		d_rank_list_t *rank_list, uint32_t ndomains,
 		int32_t *domains, bool *updated_p, uint32_t *map_version_p,
 		struct rsvc_hint *hint)
 {
-	struct pool_buf		*map_buf;
+	struct pool_buf		*map_buf = NULL;
 	struct pool_map		*map = NULL;
 	uint32_t		map_version;
 	bool			updated = false;
@@ -4221,15 +4228,17 @@ out_map_buf:
 	return rc;
 }
 
-int
-ds_pool_extend(uuid_t pool_uuid, struct rsvc_hint *hint, uint32_t nnodes,
-		uuid_t target_uuids[], d_rank_list_t *rank_list,
-		uint32_t ndomains, int32_t *domains, uint32_t *map_version_p)
-
+static int
+pool_extend_internal(uuid_t pool_uuid, struct rsvc_hint *hint,
+		     uint32_t nnodes,
+		     uuid_t target_uuids[], d_rank_list_t *rank_list,
+		     uint32_t ndomains, int32_t *domains,
+		     uint32_t *map_version_p)
 {
-	struct pool_svc		*svc = NULL;
+	struct pool_svc		*svc;
 	struct rdb_tx		tx;
-	bool			updated;
+	bool			updated = false;
+	struct pool_target_id_list tgts;
 	int rc;
 
 	rc = pool_svc_lookup_leader(pool_uuid, &svc, hint);
@@ -4241,25 +4250,41 @@ ds_pool_extend(uuid_t pool_uuid, struct rsvc_hint *hint, uint32_t nnodes,
 		D_GOTO(out_svc, rc);
 	ABT_rwlock_wrlock(svc->ps_lock);
 
-	rc = ds_pool_extend_internal(&tx, svc, ndomains, target_uuids,
-		rank_list, ndomains, domains,
-		&updated, map_version_p, hint);
-
-	ABT_rwlock_unlock(svc->ps_lock);
+	/*
+	 * Extend the pool map directly - this is more complicated than other
+	 * operations which are handled within ds_pool_update()
+	 */
+	rc = pool_extend_map(&tx, svc, ndomains, target_uuids,
+			     rank_list, ndomains, domains,
+			     &updated, map_version_p, hint);
 
 	if (!updated)
-		D_GOTO(out_svc, rc);
+		D_GOTO(out_lock, rc);
 
-	/* Do rebuild stuff here */
-	/* Do rebuild stuff here */
-	/* Do rebuild stuff here */
-	/* Do rebuild stuff here */
+	/* Get a list of all the targets being added */
+	rc = pool_map_find_targets_on_ranks(svc->ps_pool->sp_map, rank_list,
+					    &tgts);
+	if (rc <= 0) {
+		D_ERROR("failed to schedule extend rc: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out_lock, rc);
+	}
+
+	/* Schedule an extension rebuild for those targets */
+	rc = ds_rebuild_schedule(pool_uuid, *map_version_p, &tgts,
+				 RB_OP_EXTEND);
+	if (rc != 0) {
+		D_ERROR("failed to schedule extend rc: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out_lock, rc);
+	}
+
+out_lock:
+	ABT_rwlock_unlock(svc->ps_lock);
 
 out_svc:
+	pool_target_id_list_free(&tgts);
 	if (hint != NULL)
 		ds_rsvc_set_hint(&svc->ps_rsvc, hint);
 	pool_svc_put_leader(svc);
-
 	return rc;
 }
 
@@ -4282,9 +4307,9 @@ ds_pool_extend_handler(crt_rpc_t *rpc)
 	ndomains = in->pei_ndomains;
 	domains = in->pei_domains.ca_arrays;
 
-	rc = ds_pool_extend(pool_uuid, &out->peo_op.po_hint, ndomains,
-		       target_uuids, &rank_list, ndomains, domains,
-		       &out->peo_op.po_map_version);
+	rc = pool_extend_internal(pool_uuid, &out->peo_op.po_hint, ndomains,
+				  target_uuids, &rank_list, ndomains, domains,
+				  &out->peo_op.po_map_version);
 
 	out->peo_op.po_rc = rc;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",

@@ -202,6 +202,24 @@ daos_event_next(daos_event_t *parent, daos_event_t *child);
 int
 daos_event_test(struct daos_event *ev, int64_t timeout, bool *flag);
 
+typedef int (*daos_event_comp_cb_t)(void *, daos_event_t *, int);
+
+/**
+ * Register completion callback on event.
+ *
+ * \param ev [IN]	Event (operation).
+ * \param cb [IN]	Completion callback to register.
+ * \param arg [IN]	User args passed to completion callback.
+ *
+ * \return		0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			negative rc of associated operation of the event.
+ */
+int
+daos_event_register_comp_cb(struct daos_event *ev, daos_event_comp_cb_t cb,
+			    void *arg);
+
 /**
  * Mark the parent event as a launched barrier, meaning no more child events can
  * be added before all other child events have completed and the parent event

@@ -42,7 +42,7 @@ class DaosServerCommand(YamlCommand):
     FORMAT_PATTERN = "(SCM format required)(?!;)"
     REFORMAT_PATTERN = "Metadata format required"
 
-    def __init__(self, path="", yaml_cfg=None, timeout=90):
+    def __init__(self, path="", yaml_cfg=None, timeout=20):
         """Create a daos_server command object.
 
         Args:
@@ -50,7 +50,7 @@ class DaosServerCommand(YamlCommand):
             yaml_cfg (YamlParameters, optional): yaml configuration parameters.
                 Defaults to None.
             timeout (int, optional): number of seconds to wait for patterns to
-                appear in the subprocess output. Defaults to 90 seconds.
+                appear in the subprocess output. Defaults to 20 seconds.
         """
         super(DaosServerCommand, self).__init__(
             "/run/daos_server/*", "daos_server", path, yaml_cfg, timeout)
@@ -159,6 +159,7 @@ class DaosServerCommand(YamlCommand):
             value = self.yaml.using_dcpm
         return value
 
+
     class NetworkSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server network sub command."""
 
@@ -240,15 +241,12 @@ class DaosServerCommand(YamlCommand):
                 "/run/daos_server/storage/*", "storage")
 
         def get_sub_command_class(self):
-            # pylint: disable=redefined-variable-type
             """Get the daos_server storage sub command object."""
             # Available sub-commands:
             #   prepare  Prepare SCM and NVMe storage attached to remote servers
             #   scan     Scan SCM and NVMe storage attached to local server
             if self.sub_command.value == "prepare":
                 self.sub_command_class = self.PrepareSubCommand()
-            elif self.sub_command.value == "scan":
-                self.sub_command_class = self.ScanSubCommand()
             else:
                 self.sub_command_class = None
 
@@ -286,16 +284,6 @@ class DaosServerCommand(YamlCommand):
                 self.scm_only = FormattedParameter("--scm-only", False)
                 self.reset = FormattedParameter("--reset", False)
                 self.force = FormattedParameter("--force", False)
-
-        class ScanSubCommand(CommandWithParameters):
-            """Defines an object for the daos_server storage scan command."""
-
-            def __init__(self):
-                """Create a daos_server scan command object."""
-                super(
-                    DaosServerCommand.StorageSubCommand.ScanSubCommand,
-                    self).__init__(
-                        "/run/daos_server/storage/scan/*", "scan")
 
 
 class DaosServerManager(SubprocessManager):
@@ -478,7 +466,7 @@ class DaosServerManager(SubprocessManager):
             cmd.sub_command_class.sub_command_class.hugepages.value = 4096
 
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
-        result = pcmd(self._hosts, str(cmd), timeout=120)
+        result = pcmd(self._hosts, str(cmd), timeout=30)
         if len(result) > 1 or 0 not in result:
             dev_type = "nvme"
             if using_dcpm and using_nvme:
@@ -567,7 +555,9 @@ class DaosServerManager(SubprocessManager):
         # Format storage and wait for server to change ownership
         self.log.info(
             "<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
-        self.dmg.storage_format()
+        # Temporarily increasing timeout to avoid CI errors until DAOS-5764 can
+        # be further investigated.
+        self.dmg.storage_format(timeout=40)
 
         # Wait for all the doas_io_servers to start
         self.detect_io_server_start()

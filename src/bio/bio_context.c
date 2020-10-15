@@ -258,7 +258,8 @@ bio_bs_hold(struct bio_blobstore *bbs)
 	}
 
 	if (bbs->bb_state == BIO_BS_STATE_TEARDOWN ||
-	    bbs->bb_state == BIO_BS_STATE_OUT) {
+	    bbs->bb_state == BIO_BS_STATE_OUT ||
+	    bbs->bb_state == BIO_BS_STATE_SETUP) {
 		D_ERROR("Blobstore %p is in %d state, reject request.\n",
 			bbs, bbs->bb_state);
 		rc = -DER_DOS;
@@ -418,7 +419,8 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz)
 			ba->bca_id, xs_ctxt, DP_UUID(uuid),
 			bma.bma_opts.num_clusters);
 
-		rc = smd_pool_assign(uuid, xs_ctxt->bxc_tgt_id, ba->bca_id);
+		rc = smd_pool_assign(uuid, xs_ctxt->bxc_tgt_id, ba->bca_id,
+				     blob_sz);
 		if (rc != 0) {
 			D_ERROR("Failed to assign pool blob:"DF_U64" to pool: "
 				""DF_UUID":%d. %d\n", ba->bca_id, DP_UUID(uuid),
@@ -440,8 +442,8 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz)
 	return rc;
 }
 
-static int
-bio_blob_open(struct bio_io_context *ctxt, uuid_t uuid, bool async)
+int
+bio_blob_open(struct bio_io_context *ctxt, bool async)
 {
 	struct bio_xs_context		*xs_ctxt = ctxt->bic_xs_ctxt;
 	spdk_blob_id			 blob_id;
@@ -467,10 +469,11 @@ bio_blob_open(struct bio_io_context *ctxt, uuid_t uuid, bool async)
 	/*
 	 * Query per-server metadata to get blobID for this pool:target
 	 */
-	rc = smd_pool_get_blob(uuid, xs_ctxt->bxc_tgt_id, &blob_id);
+	rc = smd_pool_get_blob(ctxt->bic_pool_id, xs_ctxt->bxc_tgt_id,
+			       &blob_id);
 	if (rc != 0) {
 		D_ERROR("Failed to find blobID for xs:%p, pool:"DF_UUID"\n",
-			xs_ctxt, DP_UUID(uuid));
+			xs_ctxt, DP_UUID(ctxt->bic_pool_id));
 		return -DER_NONEXIST;
 	}
 
@@ -480,13 +483,14 @@ bio_blob_open(struct bio_io_context *ctxt, uuid_t uuid, bool async)
 	ba = &bma->bma_cp_arg;
 
 	D_DEBUG(DB_MGMT, "Opening blobID "DF_U64" for xs:%p pool:"DF_UUID"\n",
-		blob_id, xs_ctxt, DP_UUID(uuid));
+		blob_id, xs_ctxt, DP_UUID(ctxt->bic_pool_id));
 
 	ctxt->bic_opening = 1;
 	ba->bca_inflights = 1;
 	bma->bma_bs = bbs->bb_bs;
 	bma->bma_blob_id = blob_id;
 	bma->bma_async = async;
+	bma->bma_ioc = ctxt;
 	spdk_thread_send_msg(owner_thread(bbs), blob_msg_open, bma);
 
 	if (async)
@@ -499,12 +503,13 @@ bio_blob_open(struct bio_io_context *ctxt, uuid_t uuid, bool async)
 
 	if (rc != 0) {
 		D_ERROR("Open blobID "DF_U64" failed for xs:%p pool:"DF_UUID" "
-			"rc:%d\n", blob_id, xs_ctxt, DP_UUID(uuid), rc);
+			"rc:%d\n", blob_id, xs_ctxt, DP_UUID(ctxt->bic_pool_id),
+			rc);
 	} else {
 		D_ASSERT(ba->bca_blob != NULL);
 		D_DEBUG(DB_MGMT, "Successfully opened blobID "DF_U64" for xs:%p"
 			" pool:"DF_UUID" blob:%p\n", blob_id, xs_ctxt,
-			DP_UUID(uuid), ba->bca_blob);
+			DP_UUID(ctxt->bic_pool_id), ba->bca_blob);
 		ctxt->bic_blob = ba->bca_blob;
 	}
 
@@ -527,6 +532,7 @@ bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 	ctxt->bic_umem = umem;
 	ctxt->bic_pmempool_uuid = umem_get_uuid(umem);
 	ctxt->bic_xs_ctxt = xs_ctxt;
+	uuid_copy(ctxt->bic_pool_id, uuid);
 
 	/* NVMe isn't configured */
 	if (xs_ctxt == NULL) {
@@ -540,7 +546,7 @@ bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 		return rc;
 	}
 
-	rc = bio_blob_open(ctxt, uuid, false);
+	rc = bio_blob_open(ctxt, false);
 	if (rc) {
 		D_FREE(ctxt);
 	} else {

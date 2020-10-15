@@ -350,8 +350,6 @@ class DmgCommandBase(YamlCommand):
                         "/run/dmg/storage/format/*", "format")
                 self.verbose = FormattedParameter("--verbose", False)
                 self.reformat = FormattedParameter("--reformat", False)
-                self.ranks = FormattedParameter("-r {}", None)
-                self.rank_hosts = FormattedParameter("--rank-hosts={}", None)
 
         class PrepareSubCommand(CommandWithParameters):
             """Defines an object for the dmg storage format command."""
@@ -460,7 +458,7 @@ class DmgCommandBase(YamlCommand):
                     DmgCommandBase.StorageSubCommand.ScanSubCommand,
                     self).__init__(
                         "/run/dmg/storage/scan/*", "scan")
-                self.nvme_health = FormattedParameter("--nvme_health", False)
+                self.nvme_health = FormattedParameter("--nvme-health", False)
                 self.verbose = FormattedParameter("--verbose", False)
 
         class SetSubCommand(CommandWithSubCommand):
