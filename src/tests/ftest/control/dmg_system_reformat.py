@@ -100,9 +100,6 @@ class DmgSystemReformatTest(TestWithServers):
                 if "DER_NOSPACE" not in pool.dmg.result.stderr:
                     self.fail("Pool create did not fail do to DER_NOSPACE!")
 
-        self.log.info("Re-enable raising exceptions for dmg.")
-        self.get_dmg_command().exit_status_exception = True
-
         self.log.info("Stop running io_server instancess: 'dmg system stop'")
         self.get_dmg_command().system_stop(force=True)
         if self.get_dmg_command().result.exit_status != 0:
