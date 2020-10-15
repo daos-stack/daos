@@ -51,6 +51,7 @@ type mgmtModule struct {
 	numaAware  bool
 	netCtx     context.Context
 	mutex      sync.Mutex
+	monitor    *procMon
 }
 
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
@@ -79,7 +80,10 @@ func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req
 	case drpc.MethodGetAttachInfo:
 		return mod.handleGetAttachInfo(req, cred.Pid)
 	case drpc.MethodDisconnect:
-		return mod.handleDisconnect(req, cred.Pid)
+		// There isn't anything we can do here if this fails so just
+		// call the disconnect handler and return success.
+		mod.handleDisconnect(req, cred.Pid)
+		return nil, nil
 	}
 
 	return nil, drpc.UnknownMethodFailure()
@@ -115,6 +119,7 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 	// caching is enabled, there's data in the info cache and the agent can quickly return
 	// a response without the overhead of a mutex.
 	if mod.aiCache.isCached() {
+		mod.monitor.submitRequest(pid, drpc.MethodGetAttachInfo)
 		return mod.aiCache.getResponse(numaNode)
 	}
 
@@ -126,6 +131,7 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 	// If another thread succeeded in initializing the cache while this thread waited
 	// to get the mutex, return the cached response instead of initializing the cache again.
 	if mod.aiCache.isCached() {
+		mod.monitor.submitRequest(pid, drpc.MethodGetAttachInfo)
 		return mod.aiCache.getResponse(numaNode)
 	}
 
@@ -170,10 +176,20 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 		return nil, err
 	}
 
-	return mod.aiCache.getResponse(numaNode)
+	cacheResp, err := mod.aiCache.getResponse(numaNode)
+	if err != nil {
+		return nil, err
+	}
+
+	mod.monitor.submitRequest(pid, drpc.MethodGetAttachInfo)
+
+	return cacheResp, err
 }
 
-func (mod *mgmtModule) handleDisconnect(reqb []byte, pid int32) ([]byte, error) {
-	mod.log.Debugf("Disconnect is currently not implemented")
-	return nil, nil
+// handleDisconnect crafts a new request for the process monitor to inform the
+// monitor that a process is exiting. Even though the process is terminating
+// cleanly disconnect will inform the control plane of any outstanding handles
+// that the process held open.
+func (mod *mgmtModule) handleDisconnect(reqb []byte, pid int32) {
+	mod.monitor.submitRequest(pid, drpc.MethodDisconnect)
 }
