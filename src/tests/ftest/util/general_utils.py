@@ -32,6 +32,8 @@ import string
 from pathlib import Path
 from errno import ENOENT
 from getpass import getuser
+from importlib import import_module
+
 from avocado.utils import process
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
@@ -193,7 +195,7 @@ def get_host_data(hosts, command, text, error, timeout=None):
     DATA_ERROR = "[ERROR]"
 
     # Create a list of NodeSets with the same return code
-    data = {code: hosts for code, hosts in task.iter_retcodes()}
+    data = {code: host_list for code, host_list in task.iter_retcodes()}
 
     # Multiple return codes or a single non-zero return code
     # indicate at least one error obtaining the data
@@ -224,8 +226,8 @@ def get_host_data(hosts, command, text, error, timeout=None):
         host_data = {NodeSet.fromlist(hosts): DATA_ERROR}
 
     else:
-        for output, hosts in task.iter_buffers(data[0]):
-            host_data[NodeSet.fromlist(hosts)] = str(output)
+        for output, host_list in task.iter_buffers(data[0]):
+            host_data[NodeSet.fromlist(host_list)] = str(output)
 
     return host_data
 
@@ -601,7 +603,7 @@ def get_remote_file_size(host, file_name):
         file_name (str): name of remote file
 
     Returns:
-        integer value of file size
+        int: file size
 
     """
     cmd = "ssh" " {}@{}" " stat -c%s {}".format(
@@ -612,9 +614,9 @@ def get_remote_file_size(host, file_name):
 
 
 def error_count(error, hostlist, log_file):
-    """Count any specific ERROR in client log.
+    """Count the number of specific ERRORs found in the log file.
 
-    This function also returns other ERROR counts from same log file.
+    This function also returns a count of the other ERRORs from same log file.
 
     Args:
         error (str): DAOS error to look for in .log file. for example -1007
@@ -622,8 +624,8 @@ def error_count(error, hostlist, log_file):
         log_file (str): Log file name (server/client log).
 
     Returns:
-        tuple: a tuple of the count of the requested error type (int) and the
-            count of any other error types (int)
+        tuple: a tuple of the count of errors matching the specified error type
+            and the count of other errors (int, int)
 
     """
     # Get the Client side Error from client_log file.
@@ -643,3 +645,55 @@ def error_count(error, hostlist, log_file):
                 other_error_count += 1
 
     return requested_error_count, other_error_count
+
+
+def get_module_class(name, module):
+    """Get the class object in the specified module by its name.
+
+    Args:
+        name (str): class name to obtain
+        module (str): module name in which to find the class name
+
+    Raises:
+        DaosTestError: if the class name is not found in the module
+
+    Returns:
+        object: class matching the name in the specified module
+
+    """
+    try:
+        name_module = import_module(module)
+        name_class = getattr(name_module, name)
+    except (ImportError, AttributeError) as error:
+        raise DaosTestError(
+            "Invalid '{}' class name for {}: {}".format(name, module, error))
+    return name_class
+
+
+def get_job_manager_class(name, job=None, subprocess=False, mpi="openmpi"):
+    """Get the job manager class that matches the specified name.
+
+    Enables assigning a JobManager class from the test's yaml settings.
+
+    Args:
+        name (str): JobManager-based class name
+        job (ExecutableCommand, optional): command object to manage. Defaults
+            to None.
+        subprocess (bool, optional): whether the command is run as a
+            subprocess. Defaults to False.
+        mpi (str, optional): MPI type to use with the Mpirun class only.
+            Defaults to "openmpi".
+
+    Raises:
+        DaosTestError: if an invalid JobManager class name is specified.
+
+    Returns:
+        JobManager: a JobManager class, e.g. Orterun, Mpirun, Srun, etc.
+
+    """
+    manager_class = get_module_class(name, "job_manager_utils")
+    if name == "Mpirun":
+        manager = manager_class(job, subprocess=subprocess, mpitype=mpi)
+    else:
+        manager = manager_class(job, subprocess=subprocess)
+    return manager

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -227,7 +227,8 @@ vc_4(void **state)
 	oid = dts_oid_gen(dts_vc_class, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 
-	vc_gen_modifications(arg, &req, oid, 7, 7, 7, 0, 0, DAOS_VC_DIFF_REC);
+	vc_gen_modifications(arg, &req, oid, 7, 7, 7, 0, 0,
+			     DAOS_VC_DIFF_REC | DAOS_FAIL_ALWAYS);
 
 	rc = vc_obj_verify(arg, oid);
 	assert_int_equal(rc, -DER_MISMATCH);

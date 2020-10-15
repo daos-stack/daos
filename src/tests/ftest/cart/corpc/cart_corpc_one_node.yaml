@@ -1,0 +1,41 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+
+defaultENV:
+  #!filter-only : /run/envs_CRT_CTX_SHARE_ADDR/sep
+  #!filter-only : /run/tests/corpc_prefwd
+  D_LOG_MASK: "ERR"
+  CRT_PHY_ADDR_STR: "ofi+sockets"
+  OFI_INTERFACE: "eth0"
+  test_servers_CRT_CTX_NUM: "16"
+env_CRT_CTX_SHARE_ADDR: !mux
+  sep:
+    env: sep
+    CRT_CTX_SHARE_ADDR: "1"
+  no_sep:
+    env: no_sep
+    CRT_CTX_SHARE_ADDR: "0"
+hosts: !mux
+  hosts_1:
+    config: one_node
+    test_servers:
+      - boro-A
+tests: !mux
+  corpc_prefwd:
+    name: corpc_prefwd
+    test_servers_bin: crt_launch
+    test_servers_arg: "-e ../tests/test_corpc_prefwd"
+    test_servers_env: ""
+    test_servers_ppn: "5"
+  corpc_exclusive:
+    name: corpc_exclusive
+    test_servers_bin: crt_launch
+    test_servers_arg: "-e ../tests/test_corpc_exclusive"
+    test_servers_env: ""
+    test_servers_ppn: "5"
+  corpc_errors:
+    name: corpc_errors
+    test_servers_bin: crt_launch
+    test_servers_arg: "-e ../tests/no_pmix_corpc_errors"
+    test_servers_env: ""
+    test_servers_ppn: "8"

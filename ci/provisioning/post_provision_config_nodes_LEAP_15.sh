@@ -13,6 +13,9 @@ post_provision_config_nodes() {
     #                 slurm-example-configs slurmctld slurm-slurmmd
     #fi
 
+    # Reserve port ranges 31416-31516 for DAOS and CART servers
+    echo 31416-31516 > /proc/sys/net/ipv4/ip_local_reserved_ports
+
     if [ -n "$DAOS_STACK_GROUP_REPO" ]; then
          # rm -f /etc/yum.repos.d/*"$DAOS_STACK_GROUP_REPO"
         zypper --non-interactive ar                                           \
@@ -67,4 +70,8 @@ post_provision_config_nodes() {
         done
         exit "$rc"
     fi
+
+    # now make sure everything is fully up-to-date
+    zypper addlock daos daos-\*
+    time zypper --non-interactive up
 }

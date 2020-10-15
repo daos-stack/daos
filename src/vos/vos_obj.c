@@ -123,7 +123,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 				VOS_TX_LOG_FAIL(rc, "Failed to punch akey: rc="
 						DF_RC"\n", DP_RC(rc));
 				break;
-			}
+		}
 		}
 		key_tree_release(toh, 0);
 	}
@@ -342,7 +342,7 @@ static int
 key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type,
 		 daos_key_t *key, int flags, daos_handle_t *sub_toh,
 		 daos_epoch_range_t *epr, struct vos_punch_record *punched,
-		 struct vos_ilog_info *info)
+		 struct vos_ilog_info *info, struct vos_ts_set *ts_set)
 {
 	struct vos_krec_df	*krec = NULL;
 	struct vos_object	*obj = oiter->it_obj;
@@ -350,7 +350,7 @@ key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type,
 
 	rc = key_tree_prepare(obj, toh, key_type, key, flags,
 			      vos_iter_intent(&oiter->it_iter), &krec,
-			      sub_toh, NULL);
+			      sub_toh, ts_set);
 	if (rc == -DER_NONEXIST)
 		return rc;
 
@@ -557,7 +557,7 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent)
 
 	vos_ilog_fetch_init(&info);
 	rc = key_ilog_prepare(oiter, toh, VOS_BTR_AKEY, &oiter->it_akey, 0,
-			      NULL, NULL, NULL, &info);
+			      NULL, NULL, NULL, &info, NULL);
 	if (rc == 0)
 		rc = IT_OPC_NOOP;
 
@@ -662,14 +662,15 @@ dkey_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *akey)
  * Iterator for the akey tree.
  */
 static int
-akey_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey)
+akey_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
+		  struct vos_ts_set *ts_set)
 {
 	daos_handle_t		 toh;
 	int			 rc;
 
 	rc = key_ilog_prepare(oiter, oiter->it_obj->obj_toh, VOS_BTR_DKEY, dkey,
 			      0, &toh, &oiter->it_epr, &oiter->it_punched,
-			      &oiter->it_ilog_info);
+			      &oiter->it_ilog_info, ts_set);
 	if (rc != 0)
 		goto failed;
 
@@ -709,13 +710,13 @@ singv_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 
 	rc = key_ilog_prepare(oiter, obj->obj_toh, VOS_BTR_DKEY, dkey, 0,
 			      &ak_toh, &oiter->it_epr, &oiter->it_punched,
-			      &oiter->it_ilog_info);
+			      &oiter->it_ilog_info, NULL);
 	if (rc != 0)
 		return rc;
 
 	rc = key_ilog_prepare(oiter, ak_toh, VOS_BTR_AKEY, akey, 0, &sv_toh,
 			      &oiter->it_epr, &oiter->it_punched,
-			      &oiter->it_ilog_info);
+			      &oiter->it_ilog_info, NULL);
 	if (rc != 0)
 		D_GOTO(failed_1, rc);
 
@@ -899,6 +900,7 @@ singv_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 		it_entry->ie_vis_flags = VOS_VIS_FLAG_COVERED;
 	}
 	it_entry->ie_rsize	 = rbund.rb_rsize;
+	it_entry->ie_gsize	 = rbund.rb_gsize;
 	it_entry->ie_ver	 = rbund.rb_ver;
 	it_entry->ie_recx.rx_idx = 0;
 	it_entry->ie_recx.rx_nr  = 1;
@@ -976,11 +978,26 @@ done:
 }
 
 /**
+ * Sets the range filter.
+ */
+static inline void
+recx2filter(struct evt_filter *filter, daos_recx_t *recx)
+{
+	if (recx->rx_nr == 0) {
+		filter->fr_ex.ex_lo = 0ULL;
+		filter->fr_ex.ex_hi = ~(0ULL);
+	} else {
+		filter->fr_ex.ex_lo = recx->rx_idx;
+		filter->fr_ex.ex_hi = recx->rx_idx + recx->rx_nr - 1;
+	}
+}
+
+/**
  * Prepare the iterator for the recx tree.
  */
 static int
 recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
-		  daos_key_t *akey)
+		  daos_key_t *akey, struct vos_ts_set *ts_set)
 {
 	struct vos_object	*obj = oiter->it_obj;
 	struct evt_filter	 filter = {0};
@@ -991,18 +1008,17 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 
 	rc = key_ilog_prepare(oiter, obj->obj_toh, VOS_BTR_DKEY, dkey, 0,
 			      &ak_toh, &oiter->it_epr, &oiter->it_punched,
-			      &oiter->it_ilog_info);
+			      &oiter->it_ilog_info, ts_set);
 	if (rc != 0)
 		return rc;
 
 	rc = key_ilog_prepare(oiter, ak_toh, VOS_BTR_AKEY, akey, SUBTR_EVT,
 			      &rx_toh, &oiter->it_epr, &oiter->it_punched,
-			      &oiter->it_ilog_info);
+			      &oiter->it_ilog_info, ts_set);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
-	filter.fr_ex.ex_lo = 0;
-	filter.fr_ex.ex_hi = ~(0ULL);
+	recx2filter(&filter, &oiter->it_recx);
 	filter.fr_epr = oiter->it_epr;
 	filter.fr_punch_epc = oiter->it_punched.pr_epc;
 	filter.fr_punch_minor_epc = oiter->it_punched.pr_minor_epc;
@@ -1110,10 +1126,12 @@ static int vos_obj_iter_fini(struct vos_iterator *vitr);
 /** prepare an object content iterator */
 int
 vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
-		  struct vos_iterator **iter_pp)
+		  struct vos_iterator **iter_pp,
+		  struct vos_ts_set *ts_set)
 {
-	struct vos_obj_iter *oiter;
-	int		     rc;
+	struct vos_obj_iter	*oiter;
+	struct vos_container	*cont;
+	int			 rc;
 
 	D_ALLOC_PTR(oiter);
 	if (oiter == NULL)
@@ -1124,20 +1142,25 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	oiter->it_epr = param->ip_epr;
 	oiter->it_epc_expr = param->ip_epc_expr;
 	oiter->it_flags = param->ip_flags;
+	oiter->it_recx = param->ip_recx;
 	if (param->ip_flags & VOS_IT_FOR_PURGE)
 		oiter->it_iter.it_for_purge = 1;
 	if (param->ip_flags & VOS_IT_FOR_REBUILD)
 		oiter->it_iter.it_for_rebuild = 1;
 
+	cont = vos_hdl2cont(param->ip_hdl);
+	rc = vos_ts_set_add(ts_set, cont->vc_ts_idx, NULL, 0);
+	D_ASSERT(rc == 0);
+
 	/* XXX the condition epoch ranges could cover multiple versions of
 	 * the object/key if it's punched more than once. However, rebuild
 	 * system should guarantee this will never happen.
 	 */
-	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(param->ip_hdl),
+	rc = vos_obj_hold(vos_obj_cache_current(), cont,
 			  param->ip_oid, &oiter->it_epr, true,
 			  vos_iter_intent(&oiter->it_iter),
 			  (oiter->it_flags & VOS_IT_PUNCHED) == 0,
-			  &oiter->it_obj, NULL);
+			  &oiter->it_obj, ts_set);
 
 	if (rc != 0) {
 		VOS_TX_LOG_FAIL(rc, "Could not hold object to iterate: "DF_RC
@@ -1162,7 +1185,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		break;
 
 	case VOS_ITER_AKEY:
-		rc = akey_iter_prepare(oiter, &param->ip_dkey);
+		rc = akey_iter_prepare(oiter, &param->ip_dkey, ts_set);
 		break;
 
 	case VOS_ITER_SINGLE:
@@ -1171,7 +1194,8 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		break;
 
 	case VOS_ITER_RECX:
-		rc = recx_iter_prepare(oiter, &param->ip_dkey, &param->ip_akey);
+		rc = recx_iter_prepare(oiter, &param->ip_dkey, &param->ip_akey,
+				       ts_set);
 		break;
 	}
 
@@ -1335,8 +1359,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 				" rc = "DF_RC"\n", DP_RC(rc));
 			goto failed;
 		}
-		filter.fr_ex.ex_lo = 0;
-		filter.fr_ex.ex_hi = ~(0ULL);
+		recx2filter(&filter, &info->ii_recx);
 		filter.fr_epr = oiter->it_epr;
 		filter.fr_punch_epc = oiter->it_punched.pr_epc;
 		filter.fr_punch_minor_epc = oiter->it_punched.pr_minor_epc;

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -831,6 +831,11 @@ print_backtrace(int signo, siginfo_t *info, void *p)
 {
 	void	*bt[128];
 	int	 bt_size, i, rc;
+
+	/* since we mainly handle fatal signals here, flush the log to not
+	 * risk losing any debug traces
+	 */
+	d_log_sync();
 
 	fprintf(stderr, "*** Process %d received signal %d ***\n", getpid(),
 		signo);

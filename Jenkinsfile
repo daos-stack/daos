@@ -118,6 +118,10 @@ String daos_repos(String distro) {
 
 String unit_packages() {
     Map stage_info = parseStageInfo()
+    boolean need_qb = quickbuild()
+    if (env.STAGE_NAME.contains('Bullseye')) {
+        need_qb = true
+    }
     if (stage_info['target'] == 'centos7') {
         String packages =  'gotestsum openmpi3 ' +
                            'hwloc-devel argobots ' +
@@ -129,7 +133,7 @@ String unit_packages() {
                            'pmix numactl-devel ' +
                            'libipmctl-devel ' +
                            'python36-tabulate '
-        if (quickbuild()) {
+        if (need_qb) {
             // TODO: these should be gotten from the Requires: of RPM
             packages += " spdk-tools mercury-2.0.0~rc1" +
                         " boost-devel libisa-l_crypto libfabric-debuginfo"
@@ -211,7 +215,7 @@ String functional_packages() {
 String functional_packages(String distro) {
     String pkgs = get_daos_packages(distro)
     pkgs += " openmpi3 hwloc ndctl fio " +
-            "ior-hpc-cart-4-daos-0 " +
+            "ior-hpc-daos-0 " +
             "romio-tests-cart-4-daos-0 " +
             "testmpio-cart-4-daos-0 " + 
             "mpi4py-tests-cart-4-daos-0 " +
@@ -305,8 +309,7 @@ pipeline {
     agent { label 'lightweight' }
 
     triggers {
-        cron(env.BRANCH_NAME == 'master' ? '0 0 * * *\n' : '' +
-             env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
+        cron(env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
     }
 
     environment {
@@ -592,7 +595,7 @@ pipeline {
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                '$BUILDARGS_QB_CHECK' +
+                                '$BUILDARGS_QB_TRUE' +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS_EL7 + '"' +
@@ -1037,6 +1040,33 @@ pipeline {
                         }
                     }
                 } // stage('Unit test Bullseye')
+                stage('Unit Test with memcheck') {
+                    when {
+                      beforeAgent true
+                      expression { ! skip_stage('unit-test-memcheck') }
+                    }
+                    agent {
+                        label 'ci_vm1'
+                    }
+                    steps {
+                        unitTest timeout_time: 60,
+                                 ignore_failure: true,
+                                 inst_repos: pr_repos(),
+                                 inst_rpms: unit_packages()
+                    }
+                    post {
+                        always {
+                            // This is only set while dealing with issues
+                            // caused by code coverage instrumentation affecting
+                            // test results, and while code coverage is being
+                            // added.
+                            unitTestPost ignore_failure: true,
+                                         artifacts: ['unit_test_memcheck_logs.tar.gz',
+                                                     'unit_memcheck_vm_test/**'],
+                                         valgrind_stash: 'centos7-gcc-unit-memcheck'
+                        }
+                    }
+                } // stage('Unit Test with memcheck')
             }
         }
         stage('Test') {
@@ -1261,7 +1291,7 @@ pipeline {
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                '$BUILDARGS_QB_CHECK' +
+                                '$BUILDARGS_QB_TRUE' +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS_EL7 + '"' +
@@ -1284,7 +1314,8 @@ pipeline {
     } // stages
     post {
         always {
-            valgrindReportPublish valgrind_stashes: ['centos7-gcc-unit-valg']
+            valgrindReportPublish valgrind_stashes: ['centos7-gcc-unit-valg',
+                                                     'centos7-gcc-unit-memcheck']
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch

@@ -125,7 +125,7 @@ type hostDeviceError struct {
 
 // PrintSCMFirmwareQueryMap formats the firmware query results in a condensed format.
 func PrintSCMFirmwareQueryMap(fwMap control.HostSCMQueryMap, out io.Writer,
-	opts ...control.PrintConfigOption) error {
+	opts ...PrintConfigOption) error {
 	if fwMap == nil {
 		return nil
 	}
@@ -143,7 +143,7 @@ func PrintSCMFirmwareQueryMap(fwMap control.HostSCMQueryMap, out io.Writer,
 	}
 
 	return printCondensedResults(successes, iw, opts,
-		func(result string, set *hostDeviceSet, _ []control.PrintConfigOption, w io.Writer) {
+		func(result string, set *hostDeviceSet, _ []PrintConfigOption, w io.Writer) {
 			fmt.Fprintf(w, "Firmware status for %s:\n", english.Plural(len(set.Devices), "device", "devices"))
 
 			iw := txtfmt.NewIndentWriter(w)
@@ -214,15 +214,15 @@ func getPrintVersion(version string) string {
 	return version
 }
 
-func printCondensedResults(condensed hostDeviceResultMap, out io.Writer, opts []control.PrintConfigOption,
-	printResult func(string, *hostDeviceSet, []control.PrintConfigOption, io.Writer)) error {
+func printCondensedResults(condensed hostDeviceResultMap, out io.Writer, opts []PrintConfigOption,
+	printResult func(string, *hostDeviceSet, []PrintConfigOption, io.Writer)) error {
 	w := txtfmt.NewErrWriter(out)
 	for _, result := range condensed.Keys() {
 		set, ok := condensed[result]
 		if !ok {
 			continue
 		}
-		hosts := control.GetPrintHosts(set.Hosts.RangedString(), opts...)
+		hosts := getPrintHosts(set.Hosts.RangedString(), opts...)
 		printHostHeader(hosts, out)
 
 		iw := txtfmt.NewIndentWriter(out)
@@ -243,7 +243,7 @@ func printHostHeader(hosts string, out io.Writer) {
 	fmt.Fprintf(out, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
 }
 
-func printDeviceErrorTable(errorResults []hostDeviceError, devTitle string, out io.Writer, opts ...control.PrintConfigOption) error {
+func printDeviceErrorTable(errorResults []hostDeviceError, devTitle string, out io.Writer, opts ...PrintConfigOption) error {
 	if len(errorResults) == 0 {
 		return nil
 	}
@@ -279,7 +279,7 @@ func getShortSCMString(module storage.ScmModule) string {
 
 // PrintSCMFirmwareQueryMapVerbose formats the firmware query results in a detailed format.
 func PrintSCMFirmwareQueryMapVerbose(fwMap control.HostSCMQueryMap, out io.Writer,
-	opts ...control.PrintConfigOption) error {
+	opts ...PrintConfigOption) error {
 	if fwMap == nil {
 		return nil
 	}
@@ -308,8 +308,7 @@ func printSCMFirmwareQueryMapByHost(fwMap control.HostSCMQueryMap, out io.Writer
 		}
 
 		for _, res := range fwResults {
-			err := printScmModule(&res.Module, iw)
-			if err != nil {
+			if err := printScmModule(&res.Module, iw); err != nil {
 				return err
 			}
 
@@ -328,7 +327,7 @@ func printSCMFirmwareQueryMapByHost(fwMap control.HostSCMQueryMap, out io.Writer
 
 // PrintSCMFirmwareUpdateMap prints the update results in a condensed format.
 func PrintSCMFirmwareUpdateMap(fwMap control.HostSCMUpdateMap, out io.Writer,
-	opts ...control.PrintConfigOption) error {
+	opts ...PrintConfigOption) error {
 	successes, errs, err := condenseSCMUpdateMap(fwMap)
 	if err != nil {
 		return err
@@ -339,7 +338,7 @@ func PrintSCMFirmwareUpdateMap(fwMap control.HostSCMUpdateMap, out io.Writer,
 	}
 
 	return printCondensedResults(successes, out, opts,
-		func(result string, set *hostDeviceSet, _ []control.PrintConfigOption, w io.Writer) {
+		func(result string, set *hostDeviceSet, _ []PrintConfigOption, w io.Writer) {
 			fmt.Fprintf(w, "Firmware staged on %s. A power cycle is required to apply the update.\n",
 				english.Plural(len(set.Devices), "device", "devices"))
 		})
@@ -380,7 +379,7 @@ func condenseSCMUpdateMap(fwMap control.HostSCMUpdateMap) (hostDeviceResultMap, 
 // PrintSCMFirmwareUpdateMapVerbose formats the firmware update results in a
 // detailed format.
 func PrintSCMFirmwareUpdateMapVerbose(fwMap control.HostSCMUpdateMap, out io.Writer,
-	opts ...control.PrintConfigOption) error {
+	opts ...PrintConfigOption) error {
 	w := txtfmt.NewErrWriter(out)
 
 	for _, host := range fwMap.Keys() {
@@ -394,8 +393,7 @@ func PrintSCMFirmwareUpdateMapVerbose(fwMap control.HostSCMUpdateMap, out io.Wri
 		}
 
 		for _, res := range fwResults {
-			err := printScmModule(&res.Module, iw)
-			if err != nil {
+			if err := printScmModule(&res.Module, iw); err != nil {
 				return err
 			}
 
@@ -416,7 +414,7 @@ func PrintSCMFirmwareUpdateMapVerbose(fwMap control.HostSCMUpdateMap, out io.Wri
 // PrintNVMeFirmwareQueryMap formats the NVMe device firmware query results in a
 // concise format.
 func PrintNVMeFirmwareQueryMap(fwMap control.HostNVMeQueryMap, out io.Writer,
-	opts ...control.PrintConfigOption) error {
+	opts ...PrintConfigOption) error {
 	if fwMap == nil {
 		return nil
 	}
@@ -434,7 +432,7 @@ func PrintNVMeFirmwareQueryMap(fwMap control.HostNVMeQueryMap, out io.Writer,
 	}
 
 	return printCondensedResults(successes, iw, opts,
-		func(result string, set *hostDeviceSet, _ []control.PrintConfigOption, w io.Writer) {
+		func(result string, set *hostDeviceSet, _ []PrintConfigOption, w io.Writer) {
 			fmt.Fprintf(w, "Firmware status for %s:\n", english.Plural(len(set.Devices), "device", "devices"))
 
 			iw := txtfmt.NewIndentWriter(w)
@@ -448,16 +446,14 @@ func condenseNVMeQueryMap(fwMap control.HostNVMeQueryMap) (hostDeviceResultMap, 
 	for _, host := range fwMap.Keys() {
 		results := fwMap[host]
 		if len(results) == 0 {
-			err := successes.AddHost(nvmeNotFound, host)
-			if err != nil {
+			if err := successes.AddHost(nvmeNotFound, host); err != nil {
 				return nil, nil, err
 			}
 			continue
 		}
 
 		for _, devRes := range results {
-			err := successes.AddHostDevice(getNVMeFirmwareQueryStr(devRes), host, devRes.Device.PciAddr)
-			if err != nil {
+			if err := successes.AddHostDevice(getNVMeFirmwareQueryStr(devRes), host, devRes.Device.PciAddr); err != nil {
 				return nil, nil, err
 			}
 		}
@@ -472,7 +468,7 @@ func getNVMeFirmwareQueryStr(result *control.NVMeQueryResult) string {
 // PrintNVMeFirmwareQueryMapVerbose formats the NVMe device firmware query
 // results in a verbose format.
 func PrintNVMeFirmwareQueryMapVerbose(fwMap control.HostNVMeQueryMap, out io.Writer,
-	opts ...control.PrintConfigOption) error {
+	opts ...PrintConfigOption) error {
 	if fwMap == nil {
 		return nil
 	}
@@ -509,7 +505,7 @@ func printNVMeFirmwareQueryMapByHost(fwMap control.HostNVMeQueryMap, w io.Writer
 // PrintNVMeFirmwareUpdateMap formats the NVMe device firmware update results in
 // a concise format.
 func PrintNVMeFirmwareUpdateMap(fwMap control.HostNVMeUpdateMap, out io.Writer,
-	opts ...control.PrintConfigOption) error {
+	opts ...PrintConfigOption) error {
 	successes, errs, err := condenseNVMeUpdateMap(fwMap)
 	if err != nil {
 		return err
@@ -520,7 +516,7 @@ func PrintNVMeFirmwareUpdateMap(fwMap control.HostNVMeUpdateMap, out io.Writer,
 	}
 
 	return printCondensedResults(successes, out, opts,
-		func(result string, set *hostDeviceSet, _ []control.PrintConfigOption, w io.Writer) {
+		func(result string, set *hostDeviceSet, _ []PrintConfigOption, w io.Writer) {
 			fmt.Fprintf(w, "Firmware updated on %s.\n",
 				english.Plural(len(set.Devices), "NVMe device controller", "NVMe device controllers"))
 		})
@@ -532,8 +528,7 @@ func condenseNVMeUpdateMap(fwMap control.HostNVMeUpdateMap) (hostDeviceResultMap
 	for _, host := range fwMap.Keys() {
 		results := fwMap[host]
 		if len(results) == 0 {
-			err := successes.AddHost(nvmeNotFound, host)
-			if err != nil {
+			if err := successes.AddHost(nvmeNotFound, host); err != nil {
 				return nil, nil, err
 			}
 			continue
@@ -559,8 +554,7 @@ func condenseNVMeUpdateMap(fwMap control.HostNVMeUpdateMap) (hostDeviceResultMap
 }
 
 // PrintNVMeFirmwareUpdateMapVerbose prints a verbose listing of firmware update results.
-func PrintNVMeFirmwareUpdateMapVerbose(fwMap control.HostNVMeUpdateMap, out io.Writer,
-	opts ...control.PrintConfigOption) error {
+func PrintNVMeFirmwareUpdateMapVerbose(fwMap control.HostNVMeUpdateMap, out io.Writer, opts ...PrintConfigOption) error {
 	w := txtfmt.NewErrWriter(out)
 
 	for _, host := range fwMap.Keys() {

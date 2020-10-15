@@ -396,20 +396,17 @@ err:
 }
 
 static void
-dc_cont_free(struct d_hlink *hlink)
+dc_cont_hop_free(struct d_hlink *hlink)
 {
 	struct dc_cont *dc;
 
 	dc = container_of(hlink, struct dc_cont, dc_hlink);
 	D_ASSERT(daos_hhash_link_empty(&dc->dc_hlink));
-	D_RWLOCK_DESTROY(&dc->dc_obj_list_lock);
-	D_ASSERT(d_list_empty(&dc->dc_po_list));
-	D_ASSERT(d_list_empty(&dc->dc_obj_list));
-	D_FREE(dc);
+	dc_cont_free(dc);
 }
 
 static struct d_hlink_ops cont_h_ops = {
-	.hop_free	= dc_cont_free,
+	.hop_free	= dc_cont_hop_free,
 };
 
 void
@@ -428,6 +425,16 @@ void
 dc_cont_hdl_unlink(struct dc_cont *dc)
 {
 	daos_hhash_link_delete(&dc->dc_hlink);
+}
+
+void
+dc_cont_free(struct dc_cont *dc)
+{
+	D_ASSERT(daos_hhash_link_empty(&dc->dc_hlink));
+	D_RWLOCK_DESTROY(&dc->dc_obj_list_lock);
+	D_ASSERT(d_list_empty(&dc->dc_po_list));
+	D_ASSERT(d_list_empty(&dc->dc_obj_list));
+	D_FREE(dc);
 }
 
 struct dc_cont *
@@ -452,25 +459,31 @@ dc_cont_alloc(const uuid_t uuid)
 }
 
 static void
-dc_cont_csum_init(struct dc_cont *cont, struct cont_props cont_props)
+dc_cont_props_init(struct dc_cont *cont)
 {
-	uint32_t	csum_type = cont_props.dcp_csum_type;
+	uint32_t	csum_type = cont->dc_props.dcp_csum_type;
+	uint32_t	compress_type = cont->dc_props.dcp_compress_type;
+	uint32_t	encrypt_type = cont->dc_props.dcp_encrypt_type;
 	bool		dedup_only = false;
+
+	cont->dc_props.dcp_compress_enabled =
+			daos_cont_compress_prop_is_enabled(compress_type);
+	cont->dc_props.dcp_encrypt_enabled =
+			daos_cont_encrypt_prop_is_enabled(encrypt_type);
 
 	if (csum_type == DAOS_PROP_CO_CSUM_OFF) {
 		dedup_only = true;
-		csum_type = dedup_get_csum_algo(&cont_props);
+		csum_type = dedup_get_csum_algo(&cont->dc_props);
 	}
 
 	if (!daos_cont_csum_prop_is_enabled(csum_type))
 		return;
 
-	daos_csummer_init_with_type(&cont->dc_csummer,
-			       csum_type,
-			       cont_props.dcp_chunksize, 0);
+	daos_csummer_init_with_type(&cont->dc_csummer, csum_type,
+				    cont->dc_props.dcp_chunksize, 0);
 
 	if (dedup_only)
-		dedup_configure_csummer(cont->dc_csummer, &cont_props);
+		dedup_configure_csummer(cont->dc_csummer, &cont->dc_props);
 }
 
 struct cont_open_args {
@@ -1599,21 +1612,24 @@ err:
 
 /* Structure of global buffer for dc_cont */
 struct dc_cont_glob {
-	/* magic number, DC_CONT_GLOB_MAGIC */
+	/** magic number, DC_CONT_GLOB_MAGIC */
 	uint32_t	dcg_magic;
 	uint32_t	dcg_padding;
-	/* pool connection handle */
+	/** pool connection handle */
 	uuid_t		dcg_pool_hdl;
-	/* container uuid and capas */
+	/** container uuid and capas */
 	uuid_t		dcg_uuid;
 	uuid_t		dcg_cont_hdl;
 	uint64_t	dcg_capas;
+	/** specific features */
 	uint16_t	dcg_csum_type;
+	uint16_t        dcg_encrypt_type;
+	uint32_t	dcg_compress_type;
 	uint32_t	dcg_csum_chunksize;
-	bool		dcg_csum_srv_verify;
-	bool		dcg_dedup;
-	bool		dcg_dedup_verify;
 	uint32_t        dcg_dedup_th;
+	uint32_t	dcg_csum_srv_verify:1,
+			dcg_dedup_enabled:1,
+			dcg_dedup_verify:1;
 };
 
 static inline daos_size_t
@@ -1668,7 +1684,7 @@ dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 	if (pool == NULL)
 		D_GOTO(out_cont, rc = -DER_NO_HDL);
 
-	/* init global handle */
+	/** init global handle */
 	cont_glob = (struct dc_cont_glob *)glob->iov_buf;
 	cont_glob->dcg_magic = DC_CONT_GLOB_MAGIC;
 	uuid_copy(cont_glob->dcg_pool_hdl, pool->dp_pool_hdl);
@@ -1676,12 +1692,15 @@ dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 	uuid_copy(cont_glob->dcg_cont_hdl, cont->dc_cont_hdl);
 	cont_glob->dcg_capas = cont->dc_capas;
 
-	cont_glob->dcg_csum_type = cont->dc_props.dcp_csum_type;
-	cont_glob->dcg_csum_chunksize = cont->dc_props.dcp_chunksize;
-	cont_glob->dcg_csum_srv_verify = cont->dc_props.dcp_srv_verify;
-	cont_glob->dcg_dedup = cont->dc_props.dcp_dedup;
-	cont_glob->dcg_dedup_verify = cont->dc_props.dcp_dedup_verify;
-	cont_glob->dcg_dedup_th = cont->dc_props.dcp_dedup_size;
+	/** transfer container properties */
+	cont_glob->dcg_csum_type	= cont->dc_props.dcp_csum_type;
+	cont_glob->dcg_csum_chunksize	= cont->dc_props.dcp_chunksize;
+	cont_glob->dcg_csum_srv_verify	= cont->dc_props.dcp_srv_verify;
+	cont_glob->dcg_dedup_enabled	= cont->dc_props.dcp_dedup_enabled;
+	cont_glob->dcg_dedup_verify	= cont->dc_props.dcp_dedup_verify;
+	cont_glob->dcg_dedup_th		= cont->dc_props.dcp_dedup_size;
+	cont_glob->dcg_compress_type	= cont->dc_props.dcp_compress_type;
+	cont_glob->dcg_encrypt_type	= cont->dc_props.dcp_encrypt_type;
 
 	dc_pool_put(pool);
 out_cont:
@@ -1756,13 +1775,16 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	cont->dc_pool_hdl = poh;
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
-	cont->dc_props.dcp_dedup = cont_glob->dcg_dedup;
-	cont->dc_props.dcp_csum_type = cont_glob->dcg_csum_type;
-	cont->dc_props.dcp_srv_verify = cont_glob->dcg_csum_srv_verify;
-	cont->dc_props.dcp_chunksize = cont_glob->dcg_csum_chunksize;
-	cont->dc_props.dcp_dedup_size = cont_glob->dcg_dedup_th;
-	cont->dc_props.dcp_dedup_verify = cont_glob->dcg_dedup_verify;
-	dc_cont_csum_init(cont, cont->dc_props);
+	/** extract container properties */
+	cont->dc_props.dcp_dedup_enabled = cont_glob->dcg_dedup_enabled;
+	cont->dc_props.dcp_csum_type	 = cont_glob->dcg_csum_type;
+	cont->dc_props.dcp_srv_verify	 = cont_glob->dcg_csum_srv_verify;
+	cont->dc_props.dcp_chunksize	 = cont_glob->dcg_csum_chunksize;
+	cont->dc_props.dcp_dedup_size	 = cont_glob->dcg_dedup_th;
+	cont->dc_props.dcp_dedup_verify  = cont_glob->dcg_dedup_verify;
+	cont->dc_props.dcp_compress_type = cont_glob->dcg_compress_type;
+	cont->dc_props.dcp_encrypt_type	 = cont_glob->dcg_encrypt_type;
+	dc_cont_props_init(cont);
 
 	dc_cont_hdl_link(cont);
 	dc_cont2hdl(cont, coh);

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -615,9 +615,9 @@ pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
 	 *      The one with the lowest f_seq will be elected as the leader
 	 *      to avoid leader switch.
 	 */
-	rdg_idx = shard_idx / replicas;
-	start = rdg_idx * replicas;
-	replica_idx = (oid.lo + rdg_idx) % replicas;
+	rdg_idx = shard_idx / grp_size;
+	start = rdg_idx * grp_size;
+	replica_idx = (oid.lo + rdg_idx) % grp_size;
 	preferred = start + replica_idx;
 
 	for (i = 0, off = preferred, pos = -1; i < replicas;

@@ -82,6 +82,7 @@ type Configuration struct {
 	HelperLogFile       string                    `yaml:"helper_log_file"`
 	FWHelperLogFile     string                    `yaml:"firmware_helper_log_file"`
 	RecreateSuperblocks bool                      `yaml:"recreate_superblocks"`
+	FaultPath           string                    `yaml:"fault_path"`
 
 	// duplicated in ioserver.Config
 	SystemName string                `yaml:"name"`
@@ -92,7 +93,6 @@ type Configuration struct {
 	AccessPoints []string `yaml:"access_points"`
 
 	// unused (?)
-	FaultPath    string `yaml:"fault_path"`
 	FaultCb      string `yaml:"fault_cb"`
 	Hyperthreads bool   `yaml:"hyperthreads"`
 
@@ -429,7 +429,7 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 	// config without servers is valid when initially discovering hardware
 	// prior to adding per-server sections with device allocations
 	if len(c.Servers) == 0 {
-		log.Infof("No %ss in configuration, %s starting in discovery mode", DataPlaneName, ControlPlaneName)
+		log.Infof("No %ss in configuration, %s starting in discovery mode", build.DataPlaneName, build.ControlPlaneName)
 		c.Servers = nil
 		return nil
 	}

@@ -133,8 +133,7 @@ ds_mgmt_drpc_set_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to set rank to %u\n",
-		req->rank);
+	D_INFO("Received request to set rank to %u\n", req->rank);
 
 	rc = crt_rank_self_set(req->rank);
 	if (rc != 0)
@@ -303,16 +302,14 @@ ds_mgmt_drpc_join(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (len >= ADDR_STR_MAX_LEN) {
 		D_ERROR("Server address '%.*s...' too long\n", ADDR_STR_MAX_LEN,
 			req->addr);
-		rc = -DER_INVAL;
-		goto out;
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	memcpy(in.ji_server.sr_addr, req->addr, len + 1);
 	len = strnlen(req->uri, ADDR_STR_MAX_LEN);
 	if (len >= ADDR_STR_MAX_LEN) {
 		D_ERROR("Self URI '%.*s...' too long\n", ADDR_STR_MAX_LEN,
 			req->uri);
-		rc = -DER_INVAL;
-		goto out;
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	memcpy(in.ji_server.sr_uri, req->uri, len + 1);
 
@@ -366,35 +363,28 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 
 	if (owner != NULL && *owner != '\0') {
 		D_ASPRINTF(out_owner, "%s", owner);
-		if (out_owner == NULL) {
-			rc = -DER_NOMEM;
-			goto err_out;
-		}
+		if (out_owner == NULL)
+			D_GOTO(err_out, rc = -DER_NOMEM);
 
 		entries++;
 	}
 
 	if (owner_grp != NULL && *owner_grp != '\0') {
 		D_ASPRINTF(out_owner_grp, "%s", owner_grp);
-		if (out_owner_grp == NULL) {
-			rc = -DER_NOMEM;
-			goto err_out;
-		}
+		if (out_owner_grp == NULL)
+			D_GOTO(err_out, rc = -DER_NOMEM);
 
 		entries++;
 	}
 
 	if (entries == 0) {
 		D_ERROR("No prop entries provided, aborting!\n");
-		rc = -DER_INVAL;
-		goto err_out;
+		D_GOTO(err_out, rc = -DER_INVAL);
 	}
 
 	new_prop = daos_prop_alloc(entries);
-	if (new_prop == NULL) {
-		rc = -DER_NOMEM;
-		goto err_out;
-	}
+	if (new_prop == NULL)
+		D_GOTO(err_out, rc = -DER_NOMEM);
 
 	if (out_owner != NULL) {
 		new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_OWNER;
@@ -465,7 +455,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to create pool\n");
+	D_INFO("Received request to create pool on %zu ranks\n", req->n_ranks);
 
 	if (req->n_ranks > 0) {
 		targets = uint32_array_to_rank_list(req->ranks, req->n_ranks);
@@ -551,8 +541,7 @@ ds_mgmt_drpc_pool_destroy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to destroy pool %s\n",
-		req->uuid);
+	D_INFO("Received request to destroy pool %s\n", req->uuid);
 
 	rc = uuid_parse(req->uuid, uuid);
 	if (rc != 0) {
@@ -608,8 +597,7 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to evict pool connections %s\n",
-		req->uuid);
+	D_INFO("Received request to evict pool connections %s\n", req->uuid);
 
 	rc = uuid_parse(req->uuid, uuid);
 	if (rc != 0) {
@@ -665,8 +653,9 @@ pool_change_target_state(char *id, size_t n_targetidx, uint32_t *targetidx,
 	if (n_targetidx > 0) {
 		for (i = 0; i < n_targetidx; ++i)
 			target_id_list.pti_ids[i].pti_id = targetidx[i];
-	} else
+	} else {
 		target_id_list.pti_ids[0].pti_id = -1;
+	}
 
 	rc = ds_mgmt_pool_target_update_state(uuid, rank, &target_id_list,
 					      state);
@@ -789,8 +778,7 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (rc != 0) {
 		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->uuid,
 			DP_RC(rc));
-		rc = -DER_INVAL;
-		goto out;
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rank_list = uint32_array_to_rank_list(req->ranks, req->n_ranks);
@@ -800,10 +788,9 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	rc = ds_mgmt_pool_extend(uuid, rank_list, "pmem", req->scmbytes,
 				req->nvmebytes);
 
-	if (rc != 0) {
+	if (rc != 0)
 		D_ERROR("Failed to extend pool %s: "DF_RC"\n", req->uuid,
 			DP_RC(rc));
-	}
 
 out:
 	if (rank_list != NULL)
@@ -1054,16 +1041,14 @@ prop_to_acl_response(daos_prop_t *prop, Mgmt__ACLResp *resp)
 	}
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER);
-	if (entry != NULL && entry->dpe_str != NULL) {
+	if (entry != NULL && entry->dpe_str != NULL)
 		D_STRNDUP(resp->owneruser, entry->dpe_str,
 			  DAOS_ACL_MAX_PRINCIPAL_LEN);
-	}
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER_GROUP);
-	if (entry != NULL && entry->dpe_str != NULL) {
+	if (entry != NULL && entry->dpe_str != NULL)
 		D_STRNDUP(resp->ownergroup, entry->dpe_str,
 			  DAOS_ACL_MAX_PRINCIPAL_LEN);
-	}
 
 	return 0;
 }
@@ -1104,8 +1089,7 @@ ds_mgmt_drpc_pool_get_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to get ACL for pool %s\n",
-		req->uuid);
+	D_INFO("Received request to get ACL for pool %s\n", req->uuid);
 
 	if (uuid_parse(req->uuid, pool_uuid) != 0) {
 		D_ERROR("Couldn't parse '%s' to UUID\n", req->uuid);
@@ -1740,7 +1724,7 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__BioHealthReq	*req = NULL;
 	Mgmt__BioHealthResp	*resp = NULL;
 	struct mgmt_bio_health	*bio_health = NULL;
-	struct bio_dev_state	 bds;
+	struct nvme_health_stats stats;
 	uuid_t			 uuid;
 	uint8_t			*body;
 	size_t			 len;
@@ -1757,7 +1741,7 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_DEBUG(DB_MGMT, "Received request to query BIO health data\n");
+	D_INFO("Received request to query BIO health data\n");
 
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
@@ -1783,8 +1767,7 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC_PTR(bio_health);
 	if (bio_health == NULL) {
 		D_ERROR("Failed to allocate bio health struct\n");
-		rc = -DER_NOMEM;
-		goto out;
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	rc = ds_mgmt_bio_health_query(bio_health, uuid, req->tgt_id);
@@ -1797,26 +1780,42 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC(resp->dev_uuid, DAOS_UUID_STR_SIZE);
 	if (resp->dev_uuid == NULL) {
 		D_ERROR("failed to allocate buffer");
-		rc = -DER_NOMEM;
-		goto out;
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	uuid_unparse_lower(bio_health->mb_devid, resp->dev_uuid);
-	bds = bio_health->mb_dev_state;
-	resp->error_count = bds.bds_error_count;
-	resp->temperature = bds.bds_temperature;
-	resp->media_errors = bds.bds_media_errors[0];
-	resp->read_errors = bds.bds_bio_read_errs;
-	resp->write_errors = bds.bds_bio_write_errs;
-	resp->unmap_errors = bds.bds_bio_unmap_errs;
-	resp->checksum_errors = bds.bds_checksum_errs;
-	resp->temp_warn = bds.bds_temp_warning ? true : false;
-	resp->spare_warn = bds.bds_avail_spare_warning ? true : false;
-	resp->readonly_warn = bds.bds_read_only_warning ? true : false;
-	resp->device_reliability_warn = bds.bds_dev_reliabilty_warning ?
-					true : false;
-	resp->volatile_memory_warn = bds.bds_volatile_mem_warning ?
-					true : false;
+	stats = bio_health->mb_dev_state;
+	resp->timestamp = stats.timestamp;
+	resp->warn_temp_time = stats.warn_temp_time;
+	resp->crit_temp_time = stats.crit_temp_time;
+	resp->ctrl_busy_time = stats.ctrl_busy_time;
+	resp->power_cycles = stats.power_cycles;
+	resp->power_on_hours = stats.power_on_hours;
+	resp->unsafe_shutdowns = stats.unsafe_shutdowns;
+	resp->err_log_entries = stats.err_log_entries;
+	resp->temperature = stats.temperature;
+	resp->media_errs = stats.media_errs;
+	resp->bio_read_errs = stats.bio_read_errs;
+	resp->bio_write_errs = stats.bio_write_errs;
+	resp->bio_unmap_errs = stats.bio_unmap_errs;
+	resp->checksum_errs = stats.checksum_errs;
+	resp->temp_warn = stats.temp_warn;
+	resp->avail_spare_warn = stats.avail_spare_warn;
+	resp->read_only_warn = stats.read_only_warn;
+	resp->dev_reliability_warn = stats.dev_reliability_warn;
+	resp->volatile_mem_warn = stats.volatile_mem_warn;
+
+	D_STRNDUP(resp->model, stats.model, HEALTH_STAT_STR_LEN);
+	if (resp->model == NULL) {
+		D_ERROR("failed to allocate model ID buffer");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	D_STRNDUP(resp->serial, stats.serial, HEALTH_STAT_STR_LEN);
+	if (resp->serial == NULL) {
+		D_ERROR("failed to allocate serial ID buffer");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
 
 out:
 	resp->status = rc;

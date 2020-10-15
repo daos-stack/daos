@@ -152,7 +152,7 @@ func TestServer_HarnessGetMSLeaderInstance(t *testing.T) {
 			}
 			h.started.SetTrue()
 
-			_, err := h.GetMSLeaderInstance()
+			_, err := h.getMSLeaderInstance()
 			CmpErr(t, tc.expError, err)
 		})
 	}
@@ -557,7 +557,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				}
 				gotDrpcCalls := dc.(*mockDrpcClient).Calls
 				AssertEqual(t, tc.expDrpcCalls[srv.Index()], gotDrpcCalls,
-					name+": unexpected dRPCs for instance "+string(srv.Index()))
+					fmt.Sprintf("%s: unexpected dRPCs for instance %d", name, srv.Index()))
 
 				gotGrpcCalls := mockMSClients[int(srv.Index())].Calls
 				if diff := cmp.Diff(tc.expGrpcCalls[srv.Index()], gotGrpcCalls); diff != "" {
@@ -582,4 +582,21 @@ func TestServer_Harness_Start(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestServer_Harness_WithFaultDomain(t *testing.T) {
+	harness := &IOServerHarness{}
+	fd, err := system.NewFaultDomainFromString("/one/two")
+	if err != nil {
+		t.Fatalf("couldn't create fault domain: %s", err)
+	}
+
+	updatedHarness := harness.WithFaultDomain(fd)
+
+	// Updated to include the fault domain
+	if diff := cmp.Diff(harness.faultDomain, fd, cmp.AllowUnexported(system.FaultDomain{})); diff != "" {
+		t.Fatalf("unexpected results (-want, +got):\n%s\n", diff)
+	}
+	// updatedHarness is the same as harness
+	AssertEqual(t, updatedHarness, harness, "not the same structure")
 }

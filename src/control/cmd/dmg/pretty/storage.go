@@ -27,127 +27,167 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
-
-	"github.com/dustin/go-humanize"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-func printNvmeController(nvme *storage.NvmeController, out io.Writer, opts ...control.PrintConfigOption) error {
-	_, err := fmt.Fprintf(out, "PCI:%s Model:%s FW:%s Socket:%d Capacity:%s\n",
-		nvme.PciAddr, nvme.Model, nvme.FwRev, nvme.SocketID, humanize.Bytes(nvme.Capacity()))
-	return err
-}
-
-func printNvmeHealth(stat *storage.NvmeDeviceHealth, out io.Writer, opts ...control.PrintConfigOption) error {
-	if stat == nil {
-		fmt.Fprintln(out, "Health Stats Unavailable")
-		return nil
-	}
-
-	fmt.Fprintln(out, "Health Stats:")
-
-	iw := txtfmt.NewIndentWriter(out)
-	fmt.Fprintf(iw, "Temperature:%dK(%.02fC)\n", stat.TempK(), stat.TempC())
-
-	if stat.TempWarnTime > 0 {
-		fmt.Fprintf(iw, "Temperature Warning Duration:%s\n",
-			time.Duration(stat.TempWarnTime)*time.Minute)
-	}
-	if stat.TempCritTime > 0 {
-		fmt.Fprintf(iw, "Temperature Critical Duration:%s\n",
-			time.Duration(stat.TempCritTime)*time.Minute)
-	}
-
-	fmt.Fprintf(iw, "Controller Busy Time:%s\n", time.Duration(stat.CtrlBusyTime)*time.Minute)
-	fmt.Fprintf(iw, "Power Cycles:%d\n", uint64(stat.PowerCycles))
-	fmt.Fprintf(iw, "Power On Duration:%s\n", time.Duration(stat.PowerOnHours)*time.Hour)
-	fmt.Fprintf(iw, "Unsafe Shutdowns:%d\n", uint64(stat.UnsafeShutdowns))
-	fmt.Fprintf(iw, "Media Errors:%d\n", uint64(stat.MediaErrors))
-	fmt.Fprintf(iw, "Read Errors:%d\n", uint64(stat.ReadErrors))
-	fmt.Fprintf(iw, "Write Errors:%d\n", uint64(stat.WriteErrors))
-	fmt.Fprintf(iw, "Unmap Errors:%d\n", uint64(stat.UnmapErrors))
-	fmt.Fprintf(iw, "Checksum Errors:%d\n", uint64(stat.ChecksumErrors))
-	fmt.Fprintf(iw, "Error Log Entries:%d\n", uint64(stat.ErrorLogEntries))
-
-	fmt.Fprintf(out, "Critical Warnings:\n")
-	fmt.Fprintf(iw, "Temperature: ")
-	if stat.TempWarn {
-		fmt.Fprintf(iw, "WARNING\n")
-	} else {
-		fmt.Fprintf(iw, "OK\n")
-	}
-	fmt.Fprintf(iw, "Available Spare: ")
-	if stat.AvailSpareWarn {
-		fmt.Fprintf(iw, "WARNING\n")
-	} else {
-		fmt.Fprintf(iw, "OK\n")
-	}
-	fmt.Fprintf(iw, "Device Reliability: ")
-	if stat.ReliabilityWarn {
-		fmt.Fprintf(iw, "WARNING\n")
-	} else {
-		fmt.Fprintf(iw, "OK\n")
-	}
-	fmt.Fprintf(iw, "Read Only: ")
-	if stat.ReadOnlyWarn {
-		fmt.Fprintf(iw, "WARNING\n")
-	} else {
-		fmt.Fprintf(iw, "OK\n")
-	}
-	fmt.Fprintf(iw, "Volatile Memory Backup: ")
-	if stat.VolatileWarn {
-		fmt.Fprintf(iw, "WARNING\n")
-	} else {
-		fmt.Fprintf(iw, "OK\n")
+// printHostStorageMapVerbose generates a human-readable representation of the supplied
+// HostStorageMap struct and writes it to the supplied io.Writer.
+func printHostStorageMapVerbose(hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
+	for _, key := range hsm.Keys() {
+		hss := hsm[key]
+		hosts := getPrintHosts(hss.HostSet.RangedString(), opts...)
+		lineBreak := strings.Repeat("-", len(hosts))
+		fmt.Fprintf(out, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
+		if len(hss.HostStorage.ScmNamespaces) == 0 {
+			if err := PrintScmModules(hss.HostStorage.ScmModules, out, opts...); err != nil {
+				return err
+			}
+		} else {
+			if err := PrintScmNamespaces(hss.HostStorage.ScmNamespaces, out, opts...); err != nil {
+				return err
+			}
+		}
+		fmt.Fprintln(out)
+		if err := PrintNvmeControllers(hss.HostStorage.NvmeDevices, out, opts...); err != nil {
+			return err
+		}
+		fmt.Fprintln(out)
 	}
 
 	return nil
 }
 
-// PrintNvmeHealthMap generates a human-readable representation of the supplied
-// HostStorageMap, with a focus on presenting the NVMe Device Health information.
-func PrintNvmeHealthMap(hsm control.HostStorageMap, out io.Writer, opts ...control.PrintConfigOption) error {
-	w := txtfmt.NewErrWriter(out)
+// PrintHostStorageMap generates a human-readable representation of the supplied
+// HostStorageMap struct and writes it to the supplied io.Writer.
+func PrintHostStorageMap(hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
+	if len(hsm) == 0 {
+		return nil
+	}
+	fc := GetPrintConfig(opts...)
+
+	if fc.Verbose {
+		return printHostStorageMapVerbose(hsm, out, opts...)
+	}
+
+	hostsTitle := "Hosts"
+	scmTitle := "SCM Total"
+	nvmeTitle := "NVMe Total"
+
+	tablePrint := txtfmt.NewTableFormatter(hostsTitle, scmTitle, nvmeTitle)
+	tablePrint.InitWriter(out)
+	table := []txtfmt.TableRow{}
 
 	for _, key := range hsm.Keys() {
 		hss := hsm[key]
-		hosts := control.GetPrintHosts(hss.HostSet.RangedString(), opts...)
-		lineBreak := strings.Repeat("-", len(hosts))
-		fmt.Fprintf(out, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
-
-		if len(hss.HostStorage.NvmeDevices) == 0 {
-			fmt.Fprintln(out, "  No NVMe devices detected")
-			continue
+		hosts := getPrintHosts(hss.HostSet.RangedString(), opts...)
+		row := txtfmt.TableRow{hostsTitle: hosts}
+		if len(hss.HostStorage.ScmNamespaces) == 0 {
+			row[scmTitle] = hss.HostStorage.ScmModules.Summary()
+		} else {
+			row[scmTitle] = hss.HostStorage.ScmNamespaces.Summary()
 		}
-
-		for _, controller := range hss.HostStorage.NvmeDevices {
-			if err := printNvmeController(controller, out, opts...); err != nil {
-				return err
-			}
-			iw := txtfmt.NewIndentWriter(out)
-			if err := printNvmeHealth(controller.HealthStats, iw, opts...); err != nil {
-				return err
-			}
-			fmt.Fprintln(out)
-		}
+		row[nvmeTitle] = hss.HostStorage.NvmeDevices.Summary()
+		table = append(table, row)
 	}
 
-	return w.Err
+	tablePrint.Format(table)
+	return nil
 }
 
-func printSmdDevice(dev *control.SmdDevice, out io.Writer, opts ...control.PrintConfigOption) error {
+// PrintStoragePrepareMap generates a human-readable representation of the supplied
+// HostStorageMap which is populated in response to a StoragePrepare operation.
+func PrintStoragePrepareMap(hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
+	if len(hsm) == 0 {
+		return nil
+	}
+
+	hostsTitle := "Hosts"
+	scmTitle := "SCM Namespaces"
+	rebootTitle := "Reboot Required"
+
+	fmt.Fprintln(out, "Prepare Results:")
+	tablePrint := txtfmt.NewTableFormatter(hostsTitle, scmTitle, rebootTitle)
+	tablePrint.InitWriter(txtfmt.NewIndentWriter(out))
+	table := []txtfmt.TableRow{}
+
+	for _, key := range hsm.Keys() {
+		hss := hsm[key]
+		hosts := getPrintHosts(hss.HostSet.RangedString(), opts...)
+		row := txtfmt.TableRow{hostsTitle: hosts}
+		row[scmTitle] = hss.HostStorage.ScmNamespaces.Summary()
+		row[rebootTitle] = fmt.Sprintf("%t", hss.HostStorage.RebootRequired)
+		table = append(table, row)
+	}
+
+	tablePrint.Format(table)
+	return nil
+}
+
+func printStorageFormatMapVerbose(hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
+	for _, key := range hsm.Keys() {
+		hss := hsm[key]
+		hosts := getPrintHosts(hss.HostSet.RangedString(), opts...)
+		lineBreak := strings.Repeat("-", len(hosts))
+		fmt.Fprintf(out, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
+		if err := printScmMountPoints(hss.HostStorage.ScmMountPoints, out, opts...); err != nil {
+			return err
+		}
+		fmt.Fprintln(out)
+		if err := printNvmeFormatResults(hss.HostStorage.NvmeDevices, out, opts...); err != nil {
+			return err
+		}
+		fmt.Fprintln(out)
+	}
+
+	return nil
+}
+
+// PrintStorageFormatMap generates a human-readable representation of the supplied
+// HostStorageMap which is populated in response to a StorageFormat operation.
+func PrintStorageFormatMap(hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
+	if len(hsm) == 0 {
+		return nil
+	}
+	fc := GetPrintConfig(opts...)
+
+	if fc.Verbose {
+		return printStorageFormatMapVerbose(hsm, out, opts...)
+	}
+
+	hostsTitle := "Hosts"
+	scmTitle := "SCM Devices"
+	nvmeTitle := "NVMe Devices"
+
+	fmt.Fprintln(out, "Format Summary:")
+	tablePrint := txtfmt.NewTableFormatter(hostsTitle, scmTitle, nvmeTitle)
+	tablePrint.InitWriter(txtfmt.NewIndentWriter(out))
+	table := []txtfmt.TableRow{}
+
+	for _, key := range hsm.Keys() {
+		hss := hsm[key]
+		hosts := getPrintHosts(hss.HostSet.RangedString(), opts...)
+		row := txtfmt.TableRow{hostsTitle: hosts}
+		row[scmTitle] = fmt.Sprintf("%d", len(hss.HostStorage.ScmMountPoints))
+		row[nvmeTitle] = fmt.Sprintf("%d", len(hss.HostStorage.NvmeDevices))
+		table = append(table, row)
+	}
+
+	tablePrint.Format(table)
+	return nil
+}
+
+func printSmdDevice(dev *storage.SmdDevice, out io.Writer, opts ...PrintConfigOption) error {
 	_, err := fmt.Fprintf(out, "UUID:%s Targets:%+v Rank:%d State:%s\n",
 		dev.UUID, dev.TargetIDs, dev.Rank, dev.State)
 	return err
 }
 
-func printSmdPool(pool *control.SmdPool, out io.Writer, opts ...control.PrintConfigOption) error {
+func printSmdPool(pool *control.SmdPool, out io.Writer, opts ...PrintConfigOption) error {
 	_, err := fmt.Fprintf(out, "Rank:%d Targets:%+v", pool.Rank, pool.TargetIDs)
-	cfg := control.GetPrintConfig(opts...)
+	cfg := GetPrintConfig(opts...)
 	if cfg.Verbose {
 		_, err = fmt.Fprintf(out, " Blobs:%+v", pool.Blobs)
 	}
@@ -157,12 +197,12 @@ func printSmdPool(pool *control.SmdPool, out io.Writer, opts ...control.PrintCon
 
 // PrintSmdInfoMap generates a human-readable representation of the supplied
 // HostStorageMap, with a focus on presenting the per-server metadata (SMD) information.
-func PrintSmdInfoMap(req *control.SmdQueryReq, hsm control.HostStorageMap, out io.Writer, opts ...control.PrintConfigOption) error {
+func PrintSmdInfoMap(req *control.SmdQueryReq, hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
 	w := txtfmt.NewErrWriter(out)
 
 	for _, key := range hsm.Keys() {
 		hss := hsm[key]
-		hosts := control.GetPrintHosts(hss.HostSet.RangedString(), opts...)
+		hosts := getPrintHosts(hss.HostSet.RangedString(), opts...)
 		lineBreak := strings.Repeat("-", len(hosts))
 		fmt.Fprintf(out, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
 
@@ -216,9 +256,4 @@ func PrintSmdInfoMap(req *control.SmdQueryReq, hsm control.HostStorageMap, out i
 	}
 
 	return w.Err
-}
-
-func printScmModule(module *storage.ScmModule, out io.Writer, opts ...control.PrintConfigOption) error {
-	_, err := fmt.Fprintf(out, "%s\n", module.String())
-	return err
 }

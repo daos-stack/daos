@@ -1,0 +1,37 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+
+defaultENV:
+  #!filter-only : /run/env_CRT_CTX_SHARE_ADDR/no_sep
+  #!filter-only : /run/tests/iv
+  D_LOG_MASK: "DEBUG,MEM=ERR"
+  CRT_PHY_ADDR_STR: "ofi+sockets"
+  OFI_INTERFACE: "eth0"
+  test_servers_CRT_CTX_NUM: "2"
+  test_clients_CRT_CTX_NUM: "2"
+env_CRT_CTX_SHARE_ADDR: !mux
+  sep:
+    env: sep
+    CRT_CTX_SHARE_ADDR: "1"
+  no_sep:
+    env: no_sep
+    CRT_CTX_SHARE_ADDR: "0"
+hosts: !mux
+  hosts_1:
+    config: one_node
+    test_servers:
+      - boro-A
+    test_clients:
+      - boro-A
+tests: !mux
+  iv:
+    name: iv_basic
+    test_servers_bin: crt_launch
+    test_servers_arg: "-e ../tests/iv_server -v 3"
+    test_servers_env: ""
+    test_servers_ppn: "5"
+
+    test_clients_bin: ../tests/iv_client
+    test_clients_arg: ""
+    test_clients_env: ""
+    test_clients_ppn: "1"

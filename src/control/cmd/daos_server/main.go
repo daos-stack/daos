@@ -38,7 +38,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
-	"github.com/daos-stack/daos/src/control/server"
 )
 
 const (
@@ -168,7 +167,7 @@ func main() {
 
 	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
 		if errors.Cause(err) == context.Canceled {
-			log.Infof("%s (pid %d) shutting down", server.ControlPlaneName, os.Getpid())
+			log.Infof("%s (pid %d) shutting down", build.ControlPlaneName, os.Getpid())
 			os.Exit(0)
 		}
 		exitWithError(log, err)

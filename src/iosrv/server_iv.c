@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -778,11 +778,8 @@ void
 ds_iv_init()
 {
 	D_INIT_LIST_HEAD(&ds_iv_ns_list);
-	/* Let's set the topo to 32 to avoid cart IV failover,
-	 * which is not supported yet. XXX
-	 */
-	ds_iv_ns_tree_topo = crt_tree_topo(CRT_TREE_KNOMIAL, 32);
 	D_INIT_LIST_HEAD(&ds_iv_class_list);
+	ds_iv_ns_tree_topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
 }
 
 void

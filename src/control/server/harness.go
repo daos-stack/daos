@@ -28,8 +28,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
@@ -48,6 +50,7 @@ type IOServerHarness struct {
 	started          atm.Bool
 	rankReqTimeout   time.Duration
 	rankStartTimeout time.Duration
+	faultDomain      *system.FaultDomain
 }
 
 // NewIOServerHarness returns an initialized *IOServerHarness.
@@ -59,6 +62,12 @@ func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 		rankReqTimeout:   defaultRequestTimeout,
 		rankStartTimeout: defaultStartTimeout,
 	}
+}
+
+// WithFaultDomain adds a fault domain to the IOServerHarness.
+func (h *IOServerHarness) WithFaultDomain(fd *system.FaultDomain) *IOServerHarness {
+	h.faultDomain = fd
+	return h
 }
 
 // isStarted indicates whether the IOServerHarness is in a running state.
@@ -112,9 +121,19 @@ func (h *IOServerHarness) AddInstance(srv *IOServerInstance) error {
 	return nil
 }
 
-// GetMSLeaderInstance returns a managed IO Server instance to be used as a
+// CallDrpc calls the supplied dRPC method on a managed I/O server instance.
+func (h *IOServerHarness) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (*drpc.Response, error) {
+	mi, err := h.getMSLeaderInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	return mi.CallDrpc(ctx, method, body)
+}
+
+// getMSLeaderInstance returns a managed IO Server instance to be used as a
 // management target and fails if selected instance is not MS Leader.
-func (h *IOServerHarness) GetMSLeaderInstance() (*IOServerInstance, error) {
+func (h *IOServerHarness) getMSLeaderInstance() (*IOServerInstance, error) {
 	if !h.isStarted() {
 		return nil, FaultHarnessNotStarted
 	}

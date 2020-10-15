@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,7 +73,7 @@
 	X(POOL_EVICT,							\
 		0, &CQF_pool_evict,					\
 		ds_pool_evict_handler, NULL),				\
-	X(POOL_ADD,							\
+	X(POOL_REINT,							\
 		0, &CQF_pool_add,					\
 		ds_pool_update_handler, NULL),				\
 	X(POOL_ADD_IN,							\

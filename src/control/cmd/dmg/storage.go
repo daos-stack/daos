@@ -30,6 +30,7 @@ import (
 	"github.com/dustin/go-humanize/english"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -107,10 +108,10 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	}
 
 	var bld strings.Builder
-	if err := control.PrintResponseErrors(resp, &bld); err != nil {
+	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
 		return err
 	}
-	if err := control.PrintStoragePrepareMap(resp.HostStorage, &bld); err != nil {
+	if err := pretty.PrintStoragePrepareMap(resp.HostStorage, &bld); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())
@@ -124,19 +125,29 @@ type storageScanCmd struct {
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
-	Verbose bool `short:"v" long:"verbose" description:"List SCM & NVMe device details"`
+	Verbose    bool `short:"v" long:"verbose" description:"List SCM & NVMe device details"`
+	NvmeHealth bool `short:"n" long:"nvme-health" description:"Display NVMe device health statistics"`
+	NvmeMeta   bool `short:"m" long:"nvme-meta" description:"Display server meta data held on NVMe storage"`
 }
 
 // Execute is run when storageScanCmd activates.
 //
 // Runs NVMe and SCM storage scan on all connected servers.
 func (cmd *storageScanCmd) Execute(_ []string) error {
+	if cmd.NvmeHealth && cmd.NvmeMeta {
+		return errors.New("Cannot use --nvme-health and --nvme-meta together")
+	}
+
 	ctx := context.Background()
-	req := &control.StorageScanReq{}
+	req := &control.StorageScanReq{NvmeHealth: cmd.NvmeHealth, NvmeMeta: cmd.NvmeMeta}
 	req.SetHostList(cmd.hostlist)
 	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {
+		if cmd.Verbose {
+			cmd.log.Info("--verbose flag ignored if --json specified")
+		}
+
 		return cmd.outputJSON(resp, err)
 	}
 
@@ -145,11 +156,33 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 	}
 
 	var bld strings.Builder
-	verbose := control.PrintWithVerboseOutput(cmd.Verbose)
-	if err := control.PrintResponseErrors(resp, &bld); err != nil {
+	verbose := pretty.PrintWithVerboseOutput(cmd.Verbose)
+	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
 		return err
 	}
-	if err := control.PrintHostStorageMap(resp.HostStorage, &bld, verbose); err != nil {
+	if cmd.NvmeHealth {
+		if cmd.Verbose {
+			cmd.log.Info("--verbose flag ignored if --nvme-health specified")
+		}
+		if err := pretty.PrintNvmeHealthMap(resp.HostStorage, &bld); err != nil {
+			return err
+		}
+		cmd.log.Info(bld.String())
+
+		return resp.Errors()
+	}
+	if cmd.NvmeMeta {
+		if cmd.Verbose {
+			cmd.log.Info("--verbose flag ignored if --nvme-meta specified")
+		}
+		if err := pretty.PrintNvmeMetaMap(resp.HostStorage, &bld); err != nil {
+			return err
+		}
+		cmd.log.Info(bld.String())
+
+		return resp.Errors()
+	}
+	if err := pretty.PrintHostStorageMap(resp.HostStorage, &bld, verbose); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())
@@ -175,6 +208,11 @@ func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context) (bool, er
 	if cmd.Reformat {
 		resp, err := control.SystemQuery(ctx, cmd.ctlInvoker, &control.SystemQueryReq{})
 		if err != nil {
+			// If the AP hasn't been started, it will respond as if it
+			// is not a replica.
+			if system.IsNotReplica(err) {
+				return false, nil
+			}
 			return false, errors.Wrap(err, "System-Query command failed")
 		}
 
@@ -257,11 +295,11 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 
 func (cmd *storageFormatCmd) printFormatResp(resp *control.StorageFormatResp) error {
 	var bld strings.Builder
-	verbose := control.PrintWithVerboseOutput(cmd.Verbose)
-	if err := control.PrintResponseErrors(resp, &bld); err != nil {
+	verbose := pretty.PrintWithVerboseOutput(cmd.Verbose)
+	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
 		return err
 	}
-	if err := control.PrintStorageFormatMap(resp.HostStorage, &bld, verbose); err != nil {
+	if err := pretty.PrintStorageFormatMap(resp.HostStorage, &bld, verbose); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())

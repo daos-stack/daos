@@ -40,6 +40,8 @@
 #include <daos.h>
 #include <daos/common.h>
 #include <daos/checksum.h>
+#include <daos/compression.h>
+#include <daos/cipher.h>
 #include <daos/rpc.h>
 #include <daos/debug.h>
 #include <daos/object.h>
@@ -323,6 +325,7 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 		entry->dpe_str = strdup(value);
 	} else if (!strcmp(name, "cksum")) {
 		int csum_type = daos_str2csumcontprop(value);
+
 		if (csum_type < 0) {
 			fprintf(stderr,
 				"currently supported checksum types are "
@@ -399,6 +402,28 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 		}
 		entry->dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
 		entry->dpe_val = val;
+	} else if (!strcmp(name, "compress") || !strcmp(name, "compression")) {
+		int compression_type = daos_str2compresscontprop(value);
+
+		if (compression_type < 0) {
+			fprintf(stderr, "compression prop value can only be "
+				"'off/lz4/gzip/gzip[1-9]'\n");
+			return -DER_INVAL;
+		}
+		entry->dpe_type = DAOS_PROP_CO_COMPRESS;
+		entry->dpe_val = compression_type;
+	} else if (!strcmp(name, "encrypt") ||
+		   !strcmp(name, "encryption")) {
+		int encryption_type = daos_str2encryptcontprop(value);
+
+		if (encryption_type < 0) {
+			fprintf(stderr, "encryption prop value can only be "
+				"'off/aes-xts[128,256]/aes-cbc[128,192,256]/"
+				"aes-gcm[128,256]'\n");
+			return -DER_INVAL;
+		}
+		entry->dpe_type = DAOS_PROP_CO_ENCRYPT;
+		entry->dpe_val = encryption_type;
 	} else if (!strcmp(name, "rf")) {
 		if (!strcmp(value, "0"))
 			entry->dpe_val = DAOS_PROP_CO_REDUN_RF0;
@@ -956,7 +981,8 @@ cont_op_hdlr(struct cmd_args_s *ap)
 			       DAOS_PC_RW, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
-		fprintf(stderr, "failed to connect to pool: %d\n", rc);
+		fprintf(stderr, "failed to connect to pool "DF_UUIDF
+			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
 		D_GOTO(out, rc);
 	}
 
@@ -981,7 +1007,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		rc = daos_cont_open(ap->pool, ap->c_uuid, DAOS_COO_RW,
 				    &ap->cont, &cont_info, NULL);
 		if (rc != 0) {
-			fprintf(stderr, "cont open failed: %d\n", rc);
+			fprintf(stderr, "failed to open container "DF_UUIDF
+				": %s (%d)\n", DP_UUID(ap->c_uuid),
+				d_errdesc(rc), rc);
 			D_GOTO(out_disconnect, rc);
 		}
 	}
@@ -1060,7 +1088,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	if (op != CONT_CREATE && op != CONT_DESTROY) {
 		rc2 = daos_cont_close(ap->cont, NULL);
 		if (rc2 != 0)
-			fprintf(stderr, "Container close failed: %d\n", rc2);
+			fprintf(stderr, "failed to close container "DF_UUIDF
+				": %s (%d)\n", DP_UUID(ap->c_uuid),
+				d_errdesc(rc2), rc2);
 		if (rc == 0)
 			rc = rc2;
 	}
@@ -1069,7 +1099,9 @@ out_disconnect:
 	/* Pool disconnect in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
 	if (rc2 != 0)
-		fprintf(stderr, "Pool disconnect failed : %d\n", rc2);
+		fprintf(stderr, "failed to disconnect from pool "DF_UUIDF
+			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc2),
+			rc2);
 	if (rc == 0)
 		rc = rc2;
 
@@ -1103,14 +1135,16 @@ obj_op_hdlr(struct cmd_args_s *ap)
 			       DAOS_PC_RW, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
-		fprintf(stderr, "failed to connect to pool: %d\n", rc);
+		fprintf(stderr, "failed to connect to pool "DF_UUIDF
+			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
 		D_GOTO(out, rc);
 	}
 
 	rc = daos_cont_open(ap->pool, ap->c_uuid, DAOS_COO_RW,
 			&ap->cont, &cont_info, NULL);
 	if (rc != 0) {
-		fprintf(stderr, "cont open failed: %d\n", rc);
+		fprintf(stderr, "failed to open container "DF_UUIDF
+			": %s (%d)\n", DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
 		D_GOTO(out_disconnect, rc);
 	}
 
@@ -1127,7 +1161,9 @@ obj_op_hdlr(struct cmd_args_s *ap)
 	/* Container close in normal and error flows: preserve rc */
 	rc2 = daos_cont_close(ap->cont, NULL);
 	if (rc2 != 0)
-		fprintf(stderr, "Container close failed: %d\n", rc2);
+		fprintf(stderr, "failed to close container "DF_UUIDF
+			": %s (%d)\n", DP_UUID(ap->c_uuid), d_errdesc(rc2),
+			rc2);
 	if (rc == 0)
 		rc = rc2;
 
@@ -1135,7 +1171,9 @@ out_disconnect:
 	/* Pool disconnect in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
 	if (rc2 != 0)
-		fprintf(stderr, "Pool disconnect failed : %d\n", rc2);
+		fprintf(stderr, "failed to disconnect from pool "DF_UUIDF
+			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc2),
+			rc2);
 	if (rc == 0)
 		rc = rc2;
 
@@ -1286,13 +1324,18 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"	--properties=<name>:<value>[,<name>:<value>,...]\n"
 			"			   supported prop names are label, cksum,\n"
 			"				cksum_size, srv_cksum, dedup\n"
-			"				dedup_th, rf\n"
+			"				dedup_th, compression, encryption\n"
 			"			   label value can be any string\n"
-			"			   cksum supported values are off, crc[16,32,64], sha1\n"
-			"			   cksum_size can be any size\n"
+			"			   cksum supported values are off, crc[16,32,64],\n"
+			"						      sha[1,256,512]\n"
+			"			   cksum_size can be any size < 4GiB\n"
 			"			   srv_cksum values can be on, off\n"
-			"			   dedup values can be off, memcmp or hash\n"
-			"			   dedup_th can be any size bigger than 4K\n"
+			"			   dedup (preview) values can be off, memcmp or hash\n"
+			"			   dedup_th (preview) can be any size between 4KiB and 64KiB\n"
+			"			   compression (preview) values can be lz4, gzip, gzip[1-9]\n"
+			"			   encrypton (preview) values can be aes-xts[128,256],\n"
+			"							     aes-cbc[128,192,256],\n"
+			"							     aes-gcm[128,256]\n"
 			"			   rf supported values are [0-4]\n"
 			"	--acl-file=PATH    input file containing ACL\n"
 			"	--user=ID          user who will own the container.\n"
@@ -1424,7 +1467,8 @@ main(int argc, char *argv[])
 
 	rc = daos_init();
 	if (rc != 0) {
-		fprintf(stderr, "failed to initialize daos: %d\n", rc);
+		fprintf(stderr, "failed to initialize daos: %s (%d)\n",
+			d_errdesc(rc), rc);
 		return 1;
 	}
 

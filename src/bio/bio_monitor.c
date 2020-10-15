@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,12 +36,12 @@
  * the device owner xstream.
  */
 struct dev_state_msg_arg {
-	struct bio_xs_context	*xs;
-	struct bio_dev_state	 devstate;
-	ABT_eventual		 eventual;
+	struct bio_xs_context		*xs;
+	struct nvme_health_stats	 devstate;
+	ABT_eventual			 eventual;
 };
 
-/* Copy out the bio_dev_state in the device owner xstream context */
+/* Copy out the nvme_health_stats in the device owner xstream context */
 static void
 bio_get_dev_state_internal(void *msg_arg)
 {
@@ -90,7 +90,7 @@ bio_log_csum_err(struct bio_xs_context *bxc, int tgt_id)
 
 /* Call internal method to get BIO device state from the device owner xstream */
 int
-bio_get_dev_state(struct bio_dev_state *dev_state, struct bio_xs_context *xs)
+bio_get_dev_state(struct nvme_health_stats *state, struct bio_xs_context *xs)
 {
 	struct dev_state_msg_arg	 dsm = { 0 };
 	int				 rc;
@@ -107,7 +107,7 @@ bio_get_dev_state(struct bio_dev_state *dev_state, struct bio_xs_context *xs)
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
 
-	*dev_state = dsm.devstate;
+	*state = dsm.devstate;
 
 	rc = ABT_eventual_free(&dsm.eventual);
 	if (rc != ABT_SUCCESS)
@@ -168,6 +168,29 @@ get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	dev_health->bdh_inflights--;
 }
 
+static int
+populate_health_cdata(struct nvme_health_stats *dev_state,
+		      const struct spdk_nvme_ctrlr_data *cdata)
+{
+	int	written, rc = 0;
+
+	written = snprintf(dev_state->model, sizeof(dev_state->model),
+			   "%-20.20s", cdata->mn);
+	if (written >= sizeof(dev_state->model)) {
+		D_WARN("data truncated when writing model to health state");
+		rc = -DER_TRUNC;
+	}
+
+	written = snprintf(dev_state->serial, sizeof(dev_state->serial),
+			   "%-20.20s", cdata->sn);
+	if (written >= sizeof(dev_state->serial)) {
+		D_WARN("data truncated when writing model to health state");
+		rc = -DER_TRUNC;
+	}
+
+	return rc;
+}
+
 static void
 get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 				   void *cb_arg)
@@ -196,7 +219,14 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	D_ASSERT(dev_health->bdh_io_channel != NULL);
 	bdev = spdk_bdev_desc_get_bdev(dev_health->bdh_desc);
 	D_ASSERT(bdev != NULL);
+
+	/* Store ctrlr details in in-memory health state log. */
 	cdata = dev_health->bdh_ctrlr_buf;
+	rc = populate_health_cdata(&dev_health->bdh_health_state, cdata);
+	if (rc != 0) {
+		D_ERROR("failed to populate device details in health state");
+		goto out;
+	}
 
 	/* Prep NVMe command to get device error log pages */
 	ep_sz = sizeof(struct spdk_nvme_error_information_entry);
@@ -238,19 +268,39 @@ out:
 }
 
 static void
+populate_health_stats(struct nvme_health_stats *dev_state,
+		      struct spdk_nvme_health_information_page *page)
+{
+	union spdk_nvme_critical_warning_state	cw = page->critical_warning;
+
+	dev_state->warn_temp_time = page->warning_temp_time;
+	dev_state->crit_temp_time = page->critical_temp_time;
+	dev_state->ctrl_busy_time = page->controller_busy_time[0];
+	dev_state->power_cycles = page->power_cycles[0];
+	dev_state->power_on_hours = page->power_on_hours[0];
+	dev_state->unsafe_shutdowns = page->unsafe_shutdowns[0];
+	dev_state->media_errs = page->media_errors[0];
+	dev_state->err_log_entries = page->num_error_info_log_entries[0];
+	dev_state->temperature = page->temperature;
+	dev_state->temp_warn = cw.bits.temperature ? true : false;
+	dev_state->avail_spare_warn = cw.bits.available_spare ? true : false;
+	dev_state->dev_reliability_warn = cw.bits.device_reliability ?
+		true : false;
+	dev_state->read_only_warn = cw.bits.read_only ? true : false;
+	dev_state->volatile_mem_warn = cw.bits.volatile_memory_backup ?
+		true : false;
+}
+
+static void
 get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 			     void *cb_arg)
 {
-	struct bio_dev_health			 *dev_health = cb_arg;
-	struct bio_dev_state			 *dev_state;
-	struct spdk_nvme_health_information_page *hp;
-	struct spdk_bdev			 *bdev;
-	struct spdk_nvme_cmd			  cmd;
-	uint32_t				  cp_sz;
-	uint8_t					  crit_warn;
-	int					  rc;
-	int					  sc, sct;
-	uint32_t				  cdw0;
+	struct bio_dev_health	*dev_health = cb_arg;
+	struct spdk_bdev	*bdev;
+	struct spdk_nvme_cmd	 cmd;
+	uint32_t		 cp_sz;
+	int			 rc, sc, sct;
+	uint32_t		 cdw0;
 
 	D_ASSERT(dev_health->bdh_inflights == 1);
 
@@ -265,24 +315,11 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	D_ASSERT(dev_health->bdh_io_channel != NULL);
 	bdev = spdk_bdev_desc_get_bdev(dev_health->bdh_desc);
 	D_ASSERT(bdev != NULL);
-	hp = dev_health->bdh_health_buf;
 
 	/* Store device health info in in-memory health state log. */
-	dev_state = &dev_health->bdh_health_state;
-	dev_state->bds_timestamp = dev_health->bdh_stat_age;
-	dev_state->bds_temperature = hp->temperature;
-	crit_warn = hp->critical_warning.bits.temperature;
-	dev_state->bds_temp_warning = crit_warn;
-	crit_warn = hp->critical_warning.bits.available_spare;
-	dev_state->bds_avail_spare_warning = crit_warn;
-	crit_warn = hp->critical_warning.bits.device_reliability;
-	dev_state->bds_dev_reliabilty_warning = crit_warn;
-	crit_warn = hp->critical_warning.bits.read_only;
-	dev_state->bds_read_only_warning = crit_warn;
-	crit_warn = hp->critical_warning.bits.volatile_memory_backup;
-	dev_state->bds_volatile_mem_warning = crit_warn;
-	memcpy(dev_state->bds_media_errors, hp->media_errors,
-	       sizeof(hp->media_errors));
+	dev_health->bdh_health_state.timestamp = dev_health->bdh_stat_age;
+	populate_health_stats(&dev_health->bdh_health_state,
+			      dev_health->bdh_health_buf);
 
 	/* Prep NVMe command to get controller data */
 	cp_sz = sizeof(struct spdk_nvme_ctrlr_data);
@@ -314,9 +351,7 @@ out:
 static int
 auto_detect_faulty(struct bio_blobstore *bbs)
 {
-	if (bbs->bb_state != BIO_BS_STATE_NORMAL &&
-	    bbs->bb_state != BIO_BS_STATE_REPLACED &&
-	    bbs->bb_state != BIO_BS_STATE_REINT)
+	if (bbs->bb_state != BIO_BS_STATE_NORMAL)
 		return 0;
 	/*
 	 * TODO: Check the health data stored in @bbs, and mark the bbs as
@@ -339,8 +374,10 @@ collect_raw_health_data(struct bio_dev_health *dev_health)
 	int			 rc;
 
 	D_ASSERT(dev_health != NULL);
+	if (dev_health->bdh_desc == NULL)
+		return;
+
 	D_ASSERT(dev_health->bdh_io_channel != NULL);
-	D_ASSERT(dev_health->bdh_desc != NULL);
 
 	bdev = spdk_bdev_desc_get_bdev(dev_health->bdh_desc);
 	if (bdev == NULL) {
@@ -394,28 +431,32 @@ void
 bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {
 	struct bio_dev_health	*dev_health;
+	struct bio_blobstore	*bbs;
 	int			 rc;
 	uint64_t		 monitor_period;
 
 	D_ASSERT(ctxt != NULL);
-	D_ASSERT(ctxt->bxc_blobstore != NULL);
-	dev_health = &ctxt->bxc_blobstore->bb_dev_health;
+	bbs = ctxt->bxc_blobstore;
 
-	if (dev_health->bdh_monitor_pd > 0)
-		monitor_period = dev_health->bdh_monitor_pd;
-	else
+	D_ASSERT(bbs != NULL);
+	dev_health = &bbs->bb_dev_health;
+
+	if (bbs->bb_state == BIO_BS_STATE_NORMAL ||
+	    bbs->bb_state == BIO_BS_STATE_OUT)
 		monitor_period = NVME_MONITOR_PERIOD;
+	else
+		monitor_period = NVME_MONITOR_SHORT_PERIOD;
 
 	if (dev_health->bdh_stat_age + monitor_period >= now)
 		return;
 	dev_health->bdh_stat_age = now;
 
-	rc = auto_detect_faulty(ctxt->bxc_blobstore);
+	rc = auto_detect_faulty(bbs);
 	if (rc)
 		D_ERROR("Auto faulty detect on target %d failed. %d\n",
 			ctxt->bxc_tgt_id, rc);
 
-	rc = bio_bs_state_transit(ctxt->bxc_blobstore);
+	rc = bio_bs_state_transit(bbs);
 	if (rc)
 		D_ERROR("State transition on target %d failed. %d\n",
 			ctxt->bxc_tgt_id, rc);
@@ -499,8 +540,7 @@ bio_fini_health_monitoring(struct bio_blobstore *bb)
  * all SPDK DMA-safe buffers for querying log entries.
  */
 int
-bio_init_health_monitoring(struct bio_blobstore *bb,
-			   struct spdk_bdev *bdev)
+bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name)
 {
 	struct spdk_io_channel		*channel;
 	uint32_t			 hp_sz;
@@ -510,7 +550,7 @@ bio_init_health_monitoring(struct bio_blobstore *bb,
 	int				 rc;
 
 	D_ASSERT(bb != NULL);
-	D_ASSERT(bdev != NULL);
+	D_ASSERT(bdev_name != NULL);
 
 	hp_sz = sizeof(struct spdk_nvme_health_information_page);
 	bb->bb_dev_health.bdh_health_buf = spdk_dma_zmalloc(hp_sz, 0, NULL);
@@ -520,27 +560,30 @@ bio_init_health_monitoring(struct bio_blobstore *bb,
 	cp_sz = sizeof(struct spdk_nvme_ctrlr_data);
 	bb->bb_dev_health.bdh_ctrlr_buf = spdk_dma_zmalloc(cp_sz, 0, NULL);
 	if (bb->bb_dev_health.bdh_ctrlr_buf == NULL) {
-		spdk_dma_free(bb->bb_dev_health.bdh_health_buf);
-		return -DER_NOMEM;
+		rc = -DER_NOMEM;
+		goto free_health_buf;
 	}
 
 	ep_sz = sizeof(struct spdk_nvme_error_information_entry);
 	ep_buf_sz = ep_sz * NVME_MAX_ERROR_LOG_PAGES;
 	bb->bb_dev_health.bdh_error_buf = spdk_dma_zmalloc(ep_buf_sz, 0, NULL);
 	if (bb->bb_dev_health.bdh_error_buf == NULL) {
-		spdk_dma_free(bb->bb_dev_health.bdh_health_buf);
-		spdk_dma_free(bb->bb_dev_health.bdh_ctrlr_buf);
-		return -DER_NOMEM;
+		rc = -DER_NOMEM;
+		goto free_ctrlr_buf;
 	}
 
+	bb->bb_dev_health.bdh_inflights = 0;
+
+	if (bb->bb_state == BIO_BS_STATE_OUT)
+		return 0;
 
 	 /* Writable descriptor required for device health monitoring */
-	rc = spdk_bdev_open(bdev, true, NULL, NULL,
-			    &bb->bb_dev_health.bdh_desc);
+	rc = spdk_bdev_open_ext(bdev_name, true, bio_bdev_event_cb, NULL,
+				&bb->bb_dev_health.bdh_desc);
 	if (rc != 0) {
-		D_ERROR("Failed to open bdev %s, %d\n",
-			spdk_bdev_get_name(bdev), rc);
-		return daos_errno2der(-rc);
+		D_ERROR("Failed to open bdev %s, %d\n", bdev_name, rc);
+		rc = daos_errno2der(-rc);
+		goto free_error_buf;
 	}
 
 	/* Get and hold I/O channel for device health monitoring */
@@ -548,8 +591,17 @@ bio_init_health_monitoring(struct bio_blobstore *bb,
 	D_ASSERT(channel != NULL);
 	bb->bb_dev_health.bdh_io_channel = channel;
 
-	bb->bb_dev_health.bdh_inflights = 0;
-	bb->bb_dev_health.bdh_monitor_pd = NVME_MONITOR_PERIOD;
-
 	return 0;
+
+free_error_buf:
+	spdk_dma_free(bb->bb_dev_health.bdh_error_buf);
+	bb->bb_dev_health.bdh_error_buf = NULL;
+free_ctrlr_buf:
+	spdk_dma_free(bb->bb_dev_health.bdh_ctrlr_buf);
+	bb->bb_dev_health.bdh_ctrlr_buf = NULL;
+free_health_buf:
+	spdk_dma_free(bb->bb_dev_health.bdh_health_buf);
+	bb->bb_dev_health.bdh_health_buf = NULL;
+
+	return rc;
 }
