@@ -153,10 +153,13 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		}
 	}
 
-	log.Debugf("automatic NVMe prepare req: %+v", prepReq)
-	if _, err := bdevProvider.Prepare(prepReq); err != nil {
-		log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
-	}
+	/*
+		log.Debugf("automatic NVMe prepare req: %+v", prepReq)
+		if _, err := bdevProvider.Prepare(prepReq); err != nil {
+			log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
+		}
+	*/
+	log.Info("automatic NVMe prepare disabled on Endeavour")
 
 	hugePages, err := getHugePageInfo()
 	if err != nil {
