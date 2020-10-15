@@ -60,8 +60,6 @@ class DmgCommand(DmgCommandBase):
         "network_scan":
             r"[-]+(?:\n|\n\r)([a-z0-9-]+)(?:\n|\n\r)[-]+|NUMA\s+"
             r"Socket\s+(\d+)|(ofi\+[a-z0-9;_]+)\s+([a-z0-9, ]+)",
-        "pool_list":
-            r"(?:([0-9a-fA-F-]+) +([0-9,]+))",
         "storage_query_list_pools":
             r"[-]+\s+([a-z0-9-]+)\s+[-]+|(?:UUID:([a-z0-9-]+)\s+Rank:([0-9]+)"
             r"\s+Targets:\[([0-9 ]+)\])(?:\s+Blobs:\[([0-9 ]+)\]\s+?$)",
@@ -777,7 +775,8 @@ class DmgCommand(DmgCommandBase):
                 None.
 
         Returns:
-            list: a list containing system rank information.
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
 
         Raises:
             CommandFailure: if the dmg system stop command fails.

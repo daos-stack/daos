@@ -64,7 +64,7 @@ class ListPoolsTest(TestWithServers):
         # Call dmg pool list. get_output will parse the stdout with the regex
         # defined in dmg_utils.py and return the output as list of tuple. First
         # element is UUID and second is service replicas.
-        output_list = self.get_dmg_command().get_output("pool_list")
+        output_list = self.get_dmg_command().pool_list()
         # Create a map of UUID to service replicas for expected and actual and
         # compare.
         actual_map = {}

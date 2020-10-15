@@ -60,7 +60,7 @@ class DynamicServerPool(TestWithServers):
         expected UUIDs.
         """
         actual_uuids = []
-        output_list = self.get_dmg_command().get_output("pool_list")
+        output_list = self.get_dmg_command().pool_list()
         for uuid_sr in output_list:
             actual_uuids.append(uuid_sr[0])
         actual_uuids.sort()
