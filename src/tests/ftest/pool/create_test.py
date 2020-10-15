@@ -260,7 +260,7 @@ class PoolCreateTests(TestWithServers):
             Create a pool using most of the capacity of one server on only one
             server.  Verify that attempting to create  a pool of the same size
             across all of the servers fails due to no space.  Now verify that
-            creating a pool of the same size on across all but the first pool
+            creating a pool of the same size on across all but the first server
             succeeds.  Reapeat the last two steps 100 times with the addition
             of deleting the successfully created pool to verify that there is
             not any subtle/low capacity space being lost with each failed
