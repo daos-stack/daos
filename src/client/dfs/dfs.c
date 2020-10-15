@@ -3806,7 +3806,8 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 	if (obj == NULL)
 		return EINVAL;
 
-	rc = check_access(dfs, geteuid(), getegid(), obj->mode, R_OK);
+	/* Patch in user read permissions here */
+	rc = check_access(dfs, geteuid(), getegid(), obj->mode | S_IRUSR, R_OK);
 	if (rc)
 		return rc;
 
