@@ -23,7 +23,7 @@ hosts: !mux
       - boro-D
       - boro-E
     test_clients:
-      - boro-F
+      - boro-A
 tests: !mux
   ctl:
     name: ctl_basic
