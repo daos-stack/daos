@@ -779,7 +779,7 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 			return -DER_INVAL;
 		}
 		if (!json_object_object_get_ex(storage_info, "smd_info",
-			&smd_info)) {
+					       &smd_info)) {
 			D_ERROR("unable to extract hosts from JSON\n");
 			return -DER_INVAL;
 		}
@@ -803,4 +803,3 @@ out_json:
 out:
 	return rc;
 }
-

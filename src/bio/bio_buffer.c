@@ -640,7 +640,7 @@ rw_completion(void *cb_arg, int err)
 	/* Fault injection - Induce IO Error.
 	 */
 	if (DAOS_FAIL_CHECK(DAOS_NVME_BIO_WRITE_ERR) ||
-		DAOS_FAIL_CHECK(DAOS_NVME_BIO_READ_ERR)) {
+	    DAOS_FAIL_CHECK(DAOS_NVME_BIO_READ_ERR)) {
 		D_ALLOC_PTR(mem);
 		mem->mem_err_type = (DAOS_FAIL_CHECK(DAOS_NVME_BIO_WRITE_ERR) ?
 				     MET_WRITE : MET_READ);
