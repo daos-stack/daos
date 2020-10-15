@@ -327,7 +327,8 @@ nvme_test_simulate_IO_error(void **state)
 	 */
 	write_errors = strdup("bio_write_errs");
 	rc = dmg_storage_query_device_health(dmg_config_file,
-					     devices[rank_pos].host, write_errors,
+					     devices[rank_pos].host,
+					     write_errors,
 		devices[rank_pos].device_id);
 	assert_int_equal(rc, 0);
 	print_message("Initial write_errors = %s\n", write_errors);
@@ -337,7 +338,8 @@ nvme_test_simulate_IO_error(void **state)
 	 */
 	read_errors = strdup("bio_read_errs");
 	rc = dmg_storage_query_device_health(dmg_config_file,
-					     devices[rank_pos].host, read_errors,
+					     devices[rank_pos].host,
+					     read_errors,
 		devices[rank_pos].device_id);
 	assert_int_equal(rc, 0);
 	print_message("Initial read_errors = %s\n", read_errors);
@@ -394,7 +396,8 @@ nvme_test_simulate_IO_error(void **state)
 	 */
 	check_errors = strdup("bio_write_errs");
 	rc = dmg_storage_query_device_health(dmg_config_file,
-					     devices[rank_pos].host, check_errors,
+					     devices[rank_pos].host,
+					     check_errors,
 		devices[rank_pos].device_id);
 	assert_int_equal(rc, 0);
 	print_message("Final write_error = %s\n", check_errors);
@@ -406,7 +409,8 @@ nvme_test_simulate_IO_error(void **state)
 	 */
 	strcpy(check_errors, "bio_read_errs");
 	rc = dmg_storage_query_device_health(dmg_config_file,
-					     devices[rank_pos].host, check_errors,
+					     devices[rank_pos].host,
+					     check_errors,
 		devices[rank_pos].device_id);
 	assert_int_equal(rc, 0);
 	print_message("Final read_errors = %s\n", check_errors);
