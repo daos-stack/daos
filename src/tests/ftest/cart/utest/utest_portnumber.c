@@ -240,15 +240,14 @@ init_tests(void **state)
 	int flag = IPC_CREAT | 0666;
 	int pshare = 1;
 	int init_value = 1;
-	int rc;
+	int rc = 0;
 
 	/* create shared memory regions for semaphores */
 	shmid_c1 = shmget(IPC_PRIVATE, size, flag);
-	assert_true(shmid_c1  != -1);
 	shmid_c2 = shmget(IPC_PRIVATE, size, flag);
-	assert_true(shmid_c2  != -1);
 	if ((shmid_c1 == -1) || (shmid_c2 == -1)) {
 		printf(" SHMID not created\n");
+		rc = -1;
 		goto cleanup;
 	}
 
@@ -256,18 +255,21 @@ init_tests(void **state)
 	child1_sem = (sem_t *)shmat(shmid_c1, NULL, 0);
 	child2_sem = (sem_t *)shmat(shmid_c2, NULL, 0);
 
-	assert_true(child1_sem  != (sem_t *)-1);
-	assert_true(child2_sem  != (sem_t *)-1);
+	if ((child1_sem  == (sem_t *)-1) ||
+	    (child2_sem  == (sem_t *)-1)) {
+		printf(" SHMID: cannot attach memory\n");
+		rc = -1;
+		goto cleanup;
+	}
 
 	/* Initialize semaphores */
 	rc = sem_init(child1_sem, pshare, init_value);
-	assert_true(rc == 0);
+	rc |= sem_init(child2_sem, pshare, init_value);
+	if (rc != 0) {
+		printf("SEM: cannot create semaphore\n");
+	}
 
-	rc = sem_init(child2_sem, pshare, init_value);
-	assert_true(rc == 0);
-
-	return 0;
-
+	return rc;
 cleanup:
 	printf(" Error creating semaphores\n");
 	return -1;
@@ -288,16 +290,15 @@ fini_tests(void **state)
 
 	/* eliminate the shared memory regions */
 	rc = shmctl(shmid_c1, IPC_STAT, &smds);
-	assert_true(rc == 0);
-	rc = shmctl(shmid_c1, IPC_RMID, &smds);
-	assert_true(rc == 0);
+	rc |= shmctl(shmid_c1, IPC_RMID, &smds);
 
-	rc = shmctl(shmid_c2, IPC_STAT, &smds);
-	assert_true(rc == 0);
-	rc = shmctl(shmid_c2, IPC_RMID, &smds);
-	assert_true(rc == 0);
+	rc |= shmctl(shmid_c2, IPC_STAT, &smds);
+	rc |= shmctl(shmid_c2, IPC_RMID, &smds);
 
-	return 0;
+	if (rc != 0)
+		printf(" Error closing share memory\n");
+
+	return rc;
 }
 
 /*******************/
