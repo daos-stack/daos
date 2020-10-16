@@ -79,21 +79,14 @@ pool_file_setup(void **state)
 static int
 pool_file_destroy(void **state)
 {
-	int	rc = 0;
-
 	struct vp_test_args	*arg = *state;
 
 	if (arg->fname[0]) {
-		rc = remove(arg->fname[0]);
-		if (rc != 0) {
-			D_ERROR("failed to remove %s: %d\n",
-				arg->fname[0], errno);
-			rc = daos_errno2der(errno);
-		}
+		remove(arg->fname[0]);
 		D_FREE(arg->fname[0]);
 	}
 	D_FREE(arg->fname);
-	return rc;
+	return 0;
 }
 
 static void
@@ -274,18 +267,11 @@ static int
 pool_unit_teardown(void **state)
 {
 	struct vp_test_args	*arg = *state;
-	int			i, rc = 0, ret;
+	int			i;
 
 	for (i = 0; i < arg->nfiles; i++) {
-		if (vts_file_exists(arg->fname[i])) {
-			ret = remove(arg->fname[i]);
-			if (ret != 0) {
-				D_ERROR("failed to remove %s: %d\n",
-					arg->fname[i], errno);
-				/* keep this errno info in rc to return */
-				rc = daos_errno2der(errno);
-			}
-		}
+		if (vts_file_exists(arg->fname[i]))
+			remove(arg->fname[i]);
 		if (arg->fname[i])
 			D_FREE(arg->fname[i]);
 		if (arg->ops_seq[i])
@@ -305,7 +291,7 @@ pool_unit_teardown(void **state)
 	if (arg->uuid)
 		D_FREE(arg->uuid);
 
-	return rc;
+	return 0;
 }
 
 /**
