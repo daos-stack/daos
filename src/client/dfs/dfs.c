@@ -710,6 +710,7 @@ fopen:
 		}
 
 		dfs_obj_t *sym;
+
 		rc = dfs_lookup(dfs, entry.value, flags, &sym, NULL, NULL);
 		if (rc) {
 			D_FREE(entry.value);
@@ -837,6 +838,7 @@ open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
 		}
 
 		dfs_obj_t *sym;
+
 		rc = dfs_lookup(dfs, entry.value, flags, &sym, NULL, NULL);
 		if (rc) {
 			D_FREE(entry.value);
@@ -1996,7 +1998,7 @@ dfs_lookup_loop:
 				goto dfs_lookup_loop;
 			}
 
-			/* 
+			/*
 			 * This is the last entry.
 			 * conditionally dereference the symbolic link.
 			 */
@@ -2093,6 +2095,7 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 	if (S_ISLNK(obj->mode)) {
 		/* dereference symbolic links */
 		dfs_obj_t *sym;
+
 		rc = dfs_lookup(dfs, obj->value, obj->flags, &sym, NULL, NULL);
 		if (rc) {
 			return rc;
