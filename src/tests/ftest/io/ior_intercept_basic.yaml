@@ -35,8 +35,8 @@ ior:
         ssf:
           flags: "-v -D 300 -w -r"
           ior_api:
-            posix:
-              api: POSIX
+            - DFS
+            - POSIX
           transfersize_blocksize:
             1M:
               transfer_size: '1M'
