@@ -187,6 +187,9 @@ func TestServer_getFaultDomainFromCallback(t *testing.T) {
 	emptyScriptPath := filepath.Join(tmpDir, "empty.sh")
 	createFaultCBScriptFile(t, emptyScriptPath, 0755, "")
 
+	whitespaceScriptPath := filepath.Join(tmpDir, "whitespace.sh")
+	createFaultCBScriptFile(t, whitespaceScriptPath, 0755, "     ")
+
 	invalidScriptPath := filepath.Join(tmpDir, "invalid.sh")
 	createFaultCBScriptFile(t, invalidScriptPath, 0755, "some junk")
 
@@ -214,8 +217,12 @@ func TestServer_getFaultDomainFromCallback(t *testing.T) {
 			input:  errorScriptPath,
 			expErr: FaultConfigFaultCallbackFailed(errors.New("exit status 2")),
 		},
-		"script returned no fault domain": {
+		"script returned no output": {
 			input:  emptyScriptPath,
+			expErr: FaultConfigFaultCallbackEmpty,
+		},
+		"script returned only whitespace": {
+			input:  whitespaceScriptPath,
 			expErr: FaultConfigFaultCallbackEmpty,
 		},
 		"script returned invalid fault domain": {
