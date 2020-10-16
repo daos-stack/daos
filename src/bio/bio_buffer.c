@@ -46,9 +46,8 @@ dma_alloc_chunk(unsigned int cnt)
 
 	D_ASSERT(bytes > 0);
 	D_ALLOC_PTR(chunk);
-	if (chunk == NULL) {
+	if (chunk == NULL)
 		return NULL;
-	}
 
 	chunk->bdc_ptr = spdk_dma_malloc(bytes, BIO_DMA_PAGE_SZ, NULL);
 	if (chunk->bdc_ptr == NULL) {

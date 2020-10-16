@@ -114,10 +114,9 @@ d_errno_register_range(int start, int end, const char * const *error_strings,
 	struct	d_error_reg	*entry;
 
 	D_ALLOC_PTR(entry);
-	if (entry == NULL) {
+	if (entry == NULL)
 		/* Not fatal.  It just means we get DER_UNKNOWN from d_errstr */
 		return -DER_NOMEM;
-	}
 
 	entry->er_base = start;
 	entry->er_limit = end;
