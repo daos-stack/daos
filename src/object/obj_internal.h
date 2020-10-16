@@ -310,6 +310,8 @@ struct shard_rw_args {
 	struct dcs_csum_info	*dkey_csum;
 	struct dcs_iod_csums	*iod_csums;
 	struct obj_reasb_req	*reasb_req;
+	d_sg_list_t		*agg_sgls;
+	uint32_t		 agg_sgls_nr;
 };
 
 struct shard_punch_args {

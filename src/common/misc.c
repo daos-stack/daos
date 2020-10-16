@@ -363,6 +363,78 @@ daos_sgl_processor(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
 	return rc;
 }
 
+int
+daos_sgl_aggregate(d_sg_list_t *sgls, d_sg_list_t **_new_sgls, int nr)
+{
+	d_sg_list_t	*new_sgls;
+	void		*buf, *ptr;
+	daos_size_t	buf_size;
+	int		i, j, rc;
+
+	D_ALLOC_ARRAY(new_sgls, nr);
+	if (new_sgls == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < nr; i++) {
+		if (sgls[i].sg_nr <= DAOS_SGL_FRAG_THRESHOLD) {
+			rc = daos_sgls_copy_ptr(&new_sgls[i], 1, &sgls[i], 1);
+			if (rc)
+				D_GOTO(err_sgls, rc);
+			continue;
+		}
+
+		buf_size = daos_sgl_buf_size(&sgls[i]);
+
+		D_ALLOC(buf, buf_size);
+		if (buf == NULL)
+			D_GOTO(err_sgls, rc = -DER_NOMEM);
+
+		rc = d_sgl_init(&new_sgls[i], 1);
+		if (rc) {
+			D_FREE(buf);
+			D_GOTO(err_sgls, rc = -DER_NOMEM);
+		}
+		d_iov_set(new_sgls[i].sg_iovs, buf, buf_size);
+
+		ptr = buf;
+		for (j = 0; j < sgls[i].sg_nr; j++) {
+			memcpy(ptr, sgls[i].sg_iovs[j].iov_buf,
+			       sgls[i].sg_iovs[j].iov_buf_len);
+			ptr += sgls[i].sg_iovs[j].iov_buf_len;
+		}
+	}
+
+	*_new_sgls = new_sgls;
+	return 0;
+
+err_sgls:
+	for (j = 0; j < i; j++) {
+		if (sgls[j].sg_nr <= DAOS_SGL_FRAG_THRESHOLD)
+			d_sgl_fini(&new_sgls[j], false);
+		else
+			d_sgl_fini(&new_sgls[j], true);
+	}
+	D_FREE(new_sgls);
+	return rc;
+}
+
+int
+daos_sgl_aggregate_free(d_sg_list_t *sgls, int nr)
+{
+	int i;
+
+	for (i = 0; i < nr; i++) {
+		if (sgls[i].sg_nr <= DAOS_SGL_FRAG_THRESHOLD)
+			d_sgl_fini(&sgls[i], false);
+		else
+			d_sgl_fini(&sgls[i], true);
+	}
+
+	D_FREE(sgls);
+	return 0;
+}
+
+
 /**
  * Trim white space inplace for a string, it returns NULL if the string
  * only has white spaces.

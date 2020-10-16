@@ -258,6 +258,10 @@ daos_size_t daos_sgl_buf_size(d_sg_list_t *sgl);
 daos_size_t daos_sgls_buf_size(d_sg_list_t *sgls, int nr);
 daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
 				  daos_size_t *buf_size);
+#define DAOS_SGL_FRAG_THRESHOLD 8
+int daos_sgl_aggregate(d_sg_list_t *sgls, d_sg_list_t **_new_sgls, int nr);
+int daos_sgl_aggregate_free(d_sg_list_t *sgls, int nr);
+
 int
 daos_sgl_buf_extend(d_sg_list_t *sgl, int idx, size_t new_size);
 

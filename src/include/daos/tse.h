@@ -35,11 +35,11 @@
  * tse_task is used to track single asynchronous operation.
  * 1K bytes all together.
  */
-#define TSE_TASK_SIZE		1024
+#define TSE_TASK_SIZE		1048
 /* 8 bytes used for public members */
-#define TSE_PRIV_SIZE		1016
+#define TSE_PRIV_SIZE		1040
 /* tse_task arguments max length */
-#define TSE_TASK_ARG_LEN		880
+#define TSE_TASK_ARG_LEN	904
 
 typedef struct tse_task {
 	int			dt_result;

@@ -874,6 +874,8 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	uint32_t		 flags = 0;
 	int			 rc;
 
+	if (args->agg_sgls_nr)
+		sgls = args->agg_sgls;
 	if (DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_UPDATE_TIMEOUT_SINGLE)) {
 		if (auxi->shard == daos_fail_value_get()) {
 			D_INFO("Set Shard %d update to return -DER_TIMEDOUT\n",

@@ -112,6 +112,8 @@ struct obj_auxi_args {
 	uint32_t			 iod_nr;
 	uint32_t			 initial_shard;
 	d_list_t			 shard_task_head;
+	d_sg_list_t			*agg_sgls;
+	uint32_t			 agg_sgls_nr;
 	struct obj_reasb_req		 reasb_req;
 	struct obj_auxi_tgt_list	*failed_tgt_list;
 	/* one shard_args embedded to save one memory allocation if the obj
@@ -3390,6 +3392,12 @@ obj_comp_cb_internal(struct obj_auxi_args *obj_auxi)
 
 	iter_arg.retry = true;
 	D_INIT_LIST_HEAD(&iter_arg.merge_list);
+
+	if (obj_auxi->agg_sgls_nr)
+		daos_sgl_aggregate_free(obj_auxi->agg_sgls,
+					obj_auxi->agg_sgls_nr);
+	obj_auxi->agg_sgls = NULL;
+
 	/* Process each shards */
 	rc = obj_auxi_shards_iterate(obj_auxi, obj_shard_comp_cb, &iter_arg);
 	if (rc != 0) {
@@ -3714,6 +3722,8 @@ obj_task_init_common(tse_task_t *task, int opc, uint32_t map_ver,
 	obj_auxi->obj_task = task;
 	obj_auxi->th = th;
 	obj_auxi->obj = obj;
+	obj_auxi->agg_sgls = NULL;
+	obj_auxi->agg_sgls_nr = 0;
 	shard_task_list_init(obj_auxi);
 	*auxi = obj_auxi;
 }
@@ -3762,6 +3772,9 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 	shard_arg->api_args		= obj_args;
 	shard_arg->dkey_hash		= dkey_hash;
 	shard_arg->bulks		= obj_auxi->bulks;
+	shard_arg->agg_sgls_nr		= obj_auxi->agg_sgls_nr;
+	shard_arg->agg_sgls		= obj_auxi->agg_sgls;
+
 	if (obj_auxi->req_reasbed) {
 		reasb_req = &obj_auxi->reasb_req;
 		if (reasb_req->tgt_oiods != NULL) {
@@ -4128,6 +4141,22 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 
 	obj_task_init_common(task, DAOS_OBJ_RPC_UPDATE, map_ver, args->th,
 			     &obj_auxi, obj);
+
+	if (!daos_oclass_is_ec(obj->cob_md.omd_id, NULL) && args->sgls) {
+		/** Check SGL fragmentation and memcpy if needed */
+		rc = daos_sgl_aggregate(args->sgls, &obj_auxi->agg_sgls,
+					args->nr);
+		if (rc) {
+			D_ERROR(DF_OID" obj_sgl_data_mv failed %d.\n",
+				DP_OID(obj->cob_md.omd_id), rc);
+			goto out_task;
+		}
+		obj_auxi->agg_sgls_nr = args->nr;
+	} else {
+		obj_auxi->agg_sgls = args->sgls;
+		obj_auxi->agg_sgls_nr = 0;
+	}
+
 	rc = obj_rw_req_reassemb(obj, args, NULL, obj_auxi);
 	if (rc) {
 		D_ERROR(DF_OID" obj_req_reassemb failed %d.\n",
@@ -4174,7 +4203,7 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	D_DEBUG(DB_IO, "update "DF_OID" dkey_hash "DF_U64"\n",
 		DP_OID(obj->cob_md.omd_id), dkey_hash);
 
-	rc = obj_rw_bulk_prep(obj, args->iods, args->sgls, args->nr, true,
+	rc = obj_rw_bulk_prep(obj, args->iods, obj_auxi->agg_sgls, args->nr, true,
 			      obj_auxi->req_tgts.ort_srv_disp, task, obj_auxi);
 	if (rc != 0)
 		goto out_task;
