@@ -184,6 +184,39 @@ failed:
 	return NULL;
 }
 
+/* rsvc_client callback function to ask mgmt. service for updated
+ * list of pool service replica ranks
+ */
+static int
+pool_rsvc_update_ranks_cb(struct rsvc_client *client)
+{
+	struct dc_mgmt_sys     *sys = (struct dc_mgmt_sys *)client->sc_priv;
+	d_rank_list_t	       *new_ranklist = NULL;
+	int			i;
+	int			rc;
+
+	D_DEBUG(DF_DSMC, DF_UUID": request updated replica rank list from MS\n",
+		DP_UUID(client->sc_id));
+
+	rc = dc_mgmt_get_pool_svc_ranks(sys, client->sc_id, &new_ranklist);
+	if (rc != 0) {
+		D_ERROR(DF_UUID ": dc_mgmt_get_pool_svc_ranks() failed, "
+			DF_RC "\n", DP_UUID(client->sc_id), DP_RC(rc));
+		return rc;
+	}
+
+	rc = d_rank_list_copy(client->sc_ranks, new_ranklist);
+	if (rc == 0) {
+		for (i = 0; i < client->sc_ranks->rl_nr; i++) {
+			D_DEBUG(DF_DSMC, DF_UUID ": sc_ranks[%d]=%u\n",
+			       DP_UUID(client->sc_id), i,
+			       client->sc_ranks->rl_ranks[i]);
+		}
+	}
+	d_rank_list_free(new_ranklist);
+	return rc;
+}
+
 /* Assume dp_map_lock is locked before calling this function */
 int
 dc_pool_map_update(struct dc_pool *pool, struct pool_map *map,
@@ -452,7 +485,9 @@ dc_pool_connect(tse_task_t *task)
 		/** sy_info.crt_ctx_share_addr */
 		/** sy_info.crt_timeout */
 
-		rc = rsvc_client_init(&pool->dp_client, args->svc);
+		rc = rsvc_client_init(&pool->dp_client, args->svc, args->uuid,
+				      pool->dp_sys /* priv */,
+				      pool_rsvc_update_ranks_cb);
 		if (rc != 0)
 			D_GOTO(out_pool, rc);
 
@@ -1050,7 +1085,10 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 				DP_UUID(args->uuid), rc);
 			D_GOTO(out_state, rc);
 		}
-		rc = rsvc_client_init(&state->client, args->svc);
+
+		rc = rsvc_client_init(&state->client, args->svc, args->uuid,
+				      &state->sys /* priv */,
+				      pool_rsvc_update_ranks_cb);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": failed to rsvc_client_init, rc %d.\n",
 				DP_UUID(args->uuid), rc);
@@ -1553,7 +1591,10 @@ dc_pool_evict(tse_task_t *task)
 		rc = dc_mgmt_sys_attach(args->grp, &state->sys);
 		if (rc != 0)
 			D_GOTO(out_state, rc);
-		rc = rsvc_client_init(&state->client, args->svc);
+
+		rc = rsvc_client_init(&state->client, args->svc, args->uuid,
+				      &state->sys /*priv */,
+				      pool_rsvc_update_ranks_cb);
 		if (rc != 0)
 			D_GOTO(out_group, rc);
 
@@ -2208,9 +2249,9 @@ rsvc_client_state_cleanup(int stage, struct rsvc_client_state *state)
 }
 
 static int
-rsvc_client_state_create(tse_task_t *task, d_rank_list_t *targets,
-			 const char *group, crt_rpc_t **rpcp, int opc,
-			 tse_task_cb_t callback)
+rsvc_client_state_create(tse_task_t *task, const uuid_t svc_uuid,
+			 d_rank_list_t *targets, const char *group,
+			 crt_rpc_t **rpcp, int opc, tse_task_cb_t callback)
 {
 	struct rsvc_client_state *state = dc_task_get_priv(task);
 	crt_endpoint_t		  ep;
@@ -2226,7 +2267,9 @@ rsvc_client_state_create(tse_task_t *task, d_rank_list_t *targets,
 			rsvc_client_state_cleanup(CCS_CU_MEM, state);
 			return rc;
 		}
-		rc = rsvc_client_init(&state->scs_client, targets);
+		rc = rsvc_client_init(&state->scs_client, targets, svc_uuid,
+				      &state->scs_sys /* priv */,
+				      pool_rsvc_update_ranks_cb);
 		if (rc != 0) {
 			rsvc_client_state_cleanup(CCS_CU_GRP, state);
 			return rc;
@@ -2321,8 +2364,8 @@ dc_pool_membership_update(tse_task_t *task, int opc)
 		D_ERROR("Invalid targets specified\n");
 		D_GOTO(err, rc = -DER_INVAL);
 	}
-	rc = rsvc_client_state_create(task, args->svc, args->group, &rpc, opc,
-				      pool_membership_update_cb);
+	rc = rsvc_client_state_create(task, args->uuid, args->svc, args->group,
+				      &rpc, opc, pool_membership_update_cb);
 	if (rc != 0)
 		D_GOTO(err, rc);
 	state = dc_task_get_priv(task);

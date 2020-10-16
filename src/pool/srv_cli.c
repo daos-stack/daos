@@ -80,7 +80,8 @@ dsc_pool_open(uuid_t pool_uuid, uuid_t poh_uuid, unsigned int flags,
 		D_GOTO(out, rc);
 
 	D_ASSERT(svc_list != NULL);
-	rc = rsvc_client_init(&pool->dp_client, svc_list);
+	rc = rsvc_client_init(&pool->dp_client, svc_list, pool_uuid,
+			      NULL, NULL);
 	if (rc != 0)
 		D_GOTO(out, rc);
 

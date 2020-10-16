@@ -51,6 +51,7 @@ void ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc);
 void ds_mgmt_params_set_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_profile_hdlr(crt_rpc_t *rpc);
+void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_mark_hdlr(crt_rpc_t *rpc);
 
 /** srv_system.c */

@@ -48,11 +48,16 @@ rsvc_client_reset_leader(struct rsvc_client *client)
 /**
  * Initialize \a client.
  *
- * \param[out]	client	client state
- * \param[in]	ranks	ranks of (potential) service replicas
+ * \param[out]	client			client state
+ * \param[in]	ranks			ranks of (potential) service replicas
+ * \param[in]	svc_uuid		service ID
+ * \param[in]	priv		 	caller-private info to store in client
+ * \param[in]	refresh_ranks_cb	function to re-populate rank list
  */
 int
-rsvc_client_init(struct rsvc_client *client, const d_rank_list_t *ranks)
+rsvc_client_init(struct rsvc_client *client, const d_rank_list_t *ranks,
+		 const uuid_t svc_uuid, void *priv,
+		 int (*update_ranks_cb)(struct rsvc_client *))
 {
 	int rc;
 
@@ -63,6 +68,9 @@ rsvc_client_init(struct rsvc_client *client, const d_rank_list_t *ranks)
 		return rc;
 	rsvc_client_reset_leader(client);
 	client->sc_next = 0;
+	uuid_copy(client->sc_id, svc_uuid);
+	client->sc_update_ranks_cb = update_ranks_cb;
+	client->sc_priv = priv;
 	return 0;
 }
 
@@ -86,9 +94,11 @@ rsvc_client_fini(struct rsvc_client *client)
 int
 rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep)
 {
-	int chosen = -1;
+	int chosen;
 
 	D_DEBUG(DB_MD, DF_CLI"\n", DP_CLI(client));
+choose:
+	chosen = -1;
 	if (client->sc_leader_known && client->sc_leader_aliveness > 0) {
 		chosen = client->sc_leader_index;
 	} else if (client->sc_ranks->rl_nr > 0) {
@@ -99,9 +109,18 @@ rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep)
 	}
 
 	if (chosen == -1) {
-		D_WARN("replica list empty\n");
-		/* TODO: Request list of replicas from management service. */
-		return -DER_NOTREPLICA;
+		int rc;
+
+		D_DEBUG(DB_MD, DF_UUID ": replica list empty, ask MS\n",
+			DP_UUID(client->sc_id));
+		/* Request list of replicas from management service. */
+		rc = client->sc_update_ranks_cb(client);
+		if (rc) {
+			D_ERROR("failed to refresh replica ranks from MS\n");
+			return rc;
+		}
+		rsvc_client_reset_leader(client);
+		goto choose;
 	} else {
 		D_ASSERTF(chosen >= 0 && chosen < client->sc_ranks->rl_nr,
 			  "%d\n", chosen);
