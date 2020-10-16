@@ -145,6 +145,7 @@ class ZeroConfigTest(TestWithServers):
         # Add FI_LOG_LEVEL to get more info on device issues
         racer_env = daos_racer.get_environment(self.server_managers[0], logf)
         racer_env["FI_LOG_LEVEL"] = "info"
+        racer_env["D_LOG_MASK"] = "INFO,object=ERR,placement=ERR"
         daos_racer.set_environment(racer_env)
 
         # Run client
