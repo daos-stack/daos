@@ -72,7 +72,7 @@ int dc_job_init(void)
 	return 0;
 
 out_env:
-	free(dc_jobid_env);
+	D_FREE(dc_jobid_env);
 	dc_jobid_env = NULL;
 out_err:
 	return err;
