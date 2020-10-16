@@ -25,146 +25,26 @@ package control
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/storage"
 )
-
-type storageScanVariant int
-
-const (
-	standard storageScanVariant = iota
-	withNamespace
-	noNVME
-	noSCM
-	noStorage
-	scmFailed
-	nvmeFailed
-	bothFailed
-)
-
-func standardServerScanResponse(t *testing.T) *ctlpb.StorageScanResp {
-	pbSsr := &ctlpb.StorageScanResp{
-		Nvme: &ctlpb.ScanNvmeResp{},
-		Scm:  &ctlpb.ScanScmResp{},
-	}
-	nvmeControllers := storage.NvmeControllers{
-		storage.MockNvmeController(),
-	}
-	scmModules := storage.ScmModules{
-		storage.MockScmModule(),
-	}
-	if err := convert.Types(nvmeControllers, &pbSsr.Nvme.Ctrlrs); err != nil {
-		t.Fatal(err)
-	}
-	if err := convert.Types(scmModules, &pbSsr.Scm.Modules); err != nil {
-		t.Fatal(err)
-	}
-
-	return pbSsr
-}
-
-func mockServerScanResponse(t *testing.T, variant storageScanVariant) *ctlpb.StorageScanResp {
-	ssr := standardServerScanResponse(t)
-	switch variant {
-	case withNamespace:
-		scmNamespaces := storage.ScmNamespaces{
-			storage.MockScmNamespace(),
-		}
-		if err := convert.Types(scmNamespaces, &ssr.Scm.Namespaces); err != nil {
-			t.Fatal(err)
-		}
-	case noNVME:
-		ssr.Nvme.Ctrlrs = nil
-	case noSCM:
-		ssr.Scm.Modules = nil
-	case noStorage:
-		ssr.Nvme.Ctrlrs = nil
-		ssr.Scm.Modules = nil
-	case scmFailed:
-		ssr.Scm.Modules = nil
-		ssr.Scm.State = &ctlpb.ResponseState{
-			Status: ctlpb.ResponseStatus_CTL_ERR_SCM,
-			Error:  "scm scan failed",
-		}
-	case nvmeFailed:
-		ssr.Nvme.Ctrlrs = nil
-		ssr.Nvme.State = &ctlpb.ResponseState{
-			Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
-			Error:  "nvme scan failed",
-		}
-	case bothFailed:
-		ssr.Scm.Modules = nil
-		ssr.Scm.State = &ctlpb.ResponseState{
-			Status: ctlpb.ResponseStatus_CTL_ERR_SCM,
-			Error:  "scm scan failed",
-		}
-		ssr.Nvme.Ctrlrs = nil
-		ssr.Nvme.State = &ctlpb.ResponseState{
-			Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
-			Error:  "nvme scan failed",
-		}
-	}
-	return ssr
-}
-
-func mockHostStorageSet(t *testing.T, hosts string, pbResp *ctlpb.StorageScanResp) *HostStorageSet {
-	hss := &HostStorageSet{
-		HostStorage: &HostStorage{},
-		HostSet:     mockHostSet(t, hosts),
-	}
-
-	if err := convert.Types(pbResp.GetNvme().GetCtrlrs(), &hss.HostStorage.NvmeDevices); err != nil {
-		t.Fatal(err)
-	}
-	if err := convert.Types(pbResp.GetScm().GetModules(), &hss.HostStorage.ScmModules); err != nil {
-		t.Fatal(err)
-	}
-	if err := convert.Types(pbResp.GetScm().GetNamespaces(), &hss.HostStorage.ScmNamespaces); err != nil {
-		t.Fatal(err)
-	}
-
-	return hss
-}
-
-type mockStorageScan struct {
-	Hosts    string
-	HostScan *ctlpb.StorageScanResp
-}
-
-func mockHostStorageMap(t *testing.T, scans ...*mockStorageScan) HostStorageMap {
-	hsm := make(HostStorageMap)
-
-	for _, scan := range scans {
-		hss := mockHostStorageSet(t, scan.Hosts, scan.HostScan)
-		hk, err := hss.HostStorage.HashKey()
-		if err != nil {
-			t.Fatal(err)
-		}
-		hsm[hk] = hss
-	}
-
-	return hsm
-}
 
 func TestControl_StorageScan(t *testing.T) {
 	var (
-		standardScan       = mockServerScanResponse(t, standard)
-		withNamespacesScan = mockServerScanResponse(t, withNamespace)
-		noNVMEScan         = mockServerScanResponse(t, noNVME)
-		noSCMScan          = mockServerScanResponse(t, noSCM)
-		noStorageScan      = mockServerScanResponse(t, noStorage)
-		scmScanFailed      = mockServerScanResponse(t, scmFailed)
-		nvmeScanFailed     = mockServerScanResponse(t, nvmeFailed)
-		bothScansFailed    = mockServerScanResponse(t, bothFailed)
+		standardScan       = MockServerScanResp(t, "standard")
+		withNamespacesScan = MockServerScanResp(t, "withNamespace")
+		noNVMEScan         = MockServerScanResp(t, "noNVME")
+		noSCMScan          = MockServerScanResp(t, "noSCM")
+		noStorageScan      = MockServerScanResp(t, "noStorage")
+		scmScanFailed      = MockServerScanResp(t, "scmFailed")
+		nvmeScanFailed     = MockServerScanResp(t, "nvmeFailed")
+		bothScansFailed    = MockServerScanResp(t, "bothFailed")
 	)
 	for name, tc := range map[string]struct {
 		mic         *MockInvokerConfig
@@ -233,7 +113,7 @@ func TestControl_StorageScan(t *testing.T) {
 				},
 			},
 			expResponse: &StorageScanResp{
-				HostErrorsResp: mockHostErrorsResp(t, &mockHostError{"host1", "failed"}),
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "failed"}),
 				HostStorage:    nil,
 			},
 		},
@@ -249,8 +129,8 @@ func TestControl_StorageScan(t *testing.T) {
 				},
 			},
 			expResponse: &StorageScanResp{
-				HostErrorsResp: mockHostErrorsResp(t, &mockHostError{"host1", "scm scan failed"}),
-				HostStorage:    mockHostStorageMap(t, &mockStorageScan{"host1", scmScanFailed}),
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "scm scan failed"}),
+				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1", scmScanFailed}),
 			},
 		},
 		"nvme scan error": {
@@ -265,8 +145,8 @@ func TestControl_StorageScan(t *testing.T) {
 				},
 			},
 			expResponse: &StorageScanResp{
-				HostErrorsResp: mockHostErrorsResp(t, &mockHostError{"host1", "nvme scan failed"}),
-				HostStorage:    mockHostStorageMap(t, &mockStorageScan{"host1", noNVMEScan}),
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "nvme scan failed"}),
+				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1", noNVMEScan}),
 			},
 		},
 		"scm and nvme scan error": {
@@ -281,11 +161,11 @@ func TestControl_StorageScan(t *testing.T) {
 				},
 			},
 			expResponse: &StorageScanResp{
-				HostErrorsResp: mockHostErrorsResp(t,
-					&mockHostError{"host1", "nvme scan failed"},
-					&mockHostError{"host1", "scm scan failed"},
+				HostErrorsResp: MockHostErrorsResp(t,
+					&MockHostError{"host1", "nvme scan failed"},
+					&MockHostError{"host1", "scm scan failed"},
 				),
-				HostStorage: mockHostStorageMap(t, &mockStorageScan{"host1", noStorageScan}),
+				HostStorage: MockHostStorageMap(t, &MockStorageScan{"host1", noStorageScan}),
 			},
 		},
 		"no storage": {
@@ -300,8 +180,8 @@ func TestControl_StorageScan(t *testing.T) {
 				},
 			},
 			expResponse: &StorageScanResp{
-				HostErrorsResp: mockHostErrorsResp(t),
-				HostStorage:    mockHostStorageMap(t, &mockStorageScan{"host1", noStorageScan}),
+				HostErrorsResp: MockHostErrorsResp(t),
+				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1", noStorageScan}),
 			},
 		},
 		"single host": {
@@ -316,8 +196,8 @@ func TestControl_StorageScan(t *testing.T) {
 				},
 			},
 			expResponse: &StorageScanResp{
-				HostErrorsResp: mockHostErrorsResp(t),
-				HostStorage:    mockHostStorageMap(t, &mockStorageScan{"host1", standardScan}),
+				HostErrorsResp: MockHostErrorsResp(t),
+				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1", standardScan}),
 			},
 		},
 		"single host with namespace": {
@@ -332,8 +212,8 @@ func TestControl_StorageScan(t *testing.T) {
 				},
 			},
 			expResponse: &StorageScanResp{
-				HostErrorsResp: mockHostErrorsResp(t),
-				HostStorage:    mockHostStorageMap(t, &mockStorageScan{"host1", withNamespacesScan}),
+				HostErrorsResp: MockHostErrorsResp(t),
+				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1", withNamespacesScan}),
 			},
 		},
 		"two hosts same scan": {
@@ -348,14 +228,14 @@ func TestControl_StorageScan(t *testing.T) {
 							Addr: "host2",
 							// Use a newly-generated mock here to verify that
 							// non-hashable fields are ignored.
-							Message: mockServerScanResponse(t, standard),
+							Message: MockServerScanResp(t, "standard"),
 						},
 					},
 				},
 			},
 			expResponse: &StorageScanResp{
-				HostErrorsResp: mockHostErrorsResp(t),
-				HostStorage:    mockHostStorageMap(t, &mockStorageScan{"host1,host2", standardScan}),
+				HostErrorsResp: MockHostErrorsResp(t),
+				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1,host2", standardScan}),
 			},
 		},
 		"two hosts different scans": {
@@ -374,10 +254,10 @@ func TestControl_StorageScan(t *testing.T) {
 				},
 			},
 			expResponse: &StorageScanResp{
-				HostErrorsResp: mockHostErrorsResp(t),
-				HostStorage: mockHostStorageMap(t,
-					&mockStorageScan{"host1", noNVMEScan},
-					&mockStorageScan{"host2", noSCMScan},
+				HostErrorsResp: MockHostErrorsResp(t),
+				HostStorage: MockHostStorageMap(t,
+					&MockStorageScan{"host1", noNVMEScan},
+					&MockStorageScan{"host2", noSCMScan},
 				),
 			},
 		},
@@ -399,77 +279,6 @@ func TestControl_StorageScan(t *testing.T) {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
-	}
-}
-
-func mockFailureMap(idxList ...int) map[int]struct{} {
-	fm := make(map[int]struct{})
-	for _, i := range idxList {
-		fm[i] = struct{}{}
-	}
-	return fm
-}
-
-type mockFormatConf struct {
-	hosts        int
-	scmPerHost   int
-	nvmePerHost  int
-	scmFailures  map[int]struct{}
-	nvmeFailures map[int]struct{}
-}
-
-func mockFormatResp(t *testing.T, mfc mockFormatConf) *StorageFormatResp {
-	hem := make(HostErrorsMap)
-	hsm := make(HostStorageMap)
-
-	for i := 0; i < mfc.hosts; i++ {
-		hs := &HostStorage{}
-		hostName := fmt.Sprintf("host%d", i+1)
-
-		for j := 0; j < mfc.scmPerHost; j++ {
-			if _, failed := mfc.scmFailures[j]; failed {
-				if err := hem.Add(hostName, errors.Errorf("/mnt/%d format failed", j+1)); err != nil {
-					t.Fatal(err)
-				}
-				continue
-			}
-			hs.ScmMountPoints = append(hs.ScmMountPoints, &storage.ScmMountPoint{
-				Info: ctlpb.ResponseStatus_CTL_SUCCESS.String(),
-				Path: fmt.Sprintf("/mnt/%d", j+1),
-			})
-		}
-
-		for j := 0; j < mfc.nvmePerHost; j++ {
-			if _, failed := mfc.nvmeFailures[j]; failed {
-				if err := hem.Add(hostName, errors.Errorf("NVMe device %d format failed", j+1)); err != nil {
-					t.Fatal(err)
-				}
-				continue
-			}
-
-			// If the SCM format/mount failed for this idx, then there shouldn't
-			// be an NVMe format result.
-			if _, failed := mfc.scmFailures[j]; failed {
-				continue
-			}
-			hs.NvmeDevices = append(hs.NvmeDevices, &storage.NvmeController{
-				Info:    ctlpb.ResponseStatus_CTL_SUCCESS.String(),
-				PciAddr: fmt.Sprintf("%d", j+1),
-			})
-		}
-		if err := hsm.Add(hostName, hs); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	if len(hem) == 0 {
-		hem = nil
-	}
-	return &StorageFormatResp{
-		HostErrorsResp: HostErrorsResp{
-			HostErrors: hem,
-		},
-		HostStorage: hsm,
 	}
 }
 
@@ -542,7 +351,7 @@ func TestControl_StorageFormat(t *testing.T) {
 				},
 			},
 			expResponse: &StorageFormatResp{
-				HostErrorsResp: mockHostErrorsResp(t, &mockHostError{"host1", "failed"}),
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "failed"}),
 				HostStorage:    nil,
 			},
 		},
@@ -583,11 +392,11 @@ func TestControl_StorageFormat(t *testing.T) {
 					},
 				},
 			},
-			expResponse: mockFormatResp(t, mockFormatConf{
-				hosts:       1,
-				scmPerHost:  2,
-				scmFailures: mockFailureMap(0),
-				nvmePerHost: 2,
+			expResponse: MockFormatResp(t, MockFormatConf{
+				Hosts:       1,
+				ScmPerHost:  2,
+				ScmFailures: MockFailureMap(0),
+				NvmePerHost: 2,
 			}),
 		},
 		"2 SCM, 2 NVMe; second NVMe fails": {
@@ -630,11 +439,11 @@ func TestControl_StorageFormat(t *testing.T) {
 					},
 				},
 			},
-			expResponse: mockFormatResp(t, mockFormatConf{
-				hosts:        1,
-				scmPerHost:   2,
-				nvmePerHost:  2,
-				nvmeFailures: mockFailureMap(1),
+			expResponse: MockFormatResp(t, MockFormatConf{
+				Hosts:        1,
+				ScmPerHost:   2,
+				NvmePerHost:  2,
+				NvmeFailures: MockFailureMap(1),
 			}),
 		},
 		"2 SCM, 2 NVMe": {
@@ -677,10 +486,10 @@ func TestControl_StorageFormat(t *testing.T) {
 					},
 				},
 			},
-			expResponse: mockFormatResp(t, mockFormatConf{
-				hosts:       1,
-				scmPerHost:  2,
-				nvmePerHost: 2,
+			expResponse: MockFormatResp(t, MockFormatConf{
+				Hosts:       1,
+				ScmPerHost:  2,
+				NvmePerHost: 2,
 			}),
 		},
 		"2 Hosts, 2 SCM, 2 NVMe": {
@@ -756,10 +565,10 @@ func TestControl_StorageFormat(t *testing.T) {
 					},
 				},
 			},
-			expResponse: mockFormatResp(t, mockFormatConf{
-				hosts:       2,
-				scmPerHost:  2,
-				nvmePerHost: 2,
+			expResponse: MockFormatResp(t, MockFormatConf{
+				Hosts:       2,
+				ScmPerHost:  2,
+				NvmePerHost: 2,
 			}),
 		},
 	} {

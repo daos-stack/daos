@@ -25,6 +25,10 @@ package server
 
 import (
 	"os"
+	"os/exec"
+
+	"github.com/pkg/errors"
+	"golang.org/x/sys/unix"
 
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -47,11 +51,17 @@ func getFaultDomain(cfg *Configuration) (*system.FaultDomain, error) {
 		return nil, FaultBadConfig
 	}
 
+	if cfg.FaultPath != "" && cfg.FaultCb != "" {
+		return nil, FaultConfigBothFaultPathAndCb
+	}
+
 	if cfg.FaultPath != "" {
 		return newFaultDomainFromConfig(cfg.FaultPath)
 	}
 
-	// TODO DAOS-4449: Try to get fault domain from callback
+	if cfg.FaultCb != "" {
+		return getFaultDomainFromCallback(cfg.FaultCb)
+	}
 
 	return getDefaultFaultDomain(os.Hostname)
 }
@@ -62,4 +72,25 @@ func newFaultDomainFromConfig(domainStr string) (*system.FaultDomain, error) {
 		return nil, FaultConfigFaultDomainInvalid
 	}
 	return fd, nil
+}
+
+func getFaultDomainFromCallback(callbackPath string) (*system.FaultDomain, error) {
+	if callbackPath == "" {
+		return nil, errors.New("no callback path supplied")
+	}
+
+	// Fault callback can't be an arbitrary command. Must point to a
+	// specific executable file.
+	if err := unix.Stat(callbackPath, nil); os.IsNotExist(err) {
+		return nil, FaultConfigFaultCallbackNotFound
+	}
+
+	output, err := exec.Command(callbackPath).Output()
+	if os.IsPermission(err) {
+		return nil, FaultConfigFaultCallbackBadPerms
+	} else if err != nil {
+		return nil, FaultConfigFaultCallbackFailed(err)
+	}
+
+	return newFaultDomainFromConfig(string(output))
 }
