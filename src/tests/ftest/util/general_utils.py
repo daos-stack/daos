@@ -23,7 +23,6 @@
 """
 from __future__ import print_function
 from logging import getLogger
-
 import os
 import re
 import json

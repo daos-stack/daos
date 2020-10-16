@@ -27,6 +27,7 @@ from ior_test_base import IorTestBase
 
 
 class DfuseSpaceCheck(IorTestBase):
+    # pylint: disable=too-many-ancestors
     """Base Parallel IO test class.
 
     :avocado: recursive
@@ -38,23 +39,15 @@ class DfuseSpaceCheck(IorTestBase):
         self.space_before = None
         self.block_size = None
 
-    def tearDown(self):
-        """Tear down each test case."""
-        try:
-            if self.dfuse:
-                self.dfuse.stop()
-        finally:
-            # Stop the servers and agents
-            super(DfuseSpaceCheck, self).tearDown()
-
     def get_nvme_free_space(self, display=True):
         """Display pool free space.
 
-          Args:
+        Args:
             display (bool): boolean to display output of free space.
 
-          Returns:
-            free_space_nvme (int): Free space available in nvme.
+        Returns:
+            int: Free space available in nvme.
+
         """
         free_space_nvme = self.pool.get_pool_free_space("nvme")
         if display:
@@ -76,11 +69,11 @@ class DfuseSpaceCheck(IorTestBase):
             counter += 1
 
     def write_multiple_files(self):
-        """Write multiple files
+        """Write multiple files.
 
-          Returns:
-            file_count (int): Total number of files created before
-                              going out of space.
+        Returns:
+            int: Total number of files created before going out of space.
+
         """
         file_count = 0
         while self.get_nvme_free_space(False) >= self.block_size:
@@ -122,7 +115,7 @@ class DfuseSpaceCheck(IorTestBase):
         # Create a pool, container and start dfuse.
         self.create_pool()
         self.create_cont()
-        self._start_dfuse()
+        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
         # get scm space before write
         self.space_before = self.get_nvme_free_space()

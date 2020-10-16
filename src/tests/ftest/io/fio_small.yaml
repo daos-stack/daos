@@ -49,6 +49,7 @@ pool:
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+  control_method: daos
 fio:
   names:
     - global

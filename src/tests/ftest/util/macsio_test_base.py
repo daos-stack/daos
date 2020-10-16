@@ -40,8 +40,6 @@ class MacsioTestBase(TestWithServers):
     def setUp(self):
         """Set up each test case."""
         super(MacsioTestBase, self).setUp()
-        self.job_manager.timeout = self.params.get(
-            self.get_test_name(), "/run/macsio_timeout/*", 90)
         self.macsio = self.get_macsio_command()
 
     def get_macsio_command(self):

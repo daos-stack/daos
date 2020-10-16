@@ -25,97 +25,16 @@ import os
 import general_utils
 
 from ClusterShell.NodeSet import NodeSet
-from apricot import TestWithServers
+from dfuse_test_base import DfuseTestBase
 from command_utils import CommandFailure
-from daos_utils import DaosCommand
-from test_utils_pool import TestPool
-from test_utils_container import TestContainer
-from dfuse_utils import Dfuse
 
 
-class BashCmd(TestWithServers):
+class BashCmd(DfuseTestBase):
+    # pylint: disable=too-few-public-methods,too-many-ancestors
     """Base BashCmd test class.
 
     :avocado: recursive
     """
-
-    def __init__(self, *args, **kwargs):
-        """Initialize a BashCmd object."""
-        super(BashCmd, self).__init__(*args, **kwargs)
-        self.dfuse = None
-        self.file_name = None
-        self.dir_name = None
-        self.pool_count = None
-        self.cont_count = None
-
-    def setUp(self):
-        """Set up each test case."""
-        # Start the servers and agents
-        super(BashCmd, self).setUp()
-
-        # Get the parameters for BashCmd
-        self.dir_name = self.params.get("dirname", '/run/bashcmd/*')
-        self.file_name1 = self.params.get("filename1", '/run/bashcmd/*')
-        self.file_name2 = self.params.get("filename2", '/run/bashcmd/*')
-        self.dd_count = self.params.get("dd_count", '/run/bashcmd/*')
-        self.dd_blocksize = self.params.get("dd_blocksize", '/run/bashcmd/*')
-
-    def tearDown(self):
-        """Tear down each test case."""
-        try:
-            if self.dfuse:
-                self.dfuse.stop()
-        finally:
-            # Stop the servers and agents
-            super(BashCmd, self).tearDown()
-
-    def create_pool(self):
-        """Create a TestPool object to use with ior."""
-        # Get the pool params
-        self.pool = TestPool(
-            self.context, dmg_command=self.get_dmg_command())
-        self.pool.get_params(self)
-
-        # Create a pool
-        self.pool.create()
-
-    def create_cont(self):
-        """Create a TestContainer object to be used to create container."""
-        # Get container params
-        self.container = TestContainer(
-            self.pool, daos_command=DaosCommand(self.bin))
-        self.container.get_params(self)
-
-        # create container
-        self.container.create()
-
-    def start_dfuse(self, count):
-        """Create a DfuseCommand object to start dfuse.
-
-           Args:
-             count(int): container index
-        """
-
-        # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp)
-        self.dfuse.get_params(self)
-
-        # update dfuse params
-        self.dfuse.mount_dir.update("/tmp/" + self.pool.uuid + "_daos_dfuse"
-                                    + str(count))
-        self.dfuse.set_dfuse_params(self.pool)
-        self.dfuse.set_dfuse_cont_param(self.container)
-        self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
-
-        try:
-            # start dfuse
-            self.dfuse.run()
-        except CommandFailure as error:
-            self.log.error("Dfuse command %s failed on hosts %s",
-                           str(self.dfuse),
-                           self.dfuse.hosts,
-                           exc_info=error)
-            self.fail("Test was expected to pass but it failed.\n")
 
     def test_bashcmd(self):
         """Jira ID: DAOS-3508.
@@ -124,6 +43,7 @@ class BashCmd(TestWithServers):
             Purpose of this test is to mount different mount points of dfuse
             for different container and pool sizes and perform basic bash
             commands.
+
         Use cases:
             Following list of bash commands have been incorporated
             as part of this test: mkdir, touch, ls, chmod, rm, dd, stat,
@@ -142,35 +62,41 @@ class BashCmd(TestWithServers):
               Rename file
               Verify renamed file exist using list.
               Remove a directory
+
         :avocado: tags=all,hw,daosio,medium,ib2,full_regression,bashcmd
         """
-        self.cont_count = self.params.get("cont_count", '/run/container/*')
-        self.pool_count = self.params.get("pool_count", '/run/pool/*')
+        dir_name = self.params.get("dirname", '/run/bashcmd/*')
+        file_name1 = self.params.get("filename1", '/run/bashcmd/*')
+        file_name2 = self.params.get("filename2", '/run/bashcmd/*')
+        dd_count = self.params.get("dd_count", '/run/bashcmd/*')
+        dd_blocksize = self.params.get("dd_blocksize", '/run/bashcmd/*')
+        pool_count = self.params.get("pool_count", '/run/pool/*')
+        cont_count = self.params.get("cont_count", '/run/container/*')
 
         # Create a pool if one does not already exist.
-        for _ in range(self.pool_count):
-            self.create_pool()
+        for _ in range(pool_count):
+            self.add_pool(connect=False)
             # perform test for multiple containers.
-            for count in range(self.cont_count):
-                self.create_cont()
-                self.start_dfuse(count)
+            for count in range(cont_count):
+                self.add_container(self.pool)
+                mount_dir = "/tmp/{}_daos_dfuse{}".format(self.pool.uuid, count)
+                self.start_dfuse(
+                    self.hostlist_clients, self.pool, self.container, mount_dir)
                 abs_dir_path = os.path.join(
-                    self.dfuse.mount_dir.value, self.dir_name)
-                abs_file_path1 = os.path.join(abs_dir_path, self.file_name1)
-                abs_file_path2 = os.path.join(abs_dir_path, self.file_name2)
+                    self.dfuse.mount_dir.value, dir_name)
+                abs_file_path1 = os.path.join(abs_dir_path, file_name1)
+                abs_file_path2 = os.path.join(abs_dir_path, file_name2)
                 # list of commands to be executed.
                 commands = [u"mkdir -p {}".format(abs_dir_path),
                             u"touch {}".format(abs_file_path1),
                             u"ls -a {}".format(abs_file_path1),
                             u"rm {}".format(abs_file_path1),
                             u"dd if=/dev/zero of={} count={} bs={}".format(
-                                abs_file_path1, self.dd_count,
-                                self.dd_blocksize),
+                                abs_file_path1, dd_count, dd_blocksize),
                             u"ls -al {}".format(abs_file_path1),
                             u"filesize=$(stat -c%s '{}');\
                             if (( filesize != {}*{} )); then exit 1;\
-                            fi".format(abs_file_path1, self.dd_count,
-                                       self.dd_blocksize),
+                            fi".format(abs_file_path1, dd_count, dd_blocksize),
                             u"cp -r {} {}".format(abs_file_path1,
                                                   abs_file_path2),
                             u"cmp --silent {} {}".format(abs_file_path1,
@@ -202,7 +128,7 @@ class BashCmd(TestWithServers):
                                   "it failed.\n")
 
                 # stop dfuse
-                self.dfuse.stop()
+                self.stop_dfuse()
                 # destroy container
                 self.container.destroy()
             # destroy pool

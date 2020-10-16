@@ -43,6 +43,10 @@ pool:
   nvme_size: 30000000000
   svcn: 1
   control_method: dmg
+container:
+  type: POSIX
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+  control_method: daos
 mdtest:
   client_processes: !mux
     np_1:

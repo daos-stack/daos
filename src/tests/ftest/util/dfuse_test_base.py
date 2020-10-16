@@ -39,26 +39,35 @@ class DfuseTestBase(TestWithServers):
         super(DfuseTestBase, self).__init__(*args, **kwargs)
         self.dfuse = None
 
-    def tearDown(self):
-        """Tear down each test case."""
+    def stop_job_managers(self):
+        """Stop the test job manager followed by dfuse.
+
+        Returns:
+            list: a list of exceptions raised stopping the agents
+
+        """
+        error_list = super(DfuseTestBase, self).stop_job_managers()
         try:
             self.stop_dfuse()
-        finally:
-            # Stop the servers and agents
-            super(DfuseTestBase, self).tearDown()
+        except CommandFailure as error:
+            error_list.append("Error stopping dfuse: {}".format(error))
+        return error_list
 
-    def start_dfuse(self, hosts, pool, container):
+    def start_dfuse(self, hosts, pool, container, mount_dir=None):
         """Create a DfuseCommand object and use it to start Dfuse.
 
         Args:
             hosts (list): list of hosts on which to start Dfuse
             pool (TestPool): pool to use with Dfuse
             container (TestContainer): container to use with Dfuse
+            mount_dir (str, optional): updated mount dir name. Defaults to None.
         """
         self.dfuse = Dfuse(hosts, self.tmp)
         self.dfuse.get_params(self)
 
         # Update dfuse params
+        if mount_dir:
+            self.dfuse.mount_dir.update(mount_dir)
         self.dfuse.set_dfuse_params(pool)
         self.dfuse.set_dfuse_cont_param(container)
         self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
