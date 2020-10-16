@@ -78,23 +78,25 @@ class OSAOnlineParallelTest(TestWithServers):
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):
-        """Get the pool leader
-           Returns :
+        """Get the pool leader.
+
+        Returns:
             int: pool leader value
+
         """
-        kwargs = {"pool": self.pool.uuid}
-        out = self.dmg_command.get_output("pool_query", **kwargs)
-        return int(out[0][3])
+        data = self.dmg_command.pool_query(self.pool.uuid)
+        return int(data["leader"])
 
     @fail_on(CommandFailure)
     def get_pool_version(self):
-        """Get the pool version
-           Returns :
-            int : pool_version_value
+        """Get the pool version.
+
+        Returns:
+            int: pool_version_value
+
         """
-        kwargs = {"pool": self.pool.uuid}
-        out = self.dmg_command.get_output("pool_query", **kwargs)
-        return int(out[0][4])
+        data = self.dmg_command.pool_query(self.pool.uuid)
+        return int(data["version"])
 
     def daos_racer_thread(self, results):
         """Start the daos_racer thread.
@@ -181,6 +183,7 @@ class OSAOnlineParallelTest(TestWithServers):
                 self.fail("Invalid action for dmg thread")
         except CommandFailure as _error:
             results.put("{} failed".format(action))
+            # Future enhancement for extend
             # elif action == "extend":
             #    dmg.pool_extend(puuid, (rank + 2))
 
@@ -248,7 +251,6 @@ class OSAOnlineParallelTest(TestWithServers):
                                                             "flags": flags,
                                                             "results":
                                                             self.out_queue}))
-                i = 0
                 for action in osa_tasks:
                     # Add dmg threads
                     threads.append(threading.Thread(target=self.dmg_thread,
@@ -259,7 +261,6 @@ class OSAOnlineParallelTest(TestWithServers):
                                                             "action": action,
                                                             "results":
                                                             self.out_queue}))
-                    i = i + 1
 
                 # Launch the IOR threads
                 for thrd in threads:
