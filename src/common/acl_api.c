@@ -65,13 +65,16 @@ copy_ace_array(struct daos_ace *aces[], uint16_t num_aces)
 	}
 
 	for (i = 0; i < num_aces; i++) {
-		D_ALLOC(copy[i], daos_ace_get_size(aces[i]));
+		ssize_t size = daos_ace_get_size(aces[i]);
+
+		D_ASSERTF(size > 0, "ACE should have already been validated");
+		D_ALLOC(copy[i], (size_t)size);
 		if (copy[i] == NULL) {
 			free_ace_array(copy, num_aces);
 			return NULL;
 		}
 
-		memcpy(copy[i], aces[i], daos_ace_get_size(aces[i]));
+		memcpy(copy[i], aces[i], (size_t)size);
 	}
 
 	return copy;
@@ -277,10 +280,12 @@ principals_match(struct daos_ace *ace1, struct daos_ace *ace2)
 static uint8_t *
 write_ace(struct daos_ace *ace, uint8_t *pen)
 {
-	size_t	len;
+	ssize_t	len;
 
 	len = daos_ace_get_size(ace);
-	memcpy(pen, (uint8_t *)ace, len);
+	D_ASSERTF(len > 0, "ACE should have already been validated");
+
+	memcpy(pen, (uint8_t *)ace, (size_t)len);
 
 	return pen + len;
 }

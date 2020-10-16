@@ -51,7 +51,7 @@ type smdQueryCmd struct {
 	jsonOutputCmd
 }
 
-func (cmd *smdQueryCmd) makeRequest(ctx context.Context, req *control.SmdQueryReq, opts ...control.PrintConfigOption) error {
+func (cmd *smdQueryCmd) makeRequest(ctx context.Context, req *control.SmdQueryReq, opts ...pretty.PrintConfigOption) error {
 	req.SetHostList(cmd.hostlist)
 	resp, err := control.SmdQuery(ctx, cmd.ctlInvoker, req)
 
@@ -64,7 +64,7 @@ func (cmd *smdQueryCmd) makeRequest(ctx context.Context, req *control.SmdQueryRe
 	}
 
 	var bld strings.Builder
-	if err := control.PrintResponseErrors(resp, &bld, opts...); err != nil {
+	if err := pretty.PrintResponseErrors(resp, &bld, opts...); err != nil {
 		return err
 	}
 	if err := pretty.PrintSmdInfoMap(req, resp.HostStorage, &bld, opts...); err != nil {
@@ -148,5 +148,5 @@ func (cmd *listPoolsQueryCmd) Execute(_ []string) error {
 		Rank:        cmd.GetRank(),
 		UUID:        cmd.UUID,
 	}
-	return cmd.makeRequest(ctx, req, control.PrintWithVerboseOutput(cmd.Verbose))
+	return cmd.makeRequest(ctx, req, pretty.PrintWithVerboseOutput(cmd.Verbose))
 }

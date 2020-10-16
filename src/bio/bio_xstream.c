@@ -128,7 +128,7 @@ opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
 		return 0;
 	}
 
-	D_REALLOC(new, tmp, sizeof(struct spdk_pci_addr) * (count + 1));
+	D_REALLOC_ARRAY(new, tmp, count + 1);
 	if (new == NULL)
 		return -DER_NOMEM;
 
