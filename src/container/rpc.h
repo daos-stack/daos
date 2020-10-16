@@ -103,10 +103,6 @@
 		0, &CQF_cont_tgt_destroy,				\
 		ds_cont_tgt_destroy_handler,				\
 		&ds_cont_tgt_destroy_co_ops),				\
-	X(CONT_TGT_CLOSE,						\
-		0, &CQF_cont_tgt_close,					\
-		ds_cont_tgt_close_handler,				\
-		&ds_cont_tgt_close_co_ops),				\
 	X(CONT_TGT_QUERY,						\
 		0, &CQF_cont_tgt_query,					\
 		ds_cont_tgt_query_handler,				\
@@ -323,16 +319,6 @@ struct cont_tgt_close_rec {
 	uuid_t		tcr_hdl;
 	daos_epoch_t	tcr_hce;
 };
-
-#define DAOS_ISEQ_TGT_CLOSE	/* input fields */		 \
-	((uuid_t)		(tci_pool_uuid)		CRT_VAR) \
-	((struct cont_tgt_close_rec) (tci_recs)		CRT_ARRAY)
-
-#define DAOS_OSEQ_TGT_CLOSE	/* output fields */		 \
-				/* number of errors */		 \
-	((int32_t)		(tco_rc)		CRT_VAR)
-
-CRT_RPC_DECLARE(cont_tgt_close, DAOS_ISEQ_TGT_CLOSE, DAOS_OSEQ_TGT_CLOSE)
 
 #define DAOS_ISEQ_TGT_QUERY	/* input fields */		 \
 	((uuid_t)		(tqi_pool_uuid)		CRT_VAR) \

@@ -2231,7 +2231,7 @@ static const struct CMUnitTest csum_tests[] = {
 	CSUM_TEST("DAOS_CSUM13: Enumerate objects with too small csum buffer",
 		  test_enumerate_object_csum_buf_too_small),
 	CSUM_TEST("DAOS_CSUM14: Many IODs", many_iovs_with_single_values),
-	CSUM_TEST("DAOS_CSUM14.1: two iods & two recx", two_iods_two_recxs),
+	CSUM_TEST("DAOS_CSUM14.1: two iods and two recx", two_iods_two_recxs),
 	CSUM_TEST("DAOS_CSUM15: Request non existent data",
 		  request_non_existent_data),
 	CSUM_TEST("DAOS_CSUM16: Unaligned hole at beginning",
