@@ -301,7 +301,7 @@ class LogLine():
     def is_callback(self):
         """Returns true if line is RPC callback"""
 
-        if self.function != 'crt_hg_req_send_cb':
+        if self.function not in ('crt_hg_req_send_cb', 'crt_rpc_complete'):
             return False
 
         return self._is_type(['Invoking', 'RPC', 'callback'], base=5)

@@ -389,7 +389,7 @@ class DaosServer():
 
             if ready:
                 break
-            if time.time() - start > 10:
+            if time.time() - start > 20:
                 raise Exception("Failed to start")
 
     def stop(self):
@@ -789,11 +789,11 @@ def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False):
         show_memleaks = False
         fi_signal = -rc.returncode
 
-    log_test(conf,
-             log_file.name,
-             show_memleaks=show_memleaks,
-             skip_fi=skip_fi,
-             fi_signal=fi_signal)
+    rc.fi_loc = log_test(conf,
+                         log_file.name,
+                         show_memleaks=show_memleaks,
+                         skip_fi=skip_fi,
+                         fi_signal=fi_signal)
     vh.convert_xml()
     return rc
 
@@ -808,7 +808,7 @@ def show_cont(conf, pool):
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
     assert rc.returncode == 0
-    return rc.stdout.strip()
+    return rc.stdout.decode('utf-8').strip()
 
 def make_pool(daos):
     """Create a DAOS pool"""
@@ -920,6 +920,7 @@ def log_test(conf,
                             fi_signal)
         if not lto.fi_triggered:
             raise DFTestNoFi
+    return lto.fi_location
 
 def create_and_read_via_il(dfuse, path):
     """Create file in dir, write to and and read
@@ -1238,7 +1239,7 @@ def test_pydaos_kv(server, conf):
     container = show_cont(conf, pool)
 
     print(container)
-    c_uuid = container.decode().split()[-1]
+    c_uuid = container.split()[-1]
     container = daos.Cont(pool, c_uuid)
 
     kv = container.get_kv_by_name('my_test_kv', create=True)
@@ -1283,7 +1284,7 @@ def test_pydaos_kv(server, conf):
     print('Closing container and opening new one')
     kv = container.get_kv_by_name('my_test_kv')
 
-def test_alloc_fail(server, conf):
+def test_alloc_fail(server, wf, conf):
     """run 'daos' client binary with fault injection
 
     Enable the fault injection for the daos binary, injecting
@@ -1309,6 +1310,10 @@ def test_alloc_fail(server, conf):
     fid = 1
 
     fatal_errors = False
+
+    # Create at least one container, and record what the output should be when
+    # the command works.
+    container = show_cont(conf, pool)
 
     while True:
         print()
@@ -1337,10 +1342,15 @@ def test_alloc_fail(server, conf):
                                   fi_valgrind=True)
                 fatal_errors = True
 
+            stdout = rc.stdout.decode('utf-8').strip()
             stderr = rc.stderr.decode('utf-8').strip()
-            if not stderr.endswith("DER_NOMEM(-1009): 'Out of memory'"):
-                # TODO: Need to report this against fault-injection location.
-                print('Command did not log error on stderr correctly')
+            if not stderr.endswith("Out of memory (-1009)") and \
+               'error parsing command line arguments' not in stderr and \
+               stdout != container:
+                print(container)
+                print(stdout)
+                wf.add(rc.fi_loc, 'NORMAL', "Incorrect stderr '{}'".format(stderr),
+                       mtype='Out of memory not reported correctly via stderr')
         except DFTestNoFi:
             print('Fault injection did not trigger, returning')
             break
@@ -1387,13 +1397,13 @@ def main():
     elif args.mode == 'overlay':
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
     elif args.mode == 'fi':
-        fatal_errors.add_result(test_alloc_fail(server, conf))
+        fatal_errors.add_result(test_alloc_fail(server, wf, conf))
     elif args.mode == 'all':
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
         test_pydaos_kv(server, conf)
-        fatal_errors.add_result(test_alloc_fail(server, conf))
+        fatal_errors.add_result(test_alloc_fail(server, wf, conf))
     else:
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))

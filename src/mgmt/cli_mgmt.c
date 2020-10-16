@@ -355,7 +355,7 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 	resp = mgmt__get_attach_info_resp__unpack(&alloc.alloc, dresp->body.len,
 						  dresp->body.data);
 	if (alloc.oom)
-		D_GOTO(out_dresp, rc = -DER_MISC);
+		D_GOTO(out_dresp, rc = -DER_NOMEM);
 	if (resp == NULL) {
 		D_ERROR("failed to unpack GetAttachInfo response\n");
 		rc = -DER_MISC;
