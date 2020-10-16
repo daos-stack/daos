@@ -418,6 +418,10 @@ func (p *Provider) createScanResponse() *ScanResponse {
 
 // Scan attempts to scan the system for SCM storage components.
 func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
+	p.log.Info("SCM scan disabled on endeavour")
+	return p.createScanResponse(), nil
+
+	// endeavour hack -- don't ever try to scan
 	if p.isInitialized() && !req.Rescan {
 		return p.createScanResponse(), nil
 	}
