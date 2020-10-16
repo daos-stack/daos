@@ -38,6 +38,11 @@ dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
 	d_list_t			*rlink;
 	int				rc = 0;
 
+	if (oid) {
+		*_ino = oid->hi ^ oid->lo;
+		return -DER_SUCCESS;
+	}
+
 	D_ALLOC_PTR(dfir);
 	if (!dfir)
 		D_GOTO(out, rc = ENOMEM);
