@@ -252,6 +252,7 @@ class OSAOnlineExtend(TestWithServers):
             self.pool.display_pool_daos_space(display_string)
             pool[val].destroy()
 
+    @skipForTicket("DAOS-5869")
     def test_osa_online_extend(self):
         """Test ID: DAOS-4751
         Test Description: Validate Online extend

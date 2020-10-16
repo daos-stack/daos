@@ -113,13 +113,7 @@ class OSAOfflineExtend(TestWithServers):
         # Create a pool
         pool = {}
         pool_uuid = []
-        target_list = []
         total_servers = len(self.hostlist_servers)
-
-        # Exclude target : random two targets
-        n = random.randint(1, 7)
-        target_list.append(n)
-        target_list.append(n+1)
 
         # Extend a rank (or server)
         # rank index starts from zero
@@ -127,7 +121,7 @@ class OSAOfflineExtend(TestWithServers):
 
         for val in range(0, num_pool):
             pool[val] = TestPool(self.context,
-                                 dmg_command=self.get_dmg_command())
+                                 dmg_command=self.dmg_command)
             pool[val].get_params(self)
             # Split total SCM and NVME size for creating multiple pools.
             pool[val].scm_size.value = int(pool[val].scm_size.value /
