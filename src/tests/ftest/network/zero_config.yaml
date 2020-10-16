@@ -22,7 +22,7 @@ dmg:
   transport_config:
     allow_insecure: True
 daos_racer:
-  runtime: 30
+  runtime: 20
   clush_timeout: 60
 zero_config: !mux
   set:
