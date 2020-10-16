@@ -42,10 +42,10 @@ JNIEXPORT jlong JNICALL Java_io_daos_DaosClient_createEventQueue
 /*
  * Class:     io_daos_DaosClient
  * Method:    pollCompleted
- * Signature: (JJI)V
+ * Signature: (JJII)V
  */
 JNIEXPORT void JNICALL Java_io_daos_DaosClient_pollCompleted
-  (JNIEnv *, jclass, jlong, jlong, jint);
+  (JNIEnv *, jclass, jlong, jlong, jint, jint);
 
 /*
  * Class:     io_daos_DaosClient

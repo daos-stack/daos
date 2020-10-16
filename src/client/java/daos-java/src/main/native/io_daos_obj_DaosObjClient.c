@@ -200,7 +200,7 @@ Java_io_daos_obj_DaosObjClient_queryObjectAttribute(JNIEnv *env,
     int rc;
 
     memcpy(&oh, &objectHandle, sizeof(oh));
-    rc = daos_obj_query(oh, DAOS_TX_NONE, &attr, &ranks, NULL);
+    rc = daos_obj_query(oh, &attr, &ranks, NULL);
 
     if (rc) {
         char *msg = "Failed to query DAOS object attribute";

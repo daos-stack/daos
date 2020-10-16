@@ -1311,12 +1311,12 @@ public class DaosObjectIT {
     id.encode();
     DaosObject object = client.getObject(id);
     int bufLen = 16000;
-    int reduces = 1;
-    int maps = 1;
+    int reduces = 100;
+    int maps = 100;
 //    IOSimpleDataDesc desc = object.createSimpleDataDesc(4, 1, bufLen,
 //        null);
     byte[] data = generateDataArray(bufLen);
-    DaosEventQueue dq = DaosEventQueue.getInstance(128, 4, 1, bufLen);
+    DaosEventQueue dq = DaosEventQueue.getInstance(1, 4, 1, bufLen);
     for (int i = 0; i < dq.getNbrOfEvents(); i++) {
       DaosEventQueue.Event e = dq.getEvent(i);
       IOSimpleDataDesc.SimpleEntry entry = e.getDesc().getEntry(0);
@@ -1349,11 +1349,11 @@ public class DaosObjectIT {
           object.updateSimple(desc);
         }
       }
-//      compList.clear();
-//      dq.waitForCompletion(5000, compList);
+      compList.clear();
+      dq.waitForCompletion(5000, compList);
       for (IOSimpleDataDesc d : compList) {
         Assert.assertTrue(d.isSucceeded());
-//        System.out.println("completed");
+        System.out.println("completed");
       }
       System.out.println((System.nanoTime() - start) / 1000000);
       System.out.println("written");
@@ -1394,9 +1394,6 @@ public class DaosObjectIT {
       if (desc != null) {
         desc.release();
       }
-      System.out.println(1);
-      DaosEventQueue.destroyAll();
-      System.out.println(2);
       if (object.isOpen()) {
         object.punch();
       }

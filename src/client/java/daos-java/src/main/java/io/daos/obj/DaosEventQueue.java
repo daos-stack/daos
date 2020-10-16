@@ -25,6 +25,7 @@ package io.daos.obj;
 
 import io.daos.BufferAllocator;
 import io.daos.DaosClient;
+import io.daos.TimedOutException;
 import io.netty.buffer.ByteBuf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,6 +63,18 @@ public class DaosEventQueue {
   private int nbrOfAcquired;
 
   private boolean released;
+
+  private long lastProgressed;
+
+  private int nbrOfTimedOut;
+
+  private static final int DEFAULT_POLL_TIMEOUT_MS = 10;
+
+  private static final int DEFAULT_NO_PROGRESS_DURATION_ERROR = 5000; // MS
+
+  private static final int DEFAULT_NBR_OF_TIMEDOUT_WARN = 5;
+
+  private static final int DEFAULT_NBR_OF_TIMEDOUT_ERROR = 2 * DEFAULT_NBR_OF_TIMEDOUT_WARN;
 
   private static final Map<Long, DaosEventQueue> EQ_MAP = new ConcurrentHashMap<>();
 
@@ -164,28 +177,44 @@ public class DaosEventQueue {
   }
 
   public Event acquireEventBlock(boolean updateOrFetch, int maxWaitMs, List<IOSimpleDataDesc> completedList)
-      throws InterruptedException, IOException {
+      throws IOException {
     DaosEventQueue.Event e = acquireEvent(updateOrFetch);
     if (e != null) { // for most of cases
       return e;
     }
+    // check progress
+    checkProgress();
     // unfortunately to poll repeatedly and wait
     int cnt = 0;
     int totalWait = 0;
+    int wait = 0;
     while (e == null) {
       if (cnt % 10 == 0) {
         if (totalWait > maxWaitMs) {
-          throw new IOException("failed to acquire event after waiting " + totalWait + " ms");
+          nbrOfTimedOut++;
+          throw new TimedOutException("failed to acquire event after waiting " + totalWait + " ms");
         }
-        int wait = cnt < 100 ? cnt : 100;
-        Thread.sleep(wait);
+        wait = cnt < 100 ? cnt : 100;
         totalWait += wait;
       }
-      pollCompleted(completedList);
+      pollCompleted(completedList, wait);
       e = acquireEvent(updateOrFetch);
       cnt++;
     }
     return e;
+  }
+
+  private void checkProgress() throws TimedOutException {
+    if (nbrOfTimedOut > DEFAULT_NBR_OF_TIMEDOUT_ERROR) {
+      long dur = System.currentTimeMillis() - lastProgressed;
+      if (dur > DEFAULT_NO_PROGRESS_DURATION_ERROR) {
+        throw new TimedOutException("too long duration without progress. number of timedout: " +
+          nbrOfTimedOut + ", duration: " + dur);
+      }
+    }
+    if (nbrOfTimedOut > DEFAULT_NBR_OF_TIMEDOUT_WARN) {
+      log.warn("number of timedout: " + nbrOfTimedOut);
+    }
   }
 
   public boolean hasPendingEvent() {
@@ -193,16 +222,20 @@ public class DaosEventQueue {
   }
 
   public void waitForCompletion(int maxWaitMs, List<IOSimpleDataDesc> completedList)
-      throws IOException, InterruptedException {
+      throws IOException {
     long start = System.currentTimeMillis();
+    int timeout = 0;
     while (nbrOfAcquired > 0) {
       int lastNbr = nbrOfAcquired;
-      pollCompleted(completedList);
+      pollCompleted(completedList, timeout);
       if (lastNbr == nbrOfAcquired) {
-        Thread.sleep(10);
+        timeout = DEFAULT_POLL_TIMEOUT_MS;
+      } else {
+        timeout = 0;
       }
       if (System.currentTimeMillis() - start > maxWaitMs) {
-        throw new IOException("no completion after waiting more than " + maxWaitMs +
+        nbrOfTimedOut++;
+        throw new TimedOutException("no completion after waiting more than " + maxWaitMs +
           ", nbrOfAcquired: " + nbrOfAcquired +", total: " + nbrOfEvents);
       }
     }
@@ -236,11 +269,13 @@ public class DaosEventQueue {
    *
    * @param completedDescList
    * if it's not null, descs of completed events are added to this list.
+   * @param timeOutMs
    * @return number of events completed
    * @throws IOException
    */
-  public int pollCompleted(List<IOSimpleDataDesc> completedDescList) throws IOException {
-    DaosClient.pollCompleted(eqWrapperHdl, completed.memoryAddress(), nbrOfEvents);
+  public int pollCompleted(List<IOSimpleDataDesc> completedDescList, int timeOutMs) throws IOException {
+    DaosClient.pollCompleted(eqWrapperHdl, completed.memoryAddress(),
+      nbrOfEvents, timeOutMs < 0 ? DEFAULT_POLL_TIMEOUT_MS : timeOutMs);
     completed.readerIndex(0);
     int nbr = completed.readShort();
     Event event;
@@ -253,6 +288,10 @@ public class DaosEventQueue {
       }
     }
     nbrOfAcquired -= nbr;
+    if (nbr > 0) {
+      lastProgressed = System.currentTimeMillis();
+      nbrOfTimedOut = 0;
+    }
     return nbr;
   }
 
@@ -283,8 +322,8 @@ public class DaosEventQueue {
           }
           v.released = true;
         }
-      } catch (IOException e) {
-        log.error("failed to destroy event queue in thread, " + v.threadName);
+      } catch (Throwable e) {
+        log.error("failed to destroy event queue in thread, " + v.threadName, e);
       }
     });
     EQ_MAP.clear();

@@ -203,9 +203,11 @@ public class DaosClient implements ForceCloseable {
    * memory address of ByteBuf to hold indices of completed events
    * @param nbrOfEvents
    * maximum number of events to complete
+   * @param timeoutMs
    * @throws IOException
    */
-  public static native void pollCompleted(long eqWrapperHdl, long memoryAddress, int nbrOfEvents) throws IOException;
+  public static native void pollCompleted(long eqWrapperHdl, long memoryAddress,
+                                          int nbrOfEvents, int timeoutMs) throws IOException;
 
   /**
    * destroy event queue identified by <code>queueHdl</code>.
