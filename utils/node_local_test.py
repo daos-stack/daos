@@ -1278,7 +1278,7 @@ def test_pydaos_kv(server, conf):
     print('Closing container and opening new one')
     kv = container.get_kv_by_name('my_test_kv')
 
-def test_alloc_fail(conf):
+def test_alloc_fail(server, conf):
     """run 'daos' client binary with fault injection
 
     Enable the fault injection for the daos binary, injecting
@@ -1294,10 +1294,10 @@ def test_alloc_fail(conf):
 
     pools = get_pool_list()
 
-    if len(pools) > 1:
-        pool = pools[0]
-    else:
-        pool = '5848df55-a97c-46e3-8eca-45adf85591d6'
+    while len(pools) < 1:
+        pools = make_pool(server)
+
+    pool = pools[0]
 
     cmd = ['pool', 'list-containers', '--svc', '0', '--pool', pool]
 
@@ -1306,6 +1306,8 @@ def test_alloc_fail(conf):
     fatal_errors = False
 
     while True:
+        print()
+
         fc = {}
         fc['fault_config'] = [{'id': 0,
                                'probability_x': 1,
@@ -1375,13 +1377,13 @@ def main():
     elif args.mode == 'overlay':
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
     elif args.mode == 'fi':
-        fatal_errors.add_result(test_alloc_fail(conf))
+        fatal_errors.add_result(test_alloc_fail(server, conf))
     elif args.mode == 'all':
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
         test_pydaos_kv(server, conf)
-        fatal_errors.add_result(test_alloc_fail(conf))
+        fatal_errors.add_result(test_alloc_fail(server, conf))
     else:
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
