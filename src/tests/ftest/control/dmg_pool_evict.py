@@ -60,15 +60,28 @@ class DmgPoolEvictTest(TestWithServers):
         # Call dmg pool evict on the second pool.
         self.get_dmg_command().pool_evict(pool=self.pool[1].uuid)
 
-        # Call daos pool list-cont on the evicted pool. It should fail with
-        # -1012.
+        # Call daos pool list-cont on the first pool. It should succeed.
         daos_cmd = self.get_daos_command()
         try:
             daos_cmd.pool_list_cont(
-                pool=self.pool[1].uuid, svc=self.pool[1].svc_ranks[0])
-            self.fail("daos pool list-cont succeeded after pool evict!")
+                pool=self.pool[0].uuid, svc=self.pool[0].svc_ranks[0])
+            self.log.info(
+                "daos pool list-cont with first pool succeeded as expected")
         except CommandFailure:
-            self.log.info("daos pool list-cont failed as expected")
+            self.fail(
+                "daos pool list-cont with first pool failed after pool evict!")
+
+        # Call daos pool list-cont on the evicted pool. It should fail with
+        # -1012.
+        try:
+            daos_cmd.pool_list_cont(
+                pool=self.pool[1].uuid, svc=self.pool[1].svc_ranks[0])
+            self.fail(
+                "daos pool list-cont with second pool succeeded after pool " +
+                "evict!")
+        except CommandFailure:
+            self.log.info(
+                "daos pool list-cont with second pool failed as expected")
 
         self.container.pop()
 
@@ -81,4 +94,17 @@ class DmgPoolEvictTest(TestWithServers):
         self.container[0].destroy()
         data = daos_cmd.pool_list_cont(
             pool=self.pool[0].uuid, svc=self.pool[0].svc_ranks[0])
-        self.assertEqual(len(data["uuids"]), len(self.container) - 1)
+
+        # Create list of container UUIDs and compare. Convert command output to
+        # upper case since we use upper case in object.
+        uuids_cmd = []
+        for uuid in data["uuids"]:
+            uuids_cmd.append(uuid.upper())
+        uuids_obj = []
+        for cont in self.container[1:]:
+            uuids_obj.append(cont.uuid)
+        self.assertEqual(
+            uuids_cmd, uuids_obj,
+            "Container UUIDs in pool {} do not match! Cmd: {}, Obj: {}".format(
+                self.pool[0].uuid, uuids_cmd, uuids_obj)
+        )

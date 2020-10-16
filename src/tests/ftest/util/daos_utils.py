@@ -262,8 +262,8 @@ class DaosCommand(DaosCommandBase):
         # c8bfc7c9-cb19-4574-bae2-af4046d24b58
         # 182347e4-08ce-4069-b5e2-0dd04406dffd
         data = {}
-        match = re.findall(r"([0-9a-f-]{36})", self.result.stdout)
-        data["uuids"] = match
+        if self.result.exit_status == 0:
+            data["uuids"] = re.findall(r"([0-9a-f-]{36})", self.result.stdout)
         return data
 
     def pool_set_attr(self, pool, attr, value, svc):
