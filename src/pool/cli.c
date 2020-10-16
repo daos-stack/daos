@@ -269,8 +269,8 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 			D_ERROR("Couldn't get failed targets, "DF_RC"\n",
 				DP_RC(rc));
 	}
-	pool_map_decref(map); /* NB: protected by pool::dp_map_lock */
 out_unlock:
+	pool_map_decref(map); /* NB: protected by pool::dp_map_lock */
 	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 
 	if (prop_req != NULL && rc == 0)

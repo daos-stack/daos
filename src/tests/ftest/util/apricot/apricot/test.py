@@ -272,6 +272,8 @@ class TestWithServers(TestWithoutServers):
         self.hostfile_clients = None
         self.server_partition = None
         self.client_partition = None
+        self.server_reservation = None
+        self.client_reservation = None
         self.hostfile_servers_slots = 1
         self.hostfile_clients_slots = 1
         self.pool = None
@@ -318,13 +320,21 @@ class TestWithServers(TestWithoutServers):
         for name in ("servers", "clients"):
             host_list_name = "_".join(["hostlist", name])
             partition_name = "_".join([name[:-1], "partition"])
+            reservation_name = "_".join([name[:-1], "reservation"])
             partition = self.params.get(partition_name, "/run/hosts/*")
+            reservation = self.params.get(reservation_name, "/run/hosts/*")
             host_list = getattr(self, host_list_name)
             if partition is not None and host_list is None:
                 # If a partition is provided instead of a list of hosts use the
                 # partition information to populate the list of hosts.
                 setattr(self, partition_name, partition)
-                setattr(self, host_list_name, get_partition_hosts(partition))
+                setattr(self, reservation_name, reservation)
+                slurm_nodes = get_partition_hosts(partition, reservation)
+                if not slurm_nodes:
+                    self.fail(
+                        "No valid nodes in {} partition with {} "
+                        "reservation".format(partition, reservation))
+                setattr(self, host_list_name, slurm_nodes)
             elif partition is not None and host_list is not None:
                 self.fail(
                     "Specifying both a {} partition name and a list of hosts "
@@ -350,6 +360,8 @@ class TestWithServers(TestWithoutServers):
         self.log.info("hostlist_clients:  %s", self.hostlist_clients)
         self.log.info("server_partition:  %s", self.server_partition)
         self.log.info("client_partition:  %s", self.client_partition)
+        self.log.info("server_reservation:  %s", self.server_reservation)
+        self.log.info("client_reservation:  %s", self.client_reservation)
 
         # Kill commands left running on the hosts (from a previous test) before
         # starting any tests.  Currently only handles 'orterun' processes, but
