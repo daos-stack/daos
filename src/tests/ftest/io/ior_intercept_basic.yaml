@@ -17,7 +17,7 @@ pool:
     name: daos_server
     # 300 G
     scm_size: 30000000000
-    nvme_size: 320000000000
+    nvme_size: 420000000000
     svcn: 1
     control_method: dmg
 container:
