@@ -85,7 +85,7 @@ check_files_input() {
     local rc=0
     if [ -n "${1}" ]; then
         # shellcheck disable=SC2086
-        if ! ls -d ${1} 2> /dev/null; then
+        if ! ls -d ${1} 1>&2; then
             rc=2
         else
             echo "Files found that match ${1}."
@@ -263,10 +263,11 @@ set -ex
 
 # Verify files have been specified and they exist on this host
 if ! check_files_input "${FILES_TO_PROCESS}"; then
-    if [[ $? -eq 1 ]]; then
+    ret=$?
+    if [[ ${ret} -eq 1 ]]; then
         echo "Please specify -f option."
         exit 1
-    elif [[ $? -eq 2 ]]; then
+    elif [[ ${ret} -eq 2 ]]; then
         echo "No files matched ${FILES_TO_PROCESS}. Nothing to do."
         exit 0
     fi
