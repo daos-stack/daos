@@ -38,7 +38,9 @@ map_ranks_include(enum map_ranks_class class, int status)
 {
 	switch (class) {
 	case MAP_RANKS_UP:
-		return status == PO_COMP_ST_UP || status == PO_COMP_ST_UPIN;
+		return status == PO_COMP_ST_UP ||
+		       status == PO_COMP_ST_UPIN ||
+		       status == PO_COMP_ST_NEW;
 	case MAP_RANKS_DOWN:
 		return status == PO_COMP_ST_DOWN ||
 		       status == PO_COMP_ST_DOWNOUT ||
@@ -215,7 +217,10 @@ static int
 update_one_tgt(struct pool_map *map, struct pool_target *target,
 	       struct pool_domain *dom, int opc, bool evict_rank,
 	       uint32_t *version) {
+	int rc;
+
 	D_ASSERTF(target->ta_comp.co_status == PO_COMP_ST_UP ||
+		  target->ta_comp.co_status == PO_COMP_ST_NEW ||
 		  target->ta_comp.co_status == PO_COMP_ST_UPIN ||
 		  target->ta_comp.co_status == PO_COMP_ST_DOWN ||
 		  target->ta_comp.co_status == PO_COMP_ST_DRAIN ||
@@ -252,6 +257,14 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 				dom->do_comp.co_fseq = target->ta_comp.co_fseq;
 			}
 			break;
+		case PO_COMP_ST_NEW:
+			/*
+			 * TODO: Add some handling for what happens when
+			 * addition fails. Probably need to remove these
+			 * targets from the pool map, rather than setting them
+			 * to a different state
+			 */
+			return -DER_NOSYS;
 		}
 		break;
 
@@ -265,6 +278,11 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			       target->ta_comp.co_rank,
 				target->ta_comp.co_index);
 			break;
+		case PO_COMP_ST_NEW:
+			D_ERROR("Can't drain new target (rank %u idx %u)\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index);
+			return -DER_BUSY;
 		case PO_COMP_ST_UP:
 			D_ERROR("Can't drain reint target (rank %u idx %u)\n",
 				target->ta_comp.co_rank,
@@ -284,18 +302,24 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 		}
 		break;
 
-	case POOL_ADD:
+	case POOL_REINT:
 		switch (target->ta_comp.co_status) {
+		case PO_COMP_ST_NEW:
+			/* Nothing to do, already added */
+			D_INFO("Can't reint new target (rank %u idx %u)\n",
+			       target->ta_comp.co_rank,
+				target->ta_comp.co_index);
+			return -DER_BUSY;
 		case PO_COMP_ST_UP:
 		case PO_COMP_ST_UPIN:
 			/* Nothing to do, already added */
-			D_INFO("Skip add up target (rank %u idx %u)\n",
+			D_INFO("Skip reint up target (rank %u idx %u)\n",
 			       target->ta_comp.co_rank,
 				target->ta_comp.co_index);
 			break;
 		case PO_COMP_ST_DOWN:
 		case PO_COMP_ST_DRAIN:
-			D_ERROR("Can't add rebuilding tgt (rank %u idx %u)\n",
+			D_ERROR("Can't reint rebuilding tgt (rank %u idx %u)\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index);
 			return -DER_BUSY;
@@ -306,7 +330,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			target->ta_comp.co_status = PO_COMP_ST_UP;
 			target->ta_comp.co_fseq = ++(*version);
 
-			D_PRINT("Target (rank %u idx %u) is added.\n",
+			D_PRINT("Target (rank %u idx %u) start reintegration\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index);
 			D_DEBUG(DF_DSMS, "change rank %u to UP\n",
@@ -322,7 +346,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			/* Nothing to do, already UPIN */
 			D_INFO("Skip ADD_IN UPIN target (rank %u idx %u)\n",
 			       target->ta_comp.co_rank,
-				target->ta_comp.co_index);
+			       target->ta_comp.co_index);
 			break;
 		case PO_COMP_ST_DOWN:
 		case PO_COMP_ST_DRAIN:
@@ -332,10 +356,17 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 				target->ta_comp.co_index);
 			return -DER_INVAL;
 		case PO_COMP_ST_UP:
+		case PO_COMP_ST_NEW:
 			D_DEBUG(DF_DSMS, "change target %u/%u to UPIN %p\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index, map);
-			target->ta_comp.co_status = PO_COMP_ST_UPIN;
+			/*
+			 * Need to update this target AND all of its parents
+			 * domains from NEW -> UPIN
+			 */
+			rc = pool_map_activate_new_target(map,
+					target->ta_comp.co_id);
+			D_ASSERT(rc != 0); /* This target must be findable */
 			(*version)++;
 			break;
 		}
@@ -351,6 +382,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			break;
 		case PO_COMP_ST_UP:
 		case PO_COMP_ST_UPIN:
+		case PO_COMP_ST_NEW:
 			D_ERROR("Can't EXCLOUT non-down tgt (rank %u idx %u)\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index);
