@@ -950,7 +950,7 @@ def log_test(conf,
         raise NLTestNoFunction('dfuse_write')
 
 def create_and_read_via_il(dfuse, path):
-    """Create file in dir, write to and and read
+    """Create file in dir, write to and read
     through the interception library"""
 
     fname = os.path.join(path, 'test_file')
