@@ -3161,6 +3161,9 @@ crt_group_mod_get(d_rank_list_t *grp_membs, d_rank_list_t *mod_membs,
 		for (i = 0; i < mod_membs->rl_nr; i++) {
 			rank = mod_membs->rl_ranks[i];
 
+			D_WARN("checking rank %d in list: %d\n",
+				rank, d_rank_in_rank_list(grp_membs, rank));
+
 			if (d_rank_in_rank_list(grp_membs, rank) == false) {
 				idx_to_add[to_add->rl_nr] = i;
 				to_add->rl_ranks[to_add->rl_nr++] = rank;

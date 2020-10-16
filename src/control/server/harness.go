@@ -131,10 +131,10 @@ func (h *IOServerHarness) CallDrpc(ctx context.Context, method drpc.Method, body
 	// the first one that is available to service the request.
 	// If the request fails, that error will be returned.
 	for _, i := range h.Instances() {
-		if !i.isReady() {
+		/*if !i.isReady() {
 			err = instanceNotReady
 			continue
-		}
+		}*/
 		resp, err = i.CallDrpc(ctx, method, body)
 
 		switch errors.Cause(err) {
