@@ -262,8 +262,9 @@ fi
 set -ex
 
 # Verify files have been specified and they exist on this host
-if ! check_files_input "${FILES_TO_PROCESS}"; then
-    ret=$?
+check_files_input "${FILES_TO_PROCESS}"
+ret=$?
+if [ ${ret} -ne 0 ]; then
     if [[ ${ret} -eq 1 ]]; then
         echo "Please specify -f option."
         exit 1
