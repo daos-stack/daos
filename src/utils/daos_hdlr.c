@@ -521,6 +521,15 @@ out_free:
 out_disconnect:
 	/* Pool disconnect  in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
+	/* Automatically retry in case of DER_NOMEM.  This is to allow the
+	 * NLT testing to correctly stress-test all code paths and not
+	 * register any memory leaks.
+	 * TODO: Move this retry login into daos_pool_disconnect()
+	 * or work out another way to effectively shut down and release
+	 * resources in this case.
+	 */
+	if (rc2 == -DER_NOMEM)
+		rc2 = daos_pool_disconnect(ap->pool, NULL);
 	if (rc2 != 0)
 		fprintf(stderr, "failed to disconnect from pool "DF_UUIDF
 			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc2),
