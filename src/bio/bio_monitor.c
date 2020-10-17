@@ -51,6 +51,7 @@ bio_get_dev_state_internal(void *msg_arg)
 	D_ASSERT(dsm != NULL);
 
 	dsm->devstate = dsm->xs->bxc_blobstore->bb_dev_health.bdh_health_state;
+	collect_bs_usage(dsm->xs->bxc_blobstore->bb_bs, &dsm->devstate):
 	ABT_eventual_set(dsm->eventual, NULL, 0);
 }
 
@@ -477,8 +478,6 @@ bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
 			ctxt->bxc_tgt_id, rc);
 
 	collect_raw_health_data(dev_health);
-	collect_bs_usage(ctxt->bxc_blobstore->bb_bs,
-			 &dev_health->bdh_health_state);
 }
 
 /* Print the io stat every few seconds, for debug only */
