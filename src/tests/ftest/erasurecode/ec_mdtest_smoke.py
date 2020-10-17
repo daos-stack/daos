@@ -21,32 +21,32 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
+from mdtest_test_base import MdtestBase
+from apricot import skipForTicket
 
-from daos_core_base import DaosCoreBase
-
-
-class DaosCoreTestRebuildWeekly(DaosCoreBase):
+class ErasureCodeMdtest(MdtestBase):
     # pylint: disable=too-many-ancestors
-    """Temporarily run the daos_test rebuild tests that take long time in
-    weekly.
-
-    Remove this test when DAOS-5717 is closed and enable the tests 18, 22-24 in
-    daos_core_test-rebuild.yaml
-
+    """
+    EC MDtest class to run smoke tests.
     :avocado: recursive
     """
 
-    def test_rebuild_weekly(self):
-        """JIRA ID: DAOS-5717.
-
-        Test Description:
-            Purpose of this test is to run the daos_test rebuild tests that take
-            long time in weekly to reduce CI queue.
-
-        Use case:
-            Balance testing load between hardware and VM clusters.
-
-        :avocado: tags=all,hw,medium,ib2,unittest,daos_test_rebuild
-        :avocado: tags=DAOS-5610,full_regression
+    @skipForTicket("DAOS-5809")
+    def test_mdtest_large(self):
         """
-        DaosCoreBase.run_subtest(self)
+        Jira ID: DAOS-2494
+        Test Description:
+            Test EC object class with.
+        Use Cases:
+            Create the pool and run EC object class till 8P2.
+
+        :avocado: tags=all,pr,hw,large,ec,ec_smoke,ec_mdtest
+        """
+        mdtest_flags = self.params.get("flags", "/run/mdtest/*")
+        self.mdtest_cmd.flags.update(mdtest_flags)
+
+        obj_class = self.params.get("dfs_oclass", '/run/mdtest/objectclass/*')
+        for oclass in obj_class:
+            self.mdtest_cmd.dfs_oclass.update(oclass)
+            self.mdtest_cmd.dfs_dir_oclass.update(oclass)
+            self.execute_mdtest()

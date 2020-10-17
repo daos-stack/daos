@@ -101,6 +101,9 @@ class MdtestCommand(ExecutableCommand):
         self.dfs_cont = FormattedParameter("--dfs.cont {}")
         self.dfs_group = FormattedParameter("--dfs.group {}")
         self.dfs_destroy = FormattedParameter("--dfs.destroy", True)
+        self.dfs_chunk = FormattedParameter("--dfs.chunk_size {}", 1048576)
+        self.dfs_oclass = FormattedParameter("--dfs.oclass {}", "SX")
+        self.dfs_dir_oclass = FormattedParameter("--dfs.dir_oclass {}", "SX")
 
         # A list of environment variable names to set and export with ior
         self._env_names = ["D_LOG_FILE"]
