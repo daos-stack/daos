@@ -42,6 +42,19 @@ struct dev_state_msg_arg {
 	ABT_eventual			 eventual;
 };
 
+static void
+collect_bs_usage(struct spdk_blob_store *bs, struct nvme_stats *stats)
+{
+	uint64_t	cl_sz;
+
+	D_ASSERT(bs != NULL);
+	D_ASSERT(stats != NULL);
+
+	cl_sz = spdk_bs_get_cluster_size(bs);
+	stats->total_bytes = spdk_bs_total_data_cluster_count(bs) * cl_sz;
+	stats->avail_bytes = spdk_bs_free_cluster_count(bs) * cl_sz;
+}
+
 /* Copy out the nvme_stats in the device owner xstream context */
 static void
 bio_get_dev_state_internal(void *msg_arg)
@@ -51,7 +64,7 @@ bio_get_dev_state_internal(void *msg_arg)
 	D_ASSERT(dsm != NULL);
 
 	dsm->devstate = dsm->xs->bxc_blobstore->bb_dev_health.bdh_health_state;
-	collect_bs_usage(dsm->xs->bxc_blobstore->bb_bs, &dsm->devstate):
+	collect_bs_usage(dsm->xs->bxc_blobstore->bb_bs, &dsm->devstate);
 	ABT_eventual_set(dsm->eventual, NULL, 0);
 }
 
@@ -430,19 +443,6 @@ collect_raw_health_data(struct bio_dev_health *dev_health)
 }
 
 /* Collect space utilisation for blobstore */
-static void
-collect_bs_usage(struct spdk_blob_store *bs, struct nvme_stats *stats)
-{
-	uint64_t	cl_sz;
-
-	D_ASSERT(bs != NULL);
-	D_ASSERT(stats != NULL);
-
-	cl_sz = spdk_bs_get_cluster_size(bs);
-	stats->total_bytes = spdk_bs_total_data_cluster_count(bs) * cl_sz;
-	stats->avail_bytes = spdk_bs_free_cluster_count(bs) * cl_sz;
-}
-
 void
 bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {
