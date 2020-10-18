@@ -28,7 +28,7 @@ pool component values specified in
 [`dmg pool create`](https://daos-stack.github.io/admin/pool_operations/#pool-creationdestroy)
 are per rank.
 If multiple ranks (I/O processes) have been configured per host in the server
-configurtion file
+configuration file
 [`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
 then the values supplied to `dmg pool create` should be
 a maximum of the SCM/NVMe free space divided by the number of ranks per host.
