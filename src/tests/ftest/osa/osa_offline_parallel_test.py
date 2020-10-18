@@ -256,4 +256,4 @@ class OSAOfflineParallelTest(TestWithServers):
         self.run_offline_parallel_test(1)
         # Perform drain testing : inserting data in pool
         # Bug : DAOS-4946 blocks the following test case.
-        self.run_offline_parallel_test(1, True)
+        # self.run_offline_parallel_test(1, True)
