@@ -337,9 +337,6 @@ class TestContainer(TestDaosApiBase):
             self._call_method(self.container.create, kwargs)
 
         elif self.control_method.value == self.USE_DAOS and self.daos:
-            # Disconnect the pool if connected
-            self.pool.disconnect()
-
             # Create a container with the daos command
             kwargs = {
                 "pool": self.pool.uuid,
