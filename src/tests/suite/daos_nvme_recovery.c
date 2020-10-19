@@ -254,7 +254,10 @@ nvme_test_verify_device_stats(void **state)
 	D_FREE(devices);
 }
 
-/* Verify NVMe I/O error and notification*/
+/* Simulate both an NVMe I/O read and write error.
+   Check error counters in BIO health stats to verify R/W error counts,
+   and also verify I/O error notification on the console output.
+*/
 static void
 nvme_test_simulate_IO_error(void **state)
 {

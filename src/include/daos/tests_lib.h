@@ -338,14 +338,14 @@ int dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 int dmg_storage_set_nvme_fault(const char *dmg_config_file,
 			       char *host, const uuid_t uuid, int force);
 /**
- * Get NVMe Device health stat.
+ * Get NVMe Device health stats.
  *
  * \param dmg_config_file
  *		[IN]	DMG config file
  * \param host	[IN]	Nvme set to faulty on host name provided. Only single
 					disk can be set to fault for now.
  * \param uuid	[IN]	UUID of the device.
- * \param stat	[IN/OUT]
+ * \param stats	[IN/OUT]
  *			[in] \a health stats.
  *			[out] health status result.
  */
