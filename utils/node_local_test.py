@@ -597,6 +597,7 @@ class DFuse():
 
         my_env['D_LOG_FILE'] = self.log_file
         my_env['DAOS_AGENT_DRPC_DIR'] = self._daos.agent_dir
+        my_env['DFS_USE_DTX'] = '1'
 
         self.valgrind = ValgrindHelper(v_hint)
         if self.conf.args.memcheck == 'no':
