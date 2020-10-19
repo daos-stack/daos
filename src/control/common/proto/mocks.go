@@ -63,11 +63,11 @@ func MockSmdDevice(varIdx ...int32) *ctlpb.NvmeController_SmdDevice {
 	return pb.AsProto()
 }
 
-// MockNvmeControllerHealth is a mock protobuf Health message used in tests for
+// MockNvmeHealth is a mock protobuf Health message used in tests for
 // multiple packages.
-func MockNvmeControllerHealth(varIdx ...int32) *ctlpb.NvmeController_Health {
-	native := storage.MockNvmeControllerHealth(varIdx...)
-	pb := new(NvmeControllerHealth)
+func MockNvmeHealth(varIdx ...int32) *ctlpb.NvmeController_Health {
+	native := storage.MockNvmeHealth(varIdx...)
+	pb := new(NvmeHealth)
 
 	if err := pb.FromNative(native); err != nil {
 		panic(err)
@@ -115,10 +115,17 @@ func MockScmNamespace(varIdx ...int32) *ctlpb.ScmNamespace {
 	return pb.AsProto()
 }
 
-// MockScmMount is a mock protobuf Mount message used in tests for
-// multiple packages.
-func MockScmMount() *ctlpb.ScmMount {
-	return &ctlpb.ScmMount{Mntpoint: "/mnt/daos"}
+// MockScmMountPoint generates specific protobuf SCM namespace mount message
+// used in tests for multiple packages.
+func MockScmMountPoint(varIdx ...int32) *ctlpb.ScmNamespace_Mount {
+	native := storage.MockScmMountPoint(varIdx...)
+	pb := new(ScmMountPoint)
+
+	if err := pb.FromNative(native); err != nil {
+		panic(err)
+	}
+
+	return pb.AsProto()
 }
 
 // MockPoolList returns a slice of mock protobuf Pool messages used in tests for

@@ -551,7 +551,7 @@ void
 bio_media_error(void *msg_arg)
 {
 	struct media_error_msg		*mem = msg_arg;
-	struct nvme_health_stats	*dev_state;
+	struct nvme_stats		*dev_state;
 	int				 rc;
 
 	dev_state = &mem->mem_bs->bb_dev_health.bdh_health_state;
