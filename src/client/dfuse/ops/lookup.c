@@ -344,7 +344,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		rc = check_for_uns_ep(fs_handle, ie);
 		DFUSE_TRA_DEBUG(ie,
 				"check_for_uns_ep() returned %d", rc);
-		if (rc)
+		if (rc != 0 && rc != EPERM)
 			D_GOTO(err, rc);
 	}
 
