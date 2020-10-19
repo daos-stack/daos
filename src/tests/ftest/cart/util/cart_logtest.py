@@ -294,7 +294,7 @@ class hwm_counter():
 
     def has_data(self):
         """Return true if there is any data registered"""
-        return self.__hwm != 0;
+        return self.__hwm != 0
 
     def __str__(self):
         return "Total:{:,} HWM:{:,} {} allocations, {} frees".\
