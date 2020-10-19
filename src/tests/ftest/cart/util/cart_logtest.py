@@ -186,6 +186,7 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                                            'out_owner_grp'),
                      'crt_proc_d_rank_list_t': ('rank_list',
                                                 'rank_list->rl_ranks'),
+                     'crt_self_uri_get': ('tmp_uri'),
                      'path_gen': ('*fpath'),
                      'gen_pool_buf': ('uuids'),
                      'ds_pool_tgt_map_update': ('arg'),
@@ -229,6 +230,8 @@ mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'crt_group_psr_set': ('uri'),
                     'crt_hdlr_uri_lookup': ('tmp_uri'),
                     'crt_rpc_priv_free': ('rpc_priv'),
+                    'get_self_uri': ('uri'),
+                    'tc_srv_start_basic': ('my_uri'),
                     'crt_init_opt': ('crt_gdata.cg_addr'),
                     'cont_prop_default_copy': ('entry_def->dpe_str'),
                     'ds_pool_list_cont_handler': ('cont_buf'),
@@ -762,12 +765,19 @@ def run():
                         action='store_true')
     parser.add_argument('file', help='input file')
     args = parser.parse_args()
-    log_iter = cart_logparse.LogIter(args.file)
+    try:
+        log_iter = cart_logparse.LogIter(args.file)
+    except IsADirectoryError:
+        print ('Log tracing on directory not possible')
+        return
     test_iter = LogTest(log_iter)
     if args.dfuse:
         test_iter.check_dfuse_io()
     else:
-        test_iter.check_log_file(False)
+        try:
+            test_iter.check_log_file(False)
+        except LogError:
+            print('Errors in log file, ignoring')
 
 if __name__ == '__main__':
     run()
