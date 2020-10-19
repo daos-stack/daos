@@ -3881,6 +3881,7 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	daos_handle_t	oh;
 	uint64_t	cond = 0;
 	int		rc;
+	mode_t		mode;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -3889,7 +3890,14 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	if (obj == NULL)
 		return EINVAL;
 
-	rc = check_access(dfs, geteuid(), getegid(), obj->mode, W_OK);
+	mode = obj->mode;
+
+	/* Patch in user read permissions here for trusted namespaces */
+	if (!strncmp(name, XATTR_SECURITY_PREFIX, XATTR_SECURITY_PREFIX_LEN) ||
+		!strncmp(name, XATTR_SYSTEM_PREFIX, XATTR_SYSTEM_PREFIX_LEN) )
+		mode |= S_IRUSR;
+
+	rc = check_access(dfs, geteuid(), getegid(), mode, W_OK);
 	if (rc)
 		return rc;
 
