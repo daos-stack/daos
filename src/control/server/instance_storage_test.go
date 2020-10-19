@@ -38,11 +38,12 @@ import (
 )
 
 func TestIOServerInstance_MountScmDevice(t *testing.T) {
-	const (
-		goodMountPoint = "/mnt/daos"
-	)
+	testDir, cleanup := common.CreateTestDir(t)
+	defer cleanup()
+
 	var (
-		ramCfg = &ioserver.Config{
+		goodMountPoint = testDir + "/mnt/daos"
+		ramCfg         = &ioserver.Config{
 			Storage: ioserver.StorageConfig{
 				SCM: storage.ScmConfig{
 					MountPoint:  goodMountPoint,

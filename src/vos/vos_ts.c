@@ -49,8 +49,8 @@ static const uint32_t type_counts[] = {
 #define TS_TRACE(action, entry, idx, type)				\
 	D_DEBUG(DB_TRACE, "%s %s at idx %d(%p), read.hi="DF_U64		\
 		" read.lo="DF_U64"\n", action, type_strs[type], idx,	\
-		(entry)->te_record_ptr, (entry)->te_ts_rh,		\
-		(entry)->te_ts_rl)
+		(entry)->te_record_ptr, (entry)->te_ts.tp_ts_rh,	\
+		(entry)->te_ts.tp_ts_rl)
 
 /** This probably needs more thought */
 static bool
@@ -84,19 +84,21 @@ ts_update_on_evict(struct vos_ts_table *ts_table, struct vos_ts_entry *entry)
 	}
 
 	if (other == NULL) {
-		if (entry->te_ts_rl > ts_table->tt_ts_rl) {
-			ts_table->tt_ts_rl = entry->te_ts_rl;
-			uuid_copy(ts_table->tt_tx_rl, entry->te_tx_rl);
+		if (entry->te_ts.tp_ts_rl > ts_table->tt_ts_rl) {
+			vos_ts_copy(&ts_table->tt_ts_rl, &ts_table->tt_tx_rl,
+				    entry->te_ts.tp_ts_rl,
+				    &entry->te_ts.tp_tx_rl);
 		}
-		if (entry->te_ts_rh > ts_table->tt_ts_rh) {
-			ts_table->tt_ts_rh = entry->te_ts_rh;
-			uuid_copy(ts_table->tt_tx_rh, entry->te_tx_rh);
+		if (entry->te_ts.tp_ts_rh > ts_table->tt_ts_rh) {
+			vos_ts_copy(&ts_table->tt_ts_rh, &ts_table->tt_tx_rh,
+				    entry->te_ts.tp_ts_rh,
+				    &entry->te_ts.tp_tx_rh);
 		}
 		return true;
 	}
 
-	vos_ts_rl_update(other, entry->te_ts_rl, entry->te_tx_rl);
-	vos_ts_rh_update(other, entry->te_ts_rh, entry->te_tx_rh);
+	vos_ts_rl_update(other, entry->te_ts.tp_ts_rl, &entry->te_ts.tp_tx_rl);
+	vos_ts_rh_update(other, entry->te_ts.tp_ts_rh, &entry->te_ts.tp_tx_rh);
 
 	return true;
 }
@@ -184,8 +186,8 @@ vos_ts_table_alloc(struct vos_ts_table **ts_tablep)
 
 	ts_table->tt_ts_rl = vos_start_epoch;
 	ts_table->tt_ts_rh = vos_start_epoch;
-	uuid_clear(ts_table->tt_tx_rl);
-	uuid_clear(ts_table->tt_tx_rh);
+	uuid_clear(ts_table->tt_tx_rl.dti_uuid);
+	uuid_clear(ts_table->tt_tx_rh.dti_uuid);
 	miss_cursor = ts_table->tt_misses;
 	for (i = 0; i < VOS_TS_TYPE_COUNT; i++) {
 		info = &ts_table->tt_type_info[i];
@@ -266,10 +268,10 @@ vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *parent,
 
 	if (parent == NULL) {
 		/** Use global timestamps for the type to initialize it */
-		entry->te_ts_rl = ts_table->tt_ts_rl;
-		entry->te_ts_rh = ts_table->tt_ts_rh;
-		uuid_copy(entry->te_tx_rl, ts_table->tt_tx_rl);
-		uuid_copy(entry->te_tx_rh, ts_table->tt_tx_rh);
+		vos_ts_copy(&entry->te_ts.tp_ts_rl, &entry->te_ts.tp_tx_rl,
+			    ts_table->tt_ts_rl, &ts_table->tt_tx_rl);
+		vos_ts_copy(&entry->te_ts.tp_ts_rh, &entry->te_ts.tp_tx_rh,
+			    ts_table->tt_ts_rh, &ts_table->tt_tx_rh);
 		entry->te_parent_ptr = NULL;
 	} else {
 		entry->te_parent_ptr = parent->te_record_ptr;
@@ -278,20 +280,36 @@ vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *parent,
 			lrua_lookup(parent->te_info->ti_array, neg_idx,
 				    &ts_source);
 		}
-		if (ts_source == NULL) /* for negative and uncached entries */
+		if (ts_source == NULL)
 			ts_source = parent;
 
-		entry->te_ts_rl = ts_source->te_ts_rl;
-		entry->te_ts_rh = ts_source->te_ts_rh;
-		uuid_copy(entry->te_tx_rl, ts_source->te_tx_rl);
-		uuid_copy(entry->te_tx_rh, ts_source->te_tx_rh);
+		if ((type & 1) != 0) {
+			/* This is a new negative entry. The low timestamp of
+			 * the parent should cover this case so copy it to
+			 * both timestamps.
+			 */
+			vos_ts_copy(&entry->te_ts.tp_ts_rh,
+				    &entry->te_ts.tp_tx_rh,
+				    ts_source->te_ts.tp_ts_rl,
+				    &ts_source->te_ts.tp_tx_rl);
+		} else {
+			/** It is either copying from a negative entry
+			 * or its parent was evicted so copy both timestamps
+			 */
+			vos_ts_copy(&entry->te_ts.tp_ts_rh,
+				    &entry->te_ts.tp_tx_rh,
+				    ts_source->te_ts.tp_ts_rh,
+				    &ts_source->te_ts.tp_tx_rh);
+		}
+		/** Low timestamp is always copied as is */
+		vos_ts_copy(&entry->te_ts.tp_ts_rl, &entry->te_ts.tp_tx_rl,
+			    ts_source->te_ts.tp_ts_rl,
+			    &ts_source->te_ts.tp_tx_rl);
 	}
 
 	/** Set the lower bounds for the entry */
 	entry->te_hash_idx = hash_idx;
 	entry->te_record_ptr = idx;
-	uuid_clear(entry->te_tx_rl);
-	uuid_clear(entry->te_tx_rh);
 	TS_TRACE("Allocated", entry, *idx, type);
 
 	D_ASSERT(type == info->ti_type);
@@ -301,13 +319,15 @@ vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *parent,
 
 int
 vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
-		    uint32_t akey_nr, uuid_t *tx_id)
+		    uint32_t cflags, uint32_t akey_nr,
+		    const struct dtx_id *tx_id)
 {
 	uint32_t	size;
 	uint64_t	array_size;
+	uint64_t	cond_mask = VOS_COND_FETCH_MASK | VOS_COND_UPDATE_MASK;
 
 	*ts_set = NULL;
-	if (tx_id == NULL)
+	if (tx_id == NULL && (flags & cond_mask) == 0)
 		return 0;
 
 	size = 3 + akey_nr;
@@ -318,8 +338,27 @@ vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 		return -DER_NOMEM;
 
 	(*ts_set)->ts_flags = flags;
+	(*ts_set)->ts_cflags = cflags;
+	switch (cflags & VOS_TS_WRITE_MASK) {
+	case VOS_TS_WRITE_OBJ:
+		(*ts_set)->ts_wr_level = VOS_TS_TYPE_OBJ;
+		break;
+	case VOS_TS_WRITE_DKEY:
+		(*ts_set)->ts_wr_level = VOS_TS_TYPE_DKEY;
+		break;
+	case VOS_TS_WRITE_AKEY:
+		(*ts_set)->ts_wr_level = VOS_TS_TYPE_AKEY;
+		break;
+	default:
+		/** Already zero */
+		break;
+	}
 	(*ts_set)->ts_set_size = size;
-	uuid_copy((*ts_set)->ts_tx_id, *tx_id);
+	if (tx_id != NULL) {
+		(*ts_set)->ts_in_tx = true;
+		uuid_copy((*ts_set)->ts_tx_id.dti_uuid, tx_id->dti_uuid);
+		(*ts_set)->ts_tx_id.dti_hlc = tx_id->dti_hlc;
+	} /* ts_in_tx is false by default */
 
 	return 0;
 }
@@ -336,7 +375,7 @@ vos_ts_set_upgrade(struct vos_ts_set *ts_set)
 	int			 i;
 	int			 parent_idx;
 
-	if (ts_set == NULL)
+	if (!vos_ts_in_tx(ts_set))
 		return;
 
 	ts_table = vos_ts_table_get();
@@ -360,4 +399,48 @@ vos_ts_set_upgrade(struct vos_ts_set *ts_set)
 				 info->ti_type + 2);
 		set_entry->se_entry = entry;
 	}
+}
+
+static inline bool
+vos_ts_check_conflict(daos_epoch_t read_time, const struct dtx_id *read_id,
+		      daos_epoch_t write_time, const struct dtx_id *write_id)
+
+{
+	if (write_time > read_time)
+		return false;
+
+	if (write_time != read_time)
+		return true;
+
+	if (read_id->dti_hlc != write_id->dti_hlc)
+		return true;
+
+	return uuid_compare(read_id->dti_uuid, write_id->dti_uuid) != 0;
+}
+
+bool
+vos_ts_check_read_conflict(struct vos_ts_set *ts_set, int idx,
+			   daos_epoch_t write_time)
+{
+	struct vos_ts_set_entry	*se;
+	struct vos_ts_entry	*entry;
+
+	D_ASSERT(ts_set != NULL);
+
+	se = &ts_set->ts_entries[idx];
+	entry = se->se_entry;
+
+	if (se->se_etype < ts_set->ts_wr_level) {
+		/* check the low time */
+		return vos_ts_check_conflict(entry->te_ts.tp_ts_rl,
+					     &entry->te_ts.tp_tx_rl,
+					     write_time, &ts_set->ts_tx_id);
+	}
+
+	D_ASSERT(se->se_etype == ts_set->ts_wr_level);
+
+	/* check the high time */
+	return vos_ts_check_conflict(entry->te_ts.tp_ts_rh,
+				     &entry->te_ts.tp_tx_rh,
+				     write_time, &ts_set->ts_tx_id);
 }

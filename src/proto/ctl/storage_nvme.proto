@@ -31,30 +31,46 @@ import "common.proto";
 
 // NvmeController represents an NVMe Controller (SSD).
 message NvmeController {
-	// Namespace represents a namespace created on an NvmeController.
-	message Namespace {
-		uint32 id = 1;		// namespace id
-		uint64 size = 2;	// device capacity in bytes
-		string ctrlrpciaddr = 3;
+	// Health mirrors bio_dev_state structure.
+	message Health {
+		uint64 timestamp = 1;
+		// Device health details
+		uint32 warn_temp_time = 3;
+		uint32 crit_temp_time = 4;
+		uint64 ctrl_busy_time = 5;
+		uint64 power_cycles = 6;
+		uint64 power_on_hours = 7;
+		uint64 unsafe_shutdowns = 8;
+		uint64 media_errs = 9;
+		uint64 err_log_entries = 10;
+		// I/O error counters
+		uint32 bio_read_errs = 11;
+		uint32 bio_write_errs = 12;
+		uint32 bio_unmap_errs = 13;
+		uint32 checksum_errs = 14;
+		uint32 temperature = 15; // in Kelvin
+		// Critical warnings
+		bool temp_warn = 16;
+		bool avail_spare_warn = 17;
+		bool dev_reliability_warn = 18;
+		bool read_only_warn = 19;
+		bool volatile_mem_warn = 20; // volatile memory backup
 	}
 
-	message Health {
-		uint32 temperature = 1;
-		uint32 temp_warn_time = 2; // temperature warning duration
-		uint32 temp_crit_time = 3; // temperature critical duration
-		uint64 ctrl_busy_time = 4; // controller busy duration
-		uint64 power_cycles = 5;
-		uint64 power_on_hours = 6;
-		uint64 unsafe_shutdowns = 7;
-		uint64 media_errors = 8;
-		uint64 error_count = 9; // error log entries
-		// critical warnings
-		bool temp_warn = 10;
-		bool spare_warn = 11;
-		bool device_reliability_warn = 12;
-		bool readonly_warn = 13;
-		bool volatile_memory_warn = 14;
-		string ctrlr_pci_addr = 15;
+	// Namespace represents a namespace created on an NvmeController.
+	message Namespace {
+		uint32 id = 1;			// namespace id
+		uint64 size = 2;		// device capacity in bytes
+		string ctrlrpciaddr = 3;	// parent controller PCI address
+	}
+
+	// SmdDevice represents a blobstore created on a NvmeController_Namespace.
+	// TODO: this should really be embedded in Namespace above.
+	message SmdDevice {
+		string uuid = 1;		// UUID of blobstore
+		repeated int32 tgt_ids = 2;	// VOS target IDs
+		string state = 3;		// NORMAL or FAULTY
+		uint32 rank = 4;		// DAOS I/O server using controller
 	}
 
 	string model = 1;	// model name
@@ -64,6 +80,7 @@ message NvmeController {
 	int32 socketid = 5;	// NUMA socket ID
 	Health healthstats = 6;	// controller's health stats
 	repeated Namespace namespaces = 7;	// controller's namespaces
+	repeated SmdDevice smddevices = 8;	// controller's blobstores
 }
 
 // NvmeControllerResult represents state of operation performed on controller.
@@ -83,7 +100,10 @@ message PrepareNvmeResp {
 	ResponseState state = 1;
 }
 
-message ScanNvmeReq {}
+message ScanNvmeReq {
+	bool Health = 1; // Retrieve NVMe device health statistics
+	bool Meta = 2; // Retrieve metadata relating to NVMe device.
+}
 
 message ScanNvmeResp {
 	repeated NvmeController ctrlrs = 1;

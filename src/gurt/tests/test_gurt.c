@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/**
+/*
  * This file tests macros in GURT
  */
 #ifndef TEST_OLD_ERROR
@@ -124,22 +124,26 @@ test_time(void **state)
 		assert_string_equal(value, "DER_UNKNOWN");	\
 	} while (0);
 
-#define D_CHECK_ERR_IN_RANGE(name, value)			\
+#define D_CHECK_ERR_IN_RANGE(name, value, errstr)		\
 	do {							\
-		const char	*str = d_errstr(name);		\
+		const char	*str = d_errstr(-name);		\
 		assert_string_not_equal(str, "DER_UNKNOWN");	\
 	} while (0);
 
-#define D_CHECK_IN_RANGE(name, base)		\
+#define D_CHECK_IN_RANGE(name, base)	\
 	D_FOREACH_##name##_ERR(D_CHECK_ERR_IN_RANGE)
 
 #define D_FOREACH_CUSTOM1_ERR(ACTION)				\
-	ACTION(DER_CUSTOM1,	(DER_ERR_CUSTOM1_BASE + 1))	\
-	ACTION(DER_CUSTOM2,	(DER_ERR_CUSTOM1_BASE + 2))
+	ACTION(DER_CUSTOM1,	(DER_ERR_CUSTOM1_BASE + 1),	\
+	       "Custom error description 1")			\
+	ACTION(DER_CUSTOM2,	(DER_ERR_CUSTOM1_BASE + 2),	\
+	       "Custom error description 2")
 
 #define D_FOREACH_CUSTOM2_ERR(ACTION)				\
-	ACTION(DER_CUSTOM3,	(DER_ERR_CUSTOM2_BASE + 1))	\
-	ACTION(DER_CUSTOM4,	(DER_ERR_CUSTOM2_BASE + 2))
+	ACTION(DER_CUSTOM3,	(DER_ERR_CUSTOM2_BASE + 1),	\
+	       "Custom error description 3")			\
+	ACTION(DER_CUSTOM4,	(DER_ERR_CUSTOM2_BASE + 2),	\
+	       "Custom error description 4")
 
 D_DEFINE_RANGE_ERRNO(CUSTOM1, 2000)
 D_DEFINE_RANGE_ERRNO(CUSTOM2, 3000)
@@ -158,36 +162,35 @@ void test_d_errstr_v2(void **state)
 	rc = D_REGISTER_RANGE(CUSTOM2);
 	assert_int_equal(rc, 0);
 
-	value = d_errstr(DER_CUSTOM1);
+	value = d_errstr(-DER_CUSTOM1);
 	assert_string_equal(value, "DER_CUSTOM1");
 
-	value = d_errstr(DER_CUSTOM2);
+	value = d_errstr(-DER_CUSTOM2);
 	assert_string_equal(value, "DER_CUSTOM2");
 
-	value = d_errstr(DER_CUSTOM3);
+	value = d_errstr(-DER_CUSTOM3);
 	assert_string_equal(value, "DER_CUSTOM3");
 
-	value = d_errstr(DER_CUSTOM4);
+	value = d_errstr(-DER_CUSTOM4);
 	assert_string_equal(value, "DER_CUSTOM4");
 
 	D_DEREGISTER_RANGE(CUSTOM1);
 	D_DEREGISTER_RANGE(CUSTOM2);
 
 	/* CUSTOM1 and CUSTOM2 overlap with DAOS codes */
-	value = d_errstr(DER_CUSTOM1);
+	value = d_errstr(-DER_CUSTOM1);
 	assert_string_not_equal(value, "DER_CUSTOM1");
 	assert_string_not_equal(value, "DER_UNKNOWN");
 
-	value = d_errstr(DER_CUSTOM2);
+	value = d_errstr(-DER_CUSTOM2);
 	assert_string_not_equal(value, "DER_CUSTOM2");
 	assert_string_not_equal(value, "DER_UNKNOWN");
 
-	value = d_errstr(DER_CUSTOM3);
+	value = d_errstr(-DER_CUSTOM3);
 	assert_string_equal(value, "DER_UNKNOWN");
 
-	value = d_errstr(DER_CUSTOM4);
+	value = d_errstr(-DER_CUSTOM4);
 	assert_string_equal(value, "DER_UNKNOWN");
-
 }
 
 void test_d_errstr(void **state)
@@ -199,7 +202,7 @@ void test_d_errstr(void **state)
 	value = d_errstr(-DER_INVAL);
 	assert_string_equal(value, "DER_INVAL");
 	value = d_errstr(DER_INVAL);
-	assert_string_equal(value, "DER_INVAL");
+	assert_string_equal(value, "DER_UNKNOWN");
 	value = d_errstr(5000000);
 	assert_string_equal(value, "DER_UNKNOWN");
 	value = d_errstr(3);
@@ -221,6 +224,36 @@ void test_d_errstr(void **state)
 #else
 	test_d_errstr_v2(state);
 #endif
+}
+
+void test_d_errdesc(void **state)
+{
+	const char	*value;
+
+	value = d_errdesc(-DER_INVAL);
+	assert_string_equal(value, "Invalid parameters");
+	value = d_errdesc(DER_INVAL);
+	assert_string_equal(value, "Unknown error code 1003");
+	value = d_errdesc(5000000);
+	assert_string_equal(value, "Unknown error code 5000000");
+	value = d_errdesc(3);
+	assert_string_equal(value, "Unknown error code 3");
+	value = d_errdesc(-3);
+	assert_string_equal(value, "Unknown error code -3");
+	value = d_errdesc(0);
+	assert_string_equal(value, "Success");
+	value = d_errdesc(DER_SUCCESS);
+	assert_string_equal(value, "Success");
+	value = d_errdesc(-DER_NOTDIR);
+	assert_string_equal(value, "Not a directory");
+	value = d_errdesc(-2028);
+	assert_string_equal(value, "TX is not committed");
+	value = d_errdesc(-2030);
+	assert_string_equal(value, "Unknown error code -2030");
+	value = d_errdesc(-DER_UNKNOWN);
+	assert_string_equal(value, "Unknown error");
+	value = d_errdesc(-501001);
+	assert_string_equal(value, "Unknown error code -501001");
 }
 
 static int
@@ -892,7 +925,6 @@ test_gurt_hash_traverse_count_cb(d_list_t *rlink, void *arg)
 	return 0;
 }
 
-
 static struct test_hash_entry **
 test_gurt_hash_alloc_items(int num_entries)
 {
@@ -1414,7 +1446,7 @@ _test_gurt_hash_threaded_same_operations(void *(*fn)(struct hash_thread_arg *),
 
 	/* Use barrier to make sure all threads start at the same time */
 	rc = pthread_barrier_init(&barrier, NULL,
-				TEST_GURT_HASH_NUM_THREADS + 1);
+				  TEST_GURT_HASH_NUM_THREADS + 1);
 	assert_int_equal(rc, 0);
 
 	for (i = 0; i < TEST_GURT_HASH_NUM_THREADS; i++) {
@@ -1878,7 +1910,7 @@ test_gurt_atomic(void **state)
 
 	inc  = 0;
 	inc2 = 0;
-	dec  = NUM_THREADS*NUM_THREADS;
+	dec  = NUM_THREADS * NUM_THREADS;
 	mix  = 123456;
 
 	for (i = 0; i < NUM_THREADS; i++) {
@@ -1891,10 +1923,86 @@ test_gurt_atomic(void **state)
 		assert(rc == 0);
 	}
 
-	assert(inc  == NUM_THREADS*NUM_THREADS);
-	assert(inc2 == 2*NUM_THREADS*NUM_THREADS);
+	assert(inc  == NUM_THREADS * NUM_THREADS);
+	assert(inc2 == 2 * NUM_THREADS * NUM_THREADS);
 	assert(dec  == 0);
 	assert(mix  == 123456);
+}
+
+static void
+check_string_buffer(struct d_string_buffer_t *str_buf, int str_size,
+		    int buf_size, const char *test_str)
+{
+	assert_non_null(str_buf->str);
+	assert_int_equal(str_buf->str_size, str_size);
+	assert_int_equal(str_buf->buf_size, buf_size);
+	assert_int_equal(str_buf->status, 0);
+	if (test_str != NULL) {
+		assert_string_equal(str_buf->str, test_str);
+	}
+	d_free_string(str_buf);
+}
+
+static void
+test_gurt_string_buffer(void **state)
+{
+	int rc, i;
+	struct d_string_buffer_t str_buf = {0};
+	wchar_t wbuf[2] = {129, 0};
+
+	/* empty string */
+	rc = d_write_string_buffer(&str_buf, "");
+	assert_return_code(rc, errno);
+	check_string_buffer(&str_buf, 0, 64, NULL);
+
+	/* simple string */
+	rc = d_write_string_buffer(&str_buf, "hello there");
+	assert_return_code(rc, errno);
+	check_string_buffer(&str_buf, 11, 64, "hello there");
+
+	/* simple string append*/
+	rc = d_write_string_buffer(&str_buf, "Look");
+	assert_return_code(rc, errno);
+	rc = d_write_string_buffer(&str_buf, " ");
+	assert_return_code(rc, errno);
+	rc = d_write_string_buffer(&str_buf, "inside");
+	assert_return_code(rc, errno);
+	rc = d_write_string_buffer(&str_buf, "!");
+	assert_return_code(rc, errno);
+	check_string_buffer(&str_buf, 12, 64, "Look inside!");
+
+	/* formatted string */
+	rc = d_write_string_buffer(&str_buf, "int %d float %f", 5, 3.141516);
+	assert_return_code(rc, errno);
+	check_string_buffer(&str_buf, 20, 64, "int 5 float 3.141516");
+
+	/* grow buffer */
+	for (i = 0; i < 100; i++) {
+		rc = d_write_string_buffer(&str_buf,
+					   "experience what's inside");
+		assert_return_code(rc, errno);
+	}
+	check_string_buffer(&str_buf, 24 * i, 4096, NULL);
+
+	/* run as string buffer */
+	for (i = 0; i < 100; i++) {
+		d_write_string_buffer(&str_buf,
+				      "experience what's inside");
+	}
+	check_string_buffer(&str_buf, 24 * i, 4096, NULL);
+
+	/* run as string buffer with encoding error */
+	d_write_string_buffer(&str_buf, "Only");
+	d_write_string_buffer(&str_buf, " the%ls", wbuf);
+	d_write_string_buffer(&str_buf, " paranoid");
+	d_write_string_buffer(&str_buf, " survive");
+
+	assert_int_not_equal(str_buf.status, 0);
+	assert_string_equal(strerror(errno),
+			    "Invalid or incomplete multibyte or wide character");
+
+	d_free_string(&str_buf);
+	assert_null(str_buf.str);
 }
 
 int
@@ -1903,6 +2011,7 @@ main(int argc, char **argv)
 	const struct CMUnitTest	tests[] = {
 		cmocka_unit_test(test_time),
 		cmocka_unit_test(test_d_errstr),
+		cmocka_unit_test(test_d_errdesc),
 		cmocka_unit_test(test_gurt_list),
 		cmocka_unit_test(test_gurt_hlist),
 		cmocka_unit_test(test_gurt_circular_list),
@@ -1916,9 +2025,11 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_gurt_hash_parallel_different_operations),
 		cmocka_unit_test(test_gurt_hash_parallel_refcounting),
 		cmocka_unit_test(test_gurt_atomic),
+		cmocka_unit_test(test_gurt_string_buffer),
 	};
 
 	d_register_alt_assert(mock_assert);
 
-	return cmocka_run_group_tests(tests, init_tests, fini_tests);
+	return cmocka_run_group_tests_name("test_gurt", tests, init_tests,
+		fini_tests);
 }

@@ -45,24 +45,29 @@ struct list_pools_iter_args {
 };
 
 /**
- * Destroy the pool on the specified ranks
+ * Destroy the pool on the specified ranks.
+ * If filter_invert == false: destroy on all ranks EXCEPT those in filter_ranks.
+ * If filter_invert == true:  destroy on all ranks specified in filter_ranks.
  */
 static int
-ds_mgmt_tgt_pool_destroy_ranks(uuid_t pool_uuid, d_rank_list_t *excluded)
+ds_mgmt_tgt_pool_destroy_ranks(uuid_t pool_uuid,
+			       d_rank_list_t *filter_ranks, bool filter_invert)
 {
 	crt_rpc_t			*td_req;
 	struct mgmt_tgt_destroy_in	*td_in;
 	struct mgmt_tgt_destroy_out	*td_out;
 	unsigned int			opc;
 	int				topo;
+	uint32_t			flags;
 	int				rc;
 
 	/* Collective RPC to destroy the pool on all of targets */
+	flags = filter_invert ? CRT_RPC_FLAG_FILTER_INVERT : 0;
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
 	opc = DAOS_RPC_OPCODE(MGMT_TGT_DESTROY, DAOS_MGMT_MODULE,
 			      DAOS_MGMT_VERSION);
 	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL,
-				  excluded, opc, NULL, NULL, 0, topo,
+				  filter_ranks, opc, NULL, NULL, flags, topo,
 				  &td_req);
 	if (rc)
 		D_GOTO(fini_ranks, rc);
@@ -86,7 +91,6 @@ out_rpc:
 	crt_req_decref(td_req);
 
 fini_ranks:
-	map_ranks_fini(excluded);
 	return rc;
 }
 
@@ -103,11 +107,12 @@ ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid)
 	if (rc)
 		return rc;
 
-	rc = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, &excluded);
+	rc = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, &excluded, false);
 	if (rc)
-		return rc;
-
-	return DER_SUCCESS;
+		D_GOTO(fini_ranks, rc);
+fini_ranks:
+	map_ranks_fini(&excluded);
+	return rc;
 }
 
 static int
@@ -198,7 +203,7 @@ decref:
 	crt_req_decref(tc_req);
 	if (rc) {
 		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid,
-							    rank_list);
+							    rank_list, true);
 		if (rc_cleanup)
 			D_ERROR(DF_UUID": failed to clean up failed pool: "
 				DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
@@ -487,14 +492,39 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 		    daos_prop_t *prop, uint32_t svc_nr, d_rank_list_t **svcp)
 {
 	struct mgmt_svc			*svc;
-	d_rank_list_t			*rank_list;
+	d_rank_list_t			*rank_list = NULL;
 	uuid_t				*tgt_uuids = NULL;
+	d_rank_list_t			*filtered_targets = NULL;
+	d_rank_list_t			*pg_ranks = NULL;
+	uint32_t			pg_size;
 	int				rc;
 	int				rc_cleanup;
 
 	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
 	if (rc != 0)
 		goto out;
+
+	/* Sanity check targets versus cart's current primary group members.
+	 * If any targets not in PG, flag error before MGMT_TGT_ corpcs fail.
+	 */
+	rc = crt_group_size(NULL, &pg_size);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
+	pg_ranks = d_rank_list_alloc(pg_size);
+	if (pg_ranks == NULL) {
+		rc = -DER_NOMEM;
+		D_GOTO(out, rc);
+	}
+	rc = d_rank_list_dup(&filtered_targets, targets);
+	if (rc) {
+		rc = -DER_NOMEM;
+		D_GOTO(out, rc);
+	}
+	/* Remove any targets not found in pg_ranks */
+	d_rank_list_filter(pg_ranks, filtered_targets, false /* exclude */);
+	if (!d_rank_list_identical(filtered_targets, targets)) {
+		D_ERROR("some ranks not found in cart primary group\n");
+		D_GOTO(out, rc = -DER_OOG);
+	}
 
 	rc = pool_create_prepare(svc, pool_uuid, targets, &rank_list);
 	if (rc != 0) {
@@ -539,7 +569,7 @@ out_svcp:
 		*svcp = NULL;
 
 		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid,
-							    rank_list);
+							    rank_list, true);
 		if (rc_cleanup)
 			D_ERROR(DF_UUID": failed to clean up failed pool: "
 				DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
@@ -552,6 +582,10 @@ out_preparation:
 out_svc:
 	ds_mgmt_svc_put_leader(svc);
 out:
+	d_rank_list_free(filtered_targets);
+	d_rank_list_free(pg_ranks);
+	if (rank_list != NULL)
+		d_rank_list_free(rank_list);
 	D_DEBUG(DB_MGMT, "create pool "DF_UUID": "DF_RC"\n", DP_UUID(pool_uuid),
 		DP_RC(rc));
 	return rc;
@@ -763,7 +797,7 @@ ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *rank_list,
 	for (i = 0; i < ntargets; ++i)
 		doms[i] = 1;
 
-	rc = ds_pool_add(pool_uuid, ntargets, tgt_uuids, rank_list,
+	rc = ds_pool_extend(pool_uuid, ntargets, tgt_uuids, rank_list,
 			    ARRAY_SIZE(doms), doms, ranks);
 
 	d_rank_list_free(ranks);
@@ -939,7 +973,7 @@ enum_pool_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	uuid_copy(pool->lp_puuid, key->iov_buf);
 	pool->lp_svc = d_rank_list_alloc(rec->pr_nreplicas);
 	if (pool->lp_svc == NULL)
-		return DER_NOMEM;
+		return -DER_NOMEM;
 	for (ri = 0; ri < rec->pr_nreplicas; ri++)
 		pool->lp_svc->rl_ranks[ri] = rec->pr_replicas[ri];
 	return 0;

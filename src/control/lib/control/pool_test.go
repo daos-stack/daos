@@ -29,6 +29,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -44,7 +45,7 @@ func TestControl_PoolDestroy(t *testing.T) {
 	}{
 		"local failure": {
 			req: &PoolDestroyReq{
-				UUID: MockUUID,
+				UUID: common.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryError: errors.New("local failed"),
@@ -53,7 +54,7 @@ func TestControl_PoolDestroy(t *testing.T) {
 		},
 		"remote failure": {
 			req: &PoolDestroyReq{
-				UUID: MockUUID,
+				UUID: common.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
@@ -68,7 +69,7 @@ func TestControl_PoolDestroy(t *testing.T) {
 		},
 		"success": {
 			req: &PoolDestroyReq{
-				UUID: MockUUID,
+				UUID: common.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
@@ -106,7 +107,7 @@ func TestControl_PoolDrain(t *testing.T) {
 	}{
 		"local failure": {
 			req: &PoolDrainReq{
-				UUID:      MockUUID,
+				UUID:      common.MockUUID(),
 				Rank:      2,
 				Targetidx: []uint32{1, 2, 3},
 			},
@@ -117,7 +118,7 @@ func TestControl_PoolDrain(t *testing.T) {
 		},
 		"remote failure": {
 			req: &PoolDrainReq{
-				UUID:      MockUUID,
+				UUID:      common.MockUUID(),
 				Rank:      2,
 				Targetidx: []uint32{1, 2, 3},
 			},
@@ -136,7 +137,7 @@ func TestControl_PoolDrain(t *testing.T) {
 		},
 		"success": {
 			req: &PoolDrainReq{
-				UUID:      MockUUID,
+				UUID:      common.MockUUID(),
 				Rank:      2,
 				Targetidx: []uint32{1, 2, 3},
 			},
@@ -176,7 +177,7 @@ func TestControl_PoolEvict(t *testing.T) {
 	}{
 		"local failure": {
 			req: &PoolEvictReq{
-				UUID: MockUUID,
+				UUID: common.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryError: errors.New("local failed"),
@@ -185,7 +186,7 @@ func TestControl_PoolEvict(t *testing.T) {
 		},
 		"remote failure": {
 			req: &PoolEvictReq{
-				UUID: MockUUID,
+				UUID: common.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
@@ -200,7 +201,7 @@ func TestControl_PoolEvict(t *testing.T) {
 		},
 		"success": {
 			req: &PoolEvictReq{
-				UUID: MockUUID,
+				UUID: common.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
@@ -251,16 +252,8 @@ func TestControl_PoolCreate(t *testing.T) {
 			},
 			expErr: errors.New("remote failed"),
 		},
-		"invalid UUID": {
-			req: &PoolCreateReq{
-				UUID: "bad",
-			},
-			expErr: errors.New("invalid UUID"),
-		},
 		"success": {
-			req: &PoolCreateReq{
-				UUID: MockUUID,
-			},
+			req: &PoolCreateReq{},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolCreateResp{
@@ -269,7 +262,6 @@ func TestControl_PoolCreate(t *testing.T) {
 				),
 			},
 			expResp: &PoolCreateResp{
-				UUID:    MockUUID,
 				SvcReps: []uint32{0, 1, 2},
 			},
 		},
@@ -292,7 +284,8 @@ func TestControl_PoolCreate(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+			cmpOpt := cmpopts.IgnoreFields(PoolCreateResp{}, "UUID")
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpt); diff != "" {
 				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -328,7 +321,7 @@ func TestControl_PoolQuery(t *testing.T) {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolQueryResp{
-						Uuid:            MockUUID,
+						Uuid:            common.MockUUID(),
 						Totaltargets:    42,
 						Activetargets:   16,
 						Disabledtargets: 17,
@@ -355,7 +348,7 @@ func TestControl_PoolQuery(t *testing.T) {
 				),
 			},
 			expResp: &PoolQueryResp{
-				UUID: MockUUID,
+				UUID: common.MockUUID(),
 				PoolInfo: PoolInfo{
 					TotalTargets:    42,
 					ActiveTargets:   16,
@@ -390,7 +383,7 @@ func TestControl_PoolQuery(t *testing.T) {
 			req := tc.req
 			if req == nil {
 				req = &PoolQueryReq{
-					UUID: MockUUID,
+					UUID: common.MockUUID(),
 				}
 			}
 			mic := tc.mic
@@ -421,7 +414,7 @@ func TestPoolSetProp(t *testing.T) {
 		testPropValNum uint64 = 42
 	)
 	defaultReq := &PoolSetPropReq{
-		UUID:     MockUUID,
+		UUID:     common.MockUUID(),
 		Property: testPropName,
 		Value:    testPropValStr,
 	}
@@ -452,14 +445,14 @@ func TestPoolSetProp(t *testing.T) {
 		},
 		"empty request property": {
 			req: &PoolSetPropReq{
-				UUID:     MockUUID,
+				UUID:     common.MockUUID(),
 				Property: "",
 			},
 			expErr: errors.New("invalid property name"),
 		},
 		"invalid request value": {
 			req: &PoolSetPropReq{
-				UUID:     MockUUID,
+				UUID:     common.MockUUID(),
 				Property: testPropName,
 			},
 			expErr: errors.New("unhandled property value"),
@@ -508,12 +501,12 @@ func TestPoolSetProp(t *testing.T) {
 				),
 			},
 			req: &PoolSetPropReq{
-				UUID:     MockUUID,
+				UUID:     common.MockUUID(),
 				Property: testPropName,
 				Value:    testPropValStr,
 			},
 			expResp: &PoolSetPropResp{
-				UUID:     MockUUID,
+				UUID:     common.MockUUID(),
 				Property: testPropName,
 				Value:    testPropValStr,
 			},
@@ -532,12 +525,12 @@ func TestPoolSetProp(t *testing.T) {
 				),
 			},
 			req: &PoolSetPropReq{
-				UUID:     MockUUID,
+				UUID:     common.MockUUID(),
 				Property: testPropName,
 				Value:    testPropValNum,
 			},
 			expResp: &PoolSetPropResp{
-				UUID:     MockUUID,
+				UUID:     common.MockUUID(),
 				Property: testPropName,
 				Value:    strconv.FormatUint(testPropValNum, 10),
 			},
@@ -607,7 +600,7 @@ func TestControl_ListPools(t *testing.T) {
 					&mgmtpb.ListPoolsResp{
 						Pools: []*mgmtpb.ListPoolsResp_Pool{
 							{
-								Uuid:    MockUUID,
+								Uuid:    common.MockUUID(),
 								Svcreps: []uint32{1, 3, 5, 8},
 							},
 						},
@@ -617,7 +610,7 @@ func TestControl_ListPools(t *testing.T) {
 			expResp: &ListPoolsResp{
 				Pools: []*common.PoolDiscovery{
 					{
-						UUID:        MockUUID,
+						UUID:        common.MockUUID(),
 						SvcReplicas: []uint32{1, 3, 5, 8},
 					},
 				},

@@ -44,6 +44,17 @@ def get_build_tags(benv):
         return ""
     return "-tags firmware"
 
+def is_release_build(benv):
+    "Check whether this build is for release."
+    return benv.get("BUILD_TYPE") == "release"
+
+def get_build_flags(benv):
+    flags = ""
+    if not is_release_build(benv):
+        # enable race detector for non-release builds
+        flags += "-race"
+    return flags
+
 #pylint: disable=too-many-arguments
 def install_go_bin(denv, gosrc, libs, name, install_name):
     """
@@ -81,8 +92,8 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
     # Must be run from the top of the source dir in order to
     # pick up the vendored modules.
     denv.Command(build_bin, src + gurt_lib,
-                 'cd %s; %s build -mod vendor -v %s %s -o %s %s' %
-                 (gosrc, GO_BIN, go_ldflags(), get_build_tags(denv),
+                 'cd %s; %s build -mod vendor -v %s %s %s -o %s %s' %
+                 (gosrc, GO_BIN, go_ldflags(), get_build_flags(denv), get_build_tags(denv),
                   build_bin, install_src))
     # Use the intermediate build location in order to play nicely
     # with --install-sandbox.
@@ -180,13 +191,14 @@ def scons():
     SConscript('lib/spdk/SConscript', exports='denv')
 
     senv = denv.Clone()
+    denv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
     prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
 
     cgolibdirs = senv.subst("-L$BUILD_DIR/src/control/lib/spdk "
                             "-L$BUILD_DIR/src/gurt "
-                            "-L$BUILD_DIR/src/cart/src/cart "
+                            "-L$BUILD_DIR/src/cart "
                             "-L$SPDK_PREFIX/lib "
-                            "-L$OFI_PREFIX/lib -L$ISAL_PREFIX/lib $_RPATH")
+                            "-L$OFI_PREFIX/lib $_RPATH")
     # Explicitly link RTE & SPDK libs for CGO access (need for clang build).
     ldopts = cgolibdirs + " -lspdk_env_dpdk -lspdk_thread -lspdk_bdev" + \
              " -lspdk_copy -lrte_mempool  -lrte_mempool_ring" + \
@@ -196,7 +208,7 @@ def scons():
              " -lspdk_blob -lspdk_nvme -lspdk_util -lspdk_json" + \
              " -lspdk_jsonrpc -lspdk_rpc -lspdk_trace" + \
              " -lspdk_sock -lspdk_log -lspdk_notify" + \
-             " -lspdk_blob_bdev -lspdk_vmd -lnuma -ldl -lisal"
+             " -lspdk_blob_bdev -lspdk_vmd -lnuma -ldl"
 
     senv.AppendENVPath("CGO_LDFLAGS", ldopts, sep=" ")
 

@@ -59,7 +59,7 @@ func TestControl_StartRanks(t *testing.T) {
 				},
 			},
 			expResp: &RanksResp{
-				HostErrorsResp: mockHostErrorsResp(t, &mockHostError{"host1", "remote failed"}),
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "remote failed"}),
 			},
 		},
 		"no results": {
@@ -116,7 +116,7 @@ func TestControl_StartRanks(t *testing.T) {
 					{Rank: 2, Action: "start", State: system.MemberStateReady},
 					{Rank: 3, Action: "start", Errored: true, Msg: "uh oh", State: system.MemberStateStopped},
 				},
-				HostErrorsResp: mockHostErrorsResp(t, &mockHostError{"host3", "connection refused"}),
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host3", "connection refused"}),
 			},
 		},
 	} {
@@ -161,7 +161,7 @@ func TestControl_PrepShutdownRanks(t *testing.T) {
 				},
 			},
 			expResp: &RanksResp{
-				HostErrorsResp: mockHostErrorsResp(t, &mockHostError{"host1", "remote failed"}),
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "remote failed"}),
 			},
 		},
 		"no results": {
@@ -218,7 +218,7 @@ func TestControl_PrepShutdownRanks(t *testing.T) {
 					{Rank: 2, Action: "prep shutdown", State: system.MemberStateStopping},
 					{Rank: 3, Action: "prep shutdown", Errored: true, Msg: "uh oh", State: system.MemberStateStopped},
 				},
-				HostErrorsResp: mockHostErrorsResp(t, &mockHostError{"host3", "connection refused"}),
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host3", "connection refused"}),
 			},
 		},
 	} {
@@ -263,7 +263,7 @@ func TestControl_StopRanks(t *testing.T) {
 				},
 			},
 			expResp: &RanksResp{
-				HostErrorsResp: mockHostErrorsResp(t, &mockHostError{"host1", "remote failed"}),
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "remote failed"}),
 			},
 		},
 		"no results": {
@@ -320,7 +320,7 @@ func TestControl_StopRanks(t *testing.T) {
 					{Rank: 2, Action: "stop", State: system.MemberStateStopped},
 					{Rank: 3, Action: "stop", Errored: true, Msg: "uh oh", State: system.MemberStateErrored},
 				},
-				HostErrorsResp: mockHostErrorsResp(t, &mockHostError{"host3", "connection refused"}),
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host3", "connection refused"}),
 			},
 		},
 	} {
@@ -365,7 +365,7 @@ func TestControl_PingRanks(t *testing.T) {
 				},
 			},
 			expResp: &RanksResp{
-				HostErrorsResp: mockHostErrorsResp(t, &mockHostError{"host1", "remote failed"}),
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "remote failed"}),
 			},
 		},
 		"no results": {
@@ -422,7 +422,7 @@ func TestControl_PingRanks(t *testing.T) {
 					{Rank: 2, Action: "ping", State: system.MemberStateReady},
 					{Rank: 3, Action: "ping", Errored: true, Msg: "uh oh", State: system.MemberStateUnresponsive},
 				},
-				HostErrorsResp: mockHostErrorsResp(t, &mockHostError{"host3", "connection refused"}),
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host3", "connection refused"}),
 			},
 		},
 	} {
@@ -905,24 +905,6 @@ func TestControl_SystemStop(t *testing.T) {
 }
 
 func TestControl_SystemReformat(t *testing.T) {
-	testHS, err := hostlist.CreateSet("foo-[1-23]")
-	if err != nil {
-		t.Fatal(err)
-	}
-	testReqHS := new(SystemResetFormatReq)
-	testReqHS.Hosts = *testHS
-	testRespHS := new(SystemResetFormatResp)
-	testRespHS.AbsentHosts = *testHS
-
-	testRS, err := system.CreateRankSet("1-23")
-	if err != nil {
-		t.Fatal(err)
-	}
-	testReqRS := new(SystemResetFormatReq)
-	testReqRS.Ranks = *testRS
-	testRespRS := new(SystemResetFormatResp)
-	testRespRS.AbsentRanks = *testRS
-
 	for name, tc := range map[string]struct {
 		req     *SystemResetFormatReq
 		uErr    error
@@ -943,34 +925,6 @@ func TestControl_SystemReformat(t *testing.T) {
 			req:    new(SystemResetFormatReq),
 			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
 			expErr: errors.New("remote failed"),
-		},
-		"request absent host set": {
-			req: testReqHS,
-			uResp: MockMSResponse("0.0.0.0", nil,
-				&ctlpb.SystemResetFormatResp{
-					Absenthosts: "foo-[1-23]",
-				}),
-			expResp: &StorageFormatResp{
-				HostErrorsResp: HostErrorsResp{
-					HostErrors: mockHostErrorsMap(t, &mockHostError{
-						"foo-[1-23]", "unknown host",
-					}),
-				},
-			},
-		},
-		"request absent rank set": {
-			req: testReqRS,
-			uResp: MockMSResponse("0.0.0.0", nil,
-				&ctlpb.SystemResetFormatResp{
-					Absentranks: "1-23",
-				}),
-			expResp: &StorageFormatResp{
-				HostErrorsResp: HostErrorsResp{
-					HostErrors: mockHostErrorsMap(t, &mockHostError{
-						"0.0.0.0", "23 ranks unknown: 1-23",
-					}),
-				},
-			},
 		},
 		"no results": {
 			req: new(SystemResetFormatReq),
@@ -1026,7 +980,7 @@ func TestControl_SystemReformat(t *testing.T) {
 			),
 			expResp: &StorageFormatResp{
 				HostErrorsResp: HostErrorsResp{
-					HostErrors: mockHostErrorsMap(t, &mockHostError{
+					HostErrors: mockHostErrorsMap(t, &MockHostError{
 						"10.0.0.1:10001", "1 rank failed: didn't start",
 					}),
 				},
@@ -1088,9 +1042,9 @@ func TestControl_SystemReformat(t *testing.T) {
 			expResp: &StorageFormatResp{
 				HostErrorsResp: HostErrorsResp{
 					HostErrors: mockHostErrorsMap(t,
-						&mockHostError{"10.0.0.4:10001", "2 ranks failed: didn't start"},
-						&mockHostError{"10.0.0.[1,3]:10001", "1 rank failed: didn't start"},
-						&mockHostError{"10.0.0.3:10001", "1 rank failed: something bad"},
+						&MockHostError{"10.0.0.4:10001", "2 ranks failed: didn't start"},
+						&MockHostError{"10.0.0.[1,3]:10001", "1 rank failed: didn't start"},
+						&MockHostError{"10.0.0.3:10001", "1 rank failed: something bad"},
 					),
 				},
 			},

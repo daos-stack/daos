@@ -29,7 +29,8 @@ from general_utils import pcmd
 class DaosTestError(Exception):
     """DAOS API exception class."""
 
-def acl_entry(usergroup, name, perm, permissions):
+
+def acl_entry(usergroup, name, perm, permissions=None):
     """Create a daos acl entry for the specified user or group and permission
 
     Args:
@@ -96,10 +97,32 @@ def create_acl_file(file_name, permissions):
         permissions (str): daos acl permission list.
 
     """
-    acl_file = open(file_name, "w")
+    acl_file = open(file_name, "w+")
     acl_file.write("\n".join(permissions))
     acl_file.close()
 
+
+def read_acl_file(filename):
+    """Read contents of given acl file.
+
+    Args:
+        filename: name of file to be read for acl information
+
+    Returns:
+        list: list containing ACL entries
+
+    """
+    f = open(filename, 'r')
+    content = f.readlines()
+    f.close()
+
+    # Parse
+    acl = []
+    for entry in content:
+        if not entry.startswith("#"):
+            acl.append(entry.strip())
+
+    return acl
 
 def generate_acl_file(acl_type, acl_args):
     """Creates an acl file for the specified type.

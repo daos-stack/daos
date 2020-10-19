@@ -50,23 +50,25 @@ class OSAOfflineDrain(TestWithServers):
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):
-        """Get the pool leader
-           Returns :
+        """Get the pool leader.
+
+        Returns:
             int: pool leader value
+
         """
-        kwargs = {"pool": self.pool.uuid}
-        out = self.dmg_command.get_output("pool_query", **kwargs)
-        return int(out[0][3])
+        data = self.dmg_command.pool_query(self.pool.uuid)
+        return int(data["leader"])
 
     @fail_on(CommandFailure)
     def get_pool_version(self):
-        """Get the pool version
-           Returns :
-            int : pool_version_value
+        """Get the pool version.
+
+        Returns:
+            int: pool_version_value
+
         """
-        kwargs = {"pool": self.pool.uuid}
-        out = self.dmg_command.get_output("pool_query", **kwargs)
-        return int(out[0][4])
+        data = self.dmg_command.pool_query(self.pool.uuid)
+        return int(data["version"])
 
     @fail_on(DaosApiError)
     def write_single_object(self):
@@ -111,8 +113,8 @@ class OSAOfflineDrain(TestWithServers):
         target_list = []
         drain_servers = len(self.hostlist_servers) - 1
 
-        # Exclude target : random two targets
-        n = random.randint(1, 7)
+        # Exclude target : random two targets  (target idx : 0-7)
+        n = random.randint(0, 6)
         target_list.append(n)
         target_list.append(n+1)
         t_string = "{},{}".format(target_list[0], target_list[1])

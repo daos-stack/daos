@@ -27,6 +27,7 @@ from getpass import getuser
 from grp import getgrgid
 from pwd import getpwuid
 import re
+import json
 
 from command_utils_base import CommandFailure
 from dmg_utils_base import DmgCommandBase
@@ -35,6 +36,21 @@ from dmg_utils_base import DmgCommandBase
 class DmgCommand(DmgCommandBase):
     # pylint: disable=too-many-ancestors,too-many-public-methods
     """Defines a object representing a dmg command with helper methods."""
+
+    # Member state defined in control/system/member.go. Used for dmg system
+    # query.
+    SYSTEM_QUERY_STATES = {
+        "UNKNOWN": 0,
+        "AWAIT_FORMAT": 1,
+        "STARTING": 2,
+        "READY": 3,
+        "JOINED": 4,
+        "STOPPING": 5,
+        "STOPPED": 6,
+        "EVICTED": 7,
+        "ERRORED": 8,
+        "UNRESPONSIVE": 9
+    }
 
     # As the handling of these regular expressions are moved inside their
     # respective methods, they should be removed from this definition.
@@ -46,13 +62,6 @@ class DmgCommand(DmgCommandBase):
             r"Socket\s+(\d+)|(ofi\+[a-z0-9;_]+)\s+([a-z0-9, ]+)",
         "pool_list":
             r"(?:([0-9a-fA-F-]+) +([0-9,]+))",
-        "pool_query":
-            r"(?:Pool\s+([0-9a-fA-F-]+),\s+ntarget=(\d+),\s+disabled=(\d+),"
-            r"\s+leader=(\d+),\s+version=(\d+)|Target\(VOS\)\s+count:"
-            r"\s*(\d+)|(?:(?:SCM:|NVMe:)\s+Total\s+size:\s+([0-9.]+\s+[A-Z]+)"
-            r"\s+Free:\s+([0-9.]+\s+[A-Z]+),\smin:([0-9.]+\s+[A-Z]+),"
-            r"\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"
-            r"|Rebuild\s+\w+,\s+([0-9]+)\s+objs,\s+([0-9]+)\s+recs)",
         "storage_query_list_pools":
             r"[-]+\s+([a-z0-9-]+)\s+[-]+|(?:UUID:([a-z0-9-]+)\s+Rank:([0-9]+)"
             r"\s+Targets:\[([0-9 ]+)\])(?:\s+Blobs:\[([0-9 ]+)\]\s+?$)",
@@ -206,7 +215,7 @@ class DmgCommand(DmgCommandBase):
 
         return data
 
-    def storage_format(self, reformat=False):
+    def storage_format(self, reformat=False, timeout=30):
         """Get the result of the dmg storage format command.
 
         Args:
@@ -214,6 +223,8 @@ class DmgCommand(DmgCommandBase):
                 This will create control-plane related metadata i.e. superblock
                 file and reformat if the storage media is available and
                 formattable.
+            timeout: seconds after which the format is considered a failure and
+                times out.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -223,7 +234,11 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg storage format command fails.
 
         """
-        return self._get_result(("storage", "format"), reformat=reformat)
+        saved_timeout = self.timeout
+        self.timeout = timeout
+        result = self._get_result(("storage", "format"), reformat=reformat)
+        self.timeout = saved_timeout
+        return result
 
     def storage_prepare(self, user=None, hugepages="4096", nvme=False,
                         scm=False, reset=False, force=True):
@@ -334,18 +349,18 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("storage", "query", "target-health"), rank=rank, tgtid=tgtid)
 
-    def storage_query_nvme_health(self):
-        """Get the result of the 'dmg storage query nvme-health' command.
+    def storage_scan_nvme_health(self):
+        """Get the result of the 'dmg storage scan --nvme-health' command.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
                 information, e.g. exit status, stdout, stderr, etc.
 
         Raises:
-            CommandFailure: if the dmg storage prepare command fails.
+            CommandFailure: If dmg storage scan --nvme-health command fails.
 
         """
-        return self._get_result(("storage", "query", "nvme-health"))
+        return self._get_result(("storage", "scan"), nvme_health=True)
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, group=None, acl_file=None):
@@ -393,12 +408,30 @@ class DmgCommand(DmgCommandBase):
 
         # Extract the new pool UUID and SVC list from the command output
         data = {}
-        match = re.findall(
-            r"UUID:\s+([A-Za-z0-9-]+),\s+Service replicas:\s+([A-Za-z0-9-]+)",
-            self.result.stdout)
-        if match:
-            data["uuid"] = match[0][0]
-            data["svc"] = match[0][1]
+        if self.json.value:
+            # Sample json output.
+            # "response": {
+            #     "UUID": "ebac9285-61ec-4d2e-aa2d-4d0f7dd6b7d6",
+            #     "Svcreps": [
+            #     0
+            #     ]
+            # },
+            # "error": null,
+            # "status": 0
+            output = json.loads(self.result.stdout)
+            data["uuid"] = output["response"]["UUID"]
+            data["svc"] = ",".join(
+                [str(svc) for svc in output["response"]["Svcreps"]])
+
+        else:
+            match = re.findall(
+                r"UUID:\s+([A-Za-z0-9-]+),\s+"
+                r"Service replicas:\s+([0-9]+(,[0-9]+)*)",
+                self.result.stdout)
+            if match:
+                data["uuid"] = match[0][0]
+                data["svc"] = match[0][1]
+
         return data
 
     def pool_query(self, pool):
@@ -407,15 +440,118 @@ class DmgCommand(DmgCommandBase):
         Args:
             uuid (str): Pool UUID to query.
 
-        Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
-
         Raises:
             CommandFailure: if the dmg pool query command fails.
 
+        Returns:
+            dict: a dictionary containing the pool information when successfully
+                extracted form the dmg command result.
+
         """
-        return self._get_result(("pool", "query"), pool=pool)
+        self._get_result(("pool", "query"), pool=pool)
+
+        # Extract the new pool information from the command output.
+        # Sample output:
+        #   Pool <A>, ntarget=<B>, disabled=<C>, leader=<D>, version=<E>
+        #   Pool space info:
+        #   - Target(VOS) count:<F>
+        #   - SCM:
+        #     Total size: <G>
+        #     Free: <H>, min:<I>, max:<J>, mean:<K>
+        #   - NVMe:
+        #     Total size: <L>
+        #     Free: <M>, min:<N>, max:<O>, mean:<P>
+        #   Rebuild <Q>, <R> objs, <S> recs
+        #
+        # This yields the following tuple of tuples when run through the regex:
+        #   0: (<A>, <B>, <C>, <D>, <E>, '', '', '', '', '', '', '', '', '')
+        #   1: ('', '', '', '', '', <F>, '', '', '', '', '', '', '', '')
+        #   2: ('', '', '', '', '', '', <G>, <H>, <I>, <J>, <K>, '', '', '')
+        #   3: ('', '', '', '', '', '', <L>, <M>, <N>, <O>, <P>, '', '', '')
+        #   4: ('', '', '', '', '', '', '', '', '', '', '', <Q>, <R>, <S>)
+        #
+        # This method will convert the regex result into the following dict:
+        #   data = {
+        #       "uuid": <A>,
+        #       "ntarget": <B>,
+        #       "disabled": <C>,
+        #       "leader": <D>,
+        #       "version": <E>,
+        #       "target_count": <F>,
+        #       "scm": {
+        #           "total": <G>,
+        #           "free": <H>,
+        #           "free_min": <I>,
+        #           "free_max": <J>,
+        #           "free_mean": <K>
+        #       },
+        #       "nvme": {
+        #           "total": <L>,
+        #           "free": <M>,
+        #           "free_min": <N>,
+        #           "free_max": <O>,
+        #           "free_mean": <P>
+        #       },
+        #       "rebuild": {
+        #           "status": <Q>,
+        #           "objects": <R>,
+        #           "records": <S>
+        #       }
+        #   }
+        #
+        data = {}
+        match = re.findall(
+            r"(?:Pool\s+([0-9a-fA-F-]+),\s+ntarget=(\d+),\s+disabled=(\d+),"
+            r"\s+leader=(\d+),\s+version=(\d+)|Target\(VOS\)\s+count:"
+            r"\s*(\d+)|(?:(?:SCM:|NVMe:)\s+Total\s+size:\s+([0-9.]+\s+[A-Z]+)"
+            r"\s+Free:\s+([0-9.]+\s+[A-Z]+),\smin:([0-9.]+\s+[A-Z]+),"
+            r"\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"
+            r"|Rebuild\s+(\w+),\s+([0-9]+)\s+objs,\s+([0-9]+)\s+recs)",
+            self.result.stdout)
+        if match:
+            # Mapping of the pool data entries to the match[0] indices
+            pool_map = {
+                "uuid": 0,
+                "ntarget": 1,
+                "disabled": 2,
+                "leader": 3,
+                "version": 4
+            }
+            # Mapping of the pool space entries to the match[2|3] indices
+            space_map = {
+                "total": 6,
+                "free": 7,
+                "free_min": 8,
+                "free_max": 9,
+                "free_mean": 10
+            }
+            # Mapping of the second indices mappings to the first match indices
+            map_values = {
+                0: pool_map,
+                1: {"target_count": 5},
+                2: space_map,
+                3: space_map,
+                4: {"status": 11, "objects": 12, "records": 13}
+            }
+            for index_1, match_list in enumerate(match):
+                if index_1 not in map_values:
+                    continue
+                for key, index_2 in map_values[index_1].items():
+                    if index_1 == 2:
+                        if "scm" not in data:
+                            data["scm"] = {}
+                        data["scm"][key] = match_list[index_2]
+                    elif index_1 == 3:
+                        if "nvme" not in data:
+                            data["nvme"] = {}
+                        data["nvme"][key] = match_list[index_2]
+                    elif index_1 == 4:
+                        if "rebuild" not in data:
+                            data["rebuild"] = {}
+                        data["rebuild"][key] = match_list[index_2]
+                    else:
+                        data[key] = match_list[index_2]
+        return data
 
     def pool_destroy(self, pool, force=True):
         """Destroy a pool with the dmg command.
@@ -450,13 +586,13 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("pool", "get-acl"), pool=pool)
 
-    def pool_update_acl(self, pool, acl_file, entry):
+    def pool_update_acl(self, pool, acl_file=None, entry=None):
         """Update the acl for a given pool.
 
         Args:
             pool (str): Pool for which to update the ACL.
-            acl_file (str): ACL file to update
-            entry (str): entry to be updated
+            acl_file (str, optional): ACL file to update
+            entry (str, optional): entry to be updated
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -558,7 +694,7 @@ class DmgCommand(DmgCommandBase):
             ("pool", "exclude"), pool=pool, rank=rank, tgt_idx=tgt_idx)
 
     def pool_drain(self, pool, rank, tgt_idx=None):
-        """Drain a daos_server from the pool
+        """Drain a daos_server from the pool.
 
         Args:
             pool (str): Pool uuid.
@@ -595,24 +731,25 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "reintegrate"), pool=pool, rank=rank, tgt_idx=tgt_idx)
 
-    def system_query(self, rank=None, verbose=True):
+    def system_query(self, ranks=None, verbose=True):
         """Query system to obtain the status of the servers.
 
         Args:
-            rank: Specify specific rank to obtain it's status
-                  Defaults to None, which means report all available
-                  ranks.
+            ranks (str): Specify specific ranks to obtain it's status. Use
+                comma separated list for multiple ranks. e.g., 0,1.
+                Defaults to None, which means report all available ranks.
             verbose (bool): To obtain detailed query report
 
         Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
 
         Raises:
-            CommandFailure: if the dmg storage prepare command fails.
+            CommandFailure: if the dmg system query command fails.
 
         """
-        return self._get_result(("system", "query"), rank=rank, verbose=verbose)
+        return self._get_result(
+            ("system", "query"), ranks=ranks, verbose=verbose)
 
     def system_start(self):
         """Start the system.
@@ -627,12 +764,14 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("system", "start"))
 
-    def system_stop(self, force=False):
+    def system_stop(self, force=False, ranks=None):
         """Stop the system.
 
         Args:
             force (bool, optional): whether to force the stop. Defaults to
                 False.
+            ranks (str, optional): comma separated ranks to stop. Defaults to
+                None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -642,7 +781,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg system stop command fails.
 
         """
-        return self._get_result(("system", "stop"), force=force)
+        return self._get_result(("system", "stop"), force=force, ranks=ranks)
 
 
 def check_system_query_status(stdout_str):
@@ -675,35 +814,6 @@ def check_system_query_status(stdout_str):
             print("Rank {} failed with state '{}'".format(out[0], out[3]))
         check = False
     return check
-
-def get_pool_uuid_service_replicas_from_stdout(stdout_str):
-    """Get Pool UUID and Service replicas from stdout.
-
-    stdout_str is something like:
-    Active connections: [wolf-3:10001]
-    Creating DAOS pool with 100MB SCM and 0B NvMe storage (1.000 ratio)
-    Pool-create command SUCCEEDED: UUID: 9cf5be2d-083d-4f6b-9f3e-38d771ee313f,
-    Service replicas: 0
-    This method makes it easy to create a test.
-
-    Args:
-        stdout_str (str): Output of pool create command.
-
-    Returns:
-        Tuple (str, str): Tuple that contains two items; Pool UUID and Service
-            replicas if found. If not found, the tuple contains None.
-
-    """
-    # Find the following with regex. One or more of whitespace after "UUID:"
-    # followed by one of more of number, alphabets, or -. Use parenthesis to
-    # get the returned value.
-    uuid = None
-    svc = None
-    match = re.search(r" UUID: (.+), Service replicas: (.+)", stdout_str)
-    if match:
-        uuid = match.group(1)
-        svc = match.group(2)
-    return uuid, svc
 
 
 # ************************************************************************

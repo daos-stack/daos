@@ -400,9 +400,8 @@ punch_entry:
 
 static int
 insert_entry(daos_handle_t oh, daos_handle_t th, const char *name,
-	     bool cond_check, struct dfs_entry entry)
+	     struct dfs_entry entry)
 {
-	uint64_t	cond = 0;
 	d_sg_list_t	sgl;
 	d_iov_t		sg_iovs[INODE_AKEYS];
 	daos_iod_t	iod;
@@ -410,9 +409,6 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	daos_key_t	dkey;
 	unsigned int	i;
 	int		rc;
-
-	if (cond_check)
-		cond = DAOS_COND_DKEY_INSERT;
 
 	d_iov_set(&dkey, (void *)name, strlen(name));
 	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, strlen(INODE_AKEY_NAME));
@@ -442,9 +438,12 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	sgl.sg_nr_out	= 0;
 	sgl.sg_iovs	= sg_iovs;
 
-	rc = daos_obj_update(oh, th, cond, &dkey, 1, &iod, &sgl, NULL);
+	rc = daos_obj_update(oh, th, DAOS_COND_DKEY_INSERT, &dkey, 1, &iod,
+			     &sgl, NULL);
 	if (rc) {
-		D_ERROR("Failed to insert entry %s (%d)\n", name, rc);
+		/** don't log error if conditional failed */
+		if (rc != -DER_EXIST)
+			D_ERROR("Failed to insert entry %s (%d)\n", name, rc);
 		return daos_der2errno(rc);
 	}
 
@@ -572,7 +571,7 @@ check_name(const char *name)
 {
 	if (name == NULL || strchr(name, '/'))
 		return EINVAL;
-	if (strnlen(name, DFS_MAX_PATH) > DFS_MAX_PATH)
+	if (strnlen(name, DFS_MAX_PATH + 1) > DFS_MAX_PATH)
 		return EINVAL;
 	return 0;
 }
@@ -672,7 +671,7 @@ open_file(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 		if (chunk_size)
 			entry.chunk_size = chunk_size;
 
-		rc = insert_entry(parent->oh, th, file->name, oexcl, entry);
+		rc = insert_entry(parent->oh, th, file->name, entry);
 		if (rc == EEXIST && !oexcl) {
 			/** just try refetching entry to open the file */
 			daos_obj_close(file->oh, NULL);
@@ -776,7 +775,7 @@ open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
 		entry.atime = entry.mtime = entry.ctime = time(NULL);
 		entry.chunk_size = 0;
 
-		rc = insert_entry(parent_oh, th, dir->name, true, entry);
+		rc = insert_entry(parent_oh, th, dir->name, entry);
 		if (rc != 0) {
 			daos_obj_close(dir->oh, NULL);
 			D_ERROR("Inserting dir entry %s failed (%d)\n",
@@ -825,8 +824,8 @@ open_symlink(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 	int			rc;
 
 	if (flags & O_CREAT) {
-		if (value == NULL || strnlen(value, PATH_MAX-1) > PATH_MAX-1)
-			return -DER_INVAL;
+		if (value == NULL || strnlen(value, PATH_MAX) > PATH_MAX - 1)
+			return EINVAL;
 
 		rc = oid_gen(dfs, 0, false, &sym->oid);
 		if (rc != 0)
@@ -840,7 +839,7 @@ open_symlink(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 			return ENOMEM;
 
 		entry.value = sym->value;
-		rc = insert_entry(parent->oh, th, sym->name, true, entry);
+		rc = insert_entry(parent->oh, th, sym->name, entry);
 		if (rc) {
 			D_FREE(sym->value);
 			D_ERROR("Inserting entry %s failed (rc = %d)\n",
@@ -1097,7 +1096,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 	 * on another. in this case we can just assume it is inserted, and
 	 * continue.
 	 */
-	rc = insert_entry(super_oh, DAOS_TX_NONE, "/", true, entry);
+	rc = insert_entry(super_oh, DAOS_TX_NONE, "/", entry);
 	if (rc && rc != EEXIST) {
 		D_ERROR("Failed to insert root entry (%d).", rc);
 		D_GOTO(err_super, rc);
@@ -1143,6 +1142,9 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	struct daos_prop_entry	*entry;
 	int			amode, obj_mode;
 	int			rc;
+
+	if (_dfs == NULL)
+		return EINVAL;
 
 	amode = (flags & O_ACCMODE);
 	obj_mode = get_daos_obj_mode(flags);
@@ -1278,7 +1280,7 @@ dfs_umount(dfs_t *dfs)
 int
 dfs_query(dfs_t *dfs, dfs_attr_t *attr)
 {
-	if (dfs == NULL || !dfs->mounted)
+	if (dfs == NULL || !dfs->mounted || attr == NULL)
 		return EINVAL;
 
 	memcpy(attr, &dfs->attr, sizeof(dfs_attr_t));
@@ -1330,6 +1332,9 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob)
 	uuid_t			cont_uuid;
 	daos_size_t		glob_buf_size;
 	int			rc = 0;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
 
 	if (glob == NULL) {
 		D_ERROR("Invalid parameter, NULL glob pointer.\n");
@@ -1500,7 +1505,7 @@ dfs_set_prefix(dfs_t *dfs, const char *prefix)
 		return 0;
 	}
 
-	if (prefix[0] != '/' || strnlen(prefix, PATH_MAX) > PATH_MAX-1)
+	if (prefix[0] != '/' || strnlen(prefix, PATH_MAX) > PATH_MAX - 1)
 		return EINVAL;
 
 	D_STRNDUP(dfs->prefix, prefix, PATH_MAX - 1);
@@ -1584,7 +1589,7 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	entry.atime = entry.mtime = entry.ctime = time(NULL);
 	entry.chunk_size = 0;
 
-	rc = insert_entry(parent->oh, th, name, true, entry);
+	rc = insert_entry(parent->oh, th, name, entry);
 	if (rc != 0) {
 		daos_obj_close(new_dir.oh, NULL);
 		return rc;
@@ -1603,7 +1608,7 @@ remove_dir_contents(dfs_t *dfs, daos_handle_t th, struct dfs_entry entry)
 	daos_handle_t	oh;
 	daos_key_desc_t	kds[ENUM_DESC_NR];
 	daos_anchor_t	anchor = {0};
-	d_iov_t	iov;
+	d_iov_t		iov;
 	char		enum_buf[ENUM_DESC_BUF] = {0};
 	d_sg_list_t	sgl;
 	int		rc;
@@ -1795,7 +1800,7 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 		return EINVAL;
 	if (_obj == NULL)
 		return EINVAL;
-	if (path == NULL || strnlen(path, PATH_MAX-1) > PATH_MAX-1)
+	if (path == NULL || strnlen(path, PATH_MAX) > PATH_MAX - 1)
 		return EINVAL;
 	if (path[0] != '/')
 		return EINVAL;
@@ -2577,7 +2582,7 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 	/** Check container uuid mismatch */
 	rc = dc_cont_hdl2uuid(dfs->coh, &coh_uuid, &cont_uuid);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		D_GOTO(out, rc = daos_der2errno(rc));
 	if (uuid_compare(cont_uuid, obj_glob->cont_uuid) != 0) {
 		D_ERROR("Container uuid mismatch, in coh: "DF_UUID", "
 			"in obj_glob:" DF_UUID"\n", DP_UUID(cont_uuid),
@@ -3424,7 +3429,7 @@ restart:
 		D_GOTO(out, rc);
 	}
 	if (exists == false)
-		D_GOTO(out, rc);
+		D_GOTO(out, rc = ENOENT);
 
 	rc = fetch_entry(new_parent->oh, th, new_name, true, &exists,
 			 &new_entry);
@@ -3492,7 +3497,7 @@ restart:
 			D_GOTO(out, rc);
 		}
 
-		rc = insert_entry(parent->oh, th, new_name, true, entry);
+		rc = insert_entry(parent->oh, th, new_name, entry);
 		if (rc)
 			D_ERROR("Inserting new entry %s failed (%d)\n",
 				new_name, rc);
@@ -3501,7 +3506,7 @@ restart:
 
 	entry.atime = entry.mtime = entry.ctime = time(NULL);
 	/** insert old entry in new parent object */
-	rc = insert_entry(new_parent->oh, th, new_name, true, entry);
+	rc = insert_entry(new_parent->oh, th, new_name, entry);
 	if (rc) {
 		D_ERROR("Inserting entry %s failed (%d)\n", new_name, rc);
 		D_GOTO(out, rc);
@@ -3635,7 +3640,7 @@ restart:
 
 	entry1.atime = entry1.mtime = entry1.ctime = time(NULL);
 	/** insert entry1 in parent2 object */
-	rc = insert_entry(parent2->oh, th, name1, true, entry1);
+	rc = insert_entry(parent2->oh, th, name1, entry1);
 	if (rc) {
 		D_ERROR("Inserting entry %s failed (%d)\n", name1, rc);
 		D_GOTO(out, rc);
@@ -3643,7 +3648,7 @@ restart:
 
 	entry2.atime = entry2.mtime = entry2.ctime = time(NULL);
 	/** insert entry2 in parent1 object */
-	rc = insert_entry(parent1->oh, th, name2, true, entry2);
+	rc = insert_entry(parent1->oh, th, name2, entry2);
 	if (rc) {
 		D_ERROR("Inserting entry %s failed (%d)\n", name2, rc);
 		D_GOTO(out, rc);
@@ -3991,7 +3996,7 @@ out:
 int
 dfs_obj2id(dfs_obj_t *obj, daos_obj_id_t *oid)
 {
-	if (oid == NULL)
+	if (obj == NULL || oid == NULL)
 		return EINVAL;
 	oid_cp(oid, obj->oid);
 	return 0;

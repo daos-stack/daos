@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,57 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
+#include <pthread.h>
+
 #include "dfuse_common.h"
 #include "dfuse.h"
+
+/* Async progress thread.
+ *
+ * This thread is started at launch time with an event queue and blocks
+ * on a semaphore until a asynchronous event is created, at which point
+ * the thread wakes up and busy polls in daos_eq_poll() until it's complete.
+ */
+static void *
+dfuse_progress_thread(void *arg)
+{
+	struct dfuse_projection_info *fs_handle = arg;
+	int rc;
+	daos_event_t *dev;
+	struct dfuse_event *ev;
+
+	while (1) {
+
+		errno = 0;
+		rc = sem_wait(&fs_handle->dpi_sem);
+		if (rc != 0) {
+			rc = errno;
+
+			if (rc == EINTR)
+				continue;
+
+			DFUSE_TRA_ERROR(fs_handle,
+					"Error from sem_wait: %d", rc);
+		}
+
+		if (fs_handle->dpi_shutdown)
+			return NULL;
+
+		rc = daos_eq_poll(fs_handle->dpi_eq, 1,
+				  DAOS_EQ_WAIT,
+				1,
+				&dev);
+
+		if (rc == 1) {
+			ev = container_of(dev, struct dfuse_event, de_ev);
+
+			ev->de_complete_cb(ev);
+
+			D_FREE(ev);
+		}
+	}
+	return NULL;
+}
 
 /* Inode record hash table operations */
 
@@ -72,7 +121,6 @@ ir_rec_hash(struct d_hash_table *htable, d_list_t *rlink)
 	ir = container_of(rlink, struct dfuse_inode_record, ir_htl);
 
 	return (uint32_t)ir->ir_id.irid_oid.hi;
-
 }
 
 static void
@@ -224,7 +272,7 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 
 	D_ALLOC_PTR(fs_handle);
 	if (!fs_handle)
-		return false;
+		return -DER_NOMEM;
 
 	DFUSE_TRA_ROOT(fs_handle, "fs_handle");
 
@@ -245,7 +293,7 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	rc = d_hash_table_create_inplace(D_HASH_FT_RWLOCK, 3, fs_handle,
 					 &ir_hops, &fs_handle->dpi_irt);
 	if (rc != 0)
-		D_GOTO(err, 0);
+		D_GOTO(err_iet, 0);
 
 	atomic_store_relaxed(&fs_handle->dpi_ino_next, 2);
 
@@ -257,32 +305,32 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	args.allocated = 1;
 	args.argv = calloc(sizeof(*args.argv), args.argc);
 	if (!args.argv)
-		D_GOTO(err, 0);
+		D_GOTO(err_irt, rc = -DER_NOMEM);
 
 	args.argv[0] = strndup("", 1);
 	if (!args.argv[0])
-		D_GOTO(err, 0);
+		D_GOTO(err_irt, rc = -DER_NOMEM);
 
 	args.argv[1] = strndup("-ofsname=dfuse", 32);
 	if (!args.argv[1])
-		D_GOTO(err, 0);
+		D_GOTO(err_irt, rc = -DER_NOMEM);
 
 	args.argv[2] = strndup("-osubtype=daos", 32);
 	if (!args.argv[2])
-		D_GOTO(err, 0);
+		D_GOTO(err_irt, rc = -DER_NOMEM);
 
 	rc = asprintf(&args.argv[3], "-omax_read=%u", fs_handle->dpi_max_read);
 	if (rc < 0 || !args.argv[3])
-		D_GOTO(err, 0);
+		D_GOTO(err_irt, rc = -DER_NOMEM);
 
 	fuse_ops = dfuse_get_fuse_ops();
 	if (!fuse_ops)
-		D_GOTO(err, 0);
+		D_GOTO(err_irt, rc = -DER_NOMEM);
 
 	/* Create the root inode and insert into table */
 	D_ALLOC_PTR(ie);
 	if (!ie)
-		D_GOTO(err, 0);
+		D_GOTO(err_irt, rc = -DER_NOMEM);
 
 	DFUSE_TRA_UP(ie, fs_handle, "root_inode");
 
@@ -301,7 +349,7 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 		if (rc) {
 			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: (%s)",
 					strerror(rc));
-			D_GOTO(err, 0);
+			D_GOTO(err_irt, rc = daos_errno2der(rc));
 		}
 	}
 
@@ -313,23 +361,46 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	if (rc != -DER_SUCCESS) {
 		DFUSE_TRA_ERROR(fs_handle, "hash_insert() failed: %d",
 				rc);
-		D_GOTO(err, 0);
+		D_GOTO(err_ie_remove, 0);
 	}
+
+	rc = daos_eq_create(&fs_handle->dpi_eq);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(err, 0);
+
+	rc = sem_init(&fs_handle->dpi_sem, 0, 0);
+	if (rc != 0)
+		D_GOTO(err, 0);
+
+	fs_handle->dpi_shutdown = false;
+	rc = pthread_create(&fs_handle->dpi_thread, NULL,
+			    dfuse_progress_thread, fs_handle);
+	if (rc != 0)
+		D_GOTO(err, 0);
+
+	pthread_setname_np(fs_handle->dpi_thread, "dfuse_progress");
 
 	if (!dfuse_launch_fuse(dfuse_info, fuse_ops, &args, fs_handle)) {
 		DFUSE_TRA_ERROR(fs_handle, "Unable to register FUSE fs");
-		D_GOTO(err, 0);
+		D_GOTO(err_ie_remove, rc = -DER_INVAL);
 	}
 
 	D_FREE(fuse_ops);
 
 	return -DER_SUCCESS;
+
+err_ie_remove:
+	d_hash_rec_delete_at(&fs_handle->dpi_iet, &ie->ie_htl);
+err_irt:
+	d_hash_table_destroy_inplace(&fs_handle->dpi_irt, false);
+err_iet:
+	d_hash_table_destroy_inplace(&fs_handle->dpi_iet, false);
 err:
-	DFUSE_TRA_ERROR(fs_handle, "Failed");
+	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse, rc: %d", rc);
 	D_FREE(fuse_ops);
 	D_FREE(ie);
 	D_FREE(fs_handle);
-	return -DER_INVAL;
+	return rc;
 }
 
 static int
@@ -382,6 +453,14 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 	int		rcp = 0;
 
 	DFUSE_TRA_INFO(fs_handle, "Flushing inode table");
+
+
+	fs_handle->dpi_shutdown = true;
+	sem_post(&fs_handle->dpi_sem);
+
+	pthread_join(fs_handle->dpi_thread, NULL);
+
+	sem_destroy(&fs_handle->dpi_sem);
 
 	rc = d_hash_table_traverse(&fs_handle->dpi_iet, ino_flush, fs_handle);
 

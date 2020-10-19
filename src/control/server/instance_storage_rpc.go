@@ -28,6 +28,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/fault"
@@ -100,6 +101,7 @@ func (srv *IOServerInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeCon
 	res, err := p.Format(bdev.FormatRequest{
 		Class:      cfg.Class,
 		DeviceList: cfg.DeviceList,
+		MemSize:    cfg.MemSize,
 	})
 	if err != nil {
 		results = append(results,
@@ -135,8 +137,8 @@ func (srv *IOServerInstance) StorageFormatSCM(reformat bool) (mResult *ctlpb.Scm
 	srvIdx := srv.Index()
 	needsScmFormat := reformat
 
-	srv.log.Infof("Formatting SCM storage for %s instance %d (reformat: %t)",
-		DataPlaneName, srvIdx, reformat)
+	srv.log.Infof("Formatting scm storage for %s instance %d (reformat: %t)",
+		build.DataPlaneName, srvIdx, reformat)
 
 	var scmErr error
 	defer func() {
@@ -172,7 +174,7 @@ func (srv *IOServerInstance) StorageFormatSCM(reformat bool) (mResult *ctlpb.Scm
 }
 
 func (srv *IOServerInstance) StorageFormatNVMe(bdevProvider *bdev.Provider) (cResults proto.NvmeControllerResults) {
-	srv.log.Infof("Formatting NVMe storage for %s instance %d", DataPlaneName, srv.Index())
+	srv.log.Infof("Formatting nvme storage for %s instance %d", build.DataPlaneName, srv.Index())
 
 	// If no superblock exists, format NVMe and populate response with results.
 	needsSuperblock, err := srv.NeedsSuperblock()

@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+
 # pylint: disable=too-many-lines
 from __future__ import print_function
 
@@ -70,7 +71,6 @@ YAML_KEYS = {
     "bdev_list": "nvme",
 }
 YAML_KEY_ORDER = ("test_servers", "test_clients", "bdev_list")
-
 
 def display(args, message):
     """Display the message if verbosity is set.
@@ -159,7 +159,7 @@ def set_test_environment(args):
             if state.lower() == "up":
                 # Get the interface speed - used to select the fastest available
                 with open(os.path.join(net_path, device, "speed"), "r") as \
-                    fileh:
+                     fileh:
                     try:
                         speed = int(fileh.read().strip())
                         # KVM/Qemu/libvirt returns an EINVAL
@@ -213,6 +213,7 @@ def set_test_environment(args):
     required_python_paths = [
         os.path.abspath("util/apricot"),
         os.path.abspath("util"),
+        os.path.abspath("cart/util"),
         os.path.join(base_dir, "lib64", python_version, "site-packages"),
     ]
 
@@ -234,6 +235,7 @@ def set_test_environment(args):
                 python_path += ":" + required_path
         os.environ["PYTHONPATH"] = python_path
     print("Using PYTHONPATH={}".format(os.environ["PYTHONPATH"]))
+
 
 def get_output(cmd, check=True):
     """Get the output of given command executed on this host.
@@ -441,7 +443,7 @@ def get_test_list(tags):
         tags (list): a list of tag or test file names
 
     Returns:
-        (list, list): a tuple of an avacado tag filter list and lists of tests
+        (list, list): a tuple of an avocado tag filter list and lists of tests
 
     """
     test_tags = []
@@ -530,7 +532,7 @@ def get_nvme_replacement(args):
     # Get a list of NVMe devices from each specified server host
     host_list = args.test_servers.split(",")
     command_list = [
-        "/usr/sbin/lspci -D", "grep 'Non-Volatile memory controller:'"]
+        "/sbin/lspci -D", "grep 'Non-Volatile memory controller:'"]
     if ":" in args.nvme:
         command_list.append("grep '{}'".format(args.nvme.split(":")[1]))
     command = " | ".join(command_list)
@@ -712,6 +714,7 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
     # Return the untouched or modified yaml file
     return yaml_file
 
+
 def generate_certs():
     """Generate the certificates for the test."""
     daos_test_log_dir = os.environ["DAOS_TEST_LOG_DIR"]
@@ -720,6 +723,7 @@ def generate_certs():
     subprocess.call(
         ["../../../../lib64/daos/certgen/gen_certificates.sh",
          daos_test_log_dir])
+
 
 def run_tests(test_files, tag_filter, args):
     """Run or display the test commands.
@@ -872,7 +876,7 @@ def clean_logs(test_yaml, args):
     # Remove any log files from the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     host_list = get_hosts_from_yaml(test_yaml, args)
-    command = "sudo rm -fr {}".format(os.path.join(logs_dir, "*.log"))
+    command = "sudo rm -fr {}".format(os.path.join(logs_dir, "*.log*"))
     print("Cleaning logs on {}".format(host_list))
     if not spawn_commands(host_list, command):
         print("Error cleaning logs, aborting")
@@ -889,41 +893,18 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
         test_yaml (str): yaml file containing host names
         args (argparse.Namespace): command line arguments for this program
     """
+    # Create a subdirectory in the avocado logs directory for this test
+    destination = os.path.join(avocado_logs_dir, "latest", "daos_logs")
+
+    # Copy any DAOS logs created on any host under test
+    host_list = get_hosts_from_yaml(test_yaml, args)
+    print("Archiving host logs from {} in {}".format(host_list, destination))
+
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
-    this_host = socket.gethostname().split(".")[0]
-    host_list = get_hosts_from_yaml(test_yaml, args)
 
-    # Create a subdirectory in the avocado logs directory for this test
-    daos_logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs")
-    print("Archiving host logs from {} in {}".format(host_list, daos_logs_dir))
-    os.mkdir(daos_logs_dir)
-    print(get_output(["df", "-h", daos_logs_dir]))
-
-    # Copy any log files that exist on the test hosts and remove them from the
-    # test host if the copy is successful.  Attempt all of the commands and
-    # report status at the end of the loop.  Include a listing of the file
-    # related to any failed command.
-    commands = [
-        "set -eu",
-        "rc=0",
-        "copied=()",
-        "for file in $(ls {}/*.log)".format(logs_dir),
-        "do ls -sh $file",
-        "if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
-            this_host, daos_logs_dir),
-        "then copied+=($file)",
-        "if ! sudo rm -fr $file",
-        "then ((rc++))",
-        "ls -al $file",
-        "fi",
-        "fi",
-        "done",
-        "echo Copied ${copied[@]:-no files}",
-        "exit $rc",
-    ]
-    spawn_commands(host_list, "; ".join(commands), 900)
-
+    archive_files(destination, host_list, "{}/*log*".format(logs_dir))
+    archive_files(destination, host_list, "{}/*/*log*".format(logs_dir))
 
 def archive_config_files(avocado_logs_dir):
     """Copy all of the configuration files to the avocado results directory.
@@ -931,36 +912,72 @@ def archive_config_files(avocado_logs_dir):
     Args:
         avocado_logs_dir (str): path to the avocado log files
     """
-    # Run the command locally as the config files are written to a shared dir
+    # Create a subdirectory in the avocado logs directory for this test
+    destination = os.path.join(avocado_logs_dir, "latest", "daos_configs")
+
+    # Config files can be copied from the local host as they are currently
+    # written to a shared directory
     this_host = socket.gethostname().split(".")[0]
     host_list = [this_host]
+    print("Archiving config files from {} in {}".format(host_list, destination))
 
-    # Get the source directory for the config files
+    # Copy any config files
     base_dir = get_build_environment()["PREFIX"]
-    config_file_dir = get_temporary_directory(base_dir)
+    configs_dir = get_temporary_directory(base_dir)
+    archive_files(
+        destination, host_list, "{}/*_*_*.yaml".format(configs_dir))
 
-    # Get the destination directory for the config file
-    daos_logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_configs")
-    print(
-        "Archiving config files from {} in {}".format(host_list, daos_logs_dir))
-    get_output(["mkdir", daos_logs_dir])
+def archive_files(destination, host_list, source_files):
+    """Archive all of the remote files to the destination directory.
 
-    # Archive any yaml configuration files.  Currently these are always written
-    # to a shared directory for all of hosts.
+    Args:
+        destination (str): path to which to archive files
+        host_list (list): hosts from which to archive files
+        source_files (str): remote files to archive
+    """
+    this_host = socket.gethostname().split(".")[0]
+
+    # Create the destination directory
+    if not os.path.exists(destination):
+        get_output(["mkdir", destination])
+
+    # Display available disk space prior to copy.  Allow commands to fail w/o
+    # exiting this program.  Any disk space issues preventing the creation of a
+    # directory will be caught in the archiving of the source files.
+    print("Current disk space usage of {}".format(destination))
+    print(get_output(["df", "-h", destination]))
+
+    # Copy any source files that exist on the remote hosts and remove them from
+    # the remote host if the copy is successful.  Attempt all of the commands
+    # and report status at the end of the loop.  Include a listing of the file
+    # related to any failed command.
+
+    # Disable pylint's whitespace rules to improve readability for this one
+    # list.
+    #
+    # pylint: disable=bad-continuation
     commands = [
-        "set -eu",
+        "set -ux",
         "rc=0",
         "copied=()",
-        "for file in $(ls {}/test_*.yaml)".format(config_file_dir),
-        "do if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
-            this_host, daos_logs_dir),
-        "then copied+=($file)",
-        "else ((rc++))",
+        "for file in $(ls -d {})".format(source_files),
+        "do ls -sh $file",
+        "{} $file".format(
+            os.path.join(os.path.abspath("cart"), "cart_logtest.py")),
+        "if scp -r $file {}:{}/${{file##*/}}-$(hostname -s)".format(
+              this_host, destination),
+            "then copied+=($file)",
+            "if ! sudo rm -fr $file",
+                "then ((rc++))",
+                "ls -al $file",
+            "fi",
         "fi",
         "done",
         "echo Copied ${copied[@]:-no files}",
         "exit $rc",
     ]
+    # pylint: enable=bad-continuation
+
     spawn_commands(host_list, "; ".join(commands), timeout=900)
 
 
@@ -990,8 +1007,16 @@ USE_DEBUGINFO_INSTALL = True
 
 
 def resolve_debuginfo(pkg):
-    """ given a package name, return it's debuginfo package """
-    import yum # pylint: disable=import-error,import-outside-toplevel
+    """Return the debuginfo package for a given package name.
+
+    Args:
+        pkg (str): a package name
+
+    Returns:
+        str: the debuginfo package name
+
+    """
+    import yum      # pylint: disable=import-error,import-outside-toplevel
 
     yum_base = yum.YumBase()
     yum_base.conf.assumeyes = True
@@ -1018,6 +1043,7 @@ def resolve_debuginfo(pkg):
             'version': pkg_data['version'],
             'release': pkg_data['release'],
             'epoch': pkg_data['epoch']}
+
 
 def install_debuginfos():
     """Install debuginfo packages."""
@@ -1087,7 +1113,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         test_yaml (str): yaml file containing host names
         args (argparse.Namespace): command line arguments for this program
     """
-    import fnmatch # pylint: disable=import-outside-toplevel
+    import fnmatch  # pylint: disable=import-outside-toplevel
 
     this_host = socket.gethostname().split(".")[0]
     host_list = get_hosts_from_yaml(test_yaml, args)
@@ -1139,7 +1165,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
             pattern (str): the fnmatch/glob pattern of core files to
                            run gdb on
         """
-        import magic # pylint: disable=import-error
+        import magic    # pylint: disable=import-error
 
         for corefile in cores:
             if not fnmatch.fnmatch(corefile, pattern):
@@ -1148,18 +1174,16 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
             exe_magic = magic.open(magic.NONE)
             exe_magic.load()
             exe_type = exe_magic.file(corefile_fqpn)
-            exe_name_start = exe_type.find("execfn: '") + 9
             exe_name_end = 0
-            if exe_name_start > 8:
-                exe_name_end = exe_type.find("', platform:")
-            else:
-                exe_name_start = exe_type.find("from '") + 6
-                if exe_name_start > 5:
-                    exe_name_end = exe_type[exe_name_start:].find(" ") + \
-                                   exe_name_start
+            if exe_type:
+                exe_name_start = exe_type.find("execfn: '") + 9
+                if exe_name_start > 8:
+                    exe_name_end = exe_type.find("', platform:")
                 else:
-                    print("Unable to determine executable name from: "
-                          "{}\nNot creating stacktrace".format(exe_type))
+                    exe_name_start = exe_type.find("from '") + 6
+                    if exe_name_start > 5:
+                        exe_name_end = exe_type[exe_name_start:].find(" ") + \
+                                    exe_name_start
             if exe_name_end:
                 exe_name = exe_type[exe_name_start:exe_name_end]
                 cmd = [
@@ -1172,8 +1196,16 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
                 ]
                 stack_trace_file = os.path.join(
                     daos_cores_dir, "{}.stacktrace".format(corefile))
-                with open(stack_trace_file, "w") as stack_trace:
-                    stack_trace.writelines(get_output(cmd))
+                try:
+                    with open(stack_trace_file, "w") as stack_trace:
+                        stack_trace.writelines(get_output(cmd))
+                except IOError as error:
+                    print(
+                        "Error writing {}: {}".format(stack_trace_file, error))
+            else:
+                print(
+                    "Unable to determine executable name from: '{}'\nNot "
+                    "creating stacktrace".format(exe_type))
             print("Removing {}".format(corefile_fqpn))
             os.unlink(corefile_fqpn)
 
@@ -1280,8 +1312,8 @@ def main():
              "replacement values for the bdev_list in each test's yaml file.  "
              "Using the 'auto[:<filter>]' keyword will auto-detect the NVMe "
              "PCI address list on each of the '--test_servers' hosts - the "
-             "optonal '<filter>' can be used to limit auto-detected addresses, "
-             "e.g. 'auto:Optane' for Intel Optane NVMe devices.")
+             "optional '<filter>' can be used to limit auto-detected "
+             "addresses, e.g. 'auto:Optane' for Intel Optane NVMe devices.")
     parser.add_argument(
         "-r", "--rename",
         action="store_true",

@@ -253,11 +253,11 @@ struct  _Mgmt__PoolDrainReq
    */
   char *uuid;
   /*
-   * target to move to the up state
+   * rank to move to the up state
    */
   uint32_t rank;
   /*
-   * target ranks
+   * rank targets
    */
   size_t n_targetidx;
   uint32_t *targetidx;

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,12 +40,14 @@
 typedef enum {
 	RB_OP_FAIL,
 	RB_OP_DRAIN,
-	RB_OP_ADD,
+	RB_OP_REINT,
+	RB_OP_EXTEND,
 } daos_rebuild_opc_t;
 
 #define RB_OP_STR(rb_op) ((rb_op) == RB_OP_FAIL ? "RB_OP_FAIL" : \
 			  (rb_op) == RB_OP_DRAIN ? "RB_OP_DRAIN" : \
-			  (rb_op) == RB_OP_ADD ? "RB_OP_ADD" : \
+			  (rb_op) == RB_OP_REINT ? "RB_OP_REINT" : \
+			  (rb_op) == RB_OP_EXTEND ? "RB_OP_EXTEND" : \
 			  "RB_OP_UNKNOWN")
 
 int ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,

@@ -48,33 +48,60 @@ struct  _Mgmt__BioHealthReq
     , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
+/*
+ * BioHealthResp mirrors nvme_health_stats structure.
+ */
 struct  _Mgmt__BioHealthResp
 {
   ProtobufCMessage base;
+  char *model;
+  char *serial;
+  uint64_t timestamp;
   /*
-   * DAOS error code
+   * Device health details
+   */
+  uint32_t warn_temp_time;
+  uint32_t crit_temp_time;
+  uint64_t ctrl_busy_time;
+  uint64_t power_cycles;
+  uint64_t power_on_hours;
+  uint64_t unsafe_shutdowns;
+  uint64_t media_errs;
+  uint64_t err_log_entries;
+  /*
+   * I/O error counters
+   */
+  uint32_t bio_read_errs;
+  uint32_t bio_write_errs;
+  uint32_t bio_unmap_errs;
+  uint32_t checksum_errs;
+  /*
+   * in Kelvin
+   */
+  uint32_t temperature;
+  /*
+   * Critical warnings
+   */
+  protobuf_c_boolean temp_warn;
+  protobuf_c_boolean avail_spare_warn;
+  protobuf_c_boolean dev_reliability_warn;
+  protobuf_c_boolean read_only_warn;
+  /*
+   * volatile memory backup
+   */
+  protobuf_c_boolean volatile_mem_warn;
+  /*
+   * DAOS err code
    */
   int32_t status;
   /*
    * UUID of blobstore
    */
   char *dev_uuid;
-  uint64_t error_count;
-  uint32_t temperature;
-  uint64_t media_errors;
-  uint32_t read_errors;
-  uint32_t write_errors;
-  uint32_t unmap_errors;
-  uint32_t checksum_errors;
-  protobuf_c_boolean temp_warn;
-  protobuf_c_boolean spare_warn;
-  protobuf_c_boolean readonly_warn;
-  protobuf_c_boolean device_reliability_warn;
-  protobuf_c_boolean volatile_memory_warn;
 };
 #define MGMT__BIO_HEALTH_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__bio_health_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (char *)protobuf_c_empty_string }
 
 
 struct  _Mgmt__SmdDevReq

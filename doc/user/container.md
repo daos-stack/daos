@@ -8,6 +8,12 @@ Containers can be created and destroyed through the daos_cont_create/destroy()
 functions exported by the DAOS API. A user tool called `daos` is also
 provided to manage containers.
 
+!!! note
+    In DAOS 1.0, in order to use the `daos` command the following environment
+    variables need to be set (this is no longer needed in later versions of DAOS):
+     * For Omni-Path: `export OFI_INTERFACE="ib0"; export CRT_PHY_ADDR_STR="ofi+psm2"`
+     * For InfiniBand: `export OFI_INTERFACE="ib0"; export CRT_PHY_ADDR_STR="ofi+verbs;ofi_rxm"; export OFI_DOMAIN="mlx5_0"`
+
 To create a container:
 ```bash
 $ daos cont create --pool=a171434a-05a5-4671-8fe2-615aa0d05094 --svc=0
@@ -220,6 +226,11 @@ If the user does not have Delete permission on the pool, they will only be able
 to delete containers for which they have been explicitly granted Delete
 permission in the container's ACL.
 
+!!! note:
+    In DAOS version 1.0, permissions are set on the _pool_ level and all containers
+    in the pool inherit the permissions of the pool. Starting with DAOS version 1.2,
+    pool and container permissions are controlled individually.
+
 ### Creating Containers with Custom ACL
 
 To create a container with a custom ACL:
@@ -304,9 +315,16 @@ The ownership of the container corresponds to the special principals `OWNER@`
 and `GROUP@` in the ACL. These values are a part of the container properties.
 They may be set on container creation and changed later.
 
-The owner-user (`OWNER@`) always has set-ACL and get-ACL permissions, even if
-they are not explicitly granted by the ACL. This applies regardless of the other
-permissions they are granted by ACE(s) in the ACL.
+#### Privileges
+
+The owner-user (`OWNER@`) has implicit privileges on their container. The
+owner-user can always open the container, and has set-ACL (A) and get-ACL (a)
+permissions. These permissions are included alongside any permissions that the
+user was explicitly granted by entries in the ACL.
+
+Because the owner's special permissions are implicit, they apply to access
+control decisions even if they do not appear in the `OWNER@` entry, and even if
+the `OWNER@` entry is deleted.
 
 The owner-group (`GROUP@`) has no special permissions outside what they are
 granted by the ACL.

@@ -31,6 +31,7 @@
 #include "vts_io.h"
 #include "vts_array.h"
 
+static int start_epoch = 5;
 #define BUF_SIZE 2000
 static int buf_size = BUF_SIZE;
 struct pm_info {
@@ -1103,11 +1104,11 @@ cond_akey_punch_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
 
 static void
 cond_fetch_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
-	      daos_epoch_t epoch, const char *dkey_str, const char *akey_str,
-	      uint64_t flags, int expected_rc, d_sg_list_t *sgl,
-	      const char *value_str, char fill_char)
+	      daos_epoch_t epoch, bool use_tx, const char *dkey_str,
+	      const char *akey_str, uint64_t flags, int expected_rc,
+	      d_sg_list_t *sgl, const char *value_str, char fill_char)
 {
-	struct dtx_handle	*dth;
+	struct dtx_handle	*dth = NULL;
 	char			 dkey_buf[OP_MAX_STRING];
 	char			 akey_buf[OP_MAX_STRING];
 	char			 value_buf[OP_MAX_STRING];
@@ -1132,10 +1133,12 @@ cond_fetch_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
 	iod.iod_nr = 1;
 	iod.iod_recxs = NULL;
 
-	vts_dtx_begin(&oid, coh, epoch, 0, &dth);
+	if (use_tx)
+		vts_dtx_begin(&oid, coh, epoch, 0, &dth);
 	rc = vos_obj_fetch_ex(coh, oid, epoch, flags, &dkey, 1, &iod, sgl, dth);
 	assert_int_equal(rc, expected_rc);
-	vts_dtx_end(dth);
+	if (use_tx)
+		vts_dtx_end(dth);
 
 	if (value_len == 0)
 		return;
@@ -1219,7 +1222,7 @@ cond_test(void **state)
 	daos_unit_oid_t		 oid;
 	d_sg_list_t		 sgl[MAX_SGL] = {0};
 	d_iov_t			 iov[MAX_SGL];
-	daos_epoch_t		 epoch = 5;
+	daos_epoch_t		 epoch = start_epoch;
 	int			 i;
 
 	if (getenv("DAOS_IO_BYPASS"))
@@ -1251,14 +1254,14 @@ cond_test(void **state)
 		       VOS_OF_COND_DKEY_INSERT,
 		       -DER_EXIST, sgl, "bar");
 	/** Check the value */
-	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a", "b",
+	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, true, "a", "b",
 		      0, 0, sgl, "foo", 'x');
 	/** Check the value before, should be empty */
-	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch - 4, "a", "b",
+	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch - 4, true, "a", "b",
 		      0, 0, sgl, "xxxx", 'x');
 	obj_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch++);
 	/** Non conditional fetch should not see data anymore */
-	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a", "b",
+	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, true, "a", "b",
 		      0, 0, sgl, "xxxx", 'x');
 	/** Conditional update of non-existent key should fail */
 	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 1, "a", "b",
@@ -1274,37 +1277,42 @@ cond_test(void **state)
 	cond_dkey_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a",
 			   VOS_OF_COND_PUNCH, -DER_NONEXIST);
 	cond_updaten_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "z",
-			VOS_OF_COND_DKEY_UPDATE | 0,
+			VOS_OF_COND_DKEY_UPDATE,
 			-DER_NONEXIST, sgl, 5, "a", "foo", "b", "bar", "c",
 			"foobar", "d", "value", "e", "abc");
 	cond_updaten_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "z",
-			VOS_OF_COND_DKEY_INSERT | 0,
+			VOS_OF_COND_DKEY_INSERT,
 			-DER_TX_RESTART, sgl, 5, "a", "foo", "b", "bar", "c",
 			"foobar", "d", "value", "e", "abc");
 	cond_updaten_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "z",
-			VOS_OF_COND_DKEY_INSERT | 0,
+			VOS_OF_COND_DKEY_INSERT,
 			0, sgl, 5, "a", "foo", "b", "bar", "c",
 			"foobar", "d", "value", "e", "abc");
-	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "z", "a",
-		      VOS_OF_COND_AKEY_FETCH | 0, 0, sgl,
+	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, true, "z", "a",
+		      VOS_OF_COND_AKEY_FETCH, 0, sgl,
 		      "foo", 'x');
-	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a", "nonexist",
-		      VOS_OF_COND_AKEY_FETCH | 0,
-		      -DER_NONEXIST, sgl, "xxx", 'x');
+	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, true, "a",
+		      "nonexist", VOS_OF_COND_AKEY_FETCH, -DER_NONEXIST,
+		      sgl, "xxx", 'x');
 	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "a",
 		       "nonexist", 0, -DER_TX_RESTART, sgl,
 		       "foo");
-	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "nonexist", "a",
-		      VOS_OF_COND_DKEY_FETCH | 0,
+	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, true, "nonexist",
+		      "a", VOS_OF_COND_DKEY_FETCH,
 		      -DER_NONEXIST, sgl, "xxx", 'x');
 	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "nonexist",
-		       "a", 0, -DER_TX_RESTART, sgl,
-		       "foo");
+		       "a", 0, -DER_TX_RESTART, sgl, "foo");
 	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "nonexist",
 		       "a", 0, 0, sgl, "foo");
-	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "nonexist", "a",
-		      VOS_OF_COND_DKEY_FETCH | 0, 0, sgl,
+	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, true, "nonexist",
+		      "a", VOS_OF_COND_DKEY_FETCH, 0, sgl,
 		      "foo", 'x');
+	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, false,
+		      "nonexist", "a", VOS_OF_COND_DKEY_FETCH, 0, sgl,
+		      "foo", 'x');
+	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, false,
+		      "dead", "a", VOS_OF_COND_DKEY_FETCH, -DER_NONEXIST, sgl,
+		      "xxx", 'x');
 
 	oid = gen_oid(0);
 	/** Test duplicate akey */
@@ -1315,6 +1323,45 @@ cond_test(void **state)
 			0, -DER_NO_PERM, sgl, 5, "new",
 			"foo", "f", "bar", "d", "val", "e", "flag", "new",
 			"temp");
+
+	start_epoch = epoch + 1;
+}
+
+#define NUM_OIDS 1000
+static void
+multiple_oid_cond_test(void **state)
+{
+	struct io_test_args	*arg = *state;
+	daos_unit_oid_t		 oid;
+	d_sg_list_t		 sgl = {0};
+	d_iov_t			 iov = {0};
+	daos_epoch_t		 epoch = start_epoch + NUM_OIDS * 3;
+	int			 i;
+
+	if (getenv("DAOS_IO_BYPASS"))
+		skip();
+
+	start_epoch = epoch + 1;
+
+	test_args_reset(arg, VPOOL_SIZE);
+	sgl.sg_iovs = &iov;
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 1;
+
+	/** Same dkey/akey, multiple objects */
+	for (i = 0; i < NUM_OIDS; i++) {
+		oid = gen_oid(0);
+		cond_update_op(state, arg->ctx.tc_co_hdl, oid,
+			       epoch - 2, "dkey", "akey", 0, 0, &sgl, "foo");
+		cond_update_op(state, arg->ctx.tc_co_hdl, oid,
+			       epoch - 1, "dkey", "akey2",
+			       VOS_OF_COND_AKEY_UPDATE, -DER_NONEXIST, &sgl,
+			       "foo");
+		cond_update_op(state, arg->ctx.tc_co_hdl, oid,
+			       epoch, "dkey", "akey2", VOS_OF_COND_AKEY_INSERT,
+			       0, &sgl, "foo");
+		epoch -= 3;
+	}
 }
 
 #define REM_VAL1 "xyz"
@@ -1333,7 +1380,7 @@ remove_test(void **state)
 	daos_recx_t		 recx[SM_BUF_LEN];
 	char			 rbuf[SM_BUF_LEN];
 	daos_unit_oid_t		 oid;
-	daos_epoch_t		 epoch = 1000;
+	daos_epoch_t		 epoch = start_epoch;
 	int			 rc = 0;
 	char			 key1 = 'a';
 	char			 key2 = 'b';
@@ -1423,6 +1470,7 @@ remove_test(void **state)
 	assert_memory_equal(rbuf + sizeof(REM_VAL2) + sizeof(REM_VAL1) - 2,
 			    REM_VAL3, sizeof(REM_VAL3) - 1);
 
+	start_epoch = epoch + 1;
 }
 
 static void
@@ -1488,7 +1536,7 @@ small_sgl(void **state)
 }
 
 static void
-minor_epoch_punch(void **state)
+minor_epoch_punch_sv(void **state)
 {
 	struct io_test_args	*arg = *state;
 	int			rc = 0;
@@ -1497,11 +1545,99 @@ minor_epoch_punch(void **state)
 	daos_recx_t		rex;
 	daos_iod_t		iod;
 	d_sg_list_t		sgl;
-	daos_epoch_t		epoch = 2000;
+	daos_epoch_t		epoch = start_epoch;
+	struct dtx_handle	*dth;
+	struct dtx_id		 xid;
+	const char		*expected = "xxxxx";
+	const char		*first = "Hello";
+	char			buf[32] = {0};
+	char			dkey_buf[UPDATE_DKEY_SIZE];
+	char			akey_buf[UPDATE_AKEY_SIZE];
+	daos_unit_oid_t		oid;
+
+	test_args_reset(arg, VPOOL_SIZE);
+
+	memset(&rex, 0, sizeof(rex));
+	memset(&iod, 0, sizeof(iod));
+
+	/* Set up dkey and akey */
+	oid = gen_oid(arg->ofeat);
+	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
+	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
+	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
+	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
+
+	rex.rx_idx = 0;
+	rex.rx_nr = strlen(first);
+
+	iod.iod_type = DAOS_IOD_SINGLE;
+	iod.iod_size = strlen(first);
+	iod.iod_name = akey;
+	iod.iod_recxs = NULL;
+	iod.iod_nr = 1;
+
+	/* Allocate memory for the scatter-gather list */
+	rc = daos_sgl_init(&sgl, 1);
+	assert_int_equal(rc, 0);
+
+
+	/* Allocate memory for the scatter-gather list */
+	rc = daos_sgl_init(&sgl, 1);
+	assert_int_equal(rc, 0);
+
+	d_iov_set(&sgl.sg_iovs[0], (void *)first, iod.iod_size);
+
+	vts_dtx_begin_ex(&oid, arg->ctx.tc_co_hdl, epoch++, 0, 2, &dth);
+
+	/* Write the first value */
+	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid,
+			       0 /* epoch comes from dth */, 0, 0, &dkey, 1,
+			       &iod, NULL, &sgl, dth);
+	if (rc != 0)
+		goto tx_end;
+
+	/* Punch the akey */
+	dth->dth_op_seq = 2;
+	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid,
+			   0 /* epoch comes from dth */, 0, 0, &dkey, 1, &akey,
+			   dth);
+tx_end:
+	xid = dth->dth_xid;
+	vts_dtx_end(dth);
+	assert_int_equal(rc, 0);
+
+	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, NULL);
+	assert_int_equal(rc, 1);
+
+	/* Now read back original # of bytes */
+	iod.iod_size = 0;
+	memset(buf, 'x', sizeof(buf));
+	d_iov_set(&sgl.sg_iovs[0], (void *)buf, sizeof(buf));
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch++, 0, &dkey, 1,
+			   &iod, &sgl);
+	assert_int_equal(rc, 0);
+
+	assert_int_equal(iod.iod_size, 0);
+	assert_memory_equal(buf, expected, strlen(expected));
+
+	daos_sgl_fini(&sgl, false);
+	start_epoch = epoch + 1;
+}
+
+static void
+minor_epoch_punch_array(void **state)
+{
+	struct io_test_args	*arg = *state;
+	int			rc = 0;
+	daos_key_t		dkey;
+	daos_key_t		akey;
+	daos_recx_t		rex;
+	daos_iod_t		iod;
+	d_sg_list_t		sgl;
+	daos_epoch_t		epoch = start_epoch;
 	struct dtx_handle	*dth;
 	struct dtx_id		 xid;
 	const char		*expected = "xxxxxLonelyWorld";
-	const char		*sexpected = "xxxxx";
 	const char		*first = "Hello";
 	const char		*second = "LonelyWorld";
 	char			buf[32] = {0};
@@ -1580,75 +1716,66 @@ tx_end:
 
 	assert_memory_equal(buf, expected, strlen(expected));
 
-	/* Now repeat the test for single value */
+	daos_sgl_fini(&sgl, false);
+	start_epoch = epoch + 1;
+}
+
+static void
+minor_epoch_punch_rebuild(void **state)
+{
+	struct io_test_args	*arg = *state;
+	int			rc = 0;
+	daos_key_t		dkey;
+	daos_key_t		akey;
+	daos_recx_t		rex;
+	daos_iod_t		iod;
+	d_sg_list_t		sgl;
+	daos_epoch_t		epoch = start_epoch;
+	const char		*expected = "xxxxxlonelyworld";
+	const char		*first = "hello";
+	const char		*second = "lonelyworld";
+	char			buf[32] = {0};
+	char			dkey_buf[UPDATE_DKEY_SIZE];
+	char			akey_buf[UPDATE_DKEY_SIZE];
+	daos_unit_oid_t		oid;
+
+	test_args_reset(arg, VPOOL_SIZE);
+
+	memset(&rex, 0, sizeof(rex));
+	memset(&iod, 0, sizeof(iod));
+
+	/* set up dkey and akey */
+	oid = gen_oid(arg->ofeat);
+	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
 	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
+	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
+	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
 
-	iod.iod_type = DAOS_IOD_SINGLE;
-	iod.iod_size = strlen(first);
-	iod.iod_name = akey;
-	iod.iod_recxs = NULL;
-	iod.iod_nr = 1;
-
-	/* Allocate memory for the scatter-gather list */
 	rc = daos_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
 
-	d_iov_set(&sgl.sg_iovs[0], (void *)first, iod.iod_size);
-
-	vts_dtx_begin_ex(&oid, arg->ctx.tc_co_hdl, epoch++, 0, 2, &dth);
-
-	/* Write the first value */
-	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid,
-			       0 /* epoch comes from dth */, 0, 0, &dkey, 1,
-			       &iod, NULL, &sgl, dth);
-	if (rc != 0)
-		goto tx_end2;
-
-	/* Punch the akey */
-	dth->dth_op_seq = 2;
-	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid,
-			   0 /* epoch comes from dth */, 0, 0, &dkey, 1, &akey,
-			   dth);
-tx_end2:
-	xid = dth->dth_xid;
-	vts_dtx_end(dth);
-	assert_int_equal(rc, 0);
-
-	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, NULL);
-	assert_int_equal(rc, 1);
-
-	/* Now read back original # of bytes */
-	iod.iod_size = 0;
-	memset(buf, 'x', sizeof(buf));
-	d_iov_set(&sgl.sg_iovs[0], (void *)buf, sizeof(buf));
-	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch++, 0, &dkey, 1,
-			   &iod, &sgl);
-	assert_int_equal(rc, 0);
-
-	assert_int_equal(iod.iod_size, 0);
-	assert_memory_equal(buf, sexpected, strlen(sexpected));
-
-	/** Let's simulate replay scenario where rebuild replays a minor epoch
-	 * punch and an update with the same major epoch
-	 *
-	 * This can happen with something like the following
-	 * DTX does an update and commits at epoch 1.
-	 * DAOS takes a snapshot at epoch 2.
-	 * DTX does a distributed transaction that does punch and update at
-	 * 3.1 and 3.2, respectively and commits
-	 *
-	 * At some later time, rebuild runs.  While rebuilding the snapshot,
-	 * it will replay the future punch at 3.   Internally, on replay,
-	 * the minor epoch is set to MAX for updates and MAX - 1 for punch.
-	 */
-	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
-	iod.iod_type = DAOS_IOD_ARRAY;
-	iod.iod_size = 1;
-	iod.iod_recxs = &rex;
-	iod.iod_nr = 1;
 	rex.rx_idx = 0;
 	rex.rx_nr = strlen(first);
 
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = 1;
+	iod.iod_name = akey;
+	iod.iod_recxs = &rex;
+	iod.iod_nr = 1;
+
+	/** let's simulate replay scenario where rebuild replays a minor epoch
+	 * punch and an update with the same major epoch
+	 *
+	 * this can happen with something like the following
+	 * dtx does an update and commits at epoch 1.
+	 * daos takes a snapshot at epoch 2.
+	 * dtx does a distributed transaction that does punch and update at
+	 * 3.1 and 3.2, respectively and commits
+	 *
+	 * at some later time, rebuild runs.  while rebuilding the snapshot,
+	 * it will replay the future punch at 3.   internally, on replay,
+	 * the minor epoch is set to max for updates and max - 1 for punch.
+	 */
 	d_iov_set(&sgl.sg_iovs[0], (void *)first, rex.rx_nr);
 	epoch++;
 	/** First write the punched extent */
@@ -1683,6 +1810,8 @@ tx_end2:
 	epoch += 2;
 
 	daos_sgl_fini(&sgl, false);
+
+	start_epoch = epoch + 1;
 }
 
 static const struct CMUnitTest punch_model_tests[] = {
@@ -1706,7 +1835,13 @@ static const struct CMUnitTest punch_model_tests[] = {
 	{ "VOS809: Small SGL test", small_sgl, NULL, NULL },
 	{ "VOS810: Conditionals test", cond_test, NULL, NULL },
 	{ "VOS811: Test vos_obj_array_remove", remove_test, NULL, NULL },
-	{ "VOS812: Minor epoch punch", minor_epoch_punch, NULL, NULL },
+	{ "VOS812: Minor epoch punch sv", minor_epoch_punch_sv, NULL, NULL },
+	{ "VOS813: Minor epoch punch array", minor_epoch_punch_array, NULL,
+		NULL },
+	{ "VOS814: Minor epoch punch rebuild", minor_epoch_punch_rebuild, NULL,
+		NULL },
+	{ "VOS815: Multiple oid cond test", multiple_oid_cond_test, NULL,
+		NULL },
 };
 
 int

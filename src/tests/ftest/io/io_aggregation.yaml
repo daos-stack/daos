@@ -32,12 +32,12 @@ container:
   type: POSIX
   control_method: daos
 ior:
-  api: "DAOS"
+  api: "DFS"
   client_processes:
     np: 1
-  daos_destroy: False
+  dfs_destroy: False
   iorflags:
-      flags: "-w -E -k"
+      flags: "-w -k"
   repetitions: 1
   transfersize_blocksize:
     4K:
@@ -45,4 +45,4 @@ ior:
       block_size: '104857600'  # 100M
   objectclass:
     SX:
-      daos_oclass: "SX"
+      dfs_oclass: "SX"

@@ -89,7 +89,7 @@ func TestControl_SmdQuery(t *testing.T) {
 				},
 			},
 			expResp: &SmdQueryResp{
-				HostErrorsResp: mockHostErrorsResp(t, &mockHostError{"host1", "remote failed"}),
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "remote failed"}),
 			},
 		},
 		"nil request": {
@@ -209,7 +209,7 @@ func TestControl_SmdQuery(t *testing.T) {
 				HostStorage: mockSmdQueryMap(t, &mockSmdQueryResp{
 					Hosts: "host-0",
 					SmdInfo: &SmdInfo{
-						Devices: []*SmdDevice{
+						Devices: []*storage.SmdDevice{
 							{
 								UUID:      common.MockUUID(0),
 								Rank:      system.Rank(0),
@@ -241,19 +241,18 @@ func TestControl_SmdQuery(t *testing.T) {
 												Uuid:   common.MockUUID(0),
 												TgtIds: []int32{0},
 												Health: &mgmtpb.BioHealthResp{
-													DevUuid:               common.MockUUID(0),
-													ErrorCount:            1,
-													Temperature:           2,
-													MediaErrors:           3,
-													ReadErrors:            4,
-													WriteErrors:           5,
-													UnmapErrors:           6,
-													ChecksumErrors:        7,
-													TempWarn:              true,
-													SpareWarn:             true,
-													ReadonlyWarn:          true,
-													DeviceReliabilityWarn: true,
-													VolatileMemoryWarn:    true,
+													DevUuid:            common.MockUUID(0),
+													Temperature:        2,
+													MediaErrs:          3,
+													BioReadErrs:        4,
+													BioWriteErrs:       5,
+													BioUnmapErrs:       6,
+													ChecksumErrs:       7,
+													TempWarn:           true,
+													AvailSpareWarn:     true,
+													ReadOnlyWarn:       true,
+													DevReliabilityWarn: true,
+													VolatileMemWarn:    true,
 												},
 											},
 										},
@@ -269,13 +268,12 @@ func TestControl_SmdQuery(t *testing.T) {
 				HostStorage: mockSmdQueryMap(t, &mockSmdQueryResp{
 					Hosts: "host-0",
 					SmdInfo: &SmdInfo{
-						Devices: []*SmdDevice{
+						Devices: []*storage.SmdDevice{
 							{
 								UUID:      common.MockUUID(0),
 								Rank:      system.Rank(0),
 								TargetIDs: []int32{0},
-								Health: &storage.NvmeDeviceHealth{
-									ErrorLogEntries: 1,
+								Health: &storage.NvmeControllerHealth{
 									Temperature:     2,
 									MediaErrors:     3,
 									ReadErrors:      4,

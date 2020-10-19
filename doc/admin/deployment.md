@@ -26,7 +26,7 @@ following steps:
 
 - [Format](#storage-formatting) the DAOS system
 
-- [Set up and start the agent](#agent-configuration-and-startup) on the client nodes
+- [Set up and start the agent](#agent-startup) on the client nodes
 
 - [Validate](#system-validation) that the DAOS system is operational
 
@@ -45,8 +45,8 @@ DAOS server configuration and how to start it on all the storage nodes.
 
 The `daos_server` configuration file is parsed when starting the
 `daos_server` process. The configuration file location can be specified
-on the command line (`daos_server -h` for usage) or default location
-(`install/etc/daos_server.yml`).
+on the command line (`daos_server -h` for usage) or it will be read from
+the default location (`/etc/daos/daos_server.yml`).
 
 Parameter descriptions are specified in [`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
 and example configuration files in the [examples](https://github.com/daos-stack/daos/tree/master/utils/config/examples)
@@ -67,7 +67,7 @@ available at
 
 The location of this configuration file is determined by first checking
 for the path specified through the -o option of the `daos_server` command
-line. Otherwise, /etc/daos_server.conf is used.
+line. Otherwise, /etc/daos/daos_server.yml is used.
 
 Refer to the example configuration file ([daos_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml))
 for latest information and examples.
@@ -250,13 +250,15 @@ $ journalctl --unit daos_server.service
 ```
 
 After RPM install, `daos_server` service starts automatically running as user
-"daos". Server config is read from `/etc/daos` and certificates from `/etc/daos/certs`.
+"daos". The server config is read from `/etc/daos/daos_server.yml` and 
+certificates are read from `/etc/daos/certs`.
 With no other admin intervention other than the loading of certificates,
 `daos_server` will enter a listening state enabling discovery of storage and
 network hardware through the `dmg` tool without any I/O Servers specified in the
 configuration file. After device discovery and provisioning, an updated
-configuration with a populated per-server section can be provided and the service
-restarted ready for DAOS servers to be formatted.
+configuration file with a populated per-server section can be stored in
+`/etc/daos/daos_server.yml`, and after reestarting the `daos_server` service 
+it is then ready for the storage to be formatted.
 
 #### Kubernetes Pod
 
@@ -290,7 +292,7 @@ storage nodes via the dmg utility.
 
 This section addresses how to verify that Optane DC Persistent Memory
 Module (DCPMM) is correctly installed on the storage nodes, and how to configure
-it in interleaved mode to be used by DAOS in AppDirect mode.
+it in Appdirect interleaved mode to be used by DAOS.
 Instructions for other types of SCM may be covered in the future.
 
 Provisioning the SCM occurs by configuring DCPM modules in AppDirect memory regions
@@ -403,24 +405,29 @@ processes over the management network.
 
 `sudo daos_server storage scan` can be used to query `daos_server`
 directly (scans locally-attached SSDs and Intel Persistent Memory
-Modules usable by DAOS).
+Modules usable by DAOS). Output will be equivalent running
+`dmg storage scan --verbose` remotely.
 
 ```bash
-[daos@wolf-72 daos_m]$ dmg -l wolf-7[1-2] -i storage scan --verbose
-wolf-[71-72]:10001: connected
+bash-4.2$ dmg storage scan
+Hosts        SCM Total             NVMe Total
+-----        ---------             ----------
+wolf-[71-72] 6.4 TB (2 namespaces) 3.1 TB (3 controllers)
+
+bash-4.2$ dmg storage scan --verbose
 ------------
 wolf-[71-72]
 ------------
 SCM Namespace Socket ID Capacity
 ------------- --------- --------
-pmem0         0         2.90TB
-pmem1         1         2.90TB
+pmem0         0         3.2 TB
+pmem1         1         3.2 TB
 
 NVMe PCI     Model                FW Revision Socket ID Capacity
 --------     -----                ----------- --------- --------
-0000:81:00.0 INTEL SSDPED1K750GA  E2010325    1         750.00GB
-0000:87:00.0 INTEL SSDPEDMD016T4  8DV10171    1         1.56TB
-0000:da:00.0 INTEL SSDPED1K750GA  E2010325    1         750.00GB
+0000:81:00.0 INTEL SSDPED1K750GA  E2010325    1         750 GB
+0000:87:00.0 INTEL SSDPEDMD016T4  8DV10171    1         1.6 TB
+0000:da:00.0 INTEL SSDPED1K750GA  E2010325    1         750 GB
 ```
 
 The NVMe PCI field above is what should be used in the server
@@ -429,31 +436,101 @@ configuration file to identified NVMe SSDs.
 Devices with the same NUMA node/socket should be used in the same per-server
 section of the server configuration file for best performance.
 
-Note that other storage query commands are also available,
-`dmg storage --help` for listings.
+For further info on command usage run `dmg storage --help`.
 
-SSD health state can be verified via `dmg storage query nvme-health`:
+SSD health state can be verified via `dmg storage scan --nvme-health`:
 
 ```bash
-$ dmg -l wolf-71 storage query nvme-health
-wolf-71:10001: connected
-wolf-71:10001
-        NVMe controllers and namespaces detail with health statistics:
-                PCI:0000:81:00.0 Model:INTEL SSDPED1K750GA  FW:E2010325 Socket:1 Capacity:750TB
-                Health Stats:
-                        Temperature:288K(15C)
-                        Controller Busy Time:5h26m0s
-                        Power Cycles:4
-                        Power On Duration:16488h0m0s
-                        Unsafe Shutdowns:2
-                        Media Errors:0
-                        Error Log Entries:0
-                        Critical Warnings:
-                                Temperature: OK
-                                Available Spare: OK
-                                Device Reliability: OK
-                                Read Only: OK
-                                Volatile Memory Backup: OK
+bash-4.2$ dmg storage scan --nvme-health
+-------
+wolf-71
+-------
+PCI:0000:81:00.0 Model:INTEL SSDPED1K750GA  FW:E2010325 Socket:1 Capacity:750 GB
+  Health Stats:
+    Temperature:318K(44.85C)
+    Controller Busy Time:0s
+    Power Cycles:15
+    Power On Duration:10402h0m0s
+    Unsafe Shutdowns:13
+    Error Count:0
+    Media Errors:0
+    Read Errors:0
+    Write Errors:0
+    Unmap Errors:0
+    Checksum Errors:0
+    Error Log Entries:0
+  Critical Warnings:
+    Temperature: OK
+    Available Spare: OK
+    Device Reliability: OK
+    Read Only: OK
+    Volatile Memory Backup: OK
+
+PCI:0000:da:00.0 Model:INTEL SSDPED1K750GA  FW:E2010325 Socket:1 Capacity:750 GB
+  Health Stats:
+    Temperature:320K(46.85C)
+    Controller Busy Time:0s
+    Power Cycles:15
+    Power On Duration:10402h0m0s
+    Unsafe Shutdowns:13
+    Error Count:0
+    Media Errors:0
+    Read Errors:0
+    Write Errors:0
+    Unmap Errors:0
+    Checksum Errors:0
+    Error Log Entries:0
+  Critical Warnings:
+    Temperature: OK
+    Available Spare: OK
+    Device Reliability: OK
+    Read Only: OK
+    Volatile Memory Backup: OK
+
+-------
+wolf-72
+-------
+PCI:0000:81:00.0 Model:INTEL SSDPED1K750GA  FW:E2010435 Socket:1 Capacity:750 GB
+  Health Stats:
+    Temperature:316K(42.85C)
+    Controller Busy Time:8m0s
+    Power Cycles:23
+    Power On Duration:10399h0m0s
+    Unsafe Shutdowns:18
+    Error Count:0
+    Media Errors:0
+    Read Errors:0
+    Write Errors:0
+    Unmap Errors:0
+    Checksum Errors:0
+    Error Log Entries:0
+  Critical Warnings:
+    Temperature: OK
+    Available Spare: OK
+    Device Reliability: OK
+    Read Only: OK
+    Volatile Memory Backup: OK
+
+PCI:0000:da:00.0 Model:INTEL SSDPED1K750GA  FW:E2010435 Socket:1 Capacity:750 GB
+  Health Stats:
+    Temperature:320K(46.85C)
+    Controller Busy Time:1m0s
+    Power Cycles:23
+    Power On Duration:10399h0m0s
+    Unsafe Shutdowns:19
+    Error Count:0
+    Media Errors:0
+    Read Errors:0
+    Write Errors:0
+    Unmap Errors:0
+    Checksum Errors:0
+    Error Log Entries:0
+  Critical Warnings:
+    Temperature: OK
+    Available Spare: OK
+    Device Reliability: OK
+    Read Only: OK
+    Volatile Memory Backup: OK
 ```
 
 The next step consists of adjusting in the server configuration the storage
@@ -480,7 +557,6 @@ configurations that returns the following from scan for each host:
 
 ```bash
 [daos@wolf-72 daos_m]$ dmg -l wolf-7[1-2] -i storage scan --verbose
-wolf-7[1-2]:10001: connected
 -------
 wolf-7[1-2]
 -------
@@ -609,6 +685,15 @@ Each IO server instance is configured with a unique `fabric_iface` and
 optional `pinned_numa_node`. The interfaces and NUMA Sockets listed in the scan
 results map to the daos_server.yml `fabric_iface` and `pinned_numa_node`
 respectively. The use of `pinned_numa_node` is optional, but recommended for best performance. When specified with the value that matches the network interface, the IO server will bind itself to that NUMA node and to cores purely within that NUMA node. This configuration yields the fastest access to that network device.
+
+### Changing Network Providers
+
+Information about the network configuration is stored as metadata on the DAOS
+storage.
+
+If, after initial deployment, the provider must be changed, it is necessary to
+reformat the storage devices using `dmg storage format` after the configuration
+file has been updated with the new provider.
 
 ## Network Scanning All DAOS Server Nodes
 While the `daos_server network scan` is useful for scanning the localhost, it does not provide results for any other daos_server instance on the network.  The DAOS Management tool, `dmg`, is used for that purpose. The network scan operates the same way as the daos_server network scan, however, to use the dmg tool, at least one known daos_server instance must be running.
@@ -756,7 +841,7 @@ The `daos_agent` configuration file is parsed when starting the
 `daos_agent` process. The configuration file location can be specified
 on the command line (`daos_agent -h` for usage) or default location
 (`install/etc/daos_agent.yml`). If installed from rpms the default location is
-(`/usr/etc/daos_agent.yml`).
+(`/etc/daos/daos_agent.yml`).
 
 Parameter descriptions are specified in [daos_agent.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_agent.yml).
 
@@ -776,9 +861,9 @@ available at
 
 The location of this configuration file is determined by first checking
 for the path specified through the -o option of the daos_agent command
-line. Otherwise, /etc/daos_agent.conf is used.
+line. Otherwise, /etc/daos/daos_agent.yml is used.
 
-Refer to the example configuration file ([daos_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml))
+Refer to the example configuration file ([daos_agent.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_agent.yml))
 for latest information and examples.
 
 ### Agent Startup
@@ -797,7 +882,10 @@ $ daos_agent -i -o <'path to agent configuration file/daos_agent.yml'> &
 ```
 
 Alternatively, the DAOS Agent can be started as a systemd service. The DAOS Agent
-unit file is installed in the correct location when installing from RPMs.
+unit file is installed in the correct location when installing from RPMs. 
+If you want to run the DAOS Agent without certificates (not recommended in production
+deployments), you need to add the `-i` option to the systemd `ExecStart` invocation
+(see below).
 
 If you wish to use systemd with a development build, you must copy the service
 file from `utils/systemd` to `/usr/lib/systemd/system`. Once the file is copied
@@ -809,6 +897,7 @@ Once the service file is installed, you can start `daos_agent`
 with the following commands:
 
 ```bash
+$ sudo systemctl daemon-reload
 $ sudo systemctl enable daos_agent.service
 $ sudo systemctl start daos_agent.service
 ```

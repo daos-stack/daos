@@ -61,6 +61,7 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 #define DB_ALL_BITS	"all"
 
 #define D_LOG_FILE_ENV	"D_LOG_FILE"	/**< Env to specify log file */
+#define D_LOG_SIZE_ENV	"D_LOG_SIZE"	/**< Env to specify log max file size */
 #define D_LOG_MASK_ENV	"D_LOG_MASK"	/**< Env to specify log mask */
 
 /**< Env to specify log file pid append to filename*/
@@ -167,6 +168,19 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 		else						\
 			D_DEBUG(flag_false, __VA_ARGS__);	\
 	} while (0)
+
+/* Register a descriptor with a parent and a type */
+#define D_TRACE_UP(flag, ptr, parent, type)				\
+	D_TRACE_DEBUG(flag, ptr, "Registered new '%s' from %p\n",	\
+		      type, parent)
+
+/* De-register a descriptor, including all aliases */
+#define D_TRACE_DOWN(flag, ptr)						\
+	D_TRACE_DEBUG(flag, ptr, "Deregistered\n")
+
+/** Register a root with type */
+#define D_TRACE_ROOT(flag, ptr, type)					\
+	D_TRACE_DEBUG(flag, ptr, "Registered new '%s' as root\n", type)
 
 /** Helper macros to conditionally output logs conditionally based on
  *  the message priority and the current log level.  See D_DEBUG and
@@ -279,8 +293,10 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 
 #define D_ASSERT(e)							\
 	do {								\
-		if (!(e))						\
-			D_FATAL("Assertion '%s' failed\n", #e);	\
+		if (!(e)) {						\
+			D_FATAL("Assertion '%s' failed\n", #e);		\
+			d_log_sync();					\
+		}							\
 		if (d_alt_assert != NULL)				\
 			d_alt_assert((int64_t)(e), #e, __FILE__, __LINE__);\
 		assert(e);						\

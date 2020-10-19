@@ -25,19 +25,20 @@
 #include <spdk/nvme.h>
 #include <spdk/env.h>
 #include <spdk/vmd.h>
+#include <daos_srv/control.h>
 
 #include "nvme_control_common.h"
 
 struct ctrlr_entry	*g_controllers;
 
-static bool
+bool
 probe_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 	 struct spdk_nvme_ctrlr_opts *opts)
 {
 	return true;
 }
 
-static void
+void
 register_ns(struct ctrlr_entry *centry, struct spdk_nvme_ns *ns)
 {
 	struct ns_entry				*nentry;
@@ -59,9 +60,9 @@ register_ns(struct ctrlr_entry *centry, struct spdk_nvme_ns *ns)
 		return;
 	}
 
-	nentry = malloc(sizeof(struct ns_entry));
+	nentry = calloc(1, sizeof(struct ns_entry));
 	if (nentry == NULL) {
-		perror("ns_entry malloc");
+		perror("ns_entry calloc");
 		exit(1);
 	}
 
@@ -75,13 +76,13 @@ attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 	  struct spdk_nvme_ctrlr *ctrlr,
 	  const struct spdk_nvme_ctrlr_opts *opts)
 {
-	int			 nsid, num_ns;
 	struct ctrlr_entry	*entry;
 	struct spdk_nvme_ns	*ns;
+	int			 nsid, num_ns;
 
-	entry = malloc(sizeof(struct ctrlr_entry));
+	entry = calloc(1, sizeof(struct ctrlr_entry));
 	if (entry == NULL) {
-		perror("ctrlr_entry malloc");
+		perror("ctrlr_entry calloc");
 		exit(1);
 	}
 
@@ -90,7 +91,7 @@ attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 		exit(1);
 	}
 	entry->ctrlr = ctrlr;
-	entry->dev_health = NULL;
+	entry->health = NULL;
 	entry->nss = NULL;
 	entry->next = g_controllers;
 	g_controllers = entry;
@@ -112,18 +113,28 @@ attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 	}
 }
 
-struct ret_t *
-init_ret(int rc)
+struct wipe_res_t *
+init_wipe_res(void)
 {
-	struct ret_t *ret = NULL;
+	struct wipe_res_t *res = calloc(1, sizeof(struct wipe_res_t));
 
-	ret = malloc(sizeof(struct ret_t));
-	if (ret == NULL) {
-		perror("ret malloc");
+	if (res == NULL) {
+		perror("wipe_res_t calloc");
 		exit(1);
 	}
-	ret->rc = rc;
-	ret->ctrlrs = NULL;
+
+	return res;
+}
+
+struct ret_t *
+init_ret(void)
+{
+	struct ret_t *ret = calloc(1, sizeof(struct ret_t));
+
+	if (ret == NULL) {
+		perror("ret_t calloc");
+		exit(1);
+	}
 
 	return ret;
 }
@@ -131,8 +142,15 @@ init_ret(int rc)
 void
 clean_ret(struct ret_t *ret)
 {
-	struct ctrlr_t	*cnext;
-	struct ns_t	*nnext;
+	struct ctrlr_t		*cnext;
+	struct ns_t		*nnext;
+	struct wipe_res_t	*wrnext;
+
+	while (ret && (ret->wipe_results)) {
+		wrnext = ret->wipe_results->next;
+		free(ret->wipe_results);
+		ret->wipe_results = wrnext;
+	}
 
 	while (ret && (ret->ctrlrs)) {
 		while (ret->ctrlrs->nss) {
@@ -140,8 +158,8 @@ clean_ret(struct ret_t *ret)
 			free(ret->ctrlrs->nss);
 			ret->ctrlrs->nss = nnext;
 		}
-		if (ret->ctrlrs->dev_health)
-			free(ret->ctrlrs->dev_health);
+		if (ret->ctrlrs->stats)
+			free(ret->ctrlrs->stats);
 
 		cnext = ret->ctrlrs->next;
 		free(ret->ctrlrs);
@@ -175,19 +193,12 @@ get_controller(struct ctrlr_entry **entry, char *addr)
 }
 
 struct ret_t *
-_discover(prober probe, bool detach, health_getter get_health, bool init_vmd)
+_discover(prober probe, bool detach, health_getter get_health)
 {
-	int			 rc;
 	struct ctrlr_entry	*ctrlr_entry;
-	struct dev_health_entry	*health_entry;
-
-	if (init_vmd) {
-		rc = spdk_vmd_init();
-		if (rc) {
-			rc = -NVMEC_ERR_NO_VMD_CTRLRS;
-			goto fail;
-		}
-	}
+	struct health_entry	*health_entry;
+	struct ret_t		*ret;
+	int			 rc;
 
 	/*
 	 * Start the SPDK NVMe enumeration process.  probe_cb will be called
@@ -200,14 +211,8 @@ _discover(prober probe, bool detach, health_getter get_health, bool init_vmd)
 	if (rc != 0)
 		goto fail;
 
-	/**
-	 * TODO: add fini call when we upgrade SPDK to a version that supports
-	 * if (init_vmd)
-	 *   spdk_vmd_fini();
-	 */
-
 	if (!g_controllers || !g_controllers->ctrlr)
-		return init_ret(0); /* no controllers */
+		return init_ret(); /* no controllers */
 
 	/*
 	 * Collect NVMe SSD health stats for each probed controller.
@@ -216,7 +221,7 @@ _discover(prober probe, bool detach, health_getter get_health, bool init_vmd)
 	ctrlr_entry = g_controllers;
 
 	while (ctrlr_entry) {
-		health_entry = malloc(sizeof(struct dev_health_entry));
+		health_entry = calloc(1, sizeof(struct health_entry));
 		if (health_entry == NULL) {
 			rc = -ENOMEM;
 			goto fail;
@@ -228,23 +233,25 @@ _discover(prober probe, bool detach, health_getter get_health, bool init_vmd)
 			goto fail;
 		}
 
-		ctrlr_entry->dev_health = health_entry;
+		ctrlr_entry->health = health_entry;
 		ctrlr_entry = ctrlr_entry->next;
 	}
 
-	return collect();
+	ret = collect();
+	/* TODO: cleanup(detach); */
+	return ret;
+
 fail:
 	cleanup(detach);
-	return init_ret(rc);
+	ret = init_ret();
+	ret->rc = rc;
+	return ret;
 }
 
 static int
-copy_ctrlr_data(struct ctrlr_t *cdst, struct ctrlr_entry *csrc)
+copy_ctrlr_data(struct ctrlr_t *cdst, const struct spdk_nvme_ctrlr_data *cdata)
 {
-	const struct spdk_nvme_ctrlr_data	*cdata;
-	int					 written;
-
-	cdata = spdk_nvme_ctrlr_get_data(csrc->ctrlr);
+	int	written;
 
 	written = snprintf(cdst->model, sizeof(cdst->model), "%-20.20s",
 			   cdata->mn);
@@ -269,9 +276,9 @@ collect_namespaces(struct ns_entry *ns_entry, struct ctrlr_t *ctrlr)
 	struct ns_t	*ns_tmp;
 
 	while (ns_entry) {
-		ns_tmp = malloc(sizeof(struct ns_t));
+		ns_tmp = calloc(1, sizeof(struct ns_t));
 		if (ns_tmp == NULL) {
-			perror("ns_t malloc");
+			perror("ns_t calloc");
 			return -ENOMEM;
 		}
 
@@ -287,39 +294,42 @@ collect_namespaces(struct ns_entry *ns_entry, struct ctrlr_t *ctrlr)
 }
 
 static int
-collect_health_stats(struct dev_health_entry *entry, struct ctrlr_t *ctrlr)
+populate_dev_health(struct nvme_health_stats *dev_state,
+		    struct spdk_nvme_health_information_page *page,
+		    const struct spdk_nvme_ctrlr_data *cdata)
 {
-	struct dev_health_t			 *h_tmp;
-	struct spdk_nvme_health_information_page health_pg;
-	union spdk_nvme_critical_warning_state	 cwarn;
+	union spdk_nvme_critical_warning_state	cw = page->critical_warning;
+	int					written;
 
-	h_tmp = malloc(sizeof(struct dev_health_t));
-	if (h_tmp == NULL) {
-		perror("dev_health_t malloc");
-		return -ENOMEM;
+	dev_state->warn_temp_time = page->warning_temp_time;
+	dev_state->crit_temp_time = page->critical_temp_time;
+	dev_state->ctrl_busy_time = page->controller_busy_time[0];
+	dev_state->power_cycles = page->power_cycles[0];
+	dev_state->power_on_hours = page->power_on_hours[0];
+	dev_state->unsafe_shutdowns = page->unsafe_shutdowns[0];
+	dev_state->media_errs = page->media_errors[0];
+	dev_state->err_log_entries = page->num_error_info_log_entries[0];
+	dev_state->temperature = page->temperature;
+	dev_state->temp_warn = cw.bits.temperature ? true : false;
+	dev_state->avail_spare_warn = cw.bits.available_spare ?
+		true : false;
+	dev_state->dev_reliability_warn = cw.bits.device_reliability ?
+		true : false;
+	dev_state->read_only_warn = cw.bits.read_only ? true : false;
+	dev_state->volatile_mem_warn = cw.bits.volatile_memory_backup ?
+		true : false;
+
+	written = snprintf(dev_state->model, sizeof(dev_state->model),
+			   "%-20.20s", cdata->mn);
+	if (written >= sizeof(dev_state->model)) {
+		return -NVMEC_ERR_WRITE_TRUNC;
 	}
 
-	health_pg = entry->health_page;
-	h_tmp->temperature = health_pg.temperature;
-	h_tmp->warn_temp_time = health_pg.warning_temp_time;
-	h_tmp->crit_temp_time = health_pg.critical_temp_time;
-	h_tmp->ctrl_busy_time = health_pg.controller_busy_time[0];
-	h_tmp->power_cycles = health_pg.power_cycles[0];
-	h_tmp->power_on_hours = health_pg.power_on_hours[0];
-	h_tmp->unsafe_shutdowns = health_pg.unsafe_shutdowns[0];
-	h_tmp->media_errors = health_pg.media_errors[0];
-	h_tmp->error_log_entries = health_pg.num_error_info_log_entries[0];
-	/* Critical warnings */
-	cwarn = entry->health_page.critical_warning;
-	h_tmp->temp_warning = cwarn.bits.temperature ? true : false;
-	h_tmp->avail_spare_warning = cwarn.bits.available_spare ? true : false;
-	h_tmp->dev_reliabilty_warning = cwarn.bits.device_reliability ?
-					true : false;
-	h_tmp->read_only_warning = cwarn.bits.read_only ? true : false;
-	h_tmp->volatile_mem_warning = cwarn.bits.volatile_memory_backup ?
-					true : false;
-
-	ctrlr->dev_health = h_tmp;
+	written = snprintf(dev_state->serial, sizeof(dev_state->serial),
+			   "%-20.20s", cdata->sn);
+	if (written >= sizeof(dev_state->serial)) {
+		return -NVMEC_ERR_WRITE_TRUNC;
+	}
 
 	return 0;
 }
@@ -328,26 +338,29 @@ void
 _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 	 socket_id_getter get_socket_id)
 {
-	struct ctrlr_entry		       *ctrlr_entry;
-	struct spdk_pci_device		       *pci_dev;
-	struct ctrlr_t			       *ctrlr_tmp;
-	int					rc, written;
+	struct ctrlr_entry			*ctrlr_entry;
+	const struct spdk_nvme_ctrlr_data	*cdata;
+	struct spdk_pci_device			*pci_dev;
+	struct nvme_health_stats		*cstats;
+	struct ctrlr_t				*ctrlr_tmp;
+	int					 rc, written;
 
 	ctrlr_entry = g_controllers;
 
 	while (ctrlr_entry) {
-		ctrlr_tmp = malloc(sizeof(struct ctrlr_t));
+		ctrlr_tmp = calloc(1, sizeof(struct ctrlr_t));
 		if (!ctrlr_tmp) {
-			perror("ctrlr_t malloc");
 			rc = -ENOMEM;
 			goto fail;
 		}
 
 		ctrlr_tmp->nss = NULL;
-		ctrlr_tmp->dev_health = NULL;
+		ctrlr_tmp->stats = NULL;
 		ctrlr_tmp->next = NULL;
 
-		rc = copy_data(ctrlr_tmp, ctrlr_entry);
+		cdata = spdk_nvme_ctrlr_get_data(ctrlr_entry->ctrlr);
+
+		rc = copy_data(ctrlr_tmp, cdata);
 		if (rc != 0)
 			goto fail;
 
@@ -385,11 +398,23 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 		}
 
 		/* Alloc device health stats per controller */
-		if (ctrlr_entry->dev_health) {
-			rc = collect_health_stats(ctrlr_entry->dev_health,
-						  ctrlr_tmp);
-			if (rc != 0)
+		if (ctrlr_entry->health) {
+			cstats = calloc(1, sizeof(struct nvme_health_stats));
+			if (cstats == NULL) {
+				rc = -ENOMEM;
 				goto fail;
+			}
+
+			/* Store device health stats for export */
+			rc = populate_dev_health(cstats,
+						 &ctrlr_entry->health->page,
+						 cdata);
+			if (rc != 0) {
+				free(cstats);
+				goto fail;
+			}
+
+			ctrlr_tmp->stats = cstats;
 		}
 
 		ctrlr_tmp->next = ret->ctrlrs;
@@ -414,7 +439,7 @@ collect(void)
 {
 	struct ret_t *ret;
 
-	ret = init_ret(0);
+	ret = init_ret();
 	_collect(ret, &copy_ctrlr_data, &spdk_nvme_ctrlr_get_pci_device,
 		 &spdk_pci_device_get_socket_id);
 
@@ -430,17 +455,15 @@ cleanup(bool detach)
 	centry = g_controllers;
 
 	while (centry) {
-		if ((centry->ctrlr) && (detach)) {
+		if ((centry->ctrlr) && (detach))
 			spdk_nvme_detach(centry->ctrlr);
-		}
 		while (centry->nss) {
 			nentry = centry->nss->next;
 			free(centry->nss);
 			centry->nss = nentry;
 		}
-		if (centry->dev_health) {
-			free(centry->dev_health);
-		}
+		if (centry->health)
+			free(centry->health);
 
 		cnext = centry->next;
 		free(centry);
