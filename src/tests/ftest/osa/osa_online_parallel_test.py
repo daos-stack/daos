@@ -77,17 +77,6 @@ class OSAOnlineParallelTest(TestWithServers):
         self.daos_racer = None
 
     @fail_on(CommandFailure)
-    def get_pool_leader(self):
-        """Get the pool leader.
-
-        Returns:
-            int: pool leader value
-
-        """
-        data = self.dmg_command.pool_query(self.pool.uuid)
-        return int(data["leader"])
-
-    @fail_on(CommandFailure)
     def get_pool_version(self):
         """Get the pool version.
 
@@ -159,33 +148,27 @@ class OSAOnlineParallelTest(TestWithServers):
         except CommandFailure as _error:
             results.put("FAIL")
 
-    def dmg_thread(self, puuid, rank, target, action, results):
+    def dmg_thread(self, action, action_args, results):
         """Generate different dmg command related to OSA.
             Args:
-            puuid (int) : Pool UUID
-            rank (int)  : Daos Server Rank
-            target (list) : Target list
-            action (string) : String to identify OSA action
-                              like drain, reintegration, extend
+            action_args(dict) : {action: {"puuid":
+                                          pool[val].uuid,
+                                          "rank": rank,
+                                          "target": t_string,
+                                          "action": action,}
             results (queue) : dmg command output queue.
         """
         # Give sometime for IOR threads to start
         dmg = copy.copy(self.dmg_command)
         try:
-            if action == "exclude":
-                dmg.pool_exclude(puuid, (rank + 1), target)
-            elif action == "drain":
-                dmg.pool_drain(puuid, rank)
-            elif action == "reintegrate":
+            if action == "reintegrate":
                 time.sleep(60)
-                dmg.pool_reintegrate(puuid, (rank + 1), target)
-            else:
-                self.fail("Invalid action for dmg thread")
+            getattr(dmg,  "pool_{}".format(action))(**action_args[action])
         except CommandFailure as _error:
-            results.put("{} failed".format(action))
-            # Future enhancement for extend
-            # elif action == "extend":
-            #    dmg.pool_extend(puuid, (rank + 2))
+            results.put("{} failed".format(action_args[action]))
+        # Future enhancement for extend
+        # elif action == "extend":
+        #    dmg.pool_extend(puuid, (rank + 2))
 
     def run_online_parallel_test(self, num_pool):
         """Run multiple OSA commands / IO in parallel.
@@ -195,7 +178,7 @@ class OSAOnlineParallelTest(TestWithServers):
                           some data in pool. Defaults to False.
         """
         num_jobs = self.params.get("no_parallel_job", '/run/ior/*')
-        # Create a pool
+        # Create a pool+
         pool = {}
         pool_uuid = []
         target_list = []
@@ -240,7 +223,15 @@ class OSAOnlineParallelTest(TestWithServers):
                                                     self.ior_test_sequence,
                                                     self.ior_flags):
                 threads = []
-                osa_tasks = ["drain", "exclude", "reintegrate"]
+                # Action dictionary with OSA dmg command parameters
+                action_args = {
+                    "drain": {"pool": self.pool.uuid, "rank": rank,
+                              "tgt_idx": None},
+                    "exclude": {"pool": self.pool.uuid, "rank": (rank + 1),
+                                "tgt_idx": t_string},
+                    "reintegrate": {"pool": self.pool.uuid, "rank": (rank + 1),
+                                    "tgt_idx": t_string}
+                }
                 for _ in range(0, num_jobs):
                     # Add a thread for these IOR arguments
                     threads.append(threading.Thread(target=self.ior_thread,
@@ -251,14 +242,12 @@ class OSAOnlineParallelTest(TestWithServers):
                                                             "flags": flags,
                                                             "results":
                                                             self.out_queue}))
-                for action in osa_tasks:
+                for action in sorted(action_args.keys()):
                     # Add dmg threads
                     threads.append(threading.Thread(target=self.dmg_thread,
-                                                    kwargs={"puuid":
-                                                            pool[val].uuid,
-                                                            "rank": rank,
-                                                            "target": t_string,
-                                                            "action": action,
+                                                    kwargs={"action": action,
+                                                            "action_args":
+                                                            action_args,
                                                             "results":
                                                             self.out_queue}))
 
@@ -288,7 +277,7 @@ class OSAOnlineParallelTest(TestWithServers):
                                 "Pool Version Error:  at the end")
                 pool[val].destroy()
 
-    @skipForTicket("DAOS-5877")
+    # @skipForTicket("DAOS-5877")
     def test_osa_online_parallel_test(self):
         """
         JIRA ID: DAOS-4752
