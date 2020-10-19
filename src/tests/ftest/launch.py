@@ -343,7 +343,12 @@ def check_remote_output(task, command):
                 if len(lines) > 1:
                     print("    {}: rc={}, output:".format(n_set, code))
                     for line in lines:
-                        print("      {}".format(line))
+                        try:
+                            print("      {}".format(line))
+                        except IOError:
+                            time.sleep(5)
+                            print('XXX: IO Error')
+                            print("      {}".format(line))
                 else:
                     print("    {}: rc={}, output: {}".format(n_set,
                                                              code,
