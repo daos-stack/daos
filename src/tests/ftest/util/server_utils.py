@@ -169,13 +169,12 @@ class DaosServerCommand(YamlCommand):
         self.result = self._get_result(("storage", "scan"))
         # Sample daos_server storage scan output. It should be the same as dmg
         # storage scan --verbose except there's no hostname at the top.
-        """
-        NVMe PCI     Model                FW Revision Socket ID Capacity
-        --------     -----                ----------- --------- --------
-        0000:81:00.0 INTEL SSDPED1K750GA  E2010325    1         750 GB
 
-                No SCM modules found
-        """
+        # NVMe PCI     Model                FW Revision Socket ID Capacity
+        # --------     -----                ----------- --------- --------
+        # 0000:81:00.0 INTEL SSDPED1K750GA  E2010325    1         750 GB
+
+        #         No SCM modules found
         vals = re.findall(
             r"\n([a-z0-9_]+)[ ]+([\d]+)[ ]+([\d.]+) ([A-Z]+)|"
             r"([a-f0-9]+:[a-f0-9]+:[a-f0-9]+.[a-f0-9]+)[ ]+"
