@@ -90,4 +90,4 @@ class CrashIor(IorTestBase):
         # complete without killing in the middle this time to check
         # if io goes as expected after crashing it previously
         self.run_ior_with_pool()
-        self.mpirun.wait()
+        self.job_manager.wait()
