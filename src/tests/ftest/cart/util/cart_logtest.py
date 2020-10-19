@@ -186,7 +186,6 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                                            'out_owner_grp'),
                      'crt_proc_d_rank_list_t': ('rank_list',
                                                 'rank_list->rl_ranks'),
-                     'crt_self_uri_get': ('tmp_uri'),
                      'path_gen': ('*fpath'),
                      'gen_pool_buf': ('uuids'),
                      'ds_pool_tgt_map_update': ('arg'),
@@ -360,9 +359,10 @@ class LogTest():
         for (loc, count) in self.log_locs.most_common(10):
             if count < 10:
                 break
+            percent = 100 * count / self.log_count
             print('Logging used {} times at {} ({:.1f}%)'.format(count,
                                                                  loc,
-                                                                 100*count/self.log_count))
+                                                                 percent))
         print('Most common facilities')
         for (fac, count) in self.log_fac.most_common(10):
             if count < 10:
