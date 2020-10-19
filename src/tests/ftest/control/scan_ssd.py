@@ -25,7 +25,8 @@ from getpass import getuser
 
 from apricot import TestWithServers
 from server_utils import DaosServerCommand
-from server_utils_params import DaosServerTransportCredentials
+from server_utils_params import \
+    DaosServerTransportCredentials, DaosServerYamlParameters
 from command_utils_base import CommonConfig
 
 
@@ -59,7 +60,9 @@ class ScanSSDTest(TestWithServers):
             self.hostfile_servers_slots, self.hostlist_servers)
 
         # Call daos_server storage scan
-        server_cmd = DaosServerCommand(path=self.bin)
+        server_cfg = DaosServerYamlParameters(config_file, common_cfg)
+        server_cmd = DaosServerCommand(
+            path=self.bin, yaml_cfg=server_cfg, timeout=20)
         ds_scan = server_cmd.storage_scan()
         pci_addrs = ds_scan["nvme"].keys()
 
