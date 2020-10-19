@@ -195,7 +195,7 @@ ut_pool(void **state)
 	assert_int_equal(rc, -DER_EXIST);
 
 	rc = smd_pool_assign(id1, 4, 4 << 10, 200);
-	assert_int_equal(rc, -DER_MISMATCH);
+	assert_int_equal(rc, -DER_INVAL);
 
 	rc = smd_pool_get(id1, &pool_info);
 	assert_int_equal(rc, 0);
