@@ -110,6 +110,11 @@ var (
 		"both fault domain and fault path are defined in the configuration",
 		"remove either the fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
 	)
+	FaultConfigFaultCallbackEmpty = serverFault(
+		code.ServerConfigFaultCallbackEmpty,
+		"fault domain callback executed but did not generate output",
+		"specify a valid fault domain callback script ('fault_cb' parameter) and restart the control server",
+	)
 )
 
 func FaultInstancesNotStopped(action string, rank system.Rank) *fault.Fault {
