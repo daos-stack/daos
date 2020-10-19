@@ -61,6 +61,7 @@ class DaosObjectQuery(TestWithServers):
         # Create a pool and a container.
         self.add_pool()
         self.add_container(self.pool)
+        self.pool.connect()
         self.container.open(pool_handle=self.pool.pool.handle.value)
 
         # Prepare to write object.
