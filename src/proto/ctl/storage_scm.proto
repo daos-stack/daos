@@ -44,18 +44,18 @@ message ScmModule {
 
 // ScmNamespace represents SCM namespace as pmem device files created on a ScmRegion.
 message ScmNamespace {
+	// Mount represents a mounted pmem block device.
+	message Mount {
+		string path = 1;
+		uint64 total_bytes = 2;
+		uint64 avail_bytes = 3;
+	}
 	string uuid = 1;
 	string blockdev = 2;
 	string dev = 3; // ndctl specific device identifier
 	uint32 numa_node = 4;
-	uint64 size = 5; // bytes
-}
-
-// ScmMount represents mounted AppDirect region made up of SCM module set.
-message ScmMount {
-	string mntpoint = 1;
-	repeated ScmModule modules = 2;
-	ScmNamespace namespace = 3;
+	uint64 size = 5; // pmem block device capacity in bytes
+	Mount mount = 6; // mount OS info
 }
 
 // ScmModuleResult represents operation state for specific SCM/PM module.
