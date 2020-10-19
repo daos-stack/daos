@@ -292,6 +292,10 @@ class hwm_counter():
         self.__acount = 0
         self.__fcount = 0
 
+    def has_data(self):
+        """Return true if there is any data registered"""
+        return self.__hwm != 0;
+
     def __str__(self):
         return "Total:{:,} HWM:{:,} {} allocations, {} frees".\
             format(self.__val,
@@ -607,7 +611,8 @@ class LogTest():
                                                                   trace_lines,
                                                                   p_trace))
 
-        print("Memsize: {}".format(memsize))
+        if memsize.has_data():
+            print("Memsize: {}".format(memsize))
 
         # Special case the fuse arg values as these are allocated by IOF
         # but freed by fuse itself.
@@ -705,7 +710,6 @@ class LogTest():
             op_state_counters[opcode][rpc_state] += 1
 
         if not bool(op_state_counters):
-            print('No rpcs in log file')
             return
 
         table = []
@@ -778,6 +782,8 @@ def run():
             test_iter.check_log_file(False)
         except LogError:
             print('Errors in log file, ignoring')
+        except NotAllFreed:
+            print('Memory leaks, ignoring')
 
 if __name__ == '__main__':
     run()
