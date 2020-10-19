@@ -158,11 +158,13 @@ class DmgCommand(DmgCommandBase):
 
         if verbose:
             vals = re.findall(
-                r"--------\n([a-z0-9-]+)\n--------|"
+                r"-+\n([a-z0-9-]+)\n-+|"
                 r"\n([a-z0-9_]+)[ ]+([\d]+)[ ]+([\d.]+) ([A-Z]+)|"
                 r"([a-f0-9]+:[a-f0-9]+:[a-f0-9]+.[a-f0-9]+)[ ]+"
                 r"(\S+)[ ]+(\S+)[ ]+(\S+)[ ]+(\d+)[ ]+([\d.]+)"
                 r"[ ]+([A-Z]+)[ ]*\n", self.result.stdout)
+            self.log.info("--- Verbose output parse result ---")
+            self.log.info(vals)
 
             data = {}
             host = vals[0][0]
