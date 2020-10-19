@@ -346,8 +346,10 @@ def check_remote_output(task, command):
                         try:
                             print("      {}".format(line))
                         except IOError:
+                            # DAOS-5781 Jenkins doesn't like receiving large
+                            # amounts of data in a short space of time so catch
+                            # this and retry.
                             time.sleep(5)
-                            print('XXX: IO Error')
                             print("      {}".format(line))
                 else:
                     print("    {}: rc={}, output: {}".format(n_set,
