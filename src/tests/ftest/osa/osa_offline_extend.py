@@ -51,17 +51,6 @@ class OSAOfflineExtend(TestWithServers):
                                              "/run/extra_servers/*")
 
     @fail_on(CommandFailure)
-    def get_pool_leader(self):
-        """Get the pool leader.
-
-        Returns:
-            int: pool leader value
-
-        """
-        data = self.dmg_command.pool_query(self.pool.uuid)
-        return int(data["leader"])
-
-    @fail_on(CommandFailure)
     def get_pool_version(self):
         """Get the pool version.
 
