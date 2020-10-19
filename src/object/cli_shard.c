@@ -1362,9 +1362,42 @@ struct obj_query_key_cb_args {
 	daos_key_t		*akey;
 	daos_recx_t		*recx;
 	struct dc_object	*obj;
+	struct dc_obj_shard	*shard;
 	struct dtx_epoch	epoch;
 	daos_handle_t		th;
 };
+
+static void
+obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args,
+			  daos_recx_t *reply_recx)
+{
+	daos_recx_t		*result_recx = cb_args->recx;
+	struct daos_oclass_attr	*oca;
+	uint64_t		 stripe_rec_nr, cell_rec_nr, rx_idx;
+
+	oca = obj_get_oca(cb_args->obj, false);
+	if (oca == NULL || !DAOS_OC_IS_EC(oca)) {
+		*result_recx = *reply_recx;
+		return;
+	}
+
+	stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
+	cell_rec_nr = obj_ec_cell_rec_nr(oca);
+	if (reply_recx->rx_idx & PARITY_INDICATOR) {
+		rx_idx = (reply_recx->rx_idx & (~PARITY_INDICATOR));
+		D_ASSERT(rx_idx % cell_rec_nr == 0);
+		D_ASSERT(reply_recx->rx_nr % cell_rec_nr == 0);
+		rx_idx = obj_ec_idx_vos2daos(rx_idx, stripe_rec_nr, cell_rec_nr,
+					     0);
+		result_recx->rx_idx = rx_idx;
+		result_recx->rx_nr = stripe_rec_nr *
+				     (reply_recx->rx_nr / cell_rec_nr);
+		return;
+	}
+
+	/* replica ext (query from parity shard) need not translate */
+	*result_recx = *reply_recx;
+}
 
 static int
 obj_shard_query_key_cb(tse_task_t *task, void *data)
@@ -1480,8 +1513,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	if (check && flags & DAOS_GET_RECX) {
 		/** if first cb, set recx */
 		if (first || changed) {
-			cb_args->recx->rx_nr = okqo->okqo_recx.rx_nr;
-			cb_args->recx->rx_idx = okqo->okqo_recx.rx_idx;
+			obj_shard_query_recx_post(cb_args, &okqo->okqo_recx);
 		} else {
 			D_ASSERT(0);
 		}
@@ -1541,6 +1573,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
 	cb_args.akey	= akey;
 	cb_args.recx	= recx;
 	cb_args.obj	= obj;
+	cb_args.shard	= shard;
 	cb_args.epoch	= *epoch;
 	cb_args.th	= th;
 

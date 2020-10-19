@@ -387,16 +387,23 @@ obj_layout_refresh(struct dc_object *obj)
 	return rc;
 }
 
+struct daos_oclass_attr *
+obj_get_oca(struct dc_object *obj, bool force_check)
+{
+	if (obj->cob_oca == NULL && force_check) {
+		obj->cob_oca = daos_oclass_attr_find(obj->cob_md.omd_id);
+		D_ASSERT(obj->cob_oca != NULL);
+	}
+	return obj->cob_oca;
+}
+
 int
 obj_get_replicas(struct dc_object *obj)
 {
-	struct daos_oclass_attr *oc_attr;
-
-	oc_attr = daos_oclass_attr_find(obj->cob_md.omd_id);
-	D_ASSERT(oc_attr != NULL);
+	struct daos_oclass_attr *oc_attr = obj_get_oca(obj, true);
 
 	if (oc_attr->ca_resil != DAOS_RES_REPL)
-		return 1;
+		return obj_ec_tgt_nr(oc_attr);
 
 	if (oc_attr->u.rp.r_num == DAOS_OBJ_REPL_MAX)
 		return obj->cob_grp_size;

@@ -96,6 +96,8 @@ struct dc_object {
 	 * version in it.
 	 */
 	struct daos_obj_md	 cob_md;
+	/** object class attribute */
+	struct daos_oclass_attr	*cob_oca;
 	/** container open handle */
 	daos_handle_t		 cob_coh;
 	/** object open mode */
@@ -451,6 +453,7 @@ void obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr);
 int obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
 		  crt_bulk_perm_t bulk_perm, tse_task_t *task,
 		  crt_bulk_t **p_bulks);
+struct daos_oclass_attr *obj_get_oca(struct dc_object *obj, bool force_check);
 int obj_get_replicas(struct dc_object *obj);
 int obj_shard_open(struct dc_object *obj, unsigned int shard,
 		   unsigned int map_ver, struct dc_obj_shard **shard_ptr);
