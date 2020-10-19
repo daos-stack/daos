@@ -127,9 +127,9 @@ int ds_mgmt_pool_get_svc_ranks(struct mgmt_svc *svc, uuid_t uuid,
 
 /** srv_query.c */
 
-/* Device health stats from nvme_health_stats */
+/* Device health stats from nvme_stats */
 struct mgmt_bio_health {
-	struct nvme_health_stats	mb_dev_state;
+	struct nvme_stats		mb_dev_state;
 	uuid_t				mb_devid;
 };
 
