@@ -758,11 +758,12 @@ class DmgCommand(DmgCommandBase):
                 r"(?:Rank|address\s+:|uuid\s+:|status\s+:|reason\s+:)\s+(.*)",
                 self.result.stdout)
             if match:
-                rank = int(match[0])
-                data[rank]["address"] = match[1]
-                data[rank]["uuid"] = match[2]
-                data[rank]["state"] = match[3]      # Status
-                data[rank]["reason"] = match[4]
+                data[int(match[0])] = {
+                    "address": match[1],
+                    "uuid": match[2],
+                    "state": match[3],
+                    "reason": match[4],
+                }
         elif verbose:
             # Process the verbose multiple rank system query output, e.g.
             #   Rank UUID                                 Control Address State
@@ -774,11 +775,12 @@ class DmgCommand(DmgCommandBase):
                 r"(\d+)\s+([0-9a-f-]+)\s+(.*)\s+([A-Za-z]+)(?:|\s+([A-Za-z]+))",
                 self.result.stdout)
             for info in match:
-                rank = int(info[0])
-                data[rank]["address"] = info[2]
-                data[rank]["uuid"] = info[1]
-                data[rank]["state"] = info[3]
-                data[rank]["reason"] = match[4]
+                data[int(info[0])] = {
+                    "address": info[2],
+                    "uuid": info[1],
+                    "state": info[3],
+                    "reason": match[4],
+                }
         else:
             # Process the non-verbose multiple rank system query output, e.g.
             #   Rank  State
@@ -788,7 +790,7 @@ class DmgCommand(DmgCommandBase):
                 r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)", self.result.stdout)
             for info in match:
                 for rank in get_numeric_list(info[0]):
-                    data[rank]["state"] = info[1]
+                    data[rank] = {"state": info[1]}
         return data
 
     def system_start(self):
