@@ -768,7 +768,7 @@ def run():
     try:
         log_iter = cart_logparse.LogIter(args.file)
     except IsADirectoryError:
-        print ('Log tracing on directory not possible')
+        print('Log tracing on directory not possible')
         return
     test_iter = LogTest(log_iter)
     if args.dfuse:
