@@ -4,6 +4,7 @@ hosts:
     test_clients:
         - client-B
 timeout: 1800
+job_manager_timeout: 1700
 server_config:
     name: daos_server
     servers:
