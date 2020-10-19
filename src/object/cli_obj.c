@@ -659,6 +659,8 @@ obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr)
 
 	for (i = 0; i < iod_nr; i++) {
 		iod = reasb_req->orr_iods + i;
+		if (iod == NULL)
+			return;
 		if (iod->iod_recxs != NULL)
 			D_FREE(iod->iod_recxs);
 		daos_sgl_fini(reasb_req->orr_sgls + i, false);
