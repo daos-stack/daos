@@ -173,3 +173,17 @@ func StringSliceHasDuplicates(slice []string) bool {
 	}
 	return false
 }
+
+// PercentageString returns string representation of percentage given
+// nominator and denominator unsigned integers.
+func PercentageString(part, total uint64) string {
+	if total == 0 {
+		return "N/A"
+	}
+	if part == 0 {
+		return fmt.Sprintf("%v %%", 0)
+	}
+
+	return fmt.Sprintf("%v %%",
+		int((float64(part)/float64(total))*float64(100)))
+}

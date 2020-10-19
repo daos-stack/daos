@@ -538,7 +538,7 @@ const ProtobufCMessageDescriptor mgmt__bio_health_req__descriptor =
   (ProtobufCMessageInit) mgmt__bio_health_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__bio_health_resp__field_descriptors[23] =
+static const ProtobufCFieldDescriptor mgmt__bio_health_resp__field_descriptors[25] =
 {
   {
     "model",
@@ -816,8 +816,33 @@ static const ProtobufCFieldDescriptor mgmt__bio_health_resp__field_descriptors[2
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "total_bytes",
+    25,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__BioHealthResp, total_bytes),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "avail_bytes",
+    26,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__BioHealthResp, avail_bytes),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__bio_health_resp__field_indices_by_name[] = {
+  24,   /* field[24] = avail_bytes */
   17,   /* field[17] = avail_spare_warn */
   11,   /* field[11] = bio_read_errs */
   13,   /* field[13] = bio_unmap_errs */
@@ -838,6 +863,7 @@ static const unsigned mgmt__bio_health_resp__field_indices_by_name[] = {
   16,   /* field[16] = temp_warn */
   15,   /* field[15] = temperature */
   2,   /* field[2] = timestamp */
+  23,   /* field[23] = total_bytes */
   8,   /* field[8] = unsafe_shutdowns */
   20,   /* field[20] = volatile_mem_warn */
   3,   /* field[3] = warn_temp_time */
@@ -846,7 +872,7 @@ static const ProtobufCIntRange mgmt__bio_health_resp__number_ranges[2 + 1] =
 {
   { 1, 0 },
   { 5, 3 },
-  { 0, 23 }
+  { 0, 25 }
 };
 const ProtobufCMessageDescriptor mgmt__bio_health_resp__descriptor =
 {
@@ -856,7 +882,7 @@ const ProtobufCMessageDescriptor mgmt__bio_health_resp__descriptor =
   "Mgmt__BioHealthResp",
   "mgmt",
   sizeof(Mgmt__BioHealthResp),
-  23,
+  25,
   mgmt__bio_health_resp__field_descriptors,
   mgmt__bio_health_resp__field_indices_by_name,
   2,  mgmt__bio_health_resp__number_ranges,

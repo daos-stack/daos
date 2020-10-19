@@ -48,7 +48,7 @@ func printNvmeControllerSummary(nvme *storage.NvmeController, out io.Writer, opt
 	return w.Err
 }
 
-func printNvmeHealth(stat *storage.NvmeControllerHealth, out io.Writer, opts ...PrintConfigOption) error {
+func printNvmeHealth(stat *storage.NvmeHealth, out io.Writer, opts ...PrintConfigOption) error {
 	w := txtfmt.NewErrWriter(out)
 
 	if stat == nil {
@@ -61,7 +61,8 @@ func printNvmeHealth(stat *storage.NvmeControllerHealth, out io.Writer, opts ...
 	iw := txtfmt.NewIndentWriter(out)
 
 	if stat.Timestamp > 0 {
-		fmt.Fprintf(iw, "Timestamp:%s\n", time.Unix(int64(stat.Timestamp), 0).UTC())
+		fmt.Fprintf(iw, "Timestamp:%s\n",
+			time.Unix(int64(stat.Timestamp), 0).Format(time.UnixDate))
 	}
 
 	fmt.Fprintf(iw, "Temperature:%dK(%.02fC)\n", stat.TempK(), stat.TempC())

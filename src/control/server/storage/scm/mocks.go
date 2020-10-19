@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package scm
 
 import (
@@ -33,14 +34,17 @@ import (
 
 type (
 	MockSysConfig struct {
-		IsMountedBool  bool
-		IsMountedErr   error
-		MountErr       error
-		UnmountErr     error
-		MkfsErr        error
-		GetfsStr       string
-		GetfsErr       error
-		SourceToTarget map[string]string
+		IsMountedBool   bool
+		IsMountedErr    error
+		MountErr        error
+		UnmountErr      error
+		MkfsErr         error
+		GetfsStr        string
+		GetfsErr        error
+		SourceToTarget  map[string]string
+		GetfsUsageTotal uint64
+		GetfsUsageAvail uint64
+		GetfsUsageErr   error
 	}
 
 	MockSysProvider struct {
@@ -98,6 +102,10 @@ func (msp *MockSysProvider) Mkfs(_, _ string, _ bool) error {
 
 func (msp *MockSysProvider) Getfs(_ string) (string, error) {
 	return msp.cfg.GetfsStr, msp.cfg.GetfsErr
+}
+
+func (msp *MockSysProvider) GetfsUsage(_ string) (uint64, uint64, error) {
+	return msp.cfg.GetfsUsageTotal, msp.cfg.GetfsUsageAvail, msp.cfg.GetfsUsageErr
 }
 
 func NewMockSysProvider(cfg *MockSysConfig) *MockSysProvider {

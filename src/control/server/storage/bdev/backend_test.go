@@ -75,10 +75,10 @@ func mockSpdkNamespace(varIdx ...int32) storage.NvmeNamespace {
 	return *s
 }
 
-func mockSpdkDeviceHealth(varIdx ...int32) storage.NvmeControllerHealth {
-	native := storage.MockNvmeControllerHealth(varIdx...)
+func mockSpdkDeviceHealth(varIdx ...int32) storage.NvmeHealth {
+	native := storage.MockNvmeHealth(varIdx...)
 
-	s := new(storage.NvmeControllerHealth)
+	s := new(storage.NvmeHealth)
 	if err := convertTypes(native, s); err != nil {
 		panic(err)
 	}

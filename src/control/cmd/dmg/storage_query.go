@@ -81,6 +81,7 @@ type storageQueryCmd struct {
 	DeviceHealth devHealthQueryCmd   `command:"device-health" alias:"d" description:"Query the device health"`
 	ListPools    listPoolsQueryCmd   `command:"list-pools" alias:"p" description:"List pools on the server"`
 	ListDevices  listDevicesQueryCmd `command:"list-devices" alias:"d" description:"List storage devices on the server"`
+	Usage        usageQueryCmd       `command:"usage" alias:"u" description:"Show SCM & NVMe storage space utilization per storage server"`
 }
 
 type devHealthQueryCmd struct {
@@ -149,4 +150,44 @@ func (cmd *listPoolsQueryCmd) Execute(_ []string) error {
 		UUID:        cmd.UUID,
 	}
 	return cmd.makeRequest(ctx, req, pretty.PrintWithVerboseOutput(cmd.Verbose))
+}
+
+// usageQueryCmd is the struct representing the scan storage subcommand.
+type usageQueryCmd struct {
+	logCmd
+	ctlInvokerCmd
+	hostListCmd
+	jsonOutputCmd
+}
+
+// Execute is run when usageQueryCmd activates.
+//
+// Queries NVMe and SCM usage on hosts.
+func (cmd *usageQueryCmd) Execute(_ []string) error {
+	ctx := context.Background()
+	// retrieve nvme metadata as it contains storage space usage
+	req := &control.StorageScanReq{NvmeMeta: true}
+	req.SetHostList(cmd.hostlist)
+	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(resp, err)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	var bld strings.Builder
+	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
+		return err
+	}
+	if err := pretty.PrintHostStorageUsageMap(resp.HostStorage, &bld); err != nil {
+		return err
+	}
+	// Infof prints raw string and doesn't try to expand "%"
+	// preserving column formatting in txtfmt table
+	cmd.log.Infof("%s", bld.String())
+
+	return resp.Errors()
 }

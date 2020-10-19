@@ -595,7 +595,7 @@ bio_yield(void)
  *
  * \return			Zero on success, negative value on error
  */
-int bio_get_dev_state(struct nvme_health_stats *dev_state,
+int bio_get_dev_state(struct nvme_stats *dev_state,
 		      struct bio_xs_context *xs);
 
 /*

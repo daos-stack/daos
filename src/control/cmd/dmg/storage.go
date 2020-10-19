@@ -145,7 +145,7 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 
 	if cmd.jsonOutputEnabled() {
 		if cmd.Verbose {
-			cmd.log.Info("--verbose flag ignored if --json specified")
+			cmd.log.Error("--verbose flag ignored if --json specified")
 		}
 
 		return cmd.outputJSON(resp, err)

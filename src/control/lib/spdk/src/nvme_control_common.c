@@ -294,7 +294,7 @@ collect_namespaces(struct ns_entry *ns_entry, struct ctrlr_t *ctrlr)
 }
 
 static int
-populate_dev_health(struct nvme_health_stats *dev_state,
+populate_dev_health(struct nvme_stats *dev_state,
 		    struct spdk_nvme_health_information_page *page,
 		    const struct spdk_nvme_ctrlr_data *cdata)
 {
@@ -341,7 +341,7 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 	struct ctrlr_entry			*ctrlr_entry;
 	const struct spdk_nvme_ctrlr_data	*cdata;
 	struct spdk_pci_device			*pci_dev;
-	struct nvme_health_stats		*cstats;
+	struct nvme_stats			*cstats;
 	struct ctrlr_t				*ctrlr_tmp;
 	int					 rc, written;
 
@@ -399,7 +399,7 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 
 		/* Alloc device health stats per controller */
 		if (ctrlr_entry->health) {
-			cstats = calloc(1, sizeof(struct nvme_health_stats));
+			cstats = calloc(1, sizeof(struct nvme_stats));
 			if (cstats == NULL) {
 				rc = -ENOMEM;
 				goto fail;

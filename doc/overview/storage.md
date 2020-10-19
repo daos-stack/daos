@@ -15,7 +15,7 @@ storage capacity dedicated to each target) or by spanning more targets
 the unit of provisioning and isolation. DAOS pools cannot span across multiple 
 systems.
 
-A pool can host multiple transactional object store called DAOS containers. 
+A pool can host multiple transactional object stores called DAOS containers. 
 Each container is a private object address space, which can be modified 
 transactionally and independently of the other containers stored in the 
 same pool. A container is the unit of snapshot and data management. 

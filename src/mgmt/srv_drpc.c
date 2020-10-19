@@ -1724,7 +1724,7 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__BioHealthReq	*req = NULL;
 	Mgmt__BioHealthResp	*resp = NULL;
 	struct mgmt_bio_health	*bio_health = NULL;
-	struct nvme_health_stats stats;
+	struct nvme_stats	 stats;
 	uuid_t			 uuid;
 	uint8_t			*body;
 	size_t			 len;
@@ -1817,6 +1817,8 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
+	resp->total_bytes = stats.total_bytes;
+	resp->avail_bytes = stats.avail_bytes;
 out:
 	resp->status = rc;
 	len = mgmt__bio_health_resp__get_packed_size(resp);
