@@ -26,6 +26,16 @@
 #include <daos/common.h>
 #include <daos/job.h>
 
+
+/*
+ * The answer of what the max length of envvar name is very tricky. Arguments
+ * and environment variable share the same memory space so to make things easy
+ * we enforce an arbitrary length of 80 which some other shells enforce
+ */
+#define MAX_ENV_NAME 80
+
+#define MAX_JOBID_LEN 1024
+
 char *dc_jobid_env;
 char *dc_jobid;
 
@@ -53,9 +63,13 @@ int dc_job_init(void)
 	char *jobid_env = getenv(JOBID_ENV);
 	int err = 0;
 
-	if (jobid_env == NULL)
+	if (jobid_env == NULL) {
 		D_STRNDUP(jobid_env, DEFAULT_JOBID_ENV,
 			  sizeof(DEFAULT_JOBID_ENV));
+	} else {
+		char *tmp_env = jobid_env;
+		D_STRNDUP(jobid_env, tmp_env, strnlen(tmp_env, MAX_ENV_NAME));
+	}
 	if (jobid_env == NULL) {
 		err = -DER_NOMEM;
 		goto out_err;
@@ -64,11 +78,23 @@ int dc_job_init(void)
 	dc_jobid_env = jobid_env;
 
 	jobid = getenv(dc_jobid_env);
-	if (jobid == NULL)
+	if (jobid == NULL) {
 		err = craft_default_jobid(&jobid);
-	if (err)
-		goto out_env;
+		if (err)
+			goto out_env;
+	} else {
+		char *tmp_jobid = jobid;
+		D_STRNDUP(jobid, tmp_jobid, strnlen(tmp_jobid, MAX_JOBID_LEN));
+		if (jobid == NULL) {
+			err = -DER_NOMEM;
+			goto out_env;
+		}
+	}
+
 	dc_jobid = jobid;
+
+	D_INFO("Using JOBID ENV: %s\n", dc_jobid_env);
+	D_INFO("Using JOBID %s\n", dc_jobid);
 	return 0;
 
 out_env:
