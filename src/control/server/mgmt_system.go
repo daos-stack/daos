@@ -40,7 +40,10 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-const instanceUpdateDelay = 500 * time.Millisecond
+const (
+	instanceUpdateDelay = 500 * time.Millisecond
+	groupUpdateRefresh  = 100 * time.Millisecond
+)
 
 // pollInstanceState waits for either context to be cancelled/timeout or for the
 // provided validate function to return true for each of the provided instances.
@@ -105,17 +108,13 @@ func getPeerListenAddr(ctx context.Context, listenAddrStr string) (*net.TCPAddr,
 		net.JoinHostPort(tcpAddr.IP.String(), portStr))
 }
 
-const (
-	updateCheckTimeout = 1 * time.Second
-)
-
 func (svc *mgmtSvc) groupUpdateLoop(ctx context.Context) {
 	var updateRequested bool
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(updateCheckTimeout):
+		case <-time.After(groupUpdateRefresh):
 			if !updateRequested {
 				continue
 			}
