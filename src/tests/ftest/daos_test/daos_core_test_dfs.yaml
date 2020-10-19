@@ -51,9 +51,12 @@ dmg:
   transport_config:
     allow_insecure: True
 daos_tests:
-  num_clients:
-    num_clients: 32
-  Tests:
-    test_F:
-      daos_test: F
-      test_name: DAOS File System tests
+  Tests: !mux
+    test_u:
+      daos_test: u
+      num_clients: 1
+      test_name: DFS unit tests
+    test_p:
+      daos_test: p
+      num_clients: 32
+      test_name: DFS parallel tests
