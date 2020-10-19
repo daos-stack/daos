@@ -29,7 +29,7 @@ import copy
 
 from itertools import product
 from avocado import fail_on
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 from test_utils_pool import TestPool
 from ior_utils import IorCommand
 from job_manager_utils import Mpirun
@@ -288,6 +288,7 @@ class OSAOnlineParallelTest(TestWithServers):
                                 "Pool Version Error:  at the end")
                 pool[val].destroy()
 
+    @skipForTicket("DAOS-5877")
     def test_osa_online_parallel_test(self):
         """
         JIRA ID: DAOS-4752
