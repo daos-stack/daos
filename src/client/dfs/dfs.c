@@ -832,7 +832,7 @@ open_symlink(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 		if (rc != 0)
 			return rc;
 		oid_cp(&entry.oid, sym->oid);
-		entry.mode = sym->mode;
+		entry.mode = sym->mode | S_IRWXO | S_IRWXU | S_IRWXG;
 		entry.atime = entry.mtime = entry.ctime = time(NULL);
 		entry.chunk_size = 0;
 		D_STRNDUP(sym->value, value, PATH_MAX - 1);
