@@ -35,6 +35,8 @@ from sys import version_info
 import time
 import yaml
 import errno
+import xml.etree.ElementTree as ET
+from xml.dom import minidom
 
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
@@ -71,6 +73,7 @@ YAML_KEYS = {
     "bdev_list": "nvme",
 }
 YAML_KEY_ORDER = ("test_servers", "test_clients", "bdev_list")
+
 
 def display(args, message):
     """Display the message if verbosity is set.
@@ -774,13 +777,33 @@ def run_tests(test_files, tag_filter, args):
         command_list.extend(tag_filter)
 
     # Run each test
+    skip_test_reason = None
     for test_file in test_files:
-        if isinstance(test_file["yaml"], str):
+        if skip_test_reason is not None:
+            # An error was detected running clean_logs for a previous test.  As
+            # this is typically an indication of a communication issue with one
+            # of the hosts, do not attempt to run subsequent tests.
+            report_skipped_test(
+                test_file["py"], avocado_logs_dir, skip_test_reason)
+
+        elif not isinstance(test_file["yaml"], str):
+            # The test was not run due to an error replacing host placeholders
+            # in the yaml file.  Treat this like a failed avocado command.
+            reason = "error replacing yaml file placeholders"
+            report_skipped_test(test_file["py"], avocado_logs_dir, reason)
+            return_code |= 4
+
+        else:
             # Optionally clean the log files before running this test on the
             # servers and clients specified for this test
             if args.clean:
                 if not clean_logs(test_file["yaml"], args):
-                    return 128
+                    # Report errors for this skipped test
+                    skip_test_reason = "host communication error cleaning logs"
+                    report_skipped_test(
+                        test_file["py"], avocado_logs_dir, skip_test_reason)
+                    return_code |= 128
+                    continue
 
             # Execute this test
             test_command_list = list(command_list)
@@ -801,10 +824,6 @@ def run_tests(test_files, tag_filter, args):
             # Optionally process core files
             if args.process_cores:
                 process_the_cores(avocado_logs_dir, test_file["yaml"], args)
-        else:
-            # The test was not run due to an error replacing host placeholders
-            # in the yaml file.  Treat this like a failed avocado command.
-            return_code |= 4
 
     return return_code
 
@@ -919,6 +938,7 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
     archive_files(destination, host_list, "{}/*log*".format(logs_dir))
     archive_files(destination, host_list, "{}/*/*log*".format(logs_dir))
 
+
 def archive_config_files(avocado_logs_dir):
     """Copy all of the configuration files to the avocado results directory.
 
@@ -939,6 +959,7 @@ def archive_config_files(avocado_logs_dir):
     configs_dir = get_temporary_directory(base_dir)
     archive_files(
         destination, host_list, "{}/*_*_*.yaml".format(configs_dir))
+
 
 def archive_files(destination, host_list, source_files):
     """Archive all of the remote files to the destination directory.
@@ -1014,6 +1035,70 @@ def rename_logs(avocado_logs_dir, test_file):
         print(
             "Error renaming {} to {}: {}".format(
                 test_logs_dir, new_test_logs_dir, error))
+
+
+def report_skipped_test(test_file, avocado_logs_dir, reason):
+    """Report an error for the skipped test.
+
+    Args:
+        test_file (str): the test python file
+        avocado_logs_dir (str): avocado job-results directory
+        reason (str): [description]
+    """
+    message = "The {} test was skipped due to {}".format(test_file, reason)
+    print(message)
+    test_name = get_test_category(test_file)
+    destination = os.path.join(avocado_logs_dir, test_name)
+    os.mkdir(destination)
+    create_results_xml(
+        message, test_name, "See console log for more details", destination)
+
+
+def create_results_xml(message, testname, output, destination):
+    """Create Junit xml file.
+
+    Args:
+        message (str): error summary message
+        testname (str): name of test
+        output (dict): result of the command.
+        destination (str): directory where junit xml will be created
+
+    Returns:
+        bool: status of writing to junit file
+
+    """
+    status = True
+
+    # Define the test suite
+    testsuite_attributes = {
+        "name": str(testname),
+        "errors": "1",
+        "failures": "0",
+        "skipped": "0",
+        "test": "1",
+        "time": "0.0",
+    }
+    testsuite = ET.Element("testsuite", testsuite_attributes)
+
+    # Define the test case error
+    testcase_attributes = {"name": "framework_results", "time": "0.0"}
+    testcase = ET.SubElement(testsuite, "testcase", testcase_attributes)
+    ET.SubElement(testcase, "error", {"message": message})
+    system_out = ET.SubElement(testcase, "system-out")
+    system_out.text = output
+
+    # Get xml as string and write it to a file
+    rough_xml = ET.tostring(testsuite, "utf-8")
+    junit_xml = minidom.parseString(rough_xml)
+    results_xml = os.path.join(destination, "framework_results.xml")
+    print("Generating junit xml file {} ...".format(results_xml))
+    try:
+        with open(results_xml, "w") as results_xml:
+            results_xml.write(junit_xml.toprettyxml())
+    except IOError as error:
+        print("Failed to create xml file: {}".format(error))
+        status = False
+    return status
 
 
 USE_DEBUGINFO_INSTALL = True
