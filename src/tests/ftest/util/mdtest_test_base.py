@@ -21,22 +21,16 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from __future__ import print_function
-
-import re
-
-from apricot import TestWithServers
-from test_utils_pool import TestPool
+from dfuse_test_base import DfuseTestBase
 from mpio_utils import MpioUtils
 from mdtest_utils import MdtestCommand
 from command_utils_base import CommandFailure
 from test_utils_container import TestContainer
 from job_manager_utils import Mpirun, Orterun
-from dfuse_utils import Dfuse
-from daos_utils import DaosCommand
 
 
-class MdtestBase(TestWithServers):
+class MdtestBase(DfuseTestBase):
+    # pylint: disable=too-many-ancestors
     """Base mdtest class.
 
     :avocado: recursive
@@ -48,8 +42,6 @@ class MdtestBase(TestWithServers):
         self.mdtest_cmd = None
         self.processes = None
         self.hostfile_clients_slots = None
-        self.dfuse = None
-        self.daos_cmd = None
 
     def setUp(self):
         """Set up each test case."""
@@ -57,9 +49,6 @@ class MdtestBase(TestWithServers):
         self.update_log_file_names()
         # Start the servers and agents
         super(MdtestBase, self).setUp()
-
-        # initialize daos_cmd
-        self.daos_cmd = DaosCommand(self.bin)
 
         # Get the parameters for Mdtest
         self.mdtest_cmd = MdtestCommand()
@@ -135,7 +124,7 @@ class MdtestBase(TestWithServers):
         """
         # Create a pool if one does not already exist
         if self.pool is None:
-            self.create_pool()
+            self.add_pool(connect=False)
         # create container
         if create_cont:
             self._create_cont(oclass)
@@ -144,16 +133,14 @@ class MdtestBase(TestWithServers):
 
         # start dfuse if api is POSIX
         if self.mdtest_cmd.api.value == "POSIX":
-            # start dfuse
-            self._start_dfuse()
+            self.add_container(self.pool)
+            self.start_dfuse(self.hostlist_clients, self.pool, self.container)
             self.mdtest_cmd.test_dir.update(self.dfuse.mount_dir.value)
 
         # Run Mdtest
         self.run_mdtest(self.get_mdtest_job_manager_command(self.manager),
                         self.processes)
-        if self.dfuse:
-            self.dfuse.stop()
-            self.dfuse = None
+        self.stop_dfuse()
 
     def get_mdtest_job_manager_command(self, manager):
         """Get the MPI job manager command for Mdtest.
@@ -162,14 +149,17 @@ class MdtestBase(TestWithServers):
             JobManager: the object for the mpi job manager command
 
         """
+        # pylint: disable=redefined-variable-type
         # Initialize MpioUtils if mdtest needs to be run using mpich
         if manager == "MPICH":
             mpio_util = MpioUtils()
             if mpio_util.mpich_installed(self.hostlist_clients) is False:
                 self.fail("Exiting Test: Mpich not installed")
-            return Mpirun(self.mdtest_cmd, mpitype="mpich")
+            self.job_manager = Mpirun(self.mdtest_cmd, mpitype="mpich")
+        else:
+            self.job_manager = Orterun(self.mdtest_cmd)
 
-        return Orterun(self.mdtest_cmd)
+        return self.job_manager
 
     def run_mdtest(self, manager, processes):
         """Run the Mdtest command.

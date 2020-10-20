@@ -389,6 +389,28 @@ class TestWithServers(TestWithoutServers):
         if manager_class_name is not None:
             self.job_manager = get_job_manager_class(
                 manager_class_name, None, manager_subprocess, manager_mpi_type)
+            self.set_job_manager_timeout()
+
+    def set_job_manager_timeout(self):
+        """Set the timeout for the job manager.
+
+        Use the following priority when setting the job_manager timeout:
+            1) use the test method specific timeout from the test yaml, e.g.
+                job_manager_timeout:
+                    test_one: 30
+                    test_two: 60
+            2) use the common job_manager timeout from the test yaml, e.g.
+                job_manager_timeout: 45
+            3) use the avocado test timeout minus 30 seconds
+        """
+        if self.job_manager:
+            self.job_manager.timeout = self.params.get(
+                self.get_test_name(), "/run/job_manager_timeout/*", None)
+            if self.job_manager.timeout is None:
+                self.job_manager.timeout = self.params.get(
+                    "job_manager_timeout", default=None)
+                if self.job_manager.timeout is None:
+                    self.job_manager.timeout = self.timeout - 30
 
     def stop_leftover_processes(self, processes, hosts):
         """Stop leftover processes on the specified hosts before starting tests.
@@ -840,7 +862,7 @@ class TestWithServers(TestWithoutServers):
         """Get a DaosCommand object.
 
         Returns:
-            DaosCommand: New DaosCommand object.
+            DaosCommand: a new DaosCommand object
 
         """
         return DaosCommand(self.bin)
