@@ -2072,6 +2072,7 @@ fail:
 				daos_iov_free(&iod_array->oia_iods[i].iod_name);
 				D_FREE(iod_array->oia_iods[i].iod_recxs);
 			}
+			D_FREE(iod_array->oia_iods);
 		}
 
 		if (dcsr->dcsr_sgls != NULL) {
