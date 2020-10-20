@@ -23,7 +23,6 @@
 """
 
 import os
-from apricot import skipForTicket
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand, IorMetrics
 
