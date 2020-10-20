@@ -74,8 +74,8 @@ class CartCtlOneNodeTest(Test):
                        % procrtn)
 
         for i in range(6):
-          clicmd = self.utils.build_cmd(self, self.env, "test_clients", index=i)
-          self.utils.launch_test(self, clicmd, srv_rtn)
+            clicmd = self.utils.build_cmd(self, self.env, "test_clients", index=i)
+            self.utils.launch_test(self, clicmd, srv_rtn)
 
 
 if __name__ == "__main__":
