@@ -123,6 +123,72 @@ class Dfuse(DfuseCommand):
         if len(self.running_hosts):
             self.log.error('Dfuse object deleted without shutting down')
 
+    def check_mount_state(self, nodes=None):
+        """Check the dfuse mount point mounted state on the hosts.
+
+        Args:
+            nodes (NodeSet, optional): hosts on which to check if dfuse is
+                mounted. Defaults to None, which will use all of the hosts.
+
+        Returns:
+            dict: a dictionary of NodeSets of hosts with the dfuse mount point
+                either "mounted" or "unmounted"
+
+        """
+        state = {
+            "mounted": NodeSet(),
+            "unmounted": NodeSet(),
+            "nodirectory": NodeSet()
+        }
+        if not nodes:
+            nodes = NodeSet.fromlist(self.hosts)
+        check_mounted = NodeSet()
+
+        # Detect which hosts have mount point directories defined
+        command = "test -d {0} -a ! -L {0}".format(self.mount_dir.value)
+        retcodes = pcmd(nodes, command, expect_rc=None)
+        for retcode, hosts in retcodes.items():
+            for host in hosts:
+                if retcode == 0:
+                    check_mounted.add(host)
+                else:
+                    state["nodirectory"].add(host)
+
+        if check_mounted:
+            # Detect which hosts with mount point directories have it mounted as
+            # a fuseblk device
+            command = "stat -c %T -f {0} | grep -v fuseblk".format(
+                self.mount_dir.value)
+            retcodes = pcmd(check_mounted, command, expect_rc=None)
+            for retcode, hosts in retcodes.items():
+                for host in hosts:
+                    if retcode == 1:
+                        state["mounted"].add(host)
+                    else:
+                        state["unmounted"].add(host)
+
+        return state
+
+    def get_umount_command(self, force=False):
+        """Get the command to umount the dfuse mount point.
+
+        Args:
+            force (bool, optional): whether to force the umount with a lazy
+                unmount. Defaults to False.
+
+        Returns:
+            str: the dfuse umount command
+
+        """
+        umount = "-uz" if force else "-u"
+        command = [
+            "if [ -x '$(command -v fusermount)' ]",
+            "then fusermount {0} {1}".format(umount, self.mount_dir.value),
+            "else fusermount3 {0} {1}".format(umount, self.mount_dir.value),
+            "fi"
+        ]
+        return ";".join(command)
+
     def create_mount_point(self):
         """Create dfuse directory.
 
@@ -130,25 +196,26 @@ class Dfuse(DfuseCommand):
             CommandFailure: In case of error creating directory
 
         """
-        # raise exception if mount point not specified
+        # Raise exception if mount point not specified
         if self.mount_dir.value is None:
             raise CommandFailure("Mount point not specified, "
                                  "check test yaml file")
 
-        _, missing_nodes = check_file_exists(
-            self.hosts, self.mount_dir.value, directory=True)
-        if len(missing_nodes):
-
-            cmd = "mkdir -p {}".format(self.mount_dir.value)
-            ret_code = pcmd(missing_nodes, cmd, timeout=30)
+        # Create the mount point on any host without dfuse already mounted
+        state = self.check_mount_state()
+        if state["nodirectory"]:
+            command = "mkdir -p {}".format(self.mount_dir.value)
+            ret_code = pcmd(state["nodirectory"], command, timeout=30)
             if len(ret_code) > 1 or 0 not in ret_code:
-                error_hosts = NodeSet(
-                    ",".join(
-                        [str(node_set) for code, node_set in ret_code.items()
-                         if code != 0]))
+                failed_nodes = [
+                    str(node_set) for code, node_set in ret_code.items()
+                    if code != 0
+                ]
+                error_hosts = NodeSet(",".join(failed_nodes))
                 raise CommandFailure(
-                    "Error creating the {} dfuse mount point on the following "
-                    "hosts: {}".format(self.mount_dir.value, error_hosts))
+                    "Error creating the {} dfuse mount point on the "
+                    "following hosts: {}".format(
+                        self.mount_dir.value, error_hosts))
 
     def remove_mount_point(self, fail=True):
         """Remove dfuse directory.
@@ -168,10 +235,13 @@ class Dfuse(DfuseCommand):
         dir_exists, clean_nodes = check_file_exists(
             self.hosts, self.mount_dir.value, directory=True)
         if dir_exists:
-
             target_nodes = list(self.hosts)
             if clean_nodes:
                 target_nodes.remove(clean_nodes)
+
+            self.log.info(
+                "Removing the %s dfuse mount point on %s",
+                self.mount_dir.value, target_nodes)
 
             cmd = "rmdir {}".format(self.mount_dir.value)
             ret_code = pcmd(target_nodes, cmd, timeout=30)
@@ -199,8 +269,13 @@ class Dfuse(DfuseCommand):
                     "Error removing the {} dfuse mount point with rmdir on the "
                     "following hosts: {}".format(self.mount_dir.value,
                                                  failed_nodes))
+        else:
+            self.log.info(
+                "No %s dfuse mount point directory found on %s",
+                self.mount_dir.value, self.hosts)
 
     def run(self, check=True):
+        # pylint: disable=arguments-differ
         """Run the dfuse command.
 
         Args:
@@ -255,19 +330,29 @@ class Dfuse(DfuseCommand):
         Run a command to verify dfuse is running on hosts where it is supposed
         to be.  Use grep -v and rc=1 here so that if it isn't, then we can
         see what is being used instead.
+
+        Args:
+            fail_on_error (bool, optional): should an exception be raised if an
+                error is detected. Defaults to True.
+
+        Raises:
+            CommandFailure: raised if dfuse is found not running on any expected
+                nodes and fail_on_error is set.
+
+        Returns:
+            bool: whether or not dfuse is running
+
         """
-        retcodes = pcmd(
-            self.running_hosts,
-            "stat -c %T -f {0} | grep -v fuseblk".format(self.mount_dir.value),
-            expect_rc=1)
-        if 1 in retcodes:
-            del retcodes[1]
-        if len(retcodes):
-            self.log.error('Errors checking running: %s', retcodes)
-            if not fail_on_error:
-                return False
-            raise CommandFailure('dfuse not running')
-        return True
+        status = True
+        state = self.check_mount_state(self.running_hosts)
+        if state["unmounted"] or state["nodirectory"]:
+            self.log.error(
+                "Error: dfuse not running on %s",
+                str(state["unmounted"].union(state["nodirectory"])))
+            status = False
+            if fail_on_error:
+                raise CommandFailure("dfuse not running")
+        return status
 
     def stop(self):
         """Stop dfuse.
@@ -283,36 +368,57 @@ class Dfuse(DfuseCommand):
             CommandFailure: In case dfuse stop fails
 
         """
-        self.log.info('Stopping dfuse at %s on %s',
-                      self.mount_dir.value,
-                      self.running_hosts)
+        # Include all hosts when stopping to ensure all mount points in any
+        # state are properly removed
+        self.running_hosts.add(NodeSet.fromlist(self.hosts))
 
-        if self.mount_dir.value is None:
-            return
+        self.log.info(
+            "Stopping dfuse at %s on %s",
+            self.mount_dir.value, self.running_hosts)
 
-        if not len(self.running_hosts):
-            return
+        if self.mount_dir.value and self.running_hosts:
+            error_list = []
 
-        self.check_running()
-        umount_cmd = [
-            "if [ -x '$(command -v fusermount)' ]",
-            "then fusermount -u {0}".format(self.mount_dir.value),
-            "else fusermount3 -u {0}".format(self.mount_dir.value),
-            "fi"
-        ]
-        ret_code = pcmd(self.running_hosts, "; ".join(umount_cmd), timeout=30)
+            # Loop until all fuseblk mounted devices are unmounted
+            counter = 0
+            while self.running_hosts and counter < 3:
+                # Attempt to kill dfuse on after first unmount fails
+                if self.running_hosts and counter > 1:
+                    kill_command = "pkill dfuse --signal KILL"
+                    pcmd(self.running_hosts, kill_command, timeout=30)
 
-        if 0 in ret_code:
-            self.running_hosts.remove(ret_code[0])
-            del ret_code[0]
+                # Attempt to unmount any fuseblk mounted devices after detection
+                if self.running_hosts and counter > 0:
+                    pcmd(
+                        self.running_hosts,
+                        self.get_umount_command(counter > 1), expect_rc=None)
+                    time.sleep(2)
 
-        if len(self.running_hosts):
-            cmd = "pkill dfuse --signal KILL"
-            pcmd(self.running_hosts, cmd, timeout=30)
-            pcmd(self.running_hosts, umount_cmd, timeout=30)
-            self.remove_mount_point(fail=False)
-            raise CommandFailure(
-                "Error stopping dfuse on the following hosts: {}".format(
-                    self.running_hosts))
-        time.sleep(2)
-        self.remove_mount_point()
+                # Detect which hosts have fuseblk mounted devices and remove any
+                # hosts which no longer have the dfuse mount point mounted
+                state = self.check_mount_state(self.running_hosts)
+                for host in state["unmounted"].union(state["nodirectory"]):
+                    self.running_hosts.remove(host)
+
+                # Increment the loop counter
+                counter += 1
+
+            if self.running_hosts:
+                error_list.append(
+                    "Error stopping dfuse on {}".format(self.running_hosts))
+
+            # Remove mount points
+            try:
+                self.remove_mount_point()
+            except CommandFailure as error:
+                error_list.append(error)
+
+            # Report any errors
+            if error_list:
+                raise CommandFailure("\n".join(error_list))
+
+        elif self.mount_dir.value is None:
+            self.log.info("No dfuse mount directory defined - nothing to stop")
+
+        else:
+            self.log.info("No hosts running dfuse - nothing to stop")

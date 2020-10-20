@@ -620,6 +620,64 @@ crt_get_port_psm2(int *port)
 	return rc;
 }
 
+#define PORT_RANGE_STR_SIZE 32
+
+static void
+crt_port_range_verify(int port)
+{
+	char	proc[] = "/proc/sys/net/ipv4/ip_local_port_range";
+	FILE	*f;
+	char	buff[PORT_RANGE_STR_SIZE];
+	int	start_port = -1;
+	int	end_port = -1;
+	char	*p;
+	int	rc;
+
+	f = fopen(proc, "r");
+	if (!f) {
+		D_ERROR("Failed to open %s for reading\n", proc);
+		return;
+	}
+
+	memset(buff, 0x0, PORT_RANGE_STR_SIZE);
+
+	rc = fread(buff, 1, PORT_RANGE_STR_SIZE - 1, f);
+	if (rc <= 0) {
+		D_ERROR("Failed to read from file %s\n", proc);
+		fclose(f);
+		return;
+	}
+
+	fclose(f);
+
+	p = buff;
+	/* Data is in the format of <start_port><whitespaces><end_port>*/
+	while (*p != '\0') {
+		if (*p == ' ' || *p == '\t') {
+			*p = '\0';
+			start_port = atoi(buff);
+
+			p++;
+			while (*p == ' ' || *p == '\t')
+				p++;
+
+			end_port = atoi(p);
+			break;
+		}
+		p++;
+	}
+
+	if (start_port == -1)
+		return;
+
+	if (port >= start_port && port <= end_port)
+		D_WARN("\nRequested port %d is inside of the local port range "
+		       "as specified by file\n'%s'\nIn order to avoid port "
+		       "conflicts pick a different value outside of the "
+		       "%d-%d range\n",
+		       port, proc, start_port, end_port);
+}
+
 int crt_na_ofi_config_init(void)
 {
 	char		*port_str;
@@ -712,6 +770,9 @@ int crt_na_ofi_config_init(void)
 				port_str);
 		} else {
 			port = atoi(port_str);
+
+			crt_port_range_verify(port);
+
 			if (crt_gdata.cg_na_plugin == CRT_NA_OFI_PSM2)
 				port = (uint16_t) port << 8;
 			D_DEBUG(DB_ALL, "OFI_PORT %d, using it as service "
