@@ -382,6 +382,7 @@ dc_tx_cleanup_one(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr)
 				daos_iov_free(&iod_array->oia_iods[i].iod_name);
 				D_FREE(iod_array->oia_iods[i].iod_recxs);
 			}
+			D_FREE(iod_array->oia_iods);
 
 			daos_csummer_free_ic(csummer,
 					     &iod_array->oia_iod_csums);
