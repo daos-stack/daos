@@ -52,21 +52,16 @@ class ScanSSDTest(TestWithServers):
         # Use the unique agent group name to create a unique yaml file
         config_file = self.get_config_file(self.server_group, "server")
         dmg_config_file = self.get_config_file(self.server_group, "dmg")
-        # Setup the access points with the server hosts
+        # Setup the access points with the server hosts.
         common_cfg = CommonConfig(self.server_group, transport)
         self.add_server_manager(config_file, dmg_config_file, common_cfg)
         self.configure_manager(
             "server", self.server_managers[-1], self.hostlist_servers,
             self.hostfile_servers_slots, self.hostlist_servers)
 
-        # Call daos_server storage scan
-        server_cfg = DaosServerYamlParameters(config_file, common_cfg)
-        server_cmd = DaosServerCommand(
-            path=self.bin, yaml_cfg=server_cfg, timeout=20)
-        ds_scan = server_cmd.storage_scan()
-        pci_addrs = ds_scan["nvme"].keys()
-
-        # Start daos_server, but don't format storage
+        # Prepare daos_server including storage prepare before calling storage
+        # scan because sometimes the NVMe drives aren't listed until calling
+        # storage prepare.
         self.log.info(
             "Starting server: group=%s, hosts=%s, config=%s",
             self.server_managers[0].get_config_value("name"),
@@ -74,15 +69,25 @@ class ScanSSDTest(TestWithServers):
             self.server_managers[0].get_config_value("filename"))
         self.server_managers[0].verify_socket_directory(getuser())
         self.server_managers[0].prepare()
+
+        # Call daos_server storage scan.
+        server_cfg = DaosServerYamlParameters(config_file, common_cfg)
+        server_cmd = DaosServerCommand(
+            path=self.bin, yaml_cfg=server_cfg, timeout=20)
+        ds_scan = server_cmd.storage_scan()
+        pci_addrs = ds_scan["nvme"].keys()
+
+        # Start daos_server and wait for the "SCM format required" message.
+        # Don't format yet.
         self.server_managers[0].detect_format_ready()
         self.log.info("daos_server started and waiting for format")
 
         # Call dmg storage scan --verbose before format. The table in the output
         # should be the same as the output from daos_server storage scan. The
-        # only difference is that dmg has hostname at the top
+        # only difference is that dmg has hostname at the top.
         dmg_scan_before = self.server_managers[0].dmg.storage_scan(verbose=True)
 
-        # Format storage and wait for server to change ownership
+        # Format storage and wait for server to change ownership.
         self.log.info(
             "<SERVER> Formatting hosts: <%s>",
             self.server_managers[0].dmg.hostlist)
@@ -91,11 +96,14 @@ class ScanSSDTest(TestWithServers):
         self.server_managers[0].detect_io_server_start()
         self.log.info("Storage format complete")
 
-        # Call dmg storage scan --verbose after format
+        # Call dmg storage scan --verbose after format.
         dmg_scan_after = self.server_managers[0].dmg.storage_scan(verbose=True)
 
+        if not pci_addrs:
+            self.fail("NVMe disk wasn't found!")
+
         # Verify the 3 dicts are the same. Verify all the columns of each PCI
-        # address row
+        # address row.
         for pci_addr in pci_addrs:
             ds_data = ds_scan["nvme"][pci_addr]
             dmg_before_data = dmg_scan_before[self.hostlist_servers[0]]["nvme"]\
