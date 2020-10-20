@@ -163,7 +163,7 @@ class OSAOnlineParallelTest(TestWithServers):
         try:
             if action == "reintegrate":
                 time.sleep(60)
-            getattr(dmg,  "pool_{}".format(action))(**action_args[action])
+            getattr(dmg, "pool_{}".format(action))(**action_args[action])
         except CommandFailure as _error:
             results.put("{} failed".format(action_args[action]))
         # Future enhancement for extend
@@ -242,7 +242,7 @@ class OSAOnlineParallelTest(TestWithServers):
                                                             "flags": flags,
                                                             "results":
                                                             self.out_queue}))
-                for action in sorted(action_args.keys()):
+                for action in sorted(action_args):
                     # Add dmg threads
                     threads.append(threading.Thread(target=self.dmg_thread,
                                                     kwargs={"action": action,
@@ -277,7 +277,7 @@ class OSAOnlineParallelTest(TestWithServers):
                                 "Pool Version Error:  at the end")
                 pool[val].destroy()
 
-    # @skipForTicket("DAOS-5877")
+    @skipForTicket("DAOS-5877")
     def test_osa_online_parallel_test(self):
         """
         JIRA ID: DAOS-4752
