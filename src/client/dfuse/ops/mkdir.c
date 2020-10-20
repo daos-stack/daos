@@ -41,10 +41,11 @@ dfuse_cb_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
-	DFUSE_TRA_DEBUG(ie, "parent, mode %d", mode);
+	DFUSE_TRA_DEBUG(ie, "directory '%s' mode 0%o", name, mode);
 
 	rc = dfs_open(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
-		      mode | S_IFDIR, O_CREAT, 0, 0, NULL, &ie->ie_obj);
+		      mode | S_IFDIR, O_CREAT | O_RDWR,
+		      0, 0, NULL, &ie->ie_obj);
 	if (rc)
 		D_GOTO(err, rc);
 
