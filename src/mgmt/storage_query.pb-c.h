@@ -98,10 +98,21 @@ struct  _Mgmt__BioHealthResp
    * UUID of blobstore
    */
   char *dev_uuid;
+  /*
+   * Usage stats
+   */
+  /*
+   * size of blobstore
+   */
+  uint64_t total_bytes;
+  /*
+   * free space in blobstore
+   */
+  uint64_t avail_bytes;
 };
 #define MGMT__BIO_HEALTH_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__bio_health_resp__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, 0 }
 
 
 struct  _Mgmt__SmdDevReq
