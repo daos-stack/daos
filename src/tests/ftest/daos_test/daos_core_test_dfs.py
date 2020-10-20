@@ -36,7 +36,6 @@ class DaosCoreTestDfs(DaosCoreBase):
         """Initialize the DaosCoreBase object."""
         super(DaosCoreTestDfs, self).__init__(*args, **kwargs)
         self.hostfile_clients_slots = None
-        self.daos_test = os.path.join(self.prefix, 'bin', 'dfs_test')
 
     def test_subtest(self):
         """
@@ -48,4 +47,5 @@ class DaosCoreTestDfs(DaosCoreBase):
 
         :avocado: tags=all,pr,hw,large,dfs_test
         """
+        self.daos_test = os.path.join(self.prefix, 'bin', 'dfs_test')
         DaosCoreBase.run_subtest(self)
