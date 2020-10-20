@@ -93,6 +93,16 @@ class IorTestBase(DfuseTestBase):
         # create container
         self.container.create()
 
+    def display_pool_space(self):
+        """Display the current pool space.
+
+        If the TestPool object has a DmgCommand object assigned, also display
+        the free pool space per target.
+        """
+        self.pool.display_pool_daos_space()
+        if self.pool.dmg:
+            self.pool.set_query_data()
+
     def run_ior_with_pool(self, intercept=None, test_file_suffix="",
                           test_file="daos:testFile", create_pool=True,
                           create_cont=True, stop_dfuse=True, plugin_path=None,
@@ -228,7 +238,7 @@ class IorTestBase(DfuseTestBase):
 
         try:
             if display_space:
-                self.pool.display_pool_daos_space()
+                self.display_pool_space()
             out = manager.run()
 
             if not self.subprocess:
@@ -241,10 +251,7 @@ class IorTestBase(DfuseTestBase):
             self.fail("Test was expected to pass but it failed.\n")
         finally:
             if not self.subprocess and display_space:
-                self.pool.display_pool_daos_space()
-                if self.pool.dmg:
-                    # Display the per-target free space
-                    self.pool.set_query_data()
+                self.display_pool_space()
 
     def stop_ior(self):
         """Stop IOR process.
@@ -262,7 +269,7 @@ class IorTestBase(DfuseTestBase):
             self.log.error("IOR stop Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
         finally:
-            self.pool.display_pool_daos_space()
+            self.display_pool_space()
 
     def run_multiple_ior_with_pool(self, results, intercept=None):
         """Execute ior with optional overrides for ior flags and object_class.
@@ -341,7 +348,7 @@ class IorTestBase(DfuseTestBase):
         manager.assign_environment(env)
         self.lock.release()
         try:
-            self.pool.display_pool_daos_space()
+            self.display_pool_space()
             out = manager.run()
             self.lock.acquire(True)
             results[job_num] = IorCommand.get_ior_metrics(out)
@@ -350,7 +357,7 @@ class IorTestBase(DfuseTestBase):
             self.log.error("IOR Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
         finally:
-            self.pool.display_pool_daos_space()
+            self.display_pool_space()
 
     def verify_pool_size(self, original_pool_info, processes):
         """Validate the pool size.

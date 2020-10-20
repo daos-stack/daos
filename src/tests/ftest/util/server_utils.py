@@ -641,16 +641,18 @@ class DaosServerManager(SubprocessManager):
             # The regex failed to get the rank and state
             raise ServerFailed(
                 "Error obtaining {} output: {}".format(self.dmg, data))
-        if len(data) > 1:
+        try:
+            states = list(set([rank["state"] for rank in data]))
+        except KeyError:
+            raise ServerFailed(
+                "Unexpected result from {} - missing 'state' key: {}".format(
+                    self.dmg, data))
+        if len(states) > 1:
             # Multiple states for different ranks detected
             raise ServerFailed(
-                "Multiple system states detected:\n  {}".format(data))
-        ranks = next(iter(data))
-        if "state" not in data[ranks]:
-            # Single state but missing state - should not occur.
-            raise ServerFailed(
-                "Unexpected result from {}: {}".format(self.dmg, data))
-        return data[ranks]["state"]
+                "Multiple system states ({}) detected:\n  {}".format(
+                    states, data))
+        return states[0]
 
     def check_system_state(self, valid_states, max_checks=1):
         """Check that the DAOS system state is one of the provided states.
@@ -784,7 +786,7 @@ class DaosServerManager(SubprocessManager):
         else:
             # Report only the scm_size
             scm_size = self.get_config_value("scm_size")
-            storage = [Bytes(scm_size, "G"), None]
+            storage = [Bytes(scm_size, "GB"), None]
 
         self.log.info(
             "Total available storage:  \nSCM:  %s\n  NVMe: %s", str(storage[0]),

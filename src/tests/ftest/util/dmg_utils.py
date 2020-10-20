@@ -779,7 +779,7 @@ class DmgCommand(DmgCommandBase):
                     "address": info[2],
                     "uuid": info[1],
                     "state": info[3],
-                    "reason": match[4],
+                    "reason": info[4],
                 }
         else:
             # Process the non-verbose multiple rank system query output, e.g.
