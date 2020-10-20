@@ -33,6 +33,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
@@ -156,7 +157,7 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 			expResp: StorageScanResp{
 				Nvme: &ScanNvmeResp{
 					State: &ResponseState{
-						Error:  "NvmeScan(): spdk scan failed",
+						Error:  "spdk scan failed",
 						Status: ResponseStatus_CTL_ERR_NVME,
 					},
 				},
@@ -182,7 +183,7 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 				},
 				Scm: &ScanScmResp{
 					State: &ResponseState{
-						Error:  "ScmScan(): scm discover failed",
+						Error:  "scm discover failed",
 						Status: ResponseStatus_CTL_ERR_SCM,
 					},
 				},
@@ -198,13 +199,13 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 			expResp: StorageScanResp{
 				Nvme: &ScanNvmeResp{
 					State: &ResponseState{
-						Error:  "NvmeScan(): spdk scan failed",
+						Error:  "spdk scan failed",
 						Status: ResponseStatus_CTL_ERR_NVME,
 					},
 				},
 				Scm: &ScanScmResp{
 					State: &ResponseState{
-						Error:  "ScmScan(): scm discover failed",
+						Error:  "scm discover failed",
 						Status: ResponseStatus_CTL_ERR_SCM,
 					},
 				},
@@ -336,7 +337,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 		}
 		ctrlr.Model = fmt.Sprintf("model-%d", sIdx)
 		ctrlr.Serial = common.MockUUID(sIdx)
-		ctrlr.Healthstats = proto.MockNvmeControllerHealth(idx + 1)
+		ctrlr.Healthstats = proto.MockNvmeHealth(idx + 1)
 		ctrlr.Smddevices = nil
 
 		bioHealthResp := new(mgmtpb.BioHealthResp)
@@ -345,6 +346,8 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 		}
 		bioHealthResp.Model = ctrlr.Model
 		bioHealthResp.Serial = ctrlr.Serial
+		bioHealthResp.TotalBytes = uint64(idx) * uint64(humanize.TByte)
+		bioHealthResp.AvailBytes = uint64(idx) * uint64(humanize.TByte/2)
 
 		return ctrlr, bioHealthResp
 	}
@@ -363,13 +366,18 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 		ctrlr := proto.MockNvmeController(idx)
 		ctrlr.Serial = common.MockUUID(idx)
 		ctrlr.Healthstats = nil
-		ctrlr.Smddevices = []*NvmeController_SmdDevice{proto.MockSmdDevice(idx + 1)}
-		ctrlr.Smddevices[0].Rank = uint32(idx)
+		sd := proto.MockSmdDevice(idx + 1)
+		sd.Rank = uint32(idx)
+		ctrlr.Smddevices = []*NvmeController_SmdDevice{sd}
 
 		smdDevRespDevice := new(mgmtpb.SmdDevResp_Device)
 		if err := convert.Types(ctrlr.Smddevices[0], smdDevRespDevice); err != nil {
 			t.Fatal(err)
 		}
+
+		// expect resultant controller to have updated utilisation values
+		ctrlr.Smddevices[0].TotalBytes = uint64(idx) * uint64(humanize.TByte)
+		ctrlr.Smddevices[0].AvailBytes = uint64(idx) * uint64(humanize.TByte/2)
 
 		return ctrlr, smdDevRespDevice
 	}
@@ -382,10 +390,15 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 		return b
 	}
 
+	mockPbScmMount := proto.MockScmMountPoint()
+	mockPbScmNamespace := proto.MockScmNamespace()
+	mockPbScmNamespace.Mount = mockPbScmMount
+
 	for name, tc := range map[string]struct {
 		req       *StorageScanReq
 		bmbc      *bdev.MockBackendConfig
 		smbc      *scm.MockBackendConfig
+		smsc      *scm.MockSysConfig
 		cfg       *Configuration
 		scanTwice bool
 		junkResp  bool
@@ -679,16 +692,20 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 							},
 							Smddevices: []*NvmeController_SmdDevice{
 								{
-									Uuid:   newSmdDevRespDevice(1).Uuid,
-									TgtIds: newSmdDevRespDevice(1).TgtIds,
-									State:  newSmdDevRespDevice(1).State,
-									Rank:   1,
+									Uuid:       newSmdDevRespDevice(1).Uuid,
+									TgtIds:     newSmdDevRespDevice(1).TgtIds,
+									State:      newSmdDevRespDevice(1).State,
+									Rank:       1,
+									TotalBytes: newBioHealthResp(1, 1).TotalBytes,
+									AvailBytes: newBioHealthResp(1, 1).AvailBytes,
 								},
 								{
-									Uuid:   newSmdDevRespDevice(2).Uuid,
-									TgtIds: newSmdDevRespDevice(2).TgtIds,
-									State:  newSmdDevRespDevice(2).State,
-									Rank:   1,
+									Uuid:       newSmdDevRespDevice(2).Uuid,
+									TgtIds:     newSmdDevRespDevice(2).TgtIds,
+									State:      newSmdDevRespDevice(2).State,
+									Rank:       1,
+									TotalBytes: newBioHealthResp(2, 1).TotalBytes,
+									AvailBytes: newBioHealthResp(2, 1).AvailBytes,
 								},
 							},
 						},
@@ -710,16 +727,20 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 							},
 							Smddevices: []*NvmeController_SmdDevice{
 								{
-									Uuid:   newSmdDevRespDevice(3).Uuid,
-									TgtIds: newSmdDevRespDevice(3).TgtIds,
-									State:  newSmdDevRespDevice(3).State,
-									Rank:   2,
+									Uuid:       newSmdDevRespDevice(3).Uuid,
+									TgtIds:     newSmdDevRespDevice(3).TgtIds,
+									State:      newSmdDevRespDevice(3).State,
+									Rank:       2,
+									TotalBytes: newBioHealthResp(3, 2).TotalBytes,
+									AvailBytes: newBioHealthResp(3, 2).AvailBytes,
 								},
 								{
-									Uuid:   newSmdDevRespDevice(4).Uuid,
-									TgtIds: newSmdDevRespDevice(4).TgtIds,
-									State:  newSmdDevRespDevice(4).State,
-									Rank:   2,
+									Uuid:       newSmdDevRespDevice(4).Uuid,
+									TgtIds:     newSmdDevRespDevice(4).TgtIds,
+									State:      newSmdDevRespDevice(4).State,
+									Rank:       2,
+									TotalBytes: newBioHealthResp(4, 2).TotalBytes,
+									AvailBytes: newBioHealthResp(4, 2).AvailBytes,
 								},
 							},
 						},
@@ -727,6 +748,60 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 					State: new(ResponseState),
 				},
 				Scm: &ScanScmResp{State: new(ResponseState)},
+			},
+		},
+		"scan scm with space utilization": {
+			smbc: &scm.MockBackendConfig{
+				DiscoverRes:     storage.ScmModules{storage.MockScmModule()},
+				GetNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+			},
+			smsc: &scm.MockSysConfig{
+				GetfsUsageTotal: mockPbScmMount.TotalBytes,
+				GetfsUsageAvail: mockPbScmMount.AvailBytes,
+			},
+			cfg: newDefaultConfiguration(nil).WithServers(
+				ioserver.NewConfig().
+					WithScmMountPoint(mockPbScmMount.Path).
+					WithScmClass(storage.ScmClassDCPM.String()).
+					WithScmDeviceList(mockPbScmNamespace.Blockdev)),
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {},
+			},
+			expResp: StorageScanResp{
+				Nvme: &ScanNvmeResp{
+					State: new(ResponseState),
+				},
+				Scm: &ScanScmResp{
+					Namespaces: proto.ScmNamespaces{mockPbScmNamespace},
+					State:      new(ResponseState),
+				},
+			},
+		},
+		"scan scm with pmem not in instance device list": {
+			smbc: &scm.MockBackendConfig{
+				DiscoverRes:     storage.ScmModules{storage.MockScmModule()},
+				GetNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+			},
+			smsc: &scm.MockSysConfig{
+				GetfsUsageTotal: mockPbScmMount.TotalBytes,
+				GetfsUsageAvail: mockPbScmMount.AvailBytes,
+			},
+			cfg: newDefaultConfiguration(nil).WithServers(
+				ioserver.NewConfig().
+					WithScmMountPoint(mockPbScmMount.Path).
+					WithScmClass(storage.ScmClassDCPM.String()).
+					WithScmDeviceList("/dev/foo", "/dev/bar")),
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {},
+			},
+			expResp: StorageScanResp{
+				Nvme: &ScanNvmeResp{
+					State: new(ResponseState),
+				},
+				Scm: &ScanScmResp{
+					Namespaces: proto.ScmNamespaces{proto.MockScmNamespace()},
+					State:      new(ResponseState),
+				},
 			},
 		},
 	} {
@@ -744,13 +819,16 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 			if len(tc.cfg.Servers) != len(tc.drpcResps) {
 				t.Fatalf("num servers in tc.cfg doesn't match num drpc msgs")
 			}
-			svc := newTestMgmtSvcMulti(t, log, len(tc.cfg.Servers), false)
 
-			cs := mockControlService(t, log, tc.cfg, tc.bmbc, tc.smbc, nil)
+			cs := mockControlService(t, log, tc.cfg, tc.bmbc, tc.smbc, tc.smsc)
+			cs.harness.started.SetTrue()
 			for i := range cs.harness.instances {
-				// enable mocking of harness instance drpc channel
-				svcInstance := svc.harness.instances[i]
-				cs.harness.instances[i] = svcInstance
+				// replace harness instance with mock IO server
+				// to enable mocking of harness instance drpc channel
+				newSrv := newTestIOServer(log, false, tc.cfg.Servers[i])
+				newSrv.scmProvider = cs.scm
+				cs.harness.instances[i] = newSrv
+
 				cfg := new(mockDrpcClientConfig)
 				if tc.junkResp {
 					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
@@ -759,8 +837,8 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 						cfg.setSendMsgResponseList(t, mock)
 					}
 				}
-				svcInstance.setDrpcClient(newMockDrpcClient(cfg))
-				svcInstance._superblock.Rank = system.NewRankPtr(uint32(i + 1))
+				newSrv.setDrpcClient(newMockDrpcClient(cfg))
+				newSrv._superblock.Rank = system.NewRankPtr(uint32(i + 1))
 			}
 
 			// runs discovery for nvme & scm
@@ -845,6 +923,7 @@ func TestServer_CtlSvc_StoragePrepare(t *testing.T) {
 			smbc: &scm.MockBackendConfig{
 				DiscoverRes:      storage.ScmModules{storage.MockScmModule()},
 				PrepNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+				PrepNeedsReboot:  true,
 			},
 			req: StoragePrepareReq{
 				Nvme: &PrepareNvmeReq{},
@@ -853,8 +932,11 @@ func TestServer_CtlSvc_StoragePrepare(t *testing.T) {
 			expResp: &StoragePrepareResp{
 				Nvme: &PrepareNvmeResp{State: new(ResponseState)},
 				Scm: &PrepareScmResp{
-					State:      new(ResponseState),
-					Namespaces: []*ScmNamespace{proto.MockScmNamespace()},
+					State: &ResponseState{
+						Info: scm.MsgRebootRequired,
+					},
+					Namespaces:     []*ScmNamespace{proto.MockScmNamespace()},
+					Rebootrequired: true,
 				},
 			},
 		},
@@ -1086,7 +1168,6 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 						State: &ResponseState{
 							Status: ResponseStatus_CTL_ERR_SCM,
 							Error:  "instance 0: can't format storage of running instance",
-							Info:   fault.ShowResolutionFor(errors.New("")),
 						},
 					},
 				},

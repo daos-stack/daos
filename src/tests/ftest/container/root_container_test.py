@@ -21,17 +21,16 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-
+from dfuse_test_base import DfuseTestBase
 from command_utils import CommandFailure
 from daos_utils import DaosCommand
-from test_utils_pool import TestPool
 from test_utils_container import TestContainer
-from dfuse_utils import Dfuse
-from apricot import TestWithServers
 from general_utils import pcmd
 from ClusterShell.NodeSet import NodeSet
 
-class RootContainerTest(TestWithServers):
+
+class RootContainerTest(DfuseTestBase):
+    # pylint: disable=too-many-ancestors
     """Base Dfuse Container check test class.
 
     :avocado: recursive
@@ -57,72 +56,39 @@ class RootContainerTest(TestWithServers):
         """Set up each test case."""
         # Start the servers and agents
         super(RootContainerTest, self).setUp()
-        self.dfuse = None
         self.dfuse_hosts = None
 
-    def tearDown(self):
-        """Tear down each test case."""
-        try:
-            if self.dfuse:
-                self.dfuse.stop()
-        finally:
-            # Stop the servers and agents
-            super(RootContainerTest, self).tearDown()
-
     def _create_pool(self):
-        """Create a TestPool object to use with ior.
+        """Add a new TestPool object to the list of pools.
+
+        Returns:
+            TestPool: the newly added pool
+
         """
-        # Get the pool params
-        pool = TestPool(
-            self.context, dmg_command=self.get_dmg_command())
-        pool.get_params(self)
-        # Create a pool
-        pool.create()
-        self.pool.append(pool)
-        return pool
+        self.pool.append(self.get_pool(connect=False))
+        return self.pool[-1]
 
     def _create_cont(self, pool, path=None):
-        """Create a TestContainer object to be used to create container.
+        """Add a new TestContainer object to the list of containers.
 
-           Args:
-               pool (TestPool): pool object
-               path (str): Unified namespace path for container
+        Args:
+            pool (TestPool): pool object
+            path (str): Unified namespace path for container
+
+        Returns:
+            TestContainer: the newly added container
+
         """
         # Get container params
         container = TestContainer(pool, daos_command=DaosCommand(self.bin))
         container.get_params(self)
         if path is not None:
             container.path.update(path)
+
         # create container
         container.create()
         self.container.append(container)
         return container
-
-    def _start_dfuse(self, pool, container):
-        """Create a DfuseCommand object to start dfuse.
-
-           Args:
-               container: Container to mount dfuse
-        """
-
-        # Get Dfuse params
-        self.dfuse = Dfuse(self.dfuse_hosts, self.tmp)
-        self.dfuse.get_params(self)
-
-        # update dfuse params
-        self.dfuse.set_dfuse_params(pool)
-        self.dfuse.set_dfuse_cont_param(container)
-        self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
-
-        try:
-            # start dfuse
-            self.dfuse.run()
-        except CommandFailure as error:
-            self.log.error("Dfuse command %s failed on hosts %s",
-                           str(self.dfuse),
-                           self.dfuse.hosts,
-                           exc_info=error)
-            self.fail("Test was expected to pass but it failed.\n")
 
     def test_rootcontainer(self):
         """Jira ID: DAOS-3782.
@@ -140,29 +106,29 @@ class RootContainerTest(TestWithServers):
         :avocado: tags=all,hw,small,full_regression,container
         :avocado: tags=rootcontainer
         """
-
         # Create a pool and start dfuse.
         pool = self._create_pool()
         container = self._create_cont(pool)
         self.dfuse_hosts = self.agent_managers[0].hosts
         # mount fuse
-        self._start_dfuse(pool, container)
+        self.start_dfuse(self.dfuse_hosts, pool, container)
         # Create another container and add it as sub container under
         # root container
         sub_container = str(self.dfuse.mount_dir.value + "/cont0")
         container = self._create_cont(pool, path=sub_container)
-        #Insert files into root container
+        # Insert files into root container
         self.insert_files_and_verify("")
-        #Insert files into sub container
+        # Insert files into sub container
         self.insert_files_and_verify("cont0")
-        #Create 100 subcontainer and verify the temp files
+        # Create 100 subcontainer and verify the temp files
         self.verify_create_delete_containers(pool, 100)
         self.verify_multi_pool_containers()
 
     def verify_multi_pool_containers(self):
-        """Create several pools and containers and mount it
-           under the root container and verify they're
-           accessible.
+        """Verify multiple pools and containers.
+
+        Create several pools and containers and mount it under the root
+        container and verify they're accessible.
         """
         pool_count = self.params.get("pool_count", "/run/pool/*")
         for i in range(pool_count):
@@ -174,13 +140,15 @@ class RootContainerTest(TestWithServers):
                 self.insert_files_and_verify(cont_name)
 
     def verify_create_delete_containers(self, pool, cont_count):
-        """Create multiple containers and multiple multi-mb files
-           in each of them and verify the space usage.
-           Destroy half of the containers and verify the space
-           usage is reclaimed.
+        """Verify multiple pools and containers creation and deletion.
 
-           Args:
-               cont_count (int): Number of containers to be created.
+        Create multiple containers and multiple multi-mb files in each of
+        them and verify the space usage.
+
+        Destroy half of the containers and verify the space usage is reclaimed.
+
+        Args:
+            cont_count (int): Number of containers to be created.
         """
         self.log.info("Verifying multiple container create delete")
         pool_space_before = pool.get_pool_free_space(self.device)
@@ -190,7 +158,7 @@ class RootContainerTest(TestWithServers):
             self._create_cont(pool, path=sub_cont)
             self.insert_files_and_verify("cont{}".format(i+1))
         expected = pool_space_before - \
-                   cont_count * self.tmp_file_count * self.tmp_file_size
+            cont_count * self.tmp_file_count * self.tmp_file_size
         pool_space_after = pool.get_pool_free_space(self.device)
         self.log.info("Pool space <= Expected")
         self.log.info("%s <= %s", pool_space_after, expected)
@@ -201,26 +169,24 @@ class RootContainerTest(TestWithServers):
             self.container[-1].destroy(1)
             self.container.pop()
         expected = pool_space_after + \
-                   ((cont_count // 2) * self.tmp_file_count *\
-                    self.tmp_file_size)
+            ((cont_count // 2) * self.tmp_file_count * self.tmp_file_size)
         pool_space_after_cont_destroy = \
-                   pool.get_pool_free_space(self.device)
+            pool.get_pool_free_space(self.device)
         self.log.info("After container destroy")
         self.log.info("Free Pool space >= Expected")
         self.log.info("%s >= %s", pool_space_after_cont_destroy, expected)
         self.assertTrue(pool_space_after_cont_destroy >= expected)
 
     def insert_files_and_verify(self, container_name):
-        """ Insert files into the specific container and verify
-            they're navigable and accessible.
+        """Verify inserting files into a specific container.
+
+        Insert files into the specific container and verify they're navigable
+        and accessible.
 
         Args:
             container_name: Name of the POSIX Container
             file_name_prefix: Prefix of the file name that will be created
             no_of_files: Number of files to be created iteratively
-
-        Return:
-            None
         """
         cont_dir = self.dfuse.mount_dir.value
         if container_name:
@@ -245,12 +211,16 @@ class RootContainerTest(TestWithServers):
         self._execute_cmd(";".join(cmds))
 
     def _execute_cmd(self, cmd):
-        """Execute command on the host clients
+        """Execute command on the host clients.
 
-           Args:
-               cmd (str): Command to run
+        Args:
+            cmd (str): Command to run
+
+        Returns:
+            dict: a dictionary of return codes keys and accompanying NodeSet
+                values indicating which hosts yielded the return code.
+
         """
-
         try:
             # execute bash cmds
             ret = pcmd(
@@ -264,10 +234,8 @@ class RootContainerTest(TestWithServers):
                     "Error running '{}' on the following "
                     "hosts: {}".format(cmd, error_hosts))
 
-         # report error if any command fails
+        # report error if any command fails
         except CommandFailure as error:
-            self.log.error("DfuseSparseFile Test Failed: %s",
-                           str(error))
-            self.fail("Test was expected to pass but "
-                      "it failed.\n")
+            self.log.error("DfuseSparseFile Test Failed: %s", str(error))
+            self.fail("Test was expected to pass but it failed.\n")
         return ret
