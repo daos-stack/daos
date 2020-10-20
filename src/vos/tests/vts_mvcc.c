@@ -391,8 +391,8 @@ static int
 checkexisto_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	      daos_epoch_t epoch)
 {
-	return read_ts_o(arg, txh, path, epoch, VOS_OF_FETCH_CHECK_EXISTENCE,
-			 NULL, NULL, 0);
+	return read_ts_o(arg, txh, path, epoch, VOS_OF_FETCH_CHECK_EXISTENCE |
+			 VOS_OF_FETCH_SET_TS_ONLY, NULL, NULL, 0);
 }
 
 
