@@ -1,0 +1,50 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_servers:
+    - boro-14
+    - boro-13
+#    - server-A
+#    - server-B
+#    - server-C
+#    - server-D
+  test_clients:
+    - boro-14
+#    - client-E
+#    - client-F
+timeout: 600
+server_config:
+  name: daos_server
+  servers:
+    targets: 8
+  scm_size: 59
+testparams:
+  ranks:
+    rank_to_kill: 1
+#    rank_to_kill: 3
+pool:
+  mode: 146
+  name: daos_server
+  scm_size: 30000000000
+  svcn: 1
+  control_method: dmg
+container:
+  type: POSIX
+  control_method: daos
+ior:
+    client_processes:
+        np_8:
+            np: 8
+    repetitions: 1
+    api: DFS
+    dfs_oclass: "RP_2GX"
+    flags: "-w -W -k -G 1"
+#    iorflags:
+#        write:
+#          F: "-w -W -k -G 1"
+#        read:
+#          F: "-r -R -G 1 -E"
+    transfersize_blocksize:
+        512M:
+            transfer_size: '1M'
+            block_size: '512M'
