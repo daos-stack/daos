@@ -198,6 +198,11 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, lastMapVer uint32) (uint3
 	dResp, err := svc.harness.CallDrpc(ctx, drpc.MethodGroupUpdate, req)
 	if err != nil {
 		svc.log.Errorf("dRPC GroupUpdate call failed: %s", err)
+		// ... except in the case where the instance isn't ready to accept dRPC
+		// calls. In this case, the group update can't have succeeded.
+		if err == instanceNotReady {
+			return lastMapVer, err
+		}
 		return gm.Version, err
 	}
 
