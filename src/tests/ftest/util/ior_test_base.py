@@ -26,7 +26,8 @@ import threading
 import time
 
 from ClusterShell.NodeSet import NodeSet
-from apricot import TestWithServers
+
+from dfuse_test_base import DfuseTestBase
 from ior_utils import IorCommand
 from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
@@ -35,10 +36,10 @@ from daos_utils import DaosCommand
 from mpio_utils import MpioUtils
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
-from dfuse_utils import Dfuse
 
 
-class IorTestBase(TestWithServers):
+class IorTestBase(DfuseTestBase):
+    # pylint: disable=too-many-ancestors
     """Base IOR test class.
 
     :avocado: recursive
@@ -53,10 +54,8 @@ class IorTestBase(TestWithServers):
         self.ior_cmd = None
         self.processes = None
         self.hostfile_clients_slots = None
-        self.dfuse = None
         self.container = None
         self.lock = None
-        self.mpirun = None
 
     def setUp(self):
         """Set up each test case."""
@@ -73,15 +72,6 @@ class IorTestBase(TestWithServers):
 
         # lock is needed for run_multiple_ior method.
         self.lock = threading.Lock()
-
-    def tearDown(self):
-        """Tear down each test case."""
-        try:
-            if self.dfuse:
-                self.dfuse.stop()
-        finally:
-            # Stop the servers and agents
-            super(IorTestBase, self).tearDown()
 
     def create_pool(self):
         """Create a TestPool object to use with ior."""
@@ -102,27 +92,6 @@ class IorTestBase(TestWithServers):
 
         # create container
         self.container.create()
-
-    def _start_dfuse(self):
-        """Create a DfuseCommand object to start dfuse."""
-        # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp)
-        self.dfuse.get_params(self)
-
-        # update dfuse params
-        self.dfuse.set_dfuse_params(self.pool)
-        self.dfuse.set_dfuse_cont_param(self.container)
-        self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
-
-        try:
-            # start dfuse
-            self.dfuse.run()
-        except CommandFailure as error:
-            self.log.error("Dfuse command %s failed on hosts %s",
-                           str(self.dfuse),
-                           str(NodeSet.fromlist(self.dfuse.hosts)),
-                           exc_info=error)
-            self.fail("Test was expected to pass but it failed.\n")
 
     def run_ior_with_pool(self, intercept=None, test_file_suffix="",
                           test_file="daos:testFile", create_pool=True,
@@ -161,7 +130,8 @@ class IorTestBase(TestWithServers):
         if self.ior_cmd.api.value == "POSIX" or plugin_path:
             # Connect to the pool, create container and then start dfuse
             if not self.dfuse:
-                self._start_dfuse()
+                self.start_dfuse(
+                    self.hostlist_clients, self.pool, self.container)
 
         # setup test file for POSIX or HDF5 with vol connector
         if self.ior_cmd.api.value == "POSIX" or plugin_path:
@@ -175,13 +145,17 @@ class IorTestBase(TestWithServers):
         out = self.run_ior(job_manager, self.processes,
                            intercept, plugin_path=plugin_path)
 
-        if stop_dfuse and self.dfuse:
-            self.dfuse.stop()
-            self.dfuse = None
+        if stop_dfuse:
+            self.stop_dfuse()
+
         return out
 
     def update_ior_cmd_with_pool(self, create_cont=True):
-        """Update ior_cmd with pool."""
+        """Update ior_cmd with pool.
+
+        Args:
+            create_cont (bool, optional): create a container. Defaults to True.
+        """
         # Create a pool if one does not already exist
         if self.pool is None:
             self.create_pool()
@@ -210,12 +184,9 @@ class IorTestBase(TestWithServers):
         else:
             self.fail("Unsupported IOR API")
 
-        if self.subprocess:
-            self.mpirun = Mpirun(self.ior_cmd, True, mpitype="mpich")
-        else:
-            self.mpirun = Mpirun(self.ior_cmd, mpitype="mpich")
+        self.job_manager = Mpirun(self.ior_cmd, self.subprocess, "mpich")
 
-        return self.mpirun
+        return self.job_manager
 
     def check_subprocess_status(self, operation="write"):
         """Check subprocess status."""
@@ -228,7 +199,7 @@ class IorTestBase(TestWithServers):
                       for subprocess status check")
 
         if not self.ior_cmd.check_ior_subprocess_status(
-                self.mpirun.process, self.ior_cmd):
+                self.job_manager.process, self.ior_cmd):
             self.fail("Exiting Test: Subprocess not running")
 
     def run_ior(self, manager, processes, intercept=None, display_space=True,
@@ -282,10 +253,10 @@ class IorTestBase(TestWithServers):
             manager (str): mpi job manager command
         """
         self.log.info(
-            "<IOR> Stopping in-progress IOR command: %s", self.mpirun.__str__())
+            "<IOR> Stopping in-progress IOR command: %s", str(self.job_manager))
 
         try:
-            out = self.mpirun.stop()
+            out = self.job_manager.stop()
             return out
         except CommandFailure as error:
             self.log.error("IOR stop Failed: %s", str(error))
@@ -309,7 +280,7 @@ class IorTestBase(TestWithServers):
 
         # start dfuse for POSIX api. This is specific to interception
         # library test requirements.
-        self._start_dfuse()
+        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
         # Create two jobs and run in parallel.
         # Job1 will have 3 client set up to use dfuse + interception
@@ -328,8 +299,7 @@ class IorTestBase(TestWithServers):
         job2.start()
         job1.join()
         job2.join()
-        self.dfuse.stop()
-        self.dfuse = None
+        self.stop_dfuse()
 
     def get_new_job(self, clients, job_num, results, intercept=None):
         """Create a new thread for ior run.
@@ -442,8 +412,6 @@ class IorTestBase(TestWithServers):
 
         # report error if any command fails
         except CommandFailure as error:
-            self.log.error("DfuseSparseFile Test Failed: %s",
-                           str(error))
-            self.fail("Test was expected to pass but "
-                      "it failed.\n")
+            self.log.error("DfuseSparseFile Test Failed: %s", str(error))
+            self.fail("Test was expected to pass but it failed.\n")
         return ret

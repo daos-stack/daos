@@ -136,6 +136,12 @@ func TestStorageQueryCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"per-server storage space utilisation query",
+			"storage query usage",
+			printRequest(t, &control.StorageScanReq{NvmeMeta: true}),
+			nil,
+		},
+		{
 			"Nonexistent subcommand",
 			"storage query quack",
 			"",
