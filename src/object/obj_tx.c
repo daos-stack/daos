@@ -377,7 +377,7 @@ dc_tx_cleanup_one(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr)
 			D_FREE(dcsr->dcsr_reasb);
 		}
 
-		if (iod_array != NULL) {
+		if (iod_array->oia_iods != NULL) {
 			for (i = 0; i < dcsr->dcsr_nr; i++) {
 				daos_iov_free(&iod_array->oia_iods[i].iod_name);
 				D_FREE(iod_array->oia_iods[i].iod_recxs);
@@ -2068,7 +2068,7 @@ dc_tx_add_update(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 
 fail:
 	if (dcu != NULL) {
-		if (iod_array != NULL) {
+		if (iod_array->oia_iods != NULL) {
 			for (i = 0; i < nr; i++) {
 				daos_iov_free(&iod_array->oia_iods[i].iod_name);
 				D_FREE(iod_array->oia_iods[i].iod_recxs);
