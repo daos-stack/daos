@@ -160,6 +160,8 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.DrainSubCommand()
             elif self.sub_command.value == "reintegrate":
                 self.sub_command_class = self.ReintegrateSubCommand()
+            elif self.sub_command.value == "evict":
+                self.sub_command_class = self.EvictSubCommand()
             else:
                 self.sub_command_class = None
 
@@ -314,6 +316,18 @@ class DmgCommandBase(YamlCommand):
                 self.pool = FormattedParameter("--pool={}", None)
                 self.acl_file = FormattedParameter("-a {}", None)
                 self.entry = FormattedParameter("-e {}", None)
+
+        class EvictSubCommand(CommandWithParameters):
+            """Defines an object for the dmg pool evict command."""
+
+            def __init__(self):
+                """Create a dmg pool evict command object."""
+                super(
+                    DmgCommandBase.PoolSubCommand.EvictSubCommand,
+                    self).__init__(
+                        "/run/dmg/pool/evict/*", "evict")
+                self.pool = FormattedParameter("--pool={}", None)
+                self.sys = FormattedParameter("--sys={}", None)
 
     class StorageSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg storage sub command."""
