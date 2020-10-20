@@ -42,7 +42,7 @@
 #include <daos/tests_lib.h>
 #include <daos_srv/vos.h>
 #include <daos_test.h>
-#include "dts_common.h"
+#include <daos/dts.h>
 
 /* path to dmg config file */
 const char *dmg_config_file;
@@ -342,7 +342,7 @@ dts_is_async(struct dts_context *tsc)
 	return !daos_handle_is_inval(tsc->tsc_eqh);
 }
 
-/* see comments in dts_common.h */
+/* see comments in daos/dts.h */
 int
 dts_ctx_init(struct dts_context *tsc)
 {
@@ -386,7 +386,7 @@ dts_ctx_init(struct dts_context *tsc)
 	return rc;
 }
 
-/* see comments in dts_common.h */
+/* see comments in daos/dts.h */
 void
 dts_ctx_fini(struct dts_context *tsc)
 {

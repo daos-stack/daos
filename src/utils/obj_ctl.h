@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,12 +21,26 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#ifndef __DAOS_COMMON_TEST_H
-#define __DAOS_COMMON_TEST_H
+#ifndef __OBJ_CTL_H__
+#define __OBJ_CTL_H__
 
-/** Test Suite Function Declarations */
-int daos_checksum_tests_run(void);
-int daos_compress_tests_run(void);
-int misc_tests_run(void);
-
+#if defined(__cplusplus)
+extern "C" {
 #endif
+
+/**
+ * Interactive function testing shell for DAOS
+ *
+ * Provides a shell to test VOS and DAOS commands.
+ *
+ * \param[in]     argc   number of arguments
+ * \param[in,out] argv   array of character pointers listing the arguments.
+ * \return               0 on success, daos_errno code on failure.
+ */
+int shell(int argc, char *argv[]);
+
+#if defined(__cplusplus)
+}
+#endif
+
+#endif /*  __OBJ_CTL_H__ */

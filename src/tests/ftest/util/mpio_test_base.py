@@ -30,6 +30,7 @@ from apricot import TestWithServers
 from mpio_utils import MpioUtils, MpioFailed
 from test_utils_pool import TestPool
 from daos_utils import DaosCommand
+from env_modules import load_mpi
 
 
 class MpiioTests(TestWithServers):
@@ -76,7 +77,7 @@ class MpiioTests(TestWithServers):
 
         # Extract the container UUID from the daos container create output
         cont_uuid = re.findall(
-            "created\s+container\s+([0-9a-f-]+)", result.stdout)
+            r"created\s+container\s+([0-9a-f-]+)", result.stdout)
         if not cont_uuid:
             self.fail(
                 "Error obtaining the container uuid from: {}".format(
@@ -89,6 +90,12 @@ class MpiioTests(TestWithServers):
         test_repo       --location of test repository
         test_name       --name of the test to be run
         """
+        # Required to run daos command
+        load_mpi("openmpi")
+
+        # create container
+        self._create_cont()
+
         # initialize MpioUtils
         self.mpio = MpioUtils()
         if not self.mpio.mpich_installed(self.hostlist_clients):
@@ -96,9 +103,6 @@ class MpiioTests(TestWithServers):
 
         # initialize test specific variables
         client_processes = self.params.get("np", '/run/client_processes/')
-
-        # create container
-        self._create_cont()
 
         try:
             # running tests
