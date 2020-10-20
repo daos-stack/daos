@@ -446,10 +446,9 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 				    rpc_priv->crp_req_hdr.cch_hlc,
 				    rpc_priv->crp_req_hdr.cch_src_rank);
 		/* Fail all but SWIM requests. */
-		if (crt_opc_is_swim(rpc_priv->crp_req_hdr.cch_opc))
-			rc = 0;
-		else
+		if (!crt_opc_is_swim(rpc_priv->crp_req_hdr.cch_opc))
 			D_GOTO(out, rc);
+		rc = 0;
 	}
 
 	rpc_priv->crp_flags = rpc_priv->crp_req_hdr.cch_flags;
@@ -683,10 +682,9 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 							    hdr->cch_hlc,
 							    hdr->cch_dst_rank);
 					/* Fail all but SWIM replies. */
-					if (crt_opc_is_swim(hdr->cch_opc))
-						rc = 0;
-					else
+					if (!crt_opc_is_swim(hdr->cch_opc))
 						D_GOTO(out, rc);
+					rc = 0;
 				}
 			} else {
 				crt_hlct_sync(hdr->cch_hlc);
