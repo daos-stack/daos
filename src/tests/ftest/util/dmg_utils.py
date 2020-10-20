@@ -783,6 +783,23 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("system", "stop"), force=force, ranks=ranks)
 
+    def pool_evict(self, pool, sys=None):
+        """Evict a pool.
+
+        Args:
+            pool (str):  UUID of DAOS pool to evict connection to
+            sys (str, optional): DAOS system that the pools connections be
+                evicted from. Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg pool evict command fails.
+        """
+        return self._get_result(("pool", "evict"), pool=pool, sys=sys)
+
 
 def check_system_query_status(stdout_str):
     """Check if any server crashed.
