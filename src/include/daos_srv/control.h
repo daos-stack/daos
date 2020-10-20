@@ -38,10 +38,14 @@
  * bio_bs_monitor(). Used to determine faulty device status.
  * Also retrieved on request via go-spdk bindings from the control-plane.
  */
-struct nvme_health_stats {
+struct nvme_stats {
+	uint64_t	 timestamp;
+	/* Device identifiers */
 	char		 model[HEALTH_STAT_STR_LEN];
 	char		 serial[HEALTH_STAT_STR_LEN];
-	uint64_t	 timestamp;
+	/* Device space utilization */
+	uint64_t	 total_bytes;
+	uint64_t	 avail_bytes;
 	/* Device health details */
 	uint32_t	 warn_temp_time;
 	uint32_t	 crit_temp_time;
