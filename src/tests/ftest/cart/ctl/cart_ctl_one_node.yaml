@@ -52,5 +52,4 @@ tests: !mux
       - "set_fi_attr --attr 1911,5,0,1,100 --group-name \
          server_grp --rank 0"
       - "disable_fi --group-name server_grp --rank 0"
-      - "--name client-group --attach_to server_grp --shut_only \
-        tmp"
+      - "--name client-group --attach_to server_grp --shut_only"
