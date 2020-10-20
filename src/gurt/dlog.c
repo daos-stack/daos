@@ -899,7 +899,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 			setlinebuf(stderr);
 			mst.log_fd = fileno(stderr);
 		} else {
-			mst.log_fd = open(mst.log_file, log_flags, 0666);
+			mst.log_fd = open(mst.log_file, log_flags, 0644);
 		}
 
 		if (mst.log_fd < 0) {
