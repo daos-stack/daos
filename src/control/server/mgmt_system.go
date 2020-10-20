@@ -108,8 +108,19 @@ func getPeerListenAddr(ctx context.Context, listenAddrStr string) (*net.TCPAddr,
 		net.JoinHostPort(tcpAddr.IP.String(), portStr))
 }
 
+// FIXME: This async group update stuff is way more fiddly than I am
+// happy with, but it allows us to keep moving forward with this phase
+// of the task. Longer-term, we need to solve the problem of updating
+// the local CaRT primary group synchronously in a Join request, but
+// broadcasting the group map asynchronously. This will be particularly
+// challenging to handle during initial wire-up with multiple MS
+// replicas, as we can't rely on pre-registering MS service ranks outside
+// of the Join mechanism as we used to do.
+
 func (svc *mgmtSvc) groupUpdateLoop(ctx context.Context) {
+	var lastMapVersion uint32
 	var updateRequested bool
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -118,7 +129,10 @@ func (svc *mgmtSvc) groupUpdateLoop(ctx context.Context) {
 			if !updateRequested {
 				continue
 			}
-			if err := svc.doGroupUpdate(ctx); err != nil {
+
+			var err error
+			lastMapVersion, err = svc.doGroupUpdate(ctx, lastMapVersion)
+			if err != nil {
 				svc.log.Error(errors.Wrap(err, "group update failed").Error())
 				if err == system.ErrEmptyGroupMap {
 					updateRequested = false
@@ -145,14 +159,20 @@ func (svc *mgmtSvc) requestGroupUpdate(ctx context.Context) {
 	}(ctx)
 }
 
-func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
+func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, lastMapVer uint32) (uint32, error) {
 	gm, err := svc.sysdb.GroupMap()
 	if err != nil {
-		return err
+		return lastMapVer, err
 	}
 	if len(gm.RankURIs) == 0 {
-		return system.ErrEmptyGroupMap
+		return lastMapVer, system.ErrEmptyGroupMap
 	}
+
+	if gm.Version == lastMapVer {
+		svc.log.Debugf("doGroupUpdate map ver (%d == %d)", lastMapVer, gm.Version)
+		return lastMapVer, nil
+	}
+
 	req := &mgmtpb.GroupUpdateReq{
 		MapVersion: gm.Version,
 	}
@@ -163,26 +183,33 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 			Uri:  uri,
 		})
 		if err := rankSet.Add(rank); err != nil {
-			return errors.Wrap(err, "adding rank to set")
+			return lastMapVer, errors.Wrap(err, "adding rank to set")
 		}
 	}
+
+	// NB: At this point, we need to return the current version instead of
+	// the last version, because the cart primary group may have been updated
+	// before the broadcast request failed. If we call this again with the same
+	// map version, the ioserver will trip an assertion. Longer-term, we need
+	// to separate the group update and broadcast steps as we had in the previous
+	// implementation.
 
 	svc.log.Debugf("group update request: version: %d, ranks: %s", req.MapVersion, rankSet)
 	dResp, err := svc.harness.CallDrpc(ctx, drpc.MethodGroupUpdate, req)
 	if err != nil {
 		svc.log.Errorf("dRPC GroupUpdate call failed: %s", err)
-		return err
+		return gm.Version, err
 	}
 
 	resp := new(mgmtpb.GroupUpdateResp)
 	if err = proto.Unmarshal(dResp.Body, resp); err != nil {
-		return errors.Wrap(err, "unmarshal GroupUpdate response")
+		return gm.Version, errors.Wrap(err, "unmarshal GroupUpdate response")
 	}
 
 	if resp.GetStatus() != 0 {
-		return drpc.DaosStatus(resp.GetStatus())
+		return gm.Version, drpc.DaosStatus(resp.GetStatus())
 	}
-	return nil
+	return gm.Version, nil
 }
 
 // Join management service gRPC handler receives Join requests from
