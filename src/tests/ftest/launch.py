@@ -1079,11 +1079,10 @@ def install_debuginfos():
 
     if USE_DEBUGINFO_INSTALL:
         yum_args = [
-            "--exclude", "ompi-debuginfo",
-            "daos-server", "libpmemobj", "python", "openmpi3"]
+            "--exclude", "ompi-debuginfo", "libpmemobj", "python", "openmpi3"]
         cmds.append(["sudo", "yum", "-y", "install"] + yum_args)
         cmds.append(["sudo", "debuginfo-install", "--enablerepo=*-debuginfo",
-                     "-y"] + yum_args + ["gcc"])
+                     "-y"] + yum_args + ["daos-server", "gcc"])
     else:
         # We're not using the yum API to install packages
         # See the comments below.
