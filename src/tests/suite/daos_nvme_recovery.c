@@ -404,7 +404,7 @@ nvme_test_simulate_IO_error(void **state)
 		devices[rank_pos].device_id);
 	assert_int_equal(rc, 0);
 	print_message("Final write_error = %s\n", check_errors);
-	assert_true(atoi(check_errors) > atoi(write_errors));
+	assert_true(atoi(check_errors) == atoi(write_errors) + 1);
 
 	/*
 	 * Get the read error count after Injecting BIO read error
@@ -417,7 +417,7 @@ nvme_test_simulate_IO_error(void **state)
 		devices[rank_pos].device_id);
 	assert_int_equal(rc, 0);
 	print_message("Final read_errors = %s\n", check_errors);
-	assert_true(atoi(check_errors) > atoi(read_errors));
+	assert_true(atoi(check_errors) == atoi(read_errors) + 1);
 
 	/*
 	 * Verify writeErr=true and readErr:true available in control log
