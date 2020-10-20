@@ -65,7 +65,7 @@ tree_is_empty(struct vos_object *obj, daos_handle_t toh,
 	/** First ignore any uncommitted entries because they only matter
 	 *  when there are no committed entries
 	 */
-	rc = vos_iterate_key(obj, toh, type, epr, false, empty_tree_check,
+	rc = vos_iterate_key(obj, toh, type, epr, true, empty_tree_check,
 			     &empty, dth);
 
 	if (rc < 0)
@@ -78,7 +78,7 @@ tree_is_empty(struct vos_object *obj, daos_handle_t toh,
 	 *  on more time to ensure there are no uncommitted entries.  If there
 	 *  are, this will return -DER_INPROGRESS.
 	 */
-	rc = vos_iterate_key(obj, toh, type, epr, true, empty_tree_check,
+	rc = vos_iterate_key(obj, toh, type, epr, false, empty_tree_check,
 			     &empty, dth);
 
 	if (rc < 0)
