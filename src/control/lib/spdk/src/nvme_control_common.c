@@ -248,26 +248,46 @@ fail:
 	return ret;
 }
 
+/* Assign ASCII string as defined by the NVMe spec */
+static int
+copy_ascii(char *dst, const void *buf, size_t buf_sz)
+{
+	const uint8_t	*str = buf;
+	int		 i = 0;
+
+	if (buf_sz >= BUFLEN)
+		return -NVMEC_ERR_CHK_SIZE;
+
+	/* Trim trailing spaces */
+	while (buf_sz > 0 && str[buf_sz - 1] == ' ')
+		buf_sz--;
+
+	while (buf_sz--) {
+		if (*str >= 0x20 && *str <= 0x7E)
+			dst[i] = (char)*str;
+		else
+			dst[i] = '.';
+		str++, i++;
+	}
+	dst[i] = '\0';
+
+	return 0;
+}
+
 static int
 copy_ctrlr_data(struct ctrlr_t *cdst, const struct spdk_nvme_ctrlr_data *cdata)
 {
-	int	written;
+	int	rc;
 
-	written = snprintf(cdst->model, sizeof(cdst->model), "%-20.20s",
-			   cdata->mn);
-	if (written >= sizeof(cdst->model))
-		return -NVMEC_ERR_CHK_SIZE;
+	rc = copy_ascii(cdst->model, cdata->mn, sizeof(cdata->mn));
+	if (rc != 0)
+		return rc;
 
-	written = snprintf(cdst->serial, sizeof(cdst->serial), "%-20.20s",
-			   cdata->sn);
-	if (written >= sizeof(cdst->serial))
-		return -NVMEC_ERR_CHK_SIZE;
+	rc = copy_ascii(cdst->serial, cdata->sn, sizeof(cdata->sn));
+	if (rc != 0)
+		return rc;
 
-	written = snprintf(cdst->fw_rev, sizeof(cdst->fw_rev), "%s", cdata->fr);
-	if (written >= sizeof(cdst->fw_rev))
-		return -NVMEC_ERR_CHK_SIZE;
-
-	return 0;
+	return copy_ascii(cdst->fw_rev, cdata->fr, sizeof(cdata->fr));
 }
 
 static int

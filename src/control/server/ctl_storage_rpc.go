@@ -240,7 +240,6 @@ func newScanNvmeResp(req *ctlpb.ScanNvmeReq, inResp *bdev.ScanResponse, inErr er
 func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq) (*ctlpb.ScanNvmeResp, error) {
 	if req.Health || req.Meta {
 		// filter results based on config file bdev_list contents
-		c.log.Debug("scanning in-use nvme devices")
 		resp, err := c.scanInstanceBdevs(ctx)
 
 		return newScanNvmeResp(req, resp, err)
@@ -328,7 +327,6 @@ func (c *ControlService) scanScm(ctx context.Context) (*ctlpb.ScanScmResp, error
 	ssr, scanErr := c.ScmScan(scmReq)
 	if scanErr == nil && len(ssr.Namespaces) > 0 {
 		// update namespace info if storage is online
-		c.log.Debug("scanning in-use scm devices")
 		ssr, scanErr = c.scanInstanceScm(ctx, ssr)
 	}
 
