@@ -1033,6 +1033,61 @@ err_unlock:
 }
 
 int
+tse_task_reset(tse_task_t *task, tse_task_func_t task_func, void *priv)
+{
+	struct tse_task_private		*dtp = tse_task2priv(task);
+	tse_sched_t			*sched = tse_task2sched(task);
+	struct tse_sched_private	*dsp = tse_sched2priv(sched);
+	int				rc;
+
+	D_CASSERT(sizeof(task->dt_private) >= sizeof(*dtp));
+
+	D_MUTEX_LOCK(&dsp->dsp_lock);
+
+	if (dsp->dsp_cancelling) {
+		D_ERROR("Scheduler is canceling, can't reset task\n");
+		D_GOTO(err_unlock, rc = -DER_NO_PERM);
+	}
+
+	if (dtp->dtp_running || dtp->dtp_completing) {
+		D_ERROR("Can't reset a task that is running.\n");
+		D_GOTO(err_unlock, rc = -DER_NO_PERM);
+	}
+
+	/** Mark the task back at init state */
+	dtp->dtp_running = 0;
+	dtp->dtp_completing = 0;
+	dtp->dtp_completed = 0;
+
+	/** reset stack pointer as zero */
+	if (dtp->dtp_stack_top != 0) {
+		D_ERROR("task %p, dtp_stack_top reset from %d to zero.\n",
+			task, dtp->dtp_stack_top);
+		dtp->dtp_stack_top = 0;
+	}
+
+	D_INIT_LIST_HEAD(&dtp->dtp_list);
+	D_INIT_LIST_HEAD(&dtp->dtp_task_list);
+	D_INIT_LIST_HEAD(&dtp->dtp_dep_list);
+	D_INIT_LIST_HEAD(&dtp->dtp_comp_cb_list);
+	D_INIT_LIST_HEAD(&dtp->dtp_prep_cb_list);
+
+	dtp->dtp_func	  = task_func;
+	dtp->dtp_priv	  = priv;
+	dtp->dtp_sched	  = dsp;
+
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
+
+	task->dt_result = 0;
+
+	return 0;
+
+err_unlock:
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
+	return rc;
+}
+
+int
 tse_task_list_add(tse_task_t *task, d_list_t *head)
 {
 	struct tse_task_private *dtp = tse_task2priv(task);

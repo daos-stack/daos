@@ -1065,6 +1065,23 @@ daos_task_create(daos_opc_t opc, tse_sched_t *sched,
 		 tse_task_t **taskp);
 
 /**
+ * Reset a DAOS task with another opcode. The task must have been completed or
+ * not in the running state yet, and has not been freed yet (use must take a
+ * ref count on the task to prevent it to be freed after the DAOS operation has
+ * completed).
+ *
+ * \param task	[IN]	Task to reset.
+ * \param opc	[IN]	Operation code to identify the daos op to associate with
+ *			the task.
+ *
+ * \return		0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NOSYS	Unsupported opc
+ */
+int
+daos_task_reset(tse_task_t *task, daos_opc_t opc);
+
+/**
  * Return a pointer to the DAOS task argument structure. This is called to set
  * the arguments for the task before being scheduled, typically after it's
  * created or in its prepare cb. The task must be created with
