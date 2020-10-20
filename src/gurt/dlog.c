@@ -74,6 +74,7 @@
 #include <sys/types.h>
 #include <sys/utsname.h>
 #include <sys/syscall.h>
+#include <sys/stat.h>
 
 #include <netdb.h>
 #include <arpa/inet.h>
@@ -86,15 +87,36 @@
 /* extra tag bytes to alloc for a pid */
 #define DLOG_TAGPAD 16
 
+enum {
+	/** minimum log file size is 1MB */
+	LOG_SIZE_MIN	= (1ULL << 20),
+	/** default log file size is 1GB */
+	LOG_SIZE_DEF	= (1ULL << 30),
+};
+
 /**
  * internal global state
  */
-struct clog_state {
+struct d_log_state {
+	/** logfile name [malloced] */
+	char		*log_file;
+	/** backup file name */
+	char		*log_old;
+	/** buffer to cache log messages */
+	char		*log_buf;
+	/** Number Of Bytes in the buffer */
+	off_t		 log_buf_nob;
+	/** fd of the open logfile */
+	int		 log_fd;
+	/** fd of the backup logfile, only for log_sync on assertion failure */
+	int		 log_old_fd;
+	/** current size of log file */
+	uint64_t	 log_size;
+	/** max size of log file */
+	uint64_t	 log_size_max;
 	/* note: tag, dlog_facs, and fac_cnt are in xstate now */
 	int def_mask;		/* default facility mask value */
 	int stderr_mask;	/* mask above which we send to stderr  */
-	char *logfile;		/* logfile name [malloced] */
-	int logfd;		/* fd of the open logfile */
 	int oflags;		/* open flags */
 	int fac_alloc;		/* # of slots in facs[] (>=fac_cnt) */
 	struct utsname uts;	/* for hostname, from uname(3) */
@@ -117,7 +139,7 @@ struct cache_entry {
  */
 struct d_log_xstate d_log_xst;
 
-static struct clog_state mst;
+static struct d_log_state mst;
 static d_list_t	d_log_caches;
 
 
@@ -132,6 +154,7 @@ static const char *default_fac0name = "CLOG";
 #define clog_unlock()
 #endif
 
+static int d_log_write(char *buf, int len, bool flush);
 static const char *clog_pristr(int);
 static int clog_setnfac(int);
 
@@ -296,13 +319,30 @@ static void dlog_cleanout(void)
 	int			 lcv;
 
 	clog_lock();
-	if (mst.logfile) {
-		if (mst.logfd >= 0)
-			close(mst.logfd);
-		mst.logfd = -1;
-		free(mst.logfile);
-		mst.logfile = NULL;
+	if (mst.log_file) {
+		if (mst.log_fd >= 0) {
+			d_log_write(NULL, 0, true);
+			close(mst.log_fd);
+		}
+		mst.log_fd = -1;
+		free(mst.log_file);
+		mst.log_file = NULL;
 	}
+
+	if (mst.log_old) {
+		if (mst.log_old_fd >= 0)
+			close(mst.log_old_fd);
+		mst.log_old_fd = -1;
+		free(mst.log_old);
+		mst.log_old = NULL;
+	}
+
+	if (mst.log_buf) {
+		free(mst.log_buf);
+		mst.log_buf = NULL;
+		mst.log_buf_nob = 0;
+	}
+
 	if (d_log_xst.dlog_facs) {
 		/*
 		 * free malloced facility names, being careful not to free
@@ -327,7 +367,11 @@ static void dlog_cleanout(void)
 		free(ce);
 	clog_unlock();
 #ifdef DLOG_MUTEX
-	D_MUTEX_DESTROY(&mst.clogmux);
+	/* XXX
+	 * do not destroy mutex to allow correct execution of dlog_sync()
+	 * which as been registered using atexit() and to be run upon exit()
+	 */
+	 /* D_MUTEX_DESTROY(&mst.clogmux); */
 #endif
 }
 
@@ -350,6 +394,136 @@ do {								\
 		__func__, __LINE__, err,  ## __VA_ARGS__);	\
 } while (0)
 
+#define LOG_BUF_SIZE	(16 << 10)
+
+/**
+ * This function can do a few things:
+ * - copy log message @msg to log buffer
+ * - if the log buffer is full, write it to log file
+ * - if the log file is too large (exceeds to threshold), rename it to
+ *   original_name.old, and create a new log file.
+ *
+ * If @flush is true, it writes log buffer to log file immediately.
+ */
+static int
+d_log_write(char *msg, int len, bool flush)
+{
+	int	 rc;
+
+	if (mst.log_fd < 0)
+		return 0;
+
+	if (len >= LOG_BUF_SIZE) {
+		dlog_print_err(0, "message='%.64s' is too long, len=%d\n",
+			       msg, len);
+		return 0;
+	}
+
+	if (!mst.log_buf) {
+		mst.log_buf = malloc(LOG_BUF_SIZE);
+		if (!mst.log_buf) {
+			dlog_print_err(ENOMEM, "failed to alloc log buffer\n");
+			return -1;
+		}
+	}
+	D_ASSERT(!msg || len);
+ again:
+	if (msg && (len <= LOG_BUF_SIZE - mst.log_buf_nob)) {
+		/* the current buffer is not full */
+		strncpy(&mst.log_buf[mst.log_buf_nob], msg, len);
+		mst.log_buf_nob += len;
+		if (!flush)
+			return 0; /* short path done */
+
+		msg = NULL; /* already copied into log buffer */
+		len = 0;
+	}
+	/* write log buffer to log file */
+
+	if (mst.log_buf_nob == 0)
+		return 0; /* nothing to write */
+
+	if (mst.log_size + mst.log_buf_nob >= mst.log_size_max) {
+		/* exceeds the size threshold, rename the current log file
+		 * as backup, create a new log file.
+		 */
+		if (!mst.log_old) {
+			rc = asprintf(&mst.log_old, "%s.old", mst.log_file);
+			if (rc < 0) {
+				dlog_print_err(errno, "failed to alloc name\n");
+				return -1;
+			}
+		}
+
+		if (mst.log_old_fd >= 0) {
+			close(mst.log_old_fd);
+			mst.log_old_fd = -1;
+		}
+
+		/* remove the backup log file */
+		rc = unlink(mst.log_old);
+		if (rc && errno != ENOENT) {
+			dlog_print_err(errno, "failed to unlink old file\n");
+			return -1;
+		}
+
+		/* rename the current log file as a backup */
+		rc = rename(mst.log_file, mst.log_old);
+		if (rc) {
+			dlog_print_err(errno, "failed to rename log file\n");
+			return -1;
+		}
+		mst.log_old_fd = mst.log_fd;
+
+		/* create a new log file */
+		mst.log_fd = open(mst.log_file,  O_RDWR | O_CREAT, 0666);
+		if (mst.log_fd < 0) {
+			dlog_print_err(errno, "failed to recreate log file\n");
+			return -1;
+		}
+		mst.log_size = 0;
+	}
+
+	/* flush the cached log messages */
+	rc = write(mst.log_fd, mst.log_buf, mst.log_buf_nob);
+	if (rc < 0) {
+		dlog_print_err(errno, "failed to write log\n");
+		return -1;
+	}
+	mst.log_size += mst.log_buf_nob;
+	mst.log_buf_nob = 0;
+	if (msg) /* the current message is not processed yet */
+		goto again;
+
+	return 0;
+}
+
+void
+d_log_sync(void)
+{
+	int	rc;
+
+	clog_lock();
+	if (mst.log_buf_nob > 0) /* write back the inflight buffer */
+		d_log_write(NULL, 0, true);
+
+	if (mst.log_fd >= 0) {
+		rc = fsync(mst.log_fd);
+		if (rc < 0)
+			dlog_print_err(errno, "failed to sync log file\n");
+	}
+
+	if (mst.log_old_fd >= 0) {
+		rc = fsync(mst.log_old_fd);
+		if (rc < 0)
+			dlog_print_err(errno, "failed to sync log backup\n");
+
+		close(mst.log_old_fd);
+		mst.log_old_fd = -1; /* nobody is going to write it again */
+	}
+	clog_unlock();
+}
+
 /**
  * d_vlog: core log function, front-ended by d_log
  * we vsnprintf the message into a holding buffer to format it.  then we
@@ -364,8 +538,11 @@ do {								\
 void d_vlog(int flags, const char *fmt, va_list ap)
 {
 #define DLOG_TBSIZ    1024	/* bigger than any line should be */
-	int fac, lvl;
 	static __thread char b[DLOG_TBSIZ];
+	static uint64_t	last_flush;
+
+	int fac, lvl;
+	bool flush;
 	char *b_nopt1hdr;
 	char facstore[16], *facstr;
 	struct timeval tv;
@@ -376,6 +553,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	 * errno to its original value
 	 */
 	int save_errno = errno;
+	int rc;
 
 	if (flags == 0)
 		return;
@@ -489,23 +667,23 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 		}
 	}
 	b_nopt1hdr = b + hlen_pt1;
-	/*
-	 * clog message is now ready to be dispatched.
-	 */
-	/*
-	 * log it to the log file
-	 */
-	if (mst.logfd >= 0)
-		if (write(mst.logfd, b, tlen) < 0) {
-			dlog_print_err(errno, "write log failed\n");
-			errno = save_errno;
-		}
-
 	if (mst.oflags & DLOG_FLV_STDOUT)
 		flags |= DLOG_STDOUT;
 
 	if (mst.oflags & DLOG_FLV_STDERR)
 		flags |= DLOG_STDERR;
+
+	/* log message is ready to be dispatched, write to log file.
+	 * NB: flush to logfile if the message is important (warning/error...)
+	 * or the last flush was 1+ second ago.
+	 */
+	flush = (lvl >= DLOG_WARN) || (tv.tv_sec > last_flush);
+	if (flush)
+		last_flush = tv.tv_sec;
+
+	rc = d_log_write(b, tlen, flush);
+	if (rc < 0)
+		errno = save_errno;
 
 	clog_unlock();		/* drop lock here */
 	/*
@@ -525,9 +703,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 			printf("%s", b);
 		fflush(stdout);
 	}
-	/*
-	 * done!
-	 */
+	/* done! */
 	errno = save_errno;
 }
 
@@ -573,6 +749,44 @@ static int d_log_str2pri(const char *pstr, size_t len)
 }
 
 /*
+ * d_getenv_size: interpret a string as a size which can
+ * contain a unit symbol.
+ */
+static uint64_t
+d_getenv_size(char *env)
+{
+	char *end;
+	uint64_t size;
+
+	size = strtoull(env, &end, 0);
+
+	switch (*end) {
+	default:
+		break;
+	case 'k':
+		size *= 1000;
+		break;
+	case 'm':
+		size *= 1000 * 1000;
+		break;
+	case 'g':
+		size *= 1000 * 1000 * 1000;
+		break;
+	case 'K':
+		size *= 1024;
+		break;
+	case 'M':
+		size *= 1024 * 1024;
+		break;
+	case 'G':
+		size *= 1024 * 1024 * 1024;
+		break;
+	}
+
+	return size;
+}
+
+/*
  * d_log_open: open a clog (uses malloc, inits global state).  you
  * can only have one clog open at a time, but you can use multiple
  * facilities.
@@ -591,10 +805,18 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	int	truncate = 0, rc;
 	char	*env;
 	char	*buffer = NULL;
+	uint64_t log_size = LOG_SIZE_DEF;
 
 	env = getenv(D_LOG_TRUNCATE_ENV);
 	if (env != NULL && atoi(env) > 0)
 		truncate = 1;
+
+	env = getenv(D_LOG_SIZE_ENV);
+	if (env != NULL) {
+		log_size = d_getenv_size(env);
+		if (log_size < LOG_SIZE_MIN)
+			log_size = LOG_SIZE_MIN;
+	}
 
 	env = getenv(D_LOG_FILE_APPEND_PID_ENV);
 	if (logfile != NULL && env != NULL) {
@@ -617,7 +839,8 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	}
 	/* init working area so we can use dlog_cleanout to bail out */
 	memset(&mst, 0, sizeof(mst));
-	mst.logfd = -1;
+	mst.log_fd = -1;
+	mst.log_old_fd = -1;
 	/* start filling it in */
 	tagblen = strlen(tag) + DLOG_TAGPAD;	/* add a bit for pid */
 	newtag = calloc(1, tagblen);
@@ -647,6 +870,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	if (logfile) {
 		int log_flags = O_RDWR | O_CREAT;
 		bool	merge = false;
+		struct stat st;
 
 		env = getenv(D_LOG_STDERR_IN_LOG_ENV);
 		if (env != NULL && atoi(env) > 0)
@@ -655,34 +879,45 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		if (!truncate)
 			log_flags |= O_APPEND;
 
-		mst.logfile = strdup(logfile);
-		if (!mst.logfile) {
+		mst.log_file = strdup(logfile);
+		if (!mst.log_file) {
 			fprintf(stderr, "strdup failed.\n");
 			goto error;
 		}
+		mst.log_fd = open(mst.log_file, log_flags, 0666);
 		/* merge stderr into log file, to aggregate and order with
 		 * messages from Mercury/libfabric
 		 */
 		if (merge) {
-			if (freopen(mst.logfile, truncate ? "w" : "a",
+			if (freopen(mst.log_file, truncate ? "w" : "a",
 				    stderr) == NULL) {
 				fprintf(stderr, "d_log_open: cannot open %s: %s\n",
-					mst.logfile, strerror(errno));
+					mst.log_file, strerror(errno));
 				goto error;
 			}
 			/* set per-line buffering to limit jumbling */
 			setlinebuf(stderr);
-			mst.logfd = fileno(stderr);
+			mst.log_fd = fileno(stderr);
 		} else {
-			mst.logfd = open(mst.logfile, log_flags, 0666);
+			mst.log_fd = open(mst.log_file, log_flags, 0666);
 		}
-		if (mst.logfd < 0) {
+
+		if (mst.log_fd < 0) {
 			fprintf(stderr, "d_log_open: cannot open %s: %s\n",
-				mst.logfile, strerror(errno));
+				mst.log_file, strerror(errno));
 			goto error;
 		}
+		if (!truncate) {
+			rc = fstat(mst.log_fd, &st);
+			if (rc)
+				goto error;
+
+			mst.log_size = st.st_size;
+		}
+		mst.log_size_max = log_size;
 	}
 	mst.oflags = flags;
+
 	/* maxfac_hint should include default fac. */
 	if (clog_setnfac((maxfac_hint < 1) ? 1 : maxfac_hint) < 0) {
 		fprintf(stderr, "clog_setnfac failed.\n");
@@ -701,6 +936,14 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	mst.stderr_isatty = isatty(fileno(stderr));
 	d_log_xst.tag = newtag;
 	clog_unlock();
+
+	/* ensure buffer+log flush upon exit in case fini routine not
+	 * being called
+	 */
+	rc = atexit(d_log_sync);
+	if (rc != 0)
+		fprintf(stderr, "unable to register flush of log, potential risk to miss last lines if fini method not invoked upon exit\n");
+
 	if (buffer)
 		free(buffer);
 	return 0;

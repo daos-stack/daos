@@ -583,3 +583,20 @@ func TestServer_Harness_Start(t *testing.T) {
 		})
 	}
 }
+
+func TestServer_Harness_WithFaultDomain(t *testing.T) {
+	harness := &IOServerHarness{}
+	fd, err := system.NewFaultDomainFromString("/one/two")
+	if err != nil {
+		t.Fatalf("couldn't create fault domain: %s", err)
+	}
+
+	updatedHarness := harness.WithFaultDomain(fd)
+
+	// Updated to include the fault domain
+	if diff := cmp.Diff(harness.faultDomain, fd, cmp.AllowUnexported(system.FaultDomain{})); diff != "" {
+		t.Fatalf("unexpected results (-want, +got):\n%s\n", diff)
+	}
+	// updatedHarness is the same as harness
+	AssertEqual(t, updatedHarness, harness, "not the same structure")
+}
