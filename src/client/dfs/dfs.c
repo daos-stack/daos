@@ -26,6 +26,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/xattr.h>
+#include <linux/xattr.h>
 #include <daos/checksum.h>
 #include <daos/common.h>
 #include <daos/event.h>
@@ -83,7 +84,7 @@
 /** OIDs for Superblock and Root objects */
 #define RESERVED_LO	0
 #define SB_HI		0
-#define ROOT_HI	1
+#define ROOT_HI		1
 
 typedef uint64_t dfs_magic_t;
 typedef uint16_t dfs_sb_ver_t;
@@ -831,7 +832,7 @@ open_symlink(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 		if (rc != 0)
 			return rc;
 		oid_cp(&entry.oid, sym->oid);
-		entry.mode = sym->mode;
+		entry.mode = sym->mode | S_IRWXO | S_IRWXU | S_IRWXG;
 		entry.atime = entry.mtime = entry.ctime = time(NULL);
 		entry.chunk_size = 0;
 		D_STRNDUP(sym->value, value, PATH_MAX - 1);
@@ -1678,7 +1679,7 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
 	   daos_obj_id_t *oid)
 {
 	struct dfs_entry	entry = {0};
-	daos_handle_t           th = DAOS_TX_NONE;
+	daos_handle_t		th = DAOS_TX_NONE;
 	bool			exists;
 	int			rc;
 
@@ -2945,8 +2946,8 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 int
 dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 {
-	daos_handle_t           oh;
-	int			rc;
+	daos_handle_t	oh;
+	int		rc;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -3150,7 +3151,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	daos_handle_t		th = DAOS_TX_NONE;
 	uid_t			euid;
 	daos_key_t		dkey;
-	daos_handle_t           oh;
+	daos_handle_t		oh;
 	d_sg_list_t		sgl;
 	d_iov_t			sg_iovs[3];
 	daos_iod_t		iod;
@@ -3440,8 +3441,8 @@ restart:
 
 	if (exists) {
 		if (S_ISDIR(new_entry.mode)) {
-			uint32_t nr = 0;
-			daos_handle_t oh;
+			uint32_t	nr = 0;
+			daos_handle_t	oh;
 
 			/** if old entry not a dir, return error */
 			if (!S_ISDIR(entry.mode)) {
@@ -3727,7 +3728,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 	daos_iod_t	iod;
 	daos_key_t	dkey;
 	daos_handle_t	oh;
-	uint64_t        cond = 0;
+	uint64_t	cond = 0;
 	int		rc;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -3793,20 +3794,28 @@ int
 dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 	     daos_size_t *size)
 {
-	char            *xname = NULL;
+	char		*xname = NULL;
 	d_sg_list_t	sgl;
 	d_iov_t		sg_iov;
 	daos_iod_t	iod;
 	daos_key_t	dkey;
 	daos_handle_t	oh;
 	int		rc;
+	mode_t		mode;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
 	if (obj == NULL)
 		return EINVAL;
 
-	rc = check_access(dfs, geteuid(), getegid(), obj->mode, R_OK);
+	mode = obj->mode;
+
+	/* Patch in user read permissions here for trusted namespaces */
+	if (!strncmp(name, XATTR_SECURITY_PREFIX, XATTR_SECURITY_PREFIX_LEN) ||
+	    !strncmp(name, XATTR_SYSTEM_PREFIX, XATTR_SYSTEM_PREFIX_LEN))
+		mode |= S_IRUSR;
+
+	rc = check_access(dfs, geteuid(), getegid(), mode, R_OK);
 	if (rc)
 		return rc;
 
@@ -3866,12 +3875,13 @@ out:
 int
 dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 {
-	char            *xname = NULL;
+	char		*xname = NULL;
 	daos_handle_t	th = DAOS_TX_NONE;
 	daos_key_t	dkey, akey;
 	daos_handle_t	oh;
 	uint64_t	cond = 0;
 	int		rc;
+	mode_t		mode;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -3880,7 +3890,14 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	if (obj == NULL)
 		return EINVAL;
 
-	rc = check_access(dfs, geteuid(), getegid(), obj->mode, W_OK);
+	mode = obj->mode;
+
+	/* Patch in user read permissions here for trusted namespaces */
+	if (!strncmp(name, XATTR_SECURITY_PREFIX, XATTR_SECURITY_PREFIX_LEN) ||
+	    !strncmp(name, XATTR_SYSTEM_PREFIX, XATTR_SYSTEM_PREFIX_LEN))
+		mode |= S_IRUSR;
+
+	rc = check_access(dfs, geteuid(), getegid(), mode, W_OK);
 	if (rc)
 		return rc;
 

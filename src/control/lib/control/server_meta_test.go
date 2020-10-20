@@ -273,7 +273,7 @@ func TestControl_SmdQuery(t *testing.T) {
 								UUID:      common.MockUUID(0),
 								Rank:      system.Rank(0),
 								TargetIDs: []int32{0},
-								Health: &storage.NvmeControllerHealth{
+								Health: &storage.NvmeHealth{
 									Temperature:     2,
 									MediaErrors:     3,
 									ReadErrors:      4,
