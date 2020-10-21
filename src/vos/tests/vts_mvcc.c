@@ -955,14 +955,14 @@ static struct op operations[] = {
 	{"querymaxa",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymaxa_f},
 	{"querymaxr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymaxr_f},
 	{"querymaxda",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymaxda_f},
-	{"querymaxdr",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymaxdr_f},
+	{"querymaxdr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymaxdr_f},
 	{"querymaxar",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymaxar_f},
 	{"querymaxdar",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymaxdar_f},
 	{"querymind",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymind_f},
 	{"querymina",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymina_f},
 	{"queryminr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	queryminr_f},
 	{"queryminda",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	queryminda_f},
-	{"querymindr",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymindr_f},
+	{"querymindr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymindr_f},
 	{"queryminar",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	queryminar_f},
 	{"querymindar",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymindar_f},
 	/* Read timestamp update only cases */
@@ -1201,8 +1201,8 @@ conflicting_rw_exec(struct io_test_args *arg, int i, struct op *r, struct op *w)
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	daos_epoch_t	 re;			/* r epoch */
 	daos_epoch_t	 we;			/* w epoch */
-	char		 rp[L_COUNT + 1];	/* r path */
-	char		 wp[L_COUNT + 1];	/* w path */
+	char		 rp[L_COUNT + 1] = {0};	/* r path */
+	char		 wp[L_COUNT + 1] = {0};	/* w path */
 	char		*path_template = "coda";
 	bool		 emptiness[] = {true, false};
 	int		 j = 0;
