@@ -200,18 +200,27 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * @param nbrOfEntries
    * number of entries in <code>descBuffer</code>
    * @param descBufferAddress
-   * address of direct byte buffer holds serialized dkey and list of {@link IODataDesc} of akeys, types, offset, record
-   * sizes, index in value buffer and how many records to fetch
-   * @param eqHandle
-   * handle of native EQ
-   * @param eventIdx
-   * event index associated with the EQ
+   * address of direct byte buffer holds serialized dkey and list of akeys, types, offset, record
+   * sizes, index in value buffer from {@link IODataDesc} and how many records to fetch
    * @throws DaosIOException
    * {@link io.daos.DaosIOException}
    */
-  native void fetchObject(long objectPtr, long flags, int nbrOfEntries, long descBufferAddress, long eqHandle,
-                          int eventIdx) throws DaosIOException;
+  native void fetchObject(long objectPtr, long flags, int nbrOfEntries, long descBufferAddress) throws DaosIOException;
 
+  /**
+   * fetch object with simple desc.
+   *
+   * @param objectPtr
+   * handle of opened object
+   * @param flags
+   * Fetch flags (currently ignored)
+   * @param descBufferAddress
+   * address of direct byte buffer holds serialized dkey and list of akeys, offset, index in value buffer from
+   * {@link IOSimpleDataDesc} and how many records to fetch
+   * @param async
+   * is asynchronous?
+   * @throws DaosIOException
+   */
   native void fetchObjectSimple(long objectPtr, long flags, long descBufferAddress, boolean async)
       throws DaosIOException;
 
@@ -225,18 +234,27 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * @param nbrOfEntries
    * number of entries in <code>descBuffer</code>
    * @param descBufferAddress
-   * address of direct byte buffer holds serialized dkey and serialized list of {@link IODataDesc} of akeys, types,
-   * offset and record sizes, index in value buffer and how many records to update
-   * @param eqHandle
-   * handle of native EQ
-   * @param eventIdx
-   * event index associated with the EQ
+   * address of direct byte buffer holds serialized dkey and serialized list of akeys, types,
+   * offset and record sizes, index in value buffer from {@link IODataDesc} and how many records to update
    * @throws DaosIOException
    * {@link io.daos.DaosIOException}
    */
-  native void updateObject(long objectPtr, long flags, int nbrOfEntries, long descBufferAddress, long eqHandle,
-                           int eventIdx) throws DaosIOException;
+  native void updateObject(long objectPtr, long flags, int nbrOfEntries, long descBufferAddress) throws DaosIOException;
 
+  /**
+   * update object with simple desc.
+   *
+   * @param objectPtr
+   * handle of opened object
+   * @param flags
+   * update flags (currently ignored)
+   * @param descBufferAddress
+   * address of direct byte buffer holds serialized dkey and serialized list of akeys, types,
+   * offset and index in value buffer from {@link IOSimpleDataDesc} and how many records to update
+   * @param async
+   * is asynchronous?
+   * @throws DaosIOException
+   */
   native void updateObjectSimple(long objectPtr, long flags, long descBufferAddress, boolean async)
       throws DaosIOException;
 

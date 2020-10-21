@@ -8,7 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-public class DescMain {
+public class ReusableDescMain {
 
   private static final String OUTPUT_PATH = "./output";
   private static final String FILE_NAME_DKEY = "dkeys.txt";
@@ -70,7 +70,7 @@ public class DescMain {
   private static void generateData(DaosObject object, long totalBytes, int maps, int reduces) throws IOException {
     int akeyValLen = (int)(totalBytes/maps/reduces);
 //    ByteBuf buf = BufferAllocator.objBufWithNativeOrder(akeyValLen);
-    IODataDesc desc = object.createReusableDesc(20, 20, 1, akeyValLen,
+    IODataDesc desc = object.createReusableDesc(20, 1, akeyValLen,
         IODataDesc.IodType.ARRAY, 1, true);
     populate(desc.getDescBuffer());
     try {
@@ -108,7 +108,7 @@ public class DescMain {
     int nbrOfEntries = sizeLimit/akeyValLen;
     int idx = 0;
     long start = System.nanoTime();
-    IODataDesc desc = object.createReusableDesc(20, 20, nbrOfEntries,
+    IODataDesc desc = object.createReusableDesc(20, nbrOfEntries,
         akeyValLen,
         IODataDesc.IodType.ARRAY, 1, false);
 //    IODataDesc.Entry entry = desc.getEntry(0);
@@ -147,11 +147,6 @@ public class DescMain {
     System.out.println("perf (MB/s): " + ((float)totalRead)/seconds/1024/1024);
     System.out.println("total read (MB): " + totalRead/1024/1024);
     System.out.println("seconds: " + seconds);
-  }
-
-  private static IODataDesc.Entry createEntry(String akey, long offset, long readSize) throws IOException {
-    return IODataDesc.createEntryForFetch(akey, IODataDesc.IodType.ARRAY, 1, (int)offset,
-        (int)readSize);
   }
 
   private static Map<String, Integer> readKeys(String filename, int offset, int nbrOfKeys) throws IOException {

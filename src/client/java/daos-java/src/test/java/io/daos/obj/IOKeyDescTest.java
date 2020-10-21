@@ -64,7 +64,7 @@ public class IOKeyDescTest {
       desc.getDescBuffer().readerIndex(0);
       Assert.assertEquals(0, desc.getDescBuffer().readInt());
       Assert.assertEquals(129, desc.getAnchorBuffer().capacity());
-      Assert.assertEquals(164, desc.getDescBuffer().capacity());
+      Assert.assertEquals(124, desc.getDescBuffer().capacity());
       Assert.assertEquals(640, desc.getKeyBuffer().capacity());
     } finally {
       desc.release();
@@ -86,7 +86,7 @@ public class IOKeyDescTest {
       descBuffer.readBytes(bytes);
       Assert.assertTrue(Arrays.equals("dkey2345".getBytes(Constants.KEY_CHARSET), bytes));
       Assert.assertEquals(129, desc.getAnchorBuffer().capacity());
-      Assert.assertEquals(2062, desc.getDescBuffer().capacity());
+      Assert.assertEquals(1550, desc.getDescBuffer().capacity());
       Assert.assertEquals(8192, desc.getKeyBuffer().capacity());
     } finally {
       desc.release();
@@ -144,11 +144,9 @@ public class IOKeyDescTest {
     byte key2[] = "akey2".getBytes(Constants.KEY_CHARSET);
     keyBuffer.writerIndex(0);
     descBuffer.writeLong(key1.length);
-    descBuffer.writerIndex(descBuffer.writerIndex() + 6);
-    descBuffer.writeShort(0);
+    descBuffer.writerIndex(descBuffer.writerIndex() + 4);
     descBuffer.writeLong(key2.length);
-    descBuffer.writerIndex(descBuffer.writerIndex() + 6);
-    descBuffer.writeShort(0);
+    descBuffer.writerIndex(descBuffer.writerIndex() + 4);
     keyBuffer.writeBytes(key1).writeBytes(key2);
     desc.parseResult();
     return desc;

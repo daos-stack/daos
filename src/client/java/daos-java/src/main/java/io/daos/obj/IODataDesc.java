@@ -46,8 +46,8 @@ import java.util.List;
  *   See {@link Entry#release(boolean)}.
  * </p>
  * <p>
- *   For update entries, user should call {@link #createEntryForUpdate(String, IodType, int, int, ByteBuf)}.
- *   And {@link #createEntryForFetch(String, IodType, int, int, int)} for fetch entries. Results of fetch should be get
+ *   For update entries, user should call {@link #addEntryForUpdate(String, int, ByteBuf)}.
+ *   And {@link #addEntryForFetch(String, int, int)} for fetch entries. Results of fetch should be get
  *   from each entry by calling {@link Entry#getFetchedData()} For each IODataDesc object, there must be only one type
  *   of action, either update or fetch, among all its entries.
  * </p>
@@ -58,7 +58,11 @@ public class IODataDesc {
 
   private byte[] dkeyBytes;
 
-  private final int maxDkeyLen;
+  private final IodType type;
+
+  private final int recordSize;
+
+  private final int maxKeyLen;
 
   private final List<Entry> akeyEntries;
 
@@ -80,87 +84,121 @@ public class IODataDesc {
 
   private boolean resultParsed;
 
-  public static final short DEFAULT_LEN_REUSE_DKEY = 64;
-
-  public static final short DEFAULT_LEN_REUSE_AKEY = 64;
+  public static final short DEFAULT_LEN_REUSE_KEY = 64;
 
   public static final int DEFAULT_LEN_REUSE_BUFFER = 2 * 1024 * 1024;
 
   public static final int DEFAULT_NUMBER_OF_ENTRIES = 5;
 
+  /**
+   * constructor for reusing with defaults.
+   * key len: {@linkplain #DEFAULT_LEN_REUSE_KEY}
+   * buffer len: {@linkplain #DEFAULT_LEN_REUSE_BUFFER}
+   * number of entries: {@linkplain #DEFAULT_NUMBER_OF_ENTRIES}.
+   *
+   * @param iodType
+   * iod type from {@link IodType}
+   * @param recordSize
+   * record size. Should be same record size as the first update if any. You can call
+   * {@link DaosObject#getRecordSize(String, String)} to get correct value if you don't know yet.
+   * @param updateOrFetch
+   * true for update. false for fetch
+   */
   protected IODataDesc(IodType iodType, int recordSize, boolean updateOrFetch) {
-    this(DEFAULT_LEN_REUSE_DKEY, DEFAULT_LEN_REUSE_AKEY, DEFAULT_NUMBER_OF_ENTRIES,
+    this(DEFAULT_LEN_REUSE_KEY, DEFAULT_NUMBER_OF_ENTRIES,
         DEFAULT_LEN_REUSE_BUFFER, iodType, recordSize, updateOrFetch);
   }
 
-  protected IODataDesc(int maxDkeyLen, int maxAkeyLen, int nbrOfEntries, int entryBufLen,
+  /**
+   * constructor for reusing with customized values of key length, number of entries
+   * and buffer length.
+   *
+   * @param maxKeyLen
+   * max length of dkey and akey
+   * @param nbrOfEntries
+   * number of entries/akeys
+   * @param entryBufLen
+   * buffer length
+   * @param iodType
+   * iod type from {@link IodType}
+   * @param recordSize
+   * record size. Should be same record size as the first update if any. You can call
+   * {@link DaosObject#getRecordSize(String, String)} to get correct value if you don't know yet.
+   * @param updateOrFetch
+   * true for update. false for fetch
+   */
+  protected IODataDesc(int maxKeyLen, int nbrOfEntries, int entryBufLen,
                        IodType iodType, int recordSize, boolean updateOrFetch) {
-    if (maxDkeyLen <= 0) {
-      throw new IllegalArgumentException("dkey length should be positive. " + maxDkeyLen);
+    if (maxKeyLen <= 0) {
+      throw new IllegalArgumentException("dkey length should be positive. " + maxKeyLen);
     }
-    if (maxDkeyLen > Short.MAX_VALUE || maxAkeyLen > Short.MAX_VALUE) {
+    if (maxKeyLen > Short.MAX_VALUE) {
       throw new IllegalArgumentException("dkey and akey length in should not exceed "
-          + Short.MAX_VALUE + ". dkey len: " + maxDkeyLen + ", akey len: " + maxAkeyLen);
+          + Short.MAX_VALUE + ". key len: " + maxKeyLen);
     }
     if (nbrOfEntries > Short.MAX_VALUE || nbrOfEntries < 0) {
       throw new IllegalArgumentException("number of entries should be positive and no larger than " + Short.MAX_VALUE +
           ". " + nbrOfEntries);
     }
-    this.maxDkeyLen = maxDkeyLen;
+    this.maxKeyLen = maxKeyLen;
+    if (iodType == IodType.NONE) {
+      throw new IllegalArgumentException("need valid IodType, either " + IodType.ARRAY + " or " +
+        IodType.SINGLE);
+    }
+    this.type = iodType;
+    this.recordSize = recordSize;
     // 8 for whether reusing native data desc or not
     // 2 for storing maxDkeyLen
     // 2 for actual number of entries starting from first entry having data
-    totalRequestBufLen += (Constants.ENCODED_LENGTH_KEY + maxDkeyLen + 8 + 2 + 2);
+    // 1 for iod type
+    // 4 for record size
+    // 8 + 2 + 2 + 1 + 4 = 17
+    totalRequestBufLen += (Constants.ENCODED_LENGTH_KEY + maxKeyLen + 17);
+    this.updateOrFetch = updateOrFetch;
     this.akeyEntries = new ArrayList<>();
     for (int i = 0; i < nbrOfEntries; i++) {
-      Entry entry = updateOrFetch ? createReusableEntryForUpdate(maxAkeyLen, entryBufLen, iodType, recordSize) :
-          createReusableEntryForFetch(maxAkeyLen, entryBufLen, iodType, recordSize);
-      akeyEntries.add(entry);
+      Entry entry = addReusableEntry(entryBufLen);
       totalRequestBufLen += entry.getDescLen();
+      totalRequestSize += entry.getRequestSize();
     }
     totalDescBufferLen += totalRequestBufLen;
     if (!updateOrFetch) { // for returned actual size and actual record size
       totalDescBufferLen += akeyEntries.size() * Constants.ENCODED_LENGTH_EXTENT * 2;
     }
-    this.updateOrFetch = updateOrFetch;
   }
 
   /**
-   * constructor with list of {@link Entry}.
+   * constructor for non-reusable description.
+   * User should call {@link #addEntryForFetch(String, int, int)} or
+   * {@link #addEntryForUpdate(String, int, ByteBuf)} to add entries.
+   * {@link #release()} should be called after it's done.
    *
    * @param dkey
    * distribution key
-   * @param keyEntries
-   * list of description entries
+   * @param iodType
+   * iod type from {@link IodType}
+   * @param recordSize
+   * record size
    * @param updateOrFetch
    * true for update; false for fetch
    * @throws IOException
    */
-  protected IODataDesc(String dkey, List<Entry> keyEntries, boolean updateOrFetch) throws IOException {
-    this.maxDkeyLen = -1;
+  protected IODataDesc(String dkey, IodType iodType, int recordSize, boolean updateOrFetch) throws IOException {
+    this.maxKeyLen = -1;
     this.dkey = dkey;
     this.dkeyBytes = dkey.getBytes(Constants.KEY_CHARSET);
     if (dkeyBytes.length > Short.MAX_VALUE) {
       throw new IllegalArgumentException("dkey length in " + Constants.KEY_CHARSET + " should not exceed "
                       + Short.MAX_VALUE);
     }
-    this.akeyEntries = keyEntries;
+    if (iodType == IodType.NONE) {
+      throw new IllegalArgumentException("need valid IodType, either " + IodType.ARRAY + " or " +
+        IodType.SINGLE);
+    }
+    this.type = iodType;
+    this.recordSize = recordSize;
+    this.akeyEntries = new ArrayList<>();
     this.updateOrFetch = updateOrFetch;
-    // 8 for whether reusing native data desc or not
-    totalRequestBufLen += (Constants.ENCODED_LENGTH_KEY + dkeyBytes.length + 8);
-    for (Entry entry : keyEntries) {
-      if (updateOrFetch != entry.updateOrFetch) {
-        throw new IllegalArgumentException("entry is " + updateOrFetchStr(entry.updateOrFetch) +". should be " +
-            updateOrFetchStr(updateOrFetch));
-      }
-      totalRequestBufLen += entry.getDescLen();
-      totalRequestSize += entry.getRequestSize();
-    }
-
-    totalDescBufferLen += totalRequestBufLen;
-    if (!updateOrFetch) { // for returned actual size and actual record size
-      totalDescBufferLen += keyEntries.size() * Constants.ENCODED_LENGTH_EXTENT * 2;
-    }
   }
 
   public String getDkey() {
@@ -171,20 +209,20 @@ public class IODataDesc {
     return totalRequestSize;
   }
 
-  /**
-   * duplicate this object and all its entries.
-   * Do not forget to release this object and its entries.
-   *
-   * @return duplicated IODataDesc
-   * @throws IOException
-   */
-  public IODataDesc duplicate() throws IOException {
-    List<Entry> newEntries = new ArrayList<>(akeyEntries.size());
-    for (Entry e : akeyEntries) {
-      newEntries.add(e.duplicate());
-    }
-    return new IODataDesc(dkey, newEntries, updateOrFetch);
-  }
+//  /**
+//   * duplicate this object and all its entries.
+//   * Do not forget to release this object and its entries.
+//   *
+//   * @return duplicated IODataDesc
+//   * @throws IOException
+//   */
+//  public IODataDesc duplicate() throws IOException {
+//    List<Entry> newEntries = new ArrayList<>(akeyEntries.size());
+//    for (Entry e : akeyEntries) {
+//      newEntries.add(e.duplicate());
+//    }
+//    return new IODataDesc(dkey, newEntries, updateOrFetch);
+//  }
 
   private String updateOrFetchStr(boolean v) {
     return v ? "update" : "fetch";
@@ -223,7 +261,7 @@ public class IODataDesc {
    * encode entries data to Data Buffer.
    */
   public void encode() {
-    if (maxDkeyLen < 0) { // not reusable
+    if (maxKeyLen < 0) { // not reusable
       encodeFirstTime();
       return;
     }
@@ -235,20 +273,44 @@ public class IODataDesc {
     reuse();
   }
 
+  private void calcNonReusableLen() {
+    if (akeyEntries.isEmpty()) {
+      throw new IllegalStateException("no entry added");
+    }
+    // 8 for whether reusing native data desc or not
+    // 13 = 8 + 1 + 4
+    totalRequestBufLen += (Constants.ENCODED_LENGTH_KEY + dkeyBytes.length + 13);
+    for (Entry entry : akeyEntries) {
+      totalRequestBufLen += entry.getDescLen();
+      totalRequestSize += entry.getRequestSize();
+    }
+
+    totalDescBufferLen += totalRequestBufLen;
+    if (!updateOrFetch) { // for returned actual size and actual record size
+      totalDescBufferLen += akeyEntries.size() * Constants.ENCODED_LENGTH_EXTENT * 2;
+    }
+  }
+
   private void encodeFirstTime() {
     if (!resultParsed) {
       if (encoded) {
         return;
       }
       boolean reusable = isReusable();
-      if (reusable && dkey == null) {
-        throw new IllegalArgumentException("please set dkey first");
+      if (reusable) {
+        if (dkey == null) {
+          throw new IllegalArgumentException("please set dkey first");
+        }
+      } else {
+        calcNonReusableLen(); // total length before allocating buffer
       }
-      this.descBuffer = BufferAllocator.objBufWithNativeOrder(getDescBufferLen());
-      descBuffer.writerIndex(reusable ? (8 + 2 + 2) : 8);
-      encodeDkey(reusable);
+      this.descBuffer = BufferAllocator.objBufWithNativeOrder(totalDescBufferLen);
+      // 17 = (8 + 2 + 2 + 1 + 4)
+      // 13 = 8 + 1 + 4
+      descBuffer.writerIndex(reusable ? 17 : 13);
+      encodeKey(dkeyBytes, reusable);
       for (Entry entry : akeyEntries) {
-        entry.encode(descBuffer);
+        entry.encode();
         if (entry.getRequestSize() > 0) {
           nbrOfAkeysWithData++;
         }
@@ -260,11 +322,12 @@ public class IODataDesc {
       descBuffer.writerIndex(0);
       if (reusable) {
         descBuffer.writeLong(0L); // initial
-        descBuffer.writeShort(maxDkeyLen);
+        descBuffer.writeShort(maxKeyLen);
         descBuffer.writeShort(nbrOfAkeysWithData);
       } else {
         descBuffer.writeLong(-1L); // initial
       }
+      descBuffer.writeByte(type.value).writeInt(recordSize);
       descBuffer.writerIndex(lastPos);
       encoded = true;
       return;
@@ -273,7 +336,7 @@ public class IODataDesc {
   }
 
   public void setDkey(String dkey) throws UnsupportedEncodingException {
-    if (maxDkeyLen < 0) {
+    if (maxKeyLen < 0) {
       throw new UnsupportedOperationException("cannot set dkey in non-reusable desc");
     }
     resultParsed = false;
@@ -282,9 +345,9 @@ public class IODataDesc {
       return;
     }
     byte[] dkeyBytes = dkey.getBytes(Constants.KEY_CHARSET);
-    if (dkeyBytes.length > maxDkeyLen) {
-      throw new IllegalArgumentException("dkey length in " + Constants.KEY_CHARSET + " should not exceed max dkey len: "
-          + maxDkeyLen);
+    if (dkeyBytes.length > maxKeyLen) {
+      throw new IllegalArgumentException("dkey length in " + Constants.KEY_CHARSET + " should not exceed max key len: "
+          + maxKeyLen);
     }
     this.dkey = dkey;
     this.dkeyBytes = dkeyBytes;
@@ -305,12 +368,13 @@ public class IODataDesc {
     }
     nbrOfAkeysWithData = 0;
     totalRequestSize = 0;
-    descBuffer.writerIndex(Constants.ENCODED_LENGTH_KEY + 8 + 2 + 2 + maxDkeyLen);
+    // 17 = (address)8 + (maxkeylen)2 + (nbrOfAkeysWithData)2 + 1 + 4
+    descBuffer.writerIndex(Constants.ENCODED_LENGTH_KEY + 17 + maxKeyLen);
     for (Entry entry : akeyEntries) {
       if (!entry.isReused()) {
         break;
       }
-      entry.encode(descBuffer);
+      entry.encode();
       nbrOfAkeysWithData++;
       totalRequestSize += entry.getRequestSize();
     }
@@ -320,16 +384,18 @@ public class IODataDesc {
     int lastPos = descBuffer.writerIndex();
     descBuffer.writerIndex(8 + 2);
     descBuffer.writeShort(nbrOfAkeysWithData);
-    encodeDkey(true);
+    // skip type and record size
+    descBuffer.writerIndex(descBuffer.writerIndex() + 5);
+    encodeKey(dkeyBytes, true);
     descBuffer.writerIndex(lastPos);
     encoded = true;
   }
 
-  private void encodeDkey(boolean reusable) {
-    descBuffer.writeShort(dkeyBytes.length);
-    descBuffer.writeBytes(dkeyBytes);
+  private void encodeKey(byte[] keyBytes, boolean reusable) {
+    descBuffer.writeShort(keyBytes.length);
+    descBuffer.writeBytes(keyBytes);
     if (reusable) {
-      int pad = maxDkeyLen - dkeyBytes.length;
+      int pad = maxKeyLen - keyBytes.length;
       if (pad > 0) {
         descBuffer.writerIndex(descBuffer.writerIndex() + pad);
       }
@@ -337,7 +403,7 @@ public class IODataDesc {
   }
 
   public boolean isReusable() {
-    return maxDkeyLen > 0;
+    return maxKeyLen > 0;
   }
 
   /**
@@ -417,24 +483,11 @@ public class IODataDesc {
     return akeyEntries.get(index);
   }
 
-  public static Entry createReusableEntryForUpdate(int maxAkeyLen, int bufferLen, IodType iodType, int recordSize) {
-    return new IODataDesc.Entry(maxAkeyLen, bufferLen, iodType, recordSize, true);
-  }
-
-  public static Entry createReusableEntryForFetch(int maxAkeyLen, int bufferLen, IodType iodType, int recordSize) {
-    return new IODataDesc.Entry(maxAkeyLen, bufferLen, iodType, recordSize, false);
-  }
-
   /**
    * create data description entry for fetch.
    *
    * @param key
    * distribution key
-   * @param type
-   * iod type, {@see io.daos.obj.IODataDesc.IodType}
-   * @param recordSize
-   * record size. Should be provided with correct value. Or you may get error or wrong fetch result. You can call
-   * {@link DaosObject#getRecordSize(String, String)} to get correct value if you don't know yet.
    * @param offset
    * offset inside akey from which to fetch data, should be a multiple of recordSize
    * @param dataSize
@@ -443,9 +496,14 @@ public class IODataDesc {
    * @return data description entry
    * @throws IOException
    */
-  public static Entry createEntryForFetch(String key, IODataDesc.IodType type, int recordSize, int offset,
+  public Entry addEntryForFetch(String key, int offset,
                                               int dataSize) throws IOException {
-    return new IODataDesc.Entry(key, type, recordSize, offset, dataSize);
+    if (updateOrFetch) {
+      throw new IllegalArgumentException("It's desc for update");
+    }
+    Entry e = new IODataDesc.Entry(key, offset, dataSize);
+    akeyEntries.add(e);
+    return e;
   }
 
   /**
@@ -453,11 +511,6 @@ public class IODataDesc {
    *
    * @param key
    * distribution key
-   * @param type
-   * iod type, {@see io.daos.obj.IODataDesc.IodType}
-   * @param recordSize
-   * record size. Should be same record size as the first update if any. You can call
-   * {@link DaosObject#getRecordSize(String, String)} to get correct value if you don't know yet.
    * @param offset
    * offset inside akey from which to update data, should be a multiple of recordSize
    * @param dataBuffer
@@ -468,9 +521,19 @@ public class IODataDesc {
    * @return data description entry
    * @throws IOException
    */
-  public static Entry createEntryForUpdate(String key, IODataDesc.IodType type, int recordSize, int offset,
-                                               ByteBuf dataBuffer) throws IOException {
-    return new IODataDesc.Entry(key, type, recordSize, offset, dataBuffer);
+  public Entry addEntryForUpdate(String key, int offset, ByteBuf dataBuffer) throws IOException {
+    if (!updateOrFetch) {
+      throw new IllegalArgumentException("It's desc for fetch");
+    }
+    Entry e = new IODataDesc.Entry(key, offset, dataBuffer);
+    akeyEntries.add(e);
+    return e;
+  }
+
+  private Entry addReusableEntry(int bufferLen) {
+    Entry e = new IODataDesc.Entry(bufferLen);
+    akeyEntries.add(e);
+    return e;
   }
 
   /**
@@ -499,8 +562,8 @@ public class IODataDesc {
       this.descBuffer.release();
       descBuffer = null;
     }
-    if (releaseFetchBuffer && !updateOrFetch) {
-      akeyEntries.forEach(e -> e.releaseFetchDataBuffer());
+    if ((releaseFetchBuffer && !updateOrFetch) || isReusable()) {
+      akeyEntries.forEach(e -> e.releaseDataBuffer());
       akeyEntries.clear();
     }
   }
@@ -537,18 +600,14 @@ public class IODataDesc {
    * A entry to describe record update or fetch on given akey. For array, each entry object represents consecutive
    * records of given key. Multiple entries should be created for non-consecutive records of given key.
    */
-  public static class Entry {
+  public class Entry {
     private String key;
-    private final IodType type;
     private byte[] keyBytes;
-    private final int maxAkeyLen;
     private boolean reused;
     private int offset;
-    private final int recordSize;
     private int dataSize;
     private int paddedDataSize;
     private ByteBuf dataBuffer;
-    private final boolean updateOrFetch;
 
     private boolean encoded;
 
@@ -558,46 +617,38 @@ public class IODataDesc {
     /**
      * construction for reusable entry.
      *
-     * @param maxAkeyLen
      * @param bufferLen
-     * @param iodType
-     * @param recordSize
      * @throws IOException
      */
-    protected Entry(int maxAkeyLen, int bufferLen, IodType iodType, int recordSize, boolean updateOrFetch) {
-      if (maxAkeyLen <= 0) {
-        throw new IllegalArgumentException("max akey length must be positive value, " + maxAkeyLen);
-      }
-      if (maxAkeyLen > Short.MAX_VALUE) {
-        throw new IllegalArgumentException("max akey length should not exceed "
-            + Short.MAX_VALUE + ". " + maxAkeyLen);
-      }
-      this.maxAkeyLen = maxAkeyLen;
+    protected Entry(int bufferLen) {
       this.dataBuffer = BufferAllocator.objBufWithNativeOrder(bufferLen);
-      this.type = iodType;
-      if (iodType == IodType.NONE) {
-        throw new IllegalArgumentException("need valid IodType, either " + IodType.ARRAY + " or " +
-            IodType.SINGLE);
-      }
-      this.recordSize = recordSize;
-      this.updateOrFetch = updateOrFetch;
     }
 
-    private Entry(String key, IodType type, int recordSize, int offset, int dataSize,
-                    boolean updateOrFetch) throws IOException {
-      this.maxAkeyLen = -1;
+    /**
+     * constructor for fetch.
+     *
+     * @param key
+     * akey to update on
+     * akey record size
+     * @param offset
+     * offset inside akey, should be a multiple of recordSize
+     * @param dataSize
+     * size of data to fetch
+     * @throws IOException
+     */
+    private Entry(String key, int offset, int dataSize)
+        throws IOException {
       if (StringUtils.isBlank(key)) {
         throw new IllegalArgumentException("key is blank");
       }
       this.key = key;
-      this.type = type;
       this.keyBytes = key.getBytes(Constants.KEY_CHARSET);
-      if (keyBytes.length > Short.MAX_VALUE) {
+      int limit = maxKeyLen > 0 ? maxKeyLen : Short.MAX_VALUE;
+      if (keyBytes.length > limit) {
         throw new IllegalArgumentException("akey length in " + Constants.KEY_CHARSET + " should not exceed "
-            + Short.MAX_VALUE + ", akey: " + key);
+            + limit + ", akey: " + key);
       }
       this.offset = offset;
-      this.recordSize = recordSize;
       this.dataSize = dataSize;
       if (offset%recordSize != 0) {
         throw new IllegalArgumentException("offset (" + offset + ") should be a multiple of recordSize (" + recordSize +
@@ -626,27 +677,6 @@ public class IODataDesc {
       } else {
         paddedDataSize = dataSize;
       }
-      this.updateOrFetch = updateOrFetch;
-    }
-
-    /**
-     * construction for fetch.
-     *
-     * @param key
-     * akey to fetch data from
-     * @param type
-     * akey value type
-     * @param recordSize
-     * akey record size
-     * @param offset
-     * offset inside akey, should be a multiple of recordSize
-     * @param dataSize
-     * size of data to fetch, make it a multiple of recordSize as much as possible. zeros are padded to make actual
-     * request size a multiple of recordSize.
-     * @throws IOException
-     */
-    protected Entry(String key, IodType type, int recordSize, int offset, int dataSize) throws IOException {
-      this(key, type, recordSize, offset, dataSize, false);
     }
 
     /**
@@ -654,10 +684,6 @@ public class IODataDesc {
      *
      * @param key
      * akey to update on
-     * @param type
-     * akey value type
-     * @param recordSize
-     * akey record size
      * @param offset
      * offset inside akey, should be a multiple of recordSize
      * @param dataBuffer
@@ -667,8 +693,8 @@ public class IODataDesc {
      * of recordSize. user should release the buffer by himself.
      * @throws IOException
      */
-    protected Entry(String key, IodType type, int recordSize, int offset, ByteBuf dataBuffer) throws IOException {
-      this(key, type, recordSize, offset, dataBuffer.readableBytes(), true);
+    protected Entry(String key, int offset, ByteBuf dataBuffer) throws IOException {
+      this(key, offset, dataBuffer.readableBytes());
       this.dataBuffer = dataBuffer;
     }
 
@@ -741,20 +767,15 @@ public class IODataDesc {
      * @return length
      */
     public int getDescLen() {
-      // 11 or 19 = key len(2) + iod_type(1) + iod_size(4) + [recx idx(4) + recx nr(4)] + data buffer mem address(8)
+      // 10 or 18 = key len(2) + [recx idx(4) + recx nr(4)] + data buffer mem address(8)
       if (type == IodType.ARRAY) {
-        return 23 + calcKeyLen();
+        return 18 + calcKeyLen();
       }
-      return 15 + calcKeyLen();
+      return 10 + calcKeyLen();
     }
 
     private int calcKeyLen() {
-      // 2 for storing maxAkeyLen
-      return maxAkeyLen < 0 ? keyBytes.length : (2 + maxAkeyLen);
-    }
-
-    private boolean isReusable() {
-      return maxAkeyLen > 0;
+      return maxKeyLen < 0 ? keyBytes.length : maxKeyLen;
     }
 
     public boolean isReused() {
@@ -783,6 +804,9 @@ public class IODataDesc {
      * @throws UnsupportedEncodingException
      */
     public void setKey(String akey, int offset, ByteBuf buf) throws UnsupportedEncodingException {
+      if (!isReusable()) {
+        throw new UnsupportedOperationException("entry is not reusable");
+      }
       if (buf.readerIndex() != 0) {
         throw new IllegalArgumentException("buffer's reader index should be 0. " + buf.readerIndex());
       }
@@ -800,6 +824,9 @@ public class IODataDesc {
      * @throws UnsupportedEncodingException
      */
     public void setKey(String akey, int offset, int fetchDataSize) throws UnsupportedEncodingException {
+      if (!isReusable()) {
+        throw new UnsupportedOperationException("entry is not reusable");
+      }
       this.dataBuffer.clear();
       setKey(akey, offset, this.dataBuffer, fetchDataSize);
     }
@@ -811,9 +838,9 @@ public class IODataDesc {
       if (!akey.equals(this.key)) {
         this.key = akey;
         this.keyBytes = akey.getBytes(Constants.KEY_CHARSET);
-        if (keyBytes.length > maxAkeyLen) {
+        if (keyBytes.length > maxKeyLen) {
           throw new IllegalArgumentException("akey length in " + Constants.KEY_CHARSET + " should not exceed "
-              + maxAkeyLen + ", akey: " + key);
+              + maxKeyLen + ", akey: " + key);
         }
       }
       this.offset = offset;
@@ -860,42 +887,28 @@ public class IODataDesc {
     }
 
     /**
-     * encode entry to the description buffer which will be decoded in native code.<br/>
-     *
-     * @param descBuffer
-     * the description buffer
+     * encode entry to the description buffer which will be decoded in native code.
      */
-    protected void encode(ByteBuf descBuffer) {
-      if (maxAkeyLen < 0) {
-        encodeEntryFirstTime(descBuffer);
+    protected void encode() {
+      if (maxKeyLen < 0) {
+        encodeEntryFirstTime();
         return;
       }
       if (!encoded) {
-        encodeEntryFirstTime(descBuffer);
+        encodeEntryFirstTime();
         return;
       }
-      reuseEntry(descBuffer);
+      reuseEntry();
     }
 
     /**
      * depend on encoded of IODataDesc to protect entry from encoding multiple times.
-     *
-     * @param descBuffer
      */
-    private void reuseEntry(ByteBuf descBuffer) {
+    private void reuseEntry() {
       if (!reused) {
         throw new IllegalStateException("please set akey first");
       }
-      // skip maxAkeyLen
-      descBuffer.writerIndex(descBuffer.writerIndex() + 2);
-      descBuffer.writeShort(keyBytes.length)
-          .writeBytes(keyBytes);
-      int pad = maxAkeyLen - keyBytes.length;
-      if (pad > 0) {
-        descBuffer.writerIndex(descBuffer.writerIndex() + pad);
-      }
-      // skip type and record size
-      descBuffer.writerIndex(descBuffer.writerIndex() + 1 + 4);
+      encodeKey(keyBytes, isReusable());
       if (type == IodType.ARRAY) {
         descBuffer.writeInt(offset/recordSize);
         descBuffer.writeInt(paddedDataSize/recordSize);
@@ -904,7 +917,7 @@ public class IODataDesc {
       descBuffer.writerIndex(descBuffer.writerIndex() + 8);
     }
 
-    private void encodeEntryFirstTime(ByteBuf descBuffer) {
+    private void encodeEntryFirstTime() {
       if (encoded) {
         return;
       }
@@ -918,31 +931,16 @@ public class IODataDesc {
       } else {
         memoryAddress = dataBuffer.memoryAddress() + dataBuffer.readerIndex();
       }
-      int keyLen;
       byte[] bytes;
       if (keyBytes != null) {
-        keyLen = keyBytes.length;
         bytes = keyBytes;
       } else { // in case of akey is not set when encode first time
         if (dataSize > 0) {
           throw new IllegalArgumentException("akey cannot be blank when it has data");
         }
-        keyLen = 0;
         bytes = new byte[0];
       }
-      if (reusable) {
-        descBuffer.writeShort(maxAkeyLen);
-      }
-      descBuffer.writeShort(keyLen)
-          .writeBytes(bytes);
-      if (reusable) {
-        int pad = maxAkeyLen - keyLen;
-        if (pad > 0) {
-          descBuffer.writerIndex(descBuffer.writerIndex() + pad);
-        }
-      }
-      descBuffer.writeByte(type.value)
-          .writeInt(recordSize);
+      encodeKey(bytes, reusable);
       if (type == IodType.ARRAY) {
         descBuffer.writeInt(offset/recordSize);
         descBuffer.writeInt(paddedDataSize/recordSize);
@@ -951,8 +949,8 @@ public class IODataDesc {
       encoded = true;
     }
 
-    public void releaseFetchDataBuffer() {
-      if (!updateOrFetch && dataBuffer != null) {
+    public void releaseDataBuffer() {
+      if (dataBuffer != null) {
         dataBuffer.release();
         dataBuffer = null;
       }
@@ -973,19 +971,19 @@ public class IODataDesc {
       return offset;
     }
 
-    /**
-     * duplicate this object.
-     * Do not forget to release this object.
-     *
-     * @return duplicated Entry
-     * @throws IOException
-     */
-    public Entry duplicate() throws IOException {
-      if (updateOrFetch) {
-        return new Entry(key, type, recordSize, offset, dataBuffer);
-      }
-      return new Entry(key, type, recordSize, offset, dataSize);
-    }
+//    /**
+//     * duplicate this object.
+//     * Do not forget to release this object.
+//     *
+//     * @return duplicated Entry
+//     * @throws IOException
+//     */
+//    public Entry duplicate() throws IOException {
+//      if (updateOrFetch) {
+//        return new Entry(key, type, recordSize, offset, dataBuffer);
+//      }
+//      return new Entry(key, type, recordSize, offset, dataSize);
+//    }
 
     public ByteBuf getDataBuffer() {
       return dataBuffer;

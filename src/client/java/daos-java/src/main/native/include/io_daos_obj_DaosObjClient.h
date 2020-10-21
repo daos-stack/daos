@@ -90,10 +90,10 @@ JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_releaseSimDescGroup
 /*
  * Class:     io_daos_obj_DaosObjClient
  * Method:    fetchObject
- * Signature: (JJIJJI)V
+ * Signature: (JJIJ)V
  */
 JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_fetchObject
-  (JNIEnv *, jobject, jlong, jlong, jint, jlong, jlong, jint);
+  (JNIEnv *, jobject, jlong, jlong, jint, jlong);
 
 /*
  * Class:     io_daos_obj_DaosObjClient
@@ -106,10 +106,10 @@ JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_fetchObjectSimple
 /*
  * Class:     io_daos_obj_DaosObjClient
  * Method:    updateObject
- * Signature: (JJIJJI)V
+ * Signature: (JJIJ)V
  */
 JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_updateObject
-  (JNIEnv *, jobject, jlong, jlong, jint, jlong, jlong, jint);
+  (JNIEnv *, jobject, jlong, jlong, jint, jlong);
 
 /*
  * Class:     io_daos_obj_DaosObjClient

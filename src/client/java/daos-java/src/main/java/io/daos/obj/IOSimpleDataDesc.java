@@ -31,7 +31,13 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 
 /**
- * IO description for fetching and updating object records on given dkey. Each record is described in {@link SimpleEntry}.
+ * IO simple description for fetching and updating object records on given dkey. The differences between this class and
+ * {@link IODataDesc} are,
+ * - this class defaults record size as 1, iod type as ARRAY.
+ * - this class is always reusable.
+ * - this class support asynchronous update/fetch.
+ *
+ * Each record is described in {@link SimpleEntry}.
  * To make JNI call efficient and avoid memory fragmentation, the dkey and entries are serialized to direct buffers
  * which then de-serialized in native code.
  *

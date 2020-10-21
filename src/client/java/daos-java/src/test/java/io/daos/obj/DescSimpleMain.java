@@ -284,11 +284,6 @@ public class DescSimpleMain {
     }
   }
 
-  private static IODataDesc.Entry createEntry(String akey, long offset, long readSize) throws IOException {
-    return IODataDesc.createEntryForFetch(akey, IODataDesc.IodType.ARRAY, 1, (int)offset,
-        (int)readSize);
-  }
-
   private static Map<String, Integer> readKeys(String filename, int offset, int nbrOfKeys) throws IOException {
     Map<String, Integer> map = new LinkedHashMap<>();
     File f = new File(OUTPUT_PATH, filename);

@@ -313,7 +313,6 @@ public class IOKeyDesc {
       }
 
       long keyLen;
-      short csumLen;
       int idx = 0;
       for (int i = 0; i < retNbr; i++) {
         keyBuffer.readerIndex(idx);
@@ -321,9 +320,9 @@ public class IOKeyDesc {
         byte bytes[] = new byte[(int)keyLen];
         keyBuffer.readBytes(bytes);
         resultKeys.add(new String(bytes, Constants.KEY_CHARSET));
-        descBuffer.readerIndex(descBuffer.readerIndex() + 6); // uint32_t kd_val_type(4) + uint16_t kd_csum_type(2)
-        csumLen = descBuffer.readShort();
-        idx += keyLen + csumLen;
+        descBuffer.readerIndex(descBuffer.readerIndex() + 4); // uint32_t kd_val_type(4)
+//        csumLen = descBuffer.readShort();
+        idx += keyLen;
       }
       resultParsed = true;
       return resultKeys;
@@ -355,9 +354,7 @@ public class IOKeyDesc {
 
   public static int getKeyDescLen() {
     return 8    // daos_size_t kd_key_len
-      + 4   // uint32_t kd_val_type
-      + 2   // uint16_t kd_csum_type
-      + 2;  // uint16_t kd_csum_len
+      + 4;   // uint32_t kd_val_type
   }
 
   public static int getAnchorTypeLen() {

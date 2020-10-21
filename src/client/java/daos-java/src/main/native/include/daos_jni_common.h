@@ -50,18 +50,14 @@ typedef struct {
 typedef struct {
     int reusable;
     int nbrOfAkeys;
-    int maxDkeyLen;
-    int maxAkeyLen;
+    uint16_t maxKeyLen;
     daos_iod_t *iods;
     d_sg_list_t *sgls;
     daos_recx_t *recxs;
     d_iov_t *iovs;
     daos_iod_type_t iod_type;
-    int record_size;
-    long desc_buf_addr;
-    int loc_offset;
-    int ret_offset;
-    long data_buf_addr;
+    uint16_t record_size;
+    uint64_t ret_buf_address;
 } data_desc_t;
 
 typedef struct {
@@ -75,7 +71,7 @@ typedef struct {
     d_sg_list_t *sgls;
     daos_recx_t *recxs;
     d_iov_t *iovs;
-    long ret_buf_address;
+    uint64_t ret_buf_address;
 } data_desc_simple_t;
 
 typedef struct {
