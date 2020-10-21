@@ -791,7 +791,6 @@ class DmgCommand(DmgCommandBase):
             #   ---- ----                                 --------------- -----
             #   0    385af2f9-1863-406c-ae94-bffdcd02f379 10.8.1.10:10001 Joined
             #   1    d7a69a41-59a2-4dec-a620-a52217851285 10.8.1.11:10001 Joined
-            print("stdout:\n{}".format(self.result.stdout))
             match = re.findall(
                 r"(\d+)\s+([0-9a-f-]+)\s+(.*)\s+([A-Za-z]+)(?:|\s+([A-Za-z]+))",
                 self.result.stdout)
@@ -812,6 +811,7 @@ class DmgCommand(DmgCommandBase):
             for info in match:
                 for rank in get_numeric_list(info[0]):
                     data[rank] = {"state": info[1]}
+        print("data: {}".format(data))
         return data
 
     def system_start(self):

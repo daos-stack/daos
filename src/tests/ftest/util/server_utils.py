@@ -642,7 +642,7 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed(
                 "Error obtaining {} output: {}".format(self.dmg, data))
         try:
-            states = list(set([rank["state"] for rank in data]))
+            states = list(set([data[rank]["state"] for rank in data]))
         except KeyError:
             raise ServerFailed(
                 "Unexpected result from {} - missing 'state' key: {}".format(
