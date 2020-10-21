@@ -34,6 +34,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
@@ -69,6 +70,12 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	}
 	if req.Nvmebytes != 0 && req.Nvmebytes < ioserver.NvmeMinBytesPerTarget*uint64(targetCount) {
 		return nil, FaultPoolNvmeTooSmall(req.Nvmebytes, targetCount)
+	}
+
+	allRanks := svc.membership.RankList()
+	reqRanks := system.RanksFromUint32(req.GetRanks())
+	if invalid := system.TestRankMembership(allRanks, reqRanks); len(invalid) > 0 {
+		return nil, FaultPoolInvalidRanks(invalid)
 	}
 
 	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolCreate, req)

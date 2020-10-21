@@ -38,6 +38,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
@@ -150,6 +151,16 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			},
 			expErr: FaultPoolNvmeTooSmall((ioserver.NvmeMinBytesPerTarget*8)-1, 8),
 		},
+		"failed creation invalid ranks": {
+			targetCount: 1,
+			req: &mgmtpb.PoolCreateReq{
+				Uuid:      common.MockUUID(0),
+				Scmbytes:  100 * humanize.GiByte,
+				Nvmebytes: 10 * humanize.TByte,
+				Ranks:     []uint32{40, 11},
+			},
+			expErr: FaultPoolInvalidRanks([]system.Rank{11, 40}),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -171,7 +182,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				}
 				harness.started.SetTrue()
 
-				tc.mgmtSvc = newMgmtSvc(harness, nil, nil)
+				tc.mgmtSvc = newMgmtSvc(harness, system.NewMembership(log), nil)
 			}
 			tc.mgmtSvc.log = log
 
