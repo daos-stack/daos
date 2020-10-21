@@ -177,7 +177,7 @@ func (c *ControlService) scanInstanceBdevs(ctx context.Context) (*bdev.ScanRespo
 				return nil, errors.Wrap(err, "nvme scan")
 			}
 
-			ctrlrs = append(ctrlrs, bsr.Controllers...)
+			ctrlrs = ctrlrs.Update(bsr.Controllers...)
 			continue
 		}
 
@@ -198,7 +198,7 @@ func (c *ControlService) scanInstanceBdevs(ctx context.Context) (*bdev.ScanRespo
 			return nil, errors.Wrap(err, "updating bdev health and smd info")
 		}
 
-		ctrlrs = append(ctrlrs, bsr.Controllers...)
+		ctrlrs = ctrlrs.Update(bsr.Controllers...)
 	}
 
 	return &bdev.ScanResponse{Controllers: ctrlrs}, nil

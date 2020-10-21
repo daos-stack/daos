@@ -24,6 +24,7 @@
 package bdev
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -177,30 +178,44 @@ func (resp *ScanResponse) filter(pciFilter ...string) *ScanResponse {
 // filtered by request "DeviceList" and empty filter implies allowing all.
 func (p *Provider) Scan(req ScanRequest) (resp *ScanResponse, err error) {
 	if p.shouldForward(req) {
+		var action string
 		req.DisableVMD = p.IsVMDDisabled()
 
 		p.Lock()
 		defer p.Unlock()
 		defer func() {
-			if resp == nil {
+			if err != nil {
 				return
 			}
+
+			msg := fmt.Sprintf("%s bdev scan cache (%d",
+				action, len(resp.Controllers))
+
+			if resp == nil {
+				p.log.Debugf("%s devices)", msg)
+				return
+			}
+
 			resp = resp.filter(req.DeviceList...)
+			p.log.Debugf("%s->%d filtered devices)", msg,
+				len(resp.Controllers))
 		}()
 
 		if req.NoCache {
+			action = "ignoring"
 			resp, err = p.fwd.Scan(req)
 			return
 		}
 
 		if p.scanCache != nil {
+			action = "returning"
 			resp = p.scanCache
 			return
 		}
 
 		resp, err = p.fwd.Scan(req)
 		if err == nil {
-			p.log.Debug("populating bdev scan cache")
+			action = "populating"
 			p.scanCache = resp
 		}
 
