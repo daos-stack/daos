@@ -82,7 +82,7 @@ enum bio_bs_state {
  * SPDK device health monitoring.
  */
 struct bio_dev_health {
-	struct nvme_health_stats	 bdh_health_state;
+	struct nvme_stats		 bdh_health_state;
 	/* writable open descriptor for health info polling */
 	struct spdk_bdev_desc		*bdh_desc;
 	struct spdk_io_channel		*bdh_io_channel;
