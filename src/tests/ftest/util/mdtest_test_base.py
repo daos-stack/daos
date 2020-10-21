@@ -60,11 +60,7 @@ class MdtestBase(DfuseTestBase):
         self.log.info('Servers %s', self.hostlist_servers)
 
     def execute_mdtest(self):
-        """Runner method for Mdtest.
-        Args:
-            create_cont (bool): Create container if true
-            oclass (string): Pass object class type for container create
-        """
+        """Runner method for Mdtest."""
         # Create a pool if one does not already exist
         if self.pool is None:
             self.add_pool(connect=False)

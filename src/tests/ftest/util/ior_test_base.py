@@ -163,7 +163,7 @@ class IorTestBase(DfuseTestBase):
 
     def update_ior_cmd_with_pool(self, create_cont=True, oclass=None):
         """Update ior_cmd with pool.
-        
+
         Args:
           create_cont (bool, optional): create a container. Defaults to True.
           oclass (string, optional): Specify object class
