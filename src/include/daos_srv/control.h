@@ -84,7 +84,7 @@ inline int
 copy_ascii(char *dst, size_t dst_sz, const void *src, size_t src_sz)
 {
 	const uint8_t	*str = src;
-	int		 i, len = src_sz - 1;
+	int		 i, len = src_sz;
 
 	assert(dst != NULL);
 	assert(src != NULL);
@@ -102,7 +102,7 @@ copy_ascii(char *dst, size_t dst_sz, const void *src, size_t src_sz)
 		else
 			dst[i] = '.';
 	}
-	dst[i] = '\0';
+	dst[len] = '\0';
 
 	return 0;
 }
