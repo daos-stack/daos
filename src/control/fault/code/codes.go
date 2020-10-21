@@ -135,6 +135,11 @@ const (
 	ServerConfigInvalidNetDevClass
 	ServerVfioDisabled
 	ServerConfigFaultDomainInvalid
+	ServerConfigFaultCallbackNotFound
+	ServerConfigFaultCallbackBadPerms
+	ServerConfigFaultCallbackFailed
+	ServerConfigBothFaultPathAndCb
+	ServerConfigFaultCallbackEmpty
 
 	// spdk library bindings codes
 	SpdkUnknown Code = iota + 700

@@ -257,8 +257,8 @@ test_run(void)
 		}
 	}
 
-	D_FREE(rank_list->rl_ranks);
-	D_FREE(rank_list);
+	d_rank_list_free(rank_list);
+	rank_list = NULL;
 
 	if (test_g.t_save_cfg) {
 		rc = crt_group_detach(grp);
