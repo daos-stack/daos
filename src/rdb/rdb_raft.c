@@ -58,7 +58,6 @@ static int rdb_raft_destroy_lc(daos_handle_t pool, daos_handle_t mc,
 			       struct rdb_lc_record *record);
 static void *rdb_raft_lookup_result(struct rdb *db, uint64_t index);
 static int rdb_raft_add_node(struct rdb *db, d_rank_t rank);
-static void rdb_raft_unload_replicas(struct rdb *db);
 
 /* Translate a raft error into an rdb error. */
 static inline int
@@ -321,7 +320,9 @@ rdb_raft_unload_replicas(struct rdb *db)
 		raft_remove_node(db->d_raft, node);
 		D_FREE(rdb_node);
 	}
+
 	d_rank_list_free(db->d_replicas);
+	db->d_replicas = NULL;
 }
 
 /* Load the LC base. */
@@ -2406,6 +2407,7 @@ rdb_raft_start(struct rdb *db)
 		goto err_raft;
 
 	d_rank_list_free(db->d_replicas);
+	db->d_replicas = NULL;
 	rc = rdb_raft_load_replicas(db, db->d_lc_record.dlr_tail - 1);
 	if (rc != 0 && rc != -DER_NONEXIST)
 		goto err_lc;
