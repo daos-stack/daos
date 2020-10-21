@@ -93,18 +93,22 @@ class DmgSystemReformatTest(TestWithServers):
 
         self.log.info("Check that new pool will fail with DER_NOSPACE")
         try:
-            pool = self.create_pool_at_capacity(0.7)
-        except TestFail as err:
-            self.log.info("Pool create failed: %s", str(err))
-            if pool.dmg.result.stderr:
-                if "DER_NOSPACE" not in pool.dmg.result.stderr:
-                    self.fail("Pool create did not fail do to DER_NOSPACE!")
+            self.create_pool_at_capacity(0.7)
+        except TestFail as error:
+            self.log.info("Pool create failed: %s", str(error))
+            if "DER_NOSPACE" not in str(error):
+                self.fail("Pool create did not fail do to DER_NOSPACE!")
 
         self.log.info("Stop running io_server instancess: 'dmg system stop'")
         self.get_dmg_command().system_stop(force=True)
         if self.get_dmg_command().result.exit_status != 0:
             self.fail("Detected issues performing a system stop: {}".format(
                 self.get_dmg_command().result.stderr))
+
+        # To verify that we are using the membership iformation instead of the
+        # dmg config explicit hostlist
+        self.assertTrue(
+            self.server_managers[-1].dmg.set_config_value("hostlist", None))
 
         self.log.info("Perform dmg storage format on all system ranks:")
         self.get_dmg_command().storage_format(reformat=True)
