@@ -156,6 +156,8 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.UpdateAclSubCommand()
             elif self.sub_command.value == "exclude":
                 self.sub_command_class = self.ExcludeSubCommand()
+            elif self.sub_command.value == "extend":
+                self.sub_command_class = self.ExtendSubCommand()
             elif self.sub_command.value == "drain":
                 self.sub_command_class = self.DrainSubCommand()
             elif self.sub_command.value == "reintegrate":
@@ -195,6 +197,20 @@ class DmgCommandBase(YamlCommand):
                 self.pool = FormattedParameter("--pool={}", None)
                 self.rank = FormattedParameter("--rank={}", None)
                 self.tgt_idx = FormattedParameter("--target-idx={}", None)
+
+        class ExtendSubCommand(CommandWithParameters):
+            """Defines an object for the dmg pool extend command."""
+
+            def __init__(self):
+                """Create a dmg pool extend command object."""
+                super(
+                    DmgCommandBase.PoolSubCommand.ExtendSubCommand,
+                    self).__init__(
+                        "/run/dmg/pool/extend/*", "extend")
+                self.pool = FormattedParameter("--pool={}", None)
+                self.ranks = FormattedParameter("--ranks={}", None)
+                self.scm_size = FormattedParameter("--scm-size={}", None)
+                self.nvme_size = FormattedParameter("--nvme-size={}", None)
 
         class DrainSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool drain command."""
