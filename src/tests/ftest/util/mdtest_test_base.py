@@ -25,7 +25,6 @@ from dfuse_test_base import DfuseTestBase
 from mpio_utils import MpioUtils
 from mdtest_utils import MdtestCommand
 from command_utils_base import CommandFailure
-from test_utils_container import TestContainer
 from job_manager_utils import Mpirun, Orterun
 
 
