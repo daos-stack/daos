@@ -160,61 +160,70 @@ func (svc *mgmtSvc) requestGroupUpdate(ctx context.Context) {
 }
 
 func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, lastMapVer uint32) (uint32, error) {
-	gm, err := svc.sysdb.GroupMap()
-	if err != nil {
-		return lastMapVer, err
-	}
-	if len(gm.RankURIs) == 0 {
-		return lastMapVer, system.ErrEmptyGroupMap
-	}
-
-	if gm.Version == lastMapVer {
-		svc.log.Debugf("doGroupUpdate map ver (%d == %d)", lastMapVer, gm.Version)
-		return lastMapVer, nil
-	}
-
-	req := &mgmtpb.GroupUpdateReq{
-		MapVersion: gm.Version,
-	}
-	rankSet := &system.RankSet{}
-	for rank, uri := range gm.RankURIs {
-		req.Servers = append(req.Servers, &mgmtpb.GroupUpdateReq_Server{
-			Rank: rank.Uint32(),
-			Uri:  uri,
-		})
-		if err := rankSet.Add(rank); err != nil {
-			return lastMapVer, errors.Wrap(err, "adding rank to set")
+	curMapVer := lastMapVer
+	// FIXME: Revisit the database locking scheme, but for the moment, run this
+	// whole group update logic under a lock so that we can't have a concurrent Join
+	// while it's running. This whole area needs to be reworked to properly support
+	// joining with MS service ranks on multiple replicas.
+	return curMapVer, svc.sysdb.RunWithLock(func(db *system.Database) error {
+		gm, err := db.GroupMap()
+		if err != nil {
+			return err
 		}
-	}
-
-	// NB: At this point, we need to return the current version instead of
-	// the last version, because the cart primary group may have been updated
-	// before the broadcast request failed. If we call this again with the same
-	// map version, the ioserver will trip an assertion. Longer-term, we need
-	// to separate the group update and broadcast steps as we had in the previous
-	// implementation.
-
-	svc.log.Debugf("group update request: version: %d, ranks: %s", req.MapVersion, rankSet)
-	dResp, err := svc.harness.CallDrpc(ctx, drpc.MethodGroupUpdate, req)
-	if err != nil {
-		svc.log.Errorf("dRPC GroupUpdate call failed: %s", err)
-		// ... except in the case where the instance isn't ready to accept dRPC
-		// calls. In this case, the group update can't have succeeded.
-		if err == instanceNotReady {
-			return lastMapVer, err
+		if len(gm.RankURIs) == 0 {
+			return system.ErrEmptyGroupMap
 		}
-		return gm.Version, err
-	}
 
-	resp := new(mgmtpb.GroupUpdateResp)
-	if err = proto.Unmarshal(dResp.Body, resp); err != nil {
-		return gm.Version, errors.Wrap(err, "unmarshal GroupUpdate response")
-	}
+		if gm.Version == lastMapVer {
+			svc.log.Debugf("doGroupUpdate map ver (%d == %d)", lastMapVer, gm.Version)
+			return nil
+		}
 
-	if resp.GetStatus() != 0 {
-		return gm.Version, drpc.DaosStatus(resp.GetStatus())
-	}
-	return gm.Version, nil
+		req := &mgmtpb.GroupUpdateReq{
+			MapVersion: gm.Version,
+		}
+		rankSet := &system.RankSet{}
+		for rank, uri := range gm.RankURIs {
+			req.Servers = append(req.Servers, &mgmtpb.GroupUpdateReq_Server{
+				Rank: rank.Uint32(),
+				Uri:  uri,
+			})
+			if err := rankSet.Add(rank); err != nil {
+				return errors.Wrap(err, "adding rank to set")
+			}
+		}
+
+		// NB: At this point, we need to return the current version instead of
+		// the last version, because the cart primary group may have been updated
+		// before the broadcast request failed. If we call this again with the same
+		// map version, the ioserver will trip an assertion. Longer-term, we need
+		// to separate the group update and broadcast steps as we had in the previous
+		// implementation.
+		curMapVer = gm.Version
+
+		svc.log.Debugf("group update request: version: %d, ranks: %s", req.MapVersion, rankSet)
+		dResp, err := svc.harness.CallDrpc(ctx, drpc.MethodGroupUpdate, req)
+		if err != nil {
+			// ... except in the case where the instance isn't ready to accept dRPC
+			// calls. In this case, the group update can't have succeeded.
+			if err == instanceNotReady {
+				curMapVer = lastMapVer
+				return err
+			}
+			svc.log.Errorf("dRPC GroupUpdate call failed: %s", err)
+			return err
+		}
+
+		resp := new(mgmtpb.GroupUpdateResp)
+		if err = proto.Unmarshal(dResp.Body, resp); err != nil {
+			return errors.Wrap(err, "unmarshal GroupUpdate response")
+		}
+
+		if resp.GetStatus() != 0 {
+			return drpc.DaosStatus(resp.GetStatus())
+		}
+		return nil
+	})
 }
 
 // Join management service gRPC handler receives Join requests from
