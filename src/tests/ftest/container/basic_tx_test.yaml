@@ -4,7 +4,7 @@ hosts:
   test_servers:
     - server-A
     - server-B
-timeout: 100
+timeout: 60
 faults: !mux
 # commenting out the fault injection bit
 # as it's still under development. Uncomment

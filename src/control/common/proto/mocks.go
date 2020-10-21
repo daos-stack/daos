@@ -50,11 +50,24 @@ func MockNvmeNamespace(varIdx ...int32) *ctlpb.NvmeController_Namespace {
 	return pb.AsProto()
 }
 
-// MockNvmeControllerHealth is a mock protobuf Health message used in tests for
+// MockSmdDevice is a mock protobuf SmdDevice message used in tests for
 // multiple packages.
-func MockNvmeControllerHealth(varIdx ...int32) *ctlpb.NvmeController_Health {
-	native := storage.MockNvmeControllerHealth(varIdx...)
-	pb := new(NvmeControllerHealth)
+func MockSmdDevice(varIdx ...int32) *ctlpb.NvmeController_SmdDevice {
+	native := storage.MockSmdDevice(varIdx...)
+	pb := new(SmdDevice)
+
+	if err := pb.FromNative(native); err != nil {
+		panic(err)
+	}
+
+	return pb.AsProto()
+}
+
+// MockNvmeHealth is a mock protobuf Health message used in tests for
+// multiple packages.
+func MockNvmeHealth(varIdx ...int32) *ctlpb.NvmeController_Health {
+	native := storage.MockNvmeHealth(varIdx...)
+	pb := new(NvmeHealth)
 
 	if err := pb.FromNative(native); err != nil {
 		panic(err)
@@ -74,21 +87,6 @@ func MockNvmeController(varIdx ...int32) *ctlpb.NvmeController {
 	}
 
 	return pb.AsProto()
-}
-
-// NewMockNvmeController generates specific protobuf controller message.
-func NewMockNvmeController(
-	pciAddr string, fwRev string, model string, serial string,
-	nss []*ctlpb.NvmeController_Namespace, hs *ctlpb.NvmeController_Health) *ctlpb.NvmeController {
-
-	return &ctlpb.NvmeController{
-		Model:       model,
-		Serial:      serial,
-		Pciaddr:     pciAddr,
-		Fwrev:       fwRev,
-		Namespaces:  nss,
-		Healthstats: hs,
-	}
 }
 
 // MockScmModule generates specific protobuf SCM module message used in tests
@@ -117,12 +115,21 @@ func MockScmNamespace(varIdx ...int32) *ctlpb.ScmNamespace {
 	return pb.AsProto()
 }
 
-// MockScmMount is a mock protobuf Mount message used in tests for
-// multiple packages.
-func MockScmMount() *ctlpb.ScmMount {
-	return &ctlpb.ScmMount{Mntpoint: "/mnt/daos"}
+// MockScmMountPoint generates specific protobuf SCM namespace mount message
+// used in tests for multiple packages.
+func MockScmMountPoint(varIdx ...int32) *ctlpb.ScmNamespace_Mount {
+	native := storage.MockScmMountPoint(varIdx...)
+	pb := new(ScmMountPoint)
+
+	if err := pb.FromNative(native); err != nil {
+		panic(err)
+	}
+
+	return pb.AsProto()
 }
 
+// MockPoolList returns a slice of mock protobuf Pool messages used in tests for
+// multiple packages.
 var MockPoolList = []*mgmtpb.ListPoolsResp_Pool{
 	{Uuid: "12345678-1234-1234-1234-123456789abc", Svcreps: []uint32{1, 2}},
 	{Uuid: "12345678-1234-1234-1234-cba987654321", Svcreps: []uint32{0}},

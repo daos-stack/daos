@@ -82,6 +82,7 @@ type Configuration struct {
 	HelperLogFile       string                    `yaml:"helper_log_file"`
 	FWHelperLogFile     string                    `yaml:"firmware_helper_log_file"`
 	RecreateSuperblocks bool                      `yaml:"recreate_superblocks"`
+	FaultPath           string                    `yaml:"fault_path"`
 
 	// duplicated in ioserver.Config
 	SystemName string                `yaml:"name"`
@@ -92,7 +93,6 @@ type Configuration struct {
 	AccessPoints []string `yaml:"access_points"`
 
 	// unused (?)
-	FaultPath    string `yaml:"fault_path"`
 	FaultCb      string `yaml:"fault_cb"`
 	Hyperthreads bool   `yaml:"hyperthreads"`
 

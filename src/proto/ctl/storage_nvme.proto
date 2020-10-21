@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,17 +31,9 @@ import "common.proto";
 
 // NvmeController represents an NVMe Controller (SSD).
 message NvmeController {
-	// Namespace represents a namespace created on an NvmeController.
-	message Namespace {
-		uint32 id = 1;		// namespace id
-		uint64 size = 2;	// device capacity in bytes
-		string ctrlrpciaddr = 3;
-	}
-
 	// Health mirrors bio_dev_state structure.
 	message Health {
 		uint64 timestamp = 1;
-		uint64 err_count = 2;
 		// Device health details
 		uint32 warn_temp_time = 3;
 		uint32 crit_temp_time = 4;
@@ -65,6 +57,24 @@ message NvmeController {
 		bool volatile_mem_warn = 20; // volatile memory backup
 	}
 
+	// Namespace represents a namespace created on an NvmeController.
+	message Namespace {
+		uint32 id = 1;			// namespace id
+		uint64 size = 2;		// device capacity in bytes
+		string ctrlrpciaddr = 3;	// parent controller PCI address
+	}
+
+	// SmdDevice represents a blobstore created on a NvmeController_Namespace.
+	// TODO: this should be embedded in Namespace above
+	message SmdDevice {
+		string uuid = 1;		// UUID of blobstore
+		repeated int32 tgt_ids = 2;	// VOS target IDs
+		string state = 3;		// NORMAL or FAULTY
+		uint32 rank = 4;		// DAOS I/O server using controller
+		uint64 total_bytes = 5;		// blobstore clusters total bytes
+		uint64 avail_bytes = 6;		// blobstore clusters available bytes
+	}
+
 	string model = 1;	// model name
 	string serial = 2;	// serial number
 	string pciaddr = 3;	// pci address
@@ -72,6 +82,7 @@ message NvmeController {
 	int32 socketid = 5;	// NUMA socket ID
 	Health healthstats = 6;	// controller's health stats
 	repeated Namespace namespaces = 7;	// controller's namespaces
+	repeated SmdDevice smddevices = 8;	// controller's blobstores
 }
 
 // NvmeControllerResult represents state of operation performed on controller.
@@ -91,7 +102,10 @@ message PrepareNvmeResp {
 	ResponseState state = 1;
 }
 
-message ScanNvmeReq {}
+message ScanNvmeReq {
+	bool Health = 1; // Retrieve NVMe device health statistics
+	bool Meta = 2; // Retrieve metadata relating to NVMe device.
+}
 
 message ScanNvmeResp {
 	repeated NvmeController ctrlrs = 1;

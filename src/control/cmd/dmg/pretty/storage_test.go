@@ -24,16 +24,18 @@
 package pretty
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -54,119 +56,973 @@ func mockHostStorageMap(t *testing.T, hosts ...*mockHostStorage) control.HostSto
 	return hsm
 }
 
-func TestPretty_PrintNVMeHealthMap(t *testing.T) {
+func TestControl_PrintStorageScanResponse(t *testing.T) {
 	var (
-		controllerA = storage.MockNvmeController(1)
-		controllerB = storage.MockNvmeController(2)
+		standardScan      = control.MockServerScanResp(t, "standard")
+		withNamespaceScan = control.MockServerScanResp(t, "withNamespace")
+		noNVMEScan        = control.MockServerScanResp(t, "noNVME")
+		noSCMScan         = control.MockServerScanResp(t, "noSCM")
+		noStorageScan     = control.MockServerScanResp(t, "noStorage")
+		scmScanFailed     = control.MockServerScanResp(t, "scmFailed")
+		nvmeScanFailed    = control.MockServerScanResp(t, "nvmeFailed")
+		bothScansFailed   = control.MockServerScanResp(t, "bothFailed")
 	)
+
 	for name, tc := range map[string]struct {
-		hsm         control.HostStorageMap
+		mic         *control.MockInvokerConfig
 		expPrintStr string
 	}{
-		"no devices": {
-			hsm: mockHostStorageMap(t, &mockHostStorage{"host1", &control.HostStorage{}}),
-			expPrintStr: `
------
-host1
------
-  No NVMe devices detected
-`,
+		"empty response": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{},
+			},
 		},
-		"1 host; 2 devices": {
-			hsm: mockHostStorageMap(t,
-				&mockHostStorage{
-					"host1",
-					&control.HostStorage{
-						NvmeDevices: storage.NvmeControllers{
-							controllerA,
-							controllerB,
+		"server error": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:  "host1",
+							Error: errors.New("failed"),
 						},
 					},
 				},
-			),
-			expPrintStr: fmt.Sprintf(`
------
-host1
------
-PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
-  Health Stats:
-    Temperature:%dK(%.02fC)
-    Temperature Warning Duration:%dm0s
-    Temperature Critical Duration:%dm0s
-    Controller Busy Time:%dm0s
-    Power Cycles:%d
-    Power On Duration:%s
-    Unsafe Shutdowns:%d
-    Error Count:%d
-    Media Errors:%d
-    Read Errors:%d
-    Write Errors:%d
-    Unmap Errors:%d
-    Checksum Errors:%d
-    Error Log Entries:%d
-  Critical Warnings:
-    Temperature: WARNING
-    Available Spare: WARNING
-    Device Reliability: WARNING
-    Read Only: WARNING
-    Volatile Memory Backup: WARNING
-
-PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
-  Health Stats:
-    Temperature:%dK(%.02fC)
-    Temperature Warning Duration:%dm0s
-    Temperature Critical Duration:%dm0s
-    Controller Busy Time:%dm0s
-    Power Cycles:%d
-    Power On Duration:%s
-    Unsafe Shutdowns:%d
-    Error Count:%d
-    Media Errors:%d
-    Read Errors:%d
-    Write Errors:%d
-    Unmap Errors:%d
-    Checksum Errors:%d
-    Error Log Entries:%d
-  Critical Warnings:
-    Temperature: WARNING
-    Available Spare: WARNING
-    Device Reliability: WARNING
-    Read Only: WARNING
-    Volatile Memory Backup: WARNING
+			},
+			expPrintStr: `
+Errors:
+  Hosts Error  
+  ----- -----  
+  host1 failed 
 
 `,
-				controllerA.PciAddr, controllerA.Model, controllerA.FwRev, controllerA.SocketID,
-				humanize.Bytes(controllerA.Capacity()),
-				controllerA.HealthStats.TempK(), controllerA.HealthStats.TempC(),
-				controllerA.HealthStats.TempWarnTime, controllerA.HealthStats.TempCritTime,
-				controllerA.HealthStats.CtrlBusyTime, controllerA.HealthStats.PowerCycles,
-				time.Duration(controllerA.HealthStats.PowerOnHours)*time.Hour,
-				controllerA.HealthStats.UnsafeShutdowns, controllerA.HealthStats.ErrorCount,
-				controllerA.HealthStats.MediaErrors, controllerA.HealthStats.ReadErrors,
-				controllerA.HealthStats.WriteErrors, controllerA.HealthStats.UnmapErrors,
-				controllerA.HealthStats.ChecksumErrors, controllerA.HealthStats.ErrorLogEntries,
+		},
+		"scm scan error": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: scmScanFailed,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Errors:
+  Hosts Error           
+  ----- -----           
+  host1 scm scan failed 
 
-				controllerB.PciAddr, controllerB.Model, controllerB.FwRev, controllerB.SocketID,
-				humanize.Bytes(controllerB.Capacity()),
-				controllerB.HealthStats.TempK(), controllerB.HealthStats.TempC(),
-				controllerB.HealthStats.TempWarnTime, controllerB.HealthStats.TempCritTime,
-				controllerB.HealthStats.CtrlBusyTime, controllerB.HealthStats.PowerCycles,
-				time.Duration(controllerB.HealthStats.PowerOnHours)*time.Hour,
-				controllerB.HealthStats.UnsafeShutdowns, controllerB.HealthStats.ErrorCount,
-				controllerB.HealthStats.MediaErrors, controllerB.HealthStats.ReadErrors,
-				controllerB.HealthStats.WriteErrors, controllerB.HealthStats.UnmapErrors,
-				controllerB.HealthStats.ChecksumErrors, controllerB.HealthStats.ErrorLogEntries,
-			),
+Hosts SCM Total       NVMe Total         
+----- ---------       ----------         
+host1 0 B (0 modules) 1 B (1 controller) 
+`,
+		},
+		"nvme scan error": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: nvmeScanFailed,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Errors:
+  Hosts Error            
+  ----- -----            
+  host1 nvme scan failed 
+
+Hosts SCM Total      NVMe Total          
+----- ---------      ----------          
+host1 1 B (1 module) 0 B (0 controllers) 
+`,
+		},
+		"scm and nvme scan error": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1:1",
+							Message: bothScansFailed,
+						},
+						{
+							Addr:    "host2:1",
+							Message: bothScansFailed,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Errors:
+  Hosts     Error            
+  -----     -----            
+  host[1-2] nvme scan failed 
+  host[1-2] scm scan failed  
+
+Hosts     SCM Total       NVMe Total          
+-----     ---------       ----------          
+host[1-2] 0 B (0 modules) 0 B (0 controllers) 
+`,
+		},
+		"no storage": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: noStorageScan,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Hosts SCM Total       NVMe Total          
+----- ---------       ----------          
+host1 0 B (0 modules) 0 B (0 controllers) 
+`,
+		},
+		"single host": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: standardScan,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Hosts SCM Total      NVMe Total         
+----- ---------      ----------         
+host1 1 B (1 module) 1 B (1 controller) 
+`,
+		},
+		"single host with namespace": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: withNamespaceScan,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Hosts SCM Total         NVMe Total         
+----- ---------         ----------         
+host1 1 B (1 namespace) 1 B (1 controller) 
+`,
+		},
+		"two hosts same scan": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: standardScan,
+						},
+						{
+							Addr:    "host2",
+							Message: standardScan,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Hosts     SCM Total      NVMe Total         
+-----     ---------      ----------         
+host[1-2] 1 B (1 module) 1 B (1 controller) 
+`,
+		},
+		"two hosts different scans": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: noNVMEScan,
+						},
+						{
+							Addr:    "host2",
+							Message: noSCMScan,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Hosts SCM Total       NVMe Total          
+----- ---------       ----------          
+host1 1 B (1 module)  0 B (0 controllers) 
+host2 0 B (0 modules) 1 B (1 controller)  
+`,
+		},
+		"1024 hosts same scan": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: control.MockHostResponses(t,
+						1024, "host%000d", standardScan),
+				},
+			},
+			expPrintStr: `
+Hosts        SCM Total      NVMe Total         
+-----        ---------      ----------         
+host[0-1023] 1 B (1 module) 1 B (1 controller) 
+`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			ctx := context.TODO()
+			mi := control.NewMockInvoker(log, tc.mic)
+
+			resp, err := control.StorageScan(ctx, mi, &control.StorageScanReq{})
+			if err != nil {
+				t.Fatal(err)
+			}
+
 			var bld strings.Builder
-			if err := PrintNvmeHealthMap(tc.hsm, &bld); err != nil {
+			if err := PrintResponseErrors(resp, &bld); err != nil {
+				t.Fatal(err)
+			}
+			if err := PrintHostStorageMap(resp.HostStorage, &bld); err != nil {
 				t.Fatal(err)
 			}
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
-				t.Fatalf("unexpected print output (-want, +got):\n%s\n", diff)
+				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_PrintStorageUsageScanResponse(t *testing.T) {
+	var (
+		withSpaceUsageScan = control.MockServerScanResp(t, "withSpaceUsage")
+		noStorageScan      = control.MockServerScanResp(t, "noStorage")
+		bothScansFailed    = control.MockServerScanResp(t, "bothFailed")
+	)
+
+	for name, tc := range map[string]struct {
+		mic         *control.MockInvokerConfig
+		expPrintStr string
+	}{
+		"empty response": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{},
+			},
+		},
+		"server error": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:  "host1",
+							Error: errors.New("failed"),
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Errors:
+  Hosts Error  
+  ----- -----  
+  host1 failed 
+
+`,
+		},
+		"scm and nvme scan error": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1:1",
+							Message: bothScansFailed,
+						},
+						{
+							Addr:    "host2:1",
+							Message: bothScansFailed,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Errors:
+  Hosts     Error            
+  -----     -----            
+  host[1-2] nvme scan failed 
+  host[1-2] scm scan failed  
+
+Hosts     SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used 
+-----     --------- -------- -------- ---------- --------- --------- 
+host[1-2] 0 B       0 B      N/A      0 B        0 B       N/A       
+`,
+		},
+		"no storage": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: noStorageScan,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Hosts SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used 
+----- --------- -------- -------- ---------- --------- --------- 
+host1 0 B       0 B      N/A      0 B        0 B       N/A       
+`,
+		},
+		"single host with space usage": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: withSpaceUsageScan,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Hosts SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used 
+----- --------- -------- -------- ---------- --------- --------- 
+host1 3.0 TB    750 GB   75 %     36 TB      27 TB     25 %      
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			ctx := context.TODO()
+			mi := control.NewMockInvoker(log, tc.mic)
+
+			resp, err := control.StorageScan(ctx, mi, &control.StorageScanReq{})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			var bld strings.Builder
+			if err := PrintResponseErrors(resp, &bld); err != nil {
+				t.Fatal(err)
+			}
+			if err := PrintHostStorageUsageMap(resp.HostStorage, &bld); err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_PrintStorageScanResponseVerbose(t *testing.T) {
+	var (
+		standardScan      = control.MockServerScanResp(t, "standard")
+		withNamespaceScan = control.MockServerScanResp(t, "withNamespace")
+		noNVMEScan        = control.MockServerScanResp(t, "noNVME")
+		noSCMScan         = control.MockServerScanResp(t, "noSCM")
+		noStorageScan     = control.MockServerScanResp(t, "noStorage")
+		scmScanFailed     = control.MockServerScanResp(t, "scmFailed")
+		nvmeScanFailed    = control.MockServerScanResp(t, "nvmeFailed")
+		bothScansFailed   = control.MockServerScanResp(t, "bothFailed")
+	)
+
+	for name, tc := range map[string]struct {
+		mic         *control.MockInvokerConfig
+		expPrintStr string
+	}{
+		"empty response": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{},
+			},
+		},
+		"server error": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:  "host1",
+							Error: errors.New("failed"),
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Errors:
+  Hosts Error  
+  ----- -----  
+  host1 failed 
+
+`,
+		},
+		"scm scan error": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: scmScanFailed,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Errors:
+  Hosts Error           
+  ----- -----           
+  host1 scm scan failed 
+
+-----
+host1
+-----
+	No SCM modules found
+
+NVMe PCI     Model   FW Revision Socket ID Capacity 
+--------     -----   ----------- --------- -------- 
+0000:80:00.1 model-1 fwRev-1     1         1 B      
+
+`,
+		},
+		"nvme scan error": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: nvmeScanFailed,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Errors:
+  Hosts Error            
+  ----- -----            
+  host1 nvme scan failed 
+
+-----
+host1
+-----
+SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
+------------- --------- --------------- ---------- ------------ -------- 
+1             1         1               1          1            1 B      
+
+	No NVMe devices found
+
+`,
+		},
+		"scm and nvme scan error": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1:1",
+							Message: bothScansFailed,
+						},
+						{
+							Addr:    "host2:1",
+							Message: bothScansFailed,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Errors:
+  Hosts     Error            
+  -----     -----            
+  host[1-2] nvme scan failed 
+  host[1-2] scm scan failed  
+
+---------
+host[1-2]
+---------
+	No SCM modules found
+
+	No NVMe devices found
+
+`,
+		},
+		"no storage": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: noStorageScan,
+						},
+						{
+							Addr:    "host2",
+							Message: noStorageScan,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+---------
+host[1-2]
+---------
+	No SCM modules found
+
+	No NVMe devices found
+
+`,
+		},
+		"single host": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: standardScan,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+-----
+host1
+-----
+SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
+------------- --------- --------------- ---------- ------------ -------- 
+1             1         1               1          1            1 B      
+
+NVMe PCI     Model   FW Revision Socket ID Capacity 
+--------     -----   ----------- --------- -------- 
+0000:80:00.1 model-1 fwRev-1     1         1 B      
+
+`,
+		},
+		"single host with namespace": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: withNamespaceScan,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+-----
+host1
+-----
+SCM Namespace Socket ID Capacity 
+------------- --------- -------- 
+pmem1         1         1 B      
+
+NVMe PCI     Model   FW Revision Socket ID Capacity 
+--------     -----   ----------- --------- -------- 
+0000:80:00.1 model-1 fwRev-1     1         1 B      
+
+`,
+		},
+		"two hosts same scan": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: standardScan,
+						},
+						{
+							Addr:    "host2",
+							Message: standardScan,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+---------
+host[1-2]
+---------
+SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
+------------- --------- --------------- ---------- ------------ -------- 
+1             1         1               1          1            1 B      
+
+NVMe PCI     Model   FW Revision Socket ID Capacity 
+--------     -----   ----------- --------- -------- 
+0000:80:00.1 model-1 fwRev-1     1         1 B      
+
+`,
+		},
+		"two hosts different scans": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: noNVMEScan,
+						},
+						{
+							Addr:    "host2",
+							Message: noSCMScan,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+-----
+host1
+-----
+SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
+------------- --------- --------------- ---------- ------------ -------- 
+1             1         1               1          1            1 B      
+
+	No NVMe devices found
+
+-----
+host2
+-----
+	No SCM modules found
+
+NVMe PCI     Model   FW Revision Socket ID Capacity 
+--------     -----   ----------- --------- -------- 
+0000:80:00.1 model-1 fwRev-1     1         1 B      
+
+`,
+		},
+		"1024 hosts same scan": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: control.MockHostResponses(t,
+						1024, "host%000d", standardScan),
+				},
+			},
+			expPrintStr: `
+------------
+host[0-1023]
+------------
+SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
+------------- --------- --------------- ---------- ------------ -------- 
+1             1         1               1          1            1 B      
+
+NVMe PCI     Model   FW Revision Socket ID Capacity 
+--------     -----   ----------- --------- -------- 
+0000:80:00.1 model-1 fwRev-1     1         1 B      
+
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			ctx := context.TODO()
+			mi := control.NewMockInvoker(log, tc.mic)
+
+			resp, err := control.StorageScan(ctx, mi, &control.StorageScanReq{})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			var bld strings.Builder
+			if err := PrintResponseErrors(resp, &bld); err != nil {
+				t.Fatal(err)
+			}
+			if err := PrintHostStorageMap(resp.HostStorage, &bld, PrintWithVerboseOutput(true)); err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_PrintStorageFormatResponse(t *testing.T) {
+	for name, tc := range map[string]struct {
+		resp        *control.StorageFormatResp
+		expPrintStr string
+	}{
+		"empty response": {
+			resp: &control.StorageFormatResp{},
+		},
+		"server error": {
+			resp: &control.StorageFormatResp{
+				HostErrorsResp: control.MockHostErrorsResp(t,
+					&control.MockHostError{Hosts: "host1", Error: "failed"}),
+			},
+			expPrintStr: `
+Errors:
+  Hosts Error  
+  ----- -----  
+  host1 failed 
+
+`,
+		},
+		"2 SCM, 2 NVMe; first SCM fails": {
+			resp: control.MockFormatResp(t, control.MockFormatConf{
+				Hosts:       1,
+				ScmPerHost:  2,
+				ScmFailures: control.MockFailureMap(0),
+				NvmePerHost: 2,
+			}),
+			expPrintStr: `
+Errors:
+  Hosts Error                
+  ----- -----                
+  host1 /mnt/1 format failed 
+
+Format Summary:
+  Hosts SCM Devices NVMe Devices 
+  ----- ----------- ------------ 
+  host1 1           1            
+`,
+		},
+		"2 SCM, 2 NVMe; second NVMe fails": {
+			resp: control.MockFormatResp(t, control.MockFormatConf{
+				Hosts:        1,
+				ScmPerHost:   2,
+				NvmePerHost:  2,
+				NvmeFailures: control.MockFailureMap(1),
+			}),
+			expPrintStr: `
+Errors:
+  Hosts Error                       
+  ----- -----                       
+  host1 NVMe device 2 format failed 
+
+Format Summary:
+  Hosts SCM Devices NVMe Devices 
+  ----- ----------- ------------ 
+  host1 2           1            
+`,
+		},
+		"2 SCM, 2 NVMe": {
+			resp: control.MockFormatResp(t, control.MockFormatConf{
+				Hosts:       1,
+				ScmPerHost:  2,
+				NvmePerHost: 2,
+			}),
+			expPrintStr: `
+
+Format Summary:
+  Hosts SCM Devices NVMe Devices 
+  ----- ----------- ------------ 
+  host1 2           2            
+`,
+		},
+		"2 Hosts, 2 SCM, 2 NVMe; first SCM fails": {
+			resp: control.MockFormatResp(t, control.MockFormatConf{
+				Hosts:       2,
+				ScmPerHost:  2,
+				ScmFailures: control.MockFailureMap(0),
+				NvmePerHost: 2,
+			}),
+			expPrintStr: `
+Errors:
+  Hosts     Error                
+  -----     -----                
+  host[1-2] /mnt/1 format failed 
+
+Format Summary:
+  Hosts     SCM Devices NVMe Devices 
+  -----     ----------- ------------ 
+  host[1-2] 1           1            
+`,
+		},
+		"2 Hosts, 2 SCM, 2 NVMe": {
+			resp: control.MockFormatResp(t, control.MockFormatConf{
+				Hosts:       2,
+				ScmPerHost:  2,
+				NvmePerHost: 2,
+			}),
+			expPrintStr: `
+
+Format Summary:
+  Hosts     SCM Devices NVMe Devices 
+  -----     ----------- ------------ 
+  host[1-2] 2           2            
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var bld strings.Builder
+			if err := PrintResponseErrors(tc.resp, &bld); err != nil {
+				t.Fatal(err)
+			}
+			if err := PrintStorageFormatMap(tc.resp.HostStorage, &bld); err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_PrintStorageFormatResponseVerbose(t *testing.T) {
+	for name, tc := range map[string]struct {
+		resp        *control.StorageFormatResp
+		expPrintStr string
+	}{
+		"empty response": {
+			resp: &control.StorageFormatResp{},
+		},
+		"server error": {
+			resp: &control.StorageFormatResp{
+				HostErrorsResp: control.MockHostErrorsResp(t,
+					&control.MockHostError{Hosts: "host1", Error: "failed"}),
+			},
+			expPrintStr: `
+Errors:
+  Hosts Error  
+  ----- -----  
+  host1 failed 
+
+`,
+		},
+		"2 SCM, 2 NVMe; first SCM fails": {
+			resp: control.MockFormatResp(t, control.MockFormatConf{
+				Hosts:       1,
+				ScmPerHost:  2,
+				ScmFailures: control.MockFailureMap(0),
+				NvmePerHost: 2,
+			}),
+			expPrintStr: `
+Errors:
+  Hosts Error                
+  ----- -----                
+  host1 /mnt/1 format failed 
+
+-----
+host1
+-----
+SCM Mount Format Result 
+--------- ------------- 
+/mnt/2    CTL_SUCCESS   
+
+NVMe PCI Format Result 
+-------- ------------- 
+2        CTL_SUCCESS   
+
+`,
+		},
+		"2 SCM, 2 NVMe; second NVMe fails": {
+			resp: control.MockFormatResp(t, control.MockFormatConf{
+				Hosts:        1,
+				ScmPerHost:   2,
+				NvmePerHost:  2,
+				NvmeFailures: control.MockFailureMap(1),
+			}),
+			expPrintStr: `
+Errors:
+  Hosts Error                       
+  ----- -----                       
+  host1 NVMe device 2 format failed 
+
+-----
+host1
+-----
+SCM Mount Format Result 
+--------- ------------- 
+/mnt/1    CTL_SUCCESS   
+/mnt/2    CTL_SUCCESS   
+
+NVMe PCI Format Result 
+-------- ------------- 
+1        CTL_SUCCESS   
+
+`,
+		},
+		"2 SCM, 2 NVMe": {
+			resp: control.MockFormatResp(t, control.MockFormatConf{
+				Hosts:       1,
+				ScmPerHost:  2,
+				NvmePerHost: 2,
+			}),
+			expPrintStr: `
+
+-----
+host1
+-----
+SCM Mount Format Result 
+--------- ------------- 
+/mnt/1    CTL_SUCCESS   
+/mnt/2    CTL_SUCCESS   
+
+NVMe PCI Format Result 
+-------- ------------- 
+1        CTL_SUCCESS   
+2        CTL_SUCCESS   
+
+`,
+		},
+		"2 Hosts, 2 SCM, 2 NVMe; first SCM fails": {
+			resp: control.MockFormatResp(t, control.MockFormatConf{
+				Hosts:       2,
+				ScmPerHost:  2,
+				ScmFailures: control.MockFailureMap(0),
+				NvmePerHost: 2,
+			}),
+			expPrintStr: `
+Errors:
+  Hosts     Error                
+  -----     -----                
+  host[1-2] /mnt/1 format failed 
+
+---------
+host[1-2]
+---------
+SCM Mount Format Result 
+--------- ------------- 
+/mnt/2    CTL_SUCCESS   
+
+NVMe PCI Format Result 
+-------- ------------- 
+2        CTL_SUCCESS   
+
+`,
+		},
+		"2 Hosts, 2 SCM, 2 NVMe": {
+			resp: control.MockFormatResp(t, control.MockFormatConf{
+				Hosts:       2,
+				ScmPerHost:  2,
+				NvmePerHost: 2,
+			}),
+			expPrintStr: `
+
+---------
+host[1-2]
+---------
+SCM Mount Format Result 
+--------- ------------- 
+/mnt/1    CTL_SUCCESS   
+/mnt/2    CTL_SUCCESS   
+
+NVMe PCI Format Result 
+-------- ------------- 
+1        CTL_SUCCESS   
+2        CTL_SUCCESS   
+
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var bld strings.Builder
+			if err := PrintResponseErrors(tc.resp, &bld); err != nil {
+				t.Fatal(err)
+			}
+			if err := PrintStorageFormatMap(tc.resp.HostStorage, &bld, PrintWithVerboseOutput(true)); err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
@@ -178,7 +1034,7 @@ func TestPretty_PrintSmdInfoMap(t *testing.T) {
 	for name, tc := range map[string]struct {
 		req         *control.SmdQueryReq
 		hsm         control.HostStorageMap
-		opts        []control.PrintConfigOption
+		opts        []PrintConfigOption
 		expPrintStr string
 	}{
 		"list-pools (standard)": {
@@ -225,7 +1081,7 @@ host1
 			req: &control.SmdQueryReq{
 				OmitDevices: true,
 			},
-			opts: []control.PrintConfigOption{control.PrintWithVerboseOutput(true)},
+			opts: []PrintConfigOption{PrintWithVerboseOutput(true)},
 			hsm: mockHostStorageMap(t,
 				&mockHostStorage{
 					"host1",
@@ -291,7 +1147,7 @@ host1
 					"host1",
 					&control.HostStorage{
 						SmdInfo: &control.SmdInfo{
-							Devices: []*control.SmdDevice{
+							Devices: []*storage.SmdDevice{
 								{
 									UUID:      common.MockUUID(0),
 									TargetIDs: []int32{0, 1, 2},
@@ -346,7 +1202,7 @@ host1
 					"host1",
 					&control.HostStorage{
 						SmdInfo: &control.SmdInfo{
-							Devices: []*control.SmdDevice{
+							Devices: []*storage.SmdDevice{
 								{
 									UUID:      common.MockUUID(0),
 									TargetIDs: []int32{0, 1, 2},
@@ -373,12 +1229,7 @@ host1
         Power Cycles:%d
         Power On Duration:%s
         Unsafe Shutdowns:%d
-        Error Count:%d
         Media Errors:%d
-        Read Errors:%d
-        Write Errors:%d
-        Unmap Errors:%d
-        Checksum Errors:%d
         Error Log Entries:%d
       Critical Warnings:
         Temperature: WARNING
@@ -392,10 +1243,8 @@ host1
 				mockController.HealthStats.TempWarnTime, mockController.HealthStats.TempCritTime,
 				mockController.HealthStats.CtrlBusyTime, mockController.HealthStats.PowerCycles,
 				time.Duration(mockController.HealthStats.PowerOnHours)*time.Hour,
-				mockController.HealthStats.UnsafeShutdowns, mockController.HealthStats.ErrorCount,
-				mockController.HealthStats.MediaErrors, mockController.HealthStats.ReadErrors,
-				mockController.HealthStats.WriteErrors, mockController.HealthStats.UnmapErrors,
-				mockController.HealthStats.ChecksumErrors, mockController.HealthStats.ErrorLogEntries,
+				mockController.HealthStats.UnsafeShutdowns, mockController.HealthStats.MediaErrors,
+				mockController.HealthStats.ErrorLogEntries,
 			),
 		},
 	} {

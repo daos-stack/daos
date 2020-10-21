@@ -155,7 +155,35 @@ dc_rw_cb_singv_lo_get(daos_iod_t *iods, d_sg_list_t *sgls, uint32_t iod_nr,
 	return singv_los;
 }
 
-int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
+static int
+dc_rw_cb_iod_sgl_copy(daos_iod_t *iod, d_sg_list_t *sgl, daos_iod_t *cp_iod,
+		      d_sg_list_t *cp_sgl, struct obj_shard_iod *siod,
+		      uint64_t off)
+{
+	struct daos_sgl_idx	sgl_idx = {0};
+	int			rc;
+
+	cp_iod->iod_recxs = &iod->iod_recxs[siod->siod_idx];
+	cp_iod->iod_nr = siod->siod_nr;
+
+	rc = daos_sgl_processor(sgl, false, &sgl_idx, off, NULL, NULL);
+	if (rc)
+		return rc;
+
+	if (sgl_idx.iov_idx >= sgl->sg_nr || sgl_idx.iov_offset != 0) {
+		D_ERROR("bad sgl/siod, iov_idx %d, iov_offset "DF_U64
+			", offset "DF_U64", tgt_idx %d\n", sgl_idx.iov_idx,
+			sgl_idx.iov_offset, off, siod->siod_tgt_idx);
+		return -DER_IO;
+	}
+	cp_sgl->sg_iovs = &sgl->sg_iovs[sgl_idx.iov_idx];
+	cp_sgl->sg_nr = sgl->sg_nr - sgl_idx.iov_idx;
+
+	return 0;
+}
+
+static int
+dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 {
 	struct daos_csummer	*csummer;
 	struct daos_csummer	*csummer_copy = NULL;
@@ -166,6 +194,7 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	struct dcs_iod_csums	*iods_csums;
 	daos_iom_t		*maps;
 	struct dcs_layout	*singv_lo, *singv_los;
+	struct obj_io_desc	*oiods;
 	uint32_t		 shard_idx;
 	int			 i;
 	int			 rc = 0;
@@ -185,6 +214,7 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	orwo = crt_reply_get(rw_args->rpc);
 	sgls = rw_args->rwaa_sgls;
 	iods = orw->orw_iod_array.oia_iods;
+	oiods = rw_args->shard_args->oiods;
 	iods_csums = orwo->orw_iod_csums.ca_arrays;
 	maps = orwo->orw_maps.ca_arrays;
 
@@ -211,16 +241,31 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 					  rw_args->shard_args->reasb_req);
 	for (i = 0; i < orw->orw_nr; i++) {
 		daos_iod_t		*iod = &iods[i];
+		daos_iod_t		 shard_iod = *iod;
+		d_sg_list_t		 shard_sgl = sgls[i];
 		struct dcs_iod_csums	*iod_csum = &iods_csums[i];
 		daos_iom_t		*map = &maps[i];
 
 		if (!csum_iod_is_supported(iod))
 			continue;
 
+		if (iod->iod_type == DAOS_IOD_ARRAY && oiods != NULL) {
+			rc = dc_rw_cb_iod_sgl_copy(iod, &sgls[i], &shard_iod,
+					&shard_sgl, &oiods->oiod_siods[i],
+					rw_args->shard_args->offs[i]);
+			if (rc != 0) {
+				D_ERROR("dc_rw_cb_iod_sgl_copy failed (object: "
+					DF_OID"): "DF_RC"\n",
+					DP_OID(orw->orw_oid.id_pub),
+					DP_RC(rc));
+				break;
+			}
+		}
+
 		singv_lo = (singv_los == NULL) ? NULL : &singv_los[i];
-		rc = daos_csummer_verify_iod(csummer_copy, iod, &sgls[i],
-					     iod_csum, singv_lo, shard_idx,
-					     map);
+		rc = daos_csummer_verify_iod(csummer_copy, &shard_iod,
+					     &shard_sgl, iod_csum, singv_lo,
+					     shard_idx, map);
 		if (rc != 0) {
 			if (iod->iod_type == DAOS_IOD_SINGLE) {
 				D_ERROR("Data Verification failed (object: "
@@ -295,6 +340,11 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		D_GOTO(out, rc = -DER_NOSPACE);
 	}
 
+	if (DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_RW_DROP_REPLY)) {
+		D_ERROR("Drop RPC for shard I/O update\n");
+		D_GOTO(out, rc = -DER_HG);
+	}
+
 	orw = crt_req_get(rw_args->rpc);
 	orwo = crt_reply_get(rw_args->rpc);
 	D_ASSERT(orw != NULL && orwo != NULL);
@@ -334,6 +384,9 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				"need retry: "DF_RC"\n", rw_args->rpc, opc,
 				rw_args->rpc->cr_ep.ep_rank,
 				rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
+		} else if (rc == -DER_STALE) {
+			D_INFO("rpc %p got DER_STALE, pool map update needed\n",
+			       rw_args->rpc);
 		} else {
 			/*
 			 * don't log errors in-case of possible conditionals or
@@ -1056,6 +1109,15 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: "
 				""DF_RC"\n", enum_args->rpc, opc, DP_RC(rc));
 		} else {
+			if (enum_args->eaa_obj) {
+				struct dc_obj_shard *shard;
+
+				shard = enum_args->eaa_obj;
+				shard->do_pl_shard.po_target = -1;
+				D_ERROR(DF_OID" set shard %d invalid.\n",
+					DP_OID(shard->do_id.id_pub),
+					shard->do_pl_shard.po_shard);
+			}
 			D_ERROR("rpc %p RPC %d failed: "DF_RC"\n",
 				enum_args->rpc, opc, DP_RC(rc));
 		}

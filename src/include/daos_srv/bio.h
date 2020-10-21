@@ -340,6 +340,21 @@ int bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
  */
 void bio_nvme_fini(void);
 
+enum {
+	/* Notify BIO that all xsxtream contexts created */
+	BIO_CTL_NOTIFY_STARTED	= 0,
+};
+
+/**
+ * Manipulate global NVMe configuration/state.
+ *
+ * \param[IN] cmd	Ctl command
+ * \param[IN] arg	Ctl argument
+ *
+ * \return		Zero on success, negative value on error
+ */
+int bio_nvme_ctl(unsigned int cmd, void *arg);
+
 /*
  * Initialize SPDK env and per-xstream NVMe context.
  *
@@ -580,7 +595,7 @@ bio_yield(void)
  *
  * \return			Zero on success, negative value on error
  */
-int bio_get_dev_state(struct nvme_health_stats *dev_state,
+int bio_get_dev_state(struct nvme_stats *dev_state,
 		      struct bio_xs_context *xs);
 
 /*

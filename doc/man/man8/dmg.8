@@ -1,4 +1,4 @@
-.TH dmg 1 "28 August 2020"
+.TH dmg 1 "8 October 2020"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -414,6 +414,11 @@ Server rank hosting target
 .TP
 \fB\fB\-t\fR, \fB\-\-tgtid\fR (\fIrequired\fR)\fP
 VOS target ID to query
+.SS storage query usage
+Show SCM & NVMe storage space utilization per storage server
+
+\fBAliases\fP: u
+
 .SS storage scan
 Scan SCM and NVMe storage attached to remote servers.
 
@@ -428,6 +433,9 @@ List SCM & NVMe device details
 .TP
 \fB\fB\-n\fR, \fB\-\-nvme-health\fR\fP
 Display NVMe device health statistics
+.TP
+\fB\fB\-m\fR, \fB\-\-nvme-meta\fR\fP
+Display server meta data held on NVMe storage
 .SS storage set
 Manually set the device state.
 

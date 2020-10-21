@@ -39,7 +39,7 @@ from daos_racer_utils import DaosRacerCommand
 
 try:
     # python 3.x
-    import queue as queue
+    import queue
 except ImportError:
     # python 2.7
     import Queue as queue
@@ -47,12 +47,14 @@ except ImportError:
 
 class OSAOnlineReintegration(TestWithServers):
     # pylint: disable=too-many-ancestors
-    """
-    Test Class Description: This test runs
-    daos_server Online reintegration test cases.
+    """Online Server Addition online re-integration test class.
+
+    Test Class Description:
+        This test runs the daos_server Online reintegration test cases.
 
     :avocado: recursive
     """
+
     def setUp(self):
         """Set up for test case."""
         super(OSAOnlineReintegration, self).setUp()
@@ -62,10 +64,10 @@ class OSAOnlineReintegration(TestWithServers):
         self.record_length = self.params.get("length", '/run/record/*')
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
-        self.ior_test_sequence = self.params.get("ior_test_sequence",
-                                                 '/run/ior/iorflags/*')
-        self.ior_dfs_oclass = self.params.get("obj_class",
-                                               '/run/ior/iorflags/*')
+        self.ior_test_sequence = self.params.get(
+            "ior_test_sequence", '/run/ior/iorflags/*')
+        self.ior_dfs_oclass = self.params.get(
+            "obj_class", '/run/ior/iorflags/*')
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
@@ -76,27 +78,28 @@ class OSAOnlineReintegration(TestWithServers):
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):
-        """Get the pool leader
-           Returns : int (pool_leader)
+        """Get the pool leader.
+
+        Returns:
+            int: pool leader number
+
         """
-        out = []
-        kwargs = {"pool": self.pool.uuid}
-        out = self.dmg_command.get_output("pool_query", **kwargs)
-        return int(out[0][3])
+        data = self.dmg_command.pool_query(self.pool.uuid)
+        return int(data["leader"])
 
     @fail_on(CommandFailure)
     def get_pool_version(self):
-        """Get the pool version
-           Returns : int (pool_version_value)
-        """
-        out = []
-        kwargs = {"pool": self.pool.uuid}
-        out = self.dmg_command.get_output("pool_query", **kwargs)
-        return int(out[0][4])
+        """Get the pool version.
 
-    def daos_racer_thread(self, results):
-        """Start the daos_racer thread.
+        Returns:
+            int: pool version number
+
         """
+        data = self.dmg_command.pool_query(self.pool.uuid)
+        return int(data["version"])
+
+    def daos_racer_thread(self):
+        """Start the daos_racer thread."""
         self.daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0],
                                            self.dmg_command)
         self.daos_racer.get_params(self)
@@ -106,6 +109,7 @@ class OSAOnlineReintegration(TestWithServers):
 
     def ior_thread(self, pool, oclass, api, test, flags, results):
         """Start threads and wait until all threads are finished.
+
         Args:
             pool (object): pool handle
             oclass (str): IOR object class
@@ -114,8 +118,6 @@ class OSAOnlineReintegration(TestWithServers):
             flags (str): IOR flags
             results (queue): queue for returning thread results
 
-        Returns:
-            None
         """
         processes = self.params.get("slots", "/run/ior/clientslots/*")
         container_info = {}
@@ -140,26 +142,27 @@ class OSAOnlineReintegration(TestWithServers):
                                test[2])] = str(uuid.uuid4())
 
         # Define the job manager for the IOR command
-        manager = Mpirun(ior_cmd, mpitype="mpich")
+        self.job_manager = Mpirun(ior_cmd, mpitype="mpich")
         key = "".join([oclass, api, str(test[2])])
-        manager.job.dfs_cont.update(container_info[key])
-        env = ior_cmd.get_default_env(str(manager))
-        manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-        manager.assign_processes(processes)
-        manager.assign_environment(env, True)
+        self.job_manager.job.dfs_cont.update(container_info[key])
+        env = ior_cmd.get_default_env(str(self.job_manager))
+        self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
+        self.job_manager.assign_processes(processes)
+        self.job_manager.assign_environment(env, True)
 
         # run IOR Command
         try:
-            manager.run()
+            self.job_manager.run()
         except CommandFailure as _error:
             results.put("FAIL")
 
     def run_online_reintegration_test(self, num_pool):
         """Run the Online reintegration without data.
-            Args:
+
+        Args:
             num_pool (int) : total pools to create for testing purposes.
             data (bool) : whether pool has no data or to create
-                          some data in pool. Defaults to False.
+                some data in pool. Defaults to False.
         """
         num_jobs = self.params.get("no_parallel_job", '/run/ior/*')
         # Create a pool
@@ -178,12 +181,10 @@ class OSAOnlineReintegration(TestWithServers):
         rank = random.randint(1, exclude_servers)
 
         # Start the daos_racer thread
-        kwargs = {"results": self.ds_racer_queue}
-        daos_racer_thread = threading.Thread(target=self.daos_racer_thread,
-                                             kwargs=kwargs)
+        daos_racer_thread = threading.Thread(target=self.daos_racer_thread)
         daos_racer_thread.start()
         time.sleep(30)
-        
+
         for val in range(0, num_pool):
             pool[val] = TestPool(self.context,
                                  dmg_command=self.get_dmg_command())
@@ -273,10 +274,11 @@ class OSAOnlineReintegration(TestWithServers):
             pool[val].destroy()
 
     def test_osa_online_reintegration(self):
-        """Test ID: DAOS-5075
+        """Test ID: DAOS-5075.
+
         Test Description: Validate Online Reintegration
 
-        :avocado: tags=all,pr,hw,large,osa,online_reintegration
+        :avocado: tags=all,pr,hw,large,osa,online_reintegration,DAOS_5610
         """
         # Perform reintegration testing with 1 pool.
         for pool_num in range(1, 2):

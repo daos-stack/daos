@@ -188,9 +188,8 @@ func c2GoController(ctrlr *C.struct_ctrlr_t) *storage.NvmeController {
 }
 
 // c2GoDeviceHealth is a private translation function.
-func c2GoDeviceHealth(health *C.struct_nvme_health_stats) *storage.NvmeControllerHealth {
-	return &storage.NvmeControllerHealth{
-		ErrorCount:      uint64(health.err_count),
+func c2GoDeviceHealth(health *C.struct_nvme_stats) *storage.NvmeHealth {
+	return &storage.NvmeHealth{
 		TempWarnTime:    uint32(health.warn_temp_time),
 		TempCritTime:    uint32(health.crit_temp_time),
 		CtrlBusyTime:    uint64(health.ctrl_busy_time),
@@ -199,7 +198,6 @@ func c2GoDeviceHealth(health *C.struct_nvme_health_stats) *storage.NvmeControlle
 		UnsafeShutdowns: uint64(health.unsafe_shutdowns),
 		MediaErrors:     uint64(health.media_errs),
 		ErrorLogEntries: uint64(health.err_log_entries),
-		ChecksumErrors:  uint32(health.checksum_errs),
 		Temperature:     uint32(health.temperature),
 		TempWarn:        bool(health.temp_warn),
 		AvailSpareWarn:  bool(health.avail_spare_warn),

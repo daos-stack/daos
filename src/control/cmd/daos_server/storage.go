@@ -29,9 +29,9 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	commands "github.com/daos-stack/daos/src/control/common/storage"
-	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -103,9 +103,11 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 			return common.ConcatErrors(scanErrors, err)
 		}
 		if resp.RebootRequired {
-			cmd.log.Info(scm.MsgScmRebootRequired)
+			cmd.log.Info(scm.MsgRebootRequired)
 		} else if len(resp.Namespaces) > 0 {
-			cmd.log.Infof("SCM namespaces:\n\t%+v\n", resp.Namespaces)
+			var bld strings.Builder
+			pretty.PrintScmNamespaces(resp.Namespaces, &bld)
+			cmd.log.Infof("SCM namespaces:\n%s\n", bld.String())
 		} else {
 			cmd.log.Info("no SCM namespaces")
 		}
@@ -141,7 +143,7 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 		if err != nil {
 			return err
 		}
-		if err := control.PrintNvmeControllers(nvmeResp.Controllers, &bld); err != nil {
+		if err := pretty.PrintNvmeControllers(nvmeResp.Controllers, &bld); err != nil {
 			return err
 		}
 	}
@@ -155,7 +157,7 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 		if err != nil {
 			return err
 		}
-		if err := control.PrintScmNamespaces(scmResp.Namespaces, &bld); err != nil {
+		if err := pretty.PrintScmNamespaces(scmResp.Namespaces, &bld); err != nil {
 			return err
 		}
 	default:
@@ -163,7 +165,7 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 		if err != nil {
 			return err
 		}
-		if err := control.PrintScmModules(scmResp.Modules, &bld); err != nil {
+		if err := pretty.PrintScmModules(scmResp.Modules, &bld); err != nil {
 			return err
 		}
 	}

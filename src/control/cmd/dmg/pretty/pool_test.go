@@ -30,6 +30,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
@@ -48,7 +49,7 @@ Pool space info:
 		},
 		"normal response": {
 			pqr: &control.PoolQueryResp{
-				UUID: control.MockUUID,
+				UUID: common.MockUUID(),
 				PoolInfo: control.PoolInfo{
 					TotalTargets:    2,
 					DisabledTargets: 1,
@@ -81,11 +82,11 @@ Pool space info:
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
 Rebuild busy, 42 objs, 21 recs
-`, control.MockUUID),
+`, common.MockUUID()),
 		},
 		"rebuild failed": {
 			pqr: &control.PoolQueryResp{
-				UUID: control.MockUUID,
+				UUID: common.MockUUID(),
 				PoolInfo: control.PoolInfo{
 					TotalTargets:    2,
 					DisabledTargets: 1,
@@ -119,7 +120,7 @@ Pool space info:
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
 Rebuild failed, rc=0, status=2
-`, control.MockUUID),
+`, common.MockUUID()),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

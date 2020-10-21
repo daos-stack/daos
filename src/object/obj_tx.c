@@ -51,8 +51,8 @@ enum dc_tx_status {
 	TX_OPEN,
 	TX_COMMITTING,
 	TX_COMMITTED,
-	TX_ABORTED,
-	TX_FAILED,
+	TX_ABORTED,	/**< no more new TX generations */
+	TX_FAILED,	/**< may restart a new TX generation */
 };
 
 /*
@@ -482,7 +482,7 @@ dc_tx_cleanup(struct dc_tx *tx)
 }
 
 /**
- * End a operation associated with transaction \a th.
+ * End a TX operation associated with \a th.
  *
  * \param[in]	task		current task
  * \param[in]	th		transaction handle
@@ -500,7 +500,8 @@ dc_tx_op_end(tse_task_t *task, daos_handle_t th, struct dtx_epoch *req_epoch,
 	D_ASSERT(task != NULL);
 	D_ASSERT(daos_handle_is_valid(th));
 
-	if (rep_rc == 0 && (dtx_epoch_chosen(req_epoch) || rep_epoch == 0))
+	if (rep_rc != -DER_TX_RESTART &&
+	    (dtx_epoch_chosen(req_epoch) || rep_epoch == 0))
 		return 0;
 
 	tx = dc_tx_hdl2ptr(th);
@@ -519,7 +520,8 @@ dc_tx_op_end(tse_task_t *task, daos_handle_t th, struct dtx_epoch *req_epoch,
 		goto out;
 	}
 
-	/* TODO: Change the TX status according to rep_rc. */
+	if (rep_rc == -DER_TX_RESTART)
+		tx->tx_status = TX_FAILED;
 
 	if (rep_epoch == DAOS_EPOCH_MAX) {
 		D_ERROR("invalid reply epoch: DAOS_EPOCH_MAX\n");
@@ -532,7 +534,6 @@ dc_tx_op_end(tse_task_t *task, daos_handle_t th, struct dtx_epoch *req_epoch,
 		tx->tx_epoch.oe_value = rep_epoch;
 		if (tx->tx_epoch.oe_first == 0)
 			tx->tx_epoch.oe_first = tx->tx_epoch.oe_value;
-
 		D_DEBUG(DB_IO, DF_X64"/%p: set: value="DF_U64" first="DF_U64
 			" flags=%x, rpc flags %x\n", th.cookie, task,
 			tx->tx_epoch.oe_value, tx->tx_epoch.oe_first,
@@ -908,10 +909,9 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 		goto out;
 	}
 
-	tx->tx_status = TX_FAILED;
-
 	if (rc != -DER_TX_RESTART && !obj_retry_error(rc)) {
 		tx->tx_retry = 0;
+		tx->tx_status = TX_ABORTED;
 
 		goto out;
 	}
@@ -928,6 +928,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 			D_ERROR("Failed to refresh the pool map: "
 				DF_RC", original error: "DF_RC"\n",
 				DP_RC(rc1), DP_RC(rc));
+			tx->tx_status = TX_ABORTED;
 			D_GOTO(out, rc = rc1);
 		}
 	}
@@ -935,6 +936,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	/* Need to restart the TX with newer epoch. */
 	if (rc == -DER_TX_RESTART || rc == -DER_STALE) {
 		tx->tx_set_resend = 1;
+		tx->tx_status = TX_FAILED;
 
 		if (pool_task != NULL) {
 			D_MUTEX_UNLOCK(&tx->tx_lock);
@@ -960,6 +962,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 				DF_RC", original error: "DF_RC"\n",
 				DP_RC(rc1), DP_RC(rc));
 			dc_task_decref(pool_task);
+			tx->tx_status = TX_ABORTED;
 
 			D_GOTO(out, rc = rc1);
 		}
@@ -969,6 +972,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 			D_ERROR("Failed to re-init task (%p): "
 				DF_RC", original error: "DF_RC"\n",
 				task, DP_RC(rc1), DP_RC(rc));
+			tx->tx_status = TX_ABORTED;
 
 			D_GOTO(out, rc = rc1);
 		}
@@ -1723,8 +1727,10 @@ out:
 	if (req != NULL)
 		crt_req_decref(req);
 
-	if (rc != 0)
+	if (rc == -DER_TX_RESTART)
 		tx->tx_status = TX_FAILED;
+	else if (rc != 0)
+		tx->tx_status = TX_ABORTED;
 
 	D_MUTEX_UNLOCK(&tx->tx_lock);
 	/* -1 for dc_tx_commit() held */
@@ -1756,11 +1762,12 @@ dc_tx_commit(tse_task_t *task)
 	if (tx->tx_status == TX_COMMITTED)
 		D_GOTO(out_tx, rc = -DER_ALREADY);
 
-	if (tx->tx_status == TX_COMMITTING)
+	if (tx->tx_status == TX_COMMITTING &&
+	    !(tx->tx_retry && args->flags & DTF_RETRY_COMMIT))
 		D_GOTO(out_tx, rc = -DER_INPROGRESS);
 
 	if (tx->tx_status != TX_OPEN &&
-	    !(tx->tx_status == TX_FAILED &&
+	    !(tx->tx_status == TX_COMMITTING &&
 	      tx->tx_retry && args->flags & DTF_RETRY_COMMIT)) {
 		D_ERROR("Can't commit non-open state TX (%d)\n",
 			tx->tx_status);
@@ -1901,8 +1908,8 @@ dc_tx_restart(tse_task_t *task)
 		D_GOTO(out_task, rc = -DER_NO_HDL);
 
 	D_MUTEX_LOCK(&tx->tx_lock);
-	if (tx->tx_status != TX_OPEN && tx->tx_status != TX_FAILED) {
-		D_ERROR("Can't restart non-open/non-failed state TX (%d)\n",
+	if (tx->tx_status != TX_FAILED) {
+		D_ERROR("Can't restart non-failed state TX (%d)\n",
 			tx->tx_status);
 		rc = -DER_NO_PERM;
 	} else {
@@ -1967,6 +1974,12 @@ out_tx:
 	dc_tx_decref(tx);
 
 	return rc;
+}
+
+static inline daos_obj_id_t
+dc_tx_dcsr2oid(struct daos_cpd_sub_req *dcsr)
+{
+	return ((struct dc_object *)(dcsr->dcsr_obj))->cob_md.omd_id;
 }
 
 static int
@@ -2045,6 +2058,11 @@ dc_tx_add_update(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 
 	tx->tx_write_cnt++;
 
+	D_DEBUG(DB_TRACE, "Cache update: DTI "DF_DTI", obj "DF_OID", dkey "
+		DF_KEY", flags %lx, nr = %d, write cnt %d\n",
+		DP_DTI(&tx->tx_id), DP_OID(dc_tx_dcsr2oid(dcsr)),
+		DP_KEY(dkey), flags, nr, tx->tx_write_cnt);
+
 	return 0;
 
 fail:
@@ -2091,6 +2109,11 @@ dc_tx_add_punch_obj(struct dc_tx *tx, daos_handle_t oh, uint64_t flags)
 
 	tx->tx_write_cnt++;
 
+	D_DEBUG(DB_TRACE, "Cache punch obj: DTI "DF_DTI", obj "DF_OID
+		", flags %lx, write cnt %d\n",
+		DP_DTI(&tx->tx_id), DP_OID(dc_tx_dcsr2oid(dcsr)),
+		flags, tx->tx_write_cnt);
+
 	return 0;
 }
 
@@ -2120,6 +2143,11 @@ dc_tx_add_punch_dkey(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 	dcsr->dcsr_api_flags = flags;
 
 	tx->tx_write_cnt++;
+
+	D_DEBUG(DB_TRACE, "Cache punch dkey: DTI "DF_DTI", obj "DF_OID", dkey "
+		DF_KEY", flags %lx, write cnt %d\n",
+		DP_DTI(&tx->tx_id), DP_OID(dc_tx_dcsr2oid(dcsr)),
+		DP_KEY(dkey), flags, tx->tx_write_cnt);
 
 	return 0;
 }
@@ -2165,6 +2193,11 @@ dc_tx_add_punch_akeys(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 
 	tx->tx_write_cnt++;
 
+	D_DEBUG(DB_TRACE, "Cache punch akey: DTI "DF_DTI", obj "DF_OID", dkey "
+		DF_KEY", flags %lx, nr %d, write cnt %d\n",
+		DP_DTI(&tx->tx_id), DP_OID(dc_tx_dcsr2oid(dcsr)),
+		DP_KEY(dkey), flags, nr, tx->tx_write_cnt);
+
 	return 0;
 
 fail:
@@ -2182,7 +2215,7 @@ fail:
 }
 
 static int
-dc_tx_add_read(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
+dc_tx_add_read(struct dc_tx *tx, int opc, daos_handle_t oh, uint64_t flags,
 	       daos_key_t *dkey, uint32_t nr, void *iods_or_akey)
 {
 	struct daos_cpd_sub_req	*dcsr = NULL;
@@ -2247,6 +2280,17 @@ done:
 	dcsr->dcsr_api_flags = flags;
 
 	tx->tx_read_cnt++;
+
+	if (dkey != NULL)
+		D_DEBUG(DB_TRACE, "Cache read opc %d: DTI "DF_DTI", obj "DF_OID
+			", dkey "DF_KEY", flags %lx, nr %d, read cnt %d\n",
+			opc, DP_DTI(&tx->tx_id), DP_OID(dc_tx_dcsr2oid(dcsr)),
+			DP_KEY(dkey), flags, nr, tx->tx_read_cnt);
+	else
+		D_DEBUG(DB_TRACE, "Cache enum obj: DTI "DF_DTI", obj "DF_OID
+			", flags %lx, nr %d, read cnt %d\n",
+			DP_DTI(&tx->tx_id), DP_OID(dc_tx_dcsr2oid(dcsr)),
+			flags, nr, tx->tx_read_cnt);
 
 	return 0;
 
@@ -2520,8 +2564,8 @@ dc_tx_attach(daos_handle_t th, enum obj_rpc_opc opc, tse_task_t *task)
 	case DAOS_OBJ_RPC_FETCH: {
 		daos_obj_fetch_t	*fe = dc_task_get_args(task);
 
-		rc = dc_tx_add_read(tx, fe->oh, fe->flags, fe->dkey, fe->nr,
-				    fe->nr != 1 ? fe->iods :
+		rc = dc_tx_add_read(tx, opc, fe->oh, fe->flags, fe->dkey,
+				    fe->nr, fe->nr != 1 ? fe->iods :
 				    (void *)&fe->iods[0].iod_name);
 		break;
 	}
@@ -2541,25 +2585,25 @@ dc_tx_attach(daos_handle_t th, enum obj_rpc_opc opc, tse_task_t *task)
 			nr = 1;
 		}
 
-		rc = dc_tx_add_read(tx, qu->oh, 0, dkey, nr, qu->akey);
+		rc = dc_tx_add_read(tx, opc, qu->oh, 0, dkey, nr, qu->akey);
 		break;
 	}
 	case DAOS_OBJ_RECX_RPC_ENUMERATE: {
 		daos_obj_list_recx_t	*lr = dc_task_get_args(task);
 
-		rc = dc_tx_add_read(tx, lr->oh, 0, lr->dkey, 1, lr->akey);
+		rc = dc_tx_add_read(tx, opc, lr->oh, 0, lr->dkey, 1, lr->akey);
 		break;
 	}
 	case DAOS_OBJ_AKEY_RPC_ENUMERATE: {
 		daos_obj_list_akey_t	*la = dc_task_get_args(task);
 
-		rc = dc_tx_add_read(tx, la->oh, 0, la->dkey, 0, NULL);
+		rc = dc_tx_add_read(tx, opc, la->oh, 0, la->dkey, 0, NULL);
 		break;
 	}
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE: {
 		daos_obj_list_dkey_t	*ld = dc_task_get_args(task);
 
-		rc = dc_tx_add_read(tx, ld->oh, 0, NULL, 0, NULL);
+		rc = dc_tx_add_read(tx, opc, ld->oh, 0, NULL, 0, NULL);
 		break;
 	}
 	default:

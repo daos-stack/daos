@@ -56,13 +56,16 @@ on_faulty(struct bio_blobstore *bbs)
 	if (ract_ops == NULL || ract_ops->faulty_reaction == NULL)
 		return 0;
 
-	ABT_mutex_lock(bbs->bb_mutex);
+	/*
+	 * It's safe to access xs context array without locking when the
+	 * server is neither in start nor shutdown phase.
+	 */
+	D_ASSERT(is_server_started());
 	tgt_cnt = bbs->bb_ref;
 	D_ASSERT(tgt_cnt <= BIO_XS_CNT_MAX && tgt_cnt > 0);
 
 	for (i = 0; i < tgt_cnt; i++)
 		tgt_ids[i] = bbs->bb_xs_ctxts[i]->bxc_tgt_id;
-	ABT_mutex_unlock(bbs->bb_mutex);
 
 	rc = ract_ops->faulty_reaction(tgt_ids, tgt_cnt);
 	if (rc < 0)
@@ -71,44 +74,52 @@ on_faulty(struct bio_blobstore *bbs)
 	return rc;
 }
 
-/*
- * Return value:	0: Per-xstream context is torn down;
- *			1: Per-xstream context teardown is in progress;
- */
-static int
-teardown_xstream(struct bio_xs_context *xs_ctxt)
+static void
+teardown_xstream(void *arg)
 {
+	struct bio_xs_context	*xs_ctxt = arg;
 	struct bio_io_context	*ioc;
 	int			 opened_blobs = 0;
 
 	D_ASSERT(xs_ctxt != NULL);
-	/* Teardown work for this xstream is done */
+	if (!is_server_started()) {
+		D_INFO("Abort xs teardown on server start/shutdown\n");
+		return;
+	}
+
+	/* This xstream is torndown */
 	if (xs_ctxt->bxc_io_channel == NULL)
-		return 0;
+		return;
 
 	/* Try to close all blobs */
 	d_list_for_each_entry(ioc, &xs_ctxt->bxc_io_ctxts, bic_link) {
-		D_ASSERT(ioc->bic_opening == 0);
-
-		if (ioc->bic_blob == NULL)
+		if (ioc->bic_blob == NULL && ioc->bic_opening == 0)
 			continue;
 
 		opened_blobs++;
-		if (ioc->bic_closing)
+		if (ioc->bic_closing || ioc->bic_opening)
 			continue;
 
 		bio_blob_close(ioc, true);
 	}
 
-	if (opened_blobs)
-		return 1;
+	if (opened_blobs) {
+		D_DEBUG(DB_MGMT, "xs:%p has %d opened blobs\n",
+			xs_ctxt, opened_blobs);
+		return;
+	}
+
+	/* Close open desc for io stats */
+	if (xs_ctxt->bxc_desc != NULL) {
+		spdk_bdev_close(xs_ctxt->bxc_desc);
+		xs_ctxt->bxc_desc = NULL;
+	}
 
 	/* Put the io channel */
-	D_ASSERT(xs_ctxt->bxc_io_channel != NULL);
-	spdk_bs_free_io_channel(xs_ctxt->bxc_io_channel);
-	xs_ctxt->bxc_io_channel = NULL;
-
-	return 0;
+	if (xs_ctxt->bxc_io_channel != NULL) {
+		spdk_bs_free_io_channel(xs_ctxt->bxc_io_channel);
+		xs_ctxt->bxc_io_channel = NULL;
+	}
 }
 
 static void
@@ -116,68 +127,268 @@ unload_bs_cp(void *arg, int rc)
 {
 	struct bio_blobstore *bbs = arg;
 
+	/* Unload blobstore may fail if the device is hot removed */
 	if (rc != 0)
-		D_ERROR("Failed to unload blobstore:%p, "DF_RC"\n",
-			bbs, DP_RC(rc));
-	else
-		bbs->bb_bs = NULL;
+		D_ERROR("Failed to unload blobstore:%p, %d\n",
+			bbs, rc);
+
+	/* Stop accessing bbs, it could be freed on shutdown */
+	if (!is_server_started()) {
+		D_INFO("Abort bs unload on server start/shutdown\n");
+		return;
+	}
+
+	D_ASSERT(!bbs->bb_loading);
+	bbs->bb_unloading = false;
+	/* SPDK will free blobstore even if load failed */
+	bbs->bb_bs = NULL;
+	D_ASSERT(init_thread() != NULL);
+	spdk_thread_send_msg(init_thread(), bio_release_bdev,
+			     bbs->bb_dev);
 }
 
 /*
- * Return value:	0: Blobstore is torn down;
- *			1: Blobstore teardown is in progress;
+ * Return value:	0:  Blobstore is torn down;
+ *			>0: Blobstore teardown is in progress;
  */
 static int
 on_teardown(struct bio_blobstore *bbs)
 {
-	int	i, rc = 0, ret;
-
-	/*
-	 * The blobstore is already closed, transition to next state.
-	 * TODO: Need to cleanup bdev when supporting reintegration.
-	 */
-	if (bbs->bb_bs == NULL)
-		return 0;
+	struct bio_dev_health	*bdh = &bbs->bb_dev_health;
+	int			 i, rc = 0;
 
 	ABT_mutex_lock(bbs->bb_mutex);
-
 	if (bbs->bb_holdings != 0) {
 		D_DEBUG(DB_MGMT, "Blobstore %p is inuse:%d, retry later.\n",
 			bbs, bbs->bb_holdings);
 		ABT_mutex_unlock(bbs->bb_mutex);
 		return 1;
 	}
-
-	/* Hold the lock to prevent other xstreams from exiting */
-	for (i = 0; i < bbs->bb_ref; i++) {
-		ret = teardown_xstream(bbs->bb_xs_ctxts[i]);
-		rc += ret;
-	}
-
 	ABT_mutex_unlock(bbs->bb_mutex);
 
-	if (rc == 0) {
-		/* Unload the blobstore */
-		D_ASSERT(bbs->bb_bs != NULL);
-		D_ASSERT(bbs->bb_holdings == 0);
-		spdk_bs_unload(bbs->bb_bs, unload_bs_cp, bbs);
+	/*
+	 * It's safe to access xs context array without locking when the
+	 * server is neither in start nor shutdown phase.
+	 */
+	D_ASSERT(is_server_started());
+	for (i = 0; i < bbs->bb_ref; i++) {
+		struct bio_xs_context	*xs_ctxt = bbs->bb_xs_ctxts[i];
+
+		/* This xstream is torndown */
+		if (xs_ctxt->bxc_io_channel == NULL)
+			continue;
+
+		D_ASSERT(xs_ctxt->bxc_thread != NULL);
+		spdk_thread_send_msg(xs_ctxt->bxc_thread, teardown_xstream,
+				     xs_ctxt);
+		rc += 1;
 	}
 
+	if (rc)
+		return rc;
+
+	/* Put io channel for health monitor */
+	if (bdh->bdh_io_channel != NULL) {
+		spdk_put_io_channel(bdh->bdh_io_channel);
+		bdh->bdh_io_channel = NULL;
+	}
+
+	/* Close open desc for health monitor */
+	if (bdh->bdh_desc != NULL) {
+		spdk_bdev_close(bdh->bdh_desc);
+		bdh->bdh_desc = NULL;
+	}
+
+	/*
+	 * Unload the blobstore. The blobstore could be still in loading from
+	 * the SETUP stage.
+	 */
+	D_ASSERT(bbs->bb_holdings == 0);
+	if (bbs->bb_bs == NULL && !bbs->bb_loading)
+		return 0;
+
+	if (bbs->bb_loading || bbs->bb_unloading) {
+		D_DEBUG(DB_MGMT, "Blobstore %p is in %s\n", bbs,
+			bbs->bb_loading ? "loading" : "unloading");
+		return 1;
+	}
+
+	bbs->bb_unloading = true;
+	spdk_bs_unload(bbs->bb_bs, unload_bs_cp, bbs);
 	return 1;
 }
 
-static char *
-bio_state_enum_to_str(enum bio_bs_state state)
+static void
+setup_xstream(void *arg)
 {
-	switch (state) {
-	case BIO_BS_STATE_NORMAL: return "NORMAL";
-	case BIO_BS_STATE_FAULTY: return "FAULTY";
-	case BIO_BS_STATE_TEARDOWN: return "TEARDOWN";
-	case BIO_BS_STATE_OUT: return "OUT";
-	case BIO_BS_STATE_SETUP: return "SETUP";
+	struct bio_xs_context	*xs_ctxt = arg;
+	struct bio_blobstore	*bbs;
+	struct bio_bdev		*d_bdev;
+	struct bio_io_context	*ioc;
+	int			 rc, closed_blobs = 0;
+
+	D_ASSERT(xs_ctxt != NULL);
+	if (!is_server_started()) {
+		D_INFO("Abort xs setup on server start/shutdown\n");
+		return;
 	}
 
-	return "Undefined state";
+	bbs = xs_ctxt->bxc_blobstore;
+	D_ASSERT(bbs != NULL);
+	D_ASSERT(bbs->bb_bs != NULL);
+
+	/*
+	 * Setup the blobstore io channel. It's must be done as the first step
+	 * of xstream setup, since xstream teardown checks io channel to tell
+	 * if everything is torndown for the xstream.
+	 */
+	if (xs_ctxt->bxc_io_channel == NULL) {
+		xs_ctxt->bxc_io_channel = spdk_bs_alloc_io_channel(bbs->bb_bs);
+		if (xs_ctxt->bxc_io_channel == NULL) {
+			D_ERROR("Failed to create io channel for %p\n", bbs);
+			return;
+		}
+	}
+
+	/* Try to open all blobs */
+	d_list_for_each_entry(ioc, &xs_ctxt->bxc_io_ctxts, bic_link) {
+		if (ioc->bic_blob != NULL && !ioc->bic_closing)
+			continue;
+
+		closed_blobs++;
+		if (ioc->bic_opening || ioc->bic_closing)
+			continue;
+
+		bio_blob_open(ioc, true);
+	}
+
+	if (closed_blobs) {
+		D_DEBUG(DB_MGMT, "xs:%p has %d closed blobs\n",
+			xs_ctxt, closed_blobs);
+		return;
+	}
+
+	d_bdev = bbs->bb_dev;
+	D_ASSERT(d_bdev != NULL);
+	D_ASSERT(d_bdev->bb_name != NULL);
+
+	/* Acquire open desc for io stats as the last step of xs setup */
+	if (xs_ctxt->bxc_desc == NULL) {
+		rc = spdk_bdev_open_ext(d_bdev->bb_name, false,
+					bio_bdev_event_cb, NULL,
+					&xs_ctxt->bxc_desc);
+		if (rc != 0) {
+			D_ERROR("Failed to open bdev %s, for %p, %d\n",
+				d_bdev->bb_name, bbs, rc);
+			return;
+		}
+		D_ASSERT(xs_ctxt->bxc_desc != NULL);
+	}
+}
+
+static void
+load_bs_cp(void *arg, struct spdk_blob_store *bs, int rc)
+{
+	struct bio_blobstore *bbs = arg;
+
+	if (rc != 0)
+		D_ERROR("Failed to load blobstore:%p, %d\n",
+			bbs, rc);
+
+	/* Stop accessing bbs since it could be freed on shutdown */
+	if (!is_server_started()) {
+		D_INFO("Abort bs load on server start/shutdown\n");
+		return;
+	}
+
+	D_ASSERT(!bbs->bb_unloading);
+	D_ASSERT(bbs->bb_bs == NULL);
+	bbs->bb_loading = false;
+	if (rc == 0)
+		bbs->bb_bs = bs;
+}
+
+/*
+ * Return value:	0:  Blobstore loaded, all blobs opened;
+ *			>0: Blobstore or blobs are in loading/opening;
+ */
+static int
+on_setup(struct bio_blobstore *bbs)
+{
+	struct bio_bdev		*d_bdev = bbs->bb_dev;
+	struct bio_dev_health	*bdh = &bbs->bb_dev_health;
+	int			 i, rc = 0;
+
+	ABT_mutex_lock(bbs->bb_mutex);
+	if (bbs->bb_holdings != 0) {
+		D_DEBUG(DB_MGMT, "Blobstore %p is inuse:%d, retry later.\n",
+			bbs, bbs->bb_holdings);
+		ABT_mutex_unlock(bbs->bb_mutex);
+		return 1;
+	}
+	ABT_mutex_unlock(bbs->bb_mutex);
+
+	D_ASSERT(!bbs->bb_unloading);
+	/* Blobstore is already loaded */
+	if (bbs->bb_bs != NULL)
+		goto bs_loaded;
+
+	if (bbs->bb_loading) {
+		D_DEBUG(DB_MGMT, "Blobstore %p is in loading\n", bbs);
+		return 1;
+	}
+
+	D_ASSERT(d_bdev != NULL);
+	D_ASSERT(d_bdev->bb_name != NULL);
+	D_ASSERT(d_bdev->bb_uuid != NULL);
+
+	bbs->bb_loading = true;
+	load_blobstore(NULL, d_bdev->bb_name, &d_bdev->bb_uuid, false, true,
+		       load_bs_cp, bbs);
+	return 1;
+
+bs_loaded:
+	/* Acquire open desc for health monitor */
+	if (bdh->bdh_desc == NULL) {
+		rc = spdk_bdev_open_ext(d_bdev->bb_name, true,
+					bio_bdev_event_cb, NULL,
+					&bdh->bdh_desc);
+		if (rc != 0) {
+			D_ERROR("Failed to open bdev %s, for %p, %d\n",
+				d_bdev->bb_name, bbs, rc);
+			return 1;
+		}
+		D_ASSERT(bdh->bdh_desc != NULL);
+	}
+
+	/* Get io channel for health monitor */
+	if (bdh->bdh_io_channel == NULL) {
+		bdh->bdh_io_channel = spdk_bdev_get_io_channel(bdh->bdh_desc);
+		if (bdh->bdh_io_channel == NULL) {
+			D_ERROR("Failed to get health channel for %p\n", bbs);
+			return 1;
+		}
+	}
+
+	/*
+	 * It's safe to access xs context array without locking when the
+	 * server is neither in start nor shutdown phase.
+	 */
+	D_ASSERT(is_server_started());
+	for (i = 0; i < bbs->bb_ref; i++) {
+		struct bio_xs_context	*xs_ctxt = bbs->bb_xs_ctxts[i];
+
+		/* Setup for the xsteam is done */
+		if (xs_ctxt->bxc_desc != NULL)
+			continue;
+
+		D_ASSERT(xs_ctxt->bxc_thread != NULL);
+		spdk_thread_send_msg(xs_ctxt->bxc_thread, setup_xstream,
+				     xs_ctxt);
+		rc += 1;
+	}
+
+	return rc;
 }
 
 int
@@ -214,7 +425,8 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 			rc = -DER_INVAL;
 		break;
 	case BIO_BS_STATE_SETUP:
-		rc = -DER_NOSYS;
+		if (bbs->bb_state != BIO_BS_STATE_OUT)
+			rc = -DER_INVAL;
 		break;
 	default:
 		rc = -DER_INVAL;
@@ -236,18 +448,14 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 			bio_state_enum_to_str(new_state));
 		bbs->bb_state = new_state;
 
-		if (new_state == BIO_BS_STATE_NORMAL ||
-		    new_state == BIO_BS_STATE_FAULTY) {
+		if (new_state == BIO_BS_STATE_FAULTY) {
 			struct spdk_bs_type	bstype;
 			uuid_t			dev_id;
-			enum smd_dev_state	dev_state;
 
 			bstype = spdk_bs_get_bstype(bbs->bb_bs);
 			memcpy(dev_id, bstype.bstype, sizeof(dev_id));
-			dev_state = new_state == BIO_BS_STATE_NORMAL ?
-					SMD_DEV_NORMAL : SMD_DEV_FAULTY;
 
-			rc = smd_dev_set_state(dev_id, dev_state);
+			rc = smd_dev_set_state(dev_id, SMD_DEV_FAULTY);
 			if (rc)
 				D_ERROR("Set device state failed. "DF_RC"\n",
 					DP_RC(rc));
@@ -256,6 +464,43 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 	ABT_mutex_unlock(bbs->bb_mutex);
 
 	return rc;
+}
+
+static void
+on_normal(struct bio_blobstore *bbs)
+{
+	struct bio_bdev	*bdev = bbs->bb_dev;
+	int		 tgt_ids[BIO_XS_CNT_MAX];
+	int		 tgt_cnt, i, rc;
+
+	/*
+	 * Trigger auto reint only when faulty is replaced by new hot
+	 * plugged device. See comments in bio_replace_dev().
+	 */
+	D_ASSERT(bdev != NULL);
+	if (!bdev->bb_trigger_reint)
+		return;
+
+	/* don't trigger reint if reint reaction isn't registered */
+	if (ract_ops == NULL || ract_ops->reint_reaction == NULL)
+		return;
+
+	/*
+	 * It's safe to access xs context array without locking when the
+	 * server is neither in start nor shutdown phase.
+	 */
+	D_ASSERT(is_server_started());
+	tgt_cnt = bbs->bb_ref;
+	D_ASSERT(tgt_cnt <= BIO_XS_CNT_MAX && tgt_cnt > 0);
+
+	for (i = 0; i < tgt_cnt; i++)
+		tgt_ids[i] = bbs->bb_xs_ctxts[i]->bxc_tgt_id;
+
+	rc = ract_ops->reint_reaction(tgt_ids, tgt_cnt);
+	if (rc < 0)
+		D_ERROR("Reint reaction failed. "DF_RC"\n", DP_RC(rc));
+	else
+		bdev->bb_trigger_reint = false;
 }
 
 int
@@ -267,12 +512,12 @@ bio_bs_state_transit(struct bio_blobstore *bbs)
 
 	switch (bbs->bb_state) {
 	case BIO_BS_STATE_NORMAL:
+		on_normal(bbs);
+		/* fallthrough */
 	case BIO_BS_STATE_OUT:
 		rc = 0;
 		break;
 	case BIO_BS_STATE_FAULTY:
-		/* reduce monitor period after faulty state has occurred */
-		bbs->bb_dev_health.bdh_monitor_pd = NVME_MONITOR_SHORT_PERIOD;
 		rc = on_faulty(bbs);
 		if (rc == 0)
 			rc = bio_bs_state_set(bbs, BIO_BS_STATE_TEARDOWN);
@@ -283,7 +528,9 @@ bio_bs_state_transit(struct bio_blobstore *bbs)
 			rc = bio_bs_state_set(bbs, BIO_BS_STATE_OUT);
 		break;
 	case BIO_BS_STATE_SETUP:
-		rc = -DER_NOSYS;
+		rc = on_setup(bbs);
+		if (rc == 0)
+			rc = bio_bs_state_set(bbs, BIO_BS_STATE_NORMAL);
 		break;
 	default:
 		rc = -DER_INVAL;
@@ -304,7 +551,7 @@ void
 bio_media_error(void *msg_arg)
 {
 	struct media_error_msg		*mem = msg_arg;
-	struct nvme_health_stats	*dev_state;
+	struct nvme_stats		*dev_state;
 	int				 rc;
 
 	dev_state = &mem->mem_bs->bb_dev_health.bdh_health_state;

@@ -8,13 +8,9 @@ hosts:
 # servers if a server partition is defined
     # server_partition: daos_server
     client_partition: daos_client
+    client_reservation:
 orterun:
     allow_run_as_root: True
-# include Cluster specific slurm params
-srun:
-    reservation:
-srun_params:
-    reservation:
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 1 hour test
 timeout: 1H15M
@@ -118,6 +114,7 @@ ior_harasser:
     segment_count: 1
     dfs_oclass:
         - 'SX'
+    dfs_destroy: True
 rebuild:
     rebuild_timeout: 30
     ranks_to_kill:

@@ -25,22 +25,17 @@ def scons():
     prereqs.require(denv, 'argobots', 'hwloc', 'protobufc')
 
     daos_build.program(denv, 'simple_array', 'simple_array.c', LIBS=libs)
-    libs += ['vos', 'bio', 'pthread', 'abt']
+    libs += ['vos', 'bio', 'pthread', 'abt', 'dts']
 
-    dts_common = denv.Object('dts_common.c')
     daos_perf = daos_build.program(denv, 'daos_perf',
-                                   ['daos_perf.c', dts_common],
+                                   ['daos_perf.c'],
                                    LIBS=libs)
     denv.Install('$PREFIX/bin/', daos_perf)
 
     daos_racer = daos_build.program(denv, 'daos_racer',
-                                    ['daos_racer.c', dts_common],
+                                    ['daos_racer.c'],
                                     LIBS=libs)
     denv.Install('$PREFIX/bin/', daos_racer)
-
-    obj_ctl = daos_build.program(denv, 'obj_ctl', ['obj_ctl.c', dts_common],
-                                 LIBS=libs)
-    denv.Install('$PREFIX/bin/', obj_ctl)
 
     # tests
     SConscript('suite/SConscript', exports=['denv'])
