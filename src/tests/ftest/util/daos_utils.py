@@ -34,11 +34,6 @@ class DaosCommand(DaosCommandBase):
     METHOD_REGEX = {
         "run": r"(.*)",
         "container_create": r"container ([0-9a-f-]+)",
-        # daos pool list-cont returns the date, host name, and container UUID
-        # as below:
-        # 03/31-21:32:24.53 wolf-3 2f69b198-8478-472e-b6c8-02a451f4de1b
-        # UUID is made up of 36 characters of hex and -.
-        "pool_list_cont": r"([0-9a-f-]{36})",
         # Sample pool query output.
         # 04/19-18:31:26.90 wolf-3 Pool 3e59b386-fda0-404e-af7e-3ff0a38d1f81,
         #    ntarget=8, disabled=0
@@ -255,15 +250,21 @@ class DaosCommand(DaosCommandBase):
             sys_name (str, optional): System name. Defaults to None.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            dict: Dictionary that contains the list of UUIDs in the key "uuids".
 
         Raises:
             CommandFailure: if the daos pool list-containers command fails.
 
         """
-        return self._get_result(
+        self._get_result(
             ("pool", "list-containers"), pool=pool, svc=svc, sys_name=sys_name)
+        # Sample output.
+        # c8bfc7c9-cb19-4574-bae2-af4046d24b58
+        # 182347e4-08ce-4069-b5e2-0dd04406dffd
+        data = {}
+        if self.result.exit_status == 0:
+            data["uuids"] = re.findall(r"([0-9a-f-]{36})", self.result.stdout)
+        return data
 
     def pool_set_attr(self, pool, attr, value, svc):
         """Set pool attribute.

@@ -370,23 +370,27 @@ dc_tx_cleanup_one(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr)
 		D_FREE(dcu->dcu_ec_tgts);
 
 		if (reasb_req != NULL) {
-			dcu->dcu_iod_array.oia_iods = reasb_req->orr_uiods;
-			dcsr->dcsr_sgls = reasb_req->orr_usgls;
+			if (reasb_req->orr_uiods != NULL) {
+				dcu->dcu_iod_array.oia_iods =
+							reasb_req->orr_uiods;
+				dcsr->dcsr_sgls = reasb_req->orr_usgls;
+			}
 
 			obj_reasb_req_fini(reasb_req, dcsr->dcsr_nr);
 			D_FREE(dcsr->dcsr_reasb);
 		}
 
-		if (iod_array != NULL) {
+		if (iod_array->oia_iods != NULL) {
 			for (i = 0; i < dcsr->dcsr_nr; i++) {
 				daos_iov_free(&iod_array->oia_iods[i].iod_name);
 				D_FREE(iod_array->oia_iods[i].iod_recxs);
 			}
 
-			daos_csummer_free_ic(csummer,
-					     &iod_array->oia_iod_csums);
-			D_ASSERT(iod_array->oia_offs == NULL);
+			D_FREE(iod_array->oia_iods);
 		}
+
+		daos_csummer_free_ic(csummer, &iod_array->oia_iod_csums);
+		D_ASSERT(iod_array->oia_offs == NULL);
 
 		if (dcsr->dcsr_sgls != NULL) {
 			for (i = 0; i < dcsr->dcsr_nr; i++)
@@ -1989,7 +1993,7 @@ dc_tx_add_update(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 {
 	struct daos_cpd_sub_req	*dcsr;
 	struct daos_cpd_update	*dcu = NULL;
-	struct obj_iod_array	*iod_array = NULL;
+	struct obj_iod_array	*iod_array;
 	int			 rc;
 	int			 i;
 
@@ -2067,11 +2071,13 @@ dc_tx_add_update(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 
 fail:
 	if (dcu != NULL) {
-		if (iod_array != NULL) {
+		if (iod_array->oia_iods != NULL) {
 			for (i = 0; i < nr; i++) {
 				daos_iov_free(&iod_array->oia_iods[i].iod_name);
 				D_FREE(iod_array->oia_iods[i].iod_recxs);
 			}
+
+			D_FREE(iod_array->oia_iods);
 		}
 
 		if (dcsr->dcsr_sgls != NULL) {
