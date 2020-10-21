@@ -26,6 +26,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/xattr.h>
+#include <linux/xattr.h>
 #include <daos/checksum.h>
 #include <daos/common.h>
 #include <daos/event.h>
@@ -77,13 +78,14 @@
 #define SYML_IDX	(CSIZE_IDX + sizeof(daos_size_t))
 
 /** Parameters for dkey enumeration */
-#define ENUM_DESC_NR    10
-#define ENUM_DESC_BUF   (ENUM_DESC_NR * DFS_MAX_PATH)
+#define ENUM_DESC_NR	10
+#define ENUM_DESC_BUF	(ENUM_DESC_NR * DFS_MAX_PATH)
+#define ENUM_XDESC_BUF	(ENUM_DESC_NR * (DFS_MAX_XATTR_NAME + 2))
 
 /** OIDs for Superblock and Root objects */
 #define RESERVED_LO	0
 #define SB_HI		0
-#define ROOT_HI	1
+#define ROOT_HI		1
 
 typedef uint64_t dfs_magic_t;
 typedef uint16_t dfs_sb_ver_t;
@@ -831,7 +833,7 @@ open_symlink(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 		if (rc != 0)
 			return rc;
 		oid_cp(&entry.oid, sym->oid);
-		entry.mode = sym->mode;
+		entry.mode = sym->mode | S_IRWXO | S_IRWXU | S_IRWXG;
 		entry.atime = entry.mtime = entry.ctime = time(NULL);
 		entry.chunk_size = 0;
 		D_STRNDUP(sym->value, value, PATH_MAX - 1);
@@ -1678,7 +1680,7 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
 	   daos_obj_id_t *oid)
 {
 	struct dfs_entry	entry = {0};
-	daos_handle_t           th = DAOS_TX_NONE;
+	daos_handle_t		th = DAOS_TX_NONE;
 	bool			exists;
 	int			rc;
 
@@ -2945,8 +2947,8 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 int
 dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 {
-	daos_handle_t           oh;
-	int			rc;
+	daos_handle_t	oh;
+	int		rc;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -3150,7 +3152,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	daos_handle_t		th = DAOS_TX_NONE;
 	uid_t			euid;
 	daos_key_t		dkey;
-	daos_handle_t           oh;
+	daos_handle_t		oh;
 	d_sg_list_t		sgl;
 	d_iov_t			sg_iovs[3];
 	daos_iod_t		iod;
@@ -3371,6 +3373,105 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size)
 	return 0;
 }
 
+static int
+xattr_copy(daos_handle_t src_oh, char *src_name, daos_handle_t dst_oh,
+	   char *dst_name, daos_handle_t th)
+{
+	daos_key_t	src_dkey, dst_dkey;
+	daos_anchor_t	anchor = {0};
+	d_sg_list_t	sgl, fsgl;
+	d_iov_t		iov, fiov;
+	daos_iod_t	iod;
+	void		*val_buf;
+	char		enum_buf[ENUM_XDESC_BUF];
+	daos_key_desc_t	kds[ENUM_DESC_NR];
+	int		rc = 0;
+
+	/** set dkey for src entry name */
+	d_iov_set(&src_dkey, (void *)src_name, strlen(src_name));
+
+	/** set dkey for dst entry name */
+	d_iov_set(&dst_dkey, (void *)dst_name, strlen(dst_name));
+
+	/** Set IOD descriptor for fetching every xattr */
+	iod.iod_nr	= 1;
+	iod.iod_recxs	= NULL;
+	iod.iod_type	= DAOS_IOD_SINGLE;
+	iod.iod_size	= DFS_MAX_XATTR_LEN;
+
+	/** set sgl for fetch - user a preallocated buf to avoid a roundtrip */
+	D_ALLOC(val_buf, DFS_MAX_XATTR_LEN);
+	if (val_buf == NULL)
+		return ENOMEM;
+	fsgl.sg_nr	= 1;
+	fsgl.sg_nr_out	= 0;
+	fsgl.sg_iovs	= &fiov;
+
+	/** set sgl for akey_list */
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	d_iov_set(&iov, enum_buf, ENUM_XDESC_BUF);
+	sgl.sg_iovs = &iov;
+
+	/** iterate over every akey to look for xattrs */
+	while (!daos_anchor_is_eof(&anchor)) {
+		uint32_t	number = ENUM_DESC_NR;
+		uint32_t	i;
+		char		*ptr;
+
+		memset(enum_buf, 0, ENUM_XDESC_BUF);
+		rc = daos_obj_list_akey(src_oh, th, &src_dkey, &number, kds,
+					&sgl, &anchor, NULL);
+		if (rc) {
+			D_ERROR("daos_obj_list_akey() failed (%d)\n", rc);
+			D_GOTO(out, rc = daos_der2errno(rc));
+		}
+
+		/** nothing enumerated, continue loop */
+		if (number == 0)
+			continue;
+
+		/*
+		 * for every entry enumerated, check if it's an xattr, and
+		 * insert it in the new entry.
+		 */
+		for (ptr = enum_buf, i = 0; i < number; i++) {
+			/** if not an xattr, go to next entry */
+			if (strncmp("x:", ptr, 2) != 0) {
+				ptr += kds[i].kd_key_len;
+				continue;
+			}
+
+			/** set akey as the xattr name */
+			d_iov_set(&iod.iod_name, ptr, kds[i].kd_key_len);
+			d_iov_set(&fiov, val_buf, DFS_MAX_XATTR_LEN);
+
+			/** fetch the xattr value from the src */
+			rc = daos_obj_fetch(src_oh, th, 0, &src_dkey, 1,
+					    &iod, &fsgl, NULL, NULL);
+			if (rc) {
+				D_ERROR("daos_obj_fetch() failed (%d)\n", rc);
+				D_GOTO(out, rc = daos_der2errno(rc));
+			}
+
+			d_iov_set(&fiov, val_buf, iod.iod_size);
+
+			/** add it to the destination */
+			rc = daos_obj_update(dst_oh, th, 0, &dst_dkey, 1,
+					     &iod, &fsgl, NULL);
+			if (rc) {
+				D_ERROR("daos_obj_update() failed (%d)\n", rc);
+				D_GOTO(out, rc = daos_der2errno(rc));
+			}
+			ptr += kds[i].kd_key_len;
+		}
+	}
+
+out:
+	D_FREE(val_buf);
+	return rc;
+}
+
 int
 dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 	 char *new_name, daos_obj_id_t *oid)
@@ -3440,8 +3541,8 @@ restart:
 
 	if (exists) {
 		if (S_ISDIR(new_entry.mode)) {
-			uint32_t nr = 0;
-			daos_handle_t oh;
+			uint32_t	nr = 0;
+			daos_handle_t	oh;
 
 			/** if old entry not a dir, return error */
 			if (!S_ISDIR(entry.mode)) {
@@ -3509,6 +3610,13 @@ restart:
 	rc = insert_entry(new_parent->oh, th, new_name, entry);
 	if (rc) {
 		D_ERROR("Inserting entry %s failed (%d)\n", new_name, rc);
+		D_GOTO(out, rc);
+	}
+
+	/** cp the extended attributes if they exist */
+	rc = xattr_copy(parent->oh, name, new_parent->oh, new_name, th);
+	if (rc) {
+		D_ERROR("Failed to copy extended attributes (%d)\n", rc);
 		D_GOTO(out, rc);
 	}
 
@@ -3727,7 +3835,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 	daos_iod_t	iod;
 	daos_key_t	dkey;
 	daos_handle_t	oh;
-	uint64_t        cond = 0;
+	uint64_t	cond = 0;
 	int		rc;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -3735,6 +3843,12 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 	if (dfs->amode != O_RDWR)
 		return EPERM;
 	if (obj == NULL)
+		return EINVAL;
+	if (name == NULL)
+		return EINVAL;
+	if (strnlen(name, DFS_MAX_XATTR_NAME + 1) > DFS_MAX_XATTR_NAME)
+		return EINVAL;
+	if (size > DFS_MAX_XATTR_LEN)
 		return EINVAL;
 
 	rc = check_access(dfs, geteuid(), getegid(), obj->mode, W_OK);
@@ -3793,20 +3907,32 @@ int
 dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 	     daos_size_t *size)
 {
-	char            *xname = NULL;
+	char		*xname = NULL;
 	d_sg_list_t	sgl;
 	d_iov_t		sg_iov;
 	daos_iod_t	iod;
 	daos_key_t	dkey;
 	daos_handle_t	oh;
 	int		rc;
+	mode_t		mode;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
 	if (obj == NULL)
 		return EINVAL;
+	if (name == NULL)
+		return EINVAL;
+	if (strnlen(name, DFS_MAX_XATTR_NAME + 1) > DFS_MAX_XATTR_NAME)
+		return EINVAL;
 
-	rc = check_access(dfs, geteuid(), getegid(), obj->mode, R_OK);
+	mode = obj->mode;
+
+	/* Patch in user read permissions here for trusted namespaces */
+	if (!strncmp(name, XATTR_SECURITY_PREFIX, XATTR_SECURITY_PREFIX_LEN) ||
+	    !strncmp(name, XATTR_SYSTEM_PREFIX, XATTR_SYSTEM_PREFIX_LEN))
+		mode |= S_IRUSR;
+
+	rc = check_access(dfs, geteuid(), getegid(), mode, R_OK);
 	if (rc)
 		return rc;
 
@@ -3866,12 +3992,13 @@ out:
 int
 dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 {
-	char            *xname = NULL;
+	char		*xname = NULL;
 	daos_handle_t	th = DAOS_TX_NONE;
 	daos_key_t	dkey, akey;
 	daos_handle_t	oh;
 	uint64_t	cond = 0;
 	int		rc;
+	mode_t		mode;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -3879,8 +4006,19 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 		return EPERM;
 	if (obj == NULL)
 		return EINVAL;
+	if (name == NULL)
+		return EINVAL;
+	if (strnlen(name, DFS_MAX_XATTR_NAME + 1) > DFS_MAX_XATTR_NAME)
+		return EINVAL;
 
-	rc = check_access(dfs, geteuid(), getegid(), obj->mode, W_OK);
+	mode = obj->mode;
+
+	/* Patch in user read permissions here for trusted namespaces */
+	if (!strncmp(name, XATTR_SECURITY_PREFIX, XATTR_SECURITY_PREFIX_LEN) ||
+	    !strncmp(name, XATTR_SYSTEM_PREFIX, XATTR_SYSTEM_PREFIX_LEN))
+		mode |= S_IRUSR;
+
+	rc = check_access(dfs, geteuid(), getegid(), mode, W_OK);
 	if (rc)
 		return rc;
 
@@ -3945,7 +4083,7 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 		uint32_t	number = ENUM_DESC_NR;
 		uint32_t	i;
 		d_iov_t		iov;
-		char		enum_buf[ENUM_DESC_BUF] = {0};
+		char		enum_buf[ENUM_XDESC_BUF] = {0};
 		d_sg_list_t	sgl;
 		char		*ptr;
 
