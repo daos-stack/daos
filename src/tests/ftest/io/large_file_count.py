@@ -41,7 +41,7 @@ class LargeFileCount(MdtestBase, IorTestBase):
                 self.hostlist_clients, self.workdir,
                 self.hostfile_clients_slots)
 
-#    @skipForTicket("DAOS-5841")
+    @skipForTicket("DAOS-5841")
     def test_largefilecount(self):
         """Jira ID: DAOS-3845.
         Test Description:
