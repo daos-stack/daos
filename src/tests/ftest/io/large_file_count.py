@@ -41,7 +41,7 @@ class LargeFileCount(MdtestBase, IorTestBase):
                 self.hostlist_clients, self.workdir,
                 self.hostfile_clients_slots)
 
-    @skipForTicket("DAOS-5841")
+#    @skipForTicket("DAOS-5841")
     def test_largefilecount(self):
         """Jira ID: DAOS-3845.
         Test Description:
@@ -53,6 +53,9 @@ class LargeFileCount(MdtestBase, IorTestBase):
         """
         apis = self.params.get("api", "/run/largefilecount/*")
         object_class = self.params.get("object_class", '/run/largefilecount/*')
+
+        # create pool
+        self.add_pool(connect=False)
 
         for oclass in object_class:
             self.ior_cmd.dfs_oclass.update(oclass)
@@ -67,8 +70,12 @@ class LargeFileCount(MdtestBase, IorTestBase):
                 # with single client node
                 self.single_client(api)
 
+                # create container
+                self.container = self.get_container(self.pool, create=False)
+                self.container.oclass.update(oclass)
+                self.container.create()
                 # run mdtest and ior
-                self.execute_mdtest(oclass=oclass)
+                self.execute_mdtest()
                 # container destroy
                 self.container.destroy()
                 self.update_ior_cmd_with_pool(oclass=oclass)
@@ -108,8 +115,12 @@ class LargeFileCount(MdtestBase, IorTestBase):
                 # with single client node
                 self.single_client(api)
 
+                # create container
+                self.container = self.get_container(self.pool, create=False)
+                self.container.oclass.update(oclass)
+                self.container.create()
                 # run mdtest and ior
-                self.execute_mdtest(oclass=oclass)
+                self.execute_mdtest()
                 # container destroy
                 self.container.destroy()
                 self.update_ior_cmd_with_pool(oclass=oclass)

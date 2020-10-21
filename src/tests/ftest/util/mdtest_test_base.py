@@ -59,64 +59,7 @@ class MdtestBase(DfuseTestBase):
         self.log.info('Clients %s', self.hostlist_clients)
         self.log.info('Servers %s', self.hostlist_servers)
 
-    def tearDown(self):
-        """Tear down each test case."""
-        try:
-            if self.dfuse:
-                self.dfuse.stop()
-        finally:
-            # Stop the servers and agents
-            super(MdtestBase, self).tearDown()
-
-    def create_pool(self):
-        """Create a pool and execute Mdtest."""
-        # Get the pool params
-        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
-        self.pool.get_params(self)
-
-        # Create a pool
-        self.pool.create()
-
-    def _create_cont(self, oclass):
-        """Create a container.
-        Args:
-            oclass (string): Pass object class type for container create
-                             explicitly.
-        """
-
-        # Get container params
-        self.container = TestContainer(
-            self.pool, daos_command=DaosCommand(self.bin))
-        self.container.get_params(self)
-        # update oclass param if specified
-        if oclass:
-            self.container.oclass.update(oclass)
-
-        # create container
-        self.container.create()
-
-    def _start_dfuse(self):
-        """Create a DfuseCommand object to start dfuse."""
-        # Get Dfuse params
-
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp)
-        self.dfuse.get_params(self)
-
-        # update dfuse params
-        self.dfuse.set_dfuse_params(self.pool)
-        self.dfuse.set_dfuse_cont_param(self.container)
-        self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
-
-        try:
-            # start dfuse
-            self.dfuse.run()
-        except CommandFailure as error:
-            self.log.error("Dfuse command %s failed on hosts %s",
-                           str(self.dfuse), self.dfuse.hosts,
-                           exc_info=error)
-            self.fail("Unable to launch Dfuse.\n")
-
-    def execute_mdtest(self, create_cont=True, oclass=None):
+    def execute_mdtest(self):
         """Runner method for Mdtest.
         Args:
             create_cont (bool): Create container if true
@@ -126,14 +69,13 @@ class MdtestBase(DfuseTestBase):
         if self.pool is None:
             self.add_pool(connect=False)
         # create container
-        if create_cont:
-            self._create_cont(oclass)
+        if self.container is None:
+            self.add_container(self.pool)
         # set Mdtest params
         self.mdtest_cmd.set_daos_params(self.server_group, self.pool)
 
         # start dfuse if api is POSIX
         if self.mdtest_cmd.api.value == "POSIX":
-            self.add_container(self.pool)
             self.start_dfuse(self.hostlist_clients, self.pool, self.container)
             self.mdtest_cmd.test_dir.update(self.dfuse.mount_dir.value)
 
