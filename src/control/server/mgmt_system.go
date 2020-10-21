@@ -255,12 +255,18 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 		return nil, errors.Wrapf(err, "invalid uuid %q", req.GetUuid())
 	}
 
+	fd, err := system.NewFaultDomainFromString(req.GetSrvFaultDomain())
+	if err != nil {
+		return nil, errors.Wrapf(err, "invalid server fault domain %q", req.GetSrvFaultDomain())
+	}
+
 	joinResponse, err := svc.membership.Join(&system.JoinRequest{
 		Rank:           system.Rank(req.Rank),
 		UUID:           uuid,
 		ControlAddr:    replyAddr,
 		FabricURI:      req.GetUri(),
 		FabricContexts: req.GetNctxs(),
+		FaultDomain:    fd,
 	})
 	if err != nil {
 		return nil, err
