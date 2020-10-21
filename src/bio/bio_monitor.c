@@ -42,6 +42,7 @@ struct dev_state_msg_arg {
 	ABT_eventual			 eventual;
 };
 
+/* Collect space utilisation for blobstore */
 static void
 collect_bs_usage(struct spdk_blob_store *bs, struct nvme_stats *stats)
 {
@@ -442,7 +443,6 @@ collect_raw_health_data(struct bio_dev_health *dev_health)
 	}
 }
 
-/* Collect space utilisation for blobstore */
 void
 bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {

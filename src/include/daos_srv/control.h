@@ -22,7 +22,7 @@
  */
 
 /*
- * Types to share between data and control planes.
+ * Primitives to share between data and control planes.
  */
 
 #ifndef __CONTROL_H__
@@ -30,6 +30,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <assert.h>
 
 #define HEALTH_STAT_STR_LEN 128
 
@@ -68,4 +69,42 @@ struct nvme_stats {
 	bool		 read_only_warn;
 	bool		 volatile_mem_warn; /*volatile memory backup*/
 };
-#endif /* __CONTROL_H__ */
+
+/**
+ * Parse input string and output ASCII as required by the NVMe spec.
+ *
+ * \param[out] dst	pre-allocated destination string buffer
+ * \param[in]  dst_sz	destination buffer size
+ * \param[in]  src	source buffer containing char array
+ * \param[in]  src_sz	source buffer size
+ *
+ * \retval		integer return code, non-zero on failure
+ */
+inline int
+copy_ascii(char *dst, size_t dst_sz, const void *buf, size_t buf_sz)
+{
+	const uint8_t	*str = buf;
+	int		 i = 0;
+
+	assert(dst != NULL);
+	assert(buf != NULL);
+
+	if (buf_sz >= dst_sz)
+		return -1;
+
+	/* Trim trailing spaces */
+	while (buf_sz > 0 && str[buf_sz - 1] == ' ')
+		buf_sz--;
+
+	while (buf_sz--) {
+		if (*str >= 0x20 && *str <= 0x7E)
+			dst[i] = (char)*str;
+		else
+			dst[i] = '.';
+		str++, i++;
+	}
+	dst[i] = '\0';
+
+	return 0;
+}
+#endif /* __CONTROL_H_ */
