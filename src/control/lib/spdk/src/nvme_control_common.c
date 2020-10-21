@@ -251,13 +251,16 @@ fail:
 static int
 copy_ctrlr_data(struct ctrlr_t *cdst, const struct spdk_nvme_ctrlr_data *cdata)
 {
-	if (copy_ascii(cdst->model, BUFLEN, cdata->mn, sizeof(cdata->mn)) != 0)
+	if (copy_ascii(cdst->model, sizeof(cdst->model), cdata->mn,
+		       sizeof(cdata->mn)) != 0)
 		return -NVMEC_ERR_CHK_SIZE;
 
-	if (copy_ascii(cdst->serial, BUFLEN, cdata->sn, sizeof(cdata->sn)) != 0)
+	if (copy_ascii(cdst->serial, sizeof(cdst->serial), cdata->sn,
+		       sizeof(cdata->sn)) != 0)
 		return -NVMEC_ERR_CHK_SIZE;
 
-	if (copy_ascii(cdst->fw_rev, BUFLEN, cdata->fr, sizeof(cdata->fr)) != 0)
+	if (copy_ascii(cdst->fw_rev, sizeof(cdst->fw_rev), cdata->fr,
+		       sizeof(cdata->fr)) != 0)
 		return -NVMEC_ERR_CHK_SIZE;
 
 	return 0;

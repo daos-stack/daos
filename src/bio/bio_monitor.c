@@ -186,14 +186,16 @@ get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 
 static int
 populate_health_cdata(const struct spdk_nvme_ctrlr_data *cdata,
-		      struct nvme_stats *ds)
+		      struct nvme_stats *state)
 {
-	if (copy_ascii(ds->model, BUFLEN, cdata->mn, sizeof(cdata->mn)) != 0) {
+	if (copy_ascii(state->model, sizeof(state->model), cdata->mn,
+		       sizeof(cdata->mn)) != 0) {
 		D_ERROR("data truncated when writing model to health state");
 		return -DER_TRUNC;
 	}
 
-	if (copy_ascii(ds->serial, BUFLEN, cdata->sn, sizeof(cdata->sn)) != 0) {
+	if (copy_ascii(state->serial, sizeof(state->serial), cdata->sn,
+		       sizeof(cdata->sn)) != 0) {
 		D_ERROR("data truncated when writing serial to health state");
 		return -DER_TRUNC;
 	}

@@ -81,27 +81,26 @@ struct nvme_stats {
  * \retval		integer return code, non-zero on failure
  */
 inline int
-copy_ascii(char *dst, size_t dst_sz, const void *buf, size_t buf_sz)
+copy_ascii(char *dst, size_t dst_sz, const void *src, size_t src_sz)
 {
-	const uint8_t	*str = buf;
-	int		 i = 0;
+	const uint8_t	*str = src;
+	int		 i, len = src_sz - 1;
 
 	assert(dst != NULL);
-	assert(buf != NULL);
-
-	if (buf_sz >= dst_sz)
-		return -1;
+	assert(src != NULL);
 
 	/* Trim trailing spaces */
-	while (buf_sz > 0 && str[buf_sz - 1] == ' ')
-		buf_sz--;
+	while (len > 0 && str[len - 1] == ' ')
+		len--;
 
-	while (buf_sz--) {
+	if (len >= dst_sz)
+		return -1;
+
+	for (i = 0; i < len; i++, str++) {
 		if (*str >= 0x20 && *str <= 0x7E)
 			dst[i] = (char)*str;
 		else
 			dst[i] = '.';
-		str++, i++;
 	}
 	dst[i] = '\0';
 
