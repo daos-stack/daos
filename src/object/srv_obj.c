@@ -2743,8 +2743,9 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	/* local RPC handler */
 	rc = obj_local_punch(opi, opc_get(rpc->cr_opc), &ioc, &dth);
 	if (rc != 0) {
-		D_ERROR(DF_UOID": error="DF_RC".\n", DP_UOID(opi->opi_oid),
-			DP_RC(rc));
+		D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
+			 DF_UOID": error="DF_RC".\n", DP_UOID(opi->opi_oid),
+			 DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 out:

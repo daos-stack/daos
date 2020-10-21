@@ -45,8 +45,12 @@ struct tx_helper {
 };
 
 struct mvcc_arg {
-	int		i;	/* used to generate different oids, etc. */
-	daos_epoch_t	epoch;	/* used to generate different epochs */
+	/** used to generate different oids, etc. */
+	int		i;
+	/** Fail on failed test */
+	bool		fail_fast;
+	/** used to generate different epochs */
+	daos_epoch_t	epoch;
 };
 
 enum type {
@@ -234,7 +238,7 @@ stop_tx(daos_handle_t coh, struct tx_helper *txh, bool success, bool write)
 		if (txh->th_nr_mods != 0) {
 			if (success) {
 				err = vos_dtx_commit(coh, &xid, 1, NULL);
-				assert_int_equal(err, 1);
+				assert(err >= 0);
 			}
 		}
 	}
@@ -761,21 +765,17 @@ struct conflicting_rw_excluded_case {
 };
 
 static struct conflicting_rw_excluded_case conflicting_rw_excluded_cases[] = {
+	/** Used to disable specific tests as necessary */
+	/** These specific tests can be enabled when DAOS-4698 is fixed
+	 *  and the line in vos_obj.c that references this ticket is
+	 *  uncommented.
+	 */
 	{false,	"punchd_dne",	"cod",	"puncho_one",	"co",	0, false},
 	{false,	"punchd_dne",	"cod",	"puncho_one",	"co",	1, false},
-	{false,	"puncha_ane",	"coda",	"update_de",	"coda",	0, false},
-	{false,	"puncha_ane",	"coda",	"update_de",	"coda",	1, false},
-	{false,	"puncha_ane",	"coda",	"update_dne",	"coda",	0, false},
-	{false,	"puncha_ane",	"coda",	"update_dne",	"coda",	1, false},
 	{false,	"puncha_ane",	"coda",	"puncho_one",	"co",	0, false},
 	{false,	"puncha_ane",	"coda",	"puncho_one",	"co",	1, false},
-	{false,	"puncha_ane",	"coda",	"punchd_dne",	"cod",	0, false},
-	{false,	"puncha_ane",	"coda",	"punchd_dne",	"cod",	1, false},
 	{false, "puncha_ane",   "coda", "puncho_one",   "co",   0, true},
 	{false, "punchd_dne",   "cod",  "puncho_one",   "co",   0, true},
-	{false, "puncha_ane",   "coda", "update_de",    "coda", 0, true},
-	{false, "puncha_ane",   "coda", "update_dne",   "coda", 0, true},
-	{false, "puncha_ane",   "coda", "punchd_dne",   "cod",  0, true},
 };
 
 static int64_t
@@ -815,7 +815,8 @@ is_excluded(bool empty, struct op *r, char *rp, daos_epoch_t re, struct op *w,
 static int
 conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 			struct op *r, char *rp, daos_epoch_t re,
-			struct op *w, char *wp, daos_epoch_t we, bool same_tx)
+			struct op *w, char *wp, daos_epoch_t we, bool same_tx,
+			int *skipped)
 {
 	struct mvcc_arg		*mvcc_arg = arg->custom;
 	struct tx_helper	*rtx;
@@ -827,8 +828,10 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 	int			 nfailed = 0;
 	int			 rc;
 
-	if (is_excluded(empty, r, rp, re, w, wp, we, same_tx))
+	if (is_excluded(empty, r, rp, re, w, wp, we, same_tx)) {
+		(*skipped)++;
 		goto out;
+	}
 
 	/*
 	 * Figure out the expected read result, perform read, and verify the
@@ -939,7 +942,8 @@ out:
 
 /* Return the number of failures observed. */
 static int
-conflicting_rw_exec(struct io_test_args *arg, int i, struct op *r, struct op *w)
+conflicting_rw_exec(struct io_test_args *arg, int i, struct op *r, struct op *w,
+		    int *cases, int *skipped)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	daos_epoch_t	 re;			/* r epoch */
@@ -969,7 +973,9 @@ conflicting_rw_exec(struct io_test_args *arg, int i, struct op *r, struct op *w)
 		we = mvcc_arg->epoch;
 		nfailed += conflicting_rw_exec_one(arg, i, j, empty, r, rp,
 						   re, w, wp, we,
-						   false /* same_tx */);
+						   false /* same_tx */,
+						   skipped);
+		(*cases)++;
 		j++;
 		mvcc_arg->i++;
 		mvcc_arg->epoch += 100;
@@ -979,7 +985,9 @@ conflicting_rw_exec(struct io_test_args *arg, int i, struct op *r, struct op *w)
 		we = mvcc_arg->epoch;
 		nfailed += conflicting_rw_exec_one(arg, i, j, empty, r, rp,
 						   re, w, wp, we,
-						   false /* same_tx */);
+						   false /* same_tx */,
+						   skipped);
+		(*cases)++;
 		j++;
 		mvcc_arg->i++;
 		mvcc_arg->epoch += 100;
@@ -989,7 +997,9 @@ conflicting_rw_exec(struct io_test_args *arg, int i, struct op *r, struct op *w)
 		we = mvcc_arg->epoch;
 		nfailed += conflicting_rw_exec_one(arg, i, j, empty, r, rp,
 						   re, w, wp, we,
-						   true /* same_tx */);
+						   true /* same_tx */,
+						   skipped);
+		(*cases)++;
 		j++;
 		mvcc_arg->i++;
 		mvcc_arg->epoch += 100;
@@ -999,7 +1009,9 @@ conflicting_rw_exec(struct io_test_args *arg, int i, struct op *r, struct op *w)
 		we = mvcc_arg->epoch + 10;
 		nfailed += conflicting_rw_exec_one(arg, i, j, empty, r, rp,
 						   re, w, wp, we,
-						   false /* same_tx */);
+						   false /* same_tx */,
+						   skipped);
+		(*cases)++;
 		j++;
 		mvcc_arg->i++;
 		mvcc_arg->epoch += 100;
@@ -1013,10 +1025,13 @@ static void
 conflicting_rw(void **state)
 {
 	struct io_test_args	*arg = *state;
+	struct mvcc_arg		*mvcc_arg = arg->custom;
 	struct op		*r;
 	struct op		*w;
 	int			 i = 0;
 	int			 nfailed = 0;
+	int			 nskipped = 0;
+	int			 ntot = 0;
 
 	/* For each read or readwrite... */
 	for_each_op(r) {
@@ -1028,10 +1043,14 @@ conflicting_rw(void **state)
 			if (!(is_rw(w) || is_w(w)))
 				continue;
 
-			nfailed += conflicting_rw_exec(arg, i, r, w);
+			nfailed += conflicting_rw_exec(arg, i, r, w, &ntot,
+						       &nskipped);
+			assert_true(!mvcc_arg->fail_fast || nfailed == 0);
 			i++;
 		}
 	}
+
+	print_message("total tests: %d, skipped %d\n", ntot, nskipped);
 
 	if (nfailed > 0)
 		fail_msg("%d failed cases", nfailed);
@@ -1057,7 +1076,8 @@ setup_mvcc(void **state)
 	D_ASSERT(arg->custom == NULL);
 	D_ALLOC_PTR(mvcc_arg);
 	D_ASSERT(mvcc_arg != NULL);
-	mvcc_arg->epoch = 10;
+	mvcc_arg->epoch = 500;
+	d_getenv_bool("CMOCKA_TEST_ABORT", &mvcc_arg->fail_fast);
 	arg->custom = mvcc_arg;
 	return 0;
 }
