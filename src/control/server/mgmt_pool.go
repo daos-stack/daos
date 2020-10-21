@@ -132,22 +132,27 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, err
 	}
 
-	var ranks []system.Rank
+	allRanks, err := svc.sysdb.MemberRanks()
+	if err != nil {
+		return nil, err
+	}
+
 	if len(req.GetRanks()) > 0 {
 		// If the request supplies a specific rank list, use it.
-		ranks = system.RanksFromUint32(req.GetRanks())
-		ranks, err = system.DedupeRanks(ranks)
+		reqRanks := system.RanksFromUint32(req.GetRanks())
+		reqRanks, err = system.DedupeRanks(reqRanks)
 		if err != nil {
 			return nil, err
 		}
-		req.Ranks = system.RanksToUint32(ranks)
+
+		if invalid := system.TestRankMembership(allRanks, reqRanks); len(invalid) > 0 {
+			return nil, FaultPoolInvalidRanks(invalid)
+		}
+
+		req.Ranks = system.RanksToUint32(reqRanks)
 	} else {
 		// Otherwise, create the pool across all ranks in the system.
-		ranks, err = svc.sysdb.MemberRanks()
-		if err != nil {
-			return nil, err
-		}
-		req.Ranks = system.RanksToUint32(ranks)
+		req.Ranks = system.RanksToUint32(allRanks)
 	}
 
 	ps = &system.PoolService{

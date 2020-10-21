@@ -125,6 +125,7 @@ const (
 	ServerIommuDisabled
 	ServerPoolScmTooSmall
 	ServerPoolNvmeTooSmall
+	ServerPoolInvalidRanks
 	ServerInsufficientFreeHugePages
 	ServerHarnessNotStarted
 	ServerDataPlaneNotStarted

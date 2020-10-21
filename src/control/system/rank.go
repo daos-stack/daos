@@ -148,6 +148,8 @@ func RanksFromUint32(ranks []uint32) (sysRanks []Rank) {
 	return
 }
 
+// DedupeRanks takes a Rank slice and returns a copy
+// that has been sorted with duplicates removed.
 func DedupeRanks(in []Rank) ([]Rank, error) {
 	set, err := CreateRankSet("")
 	if err != nil {
@@ -159,4 +161,22 @@ func DedupeRanks(in []Rank) ([]Rank, error) {
 		}
 	}
 	return set.Ranks(), nil
+}
+
+// TestRankMembership compares two Rank slices and returns a
+// Rank slice with any ranks found in the second slice that do
+// not exist in the first slice.
+func TestRankMembership(members, toTest []Rank) (missing []Rank) {
+	mm := make(map[Rank]struct{})
+	for _, m := range members {
+		mm[m] = struct{}{}
+	}
+
+	for _, m := range toTest {
+		if _, found := mm[m]; !found {
+			missing = append(missing, m)
+		}
+	}
+
+	return
 }
