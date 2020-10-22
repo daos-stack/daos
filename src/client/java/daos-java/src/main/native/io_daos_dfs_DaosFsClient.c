@@ -279,7 +279,8 @@ out:
  *
  * \return	0 for success, non-zero for failure
  */
-static int mkdirs(dfs_t *dfs, const char *path, int mode,
+static int
+mkdirs(dfs_t *dfs, const char *path, int mode,
 		unsigned char recursive,
 		dfs_obj_t **handle, char *msg)
 {
@@ -366,12 +367,12 @@ Java_io_daos_dfs_DaosFsClient_mkdir(JNIEnv *env, jobject client,
 	dfs_obj_t *parent_handle = NULL;
 	mode_t parent_mode;
 	char *parentError = NULL;
+	int rc = 0;
 
 	dirs = strdup(path_str);
 	parent_dir = dirname(dirs);
 	bases = strdup(path_str);
 	base = basename(bases);
-	int rc = 0;
 
 	if ((strlen(parent_dir) > 0) &&
 			(strcmp(parent_dir, "/") != 0)) {
@@ -454,14 +455,14 @@ Java_io_daos_dfs_DaosFsClient_createNewFile(JNIEnv *env,
 	dfs_obj_t *parent = NULL;
 	mode_t tmp_mode;
 
-    if (!type_id) {
-        char *tmp = "unsupported object class, %s";
-        char *msg = (char *)malloc(strlen(tmp) + strlen(object_type));
+	if (!type_id) {
+		char *tmp = "unsupported object class, %s";
+		char *msg = (char *)malloc(strlen(tmp) + strlen(object_type));
 
-        sprintf(msg, tmp, object_type);
-        throw_exception(env, msg, CUSTOM_ERR6);
-        goto out;
-    }
+		sprintf(msg, tmp, object_type);
+		throw_exception(env, msg, CUSTOM_ERR6);
+		goto out;
+	}
 	int rc = dfs_lookup(dfs, parent_path, O_RDWR, &parent, &tmp_mode, NULL);
 
 	if (rc) {
