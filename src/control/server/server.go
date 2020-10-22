@@ -166,12 +166,14 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return errors.Wrap(err, "unable to read system hugepage info")
 	}
 
-	if cfgHasBdev(cfg) {
-		// Double-check that we got the requested number of huge pages after prepare.
-		if hugePages.Free < prepReq.HugePageCount {
-			return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
+	/*
+		if cfgHasBdev(cfg) {
+			// Double-check that we got the requested number of huge pages after prepare.
+			if hugePages.Free < prepReq.HugePageCount {
+				return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
+			}
 		}
-	}
+	*/
 
 	// If this daos_server instance ends up being the MS leader,
 	// this will record the DAOS system membership.
