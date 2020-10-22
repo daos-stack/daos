@@ -189,12 +189,14 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		return errors.Wrap(err, "unable to read system hugepage info")
 	}
 
-	if cfgHasBdev(cfg) {
-		// Double-check that we got the requested number of huge pages after prepare.
-		if hugePages.Free < prepReq.HugePageCount {
-			return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
+	/*
+		if cfgHasBdev(cfg) {
+			// Double-check that we got the requested number of huge pages after prepare.
+			if hugePages.Free < prepReq.HugePageCount {
+				return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
+			}
 		}
-	}
+	*/
 
 	var dbReplicas []*net.TCPAddr
 	for _, ap := range cfg.AccessPoints {
