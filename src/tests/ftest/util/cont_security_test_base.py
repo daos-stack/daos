@@ -31,6 +31,7 @@ from avocado import fail_on
 from daos_utils import DaosCommand
 from command_utils import CommandFailure
 import general_utils
+from general_utils import DaosTestError
 import security_test_base as secTestBase
 from test_utils_container import TestContainer
 
