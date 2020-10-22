@@ -164,7 +164,7 @@ class OSAOnlineParallelTest(TestWithServers):
             if action == "reintegrate":
                 time.sleep(60)
             # For each action, read the values from the
-            # dictionary. 
+            # dictionary.
             # example {"exclude" : {"puuid": self.pool, "rank": rank
             #                       "target": t_string, "action": exclude}}
             # getattr is used to obtain the method in dmg object.
@@ -278,12 +278,13 @@ class OSAOnlineParallelTest(TestWithServers):
             for val in range(0, num_pool):
                 display_string = "Pool{} space at the End".format(val)
                 pool[val].display_pool_daos_space(display_string)
+                fail_count = 0
                 while fail_count <= 20:
-                pver_end = self.get_pool_version()
-                time.sleep(10)
-                fail_count += 1
-                if pver_end > 23:
-                    break
+                    pver_end = self.get_pool_version()
+                    time.sleep(10)
+                    fail_count += 1
+                    if pver_end > 23:
+                        break
                 self.log.info("Pool Version at the End %s", pver_end)
                 self.assertTrue(pver_end == 25,
                                 "Pool Version Error:  at the end")

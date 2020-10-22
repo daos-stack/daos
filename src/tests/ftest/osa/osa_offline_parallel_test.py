@@ -138,7 +138,7 @@ class OSAOfflineParallelTest(TestWithServers):
             if action == "reintegrate":
                 time.sleep(60)
                 # For each action, read the values from the
-                # dictionary. 
+                # dictionary.
                 # example {"exclude" : {"puuid": self.pool, "rank": rank
                 #                       "target": t_string, "action": exclude}}
                 # getattr is used to obtain the method in dmg object.
