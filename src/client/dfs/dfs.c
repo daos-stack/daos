@@ -2364,7 +2364,6 @@ restart:
 
 	*_obj = obj;
 
-	return rc;
 out:
 	if (daos_handle_is_valid(th)) {
 		int ret;
@@ -2372,11 +2371,16 @@ out:
 		ret = daos_tx_close(th,  NULL);
 		if (ret) {
 			D_ERROR("daos_tx_close() failed (%d)\n", ret);
-			if (rc == 0)
+			if (rc == 0) {
+				*_obj = NULL;
 				rc = daos_der2errno(ret);
+			}
 		}
 	}
-	D_FREE(obj);
+
+	if (rc != 0)
+		D_FREE(obj);
+
 	return rc;
 }
 
