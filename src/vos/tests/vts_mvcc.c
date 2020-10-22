@@ -790,7 +790,7 @@ querymaxdr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	uint64_t	 akey_val;
 	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
 
-	set_akey(mvcc_arg->i, path, &akey);
+	set_akey(mvcc_arg->i, "...a", &akey);
 
 	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
 			DAOS_GET_DKEY | DAOS_GET_RECX | DAOS_GET_MAX,
@@ -903,7 +903,7 @@ querymindr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	uint64_t	 akey_val;
 	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
 
-	set_akey(mvcc_arg->i, path, &akey);
+	set_akey(mvcc_arg->i, "...a", &akey);
 
 	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
 			DAOS_GET_DKEY | DAOS_GET_RECX | DAOS_GET_MIN,
@@ -959,14 +959,14 @@ static struct op operations[] = {
 	{"querymaxa",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymaxa_f},
 	{"querymaxr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymaxr_f},
 	{"querymaxda",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymaxda_f},
-	{"querymaxdr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymaxdr_f},
+	{"querymaxdr",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymaxdr_f},
 	{"querymaxar",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymaxar_f},
 	{"querymaxdar",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymaxdar_f},
 	{"querymind",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymind_f},
 	{"querymina",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymina_f},
 	{"queryminr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	queryminr_f},
 	{"queryminda",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	queryminda_f},
-	{"querymindr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymindr_f},
+	{"querymindr",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymindr_f},
 	{"queryminar",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	queryminar_f},
 	{"querymindar",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymindar_f},
 	/* Read timestamp update only cases */
