@@ -80,7 +80,7 @@ struct nvme_stats {
  *
  * \retval		integer return code, non-zero on failure
  */
-inline int
+static inline int
 copy_ascii(char *dst, size_t dst_sz, const void *src, size_t src_sz)
 {
 	const uint8_t	*str = src;
