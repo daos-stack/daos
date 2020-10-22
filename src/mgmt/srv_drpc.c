@@ -875,13 +875,14 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to set pool property on %s\n", req->uuid);
-
 	rc = uuid_parse(req->uuid, uuid);
 	if (rc != 0) {
 		D_ERROR("Couldn't parse '%s' to UUID\n", req->uuid);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
+
+	D_INFO(DF_UUID": received request to set pool property\n",
+	       DP_UUID(uuid));
 
 	new_prop = daos_prop_alloc(1);
 	if (new_prop == NULL) {
