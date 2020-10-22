@@ -752,6 +752,8 @@ struct daos_prop_entry *daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
 int daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply);
 int daos_prop_entry_copy(struct daos_prop_entry *entry,
 			 struct daos_prop_entry *entry_dup);
+daos_recx_t *daos_recx_alloc(uint32_t nr);
+void daos_recx_free(daos_recx_t *recx);
 
 static inline void
 daos_parse_ctype(const char *string, daos_cont_layout_t *type)

@@ -469,7 +469,7 @@ daos_iom_copy(const daos_iom_t *src, daos_iom_t *dst)
 
 	dst->iom_nr_out = src->iom_nr_out;
 	if (dst->iom_recxs == NULL) {
-		D_ALLOC_ARRAY(dst->iom_recxs, dst->iom_nr_out);
+		dst->iom_recxs = daos_recx_alloc(dst->iom_nr_out);
 		if (dst->iom_recxs == NULL)
 			return -DER_NOMEM;
 		dst->iom_nr = dst->iom_nr_out;

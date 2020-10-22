@@ -179,8 +179,10 @@ free_io_params_cb(tse_task_t *task, void *data)
 	while (io_list) {
 		struct io_params *current = io_list;
 
-		if (current->iom.iom_recxs)
-			D_FREE(current->iom.iom_recxs);
+		if (current->iom.iom_recxs) {
+			daos_recx_free(current->iom.iom_recxs);
+			current->iom.iom_recxs = NULL;
+		}
 		if (current->iod.iod_recxs)
 			D_FREE(current->iod.iod_recxs);
 		if (!current->user_sgl_used && current->sgl.sg_iovs)
