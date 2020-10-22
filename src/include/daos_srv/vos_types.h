@@ -220,7 +220,7 @@ enum {
 	VOS_OF_COND_AKEY_UPDATE		= DAOS_COND_AKEY_UPDATE,
 	/** Conditional Op: Fetch akey if it exists, fail otherwise */
 	VOS_OF_COND_AKEY_FETCH		= DAOS_COND_AKEY_FETCH,
-	/** Indiciates akey conditions are specified in iod_flags */
+	/** Indicates akey conditions are specified in iod_flags */
 	VOS_OF_COND_PER_AKEY		= DAOS_COND_PER_AKEY,
 	/* critical update - skip checks on SCM system/held space */
 	VOS_OF_CRIT			= (1 << 8),
