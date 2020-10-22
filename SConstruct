@@ -127,11 +127,6 @@ def set_defaults(env):
               action='store_true',
               default=False,
               help='Disable rpath')
-    AddOption('--with-fault-injection',
-              dest='fault-injection',
-              action='store_true',
-              default=False,
-              help='Enable fault injection framework in this build')
 
     env.Append(CCFLAGS=['-g', '-Wshadow', '-Wall', '-Wno-missing-braces',
                         '-fpic', '-D_GNU_SOURCE', '-DD_LOG_V2'])
@@ -154,7 +149,7 @@ def set_defaults(env):
         #could refine this but for now, just assume these warnings are ok
         env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)
 
-    if GetOption("fault-injection") and env.get('BUILD_TYPE') != 'release':
+    if env.get('BUILD_TYPE') != 'release':
         env.Append(CCFLAGS=['-DFAULT_INJECTION=1'])
 
 def preload_prereqs(prereqs):

@@ -208,7 +208,9 @@ scons %{?_smp_mflags}      \
       USE_INSTALLED=all    \
       CONF_DIR=%{conf_dir} \
       PREFIX=%{?buildroot} \
-      %{?_with_fault_injection}
+      %{?with_fault_injection:BUILD_TYPE=dev} \
+      %{!?with_fault_injection:BUILD_TYPE=release}
+
 
 %install
 scons %{?_smp_mflags}                 \
@@ -220,7 +222,8 @@ scons %{?_smp_mflags}                 \
       USE_INSTALLED=all               \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
-      %{?_with_fault_injection}
+      %{?with_fault_injection:BUILD_TYPE=dev} \
+      %{!?with_fault_injection:BUILD_TYPE=release}
 
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"

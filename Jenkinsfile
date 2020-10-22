@@ -43,9 +43,9 @@ boolean release_candidate() {
 def scons_faults_enabled() {
     // if the faults_enabled pragma is false or it a release candidate; disable fault injection
     if ((cachedCommitPragma(pragma: 'faults-enabled', def_val: 'true') != 'true') || release_candidate()) {
-        return ""
+        return "BUILD_TYPE=release"
     } else {
-        return "--with-fault-injection"
+        return "BUILD_TYPE=dev"
     }
 }
 
