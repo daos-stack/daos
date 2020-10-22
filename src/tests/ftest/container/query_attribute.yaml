@@ -8,4 +8,3 @@ server_config:
     targets: 8
 pool:
   scm_size: 1G
-  control_method: dmg

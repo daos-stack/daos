@@ -5,7 +5,6 @@ timeout: 140
 server_config:
     name: daos_server
 pool:
-    control_method: dmg
     scm_size: 1GB
 container:
     control_method: daos

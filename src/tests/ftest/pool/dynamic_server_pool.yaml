@@ -14,4 +14,3 @@ extra_servers:
     - server-C
 pool:
   scm_size: 1G
-  control_method: dmg

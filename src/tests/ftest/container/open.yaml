@@ -7,7 +7,6 @@ pool:
   mode: 511
   name: daos_server
   scm_size: 1G
-  control_method: dmg
 container:
   control_method: daos
 container_uuid_states: !mux

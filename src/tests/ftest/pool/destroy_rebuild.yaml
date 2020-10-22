@@ -19,7 +19,6 @@ pool:
   mode: 511
   name: daos_server
   scm_size: 16428800
-  control_method: dmg
 testparams:
   rank_to_kill: 0
   # rank_to_kill: 1

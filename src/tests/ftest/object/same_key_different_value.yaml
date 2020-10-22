@@ -8,4 +8,3 @@ pool:
   mode: 511
   name: daos_server
   scm_size: 10000000
-  control_method: dmg

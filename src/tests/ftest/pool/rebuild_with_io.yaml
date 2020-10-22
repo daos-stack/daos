@@ -17,7 +17,6 @@ pool:
   mode: 511
   name: daos_server
   scm_size: 1073741824
-  control_method: dmg
 container:
   akey_size: 5
   dkey_size: 5

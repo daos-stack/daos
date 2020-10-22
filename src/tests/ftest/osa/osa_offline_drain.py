@@ -123,8 +123,7 @@ class OSAOfflineDrain(TestWithServers):
         rank = random.randint(1, drain_servers)
 
         for val in range(0, num_pool):
-            pool[val] = TestPool(self.context,
-                                 dmg_command=self.get_dmg_command())
+            pool[val] = TestPool(self.context, self.get_dmg_command())
             pool[val].get_params(self)
             # Split total SCM and NVME size for creating multiple pools.
             pool[val].scm_size.value = int(pool[val].scm_size.value /

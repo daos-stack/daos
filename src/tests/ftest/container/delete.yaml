@@ -10,7 +10,6 @@ pool:
   mode: 511
   scm_size: 1073741824
   name: daos_server
-  control_method: dmg
 createtests:
   ContainerUUIDS: !mux
     gooduid:

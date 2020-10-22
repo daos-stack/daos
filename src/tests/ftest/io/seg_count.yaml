@@ -19,7 +19,6 @@ pool:
     name: daos_server
     scm_size: 60000000000
     svcn: 3
-    control_method: dmg
 ior:
     client_processes: !mux
         slots_16:

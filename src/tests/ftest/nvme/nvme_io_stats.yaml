@@ -19,7 +19,6 @@ pool:
     scm_size: 21474836480 #20G
     nvme_size: 107374182400 #100G
     svcn: 1
-    control_method: dmg
 container:
     type: POSIX
     control_method: daos

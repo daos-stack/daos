@@ -18,7 +18,6 @@ server_config:
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
 pool:
-  control_method: dmg
   scm_size: 80G
   nvme_size: 100G
   target_list: [0, 1]

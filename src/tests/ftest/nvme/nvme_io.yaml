@@ -24,7 +24,6 @@ pool:
  svcn: 1
  prop_name: reclaim
  prop_value: disabled
- control_method: dmg
 ior:
  flags: "-w -r -k -vv"
  repetitions: 1

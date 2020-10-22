@@ -24,7 +24,6 @@ dmg:
   transport_config:
     allow_insecure: True
 pool:
-  control_method: dmg
   mode: 146
   scm_size: "16GB"
   nvme_size: "32GB"

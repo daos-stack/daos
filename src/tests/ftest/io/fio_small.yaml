@@ -45,7 +45,6 @@ pool:
   scm_size: 1600000000
   nvme_size: 20000000000
   svcn: 1
-  control_method: dmg
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on

@@ -13,7 +13,6 @@ server_config:
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
 pool:
-    control_method: dmg
     mode: 511
     name: daos_server
     scm_size: 50G

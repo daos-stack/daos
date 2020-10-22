@@ -35,7 +35,6 @@ pool:
     mode: 146
     name: daos_server
     svcn: 1
-    control_method: dmg
     storage_ratio:
 #   - [scm_size, nvme_size, Expected Result]
     - ['2G', '100G', 'PASS']    # SCM Size ratio is greater than 1%

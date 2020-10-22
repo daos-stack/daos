@@ -22,7 +22,6 @@ dmg:
   transport_config:
     allow_insecure: True
 pool:
-  control_method: dmg
   mode: 511
   scm_size: 1073741824
   name: daos_server

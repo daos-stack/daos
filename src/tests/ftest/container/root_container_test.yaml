@@ -13,7 +13,6 @@ pool:
   name: daos_server
   scm_size: 30000000000
   svcn: 1
-  control_method: dmg
   pool_count: 5
 container:
     type: POSIX

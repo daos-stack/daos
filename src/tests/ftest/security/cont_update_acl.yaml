@@ -9,7 +9,6 @@ timeout: 120
 server_config:
   name: daos_server
 pool:
-  control_method: dmg
   mode: 511
   scm_size: 1G
   name: daos_server

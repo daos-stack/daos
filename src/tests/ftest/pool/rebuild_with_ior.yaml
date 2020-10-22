@@ -26,7 +26,6 @@ pool:
     scm_size: 30000000000
   createsvc:
     svcn: 1
-  control_method: dmg
 ior:
     client_processes:
         np_8:

@@ -13,7 +13,6 @@ server_config:
 pool:
     name: daos_server
     scm_size: 107374182
-    control_method: dmg
 snapshot:
     dkey: "dkey"
     akey: "akey"

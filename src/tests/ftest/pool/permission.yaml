@@ -14,7 +14,6 @@ timeout: 300
 server_config:
     name: daos_server
 pool:
-    control_method: dmg
     scm_size: 1000000000
     name: daos_server
 createtests:

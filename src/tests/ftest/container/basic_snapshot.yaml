@@ -10,7 +10,6 @@ server_config:
 pool:
     mode: 511
     name: daos_server
-    control_method: dmg
     scm_size_mux: !mux
         size1gb:
             scm_size: 1073741824

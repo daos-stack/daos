@@ -12,6 +12,5 @@ extra_servers:
         - server-E
 pool:
     scm_size: 1G
-    control_method: dmg
 dmg:
     json: True
