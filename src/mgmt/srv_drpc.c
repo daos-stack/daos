@@ -769,7 +769,7 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	D_INFO("Received request to set pool property on "DF_UUID"\n",
+	D_INFO(DF_UUID": received request to set pool property\n",
 	       DP_UUID(uuid));
 
 	new_prop = daos_prop_alloc(1);
