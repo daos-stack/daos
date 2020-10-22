@@ -333,6 +333,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/libioil.so
 %{_libdir}/libdfs_internal.so
 %{_libdir}/libvos_size.so
+%{_libdir}/libdts.so
 %dir  %{_libdir}/python2.7/site-packages/pydaos
 %dir  %{_libdir}/python2.7/site-packages/storage_estimator
 %{_libdir}/python2.7/site-packages/pydaos/*.py
@@ -386,7 +387,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_bindir}/daos_perf
 %{_bindir}/daos_racer
 %{_bindir}/evt_ctl
-%{_bindir}/obj_ctl
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
 %{_bindir}/crt_launch
@@ -402,6 +402,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Tue Oct 13 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> 1.1.1-3
+- Remove obj_ctl from Tests RPM package
+- Add libdts.so shared library that is used by daos_perf, daos_racer and
+  the daos utility.
 
 * Tue Oct 14 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.1-3
 - add fault_status to daos-tests files list
