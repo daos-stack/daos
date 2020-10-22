@@ -753,7 +753,21 @@ class DmgCommand(DmgCommandBase):
             ("pool", "reintegrate"), pool=pool, rank=rank, tgt_idx=tgt_idx)
 
     def cont_set_owner(self, pool, cont, user, group):
-        """
+        """Dmg container set-owner to the sepcified new user/group.
+
+        Args:
+            pool (str): Pool uuid.
+            cont (str): Container uuid.
+            user (str): new user for the container.
+            group (str): new group for the container.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                       information.
+
+        Raises:
+            CommandFailure: if the dmg pool reintegrate command fails.
+
         """
         return self._get_result(
             ("cont", "set-owner"), pool=pool, cont=cont, user=user, group=group)
