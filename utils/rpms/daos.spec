@@ -11,7 +11,7 @@
 
 Name:          daos
 Version:       1.1.1
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -398,13 +398,13 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Tue Oct 22 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.1-4
+- add fault_status to daos-tests files list
+
 * Tue Oct 13 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> 1.1.1-3
 - Remove obj_ctl from Tests RPM package
 - Add libdts.so shared library that is used by daos_perf, daos_racer and
   the daos utility.
-
-* Tue Oct 14 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.1-3
-- add fault_status to daos-tests files list
 
 * Tue Oct 13 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.1-2
 - Create unprivileged user for daos_agent
