@@ -163,6 +163,13 @@ class OSAOnlineParallelTest(TestWithServers):
         try:
             if action == "reintegrate":
                 time.sleep(60)
+            # For each action, read the values from the
+            # dictionary. 
+            # example {"exclude" : {"puuid": self.pool, "rank": rank
+            #                       "target": t_string, "action": exclude}}
+            # getattr is used to obtain the method in dmg object.
+            # eg: dmg -> pool_exclude method, then pass arguments like
+            # puuid, rank, target to the pool_exclude method.
             getattr(dmg, "pool_{}".format(action))(**action_args[action])
         except CommandFailure as _error:
             results.put("{} failed".format(action_args[action]))
@@ -178,7 +185,7 @@ class OSAOnlineParallelTest(TestWithServers):
                           some data in pool. Defaults to False.
         """
         num_jobs = self.params.get("no_parallel_job", '/run/ior/*')
-        # Create a pool+
+        # Create a pool
         pool = {}
         pool_uuid = []
         target_list = []
@@ -271,13 +278,18 @@ class OSAOnlineParallelTest(TestWithServers):
             for val in range(0, num_pool):
                 display_string = "Pool{} space at the End".format(val)
                 pool[val].display_pool_daos_space(display_string)
+                while fail_count <= 20:
                 pver_end = self.get_pool_version()
+                time.sleep(10)
+                fail_count += 1
+                if pver_end > 23:
+                    break
                 self.log.info("Pool Version at the End %s", pver_end)
                 self.assertTrue(pver_end == 25,
                                 "Pool Version Error:  at the end")
                 pool[val].destroy()
 
-    @skipForTicket("DAOS-5877")
+    # @skipForTicket("DAOS-5877")
     def test_osa_online_parallel_test(self):
         """
         JIRA ID: DAOS-4752

@@ -123,27 +123,28 @@ class OSAOfflineParallelTest(TestWithServers):
                               .format("dkey {0}".format(dkey),
                                       "akey {0}".format(akey)))
 
-    def dmg_thread(self, puuid, rank, target, action, results):
+    def dmg_thread(self, action, action_args, results):
         """Generate different dmg command related to OSA.
             Args:
-            puuid (int) : Pool UUID
-            rank (int)  : Daos Server Rank
-            target (list) : Target list
-            action (string) : String to identify OSA action
-                              like drain, reintegration, extend
+            action_args(dict) : {action: {"puuid":
+                                          pool[val].uuid,
+                                          "rank": rank,
+                                          "target": t_string,
+                                          "action": action,}
             results (queue) : dmg command output queue.
         """
         dmg = copy.copy(self.dmg_command)
         try:
-            if action == "exclude":
-                dmg.pool_exclude(puuid, (rank + 1), target)
-            elif action == "drain":
-                dmg.pool_drain(puuid, rank)
-            elif action == "reintegrate":
+            if action == "reintegrate":
                 time.sleep(60)
-                dmg.pool_reintegrate(puuid, (rank + 1), target)
-            else:
-                self.fail("Invalid action for dmg thread")
+                # For each action, read the values from the
+                # dictionary. 
+                # example {"exclude" : {"puuid": self.pool, "rank": rank
+                #                       "target": t_string, "action": exclude}}
+                # getattr is used to obtain the method in dmg object.
+                # eg: dmg -> pool_exclude method, then pass arguments like
+                # puuid, rank, target to the pool_exclude method.
+            getattr(dmg, "pool_{}".format(action))(**action_args[action])
         except CommandFailure as _error:
             results.put("{} failed".format(action))
             # Future enhancement for extend
@@ -194,15 +195,21 @@ class OSAOfflineParallelTest(TestWithServers):
             self.log.info("Pool Version at the beginning %s", pver_begin)
             # Create the threads here
             threads = []
-            osa_tasks = ["drain", "exclude", "reintegrate"]
-            for action in osa_tasks:
+            # Action dictionary with OSA dmg command parameters
+            action_args = {
+                "drain": {"pool": self.pool.uuid, "rank": rank,
+                          "tgt_idx": None},
+                "exclude": {"pool": self.pool.uuid, "rank": (rank + 1),
+                            "tgt_idx": t_string},
+                "reintegrate": {"pool": self.pool.uuid, "rank": (rank + 1),
+                                "tgt_idx": t_string}
+            }
+            for action in sorted(action_args):
                 # Add a dmg thread
                 process = threading.Thread(target=self.dmg_thread,
-                                           kwargs={"puuid":
-                                                   self.pool.uuid,
-                                                   "rank": rank,
-                                                   "target": t_string,
-                                                   "action": action,
+                                           kwargs={"action": action,
+                                                   "action_args":
+                                                   action_args,
                                                    "results":
                                                    self.out_queue})
                 process.start()
@@ -225,7 +232,13 @@ class OSAOfflineParallelTest(TestWithServers):
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
             pool[val].display_pool_daos_space(display_string)
-            pver_end = self.get_pool_version()
+            fail_count = 0
+            while fail_count <= 20:
+                pver_end = self.get_pool_version()
+                time.sleep(10)
+                fail_count += 1
+                if pver_end > 23:
+                    break
             self.log.info("Pool Version at the End %s", pver_end)
             self.assertTrue(pver_end == 25,
                             "Pool Version Error:  at the end")
