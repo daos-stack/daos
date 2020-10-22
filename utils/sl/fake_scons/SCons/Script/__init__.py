@@ -343,6 +343,9 @@ def Glob(*args):
     """Fake Glob"""
     return []
 
+def Split(*args):
+    """Fake Split"""
+    return []
 
 def Exit(status):
     """Fake Exit"""
@@ -407,6 +410,7 @@ __all__ = ['DefaultEnvironment',
            'Dir',
            'Help',
            'Glob',
+           'Split',
            'Exit',
            'Import',
            'Export',

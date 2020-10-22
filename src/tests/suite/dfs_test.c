@@ -46,9 +46,11 @@ print_usage(int rank)
 
 	print_message("\n\nDFS TESTS\n=============================\n");
 	print_message("Tests: Use one of these arg(s) for specific test\n");
-	print_message("dfs_test -n|--dmg_config\n");
 	print_message("dfs_test -p|--parallel\n");
 	print_message("dfs_test -u|--unit\n");
+	print_message("Default <daos_tests> runs all tests\n=============\n");
+	print_message("dfs_test -E|--exclude TESTS\n");
+	print_message("dfs_test -n|--dmg_config\n");
 	print_message("\n=============================\n");
 }
 
@@ -92,6 +94,7 @@ main(int argc, char **argv)
 	test_arg_t	*arg;
 	char		 tests[64];
 	char		*exclude_str = NULL;
+	int		 ntests = 0;
 	int		 nr_failed = 0;
 	int		 nr_total_failed = 0;
 	int		 opt = 0, index = 0;
@@ -123,13 +126,21 @@ main(int argc, char **argv)
 
 	memset(tests, 0, sizeof(tests));
 
-	while ((opt = getopt_long(argc, argv, "an:pu",
+	while ((opt = getopt_long(argc, argv, "aE:n:pu",
 				  long_options, &index)) != -1) {
+		if (strchr(all_tests, opt) != NULL) {
+			tests[ntests] = opt;
+			ntests++;
+			continue;
+		}
 		switch (opt) {
 		case 'a':
 			break;
 		case 'n':
 			dmg_config_file = optarg;
+			break;
+		case 'E':
+			exclude_str = optarg;
 			break;
 		default:
 			daos_test_print(rank, "Unknown Option\n");
