@@ -381,18 +381,6 @@ func newGroupMap(version uint32) *GroupMap {
 	}
 }
 
-// DatabaseRunWithLockFn defines the signature for closures that
-// can be supplied to RunWithLock.
-type DatabaseRunWithLockFn func(*Database) error
-
-// RunWithLock executes the supplied closure under a whole-Database lock.
-func (db *Database) RunWithLock(fn DatabaseRunWithLockFn) error {
-	db.Lock()
-	defer db.Unlock()
-
-	return fn(db)
-}
-
 // GroupMap returns the latest system group map.
 func (db *Database) GroupMap() (*GroupMap, error) {
 	if err := db.checkLeader(); err != nil {
