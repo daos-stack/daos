@@ -518,6 +518,12 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 			cflags = VOS_TS_WRITE_AKEY;
 			if (vos_flags & VOS_COND_AKEY_UPDATE_MASK)
 				cflags |= VOS_TS_READ_AKEY;
+			/** This can be improved but for now, keep it simple.
+			 *  It will mean updating read timestamps on any akeys
+			 *  that don't have a condition set.
+			 */
+			if (vos_flags & VOS_OF_COND_PER_AKEY)
+				cflags |= VOS_TS_READ_AKEY;
 			if (vos_flags & VOS_COND_DKEY_UPDATE_MASK)
 				cflags |= VOS_TS_READ_DKEY;
 		}
@@ -994,8 +1000,11 @@ no_shadow:
 }
 
 static bool
-stop_on_empty(struct vos_io_context *ioc, uint64_t cond, int *rc)
+stop_on_empty(struct vos_io_context *ioc, uint64_t cond, daos_iod_t *iod,
+	      int *rc)
 {
+	uint64_t	flags;
+
 	if (*rc != -DER_NONEXIST)
 		return false;
 
@@ -1010,7 +1019,14 @@ stop_on_empty(struct vos_io_context *ioc, uint64_t cond, int *rc)
 		return true;
 	}
 
-	if (ioc->ic_ts_set->ts_flags & cond)
+	if (iod != NULL && ioc->ic_ts_set->ts_flags & VOS_OF_COND_PER_AKEY) {
+		/** Per akey flags have been specified */
+		flags = iod->iod_flags;
+	} else {
+		flags = ioc->ic_ts_set->ts_flags;
+	}
+
+	if (flags & cond)
 		return true;
 
 	return false;
@@ -1042,7 +1058,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 			      DAOS_INTENT_DEFAULT, &krec, &toh, ioc->ic_ts_set);
 
 	if (rc != 0) {
-		if (stop_on_empty(ioc, VOS_OF_COND_AKEY_FETCH, &rc))
+		if (stop_on_empty(ioc, VOS_OF_COND_AKEY_FETCH, iod, &rc))
 			goto out;
 		if (rc == -DER_NONEXIST) {
 			D_DEBUG(DB_IO, "Nonexistent akey "DF_KEY"\n",
@@ -1059,7 +1075,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 			    &ioc->ic_akey_info);
 
 	if (rc != 0) {
-		if (stop_on_empty(ioc, VOS_OF_COND_AKEY_FETCH, &rc))
+		if (stop_on_empty(ioc, VOS_OF_COND_AKEY_FETCH, iod, &rc))
 			goto out;
 		if (rc == -DER_NONEXIST) {
 			iod_empty_sgl(ioc, ioc->ic_sgl_at);
@@ -1165,7 +1181,8 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 			      dkey, 0, DAOS_INTENT_DEFAULT, &krec,
 			      &toh, ioc->ic_ts_set);
 
-	if (stop_on_empty(ioc, VOS_COND_FETCH_MASK, &rc))
+	if (stop_on_empty(ioc, VOS_COND_FETCH_MASK | VOS_OF_COND_PER_AKEY, NULL,
+			  &rc))
 		goto out;
 	if (rc == -DER_NONEXIST) {
 		for (i = 0; i < ioc->ic_iod_nr; i++)
@@ -1184,7 +1201,9 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 			    &ioc->ic_dkey_info);
 
 	if (rc != 0) {
-		if (stop_on_empty(ioc, VOS_COND_FETCH_MASK, &rc))
+		if (stop_on_empty(ioc,
+				  VOS_COND_FETCH_MASK | VOS_OF_COND_PER_AKEY,
+				  NULL, &rc))
 			goto out;
 		if (rc == -DER_NONEXIST) {
 			for (i = 0; i < ioc->ic_iod_nr; i++)
@@ -1253,7 +1272,8 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rc != -DER_NONEXIST && rc != 0)
 		goto out;
 
-	if (stop_on_empty(ioc, VOS_COND_FETCH_MASK, &rc)) {
+	if (stop_on_empty(ioc, VOS_COND_FETCH_MASK | VOS_OF_COND_PER_AKEY,
+			  NULL, &rc)) {
 		if (rc == 0)
 			goto set_ioc;
 		goto out;
@@ -1442,7 +1462,14 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 		return rc;
 
 	if (ioc->ic_ts_set) {
-		switch (ioc->ic_ts_set->ts_flags & VOS_COND_AKEY_UPDATE_MASK) {
+		uint64_t akey_flags;
+
+		if (ioc->ic_ts_set->ts_flags & VOS_OF_COND_PER_AKEY)
+			akey_flags = iod->iod_flags;
+		else
+			akey_flags = ioc->ic_ts_set->ts_flags;
+
+		switch (akey_flags) {
 		case VOS_OF_COND_AKEY_UPDATE:
 			update_cond = VOS_ILOG_COND_UPDATE;
 			break;
