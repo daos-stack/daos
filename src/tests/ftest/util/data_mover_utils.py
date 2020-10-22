@@ -134,8 +134,7 @@ class DataMover(DataMoverCommand):
     def __init__(self, hosts, timeout=30):
         """Create a datamover object."""
         super(DataMover, self).__init__(
-            "/run/datamover/*",
-            "/home/standan/mpiio/install/mpifileutils/bin/dcp")
+            "/run/datamover/*", "dcp")
 
         # set params
         self.timeout = timeout
@@ -157,6 +156,7 @@ class DataMover(DataMoverCommand):
         mpirun = Mpirun(self, mpitype="mpich")
         mpirun.assign_hosts(self.hosts, tmp)
         mpirun.assign_processes(processes)
+        mpirun.exit_status_exception = self.exit_status_exception
 
         # run dcp
         out = mpirun.run()

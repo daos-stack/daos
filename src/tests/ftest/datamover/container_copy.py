@@ -20,8 +20,6 @@
 
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
-from test_utils_container import TestContainer
-from daos_utils import DaosCommand
 from data_mover_utils import DataMover
 from command_utils_base import CommandFailure
 
@@ -34,26 +32,20 @@ class ContainerCopy(MdtestBase, IorTestBase):
     """
 
     def __init__(self, *args, **kwargs):
-        """Initialising ContainerCopy object"""
+        """Initializing ContainerCopy object"""
         super(ContainerCopy, self).__init__(*args, **kwargs)
 
         self.container = []
 
     def create_cont(self):
         """Create a TestContainer object to be used to create container."""
-        # Get container params
-        container = TestContainer(
-            self.pool, daos_command=DaosCommand(self.bin))
-        container.get_params(self)
-
-        # create container
-        container.create()
-
-        self.container.append(container)
+        # Get container params and create
+        self.container.append(self.get_container(self.pool, create=False))
+        self.container[-1].create()
 
     def run_dcp(self, src_pool=None, dst_pool=None, src_cont=None,
                 dst_cont=None, update_dest=False):
-        """Initialise and run DatamoverCommand object
+        """Initialize and run DatamoverCommand object
 
           Args:
             src_pool(TestPool): source pool object
@@ -91,7 +83,7 @@ class ContainerCopy(MdtestBase, IorTestBase):
         Use Cases:
             Create a pool.
             Create POSIX type container.
-            Run mdtest -a DFS to create 2B 4K files
+            Run mdtest -a DFS to create 50K files of size 4K
             Create second container
             Copy data from cont1 to cont2 using dcp
             Run mdtest again, but this time on cont2 and read the files back.
@@ -103,7 +95,7 @@ class ContainerCopy(MdtestBase, IorTestBase):
         mdtest_flags = self.params.get("mdtest_flags", "/run/mdtest/*")
         file_size = self.params.get("bytes", "/run/mdtest/*")
         # create pool and cont
-        self.create_pool()
+        self.add_pool(connect=False)
         self.create_cont()
 
         # set and update mdtest command params
@@ -147,7 +139,7 @@ class ContainerCopy(MdtestBase, IorTestBase):
         """
 
         # create pool and cont
-        self.create_pool()
+        self.add_pool(connect=False)
         self.create_cont()
 
         # update and run ior on cont1
@@ -168,9 +160,6 @@ class ContainerCopy(MdtestBase, IorTestBase):
         self.ior_cmd.api.update("POSIX")
         self.ior_cmd.flags.update("-r -R")
         dest_path = self.tmp + self.ior_cmd.test_file.value
-        # update dest path permissions to be able to read the file.
-        cmd = u"chmod 755 {}".format(dest_path)
-        self.execute_cmd(cmd)
         self.ior_cmd.test_file.update(dest_path)
         self.ior_cmd.set_daos_params(self.server_group, self.pool)
         self.run_ior(self.get_ior_job_manager_command(), self.processes)
