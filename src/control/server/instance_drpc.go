@@ -211,8 +211,9 @@ func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[
 		return errors.Wrapf(err, "instance %d listSmdDevices()", srv.Index())
 	}
 
+	hasUpdatedHealth := make(map[string]bool)
 	for _, dev := range smdDevs.Devices {
-		healthPB, err := srv.getBioHealth(ctx, &mgmtpb.BioHealthReq{
+		pbStats, err := srv.getBioHealth(ctx, &mgmtpb.BioHealthReq{
 			DevUuid: dev.Uuid,
 		})
 		if err != nil {
@@ -222,8 +223,8 @@ func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[
 		msg := fmt.Sprintf("instance %d: health stats from smd uuid %s", srv.Index(),
 			dev.GetUuid())
 
-		health := new(storage.NvmeControllerHealth)
-		if err := convert.Types(healthPB, health); err != nil {
+		health := new(storage.NvmeHealth)
+		if err := convert.Types(pbStats, health); err != nil {
 			return errors.Wrapf(err, msg)
 		}
 
@@ -245,7 +246,10 @@ func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[
 		// multiple updates for the same key expected when
 		// more than one controller namespaces (and resident
 		// blobstores) exist, stats will be the same for each
-		ctrlr.HealthStats = health
+		if _, already := hasUpdatedHealth[key]; !already {
+			ctrlr.HealthStats = health
+			hasUpdatedHealth[key] = true
+		}
 
 		smdDev := new(storage.SmdDevice)
 		if err := convert.Types(dev, smdDev); err != nil {
@@ -256,6 +260,12 @@ func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[
 			return errors.Wrapf(err, "get rank")
 		}
 		smdDev.Rank = srvRank
+		// space utilisation stats for each smd device
+		smdDev.TotalBytes = pbStats.TotalBytes
+		smdDev.AvailBytes = pbStats.AvailBytes
+
+		srv.log.Debugf("update smd/bs %s usage on ctrlr %s: %+v",
+			dev.GetUuid(), ctrlr.PciAddr, smdDev)
 
 		ctrlr.UpdateSmd(smdDev)
 	}
