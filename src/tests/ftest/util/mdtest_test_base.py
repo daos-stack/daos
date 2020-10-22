@@ -67,8 +67,7 @@ class MdtestBase(DfuseTestBase):
         if self.container is None:
             self.add_container(self.pool)
         # set Mdtest params
-        self.mdtest_cmd.set_daos_params(self.server_group, self.pool,
-                                        self.container.uuid)
+        self.mdtest_cmd.set_daos_params(self.server_group, self.pool)
 
         # start dfuse if api is POSIX
         if self.mdtest_cmd.api.value == "POSIX":
