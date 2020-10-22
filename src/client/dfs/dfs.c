@@ -1883,6 +1883,14 @@ dfs_lookup_loop:
 				D_GOTO(err_obj, rc = ENOENT);
 			}
 
+			rc = check_access(dfs, geteuid(), getegid(), entry.mode,
+					  (daos_mode == DAOS_OO_RO) ? R_OK :
+					  R_OK | W_OK);
+			if (rc) {
+				D_ERROR("check_access failed %d\n", rc);
+				return rc;
+			}
+
 			rc = daos_array_open_with_attr(dfs->coh, entry.oid,
 				DAOS_TX_NONE, daos_mode, 1, entry.chunk_size ?
 				entry.chunk_size : dfs->attr.da_chunk_size,
@@ -2189,6 +2197,13 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 
 	if (!exists)
 		return ENOENT;
+
+	rc = check_access(dfs, geteuid(), getegid(), entry.mode,
+			  (daos_mode == DAOS_OO_RO) ? R_OK : R_OK | W_OK);
+	if (rc) {
+		D_ERROR("check_access failed %d\n", rc);
+		return rc;
+	}
 
 	if (stbuf)
 		memset(stbuf, 0, sizeof(struct stat));
