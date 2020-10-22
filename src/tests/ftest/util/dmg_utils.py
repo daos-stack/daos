@@ -752,6 +752,12 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "reintegrate"), pool=pool, rank=rank, tgt_idx=tgt_idx)
 
+    def cont_set_owner(self, pool, cont, user, group):
+        """
+        """
+        return self._get_result(
+            ("cont", "set-owner"), pool=pool, cont=cont, user=user, group=group)
+
     def system_query(self, ranks=None, verbose=True):
         """Query system to obtain the status of the servers.
 

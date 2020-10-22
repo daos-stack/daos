@@ -28,14 +28,11 @@ import grp
 import re
 from apricot import TestWithServers
 from avocado import fail_on
-
 from daos_utils import DaosCommand
 from command_utils import CommandFailure
 import general_utils
 import security_test_base as secTestBase
-from general_utils import DaosTestError
 from test_utils_container import TestContainer
-
 
 class ContSecurityTestBase(TestWithServers):
     """Container security test cases.
