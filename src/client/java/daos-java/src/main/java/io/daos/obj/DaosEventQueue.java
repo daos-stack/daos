@@ -37,7 +37,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * DAOS Event Queue and Events per thread
+ * Java wrapper of underlying native DAOS event queue which has multiple reusable events. It manages event
+ * acquiring and releasing, as well as polls completed events.
+ * {@link IOSimpleDataDesc} is associated with each event so that it can be reused along with event.
+ * One instance per thread.
  */
 @NotThreadSafe
 public class DaosEventQueue {
@@ -80,7 +83,23 @@ public class DaosEventQueue {
 
   private static final Logger log = LoggerFactory.getLogger(DaosEventQueue.class);
 
-  public DaosEventQueue(String threadName, int nbrOfEvents, int maxKeyStrLen, int nbrOfEntries,
+  /**
+   * constructor with parameters to specify how many events to be created per EQ, as well as {@link IOSimpleDataDesc}
+   * parameters. User should call {@link #getInstance(int, int, int, int)} to create new instance.
+   *
+   * @param threadName
+   * thread name
+   * @param nbrOfEvents
+   * how many events created in EQ
+   * @param maxKeyStrLen
+   * max dkey/akey len
+   * @param nbrOfEntries
+   * number of akey entries for each desc
+   * @param entryBufLen
+   * entry buffer length
+   * @throws IOException
+   */
+  private DaosEventQueue(String threadName, int nbrOfEvents, int maxKeyStrLen, int nbrOfEntries,
                         int entryBufLen) throws IOException {
     this.threadName = threadName;
     if (nbrOfEvents > Short.MAX_VALUE) {
@@ -117,6 +136,20 @@ public class DaosEventQueue {
     }
   }
 
+  /**
+   * Get EQ bounded to current thread. If it's first time call, EQ will be created and bound it to current thread.
+   *
+   * @param nbrOfEvents
+   * how many events created in EQ
+   * @param maxKeyStrLen
+   * max dkey/akey len
+   * @param nbrOfEntries
+   * number of akey entries for each desc
+   * @param entryBufLen
+   * entry buffer length
+   * @return single instance per thread
+   * @throws IOException
+   */
   public static DaosEventQueue getInstance(int nbrOfEvents, int maxKeyStrLen, int nbrOfEntries,
                                            int entryBufLen) throws IOException {
     long tid = Thread.currentThread().getId();
@@ -149,6 +182,7 @@ public class DaosEventQueue {
    * no synchronization due to single thread access.
    *
    * @param updateOrFetch
+   * event for update or fetch? true for update, false for fetch.
    * @return event
    */
   public Event acquireEvent(boolean updateOrFetch) {
@@ -176,6 +210,21 @@ public class DaosEventQueue {
     return ret;
   }
 
+  /**
+   * acquire event with timeout. If there is no event available, this method will try to poll completed
+   * events. If there is no completed event for more than <code>maxWaitMs</code>, a timeout exception
+   * will be thrown.
+   *
+   * @param updateOrFetch
+   * true for update, false for fetch.
+   * @param maxWaitMs
+   * max wait time in millisecond
+   * @param completedList
+   * a list to hold {@link IOSimpleDataDesc}s associated with completed events.
+   * null means you want to ignore them.
+   * @return event
+   * @throws IOException
+   */
   public Event acquireEventBlock(boolean updateOrFetch, int maxWaitMs, List<IOSimpleDataDesc> completedList)
       throws IOException {
     DaosEventQueue.Event e = acquireEvent(updateOrFetch);
@@ -221,6 +270,16 @@ public class DaosEventQueue {
     return nbrOfAcquired > 0;
   }
 
+  /**
+   * wait for completion of all events within specified time, <code>maxWaitMs</code>.
+   *
+   * @param maxWaitMs
+   * max wait time in millisecond
+   * @param completedList
+   * a list to hold {@link IOSimpleDataDesc}s associated with completed events.
+   * null means you want to ignore them.
+   * @throws IOException
+   */
   public void waitForCompletion(int maxWaitMs, List<IOSimpleDataDesc> completedList)
       throws IOException {
     long start = System.currentTimeMillis();
@@ -311,6 +370,9 @@ public class DaosEventQueue {
     return eqWrapperHdl;
   }
 
+  /**
+   * destroy all event queues. It's should be called when JVM is shutting down.
+   */
   public static void destroyAll() {
     EQ_MAP.forEach((k, v) -> {
       try {

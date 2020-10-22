@@ -616,16 +616,15 @@ daos_eq_create(daos_handle_t *eqh)
 		return -DER_UNINIT;
 
 	rc = crt_context_create(&eq_ctx);
-        if (rc != 0) {
-                D_ERROR("failed to create CART context: "DF_RC"\n", DP_RC(rc));
-                return rc;
-        }
-
+	if (rc != 0) {
+		D_ERROR("failed to create CART context: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
 
 	eq = daos_eq_alloc();
 	if (eq == NULL) {
 		crt_context_destroy(eq_ctx, 1);
-                return -DER_NOMEM;
+		return -DER_NOMEM;
 	}
 
 	eqx = daos_eq2eqx(eq);
