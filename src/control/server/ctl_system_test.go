@@ -484,28 +484,28 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 				},
 			},
 			expMembers: []*ctlpb.SystemMember{
-				&ctlpb.SystemMember{
+				{
 					Rank: 0, Addr: common.MockHostAddr(1).String(),
 					State: uint32(system.MemberStateErrored), Info: "couldn't ping",
 				},
-				&ctlpb.SystemMember{
+				{
 					Rank: 1, Addr: common.MockHostAddr(1).String(),
 					// transition to "ready" illegal
 					State: uint32(system.MemberStateStopping),
 				},
-				&ctlpb.SystemMember{
+				{
 					Rank: 2, Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateUnresponsive),
 				},
-				&ctlpb.SystemMember{
+				{
 					Rank: 3, Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateJoined),
 				},
-				&ctlpb.SystemMember{
+				{
 					Rank: 4, Addr: common.MockHostAddr(3).String(),
 					State: uint32(system.MemberStateStarting),
 				},
-				&ctlpb.SystemMember{
+				{
 					Rank: 5, Addr: common.MockHostAddr(3).String(),
 					State: uint32(system.MemberStateStopped),
 				},
@@ -545,15 +545,15 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 				},
 			},
 			expMembers: []*ctlpb.SystemMember{
-				&ctlpb.SystemMember{
+				{
 					Rank: 0, Addr: common.MockHostAddr(1).String(),
 					State: uint32(system.MemberStateErrored), Info: "couldn't ping",
 				},
-				&ctlpb.SystemMember{
+				{
 					Rank: 2, Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateUnresponsive),
 				},
-				&ctlpb.SystemMember{
+				{
 					Rank: 3, Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateJoined),
 				},
@@ -595,19 +595,19 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 				},
 			},
 			expMembers: []*ctlpb.SystemMember{
-				&ctlpb.SystemMember{
+				{
 					Rank: 2, Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateUnresponsive),
 				},
-				&ctlpb.SystemMember{
+				{
 					Rank: 3, Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateJoined),
 				},
-				&ctlpb.SystemMember{
+				{
 					Rank: 4, Addr: common.MockHostAddr(3).String(),
 					State: uint32(system.MemberStateErrored), Info: "couldn't ping",
 				},
-				&ctlpb.SystemMember{
+				{
 					Rank: 5, Addr: common.MockHostAddr(3).String(),
 					State: uint32(system.MemberStateStopping),
 				},

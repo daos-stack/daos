@@ -60,8 +60,8 @@ func (sr *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
 	if err != nil {
 		return err
 	}
-	sr.AbsentHosts = *ahs
-	sr.AbsentRanks = *ars
+	sr.AbsentHosts.ReplaceSet(ahs)
+	sr.AbsentRanks.ReplaceSet(ars)
 
 	return nil
 }
@@ -223,7 +223,7 @@ func SystemStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemStartRe
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewMgmtCtlClient(conn).SystemStart(ctx, pbReq)
 	})
-	rpcClient.Debugf("DAOS system start request: %s", req)
+	rpcClient.Debugf("DAOS system start request: %+v", req)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
@@ -292,7 +292,7 @@ func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq)
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewMgmtCtlClient(conn).SystemStop(ctx, pbReq)
 	})
-	rpcClient.Debugf("DAOS system stop request: %s", req)
+	rpcClient.Debugf("DAOS system stop request: %+v", req)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
@@ -400,7 +400,9 @@ func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, resetReq *Syste
 			for addr, occurrences := range hostOccurrences {
 				err := errors.Errorf("%s failed: %s",
 					english.Plural(occurrences, "rank", "ranks"), msg)
-				reformatResp.HostErrorsResp.addHostError(addr, err)
+				if err := reformatResp.HostErrorsResp.addHostError(addr, err); err != nil {
+					return nil, err
+				}
 			}
 		}
 

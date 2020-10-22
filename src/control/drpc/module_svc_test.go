@@ -213,7 +213,9 @@ func TestService_ProcessMessage(t *testing.T) {
 			mockMod.HandleCallResponse = tc.handleCallResp
 
 			service := NewModuleService(log)
-			service.RegisterModule(mockMod)
+			if err := service.RegisterModule(mockMod); err != nil {
+				t.Fatal(err)
+			}
 
 			respBytes, err := service.ProcessMessage(&Session{}, tc.callBytes)
 

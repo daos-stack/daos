@@ -418,14 +418,14 @@ func mockResolveFn(netString string, address string) (*net.TCPAddr, error) {
 	}
 
 	return map[string]*net.TCPAddr{
-			"127.0.0.1:10001": &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001},
-			"127.0.0.2:10001": &net.TCPAddr{IP: net.ParseIP("127.0.0.2"), Port: 10001},
-			"127.0.0.3:10001": &net.TCPAddr{IP: net.ParseIP("127.0.0.3"), Port: 10001},
-			"foo-1:10001":     &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001},
-			"foo-2:10001":     &net.TCPAddr{IP: net.ParseIP("127.0.0.2"), Port: 10001},
-			"foo-3:10001":     &net.TCPAddr{IP: net.ParseIP("127.0.0.3"), Port: 10001},
-			"foo-4:10001":     &net.TCPAddr{IP: net.ParseIP("127.0.0.4"), Port: 10001},
-			"foo-5:10001":     &net.TCPAddr{IP: net.ParseIP("127.0.0.5"), Port: 10001},
+			"127.0.0.1:10001": {IP: net.ParseIP("127.0.0.1"), Port: 10001},
+			"127.0.0.2:10001": {IP: net.ParseIP("127.0.0.2"), Port: 10001},
+			"127.0.0.3:10001": {IP: net.ParseIP("127.0.0.3"), Port: 10001},
+			"foo-1:10001":     {IP: net.ParseIP("127.0.0.1"), Port: 10001},
+			"foo-2:10001":     {IP: net.ParseIP("127.0.0.2"), Port: 10001},
+			"foo-3:10001":     {IP: net.ParseIP("127.0.0.3"), Port: 10001},
+			"foo-4:10001":     {IP: net.ParseIP("127.0.0.4"), Port: 10001},
+			"foo-5:10001":     {IP: net.ParseIP("127.0.0.5"), Port: 10001},
 		}[address], map[string]error{
 			"127.0.0.4:10001": errors.New("bad lookup"),
 			"127.0.0.5:10001": errors.New("bad lookup"),

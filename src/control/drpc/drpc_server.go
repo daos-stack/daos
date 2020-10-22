@@ -136,7 +136,10 @@ func (d *DomainSocketServer) Shutdown() {
 // RegisterRPCModule takes a Module and associates it with the given
 // DomainSocketServer so it can be used to process incoming dRPC calls.
 func (d *DomainSocketServer) RegisterRPCModule(mod Module) {
-	d.service.RegisterModule(mod)
+	if err := d.service.RegisterModule(mod); err != nil {
+		// can't happen?
+		panic(err)
+	}
 }
 
 // NewDomainSocketServer returns a new unstarted instance of a

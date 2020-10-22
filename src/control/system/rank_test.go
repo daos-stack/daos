@@ -101,13 +101,10 @@ func TestSystem_RankStringer(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			gotStr := fmt.Sprintf("%s", tc.r)
+			gotStr := tc.r.String()
 			if tc.r != nil {
 				r := *tc.r
-				// Annoyingly, we have to either explicitly call String()
-				// or take a reference in order to get the Stringer implementation
-				// on the non-pointer type alias.
-				gotStr = fmt.Sprintf("%s", r.String())
+				gotStr = r.String()
 			}
 			if diff := cmp.Diff(tc.expStr, gotStr); diff != "" {
 				t.Fatalf("unexpected String() (-want, +got):\n%s\n", diff)

@@ -689,7 +689,7 @@ func TestPoolOverwriteACL_Success(t *testing.T) {
 	}
 	setupMockDrpcClient(svc, expectedResp, nil)
 
-	resp, err := svc.PoolOverwriteACL(nil, newTestModifyACLReq())
+	resp, err := svc.PoolOverwriteACL(context.TODO(), newTestModifyACLReq())
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
@@ -764,7 +764,7 @@ func TestPoolUpdateACL_Success(t *testing.T) {
 	}
 	setupMockDrpcClient(svc, expectedResp, nil)
 
-	resp, err := svc.PoolUpdateACL(nil, newTestModifyACLReq())
+	resp, err := svc.PoolUpdateACL(context.TODO(), newTestModifyACLReq())
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
