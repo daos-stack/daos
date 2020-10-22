@@ -1,4 +1,3 @@
-%bcond_with fault_injection
 %define daoshome %{_exec_prefix}/lib/%{name}
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
@@ -207,8 +206,7 @@ scons %{?_smp_mflags}      \
       USE_INSTALLED=all    \
       CONF_DIR=%{conf_dir} \
       PREFIX=%{?buildroot} \
-      %{?with_fault_injection:BUILD_TYPE=dev} \
-      %{!?with_fault_injection:BUILD_TYPE=release}
+      BUILD_TYPE=%{?build_type}
 
 
 %install
@@ -221,8 +219,7 @@ scons %{?_smp_mflags}                 \
       USE_INSTALLED=all               \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
-      %{?with_fault_injection:BUILD_TYPE=dev} \
-      %{!?with_fault_injection:BUILD_TYPE=release}
+      BUILD_TYPE=%{?build_type}
 
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"

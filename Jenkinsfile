@@ -52,9 +52,9 @@ def scons_faults_enabled() {
 def rpm_faults_enabled() {
     // if the fault_enabled pragma is false or it a release candidate; disable fault injection
     if ((cachedCommitPragma(pragma: 'faults-enabled', def_val: 'true') != 'true') || release_candidate()) {
-        return "--without=fault-injection"
+        return "--define 'build_type release'"
     } else {
-        return "--with=fault-injection"
+        return "--define 'build_type dev'"
     }
 }
 
