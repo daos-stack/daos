@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+
 # pylint: disable=too-many-lines
 from __future__ import print_function
 
@@ -70,7 +71,6 @@ YAML_KEYS = {
     "bdev_list": "nvme",
 }
 YAML_KEY_ORDER = ("test_servers", "test_clients", "bdev_list")
-
 
 def display(args, message):
     """Display the message if verbosity is set.
@@ -213,6 +213,7 @@ def set_test_environment(args):
     required_python_paths = [
         os.path.abspath("util/apricot"),
         os.path.abspath("util"),
+        os.path.abspath("cart/util"),
         os.path.join(base_dir, "lib64", python_version, "site-packages"),
     ]
 
@@ -338,9 +339,22 @@ def check_remote_output(task, command):
             for output, o_hosts in output_data:
                 n_set = NodeSet.fromlist(o_hosts)
                 lines = str(output).splitlines()
+                print("There are {} lines of output".format(len(lines)))
                 if len(lines) > 1:
-                    output = "\n      {}".format("\n      ".join(lines))
-                print("    {}: rc={}, output: {}".format(n_set, code, output))
+                    print("    {}: rc={}, output:".format(n_set, code))
+                    for line in lines:
+                        try:
+                            print("      {}".format(line))
+                        except IOError:
+                            # DAOS-5781 Jenkins doesn't like receiving large
+                            # amounts of data in a short space of time so catch
+                            # this and retry.
+                            time.sleep(5)
+                            print("      {}".format(line))
+                else:
+                    print("    {}: rc={}, output: {}".format(n_set,
+                                                             code,
+                                                             output))
 
     # List any hosts that timed out
     timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
@@ -875,7 +889,7 @@ def clean_logs(test_yaml, args):
     # Remove any log files from the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     host_list = get_hosts_from_yaml(test_yaml, args)
-    command = "sudo rm -fr {}".format(os.path.join(logs_dir, "*.log"))
+    command = "sudo rm -fr {}".format(os.path.join(logs_dir, "*.log*"))
     print("Cleaning logs on {}".format(host_list))
     if not spawn_commands(host_list, command):
         print("Error cleaning logs, aborting")
@@ -901,8 +915,9 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
 
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
-    archive_files(destination, host_list, "{}/*.log".format(logs_dir))
 
+    archive_files(destination, host_list, "{}/*log*".format(logs_dir))
+    archive_files(destination, host_list, "{}/*/*log*".format(logs_dir))
 
 def archive_config_files(avocado_logs_dir):
     """Copy all of the configuration files to the avocado results directory.
@@ -925,7 +940,6 @@ def archive_config_files(avocado_logs_dir):
     archive_files(
         destination, host_list, "{}/*_*_*.yaml".format(configs_dir))
 
-
 def archive_files(destination, host_list, source_files):
     """Archive all of the remote files to the destination directory.
 
@@ -937,7 +951,8 @@ def archive_files(destination, host_list, source_files):
     this_host = socket.gethostname().split(".")[0]
 
     # Create the destination directory
-    get_output(["mkdir", destination])
+    if not os.path.exists(destination):
+        get_output(["mkdir", destination])
 
     # Display available disk space prior to copy.  Allow commands to fail w/o
     # exiting this program.  Any disk space issues preventing the creation of a
@@ -949,26 +964,34 @@ def archive_files(destination, host_list, source_files):
     # the remote host if the copy is successful.  Attempt all of the commands
     # and report status at the end of the loop.  Include a listing of the file
     # related to any failed command.
+
+    # Disable pylint's whitespace rules to improve readability for this one
+    # list.
+    #
+    # pylint: disable=bad-continuation
     commands = [
-        "set -eu",
+        "set -ux",
         "rc=0",
         "copied=()",
-        "for file in $(ls {})".format(source_files),
+        "for file in $(ls -d {})".format(source_files),
         "do ls -sh $file",
-        "/lib/cart/TESTING/util/cart_logtest.py $file",
-        "if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
-            this_host, destination),
-        "then copied+=($file)",
-        "if ! sudo rm -fr $file",
-        "then ((rc++))",
-        "ls -al $file",
-        "fi",
+        "{} $file".format(
+            os.path.join(os.path.abspath("cart"), "cart_logtest.py")),
+        "if scp -r $file {}:{}/${{file##*/}}-$(hostname -s)".format(
+              this_host, destination),
+            "then copied+=($file)",
+            "if ! sudo rm -fr $file",
+                "then ((rc++))",
+                "ls -al $file",
+            "fi",
         "fi",
         "done",
         "echo Copied ${copied[@]:-no files}",
         "exit $rc",
     ]
-    spawn_commands(host_list, "; ".join(commands), 900)
+    # pylint: enable=bad-continuation
+
+    spawn_commands(host_list, "; ".join(commands), timeout=900)
 
 
 def rename_logs(avocado_logs_dir, test_file):

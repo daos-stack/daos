@@ -75,10 +75,10 @@ func mockSpdkNamespace(varIdx ...int32) storage.NvmeNamespace {
 	return *s
 }
 
-func mockSpdkDeviceHealth(varIdx ...int32) storage.NvmeControllerHealth {
-	native := storage.MockNvmeControllerHealth(varIdx...)
+func mockSpdkDeviceHealth(varIdx ...int32) storage.NvmeHealth {
+	native := storage.MockNvmeHealth(varIdx...)
 
-	s := new(storage.NvmeControllerHealth)
+	s := new(storage.NvmeHealth)
 	if err := convertTypes(native, s); err != nil {
 		panic(err)
 	}
@@ -124,26 +124,6 @@ func TestBdevBackendScan(t *testing.T) {
 			expResp: &ScanResponse{
 				Controllers: storage.NvmeControllers{ctrlr1},
 			},
-		},
-		"binding scan filtered in": {
-			mnc: spdk.MockNvmeCfg{
-				DiscoverCtrlrs: storage.NvmeControllers{ctrlr1},
-			},
-			req: ScanRequest{
-				DeviceList: []string{ctrlr1.PciAddr},
-			},
-			expResp: &ScanResponse{
-				Controllers: storage.NvmeControllers{ctrlr1},
-			},
-		},
-		"binding scan filtered out": {
-			mnc: spdk.MockNvmeCfg{
-				DiscoverCtrlrs: storage.NvmeControllers{ctrlr1},
-			},
-			req: ScanRequest{
-				DeviceList: []string{"0000:ff:ff.f"},
-			},
-			expResp: &ScanResponse{},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

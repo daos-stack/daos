@@ -185,6 +185,7 @@ class NvmeObject(TestWithServers):
             corrupted.
 
         :avocado: tags=all,pr,hw,large,nvme_object_single_pool,nvme_object
+        :avocado: tags=DAOS_5610
         """
         # perform multiple object writes to a single pool
         test_runner(self, self.pool_size[0], self.record_size[:-1], 0,

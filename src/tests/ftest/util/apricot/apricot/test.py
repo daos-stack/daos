@@ -48,7 +48,8 @@ from dmg_utils_params import \
 from dmg_utils import DmgCommand
 from daos_utils import DaosCommand
 from server_utils import DaosServerCommand, DaosServerManager
-from general_utils import get_partition_hosts, stop_processes
+from general_utils import \
+    get_partition_hosts, stop_processes, get_job_manager_class
 from logger_utils import TestLogger
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
@@ -181,7 +182,9 @@ class TestWithoutServers(Test):
     def setUp(self):
         """Set up run before each test."""
         super(TestWithoutServers, self).setUp()
+
         load_mpi('openmpi')
+
         self.orterun = find_executable('orterun')
         if self.orterun is None:
             self.fail("Could not find orterun")
@@ -269,6 +272,8 @@ class TestWithServers(TestWithoutServers):
         self.hostfile_clients = None
         self.server_partition = None
         self.client_partition = None
+        self.server_reservation = None
+        self.client_reservation = None
         self.hostfile_servers_slots = 1
         self.hostfile_clients_slots = 1
         self.pool = None
@@ -285,6 +290,7 @@ class TestWithServers(TestWithoutServers):
             os.path.split(self.filename)[1], self.name.str_uid)
         # self.debug = False
         # self.config = None
+        self.job_manager = None
 
     def setUp(self):
         """Set up each test case."""
@@ -314,13 +320,21 @@ class TestWithServers(TestWithoutServers):
         for name in ("servers", "clients"):
             host_list_name = "_".join(["hostlist", name])
             partition_name = "_".join([name[:-1], "partition"])
+            reservation_name = "_".join([name[:-1], "reservation"])
             partition = self.params.get(partition_name, "/run/hosts/*")
+            reservation = self.params.get(reservation_name, "/run/hosts/*")
             host_list = getattr(self, host_list_name)
             if partition is not None and host_list is None:
                 # If a partition is provided instead of a list of hosts use the
                 # partition information to populate the list of hosts.
                 setattr(self, partition_name, partition)
-                setattr(self, host_list_name, get_partition_hosts(partition))
+                setattr(self, reservation_name, reservation)
+                slurm_nodes = get_partition_hosts(partition, reservation)
+                if not slurm_nodes:
+                    self.fail(
+                        "No valid nodes in {} partition with {} "
+                        "reservation".format(partition, reservation))
+                setattr(self, host_list_name, slurm_nodes)
             elif partition is not None and host_list is not None:
                 self.fail(
                     "Specifying both a {} partition name and a list of hosts "
@@ -346,6 +360,8 @@ class TestWithServers(TestWithoutServers):
         self.log.info("hostlist_clients:  %s", self.hostlist_clients)
         self.log.info("server_partition:  %s", self.server_partition)
         self.log.info("client_partition:  %s", self.client_partition)
+        self.log.info("server_reservation:  %s", self.server_reservation)
+        self.log.info("client_reservation:  %s", self.client_reservation)
 
         # Kill commands left running on the hosts (from a previous test) before
         # starting any tests.  Currently only handles 'orterun' processes, but
@@ -362,6 +378,39 @@ class TestWithServers(TestWithoutServers):
         # Start the servers
         if self.setup_start_servers:
             self.start_servers()
+
+        # Setup a job manager command for running the test command
+        manager_class_name = self.params.get(
+            "job_manager_class_name", default=None)
+        manager_subprocess = self.params.get(
+            "job_manager_subprocess", default=False)
+        manager_mpi_type = self.params.get(
+            "job_manager_mpi_type", default="mpich")
+        if manager_class_name is not None:
+            self.job_manager = get_job_manager_class(
+                manager_class_name, None, manager_subprocess, manager_mpi_type)
+            self.set_job_manager_timeout()
+
+    def set_job_manager_timeout(self):
+        """Set the timeout for the job manager.
+
+        Use the following priority when setting the job_manager timeout:
+            1) use the test method specific timeout from the test yaml, e.g.
+                job_manager_timeout:
+                    test_one: 30
+                    test_two: 60
+            2) use the common job_manager timeout from the test yaml, e.g.
+                job_manager_timeout: 45
+            3) use the avocado test timeout minus 30 seconds
+        """
+        if self.job_manager:
+            self.job_manager.timeout = self.params.get(
+                self.get_test_name(), "/run/job_manager_timeout/*", None)
+            if self.job_manager.timeout is None:
+                self.job_manager.timeout = self.params.get(
+                    "job_manager_timeout", default=None)
+                if self.job_manager.timeout is None:
+                    self.job_manager.timeout = self.timeout - 30
 
     def stop_leftover_processes(self, processes, hosts):
         """Stop leftover processes on the specified hosts before starting tests.
@@ -470,7 +519,7 @@ class TestWithServers(TestWithoutServers):
         filename = "{}_{}_{}.yaml".format(self.config_file_base, name, command)
         return os.path.join(self.tmp, filename)
 
-    def add_agent_manager(self, config_file=None, common_cfg=None, timeout=30):
+    def add_agent_manager(self, config_file=None, common_cfg=None, timeout=15):
         """Add a new daos agent manager object to the agent manager list.
 
         Args:
@@ -497,7 +546,7 @@ class TestWithServers(TestWithoutServers):
             DaosAgentManager(agent_cmd, self.manager_class))
 
     def add_server_manager(self, config_file=None, dmg_config_file=None,
-                           common_cfg=None, timeout=90):
+                           common_cfg=None, timeout=20):
         """Add a new daos server manager object to the server manager list.
 
         When adding multiple server managers unique yaml config file names
@@ -592,6 +641,9 @@ class TestWithServers(TestWithoutServers):
         # Tear down any test-specific items
         errors = self.pre_tear_down()
 
+        # Stop any test jobs that may still be running
+        errors.extend(self.stop_job_managers())
+
         # Destroy any containers first
         errors.extend(self.destroy_containers(self.container))
 
@@ -626,6 +678,20 @@ class TestWithServers(TestWithoutServers):
         """
         self.log.info("teardown() started")
         return []
+
+    def stop_job_managers(self):
+        """Stop the test job manager.
+
+        Returns:
+            list: a list of exceptions raised stopping the agents
+
+        """
+        error_list = []
+        if self.job_manager:
+            self.test_log.info("Stopping test job manager")
+            error_list = self._stop_managers(
+                [self.job_manager], "test job manager")
+        return error_list
 
     def destroy_containers(self, containers):
         """Close and destroy one or more containers.
@@ -796,7 +862,7 @@ class TestWithServers(TestWithoutServers):
         """Get a DaosCommand object.
 
         Returns:
-            DaosCommand: New DaosCommand object.
+            DaosCommand: a new DaosCommand object
 
         """
         return DaosCommand(self.bin)

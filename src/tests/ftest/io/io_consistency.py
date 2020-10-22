@@ -29,15 +29,6 @@ class IoConsistency(IorTestBase):
     :avocado: recursive
     """
 
-    def tearDown(self):
-        """Tear down each test case."""
-        try:
-            if self.dfuse:
-                self.dfuse.stop()
-        finally:
-            # Stop the servers and agents
-            super(IoConsistency, self).tearDown()
-
     def test_ioconsistency(self):
         """Jira ID: DAOS-4778.
         Test Description:
@@ -53,7 +44,7 @@ class IoConsistency(IorTestBase):
             Try to re-create to the same file name after deletion, which should
             work without issues.
             Repeat the same steps as above for SSF this time.
-        :avocado: tags=all,daosio,hw,large,pr,ioconsistency
+        :avocado: tags=all,daosio,hw,large,pr,ioconsistency,DAOS_5610
         """
 
         # test params

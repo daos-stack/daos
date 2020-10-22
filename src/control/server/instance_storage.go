@@ -27,11 +27,11 @@ import (
 	"context"
 	"os"
 	"path"
-	"syscall"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
@@ -73,7 +73,7 @@ func (srv *IOServerInstance) MountScmDevice() error {
 		}
 		res, err = srv.scmProvider.MountDcpm(scmCfg.DeviceList[0], scmCfg.MountPoint)
 	default:
-		err = errors.New(scm.MsgScmClassNotSupported)
+		err = errors.New(scm.MsgClassNotSupported)
 	}
 	if err != nil {
 		return errors.WithMessage(err, "mounting existing scm dir")
@@ -123,7 +123,7 @@ func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingS
 		return errors.Errorf("can't wait for storage: instance %d already started", idx)
 	}
 
-	srv.log.Infof("Checking %s instance %d storage ...", DataPlaneName, idx)
+	srv.log.Infof("Checking %s instance %d storage ...", build.DataPlaneName, idx)
 
 	needsScmFormat, err := srv.NeedsScmFormat()
 	if err != nil {
@@ -161,9 +161,9 @@ func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingS
 
 	select {
 	case <-ctx.Done():
-		srv.log.Infof("%s instance %d storage not ready: %s", DataPlaneName, srv.Index(), ctx.Err())
+		srv.log.Infof("%s instance %d storage not ready: %s", build.DataPlaneName, srv.Index(), ctx.Err())
 	case <-srv.storageReady:
-		srv.log.Infof("%s instance %d storage ready", DataPlaneName, srv.Index())
+		srv.log.Infof("%s instance %d storage ready", build.DataPlaneName, srv.Index())
 	}
 
 	srv.waitFormat.SetFalse()
@@ -173,16 +173,18 @@ func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingS
 
 func (srv *IOServerInstance) logScmStorage() error {
 	scmMount := path.Dir(srv.superblockPath())
-	stBuf := new(syscall.Statfs_t)
 
-	if err := syscall.Statfs(scmMount, stBuf); err != nil {
+	if scmMount != srv.scmConfig().MountPoint {
+		return errors.New("superblock path doesn't match config mountpoint")
+	}
+
+	mp, err := srv.scmProvider.GetfsUsage(scmMount)
+	if err != nil {
 		return err
 	}
 
-	frSize := uint64(stBuf.Frsize)
-	totalBytes := frSize * stBuf.Blocks
-	availBytes := frSize * stBuf.Bavail
-	srv.log.Infof("SCM @ %s: %s Total/%s Avail", scmMount,
-		humanize.Bytes(totalBytes), humanize.Bytes(availBytes))
+	srv.log.Infof("SCM @ %s: %s Total/%s Avail", mp.Path,
+		humanize.Bytes(mp.TotalBytes), humanize.Bytes(mp.AvailBytes))
+
 	return nil
 }

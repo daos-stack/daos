@@ -35,7 +35,6 @@
 
 #include "tests_common.h"
 
-
 #define MY_BASE 0x010000000
 #define MY_VER  0
 
@@ -50,7 +49,6 @@ enum {
 	CORPC_PING,
 	RPC_SHUTDOWN
 } rpc_id_t;
-
 
 #define CRT_ISEQ_RPC_PING	/* input fields */		 \
 	((uint64_t)		(tag)			CRT_VAR)
@@ -69,7 +67,6 @@ enum {
 
 #define CRT_OSEQ_CORPC_PING \
 	((uint64_t)		(field)			CRT_VAR)
-
 
 RPC_DECLARE(RPC_PING);
 RPC_DECLARE(RPC_SHUTDOWN);
@@ -142,7 +139,6 @@ corpc_aggregate(crt_rpc_t *src, crt_rpc_t *result, void *priv)
 	struct CORPC_PING_out	*output_src;
 	struct CORPC_PING_out	*output_result;
 
-
 	output_src = crt_reply_get(src);
 	output_result = crt_reply_get(result);
 
@@ -181,8 +177,6 @@ struct crt_proto_format my_proto_fmt = {
 	.cpf_prf = &my_proto_rpc_fmt[0],
 	.cpf_base = MY_BASE,
 };
-
-
 
 static void
 __dump_ranks(crt_group_t *grp) {
@@ -291,7 +285,6 @@ __verify_ranks(crt_group_t *grp, d_rank_t *exp_ranks, int size)
 		__verify_ranks(grp, __exp,		\
 				ARRAY_SIZE(__exp));	\
 	} while (0)
-
 
 static void
 rpc_handle_reply(const struct crt_cb_info *info)
@@ -529,7 +522,6 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-
 	/* All ranks except for 0 wait for RPCs. rank=0 initiates test */
 	if (my_rank != 1)
 		D_GOTO(join, 0);
@@ -597,7 +589,6 @@ int main(int argc, char **argv)
 			DBG_PRINT("RPC to rank=%d finished\n", rank);
 		}
 	}
-
 
 	DBG_PRINT("All RPCs to secondary ranks are done\n");
 
