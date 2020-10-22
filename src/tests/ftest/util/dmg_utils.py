@@ -753,7 +753,7 @@ class DmgCommand(DmgCommandBase):
             ("pool", "reintegrate"), pool=pool, rank=rank, tgt_idx=tgt_idx)
 
     def cont_set_owner(self, pool, cont, user, group):
-        """Dmg container set-owner to the sepcified new user/group.
+        """Dmg container set-owner to the specified new user/group.
 
         Args:
             pool (str): Pool uuid.
