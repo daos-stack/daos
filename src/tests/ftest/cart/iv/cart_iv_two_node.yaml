@@ -27,6 +27,7 @@ hosts: !mux
 tests: !mux
   iv:
     name: iv_basic
+    timeout: 600
     test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/iv_server -v 3"
     test_servers_env: ""
