@@ -296,6 +296,7 @@ rdb_raft_load_replicas(struct rdb *db, uint64_t index)
 
 err_replicas:
 	d_rank_list_free(db->d_replicas);
+	db->d_replicas = NULL;
 err:
 	return rc;
 }
@@ -1291,6 +1292,7 @@ rdb_raft_cb_log_pop(raft_server_t *raft, void *arg, raft_entry_t *entry,
 		return rc;
 	}
 	d_rank_list_free(db->d_replicas);
+	db->d_replicas = NULL;
 	rc = rdb_raft_load_replicas(db, db->d_lc_record.dlr_tail - 1);
 	if (rc != 0)
 		return rc;
