@@ -97,13 +97,14 @@ func TestBdev_ScanResponse_filter(t *testing.T) {
 
 func TestBdev_forwardScan(t *testing.T) {
 	for name, tc := range map[string]struct {
-		scanReq  ScanRequest
-		cache    *ScanResponse
-		scanResp *ScanResponse
-		scanErr  error
-		expMsg   string
-		expResp  *ScanResponse
-		expErr   error
+		scanReq      ScanRequest
+		cache        *ScanResponse
+		scanResp     *ScanResponse
+		scanErr      error
+		shouldUpdate bool
+		expMsg       string
+		expResp      *ScanResponse
+		expErr       error
 	}{
 		"scan error": {
 			scanReq: ScanRequest{},
@@ -116,17 +117,19 @@ func TestBdev_forwardScan(t *testing.T) {
 			expErr:   errors.New("unexpected nil response from bdev backend"),
 		},
 		"nil devices": {
-			scanReq:  ScanRequest{},
-			scanResp: new(ScanResponse),
-			expMsg:   "bdev scan: update cache (0 devices)",
-			expResp:  new(ScanResponse),
+			scanReq:      ScanRequest{},
+			scanResp:     new(ScanResponse),
+			shouldUpdate: true,
+			expMsg:       "bdev scan: update cache (0 devices)",
+			expResp:      new(ScanResponse),
 		},
 		"no devices": {
 			scanReq: ScanRequest{},
 			scanResp: &ScanResponse{
 				Controllers: storage.NvmeControllers{},
 			},
-			expMsg: "bdev scan: update cache (0 devices)",
+			shouldUpdate: true,
+			expMsg:       "bdev scan: update cache (0 devices)",
 			expResp: &ScanResponse{
 				Controllers: storage.NvmeControllers{},
 			},
@@ -136,7 +139,8 @@ func TestBdev_forwardScan(t *testing.T) {
 			scanResp: &ScanResponse{
 				Controllers: storage.MockNvmeControllers(3),
 			},
-			expMsg: "bdev scan: update cache (3 devices)",
+			shouldUpdate: true,
+			expMsg:       "bdev scan: update cache (3 devices)",
 			expResp: &ScanResponse{
 				Controllers: storage.MockNvmeControllers(3),
 			},
@@ -147,7 +151,8 @@ func TestBdev_forwardScan(t *testing.T) {
 			scanResp: &ScanResponse{
 				Controllers: storage.MockNvmeControllers(3),
 			},
-			expMsg: "bdev scan: update cache (3 devices)",
+			shouldUpdate: true,
+			expMsg:       "bdev scan: update cache (3 devices)",
 			expResp: &ScanResponse{
 				Controllers: storage.MockNvmeControllers(3),
 			},
@@ -188,7 +193,8 @@ func TestBdev_forwardScan(t *testing.T) {
 			scanResp: &ScanResponse{
 				Controllers: storage.MockNvmeControllers(3),
 			},
-			expMsg: "bdev scan: update cache (3-1 filtered devices)",
+			shouldUpdate: true,
+			expMsg:       "bdev scan: update cache (3-1 filtered devices)",
 			expResp: &ScanResponse{
 				Controllers: storage.MockNvmeControllers(2),
 			},
@@ -202,12 +208,13 @@ func TestBdev_forwardScan(t *testing.T) {
 				return tc.scanResp, tc.scanErr
 			}
 
-			gotMsg, gotResp, gotErr := forwardScan(tc.scanReq, tc.cache, scanFn)
+			gotMsg, gotResp, shouldUpdate, gotErr := forwardScan(tc.scanReq, tc.cache, scanFn)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
 			}
 
+			common.AssertEqual(t, tc.shouldUpdate, shouldUpdate, name)
 			if diff := cmp.Diff(tc.expMsg, gotMsg, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected message (-want, +got):\n%s\n", diff)
 			}

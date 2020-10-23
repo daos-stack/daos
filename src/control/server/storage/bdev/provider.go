@@ -176,7 +176,7 @@ func (resp *ScanResponse) filter(pciFilter ...string) (int, *ScanResponse) {
 
 type scanFwdFn func(ScanRequest) (*ScanResponse, error)
 
-func forwardScan(req ScanRequest, cache *ScanResponse, scan scanFwdFn) (msg string, resp *ScanResponse, err error) {
+func forwardScan(req ScanRequest, cache *ScanResponse, scan scanFwdFn) (msg string, resp *ScanResponse, update bool, err error) {
 	var action string
 	switch {
 	case req.NoCache:
@@ -189,18 +189,19 @@ func forwardScan(req ScanRequest, cache *ScanResponse, scan scanFwdFn) (msg stri
 		action = "update"
 		resp, err = scan(req)
 		if err == nil && resp != nil {
-			cache = resp
+			update = true
 		}
 	}
 
 	msg = fmt.Sprintf("bdev scan: %s cache", action)
 
 	if err != nil {
-		return msg, nil, err
+		return
 	}
 
 	if resp == nil {
-		return msg, nil, errors.New("unexpected nil response from bdev backend")
+		err = errors.New("unexpected nil response from bdev backend")
+		return
 	}
 
 	msg += fmt.Sprintf(" (%d", len(resp.Controllers))
@@ -214,7 +215,7 @@ func forwardScan(req ScanRequest, cache *ScanResponse, scan scanFwdFn) (msg stri
 
 	msg += " devices)"
 
-	return msg, resp, nil
+	return
 }
 
 // Scan attempts to perform a scan to discover NVMe components in the
@@ -228,8 +229,11 @@ func (p *Provider) Scan(req ScanRequest) (resp *ScanResponse, err error) {
 		p.Lock()
 		defer p.Unlock()
 
-		msg, resp, err := forwardScan(req, p.scanCache, p.fwd.Scan)
+		msg, resp, update, err := forwardScan(req, p.scanCache, p.fwd.Scan)
 		p.log.Debug(msg)
+		if update {
+			p.scanCache = resp
+		}
 
 		return resp, err
 	}
