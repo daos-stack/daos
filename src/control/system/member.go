@@ -603,9 +603,9 @@ func (m *Membership) CheckRanks(ranks string) (hit, miss *RankSet, err error) {
 		return RankSetFromRanks(allRanks), RankSetFromRanks(nil), nil
 	}
 
-	missing := TestRankMembership(allRanks, toTest)
+	missing := CheckRankMembership(allRanks, toTest)
 	miss = RankSetFromRanks(missing)
-	hit = RankSetFromRanks(TestRankMembership(missing, toTest))
+	hit = RankSetFromRanks(CheckRankMembership(missing, toTest))
 
 	return
 }

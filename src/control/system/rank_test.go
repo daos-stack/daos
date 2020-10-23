@@ -429,7 +429,7 @@ func TestSystem_TestRankMembership(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			gotMissing := TestRankMembership(tc.members, tc.test)
+			gotMissing := CheckRankMembership(tc.members, tc.test)
 
 			if diff := cmp.Diff(tc.expMissing, gotMissing); diff != "" {
 				t.Fatalf("unexpected missing ranks (-want, +got):\n%s\n", diff)

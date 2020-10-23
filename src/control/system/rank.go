@@ -177,10 +177,10 @@ func DedupeRanks(in []Rank) ([]Rank, error) {
 	return set.Ranks(), nil
 }
 
-// TestRankMembership compares two Rank slices and returns a
+// CheckRankMembership compares two Rank slices and returns a
 // Rank slice with any ranks found in the second slice that do
 // not exist in the first slice.
-func TestRankMembership(members, toTest []Rank) (missing []Rank) {
+func CheckRankMembership(members, toTest []Rank) (missing []Rank) {
 	mm := make(map[Rank]struct{})
 	for _, m := range members {
 		mm[m] = struct{}{}
