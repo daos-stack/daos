@@ -192,7 +192,7 @@ class CartUtils():
             index (int): index into list or None (for a non-list param)
 
         Returns:
-            value: n-th element of list or string value 
+            value: n-th element of list or string value
 
         """
         if isinstance(param, list):
