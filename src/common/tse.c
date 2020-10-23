@@ -1049,8 +1049,8 @@ tse_task_reset(tse_task_t *task, tse_task_func_t task_func, void *priv)
 		D_GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
 
-	if (dtp->dtp_running || dtp->dtp_completing) {
-		D_ERROR("Can't reset a task that is running.\n");
+	if (!dtp->dtp_completed) {
+		D_ERROR("Can't reset a task in init state or not completed.\n");
 		D_GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
 
