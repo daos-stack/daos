@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,19 +29,12 @@
 #include "rpc.h"
 
 CRT_GEN_PROC_FUNC(server_entry, DAOS_SEQ_SERVER_ENTRY);
-CRT_GEN_PROC_FUNC(mgmt_list_pools_one, DAOS_SEQ_MGMT_LIST_POOLS_ONE);
 
-CRT_RPC_DEFINE(mgmt_pool_create, DAOS_ISEQ_MGMT_POOL_CREATE,
-		DAOS_OSEQ_MGMT_POOL_CREATE)
-CRT_RPC_DEFINE(mgmt_pool_destroy, DAOS_ISEQ_MGMT_POOL_DESTROY,
-		DAOS_OSEQ_MGMT_POOL_DESTROY)
 CRT_RPC_DEFINE(mgmt_svc_rip, DAOS_ISEQ_MGMT_SVR_RIP, DAOS_OSEQ_MGMT_SVR_RIP)
 CRT_RPC_DEFINE(mgmt_params_set, DAOS_ISEQ_MGMT_PARAMS_SET,
 		DAOS_OSEQ_MGMT_PARAMS_SET)
 CRT_RPC_DEFINE(mgmt_profile, DAOS_ISEQ_MGMT_PROFILE,
 	       DAOS_OSEQ_MGMT_PROFILE)
-CRT_RPC_DEFINE(mgmt_list_pools, DAOS_ISEQ_MGMT_LIST_POOLS,
-	       DAOS_OSEQ_MGMT_LIST_POOLS)
 CRT_RPC_DEFINE(mgmt_mark, DAOS_ISEQ_MGMT_MARK,
 	       DAOS_OSEQ_MGMT_MARK)
 

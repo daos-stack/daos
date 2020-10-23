@@ -59,6 +59,14 @@ func (srv *IOServerInstance) format(ctx context.Context, recreateSBs bool) error
 		return errors.Errorf("instance %d: no superblock after format", idx)
 	}
 
+	// After we know that the instance storage is ready, fire off
+	// any callbacks that were waiting for this state.
+	for _, readyFn := range srv.onStorageReady {
+		if err := readyFn(ctx); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -111,17 +119,17 @@ func (srv *IOServerInstance) finishStartup(ctx context.Context, ready *srvpb.Not
 	// number of targets, not number requested when starting
 	srv.setTargetCount(int(ready.GetNtgts()))
 
-	if srv.isMSReplica() {
-		if err := srv.startMgmtSvc(ctx); err != nil {
-			return errors.Wrap(err, "failed to start management service")
-		}
-	}
-
 	if err := srv.loadModules(ctx); err != nil {
 		return errors.Wrap(err, "failed to load I/O server modules")
 	}
 
 	srv.ready.SetTrue()
+
+	for _, fn := range srv.onReady {
+		if err := fn(ctx); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
@@ -149,12 +157,6 @@ func (srv *IOServerInstance) run(ctx context.Context, membership *system.Members
 
 	if err = srv.start(ctx, errChan); err != nil {
 		return
-	}
-	if srv.isMSReplica() {
-		// MS bootstrap will not join so register manually
-		if err := srv.registerMember(membership); err != nil {
-			return err
-		}
 	}
 	srv.waitDrpc.SetTrue()
 

@@ -81,7 +81,7 @@ func rankStateGroups(members system.Members) (system.RankGroups, error) {
 
 	for _, m := range members {
 		if _, exists := ranksSeen[m.Rank]; exists {
-			return nil, system.FaultMemberExists(m.Rank)
+			return nil, &system.ErrMemberExists{Rank: m.Rank}
 		}
 		ranksSeen[m.Rank] = struct{}{}
 
@@ -137,7 +137,7 @@ func displaySystemQueryVerbose(log logging.Logger, members system.Members) {
 
 	for _, m := range members {
 		row := txtfmt.TableRow{rankTitle: fmt.Sprintf("%d", m.Rank)}
-		row[uuidTitle] = m.UUID
+		row[uuidTitle] = m.UUID.String()
 		row[addrTitle] = m.Addr.String()
 		row[stateTitle] = m.State().String()
 		row[reasonTitle] = m.Info
@@ -153,7 +153,7 @@ func displaySystemQuerySingle(log logging.Logger, members system.Members) {
 
 	table := []txtfmt.TableRow{
 		{"address": m.Addr.String()},
-		{"uuid": m.UUID},
+		{"uuid": m.UUID.String()},
 		{"status": m.State().String()},
 		{"reason": m.Info},
 	}
@@ -247,7 +247,7 @@ func rankActionGroups(results system.MemberResults) (system.RankGroups, error) {
 
 	for _, r := range results {
 		if _, exists := ranksSeen[r.Rank]; exists {
-			return nil, system.FaultMemberExists(r.Rank)
+			return nil, &system.ErrMemberExists{Rank: r.Rank}
 		}
 		ranksSeen[r.Rank] = struct{}{}
 

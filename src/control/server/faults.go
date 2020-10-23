@@ -24,6 +24,8 @@ package server
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/dustin/go-humanize"
 
@@ -144,6 +146,20 @@ func FaultPoolScmTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
 			humanize.IBytes(ioserver.ScmMinBytesPerTarget*uint64(targetCount))),
 		fmt.Sprintf("SCM capacity should be larger than %s",
 			humanize.IBytes(ioserver.ScmMinBytesPerTarget*uint64(targetCount))),
+	)
+}
+
+func FaultPoolInvalidRanks(invalid []system.Rank) *fault.Fault {
+	rs := make([]string, len(invalid))
+	for i, r := range invalid {
+		rs[i] = r.String()
+	}
+	sort.Strings(rs)
+
+	return serverFault(
+		code.ServerPoolInvalidRanks,
+		fmt.Sprintf("pool request contains invalid ranks: %s", strings.Join(rs, ",")),
+		"retry the request with a valid set of ranks",
 	)
 }
 

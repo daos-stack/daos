@@ -57,9 +57,10 @@ const (
 )
 
 func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
-	missingSB := newTestMgmtSvc(nil)
+	testLog, _ := logging.NewTestLogger(t.Name())
+	missingSB := newTestMgmtSvc(t, testLog)
 	missingSB.harness.instances[0]._superblock = nil
-	missingAPs := newTestMgmtSvc(nil)
+	missingAPs := newTestMgmtSvc(t, testLog)
 	missingAPs.harness.instances[0].msClient.cfg.AccessPoints = nil
 
 	for name, tc := range map[string]struct {
@@ -105,7 +106,7 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			if tc.mgmtSvc == nil {
-				tc.mgmtSvc = newTestMgmtSvc(log)
+				tc.mgmtSvc = newTestMgmtSvc(t, log)
 			}
 
 			gotResp, gotErr := tc.mgmtSvc.LeaderQuery(context.TODO(), tc.req)
@@ -1037,7 +1038,8 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			rb, _ := proto.Marshal(&mgmtpb.GetAttachInfoResp{})
 			cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, nil)
 			srv.setDrpcClient(newMockDrpcClient(cfg))
-			tc.mgmtSvc = newMgmtSvc(harness, nil, tc.clientNetworkCfg)
+			tc.mgmtSvc = newMgmtSvc(harness, nil, system.MockDatabase(t, log))
+			tc.mgmtSvc.clientNetworkCfg = tc.clientNetworkCfg
 			gotResp, gotErr := tc.mgmtSvc.GetAttachInfo(context.TODO(), tc.req)
 			if gotErr != nil {
 				t.Fatalf("unexpected error: %+v\n", gotErr)

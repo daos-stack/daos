@@ -39,7 +39,7 @@ import (
 const (
 	defaultStoragePath = "/mnt/daos"
 	defaultGroupName   = "daos_io_server"
-	superblockVersion  = 0
+	superblockVersion  = 1
 )
 
 // Superblock is the per-Instance superblock
@@ -48,6 +48,7 @@ type Superblock struct {
 	UUID        string
 	System      string
 	Rank        *system.Rank
+	URI         string
 	ValidRank   bool
 	MS          bool
 	CreateMS    bool
@@ -142,6 +143,7 @@ func (srv *IOServerInstance) createSuperblock(recreate bool) error {
 			return err
 		}
 	}
+	srv.log.Debugf("idx %d createSuperblock() (ms: %+v)", srv.Index(), msInfo)
 
 	if err := srv.MountScmDevice(); err != nil {
 		return err
@@ -162,7 +164,6 @@ func (srv *IOServerInstance) createSuperblock(recreate bool) error {
 		Version:     superblockVersion,
 		UUID:        u.String(),
 		System:      systemName,
-		ValidRank:   msInfo.isReplica && msInfo.shouldBootstrap,
 		MS:          msInfo.isReplica,
 		CreateMS:    msInfo.isReplica,
 		BootstrapMS: msInfo.shouldBootstrap,

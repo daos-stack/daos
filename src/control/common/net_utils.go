@@ -57,3 +57,21 @@ func SplitPort(addrPattern string, defaultPort int) (string, string, error) {
 
 	return host, port, err
 }
+
+// CmpTcpAddr compares two *net.TCPAddr instances and returns
+// true if they are equivalent, false otherwise.
+func CmpTcpAddr(a, b *net.TCPAddr) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	if !a.IP.Equal(b.IP) {
+		return false
+	}
+	if a.Port != b.Port {
+		return false
+	}
+	return a.Zone == b.Zone
+}

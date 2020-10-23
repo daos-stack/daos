@@ -39,6 +39,11 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+var (
+	dRPCNotReady     = errors.New("no dRPC client set (data plane not started?)")
+	instanceNotReady = errors.New("instance not ready yet")
+)
+
 func (srv *IOServerInstance) setDrpcClient(c drpc.DomainSocketClient) {
 	srv.Lock()
 	defer srv.Unlock()
@@ -49,7 +54,7 @@ func (srv *IOServerInstance) getDrpcClient() (drpc.DomainSocketClient, error) {
 	srv.RLock()
 	defer srv.RUnlock()
 	if srv._drpcClient == nil {
-		return nil, errors.New("no dRPC client set (data plane not started?)")
+		return nil, dRPCNotReady
 	}
 	return srv._drpcClient, nil
 }
@@ -80,6 +85,12 @@ func (srv *IOServerInstance) CallDrpc(ctx context.Context, method drpc.Method, b
 	if err != nil {
 		return nil, err
 	}
+
+	rankMsg := ""
+	if sb := srv.getSuperblock(); sb != nil {
+		rankMsg = fmt.Sprintf(" (rank %s)", sb.Rank)
+	}
+	srv.log.Debugf("dRPC to index %d%s: %s", srv.Index(), rankMsg, method)
 
 	return makeDrpcCall(ctx, srv.log, dc, method, body)
 }
