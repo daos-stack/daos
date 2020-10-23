@@ -297,6 +297,38 @@ bio_sgl_holes(struct bio_sglist *bsgl)
 	return result;
 }
 
+/*
+ * Device information inquired from BIO. It's almost identical to
+ * smd_dev_info currently, but it could be extended in the future.
+ *
+ * NB. Move it to control.h if it needs be shared by control plane.
+ */
+struct bio_dev_info {
+	d_list_t	 bdi_link;
+	uuid_t		 bdi_dev_id;
+	uint32_t	 bdi_flags;	/* defined in control.h */
+	uint32_t	 bdi_tgt_cnt;
+	int		*bdi_tgts;
+};
+
+static inline void
+bio_free_dev_info(struct bio_dev_info *dev_info)
+{
+	if (dev_info->bdi_tgts != NULL)
+		D_FREE(dev_info->bdi_tgts);
+	D_FREE(dev_info);
+}
+
+/**
+ * List all devices.
+ *
+ * \param ctxt[IN]	Per xstream NVMe context
+ * \param dev_list[OUT]	Returned device list
+ *
+ * \return		Zero on success, negative value on error
+ */
+int bio_dev_list(struct bio_xs_context *ctxt, d_list_t *dev_list);
+
 /**
  * Callbacks called on NVMe device state transition
  *

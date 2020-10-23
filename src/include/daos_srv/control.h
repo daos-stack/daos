@@ -31,6 +31,15 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+enum {
+	/* Device is plugged */
+	NVME_DEV_FL_PLUGGED	= 0x1,
+	/* Device is used by DAOS (present in SMD) */
+	NVME_DEV_FL_INUSE	= 0x2,
+	/* Device is marked as FAULTY */
+	NVME_DEV_FL_FAULTY	= 0x4,
+};
+
 #define HEALTH_STAT_STR_LEN 128
 
 /*

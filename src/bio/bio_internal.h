@@ -291,6 +291,7 @@ void bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 struct spdk_thread *init_thread(void);
 void bio_release_bdev(void *arg);
 bool is_server_started(void);
+d_list_t *bio_bdev_list(void);
 struct spdk_blob_store *
 load_blobstore(struct bio_xs_context *ctxt, char *bdev_name, uuid_t *bs_uuid,
 	       bool create, bool async,
