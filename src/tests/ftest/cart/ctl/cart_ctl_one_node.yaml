@@ -27,7 +27,7 @@ tests: !mux
   ctl:
     name: ctl_basic
     test_servers_bin: crt_launch
-    test_servers_arg: "-e ../tests/test_group_np_srv --name server_grp"
+    test_servers_arg: "-e ../tests/test_group_np_srv --name server_grp_ctl_one_node"
     test_servers_env: ""
     test_servers_ppn: "1"
 
@@ -41,10 +41,10 @@ tests: !mux
       - cart_ctl
       - ../tests/test_group_np_cli
     test_clients_arg:
-      - "get_uri_cache --group-name server_grp --rank 0"
-      - "list_ctx --group-name server_grp --rank 0"
-      - "enable_fi --group-name server_grp --rank 0"
+      - "get_uri_cache --group-name server_grp_ctl_one_node --rank 0"
+      - "list_ctx --group-name server_grp_ctl_one_node --rank 0"
+      - "enable_fi --group-name server_grp_ctl_one_node --rank 0"
       - "set_fi_attr --attr 1911,5,0,1,100 --group-name \
-         server_grp --rank 0"
-      - "disable_fi --group-name server_grp --rank 0"
-      - "--name client-group --attach_to server_grp --shut_only"
+         server_grp_ctl_one_node --rank 0"
+      - "disable_fi --group-name server_grp_ctl_one_node --rank 0"
+      - "--name client-group --attach_to server_grp_ctl_one_node --shut_only"
