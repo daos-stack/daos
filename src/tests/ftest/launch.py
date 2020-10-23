@@ -469,16 +469,17 @@ def get_test_list(tags):
             # Otherwise it is assumed that this is a tag
             test_tags.extend(["--filter-by-tags", str(tag)])
 
-    # Add to the list of tests any test that matches the specified tags.  If no
+    # Update the list of tests with any test that match the specified tags.
+    # Exclude any specified tests that do not match the specified tags.  If no
     # tags and no specific tests have been specified then all of the functional
     # tests will be added.
     if test_tags or not test_list:
         command = ["avocado", "list", "--paginator=off"]
         for test_tag in test_tags:
             command.append(str(test_tag))
-        command.append("./")
+        command.extend(test_list if test_list else ["./"])
         tagged_tests = re.findall(r"INSTRUMENTED\s+(.*):", get_output(command))
-        test_list.extend(list(set(tagged_tests)))
+        test_list = list(set(tagged_tests))
 
     return test_tags, test_list
 
@@ -919,6 +920,7 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
     archive_files(destination, host_list, "{}/*log*".format(logs_dir))
     archive_files(destination, host_list, "{}/*/*log*".format(logs_dir))
 
+
 def archive_config_files(avocado_logs_dir):
     """Copy all of the configuration files to the avocado results directory.
 
@@ -939,6 +941,7 @@ def archive_config_files(avocado_logs_dir):
     configs_dir = get_temporary_directory(base_dir)
     archive_files(
         destination, host_list, "{}/*_*_*.yaml".format(configs_dir))
+
 
 def archive_files(destination, host_list, source_files):
     """Archive all of the remote files to the destination directory.
