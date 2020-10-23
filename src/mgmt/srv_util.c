@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,5 +78,71 @@ out:
 		D_FREE(uris);
 	if (ranks != NULL)
 		d_rank_list_free(ranks);
+	return rc;
+}
+
+static int
+map_update_bcast(crt_context_t ctx, uint32_t map_version,
+		 int nservers, struct server_entry servers[])
+{
+	struct mgmt_tgt_map_update_in	*in;
+	struct mgmt_tgt_map_update_out	*out;
+	crt_opcode_t			opc;
+	crt_rpc_t			*rpc;
+	int				rc;
+
+	D_DEBUG(DB_MGMT, "enter: version=%u nservers=%d\n", map_version,
+		nservers);
+
+	opc = DAOS_RPC_OPCODE(MGMT_TGT_MAP_UPDATE, DAOS_MGMT_MODULE, 1);
+	rc = crt_corpc_req_create(ctx, NULL /* grp */,
+				  NULL /* excluded_ranks */, opc,
+				  NULL /* co_bulk_hdl */, NULL /* priv */,
+				  0 /* flags */,
+				  crt_tree_topo(CRT_TREE_KNOMIAL, 32), &rpc);
+	if (rc != 0) {
+		D_ERROR("failed to create system map update RPC: "DF_RC"\n",
+			DP_RC(rc));
+		goto out;
+	}
+	in = crt_req_get(rpc);
+	in->tm_servers.ca_count = nservers;
+	in->tm_servers.ca_arrays = servers;
+	in->tm_map_version = map_version;
+
+	rc = dss_rpc_send(rpc);
+	if (rc != 0)
+		goto out_rpc;
+
+	out = crt_reply_get(rpc);
+	if (out->tm_rc != 0)
+		rc = -DER_IO;
+
+out_rpc:
+	crt_req_decref(rpc);
+out:
+	D_DEBUG(DB_MGMT, "leave: version=%u nservers=%d: "DF_RC"\n",
+		map_version, nservers, DP_RC(rc));
+	return rc;
+}
+
+int
+ds_mgmt_group_update_handler(struct mgmt_grp_up_in *in)
+{
+	struct dss_module_info *info = dss_get_module_info();
+	int			rc;
+
+	rc = ds_mgmt_group_update(CRT_GROUP_MOD_OP_REPLACE, in->gui_servers,
+				  in->gui_n_servers, in->gui_map_version);
+	if (rc != 0)
+		goto out;
+
+	D_DEBUG(DB_MGMT, "set %d servers in map version %u\n",
+		in->gui_n_servers, in->gui_map_version);
+
+	rc = map_update_bcast(info->dmi_ctx, in->gui_map_version,
+			      in->gui_n_servers, in->gui_servers);
+
+out:
 	return rc;
 }

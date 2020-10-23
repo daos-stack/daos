@@ -1332,6 +1332,85 @@ small_sgl(void **state)
 	assert_int_equal(rc, 0);
 }
 
+static void
+cond_ops(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	daos_handle_t	oh;
+	d_iov_t		dkey;
+	d_sg_list_t	sgl[2];
+	d_iov_t		sg_iov[2];
+	daos_iod_t	iod[2];
+	daos_recx_t	recx[2];
+	char		akey_str[2][10];
+	uint64_t	flags;
+	char		buf[2][STACK_BUF_LEN];
+	int		i, rc;
+
+	/** open object */
+	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_int_equal(rc, 0);
+
+	/** init dkey */
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+
+	for (i = 0; i < 2; i++) {
+		dts_buf_render(buf[i], STACK_BUF_LEN);
+
+		/** init scatter/gather */
+		d_iov_set(&sg_iov[i], buf[i], sizeof(buf[i]));
+		sgl[i].sg_nr		= 1;
+		sgl[i].sg_nr_out	= 0;
+		sgl[i].sg_iovs		= &sg_iov[i];
+
+		sprintf(akey_str[i], "akey_%d", i);
+		/** init I/O descriptor */
+		d_iov_set(&iod[i].iod_name, akey_str[i], strlen(akey_str[i]));
+		iod[i].iod_nr	= 1;
+		iod[i].iod_size	= 1;
+		recx[i].rx_idx	= 0;
+		recx[i].rx_nr	= sizeof(buf[i]);
+		iod[i].iod_recxs = &recx[i];
+		iod[i].iod_type	= DAOS_IOD_ARRAY;
+	}
+
+	flags = DAOS_COND_DKEY_UPDATE | DAOS_COND_AKEY_INSERT;
+	/** Cond update dkey should fail */
+	rc = daos_obj_update(oh, DAOS_TX_NONE, flags, &dkey, 2, iod, sgl, NULL);
+	assert_int_equal(rc, -DER_NONEXIST);
+
+	flags = DAOS_COND_DKEY_INSERT | DAOS_COND_AKEY_UPDATE;
+	/** Cond update akey should fail */
+	rc = daos_obj_update(oh, DAOS_TX_NONE, flags, &dkey, 2, iod, sgl, NULL);
+	assert_int_equal(rc, -DER_NONEXIST);
+
+	flags = DAOS_COND_DKEY_INSERT | DAOS_COND_PER_AKEY;
+	iod[0].iod_flags = DAOS_COND_AKEY_INSERT;
+	/** akey doesn't exist so update should fail */
+	iod[1].iod_flags = DAOS_COND_AKEY_UPDATE;
+	rc = daos_obj_update(oh, DAOS_TX_NONE, flags, &dkey, 2, iod, sgl, NULL);
+	assert_int_equal(rc, -DER_NONEXIST);
+
+	/** should succeed */
+	iod[1].iod_flags = DAOS_COND_AKEY_INSERT;
+	rc = daos_obj_update(oh, DAOS_TX_NONE, flags, &dkey, 2, iod, sgl, NULL);
+	assert_int_equal(rc, 0);
+
+	/** both exist now, insert should fail */
+	flags = DAOS_COND_DKEY_UPDATE | DAOS_COND_PER_AKEY;
+	iod[0].iod_flags = DAOS_COND_AKEY_INSERT;
+	iod[1].iod_flags = DAOS_COND_AKEY_UPDATE;
+	rc = daos_obj_update(oh, DAOS_TX_NONE, flags, &dkey, 2, iod, sgl, NULL);
+	assert_int_equal(rc, -DER_EXIST);
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_int_equal(rc, 0);
+	print_message("all good\n");
+}
+
 static const struct CMUnitTest array_tests[] = {
 	{ "ARRAY0: small_sgl",
 	  small_sgl, NULL, test_case_teardown},
@@ -1364,14 +1443,16 @@ static const struct CMUnitTest array_tests[] = {
 	{ "ARRAY14: Reading from incomplete array",
 	  array_recx_read_incomplete, NULL, test_case_teardown},
 	{ "ARRAY15: Reading from array with holes",
-		fetch_array_with_map, NULL, test_case_teardown},
+	  fetch_array_with_map, NULL, test_case_teardown},
 	{ "ARRAY16: Reading from array with holes not starting at idx 0",
-		fetch_array_with_map_2, NULL, test_case_teardown},
+	  fetch_array_with_map_2, NULL, test_case_teardown},
 	{ "ARRAY16: Reading from array with holes not starting at idx 0, fetch "
 	  "idx doesn't align with extent",
-		fetch_array_with_map_3, NULL, test_case_teardown},
+	  fetch_array_with_map_3, NULL, test_case_teardown},
 	{ "ARRAY17: Reading from array without holes, but many recxs",
-		fetch_array_with_map_4, NULL, test_case_teardown},
+	  fetch_array_with_map_4, NULL, test_case_teardown},
+	{ "ARRAY18: Simple Conditional Operations",
+	  cond_ops, NULL, test_case_teardown},
 };
 
 static int
