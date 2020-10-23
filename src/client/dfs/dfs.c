@@ -1888,7 +1888,7 @@ dfs_lookup_loop:
 					  R_OK | W_OK);
 			if (rc) {
 				D_ERROR("check_access failed %d\n", rc);
-				return rc;
+				D_GOTO(err_obj, rc);
 			}
 
 			rc = daos_array_open_with_attr(dfs->coh, entry.oid,
@@ -1975,6 +1975,17 @@ dfs_lookup_loop:
 		parent.mode = entry.mode;
 	}
 
+	if (S_ISDIR(obj->mode)) {
+		rc = check_access(dfs, geteuid(), getegid(), obj->mode,
+				  (daos_mode == DAOS_OO_RO) ? R_OK :
+				  R_OK | W_OK);
+		if (rc) {
+			daos_obj_close(obj->oh, NULL);
+			D_ERROR("check_access failed %d\n", rc);
+			D_GOTO(err_obj, rc);
+		}
+	}
+
 	if (mode)
 		*mode = obj->mode;
 
@@ -1996,6 +2007,7 @@ out:
 	return rc;
 err_obj:
 	D_FREE(obj);
+	D_FREE(rem);
 	goto out;
 }
 
@@ -3418,7 +3430,7 @@ xattr_copy(daos_handle_t src_oh, char *src_name, daos_handle_t dst_oh,
 	iod.iod_type	= DAOS_IOD_SINGLE;
 	iod.iod_size	= DFS_MAX_XATTR_LEN;
 
-	/** set sgl for fetch - user a preallocated buf to avoid a roundtrip */
+	/** set sgl for fetch - use a preallocated buf to avoid a roundtrip */
 	D_ALLOC(val_buf, DFS_MAX_XATTR_LEN);
 	if (val_buf == NULL)
 		return ENOMEM;
