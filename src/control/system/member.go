@@ -589,39 +589,23 @@ func (m *Membership) CheckRanks(ranks string) (hit, miss *RankSet, err error) {
 	m.RLock()
 	defer m.RUnlock()
 
-	hit, err = CreateRankSet("")
+	var allRanks, toTest []Rank
+	allRanks, err = m.db.MemberRanks()
 	if err != nil {
 		return
 	}
-	miss, err = CreateRankSet("")
+	toTest, err = ParseRanks(ranks)
 	if err != nil {
 		return
 	}
 
-	var rankList []Rank
 	if ranks == "" {
-		rankList, err = m.RankList()
-		if err != nil {
-			return
-		}
-	} else {
-		rankList, err = ParseRanks(ranks)
-		if err != nil {
-			return
-		}
+		return RankSetFromRanks(allRanks), RankSetFromRanks(nil), nil
 	}
 
-	for _, rank := range rankList {
-		if _, err = m.db.FindMemberByRank(rank); err != nil {
-			if err = miss.Add(rank); err != nil {
-				return
-			}
-			continue
-		}
-		if err = hit.Add(rank); err != nil {
-			return
-		}
-	}
+	missing := TestRankMembership(allRanks, toTest)
+	miss = RankSetFromRanks(missing)
+	hit = RankSetFromRanks(TestRankMembership(missing, toTest))
 
 	return
 }
