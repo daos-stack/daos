@@ -369,7 +369,37 @@ func TestSystem_RanksFromUint32(t *testing.T) {
 	}
 }
 
-func TestSystem_CheckRankMembership(t *testing.T) {
+func TestSystem_DedupeRanks(t *testing.T) {
+	for name, tc := range map[string]struct {
+		inList     []Rank
+		expOutlist []Rank
+	}{
+		"nil input": {
+			expOutlist: []Rank{},
+		},
+		"empty input": {
+			inList:     []Rank{},
+			expOutlist: []Rank{},
+		},
+		"dupes": {
+			inList:     []Rank{0, 1, 2, 2, 3, 4, 4, 0},
+			expOutlist: []Rank{0, 1, 2, 3, 4},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotOutlist, err := DedupeRanks(tc.inList)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(tc.expOutlist, gotOutlist); diff != "" {
+				t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestSystem_TestRankMembership(t *testing.T) {
 	for name, tc := range map[string]struct {
 		members    []Rank
 		test       []Rank
@@ -399,7 +429,7 @@ func TestSystem_CheckRankMembership(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			gotMissing := CheckRankMembership(tc.members, tc.test)
+			gotMissing := TestRankMembership(tc.members, tc.test)
 
 			if diff := cmp.Diff(tc.expMissing, gotMissing); diff != "" {
 				t.Fatalf("unexpected missing ranks (-want, +got):\n%s\n", diff)
