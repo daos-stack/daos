@@ -189,3 +189,59 @@ func TestCommon_FilterStringMatches(t *testing.T) {
 		})
 	}
 }
+
+func TestCommon_PercentageString(t *testing.T) {
+	for name, tc := range map[string]struct {
+		partial   uint64
+		total     uint64
+		expResult string
+	}{
+		"zero values": {
+			partial:   0,
+			total:     0,
+			expResult: "N/A",
+		},
+		"zero total": {
+			partial:   1,
+			total:     0,
+			expResult: "N/A",
+		},
+		"zero partial": {
+			partial:   0,
+			total:     1,
+			expResult: "0 %",
+		},
+		"full partial": {
+			partial:   1000,
+			total:     1000,
+			expResult: "100 %",
+		},
+		"excess partial": {
+			partial:   2000,
+			total:     1000,
+			expResult: "200 %",
+		},
+		"quarter partial": {
+			partial:   250,
+			total:     1000,
+			expResult: "25 %",
+		},
+		"half partial": {
+			partial:   500,
+			total:     1000,
+			expResult: "50 %",
+		},
+		"3 quarters partial": {
+			partial:   750,
+			total:     1000,
+			expResult: "75 %",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result := PercentageString(tc.partial, tc.total)
+			if result != tc.expResult {
+				t.Fatalf("expected %v, got %v", tc.expResult, result)
+			}
+		})
+	}
+}

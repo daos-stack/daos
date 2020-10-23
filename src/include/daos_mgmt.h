@@ -44,72 +44,6 @@ typedef struct {
 } daos_mgmt_pool_info_t;
 
 /**
- * Create a pool spanning \a tgts in \a grp. Upon successful completion, report
- * back the pool UUID in \a uuid and the pool service rank(s) in \a svc, which
- * are required by daos_pool_connect() to establish a pool connection.
- *
- * Targets are assumed to share the same \a dev and \a size.
- *
- * \param mode	[IN]	Capabilities permitted for the pool. May contain these
- *			bits:
- *			  0400	 user DAOS_PC_EX
- *			  0200	 user DAOS_PC_RW
- *			  0100	 user DAOS_PC_RO
- *			  0040	group DAOS_PC_EX
- *			  0020	group DAOS_PC_RW
- *			  0010	group DAOS_PC_RO
- *			  0004	other DAOS_PC_EX
- *			  0002	other DAOS_PC_RW
- *			  0001	other DAOS_PC_RO
- * \param uid	[IN]	User owning the pool
- * \param gid	[IN]	Group owning the pool
- * \param grp	[IN]	Process set name of the DAOS servers managing the pool
- * \param tgts	[IN]	Optional, allocate targets on this list of ranks
- *			If set to NULL, create the pool over all the ranks
- *			available in the service group.
- * \param dev	[IN]	String identifying the target devices to use
- * \param scm_size [IN]	Target SCM (Storage Class Memory) size in bytes (i.e.,
- *			maximum amounts of SCM storage space targets can
- *			consume) in bytes. Passing 0 will use the minimal
- *			supported target size.
- * \param nvme_size[IN]	Target NVMe (Non-Volatile Memory express) size in bytes.
- * \param pool_prop[IN]	Optional, pool properties.
- * \param svc	[IN]	Number of desired pool service replicas. Callers must
- *			speicfy svc->rl_nr and allocate a matching
- *			svc->rl_ranks; svc->rl_nr and svc->rl_ranks
- *			content are ignored.
- *		[OUT]	List of actual pool service replicas. svc->rl_nr
- *			is the number of actual pool service replicas, which
- *			shall be equal to or smaller than the desired number.
- *			The first svc->rl_nr elements of svc->rl_ranks
- *			shall be the list of pool service ranks.
- * \param uuid	[OUT]	UUID of the pool created
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- */
-int
-daos_pool_create(uint32_t mode, uid_t uid, gid_t gid, const char *grp,
-		 const d_rank_list_t *tgts, const char *dev,
-		 daos_size_t scm_size, daos_size_t nvme_size,
-		 daos_prop_t *pool_prop, d_rank_list_t *svc, uuid_t uuid,
-		 daos_event_t *ev);
-
-/**
- * Destroy a pool with \a uuid. If there is at least one connection to this
- * pool, and \a force is zero, then this operation completes with DER_BUSY.
- * Otherwise, the pool is destroyed when the operation completes.
- *
- * \param uuid	[IN]	UUID of the pool to destroy
- * \param grp	[IN]	Process set name of the DAOS servers managing the pool
- * \param force	[IN]	Force destruction even if there are active connections
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- */
-int
-daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
-		  daos_event_t *ev);
-
-/**
  * Currently, the following methods are mostly for dmg and tests.
  */
 
@@ -180,13 +114,13 @@ daos_pool_extend(const uuid_t uuid, const char *grp, d_rank_list_t *tgts,
 		 d_rank_list_t *failed, daos_event_t *ev);
 
 /**
- * add a set of storage targets from a pool.
+ * reintegrate a set of storage targets from a pool.
  *
  * \param uuid	[IN]	UUID of the pool
  * \param grp	[IN]	process set name of the DAOS servers managing the pool
  * \param svc	[IN]	list of pool service ranks
- * \param tgts	[IN]	Target array to be added from the pool.  If
- *			tl_tgts = -1, it means it will add all targets
+ * \param tgts	[IN]	Target array to be reintegrated from the pool.  If
+ *			tl_tgts = -1, it means it will reintegrate all targets
  *			on the rank.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
@@ -199,9 +133,9 @@ daos_pool_extend(const uuid_t uuid, const char *grp, d_rank_list_t *tgts,
  *			-DER_NO_PERM	Permission denied
  */
 int
-daos_pool_add_tgt(const uuid_t uuid, const char *grp,
-		  const d_rank_list_t *svc, struct d_tgt_list *tgts,
-		  daos_event_t *ev);
+daos_pool_reint_tgt(const uuid_t uuid, const char *grp,
+		    const d_rank_list_t *svc, struct d_tgt_list *tgts,
+		    daos_event_t *ev);
 
 /**
  * drain a set of storage targets from a pool.
@@ -224,8 +158,8 @@ daos_pool_add_tgt(const uuid_t uuid, const char *grp,
  */
 int
 daos_pool_drain_tgt(const uuid_t uuid, const char *grp,
-		  const d_rank_list_t *svc, struct d_tgt_list *tgts,
-		  daos_event_t *ev);
+		    const d_rank_list_t *svc, struct d_tgt_list *tgts,
+		    daos_event_t *ev);
 
 
 /**
@@ -325,32 +259,6 @@ int
 daos_pool_remove_replicas(const uuid_t uuid, const char *group,
 			  d_rank_list_t *svc, d_rank_list_t *targets,
 			  d_rank_list_t *failed, daos_event_t *ev);
-
-/**
- * List all pools created in the specified DAOS system.
- *
- * \param group	[IN]		Name of DAOS system managing the service.
- * \param npools
- *		[IN,OUT]	[in] \a pools length in items.
- *				[out] Number of pools in the DAOS system.
- * \param pools	[OUT]		Array of pool mgmt information structures.
- *				NULL is permitted in which case only the
- *				number of pools will be returned in \a npools.
- *				When non-NULL and on successful return, a
- *				service replica rank list (mgpi_svc) is
- *				allocated for each item in \pools.
- *				The rank lists must be freed by the caller.
- * \param ev	[IN]		Completion event. Optional and can be NULL.
- *				The function will run in blocking mode
- *				if \a ev is NULL.
- *
- * \return			0		Success
- *				-DER_TRUNC	\a pools cannot hold \a npools
- *						items
- */
-int
-daos_mgmt_list_pools(const char *group, daos_size_t *npools,
-		     daos_mgmt_pool_info_t *pools, daos_event_t *ev);
 
 /**
  * The operation code for DAOS client to set different parameters globally

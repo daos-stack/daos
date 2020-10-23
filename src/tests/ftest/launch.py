@@ -339,9 +339,22 @@ def check_remote_output(task, command):
             for output, o_hosts in output_data:
                 n_set = NodeSet.fromlist(o_hosts)
                 lines = str(output).splitlines()
+                print("There are {} lines of output".format(len(lines)))
                 if len(lines) > 1:
-                    output = "\n      {}".format("\n      ".join(lines))
-                print("    {}: rc={}, output: {}".format(n_set, code, output))
+                    print("    {}: rc={}, output:".format(n_set, code))
+                    for line in lines:
+                        try:
+                            print("      {}".format(line))
+                        except IOError:
+                            # DAOS-5781 Jenkins doesn't like receiving large
+                            # amounts of data in a short space of time so catch
+                            # this and retry.
+                            time.sleep(5)
+                            print("      {}".format(line))
+                else:
+                    print("    {}: rc={}, output: {}".format(n_set,
+                                                             code,
+                                                             output))
 
     # List any hosts that timed out
     timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
@@ -876,7 +889,7 @@ def clean_logs(test_yaml, args):
     # Remove any log files from the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     host_list = get_hosts_from_yaml(test_yaml, args)
-    command = "sudo rm -fr {}".format(os.path.join(logs_dir, "*.log"))
+    command = "sudo rm -fr {}".format(os.path.join(logs_dir, "*.log*"))
     print("Cleaning logs on {}".format(host_list))
     if not spawn_commands(host_list, command):
         print("Error cleaning logs, aborting")
