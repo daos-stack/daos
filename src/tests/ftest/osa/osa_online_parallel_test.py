@@ -290,7 +290,7 @@ class OSAOnlineParallelTest(TestWithServers):
                                 "Pool Version Error:  at the end")
                 pool[val].destroy()
 
-    # @skipForTicket("DAOS-5877")
+    @skipForTicket("DAOS-5877")
     def test_osa_online_parallel_test(self):
         """
         JIRA ID: DAOS-4752
