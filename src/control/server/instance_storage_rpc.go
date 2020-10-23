@@ -38,31 +38,37 @@ import (
 
 // newMntRet creates and populates SCM mount result.
 // Currently only used for format operations.
-func (srv *IOServerInstance) newMntRet(status ctlpb.ResponseStatus, errMsg, infoMsg string) *ctlpb.ScmMountResult {
+func (srv *IOServerInstance) newMntRet(inErr error) *ctlpb.ScmMountResult {
+	var info string
+	if fault.HasResolution(inErr) {
+		info = fault.ShowResolutionFor(inErr)
+	}
 	return &ctlpb.ScmMountResult{
 		Mntpoint:    srv.scmConfig().MountPoint,
-		State:       newState(srv.log, status, errMsg, infoMsg, "scm mount format"),
+		State:       newResponseState(inErr, ctlpb.ResponseStatus_CTL_ERR_SCM, info),
 		Instanceidx: srv.Index(),
 	}
 }
 
 // newCret creates and populates NVMe controller result and logs error
-func (srv *IOServerInstance) newCret(pciAddr string, status ctlpb.ResponseStatus, errMsg, infoMsg string) *ctlpb.NvmeControllerResult {
+func (srv *IOServerInstance) newCret(pciAddr string, inErr error) *ctlpb.NvmeControllerResult {
+	var info string
 	if pciAddr == "" {
 		pciAddr = "<nil>"
 	}
+	if inErr != nil && fault.HasResolution(inErr) {
+		info = fault.ShowResolutionFor(inErr)
+	}
 	return &ctlpb.NvmeControllerResult{
 		Pciaddr: pciAddr,
-		State:   newState(srv.log, status, errMsg, infoMsg, "nvme controller format"),
+		State:   newResponseState(inErr, ctlpb.ResponseStatus_CTL_ERR_NVME, info),
 	}
 }
 
 // scmFormat will return either successful result or error.
 func (srv *IOServerInstance) scmFormat(reformat bool) (*ctlpb.ScmMountResult, error) {
-	var eMsg, iMsg string
 	srvIdx := srv.Index()
 	cfg := srv.scmConfig()
-	status := ctlpb.ResponseStatus_CTL_SUCCESS
 
 	req, err := scm.CreateFormatRequest(cfg, reformat)
 	if err != nil {
@@ -82,7 +88,7 @@ func (srv *IOServerInstance) scmFormat(reformat bool) (*ctlpb.ScmMountResult, er
 	}
 	srv.log.Infof("Instance %d: finished format of %s", srvIdx, scmStr)
 
-	return srv.newMntRet(status, eMsg, iMsg), nil
+	return srv.newMntRet(nil), nil
 }
 
 func (srv *IOServerInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeControllerResults) {
@@ -104,25 +110,17 @@ func (srv *IOServerInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeCon
 		MemSize:    cfg.MemSize,
 	})
 	if err != nil {
-		results = append(results,
-			srv.newCret("", ctlpb.ResponseStatus_CTL_ERR_NVME,
-				err.Error(), fault.ShowResolutionFor(err)))
+		results = append(results, srv.newCret("", err))
 		return
 	}
 
 	for dev, status := range res.DeviceResponses {
-		var errMsg, infoMsg string
-		ctlpbStatus := ctlpb.ResponseStatus_CTL_SUCCESS
+		// TODO DAOS-5828: passing status.Error directly triggers segfault
+		var err error
 		if status.Error != nil {
-			ctlpbStatus = ctlpb.ResponseStatus_CTL_ERR_NVME
-			errMsg = status.Error.Error()
-			srv.log.Errorf("  format of %s device %s failed: %s", cfg.Class, dev, errMsg)
-			if fault.HasResolution(status.Error) {
-				infoMsg = fault.ShowResolutionFor(status.Error)
-			}
+			err = status.Error
 		}
-		results = append(results,
-			srv.newCret(dev, ctlpbStatus, errMsg, infoMsg))
+		results = append(results, srv.newCret(dev, err))
 	}
 
 	srv.log.Infof("Instance %d: finished format of %s block devices %v",
@@ -144,8 +142,7 @@ func (srv *IOServerInstance) StorageFormatSCM(reformat bool) (mResult *ctlpb.Scm
 	defer func() {
 		if scmErr != nil {
 			srv.log.Errorf(msgFormatErr, srvIdx)
-			mResult = srv.newMntRet(ctlpb.ResponseStatus_CTL_ERR_SCM,
-				scmErr.Error(), fault.ShowResolutionFor(scmErr))
+			mResult = srv.newMntRet(scmErr)
 		}
 	}()
 
@@ -173,6 +170,7 @@ func (srv *IOServerInstance) StorageFormatSCM(reformat bool) (mResult *ctlpb.Scm
 	return
 }
 
+// StorageFormatNVMe performs format on NVMe if superblock needs writing.
 func (srv *IOServerInstance) StorageFormatNVMe(bdevProvider *bdev.Provider) (cResults proto.NvmeControllerResults) {
 	srv.log.Infof("Formatting nvme storage for %s instance %d", build.DataPlaneName, srv.Index())
 
@@ -180,8 +178,7 @@ func (srv *IOServerInstance) StorageFormatNVMe(bdevProvider *bdev.Provider) (cRe
 	needsSuperblock, err := srv.NeedsSuperblock()
 	if err != nil {
 		return proto.NvmeControllerResults{
-			srv.newCret("", ctlpb.ResponseStatus_CTL_ERR_NVME,
-				err.Error(), fault.ShowResolutionFor(err)),
+			srv.newCret("", err),
 		}
 	}
 
