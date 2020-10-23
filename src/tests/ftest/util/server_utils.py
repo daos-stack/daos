@@ -731,6 +731,16 @@ class DaosServerManager(SubprocessManager):
 
         """
         def get_host_capacity(key, device_names):
+            """Get the total storage capacity per host rank.
+
+            Args:
+                key (str): the capacity type, e.g. "scm" or "nvme"
+                device_names (list): the device names of this capacity type
+
+            Returns:
+                dict: a dictionary of total storage capacity per host rank
+
+            """
             host_capacity = {}
             for host in data:
                 device_sizes = []
@@ -770,7 +780,7 @@ class DaosServerManager(SubprocessManager):
                 for path in self.get_config_value("scm_list") if path]
             capacity = get_host_capacity("scm", scm_devices)
             for host in sorted(capacity):
-                self.log.info("SCM capacity for {}: {}", host, capacity[host])
+                self.log.info("SCM capacity for %s: %s", host, capacity[host])
             # Use the minimum SCM storage across all servers
             storage[0] = capacity[min(capacity, key=capacity.get)]
         else:
@@ -783,57 +793,9 @@ class DaosServerManager(SubprocessManager):
             capacity = get_host_capacity(
                 "nvme", self.get_config_value("bdev_list"))
             for host in sorted(capacity):
-                self.log.info("NVMe capacity for {}: {}", host, capacity[host])
+                self.log.info("NVMe capacity for %s: %s", host, capacity[host])
             # Use the minimum SCM storage across all servers
             storage[1] = capacity[min(capacity, key=capacity.get)]
-
-        #     # Find the sizes of the SCM and NVMe storage configured for use by
-        #     # the DAOS IO servers.  Convert the lists into hashable tuples so
-        #     # they can be used as dictionary keys.
-        #     devices = {"scm": [], "nvme": []}
-        #     scm_list = self.get_config_value("scm_list")
-        #     if scm_list:
-        #         devices["scm"] = [
-        #             os.path.basename(path) for path in scm_list if path]
-        #     nvme_list = self.get_config_value("bdev_list")
-        #     if nvme_list:
-        #         devices["nvme"] = nvme_list
-        #     device_capacities = {}
-        #     for key in devices:
-        #         for device in devices[key]:
-        #             device_capacities[device] = 0
-        #             for host in data:
-        #                 capacity = None
-        #                 if device in data[host][key]:
-        #                     capacity = human_to_bytes(
-        #                         data[host][key][device]["capacity"])
-        #                     self.log.info(
-        #                         "Storage detected for %s on %s: %s",
-        #                         device, host, capacity)
-        #                     if device_capacities[device] == 0:
-        #                         # Store this value if no other value exists
-        #                         device_capacities[device] = capacity
-        #                     elif capacity < device_capacities[device]:
-        #                         # Replace existing capacity with a lesser value
-        #                         device_capacities[device] = capacity
-
-        #     self.log.info("devices:           %s", str(devices))
-        #     self.log.info("device_capacities: %s", str(device_capacities))
-
-        #     # Sum the minimum available capacities for each SCM and NVMe device
-        #     all_devices = (devices["scm"], devices["nvme"])
-        #     for index, device_list in enumerate(all_devices):
-        #         if device_list:
-        #             storage[index] = sum(
-        #                 [device_capacities[dev] for dev in device_list])
-
-        #     # Restart the DAOS IO servers
-        #     self.system_start()
-
-        # else:
-        #     # Report only the scm_size
-        #     scm_size = self.get_config_value("scm_size")
-        #     storage[0] = human_to_bytes("{}GB".format(scm_size))
 
         self.log.info(
             "Total available storage:\n  SCM:  %s (%s)\n  NVMe: %s (%s)",

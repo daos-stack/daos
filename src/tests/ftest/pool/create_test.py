@@ -111,7 +111,8 @@ class PoolCreateTests(TestWithServers):
                 self.log.info(
                     "Largest NVMe multiple: %s (%s)",
                     str(nvme_multiple), bytes_to_human(nvme_multiple))
-                pool.nvme_size.update(bytes_to_human(nvme_multiple), "nvme_size")
+                pool.nvme_size.update(
+                    bytes_to_human(nvme_multiple), "nvme_size")
 
     def check_pool_creation(self, max_duration):
         """Check the duration of each pool creation meets the requirement.

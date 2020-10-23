@@ -29,8 +29,6 @@ from pwd import getpwuid
 import re
 import json
 
-from ClusterShell.NodeSet import NodeSet
-
 from dmg_utils_base import DmgCommandBase
 from general_utils import get_numeric_list
 
@@ -745,7 +743,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg system query command fails.
 
         Returns:
-            dict: a dictionary of host NodeSets and their unique states.
+            dict: a dictionary of host ranks and their unique states.
 
         """
         self._get_result(("system", "query"), ranks=ranks, verbose=verbose)
@@ -806,7 +804,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg system start command fails.
 
         Returns:
-            dict: a dictionary of host NodeSets and their unique states.
+            dict: a dictionary of host ranks and their unique states.
 
         """
         self._get_result(("system", "start"))
@@ -833,7 +831,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg system stop command fails.
 
         Returns:
-            dict: a dictionary of host NodeSets and their unique states.
+            dict: a dictionary of host ranks and their unique states.
 
         """
         self._get_result(("system", "stop"), force=force, ranks=ranks)
