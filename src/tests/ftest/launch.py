@@ -778,20 +778,23 @@ def run_tests(test_files, tag_filter, args):
         command_list.extend(tag_filter)
 
     # Run each test
-    skip_test_reason = None
+    skip_reason = None
     for test_file in test_files:
-        if skip_test_reason is not None:
+        if skip_reason is not None:
             # An error was detected running clean_logs for a previous test.  As
             # this is typically an indication of a communication issue with one
             # of the hosts, do not attempt to run subsequent tests.
-            report_skipped_test(
-                test_file["py"], avocado_logs_dir, skip_test_reason)
+            if not report_skipped_test(
+                    test_file["py"], avocado_logs_dir, skip_reason):
+                return_code |= 64
 
         elif not isinstance(test_file["yaml"], str):
             # The test was not run due to an error replacing host placeholders
             # in the yaml file.  Treat this like a failed avocado command.
             reason = "error replacing yaml file placeholders"
-            report_skipped_test(test_file["py"], avocado_logs_dir, reason)
+            if not report_skipped_test(
+                    test_file["py"], avocado_logs_dir, reason):
+                return_code |= 64
             return_code |= 4
 
         else:
@@ -800,9 +803,10 @@ def run_tests(test_files, tag_filter, args):
             if args.clean:
                 if not clean_logs(test_file["yaml"], args):
                     # Report errors for this skipped test
-                    skip_test_reason = "host communication error cleaning logs"
-                    report_skipped_test(
-                        test_file["py"], avocado_logs_dir, skip_test_reason)
+                    skip_reason = "host communication error cleaning logs"
+                    if not report_skipped_test(
+                            test_file["py"], avocado_logs_dir, skip_reason):
+                        return_code |= 64
                     return_code |= 128
                     continue
 
@@ -1044,14 +1048,18 @@ def report_skipped_test(test_file, avocado_logs_dir, reason):
     Args:
         test_file (str): the test python file
         avocado_logs_dir (str): avocado job-results directory
-        reason (str): [description]
+        reason (str): test skip reason
+
+    Returns:
+        bool: status of writing to junit file
+
     """
     message = "The {} test was skipped due to {}".format(test_file, reason)
     print(message)
     test_name = get_test_category(test_file)
     destination = os.path.join(avocado_logs_dir, test_name)
     os.mkdir(destination)
-    create_results_xml(
+    return create_results_xml(
         message, test_name, "See console log for more details", destination)
 
 
@@ -1502,6 +1510,9 @@ def main():
             ret_code = 1
         if status & 4 == 4:
             print("ERROR: Detected one or more failed avocado commands!")
+            ret_code = 1
+        if status & 64 == 64:
+            print("ERROR: Failed to create a junit xml test error file!")
             ret_code = 1
         if status & 128 == 128:
             print("ERROR: Failed to clean logs in preparation for test run!")
