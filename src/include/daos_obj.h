@@ -108,7 +108,7 @@ enum {
 };
 
 /** Number of bits reserved in IO flags bitmap for conditional checks.  */
-#define IO_FLAGS_COND_BITS	7
+#define IO_FLAGS_COND_BITS	8
 
 enum {
 	/* Conditional Op: Punch key if it exists, fail otherwise */
@@ -125,6 +125,11 @@ enum {
 	DAOS_COND_AKEY_UPDATE	= (1 << 5),
 	/* Conditional Op: Fetch akey if it exists, fail otherwise */
 	DAOS_COND_AKEY_FETCH	= (1 << 6),
+	/* Inidication of per akey conditional ops.  If set, the global
+	 * flag should not have any akey conditional ops specified. The
+	 * per akey flags will be read from the iod_flags field.
+	 */
+	DAOS_COND_PER_AKEY	= (1 << 7),
 	/** Mask for convenience */
 	DAOS_COND_MASK		= ((1 << IO_FLAGS_COND_BITS) - 1),
 };
@@ -226,6 +231,10 @@ typedef struct {
 	daos_iod_type_t		iod_type;
 	/** Size of the single value or the record size of the array */
 	daos_size_t		iod_size;
+	/** Per akey conditional. If DAOS_COND_PER_AKEY not set, this is
+	 *  ignored.
+	 */
+	uint64_t		iod_flags;
 	/*
 	 * Number of entries in the \a iod_recxs for arrays,
 	 * should be 1 if single value.

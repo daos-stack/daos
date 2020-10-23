@@ -324,7 +324,8 @@ vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 {
 	uint32_t	size;
 	uint64_t	array_size;
-	uint64_t	cond_mask = VOS_COND_FETCH_MASK | VOS_COND_UPDATE_MASK;
+	uint64_t	cond_mask = VOS_COND_FETCH_MASK | VOS_COND_UPDATE_MASK |
+		VOS_OF_COND_PER_AKEY;
 
 	*ts_set = NULL;
 	if (tx_id == NULL && (flags & cond_mask) == 0)

@@ -220,8 +220,8 @@ enum {
 	VOS_OF_COND_AKEY_UPDATE		= DAOS_COND_AKEY_UPDATE,
 	/** Conditional Op: Fetch akey if it exists, fail otherwise */
 	VOS_OF_COND_AKEY_FETCH		= DAOS_COND_AKEY_FETCH,
-	/** replay punch (underwrite) */
-	VOS_OF_REPLAY_PC		= (1 << 7),
+	/** Indicates akey conditions are specified in iod_flags */
+	VOS_OF_COND_PER_AKEY		= DAOS_COND_PER_AKEY,
 	/* critical update - skip checks on SCM system/held space */
 	VOS_OF_CRIT			= (1 << 8),
 	/** Instead of update or punch of extents, remove all extents
@@ -238,6 +238,8 @@ enum {
 	VOS_OF_FETCH_CHECK_EXISTENCE	= (1 << 13),
 	/** Set when propagating a punch that results in empty subtree */
 	VOS_OF_PUNCH_PROPAGATE		= (1 << 14),
+	/** replay punch (underwrite) */
+	VOS_OF_REPLAY_PC		= (1 << 15),
 };
 
 /** Mask for any conditionals passed to to the fetch */
