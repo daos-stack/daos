@@ -659,18 +659,6 @@ rw_completion(void *cb_arg, int err)
 	spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error, mem);
 	}
 
-	if (biod->bd_result == 0 && err != 0) {
-		biod->bd_result = daos_errno2der(-err);
-		D_ALLOC_PTR(mem);
-		if (mem == NULL)
-			goto skip_media_error;
-		mem->mem_err_type = biod->bd_update ? MET_WRITE : MET_READ;
-		mem->mem_bs = xs_ctxt->bxc_blobstore;
-		mem->mem_tgt_id = xs_ctxt->bxc_tgt_id;
-		spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error,
-				     mem);
-	}
-
 skip_media_error:
 	if (biod->bd_inflights == 0 && biod->bd_dma_issued)
 		ABT_eventual_set(biod->bd_dma_done, NULL, 0);
