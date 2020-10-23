@@ -44,6 +44,9 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+type onStorageReadyFn func(ctx context.Context) error
+type onReadyFn func(ctx context.Context) error
+
 // IOServerInstance encapsulates control-plane specific configuration
 // and functionality for managed I/O server instances. The distinction
 // between this structure and what's in the ioserver package is that the
@@ -65,6 +68,8 @@ type IOServerInstance struct {
 	startLoop         chan bool // restart loop
 	fsRoot            string
 	hostFaultDomain   *system.FaultDomain
+	onStorageReady    []onStorageReadyFn
+	onReady           []onReadyFn
 
 	sync.RWMutex
 	// these must be protected by a mutex in order to
@@ -121,6 +126,18 @@ func (srv *IOServerInstance) isReady() bool {
 // isMSReplica indicates whether or not this instance is a management service replica.
 func (srv *IOServerInstance) isMSReplica() bool {
 	return srv.hasSuperblock() && srv.getSuperblock().MS
+}
+
+// OnStorageReady adds a list of callbacks to invoke when the instance
+// storage becomes ready.
+func (srv *IOServerInstance) OnStorageReady(fns ...onStorageReadyFn) {
+	srv.onStorageReady = append(srv.onStorageReady, fns...)
+}
+
+// OnReady adds a list of callbacks to invoke when the instance
+// becomes ready.
+func (srv *IOServerInstance) OnReady(fns ...onReadyFn) {
+	srv.onReady = append(srv.onReady, fns...)
 }
 
 // LocalState returns local perspective of the current instance state
@@ -180,30 +197,36 @@ func (srv *IOServerInstance) determineRank(ctx context.Context, ready *srvpb.Not
 		r = *superblock.Rank
 	}
 
-	if !superblock.ValidRank || !superblock.MS {
-		resp, err := srv.msClient.Join(ctx, &mgmtpb.JoinReq{
-			Uuid:           superblock.UUID,
-			Rank:           r.Uint32(),
-			Uri:            ready.Uri,
-			Nctxs:          ready.Nctxs,
-			SrvFaultDomain: srv.hostFaultDomain.String(),
-			// Addr member populated in msClient
-		})
-		if err != nil {
-			return system.NilRank, err
-		} else if resp.State == mgmtpb.JoinResp_OUT {
-			return system.NilRank, errors.Errorf("rank %d excluded", resp.Rank)
+	if !superblock.ValidRank {
+		// FIXME DAOS-5656: retain dependency on rank 0
+		if superblock.BootstrapMS {
+			r = system.Rank(0)
+			srv.log.Debugf("marking instance %d as rank 0", srv.Index())
 		}
-		r = system.Rank(resp.Rank)
+	}
 
-		if !superblock.ValidRank {
-			superblock.Rank = new(system.Rank)
-			*superblock.Rank = r
-			superblock.ValidRank = true
-			srv.setSuperblock(superblock)
-			if err := srv.WriteSuperblock(); err != nil {
-				return system.NilRank, err
-			}
+	resp, err := srv.msClient.Join(ctx, &mgmtpb.JoinReq{
+		Uuid:           superblock.UUID,
+		Rank:           r.Uint32(),
+		Uri:            ready.Uri,
+		Nctxs:          ready.Nctxs,
+		SrvFaultDomain: srv.hostFaultDomain.String(),
+		// Addr member populated in msClient
+	})
+	if err != nil {
+		return system.NilRank, err
+	} else if resp.State == mgmtpb.JoinResp_OUT {
+		return system.NilRank, errors.Errorf("rank %d excluded", resp.Rank)
+	}
+	r = system.Rank(resp.Rank)
+
+	if !superblock.ValidRank {
+		superblock.Rank = new(system.Rank)
+		*superblock.Rank = r
+		superblock.ValidRank = true
+		srv.setSuperblock(superblock)
+		if err := srv.WriteSuperblock(); err != nil {
+			return system.NilRank, err
 		}
 	}
 
@@ -409,20 +432,5 @@ func (srv *IOServerInstance) newMember() (*system.Member, error) {
 		return nil, err
 	}
 
-	return system.NewMember(rank, sb.UUID, addr, system.MemberStateJoined), nil
-}
-
-// registerMember creates a new system.Member for given instance and adds it
-// to the system membership.
-func (srv *IOServerInstance) registerMember(membership *system.Membership) error {
-	idx := srv.Index()
-
-	m, err := srv.newMember()
-	if err != nil {
-		return errors.Wrapf(err, "instance %d: failed to extract member details", idx)
-	}
-
-	membership.AddOrReplace(m)
-
-	return nil
+	return system.NewMember(rank, sb.UUID, sb.URI, addr, system.MemberStateJoined), nil
 }
