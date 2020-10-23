@@ -4,7 +4,7 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env', 'prereqs', 'control_tgts')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
@@ -28,8 +28,7 @@ def scons():
     # Other libs
     libs += ['numa', 'dl', 'smd']
 
-    tgts = Glob('*.c')
-    tgts += ['../common/control.c']
+    tgts = Glob('*.c') + control_tgts
     bio = daos_build.library(denv, "bio", tgts, install_off="../..", LIBS=libs)
     denv.Install('$PREFIX/lib64/daos_srv', bio)
 
