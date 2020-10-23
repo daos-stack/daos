@@ -1233,7 +1233,7 @@ public class DaosObjectIT {
     }
   }
 
-//  @Test
+  @Test
   public void testDataDescSpeed() throws Exception {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
     id.encode();
@@ -1301,7 +1301,7 @@ public class DaosObjectIT {
     return sb.toString();
   }
 
-//  @Test
+  @Test
   public void testAsyncUpdateAndFetch() throws Exception {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
     id.encode();
@@ -1395,6 +1395,7 @@ public class DaosObjectIT {
         object.punch();
       }
       object.close();
+      DaosEventQueue.destroyAll();
     }
   }
 

@@ -287,6 +287,7 @@ public class IOSimpleDataDesc {
     this.dkeyChanged = false;
     this.retCode = Integer.MAX_VALUE;
     for (SimpleEntry e : akeyEntries) {
+      e.actualSize = 0;
       e.reused = false;
       e.akeyChanged = false;
     }
