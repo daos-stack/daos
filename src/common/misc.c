@@ -40,7 +40,7 @@ daos_sgl_init(d_sg_list_t *sgl, unsigned int nr)
 
 	sgl->sg_nr = nr;
 	if (nr == 0)
-		return 0;
+		return -DER_INVAL;
 
 	D_ALLOC_ARRAY(sgl->sg_iovs, nr);
 
