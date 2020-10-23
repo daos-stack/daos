@@ -23,6 +23,7 @@
 """
 
 import os
+from apricot import skipForTicket
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand, IorMetrics
 
@@ -36,6 +37,7 @@ class IorIntercept(IorTestBase):
     :avocado: recursive
     """
 
+    @skipForTicket("DAOS-5857")
     def test_ior_intercept(self):
         """Jira ID: DAOS-3498.
 
@@ -57,29 +59,35 @@ class IorIntercept(IorTestBase):
 
         :avocado: tags=all,full_regression,hw,small,daosio,iorinterceptbasic
         """
-        out = self.run_ior_with_pool()
-        without_intercept = IorCommand.get_ior_metrics(out)
-        intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
-        out = self.run_ior_with_pool(intercept)
-        with_intercept = IorCommand.get_ior_metrics(out)
-        max_mib = int(IorMetrics.Max_MiB)
-        min_mib = int(IorMetrics.Min_MiB)
-        mean_mib = int(IorMetrics.Mean_MiB)
-        write_x = self.params.get("write_x", "/run/ior/iorflags/ssf/*", 1)
-        read_x = self.params.get("read_x", "/run/ior/iorflags/ssf/*", 1)
+        apis = self.params.get("ior_api", '/run/ior/iorflags/ssf/*')
+        for api in apis:
+            self.ior_cmd.api.update(api)
+            out = self.run_ior_with_pool(fail_on_warning=False)
+            without_intercept = IorCommand.get_ior_metrics(out)
+            if api == "POSIX":
+                intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
+                out = self.run_ior_with_pool(intercept, fail_on_warning=False)
+                with_intercept = IorCommand.get_ior_metrics(out)
+                max_mib = int(IorMetrics.Max_MiB)
+                min_mib = int(IorMetrics.Min_MiB)
+                mean_mib = int(IorMetrics.Mean_MiB)
+                write_x = self.params.get("write_x",
+                                          "/run/ior/iorflags/ssf/*", 1)
+                read_x = self.params.get("read_x",
+                                         "/run/ior/iorflags/ssf/*", 1)
 
-        # Verifying write performance
-        self.assertTrue(float(with_intercept[0][max_mib]) >
-                        write_x * float(without_intercept[0][max_mib]))
-        self.assertTrue(float(with_intercept[0][min_mib]) >
-                        write_x * float(without_intercept[0][min_mib]))
-        self.assertTrue(float(with_intercept[0][mean_mib]) >
-                        write_x * float(without_intercept[0][mean_mib]))
+                # Verifying write performance
+                self.assertTrue(float(with_intercept[0][max_mib]) >
+                                write_x * float(without_intercept[0][max_mib]))
+                self.assertTrue(float(with_intercept[0][min_mib]) >
+                                write_x * float(without_intercept[0][min_mib]))
+                self.assertTrue(float(with_intercept[0][mean_mib]) >
+                                write_x * float(without_intercept[0][mean_mib]))
 
-        # Verifying read performance
-        self.assertTrue(float(with_intercept[1][max_mib]) >
-                        read_x * float(without_intercept[1][max_mib]))
-        self.assertTrue(float(with_intercept[1][min_mib]) >
-                        read_x * float(without_intercept[1][min_mib]))
-        self.assertTrue(float(with_intercept[1][mean_mib]) >
-                        read_x * float(without_intercept[1][mean_mib]))
+                # Verifying read performance
+                self.assertTrue(float(with_intercept[1][max_mib]) >
+                                read_x * float(without_intercept[1][max_mib]))
+                self.assertTrue(float(with_intercept[1][min_mib]) >
+                                read_x * float(without_intercept[1][min_mib]))
+                self.assertTrue(float(with_intercept[1][mean_mib]) >
+                                read_x * float(without_intercept[1][mean_mib]))
