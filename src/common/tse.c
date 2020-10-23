@@ -1050,7 +1050,32 @@ tse_task_reset(tse_task_t *task, tse_task_func_t task_func, void *priv)
 	}
 
 	if (!dtp->dtp_completed) {
-		D_ERROR("Can't reset a task in init state or not completed.\n");
+		D_ERROR("Can't reset a task in init or running state.\n");
+		D_GOTO(err_unlock, rc = -DER_NO_PERM);
+	}
+
+	if (!d_list_empty(&dtp->dtp_list)) {
+		D_ERROR("task scheduler processing list should be empty\n");
+		D_GOTO(err_unlock, rc = -DER_NO_PERM);
+	}
+
+	if (!d_list_empty(&dtp->dtp_task_list)) {
+		D_ERROR("task user list should be empty\n");
+		D_GOTO(err_unlock, rc = -DER_NO_PERM);
+	}
+
+	if (!d_list_empty(&dtp->dtp_dep_list)) {
+		D_ERROR("task dep list should be empty\n");
+		D_GOTO(err_unlock, rc = -DER_NO_PERM);
+	}
+
+	if (!d_list_empty(&dtp->dtp_comp_cb_list)) {
+		D_ERROR("task completion CB list should be empty\n");
+		D_GOTO(err_unlock, rc = -DER_NO_PERM);
+	}
+
+	if (!d_list_empty(&dtp->dtp_prep_cb_list)) {
+		D_ERROR("task prep CB list should be empty\n");
 		D_GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
 
