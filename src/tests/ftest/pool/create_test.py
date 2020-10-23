@@ -24,8 +24,8 @@ portions thereof marked with this legend must also reproduce the markings.
 import time
 
 from apricot import TestWithServers
-from bytes_utils import Bytes
 from server_utils import ServerFailed
+from general_utils import human_to_bytes, bytes_to_human
 
 
 class PoolCreateTests(TestWithServers):
@@ -55,7 +55,7 @@ class PoolCreateTests(TestWithServers):
                 capacity to use for the pool sizes. Defaults to 0.9 (90%).
 
         Returns:
-            list: a list of Bytes objects representing the maximum pool creation
+            list: a list of bytes representing the maximum pool creation
                 SCM size and NVMe size
 
         """
@@ -68,11 +68,11 @@ class PoolCreateTests(TestWithServers):
         for index, size in enumerate(sizes):
             if size and ratios[index] < 1:
                 # Reduce the size by the specified percentage
-                size.amount *= ratios[index]
+                sizes[index] *= ratios[index]
                 self.log.info(
-                    "Adjusted %s size by %.2f%%: %s",
+                    "Adjusted %s size by %.2f%%: %s (%s)",
                     "SCM" if index == 0 else "NVMe", 100 * ratios[index],
-                    str(sizes[index]))
+                    str(sizes[index]), bytes_to_human(sizes[index]))
         return sizes
 
     def define_pools(self, quantity, scm_ratio, nvme_ratio):
@@ -91,7 +91,7 @@ class PoolCreateTests(TestWithServers):
         self.pool = [
             self.get_pool(create=False, connect=False) for _ in range(quantity)]
         for pool in self.pool:
-            pool.scm_size.update(str(sizes[0]), "scm_size")
+            pool.scm_size.update(bytes_to_human(sizes[0]), "scm_size")
             if nvme_ratio is not None:
                 if sizes[1] is None:
                     self.fail(
@@ -104,11 +104,14 @@ class PoolCreateTests(TestWithServers):
                 # GiB that can be used with the configured number of targets and
                 # specified capacity in GB.
                 targets = self.server_managers[0].get_config_value("targets")
-                nvme_multiple = Bytes(int(targets), "GiB")
-                while nvme_multiple + targets <= sizes[1]:
-                    nvme_multiple += targets
-                self.log.info("Largest NVMe multiple: %s", str(nvme_multiple))
-                pool.nvme_size.update(str(nvme_multiple), "nvme_size")
+                increment = human_to_bytes("{}GB".format(targets))
+                nvme_multiple = increment
+                while nvme_multiple + increment <= sizes[1]:
+                    nvme_multiple += increment
+                self.log.info(
+                    "Largest NVMe multiple: %s (%s)",
+                    str(nvme_multiple), bytes_to_human(nvme_multiple))
+                pool.nvme_size.update(bytes_to_human(nvme_multiple), "nvme_size")
 
     def check_pool_creation(self, max_duration):
         """Check the duration of each pool creation meets the requirement.

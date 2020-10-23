@@ -42,35 +42,54 @@ class DaosTestError(Exception):
     """DAOS API exception class."""
 
 
-def human_to_bytes(h_size):
-    """Convert human readable size values to respective byte value.
+def human_to_bytes(size):
+    """Convert a human readable size value to respective byte value.
 
     Args:
-        h_size (str): human readable size value to be converted.
+        size (str): human readable size value to be converted.
+
+    Raises:
+        DaosTestError: when an invalid human readable size value is provided
 
     Returns:
         int: value translated to bytes.
 
     """
-    units = {"b": 1,
-             "kb": (2**10),
-             "k": (2**10),
-             "mb": (2**20),
-             "m": (2**20),
-             "gb": (2**30),
-             "g": (2**30)}
-    pattern = r"([0-9.]+|[a-zA-Z]+)"
-    val, unit = re.findall(pattern, h_size)
+    conversion = ("B", "K", "M", "G", "T", "P")
+    match = re.findall(r"([0-9.]+)\s*([a-zA-Z]|)", size)
+    try:
+        value = float(match[0][0]) if "." in match[0][0] else int(match[0][0])
+        unit = match[0][1].upper() if match[0][1] else conversion[0]
+        if unit in conversion:
+            value *= (2 ** (10 * conversion.index(unit)))
+        else:
+            raise DaosTestError(
+                "Invalid unit detected, not in {}: {}".format(conversion, unit))
+    except IndexError:
+        raise DaosTestError(
+            "Invalid human readable size format: {}".format(size))
+    return value
 
-    # Check if float or int and then convert
-    val = float(val) if "." in val else int(val)
-    if unit.lower() in units:
-        val = val * units[unit.lower()]
-    else:
-        print("Unit not found! Provide a valid unit i.e: b,k,kb,m,mb,g,gb")
-        val = -1
 
-    return val
+def bytes_to_human(size, digits=2):
+    """Convert a byte value to the largest (> 1.0) human readable size.
+
+    Args:
+        size (int): byte size value to be converted.
+        digits (int): number of digits used to round the converted value
+
+    Returns:
+        str: value translated to a human readable size.
+
+    """
+    conversion = ["B", "KB", "MB", "GB", "TB", "PB"]
+    index = 0
+    value = [size if isinstance(size, (int, float)) else 0, conversion.pop(0)]
+    while value[0] > 1024 and conversion:
+        index += 1
+        value[0] = round(size / (2 ** (10 * index)), digits)
+        value[1] = conversion.pop(0)
+    return "".join([str(item) for item in value])
 
 
 def run_command(command, timeout=60, verbose=True, raise_exception=True,

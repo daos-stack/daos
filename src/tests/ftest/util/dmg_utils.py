@@ -123,74 +123,57 @@ class DmgCommand(DmgCommandBase):
         """
         self._get_result(("storage", "scan"), verbose=verbose)
 
-        # Sample dmg storage scan verbose output. Don't delete this sample
-        # because it helps to develop and debug the regex.
-        """
-        --------
-        wolf-130
-        --------
-        SCM Namespace Socket ID Capacity
-        ------------- --------- --------
-        pmem0         0         3.2 TB
-        pmem1         0         3.2 TB
-
-        NVMe PCI     Model                FW Revision Socket ID Capacity
-        --------     -----                ----------- --------- --------
-        0000:5e:00.0 INTEL SSDPE2KE016T8  VDV10170    0         1.6 TB
-        0000:5f:00.0 INTEL SSDPE2KE016T8  VDV10170    0         1.6 TB
-        0000:81:00.0 INTEL SSDPED1K750GA  E2010475    1         750 GB
-        0000:da:00.0 INTEL SSDPED1K750GA  E2010475    1         750 GB
-        """
-
-        # Sample dmg storage scan output. Don't delete this sample because it
-        # helps to develop and debug the regex.
-        """
-         Hosts    SCM Total             NVMe Total
-        -----    ---------             ----------
-        wolf-130 6.4 TB (2 namespaces) 4.7 TB (4 controllers)
-        """
-
         data = {}
-
         if verbose:
-            values = re.findall(
-                r"--------\n([a-z0-9-]+)\n--------|"
-                r"\n([a-z0-9_]+)[ ]+([\d]+)[ ]+([\d.]+) ([A-Z]+)|"
-                r"([a-f0-9]+:[a-f0-9]+:[a-f0-9]+.[a-f0-9]+)[ ]+"
-                r"(\S+)[ ]+(\S+)[ ]+(\S+)[ ]+(\d+)[ ]+([\d.]+)"
-                r"[ ]+([A-Z]+)[ ]*\n", self.result.stdout)
+            # Sample dmg storage scan verbose output. Don't delete this sample
+            # because it helps to develop and debug the regex.
+            """
+            --------
+            wolf-130
+            --------
+            SCM Namespace Socket ID Capacity
+            ------------- --------- --------
+            pmem0         0         3.2 TB
+            pmem1         0         3.2 TB
 
-            data = {}
-            host = values[0][0]
-            data[host] = {}
-            data[host]["scm"] = {}
-            i = 1
-            while i < len(values):
-                if values[i][1] == "":
-                    break
-                pmem_name = values[i][1]
-                socket_id = values[i][2]
-                capacity = "{} {}".format(values[i][3], values[i][4])
-                data[host]["scm"][pmem_name] = {}
-                data[host]["scm"][pmem_name]["socket"] = socket_id
-                data[host]["scm"][pmem_name]["capacity"] = capacity
-                i += 1
-
-            data[host]["nvme"] = {}
-            while i < len(values):
-                pci_addr = values[i][5]
-                model = "{} {}".format(values[i][6], values[i][7])
-                fw_revision = values[i][8]
-                socket_id = values[i][9]
-                capacity = "{} {}".format(values[i][10], values[i][11])
-                data[host]["nvme"][pci_addr] = {}
-                data[host]["nvme"][pci_addr]["model"] = model
-                data[host]["nvme"][pci_addr]["fw_revision"] = fw_revision
-                data[host]["nvme"][pci_addr]["socket"] = socket_id
-                data[host]["nvme"][pci_addr]["capacity"] = capacity
-                i += 1
-
+            NVMe PCI     Model                FW Revision Socket ID Capacity
+            --------     -----                ----------- --------- --------
+            0000:5e:00.0 INTEL SSDPE2KE016T8  VDV10170    0         1.6 TB
+            0000:5f:00.0 INTEL SSDPE2KE016T8  VDV10170    0         1.6 TB
+            0000:81:00.0 INTEL SSDPED1K750GA  E2010475    1         750 GB
+            0000:da:00.0 INTEL SSDPED1K750GA  E2010475    1         750 GB
+            """
+            match = re.findall(
+                r"(?:([a-zA-Z0-9]+-[0-9]+)|"
+                r"(?:([0-9a-fA-F:.]+)\s+([a-zA-Z0-9 ]+)\s+"
+                r"([a-zA-Z0-9]+)\s+(\d+)\s+([0-9\.]+\s+[A-Z]+))|"
+                r"(?:([a-zA-Z0-9]+)\s+(\d+)\s+([0-9\.]+\s+[A-Z]+)))",
+                self.result.stdout)
+            host = ""
+            for item in match:
+                if item[0]:
+                    host = item[0]
+                    data[host] = {"scm": {}, "nvme": {}}
+                elif item[1]:
+                    data[host]["nvme"][item[1]] = {
+                        "model": item[2],
+                        "fw": item[3],
+                        "socket": item[4],
+                        "capacity": item[5],
+                    }
+                elif item[6]:
+                    data[host]["scm"][item[6]] = {
+                        "socket": item[7],
+                        "capacity": item[8],
+                    }
         else:
+            # Sample dmg storage scan non-verbose output. Don't delete this
+            # sample because it helps to develop and debug the regex.
+            """
+            Hosts    SCM Total             NVMe Total
+            -----    ---------             ----------
+            wolf-130 6.4 TB (2 namespaces) 4.7 TB (4 controllers)
+            """
             values = re.findall(
                 r"([a-z0-9-\[\]]+)\s+([\d.]+)\s+([A-Z]+)\s+"
                 r"\(([\w\s]+)\)\s+([\d.]+)\s+([A-Z]+)\s+\(([\w\s]+)",
@@ -209,6 +192,7 @@ class DmgCommand(DmgCommandBase):
                 data[host]["nvme"]["capacity"] = " ".join(row[4:6])
                 data[host]["nvme"]["details"] = row[6]
 
+        self.log.info("storage_scan data: %s", str(data))
         return data
 
     def storage_format(self, reformat=False, timeout=30):
@@ -690,7 +674,7 @@ class DmgCommand(DmgCommandBase):
             ("pool", "exclude"), pool=pool, rank=rank, tgt_idx=tgt_idx)
 
     def pool_extend(self, pool, ranks, scm_size, nvme_size):
-        """Extend the daos_server pool
+        """Extend the daos_server pool.
 
         Args:
             pool (str): Pool uuid.
@@ -767,7 +751,7 @@ class DmgCommand(DmgCommandBase):
         self._get_result(("system", "query"), ranks=ranks, verbose=verbose)
 
         data = {}
-        if ranks is not None and "," not in ranks and "-" not in ranks:
+        if re.findall(r"Rank \d+", self.result.stdout):
             # Process the unique single rank system query output, e.g.
             #   Rank 1
             #   ------
@@ -780,10 +764,10 @@ class DmgCommand(DmgCommandBase):
                 self.result.stdout)
             if match:
                 data[int(match[0])] = {
-                    "address": match[1],
-                    "uuid": match[2],
-                    "state": match[3],
-                    "reason": match[4],
+                    "address": match[1].strip(),
+                    "uuid": match[2].strip(),
+                    "state": match[3].strip(),
+                    "reason": match[4].strip(),
                 }
         elif verbose:
             # Process the verbose multiple rank system query output, e.g.
@@ -811,7 +795,8 @@ class DmgCommand(DmgCommandBase):
             for info in match:
                 for rank in get_numeric_list(info[0]):
                     data[rank] = {"state": info[1]}
-        print("data: {}".format(data))
+
+        self.log.info("system_query data: %s", str(data))
         return data
 
     def system_start(self):
@@ -829,10 +814,10 @@ class DmgCommand(DmgCommandBase):
         # Populate a dictionary with host set keys for each unique state
         data = {}
         match = re.findall(
-            r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)\s+([A-Za-z]+)",
+            r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)\s+(.*)",
             self.result.stdout)
-        for hosts, state in match:
-            data[NodeSet(hosts)] = state
+        for info in match:
+            data[int(info[0])] = info[1].strip()
         return data
 
     def system_stop(self, force=False, ranks=None):
@@ -853,13 +838,16 @@ class DmgCommand(DmgCommandBase):
         """
         self._get_result(("system", "stop"), force=force, ranks=ranks)
 
-        # Populate a dictionary with host set keys for each unique state
+        # Populate a dictionary with host set keys for each unique state, ex:
+        #   Rank Operation Result
+        #   ---- --------- ------
+        #   0    stop      want Stopped, got Ready
         data = {}
         match = re.findall(
-            r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)\s+([A-Za-z]+)",
+            r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)\s+(.*)",
             self.result.stdout)
-        for hosts, state in match:
-            data[NodeSet(hosts)] = state
+        for info in match:
+            data[int(info[0])] = info[1].strip()
         return data
 
     def pool_evict(self, pool, sys=None):
@@ -876,6 +864,7 @@ class DmgCommand(DmgCommandBase):
 
         Raises:
             CommandFailure: if the dmg pool evict command fails.
+
         """
         return self._get_result(("pool", "evict"), pool=pool, sys=sys)
 

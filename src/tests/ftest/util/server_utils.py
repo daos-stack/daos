@@ -29,9 +29,8 @@ import time
 from command_utils_base import \
     CommandFailure, FormattedParameter, YamlParameters, CommandWithParameters
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
-from general_utils import pcmd, get_log_file
+from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human
 from dmg_utils import DmgCommand
-from bytes_utils import Bytes
 
 
 class ServerFailed(Exception):
@@ -679,12 +678,14 @@ class DaosServerManager(SubprocessManager):
         checks = 0
         daos_state = "????"
         while daos_state not in valid_states and checks < max_checks:
+            if checks > 0:
+                time.sleep(1)
             try:
                 daos_state = self.get_single_system_state().lower()
             except ServerFailed as error:
                 raise error
             checks += 1
-            time.sleep(1)
+            self.log.info("System state check (%s): %s", checks, daos_state)
         if daos_state not in valid_states:
             raise ServerFailed(
                 "Error checking DAOS state, currently neither {} after "
@@ -714,7 +715,7 @@ class DaosServerManager(SubprocessManager):
         """
         self.log.info("Stopping DAOS IO servers")
         self.check_system_state(("started", "joined"))
-        self.dmg.system_stop()
+        self.dmg.system_stop(force=True)
         if self.dmg.result.exit_status != 0:
             raise ServerFailed(
                 "Error stopping DAOS:\n{}".format(self.dmg.result))
@@ -726,10 +727,24 @@ class DaosServerManager(SubprocessManager):
             ServerFailed: if there was an error stopping the servers
 
         Returns:
-            list: a list of Bytes objects representing the maximum available
-                SCM size and NVMe size
+            list: a list of the maximum available SCM and NVMe sizes in bytes
 
         """
+        def get_host_capacity(key, device_names):
+            host_capacity = {}
+            for host in data:
+                device_sizes = []
+                for device in data[host][key]:
+                    if device in device_names:
+                        device_sizes.append(
+                            human_to_bytes(
+                                data[host][key][device]["capacity"]))
+                host_capacity[host] = sum(device_sizes)
+            return host_capacity
+
+        # Default maximum bytes for SCM and NVMe
+        storage = [0, 0]
+
         using_dcpm = self.manager.job.using_dcpm
         using_nvme = self.manager.job.using_nvme
 
@@ -739,56 +754,89 @@ class DaosServerManager(SubprocessManager):
 
             # Scan all of the hosts for their SCM and NVMe storage
             self.dmg.hostlist = self._hosts
-            result = self.dmg.storage_scan(verbose=True)
+            data = self.dmg.storage_scan(verbose=True)
             self.dmg.hostlist = self.get_config_value("access_points")
             if self.dmg.result.exit_status != 0:
                 raise ServerFailed(
-                    "Error obtaining DAOS storage:\n{}".format(result))
-
-            # Find the sizes of the SCM and NVMe storage configured for use by
-            # the DAOS IO servers.  Convert the lists into hashable tuples so
-            # they can be used as dictionary keys.
-            devices = {
-                "scm": [
-                    os.path.basename(path)
-                    for path in self.get_config_value("scm_list") if path],
-                "nvme": self.get_config_value("bdev_list")
-            }
-            device_capacities = {}
-            for key in devices:
-                for device in devices[key]:
-                    device_capacities[device] = None
-                    for host in result:
-                        capacity = None
-                        if device in result[key]:
-                            args = result[key][device]["capacity"].split(" ")
-                            capacity = Bytes(args[0], args[1])
-                        self.log.info(
-                            "Storage detected for %s on %s: %s",
-                            device, host, capacity)
-                        if device_capacities[device] is None:
-                            # Store this value if no other value exists
-                            device_capacities[device] = capacity
-                        elif capacity < device_capacities[device]:
-                            # Replace an existing capacity with a lesser value
-                            device_capacities[device] = capacity
-
-            # Sum the minimum available capacities for each SCM and NVMe device
-            storage = []
-            for device_list in (devices["scm"], devices["nvme"]):
-                storage.append(
-                    sum([device_capacities[dev] for dev in device_list]))
-                storage[-1].convert_up()
+                    "Error obtaining DAOS storage:\n{}".format(self.dmg.result))
 
             # Restart the DAOS IO servers
             self.system_start()
 
+        if using_dcpm:
+            # Find the sizes of the configured SCM storage
+            scm_devices = [
+                os.path.basename(path)
+                for path in self.get_config_value("scm_list") if path]
+            capacity = get_host_capacity("scm", scm_devices)
+            for host in sorted(capacity):
+                self.log.info("SCM capacity for {}: {}", host, capacity[host])
+            # Use the minimum SCM storage across all servers
+            storage[0] = capacity[min(capacity, key=capacity.get)]
         else:
-            # Report only the scm_size
+            # Use the assigned scm_size
             scm_size = self.get_config_value("scm_size")
-            storage = [Bytes(scm_size, "GB"), None]
+            storage[0] = human_to_bytes("{}GB".format(scm_size))
+
+        if using_nvme:
+            # Find the sizes of the configured NVMe storage
+            capacity = get_host_capacity(
+                "nvme", self.get_config_value("bdev_list"))
+            for host in sorted(capacity):
+                self.log.info("NVMe capacity for {}: {}", host, capacity[host])
+            # Use the minimum SCM storage across all servers
+            storage[1] = capacity[min(capacity, key=capacity.get)]
+
+        #     # Find the sizes of the SCM and NVMe storage configured for use by
+        #     # the DAOS IO servers.  Convert the lists into hashable tuples so
+        #     # they can be used as dictionary keys.
+        #     devices = {"scm": [], "nvme": []}
+        #     scm_list = self.get_config_value("scm_list")
+        #     if scm_list:
+        #         devices["scm"] = [
+        #             os.path.basename(path) for path in scm_list if path]
+        #     nvme_list = self.get_config_value("bdev_list")
+        #     if nvme_list:
+        #         devices["nvme"] = nvme_list
+        #     device_capacities = {}
+        #     for key in devices:
+        #         for device in devices[key]:
+        #             device_capacities[device] = 0
+        #             for host in data:
+        #                 capacity = None
+        #                 if device in data[host][key]:
+        #                     capacity = human_to_bytes(
+        #                         data[host][key][device]["capacity"])
+        #                     self.log.info(
+        #                         "Storage detected for %s on %s: %s",
+        #                         device, host, capacity)
+        #                     if device_capacities[device] == 0:
+        #                         # Store this value if no other value exists
+        #                         device_capacities[device] = capacity
+        #                     elif capacity < device_capacities[device]:
+        #                         # Replace existing capacity with a lesser value
+        #                         device_capacities[device] = capacity
+
+        #     self.log.info("devices:           %s", str(devices))
+        #     self.log.info("device_capacities: %s", str(device_capacities))
+
+        #     # Sum the minimum available capacities for each SCM and NVMe device
+        #     all_devices = (devices["scm"], devices["nvme"])
+        #     for index, device_list in enumerate(all_devices):
+        #         if device_list:
+        #             storage[index] = sum(
+        #                 [device_capacities[dev] for dev in device_list])
+
+        #     # Restart the DAOS IO servers
+        #     self.system_start()
+
+        # else:
+        #     # Report only the scm_size
+        #     scm_size = self.get_config_value("scm_size")
+        #     storage[0] = human_to_bytes("{}GB".format(scm_size))
 
         self.log.info(
-            "Total available storage:  \nSCM:  %s\n  NVMe: %s", str(storage[0]),
-            str(storage[1]))
+            "Total available storage:\n  SCM:  %s (%s)\n  NVMe: %s (%s)",
+            str(storage[0]), bytes_to_human(storage[0]),
+            str(storage[1]), bytes_to_human(storage[1]))
         return storage
