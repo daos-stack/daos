@@ -19,7 +19,6 @@ server_config:
     scm_class: dcpm
     scm_list: ["/dev/pmem0"]
     scm_size: 400
-
 pool:
   createmode:
     mode_RW:
@@ -31,6 +30,7 @@ pool:
     nvme_size: 400000000000 # large nvme_size for mdtest 1M file creation
   createsvc:
     svcn: 1
+  control_method: dmg
 container:
   type: POSIX
   control_method: daos
@@ -38,6 +38,9 @@ largefilecount:
   api:
     - DFS
     - POSIX
+  object_class:
+    - SX
+    - RP_3GX
 ior:
   np: 30
   dfs_destroy: False
@@ -50,9 +53,6 @@ ior:
     4K:
       transfer_size: '4K'
       block_size: '2G'
-  objectclass:
-    SX:
-      dfs_oclass: "SX"
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
 
