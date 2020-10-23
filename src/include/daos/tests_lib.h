@@ -173,6 +173,15 @@ typedef struct {
 	char		host[50];
 }  device_list;
 
+#define MAX_TEST_TARGETS_PER_POOL 10
+#define MAX_TEST_RANKS_PER_POOL 5
+typedef struct {
+	uuid_t		pool_id;
+	int		rank[MAX_TEST_RANKS_PER_POOL];
+	int		tgts[MAX_TEST_TARGETS_PER_POOL];
+	char		host[50];
+}  pool_table_list;
+
 /** Initialize an SGL with a variable number of IOVs and set the IOV buffers
  *  to the value of the strings passed. This will allocate memory for the iov
  *  structures as well as the iov buffers, so d_sgl_fini(sgl, true) must be
@@ -326,6 +335,19 @@ int dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 			    device_list *devices);
 
 /**
+ * List all pools from the SMD pool table in the specified DAOS system.
+ *
+ *  \param dmg_config_file	[IN]	DMG config file
+ *  \param npools		[OUT]	Number of pools in the DAOS system.
+ *  \param pool			[OUT]	Array of NVMe pool table info structures
+ *					NULL is permitted in which case only the
+ *					number of pool will be returned in
+ *					\a npools.
+ */
+int dmg_storage_pool_list(const char *dmg_config_file, int *npools,
+			  pool_table_list *pools);
+
+/**
  * Set NVMe device to faulty. Which will trigger the rebuild and all the
  * target attached to the disk will be excluded.
  *
@@ -352,5 +374,7 @@ int dmg_storage_set_nvme_fault(const char *dmg_config_file,
  *					expected state
  */
 int verify_blobstore_state(int state, const char *state_str);
+
+const char *vos_state_enum_to_str(int state);
 
 #endif /* __DAOS_TESTS_LIB_H__ */

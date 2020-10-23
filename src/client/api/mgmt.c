@@ -266,3 +266,26 @@ daos_mgmt_get_bs_state(const char *group, uuid_t blobstore_uuid,
 
 	return dc_task_schedule(task, true);
 }
+
+int
+daos_pool_get_vos_state(const char *group, uuid_t pool_uuid, d_rank_t tgt,
+			d_rank_t rank, int *state, daos_event_t *ev)
+{
+	daos_pool_get_vos_state_t	*args;
+	tse_task_t			*task;
+	int				 rc;
+
+	DAOS_API_ARG_ASSERT(*args, MGMT_GET_VOS_STATUS);
+
+	rc = dc_task_create(dc_pool_get_vos_state, NULL, ev, &task);
+	if (rc)
+		return rc;
+	args = dc_task_get_args(task);
+	args->grp = group;
+	args->tgt = tgt;
+	args->rank = rank;
+	args->state = state;
+	uuid_copy(args->pool_uuid, pool_uuid);
+
+	return dc_task_schedule(task, true);
+}

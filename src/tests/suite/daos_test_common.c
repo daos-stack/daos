@@ -1235,3 +1235,34 @@ int wait_and_verify_blobstore_state(uuid_t bs_uuid, char *expected_state,
 
 	return -DER_TIMEDOUT;
 }
+
+#define MAX_VOS_STATE_WAIT	5 /* 5sec sleep between vos state queries */
+#define MAX_VOS_STATE_RETRY	36 /* max timeout of 36 * 5sec= 3min */
+int wait_and_verify_vos_state(uuid_t pool_uuid, int tgtidx[], int n_tgtidx,
+			      int rank, char *expected_state, const char *group)
+{
+	int	vos_state;
+	int	retry_cnt;
+	int	rc;
+	int	i;
+
+	retry_cnt = 0;
+	while (retry_cnt <= MAX_VOS_STATE_RETRY) {
+		for (i = 0; i < n_tgtidx; i++) {
+			rc = daos_pool_get_vos_state(group, pool_uuid,
+						     tgtidx[i], rank,
+						     &vos_state, NULL /*ev*/);
+			if (rc)
+				return rc;
+
+			if (strcmp(vos_state_enum_to_str(vos_state),
+				   expected_state) == 0)
+				return 0;
+		}
+
+		sleep(MAX_VOS_STATE_WAIT);
+		retry_cnt++;
+	};
+
+	return -DER_TIMEDOUT;
+}

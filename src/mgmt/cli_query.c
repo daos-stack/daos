@@ -143,3 +143,118 @@ out:
 	tse_task_complete(task, rc);
 	return rc;
 }
+
+struct mgmt_get_vos_state_arg {
+	struct dc_mgmt_sys	*sys;
+	crt_rpc_t		*rpc;
+	int			*vos_state;
+	d_rank_t		 rank;
+	d_rank_t		 tgt;
+};
+
+static int
+mgmt_get_vos_state_cp(tse_task_t *task, void *data)
+{
+	struct mgmt_get_vos_state_arg	*arg;
+	struct mgmt_get_vos_state_out	*vs_out;
+	struct mgmt_get_vos_state_in	*vs_in;
+	int				 rc = task->dt_result;
+
+	arg = (struct mgmt_get_vos_state_arg *)data;
+
+	if (rc) {
+		D_ERROR("RPC error while querying VOS state: "DF_RC"\n",
+			DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	vs_out = crt_reply_get(arg->rpc);
+	D_ASSERT(vs_out != NULL);
+	rc = vs_out->vs_rc;
+	if (rc) {
+		D_ERROR("MGMT_GET_VOS_STATE replied failed, rc: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	*arg->vos_state = vs_out->vs_state;
+
+	vs_in = crt_req_get(arg->rpc);
+	D_ASSERT(vs_in != NULL);
+
+out:
+	dc_mgmt_sys_detach(arg->sys);
+	crt_req_decref(arg->rpc);
+
+	return rc;
+}
+
+int
+dc_pool_get_vos_state(tse_task_t *task)
+{
+	daos_pool_get_vos_state_t	*args;
+	crt_endpoint_t			 svr_ep;
+	crt_rpc_t			*rpc_req = NULL;
+	crt_opcode_t			 opc;
+	struct mgmt_get_vos_state_in	*vs_in;
+	struct mgmt_get_vos_state_arg	 cb_args;
+	int				 rc;
+
+	args = dc_task_get_args(task);
+
+	rc = dc_mgmt_sys_attach(args->grp, &cb_args.sys);
+	if (rc != 0) {
+		D_ERROR("cannot attach to DAOS system: %s\n", args->grp);
+		D_GOTO(out, rc);
+	}
+
+	svr_ep.ep_grp = cb_args.sys->sy_group;
+	svr_ep.ep_rank = 0;
+	svr_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
+	opc = DAOS_RPC_OPCODE(MGMT_GET_VOS_STATE, DAOS_MGMT_MODULE,
+			      DAOS_MGMT_VERSION);
+
+	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc_req);
+	if (rc != 0) {
+		D_ERROR("crt_req_create(MGMT_GET_VOS_STATE) failed, rc: %d\n",
+			rc);
+		D_GOTO(out_grp, rc);
+	}
+
+	D_ASSERT(rpc_req != NULL);
+	vs_in = crt_req_get(rpc_req);
+	D_ASSERT(vs_in != NULL);
+
+	/** fill in request buffer */
+	vs_in->vs_rank = args->rank;
+	vs_in->vs_tgt = args->tgt;
+	uuid_copy(vs_in->vs_pool_uuid, args->pool_uuid);
+
+	crt_req_addref(rpc_req);
+	cb_args.rpc = rpc_req;
+	cb_args.vos_state = args->state;
+	cb_args.rank = args->rank;
+	cb_args.tgt = args->tgt;
+
+	rc = tse_task_register_comp_cb(task, mgmt_get_vos_state_cp, &cb_args,
+				       sizeof(cb_args));
+	if (rc != 0)
+		D_GOTO(out_put_req, rc);
+
+	D_DEBUG(DB_MGMT, "Getting VOS target state for tgt:%d rank:%d pool:"
+		DF_UUID" in DAOS system:%s\n", args->tgt, args->rank,
+		DP_UUID(args->pool_uuid), args->grp);
+
+	/** send the request */
+	return daos_rpc_send(rpc_req, task);
+
+out_put_req:
+	crt_req_decref(rpc_req);
+	crt_req_decref(rpc_req);
+
+out_grp:
+	dc_mgmt_sys_detach(cb_args.sys);
+
+out:
+	tse_task_complete(task, rc);
+	return rc;
+}

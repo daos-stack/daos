@@ -54,7 +54,10 @@
 		ds_mgmt_mark_hdlr, NULL),				\
 	X(MGMT_GET_BS_STATE,						\
 		0, &CQF_mgmt_get_bs_state,				\
-		ds_mgmt_hdlr_get_bs_state, NULL)
+		ds_mgmt_hdlr_get_bs_state, NULL),			\
+	X(MGMT_GET_VOS_STATE,						\
+		0, &CQF_mgmt_get_vos_state,				\
+		ds_mgmt_hdlr_get_vos_state, NULL)
 #define MGMT_PROTO_SRV_RPC_LIST						\
 	X(MGMT_TGT_CREATE,						\
 		0, &CQF_mgmt_tgt_create,				\
@@ -199,5 +202,20 @@ CRT_RPC_DECLARE(mgmt_mark, DAOS_ISEQ_MGMT_MARK, DAOS_OSEQ_MGMT_MARK)
 
 CRT_RPC_DECLARE(mgmt_get_bs_state, DAOS_ISEQ_MGMT_GET_BS_STATE,
 		DAOS_OSEQ_MGMT_GET_BS_STATE)
+
+/* Get VOS target state */
+#define DAOS_ISEQ_MGMT_GET_VOS_STATE /* input fields */	 \
+	((d_rank_t)		(vs_rank)		CRT_VAR) \
+	((d_rank_t)		(vs_tgt)		CRT_VAR) \
+	((uuid_t)		(vs_pool_uuid)		CRT_VAR)
+
+#define DAOS_OSEQ_MGMT_GET_VOS_STATE /* output fields */	 \
+	((d_rank_t)		(vs_rank)		CRT_VAR) \
+	((d_rank_t)		(vs_tgt)		CRT_VAR) \
+	((int32_t)		(vs_state)		CRT_VAR) \
+	((int32_t)		(vs_rc)			CRT_VAR)
+
+CRT_RPC_DECLARE(mgmt_get_vos_state, DAOS_ISEQ_MGMT_GET_VOS_STATE,
+		DAOS_OSEQ_MGMT_GET_VOS_STATE)
 
 #endif /* __MGMT_RPC_H__ */

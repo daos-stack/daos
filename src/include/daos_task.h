@@ -54,6 +54,7 @@ typedef enum {
 	DAOS_OPC_POOL_ADD_REPLICAS,
 	DAOS_OPC_POOL_REMOVE_REPLICAS,
 	DAOS_OPC_MGMT_GET_BS_STATE,
+	DAOS_OPC_MGMT_GET_VOS_STATUS,
 
 	/** Pool APIs */
 	DAOS_OPC_POOL_CONNECT,
@@ -369,6 +370,20 @@ typedef struct {
 	uuid_t			uuid;
 	int			*state;
 } daos_mgmt_get_bs_state_t;
+
+/** pool management pool query VOS tgt state */
+typedef struct {
+	/** Process set name of the DAOS servers managing the pool */
+	const char		*grp;
+	/** Local VOS target idx */
+	d_rank_t		 tgt;
+	/** Rank of the pool target to query */
+	d_rank_t		 rank;
+	/** Returned VOS target state */
+	int			*state;
+	/** UUID of the of the pool that the target resides */
+	uuid_t			 pool_uuid;
+} daos_pool_get_vos_state_t;
 
 /** pool service stop args */
 typedef struct {

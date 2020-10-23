@@ -1129,3 +1129,79 @@ ds_mgmt_tgt_map_update_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	out_result->tm_rc += out_source->tm_rc;
 	return 0;
 }
+
+int
+ds_mgmt_get_vos_state(d_rank_t rank, d_rank_t tgt, const uuid_t pool_uuid,
+		      int *state)
+{
+	struct ds_pool		*pool;
+	struct pool_target	*target = NULL;
+	int			 rc = 0;
+
+	pool = ds_pool_lookup(pool_uuid);
+	if (pool == NULL || pool->sp_map == NULL)
+		D_GOTO(output, rc = 0);
+
+	ABT_rwlock_rdlock(pool->sp_lock);
+	rc = pool_map_find_target_by_rank_idx(pool->sp_map, rank, tgt,
+					      &target);
+	if (rc != 1) {
+		D_ERROR(DF_UUID": Failed to get rank:%u, idx:%d\n, rc:%d",
+			DP_UUID(pool_uuid), rank, tgt, rc);
+		D_GOTO(output, rc = -DER_NONEXIST);
+	} else {
+		rc = 0;
+	}
+
+	D_ASSERT(target != NULL);
+
+	*state = target->ta_comp.co_status;
+
+output:
+	ABT_rwlock_unlock(pool->sp_lock);
+	ds_pool_put(pool);
+
+	return rc;
+}
+
+void
+ds_mgmt_hdlr_get_vos_state(crt_rpc_t *rpc_req)
+{
+	struct mgmt_get_vos_state_in	*vs_in;
+	struct mgmt_get_vos_state_out	*vs_out;
+	int				 vs_state;
+	struct ds_pool			*pool;
+	int				 rc;
+
+
+	vs_in = crt_req_get(rpc_req);
+	D_ASSERT(vs_in != NULL);
+	vs_out = crt_reply_get(rpc_req);
+	D_ASSERT(vs_out != NULL);
+
+	pool = ds_pool_lookup(vs_in->vs_pool_uuid);
+	if (pool == NULL) {
+		D_ERROR("Failed to find pool "DF_UUID"\n",
+			DP_UUID(vs_in->vs_pool_uuid));
+		D_GOTO(out, rc = -DER_NONEXIST);
+	}
+
+	rc = ds_mgmt_get_vos_state(vs_in->vs_rank, vs_in->vs_tgt, pool->sp_uuid,
+				   &vs_state);
+	if (rc) {
+		D_ERROR("Failed to get VOS target state\n");
+		D_GOTO(out, rc);
+	}
+
+	vs_out->vs_state = vs_state;
+	vs_out->vs_rank = vs_in->vs_rank;
+	vs_out->vs_tgt = vs_in->vs_tgt;
+	vs_out->vs_rc = rc;
+
+	ds_pool_put(pool);
+
+out:
+	rc = crt_reply_send(rpc_req);
+	if (rc != 0)
+		D_ERROR("crt_reply_send failed, rc: "DF_RC"\n", DP_RC(rc));
+}

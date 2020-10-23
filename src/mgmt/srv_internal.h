@@ -116,6 +116,9 @@ int ds_mgmt_dev_state_query(uuid_t uuid, Mgmt__DevStateResp *resp);
 int ds_mgmt_dev_set_faulty(uuid_t uuid, Mgmt__DevStateResp *resp);
 int ds_mgmt_get_bs_state(uuid_t bs_uuid, int *bs_state);
 void ds_mgmt_hdlr_get_bs_state(crt_rpc_t *rpc_req);
+int ds_mgmt_get_vos_state(d_rank_t rank, d_rank_t tgt, const uuid_t pool_uuid,
+			  int *state);
+void ds_mgmt_hdlr_get_vos_state(crt_rpc_t *rpc);
 
 /** srv_target.c */
 int ds_mgmt_tgt_setup(void);

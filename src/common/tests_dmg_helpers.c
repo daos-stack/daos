@@ -29,6 +29,7 @@
 #include <daos/common.h>
 #include <daos/tests_lib.h>
 #include <daos.h>
+#include <daos/pool_map.h>
 
 static void
 cmd_free_args(char **args, int argcount)
@@ -692,6 +693,148 @@ out_json:
 	return rc;
 }
 
+static int
+parse_pooltable_info(struct json_object *smd_pool, pool_table_list *pools,
+		     char *host, int pool_length, int *pool)
+{
+	struct json_object	*tmp;
+	struct json_object	*target = NULL;
+	struct json_object	*targets;
+	struct json_object	*rank;
+	struct json_object	*uuid;
+	int			tgts_len;
+	int			i, j;
+
+	json_object_object_foreach(smd_pool, key, val) {
+		D_DEBUG(DB_TEST, "key:\"%s\",val=%s\n", key,
+			json_object_to_json_string(val));
+
+		strcpy(pools[*pool].host, strtok(host, ":") + 1);
+
+		for (i = 0; i < json_object_array_length(val); i++) {
+			tmp = json_object_array_get_idx(val, i);
+			if (!json_object_object_get_ex(tmp, "uuid", &uuid)) {
+				D_ERROR("unable to extract uuid from JSON\n");
+				return -DER_INVAL;
+			}
+
+			uuid_parse(json_object_get_string(uuid),
+				   pools[*pool].pool_id);
+
+			if (!json_object_object_get_ex(tmp, "tgt_ids",
+						       &targets)) {
+				D_ERROR("unable to extract tgtids from JSON\n");
+				return -DER_INVAL;
+			}
+			tgts_len = json_object_array_length(targets);
+			for (j = 0; j < tgts_len; j++) {
+				target = json_object_array_get_idx(targets, j);
+				pools[*pool].tgts[j] = atoi(
+					json_object_to_json_string(target));
+			}
+
+			if (!json_object_object_get_ex(tmp, "rank", &rank)) {
+				D_ERROR("unable to extract rank from JSON\n");
+				return -DER_INVAL;
+			}
+			/*
+			 * Multiple entries in JSON array under the same pool
+			 * uuid determine different ranks.
+			 */
+			pools[*pool].rank[i] = atoi(
+					json_object_to_json_string(rank));
+		}
+		*pool = *pool + 1;
+	}
+
+	return 0;
+}
+
+int
+dmg_storage_pool_list(const char *dmg_config_file, int *npools,
+		      pool_table_list *pools)
+{
+	struct json_object	*dmg_out = NULL;
+	struct json_object	*storage_map = NULL;
+	struct json_object	*hosts = NULL;
+	struct json_object	*smd_info = NULL;
+	struct json_object	*smd_pool = NULL;
+	char			 host[100];
+	int			 pool_length = 0;
+	int			 rc = 0;
+	int			*pool;
+
+	if (npools != NULL)
+		*npools = 0;
+
+	D_ALLOC_PTR(pool);
+	rc = daos_dmg_json_pipe("storage query list-pools", dmg_config_file,
+				NULL, 0, &dmg_out);
+	if (rc != 0) {
+		D_ERROR("dmg failed");
+		goto out_json;
+	}
+
+	if (!json_object_object_get_ex(dmg_out, "host_storage_map",
+				       &storage_map)) {
+		D_ERROR("unable to extract host_storage_map from JSON\n");
+		return -DER_INVAL;
+	}
+
+	json_object_object_foreach(storage_map, key, val) {
+		D_DEBUG(DB_TEST, "key:\"%s\",val=%s\n", key,
+			json_object_to_json_string(val));
+
+		if (!json_object_object_get_ex(val, "hosts", &hosts)) {
+			D_ERROR("unable to extract hosts from JSON\n");
+			return -DER_INVAL;
+		}
+
+		strcpy(host, json_object_to_json_string(hosts));
+
+		json_object_object_foreach(val, key1, val1) {
+			D_DEBUG(DB_TEST, "key1:\"%s\",val1=%s\n", key1,
+				json_object_to_json_string(val1));
+
+			json_object_object_get_ex(val1, "smd_info", &smd_info);
+			if (smd_info != NULL) {
+				if (!json_object_object_get_ex(
+					smd_info, "pools", &smd_pool)) {
+					D_ERROR("unable to extract pools\n");
+					return -DER_INVAL;
+				}
+				json_object_object_foreach(smd_pool, key2,
+							   val2) {
+					D_DEBUG(DB_TEST, "pool:\"%s\",val=%s\n",
+						key2,
+						json_object_to_json_string(val2));
+					pool_length++;
+				}
+
+				if (npools != NULL)
+					*npools = *npools + pool_length;
+
+				if (pools != NULL) {
+					rc = parse_pooltable_info(smd_pool,
+								  pools,
+								  host,
+								  pool_length,
+								  pool);
+					if (rc != 0)
+						goto out_json;
+				}
+			}
+		}
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+
+	D_FREE(pool);
+	return rc;
+}
+
 int
 dmg_storage_set_nvme_fault(const char *dmg_config_file,
 			   char *host, const uuid_t uuid, int force)
@@ -760,4 +903,20 @@ int verify_blobstore_state(int state, const char *state_str)
 	}
 
 	return 1;
+}
+
+const char *
+vos_state_enum_to_str(int state)
+{
+	switch (state) {
+	case PO_COMP_ST_UNKNOWN: return "UNKNOWN";
+	case PO_COMP_ST_NEW: return "NEW";
+	case PO_COMP_ST_UP: return "UP";
+	case PO_COMP_ST_UPIN: return "UPIN";
+	case PO_COMP_ST_DOWN: return "DOWN";
+	case PO_COMP_ST_DOWNOUT: return "DOWNOUT";
+	case PO_COMP_ST_DRAIN: return "DRAIN";
+	}
+
+	return "Undefined State";
 }

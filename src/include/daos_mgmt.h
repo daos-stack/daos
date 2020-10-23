@@ -318,6 +318,25 @@ int
 daos_mgmt_get_bs_state(const char *group, uuid_t blobstore_uuid,
 		       int *blobstore_state, daos_event_t *ev);
 
+/**
+ * Query the VOS pool target state for given pool uuid, target index, and rank
+ * in the specified DAOS system.
+ *
+ * \param group		  [IN]	Name of DAOS system managing the service.
+ * \param pool_uuid	  [IN]	UUID of the pool to query.
+ * \param tgt		  [IN]  Pool target index to query the VOS state
+ * \param rank		  [IN]  Rank that the pool target resides on
+ * \param state		  [OUT] VOS target state
+ *				ie DOWN/DOWNOUT/UP/UPIN/NEW/DRAIN
+ * \param ev		  [IN]  Completion event. Optional and can be NULL.
+ *				The function will run in blocking mode
+ *				if \a ev is NULL.
+ *
+ * \return			0		Success
+ */
+int
+daos_pool_get_vos_state(const char *group, uuid_t pool_uuid, d_rank_t tgt,
+			d_rank_t rank, int *state, daos_event_t *ev);
 
 #if defined(__cplusplus)
 }

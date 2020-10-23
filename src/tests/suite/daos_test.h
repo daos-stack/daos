@@ -401,6 +401,8 @@ int verify_state_in_log(char *host, char *log_file, char *state);
 
 int wait_and_verify_blobstore_state(uuid_t bs_uuid, char *expected_state,
 				    const char *group);
+int wait_and_verify_vos_state(uuid_t pool_uuid, int tgtidx[], int n_tgtidx,
+			      int rank, char *expected_state, const char *group);
 
 static inline void
 daos_test_print(int rank, char *message)

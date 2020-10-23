@@ -61,12 +61,19 @@ nvme_recov_1(void **state)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
+	pool_table_list	*pools = NULL;
 	struct ioreq	 req;
 	char		 dkey[DTS_KEY_LEN] = { 0 };
 	char		 akey[DTS_KEY_LEN] = { 0 };
 	int		 obj_class, key_nr = 10;
-	int		 rank = 0, tgt_idx = 0;
-	int		 i, j;
+	int		 vos_state;
+	int		 rank = 0;
+	int		 tgt_idxs[MAX_TEST_TARGETS_PER_POOL];
+	int		 num_tgt_idxs = 0;
+	int		 npools;
+	bool		 found, null_tgt_entry;
+	int		 i, j, k;
+	int		 rc;
 
 	if (!is_nvme_enabled(arg)) {
 		print_message("NVMe isn't enabled.\n");
@@ -80,7 +87,7 @@ nvme_recov_1(void **state)
 
 	oid = dts_oid_gen(obj_class, 0, arg->myrank);
 	oid = dts_oid_set_rank(oid, rank);
-	oid = dts_oid_set_tgt(oid, tgt_idx);
+	oid = dts_oid_set_tgt(oid, 0 /*tgt_idx*/);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	print_message("Generating data on obj "DF_OID"...\n", DP_OID(oid));
@@ -94,28 +101,151 @@ nvme_recov_1(void **state)
 	}
 	ioreq_fini(&req);
 
+	/**
+	 * Get the total number of VOS pools from all the servers.
+	 */
+	rc = dmg_storage_pool_list(dmg_config_file, &npools, NULL);
+	assert_int_equal(rc, 0);
+	print_message("Total Pools in SMD Pool Table = %d\n", npools);
+
+	/**
+	 * Get the SMD Pool Table info of all pools.
+	 */
+	D_ALLOC_ARRAY(pools, npools);
+	rc = dmg_storage_pool_list(dmg_config_file, NULL, pools);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Verify initial states for all VOS pool targets on specified rank are
+	 * UPIN.
+	 */
+	for (i = 0; i < npools; i++) {
+		found = false;
+		null_tgt_entry = false;
+
+		if (uuid_compare(pools[i].pool_id, arg->pool.pool_uuid) != 0)
+			continue;
+
+		print_message("\tUUID=%s\n", DP_UUID(arg->pool.pool_uuid));
+		for (j = 0; j < MAX_TEST_RANKS_PER_POOL; j++) {
+			if (pools[i].rank[j] != rank)
+				continue;
+
+			/* only print the single "rank" for the test */
+			if (found)
+				break;
+			found = true;
+
+			for (k = 0; k < MAX_TEST_TARGETS_PER_POOL; k++) {
+				/**
+				 * prevent extra zeroed tgt_ids in smd pool
+				 * tgt_idx array from printing.
+				 */
+				if (pools[i].tgts[k] == 0) {
+					if (null_tgt_entry)
+						break;
+					null_tgt_entry = true;
+				}
+
+				/* list of tgts on rank */
+				tgt_idxs[k] = pools[i].tgts[k];
+				num_tgt_idxs++;
+				print_message("\t\trank=%d, tgt_id=%d, ",
+					pools[i].rank[j], pools[i].tgts[k]);
+				/* get VOS tgt state for rank/tgtidx */
+				rc = daos_pool_get_vos_state(arg->group,
+							arg->pool.pool_uuid,
+							pools[i].tgts[k],
+							pools[i].rank[j],
+							&vos_state,
+							NULL/*ev*/);
+				assert_int_equal(rc, 0);
+				print_message("VOS state=%s\n",
+					      vos_state_enum_to_str(vos_state));
+				/* fail test if tgts are not UPIN */
+				rc = strcmp(vos_state_enum_to_str(vos_state),
+					    "UPIN");
+				assert_int_equal(rc, 0);
+			}
+		}
+	}
+
 	print_message("Error injection to simulate device faulty.\n");
 	set_fail_loc(arg, rank, DAOS_NVME_FAULTY | DAOS_FAIL_ONCE);
 
-	/*
-	 * FIXME: Due to lack of infrastructures for checking each target
-	 *	  status, let's just wait for an arbitrary time and hope the
-	 *	  faulty reaction & rebuild is triggered.
-	 */
 	print_message("Waiting for faulty reaction being triggered...\n");
-	sleep(60);
+	/**
+	 * Verify targets are in DOWN. Targets that are excluded in this
+	 * test can be any currently on the rank, no way to set ahead of time.
+	 * Therefore we need to check all targets on the rank.
+	 */
+	rc = wait_and_verify_vos_state(arg->pool.pool_uuid,
+				       tgt_idxs, num_tgt_idxs, rank,
+				       "DOWN", arg->group);
+	assert_int_equal(rc, 0);
 
 	print_message("Waiting for rebuild done...\n");
 	if (arg->myrank == 0)
 		test_rebuild_wait(&arg, 1);
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	/*
-	 * FIXME: Need to verify target is in DOWNOUT when the infrastructure
-	 *	  is ready.
-	 */
 	print_message("Waiting for faulty reaction done...\n");
-	sleep(60);
+	/**
+	 * Verify targets are in DOWNOUT. Targets that are excluded in this
+	 * test can be any currently on the rank, no way to set ahead of time.
+	 * Therefore we need to check all targets on the rank.
+	 */
+	rc = wait_and_verify_vos_state(arg->pool.pool_uuid,
+				       tgt_idxs, num_tgt_idxs, rank,
+				       "DOWNOUT", arg->group);
+	assert_int_equal(rc, 0);
+
+	/* Print final target states */
+	for (i = 0; i < npools; i++) {
+		found = false;
+		null_tgt_entry = false;
+
+		if (uuid_compare(pools[i].pool_id, arg->pool.pool_uuid) != 0)
+			continue;
+
+		for (j = 0; j < MAX_TEST_RANKS_PER_POOL; j++) {
+			if (pools[i].rank[j] != rank)
+				continue;
+
+			/* only print the single "rank" for the test */
+			if (found)
+				break;
+			found = true;
+
+			for (k = 0; k < MAX_TEST_TARGETS_PER_POOL; k++) {
+				/**
+				 * prevent extra zeroed tgt_ids in smd pool
+				 * tgt_idx array from printing.
+				 */
+				if (pools[i].tgts[k] == 0) {
+					if (null_tgt_entry)
+						break;
+					null_tgt_entry = true;
+				}
+
+				print_message("\tUUID=%s, rank=%d, tgt_id=%d\n",
+					      DP_UUID(arg->pool.pool_uuid),
+					      pools[i].rank[j],
+					      pools[i].tgts[k]);
+				/* get VOS tgt state for rank/tgtidx */
+				rc = daos_pool_get_vos_state(arg->group,
+							arg->pool.pool_uuid,
+							pools[i].tgts[k],
+							pools[i].rank[j],
+							&vos_state,
+							NULL /*ev*/);
+				assert_int_equal(rc, 0);
+				print_message("\t\tVOS state: %s\n",
+					      vos_state_enum_to_str(vos_state));
+			}
+		}
+	}
+
 	print_message("Done\n");
 }
 
