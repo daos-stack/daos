@@ -62,8 +62,7 @@ def write_host_file(hostlist, path='/tmp', slots=1):
     # boro-A slots=1
     # boro-A slots=1
 
-    hosts_with_multiple_entries =
-        [k for k,v in Counter(hostlist).items() if v > 1]
+    hosts_with_multiple_entries = [k for k,v in Counter(hostlist).items() if v > 1]
     if len(hosts_with_multiple_entries):
         slots = None
 
