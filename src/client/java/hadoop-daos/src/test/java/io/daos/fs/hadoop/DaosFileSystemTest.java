@@ -18,6 +18,7 @@
 
 package io.daos.fs.hadoop;
 
+import io.daos.DaosClient;
 import io.daos.DaosUtils;
 import io.daos.dfs.DaosFsClient;
 import io.daos.dfs.DaosUns;
@@ -47,13 +48,14 @@ import static org.mockito.Mockito.*;
 @RunWith(PowerMockRunner.class)
 @PowerMockIgnore("javax.management.*")
 @PrepareForTest({DaosFsClient.DaosFsClientBuilder.class, DaosFileSystem.class, DaosUns.class})
-@SuppressStaticInitializationFor("io.daos.dfs.DaosFsClient")
+@SuppressStaticInitializationFor({"io.daos.dfs.DaosFsClient", "io.daos.DaosClient"})
 public class DaosFileSystemTest {
 
   private static AtomicInteger unsId = new AtomicInteger(1);
 
   @Test
   public void testNewDaosFileSystemByDifferentURIs() throws Exception {
+    PowerMockito.mockStatic(DaosClient.class);
     PowerMockito.mockStatic(DaosFsClient.class);
     DaosFsClient.DaosFsClientBuilder builder = mock(DaosFsClient.DaosFsClientBuilder.class);
     PowerMockito.whenNew(DaosFsClient.DaosFsClientBuilder.class).withNoArguments().thenReturn(builder);
