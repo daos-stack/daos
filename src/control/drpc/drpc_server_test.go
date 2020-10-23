@@ -97,9 +97,7 @@ func TestSession_ProcessIncomingMessage_Success(t *testing.T) {
 
 	mod := newTestModule(ModuleID(call.Module))
 	svc := NewModuleService(log)
-	if err := svc.RegisterModule(mod); err != nil {
-		t.Fatal(err)
-	}
+	svc.RegisterModule(mod)
 
 	s := NewSession(socket, svc)
 
