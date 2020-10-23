@@ -159,10 +159,10 @@ func (c *ControlService) scanInstanceBdevs(ctx context.Context) (*bdev.ScanRespo
 	instances := c.harness.Instances()
 
 	for _, srv := range instances {
-		bdevReq := bdev.ScanRequest{} // use cached controller details by default
-
 		// only retrieve results for devices listed in server config
-		bdevReq.DeviceList = c.instanceStorage[srv.Index()].Bdev.GetNvmeDevs()
+		bdevReq := bdev.ScanRequest{
+			DeviceList: c.instanceStorage[srv.Index()].Bdev.GetNvmeDevs(),
+		}
 		c.log.Debugf("instance %d storage scan: only show bdev devices in config %v",
 			srv.Index(), bdevReq.DeviceList)
 
