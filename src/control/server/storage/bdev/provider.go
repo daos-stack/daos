@@ -155,21 +155,66 @@ func (p *Provider) IsVMDDisabled() bool {
 	return p.backend.IsVMDDisabled()
 }
 
-func (resp *ScanResponse) filter(pciFilter ...string) *ScanResponse {
+func (resp *ScanResponse) filter(pciFilter ...string) (int, *ScanResponse) {
+	var skipped int
 	out := make(storage.NvmeControllers, 0)
 
 	if len(pciFilter) == 0 {
-		return &ScanResponse{Controllers: resp.Controllers}
+		return skipped, &ScanResponse{Controllers: resp.Controllers}
 	}
 
 	for _, c := range resp.Controllers {
 		if !common.Includes(pciFilter, c.PciAddr) {
+			skipped++
 			continue
 		}
 		out = append(out, c)
 	}
 
-	return &ScanResponse{Controllers: out}
+	return skipped, &ScanResponse{Controllers: out}
+}
+
+type scanFwdFn func(ScanRequest) (*ScanResponse, error)
+
+func forwardScan(req ScanRequest, cache *ScanResponse, scan scanFwdFn) (msg string, resp *ScanResponse, err error) {
+	var action string
+	switch {
+	case req.NoCache:
+		action = "bypass"
+		resp, err = scan(req)
+	case cache != nil && len(cache.Controllers) != 0:
+		action = "reuse"
+		resp = cache
+	default:
+		action = "update"
+		resp, err = scan(req)
+		if err == nil && resp != nil {
+			cache = resp
+		}
+	}
+
+	msg = fmt.Sprintf("bdev scan: %s cache", action)
+
+	if err != nil {
+		return msg, nil, err
+	}
+
+	if resp == nil {
+		return msg, nil, errors.New("unexpected nil response from bdev backend")
+	}
+
+	msg += fmt.Sprintf(" (%d", len(resp.Controllers))
+	if len(req.DeviceList) != 0 && len(resp.Controllers) != 0 {
+		var num int
+		num, resp = resp.filter(req.DeviceList...)
+		if num != 0 {
+			msg += fmt.Sprintf("-%d filtered", num)
+		}
+	}
+
+	msg += " devices)"
+
+	return msg, resp, nil
 }
 
 // Scan attempts to perform a scan to discover NVMe components in the
@@ -178,48 +223,15 @@ func (resp *ScanResponse) filter(pciFilter ...string) *ScanResponse {
 // filtered by request "DeviceList" and empty filter implies allowing all.
 func (p *Provider) Scan(req ScanRequest) (resp *ScanResponse, err error) {
 	if p.shouldForward(req) {
-		var action string
 		req.DisableVMD = p.IsVMDDisabled()
 
 		p.Lock()
 		defer p.Unlock()
-		defer func() {
-			if err != nil {
-				return
-			}
 
-			msg := fmt.Sprintf("%s bdev scan cache (%d",
-				action, len(resp.Controllers))
+		msg, resp, err := forwardScan(req, p.scanCache, p.fwd.Scan)
+		p.log.Debug(msg)
 
-			if resp == nil {
-				p.log.Debugf("%s devices)", msg)
-				return
-			}
-
-			resp = resp.filter(req.DeviceList...)
-			p.log.Debugf("%s->%d filtered devices)", msg,
-				len(resp.Controllers))
-		}()
-
-		if req.NoCache {
-			action = "ignoring"
-			resp, err = p.fwd.Scan(req)
-			return
-		}
-
-		if p.scanCache != nil {
-			action = "returning"
-			resp = p.scanCache
-			return
-		}
-
-		resp, err = p.fwd.Scan(req)
-		if err == nil {
-			action = "populating"
-			p.scanCache = resp
-		}
-
-		return
+		return resp, err
 	}
 
 	// set vmd state on remote provider in forwarded request
