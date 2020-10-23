@@ -410,7 +410,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	vos_ilog_fetch_init(&query.qt_info);
 	query.qt_dkey_toh   = DAOS_HDL_INVAL;
 	query.qt_akey_toh   = DAOS_HDL_INVAL;
-	query.qt_obj = obj;
+	query.qt_obj	    = obj;
 	query.qt_flags	    = flags;
 	query.qt_dkey_root  = &obj->obj_df->vo_tree;
 	query.qt_coh	    = coh;

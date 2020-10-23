@@ -697,6 +697,252 @@ listr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	return tx_list(&param, VOS_ITER_RECX, txh);
 }
 
+static int
+tx_query(daos_handle_t coh, struct tx_helper *txh, daos_epoch_t epoch,
+	 daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
+	 uint64_t flags, uint64_t i, char *path)
+{
+	struct dtx_handle	*dth;
+	int			 rc;
+	daos_unit_oid_t		 oid;
+
+	set_oid(i, path, &oid);
+
+	dth = start_tx(coh, oid, epoch, txh);
+
+	rc = vos_obj_query_key(coh, oid, flags, epoch, dkey, akey, recx,
+			       dth);
+
+	stop_tx(coh, txh, rc == 0, false);
+
+	return rc;
+}
+
+static int
+querymaxd_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	    daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val = 0;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, NULL,
+			NULL, DAOS_GET_DKEY | DAOS_GET_MAX, mvcc_arg->i, path);
+}
+
+static int
+querymaxa_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	    daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val = 0;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+
+	set_dkey(mvcc_arg->i, path, &dkey);
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, NULL,
+			DAOS_GET_AKEY | DAOS_GET_MAX, mvcc_arg->i, path);
+}
+
+static int
+querymaxr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	    daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+	daos_recx_t	 recx = {0};
+
+	set_dkey(mvcc_arg->i, path, &dkey);
+	set_akey(mvcc_arg->i, path, &akey);
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
+			DAOS_GET_RECX | DAOS_GET_MAX, mvcc_arg->i, path);
+}
+
+static int
+querymaxda_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	     daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, NULL,
+			DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_MAX,
+			mvcc_arg->i, path);
+}
+
+static int
+querymaxdr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	     daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	daos_recx_t	 recx = {0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+
+	set_akey(mvcc_arg->i, "...a", &akey);
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
+			DAOS_GET_DKEY | DAOS_GET_RECX | DAOS_GET_MAX,
+			mvcc_arg->i, path);
+}
+
+static int
+querymaxar_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	     daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+	daos_recx_t	 recx = {0};
+
+	set_dkey(mvcc_arg->i, path, &dkey);
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
+			DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MAX,
+			mvcc_arg->i, path);
+}
+
+static int
+querymaxdar_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	      daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+	daos_recx_t	 recx = {0};
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
+			DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_MAX |
+			DAOS_GET_RECX, mvcc_arg->i, path);
+}
+
+static int
+querymind_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	    daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val = 0;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, NULL, NULL,
+			DAOS_GET_DKEY | DAOS_GET_MIN, mvcc_arg->i, path);
+}
+
+static int
+querymina_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	    daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val = 0;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+
+	set_dkey(mvcc_arg->i, path, &dkey);
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, NULL,
+			DAOS_GET_AKEY | DAOS_GET_MIN, mvcc_arg->i, path);
+}
+
+static int
+queryminr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	    daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+	daos_recx_t	 recx = {0};
+
+	set_dkey(mvcc_arg->i, path, &dkey);
+	set_akey(mvcc_arg->i, path, &akey);
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
+			DAOS_GET_RECX | DAOS_GET_MIN, mvcc_arg->i, path);
+}
+
+static int
+queryminda_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	     daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, NULL,
+			DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_MIN,
+			mvcc_arg->i, path);
+}
+
+static int
+querymindr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	     daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	daos_recx_t	 recx = {0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+
+	set_akey(mvcc_arg->i, "...a", &akey);
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
+			DAOS_GET_DKEY | DAOS_GET_RECX | DAOS_GET_MIN,
+			mvcc_arg->i, path);
+}
+
+static int
+queryminar_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	     daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+	daos_recx_t	 recx = {0};
+
+	set_dkey(mvcc_arg->i, path, &dkey);
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
+			DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MIN,
+			mvcc_arg->i, path);
+}
+
+static int
+querymindar_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	      daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+	daos_recx_t	 recx = {0};
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
+			DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_MIN |
+			DAOS_GET_RECX, mvcc_arg->i, path);
+}
 
 static struct op operations[] = {
 	/* {name,	type,	rlevel,	wlevel,	rtype,	wtype,	func} */
@@ -705,13 +951,24 @@ static struct op operations[] = {
 	{"fetch",	T_R,	L_A,	L_NIL,	R_R,	W_NIL,	fetch_f},
 	{"fetch_dne",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	fetch_dne_f},
 	{"fetch_ane",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	fetch_ane_f},
-	{"listo",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	listo_f},
-	{"listd",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	listd_f},
-	{"lista",	T_R,	L_A,	L_NIL,	R_R,	W_NIL,	lista_f},
+	{"listo",	T_R,	L_C,	L_NIL,	R_R,	W_NIL,	listo_f},
+	{"listd",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	listd_f},
+	{"lista",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	lista_f},
 	{"listr",	T_R,	L_A,	L_NIL,	R_R,	W_NIL,	listr_f},
-	{"queryc",	T_R,	L_C,	L_NIL,	R_R,	W_NIL,	NULL},
-	{"queryo",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	NULL},
-	{"queryd",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	NULL},
+	{"querymaxd",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymaxd_f},
+	{"querymaxa",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymaxa_f},
+	{"querymaxr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymaxr_f},
+	{"querymaxda",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymaxda_f},
+	{"querymaxdr",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymaxdr_f},
+	{"querymaxar",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymaxar_f},
+	{"querymaxdar",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymaxdar_f},
+	{"querymind",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymind_f},
+	{"querymina",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymina_f},
+	{"queryminr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	queryminr_f},
+	{"queryminda",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	queryminda_f},
+	{"querymindr",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymindr_f},
+	{"queryminar",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	queryminar_f},
+	{"querymindar",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymindar_f},
 	/* Read timestamp update only cases */
 	{"read_ts_o",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	read_ts_o_f},
 	{"read_ts_d",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	read_ts_d_f},
@@ -948,8 +1205,8 @@ conflicting_rw_exec(struct io_test_args *arg, int i, struct op *r, struct op *w,
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	daos_epoch_t	 re;			/* r epoch */
 	daos_epoch_t	 we;			/* w epoch */
-	char		 rp[L_COUNT + 1];	/* r path */
-	char		 wp[L_COUNT + 1];	/* w path */
+	char		 rp[L_COUNT + 1] = {0};	/* r path */
+	char		 wp[L_COUNT + 1] = {0};	/* w path */
 	char		*path_template = "coda";
 	bool		 emptiness[] = {true, false};
 	int		 j = 0;
