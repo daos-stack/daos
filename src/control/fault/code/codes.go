@@ -125,6 +125,7 @@ const (
 	ServerIommuDisabled
 	ServerPoolScmTooSmall
 	ServerPoolNvmeTooSmall
+	ServerPoolInvalidRanks
 	ServerInsufficientFreeHugePages
 	ServerHarnessNotStarted
 	ServerDataPlaneNotStarted
@@ -136,6 +137,7 @@ const (
 	ServerConfigFaultCallbackBadPerms
 	ServerConfigFaultCallbackFailed
 	ServerConfigBothFaultPathAndCb
+	ServerConfigFaultCallbackEmpty
 
 	// spdk library bindings codes
 	SpdkUnknown Code = iota + 700

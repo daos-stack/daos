@@ -219,6 +219,16 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			},
 			expErr: FaultPoolNvmeTooSmall((ioserver.NvmeMinBytesPerTarget*8)-1, 8),
 		},
+		"failed creation invalid ranks": {
+			targetCount: 1,
+			req: &mgmtpb.PoolCreateReq{
+				Uuid:      common.MockUUID(0),
+				Scmbytes:  100 * humanize.GiByte,
+				Nvmebytes: 10 * humanize.TByte,
+				Ranks:     []uint32{40, 11},
+			},
+			expErr: FaultPoolInvalidRanks([]system.Rank{11, 40}),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -1180,6 +1190,135 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 				},
 				Value: &mgmtpb.PoolSetPropResp_Strval{
 					Strval: "time",
+				},
+			},
+		},
+		// label not supported yet (needs a MS map for label -> UUID)
+		/*"label": {
+			req: withStrVal(withName(new(mgmtpb.PoolSetPropReq), "label"), "foo"),
+			expReq: withStrVal(
+				withNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertyLabel),
+				"foo",
+			),
+			drpcResp: &mgmtpb.PoolSetPropResp{
+				Property: &mgmtpb.PoolSetPropResp_Number{
+					Number: drpc.PoolPropertyLabel,
+				},
+				Value: &mgmtpb.PoolSetPropResp_Strval{
+					Strval: "foo",
+				},
+			},
+			expResp: &mgmtpb.PoolSetPropResp{
+				Property: &mgmtpb.PoolSetPropResp_Name{
+					Name: "label",
+				},
+				Value: &mgmtpb.PoolSetPropResp_Strval{
+					Strval: "foo",
+				},
+			},
+		},
+		"empty label is valid": {
+			req: withStrVal(withName(new(mgmtpb.PoolSetPropReq), "label"), ""),
+			expReq: withStrVal(
+				withNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertyLabel),
+				"",
+			),
+			drpcResp: &mgmtpb.PoolSetPropResp{
+				Property: &mgmtpb.PoolSetPropResp_Number{
+					Number: drpc.PoolPropertyLabel,
+				},
+				Value: &mgmtpb.PoolSetPropResp_Strval{
+					Strval: "",
+				},
+			},
+			expResp: &mgmtpb.PoolSetPropResp{
+				Property: &mgmtpb.PoolSetPropResp_Name{
+					Name: "label",
+				},
+				Value: &mgmtpb.PoolSetPropResp_Strval{
+					Strval: "",
+				},
+			},
+		},*/
+		"space_rb > 100": {
+			req:    withNumVal(withName(new(mgmtpb.PoolSetPropReq), "space_rb"), 101),
+			expErr: errors.New("invalid space_rb value"),
+		},
+		"space_rb 5%": {
+			// if the input was interpreted as a string, we should reject it
+			req:    withStrVal(withName(new(mgmtpb.PoolSetPropReq), "space_rb"), "5%"),
+			expErr: errors.New("invalid space_rb value"),
+		},
+		"space_rb": {
+			req: withNumVal(withName(new(mgmtpb.PoolSetPropReq), "space_rb"), 42),
+			expReq: withNumVal(
+				withNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertyReservedSpace),
+				42,
+			),
+			drpcResp: &mgmtpb.PoolSetPropResp{
+				Property: &mgmtpb.PoolSetPropResp_Number{
+					Number: drpc.PoolPropertyReservedSpace,
+				},
+				Value: &mgmtpb.PoolSetPropResp_Numval{
+					Numval: 42,
+				},
+			},
+			expResp: &mgmtpb.PoolSetPropResp{
+				Property: &mgmtpb.PoolSetPropResp_Name{
+					Name: "space_rb",
+				},
+				Value: &mgmtpb.PoolSetPropResp_Numval{
+					Numval: 42,
+				},
+			},
+		},
+		"self_heal-unknown": {
+			req:    withStrVal(withName(new(mgmtpb.PoolSetPropReq), "self_heal"), "unknown"),
+			expErr: errors.New("unhandled self_heal type"),
+		},
+		"self_heal-exclude": {
+			req: withStrVal(withName(new(mgmtpb.PoolSetPropReq), "self_heal"), "exclude"),
+			expReq: withNumVal(
+				withNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertySelfHealing),
+				drpc.PoolSelfHealingAutoExclude,
+			),
+			drpcResp: &mgmtpb.PoolSetPropResp{
+				Property: &mgmtpb.PoolSetPropResp_Number{
+					Number: drpc.PoolPropertySelfHealing,
+				},
+				Value: &mgmtpb.PoolSetPropResp_Numval{
+					Numval: drpc.PoolSelfHealingAutoExclude,
+				},
+			},
+			expResp: &mgmtpb.PoolSetPropResp{
+				Property: &mgmtpb.PoolSetPropResp_Name{
+					Name: "self_heal",
+				},
+				Value: &mgmtpb.PoolSetPropResp_Strval{
+					Strval: "exclude",
+				},
+			},
+		},
+		"self_heal-rebuild": {
+			req: withStrVal(withName(new(mgmtpb.PoolSetPropReq), "self_heal"), "rebuild"),
+			expReq: withNumVal(
+				withNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertySelfHealing),
+				drpc.PoolSelfHealingAutoRebuild,
+			),
+			drpcResp: &mgmtpb.PoolSetPropResp{
+				Property: &mgmtpb.PoolSetPropResp_Number{
+					Number: drpc.PoolPropertySelfHealing,
+				},
+				Value: &mgmtpb.PoolSetPropResp_Numval{
+					Numval: drpc.PoolSelfHealingAutoRebuild,
+				},
+			},
+			expResp: &mgmtpb.PoolSetPropResp{
+				Property: &mgmtpb.PoolSetPropResp_Name{
+					Name: "self_heal",
+				},
+				Value: &mgmtpb.PoolSetPropResp_Strval{
+					Strval: "rebuild",
 				},
 			},
 		},

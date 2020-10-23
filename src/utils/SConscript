@@ -1,12 +1,22 @@
 """Build DAOS utilities"""
 import daos_build
-Import('env')
+Import('env', 'prereqs')
 
 def scons():
     """Execute build"""
-    libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart']
+    libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart',
+            'daos_tests', 'vos', 'bio', 'dts']
 
     denv = env.Clone()
+
+    prereqs.require(denv, 'argobots', 'protobufc')
+
+    if not GetOption('help') and not GetOption('clean'):
+        mpi = daos_build.configure_mpi(denv, libs)
+        if mpi is None:
+            print("\nSkipping compilation for tests that need MPI")
+            print("Install and load mpich or openmpi\n")
+            return
 
     # Build self test
     SConscript('self_test/SConscript')
@@ -21,11 +31,18 @@ def scons():
     # Can remove this when pmdk is not needed on client
     denv.AppendUnique(LIBPATH=["../client/dfs"])
 
+    denv.AppendUnique(CPPPATH=["../tests/suite"])
+
+    # Add runtime paths for daos libraries
+    denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+
     daos_extra_files = denv.Object('daos_hdlr.c')
+    obj_ctl = denv.Object('obj_ctl.c')
 
     daos = daos_build.program(denv, 'daos',
-                              ['daos.c', daos_extra_files], LIBS=libs)
+                              ['daos.c', daos_extra_files, obj_ctl], LIBS=libs)
     denv.Install('$PREFIX/bin/', daos)
+
 
 if __name__ == "SCons.Script":
     scons()

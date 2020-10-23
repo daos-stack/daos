@@ -161,10 +161,13 @@ func setupMockDrpcClient(svc *mgmtSvc, resp proto.Message, err error) {
 }
 
 // newTestIOServer returns an IOServerInstance configured for testing.
-func newTestIOServer(log logging.Logger, isAP bool) *IOServerInstance {
+func newTestIOServer(log logging.Logger, isAP bool, ioCfg ...*ioserver.Config) *IOServerInstance {
+	if len(ioCfg) == 0 {
+		ioCfg = append(ioCfg, ioserver.NewConfig().WithTargetCount(1))
+	}
 	r := ioserver.NewTestRunner(&ioserver.TestRunnerConfig{
 		Running: atm.NewBool(true),
-	}, ioserver.NewConfig().WithTargetCount(1))
+	}, ioCfg[0])
 
 	var msCfg mgmtSvcClientCfg
 	if isAP {
