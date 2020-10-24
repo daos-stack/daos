@@ -204,6 +204,10 @@ crt_proc_daos_iod_and_csum(crt_proc_t proc, crt_proc_op_t proc_op,
 	if (rc != 0)
 		return -DER_HG;
 
+	rc = crt_proc_uint64_t(proc, &iod->iod_flags);
+	if (rc != 0)
+		return -DER_HG;
+
 	if (proc_op == CRT_PROC_ENCODE && oiod != NULL &&
 	    (oiod->oiod_flags & OBJ_SIOD_PROC_ONE) != 0) {
 		proc_one = true;
@@ -818,6 +822,10 @@ crt_proc_daos_iod_t(crt_proc_t proc, daos_iod_t *iod)
 		return -DER_HG;
 
 	rc = crt_proc_uint64_t(proc, &iod->iod_size);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint64_t(proc, &iod->iod_flags);
 	if (rc != 0)
 		return -DER_HG;
 

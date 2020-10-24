@@ -355,12 +355,15 @@ drain_snap_punch_keys(void **state)
 	for (i = 0; i < 5; i++) {
 		char dkey[20] = { 0 };
 		char akey[20] = { 0 };
+		char akey2[20] = { 0 };
 
 		/* Update string for each snapshot */
 		sprintf(dkey, "dkey_%d", i);
 		sprintf(akey, "akey_%d", i);
+		sprintf(akey2, "akey_%d", 100 + i);
 		insert_single(dkey, "a_key", 0, "data", 1, DAOS_TX_NONE, &req);
 		insert_single("dkey", akey, 0, "data", 1, DAOS_TX_NONE, &req);
+		insert_single("dkey", akey2, 0, "data", 1, DAOS_TX_NONE, &req);
 	}
 
 	/* Insert dkey/akey by different epoch */
@@ -403,7 +406,7 @@ drain_snap_punch_keys(void **state)
 			memset(&anchor, 0, sizeof(anchor));
 			enumerate_akey(th_open, "dkey", &number, kds,
 				       &anchor, buf, buf_len, &req);
-			assert_int_equal(number, 5 - j);
+			assert_int_equal(number, 10 - j);
 
 			daos_tx_close(th_open, NULL);
 		}
@@ -418,7 +421,7 @@ drain_snap_punch_keys(void **state)
 		memset(&anchor, 0, sizeof(anchor));
 		enumerate_akey(DAOS_TX_NONE, "dkey", &number, kds, &anchor,
 			       buf, buf_len, &req);
-		assert_int_equal(number, 0);
+		assert_int_equal(number, 5);
 	}
 
 	ioreq_fini(&req);

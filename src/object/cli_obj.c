@@ -3450,12 +3450,14 @@ obj_comp_cb(tse_task_t *task, void *data)
 			}
 		} else {
 			if (obj_auxi->is_ec_obj && task->dt_result == 0 &&
-			    obj_auxi->opc == DAOS_OBJ_RPC_FETCH &&
-			    obj_auxi->bulks != NULL) {
+			    obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
 				daos_obj_fetch_t *args = dc_task_get_args(task);
 
-				obj_ec_fetch_set_sgl(&obj_auxi->reasb_req,
-						     args->nr);
+				if (obj_auxi->bulks != NULL)
+					obj_ec_fetch_set_sgl(
+						&obj_auxi->reasb_req, args->nr);
+				obj_ec_update_iod_size(&obj_auxi->reasb_req,
+						       args->nr);
 			}
 
 			obj_bulk_fini(obj_auxi);
@@ -4194,6 +4196,15 @@ obj_list_get_shard(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 		int leader;
 
 		leader = obj_grp_leader_get(obj, shard, map_ver);
+		if (leader < 0) {
+			/* return nonapplicable in case the caller
+			 * want to retry non-leader option.
+			 */
+			D_DEBUG(DB_IO, DF_OID" failed to leader %d\n",
+				DP_OID(obj->cob_md.omd_id), leader);
+			obj_auxi->to_leader = 0;
+			D_GOTO(out, shard = -DER_NOTAPPLICABLE);
+		}
 		p_shard = obj_get_shard(obj, leader);
 		if (p_shard->po_rebuilding || p_shard->po_target == -1) {
 			D_DEBUG(DB_IO, DF_OID".%d is being rebuilt\n",
@@ -4201,11 +4212,6 @@ obj_list_get_shard(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 			obj_auxi->to_leader = 0;
 			D_GOTO(out, leader = -DER_NOTAPPLICABLE);
 		} else {
-			/* return nonapplicable in case the caller
-			 * want to retry non-leader option.
-			 */
-			if (leader < 0)
-				leader = -DER_NOTAPPLICABLE;
 			shard = leader;
 		}
 	} else {
