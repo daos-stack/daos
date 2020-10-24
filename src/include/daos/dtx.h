@@ -27,6 +27,8 @@
 #include <time.h>
 #include <uuid/uuid.h>
 
+/* Only for test. */
+
 /* If the count of committable DTXs on leader exceeds this threshold,
  * it will trigger batched DTX commit globally. We will optimize the
  * threshould with considering RPC limitation, PMDK transaction, and
