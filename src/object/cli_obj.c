@@ -912,8 +912,10 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 	req_tgts->ort_grp_nr = grp_nr;
 	req_tgts->ort_grp_size = (shard_nr == shard_cnt) ? grp_size : shard_nr;
 	for (i = 0; i < grp_nr; i++) {
+		struct daos_shard_tgt	*head;
+
 		shard_idx = start_shard + i * grp_size;
-		tgt = req_tgts->ort_shard_tgts + i * grp_size;
+		head = tgt = req_tgts->ort_shard_tgts + i * grp_size;
 		if (req_tgts->ort_srv_disp) {
 			rc = obj_grp_leader_get(obj, shard_idx, map_ver);
 			if (rc < 0) {
@@ -941,6 +943,29 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 						  tgt++, obj_auxi);
 			if (rc != 0)
 				return rc;
+
+			if (req_tgts->ort_srv_disp) {
+				struct daos_shard_tgt	*tmp, *last;
+
+				for (tmp = head, last = tgt - 1;
+				     tmp != last; tmp++) {
+					/* Two shards locate on the same target,
+					 * OSA case, will handle it via internal
+					 * transaction.
+					 */
+					if (tmp->st_tgt_id != last->st_tgt_id)
+						continue;
+
+					D_DEBUG(DB_IO, "Modify obj "DF_OID
+						" shard %u and shard %d on the"
+						" same DAOS target %u/%u, will"
+						" handle via CPD RPC.\n",
+						DP_OID(obj->cob_md.omd_id),
+						tmp->st_shard, last->st_shard,
+						tmp->st_rank, tmp->st_tgt_id);
+					return -DER_SHARDS_OVERLAP;
+				}
+			}
 		}
 	}
 
@@ -3472,16 +3497,12 @@ obj_comp_cb(tse_task_t *task, void *data)
 	return 0;
 }
 
-/**
- * Init obj_auxi_arg for this object task.
- * Register the completion cb for obj IO request
- */
-static int
-obj_task_init(tse_task_t *task, int opc, uint32_t map_ver, daos_handle_t th,
-	      struct obj_auxi_args **auxi, struct dc_object *obj)
+static void
+obj_task_init_common(tse_task_t *task, int opc, uint32_t map_ver,
+		     daos_handle_t th, struct obj_auxi_args **auxi,
+		     struct dc_object *obj)
 {
 	struct obj_auxi_args	*obj_auxi;
-	int			 rc;
 
 	obj_auxi = tse_task_stack_push(task, sizeof(*obj_auxi));
 	obj_auxi->opc = opc;
@@ -3491,11 +3512,23 @@ obj_task_init(tse_task_t *task, int opc, uint32_t map_ver, daos_handle_t th,
 	obj_auxi->obj = obj;
 	shard_task_list_init(obj_auxi);
 	*auxi = obj_auxi;
+}
 
+/**
+ * Init obj_auxi_arg for this object task.
+ * Register the completion cb for obj IO request
+ */
+static int
+obj_task_init(tse_task_t *task, int opc, uint32_t map_ver, daos_handle_t th,
+	      struct obj_auxi_args **auxi, struct dc_object *obj)
+{
+	int	rc;
+
+	obj_task_init_common(task, opc, map_ver, th, auxi, obj);
 	rc = tse_task_register_comp_cb(task, obj_comp_cb, NULL, 0);
 	if (rc) {
 		D_ERROR("task %p, register_comp_cb "DF_RC"\n", task, DP_RC(rc));
-		tse_task_stack_pop(task, sizeof(*obj_auxi));
+		tse_task_stack_pop(task, sizeof(struct obj_auxi_args));
 	}
 	return rc;
 }
@@ -3895,17 +3928,13 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	if (rc != 0)
 		goto out_task; /* invalid parameter */
 
-	rc = obj_task_init(task, DAOS_OBJ_RPC_UPDATE, map_ver, args->th,
-			   &obj_auxi, obj);
-	if (rc != 0) {
-		obj_decref(obj);
-		goto out_task;
-	}
-
+	obj_task_init_common(task, DAOS_OBJ_RPC_UPDATE, map_ver, args->th,
+			     &obj_auxi, obj);
 	rc = obj_rw_req_reassemb(obj, args, NULL, obj_auxi);
 	if (rc) {
 		D_ERROR(DF_OID" obj_req_reassemb failed %d.\n",
 			DP_OID(obj->cob_md.omd_id), rc);
+		obj_comp_cb(task, NULL);
 		goto out_task;
 	}
 
@@ -3913,8 +3942,25 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	rc = obj_req_get_tgts(obj, NULL, args->dkey, dkey_hash,
 			      obj_auxi->reasb_req.tgt_bitmap, map_ver, false,
 			      false, obj_auxi);
-	if (rc)
+	if (rc != 0) {
+		obj_comp_cb(task, NULL);
+		if (rc != -DER_SHARDS_OVERLAP)
+			goto out_task;
+
+		/* For OSA case, 2 or more shards locate on the same
+		 * VOS target. We will handle such case via internal
+		 * transaction.
+		 */
+		return dc_tx_convert(DAOS_OBJ_RPC_UPDATE, task);
+	}
+
+	rc = tse_task_register_comp_cb(task, obj_comp_cb, NULL, 0);
+	if (rc != 0) {
+		D_ERROR("update task %p, register_comp_cb "DF_RC"\n",
+			task, DP_RC(rc));
+		obj_comp_cb(task, NULL);
 		goto out_task;
+	}
 
 	if (!obj_auxi->io_retry) {
 		rc = obj_csum_update(obj, args, obj_auxi);
@@ -4484,17 +4530,41 @@ dc_obj_punch(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 
 	obj = obj_hdl2ptr(api_args->oh);
 	D_ASSERT(obj != NULL);
-	rc = obj_task_init(task, opc, map_ver, api_args->th, &obj_auxi, obj);
-	if (rc) {
+
+	if (opc == DAOS_OBJ_RPC_PUNCH && obj->cob_grp_nr > 1) {
 		obj_decref(obj);
-		goto out_task;
+
+		/* The object have multiple redundancy groups, use DAOS
+		 * internal transaction to handle that to guarantee the
+		 * atomicity of punch object.
+		 */
+		return dc_tx_convert(opc, task);
 	}
+
+	obj_task_init_common(task, opc, map_ver, api_args->th, &obj_auxi, obj);
 
 	dkey_hash = obj_dkey2hash(api_args->dkey);
 	rc = obj_req_get_tgts(obj, NULL, api_args->dkey, dkey_hash, NIL_BITMAP,
 			      map_ver, false, false, obj_auxi);
-	if (rc != 0)
+	if (rc != 0) {
+		obj_comp_cb(task, NULL);
+		if (rc != -DER_SHARDS_OVERLAP)
+			goto out_task;
+
+		/* For OSA case, 2 or more shards locate on the same
+		 * VOS target. We will handle such case via internal
+		 * transaction.
+		 */
+		return dc_tx_convert(opc, task);
+	}
+
+	rc = tse_task_register_comp_cb(task, obj_comp_cb, NULL, 0);
+	if (rc != 0) {
+		D_ERROR("punch (%d) task %p, register_comp_cb "DF_RC"\n",
+			opc, task, DP_RC(rc));
+		obj_comp_cb(task, NULL);
 		goto out_task;
+	}
 
 	if (daos_oclass_is_ec(obj->cob_md.omd_id, NULL) ||
 	    DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
