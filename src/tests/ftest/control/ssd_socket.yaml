@@ -1,9 +1,6 @@
 hosts:
   test_servers:
     - server-A
-timeout: 140
+timeout: 70
 server_config:
   name: daos_server
-setup:
-  start_servers: False
-  start_agents: False
