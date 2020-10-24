@@ -1395,12 +1395,15 @@ agg_process_partial_stripe(struct ec_agg_entry *entry)
 			goto out;
 	}
 
-	if (stripe_ud.asu_recalc && !csum_error)
-		for (i = 0; i < k; i++)
-			if (isset(bit_map, i))
+	if (stripe_ud.asu_recalc && !csum_error) {
+		for (i = 0; i < k; i++) {
+			if (isset(bit_map, i)) {
 				clrbit(bit_map, i);
-			else
+			} else {
 				setbit(bit_map, i);
+			}
+		}
+	}
 	stripe_ud.asu_agg_entry = entry;
 	stripe_ud.asu_bit_map = bit_map;
 	stripe_ud.asu_cell_cnt = cell_cnt;
