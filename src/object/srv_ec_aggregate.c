@@ -538,13 +538,6 @@ agg_fetch_and_csum_verify(struct ec_agg_entry *entry,
 		extent->ae_orig_recx.rx_nr * entry->ae_rsize;
 	(entry->ae_sgl.sg_iovs)++;
 
-	/*
-	rc = agg_get_obj_handle(entry);
-	if (rc) {
-		D_ERROR("Failed to open object: "DF_RC"\n", DP_RC(rc));
-		goto out;
-	}
-	*/
 	// read it into odata
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 	rc = vos_obj_fetch(agg_param->ap_cont_handle, entry->ae_oid,
@@ -554,11 +547,12 @@ agg_fetch_and_csum_verify(struct ec_agg_entry *entry,
 		D_ERROR("vos_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
+	(entry->ae_sgl.sg_iovs)--;
 	entry->ae_sgl.sg_nr = AGG_IOV_CNT;
-	csum_verify.acv_agg_entry    = entry;
-	csum_verify.acv_bit_map  = bit_map;
-	csum_verify.acv_ebit_map = ebit_map;
-	csum_verify.acv_csummer = csummer;
+	csum_verify.acv_agg_entry = entry;
+	csum_verify.acv_bit_map   = bit_map;
+	csum_verify.acv_ebit_map  = ebit_map;
+	csum_verify.acv_csummer   = csummer;
 	rc = ABT_eventual_create(sizeof(*status), &csum_verify.acv_eventual);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
@@ -791,7 +785,9 @@ agg_fetch_data_stripe_with_csum(struct ec_agg_entry *entry)
 	bool				 csum_error;
 	int				 i, rc = 0;
 
-	agg_prep_sgl(entry);
+	rc = agg_prep_sgl(entry);
+	if (rc)
+		goto out;
 	for (i = 0; i < k; i++)
 		setbit(bit_map, i);
 	ss = k * len * entry->ae_cur_stripe.as_stripenum;
@@ -814,6 +810,7 @@ agg_fetch_data_stripe_with_csum(struct ec_agg_entry *entry)
 	daos_csummer_destroy(&csummer);
 	if (!csum_error)
 		goto out;
+	/* CSUM error, so get data from data shards. */
 	stripe_ud.asu_agg_entry = entry;
 	stripe_ud.asu_bit_map   = bit_map;
 	stripe_ud.asu_cell_cnt  = k;

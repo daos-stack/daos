@@ -1941,6 +1941,11 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 		oea->ea_prior_len - oea->ea_after_len;
 	rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oea->ea_oid,
 				  &epoch_range, dkey, &oea->ea_akey, &recx);
+	if (rc) {
+		D_ERROR(DF_UOID" vos_obj_array_remove failed: "DF_RC"\n",
+			DP_UOID(oea->ea_oid), DP_RC(rc));
+		rc = 0;
+	}
 out:
 	obj_rw_reply(rpc, rc, 0, &ioc);
 	obj_ioc_end(&ioc, rc);
