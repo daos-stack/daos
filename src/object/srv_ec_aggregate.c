@@ -2193,13 +2193,14 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, false, &anchors,
 			 agg_iter_obj_pre_cb, NULL, &agg_param, NULL);
+
+	dsc_cont_close(ph, agg_param.ap_pool_info.api_cont_hdl);
 out:
 	daos_prop_entries_free(agg_param.ap_prop);
 	D_FREE(agg_param.ap_prop);
 	ABT_eventual_free(&agg_param.ap_pool_info.api_eventual);
 	agg_sgl_fini(&agg_param.ap_agg_entry.ae_sgl);
 	agg_csum_fini(&agg_param.ap_agg_entry.ae_csum_data);
-	dsc_cont_close(ph, agg_param.ap_pool_info.api_cont_hdl);
 	dsc_pool_close(ph);
 	return rc;
 
