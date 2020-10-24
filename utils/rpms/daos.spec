@@ -11,7 +11,7 @@
 
 Name:          daos
 Version:       1.1.1
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -256,6 +256,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 # you might think libdaos_tests.so goes in the tests RPM but
 # the 4 tools following it need it
 %{_libdir}/libdaos_tests.so
+%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_bindir}/io_conf
 %{_bindir}/jump_pl_map
 %{_bindir}/ring_pl_map
@@ -393,6 +394,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Sat Oct 24 2020 Maureen Jean <maureen.jean@intel.com> 1.1.1-4
+- Add daos.conf to the daos package to resolve the path to libbio.so
+
 * Tue Oct 13 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> 1.1.1-3
 - Remove obj_ctl from Tests RPM package
 - Add libdts.so shared library that is used by daos_perf, daos_racer and
