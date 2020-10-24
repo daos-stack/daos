@@ -20,10 +20,10 @@ hosts: !mux
     config: one_node
     test_servers:
       - boro-A
+timeout: 600
 tests: !mux
   ghost_rank:
     name: rpc_to_ghost_rank
-    timeout: 600
     test_servers_bin: ../tests/test_rpc_to_ghost_rank
     test_servers_arg: "--name service_group --is_service -c 2"
     test_servers_env: "-x CRT_TIMEOUT=15"

@@ -11,6 +11,7 @@ hosts: !mux
     config: one_node
     test_servers:
       - boro-A
+timeout: 600
 tests: !mux
   group_test:
     name: group_test
@@ -19,7 +20,6 @@ tests: !mux
     test_servers_ppn: "8"
   version_test:
     name: group_version_test
-    timeout: 600
     test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/no_pmix_group_version"
     test_servers_ppn: "8"

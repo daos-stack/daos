@@ -29,10 +29,10 @@ hosts: !mux
       - boro-C
     test_clients_3:
       - boro-C
+timeout: 600
 tests: !mux
   self_np:
     name: self_test_np
-    timeout: 600
     test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_group_np_srv --name selftest_srv_grp"
     test_servers_env: ""

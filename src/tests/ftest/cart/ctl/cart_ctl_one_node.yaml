@@ -38,10 +38,10 @@ hosts: !mux
       - boro-A
     test_clients_6:
       - boro-A
+timeout: 600
 tests: !mux
   ctl:
     name: ctl_basic
-    timeout: 600
     test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_group_np_srv --name server_grp"
     test_servers_env: ""

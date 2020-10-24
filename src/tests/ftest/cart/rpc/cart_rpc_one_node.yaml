@@ -23,10 +23,10 @@ hosts: !mux
        - boro-A
     test_clients:
        - boro-A
+#timeout: 600
 tests: !mux
   proto_np_1:
     name: proto_np_1
-    timeout: 600
     test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_proto_server -p 4 --name proto_srv_grp"
     test_servers_env: ""
@@ -37,7 +37,6 @@ tests: !mux
     test_clients_ppn: "1"
   proto_np_2:
     name: proto_np_2
-    timeout: 600
     test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_proto_server -p 4 --name proto_srv_grp"
     test_servers_env: ""
@@ -48,7 +47,6 @@ tests: !mux
     test_clients_ppn: "1"
   proto_np_3:
     name: proto_np_3
-    timeout: 600
     test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_proto_server -p 3 --name proto_srv_grp"
     test_servers_env: ""
@@ -59,7 +57,6 @@ tests: !mux
     test_clients_ppn: "1"
   test_group:
     name: test_group_basic
-    timeout: 600
     test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_group_np_srv --name tg_srv_grp"
     test_servers_env: "-x D_FI_CONFIG=/usr/etc/fault-inject-cart.yaml"
@@ -70,7 +67,6 @@ tests: !mux
     test_clients_ppn: "1"
   ep_credits_1:
     name: ep_credits_1
-    timeout: 600
     test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_ep_cred_server -n epc1_srv_grp -s"
     test_servers_env: ""
@@ -81,7 +77,6 @@ tests: !mux
     test_clients_ppn: "1"
   ep_credits_2:
     name: ep_credits_2
-    timeout: 600
     test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_ep_cred_server -n cred_group -s"
     test_servers_env: ""
@@ -92,7 +87,6 @@ tests: !mux
     test_clients_ppn: "1"
   ep_credits_3:
     name: ep_credits_3
-    timeout: 600
     test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_ep_cred_server -n cred_group -s"
     test_servers_env: ""
@@ -103,7 +97,6 @@ tests: !mux
     test_clients_ppn: "1"
   ep_credits_4:
     name: ep_credits_4
-    timeout: 600
     test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_ep_cred_server -n cred_group -s"
     test_servers_env: ""
@@ -114,7 +107,6 @@ tests: !mux
     test_clients_ppn: "1"
   ep_credits_5:
     name: ep_credits_5
-    timeout: 600
     test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_ep_cred_server -n cred_group -s"
     test_servers_env: ""
@@ -125,7 +117,6 @@ tests: !mux
     test_clients_ppn: "1"
   ep_credits_6:
     name: ep_credits_6
-    timeout: 600
     test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_ep_cred_server -n cred_group -s"
     test_servers_env: ""
@@ -136,7 +127,6 @@ tests: !mux
     test_clients_ppn: "1"
   no_timeout:
     name: no_timeout_basic
-    timeout: 600
     test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_group_np_srv --name timeout_srv_grp"
     test_servers_env: "-x CRT_TIMEOUT=10"
@@ -147,7 +137,6 @@ tests: !mux
     test_clients_ppn: "1"
 #  threaded:
 #    name: threaded_basic
-#    timeout: 600
 #    test_servers_bin: ../tests/threaded_server
 #    test_servers_arg: ""
 #    test_servers_env: ""
@@ -158,7 +147,6 @@ tests: !mux
 #    test_clients_ppn: "1"
 #  rpc_error:
 #    name: rpc_error_basic
-#    timeout: 600
 #    test_servers_bin: ../tests/test_rpc_error
 #    test_servers_arg: "--name service_group --is_service"
 #    test_servers_env: ""

@@ -21,10 +21,10 @@ hosts: !mux
     test_servers:
       - boro-A
       - boro-B
+timeout: 600
 tests: !mux
   corpc_prefwd:
     name: corpc_prefwd
-    timeout: 600
     test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_corpc_prefwd"
     test_servers_env: ""
