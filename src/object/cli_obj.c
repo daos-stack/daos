@@ -397,6 +397,15 @@ obj_get_oca(struct dc_object *obj, bool force_check)
 	return obj->cob_oca;
 }
 
+bool
+obj_is_ec(struct dc_object *obj)
+{
+	struct daos_oclass_attr	*oca;
+
+	oca = obj_get_oca(obj, false);
+	return (oca != NULL && DAOS_OC_IS_EC(oca));
+}
+
 int
 obj_get_replicas(struct dc_object *obj)
 {

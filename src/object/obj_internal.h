@@ -454,6 +454,7 @@ int obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
 		  crt_bulk_perm_t bulk_perm, tse_task_t *task,
 		  crt_bulk_t **p_bulks);
 struct daos_oclass_attr *obj_get_oca(struct dc_object *obj, bool force_check);
+bool obj_is_ec(struct dc_object *obj);
 int obj_get_replicas(struct dc_object *obj);
 int obj_shard_open(struct dc_object *obj, unsigned int shard,
 		   unsigned int map_ver, struct dc_obj_shard **shard_ptr);

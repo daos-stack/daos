@@ -1369,9 +1369,14 @@ struct obj_query_key_cb_args {
 
 static void
 obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args,
-			  daos_recx_t *reply_recx)
+			  struct obj_query_key_out *okqo, bool get_max)
 {
+	daos_recx_t		*reply_recx = &okqo->okqo_recx;
 	daos_recx_t		*result_recx = cb_args->recx;
+	daos_recx_t		*tmp_recx;
+	daos_recx_t		 recx[2] = {0};
+	uint64_t		 end[2];
+	bool			 parity_checked = false;
 	struct daos_oclass_attr	*oca;
 	uint64_t		 stripe_rec_nr, cell_rec_nr, rx_idx;
 
@@ -1383,20 +1388,48 @@ obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args,
 
 	stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
 	cell_rec_nr = obj_ec_cell_rec_nr(oca);
+	tmp_recx = &recx[0];
+re_check:
 	if (reply_recx->rx_idx & PARITY_INDICATOR) {
 		rx_idx = (reply_recx->rx_idx & (~PARITY_INDICATOR));
 		D_ASSERT(rx_idx % cell_rec_nr == 0);
 		D_ASSERT(reply_recx->rx_nr % cell_rec_nr == 0);
 		rx_idx = obj_ec_idx_vos2daos(rx_idx, stripe_rec_nr, cell_rec_nr,
 					     0);
-		result_recx->rx_idx = rx_idx;
-		result_recx->rx_nr = stripe_rec_nr *
+		tmp_recx->rx_idx = rx_idx;
+		tmp_recx->rx_nr = stripe_rec_nr *
 				     (reply_recx->rx_nr / cell_rec_nr);
-		return;
+	} else {
+		/* replica ext (query from parity shard) need not translate */
+		*tmp_recx = *reply_recx;
+	}
+	if (!parity_checked) {
+		parity_checked = true;
+		tmp_recx = &recx[1];
+		reply_recx = &okqo->okqo_recx_parity;
+		D_ASSERT((reply_recx->rx_idx & PARITY_INDICATOR) ||
+			 reply_recx->rx_nr == 0);
+		if (reply_recx->rx_nr != 0)
+			goto re_check;
 	}
 
-	/* replica ext (query from parity shard) need not translate */
-	*result_recx = *reply_recx;
+	end[0] = recx[0].rx_idx + recx[0].rx_nr;
+	end[1] = recx[1].rx_idx + recx[1].rx_nr;
+	if (get_max) {
+		if (end[0] > end[1])
+			*result_recx = recx[0];
+		else
+			*result_recx = recx[1];
+	} else {
+		if (recx[0].rx_nr == 0)
+			*result_recx = recx[1];
+		else if (recx[1].rx_nr == 0)
+			*result_recx = recx[0];
+		else if (end[0] > end[1])
+			*result_recx = recx[1];
+		else
+			*result_recx = recx[0];
+	}
 }
 
 static int
@@ -1513,7 +1546,9 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	if (check && flags & DAOS_GET_RECX) {
 		/** if first cb, set recx */
 		if (first || changed) {
-			obj_shard_query_recx_post(cb_args, &okqo->okqo_recx);
+			bool get_max = (okqi->okqi_api_flags & DAOS_GET_MAX);
+
+			obj_shard_query_recx_post(cb_args, okqo, get_max);
 		} else {
 			D_ASSERT(0);
 		}
@@ -1596,6 +1631,8 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
 		okqi->okqi_akey		= *akey;
 	if (epoch->oe_flags & DTX_EPOCH_UNCERTAIN)
 		okqi->okqi_flags	= ORF_EPOCH_UNCERTAIN;
+	if (obj_is_ec(obj))
+		okqi->okqi_flags	|= ORF_EC;
 	uuid_copy(okqi->okqi_pool_uuid, pool->dp_pool);
 	uuid_copy(okqi->okqi_co_hdl, coh_uuid);
 	uuid_copy(okqi->okqi_co_uuid, cont_uuid);
