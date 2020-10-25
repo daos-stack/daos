@@ -422,9 +422,14 @@ func TestSystem_TestRankMembership(t *testing.T) {
 			test:       []Rank{1},
 			expMissing: []Rank{1},
 		},
+		"overlap": {
+			members:    []Rank{0, 1},
+			test:       []Rank{1, 2},
+			expMissing: []Rank{2},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			gotMissing := TestRankMembership(tc.members, tc.test)
+			gotMissing := CheckRankMembership(tc.members, tc.test)
 
 			if diff := cmp.Diff(tc.expMissing, gotMissing); diff != "" {
 				t.Fatalf("unexpected missing ranks (-want, +got):\n%s\n", diff)

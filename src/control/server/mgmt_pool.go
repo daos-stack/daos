@@ -145,7 +145,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 			return nil, err
 		}
 
-		if invalid := system.TestRankMembership(allRanks, reqRanks); len(invalid) > 0 {
+		if invalid := system.CheckRankMembership(allRanks, reqRanks); len(invalid) > 0 {
 			return nil, FaultPoolInvalidRanks(invalid)
 		}
 

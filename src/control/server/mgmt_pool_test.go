@@ -257,7 +257,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				}
 				harness.started.SetTrue()
 
-				tc.mgmtSvc = newMgmtSvc(harness, nil, system.MockDatabase(t, log))
+				tc.mgmtSvc = newMgmtSvc(harness, system.MockMembership(t, log), system.MockDatabase(t, log))
 			}
 			tc.mgmtSvc.log = log
 

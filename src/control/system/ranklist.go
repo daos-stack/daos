@@ -77,6 +77,30 @@ func CreateRankSet(stringRanks string) (*RankSet, error) {
 	return &rs, nil
 }
 
+// RankSetFromRanks returns a RankSet created from the supplied Rank slice.
+func RankSetFromRanks(ranks RankList) *RankSet {
+	if len(ranks) == 0 {
+		hs, err := hostlist.CreateSet("")
+		if err != nil {
+			// If creating an empty set errors, we're in trouble.
+			panic(err)
+		}
+		return &RankSet{
+			HostSet: *hs,
+		}
+	}
+
+	sr := fixBrackets(ranks.String(), false)
+	hs, err := hostlist.CreateNumericSet(sr)
+	if err != nil {
+		// Any error with numeric ranks is going to be something bad.
+		panic(err)
+	}
+	return &RankSet{
+		HostSet: *hs,
+	}
+}
+
 // Add adds rank to an existing RankSet.
 func (rs *RankSet) Add(rank Rank) error {
 	rs.RLock()
