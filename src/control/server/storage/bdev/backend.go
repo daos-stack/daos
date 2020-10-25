@@ -96,7 +96,6 @@ func (w *spdkWrapper) init(log logging.Logger, spdkOpts spdk.EnvOptions) (func()
 		return nil, errors.Wrap(err, "failed to suppress spdk output")
 	}
 
-	// provide empty whitelist on init so all devices are discovered
 	if err := w.InitSPDKEnv(log, spdkOpts); err != nil {
 		restore()
 		return nil, errors.Wrap(err, "failed to init spdk env")
@@ -130,7 +129,8 @@ func (b *spdkBackend) IsVMDDisabled() bool {
 // Scan discovers NVMe controllers accessible by SPDK.
 func (b *spdkBackend) Scan(req ScanRequest) (*ScanResponse, error) {
 	restoreOutput, err := b.binding.init(b.log, spdk.EnvOptions{
-		DisableVMD: b.IsVMDDisabled(),
+		PciWhiteList: req.DeviceList,
+		DisableVMD:   b.IsVMDDisabled(),
 	})
 	if err != nil {
 		return nil, err

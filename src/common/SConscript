@@ -36,6 +36,9 @@ def scons():
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
+    control_tgts = [File('control.c')]
+    Export('control_tgts')
+
     # Hack alert, the argobots headers are required but the shared
     # library isn't so add the dependency so the include path
     # is correct, but set _libs to [] so that the library isn't
