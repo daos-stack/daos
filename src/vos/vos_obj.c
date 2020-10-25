@@ -110,7 +110,10 @@ vos_propagate_check(struct vos_object *obj, daos_handle_t toh,
 		read_flag = VOS_TS_READ_OBJ;
 		write_flag = VOS_TS_WRITE_OBJ;
 		tree_name = "DKEY";
-		break;
+		/** DAOS-4698.  Don't do emptiness check on dkey or propagate
+		 *  to object until this rebuild bug is fixed.
+		 */
+		return 0;
 	case VOS_ITER_AKEY:
 		read_flag = VOS_TS_READ_DKEY;
 		write_flag = VOS_TS_WRITE_DKEY;
@@ -362,15 +365,8 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 			rc = key_punch(obj, epr.epr_hi, pm_ver, dkey,
 				       akey_nr, akeys, flags, ts_set);
 
-			if (rc > 0) {
-				/** Punch the object too.  Uncomment with
-				 * DAOS-4698 is fixed.  Otherwise, it will
-				 * cause rebuild failures.
-				 *
-				 * punch_obj = true;
-				 */
-				rc = 0;
-			}
+			if (rc > 0)
+				punch_obj = true;
 		} else {
 			punch_obj = true;
 		}
