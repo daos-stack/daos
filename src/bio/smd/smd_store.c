@@ -144,7 +144,7 @@ smd_store_create(char *fname)
 	}
 	close(fd);
 
-	ph = pmemobj_create(fname, POBJ_LAYOUT_NAME(smd_md_layout), 0, 0666);
+	ph = pmemobj_create(fname, POBJ_LAYOUT_NAME(smd_md_layout), 0, 0600);
 	if (!ph) {
 		D_ERROR("Create SMD pmemobj pool %s failed. %s\n",
 			fname, pmemobj_errormsg());

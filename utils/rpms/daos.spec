@@ -190,6 +190,7 @@ Summary: The DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
 Requires: python2-tabulate
+Requires: lbzip2
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
 %endif
@@ -324,6 +325,7 @@ mv %{?buildroot}/%{_prefix}/etc/bash_completion.d %{?buildroot}/%{_sysconfdir}
 
 output="daos-tests-base.files"
 echo "%{_prefix}/lib/daos/TESTING/ftest/cart/cart_logtest.py" > ${output}
+echo "%{_prefix}/lib/daos/TESTING/ftest/get_remote_files.sh" > ${output}
 
 output="daos-tests-ior.files"
 ftest_path=%{?_prefix}/lib/daos/TESTING
@@ -571,6 +573,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 - Remove obj_ctl from Tests RPM package
 - Add libdts.so shared library that is used by daos_perf, daos_racer and
   the daos utility.
+
+* Tue Oct 13 2020 Amanda Justiniano <amanda.justiniano-pagn@intel.com> 1.1.1-3
+- Add lbzip2 requirement to the daos-tests package
 
 * Tue Oct 13 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.1-2
 - Create unprivileged user for daos_agent
