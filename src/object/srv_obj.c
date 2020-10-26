@@ -2164,7 +2164,7 @@ again:
 		dlh.dlh_handle.dth_resent = 1;
 
 	/* Execute the operation on all targets */
-	rc = dtx_leader_exec_ops(&dlh, obj_tgt_update, &exec_arg);
+	rc = dtx_leader_exec_ops(&dlh, obj_tgt_update, NULL, NULL, &exec_arg);
 
 	if (DAOS_FAIL_CHECK(DAOS_DTX_LEADER_ERROR))
 		rc = -DER_IO;
@@ -2745,8 +2745,9 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	/* local RPC handler */
 	rc = obj_local_punch(opi, opc_get(rpc->cr_opc), &ioc, &dth);
 	if (rc != 0) {
-		D_ERROR(DF_UOID": error="DF_RC".\n", DP_UOID(opi->opi_oid),
-			DP_RC(rc));
+		D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
+			 DF_UOID": error="DF_RC".\n", DP_UOID(opi->opi_oid),
+			 DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 out:
@@ -2761,8 +2762,56 @@ out:
 }
 
 static int
+obj_punch_agg_cb(struct dtx_leader_handle *dlh, void *agg_arg)
+{
+	uint64_t	*flag = agg_arg;
+	int		succeeds = 0;
+	int		allow_failure = 0;
+	int		allow_failure_cnt = 0;
+	int		result = 0;
+	int		i;
+
+	D_ASSERT(flag != NULL);
+	if (*flag & DAOS_COND_PUNCH)
+		allow_failure = -DER_NONEXIST;
+
+	for (i = 0; i < dlh->dlh_sub_cnt; i++) {
+		struct dtx_sub_status	*sub = &dlh->dlh_subs[i];
+
+		if (sub->dss_result == 0) {
+			succeeds++;
+		} else if (sub->dss_result == allow_failure) {
+			allow_failure_cnt++;
+		} else {
+			/* Ignore INPROGRESS if there other failures */
+			if (result == -DER_INPROGRESS || result == 0)
+				result = sub->dss_result;
+		}
+	}
+
+	D_DEBUG(DB_IO, DF_DTI" %d/%d shards flags "DF_X64" result %d\n",
+		DP_DTI(&dlh->dlh_handle.dth_xid), allow_failure_cnt,
+		succeeds, *flag, result);
+
+	if (*flag & DAOS_COND_PUNCH) {
+		/* For punch, let's ignore DER_NONEXIST if there are shards
+		 * succeed, since the object may not exist on some shards
+		 * due to EC partial update.
+		 */
+		if (result == 0 && succeeds == 0) {
+			D_ASSERT(dlh->dlh_sub_cnt == allow_failure_cnt);
+			return -DER_NONEXIST;
+		}
+
+		return result;
+	}
+
+	return result;
+}
+
+static int
 obj_tgt_punch(struct dtx_leader_handle *dlh, void *arg, int idx,
-		 dtx_sub_comp_cb_t comp_cb)
+	      dtx_sub_comp_cb_t comp_cb)
 {
 	struct ds_obj_exec_arg	*exec_arg = arg;
 
@@ -2920,7 +2969,8 @@ again:
 		dlh.dlh_handle.dth_resent = 1;
 
 	/* Execute the operation on all shards */
-	rc = dtx_leader_exec_ops(&dlh, obj_tgt_punch, &exec_arg);
+	rc = dtx_leader_exec_ops(&dlh, obj_tgt_punch, obj_punch_agg_cb,
+				 &opi->opi_api_flags, &exec_arg);
 
 	if (DAOS_FAIL_CHECK(DAOS_DTX_LEADER_ERROR))
 		rc = -DER_IO;
@@ -3859,7 +3909,7 @@ ds_obj_dtx_leader_ult(void *arg)
 		dlh.dlh_handle.dth_resent = 1;
 
 	/* Execute the operation on all targets */
-	rc = dtx_leader_exec_ops(&dlh, obj_obj_dtx_leader, &exec_arg);
+	rc = dtx_leader_exec_ops(&dlh, obj_obj_dtx_leader, NULL, NULL, &exec_arg);
 
 	/* Stop the distribute transaction */
 	rc = dtx_leader_end(&dlh, dca->dca_ioc->ioc_coc, rc);
