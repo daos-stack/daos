@@ -614,7 +614,8 @@ class DFuse():
 
         my_env['D_LOG_FILE'] = self.log_file
         my_env['DAOS_AGENT_DRPC_DIR'] = self._daos.agent_dir
-        my_env['DFS_USE_DTX'] = '1'
+        if self.conf.args.dtx == 'yes':
+            my_env['DFS_USE_DTX'] = '1'
 
         self.valgrind = ValgrindHelper(v_hint)
         if self.conf.args.memcheck == 'no':
@@ -1397,6 +1398,7 @@ def main():
     parser.add_argument('--server-debug', default=None)
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
+    parser.add_argument('--dtx', action='store_true')
     parser.add_argument('mode', nargs='?')
     args = parser.parse_args()
 
