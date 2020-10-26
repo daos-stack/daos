@@ -997,6 +997,12 @@ dtx_comp_cb(void **arg)
 	uint32_t			i;
 
 	dlh = arg[0];
+
+	if (dlh->dlh_agg_cb) {
+		dlh->dlh_result = dlh->dlh_agg_cb(dlh, dlh->dlh_agg_cb_arg);
+		return;
+	}
+
 	for (i = 0; i < dlh->dlh_sub_cnt; i++) {
 		struct dtx_sub_status	*sub = &dlh->dlh_subs[i];
 
@@ -1071,6 +1077,8 @@ dtx_leader_exec_ops_ult(void *arg)
 				  "ABT_future_set failed %d.\n", ret);
 		}
 	}
+
+	D_FREE_PTR(ult_arg);
 }
 
 /**
@@ -1078,7 +1086,7 @@ dtx_leader_exec_ops_ult(void *arg)
  */
 int
 dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
-		    void *func_arg)
+		    dtx_agg_cb_t agg_cb, void *agg_cb_arg, void *func_arg)
 {
 	struct dtx_ult_arg	*ult_arg;
 	int			rc;
@@ -1092,6 +1100,8 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 	ult_arg->func	= func;
 	ult_arg->func_arg = func_arg;
 	ult_arg->dlh	= dlh;
+	dlh->dlh_agg_cb = agg_cb;
+	dlh->dlh_agg_cb_arg = agg_cb_arg;
 
 	/* the future should already be freed */
 	D_ASSERT(dlh->dlh_future == ABT_FUTURE_NULL);

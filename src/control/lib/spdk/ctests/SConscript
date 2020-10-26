@@ -5,7 +5,7 @@ import os
 
 def scons():
     """Execute build"""
-    Import('senv', 'prereqs')
+    Import('senv', 'prereqs', 'control_tgts')
 
     unit_env = senv.Clone()
     prereqs.require(unit_env, 'pmdk', 'spdk', 'isal', 'hwloc', 'cmocka')
@@ -38,7 +38,8 @@ def scons():
     if os.path.isfile(look_path):
         testbin = daos_build.test(unit_env, 'nvme_control_ctests',
                                   ['nvme_control_ut.c', unit_env.ncc,
-                                   unit_env.nc], LIBS=libs)
+                                   unit_env.nc] + control_tgts,
+				  LIBS=libs)
         unit_env.Install("$PREFIX/bin", testbin)
     else:
         print(look_path, " missing, skipping nvme_control_ut build")

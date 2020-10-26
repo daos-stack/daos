@@ -25,6 +25,7 @@ package server
 
 import (
 	"context"
+	"net"
 	"sync"
 	"testing"
 	"time"
@@ -160,10 +161,13 @@ func setupMockDrpcClient(svc *mgmtSvc, resp proto.Message, err error) {
 }
 
 // newTestIOServer returns an IOServerInstance configured for testing.
-func newTestIOServer(log logging.Logger, isAP bool) *IOServerInstance {
+func newTestIOServer(log logging.Logger, isAP bool, ioCfg ...*ioserver.Config) *IOServerInstance {
+	if len(ioCfg) == 0 {
+		ioCfg = append(ioCfg, ioserver.NewConfig().WithTargetCount(1))
+	}
 	r := ioserver.NewTestRunner(&ioserver.TestRunnerConfig{
 		Running: atm.NewBool(true),
-	}, ioserver.NewConfig())
+	}, ioCfg[0])
 
 	var msCfg mgmtSvcClientCfg
 	if isAP {
@@ -182,16 +186,16 @@ func newTestIOServer(log logging.Logger, isAP bool) *IOServerInstance {
 
 // newTestMgmtSvc creates a mgmtSvc that contains an IOServerInstance
 // properly set up as an MS.
-func newTestMgmtSvc(log logging.Logger) *mgmtSvc {
+func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
 	srv := newTestIOServer(log, true)
 
 	harness := NewIOServerHarness(log)
 	if err := harness.AddInstance(srv); err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 	harness.started.SetTrue()
 
-	return newMgmtSvc(harness, nil, nil)
+	return newMgmtSvc(harness, nil, system.MockDatabase(t, log))
 }
 
 // newTestMgmtSvcMulti creates a mgmtSvc that contains the requested
@@ -211,4 +215,19 @@ func newTestMgmtSvcMulti(t *testing.T, log logging.Logger, count int, isAP bool)
 	harness.started.SetTrue()
 
 	return newMgmtSvc(harness, nil, nil)
+}
+
+// newTestMgmtSvcNonReplica creates a mgmtSvc that is configured to
+// fail if operations expect it to be a replica.
+func newTestMgmtSvcNonReplica(t *testing.T, log logging.Logger) *mgmtSvc {
+	svc := newTestMgmtSvc(t, log)
+
+	// Doesn't actually start anything, just clears the replica.
+	ctx, cancel := context.WithCancel(context.Background())
+	if err := svc.sysdb.Start(ctx, &net.TCPAddr{}); err != nil {
+		t.Fatal(err)
+	}
+	cancel()
+
+	return svc
 }
