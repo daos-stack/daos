@@ -69,7 +69,6 @@ ds_mgmt_drpc_prep_shutdown(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 					      drpc_req->body.data);
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
-		D_ERROR("Failed to unpack req (prep shutdown)\n");
 		return;
 	}
 
@@ -100,7 +99,6 @@ ds_mgmt_drpc_ping_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 					  drpc_req->body.data);
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
-		D_ERROR("Failed to unpack req (ping rank)\n");
 		return;
 	}
 
@@ -126,7 +124,6 @@ ds_mgmt_drpc_set_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 					 drpc_req->body.data);
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
-		D_ERROR("Failed to unpack req (set rank)\n");
 		return;
 	}
 
@@ -159,17 +156,14 @@ ds_mgmt_drpc_group_update(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
-		D_ERROR("Failed to unpack req (group_update)\n");
 		return;
 	}
 
 	D_INFO("Received request to update group map\n");
 
 	D_ALLOC_ARRAY(in.gui_servers, req->n_servers);
-	if (in.gui_servers == NULL) {
-		rc = -DER_NOMEM;
-		goto out;
-	}
+	if (in.gui_servers == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	for (i = 0; i < req->n_servers; i++) {
 		in.gui_servers[i].se_rank = req->servers[i]->rank;
@@ -291,7 +285,6 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 					    drpc_req->body.data);
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
-		D_ERROR("Failed to unpack req (create pool)\n");
 		return;
 	}
 
@@ -377,7 +370,6 @@ ds_mgmt_drpc_pool_destroy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
-		D_ERROR("Failed to unpack req (destroy pool)\n");
 		return;
 	}
 
@@ -438,7 +430,6 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
-		D_ERROR("Failed to unpack req (evict pool_connections)\n");
 		return;
 	}
 
@@ -539,7 +530,6 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
-		D_ERROR("Failed to unpack req (Exclude target)\n");
 		return;
 	}
 
@@ -588,7 +578,6 @@ ds_mgmt_drpc_pool_drain(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
-		D_ERROR("Failed to unpack req (Drain target)\n");
 		return;
 	}
 
@@ -638,7 +627,6 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
-		D_ERROR("Failed to unpack req (Extend target)\n");
 		return;
 	}
 
@@ -704,7 +692,6 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
-		D_ERROR("Failed to unpack req (Reintegrate target)\n");
 		return;
 	}
 
@@ -754,7 +741,6 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
-		D_ERROR("Failed to unpack req (pool setprop)\n");
 		return;
 	}
 
@@ -971,7 +957,6 @@ ds_mgmt_drpc_pool_get_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	req = mgmt__get_aclreq__unpack(&alloc.alloc, drpc_req->body.len,
 				       drpc_req->body.data);
 	if (alloc.oom || req == NULL) {
-		D_ERROR("Failed to unpack GetACLReq\n");
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		return;
 	}
@@ -1025,10 +1010,9 @@ get_params_from_modify_acl_req(Drpc__Call *drpc_req, uuid_t uuid_out,
 
 	req = mgmt__modify_aclreq__unpack(&alloc.alloc, drpc_req->body.len,
 					  drpc_req->body.data);
-	if (alloc.oom || req == NULL) {
-		D_ERROR("Failed to unpack ModifyACLReq\n");
-		return -DER_PROTO;
-	}
+	if (alloc.oom || req == NULL)
+		return -DER_NOMEM;
+
 
 	if (uuid_parse(req->uuid, uuid_out) != 0) {
 		D_ERROR("Couldn't parse UUID\n");
@@ -1142,7 +1126,6 @@ ds_mgmt_drpc_pool_delete_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	req = mgmt__delete_aclreq__unpack(&alloc.alloc, drpc_req->body.len,
 					  drpc_req->body.data);
 	if (alloc.oom || req == NULL) {
-		D_ERROR("Failed to unpack DeleteACLReq\n");
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		return;
 	}
@@ -1198,7 +1181,6 @@ ds_mgmt_drpc_pool_list_cont(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
-		D_ERROR("Failed to unpack req (list containers)\n");
 		mgmt__list_cont_req__free_unpacked(req, &alloc.alloc);
 		return;
 	}
@@ -1326,7 +1308,6 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	req = mgmt__pool_query_req__unpack(&alloc.alloc, drpc_req->body.len,
 					   drpc_req->body.data);
 	if (alloc.oom || req == NULL) {
-		D_ERROR("Failed to unpack pool query req\n");
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		return;
 	}
@@ -1405,7 +1386,6 @@ ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
-		D_ERROR("Failed to unpack req (smd list devs)\n");
 		return;
 	}
 
@@ -1474,7 +1454,6 @@ ds_mgmt_drpc_smd_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
-		D_ERROR("Failed to unpack req (smd list pools)\n");
 		return;
 	}
 
@@ -1546,7 +1525,6 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
-		D_ERROR("Failed to unpack req (bio health query)\n");
 		return;
 	}
 
@@ -1660,7 +1638,6 @@ ds_mgmt_drpc_dev_state_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to unpack req (dev state query)\n");
 		return;
 	}
 
@@ -1730,7 +1707,6 @@ ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to unpack req (dev state set faulty)\n");
 		return;
 	}
 
@@ -1810,7 +1786,6 @@ ds_mgmt_drpc_cont_set_owner(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 					       drpc_req->body.data);
 
 	if (alloc.oom || req == NULL) {
-		D_ERROR("Failed to unpack req (cont set owner)\n");
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		return;
 	}
