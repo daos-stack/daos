@@ -250,7 +250,7 @@ bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl, bool deduped_skip)
 
 	rc = daos_sgl_init(sgl, bsgl->bs_nr_out);
 	if (rc != 0)
-		return -DER_NOMEM;
+		return rc;
 
 	sgl->sg_nr_out = bsgl->bs_nr_out;
 
