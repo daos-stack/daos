@@ -24,9 +24,7 @@
 package system
 
 import (
-	"fmt"
 	"net"
-	"reflect"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -180,12 +178,6 @@ func TestSystem_Membership_AddRemove(t *testing.T) {
 			AssertEqual(t, len(tc.expMembers), count, name)
 		})
 	}
-}
-
-func assertMembersEqual(t *testing.T, a Member, b Member, msg string) {
-	t.Helper()
-	AssertTrue(t, reflect.DeepEqual(a, b),
-		fmt.Sprintf("%s: want %#v, got %#v", msg, a, b))
 }
 
 func TestSystem_Membership_AddOrReplace(t *testing.T) {

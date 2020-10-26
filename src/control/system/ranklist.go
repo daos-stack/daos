@@ -69,35 +69,34 @@ func MustCreateRankSet(stringRanks string) *RankSet {
 // CreateRankSet creates a new HostList with ranks rather than hostnames from the
 // supplied string representation.
 func CreateRankSet(stringRanks string) (*RankSet, error) {
-	rs := RankSet{
+	rs := &RankSet{
 		HostSet: *hostlist.MustCreateSet(""),
 	}
 
-	if len(stringRanks) > 0 {
-		stringRanks = fixBrackets(stringRanks, false)
-
-		// add enclosing brackets to input so CreateSet works without hostnames
-		hs, err := hostlist.CreateNumericSet(stringRanks)
-		if err != nil {
-			return nil, err
-		}
-		rs.HostSet.ReplaceSet(hs)
+	if len(stringRanks) < 1 {
+		return rs, nil
 	}
 
-	return &rs, nil
+	stringRanks = fixBrackets(stringRanks, false)
+
+	// add enclosing brackets to input so CreateSet works without hostnames
+	hs, err := hostlist.CreateNumericSet(stringRanks)
+	if err != nil {
+		return nil, err
+	}
+	rs.HostSet.ReplaceSet(hs)
+
+	return rs, nil
 }
 
 // RankSetFromRanks returns a RankSet created from the supplied Rank slice.
 func RankSetFromRanks(ranks RankList) *RankSet {
-	if len(ranks) == 0 {
-		hs, err := hostlist.CreateSet("")
-		if err != nil {
-			// If creating an empty set errors, we're in trouble.
-			panic(err)
-		}
-		return &RankSet{
-			HostSet: *hs,
-		}
+	rs := &RankSet{
+		HostSet: *hostlist.MustCreateSet(""),
+	}
+
+	if len(ranks) < 1 {
+		return rs
 	}
 
 	sr := fixBrackets(ranks.String(), false)
@@ -106,9 +105,9 @@ func RankSetFromRanks(ranks RankList) *RankSet {
 		// Any error with numeric ranks is going to be something bad.
 		panic(err)
 	}
-	return &RankSet{
-		HostSet: *hs,
-	}
+	rs.HostSet.ReplaceSet(hs)
+
+	return rs
 }
 
 // Add adds rank to an existing RankSet.
