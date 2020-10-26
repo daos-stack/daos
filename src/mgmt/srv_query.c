@@ -30,6 +30,109 @@
 
 #include "srv_internal.h"
 
+
+static void
+bs_state_query(void *arg)
+{
+	struct dss_module_info	*info = dss_get_module_info();
+	struct bio_xs_context	*bxc;
+	int			*bs_state = arg;
+
+	D_ASSERT(info != NULL);
+	D_DEBUG(DB_MGMT, "BIO blobstore state query on xs:%d, tgt:%d\n",
+		info->dmi_xs_id, info->dmi_tgt_id);
+
+	bxc = info->dmi_nvme_ctxt;
+	if (bxc == NULL) {
+		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
+			info->dmi_xs_id, info->dmi_tgt_id);
+		return;
+	}
+
+	bio_get_bs_state(bs_state, bxc);
+}
+
+/*
+ * CaRT RPC handler for management service "get blobstore state" (C API)
+ *
+ * Internal blobstore states returned for test validation only.
+ */
+int ds_mgmt_get_bs_state(uuid_t bs_uuid, int *bs_state)
+{
+	struct smd_dev_info		*dev_info;
+	ABT_thread			 thread;
+	int				 tgt_id;
+	int				 rc;
+
+	/*
+	 * Query per-server metadata (SMD) to get target ID(s) for given device.
+	 */
+	if (!uuid_is_null(bs_uuid)) {
+		rc = smd_dev_get_by_id(bs_uuid, &dev_info);
+		if (rc != 0) {
+			D_ERROR("Blobstore UUID:"DF_UUID" not found\n",
+				DP_UUID(bs_uuid));
+			return rc;
+		}
+		if (dev_info->sdi_tgts == NULL) {
+			D_ERROR("No targets mapped to device\n");
+			rc = -DER_NONEXIST;
+			goto out;
+		}
+		/* Default tgt_id is the first mapped tgt */
+		tgt_id = dev_info->sdi_tgts[0];
+	} else {
+		D_ERROR("Blobstore UUID is not provided for state query\n");
+		return -DER_INVAL;
+
+	}
+
+	/* Create a ULT on the tgt_id */
+	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
+	/* TODO Add a new DSS_ULT_BIO tag */
+	rc = dss_ult_create(bs_state_query, (void *)bs_state, DSS_ULT_GC,
+			    tgt_id, 0, &thread);
+	if (rc != 0) {
+		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
+		goto out;
+	}
+
+	ABT_thread_join(thread);
+	ABT_thread_free(&thread);
+
+out:
+	smd_free_dev_info(dev_info);
+	return rc;
+}
+
+void
+ds_mgmt_hdlr_get_bs_state(crt_rpc_t *rpc_req)
+{
+	struct mgmt_get_bs_state_in	*bs_in;
+	struct mgmt_get_bs_state_out	*bs_out;
+	uuid_t				 bs_uuid;
+	int				 bs_state;
+	int				 rc;
+
+
+	bs_in = crt_req_get(rpc_req);
+	D_ASSERT(bs_in != NULL);
+	bs_out = crt_reply_get(rpc_req);
+	D_ASSERT(bs_out != NULL);
+
+	uuid_copy(bs_uuid, bs_in->bs_uuid);
+
+	rc = ds_mgmt_get_bs_state(bs_uuid, &bs_state);
+
+	uuid_copy(bs_out->bs_uuid, bs_uuid);
+	bs_out->bs_state = bs_state;
+	bs_out->bs_rc = rc;
+
+	rc = crt_reply_send(rpc_req);
+	if (rc != 0)
+		D_ERROR("crt_reply_send failed, rc: "DF_RC"\n", DP_RC(rc));
+}
+
 static void
 bio_health_query(void *arg)
 {
