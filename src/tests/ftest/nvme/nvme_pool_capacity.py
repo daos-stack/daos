@@ -190,8 +190,7 @@ class NvmePoolCapacity(TestWithServers):
             # Create the IOR threads
             threads = []
             for val in range(0, num_pool):
-                pool[val] = TestPool(self.context,
-                                     dmg_command=self.get_dmg_command())
+                pool[val] = TestPool(self.context, self.get_dmg_command())
                 pool[val].get_params(self)
                 # Split total SCM and NVME size for creating multiple pools.
                 pool[val].scm_size.value = int(test[0]) / num_pool
