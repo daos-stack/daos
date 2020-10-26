@@ -11,7 +11,7 @@
 
 Name:          daos
 Version:       1.1.1
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -167,10 +167,10 @@ Requires: python-pathlib
 Requires: python-distro
 Requires: python2-tabulate
 Requires: fio
+Requires: lbzip2
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
 %endif
-
 
 %description tests
 This is the package needed to run the DAOS test suite
@@ -331,6 +331,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/libioil.so
 %{_libdir}/libdfs_internal.so
 %{_libdir}/libvos_size.so
+%{_libdir}/libdts.so
 %dir  %{_libdir}/python2.7/site-packages/pydaos
 %dir  %{_libdir}/python2.7/site-packages/storage_estimator
 %{_libdir}/python2.7/site-packages/pydaos/*.py
@@ -385,7 +386,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_bindir}/daos_perf
 %{_bindir}/daos_racer
 %{_bindir}/evt_ctl
-%{_bindir}/obj_ctl
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
 %{_bindir}/crt_launch
@@ -400,10 +400,18 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Wed Sep 23 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.1-3
+* Wed Sep 23 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.1-4
 - Use %%autosetup
 - Only use systemd_requires if it exists
 - Obsoletes: cart now that it's included in daos
+
+* Tue Oct 13 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> 1.1.1-3
+- Remove obj_ctl from Tests RPM package
+- Add libdts.so shared library that is used by daos_perf, daos_racer and
+  the daos utility.
+
+* Tue Oct 13 2020 Amanda Justiniano <amanda.justiniano-pagn@intel.com> 1.1.1-3
+- Add lbzip2 requirement to the daos-tests package
 
 * Tue Oct 13 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.1-2
 - Create unprivileged user for daos_agent

@@ -24,6 +24,7 @@
 
 #include <spdk/nvme.h>
 #include <spdk/bdev.h>
+#include <spdk/blob.h>
 #include <spdk/io_channel.h>
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
@@ -37,11 +38,25 @@
  */
 struct dev_state_msg_arg {
 	struct bio_xs_context		*xs;
-	struct nvme_health_stats	 devstate;
+	struct nvme_stats		 devstate;
 	ABT_eventual			 eventual;
 };
 
-/* Copy out the nvme_health_stats in the device owner xstream context */
+/* Collect space utilisation for blobstore */
+static void
+collect_bs_usage(struct spdk_blob_store *bs, struct nvme_stats *stats)
+{
+	uint64_t	cl_sz;
+
+	D_ASSERT(bs != NULL);
+	D_ASSERT(stats != NULL);
+
+	cl_sz = spdk_bs_get_cluster_size(bs);
+	stats->total_bytes = spdk_bs_total_data_cluster_count(bs) * cl_sz;
+	stats->avail_bytes = spdk_bs_free_cluster_count(bs) * cl_sz;
+}
+
+/* Copy out the nvme_stats in the device owner xstream context */
 static void
 bio_get_dev_state_internal(void *msg_arg)
 {
@@ -50,6 +65,7 @@ bio_get_dev_state_internal(void *msg_arg)
 	D_ASSERT(dsm != NULL);
 
 	dsm->devstate = dsm->xs->bxc_blobstore->bb_dev_health.bdh_health_state;
+	collect_bs_usage(dsm->xs->bxc_blobstore->bb_bs, &dsm->devstate);
 	ABT_eventual_set(dsm->eventual, NULL, 0);
 }
 
@@ -90,7 +106,7 @@ bio_log_csum_err(struct bio_xs_context *bxc, int tgt_id)
 
 /* Call internal method to get BIO device state from the device owner xstream */
 int
-bio_get_dev_state(struct nvme_health_stats *state, struct bio_xs_context *xs)
+bio_get_dev_state(struct nvme_stats *state, struct bio_xs_context *xs)
 {
 	struct dev_state_msg_arg	 dsm = { 0 };
 	int				 rc;
@@ -169,26 +185,22 @@ get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 }
 
 static int
-populate_health_cdata(struct nvme_health_stats *dev_state,
-		      const struct spdk_nvme_ctrlr_data *cdata)
+populate_health_cdata(const struct spdk_nvme_ctrlr_data *cdata,
+		      struct nvme_stats *state)
 {
-	int	written, rc = 0;
-
-	written = snprintf(dev_state->model, sizeof(dev_state->model),
-			   "%-20.20s", cdata->mn);
-	if (written >= sizeof(dev_state->model)) {
-		D_WARN("data truncated when writing model to health state");
-		rc = -DER_TRUNC;
+	if (copy_ascii(state->model, sizeof(state->model), cdata->mn,
+		       sizeof(cdata->mn)) != 0) {
+		D_ERROR("data truncated when writing model to health state");
+		return -DER_TRUNC;
 	}
 
-	written = snprintf(dev_state->serial, sizeof(dev_state->serial),
-			   "%-20.20s", cdata->sn);
-	if (written >= sizeof(dev_state->serial)) {
-		D_WARN("data truncated when writing model to health state");
-		rc = -DER_TRUNC;
+	if (copy_ascii(state->serial, sizeof(state->serial), cdata->sn,
+		       sizeof(cdata->sn)) != 0) {
+		D_ERROR("data truncated when writing serial to health state");
+		return -DER_TRUNC;
 	}
 
-	return rc;
+	return 0;
 }
 
 static void
@@ -222,9 +234,8 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 
 	/* Store ctrlr details in in-memory health state log. */
 	cdata = dev_health->bdh_ctrlr_buf;
-	rc = populate_health_cdata(&dev_health->bdh_health_state, cdata);
+	rc = populate_health_cdata(cdata, &dev_health->bdh_health_state);
 	if (rc != 0) {
-		D_ERROR("failed to populate device details in health state");
 		goto out;
 	}
 
@@ -268,8 +279,8 @@ out:
 }
 
 static void
-populate_health_stats(struct nvme_health_stats *dev_state,
-		      struct spdk_nvme_health_information_page *page)
+populate_health_stats(struct spdk_nvme_health_information_page *page,
+		      struct nvme_stats *dev_state)
 {
 	union spdk_nvme_critical_warning_state	cw = page->critical_warning;
 
@@ -318,8 +329,8 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 
 	/* Store device health info in in-memory health state log. */
 	dev_health->bdh_health_state.timestamp = dev_health->bdh_stat_age;
-	populate_health_stats(&dev_health->bdh_health_state,
-			      dev_health->bdh_health_buf);
+	populate_health_stats(dev_health->bdh_health_buf,
+			      &dev_health->bdh_health_state);
 
 	/* Prep NVMe command to get controller data */
 	cp_sz = sizeof(struct spdk_nvme_ctrlr_data);

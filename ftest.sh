@@ -62,6 +62,9 @@ if [ -n "${3}" ]; then
     NVME_ARG="-n ${3}"
 fi
 
+# Log size threshold
+LOGS_THRESHOLD="1G"
+
 # For nodes that are only rebooted between CI nodes left over mounts
 # need to be cleaned up.
 pre_clean () {
@@ -416,8 +419,8 @@ else
     process_cores=\"\"
 fi
 # now run it!
-if ! ./launch.py -cris\${process_cores}a -ts ${TEST_NODES} ${NVME_ARG} \\
-                 ${TEST_TAG_ARR[*]}; then
+if ! ./launch.py -cris\${process_cores}a -th ${LOGS_THRESHOLD} \\
+                 -ts ${TEST_NODES} ${NVME_ARG} ${TEST_TAG_ARR[*]}; then
     rc=\${PIPESTATUS[0]}
 else
     rc=0

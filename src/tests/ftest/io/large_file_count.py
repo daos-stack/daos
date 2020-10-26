@@ -19,6 +19,7 @@
 """
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
+from apricot import skipForTicket
 
 import write_host_file
 
@@ -40,6 +41,7 @@ class LargeFileCount(MdtestBase, IorTestBase):
                 self.hostlist_clients, self.workdir,
                 self.hostfile_clients_slots)
 
+    @skipForTicket("DAOS-5841")
     def test_largefilecount(self):
         """Jira ID: DAOS-3845.
         Test Description:
@@ -50,18 +52,36 @@ class LargeFileCount(MdtestBase, IorTestBase):
         :avocado: tags=all,daosio,hw,large,full_regression,largefilecount
         """
         apis = self.params.get("api", "/run/largefilecount/*")
+        object_class = self.params.get("object_class", '/run/largefilecount/*')
 
-        for api in apis:
-            self.ior_cmd.api.update(api)
-            self.mdtest_cmd.api.update(api)
+        # create pool
+        self.add_pool(connect=False)
 
-            # Until DAOS-3320 is resolved run IOR for POSIX
-            # with single client node
-            self.single_client(api)
+        for oclass in object_class:
+            self.ior_cmd.dfs_oclass.update(oclass)
+            self.mdtest_cmd.dfs_oclass.update(oclass)
+            for api in apis:
+                self.ior_cmd.api.update(api)
+                self.mdtest_cmd.api.update(api)
+                # update test_dir for mdtest if api is DFS
+                if api == "DFS":
+                    self.mdtest_cmd.test_dir.update("/")
+                # Until DAOS-3320 is resolved run IOR for POSIX
+                # with single client node
+                self.single_client(api)
 
-            # run mdtest and ior
-            self.execute_mdtest()
-            self.run_ior_with_pool()
+                # create container
+                self.container = self.get_container(self.pool, create=False)
+                self.container.oclass.update(oclass)
+                self.container.create()
+                # run mdtest and ior
+                self.execute_mdtest()
+                # container destroy
+                self.container.destroy()
+                self.update_ior_cmd_with_pool(oclass=oclass)
+                self.run_ior_with_pool(create_pool=False)
+                # container destroy
+                self.container.destroy()
 
     def test_largefilecount_rc(self):
         """Jira ID: DAOS-3845.
@@ -77,18 +97,33 @@ class LargeFileCount(MdtestBase, IorTestBase):
         apis = self.params.get("api", "/run/largefilecount/*")
         num_of_files_dirs_rc = self.params.get("num_of_files_dirs_rc",
                                                "/run/mdtest/*")
+        object_class = self.params.get("object_class", '/run/largefilecount/*')
 
         # update mdtest file count
         self.mdtest_cmd.num_of_files_dirs.update(num_of_files_dirs_rc)
 
-        for api in apis:
-            self.ior_cmd.api.update(api)
-            self.mdtest_cmd.api.update(api)
+        for oclass in object_class:
+            self.ior_cmd.dfs_oclass.update(oclass)
+            self.mdtest_cmd.dfs_oclass.update(oclass)
+            for api in apis:
+                self.ior_cmd.api.update(api)
+                self.mdtest_cmd.api.update(api)
+                # update test_dir for mdtest if api is DFS
+                if api == "DFS":
+                    self.mdtest_cmd.test_dir.update("/")
+                # Until DAOS-3320 is resolved run IOR for POSIX
+                # with single client node
+                self.single_client(api)
 
-            # Until DAOS-3320 is resolved run IOR for POSIX
-            # with single client node
-            self.single_client(api)
-
-            # run mdtest and ior
-            self.execute_mdtest()
-            self.run_ior_with_pool()
+                # create container
+                self.container = self.get_container(self.pool, create=False)
+                self.container.oclass.update(oclass)
+                self.container.create()
+                # run mdtest and ior
+                self.execute_mdtest()
+                # container destroy
+                self.container.destroy()
+                self.update_ior_cmd_with_pool(oclass=oclass)
+                self.run_ior_with_pool(create_pool=False)
+                # container destroy
+                self.container.destroy()
