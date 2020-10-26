@@ -895,7 +895,7 @@ class TestWithServers(TestWithoutServers):
             TestPool: the created test pool object.
 
         """
-        pool = TestPool(self.context, dmg_command=self.get_dmg_command(index))
+        pool = TestPool(self.context, self.get_dmg_command(index))
         if namespace is not None:
             pool.namespace = namespace
         pool.get_params(self)
