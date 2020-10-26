@@ -83,12 +83,20 @@ class IorTestBase(DfuseTestBase):
         # Create a pool
         self.pool.create()
 
-    def create_cont(self):
-        """Create a TestContainer object to be used to create container."""
+    def create_cont(self, oclass):
+        """Create a TestContainer object to be used to create container.
+        Args:
+            oclass: Explicitly supply object class for container create
+        """
         # Get container params
         self.container = TestContainer(
             self.pool, daos_command=DaosCommand(self.bin))
         self.container.get_params(self)
+
+        # update object class for container create, if supplied
+        # explicitly.
+        if oclass:
+            self.container.oclass.update(oclass)
 
         # create container
         self.container.create()
@@ -96,7 +104,7 @@ class IorTestBase(DfuseTestBase):
     def run_ior_with_pool(self, intercept=None, test_file_suffix="",
                           test_file="daos:testFile", create_pool=True,
                           create_cont=True, stop_dfuse=True, plugin_path=None,
-                          timeout=None):
+                          timeout=None, fail_on_warning=False):
         """Execute ior with optional overrides for ior flags and object_class.
 
         If specified the ior flags and ior daos object class parameters will
@@ -118,6 +126,8 @@ class IorTestBase(DfuseTestBase):
                 This will enable dfuse (xattr) working directory which is
                 needed to run vol connector for DAOS. Default is None.
             timeout (int, optional): command timeout. Defaults to None.
+            fail_on_warning (bool, optional): Controls whether the test
+                should fail if a 'WARNING' is found. Default is False.
 
         Returns:
             CmdResult: result of the ior command execution
@@ -143,18 +153,20 @@ class IorTestBase(DfuseTestBase):
         job_manager = self.get_ior_job_manager_command()
         job_manager.timeout = timeout
         out = self.run_ior(job_manager, self.processes,
-                           intercept, plugin_path=plugin_path)
+                           intercept, plugin_path=plugin_path,
+                           fail_on_warning=fail_on_warning)
 
         if stop_dfuse:
             self.stop_dfuse()
 
         return out
 
-    def update_ior_cmd_with_pool(self, create_cont=True):
+    def update_ior_cmd_with_pool(self, create_cont=True, oclass=None):
         """Update ior_cmd with pool.
 
         Args:
-            create_cont (bool, optional): create a container. Defaults to True.
+          create_cont (bool, optional): create a container. Defaults to True.
+          oclass (string, optional): Specify object class
         """
         # Create a pool if one does not already exist
         if self.pool is None:
@@ -164,7 +176,7 @@ class IorTestBase(DfuseTestBase):
         # It will not enable checksum feature
         if create_cont:
             self.pool.connect()
-            self.create_cont()
+            self.create_cont(oclass)
         # Update IOR params with the pool and container params
         self.ior_cmd.set_daos_params(self.server_group, self.pool,
                                      self.container.uuid)
@@ -203,7 +215,7 @@ class IorTestBase(DfuseTestBase):
             self.fail("Exiting Test: Subprocess not running")
 
     def run_ior(self, manager, processes, intercept=None, display_space=True,
-                plugin_path=None):
+                plugin_path=None, fail_on_warning=None):
         """Run the IOR command.
 
         Args:
@@ -213,6 +225,8 @@ class IorTestBase(DfuseTestBase):
             plugin_path (str, optional): HDF5 vol connector library path.
                 This will enable dfuse (xattr) working directory which is
                 needed to run vol connector for DAOS. Default is None.
+            fail_on_warning (bool): Controls whether the test should
+                fail if a 'WARNING' is found.
         """
         env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
@@ -234,7 +248,10 @@ class IorTestBase(DfuseTestBase):
             if not self.subprocess:
                 for line in out.stdout.splitlines():
                     if 'WARNING' in line:
-                        self.fail("IOR command issued warnings.\n")
+                        if fail_on_warning:
+                            self.fail("IOR command issued warnings.\n")
+                        else:
+                            self.log.warning("IOR command issued warnings.\n")
             return out
         except CommandFailure as error:
             self.log.error("IOR Failed: %s", str(error))
