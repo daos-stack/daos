@@ -24,6 +24,7 @@
 package bdev
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -154,21 +155,67 @@ func (p *Provider) IsVMDDisabled() bool {
 	return p.backend.IsVMDDisabled()
 }
 
-func (resp *ScanResponse) filter(pciFilter ...string) *ScanResponse {
+func (resp *ScanResponse) filter(pciFilter ...string) (int, *ScanResponse) {
+	var skipped int
 	out := make(storage.NvmeControllers, 0)
 
 	if len(pciFilter) == 0 {
-		return &ScanResponse{Controllers: resp.Controllers}
+		return skipped, &ScanResponse{Controllers: resp.Controllers}
 	}
 
 	for _, c := range resp.Controllers {
 		if !common.Includes(pciFilter, c.PciAddr) {
+			skipped++
 			continue
 		}
 		out = append(out, c)
 	}
 
-	return &ScanResponse{Controllers: out}
+	return skipped, &ScanResponse{Controllers: out}
+}
+
+type scanFwdFn func(ScanRequest) (*ScanResponse, error)
+
+func forwardScan(req ScanRequest, cache *ScanResponse, scan scanFwdFn) (msg string, resp *ScanResponse, update bool, err error) {
+	var action string
+	switch {
+	case req.NoCache:
+		action = "bypass"
+		resp, err = scan(req)
+	case cache != nil && len(cache.Controllers) != 0:
+		action = "reuse"
+		resp = cache
+	default:
+		action = "update"
+		resp, err = scan(req)
+		if err == nil && resp != nil {
+			update = true
+		}
+	}
+
+	msg = fmt.Sprintf("bdev scan: %s cache", action)
+
+	if err != nil {
+		return
+	}
+
+	if resp == nil {
+		err = errors.New("unexpected nil response from bdev backend")
+		return
+	}
+
+	msg += fmt.Sprintf(" (%d", len(resp.Controllers))
+	if len(req.DeviceList) != 0 && len(resp.Controllers) != 0 {
+		var num int
+		num, resp = resp.filter(req.DeviceList...)
+		if num != 0 {
+			msg += fmt.Sprintf("-%d filtered", num)
+		}
+	}
+
+	msg += " devices)"
+
+	return
 }
 
 // Scan attempts to perform a scan to discover NVMe components in the
@@ -181,30 +228,14 @@ func (p *Provider) Scan(req ScanRequest) (resp *ScanResponse, err error) {
 
 		p.Lock()
 		defer p.Unlock()
-		defer func() {
-			if resp == nil {
-				return
-			}
-			resp = resp.filter(req.DeviceList...)
-		}()
 
-		if req.NoCache {
-			resp, err = p.fwd.Scan(req)
-			return
-		}
-
-		if p.scanCache != nil {
-			resp = p.scanCache
-			return
-		}
-
-		resp, err = p.fwd.Scan(req)
-		if err == nil {
-			p.log.Debug("populating bdev scan cache")
+		msg, resp, update, err := forwardScan(req, p.scanCache, p.fwd.Scan)
+		p.log.Debug(msg)
+		if update {
 			p.scanCache = resp
 		}
 
-		return
+		return resp, err
 	}
 
 	// set vmd state on remote provider in forwarded request

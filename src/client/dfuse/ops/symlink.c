@@ -39,8 +39,8 @@ dfuse_cb_symlink(fuse_req_t req, const char *link,
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
-	rc = dfs_open(parent->ie_dfs->dfs_ns, parent->ie_obj, name, S_IFLNK,
-		      O_CREAT, 0, 0, link, &ie->ie_obj);
+	rc = dfs_open(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
+		      S_IFLNK, O_CREAT, 0, 0, link, &ie->ie_obj);
 	if (rc != 0)
 		D_GOTO(err, rc);
 
