@@ -40,12 +40,6 @@
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
 #define MGMT_PROTO_CLI_RPC_LIST						\
-	X(MGMT_POOL_CREATE,						\
-		0, &CQF_mgmt_pool_create,				\
-		ds_mgmt_hdlr_pool_create, NULL),			\
-	X(MGMT_POOL_DESTROY,						\
-		0, &CQF_mgmt_pool_destroy,				\
-		ds_mgmt_hdlr_pool_destroy, NULL),			\
 	X(MGMT_SVC_RIP,							\
 		DAOS_RPC_NO_REPLY, &CQF_mgmt_svc_rip,			\
 		ds_mgmt_hdlr_svc_rip, NULL),				\
@@ -55,12 +49,12 @@
 	X(MGMT_PROFILE,							\
 		0, &CQF_mgmt_profile,					\
 		ds_mgmt_profile_hdlr, NULL),				\
-	X(MGMT_LIST_POOLS,						\
-		0, &CQF_mgmt_list_pools,				\
-		ds_mgmt_hdlr_list_pools, NULL),				\
 	X(MGMT_MARK,							\
 		0, &CQF_mgmt_mark,					\
-		ds_mgmt_mark_hdlr, NULL)
+		ds_mgmt_mark_hdlr, NULL),				\
+	X(MGMT_GET_BS_STATE,						\
+		0, &CQF_mgmt_get_bs_state,				\
+		ds_mgmt_hdlr_get_bs_state, NULL)
 #define MGMT_PROTO_SRV_RPC_LIST						\
 	X(MGMT_TGT_CREATE,						\
 		0, &CQF_mgmt_tgt_create,				\
@@ -103,34 +97,6 @@ enum mgmt_profile_op {
 };
 
 extern struct crt_proto_format mgmt_proto_fmt;
-
-#define DAOS_ISEQ_MGMT_POOL_CREATE /* input fields */		 \
-	((uuid_t)		(pc_pool_uuid)		CRT_VAR) \
-	((d_string_t)		(pc_grp)		CRT_VAR) \
-	((d_string_t)		(pc_tgt_dev)		CRT_VAR) \
-	((d_rank_list_t)	(pc_tgts)		CRT_PTR) \
-	((daos_size_t)		(pc_scm_size)		CRT_VAR) \
-	((daos_size_t)		(pc_nvme_size)		CRT_VAR) \
-	((daos_prop_t)		(pc_prop)		CRT_PTR) \
-	((uint32_t)		(pc_svc_nr)		CRT_VAR)
-
-#define DAOS_OSEQ_MGMT_POOL_CREATE /* output fields */		 \
-	((d_rank_list_t)	(pc_svc)		CRT_PTR) \
-	((int32_t)		(pc_rc)			CRT_VAR)
-
-CRT_RPC_DECLARE(mgmt_pool_create, DAOS_ISEQ_MGMT_POOL_CREATE,
-		DAOS_OSEQ_MGMT_POOL_CREATE)
-
-#define DAOS_ISEQ_MGMT_POOL_DESTROY /* input fields */		 \
-	((uuid_t)		(pd_pool_uuid)		CRT_VAR) \
-	((d_string_t)		(pd_grp)		CRT_VAR) \
-	((uint32_t)		(pd_force)		CRT_VAR)
-
-#define DAOS_OSEQ_MGMT_POOL_DESTROY /* output fields */		 \
-	((int32_t)		(pd_rc)			CRT_VAR)
-
-CRT_RPC_DECLARE(mgmt_pool_destroy, DAOS_ISEQ_MGMT_POOL_DESTROY,
-		DAOS_OSEQ_MGMT_POOL_DESTROY)
 
 #define DAOS_ISEQ_MGMT_SVR_RIP	/* input fields */		 \
 	((uint32_t)		(rip_flags)		CRT_VAR)
@@ -214,25 +180,6 @@ CRT_GEN_STRUCT(server_entry, DAOS_SEQ_SERVER_ENTRY);
 CRT_RPC_DECLARE(mgmt_tgt_map_update, DAOS_ISEQ_MGMT_TGT_MAP_UPDATE,
 		DAOS_OSEQ_MGMT_TGT_MAP_UPDATE)
 
-/* List pools: returns an array of mgmt_list_pools_one */
-#define DAOS_SEQ_MGMT_LIST_POOLS_ONE \
-	((uuid_t)		(lp_puuid)	CRT_VAR) \
-	((d_rank_list_t)	(lp_svc)	CRT_PTR)
-
-CRT_GEN_STRUCT(mgmt_list_pools_one, DAOS_SEQ_MGMT_LIST_POOLS_ONE);
-
-#define DAOS_ISEQ_MGMT_LIST_POOLS /* input fields */		 \
-	((d_string_t)		(lp_grp)		CRT_VAR) \
-	((uint64_t)		(lp_npools)		CRT_VAR)
-
-#define DAOS_OSEQ_MGMT_LIST_POOLS /* output fields */			   \
-	((struct mgmt_list_pools_one)		(lp_pools)	CRT_ARRAY) \
-	((uint64_t)				(lp_npools)	CRT_VAR)   \
-	((int32_t)				(lp_rc)		CRT_VAR)
-
-CRT_RPC_DECLARE(mgmt_list_pools, DAOS_ISEQ_MGMT_LIST_POOLS,
-		DAOS_OSEQ_MGMT_LIST_POOLS)
-
 #define DAOS_ISEQ_MGMT_MARK /* input fields */	\
 	((d_string_t)		(m_mark)		CRT_VAR)
 
@@ -240,5 +187,17 @@ CRT_RPC_DECLARE(mgmt_list_pools, DAOS_ISEQ_MGMT_LIST_POOLS,
 	((int32_t)		(m_rc)			CRT_VAR)
 
 CRT_RPC_DECLARE(mgmt_mark, DAOS_ISEQ_MGMT_MARK, DAOS_OSEQ_MGMT_MARK)
+
+/* Get Blobstore State */
+#define DAOS_ISEQ_MGMT_GET_BS_STATE /* input fields */		 \
+	((uuid_t)		(bs_uuid)		CRT_VAR)
+
+#define DAOS_OSEQ_MGMT_GET_BS_STATE /* output fields */		 \
+	((int32_t)		(bs_state)		CRT_VAR) \
+	((uuid_t)		(bs_uuid)		CRT_VAR) \
+	((int32_t)		(bs_rc)			CRT_VAR)
+
+CRT_RPC_DECLARE(mgmt_get_bs_state, DAOS_ISEQ_MGMT_GET_BS_STATE,
+		DAOS_OSEQ_MGMT_GET_BS_STATE)
 
 #endif /* __MGMT_RPC_H__ */
