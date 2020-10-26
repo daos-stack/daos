@@ -561,7 +561,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 		if (rc != 0) {
 			D_ERROR("failed to create failed tgt list rc %d\n",
 				rc);
-			return;
+			break;
 		}
 
 		if (targets != NULL) {
@@ -573,8 +573,9 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 						targets[i].ta_comp.co_rank);
 
 				D_ASSERT(dom != NULL);
-				D_DEBUG(DB_REBUILD, "target %d failed\n",
-					dom->do_comp.co_rank);
+				D_DEBUG(DB_REBUILD, "rank %d/%x.\n",
+					dom->do_comp.co_rank,
+					dom->do_comp.co_status);
 				if (pool_component_unavail(&dom->do_comp,
 							false)) {
 					rebuild_leader_set_status(rgt,
