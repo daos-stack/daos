@@ -52,7 +52,7 @@ class DmgSystemReformatTest(TestWithServers):
         storage_info = self.get_dmg_command().storage_scan(verbose=True)
         self.scm_cap = storage_info[host]["scm"][pmem_ns[-1]]["capacity"]
 
-    def create_pool_at_capacity(self, percentage):
+    def get_pool_at_capacity(self, percentage):
         """Create a pool at specified capacity.
 
         Args:
@@ -76,7 +76,6 @@ class DmgSystemReformatTest(TestWithServers):
         self.log.info("Create pool at %s percent capacity.", percentage * 100)
         pool = self.get_pool(create=False, connect=False)
         pool.scm_size.update(scm_size)
-        pool.create()
 
         return pool
 
@@ -89,14 +88,16 @@ class DmgSystemReformatTest(TestWithServers):
 
         :avocado: tags=all,small,pr,hw,control,sys_reformat,dmg
         """
-        self.create_pool_at_capacity(0.7)
+        first_pool = self.get_pool_at_capacity(0.7)
+        first_pool.create()
 
         self.log.info("Check that new pool will fail with DER_NOSPACE")
+        second_pool = self.get_pool_at_capacity(0.7)
         try:
-            self.create_pool_at_capacity(0.7)
+            second_pool.create()
         except TestFail as error:
             self.log.info("Pool create failed: %s", str(error))
-            if "DER_NOSPACE" not in str(error):
+            if "DER_NOSPACE" not in second_pool.dmg.result.stderr:
                 self.fail("Pool create did not fail do to DER_NOSPACE!")
 
         self.log.info("Stop running io_server instancess: 'dmg system stop'")
@@ -130,4 +131,5 @@ class DmgSystemReformatTest(TestWithServers):
                 self.get_dmg_command().result.stdout))
 
         # Create last pool now that memory has been wiped.
-        self.create_pool_at_capacity(0.7)
+        third_pool = self.get_pool_at_capacity(0.7)
+        third_pool.create()
