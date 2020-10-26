@@ -111,7 +111,7 @@ rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep)
 	return 0;
 }
 
-/* Process an error without any leadership hint. */
+/* Process an error without leadership hint. */
 static void
 rsvc_client_process_error(struct rsvc_client *client, int rc,
 			  const crt_endpoint_t *ep)
@@ -142,6 +142,9 @@ rsvc_client_process_error(struct rsvc_client *client, int rc,
 			ep->ep_rank, DP_RC(rc));
 	} else if (client->sc_leader_known && client->sc_leader_aliveness > 0 &&
 		   ep->ep_rank == client->sc_ranks->rl_ranks[leader_index]) {
+		/* A leader stepping up may briefly reply NOTLEADER with hint.
+		 * "Give up" but "bump aliveness" in rsvc_client_process_hint().
+		 */
 		if (rc == -DER_NOTLEADER)
 			client->sc_leader_aliveness = 0;
 		else
@@ -151,6 +154,8 @@ rsvc_client_process_error(struct rsvc_client *client, int rc,
 			 * Gave up this leader. Start the hintless
 			 * search.
 			 */
+			D_DEBUG(DB_MD, "give up leader rank %u\n",
+				ep->ep_rank);
 			client->sc_next = client->sc_leader_index + 1;
 			client->sc_next %= client->sc_ranks->rl_nr;
 		}
@@ -164,6 +169,7 @@ rsvc_client_process_hint(struct rsvc_client *client,
 			 const crt_endpoint_t *ep)
 {
 	bool found;
+	bool becoming_leader;
 
 	D_ASSERT(hint->sh_flags & RSVC_HINT_VALID);
 
@@ -181,6 +187,15 @@ rsvc_client_process_hint(struct rsvc_client *client,
 				hint->sh_term, hint->sh_rank);
 			return;
 		} else if (hint->sh_term == client->sc_leader_term) {
+			if (ep->ep_rank == hint->sh_rank) {
+				if (client->sc_leader_aliveness < 2) {
+					D_DEBUG(DB_MD, "leader rank %u bump "
+						"aliveness %u -> 2\n",
+						hint->sh_rank,
+						client->sc_leader_aliveness);
+					client->sc_leader_aliveness = 2;
+				}
+			}
 			return;
 		}
 	}
@@ -209,9 +224,11 @@ rsvc_client_process_hint(struct rsvc_client *client,
 	 * If from_leader, set the aliveness to 2 so that upon a crt error
 	 * we'll give the leader another try before turning to others. (If node
 	 * failures were more frequent than message losses, then 1 should be
-	 * used instead.)
+	 * used instead.). A new leader may briefly reply NOTLEADER while
+	 * stepping up, in which case "from_leader=false" and inspect further.
 	 */
-	client->sc_leader_aliveness = from_leader ? 2 : 1;
+	becoming_leader = (ep->ep_rank == hint->sh_rank);
+	client->sc_leader_aliveness = (from_leader || becoming_leader) ? 2 : 1;
 	D_DEBUG(DB_MD, "new hint from rank %u: hint.term="DF_U64
 		" hint.rank=%u\n", ep->ep_rank, hint->sh_term, hint->sh_rank);
 }

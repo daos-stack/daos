@@ -89,10 +89,19 @@ class SoakTestBase(TestWithServers):
         self.sharedlog_dir = self.tmp + "/soak"
         self.sharedsoakdir = self.sharedlog_dir + "/pass" + str(self.loop)
         # Fail if slurm partition is not defined
+        # NOTE: Slurm reservation and partition are created before soak runs.
+        # CI uses partition=daos_client and no reservation.
+        # A21 uses partition=normal/default and reservation=daos-test.
+        # Partition and reservation names are updated in the yaml file.
+        # It is assumed that if there is no reservation (CI only), then all
+        # the nodes in the partition will be used for soak.
         if not self.client_partition:
             raise SoakTestError(
                 "<<FAILED: Partition is not correctly setup for daos "
                 "slurm partition>>")
+        self.srun_params = {"partition": self.client_partition}
+        if self.client_reservation:
+            self.srun_params["reservation"] = self.client_reservation
         # Check if the server nodes are in the client list;
         # this will happen when only one partition is specified
         for host_server in self.hostlist_servers:
@@ -104,31 +113,6 @@ class SoakTestBase(TestWithServers):
         self.exclude_slurm_nodes.extend(local_host_list)
         if local_host_list[0] in self.hostlist_clients:
             self.hostlist_clients.remove((local_host_list[0]))
-        # Check if requested reservation is allowed in partition
-        # NOTE: Slurm reservation and partition are created before soak runs.
-        # CI uses partition=daos_client and no reservation.
-        # A21 uses partition=normal/default and reservation=daos-test.
-        # Partition and reservation names are updated in the yaml file.
-        # It is assumed that if there is no reservation (CI only), then all
-        # the nodes in the partition will be used for soak.
-        self.srun_params = {"partition": self.client_partition}
-        slurm_reservation = self.params.get(
-            "reservation", "/run/srun_params/*")
-        if slurm_reservation is not None:
-            # verify that the reservation is valid
-            reserved_nodes = slurm_utils.get_reserved_nodes(
-                slurm_reservation, self.client_partition)
-            if not reserved_nodes:
-                # client nodes are invalid for requested reservation
-                self.hostlist_clients = []
-                raise SoakTestError(
-                    "<<FAILED: Reservation {} is invalid "
-                    "in partition {}>>".format(
-                        slurm_reservation, self.client_partition))
-            # update srun params
-            self.srun_params["reservation"] = slurm_reservation
-        self.log.info(
-            "<<Updated hostlist_clients %s >>", self.hostlist_clients)
         if not self.hostlist_clients:
             self.fail(
                 "There are no valid nodes in this partition to run "

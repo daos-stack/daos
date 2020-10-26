@@ -1678,6 +1678,22 @@ out:
 	return rc;
 }
 
+void
+obj_ec_update_iod_size(struct obj_reasb_req *reasb_req, uint32_t iod_nr)
+{
+	daos_iod_t	*u_iods = reasb_req->orr_uiods;
+	daos_iod_t	*re_iods = reasb_req->orr_iods;
+	int i;
+
+	if (re_iods == NULL || u_iods == re_iods)
+		return;
+
+	for (i = 0; i < iod_nr; i++) {
+		D_ASSERT(re_iods[i].iod_type == u_iods[i].iod_type);
+		u_iods[i].iod_size = re_iods[i].iod_size;
+	}
+}
+
 static daos_size_t
 obj_ec_recx_size(daos_iod_t *iod, struct obj_shard_iod *siod,
 		 daos_size_t iod_size)

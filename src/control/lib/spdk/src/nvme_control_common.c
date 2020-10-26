@@ -251,20 +251,16 @@ fail:
 static int
 copy_ctrlr_data(struct ctrlr_t *cdst, const struct spdk_nvme_ctrlr_data *cdata)
 {
-	int	written;
-
-	written = snprintf(cdst->model, sizeof(cdst->model), "%-20.20s",
-			   cdata->mn);
-	if (written >= sizeof(cdst->model))
+	if (copy_ascii(cdst->model, sizeof(cdst->model), cdata->mn,
+		       sizeof(cdata->mn)) != 0)
 		return -NVMEC_ERR_CHK_SIZE;
 
-	written = snprintf(cdst->serial, sizeof(cdst->serial), "%-20.20s",
-			   cdata->sn);
-	if (written >= sizeof(cdst->serial))
+	if (copy_ascii(cdst->serial, sizeof(cdst->serial), cdata->sn,
+		       sizeof(cdata->sn)) != 0)
 		return -NVMEC_ERR_CHK_SIZE;
 
-	written = snprintf(cdst->fw_rev, sizeof(cdst->fw_rev), "%s", cdata->fr);
-	if (written >= sizeof(cdst->fw_rev))
+	if (copy_ascii(cdst->fw_rev, sizeof(cdst->fw_rev), cdata->fr,
+		       sizeof(cdata->fr)) != 0)
 		return -NVMEC_ERR_CHK_SIZE;
 
 	return 0;
@@ -294,7 +290,7 @@ collect_namespaces(struct ns_entry *ns_entry, struct ctrlr_t *ctrlr)
 }
 
 static int
-populate_dev_health(struct nvme_health_stats *dev_state,
+populate_dev_health(struct nvme_stats *dev_state,
 		    struct spdk_nvme_health_information_page *page,
 		    const struct spdk_nvme_ctrlr_data *cdata)
 {
@@ -341,7 +337,7 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 	struct ctrlr_entry			*ctrlr_entry;
 	const struct spdk_nvme_ctrlr_data	*cdata;
 	struct spdk_pci_device			*pci_dev;
-	struct nvme_health_stats		*cstats;
+	struct nvme_stats			*cstats;
 	struct ctrlr_t				*ctrlr_tmp;
 	int					 rc, written;
 
@@ -399,7 +395,7 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 
 		/* Alloc device health stats per controller */
 		if (ctrlr_entry->health) {
-			cstats = calloc(1, sizeof(struct nvme_health_stats));
+			cstats = calloc(1, sizeof(struct nvme_stats));
 			if (cstats == NULL) {
 				rc = -ENOMEM;
 				goto fail;
