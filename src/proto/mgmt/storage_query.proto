@@ -38,7 +38,6 @@ message BioHealthResp {
 	string model = 1;
 	string serial = 2;
 	uint64 timestamp = 3;
-	uint64 err_count = 4;
 	// Device health details
 	uint32 warn_temp_time = 5;
 	uint32 crit_temp_time = 6;
@@ -62,6 +61,9 @@ message BioHealthResp {
 	bool volatile_mem_warn = 22; // volatile memory backup
 	int32 status = 23; // DAOS err code
 	string dev_uuid = 24; // UUID of blobstore
+	// Usage stats
+	uint64 total_bytes = 25; // size of blobstore
+	uint64 avail_bytes = 26; // free space in blobstore
 }
 
 message SmdDevReq {

@@ -33,6 +33,7 @@ message ContSetOwnerReq {
 	string poolUUID = 2; // UUID of the pool that the container is in
 	string owneruser = 3; // formatted user e.g. "bob@"
 	string ownergroup = 4; // formatted group e.g. "builders@"
+	repeated uint32 svc_ranks = 5; // List of pool service ranks
 }
 
 // ContSetOwnerResp returns created pool uuid and ranks.

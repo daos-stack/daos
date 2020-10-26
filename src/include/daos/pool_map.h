@@ -205,20 +205,28 @@ int pool_map_find_domain(struct pool_map *map, pool_comp_type_t type,
 			 uint32_t id, struct pool_domain **domain_pp);
 int pool_map_find_nodes(struct pool_map *map, uint32_t id,
 			struct pool_domain **domain_pp);
+int pool_map_find_tgts_by_state(struct pool_map *map,
+				pool_comp_state_t match_states,
+				struct pool_target **tgt_pp,
+				unsigned int *tgt_cnt);
 int pool_map_find_up_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 			  unsigned int *tgt_cnt);
 int pool_map_find_down_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 			    unsigned int *tgt_cnt);
-int pool_map_update_failed_cnt(struct pool_map *map);
 int pool_map_find_failed_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 			      unsigned int *tgt_cnt);
 int pool_map_find_upin_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 			  unsigned int *tgt_cnt);
+int pool_map_update_failed_cnt(struct pool_map *map);
+int pool_map_find_targets_on_ranks(struct pool_map *map,
+				   d_rank_list_t *rank_list,
+				   struct pool_target_id_list *tgts);
 int pool_map_find_target_by_rank_idx(struct pool_map *map, uint32_t rank,
 				 uint32_t tgt_idx, struct pool_target **tgts);
 int pool_map_find_failed_tgts_by_rank(struct pool_map *map,
 				  struct pool_target ***tgt_ppp,
 				  unsigned int *tgt_cnt, d_rank_t rank);
+int pool_map_activate_new_target(struct pool_map *map, uint32_t id);
 bool
 pool_map_node_status_match(struct pool_domain *dom, unsigned int status);
 
