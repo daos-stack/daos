@@ -96,6 +96,19 @@ struct bio_blob_hdr {
 	uuid_t		bbh_pool;
 };
 
+enum bio_bs_state {
+	/* Healthy and fully functional */
+	BIO_BS_STATE_NORMAL	= 0,
+	/* Being detected & marked as faulty */
+	BIO_BS_STATE_FAULTY,
+	/* Affected targets are marked as DOWN, safe to tear down blobstore */
+	BIO_BS_STATE_TEARDOWN,
+	/* Blobstore is torn down, all in-memory structures cleared */
+	BIO_BS_STATE_OUT,
+	/* Setup all in-memory structures, load blobstore */
+	BIO_BS_STATE_SETUP,
+};
+
 static inline void
 bio_addr_set(bio_addr_t *addr, uint16_t type, uint64_t off)
 {
@@ -595,8 +608,19 @@ bio_yield(void)
  *
  * \return			Zero on success, negative value on error
  */
-int bio_get_dev_state(struct nvme_health_stats *dev_state,
+int bio_get_dev_state(struct nvme_stats *dev_state,
 		      struct bio_xs_context *xs);
+
+/*
+ * Helper function to get the internal blobstore state for a given xstream.
+ * Used for daos_test validation in the daos_mgmt_get_bs_state() C API.
+ *
+ * \param dev_state	[OUT]	BIO blobstore state
+ * \param xs		[IN]	xstream context
+ *
+ */
+void bio_get_bs_state(int *blobstore_state, struct bio_xs_context *xs);
+
 
 /*
  * Helper function to set the device health state to FAULTY, and trigger device

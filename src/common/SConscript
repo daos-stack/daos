@@ -1,11 +1,43 @@
 """Build common libraries"""
 import daos_build
 
+
+def build_dts_library(env):
+    """Build libdts library"""
+    Import('prereqs')
+
+    denv = env.Clone()
+
+    prereqs.require(denv, 'argobots', 'protobufc')
+
+    if not GetOption('help') and not GetOption('clean'):
+        mpi = daos_build.configure_mpi(denv, [])
+        if mpi is None:
+            print("\nSkipping compilation for tests that need MPI")
+            print("Install and load mpich or openmpi\n")
+            return
+
+    libraries = ['cmocka', 'daos_tests', 'vos', 'bio', 'abt']
+
+    # Add runtime paths for daos libraries
+    denv.AppendUnique(LINKFLAGS=[r'-Wl,-rpath=\$$ORIGIN/daos_srv'])
+
+    denv.AppendUnique(LIBPATH=["../vos"])
+    denv.AppendUnique(LIBPATH=["../bio"])
+
+    denv.AppendUnique(CPPPATH=["../tests/suite"])
+
+    dts_lib = daos_build.library(denv, 'libdts', ['dts.c'], LIBS=libraries)
+    denv.Install('$PREFIX/lib64/', dts_lib)
+
 def scons():
     """Execute build"""
     Import('env', 'prereqs', 'platform_arm')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
+
+    control_tgts = [File('control.c')]
+    Export('control_tgts')
 
     # Hack alert, the argobots headers are required but the shared
     # library isn't so add the dependency so the include path
@@ -21,7 +53,7 @@ def scons():
     denv = env.Clone()
 
     prereqs.require(denv, 'protobufc')
-    denv.AppendUnique(LIBS=['cart', 'gurt'])
+    denv.AppendUnique(LIBS=['cart', 'gurt', 'lz4'])
     common_src = ['debug.c', 'mem.c', 'fail_loc.c', 'lru.c',
                   'misc.c', 'pool_map.c', 'sort.c', 'btree.c', 'prop.c',
                   'btree_class.c', 'tse.c', 'rsvc.c', 'checksum.c',
@@ -44,6 +76,8 @@ def scons():
     tenv.Install('$PREFIX/lib64/', tests_lib)
 
     SConscript('tests/SConscript', exports='tenv')
+
+    build_dts_library(env)
 
 if __name__ == "SCons.Script":
     scons()

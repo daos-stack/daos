@@ -65,7 +65,7 @@ daos_csummer_init(struct daos_csummer **obj, struct hash_ft *ft,
 		return -DER_INVAL;
 	}
 
-	D_ALLOC(result, sizeof(*result));
+	D_ALLOC_PTR(result);
 	if (result == NULL)
 		return -DER_NOMEM;
 
@@ -335,6 +335,8 @@ daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
 }
 
 #define	setptr(ptr, buf, len, used, total_len) do {\
+	if (len == 0) \
+		break;\
 	D_ASSERT(used + len <= total_len);\
 	ptr = (__typeof__(ptr))buf; \
 	buf += (len); \
@@ -378,8 +380,6 @@ daos_csummer_alloc_iods_csums(struct daos_csummer *obj, daos_iod_t *iods,
 		daos_iod_t		*iod = &iods[i];
 		struct dcs_iod_csums	*iod_csum = &iods_csums[i];
 		uint64_t		 rec_chunksize;
-
-
 
 		/** setup akey csum  */
 		if (!obj->dcs_skip_key_calc) {
@@ -1065,6 +1065,8 @@ ci_buf2uint64(const uint8_t *buf, uint16_t len)
 uint64_t
 ci2csum(struct dcs_csum_info ci)
 {
+	if (ci.cs_csum == 0)
+		return 0;
 	return ci_buf2uint64(ci.cs_csum, ci.cs_len);
 }
 
@@ -1094,8 +1096,10 @@ ci_cast(struct dcs_csum_info **obj, const d_iov_t *iov)
 
 	if (ci_size(*tmp) > iov->iov_len)
 		return;
-
-	tmp->cs_csum = buf + sizeof(struct dcs_csum_info);
+	if (tmp->cs_buf_len > 0)
+		tmp->cs_csum = buf + sizeof(struct dcs_csum_info);
+	else
+		tmp->cs_csum = NULL;
 	*obj = tmp;
 }
 

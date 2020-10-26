@@ -53,6 +53,7 @@ rebuild_dkeys(void **state)
 	daos_obj_id_t		oid;
 	struct ioreq		req;
 	d_rank_t		kill_rank = 0;
+	int			kill_rank_nr;
 	int			i;
 
 	if (!test_runable(arg, 4))
@@ -82,7 +83,7 @@ rebuild_dkeys(void **state)
 			     data, DATA_SIZE, &req);
 	}
 
-	kill_rank = get_killing_rank_by_oid(arg, oid, true);
+	get_killing_rank_by_oid(arg, oid, 1, 0, &kill_rank, &kill_rank_nr);
 	ioreq_fini(&req);
 
 	rebuild_single_pool_target(arg, kill_rank, -1, false);
@@ -97,6 +98,7 @@ rebuild_akeys(void **state)
 	daos_obj_id_t		oid;
 	struct ioreq		req;
 	d_rank_t		kill_rank = 0;
+	int			kill_rank_nr;
 	int			tgt = -1;
 	int			i;
 
@@ -127,7 +129,7 @@ rebuild_akeys(void **state)
 			     data, DATA_SIZE, &req);
 
 	}
-	kill_rank = get_killing_rank_by_oid(arg, oid, false);
+	get_killing_rank_by_oid(arg, oid, 1, 0, &kill_rank, &kill_rank_nr);
 	ioreq_fini(&req);
 
 	rebuild_single_pool_target(arg, kill_rank, tgt, false);
@@ -378,12 +380,18 @@ rebuild_snap_punch_keys(void **state)
 	for (i = 0; i < 5; i++) {
 		char dkey[20] = { 0 };
 		char akey[20] = { 0 };
+		char akey2[20] = { 0 };
 
 		/* Update string for each snapshot */
 		sprintf(dkey, "dkey_%d", i);
 		sprintf(akey, "akey_%d", i);
+		sprintf(akey2, "akey_%d", i + 100);
 		insert_single(dkey, "a_key", 0, "data", 1, DAOS_TX_NONE, &req);
 		insert_single("dkey", akey, 0, "data", 1, DAOS_TX_NONE, &req);
+		/* Add an extra akey so punch propagation doesn't get rid of
+		 * the dkey on the punch below
+		 */
+		insert_single("dkey", akey2, 0, "data", 1, DAOS_TX_NONE, &req);
 	}
 
 	/* Insert dkey/akey by different epoch */
@@ -413,9 +421,11 @@ rebuild_snap_punch_keys(void **state)
 		daos_fail_value_set(i);
 		for (j = 0; j < 5; j++) {
 			daos_handle_t th_open;
+			int rc;
 
-			daos_tx_open_snap(arg->coh, snap_epoch[j], &th_open,
-					  NULL);
+			rc = daos_tx_open_snap(arg->coh, snap_epoch[j],
+					       &th_open, NULL);
+			assert_int_equal(rc, 0);
 			number = 10;
 			memset(&anchor, 0, sizeof(anchor));
 			enumerate_dkey(th_open, &number, kds, &anchor, buf,
@@ -426,7 +436,7 @@ rebuild_snap_punch_keys(void **state)
 			memset(&anchor, 0, sizeof(anchor));
 			enumerate_akey(th_open, "dkey", &number, kds,
 				       &anchor, buf, buf_len, &req);
-			assert_int_equal(number, 5 - j);
+			assert_int_equal(number, 10 - j);
 
 			daos_tx_close(th_open, NULL);
 		}
@@ -441,7 +451,7 @@ rebuild_snap_punch_keys(void **state)
 		memset(&anchor, 0, sizeof(anchor));
 		enumerate_akey(DAOS_TX_NONE, "dkey", &number, kds, &anchor,
 			       buf, buf_len, &req);
-		assert_int_equal(number, 0);
+		assert_int_equal(number, 5);
 	}
 
 	ioreq_fini(&req);
@@ -666,9 +676,9 @@ run_daos_rebuild_simple_test(int rank, int size, int *sub_tests,
 		sub_tests = NULL;
 	}
 
-	run_daos_sub_tests_only("DAOS rebuild simple tests", rebuild_tests,
-				ARRAY_SIZE(rebuild_tests), sub_tests,
-				sub_tests_size);
+	rc = run_daos_sub_tests_only("DAOS rebuild simple tests", rebuild_tests,
+				     ARRAY_SIZE(rebuild_tests), sub_tests,
+				     sub_tests_size);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 

@@ -63,6 +63,7 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 	high_ver = cb_info->pq_arg;
 
 	D_ASSERT(cb_info->pq_arg != NULL);
+	D_ERROR("query_cb() failed, cb_info->pq_rc: %d.\n", cb_info->pq_rc);
 	D_ASSERT(cb_info->pq_rc == DER_SUCCESS);
 
 	*high_ver = cb_info->pq_ver;
@@ -94,7 +95,7 @@ test_run()
 			   test.tg_remote_group_name,
 			   &grp, &rank_list, &test.tg_crt_ctx,
 			   &test.tg_tid, 1,
-			   test.tg_save_cfg, NULL);
+			   true, NULL);
 
 	rc = sem_init(&test.tg_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
@@ -176,8 +177,8 @@ test_run()
 		tc_sem_timedwait(&test.tg_token_to_proceed, 61, __LINE__);
 	}
 
-	D_FREE(rank_list->rl_ranks);
-	D_FREE(rank_list);
+	d_rank_list_free(rank_list);
+	rank_list = NULL;
 
 	if (test.tg_save_cfg) {
 		rc = crt_group_detach(grp);

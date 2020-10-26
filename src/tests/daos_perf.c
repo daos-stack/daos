@@ -40,7 +40,7 @@
 #include <daos/tests_lib.h>
 #include <daos_srv/vos.h>
 #include <daos_test.h>
-#include "dts_common.h"
+#include <daos/dts.h>
 
 /* unused object class to identify VOS (storage only) test mode */
 #define DAOS_OC_RAW	(0xBEE)
@@ -791,7 +791,7 @@ ts_exclude_server(d_rank_t rank)
 }
 
 static int
-ts_add_server(d_rank_t rank)
+ts_reint_server(d_rank_t rank)
 {
 	struct d_tgt_list	targets;
 	int			tgt = -1;
@@ -801,8 +801,8 @@ ts_add_server(d_rank_t rank)
 	targets.tl_nr = 1;
 	targets.tl_ranks = &rank;
 	targets.tl_tgts = &tgt;
-	rc = daos_pool_add_tgt(ts_ctx.tsc_pool_uuid, NULL, &ts_ctx.tsc_svc,
-			       &targets, NULL);
+	rc = daos_pool_reint_tgt(ts_ctx.tsc_pool_uuid, NULL, &ts_ctx.tsc_svc,
+				 &targets, NULL);
 	return rc;
 }
 
@@ -855,7 +855,7 @@ ts_rebuild_perf(double *duration)
 
 	ts_rebuild_wait(duration);
 
-	rc = ts_add_server(RANK_ZERO);
+	rc = ts_reint_server(RANK_ZERO);
 
 	daos_mgmt_set_params(NULL, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 

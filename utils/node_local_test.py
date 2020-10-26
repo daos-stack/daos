@@ -2,6 +2,9 @@
 
 """Test code for dfuse"""
 
+# pylint: disable=too-many-lines
+# pylint: disable=too-few-public-methods
+
 import os
 import sys
 import time
@@ -17,13 +20,20 @@ import pickle
 
 from collections import OrderedDict
 
-class DFTestFail(Exception):
+class NLTestFail(Exception):
     """Used to indicate test failure"""
     pass
 
-class DFTestNoFi(DFTestFail):
+class NLTestNoFi(NLTestFail):
     """Used to indicate Fault injection didn't work"""
     pass
+
+class NLTestNoFunction(NLTestFail):
+    """Used to indicate a function did not log anything"""
+
+    def __init__(self, function):
+        super().__init__(self)
+        self.function = function
 
 instance_num = 0
 
@@ -109,6 +119,7 @@ class WarningsFactory():
         entry = {}
         entry['fileName'] = os.path.basename(self._file)
         entry['directory'] = os.path.dirname(self._file)
+        # pylint: disable=protected-access
         entry['lineStart'] = sys._getframe().f_lineno
         entry['message'] = 'Tests exited without shutting down properly'
         entry['severity'] = 'ERROR'
@@ -207,6 +218,7 @@ class WarningsFactory():
             entry = {}
             entry['fileName'] = os.path.basename(self._file)
             entry['directory'] = os.path.dirname(self._file)
+            # pylint: disable=protected-access
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'
             entry['message'] = 'Tests are still running'
@@ -306,6 +318,8 @@ class DaosServer():
                                                        delete=False)
         scyaml = yaml.load(scfd)
         scyaml['servers'][0]['log_file'] = self._log_file
+        if self.conf.args.server_debug:
+            scyaml['servers'][0]['log_mask'] = self.conf.args.server_debug
         scyaml['control_log_file'] = control_log_file.name
 
         self._yaml_file = tempfile.NamedTemporaryFile(
@@ -377,7 +391,7 @@ class DaosServer():
             if rc.returncode == 0:
                 for line in rc.stdout.decode('utf-8').splitlines():
                     if line.startswith('status'):
-                        if 'Ready' in line:
+                        if 'Ready' in line or 'Joined' in line:
                             ready = True
 
             if ready:
@@ -464,7 +478,7 @@ class DaosServer():
 
         return subprocess.run(exe_cmd, stdout=subprocess.PIPE)
 
-def il_cmd(dfuse, cmd):
+def il_cmd(dfuse, cmd, check_read=True, check_write=True):
     """Run a command under the interception library"""
     my_env = get_base_env()
     prefix = 'dnt_dfuse_il_{}_'.format(get_inc_id())
@@ -478,8 +492,18 @@ def il_cmd(dfuse, cmd):
     ret = subprocess.run(cmd, env=my_env)
     print('Logged il to {}'.format(log_file.name))
     print(ret)
-    log_test(dfuse.conf, log_file.name)
     assert ret.returncode == 0
+
+    try:
+        log_test(dfuse.conf,
+                 log_file.name,
+                 check_read=check_read,
+                 check_write=check_write)
+    except NLTestNoFunction as error:
+        print("ERROR: command '{}' did not log via {}".format(' '.join(cmd),
+                                                              error.function))
+        ret.returncode = 1
+
     return ret
 
 class ValgrindHelper():
@@ -840,21 +864,22 @@ def run_tests(dfuse):
     assert_file_size(ofd, 21)
     print(os.fstat(ofd.fileno()))
     ofd.close()
-    il_cmd(dfuse, ['cat', fname])
+    ret = il_cmd(dfuse, ['cat', fname], check_write=False)
+    assert ret.returncode == 0
 
 def stat_and_check(dfuse, pre_stat):
     """Check that dfuse started"""
     post_stat = os.stat(dfuse.dir)
     if pre_stat.st_dev == post_stat.st_dev:
-        raise DFTestFail('Device # unchanged')
+        raise NLTestFail('Device # unchanged')
     if post_stat.st_ino != 1:
-        raise DFTestFail('Unexpected inode number')
+        raise NLTestFail('Unexpected inode number')
 
 def check_no_file(dfuse):
     """Check that a non-existent file doesn't exist"""
     try:
         os.stat(os.path.join(dfuse.dir, 'no-file'))
-        raise DFTestFail('file exists')
+        raise NLTestFail('file exists')
     except FileNotFoundError:
         pass
 
@@ -865,7 +890,7 @@ def setup_log_test(conf):
     """Setup and import the log tracing code"""
     file_self = os.path.dirname(os.path.abspath(__file__))
     logparse_dir = os.path.join(file_self,
-                                '../src/cart/test/util')
+                                '../src/tests/ftest/cart/util')
     crt_mod_dir = os.path.realpath(logparse_dir)
     if crt_mod_dir not in sys.path:
         sys.path.append(crt_mod_dir)
@@ -882,12 +907,15 @@ def log_test(conf,
              filename,
              show_memleaks=True,
              skip_fi=False,
-             fi_signal=None):
+             fi_signal=None,
+             check_read=False,
+             check_write=False):
     """Run the log checker on filename, logging to stdout"""
 
     print('Running log_test on {}'.format(filename))
 
     log_iter = lp.LogIter(filename)
+
     lto = lt.LogTest(log_iter)
 
     lto.hide_fi_calls = skip_fi
@@ -907,10 +935,22 @@ def log_test(conf,
                             os.path.basename(filename),
                             fi_signal)
         if not lto.fi_triggered:
-            raise DFTestNoFi
+            raise NLTestNoFi
+
+    functions = set()
+
+    if check_read or check_write:
+        for line in log_iter.new_iter():
+            functions.add(line.function)
+
+    if check_read and 'dfuse_read' not in functions:
+        raise NLTestNoFunction('dfuse_read')
+
+    if check_write and 'dfuse_write' not in functions:
+        raise NLTestNoFunction('dfuse_write')
 
 def create_and_read_via_il(dfuse, path):
-    """Create file in dir, write to and and read
+    """Create file in dir, write to and read
     through the interception library"""
 
     fname = os.path.join(path, 'test_file')
@@ -921,7 +961,8 @@ def create_and_read_via_il(dfuse, path):
     assert_file_size(ofd, 12)
     print(os.fstat(ofd.fileno()))
     ofd.close()
-    il_cmd(dfuse, ['cat', fname])
+    ret = il_cmd(dfuse, ['cat', fname], check_write=False)
+    assert ret.returncode == 0
 
 def run_container_query(conf, path):
     """Query a path to extract container information"""
@@ -1156,30 +1197,40 @@ def run_il_test(server, conf):
     fd = open(f, 'w')
     fd.write('Hello')
     fd.close()
-    # Copy it across containers.
-    ret = il_cmd(dfuse, ['cp', f, dirs[-1]])
+    # Copy it across containers.  This will read via IL but not write
+    # as only one container is supported concurrently
+    ret = il_cmd(dfuse, ['cp', f, dirs[-1]], check_write=False)
     assert ret.returncode == 0
 
     # Copy it within the container.
     child_dir = os.path.join(dirs[0], 'new_dir')
     os.mkdir(child_dir)
     il_cmd(dfuse, ['cp', f, child_dir])
+    assert ret.returncode == 0
 
     # Copy something into a container
-    ret = il_cmd(dfuse, ['cp', '/bin/bash', dirs[-1]])
+    ret = il_cmd(dfuse, ['cp', '/bin/bash', dirs[-1]], check_read=False)
     assert ret.returncode == 0
     # Read it from within a container
-    ret = il_cmd(dfuse, ['md5sum', os.path.join(dirs[-1], 'bash')])
+    # TODO: change this to something else, md5sum uses fread which isn't
+    # intercepted.
+    ret = il_cmd(dfuse,
+                 ['md5sum', os.path.join(dirs[-1], 'bash')],
+                 check_read=False, check_write=False)
     assert ret.returncode == 0
-    ret = subprocess.run(['dd',
-                          'if={}'.format(os.path.join(dirs[-1], 'bash')),
-                          'of={}'.format(os.path.join(dirs[-1], 'bash_copy')),
-                          'iflag=direct',
-                          'oflag=direct',
-                          'bs=128k'])
+    ret = il_cmd(dfuse, ['dd',
+                         'if={}'.format(os.path.join(dirs[-1], 'bash')),
+                         'of={}'.format(os.path.join(dirs[-1], 'bash_copy')),
+                         'iflag=direct',
+                         'oflag=direct',
+                         'bs=128k'])
 
     print(ret)
     assert ret.returncode == 0
+
+    for my_dir in dirs:
+        create_and_read_via_il(dfuse, my_dir)
+
     dfuse.stop()
 
 def run_in_fg(server, conf):
@@ -1271,7 +1322,7 @@ def test_pydaos_kv(server, conf):
     print('Closing container and opening new one')
     kv = container.get_kv_by_name('my_test_kv')
 
-def test_alloc_fail(conf):
+def test_alloc_fail(server, conf):
     """run 'daos' client binary with fault injection
 
     Enable the fault injection for the daos binary, injecting
@@ -1287,10 +1338,10 @@ def test_alloc_fail(conf):
 
     pools = get_pool_list()
 
-    if len(pools) > 1:
-        pool = pools[0]
-    else:
-        pool = '5848df55-a97c-46e3-8eca-45adf85591d6'
+    while len(pools) < 1:
+        pools = make_pool(server)
+
+    pool = pools[0]
 
     cmd = ['pool', 'list-containers', '--svc', '0', '--pool', pool]
 
@@ -1299,6 +1350,8 @@ def test_alloc_fail(conf):
     fatal_errors = False
 
     while True:
+        print()
+
         fc = {}
         fc['fault_config'] = [{'id': 0,
                                'probability_x': 1,
@@ -1322,7 +1375,7 @@ def test_alloc_fail(conf):
                                   fi_file=fi_file.name,
                                   fi_valgrind=True)
                 fatal_errors = True
-        except DFTestNoFi:
+        except NLTestNoFi:
             print('Fault injection did not trigger, returning')
             break
 
@@ -1340,6 +1393,7 @@ def main():
 
     parser = argparse.ArgumentParser(description='Run DAOS client on local node')
     parser.add_argument('--output-file', default='nlt-errors.json')
+    parser.add_argument('--server-debug', default=None)
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
     parser.add_argument('mode', nargs='?')
@@ -1367,13 +1421,13 @@ def main():
     elif args.mode == 'overlay':
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
     elif args.mode == 'fi':
-        fatal_errors.add_result(test_alloc_fail(conf))
+        fatal_errors.add_result(test_alloc_fail(server, conf))
     elif args.mode == 'all':
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
         test_pydaos_kv(server, conf)
-        fatal_errors.add_result(test_alloc_fail(conf))
+        fatal_errors.add_result(test_alloc_fail(server, conf))
     else:
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))

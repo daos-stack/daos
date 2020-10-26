@@ -282,7 +282,7 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	 * the interception library handles reads vs writes
 	 */
 	fs_handle->dpi_max_read = 1024 * 1024 * 4;
-	fs_handle->dpi_max_write = 1024 * 1024 * 4;
+	fs_handle->dpi_max_write = 1024 * 1024;
 
 	/* This is a hash table of all currently known files, mainly driven by
 	 * lookups which could benefit from RW locking, however it also has
@@ -360,7 +360,7 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	dfs->dfs_root = ie->ie_stat.st_ino;
 
 	if (dfs->dfs_ops == &dfuse_dfs_ops) {
-		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDONLY, &ie->ie_obj,
+		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj,
 				NULL, NULL);
 		if (rc) {
 			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: (%s)",

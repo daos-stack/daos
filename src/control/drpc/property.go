@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,4 +54,11 @@ const (
 	PoolSpaceReclaimBatch = C.DAOS_RECLAIM_BATCH
 	// PoolSpaceReclaimTime sets the PoolPropertySpaceReclaim property to time.
 	PoolSpaceReclaimTime = C.DAOS_RECLAIM_TIME
+)
+
+const (
+	// PoolSelfHealingAutoExclude sets the self-healing strategy to auto-exclude.
+	PoolSelfHealingAutoExclude = C.DAOS_SELF_HEAL_AUTO_EXCLUDE
+	// PoolSelfHealingAutoRebuild sets the self-healing strategy to auto-rebuild.
+	PoolSelfHealingAutoRebuild = C.DAOS_SELF_HEAL_AUTO_REBUILD
 )

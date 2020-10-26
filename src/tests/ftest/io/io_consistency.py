@@ -29,15 +29,6 @@ class IoConsistency(IorTestBase):
     :avocado: recursive
     """
 
-    def tearDown(self):
-        """Tear down each test case."""
-        try:
-            if self.dfuse:
-                self.dfuse.stop()
-        finally:
-            # Stop the servers and agents
-            super(IoConsistency, self).tearDown()
-
     def test_ioconsistency(self):
         """Jira ID: DAOS-4778.
         Test Description:
