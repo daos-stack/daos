@@ -1396,7 +1396,6 @@ def test_alloc_fail(server, wf, conf):
                 print(stdout)
                 wf.add(rc.fi_loc, 'NORMAL', "Incorrect stderr '{}'".format(stderr),
                        mtype='Out of memory not reported correctly via stderr')
-        except DFTestNoFi:
         except NLTestNoFi:
 
             print('Fault injection did not trigger, returning')
@@ -1409,6 +1408,11 @@ def test_alloc_fail(server, wf, conf):
         # through Jenkins.
         # if rc.returncode not in (1, 255):
         #   break
+
+    # Check that some errors were injected.  At the time of writing we get about
+    # 900, so round down a bit and check for that.
+    assert fid > 500
+
     return fatal_errors
 
 def main():
