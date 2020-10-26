@@ -37,7 +37,6 @@ class IorIntercept(IorTestBase):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-5857")
     def test_ior_intercept(self):
         """Jira ID: DAOS-3498.
 
@@ -57,7 +56,7 @@ class IorIntercept(IorTestBase):
             Compare the results and check whether using interception
                 library provides better performance.
 
-        :avocado: tags=all,full_regression,hw,small,daosio,iorinterceptbasic
+        :avocado: tags=all,pr,full_regression,hw,small,daosio,iorinterceptbasic
         """
         apis = self.params.get("ior_api", '/run/ior/iorflags/ssf/*')
         for api in apis:
