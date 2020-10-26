@@ -86,7 +86,6 @@ struct ec_agg_csum_data	{
 /* Aggregation state for an object.
  */
 struct ec_agg_entry {
-//	d_list_t		 ae_link;	 /* List (of entries) link    */
 	daos_unit_oid_t		 ae_oid;	 /* OID of iteration entry    */
 	struct daos_oclass_attr	*ae_oca;	 /* Object class of object    */
 	struct obj_ec_codec	*ae_codec;	 /* Encode/decode for oclass  */
@@ -245,6 +244,8 @@ agg_clear_extents(struct ec_agg_entry *agg_entry)
 			agg_extent->ae_recx.rx_idx +=
 					agg_extent->ae_recx.rx_nr - tail;
 			agg_extent->ae_recx.rx_nr = tail;
+			agg_entry->ae_cur_stripe.as_hi_epoch =
+				agg_extent->ae_epoch;
 		} else {
 			agg_entry->ae_cur_stripe.as_extent_cnt--;
 			d_list_del(&agg_extent->ae_link);
@@ -252,8 +253,11 @@ agg_clear_extents(struct ec_agg_entry *agg_entry)
 		}
 	}
 	agg_entry->ae_cur_stripe.as_offset = 0U;
-	agg_entry->ae_cur_stripe.as_hi_epoch = 0UL;
 	/* Account for carry over. */
+	if (ptail)
+		agg_entry->ae_cur_stripe.as_stripenum++;
+	else
+		agg_entry->ae_cur_stripe.as_hi_epoch = 0UL;
 	agg_entry->ae_cur_stripe.as_stripe_fill = ptail;
 	agg_entry->ae_cur_stripe.as_has_holes = carry_is_hole ? true : false;
 }
@@ -400,7 +404,9 @@ agg_sgl_fini(d_sg_list_t *sgl)
 static void
 agg_csum_fini(struct ec_agg_csum_data *csum_data)
 {
+	D_FREE(csum_data->cd_csum_buf);
 }
+
 static int
 agg_fetch_data_stripe_no_csum(struct ec_agg_entry *entry)
 {
@@ -463,7 +469,7 @@ agg_csum_verify_ult(void *arg)
 	unsigned int		 stripe_cell = 0;
 	int			 i, rc = 0;
 
-	// init csum_info
+	/* init csum_info */
 	csum_info.cs_nr   = extent->ae_csum_info.cs_nr;
 	csum_info.cs_type = extent->ae_csum_info.cs_type;
 	csum_info.cs_len  = extent->ae_csum_info.cs_len;
@@ -486,16 +492,16 @@ agg_csum_verify_ult(void *arg)
 				   extent->ae_orig_recx.rx_nr);
 	if (rc)
 		goto out;
-	if(memcmp(csum_info.cs_csum, entry->ae_csum_data.cd_csum_buf,
-		  csum_info.cs_buf_len)) {
+	if (memcmp(csum_info.cs_csum, entry->ae_csum_data.cd_csum_buf,
+		   csum_info.cs_buf_len)) {
 		rc = -DER_CSUM;
 		goto out;
 	}
 	for (i = 0; i < k; i++)
-		if (isset(csum_verify->acv_ebit_map,i))
+		if (isset(csum_verify->acv_ebit_map, i))
 			ext_start_cell = i;
 	for (i = 0; i < ext_start_cell; i++)
-		if (isset(csum_verify->acv_bit_map,i))
+		if (isset(csum_verify->acv_bit_map, i))
 			stripe_cell++;
 	sgl_from_offset = extent->ae_recx.rx_idx -
 		extent->ae_orig_recx.rx_idx * entry->ae_rsize;
@@ -538,7 +544,7 @@ agg_fetch_and_csum_verify(struct ec_agg_entry *entry,
 		extent->ae_orig_recx.rx_nr * entry->ae_rsize;
 	(entry->ae_sgl.sg_iovs)++;
 
-	// read it into odata
+	/* Read it into odata. orig_recx could be larger than a stripe! */
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 	rc = vos_obj_fetch(agg_param->ap_cont_handle, entry->ae_oid,
 			   extent->ae_epoch, VOS_OF_FETCH_RECX_LIST,
@@ -598,8 +604,8 @@ agg_overlap(unsigned int estart, unsigned int elen, unsigned int cell,
 
 static unsigned int
 agg_count_cells(uint8_t *fcbit_map, uint8_t *tbit_map, unsigned int estart,
-	        unsigned int elen, unsigned int k, unsigned int len,
-	        unsigned int stripenum, unsigned int *full_cell_cnt)
+		unsigned int elen, unsigned int k, unsigned int len,
+		unsigned int stripenum, unsigned int *full_cell_cnt)
 {
 	unsigned int i, cell_cnt = 0;
 
@@ -638,11 +644,11 @@ agg_val_csum(struct ec_agg_entry *entry, struct ec_agg_extent *extent,
 	for (i = 0; i < entry->ae_oca->u.ec.e_k; i++)
 		if (isset(bit_map, i) && !isset(ebit_map, i)) {
 			cell_cnt--;
-			clrbit(ebit_map,i);
+			clrbit(ebit_map, i);
 		}
 	if (cell_cnt) {
 		rc = agg_fetch_and_csum_verify(entry, extent, bit_map,
-						ebit_map, csummer);
+					       ebit_map, csummer);
 	}
 	return rc;
 }
@@ -792,7 +798,7 @@ agg_fetch_data_stripe_with_csum(struct ec_agg_entry *entry)
 		setbit(bit_map, i);
 	ss = k * len * entry->ae_cur_stripe.as_stripenum;
 	extent = d_list_entry(entry->ae_cur_stripe.as_dextents.prev,
-				      struct ec_agg_extent, ae_link);
+			      struct ec_agg_extent, ae_link);
 	daos_csummer_init_with_type(&csummer,
 				    extent->ae_csum_info.cs_type,
 				    extent->ae_csum_info.cs_chunksize,
@@ -1362,7 +1368,7 @@ agg_process_partial_stripe(struct ec_agg_entry *entry)
 		struct daos_csummer *csummer;
 
 		extent = d_list_entry(entry->ae_cur_stripe.as_dextents.prev,
-					  struct ec_agg_extent, ae_link);
+				      struct ec_agg_extent, ae_link);
 		daos_csummer_init_with_type(&csummer,
 					    extent->ae_csum_info.cs_type,
 					    extent->ae_csum_info.cs_chunksize,
@@ -1379,7 +1385,7 @@ agg_process_partial_stripe(struct ec_agg_entry *entry)
 				 */
 				csum_error = true;
 				for (i = 0; i < k; i++)
-					setbit(bit_map,i);
+					setbit(bit_map, i);
 			} else if (rc)
 				goto out;
 		}
@@ -1742,7 +1748,7 @@ out:
 }
 
 /* Process the prior stripe. Invoked when the iterator has moved to the first
- * extent in the subsequent stripe.
+ *
  */
 static int
 agg_process_stripe(struct ec_agg_entry *entry)
@@ -1857,21 +1863,34 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 		daos_handle_t ih, unsigned int *acts)
 {
 	struct ec_agg_extent	*extent = NULL;
+	daos_off_t		 cur_stripenum, new_stripenum;
 	int			 rc = 0;
 
-	if (agg_stripenum(agg_entry, entry->ie_recx.rx_idx) !=
-			agg_entry->ae_cur_stripe.as_stripenum) {
+	new_stripenum = agg_stripenum(agg_entry, entry->ie_recx.rx_idx);
+	if (new_stripenum != agg_entry->ae_cur_stripe.as_stripenum) {
 		/* Iterator has reached next stripe */
 		if (agg_entry->ae_cur_stripe.as_stripenum != ~0UL) {
+			cur_stripenum = agg_entry->ae_cur_stripe.as_stripenum;
 			rc = agg_process_stripe(agg_entry);
+			if (rc)
 				D_ERROR("Process stripe returned "DF_RC"\n",
 					DP_RC(rc));
-		/* Error leaves data covered by replicas vunerable to vos delete
+		/* Error leaves data covered by replicas vulnerable to vos
+		 * delete, so don't advance coordination epoch.
 		 */
-		 	rc = 0;
+			rc = 0;
+			if (cur_stripenum <
+			    agg_entry->ae_cur_stripe.as_stripenum &&
+			    agg_entry->ae_cur_stripe.as_stripenum <
+			    new_stripenum) {
+				/* Handle holdover stripe */
+				rc = agg_process_stripe(agg_entry);
+				if (rc)
+					D_ERROR("Holdover returned "DF_RC"\n",
+					DP_RC(rc));
+				rc = 0;
+			}
 		}
-		agg_entry->ae_cur_stripe.as_stripenum =
-			agg_stripenum(agg_entry, entry->ie_recx.rx_idx);
 	}
 	/* Add the extent to the entry, for the current stripe */
 	D_ALLOC_PTR(extent);
@@ -1899,19 +1918,20 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 	if (entry->ie_biov.bi_addr.ba_hole) {
 		extent->ae_hole = true;
 		agg_entry->ae_cur_stripe.as_has_holes = true;
-	} else
+	} else {
 		agg_entry->ae_cur_stripe.as_stripe_fill +=
 			agg_in_stripe(agg_entry, &entry->ie_recx);
+	}
 
 	if (extent->ae_epoch > agg_entry->ae_cur_stripe.as_hi_epoch)
 		agg_entry->ae_cur_stripe.as_hi_epoch = extent->ae_epoch;
 
+out:
 	D_DEBUG(DB_TRACE,
 		"adding extent %lu,%lu, to stripe  %lu, hole: %d: shard: %u\n",
 		extent->ae_recx.rx_idx, extent->ae_recx.rx_nr,
 		agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
 		extent->ae_hole, agg_entry->ae_oid.id_shard);
-out:
 	return rc;
 }
 
@@ -1949,7 +1969,7 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		   vos_iter_type_t type, vos_iter_param_t *param,
 		   void *cb_arg, unsigned int *acts)
 {
-	struct ec_agg_entry	*agg_entry = (struct ec_agg_entry *) cb_arg;
+	struct ec_agg_entry	*agg_entry = (struct ec_agg_entry *)cb_arg;
 	int			 rc = 0;
 
 	switch (type) {
