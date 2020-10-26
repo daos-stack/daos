@@ -400,7 +400,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Wed Sep 23 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.1-4
+* Wed Oct 26 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.1-4
 - Use %%autosetup
 - Only use systemd_requires if it exists
 - Obsoletes: cart now that it's included in daos
