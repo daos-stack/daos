@@ -209,8 +209,8 @@ pool_rsvc_update_ranks_cb(struct rsvc_client *client)
 	if (rc == 0) {
 		for (i = 0; i < client->sc_ranks->rl_nr; i++) {
 			D_DEBUG(DF_DSMC, DF_UUID ": sc_ranks[%d]=%u\n",
-			       DP_UUID(client->sc_id), i,
-			       client->sc_ranks->rl_ranks[i]);
+				DP_UUID(client->sc_id), i,
+				client->sc_ranks->rl_ranks[i]);
 		}
 	}
 	d_rank_list_free(new_ranklist);

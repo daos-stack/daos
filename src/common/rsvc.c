@@ -51,7 +51,7 @@ rsvc_client_reset_leader(struct rsvc_client *client)
  * \param[out]	client			client state
  * \param[in]	ranks			ranks of (potential) service replicas
  * \param[in]	svc_uuid		service ID
- * \param[in]	priv		 	caller-private info to store in client
+ * \param[in]	priv			caller-private info to store in client
  * \param[in]	refresh_ranks_cb	function to re-populate rank list
  */
 int

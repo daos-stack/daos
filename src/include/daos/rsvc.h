@@ -53,7 +53,7 @@ struct rsvc_client {
 	int		sc_next;		/* in sc_ranks */
 	uuid_t		sc_id;			/* of rsvc e.g., uuid */
 	void	       *sc_priv;		/* caller-private info */
-	int	      (*sc_update_ranks_cb) (struct rsvc_client *);
+	int	      (*sc_update_ranks_cb)(struct rsvc_client *);
 };
 
 /** Return code of rsvc_client_complete_rpc() */
