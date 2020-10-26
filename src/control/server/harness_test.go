@@ -56,114 +56,8 @@ const (
 	maxIOServers       = 2
 )
 
-func TestServer_HarnessGetMSLeaderInstance(t *testing.T) {
-	defaultApList := []string{"1.2.3.4:5", "6.7.8.9:10"}
-	defaultCtrlList := []string{"6.3.1.2:5", "1.2.3.4:5"}
-	for name, tc := range map[string]struct {
-		instanceCount int
-		hasSuperblock bool
-		apList        []string
-		ctrlAddrs     []string
-		expError      error
-	}{
-		"zero instances": {
-			apList:   defaultApList,
-			expError: errors.New("harness has no managed instances"),
-		},
-		"empty AP list": {
-			instanceCount: 2,
-			apList:        nil,
-			ctrlAddrs:     defaultApList,
-			expError:      errors.New("no access points defined"),
-		},
-		"not MS leader": {
-			instanceCount: 1,
-			apList:        defaultApList,
-			ctrlAddrs:     []string{"4.3.2.1:10"},
-			expError:      errors.New("not an access point"),
-		},
-		"is MS leader, but no superblock": {
-			instanceCount: 2,
-			apList:        defaultApList,
-			ctrlAddrs:     defaultCtrlList,
-			expError:      errors.New("not an access point"),
-		},
-		"is MS leader": {
-			instanceCount: 2,
-			hasSuperblock: true,
-			apList:        defaultApList,
-			ctrlAddrs:     defaultCtrlList,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)
-
-			// ugh, this isn't ideal
-			oldGetAddrFn := getInterfaceAddrs
-			defer func() {
-				getInterfaceAddrs = oldGetAddrFn
-			}()
-			getInterfaceAddrs = func() ([]net.Addr, error) {
-				addrs := make([]net.Addr, len(tc.ctrlAddrs))
-				var err error
-				for i, ca := range tc.ctrlAddrs {
-					addrs[i], err = net.ResolveTCPAddr("tcp", ca)
-					if err != nil {
-						return nil, err
-					}
-				}
-				return addrs, nil
-			}
-
-			h := NewIOServerHarness(log)
-			for i := 0; i < tc.instanceCount; i++ {
-				cfg := ioserver.NewConfig().
-					WithRank(uint32(i)).
-					WithSystemName(t.Name()).
-					WithScmClass("ram").
-					WithScmMountPoint(strconv.Itoa(i))
-				r := ioserver.NewRunner(log, cfg)
-
-				m := newMgmtSvcClient(
-					context.Background(), log, mgmtSvcClientCfg{
-						ControlAddr:  &net.TCPAddr{},
-						AccessPoints: tc.apList,
-					},
-				)
-
-				isAP := func(ca string) bool {
-					for _, ap := range tc.apList {
-						if ca == ap {
-							return true
-						}
-					}
-					return false
-				}
-				srv := NewIOServerInstance(log, nil, nil, m, r)
-				if tc.hasSuperblock {
-					srv.setSuperblock(&Superblock{
-						MS: isAP(tc.ctrlAddrs[i]),
-					})
-				}
-				if err := h.AddInstance(srv); err != nil {
-					t.Fatal(err)
-				}
-			}
-			h.started.SetTrue()
-
-			_, err := h.getMSLeaderInstance()
-			CmpErr(t, tc.expError, err)
-		})
-	}
-}
-
 func TestServer_Harness_Start(t *testing.T) {
 	defaultAddrStr := "127.0.0.1:10001"
-	defaultAddr, err := net.ResolveTCPAddr("tcp", defaultAddrStr)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	for name, tc := range map[string]struct {
 		trc              *ioserver.TestRunnerConfig
@@ -237,43 +131,6 @@ func TestServer_Harness_Start(t *testing.T) {
 			expRanks: map[uint32]system.Rank{
 				0: system.Rank(1),
 				1: system.Rank(2),
-			},
-		},
-		"normal startup/shutdown with MS bootstrap": {
-			trc: &ioserver.TestRunnerConfig{
-				ErrChanCb: func() error {
-					time.Sleep(testLongTimeout)
-					return errors.New("ending")
-				},
-			},
-			isAP: true,
-			instanceUuids: map[int]string{
-				0: MockUUID(0),
-				1: MockUUID(1),
-			},
-			expStartCount: maxIOServers,
-			expDrpcCalls: map[uint32][]drpc.Method{
-				0: {
-					drpc.MethodSetRank,
-					drpc.MethodCreateMS,
-					drpc.MethodStartMS,
-					drpc.MethodSetUp,
-				},
-				1: {
-					drpc.MethodSetRank,
-					drpc.MethodSetUp,
-				},
-			},
-			expGrpcCalls: map[uint32][]string{
-				0: {"Join 0"}, // bootstrap instance will be pre-allocated rank 0
-				1: {fmt.Sprintf("Join %d", system.NilRank)},
-			},
-			expRanks: map[uint32]system.Rank{
-				0: system.Rank(0),
-				1: system.Rank(1),
-			},
-			expMembers: system.Members{ // bootstrap member is added on start
-				system.NewMember(system.Rank(0), "", defaultAddr, system.MemberStateJoined),
 			},
 		},
 		"fails to start": {
@@ -447,10 +304,11 @@ func TestServer_Harness_Start(t *testing.T) {
 
 			// start harness async and signal completion
 			var gotErr error
-			membership := system.NewMembership(log)
+			membership := system.MockMembership(t, log)
+			sysdb := system.MockDatabase(t, log)
 			done := make(chan struct{})
 			go func(ctxIn context.Context) {
-				gotErr = harness.Start(ctxIn, membership, config)
+				gotErr = harness.Start(ctxIn, membership, sysdb, config)
 				close(done)
 			}(ctx)
 
@@ -582,4 +440,21 @@ func TestServer_Harness_Start(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestServer_Harness_WithFaultDomain(t *testing.T) {
+	harness := &IOServerHarness{}
+	fd, err := system.NewFaultDomainFromString("/one/two")
+	if err != nil {
+		t.Fatalf("couldn't create fault domain: %s", err)
+	}
+
+	updatedHarness := harness.WithFaultDomain(fd)
+
+	// Updated to include the fault domain
+	if diff := cmp.Diff(harness.faultDomain, fd, cmp.AllowUnexported(system.FaultDomain{})); diff != "" {
+		t.Fatalf("unexpected results (-want, +got):\n%s\n", diff)
+	}
+	// updatedHarness is the same as harness
+	AssertEqual(t, updatedHarness, harness, "not the same structure")
 }

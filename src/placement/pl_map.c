@@ -570,11 +570,13 @@ pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
 
 	oc_attr = daos_oclass_attr_find(oid);
 	if (oc_attr->ca_resil != DAOS_RES_REPL) {
+		int tgt_nr = oc_attr->u.ec.e_k + oc_attr->u.ec.e_p;
+
 		/* For EC object, elect last shard in the group (must to be
 		 * a parity node) as leader.
 		 */
-		shard = pl_get_shard(data,
-				rounddown(shard_idx, grp_size) + grp_size - 1);
+		shard = pl_get_shard(data, rounddown(shard_idx, tgt_nr) +
+					   tgt_nr - 1);
 		if (for_tgt_id)
 			return shard->po_target;
 
@@ -615,9 +617,9 @@ pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
 	 *      The one with the lowest f_seq will be elected as the leader
 	 *      to avoid leader switch.
 	 */
-	rdg_idx = shard_idx / replicas;
-	start = rdg_idx * replicas;
-	replica_idx = (oid.lo + rdg_idx) % replicas;
+	rdg_idx = shard_idx / grp_size;
+	start = rdg_idx * grp_size;
+	replica_idx = (oid.lo + rdg_idx) % grp_size;
 	preferred = start + replica_idx;
 
 	for (i = 0, off = preferred, pos = -1; i < replicas;
