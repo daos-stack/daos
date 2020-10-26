@@ -27,7 +27,7 @@ import traceback
 import ctypes
 from pydaos.raw import RankList
 from avocado.core.exceptions import TestFail
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from test_utils_pool import TestPool
 
 class BadConnectTest(TestWithServers):

@@ -26,7 +26,7 @@ import random
 
 from apricot import TestWithServers
 from command_utils_base import \
-    CommandFailure, BasicParameter, FormattedParameter
+    BasicParameter, FormattedParameter
 from command_utils import ExecutableCommand
 from test_utils_pool import TestPool
 from job_manager_utils import Orterun
