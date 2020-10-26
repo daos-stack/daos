@@ -2058,7 +2058,8 @@ handle_ivsync_response(const struct crt_cb_info *cb_info)
 	struct iv_sync_cb_info	*iv_sync = cb_info->cci_arg;
 	struct crt_iv_ops	*iv_ops;
 
-	crt_bulk_free(iv_sync->isc_bulk_hdl);
+	if (iv_sync->isc_bulk_hdl != CRT_BULK_NULL)
+		crt_bulk_free(iv_sync->isc_bulk_hdl);
 
 	/* do_callback is set based on sync value specified */
 	if (iv_sync->isc_do_callback) {

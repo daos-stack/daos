@@ -26,6 +26,7 @@ package server
 import (
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
@@ -92,5 +93,10 @@ func getFaultDomainFromCallback(callbackPath string) (*system.FaultDomain, error
 		return nil, FaultConfigFaultCallbackFailed(err)
 	}
 
-	return newFaultDomainFromConfig(string(output))
+	trimmedOutput := strings.TrimSpace(string(output))
+	if trimmedOutput == "" {
+		return nil, FaultConfigFaultCallbackEmpty
+	}
+
+	return newFaultDomainFromConfig(trimmedOutput)
 }

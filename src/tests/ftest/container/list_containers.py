@@ -60,10 +60,9 @@ class ListContainerTest(TestWithServers):
             expected_uuids.append(
                 self.daos_cmd.get_output("container_create", **kwargs)[0])
         expected_uuids.sort()
-        # daos pool list-cont returns the date, host name, and container UUID
-        # as below:
-        # 03/31-21:32:24.53 wolf-3 2f69b198-8478-472e-b6c8-02a451f4de1b
-        actual_uuids = self.daos_cmd.get_output("pool_list_cont", **kwargs)
+        # daos pool list-cont returns container UUIDs as a list.
+        data = self.daos_cmd.pool_list_cont(**kwargs)
+        actual_uuids = data["uuids"]
         actual_uuids.sort()
         self.assertEqual(expected_uuids, actual_uuids)
 
