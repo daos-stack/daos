@@ -365,3 +365,42 @@ func TestSystem_RanksFromUint32(t *testing.T) {
 		})
 	}
 }
+
+func TestSystem_TestRankMembership(t *testing.T) {
+	for name, tc := range map[string]struct {
+		members    []Rank
+		test       []Rank
+		expMissing []Rank
+	}{
+		"empty": {},
+		"no members": {
+			test:       []Rank{1},
+			expMissing: []Rank{1},
+		},
+		"empty test": {
+			members: []Rank{0},
+		},
+		"no missing": {
+			members: []Rank{0},
+			test:    []Rank{0},
+		},
+		"one missing": {
+			members:    []Rank{0},
+			test:       []Rank{1},
+			expMissing: []Rank{1},
+		},
+		"overlap": {
+			members:    []Rank{0, 1},
+			test:       []Rank{1, 2},
+			expMissing: []Rank{2},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotMissing := CheckRankMembership(tc.members, tc.test)
+
+			if diff := cmp.Diff(tc.expMissing, gotMissing); diff != "" {
+				t.Fatalf("unexpected missing ranks (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}

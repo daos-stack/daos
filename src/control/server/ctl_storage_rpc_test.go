@@ -63,6 +63,7 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 	ctrlrPBwHealth.Smddevices = nil
 
 	for name, tc := range map[string]struct {
+		multiIO     bool
 		req         *StorageScanReq
 		bmbc        *bdev.MockBackendConfig
 		smbc        *scm.MockBackendConfig
@@ -176,7 +177,7 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 				},
 			},
 		},
-		"scan bdev health with io servers down": {
+		"scan bdev health with single io server down": {
 			req: &StorageScanReq{
 				Nvme: &ScanNvmeReq{
 					Health: true,
@@ -189,6 +190,29 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 			},
 			expResp: StorageScanResp{
 				Nvme: &ScanNvmeResp{
+					Ctrlrs: proto.NvmeControllers{ctrlrPBwHealth},
+					State:  new(ResponseState),
+				},
+				Scm: &ScanScmResp{
+					State: new(ResponseState),
+				},
+			},
+		},
+		"scan bdev health with multiple io servers down": {
+			multiIO: true,
+			req: &StorageScanReq{
+				Nvme: &ScanNvmeReq{
+					Health: true,
+				},
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &bdev.ScanResponse{
+					Controllers: storage.NvmeControllers{ctrlr},
+				},
+			},
+			expResp: StorageScanResp{
+				Nvme: &ScanNvmeResp{
+					// response should not contain duplicates
 					Ctrlrs: proto.NvmeControllers{ctrlrPBwHealth},
 					State:  new(ResponseState),
 				},
@@ -224,11 +248,14 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			emptyCfg := emptyMockConfig(t)
-			defaultWithNvme := newDefaultConfiguration(nil).WithServers(
-				ioserver.NewConfig().
-					WithBdevClass("nvme").
-					WithBdevDeviceList(storage.MockNvmeController().PciAddr),
-			)
+			ioCfg := ioserver.NewConfig().
+				WithBdevClass("nvme").
+				WithBdevDeviceList(storage.MockNvmeController().PciAddr)
+			ioCfgs := []*ioserver.Config{ioCfg}
+			if tc.multiIO {
+				ioCfgs = append(ioCfgs, ioCfg)
+			}
+			defaultWithNvme := newDefaultConfiguration(nil).WithServers(ioCfgs...)
 
 			// test for both empty and default config cases
 			for _, config := range []*Configuration{defaultWithNvme, emptyCfg} {

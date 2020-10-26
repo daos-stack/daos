@@ -24,7 +24,10 @@
 package common
 
 import (
+	"net"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestUtils_HasPort(t *testing.T) {
@@ -69,6 +72,56 @@ func TestUtils_SplitPort(t *testing.T) {
 
 			AssertEqual(t, tc.expHost, h, name)
 			AssertEqual(t, tc.expPort, p, name)
+		})
+	}
+}
+
+func TestCommon_CmpTcpAddr(t *testing.T) {
+	testA := &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)}
+	testB := &net.TCPAddr{IP: net.IPv4(127, 0, 0, 2)}
+	testC := &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 1}
+	testD := &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 1, Zone: "quack"}
+
+	for name, tc := range map[string]struct {
+		a      *net.TCPAddr
+		b      *net.TCPAddr
+		expRes bool
+	}{
+		"both nil": {
+			a:      nil,
+			b:      nil,
+			expRes: true,
+		},
+		"a nil": {
+			a: nil,
+			b: testB,
+		},
+		"b nil": {
+			a: testA,
+			b: nil,
+		},
+		"same": {
+			a:      testA,
+			b:      testA,
+			expRes: true,
+		},
+		"different IP": {
+			a: testA,
+			b: testB,
+		},
+		"different port": {
+			a: testA,
+			b: testC,
+		},
+		"different zone": {
+			a: testA,
+			b: testD,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if diff := cmp.Diff(tc.expRes, CmpTcpAddr(tc.a, tc.b)); diff != "" {
+				t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
+			}
 		})
 	}
 }
