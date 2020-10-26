@@ -815,7 +815,8 @@ class DmgCommand(DmgCommandBase):
             r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)\s+(.*)",
             self.result.stdout)
         for info in match:
-            data[int(info[0])] = info[1].strip()
+            for rank in get_numeric_list(info[0]):
+                data[rank] = info[1].strip()
         return data
 
     def system_stop(self, force=False, ranks=None):
@@ -845,7 +846,8 @@ class DmgCommand(DmgCommandBase):
             r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)\s+(.*)",
             self.result.stdout)
         for info in match:
-            data[int(info[0])] = info[1].strip()
+            for rank in get_numeric_list(info[0]):
+                data[rank] = info[1].strip()
         return data
 
     def pool_evict(self, pool, sys=None):
