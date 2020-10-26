@@ -63,7 +63,7 @@ class MdtestBase(DfuseTestBase):
         # Create a pool if one does not already exist
         if self.pool is None:
             self.add_pool(connect=False)
-        # Create container
+        # create container
         if self.container is None:
             self.add_container(self.pool)
         # set Mdtest params

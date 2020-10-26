@@ -95,6 +95,10 @@ class MdtestCommand(ExecutableCommand):
 
         # Optional arguments
         #  --dfs.group=STRING            DAOS server group
+        #  --dfs.chunk_size=1048576      Chunk size
+        #  --dfs.oclass=STRING           DAOS object class
+        #  --dfs.dir_oclass=STRING       DAOS directory object class
+        #  --dfs.prefix=STRING           Mount prefix
 
         self.dfs_pool_uuid = FormattedParameter("--dfs.pool {}")
         self.dfs_svcl = FormattedParameter("--dfs.svcl {}")
@@ -103,6 +107,7 @@ class MdtestCommand(ExecutableCommand):
         self.dfs_destroy = FormattedParameter("--dfs.destroy", True)
         self.dfs_chunk = FormattedParameter("--dfs.chunk_size {}", 1048576)
         self.dfs_oclass = FormattedParameter("--dfs.oclass {}", "SX")
+        self.dfs_prefix = FormattedParameter("--dfs.prefix {}")
         self.dfs_dir_oclass = FormattedParameter("--dfs.dir_oclass {}", "SX")
 
         # A list of environment variable names to set and export with ior
@@ -180,5 +185,8 @@ class MdtestCommand(ExecutableCommand):
         if "mpirun" in manager_cmd or "srun" in manager_cmd:
             env["DAOS_POOL"] = self.dfs_pool_uuid.value
             env["DAOS_SVCL"] = self.dfs_svcl.value
+            env["DAOS_CONT"] = self.dfs_cont.value
+            env["IOR_HINT__MPI__romio_daos_obj_class"] = \
+                self.dfs_oclass.value
 
         return env
