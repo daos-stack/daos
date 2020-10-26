@@ -286,7 +286,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %dir %{conf_dir}/certs/clients
 %attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
 %attr(0644,root,root) %{conf_dir}/daos_server.yml
-%{_sysconfdir}/ld.so.conf.d/daos.conf
 # set daos_admin to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_admins) %{_bindir}/daos_admin
 # set daos_server to be setgid daos_admins in order to invoke daos_admin
