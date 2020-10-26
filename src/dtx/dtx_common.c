@@ -749,8 +749,10 @@ out:
 				    &dth->dth_leader_oid, dth->dth_dkey_hash);
 	}
 
-	D_FREE(dlh->dlh_subs);
-	D_FREE(dth->dth_oid_array);
+	if (dlh->dlh_subs)
+		D_FREE(dlh->dlh_subs);
+	if (dth->dth_oid_array)
+		D_FREE(dth->dth_oid_array);
 
 	return result;
 }

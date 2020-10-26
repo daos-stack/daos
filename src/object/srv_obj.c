@@ -2120,7 +2120,8 @@ again:
 	 * RPC to non-leaders. Then the non-leader replicas can commit
 	 * them before real modifications to avoid availability issues.
 	 */
-	D_FREE(dti_cos);
+	if (dti_cos)
+		D_FREE(dti_cos);
 	dti_cos_cnt = dtx_list_cos(ioc.ioc_coc, &orw->orw_oid,
 				   orw->orw_dkey_hash, DTX_THRESHOLD_COUNT,
 				   &dti_cos);
