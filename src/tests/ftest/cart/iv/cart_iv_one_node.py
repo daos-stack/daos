@@ -257,7 +257,7 @@ class CartIvOneNodeTest(Test):
 
             if "set_grp_version" in operation:
                 command = " {!s} -o '{!s}' -r '{!s}' -v '{!s}' -m '{!s}'"\
-                        .format(command, operation, rank, 
+                        .format(command, operation, rank,
                                 action['version'], action['time'])
                 clicmd += command
 
@@ -313,32 +313,32 @@ class CartIvOneNodeTest(Test):
             # invalidate for this series of test to run.
             #
             {"operation":"update", "rank":0, "key":(4, 42), "value":"turnip" },
-            {"operation":"fetch", "rank":1, "key":(4, 42), 
+            {"operation":"fetch", "rank":1, "key":(4, 42),
               "return_code":0, "expected_value":"turnip"},
-            {"operation":"fetch", "rank":0, "key":(4, 42), 
+            {"operation":"fetch", "rank":0, "key":(4, 42),
               "return_code":0, "expected_value":"turnip"},
-            {"operation":"fetch", "rank":3, "key":(4, 42), 
+            {"operation":"fetch", "rank":3, "key":(4, 42),
               "return_code":0, "expected_value":"turnip"},
-            {"operation":"fetch", "rank":2, "key":(4, 42), 
+            {"operation":"fetch", "rank":2, "key":(4, 42),
               "return_code":0, "expected_value":"turnip"},
-            {"operation":"fetch", "rank":4, "key":(4, 42), 
+            {"operation":"fetch", "rank":4, "key":(4, 42),
               "return_code":0, "expected_value":"turnip"},
-            
+            #
             {"operation":"invalidate", "rank":4, "key":(4, 42),
               "sync":"eager_notify", "return_code":0},
             #{"operation":"invalidate", "rank":4, "key":(4, 42),
             #  "sync":"eager_update", "return_code":0},
             #
             # Check for stale state.
-            {"operation":"fetch", "rank":4, "key":(4, 42), 
+            {"operation":"fetch", "rank":4, "key":(4, 42),
               "return_code":-1, "expected_value":""},
-            {"operation":"fetch", "rank":1, "key":(4, 42), 
+            {"operation":"fetch", "rank":1, "key":(4, 42),
               "return_code":-1, "expected_value":""},
-            {"operation":"fetch", "rank":0, "key":(4, 42), 
+            {"operation":"fetch", "rank":0, "key":(4, 42),
               "return_code":-1, "expected_value":""},
-            {"operation":"fetch", "rank":2, "key":(4, 42), 
+            {"operation":"fetch", "rank":2, "key":(4, 42),
               "return_code":-1, "expected_value":""},
-            {"operation":"fetch", "rank":3, "key":(4, 42), 
+            {"operation":"fetch", "rank":3, "key":(4, 42),
               "return_code":-1, "expected_value":""},
             #
             # ****
@@ -400,9 +400,9 @@ class CartIvOneNodeTest(Test):
             # "expected_value":""},
             #{"operation":"set_grp_version", "rank":0, "key":(0, 42), "time":0
             #  "version":"0xdeadc0de", "return_code":0, "expected_value":""},
-            #{"operation":"fetch", "rank":0, "key":(1, 42), 
+            #{"operation":"fetch", "rank":0, "key":(1, 42),
             #  "return_code":-1036, "expected_value":""},
-            #{"operation":"fetch", "rank":1, "key":(0, 42), 
+            #{"operation":"fetch", "rank":1, "key":(0, 42),
             #  "return_code":-1036, "expected_value":""},
             #{"operation":"set_grp_version", "rank":0, "key":(0, 42), "time":0
             #  "version":"0x0", "return_code":0, "expected_value":""},
@@ -410,16 +410,16 @@ class CartIvOneNodeTest(Test):
             #
             # ****
             # Test of verison skew on fetch between rank 0 and rank 1.
-            # Create iv variable on rank 1. 
+            # Create iv variable on rank 1.
             # Fetch from rank 0.
             # Change version on rank 0 while request in flight,
-            # Not an error: 
-            #   Used for testing to ensure we donot break something 
+            # Not an error:
+            #   Used for testing to ensure we donot break something
             #   that should work.
             #{"operation":"update", "rank":1, "key":(1, 42), "value":"beans"},
             #{"operation":"set_grp_version", "rank":0, "key":(1, 42), "time":1,
             #  "version":"0xc001c001", "return_code":0, "expected_value":""},
-            #{"operation":"fetch", "rank":0, "key":(1, 42), 
+            #{"operation":"fetch", "rank":0, "key":(1, 42),
             #  "return_code":0, "expected_value":"beans"},
             #{"operation":"set_grp_version", "rank":0, "key":(1, 42), "time":0,
             #  "version":"0", "return_code":0, "expected_value":""},
@@ -428,14 +428,14 @@ class CartIvOneNodeTest(Test):
             # Test of verison skew on fetch between rank 0 and rank 1.
             # From parent to child.
             # Create a iv variable on second server  (child).
-            # Setup second server to change version after it receives 
+            # Setup second server to change version after it receives
             #   the rpc request.
             # Fetch variable from the first server.
             # Tests version-check in crt_hdlr_iv_fetch_aux.
             #{"operation":"update", "rank":1, "key":(1, 42), "value":"carrot"},
             #{"operation":"set_grp_version", "rank":1, "key":(0, 42), "time":2,
             #  "version":"0xdeadc0de", "return_code":0, "expected_value":""},
-            #{"operation":"fetch", "rank":0, "key":(1, 42), 
+            #{"operation":"fetch", "rank":0, "key":(1, 42),
             #  "return_code":-1036, "expected_value":""},
             #{"operation":"set_grp_version", "rank":1, "key":(0, 42), "time":0,
             #  "version":"0x0", "return_code":0, "expected_value":""},
