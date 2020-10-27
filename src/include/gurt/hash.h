@@ -165,9 +165,8 @@ typedef struct {
 	 */
 	void	 (*hop_rec_free)(struct d_hash_table *htable, d_list_t *link);
 
-        /**
- 	* Get \p key from the record 
- 	* This member function is optional, and used 
+	/** 	* Get \p key from the record
+	* This member function is optional, and used
  	* in dynamic hash only, but if not specified
  	* hash_rec_delete_at() for dynamic hash returns error
  	* \param[in]   item to extract key from

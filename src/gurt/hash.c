@@ -433,7 +433,7 @@ d_hash_rec_find(struct d_hash_table *htable, const void *key,
 	uint32_t		 idx;
 	bool			 is_lru = (htable->ht_feats & D_HASH_FT_LRU);
 
-	if(htable->ht_feats & D_HASH_FT_DYNAMIC) {
+	if (htable->ht_feats & D_HASH_FT_DYNAMIC) {
 		return dyn_hash_rec_find(htable, key, ksize, 0);
 	}
 
@@ -448,7 +448,7 @@ d_hash_rec_find(struct d_hash_table *htable, const void *key,
 		ch_rec_addref(htable, link);
 
 	ch_bucket_unlock(htable, idx, !is_lru);
-	return (void*)link;
+	return (void *)link;
 }
 
 int
@@ -460,8 +460,9 @@ d_hash_rec_insert(struct d_hash_table *htable, const void *key,
 	uint32_t		idx;
 	int			rc = 0;
 
-	if(htable->ht_feats & D_HASH_FT_DYNAMIC) {
-		return dyn_hash_rec_insert(htable, key, ksize, (void*)link, exclusive);
+	if (htable->ht_feats & D_HASH_FT_DYNAMIC) {
+		return dyn_hash_rec_insert(htable, key, ksize,
+		(void *)link, exclusive);
 	}
 
 	D_ASSERT(key != NULL && ksize != 0);
@@ -491,7 +492,8 @@ d_hash_rec_find_insert(struct d_hash_table *htable, const void *key,
 	uint32_t		 idx;
 
 	if(htable->ht_feats & D_HASH_FT_DYNAMIC) {
-		return (d_list_t*)dyn_hash_rec_find_insert(htable, key, ksize, (void*)link, 0);
+		return (d_list_t *)dyn_hash_rec_find_insert(htable, key, 
+		ksize, (void *)link, 0);
 	}
 
 	D_ASSERT(key != NULL && ksize != 0);
@@ -525,7 +527,7 @@ d_hash_rec_insert_anonym(struct d_hash_table *htable, d_list_t *link,
 	if (htable->ht_ops->hop_key_init == NULL)
 		return -DER_INVAL;
 
-	if(htable->ht_feats & D_HASH_FT_DYNAMIC) {
+	if (htable->ht_feats & D_HASH_FT_DYNAMIC) {
 		return -DER_NOTAPPLICABLE;
 	}
 
@@ -565,7 +567,7 @@ d_hash_rec_delete(struct d_hash_table *htable, const void *key,
 	bool			 deleted = false;
 	bool			 zombie  = false;
 
-	if(htable->ht_feats & D_HASH_FT_DYNAMIC) {
+	if (htable->ht_feats & D_HASH_FT_DYNAMIC) {
 		return dyn_hash_rec_delete(htable, key, ksize, 0);
 	}
 
@@ -591,13 +593,13 @@ d_hash_rec_delete(struct d_hash_table *htable, const void *key,
 bool
 d_hash_rec_delete_at(struct d_hash_table *htable, d_list_t *link)
 {
-	uint32_t 	idx = 0;
-	bool	 	deleted = false;
-	bool	 	zombie  = false;
-	bool	 	need_lock = !(htable->ht_feats & D_HASH_FT_NOLOCK);
+	uint32_t	idx = 0;
+	bool		deleted = false;
+	bool		zombie  = false;
+	bool		need_lock = !(htable->ht_feats & D_HASH_FT_NOLOCK);
 
-	if(htable->ht_feats & D_HASH_FT_DYNAMIC) {
-		return dyn_hash_rec_delete_at(htable, (void*)link);
+	if (htable->ht_feats & D_HASH_FT_DYNAMIC) {
+		return dyn_hash_rec_delete_at(htable, (void *)link);
 	}
 
 	if (need_lock) {
@@ -675,8 +677,8 @@ d_hash_rec_addref(struct d_hash_table *htable, d_list_t *link)
 	uint32_t idx = 0;
 	bool	 need_lock = !(htable->ht_feats & D_HASH_FT_NOLOCK);
 
-	if(htable->ht_feats & D_HASH_FT_DYNAMIC) {
-		dyn_hash_rec_addref(htable, (void*)link);
+	if (htable->ht_feats & D_HASH_FT_DYNAMIC) {
+		dyn_hash_rec_addref(htable, (void *)link);
 		return;
 	}
 
@@ -699,8 +701,8 @@ d_hash_rec_decref(struct d_hash_table *htable, d_list_t *link)
 	bool	 ephemeral = (htable->ht_feats & D_HASH_FT_EPHEMERAL);
 	bool	 zombie;
 
-	if(htable->ht_feats & D_HASH_FT_DYNAMIC) {
-		dyn_hash_rec_decref(htable, (void*)link);
+	if (htable->ht_feats & D_HASH_FT_DYNAMIC) {
+		dyn_hash_rec_decref(htable, (void *)link);
 		return;
 	}
 
@@ -731,8 +733,8 @@ d_hash_rec_ndecref(struct d_hash_table *htable, int count, d_list_t *link)
 	bool	 zombie = false;
 	int	 rc = 0;
 
-	if(htable->ht_feats & D_HASH_FT_DYNAMIC) {
-		return dyn_hash_rec_ndecref(htable, count, (void*)link);
+	if (htable->ht_feats & D_HASH_FT_DYNAMIC) {
+		return dyn_hash_rec_ndecref(htable, count, (void *)link);
 	}
 
 	if (need_lock) {
@@ -792,8 +794,8 @@ d_hash_rec_first(struct d_hash_table *htable)
 	d_list_t	*link = NULL;
 	int		 rc;
 
-	if(htable->ht_feats & D_HASH_FT_DYNAMIC) {
-		return (d_list_t*)dyn_hash_rec_first(htable);
+	if (htable->ht_feats & D_HASH_FT_DYNAMIC) {
+		return (d_list_t *)dyn_hash_rec_first(htable);
 	}
 
 	rc = d_hash_table_traverse(htable, d_hash_find_single, &link);
@@ -808,12 +810,13 @@ d_hash_table_create_inplace(uint32_t feats, uint32_t bits, void *priv,
 			    d_hash_table_ops_t *hops,
 			    struct d_hash_table *htable)
 {
-	uint32_t nr = (1 << bits);
-	uint32_t i;
-	int	 rc = 0;
+	uint32_t 	nr = (1 << bits);
+	uint32_t 	i;
+	int		rc = 0;
 
-	if(feats & D_HASH_FT_DYNAMIC) {
-		return dyn_hash_table_create_inplace(feats, bits, priv, hops, htable);
+	if (feats & D_HASH_FT_DYNAMIC) {
+		return dyn_hash_table_create_inplace(feats, bits, 
+		priv, hops, htable);
 	}
 	D_ASSERT(hops != NULL);
 	D_ASSERT(hops->hop_key_cmp != NULL);
@@ -897,7 +900,7 @@ d_hash_table_create(uint32_t feats, uint32_t bits, void *priv,
 	struct d_hash_table	*htable;
 	int			 rc;
 
-	if(feats & D_HASH_FT_DYNAMIC) {
+	if (feats & D_HASH_FT_DYNAMIC) {
 		return dyn_hash_create(feats, bits, priv, hops, htable_pp);
 	}
 
@@ -923,7 +926,7 @@ d_hash_table_traverse(struct d_hash_table *htable, d_hash_traverse_cb_t cb,
 	uint32_t		 idx;
 	int			 rc = 0;
 
-	if(htable->ht_feats & D_HASH_FT_DYNAMIC) {
+	if (htable->ht_feats & D_HASH_FT_DYNAMIC) {
 		return dyn_hash_table_traverse(htable, cb, arg);
 	}
 
@@ -982,7 +985,7 @@ d_hash_table_destroy_inplace(struct d_hash_table *htable, bool force)
 	uint32_t		 i;
 	int			 rc = 0;
 
-	if(htable->ht_feats & D_HASH_FT_DYNAMIC) {
+	if (htable->ht_feats & D_HASH_FT_DYNAMIC) {
 		return dyn_hash_table_destroy_inplace(htable, force);
 	}
 
@@ -1031,7 +1034,7 @@ d_hash_table_destroy(struct d_hash_table *htable, bool force)
 {
 	int rc;
 
-	if(htable->ht_feats & D_HASH_FT_DYNAMIC) {
+	if (htable->ht_feats & D_HASH_FT_DYNAMIC) {
 		return dyn_hash_table_destroy(htable, force);
 	}
 
@@ -1045,7 +1048,7 @@ d_hash_table_destroy(struct d_hash_table *htable, bool force)
 void
 d_hash_table_debug(struct d_hash_table *htable)
 {
-	if(htable->ht_feats & D_HASH_FT_DYNAMIC) {
+	if (htable->ht_feats & D_HASH_FT_DYNAMIC) {
 		return dyn_hash_table_debug(htable);
 	}
 
