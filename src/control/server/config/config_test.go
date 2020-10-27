@@ -97,9 +97,9 @@ func uncommentServerConfig(t *testing.T, outFile string) {
 }
 
 // supply mock external interface, populates config from given file path
-func mockConfigFromFile(t *testing.T, e External, path string) *Configuration {
+func mockConfigFromFile(t *testing.T, path string) *Configuration {
 	t.Helper()
-	c := NewDefaultConfiguration(e).
+	c := NewDefaultConfiguration().
 		WithProviderValidator(netdetect.ValidateProviderStub).
 		WithNUMAValidator(netdetect.ValidateNUMAStub).
 		WithGetNetworkDeviceClass(getDeviceClassStub)
@@ -154,7 +154,7 @@ func TestServer_ConfigMarshalUnmarshal(t *testing.T) {
 				uncommentServerConfig(t, tt.inPath)
 			}
 
-			configA := NewDefaultConfiguration(defaultMockExt()).
+			configA := NewDefaultConfiguration().
 				WithProviderValidator(netdetect.ValidateProviderStub).
 				WithNUMAValidator(netdetect.ValidateNUMAStub).
 				WithGetNetworkDeviceClass(getDeviceClassStub)
@@ -173,7 +173,7 @@ func TestServer_ConfigMarshalUnmarshal(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			configB := NewDefaultConfiguration(defaultMockExt()).
+			configB := NewDefaultConfiguration().
 				WithProviderValidator(netdetect.ValidateProviderStub).
 				WithNUMAValidator(netdetect.ValidateNUMAStub).
 				WithGetNetworkDeviceClass(getDeviceClassStub)
@@ -210,7 +210,7 @@ func TestServer_ConstructedConfig(t *testing.T) {
 	// First, load a config based on the server config with all options uncommented.
 	testFile := filepath.Join(testDir, sConfigUncomment)
 	uncommentServerConfig(t, testFile)
-	defaultCfg := mockConfigFromFile(t, defaultMockExt(), testFile)
+	defaultCfg := mockConfigFromFile(t, testFile)
 
 	var numaNode0 uint = 0
 	var numaNode1 uint = 1
@@ -355,7 +355,7 @@ func TestServer_ConfigValidation(t *testing.T) {
 			// First, load a config based on the server config with all options uncommented.
 			testFile := filepath.Join(testDir, sConfigUncomment)
 			uncommentServerConfig(t, testFile)
-			config := mockConfigFromFile(t, defaultMockExt(), testFile)
+			config := mockConfigFromFile(t, testFile)
 
 			// Apply extra config test case
 			config = tt.extraConfig(config)
@@ -396,7 +396,7 @@ func TestServer_ConfigRelativeWorkingPath(t *testing.T) {
 			relPath := filepath.Join(pathToRoot, testFile)
 			t.Logf("abs: %s, cwd: %s, rel: %s", testFile, cwd, relPath)
 
-			config := NewDefaultConfiguration(defaultMockExt()).
+			config := NewDefaultConfiguration().
 				WithProviderValidator(netdetect.ValidateProviderStub).
 				WithNUMAValidator(netdetect.ValidateNUMAStub).
 				WithGetNetworkDeviceClass(getDeviceClassStub)

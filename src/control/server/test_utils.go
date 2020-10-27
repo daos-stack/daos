@@ -35,7 +35,6 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -231,10 +230,4 @@ func newTestMgmtSvcNonReplica(t *testing.T, log logging.Logger) *mgmtSvc {
 	cancel()
 
 	return svc
-}
-
-// emptyMockConfig returns unpopulated configuration with a default mock
-// external interfacing implementation.
-func emptyMockConfig(t *testing.T) *config.Configuration {
-	return config.NewDefaultConfiguration(defaultMockExt())
 }

@@ -36,6 +36,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -373,7 +374,7 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			cfg := emptyMockConfig(t)
+			cfg := config.NewDefaultConfiguration()
 			cs := mockControlService(t, log, cfg, nil, nil, nil)
 			cs.srvCfg = cfg
 			cs.srvCfg.ControlPort = 10001
@@ -647,7 +648,7 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			cfg := emptyMockConfig(t)
+			cfg := config.NewDefaultConfiguration()
 			cs := mockControlService(t, log, cfg, nil, nil, nil)
 			cs.srvCfg = cfg
 			cs.srvCfg.ControlPort = 10001
@@ -930,7 +931,7 @@ func TestServer_CtlSvc_SystemStart(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			cfg := emptyMockConfig(t)
+			cfg := config.NewDefaultConfiguration()
 			cs := mockControlService(t, log, cfg, nil, nil, nil)
 			cs.srvCfg = cfg
 			cs.srvCfg.ControlPort = 10001
@@ -1352,7 +1353,7 @@ func TestServer_CtlSvc_SystemStop(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			cfg := emptyMockConfig(t)
+			cfg := config.NewDefaultConfiguration()
 			cs := mockControlService(t, log, cfg, nil, nil, nil)
 			cs.srvCfg = cfg
 			cs.srvCfg.ControlPort = 10001
@@ -1582,7 +1583,7 @@ func TestServer_CtlSvc_SystemResetFormat(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			cfg := emptyMockConfig(t)
+			cfg := config.NewDefaultConfiguration()
 			cs := mockControlService(t, log, cfg, nil, nil, nil)
 			cs.srvCfg = cfg
 			cs.srvCfg.ControlPort = 10001

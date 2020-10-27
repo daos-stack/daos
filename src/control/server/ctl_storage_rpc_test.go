@@ -74,7 +74,7 @@ func newMockStorageConfig(
 	bdevClass storage.BdevClass, bdevDevs []string, existsRet bool, isRoot bool,
 ) *config.Configuration {
 
-	c := config.NewDefaultConfiguration(newMockExt(isRoot))
+	c := config.NewDefaultConfiguration()
 
 	c.Servers = append(c.Servers,
 		ioserver.NewConfig().
@@ -283,7 +283,7 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			emptyCfg := emptyMockConfig(t)
+			emptyCfg := config.NewDefaultConfiguration()
 			ioCfg := ioserver.NewConfig().
 				WithBdevClass("nvme").
 				WithBdevDeviceList(storage.MockNvmeController().PciAddr)
@@ -291,7 +291,7 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 			if tc.multiIO {
 				ioCfgs = append(ioCfgs, ioCfg)
 			}
-			defaultWithNvme := config.NewDefaultConfiguration(nil).WithServers(ioCfgs...)
+			defaultWithNvme := config.NewDefaultConfiguration().WithServers(ioCfgs...)
 
 			// test for both empty and default config cases
 			for _, config := range []*config.Configuration{defaultWithNvme, emptyCfg} {
@@ -497,7 +497,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 					},
 				},
 			},
-			cfg: config.NewDefaultConfiguration(nil).WithServers(
+			cfg: config.NewDefaultConfiguration().WithServers(
 				ioserver.NewConfig().
 					WithBdevClass("nvme").
 					WithBdevDeviceList(storage.MockNvmeController(1).PciAddr),
@@ -547,7 +547,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 					},
 				},
 			},
-			cfg: config.NewDefaultConfiguration(nil).WithServers(
+			cfg: config.NewDefaultConfiguration().WithServers(
 				ioserver.NewConfig().
 					WithBdevClass("nvme").
 					WithBdevDeviceList(storage.MockNvmeController(1).PciAddr),
@@ -598,7 +598,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 					},
 				},
 			},
-			cfg: config.NewDefaultConfiguration(nil).WithServers(
+			cfg: config.NewDefaultConfiguration().WithServers(
 				ioserver.NewConfig().
 					WithBdevClass("nvme").
 					WithBdevDeviceList(storage.MockNvmeController(1).PciAddr),
@@ -665,7 +665,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 					},
 				},
 			},
-			cfg: config.NewDefaultConfiguration(nil).WithServers(
+			cfg: config.NewDefaultConfiguration().WithServers(
 				ioserver.NewConfig().
 					WithBdevClass("nvme").
 					WithBdevDeviceList(storage.MockNvmeController(1).PciAddr),
@@ -787,7 +787,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				GetfsUsageTotal: mockPbScmMount.TotalBytes,
 				GetfsUsageAvail: mockPbScmMount.AvailBytes,
 			},
-			cfg: config.NewDefaultConfiguration(nil).WithServers(
+			cfg: config.NewDefaultConfiguration().WithServers(
 				ioserver.NewConfig().
 					WithScmMountPoint(mockPbScmMount.Path).
 					WithScmClass(storage.ScmClassDCPM.String()).
@@ -814,7 +814,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				GetfsUsageTotal: mockPbScmMount.TotalBytes,
 				GetfsUsageAvail: mockPbScmMount.AvailBytes,
 			},
-			cfg: config.NewDefaultConfiguration(nil).WithServers(
+			cfg: config.NewDefaultConfiguration().WithServers(
 				ioserver.NewConfig().
 					WithScmMountPoint(mockPbScmMount.Path).
 					WithScmClass(storage.ScmClassDCPM.String()).
@@ -838,7 +838,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			if tc.cfg == nil {
-				tc.cfg = config.NewDefaultConfiguration(nil).WithServers(
+				tc.cfg = config.NewDefaultConfiguration().WithServers(
 					ioserver.NewConfig().
 						WithBdevClass("nvme").
 						WithBdevDeviceList(storage.MockNvmeController().PciAddr),
@@ -1015,7 +1015,7 @@ func TestServer_CtlSvc_StoragePrepare(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			config := config.NewDefaultConfiguration(nil)
+			config := config.NewDefaultConfiguration()
 			cs := mockControlService(t, log, config, tc.bmbc, tc.smbc, nil)
 			_ = new(StoragePrepareResp)
 
@@ -1441,7 +1441,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				}
 			}
 
-			config := config.NewDefaultConfiguration(newMockExt(tc.isRoot))
+			config := config.NewDefaultConfiguration()
 
 			// validate test parameters
 			if len(tc.sDevs) > 0 {

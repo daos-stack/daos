@@ -96,8 +96,7 @@ type Configuration struct {
 	FaultCb      string `yaml:"fault_cb"`
 	Hyperthreads bool   `yaml:"hyperthreads"`
 
-	Path string   // path to config file
-	ext  External // interface to os utilities
+	Path string // path to config file
 
 	// pointer to a function that validates the chosen provider
 	validateProviderFn networkProviderValidation
@@ -331,7 +330,7 @@ func (c *Configuration) WithFirmwareHelperLogFile(filePath string) *Configuratio
 
 // NewDefaultConfiguration creates a new instance of configuration struct
 // populated with defaults.
-func NewDefaultConfiguration(ext External) *Configuration {
+func NewDefaultConfiguration() *Configuration {
 	return &Configuration{
 		SystemName:         build.DefaultSystemName,
 		SocketDir:          defaultRuntimeDir,
@@ -341,7 +340,6 @@ func NewDefaultConfiguration(ext External) *Configuration {
 		Hyperthreads:       false,
 		Path:               defaultConfigPath,
 		ControlLogMask:     ControlLogLevel(logging.LogLevelInfo),
-		ext:                ext,
 		validateProviderFn: netdetect.ValidateProviderStub,
 		validateNUMAFn:     netdetect.ValidateNUMAStub,
 		GetDeviceClassFn:   netdetect.GetDeviceClass,
@@ -352,7 +350,7 @@ func NewDefaultConfiguration(ext External) *Configuration {
 // NewConfiguration creates a new instance of configuration struct
 // populated with defaults and default external interface.
 func NewConfiguration() *Configuration {
-	return NewDefaultConfiguration(&ext{})
+	return NewDefaultConfiguration()
 }
 
 // Load reads the serialized configuration from disk and validates it.
@@ -437,7 +435,7 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 	// append the user-friendly message to any error
 	defer func() {
 		if err != nil && !fault.HasResolution(err) {
-			examplesPath, _ := c.ext.getAbsInstallPath(relConfExamplesPath)
+			examplesPath, _ := common.GetAdjacentPath(relConfExamplesPath)
 			err = errors.WithMessage(FaultBadConfig, err.Error()+", examples: "+examplesPath)
 		}
 	}()
