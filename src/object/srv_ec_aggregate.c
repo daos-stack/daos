@@ -72,10 +72,7 @@ struct ec_agg_entry {
 	struct daos_oclass_attr	*ae_oca;	 /* Object class of object    */
 	struct obj_ec_codec	*ae_codec;	 /* Encode/decode for oclass  */
 	d_sg_list_t		 ae_sgl;	 /* Mem for entry processing  */
-	daos_handle_t		 ae_cont_hdl;    /* Container handle	      */
-	daos_handle_t		 ae_chdl;	 /* Vos container handle      */
 	daos_handle_t		 ae_thdl;	 /* Iterator handle           */
-	daos_epoch_range_t	 ae_epr;	 /* hi/lo extent threshold    */
 	daos_key_t		 ae_dkey;	 /* Current dkey              */
 	daos_key_t		 ae_akey;	 /* Current akey              */
 	daos_size_t		 ae_rsize;	 /* Record size of cur array  */
@@ -554,7 +551,7 @@ agg_get_carry_under(struct ec_agg_entry *entry)
 		tail = agg_carry_over(entry, agg_extent);
 		/* At most one extent should carry over. */
 		if (tail)
-			return agg_extent->ae_recx.rx_nr = tail;
+			return agg_extent->ae_recx.rx_nr - tail;
 		/* At most one extent should carry over. */
 	}
 	return 0;
