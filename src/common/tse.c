@@ -62,6 +62,7 @@ tse_sched_init(tse_sched_t *sched, tse_sched_comp_cb_t comp_cb,
 	D_INIT_LIST_HEAD(&dsp->dsp_init_list);
 	D_INIT_LIST_HEAD(&dsp->dsp_running_list);
 	D_INIT_LIST_HEAD(&dsp->dsp_complete_list);
+	D_INIT_LIST_HEAD(&dsp->dsp_sleeping_list);
 	D_INIT_LIST_HEAD(&dsp->dsp_comp_cb_list);
 
 	dsp->dsp_refcount = 1;
@@ -280,6 +281,7 @@ tse_sched_fini(tse_sched_t *sched)
 	D_ASSERT(d_list_empty(&dsp->dsp_init_list));
 	D_ASSERT(d_list_empty(&dsp->dsp_running_list));
 	D_ASSERT(d_list_empty(&dsp->dsp_complete_list));
+	D_ASSERT(d_list_empty(&dsp->dsp_sleeping_list));
 	D_MUTEX_DESTROY(&dsp->dsp_lock);
 }
 
@@ -505,9 +507,10 @@ tse_task_complete_callback(tse_task_t *task)
 }
 
 /*
- * Process the task in the init list of the scheduler. This executes all the
- * body function of all tasks with no dependencies in the scheduler's init
- * list.
+ * Process the init and sleeping lists of the scheduler. This first moves all
+ * tasks who shall wake up now from the sleeping list to the tail of the init
+ * list, and then executes all the body functions of all tasks with no
+ * dependencies in the scheduler's init list.
  */
 static int
 tse_sched_process_init(struct tse_sched_private *dsp)
@@ -515,12 +518,19 @@ tse_sched_process_init(struct tse_sched_private *dsp)
 	struct tse_task_private		*dtp;
 	struct tse_task_private		*tmp;
 	d_list_t			list;
+	uint64_t			now = daos_getutime();
 	int				processed = 0;
 
 	D_INIT_LIST_HEAD(&list);
 	D_MUTEX_LOCK(&dsp->dsp_lock);
-	d_list_for_each_entry_safe(dtp, tmp, &dsp->dsp_init_list,
-				      dtp_list) {
+	d_list_for_each_entry_safe(dtp, tmp, &dsp->dsp_sleeping_list,
+				   dtp_list) {
+		if (dtp->dtp_wakeup_time > now)
+			break;
+		dtp->dtp_wakeup_time = 0;
+		d_list_move_tail(&dtp->dtp_list, &dsp->dsp_init_list);
+	}
+	d_list_for_each_entry_safe(dtp, tmp, &dsp->dsp_init_list, dtp_list) {
 		if (dtp->dtp_dep_cnt == 0 || dsp->dsp_cancelling) {
 			d_list_move_tail(&dtp->dtp_list, &list);
 			dsp->dsp_inflight++;
@@ -692,6 +702,7 @@ tse_sched_check_complete(tse_sched_t *sched)
 	/* check if all tasks are done */
 	D_MUTEX_LOCK(&dsp->dsp_lock);
 	completed = (d_list_empty(&dsp->dsp_init_list) &&
+		     d_list_empty(&dsp->dsp_sleeping_list) &&
 		     dsp->dsp_inflight == 0);
 	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
@@ -925,14 +936,49 @@ tse_task_create(tse_task_func_t task_func, tse_sched_t *sched, void *priv,
 	return 0;
 }
 
+/* Insert dtp to the sleeping list of dsp. */
+static void
+tse_task_insert_sleeping(struct tse_task_private *dtp,
+			 struct tse_sched_private *dsp)
+{
+	struct tse_task_private *t;
+
+	if (d_list_empty(&dsp->dsp_sleeping_list)) {
+		d_list_add_tail(&dtp->dtp_list, &dsp->dsp_sleeping_list);
+		return;
+	}
+
+	/* If this task < the head, we don't need to search the list. */
+	t = d_list_entry(dsp->dsp_sleeping_list.next, struct tse_task_private,
+			 dtp_list);
+	if (dtp->dtp_wakeup_time < t->dtp_wakeup_time) {
+		/* Insert before the head. */
+		d_list_add(&dtp->dtp_list, &dsp->dsp_sleeping_list);
+		return;
+	}
+
+	/*
+	 * Search from the tail. Because this task >= the head, the search must
+	 * have a hit.
+	 */
+	d_list_for_each_entry_reverse(t, &dsp->dsp_sleeping_list, dtp_list) {
+		if (t->dtp_wakeup_time <= dtp->dtp_wakeup_time) {
+			/* Insert after t. */
+			d_list_add(&dtp->dtp_list, &t->dtp_list);
+			return;
+		}
+	}
+	D_ASSERT(false);
+}
+
 int
-tse_task_schedule(tse_task_t *task, bool instant)
+tse_task_schedule_with_delay(tse_task_t *task, bool instant, uint64_t delay)
 {
 	struct tse_task_private  *dtp = tse_task2priv(task);
 	struct tse_sched_private *dsp = dtp->dtp_sched;
 	int rc = 0;
 
-	D_ASSERT(!instant || dtp->dtp_func);
+	D_ASSERT(!instant || (dtp->dtp_func && delay == 0));
 
 	/* Add task to scheduler */
 	D_MUTEX_LOCK(&dsp->dsp_lock);
@@ -940,14 +986,20 @@ tse_task_schedule(tse_task_t *task, bool instant)
 		/** If task has no body function, mark it as running */
 		dsp->dsp_inflight++;
 		dtp->dtp_running = 1;
+		dtp->dtp_wakeup_time = 0;
 		d_list_add_tail(&dtp->dtp_list, &dsp->dsp_running_list);
 
 		/** +1 in case task is completed in body function */
 		if (instant)
 			tse_task_addref_locked(dtp);
-	} else {
+	} else if (delay == 0) {
 		/** Otherwise, scheduler will process it from init list */
+		dtp->dtp_wakeup_time = 0;
 		d_list_add_tail(&dtp->dtp_list, &dsp->dsp_init_list);
+	} else {
+		/* A delay is requested; insert into the sleeping list. */
+		dtp->dtp_wakeup_time = daos_getutime() + delay;
+		tse_task_insert_sleeping(dtp, dsp);
 	}
 	/* decref when remove the task from dsp (tse_sched_process_complete) */
 	tse_sched_priv_addref_locked(dsp);
@@ -970,7 +1022,13 @@ tse_task_schedule(tse_task_t *task, bool instant)
 }
 
 int
-tse_task_reinit(tse_task_t *task)
+tse_task_schedule(tse_task_t *task, bool instant)
+{
+	return tse_task_schedule_with_delay(task, instant, 0 /* delay */);
+}
+
+int
+tse_task_reinit_with_delay(tse_task_t *task, uint64_t delay)
 {
 	struct tse_task_private		*dtp = tse_task2priv(task);
 	tse_sched_t			*sched = tse_task2sched(task);
@@ -1019,7 +1077,14 @@ tse_task_reinit(tse_task_t *task)
 	}
 
 	/** Move back to init list */
-	d_list_move_tail(&dtp->dtp_list, &dsp->dsp_init_list);
+	if (delay == 0) {
+		dtp->dtp_wakeup_time = 0;
+		d_list_move_tail(&dtp->dtp_list, &dsp->dsp_init_list);
+	} else {
+		dtp->dtp_wakeup_time = daos_getutime() + delay;
+		d_list_del_init(&dtp->dtp_list);
+		tse_task_insert_sleeping(dtp, dsp);
+	}
 
 	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
@@ -1030,6 +1095,12 @@ tse_task_reinit(tse_task_t *task)
 err_unlock:
 	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 	return rc;
+}
+
+int
+tse_task_reinit(tse_task_t *task)
+{
+	return tse_task_reinit_with_delay(task, 0 /* delay */);
 }
 
 int
@@ -1090,6 +1161,8 @@ tse_task_reset(tse_task_t *task, tse_task_func_t task_func, void *priv)
 			task, dtp->dtp_stack_top);
 		dtp->dtp_stack_top = 0;
 	}
+
+	dtp->dtp_wakeup_time = 0;
 
 	D_INIT_LIST_HEAD(&dtp->dtp_list);
 	D_INIT_LIST_HEAD(&dtp->dtp_task_list);

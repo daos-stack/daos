@@ -47,7 +47,10 @@ struct tse_task_private {
 	/* links to scheduler */
 	d_list_t			 dtp_list;
 
-	/* links to tasks which dependent on it */
+	/* time to start running this task */
+	uint64_t			 dtp_wakeup_time;
+
+	/* list of tasks that depend on this task */
 	d_list_t			 dtp_dep_list;
 
 	/* daos prepare task callback list */
@@ -109,8 +112,9 @@ struct tse_sched_private {
 	pthread_mutex_t dsp_lock;
 
 	/* The task will be added to init list when it is initially
-	 * added to scheduler.
-	 **/
+	 * added to scheduler without any delay. A task with a delay
+	 * will be added to dsp_sleeping_list.
+	 */
 	d_list_t	dsp_init_list;
 
 	/* The task will be moved to complete list after the
@@ -122,6 +126,9 @@ struct tse_sched_private {
 	 * The task running list.
 	 **/
 	d_list_t	dsp_running_list;
+
+	/* list of sleeping tasks sorted by dtp_wakeup_time */
+	d_list_t	dsp_sleeping_list;
 
 	/* the list for complete callback */
 	d_list_t	dsp_comp_cb_list;
