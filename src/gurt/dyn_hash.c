@@ -351,12 +351,12 @@ shrink_vector(struct dyn_hash *htable, dh_bucket_t *bucket,
 	}
 	if (first_idx == 0) {
 		for (idx = 0; idx < last_idx; idx++) {
-			htable->ht_vector.data[idx] = 
+			htable->ht_vector.data[idx] =
 			htable->ht_vector.data[last_idx];
 		}
 	} else {
 		for (idx = first_idx; idx < last_idx; idx++) {
-			htable->ht_vector.data[idx] = 
+			htable->ht_vector.data[idx] =
 			htable->ht_vector.data[first_idx - 1];
 		}
 	}
@@ -388,7 +388,7 @@ split_bucket(struct dyn_hash *htable, dh_bucket_t* bucket,
 	memset(ad_bucket, 0, sizeof(*ad_bucket));
 	D_MUTEX_INIT(&bucket->mtx, NULL);
 	for (idx = 0, ix = 0; idx < bucket->counter; idx++) {
-		bucket_idx = (uint32_t) (bucket->field[idx].siphash >> 
+		bucket_idx = (uint32_t) (bucket->field[idx].siphash >>
 		htable->ht_shift);
 		if (bucket_idx <= vector_idx) {
 			D_ASSERT(!b_switch);
@@ -443,7 +443,7 @@ split_vector(struct dyn_hash *htable)
 	for (idx = 0; idx < (counter / DYNHASH_BUCKET); idx++) {
 		dst = &new_data[idx * DYNHASH_BUCKET * 2];
 		src = &current_data[idx * DYNHASH_BUCKET];
-		for (ix = 0, index = 0; index < DYNHASH_BUCKET; 
+		for (ix = 0, index = 0; index < DYNHASH_BUCKET;
 		     ix++, index++) {
 			dst[ix++] = src[index];
 			dst[ix] = src[index];
@@ -462,6 +462,7 @@ out:
 	do {
 		uint64_t start = begin.tv_sec * 1000000 + begin.tv_usec;
 		uint64_t stop = end.tv_sec * 1000000 + end.tv_usec;
+
 		htable->ht_vsplits++;
 		htable->ht_vsplit_delay += (uint32_t)(stop - start);
 	} while (0);
@@ -613,14 +614,15 @@ do_delete(struct d_hash_table *gtable, const void *key,
 		htable->ht_records--;
 		htable->ht_rw_unlock(htable);
 		while (bucket_idx < (bucket->counter - 1)) {
-			bucket->field[bucket_idx] = bucket->field[bucket_idx + 1];
+			bucket->field[bucket_idx] =
+			bucket->field[bucket_idx + 1];
 			bucket_idx++;
 		}
 	        bucket->counter--;
 	}
 	if ((htable->gtable->ht_feats & D_HASH_FT_EPHEMERAL) == 0 &&
 	     htable->ht_ops.hop_rec_decref(gtable, item) != 0) {
-			htable->ht_ops.hop_rec_free(gtable, item);
+		htable->ht_ops.hop_rec_free(gtable, item);
 	}
 	htable->bucket_unlock(bucket);
 	if (free_bucket) {
@@ -741,7 +743,7 @@ dyn_hash_table_create_inplace(uint32_t feats, uint32_t bits, void *priv,
 		} else {
 			rc = D_SPIN_INIT(&gtable->ht_lock.spin,
 					 PTHREAD_PROCESS_PRIVATE);
-			if (rc != 0){
+			if (rc != 0) {
 				D_GOTO(out, rc);
 			}
 			htable->ht_write_lock = spinlock;
