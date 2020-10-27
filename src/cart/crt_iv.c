@@ -82,6 +82,9 @@ struct iv_fetch_cb_info {
 	/* IV value */
 	d_sg_list_t			 ifc_iv_value;
 
+	/* Group Version at time of call */
+	uint32_t			 version;
+
 	/* IV namespace */
 	struct crt_ivns_internal	*ifc_ivns_internal;
 
@@ -1052,7 +1055,7 @@ exit:
 	return rc;
 }
 
-/* Fetch response handler */
+/* Fetch response handler (from previous request)*/
 static void
 handle_ivfetch_response(const struct crt_cb_info *cb_info)
 {
@@ -1065,6 +1068,11 @@ handle_ivfetch_response(const struct crt_cb_info *cb_info)
 	struct ivf_key_in_progress	*kip_entry;
 	uint32_t			class_id;
 	int				rc;
+	crt_iv_ver_t 			rpc_version = input->ifi_grp_ver;
+	crt_iv_ver_t 			local_version;
+
+D_DEBUG(DB_ALL,"SAB  H1: rpc version 0x%x\n", rpc_version);
+
 
 	if (cb_info->cci_rc == 0x0)
 		rc = output->ifo_rc;
@@ -1074,20 +1082,35 @@ handle_ivfetch_response(const struct crt_cb_info *cb_info)
 	ivns = iv_info->ifc_ivns_internal;
 	class_id = iv_info->ifc_class_id;
 
+	/* Check to see if version change on while waiting for reponse */
+	/* Not and error. But good to know.                            */
+	local_version = ivns->cii_grp_priv->gp_membs_ver;
+	if (local_version != rpc_version) {
+		D_DEBUG(DB_ALL, "Group Version Changed: "
+				"rpc_version 0x%x: Local version 0x%x\n",
+				rpc_version, local_version);
+	}
+
 	iv_ops = crt_iv_ops_get(ivns, class_id);
 	D_ASSERT(iv_ops != NULL);
 
 	IV_DBG(&input->ifi_key, "response received, rc = %d\n", rc);
 
+D_DEBUG(DB_ALL,"SAB  H2: rc for refresh %d \n", rc);
+
 	/* In case of a failure, call on_refresh with NULL iv_value */
 	iv_ops->ivo_on_refresh(ivns, &input->ifi_key,
-				0, /* TODO: iv_ver */
+				rpc_version, 
 				rc == 0 ? &iv_info->ifc_iv_value : NULL,
-				false, rc, iv_info->ifc_user_priv);
+				false,			/* invaliddate */
+				rc,			/* refresh rc */
+				iv_info->ifc_user_priv);
 
+D_DEBUG(DB_ALL,"SAB  H3 \n");
 	if (iv_info->ifc_bulk_hdl != 0x0)
 		crt_bulk_free(iv_info->ifc_bulk_hdl);
 
+D_DEBUG(DB_ALL,"SAB  H4 \n");
 
 	D_MUTEX_LOCK(&ivns->cii_lock);
 	kip_entry = crt_ivf_key_in_progress_find(ivns, iv_ops, &input->ifi_key);
@@ -1109,6 +1132,7 @@ handle_ivfetch_response(const struct crt_cb_info *cb_info)
 	**/
 	if (rc != 0)
 		crt_ivf_pending_reqs_process(ivns, class_id, kip_entry, rc);
+D_DEBUG(DB_ALL,"SAB  H5 \n");
 
 	/* Finalize fetch operation */
 	crt_ivf_finalize(iv_info, &input->ifi_key, rc);
@@ -1116,6 +1140,7 @@ handle_ivfetch_response(const struct crt_cb_info *cb_info)
 	if (rc == 0)
 		crt_ivf_pending_reqs_process(ivns, class_id, kip_entry, rc);
 
+D_DEBUG(DB_ALL,"SAB  H6 \n");
 	/* ADDREF done by caller of crt_ivf_rpc_issue() */
 	IVNS_DECREF(iv_info->ifc_ivns_internal);
 	D_FREE_PTR(iv_info);
@@ -1136,20 +1161,27 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 	int				rc = 0;
 	struct crt_iv_ops		*iv_ops;
 
+D_DEBUG(DB_ALL,"SAB  F1: crt_ivf_rpc_issue: rootNode %d \n", root_node);
+
+
 	ivns_internal = cb_info->ifc_ivns_internal;
 
+D_DEBUG(DB_ALL,"SAB  F2: \n");
 	iv_ops = crt_iv_ops_get(ivns_internal, cb_info->ifc_class_id);
 	D_ASSERT(iv_ops != NULL);
 
 	IV_DBG(iv_key, "rpc to be issued to rank=%d\n", dest_node);
 
+D_DEBUG(DB_ALL," SAB  F3 Target rank %d: \n", dest_node);
 	/* Check if RPC for this key has already been submitted */
 	D_MUTEX_LOCK(&ivns_internal->cii_lock);
 	entry = crt_ivf_key_in_progress_find(ivns_internal, iv_ops, iv_key);
 
+D_DEBUG(DB_ALL,"SAB  F4 :\n");
 	/* If entry exists, rpc was sent at some point */
 	if (entry) {
 		/* If rpc is in progress, add request to the pending list */
+D_DEBUG(DB_ALL,"SAB  F5 :\n");
 		if (entry->kip_rpc_in_progress == true) {
 			rc = crt_ivf_pending_request_add(ivns_internal, iv_ops,
 						entry, cb_info);
@@ -1159,14 +1191,17 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 			D_MUTEX_UNLOCK(&ivns_internal->cii_lock);
 			return rc;
 		}
+D_DEBUG(DB_ALL,"SAB  F5-1 :\n");
 		IV_DBG(iv_key, "kip_entry=%p present\n", entry);
 	} else {
+D_DEBUG(DB_ALL,"SAB  F6 :\n");
 		entry = crt_ivf_key_in_progress_set(ivns_internal, iv_key);
 		if (!entry) {
 			D_ERROR("crt_ivf_key_in_progres_set() failed\n");
 			D_MUTEX_UNLOCK(&ivns_internal->cii_lock);
 			return -DER_NOMEM;
 		}
+D_DEBUG(DB_ALL,"SAB  F6-1 :\n");
 		IV_DBG(iv_key, "new kip_entry=%p added\n", entry);
 	}
 
@@ -1179,6 +1214,7 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 	D_MUTEX_UNLOCK(&entry->kip_lock);
 	D_MUTEX_UNLOCK(&ivns_internal->cii_lock);
 
+D_DEBUG(DB_ALL,"SAB  F7 :\n");
 	rc = crt_bulk_create(ivns_internal->cii_ctx, iv_value, CRT_BULK_RW,
 				&local_bulk);
 	if (rc != 0) {
@@ -1187,16 +1223,19 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 	}
 
 	/* Note: destination node is using global rank already */
+D_DEBUG(DB_ALL,"SAB  F8 :\n");
 	ep.ep_grp = NULL;
 	ep.ep_rank = dest_node;
 
 	rc = crt_req_create(ivns_internal->cii_ctx, &ep, CRT_OPC_IV_FETCH,
 			    &rpc);
+D_DEBUG(DB_ALL,"SAB  F9 :\n");
 	if (rc != 0) {
 		D_ERROR("crt_req_create() failed; rc = %d\n", rc);
 		D_GOTO(exit, rc);
 	}
 
+D_DEBUG(DB_ALL,"SAB  F10 Wait for RPC?:\n");
 	input = crt_req_get(rpc);
 	D_ASSERT(input != NULL);
 
@@ -1212,7 +1251,9 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 	input->ifi_ivns_group = ivns_internal->cii_gns.gn_ivns_id.ii_group_name;
 	input->ifi_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
 
+D_DEBUG(DB_ALL,"SAB  F11 Send request:\n");
 	rc = crt_req_send(rpc, handle_response_cb, cb_info);
+D_DEBUG(DB_ALL,"SAB  F12 request sent:\n");
 
 	IV_DBG(iv_key, "crt_req_send() to %d rc=%d\n", dest_node, rc);
 exit:
@@ -1241,6 +1282,7 @@ exit:
 			crt_bulk_free(local_bulk);
 	}
 
+D_DEBUG(DB_ALL,"SAB  F13 Exit :\n");
 	return rc;
 }
 
@@ -1255,6 +1297,8 @@ crt_iv_ranks_parent_get(struct crt_ivns_internal *ivns_internal,
 
 	D_ASSERT(ret_node != NULL);
 
+	D_DEBUG(DB_TRACE, " SAB QQQ1\n");
+
 	if (cur_node == root_node) {
 		*ret_node = root_node;
 		return 0;
@@ -1262,11 +1306,13 @@ crt_iv_ranks_parent_get(struct crt_ivns_internal *ivns_internal,
 
 	D_ASSERT(ivns_internal->cii_grp_priv != NULL);
 
+	D_DEBUG(DB_TRACE, " SAB QQQ2\n ");
 	rc = crt_tree_get_parent(ivns_internal->cii_grp_priv, 0, NULL,
 			ivns_internal->cii_gns.gn_tree_topo, root_node,
 			cur_node, &parent_rank);
 	if (rc == 0)
 		*ret_node = parent_rank;
+	D_DEBUG(DB_TRACE, " SAB QQQ3\n ");
 
 	D_DEBUG(DB_TRACE, "parent lookup: current=%d, root=%d, parent=%d "
 		"rc=%d\n", cur_node, root_node, parent_rank, rc);
@@ -1281,12 +1327,14 @@ crt_iv_parent_get(struct crt_ivns_internal *ivns_internal,
 {
 	d_rank_t self = ivns_internal->cii_grp_priv->gp_self;
 
+	D_DEBUG(DB_TRACE, " SAB QB-1\n ");
 	if (self == CRT_NO_RANK) {
 		D_DEBUG(DB_TRACE, "%s: self rank not known yet\n",
 			ivns_internal->cii_grp_priv->gp_pub.cg_grpid);
 		return -DER_GRPVER;
 	}
 
+	D_DEBUG(DB_TRACE, " SAB QB-2\n ");
 	return crt_iv_ranks_parent_get(ivns_internal, self, root_node,
 				       ret_node);
 }
@@ -1306,12 +1354,15 @@ crt_hdlr_iv_fetch_aux(void *arg)
 	uint32_t			 local_grp_ver;
 	int				 rc = 0;
 
+D_DEBUG(DB_ALL," SAB  Y1\n");
+
 	rpc_req = arg;
 	input = crt_req_get(rpc_req);
 	output = crt_reply_get(rpc_req);
 
 	ivns_id.ii_group_name = input->ifi_ivns_group;
 	ivns_id.ii_nsid = input->ifi_ivns_id;
+D_DEBUG(DB_ALL," SAB  Y2\n");
 
 	/* ADDREF */
 	ivns_internal = crt_ivns_internal_lookup(&ivns_id);
@@ -1328,6 +1379,8 @@ crt_hdlr_iv_fetch_aux(void *arg)
 
 	/* Check group version match */
 	local_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
+D_DEBUG(DB_ALL," SAB  Y2-a: rpc version 0x%x, ivns version 0x%x\n",  input->ifi_grp_ver, local_grp_ver);
+
 	if (local_grp_ver != input->ifi_grp_ver) {
 		D_ERROR("Group (%s) version mismatch. Local: %d Remote :%d\n",
 			ivns_id.ii_group_name, local_grp_ver,
@@ -1335,6 +1388,7 @@ crt_hdlr_iv_fetch_aux(void *arg)
 		D_GOTO(send_error, rc = -DER_GRPVER);
 	}
 
+D_DEBUG(DB_ALL," SAB  Y3\n");
 	iv_ops = crt_iv_ops_get(ivns_internal, input->ifi_class_id);
 	if (iv_ops == NULL) {
 		D_ERROR("Returned iv_ops were NULL\n");
@@ -1342,6 +1396,7 @@ crt_hdlr_iv_fetch_aux(void *arg)
 	}
 
 	IV_DBG(&input->ifi_key, "fetch handler entered\n");
+D_DEBUG(DB_ALL," SAB  Y4\n");
 	rc = iv_ops->ivo_on_get(ivns_internal, &input->ifi_key,
 				0, CRT_IV_PERM_READ, &iv_value, &user_priv);
 	if (rc != 0) {
@@ -1351,10 +1406,13 @@ crt_hdlr_iv_fetch_aux(void *arg)
 
 	put_needed = true;
 
+D_DEBUG(DB_ALL," SAB  Y5\n");
 	rc = iv_ops->ivo_on_fetch(ivns_internal, &input->ifi_key, 0,
 				0x0, &iv_value, user_priv);
+D_DEBUG(DB_ALL," SAB  Y6\n");
 	if (rc == 0) {
 		/* Note: This increments ref count on 'rpc_req' and ivns */
+D_DEBUG(DB_ALL," SAB  Y7\n");
 		rc = crt_ivf_bulk_transfer(ivns_internal,
 					input->ifi_class_id, &input->ifi_key,
 					&iv_value, input->ifi_value_bulk,
@@ -1364,15 +1422,18 @@ crt_hdlr_iv_fetch_aux(void *arg)
 			D_GOTO(send_error, rc);
 		}
 	} else if (rc == -DER_IVCB_FORWARD) {
+		/* Forward the request to the parent */
 		d_rank_t next_node;
 		struct iv_fetch_cb_info *cb_info;
 
+D_DEBUG(DB_ALL," SAB  Y8\n");
 		if (ivns_internal->cii_grp_priv->gp_self ==
 							input->ifi_root_node) {
 			D_ERROR("Forward requested for root node\n");
 			D_GOTO(send_error, rc = -DER_INVAL);
 		}
 
+D_DEBUG(DB_ALL," SAB  Y9\n");
 		rc = iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
 		if (rc != 0) {
 			D_ERROR("ivo_on_put() returned rc = %d\n", rc);
@@ -1381,6 +1442,7 @@ crt_hdlr_iv_fetch_aux(void *arg)
 
 		put_needed = false;
 
+D_DEBUG(DB_ALL," SAB  Y10\n");
 		/* Reset the iv_value, since it maybe freed in on_put() */
 		memset(&iv_value, 0, sizeof(iv_value));
 		rc = iv_ops->ivo_on_get(ivns_internal, &input->ifi_key,
@@ -1391,8 +1453,10 @@ crt_hdlr_iv_fetch_aux(void *arg)
 			D_GOTO(send_error, rc);
 		}
 
+D_DEBUG(DB_ALL," SAB  Y11\n");
 		put_needed = true;
 
+D_DEBUG(DB_ALL," SAB  Y12\n");
 		rc = crt_iv_parent_get(ivns_internal, input->ifi_root_node,
 					&next_node);
 		if (rc != 0) {
@@ -1400,6 +1464,20 @@ crt_hdlr_iv_fetch_aux(void *arg)
 				rc);
 			D_GOTO(send_error, rc = -DER_OOG);
 		}
+
+		/* Check here for change in group */
+		local_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
+		if (local_grp_ver != input->ifi_grp_ver) {
+			D_ERROR("Group (%s) version mismatch. "
+				"Local: %d Remote :%d\n",
+				ivns_id.ii_group_name, local_grp_ver,
+				input->ifi_grp_ver);
+			D_GOTO(send_error, rc = -DER_GRPVER);
+		}
+
+D_DEBUG(DB_ALL," SAB  Y13: Local Ver 0x%x: rpc version 0x%x\n", local_grp_ver,
+   input->ifi_grp_ver);
+
 
 		D_ALLOC_PTR(cb_info);
 		if (cb_info == NULL)
@@ -1476,8 +1554,11 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 	uint32_t			 local_grp_ver;
 	int				 rc;
 
+/* SAB THis is first check for group ID */
+
 	input = crt_req_get(rpc_req);
 	output = crt_reply_get(rpc_req);
+D_DEBUG(DB_ALL,"  SAB B1 Input group version %x\n", input->ifi_grp_ver);
 
 	ivns_id.ii_group_name = input->ifi_ivns_group;
 	ivns_id.ii_nsid = input->ifi_ivns_id;
@@ -1490,9 +1571,15 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 		D_GOTO(send_error, rc = -DER_NONEXIST);
 	}
 
-	/* Check group version matching incoming version */
+	/* Check local group version matching with in comming request */
 	local_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
+D_DEBUG(DB_ALL,"  SAB B1A local grp version %d, rpc version %d\n", 
+   local_grp_ver, input->ifi_grp_ver);
+
 	if (local_grp_ver != input->ifi_grp_ver) {
+D_DEBUG(DB_ALL,"  SAB B1-b ERROR, version mis-matched: error %d: 0x%x\n",
+  DER_GRPVER, DER_GRPVER);
+
 		D_ERROR("Group (%s) version mismatch. Local: %d Remote :%d\n",
 			ivns_id.ii_group_name, local_grp_ver,
 			input->ifi_grp_ver);
@@ -1519,18 +1606,23 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 	 */
 	IVNS_ADDREF(ivns_internal);
 
+D_DEBUG(DB_ALL,"     SAB crt_hdlr_iv_fetch B4 \n");
 	if (iv_ops->ivo_pre_fetch != NULL) {
+D_DEBUG(DB_ALL,"     SAB crt_hdlr_iv_fetch B5a \n");
 		D_DEBUG(DB_TRACE, "Executing ivo_pre_fetch\n");
 		iv_ops->ivo_pre_fetch(ivns_internal,
 				      &input->ifi_key,
 				      crt_hdlr_iv_fetch_aux,
 				      rpc_req);
+D_DEBUG(DB_ALL,"     SAB crt_hdlr_iv_fetch B5a-b \n");
 	} else {
+D_DEBUG(DB_ALL,"    SAB crt_hdlr_iv_fetch B5b \n");
 		crt_hdlr_iv_fetch_aux(rpc_req);
 	}
 
 	/* ADDREF done above in lookup */
 	IVNS_DECREF(ivns_internal);
+D_DEBUG(DB_ALL,"    SAB crt_hdlr_iv_fetch DONE \n");
 	return;
 
 send_error:
@@ -1580,9 +1672,9 @@ exit:
 
 int
 crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
-	    crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
-	    crt_iv_shortcut_t shortcut,
-	    crt_iv_comp_cb_t fetch_comp_cb, void *cb_arg)
+           crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
+           crt_iv_shortcut_t shortcut,
+	   crt_iv_comp_cb_t fetch_comp_cb, void *cb_arg)
 {
 	struct crt_ivns_internal	*ivns_internal = NULL;
 	struct crt_iv_ops		*iv_ops;
@@ -1593,6 +1685,9 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 	d_sg_list_t			*iv_value = NULL;
 	void				*user_priv = NULL;
 	bool				put_needed = false;
+
+D_DEBUG(DB_ALL," SAB A0: Version passed in %p\n", iv_ver);
+D_DEBUG(DB_ALL,"     A0 0x%x,\n", class_id );
 
 	if (iv_key == NULL) {
 		D_ERROR("iv_key is NULL\n");
@@ -1609,6 +1704,8 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 		return -DER_NONEXIST;
 	}
 
+D_DEBUG(DB_ALL,"    SAB  crt_iv_fetch: A1\n");
+	/* Get group name space interal operations */
 	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
 	if (iv_ops == NULL) {
 		D_ERROR("Failed to get iv_ops for class_id = %d\n", class_id);
@@ -1617,12 +1714,16 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 		return -DER_INVAL;
 	}
 
+D_DEBUG(DB_ALL,"    SAB  crt_iv_fetch: A2\n");
+	/* Get iv_key root rank */
 	rc = iv_ops->ivo_on_hash(ivns_internal, iv_key, &root_rank);
 	if (rc != 0) {
 		D_ERROR("Failed to get hash\n");
 		D_GOTO(exit, rc);
 	}
 
+D_DEBUG(DB_ALL,"    SAB  crt_iv_fetch: A3, root rank %d\n",root_rank);
+	/* Allocate memory pointer for scatter/gather list */
 	D_ALLOC_PTR(iv_value);
 	if (iv_value == NULL)
 		D_GOTO(exit, rc = -DER_NOMEM);
@@ -1635,9 +1736,15 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 	}
 	put_needed = true;
 
+D_DEBUG(DB_ALL,"    SAB  crt_iv_fetch: A4-4\n");
 	rc = iv_ops->ivo_on_fetch(ivns_internal, iv_key, 0,
 				  0, iv_value, user_priv);
+
+D_DEBUG(DB_ALL,"    SAB  crt_iv_fetch: A4-5, after ivo_on_fetch opertion\n");
+	/* The fetch info is contained on current server.  */
 	if (rc == 0) {
+D_DEBUG(DB_ALL,"    SAB  crt_iv_fetch: A5\n ****");
+		/* Finish up the completion call back */
 		iv_ops->ivo_on_refresh(ivns_internal, iv_key, 0,
 				iv_value, false, 0x0, user_priv);
 		fetch_comp_cb(ivns_internal, class_id, iv_key, NULL,
@@ -1650,22 +1757,31 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 		return rc;
 	} else if (rc != -DER_IVCB_FORWARD) {
 		/* We got error, call the callback and exit */
+D_DEBUG(DB_ALL,"    SAB  crt_iv_fetch: A6\n ****");
 		iv_ops->ivo_on_refresh(ivns_internal, iv_key, 0,
 				NULL, false, rc, user_priv);
+D_DEBUG(DB_ALL,"    SAB  crt_iv_fetch: A6b\n ****");
 		fetch_comp_cb(ivns_internal, class_id, iv_key, NULL,
 			      NULL, rc, cb_arg);
+D_DEBUG(DB_ALL,"    SAB  crt_iv_fetch: A6c\n ****");
 		iv_ops->ivo_on_put(ivns_internal, iv_value, user_priv);
 		D_FREE_PTR(iv_value);
 
 		/* ADDREF done above in lookup */
+D_DEBUG(DB_ALL,"    SAB  crt_iv_fetch: A6d\n ****");
 		IVNS_DECREF(ivns_internal);
 		return rc;
 	}
-
+	/* The request is not located on current server.	*/
+	/* Create an rpc request to external server.		*/
 	/* Return read-only copy and request 'write' version of iv_value */
+	/* Free up previos iv_value structure.			*/
+D_DEBUG(DB_ALL,"    SAB  crt_iv_fetch: A7\n ****");
 	iv_ops->ivo_on_put(ivns_internal, iv_value, user_priv);
 	put_needed = false;
 
+D_DEBUG(DB_ALL,"    SAB  crt_iv_fetch: A8\n ****");
+	/* Setup user private pointer.  Alloc and fill in iv_value structure */
 	rc = iv_ops->ivo_on_get(ivns_internal, iv_key, 0, CRT_IV_PERM_WRITE,
 				iv_value, &user_priv);
 	if (rc != 0) {
@@ -1674,14 +1790,34 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 	}
 	put_needed = true;
 
-	/* If we reached here, means we got DER_IVCB_FORWARD */
-
+D_DEBUG(DB_ALL,"    SAB  crt_iv_fetch: A9\n ****");
+	/* If we reached here, means we got DER_IVCB_FORWARD	*/
+	/* Donot need a version check after call.		*/
+	/* We will create a new rpc for synchronization		*/
 	rc = get_shortcut_path(ivns_internal, root_rank, shortcut, &next_node);
+
 	if (rc != 0)
 		D_GOTO(exit, rc);
 
 	IV_DBG(iv_key, "root=%d next_parent=%d\n", root_rank, next_node);
 
+#ifdef SAB_ADDED_no
+	uint32_t			 local_grp_ver;
+We need to construt the rpc.  No version to chck.
+	/* Test for version change befor we build rpc. 		*/
+	/* verify that name space version hasn't been modified	*/
+        local_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
+
+D_DEBUG(DB_ALL,"  SAB A9-1 local grp version %d \n", local_grp_ver );
+
+        if (local_grp_ver != input->ifi_grp_ver) {
+                D_ERROR("Group (%s) version mismatch. Local: %d Remote :%d\n",
+                        ivns_id.ii_group_name, local_grp_ver,
+                        input->ifi_grp_ver);
+                D_GOTO(send_error, rc = -DER_GRPVER);
+        }
+
+#endif
 	D_ALLOC_PTR(cb_info);
 	if (cb_info == NULL)
 		D_GOTO(exit, rc = -DER_NOMEM);
@@ -1698,13 +1834,23 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 
 	cb_info->ifc_ivns_internal = ivns_internal;
 	IVNS_ADDREF(cb_info->ifc_ivns_internal);
-
+/* My added version */
+	cb_info->version = ivns_internal->cii_grp_priv->gp_membs_ver;;
 	cb_info->ifc_class_id = class_id;
 
+#if 0
+	if (local_grp_ver != input->ifi_grp_ver) {
+#endif
+
+D_DEBUG(DB_ALL,"    SAB  crt_iv_fetch: A10\n ****");
+	/* Issue a forwarding rpc to next node in list */
 	rc = crt_ivf_rpc_issue(next_node, iv_key, iv_value, root_rank,
 				cb_info);
+
+D_DEBUG(DB_ALL,"    SAB  crt_iv_fetch: rpc issued A11\n ****");
 exit:
 	if (rc != 0) {
+D_DEBUG(DB_ALL,"    SAB  crt_iv_fetch: A11\n ****");
 		fetch_comp_cb(ivns, class_id, iv_key, NULL,
 			      NULL, rc, cb_arg);
 
@@ -1724,6 +1870,10 @@ exit:
 	if (ivns_internal)
 		IVNS_DECREF(ivns_internal);
 
+D_DEBUG(DB_ALL," **** SAB  crt_iv_fetch: DONE\n ****");
+D_DEBUG(DB_ALL," ****************************\n");
+D_DEBUG(DB_ALL," ********Wait for Response **\n");
+D_DEBUG(DB_ALL," **************************\n");
 	return rc;
 }
 
@@ -1747,6 +1897,7 @@ crt_hdlr_iv_sync_aux(void *arg)
 	crt_rpc_t			*rpc_req;
 	uint32_t			 local_grp_ver;
 
+D_DEBUG(DB_ALL," SAB  1\n");
 	rpc_req = arg;
 	/* This is an internal call. All errors are fatal */
 	input = crt_req_get(rpc_req);
@@ -1765,6 +1916,7 @@ crt_hdlr_iv_sync_aux(void *arg)
 	/* In some use-cases sync can arrive to a node that hasn't attached
 	* iv namespace yet. Treat such errors as fatal if the flag is set.
 	**/
+D_DEBUG(DB_ALL," SAB z2\n");
 	if (ivns_internal == NULL) {
 		D_ERROR("ivns_internal was NULL. ivns_id=%s:%d\n",
 			ivns_id.ii_group_name, ivns_id.ii_nsid);
@@ -1776,6 +1928,7 @@ crt_hdlr_iv_sync_aux(void *arg)
 	}
 
 	/* Check group version match */
+D_DEBUG(DB_ALL," SAB z3L check version here\n");
 	local_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
 	if (local_grp_ver != input->ivs_grp_ver) {
 		D_ERROR("Group (%s) version mismatch. Local: %d Remote :%d\n",
@@ -1784,6 +1937,7 @@ crt_hdlr_iv_sync_aux(void *arg)
 		D_GOTO(exit, rc = -DER_GRPVER);
 	}
 
+D_DEBUG(DB_ALL," SAB z4\n");
 	iv_ops = crt_iv_ops_get(ivns_internal, input->ivs_class_id);
 	D_ASSERT(iv_ops != NULL);
 
@@ -1795,12 +1949,14 @@ crt_hdlr_iv_sync_aux(void *arg)
 	}
 
 	/* If bulk is set, issue sync call based on ivs_event */
+D_DEBUG(DB_ALL," SAB z5\n");
 	switch (sync_type->ivs_event) {
 	case CRT_IV_SYNC_EVENT_UPDATE:
 	{
 		d_sg_list_t	tmp_iv;
 		d_iov_t		*tmp_iovs;
 
+D_DEBUG(DB_ALL," SAB z6\n");
 		rc = iv_ops->ivo_on_get(ivns_internal, &input->ivs_key,
 				0, CRT_IV_PERM_READ, &iv_value, &user_priv);
 		if (rc != 0) {
@@ -1846,6 +2002,7 @@ crt_hdlr_iv_sync_aux(void *arg)
 	}
 
 	case CRT_IV_SYNC_EVENT_NOTIFY:
+D_DEBUG(DB_ALL," SAB z7\n");
 		rc = iv_ops->ivo_on_refresh(ivns_internal, &input->ivs_key,
 					    0, 0, false, 0, user_priv);
 		if (rc != 0) {
@@ -1856,6 +2013,7 @@ crt_hdlr_iv_sync_aux(void *arg)
 		break;
 
 	default:
+D_DEBUG(DB_ALL," SAB z8\n");
 		D_ERROR("Unknown event type %#x", sync_type->ivs_event);
 		D_GOTO(exit, rc = -DER_INVAL);
 		break;
@@ -1866,13 +2024,16 @@ exit:
 		iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
 
 	output->rc = rc;
+D_DEBUG(DB_ALL," SAB z9\n");
 	crt_reply_send(rpc_req);
+D_DEBUG(DB_ALL," SAB z10\n");
 
 	/* ADDREF done in lookup above */
 	IVNS_DECREF(ivns_internal);
 
 	/* add ref in crt_hdlr_iv_sync */
 	RPC_PUB_DECREF(rpc_req);
+D_DEBUG(DB_ALL," SAB z11\n");
 }
 
 /* Handler for internal SYNC CORPC */
@@ -1979,7 +2140,7 @@ call_pre_sync_cb(struct crt_ivns_internal *ivns_internal,
 	struct crt_iv_ops	*iv_ops;
 	d_sg_list_t		 iv_value;
 	d_sg_list_t		 tmp_iv;
-	d_iov_t			*tmp_iovs = NULL;
+	d_iov_t			*tmp_iovs;
 	void			*user_priv;
 	bool			 need_put = false;
 	int			 rc;
@@ -1996,22 +2157,21 @@ call_pre_sync_cb(struct crt_ivns_internal *ivns_internal,
 	}
 	need_put = true;
 
-	if (rpc_req->cr_co_bulk_hdl != CRT_BULK_NULL) {
-		D_ALLOC_ARRAY(tmp_iovs, iv_value.sg_nr);
-		if (tmp_iovs == NULL) {
-			D_ERROR("Failed to allocate temporary iovs\n");
-			D_GOTO(exit, rc);
-		}
+	D_ALLOC_ARRAY(tmp_iovs, iv_value.sg_nr);
+	if (tmp_iovs == NULL) {
+		D_ERROR("Failed to allocate temporary iovs\n");
+		D_GOTO(exit, rc);
+	}
 
-		tmp_iv.sg_nr = iv_value.sg_nr;
-		tmp_iv.sg_iovs = tmp_iovs;
+	tmp_iv.sg_nr = iv_value.sg_nr;
+	tmp_iv.sg_iovs = tmp_iovs;
 
-		/* Populate tmp_iv.sg_iovs[0] to [sg_nr] */
-		rc = crt_bulk_access(rpc_req->cr_co_bulk_hdl, &tmp_iv);
-		if (rc != 0) {
-			D_ERROR("crt_bulk_access() failed; rc=%d\n", rc);
-			D_GOTO(exit, rc);
-		}
+	/* Populate tmp_iv.sg_iovs[0] to [sg_nr] */
+	rc = crt_bulk_access(rpc_req->cr_co_bulk_hdl, &tmp_iv);
+	if (rc != 0) {
+		D_FREE(tmp_iovs);
+		D_ERROR("crt_bulk_access() failed; rc=%d\n", rc);
+		D_GOTO(exit, rc);
 	}
 
 	D_DEBUG(DB_TRACE, "Executing ivo_pre_sync\n");
@@ -2019,9 +2179,10 @@ call_pre_sync_cb(struct crt_ivns_internal *ivns_internal,
 				  &tmp_iv, user_priv);
 	if (rc != 0)
 		D_ERROR("ivo_pre_sync() failed; rc=%d\n", rc);
+
+	D_FREE(tmp_iovs);
+
 exit:
-	if (tmp_iovs)
-		D_FREE(tmp_iovs);
 	if (need_put)
 		iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
 	return rc;
@@ -2106,8 +2267,8 @@ handle_ivsync_response(const struct crt_cb_info *cb_info)
 	struct iv_sync_cb_info	*iv_sync = cb_info->cci_arg;
 	struct crt_iv_ops	*iv_ops;
 
-	if (iv_sync->isc_bulk_hdl != CRT_BULK_NULL)
-		crt_bulk_free(iv_sync->isc_bulk_hdl);
+D_DEBUG(DB_ALL,"SAB  M1 \n");
+	crt_bulk_free(iv_sync->isc_bulk_hdl);
 
 	/* do_callback is set based on sync value specified */
 	if (iv_sync->isc_do_callback) {
@@ -2460,6 +2621,7 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 	struct crt_iv_ops	*iv_ops;
 	int			rc;
 
+D_DEBUG(DB_ALL,"SAB  N1 \n");
 	/* For bi-directional updates, transfer data back to child */
 	if (iv_info->uci_sync_type.ivs_flags & CRT_IV_SYNC_BIDIRECTIONAL) {
 		transfer_back_to_child(&input->ivu_key, iv_info, true,
@@ -2617,14 +2779,26 @@ handle_response_internal(void *arg)
 	const struct crt_cb_info *cb_info = arg;
 	crt_rpc_t		 *rpc = cb_info->cci_rpc;
 
+#if 0
+	/* SAB Added */
+	crt_rpc_input_t		  input = rpc->cr_input;
+#endif
+
+D_DEBUG(DB_ALL,"SAB  T1:\n");
+
 	switch (rpc->cr_opc) {
 	case CRT_OPC_IV_FETCH:
+D_DEBUG(DB_ALL,"SAB  T2:\n");
 		handle_ivfetch_response(cb_info);
 		break;
+
 	case CRT_OPC_IV_SYNC:
+D_DEBUG(DB_ALL,"SAB  T3:\n");
 		handle_ivsync_response(cb_info);
 		break;
+
 	case CRT_OPC_IV_UPDATE:
+D_DEBUG(DB_ALL,"SAB  T4:\n");
 		handle_ivupdate_response(cb_info);
 		break;
 	default:
@@ -2639,11 +2813,14 @@ handle_response_cb_internal(void *arg)
 	crt_rpc_t		*rpc = cb_info->cci_rpc;
 	struct crt_rpc_priv	*rpc_priv;
 
+D_DEBUG(DB_ALL,"SAB  J1:\n");
 	handle_response_internal(arg);
 
+D_DEBUG(DB_ALL,"SAB  J2:\n");
 	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
 	RPC_DECREF(rpc_priv);
 	D_FREE_PTR(cb_info);
+D_DEBUG(DB_ALL,"SAB  J3:\n");
 }
 
 static void
@@ -2653,14 +2830,18 @@ handle_response_cb(const struct crt_cb_info *cb_info)
 	struct crt_rpc_priv	*rpc_priv;
 	struct crt_context	*crt_ctx;
 
+D_DEBUG(DB_ALL,"SAB  G1 call back response: \n");
+
 	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
 	D_ASSERT(rpc_priv != NULL);
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
+	/* Current call back response */
 	if (crt_ctx->cc_iv_resp_cb != NULL) {
 		int rc;
 		struct crt_cb_info *info;
 
+D_DEBUG(DB_ALL,"SAB  G2:\n");
 		D_ALLOC_PTR(info);
 		if (info == NULL) {
 			D_WARN("allocate fails, do cb directly\n");
@@ -2672,20 +2853,24 @@ handle_response_cb(const struct crt_cb_info *cb_info)
 		info->cci_rpc = cb_info->cci_rpc;
 		info->cci_rc = cb_info->cci_rc;
 		info->cci_arg = cb_info->cci_arg;
+D_DEBUG(DB_ALL,"SAB  G3:\n");
 		rc = crt_ctx->cc_iv_resp_cb((crt_context_t)crt_ctx,
 					    info,
 					    handle_response_cb_internal,
 					    crt_ctx->cc_rpc_cb_arg);
+D_DEBUG(DB_ALL,"SAB  G4:\n");
 		if (rc) {
 			D_WARN("rpc_cb failed %d, do cb directly\n", rc);
 			RPC_DECREF(rpc_priv);
 			D_FREE_PTR(info);
 			goto callback;
 		}
+D_DEBUG(DB_ALL,"SAB  G5:\n");
 		return;
 	}
 
 callback:
+D_DEBUG(DB_ALL,"SAB  G6:\n");
 	handle_response_internal((void *)cb_info);
 }
 
@@ -2753,6 +2938,8 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 	update_cb_info->uci_bulk_hdl = cb_info->buc_bulk_hdl;
 
 	if (update_rc == -DER_IVCB_FORWARD) {
+		/* Forward request to the parent    */
+		/* Do we need a version check here? */
 		rc = crt_iv_parent_get(ivns_internal,
 					input->ivu_root_node, &next_rank);
 		if (rc != 0) {
@@ -2984,6 +3171,17 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 				D_GOTO(send_error, rc = -DER_OOG);
 			}
 
+			/* Check here for change in group */
+			local_grp_ver = ivns_internal->cii_grp_priv->
+						       gp_membs_ver;
+			if (local_grp_ver != input->ivu_grp_ver) {
+				D_ERROR("Group (%s) version mismatch. "
+					"Local: %d Remote :%d\n",
+					ivns_id.ii_group_name, local_grp_ver,
+					input->ivu_grp_ver);
+				D_GOTO(send_error, rc = -DER_GRPVER);
+			}
+
 			D_ALLOC_PTR(update_cb_info);
 			if (update_cb_info == NULL)
 				D_GOTO(send_error, rc = -DER_NOMEM);
@@ -3186,7 +3384,10 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 
 		D_GOTO(exit, rc);
 	} else  if (rc == -DER_IVCB_FORWARD) {
+		/* Send synchronization to parent */
 
+		/* Donot need a version check after call.       */
+		/* We will create a new rpc for synchronization */
 		rc = get_shortcut_path(ivns_internal, root_rank, shortcut,
 					&next_node);
 		if (rc != 0)
