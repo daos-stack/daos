@@ -1,10 +1,7 @@
+%bcond_with fault_injection
 %define daoshome %{_exec_prefix}/lib/%{name}
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
-%if (0%{?build_type})
-%else
-%global build_type release
-%endif
 %if (0%{?suse_version} >= 1500)
 # until we get an updated mercury build on 15.2
 %global mercury_version 2.0.0~rc1-1.suse.lp151
@@ -209,7 +206,8 @@ scons %{?_smp_mflags}      \
       USE_INSTALLED=all    \
       CONF_DIR=%{conf_dir} \
       PREFIX=%{?buildroot} \
-      BUILD_TYPE=%{?build_type}
+      %{?with_fault_injection:BUILD_TYPE=dev} \
+      %{!?with_fault_injection:BUILD_TYPE=release}
 
 
 %install
@@ -222,7 +220,8 @@ scons %{?_smp_mflags}                 \
       USE_INSTALLED=all               \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
-      BUILD_TYPE=%{?build_type}
+      %{?with_fault_injection:BUILD_TYPE=dev} \
+      %{!?with_fault_injection:BUILD_TYPE=release}
 
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"
