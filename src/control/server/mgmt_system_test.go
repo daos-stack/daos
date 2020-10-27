@@ -42,6 +42,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
 	. "github.com/daos-stack/daos/src/control/system"
@@ -1007,17 +1008,17 @@ func TestServer_MgmtSvc_getPeerListenAddr(t *testing.T) {
 func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mgmtSvc          *mgmtSvc
-		clientNetworkCfg *ClientNetworkCfg
+		clientNetworkCfg *config.ClientNetworkCfg
 		req              *mgmtpb.GetAttachInfoReq
 		expResp          *mgmtpb.GetAttachInfoResp
 	}{
 		"Server uses verbs + Infiniband": {
-			clientNetworkCfg: &ClientNetworkCfg{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: netdetect.Infiniband},
+			clientNetworkCfg: &config.ClientNetworkCfg{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: netdetect.Infiniband},
 			req:              &mgmtpb.GetAttachInfoReq{},
 			expResp:          &mgmtpb.GetAttachInfoResp{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: netdetect.Infiniband},
 		},
 		"Server uses sockets + Ethernet": {
-			clientNetworkCfg: &ClientNetworkCfg{Provider: "ofi+sockets", CrtCtxShareAddr: 0, CrtTimeout: 5, NetDevClass: netdetect.Ether},
+			clientNetworkCfg: &config.ClientNetworkCfg{Provider: "ofi+sockets", CrtCtxShareAddr: 0, CrtTimeout: 5, NetDevClass: netdetect.Ether},
 			req:              &mgmtpb.GetAttachInfoReq{},
 			expResp:          &mgmtpb.GetAttachInfoResp{Provider: "ofi+sockets", CrtCtxShareAddr: 0, CrtTimeout: 5, NetDevClass: netdetect.Ether},
 		},

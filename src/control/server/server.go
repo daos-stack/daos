@@ -47,6 +47,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/security"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -58,7 +59,7 @@ const (
 	minHugePageCount = 128
 )
 
-func cfgHasBdev(cfg *Configuration) bool {
+func cfgHasBdev(cfg *config.Configuration) bool {
 	for _, srvCfg := range cfg.Servers {
 		if len(srvCfg.Storage.Bdev.DeviceList) > 0 {
 			return true
@@ -79,7 +80,7 @@ func iommuDetected() bool {
 	return len(dmars) > 0
 }
 
-func raftDir(cfg *Configuration) string {
+func raftDir(cfg *config.Configuration) string {
 	if len(cfg.Servers) == 0 {
 		return "" // can't save to SCM
 	}
@@ -95,14 +96,14 @@ func hostname() string {
 }
 
 // Start is the entry point for a daos_server instance.
-func Start(log *logging.LeveledLogger, cfg *Configuration) error {
+func Start(log *logging.LeveledLogger, cfg *config.Configuration) error {
 	err := cfg.Validate(log)
 	if err != nil {
 		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
 	// Backup active config.
-	saveActiveConfig(log, cfg)
+	config.SaveActiveConfig(log, cfg)
 
 	if cfg.HelperLogFile != "" {
 		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cfg.HelperLogFile); err != nil {
@@ -266,7 +267,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		})
 
 		if idx == 0 {
-			netDevClass, err = cfg.getDeviceClassFn(srvCfg.Fabric.Interface)
+			netDevClass, err = cfg.GetDeviceClassFn(srvCfg.Fabric.Interface)
 			if err != nil {
 				return err
 			}
@@ -341,7 +342,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	grpcServer := grpc.NewServer(opts...)
 	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
 
-	mgmtSvc.clientNetworkCfg = &ClientNetworkCfg{
+	mgmtSvc.clientNetworkCfg = &config.ClientNetworkCfg{
 		Provider:        cfg.Fabric.Provider,
 		CrtCtxShareAddr: cfg.Fabric.CrtCtxShareAddr,
 		CrtTimeout:      cfg.Fabric.CrtTimeout,

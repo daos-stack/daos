@@ -33,6 +33,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	commands "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/server"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
@@ -60,7 +61,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	// wrappers around more easily-testable functions.
 	if cmd.scs == nil {
 		cmd.scs = server.NewStorageControlService(cmd.log, bdev.DefaultProvider(cmd.log),
-			scm.DefaultProvider(cmd.log), server.NewConfiguration().Servers)
+			scm.DefaultProvider(cmd.log), config.NewConfiguration().Servers)
 	}
 
 	op := "Preparing"
@@ -128,7 +129,7 @@ type storageScanCmd struct {
 
 func (cmd *storageScanCmd) Execute(args []string) error {
 	svc := server.NewStorageControlService(cmd.log, bdev.DefaultProvider(cmd.log),
-		scm.DefaultProvider(cmd.log), server.NewConfiguration().Servers)
+		scm.DefaultProvider(cmd.log), config.NewConfiguration().Servers)
 
 	cmd.log.Info("Scanning locally-attached storage...")
 

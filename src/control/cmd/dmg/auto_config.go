@@ -28,17 +28,18 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pkg/errors"
+	"gopkg.in/yaml.v2"
+
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
-	"github.com/daos-stack/daos/src/control/server"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/pkg/errors"
-	"gopkg.in/yaml.v2"
 )
 
-var (
+const (
 	scmMountPrefix = "/mnt/daos"
 	pmemBdevDir    = "/dev"
 )
@@ -198,7 +199,7 @@ func (cmd *configGenCmd) getSingleStorageSet(ctx context.Context, ctlInvoker con
 // ioserver storage config with detected device identifiers if thresholds met.
 //
 // Return server config populated with ioserver storage or error.
-func (cmd *configGenCmd) checkStorage(ctx context.Context, ctlInvoker control.Invoker, getNumNuma numaNumGetter) (*server.Configuration, error) {
+func (cmd *configGenCmd) checkStorage(ctx context.Context, ctlInvoker control.Invoker, getNumNuma numaNumGetter) (*config.Configuration, error) {
 	storageSet, err := cmd.getSingleStorageSet(ctx, ctlInvoker)
 	if err != nil {
 		return nil, err
@@ -223,7 +224,7 @@ func (cmd *configGenCmd) checkStorage(ctx context.Context, ctlInvoker control.In
 		return nil, errors.WithMessage(err, "validating nvme storage requirements")
 	}
 
-	cfg := server.NewConfiguration()
+	cfg := config.NewConfiguration()
 	for idx, pp := range pmemPaths {
 		cfg.Servers = append(cfg.Servers, ioserver.NewConfig().
 			WithScmClass("dcpm").
@@ -236,11 +237,11 @@ func (cmd *configGenCmd) checkStorage(ctx context.Context, ctlInvoker control.In
 	return cfg, nil
 }
 
-func (cmd *configGenCmd) checkNetwork(ctx context.Context, cfg *server.Configuration) (*server.Configuration, error) {
+func (cmd *configGenCmd) checkNetwork(ctx context.Context, cfg *config.Configuration) (*config.Configuration, error) {
 	return cfg, nil // TODO: implement
 }
 
-func (cmd *configGenCmd) parseConfig(cfg *server.Configuration) (string, error) {
+func (cmd *configGenCmd) parseConfig(cfg *config.Configuration) (string, error) {
 	bytes, err := yaml.Marshal(cfg)
 	if err != nil {
 		return "", err

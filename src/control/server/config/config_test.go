@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package server
+package config
 
 import (
 	"bufio"
@@ -96,16 +96,10 @@ func uncommentServerConfig(t *testing.T, outFile string) {
 	}
 }
 
-// emptyMockConfig returns unpopulated configuration with a default mock
-// external interfacing implementation.
-func emptyMockConfig(t *testing.T) *Configuration {
-	return newDefaultConfiguration(defaultMockExt())
-}
-
 // supply mock external interface, populates config from given file path
 func mockConfigFromFile(t *testing.T, e External, path string) *Configuration {
 	t.Helper()
-	c := newDefaultConfiguration(e).
+	c := NewDefaultConfiguration(e).
 		WithProviderValidator(netdetect.ValidateProviderStub).
 		WithNUMAValidator(netdetect.ValidateNUMAStub).
 		WithGetNetworkDeviceClass(getDeviceClassStub)
@@ -160,7 +154,7 @@ func TestServer_ConfigMarshalUnmarshal(t *testing.T) {
 				uncommentServerConfig(t, tt.inPath)
 			}
 
-			configA := newDefaultConfiguration(defaultMockExt()).
+			configA := NewDefaultConfiguration(defaultMockExt()).
 				WithProviderValidator(netdetect.ValidateProviderStub).
 				WithNUMAValidator(netdetect.ValidateNUMAStub).
 				WithGetNetworkDeviceClass(getDeviceClassStub)
@@ -179,7 +173,7 @@ func TestServer_ConfigMarshalUnmarshal(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			configB := newDefaultConfiguration(defaultMockExt()).
+			configB := NewDefaultConfiguration(defaultMockExt()).
 				WithProviderValidator(netdetect.ValidateProviderStub).
 				WithNUMAValidator(netdetect.ValidateNUMAStub).
 				WithGetNetworkDeviceClass(getDeviceClassStub)
@@ -402,7 +396,7 @@ func TestServer_ConfigRelativeWorkingPath(t *testing.T) {
 			relPath := filepath.Join(pathToRoot, testFile)
 			t.Logf("abs: %s, cwd: %s, rel: %s", testFile, cwd, relPath)
 
-			config := newDefaultConfiguration(defaultMockExt()).
+			config := NewDefaultConfiguration(defaultMockExt()).
 				WithProviderValidator(netdetect.ValidateProviderStub).
 				WithNUMAValidator(netdetect.ValidateNUMAStub).
 				WithGetNetworkDeviceClass(getDeviceClassStub)

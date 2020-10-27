@@ -43,6 +43,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -211,7 +212,7 @@ func TestServer_Harness_Start(t *testing.T) {
 					WithScmRamdiskSize(1).
 					WithScmMountPoint(filepath.Join(testDir, strconv.Itoa(i)))
 			}
-			config := NewConfiguration().
+			config := config.NewConfiguration().
 				WithServers(srvCfgs...).
 				WithSocketDir(testDir).
 				WithTransportConfig(&security.TransportConfig{AllowInsecure: true})

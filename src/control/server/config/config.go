@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package server
+package config
 
 import (
 	"context"
@@ -99,14 +99,14 @@ type Configuration struct {
 	Path string   // path to config file
 	ext  External // interface to os utilities
 
-	//a pointer to a function that validates the chosen provider
+	// pointer to a function that validates the chosen provider
 	validateProviderFn networkProviderValidation
 
-	//a pointer to a function that validates the chosen numa node
+	// pointer to a function that validates the chosen numa node
 	validateNUMAFn networkNUMAValidation
 
-	//a pointer to a function that retrieves the IO server network device class
-	getDeviceClassFn networkDeviceClass
+	// pointer to a function that retrieves the IO server network device class
+	GetDeviceClassFn networkDeviceClass `yaml:"-"`
 }
 
 // WithRecreateSuperblocks indicates that a missing superblock should not be treated as
@@ -130,7 +130,7 @@ func (c *Configuration) WithNUMAValidator(fn networkNUMAValidation) *Configurati
 
 // WithGetNetworkDeviceClass sets the function that determines the network device class
 func (c *Configuration) WithGetNetworkDeviceClass(fn networkDeviceClass) *Configuration {
-	c.getDeviceClassFn = fn
+	c.GetDeviceClassFn = fn
 	return c
 }
 
@@ -329,9 +329,9 @@ func (c *Configuration) WithFirmwareHelperLogFile(filePath string) *Configuratio
 	return c
 }
 
-// newDefaultConfiguration creates a new instance of configuration struct
+// NewDefaultConfiguration creates a new instance of configuration struct
 // populated with defaults.
-func newDefaultConfiguration(ext External) *Configuration {
+func NewDefaultConfiguration(ext External) *Configuration {
 	return &Configuration{
 		SystemName:         build.DefaultSystemName,
 		SocketDir:          defaultRuntimeDir,
@@ -344,7 +344,7 @@ func newDefaultConfiguration(ext External) *Configuration {
 		ext:                ext,
 		validateProviderFn: netdetect.ValidateProviderStub,
 		validateNUMAFn:     netdetect.ValidateNUMAStub,
-		getDeviceClassFn:   netdetect.GetDeviceClass,
+		GetDeviceClassFn:   netdetect.GetDeviceClass,
 		DisableVMD:         true, // support currently unstable
 	}
 }
@@ -352,7 +352,7 @@ func newDefaultConfiguration(ext External) *Configuration {
 // NewConfiguration creates a new instance of configuration struct
 // populated with defaults and default external interface.
 func NewConfiguration() *Configuration {
-	return newDefaultConfiguration(&ext{})
+	return NewDefaultConfiguration(&ext{})
 }
 
 // Load reads the serialized configuration from disk and validates it.
@@ -405,8 +405,8 @@ func (c *Configuration) SetPath(inPath string) error {
 	return err
 }
 
-// saveActiveConfig saves read-only active config, tries config dir then /tmp/
-func saveActiveConfig(log logging.Logger, config *Configuration) {
+// SaveActiveConfig saves read-only active config, tries config dir then /tmp/
+func SaveActiveConfig(log logging.Logger, config *Configuration) {
 	activeConfig := filepath.Join(filepath.Dir(config.Path), configOut)
 	eMsg := "Warning: active config could not be saved (%s)"
 	err := config.SaveToFile(activeConfig)
@@ -570,7 +570,7 @@ func validateMultiServerConfig(log logging.Logger, c *Configuration) error {
 			seenBdevSet[dev] = idx
 		}
 
-		ndc, err := c.getDeviceClassFn(srv.Fabric.Interface)
+		ndc, err := c.GetDeviceClassFn(srv.Fabric.Interface)
 		if err != nil {
 			return err
 		}

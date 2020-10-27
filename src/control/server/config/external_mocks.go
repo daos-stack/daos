@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package server
+package config
 
 import (
 	"sync"
