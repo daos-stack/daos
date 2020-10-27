@@ -123,7 +123,7 @@ class UnitTestWithoutServers(Test):
     def test_job_tests(self):
         """
         Test Description: Test daos job unittest.
-        Use Cases: daos_job tests for job envirionment variables.
+        Use Cases: daos_job tests for job environment variables.
         :avocado: tags=all,unittest,tiny,full_regression,job_tests
         """
         unittest_runner(self, "job_tests")

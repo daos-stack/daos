@@ -34,7 +34,7 @@ static int
 craft_default_jobid(char **jobid)
 {
 	struct utsname	name = {0};
-	pid_t 		pid;
+	pid_t		pid;
 	int		ret;
 
 	ret = uname(&name);
