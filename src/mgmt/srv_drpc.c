@@ -1012,7 +1012,7 @@ get_params_from_modify_acl_req(Drpc__Call *drpc_req, uuid_t uuid_out,
 					  drpc_req->body.data);
 	if (alloc.oom)
 		return -DER_NOMEM;
-	if ( req == NULL)
+	if (req == NULL)
 		return -DER_PROTO;
 
 	if (uuid_parse(req->uuid, uuid_out) != 0) {
@@ -1828,4 +1828,3 @@ out:
 
 	mgmt__cont_set_owner_req__free_unpacked(req, &alloc.alloc);
 }
-
