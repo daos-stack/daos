@@ -47,5 +47,5 @@ class DaosCoreTestDfs(DaosCoreBase):
 
         :avocado: tags=all,pr,hw,large,dfs_test
         """
-        self.daos_test = os.path.join(self.prefix, 'bin', 'dfs_test')
+        self.daos_test = os.path.join(self.bin, 'dfs_test')
         DaosCoreBase.run_subtest(self)
