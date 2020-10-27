@@ -948,8 +948,8 @@ enum_unpack_key(daos_key_desc_t *kds, char *key_data,
 		return rc;
 	}
 
-	D_DEBUG(DB_IO, "process akey %d %s\n",
-		(int)key.iov_len, (char *)key.iov_buf);
+	D_DEBUG(DB_IO, "process akey " DF_KEY "\n",
+		DP_KEY(&key));
 
 	if (io->ui_iods_top == -1 ||
 	    !daos_key_match(&io->ui_iods[io->ui_iods_top].iod_name, &key))
