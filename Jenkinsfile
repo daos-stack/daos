@@ -225,7 +225,7 @@ String functional_packages(String distro) {
             "hdf5-vol-daos-openmpi3-tests-daos-0 " +
             "MACSio-mpich2-daos-0 " +
             "MACSio-openmpi3-daos-0 " +
-            "mpifileutils-0"
+            "mpifileutils-mpich-daos-0"
     if (quickbuild()) {
         pkgs += " spdk_tools"
     }
