@@ -38,8 +38,10 @@ craft_default_jobid(char **jobid)
 	int		ret;
 
 	ret = uname(&name);
-	if (ret)
+	if (ret) {
+		D_ERROR("Uname to get uname for creating default jobid");
 		return daos_errno2der(errno);
+	}
 
 	pid = getpid();
 
