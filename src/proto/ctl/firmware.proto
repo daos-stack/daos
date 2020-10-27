@@ -25,10 +25,14 @@ syntax = "proto3";
 package ctl;
 
 import "storage_scm.proto";
+import "storage_nvme.proto";
 
 message FirmwareQueryReq {
 	bool queryScm = 1; // Should we query SCM devices?
 	bool queryNvme = 2; // Should we query NVMe devices?
+	repeated string deviceIDs = 3; // Filter by specific devices
+	string modelID = 4; // Filter by model ID
+	string firmwareRev = 5; // Filter by current firmware revision
 }
 
 message ScmFirmwareQueryResp {
@@ -40,8 +44,13 @@ message ScmFirmwareQueryResp {
 	string error = 6; // Error string, if any
 }
 
+message NvmeFirmwareQueryResp {
+	NvmeController device = 1; // Controller information includes FW rev
+}
+
 message FirmwareQueryResp {
 	repeated ScmFirmwareQueryResp scmResults = 1;
+	repeated NvmeFirmwareQueryResp nvmeResults = 2;
 }
 
 message FirmwareUpdateReq {
@@ -51,6 +60,9 @@ message FirmwareUpdateReq {
 		NVMe = 1;
 	}
 	DeviceType type = 2; // Type of device this firmware applies to
+	repeated string deviceIDs = 3; // Devices this update applies to
+	string modelID = 4; // Model ID this update applies to
+	string firmwareRev = 5; // Starting FW rev this update applies to
 }
 
 message ScmFirmwareUpdateResp {
@@ -58,6 +70,12 @@ message ScmFirmwareUpdateResp {
 	string error = 2; // empty if successful
 }
 
+message NvmeFirmwareUpdateResp {
+	string pciAddr = 1; // PCI address of the NVMe device
+	string error = 2; // empty if successful
+}
+
 message FirmwareUpdateResp {
 	repeated ScmFirmwareUpdateResp scmResults = 1; // results for SCM update
+	repeated NvmeFirmwareUpdateResp nvmeResults = 2; // results for NVMe update
 }

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -162,7 +162,7 @@ alloc_ie:
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
-	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDONLY, &ie->ie_obj, NULL,
+	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL,
 			&ie->ie_stat);
 	if (rc) {
 		DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: (%s)", strerror(rc));

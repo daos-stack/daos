@@ -204,6 +204,10 @@ crt_proc_daos_iod_and_csum(crt_proc_t proc, crt_proc_op_t proc_op,
 	if (rc != 0)
 		return -DER_HG;
 
+	rc = crt_proc_uint64_t(proc, &iod->iod_flags);
+	if (rc != 0)
+		return -DER_HG;
+
 	if (proc_op == CRT_PROC_ENCODE && oiod != NULL &&
 	    (oiod->oiod_flags & OBJ_SIOD_PROC_ONE) != 0) {
 		proc_one = true;
@@ -559,6 +563,9 @@ crt_proc_daos_anchor_t(crt_proc_t proc, daos_anchor_t *anchor)
 	if (crt_proc_uint32_t(proc, &anchor->da_flags) != 0)
 		return -DER_HG;
 
+	if (crt_proc_uint64_t(proc, &anchor->da_sub_anchors) != 0)
+		return -DER_HG;
+
 	if (crt_proc_raw(proc, anchor->da_buf, sizeof(anchor->da_buf)) != 0)
 		return -DER_HG;
 
@@ -818,6 +825,10 @@ crt_proc_daos_iod_t(crt_proc_t proc, daos_iod_t *iod)
 	if (rc != 0)
 		return -DER_HG;
 
+	rc = crt_proc_uint64_t(proc, &iod->iod_flags);
+	if (rc != 0)
+		return -DER_HG;
+
 	rc = crt_proc_uint32_t(proc, &iod->iod_nr);
 	if (rc != 0)
 		return -DER_HG;
@@ -899,24 +910,17 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc,
 		struct daos_cpd_update	*dcu = &dcsr->dcsr_update;
 
 		if (proc_op == CRT_PROC_DECODE) {
-			D_ALLOC(dcu->dcu_iod_array,
-				sizeof(*dcu->dcu_iod_array));
-			if (dcu->dcu_iod_array == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-
 			if (dcsr->dcsr_ec_tgt_nr != 0) {
 				D_ALLOC_ARRAY(dcu->dcu_ec_tgts,
 					      dcsr->dcsr_ec_tgt_nr);
 				if (dcu->dcu_ec_tgts == NULL)
 					D_GOTO(out, rc = -DER_NOMEM);
 			}
+
+			dcu->dcu_ec_split_req = NULL;
 		}
 
 		rc = crt_proc_struct_dcs_csum_info(proc, &dcu->dcu_dkey_csum);
-		if (rc != 0)
-			D_GOTO(out, rc = -DER_HG);
-
-		rc = crt_proc_struct_obj_iod_array(proc, dcu->dcu_iod_array);
 		if (rc != 0)
 			D_GOTO(out, rc = -DER_HG);
 
@@ -927,10 +931,14 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc,
 				D_GOTO(out, rc = -DER_HG);
 
 			rc = crt_proc_uint32_t(proc,
-					&dcu->dcu_ec_tgts[i].dcet_tgt_idx);
+					&dcu->dcu_ec_tgts[i].dcet_tgt_id);
 			if (rc != 0)
 				D_GOTO(out, rc = -DER_HG);
 		}
+
+		rc = crt_proc_struct_obj_iod_array(proc, &dcu->dcu_iod_array);
+		if (rc != 0)
+			D_GOTO(out, rc = -DER_HG);
 
 		rc = crt_proc_uint32_t(proc, &dcu->dcu_start_shard);
 		if (rc != 0)
@@ -1026,7 +1034,6 @@ out:
 
 	switch (dcsr->dcsr_opc) {
 	case DCSO_UPDATE:
-		D_FREE(dcsr->dcsr_update.dcu_iod_array);
 		D_FREE(dcsr->dcsr_update.dcu_ec_tgts);
 		D_FREE(dcsr->dcsr_update.dcu_sgls);
 		break;
@@ -1304,6 +1311,9 @@ obj_reply_set_status(crt_rpc_t *rpc, int status)
 	case DAOS_OBJ_RPC_SYNC:
 		((struct obj_sync_out *)reply)->oso_ret = status;
 		break;
+	case DAOS_OBJ_RPC_CPD:
+		((struct obj_cpd_out *)reply)->oco_ret = status;
+		break;
 	default:
 		D_ASSERT(0);
 	}
@@ -1335,6 +1345,8 @@ obj_reply_get_status(crt_rpc_t *rpc)
 		return ((struct obj_query_key_out *)reply)->okqo_ret;
 	case DAOS_OBJ_RPC_SYNC:
 		return ((struct obj_sync_out *)reply)->oso_ret;
+	case DAOS_OBJ_RPC_CPD:
+		return ((struct obj_cpd_out *)reply)->oco_ret;
 	default:
 		D_ASSERT(0);
 	}
@@ -1374,6 +1386,9 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 	case DAOS_OBJ_RPC_SYNC:
 		((struct obj_sync_out *)reply)->oso_map_version = map_version;
 		break;
+	case DAOS_OBJ_RPC_CPD:
+		((struct obj_cpd_out *)reply)->oco_map_version = map_version;
+		break;
 	default:
 		D_ASSERT(0);
 	}
@@ -1405,6 +1420,8 @@ obj_reply_map_version_get(crt_rpc_t *rpc)
 		return ((struct obj_query_key_out *)reply)->okqo_map_version;
 	case DAOS_OBJ_RPC_SYNC:
 		return ((struct obj_sync_out *)reply)->oso_map_version;
+	case DAOS_OBJ_RPC_CPD:
+		return ((struct obj_cpd_out *)reply)->oco_map_version;
 	default:
 		D_ASSERT(0);
 	}

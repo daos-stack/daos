@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -714,7 +714,7 @@ drpc_close(struct drpc *ctx)
 	new_count = ctx->ref_count;
 
 	if (new_count == 0) {
-		D_INFO("Closing dRPC socket fd=%d\n", ctx->comm->fd);
+		D_DEBUG(DB_MGMT, "Closing dRPC socket fd=%d\n", ctx->comm->fd);
 
 		ret = unixcomm_close(ctx->comm);
 		if (ret != 0)

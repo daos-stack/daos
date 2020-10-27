@@ -28,10 +28,22 @@
 #include "nvme_control.h"
 #include "nvme_control_common.h"
 
+enum lba0_write_result {
+	LBA0_WRITE_PENDING	= 0x0,
+	LBA0_WRITE_SUCCESS	= 0x1,
+	LBA0_WRITE_FAIL		= 0x2,
+};
+
+struct lba0_data {
+	struct ns_entry		*ns_entry;
+	char			*buf;
+	enum lba0_write_result	 write_result;
+};
+
 static void
 get_spdk_log_page_completion(void *cb_arg, const struct spdk_nvme_cpl *cpl)
 {
-	struct dev_health_entry *entry = cb_arg;
+	struct health_entry *entry = cb_arg;
 
 	if (spdk_nvme_cpl_is_error(cpl))
 		fprintf(stderr, "Error with SPDK health log page\n");
@@ -40,153 +52,251 @@ get_spdk_log_page_completion(void *cb_arg, const struct spdk_nvme_cpl *cpl)
 }
 
 static int
-get_dev_health_logs(struct spdk_nvme_ctrlr *ctrlr,
-		    struct dev_health_entry *entry)
+get_health_logs(struct spdk_nvme_ctrlr *ctrlr, struct health_entry *health)
 {
-	struct spdk_nvme_health_information_page health_page;
+	struct spdk_nvme_health_information_page hp;
 	int					 rc = 0;
 
-	entry->inflight++;
+	health->inflight++;
 	rc = spdk_nvme_ctrlr_cmd_get_log_page(ctrlr,
 					      SPDK_NVME_LOG_HEALTH_INFORMATION,
 					      SPDK_NVME_GLOBAL_NS_TAG,
-					      &health_page,
-					      sizeof(health_page),
+					      &hp,
+					      sizeof(hp),
 					      0, get_spdk_log_page_completion,
-					      entry);
+					      health);
 	if (rc != 0)
 		return rc;
 
-	while (entry->inflight)
+	while (health->inflight)
 		spdk_nvme_ctrlr_process_admin_completions(ctrlr);
 
-	entry->health_page = health_page;
+	health->page = hp;
 	return rc;
 }
 
 struct ret_t *
-nvme_discover(bool init_vmd)
+nvme_discover(void)
 {
-	return _discover(&spdk_nvme_probe, true, &get_dev_health_logs,
-			 init_vmd);
+	return _discover(&spdk_nvme_probe, true, &get_health_logs);
+}
+
+static void
+read_complete(void *arg, const struct spdk_nvme_cpl *completion)
+{
+	struct lba0_data *data = arg;
+
+	spdk_free(data->buf);
+
+	if (spdk_nvme_cpl_is_success(completion)) {
+		data->write_result = LBA0_WRITE_SUCCESS;
+		return;
+	}
+
+	spdk_nvme_qpair_print_completion(data->ns_entry->qpair,
+					 (struct spdk_nvme_cpl *)completion);
+	fprintf(stderr, "I/O error status: %s\n",
+		spdk_nvme_cpl_get_status_string(&completion->status));
+	fprintf(stderr, "Read I/O failed, aborting run\n");
+	data->write_result = LBA0_WRITE_FAIL;
 }
 
 static void
 write_complete(void *arg, const struct spdk_nvme_cpl *completion)
 {
-	struct format_sequence	*sequence = arg;
+	struct lba0_data	*data = arg;
+	struct ns_entry		*ns_entry = data->ns_entry;
+	int			 rc;
 
-	if (sequence->using_cmb_io) {
-		spdk_nvme_ctrlr_free_cmb_io_buffer(sequence->ctrlr,
-						   sequence->buf, 0x1000);
-	} else {
-		spdk_free(sequence->buf);
+	if (spdk_nvme_cpl_is_success(completion)) {
+		rc = spdk_nvme_ns_cmd_read(ns_entry->ns, ns_entry->qpair,
+					   data->buf, 0, 1, read_complete,
+					   (void *)data, 0);
+		if (rc != 0) {
+			fprintf(stderr, "starting read I/O failed (%d)\n", rc);
+			data->write_result = LBA0_WRITE_FAIL;
+		}
+		return;
 	}
-	sequence->is_completed = 1;
+
+	spdk_nvme_qpair_print_completion(data->ns_entry->qpair,
+					 (struct spdk_nvme_cpl *)completion);
+	fprintf(stderr, "I/O error status: %s\n",
+		spdk_nvme_cpl_get_status_string(&completion->status));
+	fprintf(stderr, "Read I/O failed, aborting run\n");
+	data->write_result = LBA0_WRITE_FAIL;
+
+	spdk_free(data->buf);
+}
+
+static struct wipe_res_t *
+wipe_ctrlr(struct ctrlr_entry *centry, struct ns_entry *nentry)
+{
+	struct lba0_data	 data;
+	struct wipe_res_t	*res = NULL, *tmp = NULL;
+	int			 rc;
+
+	while (nentry != NULL) {
+		res = init_wipe_res();
+		res->next = tmp;
+		tmp = res;
+
+		res->ns_id = spdk_nvme_ns_get_id(nentry->ns);
+
+		rc = spdk_pci_addr_fmt(res->ctrlr_pci_addr,
+				       sizeof(res->ctrlr_pci_addr),
+				       &centry->pci_addr);
+		if (rc != 0) {
+			res->rc = -NVMEC_ERR_PCI_ADDR_FMT;
+			return res;
+		}
+
+		nentry->qpair = spdk_nvme_ctrlr_alloc_io_qpair(centry->ctrlr,
+							       NULL, 0);
+		if (nentry->qpair == NULL) {
+			snprintf(res->info, sizeof(res->info),
+				 "spdk_nvme_ctrlr_alloc_io_qpair()\n");
+			res->rc = -1;
+			return res;
+		}
+
+		data.buf = spdk_zmalloc(0x1000, 0x1000, NULL,
+					SPDK_ENV_SOCKET_ID_ANY,
+					SPDK_MALLOC_DMA);
+		if (data.buf == NULL) {
+			snprintf(res->info, sizeof(res->info),
+				 "spdk_zmalloc()\n");
+			res->rc = -1;
+			spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
+			return res;
+		}
+		data.write_result = LBA0_WRITE_PENDING;
+		data.ns_entry = nentry;
+
+		rc = spdk_nvme_ns_cmd_write(nentry->ns, nentry->qpair,
+					    data.buf, 0, /* LBA start */
+					    1, /* number of LBAs */
+					    write_complete, &data, 0);
+		if (rc != 0) {
+			snprintf(res->info, sizeof(res->info),
+				 "spdk_nvme_ns_cmd_write() (%d)\n", rc);
+			res->rc = -1;
+			spdk_free(data.buf);
+			spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
+			return res;
+		}
+
+		while (data.write_result == LBA0_WRITE_PENDING) {
+			rc = spdk_nvme_qpair_process_completions(nentry->qpair,
+								 0);
+			if (rc < 0) {
+				fprintf(stderr,
+					"process completions returns %d\n", rc);
+				break;
+			}
+		}
+
+		if (data.write_result != LBA0_WRITE_SUCCESS) {
+			snprintf(res->info, sizeof(res->info),
+				 "spdk_nvme_ns_cmd_write() callback\n");
+			res->rc = -1;
+			spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
+			return res;
+		}
+
+		spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
+		nentry = nentry->next;
+	}
+
+	return res;
+}
+
+static struct wipe_res_t *
+wipe_ctrlrs(void)
+{
+	struct ctrlr_entry	*centry = g_controllers;
+	struct wipe_res_t	*start = NULL, *end = NULL;
+
+	while (centry != NULL) {
+		struct wipe_res_t *results = wipe_ctrlr(centry, centry->nss);
+		struct wipe_res_t *tmp = results;
+
+		if (results == NULL) {
+			continue;
+		}
+
+		if (start == NULL) {
+			start = results;
+		} else if (end != NULL) {
+			end->next = results;
+		}
+
+		/* update ptr to last in list */
+		while (tmp != NULL) {
+			end = tmp;
+			tmp = tmp->next;
+		}
+
+		centry = centry->next;
+	}
+
+	return start;
 }
 
 struct ret_t *
-nvme_wipe_first_ns(char *ctrlr_pci_addr)
+nvme_wipe_namespaces(void)
 {
-	int			 ns_id, rc;
-	struct ctrlr_entry	*ctrlr_entry;
-	struct format_sequence   sequence;
-	struct ret_t		*ret;
+	struct ret_t	*ret = init_ret();
+	int		 rc;
 
-	ret = init_ret(0);
-
-	ret->rc = get_controller(&ctrlr_entry, ctrlr_pci_addr);
-	if (ret->rc != 0)
-		return ret;
-
-	sequence.ctrlr = ctrlr_entry->ctrlr;
-
-	ns_id = spdk_nvme_ctrlr_get_first_active_ns(sequence.ctrlr);
-	if (ns_id != 1) {
-		/* unexpected, don't wipe */
-		snprintf(ret->err, sizeof(ret->err),
-			"expected first active namespace at id 1, got %d",
-			ns_id);
-		ret->rc = -NVMEC_ERR_NS_ID_UNEXPECTED;
+	/*
+	 * Start the SPDK NVMe enumeration process.  probe_cb will be called
+	 *  for each NVMe controller found, giving our application a choice on
+	 *  whether to attach to each controller.  attach_cb will then be
+	 *  called for each controller after the SPDK NVMe driver has completed
+	 *  initializing the controller we chose to attach.
+	 */
+	rc = spdk_nvme_probe(NULL, NULL, probe_cb, attach_cb, NULL);
+	if (rc < 0) {
+		snprintf(ret->info, sizeof(ret->info),
+			 "spdk_nvme_probe() (%d)\n", rc);
+		cleanup(true);
+		ret->rc = -1;
 		return ret;
 	}
 
-	if (spdk_nvme_ctrlr_get_next_active_ns(sequence.ctrlr, ns_id) != 0) {
-		/* unexpected, don't wipe */
-		snprintf(ret->err, sizeof(ret->err),
-			"expected a single active namespace, got multiple");
-		ret->rc = -NVMEC_ERR_MULTIPLE_ACTIVE_NS;
+	if (g_controllers == NULL) {
+		snprintf(ret->info, sizeof(ret->info),
+			 "no controllers found\n");
+		cleanup(true);
+		ret->rc = -1;
 		return ret;
 	}
 
-	sequence.ns = spdk_nvme_ctrlr_get_ns(sequence.ctrlr, ns_id);
-	if (!sequence.ns) {
-		snprintf(ret->err, sizeof(ret->err), "null ns");
-		ret->rc = -NVMEC_ERR_NULL_NS;
+	ret->wipe_results = wipe_ctrlrs();
+	if (ret->wipe_results == NULL) {
+		snprintf(ret->info, sizeof(ret->info),
+			 "no namespaces on controller\n");
+		cleanup(true);
+		ret->rc = -1;
 		return ret;
 	}
 
-	sequence.qpair = spdk_nvme_ctrlr_alloc_io_qpair(sequence.ctrlr, NULL,
-							0);
-	if (sequence.qpair == NULL) {
-		snprintf(ret->err, sizeof(ret->err),
-			"spdk_nvme_ctrlr_alloc_io_qpair() failed");
-		ret->rc = -NVMEC_ERR_ALLOC_IO_QPAIR;
-		return ret;
-	}
-
-	sequence.using_cmb_io = 1;
-	sequence.buf = spdk_nvme_ctrlr_alloc_cmb_io_buffer(sequence.ctrlr,
-							   0x1000);
-	if (sequence.buf == NULL) {
-		sequence.using_cmb_io = 0;
-		sequence.buf = spdk_zmalloc(0x1000, 0x1000, NULL,
-					    SPDK_ENV_SOCKET_ID_ANY,
-					    SPDK_MALLOC_DMA);
-	}
-	if (sequence.buf == NULL) {
-		snprintf(ret->err, sizeof(ret->err),
-			"write buffer allocation failed\n");
-		ret->rc = -NVMEC_ERR_ALLOC_SEQUENCE_BUF;
-		return ret;
-	}
-	if (sequence.using_cmb_io) {
-		printf("INFO: using controller memory buffer for IO\n");
-	} else {
-		printf("INFO: using host memory buffer for IO\n");
-	}
-	sequence.is_completed = 0;
-
-	rc = spdk_nvme_ns_cmd_write(sequence.ns, sequence.qpair, sequence.buf,
-		0, /* LBA start */
-		1, /* number of LBAs */
-		write_complete, &sequence, 0);
-	if (rc != 0) {
-		snprintf(ret->err, sizeof(ret->err),
-			"starting write i/o failed (rc: %d)", rc);
-		ret->rc = -NVMEC_ERR_NS_WRITE_FAIL;
-		return ret;
-	}
-
-	while (!sequence.is_completed) {
-		spdk_nvme_qpair_process_completions(sequence.qpair, 0);
-	}
-	spdk_nvme_ctrlr_free_io_qpair(sequence.qpair);
-
+	cleanup(true);
 	return ret;
 }
 
 struct ret_t *
 nvme_format(char *ctrlr_pci_addr)
 {
-	int					 ns_id;
+	int					 nsid;
 	const struct spdk_nvme_ctrlr_data	*cdata;
 	struct spdk_nvme_ns			*ns;
 	struct spdk_nvme_format			 format = {};
 	struct ctrlr_entry			*ctrlr_entry;
 	struct ret_t				*ret;
 
-	ret = init_ret(0);
+	ret = init_ret();
 
 	ret->rc = get_controller(&ctrlr_entry, ctrlr_pci_addr);
 	if (ret->rc != 0)
@@ -194,23 +304,23 @@ nvme_format(char *ctrlr_pci_addr)
 
 	cdata = spdk_nvme_ctrlr_get_data(ctrlr_entry->ctrlr);
 	if (!cdata->oacs.format) {
-		snprintf(ret->err, sizeof(ret->err),
-			"controller does not support format nvm command");
+		snprintf(ret->info, sizeof(ret->info),
+			 "controller does not support format nvm command");
 		ret->rc = -NVMEC_ERR_NOT_SUPPORTED;
 		return ret;
 	}
 
 	if (cdata->fna.format_all_ns) {
-		ns_id = SPDK_NVME_GLOBAL_NS_TAG;
+		nsid = SPDK_NVME_GLOBAL_NS_TAG;
 		ns = spdk_nvme_ctrlr_get_ns(ctrlr_entry->ctrlr, 1);
 	} else {
-		ns_id = 1; /* just format first ns */
-		ns = spdk_nvme_ctrlr_get_ns(ctrlr_entry->ctrlr, ns_id);
+		nsid = 1; /* just format first ns */
+		ns = spdk_nvme_ctrlr_get_ns(ctrlr_entry->ctrlr, nsid);
 	}
 
 	if (ns == NULL) {
-		snprintf(ret->err, sizeof(ret->err),
-			"namespace with id %d not found", ns_id);
+		snprintf(ret->info, sizeof(ret->info),
+			 "namespace with id %d not found", nsid);
 		ret->rc = -NVMEC_ERR_NS_NOT_FOUND;
 		return ret;
 	}
@@ -221,9 +331,9 @@ nvme_format(char *ctrlr_pci_addr)
 	format.pil	= 0; /* protection information location N/A */
 	format.ses	= 0; /* secure erase operation set user data erase */
 
-	ret->rc = spdk_nvme_ctrlr_format(ctrlr_entry->ctrlr, ns_id, &format);
+	ret->rc = spdk_nvme_ctrlr_format(ctrlr_entry->ctrlr, nsid, &format);
 	if (ret->rc != 0) {
-		snprintf(ret->err, sizeof(ret->err), "format failed");
+		snprintf(ret->info, sizeof(ret->info), "format failed");
 		return ret;
 	}
 
@@ -242,13 +352,13 @@ nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
 	int					fd = -1;
 	unsigned int				size;
 	struct stat				fw_stat;
-	void					*fw_image;
+	void					*fw_image = NULL;
 	enum spdk_nvme_fw_commit_action		commit_action;
 	struct spdk_nvme_status			status;
 	struct ctrlr_entry			*ctrlr_entry;
 	struct ret_t				*ret;
 
-	ret = init_ret(0);
+	ret = init_ret();
 
 	ret->rc = get_controller(&ctrlr_entry, ctrlr_pci_addr);
 	if (ret->rc != 0)
@@ -256,21 +366,21 @@ nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
 
 	fd = open(path, O_RDONLY);
 	if (fd < 0) {
-		sprintf(ret->err, "Open file failed");
+		sprintf(ret->info, "Open file failed");
 		ret->rc = 1;
 		return ret;
 	}
 	rc = fstat(fd, &fw_stat);
 	if (rc < 0) {
 		close(fd);
-		sprintf(ret->err, "Fstat failed");
+		sprintf(ret->info, "Fstat failed");
 		ret->rc = 1;
 		return ret;
 	}
 
 	if (fw_stat.st_size % 4) {
 		close(fd);
-		sprintf(ret->err, "Firmware image size is not multiple of 4");
+		sprintf(ret->info, "Firmware image size is not multiple of 4");
 		ret->rc = 1;
 		return ret;
 	}
@@ -280,44 +390,34 @@ nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
 	fw_image = spdk_dma_zmalloc(size, 4096, NULL);
 	if (fw_image == NULL) {
 		close(fd);
-		sprintf(ret->err, "Allocation error");
+		sprintf(ret->info, "Allocation error");
 		ret->rc = 1;
 		return ret;
 	}
 
-	if (read(fd, fw_image, size) != ((ssize_t)(size))) {
+	if (read(fd, fw_image, size) != (ssize_t)size) {
 		close(fd);
 		spdk_dma_free(fw_image);
-		sprintf(ret->err, "Read firmware image failed");
+		sprintf(ret->info, "Read firmware image failed");
 		ret->rc = 1;
 		return ret;
 	}
 	close(fd);
 
 	commit_action = SPDK_NVME_FW_COMMIT_REPLACE_AND_ENABLE_IMG;
-	rc = spdk_nvme_ctrlr_update_firmware(ctrlr_entry->ctrlr, fw_image, size, slot, commit_action, &status);
+	rc = spdk_nvme_ctrlr_update_firmware(ctrlr_entry->ctrlr, fw_image, size,
+					     slot, commit_action, &status);
 	if (rc == -ENXIO && status.sct == SPDK_NVME_SCT_COMMAND_SPECIFIC &&
 		status.sc == SPDK_NVME_SC_FIRMWARE_REQ_CONVENTIONAL_RESET) {
-		sprintf(ret->err, "conventional reset is needed to enable firmware !");
+		sprintf(ret->info,
+			"conventional reset is needed to enable firmware !");
 	} else if (rc) {
-		sprintf(ret->err, "spdk_nvme_ctrlr_update_firmware failed");
+		sprintf(ret->info, "spdk_nvme_ctrlr_update_firmware failed");
 	} else {
-		sprintf(ret->err, "spdk_nvme_ctrlr_update_firmware success");
+		sprintf(ret->info, "spdk_nvme_ctrlr_update_firmware success");
 	}
 	spdk_dma_free(fw_image);
 
 	ret->rc = rc;
-	if (ret->rc != 0)
-		return ret;
-
-	/* collect() will allocate and return a new ret structure */
-	clean_ret(ret);
-	free(ret);
-	return collect();
-}
-
-void
-nvme_cleanup(void)
-{
-	cleanup(true);
+	return ret;
 }

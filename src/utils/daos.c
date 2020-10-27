@@ -40,6 +40,8 @@
 #include <daos.h>
 #include <daos/common.h>
 #include <daos/checksum.h>
+#include <daos/compression.h>
+#include <daos/cipher.h>
 #include <daos/rpc.h>
 #include <daos/debug.h>
 #include <daos/object.h>
@@ -49,6 +51,7 @@
 #include "daos_uns.h"
 #include "daos_hdlr.h"
 #include "dfuse_ioctl.h"
+#include "obj_ctl.h"
 
 const char		*default_sysname = DAOS_DEFAULT_SYS_NAME;
 
@@ -118,6 +121,8 @@ pool_op_parse(const char *str)
 		return POOL_GET_ATTR;
 	else if (strcmp(str, "set-attr") == 0)
 		return POOL_SET_ATTR;
+	else if (strcmp(str, "del-attr") == 0)
+		return POOL_DEL_ATTR;
 	else if (strcmp(str, "list-attrs") == 0)
 		return POOL_LIST_ATTRS;
 	return -1;
@@ -321,6 +326,7 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 		entry->dpe_str = strdup(value);
 	} else if (!strcmp(name, "cksum")) {
 		int csum_type = daos_str2csumcontprop(value);
+
 		if (csum_type < 0) {
 			fprintf(stderr,
 				"currently supported checksum types are "
@@ -397,6 +403,28 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 		}
 		entry->dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
 		entry->dpe_val = val;
+	} else if (!strcmp(name, "compress") || !strcmp(name, "compression")) {
+		int compression_type = daos_str2compresscontprop(value);
+
+		if (compression_type < 0) {
+			fprintf(stderr, "compression prop value can only be "
+				"'off/lz4/gzip/gzip[1-9]'\n");
+			return -DER_INVAL;
+		}
+		entry->dpe_type = DAOS_PROP_CO_COMPRESS;
+		entry->dpe_val = compression_type;
+	} else if (!strcmp(name, "encrypt") ||
+		   !strcmp(name, "encryption")) {
+		int encryption_type = daos_str2encryptcontprop(value);
+
+		if (encryption_type < 0) {
+			fprintf(stderr, "encryption prop value can only be "
+				"'off/aes-xts[128,256]/aes-cbc[128,192,256]/"
+				"aes-gcm[128,256]'\n");
+			return -DER_INVAL;
+		}
+		entry->dpe_type = DAOS_PROP_CO_ENCRYPT;
+		entry->dpe_val = encryption_type;
 	} else if (!strcmp(name, "rf")) {
 		if (!strcmp(value, "0"))
 			entry->dpe_val = DAOS_PROP_CO_REDUN_RF0;
@@ -769,9 +797,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 
 	if (ap->c_op != -1 &&
 	    (ap->c_op == CONT_LIST_OBJS ||
-	     ap->c_op == CONT_STAT ||
-	     ap->c_op == CONT_DEL_ATTR ||
-	     ap->c_op == CONT_ROLLBACK)) {
+	     ap->c_op == CONT_STAT)) {
 		fprintf(stderr,
 			"container %s not yet implemented\n", cmdname);
 		D_GOTO(out_free, rc = RC_NO_HELP);
@@ -863,6 +889,9 @@ pool_op_hdlr(struct cmd_args_s *ap)
 	case POOL_LIST_ATTRS:
 		rc = pool_list_attrs_hdlr(ap);
 		break;
+	case POOL_DEL_ATTR:
+		rc = pool_del_attr_hdlr(ap);
+		break;
 	default:
 		break;
 	}
@@ -953,7 +982,8 @@ cont_op_hdlr(struct cmd_args_s *ap)
 			       DAOS_PC_RW, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
-		fprintf(stderr, "failed to connect to pool: %d\n", rc);
+		fprintf(stderr, "failed to connect to pool "DF_UUIDF
+			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
 		D_GOTO(out, rc);
 	}
 
@@ -978,7 +1008,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		rc = daos_cont_open(ap->pool, ap->c_uuid, DAOS_COO_RW,
 				    &ap->cont, &cont_info, NULL);
 		if (rc != 0) {
-			fprintf(stderr, "cont open failed: %d\n", rc);
+			fprintf(stderr, "failed to open container "DF_UUIDF
+				": %s (%d)\n", DP_UUID(ap->c_uuid),
+				d_errdesc(rc), rc);
 			D_GOTO(out_disconnect, rc);
 		}
 	}
@@ -1014,7 +1046,7 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		rc = cont_list_attrs_hdlr(ap);
 		break;
 	case CONT_DEL_ATTR:
-		/* rc = cont_del_attr_hdlr(ap); */
+		rc = cont_del_attr_hdlr(ap);
 		break;
 	case CONT_GET_ATTR:
 		rc = cont_get_attr_hdlr(ap);
@@ -1026,13 +1058,13 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		rc = cont_create_snap_hdlr(ap);
 		break;
 	case CONT_LIST_SNAPS:
-		rc = cont_list_snaps_hdlr(ap);
+		rc = cont_list_snaps_hdlr(ap, NULL, NULL);
 		break;
 	case CONT_DESTROY_SNAP:
 		rc = cont_destroy_snap_hdlr(ap);
 		break;
 	case CONT_ROLLBACK:
-		/* rc = cont_rollback_hdlr(ap); */
+		rc = cont_rollback_hdlr(ap);
 		break;
 	case CONT_GET_ACL:
 		rc = cont_get_acl_hdlr(ap);
@@ -1057,7 +1089,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	if (op != CONT_CREATE && op != CONT_DESTROY) {
 		rc2 = daos_cont_close(ap->cont, NULL);
 		if (rc2 != 0)
-			fprintf(stderr, "Container close failed: %d\n", rc2);
+			fprintf(stderr, "failed to close container "DF_UUIDF
+				": %s (%d)\n", DP_UUID(ap->c_uuid),
+				d_errdesc(rc2), rc2);
 		if (rc == 0)
 			rc = rc2;
 	}
@@ -1066,7 +1100,9 @@ out_disconnect:
 	/* Pool disconnect in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
 	if (rc2 != 0)
-		fprintf(stderr, "Pool disconnect failed : %d\n", rc2);
+		fprintf(stderr, "failed to disconnect from pool "DF_UUIDF
+			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc2),
+			rc2);
 	if (rc == 0)
 		rc = rc2;
 
@@ -1100,14 +1136,16 @@ obj_op_hdlr(struct cmd_args_s *ap)
 			       DAOS_PC_RW, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
-		fprintf(stderr, "failed to connect to pool: %d\n", rc);
+		fprintf(stderr, "failed to connect to pool "DF_UUIDF
+			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
 		D_GOTO(out, rc);
 	}
 
 	rc = daos_cont_open(ap->pool, ap->c_uuid, DAOS_COO_RW,
 			&ap->cont, &cont_info, NULL);
 	if (rc != 0) {
-		fprintf(stderr, "cont open failed: %d\n", rc);
+		fprintf(stderr, "failed to open container "DF_UUIDF
+			": %s (%d)\n", DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
 		D_GOTO(out_disconnect, rc);
 	}
 
@@ -1124,7 +1162,9 @@ obj_op_hdlr(struct cmd_args_s *ap)
 	/* Container close in normal and error flows: preserve rc */
 	rc2 = daos_cont_close(ap->cont, NULL);
 	if (rc2 != 0)
-		fprintf(stderr, "Container close failed: %d\n", rc2);
+		fprintf(stderr, "failed to close container "DF_UUIDF
+			": %s (%d)\n", DP_UUID(ap->c_uuid), d_errdesc(rc2),
+			rc2);
 	if (rc == 0)
 		rc = rc2;
 
@@ -1132,7 +1172,9 @@ out_disconnect:
 	/* Pool disconnect in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
 	if (rc2 != 0)
-		fprintf(stderr, "Pool disconnect failed : %d\n", rc2);
+		fprintf(stderr, "failed to disconnect from pool "DF_UUIDF
+			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc2),
+			rc2);
 	if (rc == 0)
 		rc = rc2;
 
@@ -1177,6 +1219,7 @@ do { \
 	"	  pool             pool\n" \
 	"	  container (cont) container\n" \
 	"	  object (obj)     object\n" \
+	"	  shell            shell\n" \
 	"	  version          print command version\n" \
 	"	  help             print this message and exit\n"); \
 	fprintf(stream, "\n"); \
@@ -1245,7 +1288,9 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		"	  query            query a pool\n"
 		"	  stat             get pool statistics\n"
 		"	  list-attrs       list pool user-defined attributes\n"
-		"	  get-attr         get pool user-defined attribute\n");
+		"	  get-attr         get pool user-defined attribute\n"
+		"	  set-attr         set pool user-defined attribute\n"
+		"	  del-attr         del pool user-defined attribute\n");
 
 		fprintf(stream,
 		"pool options:\n"
@@ -1253,7 +1298,8 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		"	--sys-name=STR     DAOS system name context for servers (\"%s\")\n"
 		"	--sys=STR\n"
 		"	--svc=RANKS        pool service replicas like 1,2,3\n"
-		"	--attr=NAME        pool attribute name to get\n",
+		"	--attr=NAME        pool attribute name to get, set, del\n"
+		"	--value=VALUESTR   pool attribute name to set\n",
 			default_sysname);
 
 	} else if (strcmp(argv[2], "container") == 0 ||
@@ -1280,13 +1326,18 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"	--properties=<name>:<value>[,<name>:<value>,...]\n"
 			"			   supported prop names are label, cksum,\n"
 			"				cksum_size, srv_cksum, dedup\n"
-			"				dedup_th, rf\n"
+			"				dedup_th, compression, encryption\n"
 			"			   label value can be any string\n"
-			"			   cksum supported values are off, crc[16,32,64], sha1\n"
-			"			   cksum_size can be any size\n"
+			"			   cksum supported values are off, crc[16,32,64],\n"
+			"						      sha[1,256,512]\n"
+			"			   cksum_size can be any size < 4GiB\n"
 			"			   srv_cksum values can be on, off\n"
-			"			   dedup values can be off, memcmp or hash\n"
-			"			   dedup_th can be any size bigger than 4K\n"
+			"			   dedup (preview) values can be off, memcmp or hash\n"
+			"			   dedup_th (preview) can be any size between 4KiB and 64KiB\n"
+			"			   compression (preview) values can be lz4, gzip, gzip[1-9]\n"
+			"			   encrypton (preview) values can be aes-xts[128,256],\n"
+			"							     aes-cbc[128,192,256],\n"
+			"							     aes-gcm[128,256]\n"
 			"			   rf supported values are [0-4]\n"
 			"	--acl-file=PATH    input file containing ACL\n"
 			"	--user=ID          user who will own the container.\n"
@@ -1397,6 +1448,9 @@ main(int argc, char *argv[])
 		dargs.ostream = stdout;
 		help_hdlr(argc, argv, &dargs);
 		return 0;
+	} else if (strcmp(argv[1], "shell") == 0) {
+		rc = shell(argc, argv);
+		return rc;
 	} else if (argc <= 2) {
 		dargs.ostream = stdout;
 		help_hdlr(argc, argv, &dargs);
@@ -1418,7 +1472,8 @@ main(int argc, char *argv[])
 
 	rc = daos_init();
 	if (rc != 0) {
-		fprintf(stderr, "failed to initialize daos: %d\n", rc);
+		fprintf(stderr, "failed to initialize daos: %s (%d)\n",
+			d_errdesc(rc), rc);
 		return 1;
 	}
 

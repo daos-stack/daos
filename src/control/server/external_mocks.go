@@ -50,7 +50,10 @@ func (m *mockExt) checkSudo() (bool, string) {
 }
 
 func newMockExt(isRoot bool) External {
-	return &mockExt{sync.RWMutex{}, isRoot, []string{}}
+	return &mockExt{
+		isRoot:  isRoot,
+		history: []string{},
+	}
 }
 
 func defaultMockExt() External {

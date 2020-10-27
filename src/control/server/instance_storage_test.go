@@ -38,11 +38,12 @@ import (
 )
 
 func TestIOServerInstance_MountScmDevice(t *testing.T) {
-	const (
-		goodMountPoint = "/mnt/daos"
-	)
+	testDir, cleanup := common.CreateTestDir(t)
+	defer cleanup()
+
 	var (
-		ramCfg = &ioserver.Config{
+		goodMountPoint = testDir + "/mnt/daos"
+		ramCfg         = &ioserver.Config{
 			Storage: ioserver.StorageConfig{
 				SCM: storage.ScmConfig{
 					MountPoint:  goodMountPoint,
@@ -68,7 +69,7 @@ func TestIOServerInstance_MountScmDevice(t *testing.T) {
 		expErr error
 	}{
 		"empty config": {
-			expErr: errors.New("operation unsupported on scm class"),
+			expErr: errors.New("operation unsupported on SCM class"),
 		},
 		"IsMounted fails": {
 			msCfg: &scm.MockSysConfig{
@@ -164,7 +165,7 @@ func TestIOServerInstance_NeedsScmFormat(t *testing.T) {
 		expErr         error
 	}{
 		"empty config": {
-			expErr: errors.New("operation unsupported on scm class"),
+			expErr: errors.New("operation unsupported on SCM class"),
 		},
 		"check ramdisk fails (IsMounted fails)": {
 			ioCfg: ramCfg,

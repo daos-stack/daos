@@ -235,7 +235,7 @@ dtx_epoch_bound(struct dtx_epoch *epoch)
 		 */
 		return epoch->oe_value;
 
-	limit = epoch->oe_first + crt_hlc_epsilon_get();
+	limit = crt_hlc_epsilon_get_bound(epoch->oe_first);
 	if (epoch->oe_value >= limit)
 		/*
 		 * The epoch is already out of the potential uncertainty
@@ -259,7 +259,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 		uint16_t sub_modification_cnt, uint32_t pm_ver,
 		daos_unit_oid_t *leader_oid, struct dtx_id *dti_cos,
 		int dti_cos_cnt, struct dtx_memberships *mbs, bool leader,
-		bool solo, struct dtx_handle *dth)
+		bool solo, bool sync, struct dtx_handle *dth)
 {
 	if (sub_modification_cnt > DTX_SUB_MOD_MAX) {
 		D_ERROR("Too many modifications in a single transaction:"
@@ -298,12 +298,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_ent = NULL;
 	dth->dth_flags = leader ? DTE_LEADER : 0;
 
-	/* Set 'DTE_BLOCK' flag for EC object modification or
-	 * distributed transaction. At the same time, ask DTX
-	 * to 'sync' commit.
-	 */
-	if (daos_oclass_is_ec(leader_oid->id_pub, NULL) ||
-	    (mbs != NULL && mbs->dm_grp_cnt > 1)) {
+	if (sync) {
 		dth->dth_flags |= DTE_BLOCK;
 		dth->dth_sync = 1;
 	} else {
@@ -411,10 +406,10 @@ dtx_sub_init(struct dtx_handle *dth, daos_unit_oid_t *oid, uint64_t dkey_hash)
 {
 	int	rc = 0;
 
-	D_ASSERT(dth->dth_op_seq < (uint16_t)(-1));
-
-	if (dth == NULL)
+	if (!dtx_is_valid_handle(dth))
 		return 0;
+
+	D_ASSERT(dth->dth_op_seq < (uint16_t)(-1));
 
 	dth->dth_op_seq++;
 	dth->dth_dkey_hash = dkey_hash;
@@ -486,6 +481,8 @@ out:
  * \param dti_cos_cnt	[IN]	The @dti_cos array size.
  * \param tgts		[IN]	targets for distribute transaction.
  * \param tgt_cnt	[IN]	number of targets.
+ * \param solo		[IN]	single operand or not.
+ * \param sync		[IN]	sync mode or not.
  * \param mbs		[IN]	DTX participants information.
  * \param dth		[OUT]	Pointer to the DTX handle.
  *
@@ -496,7 +493,7 @@ dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 		 struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
 		 uint32_t pm_ver, daos_unit_oid_t *leader_oid,
 		 struct dtx_id *dti_cos, int dti_cos_cnt,
-		 struct daos_shard_tgt *tgts, int tgt_cnt,
+		 struct daos_shard_tgt *tgts, int tgt_cnt, bool solo, bool sync,
 		 struct dtx_memberships *mbs, struct dtx_leader_handle *dlh)
 {
 	struct dtx_handle	*dth = &dlh->dlh_handle;
@@ -528,12 +525,12 @@ dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 init:
 	rc = dtx_handle_init(dti, cont->sc_hdl, epoch, sub_modification_cnt,
 			     pm_ver, leader_oid, dti_cos, dti_cos_cnt, mbs,
-			     true, tgt_cnt == 0 ? true : false, dth);
+			     true, solo, sync, dth);
 
-	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub_reqs %d, ver %u, "
-		"dti_cos_cnt %d: "DF_RC"\n",
-		DP_DTI(dti), sub_modification_cnt,
-		dth->dth_ver, dti_cos_cnt, DP_RC(rc));
+	D_DEBUG(DB_IO, "Start %s DTX "DF_DTI" sub_reqs %d, ver %u, leader "
+		DF_UOID", dti_cos_cnt %d: "DF_RC"\n",
+		sync ? "sync" : "async", DP_DTI(dti), sub_modification_cnt,
+		dth->dth_ver, DP_UOID(*leader_oid), dti_cos_cnt, DP_RC(rc));
 
 	if (rc != 0)
 		D_FREE(dlh->dlh_subs);
@@ -575,16 +572,16 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	int				 saved = result;
 	int				 rc = 0;
 
-	if (dlh->dlh_sub_cnt == 0)
-		goto out;
-
 	D_ASSERT(cont != NULL);
 
 	/* NB: even the local request failure, dth_ent == NULL, we
 	 * should still wait for remote object to finish the request.
 	 */
 
-	rc = dtx_leader_wait(dlh);
+	if (dlh->dlh_sub_cnt != 0)
+		rc = dtx_leader_wait(dlh);
+	else if (dth->dth_modification_cnt <= 1)
+		goto out;
 
 	if (daos_is_zero_dti(&dth->dth_xid))
 		D_GOTO(out, result = result < 0 ? result : rc);
@@ -730,6 +727,7 @@ abort:
 			  dth->dth_epoch, &dte, 1);
 	}
 
+	vos_dtx_rsrvd_fini(dth);
 out:
 	if (!daos_is_zero_dti(&dth->dth_xid))
 		D_DEBUG(DB_IO,
@@ -753,8 +751,6 @@ out:
 
 	D_FREE(dlh->dlh_subs);
 	D_FREE(dth->dth_oid_array);
-
-	vos_dtx_rsrvd_fini(dth);
 
 	return result;
 }
@@ -796,7 +792,7 @@ dtx_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 
 	rc = dtx_handle_init(dti, cont->sc_hdl, epoch, sub_modification_cnt,
 			     pm_ver, leader_oid, dti_cos, dti_cos_cnt, mbs,
-			     false, false, dth);
+			     false, false, false, dth);
 
 	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub_reqs %d, ver %u, "
 		"dti_cos_cnt %d: "DF_RC"\n",
@@ -844,8 +840,7 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 
 	D_FREE(dth->dth_oid_array);
 
-	if (dth->dth_rsrvds != &dth->dth_rsrvd_inline)
-		D_FREE(dth->dth_rsrvds);
+	vos_dtx_rsrvd_fini(dth);
 
 	return result;
 }
@@ -951,7 +946,8 @@ int
 dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 		  daos_epoch_t *epoch, uint32_t *pm_ver)
 {
-	int	rc;
+	uint64_t	age;
+	int		rc;
 
 	if (daos_is_zero_dti(dti))
 		/* If DTX is disabled, then means that the application does
@@ -974,11 +970,12 @@ again:
 	case DTX_ST_COMMITTED:
 		return -DER_ALREADY;
 	case -DER_NONEXIST:
-		if (dtx_hlc_age2sec(dti->dti_hlc) >
-		    DTX_AGG_THRESHOLD_AGE_LOWER ||
+		age = dtx_hlc_age2sec(dti->dti_hlc);
+		if (age > DTX_AGG_THRESHOLD_AGE_LOWER ||
 		    DAOS_FAIL_CHECK(DAOS_DTX_LONG_TIME_RESEND)) {
-			D_DEBUG(DB_IO, "Not sure about whether the old RPC "
-				DF_DTI" is resent or not.\n", DP_DTI(dti));
+			D_ERROR("Not sure about whether the old RPC "DF_DTI
+				" is resent or not. Age="DF_U64" s.\n",
+				DP_DTI(dti), age);
 			rc = -DER_EP_OLD;
 		}
 		return rc;
@@ -1000,6 +997,12 @@ dtx_comp_cb(void **arg)
 	uint32_t			i;
 
 	dlh = arg[0];
+
+	if (dlh->dlh_agg_cb) {
+		dlh->dlh_result = dlh->dlh_agg_cb(dlh, dlh->dlh_agg_cb_arg);
+		return;
+	}
+
 	for (i = 0; i < dlh->dlh_sub_cnt; i++) {
 		struct dtx_sub_status	*sub = &dlh->dlh_subs[i];
 
@@ -1074,6 +1077,8 @@ dtx_leader_exec_ops_ult(void *arg)
 				  "ABT_future_set failed %d.\n", ret);
 		}
 	}
+
+	D_FREE_PTR(ult_arg);
 }
 
 /**
@@ -1081,7 +1086,7 @@ dtx_leader_exec_ops_ult(void *arg)
  */
 int
 dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
-		    void *func_arg)
+		    dtx_agg_cb_t agg_cb, void *agg_cb_arg, void *func_arg)
 {
 	struct dtx_ult_arg	*ult_arg;
 	int			rc;
@@ -1095,6 +1100,8 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 	ult_arg->func	= func;
 	ult_arg->func_arg = func_arg;
 	ult_arg->dlh	= dlh;
+	dlh->dlh_agg_cb = agg_cb;
+	dlh->dlh_agg_cb_arg = agg_cb_arg;
 
 	/* the future should already be freed */
 	D_ASSERT(dlh->dlh_future == ABT_FUTURE_NULL);

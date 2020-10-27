@@ -58,7 +58,6 @@ static int rdb_raft_destroy_lc(daos_handle_t pool, daos_handle_t mc,
 			       struct rdb_lc_record *record);
 static void *rdb_raft_lookup_result(struct rdb *db, uint64_t index);
 static int rdb_raft_add_node(struct rdb *db, d_rank_t rank);
-static void rdb_raft_unload_replicas(struct rdb *db);
 
 /* Translate a raft error into an rdb error. */
 static inline int
@@ -74,7 +73,7 @@ rdb_raft_rc(int raft_rc)
 	case RAFT_ERR_SHUTDOWN:			return -DER_SHUTDOWN;
 	case RAFT_ERR_NOMEM:			return -DER_NOMEM;
 	case RAFT_ERR_SNAPSHOT_ALREADY_LOADED:	return -DER_ALREADY;
-	default:				return -DER_UNKNOWN;
+	default:				return -DER_MISC;
 	}
 }
 
@@ -297,6 +296,7 @@ rdb_raft_load_replicas(struct rdb *db, uint64_t index)
 
 err_replicas:
 	d_rank_list_free(db->d_replicas);
+	db->d_replicas = NULL;
 err:
 	return rc;
 }
@@ -321,7 +321,9 @@ rdb_raft_unload_replicas(struct rdb *db)
 		raft_remove_node(db->d_raft, node);
 		D_FREE(rdb_node);
 	}
+
 	d_rank_list_free(db->d_replicas);
+	db->d_replicas = NULL;
 }
 
 /* Load the LC base. */
@@ -720,30 +722,24 @@ rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
 }
 
 static int
-rdb_raft_unpack_chunk(daos_handle_t slc, d_iov_t *kds, d_iov_t *data, int index)
+rdb_raft_unpack_chunk(daos_handle_t slc, d_iov_t *kds_iov, d_iov_t *data,
+		      int index)
 {
-	struct dss_enum_arg	   arg = { 0 };
 	struct rdb_raft_unpack_arg unpack_arg;
+	daos_unit_oid_t		   invalid_oid = { 0 };
 	d_sg_list_t		   sgl;
 
-	/* Set up the same iteration as rdb_raft_pack_chunk. */
-	memset(&arg, 0, sizeof(arg));
-	arg.chk_key2big = true;
-
 	/* Set up the buffers. */
-	arg.kds = kds->iov_buf;
-	arg.kds_cap = kds->iov_buf_len / sizeof(*arg.kds);
-	arg.kds_len = kds->iov_len / sizeof(*arg.kds);
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 1;
 	sgl.sg_iovs = data;
-	arg.sgl = &sgl;
 
 	unpack_arg.eph = index;
 	unpack_arg.slc = slc;
 
-	/* Unpack from the object level. */
-	return dss_enum_unpack(VOS_ITER_OBJ, &arg, rdb_raft_exec_unpack_io,
+	return dss_enum_unpack(invalid_oid, kds_iov->iov_buf,
+			       kds_iov->iov_len / sizeof(daos_key_desc_t),
+			       &sgl, NULL, rdb_raft_exec_unpack_io,
 			       &unpack_arg);
 }
 
@@ -1296,6 +1292,7 @@ rdb_raft_cb_log_pop(raft_server_t *raft, void *arg, raft_entry_t *entry,
 		return rc;
 	}
 	d_rank_list_free(db->d_replicas);
+	db->d_replicas = NULL;
 	rc = rdb_raft_load_replicas(db, db->d_lc_record.dlr_tail - 1);
 	if (rc != 0)
 		return rc;
@@ -2412,6 +2409,7 @@ rdb_raft_start(struct rdb *db)
 		goto err_raft;
 
 	d_rank_list_free(db->d_replicas);
+	db->d_replicas = NULL;
 	rc = rdb_raft_load_replicas(db, db->d_lc_record.dlr_tail - 1);
 	if (rc != 0 && rc != -DER_NONEXIST)
 		goto err_lc;

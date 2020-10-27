@@ -60,44 +60,35 @@ func TestStorageCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"Format with invalid ranks filter",
-			"storage format --ranks 1-3",
-			strings.Join([]string{
-				printRequest(t, &control.StorageFormatReq{}),
-			}, " "),
-			errors.New("--ranks parameter invalid"),
-		},
-		{
-			"Format with invalid hosts filter",
-			"storage format --rank-hosts foo-[1-3]",
-			strings.Join([]string{
-				printRequest(t, &control.StorageFormatReq{}),
-			}, " "),
-			errors.New("--rank-hosts parameter invalid"),
-		},
-		{
-			"Non-system reformat with invalid ranks filter",
-			"storage format --reformat --ranks 0-4",
-			strings.Join([]string{
-				printRequest(t, &control.SystemQueryReq{}),
-				printRequest(t, &control.StorageFormatReq{Reformat: true}),
-			}, " "),
-			errors.New("--ranks parameter invalid"),
-		},
-		{
-			"Non-system reformat with invalid hosts filter",
-			"storage format --reformat --rank-hosts foo-[1-3]",
-			strings.Join([]string{
-				printRequest(t, &control.StorageFormatReq{}),
-			}, " "),
-			errors.New("--rank-hosts parameter invalid"),
-		},
-		{
 			"Scan",
 			"storage scan",
 			strings.Join([]string{
 				printRequest(t, &control.StorageScanReq{}),
 			}, " "),
+			nil,
+		},
+		{
+			"Scan NVMe health short",
+			"storage scan -n",
+			printRequest(t, &control.StorageScanReq{NvmeHealth: true}),
+			nil,
+		},
+		{
+			"Scan NVMe health long",
+			"storage scan --nvme-health",
+			printRequest(t, &control.StorageScanReq{NvmeHealth: true}),
+			nil,
+		},
+		{
+			"Scan NVMe meta data short",
+			"storage scan -m",
+			printRequest(t, &control.StorageScanReq{NvmeMeta: true}),
+			nil,
+		},
+		{
+			"Scan NVMe meta data long",
+			"storage scan --nvme-meta",
+			printRequest(t, &control.StorageScanReq{NvmeMeta: true}),
 			nil,
 		},
 		{
@@ -199,19 +190,10 @@ func TestStorageCommands(t *testing.T) {
 func TestDmg_Storage_shouldReformatSystem(t *testing.T) {
 	for name, tc := range map[string]struct {
 		reformat, expSysReformat bool
-		hosts, ranks             string
 		uErr, expErr             error
 		members                  []*ctlpb.SystemMember
 	}{
-		"no reformat with rank-hosts": {
-			hosts:  "foo-[0-1]",
-			expErr: errors.New("--rank-hosts parameter invalid"),
-		},
-		"no reformat with rank list": {
-			ranks:  "0-1",
-			expErr: errors.New("--ranks parameter invalid"),
-		},
-		"no reformat without rank list": {},
+		"no reformat": {},
 		"failed member query": {
 			reformat: true,
 			uErr:     errors.New("system failed"),
@@ -263,8 +245,6 @@ func TestDmg_Storage_shouldReformatSystem(t *testing.T) {
 			cmd.log = log
 			cmd.Reformat = tc.reformat
 			cmd.ctlInvoker = mi
-			cmd.Hosts = tc.hosts
-			cmd.Ranks = tc.ranks
 
 			sysReformat, err := cmd.shouldReformatSystem(context.Background())
 			common.CmpErr(t, tc.expErr, err)
@@ -272,79 +252,3 @@ func TestDmg_Storage_shouldReformatSystem(t *testing.T) {
 		})
 	}
 }
-
-//func TestScanDisplay(t *testing.T) {
-//	//mockController := storage.MockNvmeController()
-//
-//	for name, tc := range map[string]struct {
-//		scanResp  *StorageScanResp
-//		summary   bool
-//		expOut    string
-//		expErrMsg string
-//	}{
-//		"typical scan": {
-//			scanResp: MockScanResp(MockCtrlrs, MockScmModules, MockScmNamespaces, MockServers),
-//			expOut:   fmt.Sprintf("\n 1.2.3.[4-5]\nSCM namespaces:\nBlock Device   Socket ID       Capacity\n------------   ---------       --------"),
-//				"pmem1          1               2.90TB  \n"+
-//				"NVMe controllers and namespaces:\n"+
-//				"PCI Address    Model   FW Revision     Socket ID       Capacity\n"+
-//				"-----------    -----   -----------     ---------       --------\n"+
-//				"%s      %s %s         %d               %d.00GB  \n",
-//				mockController.PciAddr, mockController.Model, mockController.FwRev,
-//				mockController.SocketID, mockController.Namespaces[0].Size),
-//		},
-//		"summary scan": {
-//			scanResp: MockScanResp(MockCtrlrs, MockScmModules, MockScmNamespaces, MockServers),
-//			summary:  true,
-//			expOut: fmt.Sprintf("\n HOSTS\t\tSCM\t\t\tNVME\t\n -----\t\t---\t\t\t----\t\n 1.2"+
-//				".3.[4-5]\t2.90TB (1 namespace)\t%d.00GB (1 controller)",
-//				mockController.Namespaces[0].Size),
-//		},
-//		"scm scan with pmem namespaces": {
-//			scanResp: MockScanResp(nil, MockScmModules, MockScmNamespaces, MockServers),
-//			expOut: "\n 1.2.3.[4-5]\n\tSCM Namespaces:\n\t\tDevice:pmem1 Socket:1 " +
-//				"Capacity:2.90TB\n\tNVMe controllers and namespaces:\n\t\tnone\n",
-//		},
-//		"summary scm scan with pmem namespaces": {
-//			scanResp: MockScanResp(nil, MockScmModules, MockScmNamespaces, MockServers),
-//			summary:  true,
-//			expOut: "\n HOSTS\t\tSCM\t\t\tNVME\t\n -----\t\t---\t\t\t----\t\n 1.2.3." +
-//				"[4-5]\t2.90TB (1 namespace)\t0.00B (0 controllers)",
-//		},
-//		"scm scan without pmem namespaces": {
-//			scanResp: MockScanResp(nil, MockScmModules, nil, MockServers),
-//			expOut: "\n 1.2.3.[4-5]\n\tSCM Modules:\n\t\tPhysicalID:12345 " +
-//				"Capacity:12.06KB Location:(socket:4 memctrlr:3 chan:1 pos:2)\n" +
-//				"\tNVMe controllers and namespaces:\n\t\tnone\n",
-//		},
-//		"summary scm scan without pmem namespaces": {
-//			scanResp: MockScanResp(nil, MockScmModules, nil, MockServers),
-//			summary:  true,
-//			expOut: "\n HOSTS\t\tSCM\t\t\tNVME\t\n -----\t\t---\t\t\t----\t\n 1.2.3." +
-//				"[4-5]\t12.06KB (1 module)\t0.00B (0 controllers)",
-//		},
-//		"nvme scan": {
-//			scanResp: MockScanResp(MockCtrlrs, nil, nil, MockServers),
-//			expOut: fmt.Sprintf("\n 1.2.3.[4-5]\n\tSCM Modules:\n\t\tnone\n\t"+
-//				"NVMe controllers and namespaces:\n\t\t"+
-//				"PCI:%s Model:%s FW:%s Socket:%d Capacity:%d.00GB\n",
-//				mockController.PciAddr, mockController.Model, mockController.FwRev,
-//				mockController.SocketID, mockController.Namespaces[0].Size),
-//		},
-//		"summary nvme scan": {
-//			scanResp: MockScanResp(MockCtrlrs, nil, nil, MockServers),
-//			summary:  true,
-//			expOut: fmt.Sprintf("\n HOSTS\t\tSCM\t\t\tNVME\t\n -----\t\t---\t\t\t----\t\n 1.2"+
-//				".3.[4-5]\t0.00B (0 modules)\t%d.00GB (1 controller)",
-//				mockController.Namespaces[0].Size),
-//		},
-//	} {
-//		t.Run(name, func(t *testing.T) {
-//			out, err := scanCmdDisplay(tc.scanResp)
-//			ExpectError(t, err, tc.expErrMsg, name)
-//			if diff := cmp.Diff(tc.expOut, out); diff != "" {
-//				t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)
-//			}
-//		})
-//	}
-//}

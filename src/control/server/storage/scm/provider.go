@@ -20,20 +20,19 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package scm
 
 import (
 	"fmt"
 	"os"
 	"os/exec"
-	"sort"
 	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/provider/system"
@@ -57,11 +56,11 @@ const (
 
 	ramFsType = fsTypeTmpfs
 
-	MsgScmRebootRequired    = "A reboot is required to process new memory allocation goals."
-	MsgScmNoModules         = "no scm modules to prepare"
-	MsgScmNotInited         = "scm storage could not be accessed"
-	MsgScmClassNotSupported = "operation unsupported on scm class"
-	MsgIpmctlDiscoverFail   = "ipmctl module discovery"
+	MsgRebootRequired     = "A reboot is required to process new SCM memory allocation goals."
+	MsgNoModules          = "no SCM modules to prepare"
+	MsgNotInited          = "SCM storage could not be accessed"
+	MsgClassNotSupported  = "operation unsupported on SCM class"
+	MsgIpmctlDiscoverFail = "ipmctl module discovery"
 )
 
 type (
@@ -82,7 +81,8 @@ type (
 	// ScanRequest defines the parameters for a Scan operation.
 	ScanRequest struct {
 		pbin.ForwardableRequest
-		Rescan bool
+		DeviceList []string
+		Rescan     bool
 	}
 
 	// ScanResponse contains information gleaned during a successful Scan operation.
@@ -158,6 +158,7 @@ type (
 		system.UnmountProvider
 		Mkfs(fsType, device string, force bool) error
 		Getfs(device string) (string, error)
+		GetfsUsage(string) (uint64, uint64, error)
 	}
 
 	defaultSystemProvider struct {
@@ -203,7 +204,7 @@ func CreateFormatRequest(scmCfg storage.ScmConfig, reformat bool) (*FormatReques
 			Device: scmCfg.DeviceList[0],
 		}
 	default:
-		return nil, errors.New(MsgScmClassNotSupported)
+		return nil, errors.New(MsgClassNotSupported)
 	}
 
 	return &req, nil
@@ -812,37 +813,16 @@ func (p *Provider) IsMounted(target string) (bool, error) {
 	return p.sys.IsMounted(target)
 }
 
-func (p *Provider) getRequestedModules(requestedUIDs []string) (storage.ScmModules, error) {
-	modules, err := p.backend.Discover()
+// GetfsUsage returns space utilisation info for a mount point.
+func (p *Provider) GetfsUsage(target string) (*storage.ScmMountPoint, error) {
+	total, avail, err := p.sys.GetfsUsage(target)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(requestedUIDs) == 0 {
-		return modules, nil
-	}
-
-	uniqueUIDs := common.DedupeStringSlice(requestedUIDs)
-	sort.Strings(uniqueUIDs)
-
-	result := make(storage.ScmModules, 0, len(modules))
-	for _, uid := range uniqueUIDs {
-		mod, err := getModule(uid, modules)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, mod)
-	}
-
-	return result, nil
-}
-
-func getModule(uid string, modules storage.ScmModules) (*storage.ScmModule, error) {
-	for _, mod := range modules {
-		if mod.UID == uid {
-			return mod, nil
-		}
-	}
-
-	return nil, fmt.Errorf("no module found with UID %q", uid)
+	return &storage.ScmMountPoint{
+		Path:       target,
+		TotalBytes: total,
+		AvailBytes: avail,
+	}, nil
 }

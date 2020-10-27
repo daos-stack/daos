@@ -107,6 +107,8 @@ struct dtx_handle {
 	struct dtx_rsrvd_uint		 dth_rsrvd_inline;
 	struct dtx_rsrvd_uint		*dth_rsrvds;
 	void				**dth_deferred;
+	/* NVME extents to release */
+	d_list_t			dth_deferred_nvme;
 };
 
 /* Each sub transaction handle to manage each sub thandle */
@@ -115,6 +117,8 @@ struct dtx_sub_status {
 	int				dss_result;
 };
 
+struct dtx_leader_handle;
+typedef int (*dtx_agg_cb_t)(struct dtx_leader_handle *dlh, void *arg);
 /* Transaction handle on the leader node to manage the transaction */
 struct dtx_leader_handle {
 	/* The dtx handle on the leader node */
@@ -133,6 +137,8 @@ struct dtx_leader_handle {
 	uint32_t			dlh_sub_cnt;
 	/* Sub transaction handle to manage the dtx leader */
 	struct dtx_sub_status		*dlh_subs;
+	dtx_agg_cb_t			dlh_agg_cb;
+	void				*dlh_agg_cb_arg;
 };
 
 struct dtx_stat {
@@ -159,7 +165,7 @@ dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 		 struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
 		 uint32_t pm_ver, daos_unit_oid_t *leader_oid,
 		 struct dtx_id *dti_cos, int dti_cos_cnt,
-		 struct daos_shard_tgt *tgts, int tgt_cnt,
+		 struct daos_shard_tgt *tgts, int tgt_cnt, bool solo, bool sync,
 		 struct dtx_memberships *mbs, struct dtx_leader_handle *dlh);
 int
 dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
@@ -181,9 +187,9 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result);
 int
 dtx_list_cos(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 	     uint64_t dkey_hash, int max, struct dtx_id **dtis);
-
-int dtx_leader_exec_ops(struct dtx_leader_handle *dth, dtx_sub_func_t exec_func,
-			void *func_arg);
+int
+dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
+		    dtx_agg_cb_t agg_cb, void *agg_cb_arg, void *func_arg);
 
 int dtx_batched_commit_register(struct ds_cont_child *cont);
 
@@ -214,13 +220,15 @@ int dtx_obj_sync(uuid_t po_uuid, uuid_t co_uuid, struct ds_cont_child *cont,
 int dtx_handle_resend(daos_handle_t coh, struct dtx_id *dti,
 		      daos_epoch_t *epoch, uint32_t *pm_ver);
 
-/* XXX: The higher 48 bits of HLC is the wall clock, the lower bits are for
- *	logic clock that will be hidden when divided by NSEC_PER_SEC.
- */
 static inline uint64_t
 dtx_hlc_age2sec(uint64_t hlc)
 {
-	return (crt_hlc_get() - hlc) / NSEC_PER_SEC;
+	uint64_t now = crt_hlc_get();
+
+	if (now <= hlc)
+		return 0;
+
+	return crt_hlc2sec(now - hlc);
 }
 
 static inline struct dtx_entry *

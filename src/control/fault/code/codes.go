@@ -82,6 +82,8 @@ const (
 	ScmFormatMissingParam
 	ScmFormatConflictingParam
 	ScmDiscoveryFailed
+	ScmDuplicatesInDeviceList
+	ScmNoDevicesMatchFilter
 
 	// Bdev fault codes
 	BdevUnknown Code = iota + 300
@@ -89,12 +91,11 @@ const (
 	BdevFormatFailure
 	BdevBadPCIAddress
 	BdevPCIAddressNotFound
+	BdevDuplicatesInDeviceList
+	BdevNoDevicesMatchFilter
 
 	// DAOS system fault codes
 	SystemUnknown Code = iota + 400
-	SystemMemberExists
-	SystemMemberMissing
-	SystemMemberChanged
 
 	// client fault codes
 	ClientUnknown Code = iota + 500
@@ -124,12 +125,19 @@ const (
 	ServerIommuDisabled
 	ServerPoolScmTooSmall
 	ServerPoolNvmeTooSmall
+	ServerPoolInvalidRanks
 	ServerInsufficientFreeHugePages
 	ServerHarnessNotStarted
 	ServerDataPlaneNotStarted
 	ServerInstancesNotStopped
 	ServerConfigInvalidNetDevClass
 	ServerVfioDisabled
+	ServerConfigFaultDomainInvalid
+	ServerConfigFaultCallbackNotFound
+	ServerConfigFaultCallbackBadPerms
+	ServerConfigFaultCallbackFailed
+	ServerConfigBothFaultPathAndCb
+	ServerConfigFaultCallbackEmpty
 
 	// spdk library bindings codes
 	SpdkUnknown Code = iota + 700

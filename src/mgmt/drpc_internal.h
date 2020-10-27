@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -118,5 +118,8 @@ ds_mgmt_drpc_pool_list_cont(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
 
 void
 ds_mgmt_drpc_cont_set_owner(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
+
+void
+ds_mgmt_drpc_group_update(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
 
 #endif /* __MGMT_DRPC_INTERNAL_H__ */

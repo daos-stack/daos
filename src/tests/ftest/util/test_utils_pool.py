@@ -76,6 +76,7 @@ class TestPool(TestDaosApiBase):
         self.svc_ranks = None
         self.connected = False
         self.dmg = dmg_command
+        self.query_data = []
 
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
@@ -207,7 +208,7 @@ class TestPool(TestDaosApiBase):
 
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
-    def destroy(self, force=1):
+    def destroy(self, force=1, disconnect=1):
         """Destroy the pool with either API or dmg.
 
         It uses control_method member previously set, so if you want to use the
@@ -215,6 +216,7 @@ class TestPool(TestDaosApiBase):
 
         Args:
             force (int, optional): force flag. Defaults to 1.
+            disconnect (int, optional): disconnect flag. Defaults to 1.
 
         Returns:
             bool: True if the pool has been destroyed; False if the pool is not
@@ -223,7 +225,8 @@ class TestPool(TestDaosApiBase):
         """
         status = False
         if self.pool:
-            self.disconnect()
+            if disconnect:
+                self.disconnect()
             if self.pool.attached:
                 self.log.info("Destroying pool %s", self.uuid)
 
@@ -630,12 +633,13 @@ class TestPool(TestDaosApiBase):
 
         Returns:
             dict: a dictionary of SCM/NVMe pool space usage in %(float)
+
         """
         daos_space = self.get_pool_daos_space()
-        pool_percent = {'scm':round(float(daos_space["s_free"][0])/
-                                    float(daos_space["s_total"][0]) * 100, 2),
-                        'nvme':round(float(daos_space["s_free"][1])/
-                                     float(daos_space["s_total"][1]) * 100, 2)}
+        pool_percent = {'scm': round(float(daos_space["s_free"][0]) /
+                                     float(daos_space["s_total"][0]) * 100, 2),
+                        'nvme': round(float(daos_space["s_free"][1]) /
+                                      float(daos_space["s_total"][1]) * 100, 2)}
         return pool_percent
 
     def get_pool_rebuild_status(self):
@@ -694,3 +698,16 @@ class TestPool(TestDaosApiBase):
         elif not status:
             self.log.error("Errors detected reading data during rebuild")
         return status
+
+    @fail_on(CommandFailure)
+    def set_query_data(self):
+        """Execute dmg pool query and store the results.
+
+        Only supported with the dmg control method.
+        """
+        self.query_data = []
+        if self.pool:
+            if self.dmg:
+                self.query_data = self.dmg.pool_query(self.pool.get_uuid_str())
+            else:
+                self.log.error("Error: Undefined dmg command")

@@ -26,6 +26,7 @@ package common
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"unicode"
 
 	"github.com/pkg/errors"
@@ -84,6 +85,12 @@ func Filter(ss []string, f func(string) bool) (nss []string) {
 		}
 	}
 	return
+}
+
+// FilterStringMatches checks whether a filter string matches the actual string
+// in a case-insensitive way. If the filter string is empty, a match is assumed.
+func FilterStringMatches(filterStr, actualStr string) bool {
+	return filterStr == "" || strings.ToUpper(actualStr) == strings.ToUpper(filterStr)
 }
 
 // IsAlphabetic checks of a string just contains alphabetic characters.
@@ -151,4 +158,32 @@ func DedupeStringSlice(in []string) []string {
 	}
 
 	return out
+}
+
+// StringSliceHasDuplicates checks whether there are duplicate strings in the
+// slice. If so, it returns true.
+func StringSliceHasDuplicates(slice []string) bool {
+	found := make(map[string]bool)
+
+	for _, s := range slice {
+		if _, ok := found[s]; ok {
+			return true
+		}
+		found[s] = true
+	}
+	return false
+}
+
+// PercentageString returns string representation of percentage given
+// nominator and denominator unsigned integers.
+func PercentageString(part, total uint64) string {
+	if total == 0 {
+		return "N/A"
+	}
+	if part == 0 {
+		return fmt.Sprintf("%v %%", 0)
+	}
+
+	return fmt.Sprintf("%v %%",
+		int((float64(part)/float64(total))*float64(100)))
 }

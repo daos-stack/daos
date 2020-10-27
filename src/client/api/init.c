@@ -47,26 +47,25 @@ static bool		module_initialized;
 const struct daos_task_api dc_funcs[] = {
 	/** Management */
 	{dc_mgmt_svc_rip, sizeof(daos_svc_rip_t)},
-	{dc_pool_create, sizeof(daos_pool_create_t)},
-	{dc_pool_destroy, sizeof(daos_pool_destroy_t)},
 	{dc_pool_extend, sizeof(daos_pool_extend_t)},
 	{dc_pool_evict, sizeof(daos_pool_evict_t)},
 	{dc_mgmt_set_params, sizeof(daos_set_params_t)},
 	{dc_pool_add_replicas, sizeof(daos_pool_replicas_t)},
 	{dc_pool_remove_replicas, sizeof(daos_pool_replicas_t)},
-	{dc_mgmt_list_pools, sizeof(daos_mgmt_list_pools_t)},
+	{dc_mgmt_get_bs_state, sizeof(daos_mgmt_get_bs_state_t)},
 
 	/** Pool */
 	{dc_pool_connect, sizeof(daos_pool_connect_t)},
 	{dc_pool_disconnect, sizeof(daos_pool_disconnect_t)},
 	{dc_pool_exclude, sizeof(daos_pool_update_t)},
 	{dc_pool_exclude_out, sizeof(daos_pool_update_t)},
-	{dc_pool_add, sizeof(daos_pool_update_t)},
+	{dc_pool_reint, sizeof(daos_pool_update_t)},
 	{dc_pool_query, sizeof(daos_pool_query_t)},
 	{dc_pool_query_target, sizeof(daos_pool_query_target_t)},
 	{dc_pool_list_attr, sizeof(daos_pool_list_attr_t)},
 	{dc_pool_get_attr, sizeof(daos_pool_get_attr_t)},
 	{dc_pool_set_attr, sizeof(daos_pool_set_attr_t)},
+	{dc_pool_del_attr, sizeof(daos_pool_del_attr_t)},
 	{dc_pool_stop_svc, sizeof(daos_pool_stop_svc_t)},
 	{dc_pool_list_cont, sizeof(daos_pool_list_cont_t)},
 
@@ -85,6 +84,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_cont_list_attr, sizeof(daos_cont_list_attr_t)},
 	{dc_cont_get_attr, sizeof(daos_cont_get_attr_t)},
 	{dc_cont_set_attr, sizeof(daos_cont_set_attr_t)},
+	{dc_cont_del_attr, sizeof(daos_cont_del_attr_t)},
 	{dc_cont_alloc_oids, sizeof(daos_cont_alloc_oids_t)},
 	{dc_cont_list_snap, sizeof(daos_cont_list_snap_t)},
 	{dc_cont_create_snap, sizeof(daos_cont_create_snap_t)},

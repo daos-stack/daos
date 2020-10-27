@@ -97,6 +97,96 @@ void   srv__bio_error_req__free_unpacked
   assert(message->base.descriptor == &srv__bio_error_req__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   srv__get_pool_svc_req__init
+                     (Srv__GetPoolSvcReq         *message)
+{
+  static const Srv__GetPoolSvcReq init_value = SRV__GET_POOL_SVC_REQ__INIT;
+  *message = init_value;
+}
+size_t srv__get_pool_svc_req__get_packed_size
+                     (const Srv__GetPoolSvcReq *message)
+{
+  assert(message->base.descriptor == &srv__get_pool_svc_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t srv__get_pool_svc_req__pack
+                     (const Srv__GetPoolSvcReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &srv__get_pool_svc_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t srv__get_pool_svc_req__pack_to_buffer
+                     (const Srv__GetPoolSvcReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &srv__get_pool_svc_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Srv__GetPoolSvcReq *
+       srv__get_pool_svc_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Srv__GetPoolSvcReq *)
+     protobuf_c_message_unpack (&srv__get_pool_svc_req__descriptor,
+                                allocator, len, data);
+}
+void   srv__get_pool_svc_req__free_unpacked
+                     (Srv__GetPoolSvcReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &srv__get_pool_svc_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   srv__get_pool_svc_resp__init
+                     (Srv__GetPoolSvcResp         *message)
+{
+  static const Srv__GetPoolSvcResp init_value = SRV__GET_POOL_SVC_RESP__INIT;
+  *message = init_value;
+}
+size_t srv__get_pool_svc_resp__get_packed_size
+                     (const Srv__GetPoolSvcResp *message)
+{
+  assert(message->base.descriptor == &srv__get_pool_svc_resp__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t srv__get_pool_svc_resp__pack
+                     (const Srv__GetPoolSvcResp *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &srv__get_pool_svc_resp__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t srv__get_pool_svc_resp__pack_to_buffer
+                     (const Srv__GetPoolSvcResp *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &srv__get_pool_svc_resp__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Srv__GetPoolSvcResp *
+       srv__get_pool_svc_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Srv__GetPoolSvcResp *)
+     protobuf_c_message_unpack (&srv__get_pool_svc_resp__descriptor,
+                                allocator, len, data);
+}
+void   srv__get_pool_svc_resp__free_unpacked
+                     (Srv__GetPoolSvcResp *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &srv__get_pool_svc_resp__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 static const ProtobufCFieldDescriptor srv__notify_ready_req__field_descriptors[5] =
 {
   {
@@ -301,5 +391,94 @@ const ProtobufCMessageDescriptor srv__bio_error_req__descriptor =
   srv__bio_error_req__field_indices_by_name,
   1,  srv__bio_error_req__number_ranges,
   (ProtobufCMessageInit) srv__bio_error_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor srv__get_pool_svc_req__field_descriptors[1] =
+{
+  {
+    "uuid",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Srv__GetPoolSvcReq, uuid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned srv__get_pool_svc_req__field_indices_by_name[] = {
+  0,   /* field[0] = uuid */
+};
+static const ProtobufCIntRange srv__get_pool_svc_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 1 }
+};
+const ProtobufCMessageDescriptor srv__get_pool_svc_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "srv.GetPoolSvcReq",
+  "GetPoolSvcReq",
+  "Srv__GetPoolSvcReq",
+  "srv",
+  sizeof(Srv__GetPoolSvcReq),
+  1,
+  srv__get_pool_svc_req__field_descriptors,
+  srv__get_pool_svc_req__field_indices_by_name,
+  1,  srv__get_pool_svc_req__number_ranges,
+  (ProtobufCMessageInit) srv__get_pool_svc_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor srv__get_pool_svc_resp__field_descriptors[2] =
+{
+  {
+    "status",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(Srv__GetPoolSvcResp, status),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "svcreps",
+    2,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Srv__GetPoolSvcResp, n_svcreps),
+    offsetof(Srv__GetPoolSvcResp, svcreps),
+    NULL,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned srv__get_pool_svc_resp__field_indices_by_name[] = {
+  0,   /* field[0] = status */
+  1,   /* field[1] = svcreps */
+};
+static const ProtobufCIntRange srv__get_pool_svc_resp__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor srv__get_pool_svc_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "srv.GetPoolSvcResp",
+  "GetPoolSvcResp",
+  "Srv__GetPoolSvcResp",
+  "srv",
+  sizeof(Srv__GetPoolSvcResp),
+  2,
+  srv__get_pool_svc_resp__field_descriptors,
+  srv__get_pool_svc_resp__field_indices_by_name,
+  1,  srv__get_pool_svc_resp__number_ranges,
+  (ProtobufCMessageInit) srv__get_pool_svc_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };

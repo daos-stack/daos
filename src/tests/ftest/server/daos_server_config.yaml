@@ -3,7 +3,7 @@
 hosts:
   test_servers:
     - server-A
-timeout: 120
+timeout: 130
 server_config:
   name: daos_server
 # The 'config_val' list is composed of the following values:

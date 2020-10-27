@@ -5,7 +5,7 @@ hosts:
     - server-A
   test_clients:
     - client-B
-timeout: 200
+timeout: 120
 server_config:
   name: daos_server
   servers:
@@ -13,8 +13,16 @@ server_config:
     bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
     scm_class: dcpm
     scm_list: ["/dev/pmem0"]
+  transport_config:
+    allow_insecure: True
+agent_config:
+  transport_config:
+    allow_insecure: True
+dmg:
+  transport_config:
+    allow_insecure: True
 daos_racer:
-  runtime: 30
+  runtime: 20
   clush_timeout: 60
 zero_config: !mux
   set:

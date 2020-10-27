@@ -87,7 +87,9 @@ class ZeroConfigTest(TestWithServers):
             bool: status of whether correct device was used.
 
         """
-        cmd = "head -50 {}".format(log_file)
+	# anticipate log switch
+        cmd = "if [ -f {0}.old ]; then head -50 {0}.old; else head -50 {0};" \
+              "fi".format(log_file)
         err = "Error getting log data."
         pattern = r"Using\s+client\s+provided\s+OFI_INTERFACE:\s+{}".format(dev)
 
@@ -125,8 +127,12 @@ class ZeroConfigTest(TestWithServers):
         cnt_before = self.get_port_cnt(
             self.hostlist_clients, hfi_map[exp_iface], "port_rcv_data")
 
+        # get the dmg config file for daos_racer
+        dmg = self.get_dmg_command()
+
         # Let's run daos_racer as a client
-        daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0])
+        daos_racer = DaosRacerCommand(self.bin,
+                                      self.hostlist_clients[0], dmg)
         daos_racer.get_params(self)
 
         # Update env_name list to add OFI_INTERFACE if needed.
@@ -139,6 +145,7 @@ class ZeroConfigTest(TestWithServers):
         # Add FI_LOG_LEVEL to get more info on device issues
         racer_env = daos_racer.get_environment(self.server_managers[0], logf)
         racer_env["FI_LOG_LEVEL"] = "info"
+        racer_env["D_LOG_MASK"] = "INFO,object=ERR,placement=ERR"
         daos_racer.set_environment(racer_env)
 
         # Run client

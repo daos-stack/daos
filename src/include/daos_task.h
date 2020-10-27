@@ -48,14 +48,12 @@ typedef enum {
 
 	/** Management APIs */
 	DAOS_OPC_SVC_RIP = 0,
-	DAOS_OPC_POOL_CREATE,
-	DAOS_OPC_POOL_DESTROY,
 	DAOS_OPC_POOL_EXTEND,
 	DAOS_OPC_POOL_EVICT,
 	DAOS_OPC_SET_PARAMS,
 	DAOS_OPC_POOL_ADD_REPLICAS,
 	DAOS_OPC_POOL_REMOVE_REPLICAS,
-	DAOS_OPC_MGMT_LIST_POOLS,
+	DAOS_OPC_MGMT_GET_BS_STATE,
 
 	/** Pool APIs */
 	DAOS_OPC_POOL_CONNECT,
@@ -68,6 +66,7 @@ typedef enum {
 	DAOS_OPC_POOL_LIST_ATTR,
 	DAOS_OPC_POOL_GET_ATTR,
 	DAOS_OPC_POOL_SET_ATTR,
+	DAOS_OPC_POOL_DEL_ATTR,
 	DAOS_OPC_POOL_STOP_SVC,
 	DAOS_OPC_POOL_LIST_CONT,
 
@@ -86,6 +85,7 @@ typedef enum {
 	DAOS_OPC_CONT_LIST_ATTR,
 	DAOS_OPC_CONT_GET_ATTR,
 	DAOS_OPC_CONT_SET_ATTR,
+	DAOS_OPC_CONT_DEL_ATTR,
 	DAOS_OPC_CONT_ALLOC_OIDS,
 	DAOS_OPC_CONT_LIST_SNAP,
 	DAOS_OPC_CONT_CREATE_SNAP,
@@ -129,7 +129,10 @@ typedef enum {
 	DAOS_OPC_ARRAY_GET_SIZE,
 	DAOS_OPC_ARRAY_SET_SIZE,
 
-	/** HL APIs */
+	/** KV APIs */
+	DAOS_OPC_KV_OPEN,
+	DAOS_OPC_KV_CLOSE,
+	DAOS_OPC_KV_DESTROY,
 	DAOS_OPC_KV_GET,
 	DAOS_OPC_KV_PUT,
 	DAOS_OPC_KV_REMOVE,
@@ -326,6 +329,16 @@ typedef struct {
 	size_t const		*sizes;
 } daos_pool_set_attr_t;
 
+/** pool del attributes args */
+typedef struct {
+	/** Pool open handle. */
+	daos_handle_t		poh;
+	/** Number of attributes. */
+	int			n;
+	/** Array of \a n null-terminated attribute names. */
+	char   const *const	*names;
+} daos_pool_del_attr_t;
+
 /** pool add/remove replicas args */
 typedef struct {
 	/** UUID of the pool. */
@@ -349,6 +362,13 @@ typedef struct {
 	/** length of array */
 	daos_size_t		*npools;
 } daos_mgmt_list_pools_t;
+
+/** Blobstore state query args */
+typedef struct {
+	const char		*grp;
+	uuid_t			uuid;
+	int			*state;
+} daos_mgmt_get_bs_state_t;
 
 /** pool service stop args */
 typedef struct {
@@ -497,6 +517,16 @@ typedef struct {
 	size_t const		*sizes;
 } daos_cont_set_attr_t;
 
+/** Container attribute del args */
+typedef struct {
+	/** Container open handle. */
+	daos_handle_t		coh;
+	/** Number of attributes. */
+	int			n;
+	/** Array of \a n null-terminated attribute names. */
+	char   const *const	*names;
+} daos_cont_del_attr_t;
+
 /** Container Object ID allocation args */
 typedef struct {
 	/** Container open handle. */
@@ -556,6 +586,8 @@ typedef struct {
 typedef struct {
 	/** Transaction open handle. */
 	daos_handle_t		th;
+	/** Control commit behavior, such as retry. */
+	uint32_t		flags;
 } daos_tx_commit_t;
 
 /** Transaction abort args */
@@ -918,6 +950,32 @@ typedef struct {
 	/** Transaction open handle. */
 	daos_handle_t		th;
 } daos_array_destroy_t;
+
+/** KV open args */
+typedef struct {
+	/** Container open handle. */
+	daos_handle_t		coh;
+	/** KV ID, */
+	daos_obj_id_t		oid;
+	/** Open mode. */
+	unsigned int		mode;
+	/** Returned KV open handle */
+	daos_handle_t		*oh;
+} daos_kv_open_t;
+
+/** KV close args */
+typedef struct {
+	/** KV open handle. */
+	daos_handle_t		oh;
+} daos_kv_close_t;
+
+/** KV destroy args */
+typedef struct {
+	/** KV open handle. */
+	daos_handle_t		oh;
+	/** Transaction open handle. */
+	daos_handle_t		th;
+} daos_kv_destroy_t;
 
 /** KV get args */
 typedef struct {

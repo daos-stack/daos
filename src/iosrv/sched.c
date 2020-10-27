@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -223,7 +223,7 @@ static uint32_t
 spi_key_hash(struct d_hash_table *htable, const void *key, unsigned int len)
 {
 	D_ASSERT(len == sizeof(uuid_t));
-	return d_hash_string_u32((const char *)key, len);
+	return *((const uint32_t *)key);
 }
 
 static void

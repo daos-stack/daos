@@ -25,6 +25,7 @@
 import time
 from mdtest_test_base import MdtestBase
 
+
 class AggregationPunching(MdtestBase):
     # pylint: disable=too-many-ancestors
     """Test class Description: Runs Mdtest with in small config and
@@ -49,7 +50,7 @@ class AggregationPunching(MdtestBase):
         """
 
         if self.pool is None:
-            self.create_pool()
+            self.add_pool(connect=False)
         self.pool.connect()
 
         storage_index = 1 # SSD
@@ -81,7 +82,7 @@ class AggregationPunching(MdtestBase):
                       "NVMe" if storage_index else "SCM")
         self.log.info("%s <= %s", free_space_after_mdtest,
                       initial_free_space-mdtest_data_size)
-        self.assertTrue(free_space_after_mdtest <
+        self.assertTrue(free_space_after_mdtest <=
                         initial_free_space - mdtest_data_size)
 
         # Enable the aggregation

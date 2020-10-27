@@ -7,7 +7,7 @@ hosts:
   test_clients:
     - client-E
     - client-F
-timeout: 1500
+timeout: 305
 server_config:
   name: daos_server
   transport_config:
@@ -27,6 +27,7 @@ pool:
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+  control_method: daos
 mdtest:
   client_processes:
     np_8:

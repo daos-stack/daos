@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -107,9 +107,6 @@ test_mgmt_drpc_handlers_bad_call_payload(void **state)
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_prep_shutdown);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_ping_rank);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_set_rank);
-	expect_failure_for_bad_call_payload(ds_mgmt_drpc_create_mgmt_svc);
-	expect_failure_for_bad_call_payload(ds_mgmt_drpc_get_attach_info);
-	expect_failure_for_bad_call_payload(ds_mgmt_drpc_join);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_create);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_extend);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_reintegrate);
@@ -125,7 +122,6 @@ test_mgmt_drpc_handlers_bad_call_payload(void **state)
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_smd_list_devs);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_smd_list_pools);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_bio_health_query);
-	expect_failure_for_bad_call_payload(ds_mgmt_drpc_list_pools);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_list_cont);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_set_prop);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_cont_set_owner);
@@ -291,7 +287,7 @@ test_drpc_pool_get_acl_mgmt_svc_fails(void **state)
 	Drpc__Response	resp = DRPC__RESPONSE__INIT;
 
 	setup_get_acl_drpc_call(&call, TEST_UUID);
-	ds_mgmt_pool_get_acl_return = -DER_UNKNOWN;
+	ds_mgmt_pool_get_acl_return = -DER_MISC;
 
 	ds_mgmt_drpc_pool_get_acl(&call, &resp);
 
@@ -444,7 +440,7 @@ test_drpc_pool_overwrite_acl_mgmt_svc_fails(void **state)
 	Drpc__Response	resp = DRPC__RESPONSE__INIT;
 
 	setup_modify_acl_drpc_call(&call, TEST_UUID, TEST_ACES, TEST_ACES_NR);
-	ds_mgmt_pool_overwrite_acl_return = -DER_UNKNOWN;
+	ds_mgmt_pool_overwrite_acl_return = -DER_MISC;
 
 	ds_mgmt_drpc_pool_overwrite_acl(&call, &resp);
 
@@ -524,7 +520,7 @@ test_drpc_pool_update_acl_mgmt_svc_fails(void **state)
 	Drpc__Response	resp = DRPC__RESPONSE__INIT;
 
 	setup_modify_acl_drpc_call(&call, TEST_UUID, TEST_ACES, TEST_ACES_NR);
-	ds_mgmt_pool_update_acl_return = -DER_UNKNOWN;
+	ds_mgmt_pool_update_acl_return = -DER_MISC;
 
 	ds_mgmt_drpc_pool_update_acl(&call, &resp);
 
@@ -610,7 +606,7 @@ test_drpc_pool_delete_acl_mgmt_svc_fails(void **state)
 	Drpc__Response	resp = DRPC__RESPONSE__INIT;
 
 	setup_delete_acl_drpc_call(&call, TEST_UUID, "OWNER@");
-	ds_mgmt_pool_delete_acl_return = -DER_UNKNOWN;
+	ds_mgmt_pool_delete_acl_return = -DER_MISC;
 
 	ds_mgmt_drpc_pool_delete_acl(&call, &resp);
 
@@ -633,184 +629,6 @@ test_drpc_pool_delete_acl_success(void **state)
 	ds_mgmt_drpc_pool_delete_acl(&call, &resp);
 
 	expect_drpc_acl_resp_success(&resp, TEST_ACES, TEST_ACES_NR);
-
-	D_FREE(call.body.data);
-	D_FREE(resp.body.data);
-}
-
-/*
- * dRPC List Pools setup/teardown
- */
-
-static int
-drpc_list_pools_setup(void **state)
-{
-	mock_ds_mgmt_list_pools_setup();
-
-	return 0;
-}
-
-static int
-drpc_list_pools_teardown(void **state)
-{
-	mock_ds_mgmt_list_pools_teardown();
-
-	return 0;
-}
-
-/*
- * dRPC List Pools tests
- */
-
-static void
-setup_list_pools_drpc_call(Drpc__Call *call, char *sys_name)
-{
-	Mgmt__ListPoolsReq	req = MGMT__LIST_POOLS_REQ__INIT;
-	size_t			len;
-	uint8_t			*body;
-
-	req.sys = sys_name;
-
-	len = mgmt__list_pools_req__get_packed_size(&req);
-	D_ALLOC(body, len);
-	assert_non_null(body);
-
-	mgmt__list_pools_req__pack(&req, body);
-
-	call->body.data = body;
-	call->body.len = len;
-}
-
-static void
-expect_drpc_list_pools_resp_with_error(Drpc__Response *resp, int expected_err)
-{
-	Mgmt__ListPoolsResp *pool_resp = NULL;
-
-	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
-	assert_non_null(resp->body.data);
-
-	pool_resp = mgmt__list_pools_resp__unpack(NULL, resp->body.len,
-						 resp->body.data);
-	assert_non_null(pool_resp);
-	assert_int_equal(pool_resp->status, expected_err);
-	assert_int_equal(pool_resp->n_pools, 0);
-
-	mgmt__list_pools_resp__free_unpacked(pool_resp, NULL);
-}
-
-static void
-test_drpc_list_pools_mgmt_svc_fails(void **state)
-{
-	Drpc__Call	call = DRPC__CALL__INIT;
-	Drpc__Response	resp = DRPC__RESPONSE__INIT;
-
-	setup_list_pools_drpc_call(&call, "DaosSys");
-
-	ds_mgmt_list_pools_return = -DER_UNKNOWN;
-
-	ds_mgmt_drpc_list_pools(&call, &resp);
-
-	expect_drpc_list_pools_resp_with_error(&resp,
-					       ds_mgmt_list_pools_return);
-
-	D_FREE(call.body.data);
-	D_FREE(resp.body.data);
-}
-
-static void
-test_drpc_list_pools_svc_results_invalid(void **state)
-{
-	Drpc__Call	call = DRPC__CALL__INIT;
-	Drpc__Response	resp = DRPC__RESPONSE__INIT;
-
-	setup_list_pools_drpc_call(&call, "DaosSys");
-
-	/* has length but pools is null - something weird happened */
-	ds_mgmt_list_pools_len_out = 2;
-
-	ds_mgmt_drpc_list_pools(&call, &resp);
-
-	expect_drpc_list_pools_resp_with_error(&resp, -DER_UNKNOWN);
-
-	D_FREE(call.body.data);
-	D_FREE(resp.body.data);
-}
-
-static void
-expect_drpc_list_pools_resp_with_pools(Drpc__Response *resp,
-				       struct mgmt_list_pools_one *exp_pools,
-				       size_t exp_pools_len)
-{
-	Mgmt__ListPoolsResp	*pool_resp = NULL;
-	size_t			i, j;
-
-	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
-	assert_non_null(resp->body.data);
-
-	pool_resp = mgmt__list_pools_resp__unpack(NULL, resp->body.len,
-						 resp->body.data);
-	assert_non_null(pool_resp);
-	assert_int_equal(pool_resp->status, 0);
-	assert_int_equal(pool_resp->n_pools, exp_pools_len);
-
-	for (i = 0; i < exp_pools_len; i++) {
-		char	exp_uuid[UUID_STR_LEN];
-
-		uuid_unparse(exp_pools[i].lp_puuid, exp_uuid);
-		assert_string_equal(pool_resp->pools[i]->uuid, exp_uuid);
-
-		assert_int_equal(pool_resp->pools[i]->n_svcreps,
-				 exp_pools[i].lp_svc->rl_nr);
-		for (j = 0; j < exp_pools[i].lp_svc->rl_nr; j++)
-			assert_int_equal(pool_resp->pools[i]->svcreps[j],
-					 exp_pools[i].lp_svc->rl_ranks[j]);
-	}
-
-	mgmt__list_pools_resp__free_unpacked(pool_resp, NULL);
-}
-
-static void
-test_drpc_list_pools_success_no_pools(void **state)
-{
-	Drpc__Call	call = DRPC__CALL__INIT;
-	Drpc__Response	resp = DRPC__RESPONSE__INIT;
-	char		*exp_sys_name = "daos_sys";
-
-	setup_list_pools_drpc_call(&call, exp_sys_name);
-
-	ds_mgmt_drpc_list_pools(&call, &resp);
-
-	expect_drpc_list_pools_resp_with_pools(&resp, NULL, 0);
-
-	/* Check mgmt svc inputs */
-	assert_string_equal(ds_mgmt_list_pools_group, exp_sys_name);
-	assert_null(ds_mgmt_list_pools_npools_ptr); /* want all pools */
-	assert_non_null(ds_mgmt_list_pools_poolsp_ptr);
-	assert_non_null(ds_mgmt_list_pools_len_ptr);
-
-	D_FREE(call.body.data);
-	D_FREE(resp.body.data);
-}
-
-static void
-test_drpc_list_pools_success_with_pools(void **state)
-{
-	Drpc__Call	call = DRPC__CALL__INIT;
-	Drpc__Response	resp = DRPC__RESPONSE__INIT;
-
-	setup_list_pools_drpc_call(&call, "DaosSys");
-	mock_ds_mgmt_list_pools_gen_pools(5);
-
-	/* Add a couple additional ranks to some pools */
-	d_rank_list_append(ds_mgmt_list_pools_poolsp_out[0].lp_svc, 3);
-	d_rank_list_append(ds_mgmt_list_pools_poolsp_out[2].lp_svc, 6);
-	d_rank_list_append(ds_mgmt_list_pools_poolsp_out[2].lp_svc, 7);
-
-	ds_mgmt_drpc_list_pools(&call, &resp);
-
-	expect_drpc_list_pools_resp_with_pools(&resp,
-					       ds_mgmt_list_pools_poolsp_out,
-					       ds_mgmt_list_pools_len_out);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
@@ -932,7 +750,7 @@ test_drpc_pool_list_cont_mgmt_svc_fails(void **state)
 	Drpc__Response	 resp = DRPC__RESPONSE__INIT;
 
 	setup_list_cont_drpc_call(&call, TEST_UUID);
-	ds_mgmt_pool_list_cont_return = -DER_UNKNOWN;
+	ds_mgmt_pool_list_cont_return = -DER_MISC;
 
 	ds_mgmt_drpc_pool_list_cont(&call, &resp);
 
@@ -1223,7 +1041,7 @@ test_drpc_pool_query_mgmt_svc_fails(void **state)
 	Drpc__Response	resp = DRPC__RESPONSE__INIT;
 
 	setup_pool_query_drpc_call(&call, TEST_UUID);
-	ds_mgmt_pool_query_return = -DER_UNKNOWN;
+	ds_mgmt_pool_query_return = -DER_MISC;
 
 	ds_mgmt_drpc_pool_query(&call, &resp);
 
@@ -1417,7 +1235,7 @@ test_drpc_pool_query_success_rebuild_err(void **state)
 
 	init_test_pool_info(&exp_info);
 	exp_info.pi_rebuild_st.rs_version = 1;
-	exp_info.pi_rebuild_st.rs_errno = -DER_UNKNOWN;
+	exp_info.pi_rebuild_st.rs_errno = -DER_MISC;
 
 	ds_mgmt_pool_query_info_out = exp_info;
 	/*
@@ -1594,7 +1412,7 @@ test_drpc_exclude_mgmt_svc_fails(void **state)
 	Drpc__Response	resp = DRPC__RESPONSE__INIT;
 
 	setup_exclude_drpc_call(&call, TEST_UUID, 0);
-	ds_mgmt_target_update_return = -DER_UNKNOWN;
+	ds_mgmt_target_update_return = -DER_MISC;
 
 	ds_mgmt_drpc_pool_exclude(&call, &resp);
 	expect_drpc_exclude_resp_with_error(&resp,
@@ -1699,7 +1517,7 @@ test_drpc_drain_mgmt_svc_fails(void **state)
 	Drpc__Response	resp = DRPC__RESPONSE__INIT;
 
 	setup_drain_drpc_call(&call, TEST_UUID, 0);
-	ds_mgmt_target_update_return = -DER_UNKNOWN;
+	ds_mgmt_target_update_return = -DER_MISC;
 
 	ds_mgmt_drpc_pool_drain(&call, &resp);
 	expect_drpc_drain_resp_with_error(&resp,
@@ -1804,7 +1622,7 @@ test_drpc_extend_mgmt_svc_fails(void **state)
 	Drpc__Response	resp = DRPC__RESPONSE__INIT;
 
 	setup_extend_drpc_call(&call, TEST_UUID);
-	ds_mgmt_pool_extend_return = -DER_UNKNOWN;
+	ds_mgmt_pool_extend_return = -DER_MISC;
 
 	ds_mgmt_drpc_pool_extend(&call, &resp);
 	expect_drpc_extend_resp_with_error(&resp, ds_mgmt_pool_extend_return);
@@ -1966,7 +1784,7 @@ test_drpc_pool_evict_mgmt_svc_fails(void **state)
 	Drpc__Response	resp = DRPC__RESPONSE__INIT;
 
 	setup_evict_drpc_call(&call, TEST_UUID, "DaosSys");
-	ds_mgmt_pool_evict_return = -DER_UNKNOWN;
+	ds_mgmt_pool_evict_return = -DER_MISC;
 
 	ds_mgmt_drpc_pool_evict(&call, &resp);
 	expect_drpc_evict_resp_with_status(&resp,
@@ -2190,7 +2008,7 @@ test_drpc_cont_set_owner_failed(void **state)
 	Drpc__Call		call = DRPC__CALL__INIT;
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
 	Mgmt__ContSetOwnerReq	req = MGMT__CONT_SET_OWNER_REQ__INIT;
-	int			exp_rc = -DER_UNKNOWN;
+	int			exp_rc = -DER_MISC;
 
 	req.pooluuid = "11111111-1111-1111-1111-111111111111";
 	req.contuuid = "22222222-2222-2222-2222-222222222222";
@@ -2253,10 +2071,6 @@ test_drpc_cont_set_owner_success(void **state)
 						drpc_pool_acl_setup, \
 						drpc_pool_acl_teardown)
 
-#define LIST_POOLS_TEST(x) cmocka_unit_test_setup_teardown(x, \
-						drpc_list_pools_setup, \
-						drpc_list_pools_teardown)
-
 #define LIST_CONT_TEST(x) cmocka_unit_test_setup_teardown(x, \
 						drpc_list_cont_setup, \
 						drpc_list_cont_teardown)
@@ -2314,10 +2128,6 @@ main(void)
 		ACL_TEST(test_drpc_pool_delete_acl_bad_uuid),
 		ACL_TEST(test_drpc_pool_delete_acl_mgmt_svc_fails),
 		ACL_TEST(test_drpc_pool_delete_acl_success),
-		LIST_POOLS_TEST(test_drpc_list_pools_mgmt_svc_fails),
-		LIST_POOLS_TEST(test_drpc_list_pools_svc_results_invalid),
-		LIST_POOLS_TEST(test_drpc_list_pools_success_no_pools),
-		LIST_POOLS_TEST(test_drpc_list_pools_success_with_pools),
 		LIST_CONT_TEST(test_drpc_pool_list_cont_bad_uuid),
 		LIST_CONT_TEST(test_drpc_pool_list_cont_mgmt_svc_fails),
 		LIST_CONT_TEST(test_drpc_pool_list_cont_no_containers),

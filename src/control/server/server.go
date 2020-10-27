@@ -31,12 +31,15 @@ import (
 	"os"
 	"os/signal"
 	"os/user"
+	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
+	"github.com/daos-stack/daos/src/control/build"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -51,13 +54,6 @@ import (
 )
 
 const (
-	// ControlPlaneName defines a consistent name for the control plane server.
-	ControlPlaneName = "DAOS Control Server"
-	// DataPlaneName defines a consistent name for the ioserver.
-	DataPlaneName = "DAOS I/O Server"
-	// define supported maximum number of I/O servers
-	maxIOServers = 2
-
 	iommuPath        = "/sys/class/iommu"
 	minHugePageCount = 128
 )
@@ -72,10 +68,6 @@ func cfgHasBdev(cfg *Configuration) bool {
 	return false
 }
 
-func instanceShmID(idx int) int {
-	return os.Getpid() + idx + 1
-}
-
 func iommuDetected() bool {
 	// Simple test for now -- if the path exists and contains
 	// DMAR entries, we assume that's good enough.
@@ -85,6 +77,21 @@ func iommuDetected() bool {
 	}
 
 	return len(dmars) > 0
+}
+
+func raftDir(cfg *Configuration) string {
+	if len(cfg.Servers) == 0 {
+		return "" // can't save to SCM
+	}
+	return filepath.Join(cfg.Servers[0].Storage.SCM.MountPoint, "control_raft")
+}
+
+func hostname() string {
+	hn, err := os.Hostname()
+	if err != nil {
+		return fmt.Sprintf("Hostname() failed: %s", err.Error())
+	}
+	return hn
 }
 
 // Start is the entry point for a daos_server instance.
@@ -108,6 +115,12 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			return errors.Wrap(err, "unable to configure privileged firmware helper logging")
 		}
 	}
+
+	faultDomain, err := getFaultDomain(cfg)
+	if err != nil {
+		return err
+	}
+	log.Debugf("fault domain: %s", faultDomain.String())
 
 	// Create the root context here. All contexts should
 	// inherit from this one so that they can be shut down
@@ -176,9 +189,14 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 
 	// If this daos_server instance ends up being the MS leader,
 	// this will record the DAOS system membership.
-	membership := system.NewMembership(log)
+	sysdb := system.NewDatabase(log, &system.DatabaseConfig{
+		Replicas: cfg.AccessPoints,
+		RaftDir:  raftDir(cfg),
+	})
+	membership := system.NewMembership(log, sysdb)
 	scmProvider := scm.DefaultProvider(log)
-	harness := NewIOServerHarness(log)
+	harness := NewIOServerHarness(log).WithFaultDomain(faultDomain)
+	mgmtSvc := newMgmtSvc(harness, membership, sysdb)
 	var netDevClass uint32
 
 	netCtx, err := netdetect.Init(context.Background())
@@ -187,11 +205,14 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 	defer netdetect.CleanUp(netCtx)
 
-	for i, srvCfg := range cfg.Servers {
-		if i+1 > maxIOServers {
-			break
-		}
+	// On a NUMA-aware system, emit a message when the configuration
+	// may be sub-optimal.
+	numaCount := netdetect.NumNumaNodes(netCtx)
+	if numaCount > 0 && len(cfg.Servers) > numaCount {
+		log.Infof("NOTICE: Detected %d NUMA node(s); %d-server config may not perform as expected", numaCount, len(cfg.Servers))
+	}
 
+	for idx, srvCfg := range cfg.Servers {
 		// Provide special handling for the ofi+verbs provider.
 		// Mercury uses the interface name such as ib0, while OFI uses the device name such as hfi1_0
 		// CaRT and Mercury will now support the new OFI_DOMAIN environment variable so that we can
@@ -215,12 +236,8 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			srvCfg.Storage.Bdev.MemSize -= srvCfg.Storage.Bdev.MemSize / 16
 		}
 
-		// Each instance must have a unique shmid in order to run as SPDK primary.
-		// Use a stable identifier that's easy to construct elsewhere if we don't
-		// have access to the instance configuration.
-		srvCfg.Storage.Bdev.ShmID = instanceShmID(i)
 		// Indicate whether VMD devices have been detected and can be used.
-		srvCfg.Storage.Bdev.VmdEnabled = bdevProvider.IsVmdEnabled()
+		srvCfg.Storage.Bdev.VmdDisabled = bdevProvider.IsVMDDisabled()
 
 		bp, err := bdev.NewClassProvider(log, srvCfg.Storage.SCM.MountPoint, &srvCfg.Storage.Bdev)
 		if err != nil {
@@ -233,16 +250,38 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			TransportConfig: cfg.TransportConfig,
 		})
 
-		srv := NewIOServerInstance(log, bp, scmProvider, msClient, ioserver.NewRunner(log, srvCfg))
+		srv := NewIOServerInstance(log, bp, scmProvider, msClient, ioserver.NewRunner(log, srvCfg)).
+			WithHostFaultDomain(faultDomain)
 		if err := harness.AddInstance(srv); err != nil {
 			return err
 		}
 
-		if i == 0 {
+		srv.OnReady(func(ctx context.Context) error {
+			if !mgmtSvc.sysdb.IsLeader() {
+				return nil
+			}
+
+			mgmtSvc.requestGroupUpdate(ctx)
+			return nil
+		})
+
+		if idx == 0 {
 			netDevClass, err = cfg.getDeviceClassFn(srvCfg.Fabric.Interface)
 			if err != nil {
 				return err
 			}
+
+			// Start the system db after instance 0's SCM is
+			// ready.
+			var once sync.Once
+			srv.OnStorageReady(func(ctx context.Context) (err error) {
+				once.Do(func() {
+					err = errors.Wrap(sysdb.Start(ctx, controlAddr),
+						"failed to start system db",
+					)
+				})
+				return
+			})
 		}
 	}
 
@@ -302,20 +341,29 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	grpcServer := grpc.NewServer(opts...)
 	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
 
-	clientNetworkCfg := ClientNetworkCfg{
+	mgmtSvc.clientNetworkCfg = &ClientNetworkCfg{
 		Provider:        cfg.Fabric.Provider,
 		CrtCtxShareAddr: cfg.Fabric.CrtCtxShareAddr,
 		CrtTimeout:      cfg.Fabric.CrtTimeout,
 		NetDevClass:     netDevClass,
 	}
-	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness, membership, &clientNetworkCfg))
+	mgmtpb.RegisterMgmtSvcServer(grpcServer, mgmtSvc)
+	sysdb.OnLeadershipGained(func(ctx context.Context) error {
+		log.Infof("MS leader running on %s", hostname())
+		mgmtSvc.startUpdateLoop(ctx)
+		return nil
+	})
+	sysdb.OnLeadershipLost(func() error {
+		log.Infof("MS leader no longer running on %s", hostname())
+		return nil
+	})
 
 	go func() {
 		_ = grpcServer.Serve(lis)
 	}()
 	defer grpcServer.GracefulStop()
 
-	log.Infof("%s (pid %d) listening on %s", ControlPlaneName, os.Getpid(), controlAddr)
+	log.Infof("%s (pid %d) listening on %s", build.ControlPlaneName, os.Getpid(), controlAddr)
 
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
@@ -328,5 +376,5 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		shutdown()
 	}()
 
-	return errors.Wrapf(harness.Start(ctx, membership, cfg), "%s exited with error", DataPlaneName)
+	return errors.Wrapf(harness.Start(ctx, membership, sysdb, cfg), "%s exited with error", build.DataPlaneName)
 }

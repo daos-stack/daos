@@ -33,6 +33,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -42,6 +43,9 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 	"github.com/daos-stack/daos/src/control/system"
 )
+
+type onStorageReadyFn func(ctx context.Context) error
+type onReadyFn func(ctx context.Context) error
 
 // IOServerInstance encapsulates control-plane specific configuration
 // and functionality for managed I/O server instances. The distinction
@@ -63,6 +67,9 @@ type IOServerInstance struct {
 	ready             atm.Bool
 	startLoop         chan bool // restart loop
 	fsRoot            string
+	hostFaultDomain   *system.FaultDomain
+	onStorageReady    []onStorageReadyFn
+	onReady           []onReadyFn
 
 	sync.RWMutex
 	// these must be protected by a mutex in order to
@@ -90,6 +97,13 @@ func NewIOServerInstance(log logging.Logger,
 	}
 }
 
+// WithHostFaultDomain adds a fault domain for the host this instance is running
+// on.
+func (srv *IOServerInstance) WithHostFaultDomain(fd *system.FaultDomain) *IOServerInstance {
+	srv.hostFaultDomain = fd
+	return srv
+}
+
 // isAwaitingFormat indicates whether IOServerInstance is waiting
 // for an administrator action to trigger a format.
 func (srv *IOServerInstance) isAwaitingFormat() bool {
@@ -112,6 +126,18 @@ func (srv *IOServerInstance) isReady() bool {
 // isMSReplica indicates whether or not this instance is a management service replica.
 func (srv *IOServerInstance) isMSReplica() bool {
 	return srv.hasSuperblock() && srv.getSuperblock().MS
+}
+
+// OnStorageReady adds a list of callbacks to invoke when the instance
+// storage becomes ready.
+func (srv *IOServerInstance) OnStorageReady(fns ...onStorageReadyFn) {
+	srv.onStorageReady = append(srv.onStorageReady, fns...)
+}
+
+// OnReady adds a list of callbacks to invoke when the instance
+// becomes ready.
+func (srv *IOServerInstance) OnReady(fns ...onReadyFn) {
+	srv.onReady = append(srv.onReady, fns...)
 }
 
 // LocalState returns local perspective of the current instance state
@@ -160,12 +186,10 @@ func (srv *IOServerInstance) removeSocket() error {
 	return nil
 }
 
-// setRank determines the instance rank and sends a SetRank dRPC request
-// to the IOServer.
-func (srv *IOServerInstance) setRank(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
+func (srv *IOServerInstance) determineRank(ctx context.Context, ready *srvpb.NotifyReadyReq) (system.Rank, error) {
 	superblock := srv.getSuperblock()
 	if superblock == nil {
-		return errors.New("nil superblock in setRank()")
+		return system.NilRank, errors.New("nil superblock while determining rank")
 	}
 
 	r := system.NilRank
@@ -173,41 +197,59 @@ func (srv *IOServerInstance) setRank(ctx context.Context, ready *srvpb.NotifyRea
 		r = *superblock.Rank
 	}
 
-	if !superblock.ValidRank || !superblock.MS {
-		resp, err := srv.msClient.Join(ctx, &mgmtpb.JoinReq{
-			Uuid:  superblock.UUID,
-			Rank:  r.Uint32(),
-			Uri:   ready.Uri,
-			Nctxs: ready.Nctxs,
-			// Addr member populated in msClient
-		})
-		if err != nil {
-			return err
-		} else if resp.State == mgmtpb.JoinResp_OUT {
-			return errors.Errorf("rank %d excluded", resp.Rank)
-		}
-		r = system.Rank(resp.Rank)
-
-		if !superblock.ValidRank {
-			superblock.Rank = new(system.Rank)
-			*superblock.Rank = r
-			superblock.ValidRank = true
-			srv.setSuperblock(superblock)
-			if err := srv.WriteSuperblock(); err != nil {
-				return err
-			}
+	if !superblock.ValidRank {
+		// FIXME DAOS-5656: retain dependency on rank 0
+		if superblock.BootstrapMS {
+			r = system.Rank(0)
+			srv.log.Debugf("marking instance %d as rank 0", srv.Index())
 		}
 	}
 
-	if err := srv.callSetRank(r); err != nil {
+	resp, err := srv.msClient.Join(ctx, &mgmtpb.JoinReq{
+		Uuid:           superblock.UUID,
+		Rank:           r.Uint32(),
+		Uri:            ready.Uri,
+		Nctxs:          ready.Nctxs,
+		SrvFaultDomain: srv.hostFaultDomain.String(),
+		// Addr member populated in msClient
+	})
+	if err != nil {
+		return system.NilRank, err
+	} else if resp.State == mgmtpb.JoinResp_OUT {
+		return system.NilRank, errors.Errorf("rank %d excluded", resp.Rank)
+	}
+	r = system.Rank(resp.Rank)
+
+	if !superblock.ValidRank {
+		superblock.Rank = new(system.Rank)
+		*superblock.Rank = r
+		superblock.ValidRank = true
+		srv.setSuperblock(superblock)
+		if err := srv.WriteSuperblock(); err != nil {
+			return system.NilRank, err
+		}
+	}
+
+	return r, nil
+}
+
+// setRank determines the instance rank and sends a SetRank dRPC request
+// to the IOServer.
+func (srv *IOServerInstance) setRank(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
+	r, err := srv.determineRank(ctx, ready)
+	if err != nil {
+		return err
+	}
+
+	if err := srv.callSetRank(ctx, r); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (srv *IOServerInstance) callSetRank(rank system.Rank) error {
-	dresp, err := srv.CallDrpc(drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32()})
+func (srv *IOServerInstance) callSetRank(ctx context.Context, rank system.Rank) error {
+	dresp, err := srv.CallDrpc(ctx, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32()})
 	if err != nil {
 		return err
 	}
@@ -250,17 +292,17 @@ func (srv *IOServerInstance) setTargetCount(numTargets int) {
 // startMgmtSvc starts the DAOS management service replica associated
 // with this instance. If no replica is associated with this instance, this
 // function is a no-op.
-func (srv *IOServerInstance) startMgmtSvc() error {
+func (srv *IOServerInstance) startMgmtSvc(ctx context.Context) error {
 	superblock := srv.getSuperblock()
 
 	// should have been loaded by now
 	if superblock == nil {
-		return errors.Errorf("%s instance %d: nil superblock", DataPlaneName, srv.Index())
+		return errors.Errorf("%s instance %d: nil superblock", build.DataPlaneName, srv.Index())
 	}
 
 	if superblock.CreateMS {
 		srv.log.Debugf("create MS (bootstrap=%t)", superblock.BootstrapMS)
-		if err := srv.callCreateMS(superblock); err != nil {
+		if err := srv.callCreateMS(ctx, superblock); err != nil {
 			return err
 		}
 		superblock.CreateMS = false
@@ -273,7 +315,7 @@ func (srv *IOServerInstance) startMgmtSvc() error {
 
 	if superblock.MS {
 		srv.log.Debug("start MS")
-		if err := srv.callStartMS(); err != nil {
+		if err := srv.callStartMS(ctx); err != nil {
 			return err
 		}
 
@@ -294,11 +336,11 @@ func (srv *IOServerInstance) startMgmtSvc() error {
 }
 
 // loadModules initiates the I/O server startup sequence.
-func (srv *IOServerInstance) loadModules() error {
-	return srv.callSetUp()
+func (srv *IOServerInstance) loadModules(ctx context.Context) error {
+	return srv.callSetUp(ctx)
 }
 
-func (srv *IOServerInstance) callCreateMS(superblock *Superblock) error {
+func (srv *IOServerInstance) callCreateMS(ctx context.Context, superblock *Superblock) error {
 	msAddr, err := srv.msClient.LeaderAddress()
 	if err != nil {
 		return err
@@ -310,7 +352,7 @@ func (srv *IOServerInstance) callCreateMS(superblock *Superblock) error {
 		req.Addr = msAddr
 	}
 
-	dresp, err := srv.CallDrpc(drpc.MethodCreateMS, req)
+	dresp, err := srv.CallDrpc(ctx, drpc.MethodCreateMS, req)
 	if err != nil {
 		return err
 	}
@@ -326,8 +368,8 @@ func (srv *IOServerInstance) callCreateMS(superblock *Superblock) error {
 	return nil
 }
 
-func (srv *IOServerInstance) callStartMS() error {
-	dresp, err := srv.CallDrpc(drpc.MethodStartMS, nil)
+func (srv *IOServerInstance) callStartMS(ctx context.Context) error {
+	dresp, err := srv.CallDrpc(ctx, drpc.MethodStartMS, nil)
 	if err != nil {
 		return err
 	}
@@ -343,8 +385,8 @@ func (srv *IOServerInstance) callStartMS() error {
 	return nil
 }
 
-func (srv *IOServerInstance) callSetUp() error {
-	dresp, err := srv.CallDrpc(drpc.MethodSetUp, nil)
+func (srv *IOServerInstance) callSetUp(ctx context.Context) error {
+	dresp, err := srv.CallDrpc(ctx, drpc.MethodSetUp, nil)
 	if err != nil {
 		return err
 	}
@@ -390,20 +432,5 @@ func (srv *IOServerInstance) newMember() (*system.Member, error) {
 		return nil, err
 	}
 
-	return system.NewMember(rank, sb.UUID, addr, system.MemberStateJoined), nil
-}
-
-// registerMember creates a new system.Member for given instance and adds it
-// to the system membership.
-func (srv *IOServerInstance) registerMember(membership *system.Membership) error {
-	idx := srv.Index()
-
-	m, err := srv.newMember()
-	if err != nil {
-		return errors.Wrapf(err, "instance %d: failed to extract member details", idx)
-	}
-
-	membership.AddOrReplace(m)
-
-	return nil
+	return system.NewMember(rank, sb.UUID, sb.URI, addr, system.MemberStateJoined), nil
 }

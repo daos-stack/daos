@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,22 +79,6 @@ extern void		*ds_mgmt_pool_delete_acl_result_ptr;
 
 void mock_ds_mgmt_pool_delete_acl_setup(void);
 void mock_ds_mgmt_pool_delete_acl_teardown(void);
-
-/*
- * Mock ds_mgmt_list_pools
- */
-extern int				ds_mgmt_list_pools_return;
-extern char				ds_mgmt_list_pools_group[];
-extern void				*ds_mgmt_list_pools_npools_ptr;
-extern uint64_t				ds_mgmt_list_pools_npools;
-extern void				*ds_mgmt_list_pools_poolsp_ptr;
-extern struct mgmt_list_pools_one	*ds_mgmt_list_pools_poolsp_out;
-extern void				*ds_mgmt_list_pools_len_ptr;
-extern size_t				ds_mgmt_list_pools_len_out;
-
-void mock_ds_mgmt_list_pools_setup(void);
-void mock_ds_mgmt_list_pools_teardown(void);
-void mock_ds_mgmt_list_pools_gen_pools(size_t num_pools);
 
 /*
  * Mock ds_mgmt_pool_list_cont

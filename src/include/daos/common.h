@@ -235,7 +235,8 @@ void daos_array_shuffle(void *arr, unsigned int len, daos_sort_ops_t *ops);
 
 int  daos_sgl_init(d_sg_list_t *sgl, unsigned int nr);
 void daos_sgl_fini(d_sg_list_t *sgl, bool free_iovs);
-int daos_sgl_copy_ptr(d_sg_list_t *dst, d_sg_list_t *src);
+int daos_sgls_copy_ptr(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
+		       int src_nr);
 int daos_sgls_copy_data_out(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
 			    int src_nr);
 int daos_sgls_copy_all(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
@@ -567,6 +568,7 @@ daos_fail_fini(void);
 
 enum {
 	DAOS_FAIL_UNIT_TEST_GROUP = 1,
+	DAOS_FAIL_SYS_TEST_GROUP = 2,
 	DAOS_FAIL_MAX_GROUP
 };
 
@@ -574,6 +576,9 @@ enum {
 
 #define DAOS_FAIL_UNIT_TEST_GROUP_LOC	\
 		(DAOS_FAIL_UNIT_TEST_GROUP << DAOS_FAIL_GROUP_SHIFT)
+
+#define DAOS_FAIL_SYS_TEST_GROUP_LOC \
+		(DAOS_FAIL_SYS_TEST_GROUP << DAOS_FAIL_GROUP_SHIFT)
 
 #define DAOS_FAIL_GROUP_GET(fail_loc)	\
 		((fail_loc & DAOS_FAIL_GROUP_MASK) >> DAOS_FAIL_GROUP_SHIFT)
@@ -639,6 +644,10 @@ enum {
 #define DAOS_DTX_LOST_RPC_REQUEST	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x33)
 #define DAOS_DTX_LOST_RPC_REPLY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x34)
 #define DAOS_DTX_LONG_TIME_RESEND	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x35)
+#define DAOS_DTX_RESTART		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x36)
+#define DAOS_DTX_NO_READ_TS		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x37)
+#define DAOS_DTX_SPEC_EPOCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x38)
+#define DAOS_DTX_STALE_PM		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x39)
 
 #define DAOS_VC_DIFF_REC		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x40)
 #define DAOS_VC_DIFF_DKEY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x41)
@@ -655,12 +664,15 @@ enum {
 #define DAOS_CONT_DESTROY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x65)
 #define DAOS_CONT_CLOSE_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x66)
 #define DAOS_CONT_QUERY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x67)
+#define DAOS_CONT_OPEN_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x68)
 
 /** interoperability failure inject */
 #define FLC_SMD_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x70)
 #define FLC_POOL_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x71)
 
 #define DAOS_FAIL_LOST_REQ		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x72)
+
+#define DAOS_SHARD_OBJ_RW_DROP_REPLY (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x80)
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 

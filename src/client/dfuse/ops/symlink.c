@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,8 +39,8 @@ dfuse_cb_symlink(fuse_req_t req, const char *link,
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
-	rc = dfs_open(parent->ie_dfs->dfs_ns, parent->ie_obj, name, S_IFLNK,
-		      O_CREAT, 0, 0, link, &ie->ie_obj);
+	rc = dfs_open(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
+		      S_IFLNK, O_CREAT, 0, 0, link, &ie->ie_obj);
 	if (rc != 0)
 		D_GOTO(err, rc);
 

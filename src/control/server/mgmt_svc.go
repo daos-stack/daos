@@ -28,7 +28,6 @@ import (
 	"net"
 	"os/exec"
 	"strconv"
-	"strings"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -147,63 +146,54 @@ type mgmtSvc struct {
 	log              logging.Logger
 	harness          *IOServerHarness
 	membership       *system.Membership // if MS leader, system membership list
+	sysdb            *system.Database
 	clientNetworkCfg *ClientNetworkCfg
+	updateReqChan    chan struct{}
 }
 
-func newMgmtSvc(h *IOServerHarness, m *system.Membership, c *ClientNetworkCfg) *mgmtSvc {
+func newMgmtSvc(h *IOServerHarness, m *system.Membership, s *system.Database) *mgmtSvc {
 	return &mgmtSvc{
 		log:              h.log,
 		harness:          h,
 		membership:       m,
-		clientNetworkCfg: c,
+		sysdb:            s,
+		clientNetworkCfg: &ClientNetworkCfg{},
+		updateReqChan:    make(chan struct{}),
 	}
 }
 
 func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
+	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, req:%+v\n", *req)
+
 	if svc.clientNetworkCfg == nil {
 		return nil, errors.New("clientNetworkCfg is missing")
 	}
 
-	mi, err := svc.harness.GetMSLeaderInstance()
+	var groupMap *system.GroupMap
+	var err error
+	if req.GetAllRanks() {
+		groupMap, err = svc.sysdb.GroupMap()
+	} else {
+		groupMap, err = svc.sysdb.ReplicaRanks()
+	}
 	if err != nil {
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(drpc.MethodGetAttachInfo, req)
-	if err != nil {
-		return nil, err
+	resp := new(mgmtpb.GetAttachInfoResp)
+	for rank, uri := range groupMap.RankURIs {
+		resp.Psrs = append(resp.Psrs, &mgmtpb.GetAttachInfoResp_Psr{
+			Rank: rank.Uint32(),
+			Uri:  uri,
+		})
 	}
-
-	resp := &mgmtpb.GetAttachInfoResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal GetAttachInfo response")
-	}
-
 	resp.Provider = svc.clientNetworkCfg.Provider
 	resp.CrtCtxShareAddr = svc.clientNetworkCfg.CrtCtxShareAddr
 	resp.CrtTimeout = svc.clientNetworkCfg.CrtTimeout
 	resp.NetDevClass = svc.clientNetworkCfg.NetDevClass
+
+	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, resp:%+v\n", *resp)
 	return resp, nil
-}
-
-// checkIsMSReplica provides a hint as to who is service leader if instance is
-// not a Management Service replica.
-func checkIsMSReplica(mi *IOServerInstance) error {
-	msg := "instance is not an access point"
-	if !mi.isMSReplica() {
-		leader, err := mi.msClient.LeaderAddress()
-		if err != nil {
-			return err
-		}
-
-		if !strings.HasPrefix(leader, "localhost") {
-			msg += ", try " + leader
-		}
-
-		return errors.New(msg)
-	}
-
-	return nil
 }
 
 func queryRank(reqRank uint32, srvRank system.Rank) bool {
@@ -212,24 +202,6 @@ func queryRank(reqRank uint32, srvRank system.Rank) bool {
 		return true
 	}
 	return rr.Equals(srvRank)
-}
-
-func (svc *mgmtSvc) getBioHealth(ctx context.Context, srv *IOServerInstance, req *mgmtpb.BioHealthReq) (*mgmtpb.BioHealthResp, error) {
-	dresp, err := srv.CallDrpc(drpc.MethodBioHealth, req)
-	if err != nil {
-		return nil, err
-	}
-
-	resp := &mgmtpb.BioHealthResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal BioHealthQuery response")
-	}
-
-	if resp.Status != 0 {
-		return nil, errors.Wrap(drpc.DaosStatus(resp.Status), "getBioHealth failed")
-	}
-
-	return resp, nil
 }
 
 func (svc *mgmtSvc) querySmdDevices(ctx context.Context, req *mgmtpb.SmdQueryReq, resp *mgmtpb.SmdQueryResp) error {
@@ -250,21 +222,12 @@ func (svc *mgmtSvc) querySmdDevices(ctx context.Context, req *mgmtpb.SmdQueryReq
 		rResp := new(mgmtpb.SmdQueryResp_RankResp)
 		rResp.Rank = srvRank.Uint32()
 
-		dresp, err := srv.CallDrpc(drpc.MethodSmdDevs, new(mgmtpb.SmdDevReq))
+		listDevsResp, err := srv.listSmdDevices(ctx, new(mgmtpb.SmdDevReq))
 		if err != nil {
-			return err
+			return errors.Wrapf(err, "rank %d", srvRank)
 		}
 
-		rankDevResp := new(mgmtpb.SmdDevResp)
-		if err = proto.Unmarshal(dresp.Body, rankDevResp); err != nil {
-			return errors.Wrap(err, "unmarshal SmdListDevs response")
-		}
-
-		if rankDevResp.Status != 0 {
-			return errors.Wrapf(drpc.DaosStatus(rankDevResp.Status), "rank %d ListDevs failed", srvRank)
-		}
-
-		if err := convert.Types(rankDevResp.Devices, &rResp.Devices); err != nil {
+		if err := convert.Types(listDevsResp.Devices, &rResp.Devices); err != nil {
 			return errors.Wrap(err, "failed to convert device list")
 		}
 		resp.Ranks = append(resp.Ranks, rResp)
@@ -309,10 +272,13 @@ func (svc *mgmtSvc) querySmdDevices(ctx context.Context, req *mgmtpb.SmdQueryReq
 		}
 
 		for _, dev := range rResp.Devices {
-			dev.Health, err = svc.getBioHealth(ctx, srv, &mgmtpb.BioHealthReq{DevUuid: dev.Uuid})
+			health, err := srv.getBioHealth(ctx, &mgmtpb.BioHealthReq{
+				DevUuid: dev.Uuid,
+			})
 			if err != nil {
-				return err
+				return errors.Wrapf(err, "device %s", dev)
 			}
+			dev.Health = health
 		}
 	}
 	return nil
@@ -336,7 +302,7 @@ func (svc *mgmtSvc) querySmdPools(ctx context.Context, req *mgmtpb.SmdQueryReq, 
 		rResp := new(mgmtpb.SmdQueryResp_RankResp)
 		rResp.Rank = srvRank.Uint32()
 
-		dresp, err := srv.CallDrpc(drpc.MethodSmdPools, new(mgmtpb.SmdPoolReq))
+		dresp, err := srv.CallDrpc(ctx, drpc.MethodSmdPools, new(mgmtpb.SmdPoolReq))
 		if err != nil {
 			return err
 		}
@@ -419,7 +385,7 @@ func (svc *mgmtSvc) smdSetFaulty(ctx context.Context, req *mgmtpb.SmdQueryReq) (
 
 	svc.log.Debugf("calling set-faulty on rank %d for %s", rank, req.Uuid)
 
-	dresp, err := srvs[0].CallDrpc(drpc.MethodSetFaultyState, &mgmtpb.DevStateReq{
+	dresp, err := srvs[0].CallDrpc(ctx, drpc.MethodSetFaultyState, &mgmtpb.DevStateReq{
 		DevUuid: req.Uuid,
 	})
 	if err != nil {
@@ -491,12 +457,7 @@ func (svc *mgmtSvc) SmdQuery(ctx context.Context, req *mgmtpb.SmdQueryReq) (*mgm
 func (svc *mgmtSvc) ListContainers(ctx context.Context, req *mgmtpb.ListContReq) (*mgmtpb.ListContResp, error) {
 	svc.log.Debugf("MgmtSvc.ListContainers dispatch, req:%+v\n", *req)
 
-	mi, err := svc.harness.GetMSLeaderInstance()
-	if err != nil {
-		return nil, err
-	}
-
-	dresp, err := mi.CallDrpc(drpc.MethodListContainers, req)
+	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodListContainers, req)
 	if err != nil {
 		return nil, err
 	}
@@ -515,12 +476,7 @@ func (svc *mgmtSvc) ListContainers(ctx context.Context, req *mgmtpb.ListContReq)
 func (svc *mgmtSvc) ContSetOwner(ctx context.Context, req *mgmtpb.ContSetOwnerReq) (*mgmtpb.ContSetOwnerResp, error) {
 	svc.log.Debugf("MgmtSvc.ContSetOwner dispatch, req:%+v\n", *req)
 
-	mi, err := svc.harness.GetMSLeaderInstance()
-	if err != nil {
-		return nil, err
-	}
-
-	dresp, err := mi.CallDrpc(drpc.MethodContSetOwner, req)
+	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodContSetOwner, req)
 	if err != nil {
 		return nil, err
 	}

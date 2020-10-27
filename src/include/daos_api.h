@@ -37,8 +37,13 @@ enum {
 	/** The transaction is read only. */
 	DAOS_TF_RDONLY		= (1 << 0),
 	/**
-	 * Not copy application buffer (neither key buffer nor value buffer)
-	 * when cache modification on client for the distributed transaction.
+	 * Not copy application data buffer when cache modification on client
+	 * for the distributed transaction.
+	 *
+	 * Please note that the key buffer will always be copied when caching.
+	 * Then the TX sponsor can reuse or release related key' buffer after
+	 * the operation returning to avoid more programming restriction under
+	 * DAOS transaction model.
 	 */
 	DAOS_TF_ZERO_COPY	= (1 << 1),
 };
@@ -143,8 +148,13 @@ int
 daos_tx_close(daos_handle_t th, daos_event_t *ev);
 
 /**
- * Restart the transaction handle. It drops all the modifications that have
- * been issued via the handle. This is a local operation, no RPC involved.
+ * Restart the transaction handle after encountering a -DER_TX_RESTART error.
+ * It drops all the modifications that have been issued via the handle. Whether
+ * the restarted transaction observes any conflicting modifications committed
+ * after this transaction was originally opened is undefined. If callers would
+ * like to retry transactions for their own purposes, they shall open new
+ * transactions instead. This is a local operation, no RPC involved.
+ *
  *
  * \param[in]	th	Transaction handle to be restarted.
  * \param[in]	ev	Completion event, it is optional and can be NULL.

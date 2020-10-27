@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -488,7 +488,7 @@ ring_create(struct pl_ring_map *rimap, unsigned int index,
 
 	first = pool_map_targets(rimap->rmp_map.pl_poolmap);
 	if (first == NULL)
-		return DER_INVAL;
+		return -DER_INVAL;
 
 	for (plt = &ring->ri_targets[0], i = 0;
 	     plt <= &ring->ri_targets[rimap->rmp_target_nr - 1]; i++) {
@@ -1056,7 +1056,7 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 	grp_start = rop->rop_begin;
 	tgts = pool_map_targets(map->pl_poolmap);
 	if (tgts == NULL) {
-		rc = DER_INVAL;
+		rc = -DER_INVAL;
 		goto out;
 	}
 

@@ -38,7 +38,7 @@ vos_ilog_status_get(struct umem_instance *umm, uint32_t tx_id,
 
 	coh.cookie = (unsigned long)args;
 
-	rc = vos_dtx_check_availability(umm, coh, tx_id, epoch, intent,
+	rc = vos_dtx_check_availability(coh, tx_id, epoch, intent,
 					DTX_RT_ILOG);
 	if (rc < 0)
 		return rc;
@@ -144,7 +144,7 @@ vos_ilog_punch_covered(const struct ilog_entry *entry,
 	return vos_epc_punched(punch->pr_epc, punch->pr_minor_epc, &new_punch);
 }
 
-static void
+static int
 vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 	       const struct vos_punch_record *punch) {
 	struct ilog_entry	*entry;
@@ -175,6 +175,9 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 				info->ii_next_punch = entry->ie_id.id_epoch;
 			continue;
 		}
+
+		if (entry->ie_status == -DER_INPROGRESS)
+			return -DER_INPROGRESS;
 
 		if (vos_ilog_punch_covered(entry, &info->ii_prior_any_punch)) {
 			info->ii_prior_any_punch.pr_epc = entry->ie_id.id_epoch;
@@ -231,6 +234,8 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 		" prior_punch="DF_PUNCH" next_punch="DF_X64"%s\n", epoch,
 		info->ii_create, DP_PUNCH(&info->ii_prior_punch),
 		info->ii_next_punch, info->ii_empty ? " is empty" : "");
+
+	return 0;
 }
 
 int
@@ -270,7 +275,7 @@ init:
 	}
 
 	if (rc == 0)
-		vos_parse_ilog(info, epoch, &punch);
+		rc = vos_parse_ilog(info, epoch, &punch);
 
 	return rc;
 }
@@ -417,7 +422,8 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 	int			 rc;
 	uint16_t		 minor_epc = VOS_MINOR_EPC_MAX;
 
-	if (ts_set == NULL || (ts_set->ts_flags & VOS_OF_COND_PUNCH) == 0) {
+	if (ts_set == NULL ||
+	    (ts_set->ts_flags & VOS_OF_COND_PUNCH) == 0) {
 		if (leaf)
 			goto punch_log;
 		return 0;
@@ -552,7 +558,7 @@ vos_ilog_ts_add(struct vos_ts_set *ts_set, struct ilog_df *ilog,
 {
 	uint32_t	*idx = NULL;
 
-	if (ts_set == NULL)
+	if (!vos_ts_in_tx(ts_set))
 		return 0;
 
 	if (ilog != NULL)

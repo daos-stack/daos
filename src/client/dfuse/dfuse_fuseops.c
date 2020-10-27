@@ -79,7 +79,7 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	 * set it before reporting the value.
 	 */
 	conn->max_read = fs_handle->dpi_max_read;
-	conn->max_write = fs_handle->dpi_max_read;
+	conn->max_write = fs_handle->dpi_max_write;
 
 	DFUSE_TRA_INFO(fs_handle, "max read %#x", conn->max_read);
 	DFUSE_TRA_INFO(fs_handle, "max write %#x", conn->max_write);
@@ -92,6 +92,9 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	DFUSE_TRA_INFO(fs_handle, "Capability requested %#x", conn->want);
 
 	dfuse_show_flags(fs_handle, conn->want);
+
+	conn->max_background = 16;
+	conn->congestion_threshold = 8;
 
 	DFUSE_TRA_INFO(fs_handle, "max_background %d", conn->max_background);
 	DFUSE_TRA_INFO(fs_handle,
@@ -696,7 +699,7 @@ struct fuse_lowlevel_ops
 	 */
 	fuse_ops->open		= dfuse_cb_open;
 	fuse_ops->release	= dfuse_cb_release;
-	fuse_ops->write		= dfuse_cb_write;
+	fuse_ops->write_buf	= dfuse_cb_write;
 	fuse_ops->read		= dfuse_cb_read;
 	fuse_ops->readlink	= dfuse_cb_readlink;
 	fuse_ops->ioctl		= dfuse_cb_ioctl;

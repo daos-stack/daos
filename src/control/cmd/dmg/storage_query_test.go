@@ -36,12 +36,6 @@ import (
 func TestStorageQueryCommands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
 		{
-			"NVMe health query",
-			"storage query nvme-health",
-			printRequest(t, &control.StorageScanReq{}),
-			nil,
-		},
-		{
 			"per-server metadata target health query",
 			"storage query target-health -r 0 -t 1",
 			printRequest(t, &control.SmdQueryReq{
@@ -139,6 +133,12 @@ func TestStorageQueryCommands(t *testing.T) {
 				UUID:      "842c739b-86b5-462f-a7ba-b4a91b674f3d",
 				OmitPools: true,
 			}),
+			nil,
+		},
+		{
+			"per-server storage space utilisation query",
+			"storage query usage",
+			printRequest(t, &control.StorageScanReq{NvmeMeta: true}),
 			nil,
 		},
 		{

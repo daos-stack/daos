@@ -109,7 +109,7 @@ func (m securityAgentMethod) String() string {
 		return s
 	}
 
-	return fmt.Sprintf("%d:%d", m.Module(), m.ID())
+	return fmt.Sprintf("%s:%d", m.Module(), m.ID())
 }
 
 // IsValid sanity checks the Method ID is within expected bounds.
@@ -140,15 +140,26 @@ func (m mgmtMethod) ID() int32 {
 
 func (m mgmtMethod) String() string {
 	if s, ok := map[mgmtMethod]string{
-		MethodPrepShutdown: "prep shutdown",
-		MethodPingRank:     "ping",
-		MethodSetRank:      "set rank",
-		MethodSetUp:        "setup MS",
+		MethodPrepShutdown:    "PrepShutdown",
+		MethodPingRank:        "Ping",
+		MethodSetRank:         "SetRank",
+		MethodSetUp:           "Setup",
+		MethodGroupUpdate:     "GroupUpdate",
+		MethodPoolCreate:      "PoolCreate",
+		MethodPoolDestroy:     "PoolDestroy",
+		MethodPoolEvict:       "PoolEvict",
+		MethodPoolExclude:     "PoolExclude",
+		MethodPoolDrain:       "PoolDrain",
+		MethodPoolExtend:      "PoolExtend",
+		MethodPoolReintegrate: "PoolReintegrate",
+		MethodPoolQuery:       "PoolQuery",
+		MethodPoolSetProp:     "PoolSetProp",
+		MethodListPools:       "ListPools",
 	}[m]; ok {
 		return s
 	}
 
-	return fmt.Sprintf("%d:%d", m.Module(), m.ID())
+	return fmt.Sprintf("%s:%d", m.Module(), m.ID())
 }
 
 // IsValid sanity checks the Method ID is within expected bounds.
@@ -221,6 +232,8 @@ const (
 	MethodPoolSetProp mgmtMethod = C.DRPC_METHOD_MGMT_POOL_SET_PROP
 	// MethodContSetOwner defines a method for setting the container's owner
 	MethodContSetOwner mgmtMethod = C.DRPC_METHOD_MGMT_CONT_SET_OWNER
+	// MethodGroupUpdate defines a method for updating the group map
+	MethodGroupUpdate mgmtMethod = C.DRPC_METHOD_MGMT_GROUP_UPDATE
 )
 
 type srvMethod int32
@@ -241,7 +254,7 @@ func (m srvMethod) String() string {
 		return s
 	}
 
-	return fmt.Sprintf("%d:%d", m.Module(), m.ID())
+	return fmt.Sprintf("%s:%d", m.Module(), m.ID())
 }
 
 // IsValid sanity checks the Method ID is within expected bounds.
@@ -260,6 +273,8 @@ const (
 	MethodNotifyReady srvMethod = C.DRPC_METHOD_SRV_NOTIFY_READY
 	// MethodBIOError is a ModuleSrv method
 	MethodBIOError srvMethod = C.DRPC_METHOD_SRV_BIO_ERR
+	// MethodGetPoolServiceRanks requests the service ranks for a pool
+	MethodGetPoolServiceRanks srvMethod = C.DRPC_METHOD_SRV_GET_POOL_SVC
 )
 
 type securityMethod int32
@@ -279,7 +294,7 @@ func (m securityMethod) String() string {
 		return s
 	}
 
-	return fmt.Sprintf("%d:%d", m.Module(), m.ID())
+	return fmt.Sprintf("%s:%d", m.Module(), m.ID())
 }
 
 // IsValid sanity checks the Method ID is within expected bounds.

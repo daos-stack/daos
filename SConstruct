@@ -156,7 +156,7 @@ def preload_prereqs(prereqs):
     prereqs.define('readline', libs=['readline', 'history'],
                    package='readline')
     reqs = ['argobots', 'pmdk', 'cmocka', 'ofi', 'hwloc', 'mercury', 'boost',
-            'uuid', 'crypto', 'fuse', 'protobufc', 'json-c']
+            'uuid', 'crypto', 'fuse', 'protobufc', 'json-c', 'lz4']
     if not is_platform_arm():
         reqs.extend(['spdk', 'isal', 'isal_crypto'])
     prereqs.load_definitions(prebuild=reqs)
@@ -408,6 +408,7 @@ def scons(): # pylint: disable=too-many-locals
     env.Install("$PREFIX/lib64/daos", "VERSION")
     env.Install("$PREFIX/lib64/daos", "API_VERSION")
 
+    env.Install('$PREFIX/etc/bash_completion.d', ['utils/completion/daos.bash'])
     env.Install('$PREFIX/etc', ['utils/memcheck-daos-client.supp'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
                 ['utils/sl/env_modules.py'])

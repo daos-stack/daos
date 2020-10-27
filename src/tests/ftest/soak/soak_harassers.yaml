@@ -8,21 +8,15 @@ hosts:
 # servers if a server partition is defined
     # server_partition: daos_server
     client_partition: daos_client
+    client_reservation:
 orterun:
     allow_run_as_root: True
-# include Cluster specific slurm params
-srun:
-    reservation:
-srun_params:
-    reservation:
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 1 hour test
 timeout: 1H15M
 setup:
     start_servers: True
     start_agents: True
-dmg:
-    insecure: True
 server_config:
     name: daos_server
     provider: ofi+sockets
@@ -56,6 +50,7 @@ pool_reserved:
     control_method: dmg
 container:
     type: POSIX
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
     control_method: daos
 container_reserved:
     akey_size: 5
@@ -65,6 +60,9 @@ container_reserved:
     record_qty: 1
     record_size: 100
     array_size: 1
+    type: POSIX
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    control_method: API
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
 #               name:                The name of the Avocado testcase
@@ -116,6 +114,7 @@ ior_harasser:
     segment_count: 1
     dfs_oclass:
         - 'SX'
+    dfs_destroy: True
 rebuild:
     rebuild_timeout: 30
     ranks_to_kill:

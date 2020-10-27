@@ -10,8 +10,8 @@
 %endif
 
 Name:          daos
-Version:       1.1.0
-Release:       31%{?relval}%{?dist}
+Version:       1.1.1
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -34,12 +34,18 @@ BuildRequires: json-c-devel
 BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
 %endif
-BuildRequires: libpmem-devel, libpmemobj-devel
+BuildRequires: libpmem-devel >= 1.8, libpmemobj-devel >= 1.8
 BuildRequires: fuse3-devel >= 3.4.2
 %if (0%{?suse_version} >= 1500)
+# NB: OpenSUSE is stupid about this... If we just
+# specify go >= 1.X, it installs go=1.11 AND 1.X.
+BuildRequires: go1.14
+BuildRequires: go1.14-race
 BuildRequires: libprotobuf-c-devel
+BuildRequires: liblz4-devel
 %else
 BuildRequires: protobuf-c-devel
+BuildRequires: lz4-devel
 %endif
 BuildRequires: spdk-devel >= 20, spdk-devel < 21
 %if (0%{?rhel} >= 7)
@@ -76,7 +82,6 @@ BuildRequires: libcurl4
 BuildRequires: distribution-release
 BuildRequires: libnuma-devel
 BuildRequires: cunit-devel
-BuildRequires: go >= 1.12
 BuildRequires: ipmctl-devel
 BuildRequires: python-devel python3-devel
 BuildRequires: lua-lmod
@@ -93,7 +98,9 @@ BuildRequires: libpsm_infinipath1
 %endif # (0%{?suse_version} >= 1315)
 %endif # (0%{?rhel} >= 7)
 %if (0%{?suse_version} >= 1500)
-Requires: libpmem1, libpmemobj1
+Requires: libpmem1 >= 1.8, libpmemobj1 >= 1.8
+%else
+Requires: libpmem >= 1.8, libpmemobj >= 1.8
 %endif
 Requires: protobuf-c
 Requires: openssl
@@ -152,11 +159,12 @@ This is the package needed to run a DAOS client
 Summary: The DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
+Requires: python2-tabulate
 Requires: fio
+Requires: lbzip2
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
 %endif
-
 
 %description tests
 This is the package needed to run the DAOS test suite
@@ -217,10 +225,11 @@ mkdir -p %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{server_svc_name} %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
 mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
+mv %{?buildroot}/%{_prefix}/etc/bash_completion.d %{?buildroot}/%{_sysconfdir}
 
 %pre server
 getent group daos_admins >/dev/null || groupadd -r daos_admins
-getent passwd daos_server >/dev/null || useradd -M daos_server
+getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r daos_server
 %post server
 /sbin/ldconfig
 %systemd_post %{server_svc_name}
@@ -230,6 +239,8 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 /sbin/ldconfig
 %systemd_postun %{server_svc_name}
 
+%pre client
+getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %post client
 %systemd_post %{agent_svc_name}
 %preun client
@@ -256,6 +267,8 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_prefix}/etc/memcheck-cart.supp
 %dir %{_prefix}%{_sysconfdir}
 %{_prefix}%{_sysconfdir}/vos_size_input.yaml
+%dir %{_sysconfdir}/bash_completion.d
+%{_sysconfdir}/bash_completion.d/daos.bash
 %{_libdir}/libdaos_common.so
 # TODO: this should move from daos_srv to daos
 %{_libdir}/daos_srv/libplacement.so
@@ -271,7 +284,7 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %attr(0700,daos_server,daos_server) %{conf_dir}/certs
 %dir %{conf_dir}/certs/clients
 %attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
-%attr(0664,root,root) %{conf_dir}/daos_server.yml
+%attr(0644,root,root) %{conf_dir}/daos_server.yml
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 # set daos_admin to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_admins) %{_bindir}/daos_admin
@@ -312,6 +325,7 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/libioil.so
 %{_libdir}/libdfs_internal.so
 %{_libdir}/libvos_size.so
+%{_libdir}/libdts.so
 %dir  %{_libdir}/python2.7/site-packages/pydaos
 %dir  %{_libdir}/python2.7/site-packages/storage_estimator
 %{_libdir}/python2.7/site-packages/pydaos/*.py
@@ -358,7 +372,6 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %files tests
 %dir %{_prefix}/lib/daos
 %{_prefix}/lib/daos/TESTING
-%{_prefix}/lib/cart/TESTING
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
 %{_bindir}/smd_ut
@@ -366,7 +379,6 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_bindir}/daos_perf
 %{_bindir}/daos_racer
 %{_bindir}/evt_ctl
-%{_bindir}/obj_ctl
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
 %{_bindir}/crt_launch
@@ -381,6 +393,29 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
+* Tue Oct 13 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> 1.1.1-3
+- Remove obj_ctl from Tests RPM package
+- Add libdts.so shared library that is used by daos_perf, daos_racer and
+  the daos utility.
+
+* Tue Oct 13 2020 Amanda Justiniano <amanda.justiniano-pagn@intel.com> 1.1.1-3
+- Add lbzip2 requirement to the daos-tests package
+
+* Tue Oct 13 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.1-2
+- Create unprivileged user for daos_agent
+
+* Mon Oct 12 2020 Johann Lombardi <johann.lombardi@intel.com> 1.1.1-1
+- Version bump up to 1.1.1
+
+* Sat Oct 03 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-34
+- Add go-race to BuildRequires on OpenSUSE Leap
+
+* Wed Sep 16 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.0-33
+- Update OFI to v1.11.0
+
+* Mon Aug 17 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-32
+- Install completion script in /etc/bash_completion.d
+
 * Wed Aug 05 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-31
 - Change fuse requirement to fuse3
 - Use Lmod for MPI module loading

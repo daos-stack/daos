@@ -50,6 +50,7 @@ pool:
 container:
     type: POSIX
     control_method: daos
+    oclass: "RP_2G1"
 ior:
   api: "DFS"
   client_processes:
@@ -57,7 +58,7 @@ ior:
   dfs_destroy: False
   iorflags:
       flags: "-w -F -r -R -k -G 1"
-  test_file: daos:testFile
+  test_file: /testFile
   repetitions: 1
   transfersize_blocksize:
     16M:
@@ -65,6 +66,9 @@ ior:
   objectclass:
     RP_2G1:
       dfs_oclass: "RP_2G1"
+  objectdirclass:
+    RP_2G1:
+      dfs_dir_oclass: "RP_2G1"
 faulttests:
   pool_capacity:
     10_Percent:
