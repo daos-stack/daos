@@ -229,7 +229,7 @@ prepare_insert(dh_bucket_t *bucket, unsigned char index)
 
 	do {
 		*dst-- = *src--;
-	 while (src >= start);
+	} while (src >= start);
 }
 
 static inline void
@@ -1006,7 +1006,7 @@ dyn_hash_rec_delete_at(struct d_hash_table *gtable, dh_item_t item)
 
 	if (!(htable->ht_ops.hop_key_get(item, &key, &ksize))) {
 		D_ERROR("Get key function failed\n");
-		D_GOTO(out, rc = false);
+		D_GOTO(out, rc = false);
 	}
 	siphash = gen_siphash(key, ksize);
 	rc = dyn_hash_rec_delete(gtable, (const void *)key, ksize, siphash);
