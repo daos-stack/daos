@@ -213,7 +213,8 @@ get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 	}
 
 	gps_resp = srv__get_pool_svc_resp__unpack(&alloc.alloc,
-					     dresp->body.len, dresp->body.data);
+						  dresp->body.len,
+						  dresp->body.data);
 	if (alloc.oom || gps_resp == NULL)
 		D_GOTO(out_dresp, rc = -DER_NOMEM);
 

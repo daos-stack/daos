@@ -1010,9 +1010,10 @@ get_params_from_modify_acl_req(Drpc__Call *drpc_req, uuid_t uuid_out,
 
 	req = mgmt__modify_aclreq__unpack(&alloc.alloc, drpc_req->body.len,
 					  drpc_req->body.data);
-	if (alloc.oom || req == NULL)
+	if (alloc.oom)
 		return -DER_NOMEM;
-
+	if ( req == NULL)
+		return -DER_PROTO;
 
 	if (uuid_parse(req->uuid, uuid_out) != 0) {
 		D_ERROR("Couldn't parse UUID\n");
