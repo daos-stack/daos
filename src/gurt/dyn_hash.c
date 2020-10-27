@@ -36,44 +36,43 @@
 
 #define _le64toh(x) (x)
 
-typedef struct dh_field
-{
+typedef struct dh_field {
 	uint64_t	siphash;
-	void 		*record;
+	void		*record;
 } dh_field_t;
 
-typedef struct dh_bucket
-{
+typedef struct dh_bucket {
 	unsigned char	counter;
-	pthread_mutex_t mtx;
-	dh_field_t 	field[DYNHASH_BUCKET];
+	pthread_mutex_t	mtx;
+	dh_field_t	field[DYNHASH_BUCKET];
 } dh_bucket_t;
 
 
-#define ROTATE(x, b) (uint64_t)( ((x) << (b)) | ( (x) >> (64 - (b))) )
+#define ROTATE(x, b) (uint64_t)(((x) << (b)) | ( (x) >> (64 - (b))))
 
-#define HALF_ROUND(a,b,c,d,s,t)     \
-    a += b; c += d;                 \
-    b = ROTATE(b, s) ^ a;           \
-    d = ROTATE(d, t) ^ c;           \
+#define HALF_ROUND(a, b, c, d, s, t) \
+    a += b; c += d;                  \
+    b = ROTATE(b, s) ^ a;            \
+    d = ROTATE(d, t) ^ c;            \
     a = ROTATE(a, 32);
 
-#define DOUBLE_ROUND(v0,v1,v2,v3)       \
-    HALF_ROUND(v0,v1,v2,v3,13,16);      \
-    HALF_ROUND(v2,v1,v0,v3,17,21);      \
-    HALF_ROUND(v0,v1,v2,v3,13,16);      \
-    HALF_ROUND(v2,v1,v0,v3,17,21);
+#define DOUBLE_ROUND(v0, v1, v2, v3)         \
+    HALF_ROUND(v0, v1, v2, v3, 13, 16);      \
+    HALF_ROUND(v2, v1, v0, v3, 17, 21);      \
+    HALF_ROUND(v0, v1, v2, v3, 13, 16);      \
+    HALF_ROUND(v2, v1, v0, v3, 17, 21);
 
-const char keys[16] = { 0,1,2,3,4,5,6,7,8,9,0xa,0xb,0xc,0xd,0xe,0xf };
+const char keys[16] = { 0, 1, 2, 3, 4, 5, 6, 7, 8,
+	   9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf };
 
 static uint64_t
-gen_siphash (const void *src, uint32_t src_sz)
+gen_siphash(const void *src, uint32_t src_sz)
 {
-	const uint64_t *_key = (uint64_t*) keys;
-	uint64_t 	k0 = _le64toh(_key[0]);
-	uint64_t 	k1 = _le64toh(_key[1]);
-	uint64_t 	b = (uint64_t) src_sz << 56;
-	const uint64_t 	*in = (uint64_t*) src;
+	const uint64_t *_key = (uint64_t *) keys;
+	uint64_t	k0 = _le64toh(_key[0]);
+	uint64_t	k1 = _le64toh(_key[1]);
+	uint64_t	b = (uint64_t) src_sz << 56;
+	const uint64_t	*in = (uint64_t *) src;
 
 	uint64_t v0 = k0 ^ 0x736f6d6570736575ULL;
 	uint64_t v1 = k1 ^ 0x646f72616e646f6dULL;
@@ -81,17 +80,19 @@ gen_siphash (const void *src, uint32_t src_sz)
 	uint64_t v3 = k1 ^ 0x7465646279746573ULL;
 
 	while (src_sz >= 8) {
-	uint64_t mi = _le64toh(*in);
-	in += 1;
-	src_sz -= 8;
-	v3 ^= mi;
-	DOUBLE_ROUND(v0, v1, v2, v3);
-	v0 ^= mi;
+		uint64_t mi = _le64toh(*in);
+
+		in += 1;
+		src_sz -= 8;
+		v3 ^= mi;
+		DOUBLE_ROUND(v0, v1, v2, v3);
+		v0 ^= mi;
 	}
 
 	uint64_t t = 0;
-	uint8_t *pt = (uint8_t*) &t;
-	uint8_t *m = (uint8_t*) in;
+	uint8_t *pt = (uint8_t *) &t;
+	uint8_t *m = (uint8_t *) in;
+
 	switch (src_sz) {
 		case 7:
 			pt[6] = m[6];
@@ -100,7 +101,7 @@ gen_siphash (const void *src, uint32_t src_sz)
 		case 5:
 			pt[4] = m[4];
 		case 4:
-			*((uint32_t*) &pt[0]) = *((uint32_t*) &m[0]);
+			*((uint32_t*) &pt[0]) = *((uint32_t *) &m[0]);
 			break;
 		case 3:
 			pt[2] = m[2];
@@ -122,18 +123,18 @@ gen_siphash (const void *src, uint32_t src_sz)
 static inline int
 vec_init(dh_vector_t *vec, unsigned char power)
 {
-	int 	rc = 0;
+	int	rc = 0;
 
-	memset (vec, 0, sizeof *vec);
-	vec->size = (size_t) (1 << power) * sizeof(void*);
-	D_ALLOC(vec->data, sizeof *vec->data * (1 << power));
+	memset(vec, 0, sizeof *vec);
+	vec->size = (size_t) (1 << power) * sizeof(void *);
+	D_ALLOC(vec->data, sizeof(*vec->data) * (1 << power));
 	if (vec->data == NULL) {
 		rc = -DER_NOMEM;
 	}
 	return rc;
 }
 static inline void
-vec_destroy (dh_vector_t *vec)
+vec_destroy(dh_vector_t *vec)
 {
 	if (vec->data != NULL) {
 		D_FREE(vec->data);
