@@ -4190,6 +4190,15 @@ obj_list_get_shard(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 		int leader;
 
 		leader = obj_grp_leader_get(obj, shard, map_ver);
+		if (leader < 0) {
+			/* return nonapplicable in case the caller
+			 * want to retry non-leader option.
+			 */
+			D_DEBUG(DB_IO, DF_OID" failed to leader %d\n",
+				DP_OID(obj->cob_md.omd_id), leader);
+			obj_auxi->to_leader = 0;
+			D_GOTO(out, shard = -DER_NOTAPPLICABLE);
+		}
 		p_shard = obj_get_shard(obj, leader);
 		if (p_shard->po_rebuilding || p_shard->po_target == -1) {
 			D_DEBUG(DB_IO, DF_OID".%d is being rebuilt\n",
@@ -4197,11 +4206,6 @@ obj_list_get_shard(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 			obj_auxi->to_leader = 0;
 			D_GOTO(out, leader = -DER_NOTAPPLICABLE);
 		} else {
-			/* return nonapplicable in case the caller
-			 * want to retry non-leader option.
-			 */
-			if (leader < 0)
-				leader = -DER_NOTAPPLICABLE;
 			shard = leader;
 		}
 	} else {
