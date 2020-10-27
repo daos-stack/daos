@@ -41,6 +41,8 @@
 #include <daos_test.h>
 #include <daos/dts.h>
 
+#error here
+
 /**
  * An example for integer key evtree .
  */
