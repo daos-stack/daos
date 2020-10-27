@@ -38,6 +38,7 @@ type formatSSDCmd struct {
 	logCmd
 	cfgCmd
 	PCIAddrs []string `short:"p" long:"pci-addr" description:"Format specified PCI Address(es) (formats all in config by default)"`
+	Force    bool     `short:"f" long:"force" description:"Do not prompt for confirmation; just format"`
 }
 
 func cfgBdevs(cfg *server.Configuration) (bdevList []string) {
@@ -67,7 +68,7 @@ func (cmd *formatSSDCmd) Execute(_ []string) error {
 
 	cmd.log.Infof("device(s) to format: %s", strings.Join(formatList, ", "))
 
-	if !common.GetConsent(cmd.log) {
+	if !cmd.Force && !common.GetConsent(cmd.log) {
 		return errors.New("try again and respond yes if you want to format")
 	}
 
