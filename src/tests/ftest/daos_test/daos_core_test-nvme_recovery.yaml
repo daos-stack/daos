@@ -60,4 +60,7 @@ daos_tests:
       daos_test: N
       test_name: nvme_recovery tests 3
       args: -u subtests="3"
-
+    test_n_4:
+      daos_test: N
+      test_name: nvme_recovery tests 4
+      args: -u subtests="4"

@@ -425,6 +425,7 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 		  struct rebuild_tgt_query_info *status)
 {
 	struct ds_migrate_status	dms = { 0 };
+	struct rebuild_pool_tls		*tls;
 	struct rebuild_tgt_query_arg	arg;
 	int				rc;
 
@@ -435,6 +436,10 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 				     &dms);
 	if (rc)
 		D_GOTO(out, rc);
+
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
+	if (tls != NULL && tls->rebuild_pool_status)
+		status->status = tls->rebuild_pool_status;
 
 	/* let's check scanning status on every thread*/
 	ABT_mutex_lock(rpt->rt_lock);
@@ -452,6 +457,10 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 		status->rebuilding = true;
 	else
 		status->rebuilding = false;
+
+	if (status->status == 0 && dms.dm_status)
+		status->status = dms.dm_status;
+
 	ABT_mutex_unlock(rpt->rt_lock);
 
 	D_DEBUG(DB_REBUILD, "pool "DF_UUID" scanning %d/%d rebuilding=%s, "
@@ -552,7 +561,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 		if (rc != 0) {
 			D_ERROR("failed to create failed tgt list rc %d\n",
 				rc);
-			return;
+			break;
 		}
 
 		if (targets != NULL) {
@@ -564,8 +573,9 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 						targets[i].ta_comp.co_rank);
 
 				D_ASSERT(dom != NULL);
-				D_DEBUG(DB_REBUILD, "target %d failed\n",
-					dom->do_comp.co_rank);
+				D_DEBUG(DB_REBUILD, "rank %d/%x.\n",
+					dom->do_comp.co_rank,
+					dom->do_comp.co_status);
 				if (pool_component_unavail(&dom->do_comp,
 							false)) {
 					rebuild_leader_set_status(rgt,

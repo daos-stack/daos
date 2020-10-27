@@ -29,6 +29,7 @@
 #include <daos/common.h>
 #include <daos_mgmt.h>
 #include <daos/object.h>
+#include <daos_srv/bio.h>
 #ifdef DAOS_HAS_VALGRIND
 #include <valgrind/valgrind.h>
 #define DAOS_ON_VALGRIND RUNNING_ON_VALGRIND
@@ -350,4 +351,19 @@ int dmg_storage_set_nvme_fault(const char *dmg_config_file,
  */
 int dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 				    char *stats, const uuid_t uuid);
+
+/**
+ * Verify the assumed blobstore device state with the actual enum definition
+ * defined in bio.h.
+ *
+ * \param state	    [IN]    Blobstore state return from daos_mgmt_ger_bs_state()
+ * \param state_str [IN]    Assumed blobstore state (ie normal, out, faulty,
+ *				teardown, setup)
+ *
+ * \return		0 on success
+ *			1 on failure, meaning the enum definition differs from
+ *					expected state
+ */
+int verify_blobstore_state(int state, const char *state_str);
+
 #endif /* __DAOS_TESTS_LIB_H__ */

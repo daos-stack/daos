@@ -265,7 +265,7 @@ func TestDmg_System_rankStateGroups(t *testing.T) {
 				MockMember(t, 4, MemberStateEvicted),
 				MockMember(t, 1, MemberStateJoined),
 			},
-			expErr: FaultMemberExists(Rank(4)),
+			expErr: &ErrMemberExists{Rank: Rank(4)},
 		},
 		"multiple groups": {
 			members: Members{
@@ -328,7 +328,7 @@ func TestDmg_System_rankActionGroups(t *testing.T) {
 				MockMemberResult(4, "ping", nil, MemberStateEvicted),
 				MockMemberResult(4, "ping", nil, MemberStateEvicted),
 			},
-			expErr: FaultMemberExists(Rank(4)),
+			expErr: &ErrMemberExists{Rank: Rank(4)},
 		},
 		"successful results": {
 			results: MemberResults{

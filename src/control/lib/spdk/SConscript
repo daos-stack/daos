@@ -4,7 +4,7 @@ from os.path import join
 
 def scons():
     """Execute build"""
-    Import('denv', 'prereqs')
+    Import('denv', 'prereqs', 'control_tgts')
 
     denv.AppendUnique(LIBPATH=[Dir('.')])
 
@@ -28,7 +28,8 @@ def scons():
 
     senv.nc = senv.Object("src/nvme_control.c")
     senv.ncc = senv.Object("src/nvme_control_common.c")
-    denv.nvmecontrol = senv.StaticLibrary("nvme_control", [senv.nc, senv.ncc],
+    denv.nvmecontrol = senv.StaticLibrary("nvme_control",
+                                          [senv.nc, senv.ncc] + control_tgts,
                                           LIBS=libs)
 
     senv.Install(join(senv.subst("$PREFIX"), "lib64"), denv.nvmecontrol)

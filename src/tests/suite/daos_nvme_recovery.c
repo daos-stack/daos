@@ -254,6 +254,111 @@ nvme_test_verify_device_stats(void **state)
 	D_FREE(devices);
 }
 
+/*
+ * Verify blobstore state transitions from NORMAL->OUT after device is marked
+ * as "FAULTY" by querying the internal blobstore device state by calling the
+ * daos_mgmt_get_bs_state() C API.
+ */
+static void
+nvme_test_get_blobstore_state(void **state)
+{
+	test_arg_t	*arg = *state;
+	device_list	*devices = NULL;
+	daos_obj_id_t	 oid;
+	struct ioreq	 req;
+	char		 dkey[DTS_KEY_LEN] = { 0 };
+	char		 akey[DTS_KEY_LEN] = { 0 };
+	int		 obj_class, key_nr = 10;
+	int		 rank = 0, tgt_idx = 0;
+	int		 blobstore_state;
+	int		 i, j;
+	int		 ndisks;
+	int		 rc;
+
+	if (!is_nvme_enabled(arg)) {
+		print_message("NVMe isn't enabled.\n");
+		skip();
+	}
+
+	/**
+	 * Get the total number of NVMe devices from all the servers.
+	 */
+	rc = dmg_storage_device_list(dmg_config_file, &ndisks, NULL);
+	assert_int_equal(rc, 0);
+	print_message("Total Disks = %d\n", ndisks);
+
+	/**
+	 * Get the Device info of all NVMe devices.
+	 */
+	D_ALLOC_ARRAY(devices, ndisks);
+	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
+	assert_int_equal(rc, 0);
+	for (i = 0; i < ndisks; i++)
+		print_message("Rank=%d UUID=%s state=%s host=%s\n",
+			      devices[i].rank, DP_UUID(devices[i].device_id),
+			devices[i].state, devices[i].host);
+
+
+	/**
+	 * Set the object class and generate data on objects.
+	 */
+	if (arg->pool.pool_info.pi_nnodes < 2)
+		obj_class = DAOS_OC_R1S_SPEC_RANK;
+	else
+		obj_class = DAOS_OC_R2S_SPEC_RANK;
+
+	oid = dts_oid_gen(obj_class, 0, arg->myrank);
+	oid = dts_oid_set_rank(oid, rank);
+	oid = dts_oid_set_tgt(oid, tgt_idx);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	print_message("Generating data on obj "DF_OID"...\n", DP_OID(oid));
+	for (i = 0; i < key_nr; i++) {
+		dts_key_gen(dkey, DTS_KEY_LEN, "dkey");
+		for (j = 0; j < key_nr; j++) {
+			dts_key_gen(akey, DTS_KEY_LEN, "akey");
+			insert_single(dkey, akey, 0, "data", strlen("data") + 1,
+				      DAOS_TX_NONE, &req);
+		}
+	}
+	ioreq_fini(&req);
+
+	/**
+	 * Verify blobstore of first device returned is in "NORMAL" state
+	 * before setting to faulty.
+	 */
+	rc = daos_mgmt_get_bs_state(arg->group, devices[0].device_id,
+				    &blobstore_state, NULL /*ev*/);
+	assert_int_equal(rc, 0);
+
+	rc = verify_blobstore_state(blobstore_state, "normal");
+	assert_int_equal(rc, 0);
+	print_message("Blobstore is in NORMAL state\n");
+
+	/**
+	 * Manually set first device returned to faulty via
+	 * 'dmg storage set nvme-faulty'.
+	 */
+	print_message("NVMe with UUID=%s on host=%s\" set to Faulty\n",
+		      DP_UUID(devices[0].device_id),
+		      devices[0].host);
+	rc = dmg_storage_set_nvme_fault(dmg_config_file, devices[0].host,
+					devices[0].device_id, 1);
+	assert_int_equal(rc, 0);
+
+	/**
+	 *  Continue to check blobstore state until "OUT" state is returned
+	 *  or max test retry count is hit (5 min).
+	 */
+	rc = wait_and_verify_blobstore_state(devices[0].device_id,
+					     /*expected state*/"out",
+					     arg->group);
+	assert_int_equal(rc, 0);
+
+	print_message("Blobstore is in OUT state\n");
+	D_FREE(devices);
+}
+
 /* Simulate both an NVMe I/O read and write error.
    Check error counters in BIO health stats to verify R/W error counts,
    and also verify I/O error notification on the console output.
@@ -452,7 +557,9 @@ static const struct CMUnitTest nvme_recov_tests[] = {
 	 nvme_recov_1, NULL, test_case_teardown},
 	{"NVMe Recovery 2: Verify device states after NVMe set to Faulty",
 	 nvme_test_verify_device_stats, NULL, test_case_teardown},
-	{"NVMe Recovery 3: Verify NVMe IO error and notification",
+	{"NVMe Recovery 3: Verify blobstore state NORMAL->OUT transition",
+	 nvme_test_get_blobstore_state, NULL, test_case_teardown},
+	{"NVMe Recovery 4: Verify NVMe IO error and notification",
 	 nvme_test_simulate_IO_error, NULL, test_case_teardown},
 };
 
