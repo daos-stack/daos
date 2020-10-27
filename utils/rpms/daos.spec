@@ -1,7 +1,7 @@
 %define daoshome %{_exec_prefix}/lib/%{name}
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
-%if 0%{?build_type}
+%if (0%{?build_type})
 %else
 %global build_type release
 %endif
