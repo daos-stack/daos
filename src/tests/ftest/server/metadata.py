@@ -154,7 +154,7 @@ class ObjectMetadata(TestWithServers):
             self.log.info("connected to pool specifying incorrect svc rank 0")
 
         except DaosApiError as exe:
-            print(exe, traceback.format.exc())
+            print(exe, traceback.format_exc())
             self.fail("pool connect failed when specifying svc rank 0")
 
         finally:
