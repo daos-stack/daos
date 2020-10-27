@@ -43,12 +43,12 @@
 
 static char *getenv_daos_jobid_return; /* value returned for DAOS_JOBID */
 static char *getenv_jobid_env_return; /* value returned for DAOS_JOBID_ENV */
-static char *getenv_jobid_return; /* value returned for value of DAOS_JOBID_ENV */
+static char *getenv_jobid_return; /* value stored in location DAOS_JOBID_ENV */
 char *getenv(const char *name)
 {
 	if (strncmp(name, DEFAULT_JOBID_ENV, sizeof(DEFAULT_JOBID_ENV)) == 0) {
 		return getenv_daos_jobid_return;
-	} else if (strncmp(name, JOBID_ENV, sizeof(JOBID_ENV)) == 0 ) {
+	} else if (strncmp(name, JOBID_ENV, sizeof(JOBID_ENV)) == 0) {
 		return getenv_jobid_env_return;
 	} else if (getenv_jobid_env_return &&
 		strncmp(name, getenv_jobid_env_return, MAX_ENV_NAME) == 0) {
@@ -64,10 +64,11 @@ pid_t getpid(void)
 	return getpid_pid;
 }
 
+static int uname_fail;
 static char *uname_nodename;
-int uname (struct utsname *buf)
+int uname(struct utsname *buf)
 {
-	if (!buf) {
+	if (uname_fail) {
 		errno = EFAULT;
 		return -1;
 	}
@@ -89,6 +90,7 @@ setup_job_mocks(void **state)
 	getenv_jobid_return = NULL;
 	getpid_pid = 0;
 	uname_nodename = NULL;
+	uname_fail = 0;
 	return 0;
 }
 
@@ -99,24 +101,22 @@ teardown_job_mocks(void **state)
 }
 
 static int
-craft_jobid(char **jobid, char *nodename , pid_t pid)
+craft_jobid(char **jobid, char *nodename ,pid_t pid)
 {
 	int   ret = 0;
 	char *tmp_jobid;
 
-	if (!jobid)
-		return -1;
+	assert_non_null(jobid);
 
 	ret = asprintf(&tmp_jobid, "%s-%d", nodename, pid);
-	if (ret == -1)
-		return -1;
+	assert_int_not_equal(ret, -1);
 
 	*jobid = tmp_jobid;
 	return 0;
 }
 
 /*
- * Client lib agent function tests
+ * Client lib job function tests
  */
 static void
 test_dc_job_init_no_env(void **state)
@@ -149,7 +149,7 @@ test_dc_job_init_with_jobid(void **state)
 	/* Make sure we checked the right environment variable */
 	assert_string_equal(dc_jobid_env, DEFAULT_JOBID_ENV);
 
-	/* Make sure we crafted a default jobid  */
+	/* Make sure we get the jobid in DAOS_JOBID  */
 	assert_string_equal(dc_jobid, getenv_daos_jobid_return);
 
 	dc_job_fini();
@@ -188,12 +188,23 @@ test_dc_job_init_with_jobid_env_and_jobid(void **state)
 	/* Make sure we checked the right environment variable */
 	assert_string_equal(dc_jobid_env, getenv_jobid_env_return);
 
-	/* Make sure we crafted a default jobid  */
+	/* Make sure we used the jobid in other-jobid-env */
 	assert_string_equal(dc_jobid, getenv_jobid_return);
 
 	dc_job_fini();
 }
 
+static void
+test_dc_job_init_with_uname_fail(void **state)
+{
+	int ret = 0;
+	uname_fail = 1;
+
+	ret = dc_job_init();
+	/* Make sure we checked the right environment variable */
+	assert_int_equal(ret, -DER_MISC);
+
+}
 /* Convenience macro for declaring unit tests in this suite */
 #define JOB_UTEST(X) \
 	cmocka_unit_test_setup_teardown(X, setup_job_mocks, \
@@ -211,6 +222,8 @@ main(void)
 			test_dc_job_init_with_jobid_env),
 		JOB_UTEST(
 			test_dc_job_init_with_jobid_env_and_jobid),
+		JOB_UTEST(
+			test_dc_job_init_with_uname_fail),
 	};
 
 	d_register_alt_assert(mock_assert);
