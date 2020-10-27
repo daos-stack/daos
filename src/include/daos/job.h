@@ -54,4 +54,14 @@ extern char *dc_jobid;
  */
 #define DEFAULT_JOBID_ENV "DAOS_JOBID"
 
+
+/*
+ * The answer of what the max length of envvar name is very tricky. Arguments
+ * and environment variable share the same memory space so to make things easy
+ * we enforce an arbitrary length of 80 which some other shells enforce
+ */
+#define MAX_ENV_NAME 80
+
+#define MAX_JOBID_LEN 1024
+
 #endif /* __DAOS_JOB_H__ */
