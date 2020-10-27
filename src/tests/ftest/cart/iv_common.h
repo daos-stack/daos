@@ -61,10 +61,11 @@ struct iv_key_struct {
 	((int64_t)		(rc)			CRT_VAR)
 
 #define CRT_ISEQ_RPC_TEST_INVALIDATE_IV /* input fields */	 \
-	((d_iov_t)		(iov_key)		CRT_VAR)
+	((d_iov_t)		(iov_key)		CRT_VAR) \
+	((d_iov_t)		(iov_sync)		CRT_VAR) 
 
 #define CRT_OSEQ_RPC_TEST_INVALIDATE_IV /* output fields */	 \
-	((int64_t)		(rc)			CRT_VAR)
+	((int32_t)		(rc)			CRT_VAR)
 
 #define CRT_ISEQ_RPC_SET_IVNS		/* input fields */	 \
 	((uint32_t)		(unused)		CRT_VAR)
@@ -80,7 +81,7 @@ struct iv_key_struct {
 
 #define CRT_ISEQ_RPC_SET_GRP_VERSION	/* input fields */	 \
 	((uint32_t)		(version)		CRT_VAR) \
-	((int)			(timing)		CRT_VAR)
+	((uint32_t)		(timing)		CRT_VAR)
 
 #define CRT_OSEQ_RPC_SET_GRP_VERSION	/* output fields */	\
 	((uint32_t)		(rc)			CRT_VAR)

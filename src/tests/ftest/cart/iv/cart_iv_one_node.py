@@ -221,9 +221,14 @@ class CartIvOneNodeTest(Test):
                 if 'value' not in action:
                     raise ValueError("Update operation requires value")
 
-                command = " {!s} -o '{!s}' -r '{!s}' -k '{!s}:{!s}' -v '{!s}'" \
+                command = " {!s} -o '{!s}' -r '{!s}' -k '{!s}:{!s}' -v '{!s}'"\
                         .format(command, operation, rank, key_rank, key_idx,
                                 action['value'])
+                if 'sync' in action:
+                    command = "{!s} -s '{!s}'".format(command, action['sync'])
+                if 'sync' not in action:
+                    command = "{!s} -s '{!s}'".format(command, "none")
+
                 clicmd += command
 
                 self.utils.print("\nClient cmd : %s\n" % clicmd)
@@ -234,8 +239,13 @@ class CartIvOneNodeTest(Test):
                             .format(cli_rtn, command))
 
             if "invalidate" in operation:
-                command = " {!s} -o '{!s}' -r '{!s}' -k '{!s}:{!s}'".format(
-                    command, operation, rank, key_rank, key_idx)
+                command = " {!s} -o '{!s}' -r '{!s}' -k '{!s}:{!s}' " \
+			    .format( command, operation, rank, key_rank, \
+				     key_idx )
+                if 'sync' in action:
+                    command = "{!s} -s '{!s}'".format(command, action['sync'])
+                if 'sync' not in action:
+                    command = "{!s} -s '{!s}'".format(command, "none")
                 clicmd += command
 
                 self.utils.print("\nClient cmd : %s\n" % clicmd)
@@ -302,8 +312,7 @@ class CartIvOneNodeTest(Test):
             # Note to Alex: need to implement syncronization in the
             # invalidate for this series of test to run.
             #
-            #
-            {"operation":"update", "rank":0, "key":(4, 42), "value":"turnip"},
+            {"operation":"update", "rank":0, "key":(4, 42), "value":"turnip" },
             {"operation":"fetch", "rank":1, "key":(4, 42), 
               "return_code":0, "expected_value":"turnip"},
             {"operation":"fetch", "rank":0, "key":(4, 42), 
@@ -314,9 +323,11 @@ class CartIvOneNodeTest(Test):
               "return_code":0, "expected_value":"turnip"},
             {"operation":"fetch", "rank":4, "key":(4, 42), 
               "return_code":0, "expected_value":"turnip"},
-            #
+            
             {"operation":"invalidate", "rank":4, "key":(4, 42),
-              "return_code":0},
+              "sync":"eager_notify", "return_code":0},
+            #{"operation":"invalidate", "rank":4, "key":(4, 42),
+            #  "sync":"eager_update", "return_code":0},
             #
             # Check for stale state.
             {"operation":"fetch", "rank":4, "key":(4, 42), 
@@ -330,7 +341,6 @@ class CartIvOneNodeTest(Test):
             {"operation":"fetch", "rank":3, "key":(4, 42), 
               "return_code":-1, "expected_value":""},
             #
-            # NOTE: All series of tests below this point are running
             # ****
             # Fetch, to expect fail, no variable yet
             # Make sure everything goes to the top rank

@@ -105,20 +105,67 @@ test_iv_shutdown()
 	assert(rc == 0);
 }
 
+static int
+create_sync(char *arg_sync, crt_iv_sync_t **rsync) 
+{
+	crt_iv_sync_t				*sync;
+
+        D_ALLOC_PTR(sync);
+        assert(sync != NULL);
+
+
+
+        if (arg_sync == NULL) {
+                sync->ivs_mode = 0;
+                sync->ivs_event = 0;
+        } else if (strcmp(arg_sync, "none") == 0) {
+                sync->ivs_mode = 0;
+                sync->ivs_event = 0;
+        } else if (strcmp(arg_sync, "eager_update") == 0) {
+                sync->ivs_mode = CRT_IV_SYNC_EAGER;
+                sync->ivs_event = CRT_IV_SYNC_EVENT_UPDATE;
+        } else if (strcmp(arg_sync, "lazy_update") == 0) {
+                sync->ivs_mode = CRT_IV_SYNC_LAZY;
+                sync->ivs_event = CRT_IV_SYNC_EVENT_UPDATE;
+
+        } else if (strcmp(arg_sync, "eager_notify") == 0) {
+                sync->ivs_mode = CRT_IV_SYNC_EAGER;
+                sync->ivs_event = CRT_IV_SYNC_EVENT_NOTIFY;
+        } else if (strcmp(arg_sync, "lazy_notify") == 0) {
+                sync->ivs_mode = CRT_IV_SYNC_LAZY;
+                sync->ivs_event = CRT_IV_SYNC_EVENT_NOTIFY;
+        } else {
+                print_usage("Unknown sync option specified");
+                D_FREE(sync);
+                return -1;
+        }
+
+	*rsync  = sync;
+	return 0;
+}
+
 static void
-test_iv_invalidate(struct iv_key_struct *key)
+test_iv_invalidate(struct iv_key_struct *key, char *arg_sync)
 {
 	struct RPC_TEST_INVALIDATE_IV_in	*input;
 	struct RPC_TEST_INVALIDATE_IV_out	*output;
 	crt_rpc_t				*rpc_req;
 	int					 rc;
+	crt_iv_sync_t				*sync = NULL;
 
-	DBG_PRINT("Attempting to invalidate key[%d:%d]\n",
-		  key->rank, key->key_id);
+	rc = create_sync(arg_sync, &sync);
+	if (rc != 0){
+		goto exit_code;
+	}
+	DBG_PRINT("Attempting to invalidate key[%d:%d]: sync type: %s\n",
+		  key->rank, key->key_id, arg_sync);
 
 	prepare_rpc_request(g_crt_ctx, RPC_TEST_INVALIDATE_IV, &g_server_ep,
 			    (void **)&input, &rpc_req);
+
+	/* Copy parameters into rpc input structure */
 	d_iov_set(&input->iov_key, key, sizeof(struct iv_key_struct));
+        d_iov_set_safe(&input->iov_sync, sync, sizeof(crt_iv_sync_t));
 
 	send_rpc_request(g_crt_ctx, rpc_req, (void **)&output);
 
@@ -130,7 +177,10 @@ test_iv_invalidate(struct iv_key_struct *key)
 			  key->rank, key->key_id, output->rc);
 
 	rc = crt_req_decref(rpc_req);
+	D_FREE(sync);
+exit_code:
 	assert(rc == 0);
+
 }
 
 /**
@@ -279,11 +329,11 @@ test_iv_fetch(struct iv_key_struct *key, FILE *log_file)
 	send_rpc_request(g_crt_ctx, rpc_req, (void **)&output);
 
 	if (output->rc == 0)
-		DBG_PRINT("Fetch of key=[%d:%d] PASSED\n", key->rank,
+		DBG_PRINT("Fetch of key=[%d:%d] FOUND\n", key->rank,
 			  key->key_id);
 	else
-		DBG_PRINT("Fetch of key=[%d:%d] FAILED; rc = %ld\n", key->rank,
-			  key->key_id, output->rc);
+		DBG_PRINT("Fetch of key=[%d:%d] NOT FOUND; rc = %ld\n", 
+			   key->rank, key->key_id, output->rc);
 
 	print_result_as_json(output->rc, &output->key, output->size, &sg_list,
 			     log_file);
@@ -307,35 +357,13 @@ test_iv_update(struct iv_key_struct *key, char *str_value, bool value_is_hex,
 	struct RPC_TEST_UPDATE_IV_in	*input;
 	struct RPC_TEST_UPDATE_IV_out	*output;
 	crt_rpc_t			*rpc_req;
-	crt_iv_sync_t			*sync;
 	size_t				 len;
 	int				 rc;
+	crt_iv_sync_t				*sync = NULL;
 
-	D_ALLOC_PTR(sync);
-	assert(sync != NULL);
-
-	if (arg_sync == NULL) {
-		sync->ivs_mode = 0;
-		sync->ivs_event = 0;
-	} else if (strcmp(arg_sync, "none") == 0) {
-		sync->ivs_mode = 0;
-		sync->ivs_event = 0;
-	} else if (strcmp(arg_sync, "eager_update") == 0) {
-		sync->ivs_mode = CRT_IV_SYNC_EAGER;
-		sync->ivs_event = CRT_IV_SYNC_EVENT_UPDATE;
-	} else if (strcmp(arg_sync, "lazy_update") == 0) {
-		sync->ivs_mode = CRT_IV_SYNC_LAZY;
-		sync->ivs_event = CRT_IV_SYNC_EVENT_UPDATE;
-	} else if (strcmp(arg_sync, "eager_notify") == 0) {
-		sync->ivs_mode = CRT_IV_SYNC_EAGER;
-		sync->ivs_event = CRT_IV_SYNC_EVENT_NOTIFY;
-	} else if (strcmp(arg_sync, "eager_update") == 0) {
-		sync->ivs_mode = CRT_IV_SYNC_EAGER;
-		sync->ivs_event = CRT_IV_SYNC_EVENT_UPDATE;
-	} else {
-		print_usage("Unknown sync option specified");
-		D_FREE(sync);
-		return -1;
+	rc = create_sync(arg_sync, &sync);
+	if (rc != 0){
+		goto exit_code;
 	}
 
 	prepare_rpc_request(g_crt_ctx, RPC_TEST_UPDATE_IV, &g_server_ep,
@@ -364,8 +392,8 @@ test_iv_update(struct iv_key_struct *key, char *str_value, bool value_is_hex,
 		DBG_PRINT("Update FAILED; rc = %ld\n", output->rc);
 
 	rc = crt_req_decref(rpc_req);
+exit_code:
 	assert(rc == 0);
-
 	return 0;
 }
 
@@ -632,7 +660,7 @@ DBG_PRINT("\n****************\n************* SAB NOTE: MAIN ******\n");
 	else if (cur_op == OP_UPDATE)
 		test_iv_update(&iv_key, arg_value, arg_value_is_hex, arg_sync);
 	else if (cur_op == OP_INVALIDATE)
-		test_iv_invalidate(&iv_key);
+		test_iv_invalidate(&iv_key, arg_sync);
 	else if (cur_op == OP_SHUTDOWN)
 		test_iv_shutdown();
 	else if (cur_op == OP_SET_GRP_VERSION)
