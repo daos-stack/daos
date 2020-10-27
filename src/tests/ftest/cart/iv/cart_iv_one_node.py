@@ -302,6 +302,7 @@ class CartIvOneNodeTest(Test):
             # Note to Alex: need to implement syncronization in the
             # invalidate for this series of test to run.
             #
+            #
             {"operation":"update", "rank":0, "key":(4, 42), "value":"turnip"},
             {"operation":"fetch", "rank":1, "key":(4, 42), 
               "return_code":0, "expected_value":"turnip"},
