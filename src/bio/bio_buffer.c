@@ -643,7 +643,7 @@ rw_completion(void *cb_arg, int err)
 
 	/* Report all NVMe IO errors */
 	if (err != 0 || DAOS_FAIL_CHECK(DAOS_NVME_WRITE_ERR) ||
-		DAOS_FAIL_CHECK(DAOS_NVME_READ_ERR)) {
+	    DAOS_FAIL_CHECK(DAOS_NVME_READ_ERR)) {
 		D_ALLOC_PTR(mem);
 		if (mem == NULL)
 			goto skip_media_error;
