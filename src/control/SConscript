@@ -223,6 +223,8 @@ def scons():
 
     serverbin = install_go_bin(senv, gosrc, [denv.nvmecontrol], "daos_server",
                                "daos_server")
+    ssdbin = install_go_bin(senv, gosrc, [denv.nvmecontrol], "daos_ssd",
+                               "daos_ssd")
 
     #Admin binary is expected to be relocated so origin based paths are useless
     aenv = senv.Clone()
@@ -234,7 +236,7 @@ def scons():
     adminbin = install_go_bin(aenv, gosrc, [denv.nvmecontrol], "daos_admin",
                               "daos_admin")
 
-    AlwaysBuild([serverbin, adminbin])
+    AlwaysBuild([serverbin, adminbin, ssdbin])
 
     if is_firmware_mgmt_build(denv):
         print("(EXPERIMENTAL) Building DAOS firmware tools")
