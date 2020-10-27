@@ -8,7 +8,8 @@
 # and TARGET can be set.
 #
 # Default is to build for CentOS 7.
-
+# Fault injection will be enabled by default in CI unless a pragma has
+# has disabled fault injection or this is a Release build
 set -ex
 
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
@@ -23,4 +24,5 @@ fi
 
 rm -rf "artifacts/${TARGET}/"
 mkdir -p "artifacts/${TARGET}/"
-make CHROOT_NAME="${CHROOT_NAME}" -C utils/rpms chrootbuild
+make CHROOT_NAME="${CHROOT_NAME}" \
+    EXTERNAL_RPM_BUILD_OPTIONS="${BUILD_OPTION}" -C utils/rpms chrootbuild

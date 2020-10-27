@@ -1,7 +1,9 @@
 %define daoshome %{_exec_prefix}/lib/%{name}
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
-
+%if 0%{?build_type}
+%else
+%global build_type release
 %if (0%{?suse_version} >= 1500)
 # until we get an updated mercury build on 15.2
 %global mercury_version 2.0.0~rc1-1.suse.lp151
@@ -11,7 +13,7 @@
 
 Name:          daos
 Version:       1.1.1
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -19,7 +21,7 @@ URL:           https//github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
 
 BuildRequires: scons >= 2.4
-BuildRequires: libfabric-devel
+BuildRequires: libfabric-devel >= 1.11.0
 BuildRequires: boost-devel
 BuildRequires: mercury-devel = %{mercury_version}
 BuildRequires: openpa-devel
@@ -131,7 +133,7 @@ Requires: hwloc
 Requires: mercury = %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
-Requires: libfabric >= 1.8.0
+Requires: libfabric >= 1.11.0
 %systemd_requires
 
 %description server
@@ -141,7 +143,7 @@ This is the package needed to run a DAOS server
 Summary: The DAOS client
 Requires: %{name} = %{version}-%{release}
 Requires: mercury = %{mercury_version}
-Requires: libfabric >= 1.8.0
+Requires: libfabric >= 1.11.0
 Requires: fuse3 >= 3.4.2
 %if (0%{?suse_version} >= 1500)
 Requires: libfuse3-3 >= 3.4.2
@@ -205,7 +207,9 @@ scons %{?_smp_mflags}      \
       --no-rpath           \
       USE_INSTALLED=all    \
       CONF_DIR=%{conf_dir} \
-      PREFIX=%{?buildroot}
+      PREFIX=%{?buildroot} \
+      BUILD_TYPE=%{?build_type}
+
 
 %install
 scons %{?_smp_mflags}                 \
@@ -216,7 +220,9 @@ scons %{?_smp_mflags}                 \
       %{?buildroot}%{conf_dir}        \
       USE_INSTALLED=all               \
       CONF_DIR=%{conf_dir}            \
-      PREFIX=%{_prefix}
+      PREFIX=%{_prefix}               \
+      BUILD_TYPE=%{?build_type}
+
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
@@ -383,6 +389,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_bindir}/daos_run_io_conf
 %{_bindir}/crt_launch
 %{_prefix}/etc/fault-inject-cart.yaml
+%{_bindir}/fault_status
 # For avocado tests
 %{_prefix}/lib/daos/.build_vars.json
 %{_prefix}/lib/daos/.build_vars.sh
@@ -393,6 +400,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Tue Oct 27 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.1-4
+- add BUILD_TYPE to scons cmdline. default=release
+- Valid values for BUILD_TYPE are dev|release|debug
+- BUILD_TYPE=release will disable fault injection in build
+
 * Tue Oct 13 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> 1.1.1-3
 - Remove obj_ctl from Tests RPM package
 - Add libdts.so shared library that is used by daos_perf, daos_racer and

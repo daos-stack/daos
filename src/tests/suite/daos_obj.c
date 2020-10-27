@@ -2913,6 +2913,8 @@ io_nospace(void **state)
 	char		key[10];
 	int		i;
 
+	FAULT_INJECTION_REQUIRED();
+
 	/** choose random object */
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 

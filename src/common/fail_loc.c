@@ -178,7 +178,7 @@ daos_fail_init(void)
 	int rc;
 
 	rc = d_fault_inject_init();
-	if (rc)
+	if (rc != 0 && rc != -DER_NOSYS)
 		return rc;
 
 	rc = d_fault_attr_set(DAOS_FAIL_UNIT_TEST_GROUP, attr);

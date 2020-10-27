@@ -41,6 +41,16 @@
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
 #endif
 
+#if FAULT_INJECTION
+#define FAULT_INJECTION_REQUIRED() do { } while (0)
+#else
+#define FAULT_INJECTION_REQUIRED() \
+	do { \
+		print_message("Fault injection required for test, skipping...\n"); \
+		skip();\
+	} while (0)
+#endif /* FAULT_INJECTION */
+
 #define VPOOL_16M	(16ULL << 20)
 #define VPOOL_1G	(1ULL << 30)
 #define VPOOL_2G	(2ULL << 30)
