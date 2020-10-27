@@ -59,7 +59,7 @@ const (
 	minHugePageCount = 128
 )
 
-func cfgHasBdev(cfg *config.Configuration) bool {
+func cfgHasBdev(cfg *config.Server) bool {
 	for _, srvCfg := range cfg.Servers {
 		if len(srvCfg.Storage.Bdev.DeviceList) > 0 {
 			return true
@@ -80,7 +80,7 @@ func iommuDetected() bool {
 	return len(dmars) > 0
 }
 
-func raftDir(cfg *config.Configuration) string {
+func raftDir(cfg *config.Server) string {
 	if len(cfg.Servers) == 0 {
 		return "" // can't save to SCM
 	}
@@ -96,7 +96,7 @@ func hostname() string {
 }
 
 // Start is the entry point for a daos_server instance.
-func Start(log *logging.LeveledLogger, cfg *config.Configuration) error {
+func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	err := cfg.Validate(log)
 	if err != nil {
 		return errors.Wrapf(err, "%s: validation failed", cfg.Path)

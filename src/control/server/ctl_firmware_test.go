@@ -514,7 +514,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			config := config.NewDefaultConfiguration()
+			config := config.DefaultServer()
 			cs := mockControlService(t, log, config, tc.bmbc, tc.smbc, nil)
 
 			resp, err := cs.FirmwareQuery(context.TODO(), &tc.req)
@@ -820,7 +820,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			cfg := config.NewDefaultConfiguration()
+			cfg := config.DefaultServer()
 			cs := mockControlService(t, log, cfg, tc.bmbc, tc.smbc, nil)
 			for i := 0; i < 2; i++ {
 				runner := ioserver.NewTestRunner(&ioserver.TestRunnerConfig{

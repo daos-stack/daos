@@ -84,7 +84,7 @@ func TestServer_getFaultDomain(t *testing.T) {
 	createFaultCBScriptFile(t, cbScriptPath, 0755, validFaultDomain)
 
 	for name, tc := range map[string]struct {
-		cfg       *config.Configuration
+		cfg       *config.Server
 		expResult string
 		expErr    error
 	}{
@@ -92,38 +92,38 @@ func TestServer_getFaultDomain(t *testing.T) {
 			expErr: config.FaultBadConfig,
 		},
 		"cfg fault path": {
-			cfg: &config.Configuration{
+			cfg: &config.Server{
 				FaultPath: validFaultDomain,
 			},
 			expResult: validFaultDomain,
 		},
 		"cfg fault path is not valid": {
-			cfg: &config.Configuration{
+			cfg: &config.Server{
 				FaultPath: "junk",
 			},
 			expErr: config.FaultConfigFaultDomainInvalid,
 		},
 		"cfg fault callback": {
-			cfg: &config.Configuration{
+			cfg: &config.Server{
 				FaultCb: cbScriptPath,
 			},
 			expResult: validFaultDomain,
 		},
 		"cfg fault callback is not valid": {
-			cfg: &config.Configuration{
+			cfg: &config.Server{
 				FaultCb: filepath.Join(tmpDir, "does not exist"),
 			},
 			expErr: config.FaultConfigFaultCallbackNotFound,
 		},
 		"cfg both fault path and fault CB": {
-			cfg: &config.Configuration{
+			cfg: &config.Server{
 				FaultPath: validFaultDomain,
 				FaultCb:   cbScriptPath,
 			},
 			expErr: config.FaultConfigBothFaultPathAndCb,
 		},
 		"default gets hostname": {
-			cfg:       &config.Configuration{},
+			cfg:       &config.Server{},
 			expResult: system.FaultDomainSeparator + realHostname,
 		},
 	} {

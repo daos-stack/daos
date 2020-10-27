@@ -39,7 +39,7 @@ func TestCtlSvc_FirmwareQuery_Disabled(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	emptyCfg := config.NewDefaultConfiguration()
+	emptyCfg := config.DefaultServer()
 	cs := mockControlService(t, log, emptyCfg, nil, nil, nil)
 
 	result, err := cs.FirmwareQuery(context.TODO(), nil)
@@ -54,7 +54,7 @@ func TestCtlSvc_FirmwareUpdate_Disabled(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	emptyCfg := config.NewDefaultConfiguration()
+	emptyCfg := config.DefaultServer()
 	cs := mockControlService(t, log, emptyCfg, nil, nil, nil)
 
 	result, err := cs.FirmwareUpdate(context.TODO(), nil)

@@ -37,7 +37,7 @@ type cliOverrider interface {
 }
 
 type cfgCmd struct {
-	config *config.Configuration
+	config *config.Server
 }
 
 func (c *cfgCmd) configPath() string {
@@ -55,7 +55,7 @@ func (c *cfgCmd) loadConfig(cfgPath string) error {
 		return nil
 	}
 
-	c.config = config.NewConfiguration()
+	c.config = config.DefaultServer()
 	if err := c.config.SetPath(cfgPath); err != nil {
 		return err
 	}

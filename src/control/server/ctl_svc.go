@@ -40,14 +40,14 @@ type ControlService struct {
 	harness    *IOServerHarness
 	membership *system.Membership
 	rpcClient  control.Invoker
-	srvCfg     *config.Configuration
+	srvCfg     *config.Server
 }
 
 // NewControlService returns ControlService to be used as gRPC control service
 // datastore. Initialized with sensible defaults and provided components.
 func NewControlService(log logging.Logger, h *IOServerHarness,
 	bp *bdev.Provider, sp *scm.Provider,
-	cfg *config.Configuration, m *system.Membership,
+	cfg *config.Server, m *system.Membership,
 	rc control.Invoker) *ControlService {
 
 	scs := NewStorageControlService(log, bp, sp, cfg.Servers)

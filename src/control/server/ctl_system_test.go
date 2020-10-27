@@ -374,7 +374,7 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			cfg := config.NewDefaultConfiguration()
+			cfg := config.DefaultServer()
 			cs := mockControlService(t, log, cfg, nil, nil, nil)
 			cs.srvCfg = cfg
 			cs.srvCfg.ControlPort = 10001
@@ -648,7 +648,7 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			cfg := config.NewDefaultConfiguration()
+			cfg := config.DefaultServer()
 			cs := mockControlService(t, log, cfg, nil, nil, nil)
 			cs.srvCfg = cfg
 			cs.srvCfg.ControlPort = 10001
@@ -931,7 +931,7 @@ func TestServer_CtlSvc_SystemStart(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			cfg := config.NewDefaultConfiguration()
+			cfg := config.DefaultServer()
 			cs := mockControlService(t, log, cfg, nil, nil, nil)
 			cs.srvCfg = cfg
 			cs.srvCfg.ControlPort = 10001
@@ -1353,7 +1353,7 @@ func TestServer_CtlSvc_SystemStop(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			cfg := config.NewDefaultConfiguration()
+			cfg := config.DefaultServer()
 			cs := mockControlService(t, log, cfg, nil, nil, nil)
 			cs.srvCfg = cfg
 			cs.srvCfg.ControlPort = 10001
@@ -1583,7 +1583,7 @@ func TestServer_CtlSvc_SystemResetFormat(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			cfg := config.NewDefaultConfiguration()
+			cfg := config.DefaultServer()
 			cs := mockControlService(t, log, cfg, nil, nil, nil)
 			cs.srvCfg = cfg
 			cs.srvCfg.ControlPort = 10001

@@ -170,7 +170,7 @@ func (srv *IOServerInstance) run(ctx context.Context, membership *system.Members
 
 // Run is the processing loop for an IOServerInstance. Starts are triggered by
 // receiving true on instance start channel.
-func (srv *IOServerInstance) Run(ctx context.Context, membership *system.Membership, cfg *config.Configuration) {
+func (srv *IOServerInstance) Run(ctx context.Context, membership *system.Membership, cfg *config.Server) {
 	for {
 		select {
 		case <-ctx.Done():

@@ -63,9 +63,9 @@ type ClientNetworkCfg struct {
 	NetDevClass     uint32
 }
 
-// Configuration describes options for DAOS control plane.
+// Server describes configuration options for DAOS control plane.
 // See utils/config/daos_server.yml for parameter descriptions.
-type Configuration struct {
+type Server struct {
 	// control-specific
 	ControlPort         int                       `yaml:"port"`
 	TransportConfig     *security.TransportConfig `yaml:"transport_config"`
@@ -110,31 +110,31 @@ type Configuration struct {
 
 // WithRecreateSuperblocks indicates that a missing superblock should not be treated as
 // an error. The server will create new superblocks as necessary.
-func (c *Configuration) WithRecreateSuperblocks() *Configuration {
+func (c *Server) WithRecreateSuperblocks() *Server {
 	c.RecreateSuperblocks = true
 	return c
 }
 
 // WithProviderValidator sets the function that validates the provider
-func (c *Configuration) WithProviderValidator(fn networkProviderValidation) *Configuration {
+func (c *Server) WithProviderValidator(fn networkProviderValidation) *Server {
 	c.validateProviderFn = fn
 	return c
 }
 
 // WithNUMAValidator sets the function that validates the NUMA configuration
-func (c *Configuration) WithNUMAValidator(fn networkNUMAValidation) *Configuration {
+func (c *Server) WithNUMAValidator(fn networkNUMAValidation) *Server {
 	c.validateNUMAFn = fn
 	return c
 }
 
 // WithGetNetworkDeviceClass sets the function that determines the network device class
-func (c *Configuration) WithGetNetworkDeviceClass(fn networkDeviceClass) *Configuration {
+func (c *Server) WithGetNetworkDeviceClass(fn networkDeviceClass) *Server {
 	c.GetDeviceClassFn = fn
 	return c
 }
 
 // WithSystemName sets the system name.
-func (c *Configuration) WithSystemName(name string) *Configuration {
+func (c *Server) WithSystemName(name string) *Server {
 	c.SystemName = name
 	for _, srv := range c.Servers {
 		srv.WithSystemName(name)
@@ -143,7 +143,7 @@ func (c *Configuration) WithSystemName(name string) *Configuration {
 }
 
 // WithSocketDir sets the default socket directory.
-func (c *Configuration) WithSocketDir(sockDir string) *Configuration {
+func (c *Server) WithSocketDir(sockDir string) *Server {
 	c.SocketDir = sockDir
 	for _, srv := range c.Servers {
 		srv.WithSocketDir(sockDir)
@@ -152,7 +152,7 @@ func (c *Configuration) WithSocketDir(sockDir string) *Configuration {
 }
 
 // WithModules sets a list of server modules to load.
-func (c *Configuration) WithModules(mList string) *Configuration {
+func (c *Server) WithModules(mList string) *Server {
 	c.Modules = mList
 	for _, srv := range c.Servers {
 		srv.WithModules(mList)
@@ -161,7 +161,7 @@ func (c *Configuration) WithModules(mList string) *Configuration {
 }
 
 // WithFabricProvider sets the top-level fabric provider.
-func (c *Configuration) WithFabricProvider(provider string) *Configuration {
+func (c *Server) WithFabricProvider(provider string) *Server {
 	c.Fabric.Provider = provider
 	for _, srv := range c.Servers {
 		srv.Fabric.Update(c.Fabric)
@@ -170,7 +170,7 @@ func (c *Configuration) WithFabricProvider(provider string) *Configuration {
 }
 
 // WithCrtCtxShareAddr sets the top-level CrtCtxShareAddr.
-func (c *Configuration) WithCrtCtxShareAddr(addr uint32) *Configuration {
+func (c *Server) WithCrtCtxShareAddr(addr uint32) *Server {
 	c.Fabric.CrtCtxShareAddr = addr
 	for _, srv := range c.Servers {
 		srv.Fabric.Update(c.Fabric)
@@ -179,7 +179,7 @@ func (c *Configuration) WithCrtCtxShareAddr(addr uint32) *Configuration {
 }
 
 // WithCrtTimeout sets the top-level CrtTimeout.
-func (c *Configuration) WithCrtTimeout(timeout uint32) *Configuration {
+func (c *Server) WithCrtTimeout(timeout uint32) *Server {
 	c.Fabric.CrtTimeout = timeout
 	for _, srv := range c.Servers {
 		srv.Fabric.Update(c.Fabric)
@@ -191,7 +191,7 @@ func (c *Configuration) WithCrtTimeout(timeout uint32) *Configuration {
 // which modify nested ioserver configurations should be kept above this
 // one as a reference for which things should be set/updated in the next
 // function.
-func (c *Configuration) updateServerConfig(cfgPtr **ioserver.Config) {
+func (c *Server) updateServerConfig(cfgPtr **ioserver.Config) {
 	// If we somehow get a nil config, we can't return an error, and
 	// we don't want to cause a segfault. Instead, just create an
 	// empty config and return early, so that it eventually fails
@@ -209,7 +209,7 @@ func (c *Configuration) updateServerConfig(cfgPtr **ioserver.Config) {
 }
 
 // WithServers sets the list of IOServer configurations.
-func (c *Configuration) WithServers(srvList ...*ioserver.Config) *Configuration {
+func (c *Server) WithServers(srvList ...*ioserver.Config) *Server {
 	c.Servers = srvList
 	for i := range c.Servers {
 		c.updateServerConfig(&c.Servers[i])
@@ -222,7 +222,7 @@ func (c *Configuration) WithServers(srvList ...*ioserver.Config) *Configuration 
 // Deprecated: This function exists to ease transition away from
 // specifying the SCM mountpoint via daos_server CLI flag. Future
 // versions will require the mountpoint to be set via configuration.
-func (c *Configuration) WithScmMountPoint(mp string) *Configuration {
+func (c *Server) WithScmMountPoint(mp string) *Server {
 	if len(c.Servers) > 0 {
 		c.Servers[0].WithScmMountPoint(mp)
 	}
@@ -230,43 +230,43 @@ func (c *Configuration) WithScmMountPoint(mp string) *Configuration {
 }
 
 // WithAccessPoints sets the access point list.
-func (c *Configuration) WithAccessPoints(aps ...string) *Configuration {
+func (c *Server) WithAccessPoints(aps ...string) *Server {
 	c.AccessPoints = aps
 	return c
 }
 
 // WithControlPort sets the gRPC listener port.
-func (c *Configuration) WithControlPort(port int) *Configuration {
+func (c *Server) WithControlPort(port int) *Server {
 	c.ControlPort = port
 	return c
 }
 
 // WithTransportConfig sets the gRPC transport configuration.
-func (c *Configuration) WithTransportConfig(cfg *security.TransportConfig) *Configuration {
+func (c *Server) WithTransportConfig(cfg *security.TransportConfig) *Server {
 	c.TransportConfig = cfg
 	return c
 }
 
 // WithFaultPath sets the fault path (identification string e.g. rack/shelf/node).
-func (c *Configuration) WithFaultPath(fp string) *Configuration {
+func (c *Server) WithFaultPath(fp string) *Server {
 	c.FaultPath = fp
 	return c
 }
 
 // WithFaultCb sets the path to the fault callback script.
-func (c *Configuration) WithFaultCb(cb string) *Configuration {
+func (c *Server) WithFaultCb(cb string) *Server {
 	c.FaultCb = cb
 	return c
 }
 
 // WithBdevExclude sets the block device exclude list.
-func (c *Configuration) WithBdevExclude(bList ...string) *Configuration {
+func (c *Server) WithBdevExclude(bList ...string) *Server {
 	c.BdevExclude = bList
 	return c
 }
 
 // WithBdevInclude sets the block device include list.
-func (c *Configuration) WithBdevInclude(bList ...string) *Configuration {
+func (c *Server) WithBdevInclude(bList ...string) *Server {
 	c.BdevInclude = bList
 	return c
 }
@@ -274,64 +274,64 @@ func (c *Configuration) WithBdevInclude(bList ...string) *Configuration {
 // WithDisableVFIO indicates that the vfio-pci driver should not be
 // used by SPDK even if an IOMMU is detected. Note that this option
 // requires that DAOS be run as root.
-func (c *Configuration) WithDisableVFIO(disabled bool) *Configuration {
+func (c *Server) WithDisableVFIO(disabled bool) *Server {
 	c.DisableVFIO = disabled
 	return c
 }
 
 // WithDisableVMD indicates that vmd devices should not be used even if they
 // exist.
-func (c *Configuration) WithDisableVMD(disabled bool) *Configuration {
+func (c *Server) WithDisableVMD(disabled bool) *Server {
 	c.DisableVMD = disabled
 	return c
 }
 
 // WithHyperthreads enables or disables hyperthread support.
-func (c *Configuration) WithHyperthreads(enabled bool) *Configuration {
+func (c *Server) WithHyperthreads(enabled bool) *Server {
 	c.Hyperthreads = enabled
 	return c
 }
 
 // WithNrHugePages sets the number of huge pages to be used.
-func (c *Configuration) WithNrHugePages(nr int) *Configuration {
+func (c *Server) WithNrHugePages(nr int) *Server {
 	c.NrHugepages = nr
 	return c
 }
 
 // WithControlLogMask sets the daos_server log level.
-func (c *Configuration) WithControlLogMask(lvl ControlLogLevel) *Configuration {
+func (c *Server) WithControlLogMask(lvl ControlLogLevel) *Server {
 	c.ControlLogMask = lvl
 	return c
 }
 
 // WithControlLogFile sets the path to the daos_server logfile.
-func (c *Configuration) WithControlLogFile(filePath string) *Configuration {
+func (c *Server) WithControlLogFile(filePath string) *Server {
 	c.ControlLogFile = filePath
 	return c
 }
 
 // WithControlLogJSON enables or disables JSON output.
-func (c *Configuration) WithControlLogJSON(enabled bool) *Configuration {
+func (c *Server) WithControlLogJSON(enabled bool) *Server {
 	c.ControlLogJSON = enabled
 	return c
 }
 
 // WithHelperLogFile sets the path to the daos_admin logfile.
-func (c *Configuration) WithHelperLogFile(filePath string) *Configuration {
+func (c *Server) WithHelperLogFile(filePath string) *Server {
 	c.HelperLogFile = filePath
 	return c
 }
 
 // WithFirmwareHelperLogFile sets the path to the daos_firmware logfile.
-func (c *Configuration) WithFirmwareHelperLogFile(filePath string) *Configuration {
+func (c *Server) WithFirmwareHelperLogFile(filePath string) *Server {
 	c.FWHelperLogFile = filePath
 	return c
 }
 
-// NewDefaultConfiguration creates a new instance of configuration struct
+// DefaultServer creates a new instance of configuration struct
 // populated with defaults.
-func NewDefaultConfiguration() *Configuration {
-	return &Configuration{
+func DefaultServer() *Server {
+	return &Server{
 		SystemName:         build.DefaultSystemName,
 		SocketDir:          defaultRuntimeDir,
 		AccessPoints:       []string{fmt.Sprintf("localhost:%d", build.DefaultControlPort)},
@@ -347,14 +347,8 @@ func NewDefaultConfiguration() *Configuration {
 	}
 }
 
-// NewConfiguration creates a new instance of configuration struct
-// populated with defaults and default external interface.
-func NewConfiguration() *Configuration {
-	return NewDefaultConfiguration()
-}
-
 // Load reads the serialized configuration from disk and validates it.
-func (c *Configuration) Load() error {
+func (c *Server) Load() error {
 	if c.Path == "" {
 		return FaultConfigNoPath
 	}
@@ -378,7 +372,7 @@ func (c *Configuration) Load() error {
 }
 
 // SaveToFile serializes the configuration and saves it to the specified filename.
-func (c *Configuration) SaveToFile(filename string) error {
+func (c *Server) SaveToFile(filename string) error {
 	bytes, err := yaml.Marshal(c)
 
 	if err != nil {
@@ -389,7 +383,7 @@ func (c *Configuration) SaveToFile(filename string) error {
 }
 
 // SetPath sets the default path to the configuration file.
-func (c *Configuration) SetPath(inPath string) error {
+func (c *Server) SetPath(inPath string) error {
 	newPath, err := common.ResolvePath(inPath, c.Path)
 	if err != nil {
 		return err
@@ -404,7 +398,7 @@ func (c *Configuration) SetPath(inPath string) error {
 }
 
 // SaveActiveConfig saves read-only active config, tries config dir then /tmp/
-func SaveActiveConfig(log logging.Logger, config *Configuration) {
+func SaveActiveConfig(log logging.Logger, config *Server) {
 	activeConfig := filepath.Join(filepath.Dir(config.Path), configOut)
 	eMsg := "Warning: active config could not be saved (%s)"
 	err := config.SaveToFile(activeConfig)
@@ -423,7 +417,7 @@ func SaveActiveConfig(log logging.Logger, config *Configuration) {
 }
 
 // Validate asserts that config meets minimum requirements.
-func (c *Configuration) Validate(log logging.Logger) (err error) {
+func (c *Server) Validate(log logging.Logger) (err error) {
 	// config without servers is valid when initially discovering hardware
 	// prior to adding per-server sections with device allocations
 	if len(c.Servers) == 0 {
@@ -512,7 +506,7 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 // for multi-server configs. The goal is to ensure that each instance
 // has unique values for resources which cannot be shared (e.g. log files,
 // fabric configurations, PCI devices, etc.)
-func validateMultiServerConfig(log logging.Logger, c *Configuration) error {
+func validateMultiServerConfig(log logging.Logger, c *Server) error {
 	if len(c.Servers) < 2 {
 		return nil
 	}

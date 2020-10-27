@@ -212,7 +212,7 @@ func TestServer_Harness_Start(t *testing.T) {
 					WithScmRamdiskSize(1).
 					WithScmMountPoint(filepath.Join(testDir, strconv.Itoa(i)))
 			}
-			config := config.NewConfiguration().
+			config := config.DefaultServer().
 				WithServers(srvCfgs...).
 				WithSocketDir(testDir).
 				WithTransportConfig(&security.TransportConfig{AllowInsecure: true})

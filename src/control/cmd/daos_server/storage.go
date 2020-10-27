@@ -61,7 +61,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	// wrappers around more easily-testable functions.
 	if cmd.scs == nil {
 		cmd.scs = server.NewStorageControlService(cmd.log, bdev.DefaultProvider(cmd.log),
-			scm.DefaultProvider(cmd.log), config.NewConfiguration().Servers)
+			scm.DefaultProvider(cmd.log), config.DefaultServer().Servers)
 	}
 
 	op := "Preparing"
@@ -129,7 +129,7 @@ type storageScanCmd struct {
 
 func (cmd *storageScanCmd) Execute(args []string) error {
 	svc := server.NewStorageControlService(cmd.log, bdev.DefaultProvider(cmd.log),
-		scm.DefaultProvider(cmd.log), config.NewConfiguration().Servers)
+		scm.DefaultProvider(cmd.log), config.DefaultServer().Servers)
 
 	cmd.log.Info("Scanning locally-attached storage...")
 

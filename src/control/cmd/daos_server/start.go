@@ -34,7 +34,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/config"
 )
 
-type serverStarter func(*logging.LeveledLogger, *config.Configuration) error
+type serverStarter func(*logging.LeveledLogger, *config.Server) error
 
 type startCmd struct {
 	logCmd

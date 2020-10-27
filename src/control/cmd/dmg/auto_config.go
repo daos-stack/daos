@@ -199,7 +199,7 @@ func (cmd *configGenCmd) getSingleStorageSet(ctx context.Context, ctlInvoker con
 // ioserver storage config with detected device identifiers if thresholds met.
 //
 // Return server config populated with ioserver storage or error.
-func (cmd *configGenCmd) checkStorage(ctx context.Context, ctlInvoker control.Invoker, getNumNuma numaNumGetter) (*config.Configuration, error) {
+func (cmd *configGenCmd) checkStorage(ctx context.Context, ctlInvoker control.Invoker, getNumNuma numaNumGetter) (*config.Server, error) {
 	storageSet, err := cmd.getSingleStorageSet(ctx, ctlInvoker)
 	if err != nil {
 		return nil, err
@@ -224,7 +224,7 @@ func (cmd *configGenCmd) checkStorage(ctx context.Context, ctlInvoker control.In
 		return nil, errors.WithMessage(err, "validating nvme storage requirements")
 	}
 
-	cfg := config.NewConfiguration()
+	cfg := config.DefaultServer()
 	for idx, pp := range pmemPaths {
 		cfg.Servers = append(cfg.Servers, ioserver.NewConfig().
 			WithScmClass("dcpm").
@@ -237,11 +237,11 @@ func (cmd *configGenCmd) checkStorage(ctx context.Context, ctlInvoker control.In
 	return cfg, nil
 }
 
-func (cmd *configGenCmd) checkNetwork(ctx context.Context, cfg *config.Configuration) (*config.Configuration, error) {
+func (cmd *configGenCmd) checkNetwork(ctx context.Context, cfg *config.Server) (*config.Server, error) {
 	return cfg, nil // TODO: implement
 }
 
-func (cmd *configGenCmd) parseConfig(cfg *config.Configuration) (string, error) {
+func (cmd *configGenCmd) parseConfig(cfg *config.Server) (string, error) {
 	bytes, err := yaml.Marshal(cfg)
 	if err != nil {
 		return "", err

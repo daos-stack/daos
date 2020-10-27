@@ -171,7 +171,7 @@ func (h *IOServerHarness) getMSLeaderInstance() (*IOServerInstance, error) {
 // configured instances' processing loops.
 //
 // Run until harness is shutdown.
-func (h *IOServerHarness) Start(ctx context.Context, membership *system.Membership, db *system.Database, cfg *config.Configuration) error {
+func (h *IOServerHarness) Start(ctx context.Context, membership *system.Membership, db *system.Database, cfg *config.Server) error {
 	if h.isStarted() {
 		return errors.New("can't start: harness already started")
 	}
