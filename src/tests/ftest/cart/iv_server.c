@@ -1237,12 +1237,15 @@ int iv_test_invalidate_iv(crt_rpc_t *rpc)
 	struct iv_key_struct			*key_struct;
 	crt_iv_key_t				*key;
 	struct invalidate_cb_info		*cb_info;
-	crt_iv_sync_t				 sync = CRT_IV_SYNC_MODE_NONE;
+	crt_iv_sync_t				 dsync = CRT_IV_SYNC_MODE_NONE;
+	crt_iv_sync_t				*sync = &dsync;
 	int					 rc;
 
 	D_DEBUG(DB_TEST, "*******************************\n");
 	D_DEBUG(DB_TEST, " >>>>>>> SAB SRV: iv_test_invalidate\n");
 	D_DEBUG(DB_TEST, "*******************************\n");
+	DBG_PRINT(" >>>>>>> IV_TEST_INVALIDATE <<<<<\n");
+
 	wait_for_namespace();
 	input = crt_req_get(rpc);
 	assert(input != NULL);
@@ -1261,8 +1264,11 @@ int iv_test_invalidate_iv(crt_rpc_t *rpc)
 	cb_info->rpc = rpc;
 	cb_info->expect_key = key;
 
+	if (input->iov_sync.iov_buf != NULL)
+		sync = (crt_iv_sync_t *)input->iov_sync.iov_buf;
+
 	rc = crt_iv_invalidate(g_ivns, 0, key, 0, CRT_IV_SHORTCUT_NONE,
-			       sync, invalidate_done, cb_info);
+			       *sync, invalidate_done, cb_info);
 	D_DEBUG(DB_TEST, "*******************************\n");
 	D_DEBUG(DB_TEST, " >>>>>>> SAB iv_test_invalidate DONE\n");
 	D_DEBUG(DB_TEST, "*******************************\n");
