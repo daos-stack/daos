@@ -43,6 +43,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include <sys/stat.h>
+#include <errno.h>
 #include "iv_common.h"
 
 static crt_context_t	g_crt_ctx;
@@ -58,7 +59,8 @@ print_usage(const char *err_msg)
 		"Usage: ./iv_client -o <operation> -r <rank> [optional args]\n"
 		"\n"
 		"Required arguments:\n"
-		"\t-o <operation> : One of ['fetch', 'update', 'invalidate', 'shutdown']\n"
+		"\t-o <operation> : One of ['fetch', 'update', 'invalidate', 'shutdown'\n"
+		"			    'get_grp_version', 'set_grp_version']\n"
 		"\t-r <rank>      : Numeric rank to send the requested operation to\n"
 		"\n"
 		"Optional arguments:\n"
@@ -67,6 +69,9 @@ print_usage(const char *err_msg)
 		"\t-x <value>     : Value as hex string, only used for update operation\n"
 		"\t-s <strategy>  : One of ['none', 'eager_update', 'lazy_update', 'eager_notify', 'lazy_notify']\n"
 		"\t-l <log.txt>   : Print results to log file instead of stdout\n"
+		"\t-m <value>     : Value as string, used to control timig to chage group verion \n"
+		"\t                 0  - change at time of call.\n"
+		"\t                 1  - change at end of iv_test_fetch.\n"
 		"\n"
 		"Example usage: ./iv_client -o fetch -r 0 -k 2:9\n"
 		"\tThis will initiate fetch of key [2:9] from rank 0.\n"
@@ -294,6 +299,7 @@ test_iv_fetch(struct iv_key_struct *key, FILE *log_file)
 	d_sgl_fini(&sg_list, true);
 }
 
+/* Modify iv synchronization type and search tree */
 static int
 test_iv_update(struct iv_key_struct *key, char *str_value, bool value_is_hex,
 	       char *arg_sync)
@@ -363,11 +369,94 @@ test_iv_update(struct iv_key_struct *key, char *str_value, bool value_is_hex,
 	return 0;
 }
 
+static int
+test_iv_set_grp_version( char *arg_version, char *arg_timing)
+{
+	struct RPC_SET_GRP_VERSION_in		*input;
+	struct RPC_SET_GRP_VERSION_out		*output;
+	crt_rpc_t				*rpc_req;
+	int					 rc;
+	int					 version;
+	int					 time = 0;
+	char					*tmp;
+
+	/* See if string contais valid hex characters.  If so assume
+	 * base 16.  Else, default to base 10.
+	 */
+	tmp = strpbrk(arg_version, "abcdABCDxX");
+	if (tmp == NULL)
+		version = strtol(arg_version, NULL, 10);
+	else
+		version = strtol(arg_version, NULL, 16);
+
+	DBG_PRINT("Attempting to set group version to 0x%08x: %d\n",
+		   version,  version);
+
+	/* decode timing for changing version */
+	if (arg_timing != NULL) {
+		time = strtol(arg_timing, NULL, 10);
+	}
+
+	prepare_rpc_request(g_crt_ctx, RPC_SET_GRP_VERSION, &g_server_ep,
+			    (void **)&input, &rpc_req);
+
+	/* Fill in the input structure */
+	input->version = version;
+	input->timing = time;
+
+	/* send the request */
+	send_rpc_request(g_crt_ctx, rpc_req, (void **)&output);
+
+	/* Check of valid output */
+	if (output->rc == 0)
+		DBG_PRINT("Grp Set Version PASSED 0x%x : %d\n",
+			   version, version);
+	else
+		DBG_PRINT("Grp Set Version FAILED 0x%x : %d\n",
+			   version, version);
+
+	rc = crt_req_decref(rpc_req);
+
+	assert(rc == 0);
+	return 0;
+}
+
+static int
+test_iv_get_grp_version()
+{
+	struct RPC_GET_GRP_VERSION_in		*input;
+	struct RPC_GET_GRP_VERSION_out		*output;
+	crt_rpc_t				*rpc_req;
+	int					 rc;
+	int					 version = 0;
+
+	prepare_rpc_request(g_crt_ctx, RPC_GET_GRP_VERSION, &g_server_ep,
+			    (void **)&input, &rpc_req);
+
+	DBG_PRINT("Attempting to get group version\n");
+	send_rpc_request(g_crt_ctx, rpc_req, (void **)&output);
+
+	/* Check for valid output */
+	version = output->version;
+	if (output->rc != 0)
+		DBG_PRINT("Grp Get Version FAILED 0x%08x : %d\n",
+			   version, version);
+	else
+		DBG_PRINT("Grp Get Version PASSED 0x%08x : %d\n",
+			   version, version);
+
+	rc = crt_req_decref(rpc_req);
+	assert(rc == 0);
+	return 0;
+}
+
 enum op_type {
 	OP_FETCH,
 	OP_UPDATE,
 	OP_INVALIDATE,
 	OP_SHUTDOWN,
+	OP_SET_GRP_VERSION,
+	OP_GET_GRP_VERSION,
 	OP_NONE,
 };
 
@@ -397,6 +486,7 @@ int main(int argc, char **argv)
 	bool			 arg_value_is_hex = false;
 	char			*arg_sync = NULL;
 	char			*arg_log = NULL;
+	char			*arg_time = NULL;
 	FILE			*log_file = stdout;
 	enum op_type		 cur_op = OP_NONE;
 	int			 rc = 0;
@@ -404,7 +494,9 @@ int main(int argc, char **argv)
 	int			 c;
 	int			 attach_retries_left;
 
-	while ((c = getopt(argc, argv, "k:o:r:s:v:x:l:")) != -1) {
+DBG_PRINT("\n****************\n************* SAB NOTE: MAIN ******\n");
+
+	while ((c = getopt(argc, argv, "k:o:r:s:v:x:l:m:")) != -1) {
 		switch (c) {
 		case 'r':
 			arg_rank = optarg;
@@ -428,6 +520,9 @@ int main(int argc, char **argv)
 			break;
 		case 'l':
 			arg_log = optarg;
+			break;
+		case 'm':
+			arg_time = optarg;
 			break;
 		default:
 			fprintf(stderr, "Unknown option %d\n", c);
@@ -462,12 +557,24 @@ int main(int argc, char **argv)
 			return -1;
 		}
 		cur_op = OP_SHUTDOWN;
+	} else if (strcmp(arg_op, "set_grp_version") == 0) {
+		if (arg_value == 0) {
+			print_usage("Version must be supplied for"
+				    " set_grp_version");
+			return -1;
+		}
+		cur_op = OP_SET_GRP_VERSION;
+	} else if (strcmp(arg_op, "get_grp_version") == 0) {
+		cur_op = OP_GET_GRP_VERSION;
+
 	} else {
 		print_usage("Unknown operation");
 		return -1;
 	}
 
-	if (arg_key == NULL && cur_op != OP_SHUTDOWN) {
+	if (arg_key == NULL && !((cur_op == OP_SHUTDOWN) ||
+				 (cur_op == OP_SET_GRP_VERSION) ||
+				 (cur_op == OP_GET_GRP_VERSION))) {
 		print_usage("Key (-k) is required for this operation");
 		return -1;
 	}
@@ -528,6 +635,10 @@ int main(int argc, char **argv)
 		test_iv_invalidate(&iv_key);
 	else if (cur_op == OP_SHUTDOWN)
 		test_iv_shutdown();
+	else if (cur_op == OP_SET_GRP_VERSION)
+		test_iv_set_grp_version(arg_value, arg_time);
+	else if (cur_op == OP_GET_GRP_VERSION)
+		test_iv_get_grp_version();
 	else {
 		print_usage("Unsupported operation");
 		return -1;

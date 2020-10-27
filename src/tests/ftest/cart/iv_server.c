@@ -36,6 +36,7 @@
 #include <fcntl.h>
 
 #include <gurt/list.h>
+#include <cart/api.h>
 
 #define _SERVER
 #include "iv_common.h"
@@ -50,6 +51,9 @@ static int g_verbose_mode;
 static int namespace_attached;
 
 static crt_group_t *grp;
+
+static uint32_t		g_grp_version;
+static int		g_timing;
 
 static void wait_for_namespace(void)
 {
@@ -102,7 +106,9 @@ iv_shutdown(crt_rpc_t *rpc)
 
 	DBG_ENTRY();
 
+	DBG_PRINT("\n\n***************************\n");
 	DBG_PRINT("Received shutdown request\n");
+	DBG_PRINT("***************************\n");
 
 	if (g_my_rank == 0) {
 		rc = crt_group_config_remove(grp);
@@ -277,6 +283,9 @@ add_new_kv_pair(crt_iv_key_t *iv_key, d_sg_list_t *iv_value,
 	uint32_t		 i;
 
 	/* If we are here it means we don't have this key cached yet */
+#if 0
+	DBG_PRINT(" iv_key %p:  iv_value %p\n", iv_key, iv_value);
+#endif
 	D_ALLOC_PTR(entry);
 	assert(entry != NULL);
 
@@ -287,9 +296,9 @@ add_new_kv_pair(crt_iv_key_t *iv_key, d_sg_list_t *iv_value,
 	assert(entry->key.iov_buf != NULL);
 
 	memcpy(entry->key.iov_buf, iv_key->iov_buf, iv_key->iov_buf_len);
-
 	entry->key.iov_buf_len = iv_key->iov_buf_len;
 	entry->key.iov_len = iv_key->iov_len;
+	D_DEBUG(DB_TEST, "IV Variable:\n");
 
 	/* Allocate space for iv value */
 	entry->value.sg_nr = 1;
@@ -321,39 +330,78 @@ add_new_kv_pair(crt_iv_key_t *iv_key, d_sg_list_t *iv_value,
 static void
 print_key_value(char *hdr, crt_iv_key_t *iv_key, d_sg_list_t *iv_value)
 {
+#	define MAX_BUF_SIZE 128
 	struct iv_key_struct *key_struct;
 	struct iv_value_struct *value_struct;
 
-	printf("%s", hdr);
+	char 		buffer[MAX_BUF_SIZE];
+	int		rindex = 0;
+	int		rc;
+
+	rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex, 
+		      "    %s:", hdr);
+	if (rc > 0) {
+		rindex += rc;
+	}
 
 	if (iv_key == NULL) {
-		printf("key=NULL");
+		rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex, "%s",
+			"key=NULL");
+		if (rc > 0) {
+			rindex += rc;
+		}
 	} else {
 
 		key_struct = (struct iv_key_struct *)iv_key->iov_buf;
-		if (key_struct == NULL)
-			printf("key=EMPTY");
-		else
-			printf("key=[%d:%d]", key_struct->rank,
-			       key_struct->key_id);
+		if (key_struct == NULL){
+			rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
+				"%s", "key=EMPTY");
+			if (rc > 0) {
+				rindex += rc;
+			}
+		}
+		else{
+			rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
+				"key=[%d:%d]", key_struct->rank,
+				key_struct->key_id);
+			if (rc > 0) {
+				rindex += rc;
+			}
+		}
 	}
 
-	printf(" ");
+	rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
+		"%s", " ");
+	if (rc > 0) 
+		rindex += rc;
 
 	if (iv_value == NULL) {
-		printf("value=NULL");
+		rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
+			"%s", "value=NULL");
+		if (rc > 0) {
+			rindex += rc;
+		}
 	} else {
 
 		value_struct = (struct iv_value_struct *)
 			       iv_value->sg_iovs[0].iov_buf;
 
-		if (value_struct == NULL)
-			printf("value=EMPTY");
-		else
-			printf("value='%s'", value_struct->data);
+		if (value_struct == NULL){
+			rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
+				"%s", "value=EMPTY");
+			if (rc > 0) {
+				rindex += rc;
+			}
+		 } else{
+			rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
+				 "value='%s'", value_struct->data);	
+			if (rc > 0) {
+				rindex += rc;
+			}
+		}
 	}
-
-	printf("\n");
+	DBG_PRINT("%s\n", buffer);
+#	undef MAX_BUF_SIZE
 }
 
 static void
@@ -364,15 +412,13 @@ dump_all_keys(char *msg)
 	if (g_verbose_mode < 2)
 		return;
 
-	DBG_PRINT("Dumping keys from %s\n", msg);
+	DBG_PRINT("Dumping keys from:: %s\n", msg);
 
 	LOCK_KEYS();
 	d_list_for_each_entry(entry, &g_kv_pair_head, link) {
-		print_key_value("Entry = ", &entry->key, &entry->value);
+		print_key_value(msg, &entry->key, &entry->value);
 	}
 	UNLOCK_KEYS();
-
-	DBG_PRINT("\n\n");
 }
 
 static int
@@ -492,6 +538,7 @@ iv_on_update(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	return rc;
 }
 
+/* update/add to iv scatter/gather list with new keys */
 static int
 iv_on_refresh(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	      crt_iv_ver_t iv_ver, d_sg_list_t *iv_value, bool invalidate,
@@ -503,6 +550,7 @@ iv_on_refresh(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	int			 rc;
 
 	DBG_ENTRY();
+	D_DEBUG(DB_TEST, " SAB refresh_rc %d:\n", refresh_rc);
 
 	/* user_priv can be NULL in invalidate case */
 	if (invalidate == false && iv_value != NULL)
@@ -511,7 +559,9 @@ iv_on_refresh(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	valid = invalidate ? false : true;
 
 	verify_key(iv_key);
+#if 0
 	print_key_value("REFRESH called ", iv_key, iv_value);
+#endif
 	dump_all_keys("ON_REFRESH");
 
 	key_struct = (struct iv_key_struct *)iv_key->iov_buf;
@@ -551,6 +601,7 @@ iv_on_refresh(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	return rc;
 }
 
+/* Return root owner of key */
 static int
 iv_on_hash(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, d_rank_t *root)
 {
@@ -582,6 +633,7 @@ iv_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 	size = sizeof(struct iv_value_struct);
 
+	/* Allocate and initialize scatter/gather list */
 	if (iv_value != NULL) {
 		rc = d_sgl_init(iv_value, 1);
 		assert(rc == 0);
@@ -618,11 +670,31 @@ static void
 iv_pre_common(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	      crt_generic_cb_t cb_func, void *cb_arg)
 {
+	DBG_ENTRY();
 	cb_func(cb_arg);
+	DBG_EXIT();
+}
+
+static void
+iv_pre_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
+	      crt_generic_cb_t cb_func, void *cb_arg)
+{
+	DBG_ENTRY();
+
+	/* Test break case:                              */
+	/*  Version change on server while it handles a  */
+	/*  rpc request from another server.             */
+	if (g_timing == 2) {
+		crt_group_version_set(grp, g_grp_version);
+		g_timing = 0;
+	}
+
+	cb_func(cb_arg);
+	DBG_EXIT();
 }
 
 struct crt_iv_ops g_ivc_ops = {
-	.ivo_pre_fetch = iv_pre_common,
+	.ivo_pre_fetch = iv_pre_fetch,
 	.ivo_on_fetch = iv_on_fetch,
 	.ivo_pre_update = iv_pre_common,
 	.ivo_on_update = iv_on_update,
@@ -742,6 +814,7 @@ static int fetch_bulk_put_cb(const struct crt_bulk_cb_info *cb_info)
 	struct RPC_TEST_FETCH_IV_out	*output;
 	int				 rc;
 
+	DBG_ENTRY();
 	rpc = cb_info->bci_bulk_desc->bd_rpc;
 	output = crt_reply_get(rpc);
 	assert(output != NULL);
@@ -761,6 +834,7 @@ static int fetch_bulk_put_cb(const struct crt_bulk_cb_info *cb_info)
 	rc = crt_bulk_free(cb_info->bci_bulk_desc->bd_local_hdl);
 	assert(rc == 0);
 
+	DBG_EXIT();
 	return 0;
 }
 
@@ -779,10 +853,11 @@ fetch_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	bool				 found = false;
 	int				 rc;
 
+	DBG_ENTRY();
+	D_DEBUG(DB_TEST, " >>>>>>> SAB SRV: fetch_done\n");
+
 	rpc = (crt_rpc_t *)cb_args;
 	assert(rpc != NULL);
-
-	DBG_ENTRY();
 
 	output = crt_reply_get(rpc);
 	assert(output != NULL);
@@ -847,6 +922,7 @@ fetch_done(crt_iv_namespace_t ivns, uint32_t class_id,
 		goto fail_reply;
 	}
 
+	DBG_EXIT();
 	return 0;
 
 	/* If something goes wrong, still send the error back to the client */
@@ -882,11 +958,12 @@ update_done(crt_iv_namespace_t ivns, uint32_t class_id,
 
 	cb_info = (struct update_done_cb_info *)cb_args;
 
-	print_key_value("UPDATE_DONE called ", iv_key, iv_value);
+	print_key_value("UPDATE_DONE called", iv_key, iv_value);
 
 	output = crt_reply_get(cb_info->rpc);
 	output->rc = update_rc;
 
+	D_DEBUG(DB_TRACE, "Respond/Send to change in IV\n");
 	rc = crt_reply_send(cb_info->rpc);
 	assert(rc == 0);
 
@@ -904,6 +981,7 @@ update_done(crt_iv_namespace_t ivns, uint32_t class_id,
 }
 
 /* handler for RPC_TEST_UPDATE_IV */
+/* Place the IV value "iv_value" into list for "key" */
 int
 iv_test_update_iv(crt_rpc_t *rpc)
 {
@@ -916,15 +994,22 @@ iv_test_update_iv(crt_rpc_t *rpc)
 	struct update_done_cb_info	*update_cb_info;
 	crt_iv_sync_t			*sync;
 
+	DBG_ENTRY();
+
+	D_DEBUG(DB_TEST, "******************************");
+	D_DEBUG(DB_TEST, " >>>>>>> SAB SRV: iv_test_update_iv\n");
+	D_DEBUG(DB_TEST, "******************************");
 	wait_for_namespace();
 
 	input = crt_req_get(rpc);
 	assert(input != NULL);
 
+	D_DEBUG(DB_TEST, " SAB X1\n");
 	key_struct = (struct iv_key_struct *)input->iov_key.iov_buf;
 	key = alloc_key(key_struct->rank, key_struct->key_id);
 	assert(key != NULL);
 
+	D_DEBUG(DB_TEST, " SAB X2\n");
 	DBG_PRINT("Performing update for %d:%d value='%s'\n",
 		  key_struct->rank, key_struct->key_id,
 		  (char *)input->iov_value.iov_buf);
@@ -932,6 +1017,7 @@ iv_test_update_iv(crt_rpc_t *rpc)
 	rc = d_sgl_init(&iv_value, 1);
 	assert(rc == 0);
 
+	D_DEBUG(DB_TEST, " SAB X3\n");
 	D_ALLOC(iv_value.sg_iovs[0].iov_buf, sizeof(struct iv_value_struct));
 	assert(iv_value.sg_iovs[0].iov_buf != NULL);
 
@@ -940,6 +1026,8 @@ iv_test_update_iv(crt_rpc_t *rpc)
 
 	value_struct = (struct iv_value_struct *)iv_value.sg_iovs[0].iov_buf;
 
+	D_DEBUG(DB_TEST, " SAB X4\n");
+	D_DEBUG(DB_TEST, "IV Variable:\n");
 	memcpy(value_struct->data, input->iov_value.iov_buf,
 	       input->iov_value.iov_buf_len > MAX_DATA_SIZE ?
 			MAX_DATA_SIZE : input->iov_value.iov_buf_len);
@@ -947,19 +1035,101 @@ iv_test_update_iv(crt_rpc_t *rpc)
 	sync = (crt_iv_sync_t *)input->iov_sync.iov_buf;
 	assert(sync != NULL);
 
+	D_DEBUG(DB_TEST, " SAB X4\n");
 	D_ALLOC_PTR(update_cb_info);
 	assert(update_cb_info != NULL);
 
 	update_cb_info->key = key;
 	update_cb_info->rpc = rpc;
 
+	D_DEBUG(DB_TEST, " SAB X5\n");
 	rc = crt_req_addref(rpc);
 	assert(rc == 0);
 
+	D_DEBUG(DB_TEST, " SAB X6\n");
 	rc = crt_iv_update(g_ivns, 0, key, 0, &iv_value, 0, *sync, update_done,
 			   update_cb_info);
+	D_DEBUG(DB_TEST, " SAB X7\n");
 
 	D_FREE(key);
+	D_DEBUG(DB_TEST, "******************************");
+	D_DEBUG(DB_TEST, " >>>>>>> SAB iv_test_update DONE\n");
+	D_DEBUG(DB_TEST, "******************************");
+	DBG_EXIT();
+	return 0;
+}
+
+/* handler for RPC_SET_GRP_VERSION */
+int
+iv_set_grp_version(crt_rpc_t *rpc)
+{
+	struct RPC_SET_GRP_VERSION_in	*input;
+	struct RPC_SET_GRP_VERSION_out	*output;
+	int				 rc = 0;
+
+	DBG_ENTRY();
+	D_DEBUG(DB_TEST, " *********************************\n");
+	D_DEBUG(DB_TEST, " >>>>>>> SAB SRV: set_grp_version\n");
+	D_DEBUG(DB_TEST, " *********************************\n");
+
+	input = crt_req_get(rpc);
+	assert(input != NULL);
+	output = crt_reply_get(rpc);
+	assert(output != NULL);
+
+	g_grp_version = input->version;
+	g_timing = input->timing;
+	D_DEBUG(DB_TEST, " >>>>>>> SAB SRV: set_grp_version: or 0x%0x: %d\n",
+		g_grp_version, g_grp_version);
+
+	/* implement code here */
+	if (g_timing == 0) {
+		crt_group_version_set(grp, g_grp_version);
+	}
+
+	/* test output */
+	D_DEBUG(DB_TEST, " SAB Set grp version results: %d\n", rc);
+	output->rc = rc;
+
+	rc = crt_reply_send(rpc);
+	assert(rc == 0);
+
+	D_DEBUG(DB_TEST, " >>>>>>> SAB set_grp_version DONE\n");
+	DBG_EXIT();
+	return 0;
+}
+
+/* handler for RPC_GET_GRP_VERSION */
+int
+iv_get_grp_version(crt_rpc_t *rpc)
+{
+	struct RPC_GET_GRP_VERSION_in	*input;
+	struct RPC_GET_GRP_VERSION_out	*output;
+	uint32_t			 version = 0;
+	int				 rc = 0;
+
+	DBG_ENTRY();
+	D_DEBUG(DB_TEST, " >>>>>>> SAB SRV: get_grp_version\n");
+
+	input = crt_req_get(rpc);
+	assert(input != NULL);
+	output = crt_reply_get(rpc);
+	assert(output != NULL);
+
+	/* implement code here */
+	rc = crt_group_version(grp, &version);
+
+	/* result of test output */
+	D_DEBUG(DB_TEST, " SAB Get grp version: 0x%08x : %d\n",
+		version, version);
+	D_DEBUG(DB_TEST, " SAB Get grp version results: %d\n", rc);
+	output->version = version;
+	output->rc = rc;
+
+	rc = crt_reply_send(rpc);
+	assert(rc == 0);
+	D_DEBUG(DB_TEST, " >>>>>>> SAB get_grp_version DONE\n");
+	DBG_EXIT();
 	return 0;
 }
 
@@ -970,6 +1140,9 @@ iv_test_fetch_iv(crt_rpc_t *rpc)
 	struct RPC_TEST_FETCH_IV_in	*input;
 	int				 rc;
 
+	D_DEBUG(DB_TEST, "*******************************\n");
+	D_DEBUG(DB_TEST, " >>>>>>> SAB SRV: iv_test_fetch_iv\n");
+	D_DEBUG(DB_TEST, "*******************************\n");
 	wait_for_namespace();
 
 	input = crt_req_get(rpc);
@@ -980,6 +1153,16 @@ iv_test_fetch_iv(crt_rpc_t *rpc)
 
 	rc = crt_iv_fetch(g_ivns, 0, &input->key, 0, 0, fetch_done, rpc);
 
+	/* Test break case:                                 */
+	/*  Version change while valid request is in flight */
+	if (g_timing == 1) {
+		crt_group_version_set(grp, g_grp_version);
+		g_timing = 0;
+	}
+
+	D_DEBUG(DB_TEST, "*******************************\n");
+	D_DEBUG(DB_TEST, " >>>>>>> SAB Fetch DONE\n");
+	D_DEBUG(DB_TEST, "*******************************\n");
 	return 0;
 }
 
@@ -1001,6 +1184,9 @@ invalidate_done(crt_iv_namespace_t ivns, uint32_t class_id,
 
 	DBG_ENTRY();
 
+	D_DEBUG(DB_TEST, "*******************************\n");
+	D_DEBUG(DB_TEST, " >>>>>>> SAB SRV: invalidate_done\n");
+	D_DEBUG(DB_TEST, "*******************************\n");
 	cb_info = (struct invalidate_cb_info *)cb_args;
 	assert(cb_info != NULL);
 
@@ -1037,6 +1223,9 @@ invalidate_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	D_FREE(cb_info->expect_key->iov_buf);
 	D_FREE(cb_info->expect_key);
 	D_FREE(cb_info);
+	D_DEBUG(DB_TEST, "*******************************\n");
+	D_DEBUG(DB_TEST, " >>>>>>> SAB invalidate_done DONE\n");
+	D_DEBUG(DB_TEST, "*******************************\n");
 	DBG_EXIT();
 
 	return 0;
@@ -1051,6 +1240,9 @@ int iv_test_invalidate_iv(crt_rpc_t *rpc)
 	crt_iv_sync_t				 sync = CRT_IV_SYNC_MODE_NONE;
 	int					 rc;
 
+	D_DEBUG(DB_TEST, "*******************************\n");
+	D_DEBUG(DB_TEST, " >>>>>>> SAB SRV: iv_test_invalidate\n");
+	D_DEBUG(DB_TEST, "*******************************\n");
 	wait_for_namespace();
 	input = crt_req_get(rpc);
 	assert(input != NULL);
@@ -1071,6 +1263,9 @@ int iv_test_invalidate_iv(crt_rpc_t *rpc)
 
 	rc = crt_iv_invalidate(g_ivns, 0, key, 0, CRT_IV_SHORTCUT_NONE,
 			       sync, invalidate_done, cb_info);
+	D_DEBUG(DB_TEST, "*******************************\n");
+	D_DEBUG(DB_TEST, " >>>>>>> SAB iv_test_invalidate DONE\n");
+	D_DEBUG(DB_TEST, "*******************************\n");
 	return 0;
 }
 
@@ -1092,6 +1287,10 @@ int main(int argc, char **argv)
 	d_rank_t	my_rank;
 	int		c;
 	int		rc;
+	uint32_t	version;
+
+	D_DEBUG(DB_TEST, " >>>>>>> DEBUG: SAB SRV: MAIN\n");
+	DBG_PRINT(" >>>>>>> DBG: BRAND NEW SAB SRV: MAIN\n");
 
 	while ((c = getopt(argc, argv, "v:")) != -1) {
 		switch (c) {
@@ -1134,6 +1333,11 @@ int main(int argc, char **argv)
 	assert(rc == 0);
 
 	grp = crt_group_lookup(IV_GRP_NAME);
+
+	D_DEBUG(DB_TEST, "  SAB grp name %s\n", grp->cg_grpid);
+	crt_group_version(grp, &version);
+	D_DEBUG(DB_TEST, "  SAB grp version %d\n", version);
+
 	if (grp == NULL) {
 		D_ERROR("Failed to lookup group %s\n", IV_GRP_NAME);
 		assert(0);
@@ -1144,10 +1348,13 @@ int main(int argc, char **argv)
 
 	init_work_contexts();
 
+	/* Load the group configuration file */
 	grp_cfg_file = getenv("CRT_L_GRP_CFG");
 	if (grp_cfg_file == NULL) {
 		D_ERROR("CRT_L_GRP_CFG was not set\n");
 		assert(0);
+	} else {
+		D_DEBUG(DB_TEST, "Group Config File: %s\n", grp_cfg_file);
 	}
 
 	rc = tc_load_group_from_file(grp_cfg_file, g_main_ctx, grp, my_rank,
@@ -1157,6 +1364,7 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
+	/* Start the server for myself */
 	DBG_PRINT("Server starting, self_rank=%d\n", my_rank);
 
 	rc = crt_group_rank(NULL, &g_my_rank);
@@ -1164,6 +1372,8 @@ int main(int argc, char **argv)
 
 	rc = crt_group_size(NULL, &g_group_size);
 	assert(rc == 0);
+	D_DEBUG(DB_TEST, "SAB My_rank %d: grp size %d\n",
+		g_my_rank, g_group_size);
 
 	rc = crt_group_ranks_get(grp, &rank_list);
 	assert(rc == 0);
@@ -1197,6 +1407,9 @@ int main(int argc, char **argv)
 
 	rc = crt_finalize();
 	assert(rc == 0);
+
+	D_DEBUG(DB_TEST, " >>>>>>> SAB SRV: MAIN\n");
+	DBG_PRINT(" >>>>>>> SAB SRV: MAIN\n");
 
 	return 0;
 }
