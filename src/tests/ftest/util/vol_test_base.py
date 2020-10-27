@@ -26,11 +26,10 @@ import os
 
 from dfuse_test_base import DfuseTestBase
 from command_utils_base import EnvironmentVariables, CommandFailure
-from job_manager_utils import Mpirun, Orterun
 
 
 class VolTestBase(DfuseTestBase):
-    # pylint: disable=too-few-public-methods
+    # pylint: disable=too-few-public-methods,too-many-ancestors
     """Runs HDF5 vol test suites.
 
     :avocado: recursive
@@ -44,7 +43,6 @@ class VolTestBase(DfuseTestBase):
 
         """
         # initialize test specific variables
-        mpi_type = self.params.get("mpi_type", default="mpich")
         test_repo = self.params.get("daos_vol_repo")
         plugin_path = self.params.get("plugin_path")
         # test_list = self.params.get("daos_vol_tests", default=[])
@@ -61,14 +59,8 @@ class VolTestBase(DfuseTestBase):
         # create dfuse container
         self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
-        # for test_param in test_list:
-        # testname = test_param[0][1]
-        # client_processes = test_param[1][1]
-        exe = os.path.join(test_repo, testname)
-        if mpi_type == "openmpi":
-            manager = Orterun(exe, subprocess=False)
-        else:
-            manager = Mpirun(exe, subprocess=False, mpitype="mpich")
+        # Assign the test to run
+        self.job_manager.job = os.path.join(test_repo, testname)
 
         env = EnvironmentVariables()
         env["DAOS_POOL"] = "{}".format(self.pool.uuid)
@@ -76,14 +68,14 @@ class VolTestBase(DfuseTestBase):
         env["DAOS_CONT"] = "{}".format(self.container.uuid)
         env["HDF5_VOL_CONNECTOR"] = "daos"
         env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)
-        manager.assign_hosts(self.hostlist_clients)
-        manager.assign_processes(client_processes)
-        manager.assign_environment(env, True)
-        manager.working_dir.value = self.dfuse.mount_dir.value
+        self.job_manager.assign_hosts(self.hostlist_clients)
+        self.job_manager.assign_processes(client_processes)
+        self.job_manager.assign_environment(env, True)
+        self.job_manager.working_dir.value = self.dfuse.mount_dir.value
 
         # run VOL Command
         try:
-            manager.run()
+            self.job_manager.run()
         except CommandFailure as _error:
             self.fail("{} FAILED> \nException occurred: {}".format(
-                exe, str(_error)))
+                self.job_manager.job, str(_error)))

@@ -3140,9 +3140,9 @@ tgt_idx_change_retry(void **state)
 
 	if (arg->myrank == 0) {
 		print_message("rank 0 adding target rank %u ...\n", rank);
-		daos_add_server(arg->pool.pool_uuid, arg->group,
-				arg->dmg_config, arg->pool.svc,
-				rank);
+		daos_reint_server(arg->pool.pool_uuid, arg->group,
+				  arg->dmg_config, arg->pool.svc,
+				  rank);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 	ioreq_fini(&req);
@@ -3196,9 +3196,9 @@ fetch_replica_unavail(void **state)
 		test_rebuild_wait(&arg, 1);
 
 		/* add back the excluded targets */
-		daos_add_server(arg->pool.pool_uuid, arg->group,
-				arg->dmg_config, arg->pool.svc,
-				rank);
+		daos_reint_server(arg->pool.pool_uuid, arg->group,
+				  arg->dmg_config, arg->pool.svc,
+				  rank);
 
 		/* wait until reintegration is done */
 		test_rebuild_wait(&arg, 1);
@@ -3932,15 +3932,6 @@ io_capa_iv_fetch(void **state)
 	daos_obj_id_t	oid;
 	struct ioreq	req;
 	d_rank_t	leader;
-
-	/*
-	 * Currently causing "Failed to destroy container" error resulting from
-	 * an additional container open from DAOS_FORCE_CAPA_FETCH w/o
-	 * corresponding container close.
-	 * FIXME: DAOS-4560 - Fix binding of container open w/ cont capa IV
-	 * refresh
-	 */
-	skip();
 
 	/* needs at lest 2 targets */
 	if (!test_runable(arg, 2))

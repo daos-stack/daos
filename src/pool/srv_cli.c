@@ -123,3 +123,26 @@ dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 
 	return dsc_task_run(task, NULL, NULL, 0, true);
 }
+
+int
+dsc_pool_tgt_reint(const uuid_t uuid, const char *grp,
+		   const d_rank_list_t *svc, struct d_tgt_list *tgts)
+{
+	daos_pool_update_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, POOL_EXCLUDE);
+
+	rc = dc_task_create(dc_pool_reint, dsc_scheduler(), NULL, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->grp	= grp;
+	args->svc	= (d_rank_list_t *)svc;
+	args->tgts	= tgts;
+	uuid_copy((unsigned char *)args->uuid, uuid);
+
+	return dsc_task_run(task, NULL, NULL, 0, true);
+}
