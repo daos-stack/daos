@@ -4,6 +4,7 @@
 %if 0%{?build_type}
 %else
 %global build_type release
+%endif
 %if (0%{?suse_version} >= 1500)
 # until we get an updated mercury build on 15.2
 %global mercury_version 2.0.0~rc1-1.suse.lp151
