@@ -240,7 +240,7 @@ extern "C" {
 	/** Agent is incompatible with libdaos */			\
 	ACTION(DER_AGENT_INCOMPAT,	(DER_ERR_DAOS_BASE + 29),	\
 	       Agent is incompatible with libdaos)			\
-	/** Event queue not initialized */					\
+	/** Event queue not initialized */			\
 	ACTION(DER_EQ_UNINIT,		(DER_ERR_DAOS_BASE + 30),	\
 	       Event queue is not initialized)
 

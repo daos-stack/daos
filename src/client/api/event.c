@@ -1028,7 +1028,7 @@ daos_event_init(struct daos_event *ev, daos_handle_t eqh,
 		evx->evx_sched = &eqx->eqx_sched;
 		daos_eq_putref(eqx);
 	} else {
-		if(daos_sched_g.ds_udata == NULL) {
+		if (daos_sched_g.ds_udata == NULL) {
 			D_ERROR("Event queue is not initialized\n");
 			return -DER_EQ_UNINIT;
 		}
