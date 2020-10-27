@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,27 +23,9 @@
 package system
 
 import (
-	"fmt"
-
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
 )
-
-func FaultMemberExists(r Rank) *fault.Fault {
-	return systemFault(
-		code.SystemMemberExists,
-		fmt.Sprintf("system member with rank %d already exists", r),
-		"",
-	)
-}
-
-func FaultMemberMissing(rank Rank) *fault.Fault {
-	return systemFault(
-		code.SystemMemberMissing,
-		fmt.Sprintf("system member with rank %d doesn't exists", rank),
-		"",
-	)
-}
 
 func systemFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{
