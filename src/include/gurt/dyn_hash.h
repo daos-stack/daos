@@ -85,11 +85,11 @@ struct dyn_hash {
 	/** basic hash table reference */
 	struct d_hash_table	*gtable;
 #if DYN_HASH_DEBUG
-	/** number of vector splits 
+	/** number of vector splits
 	 * (updated only if DYN_HASH_FT_SHRING not set)
 	 */
 	uint32_t		ht_vsplits;
-	/** accumulated vector spit time (usec) 
+	/** accumulated vector spit time (usec)
 	 * (updated only if DYN_HASH_FT_SHRING not set)
 	 */
 	uint32_t		ht_vsplit_delay;
@@ -131,7 +131,7 @@ int dyn_hash_create(uint32_t feats, uint32_t bits, void *priv,
  * \return			0 on success, negative value on error
  */
 int dyn_hash_table_create_inplace(uint32_t feats, uint32_t bits, void *priv,
-				  d_hash_table_ops_t *hops, 
+				  d_hash_table_ops_t *hops,
 				  struct d_hash_table *htable);
 
 /**
@@ -146,7 +146,7 @@ int dyn_hash_table_create_inplace(uint32_t feats, uint32_t bits, void *priv,
  *
  * \return			zero on success, negative value if error.
  */
-int dyn_hash_table_traverse(struct d_hash_table *htable, 
+int dyn_hash_table_traverse(struct d_hash_table *htable,
 			    d_hash_traverse_cb_t cb, void *arg);
 
 /**
@@ -188,7 +188,7 @@ int dyn_hash_table_destroy_inplace(struct d_hash_table *htable, bool force);
  * \param[in] htable		Pointer to the hash table
  * \param[in] key		The key to search
  * \param[in] ksize		Size of the ke
- * \param[in] siphash   Previously generated SIP hash or 0 if unknown   
+ * \param[in] siphash   Previously generated SIP hash or 0 if unknown 
  *
  * \return			found item
  */
@@ -236,7 +236,7 @@ int dyn_hash_rec_insert(struct d_hash_table *htable, const void *key,
  * \param[in] htable		Pointer to the hash table
  * \param[in] key		The key of the record being deleted
  * \param[in] ksize		Size of the key
- * \param[in] siphash  		Previously generated SIP hash or 0 if unknown
+ * \param[in] siphash		Previously generated SIP hash or 0 if unknown
  *
  * \retval			true	Item with \p key has been deleted
  * \retval			false	Can't find the record by \p key
@@ -313,7 +313,7 @@ void dyn_hash_rec_decref(struct d_hash_table *htable, dh_item_t item);
  * \retval			0		Success
  * \retval			-DER_INVAL	Not enough references were held.
  */
-int dyn_hash_rec_ndecref(struct d_hash_table *htable, int count, 
+int dyn_hash_rec_ndecref(struct d_hash_table *htable, int count,
 			 dh_item_t item);
 
 
