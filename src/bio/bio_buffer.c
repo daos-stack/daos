@@ -637,26 +637,20 @@ rw_completion(void *cb_arg, int err)
 	D_ASSERT(xs_ctxt->bxc_blob_rw > 0);
 	xs_ctxt->bxc_blob_rw--;
 
-	if (biod->bd_update)
-		err = (DAOS_FAIL_CHECK(DAOS_NVME_BIO_WRITE_ERR) ?
-			err : -DER_MISC);
-	else
-		err = (DAOS_FAIL_CHECK(DAOS_NVME_BIO_READ_ERR) ?
-			err : -DER_MISC);
-
 	/* Return the error value of the first NVMe IO error */
 	if (biod->bd_result == 0 && err != 0)
 		biod->bd_result = err;
 
 	/* Report all NVMe IO errors */
-	if (err != 0) {
+	if (err != 0 || DAOS_FAIL_CHECK(DAOS_NVME_WRITE_ERR) ||
+		DAOS_FAIL_CHECK(DAOS_NVME_READ_ERR)) {
 		D_ALLOC_PTR(mem);
-	if (mem == NULL)
-		goto skip_media_error;
-	mem->mem_err_type = biod->bd_update ? MET_WRITE : MET_READ;
-	mem->mem_bs = xs_ctxt->bxc_blobstore;
-	mem->mem_tgt_id = xs_ctxt->bxc_tgt_id;
-	spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error, mem);
+		if (mem == NULL)
+			goto skip_media_error;
+		mem->mem_err_type = biod->bd_update ? MET_WRITE : MET_READ;
+		mem->mem_bs = xs_ctxt->bxc_blobstore;
+		mem->mem_tgt_id = xs_ctxt->bxc_tgt_id;
+		spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error, mem);
 	}
 
 skip_media_error:

@@ -364,7 +364,7 @@ nvme_test_simulate_IO_error(void **state)
 	 * Inject BIO Write Errors on Rank1 device
 	 */
 	print_message("----Inject BIO Write Error----\n");
-	set_fail_loc(arg, rank, DAOS_NVME_BIO_WRITE_ERR | DAOS_FAIL_ONCE);
+	set_fail_loc(arg, rank, DAOS_NVME_WRITE_ERR | DAOS_FAIL_ONCE);
 
 	/*
 	 * Prepare records
@@ -384,7 +384,7 @@ nvme_test_simulate_IO_error(void **state)
 	 * Inject BIO Read Errors on Rank1 device
 	 */
 	print_message("----Inject BIO Read Error----\n");
-	set_fail_loc(arg, rank, DAOS_NVME_BIO_READ_ERR | DAOS_FAIL_ONCE);
+	set_fail_loc(arg, rank, DAOS_NVME_READ_ERR | DAOS_FAIL_ONCE);
 
 	/*
 	 * Read and verify the data
