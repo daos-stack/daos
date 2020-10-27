@@ -36,7 +36,7 @@
 #include "obj_ec.h"
 #include "obj_internal.h"
 
-#define EC_AGG_CREDITS_MAX 1024
+#define EC_AGG_ITERATION_MAX 256
 
 /* Pool/container info. Shared handle UUIDs, and service list are initialized
  * in system Xstream.
@@ -110,6 +110,8 @@ struct ec_agg_param {
 	daos_epoch_range_t	 ap_epr;	 /* hi/lo extent threshold    */
 	daos_prop_t		*ap_prop;        /* property for cont open    */
 	daos_handle_t		 ap_cont_handle; /* VOS container handle      */
+	bool			(*ap_yield_func)(void *arg);
+	void			*ap_yield_arg;
 	uint32_t		 ap_credits_max; /* # of tight loops to yield */
 	uint32_t		 ap_credits;     /* # of tight loops          */
 };
@@ -136,10 +138,21 @@ struct ec_agg_extent {
 	bool			ae_hole;        /* extent is a hole           */
 };
 
+/* Struct used to drive offloaded stripe update.
+ */
+struct ec_agg_csum_ver {
+	struct ec_agg_entry	*acv_agg_entry;  /* Associated entry     */
+	struct ec_agg_extent	*acv_agg_extent; /* Associated entry     */
+	uint8_t			*acv_bit_map;    /* Bitmap of cells      */
+	uint8_t			*acv_ebit_map;   /* Bitmap of cells      */
+	struct daos_csummer	*acv_csummer;
+	ABT_eventual		 acv_eventual;   /* Eventual for offload */
+};
+
 /* Reset iterator state upon completion of iteration of a subtree.
  */
 static inline void
-reset_agg_pos(vos_iter_type_t type, struct ec_agg_entry *agg_entry)
+reset_nested_agg_pos(vos_iter_type_t type, struct ec_agg_entry *agg_entry)
 {
 	switch (type) {
 	case VOS_ITER_DKEY:
@@ -170,10 +183,6 @@ static int
 agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	 struct ec_agg_entry *agg_entry, unsigned int *acts)
 {
-	if (agg_key_compare(agg_entry->ae_dkey, entry->ie_key)) {
-		agg_entry->ae_dkey = entry->ie_key;
-		reset_agg_pos(VOS_ITER_AKEY, agg_entry);
-	}
 	agg_entry->ae_dkey	= entry->ie_key;
 	return 0;
 }
@@ -317,8 +326,7 @@ agg_alloc_buf(d_sg_list_t *sgl, size_t ent_buf_len, unsigned int iov_entry,
 	} else {
 		unsigned int *buf = NULL;
 
-		 D_REALLOC(buf, sgl->sg_iovs[iov_entry].iov_buf,
-			   ent_buf_len);
+		 D_REALLOC(buf, sgl->sg_iovs[iov_entry].iov_buf, ent_buf_len);
 		 if (buf == NULL) {
 			rc = -DER_NOMEM;
 			goto out;
@@ -439,17 +447,6 @@ agg_fetch_data_stripe_no_csum(struct ec_agg_entry *entry)
 
 	return rc;
 }
-
-/* Struct used to drive offloaded stripe update.
- */
-struct ec_agg_csum_ver {
-	struct ec_agg_entry	*acv_agg_entry; /* Associated entry     */
-	struct ec_agg_extent	*acv_agg_extent; /* Associated entry     */
-	uint8_t			*acv_bit_map;   /* Bitmap of cells      */
-	uint8_t			*acv_ebit_map;  /* Bitmap of cells      */
-	struct daos_csummer	*acv_csummer;
-	ABT_eventual		 acv_eventual;  /* Eventual for offload */
-};
 
 static void
 agg_csum_verify_ult(void *arg)
@@ -978,9 +975,9 @@ agg_stripe_is_filled(struct ec_agg_entry *entry, bool has_parity)
 
 
 	D_ASSERT(entry->ae_cur_stripe.as_stripe_fill <=
-		entry->ae_oca->u.ec.e_k * entry->ae_oca->u.ec.e_len);
+		 obj_ec_stripe_rec_nr(entry->ae_oca));
 	is_filled = entry->ae_cur_stripe.as_stripe_fill ==
-		entry->ae_oca->u.ec.e_k * entry->ae_oca->u.ec.e_len;
+		 obj_ec_stripe_rec_nr(entry->ae_oca);
 
 	if (is_filled)
 		if (!has_parity || agg_data_is_newer(entry))
@@ -1001,7 +998,7 @@ agg_get_carry_under(struct ec_agg_entry *entry)
 				   ae_link) {
 		/* Check for -over extent. */
 		tail = agg_carry_over(entry, agg_extent);
-		/* At most one extent should carry over.( */
+		/* At most one extent should carry over. */
 		if (tail)
 			return agg_extent->ae_recx.rx_nr - tail;
 		/* At most one extent should carry over. */
@@ -1033,9 +1030,9 @@ agg_update_vos(struct ec_agg_entry *entry)
 		entry->ae_cur_stripe.as_prefix_ext;
 	recx.rx_nr = k * len + entry->ae_cur_stripe.as_prefix_ext -
 		entry->ae_cur_stripe.as_suffix_ext;
-	epoch_range.epr_lo = 0ULL;
-	epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
+	epoch_range.epr_lo = agg_param->ap_epr.epr_lo;
+	epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
 	rc = vos_obj_array_remove(agg_param->ap_cont_handle, entry->ae_oid,
 				  &epoch_range, &entry->ae_dkey,
 				  &entry->ae_akey, &recx);
@@ -1797,15 +1794,15 @@ agg_process_stripe(struct ec_agg_entry *entry)
 		goto out;
 	}
 
-	if ((entry->ae_par_extent.ape_epoch == ~(0ULL)
-				 && agg_stripe_is_filled(entry, false)) ||
-					agg_stripe_is_filled(entry, true)) {
+	if ((entry->ae_par_extent.ape_epoch == ~(0ULL) &&
+	     agg_stripe_is_filled(entry, false)) ||
+	    agg_stripe_is_filled(entry, true)) {
 		/* Replicas constitute a full stripe. */
 		rc = agg_encode_local_parity(entry);
 		goto out;
 	}
 	if (entry->ae_par_extent.ape_epoch == ~(0ULL)) {
-		/* No parity, partial-stripe worth of replicaa, nothing to do */
+		/* No parity, partial-stripe worth of replica, nothing to do */
 		update_vos = false;
 		goto out;
 	}
@@ -1860,7 +1857,7 @@ agg_in_stripe(struct ec_agg_entry *entry, daos_recx_t *recx)
  */
 static int
 agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
-		daos_handle_t ih, unsigned int *acts)
+		unsigned int *acts)
 {
 	struct ec_agg_extent	*extent = NULL;
 	daos_off_t		 cur_stripenum, new_stripenum;
@@ -1957,9 +1954,18 @@ agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	D_ASSERT(!(entry->ie_recx.rx_idx & PARITY_INDICATOR));
 
-	rc = agg_data_extent(entry, agg_entry, ih, acts);
+	rc = agg_data_extent(entry, agg_entry, acts);
 
 	return rc;
+}
+
+static inline bool
+ec_aggregate_yield(struct ec_agg_param *agg_param)
+{
+	if (agg_param->ap_yield_func != NULL)
+		return agg_param->ap_yield_func(agg_param->ap_yield_arg);
+
+        return false;
 }
 
 /* Pre-subtree iteration call back for per-object iterator
@@ -1970,6 +1976,7 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		   void *cb_arg, unsigned int *acts)
 {
 	struct ec_agg_entry	*agg_entry = (struct ec_agg_entry *)cb_arg;
+	struct ec_agg_param	*agg_param;
 	int			 rc = 0;
 
 	switch (type) {
@@ -1989,6 +1996,24 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (rc < 0) {
 		D_ERROR("EC aggregation failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
+	}
+
+	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
+	agg_param->ap_credits++;
+
+	if (agg_param->ap_credits > agg_param->ap_credits_max) {
+		agg_param->ap_credits = 0;
+		*acts |= VOS_ITER_CB_YIELD;
+
+		/*
+		 * Reset position if we yield while iterating in object, dkey
+		 * or akey level, so that subtree won't be skipped mistakenly.
+		 */
+		reset_nested_agg_pos(type, agg_entry);
+		if (ec_aggregate_yield(agg_param)) {
+			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
+			rc = 1;
+		}
 	}
 
 	return rc;
@@ -2071,6 +2096,16 @@ agg_subtree_iterate(daos_handle_t ih, struct ec_agg_param *agg_param)
 	return rc;
 }
 
+
+static inline void
+reset_agg_pos(vos_iter_type_t type, struct ec_agg_param *agg_param)
+{
+	D_ASSERT(type == VOS_ITER_OBJ);
+
+	memset(&agg_param->ap_agg_entry.ae_oid, 0,
+	       sizeof(agg_param->ap_agg_entry.ae_oid));
+}
+
 /* Call-back function for full VOS iteration outer iterator.
  */
 static int
@@ -2098,6 +2133,23 @@ agg_iter_obj_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		D_ERROR("ds_pool_check_leader failed "DF_RC"\n", DP_RC(rc));
 		rc = 0;
 	}
+	agg_param->ap_credits++;
+
+	if (agg_param->ap_credits > agg_param->ap_credits_max) {
+		agg_param->ap_credits = 0;
+		*acts |= VOS_ITER_CB_YIELD;
+
+		/*
+		 * Reset position if we yield while iterating in object, dkey
+		 * or akey level, so that subtree won't be skipped mistakenly.
+		 */
+		reset_agg_pos(type, agg_param);
+		if (ec_aggregate_yield(agg_param)) {
+			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
+			rc = 1;
+		}
+	}
+
 	return rc;
 }
 
@@ -2149,7 +2201,8 @@ out:
  * leader.
  */
 static int
-agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr)
+agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr,
+		bool (*yield_func)(void *arg), void *yield_arg)
 {
 	vos_iter_param_t	 iter_param = { 0 };
 	struct vos_iter_anchors  anchors = { 0 };
@@ -2166,6 +2219,8 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 		cont->sc_pool->spc_pool->sp_map_version;
 	agg_param.ap_pool_info.api_pool = cont->sc_pool->spc_pool;
 	agg_param.ap_cont_handle	= cont->sc_hdl;
+	agg_param.ap_yield_func		= yield_func;
+	agg_param.ap_yield_arg		= yield_arg;
 
 	rc = ABT_eventual_create(sizeof(*status),
 				 &agg_param.ap_pool_info.api_eventual);
@@ -2228,11 +2283,12 @@ out:
  * this function.
  */
 int
-ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr)
+ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr,
+		    bool (*yield_func)(void *arg), void *yield_arg)
 {
 	int	rc = 0;
 
-	rc = agg_iterate_all(cont, epr);
+	rc = agg_iterate_all(cont, epr, yield_func, yield_arg);
 
 	return rc;
 }

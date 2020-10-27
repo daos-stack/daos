@@ -75,7 +75,8 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	if (dss_ult_exiting(cont->sc_agg_req))
 		return 1;
 	
-	rc = ds_obj_ec_aggregate(cont, epr);
+	rc = ds_obj_ec_aggregate(cont, epr, dss_ult_yield,
+				 (void *)cont->sc_agg_req);
 	if (rc)
 		D_ERROR("EC aggregation returned: "DF_RC"\n", DP_RC(rc));
 
