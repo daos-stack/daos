@@ -982,8 +982,6 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 		state = RPC_STATE_COMPLETED;
 		break;
 	case HG_CANCELED:
-		/* Experiment */
-		HG_Ref_incr(rpc_priv->crp_hg_hdl);
 		if (!CRT_RANK_PRESENT(rpc_pub->cr_ep.ep_grp,
 				     rpc_pub->cr_ep.ep_rank)) {
 			RPC_TRACE(DB_NET, rpc_priv, "request target evicted\n");
