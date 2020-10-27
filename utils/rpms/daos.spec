@@ -1,7 +1,9 @@
 %define daoshome %{_exec_prefix}/lib/%{name}
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
-
+%if 0%{build_type}
+%else
+%global build_type release
 %if (0%{?suse_version} >= 1500)
 # until we get an updated mercury build on 15.2
 %global mercury_version 2.0.0~rc1-1.suse.lp151
@@ -399,7 +401,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 
 %changelog
 * Tue Oct 22 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.1-4
-- add fault_status to daos-tests files list
+- add BUILD_TYPE to scons cmdline. default=release
+- Valid values for BUILD_TYPE are dev|release|debug
+- BUILD_TYPE=release will disable fault injection in build
 
 * Tue Oct 13 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> 1.1.1-3
 - Remove obj_ctl from Tests RPM package
