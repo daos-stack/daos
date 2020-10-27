@@ -48,19 +48,19 @@ typedef struct dh_bucket {
 } dh_bucket_t;
 
 
-#define ROTATE(x, b) (uint64_t)(((x) << (b)) | ( (x) >> (64 - (b))))
+#define ROTATE(x, b) (uint64_t)(((x) << (b)) | ((x) >> (64 - (b))))
 
 #define HALF_ROUND(a, b, c, d, s, t) \
     a += b; c += d;                  \
     b = ROTATE(b, s) ^ a;            \
     d = ROTATE(d, t) ^ c;            \
-    a = ROTATE(a, 32);
+    a = ROTATE(a, 32)
 
 #define DOUBLE_ROUND(v0, v1, v2, v3)         \
     HALF_ROUND(v0, v1, v2, v3, 13, 16);      \
     HALF_ROUND(v2, v1, v0, v3, 17, 21);      \
     HALF_ROUND(v0, v1, v2, v3, 13, 16);      \
-    HALF_ROUND(v2, v1, v0, v3, 17, 21);
+    HALF_ROUND(v2, v1, v0, v3, 17, 21)
 
 const char keys[16] = { 0, 1, 2, 3, 4, 5, 6, 7, 8,
 	   9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf };
@@ -94,21 +94,23 @@ gen_siphash(const void *src, uint32_t src_sz)
 	uint8_t *m = (uint8_t *) in;
 
 	switch (src_sz) {
-		case 7:
-			pt[6] = m[6];
-		case 6:
-			pt[5] = m[5];
-		case 5:
-			pt[4] = m[4];
-		case 4:
-			*((uint32_t*) &pt[0]) = *((uint32_t *) &m[0]);
-			break;
-		case 3:
-			pt[2] = m[2];
-		case 2:
-			pt[1] = m[1];
-		case 1:
-			pt[0] = m[0];
+	case 7:
+		pt[6] = m[6];
+	case 6:
+		pt[5] = m[5];
+	case 5:
+		pt[4] = m[4];
+	case 4:
+		*((uint32_t *) &pt[0]) = *((uint32_t *) &m[0]);
+		break;
+	case 3:
+		pt[2] = m[2];
+	case 2:
+		pt[1] = m[1];
+	case 1:
+		pt[0] = m[0];
+	default:
+		;
 	}
 	b |= _le64toh(t);
 
@@ -125,7 +127,7 @@ vec_init(dh_vector_t *vec, unsigned char power)
 {
 	int	rc = 0;
 
-	memset(vec, 0, sizeof *vec);
+	memset(vec, 0, sizeof(*vec));
 	vec->size = (size_t) (1 << power) * sizeof(void *);
 	D_ALLOC(vec->data, sizeof(*vec->data) * (1 << power));
 	if (vec->data == NULL) {
@@ -364,7 +366,7 @@ shrink_vector(struct dyn_hash *htable, dh_bucket_t *bucket,
 }
 
 static int
-split_bucket(struct dyn_hash *htable, dh_bucket_t* bucket,
+split_bucket(struct dyn_hash *htable, dh_bucket_t *bucket,
 	      dh_bucket_t **new_bucket)
 {
 	dh_bucket_t	*ad_bucket = NULL;
@@ -619,7 +621,7 @@ do_delete(struct d_hash_table *gtable, const void *key,
 			bucket->field[bucket_idx + 1];
 			bucket_idx++;
 		}
-	        bucket->counter--;
+		bucket->counter--;
 	}
 	if ((htable->gtable->ht_feats & D_HASH_FT_EPHEMERAL) == 0 &&
 	     htable->ht_ops.hop_rec_decref(gtable, item) != 0) {
@@ -735,7 +737,7 @@ dyn_hash_table_create_inplace(uint32_t feats, uint32_t bits, void *priv,
 			htable->ht_rw_unlock = mutex_unlock;
 		} else if (feats & D_HASH_FT_RWLOCK) {
 			rc = D_RWLOCK_INIT(&gtable->ht_lock.rwlock, NULL);
-			if (rc != 0){
+			if (rc != 0) {
 				D_GOTO(out, rc);
 			}
 			htable->ht_write_lock = write_lock;
@@ -918,7 +920,7 @@ dyn_hash_rec_find(struct d_hash_table *gtable, const void *key,
 	}
 	if (item != NULL) {
 		htable->ht_ops.hop_rec_addref(gtable, item);
-		if(sip_update) {
+		if (sip_update) {
 			htable->ht_ops.hop_siphash_set(item, siphash);
 		}
 	}
@@ -1174,8 +1176,8 @@ dyn_hash_table_debug(struct d_hash_table *gtable)
 	if (htable->ht_feats & DYN_HASH_FT_SHRINK) {
 		D_DEBUG(DB_TRACE, "max nr: %u, cur nr: %u, vector_spits: %u,"
 			"split_time(usec) %u\n",
-			htable->ht_nr_max, htable->ht_records, htable->ht_dep_max,
-			htable->ht_vsplit_delay);
+			htable->ht_nr_max, htable->ht_records,
+			htable->ht_dep_max, htable->ht_vsplit_delay);
 	} else {
 		D_DEBUG(DB_TRACE, "max nr: %u, cur nr: %u\n",
 			htable->ht_nr_max, htable->ht_records);
