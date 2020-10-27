@@ -938,7 +938,6 @@ cont_query_bits(daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_DEDUP_THRESHOLD:
 			bits |= DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD;
-			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			bits |= DAOS_CO_QUERY_PROP_REDUN_FAC;
 			break;
@@ -1869,22 +1868,15 @@ cont_req_cleanup(enum creq_cleanup_stage stage, struct cont_req_arg *args)
 	switch (stage) {
 	case CLEANUP_ALL:
 		crt_req_decref(args->cra_rpc);
-		break;
 	case CLEANUP_BULK:
 		if (args->cra_bulk)
 			crt_bulk_free(args->cra_bulk);
-		break;
 	case CLEANUP_RPC:
 		crt_req_decref(args->cra_rpc);
-		break;
 	case CLEANUP_POOL:
 		dc_pool_put(args->cra_pool);
-		break;
 	case CLEANUP_CONT:
 		dc_cont_put(args->cra_cont);
-		break;
-	default:
-		break;
 	}
 }
 

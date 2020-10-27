@@ -2189,7 +2189,7 @@ vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
 
 	rc = bio_sgl_init(bsgl_dup, bsgl->bs_nr_out);
 	if (rc != 0)
-		return -DER_NOMEM;
+		return rc;
 
 	bsgl_dup->bs_nr_out = bsgl->bs_nr_out;
 
