@@ -272,6 +272,14 @@ rdbt_find_leader(crt_group_t *group, uint32_t nranks, uint32_t nreplicas,
 			}
 		}
 
+		if (!resp_isvalid) {
+			printf("ERR: rank %u invalid reply: rc="DF_RC", "
+			       "hint is %s valid (rank=%u, term="DF_U64")\n",
+			       rank, DP_RC(rc_svc), resp_isvalid ? "" : "NOT",
+			       h.sh_rank, h.sh_term);
+			rc = -1;
+			break;
+		}
 		rc = 0;
 	}
 
