@@ -491,8 +491,8 @@ d_hash_rec_find_insert(struct d_hash_table *htable, const void *key,
 	d_list_t		*tmp;
 	uint32_t		 idx;
 
-	if(htable->ht_feats & D_HASH_FT_DYNAMIC) {
-		return (d_list_t *)dyn_hash_rec_find_insert(htable, key, 
+	if (htable->ht_feats & D_HASH_FT_DYNAMIC) {
+		return (d_list_t *)dyn_hash_rec_find_insert(htable, key,
 		ksize, (void *)link, 0);
 	}
 
@@ -810,12 +810,12 @@ d_hash_table_create_inplace(uint32_t feats, uint32_t bits, void *priv,
 			    d_hash_table_ops_t *hops,
 			    struct d_hash_table *htable)
 {
-	uint32_t 	nr = (1 << bits);
-	uint32_t 	i;
+	uint32_t	nr = (1 << bits);
+	uint32_t	i;
 	int		rc = 0;
 
 	if (feats & D_HASH_FT_DYNAMIC) {
-		return dyn_hash_table_create_inplace(feats, bits, 
+		return dyn_hash_table_create_inplace(feats, bits,
 		priv, hops, htable);
 	}
 	D_ASSERT(hops != NULL);

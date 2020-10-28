@@ -179,7 +179,8 @@ typedef struct {
 	bool (*hop_key_get)(void *link, void **key, unsigned int *ksize);
 
 	/**
-	* Optional (used in dynamic hash only), store SIP hash associated with the item
+	* Optional (used in dynamic hash only), store SIP hash associated
+	* with the item
 	* This member function avoids SIP hash calculation for each
 	* insert / lookup call
 	*
@@ -336,7 +337,8 @@ int  d_hash_table_create(uint32_t feats, uint32_t bits, void *priv,
  * see \ref d_hash_feats for the details.
  *
  * \param[in] feats		Feature bits, see D_HASH_FT_*
- * \param[in] bits		power2(bits) is the size of hash table ignored for dyn_hash
+ * \param[in] bits		power2(bits) is the size of hash table
+ * 				ignored for dyn_hash
  * \param[in] priv		Private data for the hash table
  * \param[in] hops		Customized member functions
  * \param[in] htable		Hash table to be initialized

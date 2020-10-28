@@ -188,7 +188,7 @@ int dyn_hash_table_destroy_inplace(struct d_hash_table *htable, bool force);
  * \param[in] htable		Pointer to the hash table
  * \param[in] key		The key to search
  * \param[in] ksize		Size of the ke
- * \param[in] siphash   Previously generated SIP hash or 0 if unknown 
+ * \param[in] siphash   Previously generated SIP hash or 0 if unknown
  *
  * \return			found item
  */
