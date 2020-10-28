@@ -2781,7 +2781,7 @@ merge_key(d_list_t *head, char *key, int key_size)
 
 	D_ALLOC(key_one->key.iov_buf, key_size);
 	if (key_one->key.iov_buf == NULL) {
-		D_FREE(key);
+		D_FREE(key_one);
 		return -DER_NOMEM;
 	}
 
@@ -2852,11 +2852,12 @@ obj_shard_list_key_cb(struct shard_auxi_args *shard_auxi,
 		}
 
 		rc = merge_key(&merge_arg->merge_list, key, key_size);
+		/* free key first regardless of rc */
+		if (alloc_key)
+			D_FREE(key);
 		if (rc)
 			return rc;
 
-		if (alloc_key)
-			D_FREE(key);
 	}
 
 	return 0;

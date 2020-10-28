@@ -1434,7 +1434,8 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				     dth);
 		daos_recx_ep_list_free(shadows, orw->orw_nr);
 		if (rc) {
-			D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
+			D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_NONEXIST,
+				 DB_IO, DLOG_ERR,
 				 "Fetch begin for "DF_UOID" failed: "DF_RC"\n",
 				 DP_UOID(orw->orw_oid), DP_RC(rc));
 			goto out;
@@ -1556,6 +1557,8 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		obj_log_csum_err();
 post:
 	err = bio_iod_post(biod);
+	rc = rc ? : err;
+out:
 	if (bsgls_dup != NULL) {
 		int	i;
 
@@ -1565,8 +1568,7 @@ post:
 		}
 		D_FREE(bsgls_dup);
 	}
-	rc = rc ? : err;
-out:
+
 	rc = obj_rw_complete(rpc, ioc->ioc_map_ver, ioh, rc, dth);
 	D_TIME_END(time_start, OBJ_PF_UPDATE_LOCAL);
 	return rc;

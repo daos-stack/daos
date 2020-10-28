@@ -182,8 +182,8 @@ class TestWithoutServers(Test):
     def setUp(self):
         """Set up run before each test."""
         super(TestWithoutServers, self).setUp()
-
-        load_mpi('openmpi')
+        if not load_mpi("openmpi"):
+            self.fail("Failed to load openmpi")
 
         self.orterun = find_executable('orterun')
         if self.orterun is None:

@@ -7,17 +7,21 @@ set -uex
 
 if [ -n "${STAGE_NAME:?}" ]; then
   case $STAGE_NAME in
-    *CentOS*7*|*el7*|*centos7*)
+    *CentOS\ 7*|*el7*|*centos7*)
       : "${CHROOT_NAME:=epel-7-x86_64}"
       : "${TARGET:=centos7}"
       ;;
-    *CentOS*8*|*el8*|*centos8*)
+    *CentOS\ 8*|*el8*|*centos8*)
       : "${CHROOT_NAME:=epel-8-x86_64}"
       : "${TARGET:=centos8}"
       ;;
-    *Leap*15*|*leap15*|*opensuse15*|*sles15*)
+    *Leap\ 15*|*leap15*|*opensuse15*|*sles15*)
       : "${CHROOT_NAME:=opensuse-leap-15.2-x86_64}"
       : "${TARGET:=leap15}"
+      ;;
+    *Ubuntu\ 20.04*|*ubuntu2004*)
+      : "${CHROOT_NAME:="not_applicable"}"
+      : "${TARGET:=ubuntu20}"
       ;;
   esac
 fi
