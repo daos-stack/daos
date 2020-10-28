@@ -247,12 +247,6 @@ class MetaOverhead(object):
         nvme = True
         if self._scm_cutoff > size:
             nvme = False
-        csum_size = cont["csum_size"]
-        if csum_size != 0:
-            if akey["key"] == "single_value":
-                size += csum_size
-            else:
-                size += int(math.ceil(size / cont["csum_gran"]) * csum_size)
 
         akey["count"] += value_spec.get("count", 1)  # Number of values
         if value_spec.get("overhead", "user") == "user":
@@ -264,6 +258,15 @@ class MetaOverhead(object):
         if nvme:
             akey["nvme_size"] += size * \
                 value_spec.get("count", 1)  # total size
+
+        # Add checksum overhead
+
+        csum_size = cont["csum_size"]
+        if akey["key"] == "array":
+            csum_size = int(math.ceil(size / cont["csum_gran"]) * csum_size)
+
+        akey["meta_size"] += csum_size * \
+            value_spec.get("count", 1)
 
     def load_container(self, cont_spec):
         """calculate metadata for update(s)"""
