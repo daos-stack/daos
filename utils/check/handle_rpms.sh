@@ -38,11 +38,7 @@ if ! grep "gpgcheck = false" "${repo_file}"; then
   echo "gpgcheck = false" | sudo tee -a "${repo_file}"
 fi
 
-sudo yum -y remove cart \
-                   cart-debuginfo \
-                   cart-devel \
-                   cart-tests \
-                   daos \
+sudo yum -y remove daos \
                    daos-client \
                    daos-debuginfo \
                    daos-devel \
