@@ -182,26 +182,32 @@ class MetaOverhead(object):
         oid = self.next_object
         self.next_object += 1
 
-        self.init_dkeys(oid, obj_spec)
+        # zero means distribute across all available targets
+        num_of_targets = obj_spec.get("targets", 0)
+        if num_of_targets == 0:
+            num_of_targets = self.num_pools
 
-    def init_dkeys(self, oid, obj_spec):
+        self.init_dkeys(oid, obj_spec, num_of_targets)
+
+    def init_dkeys(self, oid, obj_spec, num_of_targets):
         """Handle akey specification"""
-        pool_idx = random.randint(0, self.num_pools - 1)
+        start_pool = random.randint(0, self.num_pools - 1)
+        pool_idx = start_pool
 
         for dkey_spec in obj_spec.get("dkeys"):
             if "akeys" not in dkey_spec:
                 raise RuntimeError("No akeys in dkey spec %s" % dkey_spec)
             check_key_type(dkey_spec)
             dkey_count = int(dkey_spec.get("count", 1))
-            num_pools = self.num_pools
-            full_count = dkey_count // num_pools
-            partial_count = dkey_count % num_pools
+            num_pools = num_of_targets
+            full_count = dkey_count // num_of_targets
+            partial_count = dkey_count % num_of_targets
             if full_count == 0:
                 num_pools = partial_count
-
             for idx in range(0, num_pools):
+                pool_idx = ((idx % num_of_targets) +
+                            start_pool) % self.num_pools
                 pool = self.pools[pool_idx]
-                pool_idx = (pool_idx + 1) % self.num_pools
                 cont = pool["trees"][-1]
                 if cont["trees"] == [] or cont["trees"][-1]["oid"] != oid:
                     obj = {"dup": int(obj_spec.get("count", 1)), "key": "dkey",
