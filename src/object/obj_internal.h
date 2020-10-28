@@ -683,11 +683,14 @@ ds_obj_cpd_get_tgt_cnt(crt_rpc_t *rpc, int dtx_idx)
 }
 
 static inline uint64_t
-obj_dkey2hash(daos_key_t *dkey)
+obj_dkey2hash(daos_obj_id_t oid, daos_key_t *dkey)
 {
 	/* return 0 for NULL dkey, for example obj punch and list dkey */
 	if (dkey == NULL)
 		return 0;
+
+	if (daos_obj_id2feat(oid) & DAOS_OF_DKEY_UINT64)
+		return *(uint64_t *)dkey->iov_buf;
 
 	return d_hash_murmur64((unsigned char *)dkey->iov_buf,
 			       dkey->iov_len, 5731);
