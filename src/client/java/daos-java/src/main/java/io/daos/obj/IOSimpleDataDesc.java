@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,8 +63,6 @@ public class IOSimpleDataDesc {
 
   private boolean updateOrFetch;
 
-  private final DaosEventQueue.Event event;
-
   private final int totalDescBufferLen;
 
   private final int totalRequestBufLen;
@@ -81,13 +79,30 @@ public class IOSimpleDataDesc {
 
   private final boolean async;
 
+  private DaosEventQueue.Event event;
+
+  private final long eqHandle;
+
   private boolean released;
 
   private int retCode = Integer.MAX_VALUE;
 
   public static final int RET_CODE_SUCCEEDED = 0;
 
-  protected IOSimpleDataDesc(int maxKeyStrLen, int nbrOfEntries, int entryBufLen, DaosEventQueue.Event event) {
+  /**
+   * Create simple description for synchronous or asynchronous update/fetch depending on
+   * if <code>eqWrapperHandle</code> has zero value.
+   *
+   * @param maxKeyStrLen
+   * max key len in str
+   * @param nbrOfEntries
+   * number of akey entries
+   * @param entryBufLen
+   * buffer length of each entry
+   * @param eqWrapperHandle
+   * 0L for synchronous. asynchronous otherwise.
+   */
+  protected IOSimpleDataDesc(int maxKeyStrLen, int nbrOfEntries, int entryBufLen, long eqWrapperHandle) {
     if (maxKeyStrLen > Short.MAX_VALUE/2 || maxKeyStrLen <= 0) {
       throw new IllegalArgumentException("number of entries should be positive and no larger than " +
           Short.MAX_VALUE/2 + ". " + maxKeyStrLen);
@@ -97,8 +112,8 @@ public class IOSimpleDataDesc {
       throw new IllegalArgumentException("number of entries should be positive and no larger than " + Short.MAX_VALUE +
           ". " + nbrOfEntries);
     }
-    this.event = event;
-    this.async = event != null;
+    this.eqHandle = eqWrapperHandle;
+    this.async = eqWrapperHandle != 0;
     // 8 for storing native desc pointer
     // 2 for storing maxKenLen
     // 2 for number of entries
@@ -140,6 +155,11 @@ public class IOSimpleDataDesc {
     if (descBuffer.readLong() == 0L) {
       throw new IllegalStateException("no native desc created");
     }
+  }
+
+  public void setEvent(DaosEventQueue.Event event) {
+    this.event = event;
+    event.setDesc(this);
   }
 
   public void setUpdateOrFetch(boolean updateOrFetch) {
@@ -232,7 +252,7 @@ public class IOSimpleDataDesc {
     descBuffer.writerIndex(12);
     if (async) { // assuming same event queue
       descBuffer.writerIndex(descBuffer.writerIndex() + 8);
-      descBuffer.writeShort(event.id);
+      descBuffer.writeShort(event.getId());
     }
     if (dkeyChanged) {
       descBuffer.writeShort(dkeyLen);
@@ -261,7 +281,7 @@ public class IOSimpleDataDesc {
     descBuffer.writeShort(maxKenLen);
     descBuffer.writeShort(akeyEntries.length);
     if (async) { // for asynchronous
-      descBuffer.writeLong(event.eqHandle);
+      descBuffer.writeLong(eqHandle);
       // skip event id
       descBuffer.writerIndex(descBuffer.writerIndex() + 2);
     }

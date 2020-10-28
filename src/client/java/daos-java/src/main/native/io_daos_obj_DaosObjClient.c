@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -601,8 +601,10 @@ decode_simple(JNIEnv *env, jlong descBufAddress,
 		// skip address, maxKeyLen, nbrOfEntries, eventqueue address
 		desc_buffer += 20;
 		memcpy(&value16, desc_buffer, 2);
+		printf("event id: %d\n", value16);
 		desc_buffer += 2;
 		desc->event = desc->eq->events[value16];
+		printf("dd1");
 	} else {
 		// skip address, maxKeyLen, nbrOfEntries
 		desc_buffer += 12;
@@ -625,6 +627,7 @@ decode_simple(JNIEnv *env, jlong descBufAddress,
 		return -2;
 	}
 	desc_buffer = decode_reused_simple(desc, desc_buffer);
+	printf("dd2");
 	*ret_desc = desc;
 	return 0;
 }
@@ -764,7 +767,9 @@ Java_io_daos_obj_DaosObjClient_updateObjectSimple(
 		return;
 	}
 	if (async) {
+	printf("dd3");
 		rc = daos_event_register_comp_cb(desc->event, update_ret_code, desc);
+		printf("dd4");
 		if (rc) {
 			char *msg = "Failed to register fetch callback";
 
@@ -772,9 +777,11 @@ Java_io_daos_obj_DaosObjClient_updateObjectSimple(
 			return;
 		}
 	}
+	printf("dd5");
 	rc = daos_obj_update(oh, DAOS_TX_NONE, flags, &desc->dkey,
 						 desc->nbrOfRequests, desc->iods,
 						 desc->sgls, async ? desc->event : NULL);
+						 printf("dd6");
 	if (rc) {
 		char *msg = "Failed to update DAOS object";
 

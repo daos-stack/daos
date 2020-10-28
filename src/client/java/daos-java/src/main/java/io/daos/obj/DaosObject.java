@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -580,7 +580,7 @@ public class DaosObject {
   }
 
   /**
-   * create reusable IOSimpleDataDesc object.
+   * create reusable {@link IOSimpleDescBound} object bound to event.
    *
    * @param maxKeyStrLen
    * max key string length
@@ -588,14 +588,31 @@ public class DaosObject {
    * number of akey entries available
    * @param entryBufLen
    * entry's buffer length
-   * record size of all entries
    * @param event
    * for asynchronous desc, null for synchronous
-   * @return IODataDesc instance
+   * @return IOSimpleDescBound instance
    */
-  public IOSimpleDataDesc createSimpleDataDesc(int maxKeyStrLen, int nbrOfEntries, int entryBufLen,
-                                               DaosEventQueue.Event event) {
-    return new IOSimpleDataDesc(maxKeyStrLen, nbrOfEntries, entryBufLen, event);
+  public IOSimpleDescBound createBoundSimpleDesc(int maxKeyStrLen, int nbrOfEntries, int entryBufLen,
+                                                DaosEventQueue.Event event) {
+    return new IOSimpleDescBound(maxKeyStrLen, nbrOfEntries, entryBufLen, event);
+  }
+
+  /**
+   * create reusable unbound {@link IOSimpleDataDesc} object.
+   *
+   * @param maxKeyStrLen
+   * max key string length
+   * @param nbrOfEntries
+   * number of akey entries available
+   * @param entryBufLen
+   * entry's buffer length
+   * @param eq
+   * per-thread {@link DaosEventQueue} instance
+   * @return IOSimpleDataDesc instance
+   */
+  public IOSimpleDataDesc createUnBoundSimpleDesc(int maxKeyStrLen, int nbrOfEntries, int entryBufLen,
+                                                DaosEventQueue eq) {
+    return new IOSimpleDataDesc(maxKeyStrLen, nbrOfEntries, entryBufLen, eq == null ? 0L : eq.getEqWrapperHdl());
   }
 
   /**

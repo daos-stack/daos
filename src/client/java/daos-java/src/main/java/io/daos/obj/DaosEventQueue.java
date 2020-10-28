@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ package io.daos.obj;
 
 import io.daos.BufferAllocator;
 import io.daos.DaosClient;
+import io.daos.DaosIOException;
 import io.daos.TimedOutException;
 import io.netty.buffer.ByteBuf;
 import org.slf4j.Logger;
@@ -47,25 +48,19 @@ public class DaosEventQueue {
 
   private final long eqWrapperHdl;
 
-  private final long descGrpHdl;
-
   private final String threadName;
 
   private final int nbrOfEvents;
 
-  private final Event[] events;
+  protected final Event[] events;
 
   private final ByteBuf completed;
-
-  private final int maxKeyStrLen;
-  private final int nbrOfEntries;
-  private final int entryBufLen;
 
   private int nextEventIdx;
 
   private int nbrOfAcquired;
 
-  private boolean released;
+  protected boolean released;
 
   private long lastProgressed;
 
@@ -84,56 +79,30 @@ public class DaosEventQueue {
   private static final Logger log = LoggerFactory.getLogger(DaosEventQueue.class);
 
   /**
-   * constructor with parameters to specify how many events to be created per EQ, as well as {@link IOSimpleDataDesc}
-   * parameters. User should call {@link #getInstance(int, int, int, int)} to create new instance.
+   * constructor without {@link IOSimpleDataDesc} being bound.
    *
    * @param threadName
-   * thread name
    * @param nbrOfEvents
-   * how many events created in EQ
-   * @param maxKeyStrLen
-   * max dkey/akey len
-   * @param nbrOfEntries
-   * number of akey entries for each desc
-   * @param entryBufLen
-   * entry buffer length
    * @throws IOException
    */
-  private DaosEventQueue(String threadName, int nbrOfEvents, int maxKeyStrLen, int nbrOfEntries,
-                        int entryBufLen) throws IOException {
+  protected DaosEventQueue(String threadName, int nbrOfEvents) throws IOException {
     this.threadName = threadName;
     if (nbrOfEvents > Short.MAX_VALUE) {
       throw new IllegalArgumentException("number of events should be no larger than " + Short.MAX_VALUE);
     }
     this.nbrOfEvents = nbrOfEvents;
-    this.maxKeyStrLen = maxKeyStrLen;
-    this.nbrOfEntries = nbrOfEntries;
-    this.entryBufLen = entryBufLen;
     this.eqWrapperHdl = DaosClient.createEventQueue(nbrOfEvents);
     this.events = new Event[nbrOfEvents];
     for (int i = 0; i < nbrOfEvents; i++) {
-      events[i] = new Event(i, maxKeyStrLen, nbrOfEntries, entryBufLen);
+      events[i] = createEvent((short)i);
     }
-    this.descGrpHdl = allocateSimDescGroup();
-    // additional 4 bytes to put number of completed events
+    // additional 2 bytes to put number of completed events
     this.completed = BufferAllocator.objBufWithNativeOrder(nbrOfEvents * 2 + 2);
     completed.writerIndex(completed.capacity());
   }
 
-  private long allocateSimDescGroup() {
-    ByteBuf buf = BufferAllocator.objBufWithNativeOrder((nbrOfEvents) * 8);
-    try {
-      for (Event e : events) {
-        buf.writeLong(e.desc.getDescBuffer().memoryAddress());
-      }
-      long grpHdl = DaosObjClient.allocateSimDescGroup(buf.memoryAddress(), nbrOfEvents);
-      for (Event e : events) {
-        e.desc.checkNativeDesc();
-      }
-      return grpHdl;
-    } finally {
-      buf.release();
-    }
+  protected Event createEvent(short id) {
+    return new Event(id);
   }
 
   /**
@@ -147,16 +116,34 @@ public class DaosEventQueue {
    * number of akey entries for each desc
    * @param entryBufLen
    * entry buffer length
-   * @return single instance per thread
+   * @return single {@link DaosEQWithDesc} instance per thread
    * @throws IOException
    */
-  public static DaosEventQueue getInstance(int nbrOfEvents, int maxKeyStrLen, int nbrOfEntries,
+  public static DaosEQWithDesc getInstance(int nbrOfEvents, int maxKeyStrLen, int nbrOfEntries,
                                            int entryBufLen) throws IOException {
     long tid = Thread.currentThread().getId();
     DaosEventQueue queue = EQ_MAP.get(tid);
     if (queue == null) {
-      queue = new DaosEventQueue(Thread.currentThread().getName(), nbrOfEvents, maxKeyStrLen, nbrOfEntries,
+      queue = new DaosEQWithDesc(Thread.currentThread().getName(), nbrOfEvents, maxKeyStrLen, nbrOfEntries,
           entryBufLen);
+      EQ_MAP.put(tid, queue);
+    }
+    return (DaosEQWithDesc)queue;
+  }
+
+  /**
+   * Get EQ without any {@link IOSimpleDataDesc} being bound.
+   *
+   * @param nbrOfEvents
+   * how many events created in EQ
+   * @return single {@link DaosEventQueue} instance per thread
+   * @throws IOException
+   */
+  public static DaosEventQueue getInstance(int nbrOfEvents) throws IOException {
+    long tid = Thread.currentThread().getId();
+    DaosEventQueue queue = EQ_MAP.get(tid);
+    if (queue == null) {
+      queue = new DaosEventQueue(Thread.currentThread().getName(), nbrOfEvents);
       EQ_MAP.put(tid, queue);
     }
     return queue;
@@ -164,18 +151,6 @@ public class DaosEventQueue {
 
   public int getNbrOfEvents() {
     return nbrOfEvents;
-  }
-
-  public int getNbrOfEntries() {
-    return nbrOfEntries;
-  }
-
-  public int getMaxKeyStrLen() {
-    return maxKeyStrLen;
-  }
-
-  public int getEntryBufLen() {
-    return entryBufLen;
   }
 
   /**
@@ -204,7 +179,6 @@ public class DaosEventQueue {
       nextEventIdx = 0;
     }
     Event ret = events[idx];
-    ret.desc.setUpdateOrFetch(updateOrFetch);
     ret.available = false;
     nbrOfAcquired++;
     return ret;
@@ -225,7 +199,7 @@ public class DaosEventQueue {
    * @return event
    * @throws IOException
    */
-  public Event acquireEventBlock(boolean updateOrFetch, int maxWaitMs, List<IOSimpleDataDesc> completedList)
+  public Event acquireEventBlocking(boolean updateOrFetch, int maxWaitMs, List<IOSimpleDataDesc> completedList)
       throws IOException {
     DaosEventQueue.Event e = acquireEvent(updateOrFetch);
     if (e != null) { // for most of cases
@@ -310,7 +284,7 @@ public class DaosEventQueue {
 
   /**
    * It's just for accessing event without acquiring it for DAOS API calls.
-   * Use {@link #acquireEvent(boolean)} or {@link #acquireEventBlock(boolean, int, List)} instead for DAOS API calls.
+   * Use {@link #acquireEvent(boolean)} or {@link #acquireEventBlocking(boolean, int, List)} instead for DAOS API calls.
    *
    * @param idx
    * @return
@@ -340,10 +314,9 @@ public class DaosEventQueue {
     Event event;
     for (int i = 0; i < nbr; i++) {
       event = events[completed.readShort()];
-      completeDesc(event.desc);
-      event.putBack();
+      IOSimpleDataDesc desc = event.complete();
       if (completedDescList != null) {
-        completedDescList.add(event.desc);
+        completedDescList.add(desc);
       }
     }
     nbrOfAcquired -= nbr;
@@ -354,14 +327,6 @@ public class DaosEventQueue {
     return nbr;
   }
 
-  private void completeDesc(IOSimpleDataDesc desc) {
-    if (desc.isUpdateOrFetch()) {
-      desc.succeed();
-    } else {
-      desc.parseResult();
-    }
-  }
-
   public int getNbrOfAcquired() {
     return nbrOfAcquired;
   }
@@ -370,20 +335,24 @@ public class DaosEventQueue {
     return eqWrapperHdl;
   }
 
+  public synchronized void release() throws IOException {
+    if (released) {
+      return;
+    }
+    DaosClient.destroyEventQueue(eqWrapperHdl);
+    releaseMore();
+    released = true;
+  }
+
+  protected void releaseMore() {}
+
   /**
    * destroy all event queues. It's should be called when JVM is shutting down.
    */
   public static void destroyAll() {
     EQ_MAP.forEach((k, v) -> {
       try {
-        if (!v.released) {
-          DaosClient.destroyEventQueue(v.eqWrapperHdl);
-          DaosObjClient.releaseSimDescGroup(v.descGrpHdl);
-          for (int i = 0; i < v.events.length; i++) {
-            v.events[i].desc.release();
-          }
-          v.released = true;
-        }
+        v.release();
       } catch (Throwable e) {
         log.error("failed to destroy event queue in thread, " + v.threadName, e);
       }
@@ -392,30 +361,48 @@ public class DaosEventQueue {
   }
 
   public class Event {
-    public final int id;
-    public final long eqHandle;
+    private final short id;
+    private final long eqHandle;
 
-    private final IOSimpleDataDesc desc;
-    private boolean available;
+    protected boolean available;
+    protected IOSimpleDataDesc desc;
 
-    private Event(int id, int maxKeyStrLen, int nbrOfEntries, int entryBufLen) {
+    protected Event(short id) {
       this.eqHandle = eqWrapperHdl;
       this.id = id;
       this.available = true;
-      this.desc = new IOSimpleDataDesc(maxKeyStrLen, nbrOfEntries, entryBufLen, this);
+    }
+
+    public int getId() {
+      return id;
     }
 
     public IOSimpleDataDesc getDesc() {
       return desc;
     }
 
-    public IOSimpleDataDesc reuseDesc() {
-      desc.reuse();
-      return desc;
+    public long getEqHandle() {
+      return eqHandle;
     }
 
-    private void putBack() {
+    public void setDesc(IOSimpleDataDesc desc) {
+      this.desc = desc;
+    }
+
+    protected void putBack() {
       available = true;
+      desc = null;
+    }
+
+    public IOSimpleDataDesc complete() {
+      if (desc.isUpdateOrFetch()) {
+        desc.succeed();
+      } else {
+        desc.parseResult();
+      }
+      IOSimpleDataDesc d = desc;
+      putBack();
+      return d;
     }
   }
 }
