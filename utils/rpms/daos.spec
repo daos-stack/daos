@@ -1,9 +1,8 @@
+
+%bcond_with fault_injection
 %define daoshome %{_exec_prefix}/lib/%{name}
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
-%if 0%{?build_type}
-%else
-%global build_type release
 %if (0%{?suse_version} >= 1500)
 # until we get an updated mercury build on 15.2
 %global mercury_version 2.0.0~rc1-1.suse.lp151
@@ -13,7 +12,7 @@
 
 Name:          daos
 Version:       1.1.1
-Release:       4%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -65,12 +64,14 @@ BuildRequires: libcmocka-devel
 BuildRequires: readline-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
+BuildRequires: python-devel
+BuildRequires: python-distro
 %if (0%{?rhel} >= 7)
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
 BuildRequires: golang-bin >= 1.12
 BuildRequires: libipmctl-devel
-BuildRequires: python-devel python36-devel
+BuildRequires: python36-devel
 BuildRequires: Lmod
 %else
 %if (0%{?suse_version} >= 1315)
@@ -85,7 +86,8 @@ BuildRequires: distribution-release
 BuildRequires: libnuma-devel
 BuildRequires: cunit-devel
 BuildRequires: ipmctl-devel
-BuildRequires: python-devel python3-devel
+BuildRequires: python3-devel
+BuildRequires: python3-distro
 BuildRequires: lua-lmod
 BuildRequires: systemd-rpm-macros
 %if 0%{?is_opensuse}
@@ -145,6 +147,7 @@ Requires: %{name} = %{version}-%{release}
 Requires: mercury = %{mercury_version}
 Requires: libfabric >= 1.11.0
 Requires: fuse3 >= 3.4.2
+Obsoletes: cart
 %if (0%{?suse_version} >= 1500)
 Requires: libfuse3-3 >= 3.4.2
 %else
@@ -152,7 +155,7 @@ Requires: libfuse3-3 >= 3.4.2
 # get it when fuse3 Requires: /etc/fuse.conf
 Requires: fuse < 3, fuse3-libs >= 3.4.2
 %endif
-%systemd_requires
+%{?systemd_requires}
 
 %description client
 This is the package needed to run a DAOS client
@@ -161,6 +164,7 @@ This is the package needed to run a DAOS client
 Summary: The DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
+Requires: python-distro
 Requires: python2-tabulate
 Requires: fio
 Requires: lbzip2
@@ -196,7 +200,7 @@ Summary: The DAOS development libraries and headers
 This is the package needed to build software with the DAOS library.
 
 %prep
-%setup -q
+%autosetup
 
 %build
 
@@ -208,7 +212,8 @@ scons %{?_smp_mflags}      \
       USE_INSTALLED=all    \
       CONF_DIR=%{conf_dir} \
       PREFIX=%{?buildroot} \
-      BUILD_TYPE=%{?build_type}
+      %{?with_fault_injection:BUILD_TYPE=dev} \
+      %{!?with_fault_injection:BUILD_TYPE=release}
 
 
 %install
@@ -221,7 +226,8 @@ scons %{?_smp_mflags}                 \
       USE_INSTALLED=all               \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
-      BUILD_TYPE=%{?build_type}
+      %{?with_fault_injection:BUILD_TYPE=dev} \
+      %{!?with_fault_injection:BUILD_TYPE=release}
 
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"
@@ -262,6 +268,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 # you might think libdaos_tests.so goes in the tests RPM but
 # the 4 tools following it need it
 %{_libdir}/libdaos_tests.so
+%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_bindir}/io_conf
 %{_bindir}/jump_pl_map
 %{_bindir}/ring_pl_map
@@ -270,7 +277,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/libvos.so
 %{_libdir}/libcart*
 %{_libdir}/libgurt*
-%{_prefix}/etc/memcheck-cart.supp
+%{_prefix}/%{_sysconfdir}/memcheck-cart.supp
 %dir %{_prefix}%{_sysconfdir}
 %{_prefix}%{_sysconfdir}/vos_size_input.yaml
 %dir %{_sysconfdir}/bash_completion.d
@@ -291,7 +298,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %dir %{conf_dir}/certs/clients
 %attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
 %attr(0644,root,root) %{conf_dir}/daos_server.yml
-%{_sysconfdir}/ld.so.conf.d/daos.conf
 # set daos_admin to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_admins) %{_bindir}/daos_admin
 # set daos_server to be setgid daos_admins in order to invoke daos_admin
@@ -380,6 +386,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_prefix}/lib/daos/TESTING
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
+%exclude %{_bindir}/self_test
 %{_bindir}/smd_ut
 %{_bindir}/vea_ut
 %{_bindir}/daos_perf
@@ -400,10 +407,18 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Tue Oct 27 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.1-4
+* Wed Oct 28 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.1-6
 - add BUILD_TYPE to scons cmdline. default=release
 - Valid values for BUILD_TYPE are dev|release|debug
 - BUILD_TYPE=release will disable fault injection in build
+
+* Wed Oct 28 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.1-5
+- Use %%autosetup
+- Only use systemd_requires if it exists
+- Obsoletes: cart now that it's included in daos
+
+* Sat Oct 24 2020 Maureen Jean <maureen.jean@intel.com> 1.1.1-4
+- Add daos.conf to the daos package to resolve the path to libbio.so
 
 * Tue Oct 13 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> 1.1.1-3
 - Remove obj_ctl from Tests RPM package

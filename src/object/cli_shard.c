@@ -203,13 +203,6 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_data_verify)
 		return 0;
 
-	/** Used to do actual checksum calculations. This prevents conflicts
-	 * between tasks
-	 */
-	csummer_copy = daos_csummer_copy(csummer);
-	if (csummer_copy == NULL)
-		return -DER_NOMEM;
-
 	orw = crt_req_get(rw_args->rpc);
 	orwo = crt_reply_get(rw_args->rpc);
 	sgls = rw_args->rwaa_sgls;
@@ -218,15 +211,21 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	iods_csums = orwo->orw_iod_csums.ca_arrays;
 	maps = orwo->orw_maps.ca_arrays;
 
-	if (daos_obj_is_echo(orw->orw_oid.id_pub))
-		return 0; /** currently don't verify echo classes */
+	/** currently don't verify echo classes */
+	if ((daos_obj_is_echo(orw->orw_oid.id_pub)) || (sgls == NULL))
+		return 0;
 
-	if (sgls == NULL)
-		return 0; /** no data to verify ... size only */
 	D_ASSERTF(orwo->orw_maps.ca_count == orw->orw_iod_array.oia_iod_nr,
 		  "orwo->orw_maps.ca_count(%lu) == "
 		  "orw->orw_iod_array.oia_iod_nr(%d)",
 		  orwo->orw_maps.ca_count, orw->orw_iod_array.oia_iod_nr);
+
+	/** Used to do actual checksum calculations. This prevents conflicts
+	 * between tasks
+	 */
+	csummer_copy = daos_csummer_copy(csummer);
+	if (csummer_copy == NULL)
+		return -DER_NOMEM;
 
 	/** fault injection - corrupt data after getting from server and before
 	 * verifying on client - simulates corruption over network
