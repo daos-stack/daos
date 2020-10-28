@@ -2471,7 +2471,7 @@ dc_tx_check_existence_task(enum obj_rpc_opc opc, daos_handle_t oh,
 
 	rc = dc_obj_fetch_task_create(oh, dc_tx_ptr2hdl(tx), api_flags, dkey,
 				      nr, DIOF_CHECK_EXISTENCE | DIOF_TO_LEADER,
-				      iods, NULL, NULL, NULL, NULL,
+				      iods, NULL, NULL, NULL, NULL, NULL,
 				      tse_task2sched(parent), &task);
 	if (rc != 0)
 		goto out;

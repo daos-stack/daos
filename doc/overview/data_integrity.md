@@ -183,10 +183,52 @@ export DAOS_CSUM_TEST_ALL_TYPE=1
 
 # Life of a checksum (WIP)
 ## Rebuild
-- migrate_one_insert - mrone.iods_csums is allocated, iods_csums copied from
-  dss_enum_unpack_io. Memory reference removed from iods_csums.data. It will be
-  freed in migrate_one_destory
-- migrate_fetch_update_inline - mrone.iods_csums sent to vos_obj_update
+In order for rebuild/migrate process to get checksums so it doesn't have to
+recalculate them, the object list and object fetch task api's provide a checksum
+iov parameter. If memory is allocated for the iov, then the daos client will
+pack the checksums into the it. If insufficient memory is allocated in the
+buffer, the iov_len will be set to the required capacity and the checksums
+packed into the buffer is truncated.
+
+### Client Task API Touch Points
+- **dc_obj_fetch_task_create**: sets csum iov to daos_obj_fetch_t args. These
+  args are set to the rw_cb_args.shard_args.api_args and accessed through an
+  accessor function (rw_args2csum_iov) in cli_shard.c so that rw_args_store_csum
+  can easily access it. This function, called from dc_rw_cb_csum_verify, will
+  pack the data checksums received from the server into the iov.
+- **dc_obj_list_obj_task_create**: sets csum iov to daos_obj_list_obj_t args.
+  args.csum is then copied to obj_enum_args.csum in dc_obj_shard_list(). On enum
+  callback (dc_enumerate_cb()) the packed csum buffer is copied from the rpc
+  args to obj_enum_args.csum (which points to the same buffer as the caller's)
+
+### Rebuild Touch Points
+- migrate_fetch_update_(inline|single|bulk) - the rebuild/migrate functions that
+  write to vos locally must ensure that the checksum is also written. These must
+  use the csum iov param for fetch to get the checksum, then unpack the csums
+  into iod_csum.
+- obj_enum.c is relied on for enumerating the objects to be rebuilt. Because the
+  fetch_update functions will unpack the csums from fetch, it will also unpack
+  the csums for enum, so the unpacking process in obj_enum.c will simply copy
+  the csum_iov to the io (dss_enum_unpack_io) structure in
+  **enum_unpack_recxs()** and then deep copy to the mrone (migrate_one)
+  structure in **migrate_one_insert()**.
+
+### Packing/unpacking checksums
+When checksums are packed (either for fetch or object list) only the data
+checksums are included. For object list, only checksums for data that is inlined
+is included. During a rebuild, if the data is not inlined, then the rebuild
+process will fetch the rest of the data and also get the checksums.
+
+- ci_serialize() - "packs" checksums by appending the struct to an iov and then
+  appending the checksum info buffer to the iov. This puts the actual checksum
+  just after the checksum structure that describes the checksum.
+- ci_cast() - "unpacks" the checksum and describing structure. It does this by
+  casting an iov's buffer to a dcs_csum_info struct and setting the csum_info's
+  checksum pointer to point to the memory just after the structure. It does not
+  copy anything, but really just "casts". To get all dcs_csum_infos, a caller
+  would cast the iov, copy the csum_info to a destination, then move to the next
+  csum_info(ci_move_next_iov) in the iov. Because this process modifies the iov
+  structure it is best to use a copy of the iov as a temp structure.
 
 ## VOS
 - akey_update_begin - determines how much extra space needs to be allocated in
@@ -194,11 +236,11 @@ export DAOS_CSUM_TEST_ALL_TYPE=1
 ### Arrays
 - evt_root_activate - evtree root is activated. If has a csum them the root csum
   properties are set (csum_len, csum_type, csum_chunk_size)
-- evt_desc_csum_fill - if root was activated with a punched record then it won't
-  have had the csum fields set correctly so set them here. Main purpose is to
-  copy the csum to the end of persistent evt record (evt_desc). Enough SCM
+- *evt_desc_csum_fill* - if root was activated with a punched record then it
+  won't have had the csum fields set correctly so set them here. Main purpose is
+  to copy the csum to the end of persistent evt record (evt_desc). Enough SCM
   should have been reserved in akey_update_begin.
-- evt_entry_csum_fill - Copy the csum from the persistent memory to the
+- *evt_entry_csum_fill* - Copy the csum from the persistent memory to the
   evt_entry returned. Also copy the csum fields from the evtree root to complete
   the csum_info structure in the evt_entry.
 - akey_fetch_recx - checksums are saved to the ioc for each found extent. Will
@@ -215,3 +257,6 @@ For enumeration the csums for the keys and values are packed into an iov
 dedicated to csums.
 - fill_key_csum - Checksum is calcuated for the key and packed into the iov
 - fill_data_csum - pack/serialize the csum_info structure into the iov.
+
+## Aggregation
+- srv_csum_recalc.c - the checksum verification and calculations occur here

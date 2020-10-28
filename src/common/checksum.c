@@ -252,10 +252,15 @@ daos_csummer_compare_csum_info(struct daos_csummer *obj,
 	bool		match = true;
 	int		i;
 
-	D_ASSERT(a->cs_type == b->cs_type);
-
-	if (a_len != b_len)
+	if (a->cs_type != b->cs_type) {
+		D_ERROR("%d != %d", a->cs_type, b->cs_type);
 		return false;
+	}
+
+	if (a_len != b_len) {
+		D_ERROR("%d != %d", a_len, b_len);
+		return false;
+	}
 
 	for (i = 0; i < a->cs_nr && match; i++) {
 		match = daos_csummer_csum_compare(obj, ci_idx2csum(a, i),
@@ -947,6 +952,8 @@ daos_csummer_verify_key(struct daos_csummer *obj, daos_key_t *key,
 		return -DER_CSUM;
 	}
 
+	D_ASSERT(key != NULL);
+
 	rc = daos_csummer_calc_key(obj, key, &csum_info_verify);
 	if (rc != 0) {
 		D_ERROR("daos_csummer_calc error: %d\n", rc);
@@ -954,11 +961,15 @@ daos_csummer_verify_key(struct daos_csummer *obj, daos_key_t *key,
 	}
 
 	match = daos_csummer_compare_csum_info(obj, csum, csum_info_verify);
-	daos_csummer_free_ci(obj, &csum_info_verify);
 	if (!match) {
-		D_ERROR("Key checksums don't match\n");
+		D_ERROR("Key checksums don't match. Key: "DF_KEY" Calculated: "
+				DF_CI" != Received: "DF_CI"\n",
+			DP_KEY(key),
+			DP_CI(*csum_info_verify), DP_CI(*csum));
+		daos_csummer_free_ci(obj, &csum_info_verify);
 		return -DER_CSUM;
 	}
+	daos_csummer_free_ci(obj, &csum_info_verify);
 
 	return 0;
 }
@@ -998,6 +1009,17 @@ ci_set(struct dcs_csum_info *csum_buf, void *buf, uint32_t csum_buf_size,
 	csum_buf->cs_nr = csum_count;
 	csum_buf->cs_chunksize = chunksize;
 	csum_buf->cs_type = type;
+}
+
+void
+ci_set_from_ci(struct dcs_csum_info *csum_buf, struct dcs_csum_info *csum2copy)
+{
+	D_ASSERT(csum_buf != NULL);
+	D_ASSERT(csum2copy != NULL);
+
+	ci_set(csum_buf, csum2copy->cs_csum, csum2copy->cs_buf_len,
+	       csum2copy->cs_len, csum2copy->cs_nr, csum2copy->cs_chunksize,
+	       csum2copy->cs_type);
 }
 
 void
@@ -1101,6 +1123,8 @@ ci_cast(struct dcs_csum_info **obj, const d_iov_t *iov)
 	D_ASSERT(obj != NULL);
 	*obj = NULL;
 
+	if (iov->iov_len < sizeof(struct dcs_csum_info))
+		return;
 	buf = iov->iov_buf;
 	tmp = (struct dcs_csum_info *)buf;
 

@@ -3158,7 +3158,6 @@ fetch_replica_unavail(void **state)
 	uint32_t		 size = 64;
 	d_rank_t		 rank = 2;
 	char			*buf;
-	int			 rc;
 
 	/* needs at lest 4 targets, exclude one and another 3 raft nodes */
 	if (!test_runable(arg, 4))
@@ -3201,7 +3200,6 @@ fetch_replica_unavail(void **state)
 		/* wait until reintegration is done */
 		test_rebuild_wait(&arg, 1);
 
-		assert_int_equal(rc, 0);
 	}
 	D_FREE(buf);
 	MPI_Barrier(MPI_COMM_WORLD);

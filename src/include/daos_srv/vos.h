@@ -664,7 +664,7 @@ vos_fetch_end(daos_handle_t ioh, int err);
 
 /**
  * Prepare IO sink buffers for the specified arrays of the given
- * object. The caller can directly use thse buffers for RMA write.
+ * object. The caller can directly use those buffers for RMA write.
  *
  * The upper layer must explicitly call \a vos_update_end to finalise the
  * ZC I/O and release resources.
@@ -748,6 +748,9 @@ vos_ioh2ci_nr(daos_handle_t ioh);
  */
 struct bio_sglist *
 vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx);
+
+void
+vos_set_io_csum(daos_handle_t ioh, struct dcs_iod_csums *csums);
 
 /**
  * VOS iterator APIs

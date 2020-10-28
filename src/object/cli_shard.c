@@ -182,6 +182,54 @@ dc_rw_cb_iod_sgl_copy(daos_iod_t *iod, d_sg_list_t *sgl, daos_iod_t *cp_iod,
 	return 0;
 }
 
+static d_iov_t *
+rw_args2csum_iov(const struct rw_cb_args *rw_args)
+{
+	D_ASSERT(rw_args != NULL);
+	D_ASSERT(rw_args->shard_args != NULL);
+	D_ASSERT(rw_args->shard_args != NULL);
+	D_ASSERT(rw_args->shard_args->api_args != NULL);
+
+	return rw_args->shard_args->api_args->csum_iov;
+}
+
+static bool
+rw_args_has_csum_iov(const struct rw_cb_args *rw_args)
+{
+	return rw_args2csum_iov(rw_args) != NULL;
+}
+
+/**
+ * If csums exist and the rw_args has a checksum iov to put checksums into,
+ * then serialize the data checksums to the checksum iov. If the iov buffer
+ * isn't large enough, then the checksums will be truncated. The iov len will
+ * be the length needed. The caller can decide if it wants to grow the iov
+ * buffer and call again.
+ */
+static void
+rw_args_store_csum(const struct rw_cb_args *rw_args,
+		   const struct dcs_iod_csums *iod_csum)
+{
+	int	c, rc;
+	int	csum_iov_too_small = false;
+	d_iov_t *csum_iov;
+
+	if (!rw_args_has_csum_iov(rw_args) || iod_csum == NULL)
+		return;
+
+	csum_iov = rw_args2csum_iov(rw_args);
+	for (c = 0; c < iod_csum->ic_nr; c++) {
+		if (!csum_iov_too_small) {
+			rc = ci_serialize(&iod_csum->ic_data[c],
+					  csum_iov);
+			csum_iov_too_small = rc == -DER_REC2BIG;
+		}
+
+		if (csum_iov_too_small)
+			csum_iov->iov_len += ci_size(iod_csum->ic_data[c]);
+	}
+}
+
 static int
 dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 {
@@ -305,6 +353,8 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 			}
 			break;
 		}
+
+		rw_args_store_csum(rw_args, iod_csum);
 	}
 	daos_csummer_destroy(&csummer_copy);
 
@@ -1294,8 +1344,10 @@ dc_enumerate_copy_csum(d_iov_t *dst, const d_iov_t *src)
 		       min(dst->iov_buf_len,
 			   src->iov_len));
 		dst->iov_len = src->iov_len;
-		if (dst->iov_len > dst->iov_buf_len)
+		if (dst->iov_len > dst->iov_buf_len) {
+			D_INFO("Checksum buffer truncated");
 			return -DER_TRUNC;
+		}
 	}
 	return 0;
 }

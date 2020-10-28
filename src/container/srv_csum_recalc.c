@@ -139,6 +139,7 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 		unsigned int rec_size, unsigned int prefix_len)
 {
 	unsigned int	j = 0;
+	bool		match;
 
 	if (recalc->cr_phy_off && DAOS_FAIL_CHECK(DAOS_VOS_AGG_MW_THRESH)) {
 		D_INFO("CHECKSUM merge window failure injection.\n");
@@ -183,9 +184,15 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 	 * starting at the correct offset of the checksum array for the input
 	 * segment.
 	 */
-	return !memcmp(new_csum->cs_csum,
-		       &recalc->cr_phy_csum->cs_csum[j * new_csum->cs_len],
-		       new_csum->cs_nr * new_csum->cs_len);
+	match = !memcmp(new_csum->cs_csum,
+			&recalc->cr_phy_csum->cs_csum[j *
+						      new_csum->cs_len],
+			new_csum->cs_nr * new_csum->cs_len);
+	if (!match) {
+		D_ERROR("calc ("DF_CI") != phy ("DF_CI")\n",
+			DP_CI(*new_csum), DP_CI(*recalc->cr_phy_csum));
+	}
+	return match;
 }
 
 /* Driver for the checksum verification of input segments, and calculation

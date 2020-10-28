@@ -163,7 +163,7 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 	int		 rc;
 
 	rc = dc_obj_fetch_task_create(oh, th, flags, dkey, nr, 0, iods,
-				      sgls, maps, NULL, ev, NULL, &task);
+				      sgls, maps, NULL, NULL, ev, NULL, &task);
 	if (rc)
 		return rc;
 

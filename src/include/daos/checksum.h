@@ -407,6 +407,13 @@ ci_set(struct dcs_csum_info *csum_buf, void *buf, uint32_t csum_buf_size,
 	uint16_t csum_size, uint32_t csum_count, uint32_t chunksize,
 	uint16_t type);
 
+/**
+ * Setup the daos_csum_info with an existing daos_csum_info. This is not a copy,
+ * meaning that the same csum buf from the source is used in the destination.
+ */
+void
+ci_set_from_ci(struct dcs_csum_info *csum_buf, struct dcs_csum_info *csum2copy);
+
 /** Set the csum buf to a NULL value */
 void
 ci_set_null(struct dcs_csum_info *csum_buf);

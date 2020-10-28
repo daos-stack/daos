@@ -1732,7 +1732,8 @@ test_formatter(void **state)
 		};
 
 	sprintf(result, DF_CI, DP_CI(ci));
-	assert_string_equal("{nr: 1, len: 8, first_csum: 1234567890123456789}",
+	assert_string_equal("{nr: 1, len: 8, first_csum: 1234567890123456789, "
+		     "csum_buf_len: 8}",
 			    result);
 }
 

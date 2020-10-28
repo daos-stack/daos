@@ -378,6 +378,7 @@ daos_iov_copy(d_iov_t *dst, d_iov_t *src)
 	if (src == NULL || src->iov_buf == NULL)
 		return 0;
 	D_ASSERT(src->iov_buf_len > 0);
+	D_ASSERT(dst != NULL);
 
 	D_ALLOC(dst->iov_buf, src->iov_buf_len);
 	if (dst->iov_buf == NULL)
@@ -386,6 +387,24 @@ daos_iov_copy(d_iov_t *dst, d_iov_t *src)
 	memcpy(dst->iov_buf, src->iov_buf, src->iov_len);
 	dst->iov_len = src->iov_len;
 	D_DEBUG(DB_TRACE, "iov_len %d\n", (int)dst->iov_len);
+	return 0;
+}
+
+int
+daos_iov_alloc(d_iov_t *iov, daos_size_t size, bool set_full)
+{
+	D_ASSERT(iov != NULL);
+	D_ASSERT(size > 0);
+
+	memset(iov, 0, sizeof(*iov));
+	D_ALLOC(iov->iov_buf, size);
+	if (iov->iov_buf == NULL)
+		return -DER_NOMEM;
+
+	iov->iov_buf_len = size;
+	if (set_full)
+		iov->iov_len = size;
+
 	return 0;
 }
 
@@ -419,7 +438,9 @@ daos_iov_cmp(d_iov_t *iov1, d_iov_t *iov2)
 void
 daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len)
 {
-	D_ASSERT(iov->iov_len + buf_len <= iov->iov_buf_len);
+	D_ASSERTF(iov->iov_len + buf_len <= iov->iov_buf_len,
+		  "iov->iov_len(%lu) + buf_len(%lu) <= iov->iov_buf_len(%lu)",
+		  iov->iov_len, buf_len, iov->iov_buf_len);
 	memcpy(iov->iov_buf + iov->iov_len, buf, buf_len);
 	iov->iov_len += buf_len;
 }

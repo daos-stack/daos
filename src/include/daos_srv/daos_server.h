@@ -676,7 +676,7 @@ int dsc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch,
 int dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		  unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
 		  daos_iom_t *maps, unsigned int extra_flag,
-		  unsigned int *extra_arg);
+		  unsigned int *extra_arg, d_iov_t *csum_iov);
 
 int dsc_obj_list_obj(daos_handle_t oh, daos_epoch_range_t *epr,
 		     daos_key_t *dkey, daos_key_t *akey, daos_size_t *size,
@@ -764,7 +764,7 @@ struct dss_enum_unpack_io {
 	daos_unit_oid_t		 ui_oid;	/**< type <= OBJ */
 	daos_key_t		 ui_dkey;	/**< type <= DKEY */
 	daos_iod_t		*ui_iods;
-	struct dcs_iod_csums	*ui_iods_csums;
+	d_iov_t			 ui_csum_iov;
 	/* punched epochs per akey */
 	daos_epoch_t		*ui_akey_punch_ephs;
 	daos_epoch_t		*ui_rec_punch_ephs;

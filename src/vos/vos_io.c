@@ -2149,6 +2149,15 @@ vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx)
 	return bio_iod_sgl(ioc->ic_biod, idx);
 }
 
+void
+vos_set_io_csum(daos_handle_t ioh, struct dcs_iod_csums *csums)
+{
+	struct vos_io_context *ioc = vos_ioh2ioc(ioh);
+
+	D_ASSERT(ioc != NULL);
+
+	ioc->iod_csums = csums;
+}
 /*
  * XXX Dup these two helper functions for this moment, implement
  * non-transactional umem_alloc/free() later.

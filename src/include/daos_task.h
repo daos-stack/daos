@@ -745,6 +745,10 @@ typedef struct {
 	daos_iom_t		*ioms;
 	/** extra arguments, for example obj_ec_fail_info for DIOF_EC_RECOV */
 	void			*extra_arg;
+	/** Pre-allocated buffer to pack checksums into (Optional, intended for
+	 * internal use only
+	 */
+	d_iov_t			*csum_iov;
 } daos_obj_rw_t;
 
 /** fetch args struct */

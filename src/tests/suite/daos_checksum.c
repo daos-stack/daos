@@ -152,26 +152,28 @@ iov_alloc_str(d_iov_t *iov, const char *str)
 /** daos checksum test context */
 struct csum_test_ctx {
 	/** Pool */
-	daos_handle_t		poh;
+	daos_handle_t		 poh;
 	/** Container */
-	daos_handle_t		coh;
-	daos_cont_info_t	info;
-	uuid_t			uuid;
+	daos_handle_t		 coh;
+	daos_cont_info_t	 info;
+	uuid_t			 uuid;
 	/** Object */
-	daos_handle_t		oh;
-	daos_obj_id_t		oid;
-	daos_key_t		dkey;
-	daos_iod_t		update_iod;
-	d_sg_list_t		update_sgl;
-	daos_iod_t		fetch_iod;
-	d_sg_list_t		fetch_sgl;
-	daos_recx_t		recx[8];
+	daos_handle_t		 oh;
+	daos_obj_id_t		 oid;
+	daos_key_t		 dkey;
+	daos_iod_t		 update_iod;
+	d_sg_list_t		 update_sgl;
+	daos_iod_t		 fetch_iod;
+	d_sg_list_t		 fetch_sgl;
+	daos_recx_t		 recx[8];
+	test_arg_t		*test_arg;
 };
 
 static void
 setup_from_test_args(struct csum_test_ctx *ctx, test_arg_t *state)
 {
 	ctx->poh = state->pool.poh;
+	ctx->test_arg = state;
 }
 
 /**
@@ -642,6 +644,21 @@ struct partial_unaligned_fetch_testcase_args {
 	daos_recx_t		 fetch_recxs[FETCH_RECX_NR];
 	daos_oclass_id_t	 oclass;
 };
+
+static int
+disabled_targets(test_arg_t *arg)
+{
+	int			rc;
+	daos_pool_info_t	info;
+
+	rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
+
+	if (rc < 0)
+		return rc;
+
+	return info.pi_ndisabled;
+}
+
 
 static void
 setup_obj_data_for_sv(struct csum_test_ctx *ctx, bool large_buf)
@@ -1731,20 +1748,6 @@ get_rank_not_in_placement(struct daos_obj_layout *placement,
 	return -1;
 }
 
-static int
-disabled_targets(test_arg_t *arg)
-{
-	int			rc;
-	daos_pool_info_t	info;
-
-	rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
-
-	if (rc < 0)
-		return rc;
-
-	return info.pi_ndisabled;
-}
-
 static void
 rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 {
@@ -1774,6 +1777,15 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_success(rc);
+
+	/** insert another overlapping extent */
+	if (iod_type == DAOS_IOD_ARRAY) {
+		ctx.recx->rx_idx += data_len_bytes / 2;
+		ctx.recx->rx_nr -= data_len_bytes / 2;
+		rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+				     &ctx.update_iod, &ctx.update_sgl, NULL);
+		assert_success(rc);
+	}
 
 	rc = daos_obj_layout_get(ctx.coh, ctx.oid, &layout1);
 	assert_success(rc);
@@ -1806,11 +1818,13 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 	assert_true(rank_to_fetch >= 0);
 	print_message("Rank to fetch: %d\n", rank_to_fetch);
 
-	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD);
+	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD | DAOS_FAIL_ALWAYS);
 	daos_fail_num_set(rank_to_fetch);
 	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey,
 			    1, &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
 	assert_success(rc);
+	daos_fail_loc_reset();
+	daos_fail_num_set(0);
 
 	daos_reint_server(arg->pool.pool_uuid, arg->group, arg->dmg_config,
 			  arg->pool.alive_svc, rank_to_exclude);
@@ -1825,35 +1839,104 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 	cleanup_cont_obj(&ctx);
 }
 
+int
+tst_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+	      unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
+	      daos_iom_t *maps, uint32_t extra_flag, void *extra_arg,
+	      d_iov_t *csum)
+{
+	tse_task_t	*task;
+	int		rc;
+
+	rc = dc_obj_fetch_task_create(oh, DAOS_TX_NONE, 0, dkey, nr, extra_flag,
+				      iods, sgls, maps, extra_arg, csum, NULL,
+				      NULL, &task);
+
+	assert_int_equal(0, rc);
+
+	return dc_task_schedule(task, true);
+}
+
+static void
+ctx_obj_update(struct csum_test_ctx *ctx)
+{
+	int rc = daos_obj_update(ctx->oh, DAOS_TX_NONE, 0, &ctx->dkey, 1,
+				 &ctx->update_iod, &ctx->update_sgl, NULL);
+
+
+	assert_success(rc);
+}
+
+static void
+test_fetch_task_api(void **state)
+{
+	struct csum_test_ctx	 ctx;
+	struct dcs_csum_info	*csum_info = NULL;
+	int			 rc;
+
+	setup_from_test_args(&ctx, *state);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 1024 * 32, OC_SX);
+	setup_single_recx_data(&ctx, "abc", 1024);
+
+	ctx_obj_update(&ctx);
+
+	d_iov_t iov = {0};
+
+	rc = tst_obj_fetch(ctx.oh, 1, &ctx.dkey, 1, &ctx.fetch_iod,
+			   &ctx.fetch_sgl, NULL, 0, NULL, &iov);
+	/** Should still succeed, even with an iov that doesn't have a buffer */
+	assert_success(rc);
+
+	/** fetch should have set the length to what's needed */
+	assert_true(iov.iov_len > 0);
+
+	iov_alloc(&iov, iov.iov_len);
+	iov.iov_len = 0;
+
+	/** fetch again with an allocated buffer */
+	rc = tst_obj_fetch(ctx.oh, 1, &ctx.dkey, 1, &ctx.fetch_iod,
+			   &ctx.fetch_sgl, NULL, 0, NULL, &iov);
+	assert_success(rc);
+
+	ci_cast(&csum_info, &iov);
+	assert_int_equal(1, csum_info->cs_nr);
+	assert_int_equal(8, csum_info->cs_len);
+
+	daos_iov_free(&iov);
+
+	cleanup_cont_obj(&ctx);
+}
+
 #define	INLINE_DATA	10
 #define	FETCHED_DATA	1024
 #define	BULK_DATA	(1024 * 32)
+#define CHUNK_SIZE	(1024 * 32)
 
 /** Test rebuild enumerating objects and getting data inline */
 static void
 rebuild_1(void **state)
 {
-	rebuild_test(state, 1024, INLINE_DATA, DAOS_IOD_ARRAY);
+	rebuild_test(state, CHUNK_SIZE, INLINE_DATA, DAOS_IOD_ARRAY);
 }
 
 /** Test rebuild when data is fetched after enumeration */
 static void
 rebuild_2(void **state)
 {
-	rebuild_test(state, 1024, FETCHED_DATA, DAOS_IOD_ARRAY);
+	rebuild_test(state, CHUNK_SIZE, FETCHED_DATA, DAOS_IOD_ARRAY);
 }
 
 /** Test rebuild when data is bulk transferred */
 static void
 rebuild_3(void **state)
 {
-	rebuild_test(state, 1024, BULK_DATA, DAOS_IOD_ARRAY);
+	rebuild_test(state, CHUNK_SIZE, BULK_DATA, DAOS_IOD_ARRAY);
 }
 
 static void
 rebuild_4(void **state)
 {
-	rebuild_test(state, 1024, INLINE_DATA, DAOS_IOD_SINGLE);
+	rebuild_test(state, CHUNK_SIZE, INLINE_DATA, DAOS_IOD_SINGLE);
 
 }
 
@@ -1861,14 +1944,14 @@ rebuild_4(void **state)
 static void
 rebuild_5(void **state)
 {
-	rebuild_test(state, 1024, FETCHED_DATA, DAOS_IOD_SINGLE);
+	rebuild_test(state, CHUNK_SIZE, FETCHED_DATA, DAOS_IOD_SINGLE);
 }
 
 /** Test rebuild when data is bulk transferred */
 static void
 rebuild_6(void **state)
 {
-	rebuild_test(state, 1024, BULK_DATA, DAOS_IOD_SINGLE);
+	rebuild_test(state, CHUNK_SIZE, BULK_DATA, DAOS_IOD_SINGLE);
 }
 
 static void
@@ -2070,8 +2153,8 @@ test_enumerate_object(void **state)
 	struct dcs_csum_info	*csum_info = NULL;
 	void			*end_byte;
 	const uint32_t		 akey_nr = 5;
-	/** will enumerate for each akey, value of each akey, and 1 dkey */
-	const uint32_t		 enum_nr = akey_nr * 2 + 1;
+	/** will enum for each akey, value of each akey, 1 dkey, and 1 oid */
+	const uint32_t		 enum_nr = akey_nr * 2 + 1 + 1;
 	daos_key_desc_t		 kds[enum_nr];
 	uint8_t			 csum_buf[1024];
 	uint32_t		 csum_count = 0;
@@ -2100,7 +2183,7 @@ test_enumerate_object(void **state)
 
 	/** Make sure can handle data over multiple iovs */
 	d_sgl_init(&sgl, 2);
-	iov_alloc(&sgl.sg_iovs[0], 10);
+	iov_alloc(&sgl.sg_iovs[0], 100);
 	iov_alloc(&sgl.sg_iovs[1], 1024);
 
 
@@ -2114,8 +2197,12 @@ test_enumerate_object(void **state)
 	assert_int_equal(-DER_CSUM, rc);
 	client_clear_fault();
 
-	/** Sanity check that no failure still returns success */
-	nr = enum_nr;
+	/** Sanity check that no failure still returns success. Setting
+	 * nr to larger than expected because tst_obj_list_obj will set it to
+	 * what's returned. If there is a bug an tst_obj_list_obj could return
+	 * more than expected, want to catch it.
+	 */
+	nr = enum_nr + 10;
 	memset(&anchor, 0, sizeof(anchor));
 	memset(&dkey_anchor, 0, sizeof(dkey_anchor));
 	memset(&akey_anchor, 0, sizeof(akey_anchor));
@@ -2136,10 +2223,96 @@ test_enumerate_object(void **state)
 		csum_count++;
 	}
 
-	assert_int_equal(enum_nr, csum_count);
+	/** -1 because oid doesn't have checksum */
+	assert_int_equal(enum_nr - 1, csum_count);
 
 	/** Clean up */
 	d_sgl_fini(&sgl, true);
+	cleanup_data(&ctx);
+	cleanup_cont_obj(&ctx);
+}
+
+static uint32_t
+get_csum_count(d_iov_t *csum_iov)
+{
+	void			*end_byte;
+	struct dcs_csum_info	*csum_info = NULL;
+	uint32_t		 csum_count = 0;
+
+	end_byte = csum_iov->iov_buf + csum_iov->iov_len;
+
+	while (csum_iov->iov_buf < end_byte) {
+		ci_cast(&csum_info, csum_iov);
+		csum_iov->iov_buf += ci_size(*csum_info);
+		csum_iov->iov_buf_len -= ci_size(*csum_info);
+		csum_iov->iov_len -= ci_size(*csum_info);
+		csum_count++;
+	}
+	return csum_count;
+}
+
+/**
+ * insert overlapping extents. When enumerating visible extents are checksums
+ * must be calculated for the partial extent.
+ */
+static void
+test_enumerate_object2(void **state)
+{
+#define KDS_NR 10
+	struct csum_test_ctx	 ctx = {0};
+	daos_oclass_id_t	 oc = dts_csum_oc;
+	daos_anchor_t		 anchor = {0};
+	daos_anchor_t		 dkey_anchor = {0};
+	daos_anchor_t		 akey_anchor = {0};
+	d_iov_t			 csum_iov = {0};
+	d_sg_list_t		 list_sgl = {0};
+	uint32_t		 nr = KDS_NR;
+	daos_key_desc_t		 kds[KDS_NR] = {0};
+	uint8_t			 csum_buf[2048];
+	int			 rc;
+
+	d_iov_set(&csum_iov, csum_buf, sizeof(csum_buf));
+	csum_iov.iov_len = 0;
+
+	setup_from_test_args(&ctx, *state);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 8, oc);
+	setup_single_recx_data(&ctx, "ABCDEF", 1024);
+
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			     &ctx.update_iod, &ctx.update_sgl,
+			     NULL);
+	assert_int_equal(0, rc);
+	ctx.update_iod.iod_recxs->rx_idx += 5;
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			     &ctx.update_iod, &ctx.update_sgl,
+			     NULL);
+	assert_int_equal(0, rc);
+
+	d_sgl_init(&list_sgl, 1);
+	iov_alloc(&list_sgl.sg_iovs[0], 1024 * 10);
+	/** Sanity check that no failure still returns success */
+	daos_epoch_range_t epr = {.epr_lo = 0, .epr_hi = DAOS_EPOCH_MAX};
+
+	/** force to only list visible extents */
+	daos_anchor_set_flags(&dkey_anchor,
+			      DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH);
+
+	memset(list_sgl.sg_iovs[0].iov_buf, 0, list_sgl.sg_iovs[0].iov_buf_len);
+	rc = tst_obj_list_obj(ctx.oh, &epr, &ctx.dkey, NULL, NULL, &nr, kds,
+			      &list_sgl, &anchor, &dkey_anchor, &akey_anchor,
+			      &csum_iov);
+	assert_success(rc);
+
+	/** make sure got correct number of key descriptors. Should have gotten
+	 * for: obj, dkey, akey, recx
+	 */
+	assert_int_equal(4, nr);
+
+	/** only 3 checksums, dkey, akey, and inlined recx */
+	assert_int_equal(3, get_csum_count(&csum_iov));
+
+	/** Clean up */
+	d_sgl_fini(&list_sgl, true);
 	cleanup_data(&ctx);
 	cleanup_cont_obj(&ctx);
 }
@@ -2310,8 +2483,12 @@ static const struct CMUnitTest csum_tests[] = {
 	CSUM_TEST("DAOS_CSUM10: Enumerate A Keys", test_enumerate_a_key),
 	CSUM_TEST("DAOS_CSUM11: Enumerate D Keys", test_enumerate_d_key),
 	CSUM_TEST("DAOS_CSUM12: Enumerate objects", test_enumerate_object),
+	CSUM_TEST("WIP DAOS_CSUM12.1: Enumerate objects with overlapping "
+		  "extents", test_enumerate_object2),
 	CSUM_TEST("DAOS_CSUM13: Enumerate objects with too small csum buffer",
 		  test_enumerate_object_csum_buf_too_small),
+	CSUM_TEST("DAOS_CSUM14 - Get checksum through fetch task api",
+		  test_fetch_task_api),
 	CSUM_TEST("DAOS_CSUM14: Many IODs", many_iovs_with_single_values),
 	CSUM_TEST("DAOS_CSUM14.1: two iods and two recx", two_iods_two_recxs),
 	CSUM_TEST("DAOS_CSUM15: Request non existent data",
