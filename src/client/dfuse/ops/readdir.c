@@ -299,7 +299,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 			if (dre->dre_offset == eof)
 				next_offset = DFUSE_READDIR_EOD;
 			else
-				next_offset = dre->dre_offset + 1;
+				next_offset = dre->dre_offset;
 
 			DFUSE_TRA_DEBUG(oh, "Checking offset %ld next %ld '%s'",
 					dre->dre_offset,
