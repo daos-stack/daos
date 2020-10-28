@@ -35,6 +35,7 @@ boolean release_candidate() {
            script: "git diff-index --name-only HEAD^ | grep -q TAG && " +
                    "grep -i '[0-9]rc[0-9]' TAG",
           returnStatus: true)
+}
 
 def scons_faults_args() {
     // if the faults-enabled pragma is false or it a release candidate; disable fault injection
