@@ -28,6 +28,7 @@ from server_utils import ServerFailed
 
 
 class PoolCreateTests(PoolTestBase):
+    # pylint: disable=too-many-ancestors
     """Pool create tests.
 
     All of the tests verify pool create performance with 7 servers and 1 client.
