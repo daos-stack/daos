@@ -1,0 +1,72 @@
+#!/usr/bin/make -f
+# See debhelper(7) (uncomment to enable)
+# output every command that modifies files on the build system.
+export DH_VERBOSE = 1
+
+name := daos
+prefix := /usr
+sysconfdir := /etc
+exec_prefix := $(prefix)
+buildroot := debian/tmp
+daoshome := $(exec_prefix)/lib/$(DEB_BUILD_MULTIARCH)/$(name)
+
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+    NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+    MAKEFLAGS += -j$(NUMJOBS)
+endif
+
+SCONS = scons -j $(NUMJOBS)
+DEB_SCONS_OPTIONS := --config=force --no-rpath USE_INSTALLED=all \
+                     CONF_DIR=$(sysconfdir)/daos PREFIX=$(prefix)
+
+export GOCACHE := $(CURDIR)/.gocache
+
+%:
+	dh $@ --with-systemd
+
+override_dh_auto_build:
+	mkdir -p $(GOCACHE)
+	if ! $(SCONS) $(DEB_SCONS_OPTIONS); then \
+	    cat config.log;                      \
+	    exit 1;                              \
+	fi
+
+override_dh_auto_clean:
+	echo $(DEB_BUILD_OPTIONS)
+	$(SCONS) --clean
+	rm -rf build install
+	find . -name '*.pyc' -delete
+	rm -rf _build.external-Linux
+	rm -rf .sconf-temp-Linux
+	rm -f .sconsign-Linux.dblite
+	rm -f .build_vars-Linux.json .build_vars-Linux.sh
+	rm -f $(name)-Linux.conf
+	rm -f config-Linux.log
+	dh_auto_clean
+
+override_dh_auto_install:
+	mkdir -p $(GOCACHE)
+	$(SCONS) $(DEB_SCONS_OPTIONS)                     \
+	         --install-sandbox=$(CURDIR)/${buildroot} \
+	         $(CURDIR)/${buildroot}${prefix}          \
+	         $(CURDIR)/${buildroot}$(sysconfdir)
+	mkdir -p ${buildroot}$(sysconfdir)/ld.so.conf.d/
+	echo "$(prefix)/lib64/daos_srv" > ${buildroot}$(sysconfdir)/ld.so.conf.d/daos.conf
+	mkdir -p ${buildroot}$(prefix)/lib/systemd/system
+	install -m 644 utils/systemd/daos_server.service ${buildroot}$(prefix)/lib/systemd/system
+	install -m 644 utils/systemd/daos_agent.service ${buildroot}$(prefix)/lib/systemd/system
+	mkdir -p ${buildroot}$(sysconfdir)/daos/certs/clients
+	find debian/tmp -type f | xargs ls -ld
+
+override_dh_missing:
+	# we want builds to break if files are unpackaged
+	dh_missing --fail-missing
+
+override_dh_fixperms:
+	dh_fixperms
+	chmod 0700 debian/tmp$(sysconfdir)/daos/certs debian/tmp$(sysconfdir)/daos/certs/clients
+	chmod 0664 debian/tmp$(sysconfdir)/daos/daos_server.yml
+	# set daos_admin to be setuid root in order to perform privileged tasks
+	chmod 4750 debian/tmp$(prefix)/bin/daos_admin
+	# set daos_server to be setgid daos_admins in order to invoke daos_admin
+	chmod 2755 debian/tmp$(prefix)/bin/daos_server

@@ -69,7 +69,7 @@ smd_pool_assign(uuid_t pool_id, int tgt_id, uint64_t blob_id, uint64_t blob_sz)
 				""DF_U64" != "DF_U64"\n",
 				DP_UUID(&key_pool.uuid), entry.spe_blob_sz,
 				blob_sz);
-			rc = -DER_MISMATCH;
+			rc = -DER_INVAL;
 			goto out;
 		}
 

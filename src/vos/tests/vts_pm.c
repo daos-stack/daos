@@ -1581,7 +1581,7 @@ minor_epoch_punch_sv(void **state)
 
 	d_iov_set(&sgl.sg_iovs[0], (void *)first, iod.iod_size);
 
-	vts_dtx_begin_ex(&oid, arg->ctx.tc_co_hdl, epoch++, 0, 2, &dth);
+	vts_dtx_begin_ex(&oid, arg->ctx.tc_co_hdl, epoch++, 0, 0, 2, &dth);
 
 	/* Write the first value */
 	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid,
@@ -1666,7 +1666,7 @@ minor_epoch_punch_array(void **state)
 
 	d_iov_set(&sgl.sg_iovs[0], (void *)first, rex.rx_nr);
 
-	vts_dtx_begin_ex(&oid, arg->ctx.tc_co_hdl, epoch++, 0, 3, &dth);
+	vts_dtx_begin_ex(&oid, arg->ctx.tc_co_hdl, epoch++, 0, 0, 3, &dth);
 
 	/* Write the first value */
 	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid,
