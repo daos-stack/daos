@@ -319,6 +319,7 @@ class DaosServer():
         scyaml = yaml.load(scfd)
         scyaml['servers'][0]['log_file'] = self._log_file
         if self.conf.args.server_debug:
+            scyaml['control_log_mask'] = 'ERROR'
             scyaml['servers'][0]['log_mask'] = self.conf.args.server_debug
         scyaml['control_log_file'] = control_log_file.name
 
@@ -372,12 +373,16 @@ class DaosServer():
                                                      suffix='.log',
                                                      delete=False)
 
-        self._agent = subprocess.Popen([agent_bin,
-                                        '--config-path', agent_config,
-                                        '--insecure',
-                                        '--debug',
-                                        '--runtime_dir', self.agent_dir,
-                                        '--logfile', agent_log_file.name],
+        agent_cmd = [agent_bin,
+                     '--config-path', agent_config,
+                     '--insecure',
+                     '--runtime_dir', self.agent_dir,
+                     '--logfile', agent_log_file.name]
+
+        if not self.conf.args.server_debug:
+            agent_cmd.append('--debug')
+
+        self._agent = subprocess.Popen(agent_cmd,
                                        env=os.environ.copy())
         self.conf.agent_dir = self.agent_dir
         self.running = True
@@ -542,7 +547,7 @@ class ValgrindHelper():
         if self.full_check:
             cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
         else:
-            cmd.extend(['--leak-check=no'])
+            cmd.append('--leak-check=no')
 
         s_arg = '--suppressions='
         cmd.extend(['{}{}'.format(s_arg,
@@ -611,6 +616,9 @@ class DFuse():
         pre_inode = os.stat(self.dir).st_ino
 
         my_env = get_base_env()
+
+        if self.conf.args.dfuse_debug:
+            my_env['D_LOG_MASK'] = self.conf.args.dfuse_debug
 
         my_env['D_LOG_FILE'] = self.log_file
         my_env['DAOS_AGENT_DRPC_DIR'] = self._daos.agent_dir
@@ -684,16 +692,20 @@ class DFuse():
             self._close_files()
             umount(self.dir)
 
+        run_log_test = True
         try:
             ret = self._sp.wait(timeout=20)
             print('rc from dfuse {}'.format(ret))
             if ret != 0:
                 fatal_errors = True
         except subprocess.TimeoutExpired:
+            print('Timeout stopping dfuse')
             self._sp.send_signal(signal.SIGTERM)
             fatal_errors = True
+            run_log_test = False
         self._sp = None
-        log_test(self.conf, self.log_file)
+        if run_log_test:
+            log_test(self.conf, self.log_file)
 
         # Finally, modify the valgrind xml file to remove the
         # prefix to the src dir.
@@ -1252,7 +1264,7 @@ def run_in_fg(server, conf):
     t_dir = os.path.join(dfuse.dir, container)
     os.mkdir(t_dir)
     print('Running at {}'.format(t_dir))
-    print('daos container create --svc 0 --type POSIX' \
+    print('daos container create --svc 0 --type POSIX ' \
           '--pool {} --path {}/uns-link'.format(
               pools[0], t_dir))
     print('cd {}/uns-link'.format(t_dir))
@@ -1263,6 +1275,163 @@ def run_in_fg(server, conf):
     except KeyboardInterrupt:
         pass
     dfuse = None
+
+def check_readdir_perf(server, conf):
+    """ Check and report on readdir performance"""
+
+    def make_dirs(parent, count):
+        print('Populating to {}'.format(count))
+        dir_dir = os.path.join(parent,
+                               'dirs.{}.in'.format(count))
+        t_dir = os.path.join(parent,
+                               'dirs.{}'.format(count))
+        file_dir = os.path.join(parent,
+                                'files.{}.in'.format(count))
+        t_file = os.path.join(parent,
+                                'files.{}'.format(count))
+
+        start_all = time.time()
+        if not os.path.exists(t_dir):
+            try:
+                os.mkdir(dir_dir)
+            except FileExistsError:
+                pass
+            for i in range(count):
+                try:
+                    os.mkdir(os.path.join(dir_dir, str(i)))
+                except FileExistsError:
+                    pass
+                if i + 1 == int(count / 2):
+                    elapsed = time.time() - start_all
+                    print('Creating {} dirs took {:.2f}'.format(i + 1,
+                                                             elapsed))
+            elapsed = time.time() - start_all
+            print('Creating {} dirs took {:.2f}'.format(i + 1,
+                                                         elapsed))
+            os.rename(dir_dir, t_dir)
+
+        if not os.path.exists(t_file):
+            try:
+                os.mkdir(file_dir)
+            except FileExistsError:
+                pass
+            start = time.time()
+            for i in range(count):
+                f = open(os.path.join(file_dir, str(i)), 'w')
+                f.close()
+                if i + 1 == int(count / 2):
+                    elapsed = time.time() - start
+                    print('Creating {} files took {:.2f}'.format(i + 1,
+                                                                 elapsed))
+            elapsed = time.time() - start
+            print('Creating {} files took {:.2f}'.format(i + 1,
+                                                         elapsed))
+            os.rename(file_dir, t_file)
+
+        return time.time() - start_all
+
+    def print_results(results):
+        for count in results:
+            line = '{:-10d} '.format(count)
+            rd = results[count]
+            for name, value in rd.items():
+                line += '{} {:.2f} '.format(name, value)
+            print(line)
+
+    pools = get_pool_list()
+
+    while len(pools) < 1:
+        pools = make_pool(server)
+
+    pool = pools[0]
+
+    container = '2f61f9cd-ed6a-46ed-a2a3-452283982112'
+#    container = str(uuid.uuid4())
+
+    dfuse = DFuse(server, conf, pool=pool)
+
+    print('Creating container and populating')
+    count = 4
+    dfuse.start()
+    parent = os.path.join(dfuse.dir, container)
+    try:
+        os.mkdir(parent)
+    except FileExistsError:
+        pass
+    create_time = make_dirs(parent, count)
+    dfuse.stop()
+
+    results = OrderedDict()
+    results[count] = OrderedDict()
+    results[count]['create_time'] = create_time
+    all_start = time.time()
+
+    while True:
+
+        dfuse = DFuse(server, conf, pool=pool, container=container)
+        dir_dir = os.path.join(dfuse.dir,
+                               'dirs.{}'.format(count))
+        file_dir = os.path.join(dfuse.dir,
+                                'files.{}'.format(count))
+        dfuse.start()
+        start = time.time()
+        subprocess.run(['/bin/ls', '-U', dir_dir], stdout=subprocess.PIPE)
+        elapsed = time.time() - start
+        print('processed {} dirs in {:.2f} seconds'.format(count,
+                                                           elapsed))
+        results[count]['dirs'] = elapsed
+        dfuse.stop()
+        dfuse = DFuse(server, conf, pool=pool, container=container)
+        dfuse.start()
+        start = time.time()
+        subprocess.run(['/bin/ls', '-U', file_dir], stdout=subprocess.PIPE)
+        elapsed = time.time() - start
+        print('processed {} files in {:.2f} seconds'.format(count,
+                                                            elapsed))
+        results[count]['files'] = elapsed
+        dfuse.stop()
+
+        dfuse = DFuse(server, conf, pool=pool, container=container)
+        dfuse.start()
+        start = time.time()
+        subprocess.run(['/bin/ls', '-t', dir_dir], stdout=subprocess.PIPE)
+        elapsed = time.time() - start
+        print('processed {} dirs in {:.2f} seconds'.format(count,
+                                                           elapsed))
+        results[count]['dirs_with_stat'] = elapsed
+        dfuse.stop()
+        dfuse = DFuse(server, conf, pool=pool, container=container)
+        dfuse.start()
+        start = time.time()
+        subprocess.run(['/bin/ls', '-t', file_dir], stdout=subprocess.PIPE)
+        elapsed = time.time() - start
+        print('processed {} files in {:.2f} seconds'.format(count,
+                                                            elapsed))
+        results[count]['files_with_stat'] = elapsed
+
+
+        elapsed = time.time() - all_start
+        if elapsed > 5 * 60:
+            dfuse.stop()
+            break
+
+        print_results(results)
+        count *= 2
+        results[count] = OrderedDict()
+        create_time = make_dirs(dfuse.dir, count)
+        results[count]['create_time'] = create_time
+        dfuse.stop()
+
+    if False:
+        rc = run_daos_cmd(conf, ['container',
+                                 'destroy',
+                                 '--svc', '0',
+                                 '--pool',
+                                 pool,
+                                 '--cont',
+                                 container])
+        print(rc)
+    print_results(results)
 
 def test_pydaos_kv(server, conf):
     """Test the KV interface"""
@@ -1396,6 +1565,7 @@ def main():
     parser = argparse.ArgumentParser(description='Run DAOS client on local node')
     parser.add_argument('--output-file', default='nlt-errors.json')
     parser.add_argument('--server-debug', default=None)
+    parser.add_argument('--dfuse-debug', default=None)
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
     parser.add_argument('--dtx', action='store_true')
@@ -1421,6 +1591,8 @@ def main():
         fatal_errors.add_result(run_il_test(server, conf))
     elif args.mode == 'kv':
         test_pydaos_kv(server, conf)
+    elif args.mode == 'readdir_perf':
+        check_readdir_perf(server, conf)
     elif args.mode == 'overlay':
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
     elif args.mode == 'fi':
