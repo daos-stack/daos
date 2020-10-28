@@ -15,11 +15,14 @@ sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
 sudo mkdir -p "$DAOS_BASE"
 sudo mount -t nfs "$HOSTNAME":"$HOSTPWD" "$DAOS_BASE"
 sudo cp "$DAOS_BASE/install/bin/daos_admin" /usr/bin/daos_admin
-set +x
 if [ -n "$BULLSEYE" ]; then
   pushd "$DAOS_BASE/bullseye"
+set +x
+    echo + sudo ./install --quiet --key "**********" \
+                   --prefix /opt/BullseyeCoverage
     sudo ./install --quiet --key "${BULLSEYE}" \
                    --prefix /opt/BullseyeCoverage
+set -x
   popd
   rm -rf bullseye
   export COVFILE="$DAOS_BASE/test.cov"

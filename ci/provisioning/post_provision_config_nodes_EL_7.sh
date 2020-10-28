@@ -61,6 +61,7 @@ post_provision_config_nodes() {
     done
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
+    yum -y install redhat-lsb-core
     # shellcheck disable=SC2086
     if [ -n "$INST_RPMS" ] &&
        ! yum -y $yum_repo_args install $INST_RPMS; then

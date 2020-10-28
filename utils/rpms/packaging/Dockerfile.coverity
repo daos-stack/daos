@@ -1,23 +1,20 @@
 #
-# Copyright 2018-2020, Intel Corporation
+# Copyright 2018-2019, Intel Corporation
 #
-# 'recipe' for Docker to build an RPM
+# 'recipe' for Docker to build for a Coverity scan.
 #
 
 # Pull base image
-FROM centos:7
+FROM fedora:latest
 MAINTAINER daos-stack <daos@daos.groups.io>
 
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
 
-# Update distribution
-#Nothing to do for CentOS
-
 # Install basic tools
-RUN yum install -y epel-release
-RUN yum install -y mock make rpm-build curl createrepo rpmlint redhat-lsb-core \
-                   git python-srpm-macros
+RUN dnf -y install mock make rpm-build curl createrepo rpmlint redhat-lsb-core \
+                   git python-srpm-macros rpmdevtools
+RUN dnf -y makecache && dnf -y install gcc
 
 # Add build user (to keep rpmbuild happy)
 ENV USER build
@@ -28,7 +25,8 @@ RUN echo "$USER:$PASSWD" | chpasswd
 RUN usermod -a -G mock $USER
 
 # mock in Docker needs to use the old-chroot option
-RUN grep use_nspawn /etc/mock/site-defaults.cfg || \
+RUN grep use_nspawn || \
     echo "config_opts['use_nspawn'] = False" >> /etc/mock/site-defaults.cfg
 
-RUN chmod g+w /etc/mock/default.cfg
+RUN chmod g+w /etc/mock/*
+

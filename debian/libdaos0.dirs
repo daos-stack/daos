@@ -1,0 +1,10 @@
+usr/lib64
+usr/lib64/python2.7
+usr/lib64/python2.7/site-packages/pydaos/raw
+usr/lib64/python2.7/site-packages/pydaos
+usr/lib64/python2.7/site-packages/storage_estimator
+usr/lib64/python3
+usr/lib64/python3/site-packages
+usr/lib64/python3/site-packages/pydaos
+usr/lib64/python3/site-packages/storage_estimator
+usr/lib64/python3/site-packages/pydaos/raw
