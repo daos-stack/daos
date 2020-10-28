@@ -655,3 +655,22 @@ daos_dti_gen(struct dtx_id *dti, bool zero)
 		dti->dti_hlc = crt_hlc_get();
 	}
 }
+
+/**
+ * daos_recx_alloc/_free to provide same log facility for recx's alloc and free
+ * for iom->iom_recxs' usage for example.
+ */
+daos_recx_t *
+daos_recx_alloc(uint32_t nr)
+{
+	daos_recx_t	*recxs;
+
+	D_ALLOC_ARRAY(recxs, nr);
+	return recxs;
+}
+
+void
+daos_recx_free(daos_recx_t *recx)
+{
+	D_FREE(recx);
+}
