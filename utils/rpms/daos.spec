@@ -11,7 +11,7 @@
 
 Name:          daos
 Version:       1.1.1
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -262,6 +262,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 # you might think libdaos_tests.so goes in the tests RPM but
 # the 4 tools following it need it
 %{_libdir}/libdaos_tests.so
+%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_bindir}/io_conf
 %{_bindir}/jump_pl_map
 %{_bindir}/ring_pl_map
@@ -291,7 +292,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %dir %{conf_dir}/certs/clients
 %attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
 %attr(0644,root,root) %{conf_dir}/daos_server.yml
-%{_sysconfdir}/ld.so.conf.d/daos.conf
 # set daos_admin to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_admins) %{_bindir}/daos_admin
 # set daos_server to be setgid daos_admins in order to invoke daos_admin
@@ -400,10 +400,13 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Wed Oct 26 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.1-4
+* Wed Oct 28 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.1-5
 - Use %%autosetup
 - Only use systemd_requires if it exists
 - Obsoletes: cart now that it's included in daos
+
+* Sat Oct 24 2020 Maureen Jean <maureen.jean@intel.com> 1.1.1-4
+- Add daos.conf to the daos package to resolve the path to libbio.so
 
 * Tue Oct 13 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> 1.1.1-3
 - Remove obj_ctl from Tests RPM package
