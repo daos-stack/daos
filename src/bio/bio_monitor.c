@@ -42,6 +42,7 @@ struct dev_state_msg_arg {
 	ABT_eventual			 eventual;
 };
 
+/* Collect space utilisation for blobstore */
 static void
 collect_bs_usage(struct spdk_blob_store *bs, struct nvme_stats *stats)
 {
@@ -132,6 +133,15 @@ bio_get_dev_state(struct nvme_stats *state, struct bio_xs_context *xs)
 }
 
 /*
+ * Copy out the internal BIO blobstore device state.
+ */
+void
+bio_get_bs_state(int *bs_state, struct bio_xs_context *xs)
+{
+	*bs_state = xs->bxc_blobstore->bb_state;
+}
+
+/*
  * Call internal method to set BIO device state to FAULTY and trigger device
  * state transition. Called from the device owner xstream.
  */
@@ -185,25 +195,21 @@ get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 
 static int
 populate_health_cdata(const struct spdk_nvme_ctrlr_data *cdata,
-		      struct nvme_stats *dev_state)
+		      struct nvme_stats *state)
 {
-	int	written, rc = 0;
-
-	written = snprintf(dev_state->model, sizeof(dev_state->model),
-			   "%-20.20s", cdata->mn);
-	if (written >= sizeof(dev_state->model)) {
-		D_WARN("data truncated when writing model to health state");
-		rc = -DER_TRUNC;
+	if (copy_ascii(state->model, sizeof(state->model), cdata->mn,
+		       sizeof(cdata->mn)) != 0) {
+		D_ERROR("data truncated when writing model to health state");
+		return -DER_TRUNC;
 	}
 
-	written = snprintf(dev_state->serial, sizeof(dev_state->serial),
-			   "%-20.20s", cdata->sn);
-	if (written >= sizeof(dev_state->serial)) {
-		D_WARN("data truncated when writing model to health state");
-		rc = -DER_TRUNC;
+	if (copy_ascii(state->serial, sizeof(state->serial), cdata->sn,
+		       sizeof(cdata->sn)) != 0) {
+		D_ERROR("data truncated when writing serial to health state");
+		return -DER_TRUNC;
 	}
 
-	return rc;
+	return 0;
 }
 
 static void
@@ -239,7 +245,6 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	cdata = dev_health->bdh_ctrlr_buf;
 	rc = populate_health_cdata(cdata, &dev_health->bdh_health_state);
 	if (rc != 0) {
-		D_ERROR("failed to populate device details in health state");
 		goto out;
 	}
 
@@ -442,7 +447,6 @@ collect_raw_health_data(struct bio_dev_health *dev_health)
 	}
 }
 
-/* Collect space utilisation for blobstore */
 void
 bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {
