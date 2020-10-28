@@ -169,7 +169,7 @@ type (
 		SmdDevices  []*SmdDevice
 	}
 
-	// NvmeControllers is a type alias for []*NvmeController which implements fmt.Stringer.
+	// NvmeControllers is a type alias for []*NvmeController.
 	NvmeControllers []*NvmeController
 )
 
@@ -183,64 +183,6 @@ const (
 	// ScmUpdateStatusFailed indicates that the firmware update failed.
 	ScmUpdateStatusFailed
 )
-
-// TempK returns controller temperature in degrees Kelvin.
-func (nch *NvmeHealth) TempK() uint32 {
-	return uint32(nch.Temperature)
-}
-
-// TempC returns controller temperature in degrees Celsius.
-func (nch *NvmeHealth) TempC() float32 {
-	return float32(nch.Temperature) - 273.15
-}
-
-// TempF returns controller temperature in degrees Fahrenheit.
-func (nch *NvmeHealth) TempF() float32 {
-	return nch.TempC()*(9/5) + 32
-}
-
-// genAltKey verifies non-null model and serial identifiers exist and return the
-// concatenated identifier (new key) and error if either is empty.
-func genAltKey(model, serial string) (string, error) {
-	var empty string
-	m := strings.TrimSpace(model)
-	s := strings.TrimSpace(serial)
-
-	if m == "" {
-		empty = "model"
-	} else if s == "" {
-		empty = "serial"
-	}
-	if empty != "" {
-		return "", errors.Errorf("missing %s identifier", empty)
-	}
-
-	return m + s, nil
-}
-
-// GenAltKey generates an alternative key identifier for an NVMe Controller
-// from its returned health statistics.
-func (nch *NvmeHealth) GenAltKey() (string, error) {
-	return genAltKey(nch.Model, nch.Serial)
-}
-
-// GenAltKey generates an alternative key identifier for an NVMe Controller.
-func (nc *NvmeController) GenAltKey() (string, error) {
-	return genAltKey(nc.Model, nc.Serial)
-}
-
-// UpdateSmd adds or updates SMD device entry for an NVMe Controller.
-func (nc *NvmeController) UpdateSmd(smdDev *SmdDevice) {
-	for idx := range nc.SmdDevices {
-		if smdDev.UUID == nc.SmdDevices[idx].UUID {
-			nc.SmdDevices[idx] = smdDev
-
-			return
-		}
-	}
-
-	nc.SmdDevices = append(nc.SmdDevices, smdDev)
-}
 
 // String translates the update status to a string
 func (s ScmFirmwareUpdateStatus) String() string {
@@ -352,6 +294,64 @@ func (sns ScmNamespaces) Summary() string {
 		common.Pluralise("namespace", len(sns)))
 }
 
+// TempK returns controller temperature in degrees Kelvin.
+func (nch *NvmeHealth) TempK() uint32 {
+	return uint32(nch.Temperature)
+}
+
+// TempC returns controller temperature in degrees Celsius.
+func (nch *NvmeHealth) TempC() float32 {
+	return float32(nch.Temperature) - 273.15
+}
+
+// TempF returns controller temperature in degrees Fahrenheit.
+func (nch *NvmeHealth) TempF() float32 {
+	return nch.TempC()*(9/5) + 32
+}
+
+// genAltKey verifies non-null model and serial identifiers exist and return the
+// concatenated identifier (new key) and error if either is empty.
+func genAltKey(model, serial string) (string, error) {
+	var empty string
+	m := strings.TrimSpace(model)
+	s := strings.TrimSpace(serial)
+
+	if m == "" {
+		empty = "model"
+	} else if s == "" {
+		empty = "serial"
+	}
+	if empty != "" {
+		return "", errors.Errorf("missing %s identifier", empty)
+	}
+
+	return m + s, nil
+}
+
+// GenAltKey generates an alternative key identifier for an NVMe Controller
+// from its returned health statistics.
+func (nch *NvmeHealth) GenAltKey() (string, error) {
+	return genAltKey(nch.Model, nch.Serial)
+}
+
+// GenAltKey generates an alternative key identifier for an NVMe Controller.
+func (nc *NvmeController) GenAltKey() (string, error) {
+	return genAltKey(nc.Model, nc.Serial)
+}
+
+// UpdateSmd adds or updates SMD device entry for an NVMe Controller.
+func (nc *NvmeController) UpdateSmd(smdDev *SmdDevice) {
+	for idx := range nc.SmdDevices {
+		if smdDev.UUID == nc.SmdDevices[idx].UUID {
+			nc.SmdDevices[idx] = smdDev
+
+			return
+		}
+	}
+
+	nc.SmdDevices = append(nc.SmdDevices, smdDev)
+}
+
 // Capacity returns the cumulative total bytes of all namespace sizes.
 func (nc *NvmeController) Capacity() (tb uint64) {
 	for _, n := range nc.Namespaces {
@@ -409,4 +409,24 @@ func (ncs NvmeControllers) PercentUsage() string {
 func (ncs NvmeControllers) Summary() string {
 	return fmt.Sprintf("%s (%d %s)", humanize.Bytes(ncs.Capacity()),
 		len(ncs), common.Pluralise("controller", len(ncs)))
+}
+
+// Update adds or updates slice of NVMe Controllers.
+func (ncs NvmeControllers) Update(ctrlrs ...*NvmeController) NvmeControllers {
+	for _, ctrlr := range ctrlrs {
+		replaced := false
+
+		for idx, existing := range ncs {
+			if ctrlr.PciAddr == existing.PciAddr {
+				ncs[idx] = ctrlr
+				replaced = true
+				continue
+			}
+		}
+		if !replaced {
+			ncs = append(ncs, ctrlr)
+		}
+	}
+
+	return ncs
 }

@@ -1036,30 +1036,6 @@ map_add_recx(daos_iom_t *map, const struct bio_iov *biov, uint64_t rec_idx)
 	map->iom_nr_out++;
 }
 
-static inline int
-recx_compare(const void *rank1, const void *rank2)
-{
-	const daos_recx_t *r1 = rank1;
-	const daos_recx_t *r2 = rank2;
-
-	D_ASSERT(r1 != NULL && r2 != NULL);
-	if (r1->rx_idx < r2->rx_idx)
-		return -1;
-	else if (r1->rx_idx == r2->rx_idx)
-		return 0;
-	else /** r1->rx_idx < r2->rx_idx */
-		return 1;
-}
-
-static void
-daos_iom_sort(daos_iom_t *map)
-{
-	if (map == NULL)
-		return;
-	qsort(map->iom_recxs, map->iom_nr_out,
-	      sizeof(*map->iom_recxs), recx_compare);
-}
-
 /** create maps for actually written to extents. */
 static int
 obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod)
@@ -1132,6 +1108,8 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod)
 			  map->iom_nr, map->iom_nr_out);
 		map->iom_recx_lo = map->iom_recxs[0];
 		map->iom_recx_hi = map->iom_recxs[map->iom_nr - 1];
+		if (orw->orw_flags & ORF_CREATE_MAP_DETAIL)
+			map->iom_flags = DAOS_IOMF_DETAIL;
 	}
 
 	orwo->orw_maps.ca_count = iods_nr;
@@ -1434,7 +1412,8 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				     dth);
 		daos_recx_ep_list_free(shadows, orw->orw_nr);
 		if (rc) {
-			D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
+			D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_NONEXIST,
+				 DB_IO, DLOG_ERR,
 				 "Fetch begin for "DF_UOID" failed: "DF_RC"\n",
 				 DP_UOID(orw->orw_oid), DP_RC(rc));
 			goto out;
@@ -1556,6 +1535,8 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		obj_log_csum_err();
 post:
 	err = bio_iod_post(biod);
+	rc = rc ? : err;
+out:
 	if (bsgls_dup != NULL) {
 		int	i;
 
@@ -1565,8 +1546,7 @@ post:
 		}
 		D_FREE(bsgls_dup);
 	}
-	rc = rc ? : err;
-out:
+
 	rc = obj_rw_complete(rpc, ioc->ioc_map_ver, ioh, rc, dth);
 	D_TIME_END(time_start, OBJ_PF_UPDATE_LOCAL);
 	return rc;

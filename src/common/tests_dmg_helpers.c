@@ -731,3 +731,33 @@ out_json:
 out:
 	return rc;
 }
+
+int verify_blobstore_state(int state, const char *state_str)
+{
+	if (strcasecmp(state_str, "FAULTY") == 0) {
+		if (state == BIO_BS_STATE_FAULTY)
+			return 0;
+	}
+
+	if (strcasecmp(state_str, "NORMAL") == 0) {
+		if (state == BIO_BS_STATE_NORMAL)
+			return 0;
+	}
+
+	if (strcasecmp(state_str, "TEARDOWN") == 0) {
+		if (state == BIO_BS_STATE_TEARDOWN)
+			return 0;
+	}
+
+	if (strcasecmp(state_str, "OUT") == 0) {
+		if (state == BIO_BS_STATE_OUT)
+			return 0;
+	}
+
+	if (strcasecmp(state_str, "SETUP") == 0) {
+		if (state == BIO_BS_STATE_SETUP)
+			return 0;
+	}
+
+	return 1;
+}
