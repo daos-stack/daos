@@ -57,7 +57,8 @@ nav:
         - 'Container Management': 'user/container.md'
         - 'Native Programming Interface': 'user/interface.md'
         - 'POSIX Namespace': 'user/posix.md'
-        - 'HPC I/O Middleware': 'user/hpc.md'
+        - 'MPI-IO Support': 'user/mpi-io.md'
+        - 'HDF5 Support': 'user/hdf5.md'
         - 'Spark and Hadoop': 'user/spark.md'
     - Releases:
         - 'Release Notes': 'release/releaseNote_v1_0.md'
