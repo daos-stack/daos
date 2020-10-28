@@ -595,7 +595,7 @@ agg_update_vos(struct ec_agg_entry *entry)
 	recx.rx_idx = (entry->ae_cur_stripe.as_stripenum * len) |
 							PARITY_INDICATOR;
 	recx.rx_nr = len;
-	rc = vos_obj_update(entry->ae_chdl, entry->ae_oid,
+	rc = vos_obj_update(agg_param->ap_cont_handle, entry->ae_oid,
 			    entry->ae_cur_stripe.as_hi_epoch, 0, 0,
 			    &entry->ae_dkey, 1, &iod, NULL,
 			    &sgl);
@@ -740,7 +740,7 @@ agg_akey_post(daos_handle_t ih, vos_iter_entry_t *entry,
  */
 static int
 agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
-       struct ec_agg_entry *agg_entry, unsigned int *acts)
+	struct ec_agg_entry *agg_entry, unsigned int *acts)
 {
 	int			rc = 0;
 
@@ -757,7 +757,7 @@ ec_aggregate_yield(struct ec_agg_param *agg_param)
 	if (agg_param->ap_yield_func != NULL)
 		return agg_param->ap_yield_func(agg_param->ap_yield_arg);
 
-        return false;
+	return false;
 }
 
 /* Pre-subtree iteration call back for per-object iterator
@@ -887,6 +887,8 @@ agg_subtree_iterate(daos_handle_t ih, struct ec_agg_param *agg_param)
 	return rc;
 }
 
+/* Reset iterator state upon completion of iteration of a subtree.
+ */
 static inline void
 reset_agg_pos(vos_iter_type_t type, struct ec_agg_param *agg_param)
 {
@@ -895,6 +897,7 @@ reset_agg_pos(vos_iter_type_t type, struct ec_agg_param *agg_param)
 	memset(&agg_param->ap_agg_entry.ae_oid, 0,
 	       sizeof(agg_param->ap_agg_entry.ae_oid));
 }
+
 /* Call-back function for full VOS iteration outer iterator.
  */
 static int
