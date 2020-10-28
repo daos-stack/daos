@@ -741,7 +741,7 @@ crt_proc_struct_daos_cpd_sub_head(crt_proc_t proc,
 				  struct daos_cpd_sub_head *dcsh)
 {
 	crt_proc_op_t	proc_op;
-	uint32_t	size;
+	uint32_t	size = 0;
 	int		rc;
 
 	rc = crt_proc_get_op(proc, &proc_op);

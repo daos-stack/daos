@@ -286,6 +286,9 @@ put_attach_info(int npsrs, struct dc_mgmt_psr *psrs)
 {
 	int i;
 
+	if (psrs == NULL)
+		return;
+
 	for (i = 0; i < npsrs; i++)
 		D_FREE(psrs[i].uri);
 	D_FREE(psrs);
@@ -475,13 +478,13 @@ out:
 int dc_mgmt_net_cfg(const char *name)
 {
 	int rc;
-	int npsrs;
+	int npsrs = 0;
 	char buf[SYS_INFO_BUF_SIZE];
 	char *crt_timeout;
 	char *ofi_interface;
 	char *ofi_domain;
 	struct sys_info sy_info;
-	struct dc_mgmt_psr *psrs;
+	struct dc_mgmt_psr *psrs = NULL;
 
 	if (name == NULL)
 		name = DAOS_DEFAULT_SYS_NAME;
@@ -489,7 +492,7 @@ int dc_mgmt_net_cfg(const char *name)
 	/* Query the agent for the CaRT network configuration parameters */
 	rc = get_attach_info(name, &npsrs, &psrs, &sy_info);
 	if (rc != 0)
-		return rc;
+		goto cleanup;
 
 	/* These two are always set */
 	rc = setenv("CRT_PHY_ADDR_STR", sy_info.provider, 1);

@@ -1373,7 +1373,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 	struct pool_component	map_comp;
 	struct pool_buf		*map_buf;
 	struct pool_domain      *found_dom;
-	uuid_t		       *uuids;
+	uuid_t		        *uuids = NULL;
 	uint32_t		num_comps;
 	uint8_t			new_status;
 	bool			updated;
@@ -1485,7 +1485,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 
 out_map_buf:
 	pool_buf_free(map_buf);
-
+	D_FREE(uuids);
 	return rc;
 }
 
