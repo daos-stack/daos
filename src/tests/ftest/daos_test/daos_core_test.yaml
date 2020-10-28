@@ -138,6 +138,10 @@ daos_tests:
       test_name: Checksum tests
       test_timeout: 220
     test_S:
-      daos_test: S 
+      daos_test: S
       test_name: DAOS rebuild ec tests
+      test_timeout: 900
+    test_U:
+      daos_test: U
+      test_name: DAOS dedup tests
       test_timeout: 900
