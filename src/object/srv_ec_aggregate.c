@@ -724,6 +724,8 @@ out:
 	return rc;
 }
 
+/* Post iteration call back for akey.
+ */
 static int
 agg_akey_post(daos_handle_t ih, vos_iter_entry_t *entry,
 	      struct ec_agg_entry *agg_entry, unsigned int *acts)
@@ -751,6 +753,8 @@ agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 	return rc;
 }
 
+/* Invokes the yield function pointer.
+ */
 static inline bool
 ec_aggregate_yield(struct ec_agg_param *agg_param)
 {
@@ -810,7 +814,7 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	return rc;
 }
 
-/* Post iteration call back for per-object iterator
+/* Post iteration call back for per-object iterator.
  */
 static int
 agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
@@ -873,7 +877,7 @@ agg_subtree_iterate(daos_handle_t ih, struct ec_agg_param *agg_param)
 	iter_param.ip_hdl		= DAOS_HDL_INVAL;
 	iter_param.ip_ih		= ih;
 	iter_param.ip_oid		= agg_param->ap_agg_entry.ae_oid;
-	/* lower bound should be zero of highest snap, not the hlc of last run
+	/* lower bound should be zero or highest snap, not the hlc of last run
 	 */
 	iter_param.ip_epr		= agg_param->ap_epr;
 	iter_param.ip_epc_expr		= VOS_IT_EPC_RR;
