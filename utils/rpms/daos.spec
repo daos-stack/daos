@@ -2,11 +2,11 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
-%global mercury_version 2.0.0~rc2-1%{?dist}
+%global mercury_version 2.0.0~rc3-1%{?dist}
 
 Name:          daos
 Version:       1.1.1
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -388,6 +388,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Wed Oct 28 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.1-6
+- Update to mercury 2.0.0rc3
+
 * Thu Oct 15 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.1-5
 - Update to mercury 2.0.0rc2
 
