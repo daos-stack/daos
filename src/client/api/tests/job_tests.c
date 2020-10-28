@@ -101,7 +101,7 @@ teardown_job_mocks(void **state)
 }
 
 static int
-craft_jobid(char **jobid, char *nodename ,pid_t pid)
+craft_jobid(char **jobid, char *nodename, pid_t pid)
 {
 	int   ret = 0;
 	char *tmp_jobid;
@@ -198,13 +198,14 @@ static void
 test_dc_job_init_with_uname_fail(void **state)
 {
 	int ret = 0;
+
 	uname_fail = 1;
 
 	ret = dc_job_init();
 	/* Make sure we checked the right environment variable */
 	assert_int_equal(ret, -DER_MISC);
-
 }
+
 /* Convenience macro for declaring unit tests in this suite */
 #define JOB_UTEST(X) \
 	cmocka_unit_test_setup_teardown(X, setup_job_mocks, \
