@@ -1036,30 +1036,6 @@ map_add_recx(daos_iom_t *map, const struct bio_iov *biov, uint64_t rec_idx)
 	map->iom_nr_out++;
 }
 
-static inline int
-recx_compare(const void *rank1, const void *rank2)
-{
-	const daos_recx_t *r1 = rank1;
-	const daos_recx_t *r2 = rank2;
-
-	D_ASSERT(r1 != NULL && r2 != NULL);
-	if (r1->rx_idx < r2->rx_idx)
-		return -1;
-	else if (r1->rx_idx == r2->rx_idx)
-		return 0;
-	else /** r1->rx_idx < r2->rx_idx */
-		return 1;
-}
-
-static void
-daos_iom_sort(daos_iom_t *map)
-{
-	if (map == NULL)
-		return;
-	qsort(map->iom_recxs, map->iom_nr_out,
-	      sizeof(*map->iom_recxs), recx_compare);
-}
-
 /** create maps for actually written to extents. */
 static int
 obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod)
@@ -1132,6 +1108,8 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod)
 			  map->iom_nr, map->iom_nr_out);
 		map->iom_recx_lo = map->iom_recxs[0];
 		map->iom_recx_hi = map->iom_recxs[map->iom_nr - 1];
+		if (orw->orw_flags & ORF_CREATE_MAP_DETAIL)
+			map->iom_flags = DAOS_IOMF_DETAIL;
 	}
 
 	orwo->orw_maps.ca_count = iods_nr;

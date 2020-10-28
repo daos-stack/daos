@@ -955,6 +955,7 @@ fetch_array_with_map(void **state)
 	/** init map */
 	map.iom_recxs = map_recxs;
 	map.iom_nr = SM_BUF_LEN;
+	map.iom_flags = DAOS_IOMF_DETAIL;
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
@@ -1019,12 +1020,11 @@ fetch_array_with_map(void **state)
 	memset(map_recxs, 0, sizeof(map_recxs));
 	map.iom_nr = 0;
 	map.iom_recxs = NULL;
+	map.iom_flags = 0;
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 			    &map, NULL);
 	assert_int_equal(0, rc);
 	assert_int_equal(0, map.iom_nr);
-	/** still get nr required */
-	assert_int_equal(3, map.iom_nr_out);
 	/** still get hi/lo */
 	assert_recx_equal(update_recxs[0], map.iom_recx_lo);
 	assert_recx_equal(update_recxs[2], map.iom_recx_hi);
@@ -1070,6 +1070,7 @@ fetch_array_with_map_2(void **state)
 	/** init map */
 	map.iom_recxs = map_recxs;
 	map.iom_nr = SM_BUF_LEN;
+	map.iom_flags = DAOS_IOMF_DETAIL;
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
@@ -1146,6 +1147,7 @@ fetch_array_with_map_3(void **state)
 	/** init map */
 	map.iom_recxs = map_recxs;
 	map.iom_nr = SM_BUF_LEN;
+	map.iom_flags = DAOS_IOMF_DETAIL;
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
@@ -1222,6 +1224,7 @@ fetch_array_with_map_4(void **state)
 	/** init map */
 	map.iom_recxs = map_recxs;
 	map.iom_nr = SM_BUF_LEN;
+	map.iom_flags = DAOS_IOMF_DETAIL;
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
