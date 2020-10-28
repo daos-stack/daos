@@ -39,11 +39,9 @@ class TestPool(TestDaosApiBase):
     # pylint: disable=too-many-public-methods
     """A class for functional testing of DaosPools objects."""
 
-    def __init__(self, context, dmg_command, log=None, cb_handler=None):
+    def __init__(self, context, dmg_command, cb_handler=None):
         # pylint: disable=unused-argument
         """Initialize a TestPool object.
-
-        Note: 'log' is now a defunct argument and will be removed in the future
 
         Args:
             context (DaosContext): [description]
@@ -85,7 +83,7 @@ class TestPool(TestDaosApiBase):
         To use dmg, the test needs to set dmg_command through the constructor.
         For example,
 
-            self.pool = TestPool(self.context, DmgCommand('/install/bin'))
+            self.pool = TestPool(self.context, DmgCommand(self.bin))
 
         If it wants to use --nsvc option, it needs to set the value to
         svcn.value. Otherwise, 1 is used. If it wants to use --group, it needs
@@ -117,27 +115,41 @@ class TestPool(TestDaosApiBase):
             if value is not None:
                 kwargs[key] = value
 
-        # Create a pool with the dmg command
-        self._log_method("dmg.pool_create", kwargs)
-        data = self.dmg.pool_create(**kwargs)
+        if self.control_method.value == self.USE_API:
+            raise CommandFailure(
+                "Error: control method {} not supported for create()".format(
+                    self.control_method.value))
 
-        # Populate the empty DaosPool object with the properties of the pool
-        # created with dmg pool create.
-        if self.name.value:
-            self.pool.group = ctypes.create_string_buffer(self.name.value)
+        elif self.control_method.value == self.USE_DMG and self.dmg:
+            # Create a pool with the dmg command
+            self._log_method("dmg.pool_create", kwargs)
+            data = self.dmg.pool_create(**kwargs)
 
-        # Convert the string of service replicas from the dmg command output
-        # into an ctype array for the DaosPool object using the same
-        # technique used in DaosPool.create().
-        service_replicas = [int(value) for value in data["svc"].split(",")]
-        rank_t = ctypes.c_uint * len(service_replicas)
-        rank = rank_t(*list([svc for svc in service_replicas]))
-        rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
-        self.pool.svc = daos_cref.RankList(rl_ranks, len(service_replicas))
+            # Populate the empty DaosPool object with the properties of the pool
+            # created with dmg pool create.
+            if self.name.value:
+                self.pool.group = ctypes.create_string_buffer(self.name.value)
 
-        # Set UUID and attached to the DaosPool object
-        self.pool.set_uuid_str(data["uuid"])
-        self.pool.attached = 1
+            # Convert the string of service replicas from the dmg command output
+            # into an ctype array for the DaosPool object using the same
+            # technique used in DaosPool.create().
+            service_replicas = [int(value) for value in data["svc"].split(",")]
+            rank_t = ctypes.c_uint * len(service_replicas)
+            rank = rank_t(*list([svc for svc in service_replicas]))
+            rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
+            self.pool.svc = daos_cref.RankList(rl_ranks, len(service_replicas))
+
+            # Set UUID and attached to the DaosPool object
+            self.pool.set_uuid_str(data["uuid"])
+            self.pool.attached = 1
+
+        elif self.control_method.value == self.USE_DMG:
+            self.log.error("Error: Undefined dmg command")
+
+        else:
+            self.log.error(
+                "Error: Undefined control_method: %s",
+                self.control_method.value)
 
         # Set the TestPool attributes for the created pool
         self.svc_ranks = [

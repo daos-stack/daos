@@ -50,7 +50,7 @@ class RebuildWithIO(TestWithServers):
         :avocado: tags=all,pool,rebuild,pr,medium,rebuildwithio
         """
         # Get the test params
-        pool = TestPool(self.context, self.get_dmg_command(), log=self.log)
+        pool = TestPool(self.context, self.get_dmg_command())
         pool.get_params(self)
         container = TestContainer(pool)
         container.get_params(self)

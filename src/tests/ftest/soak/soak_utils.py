@@ -71,10 +71,7 @@ def add_pools(self, pool_names):
         path = "".join(["/run/", pool_name, "/*"])
         # Create a pool and add it to the overall list of pools
         self.pool.append(
-            TestPool(
-                self.context,
-                self.get_dmg_command(),
-                log=self.log))
+            TestPool(self.context, self.get_dmg_command()))
         self.pool[-1].namespace = path
         self.pool[-1].get_params(self)
         self.pool[-1].create()

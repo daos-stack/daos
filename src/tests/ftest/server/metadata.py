@@ -95,8 +95,7 @@ class ObjectMetadata(TestWithServers):
         super(ObjectMetadata, self).setUp()
 
         # Create a pool
-        self.pool = TestPool(self.context, self.get_dmg_command(),
-                             log=self.log)
+        self.pool = TestPool(self.context, self.get_dmg_command())
         self.pool.get_params(self)
         self.pool.create()
         self.log.info("Created pool %s: svcranks:",
