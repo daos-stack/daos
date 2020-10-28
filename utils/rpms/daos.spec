@@ -135,7 +135,8 @@ Requires: mercury = %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: libfabric >= 1.11.0
-%systemd_requires
+%{?systemd_requires}
+Obsoletes: cart
 
 %description server
 This is the package needed to run a DAOS server
