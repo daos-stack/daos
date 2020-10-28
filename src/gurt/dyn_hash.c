@@ -109,6 +109,7 @@ gen_siphash(const void *src, uint32_t src_sz)
 		pt[1] = m[1];
 	case 1:
 		pt[0] = m[0];
+		break;
 	default:
 		;
 	}
