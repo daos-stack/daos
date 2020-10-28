@@ -161,7 +161,7 @@ func TestBdevBackendFormat(t *testing.T) {
 			req: FormatRequest{
 				Class: storage.BdevClassNvme,
 			},
-			expErr: errors.New("empty pci address list in format request"),
+			expErr: errors.New("empty pci address list in nvme format request"),
 		},
 		"unknown device class": {
 			req: FormatRequest{
@@ -169,6 +169,55 @@ func TestBdevBackendFormat(t *testing.T) {
 				DeviceList: []string{pci1},
 			},
 			expErr: FaultFormatUnknownClass("whoops"),
+		},
+		"aio malloc device class": {
+			mec: spdk.MockEnvCfg{
+				InitErr: errors.New("spdk backend init should not be called for non-nvme class"),
+			},
+			mnc: spdk.MockNvmeCfg{
+				FormatErr: errors.New("spdk backend format should not be called for non-nvme class"),
+			},
+			req: FormatRequest{
+				Class: storage.BdevClassMalloc,
+			},
+			expResp: &FormatResponse{
+				DeviceResponses: map[string]*DeviceFormatResponse{},
+			},
+		},
+		"aio file device class": {
+			mec: spdk.MockEnvCfg{
+				InitErr: errors.New("spdk backend init should not be called for non-nvme class"),
+			},
+			mnc: spdk.MockNvmeCfg{
+				FormatErr: errors.New("spdk backend format should not be called for non-nvme class"),
+			},
+			req: FormatRequest{
+				Class:      storage.BdevClassFile,
+				DeviceList: []string{"/tmp/daos-bdev"},
+			},
+			expResp: &FormatResponse{
+				DeviceResponses: map[string]*DeviceFormatResponse{
+					"/tmp/daos-bdev": new(DeviceFormatResponse),
+				},
+			},
+		},
+		"aio kdev device class": {
+			mec: spdk.MockEnvCfg{
+				InitErr: errors.New("spdk backend init should not be called for non-nvme class"),
+			},
+			mnc: spdk.MockNvmeCfg{
+				FormatErr: errors.New("spdk backend format should not be called for non-nvme class"),
+			},
+			req: FormatRequest{
+				Class:      storage.BdevClassKdev,
+				DeviceList: []string{"/dev/sdc", "/dev/sdd"},
+			},
+			expResp: &FormatResponse{
+				DeviceResponses: map[string]*DeviceFormatResponse{
+					"/dev/sdc": new(DeviceFormatResponse),
+					"/dev/sdd": new(DeviceFormatResponse),
+				},
+			},
 		},
 		"binding format fail": {
 			mnc: spdk.MockNvmeCfg{
@@ -199,7 +248,7 @@ func TestBdevBackendFormat(t *testing.T) {
 			},
 			expResp: &FormatResponse{
 				DeviceResponses: map[string]*DeviceFormatResponse{
-					pci1: &DeviceFormatResponse{
+					pci1: {
 						Formatted: true,
 					},
 				},
@@ -324,45 +373,6 @@ func TestBdevBackendFormat(t *testing.T) {
 							errors.Errorf(
 								"failed to format namespaces [1 2 3 4] (namespace 1: %s)",
 								errors.New("spdk format failed"))),
-					},
-				},
-			},
-		},
-		"kdev": {
-			req: FormatRequest{
-				Class:      storage.BdevClassKdev,
-				DeviceList: []string{"foo"},
-			},
-			expResp: &FormatResponse{
-				DeviceResponses: map[string]*DeviceFormatResponse{
-					"foo": &DeviceFormatResponse{
-						Formatted: true,
-					},
-				},
-			},
-		},
-		"file": {
-			req: FormatRequest{
-				Class:      storage.BdevClassFile,
-				DeviceList: []string{"foo"},
-			},
-			expResp: &FormatResponse{
-				DeviceResponses: map[string]*DeviceFormatResponse{
-					"foo": &DeviceFormatResponse{
-						Formatted: true,
-					},
-				},
-			},
-		},
-		"malloc": {
-			req: FormatRequest{
-				Class:      storage.BdevClassMalloc,
-				DeviceList: []string{"foo"},
-			},
-			expResp: &FormatResponse{
-				DeviceResponses: map[string]*DeviceFormatResponse{
-					"foo": &DeviceFormatResponse{
-						Formatted: true,
 					},
 				},
 			},

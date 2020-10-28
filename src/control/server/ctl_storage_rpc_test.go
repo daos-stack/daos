@@ -1060,6 +1060,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 		sSize            int
 		bClass           storage.BdevClass
 		bDevs            [][]string
+		bSize            int
 		bmbc             *bdev.MockBackendConfig
 		awaitTimeout     time.Duration
 		expAwaitExit     bool
@@ -1119,6 +1120,39 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				Crets: []*NvmeControllerResult{
 					{
 						Pciaddr: mockNvmeController0.PciAddr,
+						State:   new(ResponseState),
+					},
+				},
+				Mrets: []*ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State:    new(ResponseState),
+					},
+				},
+			},
+		},
+		"aio file no size and ram": {
+			sMounts: []string{"/mnt/daos"},
+			sClass:  storage.ScmClassRAM,
+			sDevs:   []string{"/dev/pmem1"}, // ignored if SCM class is ram
+			sSize:   6,
+			bClass:  storage.BdevClassFile,
+			bDevs:   [][]string{{"/tmp/daos-bdev"}},
+			bSize:   6,
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &bdev.ScanResponse{
+					Controllers: storage.NvmeControllers{mockNvmeController0},
+				},
+				FormatRes: &bdev.FormatResponse{
+					DeviceResponses: bdev.DeviceFormatResponses{
+						"/tmp/daos-bdev": new(bdev.DeviceFormatResponse),
+					},
+				},
+			},
+			expResp: &StorageFormatResp{
+				Crets: []*NvmeControllerResult{
+					{
+						Pciaddr: "/tmp/daos-bdev",
 						State:   new(ResponseState),
 					},
 				},
@@ -1424,6 +1458,9 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			testDir, cleanup := common.CreateTestDir(t)
 			defer cleanup()
 
+			if tc.expResp == nil {
+				t.Log("expResp test case parameter required")
+			}
 			common.AssertEqual(t, len(tc.sMounts), len(tc.expResp.Mrets), name)
 			for i := range tc.sMounts {
 				// Hack to deal with creating the mountpoint in test.
@@ -1467,6 +1504,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 					WithScmMountPoint(scmMount).
 					WithScmClass(tc.sClass.String()).
 					WithBdevClass(tc.bClass.String()).
+					WithBdevFileSize(tc.bSize).
 					WithScmRamdiskSize(tc.sSize).
 					WithBdevDeviceList(tc.bDevs[idx]...).
 					WithScmDeviceList(tc.sDevs[idx])
