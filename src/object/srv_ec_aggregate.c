@@ -112,22 +112,6 @@ struct ec_agg_extent {
 	daos_epoch_t	ae_epoch; /* epoch for extent   */
 };
 
-/* Reset iterator state upon completion of iteration of a subtree.
- */
-static inline void
-reset_nested_agg_pos(vos_iter_type_t type, struct ec_agg_entry *agg_entry)
-{
-	switch (type) {
-	case VOS_ITER_DKEY:
-		memset(&agg_entry->ae_dkey, 0, sizeof(agg_entry->ae_dkey));
-		break;
-	case VOS_ITER_AKEY:
-		memset(&agg_entry->ae_akey, 0, sizeof(agg_entry->ae_akey));
-		break;
-	default:
-		break;
-	}
-}
 
 /* Compare function for keys.  Used to reset iterator position.
  */
@@ -150,7 +134,6 @@ agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	if (agg_key_compare(agg_entry->ae_dkey, entry->ie_key)) {
 		agg_entry->ae_dkey = entry->ie_key;
-		reset_nested_agg_pos(VOS_ITER_AKEY, agg_entry);
 	}
 	agg_entry->ae_dkey	= entry->ie_key;
 	return rc;
@@ -680,18 +663,41 @@ agg_in_stripe(struct ec_agg_entry *entry, daos_recx_t *recx)
 /* Iterator call back sub-function for handling data extents.
  */
 static int
-agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry)
+agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
+		unsigned int *acts)
 {
 	struct ec_agg_extent	*extent = NULL;
+	daos_off_t		 cur_stripenum, new_stripenum;
 	int			 rc = 0;
 
-	if (agg_stripenum(agg_entry, entry->ie_recx.rx_idx) !=
-			agg_entry->ae_cur_stripe.as_stripenum) {
-		if (agg_entry->ae_cur_stripe.as_stripenum != ~0UL)
-			agg_process_stripe(agg_entry);
-		agg_entry->ae_cur_stripe.as_stripenum =
-			agg_stripenum(agg_entry, entry->ie_recx.rx_idx);
+	new_stripenum = agg_stripenum(agg_entry, entry->ie_recx.rx_idx);
+	if (new_stripenum != agg_entry->ae_cur_stripe.as_stripenum) {
+		/* Iterator has reached next stripe */
+		if (agg_entry->ae_cur_stripe.as_stripenum != ~0UL) {
+			cur_stripenum = agg_entry->ae_cur_stripe.as_stripenum;
+			rc = agg_process_stripe(agg_entry);
+			if (rc)
+				D_ERROR("Process stripe returned "DF_RC"\n",
+					DP_RC(rc));
+		/* Error leaves data covered by replicas vulnerable to vos
+		 * delete, so don't advance coordination epoch.
+		 */
+			rc = 0;
+			if (cur_stripenum <
+			    agg_entry->ae_cur_stripe.as_stripenum &&
+			    agg_entry->ae_cur_stripe.as_stripenum <
+			    new_stripenum) {
+				/* Handle holdover stripe */
+				rc = agg_process_stripe(agg_entry);
+				if (rc)
+					D_ERROR("Holdover returned "DF_RC"\n",
+					DP_RC(rc));
+				rc = 0;
+			}
+			*acts |= VOS_ITER_CB_YIELD;
+		}
 	}
+	/* Add the extent to the entry, for the current stripe */
 	D_ALLOC_PTR(extent);
 	if (extent == NULL) {
 		rc = -DER_NOMEM;
@@ -748,7 +754,7 @@ agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	D_ASSERT(!(entry->ie_recx.rx_idx & PARITY_INDICATOR));
 
-	rc = agg_data_extent(entry, agg_entry);
+	rc = agg_data_extent(entry, agg_entry, acts);
 
 	return rc;
 }
@@ -801,11 +807,6 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		agg_param->ap_credits = 0;
 		*acts |= VOS_ITER_CB_YIELD;
 
-		/*
-		 * Reset position if we yield while iterating in object, dkey
-		 * or akey level, so that subtree won't be skipped mistakenly.
-		 */
-		reset_nested_agg_pos(type, agg_entry);
 		if (ec_aggregate_yield(agg_param)) {
 			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
 			rc = 1;
@@ -891,16 +892,6 @@ agg_subtree_iterate(daos_handle_t ih, struct ec_agg_param *agg_param)
 	return rc;
 }
 
-/* Reset iterator state upon completion of iteration of a subtree.
- */
-static inline void
-reset_agg_pos(vos_iter_type_t type, struct ec_agg_param *agg_param)
-{
-	D_ASSERT(type == VOS_ITER_OBJ);
-
-	memset(&agg_param->ap_agg_entry.ae_oid, 0,
-	       sizeof(agg_param->ap_agg_entry.ae_oid));
-}
 
 /* Call-back function for full VOS iteration outer iterator.
  */
@@ -936,11 +927,6 @@ agg_iter_obj_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		agg_param->ap_credits = 0;
 		*acts |= VOS_ITER_CB_YIELD;
 
-		/*
-		 * Reset position if we yield while iterating in object, dkey
-		 * or akey level, so that subtree won't be skipped mistakenly.
-		 */
-		reset_agg_pos(type, agg_param);
 		if (ec_aggregate_yield(agg_param)) {
 			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
 			rc = 1;
