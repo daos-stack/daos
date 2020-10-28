@@ -55,7 +55,6 @@ String get_daos_packages() {
 }
 
 String get_daos_packages(String distro) {
-
     String pkgs
     if (env.TEST_RPMS == 'true') {
         pkgs = "daos{,-{client,server," +
@@ -63,7 +62,9 @@ String get_daos_packages(String distro) {
     } else {
         pkgs = "daos{,-client}"
     }
-
+    if (distro.startsWith('ubuntu20')) {
+        return pkgs + "=" + daos_packages_version(distro)
+    }
     return pkgs + "-" + daos_packages_version(distro)
 }
 
@@ -78,6 +79,8 @@ String pr_repos(String distro) {
         repos = cachedCommitPragma(pragma: 'PR-repos-el7')
     } else if (distro == 'leap15') {
         repos = cachedCommitPragma(pragma: 'PR-repos-leap15')
+    } else if (distro.startsWith('ubuntu20')) {
+        repos = cachedCommitPragma(pragma: 'PR-repos-ubuntu20', cache: commit_pragma_cache)
     } else {
        error 'pr_repos not implemented for ' + distro
     }
@@ -168,13 +171,13 @@ String daos_packages_version(String distro) {
     // TODO: this should actually be determined from the PR-repos artifacts
     String version = cachedCommitPragma(pragma: 'RPM-test-version')
     if (version != "") {
-        String dist
+        String dist = ""
         if (distro == "centos7") {
-            dist = "el7"
+            dist = ".el7"
         } else if (distro == "leap15") {
-            dist = "suse.lp152"
+            dist = ".suse.lp152"
         }
-        return version + "." + dist
+        return version + dist
     }
 
     // use the stash after that
@@ -214,15 +217,21 @@ String functional_packages() {
 }
 
 String functional_packages(String distro) {
-    String pkgs = get_daos_packages(distro)
-    if (quickbuild()) {
-        pkgs += " spdk_tools"
-    }
+    String daos_pkgs = get_daos_packages(distro)
+    String pkgs = ""
     if (distro == "leap15") {
-        return pkgs
+        if (quickbuild()) {
+            pkgs += " spdk-tools"
+        }
+        return daos_pkgs + pkgs
     } else if (distro == "centos7") {
+        if (quickbuild()) {
+            pkgs += " spdk_tools"
+        }
         // need to exclude openmpi until we remove it from the repo
-        return  "--exclude openmpi " + pkgs
+        return  "--exclude openmpi " + daos_pkgs + pkgs
+    } else if (distro.startsWith('ubuntu20')) {
+        return daos_pkgs + " openmpi-bin ndctl fio"
     } else {
         error 'functional_packages not implemented for ' + stage_info['target']
     }
@@ -230,7 +239,6 @@ String functional_packages(String distro) {
 
 // Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
-def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
 // bail out of branch builds that are not on a whitelist
@@ -253,46 +261,136 @@ def getuid() {
     return cached_uid
 }
 
-// This sets up the additinal build arguments for setting up a docker
-// build agent from a dockerfile.
-// The result of this function need to be stored in an environment
-// variable.  Calling this function to create a docker build agent
-// fails.  The log shows a truncated command string.
-def docker_build_args(Map config = [:]) {
-    ret_str = " --build-arg NOBUILD=1 --build-arg UID=" + getuid() +
-              " --build-arg JENKINS_URL=$env.JENKINS_URL" +
-              " --build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
+String rpm_test_version() {
+    return cachedCommitPragma(pragma: 'RPM-test-version')
+}
 
-    if (env.REPOSITORY_URL) {
-      ret_str += ' --build-arg REPO_URL=' + env.REPOSITORY_URL
+boolean skip_prebuild() {
+    return target_branch == 'weekly-testing'
+}
+
+boolean skip_checkpatch() {
+    return skip_stage('checkpatch') ||
+           doc_only_change()
+}
+
+boolean skip_build() {
+    // always build branch landings as we depend on lastSuccessfulBuild
+    // always having RPMs in it
+    return (env.BRANCH_NAME != target_branch) &&
+           skip_stage('build') ||
+           doc_only_change() ||
+           rpm_test_version() != ''
+}
+
+boolean skip_build_rpm(String distro) {
+    return target_branch == 'weekly-testing' ||
+           skip_stage('build-' + distro + '-rpm')
+}
+
+boolean skip_build_on_centos7_gcc() {
+    return skip_stage('build-centos7-gcc')
+}
+
+boolean skip_ftest(String distro) {
+    return distro == 'ubuntu20' ||
+           skip_stage('func-test') ||
+           skip_stage('func-test-vm') ||
+           skip_stage('func-test-' + distro)
+}
+
+boolean skip_test_rpms_centos7() {
+    return target_branch == 'weekly-testing' ||
+           skip_stage('test') ||
+           skip_stage('test-centos-rpms')
+}
+
+boolean skip_scan_rpms_centos7() {
+    return target_branch == 'weekly-testing' ||
+           skip_stage('scan-centos-rpms')
+}
+
+boolean skip_ftest_hw(String size) {
+    return env.DAOS_STACK_CI_HARDWARE_SKIP == 'true' ||
+           skip_stage('func-hw-test') ||
+           skip_stage('func-hw-test-' + size)
+}
+
+boolean skip_bandit_check() {
+    return cachedCommitPragma(pragma: 'Skip-python-bandit',
+                              def_val: 'true') == 'true'
+}
+
+boolean skip_build_on_centos7_bullseye() {
+    return  env.NO_CI_TESTING == 'true' ||
+            skip_stage('bullseye', true)
+}
+
+boolean skip_build_on_centos7_gcc_debug() {
+    return skip_stage('build-centos7-gcc-debug') ||
+           quickbuild()
+}
+
+boolean skip_build_on_centos7_gcc_release() {
+    return skip_stage('build-centos7-gcc-release') ||
+           quickbuild()
+}
+
+boolean skip_build_on_landing_branch() {
+    return env.BRANCH_NAME != target_branch ||
+           quickbuild()
+}
+
+boolean skip_build_on_ubuntu_clang() {
+    return target_branch == 'weekly-testing' ||
+           skip_stage('build-ubuntu-clang') ||
+           quickbuild()
+
+}
+
+boolean skip_build_on_leap15_icc() {
+    return target_branch == 'weekly-testing' ||
+           skip_stage('build-leap15-icc') ||
+           quickbuild()
+}
+
+boolean skip_testing_stage() {
+    return  env.NO_CI_TESTING == 'true' ||
+            (skip_stage('build') &&
+             rpm_test_version() == '') ||
+            doc_only_change() ||
+            skip_stage('test')
+}
+
+boolean skip_unit_test() {
+    return skip_stage('unit-test') ||
+           skip_stage('run_test')
+}
+
+boolean skip_bullseye_report() {
+    return env.BULLSEYE == null ||
+           skip_stage('bullseye', true)
+}
+
+String quick_build_deps(String distro) {
+    String rpmspec_args = ""
+    if (distro == "leap15") {
+        rpmspec_args = "--define dist\\ .suse.lp152 " +
+                       "--undefine rhel " +
+                       "--define suse_version\\ 1502"
+    } else if (distro == "centos7") {
+        rpmspec_args = "--undefine suse_version " +
+                       "--define rhel\\ 7"
+    } else {
+        error("Unknown distro: ${distro} in quick_build_deps()")
     }
-    if (env.DAOS_STACK_EL_7_LOCAL_REPO) {
-      ret_str += ' --build-arg REPO_EL7=' + env.DAOS_STACK_EL_7_LOCAL_REPO
-    }
-    if (env.DAOS_STACK_EL_8_LOCAL_REPO) {
-      ret_str += ' --build-arg REPO_EL8=' + env.DAOS_STACK_EL_8_LOCAL_REPO
-    }
-    if (env.DAOS_STACK_LEAP_15_LOCAL_REPO) {
-      ret_str += ' --build-arg REPO_LOCAL_LEAP15=' +
-                 env.DAOS_STACK_LEAP_15_LOCAL_REPO
-    }
-    if (env.DAOS_STACK_LEAP_15_GROUP_REPO) {
-      ret_str += ' --build-arg REPO_GROUP_LEAP15=' +
-                 env.DAOS_STACK_LEAP_15_GROUP_REPO
-    }
-    if (env.HTTP_PROXY) {
-      ret_str += ' --build-arg HTTP_PROXY="' + env.HTTP_PROXY + '"'
-                 ' --build-arg http_proxy="' + env.HTTP_PROXY + '"'
-    }
-    if (env.HTTPS_PROXY) {
-      ret_str += ' --build-arg HTTPS_PROXY="' + env.HTTPS_PROXY + '"'
-                 ' --build-arg https_proxy="' + env.HTTPS_PROXY + '"'
-    }
-    if (config['qb']) {
-      ret_str += ' --build-arg QUICKBUILD=true'
-    }
-    ret_str += ' '
-    return ret_str
+    return sh(label:'Get Quickbuild dependencies',
+              script: "rpmspec -q " +
+                      "--srpm " +
+                      rpmspec_args + ' ' +
+                      "--requires utils/rpms/daos.spec " +
+                      "2>/dev/null",
+              returnStdout: true)
 }
 
 pipeline {
@@ -307,23 +405,6 @@ pipeline {
         GITHUB_USER = credentials('daos-jenkins-review-posting')
         SSH_KEY_ARGS = "-ici_key"
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
-        BUILDARGS = docker_build_args()
-        BUILDARGS_QB_CHECK = docker_build_args(qb: quickbuild())
-        BUILDARGS_QB_TRUE = docker_build_args(qb: true)
-        QUICKBUILD_DEPS_EL7 = sh label:'Get Quickbuild dependencies',
-                                 script: "rpmspec -q --define dist\\ .el7 " +
-                                         "--undefine suse_version " +
-                                         "--define rhel\\ 7 --srpm " +
-                                         "--requires utils/rpms/daos.spec " +
-                                         "2>/dev/null",
-                                 returnStdout: true
-        QUICKBUILD_DEPS_LEAP15 = sh label:'Get Quickbuild dependencies',
-                                    script: "rpmspec -q --define dist\\ .suse.lp151 " +
-                                            "--undefine rhel " +
-                                            "--define suse_version\\ 1501 --srpm " +
-                                            "--requires utils/rpms/daos.spec " +
-                                            "2>/dev/null",
-                                    returnStdout: true
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
     }
 
@@ -343,27 +424,21 @@ pipeline {
         stage('Pre-build') {
             when {
                 beforeAgent true
-                allOf {
-                    not { branch 'weekly-testing' }
-                    not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
-                }
+                expression { ! skip_prebuild() }
             }
             parallel {
                 stage('checkpatch') {
                     when {
                         beforeAgent true
-                        allOf {
-                            expression { ! skip_stage('checkpatch') }
-                            expression { ! doc_only_change() }
-                        }
+                        expression { ! skip_checkpatch() }
                     }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs '$BUILDARGS' +
-                                           "-t ${sanitized_JOB_NAME}-centos7 "
+                            additionalBuildArgs dockerBuildArgs() +
+                                           " -t ${sanitized_JOB_NAME}-centos7 "
                         }
                     }
                     steps {
@@ -406,17 +481,14 @@ pipeline {
                 stage('Python Bandit check') {
                     when {
                       beforeAgent true
-                      expression {
-                          cachedCommitPragma(pragma: 'Skip-python-bandit',
-                                             def_val: 'true') != 'true'
-                      }
+                      expression { ! skip_bandit_check() }
                     }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.code_scanning'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs '$BUILDARGS'
+                            additionalBuildArgs dockerBuildArgs()
                         }
                     }
                     steps {
@@ -441,16 +513,7 @@ pipeline {
             //failFast true
             when {
                 beforeAgent true
-                anyOf {
-                    // always build branch landings as we depend on lastSuccessfulBuild
-                    // always having RPMs in it
-                    branch target_branch
-                    allOf {
-                        expression { ! skip_stage('build') }
-                        expression { ! doc_only_change() }
-                        expression { cachedCommitPragma(pragma: 'RPM-test-version') == '' }
-                    }
-                }
+                expression { ! skip_build() }
             }
             parallel {
                 stage('Build RPM on CentOS 7') {
@@ -459,7 +522,7 @@ pipeline {
                             filename 'Dockerfile.mockbuild'
                             dir 'utils/rpms/packaging'
                             label 'docker_runner'
-                            additionalBuildArgs '$BUILDARGS'
+                            additionalBuildArgs dockerBuildArgs()
                             args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
                         }
                     }
@@ -487,25 +550,55 @@ pipeline {
                 stage('Build RPM on Leap 15') {
                     when {
                         beforeAgent true
-                        allOf {
-                            not { branch 'weekly-testing' }
-                            not { environment name: 'CHANGE_TARGET',
-                                              value: 'weekly-testing' }
-                            expression { ! skip_stage('build-leap15-rpm') }
-                        }
+                        expression { ! skip_build_rpm('leap15') }
                     }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.mockbuild'
                             dir 'utils/rpms/packaging'
                             label 'docker_runner'
-                            args '--privileged=true'
-                            additionalBuildArgs '$BUILDARGS'
+                            additionalBuildArgs dockerBuildArgs()
                             args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
                         }
                     }
                     steps {
-                        buildRpm unstable: true
+                        buildRpm()
+                    }
+                    post {
+                        success {
+                            buildRpmPost condition: 'success'
+                        }
+                        unstable {
+                            buildRpmPost condition: 'unstable'
+                        }
+                        failure {
+                            buildRpmPost condition: 'failure'
+                        }
+                        unsuccessful {
+                            buildRpmPost condition: 'unsuccessful'
+                        }
+                        cleanup {
+                            buildRpmPost condition: 'cleanup'
+                        }
+                    }
+                }
+                stage('Build DEB on Ubuntu 20.04') {
+                    when {
+                        beforeAgent true
+                        expression { ! skip_build_rpm('ubuntu20') }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile.ubuntu.20.04'
+                            dir 'utils/rpms/packaging'
+                            label 'docker_runner'
+                            args '--privileged=true'
+                            additionalBuildArgs dockerBuildArgs()
+                            args  '--cap-add=SYS_ADMIN --privileged=true'
+                        }
+                    }
+                    steps {
+                        buildRpm()
                     }
                     post {
                         success {
@@ -528,20 +621,18 @@ pipeline {
                 stage('Build on CentOS 7') {
                     when {
                         beforeAgent true
-                        allOf {
-                            expression { ! skip_stage('build-centos7-gcc') }
-                        }
+                        expression { ! skip_build_on_centos7_gcc() }
                     }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                '$BUILDARGS_QB_CHECK' +
-                                ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS_EL7 + '"' +
-                                ' --build-arg REPOS="' + pr_repos() + '"'
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
+                                                " -t ${sanitized_JOB_NAME}-centos7 " +
+                                                ' --build-arg QUICKBUILD_DEPS="' +
+                                                quick_build_deps('centos7') + '"' +
+                                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
@@ -559,11 +650,11 @@ pipeline {
                                                     excludeFile('_build\\.external\\/.*') ]
                         }
                         success {
-                            sh "rm -rf _build.external${arch}"
+                            sh "rm -rf _build.external"
                         }
                         unsuccessful {
-                            sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-centos7-gcc
+                            sh """if [ -f config.log ]; then
+                                      mv config.log config.log-centos7-gcc
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-centos7-gcc',
                                              allowEmptyArchive: true
@@ -573,11 +664,7 @@ pipeline {
                 stage('Build on CentOS 7 Bullseye') {
                     when {
                         beforeAgent true
-                        allOf {
-                            not { environment name: 'NO_CI_TESTING',
-                                  value: 'true' }
-                            expression { ! skip_stage('bullseye', true) }
-                        }
+                        expression { ! skip_build_on_centos7_bullseye() }
                     }
                     agent {
                         dockerfile {
@@ -588,7 +675,7 @@ pipeline {
                                 '$BUILDARGS_QB_TRUE' +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS_EL7 + '"' +
+                                quick_build_deps('centos7') + '"' +
                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
@@ -607,11 +694,11 @@ pipeline {
                                                     excludeFile('_build\\.external\\/.*') ]
                         }
                         success {
-                            sh "rm -rf _build.external${arch}"
+                            sh "rm -rf _build.external"
                         }
                         unsuccessful {
-                            sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-centos7-covc
+                            sh """if [ -f config.log ]; then
+                                      mv config.log config.log-centos7-covc
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-centos7-covc',
                                              allowEmptyArchive: true
@@ -621,21 +708,18 @@ pipeline {
                 stage('Build on CentOS 7 debug') {
                     when {
                         beforeAgent true
-                        allOf {
-                            expression { ! skip_stage('build-centos7-gcc-debug') }
-                            expression { ! quickbuild() }
-                        }
+                        expression { ! skip_build_on_centos7_gcc_debug() }
                     }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                '$BUILDARGS_QB_CHECK' +
-                                ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS_EL7 + '"' +
-                                ' --build-arg REPOS="' + pr_repos() + '"'
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
+                                                " -t ${sanitized_JOB_NAME}-centos7 " +
+                                                ' --build-arg QUICKBUILD_DEPS="' +
+                                                quick_build_deps('centos7') + '"' +
+                                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
@@ -652,11 +736,11 @@ pipeline {
                                                    excludeFile('_build\\.external\\/.*') ]
                         }
                         success {
-                            sh "rm -rf _build.external${arch}"
+                            sh "rm -rf _build.external"
                         }
                         unsuccessful {
-                            sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-centos7-gcc-debug
+                            sh """if [ -f config.log ]; then
+                                      mv config.log config.log-centos7-gcc-debug
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-centos7-gcc-debug',
                                              allowEmptyArchive: true
@@ -666,21 +750,18 @@ pipeline {
                 stage('Build on CentOS 7 release') {
                     when {
                         beforeAgent true
-                        allOf {
-                            expression { ! skip_stage('build-centos7-gcc-release') }
-                            expression { ! quickbuild() }
-                        }
+                        expression { ! skip_build_on_centos7_gcc_release() }
                     }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                '$BUILDARGS_QB_CHECK' +
-                                ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS_EL7 + '"' +
-                                ' --build-arg REPOS="' + pr_repos() + '"'
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
+                                                " -t ${sanitized_JOB_NAME}-centos7 " +
+                                                ' --build-arg QUICKBUILD_DEPS="' +
+                                                quick_build_deps('centos7') + '"' +
+                                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
@@ -697,11 +778,11 @@ pipeline {
                                                    excludeFile('_build\\.external\\/.*')]
                         }
                         success {
-                            sh "rm -rf _build.external${arch}"
+                            sh "rm -rf _build.external"
                         }
                         unsuccessful {
-                            sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-centos7-gcc-release
+                            sh """if [ -f config.log ]; then
+                                      mv config.log config.log-centos7-gcc-release
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-centos7-gcc-release',
                                              allowEmptyArchive: true
@@ -711,20 +792,17 @@ pipeline {
                 stage('Build on CentOS 7 with Clang') {
                     when {
                         beforeAgent true
-                        allOf {
-                            branch target_branch
-                            expression { ! quickbuild() }
-                        }
+                        expression { ! skip_build_on_landing_branch() }
                     }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                '$BUILDARGS_QB_CHECK' +
-                                ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS_EL7 + '"'
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
+                                                " -t ${sanitized_JOB_NAME}-centos7 " +
+                                                ' --build-arg QUICKBUILD_DEPS="' +
+                                                quick_build_deps('centos7') + '"'
                         }
                     }
                     steps {
@@ -741,11 +819,11 @@ pipeline {
                                                     excludeFile('_build\\.external\\/.*') ]
                         }
                         success {
-                            sh "rm -rf _build.external${arch}"
+                            sh "rm -rf _build.external"
                         }
                         unsuccessful {
-                            sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-centos7-clang
+                            sh """if [ -f config.log ]; then
+                                      mv config.log config.log-centos7-clang
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-centos7-clang',
                                              allowEmptyArchive: true
@@ -755,18 +833,15 @@ pipeline {
                 stage('Build on Ubuntu 20.04') {
                     when {
                         beforeAgent true
-                        allOf {
-                            branch target_branch
-                            expression { ! quickbuild() }
-                        }
+                        expression { ! skip_build_on_landing_branch() }
                     }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.ubuntu.20.04'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-ubuntu20.04 " +
-                                                '$BUILDARGS'
+                            additionalBuildArgs dockerBuildArgs() +
+                                                " -t ${sanitized_JOB_NAME}-ubuntu20.04"
                         }
                     }
                     steps {
@@ -783,11 +858,11 @@ pipeline {
                                                     excludeFile('_build\\.external\\/.*') ]
                         }
                         success {
-                            sh "rm -rf _build.external${arch}"
+                            sh "rm -rf _build.external"
                         }
                         unsuccessful {
-                            sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-ubuntu20.04-gcc
+                            sh """if [ -f config.log ]; then
+                                      mv config.log config.log-ubuntu20.04-gcc
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-ubuntu20.04-gcc',
                                              allowEmptyArchive: true
@@ -797,20 +872,15 @@ pipeline {
                 stage('Build on Ubuntu 20.04 with Clang') {
                     when {
                         beforeAgent true
-                        allOf {
-                            not { branch 'weekly-testing' }
-                            not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
-                            expression { ! quickbuild() }
-                            expression { ! skip_stage('build-ubuntu-clang') }
-                        }
+                        expression { ! skip_build_on_ubuntu_clang() }
                     }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.ubuntu.20.04'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-ubuntu20.04 " +
-                                                '$BUILDARGS'
+                            additionalBuildArgs dockerBuildArgs() +
+                                                " -t ${sanitized_JOB_NAME}-ubuntu20.04"
                         }
                     }
                     steps {
@@ -827,11 +897,11 @@ pipeline {
                                                     excludeFile('_build\\.external\\/.*') ]
                         }
                         success {
-                            sh "rm -rf _build.external${arch}"
+                            sh "rm -rf _build.external"
                         }
                         unsuccessful {
-                            sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-ubuntu20.04-clang
+                            sh """if [ -f config.log ]; then
+                                      mv config.log config.log-ubuntu20.04-clang
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-ubuntu20.04-clang',
                                              allowEmptyArchive: true
@@ -844,11 +914,11 @@ pipeline {
                             filename 'Dockerfile.leap.15'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 " +
-                                '$BUILDARGS_QB_CHECK' +
-                                ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS_LEAP15 + '"' +
-                                ' --build-arg REPOS="' + pr_repos() + '"'
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
+                                                " -t ${sanitized_JOB_NAME}-leap15 " +
+                                                ' --build-arg QUICKBUILD_DEPS="' +
+                                                quick_build_deps('leap15') + '"' +
+                                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
@@ -866,11 +936,11 @@ pipeline {
                                                     excludeFile('_build\\.external\\/.*') ]
                         }
                         success {
-                            sh "rm -rf _build.external${arch}"
+                            sh "rm -rf _build.external"
                         }
                         unsuccessful {
-                            sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-leap15-gcc
+                            sh """if [ -f config.log ]; then
+                                      mv config.log config.log-leap15-gcc
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-leap15-gcc',
                                              allowEmptyArchive: true
@@ -880,18 +950,15 @@ pipeline {
                 stage('Build on Leap 15 with Clang') {
                     when {
                         beforeAgent true
-                        allOf {
-                            branch target_branch
-                            expression { ! quickbuild() }
-                        }
+                        expression { ! skip_build_on_landing_branch() }
                     }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.leap.15'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 " +
-                                                 '$BUILDARGS'
+                            additionalBuildArgs dockerBuildArgs() +
+                                                " -t ${sanitized_JOB_NAME}-leap15"
                         }
                     }
                     steps {
@@ -908,11 +975,11 @@ pipeline {
                                                     excludeFile('_build\\.external\\/.*') ]
                         }
                         success {
-                            sh "rm -rf _build.external${arch}"
+                            sh "rm -rf _build.external"
                         }
                         unsuccessful {
-                            sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-leap15-clang
+                            sh """if [ -f config.log ]; then
+                                      mv config.log config.log-leap15-clang
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-leap15-clang',
                                              allowEmptyArchive: true
@@ -922,20 +989,15 @@ pipeline {
                 stage('Build on Leap 15 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
-                        allOf {
-                            not { branch 'weekly-testing' }
-                            not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
-                            expression { ! quickbuild() }
-                            expression { ! skip_stage('build-leap15-icc') }
-                        }
+                        expression { ! skip_build_on_leap15_icc() }
                     }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.leap.15'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 " +
-                                                '$BUILDARGS'
+                            additionalBuildArgs dockerBuildArgs() +
+                                                " -t ${sanitized_JOB_NAME}-leap15"
                             args '-v /opt/intel:/opt/intel'
                         }
                     }
@@ -953,11 +1015,11 @@ pipeline {
                                                     excludeFile('_build\\.external\\/.*') ]
                         }
                         success {
-                            sh "rm -rf _build.external${arch}"
+                            sh "rm -rf _build.external"
                         }
                         unsuccessful {
-                            sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-leap15-intelc
+                            sh """if [ -f config.log ]; then
+                                      mv config.log config.log-leap15-intelc
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-leap15-intelc',
                                              allowEmptyArchive: true
@@ -969,24 +1031,13 @@ pipeline {
         stage('Unit Tests') {
             when {
                 beforeAgent true
-                allOf {
-                    not { environment name: 'NO_CI_TESTING', value: 'true' }
-                    // nothing to test if build was skipped
-                    expression { ! skip_stage('build') }
-                    // or it's a doc-only change
-                    expression { ! doc_only_change() }
-                    expression { ! skip_stage('test') }
-                    expression { cachedCommitPragma(pragma: 'RPM-test-version') == '' }
-                }
+                expression { ! skip_testing_stage() }
             }
             parallel {
                 stage('Unit Test') {
                     when {
                       beforeAgent true
-                      allOf {
-                          expression { ! skip_stage('unit-test')}
-                          expression { ! skip_stage('run_test') }
-                      }
+                      expression { ! skip_unit_test() }
                     }
                     agent {
                         label 'ci_vm1'
@@ -1062,14 +1113,7 @@ pipeline {
         stage('Test') {
             when {
                 beforeAgent true
-                allOf {
-                    not { environment name: 'NO_CI_TESTING', value: 'true' }
-                    // nothing to test if build was skipped
-                    expression { ! skip_stage('build') }
-                    // or it's a doc-only change
-                    expression { ! doc_only_change() }
-                    expression { ! skip_stage('test') }
-                }
+                expression { ! skip_testing_stage() }
             }
             parallel {
                 stage('Coverity on CentOS 7') {
@@ -1082,11 +1126,11 @@ pipeline {
                             filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                '$BUILDARGS_QB_TRUE' +
-                                ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS_EL7 + '"' +
-                                ' --build-arg REPOS="' + pr_repos() + '"'
+                            additionalBuildArgs dockerBuildArgs(qb: true) +
+                                                " -t ${sanitized_JOB_NAME}-centos7 " +
+                                                ' --build-arg QUICKBUILD_DEPS="' +
+                                                quick_build_deps('centos7') + '"' +
+                                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
@@ -1101,15 +1145,11 @@ pipeline {
                             coverityPost condition: 'unsuccessful'
                         }
                     }
-                }
+                } // stage('Coverity on CentOS 7')
                 stage('Functional on CentOS 7') {
                     when {
                         beforeAgent true
-                        allOf {
-                            expression { ! skip_stage('func-test') }
-                            expression { ! skip_stage('func-test-vm') }
-                            expression { ! skip_stage('func-test-el7')}
-                        }
+                        expression { ! skip_ftest('el7') }
                     }
                     agent {
                         label 'ci_vm9'
@@ -1123,15 +1163,11 @@ pipeline {
                             functionalTestPost()
                         }
                     }
-                }
+                } // stage('Functional on CentOS 7')
                 stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
-                        allOf {
-                            expression { ! skip_stage('func-test') }
-                            expression { ! skip_stage('func-test-vm') }
-                            expression { ! skip_stage('func-test-leap15') }
-                        }
+                        expression { ! skip_ftest('leap15') }
                     }
                     agent {
                         label 'ci_vm9'
@@ -1146,14 +1182,28 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Leap 15')
+                stage('Functional on Ubuntu 20.04') {
+                    when {
+                        beforeAgent true
+                        expression { ! skip_ftest('ubuntu20') }
+                    }
+                    agent {
+                        label 'ci_vm9'
+                    }
+                    steps {
+                        functionalTest inst_repos: daos_repos(),
+                                       inst_rpms: functional_packages()
+                    }
+                    post {
+                        always {
+                            functionalTestPost()
+                        }
+                    } // post
+                } // stage('Functional on Ubuntu 20.04')
                 stage('Functional_Hardware_Small') {
                     when {
                         beforeAgent true
-                        allOf {
-                            not { environment name: 'DAOS_STACK_CI_HARDWARE_SKIP', value: 'true' }
-                            expression { ! skip_stage('func-hw-test') }
-                            expression { ! skip_stage('func-hw-test-small') }
-                        }
+                        expression { ! skip_ftest_hw('small') }
                     }
                     agent {
                         // 2 node cluster with 1 IB/node + 1 test control node
@@ -1173,11 +1223,7 @@ pipeline {
                 stage('Functional_Hardware_Medium') {
                     when {
                         beforeAgent true
-                        allOf {
-                            not { environment name: 'DAOS_STACK_CI_HARDWARE_SKIP', value: 'true' }
-                            expression { ! skip_stage('func-hw-test') }
-                            expression { ! skip_stage('func-hw-test-medium') }
-                        }
+                        expression { ! skip_ftest_hw('medium') }
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
@@ -1197,11 +1243,7 @@ pipeline {
                 stage('Functional_Hardware_Large') {
                     when {
                         beforeAgent true
-                        allOf {
-                            not { environment name: 'DAOS_STACK_CI_HARDWARE_SKIP', value: 'true' }
-                            expression { ! skip_stage('func-hw-test') }
-                            expression { ! skip_stage('func-hw-test-large') }
-                        }
+                        expression { ! skip_ftest_hw('large') }
                     }
                     agent {
                         // 8+ node cluster with 1 IB/node + 1 test control node
@@ -1221,13 +1263,7 @@ pipeline {
                 stage('Test CentOS 7 RPMs') {
                     when {
                         beforeAgent true
-                        allOf {
-                            not { branch 'weekly-testing' }
-                            not { environment name: 'CHANGE_TARGET',
-                                              value: 'weekly-testing' }
-                            expression { ! skip_stage('test') }
-                            expression { ! skip_stage('test-centos-rpms') }
-                        }
+                        expression { ! skip_test_rpms_centos7() }
                     }
                     agent {
                         label 'ci_vm1'
@@ -1240,22 +1276,17 @@ pipeline {
                 stage('Scan CentOS 7 RPMs') {
                     when {
                         beforeAgent true
-                        allOf {
-                            not { branch 'weekly-testing' }
-                            not { environment name: 'CHANGE_TARGET',
-                                              value: 'weekly-testing' }
-                            expression { ! skip_stage('scan-centos-rpms') }
-                        }
+                        expression { ! skip_scan_rpms_centos7() }
                     }
                     agent {
                         label 'ci_vm1'
                     }
                     steps {
-                        testRpm inst_repos: daos_repos(),
-                                daos_pkg_version: daos_packages_version(),
-                                inst_rpms: 'clamav clamav-devel',
-                                test_script: 'ci/rpm/scan_daos.sh',
-                                junit_files: 'maldetect.xml'
+                        scanRpms inst_repos: daos_repos(),
+                                 daos_pkg_version: daos_packages_version(),
+                                 inst_rpms: 'clamav clamav-devel',
+                                 test_script: 'ci/rpm/scan_daos.sh',
+                                 junit_files: 'maldetect.xml'
                     }
                     post {
                         always {
@@ -1270,10 +1301,7 @@ pipeline {
                 stage('Bullseye Report') {
                     when {
                       beforeAgent true
-                      allOf {
-                        expression { ! env.BULLSEYE != null }
-                        expression { ! skip_stage('bullseye', true) }
-                      }
+                      expression { ! skip_bullseye_report() }
                     }
                     agent {
                         dockerfile {
@@ -1284,19 +1312,18 @@ pipeline {
                                 '$BUILDARGS_QB_TRUE' +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS_EL7 + '"' +
+                                quick_build_deps('centos7') + '"' +
                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
                         // The coverage_healthy is primarily set here
                         // while the code coverage feature is being implemented.
-                        cloverReportPublish(
-                                   coverage_stashes: ['centos7-covc-unit-cov'],
-                                   coverage_healthy: [methodCoverage: 0,
-                                                      conditionalCoverage: 0,
-                                                      statementCoverage: 0],
-                                   ignore_failure: true)
+                        cloverReportPublish coverage_stashes: ['centos7-covc-unit-cov'],
+                                            coverage_healthy: [methodCoverage: 0,
+                                                               conditionalCoverage: 0,
+                                                               statementCoverage: 0],
+                                            ignore_failure: true
                     }
                 } // stage('Bullseye Report')
             } // parallel
