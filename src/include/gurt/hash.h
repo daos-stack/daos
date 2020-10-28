@@ -338,7 +338,7 @@ int  d_hash_table_create(uint32_t feats, uint32_t bits, void *priv,
  *
  * \param[in] feats		Feature bits, see D_HASH_FT_*
  * \param[in] bits		power2(bits) is the size of hash table
- * 				ignored for dyn_hash
+ *				ignored for dyn_hash
  * \param[in] priv		Private data for the hash table
  * \param[in] hops		Customized member functions
  * \param[in] htable		Hash table to be initialized
