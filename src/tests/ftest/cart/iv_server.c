@@ -334,11 +334,11 @@ print_key_value(char *hdr, crt_iv_key_t *iv_key, d_sg_list_t *iv_value)
 	struct iv_key_struct *key_struct;
 	struct iv_value_struct *value_struct;
 
-	char 		buffer[MAX_BUF_SIZE];
+	char		buffer[MAX_BUF_SIZE];
 	int		rindex = 0;
 	int		rc;
 
-	rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex, 
+	rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
 		      "    %s:", hdr);
 	if (rc > 0) {
 		rindex += rc;
@@ -353,14 +353,13 @@ print_key_value(char *hdr, crt_iv_key_t *iv_key, d_sg_list_t *iv_value)
 	} else {
 
 		key_struct = (struct iv_key_struct *)iv_key->iov_buf;
-		if (key_struct == NULL){
+		if (key_struct == NULL) {
 			rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
 				"%s", "key=EMPTY");
 			if (rc > 0) {
 				rindex += rc;
 			}
-		}
-		else{
+		} else {
 			rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
 				"key=[%d:%d]", key_struct->rank,
 				key_struct->key_id);
@@ -372,7 +371,7 @@ print_key_value(char *hdr, crt_iv_key_t *iv_key, d_sg_list_t *iv_value)
 
 	rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
 		"%s", " ");
-	if (rc > 0) 
+	if (rc > 0)
 		rindex += rc;
 
 	if (iv_value == NULL) {
@@ -386,15 +385,15 @@ print_key_value(char *hdr, crt_iv_key_t *iv_key, d_sg_list_t *iv_value)
 		value_struct = (struct iv_value_struct *)
 			       iv_value->sg_iovs[0].iov_buf;
 
-		if (value_struct == NULL){
+		if (value_struct == NULL) {
 			rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
 				"%s", "value=EMPTY");
 			if (rc > 0) {
 				rindex += rc;
 			}
-		 } else{
+		 } else {
 			rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
-				 "value='%s'", value_struct->data);	
+				 "value='%s'", value_struct->data);
 			if (rc > 0) {
 				rindex += rc;
 			}
@@ -681,9 +680,9 @@ iv_pre_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 {
 	DBG_ENTRY();
 
-	/* Test break case:                              */
+	/* Test break case:			      */
 	/*  Version change on server while it handles a  */
-	/*  rpc request from another server.             */
+	/*  rpc request from another server.	     */
 	if (g_timing == 2) {
 		crt_group_version_set(grp, g_grp_version);
 		g_timing = 0;
@@ -1153,7 +1152,7 @@ iv_test_fetch_iv(crt_rpc_t *rpc)
 
 	rc = crt_iv_fetch(g_ivns, 0, &input->key, 0, 0, fetch_done, rpc);
 
-	/* Test break case:                                 */
+	/* Test break case:				 */
 	/*  Version change while valid request is in flight */
 	if (g_timing == 1) {
 		crt_group_version_set(grp, g_grp_version);

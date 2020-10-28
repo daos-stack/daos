@@ -69,9 +69,9 @@ print_usage(const char *err_msg)
 		"\t-x <value>     : Value as hex string, only used for update operation\n"
 		"\t-s <strategy>  : One of ['none', 'eager_update', 'lazy_update', 'eager_notify', 'lazy_notify']\n"
 		"\t-l <log.txt>   : Print results to log file instead of stdout\n"
-		"\t-m <value>     : Value as string, used to control timig to chage group verion \n"
-		"\t                 0  - change at time of call.\n"
-		"\t                 1  - change at end of iv_test_fetch.\n"
+		"\t-m <value>     : Value as string, used to control timig to chage group verion\n"
+		"\t		 0  - change at time of call.\n"
+		"\t		 1  - change at end of iv_test_fetch.\n"
 		"\n"
 		"Example usage: ./iv_client -o fetch -r 0 -k 2:9\n"
 		"\tThis will initiate fetch of key [2:9] from rank 0.\n"
@@ -106,39 +106,37 @@ test_iv_shutdown()
 }
 
 static int
-create_sync(char *arg_sync, crt_iv_sync_t **rsync) 
+create_sync(char *arg_sync, crt_iv_sync_t **rsync)$
 {
 	crt_iv_sync_t				*sync;
 
-        D_ALLOC_PTR(sync);
-        assert(sync != NULL);
+	D_ALLOC_PTR(sync);
+	assert(sync != NULL);
 
+	if (arg_sync == NULL) {
+		sync->ivs_mode = 0;
+		sync->ivs_event = 0;
+	} else if (strcmp(arg_sync, "none") == 0) {
+		sync->ivs_mode = 0;
+		sync->ivs_event = 0;
+	} else if (strcmp(arg_sync, "eager_update") == 0) {
+		sync->ivs_mode = CRT_IV_SYNC_EAGER;
+		sync->ivs_event = CRT_IV_SYNC_EVENT_UPDATE;
+	} else if (strcmp(arg_sync, "lazy_update") == 0) {
+		sync->ivs_mode = CRT_IV_SYNC_LAZY;
+		sync->ivs_event = CRT_IV_SYNC_EVENT_UPDATE;
 
-
-        if (arg_sync == NULL) {
-                sync->ivs_mode = 0;
-                sync->ivs_event = 0;
-        } else if (strcmp(arg_sync, "none") == 0) {
-                sync->ivs_mode = 0;
-                sync->ivs_event = 0;
-        } else if (strcmp(arg_sync, "eager_update") == 0) {
-                sync->ivs_mode = CRT_IV_SYNC_EAGER;
-                sync->ivs_event = CRT_IV_SYNC_EVENT_UPDATE;
-        } else if (strcmp(arg_sync, "lazy_update") == 0) {
-                sync->ivs_mode = CRT_IV_SYNC_LAZY;
-                sync->ivs_event = CRT_IV_SYNC_EVENT_UPDATE;
-
-        } else if (strcmp(arg_sync, "eager_notify") == 0) {
-                sync->ivs_mode = CRT_IV_SYNC_EAGER;
-                sync->ivs_event = CRT_IV_SYNC_EVENT_NOTIFY;
-        } else if (strcmp(arg_sync, "lazy_notify") == 0) {
-                sync->ivs_mode = CRT_IV_SYNC_LAZY;
-                sync->ivs_event = CRT_IV_SYNC_EVENT_NOTIFY;
-        } else {
-                print_usage("Unknown sync option specified");
-                D_FREE(sync);
-                return -1;
-        }
+	} else if (strcmp(arg_sync, "eager_notify") == 0) {
+		sync->ivs_mode = CRT_IV_SYNC_EAGER;
+		sync->ivs_event = CRT_IV_SYNC_EVENT_NOTIFY;
+	} else if (strcmp(arg_sync, "lazy_notify") == 0) {
+		sync->ivs_mode = CRT_IV_SYNC_LAZY;
+		sync->ivs_event = CRT_IV_SYNC_EVENT_NOTIFY;
+	} else {
+		print_usage("Unknown sync option specified");
+		D_FREE(sync);
+		return -1;
+	}
 
 	*rsync  = sync;
 	return 0;
@@ -153,19 +151,20 @@ test_iv_invalidate(struct iv_key_struct *key, char *arg_sync)
 	int					 rc;
 	crt_iv_sync_t				*sync = NULL;
 
-	rc = create_sync(arg_sync, &sync);
-	if (rc != 0){
-		goto exit_code;
-	}
 	DBG_PRINT("Attempting to invalidate key[%d:%d]: sync type: %s\n",
 		  key->rank, key->key_id, arg_sync);
+
+	rc = create_sync(arg_sync, &sync);
+	if (rc != 0) {
+		goto exit_code;
+	}
 
 	prepare_rpc_request(g_crt_ctx, RPC_TEST_INVALIDATE_IV, &g_server_ep,
 			    (void **)&input, &rpc_req);
 
 	/* Copy parameters into rpc input structure */
 	d_iov_set(&input->iov_key, key, sizeof(struct iv_key_struct));
-        d_iov_set_safe(&input->iov_sync, sync, sizeof(crt_iv_sync_t));
+	d_iov_set_safe(&input->iov_sync, sync, sizeof(crt_iv_sync_t));
 
 	send_rpc_request(g_crt_ctx, rpc_req, (void **)&output);
 
@@ -332,7 +331,7 @@ test_iv_fetch(struct iv_key_struct *key, FILE *log_file)
 		DBG_PRINT("Fetch of key=[%d:%d] FOUND\n", key->rank,
 			  key->key_id);
 	else
-		DBG_PRINT("Fetch of key=[%d:%d] NOT FOUND; rc = %ld\n", 
+		DBG_PRINT("Fetch of key=[%d:%d] NOT FOUND; rc = %ld\n",
 			   key->rank, key->key_id, output->rc);
 
 	print_result_as_json(output->rc, &output->key, output->size, &sg_list,
@@ -362,7 +361,7 @@ test_iv_update(struct iv_key_struct *key, char *str_value, bool value_is_hex,
 	crt_iv_sync_t				*sync = NULL;
 
 	rc = create_sync(arg_sync, &sync);
-	if (rc != 0){
+	if (rc != 0) {
 		goto exit_code;
 	}
 
@@ -398,7 +397,7 @@ exit_code:
 }
 
 static int
-test_iv_set_grp_version( char *arg_version, char *arg_timing)
+test_iv_set_grp_version(char *arg_version, char *arg_timing)
 {
 	struct RPC_SET_GRP_VERSION_in		*input;
 	struct RPC_SET_GRP_VERSION_out		*output;
