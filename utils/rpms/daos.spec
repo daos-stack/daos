@@ -1,4 +1,3 @@
-
 %bcond_with fault_injection
 %define daoshome %{_exec_prefix}/lib/%{name}
 %define server_svc_name daos_server.service
