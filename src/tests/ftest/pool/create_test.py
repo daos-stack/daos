@@ -23,12 +23,11 @@ portions thereof marked with this legend must also reproduce the markings.
 """
 import time
 
-from apricot import TestWithServers
+from pool_test_base import PoolTestBase
 from server_utils import ServerFailed
-from general_utils import human_to_bytes, bytes_to_human
 
 
-class PoolCreateTests(TestWithServers):
+class PoolCreateTests(PoolTestBase):
     """Pool create tests.
 
     All of the tests verify pool create performance with 7 servers and 1 client.
@@ -36,83 +35,6 @@ class PoolCreateTests(TestWithServers):
 
     :avocado: recursive
     """
-
-    def setUp(self):
-        """Set up each test case."""
-        # Create test-case-specific DAOS log files
-        self.update_log_file_names()
-
-        super(PoolCreateTests, self).setUp()
-        self.dmg = self.get_dmg_command()
-
-    def get_max_pool_sizes(self, scm_ratio=0.9, nvme_ratio=0.9):
-        """Get the maximum pool sizes for the current server configuration.
-
-        Args:
-            scm_ratio (float, optional): percentage of the maximum SCM
-                capacity to use for the pool sizes. Defaults to 0.9 (90%).
-            nvme_ratio (float, optional): percentage of the maximum NVMe
-                capacity to use for the pool sizes. Defaults to 0.9 (90%).
-
-        Returns:
-            list: a list of bytes representing the maximum pool creation
-                SCM size and NVMe size
-
-        """
-        try:
-            sizes = self.server_managers[0].get_available_storage()
-        except ServerFailed as error:
-            self.fail(error)
-
-        ratios = (scm_ratio, nvme_ratio)
-        for index, size in enumerate(sizes):
-            if size and ratios[index] < 1:
-                # Reduce the size by the specified percentage
-                sizes[index] *= ratios[index]
-                self.log.info(
-                    "Adjusted %s size by %.2f%%: %s (%s)",
-                    "SCM" if index == 0 else "NVMe", 100 * ratios[index],
-                    str(sizes[index]), bytes_to_human(sizes[index]))
-        return sizes
-
-    def define_pools(self, quantity, scm_ratio, nvme_ratio):
-        """Define a list of TestPool objects.
-
-        Args:
-            quantity (int): number of TestPool objects to create
-            scm_ratio (float): percentage of the maximum SCM capacity to use
-                for the pool sizes, e.g. 0.9 for 90%
-            nvme_ratio (float): percentage of the maximum NVMe capacity to use
-                for the pool sizes, e.g. 0.9 for 90%. Specifying None will
-                setup each pool without NVMe.
-        """
-        sizes = self.get_max_pool_sizes(
-            scm_ratio, 1 if nvme_ratio is None else nvme_ratio)
-        self.pool = [
-            self.get_pool(create=False, connect=False) for _ in range(quantity)]
-        for pool in self.pool:
-            pool.scm_size.update(bytes_to_human(sizes[0]), "scm_size")
-            if nvme_ratio is not None:
-                if sizes[1] is None:
-                    self.fail(
-                        "Unable to assign a max pool NVMe size; NVMe not "
-                        "configured!")
-
-                # The I/O server allocates NVMe storage on targets in multiples
-                # of 1GiB per target.  A server with 8 targets will have a
-                # minimum NVMe size of 8 GiB.  Specify the largest NVMe size in
-                # GiB that can be used with the configured number of targets and
-                # specified capacity in GB.
-                targets = self.server_managers[0].get_config_value("targets")
-                increment = human_to_bytes("{}GB".format(targets))
-                nvme_multiple = increment
-                while nvme_multiple + increment <= sizes[1]:
-                    nvme_multiple += increment
-                self.log.info(
-                    "Largest NVMe multiple: %s (%s)",
-                    str(nvme_multiple), bytes_to_human(nvme_multiple))
-                pool.nvme_size.update(
-                    bytes_to_human(nvme_multiple), "nvme_size")
 
     def check_pool_creation(self, max_duration):
         """Check the duration of each pool creation meets the requirement.
@@ -150,7 +72,7 @@ class PoolCreateTests(TestWithServers):
         :avocado: tags=all,pr,hw,large,pool,create_max_pool_scm_only
         """
         # Create 1 pool using 90% of the available SCM capacity (no NVMe)
-        self.define_pools(1, 0.9, None)
+        self.pool = self.get_pool_list(1, 0.9, None)
         self.check_pool_creation(120)
 
     def test_create_max_pool(self):
@@ -164,7 +86,7 @@ class PoolCreateTests(TestWithServers):
         :avocado: tags=all,pr,hw,large,pool,create_max_pool
         """
         # Create 1 pool using 90% of the available capacity
-        self.define_pools(1, 0.9, 0.9)
+        self.pool = self.get_pool_list(1, 0.9, 0.9)
         self.check_pool_creation(240)
 
     def test_create_pool_quantity(self):
@@ -182,7 +104,7 @@ class PoolCreateTests(TestWithServers):
         # available capacity, e.g. 0.6% for 100 pools.
         quantity = self.params.get("quantity", "/run/pool/*", 1)
         ratio = 0.6 / quantity
-        self.define_pools(quantity, ratio, ratio)
+        self.pool = self.get_pool_list(quantity, ratio, ratio)
         self.check_pool_creation(3)
 
         # Verify DAOS can be restarted in less than 2 minutes
@@ -225,7 +147,7 @@ class PoolCreateTests(TestWithServers):
         #   - one pool using 90% of the available capacity of one server
         #   - one pool using 90% of the available capacity of all servers
         #   - one pool using 90% of the available capacity of the other server
-        self.define_pools(3, 0.9, 0.9)
+        self.pool = self.get_pool_list(3, 0.9, 0.9)
         ranks = [rank for rank, _ in enumerate(self.hostlist_servers)]
         self.pool[0].target_list.update(ranks[:1], "pool[0].target_list")
         self.pool[1].target_list.update(ranks, "pool[1].target_list")
@@ -276,7 +198,7 @@ class PoolCreateTests(TestWithServers):
         #   - one pool using 90% of the available capacity of one server
         #   - one pool using 90% of the available capacity of all servers
         #   - one pool using 90% of the available capacity of the other server
-        self.define_pools(3, 0.9, 0.9)
+        self.pool = self.get_pool_list(3, 0.9, 0.9)
         ranks = [rank for rank, _ in enumerate(self.hostlist_servers)]
         self.pool[0].target_list.update(ranks[:1], "pool[0].target_list")
         self.pool[1].target_list.update(ranks, "pool[1].target_list")

@@ -789,7 +789,7 @@ class DmgCommand(DmgCommandBase):
             #   ----  -----
             #   [0-1] Joined
             match = re.findall(
-                r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)", self.result.stdout)
+                r"(?:\[*([0-9-,]+)\]*)\s+([A-Za-z]+)", self.result.stdout)
             for info in match:
                 for rank in get_numeric_list(info[0]):
                     data[rank] = {"state": info[1]}

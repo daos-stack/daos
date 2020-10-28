@@ -630,6 +630,7 @@ def get_numeric_list(numeric_range):
         for item in numeric_range.split(","):
             if "-" in item:
                 range_args = [int(val) for val in item.split("-")]
+                range_args[-1] += 1
                 numeric_list.extend([int(val) for val in range(*range_args)])
             else:
                 numeric_list.append(int(item))
