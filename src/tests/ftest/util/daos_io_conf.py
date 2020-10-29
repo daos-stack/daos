@@ -25,9 +25,10 @@ import os
 import random
 
 from apricot import TestWithServers
+from command_utils import ExecutableCommand
 from command_utils_base import \
     CommandFailure, BasicParameter, FormattedParameter
-from command_utils import ExecutableCommand
+
 from test_utils_pool import TestPool
 from job_manager_utils import Orterun
 
@@ -60,19 +61,39 @@ class IoConfGen(ExecutableCommand):
         self.obj_class = FormattedParameter("-O {}")
         self.filename = BasicParameter(None, filename)
 
-    def run_conf(self):
+    def run_conf(self, dmg_config_file):
         """Run the daos_run_io_conf command as a foreground process.
 
-        Raises:
-            None
+        Args:
+            dmg_config_file: dmg file to run test.
+
+        Return:
+            Result bool: True if command success and false if any error.
 
         """
+        success_msg = 'daos_run_io_conf completed successfully'
         command = " ".join([os.path.join(self._path, "daos_run_io_conf"),
+                            " -n ", dmg_config_file,
                             self.filename.value])
 
         manager = Orterun(command)
         # run daos_run_io_conf Command using Openmpi
-        manager.run()
+        try:
+            out = manager.run()
+
+            #Return False if "ERROR" in stdout
+            for line in out.stdout.splitlines():
+                if 'ERROR' in line:
+                    return False
+            #Return False if not expected message to confirm test completed.
+            if success_msg not in out.stdout.splitlines()[-1]:
+                return False
+
+        #Return False if Command failed.
+        except CommandFailure as _error:
+            return False
+
+        return True
 
 def gen_unaligned_io_conf(record_size, filename="testfile"):
     """Generate the data-set file based on record size.
@@ -104,7 +125,6 @@ def gen_unaligned_io_conf(record_size, filename="testfile"):
     except Exception as error:
         raise error
 
-
 class IoConfTestBase(TestWithServers):
     """Base rebuild test class.
 
@@ -114,6 +134,8 @@ class IoConfTestBase(TestWithServers):
         """Initialize a IoConfTestBase object."""
         super(IoConfTestBase, self).__init__(*args, **kwargs)
         self.testfile = None
+        self.dmg = None
+        self.dmg_config_file = None
 
     def setup_test_pool(self):
         """Define a TestPool object."""
@@ -121,6 +143,8 @@ class IoConfTestBase(TestWithServers):
         self.pool.get_params(self)
         avocao_tmp_dir = os.environ['AVOCADO_TESTS_COMMON_TMPDIR']
         self.testfile = os.path.join(avocao_tmp_dir, 'testfile')
+        self.dmg = self.get_dmg_command()
+        self.dmg_config_file = self.dmg.yaml.filename
 
     def execute_io_conf_run_test(self):
         """Execute the rebuild test steps."""
@@ -131,12 +155,12 @@ class IoConfTestBase(TestWithServers):
         io_conf.get_params(self)
         io_conf.run()
         # Run test file using daos_run_io_conf
-        io_conf.run_conf()
+        if not io_conf.run_conf(self.dmg_config_file):
+            self.fail("daos_run_io_conf failed")
 
     def unaligned_io(self):
         """Execute the unaligned IO test steps."""
         total_sizes = self.params.get("sizes", "/run/datasize/*")
-
         # Setup the pool
         self.setup_test_pool()
         pool_env = {"POOL_SCM_SIZE": "{}".format(self.pool.scm_size)}
@@ -148,4 +172,5 @@ class IoConfTestBase(TestWithServers):
             # Create unaligned test data set
             gen_unaligned_io_conf(record_size, self.testfile)
             # Run test file using daos_run_io_conf
-            io_conf.run_conf()
+            if not io_conf.run_conf(self.dmg_config_file):
+                self.fail("daos_run_io_conf failed")

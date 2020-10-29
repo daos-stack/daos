@@ -186,7 +186,7 @@ rdbt_find_leader(crt_group_t *group, uint32_t nranks, uint32_t nreplicas,
 	const d_rank_t		NO_RANK = 0xFFFFFF;
 	d_rank_t		ldr_rank = NO_RANK;
 	uint64_t		term = 0;
-	int			rc;
+	int			rc = 0;
 	int			rc_svc;
 
 	for (rank = 0; rank < nranks ; rank++) {
@@ -201,12 +201,12 @@ rdbt_find_leader(crt_group_t *group, uint32_t nranks, uint32_t nreplicas,
 		if ((rc_svc == -DER_NOTLEADER) && !hint_isvalid) {
 			resp_isvalid = (rank < nreplicas);
 			if (!resp_isvalid)
-				break;
+				goto resp_valid_check;
 			notleaders++;
 		} else if (rc_svc == -DER_NOTLEADER) {
 			resp_isvalid = (rank < nreplicas);
 			if (!resp_isvalid)
-				break;
+				goto resp_valid_check;
 			notleaders++;
 			if (found_leader) {
 				/* update leader rank and term if applicable */
@@ -232,13 +232,13 @@ rdbt_find_leader(crt_group_t *group, uint32_t nranks, uint32_t nreplicas,
 		} else if (rc_svc == -DER_NOTREPLICA) {
 			resp_isvalid = (rank >= nreplicas);
 			if (!resp_isvalid)
-				break;
+				goto resp_valid_check;
 			notreplicas++;
 		} else if (!hint_isvalid) {
 			/* Leader reply without a hint */
 			resp_isvalid = ((rc_svc == 0) && (rank < nreplicas));
 			if (!resp_isvalid)
-				break;
+				goto resp_valid_check;
 			if (found_leader) {
 				if (rank != ldr_rank) {
 					printf("WARN: rank=%u replied as leader"
@@ -255,7 +255,7 @@ rdbt_find_leader(crt_group_t *group, uint32_t nranks, uint32_t nreplicas,
 			/* Leader reply with a hint (does it happen)? */
 			resp_isvalid = ((rc_svc == 0) && (rank < nreplicas));
 			if (!resp_isvalid)
-				break;
+				goto resp_valid_check;
 			if (found_leader) {
 				/* reject if h.sh_term lower? */
 				if (rank != ldr_rank) {
@@ -272,6 +272,7 @@ rdbt_find_leader(crt_group_t *group, uint32_t nranks, uint32_t nreplicas,
 			}
 		}
 
+resp_valid_check:
 		if (!resp_isvalid) {
 			printf("ERR: rank %u invalid reply: rc="DF_RC", "
 			       "hint is %s valid (rank=%u, term="DF_U64")\n",

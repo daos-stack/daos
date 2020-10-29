@@ -24,7 +24,6 @@
 package bdev
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -33,6 +32,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -203,12 +203,7 @@ func TestParseBdev(t *testing.T) {
 			}
 
 			log, buf := logging.NewTestLogger(t.Name())
-			defer func(t *testing.T) {
-				t.Helper()
-				if t.Failed() {
-					fmt.Printf(buf.String())
-				}
-			}(t)
+			defer common.ShowBufferOnFailure(t, buf)
 
 			provider, err := NewClassProvider(log, testDir, &config)
 			if err != nil {
