@@ -131,7 +131,7 @@ func (tc *TransportConfig) PreLoadCertData() error {
 	if tc == nil {
 		return errors.New("nil TransportConfig")
 	}
-	if tc.tlsKeypair != nil && tc.caPool != nil || tc.AllowInsecure == true {
+	if tc.tlsKeypair != nil && tc.caPool != nil || tc.AllowInsecure {
 		// In this case the data is already preloaded.
 		// In order to reload data use ReloadCertDatA
 		return nil
@@ -163,7 +163,7 @@ func (tc *TransportConfig) ReloadCertData() error {
 
 // PrivateKey returns the private key stored in the certificates loaded into the TransportConfig
 func (tc *TransportConfig) PrivateKey() (crypto.PrivateKey, error) {
-	if tc.AllowInsecure == true {
+	if tc.AllowInsecure {
 		return nil, nil
 	}
 	// If we don't have our keys loaded attempt to load them.
@@ -178,7 +178,7 @@ func (tc *TransportConfig) PrivateKey() (crypto.PrivateKey, error) {
 
 // PublicKey returns the private key stored in the certificates loaded into the TransportConfig
 func (tc *TransportConfig) PublicKey() (crypto.PublicKey, error) {
-	if tc.AllowInsecure == true {
+	if tc.AllowInsecure {
 		return nil, nil
 	}
 	// If we don't have our keys loaded attempt to load them.

@@ -140,7 +140,8 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	if len(req.GetRanks()) > 0 {
 		// If the request supplies a specific rank list, use it.
 		reqRanks := system.RanksFromUint32(req.GetRanks())
-		reqRanks, err = system.DedupeRanks(reqRanks)
+		// Create a RankSet to sort/dedupe the ranks.
+		reqRanks = system.RankSetFromRanks(reqRanks).Ranks()
 		if err != nil {
 			return nil, err
 		}

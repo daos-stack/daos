@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -91,7 +91,7 @@ func TestSign(t *testing.T) {
 				t.Errorf("unable to read golden file %s", golden)
 			}
 
-			if bytes.Compare(result, expected) != 0 {
+			if !bytes.Equal(result, expected) {
 				t.Errorf("result %s; expected %s", hex.Dump(result), hex.Dump(expected))
 			}
 		})
@@ -143,7 +143,7 @@ func TestVerify(t *testing.T) {
 
 			err = tokenSigner.Verify(tc.key, tc.data, expected)
 			if err != nil {
-				if bytes.Compare(expected, []byte(err.Error())) != 0 {
+				if !bytes.Equal(expected, []byte(err.Error())) {
 					t.Errorf("result %s; expected %s", err.Error(), expected)
 				}
 			}
