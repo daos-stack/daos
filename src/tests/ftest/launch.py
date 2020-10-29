@@ -37,6 +37,8 @@ import errno
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 
+import random
+
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
@@ -935,7 +937,11 @@ def clean_logs(test_yaml, args):
         print("Error cleaning logs, aborting")
         return False
 
-    return True
+    # return True
+    status = random.choice([True, False])
+    if not status:
+        print("DEBUG: Returning False when cleaning logs was successful")
+    return status
 
 
 def get_remote_file_command():
