@@ -449,7 +449,6 @@ func (m *LeaderQueryResp) GetReplicas() []string {
 type GetAttachInfoReq struct {
 	Sys                  string   `protobuf:"bytes,1,opt,name=sys,proto3" json:"sys,omitempty"`
 	AllRanks             bool     `protobuf:"varint,2,opt,name=allRanks,proto3" json:"allRanks,omitempty"`
-	Jobid                string   `protobuf:"bytes,3,opt,name=jobid,proto3" json:"jobid,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -492,13 +491,6 @@ func (m *GetAttachInfoReq) GetAllRanks() bool {
 		return m.AllRanks
 	}
 	return false
-}
-
-func (m *GetAttachInfoReq) GetJobid() string {
-	if m != nil {
-		return m.Jobid
-	}
-	return ""
 }
 
 type GetAttachInfoResp struct {

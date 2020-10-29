@@ -35,7 +35,6 @@
 #include <daos/drpc_modules.h>
 #include <daos/drpc.pb-c.h>
 #include <daos/event.h>
-#include <daos/job.h>
 #include "srv.pb-c.h"
 #include "rpc.h"
 #include <errno.h>
@@ -329,7 +328,6 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 
 	/* Prepare the GetAttachInfo request. */
 	req.sys = (char *)name;
-	req.jobid = dc_jobid;
 	reqb_size = mgmt__get_attach_info_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);
 	if (reqb == NULL) {
