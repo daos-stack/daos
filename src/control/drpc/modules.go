@@ -234,8 +234,6 @@ const (
 	MethodContSetOwner mgmtMethod = C.DRPC_METHOD_MGMT_CONT_SET_OWNER
 	// MethodGroupUpdate defines a method for updating the group map
 	MethodGroupUpdate mgmtMethod = C.DRPC_METHOD_MGMT_GROUP_UPDATE
-	// MethodDisconnect defines a method for signaling a clean client shutdown
-	MethodDisconnect mgmtMethod = C.DRPC_METHOD_MGMT_DISCONNECT
 )
 
 type srvMethod int32
