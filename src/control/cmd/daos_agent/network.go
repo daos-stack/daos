@@ -50,10 +50,6 @@ func (cmd *netScanCmd) printUnlessJson(fmtStr string, args ...interface{}) {
 	cmd.log.Infof(fmtStr, args...)
 }
 
-type key int
-
-const topologyKey key = 0
-
 func (cmd *netScanCmd) Execute(_ []string) error {
 	netCtx, err := netdetect.Init(context.Background())
 	if err != nil {
