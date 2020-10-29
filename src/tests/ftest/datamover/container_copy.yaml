@@ -30,7 +30,7 @@ container:
   control_method: daos
 ior:
   client_processes:
-    np: 30
+    np: 20
   api: DFS
   flags: "-w -k"
   dfs_destroy: False
@@ -40,7 +40,7 @@ ior:
   transfersize_blocksize:
     1M:
       transfer_size: '1M'
-      block_size: '5G'         # creating aggregate file of size 150G
+      block_size: '1G'         # creating aggregate file of size 150G
   objectclass:
     SX:
       dfs_oclass: "SX"

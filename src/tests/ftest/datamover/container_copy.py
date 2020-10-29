@@ -64,7 +64,7 @@ class ContainerCopy(MdtestBase, IorTestBase):
         dcp.get_params(self)
         # update dest path
         if update_dest:
-            dcp.dest_path.update(self.tmp)
+            dcp.dest_path.update(self.workdir)
         # set datamover params
         dcp.set_datamover_params(src_pool, dst_pool, src_cont, dst_cont)
 
@@ -100,7 +100,7 @@ class ContainerCopy(MdtestBase, IorTestBase):
 
         # set and update mdtest command params
         self.mdtest_cmd.set_daos_params(self.server_group, self.pool,
-                                        self.container[0])
+                                        self.container[0].uuid)
         self.mdtest_cmd.flags.update(mdtest_flags[0])
         self.mdtest_cmd.write_bytes.update(file_size)
         # run mdtest
@@ -114,7 +114,7 @@ class ContainerCopy(MdtestBase, IorTestBase):
 
         # update and run mdtest read on cont2
         self.mdtest_cmd.set_daos_params(self.server_group, self.pool,
-                                        self.container[1])
+                                        self.container[1].uuid)
         self.mdtest_cmd.flags.update(mdtest_flags[1])
         self.mdtest_cmd.read_bytes.update(file_size)
 
@@ -159,7 +159,7 @@ class ContainerCopy(MdtestBase, IorTestBase):
         # update ior params, read back and verify data from posix file system
         self.ior_cmd.api.update("POSIX")
         self.ior_cmd.flags.update("-r -R")
-        dest_path = self.tmp + self.ior_cmd.test_file.value
+        dest_path = self.workdir + self.ior_cmd.test_file.value
         self.ior_cmd.test_file.update(dest_path)
         self.ior_cmd.set_daos_params(self.server_group, self.pool)
         self.run_ior(self.get_ior_job_manager_command(), self.processes)
