@@ -486,10 +486,12 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed(
                 "Failed to start servers before format: {}".format(error))
 
-    def detect_io_server_start(self):
+    def detect_io_server_start(self, host_qty=None):
         """Detect when all the daos_io_servers have started."""
+        if host_qty is None:
+            hosts_qty = len(self._hosts)
         self.log.info("<SERVER> Waiting for the daos_io_servers to start")
-        self.manager.job.update_pattern("normal", len(self._hosts))
+        self.manager.job.update_pattern("normal", hosts_qty)
         if not self.manager.job.check_subprocess_status(self.manager.process):
             self.kill()
             raise ServerFailed("Failed to start servers after format")

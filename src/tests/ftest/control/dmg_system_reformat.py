@@ -23,16 +23,14 @@
 """
 from __future__ import print_function
 
-import os
 
-from avocado import fail_on
 from avocado.core.exceptions import TestFail
 from apricot import TestWithServers
 from server_utils import ServerFailed
-from general_utils import human_to_bytes
+from pool_test_base import PoolTestBase
 
 
-class DmgSystemReformatTest(TestWithServers):
+class DmgSystemReformatTest(PoolTestBase):
     # pylint: disable=too-many-ancestors
     """Test Class Description:
 
@@ -42,44 +40,6 @@ class DmgSystemReformatTest(TestWithServers):
     :avocado: recursive
     """
 
-    def setUp(self):
-        """Set up for DmgSystemReformatTest test."""
-        super(DmgSystemReformatTest, self).setUp()
-
-        host = self.hostlist_servers[0]
-        scm_list = self.server_managers[-1].get_config_value("scm_list")
-        pmem_ns = os.path.split(scm_list[-1])
-        storage_info = self.get_dmg_command().storage_scan(verbose=True)
-        self.scm_cap = storage_info[host]["scm"][pmem_ns[-1]]["capacity"]
-
-    def get_pool_at_capacity(self, percentage):
-        """Create a pool at specified capacity.
-
-        Args:
-            percentage (int): percent to use of total space available for pool.
-                i.e. 0.5 (50%) 0.25(25%)
-
-        Raises:
-            CommandFailure: raise exception if pool creation fails.
-
-        Returns:
-            TestPool: the created test pool object.
-
-        """
-        if percentage > 1 or percentage <= 0:
-            self.fail("The percent value provided cannot be used: %s percent",
-                      percentage * 100)
-        # Convert info from dmg's human readable to bytes
-        scm_size = int(percentage * human_to_bytes(self.scm_cap))
-
-        # Update size value with unit and create, create pool object.
-        self.log.info("Create pool at %s percent capacity.", percentage * 100)
-        pool = self.get_pool(create=False, connect=False)
-        pool.scm_size.update(scm_size)
-
-        return pool
-
-    @fail_on(ServerFailed)
     def test_dmg_system_reformat(self):
         """
         JIRA ID: DAOS-5415
@@ -88,25 +48,29 @@ class DmgSystemReformatTest(TestWithServers):
 
         :avocado: tags=all,small,pr,hw,control,sys_reformat,dmg
         """
-        first_pool = self.get_pool_at_capacity(0.7)
-        first_pool.create()
+        # Create pool using 90% of the available SCM capacity
+        self.pool = self.get_pool_list(1, 0.9, None)
+        self.pool[-1].create()
 
         self.log.info("Check that new pool will fail with DER_NOSPACE")
-        second_pool = self.get_pool_at_capacity(0.7)
+        self.get_dmg_command().exit_status_exception = False
+        self.pool.extend(self.get_pool_list(1, 0.9, None))
         try:
-            second_pool.create()
+            self.pool[-1].create()
         except TestFail as error:
             self.log.info("Pool create failed: %s", str(error))
-            if "DER_NOSPACE" not in second_pool.dmg.result.stderr:
-                self.fail("Pool create did not fail do to DER_NOSPACE!")
+            if "-1007" not in self.get_dmg_command().result.stderr:
+                self.fail("Pool create did not fail due to DER_NOSPACE!")
 
-        self.log.info("Stop running io_server instancess: 'dmg system stop'")
+        self.log.info("Stop running io_server instances: 'dmg system stop'")
         self.get_dmg_command().system_stop(force=True)
         if self.get_dmg_command().result.exit_status != 0:
             self.fail("Detected issues performing a system stop: {}".format(
                 self.get_dmg_command().result.stderr))
+        # Remove pools
+        self.pool = []
 
-        # To verify that we are using the membership iformation instead of the
+        # To verify that we are using the membership information instead of the
         # dmg config explicit hostlist
         self.assertTrue(
             self.server_managers[-1].dmg.set_config_value("hostlist", None))
@@ -114,22 +78,22 @@ class DmgSystemReformatTest(TestWithServers):
         self.log.info("Perform dmg storage format on all system ranks:")
         self.get_dmg_command().storage_format(reformat=True)
         if self.get_dmg_command().result.exit_status != 0:
-            self.fail("Detected issues performing storage format: {}".format(
+            self.fail("Issues performing storage format --reformat: {}".format(
                 self.get_dmg_command().result.stderr))
 
         # Check that io_servers starts up again
         self.log.info("<SERVER> Waiting for the daos_io_servers to start")
-        self.server_managers[-1].manager.job.pattern_count = 2
-        if not self.server_managers[-1].manager.job.\
-           check_subprocess_status(self.server_managers[-1].manager.process):
-            self.server_managers[-1].kill()
-            raise ServerFailed("Failed to start servers after format")
+        self.server_managers[-1].detect_io_server_start(host_qty=2)
 
         # Check that we have cleared storage by checking pool list
         if self.get_dmg_command().pool_list():
-            self.fail("Detected pools in storage after refomat: {}".format(
+            self.fail("Detected pools in storage after reformat: {}".format(
                 self.get_dmg_command().result.stdout))
 
         # Create last pool now that memory has been wiped.
-        third_pool = self.get_pool_at_capacity(0.7)
-        third_pool.create()
+        self.pool.extend(self.get_pool_list(1, 0.9, None))
+        self.pool[-1].create()
+
+        # Lastly, verify that last created pool is in the list
+        pool_info = self.get_dmg_command().pool_list()
+        self.assertEqual(list(pool_info)[0], self.pool[-1].uuid)

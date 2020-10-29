@@ -31,6 +31,7 @@ import json
 
 from command_utils_base import CommandFailure
 from dmg_utils_base import DmgCommandBase
+from general_utils import get_numeric_list
 
 
 class DmgCommand(DmgCommandBase):
@@ -217,14 +218,14 @@ class DmgCommand(DmgCommandBase):
         """Get the result of the dmg storage format command.
 
         Args:
-            verbose (bool): show results of each SCM & NVMe device format
-                operation.
             reformat (bool): always reformat storage, could be destructive.
                 This will create control-plane related metadata i.e. superblock
                 file and reformat if the storage media is available and
                 formattable.
             timeout: seconds after which the format is considered a failure and
                 times out.
+            verbose (bool): show results of each SCM & NVMe device format
+                operation.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -236,10 +237,10 @@ class DmgCommand(DmgCommandBase):
         """
         saved_timeout = self.timeout
         self.timeout = timeout
-        result = self._get_result(
+        self._get_result(
             ("storage", "format"), reformat=reformat, verbose=verbose)
         self.timeout = saved_timeout
-        return result
+        return self.result
 
     def storage_prepare(self, user=None, hugepages="4096", nvme=False,
                         scm=False, reset=False, force=True):
@@ -653,7 +654,18 @@ class DmgCommand(DmgCommandBase):
 
         """
         self._get_result(("pool", "list"))
-        return re.findall(r"(?:([0-9a-fA-F-]+) +([0-9,]+))", self.result.stdout)
+        pool_info = re.findall(
+            r"(?:([0-9a-fA-F-]{36})\s+([0-9-,]+))", self.result.stdout)
+
+        """
+        Pool UUID                            Svc Replicas
+        ---------                            ------------
+        43bf2fe8-cb92-46ec-b9e9-9b056725092a 0
+        98736dfe-cb92-12cd-de45-9b09875092cd 1
+        """
+        data = {}
+        for info in pool_info:
+            data[info[0]] = get_numeric_list(info[1])
 
     def pool_set_prop(self, pool, name, value):
         """Set property for a given Pool.

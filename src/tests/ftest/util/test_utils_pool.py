@@ -132,27 +132,30 @@ class TestPool(TestDaosApiBase):
             self._call_method(self.pool.create, kwargs)
 
         elif self.control_method.value == self.USE_DMG and self.dmg:
-            # Create a pool with the dmg command
+            # Create a pool with the dmg command and store its CmdResult
             self._log_method("dmg.pool_create", kwargs)
             data = self.dmg.pool_create(**kwargs)
+            if self.dmg.result.exit_status == 0:
+                # Populate the empty DaosPool object with the properties of the
+                # pool created with dmg pool create.
+                if self.name.value:
+                    self.pool.group = ctypes.create_string_buffer(
+                        self.name.value)
 
-            # Populate the empty DaosPool object with the properties of the pool
-            # created with dmg pool create.
-            if self.name.value:
-                self.pool.group = ctypes.create_string_buffer(self.name.value)
+                # Convert the string of service replicas from the dmg command output
+                # into an ctype array for the DaosPool object using the same
+                # technique used in DaosPool.create().
+                service_replicas = [
+                    int(value) for value in data["svc"].split(",")]
+                rank_t = ctypes.c_uint * len(service_replicas)
+                rank = rank_t(*list([svc for svc in service_replicas]))
+                rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
+                self.pool.svc = daos_cref.RankList(
+                    rl_ranks, len(service_replicas))
 
-            # Convert the string of service replicas from the dmg command output
-            # into an ctype array for the DaosPool object using the same
-            # technique used in DaosPool.create().
-            service_replicas = [int(value) for value in data["svc"].split(",")]
-            rank_t = ctypes.c_uint * len(service_replicas)
-            rank = rank_t(*list([svc for svc in service_replicas]))
-            rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
-            self.pool.svc = daos_cref.RankList(rl_ranks, len(service_replicas))
-
-            # Set UUID and attached to the DaosPool object
-            self.pool.set_uuid_str(data["uuid"])
-            self.pool.attached = 1
+                # Set UUID and attached to the DaosPool object
+                self.pool.set_uuid_str(data["uuid"])
+                self.pool.attached = 1
 
         elif self.control_method.value == self.USE_DMG:
             self.log.error("Error: Undefined dmg command")
@@ -163,10 +166,11 @@ class TestPool(TestDaosApiBase):
                 self.control_method.value)
 
         # Set the TestPool attributes for the created pool
-        self.svc_ranks = [
-            int(self.pool.svc.rl_ranks[index])
-            for index in range(self.pool.svc.rl_nr)]
-        self.uuid = self.pool.get_uuid_str()
+        if self.pool.attached:
+            self.svc_ranks = [
+                int(self.pool.svc.rl_ranks[index])
+                for index in range(self.pool.svc.rl_nr)]
+            self.uuid = self.pool.get_uuid_str()
 
     @fail_on(DaosApiError)
     def connect(self, permission=2):

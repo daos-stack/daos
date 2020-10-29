@@ -266,8 +266,12 @@ class ExecutableCommand(CommandWithParameters):
                 r"\d+\s+([DRSTtWXZ<NLsl+]+)\s+\d+", result.stdout)
         return state
 
-    def get_method(self, method_name):
-        """Get specified method.
+    def get_output(self, method_name, regex_method=None, **kwargs):
+        """Get output from the command issued by the specified method.
+
+        Issue the specified method and return a list of strings that result from
+        searching its standard output for a fixed set of patterns defined for
+        the class method.
 
         Args:
             method_name (str): name of the method to execute
@@ -277,14 +281,26 @@ class ExecutableCommand(CommandWithParameters):
                 method's regex pattern, or executing the method
 
         Returns:
-            method: a method belonging to self object class.
+            list: a list of strings obtained from the method's output parsed
+                through its regex
 
         """
+        # Get the method to call to obtain the CmdResult
         method = getattr(self, method_name)
         if method is None:
             raise CommandFailure(
                 "No '{}()' method defined for this class".format(method_name))
-        return method
+
+        # Run the command
+        result = method(**kwargs)
+        if not isinstance(result, process.CmdResult):
+            raise CommandFailure(
+                "{}() did not return a CmdResult".format(method_name))
+
+        # Parse the output and return
+        if not regex_method:
+            regex_method = method_name
+        return self.parse_output(result.stdout, regex_method)
 
     def parse_output(self, stdout, regex_method):
         """Parse output using findall() with supplied 'regex_method' as pattern.
@@ -462,36 +478,6 @@ class CommandWithSubCommand(ExecutableCommand):
             index = names.index("sub_command")
             names[index] = "sub_command_class"
         return names
-
-    def get_output(self, method_name, regex_method=None, **kwargs):
-        """Get output from the command issued by the specified method.
-
-        Issue the specified method and return a list of strings that result from
-        searching its standard output for a fixed set of patterns defined for
-        the class method.
-
-        Args:
-            method_name (str): name of the method to execute
-
-        Raises:
-            CommandFailure: if there is an error finding the method, finding the
-                method's regex pattern, or executing the method
-
-        Returns:
-            list: a list of strings obtained from the method's output parsed
-                through its regex
-
-        """
-        # Run the method call
-        self.get_method(method_name)(**kwargs)
-        if not isinstance(self.result, process.CmdResult):
-            raise CommandFailure(
-                "{}() did not return a CmdResult".format(method_name))
-
-        # Parse the output and return
-        if not regex_method:
-            regex_method = method_name
-        return self.parse_output(self.result.stdout, regex_method)
 
     def set_sub_command(self, value):
         """Set the command's sub-command value and update the sub-command class.
