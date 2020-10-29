@@ -135,7 +135,7 @@ daos_compressor_init(struct daos_compressor **obj, struct compress_ft *ft)
 		return -DER_INVAL;
 	}
 
-	D_ALLOC(result, sizeof(*result));
+	D_ALLOC_PTR(result);
 	if (result == NULL)
 		return -DER_NOMEM;
 

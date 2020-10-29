@@ -697,6 +697,7 @@ iv_ns_create_internal(unsigned int ns_id, uuid_t pool_uuid,
 		      d_rank_t master_rank, struct ds_iv_ns **pns)
 {
 	struct ds_iv_ns	*ns;
+	int rc;
 
 	ns = ds_iv_ns_lookup(ns_id);
 	if (ns)
@@ -710,7 +711,11 @@ iv_ns_create_internal(unsigned int ns_id, uuid_t pool_uuid,
 	D_INIT_LIST_HEAD(&ns->iv_entry_list);
 	ns->iv_ns_id = ns_id;
 	ns->iv_master_rank = master_rank;
-	ABT_mutex_create(&ns->iv_lock);
+	rc = ABT_mutex_create(&ns->iv_lock);
+	if (rc != ABT_SUCCESS) {
+		D_FREE_PTR(ns);
+		return dss_abterr2der(rc);
+	}
 	d_list_add(&ns->iv_ns_link, &ds_iv_ns_list);
 	*pns = ns;
 
@@ -778,11 +783,8 @@ void
 ds_iv_init()
 {
 	D_INIT_LIST_HEAD(&ds_iv_ns_list);
-	/* Let's set the topo to 32 to avoid cart IV failover,
-	 * which is not supported yet. XXX
-	 */
-	ds_iv_ns_tree_topo = crt_tree_topo(CRT_TREE_KNOMIAL, 32);
 	D_INIT_LIST_HEAD(&ds_iv_class_list);
+	ds_iv_ns_tree_topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
 }
 
 void

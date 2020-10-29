@@ -91,8 +91,8 @@ else
 
 		# shellcheck disable=SC2086
 		if list=$(ls -d $glob); then
-			echo "RUN: ls -d $glob | xargs -r chown -R "
-			echo -n "$_TARGET_USER"
+			echo -n "RUN: ls -d $glob | xargs -r chown -R "
+			echo "$_TARGET_USER"
 			echo "$list" | xargs -r chown -R "$_TARGET_USER"
 		fi
 	done

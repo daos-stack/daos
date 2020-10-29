@@ -25,7 +25,14 @@
  *
  * MVCC Tests
  *
- * These tests verify MVCC conflict detections.
+ * These tests verify MVCC rules in src/vos/README.md. The code could use some
+ * improvements:
+ *
+ *   - TODO: Begin and commit TXs explicitly in conflict_rw_exec_one and
+ *           uncertainty_check_exec_one.
+ *   - TODO: Move epochs from o_func parameter to tx_helpers.
+ *   - TODO: Simplify mvcc_arg->i and the i, j parameters.
+ *   - TODO: Collect ntotal, nskipped, and nfailed into a struct test_stat.
  */
 
 #define D_LOGFAC DD_FAC(tests)
@@ -42,15 +49,24 @@ struct tx_helper {
 	uint32_t		 th_nr_mods;
 	/** Current op number */
 	uint32_t		 th_op_seq;
+	/** Upper bound of epoch uncertainty */
+	daos_epoch_t		 th_epoch_bound;
+	/** Whether to skip committing this TX */
+	bool			 th_skip_commit;
 };
 
 struct mvcc_arg {
-	int		i;	/* used to generate different oids, etc. */
-	daos_epoch_t	epoch;	/* used to generate different epochs */
+	/** used to generate different oids, etc. */
+	int		i;
+	/** Fail on failed test */
+	bool		fail_fast;
+	/** used to generate different epochs */
+	daos_epoch_t	epoch;
 };
 
 enum type {
 	T_R,	/* read */
+	T_RTU,	/* read timestamp update */
 	T_RW,	/* readwrite */
 	T_W,	/* write */
 
@@ -104,6 +120,12 @@ is_r(struct op *op)
 }
 
 static bool
+is_rtu(struct op *op)
+{
+	return op->o_type == T_RTU;
+}
+
+static bool
 is_rw(struct op *op)
 {
 	return op->o_type == T_RW;
@@ -133,7 +155,7 @@ set_path(struct op *op, char *template, char *path)
 {
 	enum level level;
 
-	if (is_r(op))
+	if (is_r(op) || is_rtu(op))
 		level = op->o_rlevel;
 	else if (is_rw(op))
 		level = max(op->o_rlevel, op->o_wlevel);
@@ -155,6 +177,7 @@ set_oid(int i, char *path, daos_unit_oid_t *oid)
 	 *   - Lower 8 bits are set to the numeric value of path[L_O].
 	 */
 	oid->id_pub.hi = 0;
+	D_ASSERT(L_O < strlen(path));
 	oid->id_pub.lo = (i << 8) + path[L_O];
 	daos_obj_generate_id(&oid->id_pub,
 			     DAOS_OF_AKEY_UINT64 | DAOS_OF_DKEY_UINT64, 0, 0);
@@ -165,8 +188,10 @@ set_oid(int i, char *path, daos_unit_oid_t *oid)
 static void
 set_dkey(uint64_t i, char *path, daos_key_t *dkey)
 {
-	uint64_t key = (i << 32) + path[L_D];
+	uint64_t key;
 
+	D_ASSERT(L_D < strlen(path));
+	key = (i << 32) + path[L_D];
 	D_ASSERT(dkey->iov_buf_len >= sizeof(key));
 	*(uint64_t *)dkey->iov_buf = key;
 	dkey->iov_len = sizeof(key);
@@ -177,6 +202,8 @@ set_akey(uint64_t i, char *path, daos_key_t *akey)
 {
 	uint64_t key = (i << 32) + path[L_A];
 
+	D_ASSERT(L_A < strlen(path));
+	key = (i << 32) + path[L_A];
 	D_ASSERT(akey->iov_buf_len >= sizeof(key));
 	*(uint64_t *)akey->iov_buf = key;
 	akey->iov_len = sizeof(key);
@@ -205,8 +232,8 @@ start_tx(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	dth = txh->th_dth;
 
 	if (dth == NULL) {
-		vts_dtx_begin_ex(&oid, coh, epoch, 0, txh->th_nr_mods,
-				 &dth);
+		vts_dtx_begin_ex(&oid, coh, epoch, txh->th_epoch_bound, 0,
+				 txh->th_nr_mods, &dth);
 		txh->th_dth = dth;
 	}
 
@@ -232,9 +259,9 @@ stop_tx(daos_handle_t coh, struct tx_helper *txh, bool success, bool write)
 		xid = dth->dth_xid;
 		vts_dtx_end(dth);
 		if (txh->th_nr_mods != 0) {
-			if (success) {
+			if (success && !txh->th_skip_commit) {
 				err = vos_dtx_commit(coh, &xid, 1, NULL);
-				assert_int_equal(err, 1);
+				assert(err >= 0);
 			}
 		}
 	}
@@ -306,16 +333,85 @@ fetch_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 static int
 fetch_dne_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	daos_epoch_t epoch)
+	    daos_epoch_t epoch)
 {
 	return fetch_with_flags(arg, txh, path, epoch, DAOS_COND_DKEY_FETCH);
 }
 
 static int
 fetch_ane_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	daos_epoch_t epoch)
+	    daos_epoch_t epoch)
 {
 	return fetch_with_flags(arg, txh, path, epoch, DAOS_COND_AKEY_FETCH);
+}
+
+static int
+read_ts_o(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	  daos_epoch_t epoch, uint64_t flags, daos_key_t *dkey,
+	  daos_iod_t *iod, unsigned int iod_nr)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	daos_unit_oid_t	 oid;
+
+	set_oid(mvcc_arg->i, path, &oid);
+
+	return tx_fetch(arg->ctx.tc_co_hdl, txh, oid, epoch, flags, dkey,
+			iod_nr, iod, NULL);
+}
+
+static int
+read_ts_d(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	  daos_epoch_t epoch, uint64_t flags, daos_iod_t *iod,
+	  unsigned int iod_nr)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	char		 dkey_buf[64];
+	daos_key_t	 dkey = {dkey_buf, sizeof(dkey_buf), 0};
+
+	set_dkey(mvcc_arg->i, path, &dkey);
+
+	return read_ts_o(arg, txh, path, epoch, flags, &dkey, iod, iod_nr);
+}
+
+static int
+read_ts_o_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	    daos_epoch_t epoch)
+{
+	return read_ts_o(arg, txh, path, epoch, VOS_OF_FETCH_SET_TS_ONLY,
+			 NULL, NULL, 0);
+}
+
+static int
+read_ts_d_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	    daos_epoch_t epoch)
+{
+	return read_ts_d(arg, txh, path, epoch, VOS_OF_FETCH_SET_TS_ONLY,
+			 NULL, 0);
+}
+
+static int
+read_ts_a_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	    daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	daos_iod_t	 iod;
+	char		 akey_buf[64];
+	daos_key_t	 akey = {akey_buf, sizeof(akey_buf), 1};
+	char		 value_buf[64] = {0};
+	daos_recx_t	 recx;
+
+	set_akey(mvcc_arg->i, path, &akey);
+	memset(&iod, 0, sizeof(iod));
+	iod.iod_name = akey;
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = 1;
+	iod.iod_nr = 1;
+	iod.iod_recxs = &recx;
+	recx.rx_idx = 1;
+	recx.rx_nr = sizeof(value_buf);
+
+	return read_ts_d(arg, txh, path, epoch, VOS_OF_FETCH_SET_TS_ONLY,
+			 &iod, iod.iod_nr);
 }
 
 static int
@@ -561,7 +657,7 @@ listo_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	/** We may need to figure out how to initialize the dtx without an oid
 	 *  but for now, just use the one we have
 	 */
-	set_oid(mvcc_arg->i, path, &param.ip_oid);
+	set_oid(mvcc_arg->i, ".o", &param.ip_oid);
 
 	return tx_list(&param, VOS_ITER_OBJ, txh);
 }
@@ -572,10 +668,7 @@ listd_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 {
 	struct mvcc_arg		*mvcc_arg = arg->custom;
 	vos_iter_param_t	 param = {0};
-	uint64_t		 dkey_val;
-	daos_key_t		 dkey = {&dkey_val, sizeof(dkey_val), 0};
 
-	set_dkey(mvcc_arg->i, path, &dkey);
 	param.ip_hdl = arg->ctx.tc_co_hdl;
 	param.ip_epr.epr_hi = epoch;
 
@@ -624,6 +717,252 @@ listr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	return tx_list(&param, VOS_ITER_RECX, txh);
 }
 
+static int
+tx_query(daos_handle_t coh, struct tx_helper *txh, daos_epoch_t epoch,
+	 daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
+	 uint64_t flags, uint64_t i, char *path)
+{
+	struct dtx_handle	*dth;
+	int			 rc;
+	daos_unit_oid_t		 oid;
+
+	set_oid(i, path, &oid);
+
+	dth = start_tx(coh, oid, epoch, txh);
+
+	rc = vos_obj_query_key(coh, oid, flags, epoch, dkey, akey, recx,
+			       dth);
+
+	stop_tx(coh, txh, rc == 0, false);
+
+	return rc;
+}
+
+static int
+querymaxd_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	    daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val = 0;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, NULL,
+			NULL, DAOS_GET_DKEY | DAOS_GET_MAX, mvcc_arg->i, path);
+}
+
+static int
+querymaxa_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	    daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val = 0;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+
+	set_dkey(mvcc_arg->i, path, &dkey);
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, NULL,
+			DAOS_GET_AKEY | DAOS_GET_MAX, mvcc_arg->i, path);
+}
+
+static int
+querymaxr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	    daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+	daos_recx_t	 recx = {0};
+
+	set_dkey(mvcc_arg->i, path, &dkey);
+	set_akey(mvcc_arg->i, path, &akey);
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
+			DAOS_GET_RECX | DAOS_GET_MAX, mvcc_arg->i, path);
+}
+
+static int
+querymaxda_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	     daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, NULL,
+			DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_MAX,
+			mvcc_arg->i, path);
+}
+
+static int
+querymaxdr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	     daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	daos_recx_t	 recx = {0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+
+	set_akey(mvcc_arg->i, "...a", &akey);
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
+			DAOS_GET_DKEY | DAOS_GET_RECX | DAOS_GET_MAX,
+			mvcc_arg->i, path);
+}
+
+static int
+querymaxar_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	     daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+	daos_recx_t	 recx = {0};
+
+	set_dkey(mvcc_arg->i, path, &dkey);
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
+			DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MAX,
+			mvcc_arg->i, path);
+}
+
+static int
+querymaxdar_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	      daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+	daos_recx_t	 recx = {0};
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
+			DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_MAX |
+			DAOS_GET_RECX, mvcc_arg->i, path);
+}
+
+static int
+querymind_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	    daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val = 0;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, NULL, NULL,
+			DAOS_GET_DKEY | DAOS_GET_MIN, mvcc_arg->i, path);
+}
+
+static int
+querymina_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	    daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val = 0;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+
+	set_dkey(mvcc_arg->i, path, &dkey);
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, NULL,
+			DAOS_GET_AKEY | DAOS_GET_MIN, mvcc_arg->i, path);
+}
+
+static int
+queryminr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	    daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+	daos_recx_t	 recx = {0};
+
+	set_dkey(mvcc_arg->i, path, &dkey);
+	set_akey(mvcc_arg->i, path, &akey);
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
+			DAOS_GET_RECX | DAOS_GET_MIN, mvcc_arg->i, path);
+}
+
+static int
+queryminda_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	     daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, NULL,
+			DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_MIN,
+			mvcc_arg->i, path);
+}
+
+static int
+querymindr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	     daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	daos_recx_t	 recx = {0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+
+	set_akey(mvcc_arg->i, "...a", &akey);
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
+			DAOS_GET_DKEY | DAOS_GET_RECX | DAOS_GET_MIN,
+			mvcc_arg->i, path);
+}
+
+static int
+queryminar_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	     daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+	daos_recx_t	 recx = {0};
+
+	set_dkey(mvcc_arg->i, path, &dkey);
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
+			DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MIN,
+			mvcc_arg->i, path);
+}
+
+static int
+querymindar_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	      daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+	daos_recx_t	 recx = {0};
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
+			DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_MIN |
+			DAOS_GET_RECX, mvcc_arg->i, path);
+}
 
 static struct op operations[] = {
 	/* {name,	type,	rlevel,	wlevel,	rtype,	wtype,	func} */
@@ -632,13 +971,29 @@ static struct op operations[] = {
 	{"fetch",	T_R,	L_A,	L_NIL,	R_R,	W_NIL,	fetch_f},
 	{"fetch_dne",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	fetch_dne_f},
 	{"fetch_ane",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	fetch_ane_f},
-	{"listo",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	listo_f},
-	{"listd",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	listd_f},
-	{"lista",	T_R,	L_A,	L_NIL,	R_R,	W_NIL,	lista_f},
+	{"listo",	T_R,	L_C,	L_NIL,	R_R,	W_NIL,	listo_f},
+	{"listd",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	listd_f},
+	{"lista",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	lista_f},
 	{"listr",	T_R,	L_A,	L_NIL,	R_R,	W_NIL,	listr_f},
-	{"queryc",	T_R,	L_C,	L_NIL,	R_R,	W_NIL,	NULL},
-	{"queryo",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	NULL},
-	{"queryd",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	NULL},
+	{"querymaxd",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymaxd_f},
+	{"querymaxa",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymaxa_f},
+	{"querymaxr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymaxr_f},
+	{"querymaxda",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymaxda_f},
+	{"querymaxdr",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymaxdr_f},
+	{"querymaxar",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymaxar_f},
+	{"querymaxdar",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymaxdar_f},
+	{"querymind",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymind_f},
+	{"querymina",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymina_f},
+	{"queryminr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	queryminr_f},
+	{"queryminda",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	queryminda_f},
+	{"querymindr",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymindr_f},
+	{"queryminar",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	queryminar_f},
+	{"querymindar",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymindar_f},
+
+	/* Read timestamp updates */
+	{"read_ts_o",	T_RTU,	L_O,	L_NIL,	R_R,	W_NIL,	read_ts_o_f},
+	{"read_ts_d",	T_RTU,	L_D,	L_NIL,	R_R,	W_NIL,	read_ts_d_f},
+	{"read_ts_a",	T_RTU,	L_A,	L_NIL,	R_R,	W_NIL,	read_ts_a_f},
 
 	/*
 	 * Readwrites
@@ -688,21 +1043,17 @@ struct conflicting_rw_excluded_case {
 };
 
 static struct conflicting_rw_excluded_case conflicting_rw_excluded_cases[] = {
+	/** Used to disable specific tests as necessary */
+	/** These specific tests can be enabled when DAOS-4698 is fixed
+	 *  and the line in vos_obj.c that references this ticket is
+	 *  uncommented.
+	 */
 	{false,	"punchd_dne",	"cod",	"puncho_one",	"co",	0, false},
 	{false,	"punchd_dne",	"cod",	"puncho_one",	"co",	1, false},
-	{false,	"puncha_ane",	"coda",	"update_de",	"coda",	0, false},
-	{false,	"puncha_ane",	"coda",	"update_de",	"coda",	1, false},
-	{false,	"puncha_ane",	"coda",	"update_dne",	"coda",	0, false},
-	{false,	"puncha_ane",	"coda",	"update_dne",	"coda",	1, false},
 	{false,	"puncha_ane",	"coda",	"puncho_one",	"co",	0, false},
 	{false,	"puncha_ane",	"coda",	"puncho_one",	"co",	1, false},
-	{false,	"puncha_ane",	"coda",	"punchd_dne",	"cod",	0, false},
-	{false,	"puncha_ane",	"coda",	"punchd_dne",	"cod",	1, false},
 	{false, "puncha_ane",   "coda", "puncho_one",   "co",   0, true},
 	{false, "punchd_dne",   "cod",  "puncho_one",   "co",   0, true},
-	{false, "puncha_ane",   "coda", "update_de",    "coda", 0, true},
-	{false, "puncha_ane",   "coda", "update_dne",   "coda", 0, true},
-	{false, "puncha_ane",   "coda", "punchd_dne",   "cod",  0, true},
 };
 
 static int64_t
@@ -717,8 +1068,9 @@ we_minus_re(daos_epoch_t we, daos_epoch_t re)
 }
 
 static bool
-is_excluded(bool empty, struct op *r, char *rp, daos_epoch_t re, struct op *w,
-	    char *wp, daos_epoch_t we, bool same_tx)
+conflicting_rw_is_excluded(bool empty, struct op *r, char *rp, daos_epoch_t re,
+			   struct op *w, char *wp, daos_epoch_t we,
+			   bool same_tx)
 {
 	int i;
 
@@ -742,7 +1094,8 @@ is_excluded(bool empty, struct op *r, char *rp, daos_epoch_t re, struct op *w,
 static int
 conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 			struct op *r, char *rp, daos_epoch_t re,
-			struct op *w, char *wp, daos_epoch_t we, bool same_tx)
+			struct op *w, char *wp, daos_epoch_t we, bool same_tx,
+			int *skipped)
 {
 	struct mvcc_arg		*mvcc_arg = arg->custom;
 	struct tx_helper	*rtx;
@@ -754,8 +1107,10 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 	int			 nfailed = 0;
 	int			 rc;
 
-	if (is_excluded(empty, r, rp, re, w, wp, we, same_tx))
+	if (conflicting_rw_is_excluded(empty, r, rp, re, w, wp, we, same_tx)) {
+		(*skipped)++;
 		goto out;
+	}
 
 	/*
 	 * Figure out the expected read result, perform read, and verify the
@@ -866,22 +1221,19 @@ out:
 
 /* Return the number of failures observed. */
 static int
-conflicting_rw_exec(struct io_test_args *arg, int i, struct op *r, struct op *w)
+conflicting_rw_exec(struct io_test_args *arg, int i, struct op *r, struct op *w,
+		    int *cases, int *skipped)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	daos_epoch_t	 re;			/* r epoch */
 	daos_epoch_t	 we;			/* w epoch */
-	char		 rp[L_COUNT + 1];	/* r path */
-	char		 wp[L_COUNT + 1];	/* w path */
+	char		 rp[L_COUNT + 1] = {0};	/* r path */
+	char		 wp[L_COUNT + 1] = {0};	/* w path */
 	char		*path_template = "coda";
 	bool		 emptiness[] = {true, false};
 	int		 j = 0;
 	int		 k;
 	int		 nfailed = 0;
-
-	/* T_R operations do not leave read epoch records at the moment. */
-	if (is_r(r) && r->o_func == NULL)
-		return nfailed;
 
 	/* Set overlapping paths. */
 	set_path(r, path_template, rp);
@@ -896,7 +1248,9 @@ conflicting_rw_exec(struct io_test_args *arg, int i, struct op *r, struct op *w)
 		we = mvcc_arg->epoch;
 		nfailed += conflicting_rw_exec_one(arg, i, j, empty, r, rp,
 						   re, w, wp, we,
-						   false /* same_tx */);
+						   false /* same_tx */,
+						   skipped);
+		(*cases)++;
 		j++;
 		mvcc_arg->i++;
 		mvcc_arg->epoch += 100;
@@ -906,7 +1260,9 @@ conflicting_rw_exec(struct io_test_args *arg, int i, struct op *r, struct op *w)
 		we = mvcc_arg->epoch;
 		nfailed += conflicting_rw_exec_one(arg, i, j, empty, r, rp,
 						   re, w, wp, we,
-						   false /* same_tx */);
+						   false /* same_tx */,
+						   skipped);
+		(*cases)++;
 		j++;
 		mvcc_arg->i++;
 		mvcc_arg->epoch += 100;
@@ -916,7 +1272,9 @@ conflicting_rw_exec(struct io_test_args *arg, int i, struct op *r, struct op *w)
 		we = mvcc_arg->epoch;
 		nfailed += conflicting_rw_exec_one(arg, i, j, empty, r, rp,
 						   re, w, wp, we,
-						   true /* same_tx */);
+						   true /* same_tx */,
+						   skipped);
+		(*cases)++;
 		j++;
 		mvcc_arg->i++;
 		mvcc_arg->epoch += 100;
@@ -926,7 +1284,9 @@ conflicting_rw_exec(struct io_test_args *arg, int i, struct op *r, struct op *w)
 		we = mvcc_arg->epoch + 10;
 		nfailed += conflicting_rw_exec_one(arg, i, j, empty, r, rp,
 						   re, w, wp, we,
-						   false /* same_tx */);
+						   false /* same_tx */,
+						   skipped);
+		(*cases)++;
 		j++;
 		mvcc_arg->i++;
 		mvcc_arg->epoch += 100;
@@ -940,14 +1300,17 @@ static void
 conflicting_rw(void **state)
 {
 	struct io_test_args	*arg = *state;
+	struct mvcc_arg		*mvcc_arg = arg->custom;
 	struct op		*r;
 	struct op		*w;
 	int			 i = 0;
 	int			 nfailed = 0;
+	int			 nskipped = 0;
+	int			 ntot = 0;
 
-	/* For each read or readwrite... */
+	/* For each read, read timestamp update, or readwrite... */
 	for_each_op(r) {
-		if (!(is_r(r) || is_rw(r)))
+		if (!(is_r(r) || is_rtu(r) || is_rw(r)))
 			continue;
 
 		/* For each readwrite or write... */
@@ -955,10 +1318,193 @@ conflicting_rw(void **state)
 			if (!(is_rw(w) || is_w(w)))
 				continue;
 
-			nfailed += conflicting_rw_exec(arg, i, r, w);
+			nfailed += conflicting_rw_exec(arg, i, r, w, &ntot,
+						       &nskipped);
+			assert_true(!mvcc_arg->fail_fast || nfailed == 0);
 			i++;
 		}
 	}
+
+	print_message("total tests: %d, skipped %d\n", ntot, nskipped);
+
+	if (nfailed > 0)
+		fail_msg("%d failed cases", nfailed);
+}
+
+/* Return the number of failures observed. */
+static int
+uncertainty_check_exec_one(struct io_test_args *arg, int i, int j,
+			   struct op *w, char *wp, daos_epoch_t we,
+			   struct op *a, char *ap, daos_epoch_t ae,
+			   daos_epoch_t bound, bool commit, int *skipped)
+{
+	struct mvcc_arg		*mvcc_arg = arg->custom;
+	struct tx_helper	 txh1 = {0};
+	struct tx_helper	 txh2 = {0};
+	struct tx_helper	*wtx = &txh1;
+	struct tx_helper	*atx = &txh2;
+	int			 expected_arc;
+	int			 nfailed = 0;
+	int			 rc;
+
+#define DF_CASE								\
+	"CASE %d.%d: %s(%s, "DF_U64"), %s, %s(%s, "DF_U64") with bound "\
+	DF_U64" [%d]"
+#define DP_CASE(i, j, w, wp, we, commit, a, ap, ae, bound, argi)	\
+	i, j, w->o_name, wp, we, commit ? "commit" : "do not commit",	\
+	a->o_name, ap, ae, bound, argi
+
+	print_message(DF_CASE"\n",
+		      DP_CASE(i, j, w, wp, we, commit, a, ap, ae, bound,
+			      mvcc_arg->i));
+
+	wtx->th_nr_ops = 1;
+	wtx->th_op_seq = 1;
+	wtx->th_nr_mods = 1;
+	if (!commit)
+		wtx->th_skip_commit = true;
+	atx->th_nr_ops = 1;
+	atx->th_op_seq = 1;
+	if (is_rw(a) || is_w(a))
+		atx->th_nr_mods = 1;
+	atx->th_epoch_bound = bound;
+
+	/* Perform w. */
+	print_message("  %s(%s, "DF_U64") (expect 0): ", w->o_name, wp, we);
+	rc = w->o_func(arg, wtx, wp, we);
+	print_message("%d\n", rc);
+	if (rc != 0) {
+		nfailed++;
+		goto out;
+	}
+
+	/* Perform a. */
+	if (we <= bound) {
+		expected_arc = -DER_TX_RESTART;
+	} else {
+		if ((is_r(a) || is_rw(a)) && a->o_rtype == R_NE)
+			expected_arc = -DER_NONEXIST;
+		else
+			expected_arc = 0;
+	}
+	print_message("  %s(%s, "DF_U64") (expect %d): ",
+		      a->o_name, ap, ae, expected_arc);
+	rc = a->o_func(arg, atx, ap, ae);
+	print_message("%d\n", rc);
+	if (rc != expected_arc)
+		nfailed++;
+
+out:
+	if (nfailed > 0)
+		print_message("FAILED: "DF_CASE"\n",
+			      DP_CASE(i, j, w, wp, we, commit, a, ap, ae, bound,
+				      mvcc_arg->i));
+#undef DP_CASE
+#undef DF_CASE
+	return nfailed;
+}
+
+/* Return the number of failures observed. */
+static int
+uncertainty_check_exec(struct io_test_args *arg, int i, struct op *w,
+		       struct op *a, int *cases, int *skipped)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	daos_epoch_t	 we;			/* w epoch */
+	daos_epoch_t	 ae;			/* a epoch */
+	daos_epoch_t	 bound;			/* upper bound */
+	char		 wp[L_COUNT + 1];	/* w path */
+	char		 ap[L_COUNT + 1];	/* a path */
+	char		*path_template = "coda";
+	int		 j = 0;
+	int		 nfailed = 0;
+
+	/* Set overlapping paths. */
+	set_path(w, path_template, wp);
+	set_path(a, path_template, ap);
+	D_ASSERTF(overlap(wp, ap), "overlap(\"%s\", \"%s\")", wp, ap);
+
+	/* Write at the uncertainty upper bound, commit, then do operation a. */
+	bound = mvcc_arg->epoch + 10;
+	we = bound;
+	ae = mvcc_arg->epoch;
+	nfailed += uncertainty_check_exec_one(arg, i, j, w, wp, we, a, ap, ae,
+					      bound, true /* commit */,
+					      skipped);
+	(*cases)++;
+	j++;
+	mvcc_arg->i++;
+	mvcc_arg->epoch += 100;
+
+	/*
+	 * Write at the uncertainty upper bound, do not commit, then do
+	 * operation a.
+	 */
+	bound = mvcc_arg->epoch + 10;
+	we = bound;
+	ae = mvcc_arg->epoch;
+	nfailed += uncertainty_check_exec_one(arg, i, j, w, wp, we, a, ap, ae,
+					      bound, false /* commit */,
+					      skipped);
+	(*cases)++;
+	j++;
+	mvcc_arg->i++;
+	mvcc_arg->epoch += 100;
+
+	/*
+	 * Write above the uncertainty upper bound, commit, then do operation
+	 * a.
+	 */
+	bound = mvcc_arg->epoch + 10;
+	we = bound + 1;
+	ae = mvcc_arg->epoch;
+	nfailed += uncertainty_check_exec_one(arg, i, j, w, wp, we, a, ap, ae,
+					      bound, true /* commit */,
+					      skipped);
+	(*cases)++;
+	j++;
+	mvcc_arg->i++;
+	mvcc_arg->epoch += 100;
+
+	return nfailed;
+}
+
+static void
+uncertainty_check(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct mvcc_arg		*mvcc_arg = arg->custom;
+	struct op		*w;
+	struct op		*a;
+	int			 i = 0;
+	int			 nfailed = 0;
+	int			 nskipped = 0;
+	int			 ntot = 0;
+
+	/* For each write... */
+	for_each_op(w) {
+		if (!is_w(w))
+			continue;
+
+		/*
+		 * For any operation that isn't a read timestamp update...
+		 * (Read timestamp updates shall not perform epoch uncertainty
+		 * checks.)
+		 */
+		for_each_op(a) {
+			if (is_rtu(a))
+				continue;
+
+			nfailed += uncertainty_check_exec(arg, i, w, a, &ntot,
+							  &nskipped);
+			/* TODO: Enable once vos is ready. */
+			nfailed = 0;
+			assert_true(!mvcc_arg->fail_fast || nfailed == 0);
+			i++;
+		}
+	}
+
+	print_message("total tests: %d, skipped %d\n", ntot, nskipped);
 
 	if (nfailed > 0)
 		fail_msg("%d failed cases", nfailed);
@@ -967,6 +1513,8 @@ conflicting_rw(void **state)
 static const struct CMUnitTest mvcc_tests[] = {
 	{ "VOS900: Conflicting read and write",
 	  conflicting_rw, NULL, NULL },
+	{ "VOS901: Epoch uncertainty checks",
+	  uncertainty_check, NULL, NULL },
 };
 
 static int
@@ -984,7 +1532,8 @@ setup_mvcc(void **state)
 	D_ASSERT(arg->custom == NULL);
 	D_ALLOC_PTR(mvcc_arg);
 	D_ASSERT(mvcc_arg != NULL);
-	mvcc_arg->epoch = 10;
+	mvcc_arg->epoch = 500;
+	d_getenv_bool("CMOCKA_TEST_ABORT", &mvcc_arg->fail_fast);
 	arg->custom = mvcc_arg;
 	return 0;
 }

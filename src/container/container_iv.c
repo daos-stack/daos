@@ -503,9 +503,13 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	memcpy(&root_hdl, entry->iv_value.sg_iovs[0].iov_buf, sizeof(root_hdl));
 	d_iov_set(&key_iov, civ_key, sizeof(*civ_key));
 	if (src == NULL) {
-		/* If the uuid is NULL, then it will delete(invalidate) all
-		 * entries (containers under the pool) of the tree.
-		 */
+		if (entry->iv_class->iv_class_id == IV_CONT_CAPA &&
+		    !uuid_is_null(civ_key->cont_uuid)) {
+			rc = ds_cont_tgt_close(civ_key->cont_uuid);
+			if (rc)
+				return rc;
+		}
+
 		if (uuid_is_null(civ_key->cont_uuid)) {
 			rc = dbtree_empty(root_hdl);
 			if (rc)
@@ -787,6 +791,10 @@ struct iv_capa_ult_arg {
 	uuid_t		pool_uuid;
 	uuid_t		cont_uuid;
 	uuid_t		cont_hdl_uuid;
+	/* This is only for testing purpose to
+	 * invalidate the current hdl inside ULT.
+	 */
+	bool		invalidate_current;
 	ABT_eventual	eventual;
 };
 
@@ -803,6 +811,14 @@ cont_iv_capa_refresh_ult(void *data)
 	pool = ds_pool_lookup(arg->pool_uuid);
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NONEXIST);
+
+	if (arg->invalidate_current) {
+		rc = cont_iv_capability_invalidate(pool->sp_iv_ns,
+						   arg->cont_hdl_uuid,
+						   CRT_IV_SYNC_NONE);
+		if (rc)
+			D_GOTO(out, rc);
+	}
 
 	rc = cont_iv_fetch(pool->sp_iv_ns, IV_CONT_CAPA,
 			   arg->cont_hdl_uuid, &entry, sizeof(entry),
@@ -824,13 +840,18 @@ cont_iv_hdl_fetch(uuid_t cont_hdl_uuid, uuid_t pool_uuid,
 {
 	struct iv_capa_ult_arg	arg;
 	ABT_eventual		eventual;
+	bool			invalidate_current = false;
 	int			*status;
 	int			rc;
 
-	*cont_hdl = ds_cont_hdl_lookup(cont_hdl_uuid);
-	if (*cont_hdl != NULL && !DAOS_FAIL_CHECK(DAOS_FORCE_CAPA_FETCH)) {
-		D_DEBUG(DB_TRACE, "get hdl %p\n", cont_hdl);
-		return 0;
+	if (DAOS_FAIL_CHECK(DAOS_FORCE_CAPA_FETCH)) {
+		invalidate_current = true;
+	} else {
+		*cont_hdl = ds_cont_hdl_lookup(cont_hdl_uuid);
+		if (*cont_hdl != NULL) {
+			D_DEBUG(DB_TRACE, "get hdl %p\n", cont_hdl);
+			return 0;
+		}
 	}
 
 	D_DEBUG(DB_TRACE, "Can not find "DF_UUID" hdl\n",
@@ -848,6 +869,7 @@ cont_iv_hdl_fetch(uuid_t cont_hdl_uuid, uuid_t pool_uuid,
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	uuid_copy(arg.cont_hdl_uuid, cont_hdl_uuid);
 	arg.eventual = eventual;
+	arg.invalidate_current = invalidate_current;
 	rc = dss_ult_create(cont_iv_capa_refresh_ult, &arg,
 			    DSS_ULT_POOL_SRV, 0, 0, NULL);
 	if (rc)
@@ -892,7 +914,7 @@ cont_iv_capability_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 }
 
 int
-cont_iv_capability_invalidate(void *ns, uuid_t cont_hdl_uuid)
+cont_iv_capability_invalidate(void *ns, uuid_t cont_hdl_uuid, int mode)
 {
 	struct ds_iv_key	key = { 0 };
 	struct cont_iv_key	*civ_key;
@@ -903,8 +925,7 @@ cont_iv_capability_invalidate(void *ns, uuid_t cont_hdl_uuid)
 	civ_key->class_id = IV_CONT_CAPA;
 
 	key.class_id = IV_CONT_CAPA;
-	rc = ds_iv_invalidate(ns, &key, 0, CRT_IV_SYNC_NONE, 0,
-			      false /* retry */);
+	rc = ds_iv_invalidate(ns, &key, 0, mode, 0, false /* retry */);
 	if (rc)
 		D_ERROR("iv invalidate failed "DF_RC"\n", DP_RC(rc));
 

@@ -1340,7 +1340,6 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 	struct ilog_priv	*priv = ilog_ent2priv(entries);
 	d_iov_t			 key_iov;
 	d_iov_t			 val_iov;
-	bool			 in_progress = false;
 	int			 status;
 	int			 rc = 0;
 
@@ -1370,9 +1369,7 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 	if (root->lr_tree.it_embedded) {
 		status = ilog_status_get(lctx, root->lr_id.id_tx_id,
 					 root->lr_id.id_epoch, intent);
-		if (status == -DER_INPROGRESS)
-			in_progress = true;
-		else if (status < 0)
+		if (status != -DER_INPROGRESS && status < 0)
 			D_GOTO(fail, rc = status);
 		rc = set_entry(entries, &root->lr_id, status);
 		if (rc != 0)
@@ -1409,9 +1406,7 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 
 		status = ilog_status_get(lctx, id.id_tx_id,
 					 id.id_epoch, intent);
-		if (status == -DER_INPROGRESS)
-			in_progress = true;
-		else if (status < 0)
+		if (status != -DER_INPROGRESS && status < 0)
 			D_GOTO(fail, rc = status);
 		rc = set_entry(entries, &id, status);
 		if (rc != 0)
@@ -1424,12 +1419,6 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 			goto fail;
 	}
 out:
-	/* We don't exit loop early with -DER_INPROGRESS so we cache the while
-	 * log for future updates.
-	 */
-	if (in_progress)
-		rc = -DER_INPROGRESS;
-
 	D_ASSERT(rc != -DER_NONEXIST);
 	if (entries->ie_num_entries == 0)
 		rc = -DER_NONEXIST;

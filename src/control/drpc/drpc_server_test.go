@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -161,7 +161,9 @@ func TestServer_Start_CantUnlinkSocket(t *testing.T) {
 	if err := os.Chmod(tmpDir, 0000); err != nil {
 		t.Fatalf("Couldn't change permissions on dir: %v", err)
 	}
-	defer os.Chmod(tmpDir, 0700)
+	defer func() {
+		_ = os.Chmod(tmpDir, 0700)
+	}()
 
 	dss, _ := NewDomainSocketServer(context.Background(), log, path)
 
@@ -183,7 +185,9 @@ func TestServer_Start_CantListen(t *testing.T) {
 	if err := os.Chmod(tmpDir, 0500); err != nil {
 		t.Fatalf("Couldn't change permissions on dir: %v", err)
 	}
-	defer os.Chmod(tmpDir, 0700)
+	defer func() {
+		_ = os.Chmod(tmpDir, 0700)
+	}()
 
 	dss, _ := NewDomainSocketServer(context.Background(), log, path)
 

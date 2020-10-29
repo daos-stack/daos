@@ -41,7 +41,7 @@
 #define CLI_OBJ_IO_PARMS	8
 #define NIL_BITMAP		(NULL)
 
-#define OBJ_TGT_INLINE_NR	(18)
+#define OBJ_TGT_INLINE_NR	(17)
 struct obj_req_tgts {
 	/* to save memory allocation if #targets <= OBJ_TGT_INLINE_NR */
 	struct daos_shard_tgt	 ort_tgts_inline[OBJ_TGT_INLINE_NR];
@@ -174,7 +174,7 @@ open_retry:
 		}
 
 		memset(&oid, 0, sizeof(oid));
-		oid.id_shard = shard;
+		oid.id_shard = obj_shard->do_shard;
 		oid.id_pub   = obj->cob_md.omd_id;
 		/* NB: obj open is a local operation, so it is ok to call
 		 * it in sync mode, at least for now.
@@ -647,6 +647,7 @@ obj_reasb_req_init(struct obj_reasb_req *reasb_req, daos_iod_t *iods,
 
 	D_ASSERT((uintptr_t)(tmp_ptr - size_tgt_nr) <=
 		 (uintptr_t)(buf + buf_size));
+	D_SPIN_INIT(&reasb_req->orr_spin, PTHREAD_PROCESS_PRIVATE);
 
 	return 0;
 }
@@ -670,6 +671,7 @@ obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr)
 		obj_ec_tgt_oiod_fini(reasb_req->tgt_oiods);
 		reasb_req->tgt_oiods = NULL;
 	}
+	D_SPIN_DESTROY(&reasb_req->orr_spin);
 	obj_ec_fail_info_free(reasb_req);
 	D_FREE(reasb_req->orr_iods);
 }
@@ -814,7 +816,7 @@ shard_open:
 		D_GOTO(out, rc);
 
 	shard_tgt->st_rank	= obj_shard->do_target_rank;
-	shard_tgt->st_shard	= shard,
+	shard_tgt->st_shard	= obj_shard->do_shard,
 	shard_tgt->st_tgt_idx	= obj_shard->do_target_idx;
 	rc = obj_shard2tgtid(obj, shard, map_ver, &shard_tgt->st_tgt_id);
 	obj_shard_close(obj_shard);
@@ -2782,7 +2784,7 @@ merge_key(d_list_t *head, char *key, int key_size)
 
 	D_ALLOC(key_one->key.iov_buf, key_size);
 	if (key_one->key.iov_buf == NULL) {
-		D_FREE(key);
+		D_FREE(key_one);
 		return -DER_NOMEM;
 	}
 
@@ -2853,11 +2855,12 @@ obj_shard_list_key_cb(struct shard_auxi_args *shard_auxi,
 		}
 
 		rc = merge_key(&merge_arg->merge_list, key, key_size);
+		/* free key first regardless of rc */
+		if (alloc_key)
+			D_FREE(key);
 		if (rc)
 			return rc;
 
-		if (alloc_key)
-			D_FREE(key);
 	}
 
 	return 0;
@@ -3447,12 +3450,14 @@ obj_comp_cb(tse_task_t *task, void *data)
 			}
 		} else {
 			if (obj_auxi->is_ec_obj && task->dt_result == 0 &&
-			    obj_auxi->opc == DAOS_OBJ_RPC_FETCH &&
-			    obj_auxi->bulks != NULL) {
+			    obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
 				daos_obj_fetch_t *args = dc_task_get_args(task);
 
-				obj_ec_fetch_set_sgl(&obj_auxi->reasb_req,
-						     args->nr);
+				if (obj_auxi->bulks != NULL)
+					obj_ec_fetch_set_sgl(
+						&obj_auxi->reasb_req, args->nr);
+				obj_ec_update_iod_size(&obj_auxi->reasb_req,
+						       args->nr);
 			}
 
 			obj_bulk_fini(obj_auxi);
@@ -4191,6 +4196,15 @@ obj_list_get_shard(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 		int leader;
 
 		leader = obj_grp_leader_get(obj, shard, map_ver);
+		if (leader < 0) {
+			/* return nonapplicable in case the caller
+			 * want to retry non-leader option.
+			 */
+			D_DEBUG(DB_IO, DF_OID" failed to leader %d\n",
+				DP_OID(obj->cob_md.omd_id), leader);
+			obj_auxi->to_leader = 0;
+			D_GOTO(out, shard = -DER_NOTAPPLICABLE);
+		}
 		p_shard = obj_get_shard(obj, leader);
 		if (p_shard->po_rebuilding || p_shard->po_target == -1) {
 			D_DEBUG(DB_IO, DF_OID".%d is being rebuilt\n",
@@ -4198,11 +4212,6 @@ obj_list_get_shard(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 			obj_auxi->to_leader = 0;
 			D_GOTO(out, leader = -DER_NOTAPPLICABLE);
 		} else {
-			/* return nonapplicable in case the caller
-			 * want to retry non-leader option.
-			 */
-			if (leader < 0)
-				leader = -DER_NOTAPPLICABLE;
 			shard = leader;
 		}
 	} else {

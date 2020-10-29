@@ -29,6 +29,7 @@
 #include <daos/common.h>
 #include <daos_mgmt.h>
 #include <daos/object.h>
+#include <daos_srv/bio.h>
 #ifdef DAOS_HAS_VALGRIND
 #include <valgrind/valgrind.h>
 #define DAOS_ON_VALGRIND RUNNING_ON_VALGRIND
@@ -164,6 +165,13 @@ struct dts_context {
 	int			 tsc_init;
 	/** OUTPUT END */
 };
+
+typedef struct {
+	uuid_t		device_id;
+	char		state[10];
+	int		rank;
+	char		host[50];
+}  device_list;
 
 /** Initialize an SGL with a variable number of IOVs and set the IOV buffers
  *  to the value of the strings passed. This will allocate memory for the iov
@@ -302,5 +310,47 @@ int dmg_pool_create(const char *dmg_config_file,
  */
 int dmg_pool_destroy(const char *dmg_config_file,
 		     const uuid_t uuid, const char *grp, int force);
+
+/**
+ * List all disks in the specified DAOS system.
+ *
+ * \param dmg_config_file
+ *				[IN]	DMG config file
+ * \param ndisks	[OUT]
+  *				[OUT] Number of drives  in the DAOS system.
+ * \param devices	[OUT]	Array of NVMe device information structures.
+ *				NULL is permitted in which case only the
+ *				number of disks will be returned in \a ndisks.
+ */
+int dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
+			    device_list *devices);
+
+/**
+ * Set NVMe device to faulty. Which will trigger the rebuild and all the
+ * target attached to the disk will be excluded.
+ *
+ * \param dmg_config_file
+ *		[IN]	DMG config file
+ * \param host	[IN]	Nvme set to faulty on host name provided. Only single
+					disk can be set to fault for now.
+ * \param uuid	[IN]	UUID of the device.
+ * \param force	[IN]	Do not require confirmation
+ */
+int dmg_storage_set_nvme_fault(const char *dmg_config_file,
+			       char *host, const uuid_t uuid, int force);
+
+/**
+ * Verify the assumed blobstore device state with the actual enum definition
+ * defined in bio.h.
+ *
+ * \param state	    [IN]    Blobstore state return from daos_mgmt_ger_bs_state()
+ * \param state_str [IN]    Assumed blobstore state (ie normal, out, faulty,
+ *				teardown, setup)
+ *
+ * \return		0 on success
+ *			1 on failure, meaning the enum definition differs from
+ *					expected state
+ */
+int verify_blobstore_state(int state, const char *state_str);
 
 #endif /* __DAOS_TESTS_LIB_H__ */

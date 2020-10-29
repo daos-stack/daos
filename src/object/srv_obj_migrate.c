@@ -1524,7 +1524,7 @@ migrate_one_insert(struct enum_unpack_arg *arg,
 		}
 
 		if (rc != 0)
-			return rc;
+			goto free;
 
 		/**
 		 * mrone owns the allocated memory now and will free it in
@@ -2568,7 +2568,8 @@ ds_object_migrate(struct ds_pool *pool, uuid_t pool_hdl_uuid,
 	ABT_rwlock_rdlock(pool->sp_lock);
 	rc = pool_map_find_target(pool->sp_map, tgt_id, &target);
 	if (rc != 1 || (target->ta_comp.co_status != PO_COMP_ST_UPIN
-			&& target->ta_comp.co_status != PO_COMP_ST_UP)) {
+			&& target->ta_comp.co_status != PO_COMP_ST_UP
+			&& target->ta_comp.co_status != PO_COMP_ST_NEW)) {
 		/* Remote target has failed, no need retry, but not
 		 * report failure as well and next rebuild will handle
 		 * it anyway.
