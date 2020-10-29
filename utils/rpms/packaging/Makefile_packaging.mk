@@ -24,7 +24,6 @@ BUILD_PREFIX ?= .
 
 DOT     := .
 RPM_BUILD_OPTIONS += $(EXTERNAL_RPM_BUILD_OPTIONS)
-DEB_SCONS_ARGS += $(EXTERNAL_DEB_SCONS_ARGS)
 # some defaults the caller can override
 PACKAGING_CHECK_DIR ?= ../packaging
 LOCAL_REPOS ?= true
@@ -250,7 +249,7 @@ $(subst deb,%,$(DEBS)): $(DEB_BUILD).tar.$(SRC_EXT) \
 	    sed 's/$(DEB_RVERS)-1/$(DEB_BVERS)/' \
 	    $(DEB_TOP)/$(NAME)-tmp/DEBIAN/symbols \
 	    > $(DEB_BUILD)/debian/$${lname}.symbols; fi
-	cd $(DEB_BUILD); SCONS_ARGS=$(DEB_SCONS_ARGS) debuild -us -uc
+	cd $(DEB_BUILD);  debuild --set-env="SCONS_ARGS=$(SCONS_ARGS)" -us -uc
 	rm $(DEB_BUILD).tar.$(SRC_EXT)
 	for f in $(DEB_TOP)/*.deb; do \
 	  echo $$f; dpkg -c $$f; done
