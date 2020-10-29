@@ -322,8 +322,8 @@ bio_free_dev_info(struct bio_dev_info *dev_info)
 /**
  * List all devices.
  *
- * \param ctxt[IN]	Per xstream NVMe context
- * \param dev_list[OUT]	Returned device list
+ * \param[IN] ctxt		Per xstream NVMe context
+ * \param[OUT] dev_list		Returned device list
  *
  * \return		Zero on success, negative value on error
  */
