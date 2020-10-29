@@ -696,7 +696,7 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 			rc = agg_process_stripe(agg_entry);
 			if (rc) {
 				D_ERROR("Holdover returned "DF_RC"\n",
-				DP_RC(rc));
+					DP_RC(rc));
 				rc = 0;
 			}
 		}
@@ -773,8 +773,8 @@ agg_akey_post(struct ec_agg_entry *agg_entry)
 /* Handles each replica extent returned by the RECX iterator.
  */
 static int
-agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
-	struct ec_agg_entry *agg_entry, unsigned int *acts)
+agg_extent(daos_handle_t ih, vos_iter_entry_t *entry,
+	   struct ec_agg_entry *agg_entry, unsigned int *acts)
 {
 	int			rc = 0;
 
@@ -815,7 +815,7 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		rc = agg_akey(ih, entry, agg_entry, acts);
 		break;
 	case VOS_ITER_RECX:
-		rc = agg_ev(ih, entry, agg_entry, acts);
+		rc = agg_extent(ih, entry, agg_entry, acts);
 		break;
 	default:
 		break;
