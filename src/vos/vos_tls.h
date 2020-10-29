@@ -32,6 +32,7 @@
 
 #include <gurt/list.h>
 #include <gurt/hash.h>
+#include <gurt/dtm.h>
 #include <daos/btree.h>
 #include <daos/common.h>
 #include <daos/lru.h>
@@ -53,6 +54,10 @@ struct vos_imem_strts {
 /* Forward declarations */
 struct vos_ts_table;
 struct dtx_handle;
+
+struct vos_io_context;
+extern struct d_dtm_reg vos_ioc_type;
+extern struct d_dtm_reg vos_tcx_type;
 
 /** VOS thread local storage structure */
 struct vos_tls {
@@ -84,6 +89,10 @@ struct vos_tls {
 	uint64_t			 vtl_kh;
 	/** profile for standalone vos test */
 	struct daos_profile		*vtl_dp;
+	/** DTM for memory used in VOS */
+	struct d_dtm			 vtl_dtm;
+	struct d_dtm_type		*vtl_ioc_dtm_type;
+	struct d_dtm_type		*vtl_tcx_dtm_type;
 };
 
 struct vos_tls *

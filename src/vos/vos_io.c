@@ -38,6 +38,7 @@
 
 /** I/O context */
 struct vos_io_context {
+	d_list_t		 ic_dtm_link;
 	daos_epoch_range_t	 ic_epr;
 	daos_unit_oid_t		 ic_oid;
 	struct vos_container	*ic_cont;
@@ -434,6 +435,22 @@ vos_ioc_reserve_init(struct vos_io_context *ioc, struct dtx_handle *dth)
 	return 0;
 }
 
+static bool
+vos_ioc_reset(void *ioc)
+{
+	memset(ioc, 0, sizeof(struct vos_io_context));
+	return true;
+}
+
+struct d_dtm_reg vos_ioc_type = {
+		.dr_init = NULL,
+		.dr_reset = vos_ioc_reset,
+		.dr_release = NULL,
+		.dr_max_desc = 0,
+		.dr_max_free_desc = 0,
+		POOL_TYPE_INIT(vos_io_context, ic_dtm_link)
+};
+
 static void
 vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 {
@@ -451,7 +468,7 @@ vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 	vos_ilog_fetch_finish(&ioc->ic_akey_info);
 	vos_cont_decref(ioc->ic_cont);
 	vos_ts_set_free(ioc->ic_ts_set);
-	D_FREE(ioc);
+	d_dtm_release(vos_tls_get()->vtl_ioc_dtm_type, ioc);
 }
 
 static int
@@ -476,7 +493,8 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		goto error;
 	}
 
-	D_ALLOC_PTR(ioc);
+	d_dtm_restock(vos_tls_get()->vtl_ioc_dtm_type);
+	ioc = d_dtm_acquire(vos_tls_get()->vtl_ioc_dtm_type);
 	if (ioc == NULL)
 		return -DER_NOMEM;
 

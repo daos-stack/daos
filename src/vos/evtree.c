@@ -969,6 +969,22 @@ evt_tcx_reset_trace(struct evt_context *tcx)
 	evt_tcx_set_trace(tcx, 0, tcx->tc_root->tr_node, 0, false);
 }
 
+static bool
+evt_tcx_reset(void *tcx)
+{
+	memset(tcx, 0, sizeof(struct evt_context));
+	return true;
+}
+
+struct d_dtm_reg vos_tcx_type = {
+		.dr_init = NULL,
+		.dr_reset = evt_tcx_reset,
+		.dr_release = NULL,
+		.dr_max_desc = 0,
+		.dr_max_free_desc = 0,
+		POOL_TYPE_INIT(evt_context, tc_dtm_link)
+};
+
 /**
  * Create a evtree context for create or open
  *
@@ -990,7 +1006,8 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 
 	D_ASSERT(root != NULL);
 
-	D_ALLOC_PTR(tcx);
+	d_dtm_restock(vos_tls_get()->vtl_tcx_dtm_type);
+	tcx = d_dtm_acquire(vos_tls_get()->vtl_tcx_dtm_type);
 	if (tcx == NULL)
 		return -DER_NOMEM;
 

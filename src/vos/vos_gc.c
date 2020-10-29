@@ -761,7 +761,7 @@ gc_log_pool(struct vos_pool *pool)
  * This function returns when there is nothing to reclaim or consumed all
  * credits. It returns the remainded credits.
  */
-#if VOS_STANDALONE
+#ifdef VOS_STANDALONE
 static int
 vos_gc_run(int *credits)
 {
@@ -831,7 +831,7 @@ vos_gc_run(int *credits)
 void
 gc_wait(void)
 {
-#if VOS_STANDALONE
+#ifdef VOS_STANDALONE
 	int total = 0;
 
 	while (1) {

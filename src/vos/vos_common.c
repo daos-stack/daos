@@ -352,6 +352,18 @@ vos_tls_init(const struct dss_thread_local_storage *dtls,
 		return NULL;
 	}
 
+	rc = d_dtm_init(&tls->vtl_dtm, NULL);
+	if (rc) {
+		vos_ts_table_free(&tls->vtl_ts_table);
+		umem_fini_txd(&tls->vtl_txd);
+		vos_imem_strts_destroy(&tls->vtl_imems_inst);
+		D_FREE(tls);
+		return NULL;
+	}
+
+	tls->vtl_ioc_dtm_type = d_dtm_register(&tls->vtl_dtm, &vos_ioc_type);
+	tls->vtl_tcx_dtm_type = d_dtm_register(&tls->vtl_dtm, &vos_tcx_type);
+
 	return tls;
 }
 
@@ -361,6 +373,7 @@ vos_tls_fini(const struct dss_thread_local_storage *dtls,
 {
 	struct vos_tls *tls = data;
 
+	d_dtm_destroy(&tls->vtl_dtm);
 	vos_imem_strts_destroy(&tls->vtl_imems_inst);
 	umem_fini_txd(&tls->vtl_txd);
 	vos_ts_table_free(&tls->vtl_ts_table);
@@ -528,7 +541,7 @@ vos_init(void)
 
 	vos_start_epoch = 0;
 
-#if VOS_STANDALONE
+#ifdef VOS_STANDALONE
 	standalone_tls = vos_tls_init(NULL, NULL);
 	if (!standalone_tls) {
 		ABT_finalize();

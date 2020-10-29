@@ -72,6 +72,7 @@ struct evt_trace {
 };
 
 struct evt_context {
+	d_list_t			 tc_dtm_link;
 	/** mapped address of the tree root */
 	struct evt_root			*tc_root;
 	/** magic number to identify invalid tree open handle */
@@ -274,7 +275,7 @@ evt_tcx_decref(struct evt_context *tcx)
 		tcx->tc_magic = EVT_HDL_DEAD;
 		/* Free any memory allocated by embedded iterator */
 		evt_ent_array_fini(&tcx->tc_iter.it_entries);
-		D_FREE(tcx);
+		d_dtm_release(vos_tls_get()->vtl_tcx_dtm_type, tcx);
 	}
 }
 
