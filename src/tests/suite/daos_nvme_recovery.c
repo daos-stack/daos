@@ -390,6 +390,34 @@ nvme_test_simulate_IO_error(void **state)
 	}
 
 	/*
+	 * Allocate and set write buffer with data
+	 */
+	D_ALLOC(ow_buf, size);
+	assert_non_null(ow_buf);
+	dts_buf_render(ow_buf, size);
+	/*
+	 * Allocate and set fetch buffer
+	 */
+	D_ALLOC(fbuf, size);
+	assert_non_null(fbuf);
+	memset(fbuf, 0, size);
+
+	/*
+	 * Prepare records
+	 */
+	oid = dts_oid_gen(DAOS_OC_R1S_SPEC_RANK, 0, arg->myrank);
+	oid = dts_oid_set_rank(oid, rank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	/*
+	 * Insert the initial 4K record which will go through NVMe
+	 */
+	print_message("Insert Initial record\n");
+	rx_nr = size / OW_IOD_SIZE;
+	insert_single_with_rxnr(dkey, akey, /*idx*/0, ow_buf,
+				OW_IOD_SIZE, rx_nr, DAOS_TX_NONE, &req);
+
+	/*
 	 *  Get the Total number of NVMe devices from all the servers.
 	 */
 	rc = dmg_storage_device_list(dmg_config_file, &ndisks, NULL);
@@ -453,17 +481,18 @@ nvme_test_simulate_IO_error(void **state)
 	print_message("Initial read_errors = %s\n", read_errors);
 
 	/*
-	 * Allocate and set write buffer with data
+	 * Inject BIO Read Errors on Rank1 device
 	 */
-	D_ALLOC(ow_buf, size);
-	assert_non_null(ow_buf);
-	dts_buf_render(ow_buf, size);
+	print_message("----Inject BIO Read Error----\n");
+	set_fail_loc(arg, rank, DAOS_NVME_READ_ERR | DAOS_FAIL_ONCE);
+
 	/*
-	 * Allocate and set fetch buffer
+	 * Read the data which will induce the READ Error and expected to fail
+	 * with DER_IO Error.
 	 */
-	D_ALLOC(fbuf, size);
-	assert_non_null(fbuf);
-	memset(fbuf, 0, size);
+	arg->expect_result = -DER_IO;
+	lookup_single_with_rxnr(dkey, akey, /*idx*/0, fbuf,
+				OW_IOD_SIZE, size, DAOS_TX_NONE, &req);
 
 	/*
 	 * Inject BIO Write Errors on Rank1 device
@@ -472,36 +501,18 @@ nvme_test_simulate_IO_error(void **state)
 	set_fail_loc(arg, rank, DAOS_NVME_WRITE_ERR | DAOS_FAIL_ONCE);
 
 	/*
-	 * Prepare records
-	 */
-	oid = dts_oid_gen(DAOS_OC_R1S_SPEC_RANK, 0, arg->myrank);
-	oid = dts_oid_set_rank(oid, rank);
-	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-
-	/*
-	 * Insert the initial 4K record which will go through NVMe
+	 * Insert the 4K record again which will induce WRITE Error and
+	 * expected to fail with DER_IO Error.
 	 */
 	rx_nr = size / OW_IOD_SIZE;
 	insert_single_with_rxnr(dkey, akey, /*idx*/0, ow_buf, OW_IOD_SIZE,
 				rx_nr, DAOS_TX_NONE, &req);
 
 	/*
-	 * Inject BIO Read Errors on Rank1 device
-	 */
-	print_message("----Inject BIO Read Error----\n");
-	set_fail_loc(arg, rank, DAOS_NVME_READ_ERR | DAOS_FAIL_ONCE);
-
-	/*
-	 * Read and verify the data
-	 */
-	lookup_single_with_rxnr(dkey, akey, /*idx*/0, fbuf,
-				OW_IOD_SIZE, size, DAOS_TX_NONE, &req);
-	assert_memory_equal(ow_buf, fbuf, size);
-
-	/*
 	 * Get the write error count after Injecting BIO write error.
 	 * Verify the recent write err count is > the initial err count.
 	 */
+	arg->expect_result = 0;
 	check_errors = strdup("bio_write_errs");
 	rc = dmg_storage_query_device_health(dmg_config_file,
 					     devices[rank_pos].host,
