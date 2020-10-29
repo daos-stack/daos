@@ -116,8 +116,9 @@ choose:
 		/* Request list of replicas from management service. */
 		rc = client->sc_update_ranks_cb(client);
 		if (rc) {
-			D_ERROR("failed to refresh replica ranks from MS\n");
-			return rc;
+			D_ERROR(DF_UUID ": refresh replicas failed " DF_RC "\n",
+				DP_UUID(client->sc_id), DP_RC(rc));
+			return -DER_NOTREPLICA;
 		}
 		rsvc_client_reset_leader(client);
 		goto choose;

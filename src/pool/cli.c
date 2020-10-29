@@ -1087,7 +1087,7 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 		}
 
 		rc = rsvc_client_init(&state->client, args->svc, args->uuid,
-				      &state->sys /* priv */,
+				      state->sys /* priv */,
 				      pool_rsvc_update_ranks_cb);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": failed to rsvc_client_init, rc %d.\n",
@@ -1593,7 +1593,7 @@ dc_pool_evict(tse_task_t *task)
 			D_GOTO(out_state, rc);
 
 		rc = rsvc_client_init(&state->client, args->svc, args->uuid,
-				      &state->sys /*priv */,
+				      state->sys /*priv */,
 				      pool_rsvc_update_ranks_cb);
 		if (rc != 0)
 			D_GOTO(out_group, rc);
@@ -2268,7 +2268,7 @@ rsvc_client_state_create(tse_task_t *task, const uuid_t svc_uuid,
 			return rc;
 		}
 		rc = rsvc_client_init(&state->scs_client, targets, svc_uuid,
-				      &state->scs_sys /* priv */,
+				      state->scs_sys /* priv */,
 				      pool_rsvc_update_ranks_cb);
 		if (rc != 0) {
 			rsvc_client_state_cleanup(CCS_CU_GRP, state);
