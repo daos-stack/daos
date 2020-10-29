@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -171,7 +171,7 @@ func TestReloadCertData(t *testing.T) {
 
 	afterCert := testTC.tlsKeypair.Certificate[0]
 
-	if bytes.Compare(beforeCert, afterCert) == 0 {
+	if bytes.Equal(beforeCert, afterCert) {
 		t.Fatal("cert before and after reload is the same")
 	}
 }
