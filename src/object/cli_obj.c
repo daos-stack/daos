@@ -41,7 +41,7 @@
 #define CLI_OBJ_IO_PARMS	8
 #define NIL_BITMAP		(NULL)
 
-#define OBJ_TGT_INLINE_NR	(18)
+#define OBJ_TGT_INLINE_NR	(17)
 struct obj_req_tgts {
 	/* to save memory allocation if #targets <= OBJ_TGT_INLINE_NR */
 	struct daos_shard_tgt	 ort_tgts_inline[OBJ_TGT_INLINE_NR];
@@ -647,6 +647,7 @@ obj_reasb_req_init(struct obj_reasb_req *reasb_req, daos_iod_t *iods,
 
 	D_ASSERT((uintptr_t)(tmp_ptr - size_tgt_nr) <=
 		 (uintptr_t)(buf + buf_size));
+	D_SPIN_INIT(&reasb_req->orr_spin, PTHREAD_PROCESS_PRIVATE);
 
 	return 0;
 }
@@ -670,6 +671,7 @@ obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr)
 		obj_ec_tgt_oiod_fini(reasb_req->tgt_oiods);
 		reasb_req->tgt_oiods = NULL;
 	}
+	D_SPIN_DESTROY(&reasb_req->orr_spin);
 	obj_ec_fail_info_free(reasb_req);
 	D_FREE(reasb_req->orr_iods);
 }
@@ -2781,7 +2783,7 @@ merge_key(d_list_t *head, char *key, int key_size)
 
 	D_ALLOC(key_one->key.iov_buf, key_size);
 	if (key_one->key.iov_buf == NULL) {
-		D_FREE(key);
+		D_FREE(key_one);
 		return -DER_NOMEM;
 	}
 
@@ -2852,11 +2854,12 @@ obj_shard_list_key_cb(struct shard_auxi_args *shard_auxi,
 		}
 
 		rc = merge_key(&merge_arg->merge_list, key, key_size);
+		/* free key first regardless of rc */
+		if (alloc_key)
+			D_FREE(key);
 		if (rc)
 			return rc;
 
-		if (alloc_key)
-			D_FREE(key);
 	}
 
 	return 0;
