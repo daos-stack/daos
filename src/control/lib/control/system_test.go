@@ -556,6 +556,12 @@ func TestControl_SystemQuery(t *testing.T) {
 	testRespRS := new(SystemQueryResp)
 	testRespRS.AbsentRanks.ReplaceSet(testRS)
 
+	fdStrs := []string{"/one/two", "/three", "/four/five/six", ""}
+	fds := make([]*system.FaultDomain, len(fdStrs))
+	for i := range fdStrs {
+		fds[i] = system.MustCreateFaultDomainFromString(fdStrs[i])
+	}
+
 	for name, tc := range map[string]struct {
 		req     *SystemQueryReq
 		uErr    error
@@ -599,38 +605,42 @@ func TestControl_SystemQuery(t *testing.T) {
 				&ctlpb.SystemQueryResp{
 					Members: []*ctlpb.SystemMember{
 						{
-							Rank:  1,
-							Uuid:  common.MockUUID(1),
-							State: uint32(MemberStateReady),
-							Addr:  "10.0.0.1:10001",
+							Rank:        1,
+							Uuid:        common.MockUUID(1),
+							State:       uint32(MemberStateReady),
+							Addr:        "10.0.0.1:10001",
+							FaultDomain: fdStrs[1],
 						},
 						{
-							Rank:  2,
-							Uuid:  common.MockUUID(2),
-							State: uint32(MemberStateReady),
-							Addr:  "10.0.0.1:10001",
+							Rank:        2,
+							Uuid:        common.MockUUID(2),
+							State:       uint32(MemberStateReady),
+							Addr:        "10.0.0.1:10001",
+							FaultDomain: fdStrs[2],
 						},
 						{
-							Rank:  0,
-							Uuid:  common.MockUUID(0),
-							State: uint32(MemberStateStopped),
-							Addr:  "10.0.0.2:10001",
+							Rank:        0,
+							Uuid:        common.MockUUID(0),
+							State:       uint32(MemberStateStopped),
+							Addr:        "10.0.0.2:10001",
+							FaultDomain: fdStrs[0],
 						},
 						{
-							Rank:  3,
-							Uuid:  common.MockUUID(3),
-							State: uint32(MemberStateStopped),
-							Addr:  "10.0.0.2:10001",
+							Rank:        3,
+							Uuid:        common.MockUUID(3),
+							State:       uint32(MemberStateStopped),
+							Addr:        "10.0.0.2:10001",
+							FaultDomain: fdStrs[3],
 						},
 					},
 				},
 			),
 			expResp: &SystemQueryResp{
 				Members: system.Members{
-					system.NewMember(1, common.MockUUID(1), "", common.MockHostAddr(1), system.MemberStateReady),
-					system.NewMember(2, common.MockUUID(2), "", common.MockHostAddr(1), system.MemberStateReady),
-					system.NewMember(0, common.MockUUID(0), "", common.MockHostAddr(2), system.MemberStateStopped),
-					system.NewMember(3, common.MockUUID(3), "", common.MockHostAddr(2), system.MemberStateStopped),
+					system.NewMember(1, common.MockUUID(1), "", common.MockHostAddr(1), system.MemberStateReady).WithFaultDomain(fds[1]),
+					system.NewMember(2, common.MockUUID(2), "", common.MockHostAddr(1), system.MemberStateReady).WithFaultDomain(fds[2]),
+					system.NewMember(0, common.MockUUID(0), "", common.MockHostAddr(2), system.MemberStateStopped).WithFaultDomain(fds[0]),
+					system.NewMember(3, common.MockUUID(3), "", common.MockHostAddr(2), system.MemberStateStopped).WithFaultDomain(fds[3]),
 				},
 			},
 		},

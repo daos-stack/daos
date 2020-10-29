@@ -265,10 +265,11 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 	for i := 0; i < maxRanks; i++ {
 		mu := &memberUpdate{
 			Member: &Member{
-				Rank:  Rank(i),
-				UUID:  uuid.New(),
-				Addr:  <-nextAddr,
-				state: MemberStateJoined,
+				Rank:        Rank(i),
+				UUID:        uuid.New(),
+				Addr:        <-nextAddr,
+				state:       MemberStateJoined,
+				FaultDomain: MustCreateFaultDomainFromString("/my/test/domain"),
 			},
 			NextRank: true,
 		}

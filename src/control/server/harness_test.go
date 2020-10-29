@@ -452,7 +452,7 @@ func TestServer_Harness_WithFaultDomain(t *testing.T) {
 	updatedHarness := harness.WithFaultDomain(fd)
 
 	// Updated to include the fault domain
-	if diff := cmp.Diff(harness.faultDomain, fd, cmp.AllowUnexported(system.FaultDomain{})); diff != "" {
+	if diff := cmp.Diff(harness.faultDomain, fd); diff != "" {
 		t.Fatalf("unexpected results (-want, +got):\n%s\n", diff)
 	}
 	// updatedHarness is the same as harness
