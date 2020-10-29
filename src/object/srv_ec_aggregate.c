@@ -1770,6 +1770,9 @@ agg_process_stripe(struct ec_agg_entry *entry)
 		entry->ae_cur_stripe.as_stripenum,
 		iter_param.ip_recx.rx_idx);
 
+	D_PRINT("Querying parity for stripe: %lu, offset: %lu\n",
+		entry->ae_cur_stripe.as_stripenum,
+		iter_param.ip_recx.rx_idx);
 	/* Query the parity */
 	rc = vos_iterate(&iter_param, VOS_ITER_RECX, false, &anchors,
 			 agg_recx_iter_pre_cb, NULL, entry, NULL);
@@ -1860,35 +1863,33 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 		unsigned int *acts)
 {
 	struct ec_agg_extent	*extent = NULL;
-	daos_off_t		 cur_stripenum, new_stripenum;
+	daos_off_t		 cur_stripenum, this_stripenum;
 	int			 rc = 0;
 
-	new_stripenum = agg_stripenum(agg_entry, entry->ie_recx.rx_idx);
-	if (new_stripenum != agg_entry->ae_cur_stripe.as_stripenum) {
+	this_stripenum = agg_stripenum(agg_entry, entry->ie_recx.rx_idx);
+	if (this_stripenum != agg_entry->ae_cur_stripe.as_stripenum) {
 		/* Iterator has reached next stripe */
-		if (agg_entry->ae_cur_stripe.as_stripenum != ~0UL) {
-			cur_stripenum = agg_entry->ae_cur_stripe.as_stripenum;
-			rc = agg_process_stripe(agg_entry);
-			if (rc)
-				D_ERROR("Process stripe returned "DF_RC"\n",
-					DP_RC(rc));
+		cur_stripenum = agg_entry->ae_cur_stripe.as_stripenum;
+		rc = agg_process_stripe(agg_entry);
+		if (rc)
+			D_ERROR("Process stripe returned "DF_RC"\n",
+				DP_RC(rc));
 		/* Error leaves data covered by replicas vulnerable to vos
 		 * delete, so don't advance coordination epoch.
 		 */
-			rc = 0;
-			if (cur_stripenum <
-			    agg_entry->ae_cur_stripe.as_stripenum &&
-			    agg_entry->ae_cur_stripe.as_stripenum <
-			    new_stripenum) {
-				/* Handle holdover stripe */
-				rc = agg_process_stripe(agg_entry);
-				if (rc)
-					D_ERROR("Holdover returned "DF_RC"\n",
+		rc = 0;
+		if (cur_stripenum < agg_entry->ae_cur_stripe.as_stripenum &&
+		    agg_entry->ae_cur_stripe.as_stripenum < this_stripenum) {
+			/* Handle holdover stripe */
+			rc = agg_process_stripe(agg_entry);
+			if (rc)
+				D_ERROR("Holdover returned "DF_RC"\n",
 					DP_RC(rc));
-				rc = 0;
-			}
+			rc = 0;
 		}
+		agg_entry->ae_cur_stripe.as_stripenum = this_stripenum;
 	}
+
 	/* Add the extent to the entry, for the current stripe */
 	D_ALLOC_PTR(extent);
 	if (extent == NULL) {
@@ -1923,12 +1924,16 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 	if (extent->ae_epoch > agg_entry->ae_cur_stripe.as_hi_epoch)
 		agg_entry->ae_cur_stripe.as_hi_epoch = extent->ae_epoch;
 
-out:
 	D_DEBUG(DB_TRACE,
 		"adding extent %lu,%lu, to stripe  %lu, hole: %d: shard: %u\n",
 		extent->ae_recx.rx_idx, extent->ae_recx.rx_nr,
 		agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
 		extent->ae_hole, agg_entry->ae_oid.id_shard);
+	D_PRINT("adding extent %lu,%lu, to stripe  %lu, hole: %d: shard: %u\n",
+		extent->ae_recx.rx_idx, extent->ae_recx.rx_nr,
+		agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
+		extent->ae_hole, agg_entry->ae_oid.id_shard);
+out:
 	return rc;
 }
 
@@ -1958,7 +1963,7 @@ agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	return rc;
 }
-
+/*
 static inline bool
 ec_aggregate_yield(struct ec_agg_param *agg_param)
 {
@@ -1967,6 +1972,7 @@ ec_aggregate_yield(struct ec_agg_param *agg_param)
 
         return false;
 }
+*/
 
 /* Pre-subtree iteration call back for per-object iterator
  */
@@ -2000,7 +2006,7 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 	agg_param->ap_credits++;
-
+#if 0
 	if (agg_param->ap_credits > agg_param->ap_credits_max) {
 		agg_param->ap_credits = 0;
 		*acts |= VOS_ITER_CB_YIELD;
@@ -2016,6 +2022,7 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		}
 	}
 
+#endif
 	return rc;
 }
 
@@ -2029,6 +2036,7 @@ agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	struct ec_agg_entry	*agg_entry = (struct ec_agg_entry *)cb_arg;
 	int			 rc = 0;
 
+	D_PRINT("iterate post type: %u\n", type);
 	switch (type) {
 	case VOS_ITER_DKEY:
 		break;
@@ -2093,6 +2101,7 @@ agg_subtree_iterate(daos_handle_t ih, struct ec_agg_param *agg_param)
 	rc = vos_iterate(&iter_param, VOS_ITER_DKEY, true, &anchors,
 			 agg_iterate_pre_cb, agg_iterate_post_cb,
 			 &agg_param->ap_agg_entry, NULL);
+	D_PRINT("Iteration complete! %d\n", rc);
 	return rc;
 }
 
@@ -2134,7 +2143,7 @@ agg_iter_obj_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		rc = 0;
 	}
 	agg_param->ap_credits++;
-
+#if 0
 	if (agg_param->ap_credits > agg_param->ap_credits_max) {
 		agg_param->ap_credits = 0;
 		*acts |= VOS_ITER_CB_YIELD;
@@ -2149,6 +2158,7 @@ agg_iter_obj_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			rc = 1;
 		}
 	}
+#endif
 
 	return rc;
 }
@@ -2195,7 +2205,26 @@ out:
 	ABT_eventual_set(agg_param->ap_pool_info.api_eventual,
 			 (void *)&rc, sizeof(rc));
 }
+/*
+static int
+iter_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
+		   vos_iter_type_t type, vos_iter_param_t *param,
+		   void *cb_arg, unsigned int *acts)
+{
 
+	switch (type) {
+	case VOS_ITER_RECX:
+		D_ERROR("rx_idx: %lu, rx_nr: %lu\n",
+				entry->ie_recx.rx_idx,
+				entry->ie_recx.rx_nr);
+		break;
+	default:
+		break;
+	}
+	return 0;
+
+}
+*/
 /* Iterates entire VOS. Invokes nested iterator to recurse through trees
  * for all objects meeting the criteria: object is EC, and this target is
  * leader.
@@ -2262,7 +2291,12 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	iter_param.ip_hdl		= cont->sc_hdl;
 	iter_param.ip_epr.epr_lo	= epr->epr_lo;
 	iter_param.ip_epr.epr_hi	= epr->epr_hi;
+	//iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
 
+	/*
+	vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
+		 iter_pre_cb, NULL, NULL, NULL);
+	*/
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, false, &anchors,
 			 agg_iter_obj_pre_cb, NULL, &agg_param, NULL);
 
@@ -2288,6 +2322,7 @@ ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 {
 	int	rc = 0;
 
+	D_PRINT("Iterate all!\n");
 	rc = agg_iterate_all(cont, epr, yield_func, yield_arg);
 
 	return rc;
