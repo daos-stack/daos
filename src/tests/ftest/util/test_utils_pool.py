@@ -142,9 +142,9 @@ class TestPool(TestDaosApiBase):
                     self.pool.group = ctypes.create_string_buffer(
                         self.name.value)
 
-                # Convert the string of service replicas from the dmg command output
-                # into an ctype array for the DaosPool object using the same
-                # technique used in DaosPool.create().
+                # Convert the string of service replicas from the dmg command
+                #  output into an ctype array for the DaosPool object using the
+                # same technique used in DaosPool.create().
                 service_replicas = [
                     int(value) for value in data["svc"].split(",")]
                 rank_t = ctypes.c_uint * len(service_replicas)

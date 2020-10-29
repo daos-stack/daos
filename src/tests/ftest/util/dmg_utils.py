@@ -644,6 +644,7 @@ class DmgCommand(DmgCommandBase):
             ("pool", "delete-acl"), pool=pool, principal=principal)
 
     def pool_list(self):
+        # pylint: disable=pointless-string-statement
         """List pools.
 
         Returns:

@@ -25,8 +25,6 @@ from __future__ import print_function
 
 
 from avocado.core.exceptions import TestFail
-from apricot import TestWithServers
-from server_utils import ServerFailed
 from pool_test_base import PoolTestBase
 
 
