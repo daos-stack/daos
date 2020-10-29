@@ -83,8 +83,17 @@ struct dfuse_projection_info {
 struct dfuse_inode_entry;
 
 struct dfuse_readdir_entry {
+	/* Name of this directory entry */
 	char	dre_name[NAME_MAX + 1];
+
+	/* Offset of this directory entry */
 	off_t	dre_offset;
+
+	/* Offset of the next directory entry
+	 * A value of DFUSE_READDIR_EOD means end
+	 * of directory.
+	 */
+	off_t	dre_next_offset;
 };
 
 /** what is returned as the handle for fuse fuse_file_info on
@@ -104,10 +113,12 @@ struct dfuse_obj_hdl {
 
 	/** Array of entries returned by dfs but not reported to kernel */
 	struct dfuse_readdir_entry	*doh_dre;
-	/** Index into doh_dre array */
-	int				doh_dre_index;
+	/** Current index into doh_dre array */
+	uint32_t			doh_dre_index;
+	/** Last index containing valid data */
+	uint32_t			doh_dre_last_index;
 	/** Next value from anchor */
-	uint64_t			doh_anchor_index;
+	uint32_t			doh_anchor_index;
 };
 
 struct dfuse_inode_ops {

@@ -24,44 +24,55 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#define READDIR_COUNT 128
+/* Maximum number of dentries to read at one time. */
+#define READDIR_MAX_COUNT 1024
 
+/* Initial number of dentries to read when doing readdirplus */
+#define READDIR_PLUS_COUNT 26
+/* Initial number of dentries to read */
+#define READDIR_BASE_COUNT 128
+
+/* Marker offset used to signify end-of-directory */
 #define DFUSE_READDIR_EOD (1LL << 63)
 
+/* Offset of the first file, allow two entries for . and .. */
+#define OFFSET_BASE 2
+
 struct iterate_data {
-	struct dfuse_readdir_entry	*dre;
-	off_t				base_offset;
-	int				index;
-	void				*oh;
+	off_t			id_base_offset;
+	int			id_index;
+	struct dfuse_obj_hdl	 *id_oh;
 };
 
 static int
 filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *arg)
 {
 	struct iterate_data *idata = arg;
+	struct dfuse_readdir_entry *dre = &idata->id_oh->doh_dre[idata->id_index];
 
-	DFUSE_TRA_DEBUG(idata->oh, "Adding at offset %d index %ld '%s'",
-			idata->index,
-			idata->base_offset + idata->index,
+	DFUSE_TRA_DEBUG(idata->id_oh, "Adding at index %d offset %ld '%s'",
+			idata->id_index,
+			idata->id_base_offset + idata->id_index,
 			name);
 
-	strncpy(idata->dre[idata->index].dre_name, name, NAME_MAX);
-	idata->dre[idata->index].dre_offset = idata->base_offset + idata->index;
-	idata->index++;
+	strncpy(dre->dre_name, name, NAME_MAX);
+	dre->dre_offset = idata->id_base_offset + idata->id_index;
+	dre->dre_next_offset = idata->id_base_offset + idata->id_index + 1;
+	idata->id_index++;
 
 	return 0;
 }
 
 static int
-fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, off_t *eof)
+fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, int to_fetch,
+		  bool *eod)
 {
 	struct iterate_data	idata = {};
-	uint32_t		count = READDIR_COUNT - 1;
+	uint32_t		count = to_fetch;
 	int			rc;
 
-	idata.dre = oh->doh_dre;
-	idata.base_offset = offset;
-	idata.oh = oh;
+	idata.id_base_offset = offset;
+	idata.id_oh = oh;
 
 	DFUSE_TRA_DEBUG(oh, "Fetching new entries at offset %ld", offset);
 
@@ -69,18 +80,17 @@ fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, off_t *eof)
 			 (NAME_MAX + 1) * count, filler_cb, &idata);
 
 	oh->doh_anchor_index += count;
-	oh->doh_dre[count].dre_offset = 0;
 	oh->doh_dre_index = 0;
+	oh->doh_dre_last_index = count;
 
-	DFUSE_TRA_DEBUG(oh, "Added %d entries rc %d", count, rc);
+	DFUSE_TRA_DEBUG(oh, "Added %d entries, anchor_index %d rc %d",
+			count, oh->doh_anchor_index, rc);
 
-	if (daos_anchor_is_eof(&oh->doh_anchor)) {
-		*eof = oh->doh_dre[count ? count - 1 : 0].dre_offset;
-
-		DFUSE_TRA_DEBUG(oh,
-				"End of stream reached, count %d offset %ld",
-				count,
-				*eof);
+	if (count) {
+		if (daos_anchor_is_eof(&oh->doh_anchor))
+			oh->doh_dre[count - 1].dre_next_offset = DFUSE_READDIR_EOD;
+	} else {
+		*eod = true;
 	}
 
 	return rc;
@@ -173,6 +183,16 @@ out:
 	return rc;
 }
 
+static inline void
+dfuse_readdir_reset(struct dfuse_obj_hdl *oh)
+{
+	memset(&oh->doh_anchor, 0, sizeof(oh->doh_anchor));
+	memset(oh->doh_dre, 0, sizeof(*oh->doh_dre) * READDIR_MAX_COUNT);
+	oh->doh_dre_index = 0;
+	oh->doh_dre_last_index = 0;
+	oh->doh_anchor_index = 0;
+}
+
 void
 dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 		 size_t size, off_t offset, bool plus)
@@ -182,6 +202,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 	off_t			buff_offset = 0;
 	int			added = 0;
 	int			rc = 0;
+	int			large_fetch = true;
 
 	if (offset == DFUSE_READDIR_EOD) {
 		DFUSE_TRA_DEBUG(oh, "End of directory %lx", offset);
@@ -194,18 +215,16 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 		D_GOTO(err, rc = ENOMEM);
 
 	if (oh->doh_dre == NULL) {
-		D_ALLOC_ARRAY(oh->doh_dre, READDIR_COUNT);
+		D_ALLOC_ARRAY(oh->doh_dre, READDIR_MAX_COUNT);
 		if (oh->doh_dre == NULL)
 			D_GOTO(err, rc = ENOMEM);
 	}
 
-	if (offset == 0) {
-		/*
-		 * if starting from the beginning, reset the anchor attached to
-		 * the open handle.
-		 */
-		memset(&oh->doh_anchor, 0, sizeof(oh->doh_anchor));
-	}
+	/* if starting from the beginning, reset the anchor attached to
+	 * the open handle.
+	 */
+	if (offset == 0)
+		dfuse_readdir_reset(oh);
 
 	DFUSE_TRA_DEBUG(oh, "plus %d offset %ld idx %d idx_offset %ld",
 			plus, offset, oh->doh_dre_index,
@@ -214,9 +233,10 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 	/* If there is an offset, and either there is no current offset, or it's
 	 * different then seek
 	 */
-	if (offset && offset != oh->doh_dre[oh->doh_dre_index].dre_offset &&
-	    oh->doh_anchor_index + 1 != offset) {
-		uint32_t num, keys;
+	if (offset &&
+		oh->doh_dre[oh->doh_dre_index].dre_offset != offset &&
+		oh->doh_anchor_index + OFFSET_BASE != offset) {
+		uint32_t num;
 
 		/*
 		 * otherwise we are starting at an earlier offset where we left
@@ -224,15 +244,15 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 		 * many entries. This is the telldir/seekdir use case.
 		 */
 
-		DFUSE_TRA_INFO(oh, "Seeking from offset %ld to %ld (index %d)",
+		DFUSE_TRA_INFO(oh,
+			       "Seeking from offset %ld(%d) to %ld (index %d)",
 			       oh->doh_dre[oh->doh_dre_index].dre_offset,
+			       oh->doh_anchor_index,
 			       offset,
 			       oh->doh_dre_index);
 
-		memset(&oh->doh_anchor, 0, sizeof(oh->doh_anchor));
-		memset(oh->doh_dre, 0, sizeof(*oh->doh_dre) * READDIR_COUNT);
-		num = (uint32_t)offset;
-		keys = 0;
+		dfuse_readdir_reset(oh);
+		num = (uint32_t)offset - OFFSET_BASE;
 		while (num) {
 			rc = dfs_iterate(oh->doh_dfs, oh->doh_obj,
 					 &oh->doh_anchor, &num,
@@ -242,68 +262,68 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 				D_GOTO(err, rc);
 
 			if (daos_anchor_is_eof(&oh->doh_anchor)) {
-				memset(&oh->doh_anchor, 0,
-				       sizeof(oh->doh_anchor));
-				oh->doh_anchor_index = 0;
-				oh->doh_dre_index = 0;
-
-				DFUSE_REPLY_BUF(oh, req, NULL, (size_t)0);
-				D_FREE(reply_buff);
-				return;
+				dfuse_readdir_reset(oh);
+				D_GOTO(reply, 0);
 			}
 
 			oh->doh_anchor_index += num;
 
-			keys += num;
-			num = offset - keys;
+			num = offset - OFFSET_BASE - oh->doh_anchor_index;
 		}
-		oh->doh_dre_index = 0;
+		large_fetch = false;
 	}
 
+	if (offset == 0)
+		offset = OFFSET_BASE;
+
+	if (offset < 1024)
+		large_fetch = false;
+
 	do {
-		struct dfuse_dfs	*dfs;
-		int			i;
-		off_t			eof = 0;
+		int i;
+		bool fetched = false;
 
-		if (offset == 0)
-			offset++;
+		if (oh->doh_dre_last_index == 0) {
+			uint32_t to_fetch;
+			bool eod = false;
 
-		if (offset != oh->doh_dre[oh->doh_dre_index].dre_offset) {
-			/* maybe fetch entries */
-			rc = fetch_dir_entries(oh, offset, &eof);
+			D_ASSERT(offset != oh->doh_dre[oh->doh_dre_index].dre_offset);
+
+			if (large_fetch)
+				to_fetch = READDIR_MAX_COUNT;
+			else if (plus)
+				to_fetch = READDIR_PLUS_COUNT - added;
+			else
+				to_fetch = READDIR_BASE_COUNT - added;
+
+			rc = fetch_dir_entries(oh, offset, to_fetch, &eod);
 			if (rc != 0)
 				D_GOTO(err, 0);
+
+			if (eod)
+				D_GOTO(reply, 0);
+
+			fetched = true;
+		} else {
+			D_ASSERT(offset == oh->doh_dre[oh->doh_dre_index].dre_offset);
 		}
 
-		dfs = oh->doh_ie->ie_dfs;
-
-		DFUSE_TRA_DEBUG(oh, "processing entries %ld %ld", offset, eof);
+		DFUSE_TRA_DEBUG(oh, "processing offset %ld", offset);
 
 		/* Populate dir */
-		for (i = oh->doh_dre_index; i < READDIR_COUNT ; i++) {
+		for (i = oh->doh_dre_index; i < oh->doh_dre_last_index ; i++) {
 			struct dfuse_readdir_entry	*dre = &oh->doh_dre[i];
 			struct stat			stbuf = {0};
 			dfs_obj_t			*obj;
-			off_t				next_offset;
 			size_t				written;
 
-			if (dre->dre_offset == 0) {
-				DFUSE_TRA_DEBUG(oh, "Reached end of array");
-				oh->doh_dre_index = 0;
-				oh->doh_dre[oh->doh_dre_index].dre_offset = 0;
-				break;
-			}
+			D_ASSERT(dre->dre_offset != 0);
 
 			oh->doh_dre_index += 1;
 
-			if (dre->dre_offset == eof)
-				next_offset = DFUSE_READDIR_EOD;
-			else
-				next_offset = dre->dre_offset;
-
 			DFUSE_TRA_DEBUG(oh, "Checking offset %ld next %ld '%s'",
 					dre->dre_offset,
-					next_offset,
+					dre->dre_next_offset,
 					dre->dre_name);
 
 			rc = dfs_lookup_rel(oh->doh_dfs, oh->doh_obj,
@@ -319,7 +339,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 				D_GOTO(reply, 0);
 			}
 
-			rc = dfuse_lookup_inode_from_obj(fs_handle, dfs,
+			rc = dfuse_lookup_inode_from_obj(fs_handle,
+							 oh->doh_ie->ie_dfs,
 							 obj,
 							 &stbuf.st_ino);
 			if (rc) {
@@ -348,7 +369,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 								 size - buff_offset,
 								 dre->dre_name,
 								 &entry,
-								 next_offset);
+								 dre->dre_next_offset);
 				if (written > size - buff_offset) {
 					d_hash_rec_decref(&fs_handle->dpi_iet,
 							  rlink);
@@ -362,13 +383,14 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 							    size - buff_offset,
 							    dre->dre_name,
 							    &stbuf,
-							    next_offset);
+							    dre->dre_next_offset);
 			}
 			if (written > size - buff_offset) {
 				DFUSE_TRA_DEBUG(oh, "Buffer is full");
 				oh->doh_dre_index -= 1;
-				break;
+				D_GOTO(reply, 0);
 			}
+
 			/* This entry has been added to the buffer so mark it as
 			 * empty
 			 */
@@ -376,13 +398,20 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 			buff_offset += written;
 			added++;
 			offset++;
-		}
-		if (oh->doh_dre_index == READDIR_COUNT) {
-			oh->doh_dre_index = 0;
-			oh->doh_dre[oh->doh_dre_index].dre_offset = 0;
-		}
 
-	} while (added == 0 && oh->doh_dre[0].dre_offset != 0);
+			if (dre->dre_next_offset == DFUSE_READDIR_EOD) {
+				DFUSE_TRA_DEBUG(oh, "Reached end of directory");
+				dfuse_readdir_reset(oh);
+				D_GOTO(reply, 0);
+			}
+		}
+		if (oh->doh_dre_index == oh->doh_dre_last_index) {
+			oh->doh_dre_index = 0;
+			oh->doh_dre_last_index = 0;
+		}
+		if (fetched && !large_fetch)
+			break;
+	} while (true);
 
 reply:
 
@@ -400,6 +429,7 @@ reply:
 	return;
 
 err:
+	dfuse_readdir_reset(oh);
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
 	D_FREE(reply_buff);
 }

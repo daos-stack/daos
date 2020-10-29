@@ -257,7 +257,7 @@ def get_base_env():
     env = os.environ.copy()
     env['DD_MASK'] = 'all'
     env['DD_SUBSYS'] = 'all'
-    env['D_LOG_MASK'] = 'DEBUG'
+    env['D_LOG_MASK'] = 'ERR,DFUSE=DEBUG,DFS=DEBUG'
     env['FI_UNIVERSE_SIZE'] = '128'
     return env
 
@@ -888,38 +888,44 @@ def run_tests(dfuse):
 
 def dfuse_wrapper(server, conf):
     """Start a dfuse instance, do something then tear it down"""
-    daos = import_daos(server, conf)
 
     pools = get_pool_list()
     while len(pools) < 1:
-        pools = make_pool(daos)
+        pools = make_pool(server)
 
     pool = pools[0]
 
     container = create_cont(conf, pool, ctype='POSIX')[0]
     dfuse = DFuse(server, conf, pool=pool, container=container)
     dfuse.start()
+    readdir_test(dfuse, 0)
+    readdir_test(dfuse, 25)
     readdir_test(dfuse, 30)
+    readdir_test(dfuse, 100)
+    readdir_test(dfuse, 300, test_all=False)
     ret = dfuse.stop()
     destroy_container(conf, pool, container)
     return ret
 
-def readdir_test(dfuse, count):
+def readdir_test(dfuse, count, test_all=False):
     """Run a rudimentary readdir test"""
 
-    path = dfuse.dir
-
-    wide_dir = os.path.join(path, 'new_dir')
-    os.mkdir(wide_dir)
+    wide_dir = tempfile.mkdtemp(dir = dfuse.dir)
+    if count == 0:
+        files = os.listdir(wide_dir)
+        assert(len(files) == 0)
+        return
     start = time.time()
     for idx in range(count):
-        print('Creating file {}'.format(os.path.join(wide_dir, str(idx))))
         fd = open(os.path.join(wide_dir, str(idx)), 'w')
         fd.close()
+        if test_all:
+            files = os.listdir(wide_dir)
+            assert len(files) == idx + 1
     duration = time.time() - start
-    print('Created {} files in {:.1f} seconds {:.1f}'.format(count,
-                                                             duration,
-                                                             count / duration))
+    print('Created {} files in {:.1f} seconds rate {:.1f}'.format(count,
+                                                                  duration,
+                                                                  count / duration))
     print('Listing dir contents')
     files = os.listdir(wide_dir)
     print(files)
