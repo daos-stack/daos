@@ -2,7 +2,7 @@
 
 # This is the script used for running unit testing
 # run_tests.sh and run_tests.sh with memcheck stages on the CI
-set -ex
+set -uex
 
 # JENKINS-52781 tar function is breaking symlinks
 

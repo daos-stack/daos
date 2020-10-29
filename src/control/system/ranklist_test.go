@@ -93,9 +93,7 @@ func TestSystem_RankSet(t *testing.T) {
 				return
 			}
 			for _, r := range tc.addRanks {
-				if err := rs.Add(r); err != nil {
-					t.Fatal(err)
-				}
+				rs.Add(r)
 			}
 
 			if diff := cmp.Diff(tc.expOut, rs.String()); diff != "" {
