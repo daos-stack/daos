@@ -251,20 +251,16 @@ fail:
 static int
 copy_ctrlr_data(struct ctrlr_t *cdst, const struct spdk_nvme_ctrlr_data *cdata)
 {
-	int	written;
-
-	written = snprintf(cdst->model, sizeof(cdst->model), "%-20.20s",
-			   cdata->mn);
-	if (written >= sizeof(cdst->model))
+	if (copy_ascii(cdst->model, sizeof(cdst->model), cdata->mn,
+		       sizeof(cdata->mn)) != 0)
 		return -NVMEC_ERR_CHK_SIZE;
 
-	written = snprintf(cdst->serial, sizeof(cdst->serial), "%-20.20s",
-			   cdata->sn);
-	if (written >= sizeof(cdst->serial))
+	if (copy_ascii(cdst->serial, sizeof(cdst->serial), cdata->sn,
+		       sizeof(cdata->sn)) != 0)
 		return -NVMEC_ERR_CHK_SIZE;
 
-	written = snprintf(cdst->fw_rev, sizeof(cdst->fw_rev), "%s", cdata->fr);
-	if (written >= sizeof(cdst->fw_rev))
+	if (copy_ascii(cdst->fw_rev, sizeof(cdst->fw_rev), cdata->fr,
+		       sizeof(cdata->fr)) != 0)
 		return -NVMEC_ERR_CHK_SIZE;
 
 	return 0;

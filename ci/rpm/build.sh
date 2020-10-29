@@ -23,4 +23,5 @@ fi
 
 rm -rf "artifacts/${TARGET}/"
 mkdir -p "artifacts/${TARGET}/"
-make CHROOT_NAME="${CHROOT_NAME}" -C utils/rpms chrootbuild
+DEBEMAIL="$DAOS_EMAIL" DEBFULLNAME="$DAOS_FULLNAME" \
+TOPDIR=$PWD make CHROOT_NAME="${CHROOT_NAME}" -C utils/rpms chrootbuild

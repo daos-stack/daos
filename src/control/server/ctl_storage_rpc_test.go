@@ -37,7 +37,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
-	"google.golang.org/grpc"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto"
@@ -54,40 +53,6 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-// mockStorageFormatServer provides mocking for server side streaming,
-// implement send method and record sent format responses.
-type mockStorageFormatServer struct {
-	grpc.ServerStream
-	Results []*StorageFormatResp
-}
-
-func (m *mockStorageFormatServer) Send(resp *StorageFormatResp) error {
-	m.Results = append(m.Results, resp)
-	return nil
-}
-
-// return config reference with customised storage config behavior and params
-func newMockStorageConfig(
-	mountRet error, unmountRet error, mkdirRet error, removeRet error,
-	scmMount string, scmClass storage.ScmClass, scmDevs []string, scmSize int,
-	bdevClass storage.BdevClass, bdevDevs []string, existsRet bool, isRoot bool,
-) *Configuration {
-
-	c := newDefaultConfiguration(newMockExt(isRoot))
-
-	c.Servers = append(c.Servers,
-		ioserver.NewConfig().
-			WithScmMountPoint(scmMount).
-			WithScmClass(scmClass.String()).
-			WithScmDeviceList(scmDevs...).
-			WithScmRamdiskSize(scmSize).
-			WithBdevClass(bdevClass.String()).
-			WithBdevDeviceList(bdevDevs...),
-	)
-
-	return c
-}
-
 func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 	ctrlr := storage.MockNvmeController()
 	ctrlr.SmdDevices = nil
@@ -98,6 +63,7 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 	ctrlrPBwHealth.Smddevices = nil
 
 	for name, tc := range map[string]struct {
+		multiIO     bool
 		req         *StorageScanReq
 		bmbc        *bdev.MockBackendConfig
 		smbc        *scm.MockBackendConfig
@@ -211,7 +177,7 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 				},
 			},
 		},
-		"scan bdev health with io servers down": {
+		"scan bdev health with single io server down": {
 			req: &StorageScanReq{
 				Nvme: &ScanNvmeReq{
 					Health: true,
@@ -224,6 +190,29 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 			},
 			expResp: StorageScanResp{
 				Nvme: &ScanNvmeResp{
+					Ctrlrs: proto.NvmeControllers{ctrlrPBwHealth},
+					State:  new(ResponseState),
+				},
+				Scm: &ScanScmResp{
+					State: new(ResponseState),
+				},
+			},
+		},
+		"scan bdev health with multiple io servers down": {
+			multiIO: true,
+			req: &StorageScanReq{
+				Nvme: &ScanNvmeReq{
+					Health: true,
+				},
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &bdev.ScanResponse{
+					Controllers: storage.NvmeControllers{ctrlr},
+				},
+			},
+			expResp: StorageScanResp{
+				Nvme: &ScanNvmeResp{
+					// response should not contain duplicates
 					Ctrlrs: proto.NvmeControllers{ctrlrPBwHealth},
 					State:  new(ResponseState),
 				},
@@ -259,11 +248,14 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			emptyCfg := emptyMockConfig(t)
-			defaultWithNvme := newDefaultConfiguration(nil).WithServers(
-				ioserver.NewConfig().
-					WithBdevClass("nvme").
-					WithBdevDeviceList(storage.MockNvmeController().PciAddr),
-			)
+			ioCfg := ioserver.NewConfig().
+				WithBdevClass("nvme").
+				WithBdevDeviceList(storage.MockNvmeController().PciAddr)
+			ioCfgs := []*ioserver.Config{ioCfg}
+			if tc.multiIO {
+				ioCfgs = append(ioCfgs, ioCfg)
+			}
+			defaultWithNvme := newDefaultConfiguration(nil).WithServers(ioCfgs...)
 
 			// test for both empty and default config cases
 			for _, config := range []*Configuration{defaultWithNvme, emptyCfg} {
@@ -1549,7 +1541,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 					t.Fatal(ctx.Err())
 				}
 				if !tc.scmMounted || inflight > 0 {
-					t.Fatal("unexpected behavior of awaitStorageReady")
+					t.Fatalf("unexpected behavior of awaitStorageReady")
 				}
 			}
 

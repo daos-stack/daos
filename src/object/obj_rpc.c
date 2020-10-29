@@ -204,6 +204,10 @@ crt_proc_daos_iod_and_csum(crt_proc_t proc, crt_proc_op_t proc_op,
 	if (rc != 0)
 		return -DER_HG;
 
+	rc = crt_proc_uint64_t(proc, &iod->iod_flags);
+	if (rc != 0)
+		return -DER_HG;
+
 	if (proc_op == CRT_PROC_ENCODE && oiod != NULL &&
 	    (oiod->oiod_flags & OBJ_SIOD_PROC_ONE) != 0) {
 		proc_one = true;
@@ -308,25 +312,14 @@ free:
 static int crt_proc_daos_iom_t(crt_proc_t proc, daos_iom_t *map)
 {
 	crt_proc_op_t		 proc_op;
+	uint32_t		 iom_nr = 0;
 	int			 i, rc;
 
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (rc)
 		return rc;
 
-	rc = crt_proc_uint64_t(proc, &map->iom_size);
-	if (rc != 0)
-		return -DER_HG;
-
 	rc = crt_proc_memcpy(proc, &map->iom_type, sizeof(map->iom_type));
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint32_t(proc, &map->iom_nr);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint32_t(proc, &map->iom_nr_out);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -342,7 +335,19 @@ static int crt_proc_daos_iom_t(crt_proc_t proc, daos_iom_t *map)
 	if (rc != 0)
 		return -DER_HG;
 
-	if (DECODING(proc_op)) {
+	if (ENCODING(proc_op)) {
+		iom_nr = map->iom_nr;
+		if ((map->iom_flags & DAOS_IOMF_DETAIL) == 0)
+			iom_nr = 0;
+	}
+
+	rc = crt_proc_uint32_t(proc, &iom_nr);
+	if (rc != 0)
+		return -DER_HG;
+
+	if (DECODING(proc_op) && iom_nr > 0) {
+		map->iom_nr = iom_nr;
+		map->iom_nr_out = iom_nr;
 		D_ALLOC_ARRAY(map->iom_recxs, map->iom_nr);
 		if (map->iom_recxs == NULL)
 			return -DER_NOMEM;
@@ -355,8 +360,8 @@ static int crt_proc_daos_iom_t(crt_proc_t proc, daos_iom_t *map)
 		}
 	}
 
-	if (ENCODING(proc_op)) {
-		for (i = 0; i < map->iom_nr; i++) {
+	if (ENCODING(proc_op) && iom_nr > 0) {
+		for (i = 0; i < iom_nr; i++) {
 			rc = crt_proc_daos_recx_t(proc, &map->iom_recxs[i]);
 			if (rc != 0)
 				return -DER_HG;
@@ -737,7 +742,7 @@ crt_proc_struct_daos_cpd_sub_head(crt_proc_t proc,
 				  struct daos_cpd_sub_head *dcsh)
 {
 	crt_proc_op_t	proc_op;
-	uint32_t	size;
+	uint32_t	size = 0;
 	int		rc;
 
 	rc = crt_proc_get_op(proc, &proc_op);
@@ -818,6 +823,10 @@ crt_proc_daos_iod_t(crt_proc_t proc, daos_iod_t *iod)
 		return -DER_HG;
 
 	rc = crt_proc_uint64_t(proc, &iod->iod_size);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint64_t(proc, &iod->iod_flags);
 	if (rc != 0)
 		return -DER_HG;
 

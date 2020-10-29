@@ -22,7 +22,7 @@
  */
 
 /*
- * Types to share between data and control planes.
+ * Primitives to share between data and control planes.
  */
 
 #ifndef __CONTROL_H__
@@ -30,6 +30,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <assert.h>
 
 enum {
 	/* Device is plugged */
@@ -77,4 +78,16 @@ struct nvme_stats {
 	bool		 read_only_warn;
 	bool		 volatile_mem_warn; /*volatile memory backup*/
 };
-#endif /* __CONTROL_H__ */
+
+/**
+ * Parse input string and output ASCII as required by the NVMe spec.
+ *
+ * \param[out] dst	pre-allocated destination string buffer
+ * \param[in]  dst_sz	destination buffer size
+ * \param[in]  src	source buffer containing char array
+ * \param[in]  src_sz	source buffer size
+ *
+ * \return		Zero on success, negative value on error
+ */
+int copy_ascii(char *dst, size_t dst_sz, const void *src, size_t src_sz);
+#endif /* __CONTROL_H_ */

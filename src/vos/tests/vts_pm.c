@@ -1581,7 +1581,7 @@ minor_epoch_punch_sv(void **state)
 
 	d_iov_set(&sgl.sg_iovs[0], (void *)first, iod.iod_size);
 
-	vts_dtx_begin_ex(&oid, arg->ctx.tc_co_hdl, epoch++, 0, 2, &dth);
+	vts_dtx_begin_ex(&oid, arg->ctx.tc_co_hdl, epoch++, 0, 0, 2, &dth);
 
 	/* Write the first value */
 	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid,
@@ -1666,7 +1666,7 @@ minor_epoch_punch_array(void **state)
 
 	d_iov_set(&sgl.sg_iovs[0], (void *)first, rex.rx_nr);
 
-	vts_dtx_begin_ex(&oid, arg->ctx.tc_co_hdl, epoch++, 0, 3, &dth);
+	vts_dtx_begin_ex(&oid, arg->ctx.tc_co_hdl, epoch++, 0, 0, 3, &dth);
 
 	/* Write the first value */
 	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid,
@@ -1943,12 +1943,241 @@ test_inprogress_parent_punch(void **state)
 	start_epoch = epoch + 1;
 }
 
+static void
+test_multiple_key_conditionals_common(void **state, bool with_dtx)
+{
+	struct io_test_args	*arg = *state;
+	int			rc = 0;
+	daos_key_t		dkey;
+	daos_key_t		akey1;
+	daos_key_t		akey2;
+	daos_recx_t		rex[2] = {0};
+	daos_iod_t		iod[2] = {0};
+	d_sg_list_t		sgl[2] = {0};
+	daos_epoch_t		epoch = start_epoch;
+	struct dtx_handle	*dth = NULL;
+	struct dtx_id		 xid;
+	const char		*expected = "xxxxx";
+	const char		*first = "hello";
+	const char		*second = "world";
+	char			buf1[32] = {0};
+	char			buf2[32] = {0};
+	char			dkey_buf[UPDATE_DKEY_SIZE];
+	char			akey1_buf[UPDATE_DKEY_SIZE];
+	char			akey2_buf[UPDATE_DKEY_SIZE];
+	daos_unit_oid_t		oid;
+
+	test_args_reset(arg, VPOOL_SIZE);
+
+	memset(rex, 0, sizeof(rex));
+	memset(iod, 0, sizeof(iod));
+
+	/* set up dkey and akey */
+	oid = gen_oid(arg->ofeat);
+	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
+	vts_key_gen(&akey1_buf[0], arg->akey_size, false, arg);
+	vts_key_gen(&akey2_buf[0], arg->akey_size, false, arg);
+	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
+	set_iov(&akey1, &akey1_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
+	set_iov(&akey2, &akey2_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
+
+	rc = daos_sgl_init(&sgl[0], 1);
+	assert_int_equal(rc, 0);
+	rc = daos_sgl_init(&sgl[1], 1);
+	assert_int_equal(rc, 0);
+
+	rex[0].rx_idx = 0;
+	rex[0].rx_nr = strlen(first);
+	rex[1].rx_idx = 0;
+	rex[1].rx_nr = strlen(second);
+
+	iod[0].iod_type = DAOS_IOD_ARRAY;
+	iod[1].iod_flags = 0;
+	iod[0].iod_size = 1;
+	iod[0].iod_name = akey1;
+	iod[0].iod_recxs = &rex[0];
+	iod[0].iod_nr = 1;
+
+	iod[1].iod_type = DAOS_IOD_ARRAY;
+	iod[1].iod_flags = DAOS_COND_AKEY_UPDATE;
+	iod[1].iod_size = 1;
+	iod[1].iod_name = akey2;
+	iod[1].iod_recxs = &rex[1];
+	iod[1].iod_nr = 1;
+
+	/** First, a committed update to a1*/
+	d_iov_set(&sgl[0].sg_iovs[0], (void *)first, rex[0].rx_nr);
+	d_iov_set(&sgl[1].sg_iovs[0], (void *)second, rex[1].rx_nr);
+	epoch++;
+	if (with_dtx)
+		vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch, 0, &dth);
+
+	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid, epoch, 0,
+			       DAOS_COND_PER_AKEY, &dkey, 2, iod, NULL, sgl,
+			       dth);
+	assert_int_equal(rc, -DER_NONEXIST);
+	if (with_dtx)
+		vts_dtx_end(dth);
+
+	/** Now commit to akey1 only */
+	epoch++;
+	if (with_dtx) {
+		vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch, 0, &dth);
+		xid = dth->dth_xid;
+	}
+	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid, epoch, 0, 0, &dkey, 1,
+			       iod, NULL, sgl, dth);
+	assert_int_equal(rc, 0);
+	if (with_dtx) {
+		vts_dtx_end(dth);
+		rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, NULL);
+		assert_int_equal(rc, 1);
+	}
+
+	/** Try again, condition on akey 2 should fail */
+	epoch++;
+	if (with_dtx)
+		vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch, 0, &dth);
+	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid, epoch, 0,
+			       DAOS_COND_PER_AKEY, &dkey, 2, iod, NULL, sgl,
+			       dth);
+	assert_int_equal(rc, -DER_NONEXIST);
+	if (with_dtx)
+		vts_dtx_end(dth);
+
+	/** Change condition to insert, should pass */
+	epoch++;
+	if (with_dtx) {
+		vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch, 0, &dth);
+		xid = dth->dth_xid;
+	}
+	iod[1].iod_flags = DAOS_COND_AKEY_INSERT;
+	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid, epoch, 0,
+			       DAOS_COND_PER_AKEY, &dkey, 2, iod, NULL, sgl,
+			       dth);
+	assert_int_equal(rc, 0);
+	if (with_dtx) {
+		vts_dtx_end(dth);
+		rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, NULL);
+		assert_int_equal(rc, 1);
+	}
+
+	/** Try update, should pass this time */
+	epoch++;
+	if (with_dtx) {
+		vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch, 0, &dth);
+		xid = dth->dth_xid;
+	}
+	iod[1].iod_flags = DAOS_COND_AKEY_UPDATE;
+	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid, epoch, 0,
+			       DAOS_COND_PER_AKEY, &dkey, 2, iod, NULL, sgl,
+			       dth);
+	assert_int_equal(rc, 0);
+	if (with_dtx) {
+		vts_dtx_end(dth);
+		rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, NULL);
+		assert_int_equal(rc, 1);
+	}
+
+	/** Conditional insert should fail */
+	epoch++;
+	if (with_dtx)
+		vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch, 0, &dth);
+	iod[1].iod_flags = DAOS_COND_AKEY_INSERT;
+	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid, epoch, 0,
+			       DAOS_COND_PER_AKEY, &dkey, 2, iod, NULL, sgl,
+			       dth);
+	assert_int_equal(rc, -DER_EXIST);
+	if (with_dtx)
+		vts_dtx_end(dth);
+
+	epoch++;
+	if (with_dtx)
+		vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch, 0, &dth);
+	memset(buf1, 0, sizeof(buf1));
+	memset(buf2, 0, sizeof(buf2));
+	iod[1].iod_flags = DAOS_COND_AKEY_FETCH;
+	d_iov_set(&sgl[0].sg_iovs[0], (void *)buf1, rex[0].rx_nr);
+	d_iov_set(&sgl[1].sg_iovs[0], (void *)buf2, rex[1].rx_nr);
+	rc = vos_obj_fetch_ex(arg->ctx.tc_co_hdl, oid, epoch,
+			      DAOS_COND_PER_AKEY, &dkey, 2, iod, sgl, dth);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(buf1, first, rex[0].rx_nr);
+	assert_memory_equal(buf2, second, rex[1].rx_nr);
+	if (with_dtx)
+		vts_dtx_end(dth);
+
+	/** Punch akey2 */
+	epoch++;
+	if (with_dtx) {
+		vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch, 0, &dth);
+		xid = dth->dth_xid;
+	}
+	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch, 0, 0, &dkey,
+			   1, &akey2, dth);
+	assert_int_equal(rc, 0);
+	if (with_dtx) {
+		vts_dtx_end(dth);
+		rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, NULL);
+		assert_int_equal(rc, 1);
+	}
+
+	epoch++;
+	if (with_dtx)
+		vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch, 0, &dth);
+	memset(buf1, 'x', sizeof(buf1));
+	memset(buf2, 'x', sizeof(buf2));
+	iod[1].iod_flags = DAOS_COND_AKEY_FETCH;
+	d_iov_set(&sgl[0].sg_iovs[0], (void *)buf1, rex[0].rx_nr);
+	d_iov_set(&sgl[1].sg_iovs[0], (void *)buf2, rex[1].rx_nr);
+	rc = vos_obj_fetch_ex(arg->ctx.tc_co_hdl, oid, epoch,
+			      DAOS_COND_PER_AKEY, &dkey, 2, iod, sgl, dth);
+	assert_int_equal(rc, -DER_NONEXIST);
+	assert_memory_equal(buf1, expected, rex[0].rx_nr);
+	assert_memory_equal(buf2, expected, rex[1].rx_nr);
+	if (with_dtx)
+		vts_dtx_end(dth);
+
+	epoch++;
+	if (with_dtx)
+		vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch, 0, &dth);
+	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
+	vts_key_gen(&akey1_buf[0], arg->akey_size, false, arg);
+	vts_key_gen(&akey2_buf[0], arg->akey_size, false, arg);
+	iod[0].iod_flags = DAOS_COND_AKEY_INSERT;
+	iod[1].iod_flags = DAOS_COND_AKEY_UPDATE;
+	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid, epoch, 0,
+			       DAOS_COND_DKEY_INSERT | DAOS_COND_PER_AKEY,
+			       &dkey, 2, iod, NULL, sgl, dth);
+	assert_int_equal(rc, -DER_NONEXIST);
+	if (with_dtx)
+		vts_dtx_end(dth);
+
+	start_epoch = epoch + 1;
+}
+
+static void
+test_multiple_key_conditionals(void **state)
+{
+	test_multiple_key_conditionals_common(state, false);
+}
+
+static void
+test_multiple_key_conditionals_tx(void **state)
+{
+	test_multiple_key_conditionals_common(state, true);
+}
+
 static const struct CMUnitTest punch_model_tests_pmdk[] = {
 	{ "VOS860: Conditionals test", cond_test, NULL, NULL },
 	{ "VOS861: Multiple oid cond test", multiple_oid_cond_test, NULL,
 		NULL },
 	{ "VOS862: Punch while other akey is inprogress",
 		test_inprogress_parent_punch, NULL, NULL },
+	{ "VOS863: Multikey conditionals",
+		test_multiple_key_conditionals, NULL, NULL },
+	{ "VOS864: Multikey conditionals with tx",
+		test_multiple_key_conditionals_tx, NULL, NULL },
 };
 
 static const struct CMUnitTest punch_model_tests_all[] = {
