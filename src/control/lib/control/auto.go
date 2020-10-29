@@ -27,7 +27,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/pkg/errors"
 
@@ -81,7 +80,7 @@ func ConfigGenerate(ctx context.Context, req *ConfigGenerateReq) (*ConfigGenerat
 	if req == nil {
 		return nil, errors.Errorf("nil %T request", req)
 	}
-	req.Log.Debugf("ConfigGenerate called with request %+v", req)
+	req.Log.Debugf("ConfigGenerate called with request %v", req)
 
 	cfg, err := req.checkStorage(ctx, getNumaCount)
 	if err != nil {
@@ -133,7 +132,7 @@ func (req *ConfigGenerateReq) validateScmStorage(scmNamespaces storage.ScmNamesp
 	for _, ns := range scmNamespaces {
 		pmemPaths = append(pmemPaths, fmt.Sprintf("%s/%s", pmemBdevDir, ns.BlockDevice))
 	}
-	req.Log.Debugf("pmem devs %+v (%d)", pmemPaths, len(pmemPaths))
+	req.Log.Debugf("pmem devs %v (%d)", pmemPaths, len(pmemPaths))
 
 	if len(scmNamespaces) < minPmems {
 		return nil, errors.Errorf("insufficient number of pmem devices, want %d got %d",
@@ -143,7 +142,7 @@ func (req *ConfigGenerateReq) validateScmStorage(scmNamespaces storage.ScmNamesp
 	// sanity check that each pmem aligns with expected numa node
 	for idx := range pmemPaths {
 		if int(scmNamespaces[idx].NumaNode) != idx {
-			return nil, errors.Errorf("unexpected numa node for scm %+v, want %d",
+			return nil, errors.Errorf("unexpected numa node for scm %v, want %d",
 				scmNamespaces[idx], idx)
 		}
 	}
@@ -164,19 +163,22 @@ func (req *ConfigGenerateReq) validateNvmeStorage(ctrlrs storage.NvmeControllers
 	pciAddrsPerNuma := make([][]string, numaCount)
 	for _, ctrlr := range ctrlrs {
 		if int(ctrlr.SocketID) > (numaCount - 1) {
-			req.Log.Debugf("skipping nvme device %s with numa %d (in use numa count is %d)",
+			req.Log.Debugf(
+				"skipping nvme device %s with numa %d (in use numa count is %d)",
 				ctrlr.PciAddr, ctrlr.SocketID, numaCount)
 			continue
 		}
-		pciAddrsPerNuma[ctrlr.SocketID] = append(pciAddrsPerNuma[ctrlr.SocketID], ctrlr.PciAddr)
+		pciAddrsPerNuma[ctrlr.SocketID] = append(pciAddrsPerNuma[ctrlr.SocketID],
+			ctrlr.PciAddr)
 	}
 
 	for idx, numaCtrlrs := range pciAddrsPerNuma {
 		num := len(numaCtrlrs)
-		req.Log.Debugf("nvme pci bound to numa %d: %+v (%d)", idx, numaCtrlrs, num)
+		req.Log.Debugf("nvme pci bound to numa %d: %v (%d)", idx, numaCtrlrs, num)
 
 		if num < minCtrlrs {
-			return nil, errors.Errorf("insufficient number of nvme devices for numa node %d, want %d got %d",
+			return nil, errors.Errorf(
+				"insufficient number of nvme devices for numa node %d, want %d got %d",
 				idx, minCtrlrs, num)
 		}
 	}
@@ -186,7 +188,7 @@ func (req *ConfigGenerateReq) validateNvmeStorage(ctrlrs storage.NvmeControllers
 
 // getSingleStorageSet retrieves the result of storage scan over host list and
 // verifies that there is only a single storage set in response which indicates
-// that storage hardware setup is homogenous across all hosts.
+// that storage hardware setup is homogeneous across all hosts.
 //
 // Return storage for a single host set or error.
 func (req *ConfigGenerateReq) getSingleStorageSet(ctx context.Context) (*HostStorageSet, error) {
@@ -209,14 +211,12 @@ func (req *ConfigGenerateReq) getSingleStorageSet(ctx context.Context) (*HostSto
 		return nil, errors.New("no host responses")
 	case numSets > 1:
 		// more than one means non-homogeneous hardware
-		var bld strings.Builder
-		fmt.Fprintln(&bld,
-			"Heterogeneous storage hardware configurations detected, cannot proceed.")
-		fmt.Fprintln(&bld, "The following sets of hosts have different storage hardware:")
+		req.Log.Info("Heterogeneous storage hardware configurations detected, " +
+			"cannot proceed. The following sets of hosts have different " +
+			"storage hardware:")
 		for _, hss := range scanResp.HostStorage {
-			fmt.Fprintln(&bld, hss.HostSet.String())
+			req.Log.Info(hss.HostSet.String())
 		}
-		req.Log.Info(bld.String())
 
 		return nil, errors.New("storage hardware not consistent across hosts")
 	}
@@ -229,7 +229,7 @@ func (req *ConfigGenerateReq) getSingleStorageSet(ctx context.Context) (*HostSto
 //
 // Return server config populated with ioserver storage or error.
 func (req *ConfigGenerateReq) checkStorage(ctx context.Context, getNumNuma numaNumGetter) (*config.Server, error) {
-	req.Log.Debugf("checkStorage called with request %+v", req)
+	req.Log.Debugf("checkStorage called with request %v", req)
 
 	storageSet, err := req.getSingleStorageSet(ctx)
 	if err != nil {
@@ -270,5 +270,27 @@ func (req *ConfigGenerateReq) checkStorage(ctx context.Context, getNumNuma numaN
 }
 
 func (req *ConfigGenerateReq) checkNetwork(ctx context.Context, cfg *config.Server) (*config.Server, error) {
+	netCtx, err := netdetect.Init(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "initializing netdetect library")
+	}
+	defer netdetect.CleanUp(netCtx)
+
+	fabricData, err := netdetect.ScanFabric(netCtx, "")
+	if err != nil {
+		return nil, errors.Wrap(err, "scanning fabric info")
+	}
+	req.Log.Debugf("fabric scan: %v", fabricData)
+
+	// sort fabric results in ascending priority (lowest is fastest)
+	sort.Slice(fabricData, func(i, j int) bool {
+		return fabricData[i].Priority < fabricData[j].Priority
+	})
+
+	for idx, fd := range fabricData {
+		req.Log.Debugf("%d. %s", idx, fd)
+	}
+
+	// identify interfaces for all numa nodes
 	return cfg, nil // TODO: implement
 }
