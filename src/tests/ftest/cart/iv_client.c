@@ -106,7 +106,7 @@ test_iv_shutdown()
 }
 
 static int
-create_sync(char *arg_sync, crt_iv_sync_t **rsync)$
+create_sync(char *arg_sync, crt_iv_sync_t **rsync)
 {
 	crt_iv_sync_t				*sync;
 
@@ -172,7 +172,7 @@ test_iv_invalidate(struct iv_key_struct *key, char *arg_sync)
 		DBG_PRINT("Invalidate of key=[%d:%d] PASSED\n", key->rank,
 			  key->key_id);
 	else
-		DBG_PRINT("Invalidate of key=[%d:%d] FAILED; rc = %ld\n",
+		DBG_PRINT("Invalidate of key=[%d:%d] FAILED; rc = %d\n",
 			  key->rank, key->key_id, output->rc);
 
 	rc = crt_req_decref(rpc_req);
