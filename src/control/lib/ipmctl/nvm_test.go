@@ -132,7 +132,9 @@ func TestNvmFwUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to create a fake FW file")
 	}
-	f.WriteString("notrealFW")
+	if _, err := f.WriteString("notrealFW"); err != nil {
+		t.Fatal(err)
+	}
 	f.Close()
 
 	mgmt := NvmMgmt{}

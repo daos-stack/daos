@@ -191,9 +191,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, lastMapVer uint32) (uint3
 			Rank: rank.Uint32(),
 			Uri:  uri,
 		})
-		if err := rankSet.Add(rank); err != nil {
-			return mapVer, errors.Wrap(err, "adding rank to set")
-		}
+		rankSet.Add(rank)
 	}
 
 	// NB: At this point, we need to return the current version instead of
