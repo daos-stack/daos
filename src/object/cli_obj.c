@@ -1765,16 +1765,16 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 	switch (opc) {
 	case DAOS_OBJ_RPC_FETCH: {
 		daos_obj_fetch_t	*f_args = args;
-		bool			 size_fetch, spec_shard, check_exist:
+		bool			 size_fetch, spec_shard, check_exist;
 
-		spec_shard  = args->extra_flags & DIOF_CHECK_EXISTENCE;
-		check_exist = args->extra_flags & DIOF_TO_SPE_SHARD;
+		spec_shard  = f_args->extra_flags & DIOF_CHECK_EXISTENCE;
+		check_exist = f_args->extra_flags & DIOF_TO_SPEC_SHARD;
 		size_fetch  = obj_auxi->reasb_req.orr_size_fetch;
 		if ((!obj_auxi->io_retry && !obj_auxi->req_reasbed) ||
 		    size_fetch) {
 			if (f_args->dkey == NULL ||
 			    f_args->dkey->iov_buf == NULL ||
-			    (f_args->nr == 0 && !check_exist) {
+			    (f_args->nr == 0 && !check_exist)) {
 				D_ERROR("Invalid fetch parameter.\n");
 				D_GOTO(out, rc = -DER_INVAL);
 			}
@@ -3773,7 +3773,7 @@ dc_obj_fetch_task(tse_task_t *task)
 	uint8_t                  csum_bitmap = 0;
 
 	rc = obj_req_valid(task, args, DAOS_OBJ_RPC_FETCH, &epoch, &map_ver,
-			   &obj)
+			   &obj);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
