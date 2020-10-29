@@ -31,6 +31,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -51,7 +52,7 @@ type (
 		NetClass string
 		Client   UnaryInvoker
 		HostList []string
-		buf      strings.Builder
+		Log      logging.Logger
 	}
 
 	// ConfigGenerateResp contains the request response.
@@ -63,12 +64,25 @@ type (
 	numaNumGetter func() (int, error)
 )
 
+func getNumaCount() (int, error) {
+	netCtx, err := netdetect.Init(context.Background())
+	if err != nil {
+		return 0, err
+	}
+	defer netdetect.CleanUp(netCtx)
+
+	return netdetect.NumNumaNodes(netCtx), nil
+}
+
+// ConfigGenerate attempts to automatically detect hardware and generate a DAOS
+// server config file for a set of hosts.
 func ConfigGenerate(ctx context.Context, req *ConfigGenerateReq) (*ConfigGenerateResp, error) {
 	if req == nil {
 		return nil, errors.Errorf("nil %T request", req)
 	}
+	req.Log.Debugf("ConfigGenerate called with request %+v", req)
 
-	cfg, err := req.checkStorage(ctx, req.Client, getNumaCount)
+	cfg, err := req.checkStorage(ctx, getNumaCount)
 	if err != nil {
 		return &ConfigGenerateResp{Err: err}, nil
 	}
@@ -88,17 +102,7 @@ func ConfigGenerate(ctx context.Context, req *ConfigGenerateReq) (*ConfigGenerat
 	return &ConfigGenerateResp{ConfigOut: cfg}, nil
 }
 
-func getNumaCount() (int, error) {
-	netCtx, err := netdetect.Init(context.Background())
-	if err != nil {
-		return 0, err
-	}
-	defer netdetect.CleanUp(netCtx)
-
-	return netdetect.NumNumaNodes(netCtx), nil
-}
-
-// cfgValidateScmStorage verifies adequate number of pmem namespaces.
+// validateScmStorage verifies adequate number of pmem namespaces.
 //
 // Return slice of pmem block device paths with index in slice equal to NUMA
 // node ID.
@@ -116,10 +120,14 @@ func (req *ConfigGenerateReq) validateScmStorage(scmNamespaces storage.ScmNamesp
 		}
 
 		minPmems = numaCount
-		//cmd.log.Debugf("minimum pmem devices required set to numa count %d", numaCount)
+		req.Log.Debugf("minimum pmem devices required set to numa count %d", numaCount)
 	}
 
-	//cmd.log.Debugf("%d scm namespaces detected", len(scmNamespaces))
+	pmemPaths := make([]string, 0, len(scmNamespaces))
+	for _, ns := range scmNamespaces {
+		pmemPaths = append(pmemPaths, fmt.Sprintf("%s/%s", pmemBdevDir, ns.BlockDevice))
+	}
+	req.Log.Debugf("pmem devs %+v (%d)", pmemPaths, len(pmemPaths))
 
 	if len(scmNamespaces) < minPmems {
 		return nil, errors.Errorf("insufficient number of pmem devices, want %d got %d",
@@ -127,19 +135,17 @@ func (req *ConfigGenerateReq) validateScmStorage(scmNamespaces storage.ScmNamesp
 	}
 
 	// sanity check that each pmem aligns with expected numa node
-	var pmemPaths []string
-	for idx, ns := range scmNamespaces {
-		if int(ns.NumaNode) != idx {
-			return nil, errors.Errorf("unexpected numa node for scm %s, want %d got %d",
-				ns.BlockDevice, idx, ns.NumaNode)
+	for idx := range pmemPaths {
+		if int(scmNamespaces[idx].NumaNode) != idx {
+			return nil, errors.Errorf("unexpected numa node for scm %+v, want %d",
+				scmNamespaces[idx], idx)
 		}
-		pmemPaths = append(pmemPaths, fmt.Sprintf("%s/%s", pmemBdevDir, ns.BlockDevice))
 	}
 
 	return pmemPaths, nil
 }
 
-// cfgValidateNvmeStorage verifies adequate number of ctrlrs per numa node.
+// validateNvmeStorage verifies adequate number of ctrlrs per numa node.
 //
 // Return slice of slices of NVMe SSD PCI addresses. All SSD addresses in group
 // will be bound to NUMA node ID specified by the index of the outer slice.
@@ -152,8 +158,8 @@ func (req *ConfigGenerateReq) validateNvmeStorage(ctrlrs storage.NvmeControllers
 	pciAddrsPerNuma := make([][]string, numaCount)
 	for _, ctrlr := range ctrlrs {
 		if int(ctrlr.SocketID) > (numaCount - 1) {
-			//cmd.log.Debugf("skipping nvme device %s with numa %d (in use numa count is %d)",
-			//	ctrlr.PciAddr, ctrlr.SocketID, numaCount)
+			req.Log.Debugf("skipping nvme device %s with numa %d (in use numa count is %d)",
+				ctrlr.PciAddr, ctrlr.SocketID, numaCount)
 			continue
 		}
 		pciAddrsPerNuma[ctrlr.SocketID] = append(pciAddrsPerNuma[ctrlr.SocketID], ctrlr.PciAddr)
@@ -161,7 +167,7 @@ func (req *ConfigGenerateReq) validateNvmeStorage(ctrlrs storage.NvmeControllers
 
 	for idx, numaCtrlrs := range pciAddrsPerNuma {
 		num := len(numaCtrlrs)
-		//cmd.log.Debugf("nvme pci bound to numa %d: %+v (%d)", idx, numaCtrlrs, num)
+		req.Log.Debugf("nvme pci bound to numa %d: %+v (%d)", idx, numaCtrlrs, num)
 
 		if num < minCtrlrs {
 			return nil, errors.Errorf("insufficient number of nvme devices for numa node %d, want %d got %d",
@@ -172,7 +178,7 @@ func (req *ConfigGenerateReq) validateNvmeStorage(ctrlrs storage.NvmeControllers
 	return pciAddrsPerNuma, nil
 }
 
-// getSingleStorage retrieves the result of storage scan over host list and
+// getSingleStorageSet retrieves the result of storage scan over host list and
 // verifies that there is only a single storage set in response which indicates
 // that storage hardware setup is homogenous across all hosts.
 //
@@ -204,7 +210,7 @@ func (req *ConfigGenerateReq) getSingleStorageSet(ctx context.Context) (*HostSto
 		for _, hss := range scanResp.HostStorage {
 			fmt.Fprintln(&bld, hss.HostSet.String())
 		}
-		//rpcClient.log.Info(bld.String())
+		req.Log.Info(bld.String())
 
 		return nil, errors.New("storage hardware not consistent across hosts")
 	}
@@ -216,7 +222,9 @@ func (req *ConfigGenerateReq) getSingleStorageSet(ctx context.Context) (*HostSto
 // ioserver storage config with detected device identifiers if thresholds met.
 //
 // Return server config populated with ioserver storage or error.
-func (req *ConfigGenerateReq) checkStorage(ctx context.Context, rpcClient UnaryInvoker, getNumNuma numaNumGetter) (*config.Server, error) {
+func (req *ConfigGenerateReq) checkStorage(ctx context.Context, getNumNuma numaNumGetter) (*config.Server, error) {
+	req.Log.Debugf("checkStorage called with request %+v", req)
+
 	storageSet, err := req.getSingleStorageSet(ctx)
 	if err != nil {
 		return nil, err
@@ -224,8 +232,8 @@ func (req *ConfigGenerateReq) checkStorage(ctx context.Context, rpcClient UnaryI
 	scmNamespaces := storageSet.HostStorage.ScmNamespaces
 	nvmeControllers := storageSet.HostStorage.NvmeDevices
 
-	//rpcClient.log.Infof("Storage hardware configuration is consistent for hosts %s:\n\t%s\n\t%s",
-	//	storageSet.HostSet.String(), scmNamespaces.Summary(), nvmeControllers.Summary())
+	req.Log.Infof("Storage hardware configuration is consistent for hosts %s:\n\t%s\n\t%s",
+		storageSet.HostSet.String(), scmNamespaces.Summary(), nvmeControllers.Summary())
 
 	// the pmemPaths is a slice of pmem block devices each pinned to NUMA
 	// node ID matching the index in the slice
@@ -244,14 +252,15 @@ func (req *ConfigGenerateReq) checkStorage(ctx context.Context, rpcClient UnaryI
 	cfg := config.DefaultServer()
 	for idx, pp := range pmemPaths {
 		cfg.Servers = append(cfg.Servers, ioserver.NewConfig().
-			WithScmClass("dcpm").
-			WithScmDeviceList(pp).
+			WithScmClass(storage.ScmClassDCPM.String()).
+			WithBdevClass(storage.BdevClassNvme.String()).
 			WithScmMountPoint(fmt.Sprintf("%s%d", scmMountPrefix, idx)).
-			WithBdevClass("nvme").
+			WithScmDeviceList(pp).
 			WithBdevDeviceList(bdevLists[idx]...))
 	}
+	cfg = cfg.WithSystemName(cfg.SystemName) // reset io cfgs to global setting
 
-	return cfg, nil
+	return cfg.WithSocketDir(cfg.SocketDir), nil
 }
 
 func (req *ConfigGenerateReq) checkNetwork(ctx context.Context, cfg *config.Server) (*config.Server, error) {

@@ -60,6 +60,7 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 		NetClass: cmd.NetClass,
 		HostList: cmd.hostlist,
 		Client:   cmd.ctlInvoker,
+		Log:      cmd.log,
 	}
 	resp, err := control.ConfigGenerate(ctx, req)
 

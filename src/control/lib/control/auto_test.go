@@ -25,12 +25,19 @@ package control
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/security"
+	"github.com/daos-stack/daos/src/control/server/config"
+	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 func TestControl_AutoConfig_checkStorage(t *testing.T) {
@@ -114,6 +121,20 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 			Message: MockServerScanResp(t, "withSpaceUsage"),
 		},
 	}
+	ioCfgWithSSDs := func(numa int) *ioserver.Config {
+		var pciAddrs []string
+		for _, c := range MockServerScanResp(t, "withSpaceUsage").Nvme.Ctrlrs {
+			if int(c.Socketid) == numa {
+				pciAddrs = append(pciAddrs, c.Pciaddr)
+			}
+		}
+		return ioserver.NewConfig().
+			WithScmClass(storage.ScmClassDCPM.String()).
+			WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", numa)).
+			WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", numa)).
+			WithBdevClass(storage.BdevClassNvme.String()).
+			WithBdevDeviceList(pciAddrs...)
+	}
 
 	for name, tc := range map[string]struct {
 		minPmem       int
@@ -122,7 +143,7 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 		numNumaErr    error
 		uErr          error
 		hostResponses []*HostResponse
-		expOut        string
+		expConfigOut  *config.Server
 		expCheckErr   error
 	}{
 		"invoker error": {
@@ -175,9 +196,14 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 			hostResponses: hostRespWithSingleSSD,
 			expCheckErr:   errors.New("insufficient number of nvme devices for numa node 1, want 1 got 0"),
 		},
-		"no min nvme and multiple ctrlrs present on 2 numa nodes": {
-			minPmem:       2,
+		"no min nvme and multiple ctrlrs present on 1 numa nodes": {
+			minPmem:       1,
 			hostResponses: hostRespWithSSDs,
+			expConfigOut: config.DefaultServer().
+				WithServers(ioCfgWithSSDs(0), ioCfgWithSSDs(1)),
+			//WithScmDeviceList(pp).
+			//WithScmMountPoint(fmt.Sprintf("%s%d", scmMountPrefix, idx)).
+			//WithBdevDeviceList(bdevLists[idx]...))
 			//			expOut: `port: 10001
 			//transport_config:
 			//  allow_insecure: false
@@ -231,6 +257,10 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 			//path: ../etc/daos_server.yml
 			//`,
 		},
+		//		"no min nvme and multiple ctrlrs present on 2 numa nodes": {
+		//			minPmem:       2,
+		//			hostResponses: hostRespWithSSDs,
+		//			expConfigOut:  config.DefaultServer().
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -248,16 +278,25 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 			}
 
 			req := &ConfigGenerateReq{
-				NumPmem: tc.minNvme,
+				NumPmem: tc.minPmem,
 				NumNvme: tc.minNvme,
 				Client:  mi,
+				Log:     log,
 				//NetClass: tc.netClass,
 			}
 
-			_, gotCheckErr := req.checkStorage(context.Background(), mi, mockGetNumaCount)
+			gotCfg, gotCheckErr := req.checkStorage(context.Background(), mockGetNumaCount)
 			common.CmpErr(t, tc.expCheckErr, gotCheckErr)
 			if tc.expCheckErr != nil {
 				return
+			}
+
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(security.CertificateConfig{}, config.Server{}),
+				cmpopts.IgnoreFields(config.Server{}, "GetDeviceClassFn"),
+			}
+			if diff := cmp.Diff(tc.expConfigOut, gotCfg, cmpOpts...); diff != "" {
+				t.Fatalf("output cfg doesn't match (-want, +got):\n%s\n", diff)
 			}
 
 			//			gotOut, gotParseErr := req.parseConfig(gotCfg)
