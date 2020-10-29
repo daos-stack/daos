@@ -1767,8 +1767,8 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 		daos_obj_fetch_t	*f_args = args;
 		bool			 size_fetch, spec_shard, check_exist;
 
-		spec_shard  = f_args->extra_flags & DIOF_CHECK_EXISTENCE;
-		check_exist = f_args->extra_flags & DIOF_TO_SPEC_SHARD;
+		spec_shard  = f_args->extra_flags & DIOF_TO_SPEC_SHARD;
+		check_exist = f_args->extra_flags & DIOF_CHECK_EXISTENCE;
 		size_fetch  = obj_auxi->reasb_req.orr_size_fetch;
 		if ((!obj_auxi->io_retry && !obj_auxi->req_reasbed) ||
 		    size_fetch) {
