@@ -94,32 +94,32 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 		return true // identical state
 	}
 	return map[MemberState]map[MemberState]bool{
-		MemberStateAwaitFormat: map[MemberState]bool{
+		MemberStateAwaitFormat: {
 			MemberStateEvicted: true,
 		},
-		MemberStateStarting: map[MemberState]bool{
+		MemberStateStarting: {
 			MemberStateEvicted: true,
 		},
-		MemberStateReady: map[MemberState]bool{
+		MemberStateReady: {
 			MemberStateEvicted: true,
 		},
-		MemberStateJoined: map[MemberState]bool{
+		MemberStateJoined: {
 			MemberStateReady: true,
 		},
-		MemberStateStopping: map[MemberState]bool{
+		MemberStateStopping: {
 			MemberStateReady: true,
 		},
-		MemberStateEvicted: map[MemberState]bool{
+		MemberStateEvicted: {
 			MemberStateReady:    true,
 			MemberStateJoined:   true,
 			MemberStateStopping: true,
 		},
-		MemberStateErrored: map[MemberState]bool{
+		MemberStateErrored: {
 			MemberStateReady:    true,
 			MemberStateJoined:   true,
 			MemberStateStopping: true,
 		},
-		MemberStateUnresponsive: map[MemberState]bool{
+		MemberStateUnresponsive: {
 			MemberStateReady:    true,
 			MemberStateJoined:   true,
 			MemberStateStopping: true,
@@ -651,9 +651,7 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int, resolveFn resolveFnSi
 		if rankList, exists := hostRanks[tcpAddr.String()]; exists {
 			m.log.Debugf("CheckHosts(): %v ranks found at %s", rankList, origHostString)
 			for _, rank := range rankList {
-				if err = rs.Add(rank); err != nil {
-					return nil, nil, err
-				}
+				rs.Add(rank)
 			}
 			continue
 		}

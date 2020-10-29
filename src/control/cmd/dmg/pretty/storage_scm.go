@@ -60,11 +60,6 @@ func printScmMountPoints(mountpoints storage.ScmMountPoints, out io.Writer, opts
 	return nil
 }
 
-func printScmModule(module *storage.ScmModule, out io.Writer, opts ...PrintConfigOption) error {
-	_, err := fmt.Fprintf(out, "%s\n", module.String())
-	return err
-}
-
 // PrintScmModules displays PMM details in a verbose table.
 //
 // TODO: un-export function when not needed in cmd/daos_server/storage.go
