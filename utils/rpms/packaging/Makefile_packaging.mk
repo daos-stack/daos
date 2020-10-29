@@ -260,7 +260,7 @@ $(DEB_TOP)/$(DEB_DSC): $(CALLING_MAKEFILE) $(DEB_BUILD).tar.$(SRC_EXT) \
 	  $(DEB_TOP)/*.dsc $(DEB_TOP)/*.build* $(DEB_TOP)/*.changes \
 	  $(DEB_TOP)/*.debian.tar.*
 	rm -rf $(DEB_TOP)/*-tmp
-	cd $(DEB_BUILD); dpkg-buildpackage -S --no-sign --no-check-builddeps
+	cd $(DEB_BUILD); debuild --set-env="SCONS_ARGS=$(SCONS_ARGS)" --no-lintian -b -us -uc
 
 $(SRPM): $(SPEC) $(SOURCES)
 	rpmbuild -bs $(COMMON_RPM_ARGS) $(RPM_BUILD_OPTIONS) $(SPEC)

@@ -26,5 +26,4 @@ rm -rf "artifacts/${TARGET}/"
 mkdir -p "artifacts/${TARGET}/"
 DEBEMAIL="$DAOS_EMAIL" DEBFULLNAME="$DAOS_FULLNAME" \
 TOPDIR=$PWD make CHROOT_NAME="${CHROOT_NAME}"  \
-    EXTERNAL_RPM_BUILD_OPTIONS="${RPM_FAULTS_ARGS}" \
     SCONS_ARGS="${SCONS_FAULTS_ARGS}" -C utils/rpms chrootbuild

@@ -9,6 +9,12 @@
 %global mercury_version 2.0.0~rc1-1%{?dist}
 %endif
 
+%if %{defined %{getenv:SCONS_ARGS}}
+%global scons_args %{getenv:SCONS_ARGS}
+%else
+%global scons_args BUILD_TYPE=release
+%endif
+
 Name:          daos
 Version:       1.1.1
 Release:       6%{?relval}%{?dist}
@@ -212,8 +218,7 @@ scons %{?_smp_mflags}      \
       USE_INSTALLED=all    \
       CONF_DIR=%{conf_dir} \
       PREFIX=%{?buildroot} \
-      %{?with_fault_injection:BUILD_TYPE=dev} \
-      %{!?with_fault_injection:BUILD_TYPE=release}
+      %{scons_args}
 
 
 %install
@@ -226,8 +231,7 @@ scons %{?_smp_mflags}                 \
       USE_INSTALLED=all               \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
-      %{?with_fault_injection:BUILD_TYPE=dev} \
-      %{!?with_fault_injection:BUILD_TYPE=release}
+      %{scons_args}
 
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"
