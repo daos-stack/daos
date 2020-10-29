@@ -69,6 +69,7 @@ typedef enum {
 	DAOS_OPC_POOL_DEL_ATTR,
 	DAOS_OPC_POOL_STOP_SVC,
 	DAOS_OPC_POOL_LIST_CONT,
+	DAOS_OPC_POOL_TGT_INFO,
 
 	/** Container APIs */
 	DAOS_OPC_CONT_CREATE,
@@ -273,12 +274,12 @@ typedef struct {
 typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
-	/** Array of targets to query. */
-	d_rank_list_t		*tgts;
-	/** Optional, buffer to store faulty targets on failure. */
-	d_rank_list_t		*failed;
-	/** Returned storage information of targets. */
-	daos_target_info_t	*info_list;
+	/** Single targets to query. */
+	d_rank_t		tgt;
+	/** Rank of target to query. */
+	d_rank_t		rank;
+	/** Returned storage information of target. */
+	daos_target_info_t	*info;
 } daos_pool_query_target_t;
 
 /** pool container list args */

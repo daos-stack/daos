@@ -30,6 +30,9 @@
 #include <daos_pool.h>
 #include "rpc.h"
 
+#define crt_proc_daos_target_state_t crt_proc_uint32_t
+#define crt_proc_daos_target_type_t crt_proc_uint32_t
+
 static int
 crt_proc_struct_pool_target_addr(crt_proc_t proc, struct pool_target_addr *tgt)
 {
@@ -100,6 +103,24 @@ crt_proc_struct_daos_pool_space(crt_proc_t proc, struct daos_pool_space *ps)
 	rc = crt_proc_uint32_t(proc, &ps->ps_padding);
 	if (rc)
 		return -DER_HG;
+
+	return 0;
+}
+
+static int
+crt_proc_struct_daos_space(crt_proc_t proc, struct daos_space *ps)
+{
+	int i, rc;
+
+	for (i = 0; i < DAOS_MEDIA_MAX; i++) {
+		rc = crt_proc_uint64_t(proc, &ps->s_total[i]);
+		if (rc)
+			return -DER_HG;
+
+		rc = crt_proc_uint64_t(proc, &ps->s_free[i]);
+		if (rc)
+			return -DER_HG;
+	}
 
 	return 0;
 }
@@ -195,6 +216,7 @@ CRT_RPC_DEFINE(pool_acl_delete, DAOS_ISEQ_POOL_ACL_DELETE,
 		DAOS_OSEQ_POOL_ACL_DELETE)
 CRT_RPC_DEFINE(pool_list_cont, DAOS_ISEQ_POOL_LIST_CONT,
 		DAOS_OSEQ_POOL_LIST_CONT)
+CRT_RPC_DEFINE(pool_tgt_info, DAOS_ISEQ_POOL_TGT_INFO, DAOS_OSEQ_POOL_TGT_INFO)
 
 /* Define for cont_rpcs[] array population below.
  * See POOL_PROTO_*_RPC_LIST macro definition

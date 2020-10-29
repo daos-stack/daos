@@ -1625,13 +1625,130 @@ dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver)
 	return 0;
 }
 
+struct pool_query_tgt_arg {
+	struct dc_pool		*dqa_pool;
+	d_rank_t		 dqa_tgt;
+	d_rank_t		 dqa_rank;
+	daos_target_info_t	*dqa_info;
+	crt_rpc_t		*rpc;
+};
+
+static int
+pool_query_target_cb(tse_task_t *task, void *data)
+{
+	struct pool_query_tgt_arg  *arg = (struct pool_query_tgt_arg *)data;
+	struct pool_tgt_info_out   *out = crt_reply_get(arg->rpc);
+	daos_target_info_t	    target_info = {0};
+	int			    rc = task->dt_result;
+
+	rc = pool_rsvc_client_complete_rpc(arg->dqa_pool, &arg->rpc->cr_ep, rc,
+					   &out->pto_op, task);
+	if (rc < 0)
+		D_GOTO(out, rc);
+	else if (rc == RSVC_CLIENT_RECHOOSE)
+		D_GOTO(out, rc = 0);
+
+	D_DEBUG(DF_DSMC, DF_UUID": target query rpc done: %d\n",
+		DP_UUID(arg->dqa_pool->dp_pool), rc);
+
+	if (rc) {
+		D_ERROR("RPC error while querying pool target: "DF_RC"\n",
+			DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	rc = out->pto_op.po_rc;
+
+	if (rc != 0) {
+		D_ERROR("failed to query pool: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	target_info.ta_state = out->pto_state;
+	arg->dqa_info = &target_info;
+
+out:
+	crt_req_decref(arg->rpc);
+	dc_pool_put(arg->dqa_pool);
+	return rc;
+}
+
 int
 dc_pool_query_target(tse_task_t *task)
 {
-	return -DER_NOSYS;
+	daos_pool_query_target_t	*args;
+	struct dc_pool			*pool;
+	crt_endpoint_t			 ep;
+	crt_rpc_t			*rpc;
+	struct pool_tgt_info_in		*in;
+	struct pool_query_tgt_arg	 query_args;
+	int				 rc;
+
+	args = dc_task_get_args(task);
+
+	/** Lookup bumps pool ref ,1 */
+	pool = dc_hdl2pool(args->poh);
+	if (pool == NULL)
+		D_GOTO(out_task, rc = -DER_NO_HDL);
+
+	D_DEBUG(DF_DSMC, DF_UUID": querying: hdl="DF_UUID" tgt=%d rank=%d\n",
+		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl),
+		args->tgt, args->rank);
+
+	ep.ep_grp = pool->dp_sys->sy_group;
+	D_MUTEX_LOCK(&pool->dp_client_lock);
+	rc = rsvc_client_choose(&pool->dp_client, &ep);
+	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
+			DP_UUID(pool->dp_pool), DP_RC(rc));
+		goto out_pool;
+	}
+	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_TGT_INFO, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool tgt info rpc: %d\n",
+			DP_UUID(pool->dp_pool), rc);
+		D_GOTO(out_pool, rc);
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->pti_op.pi_uuid, pool->dp_pool);
+	uuid_copy(in->pti_op.pi_hdl, pool->dp_pool_hdl);
+	in->pti_rank = args->rank;
+	in->pti_tgt = args->tgt;
+
+	/** +1 for args */
+	crt_req_addref(rpc);
+
+
+	query_args.dqa_pool = pool;
+	query_args.dqa_info = args->info;
+	query_args.dqa_tgt = args->tgt;
+	query_args.dqa_rank = args->rank;
+	query_args.rpc = rpc;
+
+	rc = tse_task_register_comp_cb(task, pool_query_target_cb, &query_args,
+				       sizeof(query_args));
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
+
+	/** send the request */
+	rc = daos_rpc_send(rpc, task);
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
+
+	return rc;
+
+out_rpc:
+	crt_req_decref(rpc);
+	crt_req_decref(rpc);
+out_pool:
+	dc_pool_put(pool);
+out_task:
+	tse_task_complete(task, rc);
+	return rc;
+
 }
-
-
 
 struct pool_req_arg {
 	struct dc_pool	*pra_pool;

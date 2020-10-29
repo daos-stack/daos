@@ -54,6 +54,10 @@ typedef enum {
 	DAOS_TS_UP,
 	/* Up and running */
 	DAOS_TS_UP_IN,
+	/* Intermediate state for pool map change */
+	DAOS_TS_NEW,
+	/* Being drained */
+	DAOS_TS_DRAIN,
 } daos_target_state_t;
 
 /** Description of target performance */
@@ -341,9 +345,8 @@ daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
  *			-DER_NONEXIST	No pool on specified targets
  */
 int
-daos_pool_query_target(daos_handle_t poh, d_rank_list_t *tgts,
-		       d_rank_list_t *failed, daos_target_info_t *info_list,
-		       daos_event_t *ev);
+daos_pool_query_target(daos_handle_t poh, d_rank_t tgt, d_rank_t rank,
+		       daos_target_info_t *info, daos_event_t *ev);
 
 /**
  * List the names of all user-defined pool attributes.
