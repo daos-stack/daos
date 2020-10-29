@@ -353,4 +353,6 @@ int dmg_storage_set_nvme_fault(const char *dmg_config_file,
  */
 int verify_blobstore_state(int state, const char *state_str);
 
+const char * daos_target_state_enum_to_str(int state);
+
 #endif /* __DAOS_TESTS_LIB_H__ */

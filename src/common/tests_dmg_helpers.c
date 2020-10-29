@@ -761,3 +761,18 @@ int verify_blobstore_state(int state, const char *state_str)
 
 	return 1;
 }
+
+const char *
+daos_target_state_enum_to_str(int state)
+{
+	switch (state) {
+	case DAOS_TS_UNKNOWN: return "UNKNOWN";
+	case DAOS_TS_DOWN_OUT: return "DOWNOUT";
+	case DAOS_TS_DOWN: return "DOWN";
+	case DAOS_TS_UP: return "UP";
+	case DAOS_TS_UP_IN: return "UPIN";
+	case DAOS_TS_DRAIN: return "DRAIN";
+	}
+
+	return "Undefined State";
+}

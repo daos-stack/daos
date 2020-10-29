@@ -59,14 +59,16 @@ is_nvme_enabled(test_arg_t *arg)
 static void
 nvme_recov_1(void **state)
 {
-	test_arg_t	*arg = *state;
-	daos_obj_id_t	 oid;
-	struct ioreq	 req;
-	char		 dkey[DTS_KEY_LEN] = { 0 };
-	char		 akey[DTS_KEY_LEN] = { 0 };
-	int		 obj_class, key_nr = 10;
-	int		 rank = 0, tgt_idx = 0;
-	int		 i, j;
+	test_arg_t		*arg = *state;
+	daos_obj_id_t		 oid;
+	struct ioreq		 req;
+	daos_target_info_t	 tgt_info = { 0 };
+	char			 dkey[DTS_KEY_LEN] = { 0 };
+	char			 akey[DTS_KEY_LEN] = { 0 };
+	int			 obj_class, key_nr = 10;
+	int			 rank = 0, tgt_idx = 0;
+	int			 per_node_tgt_cnt = 0;
+	int			 i, j, rc;
 
 	if (!is_nvme_enabled(arg)) {
 		print_message("NVMe isn't enabled.\n");
@@ -94,28 +96,82 @@ nvme_recov_1(void **state)
 	}
 	ioreq_fini(&req);
 
+	/* Query pool to get total pool target count per node */
+	assert_true(arg->srv_ntgts > arg->srv_nnodes);
+	per_node_tgt_cnt = arg->srv_ntgts/arg->srv_nnodes;
+	print_message("Pool Target Count:%d\n", per_node_tgt_cnt);
+
+	/**
+	 * Verify initial states for all pool targets are UPIN by querying
+	 * the pool target info.
+	 */
+	for (i = 0; i < per_node_tgt_cnt; i++) {
+		rc = daos_pool_query_target(arg->pool.poh, i/*tgt*/,
+					    rank, &tgt_info, NULL /*ev*/);
+		assert_int_equal(rc, 0);
+		rc = strcmp(daos_target_state_enum_to_str(tgt_info.ta_state),
+			    "UPIN");
+		assert_int_equal(rc, 0);
+	}
+	print_message("All targets are in UPIN\n");
 	print_message("Error injection to simulate device faulty.\n");
 	set_fail_loc(arg, rank, DAOS_NVME_FAULTY | DAOS_FAIL_ONCE);
 
-	/*
-	 * FIXME: Due to lack of infrastructures for checking each target
-	 *	  status, let's just wait for an arbitrary time and hope the
-	 *	  faulty reaction & rebuild is triggered.
-	 */
 	print_message("Waiting for faulty reaction being triggered...\n");
-	sleep(60);
+	/**
+	 * Verify targets are in DOWN. Targets that are excluded in this
+	 * test can be any currently on the rank, no way to set ahead of time.
+	 * Therefore we need to check all targets on the rank for the first one
+	 * to switch from UPIN->DOWN, and then we can confirm that rebuild
+	 * has been triggered from faulty device reaction.
+	 */
+	rc = wait_and_verify_pool_tgt_state(arg->pool.poh, per_node_tgt_cnt,
+					    rank, "DOWN");
+	/* rc = tgt_idx of first tgt in DOWN state */
+	assert_false(rc < 0);
+	tgt_idx = rc;
 
 	print_message("Waiting for rebuild done...\n");
 	if (arg->myrank == 0)
 		test_rebuild_wait(&arg, 1);
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	/*
-	 * FIXME: Need to verify target is in DOWNOUT when the infrastructure
-	 *	  is ready.
+	/**
+	 * Verify targets are in DOWNOUT. Targets that are excluded in this
+	 * test can be any currently on the rank, no way to set ahead of time.
+	 * Therefore we need to check all targets on the rank.
 	 */
 	print_message("Waiting for faulty reaction done...\n");
-	sleep(60);
+	rc = wait_and_verify_pool_tgt_state(arg->pool.poh, per_node_tgt_cnt,
+					    rank, "DOWNOUT");
+	/* rc = tgt_idx of first tgt in DOWNOUT state */
+	assert_false(rc < 0);
+
+	/**
+	 * Final verification that the first found pool target in the DOWN
+	 * state is now in the DOWNOUT state (if different from the first
+	 * returned target in the DOWNOUT state above).
+	 */
+	if (rc != tgt_idx) {
+		rc = daos_pool_query_target(arg->pool.poh, rc/*tgt*/,
+					    rank, &tgt_info, NULL /*ev*/);
+		assert_int_equal(rc, 0);
+		rc = strcmp(daos_target_state_enum_to_str(tgt_info.ta_state),
+			    "DOWNOUT");
+		assert_int_equal(rc, 0);
+	}
+
+	/**
+	 * Print the final pool target states.
+	 */
+	for (i = 0; i < per_node_tgt_cnt; i++) {
+		rc = daos_pool_query_target(arg->pool.poh, i/*tgt*/,
+					    rank, &tgt_info, NULL /*ev*/);
+		assert_int_equal(rc, 0);
+		print_message("Pool target:%d, state:%s\n", i,
+			      daos_target_state_enum_to_str(tgt_info.ta_state));
+	}
+
 	print_message("Done\n");
 }
 

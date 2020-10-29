@@ -30,6 +30,8 @@
 #include <daos_pool.h>
 #include "rpc.h"
 
+#define crt_proc_daos_target_state_t crt_proc_uint32_t
+
 static int
 crt_proc_struct_pool_target_addr(crt_proc_t proc, struct pool_target_addr *tgt)
 {
@@ -195,6 +197,8 @@ CRT_RPC_DEFINE(pool_acl_delete, DAOS_ISEQ_POOL_ACL_DELETE,
 		DAOS_OSEQ_POOL_ACL_DELETE)
 CRT_RPC_DEFINE(pool_list_cont, DAOS_ISEQ_POOL_LIST_CONT,
 		DAOS_OSEQ_POOL_LIST_CONT)
+CRT_RPC_DEFINE(pool_query_info, DAOS_ISEQ_POOL_QUERY_INFO,
+		DAOS_OSEQ_POOL_QUERY_INFO)
 
 /* Define for cont_rpcs[] array population below.
  * See POOL_PROTO_*_RPC_LIST macro definition
