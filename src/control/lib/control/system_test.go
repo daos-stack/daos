@@ -544,23 +544,17 @@ func TestControl_getResetRankErrors(t *testing.T) {
 }
 
 func TestControl_SystemQuery(t *testing.T) {
-	testHS, err := hostlist.CreateSet("foo-[1-23]")
-	if err != nil {
-		t.Fatal(err)
-	}
+	testHS := hostlist.MustCreateSet("foo-[1-23]")
 	testReqHS := new(SystemQueryReq)
-	testReqHS.Hosts = *testHS
+	testReqHS.Hosts.ReplaceSet(testHS)
 	testRespHS := new(SystemQueryResp)
-	testRespHS.AbsentHosts = *testHS
+	testRespHS.AbsentHosts.ReplaceSet(testHS)
 
-	testRS, err := system.CreateRankSet("1-23")
-	if err != nil {
-		t.Fatal(err)
-	}
+	testRS := system.MustCreateRankSet("1-23")
 	testReqRS := new(SystemQueryReq)
-	testReqRS.Ranks = *testRS
+	testReqRS.Ranks.ReplaceSet(testRS)
 	testRespRS := new(SystemQueryResp)
-	testRespRS.AbsentRanks = *testRS
+	testRespRS.AbsentRanks.ReplaceSet(testRS)
 
 	for name, tc := range map[string]struct {
 		req     *SystemQueryReq
@@ -671,23 +665,17 @@ func TestControl_SystemQuery(t *testing.T) {
 }
 
 func TestControl_SystemStart(t *testing.T) {
-	testHS, err := hostlist.CreateSet("foo-[1-23]")
-	if err != nil {
-		t.Fatal(err)
-	}
+	testHS := hostlist.MustCreateSet("foo-[1-23]")
 	testReqHS := new(SystemStartReq)
-	testReqHS.Hosts = *testHS
+	testReqHS.Hosts.ReplaceSet(testHS)
 	testRespHS := new(SystemStartResp)
-	testRespHS.AbsentHosts = *testHS
+	testRespHS.AbsentHosts.ReplaceSet(testHS)
 
-	testRS, err := system.CreateRankSet("1-23")
-	if err != nil {
-		t.Fatal(err)
-	}
+	testRS := system.MustCreateRankSet("1-23")
 	testReqRS := new(SystemStartReq)
-	testReqRS.Ranks = *testRS
+	testReqRS.Ranks.ReplaceSet(testRS)
 	testRespRS := new(SystemStartResp)
-	testRespRS.AbsentRanks = *testRS
+	testRespRS.AbsentRanks.ReplaceSet(testRS)
 
 	for name, tc := range map[string]struct {
 		req     *SystemStartReq
@@ -790,23 +778,17 @@ func TestControl_SystemStart(t *testing.T) {
 }
 
 func TestControl_SystemStop(t *testing.T) {
-	testHS, err := hostlist.CreateSet("foo-[1-23]")
-	if err != nil {
-		t.Fatal(err)
-	}
+	testHS := hostlist.MustCreateSet("foo-[1-23]")
 	testReqHS := new(SystemStopReq)
-	testReqHS.Hosts = *testHS
+	testReqHS.Hosts.ReplaceSet(testHS)
 	testRespHS := new(SystemStopResp)
-	testRespHS.AbsentHosts = *testHS
+	testRespHS.AbsentHosts.ReplaceSet(testHS)
 
-	testRS, err := system.CreateRankSet("1-23")
-	if err != nil {
-		t.Fatal(err)
-	}
+	testRS := system.MustCreateRankSet("1-23")
 	testReqRS := new(SystemStopReq)
-	testReqRS.Ranks = *testRS
+	testReqRS.Ranks.ReplaceSet(testRS)
 	testRespRS := new(SystemStopResp)
-	testRespRS.AbsentRanks = *testRS
+	testRespRS.AbsentRanks.ReplaceSet(testRS)
 
 	for name, tc := range map[string]struct {
 		req     *SystemStopReq

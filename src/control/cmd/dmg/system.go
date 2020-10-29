@@ -205,8 +205,8 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 		return err
 	}
 	req := new(control.SystemQueryReq)
-	req.Hosts = *hostSet
-	req.Ranks = *rankSet
+	req.Hosts.ReplaceSet(hostSet)
+	req.Ranks.ReplaceSet(rankSet)
 
 	resp, err := control.SystemQuery(context.Background(), cmd.ctlInvoker, req)
 
@@ -329,8 +329,8 @@ func (cmd *systemStopCmd) Execute(_ []string) error {
 		return err
 	}
 	req := &control.SystemStopReq{Prep: true, Kill: true, Force: cmd.Force}
-	req.Hosts = *hostSet
-	req.Ranks = *rankSet
+	req.Hosts.ReplaceSet(hostSet)
+	req.Ranks.ReplaceSet(rankSet)
 
 	// TODO DAOS-5079: group errors when ranks don't exist
 	resp, err := control.SystemStop(context.Background(), cmd.ctlInvoker, req)
@@ -369,8 +369,8 @@ func (cmd *systemStartCmd) Execute(_ []string) error {
 		return err
 	}
 	req := new(control.SystemStartReq)
-	req.Hosts = *hostSet
-	req.Ranks = *rankSet
+	req.Hosts.ReplaceSet(hostSet)
+	req.Ranks.ReplaceSet(rankSet)
 
 	// TODO DAOS-5079: group errors when ranks don't exist
 	resp, err := control.SystemStart(context.Background(), cmd.ctlInvoker, req)
