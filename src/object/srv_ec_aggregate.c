@@ -130,14 +130,11 @@ static int
 agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	 struct ec_agg_entry *agg_entry, unsigned int *acts)
 {
-	D_PRINT(DF_KEY" dkey aggregation\n", DP_KEY(&entry->ie_key));
-	if (agg_key_not_equal(agg_entry->ae_dkey, entry->ie_key)) {
+	if (agg_key_not_equal(agg_entry->ae_dkey, entry->ie_key))
 		agg_entry->ae_dkey = entry->ie_key;
-	} else {
-		D_PRINT("Skip akey: "DF_KEY" aggregation on re-probe\n",
-			DP_KEY(&entry->ie_key));
+	else
 		*acts |= VOS_ITER_CB_SKIP;
-	}
+
 	return 0;
 }
 
@@ -147,16 +144,13 @@ static int
 agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	 struct ec_agg_entry *agg_entry, unsigned int *acts)
 {
-	D_PRINT(DF_KEY" akey aggregation\n", DP_KEY(&entry->ie_key));
 	if (agg_key_not_equal(agg_entry->ae_akey, entry->ie_key)) {
 		agg_entry->ae_akey = entry->ie_key;
 		agg_entry->ae_thdl = ih;
-	} else {
+	} else
 
-		D_PRINT("Skip akey: "DF_KEY" aggregation on re-probe\n",
-			DP_KEY(&entry->ie_key));
 		*acts |= VOS_ITER_CB_SKIP;
-	}
+
 	return 0;
 }
 
@@ -481,7 +475,6 @@ agg_encode_local_parity(struct ec_agg_entry *entry)
 {
 	int rc = 0;
 
-	D_PRINT("Encoding local parity\n");
 	rc = agg_fetch_data_stripe(entry);
 	if (rc)
 		goto out;
@@ -565,8 +558,6 @@ agg_update_vos(struct ec_agg_entry *entry)
 	unsigned int		 k = entry->ae_oca->u.ec.e_k;
 	int			 rc = 0;
 
-	D_PRINT("Updating VOS\n");
-	
 	rc = agg_prep_sgl(entry);
 	if (rc)
 		return rc;
@@ -625,9 +616,7 @@ agg_process_stripe(struct ec_agg_entry *entry)
 	D_DEBUG(DB_TRACE, "Querying parity for stripe: %lu, offset: %lu\n",
 		entry->ae_cur_stripe.as_stripenum,
 		iter_param.ip_recx.rx_idx);
-	D_PRINT("Querying parity for stripe: %lu, offset: %lu\n",
-		entry->ae_cur_stripe.as_stripenum,
-		iter_param.ip_recx.rx_idx);
+
 	rc = vos_iterate(&iter_param, VOS_ITER_RECX, false, &anchors,
 			 agg_recx_iter_pre_cb, NULL, entry, NULL);
 	if (rc != 0)
@@ -645,18 +634,16 @@ agg_process_stripe(struct ec_agg_entry *entry)
 	     agg_stripe_is_filled(entry, true)) {
 		/* Replicas constitute a full stripe. */
 		rc = agg_encode_local_parity(entry);
-		D_PRINT("encoding parity returned: %d\n", rc);
 		goto out;
 	}
+
 	if (entry->ae_par_extent.ape_epoch == ~(0ULL)) {
 		update_vos = false;
 		goto out;
 	}
 out:
-	if (update_vos && rc == 0) {
+	if (update_vos && rc == 0)
 		rc = agg_update_vos(entry);
-		D_PRINT("updating vos returned: %d\n", rc);
-	}
 
 	agg_clear_extents(entry);
 	return rc;
@@ -686,48 +673,44 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 		unsigned int *acts)
 {
 	struct ec_agg_extent	*extent = NULL;
-	daos_off_t		 cur_stripenum, new_stripenum;
+	daos_off_t		 cur_stripenum, this_stripenum;
 	int			 rc = 0;
 
-	new_stripenum = agg_stripenum(agg_entry, entry->ie_recx.rx_idx);
-	D_PRINT("before: new_stripenum: %lu, cur_stripenum: %lu\n",
-		new_stripenum, agg_entry->ae_cur_stripe.as_stripenum);
-	if (new_stripenum != agg_entry->ae_cur_stripe.as_stripenum) {
+	this_stripenum = agg_stripenum(agg_entry, entry->ie_recx.rx_idx);
+	if (this_stripenum != agg_entry->ae_cur_stripe.as_stripenum) {
 		/* Iterator has reached next stripe */
-		if (agg_entry->ae_cur_stripe.as_stripenum != ~0UL) {
-			D_PRINT("after: new_stripenum: %lu, cur_stripenum: %lu\n",
-			new_stripenum, agg_entry->ae_cur_stripe.as_stripenum);
-			cur_stripenum = agg_entry->ae_cur_stripe.as_stripenum;
-			D_PRINT("Calling process stripe\n");
-			rc = agg_process_stripe(agg_entry);
-			if (rc)
-				D_ERROR("Process stripe returned "DF_RC"\n",
-					DP_RC(rc));
+		cur_stripenum = agg_entry->ae_cur_stripe.as_stripenum;
+		rc = agg_process_stripe(agg_entry);
+		if (rc)
+			D_ERROR("Process stripe returned "DF_RC"\n",
+				DP_RC(rc));
 		/* Error leaves data covered by replicas vulnerable to vos
 		 * delete, so don't advance coordination epoch.
 		 */
-			rc = 0;
-			if (cur_stripenum <
-			    agg_entry->ae_cur_stripe.as_stripenum &&
-			    agg_entry->ae_cur_stripe.as_stripenum <
-			    new_stripenum) {
-				/* Handle holdover stripe */
-				D_PRINT("Calling inner process stripe\n");
-				rc = agg_process_stripe(agg_entry);
-				if (rc)
-					D_ERROR("Holdover returned "DF_RC"\n",
-					DP_RC(rc));
+		rc = 0;
+		if (cur_stripenum <
+		    agg_entry->ae_cur_stripe.as_stripenum &&
+		    agg_entry->ae_cur_stripe.as_stripenum <
+		    this_stripenum) {
+			/* Handle holdover stripe */
+			rc = agg_process_stripe(agg_entry);
+			if (rc) {
+				D_ERROR("Holdover returned "DF_RC"\n",
+				DP_RC(rc));
 				rc = 0;
 			}
-			*acts |= VOS_ITER_CB_YIELD;
 		}
+		agg_entry->ae_cur_stripe.as_stripenum = this_stripenum;
+		*acts |= VOS_ITER_CB_YIELD;
 	}
+
 	/* Add the extent to the entry, for the current stripe */
 	D_ALLOC_PTR(extent);
 	if (extent == NULL) {
 		rc = -DER_NOMEM;
 		goto out;
 	}
+
 	extent->ae_recx = entry->ie_recx;
 	extent->ae_epoch = entry->ie_epoch;
 	agg_entry->ae_rsize = entry->ie_rsize;
@@ -751,24 +734,38 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 		extent->ae_recx.rx_idx, extent->ae_recx.rx_nr,
 		agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
 		agg_entry->ae_oid.id_shard);
-	D_PRINT("adding extent %lu,%lu, to stripe  %lu, shard: %u\n",
-		extent->ae_recx.rx_idx, extent->ae_recx.rx_nr,
-		agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
-		agg_entry->ae_oid.id_shard);
 out:
+	return rc;
+}
+
+/* Post iteration call back for dkey.
+ */
+static int
+agg_dkey_post(struct ec_agg_entry *agg_entry)
+{
+	int rc = 0;
+
+	memset(&agg_entry->ae_dkey, 0, sizeof(agg_entry->ae_dkey));
 	return rc;
 }
 
 /* Post iteration call back for akey.
  */
 static int
-agg_akey_post(daos_handle_t ih, vos_iter_entry_t *entry,
-	      struct ec_agg_entry *agg_entry, unsigned int *acts)
+agg_akey_post(struct ec_agg_entry *agg_entry)
 {
 	int rc = 0;
 
 	if (agg_entry->ae_cur_stripe.as_extent_cnt)
 		rc = agg_process_stripe(agg_entry);
+
+	memset(&agg_entry->ae_akey, 0, sizeof(agg_entry->ae_akey));
+
+	agg_entry->ae_cur_stripe.as_stripenum	= 0UL;
+	agg_entry->ae_cur_stripe.as_hi_epoch	= 0UL;
+	agg_entry->ae_cur_stripe.as_stripe_fill = 0UL;
+	agg_entry->ae_cur_stripe.as_extent_cnt	= 0U;
+	agg_entry->ae_cur_stripe.as_offset	= 0U;
 
 	return rc;
 }
@@ -785,8 +782,6 @@ agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	rc = agg_data_extent(entry, agg_entry, acts);
 
-	D_PRINT("agg_data_extent returned: %d\n", rc);
-
 	return rc;
 }
 
@@ -795,7 +790,6 @@ agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 static inline bool
 ec_aggregate_yield(struct ec_agg_param *agg_param)
 {
-	D_PRINT("Calling yield\n");
 	if (agg_param->ap_yield_func != NULL)
 		return agg_param->ap_yield_func(agg_param->ap_yield_arg);
 
@@ -859,9 +853,10 @@ agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	switch (type) {
 	case VOS_ITER_DKEY:
+		rc = agg_dkey_post(agg_entry);
 		break;
 	case VOS_ITER_AKEY:
-		rc = agg_akey_post(ih, entry, agg_entry, acts);
+		rc = agg_akey_post(agg_entry);
 		break;
 	case VOS_ITER_RECX:
 		break;
@@ -886,9 +881,8 @@ agg_reset_entry(struct ec_agg_entry *agg_entry,
 
 	memset(&agg_entry->ae_dkey, 0, sizeof(agg_entry->ae_dkey));
 	memset(&agg_entry->ae_akey, 0, sizeof(agg_entry->ae_akey));
-	memset(&agg_entry->ae_par_extent, 0, sizeof(agg_entry->ae_par_extent));
 
-	agg_entry->ae_cur_stripe.as_stripenum	= ~0UL;
+	agg_entry->ae_cur_stripe.as_stripenum	= 0UL;
 	agg_entry->ae_cur_stripe.as_hi_epoch	= 0UL;
 	agg_entry->ae_cur_stripe.as_stripe_fill = 0UL;
 	agg_entry->ae_cur_stripe.as_extent_cnt	= 0U;
@@ -936,8 +930,6 @@ agg_iter_obj_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	struct daos_oclass_attr *oca;
 	int			 rc = 0;
 
-
-
 	if (!daos_oclass_is_ec(entry->ie_oid.id_pub, &oca))
 		return rc;
 	rc = ds_pool_check_leader(agg_param->ap_pool_info.api_pool_uuid,
@@ -946,16 +938,12 @@ agg_iter_obj_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (rc == 1) {
 		if (!daos_unit_oid_compare(agg_param->ap_agg_entry.ae_oid,
 					   entry->ie_oid)) {
-			D_PRINT("Skip oid:"DF_UOID" aggregation on re-probe\n",
-				DP_UOID(agg_param->ap_agg_entry.ae_oid));
 			*acts |= VOS_ITER_CB_SKIP;
 			return 0;
 		}
 		/* Some of these can be set at creation. They don't change. */
 		agg_param->ap_epr = param->ip_epr;
 		agg_reset_entry(&agg_param->ap_agg_entry, entry, oca);
-		D_PRINT(DF_UOID" aggregating...\n",
-			DP_UOID(agg_param->ap_agg_entry.ae_oid));
 		rc = agg_subtree_iterate(ih, agg_param);
 		if (rc)
 			D_ERROR("Subtree iterate failed "DF_RC"\n", DP_RC(rc));
