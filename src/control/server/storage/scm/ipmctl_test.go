@@ -116,10 +116,6 @@ func newMockIpmctl(cfg *mockIpmctlCfg) *mockIpmctl {
 	}
 }
 
-func defaultMockIpmctl() *mockIpmctl {
-	return newMockIpmctl(nil)
-}
-
 // TestGetState tests the internals of ipmCtlRunner, pass in mock runCmd to verify
 // behavior. Don't use mockPrepScm as we want to test prepScm logic.
 func TestGetState(t *testing.T) {

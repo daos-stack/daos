@@ -258,7 +258,11 @@ func (b *spdkBackend) Format(req FormatRequest) (*FormatResponse, error) {
 	}
 	defer restoreOutput()
 	defer b.binding.FiniSPDKEnv(b.log, spdkOpts)
-	defer b.binding.CleanLockfiles(b.log, req.DeviceList...)
+	defer func() {
+		if err := b.binding.CleanLockfiles(b.log, req.DeviceList...); err != nil {
+			b.log.Errorf("cleanup failed after format: %s", err)
+		}
+	}()
 
 	return b.format(req.Class, req.DeviceList)
 }

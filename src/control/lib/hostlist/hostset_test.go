@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -192,6 +192,22 @@ func TestHostSet_MergeSet(t *testing.T) {
 	gotCount := a.Count()
 	if gotCount != expCount {
 		t.Fatalf("expected count to be %d, got %d", expCount, gotCount)
+	}
+}
+
+func TestHostSet_ReplaceSet(t *testing.T) {
+	a, err := hostlist.CreateSet("host[1-8]")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := hostlist.CreateSet("host[8-15]")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	a.ReplaceSet(b)
+	if a.String() != b.String() {
+		t.Fatalf("%s != %s", a, b)
 	}
 }
 
