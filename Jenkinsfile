@@ -440,7 +440,8 @@ pipeline {
         SSH_KEY_ARGS = "-ici_key"
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
-        BUILD_OPTION = rpm_faults_args()
+        RPM_FAULTS_ARGS = rpm_faults_args()
+        SCONS_FAULTS_ARGS = scons_faults_args()
     }
 
     options {
