@@ -88,8 +88,8 @@ struct ec_agg_param {
 	struct ec_agg_entry	 ap_agg_entry;	 /* entry used for each OID   */
 	daos_epoch_range_t	 ap_epr;	 /* hi/lo extent threshold    */
 	daos_handle_t		 ap_cont_handle; /* VOS container handle      */
-	bool			(*ap_yield_func)(void *arg);
-	void			*ap_yield_arg;
+	bool			(*ap_yield_func)(void *arg); /* yield function*/
+	void			*ap_yield_arg;   /* yield argument            */
 	uint32_t		 ap_credits_max; /* # of tight loops to yield */
 	uint32_t		 ap_credits;     /* # of tight loops          */
 };
