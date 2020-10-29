@@ -90,7 +90,7 @@ func Filter(ss []string, f func(string) bool) (nss []string) {
 // FilterStringMatches checks whether a filter string matches the actual string
 // in a case-insensitive way. If the filter string is empty, a match is assumed.
 func FilterStringMatches(filterStr, actualStr string) bool {
-	return filterStr == "" || strings.ToUpper(actualStr) == strings.ToUpper(filterStr)
+	return filterStr == "" || strings.EqualFold(actualStr, filterStr)
 }
 
 // IsAlphabetic checks of a string just contains alphabetic characters.
