@@ -11,8 +11,11 @@ def scons():
     agent_tests = daos_build.test(denv, 'agent_tests', Glob('agent_tests.c'),
                                   LIBS=['daos', 'daos_common', 'gurt', 'cart',
                                         'pthread', 'cmocka'])
+    job_tests = daos_build.test(denv, 'job_tests', Glob('job_tests.c'),
+                                LIBS=['daos', 'daos_common', 'gurt', 'cart',
+                                      'pthread', 'cmocka'])
 
-    denv.Install('$PREFIX/bin/', [eq_tests, agent_tests])
+    denv.Install('$PREFIX/bin/', [eq_tests, agent_tests, job_tests])
 
 if __name__ == "SCons.Script":
     scons()
