@@ -283,8 +283,8 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		}
 	case "withNamespaces":
 		scmNamespaces := storage.ScmNamespaces{
+			storage.MockScmNamespace(1), // verify out of order works
 			storage.MockScmNamespace(0),
-			storage.MockScmNamespace(1),
 		}
 		if err := convert.Types(scmNamespaces, &ssr.Scm.Namespaces); err != nil {
 			t.Fatal(err)

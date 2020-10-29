@@ -26,6 +26,7 @@ package control
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -92,7 +93,7 @@ func ConfigGenerate(ctx context.Context, req *ConfigGenerateReq) (*ConfigGenerat
 		return &ConfigGenerateResp{Err: err}, nil
 	}
 
-	// TODO: change Validate() to take io.Writer if necessary
+	// TODO: change Validate() to take io.Writer
 	//	if err := cfg.Validate(&req.buf); err != nil {
 	//		return &ConfigGenerateResp{
 	//			Err: errors.Wrap(err, "validation failed on auto generated config"),
@@ -122,6 +123,11 @@ func (req *ConfigGenerateReq) validateScmStorage(scmNamespaces storage.ScmNamesp
 		minPmems = numaCount
 		req.Log.Debugf("minimum pmem devices required set to numa count %d", numaCount)
 	}
+
+	// sort namespaces so we can assume list index to be numa id
+	sort.Slice(scmNamespaces, func(i, j int) bool {
+		return scmNamespaces[i].NumaNode < scmNamespaces[j].NumaNode
+	})
 
 	pmemPaths := make([]string, 0, len(scmNamespaces))
 	for _, ns := range scmNamespaces {
