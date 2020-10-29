@@ -125,8 +125,7 @@ class OpenContainerTest(TestWithServers):
         # Add the pool and the container created into a list
         container_uuids = []
         for _ in range(2):
-            self.pool.append(TestPool(
-                self.context, dmg_command=self.get_dmg_command()))
+            self.pool.append(TestPool(self.context, self.get_dmg_command()))
             self.pool[-1].get_params(self)
             self.pool[-1].create()
             self.pool[-1].connect()

@@ -88,18 +88,6 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_SET_RANK:
 		ds_mgmt_drpc_set_rank(drpc_req, drpc_resp);
 		break;
-	case DRPC_METHOD_MGMT_CREATE_MS:
-		ds_mgmt_drpc_create_mgmt_svc(drpc_req, drpc_resp);
-		break;
-	case DRPC_METHOD_MGMT_START_MS:
-		ds_mgmt_drpc_start_mgmt_svc(drpc_req, drpc_resp);
-		break;
-	case DRPC_METHOD_MGMT_GET_ATTACH_INFO:
-		ds_mgmt_drpc_get_attach_info(drpc_req, drpc_resp);
-		break;
-	case DRPC_METHOD_MGMT_JOIN:
-		ds_mgmt_drpc_join(drpc_req, drpc_resp);
-		break;
 	case DRPC_METHOD_MGMT_POOL_CREATE:
 		ds_mgmt_drpc_pool_create(drpc_req, drpc_resp);
 		break;
@@ -142,9 +130,6 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_POOL_GET_ACL:
 		ds_mgmt_drpc_pool_get_acl(drpc_req, drpc_resp);
 		break;
-	case DRPC_METHOD_MGMT_LIST_POOLS:
-		ds_mgmt_drpc_list_pools(drpc_req, drpc_resp);
-		break;
 	case DRPC_METHOD_MGMT_POOL_OVERWRITE_ACL:
 		ds_mgmt_drpc_pool_overwrite_acl(drpc_req, drpc_resp);
 		break;
@@ -165,6 +150,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		break;
 	case DRPC_METHOD_MGMT_CONT_SET_OWNER:
 		ds_mgmt_drpc_cont_set_owner(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_GROUP_UPDATE:
+		ds_mgmt_drpc_group_update(drpc_req, drpc_resp);
 		break;
 	default:
 		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;

@@ -39,22 +39,19 @@ class TestPool(TestDaosApiBase):
     # pylint: disable=too-many-public-methods
     """A class for functional testing of DaosPools objects."""
 
-    def __init__(self, context, log=None, cb_handler=None, dmg_command=None):
+    def __init__(self, context, dmg_command, cb_handler=None):
         # pylint: disable=unused-argument
         """Initialize a TestPool object.
 
-        Note: 'log' is now a defunct argument and will be removed in the future
-
         Args:
             context (DaosContext): [description]
+            dmg_command (DmgCommand): DmgCommand used to call dmg command. This
+                value can be obtained by calling self.get_dmg_command() from a
+                test. It'll return the object with -l <Access Point host:port>
+                and --insecure.
             log (logging): logging object used to report the pool status
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
-            dmg_command (DmgCommand): DmgCommand used to call dmg command. If
-                control_method is set to dmg, this value needs to be set. It
-                can be obtained by calling self.get_dmg_command() from a test.
-                It'll return the object with -l <Access Point host:port> and
-                --insecure.
         """
         super(TestPool, self).__init__("/run/pool/*", cb_handler)
         self.context = context
@@ -81,20 +78,12 @@ class TestPool(TestDaosApiBase):
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
     def create(self):
-        """Create a pool with either API or dmg.
+        """Create a pool with dmg.
 
-        To use dmg, the test needs to set control_method.value to USE_DMG
-        prior to calling this method. The recommended way is to specify the
-        pool block in yaml. For example,
+        To use dmg, the test needs to set dmg_command through the constructor.
+        For example,
 
-            pool:
-                control_method: dmg
-
-        This tells this method to use dmg. The test also needs to set
-        dmg_bin_path through the constructor if dmg is used. For example,
-
-            self.pool = TestPool(
-                self.context, dmg_bin_path=self.basepath + '/install/bin')
+            self.pool = TestPool(self.context, DmgCommand(self.bin))
 
         If it wants to use --nsvc option, it needs to set the value to
         svcn.value. Otherwise, 1 is used. If it wants to use --group, it needs
@@ -104,8 +93,8 @@ class TestPool(TestDaosApiBase):
         more details.
 
         To test the negative case on create, the test needs to catch
-        CommandFailure for dmg and DaosApiError for API. Thus, we need to make
-        more than one line modification to the test only for this purpose.
+        CommandFailure. Thus, we need to make more than one line modification
+        to the test only for this purpose.
         Currently, pool_svc is the only test that needs this change.
         """
         self.destroy()
@@ -127,9 +116,9 @@ class TestPool(TestDaosApiBase):
                 kwargs[key] = value
 
         if self.control_method.value == self.USE_API:
-            # Create a pool with the API method
-            kwargs["mode"] = self.mode.value
-            self._call_method(self.pool.create, kwargs)
+            raise CommandFailure(
+                "Error: control method {} not supported for create()".format(
+                    self.control_method.value))
 
         elif self.control_method.value == self.USE_DMG and self.dmg:
             # Create a pool with the dmg command
@@ -574,7 +563,9 @@ class TestPool(TestDaosApiBase):
             "DAOS_SVCL": "1",
             "PYTHONPATH": os.getenv("PYTHONPATH", "")
         }
-        load_mpi("openmpi")
+        if not load_mpi("openmpi"):
+            raise CommandFailure("Failed to load openmpi")
+
         current_path = os.path.dirname(os.path.abspath(__file__))
         command = "{} --np {} --hostfile {} {} {} testfile".format(
             orterun, processes, hostfile,

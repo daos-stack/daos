@@ -45,8 +45,7 @@ class RebuildTests(TestWithServers):
         pools = []
         containers = []
         for index in range(pool_quantity):
-            pools.append(TestPool(self.context, self.log,
-                                  dmg_command=self.get_dmg_command()))
+            pools.append(TestPool(self.context, self.get_dmg_command()))
             pools[index].get_params(self)
             containers.append(TestContainer(pools[index]))
             containers[index].get_params(self)

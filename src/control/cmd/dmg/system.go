@@ -81,7 +81,7 @@ func rankStateGroups(members system.Members) (system.RankGroups, error) {
 
 	for _, m := range members {
 		if _, exists := ranksSeen[m.Rank]; exists {
-			return nil, system.FaultMemberExists(m.Rank)
+			return nil, &system.ErrMemberExists{Rank: m.Rank}
 		}
 		ranksSeen[m.Rank] = struct{}{}
 
@@ -129,16 +129,18 @@ func displaySystemQueryVerbose(log logging.Logger, members system.Members) {
 	rankTitle := "Rank"
 	uuidTitle := "UUID"
 	addrTitle := "Control Address"
+	faultDomainTitle := "Fault Domain"
 	stateTitle := "State"
 	reasonTitle := "Reason"
 
-	formatter := txtfmt.NewTableFormatter(rankTitle, uuidTitle, addrTitle, stateTitle, reasonTitle)
+	formatter := txtfmt.NewTableFormatter(rankTitle, uuidTitle, addrTitle, faultDomainTitle, stateTitle, reasonTitle)
 	var table []txtfmt.TableRow
 
 	for _, m := range members {
 		row := txtfmt.TableRow{rankTitle: fmt.Sprintf("%d", m.Rank)}
-		row[uuidTitle] = m.UUID
+		row[uuidTitle] = m.UUID.String()
 		row[addrTitle] = m.Addr.String()
+		row[faultDomainTitle] = m.FaultDomain.String()
 		row[stateTitle] = m.State().String()
 		row[reasonTitle] = m.Info
 
@@ -153,7 +155,8 @@ func displaySystemQuerySingle(log logging.Logger, members system.Members) {
 
 	table := []txtfmt.TableRow{
 		{"address": m.Addr.String()},
-		{"uuid": m.UUID},
+		{"uuid": m.UUID.String()},
+		{"fault domain": m.FaultDomain.String()},
 		{"status": m.State().String()},
 		{"reason": m.Info},
 	}
@@ -205,8 +208,8 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 		return err
 	}
 	req := new(control.SystemQueryReq)
-	req.Hosts = *hostSet
-	req.Ranks = *rankSet
+	req.Hosts.ReplaceSet(hostSet)
+	req.Ranks.ReplaceSet(rankSet)
 
 	resp, err := control.SystemQuery(context.Background(), cmd.ctlInvoker, req)
 
@@ -247,7 +250,7 @@ func rankActionGroups(results system.MemberResults) (system.RankGroups, error) {
 
 	for _, r := range results {
 		if _, exists := ranksSeen[r.Rank]; exists {
-			return nil, system.FaultMemberExists(r.Rank)
+			return nil, &system.ErrMemberExists{Rank: r.Rank}
 		}
 		ranksSeen[r.Rank] = struct{}{}
 
@@ -329,8 +332,8 @@ func (cmd *systemStopCmd) Execute(_ []string) error {
 		return err
 	}
 	req := &control.SystemStopReq{Prep: true, Kill: true, Force: cmd.Force}
-	req.Hosts = *hostSet
-	req.Ranks = *rankSet
+	req.Hosts.ReplaceSet(hostSet)
+	req.Ranks.ReplaceSet(rankSet)
 
 	// TODO DAOS-5079: group errors when ranks don't exist
 	resp, err := control.SystemStop(context.Background(), cmd.ctlInvoker, req)
@@ -369,8 +372,8 @@ func (cmd *systemStartCmd) Execute(_ []string) error {
 		return err
 	}
 	req := new(control.SystemStartReq)
-	req.Hosts = *hostSet
-	req.Ranks = *rankSet
+	req.Hosts.ReplaceSet(hostSet)
+	req.Ranks.ReplaceSet(rankSet)
 
 	// TODO DAOS-5079: group errors when ranks don't exist
 	resp, err := control.SystemStart(context.Background(), cmd.ctlInvoker, req)

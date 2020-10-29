@@ -27,18 +27,29 @@ import (
 	"fmt"
 	"net"
 	"testing"
+	"time"
+
+	"github.com/hashicorp/raft"
+
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
-// MockMember returns a system member with appropriate values.
-func MockMember(t *testing.T, idx uint32, state MemberState, info ...string) *Member {
+func mockControlAddr(t *testing.T, idx uint32) *net.TCPAddr {
 	addr, err := net.ResolveTCPAddr("tcp",
 		fmt.Sprintf("127.0.0.%d:10001", idx))
 	if err != nil {
 		t.Fatal(err)
 	}
+	return addr
+}
 
-	m := NewMember(Rank(idx), fmt.Sprintf("abcd-efgh-ijkl-mno%d", idx),
-		addr, state)
+// MockMember returns a system member with appropriate values.
+func MockMember(t *testing.T, idx uint32, state MemberState, info ...string) *Member {
+	addr := mockControlAddr(t, idx)
+	m := NewMember(Rank(idx), common.MockUUID(int32(idx)),
+		addr.String(), addr, state)
+	m.FabricContexts = idx
 	if len(info) > 0 {
 		m.Info = info[0]
 	}
@@ -51,4 +62,88 @@ func MockMemberResult(rank Rank, action string, err error, state MemberState) *M
 	result.Action = action
 
 	return result
+}
+
+func MockMembership(t *testing.T, log logging.Logger) *Membership {
+	return NewMembership(log, MockDatabase(t, log))
+}
+
+type (
+	mockRaftFuture struct {
+		err      error
+		index    uint64
+		response interface{}
+	}
+	mockRaftServiceConfig struct {
+		LeaderCh      <-chan bool
+		ServerAddress raft.ServerAddress
+		State         raft.RaftState
+	}
+	mockRaftService struct {
+		cfg mockRaftServiceConfig
+		fsm raft.FSM
+	}
+)
+
+// mockRaftFuture implements raft.Future, raft.IndexFuture, and raft.ApplyFuture
+func (mrf *mockRaftFuture) Error() error          { return mrf.err }
+func (mrf *mockRaftFuture) Index() uint64         { return mrf.index }
+func (mrf *mockRaftFuture) Response() interface{} { return mrf.response }
+
+func (mrs *mockRaftService) Apply(cmd []byte, timeout time.Duration) raft.ApplyFuture {
+	mrs.fsm.Apply(&raft.Log{Data: cmd})
+	return &mockRaftFuture{}
+}
+
+func (mrs *mockRaftService) BootstrapCluster(cfg raft.Configuration) raft.Future {
+	return &mockRaftFuture{}
+}
+
+func (mrs *mockRaftService) Leader() raft.ServerAddress {
+	return mrs.cfg.ServerAddress
+}
+
+func (mrs *mockRaftService) LeaderCh() <-chan bool {
+	return mrs.cfg.LeaderCh
+}
+
+func (mrs *mockRaftService) LeadershipTransfer() raft.Future {
+	return &mockRaftFuture{}
+}
+
+func (mrs *mockRaftService) Shutdown() raft.Future {
+	mrs.cfg.State = raft.Shutdown
+	return &mockRaftFuture{}
+}
+
+func (mrs *mockRaftService) State() raft.RaftState {
+	return mrs.cfg.State
+}
+
+func newMockRaftService(cfg *mockRaftServiceConfig, fsm raft.FSM) *mockRaftService {
+	if cfg == nil {
+		cfg = &mockRaftServiceConfig{
+			State: raft.Leader,
+		}
+	}
+	if cfg.LeaderCh == nil {
+		cfg.LeaderCh = make(<-chan bool)
+	}
+	return &mockRaftService{
+		cfg: *cfg,
+		fsm: fsm,
+	}
+}
+
+// MockDatabase returns a lightweight implementation of the system
+// database that does not support raft replication and does all
+// operations in memory.
+func MockDatabase(t *testing.T, log logging.Logger) *Database {
+	db := NewDatabase(log, nil)
+	db.replicaAddr.Addr = &net.TCPAddr{}
+	db.raft = newMockRaftService(&mockRaftServiceConfig{
+		State: raft.Leader,
+	}, (*fsm)(db))
+
+	return db
 }
