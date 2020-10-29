@@ -50,7 +50,6 @@ import (
 
 const (
 	// test aliases for member states
-	msJoined     = uint32(MemberStateJoined)
 	msReady      = uint32(MemberStateReady)
 	msWaitFormat = uint32(MemberStateAwaitFormat)
 	msStopped    = uint32(MemberStateStopped)
@@ -130,10 +129,7 @@ func checkUnorderedRankResults(t *testing.T, expResults, gotResults []*mgmtpb.Ra
 	t.Helper()
 
 	isMsgField := func(path cmp.Path) bool {
-		if path.Last().String() == ".Msg" {
-			return true
-		}
-		return false
+		return path.Last().String() == ".Msg"
 	}
 	opts := append(common.DefaultCmpOpts(),
 		cmp.FilterPath(isMsgField, cmp.Ignore()))
@@ -460,10 +456,7 @@ func TestServer_MgmtSvc_StopRanks(t *testing.T) {
 			// RankResult.Msg generation is tested in
 			// TestServer_MgmtSvc_DrespToRankResult unit tests
 			isMsgField := func(path cmp.Path) bool {
-				if path.Last().String() == ".Msg" {
-					return true
-				}
-				return false
+				return path.Last().String() == ".Msg"
 			}
 			opts := append(common.DefaultCmpOpts(),
 				cmp.FilterPath(isMsgField, cmp.Ignore()))
@@ -805,10 +798,7 @@ func TestServer_MgmtSvc_ResetFormatRanks(t *testing.T) {
 			// RankResult.Msg generation is tested in
 			// TestServer_MgmtSvc_DrespToRankResult unit tests
 			isMsgField := func(path cmp.Path) bool {
-				if path.Last().String() == ".Msg" {
-					return true
-				}
-				return false
+				return path.Last().String() == ".Msg"
 			}
 			opts := append(common.DefaultCmpOpts(),
 				cmp.FilterPath(isMsgField, cmp.Ignore()))
@@ -916,7 +906,10 @@ func TestServer_MgmtSvc_StartRanks(t *testing.T) {
 
 					// set instance runner started and ready
 					ch := make(chan error, 1)
-					s.runner.Start(context.TODO(), ch)
+					if err := s.runner.Start(context.TODO(), ch); err != nil {
+						t.Logf("failed to start runner: %s", err)
+						return
+					}
 					<-ch
 					s.ready.SetTrue()
 				}(srv, tc.startFails)
@@ -938,10 +931,7 @@ func TestServer_MgmtSvc_StartRanks(t *testing.T) {
 			// RankResult.Msg generation is tested in
 			// TestServer_MgmtSvc_DrespToRankResult unit tests
 			isMsgField := func(path cmp.Path) bool {
-				if path.Last().String() == ".Msg" {
-					return true
-				}
-				return false
+				return path.Last().String() == ".Msg"
 			}
 			opts := append(common.DefaultCmpOpts(),
 				cmp.FilterPath(isMsgField, cmp.Ignore()))

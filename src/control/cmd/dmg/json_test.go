@@ -115,7 +115,7 @@ func TestDmg_JsonOutput(t *testing.T) {
 			r, w, _ := os.Pipe()
 			done := make(chan struct{})
 			go func() {
-				io.Copy(&result, r)
+				_, _ = io.Copy(&result, r)
 				close(done)
 			}()
 			stdout := os.Stdout

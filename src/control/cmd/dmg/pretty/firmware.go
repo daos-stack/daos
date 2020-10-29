@@ -52,6 +52,11 @@ const (
 	nvmeSectionHeader = "NVMe Device Firmware"
 )
 
+func printScmModule(module *storage.ScmModule, out io.Writer, opts ...PrintConfigOption) error {
+	_, err := fmt.Fprintf(out, "%s\n", module.String())
+	return err
+}
+
 // hostDeviceSet represents a collection of hosts and devices on those hosts.
 type hostDeviceSet struct {
 	Hosts   *hostlist.HostSet
@@ -59,8 +64,9 @@ type hostDeviceSet struct {
 }
 
 // AddHost adds a host to the set.
-func (h *hostDeviceSet) AddHost(host string) {
-	h.Hosts.Insert(host)
+func (h *hostDeviceSet) AddHost(host string) error {
+	_, err := h.Hosts.Insert(host)
+	return err
 }
 
 // AddDevice adds a device to the set.
@@ -102,8 +108,7 @@ func (m hostDeviceResultMap) AddHost(resultStr string, host string) error {
 		m[resultStr] = newSet
 	}
 
-	m[resultStr].AddHost(host)
-	return nil
+	return m[resultStr].AddHost(host)
 }
 
 // Keys returns the sorted keys of the map.

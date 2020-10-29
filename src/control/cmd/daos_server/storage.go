@@ -107,7 +107,9 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 			cmd.log.Info(scm.MsgRebootRequired)
 		} else if len(resp.Namespaces) > 0 {
 			var bld strings.Builder
-			pretty.PrintScmNamespaces(resp.Namespaces, &bld)
+			if err := pretty.PrintScmNamespaces(resp.Namespaces, &bld); err != nil {
+				return err
+			}
 			cmd.log.Infof("SCM namespaces:\n%s\n", bld.String())
 		} else {
 			cmd.log.Info("no SCM namespaces")

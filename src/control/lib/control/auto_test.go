@@ -196,71 +196,12 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 			hostResponses: hostRespWithSingleSSD,
 			expCheckErr:   errors.New("insufficient number of nvme devices for numa node 1, want 1 got 0"),
 		},
-		"no min nvme and multiple ctrlrs present on 1 numa nodes": {
-			minPmem:       1,
+		"no min nvme and multiple ctrlrs present on 2 numa nodes": {
+			minPmem:       2,
 			hostResponses: hostRespWithSSDs,
 			expConfigOut: config.DefaultServer().
 				WithServers(ioCfgWithSSDs(0), ioCfgWithSSDs(1)),
-			//WithScmDeviceList(pp).
-			//WithScmMountPoint(fmt.Sprintf("%s%d", scmMountPrefix, idx)).
-			//WithBdevDeviceList(bdevLists[idx]...))
-			//			expOut: `port: 10001
-			//transport_config:
-			//  allow_insecure: false
-			//  server_name: server
-			//  client_cert_dir: /etc/daos/certs/clients
-			//  ca_cert: /etc/daos/certs/daosCA.crt
-			//  cert: /etc/daos/certs/server.crt
-			//  key: /etc/daos/certs/server.key
-			//servers:
-			//- nr_xs_helpers: 2
-			//  first_core: 0
-			//  scm_mount: /mnt/daos0
-			//  scm_class: dcpm
-			//  scm_list:
-			//  - /dev/pmem0
-			//  bdev_class: nvme
-			//  bdev_list:
-			//  - 0000:80:00.2
-			//  - 0000:80:00.4
-			//  - 0000:80:00.6
-			//  - 0000:80:00.8
-			//- nr_xs_helpers: 2
-			//  first_core: 0
-			//  scm_mount: /mnt/daos1
-			//  scm_class: dcpm
-			//  scm_list:
-			//  - /dev/pmem1
-			//  bdev_class: nvme
-			//  bdev_list:
-			//  - 0000:80:00.1
-			//  - 0000:80:00.3
-			//  - 0000:80:00.5
-			//  - 0000:80:00.7
-			//disable_vfio: false
-			//disable_vmd: true
-			//nr_hugepages: 0
-			//set_hugepages: false
-			//control_log_mask: INFO
-			//control_log_file: ""
-			//helper_log_file: ""
-			//firmware_helper_log_file: ""
-			//recreate_superblocks: false
-			//fault_path: ""
-			//name: daos_server
-			//socket_dir: /var/run/daos_server
-			//modules: ""
-			//access_points:
-			//- localhost:10001
-			//fault_cb: ""
-			//hyperthreads: false
-			//path: ../etc/daos_server.yml
-			//`,
 		},
-		//		"no min nvme and multiple ctrlrs present on 2 numa nodes": {
-		//			minPmem:       2,
-		//			hostResponses: hostRespWithSSDs,
-		//			expConfigOut:  config.DefaultServer().
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -282,7 +223,6 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 				NumNvme: tc.minNvme,
 				Client:  mi,
 				Log:     log,
-				//NetClass: tc.netClass,
 			}
 
 			gotCfg, gotCheckErr := req.checkStorage(context.Background(), mockGetNumaCount)
@@ -298,16 +238,6 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 			if diff := cmp.Diff(tc.expConfigOut, gotCfg, cmpOpts...); diff != "" {
 				t.Fatalf("output cfg doesn't match (-want, +got):\n%s\n", diff)
 			}
-
-			//			gotOut, gotParseErr := req.parseConfig(gotCfg)
-			//			common.CmpErr(t, tc.expParseErr, gotParseErr)
-			//			if tc.expParseErr != nil {
-			//				return
-			//			}
-
-			//			if diff := cmp.Diff(tc.expOut, gotOut); diff != "" {
-			//				t.Fatalf("(-want, +got): %s", diff)
-			//			}
 		})
 	}
 }
