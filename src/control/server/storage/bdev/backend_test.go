@@ -64,28 +64,6 @@ func mockSpdkController(varIdx ...int32) storage.NvmeController {
 	return *s
 }
 
-func mockSpdkNamespace(varIdx ...int32) storage.NvmeNamespace {
-	native := storage.MockNvmeNamespace(varIdx...)
-
-	s := new(storage.NvmeNamespace)
-	if err := convertTypes(native, s); err != nil {
-		panic(err)
-	}
-
-	return *s
-}
-
-func mockSpdkDeviceHealth(varIdx ...int32) storage.NvmeHealth {
-	native := storage.MockNvmeHealth(varIdx...)
-
-	s := new(storage.NvmeHealth)
-	if err := convertTypes(native, s); err != nil {
-		panic(err)
-	}
-
-	return *s
-}
-
 func backendWithMockBinding(log logging.Logger, mec spdk.MockEnvCfg, mnc spdk.MockNvmeCfg) *spdkBackend {
 	return &spdkBackend{
 		log: log,

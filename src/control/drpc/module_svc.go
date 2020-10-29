@@ -55,13 +55,14 @@ func NewModuleService(log logging.Logger) *ModuleService {
 // RegisterModule will take in a type that implements the Module interface
 // and ensure that no other module is already registered with that module
 // identifier.
-func (r *ModuleService) RegisterModule(mod Module) error {
-	_, ok := r.GetModule(mod.ID())
-	if ok {
-		return errors.Errorf("module with ID %d already exists", mod.ID())
+func (r *ModuleService) RegisterModule(mod Module) {
+	_, found := r.GetModule(mod.ID())
+	if found {
+		// Not really an error that can be handled. It's a programming
+		// error that should manifest very quickly in test.
+		panic(errors.Errorf("module with ID %d already exists", mod.ID()))
 	}
 	r.modules[mod.ID()] = mod
-	return nil
 }
 
 // GetModule fetches the module for the given ID. Returns true if found, false
