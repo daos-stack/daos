@@ -303,14 +303,118 @@ class CartIvOneNodeTest(Test):
                        % procrtn)
 
         actions = [
-            # Test of verison skew on update.
-            # First create an iv value from rank to to rank 4.
+            # ******************
+            # Fetch, to expect fail, no variable yet
+            # Make sure everything goes to the top rank
+            {"operation":"fetch", "rank":0, "key":(0, 42), "return_code":-1,
+             "expected_value":""},
+            {"operation":"fetch", "rank":1, "key":(0, 42), "return_code":-1,
+             "expected_value":""},
+            {"operation":"fetch", "rank":4, "key":(0, 42), "return_code":-1,
+             "expected_value":""},
+            #
+            # ****
+            # Add variable 0:42
+            {"operation":"update", "rank":0, "key":(0, 42), "value":"potato"},
+            #
+            # ****
+            # Fetch the value from each server and verify it
+            {"operation":"fetch", "rank":0, "key":(0, 42), "return_code":0,
+             "expected_value":"potato"},
+            {"operation":"fetch", "rank":1, "key":(0, 42), "return_code":0,
+             "expected_value":"potato"},
+            {"operation":"fetch", "rank":2, "key":(0, 42), "return_code":0,
+             "expected_value":"potato"},
+            {"operation":"fetch", "rank":3, "key":(0, 42), "return_code":0,
+             "expected_value":"potato"},
+            {"operation":"fetch", "rank":4, "key":(0, 42), "return_code":0,
+             "expected_value":"potato"},
+            #
+            # ******************
+            # Invalidate the value
+            {"operation":"invalidate", "rank":0, "key":(0, 42),
+              "sync":"eager_notify"},
+            #
+            # ****
+            # Fetch the value again from each server, expecting failure
+            # Reverse order of fetch just in case.
+            {"operation":"fetch", "rank":4, "key":(0, 42), "return_code":-1,
+             "expected_value":""},
+            {"operation":"fetch", "rank":3, "key":(0, 42), "return_code":-1,
+             "expected_value":""},
+            {"operation":"fetch", "rank":2, "key":(0, 42), "return_code":-1,
+             "expected_value":""},
+            {"operation":"fetch", "rank":1, "key":(0, 42), "return_code":-1,
+             "expected_value":""},
+            {"operation":"fetch", "rank":0, "key":(0, 42), "return_code":-1,
+             "expected_value":""},
+            #
+            ######################
+            # Testing version number conflicts.
+            ######################
+            # ******************
+            # Test of verison skew on fetch between rank 0 and rank 1.
+            # From parent to child and from child to parent
+            # Don't setup a iv variable.
+            # Modify version number on root 0.
+            # Do fetch in both direction for and test for failure.
+            # First, do test for normal failure.
+            {"operation":"fetch", "rank":0, "key":(1, 42), "return_code":-1,
+             "expected_value":""},
+            {"operation":"set_grp_version", "rank":0, "key":(0, 42), "time":0,
+              "version":"0xdeadc0de", "return_code":0, "expected_value":""},
+            {"operation":"fetch", "rank":0, "key":(1, 42),
+              "return_code":-1036, "expected_value":""},
+            {"operation":"fetch", "rank":1, "key":(0, 42),
+              "return_code":-1036, "expected_value":""},
+            {"operation":"set_grp_version", "rank":0, "key":(0, 42), "time":0,
+              "version":"0x0", "return_code":0, "expected_value":""},
+            {"operation":"invalidate", "rank":1, "key":(1, 42)},
+            #
+            # ******************
+            # Test of verison skew on fetch between rank 0 and rank 1.
+            # Create iv variable on rank 1.
+            # Fetch from rank 0.
+            # Change version on rank 0 while request in flight,
+            # Not an error:
+            #   Used for testing to ensure we donot break something
+            #   that should work.
+            # Need to invalidate on both nodes, stale data.
+            {"operation":"update", "rank":1, "key":(1, 42), "value":"beans"},
+            {"operation":"set_grp_version", "rank":0, "key":(1, 42), "time":1,
+              "version":"0xc001c001", "return_code":0, "expected_value":""},
+            {"operation":"fetch", "rank":0, "key":(1, 42),
+              "return_code":0, "expected_value":"beans"},
+            {"operation":"set_grp_version", "rank":0, "key":(1, 42), "time":0,
+              "version":"0", "return_code":0, "expected_value":""},
+            {"operation":"invalidate", "rank":1, "key":(1, 42)},
+            {"operation":"invalidate", "rank":0, "key":(1, 42)},
+            #
+            # ******************
+            # Test of verison skew on fetch between rank 0 and rank 1.
+            # From parent to child.
+            # Create a iv variable on second server  (child).
+            # Setup second server to change version after it receives
+            #   the rpc request.
+            # Fetch variable from the first server.
+            # Tests version-check in crt_hdlr_iv_fetch_aux.
+            #
+            {"operation":"update", "rank":1, "key":(1, 42), "value":"carrot"},
+            {"operation":"set_grp_version", "rank":1, "key":(0, 42), "time":2,
+              "version":"0xdeadc0de", "return_code":0, "expected_value":""},
+            {"operation":"fetch", "rank":0, "key":(1, 42),
+              "return_code":-1036, "expected_value":""},
+            {"operation":"set_grp_version", "rank":1, "key":(0, 42), "time":0,
+              "version":"0x0", "return_code":0, "expected_value":""},
+            {"operation":"invalidate", "rank":1, "key":(1, 42)},
+            #
+            # ******************
+            # Test invalidate with synchronization.
+            # First create an iv value from rank 0 to rank 4.
             # Then verify that all ranks can see it.
             # Then remove it and verify that no ranks has a local copy
             # Need to know that this works prior to changing version
-            #
-            # Note to Alex: need to implement syncronization in the
-            # invalidate for this series of test to run.
+            # Verifies eager_notify works with invalidate.
             #
             {"operation":"update", "rank":0, "key":(4, 42), "value":"turnip" },
             {"operation":"fetch", "rank":1, "key":(4, 42),
@@ -326,8 +430,6 @@ class CartIvOneNodeTest(Test):
             #
             {"operation":"invalidate", "rank":4, "key":(4, 42),
               "sync":"eager_notify", "return_code":0},
-            #{"operation":"invalidate", "rank":4, "key":(4, 42),
-            #  "sync":"eager_update", "return_code":0},
             #
             # Check for stale state.
             {"operation":"fetch", "rank":4, "key":(4, 42),
@@ -341,105 +443,36 @@ class CartIvOneNodeTest(Test):
             {"operation":"fetch", "rank":3, "key":(4, 42),
               "return_code":-1, "expected_value":""},
             #
-            # ****
-            # Fetch, to expect fail, no variable yet
-            # Make sure everything goes to the top rank
-            #{"operation":"fetch", "rank":0, "key":(0, 42), "return_code":-1,
-            # "expected_value":""},
-            #{"operation":"fetch", "rank":1, "key":(0, 42), "return_code":-1,
-            # "expected_value":""},
-            #{"operation":"fetch", "rank":4, "key":(0, 42), "return_code":-1,
-            # "expected_value":""},
+            # ******************
+            # Test of version skew on update with synchronization
+            #   when version on child process is different
+            # Change version on rank 4 
+            # Create iv varable on rank 0 using sync.
+            #   Should return error and no iv variable created.
+            # Make sure nothing is left behind on other nodes.
             #
-            # ****
-            # Add variable 0:42
-            #{"operation":"update", "rank":0, "key":(0, 42), "value":"potato"},
-            #
-            # ****
-            # Fetch the value from each server and verify it
-            #{"operation":"fetch", "rank":0, "key":(0, 42), "return_code":0,
-            # "expected_value":"potato"},
-            #{"operation":"fetch", "rank":1, "key":(0, 42), "return_code":0,
-            # "expected_value":"potato"},
-            #{"operation":"fetch", "rank":2, "key":(0, 42), "return_code":0,
-            # "expected_value":"potato"},
-            #{"operation":"fetch", "rank":3, "key":(0, 42), "return_code":0,
-            # "expected_value":"potato"},
-            #{"operation":"fetch", "rank":4, "key":(0, 42), "return_code":0,
-            # "expected_value":"potato"},
-            #
-            # ****
-            # Invalidate the value
-            #{"operation":"invalidate", "rank":0, "key":(0, 42)},
-            #
-            # ****
-            # Fetch the value again from each server, expecting failure
-            # Reverse order of fetch just in case.
-            #{"operation":"fetch", "rank":4, "key":(0, 42), "return_code":-1,
-            # "expected_value":""},
-            #{"operation":"fetch", "rank":3, "key":(0, 42), "return_code":-1,
-            # "expected_value":""},
-            #{"operation":"fetch", "rank":2, "key":(0, 42), "return_code":-1,
-            # "expected_value":""},
-            #{"operation":"fetch", "rank":1, "key":(0, 42), "return_code":-1,
-            # "expected_value":""},
-            #{"operation":"fetch", "rank":0, "key":(0, 42), "return_code":-1,
-            # "expected_value":""},
-            #
-            ######################
-            # Testing version number conflicts.
-            ######################
-            # Test of verison skew on fetch between rank 0 and rank 1.
-            # ****
-            # From parent to child and from child to parent
-            # Don't setup a iv variable.
-            # Modify version number on root 0.
-            # Do fetch in both direction for and test for failure.
-            # First, do test for normal failure.
-            #{"operation":"fetch", "rank":0, "key":(1, 42), "return_code":-1,
-            # "expected_value":""},
-            #{"operation":"set_grp_version", "rank":0, "key":(0, 42), "time":0
-            #  "version":"0xdeadc0de", "return_code":0, "expected_value":""},
-            #{"operation":"fetch", "rank":0, "key":(1, 42),
-            #  "return_code":-1036, "expected_value":""},
-            #{"operation":"fetch", "rank":1, "key":(0, 42),
-            #  "return_code":-1036, "expected_value":""},
-            #{"operation":"set_grp_version", "rank":0, "key":(0, 42), "time":0
-            #  "version":"0x0", "return_code":0, "expected_value":""},
-            #{"operation":"invalidate", "rank":1, "key":(1, 42)},
-            #
-            # ****
-            # Test of verison skew on fetch between rank 0 and rank 1.
-            # Create iv variable on rank 1.
-            # Fetch from rank 0.
-            # Change version on rank 0 while request in flight,
-            # Not an error:
-            #   Used for testing to ensure we donot break something
-            #   that should work.
-            #{"operation":"update", "rank":1, "key":(1, 42), "value":"beans"},
-            #{"operation":"set_grp_version", "rank":0, "key":(1, 42), "time":1,
-            #  "version":"0xc001c001", "return_code":0, "expected_value":""},
-            #{"operation":"fetch", "rank":0, "key":(1, 42),
-            #  "return_code":0, "expected_value":"beans"},
-            #{"operation":"set_grp_version", "rank":0, "key":(1, 42), "time":0,
-            #  "version":"0", "return_code":0, "expected_value":""},
-            #{"operation":"invalidate", "rank":1, "key":(1, 42)},
-            #
-            # Test of verison skew on fetch between rank 0 and rank 1.
-            # From parent to child.
-            # Create a iv variable on second server  (child).
-            # Setup second server to change version after it receives
-            #   the rpc request.
-            # Fetch variable from the first server.
-            # Tests version-check in crt_hdlr_iv_fetch_aux.
-            #{"operation":"update", "rank":1, "key":(1, 42), "value":"carrot"},
-            #{"operation":"set_grp_version", "rank":1, "key":(0, 42), "time":2,
-            #  "version":"0xdeadc0de", "return_code":0, "expected_value":""},
-            #{"operation":"fetch", "rank":0, "key":(1, 42),
-            #  "return_code":-1036, "expected_value":""},
-            #{"operation":"set_grp_version", "rank":1, "key":(0, 42), "time":0,
-            #  "version":"0x0", "return_code":0, "expected_value":""},
-            #{"operation":"invalidate", "rank":1, "key":(1, 42)},
+            {"operation":"set_grp_version", "rank":4, "key":(0, 42), "time":0,
+              "version":"0xdeadc0de", "return_code":0, "expected_value":""},
+            {"operation":"update", "rank":0, "key":(0, 42), "value":"beans",
+               "sync":"eager_update", "return_code":-1036 },
+            # Even though a failue, leaves stale state on ranks 
+            {"operation":"fetch", "rank":0, "key":(0, 42),
+              "return_code":0, "expected_value":"beans"},
+            {"operation":"fetch", "rank":1, "key":(0, 42),
+              "return_code":0, "expected_value":"beans"},
+            {"operation":"fetch", "rank":4, "key":(0, 42),
+              "return_code":-1036, "expected_value":""},
+
+            # Clean up. Make sure no stale state left
+            {"operation":"invalidate", "rank":0, "key":(0, 42),
+              "sync":"eager_notify", "return_code":0},
+            {"operation":"fetch", "rank":0, "key":(0, 42),
+              "return_code":-1, "expected_value":""},
+            {"operation":"set_grp_version", "rank":4, "key":(0, 42),  "time":0,
+              "version":"0x0", "return_code":0, "expected_value":""},
+            {"operation":"fetch", "rank":1, "key":(0, 42),
+              "return_code":-1, "expected_value":""},
+
         ]
 
         time.sleep(2)
