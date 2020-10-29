@@ -96,7 +96,6 @@ func (w *spdkWrapper) init(log logging.Logger, spdkOpts spdk.EnvOptions) (func()
 		return nil, errors.Wrap(err, "failed to suppress spdk output")
 	}
 
-	// provide empty whitelist on init so all devices are discovered
 	if err := w.InitSPDKEnv(log, spdkOpts); err != nil {
 		restore()
 		return nil, errors.Wrap(err, "failed to init spdk env")
@@ -130,7 +129,8 @@ func (b *spdkBackend) IsVMDDisabled() bool {
 // Scan discovers NVMe controllers accessible by SPDK.
 func (b *spdkBackend) Scan(req ScanRequest) (*ScanResponse, error) {
 	restoreOutput, err := b.binding.init(b.log, spdk.EnvOptions{
-		DisableVMD: b.IsVMDDisabled(),
+		PciWhiteList: req.DeviceList,
+		DisableVMD:   b.IsVMDDisabled(),
 	})
 	if err != nil {
 		return nil, err
@@ -258,7 +258,11 @@ func (b *spdkBackend) Format(req FormatRequest) (*FormatResponse, error) {
 	}
 	defer restoreOutput()
 	defer b.binding.FiniSPDKEnv(b.log, spdkOpts)
-	defer b.binding.CleanLockfiles(b.log, req.DeviceList...)
+	defer func() {
+		if err := b.binding.CleanLockfiles(b.log, req.DeviceList...); err != nil {
+			b.log.Errorf("cleanup failed after format: %s", err)
+		}
+	}()
 
 	return b.format(req.Class, req.DeviceList)
 }
