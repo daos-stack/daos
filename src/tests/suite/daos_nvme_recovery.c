@@ -541,7 +541,7 @@ nvme_test_simulate_IO_error(void **state)
 	char control_err[][50] = {
 		"detected blob I/O error! writeErr:true",
 		"detected blob I/O error! readErr:true"};
-	for (i = 0; control_err[i][0] != '\0'; i++) {
+	for (i = 0; i < 2 ; i++) {
 		rc = verify_state_in_log(devices[rank_pos].host,
 					 control_log_file, control_err[i]);
 		if (rc != 0) {
