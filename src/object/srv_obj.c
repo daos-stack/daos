@@ -1803,15 +1803,23 @@ enum process_epoch_rc {
 static int
 process_epoch(uint64_t *epoch, uint64_t *epoch_first, uint32_t *flags)
 {
-	if (*epoch == 0 || *epoch == DAOS_EPOCH_MAX)
+	if (*epoch == 0 || *epoch == DAOS_EPOCH_MAX) {
 		/*
 		 * *epoch is not a chosen TX epoch. Choose the current HLC
 		 * reading as the TX epoch.
 		 */
 		*epoch = crt_hlc_get();
-	else
+	} else {
+		/*
+		 * If the TX is started before current server (re-)start,
+		 * then needs to be restarted with newer epoch.
+		 */
+		if (*epoch < dtx_get_guard_epoch())
+			return -DER_TX_RESTART;
+
 		/* *epoch is already a chosen TX epoch. */
 		return PE_OK_REMOTE;
+	}
 
 	/* If this is the first epoch chosen, assign it to *epoch_first. */
 	if (epoch_first != NULL && *epoch_first == 0)
@@ -1864,6 +1872,9 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	rc = process_epoch(&orw->orw_epoch, &orw->orw_epoch_first,
 			   &orw->orw_flags);
+	if (rc < 0)
+		goto out;
+
 	if (rc == PE_OK_LOCAL)
 		orw->orw_flags &= ~ORF_EPOCH_UNCERTAIN;
 
@@ -2122,6 +2133,9 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	if (oei->oei_flags & ORF_ENUM_WITHOUT_EPR) {
 		rc = process_epoch(&oei->oei_epr.epr_hi, &oei->oei_epr.epr_lo,
 				   &oei->oei_flags);
+		if (rc < 0)
+			goto failed;
+
 		if (rc == PE_OK_LOCAL)
 			oei->oei_flags &= ~ORF_EPOCH_UNCERTAIN;
 	}
@@ -2890,6 +2904,9 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 
 	rc = process_epoch(&okqi->okqi_epoch, &okqi->okqi_epoch_first,
 			   &okqi->okqi_flags);
+	if (rc < 0)
+		goto failed;
+
 	if (rc == PE_OK_LOCAL)
 		okqi->okqi_flags &= ~ORF_EPOCH_UNCERTAIN;
 
@@ -3686,6 +3703,9 @@ ds_obj_dtx_leader_ult(void *arg)
 	rc = process_epoch(&dcsh->dcsh_epoch.oe_value,
 			   &dcsh->dcsh_epoch.oe_first,
 			   &dcsh->dcsh_epoch.oe_rpc_flags);
+	if (rc < 0)
+		goto out;
+
 	if (rc == PE_OK_LOCAL) {
 		/*
 		 * In this case, writes to local RDGs can use the chosen epoch

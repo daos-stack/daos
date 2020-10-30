@@ -198,6 +198,8 @@ void dtx_batched_commit_deregister(struct ds_cont_child *cont);
 int dtx_obj_sync(uuid_t po_uuid, uuid_t co_uuid, struct ds_cont_child *cont,
 		 daos_unit_oid_t *oid, daos_epoch_t epoch);
 
+daos_epoch_t dtx_get_guard_epoch(void);
+
 /**
  * Check whether the given DTX is resent one or not.
  *
