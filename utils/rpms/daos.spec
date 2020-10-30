@@ -8,9 +8,8 @@
 %global mercury_version 2.0.0~rc1-1%{?dist}
 %endif
 
-%global scons_args %{getenv:SCONS_ARGS}
 %if %{undefined scons_args}
-%global scons_args BUILD_TYPE=release
+%define scons_args BUILD_TYPE=release
 %endif
 
 Name:          daos
