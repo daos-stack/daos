@@ -83,7 +83,7 @@ func PrintHostFabricMap(hfm control.HostFabricMap, out io.Writer, opts ...PrintC
 				table = append(table, row)
 			}
 
-			fmt.Fprintf(iwTable, fmt.Sprintf("%s", formatter.Format(table)))
+			fmt.Fprint(iwTable, formatter.Format(table))
 			fmt.Fprintln(ew)
 		}
 	}

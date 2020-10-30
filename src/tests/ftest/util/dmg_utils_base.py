@@ -94,8 +94,39 @@ class DmgCommandBase(YamlCommand):
             self.sub_command_class = self.StorageSubCommand()
         elif self.sub_command.value == "system":
             self.sub_command_class = self.SystemSubCommand()
+        elif self.sub_command.value == "cont":
+            self.sub_command_class = self.ContSubCommand()
         else:
             self.sub_command_class = None
+
+    class ContSubCommand(CommandWithSubCommand):
+        """Defines an object for the dmg cont sub command."""
+        def __init__(self):
+            """Create a dmg cont subcommand object."""
+            super(DmgCommandBase.ContSubCommand, self).__init__(
+                "/run/dmg/cont/*", "cont")
+
+        def get_sub_command_class(self):
+            # pylint: disable=redefined-variable-type
+            """Get the dmg cont sub command object."""
+            if self.sub_command.value == "set-owner":
+                self.sub_command_class = self.SetownerSubCommand()
+            else:
+                self.sub_command_class = None
+
+        class SetownerSubCommand(CommandWithParameters):
+            """Defines an object for the dmg cont set-owner command."""
+
+            def __init__(self):
+                """Create a dmg cont set-owner command object."""
+                super(
+                    DmgCommandBase.ContSubCommand.SetownerSubCommand,
+                    self).__init__(
+                        "/run/dmg/cont/set-owner/*", "set-owner")
+                self.pool = FormattedParameter("--pool={}", None)
+                self.cont = FormattedParameter("--cont={}", None)
+                self.user = FormattedParameter("--user={}", None)
+                self.group = FormattedParameter("--group={}", None)
 
     class NetworkSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg network sub command."""

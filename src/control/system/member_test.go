@@ -24,9 +24,7 @@
 package system
 
 import (
-	"fmt"
 	"net"
-	"reflect"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -69,6 +67,51 @@ func TestSystem_Member_Stringify(t *testing.T) {
 
 	for i, state := range states {
 		AssertEqual(t, state.String(), strs[i], strs[i])
+	}
+}
+
+func TestSystem_Member_MarshalUnmarshalJSON(t *testing.T) {
+	for name, tc := range map[string]struct {
+		member          *Member
+		expMarshalErr   error
+		expUnmarshalErr error
+	}{
+		"nil": {
+			expMarshalErr: errors.New("tried to marshal nil Member"),
+		},
+		"empty": {
+			member:          &Member{},
+			expUnmarshalErr: errors.New("address <nil>: missing port in address"),
+		},
+		"success": {
+			member: MockMember(t, 1, MemberStateReady),
+		},
+		"with info": {
+			member: MockMember(t, 2, MemberStateJoined, "info"),
+		},
+		"with fault domain": {
+			member: MockMember(t, 3, MemberStateStopped, "info").
+				WithFaultDomain(MustCreateFaultDomainFromString("/test/fault/domain")),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			marshaled, err := tc.member.MarshalJSON()
+			common.CmpErr(t, tc.expMarshalErr, err)
+			if err != nil {
+				return
+			}
+
+			unmarshaled := new(Member)
+			err = unmarshaled.UnmarshalJSON(marshaled)
+			common.CmpErr(t, tc.expUnmarshalErr, err)
+			if err != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.member, unmarshaled, cmp.AllowUnexported(Member{})); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
 	}
 }
 
@@ -180,12 +223,6 @@ func TestSystem_Membership_AddRemove(t *testing.T) {
 			AssertEqual(t, len(tc.expMembers), count, name)
 		})
 	}
-}
-
-func assertMembersEqual(t *testing.T, a Member, b Member, msg string) {
-	t.Helper()
-	AssertTrue(t, reflect.DeepEqual(a, b),
-		fmt.Sprintf("%s: want %#v, got %#v", msg, a, b))
 }
 
 func TestSystem_Membership_AddOrReplace(t *testing.T) {
@@ -440,14 +477,14 @@ func mockResolveFn(netString string, address string) (*net.TCPAddr, error) {
 	}
 
 	return map[string]*net.TCPAddr{
-			"127.0.0.1:10001": &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001},
-			"127.0.0.2:10001": &net.TCPAddr{IP: net.ParseIP("127.0.0.2"), Port: 10001},
-			"127.0.0.3:10001": &net.TCPAddr{IP: net.ParseIP("127.0.0.3"), Port: 10001},
-			"foo-1:10001":     &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001},
-			"foo-2:10001":     &net.TCPAddr{IP: net.ParseIP("127.0.0.2"), Port: 10001},
-			"foo-3:10001":     &net.TCPAddr{IP: net.ParseIP("127.0.0.3"), Port: 10001},
-			"foo-4:10001":     &net.TCPAddr{IP: net.ParseIP("127.0.0.4"), Port: 10001},
-			"foo-5:10001":     &net.TCPAddr{IP: net.ParseIP("127.0.0.5"), Port: 10001},
+			"127.0.0.1:10001": {IP: net.ParseIP("127.0.0.1"), Port: 10001},
+			"127.0.0.2:10001": {IP: net.ParseIP("127.0.0.2"), Port: 10001},
+			"127.0.0.3:10001": {IP: net.ParseIP("127.0.0.3"), Port: 10001},
+			"foo-1:10001":     {IP: net.ParseIP("127.0.0.1"), Port: 10001},
+			"foo-2:10001":     {IP: net.ParseIP("127.0.0.2"), Port: 10001},
+			"foo-3:10001":     {IP: net.ParseIP("127.0.0.3"), Port: 10001},
+			"foo-4:10001":     {IP: net.ParseIP("127.0.0.4"), Port: 10001},
+			"foo-5:10001":     {IP: net.ParseIP("127.0.0.5"), Port: 10001},
 		}[address], map[string]error{
 			"127.0.0.4:10001": errors.New("bad lookup"),
 			"127.0.0.5:10001": errors.New("bad lookup"),
@@ -747,8 +784,11 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 }
 
 func TestSystem_Membership_Join(t *testing.T) {
-	curMember := MockMember(t, 0, MemberStateJoined)
-	newMember := MockMember(t, 1, MemberStateJoined)
+	fd1 := MustCreateFaultDomainFromString("/dc1/rack8/pdu5/host1")
+	fd2 := MustCreateFaultDomainFromString("/dc1/rack9/pdu0/host2")
+
+	curMember := MockMember(t, 0, MemberStateJoined).WithFaultDomain(fd1)
+	newMember := MockMember(t, 1, MemberStateJoined).WithFaultDomain(fd2)
 
 	for name, tc := range map[string]struct {
 		notLeader bool
@@ -767,9 +807,24 @@ func TestSystem_Membership_Join(t *testing.T) {
 				UUID:        curMember.UUID,
 				ControlAddr: curMember.Addr,
 				FabricURI:   curMember.Addr.String(),
+				FaultDomain: curMember.FaultDomain,
 			},
 			expResp: &JoinResponse{
 				Member:     curMember,
+				PrevState:  curMember.state,
+				MapVersion: 2,
+			},
+		},
+		"successful rejoin with different fault domain": {
+			req: &JoinRequest{
+				Rank:        curMember.Rank,
+				UUID:        curMember.UUID,
+				ControlAddr: curMember.Addr,
+				FabricURI:   curMember.Addr.String(),
+				FaultDomain: fd2,
+			},
+			expResp: &JoinResponse{
+				Member:     MockMember(t, 0, MemberStateJoined).WithFaultDomain(fd2),
 				PrevState:  curMember.state,
 				MapVersion: 2,
 			},
@@ -780,6 +835,7 @@ func TestSystem_Membership_Join(t *testing.T) {
 				UUID:        curMember.UUID,
 				ControlAddr: curMember.Addr,
 				FabricURI:   curMember.Addr.String(),
+				FaultDomain: curMember.FaultDomain,
 			},
 			expErr: errors.New("different rank"),
 		},
@@ -790,6 +846,7 @@ func TestSystem_Membership_Join(t *testing.T) {
 				ControlAddr:    newMember.Addr,
 				FabricURI:      newMember.FabricURI,
 				FabricContexts: newMember.FabricContexts,
+				FaultDomain:    newMember.FaultDomain,
 			},
 			expResp: &JoinResponse{
 				Created:    true,
