@@ -6,6 +6,7 @@ usr/bin/common_test
 usr/bin/daos_test
 usr/bin/drpc_iosrv_test
 usr/bin/drpc_test
+usr/bin/job_tests
 usr/bin/eq_tests
 usr/bin/security_test
 usr/bin/srv_checksum_tests
