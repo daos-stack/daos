@@ -125,3 +125,28 @@ func TestCommon_CmpTcpAddr(t *testing.T) {
 		})
 	}
 }
+
+func TestCommon_IsLocalAddr(t *testing.T) {
+	local := &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)}
+	remote := &net.TCPAddr{IP: net.IPv4(127, 127, 127, 127)}
+
+	for name, tc := range map[string]struct {
+		a      *net.TCPAddr
+		expRes bool
+	}{
+		"nil": {},
+		"local": {
+			a:      local,
+			expRes: true,
+		},
+		"remote": {
+			a: remote,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if diff := cmp.Diff(tc.expRes, IsLocalAddr(tc.a)); diff != "" {
+				t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}

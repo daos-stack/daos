@@ -75,3 +75,26 @@ func CmpTcpAddr(a, b *net.TCPAddr) bool {
 	}
 	return a.Zone == b.Zone
 }
+
+// IsLocalAddr returns true if the supplied net.TCPAddr
+// matches one of the local IP addresses, false otherwise.
+func IsLocalAddr(testAddr *net.TCPAddr) bool {
+	if testAddr == nil {
+		return false
+	}
+
+	ifaceAddrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return false
+	}
+
+	for _, ia := range ifaceAddrs {
+		if in, ok := ia.(*net.IPNet); ok {
+			if in.IP.Equal(testAddr.IP) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
