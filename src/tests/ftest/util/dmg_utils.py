@@ -832,7 +832,7 @@ class DmgCommand(DmgCommandBase):
         # Populate a dictionary with host set keys for each unique state
         data = {}
         match = re.findall(
-            r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)\s+(.*)",
+            r"(?:\[*([0-9-,]+)\]*)\s+([A-Za-z]+)\s+(.*)",
             self.result.stdout)
         for info in match:
             for rank in get_numeric_list(info[0]):
@@ -863,7 +863,7 @@ class DmgCommand(DmgCommandBase):
         #   0    stop      want Stopped, got Ready
         data = {}
         match = re.findall(
-            r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)\s+(.*)",
+            r"(?:\[*([0-9-,]+)\]*)\s+([A-Za-z]+)\s+(.*)",
             self.result.stdout)
         for info in match:
             for rank in get_numeric_list(info[0]):
