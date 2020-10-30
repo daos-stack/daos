@@ -311,7 +311,7 @@ chrootbuild: $(DEB_TOP)/$(DEB_DSC)
 	DEB_TOP="$(DEB_TOP)"                                    \
 	DEB_DSC="$(DEB_DSC)"                                    \
 	DISTRO_ID_OPT="$(DISTRO_ID_OPT)"                        \
-	SCONS_ARGS = "$(SCONS_ARGS)"                            \
+	SCONS_ARGS="$(SCONS_ARGS)"                              \
 	packaging/debian_chrootbuild
 else
 chrootbuild: $(SRPM) $(CALLING_MAKEFILE)
