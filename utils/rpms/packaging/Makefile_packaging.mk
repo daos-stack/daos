@@ -24,6 +24,7 @@ BUILD_PREFIX ?= .
 
 DOT     := .
 RPM_BUILD_OPTIONS += $(EXTERNAL_RPM_BUILD_OPTIONS)
+SCONS_ARGS += $(EXTERNAL_SCONS_ARGS)
 # some defaults the caller can override
 PACKAGING_CHECK_DIR ?= ../packaging
 LOCAL_REPOS ?= true
