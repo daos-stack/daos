@@ -1184,7 +1184,10 @@ def report_skipped_test(test_file, avocado_logs_dir, reason):
     print(message)
     test_name = get_test_category(test_file)
     destination = os.path.join(avocado_logs_dir, test_name)
-    os.mkdir(destination)
+    try:
+        os.makedirs(destination)
+    except (OSError, FileExistsError) as error:
+        print("Failed to create {}: {}".format(destination, error))
     return create_results_xml(
         message, test_name, "See console log for more details", destination)
 
