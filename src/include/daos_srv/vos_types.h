@@ -277,8 +277,14 @@ enum {
 	VOS_GET_AKEY		= DAOS_GET_AKEY,
 	/** retrieve the idx of array value */
 	VOS_GET_RECX		= DAOS_GET_RECX,
+	/**
+	 * Internal flag to indicate retrieve the idx of EC array value,
+	 * in that case need to retrieve both normal space and parity space
+	 * (parity space with DAOS_EC_PARITY_BIT in the recx index).
+	 */
+	VOS_GET_RECX_EC		= (1 << 5),
 	/** Internal flag to indicate timestamps are used */
-	VOS_USE_TIMESTAMPS	= (1 << 5),
+	VOS_USE_TIMESTAMPS	= (1 << 6),
 };
 
 D_CASSERT((VOS_USE_TIMESTAMPS & (VOS_GET_MAX | VOS_GET_MIN | VOS_GET_DKEY |

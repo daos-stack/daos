@@ -2869,6 +2869,9 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	struct dtx_handle		 dth = {0};
 	struct dtx_epoch		 epoch = {0};
 	struct dss_sleep_ult		*sleep_ult = NULL;
+	uint32_t			 query_flags;
+	daos_recx_t			 ec_recx[2] = {0};
+	daos_recx_t			*query_recx;
 	int				 retry = 0;
 	int				 rc;
 
@@ -2910,10 +2913,20 @@ again:
 	if (rc != 0)
 		goto out;
 
-	rc = vos_obj_query_key(ioc.ioc_vos_coh, okqi->okqi_oid,
-			       okqi->okqi_api_flags, okqi->okqi_epoch, dkey,
-			       akey, &okqo->okqo_recx, &dth);
-
+	query_flags = okqi->okqi_api_flags;
+	if ((okqi->okqi_flags & ORF_EC) &&
+	    (okqi->okqi_api_flags & DAOS_GET_RECX)) {
+		query_flags |= VOS_GET_RECX_EC;
+		query_recx = ec_recx;
+	} else {
+		query_recx = &okqo->okqo_recx;
+	}
+	rc = vos_obj_query_key(ioc.ioc_vos_coh, okqi->okqi_oid, query_flags,
+			       okqi->okqi_epoch, dkey, akey, query_recx, &dth);
+	if (rc == 0 && (query_flags & VOS_GET_RECX_EC)) {
+		okqo->okqo_recx = ec_recx[0];
+		okqo->okqo_recx_parity = ec_recx[1];
+	}
 	rc = dtx_end(&dth, ioc.ioc_coc, rc);
 
 out:
