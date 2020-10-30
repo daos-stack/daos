@@ -310,6 +310,13 @@ bio_sgl_holes(struct bio_sglist *bsgl)
 	return result;
 }
 
+enum bio_dev_state {
+	BIO_DEV_NORMAL	= 0, /* fully functional and in-use */
+	BIO_DEV_FAULTY,      /* evicted device */
+	BIO_DEV_OUT,         /* unplugged device */
+	BIO_DEV_NEW,         /* new device not currently in-use */
+};
+
 /*
  * Device information inquired from BIO. It's almost identical to
  * smd_dev_info currently, but it could be extended in the future.
@@ -317,11 +324,12 @@ bio_sgl_holes(struct bio_sglist *bsgl)
  * NB. Move it to control.h if it needs be shared by control plane.
  */
 struct bio_dev_info {
-	d_list_t	 bdi_link;
-	uuid_t		 bdi_dev_id;
-	uint32_t	 bdi_flags;	/* defined in control.h */
-	uint32_t	 bdi_tgt_cnt;
-	int		*bdi_tgts;
+	d_list_t		bdi_link;
+	uuid_t			bdi_dev_id;
+	uint32_t		bdi_flags;	/* defined in control.h */
+	uint32_t		bdi_tgt_cnt;
+	int		       *bdi_tgts;
+	enum bio_dev_state	bdi_state;
 };
 
 static inline void
@@ -665,9 +673,30 @@ void bio_get_bs_state(int *blobstore_state, struct bio_xs_context *xs);
  */
 int bio_dev_set_faulty(struct bio_xs_context *xs);
 
+/*
+ * Helper function to get the BIO device list from the init xstream.
+ *
+ * \param dev_list	[OUT]	Device list
+ * \param n_dev_list	[OUT]	Device count
+ * \param xs		[IN]	Xstream context
+ *
+ * \return			Zero on success, negative value on error
+ */
+int bio_get_dev_list(d_list_t *dev_list, int *n_dev_list, struct bio_xs_context *xs);
+
 /* Function to increment CSUM media error. */
 void bio_log_csum_err(struct bio_xs_context *b, int tgt_id);
 
 /* Too many blob IO queued, need to schedule a NVMe poll? */
 bool bio_need_nvme_poll(struct bio_xs_context *xs);
+
+/*
+ * Convert device state to human-readable string
+ *
+ * \param [IN]  state	Device state
+ *
+ * \return		Static string representing enum value
+ */
+char *bio_dev_state_enum_to_str(enum bio_dev_state state);
+
 #endif /* __BIO_API_H__ */

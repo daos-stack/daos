@@ -224,32 +224,73 @@ out:
 	return rc;
 }
 
+struct bio_list_devs_info {
+	d_list_t	dev_list;
+	int		dev_list_cnt;
+};
+
+static void
+bio_query_dev_list(void *arg)
+{
+	struct bio_list_devs_info	*list_devs_info = arg;
+	struct dss_module_info		*info = dss_get_module_info();
+	struct bio_xs_context		*bxc;
+	int				 rc;
+
+	D_ASSERT(info != NULL);
+
+	bxc = info->dmi_nvme_ctxt;
+	if (bxc == NULL) {
+		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
+			info->dmi_xs_id, info->dmi_tgt_id);
+		return;
+	}
+
+	rc = bio_get_dev_list(&list_devs_info->dev_list,
+			      &list_devs_info->dev_list_cnt, bxc);
+	if (rc != 0) {
+		D_ERROR("Error getting BIO device list\n");
+		return;
+	}
+}
+
 int
 ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 {
-	struct smd_dev_info	*dev_info = NULL, *tmp;
-	d_list_t		 dev_list;
-	int			 dev_list_cnt = 0;
-	int			 buflen = 10;
-	int			 i = 0, j;
-	int			 rc = 0;
+	struct bio_dev_info	   *dev_info = NULL, *tmp;
+	struct bio_list_devs_info  *list_devs_info = NULL;
+	ABT_thread		    thread;
+	int			    buflen = 10;
+	int			    i = 0, j;
+	int			    rc = 0;
 
-	D_DEBUG(DB_MGMT, "Querying SMD device list\n");
+	D_DEBUG(DB_MGMT, "Querying BIO & SMD device list\n");
 
-	D_INIT_LIST_HEAD(&dev_list);
-	rc = smd_dev_list(&dev_list, &dev_list_cnt);
+	D_ALLOC_PTR(list_devs_info);
+	if (list_devs_info == NULL) {
+		D_ERROR("Failed to allocate bio list devs info struct");
+		return -DER_NOMEM;
+	}
+	D_INIT_LIST_HEAD(&list_devs_info->dev_list);
+
+	rc = dss_ult_create(bio_query_dev_list, list_devs_info, DSS_ULT_GC, 0,
+			    0, &thread);
 	if (rc != 0) {
-		D_ERROR("Failed to get all NVMe devices from SMD\n");
-		return rc;
+		D_ERROR("Unable to create a ULT\n");
+		goto out;
 	}
 
-	D_ALLOC_ARRAY(resp->devices, dev_list_cnt);
+	ABT_thread_join(thread);
+	ABT_thread_free(&thread);
+
+	D_ALLOC_ARRAY(resp->devices, list_devs_info->dev_list_cnt);
 	if (resp->devices == NULL) {
 		D_ERROR("Failed to allocate devices for resp\n");
 		return -DER_NOMEM;
 	}
 
-	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, sdi_link) {
+	d_list_for_each_entry_safe(dev_info, tmp, &list_devs_info->dev_list,
+				   bdi_link) {
 		D_ALLOC_PTR(resp->devices[i]);
 		if (resp->devices[i] == NULL) {
 			rc = -DER_NOMEM;
@@ -261,7 +302,8 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 			rc = -DER_NOMEM;
 			break;
 		}
-		uuid_unparse_lower(dev_info->sdi_id, resp->devices[i]->uuid);
+		uuid_unparse_lower(dev_info->bdi_dev_id,
+				   resp->devices[i]->uuid);
 
 		D_ALLOC(resp->devices[i]->state, buflen);
 		if (resp->devices[i]->state == NULL) {
@@ -270,21 +312,21 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 			break;
 		}
 		strncpy(resp->devices[i]->state,
-			smd_state_enum_to_str(dev_info->sdi_state), buflen);
+			bio_dev_state_enum_to_str(dev_info->bdi_state), buflen);
 
-		resp->devices[i]->n_tgt_ids = dev_info->sdi_tgt_cnt;
+		resp->devices[i]->n_tgt_ids = dev_info->bdi_tgt_cnt;
 		D_ALLOC(resp->devices[i]->tgt_ids,
-			sizeof(int) * dev_info->sdi_tgt_cnt);
+			sizeof(int) * dev_info->bdi_tgt_cnt);
 		if (resp->devices[i]->tgt_ids == NULL) {
 			rc = -DER_NOMEM;
 			break;
 		}
-		for (j = 0; j < dev_info->sdi_tgt_cnt; j++)
-			resp->devices[i]->tgt_ids[j] = dev_info->sdi_tgts[j];
+		for (j = 0; j < dev_info->bdi_tgt_cnt; j++)
+			resp->devices[i]->tgt_ids[j] = dev_info->bdi_tgts[j];
 
-		d_list_del(&dev_info->sdi_link);
+		d_list_del(&dev_info->bdi_link);
 		/* Frees sdi_tgts and dev_info */
-		smd_free_dev_info(dev_info);
+		bio_free_dev_info(dev_info);
 		dev_info = NULL;
 
 		i++;
@@ -292,9 +334,11 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 
 	/* Free all devices if there was an error allocating any */
 	if (rc != 0) {
-		d_list_for_each_entry_safe(dev_info, tmp, &dev_list, sdi_link) {
-			d_list_del(&dev_info->sdi_link);
-			smd_free_dev_info(dev_info);
+		d_list_for_each_entry_safe(dev_info, tmp,
+					   &list_devs_info->dev_list,
+					   bdi_link) {
+			d_list_del(&dev_info->bdi_link);
+			bio_free_dev_info(dev_info);
 		}
 		for (; i >= 0; i--) {
 			if (resp->devices[i] != NULL) {
@@ -312,9 +356,12 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 		resp->n_devices = 0;
 		goto out;
 	}
-	resp->n_devices = dev_list_cnt;
+	resp->n_devices = list_devs_info->dev_list_cnt;
 
 out:
+	if (list_devs_info != NULL)
+		D_FREE(list_devs_info);
+
 	return rc;
 }
 
