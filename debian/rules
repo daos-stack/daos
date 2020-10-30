@@ -17,8 +17,7 @@ endif
 
 SCONS = scons -j $(NUMJOBS)
 DEB_SCONS_OPTIONS := --config=force --no-rpath USE_INSTALLED=all \
-                     CONF_DIR=$(sysconfdir)/daos PREFIX=$(prefix) \
-                     $(SCONS_ARGS)
+                     CONF_DIR=$(sysconfdir)/daos PREFIX=$(prefix)
 
 export GOCACHE := $(CURDIR)/.gocache
 
@@ -27,9 +26,9 @@ export GOCACHE := $(CURDIR)/.gocache
 
 override_dh_auto_build:
 	mkdir -p $(GOCACHE)
-	if ! $(SCONS) $(DEB_SCONS_OPTIONS); then \
-	    cat config.log;                      \
-	    exit 1;                              \
+	if ! $(SCONS) $(DEB_SCONS_OPTIONS) ${SCONS_ARGS}; then \
+	    cat config.log;                                    \
+	    exit 1;                                            \
 	fi
 
 override_dh_auto_clean:
@@ -47,7 +46,7 @@ override_dh_auto_clean:
 
 override_dh_auto_install:
 	mkdir -p $(GOCACHE)
-	$(SCONS) $(DEB_SCONS_OPTIONS)                     \
+	$(SCONS) $(DEB_SCONS_OPTIONS) ${SCONS_ARGS}       \
 	         --install-sandbox=$(CURDIR)/${buildroot} \
 	         $(CURDIR)/${buildroot}${prefix}          \
 	         $(CURDIR)/${buildroot}$(sysconfdir)
