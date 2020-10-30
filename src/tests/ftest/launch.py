@@ -25,6 +25,7 @@
 from __future__ import print_function
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
+from datetime import datetime
 import json
 import os
 import re
@@ -1182,8 +1183,13 @@ def report_skipped_test(test_file, avocado_logs_dir, reason):
     """
     message = "The {} test was skipped due to {}".format(test_file, reason)
     print(message)
+
+    # Generate a fake avocado results.xml file to report the skipped test.
+    # This file currently requires being placed in a job-* subdirectory.
     test_name = get_test_category(test_file)
-    destination = os.path.join(avocado_logs_dir, test_name)
+    time_stamp = datetime.now().strftime("%Y-%m-%dT%H.%M")
+    destination = os.path.join(
+        avocado_logs_dir, "job-{}-da03911-{}".format(time_stamp, test_name))
     try:
         os.makedirs(destination)
     except (OSError, FileExistsError) as error:
@@ -1193,7 +1199,7 @@ def report_skipped_test(test_file, avocado_logs_dir, reason):
 
 
 def create_results_xml(message, testname, output, destination):
-    """Create Junit xml file.
+    """Create JUnit xml file.
 
     Args:
         message (str): error summary message
