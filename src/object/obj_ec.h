@@ -25,6 +25,7 @@
 #define __OBJ_EC_H__
 
 #include <daos_types.h>
+#include <daos/object.h>
 #include <daos_obj.h>
 
 #include <isa-l.h>
@@ -43,7 +44,7 @@
  * limits the addressing of user extents to the lower 63 bits of the offset
  * range. The client stack should enforce this limitation.
  */
-#define PARITY_INDICATOR (1ULL << 63)
+#define PARITY_INDICATOR DAOS_EC_PARITY_BIT
 
 /** EC codec for object EC encoding/decoding */
 struct obj_ec_codec {
