@@ -163,6 +163,8 @@ struct crt_context {
 	pthread_mutex_t		 cc_mutex;
 	/* timeout per-context */
 	uint32_t		 cc_timeout_sec;
+	/* Stores self uri for the current context */
+	char			 cc_self_uri[CRT_ADDR_STR_MAX_LEN];
 };
 
 /* in-flight RPC req list, be tracked per endpoint for every crt_context */

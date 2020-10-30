@@ -193,6 +193,7 @@ crt_context_create(crt_context_t *crt_ctx)
 {
 	struct crt_context	*ctx = NULL;
 	int			rc = 0;
+	na_size_t		uri_len = CRT_ADDR_STR_MAX_LEN;
 
 	if (crt_ctx == NULL) {
 		D_ERROR("invalid parameter of NULL crt_ctx.\n");
@@ -222,6 +223,15 @@ crt_context_create(crt_context_t *crt_ctx)
 	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, crt_gdata.cg_ctx_num);
 	if (rc != 0) {
 		D_ERROR("crt_hg_ctx_init failed rc: %d.\n", rc);
+		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
+		crt_context_destroy(ctx, true);
+		D_GOTO(out, rc);
+	}
+
+	rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla,
+			     ctx->cc_self_uri, &uri_len);
+	if (rc != 0) {
+		D_ERROR("ctx_hg_get_addr() failed; rc: %d.\n", rc);
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		crt_context_destroy(ctx, true);
 		D_GOTO(out, rc);
@@ -1109,8 +1119,7 @@ crt_self_uri_get(int tag, char **uri)
 {
 	struct crt_context	*tmp_crt_ctx;
 	char			*tmp_uri = NULL;
-	na_size_t		 uri_len = CRT_ADDR_STR_MAX_LEN;
-	int			 rc;
+	int			 rc = 0;
 
 	if (uri == NULL) {
 		D_ERROR("uri can't be NULL.\n");
@@ -1123,17 +1132,7 @@ crt_self_uri_get(int tag, char **uri)
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
-	D_ALLOC(tmp_uri, CRT_ADDR_STR_MAX_LEN);
-	if (tmp_uri == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	rc = crt_hg_get_addr(tmp_crt_ctx->cc_hg_ctx.chc_hgcla,
-			tmp_uri, &uri_len);
-	if (rc != 0) {
-		D_ERROR("crt_hg_get_addr failed, rc: %d.\n", rc);
-		D_FREE(tmp_uri);
-		D_GOTO(out, rc = -DER_HG);
-	}
+	D_STRNDUP(tmp_uri, tmp_crt_ctx->cc_self_uri, CRT_ADDR_STR_MAX_LEN-1);
 
 	*uri = tmp_uri;
 
