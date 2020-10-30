@@ -52,25 +52,25 @@ func TestSystem_NewFaultDomain(t *testing.T) {
 		"single-level": {
 			input: []string{"ok"},
 			expResult: &FaultDomain{
-				domains: []string{"ok"},
+				Domains: []string{"ok"},
 			},
 		},
 		"multi-level": {
 			input: []string{"ok", "go"},
 			expResult: &FaultDomain{
-				domains: []string{"ok", "go"},
+				Domains: []string{"ok", "go"},
 			},
 		},
 		"trim whitespace": {
 			input: []string{" ok  ", "\tgo\n"},
 			expResult: &FaultDomain{
-				domains: []string{"ok", "go"},
+				Domains: []string{"ok", "go"},
 			},
 		},
 		"fix case": {
 			input: []string{"OK", "Go"},
 			expResult: &FaultDomain{
-				domains: []string{"ok", "go"},
+				Domains: []string{"ok", "go"},
 			},
 		},
 	} {
@@ -79,7 +79,7 @@ func TestSystem_NewFaultDomain(t *testing.T) {
 
 			common.CmpErr(t, tc.expErr, err)
 
-			if diff := cmp.Diff(result, tc.expResult, cmp.AllowUnexported(FaultDomain{})); diff != "" {
+			if diff := cmp.Diff(result, tc.expResult); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)
 			}
 		})
@@ -92,6 +92,9 @@ func TestSystem_NewFaultDomainFromString(t *testing.T) {
 		expErr    error
 		expResult *FaultDomain
 	}{
+		"nil": {
+			input: FaultDomainNilStr,
+		},
 		"empty": {
 			expResult: &FaultDomain{},
 		},
@@ -102,31 +105,31 @@ func TestSystem_NewFaultDomainFromString(t *testing.T) {
 		"single-level fault domain": {
 			input: "/host",
 			expResult: &FaultDomain{
-				domains: []string{"host"},
+				Domains: []string{"host"},
 			},
 		},
 		"multi-level fault domain": {
 			input: "/dc0/rack1/pdu2/host",
 			expResult: &FaultDomain{
-				domains: []string{"dc0", "rack1", "pdu2", "host"},
+				Domains: []string{"dc0", "rack1", "pdu2", "host"},
 			},
 		},
 		"fix whitespace errors": {
 			input: " / rack 1/pdu 0    /host\n",
 			expResult: &FaultDomain{
-				domains: []string{"rack 1", "pdu 0", "host"},
+				Domains: []string{"rack 1", "pdu 0", "host"},
 			},
 		},
 		"symbols ok": {
 			input: "/$$$/#/!?/--++/}{",
 			expResult: &FaultDomain{
-				domains: []string{"$$$", "#", "!?", "--++", "}{"},
+				Domains: []string{"$$$", "#", "!?", "--++", "}{"},
 			},
 		},
 		"case insensitive": {
 			input: "/DC0/Rack1/PDU2/Host",
 			expResult: &FaultDomain{
-				domains: []string{"dc0", "rack1", "pdu2", "host"},
+				Domains: []string{"dc0", "rack1", "pdu2", "host"},
 			},
 		},
 		"fault domain doesn't start with separator": {
@@ -155,7 +158,7 @@ func TestSystem_NewFaultDomainFromString(t *testing.T) {
 
 			common.CmpErr(t, tc.expErr, err)
 
-			if diff := cmp.Diff(result, tc.expResult, cmp.AllowUnexported(FaultDomain{})); diff != "" {
+			if diff := cmp.Diff(result, tc.expResult); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)
 			}
 		})
@@ -168,7 +171,7 @@ func TestSystem_FaultDomain_String(t *testing.T) {
 		expStr string
 	}{
 		"nil": {
-			expStr: "",
+			expStr: "(nil)",
 		},
 		"empty": {
 			domain: &FaultDomain{},
@@ -176,19 +179,85 @@ func TestSystem_FaultDomain_String(t *testing.T) {
 		},
 		"single level": {
 			domain: &FaultDomain{
-				domains: []string{"host"},
+				Domains: []string{"host"},
 			},
 			expStr: "/host",
 		},
 		"multi level": {
 			domain: &FaultDomain{
-				domains: []string{"rack0", "pdu1", "host"},
+				Domains: []string{"rack0", "pdu1", "host"},
 			},
 			expStr: "/rack0/pdu1/host",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			common.AssertEqual(t, tc.expStr, tc.domain.String(), "unexpected result")
+		})
+	}
+}
+
+func TestSystem_FaultDomain_Equals(t *testing.T) {
+	for name, tc := range map[string]struct {
+		domain1   *FaultDomain
+		domain2   *FaultDomain
+		expResult bool
+	}{
+		"both nil": {
+			expResult: true,
+		},
+		"nil vs. empty": {
+			domain2:   &FaultDomain{},
+			expResult: false,
+		},
+		"nil vs. populated": {
+			domain2: &FaultDomain{
+				Domains: []string{"one", "two"},
+			},
+			expResult: false,
+		},
+		"both empty": {
+			domain1:   &FaultDomain{},
+			domain2:   &FaultDomain{},
+			expResult: true,
+		},
+		"empty vs. populated": {
+			domain1: &FaultDomain{},
+			domain2: &FaultDomain{
+				Domains: []string{"one", "two"},
+			},
+			expResult: false,
+		},
+		"populated matching": {
+			domain1: &FaultDomain{
+				Domains: []string{"one", "two"},
+			},
+			domain2: &FaultDomain{
+				Domains: []string{"one", "two"},
+			},
+			expResult: true,
+		},
+		"subset": {
+			domain1: &FaultDomain{
+				Domains: []string{"one"},
+			},
+			domain2: &FaultDomain{
+				Domains: []string{"one", "two"},
+			},
+			expResult: false,
+		},
+		"totally different": {
+			domain1: &FaultDomain{
+				Domains: []string{"three", "four"},
+			},
+			domain2: &FaultDomain{
+				Domains: []string{"one", "two"},
+			},
+			expResult: false,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.AssertEqual(t, tc.domain1.Equals(tc.domain2), tc.expResult, "domain1.Equals failed")
+			common.AssertEqual(t, tc.domain2.Equals(tc.domain1), tc.expResult, "domain2.Equals failed")
 		})
 	}
 }
@@ -207,13 +276,13 @@ func TestSystem_FaultDomain_Empty(t *testing.T) {
 		},
 		"single level": {
 			domain: &FaultDomain{
-				domains: []string{"host"},
+				Domains: []string{"host"},
 			},
 			expResult: false,
 		},
 		"multi level": {
 			domain: &FaultDomain{
-				domains: []string{"rack0", "pdu1", "host"},
+				Domains: []string{"rack0", "pdu1", "host"},
 			},
 			expResult: false,
 		},
@@ -238,13 +307,13 @@ func TestSystem_FaultDomain_BottomLevel(t *testing.T) {
 		},
 		"single level": {
 			domain: &FaultDomain{
-				domains: []string{"host"},
+				Domains: []string{"host"},
 			},
 			expResult: "host",
 		},
 		"multi level": {
 			domain: &FaultDomain{
-				domains: []string{"rack0", "pdu1", "host"},
+				Domains: []string{"rack0", "pdu1", "host"},
 			},
 			expResult: "host",
 		},
@@ -269,13 +338,13 @@ func TestSystem_FaultDomain_TopLevel(t *testing.T) {
 		},
 		"single level": {
 			domain: &FaultDomain{
-				domains: []string{"host"},
+				Domains: []string{"host"},
 			},
 			expResult: "host",
 		},
 		"multi level": {
 			domain: &FaultDomain{
-				domains: []string{"rack0", "pdu1", "host"},
+				Domains: []string{"rack0", "pdu1", "host"},
 			},
 			expResult: "rack0",
 		},
@@ -300,13 +369,13 @@ func TestSystem_FaultDomain_NumLevels(t *testing.T) {
 		},
 		"single level": {
 			domain: &FaultDomain{
-				domains: []string{"host"},
+				Domains: []string{"host"},
 			},
 			expResult: 1,
 		},
 		"multi level": {
 			domain: &FaultDomain{
-				domains: []string{"dc2", "rack0", "pdu1", "host"},
+				Domains: []string{"dc2", "rack0", "pdu1", "host"},
 			},
 			expResult: 4,
 		},
@@ -335,42 +404,42 @@ func TestSystem_FaultDomain_Level(t *testing.T) {
 		},
 		"single level": {
 			domain: &FaultDomain{
-				domains: []string{"host"},
+				Domains: []string{"host"},
 			},
 			level:     0,
 			expResult: "host",
 		},
 		"multi level - bottom": {
 			domain: &FaultDomain{
-				domains: []string{"rack0", "pdu1", "host"},
+				Domains: []string{"rack0", "pdu1", "host"},
 			},
 			level:     0,
 			expResult: "host",
 		},
 		"multi level - middle": {
 			domain: &FaultDomain{
-				domains: []string{"rack0", "pdu1", "host"},
+				Domains: []string{"rack0", "pdu1", "host"},
 			},
 			level:     1,
 			expResult: "pdu1",
 		},
 		"multi level - top": {
 			domain: &FaultDomain{
-				domains: []string{"rack0", "pdu1", "host"},
+				Domains: []string{"rack0", "pdu1", "host"},
 			},
 			level:     2,
 			expResult: "rack0",
 		},
 		"out of range": {
 			domain: &FaultDomain{
-				domains: []string{"rack0", "pdu1", "host"},
+				Domains: []string{"rack0", "pdu1", "host"},
 			},
 			level:  3,
 			expErr: errors.New("out of range"),
 		},
 		"negative": {
 			domain: &FaultDomain{
-				domains: []string{"rack0", "pdu1", "host"},
+				Domains: []string{"rack0", "pdu1", "host"},
 			},
 			level:  -1,
 			expErr: errors.New("out of range"),
@@ -383,15 +452,6 @@ func TestSystem_FaultDomain_Level(t *testing.T) {
 			common.AssertEqual(t, tc.expResult, lev, "unexpected result")
 		})
 	}
-}
-
-func getTestFaultDomain(t *testing.T, str string) *FaultDomain {
-	t.Helper()
-	fd, err := NewFaultDomainFromString(str)
-	if err != nil {
-		t.Fatalf("couldn't create fault domain: %s", err)
-	}
-	return fd
 }
 
 func TestSystem_FaultDomain_Overlaps(t *testing.T) {
@@ -444,8 +504,8 @@ func TestSystem_FaultDomain_Overlaps(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			fd1 := getTestFaultDomain(t, tc.fd1)
-			fd2 := getTestFaultDomain(t, tc.fd2)
+			fd1 := MustCreateFaultDomainFromString(tc.fd1)
+			fd2 := MustCreateFaultDomainFromString(tc.fd2)
 
 			// Should be identical in both directions
 			common.AssertEqual(t, tc.expResult, fd1.Overlaps(fd2), "unexpected result for fd1.Overlaps")
@@ -464,34 +524,34 @@ func TestSystem_FaultDomain_NewChild(t *testing.T) {
 		"nil parent": {
 			childLevel: "child",
 			expResult: &FaultDomain{
-				domains: []string{"child"},
+				Domains: []string{"child"},
 			},
 		},
 		"empty parent": {
 			orig:       &FaultDomain{},
 			childLevel: "child",
 			expResult: &FaultDomain{
-				domains: []string{"child"},
+				Domains: []string{"child"},
 			},
 		},
 		"valid parent": {
 			orig: &FaultDomain{
-				domains: []string{"parent"},
+				Domains: []string{"parent"},
 			},
 			childLevel: "child",
 			expResult: &FaultDomain{
-				domains: []string{"parent", "child"},
+				Domains: []string{"parent", "child"},
 			},
 		},
 		"empty child level": {
 			orig: &FaultDomain{
-				domains: []string{"parent"},
+				Domains: []string{"parent"},
 			},
 			expErr: errors.New("invalid fault domain"),
 		},
 		"whitespace-only child level": {
 			orig: &FaultDomain{
-				domains: []string{"parent"},
+				Domains: []string{"parent"},
 			},
 			childLevel: "   ",
 			expErr:     errors.New("invalid fault domain"),
@@ -502,7 +562,116 @@ func TestSystem_FaultDomain_NewChild(t *testing.T) {
 
 			common.CmpErr(t, tc.expErr, err)
 
-			if diff := cmp.Diff(result, tc.expResult, cmp.AllowUnexported(FaultDomain{})); diff != "" {
+			if diff := cmp.Diff(result, tc.expResult); diff != "" {
+				t.Fatalf("(-want, +got): %s", diff)
+			}
+		})
+	}
+}
+
+func TestSystem_FaultDomain_MustCreateChild(t *testing.T) {
+	for name, tc := range map[string]struct {
+		orig       *FaultDomain
+		childLevel string
+		expResult  *FaultDomain
+		expPanic   bool
+	}{
+		"success": {
+			orig: &FaultDomain{
+				Domains: []string{"parent"},
+			},
+			childLevel: "child",
+			expResult: &FaultDomain{
+				Domains: []string{"parent", "child"},
+			},
+		},
+		"panic": {
+			orig: &FaultDomain{
+				Domains: []string{"parent"},
+			},
+			childLevel: "   ",
+			expPanic:   true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if tc.expPanic {
+				defer func(t *testing.T) {
+					if r := recover(); r == nil {
+						t.Fatal("didn't panic")
+					}
+				}(t)
+			}
+			result := tc.orig.MustCreateChild(tc.childLevel)
+
+			if diff := cmp.Diff(result, tc.expResult); diff != "" {
+				t.Fatalf("(-want, +got): %s", diff)
+			}
+		})
+	}
+}
+
+func TestSystem_FaultDomain_MustCreateFaultDomain(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input     []string
+		expResult *FaultDomain
+		expPanic  bool
+	}{
+		"success": {
+			input: []string{"one", "two", "three"},
+			expResult: &FaultDomain{
+				Domains: []string{"one", "two", "three"},
+			},
+		},
+		"panic": {
+			input:    []string{"//", ""}, // bad fault domain
+			expPanic: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if tc.expPanic {
+				defer func(t *testing.T) {
+					if r := recover(); r == nil {
+						t.Fatal("didn't panic")
+					}
+				}(t)
+			}
+			result := MustCreateFaultDomain(tc.input...)
+
+			if diff := cmp.Diff(result, tc.expResult); diff != "" {
+				t.Fatalf("(-want, +got): %s", diff)
+			}
+		})
+	}
+}
+
+func TestSystem_FaultDomain_MustCreateFaultDomainFromString(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input     string
+		expResult *FaultDomain
+		expPanic  bool
+	}{
+		"success": {
+			input: "/one/two/three",
+			expResult: &FaultDomain{
+				Domains: []string{"one", "two", "three"},
+			},
+		},
+		"panic": {
+			input:    "/not/////good", // bad fault domain
+			expPanic: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if tc.expPanic {
+				defer func(t *testing.T) {
+					if r := recover(); r == nil {
+						t.Fatal("didn't panic")
+					}
+				}(t)
+			}
+			result := MustCreateFaultDomainFromString(tc.input)
+
+			if diff := cmp.Diff(result, tc.expResult); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)
 			}
 		})
