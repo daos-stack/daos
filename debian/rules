@@ -20,7 +20,11 @@ DEB_SCONS_OPTIONS := --config=force --no-rpath USE_INSTALLED=all \
                      CONF_DIR=$(sysconfdir)/daos PREFIX=$(prefix)
 
 ifneq (,$(filter build_type=%,$(DEB_BUILD_OPTIONS)))
+    echo "Build type is $(filter build_type=%,$(DEB_BUILD_OPTIONS))"
     DEB_SCONS_OPTIONS += $(patsubst BUILD_TYPE=%,%,$(filter build_type=%,$(DEB_BUILD_OPTIONS)))
+    echo $(DEB_SCONS_OPTIONS)
+else
+    echo "Build type is not defined"
 endif
 
 export GOCACHE := $(CURDIR)/.gocache
@@ -30,7 +34,7 @@ export GOCACHE := $(CURDIR)/.gocache
 
 override_dh_auto_build:
 	mkdir -p $(GOCACHE)
-	if ! $(SCONS) $(DEB_SCONS_OPTIONS); then \
+	if ! $(SCONS) $(DEB_SCONS_OPTIONS); then               \
 	    cat config.log;                                    \
 	    exit 1;                                            \
 	fi
