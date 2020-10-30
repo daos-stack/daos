@@ -525,7 +525,6 @@ int main(int argc, char **argv)
 	DBG_PRINT("\t***Client MAIN ****\n");
 	DBG_PRINT("\t*******************\n");
 
-
 	while ((c = getopt(argc, argv, "k:o:r:s:v:x:l:m:")) != -1) {
 		switch (c) {
 		case 'r':

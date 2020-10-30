@@ -240,8 +240,8 @@ class CartIvOneNodeTest(Test):
 
             if "invalidate" in operation:
                 command = " {!s} -o '{!s}' -r '{!s}' -k '{!s}:{!s}' " \
-			    .format( command, operation, rank, key_rank, \
-				     key_idx )
+                            .format( command, operation, rank, key_rank, \
+                            key_idx )
                 if 'sync' in action:
                     command = "{!s} -s '{!s}'".format(command, action['sync'])
                 if 'sync' not in action:
@@ -256,9 +256,16 @@ class CartIvOneNodeTest(Test):
                             .format(cli_rtn, command))
 
             if "set_grp_version" in operation:
-                command = " {!s} -o '{!s}' -r '{!s}' -v '{!s}' -m '{!s}'"\
+                command = " {!s} -o '{!s}' -r '{!s}' -v '{!s}' "\
                         .format(command, operation, rank,
-                                action['version'], action['time'])
+                                action['version'])
+
+                if 'time' in action:
+                    command = " {!s} -m '{!s}'"\
+                        .format(command, action['time'])
+                if 'time' not in action:
+                    command = " {!s} -m '{!s}'"\
+                        .format(command, 0)
                 clicmd += command
 
                 self.utils.print("\nClient cmd : %s\n" % clicmd)
@@ -332,8 +339,10 @@ class CartIvOneNodeTest(Test):
             #
             # ******************
             # Invalidate the value
+            #{"operation":"invalidate", "rank":0, "key":(0, 42),
+            #  "sync":"eager_notify"},
             {"operation":"invalidate", "rank":0, "key":(0, 42),
-              "sync":"eager_notify"},
+              "sync":"eager_update"},
             #
             # ****
             # Fetch the value again from each server, expecting failure
@@ -361,14 +370,15 @@ class CartIvOneNodeTest(Test):
             # First, do test for normal failure.
             {"operation":"fetch", "rank":0, "key":(1, 42), "return_code":-1,
              "expected_value":""},
-            {"operation":"set_grp_version", "rank":0, "key":(0, 42), "time":0,
-              "version":"0xdeadc0de", "return_code":0, "expected_value":""},
+            {"operation":"set_grp_version", "rank":0, "key":(1, 42),
+             "version":"0xdeadc0de", "return_code":0, "expected_value":""},
+
             {"operation":"fetch", "rank":0, "key":(1, 42),
-              "return_code":-1036, "expected_value":""},
+             "return_code":-1036, "expected_value":""},
             {"operation":"fetch", "rank":1, "key":(0, 42),
-              "return_code":-1036, "expected_value":""},
-            {"operation":"set_grp_version", "rank":0, "key":(0, 42), "time":0,
-              "version":"0x0", "return_code":0, "expected_value":""},
+             "return_code":-1036, "expected_value":""},
+            {"operation":"set_grp_version", "rank":0, "key":(1, 42),
+             "version":"0x0", "return_code":0, "expected_value":""},
             {"operation":"invalidate", "rank":1, "key":(1, 42)},
             #
             # ******************
@@ -382,11 +392,11 @@ class CartIvOneNodeTest(Test):
             # Need to invalidate on both nodes, stale data.
             {"operation":"update", "rank":1, "key":(1, 42), "value":"beans"},
             {"operation":"set_grp_version", "rank":0, "key":(1, 42), "time":1,
-              "version":"0xc001c001", "return_code":0, "expected_value":""},
+             "version":"0xc001c001", "return_code":0, "expected_value":""},
             {"operation":"fetch", "rank":0, "key":(1, 42),
-              "return_code":0, "expected_value":"beans"},
-            {"operation":"set_grp_version", "rank":0, "key":(1, 42), "time":0,
-              "version":"0", "return_code":0, "expected_value":""},
+             "return_code":0, "expected_value":"beans"},
+            {"operation":"set_grp_version", "rank":0, "key":(1, 42),
+             "version":"0", "return_code":0, "expected_value":""},
             {"operation":"invalidate", "rank":1, "key":(1, 42)},
             {"operation":"invalidate", "rank":0, "key":(1, 42)},
             #
@@ -401,11 +411,11 @@ class CartIvOneNodeTest(Test):
             #
             {"operation":"update", "rank":1, "key":(1, 42), "value":"carrot"},
             {"operation":"set_grp_version", "rank":1, "key":(0, 42), "time":2,
-              "version":"0xdeadc0de", "return_code":0, "expected_value":""},
+             "version":"0xdeadc0de", "return_code":0, "expected_value":""},
             {"operation":"fetch", "rank":0, "key":(1, 42),
-              "return_code":-1036, "expected_value":""},
-            {"operation":"set_grp_version", "rank":1, "key":(0, 42), "time":0,
-              "version":"0x0", "return_code":0, "expected_value":""},
+             "return_code":-1036, "expected_value":""},
+            {"operation":"set_grp_version", "rank":1, "key":(0, 42),
+             "version":"0x0", "return_code":0, "expected_value":""},
             {"operation":"invalidate", "rank":1, "key":(1, 42)},
             #
             # ******************
@@ -418,30 +428,30 @@ class CartIvOneNodeTest(Test):
             #
             {"operation":"update", "rank":0, "key":(4, 42), "value":"turnip" },
             {"operation":"fetch", "rank":1, "key":(4, 42),
-              "return_code":0, "expected_value":"turnip"},
+             "return_code":0, "expected_value":"turnip"},
             {"operation":"fetch", "rank":0, "key":(4, 42),
-              "return_code":0, "expected_value":"turnip"},
+             "return_code":0, "expected_value":"turnip"},
             {"operation":"fetch", "rank":3, "key":(4, 42),
-              "return_code":0, "expected_value":"turnip"},
+             "return_code":0, "expected_value":"turnip"},
             {"operation":"fetch", "rank":2, "key":(4, 42),
-              "return_code":0, "expected_value":"turnip"},
+             "return_code":0, "expected_value":"turnip"},
             {"operation":"fetch", "rank":4, "key":(4, 42),
-              "return_code":0, "expected_value":"turnip"},
+             "return_code":0, "expected_value":"turnip"},
             #
             {"operation":"invalidate", "rank":4, "key":(4, 42),
-              "sync":"eager_notify", "return_code":0},
+             "sync":"eager_notify", "return_code":0},
             #
             # Check for stale state.
             {"operation":"fetch", "rank":4, "key":(4, 42),
-              "return_code":-1, "expected_value":""},
+             "return_code":-1, "expected_value":""},
             {"operation":"fetch", "rank":1, "key":(4, 42),
-              "return_code":-1, "expected_value":""},
+             "return_code":-1, "expected_value":""},
             {"operation":"fetch", "rank":0, "key":(4, 42),
-              "return_code":-1, "expected_value":""},
+             "return_code":-1, "expected_value":""},
             {"operation":"fetch", "rank":2, "key":(4, 42),
-              "return_code":-1, "expected_value":""},
+             "return_code":-1, "expected_value":""},
             {"operation":"fetch", "rank":3, "key":(4, 42),
-              "return_code":-1, "expected_value":""},
+             "return_code":-1, "expected_value":""},
             #
             # ******************
             # Test of version skew on update with synchronization
@@ -451,27 +461,27 @@ class CartIvOneNodeTest(Test):
             #   Should return error and no iv variable created.
             # Make sure nothing is left behind on other nodes.
             #
-            {"operation":"set_grp_version", "rank":4, "key":(0, 42), "time":0,
-              "version":"0xdeadc0de", "return_code":0, "expected_value":""},
+            {"operation":"set_grp_version", "rank":4, "key":(0, 42),
+             "version":"0xdeadc0de", "return_code":0, "expected_value":""},
             {"operation":"update", "rank":0, "key":(0, 42), "value":"beans",
-               "sync":"eager_update", "return_code":-1036 },
+             "sync":"eager_update", "return_code":-1036 },
             # Even though a failue, leaves stale state on ranks 
             {"operation":"fetch", "rank":0, "key":(0, 42),
-              "return_code":0, "expected_value":"beans"},
+             "return_code":0, "expected_value":"beans"},
             {"operation":"fetch", "rank":1, "key":(0, 42),
-              "return_code":0, "expected_value":"beans"},
+             "return_code":0, "expected_value":"beans"},
             {"operation":"fetch", "rank":4, "key":(0, 42),
-              "return_code":-1036, "expected_value":""},
-
+             "return_code":-1036, "expected_value":""},
+            #
             # Clean up. Make sure no stale state left
             {"operation":"invalidate", "rank":0, "key":(0, 42),
-              "sync":"eager_notify", "return_code":0},
+             "sync":"eager_notify", "return_code":0},
             {"operation":"fetch", "rank":0, "key":(0, 42),
-              "return_code":-1, "expected_value":""},
-            {"operation":"set_grp_version", "rank":4, "key":(0, 42),  "time":0,
-              "version":"0x0", "return_code":0, "expected_value":""},
+             "return_code":-1, "expected_value":""},
+            {"operation":"set_grp_version", "rank":4, "key":(0, 42),
+             "version":"0x0", "return_code":0, "expected_value":""},
             {"operation":"fetch", "rank":1, "key":(0, 42),
-              "return_code":-1, "expected_value":""},
+             "return_code":-1, "expected_value":""},
 
         ]
 
