@@ -20,11 +20,7 @@ DEB_SCONS_OPTIONS := --config=force --no-rpath USE_INSTALLED=all \
                      CONF_DIR=$(sysconfdir)/daos PREFIX=$(prefix)
 
 ifneq (,$(filter build_type=%,$(DEB_BUILD_OPTIONS)))
-    echo "Build type is $(DEB_BUILD_OPTIONS)"
     DEB_SCONS_OPTIONS += $(patsubst BUILD_TYPE=%,%,$(filter build_type=%,$(DEB_BUILD_OPTIONS)))
-    echo $(DEB_SCONS_OPTIONS)
-else
-    echo "Build type is not defined - $(DEB_BUILD_OPTIONS)"
 endif
 
 export GOCACHE := $(CURDIR)/.gocache
@@ -41,6 +37,7 @@ override_dh_auto_build:
 
 override_dh_auto_clean:
 	echo $(DEB_BUILD_OPTIONS)
+	echo $(DEB_SCONS_OPTIONS)
 	$(SCONS) --clean
 	rm -rf build install
 	find . -name '*.pyc' -delete
