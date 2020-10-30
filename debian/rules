@@ -15,7 +15,6 @@ ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
     MAKEFLAGS += -j$(NUMJOBS)
 endif
 
-
 ifneq (,$(filter build_type=%,$(DEB_BUILD_OPTIONS)))
     BUILD_TYPE = $(patsubst build_type=%,%,$(filter build_type=%,$(DEB_BUILD_OPTIONS)))
 else
@@ -33,6 +32,7 @@ export GOCACHE := $(CURDIR)/.gocache
 	dh $@ --with-systemd
 
 override_dh_auto_build:
+	echo $(DEB_BUILD_OPTIONS)
 	mkdir -p $(GOCACHE)
 	if ! $(SCONS) $(DEB_SCONS_OPTIONS); then               \
 	    cat config.log;                                    \
@@ -53,6 +53,7 @@ override_dh_auto_clean:
 	dh_auto_clean
 
 override_dh_auto_install:
+	echo $(DEB_BUILD_OPTIONS)
 	mkdir -p $(GOCACHE)
 	$(SCONS) $(DEB_SCONS_OPTIONS)                     \
 	         --install-sandbox=$(CURDIR)/${buildroot} \
