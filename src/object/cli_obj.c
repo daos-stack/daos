@@ -3802,6 +3802,8 @@ dc_obj_fetch_task(tse_task_t *task)
 			goto out_task;
 		}
 	}
+	if (args->extra_flags & DIOF_TO_SPEC_SHARD)
+		obj_auxi->flags |= DRF_SPEC_SHARD;
 
 	dkey_hash = obj_dkey2hash(args->dkey);
 

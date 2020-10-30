@@ -186,7 +186,7 @@ rdbt_find_leader(crt_group_t *group, uint32_t nranks, uint32_t nreplicas,
 	const d_rank_t		NO_RANK = 0xFFFFFF;
 	d_rank_t		ldr_rank = NO_RANK;
 	uint64_t		term = 0;
-	int			rc = 0;
+	int			rc;
 	int			rc_svc;
 
 	for (rank = 0; rank < nranks ; rank++) {

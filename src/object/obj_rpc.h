@@ -160,6 +160,7 @@ enum obj_rpc_flags {
 	DRF_CHECK_EXISTENCE	= (1 << 12),
 	/** Include the map details on fetch (daos_iom_t::iom_recxs) */
 	ORF_CREATE_MAP_DETAIL	= (1 << 13),
+	DRF_SPEC_SHARD		= (1 << 14),
 };
 
 /* common for update/fetch */
