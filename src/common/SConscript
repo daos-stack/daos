@@ -36,9 +36,6 @@ def scons():
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
-    control_tgts = [File('control.c')]
-    Export('control_tgts')
-
     # Hack alert, the argobots headers are required but the shared
     # library isn't so add the dependency so the include path
     # is correct, but set _libs to [] so that the library isn't
@@ -54,7 +51,10 @@ def scons():
 
     prereqs.require(denv, 'protobufc')
     denv.AppendUnique(LIBS=['cart', 'gurt', 'lz4'])
-    denv.AppendUnique(OBJPREFIX='d_')
+
+    control_tgts = [File('control.c')]
+    Export('control_tgts')
+
     common_src = ['debug.c', 'mem.c', 'fail_loc.c', 'lru.c',
                   'misc.c', 'pool_map.c', 'sort.c', 'btree.c', 'prop.c',
                   'btree_class.c', 'tse.c', 'rsvc.c', 'checksum.c',

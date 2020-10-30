@@ -1425,7 +1425,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			defer cleanup()
 
 			if tc.expResp == nil {
-				t.Log("expResp test case parameter required")
+				t.Fatal("expResp test case parameter required")
 			}
 			common.AssertEqual(t, len(tc.sMounts), len(tc.expResp.Mrets), name)
 			for i := range tc.sMounts {
