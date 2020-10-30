@@ -391,6 +391,8 @@ void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_ERROR(DF_UUID ": crt_reply_send() failed, " DF_RC "\n",
 			DP_UUID(in->gsr_puuid), DP_RC(rc));
+
+	d_rank_list_free(out->gsr_ranks);
 }
 
 static int
