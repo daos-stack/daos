@@ -41,7 +41,7 @@
 #define CLI_OBJ_IO_PARMS	8
 #define NIL_BITMAP		(NULL)
 
-#define OBJ_TGT_INLINE_NR	(18)
+#define OBJ_TGT_INLINE_NR	(17)
 struct obj_req_tgts {
 	/* to save memory allocation if #targets <= OBJ_TGT_INLINE_NR */
 	struct daos_shard_tgt	 ort_tgts_inline[OBJ_TGT_INLINE_NR];
@@ -647,6 +647,7 @@ obj_reasb_req_init(struct obj_reasb_req *reasb_req, daos_iod_t *iods,
 
 	D_ASSERT((uintptr_t)(tmp_ptr - size_tgt_nr) <=
 		 (uintptr_t)(buf + buf_size));
+	D_SPIN_INIT(&reasb_req->orr_spin, PTHREAD_PROCESS_PRIVATE);
 
 	return 0;
 }
@@ -670,6 +671,7 @@ obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr)
 		obj_ec_tgt_oiod_fini(reasb_req->tgt_oiods);
 		reasb_req->tgt_oiods = NULL;
 	}
+	D_SPIN_DESTROY(&reasb_req->orr_spin);
 	obj_ec_fail_info_free(reasb_req);
 	D_FREE(reasb_req->orr_iods);
 }
@@ -692,11 +694,9 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 	}
 	obj_auxi->iod_nr = args->nr;
 
-	if (args->extra_flags & DIOF_CHECK_EXISTENCE)
-		return 0;
-
 	/** XXX possible re-order/merge for both replica and EC */
-	if (!daos_oclass_is_ec(oid, &oca))
+	if (args->extra_flags & DIOF_CHECK_EXISTENCE || args->extra_flags &
+	    DIOF_TO_SPEC_SHARD || !daos_oclass_is_ec(oid, &oca))
 		return 0;
 
 	if (!obj_auxi->req_reasbed) {
@@ -1598,7 +1598,7 @@ obj_req_size_valid(daos_size_t iod_size, daos_size_t sgl_size)
 
 static int
 obj_iod_sgl_valid(unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
-		  bool update, bool size_fetch)
+		  bool update, bool size_fetch, bool spec_shard)
 {
 	int	i, j;
 	int	rc;
@@ -1616,9 +1616,9 @@ obj_iod_sgl_valid(unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
 			return -DER_INVAL;
 		}
 		for (j = 0; j < iods[i].iod_nr; j++) {
-			if (iods[i].iod_recxs != NULL &&
+			if (iods[i].iod_recxs != NULL && (!spec_shard &&
 			   (iods[i].iod_recxs[j].rx_idx & PARITY_INDICATOR)
-			    != 0) {
+			    != 0)) {
 				D_ERROR("Invalid IOD, the bit-63 of rx_idx is "
 					"reserved.\n");
 				return -DER_INVAL;
@@ -1752,7 +1752,7 @@ check_query_flags(daos_obj_id_t oid, uint32_t flags, daos_key_t *dkey,
 /* check if the obj request is valid */
 static int
 obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
-	      uint32_t *pm_ver, struct dc_object **p_obj, bool check_existence)
+	      uint32_t *pm_ver, struct dc_object **p_obj)
 {
 	uint32_t		map_ver = *pm_ver;
 	struct obj_auxi_args	*obj_auxi;
@@ -1765,20 +1765,23 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 	switch (opc) {
 	case DAOS_OBJ_RPC_FETCH: {
 		daos_obj_fetch_t	*f_args = args;
-		bool			 size_fetch;
+		bool			 size_fetch, spec_shard, check_exist;
 
-		size_fetch = obj_auxi->reasb_req.orr_size_fetch;
+		spec_shard  = f_args->extra_flags & DIOF_TO_SPEC_SHARD;
+		check_exist = f_args->extra_flags & DIOF_CHECK_EXISTENCE;
+		size_fetch  = obj_auxi->reasb_req.orr_size_fetch;
 		if ((!obj_auxi->io_retry && !obj_auxi->req_reasbed) ||
 		    size_fetch) {
 			if (f_args->dkey == NULL ||
 			    f_args->dkey->iov_buf == NULL ||
-			    (f_args->nr == 0 && !check_existence)) {
+			    (f_args->nr == 0 && !check_exist)) {
 				D_ERROR("Invalid fetch parameter.\n");
 				D_GOTO(out, rc = -DER_INVAL);
 			}
 
 			rc = obj_iod_sgl_valid(f_args->nr, f_args->iods,
-					       f_args->sgls, false, size_fetch);
+					       f_args->sgls, false, size_fetch,
+					       spec_shard);
 			if (rc)
 				goto out;
 		}
@@ -1797,7 +1800,8 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 			}
 
 			rc = obj_iod_sgl_valid(u_args->nr, u_args->iods,
-					       u_args->sgls, true, false);
+					       u_args->sgls, true, false,
+					       false);
 			if (rc)
 				D_GOTO(out, rc);
 		}
@@ -2781,7 +2785,7 @@ merge_key(d_list_t *head, char *key, int key_size)
 
 	D_ALLOC(key_one->key.iov_buf, key_size);
 	if (key_one->key.iov_buf == NULL) {
-		D_FREE(key);
+		D_FREE(key_one);
 		return -DER_NOMEM;
 	}
 
@@ -2852,11 +2856,12 @@ obj_shard_list_key_cb(struct shard_auxi_args *shard_auxi,
 		}
 
 		rc = merge_key(&merge_arg->merge_list, key, key_size);
+		/* free key first regardless of rc */
+		if (alloc_key)
+			D_FREE(key);
 		if (rc)
 			return rc;
 
-		if (alloc_key)
-			D_FREE(key);
 	}
 
 	return 0;
@@ -3768,7 +3773,7 @@ dc_obj_fetch_task(tse_task_t *task)
 	uint8_t                  csum_bitmap = 0;
 
 	rc = obj_req_valid(task, args, DAOS_OBJ_RPC_FETCH, &epoch, &map_ver,
-		&obj, args->extra_flags & DIOF_CHECK_EXISTENCE ? true : false);
+			   &obj);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
@@ -3805,6 +3810,7 @@ dc_obj_fetch_task(tse_task_t *task)
 		args->extra_flags |= DIOF_TO_SPEC_SHARD;
 
 	obj_auxi->spec_shard = (args->extra_flags & DIOF_TO_SPEC_SHARD) != 0;
+
 	if (obj_auxi->spec_shard) {
 		D_ASSERT(!obj_auxi->to_leader);
 
@@ -3891,7 +3897,7 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	int			 rc;
 
 	rc = obj_req_valid(task, args, DAOS_OBJ_RPC_UPDATE, epoch, &map_ver,
-			   &obj, false);
+			   &obj);
 	if (rc != 0)
 		goto out_task; /* invalid parameter */
 
@@ -4332,7 +4338,7 @@ obj_list_common(tse_task_t *task, int opc, daos_obj_list_t *args)
 	int			 shard = -1;
 	int			 rc;
 
-	rc = obj_req_valid(task, args, opc, &epoch, &map_ver, &obj, false);
+	rc = obj_req_valid(task, args, opc, &epoch, &map_ver, &obj);
 	if (rc)
 		goto out_task;
 
@@ -4523,7 +4529,7 @@ obj_punch_common(tse_task_t *task, enum obj_rpc_opc opc, daos_obj_punch_t *args)
 	unsigned int		 map_ver = 0;
 	int			 rc;
 
-	rc = obj_req_valid(task, args, opc, &epoch, &map_ver, NULL, false);
+	rc = obj_req_valid(task, args, opc, &epoch, &map_ver, NULL);
 	if (rc != 0)
 		goto comp; /* invalid parameters */
 
@@ -4695,7 +4701,7 @@ dc_obj_query_key(tse_task_t *api_task)
 		  "Task Argument OPC does not match DC OPC\n");
 
 	rc = obj_req_valid(api_task, api_args, DAOS_OBJ_RPC_QUERY_KEY, &epoch,
-			   &map_ver, &obj, false);
+			   &map_ver, &obj);
 	if (rc)
 		D_GOTO(out_task, rc);
 
@@ -4889,7 +4895,7 @@ dc_obj_sync(tse_task_t *task)
 		  "Task Argument OPC does not match DC OPC\n");
 
 	rc = obj_req_valid(task, args, DAOS_OBJ_RPC_SYNC, &epoch,
-			   &map_ver, &obj, false);
+			   &map_ver, &obj);
 	if (rc)
 		D_GOTO(out_task, rc);
 
