@@ -73,7 +73,8 @@ int uname(struct utsname *buf)
 		return -1;
 	}
 
-	strncpy(buf->nodename, uname_nodename, _UTSNAME_LENGTH);
+	strncpy(buf->nodename, uname_nodename, _UTSNAME_LENGTH - 1);
+	buf->nodename[_UTSNAME_LENGTH - 1] = '\0';
 	return 0;
 }
 

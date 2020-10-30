@@ -3,9 +3,10 @@
 hosts:
   test_servers:
     - server-A
+    - server-B
   test_clients:
-    - server-A
-timeout: 210
+    - server-C
+timeout: 1200
 server_config:
   name: daos_server
   port: 10001
@@ -16,7 +17,6 @@ pool:
 container:
   control_method: daos
 container_acl:
-  user_type: user
   acl_file_name: cont_test_acl1.txt
   new_user: daos_ci_tester_1
   new_group: daos_ci_test_grp_1
@@ -26,12 +26,23 @@ container_acl:
   property:
     - label
     - HappyTesting
+  daos_user: !mux
+    owner:
+      testuser: OWNER
+    user:
+      testuser: user
+    groupuser:
+      testuser: group
+    group:
+      testuser: GROUP
+    everyone:
+      testuser: EVERYONE
   permissions: !mux
     no_permission:
       perm_expect:
          - ""     #container read/write permission
-         - deny   #expecting read
-         - deny   #expectingsg write
+         - deny   #read expect
+         - deny   #write expect
     read_only:
       perm_expect:
          - r
