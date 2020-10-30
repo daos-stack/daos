@@ -1166,7 +1166,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 
 	/* Descending order to guarantee that EC parity is handled firstly. */
 	for (idx = start + obj->cob_grp_size - 1; idx >= start; idx--) {
-		if (reasb_req != NULL &&
+		if (reasb_req != NULL && reasb_req->tgt_bitmap != NULL &&
 		    !isset(reasb_req->tgt_bitmap, idx - start))
 			continue;
 
@@ -1634,11 +1634,12 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 
 out:
 	if (rc < 0) {
-		for (i = 0; i < tgt_cnt; i++)
-			D_FREE(dtrgs[i].dtrg_req_idx);
-
-		for (i = 0; i < act_tgt_cnt; i++)
-			D_FREE(dcdes[i].dcde_reqs);
+		if (dtrgs != NULL)
+			for (i = 0; i < tgt_cnt; i++)
+				D_FREE(dtrgs[i].dtrg_req_idx);
+		if (dcdes != NULL)
+			for (i = 0; i < act_tgt_cnt; i++)
+				D_FREE(dcdes[i].dcde_reqs);
 
 		D_FREE(dcdes);
 		D_FREE(shard_tgts);
