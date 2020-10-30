@@ -31,6 +31,7 @@ PACKAGING_CHECK_DIR ?= ../packaging
 LOCAL_REPOS ?= true
 TEST_PACKAGES ?= ${NAME}
 
+scons_args                = $(shell echo $(SCONS_ARGS) | tr A-Z a-z)
 PR_REPOS                 ?= $(shell git show -s --format=%B | sed -ne 's/^PR-repos: *\(.*\)/\1/p')
 LEAP_15_PR_REPOS         ?= $(shell git show -s --format=%B | sed -ne 's/^PR-repos-leap15: *\(.*\)/\1/p')
 EL_7_PR_REPOS            ?= $(shell git show -s --format=%B | sed -ne 's/^PR-repos-el7: *\(.*\)/\1/p')
@@ -263,7 +264,7 @@ $(DEB_TOP)/$(DEB_DSC): $(CALLING_MAKEFILE) $(DEB_BUILD).tar.$(SRC_EXT) \
 	  $(DEB_TOP)/*.debian.tar.*
 	rm -rf $(DEB_TOP)/*-tmp
 	# cd $(DEB_BUILD); debuild --set-envvar=SCONS_ARGS="$(SCONS_ARGS)" --no-lintian -S --no-sign --no-check-builddeps
-	cd $(DEB_BUILD); DEB_BUILD_OPTIONS=$(SCONS_ARGS) dpkg-buildpackage -S --no-sign --no-check-builddeps
+	cd $(DEB_BUILD); DEB_BUILD_OPTIONS=$(scons_args) dpkg-buildpackage -S --no-sign --no-check-builddeps
 
 $(SRPM): $(SPEC) $(SOURCES)
 	rpmbuild -bs $(COMMON_RPM_ARGS) $(RPM_BUILD_OPTIONS) $(SPEC)
