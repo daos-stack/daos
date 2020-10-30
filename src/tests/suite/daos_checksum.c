@@ -59,7 +59,7 @@ static uint32_t dts_csum_prop_type = DAOS_PROP_CO_CSUM_SHA512;
 static inline int
 csum_ec_enable(void **state)
 {
-	dts_csum_oc = OC_EC_2P2G1;
+	dts_csum_oc = DAOS_OC_EC_K2P2_L32K;
 	return 0;
 }
 
@@ -73,7 +73,7 @@ csum_replia_enable(void **state)
 static inline bool
 csum_ec_enabled()
 {
-	return dts_csum_oc == OC_EC_2P2G1;
+	return dts_csum_oc == DAOS_OC_EC_K2P2_L32K;
 }
 
 static inline uint32_t
@@ -486,7 +486,11 @@ test_fetch_array(void **state)
 {
 	struct csum_test_ctx	ctx = {0};
 	daos_oclass_id_t	oc = dts_csum_oc;
+	uint32_t		node_nr;
 	int			rc;
+
+	if (csum_ec_enabled() && !test_runable(*state, csum_ec_grp_size()))
+		skip();
 
 	/**
 	 * Setup
@@ -527,7 +531,10 @@ test_fetch_array(void **state)
 	client_corrupt_on_fetch();
 	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
-	assert_int_equal(rc, -DER_CSUM);
+	if (csum_ec_enabled())
+		assert_int_equal(rc, 0);
+	else
+		assert_int_equal(rc, -DER_CSUM);
 	client_clear_fault();
 	cleanup_data(&ctx);
 
@@ -549,14 +556,23 @@ test_fetch_array(void **state)
 	client_corrupt_on_fetch();
 	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
-	assert_int_equal(rc, -DER_CSUM);
+	if (csum_ec_enabled())
+		assert_int_equal(rc, 0);
+	else
+		assert_int_equal(rc, -DER_CSUM);
 	client_clear_fault();
 
-	if (test_runable(*state, 2)) {
+	/** verify the csum error can be tolerate */
+	if (csum_ec_enabled()) {
+		node_nr = csum_ec_grp_size();
+	} else {
+		node_nr = 2;
+		oc = OC_RP_2GX;
+	}
+	if (test_runable(*state, node_nr)) {
 		/** 5. Replicated object with corruption */
 		cleanup_cont_obj(&ctx);
-		setup_cont_obj(&ctx, dts_csum_prop_type, false,
-			       1024*8, OC_RP_2GX);
+		setup_cont_obj(&ctx, dts_csum_prop_type, false, 1024 * 8, oc);
 		rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 				     &ctx.update_iod, &ctx.update_sgl, NULL);
 		assert_int_equal(rc, 0);
@@ -1170,7 +1186,14 @@ single_value_test(void **state, bool large_buf)
 
 	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
-	assert_int_equal(-DER_CSUM, rc);
+	/* above client_corrupt_on_update only corrupt first shard's update, for
+	 * large_buf singv it is evenly distributed to multiple shard and one
+	 * shard's csum error can be recovered.
+	 */
+	if (csum_ec_enabled() && large_buf)
+		assert_int_equal(0, rc);
+	else
+		assert_int_equal(-DER_CSUM, rc);
 	client_clear_fault();
 
 	/**
@@ -1186,7 +1209,10 @@ single_value_test(void **state, bool large_buf)
 
 	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
-	assert_int_equal(-DER_CSUM, rc);
+	if (csum_ec_enabled())
+		assert_int_equal(0, rc);
+	else
+		assert_int_equal(-DER_CSUM, rc);
 	client_clear_fault();
 
 	/** Reset the container with server side verification enabled */
@@ -2255,8 +2281,9 @@ static const struct CMUnitTest csum_tests[] = {
 	EC_CSUM_TEST("DAOS_EC_CSUM00: csum disabled", checksum_disabled),
 	EC_CSUM_TEST("DAOS_EC_CSUM01: simple update with server side verify",
 		     io_with_server_side_verify),
-	EC_CSUM_TEST("DAOS_EC_CSUM02: Single Value Checksum", single_value),
-	EC_CSUM_TEST("DAOS_EC_CSUM03: DTX with checksum enabled against EC obj",
+	EC_CSUM_TEST("DAOS_EC_CSUM02: Fetch EC Array Type", test_fetch_array),
+	EC_CSUM_TEST("DAOS_EC_CSUM03: Single Value Checksum", single_value),
+	EC_CSUM_TEST("DAOS_EC_CSUM04: DTX with checksum enabled against EC obj",
 		     dtx_with_csum),
 };
 
