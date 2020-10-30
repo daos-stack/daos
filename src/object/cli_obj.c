@@ -2120,7 +2120,7 @@ obj_req_get_tgts(struct dc_object *obj, int *shard, daos_key_t *dkey,
 
 	rc = obj_shards_2_fwtgts(obj, map_ver, bit_map, shard_idx,
 				 shard_cnt, grp_nr, flags, obj_auxi);
-	if (rc != 0)
+	if (rc != 0 && rc != -DER_SHARDS_OVERLAP)
 		D_ERROR("opc %d "DF_OID", obj_shards_2_fwtgts failed "
 			""DF_RC".\n", opc, DP_OID(obj->cob_md.omd_id),
 			DP_RC(rc));
