@@ -15,14 +15,17 @@ ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
     MAKEFLAGS += -j$(NUMJOBS)
 endif
 
-SCONS = scons -j $(NUMJOBS)
-DEB_SCONS_OPTIONS := --config=force --no-rpath USE_INSTALLED=all \
-                     CONF_DIR=$(sysconfdir)/daos PREFIX=$(prefix)
 
 ifneq (,$(filter build_type=%,$(DEB_BUILD_OPTIONS)))
     BUILD_TYPE = $(patsubst build_type=%,%,$(filter build_type=%,$(DEB_BUILD_OPTIONS)))
-    DEB_SCONS_OPTIONS += BUILD_TYPE=$(BUILD_TYPE)
+else
+    BUILD_TYPE = release
 endif
+
+SCONS = scons -j $(NUMJOBS)
+DEB_SCONS_OPTIONS := --config=force --no-rpath USE_INSTALLED=all \
+                     CONF_DIR=$(sysconfdir)/daos PREFIX=$(prefix) \
+                     BUILD_TYPE=$(BUILD_TYPE)
 
 export GOCACHE := $(CURDIR)/.gocache
 
