@@ -44,6 +44,7 @@ func TestBdev_ScanResponse_filter(t *testing.T) {
 		scanResp   *ScanResponse
 		deviceList []string
 		expResp    *ScanResponse
+		expNum     int
 	}{
 		"scan response no filter": {
 			scanResp: &ScanResponse{
@@ -61,6 +62,7 @@ func TestBdev_ScanResponse_filter(t *testing.T) {
 			expResp: &ScanResponse{
 				Controllers: storage.NvmeControllers{ctrlr1, ctrlr3},
 			},
+			expNum: 1,
 		},
 		"scan response inclusive filter": {
 			deviceList: []string{ctrlr1.PciAddr, ctrlr2.PciAddr, ctrlr3.PciAddr},
@@ -79,11 +81,143 @@ func TestBdev_ScanResponse_filter(t *testing.T) {
 			expResp: &ScanResponse{
 				Controllers: storage.NvmeControllers{},
 			},
+			expNum: 2,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			gotResp := tc.scanResp.filter(tc.deviceList...)
+			gotNum, gotResp := tc.scanResp.filter(tc.deviceList...)
 
+			common.AssertEqual(t, tc.expNum, gotNum, name+" expected number filtered")
+			if diff := cmp.Diff(tc.expResp, gotResp, defCmpOpts()...); diff != "" {
+				t.Fatalf("\nunexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestBdev_forwardScan(t *testing.T) {
+	for name, tc := range map[string]struct {
+		scanReq      ScanRequest
+		cache        *ScanResponse
+		scanResp     *ScanResponse
+		scanErr      error
+		shouldUpdate bool
+		expMsg       string
+		expResp      *ScanResponse
+		expErr       error
+	}{
+		"scan error": {
+			scanReq: ScanRequest{},
+			scanErr: errors.New("fail"),
+			expErr:  errors.New("fail"),
+		},
+		"nil scan response": {
+			scanReq:  ScanRequest{},
+			scanResp: nil,
+			expErr:   errors.New("unexpected nil response from bdev backend"),
+		},
+		"nil devices": {
+			scanReq:      ScanRequest{},
+			scanResp:     new(ScanResponse),
+			shouldUpdate: true,
+			expMsg:       "bdev scan: update cache (0 devices)",
+			expResp:      new(ScanResponse),
+		},
+		"no devices": {
+			scanReq: ScanRequest{},
+			scanResp: &ScanResponse{
+				Controllers: storage.NvmeControllers{},
+			},
+			shouldUpdate: true,
+			expMsg:       "bdev scan: update cache (0 devices)",
+			expResp: &ScanResponse{
+				Controllers: storage.NvmeControllers{},
+			},
+		},
+		"update cache": {
+			scanReq: ScanRequest{},
+			scanResp: &ScanResponse{
+				Controllers: storage.MockNvmeControllers(3),
+			},
+			shouldUpdate: true,
+			expMsg:       "bdev scan: update cache (3 devices)",
+			expResp: &ScanResponse{
+				Controllers: storage.MockNvmeControllers(3),
+			},
+		},
+		"update empty cache": {
+			scanReq: ScanRequest{},
+			cache:   &ScanResponse{},
+			scanResp: &ScanResponse{
+				Controllers: storage.MockNvmeControllers(3),
+			},
+			shouldUpdate: true,
+			expMsg:       "bdev scan: update cache (3 devices)",
+			expResp: &ScanResponse{
+				Controllers: storage.MockNvmeControllers(3),
+			},
+		},
+		"reuse cache": {
+			scanReq: ScanRequest{},
+			cache: &ScanResponse{
+				Controllers: storage.MockNvmeControllers(2),
+			},
+			scanResp: &ScanResponse{
+				Controllers: storage.MockNvmeControllers(3),
+			},
+			expMsg: "bdev scan: reuse cache (2 devices)",
+			expResp: &ScanResponse{
+				Controllers: storage.MockNvmeControllers(2),
+			},
+		},
+		"bypass cache": {
+			scanReq: ScanRequest{NoCache: true},
+			cache: &ScanResponse{
+				Controllers: storage.MockNvmeControllers(2),
+			},
+			scanResp: &ScanResponse{
+				Controllers: storage.MockNvmeControllers(3),
+			},
+			expMsg: "bdev scan: bypass cache (3 devices)",
+			expResp: &ScanResponse{
+				Controllers: storage.MockNvmeControllers(3),
+			},
+		},
+		"filtered devices": {
+			scanReq: ScanRequest{
+				DeviceList: []string{
+					storage.MockNvmeController(0).PciAddr,
+					storage.MockNvmeController(1).PciAddr,
+				},
+			},
+			scanResp: &ScanResponse{
+				Controllers: storage.MockNvmeControllers(3),
+			},
+			shouldUpdate: true,
+			expMsg:       "bdev scan: update cache (3-1 filtered devices)",
+			expResp: &ScanResponse{
+				Controllers: storage.MockNvmeControllers(2),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			scanFn := func(r ScanRequest) (*ScanResponse, error) {
+				return tc.scanResp, tc.scanErr
+			}
+
+			gotMsg, gotResp, shouldUpdate, gotErr := forwardScan(tc.scanReq, tc.cache, scanFn)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if gotErr != nil {
+				return
+			}
+
+			common.AssertEqual(t, tc.shouldUpdate, shouldUpdate, name)
+			if diff := cmp.Diff(tc.expMsg, gotMsg, defCmpOpts()...); diff != "" {
+				t.Fatalf("\nunexpected message (-want, +got):\n%s\n", diff)
+			}
 			if diff := cmp.Diff(tc.expResp, gotResp, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected response (-want, +got):\n%s\n", diff)
 			}

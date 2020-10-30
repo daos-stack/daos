@@ -13,6 +13,9 @@ post_provision_config_nodes() {
     #                 slurm-example-configs slurmctld slurm-slurmmd
     #fi
 
+    # Reserve port ranges 31416-31516 for DAOS and CART servers
+    echo 31416-31516 > /proc/sys/net/ipv4/ip_local_reserved_ports
+
     if [ -n "$DAOS_STACK_GROUP_REPO" ]; then
          # rm -f /etc/yum.repos.d/*"$DAOS_STACK_GROUP_REPO"
         zypper --non-interactive ar                                           \
@@ -20,8 +23,6 @@ post_provision_config_nodes() {
         zypper --non-interactive mr --gpgcheck-allow-unsigned-repo \
                daos-stack-group-repo
         rpm --import 'https://download.opensuse.org/repositories/science:/HPC/openSUSE_Leap_15.2/repodata/repomd.xml.key'
-        zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref \
-               daos-stack-group-repo
     fi
 
     if [ -n "$DAOS_STACK_LOCAL_REPO" ]; then
@@ -46,6 +47,8 @@ post_provision_config_nodes() {
         done
     fi
 
+    zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref
+
     # TODO: port this to zypper, but do we even need it any more?
     #if [ -n "$INST_RPMS" ]; then
         #yum -y erase $INST_RPMS
@@ -57,6 +60,12 @@ post_provision_config_nodes() {
                /etc/profile.d/lmod.sh;                                        \
     fi
 
+    zypper --non-interactive in lsb-release
+
+    # force install of avocado 52.1
+    zypper --non-interactive remove avocado{,-common} python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}}
+    zypper --non-interactive install {avocado-common,python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}}}-52.1
+
     # shellcheck disable=SC2086
     if [ -n "$INST_RPMS" ] && \
        ! zypper --non-interactive in $INST_RPMS; then
@@ -67,4 +76,8 @@ post_provision_config_nodes() {
         done
         exit "$rc"
     fi
+
+    # now make sure everything is fully up-to-date
+    zypper addlock daos daos-\*
+    time zypper --non-interactive up
 }

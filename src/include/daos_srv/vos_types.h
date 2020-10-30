@@ -220,8 +220,8 @@ enum {
 	VOS_OF_COND_AKEY_UPDATE		= DAOS_COND_AKEY_UPDATE,
 	/** Conditional Op: Fetch akey if it exists, fail otherwise */
 	VOS_OF_COND_AKEY_FETCH		= DAOS_COND_AKEY_FETCH,
-	/** replay punch (underwrite) */
-	VOS_OF_REPLAY_PC		= (1 << 7),
+	/** Indicates akey conditions are specified in iod_flags */
+	VOS_OF_COND_PER_AKEY		= DAOS_COND_PER_AKEY,
 	/* critical update - skip checks on SCM system/held space */
 	VOS_OF_CRIT			= (1 << 8),
 	/** Instead of update or punch of extents, remove all extents
@@ -233,9 +233,13 @@ enum {
 	/* query recx list */
 	VOS_OF_FETCH_RECX_LIST		= (1 << 11),
 	/* only set read TS */
-	VOS_OF_FETCH_SET_TS_ONLY		= (1 << 12),
+	VOS_OF_FETCH_SET_TS_ONLY	= (1 << 12),
 	/* check the target (obj/dkey/akey) existence */
 	VOS_OF_FETCH_CHECK_EXISTENCE	= (1 << 13),
+	/** Set when propagating a punch that results in empty subtree */
+	VOS_OF_PUNCH_PROPAGATE		= (1 << 14),
+	/** replay punch (underwrite) */
+	VOS_OF_REPLAY_PC		= (1 << 15),
 };
 
 /** Mask for any conditionals passed to to the fetch */
@@ -259,6 +263,7 @@ enum {
 	(VOS_OF_COND_DKEY_UPDATE | VOS_OF_COND_AKEY_UPDATE)
 
 D_CASSERT((VOS_OF_REPLAY_PC & DAOS_COND_MASK) == 0);
+D_CASSERT((VOS_OF_PUNCH_PROPAGATE & DAOS_COND_MASK) == 0);
 
 /** vos definitions that match daos_obj_key_query flags */
 enum {
@@ -299,6 +304,8 @@ enum {
 	VOS_IT_FOR_REBUILD	= (1 << 5),
 	/** Iterate only show punched records in interval */
 	VOS_IT_PUNCHED		= (1 << 6),
+	/** Mask for all flags */
+	VOS_IT_MASK		= (1 << 7) - 1,
 };
 
 /**
@@ -319,6 +326,8 @@ typedef struct {
 	daos_key_t		ip_dkey;
 	/** attribute key (VOS_ITER_DKEY/RECX/SINGLE, standalone only) */
 	daos_key_t		ip_akey;
+	/** address range (RECX); ip_recx.rx_nr == 0 means entire range */
+	daos_recx_t             ip_recx;
 	/** epoch validity range for the iterator (standalone only) */
 	daos_epoch_range_t	ip_epr;
 	/** epoch logic expression for the iterator. */

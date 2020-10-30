@@ -76,6 +76,7 @@ class TestPool(TestDaosApiBase):
         self.svc_ranks = None
         self.connected = False
         self.dmg = dmg_command
+        self.query_data = []
 
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
@@ -573,7 +574,9 @@ class TestPool(TestDaosApiBase):
             "DAOS_SVCL": "1",
             "PYTHONPATH": os.getenv("PYTHONPATH", "")
         }
-        load_mpi("openmpi")
+        if not load_mpi("openmpi"):
+            raise CommandFailure("Failed to load openmpi")
+
         current_path = os.path.dirname(os.path.abspath(__file__))
         command = "{} --np {} --hostfile {} {} {} testfile".format(
             orterun, processes, hostfile,
@@ -632,12 +635,13 @@ class TestPool(TestDaosApiBase):
 
         Returns:
             dict: a dictionary of SCM/NVMe pool space usage in %(float)
+
         """
         daos_space = self.get_pool_daos_space()
-        pool_percent = {'scm':round(float(daos_space["s_free"][0])/
-                                    float(daos_space["s_total"][0]) * 100, 2),
-                        'nvme':round(float(daos_space["s_free"][1])/
-                                     float(daos_space["s_total"][1]) * 100, 2)}
+        pool_percent = {'scm': round(float(daos_space["s_free"][0]) /
+                                     float(daos_space["s_total"][0]) * 100, 2),
+                        'nvme': round(float(daos_space["s_free"][1]) /
+                                      float(daos_space["s_total"][1]) * 100, 2)}
         return pool_percent
 
     def get_pool_rebuild_status(self):
@@ -696,3 +700,16 @@ class TestPool(TestDaosApiBase):
         elif not status:
             self.log.error("Errors detected reading data during rebuild")
         return status
+
+    @fail_on(CommandFailure)
+    def set_query_data(self):
+        """Execute dmg pool query and store the results.
+
+        Only supported with the dmg control method.
+        """
+        self.query_data = []
+        if self.pool:
+            if self.dmg:
+                self.query_data = self.dmg.pool_query(self.pool.get_uuid_str())
+            else:
+                self.log.error("Error: Undefined dmg command")

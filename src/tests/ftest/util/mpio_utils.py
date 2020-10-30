@@ -50,7 +50,9 @@ class MpioUtils():
             bool: whether mpich is installed on the first host in the list
 
         """
-        load_mpi('mpich')
+        if not load_mpi('mpich'):
+            print("Failed to load mpich")
+            return False
 
         # checking mpich install
         cmd = "set -e; "                                                \
@@ -99,6 +101,7 @@ class MpioUtils():
         env["DAOS_POOL"] = "{}".format(pool_uuid)
         env["DAOS_SVCL"] = "{}".format(":".join([str(item) for item in svcl]))
         env["DAOS_CONT"] = "{}".format(cont_uuid)
+        env["DAOS_BYPASS_DUNS"] = "1"
         mpirun = os.path.join(self.mpichinstall, "bin", "mpirun")
 
         executables = {

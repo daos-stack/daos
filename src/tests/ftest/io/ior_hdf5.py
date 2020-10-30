@@ -59,7 +59,7 @@ class IorHdf5(IorTestBase):
             Run IOR on HDF5 with vol connector using a single shared file
             Generate 2 terabytes of data with IOR and read back and verify
 
-        :avocado: tags=all,full_regression,large,daosio,hdf5,vol,iorhdf5vol
+        :avocado: tags=all,full_regression,hw,large,daosio,hdf5,vol,iorhdf5vol
         """
         hdf5_plugin_path = self.params.get("plugin_path", '/run/hdf5_vol/*')
         self.run_ior_with_pool(plugin_path=hdf5_plugin_path)

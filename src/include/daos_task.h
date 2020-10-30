@@ -48,14 +48,12 @@ typedef enum {
 
 	/** Management APIs */
 	DAOS_OPC_SVC_RIP = 0,
-	DAOS_OPC_POOL_CREATE,
-	DAOS_OPC_POOL_DESTROY,
 	DAOS_OPC_POOL_EXTEND,
 	DAOS_OPC_POOL_EVICT,
 	DAOS_OPC_SET_PARAMS,
 	DAOS_OPC_POOL_ADD_REPLICAS,
 	DAOS_OPC_POOL_REMOVE_REPLICAS,
-	DAOS_OPC_MGMT_LIST_POOLS,
+	DAOS_OPC_MGMT_GET_BS_STATE,
 
 	/** Pool APIs */
 	DAOS_OPC_POOL_CONNECT,
@@ -364,6 +362,13 @@ typedef struct {
 	/** length of array */
 	daos_size_t		*npools;
 } daos_mgmt_list_pools_t;
+
+/** Blobstore state query args */
+typedef struct {
+	const char		*grp;
+	uuid_t			uuid;
+	int			*state;
+} daos_mgmt_get_bs_state_t;
 
 /** pool service stop args */
 typedef struct {

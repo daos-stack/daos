@@ -64,28 +64,6 @@ func mockSpdkController(varIdx ...int32) storage.NvmeController {
 	return *s
 }
 
-func mockSpdkNamespace(varIdx ...int32) storage.NvmeNamespace {
-	native := storage.MockNvmeNamespace(varIdx...)
-
-	s := new(storage.NvmeNamespace)
-	if err := convertTypes(native, s); err != nil {
-		panic(err)
-	}
-
-	return *s
-}
-
-func mockSpdkDeviceHealth(varIdx ...int32) storage.NvmeControllerHealth {
-	native := storage.MockNvmeControllerHealth(varIdx...)
-
-	s := new(storage.NvmeControllerHealth)
-	if err := convertTypes(native, s); err != nil {
-		panic(err)
-	}
-
-	return *s
-}
-
 func backendWithMockBinding(log logging.Logger, mec spdk.MockEnvCfg, mnc spdk.MockNvmeCfg) *spdkBackend {
 	return &spdkBackend{
 		log: log,
@@ -199,7 +177,7 @@ func TestBdevBackendFormat(t *testing.T) {
 			},
 			expResp: &FormatResponse{
 				DeviceResponses: map[string]*DeviceFormatResponse{
-					pci1: &DeviceFormatResponse{
+					pci1: {
 						Formatted: true,
 					},
 				},
@@ -335,7 +313,7 @@ func TestBdevBackendFormat(t *testing.T) {
 			},
 			expResp: &FormatResponse{
 				DeviceResponses: map[string]*DeviceFormatResponse{
-					"foo": &DeviceFormatResponse{
+					"foo": {
 						Formatted: true,
 					},
 				},
@@ -348,7 +326,7 @@ func TestBdevBackendFormat(t *testing.T) {
 			},
 			expResp: &FormatResponse{
 				DeviceResponses: map[string]*DeviceFormatResponse{
-					"foo": &DeviceFormatResponse{
+					"foo": {
 						Formatted: true,
 					},
 				},
@@ -361,7 +339,7 @@ func TestBdevBackendFormat(t *testing.T) {
 			},
 			expResp: &FormatResponse{
 				DeviceResponses: map[string]*DeviceFormatResponse{
-					"foo": &DeviceFormatResponse{
+					"foo": {
 						Formatted: true,
 					},
 				},

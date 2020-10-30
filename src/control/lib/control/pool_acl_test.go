@@ -55,7 +55,7 @@ func TestControl_PoolGetACL(t *testing.T) {
 	}{
 		"local failure": {
 			req: &PoolGetACLReq{
-				UUID: MockUUID,
+				UUID: common.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryError: errors.New("local failed"),
@@ -64,7 +64,7 @@ func TestControl_PoolGetACL(t *testing.T) {
 		},
 		"remote failure": {
 			req: &PoolGetACLReq{
-				UUID: MockUUID,
+				UUID: common.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
@@ -86,7 +86,7 @@ func TestControl_PoolGetACL(t *testing.T) {
 				}),
 			},
 			req: &PoolGetACLReq{
-				UUID: MockUUID,
+				UUID: common.MockUUID(),
 			},
 			expResp: &PoolGetACLResp{ACL: MockACL},
 		},
@@ -126,7 +126,7 @@ func TestControl_PoolOverwriteACL(t *testing.T) {
 		"local failure": {
 			req: &PoolOverwriteACLReq{
 				ACL:  MockACL,
-				UUID: MockUUID,
+				UUID: common.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryError: errors.New("local failed"),
@@ -136,7 +136,7 @@ func TestControl_PoolOverwriteACL(t *testing.T) {
 		"remote failure": {
 			req: &PoolOverwriteACLReq{
 				ACL:  MockACL,
-				UUID: MockUUID,
+				UUID: common.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
@@ -151,7 +151,7 @@ func TestControl_PoolOverwriteACL(t *testing.T) {
 		},
 		"empty ACL": {
 			req: &PoolOverwriteACLReq{
-				UUID: MockUUID,
+				UUID: common.MockUUID(),
 			},
 			expErr: errors.New("empty ACL"),
 		},
@@ -165,7 +165,7 @@ func TestControl_PoolOverwriteACL(t *testing.T) {
 			},
 			req: &PoolOverwriteACLReq{
 				ACL:  MockACL,
-				UUID: MockUUID,
+				UUID: common.MockUUID(),
 			},
 			expResp: &PoolOverwriteACLResp{ACL: MockACL},
 		},
@@ -205,7 +205,7 @@ func TestControl_PoolUpdateACL(t *testing.T) {
 		"local failure": {
 			req: &PoolUpdateACLReq{
 				ACL:  MockACL,
-				UUID: MockUUID,
+				UUID: common.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryError: errors.New("local failed"),
@@ -215,7 +215,7 @@ func TestControl_PoolUpdateACL(t *testing.T) {
 		"remote failure": {
 			req: &PoolUpdateACLReq{
 				ACL:  MockACL,
-				UUID: MockUUID,
+				UUID: common.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
@@ -230,7 +230,7 @@ func TestControl_PoolUpdateACL(t *testing.T) {
 		},
 		"empty ACL": {
 			req: &PoolUpdateACLReq{
-				UUID: MockUUID,
+				UUID: common.MockUUID(),
 			},
 			expErr: errors.New("empty ACL"),
 		},
@@ -244,7 +244,7 @@ func TestControl_PoolUpdateACL(t *testing.T) {
 			},
 			req: &PoolUpdateACLReq{
 				ACL:  MockACL,
-				UUID: MockUUID,
+				UUID: common.MockUUID(),
 			},
 			expResp: &PoolUpdateACLResp{ACL: MockACL},
 		},
@@ -285,7 +285,7 @@ func TestControl_PoolDeleteACL(t *testing.T) {
 	}{
 		"local failure": {
 			req: &PoolDeleteACLReq{
-				UUID:      MockUUID,
+				UUID:      common.MockUUID(),
 				Principal: testPrincipal,
 			},
 			mic: &MockInvokerConfig{
@@ -295,7 +295,7 @@ func TestControl_PoolDeleteACL(t *testing.T) {
 		},
 		"remote failure": {
 			req: &PoolDeleteACLReq{
-				UUID:      MockUUID,
+				UUID:      common.MockUUID(),
 				Principal: testPrincipal,
 			},
 			mic: &MockInvokerConfig{
@@ -312,7 +312,7 @@ func TestControl_PoolDeleteACL(t *testing.T) {
 		},
 		"empty principal": {
 			req: &PoolDeleteACLReq{
-				UUID: MockUUID,
+				UUID: common.MockUUID(),
 			},
 			expErr: errors.New("no principal provided"),
 		},
@@ -324,7 +324,7 @@ func TestControl_PoolDeleteACL(t *testing.T) {
 				}),
 			},
 			req: &PoolDeleteACLReq{
-				UUID:      MockUUID,
+				UUID:      common.MockUUID(),
 				Principal: testPrincipal,
 			},
 			expResp: &PoolDeleteACLResp{

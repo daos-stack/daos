@@ -22,7 +22,7 @@
  */
 
 /*
- * Types to share between data and control planes.
+ * Primitives to share between data and control planes.
  */
 
 #ifndef __CONTROL_H__
@@ -30,6 +30,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <assert.h>
 
 #define HEALTH_STAT_STR_LEN 128
 
@@ -38,11 +39,14 @@
  * bio_bs_monitor(). Used to determine faulty device status.
  * Also retrieved on request via go-spdk bindings from the control-plane.
  */
-struct nvme_health_stats {
+struct nvme_stats {
+	uint64_t	 timestamp;
+	/* Device identifiers */
 	char		 model[HEALTH_STAT_STR_LEN];
 	char		 serial[HEALTH_STAT_STR_LEN];
-	uint64_t	 timestamp;
-	uint64_t	 err_count; /* error log page */
+	/* Device space utilization */
+	uint64_t	 total_bytes;
+	uint64_t	 avail_bytes;
 	/* Device health details */
 	uint32_t	 warn_temp_time;
 	uint32_t	 crit_temp_time;
@@ -65,4 +69,16 @@ struct nvme_health_stats {
 	bool		 read_only_warn;
 	bool		 volatile_mem_warn; /*volatile memory backup*/
 };
-#endif /* __CONTROL_H__ */
+
+/**
+ * Parse input string and output ASCII as required by the NVMe spec.
+ *
+ * \param[out] dst	pre-allocated destination string buffer
+ * \param[in]  dst_sz	destination buffer size
+ * \param[in]  src	source buffer containing char array
+ * \param[in]  src_sz	source buffer size
+ *
+ * \return		Zero on success, negative value on error
+ */
+int copy_ascii(char *dst, size_t dst_sz, const void *src, size_t src_sz);
+#endif /* __CONTROL_H_ */

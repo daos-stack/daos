@@ -332,18 +332,18 @@ void test_rebuild_wait(test_arg_t **args, int args_cnt);
 void daos_exclude_target(const uuid_t pool_uuid, const char *grp,
 			 const char *dmg_config, const d_rank_list_t *svc,
 			 d_rank_t rank, int tgt);
-void daos_add_target(const uuid_t pool_uuid, const char *grp,
-		     const char *dmg_config, const d_rank_list_t *svc,
-		     d_rank_t rank, int tgt);
+void daos_reint_target(const uuid_t pool_uuid, const char *grp,
+		       const char *dmg_config, const d_rank_list_t *svc,
+		       d_rank_t rank, int tgt);
 void daos_drain_target(const uuid_t pool_uuid, const char *grp,
 		       const char *dmg_config, const d_rank_list_t *svc,
 		       d_rank_t rank, int tgt);
 void daos_exclude_server(const uuid_t pool_uuid, const char *grp,
 			 const char *dmg_config, const d_rank_list_t *svc,
 			 d_rank_t rank);
-void daos_add_server(const uuid_t pool_uuid, const char *grp,
-		     const char *dmg_config, const d_rank_list_t *svc,
-		     d_rank_t rank);
+void daos_reint_server(const uuid_t pool_uuid, const char *grp,
+		       const char *dmg_config, const d_rank_list_t *svc,
+		       d_rank_t rank);
 
 void
 get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data,
@@ -391,6 +391,16 @@ int rebuild_pool_connect_internal(void *data);
 int rebuild_sub_setup(void **state);
 int rebuild_sub_teardown(void **state);
 int rebuild_small_sub_setup(void **state);
+
+int get_server_config(char *host, char *server_config_file);
+int get_server_log_file(char *host, char *server_config_file,
+			char *log_file);
+int verify_server_log_mask(char *host, char *server_config_file,
+			   char *log_mask);
+int verify_state_in_log(char *host, char *log_file, char *state);
+
+int wait_and_verify_blobstore_state(uuid_t bs_uuid, char *expected_state,
+				    const char *group);
 
 static inline void
 daos_test_print(int rank, char *message)
