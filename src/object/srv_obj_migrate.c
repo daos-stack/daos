@@ -1786,7 +1786,7 @@ retry:
 						 DIOF_TO_LEADER) {
 			daos_anchor_set_flags(&dkey_anchor,
 					      DIOF_WITH_SPEC_EPOCH);
-			D_DEBUG(DB_REBUILD, "No leader avaible retry"
+			D_DEBUG(DB_REBUILD, "No leader available retry"
 				DF_UOID"\n", DP_UOID(arg->oid));
 			D_GOTO(retry, rc);
 		} else if (rc) {
