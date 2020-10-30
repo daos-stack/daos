@@ -539,6 +539,26 @@ d_time2s(struct timespec t)
 	return (double) t.tv_sec + (double) t.tv_nsec / 1e9;
 }
 
+/**
+ * Backoff sequence (opaque)
+ *
+ * Used to generate a sequence of uint32_t backoffs with user-defined semantics
+ * (e.g., numbers of microseconds for delaying RPC retries). See
+ * d_backoff_seq_init and d_backoff_seq_next for the algorithm.
+ */
+struct d_backoff_seq {
+	uint8_t		bos_flags;	/* unused */
+	uint8_t		bos_nzeros;
+	uint16_t	bos_factor;
+	uint32_t	bos_max;
+	uint32_t	bos_next;
+};
+
+int d_backoff_seq_init(struct d_backoff_seq *seq, uint8_t nzeros,
+		       uint16_t factor, uint32_t next, uint32_t max);
+void d_backoff_seq_fini(struct d_backoff_seq *seq);
+uint32_t d_backoff_seq_next(struct d_backoff_seq *seq);
+
 static inline bool
 is_on_stack(void *ptr)
 {
