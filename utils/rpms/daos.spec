@@ -9,7 +9,7 @@
 %endif
 
 %global scons_args %{getenv:SCONS_ARGS}
-%if %undefined %scons_args
+%if (%{undefined} %{scons_args})
 %global scons_args BUILD_TYPE=release
 %endif
 
