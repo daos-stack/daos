@@ -46,6 +46,15 @@ def scons_faults_args() {
     }
 }
 
+def rpm_faults_args() {
+    // if the faults-enabled pragma is false or it a release candidate; disable fault injection
+    if ((cachedCommitPragma(pragma: 'faults-enabled', def_val: 'true') != 'true') || release_candidate()) {
+        return "--without=fault-injection"
+    } else {
+        return "--with=fault-injection"
+    }
+}
+
 def skip_stage(String stage, boolean def_val = false) {
     String value = 'false'
     if (def_val) {
@@ -431,6 +440,7 @@ pipeline {
         SSH_KEY_ARGS = "-ici_key"
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
+        RPM_FAULTS_ARGS = rpm_faults_args()
         SCONS_FAULTS_ARGS = scons_faults_args()
     }
 
