@@ -5,6 +5,41 @@
 System monitoring and telemetry data will be provided as part of the
 control plane and will be documented in a future revision.
 
+### Per-Storage-Server Space Utilization
+
+To query SCM and NVMe storage space usage and show how much space is available to
+create new DAOS pools with, run the following command:
+
+```bash
+bash-4.2$ dmg storage query usage
+Hosts   SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used
+-----   --------- -------- -------- ---------- --------- ---------
+wolf-71 6.4 TB    2.0 TB   68 %     1.5 TB     1.1 TB    27 %
+wolf-72 6.4 TB    2.0 TB   68 %     1.5 TB     1.1 TB    27 %
+```
+
+The command output shows online DAOS storage utilization, only including storage
+statistics for devices that have been formatted by DAOS control-plane and assigned
+to a currently running rank of the DAOS system. This represents the storage that
+can host DAOS pools.
+
+Note that the table values are per-host (storage server) and SCM/NVMe capacity
+pool component values specified in
+[`dmg pool create`](https://daos-stack.github.io/admin/pool_operations/#pool-creationdestroy)
+are per rank.
+If multiple ranks (I/O processes) have been configured per host in the server
+configuration file
+[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+then the values supplied to `dmg pool create` should be
+a maximum of the SCM/NVMe free space divided by the number of ranks per host.
+
+For example if 2.0 TB SCM and 10.0 TB NVMe free space is reported by
+`dmg storage query usage` and the server configuration file used to start the
+system specifies 2 I/O processes (2 "server" sections), the maximum pool size
+that can be specified is approximately `dmg pool create -s 1T -n 5T` (may need to
+specify slightly below the maximum to take account of negligible metadata
+overhead).
+
 ### NVMe SSD Health Monitoring
 
 Useful admin dmg commands to query NVMe SSD health:

@@ -43,7 +43,7 @@ func (h hfiMap) addInterface(fi *control.HostFabricInterface) {
 
 // PrintHostFabricMap generates a human-readable representation of the supplied
 // HostFabricMap and writes it to the supplied io.Writer.
-func PrintHostFabricMap(hfm control.HostFabricMap, out io.Writer, opts ...control.PrintConfigOption) error {
+func PrintHostFabricMap(hfm control.HostFabricMap, out io.Writer, opts ...PrintConfigOption) error {
 	if len(hfm) == 0 {
 		return nil
 	}
@@ -56,7 +56,7 @@ func PrintHostFabricMap(hfm control.HostFabricMap, out io.Writer, opts ...contro
 
 	for _, key := range hfm.Keys() {
 		hfs := hfm[key]
-		hosts := control.GetPrintHosts(hfs.HostSet.RangedString(), opts...)
+		hosts := getPrintHosts(hfs.HostSet.RangedString(), opts...)
 		lineBreak := strings.Repeat("-", len(hosts))
 		iw := txtfmt.NewIndentWriter(ew, txtfmt.WithPadCount(4))
 		fmt.Fprintf(ew, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
@@ -83,7 +83,7 @@ func PrintHostFabricMap(hfm control.HostFabricMap, out io.Writer, opts ...contro
 				table = append(table, row)
 			}
 
-			fmt.Fprintf(iwTable, fmt.Sprintf("%s", formatter.Format(table)))
+			fmt.Fprint(iwTable, formatter.Format(table))
 			fmt.Fprintln(ew)
 		}
 	}

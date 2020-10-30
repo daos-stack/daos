@@ -839,11 +839,11 @@ test_compare_checksums(void **state)
 	iod.iod_size = 1;
 	iod.iod_type = DAOS_IOD_ARRAY;
 
-	rc = daos_csummer_calc_iods(csummer, &sgl, &iod,
-				    NULL, 1, 0, NULL, 0, &one);
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, 0, NULL, 0,
+				    &one);
 	assert_int_equal(0, rc);
-	rc = daos_csummer_calc_iods(csummer, &sgl, &iod,
-				    NULL, 1, 0, NULL, 0, &two);
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, 0, NULL, 0,
+				    &two);
 	assert_int_equal(0, rc);
 
 	assert_true(daos_csummer_compare_csum_info(csummer, one->ic_data,
@@ -988,8 +988,7 @@ test_all_algo_basic(void **state)
 		iod.iod_type = DAOS_IOD_ARRAY;
 
 		rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, 0,
-					    NULL, 0,
-					    &csums1);
+					    NULL, 0, &csums1);
 		assert_int_equal(0, rc);
 		assert_int_equal(csum_lens[type],
 				 daos_csummer_get_csum_len(csummer));
@@ -999,8 +998,7 @@ test_all_algo_basic(void **state)
 		 * works
 		 */
 		rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, 0,
-					    NULL, 0,
-					    &csums2);
+					    NULL, 0, &csums2);
 
 		assert_int_equal(0, rc);
 		assert_int_equal(csum_lens[type],
@@ -1597,11 +1595,11 @@ test_compare_sv_checksums(void **state)
 	iod.iod_size = daos_sgl_buf_size(&sgl);
 	iod.iod_type = DAOS_IOD_SINGLE;
 
-	rc = daos_csummer_calc_iods(csummer, &sgl, &iod,
-				    NULL, 1, 0, NULL, 0, &one);
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, 0, NULL, 0,
+				    &one);
 	assert_int_equal(0, rc);
-	rc = daos_csummer_calc_iods(csummer, &sgl, &iod,
-				    NULL, 1, 0, NULL, 0, &two);
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, 0, NULL, 0,
+				    &two);
 	assert_int_equal(0, rc);
 
 	assert_true(daos_csummer_compare_csum_info(csummer, one->ic_data,

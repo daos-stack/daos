@@ -25,6 +25,9 @@ server_config:
       # scm_class: dcpm
       # scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,io,md,epc,rebuild
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -37,6 +40,9 @@ server_config:
       # scm_class: dcpm
       # scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,io,md,epc,rebuild
   transport_config:
     allow_insecure: True
 agent_config:
@@ -69,11 +75,10 @@ daos_tests:
       daos_test: r
       test_name: rebuild tests 17
       args: -s3 -u subtests="17"
-    # Moved to weekly. DAOS-5717
-    # test_r_18:
-    #   daos_test: r
-    #   test_name: rebuild tests 18
-    #   args: -s3 -u subtests="18"
+    test_r_18:
+      daos_test: r
+      test_name: rebuild tests 18
+      args: -s3 -u subtests="18"
     test_r_19:
       daos_test: r
       test_name: rebuild tests 19
@@ -86,19 +91,18 @@ daos_tests:
       daos_test: r
       test_name: rebuild tests 21
       args: -s3 -u subtests="21"
-    # Moved to weekly. DAOS-5717
-    # test_r_22:
-    #   daos_test: r
-    #   test_name: rebuild tests 22
-    #   args: -s3 -u subtests="22"
-    # test_r_23:
-    #   daos_test: r
-    #   test_name: rebuild tests 23
-    #   args: -s3 -u subtests="23"
-    # test_r_24:
-    #   daos_test: r
-    #   test_name: rebuild tests 24
-    #   args: -s3 -u subtests="24"
+    test_r_22:
+      daos_test: r
+      test_name: rebuild tests 22
+      args: -s3 -u subtests="22"
+    test_r_23:
+      daos_test: r
+      test_name: rebuild tests 23
+      args: -s3 -u subtests="23"
+    test_r_24:
+      daos_test: r
+      test_name: rebuild tests 24
+      args: -s3 -u subtests="24"
     test_r_25:
       daos_test: r
       test_name: rebuild tests 25

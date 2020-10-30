@@ -80,6 +80,8 @@ enum drpc_mgmt_method {
 	DRPC_METHOD_MGMT_EXTEND			= 228,
 	DRPC_METHOD_MGMT_POOL_EVICT		= 229,
 	DRPC_METHOD_MGMT_DRAIN			= 230,
+	DRPC_METHOD_MGMT_GROUP_UPDATE		= 231,
+	DRPC_METHOD_MGMT_DISCONNECT		= 232,
 
 	NUM_DRPC_MGMT_METHODS			/* Must be last */
 };
@@ -87,6 +89,7 @@ enum drpc_mgmt_method {
 enum drpc_srv_method {
 	DRPC_METHOD_SRV_NOTIFY_READY		= 301,
 	DRPC_METHOD_SRV_BIO_ERR			= 302,
+	DRPC_METHOD_SRV_GET_POOL_SVC		= 303,
 
 	NUM_DRPC_SRV_METHODS			/* Must be last */
 };

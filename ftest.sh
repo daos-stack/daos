@@ -62,6 +62,9 @@ if [ -n "${3}" ]; then
     NVME_ARG="-n ${3}"
 fi
 
+# Log size threshold
+LOGS_THRESHOLD="1G"
+
 # For nodes that are only rebooted between CI nodes left over mounts
 # need to be cleaned up.
 pre_clean () {
@@ -304,9 +307,20 @@ cat <<EOF > ~/.config/avocado/sysinfo/files
 EOF
 
 # apply patch for https://github.com/avocado-framework/avocado/pull/3076/
+for loc in /usr/lib/python2*/site-packages/ \\
+           /usr/lib/python3*/dist-packages/; do
+    if [ -f \$loc/avocado/core/runner.py ]; then
+        pydir=\$loc
+        break
+    fi
+    if [ -z \"\$loc\" ]; then
+        echo \"Could not determine avocado installation location\"
+        exit 1
+    fi
+done
 if ! grep TIMEOUT_TEARDOWN \
-    /usr/lib/python2.7/site-packages/avocado/core/runner.py; then
-    sudo patch -p0 -d/ << \"EOF\"
+    \$pydir/avocado/core/runner.py; then
+    if ! sudo patch -p0 -d\$pydir << \"EOF\"; then
 From d9e5210cd6112b59f7caff98883a9748495c07dd Mon Sep 17 00:00:00 2001
 From: Cleber Rosa <crosa@redhat.com>
 Date: Wed, 20 Mar 2019 12:46:57 -0400
@@ -326,8 +340,8 @@ Signed-off-by: Cleber Rosa <crosa@redhat.com>
 
 diff --git /usr/lib/python2.7/site-packages/avocado/core/runner.py.old /usr/lib/python2.7/site-packages/avocado/core/runner.py
 index 1fc84844b..17e6215d0 100644
---- /usr/lib/python2.7/site-packages/avocado/core/runner.py.old
-+++ /usr/lib/python2.7/site-packages/avocado/core/runner.py
+--- avocado/core/runner.py.old
++++ avocado/core/runner.py
 @@ -45,6 +45,8 @@
  TIMEOUT_PROCESS_DIED = 10
  #: when test reported status but the process did not finish
@@ -361,16 +375,19 @@ index 1fc84844b..17e6215d0 100644
                      try:
                          os.kill(proc.pid, signal.SIGTERM)
 EOF
+        echo \"Failed to apply avocado PR-3076 patch\"
+        exit 1
+    fi
 fi
 # apply fix for https://github.com/avocado-framework/avocado/issues/2908
-sudo ed <<EOF /usr/lib/python2.7/site-packages/avocado/core/runner.py
+sudo ed <<EOF \$pydir/avocado/core/runner.py
 /TIMEOUT_TEST_INTERRUPTED/s/[0-9]*$/60/
 wq
 EOF
 # apply fix for https://github.com/avocado-framework/avocado/pull/2922
 if grep \"testsuite.setAttribute('name', 'avocado')\" \
-    /usr/lib/python2.7/site-packages/avocado/plugins/xunit.py; then
-    sudo ed <<EOF /usr/lib/python2.7/site-packages/avocado/plugins/xunit.py
+    \$pydir/avocado/plugins/xunit.py; then
+    sudo ed <<EOF \$pydir/avocado/plugins/xunit.py
 /testsuite.setAttribute('name', 'avocado')/s/'avocado'/os.path.basename(os.path.dirname(result.logfile))/
 wq
 EOF
@@ -402,8 +419,8 @@ else
     process_cores=\"\"
 fi
 # now run it!
-if ! ./launch.py -cris\${process_cores}a -ts ${TEST_NODES} ${NVME_ARG} \\
-                 ${TEST_TAG_ARR[*]}; then
+if ! ./launch.py -cris\${process_cores}a -th ${LOGS_THRESHOLD} \\
+                 -ts ${TEST_NODES} ${NVME_ARG} ${TEST_TAG_ARR[*]}; then
     rc=\${PIPESTATUS[0]}
 else
     rc=0

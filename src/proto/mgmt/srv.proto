@@ -32,12 +32,26 @@ message DaosResp {
 	int32 status = 1;	// DAOS error code.
 }
 
+message GroupUpdateReq {
+	message Server {
+		uint32 rank = 1;
+		string uri = 2;
+	}
+	uint32 map_version = 1;
+	repeated Server servers = 2;
+}
+
+message GroupUpdateResp {
+	int32 status = 1;
+}
+
 message JoinReq {
 	string uuid = 1;	// Servee UUID.
 	uint32 rank = 2;	// Server rank desired, if not -1.
 	string uri = 3;		// Server CaRT base URI (i.e., for context 0).
 	uint32 nctxs = 4;	// Server CaRT context count.
 	string addr = 5;	// Server management address.
+	string srvFaultDomain = 6; // Fault domain for this instance's server
 }
 
 message JoinResp {
@@ -48,6 +62,7 @@ message JoinResp {
 		OUT = 1;	// Server excluded from the system.
 	}
 	State state = 3;	// Server state in the system map.
+	string faultDomain = 4; // Fault domain for the instance
 }
 
 message LeaderQueryReq {
@@ -62,6 +77,7 @@ message LeaderQueryResp {
 message GetAttachInfoReq {
 	string sys = 1;		// System name. For daos_agent only.
 	bool allRanks = 2;      // Return PSRs for all ranks, not just the MS replicas.
+	string jobid = 3;	// Job ID to associate instance with.
 }
 
 message GetAttachInfoResp {

@@ -65,7 +65,7 @@ daos_csummer_init(struct daos_csummer **obj, struct hash_ft *ft,
 		return -DER_INVAL;
 	}
 
-	D_ALLOC(result, sizeof(*result));
+	D_ALLOC_PTR(result);
 	if (result == NULL)
 		return -DER_NOMEM;
 
@@ -335,6 +335,8 @@ daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
 }
 
 #define	setptr(ptr, buf, len, used, total_len) do {\
+	if (len == 0) \
+		break;\
 	D_ASSERT(used + len <= total_len);\
 	ptr = (__typeof__(ptr))buf; \
 	buf += (len); \
@@ -378,8 +380,6 @@ daos_csummer_alloc_iods_csums(struct daos_csummer *obj, daos_iod_t *iods,
 		daos_iod_t		*iod = &iods[i];
 		struct dcs_iod_csums	*iod_csum = &iods_csums[i];
 		uint64_t		 rec_chunksize;
-
-
 
 		/** setup akey csum  */
 		if (!obj->dcs_skip_key_calc) {
@@ -637,11 +637,12 @@ calc_csum_sv(struct daos_csummer *obj, d_sg_list_t *sgl, size_t rec_len,
 	     struct dcs_layout *singv_lo, int singv_idx,
 	     struct dcs_csum_info *csums)
 {
-	size_t			 bytes_for_csum, csum_buf_len;
-	size_t			 skip_size, last_size = -1;
+	size_t			 bytes_for_csum, data_len;
+	size_t			 last_size = -1;
 	struct daos_sgl_idx	 sgl_idx = {0};
-	uint32_t		 idx, last_idx = -1;
+	uint32_t		 idx, data_tgt_nr = -1;
 	uint8_t			*csum_buf;
+	uint64_t		 singv_off;
 	int			 rc;
 
 	if (!(daos_csummer_initialized(obj)))
@@ -652,42 +653,52 @@ calc_csum_sv(struct daos_csummer *obj, d_sg_list_t *sgl, size_t rec_len,
 		D_ASSERT(singv_lo->cs_bytes > 0 &&
 			 singv_lo->cs_bytes < rec_len);
 		D_ASSERT(singv_lo->cs_nr > 1);
-		last_idx = rec_len / singv_lo->cs_bytes;
-		D_ASSERT(last_idx >= 1);
+		data_tgt_nr = roundup(rec_len, singv_lo->cs_bytes) /
+			      singv_lo->cs_bytes;
+		D_ASSERT(data_tgt_nr >= 2);
+		last_size = rec_len - (data_tgt_nr - 1) * singv_lo->cs_bytes;
+		data_len = singv_lo->cs_bytes;
 		if (singv_idx == -1) {
 			D_ASSERT(csums->cs_nr == singv_lo->cs_nr);
-			last_size = rec_len - last_idx * singv_lo->cs_bytes;
 		} else {
 			D_ASSERT(csums->cs_nr == 1);
 			/* skip to the sgl location of singv_idx, the last
 			 * data cell possibly with less valid bytes, and
 			 * followed by parity cells.
 			 */
-			if (singv_idx <= last_idx)
-				skip_size = singv_idx * singv_lo->cs_bytes;
+			if (singv_idx < data_tgt_nr)
+				singv_off = singv_idx * singv_lo->cs_bytes;
 			else
-				skip_size = rec_len + (singv_idx - last_idx) *
-						      singv_lo->cs_bytes;
-			rc = daos_sgl_processor(sgl, false, &sgl_idx, skip_size,
+				singv_off = rec_len +
+					    (singv_idx - data_tgt_nr) *
+					    singv_lo->cs_bytes;
+			rc = daos_sgl_processor(sgl, false, &sgl_idx, singv_off,
 						NULL, NULL);
 			if (rc)
 				return rc;
+			if (singv_idx == data_tgt_nr - 1)
+				data_len = last_size;
 		}
-		bytes_for_csum = singv_lo->cs_bytes;
 	} else {
 		D_ASSERT(csums->cs_nr == 1);
-		bytes_for_csum = rec_len;
+		data_len = rec_len;
 	}
 
-	csum_buf_len = bytes_for_csum;
+	bytes_for_csum = data_len;
 	for (idx = 0; idx < csums->cs_nr; idx++) {
-		if (idx == last_idx)
-			csum_buf_len = last_size;
+		if (singv_lo != NULL && singv_lo->cs_even_dist == 1 &&
+		    singv_idx == -1) {
+			if (idx == data_tgt_nr - 1)
+				bytes_for_csum = last_size;
+			else
+				bytes_for_csum = data_len;
+		}
+
 		csum_buf = ci_idx2csum(&csums[0], idx);
 		daos_csummer_set_buffer(obj, csum_buf, csums->cs_len);
 		daos_csummer_reset(obj);
 
-		rc = daos_sgl_processor(sgl, false, &sgl_idx, csum_buf_len,
+		rc = daos_sgl_processor(sgl, false, &sgl_idx, bytes_for_csum,
 					checksum_sgl_cb, obj);
 		if (rc)
 			return rc;
@@ -894,8 +905,7 @@ daos_csummer_verify_iod(struct daos_csummer *obj, daos_iod_t *iod,
 	}
 
 	rc = daos_csummer_calc_iods(obj, sgl, iod, map, 1, 0, singv_lo,
-				    singv_idx,
-				    &new_iod_csums);
+				    singv_idx, &new_iod_csums);
 	if (rc != 0) {
 		D_ERROR("daos_csummer_calc_iods error: %d\n", rc);
 		return rc;
@@ -1065,6 +1075,8 @@ ci_buf2uint64(const uint8_t *buf, uint16_t len)
 uint64_t
 ci2csum(struct dcs_csum_info ci)
 {
+	if (ci.cs_csum == 0)
+		return 0;
 	return ci_buf2uint64(ci.cs_csum, ci.cs_len);
 }
 
@@ -1094,8 +1106,10 @@ ci_cast(struct dcs_csum_info **obj, const d_iov_t *iov)
 
 	if (ci_size(*tmp) > iov->iov_len)
 		return;
-
-	tmp->cs_csum = buf + sizeof(struct dcs_csum_info);
+	if (tmp->cs_buf_len > 0)
+		tmp->cs_csum = buf + sizeof(struct dcs_csum_info);
+	else
+		tmp->cs_csum = NULL;
 	*obj = tmp;
 }
 

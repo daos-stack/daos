@@ -269,8 +269,8 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 			D_ERROR("Couldn't get failed targets, "DF_RC"\n",
 				DP_RC(rc));
 	}
-	pool_map_decref(map); /* NB: protected by pool::dp_map_lock */
 out_unlock:
+	pool_map_decref(map); /* NB: protected by pool::dp_map_lock */
 	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 
 	if (prop_req != NULL && rc == 0)
@@ -1132,13 +1132,13 @@ dc_pool_exclude(tse_task_t *task)
 }
 
 int
-dc_pool_add(tse_task_t *task)
+dc_pool_reint(tse_task_t *task)
 {
 	daos_pool_update_t *args;
 
 	args = dc_task_get_args(task);
 
-	return dc_pool_update_internal(task, args, POOL_ADD);
+	return dc_pool_update_internal(task, args, POOL_REINT);
 }
 
 int

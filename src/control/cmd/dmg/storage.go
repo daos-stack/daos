@@ -108,10 +108,10 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	}
 
 	var bld strings.Builder
-	if err := control.PrintResponseErrors(resp, &bld); err != nil {
+	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
 		return err
 	}
-	if err := control.PrintStoragePrepareMap(resp.HostStorage, &bld); err != nil {
+	if err := pretty.PrintStoragePrepareMap(resp.HostStorage, &bld); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())
@@ -145,7 +145,7 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 
 	if cmd.jsonOutputEnabled() {
 		if cmd.Verbose {
-			cmd.log.Info("--verbose flag ignored if --json specified")
+			cmd.log.Error("--verbose flag ignored if --json specified")
 		}
 
 		return cmd.outputJSON(resp, err)
@@ -156,8 +156,8 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 	}
 
 	var bld strings.Builder
-	verbose := control.PrintWithVerboseOutput(cmd.Verbose)
-	if err := control.PrintResponseErrors(resp, &bld); err != nil {
+	verbose := pretty.PrintWithVerboseOutput(cmd.Verbose)
+	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
 		return err
 	}
 	if cmd.NvmeHealth {
@@ -182,7 +182,7 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 
 		return resp.Errors()
 	}
-	if err := control.PrintHostStorageMap(resp.HostStorage, &bld, verbose); err != nil {
+	if err := pretty.PrintHostStorageMap(resp.HostStorage, &bld, verbose); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())
@@ -228,9 +228,7 @@ func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context) (bool, er
 		}
 		for _, member := range resp.Members {
 			if member.State() != system.MemberStateStopped {
-				if err := notStoppedRanks.Add(member.Rank); err != nil {
-					return false, errors.Wrap(err, "adding to rank set")
-				}
+				notStoppedRanks.Add(member.Rank)
 			}
 		}
 		if notStoppedRanks.Count() > 0 {
@@ -295,11 +293,11 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 
 func (cmd *storageFormatCmd) printFormatResp(resp *control.StorageFormatResp) error {
 	var bld strings.Builder
-	verbose := control.PrintWithVerboseOutput(cmd.Verbose)
-	if err := control.PrintResponseErrors(resp, &bld); err != nil {
+	verbose := pretty.PrintWithVerboseOutput(cmd.Verbose)
+	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
 		return err
 	}
-	if err := control.PrintStorageFormatMap(resp.HostStorage, &bld, verbose); err != nil {
+	if err := pretty.PrintStorageFormatMap(resp.HostStorage, &bld, verbose); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())
