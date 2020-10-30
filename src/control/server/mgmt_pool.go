@@ -83,7 +83,7 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 		return errors.New("harness has no managed instances")
 	}
 
-	targetCount := instances[0].runner.GetConfig().TargetCount
+	targetCount := instances[0].GetTargetCount()
 	if targetCount == 0 {
 		return errors.New("zero target count")
 	}

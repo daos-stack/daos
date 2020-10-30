@@ -37,6 +37,7 @@ import (
 	raftboltdb "github.com/hashicorp/raft-boltdb"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -74,6 +75,13 @@ type (
 		SchemaVersion uint
 	}
 
+	// syncTCPAddr protects a TCP address with a mutex to allow
+	// for atomic reads and writes.
+	syncTCPAddr struct {
+		sync.RWMutex
+		Addr *net.TCPAddr
+	}
+
 	// Database provides high-level access methods for the
 	// system data as well as structure for managing the raft
 	// service that replicates the system data.
@@ -81,7 +89,7 @@ type (
 		sync.Mutex
 		log                logging.Logger
 		cfg                *DatabaseConfig
-		replicaAddr        *net.TCPAddr
+		replicaAddr        *syncTCPAddr
 		raft               raftService
 		onLeadershipGained []onLeadershipGainedFn
 		onLeadershipLost   []onLeadershipLostFn
@@ -102,6 +110,18 @@ type (
 	}
 )
 
+func (sta *syncTCPAddr) set(addr *net.TCPAddr) {
+	sta.Lock()
+	defer sta.Unlock()
+	sta.Addr = addr
+}
+
+func (sta *syncTCPAddr) get() *net.TCPAddr {
+	sta.RLock()
+	defer sta.RUnlock()
+	return sta.Addr
+}
+
 // NewDatabase returns a configured and initialized Database instance.
 func NewDatabase(log logging.Logger, cfg *DatabaseConfig) *Database {
 	if cfg == nil {
@@ -109,8 +129,9 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) *Database {
 	}
 
 	return &Database{
-		log: log,
-		cfg: cfg,
+		log:         log,
+		cfg:         cfg,
+		replicaAddr: &syncTCPAddr{},
 
 		data: &dbData{
 			log: log,
@@ -152,35 +173,16 @@ func (db *Database) checkReplica(ctrlAddr *net.TCPAddr) (repAddr *net.TCPAddr, i
 		return
 	}
 
-	var localAddrs []net.IP
-	if ctrlAddr.IP.IsUnspecified() {
-		var ifaceAddrs []net.Addr
-		ifaceAddrs, err = net.InterfaceAddrs()
-		if err != nil {
-			return
-		}
-
-		for _, ia := range ifaceAddrs {
-			if in, ok := ia.(*net.IPNet); ok {
-				localAddrs = append(localAddrs, in.IP)
-			}
-		}
-	} else {
-		localAddrs = append(localAddrs, ctrlAddr.IP)
-	}
-
 	for idx, candidate := range repAddrs {
 		if candidate.Port != ctrlAddr.Port {
 			continue
 		}
-		for _, localAddr := range localAddrs {
-			if candidate.IP.Equal(localAddr) {
-				repAddr = candidate
-				if idx == 0 {
-					isBootStrap = true
-				}
-				return
+		if common.IsLocalAddr(candidate) {
+			repAddr = candidate
+			if idx == 0 {
+				isBootStrap = true
 			}
+			return
 		}
 	}
 
@@ -193,11 +195,19 @@ func (db *Database) ReplicaAddr() (*net.TCPAddr, error) {
 	if !db.isReplica() {
 		return nil, &ErrNotReplica{db.cfg.Replicas}
 	}
-	return db.replicaAddr, nil
+	return db.getReplica(), nil
+}
+
+func (db *Database) getReplica() *net.TCPAddr {
+	return db.replicaAddr.get()
+}
+
+func (db *Database) setReplica(addr *net.TCPAddr) {
+	db.replicaAddr.set(addr)
 }
 
 func (db *Database) isReplica() bool {
-	return db.replicaAddr != nil
+	return db.getReplica() != nil
 }
 
 func (db *Database) checkLeader() error {
@@ -236,13 +246,13 @@ func (db *Database) OnLeadershipLost(fns ...onLeadershipLostFn) {
 // is initialized if necessary, and the replica is started to begin the
 // process of choosing a MS leader.
 func (db *Database) Start(ctx context.Context, ctrlAddr *net.TCPAddr) error {
-	var isBootStrap, needsBootStrap bool
-	var err error
+	var needsBootStrap bool
 
-	db.replicaAddr, isBootStrap, err = db.checkReplica(ctrlAddr)
+	replicaAddr, isBootStrap, err := db.checkReplica(ctrlAddr)
 	if err != nil {
 		return err
 	}
+	db.setReplica(replicaAddr)
 	db.log.Debugf("system db start: isReplica: %t, isBootStrap: %t", db.isReplica(), isBootStrap)
 
 	// If we're not a replica, exit early.
@@ -267,7 +277,7 @@ func (db *Database) Start(ctx context.Context, ctrlAddr *net.TCPAddr) error {
 	rc.HeartbeatTimeout = 250 * time.Millisecond
 	rc.ElectionTimeout = 250 * time.Millisecond
 	rc.LeaderLeaseTimeout = 125 * time.Millisecond
-	rc.LocalID = raft.ServerID(db.replicaAddr.String())
+	rc.LocalID = raft.ServerID(db.getReplica().String())
 	// Just use an in-memory transport for the moment, until
 	// we add real replica support over gRPC.
 	_, transport := raft.NewInmemTransport(raft.NewInmemAddr())

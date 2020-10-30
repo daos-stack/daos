@@ -256,15 +256,6 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			return err
 		}
 
-		srv.OnReady(func(ctx context.Context) error {
-			if !mgmtSvc.sysdb.IsLeader() {
-				return nil
-			}
-
-			mgmtSvc.requestGroupUpdate(ctx)
-			return nil
-		})
-
 		if idx == 0 {
 			netDevClass, err = cfg.getDeviceClassFn(srvCfg.Fabric.Interface)
 			if err != nil {
@@ -350,7 +341,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	mgmtpb.RegisterMgmtSvcServer(grpcServer, mgmtSvc)
 	sysdb.OnLeadershipGained(func(ctx context.Context) error {
 		log.Infof("MS leader running on %s", hostname())
-		mgmtSvc.startUpdateLoop(ctx)
+		mgmtSvc.startJoinLoop(ctx)
 		return nil
 	})
 	sysdb.OnLeadershipLost(func() error {
