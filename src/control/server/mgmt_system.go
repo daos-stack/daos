@@ -191,9 +191,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, lastMapVer uint32) (uint3
 			Rank: rank.Uint32(),
 			Uri:  uri,
 		})
-		if err := rankSet.Add(rank); err != nil {
-			return mapVer, errors.Wrap(err, "adding rank to set")
-		}
+		rankSet.Add(rank)
 	}
 
 	// NB: At this point, we need to return the current version instead of
@@ -255,12 +253,18 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 		return nil, errors.Wrapf(err, "invalid uuid %q", req.GetUuid())
 	}
 
+	fd, err := system.NewFaultDomainFromString(req.GetSrvFaultDomain())
+	if err != nil {
+		return nil, errors.Wrapf(err, "invalid server fault domain %q", req.GetSrvFaultDomain())
+	}
+
 	joinResponse, err := svc.membership.Join(&system.JoinRequest{
 		Rank:           system.Rank(req.Rank),
 		UUID:           uuid,
 		ControlAddr:    replyAddr,
 		FabricURI:      req.GetUri(),
 		FabricContexts: req.GetNctxs(),
+		FaultDomain:    fd,
 	})
 	if err != nil {
 		return nil, err
