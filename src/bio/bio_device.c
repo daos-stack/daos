@@ -505,13 +505,13 @@ find_smd_dev(uuid_t dev_id, d_list_t *s_dev_list)
 }
 
 int
-bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list)
+bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 {
 	d_list_t		 s_dev_list;
 	struct bio_dev_info	*b_info;
 	struct smd_dev_info	*s_info, *s_tmp;
 	struct bio_bdev		*d_bdev;
-	int			 rc, dev_cnt = 0;
+	int			 rc;
 
 	/* Caller ensures the request handling ULT created on init xstream */
 	D_ASSERT(is_init_xstream(xs_ctxt));
@@ -519,12 +519,13 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list)
 	D_ASSERT(dev_list != NULL && d_list_empty(dev_list));
 	D_INIT_LIST_HEAD(&s_dev_list);
 
-	rc = smd_dev_list(&s_dev_list, &dev_cnt);
+	rc = smd_dev_list(&s_dev_list, dev_cnt);
 	if (rc) {
 		D_ERROR("Failed to get SMD dev list "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
+	*dev_cnt = 0;
 	/* Scan all plugged devices */
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
 		s_info = find_smd_dev(d_bdev->bb_uuid, &s_dev_list);
@@ -537,6 +538,7 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list)
 		}
 		b_info->bdi_flags |= NVME_DEV_FL_PLUGGED;
 		d_list_add_tail(&b_info->bdi_link, dev_list);
+		(*dev_cnt)++;
 
 		/* delete the found device in SMD dev list */
 		if (s_info != NULL) {
@@ -554,6 +556,7 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list)
 			goto out;
 		}
 		d_list_add_tail(&b_info->bdi_link, dev_list);
+		(*dev_cnt)++;
 	}
 out:
 	d_list_for_each_entry_safe(s_info, s_tmp, &s_dev_list, sdi_link) {
