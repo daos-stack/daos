@@ -47,7 +47,7 @@ test_run(void)
 	int			 i;
 	int			 rc = 0;
 
-	if (test_g.t_save_cfg) {
+	if (test_g.t_use_cfg && test_g.t_save_cfg) {
 		rc = crt_group_config_path_set(test_g.t_cfg_path);
 		D_ASSERTF(rc == 0, "crt_group_config_path_set failed %d\n", rc);
 	}
@@ -56,7 +56,7 @@ test_run(void)
 			   test_g.t_remote_group_name,
 			   &grp, &rank_list, &test_g.t_crt_ctx[0],
 			   &test_g.t_tid[0], test_g.t_srv_ctx_num,
-			   true, NULL);
+			   test_g.t_use_cfg, NULL);
 
 	rc = sem_init(&test_g.t_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
