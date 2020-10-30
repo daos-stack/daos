@@ -249,7 +249,7 @@ $(subst deb,%,$(DEBS)): $(DEB_BUILD).tar.$(SRC_EXT) \
 	    sed 's/$(DEB_RVERS)-1/$(DEB_BVERS)/' \
 	    $(DEB_TOP)/$(NAME)-tmp/DEBIAN/symbols \
 	    > $(DEB_BUILD)/debian/$${lname}.symbols; fi
-	cd $(DEB_BUILD);  debuild --set-env="SCONS_ARGS=$(SCONS_ARGS)" -us -uc
+	cd $(DEB_BUILD);  debuild -us -uc
 	rm $(DEB_BUILD).tar.$(SRC_EXT)
 	for f in $(DEB_TOP)/*.deb; do \
 	  echo $$f; dpkg -c $$f; done
@@ -260,7 +260,7 @@ $(DEB_TOP)/$(DEB_DSC): $(CALLING_MAKEFILE) $(DEB_BUILD).tar.$(SRC_EXT) \
 	  $(DEB_TOP)/*.dsc $(DEB_TOP)/*.build* $(DEB_TOP)/*.changes \
 	  $(DEB_TOP)/*.debian.tar.*
 	rm -rf $(DEB_TOP)/*-tmp
-	cd $(DEB_BUILD); debuild --set-env="SCONS_ARGS=$(SCONS_ARGS)" --no-lintian -b -us -uc
+	cd $(DEB_BUILD); dpkg-buildpackage  --set-env="SCONS_ARGS=$(SCONS_ARGS)" -S --no-sign --no-check-builddeps
 
 $(SRPM): $(SPEC) $(SOURCES)
 	rpmbuild -bs $(COMMON_RPM_ARGS) $(RPM_BUILD_OPTIONS) $(SPEC)

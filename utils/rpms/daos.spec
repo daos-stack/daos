@@ -1,18 +1,18 @@
-%bcond_with fault_injection
 %define daoshome %{_exec_prefix}/lib/%{name}
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
-%if (0%{?suse_version} >= 1500)
-# until we get an updated mercury build on 15.2
-%global mercury_version 2.0.0~rc1-1.suse.lp151
-%else
-%global mercury_version 2.0.0~rc1-1%{?dist}
-%endif
 
 %if %{defined %{getenv:SCONS_ARGS}}
 %global scons_args %{getenv:SCONS_ARGS}
 %else
 %global scons_args BUILD_TYPE=release
+%endif
+
+%if (0%{?suse_version} >= 1500)
+# until we get an updated mercury build on 15.2
+%global mercury_version 2.0.0~rc1-1.suse.lp151
+%else
+%global mercury_version 2.0.0~rc1-1%{?dist}
 %endif
 
 Name:          daos
