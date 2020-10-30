@@ -663,6 +663,7 @@ int crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank)
 	swim_id_t		 self_id;
 	d_rank_t		 self = grp_priv->gp_self;
 	bool			 self_in_list = false;
+	bool			 rank_in_list = false;
 	int			 n, rc = 0;
 
 	D_ASSERT(crt_initialized());
@@ -712,6 +713,7 @@ int crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank)
 		cst->cst_state.sms_status = SWIM_MEMBER_INACTIVE;
 		D_CIRCLEQ_INSERT_AFTER(&csm->csm_head, csm->csm_target, cst,
 					cst_link);
+		rank_in_list = true;
 
 		for (n = 1 + rand() % (grp_priv->gp_size + 1); n > 0; n--)
 			csm->csm_target = D_CIRCLEQ_LOOP_NEXT(&csm->csm_head,
@@ -736,6 +738,8 @@ out:
 		D_FREE(cst);
 
 	if (rc && rc != -DER_ALREADY) {
+		if (rank_in_list)
+			crt_swim_rank_del(grp_priv, rank);
 		if (self_in_list)
 			crt_swim_rank_del(grp_priv, self);
 	}
