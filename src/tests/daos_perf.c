@@ -45,7 +45,7 @@
 /* unused object class to identify VOS (storage only) test mode */
 #define DAOS_OC_RAW	(0xBEE)
 #define RANK_ZERO	(0)
-#define TEST_VAL_SIZE	(3)
+#define TEST_VAL_SIZE	(4) /* Should be changed with updating NB places */
 
 enum ts_op_type {
 	TS_DO_UPDATE = 0,
@@ -124,8 +124,7 @@ ts_abt_init(void)
 		return 0;
 	}
 
-	rc = ABT_xstream_get_affinity(abt_xstream, 0, NULL,
-				      &num_cpus);
+	rc = ABT_xstream_get_affinity(abt_xstream, 0, NULL, &num_cpus);
 	if (rc != ABT_SUCCESS) {
 		fprintf(stderr, "get num_cpus: %d\n", rc);
 		fprintf(stderr, "No CPU affinity for this test.\n");
@@ -250,8 +249,10 @@ vos_update_or_fetch_ult(void *arg)
 	struct vos_ult_arg *ult_arg = arg;
 
 	ult_arg->status = _vos_update_or_fetch(ult_arg->obj_idx,
-				ult_arg->op_type, ult_arg->cred,
-				ult_arg->epoch, ult_arg->duration);
+					       ult_arg->op_type,
+					       ult_arg->cred,
+					       ult_arg->epoch,
+					       ult_arg->duration);
 }
 
 static int
@@ -319,7 +320,8 @@ set_value_buffer(char *buffer, int idx)
 	/* Sets a pattern of Aa, Bb, ..., Yy, Zz, Aa, ... */
 	buffer[0] = 'A' + idx % 26;
 	buffer[1] = 'a' + idx % 26;
-	buffer[TEST_VAL_SIZE - 1] = 0;
+	/* NB: Assume TEST_VAL_SIZE == 4 */
+	*((uint16_t *)&buffer[2]) = 0;
 }
 
 static int
@@ -332,6 +334,7 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	daos_iod_t	     *iod;
 	d_sg_list_t	     *sgl;
 	daos_recx_t	     *recx;
+	size_t		      len;
 	int		      vsize = ts_ctx.tsc_cred_vsize;
 	int		      rc = 0;
 
@@ -346,32 +349,30 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	sgl  = &cred->tc_sgl;
 	recx = &cred->tc_recx;
 
-	memset(iod, 0, sizeof(*iod));
-	memset(sgl, 0, sizeof(*sgl));
-	memset(recx, 0, sizeof(*recx));
-
 	/* setup dkey */
-	memcpy(cred->tc_dbuf, dkey, DTS_KEY_LEN);
-	d_iov_set(&cred->tc_dkey, cred->tc_dbuf,
-			strlen(cred->tc_dbuf));
+	len = min(strlen(dkey), DTS_KEY_LEN);
+	memcpy(cred->tc_dbuf, dkey, len);
+	d_iov_set(&cred->tc_dkey, cred->tc_dbuf, len);
 
 	/* setup I/O descriptor */
-	memcpy(cred->tc_abuf, akey, DTS_KEY_LEN);
-	d_iov_set(&iod->iod_name, cred->tc_abuf,
-			strlen(cred->tc_abuf));
-	iod->iod_size = vsize;
-	recx->rx_nr  = 1;
+	len = min(strlen(akey), DTS_KEY_LEN);
+	memcpy(cred->tc_abuf, akey, len);
+	d_iov_set(&iod->iod_name, cred->tc_abuf, len);
 	if (ts_single) {
 		iod->iod_type = DAOS_IOD_SINGLE;
+		iod->iod_size = vsize;
+		recx->rx_nr   = 1;
+		recx->rx_idx  = 0;
 	} else {
 		iod->iod_type = DAOS_IOD_ARRAY;
 		iod->iod_size = 1;
-		recx->rx_nr  = vsize;
-		recx->rx_idx = ts_overwrite ? 0 : indices[idx] * vsize;
+		recx->rx_nr   = vsize;
+		recx->rx_idx  = ts_overwrite ? 0 : indices[idx] * vsize;
 	}
 
 	iod->iod_nr    = 1;
 	iod->iod_recxs = recx;
+	iod->iod_flags = 0;
 
 	if (op_type == TS_DO_UPDATE) {
 		/* initialize value buffer and setup sgl */
@@ -384,6 +385,7 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	d_iov_set(&cred->tc_val, cred->tc_vbuf, vsize);
 	sgl->sg_iovs = &cred->tc_val;
 	sgl->sg_nr = 1;
+	sgl->sg_nr_out = 0;
 
 	if (ts_mode == TS_MODE_VOS)
 		rc = vos_update_or_fetch(obj_idx, op_type, cred, *epoch,
@@ -406,7 +408,8 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 		(*epoch)++;
 
 	if (verify_buff != NULL)
-		memcpy(verify_buff, cred->tc_vbuf, TEST_VAL_SIZE);
+		/* NB: Assume TEST_VAL_SIZE == 4 */
+		*((uint32_t *)verify_buff) = *((uint32_t *)cred->tc_vbuf);
 
 	return rc;
 }
@@ -462,8 +465,9 @@ ts_io_prep(void)
 				return -1;
 			}
 		} else {
-			memset(&ts_uoids[i], 0, sizeof(*ts_uoids));
 			ts_uoids[i].id_pub = ts_oids[i];
+			ts_uoids[i].id_shard = 0;
+			ts_uoids[i].id_pad_32 = 0;
 		}
 	}
 
@@ -506,12 +510,12 @@ objects_update(double *duration, d_rank_t rank)
 static int
 dkey_verify(char *dkey, daos_epoch_t *epoch)
 {
+	char		 akey[DTS_KEY_LEN];
+	uint64_t	*indices;
+	uint32_t	 ground_truth;	/* NB: Assume TEST_VAL_SIZE == 4 */
+	uint32_t	 test_string;	/* NB: Assume TEST_VAL_SIZE == 4 */
 	int		 i;
 	int		 j;
-	uint64_t	*indices;
-	char		 ground_truth[TEST_VAL_SIZE];
-	char		 test_string[TEST_VAL_SIZE];
-	char		 akey[DTS_KEY_LEN];
 	int		 rc = 0;
 
 	indices = dts_rand_iarr_alloc_set(ts_recx_p_akey, 0, ts_shuffle);
@@ -519,18 +523,19 @@ dkey_verify(char *dkey, daos_epoch_t *epoch)
 	dts_key_gen(akey, DTS_KEY_LEN, "walker");
 
 	for (i = 0; i < ts_recx_p_akey; i++) {
-		set_value_buffer(ground_truth, i);
+		set_value_buffer((char *)&ground_truth, i);
 		for (j = 0; j < ts_obj_p_cont; j++) {
 			rc = akey_update_or_fetch(j, TS_DO_FETCH, dkey, akey,
 						  epoch, indices, i,
-						  test_string, NULL);
+						  (char *)&test_string, NULL);
 			if (rc)
 				goto failed;
-			if (memcmp(test_string, ground_truth, TEST_VAL_SIZE)
-			    != 0) {
+			/* NB: Assume TEST_VAL_SIZE == 4 */
+			if (test_string != ground_truth) {
 				D_PRINT("MISMATCH! ground_truth=%s, "
 					"test_string=%s\n",
-					ground_truth, test_string);
+					(char *)&ground_truth,
+					(char *)&test_string);
 				rc = -1;
 				goto failed;
 			}
