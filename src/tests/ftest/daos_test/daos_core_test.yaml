@@ -144,4 +144,4 @@ daos_tests:
     test_U:
       daos_test: U
       test_name: DAOS dedup tests
-      test_timeout: 900
+      test_timeout: 220
