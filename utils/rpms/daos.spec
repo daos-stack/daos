@@ -1,4 +1,3 @@
-%bcond_with fault_injection
 %define daoshome %{_exec_prefix}/lib/%{name}
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
@@ -7,6 +6,11 @@
 %global mercury_version 2.0.0~rc1-1.suse.lp151
 %else
 %global mercury_version 2.0.0~rc1-1%{?dist}
+%endif
+
+%global scons_args %{getenv:SCONS_ARGS}
+%if %undefined %scons_args
+%global scons_args BUILD_TYPE=release
 %endif
 
 Name:          daos
@@ -212,8 +216,8 @@ scons %{?_smp_mflags}      \
       USE_INSTALLED=all    \
       CONF_DIR=%{conf_dir} \
       PREFIX=%{?buildroot} \
-      %{?with_fault_injection:BUILD_TYPE=dev} \
-      %{!?with_fault_injection:BUILD_TYPE=release}
+      %{scons_args}
+
 
 
 %install
@@ -226,8 +230,7 @@ scons %{?_smp_mflags}                 \
       USE_INSTALLED=all               \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
-      %{?with_fault_injection:BUILD_TYPE=dev} \
-      %{!?with_fault_injection:BUILD_TYPE=release}
+      %{scons_args}
 
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"
