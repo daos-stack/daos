@@ -1231,8 +1231,8 @@ def create_results_xml(message, testname, output, destination):
     results_xml = os.path.join(destination, "framework_results.xml")
     print("Generating junit xml file {} ...".format(results_xml))
     try:
-        with open(results_xml, "w") as results_xml:
-            results_xml.write(junit_xml.toprettyxml())
+        with open(results_xml, "w") as xml_buffer:
+            xml_buffer.write(junit_xml.toprettyxml())
     except IOError as error:
         print("Failed to create xml file: {}".format(error))
         status = False
