@@ -885,7 +885,7 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 		}
 	}
 
-	if (crt_gdata.cg_sep_mode == true && rpc_priv->crp_hg_hdl) {
+	if (crt_gdata.cg_sep_mode == true) {
 		hg_ret = HG_Set_target_id(rpc_priv->crp_hg_hdl,
 					  rpc_priv->crp_pub.cr_ep.ep_tag);
 		if (hg_ret != HG_SUCCESS) {
