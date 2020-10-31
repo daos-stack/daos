@@ -26,11 +26,15 @@ from general_utils import run_command, DaosTestError
 
 
 class SSDSocketTest(TestWithServers):
+    # pylint: disable=logging-format-interpolation
     """Test Class Description: Verify NVMe NUMA socket values.
 
     Call dmg storage scan --verbose to obtain NUMA socket value (Socket ID) of
     each NVMe disk. Verify against the value in
-    /sys/bus/pci/devices/<PCI address>/numa_node
+    /sys/class/pci_bus/<PIC Address Head>/device/numa_node
+
+    where PCI Address Head is the first two hex numbers separated by colon.
+    e.g., 0000:5e:00.0 -> PCI Address Head is 0000:5e
 
     :avocado: recursive
     """
@@ -54,10 +58,13 @@ class SSDSocketTest(TestWithServers):
         for pci_addr in pci_addrs:
             cmd_socket_id = data[self.hostlist_servers[0]]["nvme"][pci_addr]\
                 ["socket"]
-            numa_node_path = "/sys/bus/pci/devices/{}/numa_node".format(
-                pci_addr)
+            pci_addr_vals = pci_addr.split(":")
+            pci_addr_head = "{}:{}".format(pci_addr_vals[0], pci_addr_vals[1])
+            numa_node_path = "/sys/class/pci_bus/{}/device/numa_node".format(
+                pci_addr_head)
             try:
-                cmd_result = run_command(command="cat {}".format(numa_node_path))
+                cmd_result = run_command(
+                    command="cat {}".format(numa_node_path))
             except DaosTestError:
                 errors.append("{} not found!".format(numa_node_path))
                 continue

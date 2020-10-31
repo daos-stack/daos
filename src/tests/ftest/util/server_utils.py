@@ -23,7 +23,6 @@
 """
 import getpass
 import socket
-import re
 
 from command_utils_base import \
     CommandFailure, FormattedParameter, YamlParameters, CommandWithParameters
@@ -159,59 +158,6 @@ class DaosServerCommand(YamlCommand):
         if isinstance(self.yaml, YamlParameters):
             value = self.yaml.using_dcpm
         return value
-
-    def storage_scan(self):
-        """Call daos_server storage scan and returns the output as dictionary.
-
-        Returns:
-            dict: Values in SCM and NVMe table.
-        """
-        self.result = self._get_result(("storage", "scan"))
-        # Sample daos_server storage scan output. It should be the same as dmg
-        # storage scan --verbose except there's no hostname at the top.
-
-        # NVMe PCI     Model                FW Revision Socket ID Capacity
-        # --------     -----                ----------- --------- --------
-        # 0000:81:00.0 INTEL SSDPED1K750GA  E2010325    1         750 GB
-
-        #         No SCM modules found
-        vals = re.findall(
-            r"\n([a-z0-9_]+)[ ]+([\d]+)[ ]+([\d.]+) ([A-Z]+)|"
-            r"([a-f0-9]+:[a-f0-9]+:[a-f0-9]+.[a-f0-9]+)[ ]+"
-            r"(\S+)[ ]+(\S+)[ ]+(\S+)[ ]+(\d+)[ ]+([\d.]+)"
-            r"[ ]+([A-Z]+)[ ]*\n", self.result.stdout)
-        self.log.info("--- Output parse result ---")
-        self.log.info(vals)
-
-        data = {}
-        data["scm"] = {}
-        i = 0
-        while i < len(vals):
-            if vals[i][0] == "":
-                break
-            pmem_name = vals[i][0]
-            socket_id = vals[i][1]
-            capacity = "{} {}".format(vals[i][2], vals[i][3])
-            data["scm"][pmem_name] = {}
-            data["scm"][pmem_name]["socket"] = socket_id
-            data["scm"][pmem_name]["capacity"] = capacity
-            i += 1
-
-        data["nvme"] = {}
-        while i < len(vals):
-            pci_addr = vals[i][4]
-            model = "{} {}".format(vals[i][5], vals[i][6])
-            fw_revision = vals[i][7]
-            socket_id = vals[i][8]
-            capacity = "{} {}".format(vals[i][9], vals[i][10])
-            data["nvme"][pci_addr] = {}
-            data["nvme"][pci_addr]["model"] = model
-            data["nvme"][pci_addr]["fw_revision"] = fw_revision
-            data["nvme"][pci_addr]["socket"] = socket_id
-            data["nvme"][pci_addr]["capacity"] = capacity
-            i += 1
-
-        return data
 
     class NetworkSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server network sub command."""
