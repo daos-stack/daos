@@ -54,8 +54,7 @@ class MpiioTests(TestWithServers):
         self.daos_cmd = DaosCommand(self.bin)
 
         # initialize a python pool object then create the underlying
-        self.pool = TestPool(
-            self.context, dmg_command=self.get_dmg_command())
+        self.pool = TestPool(self.context, self.get_dmg_command())
         self.pool.get_params(self)
         self.pool.create()
 
