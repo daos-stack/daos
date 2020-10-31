@@ -29,11 +29,11 @@ ENV USER build
 RUN useradd -u $UID -ms /bin/bash $USER
 
 # need to run the build command as root, as it needs to chroot
-RUN if ! grep "^#includedir /etc/sudoers.d" /etc/sudoers; then                          \
-        echo "#includedir /etc/sudoers.d" >> /etc/sudoers;                              \
-    fi;                                                                                 \
-    echo "Defaults env_keep += \"DPKG_GENSYMBOLS_CHECK_LEVEL\"" > /etc/sudoers.d/build; \
-    echo "build ALL=(ALL) NOPASSWD: /usr/sbin/pbuilder" >> /etc/sudoers.d/build;        \
-    chmod 0440 /etc/sudoers.d/build;                                                    \
-    visudo -c;                                                                          \
+RUN if ! grep "^#includedir /etc/sudoers.d" /etc/sudoers; then                                     \
+        echo "#includedir /etc/sudoers.d" >> /etc/sudoers;                                         \
+    fi;                                                                                            \
+    echo "Defaults env_keep += \"DPKG_GENSYMBOLS_CHECK_LEVEL SCONS_ARGS\"" > /etc/sudoers.d/build; \
+    echo "build ALL=(ALL) NOPASSWD: /usr/sbin/pbuilder" >> /etc/sudoers.d/build;                   \
+    chmod 0440 /etc/sudoers.d/build;                                                               \
+    visudo -c;                                                                                     \
     sudo -l -U build

@@ -313,7 +313,6 @@ chrootbuild: $(DEB_TOP)/$(DEB_DSC)
 	DEB_TOP="$(DEB_TOP)"                                    \
 	DEB_DSC="$(DEB_DSC)"                                    \
 	DISTRO_ID_OPT="$(DISTRO_ID_OPT)"                        \
-	DEB_BUILD_OPTIONS="$(scons_args)"                       \
 	packaging/debian_chrootbuild
 else
 chrootbuild: $(SRPM) $(CALLING_MAKEFILE)
