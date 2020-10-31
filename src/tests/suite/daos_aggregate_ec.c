@@ -88,14 +88,22 @@ struct ec_agg_test_ctx {
 	daos_recx_t             iom_recx;
 };
 
+inline static char
+iov_cell(int i, daos_off_t offset, unsigned int k, unsigned int len)
+{
+	return ((i + offset) % (k * len)) / len + 1;
+
+}
+
 static void
-iov_update_fill(d_iov_t *iov)
+iov_update_fill(d_iov_t *iov, daos_off_t offset, unsigned int k,
+		unsigned int len)
 {
 	char	*dest = iov->iov_buf;
 	int	 i;
 
 	for (i = 0; i < iov->iov_len; i++)
-		dest[i] = i % 128;
+		dest[i] = iov_cell(i, offset, k, len);
 }
 
 static void
@@ -133,6 +141,9 @@ static void
 ec_setup_single_recx_data(struct ec_agg_test_ctx *ctx, unsigned int mode,
 			  daos_size_t offset, daos_size_t data_bytes)
 {
+	struct daos_oclass_attr	*oca;
+
+	assert_int_equal(daos_oclass_is_ec(ctx->oid, &oca), true);
 	if (mode != EC_SPECIFIED)
 		return;
 	/* else set databytes based on oclass */
@@ -142,7 +153,9 @@ ec_setup_single_recx_data(struct ec_agg_test_ctx *ctx, unsigned int mode,
 
 	daos_sgl_init(&ctx->update_sgl, 1);
 	iov_alloc(&ctx->update_sgl.sg_iovs[0], data_bytes);
-	iov_update_fill(ctx->update_sgl.sg_iovs);
+
+	iov_update_fill(ctx->update_sgl.sg_iovs, offset, oca->u.ec.e_k,
+			oca->u.ec.e_len);
 
 	daos_sgl_init(&ctx->fetch_sgl, 1);
 	iov_alloc(&ctx->fetch_sgl.sg_iovs[0], data_bytes);
@@ -159,6 +172,7 @@ ec_setup_single_recx_data(struct ec_agg_test_ctx *ctx, unsigned int mode,
 
 	ctx->fetch_iom.iom_recxs = &ctx->iom_recx;
 	ctx->fetch_iom.iom_nr = 1;
+	ctx->fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 	ctx->fetch_iom.iom_nr_out = 0;
 
 	/** Setup Fetch IOD*/
@@ -206,7 +220,7 @@ test_filled_stripe(void **statep)
 	struct ec_agg_test_ctx	 ctx = { 0 };
 	struct daos_oclass_attr	*oca;
 	tse_task_t		*task = NULL;
-	unsigned int		 len, shard = 2; /* 2+1, 2 is group leadeer */
+	unsigned int		 len, shard = 2; /* 2+1, 2 is group leader */
 	int			 i, rc;
 
 	ec_setup_from_test_args(&ctx, (test_arg_t *)*statep);
@@ -249,9 +263,9 @@ test_filled_stripe(void **statep)
 		rc = dc_task_schedule(task, true);
 		assert_int_equal(rc, 0);
 		/* verify parity now exists on parity target */
-		//assert_int_equal(ctx.fetch_iom.iom_nr_out, 1);
-		D_PRINT("parity: ctx.fetch_iom.iom_nr_out: %u\n",
-			ctx.fetch_iom.iom_nr_out);
+		assert_int_equal(ctx.fetch_iom.iom_nr_out, 1);
+		//D_PRINT("parity: ctx.fetch_iom.iom_nr_out: %u\n",
+		//	ctx.fetch_iom.iom_nr_out);
 		task = NULL;
 	}
 	ec_cleanup_data(&ctx);
