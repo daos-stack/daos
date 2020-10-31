@@ -15,8 +15,8 @@ ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
     MAKEFLAGS += -j$(NUMJOBS)
 endif
 
-ifneq (,$(filter build_type=%,$(DEB_BUILD_OPTIONS)))
-    BUILD_TYPE = $(patsubst build_type=%,%,$(filter build_type=%,$(DEB_BUILD_OPTIONS)))
+ifneq (,$(filter build_type=%,$(SCONS_ARGS)))
+    BUILD_TYPE = $(patsubst build_type=%,%,$(filter build_type=%,$(SCONS_ARGS)))
 else
     BUILD_TYPE = release
 endif
