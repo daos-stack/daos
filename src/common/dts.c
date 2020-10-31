@@ -247,12 +247,14 @@ pool_init(struct dts_context *tsc)
 	if (tsc->tsc_mpi_size <= 1)
 		goto out; /* don't need to share handle */
 
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	if (!tsc->tsc_pmem_file)
+		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	if (rc)
 		goto out; /* open failed */
 
-	handle_share(&tsc->tsc_poh, HANDLE_POOL, tsc->tsc_mpi_rank,
-		     tsc->tsc_poh, 0);
+	if (!tsc->tsc_pmem_file)
+		handle_share(&tsc->tsc_poh, HANDLE_POOL, tsc->tsc_mpi_rank,
+			     tsc->tsc_poh, 0);
  out:
 	return rc;
 }
@@ -316,8 +318,9 @@ cont_init(struct dts_context *tsc)
 	if (rc)
 		goto out; /* open failed */
 
-	handle_share(&tsc->tsc_coh, HANDLE_CO, tsc->tsc_mpi_rank,
-		     tsc->tsc_poh, 0);
+	if (!tsc->tsc_pmem_file)
+		handle_share(&tsc->tsc_coh, HANDLE_CO, tsc->tsc_mpi_rank,
+			     tsc->tsc_poh, 0);
  out:
 	return rc;
 }

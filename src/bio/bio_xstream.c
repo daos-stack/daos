@@ -377,12 +377,6 @@ bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
 	int		rc, fd;
 	uint64_t	size_mb = DAOS_DMA_CHUNK_MB;
 
-	rc = smd_init(storage_path);
-	if (rc != 0) {
-		D_ERROR("Initialize SMD store failed. "DF_RC"\n", DP_RC(rc));
-		return rc;
-	}
-
 	nvme_glb.bd_xstream_cnt = 0;
 	nvme_glb.bd_init_thread = NULL;
 	D_INIT_LIST_HEAD(&nvme_glb.bd_bdevs);
@@ -407,6 +401,12 @@ bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
 		return 0;
 	}
 	close(fd);
+
+	rc = smd_init(storage_path);
+	if (rc != 0) {
+		D_ERROR("Initialize SMD store failed. "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
 
 	nvme_glb.bd_nvme_conf = spdk_conf_allocate();
 	if (nvme_glb.bd_nvme_conf == NULL) {
