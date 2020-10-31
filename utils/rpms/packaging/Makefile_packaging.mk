@@ -25,13 +25,11 @@ BUILD_PREFIX ?= .
 DOT     := .
 RPM_BUILD_OPTIONS += $(EXTERNAL_RPM_BUILD_OPTIONS)
 
-
 # some defaults the caller can override
 PACKAGING_CHECK_DIR ?= ../packaging
 LOCAL_REPOS ?= true
 TEST_PACKAGES ?= ${NAME}
 
-scons_args                = $(shell echo $(SCONS_ARGS) | tr A-Z a-z)
 PR_REPOS                 ?= $(shell git show -s --format=%B | sed -ne 's/^PR-repos: *\(.*\)/\1/p')
 LEAP_15_PR_REPOS         ?= $(shell git show -s --format=%B | sed -ne 's/^PR-repos-leap15: *\(.*\)/\1/p')
 EL_7_PR_REPOS            ?= $(shell git show -s --format=%B | sed -ne 's/^PR-repos-el7: *\(.*\)/\1/p')
