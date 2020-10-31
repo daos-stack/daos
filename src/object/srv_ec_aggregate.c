@@ -584,9 +584,8 @@ agg_update_vos(struct ec_agg_entry *entry, bool write_parity)
 							PARITY_INDICATOR;
 		recx.rx_nr = len;
 		rc = vos_obj_update(agg_param->ap_cont_handle, entry->ae_oid,
-				entry->ae_cur_stripe.as_hi_epoch, 0, 0,
-				&entry->ae_dkey, 1, &iod, NULL,
-				&sgl);
+				    entry->ae_cur_stripe.as_hi_epoch, 0, 0,
+				    &entry->ae_dkey, 1, &iod, NULL, &sgl);
 		if (rc)
 			D_ERROR("vos_obj_update failed: "DF_RC"\n", DP_RC(rc));
 	}
