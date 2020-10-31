@@ -520,6 +520,9 @@ lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
 
 	req->result = -1;
 	lookup_internal(&req->dkey, nr, req->sgl, req->iod, th, req, empty);
+	for (i = 0; i < nr; i++)
+		/** record extent */
+		iod_size[i] = req->iod[i].iod_size;
 }
 
 /**

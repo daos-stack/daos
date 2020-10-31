@@ -691,14 +691,13 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		/* update the sizes in iods */
 		for (i = 0; i < orw->orw_nr; i++) {
 			if (!is_ec_obj || reasb_req->orr_fail == NULL ||
-			    iods[i].iod_size == 0)
+			    iods[i].iod_size == 0 || sizes[i] != 0)
 				iods[i].iod_size = sizes[i];
-			if (is_ec_obj && reasb_req->orr_recov &&
-			    reasb_req->orr_fail &&
-			    reasb_req->orr_fail->efi_uiods[i].iod_size == 0) {
+			if ((is_ec_obj && reasb_req->orr_recov) &&
+			    (reasb_req->orr_fail->efi_uiods[i].iod_size == 0 ||
+			     sizes[i] != 0))
 				reasb_req->orr_fail->efi_uiods[i].iod_size =
 					sizes[i];
-			}
 		}
 
 		if (is_ec_obj && reasb_req->orr_size_fetch)

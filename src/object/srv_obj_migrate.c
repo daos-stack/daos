@@ -665,23 +665,23 @@ migrate_update_parity(struct migrate_one *mrone, struct ds_cont_child *ds_cont,
 		      daos_size_t size, struct daos_oclass_attr *oca,
 		      daos_iod_t *iod, unsigned char *p_bufs[])
 {
-	daos_size_t	stride_bytes = obj_ec_stripe_rec_nr(oca);
-	daos_size_t	cell_bytes = obj_ec_cell_rec_nr(oca);
+	daos_size_t	stride_nr = obj_ec_stripe_rec_nr(oca);
+	daos_size_t	cell_nr = obj_ec_cell_rec_nr(oca);
 	daos_recx_t	tmp_recx;
 	d_iov_t		tmp_iov;
 	d_sg_list_t	tmp_sgl;
-	daos_size_t	write_bytes;
+	daos_size_t	write_nr;
 	int		rc = 0;
 
 	tmp_sgl.sg_nr = tmp_sgl.sg_nr_out = 1;
 	while (size > 0) {
-		if (offset % stride_bytes != 0)
-			write_bytes =
-			  min(roundup(offset, stride_bytes) - offset, size);
+		if (offset % stride_nr != 0)
+			write_nr =
+			  min(roundup(offset, stride_nr) - offset, size);
 		else
-			write_bytes = min(stride_bytes, size);
+			write_nr = min(stride_nr, size);
 
-		if (write_bytes == stride_bytes) {
+		if (write_nr == stride_nr) {
 			unsigned int shard;
 
 			shard = mrone->mo_oid.id_shard % obj_ec_tgt_nr(oca);
@@ -694,20 +694,21 @@ migrate_update_parity(struct migrate_one *mrone, struct ds_cont_child *ds_cont,
 					       p_bufs);
 			if (rc)
 				D_GOTO(out, rc);
-			tmp_recx.rx_idx = obj_ec_idx_daos2vos(offset,
-							      stride_bytes,
-							      cell_bytes);
+			tmp_recx.rx_idx = obj_ec_idx_daos2vos(offset, stride_nr,
+							      cell_nr);
 			tmp_recx.rx_idx |= PARITY_INDICATOR;
-			tmp_recx.rx_nr = cell_bytes;
-			d_iov_set(&tmp_iov, p_bufs[shard], cell_bytes);
-			D_DEBUG(DB_IO, "parity "DF_U64"/"DF_U64"\n",
-				tmp_recx.rx_idx, tmp_recx.rx_nr);
+			tmp_recx.rx_nr = cell_nr;
+			d_iov_set(&tmp_iov, p_bufs[shard],
+				  cell_nr * iod->iod_size);
+			D_DEBUG(DB_IO, "parity "DF_U64"/"DF_U64" "DF_U64"\n",
+				tmp_recx.rx_idx, tmp_recx.rx_nr, iod->iod_size);
 		} else {
 			tmp_recx.rx_idx = offset;
-			tmp_recx.rx_nr = write_bytes;
-			d_iov_set(&tmp_iov, buffer, write_bytes);
-			D_DEBUG(DB_IO, "replicate "DF_U64"/"DF_U64"\n",
-				tmp_recx.rx_idx, tmp_recx.rx_nr);
+			tmp_recx.rx_nr = write_nr;
+			d_iov_set(&tmp_iov, buffer, write_nr * iod->iod_size);
+			D_DEBUG(DB_IO, "replicate "DF_U64"/"DF_U64" "
+				DF_U64"\n", tmp_recx.rx_idx,
+				tmp_recx.rx_nr, iod->iod_size);
 		}
 
 		tmp_sgl.sg_iovs = &tmp_iov;
@@ -716,9 +717,9 @@ migrate_update_parity(struct migrate_one *mrone, struct ds_cont_child *ds_cont,
 				    mrone->mo_epoch, mrone->mo_version,
 				    0, &mrone->mo_dkey, 1, iod, NULL,
 				    &tmp_sgl);
-		size -= write_bytes;
-		offset += write_bytes;
-		buffer += write_bytes;
+		size -= write_nr;
+		offset += write_nr;
+		buffer += write_nr * iod->iod_size;
 	}
 out:
 	return rc;
