@@ -32,11 +32,10 @@ export GOCACHE := $(CURDIR)/.gocache
 	dh $@ --with-systemd
 
 override_dh_auto_build:
-	echo $(DEB_BUILD_OPTIONS)
 	mkdir -p $(GOCACHE)
-	if ! $(SCONS) $(DEB_SCONS_OPTIONS); then               \
-	    cat config.log;                                    \
-	    exit 1;                                            \
+	if ! $(SCONS) $(DEB_SCONS_OPTIONS); then \
+	    cat config.log;                      \
+	    exit 1;                              \
 	fi
 
 override_dh_auto_clean:
@@ -53,7 +52,6 @@ override_dh_auto_clean:
 	dh_auto_clean
 
 override_dh_auto_install:
-	echo $(DEB_BUILD_OPTIONS)
 	mkdir -p $(GOCACHE)
 	$(SCONS) $(DEB_SCONS_OPTIONS)                     \
 	         --install-sandbox=$(CURDIR)/${buildroot} \
