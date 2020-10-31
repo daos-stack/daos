@@ -53,8 +53,7 @@ class StorageRatio(TestWithServers):
         tests = self.params.get("storage_ratio", '/run/pool/*')
         results = {}
         for num, test in enumerate(tests):
-            pool = TestPool(
-                self.context, dmg_command=self.get_dmg_command())
+            pool = TestPool(self.context, self.get_dmg_command())
             pool.get_params(self)
             pool.scm_size.update(test[0])
             pool.nvme_size.update(test[1])
