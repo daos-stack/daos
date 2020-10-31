@@ -1571,8 +1571,8 @@ obj_ec_encode(struct obj_reasb_req *reasb_req)
 
 	for (i = 0; i < reasb_req->orr_iod_nr; i++) {
 		rc = obj_ec_recx_encode(reasb_req->orr_oid,
-					&reasb_req->orr_iods[i],
-					&reasb_req->orr_sgls[i],
+					&reasb_req->orr_uiods[i],
+					&reasb_req->orr_usgls[i],
 					reasb_req->orr_oca,
 					codec,
 					&reasb_req->orr_recxs[i]);
