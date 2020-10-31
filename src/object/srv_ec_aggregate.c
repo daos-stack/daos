@@ -1013,46 +1013,50 @@ agg_get_carry_under(struct ec_agg_entry *entry)
  * in the processed stripe.
  */
 static int
-agg_update_vos(struct ec_agg_entry *entry)
+agg_update_vos(struct ec_agg_entry *entry, bool write_parity)
 {
-	d_sg_list_t		 sgl = { 0 };
-	daos_iod_t		 iod = { 0 };
 	daos_epoch_range_t	 epoch_range = { 0 };
 	daos_recx_t		 recx = { 0 };
-	d_iov_t			*iov;
 	struct ec_agg_param	*agg_param;
 	unsigned int		 len = entry->ae_oca->u.ec.e_len;
 	unsigned int		 k = entry->ae_oca->u.ec.e_k;
 	int			 rc = 0;
 
-	iov = &entry->ae_sgl.sg_iovs[AGG_IOV_PARITY];
-	sgl.sg_iovs = iov;
-	sgl.sg_nr = 1;
-
 	recx.rx_idx = entry->ae_cur_stripe.as_stripenum * k * len -
 		entry->ae_cur_stripe.as_prefix_ext;
 	recx.rx_nr = k * len + entry->ae_cur_stripe.as_prefix_ext -
 		entry->ae_cur_stripe.as_suffix_ext;
+
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 	epoch_range.epr_lo = agg_param->ap_epr.epr_lo;
 	epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
+
 	rc = vos_obj_array_remove(agg_param->ap_cont_handle, entry->ae_oid,
 				  &epoch_range, &entry->ae_dkey,
 				  &entry->ae_akey, &recx);
-	iod.iod_nr = 1;
-	iod.iod_size = entry->ae_rsize;
-	iod.iod_name = entry->ae_akey;
-	iod.iod_type = DAOS_IOD_ARRAY;
-	iod.iod_recxs = &recx;
-	recx.rx_idx = (entry->ae_cur_stripe.as_stripenum * len) |
+	if (write_parity) {
+		d_sg_list_t	 sgl = { 0 };
+		daos_iod_t	 iod = { 0 };
+		d_iov_t		*iov;
+
+		iov = &entry->ae_sgl.sg_iovs[AGG_IOV_PARITY];
+		sgl.sg_iovs = iov;
+		sgl.sg_nr = 1;
+		iod.iod_nr = 1;
+		iod.iod_size = entry->ae_rsize;
+		iod.iod_name = entry->ae_akey;
+		iod.iod_type = DAOS_IOD_ARRAY;
+		iod.iod_recxs = &recx;
+		recx.rx_idx = (entry->ae_cur_stripe.as_stripenum * len) |
 							PARITY_INDICATOR;
-	recx.rx_nr = len;
-	rc = vos_obj_update(agg_param->ap_cont_handle, entry->ae_oid,
-			    entry->ae_cur_stripe.as_hi_epoch, 0, 0,
-			    &entry->ae_dkey, 1, &iod, NULL,
-			    &sgl);
-	if (rc)
-		D_ERROR("vos_obj_update failed: "DF_RC"\n", DP_RC(rc));
+		recx.rx_nr = len;
+		rc = vos_obj_update(agg_param->ap_cont_handle, entry->ae_oid,
+				entry->ae_cur_stripe.as_hi_epoch, 0, 0,
+				&entry->ae_dkey, 1, &iod, NULL,
+				&sgl);
+		if (rc)
+			D_ERROR("vos_obj_update failed: "DF_RC"\n", DP_RC(rc));
+	}
 	return rc;
 }
 
@@ -1078,14 +1082,21 @@ agg_fetch_local_extents(struct ec_agg_entry *entry, uint8_t *bit_map,
 		rc = -DER_NOMEM;
 		goto out;
 	}
+
 	for (i = 0, j = 0; i < k; i++)
 		if (isset(bit_map, i)) {
 			recxs[j].rx_idx =
 			  entry->ae_cur_stripe.as_stripenum * k * len + i * len;
 			recxs[j++].rx_nr = len;
 		}
+
 	D_ASSERT(j == cell_cnt);
-	/* Don't need to fetch local parity if we're recalculating it. */
+
+	/* Parity is either updated (existing parity is updated),
+	 * or recalculated (generated from the entire stripe.
+	 *
+	 * Only need to fetch local parity if not recalculating it.
+	 */
 	if (!is_recalc) {
 		recxs[cell_cnt].rx_idx = PARITY_INDICATOR |
 				entry->ae_cur_stripe.as_stripenum * k * len;
@@ -1097,6 +1108,7 @@ agg_fetch_local_extents(struct ec_agg_entry *entry, uint8_t *bit_map,
 		rc = -DER_NOMEM;
 		goto out;
 	}
+
 	sgl.sg_nr =  is_recalc ? cell_cnt : cell_cnt + 1;
 	buf = (unsigned char *)entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_buf;
 	for (i = 0; i < cell_cnt; i++) {
@@ -1201,13 +1213,16 @@ agg_update_parity(struct ec_agg_entry *entry, uint8_t *bit_map,
 	if (entry->ae_codec == NULL)
 		entry->ae_codec =
 		obj_ec_codec_get(daos_obj_id2class(entry->ae_oid.id_pub));
+
 	buf = entry->ae_sgl.sg_iovs[AGG_IOV_PARITY].iov_buf;
+
 	for (i = p - 1; i >= 0; i--)
 		parity_bufs[i] = &buf[i * cell_bytes];
 
 	obuf = entry->ae_sgl.sg_iovs[AGG_IOV_ODATA].iov_buf;
-	buf = entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_buf;
+	buf  = entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_buf;
 	diff = entry->ae_sgl.sg_iovs[AGG_IOV_DIFF].iov_buf;
+
 	for (i = 0, j = 0; i < cell_cnt; i++) {
 		old = &obuf[i * cell_bytes];
 		new = &buf[i * cell_bytes];
@@ -1756,6 +1771,7 @@ agg_process_stripe(struct ec_agg_entry *entry)
 	vos_iter_param_t	iter_param = { 0 };
 	struct vos_iter_anchors	anchors = { 0 };
 	bool			update_vos = true;
+	bool			write_parity = true;
 	bool			process_holes = false;
 	int			rc = 0;
 
@@ -1787,13 +1803,12 @@ agg_process_stripe(struct ec_agg_entry *entry)
 		entry->ae_par_extent.ape_recx.rx_idx,
 		entry->ae_par_extent.ape_recx.rx_nr);
 
-	/* change to >= to deal with retained extent */
-	if (entry->ae_par_extent.ape_epoch >= entry->ae_cur_stripe.as_hi_epoch
+	if (entry->ae_par_extent.ape_epoch > entry->ae_cur_stripe.as_hi_epoch
 	    && entry->ae_par_extent.ape_epoch != ~(0ULL)) {
-		/* Parity newer than data and holes; so we need to delete
-		 * the replicas!
+		/* Parity newer than data and holes, so delete the replicas.
 		 */
-		update_vos = false;
+		update_vos = true;
+		write_parity = false;
 		goto out;
 	}
 
@@ -1828,7 +1843,7 @@ out:
 					DP_RC(rc));
 		}
 		if (rc == 0) {
-			rc = agg_update_vos(entry);
+			rc = agg_update_vos(entry, write_parity);
 			if (rc)
 				D_ERROR("agg_update_vos fail: "DF_RC"\n",
 					DP_RC(rc));
