@@ -43,6 +43,46 @@ func TestDmg_ConfigCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Generate with minimum storage parameters",
+			"config generate --num-pmem 2 --num-nvme 4",
+			strings.Join([]string{
+				printRequest(t, &control.StorageScanReq{}),
+			}, " "),
+			nil,
+		},
+		{
+			"Generate with ethernet network device class",
+			"config generate --net-class ethernet",
+			strings.Join([]string{
+				printRequest(t, &control.StorageScanReq{}),
+			}, " "),
+			nil,
+		},
+		{
+			"Generate with infiniband network device class",
+			"config generate --net-class infiniband",
+			strings.Join([]string{
+				printRequest(t, &control.StorageScanReq{}),
+			}, " "),
+			nil,
+		},
+		{
+			"Generate with best-available network device class",
+			"config generate --net-class best-available",
+			strings.Join([]string{
+				printRequest(t, &control.StorageScanReq{}),
+			}, " "),
+			nil,
+		},
+		{
+			"Generate with unsupported network device class",
+			"config generate --net-class loopback",
+			strings.Join([]string{
+				printRequest(t, &control.StorageScanReq{}),
+			}, " "),
+			errors.New("Invalid value"),
+		},
+		{
 			"Nonexistent subcommand",
 			"storage quack",
 			"",

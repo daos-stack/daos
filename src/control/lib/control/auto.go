@@ -49,7 +49,7 @@ type (
 		msRequest
 		NumPmem  int
 		NumNvme  int
-		NetClass string
+		NetClass *uint32
 		Client   UnaryInvoker
 		HostList []string
 		Log      logging.Logger
@@ -271,12 +271,11 @@ func (req *ConfigGenerateReq) checkStorage(ctx context.Context, getNumNuma numaN
 
 // checkProvider evaluate whether necessary interfaces of provider type exist
 // given a minimum number of numa nodes and a provider name.
-func checkProvider(provider string, numNuma, startIdx int, fabricData []netdetect.FabricScan) ([]netdetect.FabricScan, bool) {
+func checkProvider(provider string, clsSelect *uint32, numNuma, startIdx int, fabricData []netdetect.FabricScan) ([]netdetect.FabricScan, bool) {
 	ifaces := make([]netdetect.FabricScan, 0, numNuma)
 	class := fabricData[startIdx].NetDevClass
 
-	for idx, fd := range fabricData[startIdx:] {
-		fmt.Printf("%s : %d. %s, cls: %d\n", provider, startIdx+idx, fd, fd.NetDevClass)
+	for _, fd := range fabricData[startIdx:] {
 		if fd.Provider != provider {
 			return nil, false
 		}
@@ -284,7 +283,13 @@ func checkProvider(provider string, numNuma, startIdx int, fabricData []netdetec
 			ifaces = ifaces[:]
 			class = fd.NetDevClass
 		}
-		fmt.Printf("adding...\n")
+		switch {
+		case clsSelect == nil:
+		default: // filter on selected NetDevClass
+			if class != *clsSelect {
+				continue
+			}
+		}
 		ifaces = append(ifaces, fd)
 		if len(ifaces) == numNuma {
 			return ifaces, true
@@ -319,7 +324,7 @@ func (req *ConfigGenerateReq) checkNetwork(ctx context.Context, cfg *config.Serv
 			continue
 		}
 		provider = fd.Provider
-		ifaces, found = checkProvider(provider, numNuma, idx, fabricData)
+		ifaces, found = checkProvider(provider, req.NetClass, numNuma, idx, fabricData)
 		if found {
 			break
 		}
