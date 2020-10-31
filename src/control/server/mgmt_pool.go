@@ -83,7 +83,7 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 		return errors.New("harness has no managed instances")
 	}
 
-	targetCount := instances[0].runner.GetConfig().TargetCount
+	targetCount := instances[0].GetTargetCount()
 	if targetCount == 0 {
 		return errors.New("zero target count")
 	}
@@ -140,12 +140,13 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	if len(req.GetRanks()) > 0 {
 		// If the request supplies a specific rank list, use it.
 		reqRanks := system.RanksFromUint32(req.GetRanks())
-		reqRanks, err = system.DedupeRanks(reqRanks)
+		// Create a RankSet to sort/dedupe the ranks.
+		reqRanks = system.RankSetFromRanks(reqRanks).Ranks()
 		if err != nil {
 			return nil, err
 		}
 
-		if invalid := system.TestRankMembership(allRanks, reqRanks); len(invalid) > 0 {
+		if invalid := system.CheckRankMembership(allRanks, reqRanks); len(invalid) > 0 {
 			return nil, FaultPoolInvalidRanks(invalid)
 		}
 

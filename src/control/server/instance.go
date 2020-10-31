@@ -26,14 +26,12 @@ package server
 import (
 	"context"
 	"fmt"
-	"net"
 	"os"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/build"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -123,11 +121,6 @@ func (srv *IOServerInstance) isReady() bool {
 	return srv.ready.Load() && srv.isStarted()
 }
 
-// isMSReplica indicates whether or not this instance is a management service replica.
-func (srv *IOServerInstance) isMSReplica() bool {
-	return srv.hasSuperblock() && srv.getSuperblock().MS
-}
-
 // OnStorageReady adds a list of callbacks to invoke when the instance
 // storage becomes ready.
 func (srv *IOServerInstance) OnStorageReady(fns ...onStorageReadyFn) {
@@ -211,6 +204,7 @@ func (srv *IOServerInstance) determineRank(ctx context.Context, ready *srvpb.Not
 		Uri:            ready.Uri,
 		Nctxs:          ready.Nctxs,
 		SrvFaultDomain: srv.hostFaultDomain.String(),
+		Idx:            srv.Index(),
 		// Addr member populated in msClient
 	})
 	if err != nil {
@@ -230,18 +224,35 @@ func (srv *IOServerInstance) determineRank(ctx context.Context, ready *srvpb.Not
 		}
 	}
 
+	// If the join was processed locally, we don't need to
+	// perform more steps, so let the caller know.
+	if resp.LocalJoin {
+		r = system.NilRank
+	}
+
 	return r, nil
 }
 
-// setRank determines the instance rank and sends a SetRank dRPC request
+// joinSystem determines the instance rank and sends a SetRank dRPC request
 // to the IOServer.
-func (srv *IOServerInstance) setRank(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
+func (srv *IOServerInstance) joinSystem(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
 	r, err := srv.determineRank(ctx, ready)
 	if err != nil {
 		return err
 	}
 
+	// hack -- If we receive a nil rank from determineRank() it means
+	// that we can skip the rest of setup because it already happened.
+	if r.Equals(system.NilRank) {
+		srv.log.Debugf("skipping setRank/setUp due to NilRank")
+		return nil
+	}
+
 	if err := srv.callSetRank(ctx, r); err != nil {
+		return err
+	}
+
+	if err := srv.callSetUp(ctx); err != nil {
 		return err
 	}
 
@@ -286,103 +297,18 @@ func (srv *IOServerInstance) GetRank() (system.Rank, error) {
 
 // setTargetCount updates target count in ioserver config.
 func (srv *IOServerInstance) setTargetCount(numTargets int) {
+	srv.Lock()
+	defer srv.Unlock()
+
 	srv.runner.GetConfig().TargetCount = numTargets
 }
 
-// startMgmtSvc starts the DAOS management service replica associated
-// with this instance. If no replica is associated with this instance, this
-// function is a no-op.
-func (srv *IOServerInstance) startMgmtSvc(ctx context.Context) error {
-	superblock := srv.getSuperblock()
+// GetTargetCount returns the target count set for this instance.
+func (srv *IOServerInstance) GetTargetCount() int {
+	srv.RLock()
+	defer srv.RUnlock()
 
-	// should have been loaded by now
-	if superblock == nil {
-		return errors.Errorf("%s instance %d: nil superblock", build.DataPlaneName, srv.Index())
-	}
-
-	if superblock.CreateMS {
-		srv.log.Debugf("create MS (bootstrap=%t)", superblock.BootstrapMS)
-		if err := srv.callCreateMS(ctx, superblock); err != nil {
-			return err
-		}
-		superblock.CreateMS = false
-		superblock.BootstrapMS = false
-		srv.setSuperblock(superblock)
-		if err := srv.WriteSuperblock(); err != nil {
-			return err
-		}
-	}
-
-	if superblock.MS {
-		srv.log.Debug("start MS")
-		if err := srv.callStartMS(ctx); err != nil {
-			return err
-		}
-
-		msInfo, err := getMgmtInfo(srv)
-		if err != nil {
-			return err
-		}
-		if msInfo.isReplica {
-			msg := "Management Service access point started"
-			if msInfo.shouldBootstrap {
-				msg += " (bootstrapped)"
-			}
-			srv.log.Info(msg)
-		}
-	}
-
-	return nil
-}
-
-// loadModules initiates the I/O server startup sequence.
-func (srv *IOServerInstance) loadModules(ctx context.Context) error {
-	return srv.callSetUp(ctx)
-}
-
-func (srv *IOServerInstance) callCreateMS(ctx context.Context, superblock *Superblock) error {
-	msAddr, err := srv.msClient.LeaderAddress()
-	if err != nil {
-		return err
-	}
-	req := &mgmtpb.CreateMsReq{}
-	if superblock.BootstrapMS {
-		req.Bootstrap = true
-		req.Uuid = superblock.UUID
-		req.Addr = msAddr
-	}
-
-	dresp, err := srv.CallDrpc(ctx, drpc.MethodCreateMS, req)
-	if err != nil {
-		return err
-	}
-
-	resp := &mgmtpb.DaosResp{}
-	if err := proto.Unmarshal(dresp.Body, resp); err != nil {
-		return errors.Wrap(err, "unmarshal CreateMS response")
-	}
-	if resp.Status != 0 {
-		return errors.Errorf("CreateMS: %d\n", resp.Status)
-	}
-
-	return nil
-}
-
-func (srv *IOServerInstance) callStartMS(ctx context.Context) error {
-	dresp, err := srv.CallDrpc(ctx, drpc.MethodStartMS, nil)
-	if err != nil {
-		return err
-	}
-
-	resp := &mgmtpb.DaosResp{}
-	if err := proto.Unmarshal(dresp.Body, resp); err != nil {
-		return errors.Wrap(err, "unmarshal StartMS response")
-	}
-	if resp.Status != 0 {
-		return errors.Errorf("StartMS: %d\n", resp.Status)
-	}
-
-	return nil
+	return srv.runner.GetConfig().TargetCount
 }
 
 func (srv *IOServerInstance) callSetUp(ctx context.Context) error {
@@ -407,30 +333,4 @@ func (srv *IOServerInstance) BioErrorNotify(bio *srvpb.BioErrorReq) {
 
 	srv.log.Errorf("I/O server instance %d (target %d) has detected blob I/O error! %v",
 		srv.Index(), bio.TgtId, bio)
-}
-
-// newMember returns reference to a new member struct if one can be retrieved
-// from superblock, error otherwise. Member populated with local reply address.
-func (srv *IOServerInstance) newMember() (*system.Member, error) {
-	if !srv.hasSuperblock() {
-		return nil, errors.New("missing superblock")
-	}
-	sb := srv.getSuperblock()
-
-	msAddr, err := srv.msClient.LeaderAddress()
-	if err != nil {
-		return nil, err
-	}
-
-	addr, err := net.ResolveTCPAddr("tcp", msAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	rank, err := srv.GetRank()
-	if err != nil {
-		return nil, err
-	}
-
-	return system.NewMember(rank, sb.UUID, sb.URI, addr, system.MemberStateJoined), nil
 }

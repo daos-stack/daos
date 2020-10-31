@@ -257,7 +257,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				}
 				harness.started.SetTrue()
 
-				tc.mgmtSvc = newMgmtSvc(harness, nil, system.MockDatabase(t, log))
+				tc.mgmtSvc = newMgmtSvc(harness, system.MockMembership(t, log), system.MockDatabase(t, log))
 			}
 			tc.mgmtSvc.log = log
 
@@ -874,7 +874,7 @@ func TestPoolUpdateACL_Success(t *testing.T) {
 	}
 	setupMockDrpcClient(svc, expectedResp, nil)
 
-	resp, err := svc.PoolUpdateACL(nil, newTestModifyACLReq())
+	resp, err := svc.PoolUpdateACL(context.TODO(), newTestModifyACLReq())
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)

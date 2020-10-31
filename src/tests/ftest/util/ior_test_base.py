@@ -76,19 +76,26 @@ class IorTestBase(DfuseTestBase):
     def create_pool(self):
         """Create a TestPool object to use with ior."""
         # Get the pool params
-        self.pool = TestPool(
-            self.context, dmg_command=self.get_dmg_command())
+        self.pool = TestPool(self.context, self.get_dmg_command())
         self.pool.get_params(self)
 
         # Create a pool
         self.pool.create()
 
-    def create_cont(self):
-        """Create a TestContainer object to be used to create container."""
+    def create_cont(self, oclass):
+        """Create a TestContainer object to be used to create container.
+        Args:
+            oclass: Explicitly supply object class for container create
+        """
         # Get container params
         self.container = TestContainer(
             self.pool, daos_command=DaosCommand(self.bin))
         self.container.get_params(self)
+
+        # update object class for container create, if supplied
+        # explicitly.
+        if oclass:
+            self.container.oclass.update(oclass)
 
         # create container
         self.container.create()
@@ -153,11 +160,12 @@ class IorTestBase(DfuseTestBase):
 
         return out
 
-    def update_ior_cmd_with_pool(self, create_cont=True):
+    def update_ior_cmd_with_pool(self, create_cont=True, oclass=None):
         """Update ior_cmd with pool.
 
         Args:
-            create_cont (bool, optional): create a container. Defaults to True.
+          create_cont (bool, optional): create a container. Defaults to True.
+          oclass (string, optional): Specify object class
         """
         # Create a pool if one does not already exist
         if self.pool is None:
@@ -167,7 +175,7 @@ class IorTestBase(DfuseTestBase):
         # It will not enable checksum feature
         if create_cont:
             self.pool.connect()
-            self.create_cont()
+            self.create_cont(oclass)
         # Update IOR params with the pool and container params
         self.ior_cmd.set_daos_params(self.server_group, self.pool,
                                      self.container.uuid)
@@ -236,13 +244,17 @@ class IorTestBase(DfuseTestBase):
                 self.pool.display_pool_daos_space()
             out = manager.run()
 
-            if not self.subprocess:
-                for line in out.stdout.splitlines():
-                    if 'WARNING' in line:
-                        if fail_on_warning:
-                            self.fail("IOR command issued warnings.\n")
-                        else:
-                            self.log.warning("IOR command issued warnings.\n")
+            if self.subprocess:
+                return out
+
+            if fail_on_warning:
+                report_warning = self.fail
+            else:
+                report_warning = self.log.warning
+
+            for line in out.stdout.splitlines():
+                if 'WARNING' in line:
+                    report_warning("IOR command issued warnings.\n")
             return out
         except CommandFailure as error:
             self.log.error("IOR Failed: %s", str(error))
@@ -260,8 +272,8 @@ class IorTestBase(DfuseTestBase):
         Args:
             manager (str): mpi job manager command
         """
-        self.log.info(
-            "<IOR> Stopping in-progress IOR command: %s", str(self.job_manager))
+        self.log.info("<IOR> Stopping in-progress IOR command: %s",
+                      str(self.job_manager))
 
         try:
             out = self.job_manager.stop()
@@ -344,7 +356,10 @@ class IorTestBase(DfuseTestBase):
         env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
             env["LD_PRELOAD"] = intercept
-        manager.assign_hosts(clients, self.workdir, self.hostfile_clients_slots)
+        manager.assign_hosts(
+            clients,
+            self.workdir,
+            self.hostfile_clients_slots)
         manager.assign_processes(procs)
         manager.assign_environment(env)
         self.lock.release()
@@ -407,7 +422,10 @@ class IorTestBase(DfuseTestBase):
         try:
             # execute bash cmds
             ret = pcmd(
-                self.hostlist_clients, cmd, verbose=display_output, timeout=300)
+                self.hostlist_clients,
+                cmd,
+                verbose=display_output,
+                timeout=300)
             if 0 not in ret:
                 error_hosts = NodeSet(
                     ",".join(
