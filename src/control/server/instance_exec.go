@@ -113,16 +113,12 @@ func (srv *IOServerInstance) waitReady(ctx context.Context, errChan chan error) 
 //
 // Instance ready state is set to indicate that all setup is complete.
 func (srv *IOServerInstance) finishStartup(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
-	if err := srv.setRank(ctx, ready); err != nil {
+	if err := srv.joinSystem(ctx, ready); err != nil {
 		return err
 	}
 	// update ioserver target count to reflect allocated
 	// number of targets, not number requested when starting
 	srv.setTargetCount(int(ready.GetNtgts()))
-
-	if err := srv.loadModules(ctx); err != nil {
-		return errors.Wrap(err, "failed to load I/O server modules")
-	}
 
 	srv.ready.SetTrue()
 
