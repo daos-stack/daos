@@ -37,6 +37,11 @@ def scons():
                                     LIBS=libs)
     denv.Install('$PREFIX/bin/', daos_racer)
 
+    obj_ctl = daos_build.program(denv, 'obj_ctl',
+                                 ['obj_ctl.c'],
+                                 LIBS=libs)
+    denv.Install('$PREFIX/bin/', obj_ctl)
+
     # tests
     SConscript('suite/SConscript', exports=['denv'])
 

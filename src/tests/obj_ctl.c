@@ -299,7 +299,7 @@ ctl_print_usage(void)
 	fflush(stdout);
 }
 
-int
+static int
 ctl_cmd_run(char opc, char *args)
 {
 	struct dts_io_credit	*cred;
@@ -500,11 +500,11 @@ static struct option ctl_ops[] = {
 };
 
 int
-shell(int argc, char *argv[])
+main(int argc, char *argv[])
 {
 	int	rc;
 
-	if (argc < 3)
+	if (argc < 2)
 		goto out_usage;
 
 	uuid_generate(ctl_ctx.tsc_pool_uuid);
@@ -517,21 +517,21 @@ shell(int argc, char *argv[])
 	ctl_ctx.tsc_mpi_rank	= 0;
 	ctl_ctx.tsc_mpi_size	= 1;	/* just one rank */
 
-	if (!strcasecmp(argv[2], "vos")) {
+	if (!strcasecmp(argv[1], "vos")) {
 		daos_mode = false;
-		if (argc == 4)
+		if (argc == 3)
 			strncpy(pmem_file, argv[3], PATH_MAX - 1);
 		else
 			strcpy(pmem_file, "/mnt/daos/vos_ctl.pmem");
 
 		ctl_ctx.tsc_pmem_file = pmem_file;
 
-	} else if (!strcasecmp(argv[2], "daos")) {
+	} else if (!strcasecmp(argv[1], "daos")) {
 		ctl_ctx.tsc_svc.rl_ranks = &ctl_svc_rank;
 		ctl_ctx.tsc_svc.rl_nr = 1;
 
 	} else {
-		fprintf(stderr, "Unknown test mode %s\n", argv[2]);
+		fprintf(stderr, "Unknown test mode %s\n", argv[1]);
 		goto out_usage;
 	}
 
@@ -551,6 +551,6 @@ shell(int argc, char *argv[])
 	return rc;
 
  out_usage:
-	fprintf(stderr, "%s %s daos|vos [pmem_file]\n", argv[0], argv[1]);
-	return -DER_INVAL;
+	printf("%s daos|vos [pmem_file]\n", argv[0]);
+	return -1;
 }
