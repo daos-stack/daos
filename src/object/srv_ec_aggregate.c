@@ -692,6 +692,9 @@ agg_get_obj_handle(struct ec_agg_entry *entry)
 					layout->ol_shards[i]->
 					os_shard_data[j].sd_tgt_idx;
 				}
+				D_PRINT("i: %d, j: %d, rank: %u\n", i, j,
+					layout->ol_shards[i]->
+					os_shard_data[j].sd_rank);
 			}
 		daos_obj_layout_free(layout);
 	}
@@ -1770,9 +1773,6 @@ agg_process_stripe(struct ec_agg_entry *entry)
 		entry->ae_cur_stripe.as_stripenum,
 		iter_param.ip_recx.rx_idx);
 
-	D_PRINT("Querying parity for stripe: %lu, offset: %lu\n",
-		entry->ae_cur_stripe.as_stripenum,
-		iter_param.ip_recx.rx_idx);
 	/* Query the parity */
 	rc = vos_iterate(&iter_param, VOS_ITER_RECX, false, &anchors,
 			 agg_recx_iter_pre_cb, NULL, entry, NULL);
@@ -1929,10 +1929,6 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 		extent->ae_recx.rx_idx, extent->ae_recx.rx_nr,
 		agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
 		extent->ae_hole, agg_entry->ae_oid.id_shard);
-	D_PRINT("adding extent %lu,%lu, to stripe  %lu, hole: %d: shard: %u\n",
-		extent->ae_recx.rx_idx, extent->ae_recx.rx_nr,
-		agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
-		extent->ae_hole, agg_entry->ae_oid.id_shard);
 out:
 	return rc;
 }
@@ -2036,7 +2032,6 @@ agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	struct ec_agg_entry	*agg_entry = (struct ec_agg_entry *)cb_arg;
 	int			 rc = 0;
 
-	D_PRINT("iterate post type: %u\n", type);
 	switch (type) {
 	case VOS_ITER_DKEY:
 		break;
@@ -2101,7 +2096,6 @@ agg_subtree_iterate(daos_handle_t ih, struct ec_agg_param *agg_param)
 	rc = vos_iterate(&iter_param, VOS_ITER_DKEY, true, &anchors,
 			 agg_iterate_pre_cb, agg_iterate_post_cb,
 			 &agg_param->ap_agg_entry, NULL);
-	D_PRINT("Iteration complete! %d\n", rc);
 	return rc;
 }
 
@@ -2322,7 +2316,6 @@ ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 {
 	int	rc = 0;
 
-	D_PRINT("Iterate all!\n");
 	rc = agg_iterate_all(cont, epr, yield_func, yield_arg);
 
 	return rc;
