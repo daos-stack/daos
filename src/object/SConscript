@@ -21,7 +21,7 @@ def scons():
                              common_tgts + ['srv_obj.c', 'srv_mod.c',
                                             'srv_obj_remote.c', 'srv_ec.c',
                                             'srv_csum.c', 'srv_obj_migrate.c',
-                                            'srv_cli.c'],
+                                            'srv_cli.c', 'srv_ec_aggregate.c'],
                              install_off="../..")
     denv.Install('$PREFIX/lib64/daos_srv', srv)
 

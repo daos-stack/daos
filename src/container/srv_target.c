@@ -45,6 +45,7 @@
 #include <daos_srv/pool.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/iv.h>
+#include <daos_srv/srv_obj_ec.h>
 #include "rpc.h"
 #include "srv_internal.h"
 #include <daos/cont_props.h>
@@ -73,6 +74,11 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	D_ASSERT(cont->sc_agg_req != NULL);
 	if (dss_ult_exiting(cont->sc_agg_req))
 		return 1;
+
+	rc = ds_obj_ec_aggregate(cont, epr, dss_ult_yield,
+				 (void *)cont->sc_agg_req);
+	if (rc)
+		D_ERROR("EC aggregation returned: "DF_RC"\n", DP_RC(rc));
 
 	rc = vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc, dss_ult_yield,
 			   (void *)cont->sc_agg_req);
