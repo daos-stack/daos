@@ -161,7 +161,7 @@ class NvmeFragmentation(TestWithServers):
         """
         no_of_jobs = self.params.get("no_parallel_job", '/run/ior/*')
         # Create a pool
-        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
+        self.pool = TestPool(self.context, self.get_dmg_command())
         self.pool.get_params(self)
         self.pool.create()
         self.pool.display_pool_daos_space("Pool space at the Beginning")

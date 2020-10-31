@@ -34,6 +34,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/peer"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -42,7 +43,24 @@ import (
 
 const (
 	instanceUpdateDelay = 500 * time.Millisecond
-	groupUpdateRefresh  = 100 * time.Millisecond
+
+	batchJoinInterval = 250 * time.Millisecond
+	joinRespTimeout   = 10 * time.Millisecond
+)
+
+type (
+	batchJoinRequest struct {
+		mgmtpb.JoinReq
+		peerAddr *net.TCPAddr
+		respCh   chan *batchJoinResponse
+	}
+
+	batchJoinResponse struct {
+		mgmtpb.JoinResp
+		joinErr error
+	}
+
+	joinReqChan chan *batchJoinRequest
 )
 
 // pollInstanceState waits for either context to be cancelled/timeout or for the
@@ -108,78 +126,152 @@ func getPeerListenAddr(ctx context.Context, listenAddrStr string) (*net.TCPAddr,
 		net.JoinHostPort(tcpAddr.IP.String(), portStr))
 }
 
-// FIXME: This async group update stuff is way more fiddly than I am
-// happy with, but it allows us to keep moving forward with this phase
-// of the task. Longer-term, we need to solve the problem of updating
-// the local CaRT primary group synchronously in a Join request, but
-// broadcasting the group map asynchronously. This will be particularly
-// challenging to handle during initial wire-up with multiple MS
-// replicas, as we can't rely on pre-registering MS service ranks outside
-// of the Join mechanism as we used to do.
+func (svc *mgmtSvc) startJoinLoop(ctx context.Context) {
+	svc.log.Debug("starting joinLoop")
+	go svc.joinLoop(ctx)
+}
 
-func (svc *mgmtSvc) groupUpdateLoop(ctx context.Context) {
-	var lastMapVersion uint32
-	var updateRequested bool
+func (svc *mgmtSvc) joinLoop(parent context.Context) {
+	var joinReqs []*batchJoinRequest
 
 	for {
 		select {
-		case <-ctx.Done():
+		case <-parent.Done():
+			svc.log.Debug("stopped joinLoop")
 			return
-		case <-time.After(groupUpdateRefresh):
-			if !updateRequested {
+		case jr := <-svc.joinReqs:
+			joinReqs = append(joinReqs, jr)
+		case <-time.After(batchJoinInterval):
+			if len(joinReqs) == 0 {
 				continue
 			}
 
-			var err error
-			lastMapVersion, err = svc.doGroupUpdate(ctx, lastMapVersion)
-			if err != nil {
-				svc.log.Error(errors.Wrap(err, "group update failed").Error())
-				if err == system.ErrEmptyGroupMap {
-					updateRequested = false
-				}
-				continue
+			svc.log.Debugf("processing %d join requests", len(joinReqs))
+			joinResps := make([]*batchJoinResponse, len(joinReqs))
+			for i, req := range joinReqs {
+				joinResps[i] = svc.join(parent, req)
 			}
-			updateRequested = false
-			svc.log.Debugf("group update finished (version %d)", lastMapVersion)
-		case <-svc.updateReqChan:
-			updateRequested = true
+
+			for i := 0; i < len(svc.harness.Instances()); i++ {
+				if err := svc.doGroupUpdate(parent); err != nil {
+					if err == instanceNotReady {
+						svc.log.Debug("group update not ready (retrying)")
+						continue
+					}
+
+					err = errors.Wrap(err, "failed to perform CaRT group update")
+					for i, jr := range joinResps {
+						if jr.joinErr == nil {
+							joinResps[i] = &batchJoinResponse{joinErr: err}
+						}
+					}
+				}
+				break
+			}
+
+			svc.log.Debugf("sending %d join responses", len(joinReqs))
+			for i, req := range joinReqs {
+				ctx, cancel := context.WithTimeout(parent, joinRespTimeout)
+				defer cancel()
+
+				select {
+				case <-ctx.Done():
+					svc.log.Errorf("failed to send join response: %s", ctx.Err())
+				case req.respCh <- joinResps[i]:
+				}
+			}
+
+			joinReqs = nil
 		}
 	}
 }
 
-func (svc *mgmtSvc) startUpdateLoop(ctx context.Context) {
-	go svc.groupUpdateLoop(ctx)
-}
-
-func (svc *mgmtSvc) requestGroupUpdate(ctx context.Context) {
-	go func(ctx context.Context) {
-		select {
-		case <-ctx.Done():
-		case svc.updateReqChan <- struct{}{}:
+func (svc *mgmtSvc) join(ctx context.Context, req *batchJoinRequest) *batchJoinResponse {
+	uuid, err := uuid.Parse(req.GetUuid())
+	if err != nil {
+		return &batchJoinResponse{
+			joinErr: errors.Wrapf(err, "invalid uuid %q", req.GetUuid()),
 		}
-	}(ctx)
+	}
+
+	fd, err := system.NewFaultDomainFromString(req.GetSrvFaultDomain())
+	if err != nil {
+		return &batchJoinResponse{
+			joinErr: errors.Wrapf(err, "invalid server fault domain %q", req.GetSrvFaultDomain()),
+		}
+	}
+
+	joinResponse, err := svc.membership.Join(&system.JoinRequest{
+		Rank:           system.Rank(req.Rank),
+		UUID:           uuid,
+		ControlAddr:    req.peerAddr,
+		FabricURI:      req.GetUri(),
+		FabricContexts: req.GetNctxs(),
+		FaultDomain:    fd,
+	})
+	if err != nil {
+		return &batchJoinResponse{joinErr: err}
+	}
+
+	member := joinResponse.Member
+	if joinResponse.Created {
+		svc.log.Debugf("new system member: rank %d, addr %s, uri %s",
+			member.Rank, req.peerAddr, member.FabricURI)
+	} else {
+		svc.log.Debugf("updated system member: rank %d, uri %s, %s->%s",
+			member.Rank, member.FabricURI, joinResponse.PrevState, member.State())
+		if joinResponse.PrevState == member.State() {
+			svc.log.Errorf("unexpected same state in rank %d update (%s->%s)",
+				member.Rank, joinResponse.PrevState, member.State())
+		}
+	}
+
+	resp := &batchJoinResponse{
+		JoinResp: mgmtpb.JoinResp{
+			State: mgmtpb.JoinResp_IN,
+			Rank:  member.Rank.Uint32(),
+		},
+	}
+
+	// If the rank is local to the MS leader, then we need to wire up at least
+	// one in order to perform a CaRT group update.
+	if common.IsLocalAddr(req.peerAddr) && req.Idx == 0 {
+		resp.LocalJoin = true
+
+		srvs := svc.harness.Instances()
+		if len(srvs) == 0 {
+			return &batchJoinResponse{
+				joinErr: errors.New("invalid Join request (index 0 doesn't exist?!?)"),
+			}
+		}
+		srv := srvs[0]
+
+		if err := srv.callSetRank(ctx, joinResponse.Member.Rank); err != nil {
+			return &batchJoinResponse{
+				joinErr: errors.Wrap(err, "failed to set rank on local instance"),
+			}
+		}
+
+		if err := srv.callSetUp(ctx); err != nil {
+			return &batchJoinResponse{
+				joinErr: errors.Wrap(err, "failed to load local instance modules"),
+			}
+		}
+
+		// mark the ioserver as ready to handle dRPC requests
+		srv.ready.SetTrue()
+	}
+
+	return resp
 }
 
-func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, lastMapVer uint32) (uint32, error) {
-	// lock the membership to prevent a Join while this is running.
-	svc.membership.Lock()
-	defer svc.membership.Unlock()
-
-	// Until we are reasonably certain that the group map was updated, return
-	// the current version in order to retry with that version.
-	mapVer := lastMapVer
-
+func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 	gm, err := svc.sysdb.GroupMap()
 	if err != nil {
-		return mapVer, err
+		return err
 	}
 	if len(gm.RankURIs) == 0 {
-		return mapVer, system.ErrEmptyGroupMap
-	}
-
-	if gm.Version == lastMapVer {
-		svc.log.Debugf("doGroupUpdate map ver (%d == %d)", lastMapVer, gm.Version)
-		return mapVer, nil
+		return system.ErrEmptyGroupMap
 	}
 
 	req := &mgmtpb.GroupUpdateReq{
@@ -194,45 +286,35 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, lastMapVer uint32) (uint3
 		rankSet.Add(rank)
 	}
 
-	// NB: At this point, we need to return the current version instead of
-	// the last version, because the cart primary group may have been updated
-	// before the broadcast request failed. If we call this again with the same
-	// map version, the ioserver will trip an assertion. Longer-term, we need
-	// to separate the group update and broadcast steps as we had in the previous
-	// implementation.
-	mapVer = gm.Version
-
 	svc.log.Debugf("group update request: version: %d, ranks: %s", req.MapVersion, rankSet)
 	dResp, err := svc.harness.CallDrpc(ctx, drpc.MethodGroupUpdate, req)
 	if err != nil {
-		// ... except in the case where the instance isn't ready to accept dRPC
-		// calls. In this case, the group update can't have succeeded.
 		if err == instanceNotReady {
-			mapVer = lastMapVer
-			return mapVer, err
+			return err
 		}
 		svc.log.Errorf("dRPC GroupUpdate call failed: %s", err)
-		return mapVer, err
+		return err
 	}
 
 	resp := new(mgmtpb.GroupUpdateResp)
 	if err = proto.Unmarshal(dResp.Body, resp); err != nil {
-		return mapVer, errors.Wrap(err, "unmarshal GroupUpdate response")
+		return errors.Wrap(err, "unmarshal GroupUpdate response")
 	}
 
 	if resp.GetStatus() != 0 {
-		return mapVer, drpc.DaosStatus(resp.GetStatus())
+		return drpc.DaosStatus(resp.GetStatus())
 	}
-	return mapVer, nil
+	return nil
 }
 
 // Join management service gRPC handler receives Join requests from
 // control-plane instances attempting to register a managed instance (will be a
 // rank once joined) to the DAOS system.
 //
-// On receipt of the join request, forward over dRPC to MS replica instance/rank
-// running locally. This handler will only execute on a control-plane instance
-// running the MS leader (in future this will be one of a set of MS replicas).
+// On receipt of the join request, add to a queue of requests to be processed
+// periodically in a dedicated goroutine. This architecture provides for thread
+// safety and improved performance while updating the system membership and CaRT
+// primary group in the local ioserver.
 //
 // The state of the newly joined/evicted rank along with the reply address used
 // to contact the new rank in future will be registered in the system membership.
@@ -240,55 +322,37 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, lastMapVer uint32) (uint3
 // with listening port from joining instance's host addr contained in the
 // provided request.
 func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.JoinResp, error) {
-	svc.log.Debugf("MgmtSvc.Join dispatch, req:%+v\n", *req)
+	svc.log.Debugf("MgmtSvc.Join dispatch, req:%#v\n", req)
 
 	replyAddr, err := getPeerListenAddr(ctx, req.GetAddr())
 	if err != nil {
-		return nil, errors.WithMessage(err,
-			"combining peer addr with listener port")
+		return nil, errors.WithMessage(err, "combining peer addr with listener port")
 	}
 
-	uuid, err := uuid.Parse(req.GetUuid())
-	if err != nil {
-		return nil, errors.Wrapf(err, "invalid uuid %q", req.GetUuid())
+	bjr := &batchJoinRequest{
+		JoinReq:  *req,
+		peerAddr: replyAddr,
+		respCh:   make(chan *batchJoinResponse),
 	}
 
-	fd, err := system.NewFaultDomainFromString(req.GetSrvFaultDomain())
-	if err != nil {
-		return nil, errors.Wrapf(err, "invalid server fault domain %q", req.GetSrvFaultDomain())
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case svc.joinReqs <- bjr:
 	}
 
-	joinResponse, err := svc.membership.Join(&system.JoinRequest{
-		Rank:           system.Rank(req.Rank),
-		UUID:           uuid,
-		ControlAddr:    replyAddr,
-		FabricURI:      req.GetUri(),
-		FabricContexts: req.GetNctxs(),
-		FaultDomain:    fd,
-	})
-	if err != nil {
-		return nil, err
-	}
-	member := joinResponse.Member
-	if joinResponse.Created {
-		svc.log.Debugf("new system member: rank %d, addr %s, uri %s",
-			member.Rank, replyAddr, member.FabricURI)
-	} else {
-		svc.log.Debugf("updated system member: rank %d, uri %s, %s->%s",
-			member.Rank, member.FabricURI, joinResponse.PrevState, member.State())
-		if joinResponse.PrevState == member.State() {
-			svc.log.Errorf("unexpected same state in rank %d update (%s->%s)",
-				member.Rank, joinResponse.PrevState, member.State())
+	var resp *mgmtpb.JoinResp
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case r := <-bjr.respCh:
+		if r.joinErr != nil {
+			return nil, r.joinErr
 		}
+		resp = &r.JoinResp
 	}
 
-	svc.requestGroupUpdate(ctx)
-
-	resp := &mgmtpb.JoinResp{
-		State: mgmtpb.JoinResp_IN,
-		Rank:  member.Rank.Uint32(),
-	}
-	svc.log.Debugf("MgmtSvc.Join dispatch, resp:%+v\n", *resp)
+	svc.log.Debugf("MgmtSvc.Join dispatch, resp:%#v\n", resp)
 
 	return resp, nil
 }
