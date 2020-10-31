@@ -271,11 +271,12 @@ func (req *ConfigGenerateReq) checkStorage(ctx context.Context, getNumNuma numaN
 
 // checkProvider evaluate whether necessary interfaces of provider type exist
 // given a minimum number of numa nodes and a provider name.
-func checkProvider(provider string, numNuma, startIdx int, fabricData []netdetect.FabricScan) ([]*netdetect.FabricScan, bool) {
-	ifaces := make([]*netdetect.FabricScan, 0, numNuma)
+func checkProvider(provider string, numNuma, startIdx int, fabricData []netdetect.FabricScan) ([]netdetect.FabricScan, bool) {
+	ifaces := make([]netdetect.FabricScan, 0, numNuma)
 	class := fabricData[startIdx].NetDevClass
 
-	for _, fd := range fabricData[startIdx:] {
+	for idx, fd := range fabricData[startIdx:] {
+		fmt.Printf("%s : %d. %s, cls: %d\n", provider, startIdx+idx, fd, fd.NetDevClass)
 		if fd.Provider != provider {
 			return nil, false
 		}
@@ -283,7 +284,8 @@ func checkProvider(provider string, numNuma, startIdx int, fabricData []netdetec
 			ifaces = ifaces[:]
 			class = fd.NetDevClass
 		}
-		ifaces = append(ifaces, &fd)
+		fmt.Printf("adding...\n")
+		ifaces = append(ifaces, fd)
 		if len(ifaces) == numNuma {
 			return ifaces, true
 		}
@@ -308,13 +310,9 @@ func (req *ConfigGenerateReq) checkNetwork(ctx context.Context, cfg *config.Serv
 	}
 	req.Log.Debugf("fabric scan: %+v", fabricData)
 
-	for idx, fd := range fabricData {
-		req.Log.Debugf("%d. %s, cls: %d", idx, fd.NetDevClass)
-	}
-
 	var provider string
 	var found bool
-	var ifaces []*netdetect.FabricScan
+	var ifaces []netdetect.FabricScan
 	numNuma := len(cfg.Servers)
 	for idx, fd := range fabricData {
 		if fd.Provider == provider {
@@ -334,11 +332,12 @@ func (req *ConfigGenerateReq) checkNetwork(ctx context.Context, cfg *config.Serv
 	req.Log.Debugf("network devs: %v", ifaces)
 
 	for _, iface := range ifaces {
+		nn := iface.NUMANode
 		cfg.Servers[iface.NUMANode].Fabric = ioserver.FabricConfig{
 			Provider:  iface.Provider,
 			Interface: iface.DeviceName,
 			// TODO: decide on InterfacePort
-			PinnedNumaNode: &iface.NUMANode,
+			PinnedNumaNode: &nn,
 		}
 	}
 
