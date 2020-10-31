@@ -636,8 +636,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	if (opc == DAOS_OBJ_RPC_FETCH) {
 		reasb_req = rw_args->shard_args->reasb_req;
 
-		if (rw_args->shard_args->auxi.flags & DRF_CHECK_EXISTENCE ||
-		    rw_args->shard_args->auxi.flags & DRF_SPEC_SHARD)
+		if (rw_args->shard_args->auxi.flags & DRF_CHECK_EXISTENCE)
 			goto out;
 
 		is_ec_obj = (reasb_req != NULL) &&
@@ -652,10 +651,6 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				reply_maps = &orwo->orw_maps.ca_arrays[i];
 				if (is_ec_obj &&
 				    reply_maps->iom_type == DAOS_IOD_ARRAY) {
-					/* &&
-				    !(rw_args->shard_args->auxi.flags &
-				      DRF_SPEC_SHARD)) {
-				      */
 					rc = obj_ec_iom_merge(reasb_req,
 						orw->orw_tgt_idx, reply_maps,
 						&rw_args->maps[i]);
