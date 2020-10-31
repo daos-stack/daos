@@ -256,12 +256,12 @@ func (req *ConfigGenerateReq) checkStorage(ctx context.Context, getNumNuma numaN
 	}
 
 	cfg := config.DefaultServer()
-	for idx, pp := range pmemPaths {
+	for idx, pmemPath := range pmemPaths {
 		cfg.Servers = append(cfg.Servers, ioserver.NewConfig().
 			WithScmClass(storage.ScmClassDCPM.String()).
 			WithBdevClass(storage.BdevClassNvme.String()).
 			WithScmMountPoint(fmt.Sprintf("%s%d", scmMountPrefix, idx)).
-			WithScmDeviceList(pp).
+			WithScmDeviceList(pmemPath).
 			WithBdevDeviceList(bdevLists[idx]...))
 	}
 	cfg = cfg.WithSystemName(cfg.SystemName) // reset io cfgs to global setting
@@ -269,6 +269,31 @@ func (req *ConfigGenerateReq) checkStorage(ctx context.Context, getNumNuma numaN
 	return cfg.WithSocketDir(cfg.SocketDir), nil
 }
 
+// checkProvider evaluate whether necessary interfaces of provider type exist
+// given a minimum number of numa nodes and a provider name.
+func checkProvider(provider string, numNuma, startIdx int, fabricData []netdetect.FabricScan) ([]*netdetect.FabricScan, bool) {
+	ifaces := make([]*netdetect.FabricScan, 0, numNuma)
+	class := fabricData[startIdx].NetDevClass
+
+	for _, fd := range fabricData[startIdx:] {
+		if fd.Provider != provider {
+			return nil, false
+		}
+		if fd.NetDevClass != class {
+			ifaces = ifaces[:]
+			class = fd.NetDevClass
+		}
+		ifaces = append(ifaces, &fd)
+		if len(ifaces) == numNuma {
+			return ifaces, true
+		}
+	}
+
+	return nil, false
+}
+
+// checkNetwork scans fabric network interfaces and populate to configuration
+// with appropriate fabric device details for all required numa nodes.
 func (req *ConfigGenerateReq) checkNetwork(ctx context.Context, cfg *config.Server) (*config.Server, error) {
 	netCtx, err := netdetect.Init(ctx)
 	if err != nil {
@@ -276,21 +301,46 @@ func (req *ConfigGenerateReq) checkNetwork(ctx context.Context, cfg *config.Serv
 	}
 	defer netdetect.CleanUp(netCtx)
 
+	// fabric results are sorted in ascending priority (lowest is fastest)
 	fabricData, err := netdetect.ScanFabric(netCtx, "")
 	if err != nil {
 		return nil, errors.Wrap(err, "scanning fabric info")
 	}
-	req.Log.Debugf("fabric scan: %v", fabricData)
-
-	// sort fabric results in ascending priority (lowest is fastest)
-	sort.Slice(fabricData, func(i, j int) bool {
-		return fabricData[i].Priority < fabricData[j].Priority
-	})
+	req.Log.Debugf("fabric scan: %+v", fabricData)
 
 	for idx, fd := range fabricData {
-		req.Log.Debugf("%d. %s", idx, fd)
+		req.Log.Debugf("%d. %s, cls: %d", idx, fd.NetDevClass)
 	}
 
-	// identify interfaces for all numa nodes
-	return cfg, nil // TODO: implement
+	var provider string
+	var found bool
+	var ifaces []*netdetect.FabricScan
+	numNuma := len(cfg.Servers)
+	for idx, fd := range fabricData {
+		if fd.Provider == provider {
+			continue
+		}
+		provider = fd.Provider
+		ifaces, found = checkProvider(provider, numNuma, idx, fabricData)
+		if found {
+			break
+		}
+	}
+
+	if !found {
+		return nil, errors.New("insufficient matching network interfaces")
+	}
+
+	req.Log.Debugf("network devs: %v", ifaces)
+
+	for _, iface := range ifaces {
+		cfg.Servers[iface.NUMANode].Fabric = ioserver.FabricConfig{
+			Provider:  iface.Provider,
+			Interface: iface.DeviceName,
+			// TODO: decide on InterfacePort
+			PinnedNumaNode: &iface.NUMANode,
+		}
+	}
+
+	return cfg, nil
 }
