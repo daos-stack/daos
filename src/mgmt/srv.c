@@ -398,6 +398,12 @@ void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc)
 static int
 ds_mgmt_init()
 {
+	int rc;
+
+	rc = ds_mgmt_system_module_init();
+	if (rc != 0)
+		return rc;
+
 	D_DEBUG(DB_MGMT, "successful init call\n");
 	return 0;
 }
@@ -405,6 +411,8 @@ ds_mgmt_init()
 static int
 ds_mgmt_fini()
 {
+	ds_mgmt_system_module_fini();
+
 	D_DEBUG(DB_MGMT, "successful fini call\n");
 	return 0;
 }
@@ -419,7 +427,7 @@ static int
 ds_mgmt_cleanup()
 {
 	ds_mgmt_tgt_cleanup();
-	return 0;
+	return ds_mgmt_svc_stop();
 }
 
 struct dss_module mgmt_module = {
