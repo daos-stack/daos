@@ -521,7 +521,7 @@ agg_stripe_is_filled(struct ec_agg_entry *entry, bool has_parity)
 	return rc;
 }
 
-/* Prefix to not delete, if the extent carries over into the next stripe.
+/* Range to not delete, if the extent carries over into the next stripe.
  */
 static unsigned int
 agg_get_carry_under(struct ec_agg_entry *entry)
@@ -546,49 +546,50 @@ agg_get_carry_under(struct ec_agg_entry *entry)
  * in the processed stripe.
  */
 static int
-agg_update_vos(struct ec_agg_entry *entry)
+agg_update_vos(struct ec_agg_entry *entry, bool write_parity)
 {
-	d_sg_list_t		 sgl = { 0 };
-	daos_iod_t		 iod = { 0 };
 	daos_epoch_range_t	 epoch_range = { 0 };
 	daos_recx_t		 recx = { 0 };
-	d_iov_t			*iov;
 	struct ec_agg_param	*agg_param;
 	unsigned int		 len = entry->ae_oca->u.ec.e_len;
 	unsigned int		 k = entry->ae_oca->u.ec.e_k;
 	int			 rc = 0;
 
-	rc = agg_prep_sgl(entry);
-	if (rc)
-		return rc;
-	iov = &entry->ae_sgl.sg_iovs[AGG_IOV_PARITY];
-	sgl.sg_iovs = iov;
-	sgl.sg_nr = 1;
-
 	recx.rx_idx = entry->ae_cur_stripe.as_stripenum * k * len -
 		entry->ae_cur_stripe.as_prefix_ext;
-	recx.rx_nr = k * len - agg_get_carry_under(entry) +
-		entry->ae_cur_stripe.as_prefix_ext;
+	recx.rx_nr = k * len + entry->ae_cur_stripe.as_prefix_ext -
+		entry->ae_cur_stripe.as_suffix_ext;
+
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 	epoch_range.epr_lo = agg_param->ap_epr.epr_lo;
 	epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
+
 	rc = vos_obj_array_remove(agg_param->ap_cont_handle, entry->ae_oid,
 				  &epoch_range, &entry->ae_dkey,
 				  &entry->ae_akey, &recx);
-	iod.iod_nr = 1;
-	iod.iod_size = entry->ae_rsize;
-	iod.iod_name = entry->ae_akey;
-	iod.iod_type = DAOS_IOD_ARRAY;
-	iod.iod_recxs = &recx;
-	recx.rx_idx = (entry->ae_cur_stripe.as_stripenum * len) |
+	if (write_parity) {
+		d_sg_list_t	 sgl = { 0 };
+		daos_iod_t	 iod = { 0 };
+		d_iov_t		*iov;
+
+		iov = &entry->ae_sgl.sg_iovs[AGG_IOV_PARITY];
+		sgl.sg_iovs = iov;
+		sgl.sg_nr = 1;
+		iod.iod_nr = 1;
+		iod.iod_size = entry->ae_rsize;
+		iod.iod_name = entry->ae_akey;
+		iod.iod_type = DAOS_IOD_ARRAY;
+		iod.iod_recxs = &recx;
+		recx.rx_idx = (entry->ae_cur_stripe.as_stripenum * len) |
 							PARITY_INDICATOR;
-	recx.rx_nr = len;
-	rc = vos_obj_update(agg_param->ap_cont_handle, entry->ae_oid,
-			    entry->ae_cur_stripe.as_hi_epoch, 0, 0,
-			    &entry->ae_dkey, 1, &iod, NULL,
-			    &sgl);
-	if (rc)
-		D_ERROR("vos_obj_update failed: "DF_RC"\n", DP_RC(rc));
+		recx.rx_nr = len;
+		rc = vos_obj_update(agg_param->ap_cont_handle, entry->ae_oid,
+				entry->ae_cur_stripe.as_hi_epoch, 0, 0,
+				&entry->ae_dkey, 1, &iod, NULL,
+				&sgl);
+		if (rc)
+			D_ERROR("vos_obj_update failed: "DF_RC"\n", DP_RC(rc));
+	}
 	return rc;
 }
 
@@ -601,6 +602,7 @@ agg_process_stripe(struct ec_agg_entry *entry)
 	vos_iter_param_t	iter_param = { 0 };
 	struct vos_iter_anchors	anchors = { 0 };
 	bool			update_vos = true;
+	bool			write_parity = true;
 	int			rc = 0;
 
 	entry->ae_par_extent.ape_epoch	= ~(0ULL);
@@ -617,15 +619,26 @@ agg_process_stripe(struct ec_agg_entry *entry)
 		entry->ae_cur_stripe.as_stripenum,
 		iter_param.ip_recx.rx_idx);
 
+	/* Query the parity */
 	rc = vos_iterate(&iter_param, VOS_ITER_RECX, false, &anchors,
 			 agg_recx_iter_pre_cb, NULL, entry, NULL);
+	/* entry->ae_par_extent.ape_epoch has been set to the parity extent's
+	 * epoch
+	 */
 	if (rc != 0)
 		goto out;
 
+	D_DEBUG(DB_TRACE, "Par query: epoch: %lu, offset: %lu, length: %lu\n",
+		entry->ae_par_extent.ape_epoch,
+		entry->ae_par_extent.ape_recx.rx_idx,
+		entry->ae_par_extent.ape_recx.rx_nr);
+
 	if (entry->ae_par_extent.ape_epoch > entry->ae_cur_stripe.as_hi_epoch &&
 	    entry->ae_par_extent.ape_epoch != ~(0ULL)) {
-		/* Parity newer than data; nothing to do. */
-		update_vos = false;
+		/* Parity newer than data and holes, so delete the replicas.
+		 */
+		update_vos = true;
+		write_parity = false;
 		goto out;
 	}
 
@@ -638,12 +651,15 @@ agg_process_stripe(struct ec_agg_entry *entry)
 	}
 
 	if (entry->ae_par_extent.ape_epoch == ~(0ULL)) {
+		/* No parity, partial-stripe worth of replica, nothing to do */
 		update_vos = false;
 		goto out;
 	}
 out:
-	if (update_vos && rc == 0)
-		rc = agg_update_vos(entry);
+	if (update_vos && rc == 0) {
+		entry->ae_cur_stripe.as_suffix_ext = agg_get_carry_under(entry);
+		rc = agg_update_vos(entry, write_parity);
+	}
 
 	agg_clear_extents(entry);
 	return rc;
