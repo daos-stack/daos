@@ -20,11 +20,36 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
+
 /**
  * DAOS server erasure-coded object aggregation.
  *
  * src/object/srv_ec_aggregate.c
+ *
+ * Iterates over replica extents for objects with this target a leader.
+ *
+ * Processes each EC stripe with replica(s) present.
+ *
+ * If replicas fill the stripe, the parity is regenerated from the local
+ * extents.
+ *	- The parity for peer parity extents is transferred.
+ *
+ * If replicas are partial, and prior parity exists:
+ *	- If less than half cells are updated (have replicas, parity is updated:
+ *		- Old data cells for cells with replica data are fetched from
+ *		  data targets (old, since fetched at epoch of existing parity).
+ *		- Peer parity is fetched.
+ *		- Parity is incrementally updated.
+ *		- Updated parity is transferred to peer parity target(s).
+ *	- If half or more of the cells are update by replicas:
+ *		- All cells not filled by local replicas are fetched.
+ *		- New parity is generated from entire stripe.
+ *		- Updated parity is transferred to peer parity target(s).
+ *
+ * If the stripe contains holes later than the parity:
+ *	- Valid ranges in the 
  */
+
 #define D_LOGFAC	DD_FAC(object)
 
 #include <stddef.h>
@@ -234,7 +259,6 @@ agg_clear_extents(struct ec_agg_entry *agg_entry)
 	bool			 carry_is_hole = false;
 
 	agg_entry->ae_cur_stripe.as_prefix_ext = 0U;
-	/* Don't need for each. Just check tail */
 	d_list_for_each_entry_safe(agg_extent, ext_tmp,
 				   &agg_entry->ae_cur_stripe.as_dextents,
 				   ae_link) {
