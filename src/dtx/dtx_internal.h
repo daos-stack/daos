@@ -111,11 +111,11 @@ int dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 uint64_t dtx_cos_oldest(struct ds_cont_child *cont);
 
 /* dtx_rpc.c */
-int dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry **dtes,
+int dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	       int count, bool drop_cos);
-int dtx_abort(uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch,
+int dtx_abort(struct ds_cont_child *cont, daos_epoch_t epoch,
 	      struct dtx_entry **dtes, int count);
-int dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte);
-
+int dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte,
+	      daos_epoch_t epoch);
 
 #endif /* __DTX_INTERNAL_H__ */
