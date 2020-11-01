@@ -494,7 +494,7 @@ test_fetch_array(void **state)
 	int			rc;
 
 	FAULT_INJECTION_REQUIRED();
-	
+
 	if (csum_ec_enabled() && !test_runable(*state, csum_ec_grp_size()))
 		skip();
 
