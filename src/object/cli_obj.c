@@ -585,14 +585,6 @@ obj_shard_find_replica(struct dc_object *obj, unsigned int target,
 				       tgt_list);
 }
 
-static inline struct pl_obj_shard*
-obj_get_shard(void *data, int idx)
-{
-	struct dc_object	*obj = data;
-
-	return &obj->cob_shards->do_shards[idx].do_pl_shard;
-}
-
 static int
 obj_grp_leader_get(struct dc_object *obj, int idx, unsigned int map_ver)
 {

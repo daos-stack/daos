@@ -402,8 +402,10 @@ typedef struct {
 			daos_unit_oid_t		ie_dtx_oid;
 			/** The pool map version when handling DTX on server. */
 			uint32_t		ie_dtx_ver;
-			/* The dkey hash for DTX iteration. */
+			/* The DTX entry flags, see dtx_entry_flags. */
 			uint16_t		ie_dtx_flags;
+			/* DTX mbs flags, see dtx_mbs_flags. */
+			uint16_t		ie_dtx_mbs_flags;
 			/** DTX tgt count. */
 			uint32_t		ie_dtx_tgt_cnt;
 			/** DTX modified group count. */
