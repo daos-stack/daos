@@ -88,6 +88,19 @@ class SSDSocketTest(TestWithServers):
                 "----- debug_numa_node {} -----".format(pci_addr_head))
             self.debug_numa_node(pci_addr_head)
 
+            self.log.debug(
+                "----- Search PCI Addr Head {} in /sys -----".format(
+                    pci_addr_head))
+            try:
+                run_command(
+                    command="find /sys -name \"{}\"".format(pci_addr_head))
+                self.log.debug(
+                    "## Finding {} didn't cause any error".format(
+                        pci_addr_head))
+            except DaosTestError:
+                self.log.debug(
+                    "## Error ocurred while finding {}".format(pci_addr_head))
+
             numa_node_path = "/sys/class/pci_bus/{}/device/numa_node".format(
                 pci_addr_head)
             try:
