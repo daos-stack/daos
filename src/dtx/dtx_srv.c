@@ -88,11 +88,24 @@ dtx_handler(crt_rpc_t *rpc)
 	case DTX_CHECK:
 		/* Currently, only support to check single DTX state. */
 		if (din->di_dtx_array.ca_count != 1)
-			rc = -DER_PROTO;
-		else
-			rc = vos_dtx_check(cont->sc_hdl,
-					   din->di_dtx_array.ca_arrays,
-					   NULL, NULL, false);
+			D_GOTO(out, rc = -DER_PROTO);
+
+		/* If the DTX on this server is for read only operations,
+		 * then di_epoch will be non-zero. If such epoch is older
+		 * than current server start epoch, regard it as prepared
+		 * in spite of whether it has been really handled on this
+		 * server or not before current server the latest restart
+		 * because the start epoch on this server will refuse any
+		 * modification with old epoch, that have the same effect
+		 * as related read only operations for this DTX have been
+		 * executed on current server.
+		 */
+		if (din->di_epoch != 0 &&
+		    din->di_epoch <= dss_get_start_epoch())
+			D_GOTO(out, rc = DTX_ST_PREPARED);
+
+		rc = vos_dtx_check(cont->sc_hdl, din->di_dtx_array.ca_arrays,
+				   NULL, NULL, false);
 		break;
 	default:
 		rc = -DER_INVAL;
