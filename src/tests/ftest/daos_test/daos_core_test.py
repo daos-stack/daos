@@ -27,7 +27,7 @@ from daos_core_base import DaosCoreBase
 
 class DaosCoreTest(DaosCoreBase):
     # pylint: disable=too-many-ancestors
-    """Runs just the non-rebuild daos_test test
+    """Runs just the non-rebuild daos_test tests.
 
     :avocado: recursive
     """
