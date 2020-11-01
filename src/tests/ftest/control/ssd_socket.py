@@ -38,6 +38,26 @@ class SSDSocketTest(TestWithServers):
 
     :avocado: recursive
     """
+    def debug_ls(self, path):
+        try:
+            cmd_result = run_command(command="ls -l {}".format(path))
+            self.log.debug("## {} is found".format(path))
+        except DaosTestError:
+            self.log.debug("## {} NOT found!".format(path))
+
+    def debug_sys(self):
+        path = "/sys"
+        self.debug_ls(path)
+        path = "/sys/class"
+        self.debug_ls(path)
+        path = "/sys/class/pci_bus"
+        self.debug_ls(path)
+
+    def debug_numa_node(self, pci_addr_head):
+        path = "/sys/class/pci_bus/{}".format(pci_addr_head)
+        self.debug_ls(path)
+        path = "/sys/class/pci_bus/{}/device".format(pci_addr_head)
+        self.debug_ls(path)
 
     def test_scan_ssd(self):
         """
@@ -52,6 +72,9 @@ class SSDSocketTest(TestWithServers):
         pci_addrs = data[self.hostlist_servers[0]]["nvme"].keys()
         self.log.info("Testing PCI addresses: {}".format(pci_addrs))
 
+        self.log.debug("----- debug_sys -----")
+        self.debug_sys()
+
         # For every PCI address, verify its Socket ID against its NUMA socket
         # ID.
         errors = []
@@ -60,6 +83,11 @@ class SSDSocketTest(TestWithServers):
                 ["socket"]
             pci_addr_vals = pci_addr.split(":")
             pci_addr_head = "{}:{}".format(pci_addr_vals[0], pci_addr_vals[1])
+
+            self.log.debug(
+                "----- debug_numa_node {} -----".format(pci_addr_head))
+            self.debug_numa_node(pci_addr_head)
+
             numa_node_path = "/sys/class/pci_bus/{}/device/numa_node".format(
                 pci_addr_head)
             try:
