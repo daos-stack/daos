@@ -301,6 +301,9 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 	crt_phy_addr_t		uri_dup;
 	d_rank_t		rank;
 	int			rc = 0;
+	char			*p;
+	int			base_port;
+	int 			i;
 
 	rank = li->li_rank;
 	grp_priv = li->li_grp_priv;
@@ -308,6 +311,8 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 	rlink = d_hash_rec_find(&grp_priv->gp_uri_lookup_cache,
 				(void *)&rank, sizeof(rank));
 	if (rlink == NULL) {
+		char *tmp_uri;
+
 		D_ALLOC_PTR(ui);
 		if (!ui)
 			D_GOTO(exit, rc = -DER_NOMEM);
@@ -316,7 +321,26 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 		ui->ui_ref = 0;
 		ui->ui_initialized = 1;
 		ui->ui_rank = li->li_rank;
-		D_STRNDUP(ui->ui_uri[tag], uri, CRT_ADDR_STR_MAX_LEN);
+
+		/* TODO: This is a hack to quickly populate cache table */
+		D_STRNDUP(tmp_uri, uri, CRT_ADDR_STR_MAX_LEN);
+		p = tmp_uri;
+		while (*p != '\0') p++;
+		while (*p != ':') p--;
+		*p = '\0';
+		p++;
+		base_port = atoi(p) - tag;
+
+		if (base_port <= 0) {
+			D_ERROR("Failed to parse port correctly\n");
+			D_GOTO(exit, rc = -DER_INVAL);
+		}
+
+		for (i = 0; i < 255; i++) {
+			D_ASPRINTF(ui->ui_uri[i], "%s:%d", tmp_uri, base_port + i);
+		}
+
+		D_FREE(tmp_uri);
 		if (!ui->ui_uri[tag]) {
 			D_FREE_PTR(ui);
 			D_GOTO(exit, rc = -DER_NOMEM);

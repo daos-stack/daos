@@ -1132,7 +1132,7 @@ crt_self_uri_get(int tag, char **uri)
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
-	D_STRNDUP(tmp_uri, tmp_crt_ctx->cc_self_uri, CRT_ADDR_STR_MAX_LEN-1);
+	D_STRNDUP(tmp_uri, tmp_crt_ctx->cc_self_uri, CRT_ADDR_STR_MAX_LEN - 1);
 
 	*uri = tmp_uri;
 

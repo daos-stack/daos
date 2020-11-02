@@ -408,9 +408,11 @@ crt_get_info_string(char **string, int ctx_idx)
 		D_ASPRINTF(*string, "%s://", provider_str);
 	} else {
 		/* If OFI_PORT is set, context0 gets it */
-		if (ctx_idx == 0 && port != -1) {
+		if ((ctx_idx == 0 || crt_gdata.cg_contig_ports == true)
+		    && port != -1) {
 			D_ASPRINTF(*string, "%s://%s/%s:%d",
-				   provider_str, domain_str, ip_str, port);
+				   provider_str, domain_str, ip_str,
+				   port + ctx_idx);
 		} else {
 			/* All other contexts get random port */
 			D_ASPRINTF(*string, "%s://%s/%s",
