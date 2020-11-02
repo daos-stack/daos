@@ -188,10 +188,9 @@ class PoolCreateTests(PoolTestBase):
             server.  Verify that attempting to create  a pool of the same size
             across all of the servers fails due to no space.  Now verify that
             creating a pool of the same size on across all but the first server
-            succeeds.  Reapeat the last two steps 100 times with the addition
-            of deleting the successfully created pool to verify that there is
-            not any subtle/low capacity space being lost with each failed
-            create.
+            succeeds.  Repeat the last two steps 100 times with the addition of
+            deleting the successfully created pool to verify that there is not
+            any subtle/low capacity space being lost with each failed create.
 
         :avocado: tags=all,pr,hw,large,pool,create_no_space_loop
         """
