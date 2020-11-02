@@ -325,15 +325,16 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 	/* Avoid re-enter or being destroyed by hot remove callback */
 	new_dev->bb_replacing = true;
 
-	/* Create existing blobs on new device */
 	D_INIT_LIST_HEAD(&pool_list);
+	D_INIT_LIST_HEAD(&blob_list);
+
+	/* Create existing blobs on new device */
 	rc = smd_pool_list(&pool_list, &pool_cnt);
 	if (rc) {
 		D_ERROR("Failed to list pools in SMD. "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
-	D_INIT_LIST_HEAD(&blob_list);
 	rc = create_old_blobs(xs_ctxt, old_info, new_dev, &pool_list,
 			      &blob_list);
 	if (rc) {
