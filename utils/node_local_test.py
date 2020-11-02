@@ -464,8 +464,7 @@ class DaosServer():
         # Show errors from server logs bug suppress memory leaks as the server
         # often segfaults at shutdown.
         if os.path.exists(self._log_file):
-            # TODO: Enable memleak checking when server shutdown works.
-            log_test(self.conf, self._log_file, show_memleaks=False)
+            log_test(self.conf, self._log_file)
         self.running = False
         return ret
 
