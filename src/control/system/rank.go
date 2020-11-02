@@ -162,21 +162,6 @@ func RanksFromUint32(ranks []uint32) (sysRanks []Rank) {
 	return
 }
 
-// DedupeRanks takes a Rank slice and returns a copy
-// that has been sorted with duplicates removed.
-func DedupeRanks(in []Rank) ([]Rank, error) {
-	set, err := CreateRankSet("")
-	if err != nil {
-		return nil, err
-	}
-	for _, r := range in {
-		if err := set.Add(r); err != nil {
-			return nil, err
-		}
-	}
-	return set.Ranks(), nil
-}
-
 // CheckRankMembership compares two Rank slices and returns a
 // Rank slice with any ranks found in the second slice that do
 // not exist in the first slice.

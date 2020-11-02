@@ -35,6 +35,7 @@
 #include <daos/drpc_modules.h>
 #include <daos/drpc.pb-c.h>
 #include <daos/event.h>
+#include <daos/job.h>
 #include "srv.pb-c.h"
 #include "rpc.h"
 #include <errno.h>
@@ -286,6 +287,9 @@ put_attach_info(int npsrs, struct dc_mgmt_psr *psrs)
 {
 	int i;
 
+	if (psrs == NULL)
+		return;
+
 	for (i = 0; i < npsrs; i++)
 		D_FREE(psrs[i].uri);
 	D_FREE(psrs);
@@ -325,6 +329,7 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 
 	/* Prepare the GetAttachInfo request. */
 	req.sys = (char *)name;
+	req.jobid = dc_jobid;
 	reqb_size = mgmt__get_attach_info_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);
 	if (reqb == NULL) {
@@ -475,13 +480,13 @@ out:
 int dc_mgmt_net_cfg(const char *name)
 {
 	int rc;
-	int npsrs;
+	int npsrs = 0;
 	char buf[SYS_INFO_BUF_SIZE];
 	char *crt_timeout;
 	char *ofi_interface;
 	char *ofi_domain;
 	struct sys_info sy_info;
-	struct dc_mgmt_psr *psrs;
+	struct dc_mgmt_psr *psrs = NULL;
 
 	if (name == NULL)
 		name = DAOS_DEFAULT_SYS_NAME;
@@ -489,7 +494,7 @@ int dc_mgmt_net_cfg(const char *name)
 	/* Query the agent for the CaRT network configuration parameters */
 	rc = get_attach_info(name, &npsrs, &psrs, &sy_info);
 	if (rc != 0)
-		return rc;
+		goto cleanup;
 
 	/* These two are always set */
 	rc = setenv("CRT_PHY_ADDR_STR", sy_info.provider, 1);
