@@ -209,58 +209,6 @@ int
 daos_pool_stop_svc(daos_handle_t poh, daos_event_t *ev);
 
 /**
- * Add service replicas to an existing replicated service instance.
- *
- * \param uuid	[IN]	UUID of the service to add replicas to.
- * \param group	[IN]	Name of DAOS server process set managing the service.
- * \param svc	[IN]	List of service ranks.
- * \param targets
- *		[IN]	Ranks of the replicas to be added.
- * \param failed
- *		[OUT]	Optional, list of ranks which could not be added.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
- *			-DER_NO_PERM	Permission denied
- *			-DER_NONEXIST	Storage target is nonexistent
- */
-int
-daos_pool_add_replicas(const uuid_t uuid, const char *group,
-		       d_rank_list_t *svc, d_rank_list_t *targets,
-		       d_rank_list_t *failed, daos_event_t *ev);
-
-/**
- * Remove service replicas from an existing replicated service instance.
- *
- * \param uuid	[IN]	UUID of the service to remove replicas from.
- * \param group	[IN]	Name of DAOS server process set managing the service.
- * \param svc	[IN]	List of service ranks.
- * \param targets
- *		[IN]	Ranks of the replicas to be removed.
- * \param failed
- *		[OUT]	Optional, list of ranks which could not be removed.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
- *			-DER_NO_PERM	Permission denied
- *			-DER_NONEXIST	Storage target is nonexistent
- */
-int
-daos_pool_remove_replicas(const uuid_t uuid, const char *group,
-			  d_rank_list_t *svc, d_rank_list_t *targets,
-			  d_rank_list_t *failed, daos_event_t *ev);
-
-/**
  * The operation code for DAOS client to set different parameters globally
  * on all servers.
  */
