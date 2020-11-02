@@ -19,7 +19,6 @@
 """
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
-from apricot import skipForTicket
 
 import write_host_file
 
@@ -41,7 +40,6 @@ class LargeFileCount(MdtestBase, IorTestBase):
                 self.hostlist_clients, self.workdir,
                 self.hostfile_clients_slots)
 
-    @skipForTicket("DAOS-5841")
     def test_largefilecount(self):
         """Jira ID: DAOS-3845.
         Test Description:

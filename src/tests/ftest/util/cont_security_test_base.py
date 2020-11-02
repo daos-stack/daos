@@ -28,13 +28,12 @@ import grp
 import re
 from apricot import TestWithServers
 from avocado import fail_on
-
 from daos_utils import DaosCommand
 from command_utils import CommandFailure
 import general_utils
 from general_utils import DaosTestError
+import security_test_base as secTestBase
 from test_utils_container import TestContainer
-
 
 class ContSecurityTestBase(TestWithServers):
     """Container security test cases.
@@ -347,6 +346,54 @@ class ContSecurityTestBase(TestWithServers):
             else:
                 return False
         return True
+
+    def get_base_acl_entries(self, test_user):
+        """Get initial or base container acl entries per container enforcement
+           order for test_user.
+        Args:
+            test_user (str): test user.
+
+        Returns (list str):
+            List of base container acl entries for the test_user.
+        """
+        if test_user == "OWNER":
+            base_acl_entries = [
+                secTestBase.acl_entry("user", "OWNER", ""),
+                secTestBase.acl_entry("user", self.current_user, ""),
+                secTestBase.acl_entry("group", "GROUP", "rwcdtTaAo"),
+                secTestBase.acl_entry("group", self.current_group, "rwcdtTaAo"),
+                secTestBase.acl_entry("user", "EVERYONE", "rwcdtTaAo")]
+        elif test_user == "user":
+            base_acl_entries = [
+                "",
+                secTestBase.acl_entry("user", self.current_user, ""),
+                secTestBase.acl_entry("group", "GROUP", "rwcdtTaAo"),
+                secTestBase.acl_entry("group", self.current_group, ""),
+                secTestBase.acl_entry("user", "EVERYONE", "rwcdtTaAo")]
+        elif test_user == "group":
+            base_acl_entries = [
+                "",
+                "",
+                secTestBase.acl_entry("group", "GROUP", ""),
+                secTestBase.acl_entry("group", self.current_group, ""),
+                secTestBase.acl_entry("user", "EVERYONE", "rwcdtTaAo")]
+        elif test_user == "GROUP":
+            base_acl_entries = [
+                "",
+                "",
+                "",
+                secTestBase.acl_entry("group", self.current_group, ""),
+                secTestBase.acl_entry("user", "EVERYONE", "rwcdtTaAo")]
+        elif test_user == "EVERYONE":
+            base_acl_entries = [
+                "",
+                "",
+                "",
+                "",
+                secTestBase.acl_entry("user", "EVERYONE", "")]
+        else:
+            base_acl_entries = ["", "", "", "", ""]
+        return base_acl_entries
 
     def cleanup(self, types):
         """Removes all temporal acl files created during the test.
