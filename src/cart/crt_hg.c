@@ -446,6 +446,7 @@ int
 crt_hg_init(void)
 {
 	int	rc = 0;
+	char	*env;
 
 	if (crt_initialized()) {
 		D_ERROR("CaRT already initialized.\n");
@@ -456,6 +457,12 @@ crt_hg_init(void)
 
 	/* import HG log */
 	hg_log_set_func(crt_hg_log);
+
+	/* If mercury log level is not set, set it to warning by default */
+	env = getenv("HG_LOG_LEVEL");
+	if (!env)
+		HG_Set_log_level("warning");
+
 	hg_log_set_stream_debug((FILE *)(intptr_t)(EXT_FAC | DLOG_DBG));
 	hg_log_set_stream_warning((FILE *)(intptr_t)(EXT_FAC | DLOG_WARN));
 	hg_log_set_stream_error((FILE *)(intptr_t)(EXT_FAC | DLOG_ERR));
