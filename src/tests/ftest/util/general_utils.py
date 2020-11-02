@@ -58,7 +58,9 @@ def human_to_bytes(size):
     conversion = ("B", "K", "M", "G", "T", "P")
     match = re.findall(r"([0-9.]+)\s*([a-zA-Z]|)", size)
     try:
-        value = float(match[0][0]) if "." in match[0][0] else int(match[0][0])
+        value = float(match[0][0])
+        if "." in match[0][0]:
+            value /= 1.024
         unit = match[0][1].upper() if match[0][1] else conversion[0]
         if unit in conversion:
             value *= (2 ** (10 * conversion.index(unit)))
@@ -68,10 +70,10 @@ def human_to_bytes(size):
     except IndexError:
         raise DaosTestError(
             "Invalid human readable size format: {}".format(size))
-    return value
+    return int(value) if value.is_integer() else value
 
 
-def bytes_to_human(size, digits=2):
+def bytes_to_human(size, digits=1):
     """Convert a byte value to the largest (> 1.0) human readable size.
 
     Args:
@@ -87,9 +89,9 @@ def bytes_to_human(size, digits=2):
     value = [size if isinstance(size, (int, float)) else 0, conversion.pop(0)]
     while value[0] > 1024 and conversion:
         index += 1
-        value[0] = round(size / (2 ** (10 * index)), digits)
+        value[0] = float(size) / (2 ** (10 * index))
         value[1] = conversion.pop(0)
-    return "".join([str(item) for item in value])
+    return "".join([str(round(value[0], digits)), value[1]])
 
 
 def run_command(command, timeout=60, verbose=True, raise_exception=True,

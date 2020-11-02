@@ -109,7 +109,7 @@ class PoolTestBase(TestWithServers):
                 # GiB that can be used with the configured number of targets and
                 # specified capacity in GB.
                 targets = self.server_managers[0].get_config_value("targets")
-                increment = human_to_bytes("{}GB".format(targets))
+                increment = human_to_bytes("{}GB".format(float(targets)))
                 nvme_multiple = increment
                 while nvme_multiple + increment <= sizes[1]:
                     nvme_multiple += increment
