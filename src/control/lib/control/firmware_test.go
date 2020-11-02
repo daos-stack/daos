@@ -51,11 +51,8 @@ func createTestHostSet(t *testing.T, hosts string) *hostlist.HostSet {
 func getCmpOpts() []cmp.Option {
 	return []cmp.Option{
 		cmp.Comparer(common.CmpErrBool),
-		cmp.Comparer(func(h1, h2 hostlist.HostSet) bool {
-			if h1.String() == h2.String() {
-				return true
-			}
-			return false
+		cmp.Comparer(func(h1, h2 *hostlist.HostSet) bool {
+			return h1.String() == h2.String()
 		}),
 	}
 }

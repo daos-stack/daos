@@ -124,10 +124,14 @@ struct  _Mgmt__JoinReq
    * Fault domain for this instance's server
    */
   char *srvfaultdomain;
+  /*
+   * Instance index on server node.
+   */
+  uint32_t idx;
 };
 #define MGMT__JOIN_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__join_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0 }
 
 
 struct  _Mgmt__JoinResp
@@ -149,10 +153,14 @@ struct  _Mgmt__JoinResp
    * Fault domain for the instance
    */
   char *faultdomain;
+  /*
+   * Join processed locally.
+   */
+  protobuf_c_boolean localjoin;
 };
 #define MGMT__JOIN_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__join_resp__descriptor) \
-    , 0, 0, MGMT__JOIN_RESP__STATE__IN, (char *)protobuf_c_empty_string }
+    , 0, 0, MGMT__JOIN_RESP__STATE__IN, (char *)protobuf_c_empty_string, 0 }
 
 
 struct  _Mgmt__LeaderQueryReq
@@ -191,10 +199,14 @@ struct  _Mgmt__GetAttachInfoReq
    * Return PSRs for all ranks, not just the MS replicas.
    */
   protobuf_c_boolean allranks;
+  /*
+   * Job ID to associate instance with.
+   */
+  char *jobid;
 };
 #define MGMT__GET_ATTACH_INFO_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0 }
+    , (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string }
 
 
 struct  _Mgmt__GetAttachInfoResp__Psr
