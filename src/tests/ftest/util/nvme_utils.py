@@ -398,7 +398,7 @@ class ServerFillUp(IorTestBase):
               Replace with dmg options in future when it's available.
         """
         # Create a pool
-        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
+        self.pool = TestPool(self.context, self.get_dmg_command())
         self.pool.get_params(self)
 
         #If NVMe is True get the max NVMe size from servers
