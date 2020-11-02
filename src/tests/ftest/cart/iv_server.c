@@ -113,7 +113,6 @@ iv_shutdown(crt_rpc_t *rpc)
 	if (g_my_rank == 0) {
 		rc = crt_group_config_remove(grp);
 		assert(rc == 0);
-
 	}
 
 	input = crt_req_get(rpc);
@@ -233,7 +232,6 @@ copy_iv_value(d_sg_list_t *dst, d_sg_list_t *src)
 	}
 
 	for (i = 0; i < dst->sg_nr; i++) {
-
 		assert(dst->sg_iovs[i].iov_buf != NULL);
 		assert(src->sg_iovs[i].iov_buf != NULL);
 
@@ -283,9 +281,6 @@ add_new_kv_pair(crt_iv_key_t *iv_key, d_sg_list_t *iv_value,
 	uint32_t		 i;
 
 	/* If we are here it means we don't have this key cached yet */
-#if 0
-	DBG_PRINT(" iv_key %p:  iv_value %p\n", iv_key, iv_value);
-#endif
 	D_ALLOC_PTR(entry);
 	assert(entry != NULL);
 
@@ -315,9 +310,9 @@ add_new_kv_pair(crt_iv_key_t *iv_key, d_sg_list_t *iv_value,
 		entry->value.sg_iovs[i].iov_len = size;
 	}
 
-	if (is_valid_entry)
+	if (is_valid_entry) {
 		copy_iv_value(&entry->value, iv_value);
-	else {
+	} else {
 		iv_value->sg_nr = entry->value.sg_nr;
 		iv_value->sg_iovs = entry->value.sg_iovs;
 	}
@@ -346,16 +341,15 @@ print_key_value(char *hdr, crt_iv_key_t *iv_key, d_sg_list_t *iv_value)
 
 	if (iv_key == NULL) {
 		rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex, "%s",
-			"key=NULL");
+			     "key=NULL");
 		if (rc > 0) {
 			rindex += rc;
 		}
 	} else {
-
 		key_struct = (struct iv_key_struct *)iv_key->iov_buf;
 		if (key_struct == NULL) {
 			rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
-				"%s", "key=EMPTY");
+				     "%s", "key=EMPTY");
 			if (rc > 0) {
 				rindex += rc;
 			}
@@ -376,24 +370,23 @@ print_key_value(char *hdr, crt_iv_key_t *iv_key, d_sg_list_t *iv_value)
 
 	if (iv_value == NULL) {
 		rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
-			"%s", "value=NULL");
+			     "%s", "value=NULL");
 		if (rc > 0) {
 			rindex += rc;
 		}
 	} else {
-
 		value_struct = (struct iv_value_struct *)
 			       iv_value->sg_iovs[0].iov_buf;
 
 		if (value_struct == NULL) {
 			rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
-				"%s", "value=EMPTY");
+				     "%s", "value=EMPTY");
 			if (rc > 0) {
 				rindex += rc;
 			}
 		 } else {
 			rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
-				 "value='%s'", value_struct->data);
+				     "value='%s'", value_struct->data);
 			if (rc > 0) {
 				rindex += rc;
 			}
@@ -454,14 +447,11 @@ iv_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 	LOCK_KEYS();
 	d_list_for_each_entry(entry, &g_kv_pair_head, link) {
-
 		if (keys_equal(iv_key, &entry->key) == true) {
-
 			if (entry->valid) {
 				copy_iv_value(iv_value, &entry->value);
 				print_key_value("FETCH found key ", iv_key,
 						iv_value);
-
 				UNLOCK_KEYS();
 				DBG_EXIT();
 				return 0;
@@ -551,15 +541,12 @@ iv_on_refresh(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	DBG_ENTRY();
 
 	/* user_priv can be NULL in invalidate case */
-	if (invalidate == false && iv_value != NULL)
+	if ((invalidate == false) && (iv_value != NULL))
 		assert(user_priv == &g_test_user_priv);
 
 	valid = invalidate ? false : true;
 
 	verify_key(iv_key);
-#if 0
-	print_key_value("REFRESH called ", iv_key, iv_value);
-#endif
 	dump_all_keys("ON_REFRESH");
 
 	key_struct = (struct iv_key_struct *)iv_key->iov_buf;
@@ -571,9 +558,7 @@ iv_on_refresh(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 	LOCK_KEYS();
 	d_list_for_each_entry(entry, &g_kv_pair_head, link) {
-
 		if (keys_equal(iv_key, &entry->key) == true) {
-
 			if (iv_value == NULL) {
 				DBG_PRINT("Marking entry as invalid!\n");
 				entry->valid = false;
@@ -675,7 +660,7 @@ iv_pre_common(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 static void
 iv_pre_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
-	      crt_generic_cb_t cb_func, void *cb_arg)
+	    crt_generic_cb_t cb_func, void *cb_arg)
 {
 	DBG_ENTRY();
 
@@ -725,7 +710,7 @@ init_iv(void)
 		iv_class.ivc_ops = &g_ivc_ops;
 
 		rc = crt_iv_namespace_create(g_main_ctx, NULL, tree_topo,
-					&iv_class, 1, MY_IVNS_ID, &g_ivns);
+					    &iv_class, 1, MY_IVNS_ID, &g_ivns);
 		assert(rc == 0);
 
 		namespace_attached = 1;
@@ -791,8 +776,8 @@ iv_set_ivns(crt_rpc_t *rpc)
 
 	/* Don't get back ivns handle as we don't need it */
 	rc = crt_iv_namespace_create(g_main_ctx, NULL,
-			crt_tree_topo(CRT_TREE_KNOMIAL, 2),
-			&iv_class, 1, MY_IVNS_ID, &g_ivns);
+				    crt_tree_topo(CRT_TREE_KNOMIAL, 2),
+				    &iv_class, 1, MY_IVNS_ID, &g_ivns);
 	assert(rc == 0);
 
 	output->rc = 0;
@@ -885,7 +870,7 @@ fetch_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	d_list_for_each_entry(entry, &g_kv_pair_head, link) {
 		if (keys_equal(iv_key, &entry->key) == true) {
 			rc = crt_bulk_create(g_main_ctx, &entry->value,
-						perms, &bulk_hdl);
+					    perms, &bulk_hdl);
 			found = true;
 			break;
 		}
@@ -1171,10 +1156,10 @@ invalidate_done(crt_iv_namespace_t ivns, uint32_t class_id,
 
 	if (invalidate_rc != 0) {
 		DBG_PRINT("Invalidate: Key = [%d,%d] Failed\n",
-			   key_struct->rank, key_struct->key_id);
+			 key_struct->rank, key_struct->key_id);
 	} else {
 		DBG_PRINT("Invalidate: Key = [%d,%d] PASSED\n",
-			  key_struct->rank, key_struct->key_id);
+			 key_struct->rank, key_struct->key_id);
 	}
 
 	output->rc = invalidate_rc;
@@ -1316,7 +1301,7 @@ int main(int argc, char **argv)
 	}
 
 	rc = tc_load_group_from_file(grp_cfg_file, g_main_ctx, grp, my_rank,
-				true);
+				    true);
 	if (rc != 0) {
 		D_ERROR("Failed to load group file %s\n", grp_cfg_file);
 		assert(0);

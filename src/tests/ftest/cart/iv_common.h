@@ -62,7 +62,7 @@ struct iv_key_struct {
 
 #define CRT_ISEQ_RPC_TEST_INVALIDATE_IV /* input fields */	 \
 	((d_iov_t)		(iov_key)		CRT_VAR) \
-	((d_iov_t)		(iov_sync)		CRT_VAR) 
+	((d_iov_t)		(iov_sync)		CRT_VAR)
 
 #define CRT_OSEQ_RPC_TEST_INVALIDATE_IV /* output fields */	 \
 	((int32_t)		(rc)			CRT_VAR)
@@ -93,7 +93,6 @@ struct iv_key_struct {
 	((uint32_t)		(version)		CRT_VAR)\
 	((int32_t)		(rc)			CRT_VAR)
 
-
 #ifdef _SERVER
 #define RPC_REGISTER(name) \
 	CRT_RPC_SRV_REGISTER(name, 0, name, DQF_FUNC_##name)
@@ -113,7 +112,7 @@ enum {
 	RPC_TEST_UPDATE_IV = CRT_PROTO_OPC(TEST_IV_BASE, TEST_IV_VER, 1),
 	/* Client issues invalidate call */
 	RPC_TEST_INVALIDATE_IV = CRT_PROTO_OPC(TEST_IV_BASE,
-							TEST_IV_VER, 2),
+					      TEST_IV_VER, 2),
 	/* send global ivns */
 	RPC_SET_IVNS = CRT_PROTO_OPC(TEST_IV_BASE, TEST_IV_VER, 3),
 	/* Request server shutdown */

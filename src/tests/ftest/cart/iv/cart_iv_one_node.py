@@ -456,7 +456,7 @@ class CartIvOneNodeTest(Test):
             # ******************
             # Test of version skew on update with synchronization
             #   when version on child process is different
-            # Change version on rank 4 
+            # Change version on rank 4
             # Create iv varable on rank 0 using sync.
             #   Should return error and no iv variable created.
             # Make sure nothing is left behind on other nodes.
@@ -465,7 +465,7 @@ class CartIvOneNodeTest(Test):
              "version":"0xdeadc0de", "return_code":0, "expected_value":""},
             {"operation":"update", "rank":0, "key":(0, 42), "value":"beans",
              "sync":"eager_update", "return_code":-1036 },
-            # Even though a failue, leaves stale state on ranks 
+            # Even though a failue, leaves stale state on ranks
             {"operation":"fetch", "rank":0, "key":(0, 42),
              "return_code":0, "expected_value":"beans"},
             {"operation":"fetch", "rank":1, "key":(0, 42),

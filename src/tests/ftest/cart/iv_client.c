@@ -179,7 +179,6 @@ test_iv_invalidate(struct iv_key_struct *key, char *arg_sync)
 	D_FREE(sync);
 exit_code:
 	assert(rc == 0);
-
 }
 
 /**
@@ -307,7 +306,7 @@ test_iv_fetch(struct iv_key_struct *key, FILE *log_file)
 	DBG_PRINT("Attempting fetch for key[%d:%d]\n", key->rank, key->key_id);
 
 	rc = prepare_rpc_request(g_crt_ctx, RPC_TEST_FETCH_IV, &g_server_ep,
-			    (void **)&input, &rpc_req);
+				(void **)&input, &rpc_req);
 	assert(rc == 0);
 
 	/* Create a temporary buffer to store the result of the fetch */
@@ -332,7 +331,7 @@ test_iv_fetch(struct iv_key_struct *key, FILE *log_file)
 			  key->key_id);
 	else
 		DBG_PRINT("Fetch of key=[%d:%d] NOT FOUND; rc = %ld\n",
-			   key->rank, key->key_id, output->rc);
+			 key->rank, key->key_id, output->rc);
 
 	print_result_as_json(output->rc, &output->key, output->size, &sg_list,
 			     log_file);
@@ -417,7 +416,7 @@ test_iv_set_grp_version(char *arg_version, char *arg_timing)
 		version = strtol(arg_version, NULL, 16);
 
 	DBG_PRINT("Attempting to set group version to 0x%08x: %d\n",
-		   version,  version);
+		 version,  version);
 
 	/* decode timing for changing version */
 	if (arg_timing != NULL) {
@@ -437,10 +436,10 @@ test_iv_set_grp_version(char *arg_version, char *arg_timing)
 	/* Check of valid output */
 	if (output->rc == 0)
 		DBG_PRINT("Grp Set Version PASSED 0x%x : %d\n",
-			   version, version);
+			 version, version);
 	else
 		DBG_PRINT("Grp Set Version FAILED 0x%x : %d\n",
-			   version, version);
+			 version, version);
 
 	rc = crt_req_decref(rpc_req);
 
@@ -467,10 +466,10 @@ test_iv_get_grp_version()
 	version = output->version;
 	if (output->rc != 0)
 		DBG_PRINT("Grp Get Version FAILED 0x%08x : %d\n",
-			   version, version);
+			 version, version);
 	else
 		DBG_PRINT("Grp Get Version PASSED 0x%08x : %d\n",
-			   version, version);
+			 version, version);
 
 	rc = crt_req_decref(rpc_req);
 	assert(rc == 0);
@@ -635,7 +634,7 @@ int main(int argc, char **argv)
 			break;
 
 		printf("attach failed (rc=%d). retries left %d\n",
-			rc, attach_retries_left);
+		      rc, attach_retries_left);
 		sleep(1);
 	}
 	assert(rc == 0);
@@ -650,8 +649,8 @@ int main(int argc, char **argv)
 	g_server_ep.ep_rank = atoi(arg_rank);
 	g_server_ep.ep_tag = 0;
 
-	if (arg_key != NULL
-	    && sscanf(arg_key, "%d:%d", &iv_key.rank, &iv_key.key_id) != 2) {
+	if (arg_key != NULL && 
+	    sscanf(arg_key, "%d:%d", &iv_key.rank, &iv_key.key_id) != 2) {
 		print_usage("Bad key format, should be rank:id");
 		return -1;
 	}
