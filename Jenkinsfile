@@ -1049,7 +1049,7 @@ pipeline {
                       expression { ! skip_unit_test() }
                     }
                     agent {
-                        label 'ci_vm1'
+                        label 'ci_nvme1'
                     }
                     steps {
                         unitTest timeout_time: 60,
