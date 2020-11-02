@@ -1,0 +1,7 @@
+usr/include/*
+usr/include/cart/*
+usr/include/gurt/*
+usr/lib64/libdaos.so
+usr/lib64/libcart.so
+usr/lib64/libgurt.so
+usr/lib64/*.a

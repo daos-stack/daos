@@ -32,10 +32,10 @@ import (
 	"reflect"
 	"sort"
 	"strings"
-	"syscall"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"golang.org/x/sys/unix"
 )
 
 // AssertTrue asserts b is true
@@ -182,10 +182,7 @@ func ShowBufferOnFailure(t *testing.T, buf fmt.Stringer) {
 func DefaultCmpOpts() []cmp.Option {
 	// Avoid comparing the internal Protobuf fields
 	isHiddenPBField := func(path cmp.Path) bool {
-		if strings.HasPrefix(path.Last().String(), ".XXX_") {
-			return true
-		}
-		return false
+		return strings.HasPrefix(path.Last().String(), ".XXX_")
 	}
 	return []cmp.Option{
 		cmp.FilterPath(isHiddenPBField, cmp.Ignore()),
@@ -214,6 +211,8 @@ func CreateTestDir(t *testing.T) (string, func()) {
 // CreateTestSocket creates a Unix Domain Socket that can listen for connections
 // on a given path. It returns the listener and a cleanup function.
 func CreateTestSocket(t *testing.T, sockPath string) (*net.UnixListener, func()) {
+	t.Helper()
+
 	addr := &net.UnixAddr{Name: sockPath, Net: "unixpacket"}
 	sock, err := net.ListenUnix("unixpacket", addr)
 	if err != nil {
@@ -221,8 +220,11 @@ func CreateTestSocket(t *testing.T, sockPath string) (*net.UnixListener, func())
 	}
 
 	cleanup := func() {
+		t.Helper()
 		sock.Close()
-		syscall.Unlink(sockPath)
+		if err := unix.Unlink(sockPath); err != nil && !os.IsNotExist(err) {
+			t.Fatalf("Unlink(%s): %s", sockPath, err)
+		}
 	}
 
 	err = os.Chmod(sockPath, 0777)
@@ -241,6 +243,7 @@ func CreateTestSocket(t *testing.T, sockPath string) (*net.UnixListener, func())
 // It returns the path to the socket, to allow the client to connect, and a
 // cleanup function.
 func SetupTestListener(t *testing.T, conn chan *net.UnixConn) (string, func()) {
+	t.Helper()
 	tmpDir, tmpCleanup := CreateTestDir(t)
 
 	path := filepath.Join(tmpDir, "test.sock")
@@ -253,7 +256,8 @@ func SetupTestListener(t *testing.T, conn chan *net.UnixConn) (string, func()) {
 	go func() {
 		newConn, err := sock.AcceptUnix()
 		if err != nil {
-			t.Fatalf("Failed to accept connection: %v", err)
+			t.Logf("Failed to accept connection: %v", err)
+			return
 		}
 		conn <- newConn
 	}()
