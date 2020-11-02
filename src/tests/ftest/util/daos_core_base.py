@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -141,7 +141,9 @@ class DaosCoreBase(TestWithServers):
             nvme_size = 0
         env['POOL_NVME_SIZE'] = "{}".format(nvme_size)
 
-        load_mpi("openmpi")
+        if not load_mpi("openmpi"):
+            self.fail("Failed to load openmpi")
+
         try:
             process.run(cmd, env=env)
         except process.CmdError as result:
