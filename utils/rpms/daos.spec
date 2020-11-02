@@ -11,7 +11,7 @@
 
 Name:          daos
 Version:       1.1.1
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -386,6 +386,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_bindir}/daos_perf
 %{_bindir}/daos_racer
 %{_bindir}/evt_ctl
+%{_bindir}/obj_ctl
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
 %{_bindir}/crt_launch
@@ -400,6 +401,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Thu Oct 29 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> 1.1.1-6
+- Restore obj_ctl utility
+
 * Wed Oct 28 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.1-5
 - Use %%autosetup
 - Only use systemd_requires if it exists
