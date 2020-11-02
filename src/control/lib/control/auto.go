@@ -42,17 +42,24 @@ const (
 	pmemBdevDir    = "/dev"
 )
 
+var netCtx context.Context
+
 type (
+	numaCountGetter func(context.Context) (int, error)
+	fabricScanner   func(context.Context, string) ([]netdetect.FabricScan, error)
+
 	// ConfigGenerateReq contains the inputs for the request.
 	ConfigGenerateReq struct {
 		unaryRequest
 		msRequest
-		NumPmem  int
-		NumNvme  int
-		NetClass *uint32
-		Client   UnaryInvoker
-		HostList []string
-		Log      logging.Logger
+		NumPmem      int
+		NumNvme      int
+		NetClass     *uint32
+		Client       UnaryInvoker
+		HostList     []string
+		Log          logging.Logger
+		getNumaCount numaCountGetter
+		scanFabric   fabricScanner
 	}
 
 	// ConfigGenerateResp contains the request response.
@@ -60,18 +67,33 @@ type (
 		ConfigOut *config.Server
 		Err       error
 	}
-
-	numaNumGetter func() (int, error)
 )
 
-func getNumaCount() (int, error) {
-	netCtx, err := netdetect.Init(context.Background())
-	if err != nil {
+func ndInitOnce(ctx context.Context) (err error) {
+	if netCtx != nil {
+		return
+	}
+
+	netCtx, err = netdetect.Init(context.Background())
+
+	return errors.Wrap(err, "initializing netdetect library")
+}
+
+func getNumaCount(ctx context.Context) (int, error) {
+	if err := ndInitOnce(ctx); err != nil {
 		return 0, err
 	}
-	defer netdetect.CleanUp(netCtx)
 
 	return netdetect.NumNumaNodes(netCtx), nil
+}
+
+func scanFabric(ctx context.Context, provider string) ([]netdetect.FabricScan, error) {
+	if err := ndInitOnce(ctx); err != nil {
+		return nil, err
+	}
+
+	// returned fabric results already sorted in ascending priority (lowest is fastest)
+	return netdetect.ScanFabric(netCtx, provider)
 }
 
 // ConfigGenerate attempts to automatically detect hardware and generate a DAOS
@@ -82,13 +104,19 @@ func ConfigGenerate(ctx context.Context, req *ConfigGenerateReq) (*ConfigGenerat
 	}
 	req.Log.Debugf("ConfigGenerate called with request %v", req)
 
-	cfg, err := req.checkStorage(ctx, getNumaCount)
+	if req.scanFabric == nil {
+		req.scanFabric = scanFabric
+	}
+	if req.getNumaCount == nil {
+		req.getNumaCount = getNumaCount
+	}
+
+	cfg, err := req.checkStorage(ctx)
 	if err != nil {
 		return &ConfigGenerateResp{Err: err}, nil
 	}
 
-	cfg, err = req.checkNetwork(ctx, cfg)
-	if err != nil {
+	if err := req.checkNetwork(ctx, cfg); err != nil {
 		return &ConfigGenerateResp{Err: err}, nil
 	}
 
@@ -99,6 +127,10 @@ func ConfigGenerate(ctx context.Context, req *ConfigGenerateReq) (*ConfigGenerat
 	//		}, nil
 	//	}
 
+	if netCtx != nil {
+		netdetect.CleanUp(netCtx)
+	}
+
 	return &ConfigGenerateResp{ConfigOut: cfg}, nil
 }
 
@@ -106,12 +138,12 @@ func ConfigGenerate(ctx context.Context, req *ConfigGenerateReq) (*ConfigGenerat
 //
 // Return slice of pmem block device paths with index in slice equal to NUMA
 // node ID.
-func (req *ConfigGenerateReq) validateScmStorage(scmNamespaces storage.ScmNamespaces, getNumNuma numaNumGetter) ([]string, error) {
+func (req *ConfigGenerateReq) validateScmStorage(ctx context.Context, scmNamespaces storage.ScmNamespaces) ([]string, error) {
 	minPmems := req.NumPmem
 	if minPmems == 0 {
 		// detect number of NUMA nodes as by default this should be
 		// the number of pmem namespaces for optimal config
-		numaCount, err := getNumNuma()
+		numaCount, err := req.getNumaCount(ctx)
 		if err != nil {
 			return nil, errors.Wrap(err, "retrieve number of NUMA nodes on host")
 		}
@@ -228,7 +260,7 @@ func (req *ConfigGenerateReq) getSingleStorageSet(ctx context.Context) (*HostSto
 // ioserver storage config with detected device identifiers if thresholds met.
 //
 // Return server config populated with ioserver storage or error.
-func (req *ConfigGenerateReq) checkStorage(ctx context.Context, getNumNuma numaNumGetter) (*config.Server, error) {
+func (req *ConfigGenerateReq) checkStorage(ctx context.Context) (*config.Server, error) {
 	req.Log.Debugf("checkStorage called with request %v", req)
 
 	storageSet, err := req.getSingleStorageSet(ctx)
@@ -243,7 +275,7 @@ func (req *ConfigGenerateReq) checkStorage(ctx context.Context, getNumNuma numaN
 
 	// the pmemPaths is a slice of pmem block devices each pinned to NUMA
 	// node ID matching the index in the slice
-	pmemPaths, err := req.validateScmStorage(scmNamespaces, getNumNuma)
+	pmemPaths, err := req.validateScmStorage(ctx, scmNamespaces)
 	if err != nil {
 		return nil, errors.WithMessage(err, "validating scm storage requirements")
 	}
@@ -271,8 +303,8 @@ func (req *ConfigGenerateReq) checkStorage(ctx context.Context, getNumNuma numaN
 
 // checkProvider evaluate whether necessary interfaces of provider type exist
 // given a minimum number of numa nodes and a provider name.
-func checkProvider(provider string, clsSelect *uint32, numNuma, startIdx int, fabricData []netdetect.FabricScan) ([]netdetect.FabricScan, bool) {
-	ifaces := make([]netdetect.FabricScan, 0, numNuma)
+func (req *ConfigGenerateReq) checkProvider(provider string, numaCount, startIdx int, fabricData []netdetect.FabricScan) ([]netdetect.FabricScan, bool) {
+	ifaces := make([]netdetect.FabricScan, 0, numaCount)
 	class := fabricData[startIdx].NetDevClass
 
 	for _, fd := range fabricData[startIdx:] {
@@ -284,14 +316,18 @@ func checkProvider(provider string, clsSelect *uint32, numNuma, startIdx int, fa
 			class = fd.NetDevClass
 		}
 		switch {
-		case clsSelect == nil:
+		case req.NetClass == nil:
 		default: // filter on selected NetDevClass
-			if class != *clsSelect {
+			if class != *req.NetClass {
 				continue
 			}
 		}
+
 		ifaces = append(ifaces, fd)
-		if len(ifaces) == numNuma {
+		req.Log.Debugf("%s class iface %s found for NUMA %d",
+			netdetect.DevClassName(class), fd.DeviceName, fd.NUMANode)
+
+		if len(ifaces) == numaCount {
 			return ifaces, true
 		}
 	}
@@ -299,39 +335,36 @@ func checkProvider(provider string, clsSelect *uint32, numNuma, startIdx int, fa
 	return nil, false
 }
 
-// checkNetwork scans fabric network interfaces and populate to configuration
+// checkNetwork scans fabric network interfaces and updates-in-place configuration
 // with appropriate fabric device details for all required numa nodes.
-func (req *ConfigGenerateReq) checkNetwork(ctx context.Context, cfg *config.Server) (*config.Server, error) {
-	netCtx, err := netdetect.Init(ctx)
+func (req *ConfigGenerateReq) checkNetwork(ctx context.Context, cfg *config.Server) error {
+	fabricData, err := req.scanFabric(ctx, "")
 	if err != nil {
-		return nil, errors.Wrap(err, "initializing netdetect library")
-	}
-	defer netdetect.CleanUp(netCtx)
-
-	// fabric results are sorted in ascending priority (lowest is fastest)
-	fabricData, err := netdetect.ScanFabric(netCtx, "")
-	if err != nil {
-		return nil, errors.Wrap(err, "scanning fabric info")
+		return errors.Wrap(err, "scanning fabric")
 	}
 	req.Log.Debugf("fabric scan: %+v", fabricData)
 
 	var provider string
 	var found bool
 	var ifaces []netdetect.FabricScan
-	numNuma := len(cfg.Servers)
 	for idx, fd := range fabricData {
 		if fd.Provider == provider {
 			continue
 		}
 		provider = fd.Provider
-		ifaces, found = checkProvider(provider, req.NetClass, numNuma, idx, fabricData)
+		ifaces, found = req.checkProvider(provider, len(cfg.Servers), idx, fabricData)
 		if found {
 			break
 		}
 	}
 
 	if !found {
-		return nil, errors.New("insufficient matching network interfaces")
+		class := "best-available"
+		if req.NetClass != nil {
+			class = netdetect.DevClassName(*req.NetClass)
+		}
+
+		return errors.Errorf("insufficient matching network interfaces (%s)", class)
 	}
 
 	req.Log.Debugf("network devs: %v", ifaces)
@@ -346,5 +379,5 @@ func (req *ConfigGenerateReq) checkNetwork(ctx context.Context, cfg *config.Serv
 		}
 	}
 
-	return cfg, nil
+	return nil
 }

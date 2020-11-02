@@ -25,6 +25,7 @@ package control
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -33,12 +34,28 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
+
+var ioCfgWithSSDs = func(t *testing.T, numa int) *ioserver.Config {
+	var pciAddrs []string
+	for _, c := range MockServerScanResp(t, "withSpaceUsage").Nvme.Ctrlrs {
+		if int(c.Socketid) == numa {
+			pciAddrs = append(pciAddrs, c.Pciaddr)
+		}
+	}
+	return ioserver.NewConfig().
+		WithScmClass(storage.ScmClassDCPM.String()).
+		WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", numa)).
+		WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", numa)).
+		WithBdevClass(storage.BdevClassNvme.String()).
+		WithBdevDeviceList(pciAddrs...)
+}
 
 func TestControl_AutoConfig_checkStorage(t *testing.T) {
 	hostRespOneScanFail := []*HostResponse{
@@ -121,20 +138,6 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 			Message: MockServerScanResp(t, "withSpaceUsage"),
 		},
 	}
-	ioCfgWithSSDs := func(numa int) *ioserver.Config {
-		var pciAddrs []string
-		for _, c := range MockServerScanResp(t, "withSpaceUsage").Nvme.Ctrlrs {
-			if int(c.Socketid) == numa {
-				pciAddrs = append(pciAddrs, c.Pciaddr)
-			}
-		}
-		return ioserver.NewConfig().
-			WithScmClass(storage.ScmClassDCPM.String()).
-			WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", numa)).
-			WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", numa)).
-			WithBdevClass(storage.BdevClassNvme.String()).
-			WithBdevDeviceList(pciAddrs...)
-	}
 
 	for name, tc := range map[string]struct {
 		minPmem       int
@@ -199,8 +202,7 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 		"no min nvme and multiple ctrlrs present on 2 numa nodes": {
 			minPmem:       2,
 			hostResponses: hostRespWithSSDs,
-			expConfigOut: config.DefaultServer().
-				WithServers(ioCfgWithSSDs(0), ioCfgWithSSDs(1)),
+			expConfigOut:  config.DefaultServer().WithServers(ioCfgWithSSDs(t, 0), ioCfgWithSSDs(t, 1)),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -214,18 +216,19 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 				},
 			})
 
-			mockGetNumaCount := func() (int, error) {
+			mockGetNumaCount := func(_ context.Context) (int, error) {
 				return tc.numNumaRet, tc.numNumaErr
 			}
 
 			req := &ConfigGenerateReq{
-				NumPmem: tc.minPmem,
-				NumNvme: tc.minNvme,
-				Client:  mi,
-				Log:     log,
+				NumPmem:      tc.minPmem,
+				NumNvme:      tc.minNvme,
+				Client:       mi,
+				Log:          log,
+				getNumaCount: mockGetNumaCount,
 			}
 
-			gotCfg, gotCheckErr := req.checkStorage(context.Background(), mockGetNumaCount)
+			gotCfg, gotCheckErr := req.checkStorage(context.Background())
 			common.CmpErr(t, tc.expCheckErr, gotCheckErr)
 			if tc.expCheckErr != nil {
 				return
@@ -236,6 +239,114 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 				cmpopts.IgnoreFields(config.Server{}, "GetDeviceClassFn"),
 			}
 			if diff := cmp.Diff(tc.expConfigOut, gotCfg, cmpOpts...); diff != "" {
+				t.Fatalf("output cfg doesn't match (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+// TestParseTopology uses XML topology data to simulate real systems.
+// hwloc will use this topology for queries instead of the local system
+// running the test.
+func TestControl_AutoConfig_checkNetwork(t *testing.T) {
+	oneEthTwoIbNumaAligned := []byte(`[
+		{"Provider":"ofi+psm2","DeviceName":"ib0","NUMANode":0,"Priority":0,"NetDevClass":32},
+		{"Provider":"ofi+psm2","DeviceName":"ib1","NUMANode":1,"Priority":1,"NetDevClass":32},
+		{"Provider":"ofi+verbs;ofi_rxm","DeviceName":"ib0","NUMANode":0,"Priority":2,"NetDevClass":32},
+		{"Provider":"ofi+verbs;ofi_rxm","DeviceName":"ib1","NUMANode":1,"Priority":3,"NetDevClass":32},
+		{"Provider":"ofi+tcp;ofi_rxm","DeviceName":"ib0","NUMANode":0,"Priority":4,"NetDevClass":32},
+		{"Provider":"ofi+tcp;ofi_rxm","DeviceName":"ib1","NUMANode":1,"Priority":5,"NetDevClass":32},
+		{"Provider":"ofi+tcp;ofi_rxm","DeviceName":"eth0","NUMANode":0,"Priority":6,"NetDevClass":1},
+		{"Provider":"ofi+tcp;ofi_rxm","DeviceName":"lo","NUMANode":0,"Priority":7,"NetDevClass":772},
+		{"Provider":"ofi+verbs","DeviceName":"ib0","NUMANode":0,"Priority":8,"NetDevClass":32},
+		{"Provider":"ofi+verbs","DeviceName":"ib1","NUMANode":1,"Priority":9,"NetDevClass":32},
+		{"Provider":"ofi+tcp","DeviceName":"ib0","NUMANode":0,"Priority":10,"NetDevClass":32},
+		{"Provider":"ofi+tcp","DeviceName":"ib1","NUMANode":1,"Priority":11,"NetDevClass":32},
+		{"Provider":"ofi+tcp","DeviceName":"eth0","NUMANode":0,"Priority":12,"NetDevClass":1},
+		{"Provider":"ofi+tcp","DeviceName":"lo","NUMANode":0,"Priority":13,"NetDevClass":772},
+		{"Provider":"ofi+sockets","DeviceName":"ib0","NUMANode":0,"Priority":14,"NetDevClass":32},
+		{"Provider":"ofi+sockets","DeviceName":"ib1","NUMANode":1,"Priority":15,"NetDevClass":32},
+		{"Provider":"ofi+sockets","DeviceName":"eth0","NUMANode":0,"Priority":16,"NetDevClass":1},
+		{"Provider":"ofi+sockets","DeviceName":"lo","NUMANode":0,"Priority":17,"NetDevClass":772}
+	]`)
+	numa0 := uint(0)
+	numa1 := uint(1)
+	ndClassIb := uint32(netdetect.Infiniband)
+	ndClassEther := uint32(netdetect.Ether)
+
+	for name, tc := range map[string]struct {
+		netDevClass    *uint32
+		fabricScanJSON []byte
+		fabricScanErr  error
+		expConfigOut   *config.Server
+		expCheckErr    error
+	}{
+		"default (best-available) with dual ib psm2": {
+			fabricScanJSON: oneEthTwoIbNumaAligned,
+			expConfigOut: config.DefaultServer().WithServers(
+				ioCfgWithSSDs(t, 0).WithFabricInterface("ib0").
+					WithFabricProvider("ofi+psm2").
+					WithPinnedNumaNode(&numa0),
+				ioCfgWithSSDs(t, 1).WithFabricInterface("ib1").
+					WithFabricProvider("ofi+psm2").
+					WithPinnedNumaNode(&numa1)),
+		},
+		"infiniband with dual ib psm2": {
+			netDevClass:    &ndClassIb,
+			fabricScanJSON: oneEthTwoIbNumaAligned,
+			expConfigOut: config.DefaultServer().WithServers(
+				ioCfgWithSSDs(t, 0).WithFabricInterface("ib0").
+					WithFabricProvider("ofi+psm2").
+					WithPinnedNumaNode(&numa0),
+				ioCfgWithSSDs(t, 1).WithFabricInterface("ib1").
+					WithFabricProvider("ofi+psm2").
+					WithPinnedNumaNode(&numa1)),
+		},
+		"ethernet insufficient adapters": {
+			netDevClass:    &ndClassEther,
+			fabricScanJSON: oneEthTwoIbNumaAligned,
+			expCheckErr:    errors.New("insufficient matching network interfaces (ETHER)"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mockScanFabric := func(_ context.Context, _ string) ([]netdetect.FabricScan, error) {
+				if tc.fabricScanErr != nil {
+					return nil, tc.fabricScanErr
+				}
+
+				var fs []netdetect.FabricScan
+				if err := json.Unmarshal(tc.fabricScanJSON, &fs); err != nil {
+					t.Fatal(err)
+				}
+
+				return fs, nil
+			}
+
+			req := &ConfigGenerateReq{
+				NetClass:   tc.netDevClass,
+				Log:        log,
+				scanFabric: mockScanFabric,
+			}
+
+			generatedCfg := config.DefaultServer().
+				WithServers(ioCfgWithSSDs(t, 0), ioCfgWithSSDs(t, 1))
+
+			// input config param represents two-socket system
+			gotCheckErr := req.checkNetwork(context.Background(), generatedCfg)
+
+			common.CmpErr(t, tc.expCheckErr, gotCheckErr)
+			if tc.expCheckErr != nil {
+				return
+			}
+
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(security.CertificateConfig{}, config.Server{}),
+				cmpopts.IgnoreFields(config.Server{}, "GetDeviceClassFn"),
+			}
+			if diff := cmp.Diff(tc.expConfigOut, generatedCfg, cmpOpts...); diff != "" {
 				t.Fatalf("output cfg doesn't match (-want, +got):\n%s\n", diff)
 			}
 		})
