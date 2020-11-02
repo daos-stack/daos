@@ -148,7 +148,7 @@ type mgmtSvc struct {
 	membership       *system.Membership // if MS leader, system membership list
 	sysdb            *system.Database
 	clientNetworkCfg *ClientNetworkCfg
-	updateReqChan    chan struct{}
+	joinReqs         joinReqChan
 }
 
 func newMgmtSvc(h *IOServerHarness, m *system.Membership, s *system.Database) *mgmtSvc {
@@ -158,7 +158,7 @@ func newMgmtSvc(h *IOServerHarness, m *system.Membership, s *system.Database) *m
 		membership:       m,
 		sysdb:            s,
 		clientNetworkCfg: &ClientNetworkCfg{},
-		updateReqChan:    make(chan struct{}),
+		joinReqs:         make(joinReqChan),
 	}
 }
 

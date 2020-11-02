@@ -96,7 +96,7 @@ class TestDaosApiBase(ObjectWithParameters):
         self.debug = BasicParameter(None, False)
 
         # Test yaml parameter used to define the control method:
-        #   USE_API    - use the API methods to create/destroy pools/containers
+        #   USE_API    - use the API methods to create/destroy containers
         #   USE_DMG    - use the dmg command to create/destroy pools/containers
         #   USE_DAOS   - use the daos command to create/destroy pools/containers
         self.control_method = BasicParameter(self.USE_API, self.USE_API)
