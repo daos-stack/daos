@@ -27,10 +27,10 @@
 #include <daos_prop.h>
 
 #define DC_STATUS_OK			0
-#define DC_STATUS_ERR			-1
-#define DC_STATUS_INVALID_LEVEL		-2
-#define DC_STATUS_OVERFLOW		-3
-#define DC_STATUS_NOMEM			-4
+#define DC_STATUS_ERR			-DER_MISC
+#define DC_STATUS_INVALID_LEVEL		-DER_INVAL
+#define DC_STATUS_OVERFLOW		-DER_TRUNC
+#define DC_STATUS_NOMEM			-DER_NOSPACE
 
 /**
  * -----------------------------------------------------------
