@@ -204,10 +204,10 @@ static int
 agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	 struct ec_agg_entry *agg_entry, unsigned int *acts)
 {
-	if (agg_key_not_equal(agg_entry->ae_dkey, entry->ie_key))
+	//if (agg_key_not_equal(agg_entry->ae_dkey, entry->ie_key))
 		agg_entry->ae_dkey = entry->ie_key;
-	else
-		*acts |= VOS_ITER_CB_SKIP;
+	//else
+		//*acts |= VOS_ITER_CB_SKIP;
 
 	return 0;
 }
@@ -218,11 +218,8 @@ static int
 agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	 struct ec_agg_entry *agg_entry, unsigned int *acts)
 {
-	if (agg_key_not_equal(agg_entry->ae_akey, entry->ie_key)) {
-		agg_entry->ae_akey = entry->ie_key;
-		agg_entry->ae_thdl = ih;
-	} else
-		*acts |= VOS_ITER_CB_SKIP;
+	agg_entry->ae_akey = entry->ie_key;
+	agg_entry->ae_thdl = ih;
 
 	return 0;
 }
@@ -740,9 +737,6 @@ agg_get_obj_handle(struct ec_agg_entry *entry)
 					layout->ol_shards[i]->
 					os_shard_data[j].sd_tgt_idx;
 				}
-				D_PRINT("i: %d, j: %d, rank: %u\n", i, j,
-					layout->ol_shards[i]->
-					os_shard_data[j].sd_rank);
 			}
 		daos_obj_layout_free(layout);
 	}
@@ -1600,6 +1594,9 @@ agg_peer_update(struct ec_agg_entry *entry)
 		rc = dss_abterr2der(rc);
 		goto out;
 	}
+	rc = agg_prep_sgl(entry);
+	if (rc)
+		goto out;
 	rc = dss_ult_create(agg_peer_update_ult, &stripe_ud,
 			    DSS_ULT_EC, 0, 0, NULL);
 	if (rc)
@@ -1875,8 +1872,9 @@ agg_process_stripe(struct ec_agg_entry *entry)
 	/* Parity, some later replicas, possibly holes, not full stripe. */
 	if (entry->ae_cur_stripe. as_has_holes)
 		process_holes = true;
-	else
+	else {
 		rc = agg_process_partial_stripe(entry);
+	}
 
 out:
 	if (process_holes && rc == 0)
@@ -1892,6 +1890,7 @@ out:
 		}
 		if (rc == 0) {
 			rc = agg_update_vos(entry, write_parity);
+
 			if (rc)
 				D_ERROR("agg_update_vos fail: "DF_RC"\n",
 					DP_RC(rc));
@@ -1932,23 +1931,27 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 	this_stripenum = agg_stripenum(agg_entry, entry->ie_recx.rx_idx);
 	if (this_stripenum != agg_entry->ae_cur_stripe.as_stripenum) {
 		/* Iterator has reached next stripe */
-		cur_stripenum = agg_entry->ae_cur_stripe.as_stripenum;
-		rc = agg_process_stripe(agg_entry);
-		if (rc)
-			D_ERROR("Process stripe returned "DF_RC"\n",
-				DP_RC(rc));
+		if (agg_entry->ae_cur_stripe.as_extent_cnt) {
+			cur_stripenum = agg_entry->ae_cur_stripe.as_stripenum;
+			rc = agg_process_stripe(agg_entry);
+			if (rc)
+				D_ERROR("Process stripe returned "DF_RC"\n",
+					DP_RC(rc));
 		/* Error leaves data covered by replicas vulnerable to vos
 		 * delete, so don't advance coordination epoch.
 		 */
-		rc = 0;
-		if (cur_stripenum < agg_entry->ae_cur_stripe.as_stripenum &&
-		    agg_entry->ae_cur_stripe.as_stripenum < this_stripenum) {
-			/* Handle holdover stripe */
-			rc = agg_process_stripe(agg_entry);
-			if (rc)
-				D_ERROR("Holdover returned "DF_RC"\n",
-					DP_RC(rc));
 			rc = 0;
+			if (cur_stripenum <
+			    agg_entry->ae_cur_stripe.as_stripenum &&
+			agg_entry->ae_cur_stripe.as_stripenum <
+			this_stripenum) {
+				/* Handle holdover stripe */
+				rc = agg_process_stripe(agg_entry);
+				if (rc)
+					D_ERROR("Holdover returned "DF_RC"\n",
+						DP_RC(rc));
+				rc = 0;
+			}
 		}
 		agg_entry->ae_cur_stripe.as_stripenum = this_stripenum;
 		*acts |= VOS_ITER_CB_YIELD;
@@ -2015,8 +2018,9 @@ agg_akey_post(struct ec_agg_entry *agg_entry)
 {
 	int rc = 0;
 
-	if (agg_entry->ae_cur_stripe.as_extent_cnt)
+	if (agg_entry->ae_cur_stripe.as_extent_cnt) {
 		rc = agg_process_stripe(agg_entry);
+	}
 
 	memset(&agg_entry->ae_akey, 0, sizeof(agg_entry->ae_akey));
 
@@ -2087,16 +2091,6 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 	agg_param->ap_credits++;
-
-	if (agg_param->ap_credits > agg_param->ap_credits_max) {
-		agg_param->ap_credits = 0;
-		*acts |= VOS_ITER_CB_YIELD;
-
-		if (ec_aggregate_yield(agg_param)) {
-			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
-			rc = 1;
-		}
-	}
 	return rc;
 }
 
@@ -2122,7 +2116,6 @@ agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	default:
 		break;
 	}
-
 	return rc;
 }
 
@@ -2205,16 +2198,6 @@ agg_iter_obj_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		rc = 0;
 	}
 	agg_param->ap_credits++;
-
-	if (agg_param->ap_credits > agg_param->ap_credits_max) {
-		agg_param->ap_credits = 0;
-		*acts |= VOS_ITER_CB_YIELD;
-
-		if (ec_aggregate_yield(agg_param)) {
-			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
-			rc = 1;
-		}
-	}
 
 	return rc;
 }
@@ -2349,10 +2332,8 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	iter_param.ip_epr.epr_hi	= epr->epr_hi;
 	//iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
 
-	/*
-	vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
-		 iter_pre_cb, NULL, NULL, NULL);
-	*/
+	d_rank_t myrank;
+	crt_group_rank(NULL, &myrank);
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, false, &anchors,
 			 agg_iter_obj_pre_cb, NULL, &agg_param, NULL);
 
