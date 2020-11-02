@@ -129,7 +129,7 @@ func TestSystem_Database_checkReplica(t *testing.T) {
 
 			// Just to get a bit of extra coverage
 			if repAddr != nil {
-				db.replicaAddr = repAddr
+				db.replicaAddr.Addr = repAddr
 				var err error
 				repAddr, err = db.ReplicaAddr()
 				if err != nil {
@@ -265,10 +265,11 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 	for i := 0; i < maxRanks; i++ {
 		mu := &memberUpdate{
 			Member: &Member{
-				Rank:  Rank(i),
-				UUID:  uuid.New(),
-				Addr:  <-nextAddr,
-				state: MemberStateJoined,
+				Rank:        Rank(i),
+				UUID:        uuid.New(),
+				Addr:        <-nextAddr,
+				state:       MemberStateJoined,
+				FaultDomain: MustCreateFaultDomainFromString("/my/test/domain"),
 			},
 			NextRank: true,
 		}

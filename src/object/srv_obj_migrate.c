@@ -1524,7 +1524,7 @@ migrate_one_insert(struct enum_unpack_arg *arg,
 		}
 
 		if (rc != 0)
-			return rc;
+			goto free;
 
 		/**
 		 * mrone owns the allocated memory now and will free it in
