@@ -711,13 +711,6 @@ fopen:
 	if (daos_mode == -1)
 		return EINVAL;
 
-	rc = check_access(dfs, geteuid(), getegid(), entry.mode,
-			  (daos_mode == DAOS_OO_RO) ? R_OK : R_OK | W_OK);
-	if (rc) {
-		D_ERROR("check_access failed %d\n", rc);
-		return rc;
-	}
-
 	/** Open the byte array */
 	file->mode = entry.mode;
 	rc = daos_array_open_with_attr(dfs->coh, entry.oid, th, daos_mode, 1,
@@ -801,11 +794,6 @@ open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
 
 	if (!S_ISDIR(entry.mode))
 		return ENOTDIR;
-
-	rc = check_access(dfs, geteuid(), getegid(), entry.mode,
-			  (daos_mode == DAOS_OO_RO) ? R_OK : R_OK | W_OK);
-	if (rc)
-		return rc;
 
 	rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &dir->oh, NULL);
 	if (rc) {
@@ -1575,10 +1563,6 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 		return rc;
 
 	D_ASSERT(parent != NULL);
-	rc = check_access(dfs, geteuid(), getegid(), parent->mode, W_OK | X_OK);
-	if (rc)
-		return rc;
-
 	strncpy(new_dir.name, name, DFS_MAX_PATH);
 	new_dir.name[DFS_MAX_PATH] = '\0';
 
@@ -1696,9 +1680,6 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
 	rc = check_name(name);
 	if (rc)
 		return rc;
-	rc = check_access(dfs, geteuid(), getegid(), parent->mode, W_OK | X_OK);
-	if (rc)
-		return rc;
 
 	if (dfs->use_dtx) {
 		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
@@ -1794,8 +1775,6 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 	bool			exists;
 	int			daos_mode;
 	struct dfs_entry	entry = {0};
-	uid_t			uid = geteuid();
-	gid_t			gid = getegid();
 	int			rc;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -1849,10 +1828,6 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 	     token != NULL;
 	     token = strtok_r(NULL, "/", &sptr)) {
 dfs_lookup_loop:
-
-		rc = check_access(dfs, uid, gid, parent.mode, X_OK);
-		if (rc)
-			return rc;
 
 		entry.chunk_size = 0;
 		rc = fetch_entry(parent.oh, DAOS_TX_NONE, token, true,
@@ -1924,6 +1899,7 @@ dfs_lookup_loop:
 					D_DEBUG(DB_TRACE,
 						"Failed to lookup symlink %s\n",
 						entry.value);
+					D_FREE(entry.value);
 					D_FREE(sym);
 					D_GOTO(err_obj, rc);
 				}
@@ -1999,7 +1975,7 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 	char		*enum_buf;
 	uint32_t	number, key_nr, i;
 	d_sg_list_t	sgl;
-	int		rc;
+	int		rc = 0;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -2009,10 +1985,6 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 		return 0;
 	if (dirs == NULL || anchor == NULL)
 		return EINVAL;
-
-	rc = check_access(dfs, geteuid(), getegid(), obj->mode, R_OK);
-	if (rc)
-		return rc;
 
 	D_ALLOC_ARRAY(kds, *nr);
 	if (kds == NULL)
@@ -2072,7 +2044,7 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 	d_iov_t		iov;
 	uint32_t	num, keys_nr;
 	char		*enum_buf, *ptr;
-	int		rc;
+	int		rc = 0;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -2082,10 +2054,6 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 		return 0;
 	if (anchor == NULL)
 		return EINVAL;
-
-	rc = check_access(dfs, geteuid(), getegid(), obj->mode, R_OK);
-	if (rc)
-		return rc;
 
 	num = *nr;
 	D_ALLOC_ARRAY(kds, num);
@@ -2175,9 +2143,7 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	rc = check_name(name);
 	if (rc)
 		return rc;
-	rc = check_access(dfs, geteuid(), getegid(), parent->mode, X_OK);
-	if (rc)
-		return rc;
+
 	daos_mode = get_daos_obj_mode(flags);
 	if (daos_mode == -1)
 		return EINVAL;
@@ -2296,11 +2262,6 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	if (rc)
 		return rc;
 
-	rc = check_access(dfs, geteuid(), getegid(), parent->mode,
-			  (flags & O_CREAT) ? W_OK | X_OK : X_OK);
-	if (rc)
-		return rc;
-
 	D_ALLOC_PTR(obj);
 	if (obj == NULL)
 		return ENOMEM;
@@ -2399,11 +2360,6 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 	daos_mode = get_daos_obj_mode(flags);
 	if (daos_mode == -1)
 		return EINVAL;
-
-	rc = check_access(dfs, geteuid(), getegid(), obj->mode,
-			  (daos_mode == DAOS_OO_RO) ? R_OK : R_OK | W_OK);
-	if (rc)
-		return rc;
 
 	D_ALLOC_PTR(new_obj);
 	if (new_obj == NULL)
@@ -2926,10 +2882,6 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 	else if (!S_ISDIR(parent->mode))
 		return ENOTDIR;
 
-	rc = check_access(dfs, geteuid(), getegid(), parent->mode, X_OK);
-	if (rc)
-		return rc;
-
 	if (name == NULL) {
 		if (strcmp(parent->name, "/") != 0) {
 			D_ERROR("Invalid path %s and entry name is NULL)\n",
@@ -3031,6 +2983,7 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 	rc = dfs_lookup(dfs, entry.value, O_RDONLY, &sym, NULL, NULL);
 	if (rc) {
 		D_DEBUG(DB_TRACE, "Failed to lookup symlink %s\n", entry.value);
+		D_FREE(entry.value);
 		return rc;
 	}
 
@@ -3038,6 +2991,7 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 		rc = check_access(dfs, getuid(), getgid(), sym->mode, mask);
 
 	dfs_release(sym);
+	D_FREE(entry.value);
 	return rc;
 }
 
@@ -3110,11 +3064,13 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 		rc = dfs_lookup(dfs, entry.value, O_RDWR, &sym, NULL, NULL);
 		if (rc) {
 			D_ERROR("Failed to lookup Symlink %s\n", entry.value);
+			D_FREE(entry.value);
 			return rc;
 		}
 
 		rc = daos_obj_open(dfs->coh, sym->parent_oid, DAOS_OO_RW,
 				   &oh, NULL);
+		D_FREE(entry.value);
 		dfs_release(sym);
 		if (rc)
 			return daos_der2errno(rc);
@@ -3264,16 +3220,10 @@ out_obj:
 int
 dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size)
 {
-	int rc;
-
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
 	if (obj == NULL || !S_ISREG(obj->mode))
 		return EINVAL;
-
-	rc = check_access(dfs, geteuid(), getegid(), obj->mode, R_OK);
-	if (rc)
-		return rc;
 
 	return daos_array_get_size(obj->oh, DAOS_TX_NONE, size, NULL);
 }
@@ -3294,10 +3244,6 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 		return EINVAL;
 	if ((obj->flags & O_ACCMODE) == O_RDONLY)
 		return EPERM;
-
-	rc = check_access(dfs, geteuid(), getegid(), obj->mode, W_OK);
-	if (rc)
-		return rc;
 
 	/** simple truncate */
 	if (len == DFS_MAX_FSIZE) {
@@ -3511,14 +3457,6 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 	 * (immutable, append).
 	 */
 
-	rc = check_access(dfs, geteuid(), getegid(), parent->mode, W_OK | X_OK);
-	if (rc)
-		return rc;
-	rc = check_access(dfs, geteuid(), getegid(), new_parent->mode,
-			  W_OK | X_OK);
-	if (rc)
-		return rc;
-
 	if (dfs->use_dtx) {
 		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
 		if (rc) {
@@ -3699,14 +3637,6 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1, dfs_obj_t *parent2,
 	rc = check_name(name2);
 	if (rc)
 		return rc;
-	rc = check_access(dfs, geteuid(), getegid(), parent1->mode,
-			  W_OK | X_OK);
-	if (rc)
-		return rc;
-	rc = check_access(dfs, geteuid(), getegid(), parent2->mode,
-			  W_OK | X_OK);
-	if (rc)
-		return rc;
 
 	if (dfs->use_dtx) {
 		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
@@ -3855,10 +3785,6 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 	if (size > DFS_MAX_XATTR_LEN)
 		return EINVAL;
 
-	rc = check_access(dfs, geteuid(), getegid(), obj->mode, W_OK);
-	if (rc)
-		return rc;
-
 	/** prefix name with x: to avoid collision with internal attrs */
 	xname = concat("x:", name);
 	if (xname == NULL)
@@ -3935,10 +3861,6 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 	if (!strncmp(name, XATTR_SECURITY_PREFIX, XATTR_SECURITY_PREFIX_LEN) ||
 	    !strncmp(name, XATTR_SYSTEM_PREFIX, XATTR_SYSTEM_PREFIX_LEN))
 		mode |= S_IRUSR;
-
-	rc = check_access(dfs, geteuid(), getegid(), mode, R_OK);
-	if (rc)
-		return rc;
 
 	xname = concat("x:", name);
 	if (xname == NULL)
@@ -4021,10 +3943,6 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	if (!strncmp(name, XATTR_SECURITY_PREFIX, XATTR_SECURITY_PREFIX_LEN) ||
 	    !strncmp(name, XATTR_SYSTEM_PREFIX, XATTR_SYSTEM_PREFIX_LEN))
 		mode |= S_IRUSR;
-
-	rc = check_access(dfs, geteuid(), getegid(), mode, W_OK);
-	if (rc)
-		return rc;
 
 	xname = concat("x:", name);
 	if (xname == NULL)
