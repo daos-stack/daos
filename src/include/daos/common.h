@@ -453,6 +453,7 @@ daos_errno2der(int err)
 	case EFAULT:
 	case ENXIO:
 	case ENODEV:
+	case EIO:		return -DER_IO;
 	default:		return -DER_MISC;
 	}
 }

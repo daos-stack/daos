@@ -639,13 +639,13 @@ rw_completion(void *cb_arg, int err)
 
 	/* Induce NVMe Read/Write Error*/
 	if (biod->bd_update)
-		err = DAOS_FAIL_CHECK(DAOS_NVME_WRITE_ERR) ? -DER_IO : err;
+		err = DAOS_FAIL_CHECK(DAOS_NVME_WRITE_ERR) ? -EIO : err;
 	else
-		err = DAOS_FAIL_CHECK(DAOS_NVME_READ_ERR) ? -DER_IO : err;
+		err = DAOS_FAIL_CHECK(DAOS_NVME_READ_ERR) ? -EIO : err;
 
 	/* Return the error value of the first NVMe IO error */
 	if (biod->bd_result == 0 && err != 0)
-		biod->bd_result = err;
+		biod->bd_result = daos_errno2der(-err);
 
 	/* Report all NVMe IO errors */
 	if (err != 0) {
