@@ -208,7 +208,7 @@ choose:
 		rc = dc_mgmt_get_pool_svc_ranks(sys, puuid, &new_ranklist);
 		if (rc) {
 			D_ERROR(DF_UUID ": dc_mgmt_get_pool_svc_ranks() "
-				"failed, " DF_RC "\n", DP_POOL(puuid),
+				"failed, " DF_RC "\n", DP_UUID(puuid),
 				DP_RC(rc));
 			return -DER_NOTREPLICA;
 		}
