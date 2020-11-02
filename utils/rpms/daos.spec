@@ -8,10 +8,6 @@
 %global mercury_version 2.0.0~rc1-1%{?dist}
 %endif
 
-%if %{undefined scons_args}
-%define scons_args BUILD_TYPE=release
-%endif
-
 Name:          daos
 Version:       1.1.1
 Release:       7%{?relval}%{?dist}
@@ -215,9 +211,7 @@ scons %{?_smp_mflags}      \
       USE_INSTALLED=all    \
       CONF_DIR=%{conf_dir} \
       PREFIX=%{?buildroot} \
-      %{scons_args}
-
-
+     %{?scons_args}
 
 %install
 scons %{?_smp_mflags}                 \
@@ -229,7 +223,7 @@ scons %{?_smp_mflags}                 \
       USE_INSTALLED=all               \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
-      %{scons_args}
+      %{?scons_args}
 
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"
@@ -411,7 +405,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 
 %changelog
 * Sat Oct 31 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.1-7
-- add BUILD_TYPE to scons cmdline. default=release
+- Add BUILD_TYPE to scons cmdline. default=release
 - Valid values for BUILD_TYPE are dev|release|debug
 - BUILD_TYPE=release will disable fault injection in build
 

@@ -133,13 +133,15 @@ def set_defaults(env):
     env.Append(CCFLAGS=['-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
     env.Append(CCFLAGS=['-DAPI_VERSION=\\"' + API_VERSION + '\\"'])
     env.Append(CCFLAGS=['-DCMOCKA_FILTER_SUPPORTED=0'])
-    if env.get('BUILD_TYPE') == 'debug':
+
+    build_type = env.get('BUILD_TYPE', 'release')
+    if build_type == 'debug':
         if env.get("COMPILER") == 'gcc':
             env.AppendUnique(CCFLAGS=['-Og'])
         else:
             env.AppendUnique(CCFLAGS=['-O0'])
     else:
-        if env.get('BUILD_TYPE') == 'release':
+        if build_type == 'release':
             env.Append(CCFLAGS=['-DDAOS_BUILD_RELEASE'])
         env.AppendUnique(CCFLAGS=['-O2', '-D_FORTIFY_SOURCE=2'])
 
@@ -149,7 +151,7 @@ def set_defaults(env):
         #could refine this but for now, just assume these warnings are ok
         env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)
 
-    if env.get('BUILD_TYPE') != 'release':
+    if build_type != 'release':
         env.Append(CCFLAGS=['-DFAULT_INJECTION=1'])
 
 def preload_prereqs(prereqs):
