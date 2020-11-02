@@ -25,11 +25,12 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/proto"
 	commands "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
@@ -58,12 +59,8 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	// that we should have made these Execute() methods thin
 	// wrappers around more easily-testable functions.
 	if cmd.scs == nil {
-		cfg := server.NewConfiguration()
-		svc, err := server.DefaultStorageControlService(cmd.log, cfg)
-		if err != nil {
-			return errors.WithMessage(err, "init control service")
-		}
-		cmd.scs = svc
+		cmd.scs = server.NewStorageControlService(cmd.log, bdev.DefaultProvider(cmd.log),
+			scm.DefaultProvider(cmd.log), server.NewConfiguration().Servers)
 	}
 
 	op := "Preparing"
@@ -87,7 +84,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		}
 	}
 
-	scmScan, err := cmd.scs.ScmScan()
+	scmScan, err := cmd.scs.ScmScan(scm.ScanRequest{})
 	if err != nil {
 		return common.ConcatErrors(scanErrors, err)
 	}
@@ -106,9 +103,13 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 			return common.ConcatErrors(scanErrors, err)
 		}
 		if resp.RebootRequired {
-			cmd.log.Info(scm.MsgScmRebootRequired)
+			cmd.log.Info(scm.MsgRebootRequired)
 		} else if len(resp.Namespaces) > 0 {
-			cmd.log.Infof("SCM namespaces:\n\t%+v\n", resp.Namespaces)
+			var bld strings.Builder
+			if err := pretty.PrintScmNamespaces(resp.Namespaces, &bld); err != nil {
+				return err
+			}
+			cmd.log.Infof("SCM namespaces:\n%s\n", bld.String())
 		} else {
 			cmd.log.Info("no SCM namespaces")
 		}
@@ -128,36 +129,50 @@ type storageScanCmd struct {
 }
 
 func (cmd *storageScanCmd) Execute(args []string) error {
-	svc, err := server.DefaultStorageControlService(cmd.log, server.NewConfiguration())
-	if err != nil {
-		return errors.WithMessage(err, "failed to init ControlService")
-	}
+	svc := server.NewStorageControlService(cmd.log, bdev.DefaultProvider(cmd.log),
+		scm.DefaultProvider(cmd.log), server.NewConfiguration().Servers)
 
 	cmd.log.Info("Scanning locally-attached storage...")
 
+	var bld strings.Builder
 	scanErrors := make([]error, 0, 2)
 
-	res, err := svc.NvmeScan()
+	nvmeResp, err := svc.NvmeScan(bdev.ScanRequest{})
 	if err != nil {
 		scanErrors = append(scanErrors, err)
 	} else {
-		ctrlrs := proto.NvmeControllers{}
-		if err := ctrlrs.FromNative(res.Controllers); err != nil {
-			scanErrors = append(scanErrors, err)
-		} else {
-			cmd.log.Info(ctrlrs.String())
+		_, err := fmt.Fprintf(&bld, "\n")
+		if err != nil {
+			return err
+		}
+		if err := pretty.PrintNvmeControllers(nvmeResp.Controllers, &bld); err != nil {
+			return err
 		}
 	}
 
-	scmResp, err := svc.ScmScan()
+	scmResp, err := svc.ScmScan(scm.ScanRequest{})
 	switch {
 	case err != nil:
 		scanErrors = append(scanErrors, err)
 	case len(scmResp.Namespaces) > 0:
-		cmd.log.Infof("SCM Namespaces:\n%s\n", scmResp.Namespaces)
+		_, err := fmt.Fprintf(&bld, "\n")
+		if err != nil {
+			return err
+		}
+		if err := pretty.PrintScmNamespaces(scmResp.Namespaces, &bld); err != nil {
+			return err
+		}
 	default:
-		cmd.log.Infof("SCM Modules:\n%s\n", scmResp.Modules)
+		_, err := fmt.Fprintf(&bld, "\n")
+		if err != nil {
+			return err
+		}
+		if err := pretty.PrintScmModules(scmResp.Modules, &bld); err != nil {
+			return err
+		}
 	}
+
+	cmd.log.Info(bld.String())
 
 	if len(scanErrors) > 0 {
 		errStr := "scan error(s):\n"

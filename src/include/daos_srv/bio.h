@@ -31,6 +31,7 @@
 
 #include <daos/mem.h>
 #include <daos/common.h>
+#include <daos_srv/control.h>
 #include <abt.h>
 
 typedef struct {
@@ -43,7 +44,8 @@ typedef struct {
 	uint16_t	ba_type;
 	/* Is the address a hole ? */
 	uint16_t	ba_hole;
-	uint32_t	ba_padding;
+	uint16_t	ba_dedup;
+	uint16_t	ba_padding;
 } bio_addr_t;
 
 /** Ensure this remains compatible */
@@ -80,7 +82,6 @@ struct bio_desc;
 struct bio_io_context;
 /* Opaque per-xstream context */
 struct bio_xs_context;
-struct bio_blobstore;
 
 /**
  * Header for SPDK blob per VOS pool
@@ -95,26 +96,17 @@ struct bio_blob_hdr {
 	uuid_t		bbh_pool;
 };
 
-/*
- * Current device health state (health statistics). Periodically updated in
- * bio_bs_monitor(). Used to determine faulty device status.
- */
-struct bio_dev_state {
-	uint64_t	 bds_timestamp;
-	uint64_t	 bds_media_errors[2]; /* supports 128-bit values */
-	uint64_t	 bds_error_count; /* error log page */
-	/* I/O error counters */
-	uint32_t	 bds_bio_read_errs;
-	uint32_t	 bds_bio_write_errs;
-	uint32_t	 bds_bio_unmap_errs;
-	uint32_t	 bds_checksum_errs;
-	uint16_t	 bds_temperature; /* in Kelvin */
-	/* Critical warnings */
-	uint8_t		 bds_temp_warning	: 1;
-	uint8_t		 bds_avail_spare_warning	: 1;
-	uint8_t		 bds_dev_reliabilty_warning : 1;
-	uint8_t		 bds_read_only_warning	: 1;
-	uint8_t		 bds_volatile_mem_warning: 1; /*volatile memory backup*/
+enum bio_bs_state {
+	/* Healthy and fully functional */
+	BIO_BS_STATE_NORMAL	= 0,
+	/* Being detected & marked as faulty */
+	BIO_BS_STATE_FAULTY,
+	/* Affected targets are marked as DOWN, safe to tear down blobstore */
+	BIO_BS_STATE_TEARDOWN,
+	/* Blobstore is torn down, all in-memory structures cleared */
+	BIO_BS_STATE_OUT,
+	/* Setup all in-memory structures, load blobstore */
+	BIO_BS_STATE_SETUP,
 };
 
 static inline void
@@ -262,7 +254,7 @@ bio_sgl_fini(struct bio_sglist *sgl)
  * call daos_sgl_fini(sgl, false) to free iovs.
  */
 static inline int
-bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl)
+bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl, bool deduped_skip)
 {
 	int i, rc;
 
@@ -279,9 +271,13 @@ bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl)
 		struct bio_iov	*biov = &bsgl->bs_iovs[i];
 		d_iov_t	*iov = &sgl->sg_iovs[i];
 
-		iov->iov_buf = bio_iov2req_buf(biov);
+		/* Skip bulk transfer for deduped extent */
+		if (biov->bi_addr.ba_dedup && deduped_skip)
+			iov->iov_buf = NULL;
+		else
+			iov->iov_buf = bio_iov2req_buf(biov);
 		iov->iov_len = bio_iov2req_len(biov);
-		iov->iov_buf_len = bio_iov2req_len(biov);
+		iov->iov_buf_len = iov->iov_len;
 	}
 
 	return 0;
@@ -356,6 +352,21 @@ int bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
  * \return		N/A
  */
 void bio_nvme_fini(void);
+
+enum {
+	/* Notify BIO that all xsxtream contexts created */
+	BIO_CTL_NOTIFY_STARTED	= 0,
+};
+
+/**
+ * Manipulate global NVMe configuration/state.
+ *
+ * \param[IN] cmd	Ctl command
+ * \param[IN] arg	Ctl argument
+ *
+ * \return		Zero on success, negative value on error
+ */
+int bio_nvme_ctl(unsigned int cmd, void *arg);
 
 /*
  * Initialize SPDK env and per-xstream NVMe context.
@@ -560,6 +571,15 @@ int bio_iod_post(struct bio_desc *biod);
 int bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl);
 
 /*
+ * Helper function to flush memory vectors in SG lists of io descriptor
+ *
+ * \param biod       [IN]	io descriptor
+ *
+ * \return			N/A
+ */
+void bio_iod_flush(struct bio_desc *biod);
+
+/*
  * Helper function to get the specified SG list of an io descriptor
  *
  * \param biod       [IN]	io descriptor
@@ -588,8 +608,19 @@ bio_yield(void)
  *
  * \return			Zero on success, negative value on error
  */
-int bio_get_dev_state(struct bio_dev_state *dev_state,
+int bio_get_dev_state(struct nvme_stats *dev_state,
 		      struct bio_xs_context *xs);
+
+/*
+ * Helper function to get the internal blobstore state for a given xstream.
+ * Used for daos_test validation in the daos_mgmt_get_bs_state() C API.
+ *
+ * \param dev_state	[OUT]	BIO blobstore state
+ * \param xs		[IN]	xstream context
+ *
+ */
+void bio_get_bs_state(int *blobstore_state, struct bio_xs_context *xs);
+
 
 /*
  * Helper function to set the device health state to FAULTY, and trigger device

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,10 +64,16 @@
 	X(POOL_EXCLUDE,							\
 		0, &CQF_pool_exclude,					\
 		ds_pool_update_handler, NULL),				\
+	X(POOL_DRAIN,							\
+		0, &CQF_pool_drain,					\
+		ds_pool_update_handler, NULL),				\
+	X(POOL_EXTEND,							\
+		0, &CQF_pool_extend,					\
+		ds_pool_extend_handler, NULL),				\
 	X(POOL_EVICT,							\
 		0, &CQF_pool_evict,					\
 		ds_pool_evict_handler, NULL),				\
-	X(POOL_ADD,							\
+	X(POOL_REINT,							\
 		0, &CQF_pool_add,					\
 		ds_pool_update_handler, NULL),				\
 	X(POOL_ADD_IN,							\
@@ -88,6 +94,9 @@
 	X(POOL_ATTR_SET,						\
 		0, &CQF_pool_attr_set,					\
 		ds_pool_attr_set_handler, NULL),			\
+	X(POOL_ATTR_DEL,						\
+		0, &CQF_pool_attr_del,					\
+		ds_pool_attr_del_handler, NULL),			\
 	X(POOL_REPLICAS_ADD,						\
 		0, &CQF_pool_replicas_add,				\
 		ds_pool_replicas_update_handler, NULL),			\
@@ -232,6 +241,13 @@ CRT_RPC_DECLARE(pool_attr_get, DAOS_ISEQ_POOL_ATTR_GET, DAOS_OSEQ_POOL_OP)
 
 CRT_RPC_DECLARE(pool_attr_set, DAOS_ISEQ_POOL_ATTR_SET, DAOS_OSEQ_POOL_OP)
 
+#define DAOS_ISEQ_POOL_ATTR_DEL	/* input fields */		 \
+	((struct pool_op_in)	(padi_op)		CRT_VAR) \
+	((uint64_t)		(padi_count)		CRT_VAR) \
+	((crt_bulk_t)		(padi_bulk)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_attr_del, DAOS_ISEQ_POOL_ATTR_DEL, DAOS_OSEQ_POOL_OP)
+
 #define DAOS_ISEQ_POOL_MEMBERSHIP /* input fields */		 \
 	((uuid_t)		(pmi_uuid)		CRT_VAR) \
 	((d_rank_list_t)	(pmi_targets)		CRT_PTR)
@@ -269,13 +285,29 @@ struct pool_target_addr_list {
 	((struct pool_op_out)	(pto_op)		CRT_VAR) \
 	((struct pool_target_addr) (pto_addr_list)	CRT_ARRAY)
 
+#define DAOS_ISEQ_POOL_EXTEND /* input fields */		 \
+	((struct pool_op_in)	(pei_op)		CRT_VAR) \
+	((uint32_t)		(pei_ntgts)		CRT_VAR) \
+	((uuid_t)		(pei_tgt_uuids)		CRT_ARRAY) \
+	((d_rank_list_t)	(pei_tgt_ranks)		CRT_PTR) \
+	((uint32_t)		(pei_ndomains)		CRT_VAR) \
+	((int32_t)		(pei_domains)		CRT_ARRAY)
+
+
+#define DAOS_OSEQ_POOL_EXTEND /* output fields */		 \
+	((struct pool_op_out)	(peo_op)		CRT_VAR) \
+
 CRT_RPC_DECLARE(pool_tgt_update, DAOS_ISEQ_POOL_TGT_UPDATE,
 		DAOS_OSEQ_POOL_TGT_UPDATE)
+CRT_RPC_DECLARE(pool_extend, DAOS_ISEQ_POOL_EXTEND,
+		DAOS_OSEQ_POOL_EXTEND)
 CRT_RPC_DECLARE(pool_add, DAOS_ISEQ_POOL_TGT_UPDATE,
 		DAOS_OSEQ_POOL_TGT_UPDATE)
 CRT_RPC_DECLARE(pool_add_in, DAOS_ISEQ_POOL_TGT_UPDATE,
 		DAOS_OSEQ_POOL_TGT_UPDATE)
 CRT_RPC_DECLARE(pool_exclude, DAOS_ISEQ_POOL_TGT_UPDATE,
+		DAOS_OSEQ_POOL_TGT_UPDATE)
+CRT_RPC_DECLARE(pool_drain, DAOS_ISEQ_POOL_TGT_UPDATE,
 		DAOS_OSEQ_POOL_TGT_UPDATE)
 CRT_RPC_DECLARE(pool_exclude_out, DAOS_ISEQ_POOL_TGT_UPDATE,
 		DAOS_OSEQ_POOL_TGT_UPDATE)
@@ -317,6 +349,16 @@ CRT_RPC_DECLARE(pool_tgt_disconnect, DAOS_ISEQ_POOL_TGT_DISCONNECT,
 
 CRT_RPC_DECLARE(pool_tgt_query, DAOS_ISEQ_POOL_TGT_QUERY,
 		DAOS_OSEQ_POOL_TGT_QUERY)
+
+#define DAOS_ISEQ_POOL_TGT_DIST_HDLS	/* input fields */	 \
+	((uuid_t)		(tfi_pool_uuid)		CRT_VAR) \
+	((d_iov_t)		(tfi_hdls)		CRT_VAR)
+
+#define DAOS_OSEQ_POOL_TGT_DIST_HDLS	/* output fields */	 \
+	((uint32_t)		(tfo_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_tgt_dist_hdls, DAOS_ISEQ_POOL_TGT_DIST_HDLS,
+		DAOS_OSEQ_POOL_TGT_DIST_HDLS)
 
 #define DAOS_ISEQ_POOL_PROP_GET	/* input fields */		 \
 	((struct pool_op_in)	(pgi_op)		CRT_VAR) \

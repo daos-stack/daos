@@ -24,12 +24,16 @@ package server
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/dustin/go-humanize"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -73,15 +77,45 @@ var (
 		"no IOMMU detected while running as non-root user with NVMe devices",
 		"enable IOMMU per the DAOS Admin Guide or run daos_server as root",
 	)
+	FaultVfioDisabled = serverFault(
+		code.ServerVfioDisabled,
+		"disable_vfio: true in config while running as non-root user with NVMe devices",
+		"set disable_vfio: false or run daos_server as root",
+	)
 	FaultHarnessNotStarted = serverFault(
 		code.ServerHarnessNotStarted,
-		fmt.Sprintf("%s harness not started", DataPlaneName),
+		fmt.Sprintf("%s harness not started", build.DataPlaneName),
 		"retry the operation or check server logs for more details",
 	)
 	FaultDataPlaneNotStarted = serverFault(
 		code.ServerDataPlaneNotStarted,
-		fmt.Sprintf("%s instance not started or not responding on dRPC", DataPlaneName),
+		fmt.Sprintf("%s instance not started or not responding on dRPC", build.DataPlaneName),
 		"retry the operation or check server logs for more details",
+	)
+	FaultConfigFaultDomainInvalid = serverFault(
+		code.ServerConfigFaultDomainInvalid,
+		"invalid fault domain",
+		"specify a valid fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
+	)
+	FaultConfigFaultCallbackNotFound = serverFault(
+		code.ServerConfigFaultCallbackNotFound,
+		"fault domain callback script not found",
+		"specify a valid fault domain callback script ('fault_cb' parameter) and restart the control server",
+	)
+	FaultConfigFaultCallbackBadPerms = serverFault(
+		code.ServerConfigFaultCallbackBadPerms,
+		"fault domain callback cannot be executed",
+		"ensure that permissions for the DAOS server user are properly set on the fault domain callback script ('fault_cb' parameter) and restart the control server",
+	)
+	FaultConfigBothFaultPathAndCb = serverFault(
+		code.ServerConfigBothFaultPathAndCb,
+		"both fault domain and fault path are defined in the configuration",
+		"remove either the fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
+	)
+	FaultConfigFaultCallbackEmpty = serverFault(
+		code.ServerConfigFaultCallbackEmpty,
+		"fault domain callback executed but did not generate output",
+		"specify a valid fault domain callback script ('fault_cb' parameter) and restart the control server",
 	)
 )
 
@@ -112,6 +146,20 @@ func FaultPoolScmTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
 			humanize.IBytes(ioserver.ScmMinBytesPerTarget*uint64(targetCount))),
 		fmt.Sprintf("SCM capacity should be larger than %s",
 			humanize.IBytes(ioserver.ScmMinBytesPerTarget*uint64(targetCount))),
+	)
+}
+
+func FaultPoolInvalidRanks(invalid []system.Rank) *fault.Fault {
+	rs := make([]string, len(invalid))
+	for i, r := range invalid {
+		rs[i] = r.String()
+	}
+	sort.Strings(rs)
+
+	return serverFault(
+		code.ServerPoolInvalidRanks,
+		fmt.Sprintf("pool request contains invalid ranks: %s", strings.Join(rs, ",")),
+		"retry the request with a valid set of ranks",
 	)
 }
 
@@ -173,10 +221,29 @@ func FaultConfigOverlappingBdevDeviceList(curIdx, seenIdx int) *fault.Fault {
 	)
 }
 
+func FaultConfigInvalidNetDevClass(curIdx int, primaryDevClass, thisDevClass uint32, iface string) *fault.Fault {
+	return serverFault(
+		code.ServerConfigInvalidNetDevClass,
+		fmt.Sprintf("IO server %d specifies fabric_iface %q of class %q that conflicts with the primary server's device class %q",
+			curIdx, iface, netdetect.DevClassName(thisDevClass), netdetect.DevClassName(primaryDevClass)),
+		"ensure that each IO server specifies a fabric_iface with a matching device class and restart",
+	)
+}
+
 func dupeValue(code code.Code, name string, curIdx, seenIdx int) *fault.Fault {
 	return serverFault(code,
 		fmt.Sprintf("the %s value in IO server %d is a duplicate of server %d", name, curIdx, seenIdx),
 		fmt.Sprintf("ensure that each IO server has a unique %s value and restart", name),
+	)
+}
+
+// FaultConfigFaultCallbackFailed creates a Fault for the scenario where the
+// fault domain callback failed with some error.
+func FaultConfigFaultCallbackFailed(err error) *fault.Fault {
+	return serverFault(
+		code.ServerConfigFaultCallbackFailed,
+		fmt.Sprintf("fault domain callback script failed during execution: %s", err.Error()),
+		"specify a valid fault domain callback script ('fault_cb' parameter) and restart the control server",
 	)
 }
 

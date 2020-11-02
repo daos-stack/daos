@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,9 +76,8 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	d_list_for_each_entry(dfpi,
 			      &fs_handle->dpi_info->di_dfp_list,
 			      dfp_list) {
-		if (uuid_compare(dfp->dfp_pool, dfpi->dfp_pool) != 0) {
+		if (uuid_compare(dfp->dfp_pool, dfpi->dfp_pool) != 0)
 			continue;
-		}
 
 		d_list_for_each_entry(dfsi,
 				      &dfpi->dfp_dfs_list,
@@ -147,7 +146,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
 
-	atomic_fetch_add(&ie->ie_ref, 1);
+	atomic_store_relaxed(&ie->ie_ref, 1);
 	ie->ie_dfs = dfs;
 
 	prop = daos_prop_alloc(0);
@@ -218,5 +217,4 @@ err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	D_FREE(dfs);
 	D_FREE(dfp);
-	return;
 }

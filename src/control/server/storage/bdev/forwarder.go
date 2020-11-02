@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,17 +37,6 @@ func NewForwarder(log logging.Logger) *Forwarder {
 	return &Forwarder{
 		Forwarder: *pf,
 	}
-}
-
-func (f *Forwarder) Init(req InitRequest) error {
-	req.Forwarded = true
-
-	res := new(InitResponse)
-	if err := f.SendReq("BdevInit", req, res); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (f *Forwarder) Scan(req ScanRequest) (*ScanResponse, error) {

@@ -46,16 +46,14 @@ extern "C" {
 typedef enum {
 	DAOS_OPC_INVALID	= -1,
 
-	/** Managment APIs */
+	/** Management APIs */
 	DAOS_OPC_SVC_RIP = 0,
-	DAOS_OPC_POOL_CREATE,
-	DAOS_OPC_POOL_DESTROY,
 	DAOS_OPC_POOL_EXTEND,
 	DAOS_OPC_POOL_EVICT,
 	DAOS_OPC_SET_PARAMS,
 	DAOS_OPC_POOL_ADD_REPLICAS,
 	DAOS_OPC_POOL_REMOVE_REPLICAS,
-	DAOS_OPC_MGMT_LIST_POOLS,
+	DAOS_OPC_MGMT_GET_BS_STATE,
 
 	/** Pool APIs */
 	DAOS_OPC_POOL_CONNECT,
@@ -68,6 +66,7 @@ typedef enum {
 	DAOS_OPC_POOL_LIST_ATTR,
 	DAOS_OPC_POOL_GET_ATTR,
 	DAOS_OPC_POOL_SET_ATTR,
+	DAOS_OPC_POOL_DEL_ATTR,
 	DAOS_OPC_POOL_STOP_SVC,
 	DAOS_OPC_POOL_LIST_CONT,
 
@@ -86,6 +85,7 @@ typedef enum {
 	DAOS_OPC_CONT_LIST_ATTR,
 	DAOS_OPC_CONT_GET_ATTR,
 	DAOS_OPC_CONT_SET_ATTR,
+	DAOS_OPC_CONT_DEL_ATTR,
 	DAOS_OPC_CONT_ALLOC_OIDS,
 	DAOS_OPC_CONT_LIST_SNAP,
 	DAOS_OPC_CONT_CREATE_SNAP,
@@ -111,7 +111,6 @@ typedef enum {
 	DAOS_OPC_OBJ_QUERY,
 	DAOS_OPC_OBJ_QUERY_KEY,
 	DAOS_OPC_OBJ_SYNC,
-	DAOS_OPC_OBJ_FETCH_SHARD,
 	DAOS_OPC_OBJ_FETCH,
 	DAOS_OPC_OBJ_UPDATE,
 	DAOS_OPC_OBJ_LIST_DKEY,
@@ -130,7 +129,10 @@ typedef enum {
 	DAOS_OPC_ARRAY_GET_SIZE,
 	DAOS_OPC_ARRAY_SET_SIZE,
 
-	/** HL APIs */
+	/** KV APIs */
+	DAOS_OPC_KV_OPEN,
+	DAOS_OPC_KV_CLOSE,
+	DAOS_OPC_KV_DESTROY,
 	DAOS_OPC_KV_GET,
 	DAOS_OPC_KV_PUT,
 	DAOS_OPC_KV_REMOVE,
@@ -189,7 +191,7 @@ typedef struct {
 	unsigned char		*uuid;
 } daos_pool_create_t;
 
-/** pool destory args */
+/** pool destroy args */
 typedef struct {
 	/** UUID of the pool to destroy. */
 	const uuid_t		uuid;
@@ -327,6 +329,16 @@ typedef struct {
 	size_t const		*sizes;
 } daos_pool_set_attr_t;
 
+/** pool del attributes args */
+typedef struct {
+	/** Pool open handle. */
+	daos_handle_t		poh;
+	/** Number of attributes. */
+	int			n;
+	/** Array of \a n null-terminated attribute names. */
+	char   const *const	*names;
+} daos_pool_del_attr_t;
+
 /** pool add/remove replicas args */
 typedef struct {
 	/** UUID of the pool. */
@@ -350,6 +362,13 @@ typedef struct {
 	/** length of array */
 	daos_size_t		*npools;
 } daos_mgmt_list_pools_t;
+
+/** Blobstore state query args */
+typedef struct {
+	const char		*grp;
+	uuid_t			uuid;
+	int			*state;
+} daos_mgmt_get_bs_state_t;
 
 /** pool service stop args */
 typedef struct {
@@ -387,7 +406,7 @@ typedef struct {
 	daos_handle_t		coh;
 } daos_cont_close_t;
 
-/** Container destory args */
+/** Container destroy args */
 typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
@@ -498,6 +517,16 @@ typedef struct {
 	size_t const		*sizes;
 } daos_cont_set_attr_t;
 
+/** Container attribute del args */
+typedef struct {
+	/** Container open handle. */
+	daos_handle_t		coh;
+	/** Number of attributes. */
+	int			n;
+	/** Array of \a n null-terminated attribute names. */
+	char   const *const	*names;
+} daos_cont_del_attr_t;
+
 /** Container Object ID allocation args */
 typedef struct {
 	/** Container open handle. */
@@ -557,6 +586,8 @@ typedef struct {
 typedef struct {
 	/** Transaction open handle. */
 	daos_handle_t		th;
+	/** Control commit behavior, such as retry. */
+	uint32_t		flags;
 } daos_tx_commit_t;
 
 /** Transaction abort args */
@@ -698,34 +729,28 @@ typedef struct {
 	daos_handle_t		th;
 	/** Object open handle */
 	daos_handle_t		oh;
-	/** Operation flags. */
+	/** API flags. */
 	uint64_t		flags;
 	/** Distribution Key. */
 	daos_key_t		*dkey;
 	/** Number of elements in \a iods and \a sgls. */
-	unsigned int		nr;
+	uint32_t		nr;
+	/** Internal flags. */
+	uint32_t		extra_flags;
 	/** IO descriptor describing IO layout in the object. */
 	daos_iod_t		*iods;
 	/** Scatter / gather list for a memory descriptor. */
 	d_sg_list_t		*sgls;
 	/** IO Map - only valid for fetch. */
-	daos_iom_t		*maps;
+	daos_iom_t		*ioms;
+	/** extra arguments, for example obj_ec_fail_info for DIOF_EC_RECOV */
+	void			*extra_arg;
 } daos_obj_rw_t;
 
 /** fetch args struct */
 typedef daos_obj_rw_t		daos_obj_fetch_t;
 /** update args struct */
 typedef daos_obj_rw_t		daos_obj_update_t;
-
-/** Object shard fetch args */
-struct daos_obj_fetch_shard {
-	/** base. */
-	daos_obj_fetch_t	base;
-	/** Operation flags. */
-	unsigned int		flags;
-	/** shard. */
-	unsigned int		shard;
-};
 
 /** Object sync args */
 struct daos_obj_sync_args {
@@ -776,6 +801,10 @@ typedef struct {
 	daos_anchor_t		*akey_anchor;
 	/** versions. */
 	uint32_t		*versions;
+	/** Serialized checksum info for enumerated keys and data in sgl.
+	 * (for internal use only)
+	 */
+	d_iov_t			*csum;
 	/** order. */
 	bool			incr_order;
 } daos_obj_list_t;
@@ -922,6 +951,32 @@ typedef struct {
 	daos_handle_t		th;
 } daos_array_destroy_t;
 
+/** KV open args */
+typedef struct {
+	/** Container open handle. */
+	daos_handle_t		coh;
+	/** KV ID, */
+	daos_obj_id_t		oid;
+	/** Open mode. */
+	unsigned int		mode;
+	/** Returned KV open handle */
+	daos_handle_t		*oh;
+} daos_kv_open_t;
+
+/** KV close args */
+typedef struct {
+	/** KV open handle. */
+	daos_handle_t		oh;
+} daos_kv_close_t;
+
+/** KV destroy args */
+typedef struct {
+	/** KV open handle. */
+	daos_handle_t		oh;
+	/** Transaction open handle. */
+	daos_handle_t		th;
+} daos_kv_destroy_t;
+
 /** KV get args */
 typedef struct {
 	/** KV open handle. */
@@ -1003,7 +1058,7 @@ typedef struct {
  * \param dep_tasks [IN]
  *			Array of tasks that new task will wait on completion
  *			before it's scheduled.
- * \param taskp	[OUT]	Pointer to task to be created/initalized with the op.
+ * \param taskp	[OUT]	Pointer to task to be created/initialized with the op.
  *
  * \return		0		Success
  *			-DER_INVAL	Invalid parameter
@@ -1013,6 +1068,23 @@ int
 daos_task_create(daos_opc_t opc, tse_sched_t *sched,
 		 unsigned int num_deps, tse_task_t *dep_tasks[],
 		 tse_task_t **taskp);
+
+/**
+ * Reset a DAOS task with another opcode. The task must have been completed or
+ * not in the running state yet, and has not been freed yet (use must take a
+ * ref count on the task to prevent it to be freed after the DAOS operation has
+ * completed).
+ *
+ * \param task	[IN]	Task to reset.
+ * \param opc	[IN]	Operation code to identify the daos op to associate with
+ *			the task.
+ *
+ * \return		0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NOSYS	Unsupported opc
+ */
+int
+daos_task_reset(tse_task_t *task, daos_opc_t opc);
 
 /**
  * Return a pointer to the DAOS task argument structure. This is called to set

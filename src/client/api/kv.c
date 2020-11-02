@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,62 @@
 #include <daos/event.h>
 #include <daos/kv.h>
 #include <daos_kv.h>
+
+int
+daos_kv_open(daos_handle_t coh, daos_obj_id_t oid, unsigned int mode,
+	     daos_handle_t *oh, daos_event_t *ev)
+{
+	daos_kv_open_t	*args;
+	tse_task_t	*task;
+	int		rc;
+
+	rc = dc_task_create(dc_kv_open, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->coh	 = coh;
+	args->oid	 = oid;
+	args->mode	 = mode;
+	args->oh	 = oh;
+
+	return dc_task_schedule(task, true);
+}
+
+int
+daos_kv_close(daos_handle_t oh, daos_event_t *ev)
+{
+	daos_kv_close_t	*args;
+	tse_task_t	*task;
+	int		rc;
+
+	rc = dc_task_create(dc_kv_close, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->oh = oh;
+
+	return dc_task_schedule(task, true);
+}
+
+int
+daos_kv_destroy(daos_handle_t oh, daos_handle_t th, daos_event_t *ev)
+{
+	daos_kv_destroy_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	rc = dc_task_create(dc_kv_destroy, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->oh	= oh;
+	args->th	= th;
+
+	return dc_task_schedule(task, true);
+}
 
 int
 daos_kv_put(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key,

@@ -4,12 +4,12 @@ from os.path import join
 
 def scons():
     """Execute build"""
-    Import('denv', 'prereqs')
+    Import('denv', 'prereqs', 'control_tgts')
 
     denv.AppendUnique(LIBPATH=[Dir('.')])
 
     senv = denv.Clone()
-    prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc', 'isal')
+    prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
 
     senv.AppendUnique(CPPPATH=[join(Dir('.').srcnode().abspath, "include")])
 
@@ -21,19 +21,16 @@ def scons():
     libs += ['spdk_conf', 'spdk_blob', 'spdk_nvme', 'spdk_util']
     libs += ['spdk_json', 'spdk_jsonrpc', 'spdk_rpc', 'spdk_trace']
     libs += ['spdk_sock', 'spdk_log', 'spdk_notify', 'spdk_blob_bdev']
+    libs += ['spdk_vmd']
 
     # Other libs
-    libs += ['numa', 'dl', 'isal']
-
-    # hack to avoid building this library with cov compiler for the moment
-    compiler = senv.get('COMPILER').lower()
-    if compiler == "covc":
-        compiler = "gcc"
+    libs += ['numa', 'dl']
 
     senv.nc = senv.Object("src/nvme_control.c")
     senv.ncc = senv.Object("src/nvme_control_common.c")
-    denv.nvmecontrol = senv.StaticLibrary("nvme_control", [senv.nc, senv.ncc],
-                                          CC=compiler, LIBS=libs)
+    denv.nvmecontrol = senv.StaticLibrary("nvme_control",
+                                          [senv.nc, senv.ncc] + control_tgts,
+                                          LIBS=libs)
 
     senv.Install(join(senv.subst("$PREFIX"), "lib64"), denv.nvmecontrol)
 

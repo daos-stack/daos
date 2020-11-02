@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
 		dfir->ir_id.irid_oid.hi = oid->hi;
 	}
 
-	dfir->ir_ino = atomic_fetch_add(&fs_handle->dpi_ino_next, 1);
+	dfir->ir_ino = atomic_fetch_add_relaxed(&fs_handle->dpi_ino_next, 1);
 	dfir->ir_id.irid_dfs = dfs;
 
 	rlink = d_hash_rec_find_insert(&fs_handle->dpi_irt,
@@ -90,18 +90,16 @@ dfuse_check_for_inode(struct dfuse_projection_info *fs_handle,
 				&ir_id,
 				sizeof(ir_id));
 
-	if (!rlink) {
+	if (!rlink)
 		return -DER_NONEXIST;
-	}
 
 	dfir = container_of(rlink, struct dfuse_inode_record, ir_htl);
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet,
 				&dfir->ir_ino,
 				sizeof(dfir->ir_ino));
-	if (!rlink) {
+	if (!rlink)
 		return -DER_NONEXIST;
-	}
 
 	entry = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
@@ -114,7 +112,7 @@ void
 ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 {
 	int			rc;
-	int			ref = atomic_load_consume(&ie->ie_ref);
+	int			ref = atomic_load_relaxed(&ie->ie_ref);
 
 	DFUSE_TRA_DEBUG(ie, "closing, inode %lu ref %u, name '%s', parent %lu",
 			ie->ie_stat.st_ino, ref, ie->ie_name, ie->ie_parent);
@@ -140,7 +138,6 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 			       !daos_handle_is_inval(dfs->dfs_coh));
 
 		if (!daos_handle_is_inval(dfs->dfs_coh)) {
-
 			rc = dfs_umount(dfs->dfs_ns);
 			if (rc != 0)
 				DFUSE_TRA_ERROR(dfs,

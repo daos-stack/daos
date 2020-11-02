@@ -23,7 +23,6 @@
 """
 from __future__ import print_function
 from logging import getLogger
-
 import os
 import re
 import json
@@ -31,6 +30,9 @@ import random
 import string
 from pathlib import Path
 from errno import ENOENT
+from getpass import getuser
+from importlib import import_module
+
 from avocado.utils import process
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
@@ -48,8 +50,15 @@ def human_to_bytes(h_size):
 
     Returns:
         int: value translated to bytes.
+
     """
-    units = {"b": 1, "kb": (2**10), "mb": (2**20), "gb": (2**30)}
+    units = {"b": 1,
+             "kb": (2**10),
+             "k": (2**10),
+             "mb": (2**20),
+             "m": (2**20),
+             "gb": (2**30),
+             "g": (2**30)}
     pattern = r"([0-9.]+|[a-zA-Z]+)"
     val, unit = re.findall(pattern, h_size)
 
@@ -58,7 +67,7 @@ def human_to_bytes(h_size):
     if unit.lower() in units:
         val = val * units[unit.lower()]
     else:
-        print("Unit not found! Provide a valid unit i.e: b, kb, mb, gb")
+        print("Unit not found! Provide a valid unit i.e: b,k,kb,m,mb,g,gb")
         val = -1
 
     return val
@@ -120,6 +129,8 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
         "shell": False,
         "env": env,
     }
+    if verbose:
+        print("Command environment vars:\n  {}".format(env))
     try:
         # Block until the command is complete or times out
         return process.run(**kwargs)
@@ -190,13 +201,13 @@ def get_host_data(hosts, command, text, error, timeout=None):
     if len(data) > 1 or 0 not in data:
         # Report the errors
         messages = []
-        for code, hosts in data.items():
+        for code, host_list in data.items():
             if code != 0:
-                output_data = list(task.iter_buffers(hosts))
-                if len(output_data) == 0:
+                output_data = list(task.iter_buffers(host_list))
+                if not output_data:
                     messages.append(
                         "{}: rc={}, command=\"{}\"".format(
-                            NodeSet.fromlist(hosts), code, command))
+                            NodeSet.fromlist(host_list), code, command))
                 else:
                     for output, o_hosts in output_data:
                         lines = str(output).splitlines()
@@ -214,31 +225,8 @@ def get_host_data(hosts, command, text, error, timeout=None):
         host_data = {NodeSet.fromlist(hosts): DATA_ERROR}
 
     else:
-        # The command completed successfully on all servers.
         for output, hosts in task.iter_buffers(data[0]):
-            # Find the maximum size of the all the devices reported by
-            # this group of hosts as only one needs to meet the minimum
-            nodes = NodeSet.fromlist(hosts)
-            try:
-                # The assumption here is that each line of command output
-                # will begin with a number and that for the purposes of
-                # checking this requirement the maximum of these numbers is
-                # needed
-                int_host_values = [
-                    int(line.split()[0])
-                    for line in str(output).splitlines()]
-                host_data[nodes] = max(int_host_values)
-
-            except (IndexError, ValueError):
-                # Log the error
-                print(
-                    "    {}: Unable to obtain the maximum {} size due to "
-                    "unexpected output:\n      {}".format(
-                        nodes, text, "\n      ".join(str(output).splitlines())))
-
-                # Return an error data set for all of the hosts
-                host_data = {NodeSet.fromlist(hosts): DATA_ERROR}
-                break
+            host_data[NodeSet.fromlist(hosts)] = str(output)
 
     return host_data
 
@@ -451,6 +439,26 @@ def check_pool_files(log, hosts, uuid):
     return status
 
 
+def convert_list(value, separator=","):
+    """Convert a list into a separator-separated string of its items.
+
+    Examples:
+        convert_list([1,2,3])        -> '1,2,3'
+        convert_list([1,2,3], " ")   -> '1 2 3'
+        convert_list([1,2,3], ", ")  -> '1, 2, 3'
+
+    Args:
+        value (list): list to convert into a string
+        separator (str, optional): list item separator. Defaults to ",".
+
+    Returns:
+        str: a single string containing all the list items separated by the
+            separator.
+
+    """
+    return separator.join([str(item) for item in value])
+
+
 def stop_processes(hosts, pattern, verbose=True, timeout=60):
     """Stop the processes on each hosts that match the pattern.
 
@@ -490,12 +498,12 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60):
     return result
 
 
-def get_partition_hosts(partition):
-    """Get a list of hosts in the specified slurm partition.
+def get_partition_hosts(partition, reservation=None):
+    """Get a list of hosts in the specified slurm partition and reservation.
 
     Args:
         partition (str): name of the partition
-
+        reservation (str): name of reservation
     Returns:
         list: list of hosts in the specified partition
 
@@ -522,6 +530,34 @@ def get_partition_hosts(partition):
                 log.warning(
                     "Unable to obtain hosts from the %s slurm partition "
                     "output: %s", partition, output)
+                hosts = []
+            if hosts and reservation is not None:
+                # Get the list of hosts from the reservation information
+                cmd = "scontrol show reservation {}".format(reservation)
+                try:
+                    result = process.run(cmd, timeout=10)
+                except process.CmdError as error:
+                    log.warning(
+                        "Unable to obtain hosts from the %s slurm "
+                        "reservation: %s", reservation, error)
+                    result = None
+                    hosts = []
+                if result:
+                    # Get the list of hosts from the reservation information
+                    output = result.stdout
+                    try:
+                        reservation_hosts = list(
+                            NodeSet(re.findall(r"\sNodes=(\S+)", output)[0]))
+                    except (NodeSetParseError, IndexError):
+                        log.warning(
+                            "Unable to obtain hosts from the %s slurm "
+                            "reservation output: %s", reservation, output)
+                        reservation_hosts = []
+                    is_subset = set(reservation_hosts).issubset(set(hosts))
+                    if reservation_hosts and is_subset:
+                        hosts = reservation_hosts
+                    else:
+                        hosts = []
     return hosts
 
 
@@ -538,3 +574,120 @@ def get_log_file(name):
 
     """
     return os.path.join(os.environ.get("DAOS_TEST_LOG_DIR", "/tmp"), name)
+
+
+def check_uuid_format(uuid):
+    """Check for a correct UUID format.
+
+    Args:
+        uuid (str): Pool or Container UUID.
+
+    Returns:
+        bool: status of valid or invalid uuid
+
+    """
+    pattern = re.compile("([0-9a-fA-F-]+)")
+    return bool(len(uuid) == 36 and pattern.match(uuid))
+
+
+def get_remote_file_size(host, file_name):
+    """Obtain remote file size.
+
+    Args:
+        file_name (str): name of remote file
+
+    Returns:
+        int: file size
+
+    """
+    cmd = "ssh" " {}@{}" " stat -c%s {}".format(
+        getuser(), host, file_name)
+    result = run_command(cmd)
+
+    return int(result.stdout)
+
+
+def error_count(error, hostlist, log_file):
+    """Count the number of specific ERRORs found in the log file.
+
+    This function also returns a count of the other ERRORs from same log file.
+
+    Args:
+        error (str): DAOS error to look for in .log file. for example -1007
+        hostlist (list): System list to looks for an error.
+        log_file (str): Log file name (server/client log).
+
+    Returns:
+        tuple: a tuple of the count of errors matching the specified error type
+            and the count of other errors (int, int)
+
+    """
+    # Get the Client side Error from client_log file.
+    output = []
+    requested_error_count = 0
+    other_error_count = 0
+    cmd = 'cat {} | grep ERR'.format(get_log_file(log_file))
+    task = run_task(hostlist, cmd)
+    for buf, _nodes in task.iter_buffers():
+        output = str(buf).split('\n')
+
+    for line in output:
+        if 'ERR' in line:
+            if error in line:
+                requested_error_count += 1
+            else:
+                other_error_count += 1
+
+    return requested_error_count, other_error_count
+
+
+def get_module_class(name, module):
+    """Get the class object in the specified module by its name.
+
+    Args:
+        name (str): class name to obtain
+        module (str): module name in which to find the class name
+
+    Raises:
+        DaosTestError: if the class name is not found in the module
+
+    Returns:
+        object: class matching the name in the specified module
+
+    """
+    try:
+        name_module = import_module(module)
+        name_class = getattr(name_module, name)
+    except (ImportError, AttributeError) as error:
+        raise DaosTestError(
+            "Invalid '{}' class name for {}: {}".format(name, module, error))
+    return name_class
+
+
+def get_job_manager_class(name, job=None, subprocess=False, mpi="openmpi"):
+    """Get the job manager class that matches the specified name.
+
+    Enables assigning a JobManager class from the test's yaml settings.
+
+    Args:
+        name (str): JobManager-based class name
+        job (ExecutableCommand, optional): command object to manage. Defaults
+            to None.
+        subprocess (bool, optional): whether the command is run as a
+            subprocess. Defaults to False.
+        mpi (str, optional): MPI type to use with the Mpirun class only.
+            Defaults to "openmpi".
+
+    Raises:
+        DaosTestError: if an invalid JobManager class name is specified.
+
+    Returns:
+        JobManager: a JobManager class, e.g. Orterun, Mpirun, Srun, etc.
+
+    """
+    manager_class = get_module_class(name, "job_manager_utils")
+    if name == "Mpirun":
+        manager = manager_class(job, subprocess=subprocess, mpitype=mpi)
+    else:
+        manager = manager_class(job, subprocess=subprocess)
+    return manager

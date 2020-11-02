@@ -22,11 +22,12 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import getpass
+import socket
 
 from command_utils_base import \
     CommandFailure, FormattedParameter, YamlParameters, CommandWithParameters
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
-from general_utils import pcmd
+from general_utils import pcmd, get_log_file
 from dmg_utils import DmgCommand
 
 
@@ -41,7 +42,7 @@ class DaosServerCommand(YamlCommand):
     FORMAT_PATTERN = "(SCM format required)(?!;)"
     REFORMAT_PATTERN = "Metadata format required"
 
-    def __init__(self, path="", yaml_cfg=None, timeout=90):
+    def __init__(self, path="", yaml_cfg=None, timeout=20):
         """Create a daos_server command object.
 
         Args:
@@ -49,7 +50,7 @@ class DaosServerCommand(YamlCommand):
             yaml_cfg (YamlParameters, optional): yaml configuration parameters.
                 Defaults to None.
             timeout (int, optional): number of seconds to wait for patterns to
-                appear in the subprocess output. Defaults to 90 seconds.
+                appear in the subprocess output. Defaults to 20 seconds.
         """
         super(DaosServerCommand, self).__init__(
             "/run/daos_server/*", "daos_server", path, yaml_cfg, timeout)
@@ -75,7 +76,8 @@ class DaosServerCommand(YamlCommand):
         # Used to override the sub_command.value parameter value
         self.sub_command_override = None
 
-        # Include the daos_io_server command lauched by the daos_server command.
+        # Include the daos_io_server command launched by the daos_server
+        # command.
         self._exe_names.append("daos_io_server")
 
     def get_sub_command_class(self):
@@ -156,21 +158,6 @@ class DaosServerCommand(YamlCommand):
         if isinstance(self.yaml, YamlParameters):
             value = self.yaml.using_dcpm
         return value
-
-    def get_interface_envs(self, index=0):
-        """Get the environment variable names and values for the interfaces.
-
-        Args:
-            index (int, optional): server index from which to obtain the
-                environment variable values. Defaults to 0.
-
-        Returns:
-            EnvironmentVariables: a dictionary of environment variable names
-                and their values extracted from the daos_server yaml
-                configuration file.
-
-        """
-        return self.yaml.get_interface_envs(index)
 
     class NetworkSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server network sub command."""
@@ -326,20 +313,18 @@ class DaosServerManager(SubprocessManager):
         # to access the doas_servers when they are started
         self.dmg = DmgCommand(self.manager.job.command_path, dmg_cfg)
 
-    def get_interface_envs(self, index=0):
-        """Get the environment variable names and values for the interfaces.
+    def get_params(self, test):
+        """Get values for all of the command params from the yaml file.
+
+        Use the yaml file parameter values to assign the server command and
+        orterun command parameters.
 
         Args:
-            index (int, optional): server index from which to obtain the
-                environment variable values. Defaults to 0.
-
-        Returns:
-            EnvironmentVariables: a dictionary of environment variable names
-                and their values extracted from the daos_server yaml
-                configuration file.
-
+            test (Test): avocado Test object
         """
-        return self.manager.job.get_interface_envs(index)
+        super(DaosServerManager, self).get_params(test)
+        # Get the values for the dmg parameters
+        self.dmg.get_params(test)
 
     def prepare(self, storage=True):
         """Prepare to start daos_server.
@@ -354,6 +339,13 @@ class DaosServerManager(SubprocessManager):
 
         # Create the daos_server yaml file
         self.manager.job.create_yaml_file()
+
+        # Copy certificates
+        self.manager.job.copy_certificates(
+            get_log_file("daosCA/certs"), self._hosts)
+        local_host = socket.gethostname().split('.', 1)[0]
+        self.dmg.copy_certificates(
+            get_log_file("daosCA/certs"), local_host.split())
 
         # Prepare dmg for running storage format on all server hosts
         self.dmg.hostlist = self._hosts
@@ -473,7 +465,7 @@ class DaosServerManager(SubprocessManager):
             cmd.sub_command_class.sub_command_class.hugepages.value = 4096
 
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
-        result = pcmd(self._hosts, str(cmd), timeout=120)
+        result = pcmd(self._hosts, str(cmd), timeout=30)
         if len(result) > 1 or 0 not in result:
             dev_type = "nvme"
             if using_dcpm and using_nvme:
@@ -562,7 +554,9 @@ class DaosServerManager(SubprocessManager):
         # Format storage and wait for server to change ownership
         self.log.info(
             "<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
-        self.dmg.storage_format()
+        # Temporarily increasing timeout to avoid CI errors until DAOS-5764 can
+        # be further investigated.
+        self.dmg.storage_format(timeout=40)
 
         # Wait for all the doas_io_servers to start
         self.detect_io_server_start()

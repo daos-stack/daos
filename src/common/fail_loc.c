@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,7 +89,8 @@ daos_fail_check(uint64_t fail_loc)
 void
 daos_fail_loc_set(uint64_t fail_loc)
 {
-	struct d_fault_attr_t attr_in = { 0 };
+	struct d_fault_attr_t	attr_in = { 0 };
+	bool			attr_set = false;
 
 	/* If fail_loc is 0, let's assume it will reset unit test fail loc */
 	if (fail_loc == 0)
@@ -104,16 +105,52 @@ daos_fail_loc_set(uint64_t fail_loc)
 	attr_in.fa_probability_y = 1;
 	if (fail_loc & DAOS_FAIL_ONCE) {
 		attr_in.fa_max_faults = 1;
+		attr_set = true;
 	} else if (fail_loc & DAOS_FAIL_SOME) {
 		D_ASSERT(daos_fail_num > 0);
 		attr_in.fa_max_faults = daos_fail_num;
+		attr_set = true;
 	} else if (fail_loc & DAOS_FAIL_ALWAYS) {
 		attr_in.fa_max_faults = 0;
+		attr_set = true;
 	}
 
-	d_fault_attr_set(attr_in.fa_id, attr_in);
+	if (attr_set)
+		d_fault_attr_set(attr_in.fa_id, attr_in);
+
 	daos_fail_loc = fail_loc;
 	D_DEBUG(DB_ANY, "*** fail_loc="DF_X64"\n", daos_fail_loc);
+}
+
+/* set #nr shards as failure (nr within [1, 4]) */
+uint64_t
+daos_shard_fail_value(uint16_t *shards, int nr)
+{
+	int		i;
+	uint64_t	fail_val = 0;
+
+	if (nr == 0 || nr > 4) {
+		D_ERROR("ignore nr %d, should within [1, 4].\n", nr);
+		return fail_val;
+	}
+	for (i = 0; i < nr; i++)
+		fail_val |= ((uint64_t)shards[i] << (16 * i));
+	return fail_val;
+}
+
+bool
+daos_shard_in_fail_value(uint16_t shard)
+{
+	int		i;
+	uint64_t	mask = 0xFFFF;
+	uint64_t	fail_val = daos_fail_value_get();
+
+	for (i = 0; i < 4; i++) {
+		if (shard == ((fail_val & (mask << (i * 16))) >> (i * 16)))
+			return true;
+	}
+
+	return false;
 }
 
 void

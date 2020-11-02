@@ -20,7 +20,7 @@ public class DaosFileIT {
   private static DaosFsClient client;
 
   @BeforeClass
-  public static void setup()throws Exception{
+  public static void setup() throws Exception {
     poolId = System.getProperty("pool_id", DaosFsClientTestBase.DEFAULT_POOL_ID);
     contId = System.getProperty("cont_id", DaosFsClientTestBase.DEFAULT_CONT_ID);
 
@@ -28,14 +28,14 @@ public class DaosFileIT {
   }
 
   @Test
-  public void testMkdir()throws Exception{
+  public void testMkdir() throws Exception {
     DaosFile daosFile = client.getFile("/root/");
     daosFile.mkdir();
     Assert.assertTrue(daosFile.exists());
   }
 
   @Test
-  public void testMkdirs()throws Exception{
+  public void testMkdirs() throws Exception {
     DaosFile daosFile = client.getFile("/d1/d2/d3");
     daosFile.mkdirs();
     DaosFile parentFile = client.getFile("/d1/d2");
@@ -44,7 +44,7 @@ public class DaosFileIT {
   }
 
   @Test
-  public void testRenameFile()throws Exception{
+  public void testRenameFile() throws Exception {
     DaosFile dir1 = client.getFile("/src/dir");
     dir1.mkdirs();
     DaosFile srcFile = client.getFile(dir1, "data1");
@@ -59,7 +59,7 @@ public class DaosFileIT {
   }
 
   @Test
-  public void testRenameToBeConfirmed()throws Exception{
+  public void testRenameToBeConfirmed() throws Exception {
     DaosFile dir1 = client.getFile("/src3/dir");
     dir1.mkdirs();
     DaosFile srcFile = client.getFile(dir1, "data1");
@@ -82,7 +82,7 @@ public class DaosFileIT {
   }
 
   @Test
-  public void testRenameDir()throws Exception{
+  public void testRenameDir() throws Exception {
     DaosFile dir1 = client.getFile("/src2/dir");
     dir1.mkdirs();
     DaosFile srcFile = client.getFile(dir1, "subdir");
@@ -96,7 +96,7 @@ public class DaosFileIT {
   }
 
   @Test
-  public void testVerifyEmptyDir()throws Exception{
+  public void testVerifyEmptyDir() throws Exception {
     DaosFile dir1 = client.getFile("/src11/");
     dir1.mkdirs();
     String[] children = dir1.listChildren();
@@ -104,7 +104,7 @@ public class DaosFileIT {
   }
 
   @Test
-  public void testVerifyMultipleChildren()throws Exception{
+  public void testVerifyMultipleChildren() throws Exception {
     DaosFile dir1 = client.getFile("/src4/");
     dir1.mkdirs();
     DaosFile child1 = client.getFile(dir1, "c1");
@@ -122,14 +122,14 @@ public class DaosFileIT {
   }
 
   @Test
-  public void testVerifyMultipleLongNameChildren()throws Exception{
+  public void testVerifyMultipleLongNameChildren() throws Exception {
     DaosFile dir1 = client.getFile("/src5/");
     dir1.mkdirs();
-    for(int i=0; i<20; i++) {
-      DaosFile child1 = client.getFile(dir1, i+"c10000000000000000000000000000000000c50000000000000000000000000000000000");
-      if(i%2 == 0){
+    for (int i = 0; i < 20; i++) {
+      DaosFile child1 = client.getFile(dir1, i + "c10000000000000000000000000000000000c50000000000000000000000000000000000");
+      if (i % 2 == 0) {
         child1.mkdir();
-      }else{
+      } else {
         child1.createNewFile();
       }
     }
@@ -139,14 +139,14 @@ public class DaosFileIT {
   }
 
   @Test
-  public void testWriteFile()throws Exception{
+  public void testWriteFile() throws Exception {
     DaosFile daosFile = client.getFile("/data");
     daosFile.createNewFile();
     int length = 100;
     ByteBuffer buffer = ByteBuffer.allocateDirect(length);
     byte[] bytes = new byte[length];
-    for(int i=0; i<length; i++){
-      bytes[i] = (byte)i;
+    for (int i = 0; i < length; i++) {
+      bytes[i] = (byte) i;
     }
     buffer.put(bytes);
 
@@ -156,14 +156,14 @@ public class DaosFileIT {
   }
 
   @Test
-  public void testReadFile()throws Exception{
+  public void testReadFile() throws Exception {
     DaosFile daosFile = client.getFile("/data2");
     daosFile.createNewFile();
     int length = 100;
     ByteBuffer buffer = ByteBuffer.allocateDirect(length);
     byte[] bytes = new byte[length];
-    for(int i=0; i<length; i++){
-      bytes[i] = (byte)i;
+    for (int i = 0; i < length; i++) {
+      bytes[i] = (byte) i;
     }
     buffer.put(bytes);
 
@@ -171,8 +171,8 @@ public class DaosFileIT {
 
     System.out.println(daosFile.length());
 
-    ByteBuffer buffer2 = ByteBuffer.allocateDirect(length+30);
-    long actualLen = daosFile.read(buffer2, 0, 0, length+30);
+    ByteBuffer buffer2 = ByteBuffer.allocateDirect(length + 30);
+    long actualLen = daosFile.read(buffer2, 0, 0, length + 30);
     Assert.assertEquals(length, actualLen);
     byte[] bytes2 = new byte[length];
     buffer2.get(bytes2);
@@ -181,31 +181,31 @@ public class DaosFileIT {
   }
 
   @Test
-  public void testCreateNewFileSimple()throws Exception{
+  public void testCreateNewFileSimple() throws Exception {
     DaosFile daosFile = client.getFile("/zjf");
     daosFile.createNewFile();
   }
 
   @Test(expected = DaosIOException.class)
-  public void testCreateNewFileWithCreateParentFalse()throws Exception{
+  public void testCreateNewFileWithCreateParentFalse() throws Exception {
     DaosFile daosFile = client.getFile("/d444/d3/d2/file");
     daosFile.createNewFile();
   }
 
   @Test
-  public void testCreateNewFileWithCreateParentTrue()throws Exception{
+  public void testCreateNewFileWithCreateParentTrue() throws Exception {
     DaosFile daosFile = client.getFile("/d4/d3/d2/file");
     daosFile.createNewFile(true);
   }
 
   @Test
-  public void testNotExists()throws Exception{
+  public void testNotExists() throws Exception {
     DaosFile file = client.getFile("/zjf1");
     Assert.assertFalse(file.exists());
   }
 
   @Test
-  public void testNotExistsAfterDeletion()throws Exception{
+  public void testNotExistsAfterDeletion() throws Exception {
     DaosFile file = client.getFile("/zjf2");
     file.createNewFile();
     Assert.assertTrue(file.exists());
@@ -214,14 +214,14 @@ public class DaosFileIT {
   }
 
   @Test
-  public void testIsDirectoryFalse() throws Exception{
+  public void testIsDirectoryFalse() throws Exception {
     DaosFile file = client.getFile("/zjf3");
     file.createNewFile();
     Assert.assertFalse(file.isDirectory());
   }
 
   @Test
-  public void tesMkdirAndVerify() throws Exception{
+  public void tesMkdirAndVerify() throws Exception {
     DaosFile file = client.getFile("/dir11");
     file.mkdir();
     Assert.assertTrue(file.isDirectory());
@@ -229,7 +229,7 @@ public class DaosFileIT {
     rootFile.exists();
     String[] children = rootFile.listChildren();
     boolean found = false;
-    for(String child : children) {
+    for (String child : children) {
       if (file.getName().equals(child)) {
         found = true;
       }
@@ -245,7 +245,7 @@ public class DaosFileIT {
   }
 
   @Test
-  public void testGetStatAttributesLength()throws Exception{
+  public void testGetStatAttributesLength() throws Exception {
     DaosFile file = client.getFile("/zjf444");
     file.createNewFile();
 
@@ -254,18 +254,18 @@ public class DaosFileIT {
     buffer.put(str.getBytes());
     file.write(buffer, 0, 0, str.length());
     StatAttributes attributes = file.getStatAttributes();
-    Assert.assertEquals(str.length(), (int)attributes.getLength());
+    Assert.assertEquals(str.length(), (int) attributes.getLength());
   }
 
   @Test
-  public void testGetStatAttributes()throws Exception{
+  public void testGetStatAttributes() throws Exception {
     DaosFile file = client.getFile("/zjf4");
     file.createNewFile();
     StatAttributes attributes = file.getStatAttributes();
 
     UnixSystem system = new UnixSystem();
-    int uid = (int)system.getUid();
-    int gid = (int)system.getGid();
+    int uid = (int) system.getUid();
+    int gid = (int) system.getGid();
 
     Assert.assertTrue(attributes.getUid() == uid);
     Assert.assertTrue(attributes.getGid() == gid);
@@ -273,7 +273,7 @@ public class DaosFileIT {
     Assert.assertTrue(attributes.getLength() == 0);
     Assert.assertTrue(attributes.getObjId() != 0);
     Assert.assertTrue(attributes.getBlockCnt() == 0);
-    Assert.assertTrue(attributes.getBlockSize() == 1024*1024);
+    Assert.assertTrue(attributes.getBlockSize() == 1024 * 1024);
     Assert.assertTrue(attributes.getMode() != 0);
     Assert.assertTrue(attributes.getAccessTime() != null);
     Assert.assertTrue(attributes.getModifyTime() != null);
@@ -303,7 +303,7 @@ public class DaosFileIT {
   }
 
   @Test
-  public void testSetGetExtAttribute() throws Exception{
+  public void testSetGetExtAttribute() throws Exception {
     DaosFile file = client.getFile("/zjf5");
     file.createNewFile();
     file.setExtAttribute("att1", "xyz", Constants.SET_XATTRIBUTE_NO_CHECK);
@@ -316,7 +316,7 @@ public class DaosFileIT {
   }
 
   @Test(expected = DaosIOException.class)
-  public void testRemoveExtAttribute()throws Exception{
+  public void testRemoveExtAttribute() throws Exception {
     DaosFile file = client.getFile("/zjf6");
     file.mkdir();
     file.setExtAttribute("att1", "xyz", Constants.SET_XATTRIBUTE_CREATE);
@@ -325,15 +325,15 @@ public class DaosFileIT {
   }
 
   @Test
-  public void testGetChunkSize()throws Exception{
+  public void testGetChunkSize() throws Exception {
     DaosFile file = client.getFile("/zjf7");
     file.createNewFile(0754, DaosObjectType.OC_SX, 2048, false);
     Assert.assertEquals(2048, file.getChunkSize());
   }
 
   @AfterClass
-  public static void teardown()throws Exception{
-    if(client != null) {
+  public static void teardown() throws Exception {
+    if (client != null) {
       client.disconnect();
     }
   }

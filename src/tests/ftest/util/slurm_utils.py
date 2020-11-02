@@ -30,6 +30,7 @@ import threading
 import re
 
 from general_utils import run_command, DaosTestError
+from ClusterShell.NodeSet import NodeSet
 
 W_LOCK = threading.Lock()
 
@@ -56,9 +57,9 @@ def cancel_jobs(job_id):
 
 
 def create_slurm_partition(nodelist, name):
-    """Create a slurm partion for soak jobs.
+    """Create a slurm partition for soak jobs.
 
-    Client nodes will be allocated for this partiton.
+    Client nodes will be allocated for this partition.
 
     Args:
         nodelist (list): list of nodes for job allocation
@@ -92,6 +93,45 @@ def delete_slurm_partition(name):
     command = "scontrol delete PartitionName={}".format(name)
     result = run_command(command, raise_exception=False)
     return result.exit_status
+
+
+def get_reserved_nodes(reservation, partition):
+    """Get the reserved nodes.
+
+    Args:
+        reservation (str): reservation name
+        partition (str): partition name
+
+    Returns:
+        list: return list of reserved nodes in partition
+
+    """
+    partition_hosts = []
+    hosts = []
+    # Get the partition information
+    cmd = "scontrol show partition {}".format(partition)
+    partition_result = run_command(cmd, raise_exception=False)
+
+    if partition_result:
+        # Get the list of hosts from the reservation information
+        output = partition_result.stdout
+        match = re.search(r"\sNodes=(\S+)", str(output))
+        if match is not None:
+            partition_hosts = list(NodeSet(match.group(1)))
+            print("partition_hosts = {}".format(partition_hosts))
+            # partition hosts exists; continue with valid partition
+            cmd = "scontrol show reservation {}".format(reservation)
+            reservation_result = run_command(cmd, raise_exception=False)
+            if reservation_result:
+                # Get the list of hosts from the reservation information
+                output = reservation_result.stdout
+                match = re.search(r"\sNodes=(\S+)", str(output))
+                if match is not None:
+                    reservation_hosts = list(NodeSet(match.group(1)))
+                    print("reservation_hosts = {}".format(reservation_hosts))
+                    if set(reservation_hosts).issubset(set(partition_hosts)):
+                        hosts = reservation_hosts
+    return hosts
 
 
 def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch=None):
@@ -185,7 +225,7 @@ def check_slurm_job(handle):
 
     """
     command = "scontrol show job {}".format(handle)
-    result = run_command(command, raise_exception=False)
+    result = run_command(command, raise_exception=False, verbose=False)
     match = re.search(r"JobState=([a-zA-Z]+)", result.stdout)
     if match is not None:
         state = match.group(1)
@@ -222,7 +262,7 @@ def watch_job(handle, maxwait, test_obj):
     wait_time = 0
     while True:
         state = check_slurm_job(handle)
-        if state in ("PENDING", "RUNNING", "COMPLETING"):
+        if state in ("PENDING", "RUNNING", "COMPLETING", "CONFIGURING"):
             if wait_time > maxwait:
                 state = "MAXWAITREACHED"
                 print("Job {} has timedout after {} secs".format(handle,
@@ -241,7 +281,31 @@ def watch_job(handle, maxwait, test_obj):
         test_obj.job_done(params)
 
 
-def srun(nodes, cmd, srun_params=None):
+def srun_str(hosts, cmd, srun_params=None):
+    """Create string of cmd with srun and params.
+
+    Args:
+        hosts (str): hosts to allocate
+        cmd (str): cmdline to execute
+        srun_params(dict): additional params for srun
+
+    Returns:
+        Cmd: str of cmdline wrapped in srun with params
+
+    """
+    params_list = []
+    params = ""
+    if hosts is not None:
+        params_list.append("--nodelist {}".format(hosts))
+    if srun_params is not None:
+        for key, value in srun_params.items():
+            params_list.extend(["--{}={}".format(key, value)])
+            params = " ".join(params_list)
+    cmd = "srun {} {}".format(params, cmd)
+    return str(cmd)
+
+
+def srun(hosts, cmd, srun_params=None):
     """Run srun cmd on slurm partition.
 
     Args:
@@ -254,13 +318,7 @@ def srun(nodes, cmd, srun_params=None):
             the srun command
 
     """
-    params_list = []
-    params = ""
-    if srun_params is not None:
-        for key, value in srun_params.items():
-            params_list.extend(["--{}={}".format(key, value)])
-            params = " ".join(params_list)
-    cmd = "srun --nodelist={} {} {}".format(nodes, params, cmd)
+    cmd = srun_str(hosts, cmd, srun_params)
     try:
         result = run_command(cmd, timeout=30)
     except DaosTestError as error:

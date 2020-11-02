@@ -50,11 +50,10 @@ class StorageRatio(TestWithServers):
         :avocado: tags=all,hw,medium,nvme,ib2,full_regression
         :avocado: tags=storage_ratio
         """
-        tests = self.params.get("stoage_ratio", '/run/pool/*')
+        tests = self.params.get("storage_ratio", '/run/pool/*')
         results = {}
         for num, test in enumerate(tests):
-            pool = TestPool(
-                self.context, dmg_command=self.get_dmg_command())
+            pool = TestPool(self.context, self.get_dmg_command())
             pool.get_params(self)
             pool.scm_size.update(test[0])
             pool.nvme_size.update(test[1])
@@ -66,7 +65,7 @@ class StorageRatio(TestWithServers):
                 elif 'PASS' in test[2]:
                     results[num] = 'PASS'
                 elif ('WARNING' in test[2] and
-                      'SCM:NVMe ratio is less than' in pool.cmd_output):
+                      'SCM:NVMe ratio is less than' in pool.dmg.result.stdout):
                     results[num] = 'PASS'
                 else:
                     results[num] = 'FAIL'

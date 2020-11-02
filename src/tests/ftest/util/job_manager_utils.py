@@ -26,6 +26,7 @@ import os
 
 from command_utils import ExecutableCommand
 from command_utils_base import FormattedParameter, EnvironmentVariables
+from command_utils_base import CommandFailure
 from env_modules import load_mpi
 from general_utils import pcmd
 from write_host_file import write_host_file
@@ -150,7 +151,7 @@ class JobManager(ExecutableCommand):
 
             # Add a running state to the list of process states if any remote
             # process was found to be active.  The pcmd method will return a
-            # dictioanry with a single key, e.g. {1: <NodeSet>}, if there are
+            # dictionary with a single key, e.g. {1: <NodeSet>}, if there are
             # no remote processes running on any of the hosts.  If this value
             # is not returned, indicate there are processes running by adding
             # the "R" state to the process state list.
@@ -172,10 +173,12 @@ class Orterun(JobManager):
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
-        load_mpi("openmpi")
+        if not load_mpi("openmpi"):
+            raise CommandFailure("Failed to load openmpi")
+
         path = os.path.dirname(find_executable("orterun"))
         super(Orterun, self).__init__(
-            "/run/orterun", "orterun", job, path, subprocess)
+            "/run/orterun/*", "orterun", job, path, subprocess)
 
         # Default mca values to avoid queue pair errors
         mca_default = {
@@ -183,6 +186,7 @@ class Orterun(JobManager):
             "btl": "tcp,self",
             "oob": "tcp",
             "pml": "ob1",
+            "btl_tcp_if_include": "eth0",
         }
 
         self.hostfile = FormattedParameter("--hostfile {}", None)
@@ -197,6 +201,7 @@ class Orterun(JobManager):
         self.pprnode = FormattedParameter("--map-by ppr:{}:node", None)
         self.tag_output = FormattedParameter("--tag-output", True)
         self.ompi_server = FormattedParameter("--ompi-server {}", None)
+        self.working_dir = FormattedParameter("-wdir {}", None)
 
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command (--hostfile).
@@ -261,7 +266,9 @@ class Orterun(JobManager):
             CommandFailure: if there is an error running the command
 
         """
-        load_mpi("openmpi")
+        if not load_mpi("openmpi"):
+            raise CommandFailure("Failed to load openmpi")
+
         return super(Orterun, self).run()
 
 
@@ -276,15 +283,30 @@ class Mpirun(JobManager):
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
-        load_mpi(mpitype)
+        if not load_mpi(mpitype):
+            raise CommandFailure("Failed to load {}".format(mpitype))
+
         path = os.path.dirname(find_executable("mpirun"))
         super(Mpirun, self).__init__(
             "/run/mpirun", "mpirun", job, path, subprocess)
+
+        mca_default = None
+        if mpitype == "openmpi":
+            # Default mca values to avoid queue pair errors w/ OpenMPI
+            mca_default = {
+                "btl_openib_warn_default_gid_prefix": "0",
+                "btl": "tcp,self",
+                "oob": "tcp",
+                "pml": "ob1",
+                "btl_tcp_if_include": "eth0",
+            }
 
         self.hostfile = FormattedParameter("-hostfile {}", None)
         self.processes = FormattedParameter("-np {}", 1)
         self.ppn = FormattedParameter("-ppn {}", None)
         self.envlist = FormattedParameter("-envlist {}", None)
+        self.mca = FormattedParameter("--mca {}", mca_default)
+        self.working_dir = FormattedParameter("-wdir {}", None)
         self.mpitype = mpitype
 
     def assign_hosts(self, hosts, path=None, slots=None):
@@ -343,7 +365,9 @@ class Mpirun(JobManager):
             CommandFailure: if there is an error running the command
 
         """
-        load_mpi(self.mpitype)
+        if not load_mpi(self.mpitype):
+            raise CommandFailure("Failed to load {}".format(self.mpitype))
+
         return super(Mpirun, self).run()
 
 
@@ -370,6 +394,7 @@ class Srun(JobManager):
         self.nodefile = FormattedParameter("--nodefile={}", None)
         self.nodelist = FormattedParameter("--nodelist={}", None)
         self.ntasks_per_node = FormattedParameter("--ntasks-per-node={}", None)
+        self.nodes = FormattedParameter("--nodes={}", None)
         self.reservation = FormattedParameter("--reservation={}", None)
         self.partition = FormattedParameter("--partition={}", None)
         self.output = FormattedParameter("--output={}", None)

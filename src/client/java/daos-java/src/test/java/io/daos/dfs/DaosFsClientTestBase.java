@@ -2,9 +2,9 @@ package io.daos.dfs;
 
 public class DaosFsClientTestBase {
 
-  public static final String DEFAULT_POOL_ID = "0417107c-144e-4394-a7f1-a281d0251b0c";
-//  public static final String DEFAULT_CONT_ID = "ffffffff-ffff-ffff-ffff-ffffffffffff";
-  public static final String DEFAULT_CONT_ID = "71bfbb65-5de6-4f85-88a5-e1a8b33af335";
+  public static final String DEFAULT_POOL_ID = "07f519b1-f06a-4411-b0f5-638cc39d3825";
+  //  public static final String DEFAULT_CONT_ID = "ffffffff-ffff-ffff-ffff-ffffffffffff";
+  public static final String DEFAULT_CONT_ID = "9c9de970-2b43-43ec-ad2c-6a3fc33bd389";
 
   public static DaosFsClient prepareFs(String poolId, String contId) throws Exception {
     DaosFsClient.DaosFsClientBuilder builder = new DaosFsClient.DaosFsClientBuilder();
@@ -15,36 +15,36 @@ public class DaosFsClientTestBase {
       //clear all content
       DaosFile daosFile = client.getFile("/");
       String[] children = daosFile.listChildren();
-      for(String child : children) {
-        if(child.length() == 0 || ".".equals(child)){
+      for (String child : children) {
+        if (child.length() == 0 || ".".equals(child)) {
           continue;
         }
-        String path = "/"+child;
+        String path = "/" + child;
         DaosFile childFile = client.getFile(path);
-        if(childFile.delete(true)){
-          System.out.println("deleted folder "+path);
-        }else{
-          System.out.println("failed to delete folder "+path);
+        if (childFile.delete(true)) {
+          System.out.println("deleted folder " + path);
+        } else {
+          System.out.println("failed to delete folder " + path);
         }
         childFile.release();
       }
       daosFile.release();
       return client;
-    }catch (Exception e){
+    } catch (Exception e) {
       System.out.println("failed to clear/prepare file system");
       e.printStackTrace();
     }
     return null;
   }
 
-  public static void main(String args[])throws Exception{
+  public static void main(String args[]) throws Exception {
     DaosFsClient client = null;
-    try{
+    try {
       client = prepareFs(DEFAULT_POOL_ID, DEFAULT_CONT_ID);
-    }finally {
+    } finally {
       client.disconnect();
     }
-    if(client != null){
+    if (client != null) {
       System.out.println("quitting");
     }
 

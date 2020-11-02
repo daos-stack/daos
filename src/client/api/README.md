@@ -17,7 +17,7 @@ Each of those components have associated README.md files that provide more
 details about the functionality they support except for APIs to support
 non-blocking operations which is discussed here.
 
-The libdaos API is availabe under [/src/include/daos\_\*](/src/include/) and
+The libdaos API is available under [/src/include/daos\_\*](/src/include/) and
 associated man pages under [/doc/man/man3/](/doc/man/man3/).
 
 ## Event & Event Queue

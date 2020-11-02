@@ -25,15 +25,56 @@
 #define __VOS_TYPES_H__
 
 #include <daos_types.h>
+#include <daos_pool.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/vea.h>
 #include <daos/object.h>
 #include <daos/dtx.h>
 #include <daos/checksum.h>
 
+struct dtx_rsrvd_uint {
+	void			*dru_scm;
+	d_list_t		dru_nvme;
+};
+
 enum dtx_cos_flags {
 	DCF_SHARED	= (1 << 0),
 };
+
+struct dtx_cos_key {
+	daos_unit_oid_t		oid;
+	uint64_t		dkey_hash;
+};
+
+enum dtx_entry_flags {
+	/* The DTX is the leader */
+	DTE_LEADER		= (1 << 0),
+	/* The DTX entry is invalid. */
+	DTE_INVALID		= (1 << 1),
+	/* If the DTX with this flag is non-committed, then others
+	 * will be blocked (retry again and again) when access the
+	 * data being modified via this DTX. Currently, it is used
+	 * for distributed transaction. It also can be used for EC
+	 * object modification via standalone update/punch.
+	 */
+	DTE_BLOCK		= (1 << 2),
+};
+
+struct dtx_entry {
+	/** The identifier of the DTX. */
+	struct dtx_id			 dte_xid;
+	/** The pool map version when the DTX happened. */
+	uint32_t			 dte_ver;
+	/** The reference count. */
+	uint32_t			 dte_refs;
+	/** The DAOS targets participating in the DTX. */
+	struct dtx_memberships		*dte_mbs;
+};
+
+/* The 'dte_mbs' must be the last member of 'dtx_entry'. */
+D_CASSERT(sizeof(struct dtx_entry) ==
+	  offsetof(struct dtx_entry, dte_mbs) +
+	  sizeof(struct dtx_memberships *));
 
 enum vos_oi_attr {
 	/** Marks object as failed */
@@ -57,24 +98,32 @@ struct vos_gc_stat {
 	uint64_t	gs_recxs;	/**< GCed array values */
 };
 
+struct vos_pool_space {
+	/** Total & free space */
+	struct daos_space	vps_space;
+	/** Reserved sys space (for space reclaim, rebuild, etc.) in bytes */
+	daos_size_t		vps_space_sys[DAOS_MEDIA_MAX];
+	/** NVMe block allocator attributes */
+	struct vea_attr		vps_vea_attr;
+	/** NVMe block allocator statistics */
+	struct vea_stat		vps_vea_stat;
+};
+
+#define SCM_TOTAL(vps)	((vps)->vps_space.s_total[DAOS_MEDIA_SCM])
+#define SCM_FREE(vps)	((vps)->vps_space.s_free[DAOS_MEDIA_SCM])
+#define SCM_SYS(vps)	((vps)->vps_space_sys[DAOS_MEDIA_SCM])
+#define NVME_TOTAL(vps)	((vps)->vps_space.s_total[DAOS_MEDIA_NVME])
+#define NVME_FREE(vps)	((vps)->vps_space.s_free[DAOS_MEDIA_NVME])
+#define NVME_SYS(vps)	((vps)->vps_space_sys[DAOS_MEDIA_NVME])
+
 /**
  * pool attributes returned to query
  */
 typedef struct {
 	/** # of containers in this pool */
 	uint64_t		pif_cont_nr;
-	/** Total SCM space in bytes */
-	daos_size_t		pif_scm_sz;
-	/** Total NVMe space in bytes */
-	daos_size_t		pif_nvme_sz;
-	/** Current SCM free space in bytes */
-	daos_size_t		pif_scm_free;
-	/** Current NVMe free space in bytes */
-	daos_size_t		pif_nvme_free;
-	/** NVMe block allocator attributes */
-	struct vea_attr		pif_vea_attr;
-	/** NVMe block allocator statistics */
-	struct vea_stat		pif_vea_stat;
+	/** Space information */
+	struct vos_pool_space	pif_space;
 	/** garbage collector statistics */
 	struct vos_gc_stat	pif_gc_stat;
 	/** TODO */
@@ -158,23 +207,39 @@ typedef enum {
 
 enum {
 	/** Conditional Op: Punch key if it exists, fail otherwise */
-	VOS_OF_COND_PUNCH	= DAOS_COND_PUNCH,
+	VOS_OF_COND_PUNCH		= DAOS_COND_PUNCH,
 	/** Conditional Op: Insert dkey if it doesn't exist, fail otherwise */
-	VOS_OF_COND_DKEY_INSERT	= DAOS_COND_DKEY_INSERT,
+	VOS_OF_COND_DKEY_INSERT		= DAOS_COND_DKEY_INSERT,
 	/** Conditional Op: Update dkey if it exists, fail otherwise */
-	VOS_OF_COND_DKEY_UPDATE	= DAOS_COND_DKEY_UPDATE,
+	VOS_OF_COND_DKEY_UPDATE		= DAOS_COND_DKEY_UPDATE,
 	/** Conditional Op: Fetch dkey if it exists, fail otherwise */
-	VOS_OF_COND_DKEY_FETCH	= DAOS_COND_DKEY_FETCH,
+	VOS_OF_COND_DKEY_FETCH		= DAOS_COND_DKEY_FETCH,
 	/** Conditional Op: Insert akey if it doesn't exist, fail otherwise */
-	VOS_OF_COND_AKEY_INSERT	= DAOS_COND_AKEY_INSERT,
+	VOS_OF_COND_AKEY_INSERT		= DAOS_COND_AKEY_INSERT,
 	/** Conditional Op: Update akey if it exists, fail otherwise */
-	VOS_OF_COND_AKEY_UPDATE	= DAOS_COND_AKEY_UPDATE,
+	VOS_OF_COND_AKEY_UPDATE		= DAOS_COND_AKEY_UPDATE,
 	/** Conditional Op: Fetch akey if it exists, fail otherwise */
-	VOS_OF_COND_AKEY_FETCH	= DAOS_COND_AKEY_FETCH,
-	/** Indicates the operation should check mvcc timestamps */
-	VOS_OF_USE_TIMESTAMPS	= (1 << 7),
+	VOS_OF_COND_AKEY_FETCH		= DAOS_COND_AKEY_FETCH,
+	/** Indicates akey conditions are specified in iod_flags */
+	VOS_OF_COND_PER_AKEY		= DAOS_COND_PER_AKEY,
+	/* critical update - skip checks on SCM system/held space */
+	VOS_OF_CRIT			= (1 << 8),
+	/** Instead of update or punch of extents, remove all extents
+	 * under the specified range. Intended for internal use only.
+	 */
+	VOS_OF_REMOVE			= (1 << 9),
+	/* only query iod_size */
+	VOS_OF_FETCH_SIZE_ONLY		= (1 << 10),
+	/* query recx list */
+	VOS_OF_FETCH_RECX_LIST		= (1 << 11),
+	/* only set read TS */
+	VOS_OF_FETCH_SET_TS_ONLY	= (1 << 12),
+	/* check the target (obj/dkey/akey) existence */
+	VOS_OF_FETCH_CHECK_EXISTENCE	= (1 << 13),
+	/** Set when propagating a punch that results in empty subtree */
+	VOS_OF_PUNCH_PROPAGATE		= (1 << 14),
 	/** replay punch (underwrite) */
-	VOS_OF_REPLAY_PC	= (1 << 8),
+	VOS_OF_REPLAY_PC		= (1 << 15),
 };
 
 /** Mask for any conditionals passed to to the fetch */
@@ -198,7 +263,7 @@ enum {
 	(VOS_OF_COND_DKEY_UPDATE | VOS_OF_COND_AKEY_UPDATE)
 
 D_CASSERT((VOS_OF_REPLAY_PC & DAOS_COND_MASK) == 0);
-D_CASSERT((VOS_OF_USE_TIMESTAMPS & DAOS_COND_MASK) == 0);
+D_CASSERT((VOS_OF_PUNCH_PROPAGATE & DAOS_COND_MASK) == 0);
 
 /** vos definitions that match daos_obj_key_query flags */
 enum {
@@ -212,8 +277,14 @@ enum {
 	VOS_GET_AKEY		= DAOS_GET_AKEY,
 	/** retrieve the idx of array value */
 	VOS_GET_RECX		= DAOS_GET_RECX,
+	/**
+	 * Internal flag to indicate retrieve the idx of EC array value,
+	 * in that case need to retrieve both normal space and parity space
+	 * (parity space with DAOS_EC_PARITY_BIT in the recx index).
+	 */
+	VOS_GET_RECX_EC		= (1 << 5),
 	/** Internal flag to indicate timestamps are used */
-	VOS_USE_TIMESTAMPS	= (1 << 5),
+	VOS_USE_TIMESTAMPS	= (1 << 6),
 };
 
 D_CASSERT((VOS_USE_TIMESTAMPS & (VOS_GET_MAX | VOS_GET_MIN | VOS_GET_DKEY |
@@ -239,10 +310,12 @@ enum {
 	VOS_IT_FOR_REBUILD	= (1 << 5),
 	/** Iterate only show punched records in interval */
 	VOS_IT_PUNCHED		= (1 << 6),
+	/** Mask for all flags */
+	VOS_IT_MASK		= (1 << 7) - 1,
 };
 
 /**
- * Parameters for initialising VOS iterator
+ * Parameters for initializing VOS iterator
  */
 typedef struct {
 	/** standalone prepare:	pool connection handle or container open handle
@@ -259,6 +332,8 @@ typedef struct {
 	daos_key_t		ip_dkey;
 	/** attribute key (VOS_ITER_DKEY/RECX/SINGLE, standalone only) */
 	daos_key_t		ip_akey;
+	/** address range (RECX); ip_recx.rx_nr == 0 means entire range */
+	daos_recx_t             ip_recx;
 	/** epoch validity range for the iterator (standalone only) */
 	daos_epoch_range_t	ip_epr;
 	/** epoch logic expression for the iterator. */
@@ -294,26 +369,18 @@ typedef struct {
 			/** Non-zero if punched */
 			daos_epoch_t		ie_punch;
 			union {
-				/** dkey or akey */
-				struct {
-					/** key value */
-					daos_key_t		ie_key;
-				};
-				/** object or DTX entry */
-				struct {
-					/** The DTX identifier. */
-					struct dtx_id		ie_xid;
-					/** oid */
-					daos_unit_oid_t		ie_oid;
-					/* The dkey hash for DTX iteration. */
-					uint64_t		ie_dtx_hash;
-				};
+				/** key value */
+				daos_key_t	ie_key;
+				/** oid */
+				daos_unit_oid_t	ie_oid;
 			};
 		};
 		/** Array entry */
 		struct {
 			/** record size */
 			daos_size_t		ie_rsize;
+			/** record size for the whole global single record */
+			daos_size_t		ie_gsize;
 			/** record extent */
 			daos_recx_t		ie_recx;
 			/* original in-tree extent */
@@ -326,6 +393,25 @@ typedef struct {
 			uint32_t		ie_ver;
 			/** Minor epoch of extent */
 			uint16_t		ie_minor_epc;
+		};
+		/** Active DTX entry. */
+		struct {
+			/** The DTX identifier. */
+			struct dtx_id		ie_dtx_xid;
+			/** The OID. */
+			daos_unit_oid_t		ie_dtx_oid;
+			/** The pool map version when handling DTX on server. */
+			uint32_t		ie_dtx_ver;
+			/* The dkey hash for DTX iteration. */
+			uint16_t		ie_dtx_flags;
+			/** DTX tgt count. */
+			uint32_t		ie_dtx_tgt_cnt;
+			/** DTX modified group count. */
+			uint32_t		ie_dtx_grp_cnt;
+			/** DTX mbs data size. */
+			uint32_t		ie_dtx_mbs_dsize;
+			/** DTX participants information. */
+			void			*ie_dtx_mbs;
 		};
 	};
 	/* Flags to describe the entry */
@@ -374,7 +460,7 @@ struct vos_iter_anchors {
 			ia_reprobe_ev:1;
 };
 
-/* Ignores DTX as they are transient records.   Add VEA overheads later */
+/* Ignores DTX as they are transient records */
 enum VOS_TREE_CLASS {
 	VOS_TC_CONTAINER,
 	VOS_TC_OBJECT,
@@ -382,6 +468,7 @@ enum VOS_TREE_CLASS {
 	VOS_TC_AKEY,
 	VOS_TC_SV,
 	VOS_TC_ARRAY,
+	VOS_TC_VEA,
 };
 
 #endif /* __VOS_TYPES_H__ */

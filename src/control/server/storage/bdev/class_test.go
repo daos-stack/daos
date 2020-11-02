@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@
 package bdev
 
 import (
-	"bytes"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -33,6 +32,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -41,15 +41,17 @@ import (
 // config files that can be consumed by spdk.
 func TestParseBdev(t *testing.T) {
 	tests := map[string]struct {
-		bdevClass  storage.BdevClass
-		bdevList   []string
-		bdevSize   int // relevant for MALLOC/FILE
-		bdevNumber int // relevant for MALLOC
-		vosEnv     string
-		wantBuf    []string
-		errMsg     string
+		bdevClass       storage.BdevClass
+		bdevList        []string
+		bdevVmdDisabled bool
+		bdevSize        int // relevant for MALLOC/FILE
+		bdevNumber      int // relevant for MALLOC
+		vosEnv          string
+		wantBuf         []string
+		errMsg          string
 	}{
 		"defaults from example config": {
+			bdevVmdDisabled: true,
 			wantBuf: []string{
 				`[Nvme]`,
 				`    TransportID "trtype:PCIe traddr:0000:81:00.0" Nvme__0`,
@@ -63,8 +65,9 @@ func TestParseBdev(t *testing.T) {
 			},
 		},
 		"multiple controllers": {
-			bdevClass: storage.BdevClassNvme,
-			bdevList:  []string{"0000:81:00.0", "0000:81:00.1"},
+			bdevClass:       storage.BdevClassNvme,
+			bdevVmdDisabled: true,
+			bdevList:        []string{"0000:81:00.0", "0000:81:00.1"},
 			wantBuf: []string{
 				`[Nvme]`,
 				`    TransportID "trtype:PCIe traddr:0000:81:00.0" Nvme__0`,
@@ -77,11 +80,54 @@ func TestParseBdev(t *testing.T) {
 				`    HotplugPollRate 0`,
 				``,
 			},
+			vosEnv: "NVME",
+		},
+		"VMD devices": {
+			bdevClass: storage.BdevClassNvme,
+			bdevList:  []string{"5d0505:01:00.0", "5d0505:03:00.0"},
+			wantBuf: []string{
+				`[Vmd]`,
+				`    Enable True`,
+				``,
+				`[Nvme]`,
+				`    TransportID "trtype:PCIe traddr:5d0505:01:00.0" Nvme__0`,
+				`    TransportID "trtype:PCIe traddr:5d0505:03:00.0" Nvme__1`,
+				`    RetryCount 4`,
+				`    TimeoutUsec 0`,
+				`    ActionOnTimeout None`,
+				`    AdminPollRate 100000`,
+				`    HotplugEnable No`,
+				`    HotplugPollRate 0`,
+				``,
+			},
+			vosEnv: "NVME",
+		},
+		"multiple VMD and NVMe controllers": {
+			bdevClass: storage.BdevClassNvme,
+			bdevList:  []string{"0000:81:00.0", "5d0505:01:00.0", "5d0505:03:00.0"},
+			wantBuf: []string{
+				`[Vmd]`,
+				`    Enable True`,
+				``,
+				`[Nvme]`,
+				`    TransportID "trtype:PCIe traddr:0000:81:00.0" Nvme__0`,
+				`    TransportID "trtype:PCIe traddr:5d0505:01:00.0" Nvme__1`,
+				`    TransportID "trtype:PCIe traddr:5d0505:03:00.0" Nvme__2`,
+				`    RetryCount 4`,
+				`    TimeoutUsec 0`,
+				`    ActionOnTimeout None`,
+				`    AdminPollRate 100000`,
+				`    HotplugEnable No`,
+				`    HotplugPollRate 0`,
+				``,
+			},
+			vosEnv: "NVME",
 		},
 		"AIO file": {
-			bdevClass: storage.BdevClassFile,
-			bdevList:  []string{"myfile", "myotherfile"},
-			bdevSize:  5, // GB/file
+			bdevClass:       storage.BdevClassFile,
+			bdevVmdDisabled: true,
+			bdevList:        []string{"myfile", "myotherfile"},
+			bdevSize:        5, // GB/file
 			wantBuf: []string{
 				`[AIO]`,
 				`    AIO myfile AIO__0 4096`,
@@ -91,8 +137,9 @@ func TestParseBdev(t *testing.T) {
 			vosEnv: "AIO",
 		},
 		"AIO kdev": {
-			bdevClass: storage.BdevClassKdev,
-			bdevList:  []string{"sdb", "sdc"},
+			bdevClass:       storage.BdevClassKdev,
+			bdevVmdDisabled: true,
+			bdevList:        []string{"sdb", "sdc"},
 			wantBuf: []string{
 				`[AIO]`,
 				`    AIO sdb AIO__0`,
@@ -102,9 +149,10 @@ func TestParseBdev(t *testing.T) {
 			vosEnv: "AIO",
 		},
 		"MALLOC": {
-			bdevClass:  storage.BdevClassMalloc,
-			bdevSize:   5, // GB/file
-			bdevNumber: 2, // number of LUNs
+			bdevClass:       storage.BdevClassMalloc,
+			bdevVmdDisabled: true,
+			bdevSize:        5, // GB/file
+			bdevNumber:      2, // number of LUNs
 			wantBuf: []string{
 				`[Malloc]`,
 				`    NumberOfLuns 2`,
@@ -127,6 +175,8 @@ func TestParseBdev(t *testing.T) {
 			if tt.bdevClass != "" {
 				config.Class = tt.bdevClass
 			}
+			config.VmdDisabled = tt.bdevVmdDisabled
+
 			if len(tt.bdevList) != 0 {
 				switch tt.bdevClass {
 				case storage.BdevClassFile, storage.BdevClassKdev:
@@ -144,6 +194,7 @@ func TestParseBdev(t *testing.T) {
 					config.DeviceList = tt.bdevList
 				}
 			}
+
 			if tt.bdevSize != 0 {
 				config.FileSize = tt.bdevSize
 			}
@@ -151,15 +202,10 @@ func TestParseBdev(t *testing.T) {
 				config.DeviceCount = tt.bdevNumber
 			}
 
-			var logBuf bytes.Buffer
-			testLog := logging.NewCombinedLogger(t.Name(), &logBuf)
-			defer func(t *testing.T) {
-				if t.Failed() {
-					t.Error(logBuf.String())
-				}
-			}(t)
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
 
-			provider, err := NewClassProvider(testLog, testDir, &config)
+			provider, err := NewClassProvider(log, testDir, &config)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -186,10 +232,6 @@ func TestParseBdev(t *testing.T) {
 
 			if config.VosEnv != tt.vosEnv {
 				t.Fatalf("expected VosEnv to be %q, but it was %q", tt.vosEnv, config.VosEnv)
-			}
-
-			if err := provider.PrepareDevices(); err != nil {
-				t.Fatal(err)
 			}
 
 			// The remainder only applies to loopback file devices.

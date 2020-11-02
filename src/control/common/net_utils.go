@@ -57,3 +57,44 @@ func SplitPort(addrPattern string, defaultPort int) (string, string, error) {
 
 	return host, port, err
 }
+
+// CmpTcpAddr compares two *net.TCPAddr instances and returns
+// true if they are equivalent, false otherwise.
+func CmpTcpAddr(a, b *net.TCPAddr) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	if !a.IP.Equal(b.IP) {
+		return false
+	}
+	if a.Port != b.Port {
+		return false
+	}
+	return a.Zone == b.Zone
+}
+
+// IsLocalAddr returns true if the supplied net.TCPAddr
+// matches one of the local IP addresses, false otherwise.
+func IsLocalAddr(testAddr *net.TCPAddr) bool {
+	if testAddr == nil {
+		return false
+	}
+
+	ifaceAddrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return false
+	}
+
+	for _, ia := range ifaceAddrs {
+		if in, ok := ia.(*net.IPNet); ok {
+			if in.IP.Equal(testAddr.IP) {
+				return true
+			}
+		}
+	}
+
+	return false
+}

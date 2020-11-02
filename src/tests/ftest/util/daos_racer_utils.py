@@ -24,25 +24,31 @@
 from command_utils_base import \
     CommandFailure, BasicParameter, FormattedParameter
 from command_utils import ExecutableCommand
-from general_utils import pcmd
+from general_utils import pcmd, get_log_file
 
 
 class DaosRacerCommand(ExecutableCommand):
     """Defines a object representing a daos_racer command."""
 
-    def __init__(self, path, host):
+    def __init__(self, path, host, dmg=None):
         """Create a daos_racer command object.
 
         Args:
             path (str): path of the daos_racer command
             host (str): host on which to run the daos_racer command
+            dmg (DmgCommand): a DmgCommand object used to obtain the
+                configuration file and certificate
         """
         super(DaosRacerCommand, self).__init__(
-            "/run/daos_racer", "daos_racer", path)
+            "/run/daos_racer/*", "daos_racer", path)
         self.host = host
 
         # Number of seconds to run
         self.runtime = FormattedParameter("-t {}", 60)
+
+        if dmg:
+            self.dmg_config = FormattedParameter("-n {}", dmg.yaml.filename)
+            dmg.copy_certificates(get_log_file("daosCA/certs"), [self.host])
 
         # Optional timeout for the clush command running the daos_racer command.
         # This should be set greater than the 'runtime' value but less than the
@@ -54,7 +60,7 @@ class DaosRacerCommand(ExecutableCommand):
         # daos_racer command.  The values for these names are populated by the
         # get_environment() method and added to command line by the
         # set_environment() method.
-        self._env_names = ["OFI_INTERFACE", "CRT_PHY_ADDR_STR", "D_LOG_FILE"]
+        self._env_names = ["D_LOG_FILE"]
 
     def get_str_param_names(self):
         """Get a sorted list of the names of the command attributes.
@@ -87,7 +93,18 @@ class DaosRacerCommand(ExecutableCommand):
         env["OMPI_MCA_btl"] = "tcp,self"
         env["OMPI_MCA_oob"] = "tcp"
         env["OMPI_MCA_pml"] = "ob1"
+        env["D_LOG_MASK"] = "ERR"
         return env
+
+    def set_environment(self, env):
+        """Set the environment variables to export prior to running daos_racer.
+
+        Args:
+            env (EnvironmentVariables): a dictionary of environment variable
+                names and values to export prior to running daos_racer
+        """
+        # Include exports prior to the daos_racer command
+        self._pre_command = env.get_export_str()
 
     def run(self):
         """Run the daos_racer command remotely.

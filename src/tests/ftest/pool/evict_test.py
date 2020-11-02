@@ -50,8 +50,7 @@ class EvictTests(TestWithServers):
             TestPool (object)
 
         """
-        pool = TestPool(self.context, self.log,
-                        dmg_command=self.get_dmg_command())
+        pool = TestPool(self.context, self.get_dmg_command())
         pool.get_params(self)
         if targets is not None:
             pool.target_list.value = targets
@@ -112,8 +111,7 @@ class EvictTests(TestWithServers):
         # exception is expected
         except DaosApiError as result:
             if test_param == "BAD_SERVER_NAME":
-                # Due to DAOS-3835, no specific error code is available for now.
-                err = "-1025"
+                err = "-1003"
             else:
                 err = "-1005"
             status = err in str(result)
@@ -177,7 +175,7 @@ class EvictTests(TestWithServers):
         The handle is removed.
         The test verifies that the other two pools were not affected
         by the evict
-        :avocado: tags=all,pool,pr,full_regression,small,poolevict
+        :avocado: tags=all,pool,pr,full_regression,small,poolevict,DAOS_5610
         """
         pool = []
         container = []
@@ -266,8 +264,8 @@ class EvictTests(TestWithServers):
         """
         Test evicting a pool using an invalid server group name.
 
-        :avocado: tags=all,pool,full_regression,small,poolevict
-        :avocado: tags=poolevict_bad_server_name
+        :avocado: tags=all,pool,pr,full_regression,small,poolevict
+        :avocado: tags=poolevict_bad_server_name,DAOS_5610
         """
         test_param = self.params.get("server_name", '/run/badparams/*')
         self.assertTrue(self.evict_badparam(test_param))
@@ -277,7 +275,7 @@ class EvictTests(TestWithServers):
         Test evicting a pool using an invalid uuid.
 
         :avocado: tags=all,pool,pr,full_regression,small,poolevict
-        :avocado: tags=poolevict_bad_uuid
+        :avocado: tags=poolevict_bad_uuid,DAOS_5610
         """
         test_param = self.params.get("uuid", '/run/badparams/*')
         self.assertTrue(self.evict_badparam(test_param))

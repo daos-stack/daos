@@ -108,7 +108,7 @@ enum {
 };
 
 /** Number of bits reserved in IO flags bitmap for conditional checks.  */
-#define IO_FLAGS_COND_BITS	7
+#define IO_FLAGS_COND_BITS	8
 
 enum {
 	/* Conditional Op: Punch key if it exists, fail otherwise */
@@ -125,6 +125,11 @@ enum {
 	DAOS_COND_AKEY_UPDATE	= (1 << 5),
 	/* Conditional Op: Fetch akey if it exists, fail otherwise */
 	DAOS_COND_AKEY_FETCH	= (1 << 6),
+	/* Inidication of per akey conditional ops.  If set, the global
+	 * flag should not have any akey conditional ops specified. The
+	 * per akey flags will be read from the iod_flags field.
+	 */
+	DAOS_COND_PER_AKEY	= (1 << 7),
 	/** Mask for convenience */
 	DAOS_COND_MASK		= ((1 << IO_FLAGS_COND_BITS) - 1),
 };
@@ -198,7 +203,7 @@ typedef struct {
 typedef enum {
 	/** is a dkey */
 	DAOS_IOD_NONE		= 0,
-	/** one indivisble value udpate atomically */
+	/** one indivisble value update atomically */
 	DAOS_IOD_SINGLE		= 1,
 	/** an array of records where each record is update atomically */
 	DAOS_IOD_ARRAY		= 2,
@@ -226,6 +231,10 @@ typedef struct {
 	daos_iod_type_t		iod_type;
 	/** Size of the single value or the record size of the array */
 	daos_size_t		iod_size;
+	/** Per akey conditional. If DAOS_COND_PER_AKEY not set, this is
+	 *  ignored.
+	 */
+	uint64_t		iod_flags;
 	/*
 	 * Number of entries in the \a iod_recxs for arrays,
 	 * should be 1 if single value.
@@ -240,6 +249,22 @@ typedef struct {
 } daos_iod_t;
 
 /**
+ * I/O map flags -
+ * DAOS_IOMF_DETAIL	zero means only need to know the iom_recx_hi/lo.
+ *			1 means need to retrieve detailed iom_recxs array, in
+ *			that case user can either -
+ *			1) provides allocated iom_recxs buffer (iom_nr indicates
+ *			   #elements allocated), if returned iom_nr_out is
+ *			   greater than iom_nr, iom_recxs will still be
+ *			   populated, but it will be a truncated list).
+ *			2) provides NULL iod_recxs and zero iom_nr, in that case
+ *			   DAOS will internally allocated needed buffer for
+ *			   iom_recxs array (#elements is iom_nr, and equals
+ *			   iom_nr_out). User is responsible for free the
+ *			   iom_recxs buffer after using.
+ */
+#define DAOS_IOMF_DETAIL		(0x1U)
+/**
  * A I/O map represents the physical extent mapping inside an array for a
  * given range of indices.
  */
@@ -249,14 +274,15 @@ typedef struct {
 	/**
 	 * Number of elements allocated in iom_recxs.
 	 */
-	unsigned int		 iom_nr;
+	uint32_t		 iom_nr;
 	/**
 	 * Number of extents in the mapping. If iom_nr_out is greater than
 	 * iom_nr, iom_recxs will still be populated, but it will be a
 	 * truncated list.
 	 * 1 for SV.
 	 */
-	unsigned int		 iom_nr_out;
+	uint32_t		 iom_nr_out;
+	uint32_t		 iom_flags;
 	/** Size of the single value or the record size */
 	daos_size_t		 iom_size;
 	/**
@@ -308,10 +334,6 @@ typedef struct {
 	 * It is ignored for dkey enumeration.
 	 */
 	uint32_t	kd_val_type;
-	/** Checksum type */
-	uint16_t	kd_csum_type;
-	/** Checksum length */
-	uint16_t	kd_csum_len;
 } daos_key_desc_t;
 
 /**
@@ -478,8 +500,6 @@ daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  * Caller should provide at least one of the output parameters.
  *
  * \param[in]	oh	Object open handle.
- * \param[in]	th	Optional transaction handle to query with.
- *			Use DAOS_TX_NONE for an independent transaction.
  * \param[out]	oa	Returned object attributes.
  * \param[out]	ranks	Ordered list of ranks where the object is stored.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
@@ -493,8 +513,8 @@ daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *			-DER_UNREACH	Network is unreachable
  */
 int
-daos_obj_query(daos_handle_t oh, daos_handle_t th, struct daos_obj_attr *oa,
-	       d_rank_list_t *ranks, daos_event_t *ev);
+daos_obj_query(daos_handle_t oh, struct daos_obj_attr *oa, d_rank_list_t *ranks,
+	       daos_event_t *ev);
 
 /*
  * Object I/O API
@@ -519,9 +539,7 @@ daos_obj_query(daos_handle_t oh, daos_handle_t th, struct daos_obj_attr *oa,
  *		iods	[in]: Array of I/O descriptors. Each descriptor is
  *			associated with a given akey and describes the list of
  *			record extents to fetch from the array.
- *			A different epoch can be passed for each extent via
- *			\a iods[]::iod_eprs[] and in this case, \a epoch will be
- *			ignored. [out]: Checksum of each extent is returned via
+ *			[out]: Checksum of each extent is returned via
  *			\a iods[]::iod_csums[]. If the record size of an
  *			extent is unknown (i.e. set to DAOS_REC_ANY as input),
  *			then the actual record size will be returned in
@@ -538,14 +556,14 @@ daos_obj_query(daos_handle_t oh, daos_handle_t th, struct daos_obj_attr *oa,
  *			For an unfound record, the output length of the
  *			corresponding sgl is set to zero.
  *
- * \param[out]	maps	Optional, upper layers can simply pass in NULL.
+ * \param[out]	ioms	Optional, upper layers can simply pass in NULL.
  *			It is the sink buffer to store the returned actual
  *			layout of the iods used in fetch. It gives information
  *			for every iod on the highest/lowest extent in that dkey,
  *			in additional to the valid extents from the ones fetched
  *			(if asked for). If the extents don't fit in the io_map,
  *			the number required is set on the fetch in
- *			\a maps[]::iom_nr for that particular iod.
+ *			\a ioms[]::iom_nr for that particular iod.
  *
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -563,7 +581,7 @@ daos_obj_query(daos_handle_t oh, daos_handle_t th, struct daos_obj_attr *oa,
 int
 daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 	       daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
-	       d_sg_list_t *sgls, daos_iom_t *maps, daos_event_t *ev);
+	       d_sg_list_t *sgls, daos_iom_t *ioms, daos_event_t *ev);
 
 /**
  * Insert or update object records stored in co-located arrays.
@@ -583,9 +601,6 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  * \param[in]	iods	Array of I/O descriptor. Each descriptor is associated
  *			with an array identified by its akey and describes the
  *			list of record extent to update.
- *			A different epoch can be passed for each extent via
- *			\a iods[]::iod_eprs[] and in this case, \a epoch will be
- *			ignored.
  *			Checksum of each record extent is stored in
  *			\a iods[]::iod_csums[]. If the record size of an extent
  *			is zero, then it is effectively a punch for the

@@ -17,7 +17,7 @@ pool:
     name: daos_server
     # 300 G
     scm_size: 30000000000
-    nvme_size: 320000000000
+    nvme_size: 420000000000
     svcn: 1
     control_method: dmg
 container:
@@ -30,13 +30,13 @@ ior:
     test_file: daos:testFile
     repetitions: 1
 # Remove the below line once DAOS-3143 is resolved
-    daos_destroy: False
+    dfs_destroy: False
     iorflags:
         ssf:
           flags: "-v -D 300 -w -r"
           ior_api:
-            posix:
-              api: POSIX
+            - DFS
+            - POSIX
           transfersize_blocksize:
             1M:
               transfer_size: '1M'
@@ -49,6 +49,6 @@ ior:
               read_x: 2
           objectclass:
             oclass_SX:
-              daos_oclass: "SX"
+              dfs_oclass: "SX"
 dfuse:
     mount_dir: "/tmp/daos_dfuse"

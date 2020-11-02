@@ -127,12 +127,15 @@ func (cmd *jsonOutputCmd) outputJSON(out io.Writer, in interface{}) error {
 	return err
 }
 
+func versionString() string {
+	return fmt.Sprintf("daos_agent (v%s)", build.DaosVersion)
+}
+
 type versionCmd struct{}
 
 func (cmd *versionCmd) Execute(_ []string) error {
-	fmt.Printf("daos_agent version %s\n", build.DaosVersion)
-	os.Exit(0)
-	return nil
+	_, err := fmt.Println(versionString())
+	return err
 }
 
 func exitWithError(log logging.Logger, err error) {
@@ -146,12 +149,20 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 	p.SubcommandsOptional = true
 
 	p.CommandHandler = func(cmd flags.Commander, args []string) error {
+		if len(args) > 0 {
+			exitWithError(log, errors.Errorf("unknown command %q", args[0]))
+		}
+
 		if cmd == nil {
 			cmd = &startCmd{}
 		}
 
-		if !opts.AllowProxy {
-			common.ScrubProxyVariables()
+		if logCmd, ok := cmd.(logSetter); ok {
+			logCmd.setLog(log)
+		}
+
+		if jsonCmd, ok := cmd.(jsonOutputter); ok {
+			jsonCmd.enableJsonOutput(opts.JSON)
 		}
 
 		switch opts.Debug {
@@ -159,20 +170,23 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			log.WithLogLevel(logging.LogLevelDebug)
 			log.Debug("net debug output enabled")
 			netdetect.SetLogger(log)
-
 		case "basic":
 			log.WithLogLevel(logging.LogLevelDebug)
 			log.Debug("basic debug output enabled")
-		default:
-			// debug output is disabled
 		}
 
 		if opts.JSONLogs {
 			log.WithJSONOutput()
 		}
 
-		if jsonCmd, ok := cmd.(jsonOutputter); ok {
-			jsonCmd.enableJsonOutput(opts.JSON)
+		switch cmd.(type) {
+		case *versionCmd, *netScanCmd:
+			// these commands don't need the rest of the setup
+			return cmd.Execute(args)
+		}
+
+		if !opts.AllowProxy {
+			common.ScrubProxyVariables()
 		}
 
 		cfgPath := opts.ConfigPath
@@ -220,10 +234,6 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			log.WithErrorLogger(logging.NewErrorLogger("agent", f)).
 				WithInfoLogger(logging.NewInfoLogger("agent", f)).
 				WithDebugLogger(logging.NewDebugLogger(f))
-		}
-
-		if logCmd, ok := cmd.(logSetter); ok {
-			logCmd.setLog(log)
 		}
 
 		if err := cfg.TransportConfig.PreLoadCertData(); err != nil {

@@ -29,6 +29,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
@@ -36,7 +37,7 @@ import (
 )
 
 const (
-	agentSockName = "agent.sock"
+	agentSockName = "daos_agent.sock"
 )
 
 type startCmd struct {
@@ -46,7 +47,8 @@ type startCmd struct {
 }
 
 func (cmd *startCmd) Execute(_ []string) error {
-	cmd.log.Info("Starting daos_agent:")
+	cmd.log.Infof("Starting %s:", versionString())
+	startedAt := time.Now()
 
 	ctx, shutdown := context.WithCancel(context.Background())
 	defer shutdown()
@@ -65,11 +67,14 @@ func (cmd *startCmd) Execute(_ []string) error {
 		cmd.log.Debugf("GetAttachInfo agent caching has been disabled\n")
 	}
 
-	numaAware, err := netdetect.NumaAware()
+	netCtx, err := netdetect.Init(context.Background())
+	defer netdetect.CleanUp(netCtx)
 	if err != nil {
+		cmd.log.Errorf("Unable to initialize netdetect services")
 		return err
 	}
 
+	numaAware := netdetect.HasNUMA(netCtx)
 	if !numaAware {
 		cmd.log.Debugf("This system is not NUMA aware.  Any devices found are reported as NUMA node 0.")
 	}
@@ -81,6 +86,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 		ctlInvoker: cmd.ctlInvoker,
 		aiCache:    &attachInfoCache{log: cmd.log, enabled: enabled},
 		numaAware:  numaAware,
+		netCtx:     netCtx,
 	})
 
 	err = drpcServer.Start()
@@ -89,6 +95,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 		return err
 	}
 
+	cmd.log.Debugf("startup complete in %s", time.Since(startedAt))
 	cmd.log.Infof("Listening on %s", sockPath)
 
 	// Setup signal handlers so we can block till we get SIGINT or SIGTERM

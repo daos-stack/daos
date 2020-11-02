@@ -45,7 +45,7 @@ class RebuildWithIOR(IorTestBase):
                           I/O performed using IOR.
 
         Use Cases:
-          -- single pool, single client performing continous read/write/verify
+          -- single pool, single client performing continuous read/write/verify
              sequence while failure/rebuild is triggered in another process
 
         :avocado: tags=all,pr,small,pool,rebuild,rebuildwithior
@@ -71,12 +71,12 @@ class RebuildWithIOR(IorTestBase):
         }
         self.assertTrue(
             self.pool.check_pool_info(**checks),
-            "Invlaid pool information detected before rebuild")
+            "Invalid pool information detected before rebuild")
 
         self.assertTrue(
             self.pool.check_rebuild_status(rs_errno=0, rs_done=1,
                                            rs_obj_nr=0, rs_rec_nr=0),
-            "Invlaid pool rebuild info detected before rebuild")
+            "Invalid pool rebuild info detected before rebuild")
 
         # perform first set of io using IOR
         self.ior_cmd.flags.update(iorflags_write)

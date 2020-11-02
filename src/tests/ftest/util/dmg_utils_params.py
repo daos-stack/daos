@@ -23,16 +23,18 @@
 """
 
 from command_utils_base import \
-    BasicParameter, YamlParameters, TransportCredentials
+    BasicParameter, LogParameter, YamlParameters, TransportCredentials
 
 
 class DmgTransportCredentials(TransportCredentials):
     """Transport credentials listing certificates for secure communication."""
 
-    def __init__(self):
+    def __init__(self, log_dir="/tmp"):
         """Initialize a TransportConfig object."""
         super(DmgTransportCredentials, self).__init__(
-            "/run/dmg/transport_config/*", "transport_config")
+            "/run/dmg/transport_config/*", "transport_config", log_dir)
+        self.cert = LogParameter(log_dir, None, "admin.crt")
+        self.key = LogParameter(log_dir, None, "admin.key")
 
 
 class DmgYamlParameters(YamlParameters):
@@ -60,7 +62,7 @@ class DmgYamlParameters(YamlParameters):
         #       at port 10001 for local testing
         #
         #   - port: <int>, e.g. 10001
-        #       Default port number with whith to bind the daos_server. This
+        #       Default port number with with to bind the daos_server. This
         #       will also be used when connecting to access points if the list
         #       only contains host names.
         #

@@ -24,6 +24,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -49,8 +50,9 @@ const (
 	relConfExamplesPath = "../utils/config/examples/"
 )
 
-type networkProviderValidation func(string, string) error
-type networkNUMAValidation func(string, uint) error
+type networkProviderValidation func(context.Context, string, string) error
+type networkNUMAValidation func(context.Context, string, uint) error
+type networkDeviceClass func(string) (uint32, error)
 
 // ClientNetworkCfg elements are used by the libdaos clients to help initialize CaRT.
 // These settings bring coherence between the client and server network configuration.
@@ -58,6 +60,7 @@ type ClientNetworkCfg struct {
 	Provider        string
 	CrtCtxShareAddr uint32
 	CrtTimeout      uint32
+	NetDevClass     uint32
 }
 
 // Configuration describes options for DAOS control plane.
@@ -69,13 +72,17 @@ type Configuration struct {
 	Servers             []*ioserver.Config        `yaml:"servers"`
 	BdevInclude         []string                  `yaml:"bdev_include,omitempty"`
 	BdevExclude         []string                  `yaml:"bdev_exclude,omitempty"`
+	DisableVFIO         bool                      `yaml:"disable_vfio"`
+	DisableVMD          bool                      `yaml:"disable_vmd"`
 	NrHugepages         int                       `yaml:"nr_hugepages"`
 	SetHugepages        bool                      `yaml:"set_hugepages"`
 	ControlLogMask      ControlLogLevel           `yaml:"control_log_mask"`
 	ControlLogFile      string                    `yaml:"control_log_file"`
 	ControlLogJSON      bool                      `yaml:"control_log_json,omitempty"`
 	HelperLogFile       string                    `yaml:"helper_log_file"`
+	FWHelperLogFile     string                    `yaml:"firmware_helper_log_file"`
 	RecreateSuperblocks bool                      `yaml:"recreate_superblocks"`
+	FaultPath           string                    `yaml:"fault_path"`
 
 	// duplicated in ioserver.Config
 	SystemName string                `yaml:"name"`
@@ -86,7 +93,6 @@ type Configuration struct {
 	AccessPoints []string `yaml:"access_points"`
 
 	// unused (?)
-	FaultPath    string `yaml:"fault_path"`
 	FaultCb      string `yaml:"fault_cb"`
 	Hyperthreads bool   `yaml:"hyperthreads"`
 
@@ -98,6 +104,9 @@ type Configuration struct {
 
 	//a pointer to a function that validates the chosen numa node
 	validateNUMAFn networkNUMAValidation
+
+	//a pointer to a function that retrieves the IO server network device class
+	getDeviceClassFn networkDeviceClass
 }
 
 // WithRecreateSuperblocks indicates that a missing superblock should not be treated as
@@ -107,21 +116,21 @@ func (c *Configuration) WithRecreateSuperblocks() *Configuration {
 	return c
 }
 
-// WithProviderValidator is used for unit testing configurations that are not necessarily valid on the test machine.
-// We use the stub function ValidateNetworkConfigStub to avoid unnecessary failures
-// in those tests that are not concerned with testing a truly valid configuration
-// for the test system.
+// WithProviderValidator sets the function that validates the provider
 func (c *Configuration) WithProviderValidator(fn networkProviderValidation) *Configuration {
 	c.validateProviderFn = fn
 	return c
 }
 
-// WithNUMAValidator is used for unit testing configurations that are not necessarily valid on the test machine.
-// We use the stub function ValidateNetworkConfigStub to avoid unnecessary failures
-// in those tests that are not concerned with testing a truly valid configuration
-// for the test system.
+// WithNUMAValidator sets the function that validates the NUMA configuration
 func (c *Configuration) WithNUMAValidator(fn networkNUMAValidation) *Configuration {
 	c.validateNUMAFn = fn
+	return c
+}
+
+// WithGetNetworkDeviceClass sets the function that determines the network device class
+func (c *Configuration) WithGetNetworkDeviceClass(fn networkDeviceClass) *Configuration {
+	c.getDeviceClassFn = fn
 	return c
 }
 
@@ -263,6 +272,21 @@ func (c *Configuration) WithBdevInclude(bList ...string) *Configuration {
 	return c
 }
 
+// WithDisableVFIO indicates that the vfio-pci driver should not be
+// used by SPDK even if an IOMMU is detected. Note that this option
+// requires that DAOS be run as root.
+func (c *Configuration) WithDisableVFIO(disabled bool) *Configuration {
+	c.DisableVFIO = disabled
+	return c
+}
+
+// WithDisableVMD indicates that vmd devices should not be used even if they
+// exist.
+func (c *Configuration) WithDisableVMD(disabled bool) *Configuration {
+	c.DisableVMD = disabled
+	return c
+}
+
 // WithHyperthreads enables or disables hyperthread support.
 func (c *Configuration) WithHyperthreads(enabled bool) *Configuration {
 	c.Hyperthreads = enabled
@@ -299,6 +323,12 @@ func (c *Configuration) WithHelperLogFile(filePath string) *Configuration {
 	return c
 }
 
+// WithFirmwareHelperLogFile sets the path to the daos_firmware logfile.
+func (c *Configuration) WithFirmwareHelperLogFile(filePath string) *Configuration {
+	c.FWHelperLogFile = filePath
+	return c
+}
+
 // newDefaultConfiguration creates a new instance of configuration struct
 // populated with defaults.
 func newDefaultConfiguration(ext External) *Configuration {
@@ -314,6 +344,8 @@ func newDefaultConfiguration(ext External) *Configuration {
 		ext:                ext,
 		validateProviderFn: netdetect.ValidateProviderStub,
 		validateNUMAFn:     netdetect.ValidateNUMAStub,
+		getDeviceClassFn:   netdetect.GetDeviceClass,
+		DisableVMD:         true, // support currently unstable
 	}
 }
 
@@ -394,13 +426,19 @@ func saveActiveConfig(log logging.Logger, config *Configuration) {
 
 // Validate asserts that config meets minimum requirements.
 func (c *Configuration) Validate(log logging.Logger) (err error) {
+	// config without servers is valid when initially discovering hardware
+	// prior to adding per-server sections with device allocations
+	if len(c.Servers) == 0 {
+		log.Infof("No %ss in configuration, %s starting in discovery mode", build.DataPlaneName, build.ControlPlaneName)
+		c.Servers = nil
+		return nil
+	}
+
 	// append the user-friendly message to any error
-	// TODO: use a fault/resolution
 	defer func() {
 		if err != nil && !fault.HasResolution(err) {
 			examplesPath, _ := c.ext.getAbsInstallPath(relConfExamplesPath)
-			err = errors.WithMessage(FaultBadConfig,
-				err.Error()+", examples: "+examplesPath)
+			err = errors.WithMessage(FaultBadConfig, err.Error()+", examples: "+examplesPath)
 		}
 	}()
 
@@ -421,8 +459,7 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 
 		// warn if access point port differs from config control port
 		if strconv.Itoa(c.ControlPort) != port {
-			log.Debugf("access point (%s) port (%s) differs from control port (%d)",
-				host, port, c.ControlPort)
+			log.Debugf("access point (%s) port (%s) differs from control port (%d)", host, port, c.ControlPort)
 		}
 
 		if port == "0" {
@@ -432,8 +469,10 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 		c.AccessPoints[i] = fmt.Sprintf("%s:%s", host, port)
 	}
 
-	if len(c.Servers) == 0 {
-		return FaultConfigNoServers
+	netCtx, err := netdetect.Init(context.Background())
+	defer netdetect.CleanUp(netCtx)
+	if err != nil {
+		return err
 	}
 
 	for i, srv := range c.Servers {
@@ -442,7 +481,7 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 			return errors.Wrapf(err, "I/O server %d failed config validation", i)
 		}
 
-		err := c.validateProviderFn(srv.Fabric.Interface, srv.Fabric.Provider)
+		err := c.validateProviderFn(netCtx, srv.Fabric.Interface, srv.Fabric.Provider)
 		if err != nil {
 			return errors.Wrapf(err, "Network device %s does not support provider %s.  The configuration is invalid.",
 				srv.Fabric.Interface, srv.Fabric.Provider)
@@ -454,7 +493,7 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 		// Because this is an optional parameter, this is considered non-fatal.
 		numaNode, err := srv.Fabric.GetNumaNode()
 		if err == nil {
-			err = c.validateNUMAFn(srv.Fabric.Interface, numaNode)
+			err = c.validateNUMAFn(netCtx, srv.Fabric.Interface, numaNode)
 			if err != nil {
 				return errors.Wrapf(err, "Network device %s on NUMA node %d is an invalid configuration.",
 					srv.Fabric.Interface, numaNode)
@@ -484,6 +523,7 @@ func validateMultiServerConfig(log logging.Logger, c *Configuration) error {
 	seenScmSet := make(map[string]int)
 	seenBdevSet := make(map[string]int)
 
+	var netDevClass uint32
 	for idx, srv := range c.Servers {
 		fabricConfig := fmt.Sprintf("fabric:%s-%s-%d",
 			srv.Fabric.Provider,
@@ -528,6 +568,20 @@ func validateMultiServerConfig(log logging.Logger, c *Configuration) error {
 				return FaultConfigOverlappingBdevDeviceList(idx, seenIn)
 			}
 			seenBdevSet[dev] = idx
+		}
+
+		ndc, err := c.getDeviceClassFn(srv.Fabric.Interface)
+		if err != nil {
+			return err
+		}
+
+		switch idx {
+		case 0:
+			netDevClass = ndc
+		default:
+			if ndc != netDevClass {
+				return FaultConfigInvalidNetDevClass(idx, netDevClass, ndc, srv.Fabric.Interface)
+			}
 		}
 	}
 

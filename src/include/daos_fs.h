@@ -44,6 +44,11 @@ extern "C" {
 /** Maximum file size */
 #define DFS_MAX_FSIZE		(~0ULL)
 
+/** Maximum xattr name */
+#define DFS_MAX_XATTR_NAME	255
+/** Maximum xattr value */
+#define DFS_MAX_XATTR_LEN	65536
+
 /** File/Directory/Symlink object handle struct */
 typedef struct dfs_obj dfs_obj_t;
 /** DFS mount handle struct */
@@ -609,7 +614,7 @@ dfs_get_chunk_size(dfs_obj_t *obj, daos_size_t *chunk_size);
  * \param[in]	obj	Open object to query.
  * \param[in]	buf	user buffer to copy the symlink value in.
  * \param[in,out]
- *		size	[in]: Size of buffer pased in. [out]: Actual size of
+ *		size	[in]: Size of buffer passed in. [out]: Actual size of
  *			value.
  *
  * \return		0 on success, errno code on failure.

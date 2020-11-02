@@ -24,13 +24,6 @@
 package proto
 
 import (
-	"bytes"
-	"fmt"
-	"sort"
-	"time"
-
-	"github.com/dustin/go-humanize"
-
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
@@ -38,32 +31,40 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-type NvmeDeviceHealth ctlpb.NvmeController_Health
+// NvmeHealth is an alias for protobuf NvmeController_Health message.
+type NvmeHealth ctlpb.NvmeController_Health
 
-func (pb *NvmeDeviceHealth) FromNative(native *storage.NvmeDeviceHealth) error {
+// FromNative converts storage package type to protobuf equivalent.
+func (pb *NvmeHealth) FromNative(native *storage.NvmeHealth) error {
 	return convert.Types(native, pb)
 }
 
-func (pb *NvmeDeviceHealth) ToNative() (*storage.NvmeDeviceHealth, error) {
-	native := new(storage.NvmeDeviceHealth)
+// ToNative converts pointer receiver alias type to storage package equivalent.
+func (pb *NvmeHealth) ToNative() (*storage.NvmeHealth, error) {
+	native := new(storage.NvmeHealth)
 	return native, convert.Types(pb, native)
 }
 
-func (pb *NvmeDeviceHealth) AsProto() *ctlpb.NvmeController_Health {
+// AsProto converts pointer receiver alias type to protobuf type.
+func (pb *NvmeHealth) AsProto() *ctlpb.NvmeController_Health {
 	return (*ctlpb.NvmeController_Health)(pb)
 }
 
+// NvmeNamespace is an alias for protobuf NvmeController_Namespace message.
 type NvmeNamespace ctlpb.NvmeController_Namespace
 
+// FromNative converts storage package type to protobuf equivalent.
 func (pb *NvmeNamespace) FromNative(native *storage.NvmeNamespace) error {
 	return convert.Types(native, pb)
 }
 
+// ToNative converts pointer receiver alias type to storage package equivalent.
 func (pb *NvmeNamespace) ToNative() (*storage.NvmeNamespace, error) {
 	native := new(storage.NvmeNamespace)
 	return native, convert.Types(pb, native)
 }
 
+// AsProto converts pointer receiver alias type to protobuf type.
 func (pb *NvmeNamespace) AsProto() *ctlpb.NvmeController_Namespace {
 	return (*ctlpb.NvmeController_Namespace)(pb)
 }
@@ -72,166 +73,69 @@ func (pb *NvmeNamespace) AsProto() *ctlpb.NvmeController_Namespace {
 // representing namespaces existing on a NVMe SSD.
 type NvmeNamespaces []*ctlpb.NvmeController_Namespace
 
+// SmdDevice is an alias for protobuf NvmeController_SmdDevice message
+// representing DAOS server meta data existing on a NVMe SSD.
+type SmdDevice ctlpb.NvmeController_SmdDevice
+
+// FromNative converts storage package type to protobuf equivalent.
+func (pb *SmdDevice) FromNative(native *storage.SmdDevice) error {
+	return convert.Types(native, pb)
+}
+
+// ToNative converts pointer receiver alias type to storage package equivalent.
+func (pb *SmdDevice) ToNative() (*storage.SmdDevice, error) {
+	native := new(storage.SmdDevice)
+	return native, convert.Types(pb, native)
+}
+
+// AsProto converts pointer receiver alias type to protobuf type.
+func (pb *SmdDevice) AsProto() *ctlpb.NvmeController_SmdDevice {
+	return (*ctlpb.NvmeController_SmdDevice)(pb)
+}
+
+// SmdDevices is an alias for protobuf NvmeController_SmdDevice message slice
+// representing DAOS server meta data existing on a NVMe SSD.
+type SmdDevices []*ctlpb.NvmeController_SmdDevice
+
+// NvmeController is an alias for protobuf NvmeController message slice.
 type NvmeController ctlpb.NvmeController
 
+// FromNative converts storage package type to protobuf equivalent.
 func (pb *NvmeController) FromNative(native *storage.NvmeController) error {
 	return convert.Types(native, pb)
 }
 
+// ToNative converts pointer receiver alias type to storage package equivalent.
 func (pb *NvmeController) ToNative() (*storage.NvmeController, error) {
 	native := new(storage.NvmeController)
 	return native, convert.Types(pb, native)
 }
 
+// AsProto converts pointer receiver alias type to protobuf type.
 func (pb *NvmeController) AsProto() *ctlpb.NvmeController {
 	return (*ctlpb.NvmeController)(pb)
-}
-
-func (nc *NvmeController) Capacity() (tb uint64) {
-	for _, n := range nc.Namespaces {
-		tb += n.Size
-	}
-	return
-}
-
-// HealthDetail provides custom string representation for Controller including
-// health statistics.
-//
-// Append to buffer referenced by input parameter.
-func (nc *NvmeController) HealthDetail(buf *bytes.Buffer) {
-	stat := (*ctlpb.NvmeController)(nc).GetHealthstats()
-
-	if stat == nil {
-		fmt.Fprintf(buf, "\t\tHealth Stats Unavailable\n")
-		return
-	}
-
-	fmt.Fprintf(buf, "\t\tHealth Stats:\n\t\t\tTemperature:%dK(%dC)\n", stat.Temp, stat.Temp-273)
-
-	if stat.Tempwarntime > 0 {
-		fmt.Fprintf(buf, "\t\t\t\tTemperature Warning Duration:%s\n",
-			time.Duration(stat.Tempwarntime)*time.Minute)
-	}
-	if stat.Tempcrittime > 0 {
-		fmt.Fprintf(buf, "\t\t\t\tTemperature Critical Duration:%s\n",
-			time.Duration(stat.Tempcrittime)*time.Minute)
-	}
-
-	fmt.Fprintf(buf, "\t\t\tController Busy Time:%s\n", time.Duration(stat.Ctrlbusytime)*time.Minute)
-	fmt.Fprintf(buf, "\t\t\tPower Cycles:%d\n", uint64(stat.Powercycles))
-	fmt.Fprintf(buf, "\t\t\tPower On Duration:%s\n", time.Duration(stat.Poweronhours)*time.Hour)
-	fmt.Fprintf(buf, "\t\t\tUnsafe Shutdowns:%d\n", uint64(stat.Unsafeshutdowns))
-	fmt.Fprintf(buf, "\t\t\tMedia Errors:%d\n", uint64(stat.Mediaerrors))
-	fmt.Fprintf(buf, "\t\t\tError Log Entries:%d\n", uint64(stat.Errorlogentries))
-
-	fmt.Fprintf(buf, "\t\t\tCritical Warnings:\n")
-	fmt.Fprintf(buf, "\t\t\t\tTemperature: ")
-	if stat.Tempwarn {
-		fmt.Fprintf(buf, "WARNING\n")
-	} else {
-		fmt.Fprintf(buf, "OK\n")
-	}
-	fmt.Fprintf(buf, "\t\t\t\tAvailable Spare: ")
-	if stat.Availsparewarn {
-		fmt.Fprintf(buf, "WARNING\n")
-	} else {
-		fmt.Fprintf(buf, "OK\n")
-	}
-	fmt.Fprintf(buf, "\t\t\t\tDevice Reliability: ")
-	if stat.Reliabilitywarn {
-		fmt.Fprintf(buf, "WARNING\n")
-	} else {
-		fmt.Fprintf(buf, "OK\n")
-	}
-	fmt.Fprintf(buf, "\t\t\t\tRead Only: ")
-	if stat.Readonlywarn {
-		fmt.Fprintf(buf, "WARNING\n")
-	} else {
-		fmt.Fprintf(buf, "OK\n")
-	}
-	fmt.Fprintf(buf, "\t\t\t\tVolatile Memory Backup: ")
-	if stat.Volatilewarn {
-		fmt.Fprintf(buf, "WARNING\n")
-	} else {
-		fmt.Fprintf(buf, "OK\n")
-	}
-}
-
-// CtrlrDetail provides custom string representation for Controller.
-//
-// Append to buffer referenced by input parameter.
-func (nc *NvmeController) CtrlrDetail(buf *bytes.Buffer) {
-	fmt.Fprintf(buf, "\t\tPCI:%s Model:%s FW:%s Socket:%d Capacity:%s\n",
-		nc.Pciaddr, nc.Model, nc.Fwrev, nc.Socketid,
-		humanize.Bytes(nc.Capacity()))
 }
 
 // NvmeControllers is an alias for protobuf NvmeController message slice
 // representing a number of NVMe SSD controllers installed on a storage node.
 type NvmeControllers []*ctlpb.NvmeController
 
+// FromNative converts storage package type to protobuf equivalent.
 func (pb *NvmeControllers) FromNative(native storage.NvmeControllers) error {
 	return convert.Types(native, pb)
 }
 
+// ToNative converts pointer receiver alias type to storage package equivalent.
 func (pb *NvmeControllers) ToNative() (storage.NvmeControllers, error) {
 	native := make(storage.NvmeControllers, 0, len(*pb))
 	return native, convert.Types(pb, &native)
-}
-
-func (ncs NvmeControllers) String() string {
-	buf := bytes.NewBufferString("NVMe controllers and namespaces:\n")
-
-	if len(ncs) == 0 {
-		fmt.Fprint(buf, "\t\tnone\n")
-		return buf.String()
-	}
-
-	sort.Slice(ncs, func(i, j int) bool { return ncs[i].Pciaddr < ncs[j].Pciaddr })
-
-	for _, c := range ncs {
-		(*NvmeController)(c).CtrlrDetail(buf)
-	}
-
-	return buf.String()
-}
-
-// StringHealthStats returns full string representation including NVMe health
-// statistics as well as controller and namespace details.
-func (ncs NvmeControllers) StringHealthStats() string {
-	buf := bytes.NewBufferString(
-		"NVMe controllers and namespaces detail with health statistics:\n")
-
-	if len(ncs) == 0 {
-		fmt.Fprint(buf, "\t\tnone\n")
-		return buf.String()
-	}
-
-	for _, c := range ncs {
-		(*NvmeController)(c).CtrlrDetail(buf)
-		(*NvmeController)(c).HealthDetail(buf)
-	}
-
-	return buf.String()
-}
-
-func (ncs NvmeControllers) Capacity() (tb uint64) {
-	for _, c := range ncs {
-		tb += (*NvmeController)(c).Capacity()
-	}
-	return
-}
-
-// Summary reports accumulated storage space and the number of controllers.
-func (ncs NvmeControllers) Summary() string {
-	return fmt.Sprintf("%s (%d %s)", humanize.Bytes(ncs.Capacity()),
-		len(ncs), common.Pluralise("controller", len(ncs)))
 }
 
 // NvmeControllerResults is an alias for protobuf NvmeControllerResult messages
 // representing operation results on a number of NVMe controllers.
 type NvmeControllerResults []*ctlpb.NvmeControllerResult
 
+// HasErrors indicates whether any controller result has non-successful status.
 func (ncr NvmeControllerResults) HasErrors() bool {
 	for _, res := range ncr {
 		if res.State.Status != ctlpb.ResponseStatus_CTL_SUCCESS {
@@ -241,17 +145,22 @@ func (ncr NvmeControllerResults) HasErrors() bool {
 	return false
 }
 
+// ScmModule is an alias for protobuf ScmModule message representing an SCM
+// persistent memory module installed on a storage node.
 type ScmModule ctlpb.ScmModule
 
+// FromNative converts storage package type to protobuf equivalent.
 func (pb *ScmModule) FromNative(native *storage.ScmModule) error {
 	return convert.Types(native, pb)
 }
 
+// ToNative converts pointer receiver alias type to storage package equivalent.
 func (pb *ScmModule) ToNative() (*storage.ScmModule, error) {
 	native := new(storage.ScmModule)
 	return native, convert.Types(pb, native)
 }
 
+// AsProto converts pointer receiver alias type to protobuf type.
 func (pb *ScmModule) AsProto() *ctlpb.ScmModule {
 	return (*ctlpb.ScmModule)(pb)
 }
@@ -260,26 +169,37 @@ func (pb *ScmModule) AsProto() *ctlpb.ScmModule {
 // a number of SCM modules installed on a storage node.
 type ScmModules []*ctlpb.ScmModule
 
+// FromNative converts storage package type to protobuf equivalent.
 func (pb *ScmModules) FromNative(native storage.ScmModules) error {
 	return convert.Types(native, pb)
 }
 
+// ToNative converts pointer receiver alias type to storage package equivalent.
 func (pb *ScmModules) ToNative() (storage.ScmModules, error) {
 	native := make(storage.ScmModules, 0, len(*pb))
 	return native, convert.Types(pb, &native)
 }
 
+// ScmModuleResults is an alias for protobuf ScmModuleResult message slice
+// representing operation results on a number of SCM modules.
+type ScmModuleResults []*ctlpb.ScmModuleResult
+
+// ScmNamespace is an alias for protobuf ScmNamespace message representing a
+// pmem block device created on an appdirect set of persistent memory modules.
 type ScmNamespace ctlpb.ScmNamespace
 
+// FromNative converts storage package type to protobuf equivalent.
 func (pb *ScmNamespace) FromNative(native *storage.ScmNamespace) error {
 	return convert.Types(native, pb)
 }
 
+// ToNative converts pointer receiver alias type to storage package equivalent.
 func (pb *ScmNamespace) ToNative() (*storage.ScmNamespace, error) {
 	native := new(storage.ScmNamespace)
 	return native, convert.Types(pb, native)
 }
 
+// AsProto converts pointer receiver alias type to protobuf type.
 func (pb *ScmNamespace) AsProto() *ctlpb.ScmNamespace {
 	return (*ctlpb.ScmNamespace)(pb)
 }
@@ -288,33 +208,42 @@ func (pb *ScmNamespace) AsProto() *ctlpb.ScmNamespace {
 // a number of SCM modules installed on a storage node.
 type ScmNamespaces []*ctlpb.ScmNamespace
 
+// FromNative converts storage package type to protobuf equivalent.
 func (pb *ScmNamespaces) FromNative(native storage.ScmNamespaces) error {
 	return convert.Types(native, pb)
 }
 
+// ToNative converts pointer receiver alias type to storage package equivalent.
 func (pb *ScmNamespaces) ToNative() (storage.ScmNamespaces, error) {
 	native := make(storage.ScmNamespaces, 0, len(*pb))
 	return native, convert.Types(pb, &native)
 }
 
-func (sns ScmNamespaces) String() string {
-	var buf bytes.Buffer
+// ScmMountPoint is an alias for protobuf ScmNamespace_Mount message representing
+// the OS mount point target at which a pmem block device is mounted.
+type ScmMountPoint ctlpb.ScmNamespace_Mount
 
-	for _, sn := range sns {
-		fmt.Fprintf(&buf, "\t%s\n", sn)
-	}
-
-	return buf.String()
+// FromNative converts storage package type to protobuf equivalent.
+func (pb *ScmMountPoint) FromNative(native *storage.ScmMountPoint) error {
+	return convert.Types(native, pb)
 }
 
-// ScmMounts are protobuf representations of mounted SCM namespaces identified
-// by mount points
-type ScmMounts []*ctlpb.ScmMount
+// ToNative converts pointer receiver alias type to storage package equivalent.
+func (pb *ScmMountPoint) ToNative() (*storage.ScmMountPoint, error) {
+	native := new(storage.ScmMountPoint)
+	return native, convert.Types(pb, native)
+}
+
+// AsProto converts pointer receiver alias type to protobuf type.
+func (pb *ScmMountPoint) AsProto() *ctlpb.ScmNamespace_Mount {
+	return (*ctlpb.ScmNamespace_Mount)(pb)
+}
 
 // ScmMountResults is an alias for protobuf ScmMountResult message slice
 // representing operation results on a number of SCM mounts.
 type ScmMountResults []*ctlpb.ScmMountResult
 
+// HasErrors indicates whether any mount result has non-successful status.
 func (smr ScmMountResults) HasErrors() bool {
 	for _, res := range smr {
 		if res.State.Status != ctlpb.ResponseStatus_CTL_SUCCESS {
@@ -323,10 +252,6 @@ func (smr ScmMountResults) HasErrors() bool {
 	}
 	return false
 }
-
-// ScmModuleResults is an alias for protobuf ScmModuleResult message slice
-// representing operation results on a number of SCM modules.
-type ScmModuleResults []*ctlpb.ScmModuleResult
 
 // AccessControlListFromPB converts from the protobuf ACLResp structure to an
 // AccessControlList structure.
@@ -347,9 +272,7 @@ func PoolDiscoveriesFromPB(pbPools []*mgmtpb.ListPoolsResp_Pool) []*common.PoolD
 	pools := make([]*common.PoolDiscovery, 0, len(pbPools))
 	for _, pbPool := range pbPools {
 		svcReps := make([]uint32, 0, len(pbPool.Svcreps))
-		for _, rep := range pbPool.Svcreps {
-			svcReps = append(svcReps, rep)
-		}
+		svcReps = append(svcReps, pbPool.Svcreps...)
 
 		pools = append(pools, &common.PoolDiscovery{
 			UUID:        pbPool.Uuid,

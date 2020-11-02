@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -86,6 +86,10 @@ func TestHostSet_CreateNumericSet(t *testing.T) {
 			startList: "[1-128,2,4,8,6,32,64,128]",
 			expOut:    "[1-128]",
 			expCount:  128,
+		},
+		"whitespace in numeric list": {
+			startList: "[0, 5]",
+			expErr:    errors.New("unexpected whitespace character(s)"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

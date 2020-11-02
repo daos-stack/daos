@@ -29,6 +29,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
@@ -43,31 +44,36 @@ type IOServerRunner interface {
 	GetConfig() *ioserver.Config
 }
 
-func (srv *IOServerInstance) format(ctx context.Context, recreateSBs bool) (err error) {
+func (srv *IOServerInstance) format(ctx context.Context, recreateSBs bool) error {
 	idx := srv.Index()
 
 	srv.log.Debugf("instance %d: checking if storage is formatted", idx)
-	if err = srv.awaitStorageReady(ctx, recreateSBs); err != nil {
-		return
+	if err := srv.awaitStorageReady(ctx, recreateSBs); err != nil {
+		return err
 	}
-	if err = srv.createSuperblock(recreateSBs); err != nil {
-		return
+	if err := srv.createSuperblock(recreateSBs); err != nil {
+		return err
 	}
 
 	if !srv.hasSuperblock() {
 		return errors.Errorf("instance %d: no superblock after format", idx)
 	}
 
-	return
+	// After we know that the instance storage is ready, fire off
+	// any callbacks that were waiting for this state.
+	for _, readyFn := range srv.onStorageReady {
+		if err := readyFn(ctx); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // start checks to make sure that the instance has a valid superblock before
 // performing any required NVMe preparation steps and launching a managed
 // daos_io_server instance.
 func (srv *IOServerInstance) start(ctx context.Context, errChan chan<- error) error {
-	if err := srv.bdevClassProvider.PrepareDevices(); err != nil {
-		return errors.Wrap(err, "start failed; unable to prepare NVMe device(s)")
-	}
 	if err := srv.bdevClassProvider.GenConfigFile(); err != nil {
 		return errors.Wrap(err, "start failed; unable to generate NVMe configuration for SPDK")
 	}
@@ -84,7 +90,7 @@ func (srv *IOServerInstance) start(ctx context.Context, errChan chan<- error) er
 // management service on MS replicas immediately so other instances can join.
 // I/O server modules are then loaded.
 func (srv *IOServerInstance) waitReady(ctx context.Context, errChan chan error) error {
-	srv.log.Debugf("instance %d: awaiting %s init", srv.Index(), DataPlaneName)
+	srv.log.Debugf("instance %d: awaiting %s init", srv.Index(), build.DataPlaneName)
 
 	select {
 	case <-ctx.Done(): // propagated harness exit
@@ -106,24 +112,20 @@ func (srv *IOServerInstance) waitReady(ctx context.Context, errChan chan error) 
 //
 // Instance ready state is set to indicate that all setup is complete.
 func (srv *IOServerInstance) finishStartup(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
-	if err := srv.setRank(ctx, ready); err != nil {
+	if err := srv.joinSystem(ctx, ready); err != nil {
 		return err
 	}
 	// update ioserver target count to reflect allocated
 	// number of targets, not number requested when starting
 	srv.setTargetCount(int(ready.GetNtgts()))
 
-	if srv.isMSReplica() {
-		if err := srv.startMgmtSvc(); err != nil {
-			return errors.Wrap(err, "failed to start management service")
+	srv.ready.SetTrue()
+
+	for _, fn := range srv.onReady {
+		if err := fn(ctx); err != nil {
+			return err
 		}
 	}
-
-	if err := srv.loadModules(); err != nil {
-		return errors.Wrap(err, "failed to load I/O server modules")
-	}
-
-	srv.ready.SetTrue()
 
 	return nil
 }
@@ -151,12 +153,6 @@ func (srv *IOServerInstance) run(ctx context.Context, membership *system.Members
 
 	if err = srv.start(ctx, errChan); err != nil {
 		return
-	}
-	if srv.isMSReplica() {
-		// MS bootstrap will not join so register manually
-		if err := srv.registerMember(membership); err != nil {
-			return err
-		}
 	}
 	srv.waitDrpc.SetTrue()
 

@@ -24,6 +24,7 @@
 package main
 
 import (
+	"context"
 	"strings"
 	"sync"
 
@@ -106,7 +107,7 @@ func (aic *attachInfoCache) isCached() bool {
 
 // initResponseCache generates a unique dRPC response corresponding to each device specified
 // in the scanResults.  The responses are differentiated based on the network device NUMA affinity.
-func (aic *attachInfoCache) initResponseCache(resp *mgmtpb.GetAttachInfoResp, scanResults []netdetect.FabricScan) error {
+func (aic *attachInfoCache) initResponseCache(ctx context.Context, resp *mgmtpb.GetAttachInfoResp, scanResults []netdetect.FabricScan) error {
 	aic.mutex.Lock()
 	defer aic.mutex.Unlock()
 
@@ -125,11 +126,18 @@ func (aic *attachInfoCache) initResponseCache(resp *mgmtpb.GetAttachInfoResp, sc
 		if fs.DeviceName == "lo" {
 			continue
 		}
+
+		if fs.NetDevClass != resp.NetDevClass {
+			aic.log.Debugf("Excluding device: %s, network device class: %s from attachInfoCache.  Does not match server network device class: %s\n",
+				fs.DeviceName, netdetect.DevClassName(fs.NetDevClass), netdetect.DevClassName(resp.NetDevClass))
+			continue
+		}
+
 		resp.Interface = fs.DeviceName
 		// by default, the domain is the deviceName
 		resp.Domain = fs.DeviceName
 		if strings.HasPrefix(resp.Provider, verbsProvider) {
-			deviceAlias, err := netdetect.GetDeviceAlias(resp.Interface)
+			deviceAlias, err := netdetect.GetDeviceAlias(ctx, resp.Interface)
 			if err != nil {
 				aic.log.Debugf("non-fatal error: %v. unable to determine OFI_DOMAIN for %s", err, resp.Interface)
 			} else {

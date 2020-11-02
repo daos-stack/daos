@@ -43,7 +43,7 @@ class PoolSvc(TestWithServers):
         """
         Test svc arg during pool create.
 
-        :avocado: tags=all,pool,pr,medium,svc
+        :avocado: tags=all,pool,pr,medium,svc,DAOS_5610
         """
         # parameter used in pool create
         createsvc = self.params.get("svc", '/run/createtests/createsvc/*/')
@@ -52,7 +52,7 @@ class PoolSvc(TestWithServers):
 
         # initialize a python pool object then create the underlying
         # daos storage
-        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
+        self.pool = TestPool(self.context, self.get_dmg_command())
         self.pool.get_params(self)
         self.pool.svcn.update(createsvc[0])
         try:

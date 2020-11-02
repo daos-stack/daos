@@ -31,7 +31,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
@@ -85,27 +84,6 @@ func flattenHostAddrs(addrPatterns string, defaultPort int) (addrs []string, err
 	}
 
 	sort.Strings(addrs)
-
-	return
-}
-
-// checkConns analyses connection results and returns summary compressed active
-// and inactive hostlists (but disregards connection port).
-func checkConns(results client.ResultMap) (connStates hostlist.HostGroups, err error) {
-	connStates = make(hostlist.HostGroups)
-
-	for addr := range results {
-		resultErr := results[addr].Err
-		if resultErr != nil {
-			if err = connStates.AddHost(resultErr.Error(), addr); err != nil {
-				return
-			}
-			continue
-		}
-		if err = connStates.AddHost("connected", addr); err != nil {
-			return
-		}
-	}
 
 	return
 }

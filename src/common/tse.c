@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -852,7 +852,7 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 	}
 
 	if (dtp->dtp_completed) {
-		D_ERROR("Can't add a depedency for a completed task (%p)\n",
+		D_ERROR("Can't add a dependency for a completed task (%p)\n",
 			task);
 		return -DER_NO_PERM;
 	}
@@ -982,7 +982,7 @@ tse_task_reinit(tse_task_t *task)
 	D_MUTEX_LOCK(&dsp->dsp_lock);
 
 	if (dsp->dsp_cancelling) {
-		D_ERROR("Scheduler is cancelling, can't re-insert task\n");
+		D_ERROR("Scheduler is canceling, can't re-insert task\n");
 		D_GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
 
@@ -1010,8 +1010,96 @@ tse_task_reinit(tse_task_t *task)
 	dtp->dtp_running = 0;
 	dtp->dtp_completing = 0;
 	dtp->dtp_completed = 0;
+
+	/** reset stack pointer as zero */
+	if (dtp->dtp_stack_top != 0) {
+		D_ERROR("task %p, dtp_stack_top reset from %d to zero.\n",
+			task, dtp->dtp_stack_top);
+		dtp->dtp_stack_top = 0;
+	}
+
 	/** Move back to init list */
 	d_list_move_tail(&dtp->dtp_list, &dsp->dsp_init_list);
+
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
+
+	task->dt_result = 0;
+
+	return 0;
+
+err_unlock:
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
+	return rc;
+}
+
+int
+tse_task_reset(tse_task_t *task, tse_task_func_t task_func, void *priv)
+{
+	struct tse_task_private		*dtp = tse_task2priv(task);
+	tse_sched_t			*sched = tse_task2sched(task);
+	struct tse_sched_private	*dsp = tse_sched2priv(sched);
+	int				rc;
+
+	D_CASSERT(sizeof(task->dt_private) >= sizeof(*dtp));
+
+	D_MUTEX_LOCK(&dsp->dsp_lock);
+
+	if (dsp->dsp_cancelling) {
+		D_ERROR("Scheduler is canceling, can't reset task\n");
+		D_GOTO(err_unlock, rc = -DER_NO_PERM);
+	}
+
+	if (!dtp->dtp_completed) {
+		D_ERROR("Can't reset a task in init or running state.\n");
+		D_GOTO(err_unlock, rc = -DER_NO_PERM);
+	}
+
+	if (!d_list_empty(&dtp->dtp_list)) {
+		D_ERROR("task scheduler processing list should be empty\n");
+		D_GOTO(err_unlock, rc = -DER_NO_PERM);
+	}
+
+	if (!d_list_empty(&dtp->dtp_task_list)) {
+		D_ERROR("task user list should be empty\n");
+		D_GOTO(err_unlock, rc = -DER_NO_PERM);
+	}
+
+	if (!d_list_empty(&dtp->dtp_dep_list)) {
+		D_ERROR("task dep list should be empty\n");
+		D_GOTO(err_unlock, rc = -DER_NO_PERM);
+	}
+
+	if (!d_list_empty(&dtp->dtp_comp_cb_list)) {
+		D_ERROR("task completion CB list should be empty\n");
+		D_GOTO(err_unlock, rc = -DER_NO_PERM);
+	}
+
+	if (!d_list_empty(&dtp->dtp_prep_cb_list)) {
+		D_ERROR("task prep CB list should be empty\n");
+		D_GOTO(err_unlock, rc = -DER_NO_PERM);
+	}
+
+	/** Mark the task back at init state */
+	dtp->dtp_running = 0;
+	dtp->dtp_completing = 0;
+	dtp->dtp_completed = 0;
+
+	/** reset stack pointer as zero */
+	if (dtp->dtp_stack_top != 0) {
+		D_ERROR("task %p, dtp_stack_top reset from %d to zero.\n",
+			task, dtp->dtp_stack_top);
+		dtp->dtp_stack_top = 0;
+	}
+
+	D_INIT_LIST_HEAD(&dtp->dtp_list);
+	D_INIT_LIST_HEAD(&dtp->dtp_task_list);
+	D_INIT_LIST_HEAD(&dtp->dtp_dep_list);
+	D_INIT_LIST_HEAD(&dtp->dtp_comp_cb_list);
+	D_INIT_LIST_HEAD(&dtp->dtp_prep_cb_list);
+
+	dtp->dtp_func	  = task_func;
+	dtp->dtp_priv	  = priv;
+	dtp->dtp_sched	  = dsp;
 
 	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 

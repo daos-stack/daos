@@ -1,0 +1,17 @@
+hosts:
+    test_servers:
+        - server-A
+        - server-B
+timeout: 140
+server_config:
+    name: daos_server
+extra_servers:
+    test_servers:
+        - server-C
+        - server-D
+        - server-E
+pool:
+    scm_size: 1G
+    control_method: dmg
+dmg:
+    json: True

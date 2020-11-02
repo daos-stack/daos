@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -92,7 +92,7 @@ struct rebuild_tgt_pool_tracker {
 	/* global stable epoch to use for rebuilding the data */
 	uint64_t		rt_stable_epoch;
 	/* local rebuild epoch mainly to constrain the VOS aggregation
-	 * to make sure aggreation will not cross the epoch
+	 * to make sure aggregation will not cross the epoch
 	 */
 	uint64_t		rt_rebuild_fence;
 	unsigned int		rt_lead_puller_running:1,
@@ -120,10 +120,6 @@ struct rebuild_global_pool_tracker {
 	/* link to rebuild_global.rg_global_tracker_list */
 	d_list_t	rgt_list;
 
-	/* rebuild cont/pool hdl uuid */
-	uuid_t		rgt_poh_uuid;
-	uuid_t		rgt_coh_uuid;
-
 	/* the pool uuid */
 	uuid_t		rgt_pool_uuid;
 
@@ -145,7 +141,8 @@ struct rebuild_global_pool_tracker {
 	uint64_t	rgt_stable_epoch;
 
 	unsigned int	rgt_abort:1,
-			rgt_notify_stable_epoch:1;
+			rgt_notify_stable_epoch:1,
+			rgt_init_scan:1;
 };
 
 /* Structure on raft replica nodes to serve completed rebuild status querying */
@@ -291,7 +288,8 @@ int rebuild_tgt_scan_pre_forward(crt_rpc_t *rpc, void *arg);
 
 int rebuild_iv_fetch(void *ns, struct rebuild_iv *rebuild_iv);
 int rebuild_iv_update(void *ns, struct rebuild_iv *rebuild_iv,
-		      unsigned int shortcut, unsigned int sync_mode);
+		      unsigned int shortcut, unsigned int sync_mode,
+		      bool retry);
 int rebuild_iv_ns_create(struct ds_pool *pool, uint32_t map_ver,
 			 d_rank_list_t *exclude_tgts,
 			 unsigned int master_rank);

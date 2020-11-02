@@ -86,6 +86,13 @@ def check(reqs, name, built_str, installed_str=""):
         return installed_str
     return built_str
 
+def ofi_config(config):
+    """Check ofi version"""
+    code = """#include <rdma/fabric.h>
+_Static_assert(FI_MAJOR_VERSION == 1 && FI_MINOR_VERSION >= 11,
+               "libfabric must be >= 1.11");"""
+    return config.TryCompile(code, ".c")
+
 def define_mercury(reqs):
     """mercury definitions"""
     libs = ['rt']
@@ -115,24 +122,33 @@ def define_mercury(reqs):
                 headers=['psm2.h'],
                 libs=['psm2'])
 
+    if reqs.build_type == 'debug':
+        OFI_DEBUG = '--enable-debug '
+    else:
+        OFI_DEBUG = '--disable-debug '
     retriever = GitRepoRetriever('https://github.com/ofiwg/libfabric')
     reqs.define('ofi',
                 retriever=retriever,
                 commands=['./autogen.sh',
                           './configure --prefix=$OFI_PREFIX ' +
+                          '--disable-efa ' +
+                          OFI_DEBUG +
                           exclude(reqs, 'psm2',
                                   '--enable-psm2' +
                                   check(reqs, 'psm2',
                                         "=$PSM2_PREFIX "
-                                        'LDFLAGS="-Wl,--enable-new-dtags '
-                                        '-Wl,-rpath=$PSM2_PREFIX/lib64" ', ''),
+                                        'LDFLAGS="-Wl,--enable-new-dtags ' +
+                                        '-Wl,-rpath=$PSM2_PREFIX/lib64" ',
+                                        ''),
                                   ''),
                           'make $JOBS_OPT',
                           'make install'],
                 libs=['fabric'],
                 requires=exclude(reqs, 'psm2', ['psm2'], []),
+                config_cb=ofi_config,
                 headers=['rdma/fabric.h'],
-                package='libfabric-devel' if inst(reqs, 'ofi') else None)
+                package='libfabric-devel' if inst(reqs, 'ofi') else None,
+                patch_rpath=['lib'])
 
     reqs.define('openpa',
                 retriever=GitRepoRetriever(
@@ -143,6 +159,10 @@ def define_mercury(reqs):
                           'make install'], libs=['opa'],
                 package='openpa-devel' if inst(reqs, 'openpa') else None)
 
+    if reqs.build_type == 'debug':
+        MERCURY_DEBUG = '-DMERCURY_ENABLE_DEBUG=ON '
+    else:
+        MERCURY_DEBUG = '-DMERCURY_ENABLE_DEBUG=OFF '
     retriever = \
         GitRepoRetriever('https://github.com/mercury-hpc/mercury.git',
                          True)
@@ -157,12 +177,12 @@ def define_mercury(reqs):
                           '-DMERCURY_USE_BOOST_PP=ON '
                           '-DMERCURY_USE_SELF_FORWARD=ON '
                           '-DMERCURY_ENABLE_VERBOSE_ERROR=ON '
+                          + MERCURY_DEBUG +
                           '-DBUILD_TESTING=ON '
                           '-DNA_USE_OFI=ON '
                           '-DBUILD_DOCUMENTATION=OFF '
-                          '-DBUILD_SHARED_LIBS=ON $MERCURY_SRC '
-                          '-DCMAKE_INSTALL_RPATH=$MERCURY_PREFIX/lib '
-                          '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE ' +
+                          '-DBUILD_SHARED_LIBS=ON ../mercury '
+                          '-DMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE ' +
                           check(reqs, 'ofi',
                                 '-DOFI_INCLUDE_DIR=$OFI_PREFIX/include '
                                 '-DOFI_LIBRARY=$OFI_PREFIX/lib/libfabric.so'),
@@ -171,12 +191,15 @@ def define_mercury(reqs):
                 requires=[atomic, 'boost', 'ofi'] + libs,
                 extra_include_path=[os.path.join('include', 'na')],
                 out_of_src_build=True,
-                package='mercury-devel' if inst(reqs, 'mercury') else None)
+                package='mercury-devel' if inst(reqs, 'mercury') else None,
+                patch_rpath=['lib'])
 
 
 
 def define_common(reqs):
     """common system component definitions"""
+    reqs.define('lz4', headers=['lz4.h'], package='lz4-devel')
+
     reqs.define('valgrind_devel', headers=['valgrind/valgrind.h'],
                 package='valgrind-devel')
 
@@ -204,6 +227,9 @@ def define_common(reqs):
 
     reqs.define('crypto', libs=['crypto'], headers=['openssl/md5.h'],
                 package='openssl-devel')
+
+    reqs.define('json-c', libs=['json-c'], headers=['json-c/json.h'],
+                package='json-c-devel')
 
     if reqs.get_env('PLATFORM') == 'darwin':
         reqs.define('uuid', headers=['uuid/uuid.h'])
@@ -268,15 +294,8 @@ def define_components(reqs):
                 libs=['abt'],
                 headers=['abt.h'])
 
-    reqs.define('fuse', libs=['fuse3'], defines=["FUSE_USE_VERSION=32"],
+    reqs.define('fuse', libs=['fuse3'], defines=["FUSE_USE_VERSION=35"],
                 headers=['fuse3/fuse.h'], package='fuse3-devel')
-
-    reqs.define('fio',
-                retriever=GitRepoRetriever(
-                    'https://github.com/axboe/fio.git'),
-                commands=['./configure --prefix="$FIO_PREFIX"',
-                          'make $JOBS_OPT', 'make install'],
-                progs=['genfio', 'fio'])
 
     retriever = GitRepoRetriever("https://github.com/spdk/spdk.git", True)
     reqs.define('spdk',
@@ -290,7 +309,7 @@ def define_components(reqs):
                           'cp dpdk/build/lib/* "$SPDK_PREFIX/lib"',
                           'mkdir -p "$SPDK_PREFIX/share/spdk"',
                           'cp -r include scripts "$SPDK_PREFIX/share/spdk"'],
-                libs=['rte_bus_pci'])
+                libs=['rte_bus_pci'], patch_rpath=['lib'])
 
     url = 'https://github.com/protobuf-c/protobuf-c/releases/download/' \
         'v1.3.0/protobuf-c-1.3.0.tar.gz'

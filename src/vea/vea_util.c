@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -214,7 +214,7 @@ ext_overlapping(struct vea_free_extent *ext1, struct vea_free_extent *ext2)
  * \param cnt       [IN]	Block count of extent
  *
  * \return			0 - Allocated
- *				1 - Not allcoated
+ *				1 - Not allocated
  *				Negative value on error
  */
 int

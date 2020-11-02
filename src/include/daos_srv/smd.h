@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,6 +47,7 @@ struct smd_dev_info {
 struct smd_pool_info {
 	d_list_t	 spi_link;
 	uuid_t		 spi_id;
+	uint64_t	 spi_blob_sz;
 	uint32_t	 spi_tgt_cnt;
 	int		*spi_tgts;
 	uint64_t	*spi_blobs;
@@ -152,15 +153,29 @@ int smd_dev_get_by_tgt(int tgt_id, struct smd_dev_info **dev_info);
 int smd_dev_list(d_list_t *dev_list, int *dev_cnt);
 
 /**
+ * Replace an old device ID with new device ID, change it's state from
+ * FAULTY to NORMAL, update pool info according to @pool_list.
+ *
+ * \param [IN] old_id		Old device ID
+ * \param [IN] new_id		New device ID
+ * \param [IN] pool_list	List of pools to be updated
+ *
+ * \return			Zero on success, negative value on error
+ */
+int smd_dev_replace(uuid_t old_id, uuid_t new_id, d_list_t *pool_list);
+
+/**
  * Assign a blob to a VOS pool target
  *
  * \param [IN]	pool_id		Pool UUID
  * \param [IN]	tgt_id		Target ID
  * \param [IN]	blob_id		Blob ID
+ * \param [IN]	blob_sz		Blob size
  *
  * \return			Zero on success, negative value on error
  */
-int smd_pool_assign(uuid_t pool_id, int tgt_id, uint64_t blob_id);
+int smd_pool_assign(uuid_t pool_id, int tgt_id, uint64_t blob_id,
+		    uint64_t blob_sz);
 
 /**
  * Unassign a VOS pool target
@@ -202,5 +217,14 @@ int smd_pool_get_blob(uuid_t pool_id, int tgt_id, uint64_t *blob_id);
  * \return			Zero on success, negative value on error
  */
 int smd_pool_list(d_list_t *pool_list, int *pool_cnt);
+
+/**
+ * Convert device state to human-readable string
+ *
+ * \param [IN]	state		Device state
+ *
+ * \return			Static string representing enum value
+ */
+char *smd_state_enum_to_str(enum smd_dev_state state);
 
 #endif /* __SMD_H__ */

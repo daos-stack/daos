@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,109 @@
 #include <daos_srv/smd.h>
 
 #include "srv_internal.h"
+
+
+static void
+bs_state_query(void *arg)
+{
+	struct dss_module_info	*info = dss_get_module_info();
+	struct bio_xs_context	*bxc;
+	int			*bs_state = arg;
+
+	D_ASSERT(info != NULL);
+	D_DEBUG(DB_MGMT, "BIO blobstore state query on xs:%d, tgt:%d\n",
+		info->dmi_xs_id, info->dmi_tgt_id);
+
+	bxc = info->dmi_nvme_ctxt;
+	if (bxc == NULL) {
+		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
+			info->dmi_xs_id, info->dmi_tgt_id);
+		return;
+	}
+
+	bio_get_bs_state(bs_state, bxc);
+}
+
+/*
+ * CaRT RPC handler for management service "get blobstore state" (C API)
+ *
+ * Internal blobstore states returned for test validation only.
+ */
+int ds_mgmt_get_bs_state(uuid_t bs_uuid, int *bs_state)
+{
+	struct smd_dev_info		*dev_info;
+	ABT_thread			 thread;
+	int				 tgt_id;
+	int				 rc;
+
+	/*
+	 * Query per-server metadata (SMD) to get target ID(s) for given device.
+	 */
+	if (!uuid_is_null(bs_uuid)) {
+		rc = smd_dev_get_by_id(bs_uuid, &dev_info);
+		if (rc != 0) {
+			D_ERROR("Blobstore UUID:"DF_UUID" not found\n",
+				DP_UUID(bs_uuid));
+			return rc;
+		}
+		if (dev_info->sdi_tgts == NULL) {
+			D_ERROR("No targets mapped to device\n");
+			rc = -DER_NONEXIST;
+			goto out;
+		}
+		/* Default tgt_id is the first mapped tgt */
+		tgt_id = dev_info->sdi_tgts[0];
+	} else {
+		D_ERROR("Blobstore UUID is not provided for state query\n");
+		return -DER_INVAL;
+
+	}
+
+	/* Create a ULT on the tgt_id */
+	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
+	/* TODO Add a new DSS_ULT_BIO tag */
+	rc = dss_ult_create(bs_state_query, (void *)bs_state, DSS_ULT_GC,
+			    tgt_id, 0, &thread);
+	if (rc != 0) {
+		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
+		goto out;
+	}
+
+	ABT_thread_join(thread);
+	ABT_thread_free(&thread);
+
+out:
+	smd_free_dev_info(dev_info);
+	return rc;
+}
+
+void
+ds_mgmt_hdlr_get_bs_state(crt_rpc_t *rpc_req)
+{
+	struct mgmt_get_bs_state_in	*bs_in;
+	struct mgmt_get_bs_state_out	*bs_out;
+	uuid_t				 bs_uuid;
+	int				 bs_state;
+	int				 rc;
+
+
+	bs_in = crt_req_get(rpc_req);
+	D_ASSERT(bs_in != NULL);
+	bs_out = crt_reply_get(rpc_req);
+	D_ASSERT(bs_out != NULL);
+
+	uuid_copy(bs_uuid, bs_in->bs_uuid);
+
+	rc = ds_mgmt_get_bs_state(bs_uuid, &bs_state);
+
+	uuid_copy(bs_out->bs_uuid, bs_uuid);
+	bs_out->bs_state = bs_state;
+	bs_out->bs_rc = rc;
+
+	rc = crt_reply_send(rpc_req);
+	if (rc != 0)
+		D_ERROR("crt_reply_send failed, rc: "DF_RC"\n", DP_RC(rc));
+}
 
 static void
 bio_health_query(void *arg)
@@ -106,7 +209,7 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
 	/* TODO Add a new DSS_ULT_BIO tag */
-	rc = dss_ult_create(bio_health_query, mbh, DSS_ULT_AGGREGATE, tgt_id, 0,
+	rc = dss_ult_create(bio_health_query, mbh, DSS_ULT_GC, tgt_id, 0,
 			    &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
@@ -127,6 +230,7 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 	struct smd_dev_info	*dev_info = NULL, *tmp;
 	d_list_t		 dev_list;
 	int			 dev_list_cnt = 0;
+	int			 buflen = 10;
 	int			 i = 0, j;
 	int			 rc = 0;
 
@@ -139,14 +243,14 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 		return rc;
 	}
 
-	D_ALLOC(resp->devices, sizeof(*resp->devices) * dev_list_cnt);
+	D_ALLOC_ARRAY(resp->devices, dev_list_cnt);
 	if (resp->devices == NULL) {
 		D_ERROR("Failed to allocate devices for resp\n");
 		return -DER_NOMEM;
 	}
 
 	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, sdi_link) {
-		D_ALLOC(resp->devices[i], sizeof(*(resp->devices[i])));
+		D_ALLOC_PTR(resp->devices[i]);
 		if (resp->devices[i] == NULL) {
 			rc = -DER_NOMEM;
 			break;
@@ -158,6 +262,15 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 			break;
 		}
 		uuid_unparse_lower(dev_info->sdi_id, resp->devices[i]->uuid);
+
+		D_ALLOC(resp->devices[i]->state, buflen);
+		if (resp->devices[i]->state == NULL) {
+			D_ERROR("Failed to allocate device state");
+			rc = -DER_NOMEM;
+			break;
+		}
+		strncpy(resp->devices[i]->state,
+			smd_state_enum_to_str(dev_info->sdi_state), buflen);
 
 		resp->devices[i]->n_tgt_ids = dev_info->sdi_tgt_cnt;
 		D_ALLOC(resp->devices[i]->tgt_ids,
@@ -189,6 +302,8 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 					D_FREE(resp->devices[i]->uuid);
 				if (resp->devices[i]->tgt_ids != NULL)
 					D_FREE(resp->devices[i]->tgt_ids);
+				if (resp->devices[i]->state != NULL)
+					D_FREE(resp->devices[i]->state);
 				D_FREE(resp->devices[i]);
 			}
 		}
@@ -221,14 +336,14 @@ ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp)
 		return rc;
 	}
 
-	D_ALLOC(resp->pools, sizeof(*resp->pools) * pool_list_cnt);
+	D_ALLOC_ARRAY(resp->pools, pool_list_cnt);
 	if (resp->pools == NULL) {
 		D_ERROR("Failed to allocate pools for resp\n");
 		return -DER_NOMEM;
 	}
 
 	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
-		D_ALLOC(resp->pools[i], sizeof(*(resp->pools[i])));
+		D_ALLOC_PTR(resp->pools[i]);
 		if (resp->pools[i] == NULL) {
 			rc = -DER_NOMEM;
 			break;
@@ -289,7 +404,6 @@ ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp)
 			}
 		}
 		D_FREE(resp->pools);
-		resp->pools = NULL;
 		resp->n_pools = 0;
 		goto out;
 	}
@@ -328,16 +442,8 @@ ds_mgmt_dev_state_query(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
 		rc = -DER_NOMEM;
 		goto out;
 	}
-
-	if (dev_info->sdi_state == SMD_DEV_NORMAL)
-		strncpy(resp->dev_state, "NORMAL\n", buflen);
-	else if (dev_info->sdi_state == SMD_DEV_FAULTY)
-		strncpy(resp->dev_state, "FAULTY\n", buflen);
-	else {
-		D_ERROR("Device state cannot be determined\n");
-		rc = -1;
-		goto out;
-	}
+	strncpy(resp->dev_state,
+		smd_state_enum_to_str(dev_info->sdi_state), buflen);
 
 	D_ALLOC(resp->dev_uuid, DAOS_UUID_STR_SIZE);
 	if (resp->dev_uuid == NULL) {
@@ -437,7 +543,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
 	/* TODO Add a new DSS_ULT_BIO tag */
-	rc = dss_ult_create(bio_faulty_state_set, NULL, DSS_ULT_AGGREGATE,
+	rc = dss_ult_create(bio_faulty_state_set, NULL, DSS_ULT_GC,
 			    tgt_id, 0, &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
@@ -448,7 +554,9 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
 	ABT_thread_free(&thread);
 
 out:
-	strncpy(resp->dev_state, "FAULTY\n", buflen);
+	dev_info->sdi_state = SMD_DEV_FAULTY;
+	strncpy(resp->dev_state,
+		smd_state_enum_to_str(dev_info->sdi_state), buflen);
 	smd_free_dev_info(dev_info);
 
 	if (rc != 0) {

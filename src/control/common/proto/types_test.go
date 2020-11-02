@@ -33,18 +33,13 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-func TestProto_ConvertNvmeDeviceHealth(t *testing.T) {
-	pb := MockNvmeDeviceHealth()
-	native, err := (*NvmeDeviceHealth)(pb).ToNative()
+func TestProto_ConvertNvmeHealth(t *testing.T) {
+	pb := MockNvmeHealth(1)
+	native, err := (*NvmeHealth)(pb).ToNative()
 	if err != nil {
 		t.Fatal(err)
 	}
-	expNative := storage.MockNvmeDeviceHealth()
-	// set these manually, as the mock generators intentionally
-	// perturb these values
-	expNative.Temp = pb.Temp
-	expNative.PowerCycles = pb.Powercycles
-	expNative.PowerOnHours = pb.Poweronhours
+	expNative := storage.MockNvmeHealth(1)
 
 	if diff := cmp.Diff(expNative, native); diff != "" {
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
@@ -139,11 +134,13 @@ func TestProto_ConvertScmModules(t *testing.T) {
 
 func TestProto_ConvertScmNamespace(t *testing.T) {
 	pb := MockScmNamespace()
+	pb.Mount = MockScmMountPoint()
 	native, err := (*ScmNamespace)(pb).ToNative()
 	if err != nil {
 		t.Fatal(err)
 	}
 	expNative := storage.MockScmNamespace()
+	expNative.Mount = storage.MockScmMountPoint()
 
 	if diff := cmp.Diff(expNative, native); diff != "" {
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)

@@ -73,6 +73,9 @@
 	X(CONT_ATTR_SET,						\
 		0, &CQF_cont_attr_set,					\
 		ds_cont_op_handler, NULL),				\
+	X(CONT_ATTR_DEL,						\
+		0, &CQF_cont_attr_del,					\
+		ds_cont_op_handler, NULL),				\
 	X(CONT_EPOCH_AGGREGATE,						\
 		0, &CQF_cont_epoch_op,					\
 		ds_cont_op_handler, NULL),				\
@@ -100,10 +103,6 @@
 		0, &CQF_cont_tgt_destroy,				\
 		ds_cont_tgt_destroy_handler,				\
 		&ds_cont_tgt_destroy_co_ops),				\
-	X(CONT_TGT_CLOSE,						\
-		0, &CQF_cont_tgt_close,					\
-		ds_cont_tgt_close_handler,				\
-		&ds_cont_tgt_close_co_ops),				\
 	X(CONT_TGT_QUERY,						\
 		0, &CQF_cont_tgt_query,					\
 		ds_cont_tgt_query_handler,				\
@@ -205,8 +204,10 @@ CRT_RPC_DECLARE(cont_close, DAOS_ISEQ_CONT_CLOSE, DAOS_OSEQ_CONT_CLOSE)
 #define DAOS_CO_QUERY_PROP_ACL		(1ULL << 11)
 #define DAOS_CO_QUERY_PROP_OWNER	(1ULL << 12)
 #define DAOS_CO_QUERY_PROP_OWNER_GROUP	(1ULL << 13)
+#define DAOS_CO_QUERY_PROP_DEDUP	(1ULL << 14)
+#define DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD	(1ULL << 15)
 
-#define DAOS_CO_QUERY_PROP_BITS_NR	(14)
+#define DAOS_CO_QUERY_PROP_BITS_NR	(16)
 #define DAOS_CO_QUERY_PROP_ALL					\
 	((1ULL << DAOS_CO_QUERY_PROP_BITS_NR) - 1)
 
@@ -268,6 +269,16 @@ CRT_RPC_DECLARE(cont_attr_get, DAOS_ISEQ_CONT_ATTR_GET, DAOS_OSEQ_CONT_ATTR_GET)
 
 CRT_RPC_DECLARE(cont_attr_set, DAOS_ISEQ_CONT_ATTR_SET, DAOS_OSEQ_CONT_ATTR_SET)
 
+#define DAOS_ISEQ_CONT_ATTR_DEL	/* input fields */		 \
+	((struct cont_op_in)	(cadi_op)		CRT_VAR) \
+	((uint64_t)		(cadi_count)		CRT_VAR) \
+	((crt_bulk_t)		(cadi_bulk)		CRT_VAR)
+
+#define DAOS_OSEQ_CONT_ATTR_DEL	/* output fields */		 \
+	((struct cont_op_out)	(cado_op)		CRT_VAR)
+
+CRT_RPC_DECLARE(cont_attr_del, DAOS_ISEQ_CONT_ATTR_DEL, DAOS_OSEQ_CONT_ATTR_DEL)
+
 #define DAOS_ISEQ_CONT_EPOCH_OP	/* input fields */		 \
 	((struct cont_op_in)	(cei_op)		CRT_VAR) \
 	((daos_epoch_t)		(cei_epoch)		CRT_VAR)
@@ -308,16 +319,6 @@ struct cont_tgt_close_rec {
 	uuid_t		tcr_hdl;
 	daos_epoch_t	tcr_hce;
 };
-
-#define DAOS_ISEQ_TGT_CLOSE	/* input fields */		 \
-	((uuid_t)		(tci_pool_uuid)		CRT_VAR) \
-	((struct cont_tgt_close_rec) (tci_recs)		CRT_ARRAY)
-
-#define DAOS_OSEQ_TGT_CLOSE	/* output fields */		 \
-				/* number of errors */		 \
-	((int32_t)		(tco_rc)		CRT_VAR)
-
-CRT_RPC_DECLARE(cont_tgt_close, DAOS_ISEQ_TGT_CLOSE, DAOS_OSEQ_TGT_CLOSE)
 
 #define DAOS_ISEQ_TGT_QUERY	/* input fields */		 \
 	((uuid_t)		(tqi_pool_uuid)		CRT_VAR) \

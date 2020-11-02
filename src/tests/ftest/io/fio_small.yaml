@@ -31,6 +31,14 @@ server_config:
       scm_class: dcpm
       scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1
+  transport_config:
+    allow_insecure: True
+agent_config:
+  transport_config:
+    allow_insecure: True
+dmg:
+  transport_config:
+    allow_insecure: True
 pool:
   mode: 146
   name: daos_server
@@ -41,6 +49,7 @@ pool:
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+  control_method: daos
 fio:
   names:
     - global
@@ -69,3 +78,4 @@ fio:
     numjobs: 1
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
+  disable_direct_io: true

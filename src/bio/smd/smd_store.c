@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -144,7 +144,7 @@ smd_store_create(char *fname)
 	}
 	close(fd);
 
-	ph = pmemobj_create(fname, POBJ_LAYOUT_NAME(smd_md_layout), 0, 0666);
+	ph = pmemobj_create(fname, POBJ_LAYOUT_NAME(smd_md_layout), 0, 0600);
 	if (!ph) {
 		D_ERROR("Create SMD pmemobj pool %s failed. %s\n",
 			fname, pmemobj_errormsg());

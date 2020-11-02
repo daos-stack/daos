@@ -6,9 +6,10 @@ def scons():
     Import('denv', 'common_test_utils')
 
     unit_env = denv.Clone()
-    daos_build.test(unit_env, 'srv_checksum_tests',
+    srv_checksum_tests = daos_build.test(unit_env, 'srv_checksum_tests',
                     ['srv_checksum_tests.c', '../srv_csum.c'],
                     LIBS=['daos_common', 'gurt', 'cmocka'])
+    unit_env.Install('$PREFIX/bin/', [srv_checksum_tests])
 
 if __name__ == "SCons.Script":
     scons()

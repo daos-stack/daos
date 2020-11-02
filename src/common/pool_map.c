@@ -304,10 +304,10 @@ static int
 comp_sorter_init(struct pool_comp_sorter *sorter, int nr,
 		 pool_comp_type_t type)
 {
-	D_DEBUG(DB_TRACE, "Initialise sorter for %s, nr %d\n",
+	D_DEBUG(DB_TRACE, "Initialize sorter for %s, nr %d\n",
 		pool_comp_type2str(type), nr);
 
-	D_ALLOC(sorter->cs_comps, nr * sizeof(*sorter->cs_comps));
+	D_ALLOC_ARRAY(sorter->cs_comps, nr);
 	if (sorter->cs_comps == NULL)
 		return -DER_NOMEM;
 
@@ -933,13 +933,11 @@ pool_map_finalise(struct pool_map *map)
 /**
  * Install a component tree to a pool map.
  *
- * \param map		[IN]	The pool map to be initialised.
- * \param activate	[IN]	Activate pool components.
+ * \param map		[IN]	The pool map to be initialized.
  * \param tree		[IN]	Component tree for the pool map.
  */
 static int
-pool_map_initialise(struct pool_map *map, bool activate,
-		    struct pool_domain *tree)
+pool_map_initialise(struct pool_map *map, struct pool_domain *tree)
 {
 	struct pool_comp_cntr	 cntr;
 	int			 i;
@@ -972,8 +970,7 @@ pool_map_initialise(struct pool_map *map, bool activate,
 		goto failed;
 	}
 
-	D_ALLOC(map->po_domain_sorters,
-		map->po_domain_layers * sizeof(*map->po_domain_sorters));
+	D_ALLOC_ARRAY(map->po_domain_sorters, map->po_domain_layers);
 	if (map->po_domain_sorters == NULL) {
 		rc = -DER_NOMEM;
 		goto failed;
@@ -994,13 +991,8 @@ pool_map_initialise(struct pool_map *map, bool activate,
 		D_DEBUG(DB_TRACE, "domain %s, ndomains %d\n",
 			pool_domain_name(&tree[0]), sorter->cs_nr);
 
-		for (j = 0; j < sorter->cs_nr; j++) {
-			if (activate &&
-			    tree[j].do_comp.co_status == PO_COMP_ST_NEW)
-				tree[j].do_comp.co_status = PO_COMP_ST_UPIN;
-
+		for (j = 0; j < sorter->cs_nr; j++)
 			sorter->cs_comps[j] = &tree[j].do_comp;
-		}
 
 		rc = comp_sorter_sort(sorter);
 		if (rc != 0)
@@ -1019,9 +1011,6 @@ pool_map_initialise(struct pool_map *map, bool activate,
 
 		ta = &map->po_tree->do_targets[i];
 		map->po_target_sorter.cs_comps[i] = &ta->ta_comp;
-
-		if (activate && ta->ta_comp.co_status == PO_COMP_ST_NEW)
-			ta->ta_comp.co_status = PO_COMP_ST_UPIN;
 	}
 
 	rc = comp_sorter_sort(&map->po_target_sorter);
@@ -1182,7 +1171,7 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 	if (src_map == NULL)
 		return -DER_NOMEM;
 
-	rc = pool_map_initialise(src_map, false, tree);
+	rc = pool_map_initialise(src_map, tree);
 	if (rc != 0) {
 		D_DEBUG(DB_MGMT, "Failed to create scratch map for buffer\n");
 		goto failed;
@@ -1212,7 +1201,7 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 		rc = pool_map_find_domain(map, tree[0].do_comp.co_type,
 					  PO_COMP_ID_ALL, &cur_doms);
 	}
-	if (rc != 0)
+	if (rc == 0)
 		goto failed;
 
 	dst_doms = dst_tree;
@@ -1304,8 +1293,6 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 						pool_comp_type2str(dc->co_type),
 						dc->co_id);
 
-					dc->co_status = PO_COMP_ST_UPIN;
-
 					*child = sdom->do_children[j];
 					child++;
 
@@ -1335,8 +1322,6 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 					D_DEBUG(DB_TRACE, "New target[%d]\n",
 						tc->co_id);
 
-					tc->co_status = PO_COMP_ST_UPIN;
-
 					*target = sdom->do_targets[j];
 					target++;
 
@@ -1360,7 +1345,7 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 	pool_map_finalise(map);
 
 	/* install new buffer for pool map */
-	rc = pool_map_initialise(map, true, dst_tree);
+	rc = pool_map_initialise(map, dst_tree);
 	D_ASSERT(rc == 0 || rc == -DER_NOMEM);
 
 	map->po_version = version;
@@ -1369,10 +1354,146 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 	return rc;
 }
 
+static int
+uuid_compare_cb(const void *a, const void *b)
+{
+	uuid_t *ua = (uuid_t *)a;
+	uuid_t *ub = (uuid_t *)b;
+
+	return uuid_compare(*ua, *ub);
+}
+
+int
+gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
+		int map_version, int ndomains, int nnodes, int ntargets,
+		const int32_t *domains, uuid_t target_uuids[],
+		const d_rank_list_t *target_addrs, uuid_t **uuids_out,
+		uint32_t dss_tgt_nr)
+{
+	struct pool_component	map_comp;
+	struct pool_buf		*map_buf;
+	struct pool_domain      *found_dom;
+	uuid_t		        *uuids = NULL;
+	uint32_t		num_comps;
+	uint8_t			new_status;
+	bool			updated;
+	int i, rc;
+
+	updated = false;
+
+	/* Prepare the pool map attribute buffers. */
+	map_buf = pool_buf_alloc(ndomains + nnodes + ntargets);
+	if (map_buf == NULL)
+		D_GOTO(out_map_buf, rc = -DER_NOMEM);
+
+	/* Make a sorted target UUID array to determine target IDs. */
+	D_ALLOC_ARRAY(uuids, nnodes);
+	if (uuids == NULL)
+		D_GOTO(out_map_buf, rc = -DER_NOMEM);
+	memcpy(uuids, target_uuids, sizeof(uuid_t) * nnodes);
+	qsort(uuids, nnodes, sizeof(uuid_t), uuid_compare_cb);
+
+	if (map != NULL) {
+		new_status = PO_COMP_ST_NEW;
+		num_comps = pool_map_find_domain(map, PO_COMP_TP_RACK,
+						 PO_COMP_ID_ALL, NULL);
+	} else {
+		new_status = PO_COMP_ST_UPIN;
+		num_comps = 0;
+	}
+	/* fill racks */
+	for (i = 0; i < ndomains; i++) {
+		map_comp.co_type = PO_COMP_TP_RACK;	/* TODO */
+		map_comp.co_status = new_status;
+		map_comp.co_index = i + num_comps;
+		map_comp.co_id = i + num_comps;
+		map_comp.co_rank = 0;
+		map_comp.co_ver = map_version;
+		map_comp.co_fseq = 1;
+		map_comp.co_nr = domains[i];
+
+		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
+		if (rc != 0)
+			D_GOTO(out_map_buf, rc);
+	}
+
+	if (map != NULL)
+		num_comps = pool_map_find_domain(map, PO_COMP_TP_NODE,
+						 PO_COMP_ID_ALL, NULL);
+	else
+		num_comps = 0;
+
+	/* fill nodes */
+	for (i = 0; i < nnodes; i++) {
+		uuid_t *p = bsearch(target_uuids[i], uuids, nnodes,
+				    sizeof(uuid_t), uuid_compare_cb);
+
+		if (map) {
+			found_dom = pool_map_find_node_by_rank(map,
+					target_addrs->rl_ranks[i]);
+			if (found_dom)
+				continue;
+		}
+
+		updated = true;
+		map_comp.co_type = PO_COMP_TP_NODE;
+		map_comp.co_status = new_status;
+		map_comp.co_index = i + num_comps;
+		map_comp.co_id = (p - uuids) + num_comps;
+		map_comp.co_rank = target_addrs->rl_ranks[i];
+		map_comp.co_ver = map_version;
+		map_comp.co_fseq = 1;
+		map_comp.co_nr = dss_tgt_nr;
+
+		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
+		if (rc != 0)
+			D_GOTO(out_map_buf, rc);
+	}
+
+	if (!updated)
+		D_GOTO(out_map_buf, rc = -DER_ALREADY);
+
+	if (map != NULL)
+		num_comps = pool_map_find_target(map, PO_COMP_ID_ALL, NULL);
+	else
+		num_comps = 0;
+
+	/* fill targets */
+	for (i = 0; i < nnodes; i++) {
+		int j;
+
+		for (j = 0; j < dss_tgt_nr; j++) {
+			map_comp.co_type = PO_COMP_TP_TARGET;
+			map_comp.co_status = new_status;
+			map_comp.co_index = j;
+			map_comp.co_id = (i * dss_tgt_nr + j) + num_comps;
+			map_comp.co_rank = target_addrs->rl_ranks[i];
+			map_comp.co_ver = map_version;
+			map_comp.co_fseq = 1;
+			map_comp.co_nr = 1;
+
+			rc = pool_buf_attach(map_buf, &map_comp, 1);
+			if (rc != 0)
+				D_GOTO(out_map_buf, rc);
+		}
+	}
+	if (uuids_out)
+		*uuids_out = uuids;
+
+	*map_buf_out = map_buf;
+	return 0;
+
+out_map_buf:
+	pool_buf_free(map_buf);
+	D_FREE(uuids);
+	return rc;
+}
+
+
 int
 pool_map_extend(struct pool_map *map, uint32_t version, struct pool_buf *buf)
 {
-	struct pool_domain *tree; /* root of the new component tree */
+	struct pool_domain *tree = NULL;
 	int		    rc;
 
 	rc = pool_buf_parse(buf, &tree);
@@ -1382,18 +1503,23 @@ pool_map_extend(struct pool_map *map, uint32_t version, struct pool_buf *buf)
 	if (!pool_tree_sane(tree, version)) {
 		D_DEBUG(DB_MGMT, "Insane buffer format\n");
 		rc = -DER_INVAL;
-		goto out;
+		goto error_tree;
 	}
 
 	rc = pool_map_compat(map, version, tree);
 	if (rc != 0) {
 		D_DEBUG(DB_MGMT, "Buffer is incompatible with pool map\n");
-		goto out;
+		goto error_tree;
 	}
 
 	D_DEBUG(DB_TRACE, "Merge buffer with already existent pool map\n");
 	rc = pool_map_merge(map, version, tree);
- out:
+	if(rc != 0)
+		goto error_tree;
+
+	return rc;
+
+error_tree:
 	pool_tree_free(tree);
 	return rc;
 }
@@ -1430,7 +1556,7 @@ pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **mapp)
 		goto failed;
 	}
 
-	rc = pool_map_initialise(map, true, tree);
+	rc = pool_map_initialise(map, tree);
 	if (rc != 0) {
 		D_ERROR("pool_map_initialise failed, rc "DF_RC"\n", DP_RC(rc));
 		/* pool_tree_free() did in pool_map_initialise */
@@ -1638,6 +1764,56 @@ pool_map_find_node_by_rank(struct pool_map *map, uint32_t rank)
 }
 
 /**
+ * Find all targets belonging to a given list of ranks
+ *
+ * \param map		[IN]	pool map to find the target.
+ * \param rank_list	[IN]	rank to be used to find target.
+ * \param tgts		[OUT]	found targets.
+ *
+ * \return		number of targets.
+ *                      negative errno if failed.
+ *                      Caller is responsible for pool_target_id_list_free
+ */
+int
+pool_map_find_targets_on_ranks(struct pool_map *map, d_rank_list_t *rank_list,
+			       struct pool_target_id_list *tgts)
+{
+	uint32_t count = 0;
+	uint32_t i;
+	uint32_t j;
+	int rc;
+
+	tgts->pti_ids = NULL;
+	tgts->pti_number = 0;
+
+	for (i = 0; i < rank_list->rl_nr; i++) {
+		struct pool_domain *dom;
+
+		dom = pool_map_find_node_by_rank(map, rank_list->rl_ranks[i]);
+		if (dom == NULL) {
+			pool_target_id_list_free(tgts);
+			return 0;
+		}
+
+		for (j = 0; j < dom->do_target_nr; j++) {
+			struct pool_target_id id = {0};
+
+			id.pti_id = dom->do_targets[j].ta_comp.co_id;
+
+			rc = pool_target_id_list_append(tgts, &id);
+			if (rc != 0) {
+				pool_target_id_list_free(tgts);
+				return 0;
+			}
+
+			count++;
+		}
+	}
+
+	return count;
+}
+
+/**
  * Find the target by rank & idx.
  *
  * \param map	[IN]	pool map to find the target.
@@ -1670,6 +1846,67 @@ pool_map_find_target_by_rank_idx(struct pool_map *map, uint32_t rank,
 
 	return 1;
 }
+
+static int
+activate_new_target(struct pool_domain *domain, uint32_t id)
+{
+	int i;
+
+	D_ASSERT(domain->do_targets != NULL);
+
+	/*
+	 * If this component has children, recurse over them.
+	 *
+	 * If the target ID is found in any of the children, activate
+	 * this component and abort the search
+	 */
+	if (domain->do_children != NULL) {
+		for (i = 0; i < domain->do_child_nr; i++) {
+			int found = activate_new_target(&domain->do_children[i],
+							id);
+			if (found) {
+				domain->do_comp.co_status = PO_COMP_ST_UPIN;
+				return found;
+			}
+		}
+	}
+
+	/*
+	 * Check the targets in this domain to see if they match
+	 *
+	 * If they do, activate them and activate the current domain
+	 */
+	for (i = 0; i < domain->do_target_nr; i++) {
+		struct pool_component *comp = &domain->do_targets[i].ta_comp;
+
+		if (comp->co_id == id && (comp->co_status == PO_COMP_ST_NEW ||
+					  comp->co_status == PO_COMP_ST_UP)) {
+			comp->co_status = PO_COMP_ST_UPIN;
+			domain->do_comp.co_status = PO_COMP_ST_UPIN;
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
+/**
+ * Activate (move to UPIN) a NEW or UP target and all of its parent domains
+ *
+ * \param map	[IN]		The pool map to search
+ * \param id	[IN]		Target ID to search
+ *
+ * \return		0 if target was not found or not in NEW state
+ *                      1 if target was found and activated
+ */
+int
+pool_map_activate_new_target(struct pool_map *map, uint32_t id)
+{
+	if (map->po_tree != NULL)
+		return activate_new_target(map->po_tree, id);
+	return 0;
+}
+
 
 /**
  * Check if all targets under one node matching the status.
@@ -1771,7 +2008,7 @@ matched_criteria(struct find_tgts_param *param,
  * \param sorter  [IN]	Sorter for the output targets array
  * \param tgt_pp  [OUT]	The output target array, if tgt_pp == NULL, it only
  *                      needs to get the tgt count, otherwise it will
- *                      allocate the tgts arrary.
+ *                      allocate the tgts array.
  * \param tgt_cnt [OUT]	The size of target array
  *
  * \return	0 on success, negative values on errors.
@@ -1810,7 +2047,7 @@ rescan:
 		return 0;
 
 	if (*tgt_pp == NULL) {
-		D_ALLOC(*tgt_pp, *tgt_cnt * sizeof(*targets));
+		D_ALLOC_ARRAY(*tgt_pp, *tgt_cnt);
 		if (*tgt_pp == NULL)
 			return -DER_NOMEM;
 		goto rescan;
@@ -1819,24 +2056,6 @@ rescan:
 	}
 
 	return 0;
-}
-
-/**
- * Find all targets in DOWN state. Raft leader can use it drive target
- * rebuild one by one.
- */
-int
-pool_map_find_down_tgts(struct pool_map *map, struct pool_target **tgt_pp,
-			unsigned int *tgt_cnt)
-{
-	struct find_tgts_param param;
-
-	memset(&param, 0, sizeof(param));
-	param.ftp_chk_status = 1;
-	param.ftp_status = PO_COMP_ST_DOWN;
-
-	return pool_map_find_tgts(map, &param, &fseq_sort_ops, tgt_pp,
-				  tgt_cnt);
 }
 
 /**
@@ -1909,26 +2128,8 @@ pool_map_update_failed_cnt(struct pool_map *map)
 }
 
 /**
- * Find all targets in DOWN|DOWNOUT state.
- */
-int
-pool_map_find_failed_tgts(struct pool_map *map, struct pool_target **tgt_pp,
-			unsigned int *tgt_cnt)
-{
-	struct find_tgts_param param;
-
-	memset(&param, 0, sizeof(param));
-	param.ftp_chk_status = 1;
-	param.ftp_status = PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT;
-
-	return pool_map_find_tgts(map, &param, &fseq_sort_ops, tgt_pp,
-				  tgt_cnt);
-}
-
-
-/**
  * Find all targets with @status in specific rank. Note: &tgt_pp will be
- * allocated and the caller is reponsible to free it.
+ * allocated and the caller is responsible to free it.
  */
 int
 pool_map_find_by_rank_status(struct pool_map *map,
@@ -1948,8 +2149,7 @@ pool_map_find_by_rank_status(struct pool_map *map,
 	for (i = 0; i < dom->do_target_nr; i++) {
 		if (dom->do_targets[i].ta_comp.co_status & status) {
 			if (*tgt_ppp == NULL) {
-				D_ALLOC(*tgt_ppp,
-					dom->do_target_nr * sizeof(**tgt_ppp));
+				D_ALLOC_ARRAY(*tgt_ppp,	dom->do_target_nr);
 				if (*tgt_ppp == NULL)
 					return -DER_NOMEM;
 			}
@@ -1967,11 +2167,26 @@ pool_map_find_failed_tgts_by_rank(struct pool_map *map,
 				  struct pool_target ***tgt_ppp,
 				  unsigned int *tgt_cnt, d_rank_t rank)
 {
-	return pool_map_find_by_rank_status(map, tgt_ppp, tgt_cnt,
-					    PO_COMP_ST_DOWN|PO_COMP_ST_DOWNOUT,
+	unsigned int status;
+
+	status = PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT | PO_COMP_ST_DRAIN;
+	return pool_map_find_by_rank_status(map, tgt_ppp, tgt_cnt, status,
 					    rank);
 }
 
+int
+pool_map_find_tgts_by_state(struct pool_map *map,
+			    pool_comp_state_t match_states,
+			    struct pool_target **tgt_pp, unsigned int *tgt_cnt)
+{
+	struct find_tgts_param param;
+
+	memset(&param, 0, sizeof(param));
+	param.ftp_chk_status = 1;
+	param.ftp_status = match_states;
+
+	return pool_map_find_tgts(map, &param, &fseq_sort_ops, tgt_pp, tgt_cnt);
+}
 
 /**
  * Find all targets in UP state. (but not included in the pool for active I/O
@@ -1981,13 +2196,37 @@ int
 pool_map_find_up_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 		      unsigned int *tgt_cnt)
 {
-	struct find_tgts_param param;
+	return pool_map_find_tgts_by_state(map,
+					   PO_COMP_ST_UP,
+					   tgt_pp, tgt_cnt);
+}
 
-	memset(&param, 0, sizeof(param));
-	param.ftp_chk_status = 1;
-	param.ftp_status = PO_COMP_ST_UP;
+/**
+ * Find all targets in DOWN state. Raft leader can use it drive target
+ * rebuild one by one.
+ */
+int
+pool_map_find_down_tgts(struct pool_map *map, struct pool_target **tgt_pp,
+			unsigned int *tgt_cnt)
+{
+	return pool_map_find_tgts_by_state(map,
+					   PO_COMP_ST_DOWN,
+					   tgt_pp, tgt_cnt);
+}
 
-	return pool_map_find_tgts(map, &param, &fseq_sort_ops, tgt_pp, tgt_cnt);
+/**
+ * Find all targets in DOWN|DOWNOUT state.
+ *
+ * Note that this does not return DRAIN targets, because those are still healthy
+ * while they are draining
+ */
+int
+pool_map_find_failed_tgts(struct pool_map *map, struct pool_target **tgt_pp,
+			  unsigned int *tgt_cnt)
+{
+	return pool_map_find_tgts_by_state(map,
+					   PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+					   tgt_pp, tgt_cnt);
 }
 
 /**
@@ -1997,22 +2236,9 @@ int
 pool_map_find_upin_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 			unsigned int *tgt_cnt)
 {
-	struct find_tgts_param param;
-
-	memset(&param, 0, sizeof(param));
-	param.ftp_chk_status = 1;
-	param.ftp_status = PO_COMP_ST_UPIN;
-
-	return pool_map_find_tgts(map, &param, &fseq_sort_ops, tgt_pp, tgt_cnt);
-}
-
-static void
-pool_indent_print(int dep)
-{
-	int	i;
-
-	for (i = 0; i < dep * 8; i++)
-		D_PRINT(" ");
+	return pool_map_find_tgts_by_state(map,
+					   PO_COMP_ST_UPIN,
+					   tgt_pp, tgt_cnt);
 }
 
 static void
@@ -2020,9 +2246,9 @@ pool_domain_print(struct pool_domain *domain, int dep)
 {
 	int		i;
 
-	pool_indent_print(dep);
-	D_PRINT("%s[%d] %d\n", pool_domain_name(domain),
-		domain->do_comp.co_id, domain->do_comp.co_ver);
+	D_PRINT("%*s%s[%d] %d %s\n", dep * 8, "", pool_domain_name(domain),
+		domain->do_comp.co_id, domain->do_comp.co_ver,
+		pool_comp_state2str(domain->do_comp.co_status));
 
 	D_ASSERT(domain->do_targets != NULL);
 
@@ -2038,14 +2264,15 @@ pool_domain_print(struct pool_domain *domain, int dep)
 		D_ASSERTF(comp->co_type == PO_COMP_TP_TARGET,
 			  "%s\n", pool_comp_type2str(comp->co_type));
 
-		pool_indent_print(dep + 1);
-		D_PRINT("%s[%d] %d\n", pool_comp_type2str(comp->co_type),
-				       comp->co_id, comp->co_ver);
+		D_PRINT("%*s%s[%d] %d %s\n", (dep + 1) * 8, "",
+			pool_comp_type2str(comp->co_type),
+			comp->co_id, comp->co_ver,
+			pool_comp_state2str(comp->co_status));
 	}
 }
 
 /**
- * Print all componenets of the pool map, this is a debug function.
+ * Print all components of the pool map, this is a debug function.
  */
 void
 pool_map_print(struct pool_map *map)
@@ -2062,6 +2289,7 @@ unsigned int
 pool_map_get_version(struct pool_map *map)
 {
 	D_DEBUG(DB_TRACE, "Fetch pool map version %u\n", map->po_version);
+	D_ASSERT(map != NULL);
 	return map->po_version;
 }
 
@@ -2136,8 +2364,7 @@ pool_target_id_list_append(struct pool_target_id_list *id_list,
 	if (pool_target_id_found(id_list, id))
 		return 0;
 
-	D_REALLOC(new_ids, id_list->pti_ids, (id_list->pti_number + 1) *
-			  sizeof(*id_list->pti_ids));
+	D_REALLOC_ARRAY(new_ids, id_list->pti_ids, id_list->pti_number + 1);
 	if (new_ids == NULL)
 		return -DER_NOMEM;
 
@@ -2169,8 +2396,7 @@ int
 pool_target_id_list_alloc(unsigned int num,
 			  struct pool_target_id_list *id_list)
 {
-	D_ALLOC(id_list->pti_ids,
-		num * sizeof(struct pool_target_id));
+	D_ALLOC_ARRAY(id_list->pti_ids,	num);
 	if (id_list->pti_ids == NULL)
 		return -DER_NOMEM;
 

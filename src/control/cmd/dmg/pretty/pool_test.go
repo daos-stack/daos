@@ -30,6 +30,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
@@ -48,24 +49,26 @@ Pool space info:
 		},
 		"normal response": {
 			pqr: &control.PoolQueryResp{
-				UUID:            control.MockUUID,
-				TotalTargets:    2,
-				DisabledTargets: 1,
-				ActiveTargets:   1,
-				Leader:          42,
-				Version:         100,
-				Scm: &control.StorageUsageStats{
-					Total: 2,
-					Free:  1,
-				},
-				Nvme: &control.StorageUsageStats{
-					Total: 2,
-					Free:  1,
-				},
-				Rebuild: &control.PoolRebuildStatus{
-					State:   control.PoolRebuildStateBusy,
-					Objects: 42,
-					Records: 21,
+				UUID: common.MockUUID(),
+				PoolInfo: control.PoolInfo{
+					TotalTargets:    2,
+					DisabledTargets: 1,
+					ActiveTargets:   1,
+					Leader:          42,
+					Version:         100,
+					Scm: &control.StorageUsageStats{
+						Total: 2,
+						Free:  1,
+					},
+					Nvme: &control.StorageUsageStats{
+						Total: 2,
+						Free:  1,
+					},
+					Rebuild: &control.PoolRebuildStatus{
+						State:   control.PoolRebuildStateBusy,
+						Objects: 42,
+						Records: 21,
+					},
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
@@ -79,29 +82,31 @@ Pool space info:
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
 Rebuild busy, 42 objs, 21 recs
-`, control.MockUUID),
+`, common.MockUUID()),
 		},
 		"rebuild failed": {
 			pqr: &control.PoolQueryResp{
-				UUID:            control.MockUUID,
-				TotalTargets:    2,
-				DisabledTargets: 1,
-				ActiveTargets:   1,
-				Leader:          42,
-				Version:         100,
-				Scm: &control.StorageUsageStats{
-					Total: 2,
-					Free:  1,
-				},
-				Nvme: &control.StorageUsageStats{
-					Total: 2,
-					Free:  1,
-				},
-				Rebuild: &control.PoolRebuildStatus{
-					Status:  2,
-					State:   control.PoolRebuildStateBusy,
-					Objects: 42,
-					Records: 21,
+				UUID: common.MockUUID(),
+				PoolInfo: control.PoolInfo{
+					TotalTargets:    2,
+					DisabledTargets: 1,
+					ActiveTargets:   1,
+					Leader:          42,
+					Version:         100,
+					Scm: &control.StorageUsageStats{
+						Total: 2,
+						Free:  1,
+					},
+					Nvme: &control.StorageUsageStats{
+						Total: 2,
+						Free:  1,
+					},
+					Rebuild: &control.PoolRebuildStatus{
+						Status:  2,
+						State:   control.PoolRebuildStateBusy,
+						Objects: 42,
+						Records: 21,
+					},
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
@@ -115,7 +120,7 @@ Pool space info:
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
 Rebuild failed, rc=0, status=2
-`, control.MockUUID),
+`, common.MockUUID()),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

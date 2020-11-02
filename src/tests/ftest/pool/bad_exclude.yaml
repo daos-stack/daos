@@ -1,5 +1,5 @@
 server_config:
-   name: test_server
+   name: daos_server
 hosts:
    test_servers:
       - server-A

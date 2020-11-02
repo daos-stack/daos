@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -383,10 +383,12 @@ public class DaosFile {
     open(true);
     //no asynchronous for now
     if (len > buffer.capacity() - bufferOffset) {
-      throw new IOException(String.format("buffer (%d) has no enough space start at %d for reading %d bytes from file",
+      throw new IOException(String.format("buffer (%d) has no enough space start at %d for reading %d " +
+                      "bytes from file",
               buffer.capacity(), bufferOffset, len));
     }
-    return client.dfsRead(dfsPtr, objId, ((DirectBuffer) buffer).address() + bufferOffset, fileOffset, len, 0);
+    return client.dfsRead(dfsPtr, objId, ((DirectBuffer) buffer).address() + bufferOffset,
+            fileOffset, len, 0);
   }
 
   /**
@@ -409,7 +411,8 @@ public class DaosFile {
       throw new IOException(String.format("buffer (%d) has no enough data start at %d for write %d bytes to file",
               buffer.capacity(), bufferOffset, len));
     }
-    return client.dfsWrite(dfsPtr, objId, ((DirectBuffer) buffer).address() + bufferOffset, fileOffset, len, 0);
+    return client.dfsWrite(dfsPtr, objId, ((DirectBuffer) buffer).address() + bufferOffset,
+            fileOffset, len, 0);
   }
 
   /**

@@ -154,7 +154,7 @@ ilog_update(daos_handle_t loh, const daos_epoch_range_t *epr,
 
 /** Updates specified log entry to mark it as persistent (remove
  * the transaction identifier from the entry.   Additionally, this will
- * remove redundant entries, such as later uncommitted upates.
+ * remove redundant entries, such as later uncommitted updates.
  *
  *  \param	loh[in]		Open log handle
  *  \param	id[in]		Identifier for log entry
@@ -182,7 +182,7 @@ struct ilog_entry {
 	int32_t		ie_status;
 };
 
-#define ILOG_PRIV_SIZE 392
+#define ILOG_PRIV_SIZE 456
 /** Structure for storing the full incarnation log for ilog_fetch.  The
  * fields shouldn't generally be accessed directly but via the iteration
  * APIs below.
@@ -286,6 +286,13 @@ ilog_ts_idx_get(struct ilog_df *ilog_df);
  **/
 uint32_t
 ilog_version_get(daos_handle_t loh);
+
+/** Returns true if there is a punch minor epoch */
+static inline bool
+ilog_has_punch(const struct ilog_entry *entry)
+{
+	return entry->ie_id.id_punch_minor_eph > 0;
+}
 
 static inline bool
 ilog_is_punch(const struct ilog_entry *entry)

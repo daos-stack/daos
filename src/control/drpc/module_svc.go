@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,13 +55,14 @@ func NewModuleService(log logging.Logger) *ModuleService {
 // RegisterModule will take in a type that implements the Module interface
 // and ensure that no other module is already registered with that module
 // identifier.
-func (r *ModuleService) RegisterModule(mod Module) error {
-	_, ok := r.GetModule(mod.ID())
-	if ok {
-		return errors.Errorf("module with ID %d already exists", mod.ID())
+func (r *ModuleService) RegisterModule(mod Module) {
+	_, found := r.GetModule(mod.ID())
+	if found {
+		// Not really an error that can be handled. It's a programming
+		// error that should manifest very quickly in test.
+		panic(errors.Errorf("module with ID %d already exists", mod.ID()))
 	}
 	r.modules[mod.ID()] = mod
-	return nil
 }
 
 // GetModule fetches the module for the given ID. Returns true if found, false
@@ -116,7 +117,7 @@ func (r *ModuleService) ProcessMessage(session *Session, msgBytes []byte) ([]byt
 	}
 	module, ok := r.GetModule(ModuleID(msg.GetModule()))
 	if !ok {
-		err = errors.Errorf("Attempted to call unregistered module")
+		r.log.Errorf("Attempted to call unregistered module %d", msg.GetModule())
 		return marshalResponse(msg.GetSequence(), Status_UNKNOWN_MODULE, nil)
 	}
 	var method Method
@@ -126,7 +127,7 @@ func (r *ModuleService) ProcessMessage(session *Session, msgBytes []byte) ([]byt
 	}
 	respBody, err := module.HandleCall(session, method, msg.GetBody())
 	if err != nil {
-		r.log.Errorf("HandleCall for %d:%s failed: %s\n", method.String(), method, err)
+		r.log.Errorf("HandleCall for %s:%s failed: %s\n", module, method, err)
 		return marshalResponse(msg.GetSequence(), ErrorToStatus(err), nil)
 	}
 

@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package scm
 
 import (
@@ -55,15 +56,15 @@ const (
 
 	ramFsType = fsTypeTmpfs
 
-	MsgScmRebootRequired    = "A reboot is required to process new memory allocation goals."
-	MsgScmNoModules         = "no scm modules to prepare"
-	MsgScmNotInited         = "scm storage could not be accessed"
-	MsgScmClassNotSupported = "operation unsupported on scm class"
-	MsgIpmctlDiscoverFail   = "ipmctl module discovery"
+	MsgRebootRequired     = "A reboot is required to process new SCM memory allocation goals."
+	MsgNoModules          = "no SCM modules to prepare"
+	MsgNotInited          = "SCM storage could not be accessed"
+	MsgClassNotSupported  = "operation unsupported on SCM class"
+	MsgIpmctlDiscoverFail = "ipmctl module discovery"
 )
 
 type (
-	// PrepareRequest defines the parameters for a Prepare opration.
+	// PrepareRequest defines the parameters for a Prepare operation.
 	PrepareRequest struct {
 		pbin.ForwardableRequest
 		// Reset indicates that the operation should reset (clear) DCPM namespaces.
@@ -80,7 +81,8 @@ type (
 	// ScanRequest defines the parameters for a Scan operation.
 	ScanRequest struct {
 		pbin.ForwardableRequest
-		Rescan bool
+		DeviceList []string
+		Rescan     bool
 	}
 
 	// ScanResponse contains information gleaned during a successful Scan operation.
@@ -144,16 +146,19 @@ type (
 		PrepReset(storage.ScmState) (bool, error)
 		GetState() (storage.ScmState, error)
 		GetNamespaces() (storage.ScmNamespaces, error)
+		GetFirmwareStatus(deviceUID string) (*storage.ScmFirmwareInfo, error)
+		UpdateFirmware(deviceUID string, firmwarePath string) error
 	}
 
 	// SystemProvider defines a set of methods to be implemented by a provider
-	// of SCM-specific system capabilties.
+	// of SCM-specific system capabilities.
 	SystemProvider interface {
 		system.IsMountedProvider
 		system.MountProvider
 		system.UnmountProvider
 		Mkfs(fsType, device string, force bool) error
 		Getfs(device string) (string, error)
+		GetfsUsage(string) (uint64, uint64, error)
 	}
 
 	defaultSystemProvider struct {
@@ -172,7 +177,8 @@ type (
 		log     logging.Logger
 		backend Backend
 		sys     SystemProvider
-		fwd     *Forwarder
+		fwd     *AdminForwarder
+		firmwareProvider
 	}
 )
 
@@ -198,7 +204,7 @@ func CreateFormatRequest(scmCfg storage.ScmConfig, reformat bool) (*FormatReques
 			Device: scmCfg.DeviceList[0],
 		}
 	default:
-		return nil, errors.New(MsgScmClassNotSupported)
+		return nil, errors.New(MsgClassNotSupported)
 	}
 
 	return &req, nil
@@ -262,11 +268,26 @@ func (ssp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error 
 	// callback so that the user has some visibility into long-running
 	// format operations (very large devices).
 	args := []string{
-		"-m", "0", // don't reserve blocks for super-user
-		"-E", "lazy_itable_init=0,lazy_journal_init=0", // disable lazy initialization (hurts perf)
-		"-O", "bigalloc", // bigalloc with 1M cluster size (reduce ext4 metadata overhead)
-		"-C", "1M",
-		device, // device always comes last
+		// use direct i/o to avoid polluting page cache
+		"-D",
+		// use DAOS label
+		"-L", "daos",
+		// don't reserve blocks for super-user
+		"-m", "0",
+		// use largest possible block size
+		"-b", "4096",
+		// disable lazy initialization (hurts perf) and discard
+		"-E", "lazy_itable_init=0,lazy_journal_init=0,nodiscard",
+		// enable bigalloc to reduce metadata overhead
+		// enable flex_bg to allow larger contiguous block allocation
+		// disable uninit_bg to initialize everything upfront
+		"-O", "bigalloc,flex_bg,^uninit_bg",
+		// use 16M bigalloc cluster size
+		"-C", "16M",
+		// don't need that many inodes
+		"-i", "16777216",
+		// device always comes last
+		device,
 	}
 	if force {
 		args = append([]string{"-F"}, args...)
@@ -331,12 +352,14 @@ func DefaultProvider(log logging.Logger) *Provider {
 
 // NewProvider returns an initialized *Provider.
 func NewProvider(log logging.Logger, backend Backend, sys SystemProvider) *Provider {
-	return &Provider{
+	p := &Provider{
 		log:     log,
 		backend: backend,
 		sys:     sys,
-		fwd:     NewForwarder(log),
+		fwd:     NewAdminForwarder(log),
 	}
+	p.setupFirmwareProvider(log)
+	return p
 }
 
 func (p *Provider) WithForwardingDisabled() *Provider {
@@ -788,4 +811,18 @@ func (p *Provider) unmount(target string, flags int) (*MountResponse, error) {
 // is mounted.
 func (p *Provider) IsMounted(target string) (bool, error) {
 	return p.sys.IsMounted(target)
+}
+
+// GetfsUsage returns space utilisation info for a mount point.
+func (p *Provider) GetfsUsage(target string) (*storage.ScmMountPoint, error) {
+	total, avail, err := p.sys.GetfsUsage(target)
+	if err != nil {
+		return nil, err
+	}
+
+	return &storage.ScmMountPoint{
+		Path:       target,
+		TotalBytes: total,
+		AvailBytes: avail,
+	}, nil
 }

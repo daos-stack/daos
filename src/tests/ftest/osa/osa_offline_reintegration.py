@@ -50,23 +50,25 @@ class OSAOfflineReintegration(TestWithServers):
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):
-        """Get the pool leader
-           Returns : int (pool_leader)
+        """Get the pool leader.
+
+        Returns:
+            int: pool leader number
+
         """
-        out = []
-        kwargs = {"pool": self.pool.uuid}
-        out = self.dmg_command.get_output("pool_query", **kwargs)
-        return int(out[0][3])
+        data = self.dmg_command.pool_query(self.pool.uuid)
+        return int(data["leader"])
 
     @fail_on(CommandFailure)
     def get_pool_version(self):
-        """Get the pool version
-           Returns : int (pool_version_value)
+        """Get the pool version.
+
+        Returns:
+            int: pool version number
+
         """
-        out = []
-        kwargs = {"pool": self.pool.uuid}
-        out = self.dmg_command.get_output("pool_query", **kwargs)
-        return int(out[0][4])
+        data = self.dmg_command.pool_query(self.pool.uuid)
+        return int(data["version"])
 
     @fail_on(DaosApiError)
     def write_single_object(self):
@@ -116,8 +118,8 @@ class OSAOfflineReintegration(TestWithServers):
         target_list = []
         exclude_servers = len(self.hostlist_servers) - 1
 
-        # Exclude target : random two targets
-        n = random.randint(1, 7)
+        # Exclude target : random two targets (target idx : 0-7)
+        n = random.randint(0, 6)
         target_list.append(n)
         target_list.append(n+1)
         t_string = "{},{}".format(target_list[0], target_list[1])
@@ -126,11 +128,10 @@ class OSAOfflineReintegration(TestWithServers):
         rank = random.randint(1, exclude_servers)
 
         for val in range(0, num_pool):
-            pool[val] = TestPool(self.context,
-                                 dmg_command=self.get_dmg_command())
+            pool[val] = TestPool(self.context, self.get_dmg_command())
             pool[val].get_params(self)
             # Split total SCM and NVME size for creating multiple pools.
-            pool[val].scm_size.value = int(pool[val].nvme_size.value /
+            pool[val].scm_size.value = int(pool[val].scm_size.value /
                                            num_pool)
             pool[val].nvme_size.value = int(pool[val].nvme_size.value /
                                             num_pool)
@@ -149,21 +150,36 @@ class OSAOfflineReintegration(TestWithServers):
             output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                    rank, t_string)
             self.log.info(output)
-            time.sleep(10)
-            pver_exclude = self.get_pool_version()
+
+            fail_count = 0
+            while fail_count <= 20:
+                pver_exclude = self.get_pool_version()
+                time.sleep(10)
+                fail_count += 1
+                if pver_exclude > (pver_begin + len(target_list)):
+                    break
+
             self.log.info("Pool Version after exclude %s", pver_exclude)
             # Check pool version incremented after pool exclude
-            self.assertTrue(pver_exclude > pver_begin,
+            self.assertTrue(pver_exclude > (pver_begin + len(target_list)),
                             "Pool Version Error:  After exclude")
             output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                        rank,
                                                        t_string)
             self.log.info(output)
-            time.sleep(10)
+
+            fail_count = 0
+            while fail_count <= 20:
+                pver_reint = self.get_pool_version()
+                time.sleep(10)
+                fail_count += 1
+                if pver_reint > (pver_exclude + 1):
+                    break
+
             pver_reint = self.get_pool_version()
             self.log.info("Pool Version after reintegrate %d", pver_reint)
             # Check pool version incremented after pool reintegrate
-            self.assertTrue(pver_reint > pver_exclude,
+            self.assertTrue(pver_reint > (pver_exclude + 1),
                             "Pool Version Error:  After reintegrate")
 
         for val in range(0, num_pool):

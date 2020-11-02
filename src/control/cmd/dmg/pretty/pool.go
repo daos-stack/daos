@@ -36,13 +36,13 @@ import (
 
 // PrintPoolQueryResponse generates a human-readable representation of the supplied
 // PoolQueryResp struct and writes it to the supplied io.Writer.
-func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...control.PrintConfigOption) error {
+func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...PrintConfigOption) error {
 	if pqr == nil {
 		return errors.Errorf("nil %T", pqr)
 	}
 	w := txtfmt.NewErrWriter(out)
 
-	// Maintain output compability with the `daos pool query` output.
+	// Maintain output compatibility with the `daos pool query` output.
 	fmt.Fprintf(w, "Pool %s, ntarget=%d, disabled=%d, leader=%d, version=%d\n",
 		pqr.UUID, pqr.TotalTargets, pqr.DisabledTargets, pqr.Leader, pqr.Version)
 	fmt.Fprintln(w, "Pool space info:")

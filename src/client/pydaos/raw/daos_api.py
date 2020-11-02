@@ -81,59 +81,6 @@ class DaosPool(object):
         """Set group given a string"""
         self.group = ctypes.create_string_buffer(group)
 
-    def create(self, mode, uid, gid, scm_size, group, target_list=None,
-               cb_func=None, svcn=1, nvme_size=0):
-        """Send a pool creation request to the daos server group."""
-        c_mode = ctypes.c_uint(mode)
-        c_uid = ctypes.c_uint(uid)
-        c_gid = ctypes.c_uint(gid)
-        c_scm_size = ctypes.c_longlong(scm_size)
-        c_nvme_size = ctypes.c_longlong(nvme_size)
-        if group:
-            self.set_group(group)
-        self.uuid = (ctypes.c_ubyte * 16)()
-        rank_t = ctypes.c_uint * svcn
-        # initializing with default values
-        rank = rank_t(*list([999999 for dummy_i in range(svcn)]))
-        rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
-        c_whatever = ctypes.create_string_buffer(b"rubbish")
-        self.svc = daos_cref.RankList(rl_ranks, svcn)
-
-        # assuming for now target list is a server rank list
-        if target_list is not None:
-            tlist = DaosPool.__pylist_to_array(target_list)
-            c_tgts = daos_cref.RankList(tlist, len(tlist))
-            tgt_ptr = ctypes.byref(c_tgts)
-        else:
-            tgt_ptr = None
-
-        func = self.context.get_function('create-pool')
-        # the callback function is optional, if not supplied then run the
-        # create synchronously, if its there then run it in a thread
-        if cb_func is None:
-            ret = func(c_mode, c_uid, c_gid, self.group, tgt_ptr,
-                       c_whatever, c_scm_size, c_nvme_size,
-                       None, ctypes.byref(self.svc),
-                       self.uuid, None)
-            if ret != 0:
-                self.uuid = (ctypes.c_ubyte * 1)(0)
-                raise DaosApiError("Pool create returned non-zero. RC: {0}"
-                                   .format(ret))
-            else:
-                self.attached = 1
-        else:
-            event = daos_cref.DaosEvent()
-            params = [c_mode, c_uid, c_gid, self.group, tgt_ptr,
-                      c_whatever, c_scm_size, c_nvme_size, None,
-                      ctypes.byref(self.svc), self.uuid, event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
-            thread.start()
-
     def connect(self, flags, cb_func=None):
         """Connect to this pool."""
         # comment this out for now, so we can test bad data
@@ -290,13 +237,14 @@ class DaosPool(object):
                                             self))
             thread.start()
 
-    def tgt_add(self, rank_list, tgt=-1, cb_func=None):
-        """Add a set of storage targets to a pool.
+    def tgt_reint(self, rank_list, tgt=-1, cb_func=None):
+        """Reintegrate a set of storage targets to a pool that had previously
+           failed.
 
         Args:
             rank_list:  server rank
             tl_tgts:    Xstream targets on rank(server)
-                        Default -1 it means it will add all targets on the rank
+                        Default -1 means it will reint all targets on the rank
             cb_func:    Command to run non-blocking mode if it's True
         """
         tl_ranks = DaosPool.__pylist_to_array(rank_list)
@@ -304,13 +252,13 @@ class DaosPool(object):
         tl_nr = ctypes.c_uint32(1)
         c_tgts = ctypes.pointer(
             daos_cref.DTgtList(tl_ranks, ctypes.pointer(tl_tgts), tl_nr))
-        func = self.context.get_function("add-target")
+        func = self.context.get_function("reint-target")
 
         if cb_func is None:
             ret = func(self.uuid, self.group, ctypes.byref(self.svc),
                        ctypes.byref(c_tgts), None)
             if ret != 0:
-                raise DaosApiError("Pool tgt_add returned non-zero. RC: {0}"
+                raise DaosApiError("Pool tgt_reint returned non-zero. RC: {0}"
                                    .format(ret))
         else:
             event = daos_cref.DaosEvent()
@@ -627,7 +575,7 @@ class DaosObjClassOld(enum.IntEnum):
     DAOS_OC_R3S_SPEC_RANK = 21
     DAOS_OC_EC_K2P1_L32K = 22
     DAOS_OC_EC_K2P2_L32K = 23
-    DAOS_OC_EC_K8P2_L1M = 24
+    DAOS_OC_EC_K4P2_L32K = 24
 
 
 # pylint: disable=no-member
@@ -1026,6 +974,7 @@ class IORequest(object):
         self.iod.iod_name.iov_len = ctypes.sizeof(akey)
         self.iod.iod_type = 2
         self.iod.iod_size = c_data[0][1]
+        self.iod.iod_flags = 0
         self.iod.iod_nr = 1
         self.iod.iod_recxs = ctypes.pointer(extent)
 
@@ -1065,6 +1014,7 @@ class IORequest(object):
         self.iod.iod_name.iov_len = ctypes.sizeof(akey)
         self.iod.iod_type = 2
         self.iod.iod_size = rec_size
+        self.iod.iod_flags = 0
         self.iod.iod_nr = 1
         self.iod.iod_recxs = ctypes.pointer(extent)
 
@@ -1134,6 +1084,7 @@ class IORequest(object):
             self.iod.iod_name.iov_len = ctypes.sizeof(akey)
             self.iod.iod_type = 1
             self.iod.iod_size = size
+            self.iod.iod_flags = 0
             self.iod.iod_nr = 1
             self.iod.iod_recxs = None
 
@@ -1201,6 +1152,7 @@ class IORequest(object):
             self.iod.iod_name.iov_len = ctypes.sizeof(akey)
             self.iod.iod_type = 1
             self.iod.iod_size = ctypes.c_size_t(size)
+            self.iod.iod_flags = 0
             self.iod.iod_nr = 1
             # self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range),
             #                                 ctypes.c_void_p)
@@ -1256,6 +1208,7 @@ class IORequest(object):
             iods[i].iod_name.iov_len = ctypes.sizeof(tup[0])
             iods[i].iod_type = 1
             iods[i].iod_size = len(tup[1])+1
+            iods[i].iod_flags = 0
             iods[i].iod_nr = 1
             i += 1
         iod_ptr = ctypes.pointer(iods)
@@ -1314,6 +1267,7 @@ class IORequest(object):
             iods[i].iod_name.iov_len = ctypes.sizeof(key[0])
             iods[i].iod_type = 1
             iods[i].iod_size = ctypes.c_ulong(key[1].value+1)
+            iods[i].iod_flags = 0
 
             iods[i].iod_nr = 1
             i += 1
@@ -1524,7 +1478,7 @@ class DaosContainer(object):
         else:
             event = daos_cref.DaosEvent()
             if self.cont_prop is None:
-                params = [self.poh, self.uuid, None, None, event]
+                params = [self.poh, self.uuid, None, event]
             else:
                 params = [self.poh, self.uuid, ctypes.byref(self.cont_prop),
                           None, event]
@@ -1837,7 +1791,7 @@ class DaosContainer(object):
                       txn=daos_cref.DAOS_TX_NONE):
         """Read an array value from the specified object.
 
-        rec_count --number of records (array indicies) to read
+        rec_count --number of records (array indices) to read
         rec_size --each value in the array must be this size
 
         """
@@ -2104,7 +2058,7 @@ class DaosContainer(object):
         return:
             None
         raise:
-            DaosApiError raised incase of API return code is nonzero
+            DaosApiError raised in case of API return code is nonzero
         """
         self.coh = coh
         func = self.context.get_function('cont-aggregate')
@@ -2270,7 +2224,7 @@ class DaosContext(object):
                                    mode=ctypes.DEFAULT_MODE)
         # Note: action-subject format
         self.ftable = {
-            'add-target':      self.libdaos.daos_pool_add_tgt,
+            'reint-target':    self.libdaos.daos_pool_reint_tgt,
             'close-cont':      self.libdaos.daos_cont_close,
             'close-obj':       self.libdaos.daos_obj_close,
             'close-tx':        self.libdaos.daos_tx_close,
@@ -2282,12 +2236,10 @@ class DaosContext(object):
             'convert-plocal':  self.libdaos.daos_pool_local2global,
             'create-cont':     self.libdaos.daos_cont_create,
             'create-eq':       self.libdaos.daos_eq_create,
-            'create-pool':     self.libdaos.daos_pool_create,
             'create-snap':     self.libdaos.daos_cont_create_snap,
             'd_log':           self.libtest.dts_log,
             'destroy-cont':    self.libdaos.daos_cont_destroy,
             'destroy-eq':      self.libdaos.daos_eq_destroy,
-            'destroy-pool':    self.libdaos.daos_pool_destroy,
             'destroy-snap':    self.libdaos.daos_cont_destroy_snap,
             'destroy-tx':      self.libdaos.daos_tx_abort,
             'disconnect-pool': self.libdaos.daos_pool_disconnect,

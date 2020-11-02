@@ -26,7 +26,6 @@ package main
 import (
 	"errors"
 	"net"
-	"os/user"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -183,17 +182,6 @@ func TestAgentSecurityModule_RequestCreds_BadConfig(t *testing.T) {
 	expectCredResp(t, respBytes, int32(drpc.DaosInvalidInput), false)
 }
 
-// Force an error when generating the cred from the domain info
-type errorExt struct{}
-
-func (e *errorExt) LookupUserID(uid uint32) (auth.User, error) {
-	return nil, errors.New("LookupUserID")
-}
-
-func (e *errorExt) LookupGroupID(gid uint32) (*user.Group, error) {
-	return nil, errors.New("LookupGroupID")
-}
-
 func TestAgentSecurityModule_RequestCreds_BadUid(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
@@ -203,7 +191,10 @@ func TestAgentSecurityModule_RequestCreds_BadUid(t *testing.T) {
 	defer cleanup()
 
 	mod := NewSecurityModule(log, defaultTestTransportConfig())
-	mod.ext = &errorExt{}
+	mod.ext = &auth.MockExt{
+		LookupUserIDErr:  errors.New("LookupUserID"),
+		LookupGroupIDErr: errors.New("LookupGroupID"),
+	}
 	respBytes, err := callRequestCreds(mod, t, log, conn)
 
 	if err != nil {

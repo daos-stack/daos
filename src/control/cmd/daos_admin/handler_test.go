@@ -31,7 +31,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -55,36 +54,6 @@ func expectPayload(t *testing.T, resp *pbin.Response, payload interface{}, expPa
 }
 
 var nilPayloadErr = pbin.PrivilegedHelperRequestFailed("unexpected end of JSON input")
-
-func TestDaosAdmin_PingHandler(t *testing.T) {
-	for name, tc := range map[string]struct {
-		req        *pbin.Request
-		expPayload *pbin.PingResp
-		expErr     *fault.Fault
-	}{
-		"nil request": {
-			expErr: pbin.PrivilegedHelperRequestFailed("nil request"),
-		},
-		"success": {
-			req:        &pbin.Request{Method: "Ping"},
-			expPayload: &pbin.PingResp{Version: build.DaosVersion},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			handler := &pingHandler{}
-
-			resp := handler.Handle(nil, tc.req)
-
-			if diff := cmp.Diff(tc.expErr, resp.Error); diff != "" {
-				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
-			}
-			if tc.expPayload == nil {
-				tc.expPayload = &pbin.PingResp{}
-			}
-			expectPayload(t, resp, &pbin.PingResp{}, tc.expPayload)
-		})
-	}
-}
 
 func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
 	testTarget, cleanup := common.CreateTestDir(t)
@@ -399,67 +368,6 @@ func TestDaosAdmin_ScmScanHandler(t *testing.T) {
 	}
 }
 
-func TestDaosAdmin_BdevInitHandler(t *testing.T) {
-	bdevInitReqPayload, err := json.Marshal(bdev.InitRequest{
-		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for name, tc := range map[string]struct {
-		req        *pbin.Request
-		bmbc       *bdev.MockBackendConfig
-		expPayload *bdev.InitResponse
-		expErr     *fault.Fault
-	}{
-		"nil request": {
-			expErr: pbin.PrivilegedHelperRequestFailed("nil request"),
-		},
-		"BdevInit nil payload": {
-			req: &pbin.Request{
-				Method: "BdevInit",
-			},
-			expErr: nilPayloadErr,
-		},
-		"BdevInit success": {
-			req: &pbin.Request{
-				Method:  "BdevInit",
-				Payload: bdevInitReqPayload,
-			},
-			expPayload: &bdev.InitResponse{},
-		},
-		"BdevInit failure": {
-			req: &pbin.Request{
-				Method:  "BdevInit",
-				Payload: bdevInitReqPayload,
-			},
-			bmbc: &bdev.MockBackendConfig{
-				InitErr: errors.New("init failed"),
-			},
-			expErr: pbin.PrivilegedHelperRequestFailed("init failed"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
-
-			bp := bdev.NewMockProvider(log, tc.bmbc)
-			handler := &bdevInitHandler{bdevHandler: bdevHandler{bdevProvider: bp}}
-
-			resp := handler.Handle(log, tc.req)
-
-			if diff := cmp.Diff(tc.expErr, resp.Error); diff != "" {
-				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
-			}
-			if tc.expPayload == nil {
-				tc.expPayload = &bdev.InitResponse{}
-			}
-			expectPayload(t, resp, &bdev.InitResponse{}, tc.expPayload)
-		})
-	}
-}
-
 func TestDaosAdmin_BdevScanHandler(t *testing.T) {
 	bdevScanReqPayload, err := json.Marshal(bdev.ScanRequest{
 		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
@@ -559,7 +467,7 @@ func TestDaosAdmin_BdevPrepHandler(t *testing.T) {
 			bmbc: &bdev.MockBackendConfig{
 				PrepareErr: errors.New("test prepare failed"),
 			},
-			expErr: pbin.PrivilegedHelperRequestFailed("SPDK prepare: test prepare failed"),
+			expErr: pbin.PrivilegedHelperRequestFailed("test prepare failed"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -612,30 +520,32 @@ func TestDaosAdmin_BdevFormatHandler(t *testing.T) {
 				Method:  "BdevFormat",
 				Payload: bdevFormatReqPayload,
 			},
+			bmbc: &bdev.MockBackendConfig{
+				FormatRes: &bdev.FormatResponse{
+					DeviceResponses: bdev.DeviceFormatResponses{
+						"foo": &bdev.DeviceFormatResponse{
+							Formatted: true,
+						},
+					},
+				},
+			},
 			expPayload: &bdev.FormatResponse{
 				DeviceResponses: bdev.DeviceFormatResponses{
 					"foo": &bdev.DeviceFormatResponse{
-						Formatted:  true,
-						Controller: &storage.NvmeController{PciAddr: "foo"},
+						Formatted: true,
 					},
 				},
 			},
 		},
-		"BdevFormat failure": {
+		"BdevFormat device failure": {
 			req: &pbin.Request{
 				Method:  "BdevFormat",
 				Payload: bdevFormatReqPayload,
 			},
 			bmbc: &bdev.MockBackendConfig{
-				FormatErr: errors.New("test format failed"),
+				FormatErr: bdev.FaultUnknown,
 			},
-			expPayload: &bdev.FormatResponse{
-				DeviceResponses: bdev.DeviceFormatResponses{
-					"foo": &bdev.DeviceFormatResponse{
-						Error: bdev.FaultFormatError(errors.New("test format failed")),
-					},
-				},
-			},
+			expErr: bdev.FaultUnknown,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

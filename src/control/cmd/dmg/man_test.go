@@ -65,6 +65,6 @@ func TestDmg_ManPageIsCurrent(t *testing.T) {
 	strippedGolden := stripDate(goldenBytes)
 
 	if diff := cmp.Diff(strippedGolden, strippedGenerated); diff != "" {
-		t.Fatalf("unexpected manpage diff. If this is intentional rerun this test with -args --update\n Diff (-want, +got):\n%s", diff)
+		t.Fatalf("%s is out of date. Run `go test -run %s -args --update` to update it and then commit it.", goldenPath, t.Name())
 	}
 }
