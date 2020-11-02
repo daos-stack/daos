@@ -184,6 +184,58 @@ failed:
 	return NULL;
 }
 
+/* Choose a pool service replica rank. If the rsvc module indicates
+ * DER_NOTREPLICA, attempt to refresh the list by querying the MS.
+ */
+int
+dc_pool_choose_svc_rank(const uuid_t puuid, struct rsvc_client *cli,
+			pthread_mutex_t *cli_lock, struct dc_mgmt_sys *sys,
+			crt_endpoint_t *ep)
+{
+	int			rc;
+	int			i;
+
+	if (cli_lock)
+		D_MUTEX_LOCK(cli_lock);
+choose:
+	rc = rsvc_client_choose(cli, ep);
+	if (rc == -DER_NOTREPLICA) {
+		d_rank_list_t	*new_ranklist = NULL;
+
+		if (cli_lock)
+			D_MUTEX_UNLOCK(cli_lock);
+
+		rc = dc_mgmt_get_pool_svc_ranks(sys, puuid, &new_ranklist);
+		if (rc) {
+			D_ERROR(DF_UUID ": dc_mgmt_get_pool_svc_ranks() "
+				"failed, " DF_RC "\n", DP_POOL(puuid),
+				DP_RC(rc));
+			return -DER_NOTREPLICA;
+		}
+
+		if (cli_lock)
+			D_MUTEX_LOCK(cli_lock);
+
+		rsvc_client_fini(cli);
+		rc = rsvc_client_init(cli, new_ranklist, puuid, NULL, NULL);
+		d_rank_list_free(new_ranklist);
+		new_ranklist = NULL;
+		if (rc == 0) {
+			for (i = 0; i < cli->sc_ranks->rl_nr; i++) {
+				D_DEBUG(DF_DSMC, DF_UUID ": sc_ranks[%d]=%u\n",
+					DP_UUID(puuid), i,
+					cli->sc_ranks->rl_ranks[i]);
+			}
+			goto choose;
+		}
+	}
+
+	if (cli_lock)
+		D_MUTEX_UNLOCK(cli_lock);
+
+	return rc;
+}
+
 /* rsvc_client callback function to ask mgmt. service for updated
  * list of pool service replica ranks
  */
@@ -499,9 +551,8 @@ dc_pool_connect(tse_task_t *task)
 
 	/** Choose an endpoint and create an RPC. */
 	ep.ep_grp = pool->dp_sys->sy_group;
-	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rc = rsvc_client_choose(&pool->dp_client, &ep);
-	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	rc = dc_pool_choose_svc_rank(pool->dp_pool, &pool->dp_client,
+				     &pool->dp_client_lock, pool->dp_sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
 			DP_UUID(pool->dp_pool), DP_RC(rc));
@@ -664,9 +715,8 @@ dc_pool_disconnect(tse_task_t *task)
 	}
 
 	ep.ep_grp = pool->dp_sys->sy_group;
-	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rc = rsvc_client_choose(&pool->dp_client, &ep);
-	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	rc = dc_pool_choose_svc_rank(pool->dp_pool, &pool->dp_client,
+				     &pool->dp_client_lock, pool->dp_sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
 			DP_UUID(pool->dp_pool), DP_RC(rc));
@@ -1099,7 +1149,8 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 	}
 
 	ep.ep_grp = state->sys->sy_group;
-	rc = rsvc_client_choose(&state->client, &ep);
+	rc = dc_pool_choose_svc_rank(args->uuid, &state->client,
+				     NULL /* mutex */, state->sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
 			DP_UUID(args->uuid), DP_RC(rc));
@@ -1306,9 +1357,8 @@ dc_pool_query(tse_task_t *task)
 		args->tgts, args->info);
 
 	ep.ep_grp = pool->dp_sys->sy_group;
-	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rc = rsvc_client_choose(&pool->dp_client, &ep);
-	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	rc = dc_pool_choose_svc_rank(pool->dp_pool, &pool->dp_client,
+				     &pool->dp_client_lock, pool->dp_sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
 			DP_UUID(pool->dp_pool), DP_RC(rc));
@@ -1438,9 +1488,8 @@ dc_pool_list_cont(tse_task_t *task)
 		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl));
 
 	ep.ep_grp = pool->dp_sys->sy_group;
-	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rc = rsvc_client_choose(&pool->dp_client, &ep);
-	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	rc = dc_pool_choose_svc_rank(pool->dp_pool, &pool->dp_client,
+				     &pool->dp_client_lock, pool->dp_sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
 			DP_UUID(pool->dp_pool), DP_RC(rc));
@@ -1602,7 +1651,8 @@ dc_pool_evict(tse_task_t *task)
 	}
 
 	ep.ep_grp = state->sys->sy_group;
-	rc = rsvc_client_choose(&state->client, &ep);
+	rc = dc_pool_choose_svc_rank(args->uuid, &state->client,
+				     NULL /* mutex */, state->sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
 			DP_UUID(args->uuid), DP_RC(rc));
@@ -2185,9 +2235,8 @@ dc_pool_stop_svc(tse_task_t *task)
 		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl));
 
 	ep.ep_grp = pool->dp_sys->sy_group;
-	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rc = rsvc_client_choose(&pool->dp_client, &ep);
-	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	rc = dc_pool_choose_svc_rank(pool->dp_pool, &pool->dp_client,
+				     &pool->dp_client_lock, pool->dp_sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
 			DP_UUID(pool->dp_pool), DP_RC(rc));
@@ -2278,7 +2327,8 @@ rsvc_client_state_create(tse_task_t *task, const uuid_t svc_uuid,
 	}
 
 	ep.ep_grp = state->scs_sys->sy_group;
-	rc = rsvc_client_choose(&state->scs_client, &ep);
+	rc = dc_pool_choose_svc_rank(svc_uuid, &state->scs_client,
+				     NULL /* mutex */, state->scs_sys, &ep);
 	if (rc != 0) {
 		D_ERROR("cannot find pool service: "DF_RC"\n", DP_RC(rc));
 		rsvc_client_state_cleanup(CCS_CU_CLI, state);

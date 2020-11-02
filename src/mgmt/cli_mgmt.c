@@ -899,7 +899,7 @@ dc_mgmt_sys_decode(void *buf, size_t len, struct dc_mgmt_sys **sysp)
  * for freeing the d_rank_list_t allocated here.
  */
 int
-dc_mgmt_get_pool_svc_ranks(struct dc_mgmt_sys *sys, uuid_t puuid,
+dc_mgmt_get_pool_svc_ranks(struct dc_mgmt_sys *sys, const uuid_t puuid,
 			   d_rank_list_t **svcranksp)
 {
 	crt_endpoint_t				srv_ep;
