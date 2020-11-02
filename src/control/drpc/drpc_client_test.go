@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -82,7 +82,10 @@ func newTestClientConnection(dialer *mockDialer, conn *mockConn) *ClientConnecti
 func TestNewClientConnection(t *testing.T) {
 	client := NewClientConnection(testSockPath)
 
-	common.AssertTrue(t, client != nil, "Expected a real client")
+	if client == nil {
+		t.Fatal("Expected a real client")
+		return
+	}
 	common.AssertEqual(t, client.socketPath, testSockPath,
 		"Should match the path we passed in")
 	common.AssertFalse(t, client.IsConnected(), "Shouldn't be connected yet")
@@ -224,7 +227,10 @@ func TestClient_SendMsg_Success(t *testing.T) {
 	response, err := client.SendMsg(call)
 
 	common.AssertTrue(t, err == nil, "Expected no error")
-	common.AssertTrue(t, response != nil, "Expected a real response")
+	if response == nil {
+		t.Fatal("Expected a real response")
+		return
+	}
 	common.AssertEqual(t, response.Sequence, expectedResp.Sequence,
 		"Response should match expected")
 	common.AssertEqual(t, response.Status, expectedResp.Status,
