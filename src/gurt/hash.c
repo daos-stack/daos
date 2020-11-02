@@ -807,7 +807,6 @@ d_hash_table_create_inplace(uint32_t feats, uint32_t bits, void *priv,
 	if (feats & D_HASH_FT_DYNAMIC)
 		return dyn_hash_table_create_inplace(feats, bits,
 						     priv, hops, htable);
-	}
 	D_ASSERT(hops != NULL);
 	D_ASSERT(hops->hop_key_cmp != NULL);
 
