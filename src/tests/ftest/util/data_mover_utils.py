@@ -144,8 +144,8 @@ class DataMover(DataMoverCommand):
         """Run the datamover command.
 
         Args:
-            check (bool): Check if datamover mounted properly after
-                mount is executed.
+            tmp (str): path for hostfiles
+            processes: Number of processes for dcp command
         Raises:
             CommandFailure: In case datamover run command fails
 

@@ -64,7 +64,7 @@ class ContainerCopy(MdtestBase, IorTestBase):
         dcp.get_params(self)
         # update dest path
         if update_dest:
-            dcp.dest_path.update(self.workdir)
+            dcp.dest_path.update(self.dfuse.mount_dir.value)
         # set datamover params
         dcp.set_datamover_params(src_pool, dst_pool, src_cont, dst_cont)
 
@@ -87,7 +87,7 @@ class ContainerCopy(MdtestBase, IorTestBase):
             Create second container
             Copy data from cont1 to cont2 using dcp
             Run mdtest again, but this time on cont2 and read the files back.
-        :avocado: tags=all,daosio,hw,large,full_regression
+        :avocado: tags=all,datamover,hw,large,full_regression
         :avocado: tags=containercopy,daoscont1_to_daoscont2
         """
 
@@ -132,9 +132,10 @@ class ContainerCopy(MdtestBase, IorTestBase):
             Create cont2
             Copy data from cont1 to cont2 using dcp.
             Copy data from cont2 to external Posix File system.
+            (Assuming dfuse mount as external POSIX FS)
             Run ior -a DFS with read verify on copied directory to verify
             data.
-        :avocado: tags=all,daosio,hw,large,full_regression
+        :avocado: tags=all,datamover,hw,large,full_regression
         :avocado: tags=containercopy,daoscont_to_posixfs
         """
 
@@ -147,11 +148,14 @@ class ContainerCopy(MdtestBase, IorTestBase):
                                      self.container[0].uuid)
         self.run_ior(self.get_ior_job_manager_command(), self.processes)
 
-        # create container2
+        # create cont2
         self.create_cont()
 
         # copy from daos cont1 to cont2
         self.run_dcp(self.pool, self.pool, self.container[0], self.container[1])
+
+        # start dfuse
+        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
         # copy from daos cont to posix file system
         self.run_dcp(self.pool, None, self.container[1], None, True)
@@ -159,7 +163,7 @@ class ContainerCopy(MdtestBase, IorTestBase):
         # update ior params, read back and verify data from posix file system
         self.ior_cmd.api.update("POSIX")
         self.ior_cmd.flags.update("-r -R")
-        dest_path = self.workdir + self.ior_cmd.test_file.value
+        dest_path = self.dfuse.mount_dir.value + self.ior_cmd.test_file.value
         self.ior_cmd.test_file.update(dest_path)
         self.ior_cmd.set_daos_params(self.server_group, self.pool)
         self.run_ior(self.get_ior_job_manager_command(), self.processes)
