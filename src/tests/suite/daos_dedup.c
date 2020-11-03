@@ -28,12 +28,6 @@
 #include <gurt/types.h>
 #include <daos_prop.h>
 
-#define assert_success(r) do {\
-	int __rc = (r); \
-	if (__rc != 0) \
-		fail_msg("Not successful!! Error code: " DF_RC, DP_RC(__rc)); \
-	} while (0)
-
 struct dedup_test_ctx {
 	/** Pool */
 	daos_handle_t		poh;
