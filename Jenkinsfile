@@ -1077,8 +1077,9 @@ pipeline {
                     }
                     post {
                       always {
-                            unitTestPost artifacts: ['unit_vm_test/*'],
+                            unitTestPost artifacts: ['unit_vm_test/*', 'vm_test/*'],
                                          testResults: 'None',
+                                         valgrind_pattern: 'vm_test/*.memcheck.xml',
                                          valgrind_stash: 'centos7-gcc-nlt-memcheck'
                         }
                     }
@@ -1360,7 +1361,8 @@ pipeline {
     post {
         always {
             valgrindReportPublish valgrind_stashes: ['centos7-gcc-nlt-memcheck',
-                                                     'centos7-gcc-unit-memcheck']
+                                                     'centos7-gcc-unit-memcheck'],
+                                  valgrind_pattern: '*.memcheck.xml'
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch

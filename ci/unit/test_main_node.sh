@@ -57,5 +57,5 @@ if [ "$WITH_VALGRIND" == 'memcheck' ]; then
 fi
 if [ -n "$NLT" ]; then
     mkdir -p vm_test
-    ./utils/node_local_test.py --output-file=vm_test/nlt-errors.json all
+    ./utils/node_local_test.py --output-file=vm_test/nlt-errors.json --xml-dir vm_test/ all
 fi

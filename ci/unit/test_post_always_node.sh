@@ -16,15 +16,10 @@ case $STAGE_NAME in
     ;;
   *Unit*)
     test_log_dir="unit_test_logs"
-    vm_log_dir="unit_vm_test"
     ;;
 esac
 mkdir "${test_log_dir}"
 mkdir "${vm_log_dir}"
-if [ -e nlt-errors.json ]; then
-  cp nlt-errors.json "$vm_log_dir"/
-  mv nlt-errors.json vm_test/
-fi
 if ls /tmp/daos*.log > /dev/null; then
   mv /tmp/daos*.log "$test_log_dir"/
 fi
