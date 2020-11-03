@@ -810,7 +810,9 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		D_GOTO(out_free, rc = RC_NO_HELP);
 	}
 
-	/* Verify pool svc provided */
+	/* Verify pool svc argument. If not provided pass NULL list to libdaos,
+	 * and client will query management service for rank list.
+	 */
 	ARGS_VERIFY_MDSRV(ap, out_free, rc = RC_PRINT_HELP);
 
 	D_FREE(cmdname);

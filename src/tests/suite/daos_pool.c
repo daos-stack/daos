@@ -42,8 +42,16 @@ pool_connect_nonexist(void **state)
 	if (arg->myrank != 0)
 		return;
 
+	/* Contact pool service replicas as returned by pool create */
 	uuid_generate(uuid);
 	rc = daos_pool_connect(uuid, arg->group, arg->pool.svc, DAOS_PC_RW,
+			       &poh, NULL /* info */, NULL /* ev */);
+	assert_int_equal(rc, -DER_NONEXIST);
+
+	/* Do not specify pool service replicas, ask libdaos to query
+	 * management service for pool svc ranks. Same outcome expected.
+	 */
+	rc = daos_pool_connect(uuid, arg->group, NULL /* svc */, DAOS_PC_RW,
 			       &poh, NULL /* info */, NULL /* ev */);
 	assert_int_equal(rc, -DER_NONEXIST);
 }
@@ -54,8 +62,10 @@ pool_connect(void **state)
 {
 	test_arg_t	*arg = *state;
 	daos_handle_t	 poh;
+	daos_handle_t	 poh2;
 	daos_event_t	 ev;
 	daos_pool_info_t info = {0};
+	daos_pool_info_t info2 = {0};
 	int		 rc;
 
 	if (!arg->hdl_share && arg->myrank != 0)
@@ -81,6 +91,19 @@ pool_connect(void **state)
 		assert_int_equal(info.pi_ndisabled, 0);
 		print_message("success\n");
 
+		/* Connect again this time do not provide optional svc ranks */
+		print_message("rank 0 connecting to pool (no svc arg) ... ");
+		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+				       NULL, DAOS_PC_RW, &poh2, &info2,
+				       arg->async ? &ev : NULL /* ev */);
+		assert_int_equal(rc, 0);
+		WAIT_ON_ASYNC(arg, ev);
+		assert_memory_equal(info2.pi_uuid, arg->pool.pool_uuid,
+				    sizeof(info2.pi_uuid));
+		/** TODO: assert_int_equal(info2.pi_ntargets, arg->...); */
+		assert_int_equal(info2.pi_ndisabled, 0);
+		print_message("success\n");
+
 		print_message("rank 0 querying pool info... ");
 		memset(&info, 'D', sizeof(info));
 		info.pi_bits = DPI_ALL;
@@ -92,13 +115,22 @@ pool_connect(void **state)
 		print_message("success\n");
 	}
 
-	if (arg->hdl_share)
+	if (arg->hdl_share) {
 		handle_share(&poh, HANDLE_POOL, arg->myrank, poh, 1);
+		handle_share(&poh2, HANDLE_POOL, arg->myrank, poh2, 1);
+	}
 
 	/** disconnect from pool */
 	print_message("rank %d disconnecting from pool %ssynchronously ... ",
 		      arg->myrank, arg->async ? "a" : "");
 	rc = daos_pool_disconnect(poh, arg->async ? &ev : NULL /* ev */);
+	assert_int_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	print_message("success\n");
+
+	print_message("rank %d disconnecting from pool (handle 2) ... ",
+		      arg->myrank);
+	rc = daos_pool_disconnect(poh2, arg->async ? &ev : NULL /* ev */);
 	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 	if (arg->async) {
@@ -359,6 +391,8 @@ static void
 init_fini_conn(void **state)
 {
 	test_arg_t		*arg = *state;
+	daos_handle_t		 poh2;
+	daos_pool_info_t	 info2 = {0};
 	int			 rc;
 
 	rc = daos_pool_disconnect(arg->pool.poh, NULL /* ev */);
@@ -393,6 +427,23 @@ init_fini_conn(void **state)
 	else
 		print_message("connected to pool, ntarget=%d\n",
 			      arg->pool.pool_info.pi_ntargets);
+	assert_int_equal(rc, 0);
+
+	/* Connect again, without specifying pool svc ranks */
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+			       NULL /* svc */, DAOS_PC_RW,
+			       &poh2, &info2,
+			       NULL /* ev */);
+	if (rc)
+		print_message("daos_pool_connect failed, rc: %d\n", rc);
+	else
+		print_message("connected to pool (handle 2), ntarget=%d\n",
+			      arg->pool.pool_info.pi_ntargets);
+	assert_int_equal(rc, 0);
+
+	/* Disconnect handle 2 */
+	rc = daos_pool_disconnect(poh2, NULL /* ev */);
+	poh2 = DAOS_HDL_INVAL;
 	assert_int_equal(rc, 0);
 }
 
@@ -700,7 +751,7 @@ setup_containers(void **state, daos_size_t nconts)
 	/* TODO: make test_setup_pool_connect() more generic, call here */
 	if (arg->myrank == 0) {
 		rc = daos_pool_connect(lcarg->tpool.pool_uuid, arg->group,
-				       lcarg->tpool.svc, DAOS_PC_RW,
+				       NULL /* svc */, DAOS_PC_RW,
 				       &lcarg->tpool.poh, NULL /* pool info */,
 				       NULL /* ev */);
 		if (rc != 0)

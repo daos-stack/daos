@@ -478,7 +478,6 @@ dc_pool_connect(tse_task_t *task)
 
 	if (pool == NULL) {
 		if (!daos_uuid_valid(args->uuid) ||
-		    !daos_rank_list_valid(args->svc) ||
 		    !flags_are_valid(args->flags) || args->poh == NULL)
 			D_GOTO(out_task, rc = -DER_INVAL);
 
@@ -1586,8 +1585,7 @@ dc_pool_evict(tse_task_t *task)
 	state = dc_task_get_priv(task);
 
 	if (state == NULL) {
-		if (!daos_uuid_valid(args->uuid) ||
-		    !daos_rank_list_valid(args->svc))
+		if (!daos_uuid_valid(args->uuid))
 			D_GOTO(out_task, rc = -DER_INVAL);
 
 		D_DEBUG(DF_DSMC, DF_UUID": evicting\n", DP_UUID(args->uuid));

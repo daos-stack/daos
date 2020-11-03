@@ -113,18 +113,15 @@ struct cmd_args_s {
 		}						\
 	} while (0)
 
+/* --svc argument is optional. If provided by user, perform these checks */
 #define ARGS_VERIFY_MDSRV(ap, label, rcexpr)				\
 	do {								\
-		if ((ap)->mdsrv_str == NULL) {				\
-			fprintf(stderr, "--svc must be specified\n");	\
-			D_GOTO(label, (rcexpr));			\
-		}							\
-		if ((ap)->mdsrv == NULL) {				\
+		if (((ap)->mdsrv_str) && ((ap)->mdsrv == NULL)) {	\
 			fprintf(stderr, "failed to parse --svc=%s\n",	\
 					(ap)->mdsrv_str);		\
 			D_GOTO(label, (rcexpr));			\
 		}							\
-		if ((ap)->mdsrv->rl_nr == 0) {				\
+		if (((ap)->mdsrv) && ((ap)->mdsrv->rl_nr == 0)) {	\
 			fprintf(stderr, "--svc must not be empty\n");	\
 			D_GOTO(label, (rcexpr));			\
 		}							\

@@ -49,16 +49,22 @@ rsvc_client_reset_leader(struct rsvc_client *client)
  * Initialize \a client.
  *
  * \param[out]	client	client state
- * \param[in]	ranks	ranks of (potential) service replicas
+ * \param[in]	ranks	(optional) ranks of (potential) service replicas
  */
 int
 rsvc_client_init(struct rsvc_client *client, const d_rank_list_t *ranks)
 {
 	int rc;
 
-	if (ranks->rl_nr == 0)
-		return -DER_INVAL;
-	rc = daos_rank_list_dup_sort_uniq(&client->sc_ranks, ranks);
+	if (ranks) {
+		rc = daos_rank_list_dup_sort_uniq(&client->sc_ranks, ranks);
+	} else {
+		d_rank_list_t *noranks = d_rank_list_alloc(0);
+
+		if (noranks == NULL)
+			return -DER_NOMEM;
+		rc = daos_rank_list_dup_sort_uniq(&client->sc_ranks, noranks);
+	}
 	if (rc != 0)
 		return rc;
 	rsvc_client_reset_leader(client);

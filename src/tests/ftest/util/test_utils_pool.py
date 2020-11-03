@@ -137,7 +137,11 @@ class TestPool(TestDaosApiBase):
             rank_t = ctypes.c_uint * len(service_replicas)
             rank = rank_t(*list([svc for svc in service_replicas]))
             rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
-            self.pool.svc = daos_cref.RankList(rl_ranks, len(service_replicas))
+            # TEMPORARY FOR TESTING
+            # svc is now optional, testing it out here
+            # self.pool.svc = daos_cref.RankList(rl_ranks, len(service_replicas))
+            # self.pool.svc = daos_cref.RankList(rl_ranks, 0)
+            self.pool.svc = daos_cref.RankList(None, 0)
 
             # Set UUID and attached to the DaosPool object
             self.pool.set_uuid_str(data["uuid"])
