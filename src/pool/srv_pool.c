@@ -4466,6 +4466,7 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 	size_t			hdl_uuids_size;
 	int			n_hdl_uuids;
 	int			rc;
+	int			n;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
 		DP_UUID(in->pvi_op.pi_uuid), rpc);
@@ -4492,6 +4493,9 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 		if (in->pvi_pool_destroy && !in->pvi_pool_destroy_force) {
 			D_DEBUG(DF_DSMS, DF_UUID": busy, %u open handles\n",
 				DP_UUID(in->pvi_op.pi_uuid), n_hdl_uuids);
+			for (n = 0; n < n_hdl_uuids; n++)
+				D_DEBUG(DF_DSMS, "Open handle: "DF_UUID"\n",
+					DP_UUID(hdl_uuids[n]));
 			D_GOTO(out_free, rc = -DER_BUSY);
 		} else {
 			/* Pool evict, or pool destroy with force=true */

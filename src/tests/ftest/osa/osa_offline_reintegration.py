@@ -198,5 +198,4 @@ class OSAOfflineReintegration(TestWithServers):
         for x in range(1, 4):
             self.run_offline_reintegration_test(x)
         # Perform reintegration testing : inserting data in pool
-        # Remove the comment below after DAOS-4946 is fixed.
-        # self.run_offline_reintegration_test(1, True)
+        self.run_offline_reintegration_test(1, True)

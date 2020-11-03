@@ -170,8 +170,7 @@ class OSAOfflineExtend(TestWithServers):
         # Perform extend testing with 1 pool
         self.run_offline_extend_test(1)
         # Perform extend testing : inserting data in pool
-        # Blocked by DAOS-4946
-        # self.stop_servers()
-        # time.sleep(15)
-        # self.start_servers()
-        # self.run_offline_extend_test(1, True)
+        self.stop_servers()
+        time.sleep(15)
+        self.start_servers()
+        self.run_offline_extend_test(1, True)
