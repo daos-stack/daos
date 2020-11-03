@@ -67,8 +67,7 @@ class NvmeIo(IorTestBase):
                     continue
 
                 # Create and connect to a pool
-                self.pool = TestPool(
-                    self.context, dmg_command=self.get_dmg_command())
+                self.pool = TestPool(self.context, self.get_dmg_command())
                 self.pool.get_params(self)
                 self.pool.scm_size.update(ior_param[0])
                 self.pool.nvme_size.update(ior_param[1])
