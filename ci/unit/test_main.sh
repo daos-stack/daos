@@ -27,6 +27,11 @@ else
   BULLSEYE=
 fi
 
+NLT=
+if [ $STAGE_NAME = NLT ]; then
+    NLT=true
+fi
+
 # shellcheck disable=SC1091
 source ./.build_vars.sh
 rm -f "${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control"
@@ -44,5 +49,6 @@ ssh "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$DAOS_BASE      \
                                      HOSTPWD=$PWD              \
                                      SL_PREFIX=$SL_PREFIX      \
                                      WITH_VALGRIND=$WITH_VALGRIND \
+                                     NLT=$NLT                  \
                                      BULLSEYE=$BULLSEYE        \
                                      $(cat "$mydir/test_main_node.sh")"

@@ -1049,7 +1049,7 @@ pipeline {
                       expression { ! skip_unit_test() }
                     }
                     agent {
-                        label 'ci_nvme1'
+                        label 'ci_vm1'
                     }
                     steps {
                         unitTest timeout_time: 60,
@@ -1058,8 +1058,26 @@ pipeline {
                     }
                     post {
                       always {
-                            unitTestPost artifacts: ['unit_test_logs/*',
-                                                     'unit_vm_test/**'],
+                            unitTestPost artifacts: ['unit_test_logs/*']
+                        }
+                    }
+                }
+                stage('NLT') {
+                    when {
+                      beforeAgent true
+                      expression { ! skip_unit_test() }
+                    }
+                    agent {
+                        label 'ci_hdwr1'
+                    }
+                    steps {
+                        unitTest timeout_time: 60,
+                                 inst_repos: pr_repos(),
+                                 inst_rpms: unit_packages()
+                    }
+                    post {
+                      always {
+                            unitTestPost artifacts: ['unit_vm_test/*'],
                                          valgrind_stash: 'centos7-gcc-unit-valg'
                         }
                     }
