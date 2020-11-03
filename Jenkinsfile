@@ -1078,6 +1078,7 @@ pipeline {
                     post {
                       always {
                             unitTestPost artifacts: ['unit_vm_test/*'],
+                                         testResults: 'None',
                                          valgrind_stash: 'centos7-gcc-nlt-memcheck'
                         }
                     }
