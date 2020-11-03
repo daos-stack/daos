@@ -202,9 +202,9 @@ choose:
 	if (rc == -DER_NOTREPLICA) {
 		d_rank_list_t	*new_ranklist = NULL;
 
+		/* Query MS for replica ranks. Not under client lock. */
 		if (cli_lock)
 			D_MUTEX_UNLOCK(cli_lock);
-
 		rc = dc_mgmt_get_pool_svc_ranks(sys, puuid, &new_ranklist);
 		if (rc) {
 			D_ERROR(DF_UUID ": dc_mgmt_get_pool_svc_ranks() "
@@ -212,10 +212,10 @@ choose:
 				DP_RC(rc));
 			return -DER_NOTREPLICA;
 		}
-
 		if (cli_lock)
 			D_MUTEX_LOCK(cli_lock);
 
+		/* Reinitialize rsvc client with new rank list, rechoose. */
 		rsvc_client_fini(cli);
 		rc = rsvc_client_init(cli, new_ranklist);
 		d_rank_list_free(new_ranklist);
@@ -229,10 +229,8 @@ choose:
 			goto choose;
 		}
 	}
-
 	if (cli_lock)
 		D_MUTEX_UNLOCK(cli_lock);
-
 	return rc;
 }
 
@@ -1100,7 +1098,6 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 				DP_UUID(args->uuid), rc);
 			D_GOTO(out_state, rc);
 		}
-
 		rc = rsvc_client_init(&state->client, args->svc);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": failed to rsvc_client_init, rc %d.\n",
@@ -1603,7 +1600,6 @@ dc_pool_evict(tse_task_t *task)
 		rc = dc_mgmt_sys_attach(args->grp, &state->sys);
 		if (rc != 0)
 			D_GOTO(out_state, rc);
-
 		rc = rsvc_client_init(&state->client, args->svc);
 		if (rc != 0)
 			D_GOTO(out_group, rc);
