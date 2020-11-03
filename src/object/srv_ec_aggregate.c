@@ -1901,9 +1901,6 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 	if (this_stripenum != agg_entry->ae_cur_stripe.as_stripenum) {
 		/* Iterator has reached next stripe */
 		if (agg_entry->ae_cur_stripe.as_extent_cnt) {
-				this_stripenum,
-				agg_entry->ae_cur_stripe.as_extent_cnt);
-
 			cur_stripenum = agg_entry->ae_cur_stripe.as_stripenum;
 			rc = agg_process_stripe(agg_entry);
 			if (rc)
