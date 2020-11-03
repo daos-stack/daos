@@ -841,7 +841,8 @@ def run_tests(test_files, tag_filter, args):
 
             # Optionally process core files
             if args.process_cores:
-                process_the_cores(avocado_logs_dir, test_file["yaml"], args)
+                if not process_the_cores(avocado_logs_dir, test_file["yaml"], args):
+                    return_code |= 64
         else:
             # The test was not run due to an error replacing host placeholders
             # in the yaml file.  Treat this like a failed avocado command.
@@ -1387,7 +1388,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         print("Removing core files to avoid archiving them")
         for corefile in cores:
             os.remove(corefile)
-        exit(1)
+        return False
 
     def run_gdb(pattern):
         """Run a gdb command on all corefiles matching a pattern.
@@ -1646,6 +1647,10 @@ def main():
             ret_code = 1
         if status & 32 == 32:
             print("ERROR: Detected one or more tests with unreported big logs!")
+            ret_code = 1
+        if status & 64 == 64:
+            print("ERROR: Detected one or more tests with failure to create "
+                  "stack traces from core files!")
             ret_code = 1
         if status & 128 == 128:
             print("ERROR: Failed to clean logs in preparation for test run!")
