@@ -57,6 +57,20 @@ enum THRESHOLD_SETTING {
 	THRESHOLD_LESS_THAN_DATA,
 };
 
+static bool
+dedup_is_nvme_enabled(test_arg_t *arg)
+{
+	daos_pool_info_t	 pinfo = { 0 };
+	struct daos_pool_space	*ps = &pinfo.pi_space;
+	int			 rc;
+
+	pinfo.pi_bits = DPI_ALL;
+	rc = test_pool_get_info(arg, &pinfo);
+	assert_int_equal(rc, 0);
+
+	return ps->ps_free_min[DAOS_MEDIA_NVME] != 0;
+}
+
 /** easily setup an iov and allocate */
 static void
 iov_alloc(d_iov_t *iov, size_t len)
@@ -230,6 +244,13 @@ with_identical_updates(void *const *state, uint32_t iod_type, int csum_type,
 	daos_size_t		after_second_update;
 	daos_size_t		delta;
 	int			rc;
+
+	if (dedup_type == DAOS_PROP_CO_DEDUP_MEMCMP &&
+	    dedup_is_nvme_enabled(*state)) {
+		print_message("DAOS_PROP_CO_DEDUP_MEMCMP "
+			      "doesn't support NVMe.\n");
+		skip();
+	}
 
 	setup_context(&ctx, *state, iod_type, csum_type, oc, dedup_type,
 		      dedup_threshold_setting);
