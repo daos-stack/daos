@@ -337,7 +337,9 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 		}
 
 		for (i = 0; i < 255; i++) {
-			D_ASPRINTF(ui->ui_uri[i], "%s:%d", tmp_uri, base_port + i);
+			char *tag_uri;
+			D_ASPRINTF(tag_uri, "%s:%d", tmp_uri, base_port + i);
+			ui->ui_uri[i] = tag_uri;
 		}
 
 		D_FREE(tmp_uri);
