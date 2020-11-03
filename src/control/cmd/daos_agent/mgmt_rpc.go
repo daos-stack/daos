@@ -82,7 +82,7 @@ func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req
 	case drpc.MethodDisconnect:
 		// There isn't anything we can do here if this fails so just
 		// call the disconnect handler and return success.
-		mod.handleDisconnect(req, cred.Pid)
+		mod.handleDisconnect(cred.Pid)
 		return nil, nil
 	}
 
@@ -190,6 +190,6 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 // monitor that a process is exiting. Even though the process is terminating
 // cleanly disconnect will inform the control plane of any outstanding handles
 // that the process held open.
-func (mod *mgmtModule) handleDisconnect(reqb []byte, pid int32) {
+func (mod *mgmtModule) handleDisconnect(pid int32) {
 	mod.monitor.submitRequest(pid, drpc.MethodDisconnect)
 }

@@ -95,8 +95,7 @@ func (p *procInfo) sendResponse(pid int32, err error) {
 
 const MonWaitTime = 3 * time.Second
 
-// monitorProcess is the top level interface for monitoring individual processes.
-// the interface is used by procMon to kick off monitoring individual processes
+// monitorProcess is used by procMon to kick off monitoring individual processes
 // under their own child context to allow for terminating individual monitoring routines.
 func (p *procInfo) monitorProcess() {
 	Ino, err := getProcPidInode(p.pid)

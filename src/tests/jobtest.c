@@ -20,6 +20,14 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
+
+/*
+ * The purpose of this program is to provide a DAOS client which can be
+ * triggered to terminate either correctly or illgally and after a given number
+ * of seconds. This will be used in functional testing to be able to trigger
+ * log messages for comparison.
+ */
+
 #include <stdio.h>
 #include <string.h>
 #include <daos.h>
@@ -32,20 +40,19 @@ main(int argc, char **argv)
 	int	sleep_seconds = 5;
 	int	abnormal_exit = 0;
 
-           while ((opt = getopt(argc, argv, "xs:")) != -1) {
-               switch (opt) {
-               case 'x':
-                   abnormal_exit = 1;
-                   break;
-               case 's':
-                   sleep_seconds = atoi(optarg);
-                   break;
-               default: /* '?' */
-                   fprintf(stderr, "Usage: %s [-s nsecs] [-x]\n",
-                           argv[0]);
-                   exit(-1);
-               }
-           }
+	while ((opt = getopt(argc, argv, "xs:")) != -1) {
+		switch (opt) {
+		case 'x':
+			abnormal_exit = 1;
+			break;
+		case 's':
+			sleep_seconds = atoi(optarg);
+			break;
+		default: /* '?' */
+			fprintf(stderr, "Usage: %s [-s nsecs] [-x]\n", argv[0]);
+			exit(-1);
+		}
+	}
 
 	/** initialize the local DAOS stack */
 	rc = daos_init();
