@@ -841,7 +841,8 @@ def run_tests(test_files, tag_filter, args):
 
             # Optionally process core files
             if args.process_cores:
-                if not process_the_cores(avocado_logs_dir, test_file["yaml"], args):
+                if not process_the_cores(avocado_logs_dir, test_file["yaml"],
+                                         args):
                     return_code |= 64
         else:
             # The test was not run due to an error replacing host placeholders
