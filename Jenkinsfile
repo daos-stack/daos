@@ -1132,8 +1132,7 @@ pipeline {
                             // caused by code coverage instrumentation affecting
                             // test results, and while code coverage is being
                             // added.
-                            unitTestPost ignore_failure: false,
-                                         artifacts: ['unit_test_memcheck_logs.tar.gz',
+                            unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
                                                      'unit_test_memcheck_logs/*'],
                                          valgrind_stash: 'centos7-gcc-unit-memcheck'
                         }
