@@ -253,14 +253,17 @@ def set_test_environment(args):
             print("  {}: {}".format(key, os.environ[key]))
 
 
-def get_output(cmd, check=True):
+def get_output(cmd, check=True, raise_exception=False):
     """Get the output of given command executed on this host.
 
     Args:
         cmd (list): command from which to obtain the output
-        check (bool, optional): whether to raise an exception and exit the
-            program if the exit status of the command is non-zero. Defaults
-            to True.
+        check (bool, optional): whether to {emit an error and exit the
+            program|raise an exception} if the exit status of the command
+            is non-zero. Defaults to True.
+        raise_exception (bool, optional): whether to raise an exception
+            rather than exit the program if the exit status of the command
+            is non-zero. Defaults to False.
 
     Returns:
         str: command output
@@ -272,10 +275,13 @@ def get_output(cmd, check=True):
     stdout, _ = process.communicate()
     retcode = process.poll()
     if check and retcode:
-        print(
-            "Error executing '{}':\n\tOutput:\n{}".format(
-                " ".join(cmd), stdout))
-        exit(1)
+        msg = "Error executing '{}':\n\tOutput:\n{}".format(" ".join(cmd),
+                                                            stdout)
+        if raise_exception:
+            raise RuntimeError(msg)
+        else:
+            print(msg)
+            exit(1)
     return stdout
 
 
@@ -1292,7 +1298,16 @@ def install_debuginfos():
     cmds.append(cmd)
 
     for cmd in cmds:
-        print(get_output(cmd))
+        try:
+            print(get_output(cmd, raise_exception=True))
+        except RuntimeError as error:
+            print(error)
+            print("Going to refresh caches and try again")
+            cmd_prefix = ["sudo", "yum", "--enablerepo=*debug*"]
+            print(get_output([cmd_prefix + [ "clean", "all"], 
+                              cmd_prefix + [ "makecache"]]))
+    for cmd in cmds:
+        print(get_output(cmd, raise_exception=True))
 
 
 def process_the_cores(avocado_logs_dir, test_yaml, args):
@@ -1346,7 +1361,14 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
     if not cores:
         return
 
-    install_debuginfos()
+    try:
+        install_debuginfos()
+    except RuntimeError as error:
+        print(error)
+        print("Removing core files to avoid archiving them")
+        for corefile in cores:
+            os.remove(corefile)
+        exit(1)
 
     def run_gdb(pattern):
         """Run a gdb command on all corefiles matching a pattern.
