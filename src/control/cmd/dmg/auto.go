@@ -29,7 +29,6 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
 )
 
 // configCmd is the struct representing the top-level config subcommand.
@@ -56,12 +55,12 @@ type configGenCmd struct {
 func (cmd *configGenCmd) Execute(_ []string) error {
 	ctx := context.Background()
 
-	netClass := new(uint32)
+	netClass := new(control.NetDevClass)
 	switch cmd.NetClass {
 	case "ethernet":
-		*netClass = netdetect.Ether
+		*netClass = control.NetDevEther
 	case "infiniband":
-		*netClass = netdetect.Infiniband
+		*netClass = control.NetDevInfiniband
 	}
 	req := &control.ConfigGenerateReq{
 		NumPmem:  cmd.NumPmem,

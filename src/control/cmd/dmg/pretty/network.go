@@ -32,7 +32,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
-type hfiMap map[uint32]map[string][]string
+type hfiMap map[uint]map[string][]string
 
 func (h hfiMap) addInterface(fi *control.HostFabricInterface) {
 	if _, ok := h[fi.NumaNode]; !ok {
