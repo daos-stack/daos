@@ -270,8 +270,6 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 	dualHostRespSame := func(r1 *ctlpb.NetworkScanResp) []*HostResponse {
 		return dualHostResp(r1, r1)
 	}
-	//	oneEthTwoIbNumaAligned := []byte(`[
-	//	]`)
 	numa0 := uint(0)
 	numa1 := uint(1)
 	nde := NetDevEther
@@ -380,32 +378,6 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 			hostResponses: dualHostRespSame(fabIfs4),
 			expCheckErr:   errors.New("insufficient matching best-available network"),
 		},
-		//		"default (best-available) with dual ib psm2": {
-		//			fabricScanJSON: oneEthTwoIbNumaAligned,
-		//			expConfigOut: config.DefaultServer().WithServers(
-		//				ioCfgWithSSDs(t, 0).WithFabricInterface("ib0").
-		//					WithFabricProvider("ofi+psm2").
-		//					WithPinnedNumaNode(&numa0),
-		//				ioCfgWithSSDs(t, 1).WithFabricInterface("ib1").
-		//					WithFabricProvider("ofi+psm2").
-		//					WithPinnedNumaNode(&numa1)),
-		//		},
-		//		"infiniband with dual ib psm2": {
-		//			netDevClass:    &ndClassIb,
-		//			fabricScanJSON: oneEthTwoIbNumaAligned,
-		//			expConfigOut: config.DefaultServer().WithServers(
-		//				ioCfgWithSSDs(t, 0).WithFabricInterface("ib0").
-		//					WithFabricProvider("ofi+psm2").
-		//					WithPinnedNumaNode(&numa0),
-		//				ioCfgWithSSDs(t, 1).WithFabricInterface("ib1").
-		//					WithFabricProvider("ofi+psm2").
-		//					WithPinnedNumaNode(&numa1)),
-		//		},
-		//		"ethernet insufficient adapters": {
-		//			netDevClass:    &ndClassEther,
-		//			fabricScanJSON: oneEthTwoIbNumaAligned,
-		//			expCheckErr:    errors.New("insufficient matching network interfaces (ETHER)"),
-		//		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -417,19 +389,6 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 					Responses: tc.hostResponses,
 				},
 			})
-
-			//			mockScanFabric := func(_ context.Context, _ string) ([]netdetect.FabricScan, error) {
-			//				if tc.fabricScanErr != nil {
-			//					return nil, tc.fabricScanErr
-			//				}
-			//
-			//				var fs []netdetect.FabricScan
-			//				if err := json.Unmarshal(tc.fabricScanJSON, &fs); err != nil {
-			//					t.Fatal(err)
-			//				}
-			//
-			//				return fs, nil
-			//			}
 
 			req := &ConfigGenerateReq{
 				NumPmem:  tc.numPmem,
