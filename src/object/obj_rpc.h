@@ -158,6 +158,8 @@ enum obj_rpc_flags {
 	DRF_HAS_EC_SPLIT	= (1 << 11),
 	/* Checking the existence of the object/key. */
 	DRF_CHECK_EXISTENCE	= (1 << 12),
+	/** Include the map details on fetch (daos_iom_t::iom_recxs) */
+	ORF_CREATE_MAP_DETAIL	= (1 << 13),
 };
 
 /* common for update/fetch */
@@ -271,8 +273,7 @@ CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 	((uint32_t)		(okqi_flags)		CRT_VAR) \
 	((uint64_t)		(okqi_api_flags)	CRT_VAR) \
 	((daos_key_t)		(okqi_dkey)		CRT_VAR) \
-	((daos_key_t)		(okqi_akey)		CRT_VAR) \
-	((daos_recx_t)		(okqi_recx)		CRT_VAR)
+	((daos_key_t)		(okqi_akey)		CRT_VAR)
 
 #define DAOS_OSEQ_OBJ_QUERY_KEY	/* output fields */		 \
 	((int32_t)		(okqo_ret)		CRT_VAR) \
@@ -282,7 +283,10 @@ CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 	((uint32_t)		(okqo_pad32_1)		CRT_VAR) \
 	((daos_key_t)		(okqo_dkey)		CRT_VAR) \
 	((daos_key_t)		(okqo_akey)		CRT_VAR) \
-	((daos_recx_t)		(okqo_recx)		CRT_VAR)
+	/* recx for normal data space */			 \
+	((daos_recx_t)		(okqo_recx)		CRT_VAR) \
+	/* recx for EC parity space */				 \
+	((daos_recx_t)		(okqo_recx_parity)	CRT_VAR)
 
 CRT_RPC_DECLARE(obj_query_key, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY)
 

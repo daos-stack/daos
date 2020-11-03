@@ -10,6 +10,8 @@ GIT_NUM_COMMITS := $(shell git rev-list HEAD --count)
 ON_TAG          := $(shell if git diff-index --name-only HEAD^ | grep -q TAG; then \
 	                       echo "true"; else echo "false"; fi)
 
+PACKAGING_CHECK_DIR := ../../../rpm/packaging/
+
 ifeq ($(ON_TAG),false)
 BUILD_DEFINES     := --define "%relval .$(GIT_NUM_COMMITS).g$(GIT_SHORT)"
 endif
