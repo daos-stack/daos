@@ -28,7 +28,7 @@ else
 fi
 
 NLT=
-if [ $STAGE_NAME = NLT ]; then
+if [ "$STAGE_NAME" = NLT ]; then
     NLT=true
 fi
 
