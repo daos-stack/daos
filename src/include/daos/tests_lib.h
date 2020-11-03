@@ -166,7 +166,8 @@ struct dts_context {
 	/** OUTPUT END */
 };
 
-#define MAX_TEST_TARGETS_PER_DEVICE 10
+/* match BIO_XS_CNT_MAX, which is the max VOS xstreams mapped to a device */
+#define MAX_TEST_TARGETS_PER_DEVICE 48
 
 typedef struct {
 	uuid_t		device_id;
