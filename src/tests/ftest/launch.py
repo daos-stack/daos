@@ -1337,6 +1337,10 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         avocado_logs_dir ([type]): [description]
         test_yaml (str): yaml file containing host names
         args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        bool: True if everything was done as expected, False if there were
+              any issues processing core files
     """
     import fnmatch  # pylint: disable=import-outside-toplevel
 
@@ -1379,7 +1383,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
     cores = os.listdir(daos_cores_dir)
 
     if not cores:
-        return
+        return True
 
     try:
         install_debuginfos()
@@ -1442,6 +1446,8 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
             os.unlink(corefile_fqpn)
 
     run_gdb('core.*[0-9]')
+
+    return True
 
 
 def get_test_category(test_file):
