@@ -694,6 +694,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 			    iods[i].iod_size == 0)
 				iods[i].iod_size = sizes[i];
 			if (is_ec_obj && reasb_req->orr_recov &&
+			    reasb_req->orr_fail &&
 			    reasb_req->orr_fail->efi_uiods[i].iod_size == 0) {
 				reasb_req->orr_fail->efi_uiods[i].iod_size =
 					sizes[i];
