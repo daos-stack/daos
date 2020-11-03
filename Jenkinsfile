@@ -1078,7 +1078,7 @@ pipeline {
                     post {
                       always {
                             unitTestPost artifacts: ['unit_vm_test/*'],
-                                         valgrind_stash: 'centos7-gcc-unit-valg'
+                                         valgrind_stash: 'centos7-gcc-nlt-memcheck'
                         }
                     }
                 }
@@ -1358,7 +1358,7 @@ pipeline {
     } // stages
     post {
         always {
-            valgrindReportPublish valgrind_stashes: ['centos7-gcc-unit-valg',
+            valgrindReportPublish valgrind_stashes: ['centos7-gcc-nlt-memcheck',
                                                      'centos7-gcc-unit-memcheck']
         }
         unsuccessful {
