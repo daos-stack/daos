@@ -253,17 +253,14 @@ def set_test_environment(args):
             print("  {}: {}".format(key, os.environ[key]))
 
 
-def get_output(cmd, check=True, raise_exception=False):
+def run_command(cmd):
     """Get the output of given command executed on this host.
 
     Args:
         cmd (list): command from which to obtain the output
-        check (bool, optional): whether to {emit an error and exit the
-            program|raise an exception} if the exit status of the command
-            is non-zero. Defaults to True.
-        raise_exception (bool, optional): whether to raise an exception
-            rather than exit the program if the exit status of the command
-            is non-zero. Defaults to False.
+
+    Raises:
+        RuntimeError: if the command fails
 
     Returns:
         str: command output
@@ -274,13 +271,29 @@ def get_output(cmd, check=True, raise_exception=False):
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     stdout, _ = process.communicate()
     retcode = process.poll()
-    if check and retcode:
-        msg = "Error executing '{}':\n\tOutput:\n{}".format(" ".join(cmd),
-                                                            stdout)
-        if raise_exception:
-            raise RuntimeError(msg)
-        else:
-            print(msg)
+    if retcode:
+        raise RuntimeError(
+            "Error executing '{}':\n\tOutput:\n{}".format(
+                " ".join(cmd), stdout))
+    return stdout
+
+def get_output(cmd, check=True):
+    """Get the output of given command executed on this host.
+
+    Args:
+        cmd (list): command from which to obtain the output
+        check (bool, optional): whether to emit an error and exit the
+            program if the exit status of the command is non-zero. Defaults
+            to True.
+
+    Returns:
+        str: command output
+    """
+    try:
+        stdout = run_command(cmd)
+    except RuntimeError as error:
+        if check:
+            print(error)
             exit(1)
     return stdout
 
@@ -1299,15 +1312,15 @@ def install_debuginfos():
 
     for cmd in cmds:
         try:
-            print(get_output(cmd, raise_exception=True))
+            print(run_command(cmd))
         except RuntimeError as error:
             print(error)
             print("Going to refresh caches and try again")
             cmd_prefix = ["sudo", "yum", "--enablerepo=*debug*"]
-            cmds.insert(0, cmd_prefix + [ "clean", "all"])
-            cmds.insert(1, cmd_prefix + [ "makecache"])
+            cmds.insert(0, cmd_prefix + ["clean", "all"])
+            cmds.insert(1, cmd_prefix + ["makecache"])
     for cmd in cmds:
-        print(get_output(cmd, raise_exception=True))
+        print(run_command(cmd))
 
 
 def process_the_cores(avocado_logs_dir, test_yaml, args):
