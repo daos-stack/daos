@@ -129,7 +129,7 @@ func TestSystem_Database_checkReplica(t *testing.T) {
 
 			// Just to get a bit of extra coverage
 			if repAddr != nil {
-				db.replicaAddr = repAddr
+				db.replicaAddr.Addr = repAddr
 				var err error
 				repAddr, err = db.ReplicaAddr()
 				if err != nil {
