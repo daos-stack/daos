@@ -229,6 +229,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 			DFUSE_LOG_ERROR("dfs_mount failed (%d)", rc);
 			D_GOTO(out_cont, ret = rc);
 		}
+		new_cont = true;
 		ie->ie_root = true;
 	}
 

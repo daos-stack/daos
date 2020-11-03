@@ -101,7 +101,7 @@ recx_csum_len(daos_recx_t *recx, struct dcs_csum_info *csum,
 {
 	if (!ci_is_valid(csum) || rsize == 0)
 		return 0;
-	return csum->cs_len * csum_chunk_count(csum->cs_chunksize,
+	return (daos_size_t)csum->cs_len * csum_chunk_count(csum->cs_chunksize,
 			recx->rx_idx, recx->rx_idx + recx->rx_nr - 1, rsize);
 }
 
@@ -2190,7 +2190,7 @@ vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
 
 	rc = bio_sgl_init(bsgl_dup, bsgl->bs_nr_out);
 	if (rc != 0)
-		return -DER_NOMEM;
+		return rc;
 
 	bsgl_dup->bs_nr_out = bsgl->bs_nr_out;
 

@@ -416,6 +416,7 @@ main(int argc, char **argv)
 			D_STRNDUP(test_io_dir, optarg, PATH_MAX);
 			if (test_io_dir == NULL)
 				return -1;
+			break;
 		case 'l':
 			dt_obj_class = daos_oclass_name2id(optarg);
 			if (dt_obj_class == OC_UNKNOWN)

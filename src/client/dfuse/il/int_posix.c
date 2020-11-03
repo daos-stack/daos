@@ -487,8 +487,10 @@ connect_daos_cont(int fd, struct dfuse_il_reply *il_reply)
 
 	rc = daos_pool_connect(il_reply->fir_pool, NULL, svcl, DAOS_PC_RW,
 			       &ioil_ioc.ioc_poh, NULL, NULL);
-	if (rc)
+	if (rc) {
+		D_FREE(svcl);
 		return rc;
+	}
 
 	rc = daos_cont_open(ioil_ioc.ioc_poh, il_reply->fir_cont, DAOS_COO_RW,
 			    &ioil_ioc.ioc_coh, NULL, NULL);
@@ -533,7 +535,8 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 		return false;
 	}
 
-	pthread_mutex_lock(&ioil_ioc.ioc_lock);
+	rc = pthread_mutex_lock(&ioil_ioc.ioc_lock);
+	D_ASSERT(rc == 0);
 
 	if (ioil_ioc.ioc_open_fd_count == 0) {
 		rc = fetch_daos_handles(fd, entry);
@@ -615,7 +618,8 @@ cont_close:
 
 drop_lock:
 
-	pthread_mutex_unlock(&ioil_ioc.ioc_lock);
+	rc = pthread_mutex_unlock(&ioil_ioc.ioc_lock);
+	D_ASSERT(rc == 0);
 	return false;
 }
 
