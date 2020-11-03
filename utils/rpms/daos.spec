@@ -405,8 +405,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 
 %changelog
 * Sat Oct 31 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.1-7
-- Add BUILD_TYPE to scons cmdline. default=release
-- Valid values for BUILD_TYPE are dev|release|debug
+- define scons_args to be BUILD_TYPE=<release|dev>
+- the scons default is BUILD_TYPE=release
 - BUILD_TYPE=release will disable fault injection in build
 
 * Thu Oct 29 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> 1.1.1-6
