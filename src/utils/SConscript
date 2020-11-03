@@ -27,5 +27,6 @@ def scons():
                               ['daos.c', daos_extra_files], LIBS=libs)
     denv.Install('$PREFIX/bin/', daos)
 
+
 if __name__ == "SCons.Script":
     scons()

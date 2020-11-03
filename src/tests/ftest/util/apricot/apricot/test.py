@@ -182,8 +182,8 @@ class TestWithoutServers(Test):
     def setUp(self):
         """Set up run before each test."""
         super(TestWithoutServers, self).setUp()
-
-        load_mpi('openmpi')
+        if not load_mpi("openmpi"):
+            self.fail("Failed to load openmpi")
 
         self.orterun = find_executable('orterun')
         if self.orterun is None:
@@ -895,7 +895,7 @@ class TestWithServers(TestWithoutServers):
             TestPool: the created test pool object.
 
         """
-        pool = TestPool(self.context, dmg_command=self.get_dmg_command(index))
+        pool = TestPool(self.context, self.get_dmg_command(index))
         if namespace is not None:
             pool.namespace = namespace
         pool.get_params(self)

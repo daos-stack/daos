@@ -39,7 +39,7 @@
 #include <daos/tests_lib.h>
 #include <daos_srv/vos.h>
 #include <daos_test.h>
-#include "dts_common.h"
+#include <daos/dts.h>
 
 /**
  * An example for integer key evtree .
@@ -500,20 +500,18 @@ static struct option ctl_ops[] = {
 };
 
 int
-main(int argc, char **argv)
+main(int argc, char *argv[])
 {
 	int	rc;
 
-	if (argc < 2) {
-		printf("%s daos|vos [pmem_file]\n", argv[0]);
+	if (argc < 2)
 		goto out_usage;
-	}
 
 	uuid_generate(ctl_ctx.tsc_pool_uuid);
 	uuid_generate(ctl_ctx.tsc_cont_uuid);
 
 	ctl_ctx.tsc_scm_size	= (128 << 20); /* small one should be enough */
-	ctl_ctx.tsc_nvme_size	= (4ULL << 30);
+	ctl_ctx.tsc_nvme_size	= (8ULL << 30);
 	ctl_ctx.tsc_cred_vsize	= 1024;	/* long enough for console input */
 	ctl_ctx.tsc_cred_nr	= -1;	/* sync mode all the time */
 	ctl_ctx.tsc_mpi_rank	= 0;
@@ -522,7 +520,7 @@ main(int argc, char **argv)
 	if (!strcasecmp(argv[1], "vos")) {
 		daos_mode = false;
 		if (argc == 3)
-			strncpy(pmem_file, argv[2], PATH_MAX - 1);
+			strncpy(pmem_file, argv[3], PATH_MAX - 1);
 		else
 			strcpy(pmem_file, "/mnt/daos/vos_ctl.pmem");
 
@@ -553,6 +551,6 @@ main(int argc, char **argv)
 	return rc;
 
  out_usage:
-	printf("%s daos|vos\n", argv[0]);
+	printf("%s daos|vos [pmem_file]\n", argv[0]);
 	return -1;
 }

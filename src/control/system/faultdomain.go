@@ -28,20 +28,33 @@ import (
 	"strings"
 )
 
-// FaultDomainSeparator is the dividing character for different levels of a
-// fault domain.
-const FaultDomainSeparator = "/"
+const (
+	// FaultDomainSeparator is the dividing character for different levels of a
+	// fault domain.
+	FaultDomainSeparator = "/"
+
+	// FaultDomainNilStr is the string value of a nil FaultDomain.
+	FaultDomainNilStr = "(nil)"
+)
 
 // FaultDomain represents a multi-layer fault domain.
 type FaultDomain struct {
-	domains []string // Hierarchical sequence of fault domain levels
+	Domains []string // Hierarchical sequence of fault domain levels
 }
 
 func (f *FaultDomain) String() string {
+	if f == nil {
+		return FaultDomainNilStr
+	}
 	if f.Empty() {
 		return ""
 	}
-	return FaultDomainSeparator + strings.Join(f.domains, FaultDomainSeparator)
+	return FaultDomainSeparator + strings.Join(f.Domains, FaultDomainSeparator)
+}
+
+// Equals checks if the fault domains are equal.
+func (f *FaultDomain) Equals(other *FaultDomain) bool {
+	return f.String() == other.String()
 }
 
 // NumLevels gets the number of levels in the domain.
@@ -49,7 +62,7 @@ func (f *FaultDomain) NumLevels() int {
 	if f == nil {
 		return 0
 	}
-	return len(f.domains)
+	return len(f.Domains)
 }
 
 // Empty checks whether the fault domain is empty or not.
@@ -63,7 +76,7 @@ func (f *FaultDomain) Level(level int) (string, error) {
 	if level < 0 || level >= f.NumLevels() {
 		return "", errors.New("out of range")
 	}
-	return f.domains[f.topLevelIdx()-level], nil
+	return f.Domains[f.topLevelIdx()-level], nil
 }
 
 func (f *FaultDomain) topLevelIdx() int {
@@ -100,8 +113,18 @@ func (f *FaultDomain) NewChild(childLevel string) (*FaultDomain, error) {
 	if f == nil {
 		return NewFaultDomain(childLevel)
 	}
-	childDomains := append(f.domains, childLevel)
+	childDomains := append(f.Domains, childLevel)
 	return NewFaultDomain(childDomains...)
+}
+
+// MustCreateChild creates a child fault domain. If that is not possible, it
+// panics.
+func (f *FaultDomain) MustCreateChild(childLevel string) *FaultDomain {
+	child, err := f.NewChild(childLevel)
+	if err != nil {
+		panic(err)
+	}
+	return child
 }
 
 // NewFaultDomain creates a FaultDomain from a sequence of strings representing
@@ -118,8 +141,19 @@ func NewFaultDomain(domains ...string) (*FaultDomain, error) {
 	}
 
 	return &FaultDomain{
-		domains: domains,
+		Domains: domains,
 	}, nil
+}
+
+// MustCreateFaultDomain creates a FaultDomain from a sequence of strings
+// representing individual levels of the domain. If it is not possible to
+// create a valid FaultDomain, it panics.
+func MustCreateFaultDomain(domains ...string) *FaultDomain {
+	fd, err := NewFaultDomain(domains...)
+	if err != nil {
+		panic(err)
+	}
+	return fd
 }
 
 // NewFaultDomainFromString creates a FaultDomain from a string in the fault
@@ -131,6 +165,10 @@ func NewFaultDomainFromString(domainStr string) (*FaultDomain, error) {
 		return &FaultDomain{}, nil
 	}
 
+	if domainStr == FaultDomainNilStr {
+		return nil, nil
+	}
+
 	if !strings.HasPrefix(domainStr, FaultDomainSeparator) {
 		return nil, errors.New("invalid fault domain")
 	}
@@ -139,4 +177,15 @@ func NewFaultDomainFromString(domainStr string) (*FaultDomain, error) {
 	domains = domains[1:]
 
 	return NewFaultDomain(domains...)
+}
+
+// MustCreateFaultDomainFromString creates a FaultDomain from a string in the
+// fault domain path format. If it is not possible to create a valid
+// FaultDomain, it panics.
+func MustCreateFaultDomainFromString(domainStr string) *FaultDomain {
+	fd, err := NewFaultDomainFromString(domainStr)
+	if err != nil {
+		panic(err)
+	}
+	return fd
 }

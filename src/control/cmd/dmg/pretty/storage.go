@@ -28,6 +28,8 @@ import (
 	"io"
 	"strings"
 
+	"github.com/dustin/go-humanize"
+
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -66,7 +68,7 @@ func PrintHostStorageMap(hsm control.HostStorageMap, out io.Writer, opts ...Prin
 	if len(hsm) == 0 {
 		return nil
 	}
-	fc := GetPrintConfig(opts...)
+	fc := getPrintConfig(opts...)
 
 	if fc.Verbose {
 		return printHostStorageMapVerbose(hsm, out, opts...)
@@ -90,6 +92,44 @@ func PrintHostStorageMap(hsm control.HostStorageMap, out io.Writer, opts ...Prin
 			row[scmTitle] = hss.HostStorage.ScmNamespaces.Summary()
 		}
 		row[nvmeTitle] = hss.HostStorage.NvmeDevices.Summary()
+		table = append(table, row)
+	}
+
+	tablePrint.Format(table)
+	return nil
+}
+
+// PrintHostStorageUsageMap generates a human-readable representation of the supplied
+// HostStorageMap struct and writes utilization info to the supplied io.Writer.
+func PrintHostStorageUsageMap(hsm control.HostStorageMap, out io.Writer) error {
+	if len(hsm) == 0 {
+		return nil
+	}
+
+	hostsTitle := "Hosts"
+	scmTitle := "SCM-Total"
+	scmFreeTitle := "SCM-Free"
+	scmUsageTitle := "SCM-Used"
+	nvmeTitle := "NVMe-Total"
+	nvmeFreeTitle := "NVMe-Free"
+	nvmeUsageTitle := "NVMe-Used"
+
+	tablePrint := txtfmt.NewTableFormatter(hostsTitle, scmTitle, scmFreeTitle,
+		scmUsageTitle, nvmeTitle, nvmeFreeTitle, nvmeUsageTitle)
+	tablePrint.InitWriter(out)
+	table := []txtfmt.TableRow{}
+
+	for _, key := range hsm.Keys() {
+		hss := hsm[key]
+		hosts := getPrintHosts(hss.HostSet.RangedString())
+		row := txtfmt.TableRow{hostsTitle: hosts}
+		storage := hss.HostStorage
+		row[scmTitle] = humanize.Bytes(storage.ScmNamespaces.Total())
+		row[scmFreeTitle] = humanize.Bytes(storage.ScmNamespaces.Free())
+		row[scmUsageTitle] = storage.ScmNamespaces.PercentUsage()
+		row[nvmeTitle] = humanize.Bytes(storage.NvmeDevices.Total())
+		row[nvmeFreeTitle] = humanize.Bytes(storage.NvmeDevices.Free())
+		row[nvmeUsageTitle] = storage.NvmeDevices.PercentUsage()
 		table = append(table, row)
 	}
 
@@ -151,7 +191,7 @@ func PrintStorageFormatMap(hsm control.HostStorageMap, out io.Writer, opts ...Pr
 	if len(hsm) == 0 {
 		return nil
 	}
-	fc := GetPrintConfig(opts...)
+	fc := getPrintConfig(opts...)
 
 	if fc.Verbose {
 		return printStorageFormatMapVerbose(hsm, out, opts...)
@@ -186,13 +226,14 @@ func printSmdDevice(dev *storage.SmdDevice, out io.Writer, opts ...PrintConfigOp
 }
 
 func printSmdPool(pool *control.SmdPool, out io.Writer, opts ...PrintConfigOption) error {
-	_, err := fmt.Fprintf(out, "Rank:%d Targets:%+v", pool.Rank, pool.TargetIDs)
-	cfg := GetPrintConfig(opts...)
+	ew := txtfmt.NewErrWriter(out)
+	fmt.Fprintf(ew, "Rank:%d Targets:%+v", pool.Rank, pool.TargetIDs)
+	cfg := getPrintConfig(opts...)
 	if cfg.Verbose {
-		_, err = fmt.Fprintf(out, " Blobs:%+v", pool.Blobs)
+		fmt.Fprintf(ew, " Blobs:%+v", pool.Blobs)
 	}
-	_, err = fmt.Fprintln(out)
-	return err
+	fmt.Fprintln(ew)
+	return ew.Err
 }
 
 // PrintSmdInfoMap generates a human-readable representation of the supplied

@@ -103,9 +103,13 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 			return common.ConcatErrors(scanErrors, err)
 		}
 		if resp.RebootRequired {
-			cmd.log.Info(scm.MsgScmRebootRequired)
+			cmd.log.Info(scm.MsgRebootRequired)
 		} else if len(resp.Namespaces) > 0 {
-			cmd.log.Infof("SCM namespaces:\n\t%+v\n", resp.Namespaces)
+			var bld strings.Builder
+			if err := pretty.PrintScmNamespaces(resp.Namespaces, &bld); err != nil {
+				return err
+			}
+			cmd.log.Infof("SCM namespaces:\n%s\n", bld.String())
 		} else {
 			cmd.log.Info("no SCM namespaces")
 		}

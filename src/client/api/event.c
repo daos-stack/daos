@@ -121,6 +121,16 @@ daos_eq_lib_fini()
 {
 	int rc;
 
+	if (daos_eq_ctx != NULL) {
+		rc = crt_context_destroy(daos_eq_ctx, 1 /* force */);
+		if (rc != 0) {
+			D_ERROR("failed to destroy client context: "DF_RC"\n",
+				DP_RC(rc));
+			return rc;
+		}
+		daos_eq_ctx = NULL;
+	}
+
 	D_MUTEX_LOCK(&daos_eq_lock);
 	if (eq_ref == 0)
 		D_GOTO(unlock, rc = -DER_UNINIT);
@@ -131,16 +141,6 @@ daos_eq_lib_fini()
 	ev_thpriv_is_init = false;
 
 	tse_sched_complete(&daos_sched_g, 0, true);
-
-	if (daos_eq_ctx != NULL) {
-		rc = crt_context_destroy(daos_eq_ctx, 1 /* force */);
-		if (rc != 0) {
-			D_ERROR("failed to destroy client context: "DF_RC"\n",
-				DP_RC(rc));
-			D_GOTO(unlock, rc);
-		}
-		daos_eq_ctx = NULL;
-	}
 
 	rc = crt_finalize();
 	if (rc != 0) {
@@ -478,16 +478,20 @@ daos_event_complete(struct daos_event *ev, int rc)
 		D_MUTEX_LOCK(&eqx->eqx_lock);
 	}
 
-	D_ASSERT(evx->evx_status == DAOS_EVS_RUNNING ||
-		 evx->evx_status == DAOS_EVS_ABORTED);
+	if (evx->evx_status == DAOS_EVS_READY ||
+	    evx->evx_status == DAOS_EVS_COMPLETED ||
+	    evx->evx_status == DAOS_EVS_ABORTED)
+		goto out;
+
+	D_ASSERT(evx->evx_status == DAOS_EVS_RUNNING);
 
 	daos_event_complete_locked(eqx, evx, rc);
 
-	if (eqx != NULL)
+out:
+	if (eqx != NULL) {
 		D_MUTEX_UNLOCK(&eqx->eqx_lock);
-
-	if (eqx != NULL)
 		daos_eq_putref(eqx);
+	}
 }
 
 struct ev_progress_arg {
@@ -608,7 +612,7 @@ daos_eq_create(daos_handle_t *eqh)
 {
 	struct daos_eq_private	*eqx;
 	struct daos_eq		*eq;
-	int			 rc = 0;
+	int			rc = 0;
 
 	/** not thread-safe, but best effort */
 	if (eq_ref == 0)
@@ -843,6 +847,7 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 	}
 
 	D_MUTEX_LOCK(&eqx->eqx_lock);
+
 	if (eqx->eqx_finalizing) {
 		D_ERROR("eqx_finalizing.\n");
 		rc = -DER_NONEXIST;
@@ -863,6 +868,24 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 	/* prevent other threads to launch new event */
 	eqx->eqx_finalizing = 1;
 
+	D_MUTEX_UNLOCK(&eqx->eqx_lock);
+
+	/*
+	 * Since we are sharing the same cart context with all EQs, we need to
+	 * flush the tasks for this EQ, which unfortunately means flushing for
+	 * all EQs.
+	 */
+	if (eqx->eqx_ctx != NULL) {
+		rc = crt_context_flush(eqx->eqx_ctx, 0);
+		if (rc != 0) {
+			D_ERROR("failed to flush client context: "DF_RC"\n",
+				DP_RC(rc));
+			return rc;
+		}
+	}
+
+	D_MUTEX_LOCK(&eqx->eqx_lock);
+
 	/* abort all launched events */
 	d_list_for_each_entry_safe(evx, tmp, &eq->eq_running, evx_link) {
 		D_ASSERT(evx->evx_parent == NULL);
@@ -876,10 +899,9 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 		D_ASSERT(eq->eq_n_comp > 0);
 		eq->eq_n_comp--;
 	}
-	eqx->eqx_ctx = NULL;
 
 	tse_sched_complete(&eqx->eqx_sched, rc, true);
-
+	eqx->eqx_ctx = NULL;
 out:
 	D_MUTEX_UNLOCK(&eqx->eqx_lock);
 	if (rc == 0)
@@ -1031,6 +1053,12 @@ daos_event_fini(struct daos_event *ev)
 		if (eqx == NULL)
 			return -DER_NONEXIST;
 		eq = daos_eqx2eq(eqx);
+		D_MUTEX_LOCK(&eqx->eqx_lock);
+	}
+
+	if (evx->evx_status == DAOS_EVS_RUNNING) {
+		rc = -DER_BUSY;
+		goto out;
 	}
 
 	/* If there are child events */
@@ -1053,12 +1081,19 @@ daos_event_fini(struct daos_event *ev)
 			goto out;
 		}
 
+		if (eqx != NULL)
+			D_MUTEX_UNLOCK(&eqx->eqx_lock);
+
 		rc = daos_event_fini(daos_evx2ev(tmp));
 		if (rc < 0) {
 			D_ERROR("Failed to finalize child event "DF_RC"\n",
 				DP_RC(rc));
 			goto out;
 		}
+
+		if (eqx != NULL)
+			D_MUTEX_LOCK(&eqx->eqx_lock);
+
 		tmp->evx_status = DAOS_EVS_READY;
 		tmp->evx_parent = NULL;
 	}
@@ -1067,13 +1102,15 @@ daos_event_fini(struct daos_event *ev)
 	if (evx->evx_parent != NULL) {
 		if (d_list_empty(&evx->evx_link)) {
 			D_ERROR("Event not linked to its parent\n");
-			return -DER_INVAL;
+			rc = -DER_INVAL;
+			goto out;
 		}
 
 		if (evx->evx_parent->evx_status != DAOS_EVS_READY) {
 			D_ERROR("Parent event not init or launched: %d\n",
 				evx->evx_parent->evx_status);
-			return -DER_INVAL;
+			rc = -DER_INVAL;
+			goto out;
 		}
 
 		d_list_del_init(&evx->evx_link);
@@ -1085,10 +1122,9 @@ daos_event_fini(struct daos_event *ev)
 	/* Remove from the evx_link */
 	if (!d_list_empty(&evx->evx_link)) {
 		d_list_del(&evx->evx_link);
-		if (evx->evx_status == DAOS_EVS_RUNNING && eq != NULL) {
-			eq->eq_n_running--;
-		} else if (evx->evx_status == DAOS_EVS_COMPLETED &&
-			   eq != NULL) {
+		D_ASSERT(evx->evx_status != DAOS_EVS_RUNNING);
+
+		if (evx->evx_status == DAOS_EVS_COMPLETED && eq != NULL) {
 			D_ASSERTF(eq->eq_n_comp > 0, "eq %p\n", eq);
 			eq->eq_n_comp--;
 		}
@@ -1096,6 +1132,8 @@ daos_event_fini(struct daos_event *ev)
 
 	evx->evx_ctx = NULL;
 out:
+	if (eqx != NULL)
+		D_MUTEX_UNLOCK(&eqx->eqx_lock);
 	if (eq != NULL)
 		daos_eq_putref(eqx);
 	return rc;

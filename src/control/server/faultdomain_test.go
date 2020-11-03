@@ -35,6 +35,16 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+func assertFaultDomainEqualStr(t *testing.T, expResultStr string, result *system.FaultDomain) {
+	if expResultStr == "" {
+		if result != nil {
+			t.Fatalf("expected nil result, got %q", result.String())
+		}
+	} else {
+		common.AssertEqual(t, expResultStr, result.String(), "incorrect fault domain")
+	}
+}
+
 func TestServer_getDefaultFaultDomain(t *testing.T) {
 	for name, tc := range map[string]struct {
 		getHostname hostnameGetterFn
@@ -64,7 +74,7 @@ func TestServer_getDefaultFaultDomain(t *testing.T) {
 			result, err := getDefaultFaultDomain(tc.getHostname)
 
 			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, tc.expResult, result.String(), "incorrect fault domain")
+			assertFaultDomainEqualStr(t, tc.expResult, result)
 		})
 	}
 }
@@ -130,7 +140,7 @@ func TestServer_getFaultDomain(t *testing.T) {
 			result, err := getFaultDomain(tc.cfg)
 
 			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, tc.expResult, result.String(), "incorrect fault domain")
+			assertFaultDomainEqualStr(t, tc.expResult, result)
 		})
 	}
 }
@@ -184,6 +194,12 @@ func TestServer_getFaultDomainFromCallback(t *testing.T) {
 	errorScriptPath := filepath.Join(tmpDir, "fail.sh")
 	createErrorScriptFile(t, errorScriptPath)
 
+	emptyScriptPath := filepath.Join(tmpDir, "empty.sh")
+	createFaultCBScriptFile(t, emptyScriptPath, 0755, "")
+
+	whitespaceScriptPath := filepath.Join(tmpDir, "whitespace.sh")
+	createFaultCBScriptFile(t, whitespaceScriptPath, 0755, "     ")
+
 	invalidScriptPath := filepath.Join(tmpDir, "invalid.sh")
 	createFaultCBScriptFile(t, invalidScriptPath, 0755, "some junk")
 
@@ -211,6 +227,14 @@ func TestServer_getFaultDomainFromCallback(t *testing.T) {
 			input:  errorScriptPath,
 			expErr: FaultConfigFaultCallbackFailed(errors.New("exit status 2")),
 		},
+		"script returned no output": {
+			input:  emptyScriptPath,
+			expErr: FaultConfigFaultCallbackEmpty,
+		},
+		"script returned only whitespace": {
+			input:  whitespaceScriptPath,
+			expErr: FaultConfigFaultCallbackEmpty,
+		},
 		"script returned invalid fault domain": {
 			input:  invalidScriptPath,
 			expErr: FaultConfigFaultDomainInvalid,
@@ -228,7 +252,7 @@ func TestServer_getFaultDomainFromCallback(t *testing.T) {
 			result, err := getFaultDomainFromCallback(tc.input)
 
 			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, tc.expResult, result.String(), "incorrect fault domain")
+			assertFaultDomainEqualStr(t, tc.expResult, result)
 		})
 	}
 }
