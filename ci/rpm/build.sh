@@ -19,6 +19,11 @@ if [ -e "${ci_envs}" ]; then
   source "${ci_envs}"
 fi
 
+if [ -e "${SCONS_FAULTS_ARGS}" ]; then
+  EXTERNAL_RPM_BUILD_OPTIONS=" --define \"scons_args ${SCONS_FAULTS_ARGS}\"" \
+  SCONS_ARGS="${SCONS_FAULTS_ARGS}"
+fi
+
 : "${CHROOT_NAME:='epel-7-x86_64'}"
 : "${TARGET:='centos7'}"
 
@@ -26,5 +31,5 @@ rm -rf "artifacts/${TARGET}/"
 mkdir -p "artifacts/${TARGET}/"
 DEBEMAIL="$DAOS_EMAIL" DEBFULLNAME="$DAOS_FULLNAME" \
 TOPDIR=$PWD make CHROOT_NAME="${CHROOT_NAME}" \
-    EXTERNAL_RPM_BUILD_OPTIONS=" --define \"scons_args ${SCONS_FAULTS_ARGS}\"" \
-    SCONS_ARGS="${SCONS_FAULTS_ARGS}" -C utils/rpms chrootbuild
+    EXTERNAL_RPM_BUILD_OPTIONS=${EXTERNAL_RPM_BUILD_OPTIONS}
+    SCONS_ARGS="${SCONS_ARGS}" -C utils/rpms chrootbuild
