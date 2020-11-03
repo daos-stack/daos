@@ -337,10 +337,10 @@ CRT_RPC_DECLARE(obj_migrate, DAOS_ISEQ_OBJ_MIGRATE, DAOS_OSEQ_OBJ_MIGRATE)
 	((uint64_t)		(ea_epoch)		CRT_VAR)	\
 	((uint64_t)		(ea_stripenum)		CRT_VAR)	\
 	((uint64_t)		(ea_rsize)		CRT_VAR)	\
+	((crt_bulk_t)		(ea_bulk)		CRT_VAR)	\
 	((uint32_t)		(ea_prior_len)		CRT_VAR)	\
 	((uint32_t)		(ea_after_len)		CRT_VAR)	\
-	((uint32_t)		(ea_map_ver)		CRT_VAR)	\
-	((crt_bulk_t)		(ea_bulk)		CRT_VAR)
+	((uint32_t)		(ea_map_ver)		CRT_VAR)
 
 #define DAOS_OSEQ_OBJ_EC_AGG	/* output fields */		 \
 	((int32_t)		(ea_status)		CRT_VAR) \
@@ -358,8 +358,8 @@ CRT_RPC_DECLARE(obj_ec_agg, DAOS_ISEQ_OBJ_EC_AGG, DAOS_OSEQ_OBJ_EC_AGG)
 	((daos_iod_t)		(er_iod)		CRT_VAR)	\
 	((uint64_t)		(er_epoch)		CRT_VAR)	\
 	((uint64_t)		(er_stripenum)		CRT_VAR)	\
-	((uint32_t)		(er_map_ver)		CRT_VAR)	\
-	((crt_bulk_t)		(er_bulk)		CRT_VAR)
+	((crt_bulk_t)		(er_bulk)		CRT_VAR)	\
+	((uint32_t)		(er_map_ver)		CRT_VAR)
 
 #define DAOS_OSEQ_OBJ_EC_REP	/* output fields */		 \
 	((int32_t)		(er_status)		CRT_VAR) \
