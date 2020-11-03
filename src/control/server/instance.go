@@ -179,10 +179,10 @@ func (srv *IOServerInstance) removeSocket() error {
 	return nil
 }
 
-func (srv *IOServerInstance) determineRank(ctx context.Context, ready *srvpb.NotifyReadyReq) (system.Rank, error) {
+func (srv *IOServerInstance) determineRank(ctx context.Context, ready *srvpb.NotifyReadyReq) (system.Rank, bool, error) {
 	superblock := srv.getSuperblock()
 	if superblock == nil {
-		return system.NilRank, errors.New("nil superblock while determining rank")
+		return system.NilRank, false, errors.New("nil superblock while determining rank")
 	}
 
 	r := system.NilRank
@@ -208,9 +208,9 @@ func (srv *IOServerInstance) determineRank(ctx context.Context, ready *srvpb.Not
 		// Addr member populated in msClient
 	})
 	if err != nil {
-		return system.NilRank, err
+		return system.NilRank, resp.LocalJoin, err
 	} else if resp.State == mgmtpb.JoinResp_OUT {
-		return system.NilRank, errors.Errorf("rank %d excluded", resp.Rank)
+		return system.NilRank, resp.LocalJoin, errors.Errorf("rank %d excluded", resp.Rank)
 	}
 	r = system.Rank(resp.Rank)
 
@@ -220,31 +220,24 @@ func (srv *IOServerInstance) determineRank(ctx context.Context, ready *srvpb.Not
 		superblock.ValidRank = true
 		srv.setSuperblock(superblock)
 		if err := srv.WriteSuperblock(); err != nil {
-			return system.NilRank, err
+			return system.NilRank, resp.LocalJoin, err
 		}
 	}
 
-	// If the join was processed locally, we don't need to
-	// perform more steps, so let the caller know.
-	if resp.LocalJoin {
-		r = system.NilRank
-	}
-
-	return r, nil
+	return r, resp.LocalJoin, nil
 }
 
 // joinSystem determines the instance rank and sends a SetRank dRPC request
 // to the IOServer.
 func (srv *IOServerInstance) joinSystem(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
-	r, err := srv.determineRank(ctx, ready)
+	r, localJoin, err := srv.determineRank(ctx, ready)
 	if err != nil {
 		return err
 	}
 
-	// hack -- If we receive a nil rank from determineRank() it means
-	// that we can skip the rest of setup because it already happened.
-	if r.Equals(system.NilRank) {
-		srv.log.Debugf("skipping setRank/setUp due to NilRank")
+	// If the join was already processed because it ran on the same server,
+	// skip the rest of these steps.
+	if localJoin {
 		return nil
 	}
 
@@ -267,7 +260,7 @@ func (srv *IOServerInstance) callSetRank(ctx context.Context, rank system.Rank) 
 
 	resp := &mgmtpb.DaosResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return errors.Wrap(err, "unmarshall SetRank response")
+		return errors.Wrap(err, "unmarshal SetRank response")
 	}
 	if resp.Status != 0 {
 		return errors.Errorf("SetRank: %d\n", resp.Status)
