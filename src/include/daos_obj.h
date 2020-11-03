@@ -249,6 +249,22 @@ typedef struct {
 } daos_iod_t;
 
 /**
+ * I/O map flags -
+ * DAOS_IOMF_DETAIL	zero means only need to know the iom_recx_hi/lo.
+ *			1 means need to retrieve detailed iom_recxs array, in
+ *			that case user can either -
+ *			1) provides allocated iom_recxs buffer (iom_nr indicates
+ *			   #elements allocated), if returned iom_nr_out is
+ *			   greater than iom_nr, iom_recxs will still be
+ *			   populated, but it will be a truncated list).
+ *			2) provides NULL iod_recxs and zero iom_nr, in that case
+ *			   DAOS will internally allocated needed buffer for
+ *			   iom_recxs array (#elements is iom_nr, and equals
+ *			   iom_nr_out). User is responsible for free the
+ *			   iom_recxs buffer after using.
+ */
+#define DAOS_IOMF_DETAIL		(0x1U)
+/**
  * A I/O map represents the physical extent mapping inside an array for a
  * given range of indices.
  */
@@ -258,14 +274,15 @@ typedef struct {
 	/**
 	 * Number of elements allocated in iom_recxs.
 	 */
-	unsigned int		 iom_nr;
+	uint32_t		 iom_nr;
 	/**
 	 * Number of extents in the mapping. If iom_nr_out is greater than
 	 * iom_nr, iom_recxs will still be populated, but it will be a
 	 * truncated list.
 	 * 1 for SV.
 	 */
-	unsigned int		 iom_nr_out;
+	uint32_t		 iom_nr_out;
+	uint32_t		 iom_flags;
 	/** Size of the single value or the record size */
 	daos_size_t		 iom_size;
 	/**

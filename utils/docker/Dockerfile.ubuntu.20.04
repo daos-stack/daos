@@ -30,7 +30,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
             pylint python-dev python3-dev scons sg3-utils uuid-dev      \
             yasm valgrind libhwloc-dev man fuse3 libfuse3-dev           \
             openjdk-8-jdk maven libopenmpi-dev patchelf libjson-c-dev   \
-            liblz4-dev
+            liblz4-dev python3-distro
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
                        software-properties-common &&                    \
