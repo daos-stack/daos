@@ -1304,8 +1304,8 @@ def install_debuginfos():
             print(error)
             print("Going to refresh caches and try again")
             cmd_prefix = ["sudo", "yum", "--enablerepo=*debug*"]
-            print(get_output([cmd_prefix + [ "clean", "all"], 
-                              cmd_prefix + [ "makecache"]]))
+            cmds.insert(0, cmd_prefix + [ "clean", "all"])
+            cmds.insert(1, cmd_prefix + [ "makecache"])
     for cmd in cmds:
         print(get_output(cmd, raise_exception=True))
 
