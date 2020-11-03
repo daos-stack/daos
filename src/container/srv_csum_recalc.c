@@ -211,7 +211,7 @@ ds_csum_agg_recalc(void *recalc_args)
 	/* need at most prefix + buf + suffix in sgl */
 	rc = daos_sgl_init(&sgl, 3);
 	if (rc) {
-		args->cra_rc = -DER_NOMEM;
+		args->cra_rc = rc;
 		return;
 	}
 	daos_csummer_init_with_type(&csummer, csum_info.cs_type,
