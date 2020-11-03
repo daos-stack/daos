@@ -1625,7 +1625,7 @@ dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver)
 	return 0;
 }
 
-struct pool_query_tgt_arg {
+struct pool_query_target_arg {
 	struct dc_pool		*dqa_pool;
 	uint32_t		 dqa_tgt_idx;
 	d_rank_t		 dqa_rank;
@@ -1636,9 +1636,13 @@ struct pool_query_tgt_arg {
 static int
 pool_query_target_cb(tse_task_t *task, void *data)
 {
-	struct pool_query_tgt_arg  *arg = (struct pool_query_tgt_arg *)data;
-	struct pool_query_info_out *out = crt_reply_get(arg->rpc);
-	int			    rc = task->dt_result;
+	struct pool_query_target_arg *arg;
+	struct pool_query_info_out   *out;
+	int			      rc;
+
+	arg = (struct pool_query_target_arg *)data;
+	out = crt_reply_get(arg->rpc);
+	rc = task->dt_result;
 
 	rc = pool_rsvc_client_complete_rpc(arg->dqa_pool, &arg->rpc->cr_ep, rc,
 					   &out->pqio_op, task);
@@ -1680,7 +1684,7 @@ dc_pool_query_target(tse_task_t *task)
 	crt_endpoint_t			 ep;
 	crt_rpc_t			*rpc;
 	struct pool_query_info_in	*in;
-	struct pool_query_tgt_arg	 query_args;
+	struct pool_query_target_arg	 query_args;
 	int				 rc;
 
 	args = dc_task_get_args(task);

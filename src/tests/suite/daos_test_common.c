@@ -1237,27 +1237,23 @@ int wait_and_verify_blobstore_state(uuid_t bs_uuid, char *expected_state,
 }
 
 #define MAX_POOL_TGT_STATE_WAIT	   5 /* 5sec sleep between tgt state queries */
-#define MAX_POOL_TGT_STATE_RETRY   36 /* max timeout of 36 * 5sec= 3min */
-int wait_and_verify_pool_tgt_state(daos_handle_t poh, int n_tgtidx, int rank,
+#define MAX_POOL_TGT_STATE_RETRY   24 /* max timeout of 24 * 5sec= 2min */
+int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 				   char *expected_state)
 {
 	daos_target_info_t	tgt_info = { 0 };
 	int			retry_cnt;
 	int			rc;
-	int			i;
 
 	retry_cnt = 0;
 	while (retry_cnt <= MAX_POOL_TGT_STATE_RETRY) {
-		for (i = 0; i < n_tgtidx; i++) {
-			rc = daos_pool_query_target(poh, i/*tgt*/, rank,
-						    &tgt_info, NULL);
+		rc = daos_pool_query_target(poh, tgtidx, rank, &tgt_info, NULL);
 			if (rc)
 				return rc;
 
 			if (strcmp(daos_target_state_enum_to_str(tgt_info.ta_state),
 				   expected_state) == 0)
-				return i;
-		}
+				return 0;
 
 		sleep(MAX_POOL_TGT_STATE_WAIT);
 		retry_cnt++;

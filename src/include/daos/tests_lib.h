@@ -166,11 +166,15 @@ struct dts_context {
 	/** OUTPUT END */
 };
 
+#define MAX_TEST_TARGETS_PER_DEVICE 10
+
 typedef struct {
 	uuid_t		device_id;
 	char		state[10];
 	int		rank;
 	char		host[50];
+	int		tgtidx[MAX_TEST_TARGETS_PER_DEVICE];
+	int		n_tgtidx;
 }  device_list;
 
 /** Initialize an SGL with a variable number of IOVs and set the IOV buffers

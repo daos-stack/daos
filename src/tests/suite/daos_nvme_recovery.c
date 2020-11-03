@@ -33,11 +33,12 @@
 #include "daos_iotest.h"
 
 static void
-set_fail_loc(test_arg_t *arg, d_rank_t rank, uint64_t fail_loc)
+set_fail_loc(test_arg_t *arg, d_rank_t rank, uint64_t tgtidx,
+	     uint64_t fail_loc)
 {
 	if (arg->myrank == 0)
 		daos_mgmt_set_params(arg->group, rank, DMG_KEY_FAIL_LOC,
-				     fail_loc, 0, NULL);
+				     fail_loc, tgtidx, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
@@ -63,16 +64,44 @@ nvme_recov_1(void **state)
 	daos_obj_id_t		 oid;
 	struct ioreq		 req;
 	daos_target_info_t	 tgt_info = { 0 };
+	device_list		*devices = NULL;
+	int			 ndisks;
 	char			 dkey[DTS_KEY_LEN] = { 0 };
 	char			 akey[DTS_KEY_LEN] = { 0 };
 	int			 obj_class, key_nr = 10;
 	int			 rank = 0, tgt_idx = 0;
+	uint64_t		 fail_loc_tgt;
+	int			 tgtidx[MAX_TEST_TARGETS_PER_DEVICE];
+	int			 n_tgtidx = 0;
 	int			 per_node_tgt_cnt = 0;
-	int			 i, j, rc;
+	int			 i, j, k, rc;
 
 	if (!is_nvme_enabled(arg)) {
 		print_message("NVMe isn't enabled.\n");
 		skip();
+	}
+
+	/**
+	 * Get the Total number of NVMe devices from all the servers.
+	 */
+	rc = dmg_storage_device_list(dmg_config_file, &ndisks, NULL);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Get the Device info of all NVMe devices.
+	 */
+	D_ALLOC_ARRAY(devices, ndisks);
+	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
+	assert_int_equal(rc, 0);
+	for (i = 0; i < ndisks; i++) {
+		if (devices[i].rank != rank)
+			continue;
+		print_message("Rank=%d UUID=%s state=%s host=%s tgts=",
+			      devices[i].rank, DP_UUID(devices[i].device_id),
+			      devices[i].state, devices[i].host);
+		for (j = 0; j < devices[i].n_tgtidx; j++)
+			print_message("%d,", devices[i].tgtidx[j]);
+		print_message("\n");
 	}
 
 	if (arg->pool.pool_info.pi_nnodes < 2)
@@ -96,10 +125,9 @@ nvme_recov_1(void **state)
 	}
 	ioreq_fini(&req);
 
-	/* Query pool to get total pool target count per node */
+	/** Query test args to get total pool target count per node */
 	assert_true(arg->srv_ntgts > arg->srv_nnodes);
 	per_node_tgt_cnt = arg->srv_ntgts/arg->srv_nnodes;
-	print_message("Pool Target Count:%d\n", per_node_tgt_cnt);
 
 	/**
 	 * Verify initial states for all pool targets are UPIN by querying
@@ -114,52 +142,71 @@ nvme_recov_1(void **state)
 		assert_int_equal(rc, 0);
 	}
 	print_message("All targets are in UPIN\n");
-	print_message("Error injection to simulate device faulty.\n");
-	set_fail_loc(arg, rank, DAOS_NVME_FAULTY | DAOS_FAIL_ONCE);
+
+	/** Inject error on random target index */
+	srand(time(NULL));
+	fail_loc_tgt = rand() % per_node_tgt_cnt;
+	print_message("Error injection on tgt %"PRIu64" to simulate device"
+		      " faulty.\n", fail_loc_tgt);
+	set_fail_loc(arg, rank, fail_loc_tgt, DAOS_NVME_FAULTY | DAOS_FAIL_ONCE);
+
+	/* Verify that the DAOS_NVME_FAULTY reaction got triggered. Target should
+	 * be in the DOWN state to trigger rebuild. If the target is still in
+	 * UPINT, attempt the faulty injection again with another target index.
+	 * The NVMe FAULTY device reaction might not have been triggered if the
+	 * target was not assigned to the device.
+	 */
+	while (fail_loc_tgt < per_node_tgt_cnt) {
+		rc = wait_and_verify_pool_tgt_state(arg->pool.poh, fail_loc_tgt,
+						    rank, "DOWN");
+		if (rc == 0)
+			break;
+
+		if (rc == -DER_TIMEDOUT) {
+			fail_loc_tgt++;
+			print_message("Attempting error injection again"
+				      " on tgt %"PRIu64"\n", fail_loc_tgt);
+			set_fail_loc(arg, rank, fail_loc_tgt,
+				     DAOS_NVME_FAULTY | DAOS_FAIL_ONCE);
+		} else {
+			print_message("Error querying target state, rc:%d\n",
+				      rc);
+			assert_true(rc == 0 || rc == -DER_TIMEDOUT);
+		}
+	}
 
 	print_message("Waiting for faulty reaction being triggered...\n");
+
 	/**
-	 * Verify targets are in DOWN. Targets that are excluded in this
-	 * test can be any currently on the rank, no way to set ahead of time.
-	 * Therefore we need to check all targets on the rank for the first one
-	 * to switch from UPIN->DOWN, and then we can confirm that rebuild
-	 * has been triggered from faulty device reaction.
+	 * Look up all targets currently mapped to the device that is now faulty.
 	 */
-	rc = wait_and_verify_pool_tgt_state(arg->pool.poh, per_node_tgt_cnt,
-					    rank, "DOWN");
-	/* rc = tgt_idx of first tgt in DOWN state */
-	assert_false(rc < 0);
-	tgt_idx = rc;
+	for (i = 0; i < ndisks; i++) {
+		if (devices[i].rank != rank)
+			continue;
+		n_tgtidx = devices[i].n_tgtidx;
+		for (j = 0; j < n_tgtidx; j++) {
+			if (devices[i].tgtidx[j] == fail_loc_tgt) {
+				for (k = 0; k < devices[i].n_tgtidx; k++)
+					tgtidx[k] = devices[i].tgtidx[k];
+			}
+		}
+	}
 
 	print_message("Waiting for rebuild done...\n");
 	if (arg->myrank == 0)
 		test_rebuild_wait(&arg, 1);
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	/**
-	 * Verify targets are in DOWNOUT. Targets that are excluded in this
-	 * test can be any currently on the rank, no way to set ahead of time.
-	 * Therefore we need to check all targets on the rank.
-	 */
 	print_message("Waiting for faulty reaction done...\n");
-	rc = wait_and_verify_pool_tgt_state(arg->pool.poh, per_node_tgt_cnt,
-					    rank, "DOWNOUT");
-	/* rc = tgt_idx of first tgt in DOWNOUT state */
-	assert_false(rc < 0);
-
 	/**
-	 * Final verification that the first found pool target in the DOWN
-	 * state is now in the DOWNOUT state (if different from the first
-	 * returned target in the DOWNOUT state above).
+	 * Verify all mapped device targets are in DOWNOUT state.
 	 */
-	if (rc != tgt_idx) {
-		rc = daos_pool_query_target(arg->pool.poh, rc/*tgt*/,
-					    rank, &tgt_info, NULL /*ev*/);
-		assert_int_equal(rc, 0);
-		rc = strcmp(daos_target_state_enum_to_str(tgt_info.ta_state),
-			    "DOWNOUT");
+	for (i = 0; i < n_tgtidx; i++) {
+		rc = wait_and_verify_pool_tgt_state(arg->pool.poh, tgtidx[i],
+						    rank, "DOWNOUT");
 		assert_int_equal(rc, 0);
 	}
+	print_message("All mapped device targets are in DOWNOUT\n");
 
 	/**
 	 * Print the final pool target states.
@@ -172,6 +219,7 @@ nvme_recov_1(void **state)
 			      daos_target_state_enum_to_str(tgt_info.ta_state));
 	}
 
+	D_FREE(devices);
 	print_message("Done\n");
 }
 

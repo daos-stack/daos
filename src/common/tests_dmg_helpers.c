@@ -583,7 +583,10 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 {
 	struct json_object	*tmp;
 	struct json_object	*dev = NULL;
-	int			i;
+	struct json_object	*target = NULL;
+	struct json_object	*targets;
+	int			tgts_len;
+	int			i, j;
 
 	for (i = 0; i < dev_length; i++) {
 		dev = json_object_array_get_idx(smd_dev, i);
@@ -594,6 +597,19 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 		}
 		uuid_parse(json_object_get_string(tmp),
 			   devices[*disks].device_id);
+
+		if (!json_object_object_get_ex(dev, "tgt_ids",
+					       &targets)) {
+			D_ERROR("unable to extract tgtids from JSON\n");
+			return -DER_INVAL;
+		}
+		tgts_len = json_object_array_length(targets);
+		for (j = 0; j < tgts_len; j++) {
+			target = json_object_array_get_idx(targets, j);
+			devices[*disks].tgtidx[j] = atoi(
+				json_object_to_json_string(target));
+		}
+		devices[*disks].n_tgtidx = tgts_len;
 
 		if (!json_object_object_get_ex(dev, "state", &tmp)) {
 			D_ERROR("unable to extract state from JSON\n");
