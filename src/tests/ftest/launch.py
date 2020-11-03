@@ -1310,17 +1310,23 @@ def install_debuginfos():
 
     cmds.append(cmd)
 
+    retry = False
     for cmd in cmds:
         try:
             print(run_command(cmd))
         except RuntimeError as error:
+            # got an error, so abort this list of commands and re-run
+            # it with a yum clean, makecache first
             print(error)
-            print("Going to refresh caches and try again")
-            cmd_prefix = ["sudo", "yum", "--enablerepo=*debug*"]
-            cmds.insert(0, cmd_prefix + ["clean", "all"])
-            cmds.insert(1, cmd_prefix + ["makecache"])
-    for cmd in cmds:
-        print(run_command(cmd))
+            retry = True
+            break
+    if retry:
+        print("Going to refresh caches and try again")
+        cmd_prefix = ["sudo", "yum", "--enablerepo=*debug*"]
+        cmds.insert(0, cmd_prefix + ["clean", "all"])
+        cmds.insert(1, cmd_prefix + ["makecache"])
+        for cmd in cmds:
+            print(run_command(cmd))
 
 
 def process_the_cores(avocado_logs_dir, test_yaml, args):
