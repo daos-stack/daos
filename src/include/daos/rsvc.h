@@ -51,9 +51,6 @@ struct rsvc_client {
 	uint64_t	sc_leader_term;
 	int		sc_leader_index;	/* in sc_ranks */
 	int		sc_next;		/* in sc_ranks */
-	uuid_t		sc_id;			/* of rsvc e.g., uuid */
-	void	       *sc_priv;		/* caller-private info */
-	int	      (*sc_update_ranks_cb)(struct rsvc_client *);
 };
 
 /** Return code of rsvc_client_complete_rpc() */
@@ -62,9 +59,7 @@ enum rsvc_client_complete_rpc_rc {
 	RSVC_CLIENT_RECHOOSE		/**< rechoose and send a new RPC */
 };
 
-int rsvc_client_init(struct rsvc_client *client, const d_rank_list_t *ranks,
-		     const uuid_t svc_uuid, void *priv,
-		     int (*update_ranks_cb)(struct rsvc_client *));
+int rsvc_client_init(struct rsvc_client *client, const d_rank_list_t *ranks);
 void rsvc_client_fini(struct rsvc_client *client);
 int rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep);
 int rsvc_client_complete_rpc(struct rsvc_client *client,

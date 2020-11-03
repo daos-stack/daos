@@ -48,16 +48,11 @@ rsvc_client_reset_leader(struct rsvc_client *client)
 /**
  * Initialize \a client.
  *
- * \param[out]	client			client state
- * \param[in]	ranks			ranks of (potential) service replicas
- * \param[in]	svc_uuid		service ID
- * \param[in]	priv			caller-private info to store in client
- * \param[in]	update_ranks_cb		function to re-populate rank list
+ * \param[out]	client	client state
+ * \param[in]	ranks	ranks of (potential) service replicas
  */
 int
-rsvc_client_init(struct rsvc_client *client, const d_rank_list_t *ranks,
-		 const uuid_t svc_uuid, void *priv,
-		 int (*update_ranks_cb)(struct rsvc_client *))
+rsvc_client_init(struct rsvc_client *client, const d_rank_list_t *ranks)
 {
 	int rc;
 
@@ -68,9 +63,6 @@ rsvc_client_init(struct rsvc_client *client, const d_rank_list_t *ranks,
 		return rc;
 	rsvc_client_reset_leader(client);
 	client->sc_next = 0;
-	uuid_copy(client->sc_id, svc_uuid);
-	client->sc_update_ranks_cb = update_ranks_cb;
-	client->sc_priv = priv;
 	return 0;
 }
 

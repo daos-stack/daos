@@ -610,7 +610,7 @@ ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
 	if (rc != 0)
 		D_GOTO(out_ranks, rc);
 
-	rc = rsvc_client_init(&client, ranks, pool_uuid, NULL, NULL);
+	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0)
 		D_GOTO(out_creation, rc);
 
@@ -2381,7 +2381,7 @@ ds_pool_svc_list_cont(uuid_t uuid, d_rank_list_t *ranks,
 
 	*containers = NULL;
 
-	rc = rsvc_client_init(&client, ranks, uuid, NULL, NULL);
+	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -2789,7 +2789,7 @@ ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ranks,
 
 	D_DEBUG(DB_MGMT, DF_UUID": Querying pool\n", DP_UUID(pool_uuid));
 
-	rc = rsvc_client_init(&client, ranks, pool_uuid, NULL, NULL);
+	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -2939,7 +2939,7 @@ ds_pool_svc_get_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
 
 	D_DEBUG(DB_MGMT, DF_UUID": Getting prop\n", DP_UUID(pool_uuid));
 
-	rc = rsvc_client_init(&client, ranks, pool_uuid, NULL, NULL);
+	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -3007,7 +3007,7 @@ ds_pool_extend(uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
 	struct pool_extend_in		*in;
 	struct pool_extend_out		*out;
 
-	rc = rsvc_client_init(&client, svc_ranks, pool_uuid, NULL, NULL);
+	rc = rsvc_client_init(&client, svc_ranks);
 	if (rc != 0)
 		return rc;
 
@@ -3076,7 +3076,7 @@ ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 	crt_opcode_t			opcode;
 	int i = 0;
 
-	rc = rsvc_client_init(&client, ranks, pool_uuid, NULL, NULL);
+	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0)
 		return rc;
 
@@ -3247,7 +3247,7 @@ ds_pool_svc_set_prop(uuid_t pool_uuid, d_rank_list_t *ranks, daos_prop_t *prop)
 
 	D_DEBUG(DB_MGMT, DF_UUID": Setting pool prop\n", DP_UUID(pool_uuid));
 
-	rc = rsvc_client_init(&client, ranks, pool_uuid, NULL, NULL);
+	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to init rsvc client: "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
@@ -3424,7 +3424,7 @@ ds_pool_svc_update_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 
 	D_DEBUG(DB_MGMT, DF_UUID": Updating pool ACL\n", DP_UUID(pool_uuid));
 
-	rc = rsvc_client_init(&client, ranks, pool_uuid, NULL, NULL);
+	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -3589,7 +3589,7 @@ ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 		strncpy(name_buf, principal_name, name_buf_len - 1);
 	}
 
-	rc = rsvc_client_init(&client, ranks, pool_uuid, NULL, NULL);
+	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -4560,7 +4560,7 @@ ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks, uint32_t force)
 		DF_UUID": Destroy pool (force: %d), inspect/evict handles\n",
 		DP_UUID(pool_uuid), force);
 
-	rc = rsvc_client_init(&client, ranks, pool_uuid, NULL, NULL);
+	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0)
 		D_GOTO(out, rc);
 

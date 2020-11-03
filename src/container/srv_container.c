@@ -2669,7 +2669,7 @@ ds_cont_svc_set_prop(uuid_t pool_uuid, uuid_t cont_uuid,
 	D_DEBUG(DB_MGMT, DF_CONT": Setting container prop\n",
 		DP_CONT(pool_uuid, cont_uuid));
 
-	rc = rsvc_client_init(&client, ranks, pool_uuid, NULL, NULL);
+	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
