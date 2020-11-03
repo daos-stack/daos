@@ -60,8 +60,8 @@ def scons():
                   'drpc.c', 'drpc.pb-c.c', 'proc.c',
                   'acl_api.c', 'acl_util.c', 'acl_principal.c', 'cont_props.c',
                   'dedup.c', 'profile.c', 'compression.c', 'compression_isal.c',
-                  'multihash.c', 'multihash_isal.c', 'cipher.c',
-                  'cipher_isal.c']
+                  'compression_qat.c', 'multihash.c', 'multihash_isal.c',
+                  'cipher.c', 'cipher_isal.c', 'qat.c']
 
     common = daos_build.library(denv, 'libdaos_common', common_src)
     denv.Install('$PREFIX/lib64/', common)

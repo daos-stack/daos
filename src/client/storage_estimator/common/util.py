@@ -138,6 +138,7 @@ class ProcessBase(CommonBase):
         self.set_verbose(args.verbose)
         self._meta = self._get_vos_meta(args)
         self._process_block_values()
+        self._process_checksum()
 
     def get_io_size(self):
         return self._io_size
@@ -160,6 +161,24 @@ class ProcessBase(CommonBase):
             self._meta['scm_cutoff'] = scm_cutoff
 
         return scm_cutoff
+
+    def _process_checksum(self):
+        self._csum_size = 0
+
+        csummers = self._meta.get('csummers')
+
+        if 'checksum' in self._args and self._args.checksum:
+            csum_name = self._args.checksum
+
+            if csum_name not in csummers:
+                raise ValueError(
+                    'unknown checksum algorithm: "{0}"'. format(csum_name))
+
+            csum_size = csummers[csum_name]
+            self._debug(
+                'using checksum "{0}" algorithm of size {1} bytes'.format(
+                    csum_name, csum_size))
+            self._csum_size = csum_size
 
     def _process_block_values(self):
         scm_cutoff = self._process_scm_cutoff()
@@ -197,6 +216,8 @@ class ProcessBase(CommonBase):
 
         container = dfs.get_container()
         container.add_value(dfs_sb)
+        container.set_csum_size(self._csum_size)
+        container.set_csum_gran(self._chunk_size)
         containers = Containers()
         containers.add_value(container)
         containers.set_num_shards(self._args.num_shards)
