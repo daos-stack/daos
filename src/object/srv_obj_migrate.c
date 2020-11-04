@@ -2499,7 +2499,9 @@ ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver,
 
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	arg.version = ver;
-	ABT_mutex_create(&arg.status_lock);
+	rc = ABT_mutex_create(&arg.status_lock);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out, rc);
 
 	rc = dss_thread_collective(migrate_check_one, &arg, 0, DSS_ULT_REBUILD);
 	if (rc)
