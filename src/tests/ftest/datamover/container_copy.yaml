@@ -30,7 +30,7 @@ container:
   control_method: daos
 ior:
   client_processes:
-    np: 20
+    np: 30
   api: DFS
   flags: "-w -k"
   dfs_destroy: False
@@ -40,7 +40,7 @@ ior:
   transfersize_blocksize:
     1M:
       transfer_size: '1M'
-      block_size: '1G'         # creating aggregate file of size 150G
+      block_size: '5G'         # creating aggregate file of size 150G
   objectclass:
     SX:
       dfs_oclass: "SX"
@@ -58,7 +58,9 @@ mdtest:
     - "-F -E"
   bytes: 4096
   depth: 0
+dfuse:
+  mount_dir: "/tmp/daos_dfuse"
 datamover:
   src_path: "/"
   dest_path: "/"
-  processes: 1
+  processes: 16
