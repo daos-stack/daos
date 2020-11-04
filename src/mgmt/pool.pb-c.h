@@ -119,10 +119,14 @@ struct  _Mgmt__PoolCreateResp
    */
   size_t n_svcreps;
   uint32_t *svcreps;
+  /*
+   * number of target ranks used
+   */
+  int32_t numranks;
 };
 #define MGMT__POOL_CREATE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_resp__descriptor) \
-    , 0, 0,NULL }
+    , 0, 0,NULL, 0 }
 
 
 /*

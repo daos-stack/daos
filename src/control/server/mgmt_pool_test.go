@@ -285,6 +285,55 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 	}
 }
 
+func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	mgmtSvc := newTestMgmtSvc(t, log)
+	dc := newMockDrpcClient(&mockDrpcClientConfig{IsConnectedBool: true})
+	dc.cfg.setSendMsgResponse(drpc.Status_SUCCESS, nil, nil)
+	mgmtSvc.harness.instances[0]._drpcClient = dc
+
+	for _, m := range []*system.Member{
+		system.MockMember(t, 0, system.MemberStateJoined),
+		system.MockMember(t, 1, system.MemberStateStopped),
+		system.MockMember(t, 2, system.MemberStateJoined),
+		system.MockMember(t, 3, system.MemberStateJoined),
+	} {
+		if err := mgmtSvc.sysdb.AddMember(m); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	req := &mgmtpb.PoolCreateReq{
+		Uuid:      common.MockUUID(),
+		Scmbytes:  100 * humanize.GiByte,
+		Nvmebytes: 10 * humanize.TByte,
+	}
+	wantReq := new(mgmtpb.PoolCreateReq)
+	*wantReq = *req
+
+	_, err := mgmtSvc.PoolCreate(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// We should only be trying to create on the Joined ranks.
+	wantReq.Ranks = []uint32{0, 2, 3}
+
+	gotReq := new(mgmtpb.PoolCreateReq)
+	if err := proto.Unmarshal(dc.calls[0].Body, gotReq); err != nil {
+		t.Fatal(err)
+	}
+
+	if diff := cmp.Diff(wantReq, gotReq, common.DefaultCmpOpts()...); diff != "" {
+		t.Fatalf("unexpected pool create req (-want, +got):\n%s\n", diff)
+	}
+}
+
 func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 	testLog, _ := logging.NewTestLogger(t.Name())
 	missingSB := newTestMgmtSvc(t, testLog)

@@ -74,6 +74,52 @@ func waitForLeadership(t *testing.T, ctx context.Context, db *Database, gained b
 	}
 }
 
+func TestSystem_Database_filterMembers(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	db := MockDatabase(t, log)
+	memberStates := []MemberState{
+		MemberStateUnknown, MemberStateAwaitFormat, MemberStateStarting,
+		MemberStateReady, MemberStateJoined, MemberStateStopping, MemberStateStopped,
+		MemberStateEvicted, MemberStateErrored, MemberStateUnresponsive,
+	}
+
+	for i, ms := range memberStates {
+		if err := db.AddMember(MockMember(t, uint32(i), ms)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for name, tf := range map[string]func(t *testing.T){
+		"individual state filters": func(t *testing.T) {
+			for _, ms := range memberStates {
+				matchLen := len(db.filterMembers(ms))
+				if matchLen != 1 {
+					t.Fatalf("expected exactly 1 member to match %s (got %d)", ms, matchLen)
+				}
+			}
+		},
+		"all members filter": func(t *testing.T) {
+			matchLen := len(db.filterMembers(AllMemberFilter))
+			if matchLen != len(memberStates) {
+				t.Fatalf("expected all members to be %d; got %d", len(memberStates), matchLen)
+			}
+		},
+		"subset filter": func(t *testing.T) {
+			matchLen := len(db.filterMembers(memberStates[1], memberStates[2]))
+			if matchLen != 2 {
+				t.Fatalf("expected 2 members to match; got %d", matchLen)
+			}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			buf.Reset()
+			tf(t)
+		})
+	}
+}
+
 func TestSystem_Database_checkReplica(t *testing.T) {
 	for name, tc := range map[string]struct {
 		replicas     []string

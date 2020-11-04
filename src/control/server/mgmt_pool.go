@@ -132,13 +132,15 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, err
 	}
 
-	allRanks, err := svc.sysdb.MemberRanks()
+	allRanks, err := svc.sysdb.MemberRanks(system.AvailableMemberFilter)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(req.GetRanks()) > 0 {
-		// If the request supplies a specific rank list, use it.
+		// If the request supplies a specific rank list, use it. Note that
+		// the rank list may include downed ranks, in which case the create
+		// will fail with an error.
 		reqRanks := system.RanksFromUint32(req.GetRanks())
 		// Create a RankSet to sort/dedupe the ranks.
 		reqRanks = system.RankSetFromRanks(reqRanks).Ranks()
@@ -152,7 +154,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 
 		req.Ranks = system.RanksToUint32(reqRanks)
 	} else {
-		// Otherwise, create the pool across all ranks in the system.
+		// Otherwise, create the pool across all available ranks in the system.
 		req.Ranks = system.RanksToUint32(allRanks)
 	}
 
@@ -210,6 +212,9 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal PoolCreate response")
 	}
+
+	// let the caller know how many ranks were used
+	resp.Numranks = int32(len(req.Ranks))
 
 	if resp.GetStatus() != 0 {
 		if err := svc.sysdb.RemovePoolService(ps.PoolUUID); err != nil {

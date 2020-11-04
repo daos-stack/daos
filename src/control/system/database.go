@@ -417,15 +417,14 @@ func (db *Database) ReplicaRanks() (*GroupMap, error) {
 	// TODO: Should this only return one rank per replica, or
 	// should we return all ready ranks per replica, for resiliency?
 	gm := newGroupMap(db.data.MapVersion)
-	for _, srv := range db.data.Members.Ranks {
+	for _, srv := range db.filterMembers(AvailableMemberFilter) {
 		// FIXME DAOS-5656: retain dependency on rank 0
 		if !srv.Rank.Equals(0) {
 			continue
 		}
-		repAddr, _, err := db.checkReplica(srv.Addr)
-		if err != nil || repAddr == nil ||
-			!(srv.state == MemberStateJoined || srv.state == MemberStateReady) {
 
+		repAddr, _, err := db.checkReplica(srv.Addr)
+		if err != nil || repAddr == nil {
 			continue
 		}
 		gm.RankURIs[srv.Rank] = srv.FabricURI
@@ -454,8 +453,35 @@ func (db *Database) AllMembers() ([]*Member, error) {
 	return dbCopy, nil
 }
 
+func (db *Database) filterMembers(desiredStates ...MemberState) (result []*Member) {
+	// NB: Must be done under a lock!
+
+	var includeUnknown bool
+	stateMask := AllMemberFilter
+	if len(desiredStates) > 0 {
+		stateMask = 0
+		for _, s := range desiredStates {
+			if s == MemberStateUnknown {
+				includeUnknown = true
+			}
+			stateMask |= s
+		}
+	}
+	if stateMask == AllMemberFilter {
+		includeUnknown = true
+	}
+
+	for _, m := range db.data.Members.Ranks {
+		if m.state == MemberStateUnknown && includeUnknown || m.state&stateMask > 0 {
+			result = append(result, m)
+		}
+	}
+
+	return
+}
+
 // MemberRanks returns a slice of all the ranks in the membership.
-func (db *Database) MemberRanks() ([]Rank, error) {
+func (db *Database) MemberRanks(desiredStates ...MemberState) ([]Rank, error) {
 	if err := db.checkLeader(); err != nil {
 		return nil, err
 	}
@@ -463,8 +489,8 @@ func (db *Database) MemberRanks() ([]Rank, error) {
 	defer db.data.RUnlock()
 
 	ranks := make([]Rank, 0, len(db.data.Members.Ranks))
-	for rank := range db.data.Members.Ranks {
-		ranks = append(ranks, rank)
+	for _, m := range db.filterMembers(desiredStates...) {
+		ranks = append(ranks, m.Rank)
 	}
 
 	sort.Slice(ranks, func(i, j int) bool { return ranks[i] < ranks[j] })
@@ -473,14 +499,14 @@ func (db *Database) MemberRanks() ([]Rank, error) {
 }
 
 // MemberCount returns the number of members in the system.
-func (db *Database) MemberCount() (int, error) {
+func (db *Database) MemberCount(desiredStates ...MemberState) (int, error) {
 	if err := db.checkLeader(); err != nil {
 		return -1, err
 	}
 	db.data.RLock()
 	defer db.data.RUnlock()
 
-	return len(db.data.Members.Ranks), nil
+	return len(db.filterMembers(desiredStates...)), nil
 }
 
 // CurMapVersion returns the current system map version.

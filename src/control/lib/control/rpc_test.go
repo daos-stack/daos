@@ -189,8 +189,8 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 			// any lingering goroutines.
 			time.Sleep(250 * time.Millisecond)
 			goRoutinesAtEnd := runtime.NumGoroutine()
-			if goRoutinesAtEnd != goRoutinesAtStart {
-				t.Errorf("expected final goroutine count to be %d, got %d\n", goRoutinesAtStart, goRoutinesAtEnd)
+			if goRoutinesAtEnd > goRoutinesAtStart {
+				t.Errorf("expected final goroutine count to be <= %d, got %d\n", goRoutinesAtStart, goRoutinesAtEnd)
 				// Dump the stack to see which goroutines are lingering
 				if err := unix.Kill(os.Getpid(), unix.SIGABRT); err != nil {
 					t.Fatal(err)

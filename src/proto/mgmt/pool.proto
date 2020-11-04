@@ -44,6 +44,7 @@ message PoolCreateReq {
 message PoolCreateResp {
 	int32 status = 1; // DAOS error code
 	repeated uint32 svcreps = 2; // pool service replica ranks
+	int32 numranks = 3; // number of target ranks used
 }
 
 // PoolDestroyReq supplies pool identifier and force flag.
