@@ -1128,10 +1128,6 @@ pipeline {
                     }
                     post {
                         always {
-                            // This is only set while dealing with issues
-                            // caused by code coverage instrumentation affecting
-                            // test results, and while code coverage is being
-                            // added.
                             unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
                                                      'unit_test_memcheck_logs/*'],
                                          valgrind_stash: 'centos7-gcc-unit-memcheck'
