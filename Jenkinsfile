@@ -1073,13 +1073,13 @@ pipeline {
                         label 'ci_hdwr1'
                     }
                     steps {
-                        unitTest timeout_time: 30,
+                        unitTest timeout_time: 20,
                                  inst_repos: pr_repos(),
                                  inst_rpms: unit_packages()
                     }
                     post {
                       always {
-                            unitTestPost artifacts: ['unit_vm_test/*', 'vm_test/*'],
+                            unitTestPost artifacts: ['nlt_logs/*'],
                                          testResults: 'None',
                                          valgrind_pattern: 'vm_test/*.memcheck.xml',
                                          valgrind_stash: 'centos7-gcc-nlt-memcheck'
@@ -1129,7 +1129,7 @@ pipeline {
                     post {
                         always {
                             unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
-                                                     'unit_test_memcheck_logs/*'],
+                                                     'unit_test_memcheck_logs/*.log'],
                                          valgrind_stash: 'centos7-gcc-unit-memcheck'
                         }
                     }
@@ -1358,8 +1358,7 @@ pipeline {
     post {
         always {
             valgrindReportPublish valgrind_stashes: ['centos7-gcc-nlt-memcheck',
-                                                     'centos7-gcc-unit-memcheck'],
-                                  valgrind_pattern: '*.memcheck.xml'
+                                                     'centos7-gcc-unit-memcheck']
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch

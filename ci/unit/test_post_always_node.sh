@@ -4,7 +4,7 @@ set -uex
 
 cd "$DAOS_BASE"
 test_log_dir="run_test.sh"
-vm_log_dir="unit_vm_test"
+vm_log_dir="nlt_logs"
 case $STAGE_NAME in
   *Bullseye*)
     test_log_dir="covc_test_logs"
