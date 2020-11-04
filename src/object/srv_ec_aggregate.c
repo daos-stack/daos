@@ -20,11 +20,49 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
+
 /**
  * DAOS server erasure-coded object aggregation.
  *
  * src/object/srv_ec_aggregate.c
+ *
+ * Iterates over replica extents for objects with this target a leader.
+ *
+ * Processes each EC stripe with replica(s) present.
+ *
+ * If replicas fill the stripe, the parity is regenerated from the local
+ * extents.
+ *	- The parity for peer parity extents is transferred.
+ *	- Replicas for the stripe are removed from parity targets.
+ *
+ * If replicas are partial, and prior parity exists:
+ *	- If less than half cells are updated (have replicas, parity is updated:
+ *		- Old data cells for cells with replica data are fetched from
+ *		  data targets (old, since fetched at epoch of existing parity).
+ *		- Peer parity is fetched.
+ *		- Parity is incrementally updated.
+ *		- Updated parity is transferred to peer parity target(s).
+ *	- If half or more of the cells are update by replicas:
+ *		- All cells not filled by local replicas are fetched.
+ *		- New parity is generated from entire stripe.
+ *		- Updated parity is transferred to peer parity target(s).
+ *	- Replicas for the stripe are removed from parity targets.
+ *
+ * If the stripe contains holes later than the parity:
+ *	- Valid ranges in the stripe are pulled from the data targets and
+ *	  written to local VOS, and peer parity VOS, as replicas.
+ *	- Parity is removed for latest parity epoch in local VOS,
+ *	  and from VOS on peer parity targets.
+ *
+ * If replicas exist that are older than the latest parity, they are removed
+ * from parity targets.
+ *
+ * If checksums are supported for the container, checksums are verified for
+ * all read data, and they are calculated for generated parity. Re-replicated
+ * data is stored with the checksums from the fetch verification.
+ *
  */
+
 #define D_LOGFAC	DD_FAC(object)
 
 #include <stddef.h>
@@ -183,7 +221,11 @@ static int
 agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	 struct ec_agg_entry *agg_entry, unsigned int *acts)
 {
-	agg_entry->ae_dkey	= entry->ie_key;
+	if (agg_key_compare(agg_entry->ae_dkey, entry->ie_key)) {
+		agg_entry->ae_dkey	= entry->ie_key;
+	} else {
+		*acts |= VOS_ITER_CB_SKIP;
+	}
 	return 0;
 }
 
@@ -193,10 +235,9 @@ static int
 agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	 struct ec_agg_entry *agg_entry, unsigned int *acts)
 {
-	/* D_PRINT("agg_entry->akey: "DF_KEY",  entry->ie_key: "DF_KEY"\n",
-		DP_KEY(&agg_entry->ae_akey),
-		DP_KEY(&entry->ie_key));
-	*/
+	//D_PRINT("agg_entry->akey: "DF_KEY",  entry->ie_key: "DF_KEY"\n",
+		//DP_KEY(&agg_entry->ae_akey),
+		//DP_KEY(&entry->ie_key));
 	if (agg_key_compare(agg_entry->ae_akey, entry->ie_key)) {
 		agg_entry->ae_akey = entry->ie_key;
 		agg_entry->ae_thdl = ih;
@@ -1801,6 +1842,9 @@ agg_process_stripe(struct ec_agg_entry *entry)
 	D_DEBUG(DB_TRACE, "Querying parity for stripe: %lu, offset: %lu\n",
 		entry->ae_cur_stripe.as_stripenum,
 		iter_param.ip_recx.rx_idx);
+	D_PRINT("Querying parity for stripe: %lu, offset: %lu\n",
+		entry->ae_cur_stripe.as_stripenum,
+		iter_param.ip_recx.rx_idx);
 
 	/* Query the parity */
 	rc = vos_iterate(&iter_param, VOS_ITER_RECX, false, &anchors,
@@ -1897,6 +1941,13 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 	daos_off_t		 cur_stripenum, this_stripenum;
 	int			 rc = 0;
 
+	if (agg_entry->ae_cur_stripe.as_extent_cnt) {
+		extent = d_list_entry(agg_entry->ae_cur_stripe.as_dextents.prev,
+			      struct ec_agg_extent, ae_link);
+		if ( extent->ae_recx.rx_idx == entry->ie_recx.rx_idx) {
+			D_PRINT("Repeated recx: %lu\n,", extent->ae_recx.rx_idx);
+		}
+	}
 	this_stripenum = agg_stripenum(agg_entry, entry->ie_recx.rx_idx);
 	if (this_stripenum != agg_entry->ae_cur_stripe.as_stripenum) {
 		/* Iterator has reached next stripe */
@@ -1965,6 +2016,11 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 		extent->ae_recx.rx_idx, extent->ae_recx.rx_nr,
 		agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
 		extent->ae_hole, agg_entry->ae_oid.id_shard);
+	D_PRINT("akey: "DF_KEY", adding extent %lu,%lu, to stripe  %lu, hole: %d: shard: %u\n",
+		DP_KEY(&agg_entry->ae_akey),
+		extent->ae_recx.rx_idx, extent->ae_recx.rx_nr,
+		agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
+		extent->ae_hole, agg_entry->ae_oid.id_shard);
 out:
 	return rc;
 }
@@ -2007,51 +2063,6 @@ ec_aggregate_yield(struct ec_agg_param *agg_param)
         return false;
 }
 
-#if 0
-/* Pre-subtree iteration call back for per-object iterator
- */
-static int
-agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
-		   vos_iter_type_t type, vos_iter_param_t *param,
-		   void *cb_arg, unsigned int *acts)
-{
-	struct ec_agg_entry	*agg_entry = (struct ec_agg_entry *)cb_arg;
-	struct ec_agg_param	*agg_param;
-	int			 rc = 0;
-
-	switch (type) {
-	case VOS_ITER_DKEY:
-		rc = agg_dkey(ih, entry, agg_entry, acts);
-		break;
-	case VOS_ITER_AKEY:
-		rc = agg_akey(ih, entry, agg_entry, acts);
-		break;
-	case VOS_ITER_RECX:
-		rc = agg_ev(ih, entry, agg_entry, acts);
-		break;
-	default:
-		break;
-	}
-
-	if (rc < 0) {
-		D_ERROR("EC aggregation failed: "DF_RC"\n", DP_RC(rc));
-		return rc;
-	}
-
-	agg_param->ap_credits++;
-	if (agg_param->ap_credits > agg_param->ap_credits_max) {
-		agg_param->ap_credits = 0;
-		*acts |= VOS_ITER_CB_YIELD;
-
-		if (ec_aggregate_yield(agg_param)) {
-			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
-			rc = 1;
-		}
-	}
-
-	return rc;
-}
-#endif
 
 /* Post iteration call back for per-object iterator
  */
@@ -2074,6 +2085,18 @@ agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		break;
 	default:
 		break;
+	}
+	agg_param->ap_credits++;
+	if (agg_param->ap_credits > agg_param->ap_credits_max) { // &&
+//	    (type == VOS_ITER_OBJ || type == VOS_ITER_RECX)) {
+		D_PRINT("Yielding for type: %u, count: %u\n", type,
+			agg_param->ap_credits);
+		agg_param->ap_credits = 0;
+		*acts |= VOS_ITER_CB_YIELD;
+		if (ec_aggregate_yield(agg_param)) {
+			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
+			rc = 1;
+		}
 	}
 
 	return rc;
@@ -2155,6 +2178,8 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 	d_rank_t		 myrank;
 
 	crt_group_rank(NULL, &myrank);
+//	D_PRINT("Processing OID: "DF_OID", on rank: %u\n",
+//		DP_OID(entry->ie_oid.id_pub), myrank);
 	if (!daos_unit_oid_compare(agg_param->ap_agg_entry.ae_oid,
 				   entry->ie_oid)) {
 		*acts |= VOS_ITER_CB_SKIP;
@@ -2166,6 +2191,8 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 				  &entry->ie_oid,
 				  agg_param->ap_pool_info.api_pool_version);
 	if (rc == 1) {
+		D_PRINT("Starting recursion for object: "DF_OID", on rank: %u\n",
+			DP_OID(entry->ie_oid.id_pub), myrank);
 		agg_reset_entry(&agg_param->ap_agg_entry, entry, oca);
 		rc = 0;
 	} else {
@@ -2176,7 +2203,6 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 		}
 		*acts |= VOS_ITER_CB_SKIP;
 	}
-
 out:
 	return rc;
 }
@@ -2215,23 +2241,6 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return rc;
 	}
 
-	agg_param->ap_credits++;
-#if 0
-	if (agg_param->ap_credits > agg_param->ap_credits_max) {
-		agg_param->ap_credits = 0;
-		*acts |= VOS_ITER_CB_YIELD;
-
-		/*
-		 * Reset position if we yield while iterating in object, dkey
-		 * or akey level, so that subtree won't be skipped mistakenly.
-		 */
-		reset_nested_agg_pos(type, agg_entry);
-		if (ec_aggregate_yield(agg_param)) {
-			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
-			rc = 1;
-		}
-	}
-#endif
 	return rc;
 }
 
@@ -2302,6 +2311,7 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	agg_param.ap_cont_handle	= cont->sc_hdl;
 	agg_param.ap_yield_func		= yield_func;
 	agg_param.ap_yield_arg		= yield_arg;
+	agg_param.ap_credits_max	= EC_AGG_ITERATION_MAX;
 
 	rc = ABT_eventual_create(sizeof(*status),
 				 &agg_param.ap_pool_info.api_eventual);
@@ -2347,6 +2357,9 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	iter_param.ip_recx.rx_idx	= 0ULL;
 	iter_param.ip_recx.rx_nr	= ~PARITY_INDICATOR;
 
+	d_rank_t myrank;
+	crt_group_rank(NULL, &myrank);
+//	D_PRINT("Iterate on rank: %u\n", myrank);
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
 			 agg_iterate_pre_cb, agg_iterate_post_cb,
 			 &agg_param, NULL);
