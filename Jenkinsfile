@@ -1081,7 +1081,6 @@ pipeline {
                       always {
                             unitTestPost artifacts: ['nlt_logs/*'],
                                          testResults: 'None',
-                                         valgrind_pattern: 'vm_test/*.memcheck.xml',
                                          valgrind_stash: 'centos7-gcc-nlt-memcheck'
                         }
                     }
