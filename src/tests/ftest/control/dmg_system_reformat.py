@@ -59,6 +59,7 @@ class DmgSystemReformatTest(PoolTestBase):
             self.log.info("Pool create failed: %s", str(error))
             if "-1007" not in self.get_dmg_command().result.stderr:
                 self.fail("Pool create did not fail due to DER_NOSPACE!")
+        self.get_dmg_command().exit_status_exception = True
 
         self.log.info("Stop running io_server instances: 'dmg system stop'")
         self.get_dmg_command().system_stop(force=True)
@@ -70,8 +71,9 @@ class DmgSystemReformatTest(PoolTestBase):
 
         # To verify that we are using the membership information instead of the
         # dmg config explicit hostlist
-        self.assertTrue(
-            self.server_managers[-1].dmg.set_config_value("hostlist", None))
+        # Uncomment below after DAOS-5979 is resolved
+        # self.assertTrue(
+        #     self.server_managers[-1].dmg.set_config_value("hostlist", None))
 
         self.log.info("Perform dmg storage format on all system ranks:")
         self.get_dmg_command().storage_format(reformat=True)
