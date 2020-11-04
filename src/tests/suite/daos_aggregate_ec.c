@@ -283,6 +283,7 @@ test_filled_stripe(void **statep)
 //			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
 		memset(&ctx.fetch_iom, 0, sizeof(daos_iom_t));
+		ctx.fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 		shard--;
 		rc = dc_obj_fetch_task_create(ctx.oh, DAOS_TX_NONE, 0,
 					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
@@ -298,6 +299,7 @@ test_filled_stripe(void **statep)
 //			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
 		memset(&ctx.fetch_iom, 0, sizeof(daos_iom_t));
+		ctx.fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 		shard++;
 		ctx.fetch_iod.iod_recxs[0].rx_idx = (i * len) |
 						     PARITY_INDICATOR;
@@ -317,6 +319,7 @@ test_filled_stripe(void **statep)
 //			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
 		memset(&ctx.fetch_iom, 0, sizeof(daos_iom_t));
+		ctx.fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 		shard--;
 		rc = dc_obj_fetch_task_create(ctx.oh, DAOS_TX_NONE, 0,
 					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
@@ -354,6 +357,7 @@ test_filled_stripe(void **statep)
 //			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
 		memset(&ctx.fetch_iom, 0, sizeof(daos_iom_t));
+		ctx.fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 		shard--;
 		rc = dc_obj_fetch_task_create(ctx.oh, DAOS_TX_NONE, 0,
 					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
@@ -369,6 +373,7 @@ test_filled_stripe(void **statep)
 //			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
 		memset(&ctx.fetch_iom, 0, sizeof(daos_iom_t));
+		ctx.fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 		shard++;
 		ctx.fetch_iod.iod_recxs[0].rx_idx = (i * len) |
 						     PARITY_INDICATOR;
@@ -388,6 +393,7 @@ test_filled_stripe(void **statep)
 //			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
 		memset(&ctx.fetch_iom, 0, sizeof(daos_iom_t));
+		ctx.fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 		shard--;
 		rc = dc_obj_fetch_task_create(ctx.oh, DAOS_TX_NONE, 0,
 					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
@@ -425,6 +431,7 @@ test_filled_stripe(void **statep)
 //			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
 		memset(&ctx.fetch_iom, 0, sizeof(daos_iom_t));
+		ctx.fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 		shard--;
 		rc = dc_obj_fetch_task_create(ctx.oh, DAOS_TX_NONE, 0,
 					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
@@ -440,6 +447,7 @@ test_filled_stripe(void **statep)
 //			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
 		memset(&ctx.fetch_iom, 0, sizeof(daos_iom_t));
+		ctx.fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 		shard++;
 		ctx.fetch_iod.iod_recxs[0].rx_idx = (i * len) |
 						     PARITY_INDICATOR;
@@ -459,6 +467,7 @@ test_filled_stripe(void **statep)
 //			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
 		memset(&ctx.fetch_iom, 0, sizeof(daos_iom_t));
+		ctx.fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 		shard--;
 		rc = dc_obj_fetch_task_create(ctx.oh, DAOS_TX_NONE, 0,
 					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
