@@ -799,6 +799,6 @@ class DaosServerManager(SubprocessManager):
 
         self.log.info(
             "Total available storage:\n  SCM:  %s (%s)\n  NVMe: %s (%s)",
-            str(storage[0]), bytes_to_human(storage[0]),
-            str(storage[1]), bytes_to_human(storage[1]))
+            str(storage[0]), bytes_to_human(storage[0], binary=False),
+            str(storage[1]), bytes_to_human(storage[1], binary=False))
         return storage

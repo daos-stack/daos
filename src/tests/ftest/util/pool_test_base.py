@@ -107,15 +107,16 @@ class PoolTestBase(TestWithServers):
                 # of 1GiB per target.  A server with 8 targets will have a
                 # minimum NVMe size of 8 GiB.  Specify the largest NVMe size in
                 # GiB that can be used with the configured number of targets and
-                # specified capacity in GB.
+                # specified capacity in GiB.
                 targets = self.server_managers[0].get_config_value("targets")
-                increment = human_to_bytes("{}GB".format(float(targets)))
+                increment = human_to_bytes("{}GiB".format(targets))
                 nvme_multiple = increment
                 while nvme_multiple + increment <= sizes[1]:
                     nvme_multiple += increment
                 self.log.info(
-                    "Largest NVMe multiple: %s (%s)",
-                    str(nvme_multiple), bytes_to_human(nvme_multiple))
+                    "Largest NVMe multiple based on %s targets in %s: %s (%s)",
+                    targets, str(sizes[1]), str(nvme_multiple),
+                    bytes_to_human(nvme_multiple))
                 pool.nvme_size.update(
                     bytes_to_human(nvme_multiple), "nvme_size")
 
