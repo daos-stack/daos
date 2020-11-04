@@ -187,7 +187,7 @@ Requires: boost-devel
 # we ideally want to set this minimum version however it seems to confuse yum:
 # https://github.com/rpm-software-management/yum/issues/124
 #Requires: mercury >= 2.0.0~a1
-Requires: mercury-devel >= %{mercury_version}, mercury_devel < 2.0.0a1
+Requires: mercury-devel >= %{mercury_version}, mercury-devel < 2.0.0a1
 Requires: openpa-devel
 Requires: hwloc-devel
 Summary: The DAOS development libraries and headers
