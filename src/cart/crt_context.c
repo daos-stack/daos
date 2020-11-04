@@ -280,17 +280,17 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 
 	if (rc == -DER_CANCELED)
 		rpc_priv->crp_state = RPC_STATE_CANCELED;
-	else if (rc == -DER_TIMEDOUT){
+	else if (rc == -DER_TIMEDOUT) {
 		rpc_priv->crp_state = RPC_STATE_TIMEOUT;
 		retransmit = true;
-	} else if (rc == -DER_UNREACH){
+	} else if (rc == -DER_UNREACH) {
 		rpc_priv->crp_state = RPC_STATE_FWD_UNREACH;
 		retransmit = true;
 	} else
 		rpc_priv->crp_state = RPC_STATE_COMPLETED;
 
 	rply_rc = rpc_priv->crp_reply_hdr.cch_rc;
-	if ((retransmit || rply_rc != 0) && 
+	if ((retransmit || rply_rc != 0) &&
 	    rpc_priv->crp_pub.cr_ep.ep_tag != 0 && !rpc_priv->crp_rpc_retry) {
 		rpc_priv->crp_rpc_retry = true;
 		retry_rc = crt_req_retry(rpc_priv);
