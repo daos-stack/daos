@@ -245,10 +245,8 @@ with_identical_updates(void *const *state, uint32_t iod_type, int csum_type,
 	daos_size_t		delta;
 	int			rc;
 
-	if (dedup_type == DAOS_PROP_CO_DEDUP_MEMCMP &&
-	    dedup_is_nvme_enabled(*state)) {
-		print_message("DAOS_PROP_CO_DEDUP_MEMCMP "
-			      "doesn't support NVMe.\n");
+	if (dedup_is_nvme_enabled(*state)) {
+		print_message("Currently dedup doesn't support NVMe.\n");
 		skip();
 	}
 
