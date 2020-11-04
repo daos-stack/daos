@@ -234,8 +234,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 	 * different then seek
 	 */
 	if (offset &&
-		oh->doh_dre[oh->doh_dre_index].dre_offset != offset &&
-		oh->doh_anchor_index + OFFSET_BASE != offset) {
+	    oh->doh_dre[oh->doh_dre_index].dre_offset != offset &&
+	    oh->doh_anchor_index + OFFSET_BASE != offset) {
 		uint32_t num;
 
 		/*

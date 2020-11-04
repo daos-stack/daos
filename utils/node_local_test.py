@@ -910,10 +910,10 @@ def dfuse_wrapper(server, conf):
 def readdir_test(dfuse, count, test_all=False):
     """Run a rudimentary readdir test"""
 
-    wide_dir = tempfile.mkdtemp(dir = dfuse.dir)
+    wide_dir = tempfile.mkdtemp(dir=dfuse.dir)
     if count == 0:
         files = os.listdir(wide_dir)
-        assert(len(files) == 0)
+        assert len(files) == 0
         return
     start = time.time()
     for idx in range(count):
@@ -923,9 +923,10 @@ def readdir_test(dfuse, count, test_all=False):
             files = os.listdir(wide_dir)
             assert len(files) == idx + 1
     duration = time.time() - start
+    rate = count / duration
     print('Created {} files in {:.1f} seconds rate {:.1f}'.format(count,
                                                                   duration,
-                                                                  count / duration))
+                                                                  rate))
     print('Listing dir contents')
     files = os.listdir(wide_dir)
     print(files)
