@@ -20,11 +20,28 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
+
 /**
  * DAOS server erasure-coded object aggregation.
  *
  * src/object/srv_ec_aggregate.c
+ *
+ * Iterates over replica extents for objects with this target a leader.
+ *
+ * Processes each EC stripe with replica(s) present.
+ *
+ * If replicas fill the stripe, the parity is regenerated from the local
+ * extents.
+ *	- The parity for peer parity extents is transferred.
+ *	- Replicas for the stripe are removed from parity targets.
+ *
+ *
+ * If replicas exist that are older than the latest parity, they are removed
+ * from parity targets.
+ *
+ *
  */
+
 #define D_LOGFAC	DD_FAC(object)
 
 #include <stddef.h>
@@ -35,9 +52,10 @@
 #include <daos_srv/srv_obj_ec.h>
 #include "obj_ec.h"
 #include "obj_internal.h"
-#define EC_AGG_ITERATION_MAX 256
-/* Pool/container info. */
 
+#define EC_AGG_ITERATION_MAX 256
+
+/* Pool/container info. */
 struct ec_agg_pool_info {
 	uuid_t		 api_pool_uuid;		/* open pool, check leader    */
 	uuid_t		 api_cont_uuid;		/* container uuid             */
@@ -112,47 +130,6 @@ struct ec_agg_extent {
 	daos_epoch_t	ae_epoch; /* epoch for extent   */
 };
 
-
-/* Compare function for keys.  Used to reset iterator position.
- */
-static inline int
-agg_key_not_equal(daos_key_t key1, daos_key_t key2)
-{
-	if (key1.iov_len != key2.iov_len)
-		return 1;
-
-	return memcmp(key1.iov_buf, key2.iov_buf, key1.iov_len);
-}
-
-/* Handles dkeys returned by the per-object nested iteratior.
- */
-static int
-agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
-	 struct ec_agg_entry *agg_entry, unsigned int *acts)
-{
-	if (agg_key_not_equal(agg_entry->ae_dkey, entry->ie_key))
-		agg_entry->ae_dkey = entry->ie_key;
-	else
-		*acts |= VOS_ITER_CB_SKIP;
-
-	return 0;
-}
-
-/* Handles akeys returned by the per-object nested iteratior.
- */
-static int
-agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
-	 struct ec_agg_entry *agg_entry, unsigned int *acts)
-{
-	if (agg_key_not_equal(agg_entry->ae_akey, entry->ie_key)) {
-		agg_entry->ae_akey = entry->ie_key;
-		agg_entry->ae_thdl = ih;
-	} else
-
-		*acts |= VOS_ITER_CB_SKIP;
-
-	return 0;
-}
 
 /* Determines if the extent carries over into the next stripe.
  */
@@ -753,35 +730,25 @@ out:
 	return rc;
 }
 
-/* Post iteration call back for dkey.
- */
-static int
-agg_dkey_post(struct ec_agg_entry *agg_entry)
-{
-	int rc = 0;
-
-	memset(&agg_entry->ae_dkey, 0, sizeof(agg_entry->ae_dkey));
-	return rc;
-}
-
 /* Post iteration call back for akey.
  */
 static int
-agg_akey_post(struct ec_agg_entry *agg_entry)
+agg_akey_post(daos_handle_t ih, vos_iter_entry_t *entry,
+	      struct ec_agg_entry *agg_entry, unsigned int *acts)
 {
 	int rc = 0;
 
-	if (agg_entry->ae_cur_stripe.as_extent_cnt)
+	if (agg_entry->ae_cur_stripe.as_extent_cnt) {
 		rc = agg_process_stripe(agg_entry);
 
-	memset(&agg_entry->ae_akey, 0, sizeof(agg_entry->ae_akey));
+		agg_entry->ae_cur_stripe.as_stripenum	= 0UL;
+		agg_entry->ae_cur_stripe.as_hi_epoch	= 0UL;
+		agg_entry->ae_cur_stripe.as_stripe_fill = 0UL;
+		agg_entry->ae_cur_stripe.as_extent_cnt	= 0U;
+		agg_entry->ae_cur_stripe.as_offset	= 0U;
 
-	agg_entry->ae_cur_stripe.as_stripenum	= 0UL;
-	agg_entry->ae_cur_stripe.as_hi_epoch	= 0UL;
-	agg_entry->ae_cur_stripe.as_stripe_fill = 0UL;
-	agg_entry->ae_cur_stripe.as_extent_cnt	= 0U;
-	agg_entry->ae_cur_stripe.as_offset	= 0U;
-
+		*acts |= VOS_ITER_CB_YIELD;
+	}
 	return rc;
 }
 
@@ -800,6 +767,47 @@ agg_extent(daos_handle_t ih, vos_iter_entry_t *entry,
 	return rc;
 }
 
+/* Compare function for keys.  Used to reset iterator position.
+ */
+static inline int
+agg_key_compare(daos_key_t key1, daos_key_t key2)
+{
+	if (key1.iov_len != key2.iov_len)
+		return 1;
+
+	return memcmp(key1.iov_buf, key2.iov_buf, key1.iov_len);
+}
+
+/* Handles dkeys returned by the per-object nested iteratior.
+ */
+static int
+agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
+	 struct ec_agg_entry *agg_entry, unsigned int *acts)
+{
+	if (agg_key_compare(agg_entry->ae_dkey, entry->ie_key)) {
+		agg_entry->ae_dkey	= entry->ie_key;
+	} else {
+		*acts |= VOS_ITER_CB_SKIP;
+	}
+	return 0;
+}
+
+/* Handles akeys returned by the per-object nested iteratior.
+ */
+static int
+agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
+	 struct ec_agg_entry *agg_entry, unsigned int *acts)
+{
+	if (agg_key_compare(agg_entry->ae_akey, entry->ie_key)) {
+		agg_entry->ae_akey = entry->ie_key;
+		agg_entry->ae_thdl = ih;
+	} else {
+		*acts |= VOS_ITER_CB_SKIP;
+	}
+
+	return 0;
+}
+
 /* Invokes the yield function pointer.
  */
 static inline bool
@@ -811,72 +819,42 @@ ec_aggregate_yield(struct ec_agg_param *agg_param)
 	return false;
 }
 
-/* Pre-subtree iteration call back for per-object iterator
- */
-static int
-agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
-		   vos_iter_type_t type, vos_iter_param_t *param,
-		   void *cb_arg, unsigned int *acts)
-{
-	struct ec_agg_entry	*agg_entry = (struct ec_agg_entry *)cb_arg;
-	struct ec_agg_param	*agg_param;
-	int			 rc = 0;
-
-	switch (type) {
-	case VOS_ITER_DKEY:
-		rc = agg_dkey(ih, entry, agg_entry, acts);
-		break;
-	case VOS_ITER_AKEY:
-		rc = agg_akey(ih, entry, agg_entry, acts);
-		break;
-	case VOS_ITER_RECX:
-		rc = agg_extent(ih, entry, agg_entry, acts);
-		break;
-	default:
-		break;
-	}
-
-	if (rc < 0) {
-		D_ERROR("EC aggregation failed: "DF_RC"\n", DP_RC(rc));
-		return rc;
-	}
-
-	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
-	agg_param->ap_credits++;
-
-	if (agg_param->ap_credits > agg_param->ap_credits_max) {
-		agg_param->ap_credits = 0;
-		*acts |= VOS_ITER_CB_YIELD;
-
-		if (ec_aggregate_yield(agg_param)) {
-			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
-			rc = 1;
-		}
-	}
-	return rc;
-}
-
-/* Post iteration call back for per-object iterator.
+/* Post iteration call back for outer iterator
  */
 static int
 agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		    vos_iter_type_t type, vos_iter_param_t *param,
 		    void *cb_arg, unsigned int *acts)
 {
-	struct ec_agg_entry	*agg_entry = (struct ec_agg_entry *)cb_arg;
+	struct ec_agg_param	*agg_param = (struct ec_agg_param *)cb_arg;
+	struct ec_agg_entry	*agg_entry = &agg_param->ap_agg_entry;
 	int			 rc = 0;
 
 	switch (type) {
+	case VOS_ITER_OBJ:
+		break;
 	case VOS_ITER_DKEY:
-		rc = agg_dkey_post(agg_entry);
 		break;
 	case VOS_ITER_AKEY:
-		rc = agg_akey_post(agg_entry);
+		rc = agg_akey_post(ih, entry, agg_entry, acts);
 		break;
 	case VOS_ITER_RECX:
 		break;
 	default:
 		break;
+	}
+
+	agg_param->ap_credits++;
+
+	if (agg_param->ap_credits > agg_param->ap_credits_max) { 
+		D_PRINT("Yielding for type: %u, count: %u\n", type,
+			agg_param->ap_credits);
+		agg_param->ap_credits = 0;
+		*acts |= VOS_ITER_CB_YIELD;
+		if (ec_aggregate_yield(agg_param)) {
+			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
+			rc = 1;
+		}
 	}
 
 	return rc;
@@ -906,78 +884,82 @@ agg_reset_entry(struct ec_agg_entry *agg_entry,
 	agg_entry->ae_cur_stripe.as_suffix_ext	= 0U;
 }
 
-/* Configures and invokes nested iterator. Called from full-VOS object
- * iteration.
+/* Iterator pre-callback for objects. Determines if object is subject
+ * to aggregation. Skips objects that are not EC, or not led by
+ * this target.
  */
 static int
-agg_subtree_iterate(daos_handle_t ih, struct ec_agg_param *agg_param)
+agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
+	   struct ec_agg_param *agg_param, unsigned int *acts)
 {
-	vos_iter_param_t	 iter_param = { 0 };
-	struct vos_iter_anchors  anchors = { 0 };
-	int			 rc = 0;
-
-	iter_param.ip_hdl		= DAOS_HDL_INVAL;
-	iter_param.ip_ih		= ih;
-	iter_param.ip_oid		= agg_param->ap_agg_entry.ae_oid;
-	/* lower bound should be zero or highest snap, not the hlc of last run
-	 */
-	iter_param.ip_epr		= agg_param->ap_epr;
-	iter_param.ip_epc_expr		= VOS_IT_EPC_RR;
-	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
-	iter_param.ip_recx.rx_idx	= 0ULL;
-	iter_param.ip_recx.rx_nr	= ~PARITY_INDICATOR;
-
-	rc = vos_iterate(&iter_param, VOS_ITER_DKEY, true, &anchors,
-			 agg_iterate_pre_cb, agg_iterate_post_cb,
-			 &agg_param->ap_agg_entry, NULL);
-	return rc;
-}
-
-
-/* Call-back function for full VOS iteration outer iterator.
- */
-static int
-agg_iter_obj_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
-		    vos_iter_type_t type, vos_iter_param_t *param,
-		    void *cb_arg, unsigned int *acts)
-{
-	struct ec_agg_param	*agg_param = (struct ec_agg_param *)cb_arg;
 	struct daos_oclass_attr *oca;
 	int			 rc = 0;
+	d_rank_t		 myrank;
 
+	crt_group_rank(NULL, &myrank);
+//	D_PRINT("Processing OID: "DF_OID", on rank: %u\n",
+//		DP_OID(entry->ie_oid.id_pub), myrank);
+	if (!daos_unit_oid_compare(agg_param->ap_agg_entry.ae_oid,
+				   entry->ie_oid)) {
+		*acts |= VOS_ITER_CB_SKIP;
+		goto out;
+	}
 	if (!daos_oclass_is_ec(entry->ie_oid.id_pub, &oca))
 		return rc;
 	rc = ds_pool_check_leader(agg_param->ap_pool_info.api_pool_uuid,
 				  &entry->ie_oid,
 				  agg_param->ap_pool_info.api_pool_version);
 	if (rc == 1) {
-		if (!daos_unit_oid_compare(agg_param->ap_agg_entry.ae_oid,
-					   entry->ie_oid)) {
-			*acts |= VOS_ITER_CB_SKIP;
-			return 0;
-		}
-		/* Some of these can be set at creation. They don't change. */
-		agg_param->ap_epr = param->ip_epr;
+		D_PRINT("Starting recursion for object: "DF_OID", on rank: %u\n",
+			DP_OID(entry->ie_oid.id_pub), myrank);
 		agg_reset_entry(&agg_param->ap_agg_entry, entry, oca);
-		rc = agg_subtree_iterate(ih, agg_param);
-		if (rc)
-			D_ERROR("Subtree iterate failed "DF_RC"\n", DP_RC(rc));
-	} else if (rc < 0) {
-		D_ERROR("ds_pool_check_leader failed "DF_RC"\n", DP_RC(rc));
 		rc = 0;
-	}
-
-	agg_param->ap_credits++;
-
-	if (agg_param->ap_credits > agg_param->ap_credits_max) {
-		agg_param->ap_credits = 0;
-		*acts |= VOS_ITER_CB_YIELD;
-
-		if (ec_aggregate_yield(agg_param)) {
-			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
-			rc = 1;
+	} else {
+		if (rc < 0) {
+			D_ERROR("ds_pool_check_leader failed "DF_RC"\n",
+				DP_RC(rc));
+			rc = 0;
 		}
+		*acts |= VOS_ITER_CB_SKIP;
 	}
+out:
+	return rc;
+}
+
+/* Call-back function for full VOS iteration outer iterator.
+ */
+static int
+agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
+		   vos_iter_type_t type, vos_iter_param_t *param,
+		   void *cb_arg, unsigned int *acts)
+{
+	struct ec_agg_param	*agg_param = (struct ec_agg_param *)cb_arg;
+	struct ec_agg_entry	*agg_entry = &agg_param->ap_agg_entry;
+	int			 rc = 0;
+
+	switch (type) {
+	case VOS_ITER_OBJ:
+		agg_param->ap_epr = param->ip_epr;
+		rc = agg_object(ih, entry, agg_param, acts);
+		break;
+	case VOS_ITER_DKEY:
+		rc = agg_dkey(ih, entry, agg_entry, acts);
+		break;
+	case VOS_ITER_AKEY:
+		rc = agg_akey(ih, entry, agg_entry, acts);
+		break;
+	case VOS_ITER_RECX:
+		rc = agg_extent(ih, entry, agg_entry, acts);
+		break;
+	default:
+		break;
+	}
+
+	if (rc < 0) {
+		D_ERROR("EC aggregation failed: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
 	return rc;
 }
 
@@ -1005,11 +987,15 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	iter_param.ip_hdl		= cont->sc_hdl;
 	iter_param.ip_epr.epr_lo	= epr->epr_lo;
 	iter_param.ip_epr.epr_hi	= epr->epr_hi;
+	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
+	iter_param.ip_recx.rx_idx	= 0ULL;
+	iter_param.ip_recx.rx_nr	= ~PARITY_INDICATOR;
 
 	D_INIT_LIST_HEAD(&agg_param.ap_agg_entry.ae_cur_stripe.as_dextents);
 
-	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, false, &anchors,
-			 agg_iter_obj_pre_cb, NULL, &agg_param, NULL);
+	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
+			 agg_iterate_pre_cb, agg_iterate_post_cb,
+			 &agg_param, NULL);
 
 	agg_sgl_fini(&agg_param.ap_agg_entry.ae_sgl);
 	return rc;
