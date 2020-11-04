@@ -294,7 +294,8 @@ def get_output(cmd, check=True):
     except RuntimeError as error:
         if check:
             print(error)
-            exit(1)
+            exit(1) 
+        stdout = str(error)
     return stdout
 
 
