@@ -79,8 +79,8 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 				},
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:     storage.ScmModules{storage.MockScmModule()},
-				GetNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+				DiscoverRes:         storage.ScmModules{storage.MockScmModule()},
+				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
 			expResp: StorageScanResp{
 				Nvme: &ScanNvmeResp{
@@ -118,8 +118,8 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 				ScanErr: errors.New("spdk scan failed"),
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:     storage.ScmModules{storage.MockScmModule()},
-				GetNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+				DiscoverRes:         storage.ScmModules{storage.MockScmModule()},
+				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
 			expResp: StorageScanResp{
 				Nvme: &ScanNvmeResp{
@@ -745,8 +745,8 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 		},
 		"scan scm with space utilization": {
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:     storage.ScmModules{storage.MockScmModule()},
-				GetNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+				DiscoverRes:         storage.ScmModules{storage.MockScmModule()},
+				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
 			smsc: &scm.MockSysConfig{
 				GetfsUsageTotal: mockPbScmMount.TotalBytes,
@@ -772,8 +772,8 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 		},
 		"scan scm with pmem not in instance device list": {
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:     storage.ScmModules{storage.MockScmModule()},
-				GetNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+				DiscoverRes:         storage.ScmModules{storage.MockScmModule()},
+				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
 			smsc: &scm.MockSysConfig{
 				GetfsUsageTotal: mockPbScmMount.TotalBytes,
