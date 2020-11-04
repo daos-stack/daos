@@ -91,7 +91,7 @@ class JavaCIIntegration(TestWithServers):
         jdir = "{}/java".format(os.getcwd())
         cmd = "cd {};".format(jdir)
         cmd += "mvn clean install -DskipITs"
-        self.execute_cmd(cmd, 60)
+        self.execute_cmd(cmd, 180)
 
         cmd = "cd {};".format(jdir)
         cmd += " export LD_PRELOAD=/usr/lib/jvm/"
