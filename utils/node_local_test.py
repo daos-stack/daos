@@ -515,13 +515,12 @@ class ValgrindHelper():
     Jenkins in locating the source code.
     """
 
-    def __init__(self, conf, logid=None):
+    def __init__(self, logid=None):
 
         # Set this to False to disable valgrind, which will run faster.
         self.use_valgrind = True
         self.full_check = True
         self._xml_file = None
-        self.conf = conf
         self._logid = logid
 
         self.src_dir = '{}/'.format(os.path.realpath(
@@ -536,11 +535,7 @@ class ValgrindHelper():
         if not self._logid:
             self._logid = get_inc_id()
 
-        if self.conf.args.xml_dir:
-            self._xml_file = os.path.join(self.conf.args.xml_dir,
-                                          'dnt.{}.memcheck'.format(self._logid))
-        else:
-            self._xml_file = 'dnt.{}.memcheck'.format(self._logid)
+        self._xml_file = 'dnt.{}.memcheck'.format(self._logid)
 
         cmd = ['valgrind', '--quiet', '--fair-sched=yes']
 
@@ -622,7 +617,7 @@ class DFuse():
         if self.conf.args.dtx == 'yes':
             my_env['DFS_USE_DTX'] = '1'
 
-        self.valgrind = ValgrindHelper(self.conf, v_hint)
+        self.valgrind = ValgrindHelper(v_hint)
         if self.conf.args.memcheck == 'no':
             self.valgrind.use_valgrind = False
         cmd = self.valgrind.get_cmd_prefix()
@@ -757,7 +752,7 @@ def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False):
 
     Enable logging, and valgrind for the command.
     """
-    vh = ValgrindHelper(conf)
+    vh = ValgrindHelper()
 
     if conf.args.memcheck == 'no':
         valgrind = False
@@ -1400,7 +1395,6 @@ def main():
 
     parser = argparse.ArgumentParser(description='Run DAOS client on local node')
     parser.add_argument('--output-file', default='nlt-errors.json')
-    parser.add_argument('--xml-dir', default=None);
     parser.add_argument('--server-debug', default=None)
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
