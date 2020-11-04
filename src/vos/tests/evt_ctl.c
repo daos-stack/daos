@@ -654,6 +654,8 @@ skip_probe:
 			D_GOTO(out, rc);
 
 		rc = evt_iter_next(ih);
+		if (rc != 0)
+			D_GOTO(out, rc);
 	}
  out:
 	evt_iter_finish(ih);
