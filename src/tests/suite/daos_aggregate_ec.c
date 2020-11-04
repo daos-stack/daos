@@ -39,8 +39,6 @@
 #include <daos/event.h>
 #include "../../object/obj_ec.h"
 
-#define PARITY_INDICATOR (1ULL << 63)
-
 enum {
 	EC_FULL_STRIPE,
 	EC_FULL_CELL,
