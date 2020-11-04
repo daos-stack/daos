@@ -215,6 +215,26 @@ failed:
 	return rc;
 }
 
+int
+daos_task_reset(tse_task_t *task, daos_opc_t opc)
+{
+	struct daos_task_args	*args;
+	int			rc;
+
+	if (DAOS_OPC_INVALID >= opc || DAOS_OPC_MAX <= opc)
+		return -DER_NOSYS;
+
+	D_ASSERT(dc_funcs[opc].task_func);
+	rc = tse_task_reset(task, dc_funcs[opc].task_func, NULL);
+	if (rc)
+		return rc;
+
+	args = task_ptr2args(task);
+	args->ta_magic = DAOS_TASK_MAGIC;
+
+	return 0;
+}
+
 void *
 daos_task_get_args(tse_task_t *task)
 {
