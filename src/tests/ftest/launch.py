@@ -814,7 +814,10 @@ def run_tests(test_files, tag_filter, args):
             if args.clean:
                 if not clean_logs(test_file["yaml"], args):
                     # Report errors for this skipped test
-                    skip_reason = "host communication error cleaning logs"
+                    skip_reason = (
+                        "host communication error attempting to clean out "
+                        "leftover logs from a previous test run prior to "
+                        "running this test")
                     if not report_skipped_test(
                             test_file["py"], avocado_logs_dir, skip_reason):
                         return_code |= 64
@@ -1187,9 +1190,12 @@ def report_skipped_test(test_file, avocado_logs_dir, reason):
     try:
         os.makedirs(destination)
     except (OSError, FileExistsError) as error:
-        print("Failed to create {}: {}".format(destination, error))
+        print(
+            "Warning: Continuing after failing to create {}: {}".format(
+                destination, error))
     return create_results_xml(
-        message, test_name, "See console log for more details", destination)
+        message, test_name, "See launch.py command output for more details",
+        destination)
 
 
 def create_results_xml(message, testname, output, destination):
