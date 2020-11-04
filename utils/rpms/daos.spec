@@ -16,7 +16,7 @@ Source0:       %{name}-%{version}.tar.gz
 BuildRequires: scons >= 2.4
 BuildRequires: libfabric-devel
 BuildRequires: boost-devel
-BuildRequires: mercury-devel = %{mercury_version}
+BuildRequires: mercury-devel >= %{mercury_version}
 BuildRequires: openpa-devel
 BuildRequires: libpsm2-devel
 BuildRequires: gcc-c++
@@ -105,7 +105,7 @@ Requires: openssl
 # This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should
 # suffice
-Requires: mercury = %{mercury_version}
+Requires: mercury >= %{mercury_version}
 
 %description
 The Distributed Asynchronous Object Storage (DAOS) is an open-source
@@ -126,7 +126,7 @@ Requires: spdk-tools
 Requires: ndctl
 Requires: ipmctl
 Requires: hwloc
-Requires: mercury = %{mercury_version}
+Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: libfabric >= 1.8.0
@@ -139,7 +139,7 @@ This is the package needed to run a DAOS server
 %package client
 Summary: The DAOS client
 Requires: %{name} = %{version}-%{release}
-Requires: mercury = %{mercury_version}
+Requires: mercury >= %{mercury_version}
 Requires: libfabric >= 1.8.0
 Requires: fuse3 >= 3.4.2
 Obsoletes: cart
@@ -186,7 +186,7 @@ Requires: boost-devel
 # we ideally want to set this minimum version however it seems to confuse yum:
 # https://github.com/rpm-software-management/yum/issues/124
 #Requires: mercury >= 2.0.0~a1
-Requires: mercury-devel = %{mercury_version}
+Requires: mercury-devel >= %{mercury_version}
 Requires: openpa-devel
 Requires: hwloc-devel
 Summary: The DAOS development libraries and headers
