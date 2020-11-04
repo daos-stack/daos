@@ -450,7 +450,7 @@ daos_errno2der(int err)
 	case EPROTO:		return -DER_PROTO;
 	case EINVAL:		return -DER_INVAL;
 	case ENOTDIR:		return -DER_NOTDIR;
-	case EIO:		return -DER_IO;			
+	case EIO:		return -DER_IO;
 	case EFAULT:
 	case ENXIO:
 	case ENODEV:
