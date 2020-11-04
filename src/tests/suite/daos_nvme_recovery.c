@@ -156,9 +156,10 @@ nvme_recov_1(void **state)
 	 * The NVMe FAULTY device reaction might not have been triggered if the
 	 * target was not assigned to the device.
 	 */
+	print_message("Entering while loop\n");
 	while (fail_loc_tgt < per_node_tgt_cnt) {
 		rc = wait_and_verify_pool_tgt_state(arg->pool.poh, fail_loc_tgt,
-						    rank, "DOWN");
+						    rank, "DOWN|DOWNOUT");
 		if (rc == 0)
 			break;
 
