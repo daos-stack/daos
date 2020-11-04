@@ -1030,8 +1030,8 @@ daos_event_init(struct daos_event *ev, daos_handle_t eqh,
 	} else {
 		if (daos_sched_g.ds_udata == NULL) {
 			D_ERROR("The DAOS client library is not initialized: "
-				DF_RC"\n", DP_RC(-DER_EQ_UNINIT));
-			return -DER_EQ_UNINIT;
+				DF_RC"\n", DP_RC(-DER_UNINIT));
+			return -DER_UNINIT;
 		}
 		evx->evx_ctx = daos_eq_ctx;
 		evx->evx_sched = &daos_sched_g;

@@ -239,10 +239,7 @@ extern "C" {
 	       TX is not committed)					\
 	/** Agent is incompatible with libdaos */			\
 	ACTION(DER_AGENT_INCOMPAT,	(DER_ERR_DAOS_BASE + 29),	\
-	       Agent is incompatible with libdaos)			\
-	/** Event queue not initialized */			\
-	ACTION(DER_EQ_UNINIT,		(DER_ERR_DAOS_BASE + 30),	\
-	       Event queue is not initialized)
+	       Agent is incompatible with libdaos)
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
