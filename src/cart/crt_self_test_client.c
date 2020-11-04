@@ -539,12 +539,18 @@ test_rpc_cb(const struct crt_cb_info *cb_info)
 {
 	struct st_cb_args	*cb_args = cb_info->cci_arg;
 	struct timespec		 now;
+	int			 ret;
 
 	D_ASSERT(cb_args != NULL);
 	D_ASSERT(g_data != NULL);
 
 	/* Record latency of this RPC */
-	d_gettime(&now);
+	ret = d_gettime(&now);
+	if (ret != 0) {
+		D_ERROR("d_gettime failed; ret = %d\n", ret);
+		return;
+	}
+
 	g_data->rep_latencies[cb_args->rep_idx].val =
 		d_timediff_ns(&cb_args->sent_time, &now);
 

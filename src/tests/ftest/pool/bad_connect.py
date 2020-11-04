@@ -27,7 +27,7 @@ import traceback
 import ctypes
 from pydaos.raw import RankList
 from avocado.core.exceptions import TestFail
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from test_utils_pool import TestPool
 
 class BadConnectTest(TestWithServers):
@@ -77,7 +77,7 @@ class BadConnectTest(TestWithServers):
         pgroup = ctypes.create_string_buffer(0)
         # initialize a python pool object then create the underlying
         # daos storage
-        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
+        self.pool = TestPool(self.context, self.get_dmg_command())
         self.pool.get_params(self)
         self.pool.create()
         # save this uuid since we might trash it as part of the test
