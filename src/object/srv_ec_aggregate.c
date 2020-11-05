@@ -905,7 +905,7 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	if (!daos_oclass_is_ec(entry->ie_oid.id_pub, &oca)) {
 		*acts |= VOS_ITER_CB_SKIP;
-		return rc;
+		goto out;
 	}
 
 	rc = ds_pool_check_leader(agg_param->ap_pool_info.api_pool_uuid,
@@ -915,6 +915,7 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (rc == 1) {
 		agg_reset_entry(&agg_param->ap_agg_entry, entry, oca);
 		rc = 0;
+		goto out;
 	} else {
 		if (rc < 0) {
 			D_ERROR("ds_pool_check_leader failed "DF_RC"\n",
