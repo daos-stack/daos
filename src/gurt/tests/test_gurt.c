@@ -1187,9 +1187,7 @@ test_gurt_hash_decref(void **state)
 	assert_int_equal(rc, 0);
 
 	/* Get the first element in the table, which should be NULL */
-	if (test_feats == 0) {
-		assert_null(d_hash_rec_first(thtab));
-	}
+	assert_null(d_hash_rec_first(thtab));
 
 	/* Destroy the hash table, force = false (should fail if not empty) */
 	rc = d_hash_table_destroy(thtab, 0);
@@ -1954,6 +1952,7 @@ check_string_buffer(struct d_string_buffer_t *str_buf, int str_size,
 	assert_int_equal(str_buf->buf_size, buf_size);
 	assert_int_equal(str_buf->status, 0);
 	if (test_str != NULL) {
+		/**/
 		assert_string_equal(str_buf->str, test_str);
 	}
 	d_free_string(str_buf);
@@ -2048,6 +2047,7 @@ main(int argc, char **argv)
 
 	rc =  cmocka_run_group_tests(tests, init_tests, fini_tests);
 	if (rc != 0) {
+		/**/
 		return rc;
 	}
 	test_feats = D_HASH_FT_GLOCK | D_HASH_FT_DYNAMIC | D_HASH_FT_SHRINK;
