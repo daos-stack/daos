@@ -1875,13 +1875,15 @@ test_gurt_circular_list(void **state)
 
 	i = 0;
 	D_CIRCLEQ_FOREACH(item, &head, cci_link) {
-		assert(item->cci_id == i++);
+		assert(item->cci_id == i);
+		i++;
 	}
 	assert(i == 3);
 
 	i = 2;
 	D_CIRCLEQ_FOREACH_REVERSE(item, &head, cci_link) {
-		assert(item->cci_id == i--);
+		assert(item->cci_id == i);
+		i--;
 	}
 	assert(i == -1);
 
