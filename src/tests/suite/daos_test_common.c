@@ -1257,14 +1257,12 @@ int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 
 		/* multiple states not present in expected_state str */
 		if (state == NULL) {
-			print_message("expected state = %s\n", expected_state);
 			if (strcmp(daos_target_state_enum_to_str(tgt_info.ta_state),
 				   expected_state) == 0)
 				return 0;
 		/* multiple states separated by a '|' in expected_state str */
 		} else {
 			while (state != NULL) {
-				print_message("state = %s\n", state);
 				if (strcmp(daos_target_state_enum_to_str(tgt_info.ta_state),
 					   state) == 0)
 					return 0;

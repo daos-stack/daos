@@ -42,6 +42,14 @@ set_fail_loc(test_arg_t *arg, d_rank_t rank, uint64_t tgtidx,
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
+static void
+reset_fail_loc(test_arg_t *arg)
+{
+	if (arg->myrank == 0)
+		daos_fail_loc_reset();
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
 static bool
 is_nvme_enabled(test_arg_t *arg)
 {
@@ -148,35 +156,19 @@ nvme_recov_1(void **state)
 	fail_loc_tgt = rand() % per_node_tgt_cnt;
 	print_message("Error injection on tgt %"PRIu64" to simulate device"
 		      " faulty.\n", fail_loc_tgt);
-	set_fail_loc(arg, rank, fail_loc_tgt, DAOS_NVME_FAULTY | DAOS_FAIL_ONCE);
+	set_fail_loc(arg, rank, fail_loc_tgt,
+		     DAOS_NVME_FAULTY | DAOS_FAIL_ALWAYS);
 
 	/* Verify that the DAOS_NVME_FAULTY reaction got triggered. Target should
-	 * be in the DOWN state to trigger rebuild. If the target is still in
-	 * UPINT, attempt the faulty injection again with another target index.
-	 * The NVMe FAULTY device reaction might not have been triggered if the
-	 * target was not assigned to the device.
+	 * be in the DOWN state to trigger rebuild (or DOWNOUT if rebuild already
+	 * completed).
 	 */
-	print_message("Entering while loop\n");
-	while (fail_loc_tgt < per_node_tgt_cnt) {
-		rc = wait_and_verify_pool_tgt_state(arg->pool.poh, fail_loc_tgt,
-						    rank, "DOWN|DOWNOUT");
-		if (rc == 0)
-			break;
-
-		if (rc == -DER_TIMEDOUT) {
-			fail_loc_tgt++;
-			print_message("Attempting error injection again"
-				      " on tgt %"PRIu64"\n", fail_loc_tgt);
-			set_fail_loc(arg, rank, fail_loc_tgt,
-				     DAOS_NVME_FAULTY | DAOS_FAIL_ONCE);
-		} else {
-			print_message("Error querying target state, rc:%d\n",
-				      rc);
-			assert_true(rc == 0 || rc == -DER_TIMEDOUT);
-		}
-	}
-
 	print_message("Waiting for faulty reaction being triggered...\n");
+	rc = wait_and_verify_pool_tgt_state(arg->pool.poh, fail_loc_tgt,
+						    rank, "DOWN|DOWNOUT");
+	assert_int_equal(rc, 0);
+	/* Need to reset lock when using DAOS_FAIL_ALWAYS flag */
+	reset_fail_loc(arg);
 
 	/**
 	 * Look up all targets currently mapped to the device that is now faulty.
