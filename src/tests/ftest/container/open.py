@@ -25,8 +25,6 @@ import traceback
 import uuid
 
 from apricot import TestWithServers
-from test_utils_pool import TestPool
-from test_utils_container import TestContainer
 from avocado.core.exceptions import TestFail
 from daos_utils import DaosCommand
 
@@ -54,7 +52,7 @@ class OpenContainerTest(TestWithServers):
     """
 
     def test_container_open(self):
-        """Jira ID: DAOS-3223
+        """JIRA ID: DAOS-3223
 
         Test Description:
             Test container's open function as described above
@@ -63,7 +61,7 @@ class OpenContainerTest(TestWithServers):
             Open container with valid and invalid pool handle and container
             UUID
 
-        :avocado: tags=all,container,tiny,full_regression,container_open
+        :avocado: tags=all,small,container,full_regression,container_open
         """
         self.pool = []
         self.container = []
@@ -121,20 +119,14 @@ class OpenContainerTest(TestWithServers):
         ]
         result_messages = [messages_case_1, messages_case_2, messages_case_3]
 
-        # Create the pool and connect. Then create the container from the pool
-        # Add the pool and the container created into a list
+        # Create the pool and connect. Then create a container with the pool.
+        # Add the pool and the container created into the list.
         container_uuids = []
         for _ in range(2):
-            self.pool.append(TestPool(self.context, self.get_dmg_command()))
-            self.pool[-1].get_params(self)
-            self.pool[-1].create()
-            self.pool[-1].connect()
-            self.container.append(
-                TestContainer(pool=self.pool[-1],
-                              daos_command=DaosCommand(self.bin)))
-            self.container[-1].get_params(self)
-            self.container[-1].create()
+            self.pool.append(self.get_pool())
+            self.container.append(self.get_container(pool=self.pool[-1]))
             container_uuids.append(uuid.UUID(self.container[-1].uuid))
+            self.pool[-1].connect()
 
         # Decide which pool handle and container UUID to use. The PASS/FAIL
         # number corresponds to the index for self.pool and container_uuids
@@ -143,28 +135,28 @@ class OpenContainerTest(TestWithServers):
 
         # Case 1
         try:
-            self.container[0].open(self.pool[pool_handle_index].pool
-                                   .handle.value,
-                                   container_uuids[container_uuid_index])
-            self.assertEqual(expected_result, RESULT_PASS,
-                             result_messages[test_case][0])
+            self.container[0].open(
+                self.pool[pool_handle_index].pool.handle.value,
+                container_uuids[container_uuid_index])
+            self.assertEqual(
+                expected_result, RESULT_PASS, result_messages[test_case][0])
         except TestFail as excep:
             print(excep)
             print(traceback.format_exc())
-            self.assertEqual(expected_result, RESULT_FAIL,
-                             result_messages[test_case][1])
+            self.assertEqual(
+                expected_result, RESULT_FAIL, result_messages[test_case][1])
 
         # Case 2. Symmetric to Case 1. Use the other handle and UUID
         pool_handle_index = pool_handle_index ^ 1
         container_uuid_index = container_uuid_index ^ 1
         try:
-            self.container[1].open(self.pool[pool_handle_index].pool
-                                   .handle.value,
-                                   container_uuids[container_uuid_index])
-            self.assertEqual(expected_result, RESULT_PASS,
-                             result_messages[test_case][2])
+            self.container[1].open(
+                self.pool[pool_handle_index].pool.handle.value,
+                container_uuids[container_uuid_index])
+            self.assertEqual(
+                expected_result, RESULT_PASS, result_messages[test_case][2])
         except TestFail as excep:
             print(excep)
             print(traceback.format_exc())
-            self.assertEqual(expected_result, RESULT_FAIL,
-                             result_messages[test_case][3])
+            self.assertEqual(
+                expected_result, RESULT_FAIL, result_messages[test_case][3])
