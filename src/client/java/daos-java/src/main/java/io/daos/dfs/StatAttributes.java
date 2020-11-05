@@ -39,7 +39,9 @@ import java.nio.ByteOrder;
  * * struct timespec st_mtim;   (16 bytes)
  * * struct timespec st_ctim;   (16 bytes)
  * * file      boolean          (1 byte)
+ * * length of username         (4)
  * * username string            (32 bytes max)
+ * * length of groupname        (4)
  * * groupname string           (32 bytes max)
  *
  * <p>
@@ -161,7 +163,7 @@ public class StatAttributes {
    * @return total buffer size
    */
   public static int objectSize() {
-    return 4 * 8 + 3 * 4 + 3 * 16 + 1 + 64; //157
+    return 4 * 8 + 5 * 4 + 3 * 16 + 1 + 64; //165
   }
 
   /**
