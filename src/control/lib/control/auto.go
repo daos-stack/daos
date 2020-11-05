@@ -337,11 +337,11 @@ func (req *ConfigGenerateReq) validateNvmeStorage(ctrlrs storage.NvmeControllers
 //
 // Return storage for a single host set or error.
 //
-// TODO: ignore some differences in nvme device details e.g. model/capacity so that
-// configurations with equal number of SSDs in the same PCI addresses with
-// similar distribution of NUMA Affinity will result in auto selection.
+// Filter NVMe storage scan so only NUMA affinity and PCI address is taking into
+// account by supplying NvmeBasic flag in scan request. This enables
+// configuration to work with different models of SSDs.
 func (req *ConfigGenerateReq) getSingleStorageSet(ctx context.Context) (*HostStorageSet, error) {
-	scanReq := &StorageScanReq{}
+	scanReq := &StorageScanReq{NvmeBasic: true}
 	scanReq.SetHostList(req.HostList)
 
 	scanResp, err := StorageScan(ctx, req.Client, scanReq)

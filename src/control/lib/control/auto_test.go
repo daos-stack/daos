@@ -326,6 +326,7 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 			expConfigOut: config.DefaultServer().WithServers(
 				ioserver.NewConfig().
 					WithFabricInterface("ib0").
+					WithFabricInterfacePort(31416).
 					WithFabricProvider("ofi+psm2").
 					WithPinnedNumaNode(&numa0)),
 		},
@@ -336,6 +337,7 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 			expConfigOut: config.DefaultServer().WithServers(
 				ioserver.NewConfig().
 					WithFabricInterface("eth0").
+					WithFabricInterfacePort(31416).
 					WithFabricProvider("ofi+sockets").
 					WithPinnedNumaNode(&numa0)),
 		},
@@ -344,10 +346,12 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 			expConfigOut: config.DefaultServer().WithServers(
 				ioserver.NewConfig().
 					WithFabricInterface("ib0").
+					WithFabricInterfacePort(31416).
 					WithFabricProvider("ofi+psm2").
 					WithPinnedNumaNode(&numa0),
 				ioserver.NewConfig().
 					WithFabricInterface("ib1").
+					WithFabricInterfacePort(32416).
 					WithFabricProvider("ofi+psm2").
 					WithPinnedNumaNode(&numa1)),
 		},
@@ -361,10 +365,12 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 			expConfigOut: config.DefaultServer().WithServers(
 				ioserver.NewConfig().
 					WithFabricInterface("eth0").
+					WithFabricInterfacePort(31416).
 					WithFabricProvider("ofi+sockets").
 					WithPinnedNumaNode(&numa0),
 				ioserver.NewConfig().
 					WithFabricInterface("eth1").
+					WithFabricInterfacePort(32416).
 					WithFabricProvider("ofi+sockets").
 					WithPinnedNumaNode(&numa1)),
 		},
