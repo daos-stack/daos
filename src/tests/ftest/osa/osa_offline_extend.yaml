@@ -1,0 +1,47 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+test_clients:
+    - client-E
+# If we define the server under test_servers, launch.py will convert it to the
+# actual server name passed into --test_servers. If above test_servers is hosts,
+# it'll be used as one of the servers at test startup time, so use something
+# other than hosts.
+extra_servers:
+  test_servers:
+    - server-D
+timeout: 1000
+server_config:
+  name: daos_server
+  servers:
+      bdev_class: nvme
+      bdev_list: ["aaaa:aa:aa.a"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem0"]
+      scm_mount: /mnt/daos0
+      env_vars:
+        - DD_MASK=mgmt,io,md,epc,rebuild
+pool:
+    mode: 146
+    name: daos_server
+    scm_size: 6000000000
+    nvme_size: 54000000000
+    svcn: 4
+    control_method: dmg
+container:
+  properties:
+    enable_checksum: True
+dkeys:
+  single:
+    no_of_dkeys:
+      - 50
+akeys:
+  single:
+    no_of_akeys:
+      - 10
+record:
+  1KB:
+    length:
+      - 1024

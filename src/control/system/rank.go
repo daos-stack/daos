@@ -26,13 +26,19 @@ package system
 import (
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/pkg/errors"
 )
 
-// Rank is used to uniquely identify a server within a cluster
-type Rank uint32
+type (
+	// Rank is used to uniquely identify a server within a cluster.
+	Rank uint32
+
+	// RankList provides convenience methods for working with Rank slices.
+	RankList []Rank
+)
 
 const (
 	// MaxRank is the largest valid Rank value.
@@ -122,6 +128,14 @@ func (r *Rank) RemoveFromList(ranks []Rank) []Rank {
 	return rankList
 }
 
+func (rl RankList) String() string {
+	rs := make([]string, len(rl))
+	for i, r := range rl {
+		rs[i] = r.String()
+	}
+	return strings.Join(rs, ",")
+}
+
 // RanksToUint32 is a convenience method to convert this
 // slice of system ranks to a slice of uint32 ranks.
 func RanksToUint32(ranks []Rank) (uint32Ranks []uint32) {
@@ -143,6 +157,24 @@ func RanksFromUint32(ranks []uint32) (sysRanks []Rank) {
 	}
 	if err := convert.Types(ranks, &sysRanks); err != nil {
 		return nil
+	}
+
+	return
+}
+
+// CheckRankMembership compares two Rank slices and returns a
+// Rank slice with any ranks found in the second slice that do
+// not exist in the first slice.
+func CheckRankMembership(members, toTest []Rank) (missing []Rank) {
+	mm := make(map[Rank]struct{})
+	for _, m := range members {
+		mm[m] = struct{}{}
+	}
+
+	for _, m := range toTest {
+		if _, found := mm[m]; !found {
+			missing = append(missing, m)
+		}
 	}
 
 	return

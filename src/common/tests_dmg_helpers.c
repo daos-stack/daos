@@ -38,8 +38,7 @@ cmd_free_args(char **args, int argcount)
 	for (i = 0; i < argcount; i++)
 		D_FREE(args[i]);
 
-	if (argcount)
-		D_FREE(args);
+	D_FREE(args);
 }
 
 static char **
@@ -52,12 +51,12 @@ cmd_push_arg(char *args[], int *argcount, const char *fmt, ...)
 
 	va_start(ap, fmt);
 	rc = vasprintf(&arg, fmt, ap);
+	va_end(ap);
 	if (arg == NULL || rc < 0) {
 		D_ERROR("failed to create arg\n");
 		cmd_free_args(args, *argcount);
 		return NULL;
 	}
-	va_end(ap);
 
 	D_REALLOC(tmp, args, sizeof(char *) * (*argcount + 1));
 	if (tmp == NULL) {
@@ -250,7 +249,7 @@ parse_pool_info(struct json_object *json_pool, daos_mgmt_pool_info_t *pool_info)
 	struct json_object	*tmp, *rank;
 	int			n_svcranks;
 	const char		*uuid_str;
-	int			i;
+	int			i, rc;
 
 	if (json_pool == NULL || pool_info == NULL)
 		return -DER_INVAL;
@@ -260,7 +259,15 @@ parse_pool_info(struct json_object *json_pool, daos_mgmt_pool_info_t *pool_info)
 		return -DER_INVAL;
 	}
 	uuid_str = json_object_get_string(tmp);
-	uuid_parse(uuid_str, pool_info->mgpi_uuid);
+	if (uuid_str == NULL) {
+		D_ERROR("unable to extract UUID string from JSON\n");
+		return -DER_INVAL;
+	}
+	rc = uuid_parse(uuid_str, pool_info->mgpi_uuid);
+	if (rc != 0) {
+		D_ERROR("failed parsing uuid_str\n");
+		return -DER_INVAL;
+	}
 
 	if (!json_object_object_get_ex(json_pool, "Svcreps", &tmp)) {
 		D_ERROR("unable to parse pool svcreps from JSON\n");
@@ -731,4 +738,34 @@ out_json:
 	cmd_free_args(args, argcount);
 out:
 	return rc;
+}
+
+int verify_blobstore_state(int state, const char *state_str)
+{
+	if (strcasecmp(state_str, "FAULTY") == 0) {
+		if (state == BIO_BS_STATE_FAULTY)
+			return 0;
+	}
+
+	if (strcasecmp(state_str, "NORMAL") == 0) {
+		if (state == BIO_BS_STATE_NORMAL)
+			return 0;
+	}
+
+	if (strcasecmp(state_str, "TEARDOWN") == 0) {
+		if (state == BIO_BS_STATE_TEARDOWN)
+			return 0;
+	}
+
+	if (strcasecmp(state_str, "OUT") == 0) {
+		if (state == BIO_BS_STATE_OUT)
+			return 0;
+	}
+
+	if (strcasecmp(state_str, "SETUP") == 0) {
+		if (state == BIO_BS_STATE_SETUP)
+			return 0;
+	}
+
+	return 1;
 }

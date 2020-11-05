@@ -899,7 +899,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 			setlinebuf(stderr);
 			mst.log_fd = fileno(stderr);
 		} else {
-			mst.log_fd = open(mst.log_file, log_flags, 0666);
+			mst.log_fd = open(mst.log_file, log_flags, 0644);
 		}
 
 		if (mst.log_fd < 0) {
@@ -1026,20 +1026,18 @@ int d_log_namefacility(int facility, const char *aname, const char *lname)
 	if (facility >= d_log_xst.fac_cnt)
 		if (clog_setnfac(facility + 1) < 0)
 			goto done;
-	n = 0;
-	nl = 0;
-	if (aname) {
-		n = strdup(aname);
-		if (!n)
-			goto done;
-		if (lname) {
-			nl = strdup(lname);
-			if (nl == NULL) {
-				free(n);
-				goto done;
-			}
-		}
+	if (aname == NULL || lname == NULL)
+		goto done;
+
+	n = strdup(aname);
+	if (!n)
+		goto done;
+	nl = strdup(lname);
+	if (nl == NULL) {
+		free(n);
+		goto done;
 	}
+
 	if (d_log_xst.dlog_facs[facility].fac_aname &&
 	    d_log_xst.dlog_facs[facility].fac_aname != default_fac0name)
 		free(d_log_xst.dlog_facs[facility].fac_aname);

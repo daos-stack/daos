@@ -693,6 +693,27 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "exclude"), pool=pool, rank=rank, tgt_idx=tgt_idx)
 
+    def pool_extend(self, pool, ranks, scm_size, nvme_size):
+        """Extend the daos_server pool
+
+        Args:
+            pool (str): Pool uuid.
+            ranks (int): Ranks of the daos_server to extend
+            scm_size (int): SCM pool size to extend
+            nvme_size (int): NVME pool size to extend
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                       information.
+
+        Raises:
+            CommandFailure: if the dmg pool extend command fails.
+
+        """
+        return self._get_result(
+            ("pool", "extend"), pool=pool, ranks=ranks,
+            scm_size=scm_size, nvme_size=nvme_size)
+
     def pool_drain(self, pool, rank, tgt_idx=None):
         """Drain a daos_server from the pool.
 
@@ -730,6 +751,26 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(
             ("pool", "reintegrate"), pool=pool, rank=rank, tgt_idx=tgt_idx)
+
+    def cont_set_owner(self, pool, cont, user, group):
+        """Dmg container set-owner to the specified new user/group.
+
+        Args:
+            pool (str): Pool uuid.
+            cont (str): Container uuid.
+            user (str): new user for the container.
+            group (str): new group for the container.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                       information.
+
+        Raises:
+            CommandFailure: if the dmg pool reintegrate command fails.
+
+        """
+        return self._get_result(
+            ("cont", "set-owner"), pool=pool, cont=cont, user=user, group=group)
 
     def system_query(self, ranks=None, verbose=True):
         """Query system to obtain the status of the servers.
@@ -782,6 +823,23 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_result(("system", "stop"), force=force, ranks=ranks)
+
+    def pool_evict(self, pool, sys=None):
+        """Evict a pool.
+
+        Args:
+            pool (str):  UUID of DAOS pool to evict connection to
+            sys (str, optional): DAOS system that the pools connections be
+                evicted from. Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg pool evict command fails.
+        """
+        return self._get_result(("pool", "evict"), pool=pool, sys=sys)
 
 
 def check_system_query_status(stdout_str):

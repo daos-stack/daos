@@ -324,6 +324,20 @@ tse_task_register_cbs(tse_task_t *task, tse_task_cb_t prep_cb,
 int
 tse_task_reinit(tse_task_t *task);
 
+/**
+ * Reset a task with a new body function. The task must have already completed
+ * or not started yet, and must have a > 0 valid ref count (not freed).
+ * This allows a user to reuse a task with a different body function and not
+ * have to recreate a task for a different operation.
+ *
+ * \param task	[IN]	Task to reset
+ *
+ * \return		0 if success.
+ *			negative errno if it fails.
+ */
+int
+tse_task_reset(tse_task_t *task, tse_task_func_t task_func, void *priv);
+
 void
 tse_task_addref(tse_task_t *task);
 
