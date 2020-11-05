@@ -49,4 +49,8 @@ if ${NLT:-false}; then
     ./utils/node_local_test.py --output-file=vm_test/nlt-errors.json all
 else
     IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" utils/run_test.sh
+
+    if [ "$WITH_VALGRIND" == 'memcheck' ]; then
+	mv test_results/unit-test-*.memcheck.xml .
+    fi
 fi
