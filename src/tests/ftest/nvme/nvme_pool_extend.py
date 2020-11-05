@@ -195,8 +195,8 @@ class NvmePoolExtend(TestWithServers):
         for val in range(0, num_pool):
             self.pool = pool[val]
             for oclass, api, test in product(self.ior_dfs_oclass,
-                                                    self.ior_apis,
-                                                    self.ior_test_sequence):
+                                             self.ior_apis,
+                                             self.ior_test_sequence):
                 self.run_ior_thread("Write", oclass, api, test)
 
                 scm_size = self.pool.scm_size
