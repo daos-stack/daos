@@ -78,7 +78,7 @@ func TestServer_Instance_WithHostFaultDomain(t *testing.T) {
 	updatedInstance := instance.WithHostFaultDomain(fd)
 
 	// Updated to include the fault domain
-	if diff := cmp.Diff(instance.hostFaultDomain, fd, cmp.AllowUnexported(system.FaultDomain{})); diff != "" {
+	if diff := cmp.Diff(instance.hostFaultDomain, fd); diff != "" {
 		t.Fatalf("unexpected results (-want, +got):\n%s\n", diff)
 	}
 	// updatedInstance is the same ptr as instance

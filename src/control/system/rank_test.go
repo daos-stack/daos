@@ -101,13 +101,10 @@ func TestSystem_RankStringer(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			gotStr := fmt.Sprintf("%s", tc.r)
+			gotStr := tc.r.String()
 			if tc.r != nil {
 				r := *tc.r
-				// Annoyingly, we have to either explicitly call String()
-				// or take a reference in order to get the Stringer implementation
-				// on the non-pointer type alias.
-				gotStr = fmt.Sprintf("%s", r.String())
+				gotStr = r.String()
 			}
 			if diff := cmp.Diff(tc.expStr, gotStr); diff != "" {
 				t.Fatalf("unexpected String() (-want, +got):\n%s\n", diff)
@@ -369,36 +366,6 @@ func TestSystem_RanksFromUint32(t *testing.T) {
 	}
 }
 
-func TestSystem_DedupeRanks(t *testing.T) {
-	for name, tc := range map[string]struct {
-		inList     []Rank
-		expOutlist []Rank
-	}{
-		"nil input": {
-			expOutlist: []Rank{},
-		},
-		"empty input": {
-			inList:     []Rank{},
-			expOutlist: []Rank{},
-		},
-		"dupes": {
-			inList:     []Rank{0, 1, 2, 2, 3, 4, 4, 0},
-			expOutlist: []Rank{0, 1, 2, 3, 4},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			gotOutlist, err := DedupeRanks(tc.inList)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			if diff := cmp.Diff(tc.expOutlist, gotOutlist); diff != "" {
-				t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)
-			}
-		})
-	}
-}
-
 func TestSystem_TestRankMembership(t *testing.T) {
 	for name, tc := range map[string]struct {
 		members    []Rank
@@ -422,9 +389,14 @@ func TestSystem_TestRankMembership(t *testing.T) {
 			test:       []Rank{1},
 			expMissing: []Rank{1},
 		},
+		"overlap": {
+			members:    []Rank{0, 1},
+			test:       []Rank{1, 2},
+			expMissing: []Rank{2},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			gotMissing := TestRankMembership(tc.members, tc.test)
+			gotMissing := CheckRankMembership(tc.members, tc.test)
 
 			if diff := cmp.Diff(tc.expMissing, gotMissing); diff != "" {
 				t.Fatalf("unexpected missing ranks (-want, +got):\n%s\n", diff)

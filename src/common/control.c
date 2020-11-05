@@ -16,31 +16,40 @@
  * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
  * The Government's rights to use, modify, reproduce, release, perform, display,
  * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
+ * provided in Contract No. B620873.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-
-#ifndef __OBJ_CTL_H__
-#define __OBJ_CTL_H__
-
-#if defined(__cplusplus)
-extern "C" {
-#endif
-
 /**
- * Interactive function testing shell for DAOS
- *
- * Provides a shell to test VOS and DAOS commands.
- *
- * \param[in]     argc   number of arguments
- * \param[in,out] argv   array of character pointers listing the arguments.
- * \return               0 on success, daos_errno code on failure.
+ * This file implements functions shared with the control-plane.
  */
-int shell(int argc, char *argv[]);
+#include <stdlib.h>
+#include <assert.h>
+#include <stdint.h>
 
-#if defined(__cplusplus)
+int
+copy_ascii(char *dst, size_t dst_sz, const void *src, size_t src_sz)
+{
+	const uint8_t	*str = src;
+	int		 i, len = src_sz;
+
+	assert(dst != NULL);
+	assert(src != NULL);
+
+	/* Trim trailing spaces */
+	while (len > 0 && str[len - 1] == ' ')
+		len--;
+
+	if (len >= dst_sz)
+		return -1;
+
+	for (i = 0; i < len; i++, str++) {
+		if (*str >= 0x20 && *str <= 0x7E)
+			dst[i] = (char)*str;
+		else
+			dst[i] = '.';
+	}
+	dst[len] = '\0';
+
+	return 0;
 }
-#endif
-
-#endif /*  __OBJ_CTL_H__ */

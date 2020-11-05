@@ -1806,14 +1806,17 @@ btr_update(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
 	if (rc == -DER_NO_PERM) { /* cannot make inplace change */
 		struct btr_trace *trace = &tcx->tc_trace[tcx->tc_depth - 1];
 
-		if (btr_has_tx(tcx))
-			btr_node_tx_add(tcx, trace->tr_node);
+		if (btr_has_tx(tcx)) {
+			rc = btr_node_tx_add(tcx, trace->tr_node);
+			if (rc != 0)
+				goto out;
+		}
 
 		D_DEBUG(DB_TRACE, "Replace the original record\n");
 		btr_rec_free(tcx, rec, NULL);
 		rc = btr_rec_alloc(tcx, key, val, rec);
 	}
-
+out:
 	if (rc != 0) { /* failed */
 		D_DEBUG(DB_TRACE, "Failed to update record: "DF_RC"\n",
 			DP_RC(rc));

@@ -694,9 +694,6 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	void const *const aggr_disabled[] = {"disabled"};
 	void const *const aggr_set_time[] = {"time"};
 
-	if (size < OW_IOD_SIZE || (size % OW_IOD_SIZE != 0))
-		return;
-
 	/* Disabled Pool Aggrgation */
 	rc = set_pool_reclaim_strategy(state, aggr_disabled);
 	assert_int_equal(rc, 0);

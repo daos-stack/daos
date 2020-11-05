@@ -38,6 +38,7 @@
 #include <daos/btree.h>
 #include <daos/btree_class.h>
 #include <daos/placement.h>
+#include <daos/job.h>
 #include "task_internal.h"
 #include <pthread.h>
 
@@ -52,6 +53,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_mgmt_set_params, sizeof(daos_set_params_t)},
 	{dc_pool_add_replicas, sizeof(daos_pool_replicas_t)},
 	{dc_pool_remove_replicas, sizeof(daos_pool_replicas_t)},
+	{dc_mgmt_get_bs_state, sizeof(daos_mgmt_get_bs_state_t)},
 
 	/** Pool */
 	{dc_pool_connect, sizeof(daos_pool_connect_t)},
@@ -160,16 +162,21 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_hhash, rc);
 
+	/** set up job info */
+	rc = dc_job_init();
+	if (rc != 0)
+		D_GOTO(out_agent, rc);
+
 	/** get CaRT configuration */
 	rc = dc_mgmt_net_cfg(NULL);
 	if (rc != 0)
-		D_GOTO(out_agent, rc);
+		D_GOTO(out_job, rc);
 
 	/** set up event queue */
 	rc = daos_eq_lib_init();
 	if (rc != 0) {
 		D_ERROR("failed to initialize eq_lib: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_agent, rc);
+		D_GOTO(out_job, rc);
 	}
 
 	/** set up placement */
@@ -210,6 +217,8 @@ out_pl:
 	pl_fini();
 out_eq:
 	daos_eq_lib_fini();
+out_job:
+	dc_job_fini();
 out_agent:
 	dc_agent_fini();
 out_hhash:
@@ -244,6 +253,7 @@ daos_fini(void)
 	dc_pool_fini();
 	dc_mgmt_fini();
 	dc_agent_fini();
+	dc_job_fini();
 
 	pl_fini();
 	daos_hhash_fini();
