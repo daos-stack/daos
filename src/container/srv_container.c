@@ -2013,7 +2013,6 @@ ds_cont_acl_update(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		if (rc != 0) {
 			D_ERROR(DF_UUID": failed to add/update ACEs\n",
 				DP_UUID(cont->c_uuid));
-			daos_acl_free(acl);
 			D_GOTO(out_acl, rc);
 		}
 

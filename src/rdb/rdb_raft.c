@@ -2170,7 +2170,7 @@ rdb_raft_load_entry(struct rdb *db, uint64_t index)
 	 * Raft requires that every node affected by a membership change entry
 	 * be present in the node list when that entry gets applied
 	 */
-	if (raft_entry_is_cfg_change(&entry)) {
+	if (raft_entry_is_cfg_change(&entry) && entry.data.buf != NULL) {
 		d_rank_t rank = *(d_rank_t *)entry.data.buf;
 
 		if (raft_get_node(db->d_raft, rank) == NULL) {
