@@ -427,4 +427,3 @@ class ObjectMetadata(TestWithServers):
                     "##Failed to create containers after container cleanup.")
         self.log.info(
             "(3.1)Create %d containers succeed", additional_container)
-
