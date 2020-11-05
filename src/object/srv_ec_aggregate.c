@@ -671,29 +671,29 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 	this_stripenum = agg_stripenum(agg_entry, entry->ie_recx.rx_idx);
 	if (this_stripenum != agg_entry->ae_cur_stripe.as_stripenum) {
 		/* Iterator has reached next stripe */
-		cur_stripenum = agg_entry->ae_cur_stripe.as_stripenum;
-		rc = agg_process_stripe(agg_entry);
-		if (rc)
-			D_ERROR("Process stripe returned "DF_RC"\n",
-				DP_RC(rc));
+		if (agg_entry->ae_cur_stripe.as_extent_cnt) {
+			cur_stripenum = agg_entry->ae_cur_stripe.as_stripenum;
+			rc = agg_process_stripe(agg_entry);
+			if (rc)
+				D_ERROR("Process stripe returned "DF_RC"\n",
+					DP_RC(rc));
 		/* Error leaves data covered by replicas vulnerable to vos
 		 * delete, so don't advance coordination epoch.
 		 */
-		rc = 0;
-		if (cur_stripenum <
-		    agg_entry->ae_cur_stripe.as_stripenum &&
-		    agg_entry->ae_cur_stripe.as_stripenum <
-		    this_stripenum) {
-			/* Handle holdover stripe */
-			rc = agg_process_stripe(agg_entry);
-			if (rc) {
-				D_ERROR("Holdover returned "DF_RC"\n",
-					DP_RC(rc));
+			rc = 0;
+			if (cur_stripenum <
+			    agg_entry->ae_cur_stripe.as_stripenum &&
+			agg_entry->ae_cur_stripe.as_stripenum <
+			this_stripenum) {
+				/* Handle holdover stripe */
+				rc = agg_process_stripe(agg_entry);
+				if (rc)
+					D_ERROR("Holdover returned "DF_RC"\n",
+						DP_RC(rc));
 				rc = 0;
 			}
 		}
 		agg_entry->ae_cur_stripe.as_stripenum = this_stripenum;
-		*acts |= VOS_ITER_CB_YIELD;
 	}
 
 	/* Add the extent to the entry, for the current stripe */
@@ -784,11 +784,11 @@ static int
 agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	 struct ec_agg_entry *agg_entry, unsigned int *acts)
 {
-	if (agg_key_compare(agg_entry->ae_dkey, entry->ie_key)) {
+	if (agg_key_compare(agg_entry->ae_dkey, entry->ie_key))
 		agg_entry->ae_dkey	= entry->ie_key;
-	} else {
+	else
 		*acts |= VOS_ITER_CB_SKIP;
-	}
+
 	return 0;
 }
 
@@ -846,9 +846,7 @@ agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	agg_param->ap_credits++;
 
-	if (agg_param->ap_credits > agg_param->ap_credits_max) { 
-		D_PRINT("Yielding for type: %u, count: %u\n", type,
-			agg_param->ap_credits);
+	if (agg_param->ap_credits > agg_param->ap_credits_max) {
 		agg_param->ap_credits = 0;
 		*acts |= VOS_ITER_CB_YIELD;
 		if (ec_aggregate_yield(agg_param)) {
@@ -897,8 +895,6 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 	d_rank_t		 myrank;
 
 	crt_group_rank(NULL, &myrank);
-//	D_PRINT("Processing OID: "DF_OID", on rank: %u\n",
-//		DP_OID(entry->ie_oid.id_pub), myrank);
 	if (!daos_unit_oid_compare(agg_param->ap_agg_entry.ae_oid,
 				   entry->ie_oid)) {
 		*acts |= VOS_ITER_CB_SKIP;
@@ -910,8 +906,6 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 				  &entry->ie_oid,
 				  agg_param->ap_pool_info.api_pool_version);
 	if (rc == 1) {
-		D_PRINT("Starting recursion for object: "DF_OID", on rank: %u\n",
-			DP_OID(entry->ie_oid.id_pub), myrank);
 		agg_reset_entry(&agg_param->ap_agg_entry, entry, oca);
 		rc = 0;
 	} else {
