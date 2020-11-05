@@ -45,8 +45,8 @@ fi
 
 cd "$DAOS_BASE"
 if ${NLT:-false}; then
-    IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" utils/run_test.sh
-else
     mkdir -p vm_test
     ./utils/node_local_test.py --output-file=vm_test/nlt-errors.json all
+else
+    IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" utils/run_test.sh
 fi
