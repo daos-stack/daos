@@ -652,6 +652,10 @@ main(int argc, char **argv)
 
 	fname = argv[optind];
 	fd = open(fname, O_RDWR|O_TRUNC|O_CREAT, 0666);
+	if (fd < 0) {
+		rc = -1;
+		goto out;
+	}
 
 	/* Prepare the header, only support daos */
 	rc = write(fd, "test_lvl daos\n", strlen("test_lvl daos\n"));
