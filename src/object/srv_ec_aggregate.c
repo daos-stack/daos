@@ -532,18 +532,9 @@ agg_update_vos(struct ec_agg_entry *entry, bool write_parity)
 	unsigned int		 k = entry->ae_oca->u.ec.e_k;
 	int			 rc = 0;
 
-	recx.rx_idx = entry->ae_cur_stripe.as_stripenum * k * len -
-		entry->ae_cur_stripe.as_prefix_ext;
-	recx.rx_nr = k * len + entry->ae_cur_stripe.as_prefix_ext -
-		entry->ae_cur_stripe.as_suffix_ext;
 
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
-	epoch_range.epr_lo = agg_param->ap_epr.epr_lo;
-	epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
 
-	rc = vos_obj_array_remove(agg_param->ap_cont_handle, entry->ae_oid,
-				  &epoch_range, &entry->ae_dkey,
-				  &entry->ae_akey, &recx);
 	if (write_parity) {
 		d_sg_list_t	 sgl = { 0 };
 		daos_iod_t	 iod = { 0 };
@@ -563,9 +554,21 @@ agg_update_vos(struct ec_agg_entry *entry, bool write_parity)
 		rc = vos_obj_update(agg_param->ap_cont_handle, entry->ae_oid,
 				    entry->ae_cur_stripe.as_hi_epoch, 0, 0,
 				    &entry->ae_dkey, 1, &iod, NULL, &sgl);
-		if (rc)
+		if (rc) {
 			D_ERROR("vos_obj_update failed: "DF_RC"\n", DP_RC(rc));
+			goto out;
+		}
 	}
+	recx.rx_idx = entry->ae_cur_stripe.as_stripenum * k * len -
+		entry->ae_cur_stripe.as_prefix_ext;
+	recx.rx_nr = k * len + entry->ae_cur_stripe.as_prefix_ext -
+		entry->ae_cur_stripe.as_suffix_ext;
+	epoch_range.epr_lo = agg_param->ap_epr.epr_lo;
+	epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
+	rc = vos_obj_array_remove(agg_param->ap_cont_handle, entry->ae_oid,
+				  &epoch_range, &entry->ae_dkey,
+				  &entry->ae_akey, &recx);
+out:
 	return rc;
 }
 
@@ -709,12 +712,13 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 
 	d_list_add_tail(&extent->ae_link,
 			&agg_entry->ae_cur_stripe.as_dextents);
+
 	if (!agg_entry->ae_cur_stripe.as_extent_cnt)
 		/* first extent in stripe: save the start offset */
 		agg_entry->ae_cur_stripe.as_offset =  extent->ae_recx.rx_idx -
-			agg_entry->ae_cur_stripe.as_stripenum *
-			agg_entry->ae_oca->u.ec.e_len *
-			agg_entry->ae_oca->u.ec.e_k;
+			rounddown(extent->ae_recx.rx_idx,
+				  obj_ec_stripe_rec_nr(agg_entry->ae_oca));
+
 	agg_entry->ae_cur_stripe.as_extent_cnt++;
 	agg_entry->ae_cur_stripe.as_stripe_fill +=
 		agg_in_stripe(agg_entry, &entry->ie_recx);
