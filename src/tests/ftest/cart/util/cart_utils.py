@@ -38,7 +38,9 @@ import logging
 import cart_logparse
 import cart_logtest
 
+#pylint: disable=import-error
 from write_host_file import write_host_file
+#pylint: enable=import-error
 
 class CartUtils():
     """CartUtils Class"""
@@ -196,9 +198,9 @@ class CartUtils():
 
         """
         if isinstance(param, list):
-          return param[index]
+            return param[index]
         else:
-          return param
+            return param
 
     # pylint: disable=too-many-locals
     def build_cmd(self, cartobj, env, host, **kwargs):
