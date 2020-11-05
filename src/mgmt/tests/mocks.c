@@ -412,6 +412,12 @@ ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp, bool all_ranks)
 }
 
 int
+ds_mgmt_svc_start(void)
+{
+	return 0;
+}
+
+int
 ds_mgmt_group_update_handler(struct mgmt_grp_up_in *in)
 {
 	return 0;
