@@ -896,19 +896,22 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 {
 	struct daos_oclass_attr *oca;
 	int			 rc = 0;
-	d_rank_t		 myrank;
 
-	crt_group_rank(NULL, &myrank);
 	if (!daos_unit_oid_compare(agg_param->ap_agg_entry.ae_oid,
 				   entry->ie_oid)) {
 		*acts |= VOS_ITER_CB_SKIP;
 		goto out;
 	}
-	if (!daos_oclass_is_ec(entry->ie_oid.id_pub, &oca))
+
+	if (!daos_oclass_is_ec(entry->ie_oid.id_pub, &oca)) {
+		*acts |= VOS_ITER_CB_SKIP;
 		return rc;
+	}
+
 	rc = ds_pool_check_leader(agg_param->ap_pool_info.api_pool_uuid,
 				  &entry->ie_oid,
 				  agg_param->ap_pool_info.api_pool_version);
+
 	if (rc == 1) {
 		agg_reset_entry(&agg_param->ap_agg_entry, entry, oca);
 		rc = 0;
