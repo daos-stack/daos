@@ -364,6 +364,14 @@ boolean skip_build_on_leap15_icc() {
            quickbuild()
 }
 
+boolean skip_unit_testing_stage() {
+    return  env.NO_CI_TESTING == 'true' ||
+            (skip_stage('build') &&
+             rpm_test_version() == '') ||
+            doc_only_change() ||
+            skip_stage('unit-tests')
+}
+
 boolean skip_testing_stage() {
     return  env.NO_CI_TESTING == 'true' ||
             (skip_stage('build') &&
@@ -1041,7 +1049,7 @@ pipeline {
         stage('Unit Tests') {
             when {
                 beforeAgent true
-                expression { ! skip_testing_stage() }
+                expression { ! skip_unit_testing_stage() }
             }
             parallel {
                 stage('Unit Test') {
@@ -1067,7 +1075,7 @@ pipeline {
                 stage('NLT') {
                     when {
                       beforeAgent true
-                      expression { ! skip_unit_test() }
+                      expression { ! skip_stage('nlt', true) }
                     }
                     agent {
                         label 'ci_hdwr1'
