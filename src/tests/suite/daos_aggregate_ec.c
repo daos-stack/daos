@@ -269,6 +269,7 @@ test_filled_stripe(void **statep)
 			data[j] = &buf[j * len];
 		ec_encode_data(len, k, p, codec->ec_gftbls, data, parity);
 		shard++;
+		ctx.fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 		rc = dc_obj_fetch_task_create(ctx.oh, DAOS_TX_NONE, 0,
 					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
 					      &ctx.fetch_iod, &ctx.fetch_sgl,
@@ -278,11 +279,12 @@ test_filled_stripe(void **statep)
 		rc = dc_task_schedule(task, true);
 		assert_int_equal(rc, 0);
 		/* verify no remaining replicas on parity target */
-		//assert_int_equal(ctx.fetch_iom.iom_nr_out, 0);
-		D_PRINT("local_rep: ctx.fetch_iom.iom_nr_out: %u\n",
-			ctx.fetch_iom.iom_nr_out);
+		assert_int_equal(ctx.fetch_iom.iom_nr_out, 0);
+//		D_PRINT("local_rep: ctx.fetch_iom.iom_nr_out: %u\n",
+//			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
 		memset(&ctx.fetch_iom, 0, sizeof(daos_iom_t));
+		ctx.fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 		shard--;
 		rc = dc_obj_fetch_task_create(ctx.oh, DAOS_TX_NONE, 0,
 					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
@@ -291,13 +293,15 @@ test_filled_stripe(void **statep)
 					      NULL, &task);
 		assert_int_equal(rc, 0);
 		rc = dc_task_schedule(task, true);
+		ctx.fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 		assert_int_equal(rc, 0);
 		/* verify no remaining replicas on parity target */
-		//assert_int_equal(ctx.fetch_iom.iom_nr_out, 0);
-		D_PRINT("other_rep: ctx.fetch_iom.iom_nr_out: %u\n",
-			ctx.fetch_iom.iom_nr_out);
+		assert_int_equal(ctx.fetch_iom.iom_nr_out, 0);
+//		D_PRINT("other_rep: ctx.fetch_iom.iom_nr_out: %u\n",
+//			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
 		memset(&ctx.fetch_iom, 0, sizeof(daos_iom_t));
+		ctx.fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 		shard++;
 		ctx.fetch_iod.iod_recxs[0].rx_idx = (i * len) |
 						     PARITY_INDICATOR;
@@ -312,11 +316,12 @@ test_filled_stripe(void **statep)
 		rc = dc_task_schedule(task, true);
 		assert_int_equal(rc, 0);
 		/* verify parity now exists on parity target */
-		//assert_int_equal(ctx.fetch_iom.iom_nr_out, 1);
-		D_PRINT("local par: ctx.fetch_iom.iom_nr_out: %u\n",
-			ctx.fetch_iom.iom_nr_out);
+		assert_int_equal(ctx.fetch_iom.iom_nr_out, 1);
+//		D_PRINT("local par: ctx.fetch_iom.iom_nr_out: %u\n",
+//			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
 		memset(&ctx.fetch_iom, 0, sizeof(daos_iom_t));
+		ctx.fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 		shard--;
 		rc = dc_obj_fetch_task_create(ctx.oh, DAOS_TX_NONE, 0,
 					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
@@ -327,9 +332,9 @@ test_filled_stripe(void **statep)
 		rc = dc_task_schedule(task, true);
 		assert_int_equal(rc, 0);
 		/* verify parity now exists on parity target */
-		//assert_int_equal(ctx.fetch_iom.iom_nr_out, 1);
-		D_PRINT("other_par: ctx.fetch_iom.iom_nr_out: %u\n",
-			ctx.fetch_iom.iom_nr_out);
+		assert_int_equal(ctx.fetch_iom.iom_nr_out, 1);
+//		D_PRINT("other_par: ctx.fetch_iom.iom_nr_out: %u\n",
+//			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
 	}
 	for (i = 0; i < 64; i++) {
@@ -349,11 +354,12 @@ test_filled_stripe(void **statep)
 		rc = dc_task_schedule(task, true);
 		assert_int_equal(rc, 0);
 		/* verify no remaining replicas on parity target */
-		//assert_int_equal(ctx.fetch_iom.iom_nr_out, 0);
-		D_PRINT("local_rep: ctx.fetch_iom.iom_nr_out: %u\n",
-			ctx.fetch_iom.iom_nr_out);
+		assert_int_equal(ctx.fetch_iom.iom_nr_out, 0);
+//		D_PRINT("local_rep: ctx.fetch_iom.iom_nr_out: %u\n",
+//			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
 		memset(&ctx.fetch_iom, 0, sizeof(daos_iom_t));
+		ctx.fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 		shard--;
 		rc = dc_obj_fetch_task_create(ctx.oh, DAOS_TX_NONE, 0,
 					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
@@ -364,11 +370,12 @@ test_filled_stripe(void **statep)
 		rc = dc_task_schedule(task, true);
 		assert_int_equal(rc, 0);
 		/* verify no remaining replicas on parity target */
-		//assert_int_equal(ctx.fetch_iom.iom_nr_out, 0);
-		D_PRINT("other_rep: ctx.fetch_iom.iom_nr_out: %u\n",
-			ctx.fetch_iom.iom_nr_out);
+		assert_int_equal(ctx.fetch_iom.iom_nr_out, 0);
+//		D_PRINT("other_rep: ctx.fetch_iom.iom_nr_out: %u\n",
+//			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
 		memset(&ctx.fetch_iom, 0, sizeof(daos_iom_t));
+		ctx.fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 		shard++;
 		ctx.fetch_iod.iod_recxs[0].rx_idx = (i * len) |
 						     PARITY_INDICATOR;
@@ -383,11 +390,12 @@ test_filled_stripe(void **statep)
 		rc = dc_task_schedule(task, true);
 		assert_int_equal(rc, 0);
 		/* verify parity now exists on parity target */
-		//assert_int_equal(ctx.fetch_iom.iom_nr_out, 1);
-		D_PRINT("local par: ctx.fetch_iom.iom_nr_out: %u\n",
-			ctx.fetch_iom.iom_nr_out);
+		assert_int_equal(ctx.fetch_iom.iom_nr_out, 1);
+//		D_PRINT("local par: ctx.fetch_iom.iom_nr_out: %u\n",
+//			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
 		memset(&ctx.fetch_iom, 0, sizeof(daos_iom_t));
+		ctx.fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 		shard--;
 		rc = dc_obj_fetch_task_create(ctx.oh, DAOS_TX_NONE, 0,
 					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
@@ -398,9 +406,9 @@ test_filled_stripe(void **statep)
 		rc = dc_task_schedule(task, true);
 		assert_int_equal(rc, 0);
 		/* verify parity now exists on parity target */
-		//assert_int_equal(ctx.fetch_iom.iom_nr_out, 1);
-		D_PRINT("other_par: ctx.fetch_iom.iom_nr_out: %u\n",
-			ctx.fetch_iom.iom_nr_out);
+		assert_int_equal(ctx.fetch_iom.iom_nr_out, 1);
+//		D_PRINT("other_par: ctx.fetch_iom.iom_nr_out: %u\n",
+//			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
 	}
 	for (i = 0; i < 64; i++) {
@@ -420,11 +428,12 @@ test_filled_stripe(void **statep)
 		rc = dc_task_schedule(task, true);
 		assert_int_equal(rc, 0);
 		/* verify no remaining replicas on parity target */
-		//assert_int_equal(ctx.fetch_iom.iom_nr_out, 0);
-		D_PRINT("local_rep: ctx.fetch_iom.iom_nr_out: %u\n",
-			ctx.fetch_iom.iom_nr_out);
+		assert_int_equal(ctx.fetch_iom.iom_nr_out, 0);
+//		D_PRINT("local_rep: ctx.fetch_iom.iom_nr_out: %u\n",
+//			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
 		memset(&ctx.fetch_iom, 0, sizeof(daos_iom_t));
+		ctx.fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 		shard--;
 		rc = dc_obj_fetch_task_create(ctx.oh, DAOS_TX_NONE, 0,
 					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
@@ -435,11 +444,12 @@ test_filled_stripe(void **statep)
 		rc = dc_task_schedule(task, true);
 		assert_int_equal(rc, 0);
 		/* verify no remaining replicas on parity target */
-		//assert_int_equal(ctx.fetch_iom.iom_nr_out, 0);
-		D_PRINT("other_rep: ctx.fetch_iom.iom_nr_out: %u\n",
-			ctx.fetch_iom.iom_nr_out);
+		assert_int_equal(ctx.fetch_iom.iom_nr_out, 0);
+//		D_PRINT("other_rep: ctx.fetch_iom.iom_nr_out: %u\n",
+//			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
 		memset(&ctx.fetch_iom, 0, sizeof(daos_iom_t));
+		ctx.fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 		shard++;
 		ctx.fetch_iod.iod_recxs[0].rx_idx = (i * len) |
 						     PARITY_INDICATOR;
@@ -454,11 +464,12 @@ test_filled_stripe(void **statep)
 		rc = dc_task_schedule(task, true);
 		assert_int_equal(rc, 0);
 		/* verify parity now exists on parity target */
-		//assert_int_equal(ctx.fetch_iom.iom_nr_out, 1);
-		D_PRINT("local par: ctx.fetch_iom.iom_nr_out: %u\n",
-			ctx.fetch_iom.iom_nr_out);
+		assert_int_equal(ctx.fetch_iom.iom_nr_out, 1);
+//		D_PRINT("local par: ctx.fetch_iom.iom_nr_out: %u\n",
+//			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
 		memset(&ctx.fetch_iom, 0, sizeof(daos_iom_t));
+		ctx.fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 		shard--;
 		rc = dc_obj_fetch_task_create(ctx.oh, DAOS_TX_NONE, 0,
 					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
@@ -469,9 +480,9 @@ test_filled_stripe(void **statep)
 		rc = dc_task_schedule(task, true);
 		assert_int_equal(rc, 0);
 		/* verify parity now exists on parity target */
-		//assert_int_equal(ctx.fetch_iom.iom_nr_out, 1);
-		D_PRINT("other_par: ctx.fetch_iom.iom_nr_out: %u\n",
-			ctx.fetch_iom.iom_nr_out);
+		assert_int_equal(ctx.fetch_iom.iom_nr_out, 1);
+//		D_PRINT("other_par: ctx.fetch_iom.iom_nr_out: %u\n",
+//			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
 	}
 	ec_cleanup_data(&ctx);
