@@ -139,7 +139,7 @@ def scons():
     # Set options which are used throughout the src.
     dfuse_env = env.Clone()
     dfuse_env.AppendUnique(CPPPATH=['.'])
-    dfuse_env.AppendUnique(CFLAGS=['-pthread', '-fvisibility=hidden'])
+    dfuse_env.AppendUnique(CFLAGS=['-pthread'])
     dfuse_env.AppendUnique(CPPDEFINES=['_GNU_SOURCE'])
 
     dfuse_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common', 'uuid'])
