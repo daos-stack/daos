@@ -13,6 +13,7 @@ timeouts:
   test_metadata_find_svc: 100
   test_metadata_fillup: 300
   test_metadata_addremove: 900
+  test_container_removal_after_der_nospace: 150
 server_config:
   name: daos_server
   servers_per_host: 2
