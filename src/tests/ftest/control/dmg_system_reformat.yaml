@@ -9,8 +9,8 @@ timeout: 130
 server_config:
   name: daos_server
   servers:
-    scm_class: dcpm
-    scm_list: ["/dev/pmem0"]
+    bdev_class: nvme
+    bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
 pool:
   control_method: dmg
   name: daos_server

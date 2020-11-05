@@ -47,12 +47,12 @@ class DmgSystemReformatTest(PoolTestBase):
         :avocado: tags=all,small,pr,hw,control,sys_reformat,dmg
         """
         # Create pool using 90% of the available SCM capacity
-        self.pool = self.get_pool_list(1, 0.9, None)
+        self.pool = self.get_pool_list(1, None, 0.9)
         self.pool[-1].create()
 
         self.log.info("Check that new pool will fail with DER_NOSPACE")
         self.get_dmg_command().exit_status_exception = False
-        self.pool.extend(self.get_pool_list(1, 0.9, None))
+        self.pool.extend(self.get_pool_list(1, None, 0.9))
         try:
             self.pool[-1].create()
         except TestFail as error:
@@ -91,7 +91,7 @@ class DmgSystemReformatTest(PoolTestBase):
                 self.get_dmg_command().result.stdout))
 
         # Create last pool now that memory has been wiped.
-        self.pool.extend(self.get_pool_list(1, 0.9, None))
+        self.pool.extend(self.get_pool_list(1, None, 0.9))
         self.pool[-1].create()
 
         # Lastly, verify that last created pool is in the list

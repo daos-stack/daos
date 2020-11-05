@@ -55,42 +55,56 @@ def human_to_bytes(size):
         int: value translated to bytes.
 
     """
-    conversion = ("B", "K", "M", "G", "T", "P")
-    match = re.findall(r"([0-9.]+)\s*([a-zA-Z]|)", size)
+    conversion_sizes = ("", "k", "m", "g", "t", "p", "e")
+    conversion = {
+        1000: ["{}b".format(item) for item in conversion_sizes],
+        1024: ["{}ib".format(item) for item in conversion_sizes],
+    }
+    match = re.findall(r"([0-9.]+)\s*([a-zA-Z]+|)", size)
     try:
-        value = float(match[0][0])
-        if "." in match[0][0]:
-            value /= 1.024
-        unit = match[0][1].upper() if match[0][1] else conversion[0]
-        if unit in conversion:
-            value *= (2 ** (10 * conversion.index(unit)))
-        else:
-            raise DaosTestError(
-                "Invalid unit detected, not in {}: {}".format(conversion, unit))
+        multiplier = 1
+        if match[0][1]:
+            multiplier = -1
+            unit = match[0][1].lower()
+            for item in conversion:
+                if unit in conversion[item]:
+                    multiplier = item ** conversion[item].index(unit)
+                    break
+            if multiplier == -1:
+                raise DaosTestError(
+                    "Invalid unit detected, not in {}: {}".format(
+                        conversion[1000] + conversion[1024][1:], unit))
+        value = float(match[0][0]) * multiplier
     except IndexError:
         raise DaosTestError(
             "Invalid human readable size format: {}".format(size))
     return int(value) if value.is_integer() else value
 
 
-def bytes_to_human(size, digits=1):
+def bytes_to_human(size, digits=2, binary=True):
     """Convert a byte value to the largest (> 1.0) human readable size.
 
     Args:
         size (int): byte size value to be converted.
-        digits (int): number of digits used to round the converted value
+        digits (int, optional): number of digits used to round the converted
+            value. Defaults to 2.
+        binary (bool, optional): convert to binary (True) or decimal (False)
+            units. Defaults to True.
 
     Returns:
         str: value translated to a human readable size.
 
     """
-    conversion = ["B", "KB", "MB", "GB", "TB", "PB"]
+    units = 1024 if binary else 1000
+    conversion = ["B", "KB", "MB", "GB", "TB", "PB", "EB"]
     index = 0
     value = [size if isinstance(size, (int, float)) else 0, conversion.pop(0)]
-    while value[0] > 1024 and conversion:
+    while value[0] > units and conversion:
         index += 1
-        value[0] = float(size) / (2 ** (10 * index))
+        value[0] = float(size) / (units ** index)
         value[1] = conversion.pop(0)
+        if units == 1024 and len(value[1]) > 1:
+            value[1] = "{}i{}".format(*value[1])
     return "".join([str(round(value[0], digits)), value[1]])
 
 
