@@ -26,7 +26,6 @@ import uuid
 
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
-from daos_utils import DaosCommand
 
 RESULT_PASS = "PASS"
 RESULT_FAIL = "FAIL"
