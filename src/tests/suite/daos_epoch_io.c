@@ -1205,7 +1205,7 @@ cmd_line_parse(test_arg_t *arg, const char *cmd_line,
 	cmd_size = strnlen(cmd, CMD_LINE_LEN_MAX);
 	if (cmd_size == 0)
 		return 0;
-	if (cmd_size < 0 || cmd_size >= CMD_LINE_LEN_MAX) {
+	if (cmd_size >= CMD_LINE_LEN_MAX) {
 		print_message("bad cmd_line.\n");
 		return -1;
 	}
@@ -1373,14 +1373,14 @@ test_op_queue_replay(test_arg_t *arg, struct test_key_record *key_rec,
 		snprintf(single_path, PATH_MAX, "%s/single", akey_dir);
 		key_rec->or_fd_array = open(array_path,
 			O_CREAT | O_TRUNC | O_RDWR, 0666);
-		if (key_rec->or_fd_array == 0) {
+		if (key_rec->or_fd_array == -1) {
 			print_message("failed to open %s, %d(%s)\n",
 				      array_path, errno, strerror(errno));
 			return daos_errno2der(errno);
 		}
 		key_rec->or_fd_single = open(single_path,
 			O_CREAT | O_TRUNC | O_RDWR, 0666);
-		if (key_rec->or_fd_single == 0) {
+		if (key_rec->or_fd_single == -1) {
 			print_message("failed to open %s, %d(%s)\n",
 				      single_path, errno, strerror(errno));
 			close(key_rec->or_fd_array);
@@ -1517,7 +1517,7 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 		cmd_size = strnlen(cmd_line, CMD_LINE_LEN_MAX);
 		if (cmd_size == 0)
 			continue;
-		if (cmd_size < 0 || cmd_size >= CMD_LINE_LEN_MAX) {
+		if (cmd_size >= CMD_LINE_LEN_MAX) {
 			print_message("bad cmd_line, exit.\n");
 			break;
 		}
