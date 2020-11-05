@@ -395,8 +395,6 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		bool still_needed;
 		uint32_t mytarget = dss_get_module_info()->dmi_tgt_id;
 
-		D_ASSERT(mytarget >= 0);
-
 		/*
 		 * Compute placement for the object, then check if the layout
 		 * still includes the current rank. If not, the object can be
