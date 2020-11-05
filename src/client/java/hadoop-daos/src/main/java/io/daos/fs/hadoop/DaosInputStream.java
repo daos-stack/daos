@@ -103,12 +103,8 @@ public class DaosInputStream extends FSInputStream {
     this.buffer.limit(0);
     this.fileLen = daosFile.length();
     this.bufferCapacity = buffer.capacity();
-    this.preLoadSize = preLoadSize;
+    this.preLoadSize = bufferCapacity < preLoadSize ? bufferCapacity : preLoadSize;
     this.bufferedReadEnabled = preLoadSize > 0;
-    if (bufferCapacity < preLoadSize) {
-      throw new IllegalArgumentException("preLoadSize " + preLoadSize +
-              " should be not greater than buffer capacity " + bufferCapacity);
-    }
   }
 
   @Override
@@ -321,5 +317,9 @@ public class DaosInputStream extends FSInputStream {
 
   public ByteBuffer getBuffer() {
     return buffer;
+  }
+
+  public int getPreLoadSize() {
+    return preLoadSize;
   }
 }
