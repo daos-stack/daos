@@ -39,6 +39,7 @@ import (
 const (
 	scmMountPrefix = "/mnt/daos"
 	pmemBdevDir    = "/dev"
+	defaultFiPort  = 31416
 )
 
 // NetDevClass constants
@@ -251,7 +252,8 @@ func (req *ConfigGenerateReq) checkNetwork(ctx context.Context) (*config.Server,
 		iocfg.Fabric = ioserver.FabricConfig{
 			Provider:  iface.Provider,
 			Interface: iface.Device,
-			// TODO: decide on InterfacePort
+			// difference of 1000 between each IO server
+			InterfacePort:  int(defaultFiPort + (nn * 1000)),
 			PinnedNumaNode: &nn,
 		}
 		cfg.Servers = append(cfg.Servers, iocfg)
@@ -334,6 +336,10 @@ func (req *ConfigGenerateReq) validateNvmeStorage(ctrlrs storage.NvmeControllers
 // that storage hardware setup is homogeneous across all hosts.
 //
 // Return storage for a single host set or error.
+//
+// TODO: ignore some differences in nvme device details e.g. model/capacity so that
+// configurations with equal number of SSDs in the same PCI addresses with
+// similar distribution of NUMA Affinity will result in auto selection.
 func (req *ConfigGenerateReq) getSingleStorageSet(ctx context.Context) (*HostStorageSet, error) {
 	scanReq := &StorageScanReq{}
 	scanReq.SetHostList(req.HostList)

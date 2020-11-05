@@ -361,7 +361,7 @@ type SystemResetFormatResp struct {
 // DAOS system and retrieve results from the selected ranks hosted there.
 func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, resetReq *SystemResetFormatReq) (*StorageFormatResp, error) {
 	if resetReq == nil {
-	return nil, errors.Errorf("nil %T request", resetReq)
+		return nil, errors.Errorf("nil %T request", resetReq)
 	}
 
 	pbReq := new(ctlpb.SystemResetFormatReq)
