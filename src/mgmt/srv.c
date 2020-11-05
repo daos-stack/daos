@@ -367,6 +367,34 @@ ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc)
 	kill(getpid(), sig);
 }
 
+void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc)
+{
+	struct mgmt_pool_get_svcranks_in	*in;
+	struct mgmt_pool_get_svcranks_out	*out;
+	int					 rc;
+
+	in = crt_req_get(rpc);
+	D_ASSERT(in != NULL);
+
+	D_DEBUG(DB_MGMT, "get svcranks for pool "DF_UUIDF"\n",
+		DP_UUID(in->gsr_puuid));
+
+	out = crt_reply_get(rpc);
+
+	rc =  get_pool_svc_ranks(in->gsr_puuid, &out->gsr_ranks);
+	if (rc != 0)
+		D_ERROR(DF_UUID ": get_pool_svc_ranks() upcall failed, "
+			DF_RC "\n", DP_UUID(in->gsr_puuid), DP_RC(rc));
+	out->gsr_rc = rc;
+
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR(DF_UUID ": crt_reply_send() failed, " DF_RC "\n",
+			DP_UUID(in->gsr_puuid), DP_RC(rc));
+
+	d_rank_list_free(out->gsr_ranks);
+}
+
 static int
 ds_mgmt_init()
 {
