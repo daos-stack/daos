@@ -1075,7 +1075,7 @@ pipeline {
                 stage('NLT') {
                     when {
                       beforeAgent true
-                      expression { ! skip_stage('nlt', true) }
+                      expression { ! skip_stage('nlt') }
                     }
                     agent {
                         label 'ci_hdwr1'
