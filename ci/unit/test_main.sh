@@ -27,7 +27,7 @@ else
   BULLSEYE=
 fi
 
-NLT=
+NLT=false
 if [ "$STAGE_NAME" = NLT ]; then
     NLT=true
 fi

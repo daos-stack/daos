@@ -1060,7 +1060,7 @@ pipeline {
                     post {
                       always {
                             unitTestPost artifacts: ['unit_test_logs/*'],
-			    no_record_issues: false
+                                         record_issues: false
                         }
                     }
                 }
