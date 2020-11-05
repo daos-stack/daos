@@ -27,9 +27,10 @@ else
   BULLSEYE=
 fi
 
-NLT=false
 if [ "$STAGE_NAME" = NLT ]; then
     NLT=true
+else
+    NLT=false
 fi
 
 # shellcheck disable=SC1091
