@@ -238,7 +238,8 @@ if __name__ == "__main__":
     binfo = BuildInfo(os.path.join(build_root, ".build_vars.json"));
     debug_cmds = "-x D_LOG_MASK=DEBUG,RPC=ERR,MEM=ERR " + \
                  "-x DD_SUBSYS=all -x DD_MASK=all"
-    load_mpi('openmpi')
+    if not load_mpi('openmpi'):
+        raise ServerFailedToStart("No orterun installed")
     orterun = find_executable('orterun')
     if orterun is None:
         raise ServerFailedToStart("No orterun installed")

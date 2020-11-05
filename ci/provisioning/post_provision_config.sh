@@ -25,7 +25,7 @@ clush -B -S -l root -w "$NODESTRING" \
     REPOSITORY_URL=\"$REPOSITORY_URL\"
     JENKINS_URL=\"$JENKINS_URL\"
     DAOS_STACK_LOCAL_REPO=\"${!DSL_REPO_var}\"
-    DAOS_STACK_GROUP_REPO=\"${!DSG_REPO_var}\"
+    DAOS_STACK_GROUP_REPO=\"${!DSG_REPO_var:-}\"
     DISTRO=\"$DISTRO\"
     $(cat ci/provisioning/post_provision_config_nodes_"${DISTRO}".sh)
     $(cat ci/provisioning/post_provision_config_nodes.sh)"

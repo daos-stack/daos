@@ -585,6 +585,10 @@ int main(int argc, char **argv)
 			input->tag = tag;
 
 			rc = crt_req_send(rpc, rpc_handle_reply, &sem);
+			if (rc != 0) {
+				D_ERROR("crt_req_send() failed; rc=%d\n", rc);
+				assert(0);
+			}
 			tc_sem_timedwait(&sem, 10, __LINE__);
 			DBG_PRINT("RPC to rank=%d finished\n", rank);
 		}
