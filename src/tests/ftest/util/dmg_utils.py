@@ -793,15 +793,26 @@ class DmgCommand(DmgCommandBase):
             #   ---- ----                                 --------------- -----
             #   0    385af2f9-1863-406c-ae94-bffdcd02f379 10.8.1.10:10001 Joined
             #   1    d7a69a41-59a2-4dec-a620-a52217851285 10.8.1.11:10001 Joined
+            #   Rank UUID   Control Address  Fault Domain  State  Reason
+            #   ---- ----   ---------------  ------------  -----  ------
+            #   0    <uuid> <address>        <domain>      Joined system stop
+            #   1    <uuid> <address>        <domain>      Joined system stop
+            #
+            #       Where the above placeholders have values similar to:
+            #           <uuid>    = 0c21d700-0e2b-46fb-be49-1fca490ce5b0
+            #           <address> = 10.8.1.142:10001
+            #           <domain>  = /wolf-142.wolf.hpdd.intel.com
+            #
             match = re.findall(
-                r"(\d+)\s+([0-9a-f-]+)\s+(.*)\s+([A-Za-z]+)(?:|\s+([A-Za-z]+))",
+                r"(\d+)\s+([0-9a-f-]+)\s+([0-9.:]+)\s+([/A-Za-z0-9-_.]+)"
+                r"\s+([A-Za-z]+)(.*)",
                 self.result.stdout)
             for info in match:
                 data[int(info[0])] = {
                     "address": info[2],
                     "uuid": info[1],
                     "state": info[3],
-                    "reason": info[4],
+                    "reason": info[4].strip(),
                 }
         else:
             # Process the non-verbose multiple rank system query output, e.g.
