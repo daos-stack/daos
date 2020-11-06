@@ -39,6 +39,7 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 	struct crt_corpc_hdr	*co_hdr;
 	int			 rc;
 
+	DBG_ENTRY();
 	D_ASSERT(rpc_priv != NULL);
 	D_ASSERT(grp_priv != NULL);
 
@@ -90,17 +91,20 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 	rpc_priv->crp_coll = 1;
 
 out:
+	DBG_EXIT();
 	return rc;
 }
 
 void
 crt_corpc_info_fini(struct crt_rpc_priv *rpc_priv)
 {
+	DBG_ENTRY();
 	D_ASSERT(rpc_priv->crp_coll && rpc_priv->crp_corpc_info);
 	d_rank_list_free(rpc_priv->crp_corpc_info->co_filter_ranks);
 	if (rpc_priv->crp_corpc_info->co_grp_ref_taken)
 		crt_grp_priv_decref(rpc_priv->crp_corpc_info->co_grp_priv);
 	D_FREE_PTR(rpc_priv->crp_corpc_info);
+	DBG_EXIT();
 }
 
 static int
@@ -112,6 +116,7 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 	bool			 grp_ref_taken = false;
 	int			 rc = 0;
 
+	DBG_ENTRY();
 	D_ASSERT(rpc_priv != NULL && (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL));
 	grp_gdata = crt_gdata.cg_grp;
 	D_ASSERT(grp_gdata != NULL);
@@ -154,6 +159,7 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 			rc, rpc_priv->crp_pub.cr_opc);
 
 out:
+	DBG_EXIT();
 	return rc;
 }
 
@@ -167,6 +173,7 @@ crt_corpc_chained_bulk_cb(const struct crt_bulk_cb_info *cb_info)
 	void				*bulk_buf;
 	int				 rc = 0;
 
+	DBG_ENTRY();
 	rc = cb_info->bci_rc;
 	bulk_desc = cb_info->bci_bulk_desc;
 	rpc_req = bulk_desc->bd_rpc;
@@ -196,6 +203,7 @@ crt_corpc_chained_bulk_cb(const struct crt_bulk_cb_info *cb_info)
 
 out:
 	RPC_DECREF(rpc_priv);
+	DBG_EXIT();
 	return rc;
 }
 
@@ -207,6 +215,7 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 	uint32_t	 seg_num;
 	int		 i, rc = 0;
 
+	DBG_ENTRY();
 	if (bulk_hdl == CRT_BULK_NULL)
 		return 0;
 
@@ -247,6 +256,7 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 out:
 	if (iovs != NULL)
 		D_FREE(iovs);
+	DBG_EXIT();
 	return rc;
 }
 
@@ -262,6 +272,7 @@ crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 	struct crt_bulk_desc	 bulk_desc;
 	int			 rc = 0;
 
+	DBG_ENTRY();
 	D_ASSERT(rpc_priv != NULL && (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL));
 
 	if (!crt_initialized()) {
@@ -331,6 +342,7 @@ out:
 	if (rc != 0)
 		D_ERROR("crt_corpc_common_hdlr failed, rc: %d, opc: %#x.\n",
 			rc, rpc_priv->crp_pub.cr_opc);
+	DBG_EXIT();
 	return rc;
 }
 
@@ -350,6 +362,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	uint32_t		 grp_ver;
 	int			 rc = 0;
 
+	DBG_ENTRY();
 	if (crt_ctx == CRT_CONTEXT_NULL || req == NULL) {
 		D_ERROR("invalid parameter (NULL crt_ctx or req).\n");
 		D_GOTO(out, rc = -DER_INVAL);
@@ -447,6 +460,7 @@ out:
 		crt_rpc_priv_free(rpc_priv);
 	if (root_excluded)
 		d_rank_list_free(tobe_filter_ranks);
+	DBG_EXIT();
 	return rc;
 }
 
@@ -459,6 +473,7 @@ corpc_add_child_rpc(struct crt_rpc_priv *parent_rpc_priv,
 	struct crt_corpc_info	*co_info;
 	struct crt_corpc_hdr	*parent_co_hdr, *child_co_hdr;
 
+	DBG_ENTRY();
 	D_ASSERT(parent_rpc_priv != NULL);
 	D_ASSERT(child_rpc_priv != NULL);
 	D_ASSERT(parent_rpc_priv->crp_coll == 1 &&
@@ -500,12 +515,14 @@ corpc_add_child_rpc(struct crt_rpc_priv *parent_rpc_priv,
 	d_list_add_tail(&child_rpc_priv->crp_parent_link,
 			&co_info->co_child_rpcs);
 	D_SPIN_UNLOCK(&parent_rpc_priv->crp_lock);
+	DBG_EXIT();
 }
 
 static inline void
 corpc_del_child_rpc_locked(struct crt_rpc_priv *parent_rpc_priv,
 			   struct crt_rpc_priv *child_rpc_priv)
 {
+	DBG_ENTRY();
 	D_ASSERT(parent_rpc_priv != NULL);
 	D_ASSERT(child_rpc_priv != NULL);
 	D_ASSERT(parent_rpc_priv->crp_coll == 1 &&
@@ -514,6 +531,7 @@ corpc_del_child_rpc_locked(struct crt_rpc_priv *parent_rpc_priv,
 	d_list_del_init(&child_rpc_priv->crp_parent_link);
 	/* decref corresponds to the addref in corpc_add_child_rpc */
 	RPC_DECREF(child_rpc_priv);
+	DBG_EXIT();
 }
 
 static inline void
@@ -521,12 +539,14 @@ crt_corpc_fail_parent_rpc(struct crt_rpc_priv *parent_rpc_priv, int failed_rc)
 {
 	d_rank_t	 myrank;
 
+	DBG_ENTRY();
 	crt_group_rank(NULL, &myrank);
 
 	parent_rpc_priv->crp_reply_hdr.cch_rc = failed_rc;
 	parent_rpc_priv->crp_corpc_info->co_rc = failed_rc;
 	D_ERROR("myrank %d, set parent rpc (opc %#x) as failed, rc: %d.\n",
 		myrank, parent_rpc_priv->crp_pub.cr_opc, failed_rc);
+	DBG_EXIT();
 }
 
 static inline void
@@ -537,6 +557,7 @@ crt_corpc_complete(struct crt_rpc_priv *rpc_priv)
 	bool			 am_root;
 	int			 rc;
 
+	DBG_ENTRY();
 	co_info = rpc_priv->crp_corpc_info;
 	D_ASSERT(co_info != NULL);
 
@@ -569,6 +590,7 @@ crt_corpc_complete(struct crt_rpc_priv *rpc_priv)
 
 	/* correspond to addref in crt_corpc_req_hdlr */
 	RPC_DECREF(rpc_priv);
+	DBG_EXIT();
 }
 
 static inline void
@@ -580,6 +602,7 @@ crt_corpc_fail_child_rpc(struct crt_rpc_priv *parent_rpc_priv,
 	uint32_t		 done_num;
 	bool			 req_done = false;
 
+	DBG_ENTRY();
 	D_ASSERT(parent_rpc_priv != NULL);
 	co_info = parent_rpc_priv->crp_corpc_info;
 	D_ASSERT(co_info != NULL);
@@ -604,6 +627,7 @@ crt_corpc_fail_child_rpc(struct crt_rpc_priv *parent_rpc_priv,
 
 	if (req_done == true)
 		crt_corpc_complete(parent_rpc_priv);
+	DBG_EXIT();
 }
 
 void
@@ -619,6 +643,7 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 	uint32_t		 wait_num, done_num;
 	int			 rc = 0;
 
+	DBG_ENTRY();
 	child_req = cb_info->cci_rpc;
 	parent_rpc_priv = cb_info->cci_arg;
 	D_ASSERT(child_req != NULL && parent_rpc_priv != NULL);
@@ -756,6 +781,7 @@ aggregate_done:
 		RPC_DECREF(parent_rpc_priv);
 	}
 	return;
+	DBG_EXIT();
 }
 
 int
@@ -769,6 +795,7 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 	bool			 ver_match;
 	int			 i, rc = 0;
 
+	DBG_ENTRY();
 	co_info = rpc_priv->crp_corpc_info;
 	D_ASSERT(co_info != NULL);
 
@@ -926,5 +953,6 @@ out:
 	if (children_rank_list != NULL)
 		d_rank_list_free(children_rank_list);
 
+	DBG_EXIT();
 	return rc;
 }

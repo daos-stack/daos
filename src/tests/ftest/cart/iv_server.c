@@ -72,6 +72,7 @@ static void wait_for_namespace(void)
  * 1 - Entry/Exists
  * 2 - Dump keys
  **/
+#undef  DBG_ENTRY
 #define DBG_ENTRY()						\
 do {								\
 	if (g_verbose_mode >= 1) {				\
@@ -79,6 +80,7 @@ do {								\
 	}							\
 } while (0)
 
+#undef  DBG_EXIT
 #define DBG_EXIT()							\
 do {									\
 	if (g_verbose_mode >= 1) {					\
