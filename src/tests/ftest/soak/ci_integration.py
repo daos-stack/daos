@@ -119,8 +119,9 @@ class JavaCIIntegration(TestWithServers):
         # generate jar files
         jdir = "{}/java".format(os.getcwd())
         cmd = "cd {};".format(jdir)
-        cmd += "mvn clean install -DskipITs -Ddaos.install.path={}".\
+        cmd += "mvn -X clean install -DskipITs -Ddaos.install.path={}".\
                 format(self.prefix)
+        cmd += " >> {}/maven_jar_generation_output.log".format(self.log_dir)
         self.execute_cmd(cmd, 180)
 
         # run intergration-test
@@ -129,9 +130,10 @@ class JavaCIIntegration(TestWithServers):
         cmd += "java-{}-openjdk-{}-0.el7_8.x86_64/".format(version[:-8],
                                                            version)
         cmd += "jre/lib/amd64/libjsig.so;"
-        cmd += " mvn clean integration-test -Ddaos.install.path={}".\
+        cmd += " mvn -X clean integration-test -Ddaos.install.path={}".\
                 format(self.prefix)
         cmd += " -Dpool_id={}  -Dcont_id={}".format(pool_uuid, cont_uuid)
+        cmd += " >> {}/maven_integration_test_output.log".format(self.log_dir)
         self.execute_cmd(cmd, 300)
 
     def execute_cmd(self, cmd, timeout):
