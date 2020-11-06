@@ -5,15 +5,15 @@ hosts:
     - server-A
 timeout: 650
 evicttests:
-   svrlist: !mux
-     goodlist:
-          ranklist:
-             - VALID
-             - PASS
-     badlist:
-          ranklist:
-             - NULL
-             - FAIL
+#   svrlist: !mux
+#     goodlist:
+#          ranklist:
+#             - VALID
+#             - PASS
+#     badlist:
+#          ranklist:
+#             - NULL
+#             - FAIL
    connectsetnames: !mux
      goodname:
           setname:

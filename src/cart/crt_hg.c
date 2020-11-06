@@ -1021,10 +1021,14 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 				rpc_priv->crp_output_got = 1;
 				rc = rpc_priv->crp_reply_hdr.cch_rc;
 			} else {
-				RPC_ERROR(rpc_priv,
-					  "HG_Get_output failed, hg_ret: %d\n",
-					  hg_ret);
-				rc = -DER_HG;
+				if (hg_ret != HG_NOMEM) {
+					RPC_ERROR(rpc_priv,
+						  "HG_Get_output failed, "
+						  "hg_ret: %d\n", hg_ret);
+					rc = -DER_HG;
+				} else {
+					rc = -DER_NOMEM;
+				}
 			}
 		}
 	}

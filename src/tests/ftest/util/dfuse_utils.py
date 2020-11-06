@@ -41,7 +41,7 @@ class DfuseCommand(ExecutableCommand):
         self.puuid = FormattedParameter("--pool {}")
         self.cuuid = FormattedParameter("--container {}")
         self.mount_dir = FormattedParameter("--mountpoint {}")
-        self.svcl = FormattedParameter("--svc {}", 0)
+        #self.svcl = FormattedParameter("--svc {}", 0)
         self.sys_name = FormattedParameter("--sys-name {}")
         self.singlethreaded = FormattedParameter("--singlethreaded", False)
         self.foreground = FormattedParameter("--foreground", False)
@@ -68,7 +68,7 @@ class DfuseCommand(ExecutableCommand):
             display (bool, optional): print updated params. Defaults to True.
         """
         self.puuid.update(pool.uuid, "puuid" if display else None)
-        self.set_dfuse_svcl_param(pool, display)
+        #self.set_dfuse_svcl_param(pool, display)
 
     def set_dfuse_svcl_param(self, pool, display=True):
         """Set the dfuse svcl param from the ranks of a DAOS pool object.

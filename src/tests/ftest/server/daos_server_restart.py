@@ -104,10 +104,9 @@ class DaosServerTest(TestWithServers):
             dmg = self.get_dmg_command()
             result = dmg.pool_create(scm_size)
             uuid = result['uuid']
-            svc = result['svc']
             daos_cmd = DaosCommand(self.bin)
             for _ in range(container_per_pool):
-                result = daos_cmd.container_create(pool=uuid, svc=svc)
+                result = daos_cmd.container_create(pool=uuid)
                 self.log.info("container create status: %s", result)
 
     def test_daos_server_reformat(self):

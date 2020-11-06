@@ -132,12 +132,20 @@ class TestPool(TestDaosApiBase):
 
             # Convert the string of service replicas from the dmg command output
             # into an ctype array for the DaosPool object using the same
-            # technique used in DaosPool.create().
+            # technique used in DaosPool.create(). The long-term direction is
+            # to remove this parameter from DAOS tools and APIs. Leaving here
+            # for now for a gradual transition.
             service_replicas = [int(value) for value in data["svc"].split(",")]
             rank_t = ctypes.c_uint * len(service_replicas)
             rank = rank_t(*list([svc for svc in service_replicas]))
             rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
             self.pool.svc = daos_cref.RankList(rl_ranks, len(service_replicas))
+
+            # TEMPORARY FOR TESTING
+            # svc is now optional, testing without it here. specify len 0 or
+            # specify no list at all
+            # self.pool.svc = daos_cref.RankList(rl_ranks, 0)
+            # self.pool.svc = daos_cref.RankList(None, 0)
 
             # Set UUID and attached to the DaosPool object
             self.pool.set_uuid_str(data["uuid"])
@@ -558,9 +566,13 @@ class TestPool(TestDaosApiBase):
 
         """
         self.log.info("Writing %s bytes to pool %s", size, self.uuid)
+        #env = {
+        #    "DAOS_POOL": self.uuid,
+        #    "DAOS_SVCL": "1",
+        #    "PYTHONPATH": os.getenv("PYTHONPATH", "")
+        #}
         env = {
             "DAOS_POOL": self.uuid,
-            "DAOS_SVCL": "1",
             "PYTHONPATH": os.getenv("PYTHONPATH", "")
         }
         if not load_mpi("openmpi"):
