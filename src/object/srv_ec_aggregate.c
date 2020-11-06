@@ -532,7 +532,6 @@ agg_update_vos(struct ec_agg_entry *entry, bool write_parity)
 	unsigned int		 k = entry->ae_oca->u.ec.e_k;
 	int			 rc = 0;
 
-
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 
 	if (write_parity) {
