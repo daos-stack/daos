@@ -96,7 +96,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 
 		/* Check the OID */
 		if (ie->ie_oid.lo != inode->ie_oid.lo ||
-			ie->ie_oid.hi != inode->ie_oid.hi) {
+		    ie->ie_oid.hi != inode->ie_oid.hi) {
 			DFUSE_TRA_ERROR(inode, "Duplicate inode found (dfs)");
 			D_GOTO(out_err, rc = EIO);
 		}
