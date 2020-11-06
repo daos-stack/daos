@@ -54,7 +54,7 @@ dfuse_cb_readlink(fuse_req_t req, fuse_ino_t ino)
 	if (rc)
 		D_GOTO(release, rc);
 
-	DFUSE_REPLY_READLINK(req, buf);
+	DFUSE_REPLY_READLINK(inode, req, buf);
 
 	d_hash_rec_decref(&fsh->dpi_iet, rlink);
 
