@@ -1117,9 +1117,9 @@ out:
 			/* failure already reported through complete cb */
 			if (complete_cb != NULL)
 				rc = 0;
-		} else {
-			RPC_DECREF(rpc_priv);
-		}
+		} //else {
+		//	RPC_DECREF(rpc_priv);
+		//}
 	}
 
 	/* corresponds to RPC_ADDREF in this function */
