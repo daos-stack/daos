@@ -965,8 +965,8 @@ sk_btr_batch_oper(void **state)
 	}
 	sk_btr_query(NULL);
 	for (i = 0; i < key_nr; i++) {
-	        D_FREE(kv[i].key.iov_buf);
-	        D_FREE(kv[i].val.iov_buf);
+		D_FREE(kv[i].key.iov_buf);
+		D_FREE(kv[i].val.iov_buf);
 	}
 	D_FREE(kv);
 }
@@ -1043,8 +1043,8 @@ sk_btr_perf(void **state)
 	now = dts_time_now();
 	D_PRINT("delete = %10.2f/sec\n", key_nr / (now - then));
 	for (i = 0; i < key_nr; i++) {
-	        D_FREE(kv[i].key.iov_buf);
-	        D_FREE(kv[i].val.iov_buf);
+		D_FREE(kv[i].key.iov_buf);
+		D_FREE(kv[i].val.iov_buf);
 	}
 	D_FREE(kv);
 }
