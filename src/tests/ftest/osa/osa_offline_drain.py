@@ -23,13 +23,8 @@
 """
 import time
 import random
-import ctypes
-from avocado import fail_on
 from osa_utils import OSAUtils
 from test_utils_pool import TestPool
-from command_utils import CommandFailure
-from pydaos.raw import (DaosContainer, IORequest,
-                        DaosObj, DaosApiError)
 
 
 class OSAOfflineDrain(OSAUtils):

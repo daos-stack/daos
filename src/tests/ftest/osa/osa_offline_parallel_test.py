@@ -23,15 +23,11 @@
 """
 import time
 import random
-import ctypes
 import threading
 import copy
-from avocado import fail_on
 from osa_utils import OSAUtils
 from test_utils_pool import TestPool
-from command_utils import CommandFailure
-from pydaos.raw import (DaosContainer, IORequest,
-                        DaosObj, DaosApiError)
+
 try:
     # python 3.x
     import queue as queue
@@ -157,9 +153,6 @@ class OSAOfflineParallelTest(OSAUtils):
             if "FAIL" in failure:
                 self.fail("Test failed : {0}".format(failure))
 
-        if data:
-            self.verify_single_object()
-
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
             pool[val].display_pool_daos_space(display_string)
@@ -173,7 +166,8 @@ class OSAOfflineParallelTest(OSAUtils):
             self.log.info("Pool Version at the End %s", pver_end)
             self.assertTrue(pver_end == 25,
                             "Pool Version Error:  at the end")
-            pool[val].destroy()
+        if data:
+            self.verify_single_object()
 
     def test_osa_offline_parallel_test(self):
         """
@@ -183,7 +177,5 @@ class OSAOfflineParallelTest(OSAUtils):
 
         :avocado: tags=all,pr,hw,large,osa,osa_parallel,offline_parallel
         """
-        # Perform drain testing with 1 to 2 pools
-        # Two pool testing blocked by DAOS-5333.
-        # Fix range from 1,2 to 1,3
+        # Run the parallel offline test.
         self.run_offline_parallel_test(1, True)

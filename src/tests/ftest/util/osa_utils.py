@@ -21,8 +21,6 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-import time
-import random
 import ctypes
 from avocado import fail_on
 from apricot import TestWithServers

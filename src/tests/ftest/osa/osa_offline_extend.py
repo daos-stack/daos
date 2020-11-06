@@ -22,14 +22,8 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import time
-import ctypes
-from avocado import fail_on
-from apricot import TestWithServers
 from osa_utils import OSAUtils
 from test_utils_pool import TestPool
-from command_utils import CommandFailure
-from pydaos.raw import (DaosContainer, IORequest,
-                        DaosObj, DaosApiError)
 
 
 class OSAOfflineExtend(OSAUtils):
