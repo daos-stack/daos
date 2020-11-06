@@ -3089,7 +3089,7 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 							  gp_membs_ver;
 			if (grp_ver_entry != grp_ver_current) {
 				D_ERROR("Group (%s) version mismatch. ",
-					ivns_id.ii_group_name); 
+					ivns_id.ii_group_name);
 				D_ERROR("On Entry: %d:: Changed to:%d\n",
 					grp_ver_entry, grp_ver_current);
 				D_GOTO(send_error, rc = -DER_GRPVER);
@@ -3215,12 +3215,11 @@ check_sync_type(crt_iv_sync_t *sync)
 		}
 
 		if (sync->ivs_event != CRT_IV_SYNC_EVENT_UPDATE) {
-			D_ERROR("ivs_event must be set to "
-				"CRT_IV_SYNC_EVENT_UPDATE\n");
+			D_ERROR("ivs_event must be set to ");
+			D_ERROR("CRT_IV_SYNC_EVENT_UPDATE\n");
 			return -DER_INVAL;
 		}
 	}
-
 	return rc;
 }
 
@@ -3307,7 +3306,7 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 	} else  if (rc == -DER_IVCB_FORWARD) {
 		/* Send synchronization to parent */
 		/* Need to get a version number associated with next node. */
-		grp_ver =  ivns_internal->cii_grp_priv-> gp_membs_ver;
+		grp_ver =  ivns_internal->cii_grp_priv->gp_membs_ver;
 
 		rc = get_shortcut_path(ivns_internal, root_rank, shortcut,
 					&next_node);
@@ -3453,10 +3452,10 @@ crt_iv_get_nchildren(crt_iv_namespace_t ivns, uint32_t class_id,
 		ivns_internal->cii_gns.gn_tree_topo, root_rank, self_rank,
 		nchildren);
 	if (rc != 0)
-		D_ERROR("crt_tree_get_nchildren(grp %s, root %d self %d), "
-			"failed, rc=%d.\n",
+		D_ERROR("crt_tree_get_nchildren(grp %s, root %d self %d)",
 			ivns_internal->cii_grp_priv->gp_pub.cg_grpid,
-			root_rank, self_rank, rc);
+			root_rank, self_rank);
+		D_ERROR("failed, rc=%d.\n", rc);
 
 
 exit:

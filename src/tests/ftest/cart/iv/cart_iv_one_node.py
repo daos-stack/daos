@@ -361,6 +361,15 @@ class CartIvOneNodeTest(Test):
             ######################
             # Testing version number conflicts.
             ######################
+            # Test of verison skew on fetch between rank 0 and rank 1.
+            # Make sure we can set version numbers.
+            {"operation":"set_grp_version", "rank":0, "key":(1, 42),
+             "version":"0xdeadc0de", "return_code":0, "expected_value":""},
+            {"operation":"get_grp_version", "rank":0, "key":(1, 42),
+             "return_code":0, "expected_value":"0xdeadc0de"},
+            {"operation":"set_grp_version", "rank":0, "key":(1, 42),
+             "version":"", "return_code":0, "expected_value":""},
+            #
             # ******************
             # Test of verison skew on fetch between rank 0 and rank 1.
             # From parent to child and from child to parent
@@ -465,7 +474,7 @@ class CartIvOneNodeTest(Test):
              "version":"0xdeadc0de", "return_code":0, "expected_value":""},
             {"operation":"update", "rank":0, "key":(0, 42), "value":"beans",
              "sync":"eager_update", "return_code":-1036 },
-            # Even though a failue, leaves stale state on ranks
+            # Even though previous failure, leaves stale state on ranks
             {"operation":"fetch", "rank":0, "key":(0, 42),
              "return_code":0, "expected_value":"beans"},
             {"operation":"fetch", "rank":1, "key":(0, 42),
