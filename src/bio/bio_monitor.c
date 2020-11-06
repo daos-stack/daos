@@ -154,56 +154,6 @@ bio_get_bs_state(int *bs_state, struct bio_xs_context *xs)
 	*bs_state = xs->bxc_blobstore->bb_state;
 }
 
-static void
-bio_get_dev_list_internal(void *msg_arg)
-{
-	struct bio_dev_list_msg_arg	*bdl = msg_arg;
-	int				 rc;
-
-	D_ASSERT(bdl != NULL);
-
-	rc = bio_dev_list(bdl->xs, bdl->dev_list, &bdl->dev_list_cnt);
-
-	bdl->rc = rc;
-
-	ABT_eventual_set(bdl->eventual, NULL, 0);
-}
-
-/*
- * Call internal method to get the BIO device list from the init xstream.
- */
-int
-bio_get_dev_list(d_list_t *dev_list, int *n_dev_list, struct bio_xs_context *xs)
-{
-	struct bio_dev_list_msg_arg	bdl = { 0 };
-	int				rc;
-
-	rc = ABT_eventual_create(0, &bdl.eventual);
-	if (rc != ABT_SUCCESS)
-		return dss_abterr2der(rc);
-
-	bdl.xs = xs;
-	bdl.dev_list = dev_list;
-
-	spdk_thread_send_msg(init_thread(), bio_get_dev_list_internal, &bdl);
-	rc = ABT_eventual_wait(bdl.eventual, NULL);
-	if (rc != ABT_SUCCESS)
-		return dss_abterr2der(rc);
-
-	if (bdl.rc)
-		D_GOTO(out, rc = bdl.rc);
-
-	dev_list = bdl.dev_list;
-	*n_dev_list = bdl.dev_list_cnt;
-
-out:
-	rc = ABT_eventual_free(&bdl.eventual);
-	if (rc != ABT_SUCCESS)
-		rc = dss_abterr2der(rc);
-
-	return rc;
-}
-
 /*
  * Call internal method to set BIO device state to FAULTY and trigger device
  * state transition. Called from the device owner xstream.

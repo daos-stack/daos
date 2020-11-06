@@ -673,18 +673,6 @@ void bio_get_bs_state(int *blobstore_state, struct bio_xs_context *xs);
  */
 int bio_dev_set_faulty(struct bio_xs_context *xs);
 
-/*
- * Helper function to get the BIO device list from the init xstream.
- *
- * \param dev_list	[OUT]	Device list
- * \param n_dev_list	[OUT]	Device count
- * \param xs		[IN]	Xstream context
- *
- * \return			Zero on success, negative value on error
- */
-int bio_get_dev_list(d_list_t *dev_list, int *n_dev_list,
-		     struct bio_xs_context *xs);
-
 /* Function to increment CSUM media error. */
 void bio_log_csum_err(struct bio_xs_context *b, int tgt_id);
 

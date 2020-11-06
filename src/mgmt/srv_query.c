@@ -229,7 +229,7 @@ struct bio_list_devs_info {
 	int		dev_list_cnt;
 };
 
-static void
+static int
 bio_query_dev_list(void *arg)
 {
 	struct bio_list_devs_info	*list_devs_info = arg;
@@ -243,53 +243,46 @@ bio_query_dev_list(void *arg)
 	if (bxc == NULL) {
 		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
 			info->dmi_xs_id, info->dmi_tgt_id);
-		return;
+		return -DER_INVAL;
 	}
 
-	rc = bio_get_dev_list(&list_devs_info->dev_list,
-			      &list_devs_info->dev_list_cnt, bxc);
+	rc = bio_dev_list(bxc, &list_devs_info->dev_list,
+			  &list_devs_info->dev_list_cnt);
 	if (rc != 0) {
 		D_ERROR("Error getting BIO device list\n");
-		return;
+		return rc;
 	}
+
+	return 0;
 }
 
 int
 ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 {
 	struct bio_dev_info	   *dev_info = NULL, *tmp;
-	struct bio_list_devs_info  *list_devs_info = NULL;
-	ABT_thread		    thread;
+	struct bio_list_devs_info   list_devs_info = { 0 };
 	int			    buflen = 10;
 	int			    i = 0, j;
 	int			    rc = 0;
 
 	D_DEBUG(DB_MGMT, "Querying BIO & SMD device list\n");
 
-	D_ALLOC_PTR(list_devs_info);
-	if (list_devs_info == NULL) {
-		D_ERROR("Failed to allocate bio list devs info struct");
-		return -DER_NOMEM;
-	}
-	D_INIT_LIST_HEAD(&list_devs_info->dev_list);
+	D_INIT_LIST_HEAD(&list_devs_info.dev_list);
 
-	rc = dss_ult_create(bio_query_dev_list, list_devs_info, DSS_ULT_GC, 0,
-			    0, &thread);
+	rc = dss_ult_execute(bio_query_dev_list, &list_devs_info, NULL, NULL,
+			     DSS_ULT_GC, 0, 0);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT\n");
 		goto out;
 	}
 
-	ABT_thread_join(thread);
-	ABT_thread_free(&thread);
-
-	D_ALLOC_ARRAY(resp->devices, list_devs_info->dev_list_cnt);
+	D_ALLOC_ARRAY(resp->devices, list_devs_info.dev_list_cnt);
 	if (resp->devices == NULL) {
 		D_ERROR("Failed to allocate devices for resp\n");
 		return -DER_NOMEM;
 	}
 
-	d_list_for_each_entry_safe(dev_info, tmp, &list_devs_info->dev_list,
+	d_list_for_each_entry_safe(dev_info, tmp, &list_devs_info.dev_list,
 				   bdi_link) {
 		D_ALLOC_PTR(resp->devices[i]);
 		if (resp->devices[i] == NULL) {
@@ -335,7 +328,7 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 	/* Free all devices if there was an error allocating any */
 	if (rc != 0) {
 		d_list_for_each_entry_safe(dev_info, tmp,
-					   &list_devs_info->dev_list,
+					   &list_devs_info.dev_list,
 					   bdi_link) {
 			d_list_del(&dev_info->bdi_link);
 			bio_free_dev_info(dev_info);
@@ -356,11 +349,9 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 		resp->n_devices = 0;
 		goto out;
 	}
-	resp->n_devices = list_devs_info->dev_list_cnt;
+	resp->n_devices = list_devs_info.dev_list_cnt;
 
 out:
-	if (list_devs_info != NULL)
-		D_FREE(list_devs_info);
 
 	return rc;
 }
