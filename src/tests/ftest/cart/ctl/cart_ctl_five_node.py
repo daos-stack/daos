@@ -76,9 +76,9 @@ class CartCtlFiveNodeTest(Test):
 
         time.sleep(5)
 
-        for i in range(2):
-            clicmd = self.utils.build_cmd(self, self.env,
-                                          "test_clients", index=i)
+        for index in range(2):
+            clicmd = self.utils.build_cmd(
+                self, self.env, "test_clients", index=index)
             self.utils.launch_test(self, clicmd, srv_rtn)
 
         self.utils.stop_process(srv_rtn)
