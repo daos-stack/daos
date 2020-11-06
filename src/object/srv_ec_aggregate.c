@@ -62,7 +62,6 @@ struct ec_agg_pool_info {
 	uint32_t	 api_pool_version;	/* pool ver, for check leader */
 };
 
-
 /* Parity extent for the stripe undergoing aggregation.
  */
 struct ec_agg_par_extent {
