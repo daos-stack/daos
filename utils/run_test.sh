@@ -83,6 +83,7 @@ if [ -d "/mnt/daos" ]; then
     VALGRIND_CMD=""
     if [ -z "$RUN_TEST_VALGRIND" ]; then
         # Tests that do not run valgrind
+        run_test src/client/storage_estimator/common/tests/storage_estimator.sh
         run_test src/rdb/raft_tests/raft_tests.py
         go_spdk_ctests="${SL_PREFIX}/bin/nvme_control_ctests"
         if test -f "$go_spdk_ctests"; then
@@ -137,7 +138,6 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_BUILD_DIR}/src/mgmt/tests/srv_drpc_tests"
 
     # Scripts launching tests
-    run_test src/client/storage_estimator/common/tests/storage_estimator.sh
     export USE_VALGRIND=${RUN_TEST_VALGRIND}
     export VALGRIND_SUPP=${VALGRIND_SUPP}
     unset VALGRIND_CMD

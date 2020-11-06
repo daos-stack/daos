@@ -113,17 +113,6 @@
 }
 {
    <insert_a_suppression_name_here>
-   Memcheck:Addr1
-   fun:__strncpy_sse2_unaligned
-   fun:strncpy
-   fun:test_evt_various_data_size_internal
-   obj:/usr/lib64/libcmocka.so.*
-   fun:_cmocka_run_group_tests
-   fun:run_internal_tests
-   fun:main
-}
-{
-   <insert_a_suppression_name_here>
    Memcheck:Leak
    match-leak-kinds:definite
    fun:calloc
@@ -546,10 +535,10 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Leak
-   match-leak-kinds:indirect
+   ...
    fun:calloc
    fun:ent_array_resize
-   fun:ent_array_alloc.isra.*
+   fun:ent_array_alloc*
    fun:evt_ent_array_fill
    fun:evt_iter_probe_sorted
    fun:evt_iter_probe
