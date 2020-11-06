@@ -130,12 +130,12 @@ import org.slf4j.LoggerFactory;
  * <td>size of DAOS file chunk</td>
  * </tr>
  * <tr>
- * <td>{@value io.daos.fs.hadoop.Constants#DAOS_PRELOAD_SIZE}</td>
- * <td>{@value io.daos.fs.hadoop.Constants#DEFAULT_DAOS_PRELOAD_SIZE}</td>
- * <td> maximum is
- * {@value io.daos.fs.hadoop.Constants#MAXIMUM_DAOS_PRELOAD_SIZE}</td>
+ * <td>{@value io.daos.fs.hadoop.Constants#DAOS_READ_MINIMUM_SIZE}</td>
+ * <td>{@value io.daos.fs.hadoop.Constants#MINIMUM_DAOS_READ_BUFFER_SIZE}</td>
+ * <td>{@value io.daos.fs.hadoop.Constants#MINIMUM_DAOS_READ_BUFFER_SIZE} -
+ * {@value io.daos.fs.hadoop.Constants#MAXIMUM_DAOS_READ_BUFFER_SIZE}</td>
  * <td>false</td>
- * <td>size for pre-loading more than requested data from DAOS into internal buffer when read</td>
+ * <td>size of DAOS file chunk</td>
  * </tr>
  * </tbody>
  * </table>
@@ -157,10 +157,10 @@ public class DaosFileSystem extends FileSystem {
   private URI uri;
   private DaosFsClient daos;
   private int readBufferSize;
-  private int preLoadBufferSize;
   private int writeBufferSize;
   private int blockSize;
   private int chunkSize;
+  private int minReadSize;
   private String bucket;
   private boolean uns;
   private String unsPrefix;
@@ -312,7 +312,7 @@ public class DaosFileSystem extends FileSystem {
             case Constants.DAOS_WRITE_BUFFER_SIZE:
             case Constants.DAOS_BLOCK_SIZE:
             case Constants.DAOS_CHUNK_SIZE:
-            case Constants.DAOS_PRELOAD_SIZE:
+            case Constants.DAOS_READ_MINIMUM_SIZE:
               if (StringUtils.isBlank(conf.get(kv[0]))) {
                 conf.setInt(kv[0], Integer.valueOf(kv[1]));
               }
@@ -354,7 +354,11 @@ public class DaosFileSystem extends FileSystem {
       this.writeBufferSize = conf.getInt(Constants.DAOS_WRITE_BUFFER_SIZE, Constants.DEFAULT_DAOS_WRITE_BUFFER_SIZE);
       this.blockSize = conf.getInt(Constants.DAOS_BLOCK_SIZE, Constants.DEFAULT_DAOS_BLOCK_SIZE);
       this.chunkSize = conf.getInt(Constants.DAOS_CHUNK_SIZE, Constants.DEFAULT_DAOS_CHUNK_SIZE);
-      this.preLoadBufferSize = conf.getInt(Constants.DAOS_PRELOAD_SIZE, Constants.DEFAULT_DAOS_PRELOAD_SIZE);
+      this.minReadSize = conf.getInt(Constants.DAOS_READ_MINIMUM_SIZE, Constants.MINIMUM_DAOS_READ_BUFFER_SIZE);
+      if (minReadSize > readBufferSize || minReadSize <= 0) {
+        LOG.warn("overriding minReadSize to readBufferSize " + readBufferSize);
+        minReadSize = readBufferSize;
+      }
 
       checkSizeMin(readBufferSize, Constants.MINIMUM_DAOS_READ_BUFFER_SIZE,
               "internal read buffer size should be no less than ");
@@ -371,13 +375,6 @@ public class DaosFileSystem extends FileSystem {
               "internal write buffer size should not be greater than ");
       checkSizeMax(blockSize, Constants.MAXIMUM_DAOS_BLOCK_SIZE, "block size should be not be greater than ");
       checkSizeMax(chunkSize, Constants.MAXIMUM_DAOS_CHUNK_SIZE, "daos chunk size should not be greater than ");
-      checkSizeMax(preLoadBufferSize, Constants.MAXIMUM_DAOS_PRELOAD_SIZE,
-              "preload buffer size should not be greater than ");
-
-      if (preLoadBufferSize > readBufferSize) {
-        throw new IllegalArgumentException("preload buffer size " + preLoadBufferSize +
-                " should not be greater than reader buffer size, " + readBufferSize);
-      }
 
       String svrGrp = conf.get(Constants.DAOS_SERVER_GROUP);
       String poolFlags = conf.get(Constants.DAOS_POOL_FLAGS);
@@ -411,7 +408,7 @@ public class DaosFileSystem extends FileSystem {
         LOG.debug("write buffer size: " + writeBufferSize);
         LOG.debug("block size: " + blockSize);
         LOG.debug("chunk size: " + chunkSize);
-        LOG.debug("preload size: " + preLoadBufferSize);
+        LOG.debug("min read size: " + minReadSize);
       }
 
       // daosFSclient build
@@ -553,7 +550,7 @@ public class DaosFileSystem extends FileSystem {
     }
 
     return new FSDataInputStream(new DaosInputStream(
-            file, statistics, bufferSize, preLoadBufferSize));
+            file, statistics, readBufferSize, bufferSize < minReadSize ? minReadSize : bufferSize));
   }
 
   @Override
@@ -929,9 +926,5 @@ public class DaosFileSystem extends FileSystem {
     if (daos != null) {
       daos.disconnect();
     }
-  }
-
-  public boolean isPreloadEnabled() {
-    return preLoadBufferSize > 0;
   }
 }

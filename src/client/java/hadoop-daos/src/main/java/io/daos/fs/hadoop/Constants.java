@@ -60,18 +60,15 @@ public final class Constants {
 
   // the minimum and default internal read buffer size, maximum size
   public static final String DAOS_READ_BUFFER_SIZE = "fs.daos.read.buffer.size";
-  public static final int DEFAULT_DAOS_READ_BUFFER_SIZE = 8 * 1024 * 1024;
+  public static final int DEFAULT_DAOS_READ_BUFFER_SIZE = 1 * 1024 * 1024;
   public static final int MAXIMUM_DAOS_READ_BUFFER_SIZE = Integer.MAX_VALUE;
   public static final int MINIMUM_DAOS_READ_BUFFER_SIZE = 64 * 1024;
 
-  // the minimum and default preload size, maximum size
-  public static final String DAOS_PRELOAD_SIZE = "fs.daos.preload.size";
-  public static final int DEFAULT_DAOS_PRELOAD_SIZE = 4 * 1024 * 1024;
-  public static final int MAXIMUM_DAOS_PRELOAD_SIZE = Integer.MAX_VALUE;
+  public static final String DAOS_READ_MINIMUM_SIZE = "fs.daos.read.min.size";
 
   // the minimum and default internal write buffer size, maximum size
   public static final String DAOS_WRITE_BUFFER_SIZE = "fs.daos.write.buffer.size";
-  public static final int DEFAULT_DAOS_WRITE_BUFFER_SIZE = 8 * 1024 * 1024;
+  public static final int DEFAULT_DAOS_WRITE_BUFFER_SIZE = 1 * 1024 * 1024;
   public static final int MAXIMUM_DAOS_WRITE_BUFFER_SIZE = Integer.MAX_VALUE;
   public static final int MINIMUM_DAOS_WRITE_BUFFER_SIZE = 64 * 1024;
 

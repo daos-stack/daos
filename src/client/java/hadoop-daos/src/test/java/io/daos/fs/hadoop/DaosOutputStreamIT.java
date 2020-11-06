@@ -99,7 +99,7 @@ public class DaosOutputStreamIT {
     // fs.delete
     //   getFileStatus & delete & exists & create fake dir read 2, write 2
     ContractTestUtils.createAndVerifyFile(fs, getTestPath(), size - 1);
-    int readNum = (int) (size - 1) / Constants.DEFAULT_DAOS_PRELOAD_SIZE + 1;
+    int readNum = (int) (size - 1) / Constants.DEFAULT_DAOS_READ_BUFFER_SIZE + 1;
     assertEquals(readNum, statistics.getReadOps());
     assertEquals(size - 1, statistics.getBytesRead());
     int writeNum = (int) (size - 1) / Constants.DEFAULT_DAOS_WRITE_BUFFER_SIZE + 1;
