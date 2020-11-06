@@ -475,7 +475,7 @@ obj_ec_stripe_encode(daos_iod_t *iod, d_sg_list_t *sgl, uint32_t iov_idx,
 	int				 rc = 0;
 
 	if (iod->iod_type == DAOS_IOD_SINGLE)
-		obj_ec_singv_local_sz(iod->iod_size, oca, k - 1, &loc);
+		obj_ec_singv_local_sz(iod->iod_size, oca, k - 1, &loc, true);
 
 	for (i = 0; i < k; i++) {
 		c_data[i] = NULL;
