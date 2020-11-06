@@ -336,6 +336,7 @@ print_key_value(char *hdr, crt_iv_key_t *iv_key, d_sg_list_t *iv_value)
 	rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
 		      "    %s:", hdr);
 	if (rc > 0) {
+		/* Avoid checkpatch warning */
 		rindex += rc;
 	}
 
@@ -343,6 +344,7 @@ print_key_value(char *hdr, crt_iv_key_t *iv_key, d_sg_list_t *iv_value)
 		rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex, "%s",
 			     "key=NULL");
 		if (rc > 0) {
+			/* Avoid checkpatch warning */
 			rindex += rc;
 		}
 	} else {
@@ -351,6 +353,7 @@ print_key_value(char *hdr, crt_iv_key_t *iv_key, d_sg_list_t *iv_value)
 			rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
 				     "%s", "key=EMPTY");
 			if (rc > 0) {
+				/* Avoid checkpatch warning */
 				rindex += rc;
 			}
 		} else {
@@ -358,6 +361,7 @@ print_key_value(char *hdr, crt_iv_key_t *iv_key, d_sg_list_t *iv_value)
 				"key=[%d:%d]", key_struct->rank,
 				key_struct->key_id);
 			if (rc > 0) {
+				/* Avoid checkpatch warning */
 				rindex += rc;
 			}
 		}
@@ -372,6 +376,7 @@ print_key_value(char *hdr, crt_iv_key_t *iv_key, d_sg_list_t *iv_value)
 		rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
 			     "%s", "value=NULL");
 		if (rc > 0) {
+			/* Avoid checkpatch warning */
 			rindex += rc;
 		}
 	} else {
@@ -382,12 +387,14 @@ print_key_value(char *hdr, crt_iv_key_t *iv_key, d_sg_list_t *iv_value)
 			rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
 				     "%s", "value=EMPTY");
 			if (rc > 0) {
+				/* Avoid checkpatch warning */
 				rindex += rc;
 			}
-		 } else {
+		} else {
 			rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
 				     "value='%s'", value_struct->data);
 			if (rc > 0) {
+				/* Avoid checkpatch warning */
 				rindex += rc;
 			}
 		}
@@ -1048,6 +1055,7 @@ iv_set_grp_version(crt_rpc_t *rpc)
 
 	/* implement code here */
 	if (g_timing == 0) {
+		/* Set grpup version. Avoid checpatch warning */
 		crt_group_version_set(grp, g_grp_version);
 	}
 

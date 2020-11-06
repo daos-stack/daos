@@ -156,6 +156,7 @@ test_iv_invalidate(struct iv_key_struct *key, char *arg_sync)
 
 	rc = create_sync(arg_sync, &sync);
 	if (rc != 0) {
+		/* Avoid checkpatch warning */
 		goto exit_code;
 	}
 
@@ -361,6 +362,7 @@ test_iv_update(struct iv_key_struct *key, char *str_value, bool value_is_hex,
 
 	rc = create_sync(arg_sync, &sync);
 	if (rc != 0) {
+		/* Avoid checkpatch warning */
 		goto exit_code;
 	}
 
@@ -420,6 +422,7 @@ test_iv_set_grp_version(char *arg_version, char *arg_timing)
 
 	/* decode timing for changing version */
 	if (arg_timing != NULL) {
+		/* Avoid check patch warning */
 		time = strtol(arg_timing, NULL, 10);
 	}
 
@@ -578,6 +581,7 @@ int main(int argc, char **argv)
 			return -1;
 		}
 	} else if (strcmp(arg_op, "invalidate") == 0) {
+		/* Avoid check patch warning */
 		cur_op = OP_INVALIDATE;
 	} else if (strcmp(arg_op, "shutdown") == 0) {
 		if (arg_key != NULL) {
@@ -587,8 +591,7 @@ int main(int argc, char **argv)
 		cur_op = OP_SHUTDOWN;
 	} else if (strcmp(arg_op, "set_grp_version") == 0) {
 		if (arg_value == 0) {
-			print_usage("Version must be supplied for"
-				    " set_grp_version");
+			print_usage("Version must be supplied");
 			return -1;
 		}
 		cur_op = OP_SET_GRP_VERSION;
@@ -649,7 +652,7 @@ int main(int argc, char **argv)
 	g_server_ep.ep_rank = atoi(arg_rank);
 	g_server_ep.ep_tag = 0;
 
-	if (arg_key != NULL && 
+	if (arg_key != NULL &&
 	    sscanf(arg_key, "%d:%d", &iv_key.rank, &iv_key.key_id) != 2) {
 		print_usage("Bad key format, should be rank:id");
 		return -1;
