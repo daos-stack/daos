@@ -24,6 +24,7 @@ hosts: !mux
       - boro-B
     test_clients:
       - boro-C
+timeout: 600
 tests: !mux
   self_np:
     name: self_test_np

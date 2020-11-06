@@ -24,6 +24,7 @@ hosts: !mux
       - boro-E
     test_clients:
       - boro-A
+timeout: 600
 tests: !mux
   ctl:
     name: ctl_basic
