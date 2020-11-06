@@ -75,6 +75,9 @@ class SSDSocketTest(TestWithServers):
         self.log.debug("----- debug_sys -----")
         self.debug_sys()
 
+        self.log.debug("----- Check if PCI Address appears in hwloc-ls -----")
+        run_command(command="hwloc-ls --whole-io --verbose")
+
         # For every PCI address, verify its Socket ID against its NUMA socket
         # ID.
         errors = []
