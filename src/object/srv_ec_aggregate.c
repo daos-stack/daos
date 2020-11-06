@@ -129,7 +129,6 @@ struct ec_agg_extent {
 	daos_epoch_t	ae_epoch; /* epoch for extent   */
 };
 
-
 /* Determines if the extent carries over into the next stripe.
  */
 static unsigned int
@@ -170,7 +169,7 @@ agg_clear_extents(struct ec_agg_entry *agg_entry)
 				   ae_link) {
 		/* Check for carry-over extent. */
 		tail = agg_carry_over(agg_entry, agg_extent);
-		/* At most one extent should carry over.( */
+		/* At most one extent should carry over. */
 		if (tail) {
 			D_ASSERT(ptail == 0U);
 			ptail = tail;
@@ -349,6 +348,7 @@ agg_fetch_data_stripe(struct ec_agg_entry *entry)
 	rc = agg_prep_sgl(entry);
 	if (rc)
 		goto out;
+
 	recx.rx_idx = entry->ae_cur_stripe.as_stripenum * k * len;
 	recx.rx_nr = k * len;
 	iod.iod_name = entry->ae_akey;
