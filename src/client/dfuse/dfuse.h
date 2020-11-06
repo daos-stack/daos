@@ -68,8 +68,6 @@ struct dfuse_projection_info {
 	uint32_t			dpi_max_write;
 	/** Hash table of open inodes, this matches kernel ref counts */
 	struct d_hash_table		dpi_iet;
-	/** Hash table of all known/seen inodes */
-	struct d_hash_table		dpi_irt;
 	/** Next available inode number */
 	ATOMIC uint64_t			dpi_ino_next;
 	/* Event queue for async events */
@@ -190,6 +188,7 @@ struct dfuse_dfs {
 	daos_handle_t		dfs_coh;
 	daos_cont_info_t	dfs_co_info;
 	ino_t			dfs_root;
+	ino_t			dfs_ino;
 	double			dfs_attr_timeout;
 	/* List of dfuse_dfs entries in the dfuse_pool */
 	d_list_t		dfs_list;
@@ -473,6 +472,11 @@ struct dfuse_inode_entry {
 	struct stat		ie_stat;
 
 	dfs_obj_t		*ie_obj;
+
+	/** DAOS object ID of the dfs object.  Used for uniquely identifying
+	 * files
+	 */
+	daos_obj_id_t		ie_oid;
 
 	/** The name of the entry, relative to the parent.
 	 * This would have been valid when the inode was first observed

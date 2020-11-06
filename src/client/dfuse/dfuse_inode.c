@@ -34,35 +34,11 @@ dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
 		   daos_obj_id_t *oid,
 		   ino_t *_ino)
 {
-	struct dfuse_inode_record	*dfir;
-	d_list_t			*rlink;
-	int				rc = 0;
+	if (oid == NULL)
+		return EIO;
 
-	D_ALLOC_PTR(dfir);
-	if (!dfir)
-		D_GOTO(out, rc = ENOMEM);
-
-	if (oid) {
-		dfir->ir_id.irid_oid.lo = oid->lo;
-		dfir->ir_id.irid_oid.hi = oid->hi;
-	}
-
-	dfir->ir_ino = atomic_fetch_add_relaxed(&fs_handle->dpi_ino_next, 1);
-	dfir->ir_id.irid_dfs = dfs;
-
-	rlink = d_hash_rec_find_insert(&fs_handle->dpi_irt,
-				       &dfir->ir_id,
-				       sizeof(dfir->ir_id),
-				       &dfir->ir_htl);
-
-	if (rlink != &dfir->ir_htl) {
-		D_FREE(dfir);
-		dfir = container_of(rlink, struct dfuse_inode_record, ir_htl);
-	}
-
-	*_ino = dfir->ir_ino;
-out:
-	return rc;
+	*_ino = (oid->hi ^ oid->lo) ^ (dfs->dfs_root << 48);
+	return 0;
 };
 
 /* Check a DFS to see if an inode is already in place for it.  This is used
@@ -79,25 +55,11 @@ dfuse_check_for_inode(struct dfuse_projection_info *fs_handle,
 		      struct dfuse_dfs *dfs,
 		      struct dfuse_inode_entry **_entry)
 {
-	struct dfuse_inode_record	*dfir;
-	struct dfuse_inode_record_id	ir_id = {0};
 	d_list_t			*rlink;
 	struct dfuse_inode_entry	*entry;
 
-	ir_id.irid_dfs = dfs;
-
-	rlink = d_hash_rec_find(&fs_handle->dpi_irt,
-				&ir_id,
-				sizeof(ir_id));
-
-	if (!rlink)
-		return -DER_NONEXIST;
-
-	dfir = container_of(rlink, struct dfuse_inode_record, ir_htl);
-
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet,
-				&dfir->ir_ino,
-				sizeof(dfir->ir_ino));
+				&dfs->dfs_ino, sizeof(dfs->dfs_ino));
 	if (!rlink)
 		return -DER_NONEXIST;
 

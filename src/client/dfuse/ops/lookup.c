@@ -34,7 +34,6 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 {
 	struct fuse_entry_param	entry = {0};
 	d_list_t		*rlink;
-	daos_obj_id_t		oid;
 	int			rc;
 
 	D_ASSERT(ie->ie_parent);
@@ -44,13 +43,15 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
 
 	if (ie->ie_stat.st_ino == 0) {
-		rc = dfs_obj2id(ie->ie_obj, &oid);
+
+		rc = dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 		if (rc)
-			D_GOTO(err, rc);
-		rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, &oid,
+			D_GOTO(out_decref, rc);
+
+		rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, &ie->ie_oid,
 					&ie->ie_stat.st_ino);
 		if (rc)
-			D_GOTO(err, rc);
+			D_GOTO(out_decref, rc);
 	}
 
 	entry.attr = ie->ie_stat;
@@ -74,6 +75,31 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		 */
 
 		/* Update the existing object with the new name/parent */
+
+		DFUSE_TRA_DEBUG(ie, "inode dfs %p %ld hi %#lx lo %#lx",
+				inode->ie_dfs,
+				inode->ie_dfs->dfs_root,
+				inode->ie_oid.hi,
+				inode->ie_oid.lo);
+
+		DFUSE_TRA_DEBUG(ie, "inode dfs %p %ld hi %#lx lo %#lx",
+				ie->ie_dfs,
+				ie->ie_dfs->dfs_root,
+				ie->ie_oid.hi,
+				ie->ie_oid.lo);
+
+
+		if (ie->ie_dfs != inode->ie_dfs) {
+			DFUSE_TRA_ERROR(inode, "Duplicate inode found (dfs)");
+			D_GOTO(out_err, rc = EIO);
+		}
+
+		/* Check the OID */
+		if (ie->ie_oid.lo != inode->ie_oid.lo ||
+			ie->ie_oid.hi != inode->ie_oid.hi) {
+			DFUSE_TRA_ERROR(inode, "Duplicate inode found (dfs)");
+			D_GOTO(out_err, rc = EIO);
+		}
 
 		DFUSE_TRA_DEBUG(inode,
 				"Maybe updating parent inode %lu dfs_root %lu",
@@ -104,10 +130,11 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	else
 		DFUSE_REPLY_ENTRY(ie, req, entry);
 	return;
-err:
+out_decref:
+	d_hash_rec_decref(&fs_handle->dpi_iet, &ie->ie_htl);
+out_err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	dfs_release(ie->ie_obj);
-	d_hash_rec_decref(&fs_handle->dpi_iet, &ie->ie_htl);
 }
 
 /* Check for and set a unified namespace entry point.
@@ -123,7 +150,6 @@ static int
 check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		 struct dfuse_inode_entry *ie)
 {
-	daos_obj_id_t		oid;
 	int			rc;
 	char			str[DUNS_MAX_XATTR_LEN];
 	daos_size_t		str_len = DUNS_MAX_XATTR_LEN;
@@ -231,7 +257,13 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		}
 		new_cont = true;
 		ie->ie_root = true;
+
+		dfs->dfs_ino = atomic_fetch_add_relaxed(&fs_handle->dpi_ino_next, 1);
+		dfs->dfs_root = dfs->dfs_ino;
+		dfs->dfs_dfp = dfp;
 	}
+
+	ie->ie_stat.st_ino = dfs->dfs_ino;
 
 	rc = dfs_release(ie->ie_obj);
 	if (rc) {
@@ -249,18 +281,6 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	}
 
 	ie->ie_dfs = dfs;
-
-	rc = dfs_obj2id(ie->ie_obj, &oid);
-	if (rc)
-		D_GOTO(out_umount, ret = rc);
-
-	rc = dfuse_lookup_inode(fs_handle, dfs, NULL,
-				&ie->ie_stat.st_ino);
-	if (rc)
-		D_GOTO(out_umount, ret = rc);
-
-	dfs->dfs_root = ie->ie_stat.st_ino;
-	dfs->dfs_dfp = dfp;
 
 	DFUSE_TRA_INFO(dfs, "UNS entry point activated, root %lu",
 		       dfs->dfs_root);
