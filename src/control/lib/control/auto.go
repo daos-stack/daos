@@ -44,12 +44,13 @@ const (
 
 // NetDevClass constants
 const (
+	NetDevAny        NetDevClass = 0 // overwrite use of NET/ROM
 	NetDevEther      NetDevClass = 1
 	NetDevInfiniband NetDevClass = 32
 )
 
 // NetDevClass is a type alias for network device classes.
-type NetDevClass uint
+type NetDevClass uint32
 
 func (ndc NetDevClass) String() string {
 	switch ndc {
@@ -57,6 +58,8 @@ func (ndc NetDevClass) String() string {
 		return "ethernet"
 	case NetDevInfiniband:
 		return "infiniband"
+	case NetDevAny:
+		return "best-available"
 	default:
 		return "unsupported"
 	}
@@ -71,7 +74,7 @@ type (
 		msRequest
 		NumPmem  int
 		NumNvme  int
-		NetClass *NetDevClass
+		NetClass NetDevClass
 		Client   UnaryInvoker
 		HostList []string
 		Log      logging.Logger
@@ -149,7 +152,7 @@ func (req *ConfigGenerateReq) getSingleNetworkSet(ctx context.Context) (*HostFab
 	return scanResp.HostFabrics[scanResp.HostFabrics.Keys()[0]], nil
 }
 
-type classInterfaces map[uint][]*HostFabricInterface
+type classInterfaces map[uint32][]*HostFabricInterface
 
 // add interface to bucket corresponding to provider and network class type,
 // verify NUMA node binding doesn't match existing entry in bucket
@@ -185,7 +188,7 @@ func (req *ConfigGenerateReq) checkNetwork(ctx context.Context) (*config.Server,
 				networkSet.HostSet)
 		}
 
-		req.NumPmem = networkSet.HostFabric.NumaCount
+		req.NumPmem = int(networkSet.HostFabric.NumaCount)
 		req.Log.Debugf("minimum pmem/hfi devices required set to numa count %d",
 			req.NumPmem)
 	}
@@ -214,11 +217,15 @@ func (req *ConfigGenerateReq) checkNetwork(ctx context.Context) (*config.Server,
 	buckets := make(map[string]classInterfaces)
 	for _, iface := range interfaces {
 		nc := NetDevClass(iface.NetDevClass)
-		if nc.String() == "unsupported" {
-			continue
-		}
-		if req.NetClass != nil && *req.NetClass != nc {
-			continue
+		switch nc {
+		case NetDevEther, NetDevInfiniband:
+			switch req.NetClass {
+			case NetDevAny, nc:
+			default:
+				continue // iface class not requested
+			}
+		default:
+			continue // iface class unsupported
 		}
 
 		if _, exists := buckets[iface.Provider]; !exists {
@@ -233,21 +240,16 @@ func (req *ConfigGenerateReq) checkNetwork(ctx context.Context) (*config.Server,
 	}
 
 	if !complete {
-		class := "best-available"
-		if req.NetClass != nil {
-			class = NetDevClass(*req.NetClass).String()
-		}
-
 		return nil, errors.Errorf(
 			"insufficient matching %s network interfaces, want %d got %d %v",
-			class, req.NumPmem, len(matching), matching)
+			req.NetClass, req.NumPmem, len(matching), matching)
 	}
 
 	req.Log.Debugf("network interfaces: %v", matching)
 
 	cfg := config.DefaultServer()
 	for _, iface := range matching {
-		nn := iface.NumaNode
+		nn := uint(iface.NumaNode)
 		iocfg := ioserver.NewConfig()
 		iocfg.Fabric = ioserver.FabricConfig{
 			Provider:  iface.Provider,

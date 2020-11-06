@@ -81,7 +81,7 @@ func (cmd *netScanCmd) Execute(_ []string) error {
 		hf.AddInterface(&control.HostFabricInterface{
 			Provider: fi.Provider,
 			Device:   fi.DeviceName,
-			NumaNode: fi.NUMANode,
+			NumaNode: uint32(fi.NUMANode),
 		})
 	}
 

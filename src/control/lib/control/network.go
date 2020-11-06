@@ -45,9 +45,9 @@ import (
 type HostFabricInterface struct {
 	Provider    string
 	Device      string
-	NumaNode    uint
-	Priority    uint
-	NetDevClass uint
+	NumaNode    uint32
+	Priority    uint32
+	NetDevClass uint32
 }
 
 func (hfi *HostFabricInterface) String() string {
@@ -58,7 +58,7 @@ func (hfi *HostFabricInterface) String() string {
 type HostFabric struct {
 	Interfaces []*HostFabricInterface `hash:"set"`
 	Providers  []string               `hash:"set"`
-	NumaCount  int
+	NumaCount  uint32
 }
 
 // HashKey returns a uint64 value suitable for use as a key into
@@ -147,7 +147,7 @@ func (nsr *NetworkScanResp) addHostResponse(hr *HostResponse) (err error) {
 		hf.Providers = append(hf.Providers, hfi.Provider)
 	}
 	hf.Providers = common.DedupeStringSlice(hf.Providers)
-	hf.NumaCount = int(pbResp.Numacount)
+	hf.NumaCount = uint32(pbResp.Numacount)
 
 	if nsr.HostFabrics == nil {
 		nsr.HostFabrics = make(HostFabricMap)

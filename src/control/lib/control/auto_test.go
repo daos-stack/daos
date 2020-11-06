@@ -255,6 +255,27 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 			Message: fabIfs1,
 		},
 	}
+	typicalFabIfs := &ctlpb.NetworkScanResp{
+		Interfaces: []*ctlpb.FabricInterface{
+			{Provider: "ofi+psm2", Device: "ib0", Numanode: 0, Priority: 0, Netdevclass: 32},
+			{Provider: "ofi+psm2", Device: "ib1", Numanode: 1, Priority: 1, Netdevclass: 32},
+			{Provider: "ofi+verbs;ofi_rxm", Device: "ib0", Numanode: 0, Priority: 2, Netdevclass: 32},
+			{Provider: "ofi+verbs;ofi_rxm", Device: "ib1", Numanode: 1, Priority: 3, Netdevclass: 32},
+			{Provider: "ofi+verbs;ofi_rxm", Device: "eth0", Numanode: 0, Priority: 4, Netdevclass: 1},
+			{Provider: "ofi+tcp;ofi_rxm", Device: "ib0", Numanode: 0, Priority: 5, Netdevclass: 32},
+			{Provider: "ofi+tcp;ofi_rxm", Device: "ib1", Numanode: 1, Priority: 6, Netdevclass: 32},
+			{Provider: "ofi+tcp;ofi_rxm", Device: "eth0", Numanode: 0, Priority: 7, Netdevclass: 1},
+			{Provider: "ofi+verbs", Device: "ib0", Numanode: 0, Priority: 8, Netdevclass: 32},
+			{Provider: "ofi+verbs", Device: "ib1", Numanode: 1, Priority: 9, Netdevclass: 32},
+			{Provider: "ofi+tcp", Device: "ib0", Numanode: 0, Priority: 10, Netdevclass: 32},
+			{Provider: "ofi+tcp", Device: "ib1", Numanode: 1, Priority: 11, Netdevclass: 32},
+			{Provider: "ofi+tcp", Device: "eth0", Numanode: 0, Priority: 12, Netdevclass: 1},
+			{Provider: "ofi+sockets", Device: "ib0", Numanode: 0, Priority: 13, Netdevclass: 32},
+			{Provider: "ofi+sockets", Device: "ib1", Numanode: 1, Priority: 14, Netdevclass: 32},
+			{Provider: "ofi+sockets", Device: "eth0", Numanode: 0, Priority: 15, Netdevclass: 1},
+		},
+		Numacount: 2,
+	}
 	dualHostResp := func(r1, r2 *ctlpb.NetworkScanResp) []*HostResponse {
 		return []*HostResponse{
 			{
@@ -272,12 +293,10 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 	}
 	numa0 := uint(0)
 	numa1 := uint(1)
-	nde := NetDevEther
-	ndi := NetDevInfiniband
 
 	for name, tc := range map[string]struct {
 		numPmem       int
-		netDevClass   *NetDevClass
+		netDevClass   NetDevClass
 		uErr          error
 		hostResponses []*HostResponse
 		expConfigOut  *config.Server
@@ -332,7 +351,7 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 		},
 		"one min pmem and two numa but only single interface select ethernet": {
 			numPmem:       1,
-			netDevClass:   &nde,
+			netDevClass:   NetDevEther,
 			hostResponses: dualHostRespSame(fabIfs3),
 			expConfigOut: config.DefaultServer().WithServers(
 				ioserver.NewConfig().
@@ -356,7 +375,7 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 					WithPinnedNumaNode(&numa1)),
 		},
 		"dual ib interfaces but ethernet selected": {
-			netDevClass:   &nde,
+			netDevClass:   NetDevEther,
 			hostResponses: dualHostRespSame(fabIfs4),
 			expCheckErr:   errors.New("insufficient matching ethernet network"),
 		},
@@ -375,7 +394,7 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 					WithPinnedNumaNode(&numa1)),
 		},
 		"dual eth interfaces but infiniband selected": {
-			netDevClass:   &ndi,
+			netDevClass:   NetDevInfiniband,
 			hostResponses: dualHostRespSame(fabIfs5),
 			expCheckErr:   errors.New("insufficient matching infiniband network"),
 		},
@@ -383,6 +402,20 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 			numPmem:       4,
 			hostResponses: dualHostRespSame(fabIfs4),
 			expCheckErr:   errors.New("insufficient matching best-available network"),
+		},
+		"no min pmem and two numa with typical fabric scan output": {
+			hostResponses: dualHostRespSame(typicalFabIfs),
+			expConfigOut: config.DefaultServer().WithServers(
+				ioserver.NewConfig().
+					WithFabricInterface("ib0").
+					WithFabricInterfacePort(31416).
+					WithFabricProvider("ofi+psm2").
+					WithPinnedNumaNode(&numa0),
+				ioserver.NewConfig().
+					WithFabricInterface("ib1").
+					WithFabricInterfacePort(32416).
+					WithFabricProvider("ofi+psm2").
+					WithPinnedNumaNode(&numa1)),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

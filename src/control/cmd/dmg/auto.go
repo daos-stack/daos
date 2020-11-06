@@ -55,21 +55,20 @@ type configGenCmd struct {
 func (cmd *configGenCmd) Execute(_ []string) error {
 	ctx := context.Background()
 
-	netClass := new(control.NetDevClass)
-	switch cmd.NetClass {
-	case "ethernet":
-		*netClass = control.NetDevEther
-	case "infiniband":
-		*netClass = control.NetDevInfiniband
-	}
 	req := &control.ConfigGenerateReq{
 		NumPmem:  cmd.NumPmem,
 		NumNvme:  cmd.NumNvme,
-		NetClass: netClass,
 		HostList: cmd.hostlist,
 		Client:   cmd.ctlInvoker,
 		Log:      cmd.log,
 	}
+	switch cmd.NetClass {
+	case "ethernet":
+		req.NetClass = control.NetDevEther
+	case "infiniband":
+		req.NetClass = control.NetDevInfiniband
+	}
+
 	resp, err := control.ConfigGenerate(ctx, req)
 
 	if cmd.jsonOutputEnabled() {

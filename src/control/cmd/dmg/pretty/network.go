@@ -35,10 +35,11 @@ import (
 type hfiMap map[uint]map[string][]string
 
 func (h hfiMap) addInterface(fi *control.HostFabricInterface) {
-	if _, ok := h[fi.NumaNode]; !ok {
-		h[fi.NumaNode] = make(map[string][]string)
+	nn := uint(fi.NumaNode)
+	if _, ok := h[nn]; !ok {
+		h[nn] = make(map[string][]string)
 	}
-	h[fi.NumaNode][fi.Provider] = append(h[fi.NumaNode][fi.Provider], fi.Device)
+	h[nn][fi.Provider] = append(h[nn][fi.Provider], fi.Device)
 }
 
 // PrintHostFabricMap generates a human-readable representation of the supplied
