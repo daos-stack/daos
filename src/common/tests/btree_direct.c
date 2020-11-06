@@ -794,6 +794,7 @@ static void
 sk_btr_destroy_keys(struct kv_node *kv, unsigned int key_nr)
 {
 	int	 i;
+
 	for (i = 0; i < key_nr; i++) {
 		D_FREE(kv[i].key.iov_buf);
 		D_FREE(kv[i].val.iov_buf);
