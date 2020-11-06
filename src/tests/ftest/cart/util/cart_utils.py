@@ -38,9 +38,7 @@ import logging
 import cart_logparse
 import cart_logtest
 
-#pylint: disable=import-error
 from write_host_file import write_host_file
-#pylint: enable=import-error
 
 class CartUtils():
     """CartUtils Class"""
