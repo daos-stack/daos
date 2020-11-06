@@ -178,12 +178,9 @@ ll_loop_fn(struct dfuse_info *dfuse_info)
 {
 	int			ret;
 
-	/*Blocking*/
+	/* Blocking */
 	if (dfuse_info->di_threaded) {
-		struct fuse_loop_config config = {.max_idle_threads = 10};
-
-		ret = fuse_session_loop_mt(dfuse_info->di_session,
-					   &config);
+		ret = dfuse_loop(dfuse_info);
 	} else {
 		ret = fuse_session_loop(dfuse_info->di_session);
 	}

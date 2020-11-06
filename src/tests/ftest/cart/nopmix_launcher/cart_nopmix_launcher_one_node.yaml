@@ -13,6 +13,7 @@ hosts: !mux
       - boro-A
     test_clients:
       - boro-A
+timeout: 600
 tests: !mux
   no_pmix_launcher:
     name: no_pmix_launcher
