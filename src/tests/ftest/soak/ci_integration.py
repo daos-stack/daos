@@ -22,6 +22,8 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import os
+import subprocess
+import re
 from apricot import TestWithServers
 from general_utils import pcmd
 from command_utils import CommandFailure
@@ -29,6 +31,7 @@ from daos_utils import DaosCommand
 from ClusterShell.NodeSet import NodeSet
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
+
 
 class JavaCIIntegration(TestWithServers):
     """Test class Description:
@@ -71,6 +74,28 @@ class JavaCIIntegration(TestWithServers):
         container.create()
         return container
 
+    def java_version(self):
+        """Check if java is installed.
+
+        Returns:
+            bool: whether java is installed or not.
+
+        """
+
+        # checking java install
+        try:
+            result = subprocess.check_output(['java', '-version'],
+                                             stderr=subprocess.STDOUT)
+            self.log.info(result)
+        except subprocess.CalledProcessError as err:
+            self.fail("Java not installed \n {}".format(err))
+        # looking for a string something like this 1.8.0_262-b10
+        pattern = r"(\d+\.\d+\.\d+\_\d+\-[a-b]\d+)"
+
+        # replacing '-' and '-' with '.' and returning the result
+        return re.search(pattern,
+                         result).groups()[0].replace("_", ".").replace("-", ".")
+
     def test_java_hadoop_it(self):
         """Jira ID: DAOS-4093
 
@@ -81,31 +106,33 @@ class JavaCIIntegration(TestWithServers):
 
         :avocado: tags=all,pr,hw,small,javaciintegration
         """
-
+        # create pool and container
         self.pool = self._create_pool()
         self.container = self._create_cont(self.pool)
 
         pool_uuid = self.pool.uuid
         cont_uuid = self.container.uuid
 
+        # obtain java version
+        version = self.java_version()
+
+        # generate jar files
         jdir = "{}/java".format(os.getcwd())
         cmd = "cd {};".format(jdir)
-        cmd += "mvn clean install -DskipITs"
+        cmd += "mvn clean install -DskipITs -Ddaos.install.path={}".\
+                format(self.prefix)
         self.execute_cmd(cmd, 180)
 
+        # run intergration-test
         cmd = "cd {};".format(jdir)
         cmd += " export LD_PRELOAD=/usr/lib/jvm/"
-        cmd += "java-1.8.0-openjdk-1.8.0.242.b08-0.el7_7.x86_64/"
+        cmd += "java-{}-openjdk-{}-0.el7_8.x86_64/".format(version[:-8],
+                                                           version)
         cmd += "jre/lib/amd64/libjsig.so;"
-        cmd += " mvn clean integration-test"
+        cmd += " mvn clean integration-test -Ddaos.install.path={}".\
+                format(self.prefix)
         cmd += " -Dpool_id={}  -Dcont_id={}".format(pool_uuid, cont_uuid)
         self.execute_cmd(cmd, 300)
-
-        #cmd = "cp {}/daos-java/target/surefire-reports/*.xml {}".format(
-        #          jdir, self.outputdir)
-        #cmd += "cp {}/hadoop-daos/target/surefire-reports/*.xml {}".format(
-        #           jdir, self.outputdir)
-        #self.execute_cmd(cmd, 60)
 
     def execute_cmd(self, cmd, timeout):
         """Execute command on the host clients
