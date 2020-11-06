@@ -490,6 +490,7 @@ sk_btr_kv_operate(void **state)
 		switch (opc) {
 		default:
 			fail_msg("Invalid opcode\n");
+			break;
 		case BTR_OPC_UPDATE:
 			d_iov_set(&val_iov, val, strlen(val) + 1);
 			rc = dbtree_update(sk_toh, &key_iov, &val_iov);
