@@ -901,7 +901,8 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 		goto out;
 	}
 
-	if (!daos_oclass_is_ec(entry->ie_oid.id_pub, &oca)) {
+	if (!daos_oclass_is_ec(entry->ie_oid.id_pub, &oca) ||
+	    oca->u.ec.e_p > 1) {
 		*acts |= VOS_ITER_CB_SKIP;
 		goto out;
 	}
