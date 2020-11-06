@@ -526,7 +526,7 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 	}
 
 	*dev_cnt = 0;
-	/* Scan all plugged devices */
+	/* Scan all devices presented in bio_bdev list */
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
 		s_info = find_smd_dev(d_bdev->bb_uuid, &s_dev_list);
 
@@ -536,7 +536,8 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 			rc = -DER_NOMEM;
 			goto out;
 		}
-		b_info->bdi_flags |= NVME_DEV_FL_PLUGGED;
+		if (!d_bdev->bb_removed)
+			b_info->bdi_flags |= NVME_DEV_FL_PLUGGED;
 		d_list_add_tail(&b_info->bdi_link, dev_list);
 		(*dev_cnt)++;
 
@@ -547,8 +548,17 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 		}
 	}
 
-	/* Scan remaining SMD devices not presented in plugged list */
+	/*
+	 * Scan remaining SMD devices not presented bio_bdev list.
+	 *
+	 * As for current implementation, there won't be any device
+	 * present in SMD but not in bio_bdev list, here we just do
+	 * it for sanity check.
+	 */
 	d_list_for_each_entry(s_info, &s_dev_list, sdi_link) {
+		D_ERROR("Fond unexpected device "DF_UUID" in SMD\n",
+			DP_UUID(s_info->sdi_id));
+
 		b_info = alloc_dev_info(s_info->sdi_id, s_info);
 		if (b_info == NULL) {
 			D_ERROR("Failed to allocate device info\n");
