@@ -602,6 +602,7 @@ void
 swim_fini(struct swim_context *ctx)
 {
 	struct swim_item *next, *item;
+	int    rc;
 
 	if (ctx == NULL)
 		return;
@@ -638,7 +639,10 @@ swim_fini(struct swim_context *ctx)
 		item = next;
 	}
 
-	SWIM_MUTEX_DESTROY(ctx->sc_mutex);
+	rc = SWIM_MUTEX_DESTROY(ctx->sc_mutex);
+	if (rc != 0)
+		D_DEBUG(DB_TRACE, "Failed to destroy lock %d %s",
+			rc, strerror(rc));
 
 	D_FREE(ctx);
 }

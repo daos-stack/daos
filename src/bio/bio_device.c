@@ -48,17 +48,9 @@ revive_dev(struct bio_bdev *d_bdev)
 
 	bbs = d_bdev->bb_blobstore;
 	D_ASSERT(bbs != NULL);
-
-	/* Read bb_state from init xstream */
-	if (bbs->bb_state != BIO_BS_STATE_OUT) {
-		D_ERROR("Old dev "DF_UUID" isn't in %s state (%s)\n",
-			DP_UUID(d_bdev->bb_uuid),
-			bio_state_enum_to_str(BIO_BS_STATE_OUT),
-			bio_state_enum_to_str(bbs->bb_state));
-		return -DER_BUSY;
-	}
-
+	D_ASSERT(bbs->bb_state == BIO_BS_STATE_OUT);
 	D_ASSERT(owner_thread(bbs) != NULL);
+
 	spdk_thread_send_msg(owner_thread(bbs), setup_bio_bdev, d_bdev);
 
 	return 0;
@@ -318,7 +310,7 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 			DP_UUID(new_dev->bb_uuid), new_dev->bb_name);
 		return -DER_INVAL;
 	} else if (new_dev->bb_replacing) {
-		D_ERROR("New dev "DF_UUID"(%s) is being replaced\n",
+		D_ERROR("New dev "DF_UUID"(%s) is in replacing\n",
 			DP_UUID(new_dev->bb_uuid), new_dev->bb_name);
 		return -DER_BUSY;
 	}
@@ -332,7 +324,7 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 	rc = smd_pool_list(&pool_list, &pool_cnt);
 	if (rc) {
 		D_ERROR("Failed to list pools in SMD. "DF_RC"\n", DP_RC(rc));
-		goto out;
+		goto pool_list_out;
 	}
 
 	rc = create_old_blobs(xs_ctxt, old_info, new_dev, &pool_list,
@@ -373,6 +365,7 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 
 out:
 	free_blob_list(xs_ctxt, &blob_list, new_dev);
+pool_list_out:
 	free_pool_list(&pool_list);
 	if (new_dev)
 		new_dev->bb_replacing = false;
@@ -385,6 +378,7 @@ bio_replace_dev(struct bio_xs_context *xs_ctxt, uuid_t old_dev_id,
 {
 	struct smd_dev_info	*old_info = NULL, *new_info = NULL;
 	struct bio_bdev		*old_dev, *new_dev;
+	struct bio_blobstore	*bbs;
 	int			 rc;
 
 	/* Caller ensures the request handling ULT created on init xstream */
@@ -413,16 +407,22 @@ bio_replace_dev(struct bio_xs_context *xs_ctxt, uuid_t old_dev_id,
 		goto out;
 	}
 
-	/* Change a faulty device back to normal, it's usually for testing */
-	if (uuid_compare(old_dev_id, new_dev_id) == 0) {
-		rc = revive_dev(old_dev);
+	bbs = old_dev->bb_blobstore;
+	D_ASSERT(bbs != NULL);
+
+	/* Read bb_state from init xstream */
+	if (bbs->bb_state != BIO_BS_STATE_OUT) {
+		D_ERROR("Old dev "DF_UUID" isn't in %s state (%s)\n",
+			DP_UUID(old_dev->bb_uuid),
+			bio_state_enum_to_str(BIO_BS_STATE_OUT),
+			bio_state_enum_to_str(bbs->bb_state));
+		rc = -DER_BUSY;
 		goto out;
 	}
 
-	if (old_dev->bb_desc != NULL) {
-		D_INFO("Old Dev "DF_UUID"(%s) isn't torndown\n",
-		       DP_UUID(old_dev->bb_uuid), old_dev->bb_name);
-		rc = -DER_BUSY;
+	/* Change a faulty device back to normal, it's usually for testing */
+	if (uuid_compare(old_dev_id, new_dev_id) == 0) {
+		rc = revive_dev(old_dev);
 		goto out;
 	}
 
