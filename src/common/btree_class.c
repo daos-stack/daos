@@ -319,10 +319,13 @@ static int
 nv_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	      d_iov_t *key, d_iov_t *val)
 {
-	struct nv_rec  *r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	void	       *v;
+	struct nv_rec	*r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	void		*v;
+	int		rc;
 
-	umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
+	rc = umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
+	if (rc != 0)
+		return rc;
 
 	if (r->nr_value_buf_size < val->iov_len) {
 		umem_off_t voff;
@@ -650,10 +653,13 @@ static int
 uv_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	      d_iov_t *key, d_iov_t *val)
 {
-	struct uv_rec  *r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	void	       *v;
+	struct uv_rec	*r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	void		*v;
+	int		rc;
 
-	umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
+	rc = umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
+	if (rc != 0)
+		return rc;
 
 	if (r->ur_value_buf_size < val->iov_len) {
 		umem_off_t voff;
@@ -945,11 +951,15 @@ ec_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	      d_iov_t *key, d_iov_t *val)
 {
 	struct ec_rec  *r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	int rc;
 
 	if (val->iov_len != sizeof(r->er_counter))
 		return -DER_INVAL;
 
-	umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
+	rc = umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
+	if (rc)
+		return rc;
+
 	r->er_counter = *(uint64_t *)val->iov_buf;
 	return 0;
 }
@@ -1181,10 +1191,14 @@ static int
 kv_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	      d_iov_t *key, d_iov_t *val)
 {
-	struct kv_rec  *r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	void	       *v;
+	struct kv_rec	*r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	void		*v;
+	int		rc;
 
-	umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
+	rc = umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
+	if (rc != 0)
+		return rc;
+
 	if (r->kr_value_cap < val->iov_len) {
 		umem_off_t voff;
 
@@ -1358,11 +1372,15 @@ static int
 iv_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	      d_iov_t *key, d_iov_t *val)
 {
-	struct iv_rec  *r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	void	       *v;
+	struct iv_rec	*r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	void		*v;
+	int		rc;
 
 	D_ASSERTF(key->iov_len == sizeof(uint64_t), DF_U64"\n", key->iov_len);
-	umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
+	rc = umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
+	if (rc != 0)
+		return rc;
+
 	if (r->ir_value_cap < val->iov_len) {
 		umem_off_t voff;
 

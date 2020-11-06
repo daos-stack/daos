@@ -1571,8 +1571,8 @@ obj_ec_encode(struct obj_reasb_req *reasb_req)
 
 	for (i = 0; i < reasb_req->orr_iod_nr; i++) {
 		rc = obj_ec_recx_encode(reasb_req->orr_oid,
-					&reasb_req->orr_iods[i],
-					&reasb_req->orr_sgls[i],
+					&reasb_req->orr_uiods[i],
+					&reasb_req->orr_usgls[i],
 					reasb_req->orr_oca,
 					codec,
 					&reasb_req->orr_recxs[i]);
@@ -2671,7 +2671,7 @@ obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods, uint32_t iod_nr,
 			r_siod = &r_oiod->oiod_siods[j];
 			tgt = r_siod->siod_tgt_idx;
 			tgt_oiod = obj_ec_tgt_oiod_get(tgt_oiods, tgt_nr, tgt);
-			D_ASSERT(tgt_oiod->oto_tgt_idx == tgt);
+			D_ASSERT(tgt_oiod && tgt_oiod->oto_tgt_idx == tgt);
 			tgt_oiod->oto_offs[i] = r_siod->siod_off;
 			siod = &tgt_oiod->oto_oiods[i].oiod_siods[0];
 			D_ASSERT(siod->siod_tgt_idx == tgt);
