@@ -241,7 +241,7 @@ func (req *ConfigGenerateReq) checkNetwork(ctx context.Context) (*config.Server,
 
 	if !complete {
 		return nil, errors.Errorf(
-			"insufficient matching %s network interfaces, want %d got %d %v",
+			"insufficient matching %s network interfaces, want %d got %d %+v",
 			req.NetClass, req.NumPmem, len(matching), matching)
 	}
 
@@ -289,7 +289,7 @@ func (req *ConfigGenerateReq) validateScmStorage(ctx context.Context, scmNamespa
 	// sanity check that each pmem aligns with expected numa node
 	for idx := range pmemPaths {
 		if int(scmNamespaces[idx].NumaNode) != idx {
-			return nil, errors.Errorf("unexpected numa node for scm %v, want %d",
+			return nil, errors.Errorf("unexpected numa node for scm %+v, want %d",
 				scmNamespaces[idx], idx)
 		}
 	}
