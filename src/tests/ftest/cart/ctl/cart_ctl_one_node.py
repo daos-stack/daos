@@ -73,9 +73,9 @@ class CartCtlOneNodeTest(Test):
             self.fail("Server did not launch, return code %s" \
                        % procrtn)
 
-        for i in range(6):
-            clicmd = self.utils.build_cmd(self, self.env, "test_clients",
-                                          index=i)
+        for index in range(6):
+            clicmd = self.utils.build_cmd(
+                self, self.env, "test_clients", index=index)
             self.utils.launch_test(self, clicmd, srv_rtn)
 
 
