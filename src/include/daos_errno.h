@@ -149,7 +149,25 @@ extern "C" {
 	       Incorrect target for the RPC)				\
 	/** Group versioning mismatch */				\
 	ACTION(DER_GRPVER,		(DER_ERR_GURT_BASE + 36),	\
-	       Group versioning mismatch)
+	       Group versioning mismatch)				\
+	/** No shared memory available */				\
+	ACTION(DER_NO_SHMEM,		(DER_ERR_GURT_BASE + 37),	\
+	       Not enough shared memory free)				\
+	/** Failed to add metric */					\
+	ACTION(DER_ADD_METRIC_FAILED,   (DER_ERR_GURT_BASE + 38),	\
+	       Failed to add the specified metric)			\
+	/** Duration start/end mismatch */				\
+	ACTION(DER_DURATION_MISMATCH,   (DER_ERR_GURT_BASE + 39),	\
+	        Duration end not paired with duration start)		\
+	/** Operation not permitted on metric type*/			\
+	ACTION(DER_OP_NOT_PERMITTED,    (DER_ERR_GURT_BASE + 40),	\
+	         Operation not permitted for metric type provided)	\
+	/** Metric path name exceeds permitted length*/			\
+	ACTION(DER_EXCEEDS_PATH_LEN,    (DER_ERR_GURT_BASE + 41),	\
+	         Path name exceeds permitted length)			\
+	/** Metric was not found.*/					\
+	ACTION(DER_METRIC_NOT_FOUND,    (DER_ERR_GURT_BASE + 42),	\
+	         Read failed because metric not found)
 	/** TODO: add more error numbers */
 
 #define D_FOREACH_DAOS_ERR(ACTION)					\
