@@ -1876,6 +1876,9 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 			D_GOTO(out, rc = -DER_CSUM);
 		}
 
+		if (DAOS_FAIL_CHECK(DAOS_OBJ_FETCH_DATA_LOST))
+			D_GOTO(out, rc = -DER_DATA_LOSS);
+
 		epoch.oe_value = orw->orw_epoch;
 		epoch.oe_first = orw->orw_epoch_first;
 		epoch.oe_flags = orf_to_dtx_epoch_flags(orw->orw_flags);
