@@ -809,10 +809,11 @@ class DmgCommand(DmgCommandBase):
                 self.result.stdout)
             for info in match:
                 data[int(info[0])] = {
-                    "address": info[2],
                     "uuid": info[1],
-                    "state": info[3],
-                    "reason": info[4].strip(),
+                    "address": info[2],
+                    "domain": info[3],
+                    "state": info[4],
+                    "reason": info[5].strip(),
                 }
         else:
             # Process the non-verbose multiple rank system query output, e.g.

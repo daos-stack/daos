@@ -61,7 +61,7 @@ class DaosAggregationIOSmall(IorTestBase):
         num_processes = self.params.get("np", "/run/ior/client_processes/*")
         total_ior = block_size * num_processes
 
-        pool_info = self.pool.get_pool_daos_space
+        pool_info = self.pool.get_pool_daos_space()
         initial_scm_free_space = pool_info["s_free"][scm_index]
         initial_ssd_free_space = pool_info["s_free"][ssd_index]
         self.log.info(
@@ -75,7 +75,7 @@ class DaosAggregationIOSmall(IorTestBase):
 
         # Run ior
         self.run_ior_with_pool()
-        pool_info = self.pool.get_pool_daos_space
+        pool_info = self.pool.get_pool_daos_space()
         scm_free_space_after_ior = pool_info["s_free"][scm_index]
         ssd_free_space_after_ior = pool_info["s_free"][ssd_index]
         self.log.info(
@@ -105,7 +105,7 @@ class DaosAggregationIOSmall(IorTestBase):
         self.log.info("Waiting for {} seconds".format(wait_time))
         time.sleep(wait_time)
 
-        pool_info = self.pool.get_pool_daos_space
+        pool_info = self.pool.get_pool_daos_space()
         scm_free_space_after_aggregate = pool_info["s_free"][scm_index]
         ssd_free_space_after_aggregate = pool_info["s_free"][ssd_index]
 
