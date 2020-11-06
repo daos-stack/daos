@@ -1724,6 +1724,7 @@ migrate_one_epoch_object(daos_handle_t oh, daos_epoch_range_t *epr,
 
 	memset(&anchor, 0, sizeof(anchor));
 	memset(&dkey_anchor, 0, sizeof(dkey_anchor));
+	dc_obj_shard2anchor(&dkey_anchor, arg->shard);
 	memset(&akey_anchor, 0, sizeof(akey_anchor));
 	unpack_arg.arg = arg;
 	unpack_arg.epr = *epr;
@@ -1747,7 +1748,8 @@ migrate_one_epoch_object(daos_handle_t oh, daos_epoch_range_t *epr,
 
 		num = KDS_NUM;
 		daos_anchor_set_flags(&dkey_anchor,
-				      DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH);
+				      DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
+				      DIOF_TO_SPEC_SHARD);
 retry:
 		rc = dsc_obj_list_obj(oh, epr, NULL, NULL, &size,
 				     &num, kds, &sgl, &anchor,
@@ -1781,28 +1783,25 @@ retry:
 				break;
 			}
 			continue;
-		} else if (rc == -DER_NOTAPPLICABLE &&
-			   daos_anchor_get_flags(&dkey_anchor) &
-						 DIOF_TO_LEADER) {
+		} else if (rc && daos_anchor_get_flags(&dkey_anchor) &
+			   DIOF_TO_LEADER) {
 			daos_anchor_set_flags(&dkey_anchor,
-					      DIOF_WITH_SPEC_EPOCH);
-			D_DEBUG(DB_REBUILD, "No leader avaible retry"
-				DF_UOID"\n", DP_UOID(arg->oid));
+					      DIOF_WITH_SPEC_EPOCH |
+					      DIOF_TO_SPEC_SHARD);
+			D_DEBUG(DB_REBUILD, "No leader available %d retry"
+				DF_UOID"\n", rc, DP_UOID(arg->oid));
 			D_GOTO(retry, rc);
 		} else if (rc) {
 			/* container might have been destroyed. Or there is
 			 * no spare target left for this object see
 			 * obj_grp_valid_shard_get()
 			 */
-			if (rc == -DER_DATA_LOSS) {
-				D_DEBUG(DB_REBUILD, "Can not rebuild "
-					DF_UOID"\n", DP_UOID(arg->oid));
-				break;
-			}
-
-			D_DEBUG(DB_REBUILD, "retry"DF_UOID"\n",
-				DP_UOID(arg->oid));
-			D_GOTO(retry, rc);
+			/* DER_DATA_LOSS means it can not find any replicas
+			 * to rebuild the data, see obj_list_common.
+			 */
+			D_DEBUG(DB_REBUILD, "Can not rebuild "
+				DF_UOID"\n", DP_UOID(arg->oid));
+			break;
 		}
 
 		if (num == 0)
@@ -2499,7 +2498,9 @@ ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver,
 
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	arg.version = ver;
-	ABT_mutex_create(&arg.status_lock);
+	rc = ABT_mutex_create(&arg.status_lock);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out, rc);
 
 	rc = dss_thread_collective(migrate_check_one, &arg, 0, DSS_ULT_REBUILD);
 	if (rc)

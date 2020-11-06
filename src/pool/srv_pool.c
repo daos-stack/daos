@@ -4497,6 +4497,8 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 			/* Pool evict, or pool destroy with force=true */
 			rc = pool_disconnect_hdls(&tx, svc, hdl_uuids,
 						  n_hdl_uuids, rpc->cr_ctx);
+			if (rc != 0)
+				D_GOTO(out_free, rc);
 		}
 	}
 
@@ -4929,7 +4931,8 @@ ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid, uint32_t version)
 	if (rc != 0)
 		goto out;
 
-	leader = pl_select_leader(oid->id_pub, oid->id_shard,
+	leader = pl_select_leader(oid->id_pub,
+				  oid->id_shard / layout->ol_grp_size,
 				  layout->ol_grp_size, true,
 				  pl_obj_get_shard, layout);
 	if (leader < 0) {
