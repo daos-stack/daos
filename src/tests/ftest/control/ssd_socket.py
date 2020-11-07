@@ -31,7 +31,7 @@ class SSDSocketTest(TestWithServers):
 
     Call dmg storage scan --verbose to obtain NUMA socket value (Socket ID) of
     each NVMe disk. Verify against the value in
-    /sys/class/pci_bus/<PIC Address Head>/device/numa_node
+    /sys/class/pci_bus/<PCI Address Head>/device/numa_node
 
     where PCI Address Head is the first two hex numbers separated by colon.
     e.g., 0000:5e:00.0 -> PCI Address Head is 0000:5e
@@ -39,21 +39,40 @@ class SSDSocketTest(TestWithServers):
     :avocado: recursive
     """
     def debug_ls(self, path):
+        """Call ls -l <path>
+
+        This method is for debugging because numa_node file may not exist on
+        some nodes in CI.
+
+        Args:
+            path (str): Path to call ls -l
+        """
         try:
-            cmd_result = run_command(command="ls -l {}".format(path))
+            run_command(command="ls -l {}".format(path))
             self.log.debug("## {} is found".format(path))
         except DaosTestError:
             self.log.debug("## {} NOT found!".format(path))
 
     def debug_sys(self):
-        path = "/sys"
-        self.debug_ls(path)
-        path = "/sys/class"
-        self.debug_ls(path)
-        path = "/sys/class/pci_bus"
-        self.debug_ls(path)
+        """Call ls -l on /sys, /sys/class, and /sys/class/pci_bus
+
+        This method is for debugging because numa_node file may not exist on
+        some nodes in CI.
+        """
+        self.debug_ls("/sys")
+        self.debug_ls("/sys/class")
+        self.debug_ls("/sys/class/pci_bus")
 
     def debug_numa_node(self, pci_addr_head):
+        """Call ls -l /sys/class/pci_bus/<PCI Address Head> and
+        ls -l /sys/class/pci_bus/<PCI Address Head>/device
+
+        This method is for debugging because numa_node file may not exist on
+        some nodes in CI.
+
+        Args:
+            pci_addr_head (str): PCI Address Head value.
+        """
         path = "/sys/class/pci_bus/{}".format(pci_addr_head)
         self.debug_ls(path)
         path = "/sys/class/pci_bus/{}/device".format(pci_addr_head)
@@ -75,7 +94,19 @@ class SSDSocketTest(TestWithServers):
         self.log.debug("----- debug_sys -----")
         self.debug_sys()
 
-        self.log.debug("----- Check if PCI Address appears in hwloc-ls -----")
+        # Another way to obtain the Socket ID is to use hwloc-ls --whole-io
+        # --verbose. It contains something like:
+        """
+        Bridge Host->PCI L#9 (P#2 buses=0000:[80-81])
+            Bridge PCI->PCI (P#524320 busid=0000:80:02.0 id=8086:2f04 
+            class=0604(PCI_B) buses=0000:[81-81])
+                PCI 8086:2701 (P#528384 busid=0000:81:00.0 class=0108(NVMExp) PCISlot=801)
+        """
+        # In this case, the PCI address was 0000:81:00.0. We can figure out
+        # which NUMA node section these lines are in. This approach is clearly
+        # much more cumbersome than reading the numa_node, so it's called here
+        # for mainly debugging purpose.
+        self.log.debug("----- Show PCI Address in hwloc-ls -----")
         run_command(command="hwloc-ls --whole-io --verbose")
 
         # For every PCI address, verify its Socket ID against its NUMA socket
@@ -98,11 +129,11 @@ class SSDSocketTest(TestWithServers):
                 run_command(
                     command="find /sys -name \"{}\"".format(pci_addr_head))
                 self.log.debug(
-                    "## Finding {} didn't cause any error".format(
+                    "Finding {} didn't cause any error".format(
                         pci_addr_head))
             except DaosTestError:
                 self.log.debug(
-                    "## Error ocurred while finding {}".format(pci_addr_head))
+                    "Error occurred while finding {}".format(pci_addr_head))
 
             numa_node_path = "/sys/class/pci_bus/{}/device/numa_node".format(
                 pci_addr_head)
