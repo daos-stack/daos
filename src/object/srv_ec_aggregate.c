@@ -964,13 +964,15 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	return rc;
 }
 
-/* Iterates entire VOS. Invokes nested iterator to recurse through trees
+/* Public API call. Invoked from aggregation ULT (container/srv_target.c).
+ *
+ * Iterates entire VOS. Invokes nested iterator to recurse through trees
  * for all objects meeting the criteria: object is EC, and this target is
  * leader.
  */
-static int
-agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr,
-		bool (*yield_func)(void *arg), void *yield_arg)
+int
+ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr,
+		    bool (*yield_func)(void *arg), void *yield_arg)
 {
 	vos_iter_param_t	 iter_param = { 0 };
 	struct vos_iter_anchors  anchors = { 0 };
@@ -1000,21 +1002,6 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 			 &agg_param, NULL);
 
 	agg_sgl_fini(&agg_param.ap_agg_entry.ae_sgl);
-	return rc;
-}
-
-/* Public API call. Invoked from aggregation ULT  (container/srv_target.c).
- * Call to committed transaction table driven scan will also be called from
- * this function.
- */
-int
-ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr,
-		    bool (*yield_func)(void *arg), void *yield_arg)
-{
-	int	rc = 0;
-
-	rc = agg_iterate_all(cont, epr, yield_func, yield_arg);
-
 	return rc;
 }
 
