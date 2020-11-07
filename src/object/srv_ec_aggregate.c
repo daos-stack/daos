@@ -414,16 +414,17 @@ agg_encode_full_stripe(struct ec_agg_entry *entry)
 {
 	struct ec_agg_stripe_ud		stripe_ud = { 0 };
 	int				*status;
-	int				rc = 0;
+	int				tid, rc = 0;
 
 	stripe_ud.asu_agg_entry = entry;
+	tid = dss_get_module_info()->dmi_tgt_id;
 	rc = ABT_eventual_create(sizeof(*status), &stripe_ud.asu_eventual);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
 		goto out;
 	}
 	rc = dss_ult_create(agg_encode_full_stripe_ult, &stripe_ud,
-			    DSS_ULT_EC, 0, 0, NULL);
+			    DSS_ULT_EC, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
 	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
@@ -557,6 +558,7 @@ agg_update_vos(struct ec_agg_entry *entry, bool write_parity)
 			goto out;
 		}
 	}
+
 	recx.rx_idx = entry->ae_cur_stripe.as_stripenum * k * len -
 		entry->ae_cur_stripe.as_prefix_ext;
 	recx.rx_nr = k * len + entry->ae_cur_stripe.as_prefix_ext -
@@ -576,14 +578,13 @@ out:
 static int
 agg_process_stripe(struct ec_agg_entry *entry)
 {
-	vos_iter_param_t	iter_param = { 0 };
-	struct vos_iter_anchors	anchors = { 0 };
-	bool			update_vos = true;
-	bool			write_parity = true;
-	int			rc = 0;
+	vos_iter_param_t	 iter_param = { 0 };
+	struct vos_iter_anchors	 anchors = { 0 };
+	bool			 update_vos = true;
+	bool			 write_parity = true;
+	int			 rc = 0;
 
 	entry->ae_par_extent.ape_epoch	= ~(0ULL);
-
 	iter_param.ip_hdl		= DAOS_HDL_INVAL;
 	iter_param.ip_ih		= entry->ae_thdl;
 	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
@@ -669,7 +670,10 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 	daos_off_t		 cur_stripenum, this_stripenum;
 	int			 rc = 0;
 
+	D_ASSERT(!(entry->ie_recx.rx_idx & PARITY_INDICATOR));
+
 	this_stripenum = agg_stripenum(agg_entry, entry->ie_recx.rx_idx);
+
 	if (this_stripenum != agg_entry->ae_cur_stripe.as_stripenum) {
 		/* Iterator has reached next stripe */
 		if (agg_entry->ae_cur_stripe.as_extent_cnt) {
@@ -751,21 +755,7 @@ agg_akey_post(daos_handle_t ih, vos_iter_entry_t *entry,
 
 		*acts |= VOS_ITER_CB_YIELD;
 	}
-	return rc;
-}
-
-/* Handles each replica extent returned by the RECX iterator.
- */
-static int
-agg_extent(daos_handle_t ih, vos_iter_entry_t *entry,
-	   struct ec_agg_entry *agg_entry, unsigned int *acts)
-{
-	int			rc = 0;
-
-	D_ASSERT(!(entry->ie_recx.rx_idx & PARITY_INDICATOR));
-
-	rc = agg_data_extent(entry, agg_entry, acts);
-
+	memset(&agg_entry->ae_akey, 0, sizeof(agg_entry->ae_akey));
 	return rc;
 }
 
@@ -815,10 +805,10 @@ agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 static inline bool
 ec_aggregate_yield(struct ec_agg_param *agg_param)
 {
-	if (agg_param->ap_yield_func != NULL)
-		return agg_param->ap_yield_func(agg_param->ap_yield_arg);
+	D_ASSERT(agg_param->ap_yield_func != NULL);
 
-	return false;
+	return agg_param->ap_yield_func(agg_param->ap_yield_arg);
+
 }
 
 /* Post iteration call back for outer iterator
@@ -950,7 +940,7 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		rc = agg_akey(ih, entry, agg_entry, acts);
 		break;
 	case VOS_ITER_RECX:
-		rc = agg_extent(ih, entry, agg_entry, acts);
+		rc = agg_data_extent(entry, agg_entry, acts);
 		break;
 	default:
 		break;
@@ -982,6 +972,9 @@ ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	uuid_copy(agg_param.ap_pool_info.api_pool_uuid,
 		  cont->sc_pool->spc_uuid);
 	uuid_copy(agg_param.ap_pool_info.api_cont_uuid, cont->sc_uuid);
+
+	agg_param.ap_pool_info.api_pool_version =
+		cont->sc_pool->spc_pool->sp_map_version;
 
 	agg_param.ap_cont_handle	= cont->sc_hdl;
 	agg_param.ap_credits_max	= EC_AGG_ITERATION_MAX;
