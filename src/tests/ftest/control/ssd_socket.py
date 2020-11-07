@@ -96,12 +96,13 @@ class SSDSocketTest(TestWithServers):
 
         # Another way to obtain the Socket ID is to use hwloc-ls --whole-io
         # --verbose. It contains something like:
-        """
-        Bridge Host->PCI L#9 (P#2 buses=0000:[80-81])
-            Bridge PCI->PCI (P#524320 busid=0000:80:02.0 id=8086:2f04 
-            class=0604(PCI_B) buses=0000:[81-81])
-                PCI 8086:2701 (P#528384 busid=0000:81:00.0 class=0108(NVMExp) PCISlot=801)
-        """
+
+        # Bridge Host->PCI L#9 (P#2 buses=0000:[80-81])
+        #     Bridge PCI->PCI (P#524320 busid=0000:80:02.0 id=8086:2f04 
+        #     class=0604(PCI_B) buses=0000:[81-81])
+        #         PCI 8086:2701 (P#528384 busid=0000:81:00.0 class=0108(NVMExp)
+        #         PCISlot=801)
+
         # In this case, the PCI address was 0000:81:00.0. We can figure out
         # which NUMA node section these lines are in. This approach is clearly
         # much more cumbersome than reading the numa_node, so it's called here
