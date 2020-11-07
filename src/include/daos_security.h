@@ -34,6 +34,7 @@
 extern "C" {
 #endif
 
+#include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <sys/types.h>
@@ -328,7 +329,8 @@ daos_acl_remove_ace(struct daos_acl **acl,
 		    const char *principal_name);
 
 /**
- * Print the Access Control List to stdout in a human-readable format.
+ * Print the Access Control List to stdout in a detailed human-readable format,
+ * for debug purposes.
  *
  * \param	acl	Access Control List to print
  */
@@ -624,6 +626,21 @@ int
 daos_acl_principal_from_str(const char *principal_str,
 			    enum daos_acl_principal_type *type,
 			    char **name);
+
+/**
+ * Print the Access Control List to a stream in the ACL file format.
+ *
+ * \param[in]	stream	Open stream to which the ACL should be printed
+ * \param[in]	acl	Access Control List to print
+ * \param[in]	verbose	Include verbose comment for each ACE in output
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NOMEM	Could not allocate memory
+ *		-DER_IO		Failed to write to stream
+ */
+int
+daos_acl_to_stream(FILE *stream, struct daos_acl *acl, bool verbose);
 
 #if defined(__cplusplus)
 }
