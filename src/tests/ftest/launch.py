@@ -500,11 +500,7 @@ def get_test_list(tags):
         command = ["avocado", "list", "--paginator=off"]
         for test_tag in test_tags:
             command.append(str(test_tag))
-<<<<<<< HEAD
-        command.extend(test_list)
-=======
         command.extend(test_list if test_list else ["./"])
->>>>>>> master
         tagged_tests = re.findall(r"INSTRUMENTED\s+(.*):", get_output(command))
         test_list = list(set(tagged_tests))
 
