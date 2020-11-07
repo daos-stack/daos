@@ -98,7 +98,7 @@ class SSDSocketTest(TestWithServers):
         # --verbose. It contains something like:
 
         # Bridge Host->PCI L#9 (P#2 buses=0000:[80-81])
-        #     Bridge PCI->PCI (P#524320 busid=0000:80:02.0 id=8086:2f04 
+        #     Bridge PCI->PCI (P#524320 busid=0000:80:02.0 id=8086:2f04
         #     class=0604(PCI_B) buses=0000:[81-81])
         #         PCI 8086:2701 (P#528384 busid=0000:81:00.0 class=0108(NVMExp)
         #         PCISlot=801)
