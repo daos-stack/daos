@@ -94,32 +94,32 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 		return true // identical state
 	}
 	return map[MemberState]map[MemberState]bool{
-		MemberStateAwaitFormat: map[MemberState]bool{
+		MemberStateAwaitFormat: {
 			MemberStateEvicted: true,
 		},
-		MemberStateStarting: map[MemberState]bool{
+		MemberStateStarting: {
 			MemberStateEvicted: true,
 		},
-		MemberStateReady: map[MemberState]bool{
+		MemberStateReady: {
 			MemberStateEvicted: true,
 		},
-		MemberStateJoined: map[MemberState]bool{
+		MemberStateJoined: {
 			MemberStateReady: true,
 		},
-		MemberStateStopping: map[MemberState]bool{
+		MemberStateStopping: {
 			MemberStateReady: true,
 		},
-		MemberStateEvicted: map[MemberState]bool{
+		MemberStateEvicted: {
 			MemberStateReady:    true,
 			MemberStateJoined:   true,
 			MemberStateStopping: true,
 		},
-		MemberStateErrored: map[MemberState]bool{
+		MemberStateErrored: {
 			MemberStateReady:    true,
 			MemberStateJoined:   true,
 			MemberStateStopping: true,
 		},
-		MemberStateUnresponsive: map[MemberState]bool{
+		MemberStateUnresponsive: {
 			MemberStateReady:    true,
 			MemberStateJoined:   true,
 			MemberStateStopping: true,
@@ -137,21 +137,28 @@ type Member struct {
 	FabricContexts uint32
 	state          MemberState
 	Info           string
+	FaultDomain    *FaultDomain
 }
 
 // MarshalJSON marshals system.Member to JSON.
 func (sm *Member) MarshalJSON() ([]byte, error) {
+	if sm == nil {
+		return nil, errors.New("tried to marshal nil Member")
+	}
+
 	// use a type alias to leverage the default marshal for
 	// most fields
 	type toJSON Member
 	return json.Marshal(&struct {
-		Addr  string
-		State int
+		Addr        string
+		State       int
+		FaultDomain string
 		*toJSON
 	}{
-		Addr:   sm.Addr.String(),
-		State:  int(sm.state),
-		toJSON: (*toJSON)(sm),
+		Addr:        sm.Addr.String(),
+		State:       int(sm.state),
+		FaultDomain: sm.FaultDomain.String(),
+		toJSON:      (*toJSON)(sm),
 	})
 }
 
@@ -165,8 +172,9 @@ func (sm *Member) UnmarshalJSON(data []byte) error {
 	// most fields
 	type fromJSON Member
 	from := &struct {
-		Addr  string
-		State int
+		Addr        string
+		State       int
+		FaultDomain string
 		*fromJSON
 	}{
 		fromJSON: (*fromJSON)(sm),
@@ -183,6 +191,12 @@ func (sm *Member) UnmarshalJSON(data []byte) error {
 	sm.Addr = addr
 
 	sm.state = MemberState(from.State)
+
+	fd, err := NewFaultDomainFromString(from.FaultDomain)
+	if err != nil {
+		return err
+	}
+	sm.FaultDomain = fd
 
 	return nil
 }
@@ -202,12 +216,19 @@ func (sm *Member) WithInfo(msg string) *Member {
 	return sm
 }
 
+// WithFaultDomain adds the fault domain field and returns the updated member.
+func (sm *Member) WithFaultDomain(fd *FaultDomain) *Member {
+	sm.FaultDomain = fd
+	return sm
+}
+
 // NewMember returns a reference to a new member struct.
 func NewMember(rank Rank, uuidStr, uri string, addr *net.TCPAddr, state MemberState) *Member {
 	// FIXME: Either require a valid uuid.UUID to be supplied
 	// or else change the return signature to include an error
 	newUUID := uuid.MustParse(uuidStr)
-	return &Member{Rank: rank, UUID: newUUID, FabricURI: uri, Addr: addr, state: state}
+	return &Member{Rank: rank, UUID: newUUID, FabricURI: uri, Addr: addr,
+		state: state, FaultDomain: MustCreateFaultDomain()}
 }
 
 // Members is a type alias for a slice of member references
@@ -336,6 +357,7 @@ type JoinRequest struct {
 	ControlAddr    *net.TCPAddr
 	FabricURI      string
 	FabricContexts uint32
+	FaultDomain    *FaultDomain
 }
 
 type JoinResponse struct {
@@ -359,11 +381,19 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 				req.UUID, req.Rank, curMember.Rank)
 		}
 
+		if !curMember.FaultDomain.Equals(req.FaultDomain) {
+			m.log.Infof("fault domain for rank %d changed from %q to %q",
+				curMember.Rank,
+				curMember.FaultDomain.String(),
+				req.FaultDomain.String())
+		}
+
 		resp.PrevState = curMember.state
 		curMember.state = MemberStateJoined
 		curMember.Addr = req.ControlAddr
 		curMember.FabricURI = req.FabricURI
 		curMember.FabricContexts = req.FabricContexts
+		curMember.FaultDomain = req.FaultDomain
 		if err := m.db.UpdateMember(curMember); err != nil {
 			return nil, err
 		}
@@ -387,6 +417,7 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		Addr:           req.ControlAddr,
 		FabricURI:      req.FabricURI,
 		FabricContexts: req.FabricContexts,
+		FaultDomain:    req.FaultDomain,
 		state:          MemberStateJoined,
 	}
 	if err := m.db.AddMember(newMember); err != nil {
@@ -589,39 +620,23 @@ func (m *Membership) CheckRanks(ranks string) (hit, miss *RankSet, err error) {
 	m.RLock()
 	defer m.RUnlock()
 
-	hit, err = CreateRankSet("")
+	var allRanks, toTest []Rank
+	allRanks, err = m.db.MemberRanks()
 	if err != nil {
 		return
 	}
-	miss, err = CreateRankSet("")
+	toTest, err = ParseRanks(ranks)
 	if err != nil {
 		return
 	}
 
-	var rankList []Rank
 	if ranks == "" {
-		rankList, err = m.RankList()
-		if err != nil {
-			return
-		}
-	} else {
-		rankList, err = ParseRanks(ranks)
-		if err != nil {
-			return
-		}
+		return RankSetFromRanks(allRanks), RankSetFromRanks(nil), nil
 	}
 
-	for _, rank := range rankList {
-		if _, err = m.db.FindMemberByRank(rank); err != nil {
-			if err = miss.Add(rank); err != nil {
-				return
-			}
-			continue
-		}
-		if err = hit.Add(rank); err != nil {
-			return
-		}
-	}
+	missing := CheckRankMembership(allRanks, toTest)
+	miss = RankSetFromRanks(missing)
+	hit = RankSetFromRanks(CheckRankMembership(missing, toTest))
 
 	return
 }
@@ -667,9 +682,7 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int, resolveFn resolveFnSi
 		if rankList, exists := hostRanks[tcpAddr.String()]; exists {
 			m.log.Debugf("CheckHosts(): %v ranks found at %s", rankList, origHostString)
 			for _, rank := range rankList {
-				if err = rs.Add(rank); err != nil {
-					return nil, nil, err
-				}
+				rs.Add(rank)
 			}
 			continue
 		}

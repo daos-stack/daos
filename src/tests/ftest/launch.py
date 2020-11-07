@@ -21,11 +21,11 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-
 # pylint: disable=too-many-lines
 from __future__ import print_function
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
+from datetime import datetime
 import json
 import os
 import re
@@ -35,6 +35,8 @@ from sys import version_info
 import time
 import yaml
 import errno
+import xml.etree.ElementTree as ET
+from xml.dom import minidom
 
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
@@ -72,6 +74,7 @@ YAML_KEYS = {
 }
 YAML_KEY_ORDER = ("test_servers", "test_clients", "bdev_list")
 
+
 def display(args, message):
     """Display the message if verbosity is set.
 
@@ -81,6 +84,16 @@ def display(args, message):
     """
     if args.verbose:
         print(message)
+
+
+def display_disk_space(path):
+    """Display disk space of provided path destination.
+
+    Args:
+        path (str): path to directory to print disk space for.
+    """
+    print("Current disk space usage of {}".format(path))
+    print(get_output(["df", "-h", path]))
 
 
 def get_build_environment():
@@ -235,6 +248,10 @@ def set_test_environment(args):
                 python_path += ":" + required_path
         os.environ["PYTHONPATH"] = python_path
     print("Using PYTHONPATH={}".format(os.environ["PYTHONPATH"]))
+    if args.verbose:
+        print("ENVIRONMENT VARIABLES")
+        for key in sorted(os.environ):
+            print("  {}: {}".format(key, os.environ[key]))
 
 
 def get_output(cmd, check=True):
@@ -333,28 +350,25 @@ def check_remote_output(task, command):
     for code in sorted(results):
         output_data = list(task.iter_buffers(results[code]))
         if not output_data:
-            err_nodes = NodeSet.fromlist(results[code])
-            print("    {}: rc={}, output: <NONE>".format(err_nodes, code))
-        else:
-            for output, o_hosts in output_data:
-                n_set = NodeSet.fromlist(o_hosts)
-                lines = str(output).splitlines()
-                print("There are {} lines of output".format(len(lines)))
-                if len(lines) > 1:
-                    print("    {}: rc={}, output:".format(n_set, code))
-                    for line in lines:
-                        try:
-                            print("      {}".format(line))
-                        except IOError:
-                            # DAOS-5781 Jenkins doesn't like receiving large
-                            # amounts of data in a short space of time so catch
-                            # this and retry.
-                            time.sleep(5)
-                            print("      {}".format(line))
-                else:
-                    print("    {}: rc={}, output: {}".format(n_set,
-                                                             code,
-                                                             output))
+            output_data = [["<NONE>", results[code]]]
+
+        for output, o_hosts in output_data:
+            n_set = NodeSet.fromlist(o_hosts)
+            lines = str(output).splitlines()
+            print("There are {} lines of output".format(len(lines)))
+            if len(lines) > 1:
+                print("    {}: rc={}, output:".format(n_set, code))
+                for line in lines:
+                    try:
+                        print("      {}".format(line))
+                    except IOError:
+                        # DAOS-5781 Jenkins doesn't like receiving large
+                        # amounts of data in a short space of time so catch
+                        # this and retry.
+                        time.sleep(5)
+                        print("      {}".format(line))
+            else:
+                print("    {}: rc={}, output: {}".format(n_set, code, output))
 
     # List any hosts that timed out
     timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
@@ -469,16 +483,17 @@ def get_test_list(tags):
             # Otherwise it is assumed that this is a tag
             test_tags.extend(["--filter-by-tags", str(tag)])
 
-    # Add to the list of tests any test that matches the specified tags.  If no
+    # Update the list of tests with any test that match the specified tags.
+    # Exclude any specified tests that do not match the specified tags.  If no
     # tags and no specific tests have been specified then all of the functional
     # tests will be added.
     if test_tags or not test_list:
         command = ["avocado", "list", "--paginator=off"]
         for test_tag in test_tags:
             command.append(str(test_tag))
-        command.append("./")
+        command.extend(test_list if test_list else ["./"])
         tagged_tests = re.findall(r"INSTRUMENTED\s+(.*):", get_output(command))
-        test_list.extend(list(set(tagged_tests)))
+        test_list = list(set(tagged_tests))
 
     return test_tags, test_list
 
@@ -774,13 +789,40 @@ def run_tests(test_files, tag_filter, args):
         command_list.extend(tag_filter)
 
     # Run each test
+    skip_reason = None
     for test_file in test_files:
-        if isinstance(test_file["yaml"], str):
+        if skip_reason is not None:
+            # An error was detected running clean_logs for a previous test.  As
+            # this is typically an indication of a communication issue with one
+            # of the hosts, do not attempt to run subsequent tests.
+            if not report_skipped_test(
+                    test_file["py"], avocado_logs_dir, skip_reason):
+                return_code |= 64
+
+        elif not isinstance(test_file["yaml"], str):
+            # The test was not run due to an error replacing host placeholders
+            # in the yaml file.  Treat this like a failed avocado command.
+            reason = "error replacing yaml file placeholders"
+            if not report_skipped_test(
+                    test_file["py"], avocado_logs_dir, reason):
+                return_code |= 64
+            return_code |= 4
+
+        else:
             # Optionally clean the log files before running this test on the
             # servers and clients specified for this test
             if args.clean:
                 if not clean_logs(test_file["yaml"], args):
-                    return 128
+                    # Report errors for this skipped test
+                    skip_reason = (
+                        "host communication error attempting to clean out "
+                        "leftover logs from a previous test run prior to "
+                        "running this test")
+                    if not report_skipped_test(
+                            test_file["py"], avocado_logs_dir, skip_reason):
+                        return_code |= 64
+                    return_code |= 128
+                    continue
 
             # Execute this test
             test_command_list = list(command_list)
@@ -788,11 +830,17 @@ def run_tests(test_files, tag_filter, args):
                 "--mux-yaml", test_file["yaml"], "--", test_file["py"]])
             return_code |= time_command(test_command_list)
 
-            # Optionally store all of the daos server and client log files
-            # along with the test results
+            # Optionally store all of the server and client config files
+            # and archive remote logs and report big log files, if any.
             if args.archive:
-                archive_logs(avocado_logs_dir, test_file["yaml"], args)
-                archive_config_files(avocado_logs_dir)
+                return_code |= archive_config_files(avocado_logs_dir, args)
+                return_code |= archive_daos_logs(
+                    avocado_logs_dir, test_file, args)
+                return_code |= archive_cart_logs(
+                    avocado_logs_dir, test_file, args)
+
+                # Compress any log file that haven't been remotely compressed.
+                compress_log_files(avocado_logs_dir, args)
 
             # Optionally rename the test results directory for this test
             if args.rename:
@@ -801,10 +849,6 @@ def run_tests(test_files, tag_filter, args):
             # Optionally process core files
             if args.process_cores:
                 process_the_cores(avocado_logs_dir, test_file["yaml"], args)
-        else:
-            # The test was not run due to an error replacing host placeholders
-            # in the yaml file.  Treat this like a failed avocado command.
-            return_code |= 4
 
     return return_code
 
@@ -898,32 +942,106 @@ def clean_logs(test_yaml, args):
     return True
 
 
-def archive_logs(avocado_logs_dir, test_yaml, args):
-    """Copy all of the host test log files to the avocado results directory.
+def get_remote_file_command():
+    """Get path to get_remote_files.sh script."""
+    return "{}/get_remote_files.sh".format(os.path.abspath(os.getcwd()))
+
+
+def compress_log_files(avocado_logs_dir, args):
+    """Compress log files.
 
     Args:
         avocado_logs_dir (str): path to the avocado log files
-        test_yaml (str): yaml file containing host names
+    """
+    print("Compressing files in {}".format(socket.gethostname().split(".")[0]))
+    logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs", "*.log*")
+    command = [
+        get_remote_file_command(), "-z", "-x", "-f {}".format(logs_dir)]
+    if args.verbose:
+        command.append("-v")
+    print(get_output(command, check=False))
+
+
+def archive_daos_logs(avocado_logs_dir, test_files, args):
+    """Archive daos log files to the avocado results directory.
+
+    Args:
+        avocado_logs_dir (str): path to the avocado log files
+        test_files (dict): a list of dictionaries of each test script/yaml file
         args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        int: status code.
+
     """
     # Create a subdirectory in the avocado logs directory for this test
     destination = os.path.join(avocado_logs_dir, "latest", "daos_logs")
 
     # Copy any DAOS logs created on any host under test
-    host_list = get_hosts_from_yaml(test_yaml, args)
-    print("Archiving host logs from {} in {}".format(host_list, destination))
+    hosts = get_hosts_from_yaml(test_files["yaml"], args)
+    print("Archiving host logs from {} in {}".format(hosts, destination))
 
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
+    task = archive_files(
+        destination, hosts, "{}/*.log*".format(logs_dir), True, args)
 
-    archive_files(destination, host_list, "{}/*log*".format(logs_dir))
-    archive_files(destination, host_list, "{}/*/*log*".format(logs_dir))
+    # Determine if the command completed successfully across all the hosts
+    status = 0
+    if not check_remote_output(task, "archive_daos_logs command"):
+        status |= 16
+    if args.logs_threshold:
+        test_name = get_test_category(test_files["py"])
+        if not check_big_files(avocado_logs_dir, task, test_name, args):
+            status |= 32
+    return status
 
-def archive_config_files(avocado_logs_dir):
+
+def archive_cart_logs(avocado_logs_dir, test_files, args):
+    """Archive cart log files to the avocado results directory.
+
+    Args:
+        avocado_logs_dir (str): path to the avocado log files
+        test_files (dict): a list of dictionaries of each test script/yaml file
+        args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        int: status code.
+
+    """
+    # Create a subdirectory in the avocado logs directory for this test
+    destination = os.path.join(avocado_logs_dir, "latest", "cart_logs")
+
+    # Copy any DAOS logs created on any host under test
+    hosts = get_hosts_from_yaml(test_files["yaml"], args)
+    print("Archiving host logs from {} in {}".format(hosts, destination))
+
+    # Copy any log files written to the DAOS_TEST_LOG_DIR directory
+    logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
+    task = archive_files(
+        destination, hosts, "{}/*/*log*".format(logs_dir), True, args)
+
+    # Determine if the command completed successfully across all the hosts
+    status = 0
+    if not check_remote_output(task, "archive_cart_logs command"):
+        status |= 16
+    if args.logs_threshold:
+        test_name = get_test_category(test_files["py"])
+        if not check_big_files(avocado_logs_dir, task, test_name, args):
+            status |= 32
+    return status
+
+
+def archive_config_files(avocado_logs_dir, args):
     """Copy all of the configuration files to the avocado results directory.
 
     Args:
         avocado_logs_dir (str): path to the avocado log files
+        args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        int: status code.
+
     """
     # Create a subdirectory in the avocado logs directory for this test
     destination = os.path.join(avocado_logs_dir, "latest", "daos_configs")
@@ -937,16 +1055,30 @@ def archive_config_files(avocado_logs_dir):
     # Copy any config files
     base_dir = get_build_environment()["PREFIX"]
     configs_dir = get_temporary_directory(base_dir)
-    archive_files(
-        destination, host_list, "{}/*_*_*.yaml".format(configs_dir))
+    task = archive_files(
+        destination, host_list, "{}/*_*_*.yaml".format(configs_dir), False,
+        args)
 
-def archive_files(destination, host_list, source_files):
+    status = 0
+    if not check_remote_output(task, "archive_config_files"):
+        status = 16
+    return status
+
+
+def archive_files(destination, hosts, source_files, cart, args):
     """Archive all of the remote files to the destination directory.
 
     Args:
         destination (str): path to which to archive files
-        host_list (list): hosts from which to archive files
+        hosts (list): hosts from which to archive files
         source_files (str): remote files to archive
+        cart (str): enable running cart_logtest.py
+        args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        Task: a Task object containing the result of the running the command on
+            the specified hosts
+
     """
     this_host = socket.gethostname().split(".")[0]
 
@@ -957,41 +1089,21 @@ def archive_files(destination, host_list, source_files):
     # Display available disk space prior to copy.  Allow commands to fail w/o
     # exiting this program.  Any disk space issues preventing the creation of a
     # directory will be caught in the archiving of the source files.
-    print("Current disk space usage of {}".format(destination))
-    print(get_output(["df", "-h", destination]))
+    display_disk_space(destination)
 
-    # Copy any source files that exist on the remote hosts and remove them from
-    # the remote host if the copy is successful.  Attempt all of the commands
-    # and report status at the end of the loop.  Include a listing of the file
-    # related to any failed command.
-
-    # Disable pylint's whitespace rules to improve readability for this one
-    # list.
-    #
-    # pylint: disable=bad-continuation
-    commands = [
-        "set -ux",
-        "rc=0",
-        "copied=()",
-        "for file in $(ls -d {})".format(source_files),
-        "do ls -sh $file",
-        "{} $file".format(
-            os.path.join(os.path.abspath("cart"), "cart_logtest.py")),
-        "if scp -r $file {}:{}/${{file##*/}}-$(hostname -s)".format(
-              this_host, destination),
-            "then copied+=($file)",
-            "if ! sudo rm -fr $file",
-                "then ((rc++))",
-                "ls -al $file",
-            "fi",
-        "fi",
-        "done",
-        "echo Copied ${copied[@]:-no files}",
-        "exit $rc",
+    command = [
+        get_remote_file_command(),
+        "-z",
+        "-a \"{}:{}\"".format(this_host, destination),
+        "-f \"{}\"".format(source_files),
     ]
-    # pylint: enable=bad-continuation
-
-    spawn_commands(host_list, "; ".join(commands), timeout=900)
+    if cart:
+        command.append("-c")
+    if args.logs_threshold:
+        command.append("-t \"{}\"".format(args.logs_threshold))
+    if args.verbose:
+        command.append("-v")
+    return get_remote_output(hosts, " ".join(command), 900)
 
 
 def rename_logs(avocado_logs_dir, test_file):
@@ -1014,6 +1126,123 @@ def rename_logs(avocado_logs_dir, test_file):
         print(
             "Error renaming {} to {}: {}".format(
                 test_logs_dir, new_test_logs_dir, error))
+
+
+def check_big_files(avocado_logs_dir, task, test_name, args):
+    """Check the contents of the task object, tag big files, create junit xml.
+
+    Args:
+        avocado_logs_dir (str): path to the avocado log files.
+        task (Task): a Task object containing the command result
+        test_name (str): current running testname
+        args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        bool: True if no errors occurred checking and creating junit file.
+            False, otherwise.
+
+    """
+    status = True
+    hosts = NodeSet()
+    cdata = []
+    for output, nodelist in task.iter_buffers():
+        node_set = NodeSet.fromlist(nodelist)
+        hosts.update(node_set)
+        big_files = re.findall(r"Y:\s([0-9]+)", str(output))
+        if big_files:
+            cdata.append(
+                "The following log files on {} exceeded the {} "
+                "threshold:".format(node_set, args.logs_threshold))
+            cdata.extend(["  {}".format(big_file) for big_file in big_files])
+    if cdata:
+        destination = os.path.join(avocado_logs_dir, "latest")
+        message = "Log size has exceed threshold for this test on: {}".format(
+            hosts)
+        status = create_results_xml(
+            message, test_name, "\n".join(cdata), destination)
+    else:
+        print("No log files found exceeding {}".format(args.logs_threshold))
+
+    return status
+
+
+def report_skipped_test(test_file, avocado_logs_dir, reason):
+    """Report an error for the skipped test.
+
+    Args:
+        test_file (str): the test python file
+        avocado_logs_dir (str): avocado job-results directory
+        reason (str): test skip reason
+
+    Returns:
+        bool: status of writing to junit file
+
+    """
+    message = "The {} test was skipped due to {}".format(test_file, reason)
+    print(message)
+
+    # Generate a fake avocado results.xml file to report the skipped test.
+    # This file currently requires being placed in a job-* subdirectory.
+    test_name = get_test_category(test_file)
+    time_stamp = datetime.now().strftime("%Y-%m-%dT%H.%M")
+    destination = os.path.join(
+        avocado_logs_dir, "job-{}-da03911-{}".format(time_stamp, test_name))
+    try:
+        os.makedirs(destination)
+    except (OSError, FileExistsError) as error:
+        print(
+            "Warning: Continuing after failing to create {}: {}".format(
+                destination, error))
+    return create_results_xml(
+        message, test_name, "See launch.py command output for more details",
+        destination)
+
+
+def create_results_xml(message, testname, output, destination):
+    """Create JUnit xml file.
+
+    Args:
+        message (str): error summary message
+        testname (str): name of test
+        output (dict): result of the command.
+        destination (str): directory where junit xml will be created
+
+    Returns:
+        bool: status of writing to junit file
+
+    """
+    status = True
+
+    # Define the test suite
+    testsuite_attributes = {
+        "name": str(testname),
+        "errors": "1",
+        "failures": "0",
+        "skipped": "0",
+        "test": "1",
+        "time": "0.0",
+    }
+    testsuite = ET.Element("testsuite", testsuite_attributes)
+
+    # Define the test case error
+    testcase_attributes = {"name": "framework_results", "time": "0.0"}
+    testcase = ET.SubElement(testsuite, "testcase", testcase_attributes)
+    ET.SubElement(testcase, "error", {"message": message})
+    system_out = ET.SubElement(testcase, "system-out")
+    system_out.text = output
+
+    # Get xml as string and write it to a file
+    rough_xml = ET.tostring(testsuite, "utf-8")
+    junit_xml = minidom.parseString(rough_xml)
+    results_xml = os.path.join(destination, "framework_results.xml")
+    print("Generating junit xml file {} ...".format(results_xml))
+    try:
+        with open(results_xml, "w") as xml_buffer:
+            xml_buffer.write(junit_xml.toprettyxml())
+    except IOError as error:
+        print("Failed to create xml file: {}".format(error))
+        status = False
+    return status
 
 
 USE_DEBUGINFO_INSTALL = True
@@ -1079,11 +1308,10 @@ def install_debuginfos():
 
     if USE_DEBUGINFO_INSTALL:
         yum_args = [
-            "--exclude", "ompi-debuginfo",
-            "daos-server", "libpmemobj", "python", "openmpi3"]
+            "--exclude", "ompi-debuginfo", "libpmemobj", "python", "openmpi3"]
         cmds.append(["sudo", "yum", "-y", "install"] + yum_args)
         cmds.append(["sudo", "debuginfo-install", "--enablerepo=*-debuginfo",
-                     "-y"] + yum_args + ["gcc"])
+                     "-y"] + yum_args + ["daos-server", "gcc"])
     else:
         # We're not using the yum API to install packages
         # See the comments below.
@@ -1336,6 +1564,12 @@ def main():
         action="store_true",
         help="process core files from tests")
     parser.add_argument(
+        "-th", "--logs_threshold",
+        action="store",
+        help="collect log sizes and report log sizes that go past provided"
+             "threshold. e.g. '-th 5M'"
+             "Valid threshold units are: B, K, M, G, T")
+    parser.add_argument(
         "-s", "--sparse",
         action="store_true",
         help="limit output to pass/fail")
@@ -1416,6 +1650,15 @@ def main():
             ret_code = 1
         if status & 4 == 4:
             print("ERROR: Detected one or more failed avocado commands!")
+            ret_code = 1
+        if status & 16 == 16:
+            print("ERROR: Detected one or more tests that failed archiving!")
+            ret_code = 1
+        if status & 32 == 32:
+            print("ERROR: Detected one or more tests with unreported big logs!")
+            ret_code = 1
+        if status & 64 == 64:
+            print("ERROR: Failed to create a junit xml test error file!")
             ret_code = 1
         if status & 128 == 128:
             print("ERROR: Failed to clean logs in preparation for test run!")

@@ -130,7 +130,7 @@ crt_proc_daos_prop_t(crt_proc_t proc, daos_prop_t **data)
 {
 	daos_prop_t		*prop;
 	crt_proc_op_t		 proc_op;
-	uint32_t		 nr, tmp;
+	uint32_t		 nr = 0, tmp = 0;
 	int			 rc;
 
 	if (proc == NULL || data == NULL)

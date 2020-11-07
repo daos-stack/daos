@@ -34,6 +34,7 @@ static struct option long_ops[] = {
 
 void print_usage(void)
 {
+	fprintf(stdout, "-n|--dmg_config\n");
 	fprintf(stdout, "daos_run_io_conf <io_conf_file>\n");
 }
 
@@ -54,11 +55,15 @@ main(int argc, char **argv)
 		goto out_fini;
 	}
 
-	while ((rc = getopt_long(argc, argv, "h", long_ops, NULL)) != -1) {
+	while ((rc = getopt_long(argc, argv, "h:n:", long_ops, NULL)) != -1) {
 		switch (rc) {
 		case 'h':
 			print_usage();
 			goto out_fini;
+		case 'n':
+			dmg_config_file = optarg;
+			printf("dmg_config_file = %s\n", dmg_config_file);
+			break;
 		default:
 			fprintf(stderr, "Unknown option %c\n", rc);
 			print_usage();
@@ -83,6 +88,7 @@ main(int argc, char **argv)
 	}
 
 	arg = state;
+	arg->dmg_config = dmg_config_file;
 	eio_arg = &arg->eio_args;
 	D_INIT_LIST_HEAD(&eio_arg->op_list);
 	eio_arg->op_lvl = TEST_LVL_DAOS;
@@ -100,6 +106,7 @@ main(int argc, char **argv)
 
 	daos_fini();
 	MPI_Barrier(MPI_COMM_WORLD);
+	fprintf(stdout, "daos_run_io_conf completed successfully\n");
 out_fini:
 	MPI_Finalize();
 	return rc;
