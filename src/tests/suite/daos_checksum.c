@@ -2208,7 +2208,7 @@ static int
 setup(void **state)
 {
 	return test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
-			  NULL);
+			  0, NULL);
 }
 
 #define CSUM_TEST(dsc, test) { dsc, test, csum_replia_enable, \
