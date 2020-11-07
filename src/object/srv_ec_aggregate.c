@@ -672,6 +672,9 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 
 	D_ASSERT(!(entry->ie_recx.rx_idx & PARITY_INDICATOR));
 
+	if (entry->ie_oid.id_shard < agg_entry->ae_oca->u.ec.e_k)
+		return 1;
+
 	this_stripenum = agg_stripenum(agg_entry, entry->ie_recx.rx_idx);
 
 	if (this_stripenum != agg_entry->ae_cur_stripe.as_stripenum) {
