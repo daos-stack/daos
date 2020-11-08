@@ -254,7 +254,9 @@ oid_iv_ent_init(struct ds_iv_key *iv_key, void *data, struct ds_iv_entry *entry)
 		return -DER_NOMEM;
 
 	/* create the entry mutex */
-	ABT_mutex_create(&oid_entry->lock);
+	rc = ABT_mutex_create(&oid_entry->lock);
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
 
 	/** init the entry key */
 	entry->iv_key.class_id = iv_key->class_id;
