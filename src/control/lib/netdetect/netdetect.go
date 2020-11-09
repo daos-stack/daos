@@ -122,6 +122,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net"
 	"strconv"
 	"strings"
@@ -160,6 +161,8 @@ const (
 	IEEE1394   = 24
 	Eui64      = 27
 	Infiniband = 32
+	// NetDevAny matches any class
+	NetDevAny = math.MaxUint32
 )
 
 // DeviceAffinity describes the essential details of a device and its NUMA affinity
@@ -1303,6 +1306,8 @@ func DevClassName(class uint32) string {
 		return "EUI64"
 	case Infiniband:
 		return "INFINIBAND"
+	case NetDevAny:
+		return "best-available"
 	default:
 		return "UNKNOWN"
 	}

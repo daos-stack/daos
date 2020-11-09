@@ -34,6 +34,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	nd "github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -296,124 +297,145 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		numPmem       int
-		netDevClass   NetDevClass
+		netDevClass   uint32
 		uErr          error
 		hostResponses []*HostResponse
 		expConfigOut  *config.Server
 		expCheckErr   error
 	}{
 		"invoker error": {
+			netDevClass:   nd.NetDevAny,
 			uErr:          errors.New("unary error"),
 			hostResponses: dualHostRespSame(fabIfs1),
 			expCheckErr:   errors.New("unary error"),
 		},
 		"host network scan failed": {
+			netDevClass:   nd.NetDevAny,
 			hostResponses: hostRespRemoteFail,
 			expCheckErr:   errors.New("1 host had errors"),
 		},
 		"host network scan failed on multiple hosts": {
+			netDevClass:   nd.NetDevAny,
 			hostResponses: hostRespRemoteFails,
 			expCheckErr:   errors.New("2 hosts had errors"),
 		},
 		"host network scan no hosts": {
+			netDevClass:   nd.NetDevAny,
 			hostResponses: []*HostResponse{},
 			expCheckErr:   errors.New("no host responses"),
 		},
+		"unsupported network class in request": {
+			hostResponses: dualHostResp(fabIfs1, fabIfs2),
+			expCheckErr:   errors.New("unsupported net dev class in request"),
+		},
 		"host network mismatch": {
+			netDevClass:   nd.NetDevAny,
 			hostResponses: dualHostResp(fabIfs1, fabIfs2),
 			expCheckErr:   errors.New("network hardware not consistent across hosts"),
 		},
 		"no min pmem and no numa": {
+			netDevClass:   nd.NetDevAny,
 			hostResponses: dualHostRespSame(fabIfs1),
 			expCheckErr:   errors.New("no numa nodes reported on hosts host[1-2]"),
 		},
 		"no min pmem and no numa on one host": {
+			netDevClass:   nd.NetDevAny,
 			hostResponses: dualHostResp(fabIfs1, fabIfs1wNuma),
 			expCheckErr:   errors.New("network hardware not consistent across hosts"),
 		},
 		"no min pmem and two numa": {
+			netDevClass:   nd.NetDevAny,
 			hostResponses: dualHostRespSame(fabIfs1wNuma),
 			expCheckErr:   errors.New("insufficient matching best-available network"),
 		},
 		"no min pmem and two numa but only single interface": {
+			netDevClass:   nd.NetDevAny,
 			hostResponses: dualHostRespSame(fabIfs3),
 			expCheckErr:   errors.New("insufficient matching best-available network"),
 		},
 		"one min pmem and two numa but only single interface": {
+			netDevClass:   nd.NetDevAny,
 			numPmem:       1,
 			hostResponses: dualHostRespSame(fabIfs3),
 			expConfigOut: config.DefaultServer().WithServers(
 				ioserver.NewConfig().
 					WithFabricInterface("ib0").
-					WithFabricInterfacePort(31416).
+					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
 					WithPinnedNumaNode(&numa0)),
 		},
 		"one min pmem and two numa but only single interface select ethernet": {
 			numPmem:       1,
-			netDevClass:   NetDevEther,
+			netDevClass:   nd.Ether,
 			hostResponses: dualHostRespSame(fabIfs3),
 			expConfigOut: config.DefaultServer().WithServers(
 				ioserver.NewConfig().
 					WithFabricInterface("eth0").
-					WithFabricInterfacePort(31416).
+					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+sockets").
 					WithPinnedNumaNode(&numa0)),
 		},
 		"no min pmem and two numa with dual ib interfaces": {
+			netDevClass:   nd.NetDevAny,
 			hostResponses: dualHostRespSame(fabIfs4),
 			expConfigOut: config.DefaultServer().WithServers(
 				ioserver.NewConfig().
 					WithFabricInterface("ib0").
-					WithFabricInterfacePort(31416).
+					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
 					WithPinnedNumaNode(&numa0),
 				ioserver.NewConfig().
 					WithFabricInterface("ib1").
-					WithFabricInterfacePort(32416).
+					WithFabricInterfacePort(
+						defaultFiPort+defaultFiPortInterval).
 					WithFabricProvider("ofi+psm2").
 					WithPinnedNumaNode(&numa1)),
 		},
 		"dual ib interfaces but ethernet selected": {
-			netDevClass:   NetDevEther,
+			netDevClass:   nd.Ether,
 			hostResponses: dualHostRespSame(fabIfs4),
-			expCheckErr:   errors.New("insufficient matching ethernet network"),
+			expCheckErr:   errors.New("insufficient matching ETHER network"),
 		},
 		"no min pmem and two numa with dual eth interfaces": {
+			netDevClass:   nd.NetDevAny,
 			hostResponses: dualHostRespSame(fabIfs5),
 			expConfigOut: config.DefaultServer().WithServers(
 				ioserver.NewConfig().
 					WithFabricInterface("eth0").
-					WithFabricInterfacePort(31416).
+					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+sockets").
 					WithPinnedNumaNode(&numa0),
 				ioserver.NewConfig().
 					WithFabricInterface("eth1").
-					WithFabricInterfacePort(32416).
+					WithFabricInterfacePort(
+						defaultFiPort+defaultFiPortInterval).
 					WithFabricProvider("ofi+sockets").
 					WithPinnedNumaNode(&numa1)),
 		},
 		"dual eth interfaces but infiniband selected": {
-			netDevClass:   NetDevInfiniband,
+			netDevClass:   nd.Infiniband,
 			hostResponses: dualHostRespSame(fabIfs5),
-			expCheckErr:   errors.New("insufficient matching infiniband network"),
+			expCheckErr:   errors.New("insufficient matching INFINIBAND network"),
 		},
 		"four min pmem and two numa with dual ib interfaces": {
 			numPmem:       4,
+			netDevClass:   nd.NetDevAny,
 			hostResponses: dualHostRespSame(fabIfs4),
 			expCheckErr:   errors.New("insufficient matching best-available network"),
 		},
 		"no min pmem and two numa with typical fabric scan output": {
+			netDevClass:   nd.NetDevAny,
 			hostResponses: dualHostRespSame(typicalFabIfs),
 			expConfigOut: config.DefaultServer().WithServers(
 				ioserver.NewConfig().
 					WithFabricInterface("ib0").
-					WithFabricInterfacePort(31416).
+					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
 					WithPinnedNumaNode(&numa0),
 				ioserver.NewConfig().
 					WithFabricInterface("ib1").
-					WithFabricInterfacePort(32416).
+					WithFabricInterfacePort(
+						defaultFiPort+defaultFiPortInterval).
 					WithFabricProvider("ofi+psm2").
 					WithPinnedNumaNode(&numa1)),
 		},

@@ -29,6 +29,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 )
 
 // configCmd is the struct representing the top-level config subcommand.
@@ -44,7 +45,7 @@ type configGenCmd struct {
 	jsonOutputCmd
 	NumPmem  int    `short:"p" long:"num-pmem" description:"Minimum number of SCM (pmem) devices required per storage host in DAOS system"`
 	NumNvme  int    `short:"n" long:"num-nvme" description:"Minimum number of NVMe devices required per storage host in DAOS system"`
-	NetClass string `default:"best-available" short:"c" long:"net-class" description:"Network class preferred, defaults to best available" choice:"best-available" choice:"ethernet" choice:"infiniband"`
+	NetClass string `default:"best-available" short:"c" long:"net-class" description:"Network class preferred" choice:"best-available" choice:"ethernet" choice:"infiniband"`
 }
 
 // Execute is run when configGenCmd activates.
@@ -64,9 +65,11 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 	}
 	switch cmd.NetClass {
 	case "ethernet":
-		req.NetClass = control.NetDevEther
+		req.NetClass = netdetect.Ether
 	case "infiniband":
-		req.NetClass = control.NetDevInfiniband
+		req.NetClass = netdetect.Infiniband
+	default:
+		req.NetClass = netdetect.NetDevAny
 	}
 
 	resp, err := control.ConfigGenerate(ctx, req)

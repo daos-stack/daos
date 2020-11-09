@@ -30,6 +30,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	nd "github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
@@ -37,33 +38,11 @@ import (
 )
 
 const (
-	scmMountPrefix = "/mnt/daos"
-	pmemBdevDir    = "/dev"
-	defaultFiPort  = 31416
+	scmMountPrefix        = "/mnt/daos"
+	pmemBdevDir           = "/dev"
+	defaultFiPort         = 31416
+	defaultFiPortInterval = 1000
 )
-
-// NetDevClass constants
-const (
-	NetDevAny        NetDevClass = 0 // overwrite use of NET/ROM
-	NetDevEther      NetDevClass = 1
-	NetDevInfiniband NetDevClass = 32
-)
-
-// NetDevClass is a type alias for network device classes.
-type NetDevClass uint32
-
-func (ndc NetDevClass) String() string {
-	switch ndc {
-	case NetDevEther:
-		return "ethernet"
-	case NetDevInfiniband:
-		return "infiniband"
-	case NetDevAny:
-		return "best-available"
-	default:
-		return "unsupported"
-	}
-}
 
 var netCtx context.Context
 
@@ -74,7 +53,7 @@ type (
 		msRequest
 		NumPmem  int
 		NumNvme  int
-		NetClass NetDevClass
+		NetClass uint32
 		Client   UnaryInvoker
 		HostList []string
 		Log      logging.Logger
@@ -155,7 +134,7 @@ func (req *ConfigGenerateReq) getSingleNetworkSet(ctx context.Context) (*HostFab
 type classInterfaces map[uint32][]*HostFabricInterface
 
 // add interface to bucket corresponding to provider and network class type,
-// verify NUMA node binding doesn't match existing entry in bucket
+// verify NUMA node binding doesn't match existing entry in bucket.
 func (cis classInterfaces) add(log logging.Logger, iface *HostFabricInterface) []*HostFabricInterface {
 	for _, existing := range cis[iface.NetDevClass] {
 		if existing.NumaNode == iface.NumaNode {
@@ -163,16 +142,59 @@ func (cis classInterfaces) add(log logging.Logger, iface *HostFabricInterface) [
 			return cis[iface.NetDevClass]
 		}
 	}
-	log.Debugf("%s class iface %s found for NUMA %d", NetDevClass(iface.NetDevClass),
-		iface.Device, iface.NumaNode)
+	log.Debugf("%s class iface %s found for NUMA %d",
+		nd.DevClassName(iface.NetDevClass), iface.Device, iface.NumaNode)
 	cis[iface.NetDevClass] = append(cis[iface.NetDevClass], iface)
 
 	return cis[iface.NetDevClass]
 }
 
+// parseInterfaces adds interface in scan result if class is ether or infiniband and
+// the requested class is any or matches the interface class.
+func (req *ConfigGenerateReq) parseInterfaces(interfaces []*HostFabricInterface) ([]*HostFabricInterface, bool) {
+	// sort network interfaces by priority to get best available
+	sort.Slice(interfaces, func(i, j int) bool {
+		return interfaces[i].Priority < interfaces[j].Priority
+	})
+
+	var complete bool
+	var matching []*HostFabricInterface
+	buckets := make(map[string]classInterfaces)
+	for _, iface := range interfaces {
+		switch iface.NetDevClass {
+		case nd.Ether, nd.Infiniband:
+			switch req.NetClass {
+			case nd.NetDevAny, iface.NetDevClass:
+			default:
+				continue // iface class not requested
+			}
+		default:
+			continue // iface class unsupported
+		}
+
+		if _, exists := buckets[iface.Provider]; !exists {
+			buckets[iface.Provider] = make(classInterfaces)
+		}
+
+		matching = buckets[iface.Provider].add(req.Log, iface)
+		if len(matching) == req.NumPmem {
+			complete = true
+			break
+		}
+	}
+
+	return matching, complete
+}
+
 // checkNetwork scans fabric network interfaces and updates-in-place configuration
 // with appropriate fabric device details for all required numa nodes.
 func (req *ConfigGenerateReq) checkNetwork(ctx context.Context) (*config.Server, error) {
+	switch req.NetClass {
+	case nd.NetDevAny, nd.Ether, nd.Infiniband:
+	default:
+		return nil, errors.Errorf("unsupported net dev class in request: %s",
+			nd.DevClassName(req.NetClass))
+	}
 	req.Log.Debugf("checkNetwork called with request %v", req)
 
 	networkSet, err := req.getSingleNetworkSet(ctx)
@@ -205,57 +227,23 @@ func (req *ConfigGenerateReq) checkNetwork(ctx context.Context) (*config.Server,
 	}
 	req.Log.Infof(msg)
 
-	interfaces := networkSet.HostFabric.Interfaces
-
-	// sort network interfaces by priority to get best available
-	sort.Slice(interfaces, func(i, j int) bool {
-		return interfaces[i].Priority < interfaces[j].Priority
-	})
-
-	var complete bool
-	var matching []*HostFabricInterface
-	buckets := make(map[string]classInterfaces)
-	for _, iface := range interfaces {
-		nc := NetDevClass(iface.NetDevClass)
-		switch nc {
-		case NetDevEther, NetDevInfiniband:
-			switch req.NetClass {
-			case NetDevAny, nc:
-			default:
-				continue // iface class not requested
-			}
-		default:
-			continue // iface class unsupported
-		}
-
-		if _, exists := buckets[iface.Provider]; !exists {
-			buckets[iface.Provider] = make(classInterfaces)
-		}
-
-		matching = buckets[iface.Provider].add(req.Log, iface)
-		if len(matching) == req.NumPmem {
-			complete = true
-			break
-		}
-	}
-
+	matching, complete := req.parseInterfaces(networkSet.HostFabric.Interfaces)
 	if !complete {
 		return nil, errors.Errorf(
 			"insufficient matching %s network interfaces, want %d got %d %+v",
-			req.NetClass, req.NumPmem, len(matching), matching)
+			nd.DevClassName(req.NetClass), req.NumPmem, len(matching), matching)
 	}
 
-	req.Log.Debugf("network interfaces: %v", matching)
+	req.Log.Debugf("selected network interfaces: %v", matching)
 
 	cfg := config.DefaultServer()
 	for _, iface := range matching {
 		nn := uint(iface.NumaNode)
 		iocfg := ioserver.NewConfig()
 		iocfg.Fabric = ioserver.FabricConfig{
-			Provider:  iface.Provider,
-			Interface: iface.Device,
-			// difference of 1000 between each IO server
-			InterfacePort:  int(defaultFiPort + (nn * 1000)),
+			Provider:       iface.Provider,
+			Interface:      iface.Device,
+			InterfacePort:  int(defaultFiPort + (nn * defaultFiPortInterval)),
 			PinnedNumaNode: &nn,
 		}
 		cfg.Servers = append(cfg.Servers, iocfg)
