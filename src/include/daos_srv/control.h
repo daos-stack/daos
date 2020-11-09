@@ -41,6 +41,33 @@ enum {
 	NVME_DEV_FL_FAULTY	= 0x4,
 };
 
+enum bio_dev_state {
+	BIO_DEV_NORMAL  = 0, /* fully functional and in-use */
+	BIO_DEV_FAULTY,      /* evicted device */
+	BIO_DEV_OUT,         /* unplugged device */
+	BIO_DEV_NEW,         /* new device not currently in-use */
+};
+
+/*
+ * Convert device state to human-readable string
+ *
+ * \param [IN]  state   Device state
+ *
+ * \return              Static string representing enum value
+ */
+static inline char *
+bio_dev_state_enum_to_str(enum bio_dev_state state)
+{
+	switch (state) {
+	case BIO_DEV_NORMAL: return "NORMAL";
+	case BIO_DEV_FAULTY: return "EVICTED";
+	case BIO_DEV_OUT:    return "UNPLUGGED";
+	case BIO_DEV_NEW:    return "NEW";
+	}
+
+	return "Undefined state";
+}
+
 #define HEALTH_STAT_STR_LEN 128
 
 /*

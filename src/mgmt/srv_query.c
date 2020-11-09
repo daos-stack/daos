@@ -261,6 +261,7 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 {
 	struct bio_dev_info	   *dev_info = NULL, *tmp;
 	struct bio_list_devs_info   list_devs_info = { 0 };
+	enum bio_dev_state	    state;
 	int			    buflen = 10;
 	int			    i = 0, j;
 	int			    rc = 0;
@@ -304,8 +305,19 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 			rc = -DER_NOMEM;
 			break;
 		}
+		/* BIO device state is determined by device flags */
+		if (dev_info->bdi_flags & NVME_DEV_FL_PLUGGED) {
+			if (dev_info->bdi_flags & NVME_DEV_FL_FAULTY)
+				state = BIO_DEV_FAULTY;
+			else if (dev_info->bdi_flags & NVME_DEV_FL_INUSE)
+				state = BIO_DEV_NORMAL;
+			else
+				state = BIO_DEV_NEW;
+		} else
+			state = BIO_DEV_OUT;
+
 		strncpy(resp->devices[i]->state,
-			bio_dev_state_enum_to_str(dev_info->bdi_state), buflen);
+			bio_dev_state_enum_to_str(state), buflen);
 
 		resp->devices[i]->n_tgt_ids = dev_info->bdi_tgt_cnt;
 		D_ALLOC(resp->devices[i]->tgt_ids,

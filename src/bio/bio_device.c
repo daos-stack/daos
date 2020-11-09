@@ -458,19 +458,6 @@ out:
 	return rc;
 }
 
-char *
-bio_dev_state_enum_to_str(enum bio_dev_state state)
-{
-	switch (state) {
-	case BIO_DEV_NORMAL: return "NORMAL";
-	case BIO_DEV_FAULTY: return "EVICTED";
-	case BIO_DEV_OUT:    return "UNPLUGGED";
-	case BIO_DEV_NEW:    return "NEW";
-	}
-
-	return "Undefined state";
-}
-
 static struct bio_dev_info *
 alloc_dev_info(uuid_t dev_id, struct smd_dev_info *s_info)
 {
@@ -553,17 +540,6 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 		if (!d_bdev->bb_removed)
 			b_info->bdi_flags |= NVME_DEV_FL_PLUGGED;
 
-		/* set BIO device state based on flags */
-		if (b_info->bdi_flags & NVME_DEV_FL_PLUGGED) {
-			if (b_info->bdi_flags & NVME_DEV_FL_FAULTY)
-				b_info->bdi_state = BIO_DEV_FAULTY;
-			else if (b_info->bdi_flags & NVME_DEV_FL_INUSE)
-				b_info->bdi_state = BIO_DEV_NORMAL;
-			else
-				b_info->bdi_state = BIO_DEV_NEW;
-		} else
-			b_info->bdi_state = BIO_DEV_OUT;
-
 		d_list_add_tail(&b_info->bdi_link, dev_list);
 		(*dev_cnt)++;
 
@@ -591,7 +567,6 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 			rc = -DER_NOMEM;
 			goto out;
 		}
-		b_info->bdi_state = BIO_DEV_OUT;
 		d_list_add_tail(&b_info->bdi_link, dev_list);
 		(*dev_cnt)++;
 	}

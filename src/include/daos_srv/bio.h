@@ -310,13 +310,6 @@ bio_sgl_holes(struct bio_sglist *bsgl)
 	return result;
 }
 
-enum bio_dev_state {
-	BIO_DEV_NORMAL	= 0, /* fully functional and in-use */
-	BIO_DEV_FAULTY,      /* evicted device */
-	BIO_DEV_OUT,         /* unplugged device */
-	BIO_DEV_NEW,         /* new device not currently in-use */
-};
-
 /*
  * Device information inquired from BIO. It's almost identical to
  * smd_dev_info currently, but it could be extended in the future.
@@ -329,7 +322,6 @@ struct bio_dev_info {
 	uint32_t		bdi_flags;	/* defined in control.h */
 	uint32_t		bdi_tgt_cnt;
 	int		       *bdi_tgts;
-	enum bio_dev_state	bdi_state;
 };
 
 static inline void
@@ -678,14 +670,5 @@ void bio_log_csum_err(struct bio_xs_context *b, int tgt_id);
 
 /* Too many blob IO queued, need to schedule a NVMe poll? */
 bool bio_need_nvme_poll(struct bio_xs_context *xs);
-
-/*
- * Convert device state to human-readable string
- *
- * \param [IN]  state	Device state
- *
- * \return		Static string representing enum value
- */
-char *bio_dev_state_enum_to_str(enum bio_dev_state state);
 
 #endif /* __BIO_API_H__ */
