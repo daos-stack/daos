@@ -37,6 +37,7 @@ const (
 	defaultExcludeInterfaces = "lo"
 )
 
+// NetworkScan retrieves details of network interfaces on remote hosts.
 func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScanReq) (*ctlpb.NetworkScanResp, error) {
 	c.log.Debugf("NetworkScanDevices() Received request: %s", req.GetProvider())
 	excludes := req.GetExcludeinterfaces()
@@ -66,11 +67,15 @@ func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScan
 	resp := new(ctlpb.NetworkScanResp)
 	for _, sr := range results {
 		resp.Interfaces = append(resp.Interfaces, &ctlpb.FabricInterface{
-			Provider: sr.Provider,
-			Device:   sr.DeviceName,
-			Numanode: uint32(sr.NUMANode),
+			Provider:    sr.Provider,
+			Device:      sr.DeviceName,
+			Numanode:    uint32(sr.NUMANode),
+			Priority:    uint32(sr.Priority),
+			Netdevclass: sr.NetDevClass,
 		})
 	}
+
+	resp.Numacount = int32(netdetect.NumNumaNodes(netCtx))
 
 	return resp, nil
 }
