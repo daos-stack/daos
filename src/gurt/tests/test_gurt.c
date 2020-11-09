@@ -248,8 +248,8 @@ void test_d_errdesc(void **state)
 	assert_string_equal(value, "Not a directory");
 	value = d_errdesc(-2028);
 	assert_string_equal(value, "TX is not committed");
-	value = d_errdesc(-2030);
-	assert_string_equal(value, "Unknown error code -2030");
+	value = d_errdesc(-2039);
+	assert_string_equal(value, "Unknown error code -2039");
 	value = d_errdesc(-DER_UNKNOWN);
 	assert_string_equal(value, "Unknown error");
 	value = d_errdesc(-501001);
@@ -1861,13 +1861,15 @@ test_gurt_circular_list(void **state)
 
 	i = 0;
 	D_CIRCLEQ_FOREACH(item, &head, cci_link) {
-		assert(item->cci_id == i++);
+		assert(item->cci_id == i);
+		i++;
 	}
 	assert(i == 3);
 
 	i = 2;
 	D_CIRCLEQ_FOREACH_REVERSE(item, &head, cci_link) {
-		assert(item->cci_id == i--);
+		assert(item->cci_id == i);
+		i--;
 	}
 	assert(i == -1);
 
