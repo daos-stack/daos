@@ -757,7 +757,7 @@ randomize_endpts(struct st_endpoint *endpts, uint32_t num_endpts)
 {
 	struct st_endpoint	tmp;
 	int			r_index;
-	int 			i;
+	int			i;
 	int			k;
 
 	srand(time(NULL));
@@ -776,8 +776,9 @@ randomize_endpts(struct st_endpoint *endpts, uint32_t num_endpts)
 
 	printf("New order:\n");
 	for (i = 0; i < num_endpts; i++) {
-		printf("%d:%d\n", endpts[i].rank, endpts[i].tag);
+		printf("%d:%d ", endpts[i].rank, endpts[i].tag);
 	}
+	printf("\n");
 }
 
 static int run_self_test(struct st_size_params all_params[],
