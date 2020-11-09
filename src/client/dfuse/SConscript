@@ -11,6 +11,7 @@ DFUSE_SRC = ['dfuse_core.c',
              'dfuse_main.c',
              'dfuse_fuseops.c',
              'dfuse_cont.c',
+             'dfuse_thread.c',
              'dfuse_pool.c',
              'dfuse_inode.c']
 OPS_SRC = ['create',
