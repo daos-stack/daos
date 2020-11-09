@@ -147,19 +147,10 @@ func (n *NvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error)
 
 // Format devices available through SPDK, destructive operation!
 //
-// Attempt wipe of namespace #1 LBA-0.
-//
-// TODO DAOS-5485: reinstate fall back to full controller format if quick
-//      format failed, this requires reworking C.nvme_format() to format
-//      all available ctrlrs
+// Attempt wipe of each controller namespace's LBA-0.
 func (n *NvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
 	return collectFormatResults(C.nvme_wipe_namespaces(),
 		"NVMe Format(): C.nvme_wipe_namespaces()")
-
-	//	log.Infof("falling back to full format on %s\n", ctrlrPciAddr)
-	//	_, err = collectCtrlrs(C.nvme_format(csPci), failMsg+"format()")
-	//
-	//	return
 }
 
 // Update updates the firmware image via SPDK in a given slot on the device.
