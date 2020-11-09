@@ -45,7 +45,7 @@
 	ACTION(mem,  mem,  arg)  /* memory debug messages */            \
 	ACTION(swim, swim, arg)  /* swim debug messages (move ?) */     \
 	ACTION(fi,   fi,   arg)  /* fault injection debug messages */   \
-	ACTION(telem,telem,arg)  /* telemetry debug messages */
+	ACTION(telem, telem, arg)  /* telemetry debug messages */
 
 /**
  * d_alt_assert is a pointer to an alternative assert function, meaning an

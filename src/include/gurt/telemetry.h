@@ -130,7 +130,7 @@ void d_tm_list_free(d_tm_nodeList_t *nodeList);
 int d_tm_get_version(void);
 uint8_t *d_tm_get_shared_memory(int rank);
 
-d_tm_node_t * d_tm_convert_node_ptr(uint64_t *cshmemRoot, void *ptr);
+d_tm_node_t *d_tm_convert_node_ptr(uint64_t *cshmemRoot, void *ptr);
 d_tm_metric_t *d_tm_convert_metric_ptr(uint64_t *cshmemRoot, void *ptr);
 char *d_tm_convert_char_ptr(uint64_t *cshmemRoot, void *ptr);
 

@@ -52,10 +52,10 @@
  * These are server side global variables that apply to the entire server
  * side process
  */
-d_tm_node_t * root = NULL;
-uint64_t * shmemRoot = NULL;
-uint8_t * shmemIdx = NULL;
-uint64_t shmemFree = 0;
+d_tm_node_t *root;
+uint64_t *shmemRoot;
+uint8_t *shmemIdx;
+uint64_t shmemFree;
 pthread_mutex_t addlock;
 
 /*
@@ -110,6 +110,7 @@ d_tm_add_child(d_tm_node_t **newnode, d_tm_node_t *parent, char *name)
 	d_tm_node_t *child = parent->child;
 	d_tm_node_t *sibling = parent->child;
 	int rc = D_TM_SUCCESS;
+	int buffLen = 0;
 
 	/* If there are no children, add the first child to this parent */
 	if (!child) {
@@ -118,7 +119,7 @@ d_tm_add_child(d_tm_node_t **newnode, d_tm_node_t *parent, char *name)
 			rc = -DER_NO_SHMEM;
 			D_GOTO(failure, rc);
 		}
-		int buffLen = strnlen(name, D_TM_MAX_NAME_LEN);
+		buffLen = strnlen(name, D_TM_MAX_NAME_LEN);
 		if (buffLen == D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
 			D_GOTO(failure, rc);
@@ -151,7 +152,7 @@ d_tm_add_child(d_tm_node_t **newnode, d_tm_node_t *parent, char *name)
 	/* Add the new node to the sibling list */
 	*newnode = (d_tm_node_t *)d_tm_shmalloc(sizeof(d_tm_node_t));
 	if (*newnode) {
-		int buffLen = strnlen(name, D_TM_MAX_NAME_LEN);
+		buffLen = strnlen(name, D_TM_MAX_NAME_LEN);
 		if (buffLen == D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
 			D_GOTO(failure, rc);
@@ -232,7 +233,7 @@ d_tm_init(int rank, uint64_t memSize)
 	 * happen here.  Just checking for a null pointer for
 	 * good hygiene.
 	 */
-	if (!root){
+	if (!root) {
 		rc = -DER_NO_SHMEM;
 		D_ERROR("Out of shared memory: %d", rc);
 		D_GOTO(failure, rc);
@@ -248,7 +249,7 @@ d_tm_init(int rank, uint64_t memSize)
 	buffLen += 1; /* make room for the trailing null */
 
 	root->name = (char *)d_tm_shmalloc(buffLen * sizeof(char));
-	if (!root->name){
+	if (!root->name) {
 		rc = -DER_NO_SHMEM;
 		D_ERROR("Out of shared memory: %d", rc);
 		D_GOTO(failure, rc);
@@ -301,7 +302,6 @@ void d_tm_fini(void)
 		 */
 		shmdt(shmemRoot);
 	}
-	return;
 }
 
 /*
@@ -311,6 +311,7 @@ void
 d_tm_free_node(uint64_t *cshmemRoot, d_tm_node_t *node)
 {
 	char *name;
+
 	if (!node)
 		return;
 
@@ -327,14 +328,13 @@ d_tm_free_node(uint64_t *cshmemRoot, d_tm_node_t *node)
 		d_tm_free_node(cshmemRoot, node);
 		node = node->sibling;
 		node = (d_tm_node_t *) d_tm_convert_node_ptr(cshmemRoot, node);
-		while(node) {
+		while (node) {
 			d_tm_free_node(cshmemRoot, node);
 			node = node->sibling;
 			node = (d_tm_node_t *) d_tm_convert_node_ptr(cshmemRoot,
 								     node);
 		}
 	}
-	return;
 }
 
 /*
@@ -361,96 +361,83 @@ d_tm_print_my_children(uint64_t *cshmemRoot, d_tm_node_t *node, int level)
 			printf("%20s", " ");
 
 		switch (node->d_tm_type) {
-			char tmp[D_TM_TIME_BUFF_LEN];
-			int len = 0;
+		char tmp[D_TM_TIME_BUFF_LEN];
+		int len = 0;
 
-			case D_TM_DIRECTORY:
-				printf("%-20s\n", convertedNamePtr);
-				break;
-			case D_TM_COUNTER:
-				rc = d_tm_get_counter(&val, cshmemRoot, node,
-							 NULL);
-				if (rc == D_TM_SUCCESS)
-					printf("COUNTER: %s %" PRIu64 "\n",
-						convertedNamePtr, val);
-				else
-					printf("Error on counter read: %d\n",
-						rc);
-				break;
-			case D_TM_TIMESTAMP:
-				rc = d_tm_get_timestamp(&clk, cshmemRoot,
-							   node, NULL);
-				if (rc == D_TM_SUCCESS) {
-					strncpy(tmp, ctime(&clk), sizeof(tmp));
-					len = strnlen(tmp,
-						      D_TM_TIME_BUFF_LEN - 1);
-					if (len) {
-						if (tmp[len-1] == '\n') {
-							tmp[len-1] = 0;
-						}
+		case D_TM_DIRECTORY:
+			printf("%-20s\n", convertedNamePtr);
+			break;
+		case D_TM_COUNTER:
+			rc = d_tm_get_counter(&val, cshmemRoot, node, NULL);
+			if (rc == D_TM_SUCCESS)
+				printf("COUNTER: %s %" PRIu64 "\n",
+					convertedNamePtr, val);
+			else
+				printf("Error on counter read: %d\n", rc);
+			break;
+		case D_TM_TIMESTAMP:
+			rc = d_tm_get_timestamp(&clk, cshmemRoot, node, NULL);
+			if (rc == D_TM_SUCCESS) {
+				strncpy(tmp, ctime(&clk), sizeof(tmp));
+				len = strnlen(tmp, D_TM_TIME_BUFF_LEN - 1);
+				if (len) {
+					if (tmp[len-1] == '\n') {
+						tmp[len-1] = 0;
 					}
-					printf("TIMESTAMP %s: %s\n",
-						convertedNamePtr, tmp);
-				} else
-					printf("Error on timestamp read: %d\n",
-						rc);
-				break;
-			case D_TM_HIGH_RES_TIMER:
-				rc = d_tm_get_highres_timer(&tms, cshmemRoot,
-								node, NULL);
-				if (rc == D_TM_SUCCESS) {
-					printf("HIGH RES TIMER %s:%lds, "
-						"%ldns\n", convertedNamePtr,
-						tms.tv_sec, tms.tv_nsec);
-				} else
-					printf("Error on highres timer read:"
-						" %d\n", rc);
-				break;
-			case (D_TM_DURATION | D_TM_CLOCK_REALTIME):
-				rc = d_tm_get_duration(&tms, cshmemRoot,
-							  node, NULL);
-				if (rc == D_TM_SUCCESS) {
-					printf("REALTIME DURATION %s: %.9fs\n",
-						convertedNamePtr, tms.tv_sec +
-						tms.tv_nsec/1e9);
-				} else
-					printf("Error on duration read: %d\n",
-						rc);
-				break;
-			case (D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME):
-				rc = d_tm_get_duration(&tms, cshmemRoot,
-							  node, NULL);
-				if (rc == D_TM_SUCCESS) {
-					printf("PROC CPU DURATION %s: %.9fs\n",
-						convertedNamePtr, tms.tv_sec +
-						tms.tv_nsec/1e9);
-				} else
-					printf("Error on duration read: %d\n",
-						rc);
-				break;
-			case (D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME):
-				rc = d_tm_get_duration(&tms, cshmemRoot,
-							  node, NULL);
-				if (rc == D_TM_SUCCESS) {
-					printf("THRD CPU DURATION %s: %.9fs\n",
-						convertedNamePtr, tms.tv_sec +
-						tms.tv_nsec/1e9);
-				} else
-					printf("Error on duration read: %d\n",
-						rc);
-				break;
-			case D_TM_GAUGE:
-				rc = d_tm_get_gauge(&val, cshmemRoot, node,
-							NULL);
-				if (rc == D_TM_SUCCESS) {
-					printf("GAUGE %s: %" PRIu64 "\n",
-						convertedNamePtr, val);
-				} else
-					printf("Error on gauge read: %d\n", rc);
-				break;
-			default:
-				printf("Unknown type: %d\n", node->d_tm_type);
-				break;
+				}
+				printf("TIMESTAMP %s: %s\n",
+					convertedNamePtr, tmp);
+			} else
+				printf("Error on timestamp read: %d\n",	rc);
+			break;
+		case D_TM_HIGH_RES_TIMER:
+			rc = d_tm_get_highres_timer(&tms, cshmemRoot,
+						    node, NULL);
+			if (rc == D_TM_SUCCESS) {
+				printf("HIGH RES TIMER %s:%lds, %ldns\n",
+					convertedNamePtr, tms.tv_sec,
+					tms.tv_nsec);
+			} else
+				printf("Error on highres timer read: %d\n", rc);
+			break;
+		case (D_TM_DURATION | D_TM_CLOCK_REALTIME):
+			rc = d_tm_get_duration(&tms, cshmemRoot, node, NULL);
+			if (rc == D_TM_SUCCESS) {
+				printf("REALTIME DURATION %s: %.9fs\n",
+					convertedNamePtr, tms.tv_sec +
+					tms.tv_nsec/1e9);
+			} else
+				printf("Error on duration read: %d\n", rc);
+			break;
+		case (D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME):
+			rc = d_tm_get_duration(&tms, cshmemRoot, node, NULL);
+			if (rc == D_TM_SUCCESS) {
+				printf("PROC CPU DURATION %s: %.9fs\n",
+					convertedNamePtr, tms.tv_sec +
+					tms.tv_nsec/1e9);
+			} else
+				printf("Error on duration read: %d\n", rc);
+			break;
+		case (D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME):
+			rc = d_tm_get_duration(&tms, cshmemRoot, node, NULL);
+			if (rc == D_TM_SUCCESS) {
+				printf("THRD CPU DURATION %s: %.9fs\n",
+					convertedNamePtr, tms.tv_sec +
+					tms.tv_nsec/1e9);
+			} else
+				printf("Error on duration read: %d\n", rc);
+			break;
+		case D_TM_GAUGE:
+			rc = d_tm_get_gauge(&val, cshmemRoot, node, NULL);
+			if (rc == D_TM_SUCCESS) {
+				printf("GAUGE %s: %" PRIu64 "\n",
+					convertedNamePtr, val);
+			} else
+				printf("Error on gauge read: %d\n", rc);
+			break;
+		default:
+			printf("Unknown type: %d\n", node->d_tm_type);
+			break;
 		}
 	}
 	node = node->child;
@@ -460,11 +447,11 @@ d_tm_print_my_children(uint64_t *cshmemRoot, d_tm_node_t *node, int level)
 		d_tm_print_my_children(cshmemRoot, node, level+1);
 		node = node->sibling;
 		node = (d_tm_node_t *) d_tm_convert_node_ptr(cshmemRoot, node);
-		while(node) {
+		while (node) {
 			d_tm_print_my_children(cshmemRoot, node, level+1);
 			node = node->sibling;
 			node = (d_tm_node_t *) d_tm_convert_node_ptr(cshmemRoot,
-								   node);
+								     node);
 		}
 	}
 }
@@ -489,7 +476,7 @@ d_tm_count_metrics(uint64_t *cshmemRoot, d_tm_node_t *node)
 		count += d_tm_count_metrics(cshmemRoot, node);
 		node = node->sibling;
 		node = (d_tm_node_t *) d_tm_convert_node_ptr(cshmemRoot, node);
-		while(node) {
+		while (node) {
 			count += d_tm_count_metrics(cshmemRoot, node);
 			node = node->sibling;
 			node = (d_tm_node_t *) d_tm_convert_node_ptr(cshmemRoot,
@@ -522,6 +509,7 @@ d_tm_increment_counter(d_tm_node_t **metric, char *item, ...)
 		node = *metric;
 	else {
 		va_list args;
+
 		va_start(args, item);
 		sprintf(path, "%s", item);
 		str = va_arg(args, char *);
@@ -596,6 +584,7 @@ d_tm_record_timestamp(d_tm_node_t **metric, char *item, ...)
 		node = *metric;
 	else {
 		va_list args;
+
 		va_start(args, item);
 		sprintf(path, "%s", item);
 		str = va_arg(args, char *);
@@ -669,6 +658,7 @@ d_tm_record_high_res_timer(d_tm_node_t **metric, char *item, ...)
 		node = *metric;
 	else {
 		va_list args;
+
 		va_start(args, item);
 		sprintf(path, "%s", item);
 		str = va_arg(args, char *);
@@ -723,18 +713,14 @@ d_tm_record_high_res_timer(d_tm_node_t **metric, char *item, ...)
 int
 d_tm_clock_id(int clk_id) {
 	switch (clk_id) {
-		case D_TM_CLOCK_REALTIME:
-			return CLOCK_REALTIME;
-			break;
-		case D_TM_CLOCK_PROCESS_CPUTIME:
-			return CLOCK_PROCESS_CPUTIME_ID;
-			break;
-		case D_TM_CLOCK_THREAD_CPUTIME:
-			return CLOCK_THREAD_CPUTIME_ID;
-			break;
-		default:
-			return CLOCK_REALTIME;
-			break;
+	case D_TM_CLOCK_REALTIME:
+		return CLOCK_REALTIME;
+	case D_TM_CLOCK_PROCESS_CPUTIME:
+		return CLOCK_PROCESS_CPUTIME_ID;
+	case D_TM_CLOCK_THREAD_CPUTIME:
+		return CLOCK_THREAD_CPUTIME_ID;
+	default:
+		return CLOCK_REALTIME;
 	}
 	return CLOCK_REALTIME;
 }
@@ -762,6 +748,7 @@ d_tm_mark_duration_start(d_tm_node_t **metric, int clk_id, char *item, ...)
 		node = *metric;
 	else {
 		va_list args;
+
 		va_start(args, item);
 		sprintf(path, "%s", item);
 		str = va_arg(args, char *);
@@ -847,6 +834,7 @@ d_tm_mark_duration_end(d_tm_node_t **metric, char *item, ...)
 		node = *metric;
 	else {
 		va_list args;
+
 		va_start(args, item);
 		sprintf(path, "%s", item);
 		str = va_arg(args, char *);
@@ -918,6 +906,7 @@ d_tm_set_gauge(d_tm_node_t **metric, uint64_t value, char *item, ...)
 		node = *metric;
 	else {
 		va_list args;
+
 		va_start(args, item);
 		sprintf(path, "%s", item);
 		str = va_arg(args, char *);
@@ -992,6 +981,7 @@ d_tm_increment_gauge(d_tm_node_t **metric, uint64_t value, char *item, ...)
 		node = *metric;
 	else {
 		va_list args;
+
 		va_start(args, item);
 		sprintf(path, "%s", item);
 		str = va_arg(args, char *);
@@ -1066,6 +1056,7 @@ d_tm_decrement_gauge(d_tm_node_t **metric, uint64_t value, char *item, ...)
 		node = *metric;
 	else {
 		va_list args;
+
 		va_start(args, item);
 		sprintf(path, "%s", item);
 		str = va_arg(args, char *);
@@ -1134,8 +1125,7 @@ d_tm_find_metric(uint64_t *cshmemRoot, char *path)
 		node = d_tm_find_child(cshmemRoot, parentNode, token);
 		if (!node)
 			return NULL;
-		else
-			parentNode =  node;
+		parentNode =  node;
 	}
 	return node;
 }
@@ -1151,13 +1141,13 @@ int
 d_tm_add_metric(d_tm_node_t **node, char *metric, int metricType,
 		char *shortDesc, char *longDesc)
 {
-	char *str;
+	char *str = NULL;
 	char *token;
 	char *rest;
 	int buffLen;
 	d_tm_node_t *parentNode;
 	int rc;
- 	pthread_mutexattr_t mattr;
+	pthread_mutexattr_t mattr;
 
 	if (!node)
 		return -DER_INVAL;
@@ -1587,8 +1577,7 @@ d_tm_list(d_tm_nodeList_t **head, uint64_t *cshmemRoot, char *path,
 				rc = -DER_METRIC_NOT_FOUND;
 				D_GOTO(failure, rc);
 			}
-			else
-				parentNode = node;
+			parentNode = node;
 		}
 		if (!node)
 			node = parentNode;
@@ -1648,8 +1637,7 @@ d_tm_get_num_objects(uint64_t *cshmemRoot, char *path, int d_tm_type)
 			if (!node)
 				/** no node was found matching the token */
 				return count;
-			else
-				parentNode = node;
+			parentNode = node;
 		}
 		if (!node)
 			node = parentNode;
@@ -1681,9 +1669,9 @@ d_tm_list_free(d_tm_nodeList_t *nodeList)
 {
 	d_tm_nodeList_t *head = NULL;
 
-	while(nodeList) {
+	while (nodeList) {
 		head = nodeList->next;
-		free(nodeList);
+		free (nodeList);
 		nodeList = head;
 	}
 }
@@ -1766,9 +1754,9 @@ void *
 d_tm_shmalloc(int length)
 {
 	if (length % sizeof(uint16_t) != 0) {
- 		length += sizeof(uint16_t);
- 		length &= ~(sizeof(uint16_t)-1);
- 	}
+		length += sizeof(uint16_t);
+		length &= ~(sizeof(uint16_t)-1);
+	}
 
 	if (shmemIdx) {
 		if ((shmemFree - length) > 0) {
