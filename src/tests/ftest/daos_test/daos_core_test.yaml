@@ -142,6 +142,6 @@ daos_tests:
       test_name: DAOS rebuild ec tests
       test_timeout: 900
     test_Z:
-      daos_test: Z 
+      daos_test: Z
       test_name: DAOS aggregate ec tests
       test_timeout: 900
