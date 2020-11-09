@@ -232,6 +232,11 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs);
 int
 dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle);
 
+/* dfuse_thread.c */
+
+extern int
+dfuse_loop(struct dfuse_info *dfuse_info);
+
 struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 
 /* Helper macros for open() and creat() to log file access modes */

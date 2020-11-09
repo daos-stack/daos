@@ -104,7 +104,8 @@ message PrepareNvmeResp {
 
 message ScanNvmeReq {
 	bool Health = 1; // Retrieve NVMe device health statistics
-	bool Meta = 2; // Retrieve metadata relating to NVMe device.
+	bool Meta = 2; // Retrieve metadata relating to NVMe device
+	bool Basic = 3; // Strip NVMe device details to only basic
 }
 
 message ScanNvmeResp {
