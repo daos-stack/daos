@@ -225,7 +225,7 @@ func (req *ConfigGenerateReq) checkNetwork(ctx context.Context) (*config.Server,
 	for _, iface := range networkSet.HostFabric.Interfaces {
 		msg = fmt.Sprintf("%s\n\t%+v", msg, iface)
 	}
-	req.Log.Infof(msg)
+	req.Log.Debugf(msg)
 
 	matching, complete := req.parseInterfaces(networkSet.HostFabric.Interfaces)
 	if !complete {
@@ -377,7 +377,7 @@ func (req *ConfigGenerateReq) checkStorage(ctx context.Context, cfg *config.Serv
 	scmNamespaces := storageSet.HostStorage.ScmNamespaces
 	nvmeControllers := storageSet.HostStorage.NvmeDevices
 
-	req.Log.Infof("Storage hardware configuration is consistent for hosts %s:\n\t%s\n\t%s",
+	req.Log.Debugf("Storage hardware configuration is consistent for hosts %s:\n\t%s\n\t%s",
 		storageSet.HostSet.String(), scmNamespaces.Summary(), nvmeControllers.Summary())
 
 	// the pmemPaths is a slice of pmem block devices each pinned to NUMA
