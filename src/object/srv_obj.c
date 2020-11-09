@@ -687,133 +687,6 @@ out:
 	orwo->orw_map_version = orw->orw_map_ver;
 }
 
-
-int
-ec_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
-		 crt_bulk_t *remote_bulks, daos_handle_t ioh,
-		 struct ec_bulk_spec **skip_list,
-		 int sgl_nr)
-{
-	struct obj_bulk_args	arg = { 0 };
-	crt_bulk_opid_t		bulk_opid;
-	crt_bulk_perm_t		bulk_perm = CRT_BULK_RW;
-	int			i, rc, *status, ret;
-
-	D_ASSERT(skip_list != NULL);
-
-	rc = ABT_eventual_create(sizeof(*status), &arg.eventual);
-	if (rc != 0)
-		return dss_abterr2der(rc);
-
-	arg.bulks_inflight++;
-	for (i = 0; i < sgl_nr; i++) {
-		d_sg_list_t		*sgl, tmp_sgl;
-		struct crt_bulk_desc	 bulk_desc;
-		crt_bulk_t		 local_bulk_hdl;
-		struct bio_sglist	*bsgl;
-		daos_size_t		 offset = 0;
-		unsigned int		 idx = 0;
-		unsigned int		 sl_idx = 0;
-
-		if (remote_bulks[i] == NULL)
-			continue;
-
-		D_ASSERT(!daos_handle_is_inval(ioh));
-		bsgl = vos_iod_sgl_at(ioh, i);
-		D_ASSERT(bsgl != NULL);
-
-		sgl = &tmp_sgl;
-		rc = bio_sgl_convert(bsgl, sgl, true);
-		if (rc)
-			break;
-
-		if (daos_io_bypass & IOBP_SRV_BULK) {
-			/* this mode will bypass network bulk transfer and
-			 * only copy data from/to dummy buffer. This is for
-			 * performance evaluation on low bandwidth network.
-			 */
-			obj_bulk_bypass(sgl, bulk_op);
-			goto next;
-		}
-
-		while (idx < sgl->sg_nr_out) {
-			d_sg_list_t	sgl_sent;
-			daos_size_t	length = 0;
-			unsigned int	start = idx;
-
-			sgl_sent.sg_iovs = &sgl->sg_iovs[start];
-			if (skip_list[i] == NULL) {
-				/* Find the end of the non-empty record */
-				while (sgl->sg_iovs[idx].iov_buf != NULL &&
-					idx < sgl->sg_nr_out)
-					length += sgl->sg_iovs[idx++].iov_len;
-			} else {
-				while (ec_bulk_spec_get_skip(sl_idx,
-							     skip_list[i]))
-					offset +=
-					ec_bulk_spec_get_len(sl_idx++,
-							     skip_list[i]);
-				length += sgl->sg_iovs[idx++].iov_len;
-				D_ASSERT(ec_bulk_spec_get_len(sl_idx,
-							      skip_list[i]) ==
-					 length);
-				sl_idx++;
-			}
-			sgl_sent.sg_nr = idx - start;
-			sgl_sent.sg_nr_out = idx - start;
-
-			rc = crt_bulk_create(rpc->cr_ctx, &sgl_sent,
-					     bulk_perm, &local_bulk_hdl);
-			if (rc != 0) {
-				D_ERROR("crt_bulk_create %d error (%d).\n",
-					i, rc);
-				break;
-			}
-
-			crt_req_addref(rpc);
-			bulk_desc.bd_rpc	= rpc;
-			bulk_desc.bd_bulk_op	= bulk_op;
-			bulk_desc.bd_remote_hdl	= remote_bulks[i];
-			bulk_desc.bd_local_hdl	= local_bulk_hdl;
-			bulk_desc.bd_len	= length;
-			bulk_desc.bd_remote_off	= offset;
-			bulk_desc.bd_local_off	= 0;
-
-			arg.bulks_inflight++;
-			if (bulk_bind)
-				rc = crt_bulk_bind_transfer(&bulk_desc,
-					obj_bulk_comp_cb, &arg, &bulk_opid);
-			else
-				rc = crt_bulk_transfer(&bulk_desc,
-					obj_bulk_comp_cb, &arg, &bulk_opid);
-			if (rc < 0) {
-				D_ERROR("crt_bulk_transfer %d error (%d).\n",
-					i, rc);
-				arg.bulks_inflight--;
-				crt_bulk_free(local_bulk_hdl);
-				crt_req_decref(rpc);
-				break;
-			}
-			offset += length;
-		}
-next:
-		daos_sgl_fini(sgl, false);
-		if (rc)
-			break;
-		D_FREE(skip_list[i]);
-	}
-
-	if (--arg.bulks_inflight == 0)
-		ABT_eventual_set(arg.eventual, &rc, sizeof(rc));
-
-	ret = ABT_eventual_wait(arg.eventual, (void **)&status);
-	if (rc == 0)
-		rc = ret ? dss_abterr2der(ret) : *status;
-
-	ABT_eventual_free(&arg.eventual);
-	return rc;
-}
-
 /** if checksums are enabled, fetch needs to allocate the memory that will be
  * used for the csum structures.
  */
@@ -992,7 +865,7 @@ obj_singv_ec_rw_filter(daos_unit_oid_t *oid, daos_iod_t *iods, uint64_t *offs,
 			iod->iod_recxs = (void *)iod->iod_size;
 		if (!obj_ec_singv_one_tgt(iod, NULL, oca)) {
 			obj_ec_singv_local_sz(iod->iod_size, oca, tgt_idx,
-					      &loc);
+					      &loc, for_update);
 			if (offs != NULL)
 				offs[i] = loc.esl_off;
 			if (for_update)
@@ -2003,6 +1876,9 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 			D_GOTO(out, rc = -DER_CSUM);
 		}
 
+		if (DAOS_FAIL_CHECK(DAOS_OBJ_FETCH_DATA_LOST))
+			D_GOTO(out, rc = -DER_DATA_LOSS);
+
 		epoch.oe_value = orw->orw_epoch;
 		epoch.oe_first = orw->orw_epoch_first;
 		epoch.oe_flags = orf_to_dtx_epoch_flags(orw->orw_flags);
@@ -2996,6 +2872,9 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	struct dtx_handle		 dth = {0};
 	struct dtx_epoch		 epoch = {0};
 	struct dss_sleep_ult		*sleep_ult = NULL;
+	uint32_t			 query_flags;
+	daos_recx_t			 ec_recx[2] = {0};
+	daos_recx_t			*query_recx;
 	int				 retry = 0;
 	int				 rc;
 
@@ -3037,10 +2916,20 @@ again:
 	if (rc != 0)
 		goto out;
 
-	rc = vos_obj_query_key(ioc.ioc_vos_coh, okqi->okqi_oid,
-			       okqi->okqi_api_flags, okqi->okqi_epoch, dkey,
-			       akey, &okqo->okqo_recx, &dth);
-
+	query_flags = okqi->okqi_api_flags;
+	if ((okqi->okqi_flags & ORF_EC) &&
+	    (okqi->okqi_api_flags & DAOS_GET_RECX)) {
+		query_flags |= VOS_GET_RECX_EC;
+		query_recx = ec_recx;
+	} else {
+		query_recx = &okqo->okqo_recx;
+	}
+	rc = vos_obj_query_key(ioc.ioc_vos_coh, okqi->okqi_oid, query_flags,
+			       okqi->okqi_epoch, dkey, akey, query_recx, &dth);
+	if (rc == 0 && (query_flags & VOS_GET_RECX_EC)) {
+		okqo->okqo_recx = ec_recx[0];
+		okqo->okqo_recx_parity = ec_recx[1];
+	}
 	rc = dtx_end(&dth, ioc.ioc_coc, rc);
 
 out:

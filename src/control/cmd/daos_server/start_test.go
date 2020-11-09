@@ -39,7 +39,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
-	"github.com/daos-stack/daos/src/control/server"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
 
@@ -52,8 +52,8 @@ func testExpectedError(t *testing.T, expected, actual error) {
 	}
 }
 
-func genMinimalConfig() *server.Configuration {
-	cfg := server.NewConfiguration().
+func genMinimalConfig() *config.Server {
+	cfg := config.DefaultServer().
 		WithFabricProvider("foo").
 		WithProviderValidator(netdetect.ValidateProviderStub).
 		WithNUMAValidator(netdetect.ValidateNUMAStub).
@@ -69,7 +69,7 @@ func genMinimalConfig() *server.Configuration {
 	return cfg
 }
 
-func genDefaultExpected() *server.Configuration {
+func genDefaultExpected() *config.Server {
 	hostname, _ := os.Hostname()
 	return genMinimalConfig().
 		WithServers(
@@ -124,131 +124,131 @@ func getDeviceClassStub(netdev string) (uint32, error) {
 }
 
 func TestStartOptions(t *testing.T) {
-	insecureTransport := server.NewConfiguration().TransportConfig
+	insecureTransport := config.DefaultServer().TransportConfig
 	insecureTransport.AllowInsecure = true
 
 	for desc, tc := range map[string]struct {
 		argList  []string
-		expCfgFn func(*server.Configuration) *server.Configuration
+		expCfgFn func(*config.Server) *config.Server
 		expErr   error
 	}{
 		"None": {
 			argList:  []string{},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration { return cfg },
+			expCfgFn: func(cfg *config.Server) *config.Server { return cfg },
 		},
 		"Port (short)": {
 			argList: []string{"-p", "42"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
+			expCfgFn: func(cfg *config.Server) *config.Server {
 				return cfg.WithControlPort(42)
 			},
 		},
 		"Port (long)": {
 			argList: []string{"--port=42"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
+			expCfgFn: func(cfg *config.Server) *config.Server {
 				return cfg.WithControlPort(42)
 			},
 		},
 		"Storage Path (short)": {
 			argList: []string{"-s", "/foo/bar"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
+			expCfgFn: func(cfg *config.Server) *config.Server {
 				cfg.Servers[0].WithScmMountPoint("/foo/bar")
 				return cfg
 			},
 		},
 		"Storage Path (long)": {
 			argList: []string{"--storage=/foo/bar"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
+			expCfgFn: func(cfg *config.Server) *config.Server {
 				cfg.Servers[0].WithScmMountPoint("/foo/bar")
 				return cfg
 			},
 		},
 		"Modules (short)": {
 			argList: []string{"-m", "foo,bar"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
+			expCfgFn: func(cfg *config.Server) *config.Server {
 				return cfg.WithModules("foo,bar")
 			},
 		},
 		"Modules (long)": {
 			argList: []string{"--modules=foo,bar"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
+			expCfgFn: func(cfg *config.Server) *config.Server {
 				return cfg.WithModules("foo,bar")
 			},
 		},
 		"Targets (short)": {
 			argList: []string{"-t", "42"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
+			expCfgFn: func(cfg *config.Server) *config.Server {
 				cfg.Servers[0].WithTargetCount(42)
 				return cfg
 			},
 		},
 		"Targets (long)": {
 			argList: []string{"--targets=42"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
+			expCfgFn: func(cfg *config.Server) *config.Server {
 				cfg.Servers[0].WithTargetCount(42)
 				return cfg
 			},
 		},
 		"XS Helpers (short)": {
 			argList: []string{"-x", "0"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
+			expCfgFn: func(cfg *config.Server) *config.Server {
 				cfg.Servers[0].WithHelperStreamCount(0)
 				return cfg
 			},
 		},
 		"XS Helpers (long)": {
 			argList: []string{"--xshelpernr=1"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
+			expCfgFn: func(cfg *config.Server) *config.Server {
 				cfg.Servers[0].WithHelperStreamCount(1)
 				return cfg
 			},
 		},
 		"First Core (short)": {
 			argList: []string{"-f", "42"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
+			expCfgFn: func(cfg *config.Server) *config.Server {
 				cfg.Servers[0].WithServiceThreadCore(42)
 				return cfg
 			},
 		},
 		"First Core (long)": {
 			argList: []string{"--firstcore=42"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
+			expCfgFn: func(cfg *config.Server) *config.Server {
 				cfg.Servers[0].WithServiceThreadCore(42)
 				return cfg
 			},
 		},
 		"Server Group (short)": {
 			argList: []string{"-g", "foo"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
+			expCfgFn: func(cfg *config.Server) *config.Server {
 				return cfg.WithSystemName("foo")
 			},
 		},
 		"Server Group (long)": {
 			argList: []string{"--group=foo"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
+			expCfgFn: func(cfg *config.Server) *config.Server {
 				return cfg.WithSystemName("foo")
 			},
 		},
 		"SocketDir (short)": {
 			argList: []string{"-d", "/foo/bar"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
+			expCfgFn: func(cfg *config.Server) *config.Server {
 				return cfg.WithSocketDir("/foo/bar")
 			},
 		},
 		"SocketDir (long)": {
 			argList: []string{"--socket_dir=/foo/bar"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
+			expCfgFn: func(cfg *config.Server) *config.Server {
 				return cfg.WithSocketDir("/foo/bar")
 			},
 		},
 		"Insecure (short)": {
 			argList: []string{"-i"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
+			expCfgFn: func(cfg *config.Server) *config.Server {
 				return cfg.WithTransportConfig(insecureTransport)
 			},
 		},
 		"Insecure (long)": {
 			argList: []string{"--insecure"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
+			expCfgFn: func(cfg *config.Server) *config.Server {
 				return cfg.WithTransportConfig(insecureTransport)
 			},
 		},
@@ -257,9 +257,9 @@ func TestStartOptions(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			var gotConfig *server.Configuration
+			var gotConfig *config.Server
 			var opts mainOpts
-			opts.Start.start = func(log *logging.LeveledLogger, cfg *server.Configuration) error {
+			opts.Start.start = func(log *logging.LeveledLogger, cfg *config.Server) error {
 				gotConfig = cfg
 				return nil
 			}
@@ -283,9 +283,10 @@ func TestStartOptions(t *testing.T) {
 
 			cmpOpts := []cmp.Option{
 				cmpopts.IgnoreUnexported(
-					server.Configuration{},
+					config.Server{},
 					security.CertificateConfig{},
 				),
+				cmpopts.IgnoreFields(config.Server{}, "GetDeviceClassFn"),
 				cmpopts.SortSlices(func(a, b string) bool { return a < b }),
 			}
 			if diff := cmp.Diff(wantConfig, gotConfig, cmpOpts...); diff != "" {
@@ -335,7 +336,7 @@ func TestStartLoggingOptions(t *testing.T) {
 			log := logging.NewCombinedLogger(t.Name(), &logBuf)
 
 			var opts mainOpts
-			opts.Start.start = func(log *logging.LeveledLogger, cfg *server.Configuration) error {
+			opts.Start.start = func(log *logging.LeveledLogger, cfg *config.Server) error {
 				return nil
 			}
 			opts.Start.config = genMinimalConfig()
@@ -360,13 +361,13 @@ func TestStartLoggingOptions(t *testing.T) {
 
 func TestStartLoggingConfiguration(t *testing.T) {
 	for desc, tc := range map[string]struct {
-		configFn  func(*server.Configuration) *server.Configuration
+		configFn  func(*config.Server) *config.Server
 		logFnName string
 		input     string
 		wantRe    *regexp.Regexp
 	}{
 		"JSON": {
-			configFn: func(cfg *server.Configuration) *server.Configuration {
+			configFn: func(cfg *config.Server) *config.Server {
 				return cfg.WithControlLogJSON(true)
 			},
 			logFnName: "Info",
@@ -374,16 +375,16 @@ func TestStartLoggingConfiguration(t *testing.T) {
 			wantRe:    regexp.MustCompile(`"message":"hello"`),
 		},
 		"Debug": {
-			configFn: func(cfg *server.Configuration) *server.Configuration {
-				return cfg.WithControlLogMask(server.ControlLogLevelDebug)
+			configFn: func(cfg *config.Server) *config.Server {
+				return cfg.WithControlLogMask(config.ControlLogLevelDebug)
 			},
 			logFnName: "Debug",
 			input:     "hello",
 			wantRe:    regexp.MustCompile(`hello`),
 		},
 		"Error": {
-			configFn: func(cfg *server.Configuration) *server.Configuration {
-				return cfg.WithControlLogMask(server.ControlLogLevelError)
+			configFn: func(cfg *config.Server) *config.Server {
+				return cfg.WithControlLogMask(config.ControlLogLevelError)
 			},
 			logFnName: "Info",
 			input:     "hello",
@@ -395,7 +396,7 @@ func TestStartLoggingConfiguration(t *testing.T) {
 			log := logging.NewCombinedLogger(t.Name(), &logBuf)
 
 			var opts mainOpts
-			opts.Start.start = func(log *logging.LeveledLogger, cfg *server.Configuration) error {
+			opts.Start.start = func(log *logging.LeveledLogger, cfg *config.Server) error {
 				return nil
 			}
 			opts.Start.config = tc.configFn(genMinimalConfig())
