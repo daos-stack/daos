@@ -521,8 +521,8 @@ crt_req_addref(crt_rpc_t *req)
 	RPC_ADDREF(rpc_priv);
 
 out:
-	return rc;
 	DBG_EXIT();
+	return rc;
 }
 
 int
@@ -1088,7 +1088,7 @@ int
 crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 {
 	struct crt_rpc_priv	*rpc_priv = NULL;
-	int			rc = 0;
+	int			 rc = 0;
 	struct crt_corpc_info	*co_info;
 
 	DBG_ENTRY();
@@ -1166,11 +1166,11 @@ out:
 			if (complete_cb != NULL)
 				rc = 0;
 		} else if (co_info->co_child_num != 0 ||
-			   !co_info->co_root_excluded) {
-			/* decrement refernce coresponds to
-			* crt_corpc_req_hdlr if crt_corpc_complete
-			* has not been called
-			*/
+			  !co_info->co_root_excluded) {
+			  /* decrement refernce coresponds to
+			  * crt_corpc_req_hdlr if crt_corpc_complete
+			  * has not been called
+			  */
 			RPC_DECREF(rpc_priv);
 		}
 	}
