@@ -527,6 +527,7 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 	}
 
 	*dev_cnt = 0;
+
 	/* Scan all devices present in bio_bdev list */
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
 		s_info = find_smd_dev(d_bdev->bb_uuid, &s_dev_list);
@@ -539,7 +540,6 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 		}
 		if (!d_bdev->bb_removed)
 			b_info->bdi_flags |= NVME_DEV_FL_PLUGGED;
-
 		d_list_add_tail(&b_info->bdi_link, dev_list);
 		(*dev_cnt)++;
 
