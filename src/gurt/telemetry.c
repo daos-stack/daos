@@ -201,11 +201,11 @@ d_tm_init(int rank, uint64_t memSize)
 		       "Memory size is %"PRIu64" bytes at address 0x%"PRIx64
 		       "\n", memSize, (uint64_t)shmemRoot);
 		/*
-		* Store the base address of the shared memory as seen by the
-		* server in this first uint64_t sized slot.
-		* Used by the client to adjust pointers in the shared memory
-		* to its own address space.
-		*/
+		 * Store the base address of the shared memory as seen by the
+		 * server in this first uint64_t sized slot.
+		 * Used by the client to adjust pointers in the shared memory
+		 * to its own address space.
+		 */
 		base_addr = (uint64_t *)d_tm_shmalloc(sizeof(uint64_t));
 		/*
 		 * Just allocated the pool, and this memory is dedicated
@@ -332,7 +332,7 @@ d_tm_free_node(uint64_t *cshmemRoot, d_tm_node_t *node)
 			d_tm_free_node(cshmemRoot, node);
 			node = node->sibling;
 			node = (d_tm_node_t *)d_tm_convert_node_ptr(cshmemRoot,
-								     node);
+								    node);
 		}
 	}
 }
@@ -1108,7 +1108,7 @@ d_tm_decrement_gauge(d_tm_node_t **metric, uint64_t value, char *item, ...)
 d_tm_node_t *
 d_tm_find_metric(uint64_t *cshmemRoot, char *path)
 {
-	char str[256];
+	char str[D_TM_MAX_NAME_LEN];
 	char *token;
 	char *rest = str;
 	d_tm_node_t *node = NULL;
@@ -1177,8 +1177,7 @@ d_tm_add_metric(d_tm_node_t **node, char *metric, int metricType,
 	rest = str;
 	parentNode = d_tm_get_root(shmemRoot);
 	while ((token = strtok_r(rest, "/", &rest))) {
-		*node = d_tm_find_child(shmemRoot, parentNode,
-					token);
+		*node = d_tm_find_child(shmemRoot, parentNode, token);
 		if (!*node) {
 			rc = d_tm_add_child(&(*node), parentNode, token);
 			if ((rc == D_TM_SUCCESS) && (*node != NULL)) {
@@ -1282,7 +1281,7 @@ failure:
  */
 int
 d_tm_get_counter(uint64_t *val, uint64_t *cshmemRoot, d_tm_node_t *node,
-		    char *metric)
+		 char *metric)
 {
 	d_tm_metric_t *cMetric = NULL;
 	int rc = D_TM_SUCCESS;
@@ -1321,7 +1320,7 @@ d_tm_get_counter(uint64_t *val, uint64_t *cshmemRoot, d_tm_node_t *node,
  */
 int
 d_tm_get_timestamp(time_t *val, uint64_t *cshmemRoot, d_tm_node_t *node,
-		      char *metric)
+		   char *metric)
 {
 	d_tm_metric_t *cMetric = NULL;
 	int rc = D_TM_SUCCESS;
@@ -1360,7 +1359,7 @@ d_tm_get_timestamp(time_t *val, uint64_t *cshmemRoot, d_tm_node_t *node,
  */
 int
 d_tm_get_highres_timer(struct timespec *tms, uint64_t *cshmemRoot,
-			  d_tm_node_t *node, char *metric)
+		       d_tm_node_t *node, char *metric)
 {
 	d_tm_metric_t *cMetric = NULL;
 	int rc = D_TM_SUCCESS;
@@ -1400,7 +1399,7 @@ d_tm_get_highres_timer(struct timespec *tms, uint64_t *cshmemRoot,
  */
 int
 d_tm_get_duration(struct timespec *tms, uint64_t *cshmemRoot, d_tm_node_t *node,
-		     char *metric)
+		  char *metric)
 {
 	d_tm_metric_t *cMetric = NULL;
 	int rc = D_TM_SUCCESS;
@@ -1440,7 +1439,7 @@ d_tm_get_duration(struct timespec *tms, uint64_t *cshmemRoot, d_tm_node_t *node,
  */
 int
 d_tm_get_gauge(uint64_t *val, uint64_t *cshmemRoot, d_tm_node_t *node,
-		  char *metric)
+	       char *metric)
 {
 	d_tm_metric_t *cMetric = NULL;
 	int rc = D_TM_SUCCESS;
@@ -1472,7 +1471,7 @@ d_tm_get_gauge(uint64_t *val, uint64_t *cshmemRoot, d_tm_node_t *node,
 }
 
 int d_tm_get_metadata(char **shortDesc, char **longDesc, uint64_t *cshmemRoot,
-	d_tm_node_t *node, char *metric)
+		      d_tm_node_t *node, char *metric)
 {
 	d_tm_metric_t *cMetric = NULL;
 	int rc = D_TM_SUCCESS;
@@ -1501,12 +1500,12 @@ int d_tm_get_metadata(char **shortDesc, char **longDesc, uint64_t *cshmemRoot,
 		shortDescStr = d_tm_convert_char_ptr(cshmemRoot,
 						     cMetric->shortDesc);
 		if (shortDescStr)
-			D_STRNDUP(*shortDesc, shortDescStr?shortDescStr:"N/A",
-				  D_TM_MAX_SHORT_LEN);
+			D_STRNDUP(*shortDesc, shortDescStr ? shortDescStr :
+				  "N/A", D_TM_MAX_SHORT_LEN);
 		longDescStr = d_tm_convert_char_ptr(cshmemRoot,
 						    cMetric->longDesc);
 		if (longDescStr)
-			D_STRNDUP(*longDesc, longDescStr?longDescStr:"N/A",
+			D_STRNDUP(*longDesc, longDescStr ? longDescStr : "N/A",
 				  D_TM_MAX_LONG_LEN);
 		D_MUTEX_UNLOCK(&node->lock);
 	} else
@@ -1540,7 +1539,7 @@ d_tm_list(d_tm_nodeList_t **head, uint64_t *cshmemRoot, char *path,
 	d_tm_node_t *node = NULL;
 	d_tm_node_t *parentNode = NULL;
 	d_tm_nodeList_t *nodelist = NULL;
-	char *str;
+	char *str = NULL;
 	char *token;
 	char *rest;
 	int rc = D_TM_SUCCESS;
@@ -1564,8 +1563,7 @@ d_tm_list(d_tm_nodeList_t **head, uint64_t *cshmemRoot, char *path,
 	node = parentNode;
 	if (parentNode) {
 		while ((token = strtok_r(rest, "/", &rest))) {
-			node = d_tm_find_child(cshmemRoot, parentNode,
-						  token);
+			node = d_tm_find_child(cshmemRoot, parentNode, token);
 			if (!node) {
 				/** no node was found matching the token */
 				rc = -DER_METRIC_NOT_FOUND;
@@ -1577,12 +1575,11 @@ d_tm_list(d_tm_nodeList_t **head, uint64_t *cshmemRoot, char *path,
 			node = parentNode;
 
 		if (node->d_tm_type == D_TM_DIRECTORY) {
-			node = d_tm_convert_node_ptr(cshmemRoot,
-							node->child);
+			node = d_tm_convert_node_ptr(cshmemRoot, node->child);
 			while (node) {
 				if (d_tm_type & node->d_tm_type) {
 					nodelist = d_tm_add_node(node,
-								    nodelist);
+								 nodelist);
 					if (!nodelist) {
 						rc = -DER_NOMEM;
 						D_GOTO(failure, rc);
@@ -1591,7 +1588,7 @@ d_tm_list(d_tm_nodeList_t **head, uint64_t *cshmemRoot, char *path,
 						*head = nodelist;
 				}
 				node = d_tm_convert_node_ptr(cshmemRoot,
-								node->sibling);
+							     node->sibling);
 			}
 		} else {
 			if (d_tm_type & node->d_tm_type) {
@@ -1616,7 +1613,7 @@ d_tm_get_num_objects(uint64_t *cshmemRoot, char *path, int d_tm_type)
 	uint64_t count = 0;
 	d_tm_node_t *node = NULL;
 	d_tm_node_t *parentNode = NULL;
-	char str[256];
+	char str[D_TM_MAX_NAME_LEN];
 	char *token;
 	char *rest = str;
 
@@ -1626,8 +1623,7 @@ d_tm_get_num_objects(uint64_t *cshmemRoot, char *path, int d_tm_type)
 	node = parentNode;
 	if (parentNode) {
 		while ((token = strtok_r(rest, "/", &rest))) {
-			node = d_tm_find_child(cshmemRoot, parentNode,
-						  token);
+			node = d_tm_find_child(cshmemRoot, parentNode, token);
 			if (!node)
 				/** no node was found matching the token */
 				return count;
@@ -1637,13 +1633,12 @@ d_tm_get_num_objects(uint64_t *cshmemRoot, char *path, int d_tm_type)
 			node = parentNode;
 
 		if (node->d_tm_type == D_TM_DIRECTORY) {
-			node = d_tm_convert_node_ptr(cshmemRoot,
-							node->child);
+			node = d_tm_convert_node_ptr(cshmemRoot, node->child);
 			while (node) {
 				if (d_tm_type & node->d_tm_type)
 					count++;
 				node = d_tm_convert_node_ptr(cshmemRoot,
-								node->sibling);
+							     node->sibling);
 			}
 		} else {
 			if (d_tm_type & node->d_tm_type)
@@ -1738,7 +1733,7 @@ d_tm_get_shared_memory(int rank)
 	if (shmid < 0)
 		return NULL;
 
-	return (uint8_t *) shmat(shmid, NULL, 0);
+	return (uint8_t *)shmat(shmid, NULL, 0);
 }
 
 /*
@@ -1773,7 +1768,7 @@ d_tm_shmalloc(int length)
 bool d_tm_validate_shmem_ptr(uint64_t *cshmemRoot, void *ptr)
 {
 	if (((uint64_t)ptr < (uint64_t)cshmemRoot) ||
-	   ((uint64_t)ptr >= (uint64_t)cshmemRoot+D_TM_SHARED_MEMORY_SIZE)) {
+	   ((uint64_t)ptr >= (uint64_t)cshmemRoot + D_TM_SHARED_MEMORY_SIZE)) {
 		D_DEBUG(DB_TRACE,
 			"shmem ptr 0x%"PRIx64" was outside the shmem range "
 			"0x%"PRIx64" to 0x%"PRIx64, (uint64_t)ptr,
@@ -1797,8 +1792,8 @@ d_tm_convert_node_ptr(uint64_t *cshmemRoot, void *ptr)
 	if (!ptr || !cshmemRoot)
 		return NULL;
 
-	temp = (d_tm_node_t *) ((uint64_t)cshmemRoot + ((uint64_t)ptr) -
-			   *(uint64_t *)cshmemRoot);
+	temp = (d_tm_node_t *)((uint64_t)cshmemRoot + ((uint64_t)ptr) -
+			       *(uint64_t *)cshmemRoot);
 
 	if (d_tm_validate_shmem_ptr(cshmemRoot, temp))
 		return temp;
@@ -1817,8 +1812,8 @@ d_tm_convert_metric_ptr(uint64_t *cshmemRoot, void *ptr)
 	if (!ptr || !cshmemRoot)
 		return NULL;
 
-	temp = (d_tm_metric_t *) ((uint64_t)cshmemRoot + ((uint64_t)ptr) -
-				     *(uint64_t *)cshmemRoot);
+	temp = (d_tm_metric_t *)((uint64_t)cshmemRoot + ((uint64_t)ptr) -
+				 *(uint64_t *)cshmemRoot);
 
 	if (d_tm_validate_shmem_ptr(cshmemRoot, temp))
 		return temp;
@@ -1837,8 +1832,8 @@ d_tm_convert_char_ptr(uint64_t *cshmemRoot, void *ptr)
 	if (!ptr || !cshmemRoot)
 		return NULL;
 
-	temp = (char *) ((uint64_t)cshmemRoot + ((uint64_t)ptr) -
-			 *(uint64_t *)cshmemRoot);
+	temp = (char *)((uint64_t)cshmemRoot + ((uint64_t)ptr) -
+			*(uint64_t *)cshmemRoot);
 
 	if (d_tm_validate_shmem_ptr(cshmemRoot, temp))
 		return temp;
