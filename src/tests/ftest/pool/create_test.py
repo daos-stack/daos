@@ -126,11 +126,19 @@ class PoolCreateTests(PoolTestBase):
             "DAOS not ready to accept requests with in 2 minutes")
 
         # Verify all the pools exists after the restart
-        pool_uuid_list = [pool.uuid for pool in self.pool]
-        result = self.dmg.get_output("pool_list")
-        self.assertListEqual(
-            pool_uuid_list, result,
-            "Pool UUID list does not match after reboot")
+        detected_pools = self.dmg.pool_list()
+        missing_pools = []
+        for pool in self.pool:
+            if pool.uuid not in detected_pools:
+                missing_pools.append(pool.uuid)
+        if missing_pools:
+            self.fail(
+                "The following created pools were not detected in the pool "
+                "list after rebooting the servers:\n  [{}]: {}".format(
+                    len(missing_pools), ", ".join(missing_pools)))
+        self.assertEqual(
+            len(self.pool), len(detected_pools),
+            "Unexpected pools detected after rebooting the servers")
 
     def test_create_no_space(self):
         """JIRA ID: DAOS-3728.

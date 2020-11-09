@@ -60,8 +60,6 @@ class DmgCommand(DmgCommandBase):
         "network_scan":
             r"[-]+(?:\n|\n\r)([a-z0-9-]+)(?:\n|\n\r)[-]+|NUMA\s+"
             r"Socket\s+(\d+)|(ofi\+[a-z0-9;_]+)\s+([a-z0-9, ]+)",
-        "pool_list":
-            r"(?:([0-9a-fA-F-]+) +([0-9,]+))",
         "storage_query_list_pools":
             r"[-]+\s+([a-z0-9-]+)\s+[-]+|(?:UUID:([a-z0-9-]+)\s+Rank:([0-9]+)"
             r"\s+Targets:\[([0-9 ]+)\])(?:\s+Blobs:\[([0-9 ]+)\]\s+?$)",
@@ -622,15 +620,22 @@ class DmgCommand(DmgCommandBase):
     def pool_list(self):
         """List pools.
 
-        Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
-
         Raises:
-            CommandFailure: if the dmg pool delete-acl command fails.
+            CommandFailure: if the dmg pool pool list command fails.
+
+        Returns:
+            dict: a dictionary of pool UUID keys and svc replica values
 
         """
-        return self._get_result(("pool", "list"))
+        self._get_result(("pool", "list"))
+
+        # Populate a dictionary with svc replicas for each pool UUID key listed
+        data = {}
+        match = re.findall(
+            r"(?:([0-9a-fA-F-]+)\s+([0-9,-]+))", self.result.stdout)
+        for info in match:
+            data[info[0]] = info[1]
+        return data
 
     def pool_set_prop(self, pool, name, value):
         """Set property for a given Pool.
