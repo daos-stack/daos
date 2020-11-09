@@ -53,4 +53,4 @@ ior:
           fpp:
             flags: "-F -k -e -D 600 -v -w -W -r -R"
 dfuse:
-    mount_dir: "/tmp/daos_dfuse"
+    mount_dir: "/tmp/daos_dfuse/"

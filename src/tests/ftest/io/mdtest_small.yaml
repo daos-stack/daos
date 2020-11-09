@@ -48,4 +48,4 @@ mdtest:
     - [POSIX, 0, 0, 2, 10, 5, '-u']
 
 dfuse:
-  mount_dir: "/tmp/daos_dfuse"
+  mount_dir: "/tmp/daos_dfuse/"
