@@ -204,29 +204,34 @@ class NvmePoolExtend(TestWithServers):
                 self.pool.display_pool_daos_space("Pool space: Beginning")
                 pver_begin = self.get_pool_version()
 
-                # Start the additional servers and extend the pool
-                self.log.info("Extra Servers = %s", self.extra_servers)
-                self.start_additional_servers(self.extra_servers)
-                # Give sometime for the additional server to come up.
-                time.sleep(5)
-                self.log.info("Pool Version at the beginning %s", pver_begin)
-                output = self.dmg_command.pool_extend(self.pool.uuid,
-                                                      rank, scm_size,
-                                                      nvme_size)
-                self.log.info(output)
+        # Start the additional servers and extend the pool
+        self.log.info("Extra Servers = %s", self.extra_servers)
+        self.start_additional_servers(self.extra_servers)
+        # Give sometime for the additional server to come up.
+        time.sleep(5)
+        self.log.info("Pool Version at the beginning %s", pver_begin)
+        output = self.dmg_command.pool_extend(self.pool.uuid,
+                                              rank, scm_size,
+                                              nvme_size)
+        self.log.info(output)
+        fail_count = 0
+        while fail_count <= 20:
+            pver_extend = self.get_pool_version()
+            time.sleep(15)
+            fail_count += 1
+            if pver_extend > pver_begin:
+                break
 
-                fail_count = 0
-                while fail_count <= 20:
-                    pver_extend = self.get_pool_version()
-                    time.sleep(15)
-                    fail_count += 1
-                    if pver_extend > pver_begin:
-                        break
+        self.log.info("Pool Version after extend %s", pver_extend)
+        # Check pool version incremented after pool exclude
+        self.assertTrue(pver_extend > pver_begin,
+                        "Pool Version Error:  After extend")
 
-                self.log.info("Pool Version after extend %s", pver_extend)
-                # Check pool version incremented after pool exclude
-                self.assertTrue(pver_extend > pver_begin,
-                                "Pool Version Error:  After extend")
+        for val in range(0, num_pool):
+            self.pool = pool[val]
+            for oclass, api, test in product(self.ior_dfs_oclass,
+                                             self.ior_apis,
+                                             self.ior_test_sequence):
                 # Verify the data after pool extend
                 self.run_ior_thread("Read", oclass, api, test)
 
