@@ -912,9 +912,10 @@ iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
 
 	ABT_future_wait(future);
 	rc = cb_info.result;
-	D_DEBUG(DB_MD, "class_id %d opc %d rc %d\n", key_iv->class_id, opc, rc);
+	D_DEBUG(DB_MD, "class_id %d opc %d rc %d\n\n", key_iv->class_id, opc, rc);
 out:
 	ABT_future_free(&future);
+	D_DEBUG(DB_MD, " <<<< End of iv_opt_internal program >>>>\n");
 	return rc;
 }
 
@@ -930,7 +931,7 @@ struct sync_comp_cb_arg {
 
 static int
 iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
-      crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc);
+	crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc);
 
 static int
 sync_comp_cb(void *arg, int rc)
@@ -966,7 +967,7 @@ sync_comp_cb(void *arg, int rc)
 
 static int
 iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
-      crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc)
+	crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc)
 {
 	struct ds_iv_key *_key = key;
 	d_sg_list_t	 *_value = value;

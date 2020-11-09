@@ -2251,6 +2251,7 @@ handle_ivsync_response(const struct crt_cb_info *cb_info)
 					iv_sync->isc_user_priv);
 		D_FREE(iv_sync->isc_iv_key.iov_buf);
 	} else {
+		D_INFO("Call Back not supplied\n");
 		D_ASSERT(iv_sync->isc_ivns_internal == NULL);
 	}
 
@@ -2291,15 +2292,19 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
 	D_ASSERT(iv_ops != NULL);
 
+
 	switch (sync_type->ivs_mode) {
 	case CRT_IV_SYNC_NONE:
+		D_INFO("NONE syncMode\n");
 		D_GOTO(exit, rc = 0);
 
 	case CRT_IV_SYNC_EAGER:
+		D_INFO("EAGER syncMode\n");
 		delay_completion = true;
 		break;
 
 	case CRT_IV_SYNC_LAZY:
+		D_INFO("LAZY syncMode\n");
 		delay_completion = false;
 		break;
 
@@ -2328,6 +2333,7 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 
 	local_bulk = CRT_BULK_NULL;
 	if (iv_value != NULL) {
+		D_INFO("Create Bulk\n");
 		rc = crt_bulk_create(ivns_internal->cii_ctx, iv_value,
 				CRT_BULK_RO, &local_bulk);
 		if (rc != 0) {
@@ -2352,8 +2358,10 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 	D_ASSERT(input != NULL);
 
 	D_ALLOC_PTR(iv_sync_cb);
-	if (iv_sync_cb == NULL)
+	if (iv_sync_cb == NULL) {
+		D_INFO("NO callback supplied\n");
 		D_GOTO(exit, rc = -DER_NOMEM);
+	}
 
 	iv_sync_cb->isc_sync_type = *sync_type;
 	input->ivs_ivns_id = ivns_internal->cii_gns.gn_ivns_id.ii_nsid;
@@ -2383,8 +2391,9 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 
 		/* Copy iv_key over as it will get destroyed after this call */
 		D_ALLOC(iv_sync_cb->isc_iv_key.iov_buf, iv_key->iov_buf_len);
-		if (iv_sync_cb->isc_iv_key.iov_buf == NULL)
+		if (iv_sync_cb->isc_iv_key.iov_buf == NULL) {
 			D_GOTO(exit, rc = -DER_NOMEM);
+			}
 
 		memcpy(iv_sync_cb->isc_iv_key.iov_buf, iv_key->iov_buf,
 			iv_key->iov_buf_len);
@@ -2429,7 +2438,7 @@ exit:
 			sync_type->ivs_comp_cb(sync_type->ivs_comp_cb_arg, rc);
 	}
 
-	DBG_ENTRY();
+	DBG_EXIT();
 	return rc;
 }
 
