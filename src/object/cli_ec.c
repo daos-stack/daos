@@ -475,7 +475,7 @@ obj_ec_stripe_encode(daos_iod_t *iod, d_sg_list_t *sgl, uint32_t iov_idx,
 	int				 rc = 0;
 
 	if (iod->iod_type == DAOS_IOD_SINGLE)
-		obj_ec_singv_local_sz(iod->iod_size, oca, k - 1, &loc);
+		obj_ec_singv_local_sz(iod->iod_size, oca, k - 1, &loc, true);
 
 	for (i = 0; i < k; i++) {
 		c_data[i] = NULL;
@@ -2671,7 +2671,7 @@ obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods, uint32_t iod_nr,
 			r_siod = &r_oiod->oiod_siods[j];
 			tgt = r_siod->siod_tgt_idx;
 			tgt_oiod = obj_ec_tgt_oiod_get(tgt_oiods, tgt_nr, tgt);
-			D_ASSERT(tgt_oiod->oto_tgt_idx == tgt);
+			D_ASSERT(tgt_oiod && tgt_oiod->oto_tgt_idx == tgt);
 			tgt_oiod->oto_offs[i] = r_siod->siod_off;
 			siod = &tgt_oiod->oto_oiods[i].oiod_siods[0];
 			D_ASSERT(siod->siod_tgt_idx == tgt);
