@@ -2276,6 +2276,39 @@ vos_dtx_cleanup(struct dtx_handle *dth)
 		vos_obj_evict_by_oid(vos_obj_cache_current(), cont, oids[i]);
 }
 
+int
+vos_dtx_pin(struct dtx_handle *dth)
+{
+	struct vos_container	*cont;
+	struct umem_instance	*umm;
+	int			 rc;
+
+	D_ASSERT(dtx_is_valid_handle(dth));
+	D_ASSERT(dth->dth_ent == NULL);
+
+	if (dth->dth_solo)
+		return 0;
+
+	cont = vos_hdl2cont(dth->dth_coh);
+	D_ASSERT(cont != NULL);
+
+	umm = vos_cont2umm(cont);
+	rc = vos_dtx_alloc(umm, dth);
+	if (rc != 0)
+		return rc;
+
+	rc = umem_tx_begin(umm, NULL);
+	if (rc == 0) {
+		rc = vos_dtx_prepared(dth);
+		rc = umem_tx_end(umm, rc);
+	}
+
+	if (rc != 0)
+		vos_dtx_cleanup_internal(dth);
+
+	return rc;
+}
+
 /** Allocate space for saving the vos reservations and deferred actions */
 int
 vos_dtx_rsrvd_init(struct dtx_handle *dth)
