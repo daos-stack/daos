@@ -362,6 +362,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 		} else {
 			D_ERROR("Failed to load value for symlink\n");
 			D_FREE(value);
+			D_GOTO(out, rc = EIO);
 		}
 	}
 
@@ -637,8 +638,8 @@ check_access(dfs_t *dfs, uid_t uid, gid_t gid, mode_t mode, int mask)
 
 static int
 open_file(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
-	  daos_oclass_id_t cid, daos_size_t chunk_size, dfs_obj_t *file,
-	  size_t len)
+	  daos_oclass_id_t cid, daos_size_t chunk_size, size_t len,
+	  dfs_obj_t *file)
 {
 	struct dfs_entry	entry = {0};
 	bool			exists;
@@ -772,7 +773,7 @@ create_dir(dfs_t *dfs, daos_handle_t parent_oh, daos_oclass_id_t cid,
 
 static int
 open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
-	 daos_oclass_id_t cid, dfs_obj_t *dir, size_t len)
+	 daos_oclass_id_t cid, size_t len, dfs_obj_t *dir)
 {
 	struct dfs_entry	entry = {0};
 	bool			exists;
@@ -832,7 +833,7 @@ open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
 
 static int
 open_symlink(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
-	     const char *value, dfs_obj_t *sym, size_t len)
+	     const char *value, size_t len, dfs_obj_t *sym)
 {
 	struct dfs_entry	entry = {0};
 	size_t			value_len;
@@ -1237,7 +1238,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	dfs->root.parent_oid.hi = SB_HI;
 	daos_obj_generate_id(&dfs->root.parent_oid, 0, OC_RP_XSF, 0);
 	rc = open_dir(dfs, DAOS_TX_NONE, dfs->super_oh, amode, 0,
-		      &dfs->root, 1);
+		      1, &dfs->root);
 	if (rc) {
 		D_ERROR("Failed to open root object (%d)\n", rc);
 		D_GOTO(err_super, rc);
@@ -1956,11 +1957,11 @@ dfs_lookup_loop:
 
 			/* Create a truncated version of the string */
 			D_STRNDUP(obj->value, entry.value, entry.value_len + 1);
-			if (obj->value == NULL)
-				obj->value = entry.value;
-			else {
+			if (obj->value == NULL) {
 				D_FREE(entry.value);
+				D_GOTO(out, rc = ENOMEM);
 			}
+			D_FREE(entry.value);
 			if (stbuf)
 				stbuf->st_size = entry.value_len + 1;
 			/** return the symlink obj if this is the last entry */
@@ -2256,9 +2257,8 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		/* Create a truncated version of the string */
 		D_STRNDUP(obj->value, entry.value, entry.value_len + 1);
 		if (obj->value == NULL)
-			obj->value = entry.value;
-		else
-			D_FREE(entry.value);
+			D_GOTO(err_obj, rc = ENOMEM);
+		D_FREE(entry.value);
 		if (stbuf)
 			stbuf->st_size = entry.value_len + 1;
 	} else if (S_ISDIR(entry.mode)) {
@@ -2349,22 +2349,23 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 restart:
 	switch (mode & S_IFMT) {
 	case S_IFREG:
-		rc = open_file(dfs, th, parent, flags, cid, chunk_size, obj,
-			       len);
+		rc = open_file(dfs, th, parent, flags, cid, chunk_size, len,
+			       obj);
+
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open file (%d)\n", rc);
 			D_GOTO(out, rc);
 		}
 		break;
 	case S_IFDIR:
-		rc = open_dir(dfs, th, parent->oh, flags, cid, obj, len);
+		rc = open_dir(dfs, th, parent->oh, flags, cid, len, obj);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open dir (%d)\n", rc);
 			D_GOTO(out, rc);
 		}
 		break;
 	case S_IFLNK:
-		rc = open_symlink(dfs, th, parent, flags, value, obj, len);
+		rc = open_symlink(dfs, th, parent, flags, value, len, obj);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open symlink (%d)\n", rc);
 			D_GOTO(out, rc);
@@ -3055,10 +3056,7 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 		return check_access(dfs, getuid(), getgid(), entry.mode, mask);
 	}
 
-	if (entry.value == NULL) {
-		D_ERROR("Null Symlink value\n");
-		return EIO;
-	}
+	D_ASSERT(entry.value);
 
 	rc = dfs_lookup(dfs, entry.value, O_RDONLY, &sym, NULL, NULL);
 	if (rc) {
@@ -3140,10 +3138,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	if (S_ISLNK(entry.mode)) {
 		dfs_obj_t *sym;
 
-		if (entry.value == NULL) {
-			D_ERROR("Null Symlink value\n");
-			return EIO;
-		}
+		D_ASSERT(entry.value);
 
 		rc = dfs_lookup(dfs, entry.value, O_RDWR, &sym, NULL, NULL);
 		if (rc) {
