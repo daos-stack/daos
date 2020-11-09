@@ -64,7 +64,7 @@ pthread_mutex_t addlock;
 d_tm_node_t *
 d_tm_get_root(uint64_t *shmem)
 {
-	return (d_tm_node_t *) (shmem + 1);
+	return (d_tm_node_t *)(shmem + 1);
 }
 
 /*
@@ -206,7 +206,7 @@ d_tm_init(int rank, uint64_t memSize)
 		* Used by the client to adjust pointers in the shared memory
 		* to its own address space.
 		*/
-		base_addr = (uint64_t *) d_tm_shmalloc(sizeof(uint64_t));
+		base_addr = (uint64_t *)d_tm_shmalloc(sizeof(uint64_t));
 		/*
 		 * Just allocated the pool, and this memory is dedicated
 		 * for this process, so a d_tm_shmalloc failure cannot
@@ -225,7 +225,7 @@ d_tm_init(int rank, uint64_t memSize)
 		D_GOTO(failure, rc);
 	}
 
-	root = (d_tm_node_t *) d_tm_shmalloc(sizeof(d_tm_node_t));
+	root = (d_tm_node_t *)d_tm_shmalloc(sizeof(d_tm_node_t));
 
 	/*
 	 * Just allocated the pool, and this memory is dedicated
@@ -288,7 +288,7 @@ void d_tm_fini(void)
 {
 	if (shmemRoot != NULL) {
 		D_INFO("There are %"PRIu64" metrics in the tree\n",
-			d_tm_count_metrics(shmemRoot, root));
+		       d_tm_count_metrics(shmemRoot, root));
 		/*
 		 * If we decide to free the mutex objects on shutdown for the
 		 * nodes that have them, call:
@@ -323,15 +323,15 @@ d_tm_free_node(uint64_t *cshmemRoot, d_tm_node_t *node)
 	}
 
 	node = node->child;
-	node = (d_tm_node_t *) d_tm_convert_node_ptr(cshmemRoot, node);
+	node = (d_tm_node_t *)d_tm_convert_node_ptr(cshmemRoot, node);
 	if (node) {
 		d_tm_free_node(cshmemRoot, node);
 		node = node->sibling;
-		node = (d_tm_node_t *) d_tm_convert_node_ptr(cshmemRoot, node);
+		node = (d_tm_node_t *)d_tm_convert_node_ptr(cshmemRoot, node);
 		while (node) {
 			d_tm_free_node(cshmemRoot, node);
 			node = node->sibling;
-			node = (d_tm_node_t *) d_tm_convert_node_ptr(cshmemRoot,
+			node = (d_tm_node_t *)d_tm_convert_node_ptr(cshmemRoot,
 								     node);
 		}
 	}
@@ -345,11 +345,13 @@ void
 d_tm_print_my_children(uint64_t *cshmemRoot, d_tm_node_t *node, int level)
 {
 	char *convertedNamePtr = NULL;
+	char tmp[D_TM_TIME_BUFF_LEN];
 	int i = 0;
+	int len = 0;
+	int rc;
 	time_t clk;
 	uint64_t val;
 	struct timespec tms;
-	int rc;
 
 	if (!node)
 		return;
@@ -361,9 +363,6 @@ d_tm_print_my_children(uint64_t *cshmemRoot, d_tm_node_t *node, int level)
 			printf("%20s", " ");
 
 		switch (node->d_tm_type) {
-		char tmp[D_TM_TIME_BUFF_LEN];
-		int len = 0;
-
 		case D_TM_DIRECTORY:
 			printf("%-20s\n", convertedNamePtr);
 			break;
@@ -371,22 +370,22 @@ d_tm_print_my_children(uint64_t *cshmemRoot, d_tm_node_t *node, int level)
 			rc = d_tm_get_counter(&val, cshmemRoot, node, NULL);
 			if (rc == D_TM_SUCCESS)
 				printf("COUNTER: %s %" PRIu64 "\n",
-					convertedNamePtr, val);
+				       convertedNamePtr, val);
 			else
 				printf("Error on counter read: %d\n", rc);
 			break;
 		case D_TM_TIMESTAMP:
 			rc = d_tm_get_timestamp(&clk, cshmemRoot, node, NULL);
 			if (rc == D_TM_SUCCESS) {
-				strncpy(tmp, ctime(&clk), sizeof(tmp));
+				strncpy(tmp, ctime(&clk), sizeof(tmp) - 1);
 				len = strnlen(tmp, D_TM_TIME_BUFF_LEN - 1);
 				if (len) {
-					if (tmp[len-1] == '\n') {
-						tmp[len-1] = 0;
+					if (tmp[len - 1] == '\n') {
+						tmp[len - 1] = 0;
 					}
 				}
 				printf("TIMESTAMP %s: %s\n",
-					convertedNamePtr, tmp);
+				       convertedNamePtr, tmp);
 			} else
 				printf("Error on timestamp read: %d\n",	rc);
 			break;
@@ -395,8 +394,8 @@ d_tm_print_my_children(uint64_t *cshmemRoot, d_tm_node_t *node, int level)
 						    node, NULL);
 			if (rc == D_TM_SUCCESS) {
 				printf("HIGH RES TIMER %s:%lds, %ldns\n",
-					convertedNamePtr, tms.tv_sec,
-					tms.tv_nsec);
+				       convertedNamePtr, tms.tv_sec,
+				       tms.tv_nsec);
 			} else
 				printf("Error on highres timer read: %d\n", rc);
 			break;
@@ -404,8 +403,8 @@ d_tm_print_my_children(uint64_t *cshmemRoot, d_tm_node_t *node, int level)
 			rc = d_tm_get_duration(&tms, cshmemRoot, node, NULL);
 			if (rc == D_TM_SUCCESS) {
 				printf("REALTIME DURATION %s: %.9fs\n",
-					convertedNamePtr, tms.tv_sec +
-					tms.tv_nsec/1e9);
+				       convertedNamePtr, tms.tv_sec +
+				       tms.tv_nsec / 1e9);
 			} else
 				printf("Error on duration read: %d\n", rc);
 			break;
@@ -413,8 +412,8 @@ d_tm_print_my_children(uint64_t *cshmemRoot, d_tm_node_t *node, int level)
 			rc = d_tm_get_duration(&tms, cshmemRoot, node, NULL);
 			if (rc == D_TM_SUCCESS) {
 				printf("PROC CPU DURATION %s: %.9fs\n",
-					convertedNamePtr, tms.tv_sec +
-					tms.tv_nsec/1e9);
+				       convertedNamePtr, tms.tv_sec +
+				       tms.tv_nsec / 1e9);
 			} else
 				printf("Error on duration read: %d\n", rc);
 			break;
@@ -422,8 +421,8 @@ d_tm_print_my_children(uint64_t *cshmemRoot, d_tm_node_t *node, int level)
 			rc = d_tm_get_duration(&tms, cshmemRoot, node, NULL);
 			if (rc == D_TM_SUCCESS) {
 				printf("THRD CPU DURATION %s: %.9fs\n",
-					convertedNamePtr, tms.tv_sec +
-					tms.tv_nsec/1e9);
+				       convertedNamePtr, tms.tv_sec +
+				       tms.tv_nsec / 1e9);
 			} else
 				printf("Error on duration read: %d\n", rc);
 			break;
@@ -431,7 +430,7 @@ d_tm_print_my_children(uint64_t *cshmemRoot, d_tm_node_t *node, int level)
 			rc = d_tm_get_gauge(&val, cshmemRoot, node, NULL);
 			if (rc == D_TM_SUCCESS) {
 				printf("GAUGE %s: %" PRIu64 "\n",
-					convertedNamePtr, val);
+				       convertedNamePtr, val);
 			} else
 				printf("Error on gauge read: %d\n", rc);
 			break;
@@ -441,17 +440,17 @@ d_tm_print_my_children(uint64_t *cshmemRoot, d_tm_node_t *node, int level)
 		}
 	}
 	node = node->child;
-	node = (d_tm_node_t *) d_tm_convert_node_ptr(cshmemRoot, node);
+	node = (d_tm_node_t *)d_tm_convert_node_ptr(cshmemRoot, node);
 
 	if (node) {
-		d_tm_print_my_children(cshmemRoot, node, level+1);
+		d_tm_print_my_children(cshmemRoot, node, level + 1);
 		node = node->sibling;
-		node = (d_tm_node_t *) d_tm_convert_node_ptr(cshmemRoot, node);
+		node = (d_tm_node_t *)d_tm_convert_node_ptr(cshmemRoot, node);
 		while (node) {
-			d_tm_print_my_children(cshmemRoot, node, level+1);
+			d_tm_print_my_children(cshmemRoot, node, level + 1);
 			node = node->sibling;
-			node = (d_tm_node_t *) d_tm_convert_node_ptr(cshmemRoot,
-								     node);
+			node = (d_tm_node_t *)d_tm_convert_node_ptr(cshmemRoot,
+								    node);
 		}
 	}
 }
@@ -471,16 +470,16 @@ d_tm_count_metrics(uint64_t *cshmemRoot, d_tm_node_t *node)
 		count++;
 
 	node = node->child;
-	node = (d_tm_node_t *) d_tm_convert_node_ptr(cshmemRoot, node);
+	node = (d_tm_node_t *)d_tm_convert_node_ptr(cshmemRoot, node);
 	if (node) {
 		count += d_tm_count_metrics(cshmemRoot, node);
 		node = node->sibling;
-		node = (d_tm_node_t *) d_tm_convert_node_ptr(cshmemRoot, node);
+		node = (d_tm_node_t *)d_tm_convert_node_ptr(cshmemRoot, node);
 		while (node) {
 			count += d_tm_count_metrics(cshmemRoot, node);
 			node = node->sibling;
-			node = (d_tm_node_t *) d_tm_convert_node_ptr(cshmemRoot,
-								     node);
+			node = (d_tm_node_t *)d_tm_convert_node_ptr(cshmemRoot,
+								    node);
 		}
 	}
 	return count;
@@ -523,7 +522,7 @@ d_tm_increment_counter(d_tm_node_t **metric, char *item, ...)
 			     strnlen(str, D_TM_MAX_NAME_LEN) + 1) <
 			     D_TM_MAX_NAME_LEN) {
 				strncat(path, "/", 1);
-				strncat(path, str, D_TM_MAX_NAME_LEN-1);
+				strncat(path, str, D_TM_MAX_NAME_LEN - 1);
 				str = va_arg(args, char *);
 			} else {
 				D_ERROR("Failed to find metric");
@@ -537,8 +536,7 @@ d_tm_increment_counter(d_tm_node_t **metric, char *item, ...)
 	}
 
 	if (!node) {
-		rc = d_tm_add_metric(&node, path, D_TM_COUNTER,
-					"N/A", "N/A");
+		rc = d_tm_add_metric(&node, path, D_TM_COUNTER, "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to incremement counter [%s]  "
 				"Failed to add metric", path);
@@ -598,7 +596,7 @@ d_tm_record_timestamp(d_tm_node_t **metric, char *item, ...)
 			     strnlen(str, D_TM_MAX_NAME_LEN) + 1) <
 			     D_TM_MAX_NAME_LEN) {
 				strncat(path, "/", 1);
-				strncat(path, str, D_TM_MAX_NAME_LEN-1);
+				strncat(path, str, D_TM_MAX_NAME_LEN - 1);
 				str = va_arg(args, char *);
 			} else {
 				D_ERROR("Failed to find metric");
@@ -612,8 +610,7 @@ d_tm_record_timestamp(d_tm_node_t **metric, char *item, ...)
 	}
 
 	if (!node) {
-		rc = d_tm_add_metric(&node, path, D_TM_TIMESTAMP,
-					"N/A", "N/A");
+		rc = d_tm_add_metric(&node, path, D_TM_TIMESTAMP, "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to record timestamp [%s]  "
 				"Failed to add metric.", path);
@@ -672,7 +669,7 @@ d_tm_record_high_res_timer(d_tm_node_t **metric, char *item, ...)
 			     strnlen(str, D_TM_MAX_NAME_LEN) + 1) <
 			     D_TM_MAX_NAME_LEN) {
 				strncat(path, "/", 1);
-				strncat(path, str, D_TM_MAX_NAME_LEN-1);
+				strncat(path, str, D_TM_MAX_NAME_LEN - 1);
 				str = va_arg(args, char *);
 			} else {
 				D_ERROR("Failed to find metric");
@@ -687,7 +684,7 @@ d_tm_record_high_res_timer(d_tm_node_t **metric, char *item, ...)
 
 	if (!node) {
 		rc = d_tm_add_metric(&node, path, D_TM_HIGH_RES_TIMER,
-					"N/A", "N/A");
+				     "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to record high resolution timer [%s]  "
 				"Failed to add metric.", path);
@@ -762,7 +759,7 @@ d_tm_mark_duration_start(d_tm_node_t **metric, int clk_id, char *item, ...)
 			     strnlen(str, D_TM_MAX_NAME_LEN) + 1) <
 			     D_TM_MAX_NAME_LEN) {
 				strncat(path, "/", 1);
-				strncat(path, str, D_TM_MAX_NAME_LEN-1);
+				strncat(path, str, D_TM_MAX_NAME_LEN - 1);
 				str = va_arg(args, char *);
 			} else {
 				D_ERROR("Failed to find metric");
@@ -785,7 +782,7 @@ d_tm_mark_duration_start(d_tm_node_t **metric, int clk_id, char *item, ...)
 			return rc;
 		}
 		rc = d_tm_add_metric(&node, path, D_TM_DURATION | clk_id,
-					"N/A", "N/A");
+				     "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to mark duration start [%s]  "
 				"Failed to add metric.", path);
@@ -848,7 +845,7 @@ d_tm_mark_duration_end(d_tm_node_t **metric, char *item, ...)
 			     strnlen(str, D_TM_MAX_NAME_LEN) + 1) <
 			     D_TM_MAX_NAME_LEN) {
 				strncat(path, "/", 1);
-				strncat(path, str, D_TM_MAX_NAME_LEN-1);
+				strncat(path, str, D_TM_MAX_NAME_LEN - 1);
 				str = va_arg(args, char *);
 			} else {
 				D_ERROR("Failed to find metric");
@@ -870,7 +867,7 @@ d_tm_mark_duration_end(d_tm_node_t **metric, char *item, ...)
 	if (node->d_tm_type & D_TM_DURATION) {
 		D_MUTEX_LOCK(&node->lock);
 		clock_gettime(d_tm_clock_id(node->d_tm_type & ~D_TM_DURATION),
-					    &end);
+			      &end);
 		node->metric->data.tms[0] = d_timediff(
 						node->metric->data.tms[1], end);
 		D_MUTEX_UNLOCK(&node->lock);
@@ -920,7 +917,7 @@ d_tm_set_gauge(d_tm_node_t **metric, uint64_t value, char *item, ...)
 			     strnlen(str, D_TM_MAX_NAME_LEN) + 1) <
 			     D_TM_MAX_NAME_LEN) {
 				strncat(path, "/", 1);
-				strncat(path, str, D_TM_MAX_NAME_LEN-1);
+				strncat(path, str, D_TM_MAX_NAME_LEN - 1);
 				str = va_arg(args, char *);
 			} else {
 				D_ERROR("Failed to find metric");
@@ -934,8 +931,7 @@ d_tm_set_gauge(d_tm_node_t **metric, uint64_t value, char *item, ...)
 	}
 
 	if (!node) {
-		rc = d_tm_add_metric(&node, path, D_TM_GAUGE,
-					"N/A", "N/A");
+		rc = d_tm_add_metric(&node, path, D_TM_GAUGE, "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to set gauge [%s]  "
 				"Failed to add metric.", path);
@@ -995,7 +991,7 @@ d_tm_increment_gauge(d_tm_node_t **metric, uint64_t value, char *item, ...)
 			     strnlen(str, D_TM_MAX_NAME_LEN) + 1) <
 			     D_TM_MAX_NAME_LEN) {
 				strncat(path, "/", 1);
-				strncat(path, str, D_TM_MAX_NAME_LEN-1);
+				strncat(path, str, D_TM_MAX_NAME_LEN - 1);
 				str = va_arg(args, char *);
 			} else {
 				D_ERROR("Failed to find metric");
@@ -1009,8 +1005,7 @@ d_tm_increment_gauge(d_tm_node_t **metric, uint64_t value, char *item, ...)
 	}
 
 	if (!node) {
-		rc = d_tm_add_metric(&node, path, D_TM_GAUGE,
-					"N/A", "N/A");
+		rc = d_tm_add_metric(&node, path, D_TM_GAUGE, "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to incremement gauge [%s]  "
 				"Failed to add metric.", path);
@@ -1070,7 +1065,7 @@ d_tm_decrement_gauge(d_tm_node_t **metric, uint64_t value, char *item, ...)
 			     strnlen(str, D_TM_MAX_NAME_LEN) + 1) <
 			     D_TM_MAX_NAME_LEN) {
 				strncat(path, "/", 1);
-				strncat(path, str, D_TM_MAX_NAME_LEN-1);
+				strncat(path, str, D_TM_MAX_NAME_LEN - 1);
 				str = va_arg(args, char *);
 			} else {
 				D_ERROR("Failed to find metric");
@@ -1084,8 +1079,7 @@ d_tm_decrement_gauge(d_tm_node_t **metric, uint64_t value, char *item, ...)
 	}
 
 	if (!node) {
-		rc = d_tm_add_metric(&node, path, D_TM_GAUGE,
-					"N/A", "N/A");
+		rc = d_tm_add_metric(&node, path, D_TM_GAUGE, "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to decrement gauge [%s]  "
 				"Failed to add metric.", path);
@@ -1508,7 +1502,7 @@ int d_tm_get_metadata(char **shortDesc, char **longDesc, uint64_t *cshmemRoot,
 						     cMetric->shortDesc);
 		if (shortDescStr)
 			D_STRNDUP(*shortDesc, shortDescStr?shortDescStr:"N/A",
-				D_TM_MAX_SHORT_LEN);
+				  D_TM_MAX_SHORT_LEN);
 		longDescStr = d_tm_convert_char_ptr(cshmemRoot,
 						    cMetric->longDesc);
 		if (longDescStr)
@@ -1671,7 +1665,7 @@ d_tm_list_free(d_tm_nodeList_t *nodeList)
 
 	while (nodeList) {
 		head = nodeList->next;
-		free (nodeList);
+		free(nodeList);
 		nodeList = head;
 	}
 }
@@ -1755,7 +1749,7 @@ d_tm_shmalloc(int length)
 {
 	if (length % sizeof(uint16_t) != 0) {
 		length += sizeof(uint16_t);
-		length &= ~(sizeof(uint16_t)-1);
+		length &= ~(sizeof(uint16_t) - 1);
 	}
 
 	if (shmemIdx) {
