@@ -499,7 +499,7 @@ obj_set_reply_sizes(crt_rpc_t *rpc)
 	D_ASSERT(orwo != NULL);
 	D_ASSERT(orw != NULL);
 
-	if (orw->orw_flags & DRF_CHECK_EXISTENCE)
+	if (orw->orw_flags & ORF_CHECK_EXISTENCE)
 		goto out;
 
 	iods = orw->orw_iod_array.oia_iods;
@@ -1261,7 +1261,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		bulk_op = CRT_BULK_PUT;
 		if (!rma && orw->orw_sgls.ca_arrays == NULL) {
 			spec_fetch = true;
-			if (orw->orw_flags & DRF_CHECK_EXISTENCE)
+			if (orw->orw_flags & ORF_CHECK_EXISTENCE)
 				fetch_flags = VOS_OF_FETCH_CHECK_EXISTENCE;
 			else
 				fetch_flags = VOS_OF_FETCH_SIZE_ONLY;
@@ -1328,7 +1328,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		}
 	}
 
-	if (orw->orw_flags & DRF_CHECK_EXISTENCE)
+	if (orw->orw_flags & ORF_CHECK_EXISTENCE)
 		goto out;
 
 	biod = vos_ioh2desc(ioh);
@@ -1804,15 +1804,23 @@ enum process_epoch_rc {
 static int
 process_epoch(uint64_t *epoch, uint64_t *epoch_first, uint32_t *flags)
 {
-	if (*epoch == 0 || *epoch == DAOS_EPOCH_MAX)
+	if (*epoch == 0 || *epoch == DAOS_EPOCH_MAX) {
 		/*
 		 * *epoch is not a chosen TX epoch. Choose the current HLC
 		 * reading as the TX epoch.
 		 */
 		*epoch = crt_hlc_get();
-	else
+	} else {
+		/*
+		 * If the non-rdonly TX is started before current server
+		 * (re-)start, then needs to be restarted with newer epoch.
+		 */
+		if (!(*flags & ORF_RDONLY_TX) && *epoch < dss_get_start_epoch())
+			return -DER_TX_RESTART;
+
 		/* *epoch is already a chosen TX epoch. */
 		return PE_OK_REMOTE;
+	}
 
 	/* If this is the first epoch chosen, assign it to *epoch_first. */
 	if (epoch_first != NULL && *epoch_first == 0)
@@ -1865,6 +1873,9 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	rc = process_epoch(&orw->orw_epoch, &orw->orw_epoch_first,
 			   &orw->orw_flags);
+	if (rc < 0)
+		goto out;
+
 	if (rc == PE_OK_LOCAL)
 		orw->orw_flags &= ~ORF_EPOCH_UNCERTAIN;
 
@@ -2126,6 +2137,9 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	if (oei->oei_flags & ORF_ENUM_WITHOUT_EPR) {
 		rc = process_epoch(&oei->oei_epr.epr_hi, &oei->oei_epr.epr_lo,
 				   &oei->oei_flags);
+		if (rc < 0)
+			goto failed;
+
 		if (rc == PE_OK_LOCAL)
 			oei->oei_flags &= ~ORF_EPOCH_UNCERTAIN;
 	}
@@ -2894,6 +2908,9 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 
 	rc = process_epoch(&okqi->okqi_epoch, &okqi->okqi_epoch_first,
 			   &okqi->okqi_flags);
+	if (rc < 0)
+		goto failed;
+
 	if (rc == PE_OK_LOCAL)
 		okqi->okqi_flags &= ~ORF_EPOCH_UNCERTAIN;
 
@@ -3258,7 +3275,7 @@ ds_obj_dtx_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 			goto out;
 		}
 
-		if (dcu->dcu_flags & DRF_CPD_BULK) {
+		if (dcu->dcu_flags & ORF_CPD_BULK) {
 			if (bulks == NULL) {
 				D_ALLOC_ARRAY(bulks, dcde->dcde_write_cnt);
 				if (bulks == NULL)
@@ -3524,6 +3541,9 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 	D_DEBUG(DB_IO, "Handling DTX "DF_DTI" on non-leader\n",
 		DP_DTI(&dcsh->dcsh_xid));
 
+	D_ASSERT(dcsh->dcsh_epoch.oe_value != 0);
+	D_ASSERT(dcsh->dcsh_epoch.oe_value != DAOS_EPOCH_MAX);
+
 	/* The check for read capa has been done before handling the CPD RPC.
 	 * So here, only need to check the write capa.
 	 */
@@ -3531,6 +3551,9 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 		rc = obj_capa_check(ioc->ioc_coh, true);
 		if (rc != 0)
 			goto out;
+
+		if (dcsh->dcsh_epoch.oe_value < dss_get_start_epoch())
+			D_GOTO(out, rc = -DER_TX_RESTART);
 	}
 
 	if (oci->oci_flags & ORF_RESEND) {
@@ -3648,7 +3671,7 @@ ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
 		}
 
 		if (dcu->dcu_ec_split_req != NULL)
-			*flags |= DRF_HAS_EC_SPLIT;
+			*flags |= ORF_HAS_EC_SPLIT;
 	}
 
 	return rc;
@@ -3696,6 +3719,9 @@ ds_obj_dtx_leader_ult(void *arg)
 	rc = process_epoch(&dcsh->dcsh_epoch.oe_value,
 			   &dcsh->dcsh_epoch.oe_first,
 			   &dcsh->dcsh_epoch.oe_rpc_flags);
+	if (rc < 0)
+		goto out;
+
 	if (rc == PE_OK_LOCAL) {
 		/*
 		 * In this case, writes to local RDGs can use the chosen epoch
@@ -3833,7 +3859,7 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 
 	D_ASSERT(oci != NULL);
 
-	if (oci->oci_flags & DRF_CPD_LEADER)
+	if (oci->oci_flags & ORF_CPD_LEADER)
 		leader = true;
 	else
 		leader = false;

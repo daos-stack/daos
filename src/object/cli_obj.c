@@ -1915,7 +1915,7 @@ check_query_flags(daos_obj_id_t oid, uint32_t flags, daos_key_t *dkey,
 /* check if the obj request is valid */
 static int
 obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
-	      uint32_t *pm_ver, struct dc_object **p_obj)
+	      uint32_t *pm_ver, struct dc_object **p_obj, bool *rdonly)
 {
 	uint32_t		map_ver = *pm_ver;
 	struct obj_auxi_args	*obj_auxi;
@@ -2084,7 +2084,8 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 
 	if (daos_handle_is_valid(th)) {
 		if (!obj_is_modification_opc(opc)) {
-			rc = dc_tx_hdl2epoch_and_pmv(th, epoch, &map_ver);
+			rc = dc_tx_hdl2epoch_and_pmv(th, epoch, &map_ver,
+						     rdonly);
 			if (rc != 0)
 				D_GOTO(out, rc);
 		}
@@ -3976,9 +3977,10 @@ dc_obj_fetch_task(tse_task_t *task)
 	uint32_t		 shard = 0;
 	int			 rc;
 	uint8_t                  csum_bitmap = 0;
+	bool			 rdonly;
 
 	rc = obj_req_valid(task, args, DAOS_OBJ_RPC_FETCH, &epoch, &map_ver,
-			   &obj);
+			   &obj, &rdonly);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
@@ -3989,6 +3991,9 @@ dc_obj_fetch_task(tse_task_t *task)
 		D_GOTO(out_task, rc);
 	}
 
+	if (rdonly)
+		obj_auxi->flags |= ORF_RDONLY_TX;
+
 	if ((args->extra_flags & DIOF_EC_RECOV) != 0) {
 		obj_auxi->ec_in_recov = 1;
 		obj_auxi->reasb_req.orr_fail = args->extra_arg;
@@ -3998,7 +4003,7 @@ dc_obj_fetch_task(tse_task_t *task)
 		goto out_task;
 
 	if (args->extra_flags & DIOF_CHECK_EXISTENCE) {
-		obj_auxi->flags |= DRF_CHECK_EXISTENCE;
+		obj_auxi->flags |= ORF_CHECK_EXISTENCE;
 	} else {
 		rc = obj_rw_req_reassemb(obj, args, &epoch, obj_auxi);
 		if (rc != 0) {
@@ -4099,7 +4104,7 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	int			 rc;
 
 	rc = obj_req_valid(task, args, DAOS_OBJ_RPC_UPDATE, epoch, &map_ver,
-			   &obj);
+			   &obj, NULL);
 	if (rc != 0)
 		goto out_task; /* invalid parameter */
 
@@ -4569,8 +4574,9 @@ obj_list_common(tse_task_t *task, int opc, daos_obj_list_t *args)
 	struct dtx_epoch	 epoch = {0};
 	int			 shard = -1;
 	int			 rc;
+	bool			 rdonly;
 
-	rc = obj_req_valid(task, args, opc, &epoch, &map_ver, &obj);
+	rc = obj_req_valid(task, args, opc, &epoch, &map_ver, &obj, &rdonly);
 	if (rc)
 		goto out_task;
 
@@ -4579,6 +4585,9 @@ obj_list_common(tse_task_t *task, int opc, daos_obj_list_t *args)
 		obj_decref(obj);
 		D_GOTO(out_task, rc);
 	}
+
+	if (rdonly)
+		obj_auxi->flags |= ORF_RDONLY_TX;
 
 	if (daos_oclass_is_ec(obj->cob_md.omd_id, NULL))
 		obj_auxi->is_ec_obj = 1;
@@ -4772,7 +4781,7 @@ obj_punch_common(tse_task_t *task, enum obj_rpc_opc opc, daos_obj_punch_t *args)
 	unsigned int		 map_ver = 0;
 	int			 rc;
 
-	rc = obj_req_valid(task, args, opc, &epoch, &map_ver, NULL);
+	rc = obj_req_valid(task, args, opc, &epoch, &map_ver, NULL, NULL);
 	if (rc != 0)
 		goto comp; /* invalid parameters */
 
@@ -4878,7 +4887,8 @@ shard_query_key_task(tse_task_t *task)
 	 */
 	args->kqa_auxi.obj_auxi->map_ver_reply =
 			args->kqa_auxi.obj_auxi->map_ver_req;
-	rc = dc_obj_shard_query_key(obj_shard, epoch, api_args->flags, obj,
+	rc = dc_obj_shard_query_key(obj_shard, epoch, api_args->flags,
+				    args->kqa_auxi.flags, obj,
 				    api_args->dkey, api_args->akey,
 				    api_args->recx, args->kqa_coh_uuid,
 				    args->kqa_cont_uuid, &args->kqa_dti,
@@ -4939,12 +4949,13 @@ dc_obj_query_key(tse_task_t *api_task)
 	struct dtx_id		dti;
 	int			i = 0;
 	int			rc;
+	bool			rdonly;
 
 	D_ASSERTF(api_args != NULL,
 		  "Task Argument OPC does not match DC OPC\n");
 
 	rc = obj_req_valid(api_task, api_args, DAOS_OBJ_RPC_QUERY_KEY, &epoch,
-			   &map_ver, &obj);
+			   &map_ver, &obj, &rdonly);
 	if (rc)
 		D_GOTO(out_task, rc);
 
@@ -5063,6 +5074,8 @@ dc_obj_query_key(tse_task_t *api_task)
 		args->kqa_auxi.map_ver	= map_ver;
 		args->kqa_auxi.obj	= obj;
 		args->kqa_auxi.obj_auxi	= obj_auxi;
+		if (rdonly)
+			args->kqa_auxi.flags = ORF_RDONLY_TX;
 		args->kqa_dkey_hash	= dkey_hash;
 		args->kqa_dti		= dti;
 		uuid_copy(args->kqa_coh_uuid, coh_uuid);
@@ -5138,7 +5151,7 @@ dc_obj_sync(tse_task_t *task)
 		  "Task Argument OPC does not match DC OPC\n");
 
 	rc = obj_req_valid(task, args, DAOS_OBJ_RPC_SYNC, &epoch,
-			   &map_ver, &obj);
+			   &map_ver, &obj, NULL);
 	if (rc)
 		D_GOTO(out_task, rc);
 

@@ -439,7 +439,8 @@ int dc_obj_shard_list(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		      uint32_t fw_cnt, tse_task_t *task);
 
 int dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
-			   uint32_t flags, struct dc_object *obj,
+			   uint32_t api_flags, uint32_t rpc_flags,
+			   struct dc_object *obj,
 			   daos_key_t *dkey, daos_key_t *akey,
 			   daos_recx_t *recx, const uuid_t coh_uuid,
 			   const uuid_t cont_uuid, struct dtx_id *dti,
@@ -773,7 +774,7 @@ dc_tx_check_pmv(daos_handle_t th);
 
 int
 dc_tx_hdl2epoch_and_pmv(daos_handle_t th, struct dtx_epoch *epoch,
-			uint32_t *pmv);
+			uint32_t *pmv, bool *rdonly);
 
 /** See dc_tx_get_epoch. */
 enum dc_tx_get_epoch_rc {

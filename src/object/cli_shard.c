@@ -636,7 +636,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	if (opc == DAOS_OBJ_RPC_FETCH) {
 		reasb_req = rw_args->shard_args->reasb_req;
 
-		if (rw_args->shard_args->auxi.flags & DRF_CHECK_EXISTENCE)
+		if (rw_args->shard_args->auxi.flags & ORF_CHECK_EXISTENCE)
 			goto out;
 
 		is_ec_obj = (reasb_req != NULL) &&
@@ -917,7 +917,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 			orw->orw_flags |= ORF_BULK_BIND;
 	} else {
 		if ((args->reasb_req && args->reasb_req->orr_size_fetch) ||
-		    auxi->flags & DRF_CHECK_EXISTENCE) {
+		    auxi->flags & ORF_CHECK_EXISTENCE) {
 			/* NULL bulk/sgl for size_fetch or check existence */
 			orw->orw_sgls.ca_count = 0;
 			orw->orw_sgls.ca_arrays = NULL;
@@ -1473,6 +1473,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 		oei->oei_akey = *obj_args->akey;
 	oei->oei_oid		= obj_shard->do_id;
 	oei->oei_map_ver	= args->la_auxi.map_ver;
+	oei->oei_flags		= args->la_auxi.flags;
 	if (args->la_auxi.epoch.oe_flags & DTX_EPOCH_UNCERTAIN)
 		oei->oei_flags |= ORF_EPOCH_UNCERTAIN;
 	if (obj_args->eprs != NULL && opc == DAOS_OBJ_RPC_ENUMERATE) {
@@ -1791,7 +1792,8 @@ out:
 
 int
 dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
-		       uint32_t flags, struct dc_object *obj, daos_key_t *dkey,
+		       uint32_t api_flags, uint32_t rpc_flags,
+		       struct dc_object *obj, daos_key_t *dkey,
 		       daos_key_t *akey, daos_recx_t *recx,
 		       const uuid_t coh_uuid, const uuid_t cont_uuid,
 		       struct dtx_id *dti, unsigned int *map_ver,
@@ -1850,14 +1852,15 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
 	okqi->okqi_map_ver		= *map_ver;
 	okqi->okqi_epoch		= epoch->oe_value;
 	okqi->okqi_epoch_first		= epoch->oe_first;
-	okqi->okqi_api_flags		= flags;
+	okqi->okqi_api_flags		= api_flags;
+	okqi->okqi_flags		= rpc_flags;
 	okqi->okqi_oid			= oid;
 	if (dkey != NULL)
 		okqi->okqi_dkey		= *dkey;
 	if (akey != NULL)
 		okqi->okqi_akey		= *akey;
 	if (epoch->oe_flags & DTX_EPOCH_UNCERTAIN)
-		okqi->okqi_flags	= ORF_EPOCH_UNCERTAIN;
+		okqi->okqi_flags	|= ORF_EPOCH_UNCERTAIN;
 	if (obj_is_ec(obj))
 		okqi->okqi_flags	|= ORF_EC;
 	uuid_copy(okqi->okqi_pool_uuid, pool->dp_pool);

@@ -357,7 +357,7 @@ dc_tx_cleanup_one(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr)
 
 		csummer = dc_cont_hdl2csummer(tx->tx_coh);
 
-		if (dcu->dcu_flags & DRF_CPD_BULK) {
+		if (dcu->dcu_flags & ORF_CPD_BULK) {
 			for (i = 0; i < dcsr->dcsr_nr; i++) {
 				if (dcu->dcu_bulks[i] != CRT_BULK_NULL)
 					crt_bulk_free(dcu->dcu_bulks[i]);
@@ -678,7 +678,7 @@ out:
 
 int
 dc_tx_hdl2epoch_and_pmv(daos_handle_t th, struct dtx_epoch *epoch,
-			uint32_t *pm_ver)
+			uint32_t *pm_ver, bool *rdonly)
 {
 	struct dc_tx	*tx = NULL;
 	int		 rc;
@@ -690,6 +690,12 @@ dc_tx_hdl2epoch_and_pmv(daos_handle_t th, struct dtx_epoch *epoch,
 
 		*pm_ver = tx->tx_pm_ver;
 		*epoch = tx->tx_epoch;
+		if (rdonly != NULL) {
+			if (tx->tx_flags & DAOS_TF_RDONLY)
+				*rdonly = true;
+			else
+				*rdonly = false;
+		}
 		D_MUTEX_UNLOCK(&tx->tx_lock);
 		dc_tx_decref(tx);
 	}
@@ -1026,7 +1032,7 @@ tx_bulk_prepare(struct daos_cpd_sub_req *dcsr, tse_task_t *task)
 	rc = obj_bulk_prep(dcsr->dcsr_sgls, dcsr->dcsr_nr, true,
 			   CRT_BULK_RO, task, &dcu->dcu_bulks);
 	if (rc == 0)
-		dcu->dcu_flags |= ORF_BULK_BIND | DRF_CPD_BULK;
+		dcu->dcu_flags |= ORF_BULK_BIND | ORF_CPD_BULK;
 
 	return rc;
 }
@@ -1615,6 +1621,9 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	else
 		dcsh->dcsh_epoch.oe_rpc_flags &= ~ORF_EPOCH_UNCERTAIN;
 
+	if (tx->tx_flags & DAOS_TF_RDONLY)
+		dcsh->dcsh_epoch.oe_rpc_flags |= ORF_RDONLY_TX;
+
 	mbs->dm_tgt_cnt = act_tgt_cnt;
 	mbs->dm_grp_cnt = act_grp_cnt;
 	mbs->dm_data_size = size;
@@ -1776,7 +1785,7 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 
 	uuid_copy(oci->oci_pool_uuid, tx->tx_pool->dp_pool);
 	oci->oci_map_ver = tx->tx_pm_ver;
-	oci->oci_flags = DRF_CPD_LEADER | (tx->tx_set_resend ? ORF_RESEND : 0);
+	oci->oci_flags = ORF_CPD_LEADER | (tx->tx_set_resend ? ORF_RESEND : 0);
 
 	oci->oci_sub_heads.ca_arrays = &tx->tx_head;
 	oci->oci_sub_heads.ca_count = 1;

@@ -461,9 +461,13 @@ abt_fini(void)
 static int
 server_init(int argc, char *argv[])
 {
+	daos_epoch_t	epoch;
+	uint64_t	diff;
 	unsigned int	ctx_nr;
 	char		hostname[256] = { 0 };
 	int		rc;
+
+	epoch = crt_hlc_get();
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
@@ -570,6 +574,30 @@ server_init(int argc, char *argv[])
 	if (rc != 0)
 		goto exit_drpc_fini;
 	D_INFO("Modules successfully set up\n");
+
+	diff = crt_hlc_get() - epoch;
+	if (diff < crt_hlc_epsilon_get()) {
+		struct timespec		tv;
+
+		tv.tv_sec = diff / NSEC_PER_SEC;
+		tv.tv_nsec = diff % NSEC_PER_SEC;
+
+		/* XXX: If the server restart so quickly as to all related
+		 *	things are handled within HLC epsilon, then it is
+		 *	possible that current local HLC after restart may
+		 *	be older than some HLC that was generated before
+		 *	server restart because of the clock drift between
+		 *	servers. So here, we control the server (re)start
+		 *	process to guarantee that the restart time window
+		 *	will be longer than the HLC epsilon, then new HLC
+		 *	generated after server restart will not rollback.
+		 */
+		D_INFO("nanosleep %lu:%lu before open external service.\n",
+		       tv.tv_sec, tv.tv_nsec);
+		nanosleep(&tv, NULL);
+	}
+
+	dss_set_start_epoch();
 
 	dss_xstreams_open_barrier();
 	D_INFO("Service fully up\n");

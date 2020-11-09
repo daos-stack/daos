@@ -151,15 +151,17 @@ enum obj_rpc_flags {
 	 */
 	ORF_ENUM_WITHOUT_EPR	= (1 << 8),
 	/* CPD RPC leader */
-	DRF_CPD_LEADER		= (1 << 9),
+	ORF_CPD_LEADER		= (1 << 9),
 	/* Bulk data transfer for CPD RPC. */
-	DRF_CPD_BULK		= (1 << 10),
+	ORF_CPD_BULK		= (1 << 10),
 	/* Contain EC split req, only used on CPD leader locally. */
-	DRF_HAS_EC_SPLIT	= (1 << 11),
+	ORF_HAS_EC_SPLIT	= (1 << 11),
 	/* Checking the existence of the object/key. */
-	DRF_CHECK_EXISTENCE	= (1 << 12),
+	ORF_CHECK_EXISTENCE	= (1 << 12),
 	/** Include the map details on fetch (daos_iom_t::iom_recxs) */
 	ORF_CREATE_MAP_DETAIL	= (1 << 13),
+	/* For read only TX. */
+	ORF_RDONLY_TX		= (1 << 14),
 };
 
 /* common for update/fetch */
