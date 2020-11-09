@@ -23,6 +23,7 @@ hosts: !mux
        - boro-A
     test_clients:
        - boro-A
+#timeout: 600
 tests: !mux
   proto_np_1:
     name: proto_np_1

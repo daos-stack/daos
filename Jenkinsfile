@@ -13,7 +13,6 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
-@Library(value="pipeline-lib@NLT") _
 
 boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
@@ -228,7 +227,8 @@ String functional_packages(String distro) {
                   "hdf5-vol-daos-mpich2-tests-daos-0 " +
                   "hdf5-vol-daos-openmpi3-tests-daos-0 " +
                   "MACSio-mpich2-daos-0 " +
-                  "MACSio-openmpi3-daos-0"
+                  "MACSio-openmpi3-daos-0 " +
+                  "mpifileutils-mpich-daos-0"
     if (distro == "leap15") {
         if (quickbuild()) {
             pkgs += " spdk-tools"
