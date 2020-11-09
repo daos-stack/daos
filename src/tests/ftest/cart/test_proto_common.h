@@ -43,6 +43,7 @@ struct test_global_t {
 	pthread_t		 tg_tid;
 	int			 tg_thread_id;
 	sem_t			 tg_token_to_proceed;
+	bool			 tg_use_cfg;
 	bool			 tg_save_cfg;
 	char			*tg_cfg_path;
 	uint32_t		 tg_num_proto;
@@ -294,12 +295,15 @@ test_parse_args(int argc, char **argv)
 		{"attach_to",	required_argument,	0, 'a'},
 		{"hold",	no_argument,		0, 'h'},
 		{"cfg_path",	required_argument,	0, 's'},
+		{"use_cfg",	required_argument,	0, 'u'},
 		{"num_proto",	required_argument,	0, 'p'},
 		{0, 0, 0, 0}
 	};
 
+	test.tg_use_cfg = true;
+
 	while (1) {
-		rc = getopt_long(argc, argv, "n:a:s:p:h", long_options,
+		rc = getopt_long(argc, argv, "n:a:s:p:u:h", long_options,
 				 &option_index);
 		if (rc == -1)
 			break;
@@ -323,6 +327,9 @@ test_parse_args(int argc, char **argv)
 			break;
 		case 'p':
 			test.tg_num_proto = atoi(optarg);
+			break;
+		case 'u':
+			test.tg_use_cfg = atoi(optarg);
 			break;
 		case '?':
 			return 1;

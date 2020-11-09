@@ -47,7 +47,7 @@ test_run(void)
 	int			 i;
 	int			 rc = 0;
 
-	if (test_g.t_use_cfg && test_g.t_save_cfg) {
+	if (test_g.t_save_cfg) {
 		rc = crt_group_config_path_set(test_g.t_cfg_path);
 		D_ASSERTF(rc == 0, "crt_group_config_path_set failed %d\n", rc);
 	}
