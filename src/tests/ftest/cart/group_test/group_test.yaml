@@ -11,6 +11,7 @@ hosts: !mux
     config: one_node
     test_servers:
       - boro-A
+timeout: 600
 tests: !mux
   group_test:
     name: group_test
