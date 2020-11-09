@@ -124,9 +124,10 @@ struct ec_agg_stripe_ud {
 /* Represents an replicated data extent.
  */
 struct ec_agg_extent {
-	d_list_t	ae_link;  /* for extents list   */
-	daos_recx_t	ae_recx;  /* idx, nr for extent */
-	daos_epoch_t	ae_epoch; /* epoch for extent   */
+	d_list_t	ae_link;        /* for extents list   */
+	daos_recx_t	ae_recx;        /* idx, nr for extent */
+	daos_recx_t	ae_orig_recx;   /* For removal        */
+	daos_epoch_t	ae_epoch;       /* epoch for extent   */
 };
 
 /* Determines if the extent carries over into the next stripe.
@@ -528,8 +529,9 @@ agg_update_vos(struct ec_agg_entry *entry, bool write_parity)
 	daos_epoch_range_t	 epoch_range = { 0 };
 	daos_recx_t		 recx = { 0 };
 	struct ec_agg_param	*agg_param;
+	struct ec_agg_extent	*agg_extent;
 	unsigned int		 len = entry->ae_oca->u.ec.e_len;
-	unsigned int		 k = entry->ae_oca->u.ec.e_k;
+	unsigned int		 ext_total, ext_counter = 0;
 	int			 rc = 0;
 
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
@@ -559,15 +561,29 @@ agg_update_vos(struct ec_agg_entry *entry, bool write_parity)
 		}
 	}
 
-	recx.rx_idx = entry->ae_cur_stripe.as_stripenum * k * len -
-		entry->ae_cur_stripe.as_prefix_ext;
-	recx.rx_nr = k * len + entry->ae_cur_stripe.as_prefix_ext -
-		entry->ae_cur_stripe.as_suffix_ext;
 	epoch_range.epr_lo = agg_param->ap_epr.epr_lo;
 	epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
-	rc = vos_obj_array_remove(agg_param->ap_cont_handle, entry->ae_oid,
-				  &epoch_range, &entry->ae_dkey,
-				  &entry->ae_akey, &recx);
+	ext_total = entry->ae_cur_stripe.as_suffix_ext ?
+		entry->ae_cur_stripe.as_extent_cnt - 1 :
+		entry->ae_cur_stripe.as_extent_cnt;
+
+	d_list_for_each_entry(agg_extent, &entry->ae_cur_stripe.as_dextents,
+			      ae_link) {
+		int erc = 0;
+
+		erc = vos_obj_array_remove(agg_param->ap_cont_handle,
+					   entry->ae_oid, &epoch_range,
+					   &entry->ae_dkey, &entry->ae_akey,
+					   &agg_extent->ae_orig_recx);
+		if (erc)
+			D_ERROR("vos_obj_array_remove failed: "DF_RC"\n",
+				DP_RC(erc));
+		if (!rc && erc)
+			rc = erc;
+		ext_counter++;
+		if (ext_counter >= ext_total)
+			break;
+	}
 out:
 	return rc;
 }
@@ -712,6 +728,7 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 	}
 
 	extent->ae_recx = entry->ie_recx;
+	extent->ae_orig_recx = entry->ie_orig_recx;
 	extent->ae_epoch = entry->ie_epoch;
 	agg_entry->ae_rsize = entry->ie_rsize;
 
