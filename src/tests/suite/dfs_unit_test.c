@@ -284,13 +284,12 @@ dfs_test_read_shared_file(void **state)
 #define NUM_SEGS 10
 
 static void
-dfs_test_short_read(void **state)
+dfs_test_short_read_internal(void **state, daos_oclass_id_t cid,
+			     daos_size_t chunk_size, daos_size_t buf_size)
 {
 	test_arg_t		*arg = *state;
 	dfs_obj_t		*obj;
-	daos_size_t		read_size;
-	daos_size_t		chunk_size = 2000;
-	daos_size_t		buf_size = 1024;
+	daos_size_t		read_size = 0;
 	int			*wbuf, *rbuf[NUM_SEGS];
 	char			*name = "short_read_file";
 	d_sg_list_t		wsgl, rsgl;
@@ -314,7 +313,7 @@ dfs_test_short_read(void **state)
 
 	if (arg->myrank == 0) {
 		rc = dfs_open(dfs_mt, NULL, name, S_IFREG | S_IWUSR | S_IRUSR,
-			      O_RDWR | O_CREAT, 0, chunk_size, NULL, &obj);
+			      O_RDWR | O_CREAT, cid, chunk_size, NULL, &obj);
 		assert_int_equal(rc, 0);
 	}
 
@@ -405,7 +404,7 @@ dfs_test_short_read(void **state)
 	if (arg->myrank == 0) {
 		rc = dfs_write(dfs_mt, obj, &wsgl, 0, NULL);
 		assert_int_equal(rc, 0);
-		rc = dfs_write(dfs_mt, obj, &wsgl, 1048576 * 2, NULL);
+		rc = dfs_write(dfs_mt, obj, &wsgl, 1048576 * 3, NULL);
 		assert_int_equal(rc, 0);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -423,6 +422,36 @@ dfs_test_short_read(void **state)
 	for (i = 0; i < NUM_SEGS; i++)
 		D_FREE(rbuf[i]);
 	D_FREE(rsgl.sg_iovs);
+}
+
+static void
+dfs_test_short_read(void **state)
+{
+	dfs_test_short_read_internal(state, 0, 2000, 1024);
+}
+
+static void
+dfs_test_ec_short_read(void **state)
+{
+	/* less than 1 EC stripe */
+	dfs_test_short_read_internal(state, DAOS_OC_EC_K4P2_L32K,
+				     32 * 1024 * 8, 2000);
+
+	/* partial EC stripe */
+	dfs_test_short_read_internal(state, DAOS_OC_EC_K4P2_L32K,
+				     32 * 1024 * 8, 32 * 1024 * 2);
+
+	/* full EC stripe */
+	dfs_test_short_read_internal(state, DAOS_OC_EC_K4P2_L32K,
+				     32 * 1024 * 8, 32 * 1024 * 4);
+
+	/* one full EC stripe + partial EC stripe */
+	dfs_test_short_read_internal(state, DAOS_OC_EC_K4P2_L32K,
+				     32 * 1024 * 8, 32 * 1024 * 6);
+
+	/* 2 full stripe */
+	dfs_test_short_read_internal(state, DAOS_OC_EC_K4P2_L32K,
+				     32 * 1024 * 8, 32 * 1024 * 6);
 }
 
 static void
@@ -687,6 +716,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_read_shared_file, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST4: DFS short reads",
 	  dfs_test_short_read, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST5: DFS EC object short reads",
+	  dfs_test_ec_short_read, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST5: DFS hole management",
 	  dfs_test_hole_mgmt, async_disable, test_case_teardown},
 };
@@ -698,7 +729,7 @@ dfs_setup(void **state)
 	int			rc = 0;
 
 	rc = test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
-			NULL);
+			0, NULL);
 	assert_int_equal(rc, 0);
 
 	arg = *state;

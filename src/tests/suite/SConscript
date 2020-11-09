@@ -103,7 +103,7 @@ def scons():
                     daos_obj_array.c daos_obj.c daos_oid_alloc.c daos_pool.c
                     daos_rebuild.c daos_rebuild_common.c daos_rebuild_ec.c
                     daos_rebuild_simple.c daos_test.c daos_test_common.c
-                    daos_verify_consistency.c""")
+                    daos_verify_consistency.c daos_degrade_ec.c""")
     daostest = daos_build.program(newenv, 'daos_test', c_files, LIBS=libraries)
 
     c_files = Split("""daos_test_common.c dfs_unit_test.c dfs_par_test.c

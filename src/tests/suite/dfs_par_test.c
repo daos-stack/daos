@@ -155,7 +155,7 @@ dfs_setup(void **state)
 	int			rc = 0;
 
 	rc = test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
-			NULL);
+			0, NULL);
 	assert_int_equal(rc, 0);
 
 	arg = *state;
