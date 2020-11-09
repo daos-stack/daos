@@ -263,6 +263,8 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		}
 
 		singv_lo = (singv_los == NULL) ? NULL : &singv_los[i];
+		if (singv_lo != NULL)
+			singv_lo->cs_cell_align = 1;
 		rc = daos_csummer_verify_iod(csummer_copy, &shard_iod,
 					     &shard_sgl, iod_csum, singv_lo,
 					     shard_idx, map);
