@@ -38,16 +38,17 @@
 
 #define MAX_SIZE		1048576 * 3
 #define DATA_SIZE		(1048576 * 2 + 512)
-#define PARTIAL_DATA_SIZE	1024	
+#define PARTIAL_DATA_SIZE	1024
+#define IOD3_DATA_SIZE		300
 
-#define KEY_NR	5
+#define KEY_NR 5
 static void
 write_ec(struct ioreq *req, int index, char *data, daos_off_t off, int size)
 {
 	char		key[32];
 	daos_recx_t	recx;
 	int		i;
-	char		single_data[8192];
+	char		single_data[8500];
 
 	for (i = 0; i < KEY_NR; i++) {
 		req->iod_type = DAOS_IOD_ARRAY;
@@ -57,13 +58,18 @@ write_ec(struct ioreq *req, int index, char *data, daos_off_t off, int size)
 		insert_recxs(key, "a_key", 1, DAOS_TX_NONE, &recx, 1,
 			     data, size, req);
 
+		recx.rx_nr = IOD3_DATA_SIZE;
+		insert_recxs(key, "a_key_iod3", 3, DAOS_TX_NONE, &recx, 1,
+			     data, IOD3_DATA_SIZE * 3, req);
+
 		req->iod_type = DAOS_IOD_SINGLE;
-		memset(single_data, 'a'+i, 8192);
+		memset(single_data, 'a' + i, 8500);
 		sprintf(key, "dkey_single_small_%d_%d", index, i);
 		insert_single(key, "a_key", 0, single_data, 32, DAOS_TX_NONE,
 			      req);
+
 		sprintf(key, "dkey_single_large_%d_%d", index, i);
-		insert_single(key, "a_key", 0, single_data, 8192, DAOS_TX_NONE,
+		insert_single(key, "a_key", 0, single_data, 8500, DAOS_TX_NONE,
 			      req);
 	}
 }
@@ -72,35 +78,61 @@ static void
 verify_ec(struct ioreq *req, int index, char *verify_data, daos_off_t off,
 	  int size)
 {
-	char	key[32];
-	char	read_data[MAX_SIZE];
-	char	single_data[8192];
-	char	verify_single_data[8192];
-	int	i;
+	char		key[32];
+	char		key_buf[32];
+	const char	*akey = key_buf;
+	char		data_buf[MAX_SIZE];
+	void		*read_data = data_buf;
+	char		single_buf[8500];
+	void		*single_data = single_buf;
+	char		verify_single_data[8500];
+	int		i;
 
 	for (i = 0; i < KEY_NR; i++) {
-		uint64_t offset = off + i * 10485760;
+		uint64_t	offset = off + i * 10485760;
+		uint64_t	idx = 0;
+		daos_size_t	read_size = 0;
+		daos_size_t	iod_size = 1;
+		daos_size_t	single_data_size;
+		daos_size_t	iod3_datasize = IOD3_DATA_SIZE * 3;
+		daos_size_t	datasize = size;
 
 		req->iod_type = DAOS_IOD_ARRAY;
 		sprintf(key, "dkey_%d", index);
+		sprintf(key_buf, "a_key");
 		memset(read_data, 0, size);
-		lookup_single_with_rxnr(key, "a_key", offset, read_data,
-					1, size, DAOS_TX_NONE, req);
-		assert_memory_equal(read_data, verify_data, size);
+		lookup(key, 1, &akey, &offset, &iod_size,
+		       &read_data, &datasize, DAOS_TX_NONE, req, false);
+		assert_memory_equal(read_data, verify_data, datasize);
+		assert_int_equal(iod_size, 1);
+
+		sprintf(key_buf, "a_key_iod3");
+		memset(read_data, 0, size);
+		lookup(key, 1, &akey, &offset, &iod_size, &read_data,
+		       &iod3_datasize, DAOS_TX_NONE, req, false);
+		assert_int_equal(iod_size, 3);
+		assert_memory_equal(read_data, verify_data, iod3_datasize);
 
 		req->iod_type = DAOS_IOD_SINGLE;
-		memset(single_data, 0, 8192);	
-		memset(verify_single_data, 'a'+i, 8192);
+		memset(single_data, 0, 32);
+		memset(verify_single_data, 'a' + i, 8500);
+		single_data_size = 32;
 		sprintf(key, "dkey_single_small_%d_%d", index, i);
-		lookup_single(key, "a_key", 0, single_data, 32, DAOS_TX_NONE,
-			      req);
+		sprintf(key_buf, "a_key");
+		lookup(key, 1, &akey, &idx, &read_size, &single_data,
+		       &single_data_size, DAOS_TX_NONE, req, false);
+		assert_int_equal(read_size, 32);
 		assert_memory_equal(single_data, verify_single_data, 32);
 
-		memset(single_data, 0, 8192);	
+		idx = 0;
+		read_size = 0;
+		single_data_size = 8500;
+		memset(single_data, 0, 8500);
 		sprintf(key, "dkey_single_large_%d_%d", index, i);
-		lookup_single(key, "a_key", 0, single_data, 8192, DAOS_TX_NONE,
-			      req);
-		assert_memory_equal(single_data, verify_single_data, 8192);
+		lookup(key, 1, &akey, &idx, &read_size, &single_data,
+		       &single_data_size, DAOS_TX_NONE, req, false);
+		assert_int_equal(read_size, 8500);
+		assert_memory_equal(single_data, verify_single_data, 8500);
 	}
 }
 
@@ -110,7 +142,7 @@ write_ec_partial(struct ioreq *req, int test_idx, daos_off_t off)
 	char	buffer[PARTIAL_DATA_SIZE];
 
 	memset(buffer, 'a', PARTIAL_DATA_SIZE);
-	write_ec(req, test_idx, buffer, off, PARTIAL_DATA_SIZE); 
+	write_ec(req, test_idx, buffer, off, PARTIAL_DATA_SIZE);
 }
 
 static void
@@ -119,7 +151,7 @@ verify_ec_partial(struct ioreq *req, int test_idx, daos_off_t off)
 	char	buffer[PARTIAL_DATA_SIZE];
 
 	memset(buffer, 'a', PARTIAL_DATA_SIZE);
-	verify_ec(req, test_idx, buffer, off, PARTIAL_DATA_SIZE); 
+	verify_ec(req, test_idx, buffer, off, PARTIAL_DATA_SIZE);
 }
 
 static void
@@ -128,7 +160,7 @@ write_ec_full(struct ioreq *req, int test_idx, daos_off_t off)
 	char	buffer[DATA_SIZE];
 
 	memset(buffer, 'b', DATA_SIZE);
-	write_ec(req, test_idx, buffer, off, DATA_SIZE); 
+	write_ec(req, test_idx, buffer, off, DATA_SIZE);
 }
 
 static void
@@ -137,7 +169,7 @@ verify_ec_full(struct ioreq *req, int test_idx, daos_off_t off)
 	char	buffer[DATA_SIZE];
 
 	memset(buffer, 'b', DATA_SIZE);
-	verify_ec(req, test_idx, buffer, off, DATA_SIZE); 
+	verify_ec(req, test_idx, buffer, off, DATA_SIZE);
 }
 
 static void
@@ -161,7 +193,7 @@ verify_ec_full_partial(struct ioreq *req, int test_idx, daos_off_t off)
 
 	memset(buffer, 'b', DATA_SIZE);
 	memset(buffer, 'a', PARTIAL_DATA_SIZE);
-	verify_ec(req, test_idx, buffer, off, DATA_SIZE); 
+	verify_ec(req, test_idx, buffer, off, DATA_SIZE);
 }
 
 enum op_type {

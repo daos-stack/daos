@@ -12,6 +12,7 @@ def scons():
     prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
 
     senv.AppendUnique(CPPPATH=[join(Dir('.').srcnode().abspath, "include")])
+    senv.AppendUnique(OBJPREFIX='s_')
 
     # SPDK related libs
     libs = ['spdk_env_dpdk', 'spdk_thread', 'spdk_bdev', 'spdk_copy']
