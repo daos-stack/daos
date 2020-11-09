@@ -3501,6 +3501,12 @@ out:
 	D_FREE(biods);
 	D_FREE(bulks);
 
+	if (rc == 0 && dth->dth_modification_cnt == 0)
+		/* For the case of only containing read sub operations,
+		 * we will generate DTX entry for DTX recovery.
+		 */
+		rc = vos_dtx_pin(dth);
+
 	return rc;
 }
 
