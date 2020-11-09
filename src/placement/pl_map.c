@@ -543,7 +543,7 @@ pl_map_version(struct pl_map *map)
  * Select leader replica for the given object's shard.
  *
  * \param [IN]  oid             The object identifier.
- * \param [IN]  shard_idx       The shard index.
+ * \param [IN]  grp_idx         The group index.
  * \param [IN]  grp_size        Group size of obj layout.
  * \param [IN]  for_tgt_id      Require leader target id or leader shard index.
  * \param [IN]  pl_get_shard    The callback function to parse out pl_obj_shard
@@ -554,17 +554,14 @@ pl_map_version(struct pl_map *map)
  *                              shard index. Negative value if error.
  */
 int
-pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
+pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 		 bool for_tgt_id, pl_get_shard_t pl_get_shard, void *data)
 {
 	struct pl_obj_shard             *shard;
 	struct daos_oclass_attr         *oc_attr;
 	uint32_t                         replicas;
-	int                              preferred;
-	int                              rdg_idx;
 	int                              start;
 	int                              pos;
-	int                              off;
 	int                              replica_idx;
 	int                              i;
 
@@ -575,8 +572,7 @@ pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
 		/* For EC object, elect last shard in the group (must to be
 		 * a parity node) as leader.
 		 */
-		shard = pl_get_shard(data, rounddown(shard_idx, tgt_nr) +
-					   tgt_nr - 1);
+		shard = pl_get_shard(data, grp_idx * tgt_nr + tgt_nr - 1);
 		if (for_tgt_id)
 			return shard->po_target;
 
@@ -591,7 +587,7 @@ pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
 		return -DER_INVAL;
 
 	if (replicas == 1) {
-		shard = pl_get_shard(data, shard_idx);
+		shard = pl_get_shard(data, grp_idx * grp_size);
 		if (shard->po_target == -1)
 			return -DER_IO;
 
@@ -617,14 +613,12 @@ pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
 	 *      The one with the lowest f_seq will be elected as the leader
 	 *      to avoid leader switch.
 	 */
-	rdg_idx = shard_idx / grp_size;
-	start = rdg_idx * grp_size;
-	replica_idx = (oid.lo + rdg_idx) % grp_size;
-	preferred = start + replica_idx;
+	start = grp_idx * grp_size;
+	replica_idx = (oid.lo + grp_idx) % grp_size;
+	for (i = 0, pos = -1; i < replicas;
+	     i++, replica_idx = (replica_idx + 1) % replicas) {
+		int off = start + replica_idx;
 
-	for (i = 0, off = preferred, pos = -1; i < replicas;
-	     i++, replica_idx = (replica_idx + 1) % replicas,
-	     off = start + replica_idx) {
 		shard = pl_get_shard(data, off);
 		/*
 		 * shard->po_shard != off is necessary because during

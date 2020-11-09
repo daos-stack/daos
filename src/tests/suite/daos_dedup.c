@@ -318,7 +318,7 @@ static int
 setup(void **state)
 {
 	return test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
-			  NULL);
+			  0, NULL);
 }
 
 #define DEDUP_TEST(dsc, test) { dsc, test, NULL, test_case_teardown }
