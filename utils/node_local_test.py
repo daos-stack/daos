@@ -588,6 +588,7 @@ class DFuse():
         self.valgrind_file = None
         self.container = container
         self.conf = conf
+        self.cores = None
         self._daos = daos
         self._sp = None
 
@@ -620,7 +621,13 @@ class DFuse():
         self.valgrind = ValgrindHelper(v_hint)
         if self.conf.args.memcheck == 'no':
             self.valgrind.use_valgrind = False
-        cmd = self.valgrind.get_cmd_prefix()
+
+        if self.cores:
+            cmd = ['numactl', '--physcpubind', '0-{}'.format(self.cores - 1)]
+        else:
+            cmd = []
+
+        cmd.extend(self.valgrind.get_cmd_prefix())
 
         cmd.extend([dfuse_bin, '-s', '0', '-m', self.dir, '-f'])
 
@@ -1074,6 +1081,7 @@ def run_dfuse(server, conf):
     fatal_errors.add_result(dfuse.stop())
 
     dfuse = DFuse(server, conf, pool=pools[0], container=container)
+    dfuse.cores = 2
     pre_stat = os.stat(dfuse.dir)
     dfuse.start(v_hint='pool_and_cont')
     print('Running fuse with both')

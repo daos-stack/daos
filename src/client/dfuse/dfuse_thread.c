@@ -149,7 +149,7 @@ dfuse_loop(struct dfuse_info *dfuse_info)
 	D_MUTEX_INIT(&dtm->tm_lock, NULL);
 
 	D_MUTEX_LOCK(&dtm->tm_lock);
-	for (i = 0 ; i < 4 ; i++) {
+	for (i = 0 ; i < dfuse_info->di_thread_count ; i++) {
 		rc = start_one(dtm);
 		if (rc != 0) {
 			fuse_session_exit(se);
