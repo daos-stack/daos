@@ -3513,9 +3513,27 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 	struct daos_cpd_disp_ent	*dcde = ds_obj_cpd_get_dcde(rpc, 0, 0);
 	struct daos_cpd_sub_req		*dcsr = ds_obj_cpd_get_dcsr(rpc, 0);
 	int				 rc = 0;
+	int				 rc1 = 0;
 
 	D_DEBUG(DB_IO, "Handling DTX "DF_DTI" on non-leader\n",
 		DP_DTI(&dcsh->dcsh_xid));
+
+	D_ASSERT(dcsh->dcsh_epoch.oe_value != 0);
+	D_ASSERT(dcsh->dcsh_epoch.oe_value != DAOS_EPOCH_MAX);
+
+	if (oci->oci_flags & ORF_RESEND) {
+		rc1 = dtx_handle_resend(ioc->ioc_vos_coh, &dcsh->dcsh_xid,
+					&dcsh->dcsh_epoch.oe_value, NULL);
+
+		/* Do nothing if 'prepared' or 'committed'. */
+		if (rc1 == -DER_ALREADY || rc1 == 0)
+			D_GOTO(out, rc = 0);
+	}
+
+	/* Refuse any modification with old epoch. */
+	if (dcde->dcde_write_cnt != 0 &&
+	    dcsh->dcsh_epoch.oe_value < dss_get_start_epoch())
+		D_GOTO(out, rc = -DER_TX_RESTART);
 
 	/* The check for read capa has been done before handling the CPD RPC.
 	 * So here, only need to check the write capa.
@@ -3526,20 +3544,12 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 			goto out;
 	}
 
-	if (oci->oci_flags & ORF_RESEND) {
-		rc = dtx_handle_resend(ioc->ioc_vos_coh, &dcsh->dcsh_xid,
-				       &dcsh->dcsh_epoch.oe_value, NULL);
-
-		/* Do nothing if 'prepared' or 'committed'. */
-		if (rc == -DER_ALREADY || rc == 0)
-			D_GOTO(out, rc = 0);
-
-		/* Abort it firstly if exist but with different (old) epoch,
-		 * then re-execute with new epoch.
-		 */
-		if (rc == -DER_MISMATCH)
-			rc = vos_dtx_abort(ioc->ioc_vos_coh, DAOS_EPOCH_MAX,
-					   &dcsh->dcsh_xid, 1);
+	/* For resent RPC, abort it firstly if exist but with different (old)
+	 * epoch, then re-execute with new epoch.
+	 */
+	if (rc1 == -DER_MISMATCH) {
+		rc = vos_dtx_abort(ioc->ioc_vos_coh, DAOS_EPOCH_MAX,
+				   &dcsh->dcsh_xid, 1);
 
 		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
@@ -3697,6 +3707,9 @@ ds_obj_dtx_leader_ult(void *arg)
 		 */
 	}
 
+	D_ASSERT(dcsh->dcsh_epoch.oe_value != 0);
+	D_ASSERT(dcsh->dcsh_epoch.oe_value != DAOS_EPOCH_MAX);
+
 	if (oci->oci_flags & ORF_RESEND) {
 		/* For distributed transaction, the 'ORF_RESEND' may means
 		 * that the DTX has been restarted with newer epoch.
@@ -3745,6 +3758,11 @@ ds_obj_dtx_leader_ult(void *arg)
 	tgts = ds_obj_cpd_get_tgts(dca->dca_rpc, dca->dca_idx);
 	req_cnt = ds_obj_cpd_get_dcsr_cnt(dca->dca_rpc, dca->dca_idx);
 	tgt_cnt = ds_obj_cpd_get_tgt_cnt(dca->dca_rpc, dca->dca_idx);
+
+	/* Refuse any modification with old epoch. */
+	if (dcde->dcde_write_cnt != 0 &&
+	    dcsh->dcsh_epoch.oe_value < dss_get_start_epoch())
+		D_GOTO(out, rc = -DER_TX_RESTART);
 
 	rc = ds_obj_dtx_leader_prep_handle(dcsh, dcsrs, tgts, tgt_cnt,
 					   req_cnt, &flags);
