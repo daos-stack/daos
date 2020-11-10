@@ -297,7 +297,7 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 
 	atomic_store_relaxed(&fs_handle->dpi_ino_next, 2);
 
-	args.argc = 4;
+	args.argc = 5;
 
 	/* These allocations are freed later by libfuse so do not use the
 	 * standard allocation macros
@@ -323,6 +323,10 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	if (rc < 0 || !args.argv[3])
 		D_GOTO(err_irt, rc = -DER_NOMEM);
 
+	args.argv[4] = strndup("-odefault_permissions", 32);
+	if (!args.argv[4])
+		D_GOTO(err_irt, rc = -DER_NOMEM);
+
 	fuse_ops = dfuse_get_fuse_ops();
 	if (!fuse_ops)
 		D_GOTO(err_irt, rc = -DER_NOMEM);
@@ -340,6 +344,8 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	ie->ie_parent = 1;
 	atomic_store_relaxed(&ie->ie_ref, 1);
 	ie->ie_stat.st_ino = 1;
+	ie->ie_stat.st_uid = geteuid();
+	ie->ie_stat.st_gid = getegid();
 	ie->ie_stat.st_mode = 0700 | S_IFDIR;
 	dfs->dfs_root = ie->ie_stat.st_ino;
 
