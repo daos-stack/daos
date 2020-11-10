@@ -30,6 +30,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net"
+	"sort"
 	"testing"
 	"time"
 
@@ -117,6 +118,9 @@ func TestSystem_Database_filterMembers(t *testing.T) {
 			if matchLen != 2 {
 				t.Fatalf("expected 2 members to match; got %d", matchLen)
 			}
+
+			// sort the results for stable comparison
+			sort.Slice(matches, func(i, j int) bool { return matches[i].state < matches[j].state })
 			for i, ms := range filter {
 				if matches[i].state != ms {
 					t.Fatalf("filtered member %d doesn't match requested state (%s != %s)", i, matches[i].state, ms)
