@@ -263,6 +263,8 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		}
 
 		singv_lo = (singv_los == NULL) ? NULL : &singv_los[i];
+		if (singv_lo != NULL)
+			singv_lo->cs_cell_align = 1;
 		rc = daos_csummer_verify_iod(csummer_copy, &shard_iod,
 					     &shard_sgl, iod_csum, singv_lo,
 					     shard_idx, map);
@@ -362,7 +364,8 @@ obj_ec_iom_merge(struct obj_reasb_req *reasb_req, uint32_t tgt_idx,
 	/* merge iom_recx_hi */
 	hi = src->iom_recx_hi;
 	end = DAOS_RECX_END(hi);
-	hi.rx_idx = max(hi.rx_idx, rounddown(end - 1, cell_rec_nr));
+	if (end > 0)
+		hi.rx_idx = max(hi.rx_idx, rounddown(end - 1, cell_rec_nr));
 	hi.rx_nr = end - hi.rx_idx;
 	hi.rx_idx = obj_ec_idx_vos2daos(hi.rx_idx, stripe_rec_nr,
 					cell_rec_nr, tgt_idx);
@@ -691,13 +694,13 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		/* update the sizes in iods */
 		for (i = 0; i < orw->orw_nr; i++) {
 			if (!is_ec_obj || reasb_req->orr_fail == NULL ||
-			    iods[i].iod_size == 0)
+			    iods[i].iod_size == 0 || sizes[i] != 0)
 				iods[i].iod_size = sizes[i];
-			if (is_ec_obj && reasb_req->orr_recov &&
-			    reasb_req->orr_fail->efi_uiods[i].iod_size == 0) {
+			if ((is_ec_obj && reasb_req->orr_recov) &&
+			    (reasb_req->orr_fail->efi_uiods[i].iod_size == 0 ||
+			     sizes[i] != 0))
 				reasb_req->orr_fail->efi_uiods[i].iod_size =
 					sizes[i];
-			}
 		}
 
 		if (is_ec_obj && reasb_req->orr_size_fetch)
@@ -1345,15 +1348,6 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: "
 				""DF_RC"\n", enum_args->rpc, opc, DP_RC(rc));
 		} else {
-			if (enum_args->eaa_obj) {
-				struct dc_obj_shard *shard;
-
-				shard = enum_args->eaa_obj;
-				shard->do_pl_shard.po_target = -1;
-				D_ERROR(DF_OID" set shard %d invalid.\n",
-					DP_OID(shard->do_id.id_pub),
-					shard->do_pl_shard.po_shard);
-			}
 			D_ERROR("rpc %p RPC %d failed: "DF_RC"\n",
 				enum_args->rpc, opc, DP_RC(rc));
 		}

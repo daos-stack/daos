@@ -101,7 +101,7 @@ recx_csum_len(daos_recx_t *recx, struct dcs_csum_info *csum,
 {
 	if (!ci_is_valid(csum) || rsize == 0)
 		return 0;
-	return csum->cs_len * csum_chunk_count(csum->cs_chunksize,
+	return (daos_size_t)csum->cs_len * csum_chunk_count(csum->cs_chunksize,
 			recx->rx_idx, recx->rx_idx + recx->rx_nr - 1, rsize);
 }
 
@@ -492,9 +492,10 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_save_recx = ((vos_flags & VOS_OF_FETCH_RECX_LIST) != 0);
 	ioc->ic_dedup = dedup;
 	ioc->ic_dedup_th = dedup_th;
-	ioc->ic_read_ts_only = ((vos_flags & VOS_OF_FETCH_SET_TS_ONLY) != 0);
-	ioc->ic_check_existence =
-		((vos_flags & VOS_OF_FETCH_CHECK_EXISTENCE) != 0);
+	if (vos_flags & VOS_OF_FETCH_CHECK_EXISTENCE)
+		ioc->ic_read_ts_only = ioc->ic_check_existence = 1;
+	else if (vos_flags & VOS_OF_FETCH_SET_TS_ONLY)
+		ioc->ic_read_ts_only = 1;
 	ioc->ic_remove =
 		((vos_flags & VOS_OF_REMOVE) != 0);
 	ioc->ic_umoffs_cnt = ioc->ic_umoffs_at = 0;
@@ -2189,7 +2190,7 @@ vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
 
 	rc = bio_sgl_init(bsgl_dup, bsgl->bs_nr_out);
 	if (rc != 0)
-		return -DER_NOMEM;
+		return rc;
 
 	bsgl_dup->bs_nr_out = bsgl->bs_nr_out;
 

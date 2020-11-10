@@ -512,6 +512,12 @@ is_server_started(void)
 	return nvme_glb.bd_started;
 }
 
+inline d_list_t *
+bio_bdev_list(void)
+{
+	return &nvme_glb.bd_bdevs;
+}
+
 inline bool
 is_init_xstream(struct bio_xs_context *ctxt)
 {
@@ -749,8 +755,14 @@ bio_release_bdev(void *arg)
 	if (d_bdev->bb_desc == NULL)
 		return;
 
-	spdk_bdev_close(d_bdev->bb_desc);
-	d_bdev->bb_desc = NULL;
+	/*
+	 * It could be called from faulty device teardown procedure, where
+	 * the device is still plugged.
+	 */
+	if (d_bdev->bb_removed) {
+		spdk_bdev_close(d_bdev->bb_desc);
+		d_bdev->bb_desc = NULL;
+	}
 }
 
 static void
@@ -827,13 +839,14 @@ bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 		return;
 	}
 
-	spdk_thread_send_msg(owner_thread(bbs), teardown_bio_bdev, d_bdev);
+	if (bbs != NULL)
+		spdk_thread_send_msg(owner_thread(bbs), teardown_bio_bdev,
+				     d_bdev);
 }
 
 void
 replace_bio_bdev(struct bio_bdev *old_dev, struct bio_bdev *new_dev)
 {
-	D_ASSERT(old_dev->bb_removed);
 	D_ASSERT(old_dev->bb_blobstore != NULL);
 
 	new_dev->bb_blobstore = old_dev->bb_blobstore;
@@ -963,6 +976,7 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 			       DP_UUID(old_dev->bb_uuid), old_dev->bb_name);
 			destroy_bio_bdev(d_bdev);
 		} else {
+			D_ASSERT(old_dev->bb_removed);
 			replace_bio_bdev(old_dev, d_bdev);
 			d_list_add(&d_bdev->bb_link, &nvme_glb.bd_bdevs);
 			/* Inform caller to trigger device setup */
@@ -1630,6 +1644,9 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 
 		D_INFO("Detected hot plugged device %s\n",
 		       spdk_bdev_get_name(bdev));
+		/* Print a console message */
+		D_PRINT("Detected hot plugged device %s\n",
+			spdk_bdev_get_name(bdev));
 
 		scan_period = 0;
 
@@ -1680,8 +1697,9 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 			continue;
 
 		scan_period = 0;
-		spdk_thread_send_msg(owner_thread(bbs), teardown_bio_bdev,
-				     d_bdev);
+		if (bbs != NULL)
+			spdk_thread_send_msg(owner_thread(bbs),
+					     teardown_bio_bdev, d_bdev);
 	}
 
 	if (scan_period == 0)
