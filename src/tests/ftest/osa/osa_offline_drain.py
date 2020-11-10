@@ -27,6 +27,7 @@ from osa_utils import OSAUtils
 from test_utils_pool import TestPool
 
 
+
 class OSAOfflineDrain(OSAUtils):
     # pylint: disable=too-many-ancestors
     """
