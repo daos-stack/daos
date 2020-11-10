@@ -1479,6 +1479,8 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 	}
 	if (uuids_out)
 		*uuids_out = uuids;
+	else
+		D_FREE(uuids);
 
 	*map_buf_out = map_buf;
 	return 0;
