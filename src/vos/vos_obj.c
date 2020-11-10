@@ -166,6 +166,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 	daos_handle_t		 toh;
 	int			 i;
 	int			 rc;
+	bool			 uncertain = false;
 
 	if (flags & VOS_OF_COND_PUNCH) {
 		vos_ilog_fetch_init(&obj_info);
@@ -216,12 +217,29 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 		rc = key_tree_punch(obj, toh, epoch, &akeys[i], &riov,
 				    flags, ts_set, &dkey_info,
 				    &akey_info);
+		if (rc == -DER_TX_UNCERTAINTY) {
+			struct dtx_handle	*dth = vos_dth_get();
+
+			uncertain = true;
+			if (dth->dth_share_tbd_count >= DTX_UNCERTAINTY_MAX)
+				goto out;
+
+			/* Continue to detect other potential
+			 * uncertainty without real punch.
+			 */
+			flags |= VOS_OF_DETECT_UNCERTAINTY;
+			continue;
+		}
+
 		if (rc != 0) {
 			VOS_TX_LOG_FAIL(rc, "Failed to punch akey: rc="
 					DF_RC"\n", DP_RC(rc));
 			break;
+		}
 	}
-	}
+
+	if (uncertain)
+		goto out;
 
 	if (rc == 0 && (flags & VOS_OF_REPLAY_PC) == 0) {
 		/** Check if we need to propagate the punch */
@@ -256,7 +274,7 @@ punch_dkey:
 		vos_ilog_fetch_finish(&akey_info);
 	}
 
-	return rc;
+	return uncertain ? -DER_TX_UNCERTAINTY : rc;
 }
 
 static int
