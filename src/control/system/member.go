@@ -45,26 +45,26 @@ type MemberState int
 
 const (
 	// MemberStateUnknown is the default invalid state.
-	MemberStateUnknown MemberState = 0
+	MemberStateUnknown MemberState = 0x0000
 	// MemberStateAwaitFormat indicates the member is waiting for format.
-	MemberStateAwaitFormat MemberState = 1
+	MemberStateAwaitFormat MemberState = 0x0001
 	// MemberStateStarting indicates the member has started but is not
 	// ready.
-	MemberStateStarting MemberState = 2
+	MemberStateStarting MemberState = 0x0002
 	// MemberStateReady indicates the member has setup successfully.
-	MemberStateReady MemberState = 4
+	MemberStateReady MemberState = 0x0004
 	// MemberStateJoined indicates the member has joined the system.
-	MemberStateJoined MemberState = 8
+	MemberStateJoined MemberState = 0x0008
 	// MemberStateStopping indicates prep-shutdown successfully run.
-	MemberStateStopping MemberState = 16
+	MemberStateStopping MemberState = 0x0010
 	// MemberStateStopped indicates process has been stopped.
-	MemberStateStopped MemberState = 32
+	MemberStateStopped MemberState = 0x0020
 	// MemberStateEvicted indicates rank has been evicted from DAOS system.
-	MemberStateEvicted MemberState = 64
+	MemberStateEvicted MemberState = 0x0040
 	// MemberStateErrored indicates the process stopped with errors.
-	MemberStateErrored MemberState = 128
+	MemberStateErrored MemberState = 0x0080
 	// MemberStateUnresponsive indicates the process is not responding.
-	MemberStateUnresponsive MemberState = 256
+	MemberStateUnresponsive MemberState = 0x0100
 
 	// AvailableMemberFilter defines the state(s) to be used when determining
 	// whether or not a member is available for the purposes of pool creation, etc.

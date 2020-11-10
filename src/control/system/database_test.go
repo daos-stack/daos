@@ -94,9 +94,13 @@ func TestSystem_Database_filterMembers(t *testing.T) {
 	for name, tf := range map[string]func(t *testing.T){
 		"individual state filters": func(t *testing.T) {
 			for _, ms := range memberStates {
-				matchLen := len(db.filterMembers(ms))
+				matches := db.filterMembers(ms)
+				matchLen := len(matches)
 				if matchLen != 1 {
 					t.Fatalf("expected exactly 1 member to match %s (got %d)", ms, matchLen)
+				}
+				if matches[0].state != ms {
+					t.Fatalf("filtered member doesn't match requested state (%s != %s)", matches[0].state, ms)
 				}
 			}
 		},
@@ -107,9 +111,16 @@ func TestSystem_Database_filterMembers(t *testing.T) {
 			}
 		},
 		"subset filter": func(t *testing.T) {
-			matchLen := len(db.filterMembers(memberStates[1], memberStates[2]))
+			filter := []MemberState{memberStates[1], memberStates[2]}
+			matches := db.filterMembers(filter...)
+			matchLen := len(matches)
 			if matchLen != 2 {
 				t.Fatalf("expected 2 members to match; got %d", matchLen)
+			}
+			for i, ms := range filter {
+				if matches[i].state != ms {
+					t.Fatalf("filtered member %d doesn't match requested state (%s != %s)", i, matches[i].state, ms)
+				}
 			}
 		},
 	} {
