@@ -850,7 +850,7 @@ vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
 
 static int
 tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
-		 struct vos_krec_df *krec, daos_handle_t *sub_toh)
+		 struct vos_krec_df *krec, bool created, daos_handle_t *sub_toh)
 {
 	struct umem_attr        *uma = vos_obj2uma(obj);
 	struct vos_pool		*pool = vos_obj2pool(obj);
@@ -899,6 +899,16 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		 */
 		rc = -DER_NONEXIST;
 		goto out;
+	}
+
+	if (!created) {
+		rc = umem_tx_add_ptr(vos_obj2umm(obj), krec,
+				     sizeof(*krec));
+		if (rc != 0) {
+			D_ERROR("Failed to add key record to transaction,"
+				" rc = %d", rc);
+			goto out;
+		}
 	}
 
 	if (flags & SUBTR_EVT) {
@@ -966,6 +976,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	struct dcs_csum_info	 csum;
 	struct vos_rec_bundle	 rbund;
 	d_iov_t			 riov;
+	bool			 created = false;
 	int			 rc;
 	int			 tmprc;
 
@@ -1031,11 +1042,13 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 		}
 		krec = rbund.rb_krec;
 		vos_ilog_ts_mark(ts_set, &krec->kr_ilog);
+		created = true;
 	}
 
 	if (sub_toh) {
 		D_ASSERT(krec != NULL);
-		rc = tree_open_create(obj, tclass, flags, krec, sub_toh);
+		rc = tree_open_create(obj, tclass, flags, krec, created,
+				      sub_toh);
 	}
 
 	if (rc)

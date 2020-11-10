@@ -1943,6 +1943,284 @@ test_inprogress_parent_punch(void **state)
 	start_epoch = epoch + 1;
 }
 
+#define NR_OBJ 10
+#define NR_DKEY 20
+#define NR_AKEY 50
+#define NR_TX 30
+enum {
+	TX_OP_PUNCH_OBJ,
+	TX_OP_PUNCH_DKEY,
+	TX_OP_COND_PUNCH_DKEY,
+	TX_OP_PUNCH_AKEY,
+	TX_OP_COND_PUNCH_AKEY,
+	TX_OP_UPDATE_AKEY,
+	TX_OP_UPDATE_DKEY,
+	TX_OP_INSERT_AKEY,
+	TX_OP_INSERT_DKEY,
+	TX_OP_UPDATE1,
+	TX_OP_UPDATE2,
+	TX_OP_FETCH_AKEY,
+	TX_OP_FETCH_DKEY,
+	TX_OP_FETCH1,
+	TX_OP_FETCH2,
+	TX_OP_FETCH3,
+	TX_NUM_OPS,
+};
+
+struct vos_ioreq {
+	daos_handle_t		 coh;
+	daos_unit_oid_t		 oid;
+	struct dtx_handle	*dth;
+	struct dtx_id		 xid;
+	d_sg_list_t		*sgl;
+	d_sg_list_t		*fetch_sgl;
+	daos_key_t		*dkey;
+	daos_key_t		*akey;
+	daos_iod_t		*iod;
+	uint64_t		 flags;
+	int			 akey_nr;
+	bool			 commit;
+	bool			 success;
+};
+
+static void
+do_punch(struct vos_ioreq *req)
+{
+	int	rc;
+
+	rc = vos_obj_punch(req->coh, req->oid, 0, 0, req->flags, req->dkey,
+			   req->akey_nr, req->akey, req->dth);
+	if (rc == 0) {
+		req->commit = true;
+		req->success = true;
+	}
+}
+
+static void
+do_io(struct vos_ioreq *req, int op)
+{
+	int		rc;
+	bool		fetch = false;
+
+	switch (op) {
+	case TX_OP_UPDATE_AKEY:
+		req->flags = DAOS_COND_AKEY_UPDATE;
+		break;
+	case TX_OP_UPDATE_DKEY:
+		req->flags = DAOS_COND_DKEY_UPDATE;
+		break;
+	case TX_OP_INSERT_AKEY:
+		req->flags = DAOS_COND_AKEY_INSERT;
+		break;
+	case TX_OP_INSERT_DKEY:
+		req->flags = DAOS_COND_DKEY_INSERT;
+		break;
+	case TX_OP_UPDATE1:
+	case TX_OP_UPDATE2:
+		break;
+	case TX_OP_FETCH_AKEY:
+		req->flags = DAOS_COND_AKEY_FETCH;
+		fetch = true;
+		break;
+	case TX_OP_FETCH_DKEY:
+		req->flags = DAOS_COND_DKEY_FETCH;
+	case TX_OP_FETCH1:
+	case TX_OP_FETCH2:
+	case TX_OP_FETCH3:
+		fetch = true;
+		break;
+	}
+
+	if (!fetch) {
+		rc = vos_obj_update_ex(req->coh, req->oid, 0, 0, req->flags,
+				       req->dkey, req->akey_nr, req->iod, NULL,
+				       req->sgl, req->dth);
+		if (rc == 0) {
+			req->commit = true;
+			req->success = true;
+		}
+		return;
+	}
+
+	rc = vos_obj_fetch_ex(req->coh, req->oid, 0, req->flags, req->dkey,
+			      req->akey_nr, req->iod, req->fetch_sgl, req->dth);
+
+	if (rc == 0)
+		req->success = true;
+}
+
+static void
+many_tx(void **state)
+{
+	struct io_test_args	*arg = *state;
+	int			rc = 0;
+	bool			done = false;
+	daos_key_t		dkey[NR_DKEY];
+	daos_key_t		akey[NR_AKEY];
+	daos_iod_t		iod[NR_AKEY];
+	d_sg_list_t		sgl;
+	d_sg_list_t		fetch_sgl;
+	char			buf[32];
+	daos_epoch_t		epoch = start_epoch;
+	daos_handle_t		coh;
+	daos_epoch_range_t	epr = {epoch, epoch};
+	struct vos_ioreq	req[NR_TX] = {0};
+	const char		*first = "Hello";
+	char			dkey_buf[NR_DKEY][UPDATE_DKEY_SIZE];
+	char			akey_buf[NR_AKEY][UPDATE_AKEY_SIZE];
+	daos_unit_oid_t		oid[NR_OBJ];
+	uint64_t		flags;
+	int			count, i, j, k, tx_num, cur_tx, old_tx;
+	int			random = 0, op;
+	int			total = 0, success = 0, writes = 0;
+
+	test_args_reset(arg, VPOOL_SIZE);
+	coh = arg->ctx.tc_co_hdl;
+
+	memset(&iod, 0, sizeof(iod));
+
+	rc = daos_sgl_init(&sgl, 1);
+	assert_int_equal(rc, 0);
+	rc = daos_sgl_init(&fetch_sgl, 1);
+	assert_int_equal(rc, 0);
+
+	/* Set up dkey and akey */
+	for (i = 0; i < NR_OBJ; i++)
+		oid[i] = gen_oid(arg->ofeat);
+	for (i = 0; i < NR_DKEY; i++) {
+		vts_key_gen(&dkey_buf[i][0], arg->dkey_size, true, arg);
+		set_iov(&dkey[i], &dkey_buf[i][0],
+			arg->ofeat & DAOS_OF_DKEY_UINT64);
+	}
+	for (i = 0; i < NR_AKEY; i++) {
+		vts_key_gen(&akey_buf[i][0], arg->akey_size, true, arg);
+		set_iov(&akey[i], &akey_buf[i][0],
+			arg->ofeat & DAOS_OF_AKEY_UINT64);
+		iod[i].iod_type = DAOS_IOD_SINGLE;
+		iod[i].iod_size = strlen(first);
+		iod[i].iod_name = akey[i];
+		iod[i].iod_recxs = NULL;
+		iod[i].iod_nr = 1;
+	}
+	d_iov_set(&sgl.sg_iovs[0], (void *)first, iod[0].iod_size);
+	d_iov_set(&fetch_sgl.sg_iovs[0], (void *)buf, sizeof(buf));
+
+	tx_num = 0;
+start_over:
+	srand(0);
+	for (i = 0; i < NR_OBJ; i++) {
+		for (j = 0; j < NR_DKEY; j++) {
+			for (k = 0; k < NR_AKEY; k++) {
+				for (count = 0; count < 3; count++) {
+					total++;
+					switch (tx_num & 3) {
+					case 0:
+						epoch -= 3;
+						break;
+					case 1:
+						epoch += 2;
+						break;
+					case 2:
+						epoch -= 1;
+						break;
+					case 3:
+						epoch += 10;
+						break;
+					}
+
+					cur_tx = tx_num++ % NR_TX;
+					old_tx = (cur_tx + 1) % NR_TX;
+					vts_dtx_begin_ex(&oid[i], coh,
+							 epoch, 0, 0, 1,
+							 &req[cur_tx].dth);
+					req[cur_tx].oid = oid[i];
+					req[cur_tx].coh = coh;
+					req[cur_tx].xid =
+						req[cur_tx].dth->dth_xid;
+
+					random = rand();
+					flags = 0;
+					op = random % TX_NUM_OPS;
+					switch (op) {
+					case TX_OP_PUNCH_OBJ:
+						do_punch(&req[cur_tx]);
+						break;
+					case TX_OP_COND_PUNCH_DKEY:
+						flags = DAOS_COND_PUNCH;
+						req[cur_tx].flags = flags;
+					case TX_OP_PUNCH_DKEY:
+						req[cur_tx].dkey = &dkey[j];
+						do_punch(&req[cur_tx]);
+						break;
+					case TX_OP_COND_PUNCH_AKEY:
+						flags = DAOS_COND_PUNCH;
+						req[cur_tx].flags = flags;
+					case TX_OP_PUNCH_AKEY:
+						req[cur_tx].dkey = &dkey[j];
+						req[cur_tx].akey = &akey[k];
+						req[cur_tx].akey_nr = 1;
+						do_punch(&req[cur_tx]);
+						break;
+					default:
+						req[cur_tx].dkey = &dkey[j];
+						req[cur_tx].iod = &iod[k];
+						req[cur_tx].sgl = &sgl;
+						req[cur_tx].fetch_sgl =
+							&fetch_sgl;
+						req[cur_tx].akey_nr = 1;
+						do_io(&req[cur_tx], op);
+						break;
+					}
+					if (req[cur_tx].success)
+						success++;
+					if (req[cur_tx].commit)
+						writes++;
+					vts_dtx_end(req[cur_tx].dth);
+					if (req[old_tx].commit) {
+						rc = vos_dtx_commit(coh,
+							    &req[old_tx].xid, 1,
+							    NULL);
+						assert_int_equal(rc, 1);
+					}
+					memset(&req[old_tx], 0, sizeof(req[0]));
+				}
+			}
+		}
+		if ((epoch - 200) < epr.epr_lo)
+			continue;
+		epr.epr_hi = epoch - 200;
+		rc = vos_aggregate(coh, &epr, NULL, NULL, NULL);
+		assert_int_equal(rc, 0);
+	}
+	for (i = 0; i < NR_TX - 1; i++) {
+		old_tx = (tx_num++ + 1) % NR_TX;
+		if (!req[old_tx].commit) {
+			memset(&req[old_tx], 0, sizeof(req[0]));
+			continue;
+		}
+		rc = vos_dtx_commit(coh, &req[old_tx].xid, 1, NULL);
+		assert_int_equal(rc, 1);
+		memset(&req[old_tx], 0, sizeof(req[0]));
+	}
+
+	for (i = 0; i < NR_OBJ; i++) {
+		rc = vos_obj_delete(coh, oid[i]);
+		assert_int_equal(rc, 0);
+	}
+
+	if (!done) {
+		done = true;
+		goto start_over;
+	}
+
+	printf("Total transactions %d, success %d, writes %d\n", total, success,
+	       writes);
+
+	daos_sgl_fini(&sgl, false);
+	daos_sgl_fini(&fetch_sgl, false);
+	start_epoch = epoch + 1;
+}
+
 static void
 test_multiple_key_conditionals_common(void **state, bool with_dtx)
 {
@@ -2178,6 +2456,7 @@ static const struct CMUnitTest punch_model_tests_pmdk[] = {
 		test_multiple_key_conditionals, NULL, NULL },
 	{ "VOS864: Multikey conditionals with tx",
 		test_multiple_key_conditionals_tx, NULL, NULL },
+	{ "VOS865: Many transactions", many_tx, NULL, NULL },
 };
 
 static const struct CMUnitTest punch_model_tests_all[] = {
