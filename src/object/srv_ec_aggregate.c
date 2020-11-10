@@ -921,7 +921,7 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 				  &entry->ie_oid,
 				  agg_param->ap_pool_info.api_pool_version);
 
-	if (rc == 1) {
+	if (rc == 1 && entry->ie_oid.id_shard >= oca->u.ec.e_k) {
 		agg_reset_entry(&agg_param->ap_agg_entry, entry, oca);
 		rc = 0;
 		goto out;
