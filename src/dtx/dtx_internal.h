@@ -45,7 +45,8 @@
 #define DTX_PROTO_SRV_RPC_LIST(X)				\
 	X(DTX_COMMIT, 0, &CQF_dtx, dtx_handler, NULL),		\
 	X(DTX_ABORT, 0, &CQF_dtx, dtx_handler, NULL),		\
-	X(DTX_CHECK, 0, &CQF_dtx, dtx_handler, NULL)
+	X(DTX_CHECK, 0, &CQF_dtx, dtx_handler, NULL),		\
+	X(DTX_REFRESH, 0, &CQF_dtx, dtx_handler, NULL)
 
 #define X_OPC(a, b, c, d, e) a
 
@@ -62,7 +63,8 @@ enum dtx_operation {
 
 /* DTX RPC output fields */
 #define DAOS_OSEQ_DTX							\
-	((int32_t)		(do_status)		CRT_VAR)
+	((int32_t)		(do_status)		CRT_VAR)	\
+	((int32_t)		(do_sub_rets)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
 
@@ -94,15 +96,13 @@ extern btr_ops_t dbtree_dtx_cf_ops;
 extern btr_ops_t dtx_btr_cos_ops;
 
 /* dtx_common.c */
-void dtx_aggregate(void *arg);
+int dtx_handle_reinit(struct dtx_handle *dth);
 void dtx_batched_commit(void *arg);
 
 /* dtx_cos.c */
 int dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 			  daos_unit_oid_t *oid, daos_epoch_t epoch,
 			  struct dtx_entry ***dtes);
-int dtx_lookup_cos(struct ds_cont_child *cont, struct dtx_id *xid,
-		   daos_unit_oid_t *oid, uint64_t dkey_hash);
 int dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
 		daos_unit_oid_t *oid, uint64_t dkey_hash,
 		daos_epoch_t epoch, uint32_t flags);

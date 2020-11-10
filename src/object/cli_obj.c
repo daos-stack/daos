@@ -838,7 +838,6 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 	rc = obj_ec_req_reasb(args->iods, args->sgls, oid, oca, reasb_req,
 			      args->nr, obj_auxi->opc == DAOS_OBJ_RPC_UPDATE);
 	if (rc == 0) {
-		obj_auxi->flags |= ORF_DTX_SYNC;
 		obj_auxi->flags |= ORF_EC;
 		obj_auxi->req_reasbed = true;
 		if (reasb_req->orr_iods != NULL)
@@ -4749,8 +4748,7 @@ dc_obj_punch(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 		goto out_task;
 	}
 
-	if (daos_oclass_is_ec(obj->cob_md.omd_id, NULL) ||
-	    DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
+	if (DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
 		obj_auxi->flags |= ORF_DTX_SYNC;
 
 	D_DEBUG(DB_IO, "punch "DF_OID" dkey %llu\n",

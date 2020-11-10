@@ -48,11 +48,11 @@ enum dtx_grp_flags {
 };
 
 enum dtx_mbs_flags {
-	/* The targets that are modified by the distributed transaction
-	 * are in the same single redundancy group.
+	/* The targets modified via the DTX belong to replicated object
+	 * within single redundancy group.
 	 */
-	DMF_MODIFY_SRDG			= (1 << 0),
-	/* The MDS contains the leader information, used for distributed
+	DMF_SRDG_REP			= (1 << 0),
+	/* The MBS contains the leader information, used for distributed
 	 * transaction. For stand-alone modification, leader information
 	 * is not stored inside MBS as optimization.
 	 */
