@@ -158,16 +158,16 @@ extern "C" {
 	       Failed to add the specified metric)			\
 	/** Duration start/end mismatch */				\
 	ACTION(DER_DURATION_MISMATCH,   (DER_ERR_GURT_BASE + 39),	\
-	        Duration end not paired with duration start)		\
+	       Duration end not paired with duration start)		\
 	/** Operation not permitted on metric type*/			\
 	ACTION(DER_OP_NOT_PERMITTED,    (DER_ERR_GURT_BASE + 40),	\
-	         Operation not permitted for metric type provided)	\
+	       Operation not permitted for metric type provided)	\
 	/** Metric path name exceeds permitted length*/			\
 	ACTION(DER_EXCEEDS_PATH_LEN,    (DER_ERR_GURT_BASE + 41),	\
-	         Path name exceeds permitted length)			\
+	       Path name exceeds permitted length)			\
 	/** Metric was not found.*/					\
 	ACTION(DER_METRIC_NOT_FOUND,    (DER_ERR_GURT_BASE + 42),	\
-	         Read failed because metric not found)
+	       Read failed because metric not found)
 	/** TODO: add more error numbers */
 
 #define D_FOREACH_DAOS_ERR(ACTION)					\
