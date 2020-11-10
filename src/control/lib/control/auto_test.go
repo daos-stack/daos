@@ -294,10 +294,21 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 	}
 	numa0 := uint(0)
 	numa1 := uint(1)
+	baseConfig := func(provider string) *config.Server {
+		return config.DefaultServer().
+			WithControlLogFile(defaultControlLogFile).
+			WithFabricProvider(provider)
+	}
+	baseIOConfig := func(idx int) *ioserver.Config {
+		return ioserver.NewConfig().
+			WithTargetCount(defaultTargetCount).
+			WithLogFile(fmt.Sprintf("%s.%d.log", defaultIOSrvLogFile, idx))
+	}
 
 	for name, tc := range map[string]struct {
 		numPmem       int
 		netDevClass   uint32
+		accessPoints  []string
 		uErr          error
 		hostResponses []*HostResponse
 		expConfigOut  *config.Server
@@ -357,8 +368,8 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 			netDevClass:   nd.NetDevAny,
 			numPmem:       1,
 			hostResponses: dualHostRespSame(fabIfs3),
-			expConfigOut: config.DefaultServer().WithServers(
-				ioserver.NewConfig().
+			expConfigOut: baseConfig("ofi+psm2").WithServers(
+				baseIOConfig(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
@@ -368,8 +379,8 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 			numPmem:       1,
 			netDevClass:   nd.Ether,
 			hostResponses: dualHostRespSame(fabIfs3),
-			expConfigOut: config.DefaultServer().WithServers(
-				ioserver.NewConfig().
+			expConfigOut: baseConfig("ofi+sockets").WithServers(
+				baseIOConfig(0).
 					WithFabricInterface("eth0").
 					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+sockets").
@@ -378,13 +389,13 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 		"no min pmem and two numa with dual ib interfaces": {
 			netDevClass:   nd.NetDevAny,
 			hostResponses: dualHostRespSame(fabIfs4),
-			expConfigOut: config.DefaultServer().WithServers(
-				ioserver.NewConfig().
+			expConfigOut: baseConfig("ofi+psm2").WithServers(
+				baseIOConfig(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
 					WithPinnedNumaNode(&numa0),
-				ioserver.NewConfig().
+				baseIOConfig(1).
 					WithFabricInterface("ib1").
 					WithFabricInterfacePort(
 						defaultFiPort+defaultFiPortInterval).
@@ -399,16 +410,15 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 		"no min pmem and two numa with dual eth interfaces": {
 			netDevClass:   nd.NetDevAny,
 			hostResponses: dualHostRespSame(fabIfs5),
-			expConfigOut: config.DefaultServer().WithServers(
-				ioserver.NewConfig().
+			expConfigOut: baseConfig("ofi+sockets").WithServers(
+				baseIOConfig(0).
 					WithFabricInterface("eth0").
 					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+sockets").
 					WithPinnedNumaNode(&numa0),
-				ioserver.NewConfig().
+				baseIOConfig(1).
 					WithFabricInterface("eth1").
-					WithFabricInterfacePort(
-						defaultFiPort+defaultFiPortInterval).
+					WithFabricInterfacePort(defaultFiPort+defaultFiPortInterval).
 					WithFabricProvider("ofi+sockets").
 					WithPinnedNumaNode(&numa1)),
 		},
@@ -423,19 +433,19 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 			hostResponses: dualHostRespSame(fabIfs4),
 			expCheckErr:   errors.New("insufficient matching best-available network"),
 		},
-		"no min pmem and two numa with typical fabric scan output": {
+		"no min pmem and two numa with typical fabric scan output and access points": {
 			netDevClass:   nd.NetDevAny,
+			accessPoints:  []string{"hostX"},
 			hostResponses: dualHostRespSame(typicalFabIfs),
-			expConfigOut: config.DefaultServer().WithServers(
-				ioserver.NewConfig().
+			expConfigOut: baseConfig("ofi+psm2").WithAccessPoints("hostX").WithServers(
+				baseIOConfig(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
 					WithPinnedNumaNode(&numa0),
-				ioserver.NewConfig().
+				baseIOConfig(1).
 					WithFabricInterface("ib1").
-					WithFabricInterfacePort(
-						defaultFiPort+defaultFiPortInterval).
+					WithFabricInterfacePort(defaultFiPort+defaultFiPortInterval).
 					WithFabricProvider("ofi+psm2").
 					WithPinnedNumaNode(&numa1)),
 		},
@@ -452,10 +462,11 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 			})
 
 			req := &ConfigGenerateReq{
-				NumPmem:  tc.numPmem,
-				NetClass: tc.netDevClass,
-				Client:   mi,
-				Log:      log,
+				NumPmem:      tc.numPmem,
+				NetClass:     tc.netDevClass,
+				AccessPoints: tc.accessPoints,
+				Client:       mi,
+				Log:          log,
 			}
 
 			gotCfg, gotCheckErr := req.checkNetwork(context.Background())

@@ -1,4 +1,4 @@
-.TH dmg 1 "22 October 2020"
+.TH dmg 1 "9 November 2020"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -16,7 +16,7 @@ and access control settings, along with system wide operations.
 Allow proxy configuration via environment
 .TP
 \fB\fB\-l\fR, \fB\-\-host-list\fR\fP
-comma separated list of addresses <ipv4addr/hostname:port>
+comma separated list of addresses <ipv4addr/hostname>
 .TP
 \fB\fB\-i\fR, \fB\-\-insecure\fR\fP
 have dmg attempt to connect without certificates
@@ -47,6 +47,9 @@ Generate DAOS server configuration file based on discoverable hardware devices
 \fBAliases\fP: g
 
 .TP
+\fB\fB\-a\fR, \fB\-\-access-points\fR\fP
+Comma separated list of access point addresses <ipv4addr/hostname>
+.TP
 \fB\fB\-p\fR, \fB\-\-num-pmem\fR\fP
 Minimum number of SCM (pmem) devices required per storage host in DAOS system
 .TP
@@ -54,7 +57,7 @@ Minimum number of SCM (pmem) devices required per storage host in DAOS system
 Minimum number of NVMe devices required per storage host in DAOS system
 .TP
 \fB\fB\-c\fR, \fB\-\-net-class\fR <default: \fI"best-available"\fR>\fP
-Network class preferred, defaults to best available
+Network class preferred
 .SS cont
 Perform tasks related to DAOS containers
 

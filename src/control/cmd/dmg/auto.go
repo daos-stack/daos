@@ -25,6 +25,7 @@ package main
 
 import (
 	"context"
+	"strings"
 
 	"gopkg.in/yaml.v2"
 
@@ -43,9 +44,10 @@ type configGenCmd struct {
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
-	NumPmem  int    `short:"p" long:"num-pmem" description:"Minimum number of SCM (pmem) devices required per storage host in DAOS system"`
-	NumNvme  int    `short:"n" long:"num-nvme" description:"Minimum number of NVMe devices required per storage host in DAOS system"`
-	NetClass string `default:"best-available" short:"c" long:"net-class" description:"Network class preferred" choice:"best-available" choice:"ethernet" choice:"infiniband"`
+	AccessPoints string `short:"a" long:"access-points" description:"Comma separated list of access point addresses <ipv4addr/hostname>"`
+	NumPmem      int    `short:"p" long:"num-pmem" description:"Minimum number of SCM (pmem) devices required per storage host in DAOS system"`
+	NumNvme      int    `short:"n" long:"num-nvme" description:"Minimum number of NVMe devices required per storage host in DAOS system"`
+	NetClass     string `default:"best-available" short:"c" long:"net-class" description:"Network class preferred" choice:"best-available" choice:"ethernet" choice:"infiniband"`
 }
 
 // Execute is run when configGenCmd activates.
@@ -70,6 +72,9 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 		req.NetClass = netdetect.Infiniband
 	default:
 		req.NetClass = netdetect.NetDevAny
+	}
+	if cmd.AccessPoints != "" {
+		req.AccessPoints = strings.Split(cmd.AccessPoints, ",")
 	}
 
 	resp, err := control.ConfigGenerate(ctx, req)

@@ -42,6 +42,9 @@ const (
 	pmemBdevDir           = "/dev"
 	defaultFiPort         = 31416
 	defaultFiPortInterval = 1000
+	defaultTargetCount    = 16
+	defaultIOSrvLogFile   = "/tmp/daos_io_server"
+	defaultControlLogFile = "/tmp/daos_server.log"
 )
 
 var netCtx context.Context
@@ -51,12 +54,13 @@ type (
 	ConfigGenerateReq struct {
 		unaryRequest
 		msRequest
-		NumPmem  int
-		NumNvme  int
-		NetClass uint32
-		Client   UnaryInvoker
-		HostList []string
-		Log      logging.Logger
+		NumPmem      int
+		NumNvme      int
+		NetClass     uint32
+		Client       UnaryInvoker
+		HostList     []string
+		AccessPoints []string
+		Log          logging.Logger
 	}
 
 	// ConfigGenerateResp contains the request response.
@@ -186,6 +190,37 @@ func (req *ConfigGenerateReq) parseInterfaces(interfaces []*HostFabricInterface)
 	return matching, complete
 }
 
+func (req *ConfigGenerateReq) genConfig(interfaces []*HostFabricInterface) *config.Server {
+	cfg := config.DefaultServer()
+	for idx, iface := range interfaces {
+		nn := uint(iface.NumaNode)
+		iocfg := ioserver.NewConfig().
+			WithTargetCount(defaultTargetCount).
+			WithLogFile(fmt.Sprintf("%s.%d.log", defaultIOSrvLogFile, idx))
+
+		iocfg.Fabric = ioserver.FabricConfig{
+			Provider:       iface.Provider,
+			Interface:      iface.Device,
+			InterfacePort:  int(defaultFiPort + (nn * defaultFiPortInterval)),
+			PinnedNumaNode: &nn,
+		}
+
+		cfg.Servers = append(cfg.Servers, iocfg)
+	}
+
+	if len(req.AccessPoints) != 0 {
+		cfg = cfg.WithAccessPoints(req.AccessPoints...)
+	}
+
+	// apply global config parameters across iosrvs
+	return cfg.WithSystemName(cfg.SystemName).
+		WithSocketDir(cfg.SocketDir).
+		WithFabricProvider(cfg.Servers[0].Fabric.Provider).
+		WithSystemName(cfg.SystemName).
+		WithSocketDir(cfg.SocketDir).
+		WithControlLogFile(defaultControlLogFile)
+}
+
 // checkNetwork scans fabric network interfaces and updates-in-place configuration
 // with appropriate fabric device details for all required numa nodes.
 func (req *ConfigGenerateReq) checkNetwork(ctx context.Context) (*config.Server, error) {
@@ -236,21 +271,7 @@ func (req *ConfigGenerateReq) checkNetwork(ctx context.Context) (*config.Server,
 
 	req.Log.Debugf("selected network interfaces: %v", matching)
 
-	cfg := config.DefaultServer()
-	for _, iface := range matching {
-		nn := uint(iface.NumaNode)
-		iocfg := ioserver.NewConfig()
-		iocfg.Fabric = ioserver.FabricConfig{
-			Provider:       iface.Provider,
-			Interface:      iface.Device,
-			InterfacePort:  int(defaultFiPort + (nn * defaultFiPortInterval)),
-			PinnedNumaNode: &nn,
-		}
-		cfg.Servers = append(cfg.Servers, iocfg)
-	}
-
-	// reset io cfgs to global setting
-	return cfg.WithSystemName(cfg.SystemName).WithSocketDir(cfg.SocketDir), nil
+	return req.genConfig(matching), nil
 }
 
 // validateScmStorage verifies adequate number of pmem namespaces.
@@ -407,8 +428,6 @@ func (req *ConfigGenerateReq) checkStorage(ctx context.Context, cfg *config.Serv
 			WithScmDeviceList(pmemPath).
 			WithBdevDeviceList(bdevLists[idx]...)
 	}
-	// reset io cfgs to global setting
-	cfg = cfg.WithSystemName(cfg.SystemName).WithSocketDir(cfg.SocketDir)
 
 	return nil
 }
