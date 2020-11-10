@@ -100,6 +100,7 @@ static unsigned int max_delay_msecs[SCHED_REQ_MAX] = {
 	20000,	/* SCHED_REQ_UPDATE */
 	1000,	/* SCHED_REQ_FETCH */
 	500,	/* SCHED_REQ_GC */
+	20000,	/* SCHED_REQ_SCRUB */
 	20000,	/* SCHED_REQ_MIGRATE */
 };
 
@@ -107,6 +108,7 @@ static unsigned int max_qds[SCHED_REQ_MAX] = {
 	64000,	/* SCHED_REQ_UPDATE */
 	32000,	/* SCHED_REQ_FETCH */
 	1024,	/* SCHED_REQ_GC */
+	1024,	/* SCHED_REQ_SCRUB */
 	64000,	/* SCHED_REQ_MIGRATE */
 };
 
@@ -114,6 +116,7 @@ static unsigned int req_throttle[SCHED_REQ_MAX] = {
 	0,	/* SCHED_REQ_UPDATE */
 	0,	/* SCHED_REQ_FETCH */
 	30,	/* SCHED_REQ_GC */
+	30,	/* SCHED_REQ_SCRUB */
 	30,	/* SCHED_REQ_REBUILD */
 };
 
@@ -533,6 +536,9 @@ req_kickoff_internal(struct dss_xstream *dx, struct sched_req_attr *attr,
 	case SCHED_REQ_GC:
 		abt_pool = dx->dx_pools[DSS_POOL_GC];
 		break;
+	case SCHED_REQ_SCRUB:
+		abt_pool = dx->dx_pools[DSS_POOL_SCRUB];
+		break;
 	case SCHED_REQ_MIGRATE:
 		abt_pool = dx->dx_pools[DSS_POOL_REBUILD];
 		break;
@@ -752,7 +758,8 @@ process_pool_cb(d_list_t *rlink, void *arg)
 	struct dss_xstream	*dx = (struct dss_xstream *)arg;
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct sched_pool_info	*spi;
-	unsigned int		 u_max, f_max, io_max, gc_max, mig_max;
+	unsigned int		 u_max, f_max, io_max, gc_max, scrub_max,
+				 mig_max;
 	unsigned int		 gc_thr, mig_thr;
 	struct pressure_ratio	*pr;
 	int			 press;
@@ -768,6 +775,7 @@ process_pool_cb(d_list_t *rlink, void *arg)
 	io_max	= u_max + f_max;
 
 	gc_max	= pool2req_cnt(spi, SCHED_REQ_GC);
+	scrub_max = pool2req_cnt(spi, SCHED_REQ_SCRUB);
 	mig_max	= pool2req_cnt(spi, SCHED_REQ_MIGRATE);
 
 	press = check_space_pressure(dx, spi);
@@ -816,9 +824,11 @@ out:
 	reset_req_limit(dx, spi, SCHED_REQ_UPDATE, u_max);
 	reset_req_limit(dx, spi, SCHED_REQ_FETCH, f_max);
 	reset_req_limit(dx, spi, SCHED_REQ_GC, gc_max);
+	reset_req_limit(dx, spi, SCHED_REQ_SCRUB, scrub_max);
 	reset_req_limit(dx, spi, SCHED_REQ_MIGRATE, mig_max);
 
 	process_req_list(dx, pool2req_list(spi, SCHED_REQ_GC));
+	process_req_list(dx, pool2req_list(spi, SCHED_REQ_SCRUB));
 	process_req_list(dx, pool2req_list(spi, SCHED_REQ_MIGRATE));
 
 	return 0;
@@ -894,6 +904,7 @@ should_enqueue_req(struct dss_xstream *dx, struct sched_req_attr *attr)
 	D_ASSERT(attr->sra_type == SCHED_REQ_GC ||
 		 attr->sra_type == SCHED_REQ_UPDATE ||
 		 attr->sra_type == SCHED_REQ_FETCH ||
+		 attr->sra_type == SCHED_REQ_SCRUB ||
 		 attr->sra_type == SCHED_REQ_MIGRATE);
 
 	/* For VOS xstream only */
@@ -1094,6 +1105,7 @@ sched_req_get(struct sched_req_attr *attr, ABT_thread ult)
 	D_ASSERT(attr->sra_type == SCHED_REQ_GC ||
 		 attr->sra_type == SCHED_REQ_UPDATE ||
 		 attr->sra_type == SCHED_REQ_FETCH ||
+		 attr->sra_type == SCHED_REQ_SCRUB ||
 		 attr->sra_type == SCHED_REQ_MIGRATE);
 
 	if (ult == ABT_THREAD_NULL) {
