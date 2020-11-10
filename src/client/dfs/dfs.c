@@ -555,7 +555,7 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 		break;
 	}
 	case S_IFLNK:
-		size = entry.value_len + 1;
+		size = entry.value_len;
 		D_FREE(entry.value);
 		break;
 	default:
@@ -1963,7 +1963,7 @@ dfs_lookup_loop:
 			}
 			D_FREE(entry.value);
 			if (stbuf)
-				stbuf->st_size = entry.value_len + 1;
+				stbuf->st_size = entry.value_len;
 			/** return the symlink obj if this is the last entry */
 			break;
 		}
@@ -2260,7 +2260,7 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 			D_GOTO(err_obj, rc = ENOMEM);
 		D_FREE(entry.value);
 		if (stbuf)
-			stbuf->st_size = entry.value_len + 1;
+			stbuf->st_size = entry.value_len;
 	} else if (S_ISDIR(entry.mode)) {
 		rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &obj->oh,
 				   NULL);
