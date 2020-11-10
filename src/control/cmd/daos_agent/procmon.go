@@ -50,24 +50,8 @@ type procMonResponse struct {
 type procInfo struct {
 	log       logging.Logger
 	pid       int32
-	ctx       context.Context
 	cancelCtx func()
 	response  chan *procMonResponse
-}
-
-// NewProcInfo creates a new procInfo struct for use by procMon. The context passed
-// in is the top level context which a child context and cancellation routine is generated.
-// The response channel is the passed in by procMon to provide a unified interface
-// in procMon to handle responses.
-func NewProcInfo(ctx context.Context, Log logging.Logger, Pid int32, Response chan *procMonResponse) *procInfo {
-	child, cancel := context.WithCancel(ctx)
-	return &procInfo{
-		log:       Log,
-		pid:       Pid,
-		ctx:       child,
-		cancelCtx: cancel,
-		response:  Response,
-	}
 }
 
 func getProcPidInode(pid int32) (uint64, error) {
@@ -85,42 +69,45 @@ func getProcPidInode(pid int32) (uint64, error) {
 	return stat.Ino, nil
 }
 
-func (p *procInfo) sendResponse(pid int32, err error) {
+func (p *procInfo) sendResponse(ctx context.Context, pid int32, err error) {
 	response := &procMonResponse{
 		pid: pid,
 		err: err,
 	}
-	p.response <- response
+	select {
+	case <-ctx.Done():
+	case p.response <- response:
+	}
 }
 
 const MonWaitTime = 3 * time.Second
 
 // monitorProcess is used by procMon to kick off monitoring individual processes
 // under their own child context to allow for terminating individual monitoring routines.
-func (p *procInfo) monitorProcess() {
+func (p *procInfo) monitorProcess(ctx context.Context) {
 	Ino, err := getProcPidInode(p.pid)
 	if err != nil {
-		p.sendResponse(p.pid, err)
+		p.sendResponse(ctx, p.pid, err)
 		return
 	}
 
 	p.log.Debugf("Monitoring pid:%d\n", p.pid)
 	for {
 		select {
-		case <-p.ctx.Done():
+		case <-ctx.Done():
 			return
 		case <-time.After(MonWaitTime):
 			newIno, newErr := getProcPidInode(p.pid)
 			if newErr != nil {
 				if os.IsNotExist(newErr) {
-					p.sendResponse(p.pid, fmt.Errorf("Pid %d terminated unexpectedly", p.pid))
+					p.sendResponse(ctx, p.pid, fmt.Errorf("Pid %d terminated unexpectedly", p.pid))
 				} else {
-					p.sendResponse(p.pid, newErr)
+					p.sendResponse(ctx, p.pid, newErr)
 				}
 				return
 			}
 			if newIno != Ino {
-				p.sendResponse(p.pid, fmt.Errorf("Pid %d terminated but another processes took its place %d:%d", p.pid, Ino, newIno))
+				p.sendResponse(ctx, p.pid, fmt.Errorf("Pid %d terminated but another processes took its place %d:%d", p.pid, Ino, newIno))
 				return
 			}
 		}
@@ -131,30 +118,43 @@ func (p *procInfo) monitorProcess() {
 // monitor and disconnect processes. Once created it is started by passing a
 // context into the startMonitoring call.
 type procMon struct {
-	log     logging.Logger
-	ctx     context.Context
-	procs   map[int32]*procInfo
-	request chan *procMonRequest
+	log      logging.Logger
+	procs    map[int32]*procInfo
+	request  chan *procMonRequest
+	response chan *procMonResponse
 }
 
 // NewProcMon creates a new process monitor struct setting initializing the
 // internal process map and the request channel.
 func NewProcMon(logger logging.Logger) *procMon {
 	return &procMon{
-		log:     logger,
-		procs:   make(map[int32]*procInfo),
-		request: make(chan *procMonRequest),
+		log:      logger,
+		procs:    make(map[int32]*procInfo),
+		request:  make(chan *procMonRequest),
+		response: make(chan *procMonResponse),
 	}
 }
 
-func (p *procMon) submitRequest(Pid int32, Action drpc.MgmtMethod) {
+func (p *procMon) RegisterProcess(ctx context.Context, Pid int32) {
+	p.submitRequest(ctx, Pid, drpc.MethodGetAttachInfo)
+}
+
+func (p *procMon) UnregisterProcess(ctx context.Context, Pid int32) {
+	p.submitRequest(ctx, Pid, drpc.MethodDisconnect)
+}
+
+func (p *procMon) submitRequest(ctx context.Context, Pid int32, Action drpc.MgmtMethod) {
 	req := &procMonRequest{
 		pid:    Pid,
 		action: Action,
 	}
-	p.request <- req
+	select {
+	case <-ctx.Done():
+	case p.request <- req:
+	}
 }
-func (p *procMon) handleProcessAttach(ctx context.Context, request *procMonRequest, response chan *procMonResponse) {
+
+func (p *procMon) handleProcessAttach(ctx context.Context, request *procMonRequest) {
 	info, found := p.procs[request.pid]
 
 	if found {
@@ -162,10 +162,16 @@ func (p *procMon) handleProcessAttach(ctx context.Context, request *procMonReque
 		return
 	}
 
-	info = NewProcInfo(ctx, p.log, request.pid, response)
+	child, cancel := context.WithCancel(ctx)
+	info = &procInfo{
+		log:       p.log,
+		pid:       request.pid,
+		cancelCtx: cancel,
+		response:  p.response,
+	}
 
 	p.procs[request.pid] = info
-	go info.monitorProcess()
+	go info.monitorProcess(child)
 }
 
 func (p *procMon) handleProcessDisconnect(request *procMonRequest) {
@@ -182,7 +188,6 @@ func (p *procMon) handleProcessDisconnect(request *procMonRequest) {
 }
 
 func (p *procMon) handleRequests(ctx context.Context) {
-	response := make(chan *procMonResponse)
 	for {
 		select {
 		case <-ctx.Done():
@@ -190,13 +195,13 @@ func (p *procMon) handleRequests(ctx context.Context) {
 		case request := <-p.request:
 			switch request.action {
 			case drpc.MethodGetAttachInfo:
-				p.handleProcessAttach(ctx, request, response)
+				p.handleProcessAttach(ctx, request)
 			case drpc.MethodDisconnect:
 				p.handleProcessDisconnect(request)
 			default:
 				p.log.Errorf("Received request with invalid action type %s", request.action)
 			}
-		case resp := <-response:
+		case resp := <-p.response:
 			p.log.Debugf("Received response from Process %d, terminated with %s", resp.pid, resp.err)
 		}
 	}
