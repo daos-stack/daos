@@ -1551,7 +1551,7 @@ print_acl(FILE *outstream, daos_prop_t *acl_prop, bool verbose)
 
 	rc = daos_acl_to_stream(outstream, acl, verbose);
 	if (rc != 0) {
-		fprintf(stderr, "failed to print ACL: %s (%d)\n", 
+		fprintf(stderr, "failed to print ACL: %s (%d)\n",
 			d_errstr(rc), rc);
 	}
 

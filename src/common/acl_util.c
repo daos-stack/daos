@@ -937,7 +937,7 @@ verbose_str_to_stream(FILE *stream, const char *ace_str)
 	char	verbose_str[DAOS_ACL_MAX_ACE_STR_LEN * 2];
 	int	rc;
 
-	rc = daos_ace_str_get_verbose(ace_str, verbose_str, 
+	rc = daos_ace_str_get_verbose(ace_str, verbose_str,
 				      sizeof(verbose_str));
 	/* String may have been truncated - that's OK */
 	if (rc != 0 && rc != -DER_TRUNC) {
@@ -982,7 +982,6 @@ daos_acl_to_stream(FILE *stream, struct daos_acl *acl, bool verbose)
 			if (rc != 0)
 				goto out;
 		}
-		
 		rc = D_FPRINTF(stream, "%s\n", aces[i]);
 		if (rc != 0)
 			goto out;
@@ -993,6 +992,5 @@ out:
 		free_strings(aces, aces_nr);
 		D_FREE(aces);
 	}
-	
 	return rc;
 }

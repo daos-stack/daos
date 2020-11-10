@@ -1053,7 +1053,7 @@ assert_stream_written(FILE *stream, const char *exp_str)
 }
 
 static void
-add_ace_allow(struct daos_acl **acl, enum daos_acl_principal_type type, 
+add_ace_allow(struct daos_acl **acl, enum daos_acl_principal_type type,
 	      const char *principal, uint64_t perms)
 {
 	struct daos_ace *ace = daos_ace_create(type, principal);
@@ -1114,7 +1114,6 @@ test_acl_to_stream_success(void **state)
 			      "A::OWNER@:rwdtTaAo\n"
 			      "# Allow:Group:readers@:Read\n"
 			      "A:G:readers@:r\n");
-	
 	fclose(tmpstream);
 
 	daos_acl_free(acl);
