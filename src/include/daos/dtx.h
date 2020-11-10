@@ -137,8 +137,12 @@ struct dtx_memberships {
 	/* see dtx_mbs_flags. */
 	uint16_t			dm_flags;
 
-	/* For alignment. */
-	uint16_t			dm_padding;
+	union {
+		/* DTX entry flags during DTX recovery. */
+		uint16_t		dm_dte_flags;
+		/* For alignment. */
+		uint16_t		dm_padding;
+	};
 
 	/* The first 'sizeof(struct dtx_daos_target) * dm_tgt_cnt' is the
 	 * dtx_daos_target array. The subsequent are modification groups.
