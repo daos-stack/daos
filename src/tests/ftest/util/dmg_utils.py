@@ -621,7 +621,6 @@ class DmgCommand(DmgCommandBase):
             ("pool", "delete-acl"), pool=pool, principal=principal)
 
     def pool_list(self):
-        # pylint: disable=pointless-string-statement
         """List pools.
 
         Returns:
@@ -633,14 +632,13 @@ class DmgCommand(DmgCommandBase):
         """
         self._get_result(("pool", "list"))
         pool_info = re.findall(
-            r"(?:([0-9a-fA-F-]{36})\s+([0-9-,]+))", self.result.stdout)
+            r"(?:([0-9a-fA-F-]+)\s+([0-9,-]+))", self.result.stdout)
 
-        """
-        Pool UUID                            Svc Replicas
-        ---------                            ------------
-        43bf2fe8-cb92-46ec-b9e9-9b056725092a 0
-        98736dfe-cb92-12cd-de45-9b09875092cd 1
-        """
+        # Sample dmg pool list output
+        #    Pool UUID                            Svc Replicas
+        #    ---------                            ------------
+        #    43bf2fe8-cb92-46ec-b9e9-9b056725092a 0
+        #    98736dfe-cb92-12cd-de45-9b09875092cd 1
         data = {}
         for info in pool_info:
             data[info[0]] = get_numeric_list(info[1])
