@@ -26,6 +26,7 @@ package control
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
 
 	"github.com/pkg/errors"
@@ -45,6 +46,8 @@ const (
 	defaultTargetCount    = 16
 	defaultIOSrvLogFile   = "/tmp/daos_io_server"
 	defaultControlLogFile = "/tmp/daos_server.log"
+	// NetDevAny matches any netdetect network device class
+	NetDevAny = math.MaxUint32
 )
 
 var netCtx context.Context
@@ -170,7 +173,7 @@ func (req *ConfigGenerateReq) parseInterfaces(interfaces []*HostFabricInterface)
 		switch iface.NetDevClass {
 		case nd.Ether, nd.Infiniband:
 			switch req.NetClass {
-			case nd.NetDevAny, iface.NetDevClass:
+			case NetDevAny, iface.NetDevClass:
 			default:
 				continue // iface class not requested
 			}
@@ -227,7 +230,7 @@ func (req *ConfigGenerateReq) genConfig(interfaces []*HostFabricInterface) *conf
 // with appropriate fabric device details for all required numa nodes.
 func (req *ConfigGenerateReq) checkNetwork(ctx context.Context, resp *ConfigGenerateResp) error {
 	switch req.NetClass {
-	case nd.NetDevAny, nd.Ether, nd.Infiniband:
+	case NetDevAny, nd.Ether, nd.Infiniband:
 	default:
 		return errors.Errorf("unsupported net dev class in request: %s",
 			nd.DevClassName(req.NetClass))
@@ -266,8 +269,12 @@ func (req *ConfigGenerateReq) checkNetwork(ctx context.Context, resp *ConfigGene
 
 	matching, complete := req.parseInterfaces(networkSet.HostFabric.Interfaces)
 	if !complete {
+		class := "best-available"
+		if req.NetClass != NetDevAny {
+			class = nd.DevClassName(req.NetClass)
+		}
 		return errors.Errorf("insufficient matching %s network interfaces, want %d got %d %+v",
-			nd.DevClassName(req.NetClass), req.NumPmem, len(matching), matching)
+			class, req.NumPmem, len(matching), matching)
 	}
 
 	req.Log.Debugf("selected network interfaces: %v", matching)

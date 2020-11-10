@@ -72,7 +72,7 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 	case "infiniband":
 		req.NetClass = netdetect.Infiniband
 	default:
-		req.NetClass = netdetect.NetDevAny
+		req.NetClass = control.NetDevAny
 	}
 	if cmd.AccessPoints != "" {
 		req.AccessPoints = strings.Split(cmd.AccessPoints, ",")

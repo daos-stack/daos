@@ -341,13 +341,11 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 		expCheckErr   error
 	}{
 		"invoker error": {
-			netDevClass:   nd.NetDevAny,
 			uErr:          errors.New("unary error"),
 			hostResponses: dualHostRespSame(fabIfs1),
 			expCheckErr:   errors.New("unary error"),
 		},
 		"host network scan failed": {
-			netDevClass:   nd.NetDevAny,
 			hostResponses: hostRespRemoteFail,
 			expHostErrors: []*MockHostError{
 				{"host2", "remote failed"},
@@ -356,7 +354,6 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 			expCheckErr: errors.New("1 host had errors"),
 		},
 		"host network scan failed on multiple hosts": {
-			netDevClass:   nd.NetDevAny,
 			hostResponses: hostRespRemoteFails,
 			expHostErrors: []*MockHostError{
 				{"host1", "remote failed"},
@@ -365,41 +362,35 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 			expCheckErr: errors.New("2 hosts had errors"),
 		},
 		"host network scan no hosts": {
-			netDevClass:   nd.NetDevAny,
 			hostResponses: []*HostResponse{},
 			expCheckErr:   errors.New("no host responses"),
 		},
 		"unsupported network class in request": {
+			netDevClass:   2,
 			hostResponses: dualHostResp(fabIfs1, fabIfs2),
 			expCheckErr:   errors.New("unsupported net dev class in request"),
 		},
 		"host network mismatch": {
-			netDevClass:   nd.NetDevAny,
 			hostResponses: dualHostResp(fabIfs1, fabIfs2),
 			expCheckErr:   errors.New("network hardware not consistent across hosts"),
 		},
 		"no min pmem and no numa": {
-			netDevClass:   nd.NetDevAny,
 			hostResponses: dualHostRespSame(fabIfs1),
 			expCheckErr:   errors.New("no numa nodes reported on hosts host[1-2]"),
 		},
 		"no min pmem and no numa on one host": {
-			netDevClass:   nd.NetDevAny,
 			hostResponses: dualHostResp(fabIfs1, fabIfs1wNuma),
 			expCheckErr:   errors.New("network hardware not consistent across hosts"),
 		},
 		"no min pmem and two numa": {
-			netDevClass:   nd.NetDevAny,
 			hostResponses: dualHostRespSame(fabIfs1wNuma),
 			expCheckErr:   errors.New("insufficient matching best-available network"),
 		},
 		"no min pmem and two numa but only single interface": {
-			netDevClass:   nd.NetDevAny,
 			hostResponses: dualHostRespSame(fabIfs3),
 			expCheckErr:   errors.New("insufficient matching best-available network"),
 		},
 		"one min pmem and two numa but only single interface": {
-			netDevClass:   nd.NetDevAny,
 			numPmem:       1,
 			hostResponses: dualHostRespSame(fabIfs3),
 			expConfigOut: baseConfig("ofi+psm2").WithServers(
@@ -421,7 +412,6 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 					WithPinnedNumaNode(&numa0)),
 		},
 		"no min pmem and two numa with dual ib interfaces": {
-			netDevClass:   nd.NetDevAny,
 			hostResponses: dualHostRespSame(fabIfs4),
 			expConfigOut: baseConfig("ofi+psm2").WithServers(
 				baseIOConfig(0).
@@ -442,7 +432,6 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 			expCheckErr:   errors.New("insufficient matching ETHER network"),
 		},
 		"no min pmem and two numa with dual eth interfaces": {
-			netDevClass:   nd.NetDevAny,
 			hostResponses: dualHostRespSame(fabIfs5),
 			expConfigOut: baseConfig("ofi+sockets").WithServers(
 				baseIOConfig(0).
@@ -463,12 +452,10 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 		},
 		"four min pmem and two numa with dual ib interfaces": {
 			numPmem:       4,
-			netDevClass:   nd.NetDevAny,
 			hostResponses: dualHostRespSame(fabIfs4),
 			expCheckErr:   errors.New("insufficient matching best-available network"),
 		},
 		"no min pmem and two numa with typical fabric scan output and access points": {
-			netDevClass:   nd.NetDevAny,
 			accessPoints:  []string{"hostX"},
 			hostResponses: dualHostRespSame(typicalFabIfs),
 			expConfigOut: baseConfig("ofi+psm2").WithAccessPoints("hostX").WithServers(
@@ -495,6 +482,9 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 				},
 			})
 
+			if tc.netDevClass == 0 {
+				tc.netDevClass = NetDevAny
+			}
 			req := &ConfigGenerateReq{
 				NumPmem:      tc.numPmem,
 				NetClass:     tc.netDevClass,
