@@ -129,13 +129,6 @@ cleanup() {
     done
 }
 
-# build java jar files under ftest/java
-build_java_hadoop() {
-    cd java
-    mvn clean install -DskipITs -Ddaos.install.path=$PREFIX
-    cd ..
-}
-
 pre_clean
 
 # shellcheck disable=SC1091
@@ -425,8 +418,6 @@ if [ $(lsb_release -s -i) = CentOS ]; then
 else
     process_cores=\"\"
 fi
-
-build_java_hadoop
 
 # now run it!
 if ! ./launch.py -cris\${process_cores}a -th ${LOGS_THRESHOLD} \\
