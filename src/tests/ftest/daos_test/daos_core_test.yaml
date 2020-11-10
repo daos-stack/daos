@@ -141,6 +141,10 @@ daos_tests:
       daos_test: S
       test_name: DAOS rebuild ec tests
       test_timeout: 900
+    test_X:
+      daos_test: X
+      test_name: DAOS degraded ec tests
+      test_timeout: 900
     test_U:
       daos_test: U
       test_name: DAOS dedup tests
