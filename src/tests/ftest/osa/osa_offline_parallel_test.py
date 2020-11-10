@@ -23,15 +23,11 @@
 """
 import time
 import random
-import ctypes
 import threading
 import copy
-from avocado import fail_on
-from apricot import TestWithServers
+from osa_utils import OSAUtils
 from test_utils_pool import TestPool
-from command_utils import CommandFailure
-from pydaos.raw import (DaosContainer, IORequest,
-                        DaosObj, DaosApiError)
+
 try:
     # python 3.x
     import queue as queue
@@ -39,7 +35,7 @@ except ImportError:
     # python 2.7
     import Queue as queue
 
-class OSAOfflineParallelTest(TestWithServers):
+class OSAOfflineParallelTest(OSAUtils):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
@@ -52,76 +48,7 @@ class OSAOfflineParallelTest(TestWithServers):
         """Set up for test case."""
         super(OSAOfflineParallelTest, self).setUp()
         self.dmg_command = self.get_dmg_command()
-        self.no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')[0]
-        self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')[0]
-        self.record_length = self.params.get("length", '/run/record/*')[0]
         self.out_queue = queue.Queue()
-        self.test_ioreq = None
-
-    @fail_on(CommandFailure)
-    def get_pool_version(self):
-        """Get the pool version.
-
-        Returns:
-            int: pool_version_value
-
-        """
-        data = self.dmg_command.pool_query(self.pool.uuid)
-        return int(data["version"])
-
-    @fail_on(DaosApiError)
-    def write_single_object(self):
-        """Write some data to the existing pool."""
-        self.pool.connect(2)
-        csum = self.params.get("enable_checksum", '/run/container/*')
-        container = DaosContainer(self.context)
-        input_param = container.cont_input_values
-        input_param.enable_chksum = csum
-        container.create(poh=self.pool.pool.handle,
-                         con_prop=input_param)
-        container.open()
-        obj = DaosObj(self.context, container)
-        obj.create(objcls=1)
-        obj.open()
-        ioreq = IORequest(self.context,
-                          container,
-                          obj, objtype=4)
-        self.test_ioreq = ioreq
-        self.log.info("Writing the Single Dataset")
-        for dkey in range(self.no_of_dkeys):
-            for akey in range(self.no_of_akeys):
-                indata = ("{0}".format(str(akey)[0])
-                          * self.record_length)
-                d_key_value = "dkey {0}".format(dkey)
-                c_dkey = ctypes.create_string_buffer(d_key_value)
-                a_key_value = "akey {0}".format(akey)
-                c_akey = ctypes.create_string_buffer(a_key_value)
-                c_value = ctypes.create_string_buffer(indata)
-                c_size = ctypes.c_size_t(ctypes.sizeof(c_value))
-                ioreq.single_insert(c_dkey, c_akey, c_value, c_size)
-
-    @fail_on(DaosApiError)
-    def verify_single_object(self):
-        """Verify the container data on the existing pool."""
-        self.log.info("Single Dataset Verification -- Started")
-        for dkey in range(self.no_of_dkeys):
-            for akey in range(self.no_of_akeys):
-                indata = ("{0}".format(str(akey)[0]) *
-                          self.record_length)
-                c_dkey = ctypes.create_string_buffer("dkey {0}".format(dkey))
-                c_akey = ctypes.create_string_buffer("akey {0}".format(akey))
-                val = self.test_ioreq.single_fetch(c_dkey,
-                                                   c_akey,
-                                                   len(indata)+1)
-                if indata != (repr(val.value)[1:-1]):
-                    self.d_log.error("ERROR:Data mismatch for "
-                                     "dkey = {0}, "
-                                     "akey = {1}".format(
-                                         "dkey {0}".format(dkey),
-                                         "akey {0}".format(akey)))
-                    self.fail("ERROR: Data mismatch for dkey = {0}, akey={1}"
-                              .format("dkey {0}".format(dkey),
-                                      "akey {0}".format(akey)))
 
     def dmg_thread(self, action, action_args, results):
         """Generate different dmg command related to OSA.
@@ -226,9 +153,6 @@ class OSAOfflineParallelTest(TestWithServers):
             if "FAIL" in failure:
                 self.fail("Test failed : {0}".format(failure))
 
-        if data:
-            self.verify_single_object()
-
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
             pool[val].display_pool_daos_space(display_string)
@@ -242,7 +166,8 @@ class OSAOfflineParallelTest(TestWithServers):
             self.log.info("Pool Version at the End %s", pver_end)
             self.assertTrue(pver_end == 25,
                             "Pool Version Error:  at the end")
-            pool[val].destroy()
+        if data:
+            self.verify_single_object()
 
     def test_osa_offline_parallel_test(self):
         """
@@ -252,10 +177,5 @@ class OSAOfflineParallelTest(TestWithServers):
 
         :avocado: tags=all,pr,hw,large,osa,osa_parallel,offline_parallel
         """
-        # Perform drain testing with 1 to 2 pools
-        # Two pool testing blocked by DAOS-5333.
-        # Fix range from 1,2 to 1,3
-        self.run_offline_parallel_test(1)
-        # Perform drain testing : inserting data in pool
-        # Bug : DAOS-4946 blocks the following test case.
-        # self.run_offline_parallel_test(1, True)
+        # Run the parallel offline test.
+        self.run_offline_parallel_test(1, True)

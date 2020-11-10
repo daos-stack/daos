@@ -36,7 +36,7 @@ int run_dfs_unit_test(int rank, int size);
 int run_dfs_par_test(int rank, int size);
 
 static inline void
-dfs_share(daos_handle_t poh, daos_handle_t coh, int rank, dfs_t **dfs)
+dfs_test_share(daos_handle_t poh, daos_handle_t coh, int rank, dfs_t **dfs)
 {
 	d_iov_t	ghdl = { NULL, 0, 0 };
 	int	rc;
@@ -77,7 +77,7 @@ dfs_share(daos_handle_t poh, daos_handle_t coh, int rank, dfs_t **dfs)
 }
 
 static inline void
-dfs_obj_share(dfs_t *dfs, int flags, int rank, dfs_obj_t **obj)
+dfs_test_obj_share(dfs_t *dfs, int flags, int rank, dfs_obj_t **obj)
 {
 	d_iov_t	ghdl = { NULL, 0, 0 };
 	int	rc;
