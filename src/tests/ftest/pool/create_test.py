@@ -129,8 +129,9 @@ class PoolCreateTests(PoolTestBase):
         detected_pools = [uuid.lower() for uuid in self.dmg.pool_list()]
         missing_pools = []
         for pool in self.pool:
-            if pool.uuid.lower() not in detected_pools:
-                missing_pools.append(pool.uuid.lower())
+            pool_uuid = pool.uuid.lower()
+            if pool_uuid not in detected_pools:
+                missing_pools.append(pool_uuid)
         if missing_pools:
             self.fail(
                 "The following created pools were not detected in the pool "
