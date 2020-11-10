@@ -49,10 +49,16 @@ struct dtx_cos_rec {
 	 *	operation efficiency.
 	 */
 	d_list_t		 dcr_prio_list;
+	/* The list for those DTXs that need to committed via explicit DTX
+	 * commit RPC instead of piggyback via dispatched update/punch RPC.
+	 */
+	d_list_t		 dcr_expcmt_list;
 	/* The number of the PUNCH DTXs in the dcr_reg_list. */
 	int			 dcr_reg_count;
 	/* The number of the DTXs in the dcr_prio_list. */
 	int			 dcr_prio_count;
+	/* The number of the DTXs in the dcr_explicit_list. */
+	int			 dcr_expcmt_count;
 };
 
 /* Above dtx_cos_rec is consisted of a series of dtx_cos_rec_child uints.
@@ -126,6 +132,7 @@ dtx_cos_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	dcr->dcr_oid = key->oid;
 	D_INIT_LIST_HEAD(&dcr->dcr_reg_list);
 	D_INIT_LIST_HEAD(&dcr->dcr_prio_list);
+	D_INIT_LIST_HEAD(&dcr->dcr_expcmt_list);
 
 	D_ALLOC_PTR(dcrc);
 	if (dcrc == NULL) {
@@ -141,7 +148,10 @@ dtx_cos_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 			&cont->sc_dtx_cos_list);
 	cont->sc_dtx_committable_count++;
 
-	if (rbund->flags & DCF_SHARED) {
+	if (rbund->flags & DCF_EXP_CMT) {
+		d_list_add_tail(&dcrc->dcrc_lo_link, &dcr->dcr_expcmt_list);
+		dcr->dcr_expcmt_count = 1;
+	} else if (rbund->flags & DCF_SHARED) {
 		d_list_add_tail(&dcrc->dcrc_lo_link, &dcr->dcr_prio_list);
 		dcr->dcr_prio_count = 1;
 	} else {
@@ -174,6 +184,14 @@ dtx_cos_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		cont->sc_dtx_committable_count--;
 	}
 	d_list_for_each_entry_safe(dcrc, next, &dcr->dcr_prio_list,
+				   dcrc_lo_link) {
+		d_list_del(&dcrc->dcrc_lo_link);
+		d_list_del(&dcrc->dcrc_gl_committable);
+		dtx_entry_put(dcrc->dcrc_dte);
+		D_FREE_PTR(dcrc);
+		cont->sc_dtx_committable_count--;
+	}
+	d_list_for_each_entry_safe(dcrc, next, &dcr->dcr_expcmt_list,
 				   dcrc_lo_link) {
 		d_list_del(&dcrc->dcrc_lo_link);
 		d_list_del(&dcrc->dcrc_gl_committable);
@@ -226,7 +244,10 @@ dtx_cos_rec_update(struct btr_instance *tins, struct btr_record *rec,
 			&cont->sc_dtx_cos_list);
 	cont->sc_dtx_committable_count++;
 
-	if (rbund->flags & DCF_SHARED) {
+	if (rbund->flags & DCF_EXP_CMT) {
+		d_list_add_tail(&dcrc->dcrc_lo_link, &dcr->dcr_expcmt_list);
+		dcr->dcr_expcmt_count++;
+	} else if (rbund->flags & DCF_SHARED) {
 		d_list_add_tail(&dcrc->dcrc_lo_link, &dcr->dcr_prio_list);
 		dcr->dcr_prio_count++;
 	} else {
@@ -342,41 +363,6 @@ dtx_list_cos(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 }
 
 int
-dtx_lookup_cos(struct ds_cont_child *cont, struct dtx_id *xid,
-	       daos_unit_oid_t *oid, uint64_t dkey_hash)
-{
-	struct dtx_cos_key		 key;
-	d_iov_t				 kiov;
-	d_iov_t				 riov;
-	struct dtx_cos_rec		*dcr;
-	struct dtx_cos_rec_child	*dcrc;
-	int				 rc;
-
-	key.oid = *oid;
-	key.dkey_hash = dkey_hash;
-	d_iov_set(&kiov, &key, sizeof(key));
-	d_iov_set(&riov, NULL, 0);
-
-	rc = dbtree_lookup(cont->sc_dtx_cos_hdl, &kiov, &riov);
-	if (rc != 0)
-		return rc;
-
-	dcr = (struct dtx_cos_rec *)riov.iov_buf;
-
-	d_list_for_each_entry(dcrc, &dcr->dcr_prio_list, dcrc_lo_link) {
-		if (memcmp(&dcrc->dcrc_dte->dte_xid, xid, sizeof(*xid)) == 0)
-			return 0;
-	}
-
-	d_list_for_each_entry(dcrc, &dcr->dcr_reg_list, dcrc_lo_link) {
-		if (memcmp(&dcrc->dcrc_dte->dte_xid, xid, sizeof(*xid)) == 0)
-			return 0;
-	}
-
-	return -DER_NONEXIST;
-}
-
-int
 dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
 	    daos_unit_oid_t *oid, uint64_t dkey_hash,
 	    daos_epoch_t epoch, uint32_t flags)
@@ -403,9 +389,8 @@ dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
 			   DAOS_INTENT_UPDATE, &kiov, &riov);
 
 	D_DEBUG(DB_IO, "Insert DTX "DF_DTI" to CoS cache, key %lu, "
-		"%s shared entry: rc = "DF_RC"\n",
-		DP_DTI(&dte->dte_xid), (unsigned long)dkey_hash,
-		flags & DCF_SHARED ? "has" : "has not", DP_RC(rc));
+		"flags %x: rc = "DF_RC"\n", DP_DTI(&dte->dte_xid),
+		(unsigned long)dkey_hash, flags, DP_RC(rc));
 
 	return rc;
 }
@@ -470,9 +455,25 @@ dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 		D_GOTO(out, found = 2);
 	}
 
+	d_list_for_each_entry(dcrc, &dcr->dcr_expcmt_list, dcrc_lo_link) {
+		if (memcmp(&dcrc->dcrc_dte->dte_xid, xid, sizeof(*xid)) != 0)
+			continue;
+
+		d_list_del(&dcrc->dcrc_gl_committable);
+		d_list_del(&dcrc->dcrc_lo_link);
+		dtx_entry_put(dcrc->dcrc_dte);
+		D_FREE_PTR(dcrc);
+
+		cont->sc_dtx_committable_count--;
+		dcr->dcr_expcmt_count--;
+
+		D_GOTO(out, found = 3);
+	}
+
 out:
 	if (found > 0) {
-		if (dcr->dcr_reg_count == 0 && dcr->dcr_prio_count == 0)
+		if (dcr->dcr_reg_count == 0 && dcr->dcr_prio_count == 0 &&
+		    dcr->dcr_expcmt_count == 0)
 			rc = dbtree_delete(cont->sc_dtx_cos_hdl, BTR_PROBE_EQ,
 					   &kiov, NULL);
 
