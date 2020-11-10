@@ -708,15 +708,19 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed(
                 "Error starting DAOS:\n{}".format(self.dmg.result))
 
-    def system_stop(self):
+    def system_stop(self, valid_states=None):
         """Stop the DAOS IO servers.
 
         Raises:
             ServerFailed: if there was an error stopping the servers
 
         """
+        if valid_states:
+            valid_states.extend(("started", "joined"))
+        else:
+            valid_states = ("started", "joined")
         self.log.info("Stopping DAOS IO servers")
-        self.check_system_state(("started", "joined"))
+        self.check_system_state(valid_states)
         self.dmg.system_stop(force=True)
         if self.dmg.result.exit_status != 0:
             raise ServerFailed(
