@@ -526,7 +526,6 @@ agg_get_carry_under(struct ec_agg_entry *entry)
 static int
 agg_update_vos(struct ec_agg_entry *entry, bool write_parity)
 {
-	daos_epoch_range_t	 epoch_range = { 0 };
 	daos_recx_t		 recx = { 0 };
 	struct ec_agg_param	*agg_param;
 	struct ec_agg_extent	*agg_extent;
@@ -561,15 +560,16 @@ agg_update_vos(struct ec_agg_entry *entry, bool write_parity)
 		}
 	}
 
-	epoch_range.epr_lo = agg_param->ap_epr.epr_lo;
-	epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
 	ext_total = entry->ae_cur_stripe.as_suffix_ext ?
 		entry->ae_cur_stripe.as_extent_cnt - 1 :
 		entry->ae_cur_stripe.as_extent_cnt;
 
 	d_list_for_each_entry(agg_extent, &entry->ae_cur_stripe.as_dextents,
 			      ae_link) {
-		int erc = 0;
+		daos_epoch_range_t	 epoch_range = { 0 };
+		int			 erc = 0;
+
+		epoch_range.epr_lo = epoch_range.epr_hi = agg_extent->ae_epoch;
 
 		erc = vos_obj_array_remove(agg_param->ap_cont_handle,
 					   entry->ae_oid, &epoch_range,
@@ -629,7 +629,7 @@ agg_process_stripe(struct ec_agg_entry *entry)
 
 	if (entry->ae_par_extent.ape_epoch > entry->ae_cur_stripe.as_hi_epoch &&
 	    entry->ae_par_extent.ape_epoch != ~(0ULL)) {
-		/* Parity newer than data and holes, so delete the replicas.
+		/* Parity newer than data, so delete the replicas.
 		 */
 		update_vos = true;
 		write_parity = false;
