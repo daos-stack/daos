@@ -4893,7 +4893,7 @@ out:
  * Check whether the leader replica of the given object resides
  * on current server or not.
  *
- * \param [IN]	pool_uuid	The pool UUID
+ * \param [IN]	pool		Pointer to the pool
  * \param [IN]	oid		The OID of the object to be checked
  * \param [IN]	version		The pool map version
  *
@@ -4902,10 +4902,10 @@ out:
  * \return			Negative value if error.
  */
 int
-ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid, uint32_t version)
+ds_pool_check_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
+			 uint32_t version)
 {
-	struct ds_pool		*pool;
-	struct pl_map		*map = NULL;
+	struct pl_map		*map;
 	struct pl_obj_layout	*layout = NULL;
 	struct pool_target	*target;
 	struct daos_obj_md	 md = { 0 };
@@ -4913,16 +4913,11 @@ ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid, uint32_t version)
 	d_rank_t		 myrank;
 	int			 rc = 0;
 
-	pool = ds_pool_lookup(pool_uuid);
-	if (pool == NULL)
-		return -DER_INVAL;
-
-	map = pl_map_find(pool_uuid, oid->id_pub);
+	map = pl_map_find(pool->sp_uuid, oid->id_pub);
 	if (map == NULL) {
 		D_WARN("Failed to find pool map tp select leader for "
 		       DF_UOID" version = %d\n", DP_UOID(*oid), version);
-		rc = -DER_INVAL;
-		goto out;
+		return -DER_INVAL;
 	}
 
 	md.omd_id = oid->id_pub;
@@ -4962,9 +4957,8 @@ ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid, uint32_t version)
 out:
 	if (layout != NULL)
 		pl_obj_layout_free(layout);
-	if (map != NULL)
-		pl_map_decref(map);
-	ds_pool_put(pool);
+	pl_map_decref(map);
+
 	return rc;
 }
 
