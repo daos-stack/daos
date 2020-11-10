@@ -333,7 +333,7 @@ boolean skip_bandit_check() {
 
 boolean skip_build_on_centos7_bullseye() {
     return  env.NO_CI_TESTING == 'true' ||
-            skip_stage('bullseye', true)
+            skip_stage('bullseye')
 }
 
 boolean skip_build_on_centos7_gcc_debug() {
