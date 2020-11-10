@@ -457,3 +457,123 @@ out:
 		smd_free_dev_info(new_info);
 	return rc;
 }
+
+static struct bio_dev_info *
+alloc_dev_info(uuid_t dev_id, struct smd_dev_info *s_info)
+{
+	struct bio_dev_info	*info;
+	int			 tgt_cnt = 0, i;
+
+	D_ALLOC_PTR(info);
+	if (info == NULL)
+		return NULL;
+
+	if (s_info != NULL) {
+		tgt_cnt = s_info->sdi_tgt_cnt;
+		info->bdi_flags |= NVME_DEV_FL_INUSE;
+		if (s_info->sdi_state == SMD_DEV_FAULTY)
+			info->bdi_flags |= NVME_DEV_FL_FAULTY;
+	}
+
+	if (tgt_cnt != 0) {
+		D_ALLOC_ARRAY(info->bdi_tgts, tgt_cnt);
+		if (info->bdi_tgts == NULL) {
+			D_FREE(info);
+			return NULL;
+		}
+	}
+
+	D_INIT_LIST_HEAD(&info->bdi_link);
+	uuid_copy(info->bdi_dev_id, dev_id);
+	info->bdi_tgt_cnt = tgt_cnt;
+	for (i = 0; i < info->bdi_tgt_cnt; i++)
+		info->bdi_tgts[i] = s_info->sdi_tgts[i];
+
+	return info;
+}
+
+static struct smd_dev_info *
+find_smd_dev(uuid_t dev_id, d_list_t *s_dev_list)
+{
+	struct smd_dev_info	*s_info;
+
+	d_list_for_each_entry(s_info, s_dev_list, sdi_link) {
+		if (uuid_compare(s_info->sdi_id, dev_id) == 0)
+			return s_info;
+	}
+
+	return NULL;
+}
+
+int
+bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
+{
+	d_list_t		 s_dev_list;
+	struct bio_dev_info	*b_info;
+	struct smd_dev_info	*s_info, *s_tmp;
+	struct bio_bdev		*d_bdev;
+	int			 rc;
+
+	/* Caller ensures the request handling ULT created on init xstream */
+	D_ASSERT(is_init_xstream(xs_ctxt));
+
+	D_ASSERT(dev_list != NULL && d_list_empty(dev_list));
+	D_INIT_LIST_HEAD(&s_dev_list);
+
+	rc = smd_dev_list(&s_dev_list, dev_cnt);
+	if (rc) {
+		D_ERROR("Failed to get SMD dev list "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	*dev_cnt = 0;
+	/* Scan all devices presented in bio_bdev list */
+	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
+		s_info = find_smd_dev(d_bdev->bb_uuid, &s_dev_list);
+
+		b_info = alloc_dev_info(d_bdev->bb_uuid, s_info);
+		if (b_info == NULL) {
+			D_ERROR("Failed to allocate device info\n");
+			rc = -DER_NOMEM;
+			goto out;
+		}
+		if (!d_bdev->bb_removed)
+			b_info->bdi_flags |= NVME_DEV_FL_PLUGGED;
+		d_list_add_tail(&b_info->bdi_link, dev_list);
+		(*dev_cnt)++;
+
+		/* delete the found device in SMD dev list */
+		if (s_info != NULL) {
+			d_list_del_init(&s_info->sdi_link);
+			smd_free_dev_info(s_info);
+		}
+	}
+
+	/*
+	 * Scan remaining SMD devices not presented bio_bdev list.
+	 *
+	 * As for current implementation, there won't be any device
+	 * present in SMD but not in bio_bdev list, here we just do
+	 * it for sanity check.
+	 */
+	d_list_for_each_entry(s_info, &s_dev_list, sdi_link) {
+		D_ERROR("Fond unexpected device "DF_UUID" in SMD\n",
+			DP_UUID(s_info->sdi_id));
+
+		b_info = alloc_dev_info(s_info->sdi_id, s_info);
+		if (b_info == NULL) {
+			D_ERROR("Failed to allocate device info\n");
+			rc = -DER_NOMEM;
+			goto out;
+		}
+		d_list_add_tail(&b_info->bdi_link, dev_list);
+		(*dev_cnt)++;
+	}
+out:
+	d_list_for_each_entry_safe(s_info, s_tmp, &s_dev_list, sdi_link) {
+		d_list_del_init(&s_info->sdi_link);
+		smd_free_dev_info(s_info);
+	}
+
+	return rc;
+}
