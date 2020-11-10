@@ -82,6 +82,7 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		char		*env;
 		int		 size_gb;
 		daos_size_t	 nvme_size;
+		d_rank_list_t	 *rank_list = NULL;
 
 		env = getenv("POOL_SCM_SIZE");
 		if (env) {
@@ -104,19 +105,27 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 			nvme_size = (daos_size_t)size_gb << 30;
 		}
 
+		if (arg->pool_node_size > 0) {
+			rank_list = d_rank_list_alloc(arg->pool_node_size);
+			if (rank_list == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
 		print_message("setup: creating pool, SCM size="DF_U64" GB, "
 			      "NVMe size="DF_U64" GB\n",
 			      (outpool->pool_size >> 30), nvme_size >> 30);
 		rc = dmg_pool_create(dmg_config_file,
 				     arg->uid, arg->gid, arg->group,
-				     NULL, outpool->pool_size, nvme_size,
+				     rank_list, outpool->pool_size, nvme_size,
 				     prop, outpool->svc, outpool->pool_uuid);
 		if (rc)
 			print_message("dmg_pool_create failed, rc: %d\n", rc);
 		else
 			print_message("setup: created pool "DF_UUIDF"\n",
 				       DP_UUID(outpool->pool_uuid));
+		if (rank_list)
+			d_rank_list_free(rank_list);
 	}
+out:
 	/** broadcast pool create result */
 	if (arg->multi_rank) {
 		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -276,7 +285,7 @@ test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *po_prop,
 
 int
 test_setup(void **state, unsigned int step, bool multi_rank,
-	   daos_size_t pool_size, struct test_pool *pool)
+	   daos_size_t pool_size, int node_size, struct test_pool *pool)
 {
 	test_arg_t		*arg = *state;
 	struct timeval		 now;
@@ -316,6 +325,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		arg->uid = geteuid();
 		arg->gid = getegid();
 
+		arg->pool_node_size = node_size;
 		arg->group = server_group;
 		arg->dmg_config = dmg_config_file;
 		uuid_clear(arg->pool.pool_uuid);
@@ -1207,4 +1217,31 @@ int verify_state_in_log(char *host, char *log_file, char *state)
 out:
 	D_FREE(tmp);
 	return 0;
+}
+
+#define MAX_BS_STATE_WAIT	20 /* 20sec sleep between bs state queries */
+#define MAX_BS_STATE_RETRY	15 /* max timeout of 15 * 20sec= 5min */
+
+int wait_and_verify_blobstore_state(uuid_t bs_uuid, char *expected_state,
+				    const char *group)
+{
+	int	bs_state;
+	int	retry_cnt;
+	int	rc;
+
+	retry_cnt = 0;
+	while (retry_cnt <= MAX_BS_STATE_RETRY) {
+		rc = daos_mgmt_get_bs_state(group, bs_uuid, &bs_state,
+					    NULL /*ev*/);
+		if (rc)
+			return rc;
+
+		if (verify_blobstore_state(bs_state, expected_state) == 0)
+			return 0;
+
+		sleep(MAX_BS_STATE_WAIT);
+		retry_cnt++;
+	};
+
+	return -DER_TIMEDOUT;
 }

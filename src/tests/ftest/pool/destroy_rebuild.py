@@ -48,8 +48,7 @@ class DestroyRebuild(TestWithServers):
         :avocado: tags=all,pr,medium,pool,destroypoolrebuild
         """
         # Get the test parameters
-        self.pool = TestPool(self.context, self.log,
-                             dmg_command=self.get_dmg_command())
+        self.pool = TestPool(self.context, self.get_dmg_command())
         self.pool.get_params(self)
         targets = self.params.get("targets", "/run/server_config/*")
         rank = self.params.get("rank_to_kill", "/run/testparams/*")

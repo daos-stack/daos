@@ -134,6 +134,7 @@ type (
 		unaryRequest
 		NvmeHealth bool
 		NvmeMeta   bool
+		NvmeBasic  bool
 	}
 
 	// StorageScanResp contains the response from a storage scan request.
@@ -213,12 +214,17 @@ func (ssp *StorageScanResp) addHostResponse(hr *HostResponse) error {
 // explicitly specified. The function blocks until all results (successful
 // or otherwise) are received, and returns a single response structure
 // containing results for all host scan operations.
+//
+// NumaHealth option requests SSD health statistics.
+// NumaMeta option requests DAOS server meta data stored on SSDs.
+// NumaBasic option strips SSD details down to only the most basic.
 func StorageScan(ctx context.Context, rpcClient UnaryInvoker, req *StorageScanReq) (*StorageScanResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewMgmtCtlClient(conn).StorageScan(ctx, &ctlpb.StorageScanReq{
 			Nvme: &ctlpb.ScanNvmeReq{
 				Health: req.NvmeHealth,
 				Meta:   req.NvmeMeta,
+				Basic:  req.NvmeBasic,
 			},
 		})
 	})

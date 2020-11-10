@@ -167,7 +167,7 @@ func TestPbinApp_Name(t *testing.T) {
 
 // testPayload is a Response payload used by the test handler.
 type testPayload struct {
-	result string
+	Result string
 }
 
 // testHandler is an implementation of the RequestHandler for unit tests.
@@ -184,7 +184,7 @@ func TestPbinApp_Run(t *testing.T) {
 	defaultReq := &Request{
 		Method: testMethod,
 	}
-	defaultResp := NewResponseWithPayload(&testPayload{result: "defaultResp"})
+	defaultResp := NewResponseWithPayload(&testPayload{Result: "defaultResp"})
 
 	for name, tc := range map[string]struct {
 		process        *mockProcess

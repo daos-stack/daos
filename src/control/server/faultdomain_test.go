@@ -32,8 +32,19 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/system"
 )
+
+func assertFaultDomainEqualStr(t *testing.T, expResultStr string, result *system.FaultDomain) {
+	if expResultStr == "" {
+		if result != nil {
+			t.Fatalf("expected nil result, got %q", result.String())
+		}
+	} else {
+		common.AssertEqual(t, expResultStr, result.String(), "incorrect fault domain")
+	}
+}
 
 func TestServer_getDefaultFaultDomain(t *testing.T) {
 	for name, tc := range map[string]struct {
@@ -57,14 +68,14 @@ func TestServer_getDefaultFaultDomain(t *testing.T) {
 			getHostname: func() (string, error) {
 				return "/////////", nil
 			},
-			expErr: FaultConfigFaultDomainInvalid,
+			expErr: config.FaultConfigFaultDomainInvalid,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			result, err := getDefaultFaultDomain(tc.getHostname)
 
 			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, tc.expResult, result.String(), "incorrect fault domain")
+			assertFaultDomainEqualStr(t, tc.expResult, result)
 		})
 	}
 }
@@ -83,46 +94,46 @@ func TestServer_getFaultDomain(t *testing.T) {
 	createFaultCBScriptFile(t, cbScriptPath, 0755, validFaultDomain)
 
 	for name, tc := range map[string]struct {
-		cfg       *Configuration
+		cfg       *config.Server
 		expResult string
 		expErr    error
 	}{
 		"nil cfg": {
-			expErr: FaultBadConfig,
+			expErr: config.FaultBadConfig,
 		},
 		"cfg fault path": {
-			cfg: &Configuration{
+			cfg: &config.Server{
 				FaultPath: validFaultDomain,
 			},
 			expResult: validFaultDomain,
 		},
 		"cfg fault path is not valid": {
-			cfg: &Configuration{
+			cfg: &config.Server{
 				FaultPath: "junk",
 			},
-			expErr: FaultConfigFaultDomainInvalid,
+			expErr: config.FaultConfigFaultDomainInvalid,
 		},
 		"cfg fault callback": {
-			cfg: &Configuration{
+			cfg: &config.Server{
 				FaultCb: cbScriptPath,
 			},
 			expResult: validFaultDomain,
 		},
 		"cfg fault callback is not valid": {
-			cfg: &Configuration{
+			cfg: &config.Server{
 				FaultCb: filepath.Join(tmpDir, "does not exist"),
 			},
-			expErr: FaultConfigFaultCallbackNotFound,
+			expErr: config.FaultConfigFaultCallbackNotFound,
 		},
 		"cfg both fault path and fault CB": {
-			cfg: &Configuration{
+			cfg: &config.Server{
 				FaultPath: validFaultDomain,
 				FaultCb:   cbScriptPath,
 			},
-			expErr: FaultConfigBothFaultPathAndCb,
+			expErr: config.FaultConfigBothFaultPathAndCb,
 		},
 		"default gets hostname": {
-			cfg:       &Configuration{},
+			cfg:       &config.Server{},
 			expResult: system.FaultDomainSeparator + realHostname,
 		},
 	} {
@@ -130,7 +141,7 @@ func TestServer_getFaultDomain(t *testing.T) {
 			result, err := getFaultDomain(tc.cfg)
 
 			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, tc.expResult, result.String(), "incorrect fault domain")
+			assertFaultDomainEqualStr(t, tc.expResult, result)
 		})
 	}
 }
@@ -207,42 +218,42 @@ func TestServer_getFaultDomainFromCallback(t *testing.T) {
 		},
 		"script does not exist": {
 			input:  filepath.Join(tmpDir, "notarealfile"),
-			expErr: FaultConfigFaultCallbackNotFound,
+			expErr: config.FaultConfigFaultCallbackNotFound,
 		},
 		"script has bad permissions": {
 			input:  badPermsScriptPath,
-			expErr: FaultConfigFaultCallbackBadPerms,
+			expErr: config.FaultConfigFaultCallbackBadPerms,
 		},
 		"error within the script": {
 			input:  errorScriptPath,
-			expErr: FaultConfigFaultCallbackFailed(errors.New("exit status 2")),
+			expErr: config.FaultConfigFaultCallbackFailed(errors.New("exit status 2")),
 		},
 		"script returned no output": {
 			input:  emptyScriptPath,
-			expErr: FaultConfigFaultCallbackEmpty,
+			expErr: config.FaultConfigFaultCallbackEmpty,
 		},
 		"script returned only whitespace": {
 			input:  whitespaceScriptPath,
-			expErr: FaultConfigFaultCallbackEmpty,
+			expErr: config.FaultConfigFaultCallbackEmpty,
 		},
 		"script returned invalid fault domain": {
 			input:  invalidScriptPath,
-			expErr: FaultConfigFaultDomainInvalid,
+			expErr: config.FaultConfigFaultDomainInvalid,
 		},
 		"no arbitrary shell commands allowed": {
 			input:  "echo \"my dog has fleas\"",
-			expErr: FaultConfigFaultCallbackNotFound,
+			expErr: config.FaultConfigFaultCallbackNotFound,
 		},
 		"no command line parameters allowed": {
 			input:  fmt.Sprintf("%s arg", goodScriptPath),
-			expErr: FaultConfigFaultCallbackNotFound,
+			expErr: config.FaultConfigFaultCallbackNotFound,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			result, err := getFaultDomainFromCallback(tc.input)
 
 			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, tc.expResult, result.String(), "incorrect fault domain")
+			assertFaultDomainEqualStr(t, tc.expResult, result)
 		})
 	}
 }

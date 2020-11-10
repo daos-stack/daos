@@ -35,142 +35,6 @@
 #include <daos/pool.h>
 #include <daos/mgmt.h>
 #include <daos/container.h>
-
-#define MAX_SIZE		1048576 * 3
-#define DATA_SIZE		(1048576 * 2 + 512)
-#define PARTIAL_DATA_SIZE	1024	
-
-#define KEY_NR	5
-static void
-write_ec(struct ioreq *req, int index, char *data, daos_off_t off, int size)
-{
-	char		key[32];
-	daos_recx_t	recx;
-	int		i;
-	char		single_data[8192];
-
-	for (i = 0; i < KEY_NR; i++) {
-		req->iod_type = DAOS_IOD_ARRAY;
-		sprintf(key, "dkey_%d", index);
-		recx.rx_nr = size;
-		recx.rx_idx = off + i * 10485760;
-		insert_recxs(key, "a_key", 1, DAOS_TX_NONE, &recx, 1,
-			     data, size, req);
-
-		req->iod_type = DAOS_IOD_SINGLE;
-		memset(single_data, 'a'+i, 8192);
-		sprintf(key, "dkey_single_small_%d_%d", index, i);
-		insert_single(key, "a_key", 0, single_data, 32, DAOS_TX_NONE,
-			      req);
-		sprintf(key, "dkey_single_large_%d_%d", index, i);
-		insert_single(key, "a_key", 0, single_data, 8192, DAOS_TX_NONE,
-			      req);
-	}
-}
-
-static void
-verify_ec(struct ioreq *req, int index, char *verify_data, daos_off_t off,
-	  int size)
-{
-	char	key[32];
-	char	read_data[MAX_SIZE];
-	char	single_data[8192];
-	char	verify_single_data[8192];
-	int	i;
-
-	for (i = 0; i < KEY_NR; i++) {
-		uint64_t offset = off + i * 10485760;
-
-		req->iod_type = DAOS_IOD_ARRAY;
-		sprintf(key, "dkey_%d", index);
-		memset(read_data, 0, size);
-		lookup_single_with_rxnr(key, "a_key", offset, read_data,
-					1, size, DAOS_TX_NONE, req);
-		assert_memory_equal(read_data, verify_data, size);
-
-		req->iod_type = DAOS_IOD_SINGLE;
-		memset(single_data, 0, 8192);	
-		memset(verify_single_data, 'a'+i, 8192);
-		sprintf(key, "dkey_single_small_%d_%d", index, i);
-		lookup_single(key, "a_key", 0, single_data, 32, DAOS_TX_NONE,
-			      req);
-		assert_memory_equal(single_data, verify_single_data, 32);
-
-		memset(single_data, 0, 8192);	
-		sprintf(key, "dkey_single_large_%d_%d", index, i);
-		lookup_single(key, "a_key", 0, single_data, 8192, DAOS_TX_NONE,
-			      req);
-		assert_memory_equal(single_data, verify_single_data, 8192);
-	}
-}
-
-static void
-write_ec_partial(struct ioreq *req, int test_idx, daos_off_t off)
-{
-	char	buffer[PARTIAL_DATA_SIZE];
-
-	memset(buffer, 'a', PARTIAL_DATA_SIZE);
-	write_ec(req, test_idx, buffer, off, PARTIAL_DATA_SIZE); 
-}
-
-static void
-verify_ec_partial(struct ioreq *req, int test_idx, daos_off_t off)
-{
-	char	buffer[PARTIAL_DATA_SIZE];
-
-	memset(buffer, 'a', PARTIAL_DATA_SIZE);
-	verify_ec(req, test_idx, buffer, off, PARTIAL_DATA_SIZE); 
-}
-
-static void
-write_ec_full(struct ioreq *req, int test_idx, daos_off_t off)
-{
-	char	buffer[DATA_SIZE];
-
-	memset(buffer, 'b', DATA_SIZE);
-	write_ec(req, test_idx, buffer, off, DATA_SIZE); 
-}
-
-static void
-verify_ec_full(struct ioreq *req, int test_idx, daos_off_t off)
-{
-	char	buffer[DATA_SIZE];
-
-	memset(buffer, 'b', DATA_SIZE);
-	verify_ec(req, test_idx, buffer, off, DATA_SIZE); 
-}
-
-static void
-write_ec_full_partial(struct ioreq *req, int test_idx, daos_off_t off)
-{
-	write_ec_full(req, test_idx, off);
-	write_ec_partial(req, test_idx, off);
-}
-
-static void
-write_ec_partial_full(struct ioreq *req, int test_idx, daos_off_t off)
-{
-	write_ec_partial(req, test_idx, off);
-	write_ec_full(req, test_idx, off);
-}
-
-static void
-verify_ec_full_partial(struct ioreq *req, int test_idx, daos_off_t off)
-{
-	char	buffer[DATA_SIZE];
-
-	memset(buffer, 'b', DATA_SIZE);
-	memset(buffer, 'a', PARTIAL_DATA_SIZE);
-	verify_ec(req, test_idx, buffer, off, DATA_SIZE); 
-}
-
-enum op_type {
-	PARTIAL_UPDATE	=	1,
-	FULL_UPDATE,
-	FULL_PARTIAL_UPDATE,
-	PARTIAL_FULL_UPDATE
-};
-
 static void
 rebuild_ec_internal(void **state, uint16_t oclass, int kill_data_nr,
 		    int kill_parity_nr, int write_type)
@@ -189,9 +53,6 @@ rebuild_ec_internal(void **state, uint16_t oclass, int kill_data_nr,
 
 	oid = dts_oid_gen(oclass, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-
-	print_message("Insert %d kv record in object "DF_OID"\n",
-		      KEY_NR, DP_OID(oid));
 
 	if (write_type == PARTIAL_UPDATE)
 		write_ec_partial(&req, arg->index, 0);
@@ -288,31 +149,88 @@ rebuild_partial_full_fail_parity(void **state)
 static void
 rebuild2p_partial_fail_data(void **state)
 {
-	rebuild_ec_internal(state, OC_EC_4P2G1, 1, 0, PARTIAL_UPDATE);
+	rebuild_ec_internal(state, OC_EC_4P2G1, 1, 0, FULL_UPDATE);
 }
 
 static void
 rebuild2p_partial_fail_2data(void **state)
 {
-	rebuild_ec_internal(state, OC_EC_4P2G1, 2, 0, PARTIAL_UPDATE);
+	rebuild_ec_internal(state, OC_EC_4P2G1, 2, 0, FULL_UPDATE);
 }
 
 static void
 rebuild2p_partial_fail_data_parity(void **state)
 {
-	rebuild_ec_internal(state, OC_EC_4P2G1, 1, 1, PARTIAL_UPDATE);
+	rebuild_ec_internal(state, OC_EC_4P2G1, 1, 1, FULL_UPDATE);
 }
 
 static void
 rebuild2p_partial_fail_parity(void **state)
 {
-	rebuild_ec_internal(state, OC_EC_4P2G1, 0, 1, PARTIAL_UPDATE);
+	rebuild_ec_internal(state, OC_EC_4P2G1, 0, 1, FULL_UPDATE);
 }
 
 static void
 rebuild2p_partial_fail_2parity(void **state)
 {
-	rebuild_ec_internal(state, OC_EC_4P2G1, 0, 2, PARTIAL_UPDATE);
+	rebuild_ec_internal(state, OC_EC_4P2G1, 0, 2, FULL_UPDATE);
+}
+
+#define CELL_SIZE	1048576
+
+static void
+rebuild_mixed_stripes(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	char		*data;
+	char		*verify_data;
+	daos_recx_t	recxs[5];
+	d_rank_t	rank = 0;
+	int		size = 8 * 1048576 + 10000;
+
+	if (!test_runable(arg, 7))
+		return;
+
+	oid = dts_oid_gen(OC_EC_4P2G1, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	recxs[0].rx_idx = 0;		/* full stripe */
+	recxs[0].rx_nr = 4 * CELL_SIZE;
+
+	recxs[1].rx_idx = 5 * CELL_SIZE; /* partial stripe */
+	recxs[1].rx_nr = 2000;
+
+	recxs[2].rx_idx = 8 * CELL_SIZE;	/* full stripe */
+	recxs[2].rx_nr = 4 * 1048576;
+
+	recxs[3].rx_idx = 12 * 1048576;	/* partial stripe */
+	recxs[3].rx_nr = 5000;
+
+	recxs[4].rx_idx = 16 * 1048576 - 3000;	/* partial stripe */
+	recxs[4].rx_nr = 3000;
+
+	data = (char *)malloc(size);
+	verify_data = (char *)malloc(size);
+	make_buffer(data, 'a', size);
+	make_buffer(verify_data, 'a', size);
+
+	req.iod_type = DAOS_IOD_ARRAY;
+	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, recxs, 5,
+		     data, size, &req);
+
+	rank = get_rank_by_oid_shard(arg, oid, 0);
+	rebuild_pools_ranks(&arg, 1, &rank, 1, false);
+
+	memset(data, 0, size);
+	lookup_recxs("d_key", "a_key", 1, DAOS_TX_NONE, recxs, 5,
+		     data, size, &req);
+	assert_memory_equal(data, verify_data, size);
+
+	ioreq_fini(&req);
+
+	reintegrate_pools_ranks(&arg, 1, &rank, 1);
 }
 
 /** create a new pool/container for each test */
@@ -349,6 +267,8 @@ static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD12: rebuild2p partial update with 2 parity tgt fail",
 	 rebuild2p_partial_fail_2parity, rebuild_small_sub_setup,
 	 test_teardown},
+	{"REBUILD13: rebuild with mixed partial/full stripe",
+	 rebuild_mixed_stripes, rebuild_small_sub_setup, test_teardown},
 };
 
 int

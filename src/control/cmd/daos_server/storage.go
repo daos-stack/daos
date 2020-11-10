@@ -33,6 +33,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	commands "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/server"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
@@ -60,7 +61,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	// wrappers around more easily-testable functions.
 	if cmd.scs == nil {
 		cmd.scs = server.NewStorageControlService(cmd.log, bdev.DefaultProvider(cmd.log),
-			scm.DefaultProvider(cmd.log), server.NewConfiguration().Servers)
+			scm.DefaultProvider(cmd.log), config.DefaultServer().Servers)
 	}
 
 	op := "Preparing"
@@ -106,7 +107,9 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 			cmd.log.Info(scm.MsgRebootRequired)
 		} else if len(resp.Namespaces) > 0 {
 			var bld strings.Builder
-			pretty.PrintScmNamespaces(resp.Namespaces, &bld)
+			if err := pretty.PrintScmNamespaces(resp.Namespaces, &bld); err != nil {
+				return err
+			}
 			cmd.log.Infof("SCM namespaces:\n%s\n", bld.String())
 		} else {
 			cmd.log.Info("no SCM namespaces")
@@ -128,7 +131,7 @@ type storageScanCmd struct {
 
 func (cmd *storageScanCmd) Execute(args []string) error {
 	svc := server.NewStorageControlService(cmd.log, bdev.DefaultProvider(cmd.log),
-		scm.DefaultProvider(cmd.log), server.NewConfiguration().Servers)
+		scm.DefaultProvider(cmd.log), config.DefaultServer().Servers)
 
 	cmd.log.Info("Scanning locally-attached storage...")
 

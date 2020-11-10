@@ -38,6 +38,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -104,7 +105,7 @@ func checkMgmtSvcReplica(self *net.TCPAddr, accessPoints []string) (isReplica, b
 // resolveAccessPoints resolves the strings in accessPoints into addresses in
 // addrs. If a port isn't specified, assume the default port.
 func resolveAccessPoints(accessPoints []string) (addrs []*net.TCPAddr, err error) {
-	defaultPort := NewConfiguration().ControlPort
+	defaultPort := config.DefaultServer().ControlPort
 	for _, ap := range accessPoints {
 		if !common.HasPort(ap) {
 			ap = net.JoinHostPort(ap, strconv.Itoa(defaultPort))
@@ -147,8 +148,8 @@ type mgmtSvc struct {
 	harness          *IOServerHarness
 	membership       *system.Membership // if MS leader, system membership list
 	sysdb            *system.Database
-	clientNetworkCfg *ClientNetworkCfg
-	updateReqChan    chan struct{}
+	clientNetworkCfg *config.ClientNetworkCfg
+	joinReqs         joinReqChan
 }
 
 func newMgmtSvc(h *IOServerHarness, m *system.Membership, s *system.Database) *mgmtSvc {
@@ -157,8 +158,8 @@ func newMgmtSvc(h *IOServerHarness, m *system.Membership, s *system.Database) *m
 		harness:          h,
 		membership:       m,
 		sysdb:            s,
-		clientNetworkCfg: &ClientNetworkCfg{},
-		updateReqChan:    make(chan struct{}),
+		clientNetworkCfg: new(config.ClientNetworkCfg),
+		joinReqs:         make(joinReqChan),
 	}
 }
 

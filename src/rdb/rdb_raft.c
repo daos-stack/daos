@@ -58,7 +58,6 @@ static int rdb_raft_destroy_lc(daos_handle_t pool, daos_handle_t mc,
 			       struct rdb_lc_record *record);
 static void *rdb_raft_lookup_result(struct rdb *db, uint64_t index);
 static int rdb_raft_add_node(struct rdb *db, d_rank_t rank);
-static void rdb_raft_unload_replicas(struct rdb *db);
 
 /* Translate a raft error into an rdb error. */
 static inline int
@@ -297,6 +296,7 @@ rdb_raft_load_replicas(struct rdb *db, uint64_t index)
 
 err_replicas:
 	d_rank_list_free(db->d_replicas);
+	db->d_replicas = NULL;
 err:
 	return rc;
 }
@@ -321,7 +321,9 @@ rdb_raft_unload_replicas(struct rdb *db)
 		raft_remove_node(db->d_raft, node);
 		D_FREE(rdb_node);
 	}
+
 	d_rank_list_free(db->d_replicas);
+	db->d_replicas = NULL;
 }
 
 /* Load the LC base. */
@@ -1290,6 +1292,7 @@ rdb_raft_cb_log_pop(raft_server_t *raft, void *arg, raft_entry_t *entry,
 		return rc;
 	}
 	d_rank_list_free(db->d_replicas);
+	db->d_replicas = NULL;
 	rc = rdb_raft_load_replicas(db, db->d_lc_record.dlr_tail - 1);
 	if (rc != 0)
 		return rc;
@@ -2167,7 +2170,7 @@ rdb_raft_load_entry(struct rdb *db, uint64_t index)
 	 * Raft requires that every node affected by a membership change entry
 	 * be present in the node list when that entry gets applied
 	 */
-	if (raft_entry_is_cfg_change(&entry)) {
+	if (raft_entry_is_cfg_change(&entry) && entry.data.buf != NULL) {
 		d_rank_t rank = *(d_rank_t *)entry.data.buf;
 
 		if (raft_get_node(db->d_raft, rank) == NULL) {
@@ -2406,6 +2409,7 @@ rdb_raft_start(struct rdb *db)
 		goto err_raft;
 
 	d_rank_list_free(db->d_replicas);
+	db->d_replicas = NULL;
 	rc = rdb_raft_load_replicas(db, db->d_lc_record.dlr_tail - 1);
 	if (rc != 0 && rc != -DER_NONEXIST)
 		goto err_lc;

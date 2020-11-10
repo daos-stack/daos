@@ -160,6 +160,7 @@ type cliOptions struct {
 	JSONLogs       bool       `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
 	ConfigPath     string     `short:"o" long:"config-path" description:"Client config file path"`
 	Storage        storageCmd `command:"storage" alias:"st" description:"Perform tasks related to storage attached to remote servers"`
+	Config         configCmd  `command:"config" alias:"co" description:"Perform tasks related to configuration of hardware remote servers"`
 	System         SystemCmd  `command:"system" alias:"sy" description:"Perform distributed tasks related to DAOS system"`
 	Network        NetCmd     `command:"network" alias:"n" description:"Perform tasks related to network devices attached to remote servers"`
 	Pool           PoolCmd    `command:"pool" alias:"p" description:"Perform tasks related to DAOS pools"`

@@ -71,7 +71,14 @@ struct dcs_layout {
 	/** targets number */
 	uint32_t	cs_nr;
 	/** even distribution flag */
-	uint32_t	cs_even_dist:1;
+	uint32_t	cs_even_dist:1,
+	/**
+	 * Align flag, used only for single value fetch that parity buffer's
+	 * location possibly not immediately following data buffer (to align
+	 * with cell size to avoid data movement in data recovery). For update
+	 * the data immediately followed by parity (this flag is zero).
+	 */
+			cs_cell_align:1;
 };
 
 struct daos_csummer {

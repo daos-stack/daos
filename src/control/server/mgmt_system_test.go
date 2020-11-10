@@ -42,6 +42,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
 	. "github.com/daos-stack/daos/src/control/system"
@@ -49,7 +50,6 @@ import (
 
 const (
 	// test aliases for member states
-	msJoined     = uint32(MemberStateJoined)
 	msReady      = uint32(MemberStateReady)
 	msWaitFormat = uint32(MemberStateAwaitFormat)
 	msStopped    = uint32(MemberStateStopped)
@@ -129,10 +129,7 @@ func checkUnorderedRankResults(t *testing.T, expResults, gotResults []*mgmtpb.Ra
 	t.Helper()
 
 	isMsgField := func(path cmp.Path) bool {
-		if path.Last().String() == ".Msg" {
-			return true
-		}
-		return false
+		return path.Last().String() == ".Msg"
 	}
 	opts := append(common.DefaultCmpOpts(),
 		cmp.FilterPath(isMsgField, cmp.Ignore()))
@@ -459,10 +456,7 @@ func TestServer_MgmtSvc_StopRanks(t *testing.T) {
 			// RankResult.Msg generation is tested in
 			// TestServer_MgmtSvc_DrespToRankResult unit tests
 			isMsgField := func(path cmp.Path) bool {
-				if path.Last().String() == ".Msg" {
-					return true
-				}
-				return false
+				return path.Last().String() == ".Msg"
 			}
 			opts := append(common.DefaultCmpOpts(),
 				cmp.FilterPath(isMsgField, cmp.Ignore()))
@@ -804,10 +798,7 @@ func TestServer_MgmtSvc_ResetFormatRanks(t *testing.T) {
 			// RankResult.Msg generation is tested in
 			// TestServer_MgmtSvc_DrespToRankResult unit tests
 			isMsgField := func(path cmp.Path) bool {
-				if path.Last().String() == ".Msg" {
-					return true
-				}
-				return false
+				return path.Last().String() == ".Msg"
 			}
 			opts := append(common.DefaultCmpOpts(),
 				cmp.FilterPath(isMsgField, cmp.Ignore()))
@@ -915,7 +906,10 @@ func TestServer_MgmtSvc_StartRanks(t *testing.T) {
 
 					// set instance runner started and ready
 					ch := make(chan error, 1)
-					s.runner.Start(context.TODO(), ch)
+					if err := s.runner.Start(context.TODO(), ch); err != nil {
+						t.Logf("failed to start runner: %s", err)
+						return
+					}
 					<-ch
 					s.ready.SetTrue()
 				}(srv, tc.startFails)
@@ -937,10 +931,7 @@ func TestServer_MgmtSvc_StartRanks(t *testing.T) {
 			// RankResult.Msg generation is tested in
 			// TestServer_MgmtSvc_DrespToRankResult unit tests
 			isMsgField := func(path cmp.Path) bool {
-				if path.Last().String() == ".Msg" {
-					return true
-				}
-				return false
+				return path.Last().String() == ".Msg"
 			}
 			opts := append(common.DefaultCmpOpts(),
 				cmp.FilterPath(isMsgField, cmp.Ignore()))
@@ -1007,17 +998,17 @@ func TestServer_MgmtSvc_getPeerListenAddr(t *testing.T) {
 func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mgmtSvc          *mgmtSvc
-		clientNetworkCfg *ClientNetworkCfg
+		clientNetworkCfg *config.ClientNetworkCfg
 		req              *mgmtpb.GetAttachInfoReq
 		expResp          *mgmtpb.GetAttachInfoResp
 	}{
 		"Server uses verbs + Infiniband": {
-			clientNetworkCfg: &ClientNetworkCfg{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: netdetect.Infiniband},
+			clientNetworkCfg: &config.ClientNetworkCfg{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: netdetect.Infiniband},
 			req:              &mgmtpb.GetAttachInfoReq{},
 			expResp:          &mgmtpb.GetAttachInfoResp{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: netdetect.Infiniband},
 		},
 		"Server uses sockets + Ethernet": {
-			clientNetworkCfg: &ClientNetworkCfg{Provider: "ofi+sockets", CrtCtxShareAddr: 0, CrtTimeout: 5, NetDevClass: netdetect.Ether},
+			clientNetworkCfg: &config.ClientNetworkCfg{Provider: "ofi+sockets", CrtCtxShareAddr: 0, CrtTimeout: 5, NetDevClass: netdetect.Ether},
 			req:              &mgmtpb.GetAttachInfoReq{},
 			expResp:          &mgmtpb.GetAttachInfoResp{Provider: "ofi+sockets", CrtCtxShareAddr: 0, CrtTimeout: 5, NetDevClass: netdetect.Ether},
 		},

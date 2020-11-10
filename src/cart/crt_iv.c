@@ -2062,7 +2062,8 @@ handle_ivsync_response(const struct crt_cb_info *cb_info)
 	struct iv_sync_cb_info	*iv_sync = cb_info->cci_arg;
 	struct crt_iv_ops	*iv_ops;
 
-	crt_bulk_free(iv_sync->isc_bulk_hdl);
+	if (iv_sync->isc_bulk_hdl != CRT_BULK_NULL)
+		crt_bulk_free(iv_sync->isc_bulk_hdl);
 
 	/* do_callback is set based on sync value specified */
 	if (iv_sync->isc_do_callback) {
@@ -2738,7 +2739,7 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 					&cb_info->buc_iv_value,
 					cb_info->buc_user_priv);
 		output->rc = rc;
-		rc = crt_reply_send(info->bci_bulk_desc->bd_rpc);
+		crt_reply_send(info->bci_bulk_desc->bd_rpc);
 
 		RPC_PUB_DECREF(info->bci_bulk_desc->bd_rpc);
 		IVNS_DECREF(update_cb_info->uci_ivns_internal);
