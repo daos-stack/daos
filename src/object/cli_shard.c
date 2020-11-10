@@ -263,6 +263,8 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		}
 
 		singv_lo = (singv_los == NULL) ? NULL : &singv_los[i];
+		if (singv_lo != NULL)
+			singv_lo->cs_cell_align = 1;
 		rc = daos_csummer_verify_iod(csummer_copy, &shard_iod,
 					     &shard_sgl, iod_csum, singv_lo,
 					     shard_idx, map);
@@ -362,7 +364,8 @@ obj_ec_iom_merge(struct obj_reasb_req *reasb_req, uint32_t tgt_idx,
 	/* merge iom_recx_hi */
 	hi = src->iom_recx_hi;
 	end = DAOS_RECX_END(hi);
-	hi.rx_idx = max(hi.rx_idx, rounddown(end - 1, cell_rec_nr));
+	if (end > 0)
+		hi.rx_idx = max(hi.rx_idx, rounddown(end - 1, cell_rec_nr));
 	hi.rx_nr = end - hi.rx_idx;
 	hi.rx_idx = obj_ec_idx_vos2daos(hi.rx_idx, stripe_rec_nr,
 					cell_rec_nr, tgt_idx);
