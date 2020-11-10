@@ -322,6 +322,8 @@ struct bio_dev_info {
 	uint32_t	 bdi_flags;	/* defined in control.h */
 	uint32_t	 bdi_tgt_cnt;
 	int		*bdi_tgts;
+	char		*bdi_traddr;
+	uint32_t	 bdi_dev_type;	/* reserved */
 };
 
 static inline void
@@ -329,6 +331,8 @@ bio_free_dev_info(struct bio_dev_info *dev_info)
 {
 	if (dev_info->bdi_tgts != NULL)
 		D_FREE(dev_info->bdi_tgts);
+	if (dev_info->bdi_traddr != NULL)
+		D_FREE(dev_info->bdi_traddr);
 	D_FREE(dev_info);
 }
 

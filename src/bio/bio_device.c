@@ -458,11 +458,86 @@ out:
 	return rc;
 }
 
+static int
+json_write_cb(void *cb_ctx, const void *data, size_t size)
+{
+	struct bio_dev_info	*b_info = cb_ctx;
+	char			*prefix = "traddr\": \"";
+	char			*traddr, *end;
+
+	D_ASSERT(b_info != NULL);
+	/* traddr is already generated */
+	if (b_info->bdi_traddr != NULL)
+		return 0;
+
+	if (size <= strlen(prefix))
+		return 0;
+
+	traddr = strstr(data, prefix);
+	if (traddr) {
+		traddr += strlen(prefix);
+		end = strchr(traddr, '"');
+		if (end == NULL)
+			return 0;
+
+		D_STRNDUP(b_info->bdi_traddr, traddr, end - traddr);
+		if (b_info->bdi_traddr == NULL) {
+			D_ERROR("Failed to alloc traddr %s\n", traddr);
+			return -DER_NOMEM;
+		}
+	}
+
+	return 0;
+}
+
+static int
+fill_in_traddr(struct bio_dev_info *b_info, char *dev_name)
+{
+	struct spdk_bdev		*bdev;
+	struct spdk_json_write_ctx	*json;
+	int				 rc;
+
+	D_ASSERT(dev_name != NULL);
+	D_ASSERT(b_info != NULL);
+	D_ASSERT(b_info->bdi_traddr == NULL);
+
+	bdev = spdk_bdev_get_by_name(dev_name);
+	if (bdev == NULL) {
+		D_ERROR("Failed to get SPDK bdev for %s\n", dev_name);
+		return -DER_NONEXIST;
+	}
+
+	if (get_bdev_type(bdev) != BDEV_CLASS_NVME)
+		return 0;
+
+	json = spdk_json_write_begin(json_write_cb, b_info,
+				     SPDK_JSON_WRITE_FLAG_FORMATTED);
+	if (json == NULL) {
+		D_ERROR("Failed to alloc SPDK json context\n");
+		return -DER_NOMEM;
+	}
+
+	rc = spdk_bdev_dump_info_json(bdev, json);
+	if (rc) {
+		D_ERROR("Failed to dump config from SPDK bdev. %d\n", rc);
+		rc = daos_errno2der(-rc);
+	}
+
+	spdk_json_write_end(json);
+
+	if (!rc && b_info->bdi_traddr == NULL) {
+		D_ERROR("Failed to get traddr for %s\n", dev_name);
+		rc = -DER_INVAL;
+	}
+
+	return rc;
+}
+
 static struct bio_dev_info *
-alloc_dev_info(uuid_t dev_id, struct smd_dev_info *s_info)
+alloc_dev_info(uuid_t dev_id, char *dev_name, struct smd_dev_info *s_info)
 {
 	struct bio_dev_info	*info;
-	int			 tgt_cnt = 0, i;
+	int			 tgt_cnt = 0, i, rc;
 
 	D_ALLOC_PTR(info);
 	if (info == NULL)
@@ -475,10 +550,18 @@ alloc_dev_info(uuid_t dev_id, struct smd_dev_info *s_info)
 			info->bdi_flags |= NVME_DEV_FL_FAULTY;
 	}
 
+	if (dev_name != NULL) {
+		rc = fill_in_traddr(info, dev_name);
+		if (rc) {
+			bio_free_dev_info(info);
+			return NULL;
+		}
+	}
+
 	if (tgt_cnt != 0) {
 		D_ALLOC_ARRAY(info->bdi_tgts, tgt_cnt);
 		if (info->bdi_tgts == NULL) {
-			D_FREE(info);
+			bio_free_dev_info(info);
 			return NULL;
 		}
 	}
@@ -509,7 +592,7 @@ int
 bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 {
 	d_list_t		 s_dev_list;
-	struct bio_dev_info	*b_info;
+	struct bio_dev_info	*b_info, *b_tmp;
 	struct smd_dev_info	*s_info, *s_tmp;
 	struct bio_bdev		*d_bdev;
 	int			 rc;
@@ -531,7 +614,8 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
 		s_info = find_smd_dev(d_bdev->bb_uuid, &s_dev_list);
 
-		b_info = alloc_dev_info(d_bdev->bb_uuid, s_info);
+		b_info = alloc_dev_info(d_bdev->bb_uuid, d_bdev->bb_name,
+					s_info);
 		if (b_info == NULL) {
 			D_ERROR("Failed to allocate device info\n");
 			rc = -DER_NOMEM;
@@ -560,7 +644,7 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 		D_ERROR("Fond unexpected device "DF_UUID" in SMD\n",
 			DP_UUID(s_info->sdi_id));
 
-		b_info = alloc_dev_info(s_info->sdi_id, s_info);
+		b_info = alloc_dev_info(s_info->sdi_id, NULL, s_info);
 		if (b_info == NULL) {
 			D_ERROR("Failed to allocate device info\n");
 			rc = -DER_NOMEM;
@@ -573,6 +657,14 @@ out:
 	d_list_for_each_entry_safe(s_info, s_tmp, &s_dev_list, sdi_link) {
 		d_list_del_init(&s_info->sdi_link);
 		smd_free_dev_info(s_info);
+	}
+
+	if (rc != 0) {
+		d_list_for_each_entry_safe(b_info, b_tmp, dev_list, bdi_link) {
+			d_list_del_init(&b_info->bdi_link);
+			bio_free_dev_info(b_info);
+		}
+		*dev_cnt = 0;
 	}
 
 	return rc;
