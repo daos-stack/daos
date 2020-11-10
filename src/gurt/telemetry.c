@@ -1784,7 +1784,7 @@ d_tm_shmalloc(int length)
 bool d_tm_validate_shmem_ptr(uint64_t *cshmemRoot, void *ptr)
 {
 	if (((uint64_t)ptr < (uint64_t)cshmemRoot) ||
-	   ((uint64_t)ptr >= (uint64_t)cshmemRoot + D_TM_SHARED_MEMORY_SIZE)) {
+	    ((uint64_t)ptr >= (uint64_t)cshmemRoot + D_TM_SHARED_MEMORY_SIZE)) {
 		D_DEBUG(DB_TRACE,
 			"shmem ptr 0x%"PRIx64" was outside the shmem range "
 			"0x%"PRIx64" to 0x%"PRIx64, (uint64_t)ptr,
