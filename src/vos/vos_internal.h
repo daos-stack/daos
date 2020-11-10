@@ -278,6 +278,7 @@ do {						\
 #define DAE_EPOCH(dae)		((dae)->dae_base.dae_epoch)
 #define DAE_LID(dae)		((dae)->dae_base.dae_lid)
 #define DAE_FLAGS(dae)		((dae)->dae_base.dae_flags)
+#define DAE_MBS_FLAGS(dae)	((dae)->dae_base.dae_mbs_flags)
 #define DAE_REC_INLINE(dae)	((dae)->dae_base.dae_rec_inline)
 #define DAE_REC_CNT(dae)	((dae)->dae_base.dae_rec_cnt)
 #define DAE_VER(dae)		((dae)->dae_base.dae_ver)
