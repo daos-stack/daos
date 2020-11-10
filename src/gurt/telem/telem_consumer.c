@@ -40,12 +40,11 @@
 int
 main(int argc, char **argv)
 {
-	int	rc;
-	int 	simulatedRank = 0;
+	int rc;
+	int simulatedRank = 0;
 	uint64_t *shmemRoot = NULL;
 	uint64_t val;
 	struct d_tm_node_t *root = NULL;
-	//struct d_tm_node_t *node = NULL;
 	struct d_tm_nodeList_t *nodelist = NULL;
 	struct d_tm_nodeList_t *head = NULL;
 	char *shortDesc;
@@ -78,7 +77,7 @@ main(int argc, char **argv)
 
 	sprintf(dirname, "src/gurt/telem/telem_producer.c/main");
 
-	while(1) {
+	while (1) {
 		d_tm_print_my_children(shmemRoot, root, 0);
 		printf("----------------------------------------\n");
 
@@ -105,14 +104,14 @@ main(int argc, char **argv)
 		printf("There are %"PRIu64" metrics in the tree\n",
 		       d_tm_count_metrics(shmemRoot, root));
 
-		while(nodelist) {
+		while (nodelist) {
 			switch (nodelist->node->d_tm_type) {
 			case D_TM_DIRECTORY:
 				name = d_tm_convert_char_ptr(shmemRoot,
 							  nodelist->node->name);
 				printf("\tDIRECTORY: %s has %"PRIu64
 				       " metrics underneath it\n",
-				       name?name:"Unavailable",
+				       name ? name : "Unavailable",
 				       d_tm_count_metrics(shmemRoot,
 							  nodelist->node));
 				break;
@@ -122,18 +121,17 @@ main(int argc, char **argv)
 				if (rc == D_TM_SUCCESS) {
 					name = d_tm_convert_char_ptr(shmemRoot,
 							  nodelist->node->name);
-						d_tm_get_metadata(&shortDesc,
-								  &longDesc,
-								  shmemRoot,
+					d_tm_get_metadata(&shortDesc,
+							  &longDesc,
+							  shmemRoot,
 							  nodelist->node, NULL);
 					printf("\tCOUNTER: %s %" PRIu64
 					       " With metadata: %s and %s\n",
-					       name?name:"Unavailable", val,
+					       name ? name : "Unavailable", val,
 					       shortDesc, longDesc);
 					free(shortDesc);
 					free(longDesc);
-				}
-				else
+				} else
 					printf("Error on counter read: %d\n",
 					       rc);
 				break;
@@ -151,11 +149,10 @@ main(int argc, char **argv)
 					name = d_tm_convert_char_ptr(shmemRoot,
 							  nodelist->node->name);
 					printf("\tTIMESTAMP %s: %s\n",
-					       name?name:"Unavailable", tmp);
-				} else {
+					       name ? name: "Unavailable", tmp);
+				} else
 					printf("Error on timestamp read: %d\n",
 					       rc);
-				}
 				break;
 			case D_TM_HIGH_RES_TIMER:
 				rc = d_tm_get_highres_timer(&tms, shmemRoot,
@@ -165,7 +162,7 @@ main(int argc, char **argv)
 					name = d_tm_convert_char_ptr(shmemRoot,
 							  nodelist->node->name);
 					printf("\tHIGH RES TIMER %s: %lds, "
-					       "%ldns\n", name?name:
+					       "%ldns\n", name ? name :
 					       "Unavailable", tms.tv_sec,
 					       tms.tv_nsec);
 				} else
@@ -179,9 +176,9 @@ main(int argc, char **argv)
 					name = d_tm_convert_char_ptr(shmemRoot,
 							  nodelist->node->name);
 					printf("\tD_TM_CLOCK_REALTIME DURATION"
-					       " %s: %.9fs\n", name?name:
+					       " %s: %.9fs\n", name ? name :
 					       "Unavailable", tms.tv_sec +
-					       tms.tv_nsec/1e9);
+					       tms.tv_nsec / 1e9);
 				} else
 					printf("Error on duration read: %d\n",
 					       rc);
@@ -194,8 +191,8 @@ main(int argc, char **argv)
 							  nodelist->node->name);
 					printf("\tD_TM_CLOCK_PROCESS_CPUTIME "
 					       "DURATION %s: %.9fs\n",
-					       name?name:"Unavailable",
-					       tms.tv_sec + tms.tv_nsec/1e9);
+					       name ? name : "Unavailable",
+					       tms.tv_sec + tms.tv_nsec / 1e9);
 				} else
 					printf("Error on duration read: %d\n",
 					       rc);
@@ -208,8 +205,8 @@ main(int argc, char **argv)
 							  nodelist->node->name);
 					printf("\tD_TM_CLOCK_THREAD_CPUTIME "
 					       "DURATION %s: %.9fs\n",
-					       name?name:"Unavailable",
-					       tms.tv_sec + tms.tv_nsec/1e9);
+					       name ? name : "Unavailable",
+					       tms.tv_sec + tms.tv_nsec / 1e9);
 				} else
 					printf("Error on duration read: %d\n",
 					       rc);
@@ -221,9 +218,9 @@ main(int argc, char **argv)
 					name = d_tm_convert_char_ptr(shmemRoot,
 							  nodelist->node->name);
 					printf("\tDEFAULT REALTIME DURATION %s:"
-					       " %.9fs\n", name?name:
+					       " %.9fs\n", name ? name :
 					       "Unavailable", tms.tv_sec +
-					       tms.tv_nsec/1e9);
+					       tms.tv_nsec / 1e9);
 				} else
 					printf("Error on duration read: %d\n",
 					       rc);
@@ -235,15 +232,16 @@ main(int argc, char **argv)
 					name = d_tm_convert_char_ptr(shmemRoot,
 							  nodelist->node->name);
 					printf("\tGAUGE: %s %" PRIu64 "\n",
-					       name?name:"Unavailable", val);
+					       name ? name :
+					       "Unavailable", val);
 				} else
 					printf("Error on gauge read: %d\n", rc);
 				break;
 			default:
 				name = d_tm_convert_char_ptr(shmemRoot,
 							  nodelist->node->name);
-				printf("\tUNKNOWN!: %s Type: %d\n", name?name:
-				       "Unavailable",
+				printf("\tUNKNOWN!: %s Type: %d\n",
+				       name ? name : "Unavailable",
 				       nodelist->node->d_tm_type);
 				break;
 			}

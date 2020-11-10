@@ -25,6 +25,7 @@
  */
 
 #include <stdio.h>
+#include <time.h>
 #include "gurt/common.h"
 #include "gurt/telemetry.h"
 
@@ -33,12 +34,12 @@
  */
 void test_function1(int count)
 {
-	static struct d_tm_node_t	*loop = NULL;
-	int	rc;
-	int 	i;
+	static struct d_tm_node_t *loop;
+	int rc;
+	int i;
 
 	for (i = 0; i < count-1; i++) {
-		rc = d_tm_increment_counter(&loop, __FILE__, __FUNCTION__,
+		rc = d_tm_increment_counter(&loop, __FILE__, __func__,
 					    "loop counter", NULL);
 		if (rc != 0) {
 			return;
@@ -60,20 +61,20 @@ void test_function1(int count)
  * A sample function that creates and records a timestamp when this function is
  * called.
  */
-void test_function2()
+void test_function2(void)
 {
-	static struct d_tm_node_t	*ts = NULL;
-	d_tm_record_timestamp(&ts, __FILE__, __FUNCTION__, "last executed",
-			      NULL);
+	static struct d_tm_node_t *ts;
+
+	d_tm_record_timestamp(&ts, __FILE__, __func__, "last executed", NULL);
 }
 
 /*
  * A sample function that shows how a gauge is incremented, say when opening
  * a handle.
  */
-void test_open_handle()
+void test_open_handle(void)
 {
-	static struct d_tm_node_t *numOpenHandles = NULL;
+	static struct d_tm_node_t *numOpenHandles;
 
 	/*
 	 * Create / use a gauge at a known location so that it can be used by
@@ -89,9 +90,10 @@ void test_open_handle()
  * A sample function that shows how a gauge is decremented, say when closing
  * a handle.  It uses the same gauge as the one referenced in test_open_handle()
  */
-void test_close_handle()
+void test_close_handle(void)
 {
-	static struct d_tm_node_t *numOpenHandles = NULL;
+	static struct d_tm_node_t *numOpenHandles;
+
 	/*
 	 * The full name of this gauge matches the name in test_open_handle() so
 	 * that increments in test_open_handle() are changing the same metric
@@ -107,41 +109,42 @@ void test_close_handle()
  * can then be interpreted depending on the need.  A duration type metric
  * is a simplified version of this metric that does the interval calculation.
  */
-void highres_timer()
+void highres_timer(void)
 {
-	static struct d_tm_node_t	*t1 = NULL;
-	static struct d_tm_node_t	*t2 = NULL;
-	static struct d_tm_node_t	*t3 = NULL;
-	static struct d_tm_node_t	*t4 = NULL;
-	volatile int	i;
+	static struct d_tm_node_t *t1;
+	static struct d_tm_node_t *t2;
+	static struct d_tm_node_t *t3;
+	static struct d_tm_node_t *t4;
+	struct timespec ts;
 
-	d_tm_record_high_res_timer(&t1, __FILE__, __FUNCTION__, "timer 1",
-				   NULL);
+	d_tm_record_high_res_timer(&t1, __FILE__, __func__, "timer 1", NULL);
 
 	/*
 	 * Do some stuff
 	 */
 	sleep(1);
 
-	d_tm_record_high_res_timer(&t2, __FILE__, __FUNCTION__, "timer 2",
-				   NULL);
+	d_tm_record_high_res_timer(&t2, __FILE__, __func__, "timer 2", NULL);
 
 	/*
 	 * Do some stuff
 	 */
-	for (i = 0; i < 50000; i++);
+	ts.tv_sec = 0;
+	ts.tv_nsec = 50000000;
+	nanosleep(&ts, NULL);
 
-	d_tm_record_high_res_timer(&t3, __FILE__, __FUNCTION__, "timer 3",
-				   NULL);
+	d_tm_record_high_res_timer(&t3, __FILE__, __func__, "timer 3", NULL);
 
 
 	/*
-	 * Do some stuff
+	 * Do some stuff (10x longer)
 	 */
-	for (i = 0; i < 500000; i++);
+	ts.tv_sec = 0;
+	ts.tv_nsec = 500000000;
+	nanosleep(&ts, NULL);
 
-	d_tm_record_high_res_timer(&t4, __FILE__, __FUNCTION__, "timer 4",
-				   NULL);
+
+	d_tm_record_high_res_timer(&t4, __FILE__, __func__, "timer 4", NULL);
 
 	/*
 	 * How long did the sleep(1) take?  That's timer 2 - timer 1
@@ -158,13 +161,13 @@ void highres_timer()
 int
 main(int argc, char **argv)
 {
-	static struct d_tm_node_t	*entry = NULL;
-	static struct d_tm_node_t	*loop = NULL;
-	static struct d_tm_node_t	*timer1 = NULL;
-	static struct d_tm_node_t	*timer2 = NULL;
-	int	rc;
-	int 	simulatedRank = 0;
-	int 	i;
+	static struct d_tm_node_t *entry;
+	static struct d_tm_node_t *loop;
+	static struct d_tm_node_t *timer1;
+	static struct d_tm_node_t *timer2;
+	int rc;
+	int simulatedRank = 0;
+	int i;
 
 	if (argc < 2) {
 		printf("Specify an integer that identifies this producer's "
@@ -195,7 +198,7 @@ main(int argc, char **argv)
 	 * it.  The counter is created, and incremented by one.  It now has the
 	 * value 1.
 	 */
-	rc = d_tm_increment_counter(&entry, __FILE__, __FUNCTION__,
+	rc = d_tm_increment_counter(&entry, __FILE__, __func__,
 				    "sample counter", NULL);
 	if (rc != 0) {
 		D_GOTO(failure, rc);
@@ -208,13 +211,12 @@ main(int argc, char **argv)
 	 * for faster lookup.
 	 */
 	for (i = 0; i < 1000; i++) {
-		rc = d_tm_increment_counter(&loop, __FILE__, __FUNCTION__,
+		rc = d_tm_increment_counter(&loop, __FILE__, __func__,
 					    "loop counter", NULL);
 		if (rc != 0) {
 			D_GOTO(failure, rc);
 		}
 	}
-
 
 	/*
 	 * How long does it take to execute test_function()?
@@ -228,7 +230,7 @@ main(int argc, char **argv)
 	 * For the first timer, let's use the realtime clock
 	 */
 	rc = d_tm_mark_duration_start(&timer1, D_TM_CLOCK_REALTIME, __FILE__,
-				      __FUNCTION__,
+				      __func__,
 				      "10000 iterations - REALTIME",
 				      NULL);
 	test_function1(10000);
@@ -239,7 +241,7 @@ main(int argc, char **argv)
 	 * For the second timer, let's use the process clock
 	 */
 	rc = d_tm_mark_duration_start(&timer2, D_TM_CLOCK_PROCESS_CPUTIME,
-				      __FILE__, __FUNCTION__,
+				      __FILE__, __func__,
 				      "10000 iterations - PROCESS_CPUTIME",
 				      NULL);
 	test_function1(10000);
