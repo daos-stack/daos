@@ -50,88 +50,94 @@ enum d_tm_metric_types {
 	D_TM_CLOCK_THREAD_CPUTIME = 0x100
 };
 
-typedef struct d_tm_metric {
+struct d_tm_metric_t {
 	union data {
 		uint64_t value;
 		struct timespec tms[2];
 	} data;
 	char *shortDesc;
 	char *longDesc;
-} d_tm_metric_t;
+};
 
-typedef struct node {
-	struct node *child;
-	struct node *sibling;
+struct d_tm_node_t {
+	struct d_tm_node_t *child;
+	struct d_tm_node_t *sibling;
 	char *name;
 	int d_tm_type;
 	pthread_mutex_t lock;
-	d_tm_metric_t *metric;
-} d_tm_node_t;
+	struct d_tm_metric_t *metric;
+};
 
-typedef struct nodeList {
-	struct node *node;
-	struct nodeList *next;
-} d_tm_nodeList_t;
+struct d_tm_nodeList_t {
+	struct d_tm_node_t *node;
+	struct d_tm_nodeList_t *next;
+};
 
 int d_tm_init(int rank, uint64_t memSize);
 
-int d_tm_add_metric(d_tm_node_t **node, char *metric, int metricType,
+int d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metricType,
 		    char *shortDesc, char *longDesc);
 
-d_tm_node_t *d_tm_get_root(uint64_t *shmemRoot);
-void d_tm_print_my_children(uint64_t *cshmemRoot, d_tm_node_t *node, int level);
+struct d_tm_node_t *d_tm_get_root(uint64_t *shmemRoot);
+void d_tm_print_my_children(uint64_t *cshmemRoot, struct d_tm_node_t *node,
+			    int level);
 
 /* Developer facing server API to write data */
-int d_tm_increment_counter(d_tm_node_t **metric, char *item, ...);
-int d_tm_record_timestamp(d_tm_node_t **metric, char *item, ...);
-int d_tm_record_high_res_timer(d_tm_node_t **metric, char *item, ...);
-int d_tm_mark_duration_start(d_tm_node_t **metric, int clk_id, char *item, ...);
-int d_tm_mark_duration_end(d_tm_node_t **metric, char *item, ...);
-int d_tm_set_gauge(d_tm_node_t **metric, uint64_t value, char *item, ...);
-int d_tm_increment_gauge(d_tm_node_t **metric, uint64_t value, char *item, ...);
-int d_tm_decrement_gauge(d_tm_node_t **metric, uint64_t value, char *item, ...);
+int d_tm_increment_counter(struct d_tm_node_t **metric, char *item, ...);
+int d_tm_record_timestamp(struct d_tm_node_t **metric, char *item, ...);
+int d_tm_record_high_res_timer(struct d_tm_node_t **metric, char *item, ...);
+int d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
+			     char *item, ...);
+int d_tm_mark_duration_end(struct d_tm_node_t **metric, char *item, ...);
+int d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value,
+		   char *item, ...);
+int d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
+			 char *item, ...);
+int d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
+			 char *item, ...);
 
 /* Other server functions */
-d_tm_nodeList_t *d_tm_add_node(d_tm_node_t *src, d_tm_nodeList_t *nodelist);
+struct d_tm_nodeList_t *d_tm_add_node(struct d_tm_node_t *src,
+				      struct d_tm_nodeList_t *nodelist);
 uint8_t *d_tm_allocate_shared_memory(int rank, size_t mem_size);
 void d_tm_fini(void);
-void d_tm_free_node(uint64_t *cshmemRoot, d_tm_node_t *node);
+void d_tm_free_node(uint64_t *cshmemRoot, struct d_tm_node_t *node);
 void *d_tm_shmalloc(int length);
 int d_tm_shmalloc_offset(int length);
 int d_tm_clock_id(int clk_id);
 
-d_tm_node_t *d_tm_find_child(uint64_t *cshmemRoot, d_tm_node_t *parent,
-			     char *name);
-d_tm_node_t *d_tm_find_metric(uint64_t *cshmemRoot, char *metric);
+struct d_tm_node_t *d_tm_find_child(uint64_t *cshmemRoot,
+				    struct d_tm_node_t *parent, char *name);
+struct d_tm_node_t *d_tm_find_metric(uint64_t *cshmemRoot, char *metric);
 bool d_tm_validate_shmem_ptr(uint64_t *cshmemRoot, void *ptr);
 
 /* Developer facing client API to read data */
-int d_tm_get_counter(uint64_t *val, uint64_t *cshmemRoot, d_tm_node_t *node,
-		     char *metric);
-int d_tm_get_timestamp(time_t *val, uint64_t *cshmemRoot, d_tm_node_t *node,
-		       char *metric);
+int d_tm_get_counter(uint64_t *val, uint64_t *cshmemRoot,
+		     struct d_tm_node_t *node, char *metric);
+int d_tm_get_timestamp(time_t *val, uint64_t *cshmemRoot,
+		       struct d_tm_node_t *node, char *metric);
 int d_tm_get_highres_timer(struct timespec *tms, uint64_t *cshmemRoot,
-			   d_tm_node_t *node, char *metric);
+			   struct d_tm_node_t *node, char *metric);
 int d_tm_get_duration(struct timespec *tms, uint64_t *cshmemRoot,
-		      d_tm_node_t *node, char *metric);
-int d_tm_get_gauge(uint64_t *val, uint64_t *cshmemRoot, d_tm_node_t *node,
-		   char *metric);
+		      struct d_tm_node_t *node, char *metric);
+int d_tm_get_gauge(uint64_t *val, uint64_t *cshmemRoot,
+		   struct d_tm_node_t *node, char *metric);
 
 int d_tm_get_metadata(char **shortDesc, char **longDesc, uint64_t *cshmemRoot,
-		      d_tm_node_t *node, char *metric);
+		      struct d_tm_node_t *node, char *metric);
 
 /* Developer facing client API to discover topology and manage results */
-int d_tm_list(d_tm_nodeList_t **nodelist, uint64_t *cshmemRoot, char *path,
-	      int d_tm_type);
+int d_tm_list(struct d_tm_nodeList_t **nodelist, uint64_t *cshmemRoot,
+	      char *path, int d_tm_type);
 uint64_t d_tm_get_num_objects(uint64_t *cshmemRoot, char *path,
 			      int d_tm_type);
-uint64_t d_tm_count_metrics(uint64_t *cshmemRoot, d_tm_node_t *node);
-void d_tm_list_free(d_tm_nodeList_t *nodeList);
+uint64_t d_tm_count_metrics(uint64_t *cshmemRoot, struct d_tm_node_t *node);
+void d_tm_list_free(struct d_tm_nodeList_t *nodeList);
 int d_tm_get_version(void);
 uint8_t *d_tm_get_shared_memory(int rank);
 
-d_tm_node_t *d_tm_convert_node_ptr(uint64_t *cshmemRoot, void *ptr);
-d_tm_metric_t *d_tm_convert_metric_ptr(uint64_t *cshmemRoot, void *ptr);
+struct d_tm_node_t *d_tm_convert_node_ptr(uint64_t *cshmemRoot, void *ptr);
+struct d_tm_metric_t *d_tm_convert_metric_ptr(uint64_t *cshmemRoot, void *ptr);
 char *d_tm_convert_char_ptr(uint64_t *cshmemRoot, void *ptr);
 
 #endif /* __TELEMETRY_H__ */

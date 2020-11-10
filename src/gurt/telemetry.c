@@ -52,7 +52,7 @@
  * These are server side global variables that apply to the entire server
  * side process
  */
-d_tm_node_t *root;
+struct d_tm_node_t *root;
 uint64_t *shmemRoot;
 uint8_t *shmemIdx;
 uint64_t shmemFree;
@@ -61,20 +61,20 @@ pthread_mutex_t addlock;
 /*
  * Returns a pointer to the root node for the given shared memory segment
  */
-d_tm_node_t *
+struct d_tm_node_t *
 d_tm_get_root(uint64_t *shmem)
 {
-	return (d_tm_node_t *)(shmem + 1);
+	return (struct d_tm_node_t *)(shmem + 1);
 }
 
 /*
  * Search for a parent's child with the given name.
  * Return a pointer to the child if found.
  */
-d_tm_node_t *
-d_tm_find_child(uint64_t *cshmemRoot, d_tm_node_t *parent, char *name)
+struct d_tm_node_t *
+d_tm_find_child(uint64_t *cshmemRoot, struct d_tm_node_t *parent, char *name)
 {
-	d_tm_node_t *child = NULL;
+	struct d_tm_node_t *child = NULL;
 	char *clientName;
 
 	if (!parent)
@@ -105,16 +105,18 @@ d_tm_find_child(uint64_t *cshmemRoot, d_tm_node_t *parent, char *name)
  * A child will either be a first child, or a sibling of an existing child.
  */
 int
-d_tm_add_child(d_tm_node_t **newnode, d_tm_node_t *parent, char *name)
+d_tm_add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
+	       char *name)
 {
-	d_tm_node_t *child = parent->child;
-	d_tm_node_t *sibling = parent->child;
+	struct d_tm_node_t *child = parent->child;
+	struct d_tm_node_t *sibling = parent->child;
 	int rc = D_TM_SUCCESS;
 	int buffLen = 0;
 
 	/* If there are no children, add the first child to this parent */
 	if (!child) {
-		*newnode = (d_tm_node_t *)d_tm_shmalloc(sizeof(d_tm_node_t));
+		*newnode = (struct d_tm_node_t *)d_tm_shmalloc(
+						    sizeof(struct d_tm_node_t));
 		if (!*newnode) {
 			rc = -DER_NO_SHMEM;
 			D_GOTO(failure, rc);
@@ -150,7 +152,8 @@ d_tm_add_child(d_tm_node_t **newnode, d_tm_node_t *parent, char *name)
 	}
 
 	/* Add the new node to the sibling list */
-	*newnode = (d_tm_node_t *)d_tm_shmalloc(sizeof(d_tm_node_t));
+	*newnode = (struct d_tm_node_t *)d_tm_shmalloc(
+						    sizeof(struct d_tm_node_t));
 	if (*newnode) {
 		buffLen = strnlen(name, D_TM_MAX_NAME_LEN);
 		if (buffLen == D_TM_MAX_NAME_LEN) {
@@ -225,7 +228,7 @@ d_tm_init(int rank, uint64_t memSize)
 		D_GOTO(failure, rc);
 	}
 
-	root = (d_tm_node_t *)d_tm_shmalloc(sizeof(d_tm_node_t));
+	root = (struct d_tm_node_t *)d_tm_shmalloc(sizeof(struct d_tm_node_t));
 
 	/*
 	 * Just allocated the pool, and this memory is dedicated
@@ -308,7 +311,7 @@ void d_tm_fini(void)
  * Recursively free resources underneath the given node.
  */
 void
-d_tm_free_node(uint64_t *cshmemRoot, d_tm_node_t *node)
+d_tm_free_node(uint64_t *cshmemRoot, struct d_tm_node_t *node)
 {
 	char *name;
 
@@ -323,16 +326,18 @@ d_tm_free_node(uint64_t *cshmemRoot, d_tm_node_t *node)
 	}
 
 	node = node->child;
-	node = (d_tm_node_t *)d_tm_convert_node_ptr(cshmemRoot, node);
+	node = (struct d_tm_node_t *)d_tm_convert_node_ptr(cshmemRoot, node);
 	if (node) {
 		d_tm_free_node(cshmemRoot, node);
 		node = node->sibling;
-		node = (d_tm_node_t *)d_tm_convert_node_ptr(cshmemRoot, node);
+		node = (struct d_tm_node_t *)d_tm_convert_node_ptr(cshmemRoot,
+								   node);
 		while (node) {
 			d_tm_free_node(cshmemRoot, node);
 			node = node->sibling;
-			node = (d_tm_node_t *)d_tm_convert_node_ptr(cshmemRoot,
-								    node);
+			node = (struct d_tm_node_t *)d_tm_convert_node_ptr(
+								     cshmemRoot,
+								     node);
 		}
 	}
 }
@@ -342,7 +347,8 @@ d_tm_free_node(uint64_t *cshmemRoot, d_tm_node_t *node)
  * Used as a convenience function to demonstrate usage for the client
  */
 void
-d_tm_print_my_children(uint64_t *cshmemRoot, d_tm_node_t *node, int level)
+d_tm_print_my_children(uint64_t *cshmemRoot, struct d_tm_node_t *node,
+		       int level)
 {
 	char *convertedNamePtr = NULL;
 	char tmp[D_TM_TIME_BUFF_LEN];
@@ -440,17 +446,19 @@ d_tm_print_my_children(uint64_t *cshmemRoot, d_tm_node_t *node, int level)
 		}
 	}
 	node = node->child;
-	node = (d_tm_node_t *)d_tm_convert_node_ptr(cshmemRoot, node);
+	node = (struct d_tm_node_t *)d_tm_convert_node_ptr(cshmemRoot, node);
 
 	if (node) {
 		d_tm_print_my_children(cshmemRoot, node, level + 1);
 		node = node->sibling;
-		node = (d_tm_node_t *)d_tm_convert_node_ptr(cshmemRoot, node);
+		node = (struct d_tm_node_t *)d_tm_convert_node_ptr(cshmemRoot,
+								   node);
 		while (node) {
 			d_tm_print_my_children(cshmemRoot, node, level + 1);
 			node = node->sibling;
-			node = (d_tm_node_t *)d_tm_convert_node_ptr(cshmemRoot,
-								    node);
+			node = (struct d_tm_node_t *)d_tm_convert_node_ptr(
+								     cshmemRoot,
+								     node);
 		}
 	}
 }
@@ -459,7 +467,7 @@ d_tm_print_my_children(uint64_t *cshmemRoot, d_tm_node_t *node, int level)
  * Recursively counts number of metrics underneath the given node.
  */
 uint64_t
-d_tm_count_metrics(uint64_t *cshmemRoot, d_tm_node_t *node)
+d_tm_count_metrics(uint64_t *cshmemRoot, struct d_tm_node_t *node)
 {
 	uint64_t count = 0;
 
@@ -470,16 +478,18 @@ d_tm_count_metrics(uint64_t *cshmemRoot, d_tm_node_t *node)
 		count++;
 
 	node = node->child;
-	node = (d_tm_node_t *)d_tm_convert_node_ptr(cshmemRoot, node);
+	node = (struct d_tm_node_t *)d_tm_convert_node_ptr(cshmemRoot, node);
 	if (node) {
 		count += d_tm_count_metrics(cshmemRoot, node);
 		node = node->sibling;
-		node = (d_tm_node_t *)d_tm_convert_node_ptr(cshmemRoot, node);
+		node = (struct d_tm_node_t *)d_tm_convert_node_ptr(cshmemRoot,
+								   node);
 		while (node) {
 			count += d_tm_count_metrics(cshmemRoot, node);
 			node = node->sibling;
-			node = (d_tm_node_t *)d_tm_convert_node_ptr(cshmemRoot,
-								    node);
+			node = (struct d_tm_node_t *)d_tm_convert_node_ptr(
+								     cshmemRoot,
+								     node);
 		}
 	}
 	return count;
@@ -497,9 +507,9 @@ d_tm_count_metrics(uint64_t *cshmemRoot, d_tm_node_t *node)
  * faster access.
  */
 int
-d_tm_increment_counter(d_tm_node_t **metric, char *item, ...)
+d_tm_increment_counter(struct d_tm_node_t **metric, char *item, ...)
 {
-	d_tm_node_t *node = NULL;
+	struct d_tm_node_t *node = NULL;
 	char path[D_TM_MAX_NAME_LEN] = {};
 	char *str;
 	int rc = D_TM_SUCCESS;
@@ -571,9 +581,9 @@ d_tm_increment_counter(d_tm_node_t **metric, char *item, ...)
  * faster access.
  */
 int
-d_tm_record_timestamp(d_tm_node_t **metric, char *item, ...)
+d_tm_record_timestamp(struct d_tm_node_t **metric, char *item, ...)
 {
-	d_tm_node_t *node = NULL;
+	struct d_tm_node_t *node = NULL;
 	char path[D_TM_MAX_NAME_LEN] = {};
 	char *str;
 	int rc = D_TM_SUCCESS;
@@ -644,9 +654,9 @@ d_tm_record_timestamp(d_tm_node_t **metric, char *item, ...)
  * faster access.
  */
 int
-d_tm_record_high_res_timer(d_tm_node_t **metric, char *item, ...)
+d_tm_record_high_res_timer(struct d_tm_node_t **metric, char *item, ...)
 {
-	d_tm_node_t *node = NULL;
+	struct d_tm_node_t *node = NULL;
 	char path[D_TM_MAX_NAME_LEN] = {};
 	char *str;
 	int rc = D_TM_SUCCESS;
@@ -734,9 +744,10 @@ d_tm_clock_id(int clk_id) {
  * faster access.
  */
 int
-d_tm_mark_duration_start(d_tm_node_t **metric, int clk_id, char *item, ...)
+d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
+			 char *item, ...)
 {
-	d_tm_node_t *node = NULL;
+	struct d_tm_node_t *node = NULL;
 	char path[D_TM_MAX_NAME_LEN] = {};
 	char *str;
 	int rc = D_TM_SUCCESS;
@@ -819,10 +830,10 @@ d_tm_mark_duration_start(d_tm_node_t **metric, int clk_id, char *item, ...)
  * does not already exist.
  */
 int
-d_tm_mark_duration_end(d_tm_node_t **metric, char *item, ...)
+d_tm_mark_duration_end(struct d_tm_node_t **metric, char *item, ...)
 {
 	struct timespec end;
-	d_tm_node_t *node = NULL;
+	struct d_tm_node_t *node = NULL;
 	char path[D_TM_MAX_NAME_LEN] = {};
 	char *str;
 	int rc = D_TM_SUCCESS;
@@ -892,9 +903,9 @@ d_tm_mark_duration_end(d_tm_node_t **metric, char *item, ...)
  * faster access.
  */
 int
-d_tm_set_gauge(d_tm_node_t **metric, uint64_t value, char *item, ...)
+d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value, char *item, ...)
 {
-	d_tm_node_t *node = NULL;
+	struct d_tm_node_t *node = NULL;
 	char path[D_TM_MAX_NAME_LEN] = {};
 	char *str;
 	int rc = D_TM_SUCCESS;
@@ -966,9 +977,10 @@ d_tm_set_gauge(d_tm_node_t **metric, uint64_t value, char *item, ...)
  * faster access.
  */
 int
-d_tm_increment_gauge(d_tm_node_t **metric, uint64_t value, char *item, ...)
+d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
+		     char *item, ...)
 {
-	d_tm_node_t *node = NULL;
+	struct d_tm_node_t *node = NULL;
 	char path[D_TM_MAX_NAME_LEN] = {};
 	char *str;
 	int rc = D_TM_SUCCESS;
@@ -1040,9 +1052,10 @@ d_tm_increment_gauge(d_tm_node_t **metric, uint64_t value, char *item, ...)
  * faster access.
  */
 int
-d_tm_decrement_gauge(d_tm_node_t **metric, uint64_t value, char *item, ...)
+d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
+		     char *item, ...)
 {
-	d_tm_node_t *node = NULL;
+	struct d_tm_node_t *node = NULL;
 	char path[D_TM_MAX_NAME_LEN] = {};
 	char *str;
 	int rc = D_TM_SUCCESS;
@@ -1105,14 +1118,14 @@ d_tm_decrement_gauge(d_tm_node_t **metric, uint64_t value, char *item, ...)
 /*
  * Finds the node pointing to the given metric described by path name provided
  */
-d_tm_node_t *
+struct d_tm_node_t *
 d_tm_find_metric(uint64_t *cshmemRoot, char *path)
 {
 	char str[D_TM_MAX_NAME_LEN];
 	char *token;
 	char *rest = str;
-	d_tm_node_t *node = NULL;
-	d_tm_node_t *parentNode = d_tm_get_root(cshmemRoot);
+	struct d_tm_node_t *node = NULL;
+	struct d_tm_node_t *parentNode = d_tm_get_root(cshmemRoot);
 
 	sprintf(str, "%s", path);
 	while ((token = strtok_r(rest, "/", &rest))) {
@@ -1132,14 +1145,14 @@ d_tm_find_metric(uint64_t *cshmemRoot, char *path)
  * critical time.
  */
 int
-d_tm_add_metric(d_tm_node_t **node, char *metric, int metricType,
+d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metricType,
 		char *shortDesc, char *longDesc)
 {
 	char *str = NULL;
 	char *token;
 	char *rest;
 	int buffLen;
-	d_tm_node_t *parentNode;
+	struct d_tm_node_t *parentNode;
 	int rc;
 	pthread_mutexattr_t mattr;
 
@@ -1195,7 +1208,8 @@ d_tm_add_metric(d_tm_node_t **node, char *metric, int metricType,
 	}
 
 	(*node)->d_tm_type = metricType;
-	(*node)->metric = (d_tm_metric_t *)d_tm_shmalloc(sizeof(d_tm_metric_t));
+	(*node)->metric = (struct d_tm_metric_t *)d_tm_shmalloc(
+						  sizeof(struct d_tm_metric_t));
 	if (!(*node)->metric) {
 		rc = -DER_NO_SHMEM;
 		D_GOTO(failure, rc);
@@ -1280,10 +1294,10 @@ failure:
  * proceeds to avoid unlimited blocking.
  */
 int
-d_tm_get_counter(uint64_t *val, uint64_t *cshmemRoot, d_tm_node_t *node,
+d_tm_get_counter(uint64_t *val, uint64_t *cshmemRoot, struct d_tm_node_t *node,
 		 char *metric)
 {
-	d_tm_metric_t *cMetric = NULL;
+	struct d_tm_metric_t *cMetric = NULL;
 	int rc = D_TM_SUCCESS;
 
 	if (!val)
@@ -1319,10 +1333,10 @@ d_tm_get_counter(uint64_t *val, uint64_t *cshmemRoot, d_tm_node_t *node,
  * proceeds to avoid unlimited blocking.
  */
 int
-d_tm_get_timestamp(time_t *val, uint64_t *cshmemRoot, d_tm_node_t *node,
+d_tm_get_timestamp(time_t *val, uint64_t *cshmemRoot, struct d_tm_node_t *node,
 		   char *metric)
 {
-	d_tm_metric_t *cMetric = NULL;
+	struct d_tm_metric_t *cMetric = NULL;
 	int rc = D_TM_SUCCESS;
 
 	if (!val)
@@ -1359,9 +1373,9 @@ d_tm_get_timestamp(time_t *val, uint64_t *cshmemRoot, d_tm_node_t *node,
  */
 int
 d_tm_get_highres_timer(struct timespec *tms, uint64_t *cshmemRoot,
-		       d_tm_node_t *node, char *metric)
+		       struct d_tm_node_t *node, char *metric)
 {
-	d_tm_metric_t *cMetric = NULL;
+	struct d_tm_metric_t *cMetric = NULL;
 	int rc = D_TM_SUCCESS;
 
 	if (!tms)
@@ -1398,10 +1412,10 @@ d_tm_get_highres_timer(struct timespec *tms, uint64_t *cshmemRoot,
  * proceeds to avoid unlimited blocking.
  */
 int
-d_tm_get_duration(struct timespec *tms, uint64_t *cshmemRoot, d_tm_node_t *node,
-		  char *metric)
+d_tm_get_duration(struct timespec *tms, uint64_t *cshmemRoot,
+		  struct d_tm_node_t *node, char *metric)
 {
-	d_tm_metric_t *cMetric = NULL;
+	struct d_tm_metric_t *cMetric = NULL;
 	int rc = D_TM_SUCCESS;
 
 	if (!tms)
@@ -1438,10 +1452,10 @@ d_tm_get_duration(struct timespec *tms, uint64_t *cshmemRoot, d_tm_node_t *node,
  * proceeds to avoid unlimited blocking.
  */
 int
-d_tm_get_gauge(uint64_t *val, uint64_t *cshmemRoot, d_tm_node_t *node,
+d_tm_get_gauge(uint64_t *val, uint64_t *cshmemRoot, struct d_tm_node_t *node,
 	       char *metric)
 {
-	d_tm_metric_t *cMetric = NULL;
+	struct d_tm_metric_t *cMetric = NULL;
 	int rc = D_TM_SUCCESS;
 
 	if (!val)
@@ -1471,9 +1485,9 @@ d_tm_get_gauge(uint64_t *val, uint64_t *cshmemRoot, d_tm_node_t *node,
 }
 
 int d_tm_get_metadata(char **shortDesc, char **longDesc, uint64_t *cshmemRoot,
-		      d_tm_node_t *node, char *metric)
+		      struct d_tm_node_t *node, char *metric)
 {
-	d_tm_metric_t *cMetric = NULL;
+	struct d_tm_metric_t *cMetric = NULL;
 	int rc = D_TM_SUCCESS;
 	char *shortDescStr;
 	char *longDescStr;
@@ -1533,12 +1547,12 @@ d_tm_get_version(void)
  */
 
 int
-d_tm_list(d_tm_nodeList_t **head, uint64_t *cshmemRoot, char *path,
+d_tm_list(struct d_tm_nodeList_t **head, uint64_t *cshmemRoot, char *path,
 	  int d_tm_type)
 {
-	d_tm_node_t *node = NULL;
-	d_tm_node_t *parentNode = NULL;
-	d_tm_nodeList_t *nodelist = NULL;
+	struct d_tm_node_t *node = NULL;
+	struct d_tm_node_t *parentNode = NULL;
+	struct d_tm_nodeList_t *nodelist = NULL;
 	char *str = NULL;
 	char *token;
 	char *rest;
@@ -1611,8 +1625,8 @@ uint64_t
 d_tm_get_num_objects(uint64_t *cshmemRoot, char *path, int d_tm_type)
 {
 	uint64_t count = 0;
-	d_tm_node_t *node = NULL;
-	d_tm_node_t *parentNode = NULL;
+	struct d_tm_node_t *node = NULL;
+	struct d_tm_node_t *parentNode = NULL;
 	char str[D_TM_MAX_NAME_LEN];
 	char *token;
 	char *rest = str;
@@ -1654,9 +1668,9 @@ d_tm_get_num_objects(uint64_t *cshmemRoot, char *path, int d_tm_type)
  * that was allocated by d_tm_list()
  */
 void
-d_tm_list_free(d_tm_nodeList_t *nodeList)
+d_tm_list_free(struct d_tm_nodeList_t *nodeList)
 {
-	d_tm_nodeList_t *head = NULL;
+	struct d_tm_nodeList_t *head = NULL;
 
 	while (nodeList) {
 		head = nodeList->next;
@@ -1668,13 +1682,14 @@ d_tm_list_free(d_tm_nodeList_t *nodeList)
 /*
  * Adds a node to an existing nodeList, or creates it if the list is empty.
  */
-d_tm_nodeList_t *
-d_tm_add_node(d_tm_node_t *src, d_tm_nodeList_t *nodelist)
+struct d_tm_nodeList_t *
+d_tm_add_node(struct d_tm_node_t *src, struct d_tm_nodeList_t *nodelist)
 {
-	d_tm_nodeList_t *list = NULL;
+	struct d_tm_nodeList_t *list = NULL;
 
 	if (!nodelist) {
-		nodelist = (d_tm_nodeList_t *)malloc(sizeof(d_tm_nodeList_t));
+		nodelist = (struct d_tm_nodeList_t *)malloc(
+						sizeof(struct d_tm_nodeList_t));
 		if (nodelist) {
 			nodelist->node = src;
 			nodelist->next = NULL;
@@ -1689,7 +1704,8 @@ d_tm_add_node(d_tm_node_t *src, d_tm_nodeList_t *nodelist)
 	while (list->next)
 		list = list->next;
 
-	list->next = (d_tm_nodeList_t *)malloc(sizeof(d_tm_nodeList_t));
+	list->next = (struct d_tm_nodeList_t *)malloc(
+						sizeof(struct d_tm_nodeList_t));
 	if (list->next) {
 		list = list->next;
 		list->node = src;
@@ -1784,16 +1800,16 @@ bool d_tm_validate_shmem_ptr(uint64_t *cshmemRoot, void *ptr)
  * Convert the virtual address of the pointer in shared memory from a server
  * address to a client side virtual address.
  */
-d_tm_node_t *
+struct d_tm_node_t *
 d_tm_convert_node_ptr(uint64_t *cshmemRoot, void *ptr)
 {
-	d_tm_node_t *temp;
+	struct d_tm_node_t *temp;
 
 	if (!ptr || !cshmemRoot)
 		return NULL;
 
-	temp = (d_tm_node_t *)((uint64_t)cshmemRoot + ((uint64_t)ptr) -
-			       *(uint64_t *)cshmemRoot);
+	temp = (struct d_tm_node_t *)((uint64_t)cshmemRoot + ((uint64_t)ptr) -
+				      *(uint64_t *)cshmemRoot);
 
 	if (d_tm_validate_shmem_ptr(cshmemRoot, temp))
 		return temp;
@@ -1804,16 +1820,16 @@ d_tm_convert_node_ptr(uint64_t *cshmemRoot, void *ptr)
  * Convert the virtual address of the pointer in shared memory from a server
  * address to a client side virtual address.
  */
-d_tm_metric_t *
+struct d_tm_metric_t *
 d_tm_convert_metric_ptr(uint64_t *cshmemRoot, void *ptr)
 {
-	d_tm_metric_t *temp;
+	struct d_tm_metric_t *temp;
 
 	if (!ptr || !cshmemRoot)
 		return NULL;
 
-	temp = (d_tm_metric_t *)((uint64_t)cshmemRoot + ((uint64_t)ptr) -
-				 *(uint64_t *)cshmemRoot);
+	temp = (struct d_tm_metric_t *)((uint64_t)cshmemRoot + ((uint64_t)ptr) -
+					*(uint64_t *)cshmemRoot);
 
 	if (d_tm_validate_shmem_ptr(cshmemRoot, temp))
 		return temp;
