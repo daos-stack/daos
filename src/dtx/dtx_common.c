@@ -253,6 +253,63 @@ dtx_epoch_bound(struct dtx_epoch *epoch)
  */
 #define DTX_SUB_MOD_MAX	(((uint16_t)-1) - 2)
 
+static void
+dtx_shares_init(struct dtx_handle *dth)
+{
+	D_INIT_LIST_HEAD(&dth->dth_share_cmt_list);
+	D_INIT_LIST_HEAD(&dth->dth_share_act_list);
+	D_INIT_LIST_HEAD(&dth->dth_share_tbd_list);
+	dth->dth_share_tbd_count = 0;
+	dth->dth_shares_inited = 1;
+}
+
+static void
+dtx_shares_fini(struct dtx_handle *dth)
+{
+	struct dtx_share_peer	*dsp;
+
+	if (!dth->dth_shares_inited)
+		return;
+
+	while ((dsp = d_list_pop_entry(&dth->dth_share_cmt_list,
+				       struct dtx_share_peer,
+				       dsp_link)) != NULL)
+		D_FREE(dsp);
+
+	while ((dsp = d_list_pop_entry(&dth->dth_share_act_list,
+				       struct dtx_share_peer,
+				       dsp_link)) != NULL)
+		D_FREE(dsp);
+
+	while ((dsp = d_list_pop_entry(&dth->dth_share_tbd_list,
+				       struct dtx_share_peer,
+				       dsp_link)) != NULL)
+		D_FREE(dsp);
+
+	dth->dth_share_tbd_count = 0;
+}
+
+int
+dtx_handle_reinit(struct dtx_handle *dth)
+{
+	dth->dth_modify_shared = 0;
+	dth->dth_active = 0;
+	dth->dth_touched_leader_oid = 0;
+	dth->dth_local_tx_started = 0;
+	dth->dth_local_retry = 0;
+
+	dth->dth_ent = NULL;
+
+	dth->dth_op_seq = 0;
+	dth->dth_oid_cnt = 0;
+	dth->dth_oid_cap = 0;
+	D_FREE(dth->dth_oid_array);
+	dth->dth_dkey_hash = 0;
+	vos_dtx_rsrvd_fini(dth);
+
+	return vos_dtx_rsrvd_init(dth);
+}
+
 /**
  * Init local dth handle.
  */
@@ -268,19 +325,12 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 			"%u > %u\n", sub_modification_cnt, DTX_SUB_MOD_MAX);
 		return -DER_OVERFLOW;
 	}
+	dth->dth_modification_cnt = sub_modification_cnt;
+
+	dtx_shares_init(dth);
 
 	dth->dth_xid = *dti;
 	dth->dth_coh = coh;
-
-	if (!dtx_epoch_chosen(epoch)) {
-		D_ERROR("initializing DTX "DF_DTI" with invalid epoch: value="
-			DF_U64" first="DF_U64" flags=%x\n",
-			DP_DTI(dti), epoch->oe_value, epoch->oe_first,
-			epoch->oe_flags);
-		return -DER_INVAL;
-	}
-	dth->dth_epoch = epoch->oe_value;
-	dth->dth_epoch_bound = dtx_epoch_bound(epoch);
 
 	dth->dth_leader_oid = *leader_oid;
 	dth->dth_ver = pm_ver;
@@ -307,14 +357,28 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 		dth->dth_sync = 0;
 	}
 
-	dth->dth_modification_cnt = sub_modification_cnt;
-
 	dth->dth_op_seq = 0;
 	dth->dth_oid_cnt = 0;
 	dth->dth_oid_cap = 0;
 	dth->dth_oid_array = NULL;
 
 	dth->dth_dkey_hash = 0;
+
+	if (daos_is_zero_dti(dti))
+		return 0;
+
+	if (!dtx_epoch_chosen(epoch)) {
+		D_ERROR("initializing DTX "DF_DTI" with invalid epoch: value="
+			DF_U64" first="DF_U64" flags=%x\n",
+			DP_DTI(dti), epoch->oe_value, epoch->oe_first,
+			epoch->oe_flags);
+		return -DER_INVAL;
+	}
+	dth->dth_epoch = epoch->oe_value;
+	dth->dth_epoch_bound = dtx_epoch_bound(epoch);
+
+	if (dth->dth_modification_cnt == 0)
+		return 0;
 
 	return vos_dtx_rsrvd_init(dth);
 }
@@ -414,7 +478,11 @@ dtx_sub_init(struct dtx_handle *dth, daos_unit_oid_t *oid, uint64_t dkey_hash)
 	D_ASSERT(dth->dth_op_seq < (uint16_t)(-1));
 
 	dth->dth_op_seq++;
-	dth->dth_dkey_hash = dkey_hash;
+	/* Use the dkey_hash for the first modification as the dkey_hash
+	 * for the whole transaction.
+	 */
+	if (dth->dth_op_seq == 1)
+		dth->dth_dkey_hash = dkey_hash;
 
 	rc = daos_unit_oid_compare(dth->dth_leader_oid, *oid);
 	if (rc == 0) {
@@ -504,27 +572,17 @@ dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 
 	memset(dlh, 0, sizeof(*dlh));
 
-	/* Single replica case. */
-	if (tgt_cnt == 0) {
-		if (!daos_is_zero_dti(dti))
-			goto init;
+	if (tgt_cnt > 0) {
+		dlh->dlh_future = ABT_FUTURE_NULL;
+		D_ALLOC_ARRAY(dlh->dlh_subs, tgt_cnt);
+		if (dlh->dlh_subs == NULL)
+			return -DER_NOMEM;
 
-		return 0;
+		for (i = 0; i < tgt_cnt; i++)
+			dlh->dlh_subs[i].dss_tgt = tgts[i];
+		dlh->dlh_sub_cnt = tgt_cnt;
 	}
 
-	dlh->dlh_future = ABT_FUTURE_NULL;
-	D_ALLOC_ARRAY(dlh->dlh_subs, tgt_cnt);
-	if (dlh->dlh_subs == NULL)
-		return -DER_NOMEM;
-
-	for (i = 0; i < tgt_cnt; i++)
-		dlh->dlh_subs[i].dss_tgt = tgts[i];
-	dlh->dlh_sub_cnt = tgt_cnt;
-
-	if (daos_is_zero_dti(dti))
-		return 0;
-
-init:
 	rc = dtx_handle_init(dti, cont->sc_hdl, epoch, sub_modification_cnt,
 			     pm_ver, leader_oid, dti_cos, dti_cos_cnt, mbs,
 			     true, solo, sync, dth);
@@ -576,6 +634,8 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 
 	D_ASSERT(cont != NULL);
 
+	dtx_shares_fini(dth);
+
 	/* NB: even the local request failure, dth_ent == NULL, we
 	 * should still wait for remote object to finish the request.
 	 */
@@ -607,9 +667,9 @@ again:
 	 */
 	if (dth->dth_ver < cont->sc_dtx_resync_ver) {
 		rc = vos_dtx_check(cont->sc_hdl, &dth->dth_xid,
-				   NULL, NULL, false);
+				   NULL, NULL, NULL, false);
 		/* Committed by race, do nothing. */
-		if (rc == DTX_ST_COMMITTED)
+		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE)
 			D_GOTO(abort, result = 0);
 
 		/* Aborted by race, restart it. */
@@ -642,6 +702,7 @@ again:
 	if (rc == 0) {
 		struct dtx_memberships	*mbs;
 		size_t			 size;
+		uint32_t		 flags;
 
 		/* For synchronous DTX, do not add it into CoS cache, otherwise,
 		 * we may have no way to remove it from the cache.
@@ -668,12 +729,16 @@ again:
 
 		/* Use the new created @dte instead of dth->dth_dte that will be
 		 * released after dtx_leader_end().
-		 *
-		 * Only the DTX for single RDG may be added into CoS cache.
 		 */
+
+		if (!(mbs->dm_flags & DMF_SRDG_REP))
+			flags = DCF_EXP_CMT;
+		else if (dth->dth_modify_shared)
+			flags = DCF_SHARED;
+		else
+			flags = 0;
 		rc = dtx_add_cos(cont, dte, &dth->dth_leader_oid,
-				 dth->dth_dkey_hash, dth->dth_epoch,
-				 dth->dth_modify_shared ? DCF_SHARED : 0);
+				 dth->dth_dkey_hash, dth->dth_epoch, flags);
 		dtx_entry_put(dte);
 		if (rc == 0)
 			vos_dtx_mark_committable(dth);
@@ -787,13 +852,6 @@ dtx_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 {
 	int	rc;
 
-	D_ASSERT(dth != NULL);
-
-	if (daos_is_zero_dti(dti)) {
-		daos_dti_gen(&dth->dth_xid, true);
-		return 0;
-	}
-
 	rc = dtx_handle_init(dti, cont->sc_hdl, epoch, sub_modification_cnt,
 			     pm_ver, leader_oid, dti_cos, dti_cos_cnt, mbs,
 			     false, false, false, dth);
@@ -810,6 +868,8 @@ int
 dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 {
 	D_ASSERT(dth != NULL);
+
+	dtx_shares_fini(dth);
 
 	if (daos_is_zero_dti(&dth->dth_xid))
 		return result;
@@ -967,11 +1027,12 @@ dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 		return -DER_NONEXIST;
 
 again:
-	rc = vos_dtx_check(coh, dti, epoch, pm_ver, true);
+	rc = vos_dtx_check(coh, dti, epoch, pm_ver, NULL, true);
 	switch (rc) {
 	case DTX_ST_PREPARED:
 		return 0;
 	case DTX_ST_COMMITTED:
+	case DTX_ST_COMMITTABLE:
 		return -DER_ALREADY;
 	case -DER_NONEXIST:
 		age = dtx_hlc_age2sec(dti->dti_hlc);

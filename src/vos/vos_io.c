@@ -1044,6 +1044,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	int			 i, rc;
 	int			 flags = 0;
 	bool			 is_array = (iod->iod_type == DAOS_IOD_ARRAY);
+	bool			 uncertain = false;
 	struct daos_recx_ep_list *shadow;
 
 	D_DEBUG(DB_IO, "akey "DF_KEY" fetch %s epr "DF_X64"-"DF_X64"\n",
@@ -1123,12 +1124,31 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 					    &shadow_ep);
 			rc = akey_fetch_recx(toh, &val_epr, &fetch_recx,
 					     shadow_ep, &rsize, ioc);
+
+			if (rc == -DER_TX_UNCERTAINTY) {
+				struct dtx_handle	*dth = vos_dth_get();
+
+				uncertain = true;
+				if (dth->dth_share_tbd_count >=
+				    DTX_UNCERTAINTY_MAX)
+					goto out;
+
+				/* Continue to detect other potential
+				 * uncertainty without reading real data.
+				 */
+				ioc->ic_size_fetch = 1;
+				continue;
+			}
+
 			if (rc != 0) {
 				D_DEBUG(DB_IO, "Failed to fetch index %d: "
 					DF_RC"\n", i, DP_RC(rc));
 				goto out;
 			}
 		}
+
+		if (uncertain)
+			goto out;
 
 		/*
 		 * Empty tree or all holes, DAOS array API relies on zero
@@ -1153,7 +1173,7 @@ out:
 	if (!daos_handle_is_inval(toh))
 		key_tree_release(toh, is_array);
 
-	return rc;
+	return uncertain ? -DER_TX_UNCERTAINTY : rc;
 }
 
 static void
@@ -1173,6 +1193,7 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 	struct vos_krec_df	*krec;
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
 	int			 i, rc;
+	bool			 uncertain = false;
 
 	rc = obj_tree_init(obj);
 	if (rc != 0)
@@ -1222,6 +1243,20 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 	for (i = 0; i < ioc->ic_iod_nr; i++) {
 		iod_set_cursor(ioc, i);
 		rc = akey_fetch(ioc, toh);
+		if (rc == -DER_TX_UNCERTAINTY) {
+			struct dtx_handle	*dth = vos_dth_get();
+
+			uncertain = true;
+			if (dth->dth_share_tbd_count >= DTX_UNCERTAINTY_MAX)
+				goto out;
+
+			/* Continue to detect other potential
+			 * uncertainty without reading real data.
+			 */
+			ioc->ic_size_fetch = 1;
+			continue;
+		}
+
 		if (rc != 0)
 			break;
 	}
@@ -1229,7 +1264,7 @@ out:
 	if (!daos_handle_is_inval(toh))
 		key_tree_release(toh, false);
 
-	return rc;
+	return uncertain ? -DER_TX_UNCERTAINTY : rc;
 }
 
 int

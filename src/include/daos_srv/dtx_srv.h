@@ -31,6 +31,15 @@
 #include <daos_srv/pool.h>
 #include <daos_srv/container.h>
 
+#define DTX_UNCERTAINTY_MAX	4
+
+struct dtx_share_peer {
+	d_list_t		dsp_link;
+	struct dtx_id		dsp_xid;
+	uint32_t		dsp_leader;
+	uint32_t		dsp_ver;
+};
+
 /**
  * DAOS two-phase commit transaction handle in DRAM.
  */
@@ -76,7 +85,9 @@ struct dtx_handle {
 					 /* Local TX is started. */
 					 dth_local_tx_started:1,
 					 /* Retry with this server. */
-					 dth_local_retry:1;
+					 dth_local_retry:1,
+					 /* The DTX share lists are inited. */
+					 dth_shares_inited:1;
 
 	/* The count the DTXs in the dth_dti_cos array. */
 	uint32_t			 dth_dti_cos_count;
@@ -108,7 +119,11 @@ struct dtx_handle {
 	struct dtx_rsrvd_uint		*dth_rsrvds;
 	void				**dth_deferred;
 	/* NVME extents to release */
-	d_list_t			dth_deferred_nvme;
+	d_list_t			 dth_deferred_nvme;
+	d_list_t			 dth_share_cmt_list;
+	d_list_t			 dth_share_act_list;
+	d_list_t			 dth_share_tbd_list;
+	int				 dth_share_tbd_count;
 };
 
 /* Each sub transaction handle to manage each sub thandle */
@@ -154,8 +169,10 @@ struct dtx_stat {
 enum dtx_status {
 	/** Local participant has done the modification. */
 	DTX_ST_PREPARED		= 1,
+	/** The DTX is committable, but not committed. */
+	DTX_ST_COMMITTABLE	= 2,
 	/** The DTX has been committed. */
-	DTX_ST_COMMITTED	= 2,
+	DTX_ST_COMMITTED	= 3,
 };
 
 int
@@ -197,6 +214,8 @@ void dtx_batched_commit_deregister(struct ds_cont_child *cont);
 
 int dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 		 daos_epoch_t epoch);
+
+int dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont);
 
 /**
  * Check whether the given DTX is resent one or not.
