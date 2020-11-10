@@ -271,6 +271,8 @@ else
     mkdir -p $DAOS_BASE/install/tmp
     logs_prefix=\"$DAOS_BASE/install/lib/daos/TESTING\"
     cd $DAOS_BASE
+    #SCHAN15
+    export DAOS_TEST_SHARED_DIR=$DAOS_BASE/install/tmp
 fi
 
 export CRT_PHY_ADDR_STR=ofi+sockets
@@ -419,12 +421,21 @@ else
     process_cores=\"\"
 fi
 # now run it!
+
+#SCHAN15
+mv $DAOS_BASE/test.cov $DAOS_BASE/install/lib/daos/TESTING/ftest
+chmod 777 $DAOS_BASE/install/lib/daos/TESTING/ftest/test.cov
+ls -al $DAOS_BASE/install/lib/daos/TESTING/ftest/test.cov
+
 if ! ./launch.py -cris\${process_cores}a -th ${LOGS_THRESHOLD} \\
                  -ts ${TEST_NODES} ${NVME_ARG} ${TEST_TAG_ARR[*]}; then
     rc=\${PIPESTATUS[0]}
 else
     rc=0
 fi
+
+#SCHAN15
+mv $DAOS_BASE/install/lib/daos/TESTING/ftest/test.cov $DAOS_BASE/
 
 exit \$rc"; then
     rc=${PIPESTATUS[0]}

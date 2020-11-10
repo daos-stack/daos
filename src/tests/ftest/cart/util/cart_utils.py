@@ -186,6 +186,9 @@ class CartUtils():
 
         env += " -x CRT_ATTACH_INFO_PATH={!s}".format(daos_test_shared_dir)
 
+        #SCHAN15
+        env += " -x PATH"
+
         cartobj.log_path = log_path
 
         if not os.path.exists(log_path):

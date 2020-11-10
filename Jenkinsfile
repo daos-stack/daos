@@ -12,7 +12,9 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value="pipeline-lib@your_branch") _
+
+//SCHAN15
+@Library(value="pipeline-lib@schan_pipelinecov_2") _
 
 boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
@@ -680,7 +682,8 @@ pipeline {
                             filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
+                                "-t ${sanitized_JOB_NAME}-centos7 " +
                                 '$BUILDARGS_QB_TRUE' +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
@@ -1125,46 +1128,18 @@ pipeline {
                 expression { ! skip_testing_stage() }
             }
             parallel {
-                stage('Coverity on CentOS 7') {
+                stage('Functional on CentOS 7 Bullseye') {
                     when {
                         beforeAgent true
-                        expression { ! skip_stage('coverity-test') }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.centos.7'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(qb: true) +
-                                                " -t ${sanitized_JOB_NAME}-centos7 " +
-                                                ' --build-arg QUICKBUILD_DEPS="' +
-                                                quick_build_deps('centos7') + '"' +
-                                                ' --build-arg REPOS="' + pr_repos() + '"'
+                        allOf {
+                            expression { ! skip_stage('bullseye', true) }
                         }
-                    }
-                    steps {
-                        sconsBuild coverity: "daos-stack/daos",
-                                   parallel_build: parallel_build()
-                    }
-                    post {
-                        success {
-                            coverityPost condition: 'success'
-                        }
-                        unsuccessful {
-                            coverityPost condition: 'unsuccessful'
-                        }
-                    }
-                } // stage('Coverity on CentOS 7')
-                stage('Functional on CentOS 7') {
-                    when {
-                        beforeAgent true
-                        expression { ! skip_ftest('el7') }
                     }
                     agent {
                         label 'ci_vm9'
                     }
                     steps {
-                        functionalTest inst_repos: daos_repos(),
+                        fnCovTest inst_repos: daos_repos(),
                                        inst_rpms: functional_packages()
                     }
                     post {
@@ -1172,54 +1147,20 @@ pipeline {
                             functionalTestPost()
                         }
                     }
-                } // stage('Functional on CentOS 7')
-                stage('Functional on Leap 15') {
+                }
+                stage('Functional_Hardware_Small Bullseye') {
                     when {
                         beforeAgent true
-                        expression { ! skip_ftest('leap15') }
-                    }
-                    agent {
-                        label 'ci_vm9'
-                    }
-                    steps {
-                        functionalTest inst_repos: daos_repos(),
-                                       inst_rpms: functional_packages()
-                    }
-                    post {
-                        always {
-                            functionalTestPost()
+                        allOf {
+                            expression { ! skip_stage('bullseye', true) }
                         }
-                    } // post
-                } // stage('Functional on Leap 15')
-                stage('Functional on Ubuntu 20.04') {
-                    when {
-                        beforeAgent true
-                        expression { ! skip_ftest('ubuntu20') }
-                    }
-                    agent {
-                        label 'ci_vm9'
-                    }
-                    steps {
-                        functionalTest inst_repos: daos_repos(),
-                                       inst_rpms: functional_packages()
-                    }
-                    post {
-                        always {
-                            functionalTestPost()
-                        }
-                    } // post
-                } // stage('Functional on Ubuntu 20.04')
-                stage('Functional_Hardware_Small') {
-                    when {
-                        beforeAgent true
-                        expression { ! skip_ftest_hw('small') }
                     }
                     agent {
                         // 2 node cluster with 1 IB/node + 1 test control node
                         label 'ci_nvme3'
                     }
                     steps {
-                        functionalTest target: hw_distro_target(),
+                        fnCovTest target: hw_distro_target(),
                                        inst_repos: daos_repos(),
                                        inst_rpms: functional_packages()
                     }
@@ -1228,18 +1169,20 @@ pipeline {
                             functionalTestPost()
                         }
                     }
-                } // stage('Functional_Hardware_Small')
-                stage('Functional_Hardware_Medium') {
+                } // stage('Functional_Hardware_Small Bullseye')
+                stage('Functional_Hardware_Medium Bullseye') {
                     when {
                         beforeAgent true
-                        expression { ! skip_ftest_hw('medium') }
+                        allOf {
+                            expression { ! skip_stage('bullseye', true) }
+                        }
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
                         label 'ci_nvme5'
                     }
                     steps {
-                        functionalTest target: hw_distro_target(),
+                        fnCovTest target: hw_distro_target(),
                                        inst_repos: daos_repos(),
                                        inst_rpms: functional_packages()
                    }
@@ -1248,18 +1191,20 @@ pipeline {
                             functionalTestPost()
                         }
                     }
-                } // stage('Functional_Hardware_Medium')
-                stage('Functional_Hardware_Large') {
+                } // stage('Functional_Hardware_Medium Bullseye')
+                stage('Functional_Hardware_Large Bullseye') {
                     when {
                         beforeAgent true
-                        expression { ! skip_ftest_hw('large') }
+                        allOf {
+                            expression { ! skip_stage('bullseye', true) }
+                        }
                     }
                     agent {
                         // 8+ node cluster with 1 IB/node + 1 test control node
                         label 'ci_nvme9'
                     }
                     steps {
-                        functionalTest target: hw_distro_target(),
+                        fnCovTest target: hw_distro_target(),
                                        inst_repos: daos_repos(),
                                        inst_rpms: functional_packages()
                     }
@@ -1268,41 +1213,7 @@ pipeline {
                             functionalTestPost()
                         }
                     }
-                } // stage('Functional_Hardware_Large')
-                stage('Test CentOS 7 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { ! skip_test_rpms_centos7() }
-                    }
-                    agent {
-                        label 'ci_vm1'
-                    }
-                    steps {
-                        testRpm inst_repos: daos_repos(),
-                                daos_pkg_version: daos_packages_version()
-                   }
-                } // stage('Test CentOS 7 RPMs')
-                stage('Scan CentOS 7 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { ! skip_scan_rpms_centos7() }
-                    }
-                    agent {
-                        label 'ci_vm1'
-                    }
-                    steps {
-                        scanRpms inst_repos: daos_repos(),
-                                 daos_pkg_version: daos_packages_version(),
-                                 inst_rpms: 'clamav clamav-devel',
-                                 test_script: 'ci/rpm/scan_daos.sh',
-                                 junit_files: 'maldetect.xml'
-                    }
-                    post {
-                        always {
-                            junit 'maldetect.xml'
-                        }
-                    }
-                } // stage('Scan CentOS 7 RPMs')
+                } // stage('Functional_Hardware_Large Bullseye')
             } // parallel
         } // stage('Test')
         stage ('Test Report') {
@@ -1317,7 +1228,8 @@ pipeline {
                             filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
+                                "-t ${sanitized_JOB_NAME}-centos7 " +
                                 '$BUILDARGS_QB_TRUE' +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
@@ -1328,7 +1240,11 @@ pipeline {
                     steps {
                         // The coverage_healthy is primarily set here
                         // while the code coverage feature is being implemented.
-                        cloverReportPublish coverage_stashes: ['centos7-covc-unit-cov'],
+                        cloverReportPublish coverage_stashes: ['centos7-covc-unit-cov',
+                                                     'centos7-covc-cov',
+                                                     'centos7-covc-hw-small-cov',
+                                                     'centos7-covc-hw-large-cov',
+                                                     'centos7-covc-hw-medium-cov'],
                                             coverage_healthy: [methodCoverage: 0,
                                                                conditionalCoverage: 0,
                                                                statementCoverage: 0],
@@ -1339,10 +1255,10 @@ pipeline {
         } // stage ('Test Report')
     } // stages
     post {
-        always {
-            valgrindReportPublish valgrind_stashes: ['centos7-gcc-unit-valg',
-                                                     'centos7-gcc-unit-memcheck']
-        }
+        //always {
+        //    valgrindReportPublish valgrind_stashes: ['centos7-gcc-unit-valg',
+        //                                             'centos7-gcc-unit-memcheck']
+        //
         unsuccessful {
             notifyBrokenBranch branches: target_branch
         }

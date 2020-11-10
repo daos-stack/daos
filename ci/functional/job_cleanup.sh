@@ -29,3 +29,9 @@ if [ -n "$arts" ]; then
   # shellcheck disable=SC2046,SC2086
   mv $(echo $arts | tr '\n' ' ') "Functional/"
 fi
+
+#SCHAN15
+if [ -e test.cov ]; then
+  mkdir -p "Functional/covs$STAGE_NAME"
+  mv test.cov* "Functional/covs$STAGE_NAME"
+fi

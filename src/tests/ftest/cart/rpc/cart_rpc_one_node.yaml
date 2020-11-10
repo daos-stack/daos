@@ -58,11 +58,11 @@ tests: !mux
     name: test_group_basic
     test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_group_np_srv --name tg_srv_grp"
-    test_servers_env: "-x D_FI_CONFIG=/usr/etc/fault-inject-cart.yaml"
+    test_servers_env: ""
     test_servers_ppn: "1"
     test_clients_bin: ../tests/test_group_np_cli
     test_clients_arg: "--name client_group --attach_to tg_srv_grp"
-    test_clients_env: "-x D_FI_CONFIG=/usr/etc/fault-inject-cart.yaml"
+    test_clients_env: ""
     test_clients_ppn: "1"
   ep_credits_1:
     name: ep_credits_1
