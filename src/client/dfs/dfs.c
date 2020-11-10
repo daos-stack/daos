@@ -1103,7 +1103,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 	entry.mode = S_IFDIR | 0755;
 	entry.atime = entry.mtime = entry.ctime = time(NULL);
 	entry.chunk_size = dattr.da_chunk_size;
-	entry.gid = dfs->gid;
+	entry.gid = getegid();
 
 	/*
 	 * Since we don't support daos cont create atomicity (2 or more cont
