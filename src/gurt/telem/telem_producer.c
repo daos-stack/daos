@@ -38,7 +38,7 @@ void test_function1(int count)
 	int rc;
 	int i;
 
-	for (i = 0; i < count-1; i++) {
+	for (i = 0; i < count - 1; i++) {
 		rc = d_tm_increment_counter(&loop, __FILE__, __func__,
 					    "loop counter", NULL);
 		if (rc != 0) {
