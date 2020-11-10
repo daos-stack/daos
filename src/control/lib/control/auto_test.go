@@ -87,6 +87,7 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 		minNvme       int
 		uErr          error
 		hostResponses []*HostResponse
+		expHostErrors []*MockHostError
 		expConfigOut  *config.Server
 		expCheckErr   error
 	}{
@@ -97,11 +98,21 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 		},
 		"host storage scan failed": {
 			hostResponses: hostRespOneScanFail,
-			expCheckErr:   errors.New("1 host had errors"),
+			expHostErrors: []*MockHostError{
+				{"host2", "scm scan failed"},
+				{"host2", "nvme scan failed"},
+			},
+			expCheckErr: errors.New("1 host had errors"),
 		},
 		"host storage scan failed on multiple hosts": {
 			hostResponses: hostRespScanFail,
-			expCheckErr:   errors.New("2 hosts had errors"),
+			expHostErrors: []*MockHostError{
+				{"host1", "scm scan failed"},
+				{"host1", "nvme scan failed"},
+				{"host2", "scm scan failed"},
+				{"host2", "nvme scan failed"},
+			},
+			expCheckErr: errors.New("2 hosts had errors"),
 		},
 		"host storage scan no hosts": {
 			hostResponses: []*HostResponse{},
@@ -155,22 +166,36 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 				Log:     log,
 			}
 
-			generatedCfg := config.DefaultServer().
-				WithServers(ioserver.NewConfig(), ioserver.NewConfig())
+			resp := &ConfigGenerateResp{
+				// input config param represents two-socket system
+				ConfigOut: config.DefaultServer().
+					WithServers(ioserver.NewConfig(), ioserver.NewConfig()),
+			}
 
-			// input config param represents two-socket system
-			gotCheckErr := req.checkStorage(context.Background(), generatedCfg)
-			common.CmpErr(t, tc.expCheckErr, gotCheckErr)
-			if tc.expCheckErr != nil {
-				return
+			expResp := &ConfigGenerateResp{
+				ConfigOut:      tc.expConfigOut,
+				HostErrorsResp: MockHostErrorsResp(t, tc.expHostErrors...),
 			}
 
 			cmpOpts := []cmp.Option{
 				cmpopts.IgnoreUnexported(security.CertificateConfig{}, config.Server{}),
 				cmpopts.IgnoreFields(config.Server{}, "GetDeviceClassFn"),
 			}
-			if diff := cmp.Diff(tc.expConfigOut, generatedCfg, cmpOpts...); diff != "" {
-				t.Fatalf("output cfg doesn't match (-want, +got):\n%s\n", diff)
+			cmpOpts = append(cmpOpts, defResCmpOpts()...)
+
+			gotCheckErr := req.checkStorage(context.Background(), resp)
+
+			if diff := cmp.Diff(expResp.GetHostErrors(), resp.GetHostErrors(), cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+
+			common.CmpErr(t, tc.expCheckErr, gotCheckErr)
+			if tc.expCheckErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(expResp, resp, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
@@ -311,6 +336,7 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 		accessPoints  []string
 		uErr          error
 		hostResponses []*HostResponse
+		expHostErrors []*MockHostError
 		expConfigOut  *config.Server
 		expCheckErr   error
 	}{
@@ -323,12 +349,20 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 		"host network scan failed": {
 			netDevClass:   nd.NetDevAny,
 			hostResponses: hostRespRemoteFail,
-			expCheckErr:   errors.New("1 host had errors"),
+			expHostErrors: []*MockHostError{
+				{"host2", "remote failed"},
+				{"host2", "remote failed"},
+			},
+			expCheckErr: errors.New("1 host had errors"),
 		},
 		"host network scan failed on multiple hosts": {
 			netDevClass:   nd.NetDevAny,
 			hostResponses: hostRespRemoteFails,
-			expCheckErr:   errors.New("2 hosts had errors"),
+			expHostErrors: []*MockHostError{
+				{"host1", "remote failed"},
+				{"host2", "remote failed"},
+			},
+			expCheckErr: errors.New("2 hosts had errors"),
 		},
 		"host network scan no hosts": {
 			netDevClass:   nd.NetDevAny,
@@ -469,19 +503,32 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 				Log:          log,
 			}
 
-			gotCfg, gotCheckErr := req.checkNetwork(context.Background())
+			resp := new(ConfigGenerateResp)
 
-			common.CmpErr(t, tc.expCheckErr, gotCheckErr)
-			if tc.expCheckErr != nil {
-				return
+			expResp := &ConfigGenerateResp{
+				ConfigOut:      tc.expConfigOut,
+				HostErrorsResp: MockHostErrorsResp(t, tc.expHostErrors...),
 			}
 
 			cmpOpts := []cmp.Option{
 				cmpopts.IgnoreUnexported(security.CertificateConfig{}, config.Server{}),
 				cmpopts.IgnoreFields(config.Server{}, "GetDeviceClassFn"),
 			}
-			if diff := cmp.Diff(tc.expConfigOut, gotCfg, cmpOpts...); diff != "" {
-				t.Fatalf("output cfg doesn't match (-want, +got):\n%s\n", diff)
+			cmpOpts = append(cmpOpts, defResCmpOpts()...)
+
+			gotCheckErr := req.checkNetwork(context.Background(), resp)
+
+			if diff := cmp.Diff(expResp.GetHostErrors(), resp.GetHostErrors(), cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+
+			common.CmpErr(t, tc.expCheckErr, gotCheckErr)
+			if tc.expCheckErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(expResp, resp, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

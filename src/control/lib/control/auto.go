@@ -65,8 +65,8 @@ type (
 
 	// ConfigGenerateResp contains the request response.
 	ConfigGenerateResp struct {
+		HostErrorsResp
 		ConfigOut *config.Server
-		Err       error
 	}
 )
 
@@ -78,13 +78,13 @@ func ConfigGenerate(ctx context.Context, req *ConfigGenerateReq) (*ConfigGenerat
 	}
 	req.Log.Debugf("ConfigGenerate called with request %v", req)
 
-	cfg, err := req.checkNetwork(ctx)
-	if err != nil {
-		return &ConfigGenerateResp{Err: err}, nil
+	resp := new(ConfigGenerateResp)
+	if err := req.checkNetwork(ctx, resp); err != nil {
+		return resp, err
 	}
 
-	if err := req.checkStorage(ctx, cfg); err != nil {
-		return &ConfigGenerateResp{Err: err}, nil
+	if err := req.checkStorage(ctx, resp); err != nil {
+		return resp, err
 	}
 
 	// TODO: change Validate() to take io.Writer
@@ -94,7 +94,7 @@ func ConfigGenerate(ctx context.Context, req *ConfigGenerateReq) (*ConfigGenerat
 	//		}, nil
 	//	}
 
-	return &ConfigGenerateResp{ConfigOut: cfg}, nil
+	return resp, nil
 }
 
 // getSingleNetworkSet retrieves the result of network scan over host list and
@@ -102,7 +102,7 @@ func ConfigGenerate(ctx context.Context, req *ConfigGenerateReq) (*ConfigGenerat
 // that network hardware setup is homogeneous across all hosts.
 //
 // Return network for a single host set or error.
-func (req *ConfigGenerateReq) getSingleNetworkSet(ctx context.Context) (*HostFabricSet, error) {
+func (req *ConfigGenerateReq) getSingleNetworkSet(ctx context.Context, resp *ConfigGenerateResp) (*HostFabricSet, error) {
 	scanReq := new(NetworkScanReq)
 	scanReq.SetHostList(req.HostList)
 
@@ -111,7 +111,9 @@ func (req *ConfigGenerateReq) getSingleNetworkSet(ctx context.Context) (*HostFab
 		return nil, err
 	}
 
-	if scanResp.Errors() != nil {
+	if len(scanResp.GetHostErrors()) > 0 {
+		resp.HostErrorsResp = scanResp.HostErrorsResp
+
 		return nil, scanResp.Errors()
 	}
 
@@ -223,25 +225,25 @@ func (req *ConfigGenerateReq) genConfig(interfaces []*HostFabricInterface) *conf
 
 // checkNetwork scans fabric network interfaces and updates-in-place configuration
 // with appropriate fabric device details for all required numa nodes.
-func (req *ConfigGenerateReq) checkNetwork(ctx context.Context) (*config.Server, error) {
+func (req *ConfigGenerateReq) checkNetwork(ctx context.Context, resp *ConfigGenerateResp) error {
 	switch req.NetClass {
 	case nd.NetDevAny, nd.Ether, nd.Infiniband:
 	default:
-		return nil, errors.Errorf("unsupported net dev class in request: %s",
+		return errors.Errorf("unsupported net dev class in request: %s",
 			nd.DevClassName(req.NetClass))
 	}
 	req.Log.Debugf("checkNetwork called with request %v", req)
 
-	networkSet, err := req.getSingleNetworkSet(ctx)
+	networkSet, err := req.getSingleNetworkSet(ctx, resp)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if req.NumPmem == 0 {
 		// the number of network interfaces and pmem namespaces should
 		// be equal to the number of NUMA nodes for optimal
 		if networkSet.HostFabric.NumaCount == 0 {
-			return nil, errors.Errorf("no numa nodes reported on hosts %s",
+			return errors.Errorf("no numa nodes reported on hosts %s",
 				networkSet.HostSet)
 		}
 
@@ -264,14 +266,15 @@ func (req *ConfigGenerateReq) checkNetwork(ctx context.Context) (*config.Server,
 
 	matching, complete := req.parseInterfaces(networkSet.HostFabric.Interfaces)
 	if !complete {
-		return nil, errors.Errorf(
-			"insufficient matching %s network interfaces, want %d got %d %+v",
+		return errors.Errorf("insufficient matching %s network interfaces, want %d got %d %+v",
 			nd.DevClassName(req.NetClass), req.NumPmem, len(matching), matching)
 	}
 
 	req.Log.Debugf("selected network interfaces: %v", matching)
 
-	return req.genConfig(matching), nil
+	resp.ConfigOut = req.genConfig(matching)
+
+	return nil
 }
 
 // validateScmStorage verifies adequate number of pmem namespaces.
@@ -351,7 +354,7 @@ func (req *ConfigGenerateReq) validateNvmeStorage(ctrlrs storage.NvmeControllers
 // Filter NVMe storage scan so only NUMA affinity and PCI address is taking into
 // account by supplying NvmeBasic flag in scan request. This enables
 // configuration to work with different models of SSDs.
-func (req *ConfigGenerateReq) getSingleStorageSet(ctx context.Context) (*HostStorageSet, error) {
+func (req *ConfigGenerateReq) getSingleStorageSet(ctx context.Context, resp *ConfigGenerateResp) (*HostStorageSet, error) {
 	scanReq := &StorageScanReq{NvmeBasic: true}
 	scanReq.SetHostList(req.HostList)
 
@@ -359,8 +362,9 @@ func (req *ConfigGenerateReq) getSingleStorageSet(ctx context.Context) (*HostSto
 	if err != nil {
 		return nil, err
 	}
+	if len(scanResp.GetHostErrors()) > 0 {
+		resp.HostErrorsResp = scanResp.HostErrorsResp
 
-	if scanResp.Errors() != nil {
 		return nil, scanResp.Errors()
 	}
 
@@ -388,13 +392,14 @@ func (req *ConfigGenerateReq) getSingleStorageSet(ctx context.Context) (*HostSto
 // ioserver storage config with detected device identifiers if thresholds met.
 //
 // Return server config populated with ioserver storage or error.
-func (req *ConfigGenerateReq) checkStorage(ctx context.Context, cfg *config.Server) error {
+func (req *ConfigGenerateReq) checkStorage(ctx context.Context, resp *ConfigGenerateResp) error {
 	req.Log.Debugf("checkStorage called with request %v", req)
 
-	storageSet, err := req.getSingleStorageSet(ctx)
+	storageSet, err := req.getSingleStorageSet(ctx, resp)
 	if err != nil {
 		return err
 	}
+
 	scmNamespaces := storageSet.HostStorage.ScmNamespaces
 	nvmeControllers := storageSet.HostStorage.NvmeDevices
 
@@ -408,9 +413,9 @@ func (req *ConfigGenerateReq) checkStorage(ctx context.Context, cfg *config.Serv
 		return errors.WithMessage(err, "validating scm storage requirements")
 	}
 
-	if len(pmemPaths) != len(cfg.Servers) {
+	if len(pmemPaths) != len(resp.ConfigOut.Servers) {
 		return errors.Errorf("unexpected number of pmem devices, want %d got %d",
-			len(pmemPaths), len(cfg.Servers))
+			len(pmemPaths), len(resp.ConfigOut.Servers))
 	}
 
 	// bdevLists is a slice of slices of pci addresses for nvme ssd devices
@@ -421,7 +426,7 @@ func (req *ConfigGenerateReq) checkStorage(ctx context.Context, cfg *config.Serv
 	}
 
 	for idx, pmemPath := range pmemPaths {
-		cfg.Servers[idx] = cfg.Servers[idx].
+		resp.ConfigOut.Servers[idx] = resp.ConfigOut.Servers[idx].
 			WithScmClass(storage.ScmClassDCPM.String()).
 			WithBdevClass(storage.BdevClassNvme.String()).
 			WithScmMountPoint(fmt.Sprintf("%s%d", scmMountPrefix, idx)).

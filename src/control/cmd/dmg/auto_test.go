@@ -40,7 +40,7 @@ func TestDmg_ConfigCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
-			nil,
+			errors.New("no host responses"),
 		},
 		{
 			"Generate with minimum storage parameters",
@@ -48,7 +48,7 @@ func TestDmg_ConfigCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
-			nil,
+			errors.New("no host responses"),
 		},
 		{
 			"Generate with ethernet network device class",
@@ -56,7 +56,7 @@ func TestDmg_ConfigCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
-			nil,
+			errors.New("no host responses"),
 		},
 		{
 			"Generate with infiniband network device class",
@@ -64,7 +64,7 @@ func TestDmg_ConfigCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
-			nil,
+			errors.New("no host responses"),
 		},
 		{
 			"Generate with best-available network device class",
@@ -72,7 +72,7 @@ func TestDmg_ConfigCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
-			nil,
+			errors.New("no host responses"),
 		},
 		{
 			"Generate with unsupported network device class",

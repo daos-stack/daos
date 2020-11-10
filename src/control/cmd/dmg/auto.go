@@ -29,6 +29,7 @@ import (
 
 	"gopkg.in/yaml.v2"
 
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 )
@@ -77,19 +78,23 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 		req.AccessPoints = strings.Split(cmd.AccessPoints, ",")
 	}
 
+	// TODO: decide whether we want meaningful JSON output
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(new(control.ConfigGenerateResp), nil)
+	}
+
 	resp, err := control.ConfigGenerate(ctx, req)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
-	}
-
-	if err != nil {
+	// host level errors e.g. unresponsive daos_server process
+	var bld strings.Builder
+	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
 		return err
 	}
+	cmd.log.Info(bld.String()) // no-op if no host level errors
 
-	if resp.Err != nil {
-		cmd.log.Info(resp.Err.Error())
-		return nil
+	// includes hardware validation errors e.g. hardware across hostset differs
+	if err != nil {
+		return err
 	}
 
 	bytes, err := yaml.Marshal(resp.ConfigOut)
@@ -97,6 +102,7 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 		return err
 	}
 
+	// output recommended server config yaml file
 	cmd.log.Info(string(bytes))
 	return nil
 }
