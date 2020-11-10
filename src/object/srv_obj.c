@@ -86,6 +86,7 @@ obj_gen_dtx_mbs(struct daos_shard_tgt *tgts, uint32_t *tgt_cnt,
 		mbs->dm_tgt_cnt = j;
 		mbs->dm_grp_cnt = 1;
 		mbs->dm_data_size = size;
+		mbs->dm_flags = DMF_MODIFY_SRDG;
 	}
 
 	*p_mbs = mbs;
@@ -3501,6 +3502,12 @@ out:
 	D_FREE(biods);
 	D_FREE(bulks);
 
+	if (rc == 0 && dth->dth_modification_cnt == 0)
+		/* For the case of only containing read sub operations,
+		 * we will generate DTX entry for DTX recovery.
+		 */
+		rc = vos_dtx_pin(dth);
+
 	return rc;
 }
 
@@ -3513,9 +3520,27 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 	struct daos_cpd_disp_ent	*dcde = ds_obj_cpd_get_dcde(rpc, 0, 0);
 	struct daos_cpd_sub_req		*dcsr = ds_obj_cpd_get_dcsr(rpc, 0);
 	int				 rc = 0;
+	int				 rc1 = 0;
 
 	D_DEBUG(DB_IO, "Handling DTX "DF_DTI" on non-leader\n",
 		DP_DTI(&dcsh->dcsh_xid));
+
+	D_ASSERT(dcsh->dcsh_epoch.oe_value != 0);
+	D_ASSERT(dcsh->dcsh_epoch.oe_value != DAOS_EPOCH_MAX);
+
+	if (oci->oci_flags & ORF_RESEND) {
+		rc1 = dtx_handle_resend(ioc->ioc_vos_coh, &dcsh->dcsh_xid,
+					&dcsh->dcsh_epoch.oe_value, NULL);
+
+		/* Do nothing if 'prepared' or 'committed'. */
+		if (rc1 == -DER_ALREADY || rc1 == 0)
+			D_GOTO(out, rc = 0);
+	}
+
+	/* Refuse any modification with old epoch. */
+	if (dcde->dcde_write_cnt != 0 &&
+	    dcsh->dcsh_epoch.oe_value < dss_get_start_epoch())
+		D_GOTO(out, rc = -DER_TX_RESTART);
 
 	/* The check for read capa has been done before handling the CPD RPC.
 	 * So here, only need to check the write capa.
@@ -3526,20 +3551,12 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 			goto out;
 	}
 
-	if (oci->oci_flags & ORF_RESEND) {
-		rc = dtx_handle_resend(ioc->ioc_vos_coh, &dcsh->dcsh_xid,
-				       &dcsh->dcsh_epoch.oe_value, NULL);
-
-		/* Do nothing if 'prepared' or 'committed'. */
-		if (rc == -DER_ALREADY || rc == 0)
-			D_GOTO(out, rc = 0);
-
-		/* Abort it firstly if exist but with different (old) epoch,
-		 * then re-execute with new epoch.
-		 */
-		if (rc == -DER_MISMATCH)
-			rc = vos_dtx_abort(ioc->ioc_vos_coh, DAOS_EPOCH_MAX,
-					   &dcsh->dcsh_xid, 1);
+	/* For resent RPC, abort it firstly if exist but with different (old)
+	 * epoch, then re-execute with new epoch.
+	 */
+	if (rc1 == -DER_MISMATCH) {
+		rc = vos_dtx_abort(ioc->ioc_vos_coh, DAOS_EPOCH_MAX,
+				   &dcsh->dcsh_xid, 1);
 
 		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
@@ -3697,6 +3714,9 @@ ds_obj_dtx_leader_ult(void *arg)
 		 */
 	}
 
+	D_ASSERT(dcsh->dcsh_epoch.oe_value != 0);
+	D_ASSERT(dcsh->dcsh_epoch.oe_value != DAOS_EPOCH_MAX);
+
 	if (oci->oci_flags & ORF_RESEND) {
 		/* For distributed transaction, the 'ORF_RESEND' may means
 		 * that the DTX has been restarted with newer epoch.
@@ -3746,6 +3766,11 @@ ds_obj_dtx_leader_ult(void *arg)
 	req_cnt = ds_obj_cpd_get_dcsr_cnt(dca->dca_rpc, dca->dca_idx);
 	tgt_cnt = ds_obj_cpd_get_tgt_cnt(dca->dca_rpc, dca->dca_idx);
 
+	/* Refuse any modification with old epoch. */
+	if (dcde->dcde_write_cnt != 0 &&
+	    dcsh->dcsh_epoch.oe_value < dss_get_start_epoch())
+		D_GOTO(out, rc = -DER_TX_RESTART);
+
 	rc = ds_obj_dtx_leader_prep_handle(dcsh, dcsrs, tgts, tgt_cnt,
 					   req_cnt, &flags);
 	if (rc != 0)
@@ -3757,7 +3782,11 @@ ds_obj_dtx_leader_ult(void *arg)
 	else
 		tgts++;
 
-	/* For distributed transaction, ask DTX  to 'sync' commit. */
+	/* For distributed transaction, ask DTX  to 'sync' commit. For single
+	 * RDG based modification (with the dm_flag DMF_MODIFY_SRDG), we will
+	 * consider 'async' mode when batched commit is ready for distributed
+	 * transaction.
+	 */
 	rc = dtx_leader_begin(dca->dca_ioc->ioc_coc, &dcsh->dcsh_xid,
 			      &dcsh->dcsh_epoch, dcde->dcde_write_cnt,
 			      oci->oci_map_ver, &dcsh->dcsh_leader_oid, NULL,
