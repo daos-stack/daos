@@ -332,6 +332,7 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
+	obj->cob_md.omd_ver = pool_map_get_version(pool->dp_map);
 	rc = pl_obj_place(map, &obj->cob_md, NULL, &layout);
 	pl_map_decref(map);
 	if (rc != 0) {
@@ -1272,12 +1273,12 @@ dc_obj_open(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = obj_ptr2pm_ver(obj, &obj->cob_md.omd_ver);
-	if (rc)
-		D_GOTO(out, rc);
-
 	rc = obj_layout_create(obj, false);
 	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = obj_ptr2pm_ver(obj, &obj->cob_md.omd_ver);
+	if (rc)
 		D_GOTO(out, rc);
 
 	obj_hdl_link(obj);
@@ -3085,6 +3086,11 @@ obj_shard_comp_cb(struct shard_auxi_args *shard_auxi,
 	tse_task_t		*task = obj_auxi->obj_task;
 	int			ret = task->dt_result;
 
+	if (shard_auxi == NULL) {
+		iter_arg->retry = false;
+		return ret;
+	}
+
 	/*
 	 * Check shard IO task's completion status:
 	 * 1) if succeed just stores the highest replied pm version.
@@ -3129,10 +3135,8 @@ obj_shard_comp_cb(struct shard_auxi_args *shard_auxi,
 		} else {
 			iter_arg->retry = false;
 		}
-	}
-
-	if (ret != 0)
 		return ret;
+	}
 
 	/* Then process each shards for enumeration */
 	if (obj_is_enum_opc(obj_auxi->opc)) {
