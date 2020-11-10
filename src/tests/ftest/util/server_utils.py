@@ -711,6 +711,10 @@ class DaosServerManager(SubprocessManager):
     def system_stop(self, valid_states=None):
         """Stop the DAOS IO servers.
 
+        Args:
+            valid_states (list): expected DAOS system states as a list of
+                lowercase strings
+
         Raises:
             ServerFailed: if there was an error stopping the servers
 
