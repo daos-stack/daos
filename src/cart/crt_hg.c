@@ -1275,7 +1275,6 @@ crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 	unsigned int		hg_timeout;
 	unsigned int		total = 256;
 
-	DBG_ENTRY();
 	hg_context = hg_ctx->chc_hgctx;
 
 	/**
@@ -1322,7 +1321,6 @@ crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 		hg_timeout = 0;
 	} while (total > 0);
 
-	DBG_EXIT();
 	return 0;
 }
 
