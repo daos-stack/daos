@@ -33,6 +33,14 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 
 	DFUSE_TRA_DEBUG(ie, "flags %#x", to_set);
 
+	if (to_set & FUSE_SET_ATTR_GID) {
+		DFUSE_TRA_DEBUG(ie, "gid %d %d",
+				attr->st_gid, ie->ie_stat.st_gid);
+
+		to_set &= ~FUSE_SET_ATTR_GID;
+		dfs_flags |= DFS_SET_ATTR_GID;
+	}
+
 	if (to_set & FUSE_SET_ATTR_MODE) {
 		DFUSE_TRA_DEBUG(ie, "mode %#x %#x",
 				attr->st_mode, ie->ie_stat.st_mode);

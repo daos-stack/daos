@@ -67,7 +67,7 @@
 #define DFS_OBJ_GLOB_MAGIC	0xdf500b90
 
 /** Number of A-keys for attributes in any object entry */
-#define INODE_AKEYS	7
+#define INODE_AKEYS	8
 #define INODE_AKEY_NAME	"DFS_INODE"
 #define MODE_IDX	0
 #define OID_IDX		(sizeof(mode_t))
@@ -75,7 +75,7 @@
 #define MTIME_IDX	(ATIME_IDX + sizeof(time_t))
 #define CTIME_IDX	(MTIME_IDX + sizeof(time_t))
 #define CSIZE_IDX	(CTIME_IDX + sizeof(time_t))
-#define SYML_IDX	(CSIZE_IDX + sizeof(daos_size_t))
+#define GID_IDX		(CSIZE_IDX + sizeof(time_t))
 
 /** Parameters for dkey enumeration */
 #define ENUM_DESC_NR	10
@@ -155,6 +155,8 @@ struct dfs_entry {
 	daos_size_t	chunk_size;
 	/** Sym Link value */
 	char		*value;
+	/* Group of file */
+	gid_t		gid;
 };
 
 #if 0
@@ -302,7 +304,8 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	iod.iod_nr	= 1;
 	recx.rx_idx	= 0;
 	recx.rx_nr	= sizeof(mode_t) + sizeof(time_t) * 3 +
-			    sizeof(daos_obj_id_t) + sizeof(daos_size_t);
+		sizeof(daos_obj_id_t) + sizeof(daos_size_t) +
+		sizeof(gid_t);
 	iod.iod_recxs	= &recx;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 	iod.iod_size	= 1;
@@ -314,6 +317,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	d_iov_set(&sg_iovs[i++], &entry->mtime, sizeof(time_t));
 	d_iov_set(&sg_iovs[i++], &entry->ctime, sizeof(time_t));
 	d_iov_set(&sg_iovs[i++], &entry->chunk_size, sizeof(daos_size_t));
+	d_iov_set(&sg_iovs[i++], &entry->gid, sizeof(gid_t));
 
 	sgl.sg_nr	= i;
 	sgl.sg_nr_out	= 0;
@@ -334,7 +338,8 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 			return ENOMEM;
 
 		recx.rx_idx = sizeof(mode_t) + sizeof(time_t) * 3 +
-			sizeof(daos_obj_id_t) + sizeof(daos_size_t);
+			sizeof(daos_obj_id_t) + sizeof(daos_size_t) +
+			sizeof(gid_t);
 		recx.rx_nr = PATH_MAX;
 
 		d_iov_set(&sg_iovs[0], value, PATH_MAX);
@@ -419,7 +424,9 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	iod.iod_nr	= 1;
 	recx.rx_idx	= 0;
 	recx.rx_nr	= sizeof(mode_t) + sizeof(time_t) * 3 +
-		sizeof(daos_obj_id_t) + sizeof(daos_size_t);
+		sizeof(daos_obj_id_t) + sizeof(daos_size_t) +
+		sizeof(gid_t);
+
 	iod.iod_recxs	= &recx;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 	iod.iod_size	= 1;
@@ -431,6 +438,7 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	d_iov_set(&sg_iovs[i++], &entry.mtime, sizeof(time_t));
 	d_iov_set(&sg_iovs[i++], &entry.ctime, sizeof(time_t));
 	d_iov_set(&sg_iovs[i++], &entry.chunk_size, sizeof(daos_size_t));
+	d_iov_set(&sg_iovs[i++], &entry.gid, sizeof(gid_t));
 
 	/** Add symlink value if Symlink */
 	if (S_ISLNK(entry.mode)) {
@@ -562,7 +570,7 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 	stbuf->st_size = size;
 	stbuf->st_mode = entry.mode;
 	stbuf->st_uid = dfs->uid;
-	stbuf->st_gid = dfs->gid;
+	stbuf->st_gid = entry.gid;
 	stbuf->st_atim.tv_sec = entry.atime;
 	stbuf->st_mtim.tv_sec = entry.mtime;
 	stbuf->st_ctim.tv_sec = entry.ctime;
@@ -671,6 +679,7 @@ open_file(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 
 		/** Create and insert entry in parent dir object. */
 		entry.mode = file->mode;
+		entry.gid = dfs->gid;
 		entry.atime = entry.mtime = entry.ctime = time(NULL);
 		if (chunk_size)
 			entry.chunk_size = chunk_size;
@@ -776,6 +785,7 @@ open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
 
 		entry.oid = dir->oid;
 		entry.mode = dir->mode;
+		entry.gid = dfs->gid;
 		entry.atime = entry.mtime = entry.ctime = time(NULL);
 		entry.chunk_size = 0;
 
@@ -838,6 +848,7 @@ open_symlink(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 		entry.mode = sym->mode | S_IRWXO | S_IRWXU | S_IRWXG;
 		entry.atime = entry.mtime = entry.ctime = time(NULL);
 		entry.chunk_size = 0;
+		entry.gid = dfs->gid;
 		D_STRNDUP(sym->value, value, PATH_MAX - 1);
 		if (sym->value == NULL)
 			return ENOMEM;
@@ -1092,6 +1103,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 	entry.mode = S_IFDIR | 0755;
 	entry.atime = entry.mtime = entry.ctime = time(NULL);
 	entry.chunk_size = dattr.da_chunk_size;
+	entry.gid = dfs->gid;
 
 	/*
 	 * Since we don't support daos cont create atomicity (2 or more cont
@@ -1976,7 +1988,7 @@ dfs_lookup_loop:
 		stbuf->st_nlink = 1;
 		stbuf->st_mode = obj->mode;
 		stbuf->st_uid = dfs->uid;
-		stbuf->st_gid = dfs->gid;
+		stbuf->st_gid = entry.gid;
 		stbuf->st_atim.tv_sec = entry.atime;
 		stbuf->st_mtim.tv_sec = entry.mtime;
 		stbuf->st_ctim.tv_sec = entry.ctime;
@@ -2257,7 +2269,7 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		stbuf->st_nlink = 1;
 		stbuf->st_mode = obj->mode;
 		stbuf->st_uid = dfs->uid;
-		stbuf->st_gid = dfs->gid;
+		stbuf->st_gid = entry.gid;
 		stbuf->st_atim.tv_sec = entry.atime;
 		stbuf->st_mtim.tv_sec = entry.mtime;
 		stbuf->st_ctim.tv_sec = entry.ctime;
@@ -3193,6 +3205,14 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	iod.iod_type	= DAOS_IOD_ARRAY;
 	iod.iod_size	= 1;
 
+	if (flags & DFS_SET_ATTR_GID) {
+		/** set akey as the mode attr name */
+		d_iov_set(&sg_iovs[i], &stbuf->st_gid, sizeof(gid_t));
+		recx[i].rx_idx = GID_IDX;
+		recx[i].rx_nr = sizeof(gid_t);
+		i++;
+		flags &= ~DFS_SET_ATTR_GID;
+	}
 	if (flags & DFS_SET_ATTR_MODE) {
 		/** set akey as the mode attr name */
 		d_iov_set(&sg_iovs[i], &stbuf->st_mode, sizeof(mode_t));
