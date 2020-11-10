@@ -1,5 +1,4 @@
-#!python
-# (C) Copyright 2016-2020 Intel Corporation.
+# (C) Copyright 2020 Intel Corporation.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,37 +18,23 @@
 # provided in Contract No. 8F-30005.
 # Any reproduction of computer software, computer software documentation, or
 # portions thereof marked with this legend must also reproduce the markings.
-#
-"""Build libgurt"""
+"""Unit tests"""
 
 import daos_build
-SRC = ['debug.c', 'dlog.c', 'hash.c', 'misc.c', 'heap.c', 'errno.c',
-       'fault_inject.c', 'dtm.c', 'telemetry.c']
 
 def scons():
-    """Scons function"""
+    """Execute build"""
+    Import('env')
 
-    Import('env', 'prereqs', 'CART_VERSION')
+    unit_env = env.Clone()
 
-    env.AppendUnique(LIBPATH=[Dir('.')])
+    daos_build.test(unit_env, 'telemetry_producer_tests',
+                    ['telem_producer.c'],
+                    LIBS=['gurt'])
 
-    denv = env.Clone()
-
-    denv.AppendUnique(CPPPATH=[Dir('.').srcnode()])
-    denv.AppendUnique(LIBS=['pthread', 'yaml'])
-    prereqs.require(denv, 'uuid')
-
-    gurt_targets = denv.SharedObject(SRC)
-    gurt_lib = daos_build.library(denv, 'libgurt', gurt_targets,
-                                  SHLIBVERSION=CART_VERSION)
-    denv.InstallVersionedLib('$PREFIX/lib64/', gurt_lib,
-                             SHLIBVERSION=CART_VERSION)
-
-    Default(gurt_lib)
-    Export('gurt_lib', 'gurt_targets')
-
-    SConscript('telem/SConscript')
-    SConscript('tests/SConscript')
+    daos_build.test(unit_env, 'telemetry_consumer_tests',
+                    ['telem_consumer.c'],
+                    LIBS=['gurt'])
 
 if __name__ == "SCons.Script":
     scons()
