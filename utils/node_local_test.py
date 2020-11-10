@@ -705,6 +705,11 @@ class DFuse():
         ret = self._sp.wait()
         print('rc from dfuse {}'.format(ret))
         self._sp = None
+        log_test(self.conf, self.log_file)
+
+        # Finally, modify the valgrind xml file to remove the
+        # prefix to the src dir.
+        self.valgrind.convert_xml()
 
 def get_pool_list():
     """Return a list of valid pool names"""

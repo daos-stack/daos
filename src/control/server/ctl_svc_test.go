@@ -27,6 +27,7 @@ import (
 	"testing"
 
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -34,7 +35,7 @@ import (
 
 // mockControlService takes cfgs for tuneable scm and sys provider behavior but
 // default nvmeStorage behavior (cs.nvoe can be subsequently replaced in test).
-func mockControlService(t *testing.T, log logging.Logger, cfg *Configuration, bmbc *bdev.MockBackendConfig, smbc *scm.MockBackendConfig, smsc *scm.MockSysConfig) *ControlService {
+func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bmbc *bdev.MockBackendConfig, smbc *scm.MockBackendConfig, smsc *scm.MockSysConfig) *ControlService {
 	t.Helper()
 
 	cs := ControlService{
