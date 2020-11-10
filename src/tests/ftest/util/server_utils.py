@@ -712,8 +712,9 @@ class DaosServerManager(SubprocessManager):
         """Stop the DAOS IO servers.
 
         Args:
-            extra_states (list): expected DAOS system states as a list of
-                lowercase strings
+            extra_states (list, optional): a list of DAOS system states in
+                addition to "started" and "joined" that are verified prior to
+                issuing the stop. Defaults to None.
 
         Raises:
             ServerFailed: if there was an error stopping the servers
