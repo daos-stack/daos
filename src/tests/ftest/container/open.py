@@ -65,29 +65,17 @@ class OpenContainerTest(TestWithServers):
         self.pool = []
         self.container = []
 
-        # Get parameters from open.yaml
-        poh_states = self.params.get("poh", '/run/handle_states/*/')
-        uuid_states = self.params.get("uuid", '/run/container_uuid_states/*/')
+        uuid_state = self.params.get("uuid", "/run/uuid_poh/*/")
+        poh_state = self.params.get("poh", "/run/uuid_poh/*/")
+
+        expected_result = RESULT_PASS
+        if uuid_state == RESULT_FAIL or poh_state == RESULT_FAIL:
+            expected_result = RESULT_FAIL
 
         # Derive the test case number from the PASS/FAIL-PASS/FAIL combination
-        poh_state_num = RESULT_TO_NUM[poh_states[0]]
-        uuid_state_num = RESULT_TO_NUM[uuid_states[0]]
+        poh_state_num = RESULT_TO_NUM[poh_state]
+        uuid_state_num = RESULT_TO_NUM[uuid_state]
         test_case = (poh_state_num << 1) + uuid_state_num
-        if test_case == 3:
-            # Passing in handle2 and UUID2 to open will overwrite the
-            # container's members, so container1 effectively becomes container2
-            # and that wouldn't be a good test, so skip
-            self.cancel("Skip the case with container1.open(pool_handle2, " +
-                        "container_uuid2)")
-
-        expected_for_param = []
-        expected_for_param.append(uuid_states[0])
-        expected_for_param.append(poh_states[0])
-        expected_result = RESULT_PASS
-        for result in expected_for_param:
-            if result == RESULT_FAIL:
-                expected_result = RESULT_FAIL
-                break
 
         # Prepare the messages for the 3 test cases.
         # Test Bug! indicates that there's something wrong with the test since
@@ -125,7 +113,6 @@ class OpenContainerTest(TestWithServers):
             self.pool.append(self.get_pool())
             self.container.append(self.get_container(pool=self.pool[-1]))
             container_uuids.append(uuid.UUID(self.container[-1].uuid))
-            self.pool[-1].connect()
 
         # Decide which pool handle and container UUID to use. The PASS/FAIL
         # number corresponds to the index for self.pool and container_uuids
@@ -135,7 +122,7 @@ class OpenContainerTest(TestWithServers):
         # Case 1
         try:
             self.container[0].open(
-                self.pool[pool_handle_index].pool.handle.value,
+                self.pool[pool_handle_index].pool.handle,
                 container_uuids[container_uuid_index])
             self.assertEqual(
                 expected_result, RESULT_PASS, result_messages[test_case][0])
@@ -150,7 +137,7 @@ class OpenContainerTest(TestWithServers):
         container_uuid_index = container_uuid_index ^ 1
         try:
             self.container[1].open(
-                self.pool[pool_handle_index].pool.handle.value,
+                self.pool[pool_handle_index].pool.handle,
                 container_uuids[container_uuid_index])
             self.assertEqual(
                 expected_result, RESULT_PASS, result_messages[test_case][2])
