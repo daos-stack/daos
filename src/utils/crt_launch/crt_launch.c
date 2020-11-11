@@ -355,7 +355,7 @@ exit:
 	if (rc == 0) {
 		if (access(g_opt.app_to_exec, F_OK) == -1) {
 			fprintf(stderr, "ERROR: Unable to locate '%s'\n",
-			g_opt.app_to_exec);
+				g_opt.app_to_exec);
 			return -1;
 		}
 
