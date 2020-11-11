@@ -39,7 +39,7 @@ static int			 ds_iv_ns_tree_topo;
 static d_list_t			 ds_iv_class_list;
 static int			 ds_iv_class_nr;
 static int			 crt_iv_class_nr;
-static struct crt_iv_class	*crt_iv_class = NULL;
+static struct crt_iv_class	*crt_iv_class;
 
 struct ds_iv_class *
 iv_class_lookup(unsigned int class_id)
@@ -833,6 +833,7 @@ ds_iv_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	struct iv_cb_info	*cb_info = cb_arg;
 	int			ret = 0;
 
+	D_DEBUG(DB_MD, "iv_ns %p\n", ivns);
 	/* FIXME: Temporarily ignore certain IV errors. See DAOS-3545. */
 	if (rc == -DER_UNREACH || rc == -DER_TIMEDOUT)
 		cb_info->result = 0;
@@ -888,17 +889,20 @@ iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
 	cb_info.ns = ns;
 	switch (opc) {
 	case IV_FETCH:
+		D_DEBUG(DB_MD, "IV_FETCH: iv_ns %p\n", ns->iv_ns);
 		rc = crt_iv_fetch(ns->iv_ns, class->iv_cart_class_id,
 				  (crt_iv_key_t *)&key_iov, 0,
 				  0, ds_iv_done, &cb_info);
 		break;
 	case IV_UPDATE:
+		D_DEBUG(DB_MD, "IV_FETCH: iv_ns %p\n", ns->iv_ns);
 		rc = crt_iv_update(ns->iv_ns, class->iv_cart_class_id,
 				   (crt_iv_key_t *)&key_iov, 0,
 				   (d_sg_list_t *)value, shortcut,
 				   *sync, ds_iv_done, &cb_info);
 		break;
 	case IV_INVALIDATE:
+		D_DEBUG(DB_MD, "IV_INVALIDATE: iv_ns %p\n", ns->iv_ns);
 		rc = crt_iv_invalidate(ns->iv_ns, class->iv_cart_class_id,
 				       (crt_iv_key_t *)&key_iov, 0, 0, *sync,
 				       ds_iv_done, &cb_info);
@@ -912,7 +916,8 @@ iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
 
 	ABT_future_wait(future);
 	rc = cb_info.result;
-	D_DEBUG(DB_MD, "class_id %d opc %d rc %d\n\n", key_iv->class_id, opc, rc);
+	D_DEBUG(DB_MD, "class_id %d opc %d rc %d\n\n",
+		key_iv->class_id, opc, rc);
 out:
 	ABT_future_free(&future);
 	D_DEBUG(DB_MD, " <<<< End of iv_opt_internal program >>>>\n");
@@ -941,6 +946,8 @@ sync_comp_cb(void *arg, int rc)
 	if (cb_arg == NULL)
 		return rc;
 
+	D_DEBUG(DB_MD, "rc  %d\n", rc);
+
 	/* Let's retry asynchronous IV only for GRPVER for the moment */
 	if (cb_arg->retry && rc == -DER_GRPVER) {
 		int rc1;
@@ -949,6 +956,7 @@ sync_comp_cb(void *arg, int rc)
 		 * in the mean time, it will rely on others to update the
 		 * ns for it.
 		 */
+		D_DEBUG(DB_MD, "Group Version retry: %d\n", rc);
 		D_WARN("retry upon %d for class %d opc %d\n", rc,
 		       cb_arg->iv_key.class_id, IV_UPDATE);
 		rc1 = iv_op(cb_arg->ns, &cb_arg->iv_key, &cb_arg->iv_value,
@@ -977,6 +985,7 @@ retry:
 	if (sync && sync->ivs_mode == CRT_IV_SYNC_LAZY) {
 		struct sync_comp_cb_arg *arg = NULL;
 
+		D_DEBUG(DB_MD, "LAZY: ns %p\n", ns);
 		/* Register asynchronous sync(lazy mode) callback */
 		D_ALLOC_PTR(arg);
 		if (arg == NULL)
@@ -1035,6 +1044,7 @@ int
 ds_iv_fetch(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 	    bool retry)
 {
+	D_DEBUG(DB_MD, "FETCH: ns %p\n", ns);
 	return iv_op(ns, key, value, NULL, 0, retry, IV_FETCH);
 }
 
@@ -1062,6 +1072,7 @@ ds_iv_update(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 	crt_iv_sync_t		iv_sync = { 0 };
 	int			rc;
 
+	D_DEBUG(DB_MD, "UPDATE: ns %p\n", ns);
 	iv_sync.ivs_event = CRT_IV_SYNC_EVENT_UPDATE;
 	iv_sync.ivs_mode = sync_mode;
 	iv_sync.ivs_flags = sync_flags;
@@ -1089,6 +1100,7 @@ ds_iv_invalidate(struct ds_iv_ns *ns, struct ds_iv_key *key,
 {
 	crt_iv_sync_t iv_sync = { 0 };
 
+	D_DEBUG(DB_MD, "INVALIDATE: ns %p\n", ns);
 	iv_sync.ivs_event = CRT_IV_SYNC_EVENT_NOTIFY;
 	iv_sync.ivs_mode = sync_mode;
 	iv_sync.ivs_flags = sync_flags;

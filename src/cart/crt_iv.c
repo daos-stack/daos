@@ -2774,6 +2774,8 @@ handle_response_internal(void *arg)
 	const struct crt_cb_info *cb_info = arg;
 	crt_rpc_t		 *rpc = cb_info->cci_rpc;
 
+	DBG_ENTRY();
+	D_INFO("cb_info %p:  rpc %p:  opc  %d\n", cb_info, rpc, rpc->cr_opc);
 	switch (rpc->cr_opc) {
 	case CRT_OPC_IV_FETCH:
 		handle_ivfetch_response(cb_info);
@@ -2787,8 +2789,10 @@ handle_response_internal(void *arg)
 		handle_ivupdate_response(cb_info);
 		break;
 	default:
+		D_ERROR("Bad opc:: cb_info %p:  rpc  %p\n", cb_info, rpc);
 		D_ERROR("wrong opc 0x%x\n", rpc->cr_opc);
 	}
+	DBG_EXIT();
 }
 
 static void

@@ -308,6 +308,7 @@ crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv)
 
 	D_SPIN_DESTROY(&rpc_priv->crp_lock);
 
+	memset(rpc_priv, 0xfe, sizeof crt_rpc_priv);
 	D_FREE(rpc_priv);
 	DBG_EXIT();
 }
@@ -1192,7 +1193,7 @@ crt_reply_send(crt_rpc_t *req)
 	if (rpc_priv->crp_coll == 1) {
 		struct crt_cb_info	cb_info;
 
-		D_INFO("caklk crp_corpc_reply_hdlf: rpc_priv: %p\n",
+		D_INFO("call crp_corpc_reply_hdlf: rpc_priv: %p\n",
 			rpc_priv);
 		cb_info.cci_rpc = &rpc_priv->crp_pub;
 		cb_info.cci_rc = 0;
