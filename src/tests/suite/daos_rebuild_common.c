@@ -37,7 +37,7 @@
 static test_arg_t *save_arg;
 
 #define REBUILD_SUBTEST_POOL_SIZE (1ULL << 30)
-#define REBUILD_SMALL_POOL_SIZE (1ULL << 28)
+#define REBUILD_SMALL_POOL_SIZE (1ULL << 29)
 
 enum REBUILD_TEST_OP_TYPE {
 	RB_OP_TYPE_FAIL,
@@ -544,6 +544,190 @@ rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 	}
 }
 
+#define DATA_SIZE		(1048576 * 4 + 512)
+#define PARTIAL_DATA_SIZE	1024
+#define IOD3_DATA_SIZE		300
+#define LARGE_SINGLE_VALUE_SIZE	8500
+#define SMALL_SINGLE_VALUE_SIZE	32
+
+#define KEY_NR 5
+void make_buffer(char *buffer, char start, int total)
+{
+	int i = 0;
+
+	while (total > 0) {
+		char tmp;
+		int size = min(total, 1000);
+
+		tmp = start + (i++) % 25;
+		memset(buffer, tmp, size);
+		buffer += size;
+		total -= size;
+	}
+}
+
+static void
+write_ec(struct ioreq *req, int index, char *data, daos_off_t off, int size)
+{
+	char		key[32];
+	daos_recx_t	recx;
+	int		i;
+	char		single_data[LARGE_SINGLE_VALUE_SIZE];
+
+	for (i = 0; i < KEY_NR; i++) {
+		req->iod_type = DAOS_IOD_ARRAY;
+		sprintf(key, "dkey_%d", index);
+		recx.rx_nr = size;
+		recx.rx_idx = off + i * 10485760;
+		insert_recxs(key, "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, size, req);
+
+		recx.rx_nr = IOD3_DATA_SIZE;
+		insert_recxs(key, "a_key_iod3", 3, DAOS_TX_NONE, &recx, 1,
+			     data, IOD3_DATA_SIZE * 3, req);
+
+		req->iod_type = DAOS_IOD_SINGLE;
+		memset(single_data, 'a' + i, LARGE_SINGLE_VALUE_SIZE);
+		sprintf(key, "dkey_single_small_%d_%d", index, i);
+		insert_single(key, "a_key", 0, single_data, 32, DAOS_TX_NONE,
+			      req);
+
+		sprintf(key, "dkey_single_large_%d_%d", index, i);
+		insert_single(key, "a_key", 0, single_data,
+			      LARGE_SINGLE_VALUE_SIZE, DAOS_TX_NONE, req);
+	}
+}
+
+static void
+verify_ec(struct ioreq *req, int index, char *verify_data, daos_off_t off,
+	  daos_size_t size)
+{
+	char		key[32];
+	char		key_buf[32];
+	const char	*akey = key_buf;
+	void		*read_data;
+	char		single_buf[LARGE_SINGLE_VALUE_SIZE];
+	void		*single_data = single_buf;
+	char		verify_single_data[LARGE_SINGLE_VALUE_SIZE];
+	int		i;
+
+	read_data = (char *)malloc(size);
+	for (i = 0; i < KEY_NR; i++) {
+		uint64_t	offset = off + i * 10485760;
+		uint64_t	idx = 0;
+		daos_size_t	read_size = 0;
+		daos_size_t	iod_size = 1;
+		daos_size_t	single_data_size;
+		daos_size_t	iod3_datasize = IOD3_DATA_SIZE * 3;
+		daos_size_t	datasize = size;
+
+		req->iod_type = DAOS_IOD_ARRAY;
+		sprintf(key, "dkey_%d", index);
+		sprintf(key_buf, "a_key");
+		memset(read_data, 0, size);
+		lookup(key, 1, &akey, &offset, &iod_size,
+		       &read_data, &datasize, DAOS_TX_NONE, req, false);
+		assert_memory_equal(read_data, verify_data, datasize);
+		assert_int_equal(iod_size, 1);
+
+		sprintf(key_buf, "a_key_iod3");
+		memset(read_data, 0, size);
+		lookup(key, 1, &akey, &offset, &iod_size, &read_data,
+		       &iod3_datasize, DAOS_TX_NONE, req, false);
+		assert_int_equal(iod_size, 3);
+		assert_memory_equal(read_data, verify_data, iod3_datasize);
+
+		memset(verify_single_data, 'a' + i, LARGE_SINGLE_VALUE_SIZE);
+
+		req->iod_type = DAOS_IOD_SINGLE;
+		memset(single_data, 0, SMALL_SINGLE_VALUE_SIZE);
+		single_data_size = SMALL_SINGLE_VALUE_SIZE;
+		sprintf(key, "dkey_single_small_%d_%d", index, i);
+		sprintf(key_buf, "a_key");
+		lookup(key, 1, &akey, &idx, &read_size, &single_data,
+		       &single_data_size, DAOS_TX_NONE, req, false);
+		assert_int_equal(read_size, SMALL_SINGLE_VALUE_SIZE);
+		assert_memory_equal(single_data, verify_single_data,
+				    SMALL_SINGLE_VALUE_SIZE);
+
+		idx = 0;
+		read_size = 0;
+		single_data_size = LARGE_SINGLE_VALUE_SIZE;
+		memset(single_data, 0, LARGE_SINGLE_VALUE_SIZE);
+		sprintf(key, "dkey_single_large_%d_%d", index, i);
+		lookup(key, 1, &akey, &idx, &read_size, &single_data,
+		       &single_data_size, DAOS_TX_NONE, req, false);
+		assert_int_equal(read_size, LARGE_SINGLE_VALUE_SIZE);
+		assert_memory_equal(single_data, verify_single_data,
+				    LARGE_SINGLE_VALUE_SIZE);
+	}
+	free(read_data);
+}
+
+void
+write_ec_partial(struct ioreq *req, int test_idx, daos_off_t off)
+{
+	char	buffer[PARTIAL_DATA_SIZE];
+
+	make_buffer(buffer, 'a', PARTIAL_DATA_SIZE);
+	write_ec(req, test_idx, buffer, off, PARTIAL_DATA_SIZE);
+}
+
+void
+verify_ec_partial(struct ioreq *req, int test_idx, daos_off_t off)
+{
+	char	buffer[PARTIAL_DATA_SIZE];
+
+	make_buffer(buffer, 'a', PARTIAL_DATA_SIZE);
+	verify_ec(req, test_idx, buffer, off, PARTIAL_DATA_SIZE);
+}
+
+void
+write_ec_full(struct ioreq *req, int test_idx, daos_off_t off)
+{
+	char	*buffer;
+
+	buffer = (char *)malloc(DATA_SIZE);
+	make_buffer(buffer, 'b', DATA_SIZE);
+	write_ec(req, test_idx, buffer, off, DATA_SIZE);
+	free(buffer);
+}
+
+void
+verify_ec_full(struct ioreq *req, int test_idx, daos_off_t off)
+{
+	char	*buffer;
+
+	buffer = (char *)malloc(DATA_SIZE);
+	make_buffer(buffer, 'b', DATA_SIZE);
+	verify_ec(req, test_idx, buffer, off, DATA_SIZE);
+	free(buffer);
+}
+
+void
+write_ec_full_partial(struct ioreq *req, int test_idx, daos_off_t off)
+{
+	write_ec_full(req, test_idx, off);
+	write_ec_partial(req, test_idx, off);
+}
+
+void
+write_ec_partial_full(struct ioreq *req, int test_idx, daos_off_t off)
+{
+	write_ec_partial(req, test_idx, off);
+	write_ec_full(req, test_idx, off);
+}
+
+void
+verify_ec_full_partial(struct ioreq *req, int test_idx, daos_off_t off)
+{
+	char	buffer[DATA_SIZE];
+
+	make_buffer(buffer, 'b', DATA_SIZE);
+	make_buffer(buffer, 'a', PARTIAL_DATA_SIZE);
+	verify_ec(req, test_idx, buffer, off, DATA_SIZE);
+}
+
 /* Create a new pool for the sub_test */
 int
 rebuild_pool_create(test_arg_t **new_arg, test_arg_t *old_arg, int flag,
@@ -553,7 +737,7 @@ rebuild_pool_create(test_arg_t **new_arg, test_arg_t *old_arg, int flag,
 
 	/* create/connect another pool */
 	rc = test_setup((void **)new_arg, flag, old_arg->multi_rank,
-			REBUILD_SUBTEST_POOL_SIZE, pool);
+			REBUILD_SUBTEST_POOL_SIZE, 0, pool);
 	if (rc) {
 		print_message("open/connect another pool failed: rc %d\n", rc);
 		return rc;
@@ -598,9 +782,8 @@ get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data_nr,
 			int parity_nr, d_rank_t *ranks, int *ranks_num)
 {
 	struct daos_oclass_attr *oca;
-	uint32_t		shard = 0;
+	uint32_t		shard;
 	int			idx = 0;
-	int			data_idx;
 
 	oca = daos_oclass_attr_find(oid);
 	if (oca->ca_resil == DAOS_RES_REPL) {
@@ -612,15 +795,16 @@ get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data_nr,
 	/* for EC object */
 	assert_true(data_nr <= oca->u.ec.e_k);
 	assert_true(parity_nr <= oca->u.ec.e_p);
-	while (parity_nr-- > 0) {
-		shard = oca->u.ec.e_k + oca->u.ec.e_p - 1 - idx;
-		ranks[idx++] = get_rank_by_oid_shard(arg, oid, shard);
-	}
+	shard = oca->u.ec.e_k + oca->u.ec.e_p - 1;
+	while (parity_nr-- > 0)
+		ranks[idx++] = get_rank_by_oid_shard(arg, oid, shard--);
 
-	data_idx = 0;
+	shard = 0;
 	while (data_nr-- > 0) {
-		shard = data_idx++;
 		ranks[idx++] = get_rank_by_oid_shard(arg, oid, shard);
+		shard = shard + 2;
+		if (shard > oca->u.ec.e_k)
+			break;
 	}
 
 	*ranks_num = idx;
@@ -652,7 +836,7 @@ rebuild_sub_setup(void **state)
 
 	save_group_state(state);
 	rc = test_setup(state, SETUP_CONT_CONNECT, true,
-			REBUILD_SUBTEST_POOL_SIZE, NULL);
+			REBUILD_SUBTEST_POOL_SIZE, 0, NULL);
 	if (rc)
 		return rc;
 
@@ -673,7 +857,7 @@ rebuild_small_sub_setup(void **state)
 
 	save_group_state(state);
 	rc = test_setup(state, SETUP_CONT_CONNECT, true,
-			REBUILD_SMALL_POOL_SIZE, NULL);
+			REBUILD_SMALL_POOL_SIZE, 0, NULL);
 	if (rc)
 		return rc;
 

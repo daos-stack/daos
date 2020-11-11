@@ -51,12 +51,12 @@ cmd_push_arg(char *args[], int *argcount, const char *fmt, ...)
 
 	va_start(ap, fmt);
 	rc = vasprintf(&arg, fmt, ap);
+	va_end(ap);
 	if (arg == NULL || rc < 0) {
 		D_ERROR("failed to create arg\n");
 		cmd_free_args(args, *argcount);
 		return NULL;
 	}
-	va_end(ap);
 
 	D_REALLOC(tmp, args, sizeof(char *) * (*argcount + 1));
 	if (tmp == NULL) {
@@ -249,7 +249,7 @@ parse_pool_info(struct json_object *json_pool, daos_mgmt_pool_info_t *pool_info)
 	struct json_object	*tmp, *rank;
 	int			n_svcranks;
 	const char		*uuid_str;
-	int			i;
+	int			i, rc;
 
 	if (json_pool == NULL || pool_info == NULL)
 		return -DER_INVAL;
@@ -259,7 +259,15 @@ parse_pool_info(struct json_object *json_pool, daos_mgmt_pool_info_t *pool_info)
 		return -DER_INVAL;
 	}
 	uuid_str = json_object_get_string(tmp);
-	uuid_parse(uuid_str, pool_info->mgpi_uuid);
+	if (uuid_str == NULL) {
+		D_ERROR("unable to extract UUID string from JSON\n");
+		return -DER_INVAL;
+	}
+	rc = uuid_parse(uuid_str, pool_info->mgpi_uuid);
+	if (rc != 0) {
+		D_ERROR("failed parsing uuid_str\n");
+		return -DER_INVAL;
+	}
 
 	if (!json_object_object_get_ex(json_pool, "Svcreps", &tmp)) {
 		D_ERROR("unable to parse pool svcreps from JSON\n");
@@ -583,7 +591,10 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 {
 	struct json_object	*tmp;
 	struct json_object	*dev = NULL;
-	int			i;
+	struct json_object	*target = NULL;
+	struct json_object	*targets;
+	int			tgts_len;
+	int			i, j;
 
 	for (i = 0; i < dev_length; i++) {
 		dev = json_object_array_get_idx(smd_dev, i);
@@ -594,6 +605,19 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 		}
 		uuid_parse(json_object_get_string(tmp),
 			   devices[*disks].device_id);
+
+		if (!json_object_object_get_ex(dev, "tgt_ids",
+					       &targets)) {
+			D_ERROR("unable to extract tgtids from JSON\n");
+			return -DER_INVAL;
+		}
+		tgts_len = json_object_array_length(targets);
+		for (j = 0; j < tgts_len; j++) {
+			target = json_object_array_get_idx(targets, j);
+			devices[*disks].tgtidx[j] = atoi(
+				json_object_to_json_string(target));
+		}
+		devices[*disks].n_tgtidx = tgts_len;
 
 		if (!json_object_object_get_ex(dev, "state", &tmp)) {
 			D_ERROR("unable to extract state from JSON\n");
@@ -760,4 +784,19 @@ int verify_blobstore_state(int state, const char *state_str)
 	}
 
 	return 1;
+}
+
+const char *
+daos_target_state_enum_to_str(int state)
+{
+	switch (state) {
+	case DAOS_TS_UNKNOWN: return "UNKNOWN";
+	case DAOS_TS_DOWN_OUT: return "DOWNOUT";
+	case DAOS_TS_DOWN: return "DOWN";
+	case DAOS_TS_UP: return "UP";
+	case DAOS_TS_UP_IN: return "UPIN";
+	case DAOS_TS_DRAIN: return "DRAIN";
+	}
+
+	return "Undefined State";
 }

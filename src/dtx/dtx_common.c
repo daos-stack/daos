@@ -181,6 +181,12 @@ dtx_batched_commit(void *arg)
 			if (rc > 0) {
 				rc = dtx_commit(cont->sc_pool->spc_uuid,
 						cont->sc_uuid, dtes, rc, true);
+				if (rc != 0) {
+					D_ERROR("Fail to commit dtx: "DF_RC"\n",
+						DP_RC(rc));
+					goto check;
+				}
+
 				dtx_free_committable(dtes);
 
 				if (dbca->dbca_deregistering) {
@@ -644,6 +650,8 @@ again:
 		 */
 		if (dth->dth_sync)
 			goto sync;
+
+		D_ASSERT(dth->dth_mbs != NULL);
 
 		size = sizeof(*dte) + sizeof(*mbs) + dth->dth_mbs->dm_data_size;
 		D_ALLOC(dte, size);

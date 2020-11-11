@@ -654,6 +654,8 @@ skip_probe:
 			D_GOTO(out, rc);
 
 		rc = evt_iter_next(ih);
+		if (rc != 0)
+			D_GOTO(out, rc);
 	}
  out:
 	evt_iter_finish(ih);
@@ -1646,7 +1648,7 @@ test_evt_various_data_size_internal(void **state)
 					break;
 			}
 			entry.ei_rect.rc_ex.ex_lo = epoch;
-			entry.ei_rect.rc_ex.ex_hi = epoch + data_size;
+			entry.ei_rect.rc_ex.ex_hi = epoch + data_size - 1;
 			entry.ei_rect.rc_epc = epoch;
 			entry.ei_ver = 0;
 			entry.ei_inob = data_size;
@@ -1671,7 +1673,7 @@ test_evt_various_data_size_internal(void **state)
 			if (epoch == 1) {
 				evt_ent_array_init(&ent_array);
 				filter.fr_ex.ex_lo = epoch;
-				filter.fr_ex.ex_hi = epoch + data_size;
+				filter.fr_ex.ex_hi = epoch + data_size - 1;
 				filter.fr_epr.epr_hi = epoch;
 				rc = evt_find(toh, &filter, &ent_array);
 				if (rc != 0)
@@ -1700,7 +1702,8 @@ test_evt_various_data_size_internal(void **state)
 			/* Delete a record*/
 			if (epoch % 10 == 0) {
 				entry.ei_rect.rc_ex.ex_lo = epoch;
-				entry.ei_rect.rc_ex.ex_hi = epoch + data_size;
+				entry.ei_rect.rc_ex.ex_hi = epoch + data_size
+							    - 1;
 				entry.ei_rect.rc_epc = epoch;
 
 				rc = evt_delete(toh, &entry.ei_rect, NULL);

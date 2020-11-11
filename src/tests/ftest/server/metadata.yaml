@@ -9,7 +9,10 @@ hosts:
     - server-D
   test_clients:
     - client-C
-timeout: 900
+timeouts:
+  test_metadata_find_svc: 100
+  test_metadata_fillup: 300
+  test_metadata_addremove: 900
 server_config:
   name: daos_server
   servers_per_host: 2

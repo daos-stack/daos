@@ -76,14 +76,14 @@ struct crt_common_hdr {
 	uint32_t	cch_flags;
 	/* HLC timestamp */
 	uint64_t	cch_hlc;
+	/* RPC id */
+	uint64_t	cch_rpcid;
 	/* destination rank in default primary group */
 	d_rank_t	cch_dst_rank;
 	/* originator rank in default primary group */
 	d_rank_t	cch_src_rank;
 	/* tag to which rpc request was sent to */
 	uint32_t	cch_dst_tag;
-	/* RPC id */
-	uint64_t	cch_rpcid;
 	/* used in crp_reply_hdr to propagate rpc failure back to sender */
 	uint32_t	cch_rc;
 };

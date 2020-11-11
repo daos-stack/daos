@@ -21,6 +21,7 @@ hosts: !mux
     test_servers:
       - boro-A
       - boro-B
+timeout: 600
 tests: !mux
   corpc_prefwd:
     name: corpc_prefwd

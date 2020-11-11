@@ -182,14 +182,18 @@ __shim_handle__cont_open(PyObject *self, PyObject *args)
 	uuid_t		 puuid;
 	uuid_t		 cuuid;
 	int		 flags;
+	int		 rc;
 
 	/** Parse arguments, flags not used for now */
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "sssi", &puuid_str, &cuuid_str,
 				       &svc_str, &flags);
-	uuid_parse(puuid_str, puuid);
-	uuid_parse(cuuid_str, cuuid);
+	rc = uuid_parse(puuid_str, puuid);
+	if (rc)
+		goto out;
 
-	return cont_open(DER_SUCCESS, puuid, cuuid, svc_str, flags);
+	rc = uuid_parse(cuuid_str, cuuid);
+out:
+	return cont_open(rc, puuid, cuuid, svc_str, flags);
 }
 
 static PyObject *
@@ -198,7 +202,7 @@ __shim_handle__cont_open_by_path(PyObject *self, PyObject *args)
 	const char		*path;
 	char			*svc_str;
 	int			 flags;
-	struct duns_attr_t	 attr;
+	struct duns_attr_t	 attr = {0};
 	int			 rc;
 
 	/** Parse arguments, flags not used for now */

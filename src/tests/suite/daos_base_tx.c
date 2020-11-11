@@ -709,7 +709,7 @@ dtx_test_setup(void **state)
 	int     rc;
 
 	rc = test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
-			NULL);
+			0, NULL);
 
 	return rc;
 }

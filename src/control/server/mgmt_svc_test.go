@@ -50,7 +50,7 @@ func makeBadBytes(count int) (badBytes []byte) {
 }
 
 /*func TestCheckMgmtSvcReplica(t *testing.T) {
-	defaultPort := strconv.Itoa(NewConfiguration().ControlPort)
+	defaultPort := strconv.Itoa(DefaultServer().ControlPort)
 
 	tests := []struct {
 		self              string

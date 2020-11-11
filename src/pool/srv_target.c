@@ -380,7 +380,10 @@ err_iv_ns:
 err_group:
 	crt_group_secondary_destroy(pool->sp_group);
 err_done_cond:
-	ABT_cond_free(&pool->sp_fetch_hdls_done_cond);
+	rc = ABT_cond_free(&pool->sp_fetch_hdls_done_cond);
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to destroy pool group: %d\n",
+			DP_UUID(pool->sp_uuid), rc);
 err_cond:
 	ABT_cond_free(&pool->sp_fetch_hdls_cond);
 err_mutex:

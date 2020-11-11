@@ -314,7 +314,7 @@ class Snapshot(TestWithServers):
 
 
     def test_snapshots(self):
-        # pylint: disable=no-member
+        # pylint: disable=no-member,too-many-locals
         """
         Test ID: DAOS-1386 Test container SnapShot information
                  DAOS-1371 Test list snapshots
@@ -474,11 +474,12 @@ class Snapshot(TestWithServers):
 
         #(6)Destroy the individual snapshot
             self.log.info("=(6.%s)Destroy the snapshot epoch: %s",
-                          ss_number, epoch)
+                          ss_number, snapshot.epoch)
             try:
-                snapshot.destroy(coh, epoch)
-                self.log.info("  ==snapshot epoch %s successfully destroyed",
-                              epoch)
+                snapshot.destroy(coh, snapshot.epoch)
+                self.log.info(
+                    "  ==snapshot.epoch %s successfully destroyed",
+                    snapshot.epoch)
             except Exception as error:
                 self.fail("##(6)Error on snapshot.destroy: {}"
                           .format(str(error)))
@@ -500,8 +501,9 @@ class Snapshot(TestWithServers):
 
         #Still able to open the snapshot and read data after destroyed.
         try:
-            ss_list = snapshot.list(coh, epoch)
-            self.log.info("  -->snapshot.list(coh, epoch)= %s", ss_list)
+            ss_list = snapshot.list(coh, snapshot.epoch)
+            self.log.info(
+                "  -->snapshot.list(coh, snapshot.epoch)= %s", ss_list)
         except Exception as error:
             self.fail("##(7)Error when calling the snapshot list: {}"
                       .format(str(error)))
