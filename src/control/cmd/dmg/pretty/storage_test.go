@@ -302,6 +302,130 @@ host[0-1023] 1 B (1 module) 1 B (1 controller)
 	}
 }
 
+func TestControl_PrintStorageUsageScanResponse(t *testing.T) {
+	var (
+		withSpaceUsageScan = control.MockServerScanResp(t, "withSpaceUsage")
+		noStorageScan      = control.MockServerScanResp(t, "noStorage")
+		bothScansFailed    = control.MockServerScanResp(t, "bothFailed")
+	)
+
+	for name, tc := range map[string]struct {
+		mic         *control.MockInvokerConfig
+		expPrintStr string
+	}{
+		"empty response": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{},
+			},
+		},
+		"server error": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:  "host1",
+							Error: errors.New("failed"),
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Errors:
+  Hosts Error  
+  ----- -----  
+  host1 failed 
+
+`,
+		},
+		"scm and nvme scan error": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1:1",
+							Message: bothScansFailed,
+						},
+						{
+							Addr:    "host2:1",
+							Message: bothScansFailed,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Errors:
+  Hosts     Error            
+  -----     -----            
+  host[1-2] nvme scan failed 
+  host[1-2] scm scan failed  
+
+Hosts     SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used 
+-----     --------- -------- -------- ---------- --------- --------- 
+host[1-2] 0 B       0 B      N/A      0 B        0 B       N/A       
+`,
+		},
+		"no storage": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: noStorageScan,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Hosts SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used 
+----- --------- -------- -------- ---------- --------- --------- 
+host1 0 B       0 B      N/A      0 B        0 B       N/A       
+`,
+		},
+		"single host with space usage": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: withSpaceUsageScan,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Hosts SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used 
+----- --------- -------- -------- ---------- --------- --------- 
+host1 3.0 TB    750 GB   75 %     36 TB      27 TB     25 %      
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			ctx := context.TODO()
+			mi := control.NewMockInvoker(log, tc.mic)
+
+			resp, err := control.StorageScan(ctx, mi, &control.StorageScanReq{})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			var bld strings.Builder
+			if err := PrintResponseErrors(resp, &bld); err != nil {
+				t.Fatal(err)
+			}
+			if err := PrintHostStorageUsageMap(resp.HostStorage, &bld); err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestControl_PrintStorageScanResponseVerbose(t *testing.T) {
 	var (
 		standardScan      = control.MockServerScanResp(t, "standard")
@@ -496,7 +620,7 @@ host1
 -----
 SCM Namespace Socket ID Capacity 
 ------------- --------- -------- 
-/dev/pmem1    1         1 B      
+pmem0         0         1 B      
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
@@ -629,7 +753,7 @@ func TestControl_PrintStorageFormatResponse(t *testing.T) {
 		"server error": {
 			resp: &control.StorageFormatResp{
 				HostErrorsResp: control.MockHostErrorsResp(t,
-					&control.MockHostError{"host1", "failed"}),
+					&control.MockHostError{Hosts: "host1", Error: "failed"}),
 			},
 			expPrintStr: `
 Errors:
@@ -752,7 +876,7 @@ func TestControl_PrintStorageFormatResponseVerbose(t *testing.T) {
 		"server error": {
 			resp: &control.StorageFormatResp{
 				HostErrorsResp: control.MockHostErrorsResp(t,
-					&control.MockHostError{"host1", "failed"}),
+					&control.MockHostError{Hosts: "host1", Error: "failed"}),
 			},
 			expPrintStr: `
 Errors:

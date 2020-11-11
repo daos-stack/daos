@@ -63,7 +63,7 @@ struct ctrlr_t {
 	char				 pci_type[BUFLEN];
 	int				 socket_id;
 	struct ns_t			*nss;
-	struct nvme_health_stats	*stats;
+	struct nvme_stats		*stats;
 	struct ctrlr_t			*next;
 };
 

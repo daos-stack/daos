@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -65,12 +65,14 @@ message NvmeController {
 	}
 
 	// SmdDevice represents a blobstore created on a NvmeController_Namespace.
-	// TODO: this should really be embedded in Namespace above.
+	// TODO: this should be embedded in Namespace above
 	message SmdDevice {
 		string uuid = 1;		// UUID of blobstore
 		repeated int32 tgt_ids = 2;	// VOS target IDs
 		string state = 3;		// NORMAL or FAULTY
 		uint32 rank = 4;		// DAOS I/O server using controller
+		uint64 total_bytes = 5;		// blobstore clusters total bytes
+		uint64 avail_bytes = 6;		// blobstore clusters available bytes
 	}
 
 	string model = 1;	// model name
@@ -102,7 +104,8 @@ message PrepareNvmeResp {
 
 message ScanNvmeReq {
 	bool Health = 1; // Retrieve NVMe device health statistics
-	bool Meta = 2; // Retrieve metadata relating to NVMe device.
+	bool Meta = 2; // Retrieve metadata relating to NVMe device
+	bool Basic = 3; // Strip NVMe device details to only basic
 }
 
 message ScanNvmeResp {

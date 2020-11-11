@@ -1,0 +1,21 @@
+# you might think libvio.so goes in the server RPM but
+# the 2 tools following it need it
+usr/lib64/daos_srv/libbio.so
+# you might think libdaos_tests.so goes in the tests RPM but
+# the 4 tools following it need it
+usr/lib64/libdaos_tests.so
+usr/bin/io_conf
+usr/bin/jump_pl_map
+usr/bin/ring_pl_map
+usr/bin/pl_bench
+usr/bin/rdbt
+usr/lib64/libvos.so
+usr/lib64/libdaos_common.so
+usr/etc/memcheck-cart.supp
+usr/etc/vos_size_input.yaml
+# TODO: this should move from daos_srv to daos
+usr/lib64/daos_srv/libplacement.so
+# Certificate generation files
+usr/lib64/daos/certgen/*
+usr/lib64/daos/VERSION
+usr/etc/bash_completion.d/daos.bash

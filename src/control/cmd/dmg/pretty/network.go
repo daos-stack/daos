@@ -32,13 +32,14 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
-type hfiMap map[uint32]map[string][]string
+type hfiMap map[uint]map[string][]string
 
 func (h hfiMap) addInterface(fi *control.HostFabricInterface) {
-	if _, ok := h[fi.NumaNode]; !ok {
-		h[fi.NumaNode] = make(map[string][]string)
+	nn := uint(fi.NumaNode)
+	if _, ok := h[nn]; !ok {
+		h[nn] = make(map[string][]string)
 	}
-	h[fi.NumaNode][fi.Provider] = append(h[fi.NumaNode][fi.Provider], fi.Device)
+	h[nn][fi.Provider] = append(h[nn][fi.Provider], fi.Device)
 }
 
 // PrintHostFabricMap generates a human-readable representation of the supplied
@@ -83,7 +84,7 @@ func PrintHostFabricMap(hfm control.HostFabricMap, out io.Writer, opts ...PrintC
 				table = append(table, row)
 			}
 
-			fmt.Fprintf(iwTable, fmt.Sprintf("%s", formatter.Format(table)))
+			fmt.Fprint(iwTable, formatter.Format(table))
 			fmt.Fprintln(ew)
 		}
 	}

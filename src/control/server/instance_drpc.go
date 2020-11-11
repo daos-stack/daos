@@ -39,6 +39,11 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+var (
+	dRPCNotReady     = errors.New("no dRPC client set (data plane not started?)")
+	instanceNotReady = errors.New("instance not ready yet")
+)
+
 func (srv *IOServerInstance) setDrpcClient(c drpc.DomainSocketClient) {
 	srv.Lock()
 	defer srv.Unlock()
@@ -49,7 +54,7 @@ func (srv *IOServerInstance) getDrpcClient() (drpc.DomainSocketClient, error) {
 	srv.RLock()
 	defer srv.RUnlock()
 	if srv._drpcClient == nil {
-		return nil, errors.New("no dRPC client set (data plane not started?)")
+		return nil, dRPCNotReady
 	}
 	return srv._drpcClient, nil
 }
@@ -80,6 +85,12 @@ func (srv *IOServerInstance) CallDrpc(ctx context.Context, method drpc.Method, b
 	if err != nil {
 		return nil, err
 	}
+
+	rankMsg := ""
+	if sb := srv.getSuperblock(); sb != nil {
+		rankMsg = fmt.Sprintf(" (rank %s)", sb.Rank)
+	}
+	srv.log.Debugf("dRPC to index %d%s: %s", srv.Index(), rankMsg, method)
 
 	return makeDrpcCall(ctx, srv.log, dc, method, body)
 }
@@ -211,8 +222,9 @@ func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[
 		return errors.Wrapf(err, "instance %d listSmdDevices()", srv.Index())
 	}
 
+	hasUpdatedHealth := make(map[string]bool)
 	for _, dev := range smdDevs.Devices {
-		healthPB, err := srv.getBioHealth(ctx, &mgmtpb.BioHealthReq{
+		pbStats, err := srv.getBioHealth(ctx, &mgmtpb.BioHealthReq{
 			DevUuid: dev.Uuid,
 		})
 		if err != nil {
@@ -222,8 +234,8 @@ func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[
 		msg := fmt.Sprintf("instance %d: health stats from smd uuid %s", srv.Index(),
 			dev.GetUuid())
 
-		health := new(storage.NvmeControllerHealth)
-		if err := convert.Types(healthPB, health); err != nil {
+		health := new(storage.NvmeHealth)
+		if err := convert.Types(pbStats, health); err != nil {
 			return errors.Wrapf(err, msg)
 		}
 
@@ -245,7 +257,10 @@ func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[
 		// multiple updates for the same key expected when
 		// more than one controller namespaces (and resident
 		// blobstores) exist, stats will be the same for each
-		ctrlr.HealthStats = health
+		if _, already := hasUpdatedHealth[key]; !already {
+			ctrlr.HealthStats = health
+			hasUpdatedHealth[key] = true
+		}
 
 		smdDev := new(storage.SmdDevice)
 		if err := convert.Types(dev, smdDev); err != nil {
@@ -256,6 +271,12 @@ func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[
 			return errors.Wrapf(err, "get rank")
 		}
 		smdDev.Rank = srvRank
+		// space utilisation stats for each smd device
+		smdDev.TotalBytes = pbStats.TotalBytes
+		smdDev.AvailBytes = pbStats.AvailBytes
+
+		srv.log.Debugf("update smd/bs %s usage on ctrlr %s: %+v",
+			dev.GetUuid(), ctrlr.PciAddr, smdDev)
 
 		ctrlr.UpdateSmd(smdDev)
 	}

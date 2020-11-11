@@ -24,15 +24,15 @@
 package system
 
 import (
-	"fmt"
 	"net"
-	"reflect"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -70,6 +70,51 @@ func TestSystem_Member_Stringify(t *testing.T) {
 	}
 }
 
+func TestSystem_Member_MarshalUnmarshalJSON(t *testing.T) {
+	for name, tc := range map[string]struct {
+		member          *Member
+		expMarshalErr   error
+		expUnmarshalErr error
+	}{
+		"nil": {
+			expMarshalErr: errors.New("tried to marshal nil Member"),
+		},
+		"empty": {
+			member:          &Member{},
+			expUnmarshalErr: errors.New("address <nil>: missing port in address"),
+		},
+		"success": {
+			member: MockMember(t, 1, MemberStateReady),
+		},
+		"with info": {
+			member: MockMember(t, 2, MemberStateJoined, "info"),
+		},
+		"with fault domain": {
+			member: MockMember(t, 3, MemberStateStopped, "info").
+				WithFaultDomain(MustCreateFaultDomainFromString("/test/fault/domain")),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			marshaled, err := tc.member.MarshalJSON()
+			common.CmpErr(t, tc.expMarshalErr, err)
+			if err != nil {
+				return
+			}
+
+			unmarshaled := new(Member)
+			err = unmarshaled.UnmarshalJSON(marshaled)
+			common.CmpErr(t, tc.expUnmarshalErr, err)
+			if err != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.member, unmarshaled, cmp.AllowUnexported(Member{})); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestSystem_Membership_Get(t *testing.T) {
 	for name, tc := range map[string]struct {
 		memberToAdd *Member
@@ -87,14 +132,14 @@ func TestSystem_Membership_Get(t *testing.T) {
 			MockMember(t, 1, MemberStateUnknown),
 			Rank(2),
 			MockMember(t, 1, MemberStateUnknown),
-			FaultMemberMissing(Rank(2)),
+			&ErrMemberNotFound{byRank: NewRankPtr(2)},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			ms := NewMembership(log)
+			ms := NewMembership(log, MockDatabase(t, log))
 
 			if _, err := ms.Add(tc.memberToAdd); err != nil {
 				t.Fatal(err)
@@ -134,7 +179,7 @@ func TestSystem_Membership_AddRemove(t *testing.T) {
 			},
 			nil,
 			nil,
-			[]error{nil, FaultMemberExists(Rank(1))},
+			[]error{nil, &ErrMemberExists{Rank(1)}},
 		},
 		"remove non-existent": {
 			Members{
@@ -155,7 +200,7 @@ func TestSystem_Membership_AddRemove(t *testing.T) {
 
 			var count int
 			var err error
-			ms := NewMembership(log)
+			ms := NewMembership(log, MockDatabase(t, log))
 
 			for i, m := range tc.membersToAdd {
 				count, err = ms.Add(m)
@@ -171,15 +216,13 @@ func TestSystem_Membership_AddRemove(t *testing.T) {
 				ms.Remove(r)
 			}
 
-			AssertEqual(t, len(tc.expMembers), len(ms.members), name)
+			count, err = ms.Count()
+			if err != nil {
+				t.Fatal(err)
+			}
+			AssertEqual(t, len(tc.expMembers), count, name)
 		})
 	}
-}
-
-func assertMembersEqual(t *testing.T, a Member, b Member, msg string) {
-	t.Helper()
-	AssertTrue(t, reflect.DeepEqual(a, b),
-		fmt.Sprintf("%s: want %#v, got %#v", msg, a, b))
 }
 
 func TestSystem_Membership_AddOrReplace(t *testing.T) {
@@ -187,16 +230,16 @@ func TestSystem_Membership_AddOrReplace(t *testing.T) {
 	m1a := *MockMember(t, 1, MemberStateStopped)
 	m2a := *MockMember(t, 2, MemberStateStopped)
 	m0b := m0a
-	m0b.UUID = "m0b" // uuid changes after reformat
+	m0b.UUID = uuid.MustParse(MockUUID(4)) // uuid changes after reformat
 	m0b.state = MemberStateJoined
 	m1b := m1a
 	m1b.Addr = m0a.Addr // rank allocated differently between hosts after reformat
-	m1b.UUID = "m1b"
+	m1b.UUID = uuid.MustParse(MockUUID(5))
 	m1b.state = MemberStateJoined
 	m2b := m2a
 	m2a.Addr = m0a.Addr // ranks 0,2 on same host before reformat
 	m2b.Addr = m1a.Addr // ranks 0,1 on same host after reformat
-	m2b.UUID = "m2b"
+	m2b.UUID = uuid.MustParse(MockUUID(6))
 	m2b.state = MemberStateJoined
 
 	for name, tc := range map[string]struct {
@@ -222,27 +265,38 @@ func TestSystem_Membership_AddOrReplace(t *testing.T) {
 		},
 		"rank uuid and address changed after reformat": {
 			Members{&m0a, &m1a, &m2a, &m0b, &m2b, &m1b},
-			Members{&m0b, &m1b, &m2b},
+			Members{&m0b, &m2b, &m1b},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			ms := NewMembership(log)
+			ms := NewMembership(log, MockDatabase(t, log))
 
 			for _, m := range tc.membersToAddOrReplace {
-				ms.AddOrReplace(m)
+				if err := ms.AddOrReplace(m); err != nil {
+					t.Fatal(err)
+				}
 			}
 
-			AssertEqual(t, len(tc.expMembers), len(ms.members), name)
+			count, err := ms.Count()
+			if err != nil {
+				t.Fatal(err)
+			}
+			AssertEqual(t, len(tc.expMembers), count, name)
 
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(Member{}),
+			}
 			for _, em := range tc.expMembers {
 				m, err := ms.Get(em.Rank)
 				if err != nil {
 					t.Fatal(err)
 				}
-				assertMembersEqual(t, *em, *m, name)
+				if diff := cmp.Diff(em, m, cmpOpts...); diff != "" {
+					t.Fatalf("unexpected member (-want, +got):\n%s\n", diff)
+				}
 			}
 		})
 	}
@@ -257,7 +311,7 @@ func TestSystem_Membership_HostRanks(t *testing.T) {
 		MockMember(t, 1, MemberStateJoined),
 		MockMember(t, 2, MemberStateStopped),
 		MockMember(t, 3, MemberStateEvicted),
-		NewMember(Rank(4), "", addr1, MemberStateStopped), // second host rank
+		NewMember(Rank(4), MockUUID(4), addr1.String(), addr1, MemberStateStopped), // second host rank
 	}
 
 	for name, tc := range map[string]struct {
@@ -317,7 +371,7 @@ func TestSystem_Membership_HostRanks(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			ms := NewMembership(log)
+			ms := NewMembership(log, MockDatabase(t, log))
 
 			for _, m := range tc.members {
 				if _, err := ms.Add(m); err != nil {
@@ -330,7 +384,12 @@ func TestSystem_Membership_HostRanks(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			AssertEqual(t, tc.expRanks, ms.RankList(), "ranks")
+			rankList, err := ms.RankList()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			AssertEqual(t, tc.expRanks, rankList, "ranks")
 			AssertEqual(t, tc.expHostRanks, ms.HostRanks(rankSet), "host ranks")
 			AssertEqual(t, tc.expHosts, ms.HostList(rankSet), "hosts")
 			AssertEqual(t, tc.expMembers, ms.Members(rankSet), "members")
@@ -348,7 +407,7 @@ func TestSystem_Membership_CheckRanklist(t *testing.T) {
 		MockMember(t, 1, MemberStateJoined),
 		MockMember(t, 2, MemberStateStopped),
 		MockMember(t, 3, MemberStateEvicted),
-		NewMember(Rank(4), "", addr1, MemberStateStopped), // second host rank
+		NewMember(Rank(4), common.MockUUID(4), "", addr1, MemberStateStopped), // second host rank
 	}
 
 	for name, tc := range map[string]struct {
@@ -392,7 +451,7 @@ func TestSystem_Membership_CheckRanklist(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			ms := NewMembership(log)
+			ms := NewMembership(log, MockDatabase(t, log))
 
 			for _, m := range tc.members {
 				if _, err := ms.Add(m); err != nil {
@@ -418,14 +477,14 @@ func mockResolveFn(netString string, address string) (*net.TCPAddr, error) {
 	}
 
 	return map[string]*net.TCPAddr{
-			"127.0.0.1:10001": &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001},
-			"127.0.0.2:10001": &net.TCPAddr{IP: net.ParseIP("127.0.0.2"), Port: 10001},
-			"127.0.0.3:10001": &net.TCPAddr{IP: net.ParseIP("127.0.0.3"), Port: 10001},
-			"foo-1:10001":     &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001},
-			"foo-2:10001":     &net.TCPAddr{IP: net.ParseIP("127.0.0.2"), Port: 10001},
-			"foo-3:10001":     &net.TCPAddr{IP: net.ParseIP("127.0.0.3"), Port: 10001},
-			"foo-4:10001":     &net.TCPAddr{IP: net.ParseIP("127.0.0.4"), Port: 10001},
-			"foo-5:10001":     &net.TCPAddr{IP: net.ParseIP("127.0.0.5"), Port: 10001},
+			"127.0.0.1:10001": {IP: net.ParseIP("127.0.0.1"), Port: 10001},
+			"127.0.0.2:10001": {IP: net.ParseIP("127.0.0.2"), Port: 10001},
+			"127.0.0.3:10001": {IP: net.ParseIP("127.0.0.3"), Port: 10001},
+			"foo-1:10001":     {IP: net.ParseIP("127.0.0.1"), Port: 10001},
+			"foo-2:10001":     {IP: net.ParseIP("127.0.0.2"), Port: 10001},
+			"foo-3:10001":     {IP: net.ParseIP("127.0.0.3"), Port: 10001},
+			"foo-4:10001":     {IP: net.ParseIP("127.0.0.4"), Port: 10001},
+			"foo-5:10001":     {IP: net.ParseIP("127.0.0.5"), Port: 10001},
 		}[address], map[string]error{
 			"127.0.0.4:10001": errors.New("bad lookup"),
 			"127.0.0.5:10001": errors.New("bad lookup"),
@@ -444,7 +503,7 @@ func TestSystem_Membership_CheckHostlist(t *testing.T) {
 		MockMember(t, 3, MemberStateEvicted),
 		MockMember(t, 4, MemberStateJoined),
 		MockMember(t, 5, MemberStateJoined),
-		NewMember(Rank(6), "", addr1, MemberStateStopped), // second host rank
+		NewMember(Rank(6), common.MockUUID(6), "", addr1, MemberStateStopped), // second host rank
 	}
 
 	for name, tc := range map[string]struct {
@@ -541,7 +600,7 @@ func TestSystem_Membership_CheckHostlist(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			ms := NewMembership(log)
+			ms := NewMembership(log, MockDatabase(t, log))
 
 			for _, m := range tc.members {
 				if _, err := ms.Add(m); err != nil {
@@ -693,7 +752,7 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			ms := NewMembership(log)
+			ms := NewMembership(log, MockDatabase(t, log))
 
 			for _, m := range tc.members {
 				if _, err := ms.Add(m); err != nil {
@@ -719,6 +778,109 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 			// verify result host address is updated to that of member if empty
 			for i, r := range tc.expResults {
 				AssertEqual(t, tc.expResults[i].Addr, tc.results[i].Addr, r.Rank.String())
+			}
+		})
+	}
+}
+
+func TestSystem_Membership_Join(t *testing.T) {
+	fd1 := MustCreateFaultDomainFromString("/dc1/rack8/pdu5/host1")
+	fd2 := MustCreateFaultDomainFromString("/dc1/rack9/pdu0/host2")
+
+	curMember := MockMember(t, 0, MemberStateJoined).WithFaultDomain(fd1)
+	newMember := MockMember(t, 1, MemberStateJoined).WithFaultDomain(fd2)
+
+	for name, tc := range map[string]struct {
+		notLeader bool
+		req       *JoinRequest
+		expResp   *JoinResponse
+		expErr    error
+	}{
+		"not leader": {
+			notLeader: true,
+			req:       &JoinRequest{},
+			expErr:    &ErrNotLeader{},
+		},
+		"successful rejoin": {
+			req: &JoinRequest{
+				Rank:        curMember.Rank,
+				UUID:        curMember.UUID,
+				ControlAddr: curMember.Addr,
+				FabricURI:   curMember.Addr.String(),
+				FaultDomain: curMember.FaultDomain,
+			},
+			expResp: &JoinResponse{
+				Member:     curMember,
+				PrevState:  curMember.state,
+				MapVersion: 2,
+			},
+		},
+		"successful rejoin with different fault domain": {
+			req: &JoinRequest{
+				Rank:        curMember.Rank,
+				UUID:        curMember.UUID,
+				ControlAddr: curMember.Addr,
+				FabricURI:   curMember.Addr.String(),
+				FaultDomain: fd2,
+			},
+			expResp: &JoinResponse{
+				Member:     MockMember(t, 0, MemberStateJoined).WithFaultDomain(fd2),
+				PrevState:  curMember.state,
+				MapVersion: 2,
+			},
+		},
+		"rejoin with different rank": {
+			req: &JoinRequest{
+				Rank:        Rank(42),
+				UUID:        curMember.UUID,
+				ControlAddr: curMember.Addr,
+				FabricURI:   curMember.Addr.String(),
+				FaultDomain: curMember.FaultDomain,
+			},
+			expErr: errors.New("different rank"),
+		},
+		"successful join": {
+			req: &JoinRequest{
+				Rank:           NilRank,
+				UUID:           newMember.UUID,
+				ControlAddr:    newMember.Addr,
+				FabricURI:      newMember.FabricURI,
+				FabricContexts: newMember.FabricContexts,
+				FaultDomain:    newMember.FaultDomain,
+			},
+			expResp: &JoinResponse{
+				Created:    true,
+				Member:     newMember,
+				PrevState:  MemberStateUnknown,
+				MapVersion: 2,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			db := MockDatabase(t, log)
+			ms := NewMembership(log, db)
+			curMember.Rank = NilRank
+			if err := ms.addMember(curMember); err != nil {
+				t.Fatal(err)
+			}
+			if tc.notLeader {
+				_ = db.raft.Shutdown().Error()
+			}
+
+			gotResp, gotErr := ms.Join(tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(Member{}),
+			}
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

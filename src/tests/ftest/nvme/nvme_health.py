@@ -58,7 +58,7 @@ class NvmeHealth(ServerFillUp):
         self.pool = []
         #Create the Large number of pools
         for _pool in range(no_of_pools):
-            pool = TestPool(self.context, dmg_command=self.get_dmg_command())
+            pool = TestPool(self.context, self.get_dmg_command())
             pool.get_params(self)
             #SCM size is 10% of NVMe
             pool.scm_size.update('{}'.format(int(single_pool_nvme_size * 0.10)))

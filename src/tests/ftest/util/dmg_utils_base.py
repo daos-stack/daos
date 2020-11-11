@@ -94,8 +94,39 @@ class DmgCommandBase(YamlCommand):
             self.sub_command_class = self.StorageSubCommand()
         elif self.sub_command.value == "system":
             self.sub_command_class = self.SystemSubCommand()
+        elif self.sub_command.value == "cont":
+            self.sub_command_class = self.ContSubCommand()
         else:
             self.sub_command_class = None
+
+    class ContSubCommand(CommandWithSubCommand):
+        """Defines an object for the dmg cont sub command."""
+        def __init__(self):
+            """Create a dmg cont subcommand object."""
+            super(DmgCommandBase.ContSubCommand, self).__init__(
+                "/run/dmg/cont/*", "cont")
+
+        def get_sub_command_class(self):
+            # pylint: disable=redefined-variable-type
+            """Get the dmg cont sub command object."""
+            if self.sub_command.value == "set-owner":
+                self.sub_command_class = self.SetownerSubCommand()
+            else:
+                self.sub_command_class = None
+
+        class SetownerSubCommand(CommandWithParameters):
+            """Defines an object for the dmg cont set-owner command."""
+
+            def __init__(self):
+                """Create a dmg cont set-owner command object."""
+                super(
+                    DmgCommandBase.ContSubCommand.SetownerSubCommand,
+                    self).__init__(
+                        "/run/dmg/cont/set-owner/*", "set-owner")
+                self.pool = FormattedParameter("--pool={}", None)
+                self.cont = FormattedParameter("--cont={}", None)
+                self.user = FormattedParameter("--user={}", None)
+                self.group = FormattedParameter("--group={}", None)
 
     class NetworkSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg network sub command."""
@@ -156,10 +187,14 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.UpdateAclSubCommand()
             elif self.sub_command.value == "exclude":
                 self.sub_command_class = self.ExcludeSubCommand()
+            elif self.sub_command.value == "extend":
+                self.sub_command_class = self.ExtendSubCommand()
             elif self.sub_command.value == "drain":
                 self.sub_command_class = self.DrainSubCommand()
             elif self.sub_command.value == "reintegrate":
                 self.sub_command_class = self.ReintegrateSubCommand()
+            elif self.sub_command.value == "evict":
+                self.sub_command_class = self.EvictSubCommand()
             else:
                 self.sub_command_class = None
 
@@ -193,6 +228,20 @@ class DmgCommandBase(YamlCommand):
                 self.pool = FormattedParameter("--pool={}", None)
                 self.rank = FormattedParameter("--rank={}", None)
                 self.tgt_idx = FormattedParameter("--target-idx={}", None)
+
+        class ExtendSubCommand(CommandWithParameters):
+            """Defines an object for the dmg pool extend command."""
+
+            def __init__(self):
+                """Create a dmg pool extend command object."""
+                super(
+                    DmgCommandBase.PoolSubCommand.ExtendSubCommand,
+                    self).__init__(
+                        "/run/dmg/pool/extend/*", "extend")
+                self.pool = FormattedParameter("--pool={}", None)
+                self.ranks = FormattedParameter("--ranks={}", None)
+                self.scm_size = FormattedParameter("--scm-size={}", None)
+                self.nvme_size = FormattedParameter("--nvme-size={}", None)
 
         class DrainSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool drain command."""
@@ -314,6 +363,18 @@ class DmgCommandBase(YamlCommand):
                 self.pool = FormattedParameter("--pool={}", None)
                 self.acl_file = FormattedParameter("-a {}", None)
                 self.entry = FormattedParameter("-e {}", None)
+
+        class EvictSubCommand(CommandWithParameters):
+            """Defines an object for the dmg pool evict command."""
+
+            def __init__(self):
+                """Create a dmg pool evict command object."""
+                super(
+                    DmgCommandBase.PoolSubCommand.EvictSubCommand,
+                    self).__init__(
+                        "/run/dmg/pool/evict/*", "evict")
+                self.pool = FormattedParameter("--pool={}", None)
+                self.sys = FormattedParameter("--sys={}", None)
 
     class StorageSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg storage sub command."""

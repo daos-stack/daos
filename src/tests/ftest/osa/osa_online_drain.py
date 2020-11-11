@@ -122,17 +122,17 @@ class OSAOnlineDrain(TestWithServers):
                                test[2])] = str(uuid.uuid4())
 
         # Define the job manager for the IOR command
-        manager = Mpirun(ior_cmd, mpitype="mpich")
+        self.job_manager = Mpirun(ior_cmd, mpitype="mpich")
         key = "".join([oclass, api, str(test[2])])
-        manager.job.dfs_cont.update(container_info[key])
-        env = ior_cmd.get_default_env(str(manager))
-        manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-        manager.assign_processes(processes)
-        manager.assign_environment(env, True)
+        self.job_manager.job.dfs_cont.update(container_info[key])
+        env = ior_cmd.get_default_env(str(self.job_manager))
+        self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
+        self.job_manager.assign_processes(processes)
+        self.job_manager.assign_environment(env, True)
 
         # run IOR Command
         try:
-            manager.run()
+            self.job_manager.run()
         except CommandFailure as _error:
             results.put("FAIL")
 
@@ -158,8 +158,7 @@ class OSAOnlineDrain(TestWithServers):
         rank = random.randint(1, drain_servers)
 
         for val in range(0, num_pool):
-            pool[val] = TestPool(self.context,
-                                 dmg_command=self.get_dmg_command())
+            pool[val] = TestPool(self.context, self.get_dmg_command())
             pool[val].get_params(self)
             # Split total SCM and NVME size for creating multiple pools.
             pool[val].scm_size.value = int(pool[val].scm_size.value /

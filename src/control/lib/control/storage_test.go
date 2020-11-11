@@ -39,6 +39,7 @@ func TestControl_StorageScan(t *testing.T) {
 	var (
 		standardScan       = MockServerScanResp(t, "standard")
 		withNamespacesScan = MockServerScanResp(t, "withNamespace")
+		withSpaceUsageScan = MockServerScanResp(t, "withSpaceUsage")
 		noNVMEScan         = MockServerScanResp(t, "noNVME")
 		noSCMScan          = MockServerScanResp(t, "noSCM")
 		noStorageScan      = MockServerScanResp(t, "noStorage")
@@ -214,6 +215,22 @@ func TestControl_StorageScan(t *testing.T) {
 			expResponse: &StorageScanResp{
 				HostErrorsResp: MockHostErrorsResp(t),
 				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1", withNamespacesScan}),
+			},
+		},
+		"single host with space utilisation": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Addr:    "host1",
+							Message: withSpaceUsageScan,
+						},
+					},
+				},
+			},
+			expResponse: &StorageScanResp{
+				HostErrorsResp: MockHostErrorsResp(t),
+				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1", withSpaceUsageScan}),
 			},
 		},
 		"two hosts same scan": {

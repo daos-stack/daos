@@ -28,7 +28,6 @@ import (
 	"net"
 	"os/exec"
 	"strconv"
-	"strings"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -39,6 +38,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -105,7 +105,7 @@ func checkMgmtSvcReplica(self *net.TCPAddr, accessPoints []string) (isReplica, b
 // resolveAccessPoints resolves the strings in accessPoints into addresses in
 // addrs. If a port isn't specified, assume the default port.
 func resolveAccessPoints(accessPoints []string) (addrs []*net.TCPAddr, err error) {
-	defaultPort := NewConfiguration().ControlPort
+	defaultPort := config.DefaultServer().ControlPort
 	for _, ap := range accessPoints {
 		if !common.HasPort(ap) {
 			ap = net.JoinHostPort(ap, strconv.Itoa(defaultPort))
@@ -147,15 +147,19 @@ type mgmtSvc struct {
 	log              logging.Logger
 	harness          *IOServerHarness
 	membership       *system.Membership // if MS leader, system membership list
-	clientNetworkCfg *ClientNetworkCfg
+	sysdb            *system.Database
+	clientNetworkCfg *config.ClientNetworkCfg
+	joinReqs         joinReqChan
 }
 
-func newMgmtSvc(h *IOServerHarness, m *system.Membership, c *ClientNetworkCfg) *mgmtSvc {
+func newMgmtSvc(h *IOServerHarness, m *system.Membership, s *system.Database) *mgmtSvc {
 	return &mgmtSvc{
 		log:              h.log,
 		harness:          h,
 		membership:       m,
-		clientNetworkCfg: c,
+		sysdb:            s,
+		clientNetworkCfg: new(config.ClientNetworkCfg),
+		joinReqs:         make(joinReqChan),
 	}
 }
 
@@ -166,16 +170,24 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		return nil, errors.New("clientNetworkCfg is missing")
 	}
 
-	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodGetAttachInfo, req)
+	var groupMap *system.GroupMap
+	var err error
+	if req.GetAllRanks() {
+		groupMap, err = svc.sysdb.GroupMap()
+	} else {
+		groupMap, err = svc.sysdb.ReplicaRanks()
+	}
 	if err != nil {
 		return nil, err
 	}
 
-	resp := &mgmtpb.GetAttachInfoResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal GetAttachInfo response")
+	resp := new(mgmtpb.GetAttachInfoResp)
+	for rank, uri := range groupMap.RankURIs {
+		resp.Psrs = append(resp.Psrs, &mgmtpb.GetAttachInfoResp_Psr{
+			Rank: rank.Uint32(),
+			Uri:  uri,
+		})
 	}
-
 	resp.Provider = svc.clientNetworkCfg.Provider
 	resp.CrtCtxShareAddr = svc.clientNetworkCfg.CrtCtxShareAddr
 	resp.CrtTimeout = svc.clientNetworkCfg.CrtTimeout
@@ -183,26 +195,6 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 
 	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, resp:%+v\n", *resp)
 	return resp, nil
-}
-
-// checkIsMSReplica provides a hint as to who is service leader if instance is
-// not a Management Service replica.
-func checkIsMSReplica(mi *IOServerInstance) error {
-	msg := "instance is not an access point"
-	if !mi.isMSReplica() {
-		leader, err := mi.msClient.LeaderAddress()
-		if err != nil {
-			return err
-		}
-
-		if !strings.HasPrefix(leader, "localhost") {
-			msg += ", try " + leader
-		}
-
-		return errors.New(msg)
-	}
-
-	return nil
 }
 
 func queryRank(reqRank uint32, srvRank system.Rank) bool {

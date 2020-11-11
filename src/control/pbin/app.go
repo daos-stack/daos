@@ -235,7 +235,7 @@ func (a *App) handleRequest(req *Request) *Response {
 	}
 
 	if resp.Error != nil {
-		a.logError(resp.Error)
+		_ = a.logError(resp.Error)
 	}
 	return resp
 }

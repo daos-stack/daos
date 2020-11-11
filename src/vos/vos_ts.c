@@ -70,7 +70,7 @@ ts_update_on_evict(struct vos_ts_table *ts_table, struct vos_ts_entry *entry)
 		if (info->ti_type & 1) { /* negative entry */
 			parent_info = info - 1;
 		} else {
-			parent_info = info - 2;
+			parent_info = info - VOS_TS_PER_LEVEL;
 			neg_info = info - 1;
 		}
 		lrua_lookup(parent_info->ti_array, entry->te_parent_ptr,
@@ -319,18 +319,19 @@ vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *parent,
 
 int
 vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
-		    uint32_t cflags, uint32_t akey_nr,
+		    uint16_t cflags, uint32_t akey_nr,
 		    const struct dtx_id *tx_id)
 {
 	uint32_t	size;
 	uint64_t	array_size;
-	uint64_t	cond_mask = VOS_COND_FETCH_MASK | VOS_COND_UPDATE_MASK;
+	uint64_t	cond_mask = VOS_COND_FETCH_MASK | VOS_COND_UPDATE_MASK |
+		VOS_OF_COND_PER_AKEY;
 
 	*ts_set = NULL;
 	if (tx_id == NULL && (flags & cond_mask) == 0)
 		return 0;
 
-	size = 3 + akey_nr;
+	size = VOS_TS_TYPE_AKEY / VOS_TS_PER_LEVEL + akey_nr;
 	array_size = size * sizeof((*ts_set)->ts_entries[0]);
 
 	D_ALLOC(*ts_set, sizeof(**ts_set) + array_size);
@@ -338,27 +339,13 @@ vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 		return -DER_NOMEM;
 
 	(*ts_set)->ts_flags = flags;
-	(*ts_set)->ts_cflags = cflags;
-	switch (cflags & VOS_TS_WRITE_MASK) {
-	case VOS_TS_WRITE_OBJ:
-		(*ts_set)->ts_wr_level = VOS_TS_TYPE_OBJ;
-		break;
-	case VOS_TS_WRITE_DKEY:
-		(*ts_set)->ts_wr_level = VOS_TS_TYPE_DKEY;
-		break;
-	case VOS_TS_WRITE_AKEY:
-		(*ts_set)->ts_wr_level = VOS_TS_TYPE_AKEY;
-		break;
-	default:
-		/** Already zero */
-		break;
-	}
 	(*ts_set)->ts_set_size = size;
 	if (tx_id != NULL) {
 		(*ts_set)->ts_in_tx = true;
 		uuid_copy((*ts_set)->ts_tx_id.dti_uuid, tx_id->dti_uuid);
 		(*ts_set)->ts_tx_id.dti_hlc = tx_id->dti_hlc;
 	} /* ts_in_tx is false by default */
+	vos_ts_set_append_cflags(*ts_set, cflags);
 
 	return 0;
 }
@@ -396,7 +383,7 @@ vos_ts_set_upgrade(struct vos_ts_set *ts_set)
 		hash_idx = set_entry->se_hash & info->ti_cache_mask;
 		vos_ts_evict_lru(ts_table, parent, &entry,
 				 set_entry->se_create_idx, hash_idx,
-				 info->ti_type + 2);
+				 info->ti_type + VOS_TS_PER_LEVEL);
 		set_entry->se_entry = entry;
 	}
 }
@@ -424,20 +411,27 @@ vos_ts_check_read_conflict(struct vos_ts_set *ts_set, int idx,
 {
 	struct vos_ts_set_entry	*se;
 	struct vos_ts_entry	*entry;
+	int			 write_level;
 
 	D_ASSERT(ts_set != NULL);
 
 	se = &ts_set->ts_entries[idx];
 	entry = se->se_entry;
 
-	if (se->se_etype < ts_set->ts_wr_level) {
+	if (ts_set->ts_wr_level > ts_set->ts_max_type)
+		write_level = ts_set->ts_max_type;
+	else
+		write_level = ts_set->ts_wr_level;
+
+	if (se->se_etype > write_level)
+		return false; /** Check is redundant */
+
+	if (se->se_etype < write_level) {
 		/* check the low time */
 		return vos_ts_check_conflict(entry->te_ts.tp_ts_rl,
 					     &entry->te_ts.tp_tx_rl,
 					     write_time, &ts_set->ts_tx_id);
 	}
-
-	D_ASSERT(se->se_etype == ts_set->ts_wr_level);
 
 	/* check the high time */
 	return vos_ts_check_conflict(entry->te_ts.tp_ts_rh,

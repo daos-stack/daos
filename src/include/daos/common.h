@@ -47,6 +47,7 @@
 #include <gurt/common.h>
 #include <cart/api.h>
 #include <daos_types.h>
+#include <daos_obj.h>
 #include <daos_prop.h>
 #include <daos_security.h>
 #include <daos/profile.h>
@@ -673,6 +674,8 @@ enum {
 #define DAOS_FAIL_LOST_REQ		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x72)
 
 #define DAOS_SHARD_OBJ_RW_DROP_REPLY (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x80)
+#define DAOS_OBJ_FETCH_DATA_LOST	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x81)
+#define DAOS_OBJ_TRY_SPECIAL_SHARD	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x82)
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 
@@ -712,6 +715,29 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 	(((recx_1)->rx_idx < (recx_2)->rx_idx + (recx_2)->rx_nr) &&	\
 	 ((recx_2)->rx_idx < (recx_1)->rx_idx + (recx_1)->rx_nr))
 
+#define DAOS_RECX_ADJACENT(recx_1, recx_2)				\
+	(((recx_1).rx_idx == (recx_2).rx_idx + (recx_2).rx_nr) ||	\
+	 ((recx_2).rx_idx == (recx_1).rx_idx + (recx_1).rx_nr))
+#define DAOS_RECX_PTR_ADJACENT(recx_1, recx_2)				\
+	(((recx_1)->rx_idx == (recx_2)->rx_idx + (recx_2)->rx_nr) ||	\
+	 ((recx_2)->rx_idx == (recx_1)->rx_idx + (recx_1)->rx_nr))
+
+#define DAOS_RECX_END(recx)	((recx).rx_idx + (recx).rx_nr)
+#define DAOS_RECX_PTR_END(recx)	((recx)->rx_idx + (recx)->rx_nr)
+
+/**
+ * Merge \a src recx to \a dst recx.
+ */
+static inline void
+daos_recx_merge(daos_recx_t *src, daos_recx_t *dst)
+{
+	uint64_t	end;
+
+	end = max(DAOS_RECX_PTR_END(src), DAOS_RECX_PTR_END(dst));
+	dst->rx_idx = min(src->rx_idx, dst->rx_idx);
+	dst->rx_nr = end - dst->rx_idx;
+}
+
 /* NVMe shared constants */
 #define DAOS_NVME_SHMID_NONE	-1
 #define DAOS_NVME_MEM_PRIMARY	0
@@ -728,6 +754,8 @@ struct daos_prop_entry *daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
 int daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply);
 int daos_prop_entry_copy(struct daos_prop_entry *entry,
 			 struct daos_prop_entry *entry_dup);
+daos_recx_t *daos_recx_alloc(uint32_t nr);
+void daos_recx_free(daos_recx_t *recx);
 
 static inline void
 daos_parse_ctype(const char *string, daos_cont_layout_t *type)

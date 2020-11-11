@@ -329,9 +329,7 @@ func CleanUp(ctx context.Context) {
 
 // initLib initializes the hwloc library.
 func initLib() (C.hwloc_topology_t, error) {
-	var version C.uint
-
-	version = C.hwloc_get_api_version()
+	version := C.hwloc_get_api_version()
 	if (version >> 16) != (C.HWLOC_API_VERSION >> 16) {
 		return nil, errors.Errorf("compilation error - compiled for hwloc API 0x%x but using library API 0x%x\n", C.HWLOC_API_VERSION, version)
 	}

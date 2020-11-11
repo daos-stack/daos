@@ -21,10 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 #define D_LOGFAC        DD_FAC(tests)
-
-
 #include <string.h>
-
 #include <stdarg.h>
 #include <stddef.h>
 #include <setjmp.h> /** For cmocka.h */
@@ -54,6 +51,8 @@ static bool verbose;
 	for (__i = 0; __i < (e).ic_nr; __i++) \
 		assert_ci_equal((e).ic_data[__i], (a).ic_data[__i]);\
 } while (0)
+
+#define MAX_INPUT_SIZE 4096
 
 /** Text to be compressed */
 static uint8_t origin_buf[] =
@@ -98,50 +97,62 @@ static void
 test_alg_basic(const char *alg_name)
 {
 	struct daos_compressor *compressor;
-
 	int i = 0;
 	int origion_sz = sizeof(origin_buf);
 	int compressed_sz = sizeof(comp_buf);
 	int decompressed_sz = sizeof(decomp_buf);
+	size_t compr_output_sz = 0;
+	size_t decompr_output_sz = 0;
+	bool qat_preferred = true;
 
 	/** Initialize compressor */
-	int rc = daos_compressor_init_with_type(&compressor,
-				daos_str2compresscontprop(alg_name));
+	int rc = daos_compressor_init_with_type(
+				&compressor,
+				daos_str2compresscontprop(alg_name),
+				qat_preferred,
+				MAX_INPUT_SIZE);
 
-	assert_int_equal(0, rc);
-
+	assert_int_equal(DC_STATUS_OK, rc);
 	/** Perform compress */
-	compressed_sz = daos_compressor_compress(compressor,
-						 origin_buf,
-						 origion_sz,
-						 comp_buf,
-						 compressed_sz);
+	rc = daos_compressor_compress(
+				compressor,
+				origin_buf,
+				origion_sz,
+				comp_buf,
+				compressed_sz,
+				&compr_output_sz);
 
+	assert_int_equal(DC_STATUS_OK, rc);
 	if (verbose)
 		print_message("%s: compressed %d bytes --> %d bytes.\n",
-			      alg_name, origion_sz, compressed_sz);
+			      alg_name, (int)origion_sz, (int)compr_output_sz);
 
 	/** Perform decompress */
-	decompressed_sz = daos_compressor_decompress(compressor,
-						     comp_buf,
-						     compressed_sz,
-						     decomp_buf,
-						     decompressed_sz);
+	rc = daos_compressor_decompress(
+				compressor,
+				comp_buf,
+				compr_output_sz,
+				decomp_buf,
+				decompressed_sz,
+				&decompr_output_sz);
 
+	assert_int_equal(DC_STATUS_OK, rc);
 	if (verbose)
 		print_message("%s: decompressed %d bytes --> %d bytes.\n",
-			      alg_name, compressed_sz, decompressed_sz);
+			      alg_name,
+			      (int)compr_output_sz,
+			      (int)decompr_output_sz);
 
-	assert_int_equal(decompressed_sz, origion_sz);
+	assert_int_equal(decompr_output_sz, origion_sz);
 
 	/** Verify the results */
 	for (i = 0; i < origion_sz; i++)
 		if (origin_buf[i] != decomp_buf[i])
 			fail_msg("compression type %s, decomp_buf[%d] "
 				 "(%d) != (%d)",
-				 alg_name,
-				 i,
-				 origin_buf[i], decomp_buf[i]);
+				 alg_name, i,
+				 origin_buf[i],
+				 decomp_buf[i]);
 
 	/** Destroy the compressor */
 	daos_compressor_destroy(&compressor);
@@ -218,5 +229,5 @@ daos_compress_tests_run()
 {
 	verbose = false;
 	return cmocka_run_group_tests_name("DAOS Compress Tests", tests,
-					NULL, NULL);
+					   NULL, NULL);
 }

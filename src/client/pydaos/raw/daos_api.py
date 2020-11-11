@@ -974,6 +974,7 @@ class IORequest(object):
         self.iod.iod_name.iov_len = ctypes.sizeof(akey)
         self.iod.iod_type = 2
         self.iod.iod_size = c_data[0][1]
+        self.iod.iod_flags = 0
         self.iod.iod_nr = 1
         self.iod.iod_recxs = ctypes.pointer(extent)
 
@@ -1013,6 +1014,7 @@ class IORequest(object):
         self.iod.iod_name.iov_len = ctypes.sizeof(akey)
         self.iod.iod_type = 2
         self.iod.iod_size = rec_size
+        self.iod.iod_flags = 0
         self.iod.iod_nr = 1
         self.iod.iod_recxs = ctypes.pointer(extent)
 
@@ -1082,6 +1084,7 @@ class IORequest(object):
             self.iod.iod_name.iov_len = ctypes.sizeof(akey)
             self.iod.iod_type = 1
             self.iod.iod_size = size
+            self.iod.iod_flags = 0
             self.iod.iod_nr = 1
             self.iod.iod_recxs = None
 
@@ -1149,6 +1152,7 @@ class IORequest(object):
             self.iod.iod_name.iov_len = ctypes.sizeof(akey)
             self.iod.iod_type = 1
             self.iod.iod_size = ctypes.c_size_t(size)
+            self.iod.iod_flags = 0
             self.iod.iod_nr = 1
             # self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range),
             #                                 ctypes.c_void_p)
@@ -1204,6 +1208,7 @@ class IORequest(object):
             iods[i].iod_name.iov_len = ctypes.sizeof(tup[0])
             iods[i].iod_type = 1
             iods[i].iod_size = len(tup[1])+1
+            iods[i].iod_flags = 0
             iods[i].iod_nr = 1
             i += 1
         iod_ptr = ctypes.pointer(iods)
@@ -1262,6 +1267,7 @@ class IORequest(object):
             iods[i].iod_name.iov_len = ctypes.sizeof(key[0])
             iods[i].iod_type = 1
             iods[i].iod_size = ctypes.c_ulong(key[1].value+1)
+            iods[i].iod_flags = 0
 
             iods[i].iod_nr = 1
             i += 1
@@ -2230,12 +2236,10 @@ class DaosContext(object):
             'convert-plocal':  self.libdaos.daos_pool_local2global,
             'create-cont':     self.libdaos.daos_cont_create,
             'create-eq':       self.libdaos.daos_eq_create,
-            'create-pool':     self.libdaos.daos_pool_create,
             'create-snap':     self.libdaos.daos_cont_create_snap,
             'd_log':           self.libtest.dts_log,
             'destroy-cont':    self.libdaos.daos_cont_destroy,
             'destroy-eq':      self.libdaos.daos_eq_destroy,
-            'destroy-pool':    self.libdaos.daos_pool_destroy,
             'destroy-snap':    self.libdaos.daos_cont_destroy_snap,
             'destroy-tx':      self.libdaos.daos_tx_abort,
             'disconnect-pool': self.libdaos.daos_pool_disconnect,

@@ -132,6 +132,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 		if (rc != -DER_SUCCESS) {
 			DFUSE_REPLY_ERR_RAW(oh, req, rc);
 			D_FREE(buff);
+			D_FREE(ev);
 			return;
 		}
 	}

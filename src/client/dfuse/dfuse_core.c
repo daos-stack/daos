@@ -282,7 +282,7 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	 * the interception library handles reads vs writes
 	 */
 	fs_handle->dpi_max_read = 1024 * 1024 * 4;
-	fs_handle->dpi_max_write = 1024 * 1024 * 4;
+	fs_handle->dpi_max_write = 1024 * 1024;
 
 	rc = d_hash_table_create_inplace(D_HASH_FT_RWLOCK | D_HASH_FT_EPHEMERAL,
 					 3, fs_handle, &ie_hops,
@@ -344,7 +344,7 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	dfs->dfs_root = ie->ie_stat.st_ino;
 
 	if (dfs->dfs_ops == &dfuse_dfs_ops) {
-		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDONLY, &ie->ie_obj,
+		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj,
 				NULL, NULL);
 		if (rc) {
 			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: (%s)",

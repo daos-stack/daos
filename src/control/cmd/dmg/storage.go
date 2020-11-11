@@ -145,7 +145,7 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 
 	if cmd.jsonOutputEnabled() {
 		if cmd.Verbose {
-			cmd.log.Info("--verbose flag ignored if --json specified")
+			cmd.log.Error("--verbose flag ignored if --json specified")
 		}
 
 		return cmd.outputJSON(resp, err)
@@ -228,9 +228,7 @@ func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context) (bool, er
 		}
 		for _, member := range resp.Members {
 			if member.State() != system.MemberStateStopped {
-				if err := notStoppedRanks.Add(member.Rank); err != nil {
-					return false, errors.Wrap(err, "adding to rank set")
-				}
+				notStoppedRanks.Add(member.Rank)
 			}
 		}
 		if notStoppedRanks.Count() > 0 {

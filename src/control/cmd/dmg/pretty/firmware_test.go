@@ -33,19 +33,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
-
-func makeHostSet(t *testing.T, hosts string) *hostlist.HostSet {
-	t.Helper()
-
-	set, err := hostlist.CreateSet(hosts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return set
-}
 
 func TestPretty_PrintSCMFirmwareQueryMap(t *testing.T) {
 	for name, tc := range map[string]struct {

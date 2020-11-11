@@ -28,6 +28,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	commands "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -39,6 +40,11 @@ import (
 
 func TestDaosServer_StoragePrepare(t *testing.T) {
 	failedErr := errors.New("it failed")
+	var printNamespace strings.Builder
+	msns := storage.ScmNamespaces{storage.MockScmNamespace()}
+	if err := pretty.PrintScmNamespaces(msns, &printNamespace); err != nil {
+		t.Fatal(err)
+	}
 
 	for name, tc := range map[string]struct {
 		nvmeOnly  bool
@@ -83,7 +89,7 @@ func TestDaosServer_StoragePrepare(t *testing.T) {
 				StartingState:   storage.ScmStateNoRegions,
 				PrepNeedsReboot: true,
 			},
-			expLogMsg: scm.MsgScmRebootRequired,
+			expLogMsg: scm.MsgRebootRequired,
 		},
 		"prepare scm; create namespaces": {
 			smbc: &scm.MockBackendConfig{
@@ -91,7 +97,7 @@ func TestDaosServer_StoragePrepare(t *testing.T) {
 				PrepNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 				StartingState:    storage.ScmStateFreeCapacity,
 			},
-			expLogMsg: storage.MockScmNamespace().String(),
+			expLogMsg: printNamespace.String(),
 		},
 		"reset scm": {
 			reset: true,
@@ -150,7 +156,8 @@ func TestDaosServer_StoragePrepare(t *testing.T) {
 
 			if tc.expLogMsg != "" {
 				if !strings.Contains(buf.String(), tc.expLogMsg) {
-					t.Fatalf("expected to see %q in log, but didn't", tc.expLogMsg)
+					t.Fatalf("expected to see %q in log, got %q",
+						tc.expLogMsg, buf.String())
 				}
 			}
 		})

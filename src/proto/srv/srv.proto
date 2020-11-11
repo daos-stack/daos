@@ -47,3 +47,12 @@ message BioErrorReq {
 }
 
 // BioErrorResp is nil.
+
+message GetPoolSvcReq {
+	string uuid = 1; // Pool UUID
+}
+
+message GetPoolSvcResp {
+	int32 status = 1; // DAOS error code
+	repeated uint32 svcreps = 2; // Pool service replica ranks
+}

@@ -86,7 +86,10 @@ func (c *StorageControlService) substBdevVmdAddrs(sr *bdev.ScanResponse) error {
 
 	for i := range c.instanceStorage {
 		var newDevs []string
-		oldDevs := c.instanceStorage[i].Bdev.DeviceList
+		oldDevs := c.instanceStorage[i].Bdev.GetNvmeDevs()
+		if len(oldDevs) == 0 {
+			continue
+		}
 
 		for _, dev := range oldDevs {
 			_, b, d, f, err := bdev.ParsePCIAddress(dev)
@@ -136,6 +139,17 @@ func (c *StorageControlService) canAccessBdevs(sr *bdev.ScanResponse) (missing [
 
 // Setup delegates to Storage implementation's Setup methods.
 func (c *StorageControlService) Setup() error {
+	if _, err := c.ScmScan(scm.ScanRequest{}); err != nil {
+		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Scan"))
+	}
+
+	// don't scan if using emulated NVMe
+	for _, storageCfg := range c.instanceStorage {
+		if storageCfg.Bdev.Class != storage.BdevClassNvme {
+			return nil
+		}
+	}
+
 	sr, err := c.NvmeScan(bdev.ScanRequest{})
 	if err != nil {
 		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Scan"))
@@ -152,10 +166,6 @@ func (c *StorageControlService) Setup() error {
 	missing, ok := c.canAccessBdevs(sr)
 	if !ok {
 		return FaultBdevNotFound(missing)
-	}
-
-	if _, err := c.ScmScan(scm.ScanRequest{}); err != nil {
-		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Scan"))
 	}
 
 	return nil

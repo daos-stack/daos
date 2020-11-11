@@ -16,6 +16,9 @@ PROTOBUF_C__BEGIN_DECLS
 
 
 typedef struct _Mgmt__DaosResp Mgmt__DaosResp;
+typedef struct _Mgmt__GroupUpdateReq Mgmt__GroupUpdateReq;
+typedef struct _Mgmt__GroupUpdateReq__Server Mgmt__GroupUpdateReq__Server;
+typedef struct _Mgmt__GroupUpdateResp Mgmt__GroupUpdateResp;
 typedef struct _Mgmt__JoinReq Mgmt__JoinReq;
 typedef struct _Mgmt__JoinResp Mgmt__JoinResp;
 typedef struct _Mgmt__LeaderQueryReq Mgmt__LeaderQueryReq;
@@ -61,6 +64,39 @@ struct  _Mgmt__DaosResp
     , 0 }
 
 
+struct  _Mgmt__GroupUpdateReq__Server
+{
+  ProtobufCMessage base;
+  uint32_t rank;
+  char *uri;
+};
+#define MGMT__GROUP_UPDATE_REQ__SERVER__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__group_update_req__server__descriptor) \
+    , 0, (char *)protobuf_c_empty_string }
+
+
+struct  _Mgmt__GroupUpdateReq
+{
+  ProtobufCMessage base;
+  uint32_t map_version;
+  size_t n_servers;
+  Mgmt__GroupUpdateReq__Server **servers;
+};
+#define MGMT__GROUP_UPDATE_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__group_update_req__descriptor) \
+    , 0, 0,NULL }
+
+
+struct  _Mgmt__GroupUpdateResp
+{
+  ProtobufCMessage base;
+  int32_t status;
+};
+#define MGMT__GROUP_UPDATE_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__group_update_resp__descriptor) \
+    , 0 }
+
+
 struct  _Mgmt__JoinReq
 {
   ProtobufCMessage base;
@@ -88,10 +124,14 @@ struct  _Mgmt__JoinReq
    * Fault domain for this instance's server
    */
   char *srvfaultdomain;
+  /*
+   * Instance index on server node.
+   */
+  uint32_t idx;
 };
 #define MGMT__JOIN_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__join_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0 }
 
 
 struct  _Mgmt__JoinResp
@@ -113,10 +153,14 @@ struct  _Mgmt__JoinResp
    * Fault domain for the instance
    */
   char *faultdomain;
+  /*
+   * Join processed locally.
+   */
+  protobuf_c_boolean localjoin;
 };
 #define MGMT__JOIN_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__join_resp__descriptor) \
-    , 0, 0, MGMT__JOIN_RESP__STATE__IN, (char *)protobuf_c_empty_string }
+    , 0, 0, MGMT__JOIN_RESP__STATE__IN, (char *)protobuf_c_empty_string, 0 }
 
 
 struct  _Mgmt__LeaderQueryReq
@@ -155,10 +199,14 @@ struct  _Mgmt__GetAttachInfoReq
    * Return PSRs for all ranks, not just the MS replicas.
    */
   protobuf_c_boolean allranks;
+  /*
+   * Job ID to associate instance with.
+   */
+  char *jobid;
 };
 #define MGMT__GET_ATTACH_INFO_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0 }
+    , (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string }
 
 
 struct  _Mgmt__GetAttachInfoResp__Psr
@@ -296,6 +344,47 @@ Mgmt__DaosResp *
                       const uint8_t       *data);
 void   mgmt__daos_resp__free_unpacked
                      (Mgmt__DaosResp *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__GroupUpdateReq__Server methods */
+void   mgmt__group_update_req__server__init
+                     (Mgmt__GroupUpdateReq__Server         *message);
+/* Mgmt__GroupUpdateReq methods */
+void   mgmt__group_update_req__init
+                     (Mgmt__GroupUpdateReq         *message);
+size_t mgmt__group_update_req__get_packed_size
+                     (const Mgmt__GroupUpdateReq   *message);
+size_t mgmt__group_update_req__pack
+                     (const Mgmt__GroupUpdateReq   *message,
+                      uint8_t             *out);
+size_t mgmt__group_update_req__pack_to_buffer
+                     (const Mgmt__GroupUpdateReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__GroupUpdateReq *
+       mgmt__group_update_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__group_update_req__free_unpacked
+                     (Mgmt__GroupUpdateReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__GroupUpdateResp methods */
+void   mgmt__group_update_resp__init
+                     (Mgmt__GroupUpdateResp         *message);
+size_t mgmt__group_update_resp__get_packed_size
+                     (const Mgmt__GroupUpdateResp   *message);
+size_t mgmt__group_update_resp__pack
+                     (const Mgmt__GroupUpdateResp   *message,
+                      uint8_t             *out);
+size_t mgmt__group_update_resp__pack_to_buffer
+                     (const Mgmt__GroupUpdateResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__GroupUpdateResp *
+       mgmt__group_update_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__group_update_resp__free_unpacked
+                     (Mgmt__GroupUpdateResp *message,
                       ProtobufCAllocator *allocator);
 /* Mgmt__JoinReq methods */
 void   mgmt__join_req__init
@@ -495,6 +584,15 @@ void   mgmt__create_ms_req__free_unpacked
 typedef void (*Mgmt__DaosResp_Closure)
                  (const Mgmt__DaosResp *message,
                   void *closure_data);
+typedef void (*Mgmt__GroupUpdateReq__Server_Closure)
+                 (const Mgmt__GroupUpdateReq__Server *message,
+                  void *closure_data);
+typedef void (*Mgmt__GroupUpdateReq_Closure)
+                 (const Mgmt__GroupUpdateReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__GroupUpdateResp_Closure)
+                 (const Mgmt__GroupUpdateResp *message,
+                  void *closure_data);
 typedef void (*Mgmt__JoinReq_Closure)
                  (const Mgmt__JoinReq *message,
                   void *closure_data);
@@ -535,6 +633,9 @@ typedef void (*Mgmt__CreateMsReq_Closure)
 /* --- descriptors --- */
 
 extern const ProtobufCMessageDescriptor mgmt__daos_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__group_update_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__group_update_req__server__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__group_update_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__join_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__join_resp__descriptor;
 extern const ProtobufCEnumDescriptor    mgmt__join_resp__state__descriptor;

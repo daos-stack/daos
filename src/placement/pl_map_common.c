@@ -407,7 +407,7 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 			continue;
 		}
 
-		if (grp_map_idx > grp_map_size) {
+		if (grp_map_idx >= grp_map_size) {
 			uint32_t *new_grp_map;
 
 			new_grp_map = grp_map_extend(grp_map, &grp_map_size);

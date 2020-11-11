@@ -40,7 +40,7 @@
 #include <daos/tests_lib.h>
 #include <daos_srv/vos.h>
 #include <daos_test.h>
-#include "dts_common.h"
+#include <daos/dts.h>
 
 /* unused object class to identify VOS (storage only) test mode */
 #define DAOS_OC_RAW	(0xBEE)
@@ -1310,6 +1310,7 @@ main(int argc, char **argv)
 			break;
 		case 'n':
 			ts_nest_iterator = true;
+			break;
 		case 'I':
 			perf_tests[ITERATE_TEST] = ts_iterate_perf;
 			break;

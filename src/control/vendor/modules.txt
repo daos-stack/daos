@@ -1,7 +1,5 @@
 # github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878
 github.com/armon/go-metrics
-# github.com/boltdb/bolt v1.3.1
-github.com/boltdb/bolt
 # github.com/dustin/go-humanize v1.0.0
 github.com/dustin/go-humanize
 github.com/dustin/go-humanize/english
@@ -30,14 +28,14 @@ github.com/hashicorp/go-msgpack/codec
 github.com/hashicorp/golang-lru/simplelru
 # github.com/hashicorp/raft v1.1.2
 github.com/hashicorp/raft
-# github.com/hashicorp/raft-boltdb v0.0.0-20191021154308-4207f1bf0617
-github.com/hashicorp/raft-boltdb
 # github.com/jessevdk/go-flags v1.4.0
 github.com/jessevdk/go-flags
 # github.com/mitchellh/hashstructure v1.0.0
 github.com/mitchellh/hashstructure
 # github.com/pkg/errors v0.9.1
 github.com/pkg/errors
+# go.etcd.io/bbolt v1.3.5
+go.etcd.io/bbolt
 # golang.org/x/net v0.0.0-20200301022130-244492dfa37a
 golang.org/x/net/context
 golang.org/x/net/http/httpguts

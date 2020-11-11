@@ -1,0 +1,143 @@
+Source: daos
+Section: net
+Priority: optional
+Maintainer: daos-stack <daos@daos.groups.io>
+Build-Depends: debhelper (>= 10),
+               dh-python,
+               libcmocka-dev,
+               libfabric-dev,
+               libhwloc-dev,
+               libopenmpi-dev,
+               libssl-dev,
+               libyaml-dev,
+               libmercury-dev (= 2.0.0~rc1-1),
+               scons,
+               uuid-dev,
+               pkg-config,
+               python3-dev,
+               python3-distro,
+               libabt-dev,
+               libpmemobj-dev,
+               libfuse3-dev,
+               libprotobuf-c-dev,
+               libjson-c-dev,
+               dpdk-dev,
+               libisal-crypto-dev,
+               libcunit1-dev,
+               python2-dev,
+               golang-go,
+               libboost-dev,
+               libspdk-dev,
+               libipmctl-dev,
+               libraft-dev,
+               python3-tabulate,
+               liblz4-dev
+Standards-Version: 4.1.2
+Homepage: https://wiki.hpdd.intel.com/display/DC/DAOS+Community+Home
+Vcs-Git: https://github.com/daos-stack/daos.git
+Vcs-Browser: https://github.com/daos-stack/daos.git
+
+Package: daos
+Section: net
+Architecture: any
+Multi-Arch: same
+Depends: ${shlibs:Depends}, ${misc:Depends}, openmpi-bin
+Description: The Distributed Asynchronous Object Storage (DAOS) is an open-source
+ software-defined object store designed from the ground up for
+ massively distributed Non Volatile Memory (NVM). DAOS takes advantage
+ of next generation NVM technology like Storage Class Memory (SCM) and
+ NVM express (NVMe) while presenting a key-value storage interface and
+ providing features such as transactional non-blocking I/O, advanced
+ data protection with self healing on top of commodity hardware, end-
+ to-end data integrity, fine grained data control and elastic storage
+ to optimize performance and cost.
+ .
+ This package contains the common components.
+
+Package: libdaos-dev
+Section: libdevel
+Architecture: any
+Multi-Arch: same
+Description: The Distributed Asynchronous Object Storage (DAOS) is an open-source
+ software-defined object store designed from the ground up for
+ massively distributed Non Volatile Memory (NVM). DAOS takes advantage
+ of next generation NVM technology like Storage Class Memory (SCM) and
+ NVM express (NVMe) while presenting a key-value storage interface and
+ providing features such as transactional non-blocking I/O, advanced
+ data protection with self healing on top of commodity hardware, end-
+ to-end data integrity, fine grained data control and elastic storage
+ to optimize performance and cost.
+ .
+ This package is needed to compile programs against libdaos.
+ It contains the header files and links needed for compiling.
+
+
+Package: libdaos0
+Section: libs
+Architecture: any
+Multi-Arch: same
+Depends: libmercury1, libyaml-0-2, libuuid1,
+         ${shlibs:Depends}, ${misc:Depends}
+Description: The Distributed Asynchronous Object Storage (DAOS) is an open-source
+ software-defined object store designed from the ground up for
+ massively distributed Non Volatile Memory (NVM). DAOS takes advantage
+ of next generation NVM technology like Storage Class Memory (SCM) and
+ NVM express (NVMe) while presenting a key-value storage interface and
+ providing features such as transactional non-blocking I/O, advanced
+ data protection with self healing on top of commodity hardware, end-
+ to-end data integrity, fine grained data control and elastic storage
+ to optimize performance and cost.
+ .
+ This package contains the shared libraries.
+
+Package: daos-tests
+Architecture: any
+Multi-Arch: same
+Depends: python (>=2.7), python3, python-yaml, python3-yaml,
+         ${shlibs:Depends}, ${misc:Depends}
+Description: The Distributed Asynchronous Object Storage (DAOS) is an open-source
+ software-defined object store designed from the ground up for
+ massively distributed Non Volatile Memory (NVM). DAOS takes advantage
+ of next generation NVM technology like Storage Class Memory (SCM) and
+ NVM express (NVMe) while presenting a key-value storage interface and
+ providing features such as transactional non-blocking I/O, advanced
+ data protection with self healing on top of commodity hardware, end-
+ to-end data integrity, fine grained data control and elastic storage
+ to optimize performance and cost.
+ .
+ This package contains tests
+
+Package: daos-client
+Section: net
+Architecture: any
+Multi-Arch: same
+Depends: ${shlibs:Depends}, ${misc:Depends}, openmpi-bin
+Description: The Distributed Asynchronous Object Storage (DAOS) is an open-source
+ software-defined object store designed from the ground up for
+ massively distributed Non Volatile Memory (NVM). DAOS takes advantage
+ of next generation NVM technology like Storage Class Memory (SCM) and
+ NVM express (NVMe) while presenting a key-value storage interface and
+ providing features such as transactional non-blocking I/O, advanced
+ data protection with self healing on top of commodity hardware, end-
+ to-end data integrity, fine grained data control and elastic storage
+ to optimize performance and cost.
+ .
+ This package contains the DAOS client.
+
+
+Package: daos-server
+Section: net
+Architecture: any
+Multi-Arch: same
+Depends: ${shlibs:Depends}, ${misc:Depends}, openmpi-bin
+Description: The Distributed Asynchronous Object Storage (DAOS) is an open-source
+ software-defined object store designed from the ground up for
+ massively distributed Non Volatile Memory (NVM). DAOS takes advantage
+ of next generation NVM technology like Storage Class Memory (SCM) and
+ NVM express (NVMe) while presenting a key-value storage interface and
+ providing features such as transactional non-blocking I/O, advanced
+ data protection with self healing on top of commodity hardware, end-
+ to-end data integrity, fine grained data control and elastic storage
+ to optimize performance and cost.
+ .
+ This package contains the DAOS server.

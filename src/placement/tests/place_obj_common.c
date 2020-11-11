@@ -232,6 +232,7 @@ plt_obj_reint_layout_check(struct pl_obj_layout *layout,
 	if (contains_reint_tgt == false) {
 		D_ASSERT(plt_obj_layout_match(layout, org_layout));
 		D_ASSERT(num_spares_returned == 0);
+		D_FREE(target_set);
 		return;
 	}
 
@@ -247,6 +248,7 @@ plt_obj_reint_layout_check(struct pl_obj_layout *layout,
 		reint_id = spare_tgt_ranks[i];
 		D_ASSERT(target_set[reint_id] == 2);
 	}
+	D_FREE(target_set);
 }
 
 void
@@ -289,6 +291,7 @@ plt_obj_add_layout_check(struct pl_obj_layout *layout,
 	if (contains_new_tgt == false || org_layout->ol_nr == layout->ol_nr) {
 		D_ASSERT(plt_obj_layout_match(layout, org_layout));
 		D_ASSERT(num_spares_returned == 0);
+		D_FREE(target_set);
 		return;
 	}
 
@@ -303,6 +306,7 @@ plt_obj_add_layout_check(struct pl_obj_layout *layout,
 		spare_id = spare_tgt_ranks[i];
 		D_ASSERT(target_set[spare_id] == 2);
 	}
+	D_FREE(target_set);
 }
 void
 plt_obj_rebuild_unique_check(uint32_t *shard_ids, uint32_t num_shards,

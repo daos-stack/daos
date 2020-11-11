@@ -20,3 +20,5 @@ UnitTest:
     testname: vos_tests
   agent_tests:
     testname: agent_tests
+  job_tests:
+    testname: job_tests

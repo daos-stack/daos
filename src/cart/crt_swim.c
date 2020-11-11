@@ -158,10 +158,13 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 		rc = swim_parse_message(ctx, rpc_swim_input->src,
 					rpc_swim_input->upds.ca_arrays,
 					rpc_swim_input->upds.ca_count);
-		if (rc == -ESHUTDOWN)
+		if (rc == -ESHUTDOWN) {
+			if (grp_priv->gp_size > 1)
+				D_ERROR("SWIM shutdown\n");
 			swim_self_set(ctx, SWIM_ID_INVALID);
-		else if (rc)
+		} else if (rc) {
 			D_ERROR("swim_parse_message() failed rc=%d\n", rc);
+		}
 	}
 
 	if (rpc_req->cr_opc & 0xFFFF) { /* RPC with acknowledge? */
@@ -220,7 +223,7 @@ out:
 static int crt_swim_send_message(struct swim_context *ctx, swim_id_t to,
 				 struct swim_member_update *upds, size_t nupds)
 {
-	struct crt_grp_priv	*grp_priv = swim_data(ctx);
+	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 	struct crt_rpc_swim_in	*rpc_swim_input;
 	crt_context_t		 crt_ctx;
@@ -281,7 +284,7 @@ out:
 
 static swim_id_t crt_swim_get_dping_target(struct swim_context *ctx)
 {
-	struct crt_grp_priv	*grp_priv = swim_data(ctx);
+	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 	swim_id_t		 self_id = swim_self_get(ctx);
 	swim_id_t		 id;
@@ -316,7 +319,7 @@ out:
 
 static swim_id_t crt_swim_get_iping_target(struct swim_context *ctx)
 {
-	struct crt_grp_priv	*grp_priv = swim_data(ctx);
+	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 	swim_id_t		 self_id = swim_self_get(ctx);
 	swim_id_t		 id;
@@ -384,7 +387,7 @@ static int crt_swim_get_member_state(struct swim_context *ctx,
 				     swim_id_t id,
 				     struct swim_member_state *state)
 {
-	struct crt_grp_priv	*grp_priv = swim_data(ctx);
+	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 	struct crt_swim_target	*cst;
 	int			 rc = -DER_NONEXIST;
@@ -406,7 +409,7 @@ static int crt_swim_set_member_state(struct swim_context *ctx,
 				     swim_id_t id,
 				     struct swim_member_state *state)
 {
-	struct crt_grp_priv	*grp_priv = swim_data(ctx);
+	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 	struct crt_swim_target	*cst;
 	int			 rc = -DER_NONEXIST;
@@ -440,6 +443,8 @@ static void crt_swim_progress_cb(crt_context_t crt_ctx, void *arg)
 
 	rc = swim_progress(ctx, CRT_SWIM_PROGRESS_TIMEOUT);
 	if (rc == -ESHUTDOWN) {
+		if (grp_priv->gp_size > 1)
+			D_ERROR("SWIM shutdown\n");
 		swim_self_set(ctx, SWIM_ID_INVALID);
 	} else if (rc && rc != -ETIMEDOUT) {
 		D_ERROR("swim_progress() failed rc=%d\n", rc);
@@ -492,7 +497,7 @@ int crt_swim_init(int crt_ctx_idx)
 
 	grp_membs = grp_priv_get_membs(grp_priv);
 	csm->csm_crt_ctx_idx = crt_ctx_idx;
-	csm->csm_ctx = swim_init(SWIM_ID_INVALID, &crt_swim_ops, grp_priv);
+	csm->csm_ctx = swim_init(SWIM_ID_INVALID, &crt_swim_ops, NULL);
 	if (csm->csm_ctx == NULL) {
 		D_ERROR("swim_init() failed for self=%u, crt_ctx_idx=%d\n",
 			self, crt_ctx_idx);

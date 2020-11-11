@@ -324,7 +324,6 @@ func TestInfoCacheDefaultNumaNode(t *testing.T) {
 // set of data for the cache.  The load balancer is expected to assign each cached response
 // per NUMA node in linear order.
 func TestInfoCacheLoadBalancer(t *testing.T) {
-	const loadBalanceIterations = 100
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 	enabled := atm.NewBool(true)

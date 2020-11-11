@@ -25,6 +25,7 @@
 #define __OBJ_EC_H__
 
 #include <daos_types.h>
+#include <daos/object.h>
 #include <daos_obj.h>
 
 #include <isa-l.h>
@@ -43,7 +44,7 @@
  * limits the addressing of user extents to the lower 63 bits of the offset
  * range. The client stack should enforce this limitation.
  */
-#define PARITY_INDICATOR (1ULL << 63)
+#define PARITY_INDICATOR DAOS_EC_PARITY_BIT
 
 /** EC codec for object EC encoding/decoding */
 struct obj_ec_codec {
@@ -360,7 +361,8 @@ obj_ec_singv_cell_bytes(uint64_t rec_gsize, struct daos_oclass_attr *oca)
 /** Query local record size and needed padding for evenly distributed singv */
 static inline void
 obj_ec_singv_local_sz(uint64_t rec_gsize, struct daos_oclass_attr *oca,
-		      uint32_t tgt_idx, struct obj_ec_singv_local *loc)
+		      uint32_t tgt_idx, struct obj_ec_singv_local *loc,
+		      bool update)
 {
 	uint32_t	data_tgt_nr = obj_ec_data_tgt_nr(oca);
 	uint64_t	cell_size;
@@ -368,7 +370,15 @@ obj_ec_singv_local_sz(uint64_t rec_gsize, struct daos_oclass_attr *oca,
 	D_ASSERT(tgt_idx < obj_ec_tgt_nr(oca));
 
 	cell_size = obj_ec_singv_cell_bytes(rec_gsize, oca);
-	if (tgt_idx >= data_tgt_nr)
+	/* For update, the parity buffer is immediately following data buffer,
+	 * to avoid insert extra sgl segment (for last data shard's padding).
+	 * For fetch, fetching from parity shard is only for EC recovery, in
+	 * that case it allocates enough buffer (obj_ec_singv_stripe_buf_size)
+	 * and to simplify data recovery (avoid data movement for the case that
+	 * last data shard with padding bytes) the parity data's offset in fetch
+	 * buffer is aligned to cell size boundary.
+	 */
+	if (tgt_idx >= data_tgt_nr && update)
 		loc->esl_off = rec_gsize + (tgt_idx - data_tgt_nr) * cell_size;
 	else
 		loc->esl_off = tgt_idx * cell_size;
@@ -638,6 +648,7 @@ struct obj_tgt_oiod *obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods,
 struct obj_tgt_oiod *obj_ec_tgt_oiod_get(struct obj_tgt_oiod *tgt_oiods,
 			uint32_t tgt_nr, uint32_t tgt_idx);
 void obj_ec_fetch_set_sgl(struct obj_reasb_req *reasb_req, uint32_t iod_nr);
+void obj_ec_update_iod_size(struct obj_reasb_req *reasb_req, uint32_t iod_nr);
 int obj_ec_recov_add(struct obj_reasb_req *reasb_req,
 		     struct daos_recx_ep_list *recx_lists, unsigned int nr);
 struct obj_ec_fail_info *obj_ec_fail_info_get(struct obj_reasb_req *reasb_req,

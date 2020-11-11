@@ -147,19 +147,10 @@ func (n *NvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error)
 
 // Format devices available through SPDK, destructive operation!
 //
-// Attempt wipe of namespace #1 LBA-0.
-//
-// TODO DAOS-5485: reinstate fall back to full controller format if quick
-//      format failed, this requires reworking C.nvme_format() to format
-//      all available ctrlrs
+// Attempt wipe of each controller namespace's LBA-0.
 func (n *NvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
 	return collectFormatResults(C.nvme_wipe_namespaces(),
 		"NVMe Format(): C.nvme_wipe_namespaces()")
-
-	//	log.Infof("falling back to full format on %s\n", ctrlrPciAddr)
-	//	_, err = collectCtrlrs(C.nvme_format(csPci), failMsg+"format()")
-	//
-	//	return
 }
 
 // Update updates the firmware image via SPDK in a given slot on the device.
@@ -188,8 +179,8 @@ func c2GoController(ctrlr *C.struct_ctrlr_t) *storage.NvmeController {
 }
 
 // c2GoDeviceHealth is a private translation function.
-func c2GoDeviceHealth(health *C.struct_nvme_health_stats) *storage.NvmeControllerHealth {
-	return &storage.NvmeControllerHealth{
+func c2GoDeviceHealth(health *C.struct_nvme_stats) *storage.NvmeHealth {
+	return &storage.NvmeHealth{
 		TempWarnTime:    uint32(health.warn_temp_time),
 		TempCritTime:    uint32(health.crit_temp_time),
 		CtrlBusyTime:    uint64(health.ctrl_busy_time),
@@ -198,7 +189,6 @@ func c2GoDeviceHealth(health *C.struct_nvme_health_stats) *storage.NvmeControlle
 		UnsafeShutdowns: uint64(health.unsafe_shutdowns),
 		MediaErrors:     uint64(health.media_errs),
 		ErrorLogEntries: uint64(health.err_log_entries),
-		ChecksumErrors:  uint32(health.checksum_errs),
 		Temperature:     uint32(health.temperature),
 		TempWarn:        bool(health.temp_warn),
 		AvailSpareWarn:  bool(health.avail_spare_warn),

@@ -65,24 +65,11 @@ struct bio_dma_buffer {
 	ABT_mutex		 bdb_mutex;
 };
 
-enum bio_bs_state {
-	/* Healthy and fully functional */
-	BIO_BS_STATE_NORMAL	= 0,
-	/* Being detected & marked as faulty */
-	BIO_BS_STATE_FAULTY,
-	/* Affected targets are marked as DOWN, safe to tear down blobstore */
-	BIO_BS_STATE_TEARDOWN,
-	/* Blobstore is torn down, all in-memory structures cleared */
-	BIO_BS_STATE_OUT,
-	/* Setup all in-memory structures, load blobstore */
-	BIO_BS_STATE_SETUP,
-};
-
 /*
  * SPDK device health monitoring.
  */
 struct bio_dev_health {
-	struct nvme_health_stats	 bdh_health_state;
+	struct nvme_stats		 bdh_health_state;
 	/* writable open descriptor for health info polling */
 	struct spdk_bdev_desc		*bdh_desc;
 	struct spdk_io_channel		*bdh_io_channel;
@@ -291,6 +278,7 @@ void bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 struct spdk_thread *init_thread(void);
 void bio_release_bdev(void *arg);
 bool is_server_started(void);
+d_list_t *bio_bdev_list(void);
 struct spdk_blob_store *
 load_blobstore(struct bio_xs_context *ctxt, char *bdev_name, uuid_t *bs_uuid,
 	       bool create, bool async,

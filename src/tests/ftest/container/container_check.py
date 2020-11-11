@@ -21,75 +21,19 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+from avocado.core.exceptions import TestFail
 
-from command_utils import CommandFailure
-from daos_utils import DaosCommand
-from test_utils_pool import TestPool
-from test_utils_container import TestContainer
-from dfuse_utils import Dfuse
-from apricot import TestWithServers
+from dfuse_test_base import DfuseTestBase
 
-class DfuseContainerCheck(TestWithServers):
+
+class DfuseContainerCheck(DfuseTestBase):
+    # pylint: disable=too-few-public-methods,too-many-ancestors
     """Base Dfuse Container check test class.
 
     :avocado: recursive
     """
 
-    def __init__(self, *args, **kwargs):
-        """Initialize a DfuseContainerCheck object."""
-        super(DfuseContainerCheck, self).__init__(*args, **kwargs)
-        self.dfuse = None
-        self.pool = None
-        self.container = None
-
-    def setUp(self):
-        """Set up each test case."""
-        # Start the servers and agents
-        super(DfuseContainerCheck, self).setUp()
-
-    def tearDown(self):
-        """Tear down each test case."""
-        try:
-            if self.dfuse:
-                self.dfuse.stop()
-        finally:
-            # Stop the servers and agents
-            super(DfuseContainerCheck, self).tearDown()
-
-    def create_pool(self):
-        """Create a TestPool object to use with ior."""
-        # Get the pool params
-        self.pool = TestPool(
-            self.context, dmg_command=self.get_dmg_command())
-        self.pool.get_params(self)
-
-        # Create a pool
-        self.pool.create()
-
-    def start_dfuse(self):
-        """Create a DfuseCommand object to start dfuse.
-        """
-
-        # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp)
-        self.dfuse.get_params(self)
-
-        # update dfuse params
-        self.dfuse.set_dfuse_params(self.pool)
-        self.dfuse.set_dfuse_cont_param(self.container)
-        self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
-
-        try:
-            # start dfuse
-            self.dfuse.run(False)
-        except CommandFailure as error:
-            self.log.error("Dfuse command %s failed on hosts %s",
-                           str(self.dfuse),
-                           self.dfuse.hosts,
-                           exc_info=error)
-            self.fail("Test was expected to pass but it failed.\n")
-
-    def test_dfusecontainercheck(self):
+    def test_dfuse_container_check(self):
         """Jira ID: DAOS-3635.
 
         Test Description:
@@ -107,38 +51,37 @@ class DfuseContainerCheck(TestWithServers):
         cont_types = self.params.get("cont_types", '/run/container/*')
 
         # Create a pool and start dfuse.
-        self.create_pool()
+        self.add_pool(connect=False)
 
         for cont_type in cont_types:
             # Get container params
-            self.container = TestContainer(
-                self.pool, daos_command=DaosCommand(self.bin))
-            self.container.get_params(self)
+            self.add_container(self.pool, create=False)
             # create container
             if cont_type == "POSIX":
                 self.container.type.update(cont_type)
             self.container.create()
+
+            # Attempt to mount the dfuse mount point - this should only succeed
+            # with a POSIX container
             try:
-                # mount fuse
-                self.start_dfuse()
-                # check if fuse got mounted
+                self.start_dfuse(
+                    self.hostlist_clients, self.pool, self.container)
+                if cont_type != "POSIX":
+                    self.fail("Non-POSIX type container mounted over dfuse")
+
+            except TestFail as error:
+                if cont_type == "POSIX":
+                    self.fail(
+                        "POSIX type container failed dfuse mount: {}".format(
+                            error))
+                self.log.info(
+                    "Non-POSIX type container expected to fail dfuse mount")
+
+            # Verify dfuse is running on the POSIX type container
+            if cont_type == "POSIX":
                 self.dfuse.check_running()
-                # fail the test if fuse mounts with non-posix type container
-                if cont_type == "":
-                    self.fail("Non-Posix type container got mounted over dfuse")
-            except CommandFailure as error:
-                # expected to throw CommandFailure exception for non-posix type
-                # container
-                if cont_type == "":
-                    self.log.info("Expected behavior: Default container type \
-                        is expected to fail on dfuse mount: %s", str(error))
-                # fail the test if exception is caught for POSIX type container
-                elif cont_type == "POSIX":
-                    self.log.error("Posix Container dfuse mount \
-                        failed: %s", str(error))
-                    self.fail("Posix container type was expected to mount \
-                        over dfuse")
-            # stop fuse and container for next iteration
+
+            # Stop dfuse and destroy the container for next iteration
             if not cont_type == "":
-                self.dfuse.stop()
+                self.stop_dfuse()
             self.container.destroy(1)

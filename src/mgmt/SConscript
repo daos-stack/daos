@@ -24,7 +24,7 @@ def scons():
     denv.Install('$PREFIX/lib64/daos_srv', mgmt_srv)
 
     # Management client library
-    dc_mgmt_tgts = common + denv.SharedObject(['cli_mgmt.c', 'cli_pool.c'])
+    dc_mgmt_tgts = common + denv.SharedObject(['cli_mgmt.c', 'cli_query.c'])
     Export('dc_mgmt_tgts')
 
     SConscript('tests/SConscript', exports=['denv', 'pb'])
