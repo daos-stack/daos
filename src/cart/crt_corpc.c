@@ -924,8 +924,11 @@ forward_done:
 	if (co_info->co_child_num == 0 && co_info->co_root_excluded)
 		crt_corpc_complete(rpc_priv);
 
-	if (co_info->co_root_excluded == 1)
-		D_GOTO(out, rc);
+	if (co_info->co_root_excluded == 1 && co_info->co_grp_priv->gp_self ==
+	    co_info->co_root) {
+		/* return no error for root */
+		D_GOTO(out, rc = 0);
+	}
 
 	/* invoke RPC handler on local node */
 	rc = crt_rpc_common_hdlr(rpc_priv);
