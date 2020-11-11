@@ -496,7 +496,7 @@ check_one_success(int rc, int err, MPI_Comm comm)
 			failed++;
 	}
 
-	free(rc_arr);
+	D_FREE(rc_arr);
 
 	if (failed || passed != 1)
 		return -1;

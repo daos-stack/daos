@@ -1079,10 +1079,9 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 		if (stop_on_empty(ioc, VOS_OF_COND_AKEY_FETCH, iod, &rc))
 			goto out;
 		if (rc == -DER_NONEXIST) {
+			D_DEBUG(DB_IO, "Nonexistent akey "DF_KEY"\n",
+				DP_KEY(&iod->iod_name));
 			iod_empty_sgl(ioc, ioc->ic_sgl_at);
-			D_DEBUG(DB_IO, "Nonexistent akey %.*s\n",
-				(int)iod->iod_name.iov_len,
-				(char *)iod->iod_name.iov_buf);
 			rc = 0;
 		} else {
 			D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,

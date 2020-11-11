@@ -69,6 +69,7 @@ print_usage(int rank)
 	print_message("daos_test -i|--daos_io_tests\n");
 	print_message("daos_test -x|--epoch_io\n");
 	print_message("daos_test -A|--array\n");
+	print_message("daos_test -F|--dfs\n");
 	print_message("daos_test -D|--daos_array\n");
 	print_message("daos_test -K|--daos_kv\n");
 	print_message("daos_test -d|--degraded\n");

@@ -258,6 +258,7 @@ def get_base_env():
     env['DD_MASK'] = 'all'
     env['DD_SUBSYS'] = 'all'
     env['D_LOG_MASK'] = 'DEBUG'
+    env['D_LOG_SIZE'] = '4g'
     env['FI_UNIVERSE_SIZE'] = '128'
     return env
 
@@ -1329,6 +1330,30 @@ def test_pydaos_kv(server, conf):
     print('Closing container and opening new one')
     kv = container.get_kv_by_name('my_test_kv')
 
+def run_daos_test(server, conf):
+
+    daos_test_bin = os.path.join(conf['PREFIX'], 'bin', 'daos_test')
+
+    env = get_base_env()
+    env["DAOS_AGENT_DRPC_DIR"] = server.agent_dir
+    env["POOL_SCM_SIZE"] = '1'
+    env["POOL_NVME_SIZE"] = '0'
+
+    log_file = tempfile.NamedTemporaryFile(prefix='dnt_test_',
+                                           suffix='.log',
+                                           delete=False)
+
+    env['D_LOG_FILE'] = log_file.name
+    env['PATH'] = '{}:{}'.format(os.path.join(conf['PREFIX'], 'bin'),
+                                 env['PATH'])
+
+    cmd = [daos_test_bin]
+
+    rc = subprocess.run(cmd, env=env)
+
+    log_test(conf, log_file.name)
+    print(rc)
+
 def test_alloc_fail(server, conf):
     """run 'daos' client binary with fault injection
 
@@ -1422,6 +1447,8 @@ def main():
 
     if args.mode == 'launch':
         run_in_fg(server, conf)
+    elif args.mode == 'daos_test':
+        run_daos_test(server, conf)
     elif args.mode == 'il':
         fatal_errors.add_result(run_il_test(server, conf))
     elif args.mode == 'kv':
@@ -1436,9 +1463,12 @@ def main():
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
         test_pydaos_kv(server, conf)
         fatal_errors.add_result(test_alloc_fail(server, conf))
-    else:
+    elif not args.mode:
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
+    else:
+        print("Unknown mode")
+        fatal_errors.add_result(True)
 
     if server.stop() != 0:
         fatal_errors.fail()

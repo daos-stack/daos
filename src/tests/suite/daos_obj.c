@@ -1951,7 +1951,7 @@ io_manyrec_internal(void **state, daos_obj_id_t oid, unsigned int size,
 	ioreq_init(&req, arg->coh, oid, iod_type, arg);
 
 	for (i = 0; i < MANYREC_NUMRECS; i++) {
-		akeys[i] = calloc(30, 1);
+		D_ALLOC(akeys[i], 30);
 		assert_non_null(akeys[i]);
 		snprintf(akeys[i], 30, "%s%d", akey, i);
 		D_ALLOC(rec[i], size);
@@ -1960,7 +1960,7 @@ io_manyrec_internal(void **state, daos_obj_id_t oid, unsigned int size,
 		rec_size[i] = size;
 		rx_nr[i] = 1;
 		offset[i] = i * size;
-		val[i] = calloc(size, 1);
+		D_ALLOC(val[i], size);
 		assert_non_null(val[i]);
 		val_size[i] = size;
 	}
@@ -2582,10 +2582,10 @@ tx_discard(void **state)
 		D_ALLOC(akey[i], strlen(akey_fmt) + nakeys_strlen + 1);
 		assert_non_null(akey[i]);
 		sprintf(akey[i], akey_fmt, i);
-		rec[i] = calloc(i % 2 == 0 ? IO_SIZE_NVME : IO_SIZE_SCM, 1);
+		D_ALLOC(rec[i], i % 2 == 0 ? IO_SIZE_NVME : IO_SIZE_SCM);
 		assert_non_null(rec[i]);
 		offset[i] = i * 20;
-		val[i] = calloc(i % 2 == 0 ? IO_SIZE_NVME : IO_SIZE_SCM, 1);
+		D_ALLOC(val[i], i % 2 == 0 ? IO_SIZE_NVME : IO_SIZE_SCM);
 		assert_non_null(val[i]);
 		if (i % 2 == 0)
 			val_size[i] = IO_SIZE_NVME;
@@ -2638,8 +2638,8 @@ tx_discard(void **state)
 		lookup(dkey, nakeys, (const char **)akey, offset, rec_size,
 		       (void **)val, val_size, th[t], &req, false);
 		for (i = 0; i < nakeys; i++) {
-			rec_verify = calloc(i % 2 == 0 ? IO_SIZE_NVME :
-					    IO_SIZE_SCM, 1);
+			D_ALLOC(rec_verify, i % 2 == 0 ? IO_SIZE_NVME :
+				IO_SIZE_SCM);
 			assert_non_null(rec_verify);
 			if (i % 2 == 0)
 				memcpy(rec_verify, rec_nvme, IO_SIZE_NVME);
@@ -2675,8 +2675,8 @@ tx_discard(void **state)
 	       (void **)val, val_size, DAOS_TX_NONE, &req, false);
 	print_message("verifying transaction after container re-open\n");
 	for (i = 0; i < nakeys; i++) {
-		rec_verify = calloc(i % 2 == 0 ? IO_SIZE_NVME :
-				    IO_SIZE_SCM, 1);
+		D_ALLOC(rec_verify, i % 2 == 0 ? IO_SIZE_NVME :
+			IO_SIZE_SCM);
 		assert_non_null(rec_verify);
 		if (i % 2 == 0)
 			memcpy(rec_verify, rec_nvme, IO_SIZE_NVME);
@@ -2761,10 +2761,10 @@ tx_commit(void **state)
 		D_ALLOC(akey[i], strlen(akey_fmt) + nakeys_strlen + 1);
 		assert_non_null(akey[i]);
 		sprintf(akey[i], akey_fmt, i);
-		rec[i] = calloc(i % 2 == 0 ? IO_SIZE_NVME : IO_SIZE_SCM, 1);
+		D_ALLOC(rec[i], i % 2 == 0 ? IO_SIZE_NVME : IO_SIZE_SCM);
 		assert_non_null(rec[i]);
 		offset[i] = i * 20;
-		val[i] = calloc(i % 2 == 0 ? IO_SIZE_NVME : IO_SIZE_SCM, 1);
+		D_ALLOC(val[i], i % 2 == 0 ? IO_SIZE_NVME : IO_SIZE_SCM);
 		assert_non_null(val[i]);
 		if (i % 2 == 0)
 			val_size[i] = IO_SIZE_NVME;
@@ -2802,8 +2802,8 @@ tx_commit(void **state)
 		lookup(dkey, nakeys, (const char **)akey, offset, rec_size,
 		       (void **)val, val_size, th[t], &req, false);
 		for (i = 0; i < nakeys; i++) {
-			rec_verify = calloc(i % 2 == 0 ? IO_SIZE_NVME :
-					    IO_SIZE_SCM, 1);
+			D_ALLOC(rec_verify, i % 2 == 0 ? IO_SIZE_NVME :
+				IO_SIZE_SCM);
 			assert_non_null(rec_verify);
 			if (i % 2 == 0)
 				memcpy(rec_verify, rec_nvme, IO_SIZE_NVME);
@@ -2869,7 +2869,7 @@ tx_commit(void **state)
 	       (void **)val, val_size, DAOS_TX_NONE, &req, false);
 	t = 1;
 	for (i = 0; i < nakeys; i++) {
-		rec_verify = calloc(i % 2 == 0 ? IO_SIZE_NVME : IO_SIZE_SCM, 1);
+		D_ALLOC(rec_verify, i % 2 == 0 ? IO_SIZE_NVME : IO_SIZE_SCM);
 		assert_non_null(rec_verify);
 		if (i % 2 == 0)
 			memcpy(rec_verify, rec_nvme, IO_SIZE_NVME);
@@ -3049,16 +3049,16 @@ tgt_idx_change_retry(void **state)
 	print_message("Insert(e=0)/lookup(e=0)/verify complex kv record "
 		      "with target change.\n");
 	for (i = 0; i < 5; i++) {
-		akey[i] = calloc(20, 1);
+		D_ALLOC(akey[i], 20);
 		assert_non_null(akey[i]);
 		sprintf(akey[i], "test_update akey%d", i);
-		rec[i] = calloc(20, 1);
+		D_ALLOC(rec[i], 20);
 		assert_non_null(rec[i]);
 		sprintf(rec[i], "test_update val%d", i);
 		rec_size[i] = strlen(rec[i]);
 		rx_nr[i] = 1;
 		offset[i] = i * 20;
-		val[i] = calloc(64, 1);
+		D_ALLOC(val[i], 64);
 		assert_non_null(val[i]);
 		val_size[i] = 64;
 	}
@@ -3182,7 +3182,7 @@ fetch_replica_unavail(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	/** Lookup */
-	buf = calloc(size, 1);
+	D_ALLOC(buf, size);
 	assert_non_null(buf);
 	/** inject CRT error failure to update pool map + retry */
 	daos_fail_loc_set(DAOS_SHARD_OBJ_RW_CRT_ERROR | DAOS_FAIL_ONCE);
@@ -3649,8 +3649,8 @@ split_sgl_internal(void **state, int size)
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
-	sbuf1 = calloc(size/2, 1);
-	sbuf2 = calloc(size/2, 1);
+	D_ALLOC(sbuf1, size/2);
+	D_ALLOC(sbuf2, size/2);
 
 	/** init dkey */
 	d_iov_set(&dkey, "dkey", strlen("dkey"));
@@ -3833,7 +3833,7 @@ static void fetch_mixed_keys_internal(void **state, daos_obj_id_t oid,
 	ioreq_init(&req, arg->coh, oid, iod_type, arg);
 
 	for (i = 0; i < MANYREC_NUMRECS; i++) {
-		akeys[i] = calloc(30, 1);
+		D_ALLOC(akeys[i], 30);
 		assert_non_null(akeys[i]);
 		snprintf(akeys[i], 30, "%s%d", akey, i);
 		D_ALLOC(rec[i], size);
@@ -3842,7 +3842,7 @@ static void fetch_mixed_keys_internal(void **state, daos_obj_id_t oid,
 		rec_size[i] = size;
 		rx_nr[i]    = 1;
 		offset[i]   = i * size;
-		val[i]      = calloc(size, 1);
+		D_ALLOC(val[i], size);
 		assert_non_null(val[i]);
 		val_size[i] = size;
 	}
