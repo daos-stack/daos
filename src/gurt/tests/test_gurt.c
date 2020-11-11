@@ -166,7 +166,7 @@ void test_d_errstr_v2(void **state)
 	assert_string_equal(value, "DER_CUSTOM1");
 
 	value = d_errstr(-DER_CUSTOM2);
-	assert_string_equal(value, "DER_CUSTOM2");
+	assert_string_equal(value, "DER_CUSTOMx");
 
 	value = d_errstr(-DER_CUSTOM3);
 	assert_string_equal(value, "DER_CUSTOM3");
