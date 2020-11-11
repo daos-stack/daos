@@ -1,4 +1,4 @@
-.TH dmg 1 "8 October 2020"
+.TH dmg 1 "22 October 2020"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -33,6 +33,28 @@ Enable JSON-formatted log output
 \fB\fB\-o\fR, \fB\-\-config-path\fR\fP
 Client config file path
 .SH COMMANDS
+.SS config
+Perform tasks related to configuration of hardware remote servers
+
+\fBAliases\fP: co
+
+.SS config generate
+Generate DAOS server configuration file based on discoverable hardware devices
+
+\fBUsage\fP: config generate [generate-OPTIONS]
+.TP
+
+\fBAliases\fP: g
+
+.TP
+\fB\fB\-p\fR, \fB\-\-num-pmem\fR\fP
+Minimum number of SCM (pmem) devices required per storage host in DAOS system
+.TP
+\fB\fB\-n\fR, \fB\-\-num-nvme\fR\fP
+Minimum number of NVMe devices required per storage host in DAOS system
+.TP
+\fB\fB\-c\fR, \fB\-\-net-class\fR <default: \fI"best-available"\fR>\fP
+Network class preferred, defaults to best available
 .SS cont
 Perform tasks related to DAOS containers
 
