@@ -204,6 +204,15 @@ func (c *ControlService) scanInstanceBdevs(ctx context.Context) (*bdev.ScanRespo
 	return &bdev.ScanResponse{Controllers: ctrlrs}, nil
 }
 
+// stripNvmeDetails removes all controller details leaving only PCI address and
+// NUMA node/socket ID. Useful when scanning only device topology.
+func stripNvmeDetails(pbc *ctlpb.NvmeController) {
+	pbc.Serial = ""
+	pbc.Model = ""
+	pbc.Fwrev = ""
+	pbc.Namespaces = nil
+}
+
 // newScanBdevResp populates protobuf NVMe scan response with controller info
 // including health statistics or metadata if requested.
 func newScanNvmeResp(req *ctlpb.ScanNvmeReq, inResp *bdev.ScanResponse, inErr error) (*ctlpb.ScanNvmeResp, error) {
@@ -222,11 +231,14 @@ func newScanNvmeResp(req *ctlpb.ScanNvmeReq, inResp *bdev.ScanResponse, inErr er
 
 	// trim unwanted fields so responses can be coalesced from hash map
 	for _, pbc := range pbCtrlrs {
-		if !req.Health {
+		if !req.GetHealth() {
 			pbc.Healthstats = nil
 		}
-		if !req.Meta {
+		if !req.GetMeta() {
 			pbc.Smddevices = nil
+		}
+		if req.GetBasic() {
+			stripNvmeDetails(pbc)
 		}
 	}
 

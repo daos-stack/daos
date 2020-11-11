@@ -562,12 +562,3 @@
    fun:run_all_tests
    fun:main
 }
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   ...
-   fun:calloc
-   fun:sk_btr_gen_keys
-   ...
-   fun:main
-}

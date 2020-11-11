@@ -45,5 +45,5 @@ ior:
       transfer_size: '1M'
       block_size: '6G'
 dfuse:
-    mount_dir: "/tmp/daos_dfuse"
+    mount_dir: "/tmp/daos_dfuse/"
 

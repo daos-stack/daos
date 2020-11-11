@@ -7,7 +7,7 @@ hosts:
   test_clients:
     - client-E
     - client-F
-timeout: 305
+timeout: 605
 server_config:
   name: daos_server
   transport_config:
@@ -48,4 +48,4 @@ mdtest:
     - [POSIX, 0, 0, 2, 10, 5, '-u']
 
 dfuse:
-  mount_dir: "/tmp/daos_dfuse"
+  mount_dir: "/tmp/daos_dfuse/"

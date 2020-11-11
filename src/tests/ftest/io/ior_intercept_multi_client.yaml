@@ -59,4 +59,4 @@ ior:
               write_x: 3
               read_x: 1
 dfuse:
-    mount_dir: "/tmp/daos_dfuse"
+    mount_dir: "/tmp/daos_dfuse/"
