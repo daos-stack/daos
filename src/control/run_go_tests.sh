@@ -140,5 +140,4 @@ if [ -f "$GO_TEST_XML" ]; then
 fi
 
 echo "Tests completed with rc: $testrc"
-exit 1
 exit $testrc
