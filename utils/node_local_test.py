@@ -396,7 +396,7 @@ class DaosServer():
 
             if ready:
                 break
-            if time.time() - start > 10:
+            if time.time() - start > 20:
                 raise Exception("Failed to start")
 
     def stop(self):
