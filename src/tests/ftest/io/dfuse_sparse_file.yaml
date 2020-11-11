@@ -23,4 +23,4 @@ container:
   type: POSIX
   control_method: daos
 dfuse:
-  mount_dir: "/tmp/daos_dfuse"
+  mount_dir: "/tmp/daos_dfuse/"
