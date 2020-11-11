@@ -1,8 +1,11 @@
 {
-    dlopen leaks
+   dl init leaks
+   Memcheck:Leak
+   fun:_dl_init
+}
+{
+    d lopen leaks
     Memcheck:Leak
-    match-leak-kinds: reachable
-    ...
     fun:_dl_open
 }
 {
@@ -162,15 +165,6 @@
     ...
 }
 {
-   PSM2 leak 1
-   Memcheck:Leak
-   match-leak-kinds: reachable
-   fun:malloc
-   fun:sysfs_init
-   fun:_dl_init
-   obj:/usr/lib64/ld-2.17.so
-}
-{
    mercury bug/leak 1
    Memcheck:Addr4
    fun:OPA_load_int
@@ -212,14 +206,5 @@
    fun:na_ofi_initialize
    ...
    fun:crt_hg_ctx_init
-   ...
-}
-{
-   dl open leaks
-   Memcheck:Leak
-   match-leak-kinds: reachable
-   fun:malloc
-   ...
-   fun:_dl_init
    ...
 }
