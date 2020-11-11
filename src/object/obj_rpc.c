@@ -193,9 +193,6 @@ crt_proc_daos_iod_and_csum(crt_proc_t proc, crt_proc_op_t proc_op,
 	if (rc != 0)
 		return rc;
 
-	if (rc != 0)
-		return rc;
-
 	rc = crt_proc_memcpy(proc, &iod->iod_type, sizeof(iod->iod_type));
 	if (rc != 0)
 		return -DER_HG;

@@ -25,6 +25,7 @@
 from __future__ import print_function
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
+from datetime import datetime
 import json
 import os
 import re
@@ -349,28 +350,25 @@ def check_remote_output(task, command):
     for code in sorted(results):
         output_data = list(task.iter_buffers(results[code]))
         if not output_data:
-            err_nodes = NodeSet.fromlist(results[code])
-            print("    {}: rc={}, output: <NONE>".format(err_nodes, code))
-        else:
-            for output, o_hosts in output_data:
-                n_set = NodeSet.fromlist(o_hosts)
-                lines = str(output).splitlines()
-                print("There are {} lines of output".format(len(lines)))
-                if len(lines) > 1:
-                    print("    {}: rc={}, output:".format(n_set, code))
-                    for line in lines:
-                        try:
-                            print("      {}".format(line))
-                        except IOError:
-                            # DAOS-5781 Jenkins doesn't like receiving large
-                            # amounts of data in a short space of time so catch
-                            # this and retry.
-                            time.sleep(5)
-                            print("      {}".format(line))
-                else:
-                    print("    {}: rc={}, output: {}".format(n_set,
-                                                             code,
-                                                             output))
+            output_data = [["<NONE>", results[code]]]
+
+        for output, o_hosts in output_data:
+            n_set = NodeSet.fromlist(o_hosts)
+            lines = str(output).splitlines()
+            print("There are {} lines of output".format(len(lines)))
+            if len(lines) > 1:
+                print("    {}: rc={}, output:".format(n_set, code))
+                for line in lines:
+                    try:
+                        print("      {}".format(line))
+                    except IOError:
+                        # DAOS-5781 Jenkins doesn't like receiving large
+                        # amounts of data in a short space of time so catch
+                        # this and retry.
+                        time.sleep(5)
+                        print("      {}".format(line))
+            else:
+                print("    {}: rc={}, output: {}".format(n_set, code, output))
 
     # List any hosts that timed out
     timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
@@ -485,16 +483,17 @@ def get_test_list(tags):
             # Otherwise it is assumed that this is a tag
             test_tags.extend(["--filter-by-tags", str(tag)])
 
-    # Add to the list of tests any test that matches the specified tags.  If no
+    # Update the list of tests with any test that match the specified tags.
+    # Exclude any specified tests that do not match the specified tags.  If no
     # tags and no specific tests have been specified then all of the functional
     # tests will be added.
     if test_tags or not test_list:
         command = ["avocado", "list", "--paginator=off"]
         for test_tag in test_tags:
             command.append(str(test_tag))
-        command.append("./")
+        command.extend(test_list if test_list else ["./"])
         tagged_tests = re.findall(r"INSTRUMENTED\s+(.*):", get_output(command))
-        test_list.extend(list(set(tagged_tests)))
+        test_list = list(set(tagged_tests))
 
     return test_tags, test_list
 
@@ -790,13 +789,40 @@ def run_tests(test_files, tag_filter, args):
         command_list.extend(tag_filter)
 
     # Run each test
+    skip_reason = None
     for test_file in test_files:
-        if isinstance(test_file["yaml"], str):
+        if skip_reason is not None:
+            # An error was detected running clean_logs for a previous test.  As
+            # this is typically an indication of a communication issue with one
+            # of the hosts, do not attempt to run subsequent tests.
+            if not report_skipped_test(
+                    test_file["py"], avocado_logs_dir, skip_reason):
+                return_code |= 64
+
+        elif not isinstance(test_file["yaml"], str):
+            # The test was not run due to an error replacing host placeholders
+            # in the yaml file.  Treat this like a failed avocado command.
+            reason = "error replacing yaml file placeholders"
+            if not report_skipped_test(
+                    test_file["py"], avocado_logs_dir, reason):
+                return_code |= 64
+            return_code |= 4
+
+        else:
             # Optionally clean the log files before running this test on the
             # servers and clients specified for this test
             if args.clean:
                 if not clean_logs(test_file["yaml"], args):
-                    return 128
+                    # Report errors for this skipped test
+                    skip_reason = (
+                        "host communication error attempting to clean out "
+                        "leftover logs from a previous test run prior to "
+                        "running this test")
+                    if not report_skipped_test(
+                            test_file["py"], avocado_logs_dir, skip_reason):
+                        return_code |= 64
+                    return_code |= 128
+                    continue
 
             # Execute this test
             test_command_list = list(command_list)
@@ -823,10 +849,6 @@ def run_tests(test_files, tag_filter, args):
             # Optionally process core files
             if args.process_cores:
                 process_the_cores(avocado_logs_dir, test_file["yaml"], args)
-        else:
-            # The test was not run due to an error replacing host placeholders
-            # in the yaml file.  Treat this like a failed avocado command.
-            return_code |= 4
 
     return return_code
 
@@ -1134,19 +1156,53 @@ def check_big_files(avocado_logs_dir, task, test_name, args):
             cdata.extend(["  {}".format(big_file) for big_file in big_files])
     if cdata:
         destination = os.path.join(avocado_logs_dir, "latest")
+        message = "Log size has exceed threshold for this test on: {}".format(
+            hosts)
         status = create_results_xml(
-            hosts, test_name, "\n".join(cdata), destination)
+            message, test_name, "\n".join(cdata), destination)
     else:
         print("No log files found exceeding {}".format(args.logs_threshold))
 
     return status
 
 
-def create_results_xml(hosts, testname, output, destination):
-    """Create Junit xml file.
+def report_skipped_test(test_file, avocado_logs_dir, reason):
+    """Report an error for the skipped test.
 
     Args:
-        hosts (list): list of host names
+        test_file (str): the test python file
+        avocado_logs_dir (str): avocado job-results directory
+        reason (str): test skip reason
+
+    Returns:
+        bool: status of writing to junit file
+
+    """
+    message = "The {} test was skipped due to {}".format(test_file, reason)
+    print(message)
+
+    # Generate a fake avocado results.xml file to report the skipped test.
+    # This file currently requires being placed in a job-* subdirectory.
+    test_name = get_test_category(test_file)
+    time_stamp = datetime.now().strftime("%Y-%m-%dT%H.%M")
+    destination = os.path.join(
+        avocado_logs_dir, "job-{}-da03911-{}".format(time_stamp, test_name))
+    try:
+        os.makedirs(destination)
+    except (OSError, FileExistsError) as error:
+        print(
+            "Warning: Continuing after failing to create {}: {}".format(
+                destination, error))
+    return create_results_xml(
+        message, test_name, "See launch.py command output for more details",
+        destination)
+
+
+def create_results_xml(message, testname, output, destination):
+    """Create JUnit xml file.
+
+    Args:
+        message (str): error summary message
         testname (str): name of test
         output (dict): result of the command.
         destination (str): directory where junit xml will be created
@@ -1156,38 +1212,33 @@ def create_results_xml(hosts, testname, output, destination):
 
     """
     status = True
-    testsuite_attrs = {
-        "name": "{}".format(testname),
+
+    # Define the test suite
+    testsuite_attributes = {
+        "name": str(testname),
         "errors": "1",
         "failures": "0",
         "skipped": "0",
         "test": "1",
         "time": "0.0",
     }
-    testcase_attrs = {
-        "name": "framework_results",
-        "time": "0.0",
-    }
-    error_atttrs = {
-        "message": "Log size has exceed threshold for this test on: {}".format(
-            hosts)
-    }
+    testsuite = ET.Element("testsuite", testsuite_attributes)
 
-    # Create xml tree
-    testsuite = ET.Element("testsuite", testsuite_attrs)
-    testcase = ET.SubElement(testsuite, "testcase", testcase_attrs)
-    ET.SubElement(testcase, "error", error_atttrs)
+    # Define the test case error
+    testcase_attributes = {"name": "framework_results", "time": "0.0"}
+    testcase = ET.SubElement(testsuite, "testcase", testcase_attributes)
+    ET.SubElement(testcase, "error", {"message": message})
     system_out = ET.SubElement(testcase, "system-out")
     system_out.text = output
 
     # Get xml as string and write it to a file
     rough_xml = ET.tostring(testsuite, "utf-8")
     junit_xml = minidom.parseString(rough_xml)
-    filen = os.path.join(destination, "framework_results.xml")
-    print("Generating junit xml file ...")
+    results_xml = os.path.join(destination, "framework_results.xml")
+    print("Generating junit xml file {} ...".format(results_xml))
     try:
-        with open(filen, "w") as results_xml:
-            results_xml.write(junit_xml.toprettyxml())
+        with open(results_xml, "w") as xml_buffer:
+            xml_buffer.write(junit_xml.toprettyxml())
     except IOError as error:
         print("Failed to create xml file: {}".format(error))
         status = False
@@ -1605,6 +1656,9 @@ def main():
             ret_code = 1
         if status & 32 == 32:
             print("ERROR: Detected one or more tests with unreported big logs!")
+            ret_code = 1
+        if status & 64 == 64:
+            print("ERROR: Failed to create a junit xml test error file!")
             ret_code = 1
         if status & 128 == 128:
             print("ERROR: Failed to clean logs in preparation for test run!")

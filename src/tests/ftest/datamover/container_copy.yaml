@@ -1,0 +1,66 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+    - server-E
+  test_clients:
+    - client-F
+    - client-G
+    - client-H
+timeout: 3600
+server_config:
+  name: daos_server
+  servers:
+    log_mask: ERR
+    bdev_class: nvme
+    bdev_list: ["0000:81:00.0"]
+    scm_class: dcpm
+    scm_list: ["/dev/pmem0"]
+pool:
+  mode: 146
+  name: daos_server
+  scm_size: 42000000000       # 42G
+  nvme_size: 700000000000     # 700G
+  svcn: 1
+  control_method: dmg
+container:
+  type: POSIX
+  control_method: daos
+ior:
+  client_processes:
+    np: 30
+  api: DFS
+  flags: "-w -k"
+  dfs_destroy: False
+  test_file: /testFile
+  repetitions: 1
+  signature: 5
+  transfersize_blocksize:
+    1M:
+      transfer_size: '1M'
+      block_size: '5G'         # creating aggregate file of size 150G
+  objectclass:
+    SX:
+      dfs_oclass: "SX"
+mdtest:
+  client_processes:
+    np: 30
+  api: DFS
+  num_of_files_dirs: 1667      # creating total of 50K files with 30 np
+  test_dir: "/"
+  iteration: 1
+  dfs_destroy: False
+  manager: "MPICH"
+  mdtest_flags:
+    - "-F -C"
+    - "-F -E"
+  bytes: 4096
+  depth: 0
+dfuse:
+  mount_dir: "/tmp/daos_dfuse/"
+datamover:
+  src_path: "/"
+  dest_path: "/"
+  processes: 16

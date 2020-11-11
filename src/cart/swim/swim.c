@@ -602,6 +602,7 @@ void
 swim_fini(struct swim_context *ctx)
 {
 	struct swim_item *next, *item;
+	int    rc;
 
 	if (ctx == NULL)
 		return;
@@ -638,7 +639,10 @@ swim_fini(struct swim_context *ctx)
 		item = next;
 	}
 
-	SWIM_MUTEX_DESTROY(ctx->sc_mutex);
+	rc = SWIM_MUTEX_DESTROY(ctx->sc_mutex);
+	if (rc != 0)
+		D_DEBUG(DB_TRACE, "Failed to destroy lock %d %s",
+			rc, strerror(rc));
 
 	D_FREE(ctx);
 }
@@ -855,7 +859,6 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 			ctx->sc_target = ctx->sc_ops->get_dping_target(ctx);
 			if (ctx->sc_target == SWIM_ID_INVALID) {
 				swim_ctx_unlock(ctx);
-				SWIM_ERROR("SWIM shutdown\n");
 				D_GOTO(out, rc = -ESHUTDOWN);
 			}
 
@@ -985,7 +988,6 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 						  upds[i].smu_state.sms_status],
 					   upds[i].smu_state.sms_incarnation,
 					   from);
-				SWIM_ERROR("SWIM shutdown\n");
 				D_GOTO(out, rc = -ESHUTDOWN);
 			}
 

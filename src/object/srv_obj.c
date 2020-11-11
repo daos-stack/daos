@@ -865,7 +865,7 @@ obj_singv_ec_rw_filter(daos_unit_oid_t *oid, daos_iod_t *iods, uint64_t *offs,
 			iod->iod_recxs = (void *)iod->iod_size;
 		if (!obj_ec_singv_one_tgt(iod, NULL, oca)) {
 			obj_ec_singv_local_sz(iod->iod_size, oca, tgt_idx,
-					      &loc);
+					      &loc, for_update);
 			if (offs != NULL)
 				offs[i] = loc.esl_off;
 			if (for_update)
@@ -1875,6 +1875,9 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 			obj_log_csum_err();
 			D_GOTO(out, rc = -DER_CSUM);
 		}
+
+		if (DAOS_FAIL_CHECK(DAOS_OBJ_FETCH_DATA_LOST))
+			D_GOTO(out, rc = -DER_DATA_LOSS);
 
 		epoch.oe_value = orw->orw_epoch;
 		epoch.oe_first = orw->orw_epoch_first;
