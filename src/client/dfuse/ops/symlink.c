@@ -56,8 +56,6 @@ dfuse_cb_symlink(fuse_req_t req, const char *link,
 	if (rc)
 		D_GOTO(err, rc);
 
-	DFUSE_TRA_INFO(ie, "Inserting inode %lu", ie->ie_stat.st_ino);
-
 	dfuse_reply_entry(fs_handle, ie, NULL, req);
 
 	return;

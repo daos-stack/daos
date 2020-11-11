@@ -57,7 +57,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	entry.attr = ie->ie_stat;
 	entry.generation = 1;
 	entry.ino = entry.attr.st_ino;
-	DFUSE_TRA_DEBUG(ie, "Inserting inode %lu", entry.ino);
+	DFUSE_TRA_DEBUG(ie, "Inserting inode %#lx", entry.ino);
 
 	rlink = d_hash_rec_find_insert(&fs_handle->dpi_iet,
 				       &ie->ie_stat.st_ino,
@@ -97,12 +97,12 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		/* Check the OID */
 		if (ie->ie_oid.lo != inode->ie_oid.lo ||
 		    ie->ie_oid.hi != inode->ie_oid.hi) {
-			DFUSE_TRA_ERROR(inode, "Duplicate inode found (dfs)");
+			DFUSE_TRA_ERROR(inode, "Duplicate inode found (oid)");
 			D_GOTO(out_err, rc = EIO);
 		}
 
 		DFUSE_TRA_DEBUG(inode,
-				"Maybe updating parent inode %lu dfs_root %lu",
+				"Maybe updating parent inode %#lx dfs_root %#lx",
 				entry.ino, ie->ie_dfs->dfs_root);
 
 		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_root) {
