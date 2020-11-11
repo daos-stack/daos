@@ -30,6 +30,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net"
+	"sort"
 	"testing"
 	"time"
 
@@ -71,6 +72,66 @@ func waitForLeadership(t *testing.T, ctx context.Context, db *Database, gained b
 			}
 			time.Sleep(1 * time.Second)
 		}
+	}
+}
+
+func TestSystem_Database_filterMembers(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	db := MockDatabase(t, log)
+	memberStates := []MemberState{
+		MemberStateUnknown, MemberStateAwaitFormat, MemberStateStarting,
+		MemberStateReady, MemberStateJoined, MemberStateStopping, MemberStateStopped,
+		MemberStateEvicted, MemberStateErrored, MemberStateUnresponsive,
+	}
+
+	for i, ms := range memberStates {
+		if err := db.AddMember(MockMember(t, uint32(i), ms)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for name, tf := range map[string]func(t *testing.T){
+		"individual state filters": func(t *testing.T) {
+			for _, ms := range memberStates {
+				matches := db.filterMembers(ms)
+				matchLen := len(matches)
+				if matchLen != 1 {
+					t.Fatalf("expected exactly 1 member to match %s (got %d)", ms, matchLen)
+				}
+				if matches[0].state != ms {
+					t.Fatalf("filtered member doesn't match requested state (%s != %s)", matches[0].state, ms)
+				}
+			}
+		},
+		"all members filter": func(t *testing.T) {
+			matchLen := len(db.filterMembers(AllMemberFilter))
+			if matchLen != len(memberStates) {
+				t.Fatalf("expected all members to be %d; got %d", len(memberStates), matchLen)
+			}
+		},
+		"subset filter": func(t *testing.T) {
+			filter := []MemberState{memberStates[1], memberStates[2]}
+			matches := db.filterMembers(filter...)
+			matchLen := len(matches)
+			if matchLen != 2 {
+				t.Fatalf("expected 2 members to match; got %d", matchLen)
+			}
+
+			// sort the results for stable comparison
+			sort.Slice(matches, func(i, j int) bool { return matches[i].state < matches[j].state })
+			for i, ms := range filter {
+				if matches[i].state != ms {
+					t.Fatalf("filtered member %d doesn't match requested state (%s != %s)", i, matches[i].state, ms)
+				}
+			}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			buf.Reset()
+			tf(t)
+		})
 	}
 }
 
@@ -129,7 +190,7 @@ func TestSystem_Database_checkReplica(t *testing.T) {
 
 			// Just to get a bit of extra coverage
 			if repAddr != nil {
-				db.replicaAddr = repAddr
+				db.replicaAddr.Addr = repAddr
 				var err error
 				repAddr, err = db.ReplicaAddr()
 				if err != nil {

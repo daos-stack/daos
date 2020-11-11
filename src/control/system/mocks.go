@@ -140,7 +140,7 @@ func newMockRaftService(cfg *mockRaftServiceConfig, fsm raft.FSM) *mockRaftServi
 // operations in memory.
 func MockDatabase(t *testing.T, log logging.Logger) *Database {
 	db := NewDatabase(log, nil)
-	db.replicaAddr = &net.TCPAddr{}
+	db.replicaAddr.Addr = &net.TCPAddr{}
 	db.raft = newMockRaftService(&mockRaftServiceConfig{
 		State: raft.Leader,
 	}, (*fsm)(db))

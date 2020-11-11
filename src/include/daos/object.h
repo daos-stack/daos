@@ -27,6 +27,13 @@
 #include <daos/tse.h>
 #include <daos_obj.h>
 
+/* EC parity is stored in a private address range that is selected by setting
+ * the most-significant bit of the offset (an unsigned long). This effectively
+ * limits the addressing of user extents to the lower 63 bits of the offset
+ * range.
+ */
+#define DAOS_EC_PARITY_BIT	(1ULL << 63)
+
 static inline daos_oclass_id_t
 daos_obj_id2class(daos_obj_id_t oid)
 {

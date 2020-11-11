@@ -184,6 +184,12 @@ explore.add_argument(
 explore.add_argument('-a', '--alloc_overhead', type=int,
                      help='Vos alloc overhead', default=16)
 explore.add_argument(
+    '-k',
+    '--checksum',
+    type=str,
+    help='[optional] Checksum algorithm to be used crc16, crc32, crc64, sha1, sha256, sha512',
+    default='')
+explore.add_argument(
     '-m',
     '--meta',
     metavar='META',
@@ -270,6 +276,12 @@ csv_file.add_argument(
     type=int,
     help='Number of vos pools',
     default=1000)
+csv_file.add_argument(
+    '-k',
+    '--checksum',
+    type=str,
+    help='[optional] Checksum algorithm to be used crc16, crc32, crc64, sha1, sha256, sha512',
+    default='')
 csv_file.add_argument(
     '-v',
     '--verbose',

@@ -708,6 +708,61 @@ err:
 	return rc;
 }
 
+int
+ds_rsvc_start_nodb(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid)
+{
+	struct ds_rsvc		*svc = NULL;
+	d_list_t		*entry;
+	int			 rc;
+
+	entry = d_hash_rec_find(&rsvc_hash, id->iov_buf, id->iov_len);
+	if (entry != NULL) {
+		svc = rsvc_obj(entry);
+		D_DEBUG(DB_MD, "%s: found: stop=%d\n", svc->s_name,
+			svc->s_stop);
+		if (svc->s_stop)
+			rc = -DER_CANCELED;
+		else
+			rc = -DER_ALREADY;
+		ds_rsvc_put(svc);
+		goto out;
+	}
+
+	rc = alloc_init(class, id, db_uuid, &svc);
+	if (rc != 0)
+		goto out;
+	svc->s_ref++;
+
+	rc = d_hash_rec_insert(&rsvc_hash, svc->s_id.iov_buf, svc->s_id.iov_len,
+			       &svc->s_entry, true /* exclusive */);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, "%s: insert: "DF_RC"\n", svc->s_name, DP_RC(rc));
+		stop(svc, false /* destroy */);
+		goto err_svc;
+	}
+
+	if (rsvc_class(svc->s_class)->sc_map_dist != NULL) {
+		rc = init_map_distd(svc);
+		if (rc != 0)
+			goto err_svc;
+	}
+	change_state(svc, DS_RSVC_UP);
+
+	D_DEBUG(DB_MD, "%s: started service\n", svc->s_name);
+	ds_rsvc_put(svc);
+
+	goto out;
+
+err_svc:
+	svc->s_ref--;
+	fini_free(svc);
+out:
+	if (rc != 0 && rc != -DER_ALREADY)
+		D_ERROR("Failed to start service: "DF_RC"\n",
+			DP_RC(rc));
+	return rc;
+}
+
 /**
  * Start a replicated service. If \a create is false, all remaining input
  * parameters are ignored; otherwise, create the replica first. If \a replicas

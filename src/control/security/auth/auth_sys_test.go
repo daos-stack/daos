@@ -148,7 +148,7 @@ func TestAuthSysRequestFromCreds_returnsAuthSys(t *testing.T) {
 		groupIDs: gids,
 	}
 	ext.LookupGroupIDResults = []*user.Group{
-		&user.Group{
+		{
 			Name: expectedGroup,
 		},
 	}
@@ -264,7 +264,7 @@ func TestAuthSysRequestFromCreds_GroupIDListFails(t *testing.T) {
 	ext.LookupUserIDResult = testUser
 
 	ext.LookupGroupIDResults = []*user.Group{
-		&user.Group{
+		{
 			Name: "group@",
 		},
 	}

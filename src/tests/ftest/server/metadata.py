@@ -95,8 +95,7 @@ class ObjectMetadata(TestWithServers):
         super(ObjectMetadata, self).setUp()
 
         # Create a pool
-        self.pool = TestPool(self.context, self.log,
-                             dmg_command=self.get_dmg_command())
+        self.pool = TestPool(self.context, self.get_dmg_command())
         self.pool.get_params(self)
         self.pool.create()
         self.log.info("Created pool %s: svcranks:",
@@ -126,6 +125,41 @@ class ObjectMetadata(TestWithServers):
                 return "FAIL"
         self.d_log.debug("IOR {0} Threads Finished -----".format(operation))
         return "PASS"
+
+    def test_metadata_find_svc(self):
+        """JIRA ID: DAOS-3321.
+
+        Test Description:
+            Test to ask MS for list of PS replia ranks.
+
+        Use Cases:
+            ?
+
+        :avocado: tags=all,metadata,pr,large,metadatafindsvc,hw
+        """
+        # Connect to pool with svc argument being a valid rank,
+        # but one that is not a pool service replica. Rank 0 is convenient.
+        # libdaos should process a DER_NOTREPLICA reply, and then contact MS
+        # for the list of PS ranks
+
+        try:
+            # temporarily manipulate the pool's svc ranks
+            save_rank = self.pool.pool.svc.rl_ranks[0]
+            save_nranks = self.pool.pool.svc.rl_nr
+            self.pool.pool.svc.rl_ranks[0] = 0
+            self.pool.pool.svc.rl_nr = 1
+            self.pool.pool.connect(2)
+            self.pool.pool.disconnect()
+            self.log.info("connected to pool specifying incorrect svc rank 0")
+
+        except DaosApiError as exe:
+            print(exe, traceback.format_exc())
+            self.fail("pool connect failed when specifying svc rank 0")
+
+        finally:
+            # restore
+            self.pool.pool.svc.rl_ranks[0] = save_rank
+            self.pool.pool.svc.rl_nr = save_nranks
 
     def test_metadata_fillup(self):
         """JIRA ID: DAOS-1512.

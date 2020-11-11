@@ -51,7 +51,6 @@
 #include "daos_uns.h"
 #include "daos_hdlr.h"
 #include "dfuse_ioctl.h"
-#include "obj_ctl.h"
 
 const char		*default_sysname = DAOS_DEFAULT_SYS_NAME;
 
@@ -1219,7 +1218,6 @@ do { \
 	"	  pool             pool\n" \
 	"	  container (cont) container\n" \
 	"	  object (obj)     object\n" \
-	"	  shell            shell\n" \
 	"	  version          print command version\n" \
 	"	  help             print this message and exit\n"); \
 	fprintf(stream, "\n"); \
@@ -1448,9 +1446,6 @@ main(int argc, char *argv[])
 		dargs.ostream = stdout;
 		help_hdlr(argc, argv, &dargs);
 		return 0;
-	} else if (strcmp(argv[1], "shell") == 0) {
-		rc = shell(argc, argv);
-		return rc;
 	} else if (argc <= 2) {
 		dargs.ostream = stdout;
 		help_hdlr(argc, argv, &dargs);

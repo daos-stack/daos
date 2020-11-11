@@ -96,6 +96,8 @@ struct dc_object {
 	 * version in it.
 	 */
 	struct daos_obj_md	 cob_md;
+	/** object class attribute */
+	struct daos_oclass_attr	*cob_oca;
 	/** container open handle */
 	daos_handle_t		 cob_coh;
 	/** object open mode */
@@ -459,6 +461,8 @@ void obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr);
 int obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
 		  crt_bulk_perm_t bulk_perm, tse_task_t *task,
 		  crt_bulk_t **p_bulks);
+struct daos_oclass_attr *obj_get_oca(struct dc_object *obj, bool force_check);
+bool obj_is_ec(struct dc_object *obj);
 int obj_get_replicas(struct dc_object *obj);
 int obj_shard_open(struct dc_object *obj, unsigned int shard,
 		   unsigned int map_ver, struct dc_obj_shard **shard_ptr);
@@ -479,6 +483,14 @@ obj_singv_ec_rw_filter(daos_unit_oid_t *oid, daos_iod_t *iods, uint64_t *offs,
 		       daos_epoch_t epoch, uint32_t flags, uint32_t start_shard,
 		       uint32_t nr, bool for_update, bool deg_fetch,
 		       struct daos_recx_ep_list **recov_lists_ptr);
+
+static inline struct pl_obj_shard*
+obj_get_shard(void *data, int idx)
+{
+	struct dc_object	*obj = data;
+
+	return &obj->cob_shards->do_shards[idx].do_pl_shard;
+}
 
 static inline bool
 obj_retry_error(int err)
@@ -782,6 +794,9 @@ dc_tx_get_dti(daos_handle_t th, struct dtx_id *dti);
 
 int
 dc_tx_attach(daos_handle_t th, enum obj_rpc_opc opc, tse_task_t *task);
+
+int
+dc_tx_convert(enum obj_rpc_opc opc, tse_task_t *task);
 
 /* obj_enum.c */
 int

@@ -2739,7 +2739,7 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 					&cb_info->buc_iv_value,
 					cb_info->buc_user_priv);
 		output->rc = rc;
-		rc = crt_reply_send(info->bci_bulk_desc->bd_rpc);
+		crt_reply_send(info->bci_bulk_desc->bd_rpc);
 
 		RPC_PUB_DECREF(info->bci_bulk_desc->bd_rpc);
 		IVNS_DECREF(update_cb_info->uci_ivns_internal);

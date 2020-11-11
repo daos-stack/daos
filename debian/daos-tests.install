@@ -6,6 +6,7 @@ usr/bin/common_test
 usr/bin/daos_test
 usr/bin/drpc_iosrv_test
 usr/bin/drpc_test
+usr/bin/job_tests
 usr/bin/eq_tests
 usr/bin/security_test
 usr/bin/srv_checksum_tests
@@ -15,6 +16,7 @@ usr/bin/vea_ut
 usr/bin/daos_perf
 usr/bin/daos_racer
 usr/bin/evt_ctl
+usr/bin/obj_ctl
 usr/bin/daos_gen_io_conf
 usr/bin/daos_run_io_conf
 usr/bin/crt_launch

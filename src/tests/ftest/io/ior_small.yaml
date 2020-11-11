@@ -53,7 +53,8 @@ ior:
             - MPIIO
             - POSIX
             - HDF5
-            - HDF5-VOL
+# DAOS-5980: Disable HDF5-VOL until upstream is updated.
+#            - HDF5-VOL
           transfer_block_size:
             - [256B, 2M]
             - [1M, 32M]
@@ -62,6 +63,6 @@ ior:
 # Commenting it out until DAOS-3097/3143 is resolved.
 #            - "RP_2GX"
 dfuse:
-    mount_dir: "/tmp/daos_dfuse"
+    mount_dir: "/tmp/daos_dfuse/"
 hdf5_vol:
     plugin_path: /usr/lib64/mpich/lib

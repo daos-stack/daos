@@ -37,6 +37,7 @@ import (
 	raftboltdb "github.com/hashicorp/raft-boltdb"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -74,6 +75,13 @@ type (
 		SchemaVersion uint
 	}
 
+	// syncTCPAddr protects a TCP address with a mutex to allow
+	// for atomic reads and writes.
+	syncTCPAddr struct {
+		sync.RWMutex
+		Addr *net.TCPAddr
+	}
+
 	// Database provides high-level access methods for the
 	// system data as well as structure for managing the raft
 	// service that replicates the system data.
@@ -81,7 +89,7 @@ type (
 		sync.Mutex
 		log                logging.Logger
 		cfg                *DatabaseConfig
-		replicaAddr        *net.TCPAddr
+		replicaAddr        *syncTCPAddr
 		raft               raftService
 		onLeadershipGained []onLeadershipGainedFn
 		onLeadershipLost   []onLeadershipLostFn
@@ -102,6 +110,25 @@ type (
 	}
 )
 
+func (sta *syncTCPAddr) String() string {
+	if sta == nil || sta.Addr == nil {
+		return "(nil)"
+	}
+	return sta.Addr.String()
+}
+
+func (sta *syncTCPAddr) set(addr *net.TCPAddr) {
+	sta.Lock()
+	defer sta.Unlock()
+	sta.Addr = addr
+}
+
+func (sta *syncTCPAddr) get() *net.TCPAddr {
+	sta.RLock()
+	defer sta.RUnlock()
+	return sta.Addr
+}
+
 // NewDatabase returns a configured and initialized Database instance.
 func NewDatabase(log logging.Logger, cfg *DatabaseConfig) *Database {
 	if cfg == nil {
@@ -109,8 +136,9 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) *Database {
 	}
 
 	return &Database{
-		log: log,
-		cfg: cfg,
+		log:         log,
+		cfg:         cfg,
+		replicaAddr: &syncTCPAddr{},
 
 		data: &dbData{
 			log: log,
@@ -152,35 +180,16 @@ func (db *Database) checkReplica(ctrlAddr *net.TCPAddr) (repAddr *net.TCPAddr, i
 		return
 	}
 
-	var localAddrs []net.IP
-	if ctrlAddr.IP.IsUnspecified() {
-		var ifaceAddrs []net.Addr
-		ifaceAddrs, err = net.InterfaceAddrs()
-		if err != nil {
-			return
-		}
-
-		for _, ia := range ifaceAddrs {
-			if in, ok := ia.(*net.IPNet); ok {
-				localAddrs = append(localAddrs, in.IP)
-			}
-		}
-	} else {
-		localAddrs = append(localAddrs, ctrlAddr.IP)
-	}
-
 	for idx, candidate := range repAddrs {
 		if candidate.Port != ctrlAddr.Port {
 			continue
 		}
-		for _, localAddr := range localAddrs {
-			if candidate.IP.Equal(localAddr) {
-				repAddr = candidate
-				if idx == 0 {
-					isBootStrap = true
-				}
-				return
+		if common.IsLocalAddr(candidate) {
+			repAddr = candidate
+			if idx == 0 {
+				isBootStrap = true
 			}
+			return
 		}
 	}
 
@@ -193,11 +202,19 @@ func (db *Database) ReplicaAddr() (*net.TCPAddr, error) {
 	if !db.isReplica() {
 		return nil, &ErrNotReplica{db.cfg.Replicas}
 	}
-	return db.replicaAddr, nil
+	return db.getReplica(), nil
+}
+
+func (db *Database) getReplica() *net.TCPAddr {
+	return db.replicaAddr.get()
+}
+
+func (db *Database) setReplica(addr *net.TCPAddr) {
+	db.replicaAddr.set(addr)
 }
 
 func (db *Database) isReplica() bool {
-	return db.replicaAddr != nil
+	return db.getReplica() != nil
 }
 
 func (db *Database) checkLeader() error {
@@ -236,13 +253,13 @@ func (db *Database) OnLeadershipLost(fns ...onLeadershipLostFn) {
 // is initialized if necessary, and the replica is started to begin the
 // process of choosing a MS leader.
 func (db *Database) Start(ctx context.Context, ctrlAddr *net.TCPAddr) error {
-	var isBootStrap, needsBootStrap bool
-	var err error
+	var needsBootStrap bool
 
-	db.replicaAddr, isBootStrap, err = db.checkReplica(ctrlAddr)
+	replicaAddr, isBootStrap, err := db.checkReplica(ctrlAddr)
 	if err != nil {
 		return err
 	}
+	db.setReplica(replicaAddr)
 	db.log.Debugf("system db start: isReplica: %t, isBootStrap: %t", db.isReplica(), isBootStrap)
 
 	// If we're not a replica, exit early.
@@ -267,7 +284,7 @@ func (db *Database) Start(ctx context.Context, ctrlAddr *net.TCPAddr) error {
 	rc.HeartbeatTimeout = 250 * time.Millisecond
 	rc.ElectionTimeout = 250 * time.Millisecond
 	rc.LeaderLeaseTimeout = 125 * time.Millisecond
-	rc.LocalID = raft.ServerID(db.replicaAddr.String())
+	rc.LocalID = raft.ServerID(db.getReplica().String())
 	// Just use an in-memory transport for the moment, until
 	// we add real replica support over gRPC.
 	_, transport := raft.NewInmemTransport(raft.NewInmemAddr())
@@ -407,15 +424,14 @@ func (db *Database) ReplicaRanks() (*GroupMap, error) {
 	// TODO: Should this only return one rank per replica, or
 	// should we return all ready ranks per replica, for resiliency?
 	gm := newGroupMap(db.data.MapVersion)
-	for _, srv := range db.data.Members.Ranks {
+	for _, srv := range db.filterMembers(AvailableMemberFilter) {
 		// FIXME DAOS-5656: retain dependency on rank 0
 		if !srv.Rank.Equals(0) {
 			continue
 		}
-		repAddr, _, err := db.checkReplica(srv.Addr)
-		if err != nil || repAddr == nil ||
-			!(srv.state == MemberStateJoined || srv.state == MemberStateReady) {
 
+		repAddr, _, err := db.checkReplica(srv.Addr)
+		if err != nil || repAddr == nil {
 			continue
 		}
 		gm.RankURIs[srv.Rank] = srv.FabricURI
@@ -444,8 +460,35 @@ func (db *Database) AllMembers() ([]*Member, error) {
 	return dbCopy, nil
 }
 
+func (db *Database) filterMembers(desiredStates ...MemberState) (result []*Member) {
+	// NB: Must be done under a lock!
+
+	var includeUnknown bool
+	stateMask := AllMemberFilter
+	if len(desiredStates) > 0 {
+		stateMask = 0
+		for _, s := range desiredStates {
+			if s == MemberStateUnknown {
+				includeUnknown = true
+			}
+			stateMask |= s
+		}
+	}
+	if stateMask == AllMemberFilter {
+		includeUnknown = true
+	}
+
+	for _, m := range db.data.Members.Ranks {
+		if m.state == MemberStateUnknown && includeUnknown || m.state&stateMask > 0 {
+			result = append(result, m)
+		}
+	}
+
+	return
+}
+
 // MemberRanks returns a slice of all the ranks in the membership.
-func (db *Database) MemberRanks() ([]Rank, error) {
+func (db *Database) MemberRanks(desiredStates ...MemberState) ([]Rank, error) {
 	if err := db.checkLeader(); err != nil {
 		return nil, err
 	}
@@ -453,8 +496,8 @@ func (db *Database) MemberRanks() ([]Rank, error) {
 	defer db.data.RUnlock()
 
 	ranks := make([]Rank, 0, len(db.data.Members.Ranks))
-	for rank := range db.data.Members.Ranks {
-		ranks = append(ranks, rank)
+	for _, m := range db.filterMembers(desiredStates...) {
+		ranks = append(ranks, m.Rank)
 	}
 
 	sort.Slice(ranks, func(i, j int) bool { return ranks[i] < ranks[j] })
@@ -463,14 +506,14 @@ func (db *Database) MemberRanks() ([]Rank, error) {
 }
 
 // MemberCount returns the number of members in the system.
-func (db *Database) MemberCount() (int, error) {
+func (db *Database) MemberCount(desiredStates ...MemberState) (int, error) {
 	if err := db.checkLeader(); err != nil {
 		return -1, err
 	}
 	db.data.RLock()
 	defer db.data.RUnlock()
 
-	return len(db.data.Members.Ranks), nil
+	return len(db.filterMembers(desiredStates...)), nil
 }
 
 // CurMapVersion returns the current system map version.

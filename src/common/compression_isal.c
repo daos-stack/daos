@@ -42,37 +42,53 @@
 
 /** LZ4 */
 static int
-lz4_init(void **daos_dc_ctx, uint16_t level)
+lz4_init(void **daos_dc_ctx,
+	 uint16_t level,
+	 uint32_t max_buf_size)
 {
-	return 0;
+	return DC_STATUS_OK;
 }
 
 static int
 lz4_compress(void *daos_dc_ctx,
 	     uint8_t *src, size_t src_len,
-	     uint8_t *dst, size_t dst_len)
+	     uint8_t *dst, size_t dst_len,
+	     size_t *produced)
 {
-	return LZ4_compress_default((const char *)src, (char *)dst,
-		(int)src_len, (int)dst_len);
+	int rc = DC_STATUS_ERR;
+	int len = 0;
+
+	len = LZ4_compress_default((const char *)src, (char *)dst,
+				   (int)src_len, (int)dst_len);
+	if (len > 0) {
+		*produced = len;
+		rc = DC_STATUS_OK;
+	}
+
+	return rc;
 }
 
 static int
 lz4_decompress(void *daos_dc_ctx,
 	       uint8_t *src, size_t src_len,
-	       uint8_t *dst, size_t dst_len)
+	       uint8_t *dst, size_t dst_len,
+	       size_t *produced)
 {
 	int ret = LZ4_decompress_safe((const char *)src, (char *)dst,
-		(int)src_len, (int)dst_len);
+				      (int)src_len, (int)dst_len);
 
 	if (ret <= 0)
-		return 0;
+		return DC_STATUS_ERR;
 
-	return ret;
+	*produced = ret;
+
+	return DC_STATUS_OK;
 }
 
 void
 lz4_destroy(void *daos_dc_ctx)
 {
+	return;
 }
 
 struct compress_ft lz4_algo = {
@@ -92,7 +108,9 @@ struct deflate_ctx {
 };
 
 static int
-deflate_init(void **daos_dc_ctx, uint16_t level)
+deflate_init(void **daos_dc_ctx,
+	     uint16_t level,
+	     uint32_t max_buf_size)
 {
 	int level_size_buf[] = {
 		ISAL_DEF_LVL0_DEFAULT,
@@ -104,14 +122,14 @@ deflate_init(void **daos_dc_ctx, uint16_t level)
 
 	if (isal_level >= sizeof(level_size_buf) / sizeof(int)) {
 		D_ERROR("Invalid isa-l compression level: %d\n", level);
-		return -1;
+		return DC_STATUS_INVALID_LEVEL;
 	}
 
 	struct deflate_ctx *ctx;
 
 	D_ALLOC_PTR(ctx);
 	if (ctx == NULL)
-		return -DER_NOMEM;
+		return DC_STATUS_NOMEM;
 
 	isal_deflate_stateless_init(&ctx->stream);
 	ctx->stream.level = isal_level;
@@ -126,12 +144,12 @@ deflate_init(void **daos_dc_ctx, uint16_t level)
 
 	*daos_dc_ctx = ctx;
 
-	return 0;
+	return DC_STATUS_OK;
 }
 
 static int
 deflate_compress(void *daos_dc_ctx, uint8_t *src, size_t src_len,
-		 uint8_t *dst, size_t dst_len)
+		 uint8_t *dst, size_t dst_len, size_t *produced)
 {
 	int ret = 0;
 	struct deflate_ctx *ctx = daos_dc_ctx;
@@ -147,17 +165,22 @@ deflate_compress(void *daos_dc_ctx, uint8_t *src, size_t src_len,
 
 	/* Check if input buffer are all consumed */
 	if (ctx->stream.avail_in)
-		return 0;
+		return DC_STATUS_ERR;
 
-	if (ret != COMP_OK)
-		return 0;
+	if (ret == COMP_OK) {
+		*produced = ctx->stream.total_out;
+		return DC_STATUS_OK;
+	}
 
-	return ctx->stream.total_out;
+	if (ret == STATELESS_OVERFLOW)
+		return DC_STATUS_OVERFLOW;
+
+	return DC_STATUS_ERR;
 }
 
 static int
 deflate_decompress(void *daos_dc_ctx, uint8_t *src, size_t src_len,
-		   uint8_t *dst, size_t dst_len)
+		   uint8_t *dst, size_t dst_len, size_t *produced)
 {
 	int ret = 0;
 	struct deflate_ctx *ctx = daos_dc_ctx;
@@ -173,18 +196,30 @@ deflate_decompress(void *daos_dc_ctx, uint8_t *src, size_t src_len,
 
 	/* Check if input buffer are all consumed */
 	if (ctx->state.avail_in)
-		return -1;
+		return DC_STATUS_ERR;
 
-	if (ret != ISAL_DECOMP_OK)
-		return ret;
+	if (ret == ISAL_DECOMP_OK) {
+		*produced = ctx->state.total_out;
+		return DC_STATUS_OK;
+	}
 
-	return ctx->state.total_out;
+	if (ret == ISAL_OUT_OVERFLOW)
+		return DC_STATUS_OVERFLOW;
+
+	return DC_STATUS_ERR;
 }
 
-void
+static void
 deflate_destroy(void *daos_dc_ctx)
 {
 	D_FREE(daos_dc_ctx);
+}
+
+static int
+is_available()
+{
+	/** ISA-L is always available */
+	return 1;
 }
 
 struct compress_ft deflate_algo = {
@@ -192,6 +227,7 @@ struct compress_ft deflate_algo = {
 	.cf_compress = deflate_compress,
 	.cf_decompress = deflate_decompress,
 	.cf_destroy = deflate_destroy,
+	.cf_available = is_available,
 	.cf_level = 1,
 	.cf_name = "deflate",
 	.cf_type = COMPRESS_TYPE_DEFLATE
@@ -202,6 +238,7 @@ struct compress_ft deflate1_algo = {
 	.cf_compress = deflate_compress,
 	.cf_decompress = deflate_decompress,
 	.cf_destroy = deflate_destroy,
+	.cf_available = is_available,
 	.cf_level = 1,
 	.cf_name = "deflate1",
 	.cf_type = COMPRESS_TYPE_DEFLATE1
@@ -212,6 +249,7 @@ struct compress_ft deflate2_algo = {
 	.cf_compress = deflate_compress,
 	.cf_decompress = deflate_decompress,
 	.cf_destroy = deflate_destroy,
+	.cf_available = is_available,
 	.cf_level = 2,
 	.cf_name = "deflate2",
 	.cf_type = COMPRESS_TYPE_DEFLATE2
@@ -222,6 +260,7 @@ struct compress_ft deflate3_algo = {
 	.cf_compress = deflate_compress,
 	.cf_decompress = deflate_decompress,
 	.cf_destroy = deflate_destroy,
+	.cf_available = is_available,
 	.cf_level = 3,
 	.cf_name = "deflate3",
 	.cf_type = COMPRESS_TYPE_DEFLATE3
@@ -232,6 +271,7 @@ struct compress_ft deflate4_algo = {
 	.cf_compress = deflate_compress,
 	.cf_decompress = deflate_decompress,
 	.cf_destroy = deflate_destroy,
+	.cf_available = is_available,
 	.cf_level = 4,
 	.cf_name = "deflate4",
 	.cf_type = COMPRESS_TYPE_DEFLATE4

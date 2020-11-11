@@ -155,17 +155,19 @@ func MockScmModules(length int) ScmModules {
 }
 
 // MockScmMountPoint returns struct with examples values.
+// Avoid creating mock with zero sizes.
 func MockScmMountPoint(varIdx ...int32) *ScmMountPoint {
 	idx := common.GetIndex(varIdx...)
 
 	return &ScmMountPoint{
 		Path:       fmt.Sprintf("/mnt/daos%d", idx),
-		TotalBytes: uint64(humanize.TByte) * uint64(idx),
-		AvailBytes: uint64(humanize.TByte/4) * uint64(idx), // 75% used
+		TotalBytes: uint64(humanize.TByte) * uint64(idx+1),
+		AvailBytes: uint64(humanize.TByte/4) * uint64(idx+1), // 75% used
 	}
 }
 
 // MockScmNamespace returns struct with examples values.
+// Avoid creating mock with zero sizes.
 func MockScmNamespace(varIdx ...int32) *ScmNamespace {
 	idx := common.GetIndex(varIdx...)
 
@@ -174,6 +176,6 @@ func MockScmNamespace(varIdx ...int32) *ScmNamespace {
 		BlockDevice: fmt.Sprintf("pmem%d", idx),
 		Name:        fmt.Sprintf("namespace%d.0", idx),
 		NumaNode:    uint32(idx),
-		Size:        uint64(idx),
+		Size:        uint64(idx + 1),
 	}
 }
