@@ -1350,8 +1350,7 @@ def check_readdir_perf(server, conf):
 
     pool = pools[0]
 
-    container = '2f61f9cd-ed6a-46ed-a2a3-452283982112'
-#    container = str(uuid.uuid4())
+    container = str(uuid.uuid4())
 
     dfuse = DFuse(server, conf, pool=pool)
 
