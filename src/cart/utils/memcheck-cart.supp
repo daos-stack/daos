@@ -105,7 +105,7 @@
    fun:verbs_open_device
    ...
    fun:rdma_bind_addr
-   fun:vrb_init_info
+   ...
    fun:fi_verbs_ini
 }
 # We couldn't find a rte_log_fini() function or similar on SPDK codebase to

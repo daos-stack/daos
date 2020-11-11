@@ -485,7 +485,7 @@ pool_properties(void **state)
 
 	print_message("create pool with properties, and query it to verify.\n");
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
-			SMALL_POOL_SIZE, NULL);
+			SMALL_POOL_SIZE, 0, NULL);
 	assert_int_equal(rc, 0);
 
 /* FIXME (DAOS-5456): label/space_rb props not supported with dmg */
@@ -643,7 +643,7 @@ pool_setup_sync(void **state)
 {
 	async_disable(state);
 	return test_setup(state, SETUP_POOL_CONNECT, true, SMALL_POOL_SIZE,
-			  NULL);
+			  0, NULL);
 }
 
 static int
@@ -651,14 +651,14 @@ pool_setup_async(void **state)
 {
 	async_enable(state);
 	return test_setup(state, SETUP_POOL_CONNECT, true, SMALL_POOL_SIZE,
-			  NULL);
+			  0, NULL);
 }
 
 static int
 setup(void **state)
 {
 	return test_setup(state, SETUP_POOL_CREATE, true, SMALL_POOL_SIZE,
-			  NULL);
+			  0, NULL);
 }
 
 /* Private definition for void * typed test_arg_t.pool_lc_args */
@@ -1037,7 +1037,7 @@ expect_pool_connect_access(test_arg_t *arg0, uint64_t perms,
 	int		 rc;
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
-			SMALL_POOL_SIZE, NULL);
+			SMALL_POOL_SIZE, 0, NULL);
 	assert_int_equal(rc, 0);
 
 	arg->pool.pool_connect_flags = flags;

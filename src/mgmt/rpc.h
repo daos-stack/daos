@@ -49,6 +49,9 @@
 	X(MGMT_PROFILE,							\
 		0, &CQF_mgmt_profile,					\
 		ds_mgmt_profile_hdlr, NULL),				\
+	X(MGMT_POOL_GET_SVCRANKS,					\
+		0, &CQF_mgmt_pool_get_svcranks,				\
+		ds_mgmt_pool_get_svcranks_hdlr, NULL),			\
 	X(MGMT_MARK,							\
 		0, &CQF_mgmt_mark,					\
 		ds_mgmt_mark_hdlr, NULL),				\
@@ -127,6 +130,16 @@ CRT_RPC_DECLARE(mgmt_params_set, DAOS_ISEQ_MGMT_PARAMS_SET,
 
 CRT_RPC_DECLARE(mgmt_profile, DAOS_ISEQ_MGMT_PROFILE,
 		DAOS_OSEQ_MGMT_PROFILE)
+
+#define DAOS_ISEQ_MGMT_POOL_GET_SVCRANKS /* input fields */	 \
+	((uuid_t)		(gsr_puuid)		CRT_VAR)
+
+#define DAOS_OSEQ_MGMT_POOL_GET_SVCRANKS /* output fields */	 \
+	((d_rank_list_t)	(gsr_ranks)		CRT_PTR) \
+	((int32_t)		(gsr_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(mgmt_pool_get_svcranks, DAOS_ISEQ_MGMT_POOL_GET_SVCRANKS,
+		DAOS_OSEQ_MGMT_POOL_GET_SVCRANKS)
 
 #define DAOS_ISEQ_MGMT_TGT_CREATE /* input fields */		 \
 	((uuid_t)		(tc_pool_uuid)		CRT_VAR) \
