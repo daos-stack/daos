@@ -115,25 +115,6 @@
    <insert_a_suppression_name_here>
    Memcheck:Leak
    match-leak-kinds:definite
-   fun:calloc
-   fun:btr_context_create
-   fun:dbtree_open_inplace_ex
-   fun:tree_open_create
-   fun:key_tree_prepare
-   fun:key_punch
-   fun:vos_obj_punch
-   fun:puncha_with_flags.isra.*
-   fun:conflicting_rw_exec_one
-   fun:conflicting_rw_exec
-   fun:conflicting_rw
-   obj:/usr/lib64/libcmocka.so.*
-   fun:_cmocka_run_group_tests
-   fun:run_mvcc_tests
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds:definite
    fun:malloc
    fun:vts_alloc_gen_fname
    fun:io_obj_cache_test

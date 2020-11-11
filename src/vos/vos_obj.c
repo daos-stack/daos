@@ -163,7 +163,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 	struct vos_ilog_info	 akey_info = {0};
 	daos_epoch_range_t	 epr = {0, epoch};
 	d_iov_t			 riov;
-	daos_handle_t		 toh;
+	daos_handle_t		 toh = DAOS_HDL_INVAL ;
 	int			 i;
 	int			 rc;
 
@@ -220,7 +220,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 			VOS_TX_LOG_FAIL(rc, "Failed to punch akey: rc="
 					DF_RC"\n", DP_RC(rc));
 			break;
-	}
+		}
 	}
 
 	if (rc == 0 && (flags & VOS_OF_REPLAY_PC) == 0) {
@@ -228,8 +228,6 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 		rc = vos_propagate_check(obj, toh, ts_set, &epr,
 					 VOS_ITER_AKEY);
 	}
-
-	key_tree_release(toh, 0);
 
 	if (rc != 1)
 		goto out;
@@ -256,6 +254,9 @@ punch_dkey:
 		vos_ilog_fetch_finish(&akey_info);
 	}
 
+	if (!daos_handle_is_inval(toh)) {
+		key_tree_release(toh, 0);
+	}
 	return rc;
 }
 
