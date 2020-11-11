@@ -307,9 +307,10 @@ func (req *ConfigGenerateReq) validateScmStorage(ctx context.Context, scmNamespa
 
 	// sanity check that each pmem aligns with expected numa node
 	for idx := range pmemPaths {
-		if int(scmNamespaces[idx].NumaNode) != idx {
-			return nil, errors.Errorf("unexpected numa node for scm %+v, want %d",
-				scmNamespaces[idx], idx)
+		ns := scmNamespaces[idx]
+		if int(ns.NumaNode) != idx {
+			return nil, errors.Errorf("unexpected numa node for %s, want %d got %d",
+				ns.BlockDevice, idx, ns.NumaNode)
 		}
 	}
 
@@ -330,7 +331,7 @@ func (req *ConfigGenerateReq) validateNvmeStorage(ctrlrs storage.NvmeControllers
 	for _, ctrlr := range ctrlrs {
 		if int(ctrlr.SocketID) > (numaCount - 1) {
 			req.Log.Debugf(
-				"skipping nvme device %s with numa %d (in use numa count is %d)",
+				"skipping nvme device %s with numa %d (currently using %d numa nodes)",
 				ctrlr.PciAddr, ctrlr.SocketID, numaCount)
 			continue
 		}
