@@ -82,7 +82,6 @@ func isRetryable(msg proto.Message) (*retryableDrpcReq, bool) {
 		return &retryableDrpcReq{
 			Message: msg,
 			RetryableStatuses: []drpc.DaosStatus{
-				drpc.DaosOutOfGroup,
 				drpc.DaosGroupVersionMismatch,
 				drpc.DaosTimedOut,
 			},
