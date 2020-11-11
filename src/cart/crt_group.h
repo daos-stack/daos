@@ -217,6 +217,8 @@ struct crt_uri_item {
 	/* TODO: in phase2 change this to hash table */
 	ATOMIC crt_phy_addr_t ui_uri[CRT_SRV_CONTEXT_NUM];
 
+	//crt_phy_addr_t	base_uri;
+
 	/* Primary rank; for secondary groups only  */
 	d_rank_t	ui_pri_rank;
 

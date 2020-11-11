@@ -22,7 +22,7 @@ server_config:
       first_core: 0
       pinned_numa_node: 0
       fabric_iface: ib0
-      fabric_iface_port: 31416
+      fabric_iface_port: 31317
       log_file: daos_server0.log
       scm_mount: /mnt/daos0
       # common items below (same in server 0 and server 1)

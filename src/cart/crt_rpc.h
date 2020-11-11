@@ -160,7 +160,10 @@ struct crt_rpc_priv {
 	struct crt_hg_hdl	*crp_hdl_reuse; /* reused hg_hdl */
 	crt_phy_addr_t		crp_tgt_uri; /* target uri address */
 	crt_rpc_t		*crp_ul_req; /* uri lookup request */
+
 	uint32_t		crp_ul_retry; /* uri lookup retry counter */
+
+	int			crp_ul_idx; /* index last tried */
 
 	struct crt_grp_priv	*crp_grp_priv; /* group private pointer */
 	/*
