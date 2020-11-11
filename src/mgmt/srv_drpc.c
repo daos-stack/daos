@@ -1804,6 +1804,92 @@ ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 }
 
 void
+ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__DevReplaceReq	*req = NULL;
+	Mgmt__DevReplaceResp	*resp = NULL;
+	uint8_t			*body;
+	size_t			 len;
+	uuid_t			 old_uuid;
+	uuid_t			 new_uuid;
+	int			 rc = 0;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__dev_replace_req__unpack(&alloc.alloc,
+					    drpc_req->body.len,
+					    drpc_req->body.data);
+
+	if (alloc.oom || req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to unpack req (dev state set faulty)\n");
+		return;
+	}
+
+	D_INFO("Received request to replace device %s with device %s\n",
+	       req->old_dev_uuid, req->new_dev_uuid);
+
+	D_ALLOC_PTR(resp);
+	if (resp == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate daos response ref\n");
+		mgmt__dev_replace_req__free_unpacked(req, &alloc.alloc);
+		return;
+	}
+
+	/* Response status is populated with SUCCESS on init. */
+	mgmt__dev_replace_resp__init(resp);
+
+	if (strlen(req->old_dev_uuid) != 0) {
+		if (uuid_parse(req->old_dev_uuid, old_uuid) != 0) {
+			D_ERROR("Unable to parse device UUID %s: %d\n",
+				req->old_dev_uuid, rc);
+			uuid_clear(old_uuid);
+		}
+	} else
+		uuid_clear(old_uuid); /* need to set uuid = NULL */
+
+	if (strlen(req->new_dev_uuid) != 0) {
+		if (uuid_parse(req->new_dev_uuid, new_uuid) != 0) {
+			D_ERROR("Unable to parse device UUID %s: %d\n",
+				req->new_dev_uuid, rc);
+			uuid_clear(new_uuid);
+		}
+	} else
+		uuid_clear(new_uuid); /* need to set uuid = NULL */
+
+	rc = ds_mgmt_dev_replace(old_uuid, new_uuid, resp);
+	if (rc != 0)
+		D_ERROR("Failed to replace device :%d\n", rc);
+
+	resp->status = rc;
+	len = mgmt__dev_replace_resp__get_packed_size(resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		mgmt__dev_replace_resp__pack(resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__dev_replace_req__free_unpacked(req, &alloc.alloc);
+
+	if (rc == 0) {
+		if (resp->dev_state != NULL)
+			D_FREE(resp->dev_state);
+		if (resp->old_dev_uuid != NULL)
+			D_FREE(resp->old_dev_uuid);
+		if (resp->new_dev_uuid != NULL)
+			D_FREE(resp->new_dev_uuid);
+	}
+
+	D_FREE(resp);
+}
+
+
+void
 ds_mgmt_drpc_set_up(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__DaosResp	resp = MGMT__DAOS_RESP__INIT;

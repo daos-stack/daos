@@ -102,14 +102,28 @@ message DevStateResp {
 	string dev_state=3; //NORMAL or FAULTY
 }
 
+message DevReplaceReq {
+	string old_dev_uuid = 1; // UUID of old (hot-removed) blobstore/device
+	string new_dev_uuid = 2; // UUID of new (hot-plugged) blobstore/device
+}
+
+message DevReplaceResp {
+	int32 status = 1; // DAOS error code
+	string old_dev_uuid = 2; // UUID of old (hot-removed) blobstore/device
+	string new_dev_uuid = 3; // UUID of new (hot-plugged) blobstore/device
+	string dev_state = 4; // BIO device state
+}
+
 message SmdQueryReq {
 	bool omitDevices = 1; // query should omit devices
 	bool omitPools = 2; // query should omit pools
 	bool includeBioHealth = 3; // query should include BIO health for devices
 	bool setFaulty = 4; // set the specified device to FAULTY
-	string uuid = 5; // constrain query to this UUID (pool or device)
-	uint32 rank = 6; // response should only include information about this rank
-	string target = 7; // response should only include information about this VOS target
+	bool replace = 5; // replace a device with a new device
+	string uuid = 6; // constrain query to this UUID (pool or device)
+	uint32 rank = 7; // response should only include information about this rank
+	string target = 8; // response should only include information about this VOS target
+	string replaceUUID = 9; // UUID of new device to replace storage with
 }
 
 message SmdQueryResp {

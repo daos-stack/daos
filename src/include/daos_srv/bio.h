@@ -637,4 +637,16 @@ void bio_log_csum_err(struct bio_xs_context *b, int tgt_id);
 
 /* Too many blob IO queued, need to schedule a NVMe poll? */
 bool bio_need_nvme_poll(struct bio_xs_context *xs);
+
+/*
+ * Replace a device.
+ *
+ * \param xs		[IN]	xstream context
+ * \param old_dev_id	[IN]	UUID of device to be replaced
+ * \param new_dev_id	[IN]	UUID of new device to replace with
+ *
+ * \return			Zero on success, negative value on error
+ */
+int bio_replace_dev(struct bio_xs_context *xs, uuid_t old_dev_id,
+		    uuid_t new_dev_id);
 #endif /* __BIO_API_H__ */

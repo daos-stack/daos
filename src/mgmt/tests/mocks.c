@@ -469,3 +469,9 @@ ds_mgmt_dev_set_faulty(uuid_t uuid, Mgmt__DevStateResp *resp)
 {
 	return 0;
 }
+
+int
+ds_mgmt_dev_replace(uuid_t old_uuid, uuid_t new_uuid, Mgmt__DevReplaceResp *resp)
+{
+	return 0;
+}
