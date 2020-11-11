@@ -1824,7 +1824,9 @@ agg_process_stripe(struct ec_agg_entry *entry)
 	if ((entry->ae_par_extent.ape_epoch == ~(0ULL) &&
 	     agg_stripe_is_filled(entry, false)) ||
 	    agg_stripe_is_filled(entry, true)) {
-		/* Replicas constitute a full stripe. */
+		/* Replicas constitute a full stripe, all extents are new than
+		 * parity, if parity exists for the stripe
+		 */
 		rc = agg_encode_local_parity(entry);
 		goto out;
 	}
@@ -1834,7 +1836,7 @@ agg_process_stripe(struct ec_agg_entry *entry)
 		goto out;
 	}
 	/* Parity, some later replicas, possibly holes, not full stripe. */
-	if (entry->ae_cur_stripe. as_has_holes)
+	if (entry->ae_cur_stripe.as_has_holes)
 		process_holes = true;
 	else
 		rc = agg_process_partial_stripe(entry);
@@ -1895,7 +1897,6 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 
 	D_ASSERT(!(entry->ie_recx.rx_idx & PARITY_INDICATOR));
 
-	if (entry->ie_oid.id_shard < agg_entry->ae_oca->u.ec.e_k)
 		return 1;
 
 	this_stripenum = agg_stripenum(agg_entry, entry->ie_recx.rx_idx);
@@ -2134,7 +2135,7 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 				  &entry->ie_oid, agg_param->
 				  ap_pool_info.api_pool->sp_map_version);
 
-	if (rc == 1) {
+	if (rc == 1 && entry->ie_oid.id_shard >= oca->u.ec.e_k) {
 		agg_reset_entry(&agg_param->ap_agg_entry, entry, oca);
 		rc = 0;
 		goto out;
