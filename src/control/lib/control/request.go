@@ -30,6 +30,7 @@ type (
 	// by requests that can provide the hostList set by the
 	// caller.
 	hostListGetter interface {
+		SetHostList([]string)
 		getHostList() []string
 	}
 
