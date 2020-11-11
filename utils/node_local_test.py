@@ -1347,7 +1347,7 @@ def run_daos_test(server, conf):
     env['PATH'] = '{}:{}'.format(os.path.join(conf['PREFIX'], 'bin'),
                                  env['PATH'])
 
-    cmd = [daos_test_bin]
+    cmd = [daos_test_bin, '--dfs']
 
     rc = subprocess.run(cmd, env=env)
 
