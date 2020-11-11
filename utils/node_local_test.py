@@ -398,6 +398,7 @@ class DaosServer():
                 break
             if time.time() - start > 20:
                 raise Exception("Failed to start")
+        print('Server started in {:.2f} seconds'.format(time.time() - start))
 
     def stop(self):
         """Stop a previously started DAOS server"""
@@ -544,16 +545,10 @@ class ValgrindHelper():
         else:
             cmd.extend(['--leak-check=no'])
 
-        s_arg = '--suppressions='
-        cmd.extend(['{}{}'.format(s_arg,
-                                  os.path.join('src',
-                                               'cart',
-                                               'utils',
-                                               'memcheck-cart.supp')),
-                    '{}{}'.format(s_arg,
-                                  os.path.join('utils',
-                                               'memcheck-daos-client.supp'))])
-
+        cmd.append('--suppressions={}'.format(os.path.join('src',
+                                                           'cart',
+                                                           'utils',
+                                                           'memcheck-cart.supp')))
         cmd.append('--error-exitcode=42')
 
         cmd.extend(['--xml=yes',

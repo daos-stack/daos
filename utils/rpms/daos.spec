@@ -314,7 +314,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_unitdir}/%{server_svc_name}
 
 %files client
-%{_prefix}/etc/memcheck-daos-client.supp
 %{_bindir}/cart_ctl
 %{_bindir}/self_test
 %{_bindir}/dmg

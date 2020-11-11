@@ -13,7 +13,6 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
-@Library(value="pipeline-lib@abort-on-fail") _
 
 boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
@@ -1079,7 +1078,7 @@ pipeline {
                       expression { ! skip_stage('nlt') }
                     }
                     agent {
-                        label 'ci_vm1'
+                        label 'ci_hdwr1'
                     }
                     steps {
                         unitTest timeout_time: 20,

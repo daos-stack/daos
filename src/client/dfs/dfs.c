@@ -2645,6 +2645,7 @@ dfs_release(dfs_obj_t *obj)
 		return daos_der2errno(rc);
 	}
 
+	D_FREE(obj);
 	return 0;
 }
 

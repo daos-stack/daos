@@ -10,17 +10,6 @@
     fun:_dl_open
 }
 {
-   FI leak 0
-   Memcheck:Leak
-   match-leak-kinds: reachable
-   fun:calloc
-   fun:_dlerror_run
-   fun:dlopen@@GLIBC_2.2.5
-   ...
-   fun:crt_hg_ctx_initXX
-   ...
-}
-{
    FI leak 1
    Memcheck:Leak
    fun:malloc
