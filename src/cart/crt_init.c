@@ -336,7 +336,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		}
 
 		if (strcmp(addr_env, "ofi+sockets") == 0) {
-			D_WARN("Overriding to use ofi+tcp;ofi_rxm\n");
+			D_WARN("Overriding to use ofi+tcp;ofi_rxm \n");
 			addr_env = "ofi+tcp;ofi_rxm";
 		}
 
