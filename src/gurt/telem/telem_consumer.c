@@ -114,7 +114,7 @@ void readMetrics(uint64_t *shmemRoot, struct d_tm_node_t *root, char *dirname,
 			rc = d_tm_get_timestamp(&clk, shmemRoot,
 						nodelist->node, NULL);
 			if (rc == D_TM_SUCCESS) {
-				strncpy(tmp, ctime(&clk), sizeof(tmp));
+				strncpy(tmp, ctime(&clk), sizeof(tmp) - 1);
 				len = strlen(tmp);
 				if (len) {
 					if (tmp[len - 1] == '\n') {
