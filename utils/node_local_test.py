@@ -1335,9 +1335,10 @@ def run_daos_test(server, conf):
     daos_test_bin = os.path.join(conf['PREFIX'], 'bin', 'daos_test')
 
     env = get_base_env()
-    env["DAOS_AGENT_DRPC_DIR"] = server.agent_dir
-    env["POOL_SCM_SIZE"] = '1'
-    env["POOL_NVME_SIZE"] = '0'
+    env['DAOS_AGENT_DRPC_DIR'] = server.agent_dir
+    env['POOL_SCM_SIZE'] = '1'
+    env['POOL_NVME_SIZE'] = '0'
+    env['OMPI_MCA_btl'] = 'self,tcp'
 
     log_file = tempfile.NamedTemporaryFile(prefix='dnt_test_',
                                            suffix='.log',
