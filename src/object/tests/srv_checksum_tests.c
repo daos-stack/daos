@@ -1534,7 +1534,5 @@ main(int argc, char **argv)
 		"Storage and retrieval of checksums for Single Value Type",
 		sv_tests, NULL, NULL);
 
-	rc += run_scrubbing_tests();
 	return rc;
-
 }
