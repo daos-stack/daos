@@ -306,11 +306,16 @@ func (req *ConfigGenerateReq) validateScmStorage(ctx context.Context, scmNamespa
 	}
 
 	// sanity check that each pmem aligns with expected numa node
+	var wantNodes, gotNodes []uint32
 	for idx := range pmemPaths {
 		ns := scmNamespaces[idx]
+		wantNodes = append(wantNodes, uint32(idx))
+		gotNodes = append(gotNodes, ns.NumaNode)
+
 		if int(ns.NumaNode) != idx {
-			return nil, errors.Errorf("unexpected numa node for %s, want %d got %d",
-				ns.BlockDevice, idx, ns.NumaNode)
+			return nil, errors.Errorf(
+				"pmem devices %v bound to unexpected numa nodes, want %v got %v",
+				pmemPaths, wantNodes, gotNodes)
 		}
 	}
 

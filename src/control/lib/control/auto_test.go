@@ -79,6 +79,7 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 	hostRespOneWithScmNs := dualHostResp("withNamespace", "standard")
 	hostRespWithScmNs := dualHostRespSame("withNamespace")
 	hostRespWithScmNss := dualHostRespSame("withNamespaces")
+	hostRespWithScmNssNumaZero := dualHostRespSame("withNamespacesNumaZero")
 	hostRespWithSingleSSD := dualHostRespSame("withSingleSSD")
 	hostRespWithSSDs := dualHostRespSame("withSpaceUsage")
 
@@ -136,6 +137,11 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 			numPmem:       2,
 			hostResponses: hostRespWithScmNss,
 			expCheckErr:   errors.New("insufficient number of nvme devices for numa node 0, want 1 got 0"),
+		},
+		"2 min pmem and 2 pmems present both numa 0": {
+			numPmem:       2,
+			hostResponses: hostRespWithScmNssNumaZero,
+			expCheckErr:   errors.New("bound to unexpected numa nodes"),
 		},
 		"no min nvme and 1 ctrlr present on 1 numa node": {
 			numPmem:       2,
