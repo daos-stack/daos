@@ -25,6 +25,10 @@ package system
 
 import (
 	"errors"
+	"fmt"
+	"io"
+	"math"
+	"sort"
 	"strings"
 )
 
@@ -47,7 +51,7 @@ func (f *FaultDomain) String() string {
 		return FaultDomainNilStr
 	}
 	if f.Empty() {
-		return ""
+		return FaultDomainSeparator
 	}
 	return FaultDomainSeparator + strings.Join(f.Domains, FaultDomainSeparator)
 }
@@ -161,7 +165,7 @@ func MustCreateFaultDomain(domains ...string) *FaultDomain {
 // If the string isn't formatted correctly, returns an error.
 func NewFaultDomainFromString(domainStr string) (*FaultDomain, error) {
 	domainStr = strings.TrimSpace(domainStr)
-	if len(domainStr) == 0 {
+	if len(domainStr) == 0 || domainStr == FaultDomainSeparator {
 		return &FaultDomain{}, nil
 	}
 
@@ -188,4 +192,183 @@ func MustCreateFaultDomainFromString(domainStr string) *FaultDomain {
 		panic(err)
 	}
 	return fd
+}
+
+type (
+	// FaultDomainTree is a node in a tree of FaultDomain objects.
+	FaultDomainTree struct {
+		Domain   *FaultDomain
+		Children []*FaultDomainTree
+	}
+)
+
+// WithNodeDomain changes the domain of the FaultDomainTree node.
+func (t *FaultDomainTree) WithNodeDomain(domain *FaultDomain) *FaultDomainTree {
+	if t == nil {
+		t = NewFaultDomainTree()
+	}
+	t.Domain = domain
+	return t
+}
+
+// AddDomain adds a child fault domain, including intermediate nodes, to the
+// fault domain tree.
+func (t *FaultDomainTree) AddDomain(domain *FaultDomain) error {
+	if t == nil {
+		return errors.New("can't add to nil FaultDomainTree")
+	}
+
+	if domain.Empty() {
+		return errors.New("can't add empty fault domain to tree")
+	}
+
+	domainAsTree := NewFaultDomainTree(domain)
+
+	return t.Merge(domainAsTree)
+}
+
+// Merge merges another FaultDomainTree into this one.
+func (t *FaultDomainTree) Merge(t2 *FaultDomainTree) error {
+	if t == nil {
+		return errors.New("can't merge into nil FaultDomainTree")
+	}
+
+	if t2 == nil {
+		return nil // nothing to do
+	}
+
+	// To merge, tree domains must match at the top.
+	if !t.Domain.Equals(t2.Domain) {
+		return errors.New("trees cannot be merged")
+	}
+
+	t.mergeTree(t2)
+	return nil
+}
+
+func (t *FaultDomainTree) mergeTree(toBeMerged *FaultDomainTree) {
+	for _, m := range toBeMerged.Children {
+		foundBranch := false
+		for _, p := range t.Children {
+			if p.Domain.Equals(m.Domain) {
+				foundBranch = true
+				p.mergeTree(m)
+				break
+			}
+		}
+		if !foundBranch {
+			t.Children = append(t.Children, m)
+			sort.Slice(t.Children, func(i, j int) bool {
+				return t.Children[i].Domain.BottomLevel() < t.Children[j].Domain.BottomLevel()
+			})
+		}
+	}
+
+	return
+}
+
+// IsRoot verifies if the FaultDomainTree is a root node.
+func (t *FaultDomainTree) IsRoot() bool {
+	if t == nil {
+		return false
+	}
+	if t.Domain.Empty() {
+		return true
+	}
+	return false
+}
+
+// IsLeaf verifies if the FaultDomainTree is a leaf node.
+func (t *FaultDomainTree) IsLeaf() bool {
+	if t == nil {
+		return false
+	}
+	if len(t.Children) == 0 {
+		return true
+	}
+	return false
+}
+
+// IsBalanced verifies that all the branches of the tree are the same depth.
+func (t *FaultDomainTree) IsBalanced() bool {
+	if t == nil {
+		return true
+	}
+	maxDepth := t.getMaxDepth()
+	minDepth := t.getMinDepth()
+	return maxDepth == minDepth
+}
+
+func (t *FaultDomainTree) getMaxDepth() int {
+	maxDepth := 0
+	for _, c := range t.Children {
+		childMax := c.getMaxDepth() + 1
+		if childMax > maxDepth {
+			maxDepth = childMax
+		}
+	}
+	return maxDepth
+}
+
+func (t *FaultDomainTree) getMinDepth() int {
+	if len(t.Children) == 0 {
+		return 0
+	}
+	minDepth := math.MaxInt32
+	for _, c := range t.Children {
+		childMin := c.getMinDepth() + 1
+		if childMin < minDepth {
+			minDepth = childMin
+		}
+	}
+	return minDepth
+}
+
+func (t *FaultDomainTree) String() string {
+	if t == nil {
+		return "(nil)"
+	}
+
+	var b strings.Builder
+	b.WriteString("FaultDomainTree:\n")
+	t.nodeToString(&b, 0, true)
+	return b.String()
+}
+
+func (t *FaultDomainTree) nodeToString(w io.Writer, depth int, fullDomain bool) {
+	nodeStr := t.Domain.BottomLevel()
+	if fullDomain {
+		nodeStr = t.Domain.String()
+	}
+	fmt.Fprintf(w, "%s- %s\n", strings.Repeat("  ", depth), nodeStr)
+	for _, c := range t.Children {
+		c.nodeToString(w, depth+1, false)
+	}
+}
+
+// NewFaultDomainTree creates a FaultDomainTree including all the
+// passed-in fault domains.
+func NewFaultDomainTree(domains ...*FaultDomain) *FaultDomainTree {
+	tree := &FaultDomainTree{
+		Domain: MustCreateFaultDomain(), // Empty fault domain will not fail
+	}
+	for _, d := range domains {
+		subtree := faultDomainTreeFromDomain(d)
+		tree.mergeTree(subtree)
+	}
+	return tree
+}
+
+func faultDomainTreeFromDomain(d *FaultDomain) *FaultDomainTree {
+	tree := NewFaultDomainTree()
+	if !d.Empty() {
+		node := tree
+		for i := 0; i < d.NumLevels(); i++ {
+			childDomain := MustCreateFaultDomain(d.Domains[:i+1]...)
+			child := NewFaultDomainTree().WithNodeDomain(childDomain)
+			node.Children = append(node.Children, child)
+			node = child
+		}
+	}
+	return tree
 }

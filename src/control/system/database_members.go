@@ -43,9 +43,10 @@ type (
 	// up members and provides methods for managing the
 	// membership.
 	MemberDatabase struct {
-		Ranks MemberRankMap
-		Uuids MemberUuidMap
-		Addrs MemberAddrMap
+		Ranks        MemberRankMap
+		Uuids        MemberUuidMap
+		Addrs        MemberAddrMap
+		FaultDomains *FaultDomainTree
 	}
 )
 
@@ -139,6 +140,7 @@ func (mdb *MemberDatabase) addMember(m *Member) {
 	mdb.Ranks[m.Rank] = m
 	mdb.Uuids[m.UUID] = m
 	mdb.Addrs.addMember(m.Addr, m)
+	mdb.FaultDomains.AddDomain(m.FaultDomain)
 }
 
 // removeMember is responsible for removing new Member and updating all
@@ -147,4 +149,5 @@ func (mdb *MemberDatabase) removeMember(m *Member) {
 	delete(mdb.Ranks, m.Rank)
 	delete(mdb.Uuids, m.UUID)
 	delete(mdb.Addrs, m.Addr.String())
+	// TODO KJ: remove fault domain if no one else needs it
 }
