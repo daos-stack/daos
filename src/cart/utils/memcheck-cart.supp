@@ -1,6 +1,7 @@
 {
    dl init leaks
    Memcheck:Leak
+   ...
    fun:_dl_init
 }
 {
