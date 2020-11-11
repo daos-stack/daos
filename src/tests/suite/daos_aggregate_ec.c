@@ -378,7 +378,7 @@ static int
 ec_setup(void **statep)
 {
 	return test_setup(statep, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
-			  NULL);
+			  4, NULL);
 }
 
 

@@ -55,6 +55,7 @@ struct migrate_one {
 	daos_unit_oid_t		 mo_oid;
 	daos_epoch_t		 mo_dkey_punch_eph;
 	daos_epoch_t		 mo_epoch;
+	daos_epoch_t		 mo_update_epoch;
 	daos_iod_t		*mo_iods;
 	struct dcs_iod_csums	*mo_iods_csums;
 	daos_iod_t		*mo_punch_iods;
@@ -605,7 +606,8 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 			D_DEBUG(DB_TRACE, "update start %d cnt %d\n",
 				start, iod_cnt);
 			rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
-					    mrone->mo_epoch, mrone->mo_version,
+					    mrone->mo_update_epoch,
+					    mrone->mo_version,
 					    0, &mrone->mo_dkey, iod_cnt,
 					    &mrone->mo_iods[start], iod_csums,
 					    &sgls[start]);
@@ -622,7 +624,8 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 		iod_csums = mrone->mo_iods_csums == NULL ? NULL
 				: &mrone->mo_iods_csums[start];
 		rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
-				    mrone->mo_epoch, mrone->mo_version,
+				    mrone->mo_update_epoch,
+				    mrone->mo_version,
 				    0, &mrone->mo_dkey, iod_cnt,
 				    &mrone->mo_iods[start], iod_csums,
 				    &sgls[start]);
@@ -714,7 +717,8 @@ migrate_update_parity(struct migrate_one *mrone, struct ds_cont_child *ds_cont,
 		tmp_sgl.sg_iovs = &tmp_iov;
 		iod->iod_recxs = &tmp_recx;
 		rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
-				    mrone->mo_epoch, mrone->mo_version,
+				    mrone->mo_epoch,
+				    mrone->mo_version,
 				    0, &mrone->mo_dkey, 1, iod, NULL,
 				    &tmp_sgl);
 		size -= write_nr;
@@ -893,7 +897,7 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 	}
 
 	rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
-			    mrone->mo_epoch, mrone->mo_version,
+			    mrone->mo_update_epoch, mrone->mo_version,
 			    0, &mrone->mo_dkey, mrone->mo_iod_num,
 			    mrone->mo_iods, mrone->mo_iods_csums, sgls);
 out:
@@ -927,10 +931,10 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		mrone_recx_daos2_vos(mrone, oca);
 
 	D_ASSERT(mrone->mo_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
-	rc = vos_update_begin(ds_cont->sc_hdl, mrone->mo_oid, mrone->mo_epoch,
-			      0, &mrone->mo_dkey, mrone->mo_iod_num,
-			      mrone->mo_iods, mrone->mo_iods_csums, false, 0,
-			      &ioh, NULL);
+	rc = vos_update_begin(ds_cont->sc_hdl, mrone->mo_oid,
+			      mrone->mo_update_epoch, 0, &mrone->mo_dkey,
+			      mrone->mo_iod_num, mrone->mo_iods,
+			      mrone->mo_iods_csums, false, 0, &ioh, NULL);
 	if (rc != 0) {
 		D_ERROR(DF_UOID"preparing update fails: %d\n",
 			DP_UOID(mrone->mo_oid), rc);
@@ -1431,10 +1435,9 @@ struct enum_unpack_arg {
 
 static int
 migrate_one_insert(struct enum_unpack_arg *arg,
-		   struct dss_enum_unpack_io *io)
+		   struct dss_enum_unpack_io *io, daos_epoch_t epoch)
 {
 	struct iter_obj_arg	*iter_arg = arg->arg;
-	daos_epoch_t		epoch = arg->epr.epr_hi;
 	daos_unit_oid_t		oid = io->ui_oid;
 	daos_key_t		*dkey = &io->ui_dkey;
 	daos_epoch_t		dkey_punch_eph = io->ui_dkey_punch_eph;
@@ -1477,7 +1480,8 @@ migrate_one_insert(struct enum_unpack_arg *arg,
 	if (mrone->mo_iods_csums == NULL)
 		D_GOTO(free, rc = -DER_NOMEM);
 
-	mrone->mo_epoch = epoch;
+	mrone->mo_epoch = arg->epr.epr_hi;
+	mrone->mo_update_epoch = epoch;
 	mrone->mo_dkey_punch_eph = dkey_punch_eph;
 	D_ALLOC_ARRAY(mrone->mo_akey_punch_ephs, iod_eph_total);
 	if (mrone->mo_akey_punch_ephs == NULL)
@@ -1572,6 +1576,7 @@ migrate_enum_unpack_cb(struct dss_enum_unpack_io *io, void *data)
 	struct migrate_one	*mo;
 	struct daos_oclass_attr	*oca;
 	bool			merged = false;
+	daos_epoch_t		epoch = arg->epr.epr_hi;
 	int			rc = 0;
 	int			i;
 
@@ -1606,6 +1611,13 @@ migrate_enum_unpack_cb(struct dss_enum_unpack_io *io, void *data)
 							    &iod->iod_nr);
 				if (rc)
 					return rc;
+				/* NB: data epoch can not be larger than
+				 * parity epoch, otherwise it will cause
+				 * issue in degraded fetch, since it will
+				 * use the parity epoch to fetch data
+				 */
+				if (io->ui_rec_min_ephs[i] < epoch)
+					epoch = io->ui_rec_min_ephs[i];
 			}
 		}
 
@@ -1624,7 +1636,7 @@ migrate_enum_unpack_cb(struct dss_enum_unpack_io *io, void *data)
 	}
 
 	if (!merged)
-		rc = migrate_one_insert(arg, io);
+		rc = migrate_one_insert(arg, io, epoch);
 
 	return rc;
 }
