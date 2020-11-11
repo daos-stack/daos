@@ -4241,7 +4241,7 @@ pool_extend_internal(uuid_t pool_uuid, struct rsvc_hint *hint,
 	struct pool_svc		*svc;
 	struct rdb_tx		tx;
 	bool			updated = false;
-	struct pool_target_id_list tgts;
+	struct pool_target_id_list tgts = { 0 };
 	int rc;
 
 	rc = pool_svc_lookup_leader(pool_uuid, &svc, hint);
