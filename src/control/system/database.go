@@ -110,6 +110,13 @@ type (
 	}
 )
 
+func (sta *syncTCPAddr) String() string {
+	if sta == nil || sta.Addr == nil {
+		return "(nil)"
+	}
+	return sta.Addr.String()
+}
+
 func (sta *syncTCPAddr) set(addr *net.TCPAddr) {
 	sta.Lock()
 	defer sta.Unlock()
