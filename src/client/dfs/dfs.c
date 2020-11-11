@@ -439,8 +439,8 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 
 	/** Add symlink value if Symlink */
 	if (S_ISLNK(entry.mode)) {
-		d_iov_set(&sg_iovs[i++], entry.value, entry.value_len + 1);
-		recx.rx_nr += entry.value_len + 1;
+		d_iov_set(&sg_iovs[i++], entry.value, entry.value_len);
+		recx.rx_nr += entry.value_len;
 	}
 
 	sgl.sg_nr	= i;
