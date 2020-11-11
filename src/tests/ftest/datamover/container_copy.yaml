@@ -59,7 +59,7 @@ mdtest:
   bytes: 4096
   depth: 0
 dfuse:
-  mount_dir: "/tmp/daos_dfuse"
+  mount_dir: "/tmp/daos_dfuse/"
 datamover:
   src_path: "/"
   dest_path: "/"

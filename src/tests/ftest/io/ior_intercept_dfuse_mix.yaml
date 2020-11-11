@@ -42,4 +42,4 @@ ior:
           read_x: 1
           dfs_oclass: "SX"
 dfuse:
-    mount_dir: "/tmp/daos_dfuse"
+    mount_dir: "/tmp/daos_dfuse/"
