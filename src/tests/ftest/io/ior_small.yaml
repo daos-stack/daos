@@ -63,6 +63,6 @@ ior:
 # Commenting it out until DAOS-3097/3143 is resolved.
 #            - "RP_2GX"
 dfuse:
-    mount_dir: "/tmp/daos_dfuse"
+    mount_dir: "/tmp/daos_dfuse/"
 hdf5_vol:
     plugin_path: /usr/lib64/mpich/lib
