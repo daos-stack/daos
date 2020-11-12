@@ -2286,7 +2286,7 @@ read_empty_records_internal(void **state, unsigned int size)
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
-	recx.rx_idx	= (size/2) * sizeof(int);
+	recx.rx_idx	= (size / 2) * sizeof(int);
 	recx.rx_nr	= sizeof(int);
 	iod.iod_recxs	= &recx;
 	iod.iod_type	= DAOS_IOD_ARRAY;
@@ -2322,7 +2322,7 @@ read_empty_records_internal(void **state, unsigned int size)
 		 * if (i < STACK_BUF_LEN/2)
 		 * assert_int_equal(buf_out[i], 0);
 		*/
-		if (i == size/2)
+		if (i == size / 2)
 			assert_int_equal(buf_out[i], buf);
 		else
 			assert_int_equal(buf_out[i], 2016);
@@ -3649,16 +3649,16 @@ split_sgl_internal(void **state, int size)
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
-	D_ALLOC(sbuf1, size/2);
-	D_ALLOC(sbuf2, size/2);
+	D_ALLOC(sbuf1, size / 2);
+	D_ALLOC(sbuf2, size / 2);
 
 	/** init dkey */
 	d_iov_set(&dkey, "dkey", strlen("dkey"));
-	memset(sbuf1, 'a', size/2);
-	memset(sbuf2, 'a', size/2);
+	memset(sbuf1, 'a', size / 2);
+	memset(sbuf2, 'a', size / 2);
 	/** init scatter/gather */
-	d_iov_set(&sg_iov[0], sbuf1, size/2);
-	d_iov_set(&sg_iov[1], sbuf2, size/2);
+	d_iov_set(&sg_iov[0], sbuf1, size / 2);
+	d_iov_set(&sg_iov[1], sbuf2, size / 2);
 	sgl.sg_nr = 2;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = sg_iov;
@@ -3677,10 +3677,10 @@ split_sgl_internal(void **state, int size)
 	assert_int_equal(rc, 0);
 
 	/** reset sg_iov */
-	memset(sbuf1, 0, size/2);
-	memset(sbuf2, 0, size/2);
-	d_iov_set(&sg_iov[0], sbuf1, size/2);
-	d_iov_set(&sg_iov[1], sbuf2, size/2);
+	memset(sbuf1, 0, size / 2);
+	memset(sbuf2, 0, size / 2);
+	d_iov_set(&sg_iov[0], sbuf1, size / 2);
+	d_iov_set(&sg_iov[1], sbuf2, size / 2);
 	sgl.sg_nr = 2;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = sg_iov;
@@ -3688,7 +3688,7 @@ split_sgl_internal(void **state, int size)
 	/** Let's use differet iod_size to see if fetch
 	 *  can reset the correct iod_size
 	 */
-	iod.iod_size = size/2;
+	iod.iod_size = size / 2;
 	recx.rx_idx = 0;
 	recx.rx_nr = 1;
 	iod.iod_recxs = &recx;
@@ -3700,7 +3700,7 @@ split_sgl_internal(void **state, int size)
 	assert_int_equal(iod.iod_size, size);
 	assert_int_equal(sgl.sg_nr_out, 2);
 
-	for (i = 0 ; i < size/2; i++) {
+	for (i = 0 ; i < size / 2; i++) {
 		if (sbuf1[i] != 'a' || sbuf2[i] != 'a')
 			print_message("i is %d\n", i);
 		assert_int_equal(sbuf1[i], 'a');

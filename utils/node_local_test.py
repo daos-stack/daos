@@ -397,7 +397,7 @@ class DaosServer():
 
             if ready:
                 break
-            if time.time() - start > 10:
+            if time.time() - start > 20:
                 raise Exception("Failed to start")
 
     def stop(self):
@@ -1331,6 +1331,11 @@ def test_pydaos_kv(server, conf):
     kv = container.get_kv_by_name('my_test_kv')
 
 def run_daos_test(server, conf):
+    """Run the daos_test program to check for errors
+    
+    Note that this doesn't check the result of daos_test itself, but
+    so far simply checks the logs for generated errors.
+    """
 
     daos_test_bin = os.path.join(conf['PREFIX'], 'bin', 'daos_test')
 
@@ -1339,6 +1344,7 @@ def run_daos_test(server, conf):
     env['POOL_SCM_SIZE'] = '1'
     env['POOL_NVME_SIZE'] = '0'
     env['OMPI_MCA_btl'] = 'self,tcp'
+    env['OMPI_MCA_oob'] = '^ud'
 
     log_file = tempfile.NamedTemporaryFile(prefix='dnt_test_',
                                            suffix='.log',
