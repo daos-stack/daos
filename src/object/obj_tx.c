@@ -436,19 +436,20 @@ dc_tx_cleanup_one(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr)
 	obj_decref(dcsr->dcsr_obj);
 }
 
+/* Return the index of the leftmost request in the cache. For write case,
+ * it is the first write request. Otherwise, it is the last read request.
+ */
 static uint32_t
-dc_tx_first_req(struct dc_tx *tx)
+dc_tx_leftmost_req(struct dc_tx *tx, bool write)
 {
-	uint32_t	idx;
-
 	if (tx->tx_flags & DAOS_TF_RDONLY)
-		idx = tx->tx_total_slots - tx->tx_read_cnt;
-	else if (tx->tx_total_slots > DTX_SUB_WRITE_MAX)
-		idx = tx->tx_total_slots - DTX_SUB_WRITE_MAX - tx->tx_read_cnt;
-	else
-		idx = (tx->tx_total_slots >> 1) - tx->tx_read_cnt;
+		return tx->tx_total_slots - tx->tx_read_cnt;
 
-	return idx;
+	if (tx->tx_total_slots > DTX_SUB_WRITE_MAX)
+		return tx->tx_total_slots - DTX_SUB_WRITE_MAX -
+			(write ? 0 : tx->tx_read_cnt);
+
+	return (tx->tx_total_slots >> 1) - (write ? 0 : tx->tx_read_cnt);
 }
 
 static void
@@ -460,7 +461,7 @@ dc_tx_cleanup(struct dc_tx *tx)
 	uint32_t			 to;
 	uint32_t			 i;
 
-	from = dc_tx_first_req(tx);
+	from = dc_tx_leftmost_req(tx, false);
 	to = from + tx->tx_read_cnt + tx->tx_write_cnt;
 	for (i = from; i < to; i++)
 		dc_tx_cleanup_one(tx, &tx->tx_req_cache[i]);
@@ -924,7 +925,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	if (tx->tx_pm_ver < oco->oco_map_version) {
 		struct daos_cpd_sub_req		*dcsr;
 
-		dcsr = &tx->tx_req_cache[dc_tx_first_req(tx)];
+		dcsr = &tx->tx_req_cache[dc_tx_leftmost_req(tx, false)];
 		rc1 = obj_pool_query_task(tse_task2sched(task), dcsr->dcsr_obj,
 					  &pool_task);
 		if (rc1 != 0) {
@@ -1323,6 +1324,9 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 		D_GOTO(out, rc = -DER_IO);
 	}
 
+	if (read)
+		dtr->dtr_group.drg_flags = DGF_RDONLY;
+
 	if (oca->ca_resil == DAOS_RES_EC && !all) {
 		dtr->dtr_group.drg_redundancy = oca->u.ec.e_p + 1;
 		D_ASSERT(dtr->dtr_group.drg_redundancy <= obj->cob_grp_size);
@@ -1371,7 +1375,7 @@ dc_tx_same_rdg(struct dtx_redundancy_group *grp1,
 }
 
 static size_t
-dc_tx_reduce_rdgs(d_list_t *dtr_list, uint32_t *grp_cnt)
+dc_tx_reduce_rdgs(d_list_t *dtr_list, uint32_t *grp_cnt, uint32_t *mod_cnt)
 {
 	struct dc_tx_rdg	*dtr;
 	struct dc_tx_rdg	*tmp;
@@ -1404,11 +1408,18 @@ dc_tx_reduce_rdgs(d_list_t *dtr_list, uint32_t *grp_cnt)
 	d_list_for_each_entry_safe(dtr, next, dtr_list, dtr_link) {
 		if (dc_tx_same_rdg(&tmp->dtr_group, &dtr->dtr_group)) {
 			d_list_del(&dtr->dtr_link);
-			D_FREE(dtr);
+			if (tmp->dtr_group.drg_flags & DGF_RDONLY) {
+				D_FREE(tmp);
+				tmp = dtr;
+			} else {
+				D_FREE(dtr);
+			}
 		} else {
 			size += sizeof(struct dtx_redundancy_group) +
 				sizeof(uint32_t) * dtr->dtr_group.drg_tgt_cnt;
 			(*grp_cnt)++;
+			if (!(dtr->dtr_group.drg_flags & DGF_RDONLY))
+				(*mod_cnt)++;
 		}
 	}
 
@@ -1416,12 +1427,17 @@ dc_tx_reduce_rdgs(d_list_t *dtr_list, uint32_t *grp_cnt)
 	size += sizeof(struct dtx_redundancy_group) +
 		sizeof(uint32_t) * tmp->dtr_group.drg_tgt_cnt;
 	(*grp_cnt)++;
+	if (!(tmp->dtr_group.drg_flags & DGF_RDONLY))
+		(*mod_cnt)++;
 
 out:
+	/* Insert the leader dtr at the head position. */
 	d_list_add(&leader->dtr_link, dtr_list);
 	size += sizeof(struct dtx_redundancy_group) +
 		sizeof(uint32_t) * leader->dtr_group.drg_tgt_cnt;
 	(*grp_cnt)++;
+	if (!(leader->dtr_group.drg_flags & DGF_RDONLY))
+		(*mod_cnt)++;
 
 	return size;
 }
@@ -1460,6 +1476,8 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	struct daos_cpd_sub_head	*dcsh = NULL;
 	struct daos_cpd_disp_ent	*dcdes = NULL;
 	struct daos_shard_tgt		*shard_tgts = NULL;
+	struct daos_cpd_sub_req		*dcsr;
+	struct dc_object		*obj;
 	struct dtx_memberships		*mbs;
 	struct dtx_daos_target		*ddt;
 	struct dc_tx_rdg		*dtr;
@@ -1469,9 +1487,11 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	uint32_t			 leader_dtrg_idx = 0;
 	uint32_t			 act_tgt_cnt = 0;
 	uint32_t			 act_grp_cnt = 0;
+	uint32_t			 mod_grp_cnt = 0;
 	uint32_t			 start;
 	uint32_t			 tgt_cnt;
 	uint32_t			 req_cnt;
+	int				 grp_idx;
 	int				 rc = 0;
 	int				 i;
 	int				 j;
@@ -1482,14 +1502,14 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	tgt_cnt = pool_map_target_nr(tx->tx_pool->dp_map);
 	D_ASSERT(tgt_cnt != 0);
 
-	start = dc_tx_first_req(tx);
+	start = dc_tx_leftmost_req(tx, false);
 	D_ALLOC_ARRAY(dtrgs, tgt_cnt);
 	if (dtrgs == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	for (i = 0; i < req_cnt; i++) {
-		struct daos_cpd_sub_req	*dcsr = &tx->tx_req_cache[i + start];
-		struct dc_object	*obj = dcsr->dcsr_obj;
+		dcsr = &tx->tx_req_cache[i + start];
+		obj = dcsr->dcsr_obj;
 
 		if (dcsr->dcsr_opc == DCSO_UPDATE) {
 			rc = dc_tx_classify_update(tx, dcsr, csummer);
@@ -1515,21 +1535,31 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 					goto out;
 			}
 		} else {
-			rc = obj_dkey2grpidx(obj, dcsr->dcsr_dkey_hash,
-					     tx->tx_pm_ver);
-			if (rc < 0)
-				goto out;
+			grp_idx = obj_dkey2grpidx(obj, dcsr->dcsr_dkey_hash,
+						  tx->tx_pm_ver);
+			if (grp_idx < 0)
+				D_GOTO(out, rc = grp_idx);
 
-			rc = dc_tx_classify_common(tx, dcsr, dtrgs, tgt_cnt, rc,
-					i, dcsr->dcsr_opc == DCSO_READ, false,
-					&leader_dtrg_idx, &act_tgt_cnt,
-					&dtr_list, &leader_oid);
+			rc = dc_tx_classify_common(tx, dcsr, dtrgs, tgt_cnt,
+						   grp_idx, i,
+						   dcsr->dcsr_opc == DCSO_READ,
+						   false, &leader_dtrg_idx,
+						   &act_tgt_cnt, &dtr_list,
+						   &leader_oid);
 			if (rc != 0)
 				goto out;
 		}
 	}
 
-	size = dc_tx_reduce_rdgs(&dtr_list, &act_grp_cnt);
+	size = dc_tx_reduce_rdgs(&dtr_list, &act_grp_cnt, &mod_grp_cnt);
+
+	/* For the distributed transaction that all the touched targets
+	 * are in the same redundancy group, be as optimization, we will
+	 * not store modification group information inside 'dm_data'.
+	 */
+	if (act_grp_cnt == 1)
+		size = 0;
+
 	size += sizeof(*ddt) * act_tgt_cnt;
 
 	D_ALLOC_PTR(dcsh);
@@ -1548,6 +1578,35 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	if (shard_tgts == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	mbs = dcsh->dcsh_mbs;
+	mbs->dm_flags = DMF_CONTAIN_LEADER;
+
+	/* For the case of modification(s) within single RDG,
+	 * elect leader as standalone modification case does.
+	 */
+	if (mod_grp_cnt == 1) {
+		i = dc_tx_leftmost_req(tx, true);
+		dcsr = &tx->tx_req_cache[i];
+		obj = dcsr->dcsr_obj;
+
+		grp_idx = obj_dkey2grpidx(obj, dcsr->dcsr_dkey_hash,
+					  tx->tx_pm_ver);
+		if (grp_idx < 0)
+			D_GOTO(out, rc = grp_idx);
+
+		i = pl_select_leader(obj->cob_md.omd_id,
+				     grp_idx * obj->cob_grp_size,
+				     obj->cob_grp_size, false,
+				     obj_get_shard, obj);
+		if (i < 0)
+			D_GOTO(out, rc = i);
+
+		leader_oid.id_pub = obj->cob_md.omd_id;
+		leader_oid.id_shard = i;
+		leader_dtrg_idx = obj_get_shard(obj, i)->po_target;
+		mbs->dm_flags |= DMF_MODIFY_SRDG;
+	}
+
 	dcsh->dcsh_xid = tx->tx_id;
 	dcsh->dcsh_leader_oid = leader_oid;
 	dcsh->dcsh_epoch = tx->tx_epoch;
@@ -1556,7 +1615,6 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	else
 		dcsh->dcsh_epoch.oe_rpc_flags &= ~ORF_EPOCH_UNCERTAIN;
 
-	mbs = dcsh->dcsh_mbs;
 	mbs->dm_tgt_cnt = act_tgt_cnt;
 	mbs->dm_grp_cnt = act_grp_cnt;
 	mbs->dm_data_size = size;
@@ -1596,14 +1654,22 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		j++;
 	}
 
-	ptr = ddt;
-	while ((dtr = d_list_pop_entry(&dtr_list, struct dc_tx_rdg,
-				       dtr_link)) != NULL) {
-		size = sizeof(dtr->dtr_group) +
-		       sizeof(uint32_t) * dtr->dtr_group.drg_tgt_cnt;
-		memcpy(ptr, &dtr->dtr_group, size);
-		ptr += size;
+	if (act_grp_cnt == 1) {
+		/* We do not need the group information if all the targets are
+		 * in the same redundancy group.
+		 */
+		dtr = d_list_pop_entry(&dtr_list, struct dc_tx_rdg, dtr_link);
 		D_FREE(dtr);
+	} else {
+		ptr = ddt;
+		while ((dtr = d_list_pop_entry(&dtr_list, struct dc_tx_rdg,
+					       dtr_link)) != NULL) {
+			size = sizeof(dtr->dtr_group) +
+			       sizeof(uint32_t) * dtr->dtr_group.drg_tgt_cnt;
+			memcpy(ptr, &dtr->dtr_group, size);
+			ptr += size;
+			D_FREE(dtr);
+		}
 	}
 
 	tx->tx_reqs.dcs_type = DCST_REQ_CLI;

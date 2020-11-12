@@ -414,7 +414,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				gotDrpcCalls := dc.(*mockDrpcClient).Calls
+				gotDrpcCalls := dc.(*mockDrpcClient).CalledMethods()
 				AssertEqual(t, tc.expDrpcCalls[srv.Index()], gotDrpcCalls,
 					fmt.Sprintf("%s: unexpected dRPCs for instance %d", name, srv.Index()))
 
