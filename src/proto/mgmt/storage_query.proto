@@ -109,9 +109,8 @@ message DevReplaceReq {
 
 message DevReplaceResp {
 	int32 status = 1; // DAOS error code
-	string old_dev_uuid = 2; // UUID of old (hot-removed) blobstore/device
-	string new_dev_uuid = 3; // UUID of new (hot-plugged) blobstore/device
-	string dev_state = 4; // BIO device state
+	string new_dev_uuid = 2; // UUID of new (hot-plugged) blobstore/device
+	string dev_state = 3; // BIO device state
 }
 
 message SmdQueryReq {

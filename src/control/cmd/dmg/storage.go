@@ -360,7 +360,6 @@ func (cmd *storageReplaceCmd) Execute(_ []string) error {
 	req := &control.SmdQueryReq{
 		UUID:		cmd.OldDevUUID,
 		ReplaceUUID:	cmd.NewDevUUID,
-		Replace: true,
 	}
 	return cmd.makeRequest(ctx, req)
 }

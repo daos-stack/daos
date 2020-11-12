@@ -263,10 +263,6 @@ struct  _Mgmt__DevReplaceResp
    */
   int32_t status;
   /*
-   * UUID of old (hot-removed) blobstore/device
-   */
-  char *old_dev_uuid;
-  /*
    * UUID of new (hot-plugged) blobstore/device
    */
   char *new_dev_uuid;
@@ -277,7 +273,7 @@ struct  _Mgmt__DevReplaceResp
 };
 #define MGMT__DEV_REPLACE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__dev_replace_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 struct  _Mgmt__SmdQueryReq

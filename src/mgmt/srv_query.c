@@ -617,14 +617,6 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid,
 	D_DEBUG(DB_MGMT, "Replacing device:"DF_UUID" with device:"DF_UUID"\n",
 		DP_UUID(old_dev_uuid), DP_UUID(new_dev_uuid));
 
-	D_ALLOC(resp->old_dev_uuid, DAOS_UUID_STR_SIZE);
-	if (resp->old_dev_uuid == NULL) {
-		D_ERROR("Failed to allocate old device uuid");
-		rc = -DER_NOMEM;
-		goto out;
-	}
-	uuid_unparse_lower(old_dev_uuid, resp->old_dev_uuid);
-
 	D_ALLOC(resp->new_dev_uuid, DAOS_UUID_STR_SIZE);
 	if (resp->new_dev_uuid == NULL) {
 		D_ERROR("Failed to allocate new device uuid");
@@ -652,15 +644,11 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid,
 	/* BIO device state after reintegration should be NORMAL */
 	strncpy(resp->dev_state, smd_state_enum_to_str(SMD_DEV_NORMAL),
 		buflen);
-//	strncpy(resp->dev_state, "NORMAL", buflen);
-
 out:
 
 	if (rc != 0) {
 		if (resp->dev_state != NULL)
 			D_FREE(resp->dev_state);
-		if (resp->old_dev_uuid != NULL)
-			D_FREE(resp->old_dev_uuid);
 		if (resp->new_dev_uuid != NULL)
 			D_FREE(resp->new_dev_uuid);
 	}

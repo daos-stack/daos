@@ -1879,8 +1879,6 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (rc == 0) {
 		if (resp->dev_state != NULL)
 			D_FREE(resp->dev_state);
-		if (resp->old_dev_uuid != NULL)
-			D_FREE(resp->old_dev_uuid);
 		if (resp->new_dev_uuid != NULL)
 			D_FREE(resp->new_dev_uuid);
 	}

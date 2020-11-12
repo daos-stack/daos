@@ -1398,7 +1398,7 @@ const ProtobufCMessageDescriptor mgmt__dev_replace_req__descriptor =
   (ProtobufCMessageInit) mgmt__dev_replace_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__dev_replace_resp__field_descriptors[4] =
+static const ProtobufCFieldDescriptor mgmt__dev_replace_resp__field_descriptors[3] =
 {
   {
     "status",
@@ -1413,20 +1413,8 @@ static const ProtobufCFieldDescriptor mgmt__dev_replace_resp__field_descriptors[
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "old_dev_uuid",
-    2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__DevReplaceResp, old_dev_uuid),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
     "new_dev_uuid",
-    3,
+    2,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
@@ -1438,7 +1426,7 @@ static const ProtobufCFieldDescriptor mgmt__dev_replace_resp__field_descriptors[
   },
   {
     "dev_state",
-    4,
+    3,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
@@ -1450,15 +1438,14 @@ static const ProtobufCFieldDescriptor mgmt__dev_replace_resp__field_descriptors[
   },
 };
 static const unsigned mgmt__dev_replace_resp__field_indices_by_name[] = {
-  3,   /* field[3] = dev_state */
-  2,   /* field[2] = new_dev_uuid */
-  1,   /* field[1] = old_dev_uuid */
+  2,   /* field[2] = dev_state */
+  1,   /* field[1] = new_dev_uuid */
   0,   /* field[0] = status */
 };
 static const ProtobufCIntRange mgmt__dev_replace_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 4 }
+  { 0, 3 }
 };
 const ProtobufCMessageDescriptor mgmt__dev_replace_resp__descriptor =
 {
@@ -1468,7 +1455,7 @@ const ProtobufCMessageDescriptor mgmt__dev_replace_resp__descriptor =
   "Mgmt__DevReplaceResp",
   "mgmt",
   sizeof(Mgmt__DevReplaceResp),
-  4,
+  3,
   mgmt__dev_replace_resp__field_descriptors,
   mgmt__dev_replace_resp__field_indices_by_name,
   1,  mgmt__dev_replace_resp__number_ranges,
