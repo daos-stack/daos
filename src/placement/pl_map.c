@@ -591,13 +591,11 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 		if (shard->po_target == -1)
 			return -DER_IO;
 
-		/* Single replicated object will not rebuild. */
-		D_ASSERT(!shard->po_rebuilding);
-		/* During target adding, it will add some -1 targets
-		 * into the object layout, so this assert is not right
-		 * anymore. see pl_map_extend().
+		/*
+		 * Note that even though there's only one replica here, this
+		 * object can still be rebuilt during addition or drain as
+		 * it moves between ranks
 		 */
-		/*D_ASSERT(shard->po_shard == shard_idx);*/
 
 		if (for_tgt_id)
 			return shard->po_target;
