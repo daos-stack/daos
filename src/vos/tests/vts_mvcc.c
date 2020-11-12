@@ -817,7 +817,7 @@ querymaxr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
 	uint64_t	 akey_val;
 	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
-	daos_recx_t	 recx = {0};
+	daos_recx_t	 recx = {0, 0};
 
 	set_dkey(mvcc_arg->i, path, &dkey);
 	set_akey(mvcc_arg->i, path, &akey);
@@ -848,7 +848,7 @@ querymaxdr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	uint64_t	 dkey_val;
 	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
-	daos_recx_t	 recx = {0};
+	daos_recx_t	 recx = {0, 0};
 	uint64_t	 akey_val;
 	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
 
@@ -868,7 +868,7 @@ querymaxar_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
 	uint64_t	 akey_val;
 	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
-	daos_recx_t	 recx = {0};
+	daos_recx_t	 recx = {0, 0};
 
 	set_dkey(mvcc_arg->i, path, &dkey);
 
@@ -886,7 +886,7 @@ querymaxdar_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
 	uint64_t	 akey_val;
 	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
-	daos_recx_t	 recx = {0};
+	daos_recx_t	 recx = {0, 0};
 
 	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
 			DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_MAX |
@@ -930,7 +930,7 @@ queryminr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
 	uint64_t	 akey_val;
 	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
-	daos_recx_t	 recx = {0};
+	daos_recx_t	 recx = {0, 0};
 
 	set_dkey(mvcc_arg->i, path, &dkey);
 	set_akey(mvcc_arg->i, path, &akey);
@@ -961,7 +961,7 @@ querymindr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	uint64_t	 dkey_val;
 	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
-	daos_recx_t	 recx = {0};
+	daos_recx_t	 recx = {0, 0};
 	uint64_t	 akey_val;
 	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
 
@@ -981,7 +981,7 @@ queryminar_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
 	uint64_t	 akey_val;
 	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
-	daos_recx_t	 recx = {0};
+	daos_recx_t	 recx = {0, 0};
 
 	set_dkey(mvcc_arg->i, path, &dkey);
 
@@ -999,7 +999,7 @@ querymindar_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
 	uint64_t	 akey_val;
 	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
-	daos_recx_t	 recx = {0};
+	daos_recx_t	 recx = {0, 0};
 
 	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
 			DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_MIN |
