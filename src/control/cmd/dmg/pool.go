@@ -145,8 +145,8 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 	if err != nil {
 		msg = errors.WithMessage(err, "FAILED").Error()
 	} else {
-		msg += fmt.Sprintf("UUID: %s, Service replicas: %s",
-			resp.UUID, formatPoolSvcReps(resp.SvcReps))
+		msg += fmt.Sprintf("UUID: %s, Service replicas: %s, # Ranks: %d",
+			resp.UUID, formatPoolSvcReps(resp.SvcReps), resp.NumRanks)
 	}
 
 	c.log.Infof("Pool-create command %s\n", msg)
