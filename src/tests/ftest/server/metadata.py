@@ -371,7 +371,7 @@ class ObjectMetadata(TestWithServers):
         """
         self.pool.pool.connect(2)
         init_container = NO_OF_MAX_CONTAINER
-        additional_container = 100
+        additional_container = 1000000
         der_no_space = "RC: -1007"
 
         container_array = []
@@ -399,6 +399,10 @@ class ObjectMetadata(TestWithServers):
                     self.log.info(traceback.format_exc())
                     self.log.info("(1.4)No space error shown,  test passed.")
                 break
+        if cont == additional_container - 1:
+            self.fail(
+                "##Storage resource did not exhaused after %d containers",
+                "created", len(container_array))
         self.log.info(
             "(1.5)Additional %d containers created and detected der_no_space.",
             cont)
@@ -415,8 +419,8 @@ class ObjectMetadata(TestWithServers):
 
         self.log.info(
             "(3)Create %d containers after container cleanup.",
-            additional_container)
-        for cont in range(additional_container):
+            init_container)
+        for cont in range(init_container):
             try:
                 container = DaosContainer(self.context)
                 container.create(self.pool.pool.handle)
@@ -426,4 +430,4 @@ class ObjectMetadata(TestWithServers):
                 self.fail(
                     "##Failed to create containers after container cleanup.")
         self.log.info(
-            "(3.1)Create %d containers succeed", additional_container)
+            "(3.1)Create %d containers succeed after cleanup.", init_container)
