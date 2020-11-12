@@ -2834,8 +2834,8 @@ handle_response_cb(const struct crt_cb_info *cb_info)
 			goto callback;
 		}
 
+		/* Create child process to handle the call back */
 		RPC_ADDREF(rpc_priv);
-
 		info->cci_rpc = cb_info->cci_rpc;
 		info->cci_rc = cb_info->cci_rc;
 		info->cci_arg = cb_info->cci_arg;
