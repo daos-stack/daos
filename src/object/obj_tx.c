@@ -1604,7 +1604,8 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		leader_oid.id_pub = obj->cob_md.omd_id;
 		leader_oid.id_shard = i;
 		leader_dtrg_idx = obj_get_shard(obj, i)->po_target;
-		mbs->dm_flags |= DMF_MODIFY_SRDG;
+		if (!daos_oclass_is_ec(obj->cob_md.omd_id, NULL))
+			mbs->dm_flags |= DMF_SRDG_REP;
 	}
 
 	dcsh->dcsh_xid = tx->tx_id;

@@ -73,12 +73,15 @@ vos_dtx_pin(struct dtx_handle *dth);
  *				 if the DTX exists, then the DTX's epoch will
  *				 be saved in it.
  * \param pm_ver	[OUT]	Hold the DTX's pool map version.
+ * \param mbs		[OUT	Pointer to the DTX participants information.]
  * \param for_resent	[IN]	The check is for check resent or not.
  *
  * \return		DTX_ST_PREPARED	means that the DTX has been 'prepared',
  *					so the local modification has been done
  *					on related replica(s).
  *			DTX_ST_COMMITTED means the DTX has been committed.
+ *			DTX_ST_COMMITTABLE means that the DTX is committable,
+ *					   but not real committed.
  *			-DER_MISMATCH	means that the DTX has ever been
  *					processed with different epoch.
  *			-DER_AGAIN means DTX re-index is in processing, not sure
@@ -88,7 +91,7 @@ vos_dtx_pin(struct dtx_handle *dth);
  */
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, bool for_resent);
+	      uint32_t *pm_ver, struct dtx_memberships **mbs, bool for_resent);
 
 /**
  * Commit the specified DTXs.

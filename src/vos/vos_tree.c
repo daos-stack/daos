@@ -1104,6 +1104,9 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 		goto done;
 	}
 
+	if (flags & VOS_OF_DETECT_UNCERTAINTY)
+		return 0;
+
 	if (rc != 0) {
 		/** If it's not a replay punch, we should not insert
 		 *  anything.   In such case, ts_set will be NULL
