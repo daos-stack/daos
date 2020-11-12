@@ -54,6 +54,10 @@ typedef enum {
 	DAOS_TS_UP,
 	/* Up and running */
 	DAOS_TS_UP_IN,
+	/* Intermediate state for pool map change */
+	DAOS_TS_NEW,
+	/* Being drained */
+	DAOS_TS_DRAIN,
 } daos_target_state_t;
 
 /** Description of target performance */
@@ -324,11 +328,9 @@ daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
  * Query information of storage targets within a DAOS pool.
  *
  * \param[in]	poh	Pool connection handle.
- * \param[in]	tgts	A list of targets to query.
- * \param[out]	failed	Optional, buffer to store faulty targets on failure.
- * \param[out]	info_list
- *			Returned storage information of \a tgts, it is an array
- *			and array size must equal to tgts::rl_llen.
+ * \param[in]	tgt	A single target index to query.
+ * \param[in]	rank	Rank of the target index to query.
+ * \param[out]	info	Returned storage information of \a tgt.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
@@ -338,12 +340,11 @@ daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
  *			-DER_INVAL	Invalid parameter
  *			-DER_NO_HDL	Invalid pool handle
  *			-DER_UNREACH	Network is unreachable
- *			-DER_NONEXIST	No pool on specified targets
+ *			-DER_NONEXIST	No pool on specified target
  */
 int
-daos_pool_query_target(daos_handle_t poh, d_rank_list_t *tgts,
-		       d_rank_list_t *failed, daos_target_info_t *info_list,
-		       daos_event_t *ev);
+daos_pool_query_target(daos_handle_t poh, uint32_t tgt, d_rank_t rank,
+		       daos_target_info_t *info, daos_event_t *ev);
 
 /**
  * List the names of all user-defined pool attributes.

@@ -651,6 +651,8 @@ again:
 		if (dth->dth_sync)
 			goto sync;
 
+		D_ASSERT(dth->dth_mbs != NULL);
+
 		size = sizeof(*dte) + sizeof(*mbs) + dth->dth_mbs->dm_data_size;
 		D_ALLOC(dte, size);
 		if (dte == NULL) {

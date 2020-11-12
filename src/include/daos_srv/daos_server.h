@@ -192,6 +192,7 @@ struct dss_xstream;
 
 bool dss_xstream_exiting(struct dss_xstream *dxs);
 bool dss_xstream_is_busy(void);
+daos_epoch_t dss_get_start_epoch(void);
 
 struct dss_module_info {
 	crt_context_t		dmi_ctx;
@@ -768,6 +769,7 @@ struct dss_enum_unpack_io {
 	/* punched epochs per akey */
 	daos_epoch_t		*ui_akey_punch_ephs;
 	daos_epoch_t		*ui_rec_punch_ephs;
+	daos_epoch_t		*ui_rec_min_ephs;
 	int			 ui_iods_cap;
 	int			 ui_iods_top;
 	int			*ui_recxs_caps;

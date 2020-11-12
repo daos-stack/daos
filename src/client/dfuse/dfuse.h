@@ -332,7 +332,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define DFUSE_REPLY_ATTR(ie, req, attr)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(ie, "Returning attr mode %#x dir:%d",	\
+		DFUSE_TRA_DEBUG(ie, "Returning attr mode %#o dir:%d",	\
 				(attr)->st_mode,			\
 				S_ISDIR(((attr)->st_mode)));		\
 		__rc = fuse_reply_attr(req, attr,			\
@@ -427,7 +427,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(desc,					\
-				"Returning entry inode %li mode %#x dir:%d", \
+				"Returning entry inode %li mode %#o dir:%d", \
 				(entry).attr.st_ino,			\
 				(entry).attr.st_mode,			\
 				S_ISDIR((entry).attr.st_mode));		\

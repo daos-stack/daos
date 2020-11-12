@@ -468,8 +468,6 @@ lookup_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
 	     daos_handle_t th, daos_recx_t *recxs, int nr, void *data,
 	     daos_size_t data_size, struct ioreq *req)
 {
-	assert_in_range(nr, 1, IOREQ_IOD_NR);
-
 	/* dkey */
 	ioreq_dkey_set(req, dkey);
 
@@ -4201,7 +4199,7 @@ obj_setup(void **state)
 	int	rc;
 
 	rc = test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
-			NULL);
+			0, NULL);
 	if (rc != 0)
 		return rc;
 
