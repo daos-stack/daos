@@ -398,6 +398,7 @@ class DaosServer():
                 break
             if time.time() - start > 20:
                 raise Exception("Failed to start")
+        print('Server started in {:.2f} seconds'.format(time.time() - start))
 
     def stop(self):
         """Stop a previously started DAOS server"""
