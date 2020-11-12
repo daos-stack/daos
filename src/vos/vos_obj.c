@@ -163,7 +163,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 	struct vos_ilog_info	 akey_info = {0};
 	daos_epoch_range_t	 epr = {0, epoch};
 	d_iov_t			 riov;
-	daos_handle_t		 toh = DAOS_HDL_INVAL ;
+	daos_handle_t		 toh = DAOS_HDL_INVAL;
 	int			 i;
 	int			 rc;
 
@@ -254,9 +254,9 @@ punch_dkey:
 		vos_ilog_fetch_finish(&akey_info);
 	}
 
-	if (!daos_handle_is_inval(toh)) {
+	if (!daos_handle_is_inval(toh))
 		key_tree_release(toh, 0);
-	}
+
 	return rc;
 }
 
