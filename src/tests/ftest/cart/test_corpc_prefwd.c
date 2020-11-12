@@ -199,8 +199,8 @@ int main(void)
 		}
 
 		sleep(2);
-		rc = tc_wait_for_ranks(g_main_ctx, grp, rank_list, 0,
-				1, 10, 100.0);
+		rc = tc_wait_for_ranks(g_main_ctx, grp, rank_list,
+				       0, 1, 10, 100.0);
 		if (rc != 0) {
 			D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
 			assert(0);
