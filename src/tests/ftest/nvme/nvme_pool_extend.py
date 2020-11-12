@@ -72,6 +72,7 @@ class NvmePoolExtend(TestWithServers):
             self.hostlist_clients, self.workdir, None)
         self.pool = None
         self.out_queue = queue.Queue()
+        self.container_info = {}
 
     @fail_on(CommandFailure)
     def get_pool_version(self):
@@ -95,7 +96,6 @@ class NvmePoolExtend(TestWithServers):
             results (queue): queue for returning thread results
         """
         processes = self.params.get("slots", "/run/ior/clientslots/*")
-        container_info = {}
         mpio_util = MpioUtils()
         if mpio_util.mpich_installed(self.hostlist_clients) is False:
             self.fail("Exiting Test: Mpich not installed")
@@ -109,16 +109,16 @@ class NvmePoolExtend(TestWithServers):
         ior_cmd.transfer_size.update(test[0])
         ior_cmd.block_size.update(test[1])
         ior_cmd.flags.update(flags)
-
-        container_info["{}{}{}"
-                       .format(oclass,
-                               api,
-                               test[0])] = str(uuid.uuid4())
+        if "-w" in flags:
+            self.container_info["{}{}{}"
+                                .format(oclass,
+                                        api,
+                                        test[0])] = str(uuid.uuid4())
 
         # Define the job manager for the IOR command
         manager = Mpirun(ior_cmd, mpitype="mpich")
         key = "".join([oclass, api, str(test[0])])
-        manager.job.dfs_cont.update(container_info[key])
+        manager.job.dfs_cont.update(self.container_info[key])
         env = ior_cmd.get_default_env(str(manager))
         manager.assign_hosts(self.hostlist_clients, self.workdir, None)
         manager.assign_processes(processes)
@@ -140,32 +140,24 @@ class NvmePoolExtend(TestWithServers):
             test (list): IOR test sequence
             flags (str): IOR flags
         """
-        num_jobs = self.params.get("no_parallel_job", '/run/ior/*')
         if action == "Write":
             flags = self.ior_w_flags
         else:
             flags = self.ior_r_flags
 
-        threads = []
-        for _ in range(0, num_jobs):
-            # Add a thread for these IOR arguments
-            threads.append(threading.Thread(target=self.ior_thread,
-                                            kwargs={"pool": self.pool,
-                                                    "oclass": oclass,
-                                                    "api": api,
-                                                    "test": test,
-                                                    "flags": flags,
-                                                    "results":
-                                                    self.out_queue}))
-        # Launch the IOR threads
-        for thrd in threads:
-            self.log.info("Thread : %s", thrd)
-            thrd.start()
-            time.sleep(5)
-
-        # Wait to finish the threads
-        for thrd in threads:
-            thrd.join()
+        # Add a thread for these IOR arguments
+        process = threading.Thread(target=self.ior_thread,
+                                   kwargs={"pool": self.pool,
+                                           "oclass": oclass,
+                                           "api": api,
+                                           "test": test,
+                                           "flags": flags,
+                                           "results":
+                                           self.out_queue})
+        # Launch the IOR thread
+        process.start()
+        # Wait for the thread to finish
+        process.join()
 
     def run_nvme_pool_extend(self, num_pool):
         """Run Pool Extend
@@ -174,7 +166,6 @@ class NvmePoolExtend(TestWithServers):
         """
         # Create a pool
         pool = {}
-        pool_uuid = []
         total_servers = len(self.hostlist_servers)
 
         # Extend one of the ranks (or server)
@@ -190,7 +181,6 @@ class NvmePoolExtend(TestWithServers):
             pool[val].nvme_size.value = int(pool[val].nvme_size.value /
                                             num_pool)
             pool[val].create()
-            pool_uuid.append(pool[val].uuid)
 
         for val in range(0, num_pool):
             self.pool = pool[val]
@@ -223,7 +213,7 @@ class NvmePoolExtend(TestWithServers):
                 break
 
         self.log.info("Pool Version after extend %s", pver_extend)
-        # Check pool version incremented after pool exclude
+        # Check pool version incremented after pool extend
         self.assertTrue(pver_extend > pver_begin,
                         "Pool Version Error:  After extend")
 
