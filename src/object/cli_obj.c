@@ -586,14 +586,6 @@ obj_shard_find_replica(struct dc_object *obj, unsigned int target,
 				       tgt_list);
 }
 
-static inline struct pl_obj_shard*
-obj_get_shard(void *data, int idx)
-{
-	struct dc_object	*obj = data;
-
-	return &obj->cob_shards->do_shards[idx].do_pl_shard;
-}
-
 static int
 obj_grp_leader_get(struct dc_object *obj, int idx, unsigned int map_ver)
 {
@@ -4023,7 +4015,7 @@ dc_obj_fetch_task(tse_task_t *task)
 		}
 	}
 
-	dkey_hash = obj_dkey2hash(args->dkey);
+	dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, args->dkey);
 
 	if (args->extra_arg == NULL &&
 	    DAOS_FAIL_CHECK(DAOS_OBJ_SPECIAL_SHARD))
@@ -4128,7 +4120,7 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 		goto out_task;
 	}
 
-	dkey_hash = obj_dkey2hash(args->dkey);
+	dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, args->dkey);
 	rc = obj_req_get_tgts(obj, NULL, args->dkey, dkey_hash,
 			      obj_auxi->reasb_req.tgt_bitmap, map_ver, false,
 			      false, obj_auxi);
@@ -4520,7 +4512,8 @@ obj_list_get_shard(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 		uint64_t dkey_hash;
 
 		if (args->dkey != NULL) {
-			dkey_hash = obj_dkey2hash(args->dkey);
+			dkey_hash = obj_dkey2hash(obj->cob_md.omd_id,
+						  args->dkey);
 			grp_idx = obj_dkey2grpidx(obj, dkey_hash, map_ver);
 		} else {
 			D_ASSERT(args->dkey_anchor != NULL);
@@ -4741,7 +4734,7 @@ dc_obj_punch(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 
 	obj_task_init_common(task, opc, map_ver, api_args->th, &obj_auxi, obj);
 
-	dkey_hash = obj_dkey2hash(api_args->dkey);
+	dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, api_args->dkey);
 	rc = obj_req_get_tgts(obj, NULL, api_args->dkey, dkey_hash, NIL_BITMAP,
 			      map_ver, false, false, obj_auxi);
 	if (rc != 0) {
@@ -4990,7 +4983,7 @@ dc_obj_query_key(tse_task_t *api_task)
 		D_GOTO(out_task, rc);
 
 	D_ASSERTF(api_args->dkey != NULL, "dkey should not be NULL\n");
-	dkey_hash = obj_dkey2hash(api_args->dkey);
+	dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, api_args->dkey);
 	if (api_args->flags & DAOS_GET_DKEY) {
 		replicas = obj_get_replicas(obj);
 		shard_first = 0;
