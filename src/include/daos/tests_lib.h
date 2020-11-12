@@ -166,11 +166,16 @@ struct dts_context {
 	/** OUTPUT END */
 };
 
+/* match BIO_XS_CNT_MAX, which is the max VOS xstreams mapped to a device */
+#define MAX_TEST_TARGETS_PER_DEVICE 48
+
 typedef struct {
 	uuid_t		device_id;
 	char		state[10];
 	int		rank;
 	char		host[50];
+	int		tgtidx[MAX_TEST_TARGETS_PER_DEVICE];
+	int		n_tgtidx;
 }  device_list;
 
 /** Initialize an SGL with a variable number of IOVs and set the IOV buffers
@@ -352,5 +357,7 @@ int dmg_storage_set_nvme_fault(const char *dmg_config_file,
  *					expected state
  */
 int verify_blobstore_state(int state, const char *state_str);
+
+const char * daos_target_state_enum_to_str(int state);
 
 #endif /* __DAOS_TESTS_LIB_H__ */
