@@ -919,18 +919,6 @@ daos_acl_to_strs(struct daos_acl *acl, char ***ace_strs, size_t *ace_nr)
 	return 0;
 }
 
-#define D_FPRINTF(...)							\
-	({								\
-		size_t	printed = fprintf(__VA_ARGS__);			\
-		int	tmp_rc = 0;					\
-									\
-		if (printed < 0) {					\
-			D_ERROR("failed to print to stream\n");		\
-			tmp_rc = -DER_IO;				\
-		}							\
-		tmp_rc;							\
-	})
-
 static int
 verbose_str_to_stream(FILE *stream, const char *ace_str)
 {
