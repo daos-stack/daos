@@ -29,7 +29,7 @@ hosts: !mux
       - boro-C
     test_clients_3:
       - boro-C
-timeout: 600
+timeout: 300
 tests: !mux
   self_np:
     name: self_test_np
