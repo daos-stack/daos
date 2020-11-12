@@ -499,7 +499,7 @@ d_binheap_insert(struct d_binheap *h, struct d_binheap_node *e)
 	if (h->d_bh_ops->hop_enter) {
 		rc = h->d_bh_ops->hop_enter(h, e);
 		if (rc != 0) {
-			D_ERROR("d_bh_ops->hop_enter failed, " DF_RC "\n",
+			D_ERROR("d_bh_ops->hop_enter() failed, " DF_RC "\n",
 				DP_RC(rc));
 			dbh_unlock(h, false /* read-only */);
 			return rc;
