@@ -79,9 +79,11 @@ static uint32_t
 ih_key_hash(struct d_hash_table *htable, const void *key,
 	    unsigned int ksize)
 {
-	const ino_t *ino = key;
+	const ino_t *_ino = key;
+	ino_t ino = *_ino;
+	uint32_t hash = ino ^ (ino >> 32);
 
-	return (uint32_t)(*ino);
+	return hash;
 }
 
 static bool
@@ -103,7 +105,9 @@ ih_rec_hash(struct d_hash_table *htable, d_list_t *rlink)
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	return (uint32_t)ie->ie_stat.st_ino;
+	return ih_key_hash(NULL,
+			   &ie->ie_stat.st_ino,
+			   sizeof(ie->ie_stat.st_ino));
 }
 
 static void
