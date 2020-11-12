@@ -1401,7 +1401,8 @@ def test_alloc_fail(server, wf, conf):
                stdout != container:
                 print(container)
                 print(stdout)
-                wf.add(rc.fi_loc, 'NORMAL', "Incorrect stderr '{}'".format(stderr),
+                wf.add(rc.fi_loc,
+                       'NORMAL', "Incorrect stderr '{}'".format(stderr),
                        mtype='Out of memory not reported correctly via stderr')
         except NLTestNoFi:
 
