@@ -29,6 +29,7 @@
 #include "crt_internal.h"
 #include "swim/swim_internal.h"
 
+#define CRT_OPC_SWIM_PROTO      0xFE000000U
 #define CRT_OPC_SWIM_VERSION	0
 
 #define crt_proc_swim_id_t	crt_proc_uint64_t
