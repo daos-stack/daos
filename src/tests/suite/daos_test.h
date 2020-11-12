@@ -430,6 +430,8 @@ int verify_state_in_log(char *host, char *log_file, char *state);
 
 int wait_and_verify_blobstore_state(uuid_t bs_uuid, char *expected_state,
 				    const char *group);
+int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
+				   char *expected_state);
 
 enum op_type {
 	PARTIAL_UPDATE	=	1,
