@@ -38,7 +38,12 @@ struct dtx_rsrvd_uint {
 };
 
 enum dtx_cos_flags {
-	DCF_SHARED	= (1 << 0),
+	DCF_SHARED		= (1 << 0),
+	/* Some DTX (such as for the distributed transaction across multiple
+	 * RDGs, or for EC object modification) need to be committed via DTX
+	 * RPC instead of piggyback via other dispatched update/punch RPC.
+	 */
+	DCF_EXP_CMT		= (1 << 1),
 };
 
 struct dtx_cos_key {
@@ -240,6 +245,8 @@ enum {
 	VOS_OF_PUNCH_PROPAGATE		= (1 << 14),
 	/** replay punch (underwrite) */
 	VOS_OF_REPLAY_PC		= (1 << 15),
+	/** For detecting DTX uncertainty  */
+	VOS_OF_DETECT_UNCERTAINTY	= (1 << 16),
 };
 
 /** Mask for any conditionals passed to to the fetch */

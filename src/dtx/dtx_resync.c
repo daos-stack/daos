@@ -91,10 +91,11 @@ dtx_resync_commit(struct ds_cont_child *cont,
 		 * DTXs. So double check the status before current commit.
 		 */
 		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid,
-				   NULL, NULL, false);
+				   NULL, NULL, NULL, false);
 
 		/* Skip this DTX since it has been committed or aggregated. */
-		if (rc == DTX_ST_COMMITTED || rc == -DER_NONEXIST)
+		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE ||
+		    rc == -DER_NONEXIST)
 			goto next;
 
 		/* If we failed to check the status, then assume that it is
@@ -257,7 +258,7 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		/* The DTX has been committed on some remote replica(s),
 		 * let's commit the DTX globally.
 		 */
-		if (rc == DTX_ST_COMMITTED)
+		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE)
 			goto commit;
 
 		if (rc == DTX_ST_PREPARED) {
@@ -301,10 +302,11 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		 * DTXs. So double check the status before next action.
 		 */
 		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid,
-				   NULL, NULL, false);
+				   NULL, NULL, NULL, false);
 
 		/* Skip this DTX that it may has been committed or aborted. */
-		if (rc == DTX_ST_COMMITTED || rc == -DER_NONEXIST) {
+		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE ||
+		    rc == -DER_NONEXIST) {
 			dtx_dre_release(drh, dre);
 			continue;
 		}
