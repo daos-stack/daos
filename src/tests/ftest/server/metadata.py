@@ -401,7 +401,7 @@ class ObjectMetadata(TestWithServers):
                 break
         if cont == additional_container - 1:
             self.fail(
-                "##Storage resource did not exhaused after %d containers",
+                "##Storage resource did not exhausted after %d containers",
                 "created", len(container_array))
         self.log.info(
             "(1.5)Additional %d containers created and detected der_no_space.",
