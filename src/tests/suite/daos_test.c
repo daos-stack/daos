@@ -333,7 +333,7 @@ main(int argc, char **argv)
 		{"verify",	no_argument,		NULL,	'V'},
 		{"io",		no_argument,		NULL,	'i'},
 		{"checksum",	no_argument,		NULL,	'z'},
-		{"dedup",	no_argument,		NULL,	'u'},
+		{"dedup",	no_argument,		NULL,	'U'},
 		{"epoch_io",	no_argument,		NULL,	'x'},
 		{"obj_array",	no_argument,		NULL,	'A'},
 		{"array",	no_argument,		NULL,	'D'},
