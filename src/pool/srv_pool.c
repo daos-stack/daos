@@ -4931,7 +4931,8 @@ ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid, uint32_t version)
 	if (rc != 0)
 		goto out;
 
-	leader = pl_select_leader(oid->id_pub, oid->id_shard,
+	leader = pl_select_leader(oid->id_pub,
+				  oid->id_shard / layout->ol_grp_size,
 				  layout->ol_grp_size, true,
 				  pl_obj_get_shard, layout);
 	if (leader < 0) {

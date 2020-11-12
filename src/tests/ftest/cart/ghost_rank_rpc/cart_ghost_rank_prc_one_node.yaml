@@ -20,6 +20,7 @@ hosts: !mux
     config: one_node
     test_servers:
       - boro-A
+timeout: 600
 tests: !mux
   ghost_rank:
     name: rpc_to_ghost_rank

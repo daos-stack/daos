@@ -1706,7 +1706,7 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
 		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
 		if (rc) {
 			D_ERROR("daos_tx_open() failed (%d)\n", rc);
-			D_GOTO(out, daos_der2errno(rc));
+			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 	}
 
@@ -1760,12 +1760,12 @@ restart:
 			rc = daos_tx_restart(th, NULL);
 			if (rc) {
 				D_ERROR("daos_tx_restart() failed (%d)\n", rc);
-				D_GOTO(out, daos_der2errno(rc));
+				D_GOTO(out, rc = daos_der2errno(rc));
 			}
 			goto restart;
 		} else if (rc) {
 			D_ERROR("daos_tx_commit() failed (%d)\n", rc);
-			D_GOTO(out, daos_der2errno(rc));
+			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 	}
 
@@ -2317,7 +2317,7 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
 		if (rc) {
 			D_ERROR("daos_tx_open() failed (%d)\n", rc);
-			D_GOTO(out, daos_der2errno(rc));
+			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 	}
 
@@ -2355,12 +2355,12 @@ restart:
 			rc = daos_tx_restart(th, NULL);
 			if (rc) {
 				D_ERROR("daos_tx_restart() failed (%d)\n", rc);
-				D_GOTO(out, daos_der2errno(rc));
+				D_GOTO(out, rc = daos_der2errno(rc));
 			}
 			goto restart;
 		} else if (rc) {
 			D_ERROR("daos_tx_commit() failed (%d)\n", rc);
-			D_GOTO(out, daos_der2errno(rc));
+			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 	}
 
@@ -3525,7 +3525,7 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
 		if (rc) {
 			D_ERROR("daos_tx_open() failed (%d)\n", rc);
-			D_GOTO(out, daos_der2errno(rc));
+			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 	}
 
@@ -3641,12 +3641,12 @@ restart:
 			rc = daos_tx_restart(th, NULL);
 			if (rc) {
 				D_ERROR("daos_tx_restart() failed (%d)\n", rc);
-				D_GOTO(out, daos_der2errno(rc));
+				D_GOTO(out, rc = daos_der2errno(rc));
 			}
 			goto restart;
 		} else if (rc) {
 			D_ERROR("daos_tx_commit() failed (%d)\n", rc);
-			D_GOTO(out, daos_der2errno(rc));
+			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 	}
 
@@ -3714,7 +3714,7 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1, dfs_obj_t *parent2,
 		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
 		if (rc) {
 			D_ERROR("daos_tx_open() failed (%d)\n", rc);
-			D_GOTO(out, daos_der2errno(rc));
+			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 	}
 
@@ -3774,12 +3774,12 @@ restart:
 			rc = daos_tx_restart(th, NULL);
 			if (rc) {
 				D_ERROR("daos_tx_restart() failed (%d)\n", rc);
-				D_GOTO(out, daos_der2errno(rc));
+				D_GOTO(out, rc = daos_der2errno(rc));
 			}
 			goto restart;
 		} else if (rc) {
 			D_ERROR("daos_tx_commit() failed (%d)\n", rc);
-			D_GOTO(out, daos_der2errno(rc));
+			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 	}
 

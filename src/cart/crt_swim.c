@@ -158,10 +158,13 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 		rc = swim_parse_message(ctx, rpc_swim_input->src,
 					rpc_swim_input->upds.ca_arrays,
 					rpc_swim_input->upds.ca_count);
-		if (rc == -ESHUTDOWN)
+		if (rc == -ESHUTDOWN) {
+			if (grp_priv->gp_size > 1)
+				D_ERROR("SWIM shutdown\n");
 			swim_self_set(ctx, SWIM_ID_INVALID);
-		else if (rc)
+		} else if (rc) {
 			D_ERROR("swim_parse_message() failed rc=%d\n", rc);
+		}
 	}
 
 	if (rpc_req->cr_opc & 0xFFFF) { /* RPC with acknowledge? */
@@ -440,6 +443,8 @@ static void crt_swim_progress_cb(crt_context_t crt_ctx, void *arg)
 
 	rc = swim_progress(ctx, CRT_SWIM_PROGRESS_TIMEOUT);
 	if (rc == -ESHUTDOWN) {
+		if (grp_priv->gp_size > 1)
+			D_ERROR("SWIM shutdown\n");
 		swim_self_set(ctx, SWIM_ID_INVALID);
 	} else if (rc && rc != -ETIMEDOUT) {
 		D_ERROR("swim_progress() failed rc=%d\n", rc);
