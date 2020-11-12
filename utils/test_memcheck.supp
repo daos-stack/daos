@@ -299,20 +299,6 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Leak
-   match-leak-kinds:definite
-   fun:calloc
-   fun:evt_tcx_create
-   fun:evt_tcx_clone
-   fun:evt_iter_prepare
-   fun:test_evt_overlap_split_internal
-   obj:/usr/lib64/libcmocka.so.*
-   fun:_cmocka_run_group_tests
-   fun:run_internal_tests
-   fun:main
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
    match-leak-kinds:reachable
    fun:malloc
    fun:xmalloc
@@ -519,18 +505,6 @@
    fun:xmalloc
    fun:array_create_element
    ...
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds:definite
-   fun:calloc
-   fun:evt_tcx_create
-   fun:evt_tcx_clone
-   fun:evt_iter_prepare
-   fun:test_evt_overlap_split
-   ...
-   fun:main
 }
 {
    <insert_a_suppression_name_here>
