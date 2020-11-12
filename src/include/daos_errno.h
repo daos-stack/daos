@@ -149,7 +149,10 @@ extern "C" {
 	       Incorrect target for the RPC)				\
 	/** Group versioning mismatch */				\
 	ACTION(DER_GRPVER,		(DER_ERR_GURT_BASE + 36),	\
-	       Group versioning mismatch)
+	       Group versioning mismatch)				\
+	/** HLC synchronization error */				\
+	ACTION(DER_HLC_SYNC,		(DER_ERR_GURT_BASE + 37),	\
+	       HLC synchronization error)
 	/** TODO: add more error numbers */
 
 #define D_FOREACH_DAOS_ERR(ACTION)					\
