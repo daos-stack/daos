@@ -59,7 +59,7 @@ class IorInterceptDfuseMix(IorTestBase):
                 library provides better performance and not using it
                 does not change the performance.
 
-        :avocado: tags=all,full_regression,hw,large,daosio,iorinterceptmix
+        :avocado: tags=pr,all,full_regression,hw,large,daosio,iorinterceptmix
         """
         without_intercept = dict()
         self.run_multiple_ior_with_pool(without_intercept)
