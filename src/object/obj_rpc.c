@@ -684,7 +684,11 @@ crt_proc_struct_dtx_redundancy_group(crt_proc_t proc,
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint32_t(proc, &drg->drg_redundancy);
+	rc = crt_proc_uint16_t(proc, &drg->drg_redundancy);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint16_t(proc, &drg->drg_flags);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -716,11 +720,25 @@ crt_proc_struct_dtx_memberships(crt_proc_t proc, struct dtx_memberships *mbs)
 	if (rc != 0)
 		return -DER_HG;
 
+	rc = crt_proc_uint16_t(proc, &mbs->dm_flags);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint16_t(proc, &mbs->dm_padding);
+	if (rc != 0)
+		return -DER_HG;
+
 	for (i = 0; i < mbs->dm_tgt_cnt; i++) {
 		rc = crt_proc_struct_dtx_daos_target(proc, &mbs->dm_tgts[i]);
 		if (rc != 0)
 			return rc;
 	}
+
+	/* We do not need the group information if all the targets are
+	 * in the same redundancy group.
+	 */
+	if (mbs->dm_grp_cnt == 1)
+		return 0;
 
 	drg = (struct dtx_redundancy_group *)mbs->dm_data;
 	rc = sizeof(mbs->dm_tgts[0]) * mbs->dm_tgt_cnt;
