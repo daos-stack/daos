@@ -397,12 +397,13 @@ class ObjectMetadata(TestWithServers):
                         "##Expecting der_no_space RC: -1007, not seen")
                 else:
                     self.log.info(traceback.format_exc())
-                    self.log.info("(1.4)No space error shown,  test passed.")
+                    self.log.info("(1.4)No space error shown with additional",
+                                  "%d containers created, test passed.", cont)
                 break
         if cont == additional_container - 1:
             self.fail(
-                "##Storage resource did not exhausted after %d containers",
-                "created", len(container_array))
+                "##Storage resource did not exhaused after {} containers",
+                "created".format(len(container_array)))
         self.log.info(
             "(1.5)Additional %d containers created and detected der_no_space.",
             cont)
