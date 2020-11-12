@@ -2074,6 +2074,7 @@ dc_tx_add_update(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 		 d_sg_list_t *sgls)
 {
 	struct daos_cpd_sub_req	*dcsr;
+	struct dc_object	*obj = NULL;
 	struct daos_cpd_update	*dcu = NULL;
 	struct obj_iod_array	*iod_array;
 	int			 rc;
@@ -2085,7 +2086,7 @@ dc_tx_add_update(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 	if (rc != 0)
 		return rc;
 
-	dcsr->dcsr_obj = obj_hdl2ptr(oh);
+	obj = dcsr->dcsr_obj = obj_hdl2ptr(oh);
 	if (dcsr->dcsr_obj == NULL)
 		return -DER_NO_HDL;
 
@@ -2098,7 +2099,7 @@ dc_tx_add_update(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 
 	dcsr->dcsr_opc = DCSO_UPDATE;
 	dcsr->dcsr_nr = nr;
-	dcsr->dcsr_dkey_hash = obj_dkey2hash(dkey);
+	dcsr->dcsr_dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, dkey);
 	dcsr->dcsr_api_flags = flags;
 
 	dcu = &dcsr->dcsr_update;
@@ -2210,13 +2211,14 @@ dc_tx_add_punch_dkey(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 		     daos_key_t *dkey)
 {
 	struct daos_cpd_sub_req	*dcsr;
+	struct dc_object	*obj = NULL;
 	int			 rc;
 
 	rc = dc_tx_get_next_slot(tx, false, &dcsr);
 	if (rc != 0)
 		return rc;
 
-	dcsr->dcsr_obj = obj_hdl2ptr(oh);
+	obj = dcsr->dcsr_obj = obj_hdl2ptr(oh);
 	if (dcsr->dcsr_obj == NULL)
 		return -DER_NO_HDL;
 
@@ -2227,7 +2229,7 @@ dc_tx_add_punch_dkey(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 	}
 
 	dcsr->dcsr_opc = DCSO_PUNCH_DKEY;
-	dcsr->dcsr_dkey_hash = obj_dkey2hash(dkey);
+	dcsr->dcsr_dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, dkey);
 	dcsr->dcsr_api_flags = flags;
 
 	tx->tx_write_cnt++;
@@ -2246,6 +2248,7 @@ dc_tx_add_punch_akeys(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 {
 	struct daos_cpd_sub_req	*dcsr = NULL;
 	struct daos_cpd_punch	*dcp = NULL;
+	struct dc_object	*obj = NULL;
 	int			 rc;
 	int			 i;
 
@@ -2255,7 +2258,7 @@ dc_tx_add_punch_akeys(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 	if (rc != 0)
 		return rc;
 
-	dcsr->dcsr_obj = obj_hdl2ptr(oh);
+	obj = dcsr->dcsr_obj = obj_hdl2ptr(oh);
 	if (dcsr->dcsr_obj == NULL)
 		return -DER_NO_HDL;
 
@@ -2276,7 +2279,8 @@ dc_tx_add_punch_akeys(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 
 	dcsr->dcsr_opc = DCSO_PUNCH_AKEY;
 	dcsr->dcsr_nr = nr;
-	dcsr->dcsr_dkey_hash = obj_dkey2hash(dkey);
+	dcsr->dcsr_dkey_hash = obj_dkey2hash(obj->cob_md.omd_id,
+					     dkey);
 	dcsr->dcsr_api_flags = flags;
 
 	tx->tx_write_cnt++;
@@ -2307,6 +2311,7 @@ dc_tx_add_read(struct dc_tx *tx, int opc, daos_handle_t oh, uint64_t flags,
 	       daos_key_t *dkey, uint32_t nr, void *iods_or_akey)
 {
 	struct daos_cpd_sub_req	*dcsr = NULL;
+	struct dc_object	*obj = NULL;
 	struct daos_cpd_read	*dcr = NULL;
 	int			 rc;
 	int			 i;
@@ -2321,7 +2326,7 @@ dc_tx_add_read(struct dc_tx *tx, int opc, daos_handle_t oh, uint64_t flags,
 	if (rc != 0)
 		return rc;
 
-	dcsr->dcsr_obj = obj_hdl2ptr(oh);
+	obj = dcsr->dcsr_obj = obj_hdl2ptr(oh);
 	if (dcsr->dcsr_obj == NULL)
 		return -DER_NO_HDL;
 
@@ -2364,7 +2369,7 @@ dc_tx_add_read(struct dc_tx *tx, int opc, daos_handle_t oh, uint64_t flags,
 done:
 	dcsr->dcsr_opc = DCSO_READ;
 	dcsr->dcsr_nr = nr;
-	dcsr->dcsr_dkey_hash = obj_dkey2hash(dkey);
+	dcsr->dcsr_dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, dkey);
 	dcsr->dcsr_api_flags = flags;
 
 	tx->tx_read_cnt++;
