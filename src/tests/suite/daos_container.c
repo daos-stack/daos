@@ -333,7 +333,7 @@ co_properties(void **state)
 
 	prop = daos_prop_alloc(2);
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-	prop->dpp_entries[0].dpe_str = strdup(label);
+	D_STRNDUP(prop->dpp_entries[0].dpe_str, label, 100);
 	prop->dpp_entries[1].dpe_type = DAOS_PROP_CO_SNAPSHOT_MAX;
 	prop->dpp_entries[1].dpe_val = snapshot_max;
 

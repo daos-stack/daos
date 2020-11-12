@@ -258,7 +258,7 @@ def get_base_env():
     env['DD_MASK'] = 'all'
     env['DD_SUBSYS'] = 'all'
     env['D_LOG_MASK'] = 'DEBUG'
-    env['D_LOG_SIZE'] = '4g'
+    env['D_LOG_SIZE'] = '5g'
     env['FI_UNIVERSE_SIZE'] = '128'
     return env
 
@@ -918,6 +918,7 @@ def log_test(conf,
              skip_fi=False,
              fi_signal=None,
              check_read=False,
+	     abort_on_warning=True,
              check_write=False):
     """Run the log checker on filename, logging to stdout"""
 
@@ -930,7 +931,7 @@ def log_test(conf,
     lto.hide_fi_calls = skip_fi
 
     try:
-        lto.check_log_file(abort_on_warning=True,
+        lto.check_log_file(abort_on_warning=abort_on_warning,
                            show_memleaks=show_memleaks)
     except lt.LogCheckError:
         if lto.fi_location:
@@ -1345,7 +1346,7 @@ def run_daos_test(server, conf):
     env['POOL_SCM_SIZE'] = '1'
     env['POOL_NVME_SIZE'] = '0'
     env['OMPI_MCA_btl'] = 'self,tcp'
-    env['OMPI_MCA_oob'] = '^ud,^ucx'
+    env['OMPI_MCA_oob'] = '^ud,ucx'
     env['OMPI_MCA_pml'] = '^ucx'
 
     log_file = tempfile.NamedTemporaryFile(prefix='dnt_test_',
@@ -1356,11 +1357,11 @@ def run_daos_test(server, conf):
     env['PATH'] = '{}:{}'.format(os.path.join(conf['PREFIX'], 'bin'),
                                  env['PATH'])
 
-    cmd = [daos_test_bin, '--dfs']
+    cmd = [daos_test_bin]
 
     rc = subprocess.run(cmd, env=env)
 
-    log_test(conf, log_file.name)
+    log_test(conf, log_file.name, abort_on_warning=False)
     print(rc)
 
 def test_alloc_fail(server, conf):
