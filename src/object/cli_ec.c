@@ -475,7 +475,7 @@ obj_ec_stripe_encode(daos_iod_t *iod, d_sg_list_t *sgl, uint32_t iov_idx,
 	int				 rc = 0;
 
 	if (iod->iod_type == DAOS_IOD_SINGLE)
-		obj_ec_singv_local_sz(iod->iod_size, oca, k - 1, &loc);
+		obj_ec_singv_local_sz(iod->iod_size, oca, k - 1, &loc, true);
 
 	for (i = 0; i < k; i++) {
 		c_data[i] = NULL;
@@ -1286,7 +1286,7 @@ obj_ec_get_degrade(struct obj_reasb_req *reasb_req, uint16_t fail_tgt_idx,
 	uint32_t		 nerrs, i;
 	bool			 with_parity = false;
 
-	fail_info = obj_ec_fail_info_get(reasb_req, true, p);
+	fail_info = obj_ec_fail_info_get(reasb_req, true, k + p);
 	if (fail_info == NULL)
 		return -DER_NOMEM;
 
@@ -1880,20 +1880,20 @@ obj_ec_recov_codec_free(struct obj_reasb_req *reasb_req)
 }
 
 struct obj_ec_fail_info *
-obj_ec_fail_info_get(struct obj_reasb_req *reasb_req, bool create, uint16_t p)
+obj_ec_fail_info_get(struct obj_reasb_req *reasb_req, bool create, uint16_t nr)
 {
 	struct obj_ec_fail_info *fail_info = reasb_req->orr_fail;
 
 	if (fail_info != NULL || !create)
 		return fail_info;
 
-	D_ASSERT(p <= OBJ_EC_MAX_P);
+	D_ASSERT(nr <= OBJ_EC_MAX_M);
 	D_ALLOC_PTR(fail_info);
 	if (fail_info == NULL)
 		return NULL;
 	reasb_req->orr_fail = fail_info;
 
-	D_ALLOC_ARRAY(fail_info->efi_tgt_list, p);
+	D_ALLOC_ARRAY(fail_info->efi_tgt_list, nr);
 	if (fail_info->efi_tgt_list == NULL)
 		return NULL;
 

@@ -29,7 +29,6 @@
 #include "crt_internal.h"
 #include "swim/swim_internal.h"
 
-#define CRT_OPC_SWIM_PROTO	0xFE000000U
 #define CRT_OPC_SWIM_VERSION	0
 
 #define crt_proc_swim_id_t	crt_proc_uint64_t
@@ -120,7 +119,14 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 		self_id, rpc_swim_input->src);
 
 	rpc_priv = container_of(rpc_req, struct crt_rpc_priv, crp_pub);
-	delay = (hlc - rpc_priv->crp_req_hdr.cch_hlc) / NSEC_PER_MSEC;
+	/*
+	 * crt_hg_unpack_header may have failed to synchronize the HLC with
+	 * this request.
+	 */
+	if (hlc > rpc_priv->crp_req_hdr.cch_hlc)
+		delay = (hlc - rpc_priv->crp_req_hdr.cch_hlc) / NSEC_PER_MSEC;
+	else
+		delay = 0;
 	csm->csm_msg_count++;
 
 	if (csm->csm_hlc) {
@@ -158,10 +164,13 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 		rc = swim_parse_message(ctx, rpc_swim_input->src,
 					rpc_swim_input->upds.ca_arrays,
 					rpc_swim_input->upds.ca_count);
-		if (rc == -ESHUTDOWN)
+		if (rc == -ESHUTDOWN) {
+			if (grp_priv->gp_size > 1)
+				D_ERROR("SWIM shutdown\n");
 			swim_self_set(ctx, SWIM_ID_INVALID);
-		else if (rc)
+		} else if (rc) {
 			D_ERROR("swim_parse_message() failed rc=%d\n", rc);
+		}
 	}
 
 	if (rpc_req->cr_opc & 0xFFFF) { /* RPC with acknowledge? */
@@ -440,6 +449,8 @@ static void crt_swim_progress_cb(crt_context_t crt_ctx, void *arg)
 
 	rc = swim_progress(ctx, CRT_SWIM_PROGRESS_TIMEOUT);
 	if (rc == -ESHUTDOWN) {
+		if (grp_priv->gp_size > 1)
+			D_ERROR("SWIM shutdown\n");
 		swim_self_set(ctx, SWIM_ID_INVALID);
 	} else if (rc && rc != -ETIMEDOUT) {
 		D_ERROR("swim_progress() failed rc=%d\n", rc);

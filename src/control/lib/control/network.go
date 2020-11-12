@@ -43,15 +43,22 @@ import (
 
 // HostFabricInterface describes a host fabric interface.
 type HostFabricInterface struct {
-	Provider string
-	Device   string
-	NumaNode uint32
+	Provider    string
+	Device      string
+	NumaNode    uint32
+	Priority    uint32
+	NetDevClass uint32
+}
+
+func (hfi *HostFabricInterface) String() string {
+	return fmt.Sprintf("%+v", *hfi)
 }
 
 // HostFabric describes a host fabric configuration.
 type HostFabric struct {
 	Interfaces []*HostFabricInterface `hash:"set"`
 	Providers  []string               `hash:"set"`
+	NumaCount  uint32
 }
 
 // HashKey returns a uint64 value suitable for use as a key into
@@ -140,6 +147,7 @@ func (nsr *NetworkScanResp) addHostResponse(hr *HostResponse) (err error) {
 		hf.Providers = append(hf.Providers, hfi.Provider)
 	}
 	hf.Providers = common.DedupeStringSlice(hf.Providers)
+	hf.NumaCount = uint32(pbResp.Numacount)
 
 	if nsr.HostFabrics == nil {
 		nsr.HostFabrics = make(HostFabricMap)
@@ -170,7 +178,7 @@ type (
 // explicitly specified. The function blocks until all results (successful
 // or otherwise) are received, and returns a single response structure
 // containing results for all host scan operations.
-func NetworkScan(ctx context.Context, rpcClient Invoker, req *NetworkScanReq) (*NetworkScanResp, error) {
+func NetworkScan(ctx context.Context, rpcClient UnaryInvoker, req *NetworkScanReq) (*NetworkScanResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewMgmtCtlClient(conn).NetworkScan(ctx, &ctlpb.NetworkScanReq{
 			Provider: req.Provider,

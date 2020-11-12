@@ -24,6 +24,7 @@ hosts: !mux
       - boro-B
     test_clients:
       - boro-A
+timeout: 600
 tests: !mux
   iv:
     name: iv_basic

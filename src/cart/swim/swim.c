@@ -859,7 +859,6 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 			ctx->sc_target = ctx->sc_ops->get_dping_target(ctx);
 			if (ctx->sc_target == SWIM_ID_INVALID) {
 				swim_ctx_unlock(ctx);
-				SWIM_ERROR("SWIM shutdown\n");
 				D_GOTO(out, rc = -ESHUTDOWN);
 			}
 
@@ -989,7 +988,6 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 						  upds[i].smu_state.sms_status],
 					   upds[i].smu_state.sms_incarnation,
 					   from);
-				SWIM_ERROR("SWIM shutdown\n");
 				D_GOTO(out, rc = -ESHUTDOWN);
 			}
 

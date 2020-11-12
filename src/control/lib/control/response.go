@@ -26,6 +26,7 @@ package control
 import (
 	"encoding/json"
 	"sort"
+	"strings"
 
 	"github.com/dustin/go-humanize/english"
 	"github.com/golang/protobuf/proto"
@@ -50,6 +51,7 @@ type (
 	HostResponseChan chan *HostResponse
 )
 
+// HostErrorsResp is a response type containing a HostErrorsMap.
 type HostErrorsResp struct {
 	HostErrors HostErrorsMap `json:"host_errors"`
 }
@@ -61,19 +63,26 @@ func (her *HostErrorsResp) addHostError(hostAddr string, hostErr error) error {
 	return her.HostErrors.Add(hostAddr, hostErr)
 }
 
+// GetHostErrors retrieves a HostErrorsMap from a response type.
 func (her *HostErrorsResp) GetHostErrors() HostErrorsMap {
 	return her.HostErrors
 }
 
+// Errors returns an error containing brief description of errors in map.
 func (her *HostErrorsResp) Errors() error {
 	if len(her.HostErrors) > 0 {
-		errCount := 0
+		erroredHosts := make(map[string]bool)
 		for _, hes := range her.HostErrors {
-			errCount += hes.HostSet.Count()
+			hostsInSet := strings.Split(hes.HostSet.DerangedString(), ",")
+			for _, host := range hostsInSet {
+				if _, exists := erroredHosts[host]; !exists {
+					erroredHosts[host] = true
+				}
+			}
 		}
 
 		return errors.Errorf("%s had errors",
-			english.Plural(errCount, "host", "hosts"))
+			english.Plural(len(erroredHosts), "host", "hosts"))
 	}
 	return nil
 }
