@@ -1345,7 +1345,8 @@ def run_daos_test(server, conf):
     env['POOL_SCM_SIZE'] = '1'
     env['POOL_NVME_SIZE'] = '0'
     env['OMPI_MCA_btl'] = 'self,tcp'
-    env['OMPI_MCA_oob'] = '^ud'
+    env['OMPI_MCA_oob'] = '^ud,^ucx'
+    env['OMPI_MCA_pml'] = '^ucx'
 
     log_file = tempfile.NamedTemporaryFile(prefix='dnt_test_',
                                            suffix='.log',
