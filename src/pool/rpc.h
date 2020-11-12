@@ -61,6 +61,9 @@
 	X(POOL_QUERY,							\
 		0, &CQF_pool_query,					\
 		ds_pool_query_handler, NULL),				\
+	X(POOL_QUERY_INFO,						\
+		0, &CQF_pool_query_info,				\
+		ds_pool_query_info_handler, NULL),			\
 	X(POOL_EXCLUDE,							\
 		0, &CQF_pool_exclude,					\
 		ds_pool_update_handler, NULL),				\
@@ -214,6 +217,20 @@ CRT_RPC_DECLARE(pool_disconnect, DAOS_ISEQ_POOL_DISCONNECT,
 	((uint32_t)		(pqo_map_buf_size)	CRT_VAR)
 
 CRT_RPC_DECLARE(pool_query, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY)
+
+#define DAOS_ISEQ_POOL_QUERY_INFO	/* input fields */	 \
+	((struct pool_op_in)	(pqii_op)		CRT_VAR) \
+	((d_rank_t)		(pqii_rank)		CRT_VAR) \
+	((uint32_t)		(pqii_tgt)		CRT_VAR)
+
+#define DAOS_OSEQ_POOL_QUERY_INFO	/* output fields */	 \
+	((struct pool_op_out)	  (pqio_op)		CRT_VAR) \
+	((d_rank_t)		  (pqio_rank)		CRT_VAR) \
+	((uint32_t)		  (pqio_tgt)		CRT_VAR) \
+	((daos_target_state_t)	  (pqio_state)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_query_info, DAOS_ISEQ_POOL_QUERY_INFO,
+		DAOS_OSEQ_POOL_QUERY_INFO)
 
 #define DAOS_ISEQ_POOL_ATTR_LIST /* input fields */		 \
 	((struct pool_op_in)	(pali_op)		CRT_VAR) \
