@@ -303,7 +303,6 @@ main(int argc, char **argv)
 
 	dfuse_info->di_threaded = true;
 	dfuse_info->di_direct_io = true;
-	dfuse_info->di_thread_count = 4;
 
 	while (1) {
 		c = getopt_long(argc, argv, "s:m:Sfh",
