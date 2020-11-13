@@ -1666,7 +1666,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 		unsigned char	*buf = dkey->iov_buf;
 
 		buf[0] += orw->orw_oid.id_shard + 1;
-		orw->orw_dkey_hash = obj_dkey2hash(dkey);
+		orw->orw_dkey_hash = obj_dkey2hash(orw->orw_oid.id_pub, dkey);
 	}
 
 	D_DEBUG(DB_IO,
@@ -3501,6 +3501,12 @@ out:
 	D_FREE(iohs);
 	D_FREE(biods);
 	D_FREE(bulks);
+
+	if (rc == 0 && dth->dth_modification_cnt == 0)
+		/* For the case of only containing read sub operations,
+		 * we will generate DTX entry for DTX recovery.
+		 */
+		rc = vos_dtx_pin(dth);
 
 	return rc;
 }

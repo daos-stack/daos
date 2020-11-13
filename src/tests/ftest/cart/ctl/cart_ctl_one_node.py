@@ -26,8 +26,6 @@ from __future__ import print_function
 
 import sys
 
-from apricot import skipForTicket
-
 from avocado       import Test
 from avocado       import main
 
@@ -53,7 +51,6 @@ class CartCtlOneNodeTest(Test):
         """ Test tear down """
         print("Run TearDown\n")
 
-    @skipForTicket("DAOS-5547")
     def test_cart_ctl(self):
         """
         Test CaRT ctl
@@ -76,18 +73,10 @@ class CartCtlOneNodeTest(Test):
             self.fail("Server did not launch, return code %s" \
                        % procrtn)
 
-        clicmd = self.utils.build_cmd(self, self.env, "test_clients_1")
-        self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "test_clients_2")
-        self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "test_clients_3")
-        self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "test_clients_4")
-        self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "test_clients_5")
-        self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "test_clients_6")
-        self.utils.launch_test(self, clicmd, srv_rtn)
+        for index in range(6):
+            clicmd = self.utils.build_cmd(
+                self, self.env, "test_clients", index=index)
+            self.utils.launch_test(self, clicmd, srv_rtn)
 
 
 if __name__ == "__main__":
