@@ -40,15 +40,10 @@
 #include "rpc.h"
 #include <errno.h>
 
-struct cp_arg_tmp {
-	struct dc_mgmt_sys	*sys;
-	crt_rpc_t		*rpc;
-};
-
-static int
-cp_tmp(tse_task_t *task, void *data)
+int
+cp(tse_task_t *task, void *data)
 {
-	struct cp_arg_tmp	*arg = data;
+	struct cp_arg	*arg = data;
 	int		 rc = task->dt_result;
 
 	if (rc)
@@ -63,7 +58,7 @@ int
 dc_mgmt_svc_rip(tse_task_t *task)
 {
 	daos_svc_rip_t		*args;
-	struct cp_arg_tmp		 cp_arg;
+	struct cp_arg		 cp_arg;
 	crt_endpoint_t		 svr_ep;
 	crt_rpc_t		*rpc = NULL;
 	crt_opcode_t		 opc;
@@ -101,7 +96,7 @@ dc_mgmt_svc_rip(tse_task_t *task)
 	crt_req_addref(rpc);
 	cp_arg.rpc = rpc;
 
-	rc = tse_task_register_comp_cb(task, cp_tmp, &cp_arg, sizeof(cp_arg));
+	rc = tse_task_register_comp_cb(task, cp, &cp_arg, sizeof(cp_arg));
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 

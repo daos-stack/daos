@@ -35,6 +35,12 @@ int dc_mgmt_init(void);
 
 void dc_mgmt_fini(void);
 
+struct cp_arg {
+	struct dc_mgmt_sys	*sys;
+	crt_rpc_t		*rpc;
+};
+int cp(tse_task_t *task, void *data);
+
 int dc_mgmt_svc_rip(tse_task_t *task);
 int dc_pool_extend(tse_task_t *task);
 int dc_mgmt_profile(char *path, int avg, bool start);

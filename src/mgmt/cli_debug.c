@@ -41,25 +41,6 @@
 #include "rpc.h"
 #include <errno.h>
 
-struct cp_arg {
-	struct dc_mgmt_sys	*sys;
-	crt_rpc_t		*rpc;
-};
-
-static int
-cp(tse_task_t *task, void *data)
-{
-	struct cp_arg	*arg = data;
-	int		 rc = task->dt_result;
-
-	if (rc)
-		D_ERROR("RPC error: "DF_RC"\n", DP_RC(rc));
-
-	dc_mgmt_sys_detach(arg->sys);
-	crt_req_decref(arg->rpc);
-	return rc;
-}
-
 int
 dc_mgmt_set_params(tse_task_t *task)
 {
