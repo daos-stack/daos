@@ -1099,6 +1099,7 @@ struct hole_params {
 static int
 zero_out_cb(uint8_t *buf, size_t len, void *args)
 {
+	D_DEBUG(DB_IO, "zero hole segment, buf %p, len %zu\n", buf, len);
 	memset(buf, 0, len);
 	return 0;
 }

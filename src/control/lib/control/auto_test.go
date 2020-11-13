@@ -34,6 +34,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	nd "github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -78,6 +79,7 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 	hostRespOneWithScmNs := dualHostResp("withNamespace", "standard")
 	hostRespWithScmNs := dualHostRespSame("withNamespace")
 	hostRespWithScmNss := dualHostRespSame("withNamespaces")
+	hostRespWithScmNssNumaZero := dualHostRespSame("withNamespacesNumaZero")
 	hostRespWithSingleSSD := dualHostRespSame("withSingleSSD")
 	hostRespWithSSDs := dualHostRespSame("withSpaceUsage")
 
@@ -86,6 +88,7 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 		minNvme       int
 		uErr          error
 		hostResponses []*HostResponse
+		expHostErrors []*MockHostError
 		expConfigOut  *config.Server
 		expCheckErr   error
 	}{
@@ -96,11 +99,21 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 		},
 		"host storage scan failed": {
 			hostResponses: hostRespOneScanFail,
-			expCheckErr:   errors.New("1 host had errors"),
+			expHostErrors: []*MockHostError{
+				{"host2", "scm scan failed"},
+				{"host2", "nvme scan failed"},
+			},
+			expCheckErr: errors.New("1 host had errors"),
 		},
 		"host storage scan failed on multiple hosts": {
 			hostResponses: hostRespScanFail,
-			expCheckErr:   errors.New("2 hosts had errors"),
+			expHostErrors: []*MockHostError{
+				{"host1", "scm scan failed"},
+				{"host1", "nvme scan failed"},
+				{"host2", "scm scan failed"},
+				{"host2", "nvme scan failed"},
+			},
+			expCheckErr: errors.New("2 hosts had errors"),
 		},
 		"host storage scan no hosts": {
 			hostResponses: []*HostResponse{},
@@ -124,6 +137,11 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 			numPmem:       2,
 			hostResponses: hostRespWithScmNss,
 			expCheckErr:   errors.New("insufficient number of nvme devices for numa node 0, want 1 got 0"),
+		},
+		"2 min pmem and 2 pmems present both numa 0": {
+			numPmem:       2,
+			hostResponses: hostRespWithScmNssNumaZero,
+			expCheckErr:   errors.New("bound to unexpected numa nodes"),
 		},
 		"no min nvme and 1 ctrlr present on 1 numa node": {
 			numPmem:       2,
@@ -154,22 +172,36 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 				Log:     log,
 			}
 
-			generatedCfg := config.DefaultServer().
-				WithServers(ioserver.NewConfig(), ioserver.NewConfig())
+			resp := &ConfigGenerateResp{
+				// input config param represents two-socket system
+				ConfigOut: config.DefaultServer().
+					WithServers(ioserver.NewConfig(), ioserver.NewConfig()),
+			}
 
-			// input config param represents two-socket system
-			gotCheckErr := req.checkStorage(context.Background(), generatedCfg)
-			common.CmpErr(t, tc.expCheckErr, gotCheckErr)
-			if tc.expCheckErr != nil {
-				return
+			expResp := &ConfigGenerateResp{
+				ConfigOut:      tc.expConfigOut,
+				HostErrorsResp: MockHostErrorsResp(t, tc.expHostErrors...),
 			}
 
 			cmpOpts := []cmp.Option{
 				cmpopts.IgnoreUnexported(security.CertificateConfig{}, config.Server{}),
 				cmpopts.IgnoreFields(config.Server{}, "GetDeviceClassFn"),
 			}
-			if diff := cmp.Diff(tc.expConfigOut, generatedCfg, cmpOpts...); diff != "" {
-				t.Fatalf("output cfg doesn't match (-want, +got):\n%s\n", diff)
+			cmpOpts = append(cmpOpts, defResCmpOpts()...)
+
+			gotCheckErr := req.checkStorage(context.Background(), resp)
+
+			if diff := cmp.Diff(expResp.GetHostErrors(), resp.GetHostErrors(), cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+
+			common.CmpErr(t, tc.expCheckErr, gotCheckErr)
+			if tc.expCheckErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(expResp, resp, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
@@ -293,12 +325,24 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 	}
 	numa0 := uint(0)
 	numa1 := uint(1)
+	baseConfig := func(provider string) *config.Server {
+		return config.DefaultServer().
+			WithControlLogFile(defaultControlLogFile).
+			WithFabricProvider(provider)
+	}
+	baseIOConfig := func(idx int) *ioserver.Config {
+		return ioserver.NewConfig().
+			WithTargetCount(defaultTargetCount).
+			WithLogFile(fmt.Sprintf("%s.%d.log", defaultIOSrvLogFile, idx))
+	}
 
 	for name, tc := range map[string]struct {
 		numPmem       int
-		netDevClass   NetDevClass
+		netDevClass   uint32
+		accessPoints  []string
 		uErr          error
 		hostResponses []*HostResponse
+		expHostErrors []*MockHostError
 		expConfigOut  *config.Server
 		expCheckErr   error
 	}{
@@ -309,15 +353,28 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 		},
 		"host network scan failed": {
 			hostResponses: hostRespRemoteFail,
-			expCheckErr:   errors.New("1 host had errors"),
+			expHostErrors: []*MockHostError{
+				{"host2", "remote failed"},
+				{"host2", "remote failed"},
+			},
+			expCheckErr: errors.New("1 host had errors"),
 		},
 		"host network scan failed on multiple hosts": {
 			hostResponses: hostRespRemoteFails,
-			expCheckErr:   errors.New("2 hosts had errors"),
+			expHostErrors: []*MockHostError{
+				{"host1", "remote failed"},
+				{"host2", "remote failed"},
+			},
+			expCheckErr: errors.New("2 hosts had errors"),
 		},
 		"host network scan no hosts": {
 			hostResponses: []*HostResponse{},
 			expCheckErr:   errors.New("no host responses"),
+		},
+		"unsupported network class in request": {
+			netDevClass:   2,
+			hostResponses: dualHostResp(fabIfs1, fabIfs2),
+			expCheckErr:   errors.New("unsupported net dev class in request"),
 		},
 		"host network mismatch": {
 			hostResponses: dualHostResp(fabIfs1, fabIfs2),
@@ -342,78 +399,80 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 		"one min pmem and two numa but only single interface": {
 			numPmem:       1,
 			hostResponses: dualHostRespSame(fabIfs3),
-			expConfigOut: config.DefaultServer().WithServers(
-				ioserver.NewConfig().
+			expConfigOut: baseConfig("ofi+psm2").WithServers(
+				baseIOConfig(0).
 					WithFabricInterface("ib0").
-					WithFabricInterfacePort(31416).
+					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
 					WithPinnedNumaNode(&numa0)),
 		},
 		"one min pmem and two numa but only single interface select ethernet": {
 			numPmem:       1,
-			netDevClass:   NetDevEther,
+			netDevClass:   nd.Ether,
 			hostResponses: dualHostRespSame(fabIfs3),
-			expConfigOut: config.DefaultServer().WithServers(
-				ioserver.NewConfig().
+			expConfigOut: baseConfig("ofi+sockets").WithServers(
+				baseIOConfig(0).
 					WithFabricInterface("eth0").
-					WithFabricInterfacePort(31416).
+					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+sockets").
 					WithPinnedNumaNode(&numa0)),
 		},
 		"no min pmem and two numa with dual ib interfaces": {
 			hostResponses: dualHostRespSame(fabIfs4),
-			expConfigOut: config.DefaultServer().WithServers(
-				ioserver.NewConfig().
+			expConfigOut: baseConfig("ofi+psm2").WithServers(
+				baseIOConfig(0).
 					WithFabricInterface("ib0").
-					WithFabricInterfacePort(31416).
+					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
 					WithPinnedNumaNode(&numa0),
-				ioserver.NewConfig().
+				baseIOConfig(1).
 					WithFabricInterface("ib1").
-					WithFabricInterfacePort(32416).
+					WithFabricInterfacePort(
+						defaultFiPort+defaultFiPortInterval).
 					WithFabricProvider("ofi+psm2").
 					WithPinnedNumaNode(&numa1)),
 		},
 		"dual ib interfaces but ethernet selected": {
-			netDevClass:   NetDevEther,
+			netDevClass:   nd.Ether,
 			hostResponses: dualHostRespSame(fabIfs4),
-			expCheckErr:   errors.New("insufficient matching ethernet network"),
+			expCheckErr:   errors.New("insufficient matching ETHER network"),
 		},
 		"no min pmem and two numa with dual eth interfaces": {
 			hostResponses: dualHostRespSame(fabIfs5),
-			expConfigOut: config.DefaultServer().WithServers(
-				ioserver.NewConfig().
+			expConfigOut: baseConfig("ofi+sockets").WithServers(
+				baseIOConfig(0).
 					WithFabricInterface("eth0").
-					WithFabricInterfacePort(31416).
+					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+sockets").
 					WithPinnedNumaNode(&numa0),
-				ioserver.NewConfig().
+				baseIOConfig(1).
 					WithFabricInterface("eth1").
-					WithFabricInterfacePort(32416).
+					WithFabricInterfacePort(defaultFiPort+defaultFiPortInterval).
 					WithFabricProvider("ofi+sockets").
 					WithPinnedNumaNode(&numa1)),
 		},
 		"dual eth interfaces but infiniband selected": {
-			netDevClass:   NetDevInfiniband,
+			netDevClass:   nd.Infiniband,
 			hostResponses: dualHostRespSame(fabIfs5),
-			expCheckErr:   errors.New("insufficient matching infiniband network"),
+			expCheckErr:   errors.New("insufficient matching INFINIBAND network"),
 		},
 		"four min pmem and two numa with dual ib interfaces": {
 			numPmem:       4,
 			hostResponses: dualHostRespSame(fabIfs4),
 			expCheckErr:   errors.New("insufficient matching best-available network"),
 		},
-		"no min pmem and two numa with typical fabric scan output": {
+		"no min pmem and two numa with typical fabric scan output and access points": {
+			accessPoints:  []string{"hostX"},
 			hostResponses: dualHostRespSame(typicalFabIfs),
-			expConfigOut: config.DefaultServer().WithServers(
-				ioserver.NewConfig().
+			expConfigOut: baseConfig("ofi+psm2").WithAccessPoints("hostX").WithServers(
+				baseIOConfig(0).
 					WithFabricInterface("ib0").
-					WithFabricInterfacePort(31416).
+					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
 					WithPinnedNumaNode(&numa0),
-				ioserver.NewConfig().
+				baseIOConfig(1).
 					WithFabricInterface("ib1").
-					WithFabricInterfacePort(32416).
+					WithFabricInterfacePort(defaultFiPort+defaultFiPortInterval).
 					WithFabricProvider("ofi+psm2").
 					WithPinnedNumaNode(&numa1)),
 		},
@@ -429,26 +488,43 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 				},
 			})
 
+			if tc.netDevClass == 0 {
+				tc.netDevClass = NetDevAny
+			}
 			req := &ConfigGenerateReq{
-				NumPmem:  tc.numPmem,
-				NetClass: tc.netDevClass,
-				Client:   mi,
-				Log:      log,
+				NumPmem:      tc.numPmem,
+				NetClass:     tc.netDevClass,
+				AccessPoints: tc.accessPoints,
+				Client:       mi,
+				Log:          log,
 			}
 
-			gotCfg, gotCheckErr := req.checkNetwork(context.Background())
+			resp := new(ConfigGenerateResp)
 
-			common.CmpErr(t, tc.expCheckErr, gotCheckErr)
-			if tc.expCheckErr != nil {
-				return
+			expResp := &ConfigGenerateResp{
+				ConfigOut:      tc.expConfigOut,
+				HostErrorsResp: MockHostErrorsResp(t, tc.expHostErrors...),
 			}
 
 			cmpOpts := []cmp.Option{
 				cmpopts.IgnoreUnexported(security.CertificateConfig{}, config.Server{}),
 				cmpopts.IgnoreFields(config.Server{}, "GetDeviceClassFn"),
 			}
-			if diff := cmp.Diff(tc.expConfigOut, gotCfg, cmpOpts...); diff != "" {
-				t.Fatalf("output cfg doesn't match (-want, +got):\n%s\n", diff)
+			cmpOpts = append(cmpOpts, defResCmpOpts()...)
+
+			gotCheckErr := req.checkNetwork(context.Background(), resp)
+
+			if diff := cmp.Diff(expResp.GetHostErrors(), resp.GetHostErrors(), cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+
+			common.CmpErr(t, tc.expCheckErr, gotCheckErr)
+			if tc.expCheckErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(expResp, resp, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

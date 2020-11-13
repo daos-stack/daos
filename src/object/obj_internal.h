@@ -484,6 +484,14 @@ obj_singv_ec_rw_filter(daos_unit_oid_t *oid, daos_iod_t *iods, uint64_t *offs,
 		       uint32_t nr, bool for_update, bool deg_fetch,
 		       struct daos_recx_ep_list **recov_lists_ptr);
 
+static inline struct pl_obj_shard*
+obj_get_shard(void *data, int idx)
+{
+	struct dc_object	*obj = data;
+
+	return &obj->cob_shards->do_shards[idx].do_pl_shard;
+}
+
 static inline bool
 obj_retry_error(int err)
 {
@@ -687,11 +695,14 @@ ds_obj_cpd_get_tgt_cnt(crt_rpc_t *rpc, int dtx_idx)
 }
 
 static inline uint64_t
-obj_dkey2hash(daos_key_t *dkey)
+obj_dkey2hash(daos_obj_id_t oid, daos_key_t *dkey)
 {
 	/* return 0 for NULL dkey, for example obj punch and list dkey */
 	if (dkey == NULL)
 		return 0;
+
+	if (daos_obj_id2feat(oid) & DAOS_OF_DKEY_UINT64)
+		return *(uint64_t *)dkey->iov_buf;
 
 	return d_hash_murmur64((unsigned char *)dkey->iov_buf,
 			       dkey->iov_len, 5731);

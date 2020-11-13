@@ -76,14 +76,14 @@ struct crt_common_hdr {
 	uint32_t	cch_flags;
 	/* HLC timestamp */
 	uint64_t	cch_hlc;
+	/* RPC id */
+	uint64_t	cch_rpcid;
 	/* destination rank in default primary group */
 	d_rank_t	cch_dst_rank;
 	/* originator rank in default primary group */
 	d_rank_t	cch_src_rank;
 	/* tag to which rpc request was sent to */
 	uint32_t	cch_dst_tag;
-	/* RPC id */
-	uint64_t	cch_rpcid;
 	/* used in crp_reply_hdr to propagate rpc failure back to sender */
 	uint32_t	cch_rc;
 };
@@ -298,7 +298,15 @@ enum {
 	CRT_FI_RPCS_LIST
 };
 
+#define CRT_OPC_SWIM_PROTO	0xFE000000U
+
 #undef X
+
+static inline bool
+crt_opc_is_swim(crt_opcode_t opc)
+{
+	return ((opc & CRT_PROTO_BASEOPC_MASK) == CRT_OPC_SWIM_PROTO);
+}
 
 #define CRT_SEQ_GRP_CACHE					 \
 	((d_rank_t)		(gc_rank)		CRT_VAR) \
