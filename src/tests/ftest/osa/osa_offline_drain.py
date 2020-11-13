@@ -118,3 +118,7 @@ class OSAOfflineDrain(OSAUtils):
         """
         for pool_num in range(1, 3):
             self.run_offline_drain_test(pool_num, True)
+            self.stop_servers()
+            time.sleep(5)
+            self.start_servers()
+            time.sleep(5)
