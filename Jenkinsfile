@@ -1081,15 +1081,19 @@ pipeline {
                         label 'ci_hdwr1'
                     }
                     steps {
-                        unitTest timeout_time: 20,
+                        unitTest timeout_time: 30,
                                  inst_repos: pr_repos(),
                                  inst_rpms: unit_packages()
                     }
                     post {
                       always {
                             unitTestPost artifacts: ['nlt_logs/*'],
-                                         testResults: 'None',
-                                         valgrind_stash: 'centos7-gcc-nlt-memcheck'
+                                         testResults: 'None'
+                            recordIssues enabledForFailure: true,
+                                  name: "daos_test logging",
+                                  tool: issues(pattern: 'vm_test/daos_test-errors.json',
+                                                name: 'daos_test results',
+                                                id: 'NLT_daos_test')
                         }
                     }
                 }

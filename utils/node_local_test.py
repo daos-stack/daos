@@ -299,7 +299,7 @@ class DaosServer():
 
     def __del__(self):
         if self.running:
-            self.stop()
+            self.stop(abort_on_warning=False)
 
     def start(self):
         """Start a DAOS server"""
@@ -401,7 +401,7 @@ class DaosServer():
                 raise Exception("Failed to start")
         print('Server started in {:.2f} seconds'.format(time.time() - start))
 
-    def stop(self):
+    def stop(self, abort_on_warning=True):
         """Stop a previously started DAOS server"""
         if self._agent:
             self._agent.send_signal(signal.SIGINT)
@@ -467,7 +467,10 @@ class DaosServer():
         # often segfaults at shutdown.
         if os.path.exists(self._log_file):
             # TODO: Enable memleak checking when server shutdown works.
-            log_test(self.conf, self._log_file, show_memleaks=False)
+            log_test(self.conf,
+                     self._log_file,
+                     abort_on_warning=abort_on_warning,
+                     show_memleaks=False)
         self.running = False
         return ret
 
@@ -1339,8 +1342,6 @@ def run_daos_test(server, conf):
     so far simply checks the logs for generated errors.
     """
 
-    daos_test_bin = os.path.join(conf['PREFIX'], 'bin', 'daos_test')
-
     env = get_base_env()
     env['DAOS_AGENT_DRPC_DIR'] = server.agent_dir
     env['POOL_SCM_SIZE'] = '1'
@@ -1348,21 +1349,50 @@ def run_daos_test(server, conf):
     env['OMPI_MCA_btl'] = 'self,tcp'
     env['OMPI_MCA_oob'] = '^ud,ucx'
     env['OMPI_MCA_pml'] = '^ucx'
-
     log_file = tempfile.NamedTemporaryFile(prefix='dnt_test_',
                                            suffix='.log',
                                            delete=False)
-
     env['D_LOG_FILE'] = log_file.name
-    env['PATH'] = '{}:{}'.format(os.path.join(conf['PREFIX'], 'bin'),
-                                 env['PATH'])
 
-    cmd = [daos_test_bin]
+    daos_test_bin = os.path.join(conf['PREFIX'], 'bin', 'daos_test')
 
-    rc = subprocess.run(cmd, env=env)
-
-    log_test(conf, log_file.name, abort_on_warning=False)
+    rc = subprocess.run([daos_test_bin, '--help'],
+                        env=env,
+                        stdout=subprocess.PIPE)
     print(rc)
+    assert rc.returncode == 0
+    log_test(conf, log_file.name)
+
+    modes = []
+
+    for line in rc.stdout.decode('utf-8').splitlines():
+        if line.startswith('Default'):
+            break
+        if not line.startswith('daos_test '):
+            continue
+        _, mode = line.split('|')
+        if mode == '--all':
+            continue
+        modes.append(mode)
+
+    print(modes)
+
+    for mode in modes:
+
+        log_file = tempfile.NamedTemporaryFile(prefix='dnt_test_',
+                                               suffix='.log',
+                                               delete=False)
+
+        env['D_LOG_FILE'] = log_file.name
+        env['PATH'] = '{}:{}'.format(os.path.join(conf['PREFIX'], 'bin'),
+                                     env['PATH'])
+
+        cmd = [daos_test_bin, mode]
+        rc = subprocess.run(cmd, env=env, stdout=subprocess.PIPE)
+        stdout = rc.stdout.decode('utf-8')
+        print(rc)
+        log_test(conf, log_file.name, abort_on_warning=False)
+        assert 'Unknown Option' not in stdout
 
 def test_alloc_fail(server, conf):
     """run 'daos' client binary with fault injection
@@ -1454,11 +1484,13 @@ def main():
     server.start()
 
     fatal_errors = BoolRatchet()
+    server_log_strict = True
 
     if args.mode == 'launch':
         run_in_fg(server, conf)
     elif args.mode == 'daos_test':
         run_daos_test(server, conf)
+        server_log_strict = False
     elif args.mode == 'il':
         fatal_errors.add_result(run_il_test(server, conf))
     elif args.mode == 'kv':
@@ -1480,7 +1512,7 @@ def main():
         print("Unknown mode")
         fatal_errors.add_result(True)
 
-    if server.stop() != 0:
+    if server.stop(abort_on_warning = server_log_strict) != 0:
         fatal_errors.fail()
 
     # If running all tests then restart the server under valgrind.

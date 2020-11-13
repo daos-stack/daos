@@ -59,24 +59,24 @@ print_usage(int rank)
 	print_message("\n\nDAOS TESTS\n=============================\n");
 	print_message("Tests: Use one of these arg(s) for specific test\n");
 	print_message("daos_test -m|--mgmt\n");
-	print_message("daos_test -p|--daos_pool_tests\n");
-	print_message("daos_test -c|--daos_container_tests\n");
+	print_message("daos_test -p|--pool\n");
+	print_message("daos_test -c|--cont\n");
 	print_message("daos_test -C|--capa\n");
 	print_message("daos_test -U|--dedup\n");
 	print_message("daos_test -z|--checksum\n");
-	print_message("daos_test -t|--base_tx\n");
-	print_message("daos_test -T|--dist_tx\n");
-	print_message("daos_test -i|--daos_io_tests\n");
+	print_message("daos_test -t|--base_dtx\n");
+	print_message("daos_test -T|--dist_dtx\n");
+	print_message("daos_test -i|--io\n");
 	print_message("daos_test -x|--epoch_io\n");
 	print_message("daos_test -A|--array\n");
 	print_message("daos_test -F|--dfs\n");
-	print_message("daos_test -D|--daos_array\n");
+	print_message("daos_test -D|--array\n");
 	print_message("daos_test -K|--daos_kv\n");
 	print_message("daos_test -d|--degraded\n");
-	print_message("daos_test -e|--daos_epoch_tests\n");
-	print_message("daos_test -o|--daos_epoch_recovery_tests\n");
-	print_message("daos_test -V|--verify_consistency\n");
-	print_message("daos_test -R|--MD_replication_tests\n");
+	print_message("daos_test -e|--epoch\n");
+	print_message("daos_test -o|--erecov\n");
+	print_message("daos_test -V|--verify\n");
+	print_message("daos_test -R|--mdr\n");
 	print_message("daos_test -O|--oid_alloc\n");
 	print_message("daos_test -r|--rebuild\n");
 	print_message("daos_test -v|--rebuild_simple\n");
@@ -84,7 +84,7 @@ print_usage(int rank)
 	print_message("daos_test -X|--degrade_ec\n");
 	print_message("daos_test -b|--drain_simple\n");
 	print_message("daos_test -N|--nvme_recovery\n");
-	print_message("daos_test -a|--daos_all_tests\n");
+	print_message("daos_test -a|--all\n");
 	print_message("Default <daos_tests> runs all tests\n=============\n");
 	print_message("Options: Use one of these arg(s) to modify the "
 			"tests that are run\n");
@@ -444,7 +444,7 @@ main(int argc, char **argv)
 		default:
 			daos_test_print(rank, "Unknown Option\n");
 			print_usage(rank);
-			goto exit;
+			D_GOTO(exit, nr_failed = 2);
 		}
 	}
 
@@ -537,6 +537,8 @@ exit:
 	MPI_Allreduce(&nr_failed, &nr_total_failed, 1, MPI_INT, MPI_SUM,
 		      MPI_COMM_WORLD);
 
+	D_FREE(test_io_dir);
+
 	rc = daos_fini();
 	if (rc)
 		print_message("daos_fini() failed with %d\n", rc);
@@ -551,8 +553,6 @@ exit:
 	}
 
 	MPI_Finalize();
-
-	D_FREE(test_io_dir);
 
 	return nr_failed;
 }
