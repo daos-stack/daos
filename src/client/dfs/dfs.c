@@ -2290,6 +2290,13 @@ restart:
 			D_DEBUG(DB_TRACE, "Failed to open file (%d)\n", rc);
 			D_GOTO(out, rc);
 		}
+		if (flags & O_TRUNC) {
+			rc = daos_array_set_size(obj->oh, th, 0, NULL);
+			if (rc) {
+				D_DEBUG(DB_TRACE, "Failed to punch file (%d)\n", rc);
+				D_GOTO(out, rc = daos_der2errno(rc));
+			}
+		}
 		break;
 	case S_IFDIR:
 		rc = open_dir(dfs, th, parent->oh, flags, cid, obj);
@@ -2389,6 +2396,15 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 					     &new_obj->oh);
 		if (rc)
 			D_GOTO(err, rc = daos_der2errno(rc));
+		if (flags & O_TRUNC) {
+			rc = daos_array_set_size(obj->oh, DAOS_TX_NONE,
+						 0, NULL);
+			if (rc) {
+				D_DEBUG(DB_TRACE,
+					"Failed to punch file (%d)\n", rc);
+				D_GOTO(err, rc = daos_der2errno(rc));
+			}
+		}
 		break;
 	}
 	case S_IFLNK:
