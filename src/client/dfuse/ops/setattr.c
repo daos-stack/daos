@@ -34,7 +34,7 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 	DFUSE_TRA_DEBUG(ie, "flags %#x", to_set);
 
 	if (to_set & FUSE_SET_ATTR_MODE) {
-		DFUSE_TRA_DEBUG(ie, "mode %#x %#x",
+		DFUSE_TRA_DEBUG(ie, "mode %#o %#o",
 				attr->st_mode, ie->ie_stat.st_mode);
 
 		to_set &= ~FUSE_SET_ATTR_MODE;

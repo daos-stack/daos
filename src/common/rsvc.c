@@ -100,7 +100,6 @@ rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep)
 
 	if (chosen == -1) {
 		D_WARN("replica list empty\n");
-		/* TODO: Request list of replicas from management service. */
 		return -DER_NOTREPLICA;
 	} else {
 		D_ASSERTF(chosen >= 0 && chosen < client->sc_ranks->rl_nr,

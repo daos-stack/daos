@@ -396,8 +396,9 @@ class DaosServer():
 
             if ready:
                 break
-            if time.time() - start > 10:
+            if time.time() - start > 20:
                 raise Exception("Failed to start")
+        print('Server started in {:.2f} seconds'.format(time.time() - start))
 
     def stop(self):
         """Stop a previously started DAOS server"""
@@ -705,6 +706,11 @@ class DFuse():
         ret = self._sp.wait()
         print('rc from dfuse {}'.format(ret))
         self._sp = None
+        log_test(self.conf, self.log_file)
+
+        # Finally, modify the valgrind xml file to remove the
+        # prefix to the src dir.
+        self.valgrind.convert_xml()
 
 def get_pool_list():
     """Return a list of valid pool names"""
@@ -884,6 +890,10 @@ def run_tests(dfuse):
     ofd.close()
     ret = il_cmd(dfuse, ['cat', fname], check_write=False)
     assert ret.returncode == 0
+    symlink_name = os.path.join(path, 'symlink_src')
+    symlink_dest = 'missing_dest'
+    os.symlink(symlink_dest, symlink_name)
+    assert symlink_dest == os.readlink(symlink_name)
     readdir_test(dfuse, 10)
 
 def dfuse_wrapper(server, conf):
