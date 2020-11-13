@@ -47,8 +47,6 @@ struct crt_swim_membs {
 	struct crt_swim_target		*csm_target;
 	struct swim_context		*csm_ctx;
 	uint64_t			 csm_hlc;
-	uint64_t			 csm_avg_delay;
-	uint64_t			 csm_msg_count;
 	int				 csm_crt_ctx_idx;
 };
 

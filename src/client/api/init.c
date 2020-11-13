@@ -51,8 +51,6 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_pool_extend, sizeof(daos_pool_extend_t)},
 	{dc_pool_evict, sizeof(daos_pool_evict_t)},
 	{dc_mgmt_set_params, sizeof(daos_set_params_t)},
-	{dc_pool_add_replicas, sizeof(daos_pool_replicas_t)},
-	{dc_pool_remove_replicas, sizeof(daos_pool_replicas_t)},
 	{dc_mgmt_get_bs_state, sizeof(daos_mgmt_get_bs_state_t)},
 
 	/** Pool */

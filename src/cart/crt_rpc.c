@@ -323,8 +323,10 @@ static int check_ep(crt_endpoint_t *tgt_ep, struct crt_grp_priv **ret_grp_priv)
 	int rc = 0;
 
 	grp_priv = crt_grp_pub2priv(tgt_ep->ep_grp);
-	if (grp_priv == NULL)
+	if (grp_priv == NULL) {
+		D_ERROR("crt_grp_pub2priv(%p) got NULL.\n", tgt_ep->ep_grp);
 		D_GOTO(out, rc = -DER_BAD_TARGET);
+	}
 
 out:
 	if (rc == 0)
@@ -1377,8 +1379,8 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 		(crt_ctx->cc_idx != rpc_priv->crp_req_hdr.cch_dst_tag)) {
 
 		if (!skip_check) {
-			D_DEBUG(DB_TRACE, "Mismatch rpc: %p opc: %x rank:%d "
-				"tag:%d self:%d cc_idx:%d ep_rank:%d ep_tag:%d\n",
+			D_ERROR("Mismatch rpc: %p opc: %x rank:%d tag:%d "
+				"self:%d cc_idx:%d ep_rank:%d ep_tag:%d\n",
 				rpc_priv,
 				rpc_priv->crp_pub.cr_opc,
 				rpc_priv->crp_req_hdr.cch_dst_rank,

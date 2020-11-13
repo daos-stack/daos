@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 // Package code is a central repository for all control plane fault codes.
 package code
 
@@ -109,19 +110,8 @@ const (
 
 	// server fault codes
 	ServerUnknown Code = iota + 600
-	ServerBadConfig
-	ServerNoConfigPath
-	ServerConfigBadControlPort
-	ServerConfigBadAccessPoints
-	ServerConfigBadProvider
-	ServerConfigNoServers
 	ServerScmUnmanaged
 	ServerBdevNotFound
-	ServerConfigDuplicateFabric
-	ServerConfigDuplicateLogFile
-	ServerConfigDuplicateScmMount
-	ServerConfigDuplicateScmDeviceList
-	ServerConfigOverlappingBdevDeviceList
 	ServerIommuDisabled
 	ServerPoolScmTooSmall
 	ServerPoolNvmeTooSmall
@@ -132,6 +122,20 @@ const (
 	ServerInstancesNotStopped
 	ServerConfigInvalidNetDevClass
 	ServerVfioDisabled
+
+	// server config fault codes
+	ServerConfigUnknown Code = iota + 700
+	ServerBadConfig
+	ServerNoConfigPath
+	ServerConfigBadControlPort
+	ServerConfigBadAccessPoints
+	ServerConfigBadProvider
+	ServerConfigNoServers
+	ServerConfigDuplicateFabric
+	ServerConfigDuplicateLogFile
+	ServerConfigDuplicateScmMount
+	ServerConfigDuplicateScmDeviceList
+	ServerConfigOverlappingBdevDeviceList
 	ServerConfigFaultDomainInvalid
 	ServerConfigFaultCallbackNotFound
 	ServerConfigFaultCallbackBadPerms
@@ -139,8 +143,8 @@ const (
 	ServerConfigBothFaultPathAndCb
 	ServerConfigFaultCallbackEmpty
 
-	// spdk library bindings codes
-	SpdkUnknown Code = iota + 700
+	// SPDK library bindings codes
+	SpdkUnknown Code = iota + 800
 	SpdkCtrlrNoHealth
 	SpdkBindingRetNull
 	SpdkBindingFailed

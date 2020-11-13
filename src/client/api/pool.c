@@ -115,11 +115,27 @@ daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
 }
 
 int
-daos_pool_query_target(daos_handle_t poh, d_rank_list_t *tgts,
-		       d_rank_list_t *failed, daos_target_info_t *info_list,
-		       daos_event_t *ev)
+daos_pool_query_target(daos_handle_t poh, uint32_t tgt_idx, d_rank_t rank,
+		       daos_target_info_t *info, daos_event_t *ev)
 {
-	return -DER_NOSYS;
+	daos_pool_query_target_t	*args;
+	tse_task_t			*task;
+	int				 rc;
+
+	DAOS_API_ARG_ASSERT(*args, POOL_QUERY_INFO);
+
+	rc = dc_task_create(dc_pool_query_target, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->poh	= poh;
+	args->tgt_idx	= tgt_idx;
+	args->rank	= rank;
+	args->info	= info;
+
+	return dc_task_schedule(task, true);
+
 }
 
 int

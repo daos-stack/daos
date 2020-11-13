@@ -378,6 +378,14 @@ boolean skip_build_on_leap15_icc() {
            quickbuild()
 }
 
+boolean skip_unit_testing_stage() {
+    return  env.NO_CI_TESTING == 'true' ||
+            (skip_stage('build') &&
+             rpm_test_version() == '') ||
+            doc_only_change() ||
+            skip_stage('unit-tests')
+}
+
 boolean skip_testing_stage() {
     return  env.NO_CI_TESTING == 'true' ||
             (skip_stage('build') &&
@@ -1064,7 +1072,7 @@ pipeline {
         stage('Unit Tests') {
             when {
                 beforeAgent true
-                expression { ! skip_testing_stage() }
+                expression { ! skip_unit_testing_stage() }
             }
             parallel {
                 stage('Unit Test') {
@@ -1076,15 +1084,35 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
-                        unitTest timeout_time: 60,
+                        unitTest timeout_time: 30,
                                  inst_repos: pr_repos(),
                                  inst_rpms: unit_packages()
                     }
                     post {
                       always {
-                            unitTestPost artifacts: ['unit_test_logs/*',
-                                                     'unit_vm_test/**'],
-                                         valgrind_stash: 'centos7-gcc-unit-valg'
+                            unitTestPost artifacts: ['unit_test_logs/*'],
+                                         record_issues: false
+                        }
+                    }
+                }
+                stage('NLT') {
+                    when {
+                      beforeAgent true
+                      expression { ! skip_stage('nlt') }
+                    }
+                    agent {
+                        label 'ci_hdwr1'
+                    }
+                    steps {
+                        unitTest timeout_time: 20,
+                                 inst_repos: pr_repos(),
+                                 inst_rpms: unit_packages()
+                    }
+                    post {
+                      always {
+                            unitTestPost artifacts: ['nlt_logs/*'],
+                                         testResults: 'None',
+                                         valgrind_stash: 'centos7-gcc-nlt-memcheck'
                         }
                     }
                 }
@@ -1123,20 +1151,15 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
-                        unitTest timeout_time: 60,
+                        unitTest timeout_time: 30,
                                  ignore_failure: true,
                                  inst_repos: pr_repos(),
                                  inst_rpms: unit_packages()
                     }
                     post {
                         always {
-                            // This is only set while dealing with issues
-                            // caused by code coverage instrumentation affecting
-                            // test results, and while code coverage is being
-                            // added.
-                            unitTestPost ignore_failure: true,
-                                         artifacts: ['unit_test_memcheck_logs.tar.gz',
-                                                     'unit_memcheck_vm_test/**'],
+                            unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
+                                                     'unit_test_memcheck_logs/*.log'],
                                          valgrind_stash: 'centos7-gcc-unit-memcheck'
                         }
                     }
@@ -1364,7 +1387,7 @@ pipeline {
     } // stages
     post {
         always {
-            valgrindReportPublish valgrind_stashes: ['centos7-gcc-unit-valg',
+            valgrindReportPublish valgrind_stashes: ['centos7-gcc-nlt-memcheck',
                                                      'centos7-gcc-unit-memcheck']
         }
         unsuccessful {

@@ -468,8 +468,6 @@ lookup_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
 	     daos_handle_t th, daos_recx_t *recxs, int nr, void *data,
 	     daos_size_t data_size, struct ioreq *req)
 {
-	assert_in_range(nr, 1, IOREQ_IOD_NR);
-
 	/* dkey */
 	ioreq_dkey_set(req, dkey);
 
@@ -667,7 +665,6 @@ io_overwrite_small(void **state, daos_obj_id_t oid)
 #endif
 }
 
-#define OW_IOD_SIZE	1024ULL /* used for mixed record overwrite */
 /**
  * Test mixed SCM & NVMe overwrites in different transactions with a large
  * record size. Iod size is needed for insert/lookup since the same akey is
@@ -4203,7 +4200,7 @@ obj_setup(void **state)
 	int	rc;
 
 	rc = test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
-			NULL);
+			0, NULL);
 	if (rc != 0)
 		return rc;
 
