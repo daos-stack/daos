@@ -23,6 +23,7 @@
 #define D_LOGFAC	DD_FAC(client)
 
 #include <daos/mgmt.h>
+#include <daos/sys_debug.h>
 #include <daos/pool.h>
 #include <daos/task.h>
 #include <daos_mgmt.h>

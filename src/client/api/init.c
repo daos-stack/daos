@@ -29,6 +29,7 @@
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/mgmt.h>
+#include <daos/sys_debug.h>
 #include <daos/pool.h>
 #include <daos/container.h>
 #include <daos/object.h>
