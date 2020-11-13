@@ -8,7 +8,7 @@ hosts:
 # servers if a server partition is defined
     # server_partition: daos_server
     client_partition: daos_client
-    client_reservation:
+    # client_reservation: daos-test
 orterun:
     allow_run_as_root: True
 # This timeout must be longer than the test_timeout param (+15minutes)
@@ -37,31 +37,26 @@ server_config:
         env_vars:
             - FI_UNIVERSE_SIZE=2048
 # pool_params - attributes of the pools to create; Currently only create one
-pool_ior:
+pool_jobs:
     mode: 146
     name: daos_server
-    scm_size: 200000000000
-    nvme_size: 300000000000
-    svcn: 1
-    control_method: dmg
-pool_fio:
-    mode: 146
-    name: daos_server
-    scm_size: 100000000000
-    nvme_size: 200000000000
+    scm_size: 80GB
+    nvme_size: 400GB
     svcn: 1
     control_method: dmg
 pool_reserved:
     mode: 511
     name: daos_server
-    scm_size: 3000000000
-    nvme_size: 50000000000
+    scm_size: 3GB
+    nvme_size: 50GB
     control_method: dmg
 container:
     type: POSIX
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    oclass: RP_2G1
     control_method: daos
 container_reserved:
+    oclass: OC_RP_2G1
     akey_size: 5
     dkey_size: 5
     data_size: 4096
@@ -94,6 +89,7 @@ soak_stress:
         - -1
         - 2
         - 4
+        - 8
     # used for performance benchmarks
     taskspernode:
         - 1
@@ -113,14 +109,13 @@ ior_stress:
     api:
         - DFS
         - MPIIO
+        - POSIX
         - HDF5
         - HDF5-VOL
     test_file: daos:testFile
     flags: -v -w -W -r -R
     block_size:
         - '64M'
-        - '4M'
-        - '32M'
     repetitions: 5
     transfer_size:
         - '4k'
@@ -129,7 +124,7 @@ ior_stress:
         - '512K'
         - '64k'
     dfs_oclass:
-        - "SX"
+        - 'RP_2G1'
     dfs_destroy: True
 fio_stress:
   names:
