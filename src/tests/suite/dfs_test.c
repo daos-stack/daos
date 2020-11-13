@@ -604,11 +604,11 @@ dfs_test_syml(void **state)
 	if (op_rc != 0)
 		goto syml_stat;
 
-	rc = dfs_get_symlink_value(sym, NULL, &size);
+	rc = dfs_get_symlink_value(dfs_mt, sym, NULL, &size);
 	assert_int_equal(rc, 0);
 	assert_int_equal(size, strlen(val)+1);
 
-	rc = dfs_get_symlink_value(sym, tmp_buf, &size);
+	rc = dfs_get_symlink_value(dfs_mt, sym, tmp_buf, &size);
 	assert_int_equal(rc, 0);
 	assert_int_equal(size, strlen(val) + 1);
 	assert_string_equal(val, tmp_buf);

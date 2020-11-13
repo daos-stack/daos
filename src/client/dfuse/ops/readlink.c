@@ -31,7 +31,7 @@ dfuse_cb_readlink(fuse_req_t req, fuse_ino_t ino)
 	struct dfuse_inode_entry	*inode;
 	d_list_t			*rlink;
 	char				*buf = NULL;
-	size_t				size = 0;
+	size_t				size = PATH_MAX;
 	int				rc;
 
 	rlink = d_hash_rec_find(&fsh->dpi_iet, &ino, sizeof(ino));
@@ -42,15 +42,12 @@ dfuse_cb_readlink(fuse_req_t req, fuse_ino_t ino)
 
 	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	rc = dfs_get_symlink_value(inode->ie_obj, NULL, &size);
-	if (rc)
-		D_GOTO(release, rc);
-
-	D_ALLOC(buf, size);
+	D_ALLOC(buf, PATH_MAX);
 	if (!buf)
 		D_GOTO(release, rc = ENOMEM);
 
-	rc = dfs_get_symlink_value(inode->ie_obj, buf, &size);
+	rc = dfs_get_symlink_value(inode->ie_dfs->dfs_ns, inode->ie_obj,
+				   buf, &size);
 	if (rc)
 		D_GOTO(release, rc);
 

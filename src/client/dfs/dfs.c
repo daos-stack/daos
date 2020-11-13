@@ -105,8 +105,6 @@ struct dfs_obj {
 	daos_obj_id_t		parent_oid;
 	/** entry name of the object in the parent */
 	char			name[DFS_MAX_PATH + 1];
-	/** Symlink value if object is a symbolic link */
-	char			*value;
 };
 
 /** dfs struct that is instantiated for a mounted DFS namespace */
@@ -328,17 +326,23 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 	}
 
 	if (fetch_sym && S_ISLNK(entry->mode)) {
-		char *value;
+		char *value = NULL;
 
-		D_ALLOC(value, PATH_MAX);
-		if (value == NULL)
-			return ENOMEM;
+		if (entry->value) {
+			d_iov_set(&sg_iovs[0], entry->value, entry->value_len);
+			recx.rx_nr = entry->value_len;
+		} else {
+			D_ALLOC(value, PATH_MAX);
+			if (value == NULL)
+				return ENOMEM;
+			d_iov_set(&sg_iovs[0], value, PATH_MAX);
+			recx.rx_nr = PATH_MAX;
+		}
 
 		recx.rx_idx = sizeof(mode_t) + sizeof(time_t) * 3 +
 			sizeof(daos_obj_id_t) + sizeof(daos_size_t);
 		recx.rx_nr = PATH_MAX;
 
-		d_iov_set(&sg_iovs[0], value, PATH_MAX);
 		sgl.sg_nr	= 1;
 		sgl.sg_nr_out	= 0;
 		sgl.sg_iovs	= sg_iovs;
@@ -358,7 +362,8 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 			/* Return value here, and allow the caller to truncate
 			 * the buffer if they want to
 			 */
-			entry->value = value;
+			if (entry->value == NULL)
+				entry->value = value;
 		} else {
 			D_ERROR("Failed to load value for symlink\n");
 			D_FREE(value);
@@ -843,15 +848,10 @@ open_symlink(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 		entry.mode = sym->mode | S_IRWXO | S_IRWXU | S_IRWXG;
 		entry.atime = entry.mtime = entry.ctime = time(NULL);
 		entry.chunk_size = 0;
-		D_STRNDUP(sym->value, value, value_len + 1);
-		if (sym->value == NULL)
-			return ENOMEM;
-
-		entry.value = sym->value;
+		entry.value = (char *)value;
 		entry.value_len = value_len;
 		rc = insert_entry(parent->oh, th, sym->name, len, entry);
 		if (rc) {
-			D_FREE(sym->value);
 			D_ERROR("Inserting entry %s failed (rc = %d)\n",
 				sym->name, rc);
 		}
@@ -1922,7 +1922,6 @@ dfs_lookup_loop:
 				parent.oh = sym->oh;
 				D_FREE(sym);
 				D_FREE(entry.value);
-				obj->value = NULL;
 				/*
 				 * need to go to to the beginning of loop but we
 				 * already did the strtok.
@@ -1930,12 +1929,6 @@ dfs_lookup_loop:
 				goto dfs_lookup_loop;
 			}
 
-			/* Create a truncated version of the string */
-			D_STRNDUP(obj->value, entry.value, entry.value_len + 1);
-			if (obj->value == NULL) {
-				D_FREE(entry.value);
-				D_GOTO(out, rc = ENOMEM);
-			}
 			D_FREE(entry.value);
 			if (stbuf)
 				stbuf->st_size = entry.value_len;
@@ -2219,9 +2212,6 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		}
 	} else if (S_ISLNK(entry.mode)) {
 		/* Create a truncated version of the string */
-		D_STRNDUP(obj->value, entry.value, entry.value_len + 1);
-		if (obj->value == NULL)
-			D_GOTO(err_obj, rc = ENOMEM);
 		D_FREE(entry.value);
 		if (stbuf)
 			stbuf->st_size = entry.value_len;
@@ -2417,9 +2407,6 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 		break;
 	}
 	case S_IFLNK:
-		D_STRNDUP(new_obj->value, obj->value, PATH_MAX - 1);
-		if (new_obj->value == NULL)
-			D_GOTO(err, rc = ENOMEM);
 		break;
 	default:
 		D_ERROR("Invalid object type (not a dir, file, symlink).\n");
@@ -2616,13 +2603,12 @@ dfs_release(dfs_obj_t *obj)
 		rc = daos_obj_close(obj->oh, NULL);
 	else if (S_ISREG(obj->mode))
 		rc = daos_array_close(obj->oh, NULL);
-	else if (S_ISLNK(obj->mode))
-		D_FREE(obj->value);
 	else
-		D_ASSERT(0);
+		D_ASSERT((S_ISLNK(obj->mode)));
 
 	if (rc) {
 		D_ERROR("daos_obj_close() Failed (%d)\n", rc);
+		D_FREE(obj);
 		return daos_der2errno(rc);
 	}
 
@@ -2944,7 +2930,6 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);
 	if (rc)
 		return daos_der2errno(rc);
-
 
 	rc = entry_stat(dfs, DAOS_TX_NONE, oh, obj->name, strlen(obj->name),
 			stbuf);
@@ -3328,27 +3313,44 @@ dfs_get_mode(dfs_obj_t *obj, mode_t *mode)
 }
 
 int
-dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size)
+dfs_get_symlink_value(dfs_t *dfs, dfs_obj_t *obj, char *buf, daos_size_t *size)
 {
-	daos_size_t val_size;
+	daos_handle_t		oh;
+	struct dfs_entry	entry = {0};
+	int			rc;
+	bool			exists;
 
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
 	if (obj == NULL || !S_ISLNK(obj->mode))
 		return EINVAL;
-	if (obj->value == NULL)
+
+	/** Open parent object and fetch entry of obj from it */
+	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);
+	if (rc)
+		return daos_der2errno(rc);
+
+	if (buf) {
+		entry.value = buf;
+		entry.value_len = *size;
+	}
+	rc = fetch_entry(oh, DAOS_TX_NONE, obj->name, strlen(obj->name), true,
+			 &exists, &entry);
+
+	daos_obj_close(oh, NULL);
+	if (rc)
+		return rc;
+
+	if (!exists)
+		return ENOENT;
+
+	if (!S_ISLNK(entry.mode))
 		return EINVAL;
 
-	val_size = strlen(obj->value) + 1;
-	if (*size == 0 || buf == NULL) {
-		*size = val_size;
-		return 0;
-	}
+	*size = entry.value_len + 1;
 
-	if (*size < val_size)
-		strncpy(buf, obj->value, *size);
-	else
-		strcpy(buf, obj->value);
-
-	*size = val_size;
+	if (entry.value != buf)
+		D_FREE(entry.value);
 	return 0;
 }
 

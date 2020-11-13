@@ -674,7 +674,7 @@ dfuse_readlink(const char *path, char *buf, size_t size)
 		D_GOTO(out, rc = -EINVAL);
 	}
 
-	rc = dfs_get_symlink_value(obj, buf, &size);
+	rc = dfs_get_symlink_value(dfs, obj, buf, &size);
 	if (rc)
 		D_GOTO(out, rc = -rc);
 

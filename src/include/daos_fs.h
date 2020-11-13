@@ -611,6 +611,7 @@ dfs_get_chunk_size(dfs_obj_t *obj, daos_size_t *chunk_size);
  * in is not large enough, we copy up to size of the buffer, and update the size
  * to actual value size. The size returned includes the null terminator.
  *
+ * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Open object to query.
  * \param[in]	buf	user buffer to copy the symlink value in.
  * \param[in,out]
@@ -620,7 +621,7 @@ dfs_get_chunk_size(dfs_obj_t *obj, daos_size_t *chunk_size);
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size);
+dfs_get_symlink_value(dfs_t *dfs, dfs_obj_t *obj, char *buf, daos_size_t *size);
 
 /**
  * A DFS object open handle has links to its parent (oid) and the entry name of
