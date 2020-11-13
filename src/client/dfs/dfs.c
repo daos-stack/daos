@@ -691,9 +691,9 @@ open_file(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 		rc = insert_entry(parent->oh, th, file->name, len, entry);
 		if (rc == EEXIST && !oexcl) {
 			/** just try refetching entry to open the file */
-			daos_obj_close(file->oh, NULL);
+			daos_array_close(file->oh, NULL);
 		} else if (rc) {
-			daos_obj_close(file->oh, NULL);
+			daos_array_close(file->oh, NULL);
 			D_ERROR("Inserting file entry %s failed (%d)\n",
 				file->name, rc);
 			return rc;
@@ -3258,12 +3258,15 @@ out_obj:
 int
 dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size)
 {
+	int rc;
+
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
 	if (obj == NULL || !S_ISREG(obj->mode))
 		return EINVAL;
 
-	return daos_array_get_size(obj->oh, DAOS_TX_NONE, size, NULL);
+	rc = daos_array_get_size(obj->oh, DAOS_TX_NONE, size, NULL);
+	return daos_der2errno(rc);
 }
 
 int
