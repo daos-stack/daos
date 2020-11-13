@@ -114,12 +114,6 @@ struct ec_agg_stripe {
 	bool		as_has_holes;   /* stripe includes holes             */
 };
 
-struct ec_agg_csum_data	{
-	uint8_t		*cd_csum_buf;
-	unsigned int	 cd_buf_len;
-	bool		 cd_has_csums;   /* CSUM processing needed   */
-};
-
 /* Aggregation state for an object.
  */
 struct ec_agg_entry {
@@ -136,7 +130,6 @@ struct ec_agg_entry {
 	daos_handle_t		 ae_obj_hdl;	 /* Object handle for cur obj */
 	d_rank_t		 ae_peer_rank;   /* Rank of peer parity tgt   */
 	uint32_t		 ae_peer_idx;    /* Index of peer parity tgt  */
-	struct ec_agg_csum_data	 ae_csum_data;
 };
 
 /* Parameters used to drive iterate all.
@@ -168,22 +161,10 @@ struct ec_agg_stripe_ud {
  */
 struct ec_agg_extent {
 	d_list_t		ae_link;        /* for extents list           */
-	struct dcs_csum_info	ae_csum_info;   /* Checksum struct for extent */
 	daos_recx_t		ae_recx;        /* idx, nr for extent         */
 	daos_recx_t		ae_orig_recx;   /* For checksum verification  */
 	daos_epoch_t		ae_epoch;       /* epoch for extent           */
 	bool			ae_hole;        /* extent is a hole           */
-};
-
-/* Struct used to drive offloaded stripe update.
- */
-struct ec_agg_csum_ver {
-	struct ec_agg_entry	*acv_agg_entry;  /* Associated entry     */
-	struct ec_agg_extent	*acv_agg_extent; /* Associated entry     */
-	uint8_t			*acv_bit_map;    /* Bitmap of cells      */
-	uint8_t			*acv_ebit_map;   /* Bitmap of cells      */
-	struct daos_csummer	*acv_csummer;
-	ABT_eventual		 acv_eventual;   /* Eventual for offload */
 };
 
 /* Determines if the extent carries over into the next stripe.
@@ -399,179 +380,6 @@ agg_sgl_fini(d_sg_list_t *sgl)
 	}
 }
 
-static void
-agg_csum_fini(struct ec_agg_csum_data *csum_data)
-{
-	D_FREE(csum_data->cd_csum_buf);
-}
-
-static int
-agg_fetch_data_stripe_no_csum(struct ec_agg_entry *entry)
-{
-	daos_iod_t		 iod = { 0 };
-	daos_recx_t		 recx = { 0 };
-	struct ec_agg_param	*agg_param;
-	unsigned int		 len = entry->ae_oca->u.ec.e_len;
-	unsigned int		 k = entry->ae_oca->u.ec.e_k;
-	int			 rc = 0;
-
-	recx.rx_idx = entry->ae_cur_stripe.as_stripenum * k * len;
-	recx.rx_nr = k * len;
-	iod.iod_name = entry->ae_akey;
-	iod.iod_type = DAOS_IOD_ARRAY;
-	iod.iod_size = entry->ae_rsize;
-	iod.iod_nr = 1;
-	iod.iod_recxs = &recx;
-	entry->ae_sgl.sg_nr = 1;
-	D_ASSERT(entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_len ==
-						len * k * entry->ae_rsize);
-
-	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
-	rc = vos_obj_fetch(agg_param->ap_cont_handle, entry->ae_oid,
-			   entry->ae_cur_stripe.as_hi_epoch,
-			   VOS_OF_FETCH_RECX_LIST, &entry->ae_dkey, 1, &iod,
-			   &entry->ae_sgl);
-	if (rc)
-		D_ERROR("vos_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
-	entry->ae_sgl.sg_nr = AGG_IOV_CNT;
-
-	return rc;
-}
-
-static void
-agg_csum_verify_ult(void *arg)
-{
-	struct ec_agg_csum_ver	*csum_verify = (struct ec_agg_csum_ver *)arg;
-	struct ec_agg_entry	*entry = csum_verify->acv_agg_entry;
-	struct ec_agg_extent	*extent = csum_verify->acv_agg_extent;
-	struct daos_csummer	*csummer = csum_verify->acv_csummer;
-	struct dcs_csum_info	 csum_info = { 0 };
-	char			*tbuf = NULL;
-	char			*fbuf = NULL;
-	daos_off_t		 sgl_to_offset, sgl_from_offset;
-	daos_off_t		 cpy_len, next_stripe_offset;
-	unsigned int		 len = entry->ae_oca->u.ec.e_len;
-	unsigned int		 k = entry->ae_oca->u.ec.e_k;
-	unsigned int		 ext_start_cell = 0;
-	unsigned int		 stripe_cell = 0;
-	int			 i, rc = 0;
-
-	/* init csum_info */
-	csum_info.cs_nr   = extent->ae_csum_info.cs_nr;
-	csum_info.cs_type = extent->ae_csum_info.cs_type;
-	csum_info.cs_len  = extent->ae_csum_info.cs_len;
-	csum_info.cs_buf_len = extent->ae_csum_info.cs_buf_len;
-	csum_info.cs_chunksize = extent->ae_csum_info.cs_chunksize;
-	if (entry->ae_csum_data.cd_buf_len < csum_info.cs_buf_len) {
-		uint8_t *buf = NULL;
-
-		 D_REALLOC(buf, entry->ae_csum_data.cd_csum_buf,
-			   csum_info.cs_buf_len);
-		 if (buf == NULL) {
-			rc = -DER_NOMEM;
-			goto out;
-		 }
-		 entry->ae_csum_data.cd_csum_buf = buf;
-		 entry->ae_csum_data.cd_buf_len = csum_info.cs_buf_len;
-	}
-	rc = daos_csummer_calc_one(csummer, &entry->ae_sgl, &csum_info,
-				   entry->ae_rsize, extent->ae_orig_recx.rx_idx,
-				   extent->ae_orig_recx.rx_nr);
-	if (rc)
-		goto out;
-	if (memcmp(csum_info.cs_csum, entry->ae_csum_data.cd_csum_buf,
-		   csum_info.cs_buf_len)) {
-		rc = -DER_CSUM;
-		goto out;
-	}
-	for (i = 0; i < k; i++)
-		if (isset(csum_verify->acv_ebit_map, i))
-			ext_start_cell = i;
-	for (i = 0; i < ext_start_cell; i++)
-		if (isset(csum_verify->acv_bit_map, i))
-			stripe_cell++;
-	sgl_from_offset = extent->ae_recx.rx_idx -
-		extent->ae_orig_recx.rx_idx * entry->ae_rsize;
-	sgl_to_offset = (stripe_cell * len + extent->ae_recx.rx_idx % len) *
-		entry->ae_rsize;
-	tbuf = (char *)entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_buf;
-	fbuf = (char *)entry->ae_sgl.sg_iovs[AGG_IOV_ODATA].iov_buf;
-	/* make sure extent doesn't extend into next stripe */
-	next_stripe_offset =
-		(entry->ae_cur_stripe.as_stripenum + 1) * (k * len);
-	cpy_len = next_stripe_offset >=
-		extent->ae_recx.rx_idx + extent->ae_recx.rx_nr ?
-			extent->ae_recx.rx_nr * entry->ae_rsize :
-			(extent->ae_recx.rx_idx + extent->ae_recx.rx_nr -
-			next_stripe_offset) * entry->ae_rsize;
-
-	memcpy(&tbuf[sgl_to_offset], &fbuf[sgl_from_offset], cpy_len);
-out:
-	ABT_eventual_set(csum_verify->acv_eventual, (void *)&rc, sizeof(rc));
-}
-
-static int
-agg_fetch_and_csum_verify(struct ec_agg_entry *entry,
-			  struct ec_agg_extent *extent, uint8_t *bit_map,
-			  uint8_t *ebit_map, struct daos_csummer *csummer)
-{
-	daos_iod_t		 iod = { 0 };
-	struct ec_agg_csum_ver	 csum_verify = { 0 };
-	struct ec_agg_param	*agg_param;
-	int			*status;
-	int			 rc = 0;
-
-	iod.iod_name = entry->ae_akey;
-	iod.iod_type = DAOS_IOD_ARRAY;
-	iod.iod_size = entry->ae_rsize;
-	iod.iod_nr = 1;
-	iod.iod_recxs = &extent->ae_orig_recx;
-	entry->ae_sgl.sg_nr = 1;
-	entry->ae_sgl.sg_iovs[AGG_IOV_ODATA].iov_len =
-		extent->ae_orig_recx.rx_nr * entry->ae_rsize;
-	(entry->ae_sgl.sg_iovs)++;
-
-	/* Read it into odata. orig_recx could be larger than a stripe! */
-	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
-	rc = vos_obj_fetch(agg_param->ap_cont_handle, entry->ae_oid,
-			   extent->ae_epoch, VOS_OF_FETCH_RECX_LIST,
-			   &entry->ae_dkey, 1, &iod, &entry->ae_sgl);
-	if (rc) {
-		D_ERROR("vos_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
-		goto out;
-	}
-	(entry->ae_sgl.sg_iovs)--;
-	entry->ae_sgl.sg_nr = AGG_IOV_CNT;
-	csum_verify.acv_agg_entry = entry;
-	csum_verify.acv_bit_map   = bit_map;
-	csum_verify.acv_ebit_map  = ebit_map;
-	csum_verify.acv_csummer   = csummer;
-	rc = ABT_eventual_create(sizeof(*status), &csum_verify.acv_eventual);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-		goto out;
-	}
-	rc = dss_ult_create(agg_csum_verify_ult, &csum_verify,
-			    DSS_ULT_EC, 0, 0, NULL);
-	if (rc)
-		goto ev_out;
-	rc = ABT_eventual_wait(csum_verify.acv_eventual, (void **)&status);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-		goto ev_out;
-	}
-	if (*status != 0) {
-		rc = *status;
-		goto ev_out;
-	}
-
-ev_out:
-	ABT_eventual_free(&csum_verify.acv_eventual);
-
-out:
-	return rc;
-}
-
 /* Determines if an extent overlaps a cell.
  */
 static bool
@@ -611,33 +419,6 @@ agg_count_cells(uint8_t *fcbit_map, uint8_t *tbit_map, unsigned int estart,
 	}
 
 	return cell_cnt;
-}
-
-static int
-agg_val_csum(struct ec_agg_entry *entry, struct ec_agg_extent *extent,
-	     uint8_t *bit_map, unsigned long ss, unsigned int sn,
-	     struct daos_csummer *csummer)
-{
-	uint8_t		ebit_map[OBJ_TGT_BITMAP_LEN] = {0};
-	unsigned int	i, cell_cnt;
-	int		rc = 0;
-
-	cell_cnt = agg_count_cells(NULL, ebit_map, extent->ae_recx.rx_idx - ss,
-				   extent->ae_recx.rx_nr,
-				   entry->ae_oca->u.ec.e_k,
-				   entry->ae_oca->u.ec.e_len, sn, NULL);
-	D_ASSERT(cell_cnt);
-
-	for (i = 0; i < entry->ae_oca->u.ec.e_k; i++)
-		if (isset(bit_map, i) && !isset(ebit_map, i)) {
-			cell_cnt--;
-			clrbit(ebit_map, i);
-		}
-	if (cell_cnt) {
-		rc = agg_fetch_and_csum_verify(entry, extent, bit_map,
-					       ebit_map, csummer);
-	}
-	return rc;
 }
 
 /* Initializes the object handle of for the object represented by the entry.
@@ -750,107 +531,40 @@ out:
 	return rc;
 }
 
-static void
-agg_fetch_data_stripe_ult(void *arg)
-{
-	struct ec_agg_stripe_ud	*stripe_ud = (struct ec_agg_stripe_ud *)arg;
-	struct ec_agg_entry	*entry = stripe_ud->asu_agg_entry;
-	uint8_t			*bit_map = stripe_ud->asu_bit_map;
-	unsigned int		 cell_cnt = stripe_ud->asu_cell_cnt;
-	int			 rc = 0;
-
-	/* Fetch the data cells on other shards. For parity update,
-	 * the bitmap is set for the same cells as are replicated.
-	 */
-	rc = agg_fetch_odata_cells(entry, bit_map, cell_cnt,
-				   stripe_ud->asu_recalc);
-	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
-}
-
-static int
-agg_fetch_data_stripe_with_csum(struct ec_agg_entry *entry)
-{
-	uint8_t				 bit_map[OBJ_TGT_BITMAP_LEN] = { 0 };
-	struct ec_agg_stripe_ud		 stripe_ud = { 0 };
-	struct daos_csummer		*csummer;
-	struct ec_agg_extent		*extent;
-	unsigned long			 ss;
-	unsigned int			 len = entry->ae_oca->u.ec.e_len;
-	unsigned int			 k = entry->ae_oca->u.ec.e_k;
-	int				*status;
-	bool				 csum_error;
-	int				 i, rc = 0;
-
-	rc = agg_prep_sgl(entry);
-	if (rc)
-		goto out;
-	for (i = 0; i < k; i++)
-		setbit(bit_map, i);
-	ss = k * len * entry->ae_cur_stripe.as_stripenum;
-	extent = d_list_entry(entry->ae_cur_stripe.as_dextents.prev,
-			      struct ec_agg_extent, ae_link);
-	daos_csummer_init_with_type(&csummer,
-				    extent->ae_csum_info.cs_type,
-				    extent->ae_csum_info.cs_chunksize,
-				    false);
-	d_list_for_each_entry(extent, &entry->ae_cur_stripe.as_dextents,
-			      ae_link) {
-		rc = agg_val_csum(entry, extent, bit_map, ss,
-				  entry->ae_cur_stripe.as_stripenum,
-				  csummer);
-		if (rc == -DER_CSUM)
-			csum_error = true;
-		else if (rc)
-			goto out;
-	}
-	daos_csummer_destroy(&csummer);
-	if (!csum_error)
-		goto out;
-	/* CSUM error, so get data from data shards. */
-	stripe_ud.asu_agg_entry = entry;
-	stripe_ud.asu_bit_map   = bit_map;
-	stripe_ud.asu_cell_cnt  = k;
-	stripe_ud.asu_recalc    = true;
-	rc = ABT_eventual_create(sizeof(*status), &stripe_ud.asu_eventual);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-		goto out;
-	}
-	rc = dss_ult_create(agg_fetch_data_stripe_ult, &stripe_ud,
-			    DSS_ULT_EC, 0, 0, NULL);
-	if (rc)
-		goto ev_out;
-	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-		goto ev_out;
-	}
-	if (*status != 0)
-		rc = *status;
-ev_out:
-	ABT_eventual_free(&stripe_ud.asu_eventual);
-out:
-	return rc;
-}
-
 /* Fetches the full data stripe (called when replicas form a full stripe).
  */
 static int
 agg_fetch_data_stripe(struct ec_agg_entry *entry)
 {
-	int rc = 0;
+	daos_iod_t		 iod = { 0 };
+	daos_recx_t		 recx = { 0 };
+	struct ec_agg_param	*agg_param;
+	unsigned int		 len = entry->ae_oca->u.ec.e_len;
+	unsigned int		 k = entry->ae_oca->u.ec.e_k;
+	int			 rc = 0;
 
-	rc = agg_prep_sgl(entry);
+	recx.rx_idx = entry->ae_cur_stripe.as_stripenum * k * len;
+	recx.rx_nr = k * len;
+	iod.iod_name = entry->ae_akey;
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = entry->ae_rsize;
+	iod.iod_nr = 1;
+	iod.iod_recxs = &recx;
+	entry->ae_sgl.sg_nr = 1;
+	D_ASSERT(entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_len ==
+						len * k * entry->ae_rsize);
+
+	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
+	rc = vos_obj_fetch(agg_param->ap_cont_handle, entry->ae_oid,
+			   entry->ae_cur_stripe.as_hi_epoch,
+			   VOS_OF_FETCH_RECX_LIST, &entry->ae_dkey, 1, &iod,
+			   &entry->ae_sgl);
 	if (rc)
-		goto out;
-	if (entry->ae_csum_data.cd_has_csums)
-		rc = agg_fetch_data_stripe_with_csum(entry);
-	else
-		rc = agg_fetch_data_stripe_no_csum(entry);
-out:
+		D_ERROR("vos_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
+	entry->ae_sgl.sg_nr = AGG_IOV_CNT;
+
 	return rc;
 }
-
 
 /* Xstream offload function for encoding new parity from full stripe of
  * replicas.
@@ -1345,7 +1059,6 @@ agg_process_partial_stripe(struct ec_agg_entry *entry)
 	unsigned int		 cell_cnt = 0;
 	unsigned int		 estart, elen = 0;
 	unsigned int		 eend = 0;
-	bool			 csum_error = false;
 	int			 rc = 0;
 
 	/* For each contiguous extent, constructable from the extent list,
@@ -1386,41 +1099,12 @@ agg_process_partial_stripe(struct ec_agg_entry *entry)
 	if (rc)
 		goto out;
 
-	if (entry->ae_csum_data.cd_has_csums) {
-		struct daos_csummer *csummer;
+	rc = agg_fetch_local_extents(entry, bit_map, cell_cnt,
+				     stripe_ud.asu_recalc);
+	if (rc)
+		goto out;
 
-		extent = d_list_entry(entry->ae_cur_stripe.as_dextents.prev,
-				      struct ec_agg_extent, ae_link);
-		daos_csummer_init_with_type(&csummer,
-					    extent->ae_csum_info.cs_type,
-					    extent->ae_csum_info.cs_chunksize,
-					    false);
-		d_list_for_each_entry(extent, &entry->ae_cur_stripe.as_dextents,
-				      ae_link) {
-			rc = agg_val_csum(entry, extent, bit_map, ss,
-					  entry->ae_cur_stripe.as_stripenum,
-					  csummer);
-			if (rc == -DER_CSUM) {
-				/* if csum error,
-				 * get whole strip from data shards,
-				 * set all bit_map on
-				 */
-				csum_error = true;
-				for (i = 0; i < k; i++)
-					setbit(bit_map, i);
-			} else if (rc)
-				goto out;
-		}
-		daos_csummer_destroy(&csummer);
-	}
-	if (!entry->ae_csum_data.cd_has_csums || csum_error) {
-		rc = agg_fetch_local_extents(entry, bit_map, cell_cnt,
-					     stripe_ud.asu_recalc);
-		if (rc)
-			goto out;
-	}
-
-	if (stripe_ud.asu_recalc && !csum_error) {
+	if (stripe_ud.asu_recalc) {
 		for (i = 0; i < k; i++) {
 			if (isset(bit_map, i)) {
 				clrbit(bit_map, i);
@@ -1429,9 +1113,11 @@ agg_process_partial_stripe(struct ec_agg_entry *entry)
 			}
 		}
 	}
+
 	stripe_ud.asu_agg_entry = entry;
 	stripe_ud.asu_bit_map = bit_map;
 	stripe_ud.asu_cell_cnt = cell_cnt;
+
 	rc = ABT_eventual_create(sizeof(*status), &stripe_ud.asu_eventual);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
@@ -1897,8 +1583,6 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 
 	D_ASSERT(!(entry->ie_recx.rx_idx & PARITY_INDICATOR));
 
-		return 1;
-
 	this_stripenum = agg_stripenum(agg_entry, entry->ie_recx.rx_idx);
 
 	if (this_stripenum != agg_entry->ae_cur_stripe.as_stripenum) {
@@ -1936,8 +1620,8 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 		goto out;
 	}
 	if (entry->ie_csum.cs_type)
-		agg_entry->ae_csum_data.cd_has_csums = true;
-	extent->ae_csum_info = entry->ie_csum;
+		return 1;
+
 	extent->ae_recx = entry->ie_recx;
 	extent->ae_orig_recx = entry->ie_orig_recx;
 	extent->ae_epoch = entry->ie_epoch;
@@ -2313,7 +1997,6 @@ out:
 	D_FREE(agg_param.ap_prop);
 	ABT_eventual_free(&agg_param.ap_pool_info.api_eventual);
 	agg_sgl_fini(&agg_param.ap_agg_entry.ae_sgl);
-	agg_csum_fini(&agg_param.ap_agg_entry.ae_csum_data);
 	dsc_pool_close(ph);
 	return rc;
 
