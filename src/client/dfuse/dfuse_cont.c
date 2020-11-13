@@ -150,6 +150,8 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(close, rc);
 	}
 
+	d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
+
 alloc_ie:
 	D_ALLOC_PTR(ie);
 	if (!ie)
