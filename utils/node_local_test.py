@@ -1398,6 +1398,7 @@ def test_alloc_fail(server, conf):
         # through Jenkins.
         # if rc.returncode not in (1, 255):
         #   break
+        assert fid > 500
     return fatal_errors
 
 def main():
