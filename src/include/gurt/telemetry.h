@@ -103,7 +103,6 @@ uint8_t *d_tm_allocate_shared_memory(int rank, size_t mem_size);
 void d_tm_fini(void);
 void d_tm_free_node(uint64_t *cshmemRoot, struct d_tm_node_t *node);
 void *d_tm_shmalloc(int length);
-int d_tm_shmalloc_offset(int length);
 int d_tm_clock_id(int clk_id);
 
 struct d_tm_node_t *d_tm_find_child(uint64_t *cshmemRoot,
@@ -134,7 +133,7 @@ uint64_t d_tm_get_num_objects(uint64_t *cshmemRoot, char *path,
 uint64_t d_tm_count_metrics(uint64_t *cshmemRoot, struct d_tm_node_t *node);
 void d_tm_list_free(struct d_tm_nodeList_t *nodeList);
 int d_tm_get_version(void);
-uint8_t *d_tm_get_shared_memory(int rank);
+uint64_t *d_tm_get_shared_memory(int rank);
 
 struct d_tm_node_t *d_tm_convert_node_ptr(uint64_t *cshmemRoot, void *ptr);
 struct d_tm_metric_t *d_tm_convert_metric_ptr(uint64_t *cshmemRoot, void *ptr);

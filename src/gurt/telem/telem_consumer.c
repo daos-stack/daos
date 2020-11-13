@@ -220,7 +220,7 @@ main(int argc, char **argv)
 	simulatedRank = atoi(argv[1]);
 	printf("This simulatedRank has ID: %d\n", simulatedRank);
 
-	shmemRoot = (uint64_t *)d_tm_get_shared_memory(simulatedRank);
+	shmemRoot = d_tm_get_shared_memory(simulatedRank);
 	if (!shmemRoot)
 		goto failure;
 

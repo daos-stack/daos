@@ -1290,8 +1290,7 @@ failure:
  * Client function to read the specified counter.  If the node is provided,
  * that pointer is used for the read.  Otherwise, a lookup by the metric name
  * is performed.  Access to the data is guarded by the use of the shared
- * semaphore for this specific node.  If the semaphore cannot be taken, the read
- * proceeds to avoid unlimited blocking.
+ * semaphore for this specific node.
  */
 int
 d_tm_get_counter(uint64_t *val, uint64_t *cshmemRoot, struct d_tm_node_t *node,
@@ -1329,8 +1328,7 @@ d_tm_get_counter(uint64_t *val, uint64_t *cshmemRoot, struct d_tm_node_t *node,
  * Client function to read the specified timestamp.  If the node is provided,
  * that pointer is used for the read.  Otherwise, a lookup by the metric name
  * is performed.  Access to the data is guarded by the use of the shared
- * semaphore for this specific node.  If the semaphore cannot be taken, the read
- * proceeds to avoid unlimited blocking.
+ * semaphore for this specific node.
  */
 int
 d_tm_get_timestamp(time_t *val, uint64_t *cshmemRoot, struct d_tm_node_t *node,
@@ -1368,8 +1366,7 @@ d_tm_get_timestamp(time_t *val, uint64_t *cshmemRoot, struct d_tm_node_t *node,
  * Client function to read the specified high resolution timer.  If the node is
  * provided, that pointer is used for the read.  Otherwise, a lookup by the
  * metric name is performed.  Access to the data is guarded by the use of the
- * shared semaphore for this specific node.  If the semaphore cannot be taken,
- * the read proceeds to avoid unlimited blocking.
+ * shared semaphore for this specific node.
  */
 int
 d_tm_get_highres_timer(struct timespec *tms, uint64_t *cshmemRoot,
@@ -1408,8 +1405,7 @@ d_tm_get_highres_timer(struct timespec *tms, uint64_t *cshmemRoot,
  * Client function to read the specified duration.  If the node is provided,
  * that pointer is used for the read.  Otherwise, a lookup by the metric name
  * is performed.  Access to the data is guarded by the use of the shared
- * semaphore for this specific node.  If the semaphore cannot be taken, the read
- * proceeds to avoid unlimited blocking.
+ * semaphore for this specific node.
  */
 int
 d_tm_get_duration(struct timespec *tms, uint64_t *cshmemRoot,
@@ -1448,8 +1444,7 @@ d_tm_get_duration(struct timespec *tms, uint64_t *cshmemRoot,
  * Client function to read the specified gauge.  If the node is provided,
  * that pointer is used for the read.  Otherwise, a lookup by the metric name
  * is performed.  Access to the data is guarded by the use of the shared
- * semaphore for this specific node.  If the semaphore cannot be taken, the read
- * proceeds to avoid unlimited blocking.
+ * semaphore for this specific node.
  */
 int
 d_tm_get_gauge(uint64_t *val, uint64_t *cshmemRoot, struct d_tm_node_t *node,
@@ -1541,7 +1536,8 @@ d_tm_get_version(void)
  * the d_tm_type bit mask.  The mask may be a combination of
  * d_tm_metric_types.  The search is performed only on the direct children
  * specified by the path.  Returns a linked list that points to each node found
- * that matches the search criteria.
+ * that matches the search criteria.  Adds elements to an existing node list
+ * if head is already initialized.
  *
  * The client should free the memory with d_tm_list_free().
  */
@@ -1557,6 +1553,7 @@ d_tm_list(struct d_tm_nodeList_t **head, uint64_t *cshmemRoot, char *path,
 	char *token;
 	char *rest;
 	int rc = D_TM_SUCCESS;
+	bool searchSiblings = false;
 
 	D_STRNDUP(str, path, D_TM_MAX_NAME_LEN);
 
@@ -1589,31 +1586,23 @@ d_tm_list(struct d_tm_nodeList_t **head, uint64_t *cshmemRoot, char *path,
 			node = parentNode;
 
 		if (node->d_tm_type == D_TM_DIRECTORY) {
+			searchSiblings = true;
 			node = d_tm_convert_node_ptr(cshmemRoot, node->child);
-			while (node) {
-				if (d_tm_type & node->d_tm_type) {
-					nodelist = d_tm_add_node(node,
-								 nodelist);
-					if (!nodelist) {
-						rc = -DER_NOMEM;
-						D_GOTO(failure, rc);
-					}
-					if (!*head)
-						*head = nodelist;
-				}
-				node = d_tm_convert_node_ptr(cshmemRoot,
-							     node->sibling);
-			}
-		} else {
+		}
+
+		nodelist = *head;
+
+		while (node) {
 			if (d_tm_type & node->d_tm_type) {
 				nodelist = d_tm_add_node(node, nodelist);
-				if (!nodelist) {
-					rc = -DER_NOMEM;
-					D_GOTO(failure, rc);
-				}
 				if (!*head)
 					*head = nodelist;
 			}
+			if (searchSiblings)
+				node = d_tm_convert_node_ptr(cshmemRoot,
+							     node->sibling);
+			else
+				node = NULL;
 		}
 	}
 failure:
@@ -1701,8 +1690,9 @@ d_tm_add_node(struct d_tm_node_t *src, struct d_tm_nodeList_t *nodelist)
 	list = nodelist;
 
 	/** advance to the last node in the list */
-	while (list->next)
+	while (list->next) {
 		list = list->next;
+	}
 
 	list->next = (struct d_tm_nodeList_t *)malloc(
 						sizeof(struct d_tm_nodeList_t));
@@ -1725,7 +1715,7 @@ d_tm_allocate_shared_memory(int rank, size_t mem_size)
 	key_t key;
 
 	/** create a unique key for this rank */
-	key = D_TM_SHARED_MEMORY_KEY << rank;
+	key = D_TM_SHARED_MEMORY_KEY + rank;
 	shmid = shmget(key, mem_size, IPC_CREAT | 0666);
 	if (shmid < 0)
 		return NULL;
@@ -1737,19 +1727,19 @@ d_tm_allocate_shared_memory(int rank, size_t mem_size)
  * Client side function that retrieves a pointer to the shared memory segment
  * for this rank.
  */
-uint8_t *
+uint64_t *
 d_tm_get_shared_memory(int rank)
 {
 	int shmid;
 	key_t key;
 
 	/** create a unique key for this rank */
-	key = D_TM_SHARED_MEMORY_KEY << rank;
+	key = D_TM_SHARED_MEMORY_KEY + rank;
 	shmid = shmget(key, 0, 0666);
 	if (shmid < 0)
 		return NULL;
 
-	return (uint8_t *)shmat(shmid, NULL, 0);
+	return (uint64_t *)shmat(shmid, NULL, 0);
 }
 
 /*
