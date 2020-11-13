@@ -1393,6 +1393,8 @@ def run_daos_test(server, conf):
         print(rc)
         log_test(conf, log_file.name, abort_on_warning=False)
         assert 'Unknown Option' not in stdout
+        if mode == '--degrade_ec':
+            return
 
 def test_alloc_fail(server, conf):
     """run 'daos' client binary with fault injection

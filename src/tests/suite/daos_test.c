@@ -68,9 +68,9 @@ print_usage(int rank)
 	print_message("daos_test -T|--dist_dtx\n");
 	print_message("daos_test -i|--io\n");
 	print_message("daos_test -Z|--agg_ec\n");
-	print_message("daos_test -t|--base_tx\n");
-	print_message("daos_test -T|--dist_tx\n");
-	print_message("daos_test -i|--daos_io_tests\n");
+	print_message("daos_test -t|--base_dtx\n");
+	print_message("daos_test -T|--dist_dtx\n");
+	print_message("daos_test -i|--io\n");
 	print_message("daos_test -x|--epoch_io\n");
 	print_message("daos_test -A|--array\n");
 	print_message("daos_test -F|--dfs\n");
