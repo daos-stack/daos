@@ -29,7 +29,7 @@ from command_utils import CommandWithSubCommand, YamlCommand
 
 
 class DmgCommandBase(YamlCommand):
-    """Defines a base object representing a dmg command."""g
+    """Defines a base object representing a dmg command."""
 
     def __init__(self, path, yaml_cfg=None):
         """Create a dmg Command object.

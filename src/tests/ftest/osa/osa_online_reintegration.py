@@ -226,8 +226,8 @@ class OSAOnlineReintegration(TestWithServers):
                 output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                        rank, t_string)
             else:
-                output = self.dmg_commmand.system_stop(self.pool.uuid,
-                                                       rank)
+                output = self.dmg_command.system_stop(self.pool.uuid,
+                                                      rank)
             self.log.info(output)
             fail_count = 0
             while fail_count <= 20:
@@ -248,8 +248,8 @@ class OSAOnlineReintegration(TestWithServers):
                 self.assertTrue(pver_exclude > (pver_begin + len(target_list)),
                                 "Pool Version Error:  After server stop")
                 # Now start the server
-                output = self.dmg_commmand.system_start(self.pool.uuid,
-                                                        rank)
+                output = self.dmg_command.system_start(self.pool.uuid,
+                                                       rank)
                 time.sleep(30)
                 self.log.info(output)
 
