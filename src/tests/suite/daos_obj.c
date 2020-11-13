@@ -468,8 +468,6 @@ lookup_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
 	     daos_handle_t th, daos_recx_t *recxs, int nr, void *data,
 	     daos_size_t data_size, struct ioreq *req)
 {
-	assert_in_range(nr, 1, IOREQ_IOD_NR);
-
 	/* dkey */
 	ioreq_dkey_set(req, dkey);
 
@@ -520,6 +518,9 @@ lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
 
 	req->result = -1;
 	lookup_internal(&req->dkey, nr, req->sgl, req->iod, th, req, empty);
+	for (i = 0; i < nr; i++)
+		/** record extent */
+		iod_size[i] = req->iod[i].iod_size;
 }
 
 /**
@@ -664,7 +665,6 @@ io_overwrite_small(void **state, daos_obj_id_t oid)
 #endif
 }
 
-#define OW_IOD_SIZE	1024ULL /* used for mixed record overwrite */
 /**
  * Test mixed SCM & NVMe overwrites in different transactions with a large
  * record size. Iod size is needed for insert/lookup since the same akey is
@@ -693,9 +693,6 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	daos_size_t	 nvme_current_size;
 	void const *const aggr_disabled[] = {"disabled"};
 	void const *const aggr_set_time[] = {"time"};
-
-	if (size < OW_IOD_SIZE || (size % OW_IOD_SIZE != 0))
-		return;
 
 	/* Disabled Pool Aggrgation */
 	rc = set_pool_reclaim_strategy(state, aggr_disabled);
@@ -4049,6 +4046,48 @@ io_invalid(void **state)
 	assert_int_equal(rc, 0);
 }
 
+static void
+io_fetch_retry_another_replica(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	struct ioreq	 req;
+	char		fetch_buf[32];
+	char		update_buf[32];
+
+	/* needs at lest 2 targets */
+	if (!test_runable(arg, 2))
+		skip();
+
+	oid = dts_oid_gen(DAOS_OC_R2S_SPEC_RANK, 0, arg->myrank);
+	oid = dts_oid_set_rank(oid, 0);
+
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	/** Insert */
+	dts_buf_render(update_buf, 32);
+	insert_single("d_key_retry", "a_key_retry", 0, update_buf,
+		      32, DAOS_TX_NONE, &req);
+
+	/* Fail the first try */
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
+				 DAOS_OBJ_FETCH_DATA_LOST | DAOS_FAIL_ONCE,
+				 0, NULL);
+
+	sleep(3);
+	daos_fail_loc_set(DAOS_OBJ_TRY_SPECIAL_SHARD | DAOS_FAIL_ONCE);
+	daos_fail_value_set(0);
+
+	/** Lookup */
+	memset(fetch_buf, 0, 32);
+	lookup_single("d_key_retry", "a_key_retry", 0, fetch_buf,
+		      32, DAOS_TX_NONE, &req);
+
+	assert_memory_equal(update_buf, fetch_buf, 32);
+	ioreq_fini(&req);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
@@ -4133,6 +4172,9 @@ static const struct CMUnitTest io_tests[] = {
 	{ "IO41: IO Rewritten data fetch and validate pool size",
 	  io_rewritten_array_with_mixed_size, async_disable,
 	  test_case_teardown},
+	{ "IO42: IO fetch from an alternative node after first try failed",
+	  io_fetch_retry_another_replica, async_disable,
+	  test_case_teardown},
 };
 
 int
@@ -4156,7 +4198,7 @@ obj_setup(void **state)
 	int	rc;
 
 	rc = test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
-			NULL);
+			0, NULL);
 	if (rc != 0)
 		return rc;
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package server
+package config
 
 import (
 	"bufio"
@@ -43,9 +43,9 @@ import (
 
 const (
 	sConfigUncomment = "daos_server_uncomment.yml"
-	socketsExample   = "../../../utils/config/examples/daos_server_sockets.yml"
-	psm2Example      = "../../../utils/config/examples/daos_server_psm2.yml"
-	defaultConfig    = "../../../utils/config/daos_server.yml"
+	socketsExample   = "../../../../utils/config/examples/daos_server_sockets.yml"
+	psm2Example      = "../../../../utils/config/examples/daos_server_psm2.yml"
+	defaultConfig    = "../../../../utils/config/daos_server.yml"
 )
 
 // uncommentServerConfig removes leading comment chars from daos_server.yml
@@ -96,16 +96,10 @@ func uncommentServerConfig(t *testing.T, outFile string) {
 	}
 }
 
-// emptyMockConfig returns unpopulated configuration with a default mock
-// external interfacing implementation.
-func emptyMockConfig(t *testing.T) *Configuration {
-	return newDefaultConfiguration(defaultMockExt())
-}
-
 // supply mock external interface, populates config from given file path
-func mockConfigFromFile(t *testing.T, e External, path string) *Configuration {
+func mockConfigFromFile(t *testing.T, path string) *Server {
 	t.Helper()
-	c := newDefaultConfiguration(e).
+	c := DefaultServer().
 		WithProviderValidator(netdetect.ValidateProviderStub).
 		WithNUMAValidator(netdetect.ValidateNUMAStub).
 		WithGetNetworkDeviceClass(getDeviceClassStub)
@@ -160,7 +154,7 @@ func TestServer_ConfigMarshalUnmarshal(t *testing.T) {
 				uncommentServerConfig(t, tt.inPath)
 			}
 
-			configA := newDefaultConfiguration(defaultMockExt()).
+			configA := DefaultServer().
 				WithProviderValidator(netdetect.ValidateProviderStub).
 				WithNUMAValidator(netdetect.ValidateNUMAStub).
 				WithGetNetworkDeviceClass(getDeviceClassStub)
@@ -179,7 +173,7 @@ func TestServer_ConfigMarshalUnmarshal(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			configB := newDefaultConfiguration(defaultMockExt()).
+			configB := DefaultServer().
 				WithProviderValidator(netdetect.ValidateProviderStub).
 				WithNUMAValidator(netdetect.ValidateNUMAStub).
 				WithGetNetworkDeviceClass(getDeviceClassStub)
@@ -198,9 +192,10 @@ func TestServer_ConfigMarshalUnmarshal(t *testing.T) {
 
 			cmpOpts := []cmp.Option{
 				cmpopts.IgnoreUnexported(
-					Configuration{},
+					Server{},
 					security.CertificateConfig{},
 				),
+				cmpopts.IgnoreFields(Server{}, "GetDeviceClassFn"),
 			}
 			if diff := cmp.Diff(configA, configB, cmpOpts...); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)
@@ -216,14 +211,14 @@ func TestServer_ConstructedConfig(t *testing.T) {
 	// First, load a config based on the server config with all options uncommented.
 	testFile := filepath.Join(testDir, sConfigUncomment)
 	uncommentServerConfig(t, testFile)
-	defaultCfg := mockConfigFromFile(t, defaultMockExt(), testFile)
+	defaultCfg := mockConfigFromFile(t, testFile)
 
 	var numaNode0 uint = 0
 	var numaNode1 uint = 1
 
 	// Next, construct a config to compare against the first one. It should be
 	// possible to construct an identical configuration with the helpers.
-	constructed := NewConfiguration().
+	constructed := DefaultServer().
 		WithControlPort(10001).
 		WithBdevInclude("0000:81:00.1", "0000:81:00.2", "0000:81:00.3").
 		WithBdevExclude("0000:81:00.1").
@@ -286,9 +281,10 @@ func TestServer_ConstructedConfig(t *testing.T) {
 
 	cmpOpts := []cmp.Option{
 		cmpopts.IgnoreUnexported(
-			Configuration{},
+			Server{},
 			security.CertificateConfig{},
 		),
+		cmpopts.IgnoreFields(Server{}, "GetDeviceClassFn"),
 	}
 	if diff := cmp.Diff(defaultCfg, constructed, cmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got): %s", diff)
@@ -296,10 +292,10 @@ func TestServer_ConstructedConfig(t *testing.T) {
 }
 
 func TestServer_ConfigValidation(t *testing.T) {
-	noopExtra := func(c *Configuration) *Configuration { return c }
+	noopExtra := func(c *Server) *Server { return c }
 
 	for name, tt := range map[string]struct {
-		extraConfig func(c *Configuration) *Configuration
+		extraConfig func(c *Server) *Server
 		expErr      error
 	}{
 		"example config": {
@@ -307,45 +303,45 @@ func TestServer_ConfigValidation(t *testing.T) {
 			nil,
 		},
 		"nil server entry": {
-			func(c *Configuration) *Configuration {
+			func(c *Server) *Server {
 				var nilIOServerConfig *ioserver.Config
 				return c.WithServers(nilIOServerConfig)
 			},
 			errors.New("validation"),
 		},
 		"single access point": {
-			func(c *Configuration) *Configuration {
+			func(c *Server) *Server {
 				return c.WithAccessPoints("1.2.3.4:1234")
 			},
 			nil,
 		},
 		"multiple access points": {
-			func(c *Configuration) *Configuration {
+			func(c *Server) *Server {
 				return c.WithAccessPoints("1.2.3.4:1234", "5.6.7.8:5678")
 			},
 			FaultConfigBadAccessPoints,
 		},
 		"no access points": {
-			func(c *Configuration) *Configuration {
+			func(c *Server) *Server {
 				return c.WithAccessPoints()
 			},
 			FaultConfigBadAccessPoints,
 		},
 		"single access point no port": {
-			func(c *Configuration) *Configuration {
+			func(c *Server) *Server {
 				return c.WithAccessPoints("1.2.3.4")
 			},
 			nil,
 		},
 		"single access point invalid port": {
-			func(c *Configuration) *Configuration {
+			func(c *Server) *Server {
 				return c.WithAccessPoints("1.2.3.4").
 					WithControlPort(0)
 			},
 			FaultConfigBadControlPort,
 		},
 		"single access point including invalid port": {
-			func(c *Configuration) *Configuration {
+			func(c *Server) *Server {
 				return c.WithAccessPoints("1.2.3.4:0")
 			},
 			FaultConfigBadControlPort,
@@ -361,7 +357,7 @@ func TestServer_ConfigValidation(t *testing.T) {
 			// First, load a config based on the server config with all options uncommented.
 			testFile := filepath.Join(testDir, sConfigUncomment)
 			uncommentServerConfig(t, testFile)
-			config := mockConfigFromFile(t, defaultMockExt(), testFile)
+			config := mockConfigFromFile(t, testFile)
 
 			// Apply extra config test case
 			config = tt.extraConfig(config)
@@ -402,7 +398,7 @@ func TestServer_ConfigRelativeWorkingPath(t *testing.T) {
 			relPath := filepath.Join(pathToRoot, testFile)
 			t.Logf("abs: %s, cwd: %s, rel: %s", testFile, cwd, relPath)
 
-			config := newDefaultConfiguration(defaultMockExt()).
+			config := DefaultServer().
 				WithProviderValidator(netdetect.ValidateProviderStub).
 				WithNUMAValidator(netdetect.ValidateNUMAStub).
 				WithGetNetworkDeviceClass(getDeviceClassStub)
@@ -436,7 +432,7 @@ func TestServer_WithServersInheritsMainConfig(t *testing.T) {
 		WithSocketDir(testSocketDir).
 		WithSystemName(testSystemName)
 
-	config := NewConfiguration().
+	config := DefaultServer().
 		WithFabricProvider(testFabric).
 		WithModules(testModules).
 		WithSocketDir(testSocketDir).
@@ -516,7 +512,7 @@ func TestServer_ConfigDuplicateValues(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			conf := NewConfiguration().
+			conf := DefaultServer().
 				WithFabricProvider("test").
 				WithGetNetworkDeviceClass(getDeviceClassStub).
 				WithServers(tc.configA, tc.configB)
@@ -593,7 +589,7 @@ func TestServer_ConfigNetworkDeviceClass(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			conf := NewConfiguration().
+			conf := DefaultServer().
 				WithFabricProvider("test").
 				WithGetNetworkDeviceClass(getDeviceClassStub).
 				WithServers(tc.configA, tc.configB)

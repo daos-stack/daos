@@ -1310,6 +1310,7 @@ main(int argc, char **argv)
 			break;
 		case 'n':
 			ts_nest_iterator = true;
+			break;
 		case 'I':
 			perf_tests[ITERATE_TEST] = ts_iterate_perf;
 			break;

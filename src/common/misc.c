@@ -94,8 +94,13 @@ daos_sgls_copy_internal(d_sg_list_t *dst_sgl, uint32_t dst_nr,
 		if (num == 0)
 			continue;
 
-		if (alloc)
-			daos_sgl_init(&dst_sgl[i], src_sgl[i].sg_nr);
+		if (alloc) {
+			int rc;
+
+			rc = daos_sgl_init(&dst_sgl[i], src_sgl[i].sg_nr);
+			if (rc)
+				return rc;
+		}
 
 		if (src_sgl[i].sg_nr > dst_sgl[i].sg_nr) {
 			D_ERROR("%d : %u > %u\n", i,
