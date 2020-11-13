@@ -11,7 +11,7 @@
 
 Name:          daos
 Version:       1.1.1
-Release:       6%{?relval}%{?dist}
+Release:       7%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -400,6 +400,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Fri Nov 13 2020 Ashley Pittman <ashley.m.pittman@intel.com> 1.1.1-6
+- Combine the two memcheck suppressions files.
+
 * Thu Oct 29 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> 1.1.1-6
 - Restore obj_ctl utility
 
