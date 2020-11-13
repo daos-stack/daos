@@ -54,8 +54,8 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 	 * mode.
 	 */
 
-	rc = dfs_lookup_rel(dfs, dir, name, O_RDONLY, &obj, &stbuf.st_mode,
-			    NULL);
+	rc = dfs_lookup_rel(dfs, dir, name, O_RDONLY | O_NOFOLLOW, &obj,
+			    &stbuf.st_mode, NULL);
 	if (rc)
 		return rc;
 

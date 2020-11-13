@@ -53,6 +53,8 @@ class DataMoverTestBase(IorTestBase):
         self.containers = []
         self.uuids = []
         self._gen_daos_path_v = 0
+        self.posix_path = join(self.workdir, "posix_test")
+        self._new_posix_dir_v = 0
 
     def setUp(self):
         """Set up each test case."""
@@ -65,6 +67,15 @@ class DataMoverTestBase(IorTestBase):
         self.dm_cmd = DataMover(self.hostlist_clients)
         self.dm_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/datamover/processes/*')
+
+    def tearDown(self):
+        """Tear down each test case."""
+        # Remove the created posix test path
+        cmd = "rm -rf '{}'".format(self.posix_path)
+        self.execute_cmd(cmd)
+
+        # Stop the servers and agents
+        super(DataMoverTestBase, self).tearDown()
 
     # The valid parameter types for setting param locations.
     PARAM_TYPES = ("POSIX", "DAOS_UUID", "DAOS_UNS")
@@ -176,6 +187,17 @@ class DataMoverTestBase(IorTestBase):
         if prefix:
             return join(prefix, daos_dir)
         return join("/", daos_dir)
+
+    def new_posix_dir(self):
+        """Creates and returns a new, unique, POSIX path"""
+        dir_name = "dir{}".join(str(self._new_posix_dir_v))
+        path = join(self.posix_path, dir_name)
+
+        # Create the directory
+        cmd = "mkdir -p '{}'".format(path)
+        self.execute_cmd(cmd)
+
+        return path
 
     @staticmethod
     def svcl_from_pool(pool):

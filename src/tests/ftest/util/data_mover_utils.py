@@ -38,8 +38,10 @@ class DataMoverCommand(ExecutableCommand):
 
         # datamover options
 
-        # IO buffer size in bytes (default 1MB)
+        # IO buffer size in bytes (default 64MB)
         self.blocksize = FormattedParameter("--blocksize {}")
+        # work size per task in bytes (default 64MB)
+        self.chunksize = FormattedParameter("--chunksize {}")
         # DAOS source pool
         self.daos_src_pool = FormattedParameter("--daos-src-pool {}")
         # DAOS destination pool
@@ -56,11 +58,13 @@ class DataMoverCommand(ExecutableCommand):
         self.daos_prefix = FormattedParameter("--daos-prefix {}")
         # read source list from file
         self.input_file = FormattedParameter("--input {}")
-        # work size per task in bytes (default 1MB)
-        self.chunksize = FormattedParameter("--chunksize {}")
+        # copy original files instead of links
+        self.dereference = FormattedParameter("--dereference", False)
+        # don't follow links in source
+        self.no_dereference = FormattedParameter("--no-dereference", False)
         # preserve permissions, ownership, timestamps, extended attributes
         self.preserve = FormattedParameter("--preserve", False)
-        # use synchronous read/write calls (O_DIRECT)
+        # open files with O_DIRECT
         self.direct = FormattedParameter("--direct", False)
         # create sparse files when possible
         self.sparse = FormattedParameter("--sparse", False)
