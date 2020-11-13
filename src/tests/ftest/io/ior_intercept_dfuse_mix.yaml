@@ -1,6 +1,7 @@
 hosts:
     test_servers:
         - server-A
+        - server-B
     test_clients:
         - client-A
         - client-B
