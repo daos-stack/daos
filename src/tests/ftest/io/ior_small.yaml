@@ -53,8 +53,7 @@ ior:
             - MPIIO
             - POSIX
             - HDF5
-# DAOS-5980: Disable HDF5-VOL until upstream is updated.
-#            - HDF5-VOL
+            - HDF5-VOL
           transfer_block_size:
             - [256B, 2M]
             - [1M, 32M]
