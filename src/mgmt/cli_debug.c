@@ -42,7 +42,7 @@
 #include <errno.h>
 
 int
-dc_mgmt_set_params(tse_task_t *task)
+dc_debug_set_params(tse_task_t *task)
 {
 	daos_set_params_t		*args;
 	struct cp_arg			cp_arg;
@@ -109,7 +109,7 @@ out_task:
 }
 
 int
-dc_mgmt_add_mark(const char *mark)
+dc_debug_add_mark(const char *mark)
 {
 	struct dc_mgmt_sys	*sys;
 	struct mgmt_mark_in	*in;
