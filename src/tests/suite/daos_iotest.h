@@ -38,32 +38,7 @@ extern int dts_obj_replica_cnt;
 extern int dts_ec_obj_class;
 extern int dts_ec_grp_size;
 
-#define IOREQ_IOD_NR	5
-#define IOREQ_SG_NR	5
-#define IOREQ_SG_IOD_NR	5
-
-#define DTS_MAX_EXT_NUM		5
-#define DTS_MAX_DISTANCE	10
-#define DTS_MAX_EXTENT_SIZE	50
-#define DTS_MAX_OFFSET		1048576
-#define DTS_MAX_EPOCH_TIMES	20
-
-struct ioreq {
-	daos_handle_t		oh;
-	test_arg_t		*arg;
-	daos_event_t		ev;
-	daos_key_t		dkey;
-	daos_key_t		akey;
-	d_iov_t			val_iov[IOREQ_SG_IOD_NR][IOREQ_SG_NR];
-	d_sg_list_t		sgl[IOREQ_SG_IOD_NR];
-	daos_recx_t		rex[IOREQ_SG_IOD_NR][IOREQ_IOD_NR];
-	daos_epoch_range_t	erange[IOREQ_SG_IOD_NR][IOREQ_IOD_NR];
-	daos_iod_t		iod[IOREQ_SG_IOD_NR];
-	daos_iod_type_t		iod_type;
-	uint64_t		fail_loc;
-	int			result;
-};
-
+#define OW_IOD_SIZE	1024ULL
 #define SEGMENT_SIZE (10 * 1048576) /* 10MB */
 
 void
