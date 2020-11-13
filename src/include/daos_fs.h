@@ -259,6 +259,11 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	 int flags, daos_oclass_id_t cid, daos_size_t chunk_size,
 	 const char *value, dfs_obj_t **obj);
 
+int
+dfs_open2(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
+	 int flags, daos_oclass_id_t cid, daos_size_t chunk_size,
+	const char *value, struct stat *stbuf, dfs_obj_t **obj);
+
 /**
  * Duplicate the DFS object without any RPCs (locally) by using the existing
  * open handles. This is used mostly for low-level fuse to avoid re-opening. The

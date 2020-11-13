@@ -43,9 +43,9 @@ dfuse_cb_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	DFUSE_TRA_DEBUG(ie, "directory '%s' mode 0%o", name, mode);
 
-	rc = dfs_open(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
+	rc = dfs_open2(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
 		      mode | S_IFDIR, O_CREAT | O_RDWR,
-		      0, 0, NULL, &ie->ie_obj);
+		      0, 0, NULL, &ie->ie_stat, &ie->ie_obj);
 	if (rc)
 		D_GOTO(err, rc);
 
@@ -55,16 +55,10 @@ dfuse_cb_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_dfs = parent->ie_dfs;
 	atomic_store_relaxed(&ie->ie_ref, 1);
 
-	rc = dfs_ostat(parent->ie_dfs->dfs_ns, ie->ie_obj, &ie->ie_stat);
-	if (rc)
-		D_GOTO(release, rc);
-
 	/* Return the new inode data, and keep the parent ref */
 	dfuse_reply_entry(fs_handle, ie, NULL, req);
 
 	return;
-release:
-	dfs_release(ie->ie_obj);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	D_FREE(ie);

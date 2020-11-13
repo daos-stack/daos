@@ -73,8 +73,8 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	DFUSE_TRA_DEBUG(ie, "file '%s' flags 0%o mode 0%o", name, fi->flags,
 			mode);
 
-	rc = dfs_open(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
-		      mode, fi->flags, 0, 0, NULL, &ie->ie_obj);
+	rc = dfs_open2(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
+		       mode, fi->flags, 0, 0, NULL, &ie->ie_stat, &ie->ie_obj);
 	if (rc) {
 		DFUSE_TRA_DEBUG(parent, "dfs_open() failed %d", rc);
 		D_GOTO(err, rc);
@@ -109,12 +109,6 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_truncated = false;
 	atomic_store_relaxed(&ie->ie_ref, 1);
 
-	rc = dfs_ostat(oh->doh_dfs, oh->doh_obj, &ie->ie_stat);
-	if (rc) {
-		DFUSE_TRA_DEBUG(parent, "dfs_ostat() failed %d", rc);
-		D_GOTO(release2, rc);
-	}
-
 	LOG_FLAGS(ie, fi->flags);
 	LOG_MODES(ie, mode);
 
@@ -122,8 +116,6 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	dfuse_reply_entry(fs_handle, ie, &fi_out, req);
 
 	return;
-release2:
-	dfs_release(oh->doh_obj);
 release1:
 	dfs_release(ie->ie_obj);
 err:
