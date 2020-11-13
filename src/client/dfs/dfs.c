@@ -409,7 +409,7 @@ punch_entry:
 
 static int
 insert_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
-	     struct dfs_entry entry)
+	     struct dfs_entry *entry)
 {
 	d_sg_list_t	sgl;
 	d_iov_t		sg_iovs[INODE_AKEYS];
@@ -430,17 +430,17 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 	iod.iod_size	= 1;
 	i = 0;
 
-	d_iov_set(&sg_iovs[i++], &entry.mode, sizeof(mode_t));
-	d_iov_set(&sg_iovs[i++], &entry.oid, sizeof(daos_obj_id_t));
-	d_iov_set(&sg_iovs[i++], &entry.atime, sizeof(time_t));
-	d_iov_set(&sg_iovs[i++], &entry.mtime, sizeof(time_t));
-	d_iov_set(&sg_iovs[i++], &entry.ctime, sizeof(time_t));
-	d_iov_set(&sg_iovs[i++], &entry.chunk_size, sizeof(daos_size_t));
+	d_iov_set(&sg_iovs[i++], &entry->mode, sizeof(mode_t));
+	d_iov_set(&sg_iovs[i++], &entry->oid, sizeof(daos_obj_id_t));
+	d_iov_set(&sg_iovs[i++], &entry->atime, sizeof(time_t));
+	d_iov_set(&sg_iovs[i++], &entry->mtime, sizeof(time_t));
+	d_iov_set(&sg_iovs[i++], &entry->ctime, sizeof(time_t));
+	d_iov_set(&sg_iovs[i++], &entry->chunk_size, sizeof(daos_size_t));
 
 	/** Add symlink value if Symlink */
-	if (S_ISLNK(entry.mode)) {
-		d_iov_set(&sg_iovs[i++], entry.value, entry.value_len);
-		recx.rx_nr += entry.value_len;
+	if (S_ISLNK(entry->mode)) {
+		d_iov_set(&sg_iovs[i++], entry->value, entry->value_len);
+		recx.rx_nr += entry->value_len;
 	}
 
 	sgl.sg_nr	= i;
@@ -639,7 +639,7 @@ check_access(dfs_t *dfs, uid_t uid, gid_t gid, mode_t mode, int mask)
 static int
 open_file(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 	  daos_oclass_id_t cid, daos_size_t chunk_size, struct dfs_entry *entry,
-	  size_t len, dfs_obj_t *file)
+	  daos_size_t *size, size_t len, dfs_obj_t *file)
 {
 	bool	exists;
 	int	daos_mode;
@@ -687,7 +687,7 @@ open_file(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 		if (chunk_size)
 			entry->chunk_size = chunk_size;
 
-		rc = insert_entry(parent->oh, th, file->name, len, *entry);
+		rc = insert_entry(parent->oh, th, file->name, len, entry);
 		if (rc == EEXIST && !oexcl) {
 			/** just try refetching entry to open the file */
 			daos_obj_close(file->oh, NULL);
@@ -731,6 +731,14 @@ fopen:
 	if (rc != 0) {
 		D_ERROR("daos_array_open_with_attr() failed (%d)\n", rc);
 		return daos_der2errno(rc);
+	}
+
+	if (size) {
+		rc = daos_array_get_size(file->oh, th, size, NULL);
+		if (rc != 0) {
+			D_ERROR("daos_array_get_size() failed (%d)\n", rc);
+			return daos_der2errno(rc);
+		}
 	}
 
 	oid_cp(&file->oid, entry->oid);
@@ -782,7 +790,7 @@ open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
 		entry->atime = entry->mtime = entry->ctime = time(NULL);
 		entry->chunk_size = 0;
 
-		rc = insert_entry(parent_oh, th, dir->name, len, *entry);
+		rc = insert_entry(parent_oh, th, dir->name, len, entry);
 		if (rc != 0) {
 			daos_obj_close(dir->oh, NULL);
 			D_ERROR("Inserting dir entry %s failed (%d)\n",
@@ -848,7 +856,7 @@ open_symlink(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 
 		entry.value = sym->value;
 		entry.value_len = value_len;
-		rc = insert_entry(parent->oh, th, sym->name, len, entry);
+		rc = insert_entry(parent->oh, th, sym->name, len, &entry);
 		if (rc) {
 			D_FREE(sym->value);
 			D_ERROR("Inserting entry %s failed (rc = %d)\n",
@@ -1101,7 +1109,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 	 * on another. in this case we can just assume it is inserted, and
 	 * continue.
 	 */
-	rc = insert_entry(super_oh, DAOS_TX_NONE, "/", 1, entry);
+	rc = insert_entry(super_oh, DAOS_TX_NONE, "/", 1, &entry);
 	if (rc && rc != EEXIST) {
 		D_ERROR("Failed to insert root entry (%d).", rc);
 		D_GOTO(err_super, rc);
@@ -1590,7 +1598,7 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	entry.atime = entry.mtime = entry.ctime = time(NULL);
 	entry.chunk_size = 0;
 
-	rc = insert_entry(parent->oh, th, name, len, entry);
+	rc = insert_entry(parent->oh, th, name, len, &entry);
 	if (rc != 0) {
 		daos_obj_close(new_dir.oh, NULL);
 		return rc;
@@ -2279,6 +2287,7 @@ dfs_open2(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	dfs_obj_t		*obj;
 	daos_handle_t		th = DAOS_TX_NONE;
 	size_t			len;
+	daos_size_t		file_size;
 	int			rc;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -2326,7 +2335,7 @@ restart:
 	switch (mode & S_IFMT) {
 	case S_IFREG:
 		rc = open_file(dfs, th, parent, flags, cid, chunk_size,
-			       &entry, len, obj);
+			       &entry, stbuf ? &file_size : NULL, len, obj);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open file (%d)\n", rc);
 			D_GOTO(out, rc);
@@ -2387,6 +2396,7 @@ out:
 		D_FREE(obj);
 
 	if (rc == 0 && stbuf) {
+		stbuf->st_size = file_size;
 		stbuf->st_nlink = 1;
 		stbuf->st_mode = entry.mode;
 		stbuf->st_uid = dfs->uid;
@@ -3275,12 +3285,15 @@ out_obj:
 int
 dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size)
 {
+	int rc;
+
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
 	if (obj == NULL || !S_ISREG(obj->mode))
 		return EINVAL;
 
-	return daos_array_get_size(obj->oh, DAOS_TX_NONE, size, NULL);
+	rc = daos_array_get_size(obj->oh, DAOS_TX_NONE, size, NULL);
+	return daos_der2errno(rc);
 }
 
 int
@@ -3598,7 +3611,7 @@ restart:
 			D_GOTO(out, rc);
 		}
 
-		rc = insert_entry(parent->oh, th, new_name, new_len, entry);
+		rc = insert_entry(parent->oh, th, new_name, new_len, &entry);
 		if (rc)
 			D_ERROR("Inserting new entry %s failed (%d)\n",
 				new_name, rc);
@@ -3607,7 +3620,7 @@ restart:
 
 	entry.atime = entry.mtime = entry.ctime = time(NULL);
 	/** insert old entry in new parent object */
-	rc = insert_entry(new_parent->oh, th, new_name, new_len, entry);
+	rc = insert_entry(new_parent->oh, th, new_name, new_len, &entry);
 	if (rc) {
 		D_ERROR("Inserting entry %s failed (%d)\n", new_name, rc);
 		D_GOTO(out, rc);
@@ -3742,7 +3755,7 @@ restart:
 
 	entry1.atime = entry1.mtime = entry1.ctime = time(NULL);
 	/** insert entry1 in parent2 object */
-	rc = insert_entry(parent2->oh, th, name1, len1, entry1);
+	rc = insert_entry(parent2->oh, th, name1, len1, &entry1);
 	if (rc) {
 		D_ERROR("Inserting entry %s failed (%d)\n", name1, rc);
 		D_GOTO(out, rc);
@@ -3750,7 +3763,7 @@ restart:
 
 	entry2.atime = entry2.mtime = entry2.ctime = time(NULL);
 	/** insert entry2 in parent1 object */
-	rc = insert_entry(parent1->oh, th, name2, len2, entry2);
+	rc = insert_entry(parent1->oh, th, name2, len2, &entry2);
 	if (rc) {
 		D_ERROR("Inserting entry %s failed (%d)\n", name2, rc);
 		D_GOTO(out, rc);

@@ -13,6 +13,7 @@ import yaml
 import json
 import signal
 import stat
+import errno
 import argparse
 import subprocess
 import tempfile
@@ -878,6 +879,21 @@ def run_tests(dfuse):
     symlink_dest = 'missing_dest'
     os.symlink(symlink_dest, symlink_name)
     assert symlink_dest == os.readlink(symlink_name)
+
+    # Note that this doesn't test dfs because fuse will do a
+    # lookup to check if the file exists rather than just trying
+    # to create it.
+    fname = os.path.join(path, 'test_file4')
+    fd = os.open(fname, os.O_CREAT | os.O_EXCL)
+    os.close(fd)
+    try:
+        fd = os.open(fname, os.O_CREAT | os.O_EXCL)
+        os.close(fd)
+        assert False
+    except OSError as e:
+        assert e.errno == errno.EEXIST
+        pass
+    os.unlink(fname)
 
 def stat_and_check(dfuse, pre_stat):
     """Check that dfuse started"""
