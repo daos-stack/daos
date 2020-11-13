@@ -881,6 +881,10 @@ def run_tests(dfuse):
     ofd = os.open(fname, os.O_TRUNC)
     assert_file_size_fd(ofd, 0)
     os.close(ofd)
+    symlink_name = os.path.join(path, 'symlink_src')
+    symlink_dest = 'missing_dest'
+    os.symlink(symlink_dest, symlink_name)
+    assert symlink_dest == os.readlink(symlink_name)
 
 def stat_and_check(dfuse, pre_stat):
     """Check that dfuse started"""
