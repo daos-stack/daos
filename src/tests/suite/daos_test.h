@@ -329,6 +329,8 @@ int run_daos_dist_tx_test(int rank, int size, int *tests, int test_size);
 int run_daos_vc_test(int rank, int size, int *tests, int test_size);
 int run_daos_checksum_test(int rank, int size, int *sub_tests,
 			   int sub_tests_size);
+int run_daos_aggregation_ec_test(int rank, int size, int *sub_tests,
+				 int sub_tests_size);
 int run_daos_dedup_test(int rank, int size, int *sub_tests,
 			   int sub_tests_size);
 unsigned int daos_checksum_test_arg2type(char *optarg);
@@ -421,14 +423,16 @@ int rebuild_sub_teardown(void **state);
 int rebuild_small_sub_setup(void **state);
 
 int get_server_config(char *host, char *server_config_file);
-int get_server_log_file(char *host, char *server_config_file,
-			char *log_file);
+int get_log_file(char *host, char *server_config_file,
+		 char *key_name, char *log_file);
 int verify_server_log_mask(char *host, char *server_config_file,
 			   char *log_mask);
 int verify_state_in_log(char *host, char *log_file, char *state);
 
 int wait_and_verify_blobstore_state(uuid_t bs_uuid, char *expected_state,
 				    const char *group);
+int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
+				   char *expected_state);
 
 enum op_type {
 	PARTIAL_UPDATE	=	1,

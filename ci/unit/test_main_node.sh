@@ -44,15 +44,13 @@ else
 fi
 
 cd "$DAOS_BASE"
-IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" utils/run_test.sh
-mkdir -p vm_test
-
-# Remove DAOS_BASE from memcheck xml results
-set -x
-if [ "$WITH_VALGRIND" == 'memcheck' ]; then
-    find test_results -maxdepth 1 -name '*.memcheck.xml' \
-        -print0 | xargs -0 sed -i "s:$DAOS_BASE::g"
-    mv test_results/unit-test-*.memcheck.xml .
-elif [ -z "$BULLSEYE" ]; then
+if ${NLT:-false}; then
+    mkdir -p vm_test
     ./utils/node_local_test.py --output-file=vm_test/nlt-errors.json all
+else
+    IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" utils/run_test.sh
+
+    if [ "$WITH_VALGRIND" == 'memcheck' ]; then
+	mv test_results/unit-test-*.memcheck.xml .
+    fi
 fi

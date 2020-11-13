@@ -467,6 +467,7 @@ class TestContainer(TestDaosApiBase):
         """
         if self.container and not self.opened:
             self.log.info("Opening container %s", self.uuid)
+            self.pool.connect()
             kwargs = {}
             kwargs["poh"] = pool_handle
             kwargs["cuuid"] = container_uuid

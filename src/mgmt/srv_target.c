@@ -1010,9 +1010,12 @@ ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc)
 	D_ASSERT(in != NULL);
 
 	rc = dss_parameters_set(in->tps_key_id, in->tps_value);
-	if (rc == 0 && in->tps_key_id == DMG_KEY_FAIL_LOC)
+	if (rc == 0 && in->tps_key_id == DMG_KEY_FAIL_LOC) {
+		D_DEBUG(DB_MGMT, "Set param DMG_KEY_FAIL_VALUE=%"PRIu64"\n",
+			in->tps_value_extra);
 		rc = dss_parameters_set(DMG_KEY_FAIL_VALUE,
 					in->tps_value_extra);
+	}
 	if (rc)
 		D_ERROR("Set parameter failed key_id %d: rc %d\n",
 			 in->tps_key_id, rc);
