@@ -1151,8 +1151,8 @@ int verify_server_log_mask(char *host, char *server_config_file,
 	return 0;
 }
 
-int get_server_log_file(char *host, char *server_config_file,
-			char *log_file)
+int get_log_file(char *host, char *server_config_file,
+		 char *key_name, char *log_file)
 {
 	char	command[256];
 	size_t	len = 0;
@@ -1168,12 +1168,12 @@ int get_server_log_file(char *host, char *server_config_file,
 		return -DER_INVAL;
 
 	while ((read = getline(&line, &len, fp)) != -1) {
-		if (strstr(line, " log_file") != NULL)
+		if (strstr(line, key_name) != NULL)
 			strcat(log_file, strrchr(line, ':') + 1);
 	}
 
 	pclose(fp);
-	free(line);
+	D_FREE(line);
 	return 0;
 }
 
@@ -1240,6 +1240,47 @@ int wait_and_verify_blobstore_state(uuid_t bs_uuid, char *expected_state,
 			return 0;
 
 		sleep(MAX_BS_STATE_WAIT);
+		retry_cnt++;
+	};
+
+	return -DER_TIMEDOUT;
+}
+
+#define MAX_POOL_TGT_STATE_WAIT	   5 /* 5sec sleep between tgt state queries */
+#define MAX_POOL_TGT_STATE_RETRY   24 /* max timeout of 24 * 5sec= 2min */
+
+int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
+				   char *expected_state)
+{
+	daos_target_info_t	tgt_info = { 0 };
+	int			retry_cnt;
+	int			rc;
+
+	retry_cnt = 0;
+	while (retry_cnt <= MAX_POOL_TGT_STATE_RETRY) {
+		char *expected_state_dup = strdup(expected_state);
+		char *state = strtok(expected_state_dup, "|");
+
+		rc = daos_pool_query_target(poh, tgtidx, rank, &tgt_info, NULL);
+			if (rc)
+				return rc;
+
+		/* multiple states not present in expected_state str */
+		if (state == NULL) {
+			if (strcmp(daos_target_state_enum_to_str(tgt_info.ta_state),
+				   expected_state) == 0)
+				return 0;
+		/* multiple states separated by a '|' in expected_state str */
+		} else {
+			while (state != NULL) {
+				if (strcmp(daos_target_state_enum_to_str(tgt_info.ta_state),
+					   state) == 0)
+					return 0;
+				state = strtok(NULL, "|");
+			};
+		}
+
+		sleep(MAX_POOL_TGT_STATE_WAIT);
 		retry_cnt++;
 	};
 
