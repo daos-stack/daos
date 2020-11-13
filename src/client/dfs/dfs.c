@@ -736,6 +736,7 @@ fopen:
 	if (size) {
 		rc = daos_array_get_size(file->oh, th, size, NULL);
 		if (rc != 0) {
+			daos_array_close(file->oh, NULL);
 			D_ERROR("daos_array_get_size() failed (%d)\n", rc);
 			return daos_der2errno(rc);
 		}
@@ -2287,7 +2288,7 @@ dfs_open2(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	dfs_obj_t		*obj;
 	daos_handle_t		th = DAOS_TX_NONE;
 	size_t			len;
-	daos_size_t		file_size;
+	daos_size_t		file_size = 0;
 	int			rc;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -2628,7 +2629,8 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 
 	daos_mode = get_daos_obj_mode(obj->flags);
 	rc = daos_array_open_with_attr(dfs->coh, obj->oid, DAOS_TX_NONE,
-		daos_mode, 1, obj_glob->chunk_size, &obj->oh, NULL);
+				       daos_mode, 1, obj_glob->chunk_size,
+				       &obj->oh, NULL);
 	if (rc) {
 		D_ERROR("daos_array_open_with_attr() failed (%d)\n", rc);
 		D_FREE(obj);

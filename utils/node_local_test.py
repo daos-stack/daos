@@ -892,7 +892,6 @@ def run_tests(dfuse):
         assert False
     except OSError as e:
         assert e.errno == errno.EEXIST
-        pass
     os.unlink(fname)
 
 def stat_and_check(dfuse, pre_stat):
