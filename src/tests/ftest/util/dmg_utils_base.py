@@ -29,7 +29,7 @@ from command_utils import CommandWithSubCommand, YamlCommand
 
 
 class DmgCommandBase(YamlCommand):
-    """Defines a base object representing a dmg command."""
+    """Defines a base object representing a dmg command."""g
 
     def __init__(self, path, yaml_cfg=None):
         """Create a dmg Command object.
@@ -618,6 +618,7 @@ class DmgCommandBase(YamlCommand):
                     DmgCommandBase.SystemSubCommand.StartSubCommand,
                     self).__init__(
                         "/run/dmg/system/start/*", "start")
+                self.ranks = FormattedParameter("--ranks={}")
 
         class StopSubCommand(CommandWithParameters):
             """Defines an object for the dmg system stop command."""

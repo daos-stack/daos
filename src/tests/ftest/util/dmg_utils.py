@@ -792,7 +792,7 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("system", "query"), ranks=ranks, verbose=verbose)
 
-    def system_start(self):
+    def system_start(self, ranks=None):
         """Start the system.
 
         Returns:
@@ -803,7 +803,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg system start command fails.
 
         """
-        return self._get_result(("system", "start"))
+        return self._get_result(("system", "start"), ranks=ranks)
 
     def system_stop(self, force=False, ranks=None):
         """Stop the system.

@@ -156,7 +156,7 @@ class OSAOnlineReintegration(TestWithServers):
         except CommandFailure as _error:
             results.put("FAIL")
 
-    def run_online_reintegration_test(self, num_pool):
+    def run_online_reintegration_test(self, num_pool, server_boot=False):
         """Run the Online reintegration without data.
 
         Args:
@@ -222,10 +222,13 @@ class OSAOnlineReintegration(TestWithServers):
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
-            output = self.dmg_command.pool_exclude(self.pool.uuid,
-                                                   rank, t_string)
+            if server_boot is False:
+                output = self.dmg_command.pool_exclude(self.pool.uuid,
+                                                       rank, t_string)
+            else:
+                output = self.dmg_commmand.system_stop(self.pool.uuid,
+                                                       rank)
             self.log.info(output)
-
             fail_count = 0
             while fail_count <= 20:
                 pver_exclude = self.get_pool_version()
@@ -233,11 +236,23 @@ class OSAOnlineReintegration(TestWithServers):
                 fail_count += 1
                 if pver_exclude > (pver_begin + len(target_list)):
                     break
+            if server_boot is False:
+                self.log.info("Pool Version after exclude %s", pver_exclude)
+                # Check pool version incremented after pool exclude
+                self.assertTrue(pver_exclude > (pver_begin + len(target_list)),
+                                "Pool Version Error:  After exclude")
+            else:
+                self.log.info("Pool Version after server stop %s",
+                              pver_exclude)
+                # Check pool version incremented after pool exclude
+                self.assertTrue(pver_exclude > (pver_begin + len(target_list)),
+                                "Pool Version Error:  After server stop")
+                # Now start the server
+                output = self.dmg_commmand.system_start(self.pool.uuid,
+                                                        rank)
+                time.sleep(30)
+                self.log.info(output)
 
-            self.log.info("Pool Version after exclude %s", pver_exclude)
-            # Check pool version incremented after pool exclude
-            self.assertTrue(pver_exclude > (pver_begin + len(target_list)),
-                            "Pool Version Error:  After exclude")
             output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                        rank,
                                                        t_string)
@@ -282,3 +297,13 @@ class OSAOnlineReintegration(TestWithServers):
         # Perform reintegration testing with 1 pool.
         for pool_num in range(1, 2):
             self.run_online_reintegration_test(pool_num)
+
+    def test_osa_online_reintegration_server_stop(self):
+        """Test ID: DAOS-5920.
+
+        Test Description: Validate Online Reintegration with server stop
+
+        :avocado: tags=all,pr,hw,large,osa,online_reintegration,DAOS_5610
+        """
+        # Perform reintegration testing with 1 pool.
+        self.run_online_reintegration_test(1, server_boot=True)
