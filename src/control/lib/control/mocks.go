@@ -289,6 +289,16 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		if err := convert.Types(scmNamespaces, &ssr.Scm.Namespaces); err != nil {
 			t.Fatal(err)
 		}
+	case "withNamespacesNumaZero":
+		ns1 := storage.MockScmNamespace(1)
+		ns1.NumaNode = 0
+		scmNamespaces := storage.ScmNamespaces{
+			ns1,
+			storage.MockScmNamespace(0),
+		}
+		if err := convert.Types(scmNamespaces, &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
 	case "withSingleSSD":
 		scmNamespaces := storage.ScmNamespaces{
 			storage.MockScmNamespace(0),

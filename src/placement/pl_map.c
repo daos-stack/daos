@@ -574,9 +574,10 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 		 */
 		shard = pl_get_shard(data, grp_idx * tgt_nr + tgt_nr - 1);
 		if (for_tgt_id)
-			return shard->po_target;
+			return shard->po_target == -1 ? -DER_IO :
+						shard->po_target;
 
-		return shard->po_shard;
+		return shard->po_shard == -1 ? -DER_IO : shard->po_shard;
 	}
 
 	replicas = oc_attr->u.rp.r_num;

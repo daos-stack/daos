@@ -512,6 +512,12 @@ is_server_started(void)
 	return nvme_glb.bd_started;
 }
 
+inline d_list_t *
+bio_bdev_list(void)
+{
+	return &nvme_glb.bd_bdevs;
+}
+
 inline bool
 is_init_xstream(struct bio_xs_context *ctxt)
 {

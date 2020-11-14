@@ -1097,8 +1097,7 @@ print_permissions(uint32_t indent_tabs, const char *name, uint64_t perms)
 
 		if (perms & bit) {
 			indent(indent_tabs + 1);
-			printf("%s (0x%lx)\n", get_perm_string(bit),
-					bit);
+			printf("%s (%#lx)\n", get_perm_string(bit), bit);
 		}
 	}
 }
