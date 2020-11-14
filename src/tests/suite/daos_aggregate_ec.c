@@ -1,5 +1,4 @@
-/**
- * (C) Copyright 2020 Intel Corporation.
+/** * (C) Copyright 2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -275,7 +274,9 @@ test_filled_stripe(void **statep)
 		rc = dc_task_schedule(task, true);
 		assert_int_equal(rc, 0);
 		/* verify no remaining replicas on parity target */
-//		assert_int_equal(ctx.fetch_iom.iom_nr_out, 0);
+/*
+		assert_int_equal(ctx.fetch_iom.iom_nr_out, 0);
+ */
 		D_PRINT("local data: ctx.fetch_iom.iom_nr_out: %u\n",
 			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
@@ -294,7 +295,8 @@ test_filled_stripe(void **statep)
 		rc = dc_task_schedule(task, true);
 		assert_int_equal(rc, 0);
 		/* verify parity now exists on parity target */
-//		assert_int_equal(ctx.fetch_iom.iom_nr_out, 1);
+/*		assert_int_equal(ctx.fetch_iom.iom_nr_out, 1);
+ */
 		D_PRINT("local par: ctx.fetch_iom.iom_nr_out: %u\n",
 			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
@@ -316,7 +318,8 @@ test_filled_stripe(void **statep)
 		rc = dc_task_schedule(task, true);
 		assert_int_equal(rc, 0);
 		/* verify no remaining replicas on parity target */
-//		assert_int_equal(ctx.fetch_iom.iom_nr_out, 0);
+/*		assert_int_equal(ctx.fetch_iom.iom_nr_out, 0);
+ */
 		D_PRINT("local data: ctx.fetch_iom.iom_nr_out: %u\n",
 			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
@@ -335,7 +338,8 @@ test_filled_stripe(void **statep)
 		rc = dc_task_schedule(task, true);
 		assert_int_equal(rc, 0);
 		/* verify parity now exists on parity target */
-//		assert_int_equal(ctx.fetch_iom.iom_nr_out, 1);
+/*		assert_int_equal(ctx.fetch_iom.iom_nr_out, 1);
+ */
 		D_PRINT("local par: ctx.fetch_iom.iom_nr_out: %u\n",
 			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
@@ -357,7 +361,9 @@ test_filled_stripe(void **statep)
 		rc = dc_task_schedule(task, true);
 		assert_int_equal(rc, 0);
 		/* verify no remaining replicas on parity target */
-//		assert_int_equal(ctx.fetch_iom.iom_nr_out, 0);
+/*
+		assert_int_equal(ctx.fetch_iom.iom_nr_out, 0);
+ */
 		D_PRINT("local data: ctx.fetch_iom.iom_nr_out: %u\n",
 			ctx.fetch_iom.iom_nr_out);
 		task = NULL;
@@ -376,7 +382,8 @@ test_filled_stripe(void **statep)
 		rc = dc_task_schedule(task, true);
 		assert_int_equal(rc, 0);
 		/* verify parity now exists on parity target */
-//		assert_int_equal(ctx.fetch_iom.iom_nr_out, 1);
+/*		assert_int_equal(ctx.fetch_iom.iom_nr_out, 1);
+ */
 		D_PRINT("local par: ctx.fetch_iom.iom_nr_out: %u\n",
 			ctx.fetch_iom.iom_nr_out);
 		task = NULL;

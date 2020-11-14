@@ -579,7 +579,7 @@ expect_pool_get_capas_flags_invalid(uint64_t invalid_flags)
 	assert_non_null(valid_acl);
 	init_default_cred(&valid_cred);
 
-	printf("Expecting flags 0x%lx invalid\n", invalid_flags);
+	printf("Expecting flags %#lx invalid\n", invalid_flags);
 	assert_int_equal(ds_sec_pool_get_capabilities(invalid_flags,
 						      &valid_cred,
 						      &valid_owner, valid_acl,
@@ -1561,7 +1561,7 @@ expect_cont_get_capas_flags_invalid(uint64_t invalid_flags)
 	assert_non_null(valid_acl);
 	init_default_cred(&valid_cred);
 
-	printf("Expecting flags 0x%lx invalid\n", invalid_flags);
+	printf("Expecting flags %#lx invalid\n", invalid_flags);
 	assert_int_equal(ds_sec_cont_get_capabilities(invalid_flags,
 						      &valid_cred,
 						      &valid_owner, valid_acl,
@@ -1740,7 +1740,7 @@ expect_cont_capas_with_perms(uint64_t acl_perms, uint64_t flags,
 	acl = get_user_acl_with_perms("specificuser@", acl_perms);
 	init_default_ownership(&ownership);
 
-	printf("Perms: 0x%lx, Flags: 0x%lx\n", acl_perms, flags);
+	printf("Perms: %#lx, Flags: %#lx\n", acl_perms, flags);
 	assert_int_equal(ds_sec_cont_get_capabilities(flags, &cred, &ownership,
 						      acl, &result),
 			 0);
@@ -1821,7 +1821,7 @@ expect_cont_capas_with_owner_perms(uint64_t acl_perms, uint64_t flags,
 	acl = get_acl_with_perms(acl_perms, 0);
 	init_default_ownership(&ownership);
 
-	printf("Perms: 0x%lx, Flags: 0x%lx\n", acl_perms, flags);
+	printf("Perms: %#lx, Flags: %#lx\n", acl_perms, flags);
 	assert_int_equal(ds_sec_cont_get_capabilities(flags, &cred, &ownership,
 						      acl, &result),
 			 0);

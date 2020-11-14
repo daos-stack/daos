@@ -1927,6 +1927,9 @@ test_evt_overlap_split(struct test_arg *arg, int major_num, int minor_num)
 		assert_int_equal(rc, 0);
 	}
 
+	rc = evt_iter_finish(ih);
+	assert_int_equal(rc, 0);
+
 	D_PRINT("Tree depth :%d\n", arg->ta_root->tr_depth);
 	if (arg->ta_root->tr_depth < 2)
 		tree_depth_fail = 1;
