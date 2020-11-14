@@ -349,7 +349,7 @@ typedef struct {
  * \param[in]	cid	Class Identifier
  * \param[in]	args	Reserved.
  */
-static inline int
+static inline void
 daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
 		     daos_oclass_id_t cid, uint32_t args)
 {
@@ -370,8 +370,6 @@ daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
 	hdr |= ((uint64_t)ofeats << OID_FMT_FEAT_SHIFT);
 	hdr |= ((uint64_t)cid << OID_FMT_CLASS_SHIFT);
 	oid->hi |= hdr;
-
-	return 0;
 }
 
 /**

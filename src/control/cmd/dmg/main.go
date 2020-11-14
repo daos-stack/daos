@@ -153,7 +153,7 @@ func (c *cfgCmd) setConfig(cfg *control.Config) {
 
 type cliOptions struct {
 	AllowProxy     bool       `long:"allow-proxy" description:"Allow proxy configuration via environment"`
-	HostList       string     `short:"l" long:"host-list" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
+	HostList       string     `short:"l" long:"host-list" description:"comma separated list of addresses <ipv4addr/hostname>"`
 	Insecure       bool       `short:"i" long:"insecure" description:"have dmg attempt to connect without certificates"`
 	Debug          bool       `short:"d" long:"debug" description:"enable debug output"`
 	JSON           bool       `short:"j" long:"json" description:"Enable JSON output"`
