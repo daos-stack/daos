@@ -512,6 +512,7 @@ agg_fetch_odata_cells(struct ec_agg_entry *entry, uint8_t *bit_map,
 								entry->ae_rsize;
 	(entry->ae_sgl.sg_iovs)++;
 
+	//D_PRINT("calling get obj handle from: agg_fetch_odata\n");
 	rc = agg_get_obj_handle(entry);
 	if (rc) {
 		D_ERROR("Failed to open object: "DF_RC"\n", DP_RC(rc));
@@ -543,6 +544,9 @@ agg_fetch_data_stripe(struct ec_agg_entry *entry)
 	unsigned int		 k = entry->ae_oca->u.ec.e_k;
 	int			 rc = 0;
 
+	rc = agg_prep_sgl(entry);
+	if (rc)
+		goto out;
 	recx.rx_idx = entry->ae_cur_stripe.as_stripenum * k * len;
 	recx.rx_nr = k * len;
 	iod.iod_name = entry->ae_akey;
@@ -562,7 +566,7 @@ agg_fetch_data_stripe(struct ec_agg_entry *entry)
 	if (rc)
 		D_ERROR("vos_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 	entry->ae_sgl.sg_nr = AGG_IOV_CNT;
-
+out:
 	return rc;
 }
 
@@ -1237,6 +1241,7 @@ agg_peer_update(struct ec_agg_entry *entry)
 	D_ASSERT(entry->ae_sgl.sg_iovs[AGG_IOV_PARITY].iov_buf);
 
 	stripe_ud.asu_agg_entry = entry;
+	//D_PRINT("calling get obj handle from: agg_peer_update\n");
 	rc = agg_get_obj_handle(entry);
 	if (rc) {
 		D_ERROR("Failed to open object: "DF_RC"\n", DP_RC(rc));
@@ -1398,6 +1403,7 @@ agg_process_holes(struct ec_agg_entry *entry)
 	int			*status;
 
 	stripe_ud.asu_agg_entry = entry;
+	//D_PRINT("calling get obj handle from: agg_pocess_holes\n");
 	rc = agg_get_obj_handle(entry);
 	if (rc) {
 		D_ERROR("Failed to open object: "DF_RC"\n", DP_RC(rc));
@@ -1483,6 +1489,9 @@ agg_process_stripe(struct ec_agg_entry *entry)
 	D_DEBUG(DB_TRACE, "Querying parity for stripe: %lu, offset: %lu\n",
 		entry->ae_cur_stripe.as_stripenum,
 		iter_param.ip_recx.rx_idx);
+	D_PRINT("Querying parity for stripe: %lu, offset: %lu\n",
+		entry->ae_cur_stripe.as_stripenum,
+		iter_param.ip_recx.rx_idx);
 
 	/* Query the parity */
 	rc = vos_iterate(&iter_param, VOS_ITER_RECX, false, &anchors,
@@ -1534,7 +1543,7 @@ out:
 
 		entry->ae_cur_stripe.as_suffix_ext = agg_get_carry_under(entry);
 
-		if (!rc && entry->ae_oca->u.ec.e_p > 1)  {
+		if (rc == 0 && entry->ae_oca->u.ec.e_p > 1)  {
 			/* offload of ds_obj_update to push remote parity */
 			rc = agg_peer_update(entry);
 			if (rc)
@@ -1649,6 +1658,10 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 
 	D_DEBUG(DB_TRACE,
 		"adding extent %lu,%lu, to stripe  %lu, hole: %d: shard: %u\n",
+		extent->ae_recx.rx_idx, extent->ae_recx.rx_nr,
+		agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
+		extent->ae_hole, agg_entry->ae_oid.id_shard);
+	D_PRINT("adding extent %lu,%lu, to stripe  %lu, hole: %d: shard: %u\n",
 		extent->ae_recx.rx_idx, extent->ae_recx.rx_nr,
 		agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
 		extent->ae_hole, agg_entry->ae_oid.id_shard);
@@ -1803,14 +1816,17 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 	struct daos_oclass_attr *oca;
 	int			 rc = 0;
 
+	//D_PRINT("object: "DF_OID"\n", DP_OID(entry->ie_oid.id_pub));
 	if (!daos_unit_oid_compare(agg_param->ap_agg_entry.ae_oid,
 				   entry->ie_oid)) {
+		//D_PRINT("repeated object\n");
 		*acts |= VOS_ITER_CB_SKIP;
 		goto out;
 	}
 
-	if (!daos_oclass_is_ec(entry->ie_oid.id_pub, &oca) ||
-	    oca->u.ec.e_p > 1) {
+	if (!daos_oclass_is_ec(entry->ie_oid.id_pub, &oca)) {
+		//D_PRINT("non-EC object\n");
+
 		*acts |= VOS_ITER_CB_SKIP;
 		goto out;
 	}
@@ -1820,10 +1836,12 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 				  ap_pool_info.api_pool->sp_map_version);
 
 	if (rc == 1 && entry->ie_oid.id_shard >= oca->u.ec.e_k) {
+		//D_PRINT("leader and not data target\n");
 		agg_reset_entry(&agg_param->ap_agg_entry, entry, oca);
 		rc = 0;
 		goto out;
 	} else {
+		D_PRINT("skipping, rc == %d\n", rc);
 		if (rc < 0) {
 			D_ERROR("ds_pool_check_leader failed "DF_RC"\n",
 				DP_RC(rc));
@@ -1987,6 +2005,7 @@ ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 
 	d_rank_t myrank;
 	crt_group_rank(NULL, &myrank);
+//	D_PRINT("Calling outer iterate\n");
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
 			 agg_iterate_pre_cb, agg_iterate_post_cb,
 			 &agg_param, NULL);
