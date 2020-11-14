@@ -38,6 +38,7 @@ extern int dts_obj_replica_cnt;
 extern int dts_ec_obj_class;
 extern int dts_ec_grp_size;
 
+#define OW_IOD_SIZE	1024ULL
 #define SEGMENT_SIZE (10 * 1048576) /* 10MB */
 
 void
