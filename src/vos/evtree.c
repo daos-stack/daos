@@ -1990,6 +1990,10 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 		return -DER_INVAL;
 	}
 
+	D_ASSERT(evt_rect_width(&entry->ei_rect) != 0);
+	D_ASSERT(entry->ei_inob != 0 || bio_addr_is_hole(&entry->ei_addr));
+	D_ASSERT(bio_addr_is_hole(&entry->ei_addr) ||
+		 entry->ei_addr.ba_off != 0);
 	if (evt_rect_width(&entry->ei_rect) > MAX_RECT_WIDTH) {
 		if (bio_addr_is_hole(&entry->ei_addr)) {
 			/** csum_bufp is specific to aggregation case and we
