@@ -256,8 +256,8 @@ daos_fini(void)
 		 * DAOS was initialized multiple times.
 		 * Can happen when using multiple DAOS-aware middleware.
 		 */
-		 module_initialized--;
-		 D_GOTO(unlock, rc = 0);
+		module_initialized--;
+		D_GOTO(unlock, rc = 0);
 	}
 
 	rc = daos_eq_lib_fini();
