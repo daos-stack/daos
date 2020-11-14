@@ -93,4 +93,4 @@ mdtest:
       read_bytes: 32000
       depth: 0
 dfuse:
-  mount_dir: "/tmp/daos_dfuse"
+  mount_dir: "/tmp/daos_dfuse/"

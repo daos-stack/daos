@@ -38,6 +38,8 @@ import logging
 import cart_logparse
 import cart_logtest
 
+from write_host_file import write_host_file
+
 class CartUtils():
     """CartUtils Class"""
 
@@ -48,38 +50,6 @@ class CartUtils():
         self.module_init = False
         self.provider = None
         self.module = lambda *x: False
-
-    @staticmethod
-    def write_host_file(hostlist, slots=1):
-        """ write out a hostfile suitable for orterun """
-
-        unique = random.randint(1, 100000)
-
-        # Write hostfile to HOME or DAOS_TEST_SHARED_DIR (can't be '.' or
-        # cwd(), it must be some place writable)
-        hostfile_path_dir = os.environ['HOME']
-        if 'DAOS_TEST_SHARED_DIR' in os.environ:
-            hostfile_path_dir = os.environ['DAOS_TEST_SHARED_DIR']
-
-        path = hostfile_path_dir + '/hostfile'
-
-        if not os.path.exists(path):
-            os.makedirs(path)
-        hostfile = path + "/hostfile" + str(unique)
-
-        if hostlist is None:
-            raise ValueError("host list parameter must be provided.")
-        hostfile_handle = open(hostfile, 'w')
-
-        for host in hostlist:
-            if slots is None:
-                print("<<{}>>".format(slots))
-                hostfile_handle.write("{0}\n".format(host))
-            else:
-                print("<<{}>>".format(slots))
-                hostfile_handle.write("{0} slots={1}\n".format(host, slots))
-        hostfile_handle.close()
-        return hostfile
 
     @staticmethod
     def check_process(proc):
@@ -213,10 +183,29 @@ class CartUtils():
 
         return srvcnt
 
+    @staticmethod
+    def get_yaml_list_elem(param, index):
+        """Get n-th element from YAML param
+
+        Args:
+            param (str): yaml string or list value
+            index (int): index into list or None (for a non-list param)
+
+        Returns:
+            value: n-th element of list or string value
+
+        """
+        if isinstance(param, list):
+            return param[index]
+        else:
+            return param
+
     # pylint: disable=too-many-locals
-    def build_cmd(self, cartobj, env, host):
+    def build_cmd(self, cartobj, env, host, **kwargs):
         """ build command """
         tst_cmd = ""
+
+        index = kwargs.get('index', None)
 
         tst_vgd = " valgrind --xml=yes " + \
                   "--xml-file={}/".format(cartobj.log_path) + \
@@ -237,25 +226,42 @@ class CartUtils():
         if orterun_bin is None:
             orterun_bin = "orterun_not_installed"
 
-        tst_bin = cartobj.params.get("{}_bin".format(host),
-                                     "/run/tests/*/")
-        tst_arg = cartobj.params.get("{}_arg".format(host),
-                                     "/run/tests/*/")
-        tst_env = cartobj.params.get("{}_env".format(host),
-                                     "/run/tests/*/")
-        tst_slt = cartobj.params.get("{}_slt".format(host),
-                                     "/run/tests/*/")
-        tst_ctx = cartobj.params.get("{}_CRT_CTX_NUM".format(host),
+        _tst_bin = cartobj.params.get("{}_bin".format(host),
+                                      "/run/tests/*/")
+        _tst_arg = cartobj.params.get("{}_arg".format(host),
+                                      "/run/tests/*/")
+        _tst_env = cartobj.params.get("{}_env".format(host),
+                                      "/run/tests/*/")
+        _tst_slt = cartobj.params.get("{}_slt".format(host),
+                                      "/run/tests/*/")
+        _tst_ctx = cartobj.params.get("{}_CRT_CTX_NUM".format(host),
                                      "/run/defaultENV/")
+
+        # If the yaml parameter is a list, return the n-th element
+        tst_bin = self.get_yaml_list_elem(_tst_bin, index)
+        tst_arg = self.get_yaml_list_elem(_tst_arg, index)
+        tst_env = self.get_yaml_list_elem(_tst_env, index)
+        tst_slt = self.get_yaml_list_elem(_tst_slt, index)
+        tst_ctx = self.get_yaml_list_elem(_tst_ctx, index)
 
         tst_host = cartobj.params.get("{}".format(host), "/run/hosts/*/")
         tst_ppn = cartobj.params.get("{}_ppn".format(host), "/run/tests/*/")
         logparse = cartobj.params.get("logparse", "/run/tests/*/")
 
+        # Write group attach info file(s) to HOME or DAOS_TEST_SHARED_DIR.
+        # (It can't be '.' or cwd(), it must be some place writable.)
+        daos_test_shared_dir = os.environ['HOME']
+        if 'DAOS_TEST_SHARED_DIR' in os.environ:
+            daos_test_shared_dir = os.environ['DAOS_TEST_SHARED_DIR']
+
         if tst_slt is not None:
-            hostfile = self.write_host_file(tst_host, tst_slt)
+            hostfile = write_host_file(tst_host,
+                                       daos_test_shared_dir,
+                                       tst_slt)
         else:
-            hostfile = self.write_host_file(tst_host, tst_ppn)
+            hostfile = write_host_file(tst_host,
+                                       daos_test_shared_dir,
+                                       tst_ppn)
 
         mca_flags = "--mca btl self,tcp "
 

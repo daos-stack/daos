@@ -97,7 +97,7 @@ daos_oclass_id_t	 cid = 0x1;/* class identifier */
 #define	MAX_IOREQS	10	   /* number of concurrent i/o reqs in flight */
 
 /** an i/o request in flight */
-struct ioreq {
+struct io_req {
 	char		dstr[KEY_LEN];
 	daos_key_t	dkey;
 
@@ -168,12 +168,12 @@ pool_destroy(void)
 }
 
 static inline void
-ioreqs_init(struct ioreq *reqs) {
+ioreqs_init(struct io_req *reqs) {
 	int rc;
 	int j;
 
 	for (j = 0; j < MAX_IOREQS; j++) {
-		struct ioreq	*req = &reqs[j];
+		struct io_req	*req = &reqs[j];
 
 		/** initialize event */
 		rc = daos_event_init(&req->ev, eq, NULL);
@@ -214,7 +214,7 @@ void
 array(void)
 {
 	daos_handle_t	 oh;
-	struct ioreq	*reqs;
+	struct io_req	*reqs;
 	int		 rc;
 	int		 iter;
 	int		 k;
@@ -234,7 +234,7 @@ array(void)
 		daos_event_t	*evp[MAX_IOREQS];
 		uint64_t	 sid; /* slice ID */
 		int		 submitted = 0;
-		struct ioreq	*req = &reqs[0];
+		struct io_req	*req = &reqs[0];
 
 		/** store very basic array data */
 		for (k = 0; k < SLICE_SIZE; k++)
@@ -296,7 +296,7 @@ array(void)
 				       evp[0]->ev_error);
 
 				submitted--;
-				req = container_of(evp[0], struct ioreq, ev);
+				req = container_of(evp[0], struct io_req, ev);
 			}
 		}
 

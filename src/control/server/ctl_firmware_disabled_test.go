@@ -32,13 +32,14 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/config"
 )
 
 func TestCtlSvc_FirmwareQuery_Disabled(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	emptyCfg := emptyMockConfig(t)
+	emptyCfg := config.DefaultServer()
 	cs := mockControlService(t, log, emptyCfg, nil, nil, nil)
 
 	result, err := cs.FirmwareQuery(context.TODO(), nil)
@@ -53,7 +54,7 @@ func TestCtlSvc_FirmwareUpdate_Disabled(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	emptyCfg := emptyMockConfig(t)
+	emptyCfg := config.DefaultServer()
 	cs := mockControlService(t, log, emptyCfg, nil, nil, nil)
 
 	result, err := cs.FirmwareUpdate(context.TODO(), nil)

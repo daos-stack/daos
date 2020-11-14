@@ -42,6 +42,19 @@ struct dev_state_msg_arg {
 	ABT_eventual			 eventual;
 };
 
+/*
+ * Used for getting bio device list, which requires exclusive access from
+ * the init xstream.
+ */
+struct bio_dev_list_msg_arg {
+	struct bio_xs_context		*xs;
+	d_list_t			*dev_list;
+	int				 dev_list_cnt;
+	ABT_eventual			 eventual;
+	int				 rc;
+};
+
+
 /* Collect space utilisation for blobstore */
 static void
 collect_bs_usage(struct spdk_blob_store *bs, struct nvme_stats *stats)
@@ -395,14 +408,28 @@ out:
 static int
 auto_detect_faulty(struct bio_blobstore *bbs)
 {
+	uint64_t	tgtidx;
+	int		i;
+
 	if (bbs->bb_state != BIO_BS_STATE_NORMAL)
 		return 0;
 	/*
 	 * TODO: Check the health data stored in @bbs, and mark the bbs as
 	 *	 faulty when certain faulty criteria are satisfied.
 	 */
-	if (DAOS_FAIL_CHECK(DAOS_NVME_FAULTY))
-		return bio_bs_state_set(bbs, BIO_BS_STATE_FAULTY);
+
+	/*
+	 * Used for DAOS NVMe Recovery Tests. Will trigger bs faulty reaction
+	 * only if the specified target is assigned to the device.
+	 */
+	if (DAOS_FAIL_CHECK(DAOS_NVME_FAULTY)) {
+		tgtidx = daos_fail_value_get();
+		for (i = 0; i < bbs->bb_ref; i++) {
+			if (bbs->bb_xs_ctxts[i]->bxc_tgt_id == tgtidx)
+				return bio_bs_state_set(bbs,
+							BIO_BS_STATE_FAULTY);
+		}
+	}
 
 	return 0;
 }

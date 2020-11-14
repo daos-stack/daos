@@ -12,6 +12,7 @@ ExecStart=/usr/bin/daos_agent
 StandardOutput=journal
 StandardError=journal
 Restart=always
+LimitCORE=infinity
 
 [Install]
 WantedBy = multi-user.target
