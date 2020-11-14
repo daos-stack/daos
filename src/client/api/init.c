@@ -248,10 +248,10 @@ daos_fini(void)
 	int	rc;
 
 	D_MUTEX_LOCK(&module_lock);
-	if (module_initialized == 0)
-		/** call fini without init, report and error */
+	if (module_initialized == 0) {
+		/** calling fini without init, report an error */
 		D_GOTO(unlock, rc = -DER_UNINIT);
-	else if (module_initialized > 1) {
+	} else if (module_initialized > 1) {
 		/**
 		 * DAOS was initialized multiple times.
 		 * Can happen when using multiple DAOS-aware middleware.
