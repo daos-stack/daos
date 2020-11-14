@@ -182,7 +182,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		/* Connect to DAOS pool */
 		rc = daos_pool_connect(dfp->dfp_pool,
 				       fs_handle->dpi_info->di_group,
-				       fs_handle->dpi_info->di_svcl, DAOS_PC_RW,
+				       DAOS_PC_RW,
 				       &dfp->dfp_poh, &dfp->dfp_pool_info,
 				       NULL);
 		if (rc != -DER_SUCCESS) {

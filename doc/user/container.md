@@ -16,7 +16,7 @@ provided to manage containers.
 
 To create a container:
 ```bash
-$ daos cont create --pool=a171434a-05a5-4671-8fe2-615aa0d05094 --svc=0
+$ daos cont create --pool=a171434a-05a5-4671-8fe2-615aa0d05094
 Successfully created container 008123fc-6b6c-4768-a88a-a2a5ef34a1a2
 ```
 
@@ -28,11 +28,11 @@ to the POSIX file or directory.
 
 ```bash
 $ daos cont create --pool=a171434a-05a5-4671-8fe2-615aa0d05094 \
-      --svc=0 --path=/tmp/mycontainer --type=POSIX --oclass=large \
+      --path=/tmp/mycontainer --type=POSIX --oclass=large \
       --chunk_size=4K
 Successfully created container 419b7562-5bb8-453f-bd52-917c8f5d80d1 type POSIX
 
-$ daos container query --svc=0 --path=/tmp/mycontainer
+$ daos container query --path=/tmp/mycontainer
 Pool UUID:      a171434a-05a5-4671-8fe2-615aa0d05094
 Container UUID: 419b7562-5bb8-453f-bd52-917c8f5d80d1
 Number of snapshots: 0
@@ -236,7 +236,7 @@ permission in the container's ACL.
 To create a container with a custom ACL:
 
 ```bash
-$ daos cont create --pool=<UUID> --svc=<rank> --acl-file=<path>
+$ daos cont create --pool=<UUID> --acl-file=<path>
 ```
 
 The ACL file format is detailed in the [ACL section](https://daos-stack.github.io/overview/security/#acl-file).
@@ -246,7 +246,7 @@ The ACL file format is detailed in the [ACL section](https://daos-stack.github.i
 To view a container's ACL:
 
 ```bash
-$ daos cont get-acl --pool=<UUID> --svc=<rank> --cont=<UUID>
+$ daos cont get-acl --pool=<UUID> --cont=<UUID>
 ```
 
 The output is in the same string format used in the ACL file during creation,
@@ -262,7 +262,7 @@ noted above for container creation.
 To replace a container's ACL with a new ACL:
 
 ```bash
-$ daos cont overwrite-acl --pool=<UUID> --svc=<rank> --cont=<UUID> \
+$ daos cont overwrite-acl --pool=<UUID> --cont=<UUID> \
       --acl-file=<path>
 ```
 
@@ -271,14 +271,14 @@ $ daos cont overwrite-acl --pool=<UUID> --svc=<rank> --cont=<UUID> \
 To add or update multiple entries in an existing container ACL:
 
 ```bash
-$ daos cont update-acl --pool=<UUID> --svc=<rank> --cont=<UUID> \
+$ daos cont update-acl --pool=<UUID> --cont=<UUID> \
       --acl-file=<path>
 ```
 
 To add or update a single entry in an existing container ACL:
 
 ```bash
-$ daos cont update-acl --pool=<UUID> --svc=<rank> --cont=<UUID> --entry <ACE>
+$ daos cont update-acl --pool=<UUID> --cont=<UUID> --entry <ACE>
 ```
 
 If there is no existing entry for the principal in the ACL, the new entry is
@@ -290,7 +290,7 @@ is replaced with the new one.
 To delete an entry for a given principal in an existing container ACL:
 
 ```bash
-$ daos cont delete-acl --pool=<UUID> --svc=<rank> --cont=<UUID> \
+$ daos cont delete-acl --pool=<UUID> --cont=<UUID> \
       --principal=<principal>
 ```
 
@@ -336,7 +336,7 @@ creating the container. However, a specific user and/or group may be specified
 at container creation time.
 
 ```bash
-$ daos cont create --pool=<UUID> --svc=<rank> --user=<owner-user> \
+$ daos cont create --pool=<UUID> --user=<owner-user> \
       --group=<owner-group>
 ```
 
@@ -348,14 +348,14 @@ The user and group names are case sensitive and must be formatted as
 To change the owner user:
 
 ```bash
-$ daos cont set-owner --pool=<UUID> --svc=<rank> --cont=<UUID> \
+$ daos cont set-owner --pool=<UUID> --cont=<UUID> \
       --user=<owner-user>
 ```
 
 To change the owner group:
 
 ```bash
-$ daos cont set-owner --pool=<UUID> --svc=<rank> --cont=<UUID> \
+$ daos cont set-owner --pool=<UUID> --cont=<UUID> \
       --group=<owner-group>
 ```
 

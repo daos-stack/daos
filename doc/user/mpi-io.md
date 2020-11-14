@@ -78,7 +78,7 @@ To run an example:
 1. Create a DAOS pool on the DAOS server(s).
    This will return a pool uuid "puuid" and service rank list "svcl".
 2. Create a POSIX type container:
-   `daos cont create --pool=puuid --svc=svcl --type=POSIX`
+   `daos cont create --pool=puuid --type=POSIX`
    This will return a container uuid "cuuid".
 3. At the client side, the following environment variables need to be set:
    `export DAOS_POOL=puuid; export DAOS_SVCL=svcl; export DAOS_CONT=cuuid`.

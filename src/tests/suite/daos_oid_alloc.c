@@ -45,7 +45,7 @@ reconnect(test_arg_t *arg) {
 	flags = (DAOS_COO_RW | DAOS_COO_FORCE);
 	if (arg->myrank == 0) {
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       NULL /* svc */, DAOS_PC_RW,
+				       DAOS_PC_RW,
 				       &arg->pool.poh, &arg->pool.pool_info,
 				       NULL /* ev */);
 		if (rc)

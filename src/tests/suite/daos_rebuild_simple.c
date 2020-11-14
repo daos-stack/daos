@@ -666,14 +666,14 @@ rebuild_sx_object(void **state)
 	get_killing_rank_by_oid(arg, oid, 1, 0, &rank, &rank_nr);
 	/** exclude the target of this obj's replicas */
 	daos_exclude_server(arg->pool.pool_uuid, arg->group,
-			    arg->dmg_config, arg->pool.svc, rank);
+			    arg->dmg_config, rank);
 
 	/* wait until rebuild done */
 	test_rebuild_wait(&arg, 1);
 
 	/* add back the excluded targets */
 	daos_reint_server(arg->pool.pool_uuid, arg->group,
-			  arg->dmg_config, arg->pool.svc, rank);
+			  arg->dmg_config, rank);
 
 	/* wait until reintegration is done */
 	test_rebuild_wait(&arg, 1);

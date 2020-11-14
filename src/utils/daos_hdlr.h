@@ -74,8 +74,6 @@ struct cmd_args_s {
 	daos_handle_t		pool;
 	uuid_t			c_uuid;		/* --cont */
 	daos_handle_t		cont;
-	char			*mdsrv_str;	/* --svc */
-	d_rank_list_t		*mdsrv;
 	int			force;		/* --force */
 	char			*attrname_str;	/* --attr attribute name */
 	char			*value_str;	/* --value attribute value */
@@ -111,20 +109,6 @@ struct cmd_args_s {
 			fprintf(stderr, "pool UUID required\n");\
 			D_GOTO(label, (rcexpr));		\
 		}						\
-	} while (0)
-
-/* --svc argument is optional. If provided by user, perform these checks */
-#define ARGS_VERIFY_MDSRV(ap, label, rcexpr)				\
-	do {								\
-		if (((ap)->mdsrv_str) && ((ap)->mdsrv == NULL)) {	\
-			fprintf(stderr, "failed to parse --svc=%s\n",	\
-					(ap)->mdsrv_str);		\
-			D_GOTO(label, (rcexpr));			\
-		}							\
-		if (((ap)->mdsrv) && ((ap)->mdsrv->rl_nr == 0)) {	\
-			fprintf(stderr, "--svc must not be empty\n");	\
-			D_GOTO(label, (rcexpr));			\
-		}							\
 	} while (0)
 
 #define ARGS_VERIFY_CUUID(ap, label, rcexpr)				\

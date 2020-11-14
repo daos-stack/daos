@@ -119,7 +119,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	DFUSE_TRA_UP(dfs, dfp, "dfs");
 
 	rc = daos_pool_connect(dfp->dfp_pool, dfuse_info->di_group,
-			       dfuse_info->di_svcl, DAOS_PC_RW,
+			       DAOS_PC_RW,
 			       &dfp->dfp_poh, &dfp->dfp_pool_info,
 			       NULL);
 	if (rc) {

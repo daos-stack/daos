@@ -482,7 +482,7 @@ connect_daos_cont(int fd, struct dfuse_il_reply *il_reply)
 {
 	int			rc;
 
-	rc = daos_pool_connect(il_reply->fir_pool, NULL, NULL, DAOS_PC_RW,
+	rc = daos_pool_connect(il_reply->fir_pool, NULL, DAOS_PC_RW,
 			       &ioil_ioc.ioc_poh, NULL, NULL);
 	if (rc)
 		return rc;

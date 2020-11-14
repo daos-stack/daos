@@ -784,7 +784,7 @@ ts_exclude_server(d_rank_t rank)
 	targets.tl_nr = 1;
 	targets.tl_ranks = &rank;
 	targets.tl_tgts = &tgt;
-	rc = daos_pool_tgt_exclude(ts_ctx.tsc_pool_uuid, NULL, NULL /* svc */,
+	rc = daos_pool_tgt_exclude(ts_ctx.tsc_pool_uuid, NULL,
 				   &targets, NULL);
 
 	return rc;
@@ -801,7 +801,7 @@ ts_reint_server(d_rank_t rank)
 	targets.tl_nr = 1;
 	targets.tl_ranks = &rank;
 	targets.tl_tgts = &tgt;
-	rc = daos_pool_reint_tgt(ts_ctx.tsc_pool_uuid, NULL, NULL /* svc */,
+	rc = daos_pool_reint_tgt(ts_ctx.tsc_pool_uuid, NULL,
 				 &targets, NULL);
 	return rc;
 }

@@ -259,7 +259,7 @@ class ParallelIo(FioBase, IorTestBase):
         for pool_job in pool_threads:
             pool_job.join()
 
-        # start dfuse using --svc option only.
+        # start dfuse.
         self.start_dfuse(self.hostlist_clients, None, None)
 
         # record free space using statvfs before any data is written.

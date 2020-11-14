@@ -501,7 +501,7 @@ dc_pool_connect(tse_task_t *task)
 		/** sy_info.crt_ctx_share_addr */
 		/** sy_info.crt_timeout */
 
-		rc = rsvc_client_init(&pool->dp_client, args->svc);
+		rc = rsvc_client_init(&pool->dp_client, NULL);
 		if (rc != 0)
 			D_GOTO(out_pool, rc);
 
@@ -1095,7 +1095,7 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 				DP_UUID(args->uuid), rc);
 			D_GOTO(out_state, rc);
 		}
-		rc = rsvc_client_init(&state->client, args->svc);
+		rc = rsvc_client_init(&state->client, NULL);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": failed to rsvc_client_init, rc %d.\n",
 				DP_UUID(args->uuid), rc);
@@ -1596,7 +1596,7 @@ dc_pool_evict(tse_task_t *task)
 		rc = dc_mgmt_sys_attach(args->grp, &state->sys);
 		if (rc != 0)
 			D_GOTO(out_state, rc);
-		rc = rsvc_client_init(&state->client, args->svc);
+		rc = rsvc_client_init(&state->client, NULL);
 		if (rc != 0)
 			D_GOTO(out_group, rc);
 
@@ -2369,7 +2369,7 @@ rsvc_client_state_cleanup(int stage, struct rsvc_client_state *state)
 
 static int
 rsvc_client_state_create(tse_task_t *task, const uuid_t svc_uuid,
-			 d_rank_list_t *targets, const char *group,
+			 const char *group,
 			 crt_rpc_t **rpcp, int opc, tse_task_cb_t callback)
 {
 	struct rsvc_client_state *state = dc_task_get_priv(task);
@@ -2386,7 +2386,7 @@ rsvc_client_state_create(tse_task_t *task, const uuid_t svc_uuid,
 			rsvc_client_state_cleanup(CCS_CU_MEM, state);
 			return rc;
 		}
-		rc = rsvc_client_init(&state->scs_client, targets);
+		rc = rsvc_client_init(&state->scs_client, NULL);
 		if (rc != 0) {
 			rsvc_client_state_cleanup(CCS_CU_GRP, state);
 			return rc;
@@ -2482,7 +2482,7 @@ dc_pool_membership_update(tse_task_t *task, int opc)
 		D_ERROR("Invalid targets specified\n");
 		D_GOTO(err, rc = -DER_INVAL);
 	}
-	rc = rsvc_client_state_create(task, args->uuid, args->svc, args->group,
+	rc = rsvc_client_state_create(task, args->uuid, args->group,
 				      &rpc, opc, pool_membership_update_cb);
 	if (rc != 0)
 		D_GOTO(err, rc);
