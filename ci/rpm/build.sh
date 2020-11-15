@@ -19,13 +19,8 @@ if [ -e "${ci_envs}" ]; then
   source "${ci_envs}"
 fi
 
-if [ -z "$SCONS_FAULTS_ARGS" ]; then
-  EXTERNAL_RPM_BUILD_OPTIONS=""
-  SCONS_ARGS=""
-else
-  EXTERNAL_RPM_BUILD_OPTIONS=" --define \"scons_args ${SCONS_FAULTS_ARGS}\""
-  SCONS_ARGS="${SCONS_FAULTS_ARGS}"
-fi
+EXTERNAL_RPM_BUILD_OPTIONS=" --define \"scons_args ${SCONS_FAULTS_ARGS}\""
+SCONS_ARGS="${SCONS_FAULTS_ARGS}"
 
 : "${CHROOT_NAME:='epel-7-x86_64'}"
 : "${TARGET:='centos7'}"
