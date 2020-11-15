@@ -301,6 +301,9 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 	crt_phy_addr_t		uri_dup;
 	d_rank_t		rank;
 	int			rc = 0;
+	char			*p;
+	int			base_port;
+	int			i;
 
 	rank = li->li_rank;
 	grp_priv = li->li_grp_priv;
@@ -308,6 +311,8 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 	rlink = d_hash_rec_find(&grp_priv->gp_uri_lookup_cache,
 				(void *)&rank, sizeof(rank));
 	if (rlink == NULL) {
+		char *tmp_uri;
+
 		D_ALLOC_PTR(ui);
 		if (!ui)
 			D_GOTO(exit, rc = -DER_NOMEM);
@@ -316,19 +321,85 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 		ui->ui_ref = 0;
 		ui->ui_initialized = 1;
 		ui->ui_rank = li->li_rank;
-		D_STRNDUP(ui->ui_uri[tag], uri, CRT_ADDR_STR_MAX_LEN);
-		if (!ui->ui_uri[tag]) {
-			D_FREE_PTR(ui);
-			D_GOTO(exit, rc = -DER_NOMEM);
+
+		if (crt_provider_is_contig_ep(crt_gdata.cg_na_plugin)) {
+			D_STRNDUP(tmp_uri, uri, CRT_ADDR_STR_MAX_LEN);
+			if (!tmp_uri)
+				D_GOTO(exit, rc = -DER_NOMEM);
+
+			/* For now we assume contiguous endpoint providers are
+			 * port based. Based on that we generate URIs for every
+			 * tag of the rank from the base port.
+			 *
+			 * Port-based providers have form of
+			 * string:port
+			 *
+			 * Parse both parts out
+			 */
+			p = tmp_uri;
+			while (*p != '\0')
+				p++;
+			while (*p != ':' && p != tmp_uri)
+				p--;
+
+			if (p == tmp_uri) {
+				D_ERROR("Badly formed URI '%s'\n", tmp_uri);
+				D_FREE(tmp_uri);
+				D_GOTO(exit, rc = -DER_INVAL);
+			}
+
+			/* Split <string> from <port> part in URI */
+			*p = '\0';
+			p++;
+			base_port = atoi(p) - tag;
+
+			if (base_port <= 0) {
+				D_ERROR("Failed to parse uri=%s correctly\n",
+					tmp_uri);
+				D_FREE(tmp_uri);
+				D_GOTO(exit, rc = -DER_INVAL);
+			}
+
+			for (i = 0; i < 255; i++) {
+				char *tag_uri = NULL;
+
+				D_ASPRINTF(tag_uri, "%s:%d", tmp_uri,
+					   base_port + i);
+
+				if (tag_uri == NULL) {
+					int k;
+					for (k = 0; k < i; k++)
+						D_FREE(ui->ui_uri[k]);
+
+					D_FREE(tmp_uri);
+					D_GOTO(exit, rc = -DER_NOMEM);
+				}
+
+				ui->ui_uri[i] = tag_uri;
+			}
+
+			D_FREE(tmp_uri);
+		} else {
+			D_STRNDUP(ui->ui_uri[tag], uri, CRT_ADDR_STR_MAX_LEN);
+			if (!ui->ui_uri[tag]) {
+				D_FREE_PTR(ui);
+				D_GOTO(exit, rc = -DER_NOMEM);
+			}
 		}
 
 		rc = d_hash_rec_insert(&grp_priv->gp_uri_lookup_cache,
-				&rank, sizeof(rank),
-				&ui->ui_link,
-				true /* exclusive */);
+				       &rank, sizeof(rank),
+				       &ui->ui_link,
+				       true /* exclusive */);
 		if (rc != 0) {
 			D_ERROR("Entry already present\n");
-			D_FREE(ui->ui_uri[tag]);
+
+			if (crt_provider_is_contig_ep(crt_gdata.cg_na_plugin)) {
+				for (i = 0; i < 255; i++)
+					D_FREE(ui->ui_uri[i]);
+			} else {
+				D_FREE(ui->ui_uri[tag]);
+			}
 			D_FREE_PTR(ui);
 			D_GOTO(exit, rc);
 		}
@@ -589,18 +660,18 @@ err_free_li:
 out:
 	return rc;
 }
+
 /*
  * Fill in the base URI of rank in the lookup cache of the crt_ctx.
  */
 int
-crt_grp_lc_uri_insert(struct crt_grp_priv *passed_grp_priv, int ctx_idx,
+crt_grp_lc_uri_insert(struct crt_grp_priv *passed_grp_priv,
 		      d_rank_t rank, uint32_t tag, const char *uri)
 {
 	struct crt_grp_priv	*grp_priv;
 	int			 rc = 0;
 	int			 i;
 
-	D_ASSERT(ctx_idx >= 0 && ctx_idx < CRT_SRV_CONTEXT_NUM);
 	if (tag >= CRT_SRV_CONTEXT_NUM) {
 		D_ERROR("tag %d out of range [0, %d].\n",
 			tag, CRT_SRV_CONTEXT_NUM - 1);
@@ -616,8 +687,7 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *passed_grp_priv, int ctx_idx,
 
 	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		ctx_idx = i;
-		rc = grp_lc_uri_insert_internal_locked(grp_priv, ctx_idx, rank,
+		rc = grp_lc_uri_insert_internal_locked(grp_priv, i, rank,
 						tag, uri);
 		if (rc != 0) {
 			D_ERROR("Insertion failed: rc %d\n", rc);
@@ -630,33 +700,6 @@ unlock:
 
 	return rc;
 
-}
-
-/**
- * Fill in the base URI of rank in the lookup cache of all crt_ctx. grp can be
- * NULL
- */
-int
-crt_grp_lc_uri_insert_all(crt_group_t *grp, d_rank_t rank, int tag,
-			const char *uri)
-{
-	struct crt_grp_priv	*grp_priv;
-	int			 i;
-	int			 rc = 0;
-
-	grp_priv = crt_grp_pub2priv(grp);
-
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		rc = crt_grp_lc_uri_insert(grp_priv, i, rank, tag, uri);
-		if (rc != 0) {
-			D_ERROR("crt_grp_lc_uri_insert(%p, %d, %d, %d, %s)"
-				" failed. rc: %d\n", grp_priv, i, rank, tag,
-				uri, rc);
-			return rc;
-		}
-	}
-
-	return rc;
 }
 
 int
@@ -2375,7 +2418,6 @@ static int
 crt_group_primary_add_internal(struct crt_grp_priv *grp_priv,
 				d_rank_t rank, int tag, char *uri)
 {
-	int i;
 	int rc;
 
 	if (!grp_priv->gp_primary) {
@@ -2383,12 +2425,10 @@ crt_group_primary_add_internal(struct crt_grp_priv *grp_priv,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		rc = crt_grp_lc_uri_insert(grp_priv, i, rank, tag, uri);
-		if (rc != 0) {
-			D_ERROR("crt_grp_lc_uri_insert() failed; rc=%d\n", rc);
-			D_GOTO(out, rc);
-		}
+	rc = crt_grp_lc_uri_insert(grp_priv, rank, tag, uri);
+	if (rc != 0) {
+		D_ERROR("crt_grp_lc_uri_insert() failed; rc=%d\n", rc);
+		D_GOTO(out, rc);
 	}
 
 	/* Only add node to membership list once, for tag 0 */
@@ -2449,10 +2489,10 @@ crt_rank_self_set(d_rank_t rank)
 			D_GOTO(unlock, rc);
 		}
 
-		rc = crt_grp_lc_uri_insert_all(NULL, rank, ctx->cc_idx,
-					uri_addr);
+		rc = crt_grp_lc_uri_insert(default_grp_priv, rank, ctx->cc_idx,
+					   uri_addr);
 		if (rc != 0) {
-			D_ERROR("crt_grp_lc_uri_insert_all() failed; rc=%d\n",
+			D_ERROR("crt_grp_lc_uri_insert() failed; rc=%d\n",
 				rc);
 			D_GOTO(unlock, rc);
 		}
