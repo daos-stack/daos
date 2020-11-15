@@ -41,6 +41,8 @@ def scons_faults_args() {
     // The default build will have BUILD_TYPE=dev; fault injection enabled
     if ((cachedCommitPragma(pragma: 'faults-enabled', def_val: 'true') == 'true') && !release_candidate()) {
         return "BUILD_TYPE=dev"
+    } else {
+        return ""
     }
 }
 
