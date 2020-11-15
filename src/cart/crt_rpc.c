@@ -550,7 +550,7 @@ static int
 crt_issue_uri_lookup_retry(crt_context_t ctx,
 			   struct crt_grp_priv *grp_priv,
 			   d_rank_t query_rank, uint32_t query_tag,
-			   struct crt_rpc_priv *chained_rpc_priv)
+			   struct crt_rpc_priv *rpc_priv)
 {
 
 	d_rank_list_t	*membs;
@@ -560,16 +560,16 @@ crt_issue_uri_lookup_retry(crt_context_t ctx,
 	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
 	membs = grp_priv_get_membs(grp_priv);
 
-	if (!membs || membs->rl_nr <= 1 || chained_rpc_priv->crp_ul_idx == -1) {
+	/* Note: membership can change between uri lookups, but we don't need
+	 * to handle this case, as it should be rare and will result in rank
+	 * being either repeated or skipped
+	 */
+	if (!membs || membs->rl_nr <= 1 || rpc_priv->crp_ul_idx == -1) {
 		contact_rank = grp_priv->gp_psr_rank;
 	} else {
-		/* Note: membership can change between uri lookups, but we don't need
-		 * to handle this case, as it should be rare and will result in rank
-		 * being either repeated or skipped
-		 */
-		chained_rpc_priv->crp_ul_idx = (chained_rpc_priv->crp_ul_idx + 1) %
-					       membs->rl_nr;
-		contact_rank = membs->rl_ranks[chained_rpc_priv->crp_ul_idx];
+		rpc_priv->crp_ul_idx = (rpc_priv->crp_ul_idx + 1) %
+				       membs->rl_nr;
+		contact_rank = membs->rl_ranks[rpc_priv->crp_ul_idx];
 	}
 
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
@@ -577,7 +577,7 @@ crt_issue_uri_lookup_retry(crt_context_t ctx,
 	rc = crt_issue_uri_lookup(ctx, &grp_priv->gp_pub,
 				  contact_rank, 0,
 				  query_rank, query_tag,
-				  chained_rpc_priv);
+				  rpc_priv);
 	return rc;
 }
 
