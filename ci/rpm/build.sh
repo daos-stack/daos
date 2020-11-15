@@ -19,7 +19,7 @@ if [ -e "${ci_envs}" ]; then
   source "${ci_envs}"
 fi
 
-if [ -z "${SCONS_FAULTS_ARGS}" ]; then
+if [ -z "$SCONS_FAULTS_ARGS" ]; then
   EXTERNAL_RPM_BUILD_OPTIONS=""
   SCONS_ARGS=""
 else
