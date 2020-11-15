@@ -42,7 +42,7 @@ def scons_faults_args() {
     if ((cachedCommitPragma(pragma: 'faults-enabled', def_val: 'true') == 'true') && !release_candidate()) {
         return "BUILD_TYPE=dev"
     } else {
-        return ""
+        return "BUILD_TYPE=release"
     }
 }
 
