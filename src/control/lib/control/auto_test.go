@@ -138,6 +138,11 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 			hostResponses: hostRespWithScmNss,
 			expCheckErr:   errors.New("insufficient number of nvme devices for numa node 0, want 1 got 0"),
 		},
+		"1 min pmem and 2 pmems present both numa 0": {
+			numPmem:       1,
+			hostResponses: hostRespWithScmNssNumaZero,
+			expCheckErr:   errors.New("insufficient number of nvme devices for numa node 0, want 1 got 0"),
+		},
 		"2 min pmem and 2 pmems present both numa 0": {
 			numPmem:       2,
 			hostResponses: hostRespWithScmNssNumaZero,
@@ -172,10 +177,18 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 				Log:     log,
 			}
 
+			// default input config param represents two-socket system
+			ioServers := []*ioserver.Config{ioserver.NewConfig()}
+			switch tc.numPmem {
+			case 0, 1:
+			case 2:
+				ioServers = append(ioServers, ioserver.NewConfig())
+			default:
+				t.Fatal("test expecting num-pmem in range 0-2")
+			}
+
 			resp := &ConfigGenerateResp{
-				// input config param represents two-socket system
-				ConfigOut: config.DefaultServer().
-					WithServers(ioserver.NewConfig(), ioserver.NewConfig()),
+				ConfigOut: config.DefaultServer().WithServers(ioServers...),
 			}
 
 			expResp := &ConfigGenerateResp{
@@ -512,7 +525,7 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 			}
 			cmpOpts = append(cmpOpts, defResCmpOpts()...)
 
-			gotCheckErr := req.checkNetwork(context.Background(), resp)
+			_, gotCheckErr := req.checkNetwork(context.Background(), resp)
 
 			if diff := cmp.Diff(expResp.GetHostErrors(), resp.GetHostErrors(), cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)

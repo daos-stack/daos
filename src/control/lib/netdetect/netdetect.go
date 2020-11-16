@@ -172,14 +172,14 @@ type DeviceAffinity struct {
 
 // FabricScan data encapsulates the results of the fabric scanning
 type FabricScan struct {
-	Provider    string
-	DeviceName  string
-	NUMANode    uint
-	Priority    int
-	NetDevClass uint32
+	Provider    string `json:"provider"`
+	DeviceName  string `json:"device"`
+	NUMANode    uint   `json:"numanode"`
+	Priority    int    `json:"priority"`
+	NetDevClass uint32 `json:"netdevclass"`
 }
 
-func (fs FabricScan) String() string {
+func (fs *FabricScan) String() string {
 	return fmt.Sprintf("\tfabric_iface: %v\n\tprovider: %v\n\tpinned_numa_node: %d", fs.DeviceName, fs.Provider, fs.NUMANode)
 }
 
@@ -256,10 +256,11 @@ func (hpa *hwlocProtectedAccess) topology_init() (C.hwloc_topology_t, error) {
 }
 
 type netdetectContext struct {
-	topology      C.hwloc_topology_t
-	numaAware     bool
-	numNUMANodes  int
-	deviceScanCfg DeviceScan
+	topology         C.hwloc_topology_t
+	numaAware        bool
+	numNUMANodes     int
+	coresPerNumaNode int
+	deviceScanCfg    DeviceScan
 }
 
 func getContext(ctx context.Context) (*netdetectContext, error) {
@@ -288,6 +289,11 @@ func Init(parent context.Context) (context.Context, error) {
 	}
 	ndc.numNUMANodes = numNUMANodes(ndc.topology)
 	ndc.numaAware = ndc.numNUMANodes > 0
+	cores, err := coresPerNumaNode(ndc.topology)
+	if err != nil {
+		return nil, err
+	}
+	ndc.coresPerNumaNode = cores
 
 	ndc.deviceScanCfg, err = initDeviceScan(ndc.topology)
 	log.Debugf("initDeviceScan completed.  Depth %d, numObj %d, systemDeviceNames %v, hwlocDeviceNames %v",
@@ -316,6 +322,15 @@ func NumNumaNodes(ctx context.Context) int {
 		return 0
 	}
 	return ndc.numNUMANodes
+}
+
+// CoresPerNumaNode returns the number of detected NUMA nodes, or 0 if none.
+func CoresPerNumaNode(ctx context.Context) int {
+	ndc, err := getContext(ctx)
+	if err != nil || !HasNUMA(ctx) {
+		return 0
+	}
+	return ndc.coresPerNumaNode
 }
 
 // Cleanup releases the hwloc topology resources
@@ -594,6 +609,15 @@ func numNUMANodes(topology C.hwloc_topology_t) int {
 	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_NUMANODE)
 	numObj := int(C.cmpt_get_nbobjs_by_depth(topology, C.int(depth)))
 	return numObj
+}
+
+func coresPerNumaNode(topology C.hwloc_topology_t) (int, error) {
+	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_CORE)
+	if depth == C.HWLOC_TYPE_DEPTH_UNKNOWN {
+		return 0, errors.New("number of cpu cores could not be detected")
+	}
+
+	return int(C.cmpt_get_nbobjs_by_depth(topology, C.int(depth))), nil
 }
 
 // GetNUMASocketIDForPid determines the cpuset and nodeset corresponding to the given pid.
@@ -1122,7 +1146,7 @@ func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount i
 		return nil, err
 	}
 
-	scanResults := FabricScan{
+	scanResults := &FabricScan{
 		Provider:    mercuryProviderList,
 		DeviceName:  deviceAffinity.DeviceName,
 		NUMANode:    deviceAffinity.NUMANode,
@@ -1142,12 +1166,12 @@ func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount i
 
 	resultsMap[results] = struct{}{}
 	log.Debugf("\n%s", results)
-	return &scanResults, nil
+	return scanResults, nil
 }
 
 // ScanFabric examines libfabric data to find the network devices that support the given fabric provider.
-func ScanFabric(ctx context.Context, provider string, excludes ...string) ([]FabricScan, error) {
-	var ScanResults []FabricScan
+func ScanFabric(ctx context.Context, provider string, excludes ...string) ([]*FabricScan, error) {
+	var ScanResults []*FabricScan
 	var fi *C.struct_fi_info
 	var hints *C.struct_fi_info
 	var devCount int
@@ -1228,7 +1252,7 @@ func ScanFabric(ctx context.Context, provider string, excludes ...string) ([]Fab
 						if err != nil {
 							continue
 						}
-						ScanResults = append(ScanResults, *devScanResults)
+						ScanResults = append(ScanResults, devScanResults)
 						devCount++
 					}
 					continue
@@ -1247,7 +1271,7 @@ func ScanFabric(ctx context.Context, provider string, excludes ...string) ([]Fab
 		if err != nil {
 			continue
 		}
-		ScanResults = append(ScanResults, *devScanResults)
+		ScanResults = append(ScanResults, devScanResults)
 		devCount++
 	}
 
