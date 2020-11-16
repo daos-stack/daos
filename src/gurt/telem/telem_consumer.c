@@ -86,7 +86,7 @@ void readMetrics(uint64_t *shmemRoot, struct d_tm_node_t *root, char *dirname,
 	       d_tm_count_metrics(shmemRoot, root));
 
 	while (nodelist) {
-		name = d_tm_convert_char_ptr(shmemRoot, nodelist->node->name);
+		name = (char *)d_tm_conv_ptr(shmemRoot, nodelist->node->name);
 		switch (nodelist->node->d_tm_type) {
 		case D_TM_DIRECTORY:
 			printf("\tDIRECTORY: %s has %"PRIu64
@@ -220,7 +220,7 @@ main(int argc, char **argv)
 	simulatedRank = atoi(argv[1]);
 	printf("This simulatedRank has ID: %d\n", simulatedRank);
 
-	shmemRoot = (uint64_t *)d_tm_get_shared_memory(simulatedRank);
+	shmemRoot = d_tm_get_shared_memory(simulatedRank);
 	if (!shmemRoot)
 		goto failure;
 

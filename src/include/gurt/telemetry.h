@@ -74,10 +74,8 @@ struct d_tm_nodeList_t {
 };
 
 int d_tm_init(int rank, uint64_t memSize);
-
 int d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metricType,
 		    char *shortDesc, char *longDesc);
-
 struct d_tm_node_t *d_tm_get_root(uint64_t *shmemRoot);
 void d_tm_print_my_children(uint64_t *cshmemRoot, struct d_tm_node_t *node,
 			    int level);
@@ -103,9 +101,7 @@ uint8_t *d_tm_allocate_shared_memory(int rank, size_t mem_size);
 void d_tm_fini(void);
 void d_tm_free_node(uint64_t *cshmemRoot, struct d_tm_node_t *node);
 void *d_tm_shmalloc(int length);
-int d_tm_shmalloc_offset(int length);
 int d_tm_clock_id(int clk_id);
-
 struct d_tm_node_t *d_tm_find_child(uint64_t *cshmemRoot,
 				    struct d_tm_node_t *parent, char *name);
 struct d_tm_node_t *d_tm_find_metric(uint64_t *cshmemRoot, char *metric);
@@ -122,7 +118,6 @@ int d_tm_get_duration(struct timespec *tms, uint64_t *cshmemRoot,
 		      struct d_tm_node_t *node, char *metric);
 int d_tm_get_gauge(uint64_t *val, uint64_t *cshmemRoot,
 		   struct d_tm_node_t *node, char *metric);
-
 int d_tm_get_metadata(char **shortDesc, char **longDesc, uint64_t *cshmemRoot,
 		      struct d_tm_node_t *node, char *metric);
 
@@ -134,10 +129,6 @@ uint64_t d_tm_get_num_objects(uint64_t *cshmemRoot, char *path,
 uint64_t d_tm_count_metrics(uint64_t *cshmemRoot, struct d_tm_node_t *node);
 void d_tm_list_free(struct d_tm_nodeList_t *nodeList);
 int d_tm_get_version(void);
-uint8_t *d_tm_get_shared_memory(int rank);
-
-struct d_tm_node_t *d_tm_convert_node_ptr(uint64_t *cshmemRoot, void *ptr);
-struct d_tm_metric_t *d_tm_convert_metric_ptr(uint64_t *cshmemRoot, void *ptr);
-char *d_tm_convert_char_ptr(uint64_t *cshmemRoot, void *ptr);
-
+uint64_t *d_tm_get_shared_memory(int rank);
+void *d_tm_conv_ptr(uint64_t *cshmemRoot, void *ptr);
 #endif /* __TELEMETRY_H__ */
