@@ -596,24 +596,16 @@ dc_tx_check_pmv_internal(daos_handle_t th, struct dc_tx **ptx)
 
 	pm_ver = dc_pool_get_version(tx->tx_pool);
 
-	if (tx->tx_pm_ver != pm_ver) {
-		D_ASSERTF(tx->tx_pm_ver < pm_ver,
-			  "Pool map version is reverted from %u to %u\n",
-			  tx->tx_pm_ver, pm_ver);
-
+	if (tx->tx_pm_ver != pm_ver ||
+	    DAOS_FAIL_CHECK(DAOS_DTX_STALE_PM)) {
 		/* For external or RW TX, if pool map is stale, restart it. */
 		if (tx->tx_pm_ver != 0 &&
 		    (!tx->tx_local || !(tx->tx_flags & DAOS_TF_RDONLY))) {
 			tx->tx_status = TX_FAILED;
 			rc = -DER_TX_RESTART;
+		} else {
+			tx->tx_pm_ver = pm_ver;
 		}
-
-		tx->tx_pm_ver = pm_ver;
-	}
-
-	if (ptx == NULL && DAOS_FAIL_CHECK(DAOS_DTX_STALE_PM)) {
-		tx->tx_status = TX_FAILED;
-		rc = -DER_TX_RESTART;
 	}
 
 	if (rc != 0 || ptx == NULL) {

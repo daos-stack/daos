@@ -10,7 +10,7 @@
 
 Name:          daos
 Version:       1.1.1
-Release:       7%{?relval}%{?dist}
+Release:       8%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -68,6 +68,7 @@ BuildRequires: python-distro
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
 BuildRequires: golang-bin >= 1.12
+# needed to retrieve PMM region info through control-plane
 BuildRequires: libipmctl-devel
 BuildRequires: python36-devel
 BuildRequires: Lmod
@@ -128,7 +129,12 @@ Requires: %{name} = %{version}-%{release}
 Requires: %{name}-client = %{version}-%{release}
 Requires: spdk-tools
 Requires: ndctl
-Requires: ipmctl
+# needed to set PMem configuration goals in BIOS through control-plane
+%if (0%{?suse_version} >= 1500)
+Requires: ipmctl < 02.00.00.3809
+%else
+Requires: ipmctl > 02.00.00.3816
+%endif
 Requires: hwloc
 Requires: mercury = %{mercury_version}
 Requires(post): /sbin/ldconfig
@@ -404,10 +410,15 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Sat Oct 31 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.1-7
+* Mon Nov 16 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.1-8
 - define scons_args to be BUILD_TYPE=<release|dev>
 - the scons default is BUILD_TYPE=release
 - BUILD_TYPE=release will disable fault injection in build
+
+* Wed Nov 11 2020 Tom Nabarro <tom.nabarro@intel.com> 1.1.1-7
+- Add version validation for runtime daos_server ipmctl requirement to avoid
+  potential corruption of PMMs when setting PMem goal, issue fixed in
+  https://github.com/intel/ipmctl/commit/9e3898cb15fa9eed3ef3e9de4488be1681d53ff4
 
 * Thu Oct 29 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> 1.1.1-6
 - Restore obj_ctl utility
