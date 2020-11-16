@@ -161,8 +161,7 @@ dfuse_bg(struct dfuse_info *dfuse_info)
 			exit(2);
 		}
 		if (child_ret) {
-			printf("Exiting %d %s\n", child_ret,
-			       d_errstr(child_ret));
+			printf("Exiting " DF_RC "\n", DP_RC(child_ret));
 			exit(-(child_ret + DER_ERR_GURT_BASE));
 		} else {
 			exit(0);
