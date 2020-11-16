@@ -637,8 +637,18 @@ rw_completion(void *cb_arg, int err)
 	D_ASSERT(xs_ctxt->bxc_blob_rw > 0);
 	xs_ctxt->bxc_blob_rw--;
 
-	if (biod->bd_result == 0 && err != 0) {
+	/* Induce NVMe Read/Write Error*/
+	if (biod->bd_update)
+		err = DAOS_FAIL_CHECK(DAOS_NVME_WRITE_ERR) ? -EIO : err;
+	else
+		err = DAOS_FAIL_CHECK(DAOS_NVME_READ_ERR) ? -EIO : err;
+
+	/* Return the error value of the first NVMe IO error */
+	if (biod->bd_result == 0 && err != 0)
 		biod->bd_result = daos_errno2der(-err);
+
+	/* Report all NVMe IO errors */
+	if (err != 0) {
 		D_ALLOC_PTR(mem);
 		if (mem == NULL)
 			goto skip_media_error;

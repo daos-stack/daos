@@ -195,7 +195,8 @@ d_binheap_create_inplace(uint32_t feats, uint32_t count, void *priv,
 	while (h->d_bh_hwm < count) { /* preallocate */
 	rc = d_binheap_grow(h);
 		if (rc != 0) {
-			D_ERROR("d_binheap_grow failed, rc: %d.\n", rc);
+			D_ERROR("d_binheap_grow() failed, " DF_RC "\n",
+				DP_RC(rc));
 			d_binheap_destroy_inplace(h);
 			return rc;
 		}
@@ -203,7 +204,7 @@ d_binheap_create_inplace(uint32_t feats, uint32_t count, void *priv,
 
 	rc = dbh_lock_init(h);
 	if (rc != 0) {
-		D_ERROR("dbg_lock_init() failed, rc: %d.\n", rc);
+		D_ERROR("dbg_lock_init() failed, " DF_RC "\n", DP_RC(rc));
 		d_binheap_destroy_inplace(h);
 	}
 
@@ -232,7 +233,7 @@ d_binheap_create(uint32_t feats, uint32_t count, void *priv,
 
 	rc = d_binheap_create_inplace(feats, count, priv, ops, bh_created);
 	if (rc != 0) {
-		D_ERROR("d_binheap_create_inplace failed, rc: %d.\n", rc);
+		D_ERROR("d_binheap_create() failed, " DF_RC "\n", DP_RC(rc));
 		D_FREE_PTR(bh_created);
 		return rc;
 	}
@@ -488,7 +489,8 @@ d_binheap_insert(struct d_binheap *h, struct d_binheap_node *e)
 	if (new_idx == h->d_bh_hwm) {
 		rc = d_binheap_grow(h);
 		if (rc != 0) {
-			D_ERROR("d_binheap_grow failed, rc: %d.\n", rc);
+			D_ERROR("d_binheap_grow() failed, " DF_RC "\n",
+				DP_RC(rc));
 			dbh_unlock(h, false /* read-only */);
 			return rc;
 		}
@@ -497,7 +499,8 @@ d_binheap_insert(struct d_binheap *h, struct d_binheap_node *e)
 	if (h->d_bh_ops->hop_enter) {
 		rc = h->d_bh_ops->hop_enter(h, e);
 		if (rc != 0) {
-			D_ERROR("d_bh_ops->hop_enter failed, rc: %d.\n", rc);
+			D_ERROR("d_bh_ops->hop_enter() failed, " DF_RC "\n",
+				DP_RC(rc));
 			dbh_unlock(h, false /* read-only */);
 			return rc;
 		}

@@ -99,8 +99,8 @@ class LogLine():
 
     # Match an address range, a region in memory.
     re_region = re.compile(r"(0|0x[0-9a-f]{1,16})-(0x[0-9a-f]{1,16})")
-    # Match a pointer, with optional ) or . suffix.
-    re_pointer = re.compile(r"0x[0-9a-f]{1,16}((\)|\.)?)")
+    # Match a pointer, with optional ) . or , suffix.
+    re_pointer = re.compile(r"0x[0-9a-f]{1,16}((\)|\.|\,)?)")
     # Match a pid marker
     re_pid = re.compile(r"pid=(\d+)")
 
@@ -307,7 +307,7 @@ class LogLine():
     def is_callback(self):
         """Returns true if line is RPC callback"""
 
-        if self.function != 'crt_hg_req_send_cb':
+        if self.function not in ('crt_hg_req_send_cb', 'crt_rpc_complete'):
             return False
 
         return self._is_type(['Invoking', 'RPC', 'callback'], base=5)
