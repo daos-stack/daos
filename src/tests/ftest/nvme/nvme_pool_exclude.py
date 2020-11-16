@@ -207,12 +207,14 @@ class NvmePoolExclude(TestWithServers):
                 self.log.info(output)
                 fail_count = 0
                 while fail_count <= 20:
-                    pver_exclude = self.get_pool_version()
+                    rebuild_status = self.get_rebuild_status()
                     time.sleep(15)
                     fail_count += 1
-                    if pver_exclude > pver_begin:
+                    if rebuild_status == "done":
                         break
 
+                self.assertTrue(fail_count <= 20, "Rebuild Not Completed")
+                pver_exclude = self.get_pool_version()
                 self.log.info("Pool Version after exclude %s", pver_exclude)
                 # Check pool version incremented after pool exclude
                 self.assertTrue(pver_exclude > pver_begin,

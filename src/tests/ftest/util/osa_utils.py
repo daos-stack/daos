@@ -60,6 +60,17 @@ class OSAUtils(TestWithServers):
         return int(data["leader"])
 
     @fail_on(CommandFailure)
+    def get_rebuild_status(self):
+        """Get the rebuild status.
+
+        Returns:
+            str: reuild status
+
+        """
+        data = self.dmg_command.pool_query(self.pool.uuid)
+        return data["rebuild"]["status"]
+
+    @fail_on(CommandFailure)
     def get_pool_version(self):
         """Get the pool version.
 
