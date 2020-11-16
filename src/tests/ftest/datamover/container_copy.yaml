@@ -67,7 +67,7 @@ mdtest:
       branching_factor: 4
   bytes: 4096
 dfuse:
-  mount_dir: "/tmp/daos_dfuse"
+  mount_dir: "/tmp/daos_dfuse/"
 datamover:
   src_path: "/"
   dest_path: "/"

@@ -120,7 +120,7 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	crt_gdata.cg_rpcid = start_rpcid;
 
-	D_DEBUG(DB_ALL, "Starting RPCID 0x%lx\n", start_rpcid);
+	D_DEBUG(DB_ALL, "Starting RPCID %#lx\n", start_rpcid);
 
 	/* Apply CART-890 workaround for server side only */
 	if (server) {
@@ -388,28 +388,30 @@ do_init:
 		if (crt_na_type_is_ofi(crt_gdata.cg_na_plugin)) {
 			rc = crt_na_ofi_config_init();
 			if (rc != 0) {
-				D_ERROR("crt_na_ofi_config_init failed, "
-					"rc: %d.\n", rc);
+				D_ERROR("crt_na_ofi_config_init() failed, "
+					DF_RC "\n", DP_RC(rc));
 				D_GOTO(out, rc);
 			}
 		}
 
 		rc = crt_hg_init();
 		if (rc != 0) {
-			D_ERROR("crt_hg_init failed rc: %d.\n", rc);
+			D_ERROR("crt_hg_init() failed, " DF_RC "\n", DP_RC(rc));
 			D_GOTO(cleanup, rc);
 		}
 
 		rc = crt_grp_init(grpid);
 		if (rc != 0) {
-			D_ERROR("crt_grp_init failed, rc: %d.\n", rc);
+			D_ERROR("crt_grp_init() failed, " DF_RC "\n",
+				DP_RC(rc));
 			D_GOTO(cleanup, rc);
 		}
 
 		if (crt_plugin_gdata.cpg_inited == 0) {
 			rc = crt_plugin_init();
 			if (rc != 0) {
-				D_ERROR("crt_plugin_init rc: %d.\n", rc);
+				D_ERROR("crt_plugin_init() failed, " DF_RC "\n",
+					DP_RC(rc));
 				D_GOTO(cleanup, rc);
 			}
 		}
@@ -418,7 +420,8 @@ do_init:
 
 		rc = crt_opc_map_create(CRT_OPC_MAP_BITS);
 		if (rc != 0) {
-			D_ERROR("crt_opc_map_create failed rc: %d.\n", rc);
+			D_ERROR("crt_opc_map_create() failed, " DF_RC "\n",
+				DP_RC(rc));
 			D_GOTO(cleanup, rc);
 		}
 		D_ASSERT(crt_gdata.cg_opc_map != NULL);
@@ -451,7 +454,7 @@ unlock:
 
 out:
 	if (rc != 0) {
-		D_ERROR("crt_init failed, rc: %d.\n", rc);
+		D_ERROR("failed, " DF_RC "\n", DP_RC(rc));
 		d_fault_inject_fini();
 		d_log_fini();
 	}

@@ -51,4 +51,4 @@ ior:
         oclass_SX:
           dfs_oclass: "SX"
 dfuse:
-  mount_dir: "/tmp/daos_dfuse"
+  mount_dir: "/tmp/daos_dfuse/"

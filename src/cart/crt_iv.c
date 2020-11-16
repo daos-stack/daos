@@ -1685,11 +1685,12 @@ exit:
 
 		if (put_needed)
 			iv_ops->ivo_on_put(ivns, iv_value, user_priv);
-		D_ERROR("Failed to issue IV fetch; rc = %d\n", rc);
+		D_ERROR("Failed to issue IV fetch; rc = " DF_RC "\n",
+			DP_RC(rc));
 
 		if (cb_info) {
 			IVNS_DECREF(cb_info->ifc_ivns_internal);
-			D_FREE_PTR(cb_info);
+			D_FREE(cb_info);
 		}
 	}
 
@@ -2581,7 +2582,7 @@ handle_response_internal(void *arg)
 		handle_ivupdate_response(cb_info);
 		break;
 	default:
-		D_ERROR("wrong opc 0x%x\n", rpc->cr_opc);
+		D_ERROR("wrong opc %#x\n", rpc->cr_opc);
 	}
 }
 
