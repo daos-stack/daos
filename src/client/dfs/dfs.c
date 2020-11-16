@@ -1126,7 +1126,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 		rc = daos_cont_close(coh, NULL);
 		if (rc) {
 			D_ERROR("daos_cont_close() failed (%d)\n", rc);
-			D_GOTO(err_destroy, rc);
+			D_GOTO(err_destroy, rc = daos_der2errno(rc));
 		}
 	}
 
