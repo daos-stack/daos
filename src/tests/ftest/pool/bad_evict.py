@@ -26,7 +26,7 @@ import traceback
 import ctypes
 
 from apricot import TestWithServers
-from pydaos.raw import DaosPool, DaosApiError, RankList
+from pydaos.raw import DaosPool, DaosApiError
 
 
 class BadEvictTest(TestWithServers):
@@ -60,10 +60,6 @@ class BadEvictTest(TestWithServers):
         # expected result of the test
         expected_for_param = []
 
-        #svclist = self.params.get("ranklist", '/run/evicttests/svrlist/*/')
-        #svc = svclist[0]
-        #expected_for_param.append(svclist[1])
-
         setlist = self.params.get("setname",
                                   '/run/evicttests/connectsetnames/*/')
         evictset = setlist[0]
@@ -83,7 +79,6 @@ class BadEvictTest(TestWithServers):
 
         saveduuid = None
         savedgroup = None
-        #savedsvc = None
         pool = None
 
         try:
@@ -92,12 +87,6 @@ class BadEvictTest(TestWithServers):
             pool = DaosPool(self.context)
             pool.create(createmode, createuid, creategid,
                         createsize, createsetid, None)
-
-            # trash the the pool service rank list
-            #if not svc == 'VALID':
-            #    savedsvc = pool.svc
-            #    rl_ranks = ctypes.POINTER(ctypes.c_uint)()
-            #    pool.svc = RankList(rl_ranks, 1)
 
             # trash the pool group value
             savedgroup = pool.group
@@ -136,6 +125,4 @@ class BadEvictTest(TestWithServers):
                 if saveduuid is not None:
                     for item in range(0, len(saveduuid)):
                         pool.uuid[item] = saveduuid[item]
-                #if savedsvc is not None:
-                #    pool.svc = savedsvc
                 pool.destroy(0)

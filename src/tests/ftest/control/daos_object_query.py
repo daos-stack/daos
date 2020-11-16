@@ -23,7 +23,6 @@
 """
 from apricot import TestWithServers
 from daos_utils import DaosCommand
-from general_utils import convert_list
 
 
 class DaosObjectQuery(TestWithServers):

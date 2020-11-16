@@ -112,7 +112,7 @@ class Cont(object):
     __str__
         print pool and container UUIDs
     """
-    def __init__(self, puuid=None, cuuid=None, path=None, svc='0'):
+    def __init__(self, puuid=None, cuuid=None, path=None):
         self._dc = DaosClient()
         self.coh = None
         if path is None and (puuid is None or cuuid is None):

@@ -68,20 +68,6 @@ class DfuseCommand(ExecutableCommand):
             display (bool, optional): print updated params. Defaults to True.
         """
         self.puuid.update(pool.uuid, "puuid" if display else None)
-        #self.set_dfuse_svcl_param(pool, display)
-
-    def set_dfuse_svcl_param(self, pool, display=True):
-        """Set the dfuse svcl param from the ranks of a DAOS pool object.
-
-        Args:
-            pool (TestPool): DAOS test pool object
-            display (bool, optional): print updated params. Defaults to True.
-        """
-        svcl = ":".join(
-            [str(item) for item in [
-                int(pool.pool.svc.rl_ranks[index])
-                for index in range(pool.pool.svc.rl_nr)]])
-        self.svcl.update(svcl, "svcl" if display else None)
 
     def set_dfuse_cont_param(self, cont, display=True):
         """Set dfuse cont param from Container object.
