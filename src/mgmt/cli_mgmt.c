@@ -552,6 +552,57 @@ cleanup:
 	return rc;
 }
 
+/*
+ * Send an upcall to the agent to notify it of a clean process shutdown.
+ */
+int
+dc_mgmt_disconnect(void)
+{
+	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
+	struct drpc		 *ctx;
+	Drpc__Call		 *dreq;
+	Drpc__Response		 *dresp;
+	int			 rc;
+
+	D_DEBUG(DB_MGMT, "disconnecting process for pid:%d\n", getpid());
+
+	/* Connect to daos_agent. */
+	D_ASSERT(dc_agent_sockpath != NULL);
+	rc = drpc_connect(dc_agent_sockpath, &ctx);
+	if (rc != -DER_SUCCESS) {
+		D_ERROR("failed to connect to %s " DF_RC "\n",
+			dc_agent_sockpath, DP_RC(rc));
+		D_GOTO(out, 0);
+	}
+
+	rc = drpc_call_create(ctx, DRPC_MODULE_MGMT,
+			      DRPC_METHOD_MGMT_DISCONNECT, &dreq);
+	if (rc != 0)
+		goto out_ctx;
+
+	/* Make the Process Disconnect call and get the response. */
+	rc = drpc_call(ctx, R_SYNC, dreq, &dresp);
+	if (rc != 0) {
+		D_ERROR("Process Disconnect call failed: "DF_RC"\n", DP_RC(rc));
+		goto out_dreq;
+	}
+	if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("Process Disconnect unsuccessful: %d\n", dresp->status);
+		rc = -DER_MISC;
+		goto out_dresp;
+	}
+
+out_dresp:
+	drpc_response_free(dresp);
+out_dreq:
+	drpc_call_free(dreq);
+out_ctx:
+	drpc_close(ctx);
+out:
+	return rc;
+}
+
+
 #define SYS_BUF_MAGIC 0x98234ad3
 
 struct psr_buf {
