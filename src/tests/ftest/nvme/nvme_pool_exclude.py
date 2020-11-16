@@ -28,7 +28,7 @@ import threading
 
 from itertools import product
 from avocado import fail_on
-from osa_utils import OSAUtils
+from apricot import TestWithServers
 from test_utils_pool import TestPool
 from ior_utils import IorCommand
 from job_manager_utils import Mpirun
@@ -44,7 +44,7 @@ except ImportError:
     import Queue as queue
 
 
-class NvmePoolExclude(OSAUtils):
+class NvmePoolExclude(TestWithServers):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
@@ -71,6 +71,28 @@ class NvmePoolExclude(OSAUtils):
         self.pool = None
         self.out_queue = queue.Queue()
         self.container_info = {}
+
+    @fail_on(CommandFailure)
+    def get_rebuild_status(self):
+        """Get the rebuild status.
+
+        Returns:
+            str: reuild status
+
+        """
+        data = self.dmg_command.pool_query(self.pool.uuid)
+        return data["rebuild"]["status"]
+
+    @fail_on(CommandFailure)
+    def get_pool_version(self):
+        """Get the pool version.
+
+        Returns:
+            int: pool_version_value
+
+        """
+        data = self.dmg_command.pool_query(self.pool.uuid)
+        return int(data["version"])
 
     def ior_thread(self, pool, oclass, api, test, flags, results):
         """Start threads and wait until all threads are finished.
