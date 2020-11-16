@@ -272,6 +272,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 		LOG_MODE((HANDLE), _flag, O_PATH);			\
 		LOG_MODE((HANDLE), _flag, O_SYNC);			\
 		LOG_MODE((HANDLE), _flag, O_TRUNC);			\
+		LOG_MODE((HANDLE), _flag, O_NOFOLLOW);			\
 		if (_flag)						\
 			DFUSE_TRA_ERROR(HANDLE, "Flags 0%o", _flag);	\
 	} while (0)

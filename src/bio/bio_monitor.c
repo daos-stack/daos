@@ -42,6 +42,19 @@ struct dev_state_msg_arg {
 	ABT_eventual			 eventual;
 };
 
+/*
+ * Used for getting bio device list, which requires exclusive access from
+ * the init xstream.
+ */
+struct bio_dev_list_msg_arg {
+	struct bio_xs_context		*xs;
+	d_list_t			*dev_list;
+	int				 dev_list_cnt;
+	ABT_eventual			 eventual;
+	int				 rc;
+};
+
+
 /* Collect space utilisation for blobstore */
 static void
 collect_bs_usage(struct spdk_blob_store *bs, struct nvme_stats *stats)

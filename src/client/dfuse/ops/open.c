@@ -69,6 +69,17 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	LOG_FLAGS(ie, fi->flags);
 
+	/*
+	 * dfs_dup() just locally duplicates the file handle. If we have
+	 * O_TRUNC flag, we need to truncate the file manually.
+	 */
+	if (fi->flags & O_TRUNC) {
+		rc = dfs_punch(ie->ie_dfs->dfs_ns, ie->ie_obj, 0,
+			       DFS_MAX_FSIZE);
+		if (rc)
+			D_GOTO(err, rc);
+	}
+
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	DFUSE_REPLY_OPEN(oh, req, &fi_out);
 
