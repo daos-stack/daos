@@ -52,6 +52,7 @@ struct test_global_t {
 	int			 tg_burst_count;
 	int			 tg_send_shutdown;
 	int			 tg_send_queue_front;
+	bool			 tg_use_cfg;
 	bool			 tg_save_cfg;
 	char			*tg_cfg_path;
 };
@@ -154,11 +155,14 @@ test_parse_args(int argc, char **argv)
 		{"queue_front",	no_argument,		0, 'f'},
 		{"shutdown",	no_argument,		0, 'q'},
 		{"cfg_path",	required_argument,	0, 'p'},
+		{"use_cfg",	required_argument,	0, 'u'},
 		{0, 0, 0, 0}
 	};
 
+	test.tg_use_cfg = true;
+
 	while (1) {
-		rc = getopt_long(argc, argv, "n:a:b:c:p:fhsq", long_options,
+		rc = getopt_long(argc, argv, "n:a:b:c:p:u:fhsq", long_options,
 				 &option_index);
 		if (rc == -1)
 			break;
@@ -194,6 +198,9 @@ test_parse_args(int argc, char **argv)
 		case 'p':
 			test.tg_save_cfg = true;
 			test.tg_cfg_path = optarg;
+			break;
+		case 'u':
+			test.tg_use_cfg = atoi(optarg);
 			break;
 		case '?':
 			return 1;

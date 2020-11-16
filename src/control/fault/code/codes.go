@@ -63,6 +63,7 @@ const (
 	// general fault codes
 	Unknown Code = iota
 	MissingSoftwareDependency
+	BadVersionSoftwareDependency
 	PrivilegedHelperNotPrivileged
 	PrivilegedHelperNotAvailable
 	PrivilegedHelperRequestFailed
