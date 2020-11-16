@@ -238,7 +238,7 @@ crt_opc_reg(struct crt_opc_info *opc_info, crt_opcode_t opc, uint32_t flags,
 	int	rc = 0;
 
 	if (opc_info->coi_inited == 1) {
-		D_ERROR("RPC with opcode 0x%x already registered\n",
+		D_ERROR("RPC with opcode %#x already registered\n",
 			opc_info->coi_opc);
 		D_GOTO(out, rc = -DER_EXIST);
 	};

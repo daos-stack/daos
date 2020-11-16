@@ -48,7 +48,7 @@
 #define RPC_TRACE(mask, rpc, fmt, ...)					\
 	do {								\
 		D_TRACE_DEBUG(mask, (rpc),				\
-			"[opc=0x%x rpcid=0x%lx rank:tag=%d:%d] " fmt,	\
+			"[opc=%#x rpcid=%#lx rank:tag=%d:%d] " fmt,	\
 			(rpc)->crp_pub.cr_opc,				\
 			(rpc)->crp_req_hdr.cch_rpcid,			\
 			(rpc)->crp_pub.cr_ep.ep_rank,			\
@@ -60,7 +60,7 @@
 #define RPC_ERROR(rpc, fmt, ...)					\
 	do {								\
 		D_TRACE_ERROR((rpc),					\
-			"[opc=0x%x rpcid=0x%lx rank:tag=%d:%d] " fmt,	\
+			"[opc=%#x rpcid=%#lx rank:tag=%d:%d] " fmt,	\
 			(rpc)->crp_pub.cr_opc,				\
 			(rpc)->crp_req_hdr.cch_rpcid,			\
 			(rpc)->crp_pub.cr_ep.ep_rank,			\

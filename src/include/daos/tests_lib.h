@@ -348,6 +348,19 @@ int dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
  */
 int dmg_storage_set_nvme_fault(const char *dmg_config_file,
 			       char *host, const uuid_t uuid, int force);
+/**
+ * Get NVMe Device health stats.
+ *
+ * \param dmg_config_file
+ *		[IN]	DMG config file
+ * \param host	[IN]	Get device-health from the given host.
+ * \param uuid	[IN]	UUID of the device.
+ * \param stats	[IN/OUT]
+ *			[in] Health stats for which to get counter value.
+ *			[out] Stats counter value.
+ */
+int dmg_storage_query_device_health(const char *dmg_config_file, char *host,
+				    char *stats, const uuid_t uuid);
 
 /**
  * Verify the assumed blobstore device state with the actual enum definition

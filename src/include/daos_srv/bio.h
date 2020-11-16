@@ -317,11 +317,11 @@ bio_sgl_holes(struct bio_sglist *bsgl)
  * NB. Move it to control.h if it needs be shared by control plane.
  */
 struct bio_dev_info {
-	d_list_t	 bdi_link;
-	uuid_t		 bdi_dev_id;
-	uint32_t	 bdi_flags;	/* defined in control.h */
-	uint32_t	 bdi_tgt_cnt;
-	int		*bdi_tgts;
+	d_list_t		bdi_link;
+	uuid_t			bdi_dev_id;
+	uint32_t		bdi_flags;	/* defined in control.h */
+	uint32_t		bdi_tgt_cnt;
+	int		       *bdi_tgts;
 };
 
 static inline void
@@ -670,4 +670,5 @@ void bio_log_csum_err(struct bio_xs_context *b, int tgt_id);
 
 /* Too many blob IO queued, need to schedule a NVMe poll? */
 bool bio_need_nvme_poll(struct bio_xs_context *xs);
+
 #endif /* __BIO_API_H__ */
