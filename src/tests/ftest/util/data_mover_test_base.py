@@ -79,12 +79,12 @@ class DataMoverTestBase(IorTestBase):
         Returns:
             (str) A valid param_type
         """
-        s = str(param_type).upper()
-        if s == "DAOS":
+        _type = str(param_type).upper()
+        if _type == "DAOS":
             return "DAOS_UUID"
-        if s in self.PARAM_TYPES:
-            return s
-        self.fail("Invalid param_type: {}".format(s))
+        if _type in self.PARAM_TYPES:
+            return _type
+        self.fail("Invalid param_type: {}".format(_type))
 
 
     def create_pool(self):

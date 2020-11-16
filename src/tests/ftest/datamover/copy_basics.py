@@ -55,12 +55,12 @@ class CopyBasicsTest(DataMoverTestBase):
             "test_file", "/run/ior/copy_basics/*")
 
         # Setup the directory structures
-        self.posix_test_path = join(self.workdir, "posix_test") + sep
+        self.posix_test_path1 = join(self.workdir, "posix_test") + sep
         self.posix_test_path2 = join(self.workdir, "posix_test2") + sep
 
         # Create the directories
         cmd = "mkdir -p '{}' '{}'".format(
-            self.posix_test_path,
+            self.posix_test_path1,
             self.posix_test_path2)
         self.execute_cmd(cmd)
 
@@ -68,7 +68,7 @@ class CopyBasicsTest(DataMoverTestBase):
         """Tear down each test case."""
         # Remove the created directories
         cmd = "rm -rf '{}' '{}'".format(
-            self.posix_test_path,
+            self.posix_test_path1,
             self.posix_test_path2)
         self.execute_cmd(cmd)
 
@@ -120,7 +120,7 @@ class CopyBasicsTest(DataMoverTestBase):
 
         # Create each source location
         p1_c1 = ["/", pool1, container1]
-        posix1 = [self.posix_test_path, None, None]
+        posix1 = [self.posix_test_path1, None, None]
 
         # Create each destination location
         p1_c2 = ["/", pool1, container2]
