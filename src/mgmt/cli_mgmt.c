@@ -360,7 +360,7 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 	resp = mgmt__get_attach_info_resp__unpack(&alloc.alloc, dresp->body.len,
 						  dresp->body.data);
 	if (alloc.oom)
-		D_GOTO(out_dresp, rc = -DER_MISC);
+		D_GOTO(out_dresp, rc = -DER_NOMEM);
 	if (resp == NULL) {
 		D_ERROR("failed to unpack GetAttachInfo response\n");
 		rc = -DER_MISC;
@@ -621,14 +621,16 @@ attach_group(const char *name, int npsrs, struct dc_mgmt_psr *psrs,
 						psrs[i].rank, psrs[i].uri);
 		if (rc != 0) {
 			D_ERROR("failed to add rank %u URI %s to group %s: "
-				"%d\n", psrs[i].rank, psrs[i].uri, name, rc);
+				DF_RC "\n",
+				psrs[i].rank, psrs[i].uri, name, DP_RC(rc));
 			goto err_group;
 		}
 
 		rc = crt_group_psr_set(group, psrs[i].rank);
 		if (rc != 0) {
-			D_ERROR("failed to set rank %u as group %s PSR: %d\n",
-				psrs[i].rank, name, rc);
+			D_ERROR("failed to set rank %u as group %s PSR: "
+				DF_RC "\n",
+				psrs[i].rank, name, DP_RC(rc));
 			goto err_group;
 		}
 	}
