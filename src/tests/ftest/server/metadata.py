@@ -360,7 +360,7 @@ class ObjectMetadata(TestWithServers):
 
     @avocado.fail_on(DaosApiError)
     def test_container_removal_after_der_nospace(self):
-        """JIRA ID: DAOS-4858.
+        """JIRA ID: DAOS-4858
 
         Test Description:
            Verify container can be successfully deleted when the storage pool
