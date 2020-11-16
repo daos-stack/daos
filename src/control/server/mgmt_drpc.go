@@ -97,7 +97,6 @@ func (mod *srvModule) handleGetPoolServiceRanks(reqb []byte) ([]byte, error) {
 		// return nil, err
 	}
 
-	// resp := new(srvpb.GetPoolSvcResp)
 	resp.Svcreps = system.RanksToUint32(ps.Replicas)
 
 	mod.log.Debugf("GetPoolSvcResp: %+v", resp)
