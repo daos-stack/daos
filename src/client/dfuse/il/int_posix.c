@@ -141,7 +141,6 @@ entry_array_close(void *arg) {
 
 	entry->fd_cont->ioc_open_count -= 1;
 
-	/* CLOSE_WHERE_POSSIBLE */
 	ioil_shrink(entry->fd_cont);
 }
 
