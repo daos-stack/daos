@@ -10,6 +10,8 @@ def scons():
     unit_env = senv.Clone()
     prereqs.require(unit_env, 'pmdk', 'spdk', 'isal', 'hwloc', 'cmocka')
 
+    unit_env.AppendUnique(OBJPREFIX='c_')
+
     spdk_src = prereqs.get_src_path("spdk")
     nvme_lib_src = os.path.join(spdk_src, 'lib', 'nvme')
     spdk_incl_src = os.path.join(spdk_src, 'include')
@@ -39,7 +41,7 @@ def scons():
         testbin = daos_build.test(unit_env, 'nvme_control_ctests',
                                   ['nvme_control_ut.c', unit_env.ncc,
                                    unit_env.nc] + control_tgts,
-				  LIBS=libs)
+                                  LIBS=libs)
         unit_env.Install("$PREFIX/bin", testbin)
     else:
         print(look_path, " missing, skipping nvme_control_ut build")
