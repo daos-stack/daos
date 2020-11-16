@@ -308,7 +308,6 @@ crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv)
 
 	D_SPIN_DESTROY(&rpc_priv->crp_lock);
 
-	memset(rpc_priv, 0xfe, sizeof (struct crt_rpc_priv));
 	D_FREE(rpc_priv);
 	DBG_EXIT();
 }
