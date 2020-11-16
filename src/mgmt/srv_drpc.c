@@ -1826,6 +1826,19 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
+	if (strlen(req->old_dev_uuid) == 0) {
+		D_ERROR("Old device UUID for replacement command is empty\n");
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		mgmt__dev_replace_req__free_unpacked(req, &alloc.alloc);
+		return;
+	}
+	if (strlen(req->new_dev_uuid) == 0) {
+		D_ERROR("New device UUID for replacement command is empty\n");
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		mgmt__dev_replace_req__free_unpacked(req, &alloc.alloc);
+		return;
+	}
+
 	D_INFO("Received request to replace device %s with device %s\n",
 	       req->old_dev_uuid, req->new_dev_uuid);
 
@@ -1840,23 +1853,17 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	/* Response status is populated with SUCCESS on init. */
 	mgmt__dev_replace_resp__init(resp);
 
-	if (strlen(req->old_dev_uuid) != 0) {
-		if (uuid_parse(req->old_dev_uuid, old_uuid) != 0) {
-			D_ERROR("Unable to parse device UUID %s: %d\n",
-				req->old_dev_uuid, rc);
-			uuid_clear(old_uuid);
-		}
-	} else
+	if (uuid_parse(req->old_dev_uuid, old_uuid) != 0) {
+		D_ERROR("Unable to parse device UUID %s: %d\n",
+			req->old_dev_uuid, rc);
 		uuid_clear(old_uuid); /* need to set uuid = NULL */
+	}
 
-	if (strlen(req->new_dev_uuid) != 0) {
-		if (uuid_parse(req->new_dev_uuid, new_uuid) != 0) {
-			D_ERROR("Unable to parse device UUID %s: %d\n",
-				req->new_dev_uuid, rc);
-			uuid_clear(new_uuid);
-		}
-	} else
+	if (uuid_parse(req->new_dev_uuid, new_uuid) != 0) {
+		D_ERROR("Unable to parse device UUID %s: %d\n",
+			req->new_dev_uuid, rc);
 		uuid_clear(new_uuid); /* need to set uuid = NULL */
+	}
 
 	rc = ds_mgmt_dev_replace(old_uuid, new_uuid, resp);
 	if (rc != 0)

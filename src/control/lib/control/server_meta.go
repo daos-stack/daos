@@ -138,12 +138,12 @@ func SmdQuery(ctx context.Context, rpcClient UnaryInvoker, req *SmdQueryReq) (*S
 	}
 	if req.UUID != "" {
 		if err := checkUUID(req.UUID); err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "bad old device UUID for replacement")
 		}
 	}
 	if req.ReplaceUUID != "" {
 		if err := checkUUID(req.ReplaceUUID); err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "bad new device UUID for replacement")
 		}
 	}
 
