@@ -55,6 +55,15 @@ void
 vos_dtx_rsrvd_fini(struct dtx_handle *dth);
 
 /**
+ * Generate DTX entry for the given DTX. It is usually used for read
+ * only TX or on the server that only contains read sub operations.
+ *
+ * \param dth	[IN]	The dtx handle
+ */
+int
+vos_dtx_pin(struct dtx_handle *dth);
+
+/**
  * Check the specified DTX's status, and related epoch, pool map version
  * information if required.
  *
