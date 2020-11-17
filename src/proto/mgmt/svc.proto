@@ -118,18 +118,3 @@ message SetRankReq {
 
 // SetRankResp is identical to DaosResp.
 
-message CreateMsReq {
-	bool bootstrap = 1;	// Bootstrap the DAOS management service (MS).
-	string uuid = 2;	// DAOS IO server UUID of this MS replica.
-	string addr = 3;	// Control server management address of this MS replica.
-}
-
-// CreateMsResp is identical to DaosResp.
-
-// StartMsReq is nil.
-
-// StartMsResp is identical to DaosResp.
-
-// SetUpReq is nil.
-
-// SetUpResp is identical to DaosResp.
