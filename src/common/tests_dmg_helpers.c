@@ -591,7 +591,10 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 {
 	struct json_object	*tmp;
 	struct json_object	*dev = NULL;
-	int			i;
+	struct json_object	*target = NULL;
+	struct json_object	*targets;
+	int			tgts_len;
+	int			i, j;
 
 	for (i = 0; i < dev_length; i++) {
 		dev = json_object_array_get_idx(smd_dev, i);
@@ -602,6 +605,19 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 		}
 		uuid_parse(json_object_get_string(tmp),
 			   devices[*disks].device_id);
+
+		if (!json_object_object_get_ex(dev, "tgt_ids",
+					       &targets)) {
+			D_ERROR("unable to extract tgtids from JSON\n");
+			return -DER_INVAL;
+		}
+		tgts_len = json_object_array_length(targets);
+		for (j = 0; j < tgts_len; j++) {
+			target = json_object_array_get_idx(targets, j);
+			devices[*disks].tgtidx[j] = atoi(
+				json_object_to_json_string(target));
+		}
+		devices[*disks].n_tgtidx = tgts_len;
 
 		if (!json_object_object_get_ex(dev, "state", &tmp)) {
 			D_ERROR("unable to extract state from JSON\n");
@@ -740,6 +756,77 @@ out:
 	return rc;
 }
 
+int
+dmg_storage_query_device_health(const char *dmg_config_file, char *host,
+				char *stats, const uuid_t uuid)
+{
+	struct json_object	*dmg_out = NULL;
+	struct json_object	*storage_map = NULL;
+	struct json_object	*smd_info = NULL;
+	struct json_object	*storage_info = NULL;
+	struct json_object	*health_info = NULL;
+	struct json_object	*dev = NULL;
+	struct json_object	*tmp = NULL;
+	char			uuid_str[DAOS_UUID_STR_SIZE];
+	int			argcount = 0;
+	char			**args = NULL;
+	int			rc = 0;
+
+	uuid_unparse_lower(uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, " --uuid=%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	args = cmd_push_arg(args, &argcount, " --host-list=%s ", host);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("storage query device-health ", dmg_config_file,
+				args, argcount, &dmg_out);
+	if (rc != 0) {
+		D_ERROR("dmg command failed");
+		goto out_json;
+	}
+
+	if (!json_object_object_get_ex(dmg_out, "host_storage_map",
+				       &storage_map)) {
+		D_ERROR("unable to extract host_storage_map from JSON\n");
+		return -DER_INVAL;
+	}
+
+	json_object_object_foreach(storage_map, key, val) {
+		D_DEBUG(DB_TEST, "key:\"%s\",val=%s\n", key,
+			json_object_to_json_string(val));
+		if (!json_object_object_get_ex(val, "storage", &storage_info)) {
+			D_ERROR("unable to extract hosts from JSON\n");
+			return -DER_INVAL;
+		}
+		if (!json_object_object_get_ex(storage_info, "smd_info",
+					       &smd_info)) {
+			D_ERROR("unable to extract hosts from JSON\n");
+			return -DER_INVAL;
+		}
+		json_object_object_foreach(smd_info, key1, val1) {
+			D_DEBUG(DB_TEST, "key1:\"%s\",val1=%s\n", key1,
+				json_object_to_json_string(val1));
+			dev = json_object_array_get_idx(val1, 0);
+			json_object_object_get_ex(dev, "health", &health_info);
+			if (health_info != NULL) {
+				json_object_object_get_ex(health_info, stats,
+							  &tmp);
+				strcpy(stats, json_object_to_json_string(tmp));
+			}
+		}
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
 int verify_blobstore_state(int state, const char *state_str)
 {
 	if (strcasecmp(state_str, "FAULTY") == 0) {
@@ -768,4 +855,19 @@ int verify_blobstore_state(int state, const char *state_str)
 	}
 
 	return 1;
+}
+
+const char *
+daos_target_state_enum_to_str(int state)
+{
+	switch (state) {
+	case DAOS_TS_UNKNOWN: return "UNKNOWN";
+	case DAOS_TS_DOWN_OUT: return "DOWNOUT";
+	case DAOS_TS_DOWN: return "DOWN";
+	case DAOS_TS_UP: return "UP";
+	case DAOS_TS_UP_IN: return "UPIN";
+	case DAOS_TS_DRAIN: return "DRAIN";
+	}
+
+	return "Undefined State";
 }

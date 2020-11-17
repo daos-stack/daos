@@ -27,8 +27,6 @@ from __future__ import print_function
 import sys
 import time
 
-from apricot import skipForTicket
-
 from avocado  import Test
 from avocado  import main
 
@@ -54,7 +52,6 @@ class CartCtlFiveNodeTest(Test):
         """ Test tear down """
         print("Run TearDown\n")
 
-    @skipForTicket("DAOS-5547")
     def test_cart_ctl(self):
         """
         Test CaRT ctl
@@ -79,10 +76,10 @@ class CartCtlFiveNodeTest(Test):
 
         time.sleep(5)
 
-        clicmd = self.utils.build_cmd(self, self.env, "test_clients_1")
-        self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "test_clients_2")
-        self.utils.launch_test(self, clicmd, srv_rtn)
+        for index in range(2):
+            clicmd = self.utils.build_cmd(
+                self, self.env, "test_clients", index=index)
+            self.utils.launch_test(self, clicmd, srv_rtn)
 
         self.utils.stop_process(srv_rtn)
 

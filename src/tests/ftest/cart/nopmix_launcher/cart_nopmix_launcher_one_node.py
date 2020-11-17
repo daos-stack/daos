@@ -53,7 +53,6 @@ class CartNoPmixLauncherOneNodeTest(Test):
         """ Test tear down """
         print("Run TearDown\n")
 
-    @skipForTicket("DAOS-5524")
     def test_cart_no_pmix_launcher(self):
         """
         Test CaRT NoPmix Launcher
