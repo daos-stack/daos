@@ -33,7 +33,6 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
-	"golang.org/x/net/context"
 )
 
 func TestServer_Instance_createSuperblock(t *testing.T) {
@@ -43,7 +42,6 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 	testDir, cleanup := CreateTestDir(t)
 	defer cleanup()
 
-	defaultApList := []string{"1.2.3.4:5"}
 	ctrlAddrs := []string{"1.2.3.4:5", "6.7.8.9:10"}
 	h := NewIOServerHarness(log)
 	for idx, mnt := range []string{"one", "two"} {
@@ -57,21 +55,11 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 			WithScmRamdiskSize(1).
 			WithScmMountPoint(mnt)
 		r := ioserver.NewRunner(log, cfg)
-		ctrlAddr, err := net.ResolveTCPAddr("tcp", ctrlAddrs[idx])
-		if err != nil {
-			t.Fatal(err)
-		}
-		ms := newMgmtSvcClient(
-			context.Background(), log, mgmtSvcClientCfg{
-				ControlAddr:  ctrlAddr,
-				AccessPoints: defaultApList,
-			},
-		)
 		msc := &scm.MockSysConfig{
 			IsMountedBool: true,
 		}
 		mp := scm.NewMockProvider(log, nil, msc)
-		srv := NewIOServerInstance(log, nil, mp, ms, r)
+		srv := NewIOServerInstance(log, nil, mp, nil, r)
 		srv.fsRoot = testDir
 		if err := h.AddInstance(srv); err != nil {
 			t.Fatal(err)

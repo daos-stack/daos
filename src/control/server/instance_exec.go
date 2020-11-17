@@ -113,7 +113,7 @@ func (srv *IOServerInstance) waitReady(ctx context.Context, errChan chan error) 
 //
 // Instance ready state is set to indicate that all setup is complete.
 func (srv *IOServerInstance) finishStartup(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
-	if err := srv.joinSystem(ctx, ready); err != nil {
+	if err := srv.handleReady(ctx, ready); err != nil {
 		return err
 	}
 	// update ioserver target count to reflect allocated
