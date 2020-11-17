@@ -249,10 +249,14 @@ struct  _Mgmt__DevReplaceReq
    * UUID of new (hot-plugged) blobstore/device
    */
   char *new_dev_uuid;
+  /*
+   * Skip device reintegration if set
+   */
+  protobuf_c_boolean noreint;
 };
 #define MGMT__DEV_REPLACE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__dev_replace_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0 }
 
 
 struct  _Mgmt__DevReplaceResp
@@ -296,10 +300,6 @@ struct  _Mgmt__SmdQueryReq
    */
   protobuf_c_boolean setfaulty;
   /*
-   * replace a device with a new device
-   */
-  protobuf_c_boolean replace;
-  /*
    * constrain query to this UUID (pool or device)
    */
   char *uuid;
@@ -315,10 +315,14 @@ struct  _Mgmt__SmdQueryReq
    * UUID of new device to replace storage with
    */
   char *replaceuuid;
+  /*
+   * specify if device reint is needed (used for replace cmd)
+   */
+  protobuf_c_boolean noreint;
 };
 #define MGMT__SMD_QUERY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__smd_query_req__descriptor) \
-    , 0, 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+    , 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0 }
 
 
 struct  _Mgmt__SmdQueryResp__Device

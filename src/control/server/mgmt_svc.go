@@ -440,6 +440,7 @@ func (svc *mgmtSvc) smdReplace(ctx context.Context, req *mgmtpb.SmdQueryReq) (*m
 	dresp, err := srvs[0].CallDrpc(ctx, drpc.MethodReplaceStorage, &mgmtpb.DevReplaceReq{
 		OldDevUuid: req.Uuid,
 		NewDevUuid: req.ReplaceUUID,
+		NoReint:    req.NoReint,
 	})
 	if err != nil {
 		return nil, err
@@ -483,7 +484,7 @@ func (svc *mgmtSvc) SmdQuery(ctx context.Context, req *mgmtpb.SmdQueryReq) (*mgm
 		return svc.smdSetFaulty(ctx, req)
 	}
 
-	if req.Replace {
+	if req.ReplaceUUID != "" {
 		return svc.smdReplace(ctx, req)
 	}
 

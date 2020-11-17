@@ -341,25 +341,34 @@ func (cmd *nvmeSetFaultyCmd) Execute(_ []string) error {
 
 // storageReplaceCmd is the struct representing the replace storage subcommand
 type storageReplaceCmd struct {
+	NVMe nvmeReplaceCmd `command:"nvme" alias:"n" description:"Replace an evicted/FAULTY NVMe SSD with another device."`
+}
+
+// nvmeReplaceCmd is the struct representing the replace nvme storage subcommand
+type nvmeReplaceCmd struct {
 	smdQueryCmd
-	OldDevUUID string `long:"old-dev" description:"Device UUID of hot-removed SSD" required:"1"`
-	NewDevUUID string `long:"new-dev" description:"Device UUID of new device" required:"1"`
+	OldDevUUID string `long:"old-uuid" description:"Device UUID of hot-removed SSD" required:"1"`
+	NewDevUUID string `long:"new-uuid" description:"Device UUID of new device" required:"1"`
 	NoReint    bool   `long:"no-reint" description:"Bypass reintegration of device and just bring back online."`
 }
 
 // Execute is run when storageReplaceCmd activates
 // Replace a hot-removed device with a newly plugged device, or reuse a FAULTY device
-func (cmd *storageReplaceCmd) Execute(_ []string) error {
+func (cmd *nvmeReplaceCmd) Execute(_ []string) error {
 	if cmd.OldDevUUID == cmd.NewDevUUID {
 		cmd.log.Info("WARNING: Attempting to reuse a previously set FAULTY device!")
 	}
 
 	// TODO: Implement no-reint flag option
+	if cmd.NoReint {
+		cmd.log.Info("NoReint is not currently implemented")
+	}
 
 	ctx := context.Background()
 	req := &control.SmdQueryReq{
 		UUID:        cmd.OldDevUUID,
 		ReplaceUUID: cmd.NewDevUUID,
+		NoReint:     cmd.NoReint,
 	}
 	return cmd.makeRequest(ctx, req)
 }

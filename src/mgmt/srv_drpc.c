@@ -1865,6 +1865,8 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		uuid_clear(new_uuid); /* need to set uuid = NULL */
 	}
 
+	/* TODO: Implement no-reint device replacement option */
+
 	rc = ds_mgmt_dev_replace(old_uuid, new_uuid, resp);
 	if (rc != 0)
 		D_ERROR("Failed to replace device :%d\n", rc);

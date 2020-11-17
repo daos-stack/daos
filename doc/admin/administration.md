@@ -70,8 +70,10 @@ boro-11
   Devices
     UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 Targets:[0 2] Rank:0 State:NORMAL
     UUID:80c9f1be-84b9-4318-a1be-c416c96ca48b Targets:[1 3] Rank:0 State:FAULTY
+    UUID:051b77e4-1524-4662-9f32-f8e4d2542c2d Targets:[] Rank:0 State:NEW
     UUID:81905b24-be44-4106-8ff9-03002e9dd86a Targets:[0 2] Rank:1 State:UNPLUGGED
-    UUID:3f08da48-d88d-42dc-bca5-d1ab8419a401 Targets:[1 3] Rank:1 State:NEW
+    UUID:2ccb8afb-5d32-454e-86e3-762ec5dca7be Targets:[1 3] Rank:1 State:NORMAL
+    UUID:3f08da48-d88d-42dc-bca5-d1ab8419a401 Targets:[] Rank:1 State:NEW
 ```
 ```bash
 $ dmg -l boro-11,boro-13 storage query list-pools
@@ -149,14 +151,14 @@ boro-11
 ```
 The device state will transition from "NORMAL" to "FAULTY" (shown above), which will
 trigger the faulty device reaction (all targets on the SSD will be rebuilt and the SSD
-will remain evicted until device replacement occurs.
+will remain evicted until device replacement occurs).
 
-- Replace an Evicted SSD with a New Device: `dmg storage replace`
+- Replace an Evicted SSD with a New Device: `dmg storage replace nvme`
 
 To replace an NVMe SSD with an evicted device and reintegrate it into use with
 DAOS, run the following command:
 ```bash
-$ dmg -l boro-11 storage replace --old-dev=5bd91603-d3c7-4fb7-9a71-76bc25690c19 --new-dev=80c9f1be-84b9-4318-a1be-c416c96ca48b
+$ dmg -l boro-11 storage replace nvme --old-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 --new-uuid=80c9f1be-84b9-4318-a1be-c416c96ca48b
 -------
 boro-11
 -------
@@ -165,6 +167,23 @@ boro-11
 ```
 The old, now replaced device will remain in an "EVICTED" state until it is unplugged.
 The new device will transition from a "NEW" state to a "NORMAL" state (shown above).
+
+- Reuse a FAULTY Device: `dmg storage replace nvme`
+
+In order to reuse a device that was previously set as FAULTY and evicted from the DAOS
+system, an admin can run the following command (setting the old device UUID to be the
+new device UUID):
+```bash
+$ dmg -l boro-11 storage replace nvme --old-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 --new-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
+-------
+boro-11
+-------
+  Devices
+    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 Targets:[] Rank:1 State:NORMAL
+```
+The FAULTY device will transition from an "EVICTED" state back to a "NORMAL" state,
+and will again be available for use with DAOS. The use case of this command will mainly
+be for testing, or for accidental device eviction.
 
 ## System Operations
 

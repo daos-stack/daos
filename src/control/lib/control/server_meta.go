@@ -66,6 +66,7 @@ type (
 		Rank             system.Rank
 		Target           string
 		ReplaceUUID      string // UUID of new device to replace storage
+		NoReint          bool   // for device replacement
 	}
 
 	// SmdQueryResp represents the results of performing
