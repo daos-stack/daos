@@ -63,10 +63,10 @@ struct vos_ts_pair {
 };
 
 struct vos_wts_cache {
-	/** write timestamps */
+	/** Highest two write timestamps. */
 	daos_epoch_t	wc_ts_w[2];
-	/** Index of max timestamp */
-	uint32_t	wc_w_max;
+	/** Index of highest timestamp in wc_ts_w */
+	uint32_t	wc_w_high;
 };
 
 struct vos_ts_entry {
@@ -436,6 +436,20 @@ out:
  *  is a write within the epoch uncertainty bound or if it
  *  can't be determined that the epoch is safe (e.g. a cache miss).
  *
+ *  There are the following cases for an uncertainty check
+ *  1. The access timestamp is earlier than both.  In such
+ *     case, we have a cache miss and can't determine whether
+ *     there is uncertainty so we must reject the access.
+ *  2. The access is later than the first and the bound is
+ *     less than or equal to the high time.  No conflict in
+ *     this case because the write is outside the undertainty
+ *     bound.
+ *  3. The access is later than the first but the bound is
+ *     greater than the high timestamp.  We must reject the
+ *     access because there is an uncertain write.
+ *  4. The access is later than both timestamps.  No conflict
+ *     in this case.
+ *
  *  \param[in]	ts_set	The timestamp set
  *  \param[in]	epoch	The epoch of the update
  *  \param[in]	bound	The uncertainty bound
@@ -446,9 +460,9 @@ vos_ts_wcheck(struct vos_ts_set *ts_set, daos_epoch_t epoch,
 {
 	struct vos_wts_cache	*wcache;
 	struct vos_ts_set_entry	*se;
-	uint32_t		 max_idx;
-	daos_epoch_t		 max;
-	daos_epoch_t		 min;
+	uint32_t		 high_idx;
+	daos_epoch_t		 high;
+	daos_epoch_t		 second;
 
 	if (!vos_ts_in_tx(ts_set) || ts_set->ts_init_count == 0 ||
 	    bound <= epoch)
@@ -460,18 +474,22 @@ vos_ts_wcheck(struct vos_ts_set *ts_set, daos_epoch_t epoch,
 		return false;
 
 	wcache = &se->se_entry->te_w_cache;
-	max_idx = wcache->wc_w_max;
-	max = wcache->wc_ts_w[max_idx];
-	if (epoch >= max)
+	high_idx = wcache->wc_w_high;
+	high = wcache->wc_ts_w[high_idx];
+	if (epoch >= high) /* Case #4, the access is newer than any write */
 		return false;
 
-	min = wcache->wc_ts_w[1 - max_idx];
-	if (epoch < min) /* unknown case, not enough history */
+	second = wcache->wc_ts_w[1 - high_idx];
+	if (epoch < second) /* Case #1, Cache miss, not enough history */
 		return true;
 
-	if (bound >= max) /* write conflict */
+	/* We know at this point that second <= epoch so we need to determine
+	 * only if the high time is inside the uncertainty bound.
+	 */
+	if (bound >= high) /* Case #3, Uncertain write conflict */
 		return true;
 
+	/* Case #2, No write conflict, all writes outside the bound */
 	return false;
 }
 
@@ -816,18 +834,26 @@ vos_ts_set_update(struct vos_ts_set *ts_set, daos_epoch_t read_time)
 static inline void
 vos_ts_update_wcache(struct vos_wts_cache *wcache, daos_epoch_t write_time)
 {
-	daos_epoch_t		*max;
-	daos_epoch_t		*min;
+	daos_epoch_t		*high;
+	daos_epoch_t		*second;
 
-	max = &wcache->wc_ts_w[wcache->wc_w_max];
-	min = &wcache->wc_ts_w[1 - wcache->wc_w_max];
+	/** We store only the highest two timestamps so workout which timestamp
+	 *  should be replaced, if any and replace it
+	 */
+	high = &wcache->wc_ts_w[wcache->wc_w_high];
+	second = &wcache->wc_ts_w[1 - wcache->wc_w_high];
 
-	if (write_time <= *min || write_time == *max)
+	if (write_time <= *second || write_time == *high)
 		return;
 
-	if (write_time > *max)
-		wcache->wc_w_max = 1 - wcache->wc_w_max;
-	*min = write_time;
+	/** We know it's not older than both timestamps and is unique, so
+	 *  check for which one to replace.  If the high needs to be
+	 *  replaced, we simply move the index of the high and still
+	 *  replace the second one.
+	 */
+	if (write_time > *high)
+		wcache->wc_w_high = 1 - wcache->wc_w_high;
+	*second = write_time;
 }
 
 /** Update the write timestamps for the set after a successful operation
