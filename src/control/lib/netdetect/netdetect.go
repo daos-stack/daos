@@ -294,6 +294,7 @@ func Init(parent context.Context) (context.Context, error) {
 		return nil, err
 	}
 	ndc.coresPerNumaNode = cores
+	log.Debugf("%d NUMA nodes detected with %d cores per node", ndc.numNUMANodes, cores)
 
 	ndc.deviceScanCfg, err = initDeviceScan(ndc.topology)
 	log.Debugf("initDeviceScan completed.  Depth %d, numObj %d, systemDeviceNames %v, hwlocDeviceNames %v",
@@ -896,7 +897,7 @@ func libFabricToMercury(provider string) (string, error) {
 func convertLibFabricToMercury(provider string) (string, error) {
 	var mercuryProviderList string
 
-	log.Debugf("Converting provider string: '%s' to Mercury", provider)
+	//log.Debugf("Converting provider string: '%s' to Mercury", provider)
 
 	if len(provider) == 0 {
 		return "", errors.New("fabric provider was empty.")
@@ -1121,7 +1122,7 @@ func ValidateNUMAConfig(ctx context.Context, device string, numaNode uint) error
 }
 
 func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount int, resultsMap map[string]struct{}, excludeMap map[string]struct{}) (*FabricScan, error) {
-	log.Debugf("Device scan target device name: %s", deviceScanCfg.targetDevice)
+	//log.Debugf("Device scan target device name: %s", deviceScanCfg.targetDevice)
 	deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
 	if err != nil {
 		return nil, err
@@ -1140,7 +1141,7 @@ func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount i
 		// equivalent, and we want to filter those out right here.
 		return nil, err
 	}
-	log.Debugf("Mercury provider list: %v", mercuryProviderList)
+	//log.Debugf("Mercury provider list: %v", mercuryProviderList)
 
 	devClass, err := GetDeviceClass(deviceAffinity.DeviceName)
 	if err != nil {
@@ -1222,7 +1223,7 @@ func ScanFabric(ctx context.Context, provider string, excludes ...string) ([]*Fa
 			continue
 		}
 		ndc.deviceScanCfg.targetDevice = C.GoString(fi.domain_attr.name)
-		log.Debugf("The target device is: %s", ndc.deviceScanCfg.targetDevice)
+		//log.Debugf("The target device is: %s", ndc.deviceScanCfg.targetDevice)
 		// Implements a workaround to handle the current psm2 provider behavior
 		// that reports fi.domain_attr.name as "psm2" instead of an actual device
 		// name like "hfi1_0".
@@ -1240,7 +1241,7 @@ func ScanFabric(ctx context.Context, provider string, excludes ...string) ([]*Fa
 			provider = "All"
 		}
 
-		log.Debugf("This fabric info record has provider: %s", C.GoString(fi.fabric_attr.prov_name))
+		//log.Debugf("This fabric info record has provider: %s", C.GoString(fi.fabric_attr.prov_name))
 		if strings.Contains(C.GoString(fi.fabric_attr.prov_name), "psm2") {
 			if strings.Contains(ndc.deviceScanCfg.targetDevice, "psm2") {
 				log.Debugf("psm2 provider and psm2 device found.")
