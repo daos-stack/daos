@@ -318,13 +318,7 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 }
 
 #define LOG_RC(rc, ...)					\
-	do {						\
-		D_ASSERT(rc != 0);			\
-		if (rc == -DER_NONEXIST)		\
-			D_DEBUG(DB_IO, __VA_ARGS__);	\
-		else					\
-			D_ERROR(__VA_ARGS__);		\
-	} while (0)
+	VOS_TX_LOG_FAIL(rc, __VA_ARGS__)
 
 int
 vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,

@@ -58,7 +58,6 @@ static int
 tree_is_empty(struct vos_object *obj, daos_handle_t toh,
 	      const daos_epoch_range_t *epr, vos_iter_type_t type)
 {
-	struct dtx_handle	*dth = vos_dth_get();
 	bool			 empty = true;
 	int			 rc;
 
@@ -66,7 +65,7 @@ tree_is_empty(struct vos_object *obj, daos_handle_t toh,
 	 *  when there are no committed entries
 	 */
 	rc = vos_iterate_key(obj, toh, type, epr, true, empty_tree_check,
-			     &empty, dth);
+			     &empty, NULL);
 
 	if (rc < 0)
 		return rc;
@@ -79,7 +78,7 @@ tree_is_empty(struct vos_object *obj, daos_handle_t toh,
 	 *  are, this will return -DER_INPROGRESS.
 	 */
 	rc = vos_iterate_key(obj, toh, type, epr, false, empty_tree_check,
-			     &empty, dth);
+			     &empty, NULL);
 
 	if (rc < 0)
 		return rc;
@@ -398,11 +397,13 @@ reset:
 		vos_ts_set_upgrade(ts_set);
 
 	if (rc == -DER_NONEXIST || rc == 0) {
-		if (vos_ts_wcheck(ts_set, epr.epr_hi, bound))
+		if (vos_ts_wcheck(ts_set, epr.epr_hi, bound)) {
 			rc = -DER_TX_RESTART;
-		vos_ts_set_update(ts_set, epr.epr_hi);
-		if (rc == 0)
-			vos_ts_set_wupdate(ts_set, epr.epr_hi);
+		} else {
+			vos_ts_set_update(ts_set, epr.epr_hi);
+			if (rc == 0)
+				vos_ts_set_wupdate(ts_set, epr.epr_hi);
+		}
 	}
 
 	vos_ts_set_free(ts_set);
