@@ -29,6 +29,7 @@
 
 #include <stdio.h>
 #include <dirent.h>
+#include <libgen.h>
 #include <sys/xattr.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -1532,6 +1533,758 @@ cont_destroy_hdlr(struct cmd_args_s *ap)
 		fprintf(stdout, "Successfully destroyed container "
 				DF_UUIDF"\n", DP_UUID(ap->c_uuid));
 
+	return rc;
+}
+
+static int
+parse_filename(const char* path, char** _obj_name, char** _cont_name)
+{
+	char *f1 = NULL;
+	char *f2 = NULL;
+	char *fname = NULL;
+	char *cont_name = NULL;
+	int rc = 0;
+	if (path == NULL || _obj_name == NULL || _cont_name == NULL)
+			return -EINVAL;
+
+	if (strcmp(path, "/") == 0) {
+		*_cont_name = strdup("/");
+		if (*_cont_name == NULL)
+			return -ENOMEM;
+		*_obj_name = NULL;
+		return 0;
+	}
+	f1 = strdup(path);
+	if (f1 == NULL) {
+		rc = -ENOMEM;
+		goto out;
+	}
+
+	f2 = strdup(path);
+	if (f2 == NULL) {
+		rc = -ENOMEM;
+		goto out;
+	}
+	fname = basename(f1);
+	cont_name = dirname(f2);
+
+	if (cont_name[0] != '/') {
+		char cwd[1024];
+
+		if (getcwd(cwd, 1024) == NULL) {
+			rc = -ENOMEM;
+			goto out;
+		}
+
+		if (strcmp(cont_name, ".") == 0) {
+			cont_name = strdup(cwd);
+			if (cont_name == NULL) {
+				rc = -ENOMEM;
+				goto out;
+			}
+		} else {
+			char *new_dir = calloc(strlen(cwd) + strlen(cont_name) + 1, sizeof(char));
+			if (new_dir == NULL) {
+				rc = -ENOMEM;
+				goto out;
+			}
+
+			strcpy(new_dir, cwd);
+			if (cont_name[0] == '.') {
+				strcat(new_dir, &cont_name[1]);
+			} else {
+				strcat(new_dir, "/");
+				strcat(new_dir, cont_name);
+			}
+			cont_name = new_dir;
+		}
+		*_cont_name = cont_name;
+	} else {
+		*_cont_name = strdup(cont_name);
+		if (*_cont_name == NULL) {
+			rc = -ENOMEM;
+			goto out;
+		}
+	}
+	*_obj_name = strdup(fname);
+	if (*_obj_name == NULL) {
+		free(*_cont_name);
+		*_cont_name = NULL;
+		rc = -ENOMEM;
+		goto out;
+	}
+	out:
+		if (f1)
+			free(f1);
+		if (f2)
+			free(f2);
+	return rc;
+}
+
+static ssize_t
+daos_write(struct daos_file_t *daos_file, char *file, void *buf, size_t size)
+{
+	int rc;
+	/* record address and size of user buffer in io vector */
+	d_iov_t iov;
+	d_iov_set(&iov, buf, size);
+
+	/* define scatter-gather list for dfs_write */
+	d_sg_list_t sgl;
+	sgl.sg_nr = 1;
+	sgl.sg_iovs = &iov;
+	sgl.sg_nr_out = 1;
+
+	rc = dfs_write(daos_file->dfs, daos_file->obj, &sgl, daos_file->offset, NULL); 
+
+	if (rc) {
+		fprintf(stderr, "dfs_write %s failed (%d %s)",
+			file, rc, strerror(rc));
+		errno = rc;
+		size = -1;
+	}
+
+	daos_file->offset += (daos_off_t)size;
+	return (ssize_t) size;
+}
+
+static ssize_t
+daos_file_write(daos_file_t *daos_file, char* file,
+		void* buf, size_t size)
+{
+	ssize_t num_bytes_written = 0;
+	if (daos_file->type == POSIX) {
+		num_bytes_written = write(daos_file->fd, buf, size);
+	} else if (daos_file->type == DAOS) {
+		num_bytes_written = daos_write(daos_file, file, buf, size);
+	} else {
+		fprintf(stderr, "File type not known: %s type=%d",
+			file, daos_file->type);
+	}
+	if (num_bytes_written < 0) {
+		fprintf(stderr, "write error on %s type=%d\n",
+			file, daos_file->type);
+	}
+	return num_bytes_written;
+}
+
+static void 
+daos_open(daos_file_t *daos_file, char *file, int flags, mode_t mode)
+{
+
+	int rc; 
+	dfs_obj_t *parent = NULL;
+	char *name = NULL, *dir_name = NULL;
+
+	parse_filename(file, &name, &dir_name);
+
+	assert(dir_name);
+
+	rc = dfs_lookup(daos_file->dfs, dir_name, O_RDWR, &parent, NULL, NULL);
+	if (parent == NULL) {
+		fprintf(stderr, "dfs_lookup %s failed \n", dir_name);
+	}
+
+	rc = dfs_open(daos_file->dfs, parent, name, mode | S_IFREG,
+		flags, 0, 0, NULL, &(daos_file->obj));
+	if (rc)
+		fprintf(stderr, "dfs_open %s failed (%d)\n", name, rc);
+}
+
+void
+daos_file_open(daos_file_t *daos_file, char* file, int flags, ...)
+{
+	/* extract the mode */
+	int mode_set = 0;
+	mode_t mode  = 0;
+	if (flags & O_CREAT) {
+		va_list ap;
+		va_start(ap, flags);
+		mode = va_arg(ap, mode_t);
+		va_end(ap);
+		mode_set = 1;
+	}
+
+	if (daos_file->type == POSIX) {
+		if (mode_set) {
+			daos_file->fd = open(file, flags, mode);
+		} else {
+			daos_file->fd = open(file, flags);
+		}
+	} else if (daos_file->type == DAOS) {
+		daos_open(daos_file, file, flags, mode);
+	} else {
+		fprintf(stderr, "File type not known: %s type=%d",
+			file, daos_file->type);
+	}
+}
+
+static int
+daos_mkdir(daos_file_t *daos_file, const char *path)
+{
+	int rc = 0;
+	dfs_obj_t *parent = NULL;
+	char *name = NULL;
+	char *dname = NULL;
+	parse_filename(path, &name, &dname);
+    
+	assert(dname);
+	if (name && strcmp(name, "/") != 0) {
+		rc = dfs_lookup(daos_file->dfs, dname, O_RDWR, &parent, NULL, NULL);
+		if (parent == NULL)
+			fprintf(stderr, "dfs_lookup %s failed \n", dname);
+		rc = dfs_mkdir(daos_file->dfs, parent, name, S_IRWXU, 0);
+		if (rc == EEXIST) {
+			fprintf(stdout, "dfs_mkdir %s already exists, %d \n", name, rc);
+		} else if (rc) {	
+			fprintf(stderr, "dfs_mkdir %s failed, %d \n", name, rc);
+		}
+	}
+	return rc;
+}
+
+static int 
+daos_file_mkdir(struct daos_file_t *daos_file, const char* dir, mode_t mode)
+{
+	int rc = 0;
+	if (daos_file->type == POSIX) {
+		rc = mkdir(dir, mode);
+	} else if (daos_file->type == DAOS) {
+		rc = daos_mkdir(daos_file, dir);
+	} else {
+		fprintf(stderr, "File type not known: %s type=%d", dir, daos_file->type);
+	}
+	return rc;
+}
+
+static DIR*
+daos_opendir(daos_file_t *daos_file, const char* dir)
+{
+	struct dfs_daos_t* dirp = calloc(1, sizeof(*dirp));
+	if (dirp == NULL) {
+		errno = ENOMEM;
+		return NULL;
+	}
+	dfs_lookup(daos_file->dfs, dir, O_RDWR, &dirp->dir, NULL, NULL);
+	if (dirp->dir == NULL) {
+		fprintf(stderr, "dfs_lookup %s failed", dir);
+		errno = ENOENT;
+		free(dirp);
+		dirp = NULL;
+	}
+	return (DIR *)dirp;
+}
+
+static DIR*
+daos_file_opendir(daos_file_t *daos_file, const char* dir)
+{
+	DIR* dirp = NULL;
+	if (daos_file->type == POSIX) {
+		dirp = opendir(dir);
+	} else if (daos_file->type == DAOS) {
+		dirp = daos_opendir(daos_file, dir);
+	} else {
+		fprintf(stderr, "File type not known: %s type=%d",
+			dir, daos_file->type);
+	}
+	return dirp;
+}
+
+static struct dirent*
+daos_readdir(daos_file_t *daos_file, DIR* _dirp) 
+{
+	struct dfs_daos_t *dirp = (struct dfs_daos_t *)_dirp;
+	if (dirp->num_ents) {
+		goto ret;
+	}
+	dirp->num_ents = NUM_DIRENTS;
+	int rc;
+	while (!daos_anchor_is_eof(&dirp->anchor)) {
+		rc = dfs_readdir(daos_file->dfs, dirp->dir,
+				&dirp->anchor, &dirp->num_ents,
+				dirp->ents);
+		if (rc) {
+			fprintf(stderr, "dfs_readdir failed (%d %s)", rc, strerror(rc));
+			dirp->num_ents = 0;
+			errno = ENOENT;
+			return NULL;
+		}
+		if (dirp->num_ents == 0) {
+			continue;
+		}
+		goto ret;
+	}
+	assert(daos_anchor_is_eof(&dirp->anchor));
+	return NULL;
+ret:
+	dirp->num_ents--;
+	return &dirp->ents[dirp->num_ents];
+}
+
+static struct dirent*
+daos_file_readdir(daos_file_t *daos_file, DIR* dirp)
+{
+	struct dirent* entry = NULL;
+	if (daos_file->type == POSIX) {
+		entry = readdir(dirp);
+	} else if (daos_file->type == DAOS) {
+		entry = daos_readdir(daos_file, dirp);
+	} else {
+		fprintf(stderr, "File type not known, type=%d",
+			daos_file->type);
+	}
+	return entry;
+}
+
+static int
+daos_stat(daos_file_t *daos_file, const char *path, struct stat* buf)
+{
+	dfs_obj_t *parent = NULL;
+	char* name        = NULL;
+	char* dir_name    = NULL;
+	parse_filename(path, &name, &dir_name);
+	assert(dir_name);
+
+	int rc = 0;
+
+	/* Lookup the parent directory */
+	rc = dfs_lookup(daos_file->dfs, dir_name, O_RDWR, &parent, NULL, NULL);
+	if (parent == NULL) {
+		fprintf(stderr, "dfs_lookup %s failed \n", dir_name);
+		errno = ENOENT;
+		rc = -1;
+	} else {
+		/* Stat the path */
+		rc = dfs_stat(daos_file->dfs, parent, name, buf);
+		if (rc) {
+			fprintf(stderr, "dfs_stat %s failed (%d %s)",
+				name, rc, strerror(rc));
+			errno = rc;
+			rc = -1;
+		}
+	}
+	if (name != NULL)
+		free(name);
+	if (dir_name != NULL)
+		free(dir_name);
+	return rc;
+}
+
+static int
+daos_file_stat(daos_file_t *daos_file, const char *path, struct stat *buf)
+{
+	int rc = 0;
+	if (daos_file->type == POSIX) {
+		rc = stat(path, buf);
+	} else if (daos_file->type == DAOS) {
+		rc = daos_stat(daos_file, path, buf);
+	} else {
+		fprintf(stderr, "File type not known, file=%s, type=%d",
+			path, daos_file->type);
+	}
+	return rc;
+}
+
+static ssize_t
+daos_read(daos_file_t *daos_file,
+	const char* file,
+	void* buf,
+	size_t size)
+{
+	d_iov_t iov;
+	d_iov_set(&iov, buf, size);
+
+	/* define scatter-gather list for dfs_write */
+	d_sg_list_t sgl;
+	sgl.sg_nr = 1;
+	sgl.sg_iovs = &iov;
+	sgl.sg_nr_out = 1;
+
+	/* execute read operation */
+	daos_size_t got_size;
+	int rc = dfs_read(daos_file->dfs, daos_file->obj, &sgl,
+			daos_file->offset, &got_size, NULL); 
+	if (rc) {
+		fprintf(stderr, "dfs_read %s failed (%d %s)",
+			file, rc, strerror(rc));
+		errno = rc;
+		return -1;
+	}
+	/* update file pointer with number of bytes read */
+	daos_file->offset += (daos_off_t)got_size;
+
+	return (ssize_t)got_size;
+}
+
+static ssize_t
+daos_file_read(struct daos_file_t *daos_file, char* file,
+		void* buf, size_t size)
+{
+	ssize_t got_size = 0;
+	if (daos_file->type == POSIX) {
+		got_size = read(daos_file->fd, buf, size);
+	} else if (daos_file->type == DAOS) {
+		got_size = daos_read(daos_file, file, buf, size);
+	} else {
+		fprintf(stderr, "File type not known: %s type=%d", file, daos_file->type);
+	}
+	return got_size;
+}
+
+static int
+daos_closedir(DIR* _dirp)
+{
+	struct dfs_daos_t *dirp = (struct dfs_daos_t *)_dirp;
+	int rc = dfs_release(dirp->dir);
+	if (rc) {
+		fprintf(stderr, "dfs_release failed (%d %s)",
+			rc, strerror(rc));
+		errno = rc;
+		rc = -1;
+	}
+	free(dirp);
+	return rc;
+}
+
+static int
+daos_file_closedir(daos_file_t *daos_file, DIR* dirp)
+{
+	int rc = 0;
+	if (daos_file->type == POSIX) {
+		rc = closedir(dirp);
+	} else if (daos_file->type == DAOS) {
+		rc = daos_closedir(dirp);
+	} else {
+		fprintf(stderr, "File type not known, type=%d", daos_file->type);
+	}
+	return rc;
+}
+
+static int
+daos_close(daos_file_t *daos_file, const char* file)
+{
+	int rc = dfs_release(daos_file->obj);
+	if (rc) {
+		fprintf(stderr, "dfs_close %s failed (%d %s)",
+			file, rc, strerror(rc));
+		errno = rc;
+		rc = -1;
+	}
+	return rc;
+}
+
+static int
+daos_file_close(daos_file_t *daos_file, const char *file)
+{
+	int rc = 0;
+	if (daos_file->type == POSIX) {
+		rc = close(daos_file->fd);
+		if (rc == 0)
+			daos_file->fd = -1;
+	} else if (daos_file->type == DAOS) {
+		rc = daos_close(daos_file, file);
+		if (rc == 0)
+			daos_file->obj = NULL;
+	} else {
+		fprintf(stderr, "File type not known, file=%s, type=%d",
+			file, daos_file->type);
+	}
+	return rc;
+}
+
+static int 
+fs_copy(daos_file_t *daos_src_file,
+		daos_file_t *daos_dst_file,
+		const char* dir_name,
+		const char* fs_dst_prefix)
+{
+	DIR *src_dir;
+	int rc = 0;
+
+	/* stat the source, and make sure it is a directory  */
+	struct stat st_dir_name;
+	rc = daos_file_stat(daos_src_file, dir_name, &st_dir_name);
+	if (!S_ISDIR(st_dir_name.st_mode))
+		fprintf(stderr, "Source is not a directory: %s\n", dir_name);
+
+	/* begin by opening source directory */
+	src_dir = daos_file_opendir(daos_src_file, dir_name);
+
+	 /* check it was opened. */
+	if (!src_dir) {
+		fprintf(stderr, "Cannot open directory '%s': %s\n",
+			dir_name, strerror (errno));
+	}
+
+	while (1) {
+		struct dirent *entry;
+		const char *d_name;
+
+		/* walk source directory */
+		entry = daos_file_readdir(daos_src_file, src_dir);
+		if (!entry) {
+			/* There are no more entries in this directory, so break
+			 * out of the while loop. */
+			break;
+		}
+
+		d_name = entry->d_name;
+		char filename[MAX_FILENAME];
+		char dst_filename[MAX_FILENAME];
+		snprintf(filename, MAX_FILENAME, "%s/%s", dir_name, d_name);
+
+		int path_length = 0;
+		if (daos_src_file->type == DAOS && daos_dst_file->type == POSIX)
+			path_length = snprintf(dst_filename, MAX_FILENAME, "%s/%s", fs_dst_prefix, filename);
+			if (path_length >= MAX_FILENAME) 
+				fprintf(stderr, "Path length is too long.\n");
+
+		/* stat the source file */
+		struct stat st;
+		rc = daos_file_stat(daos_src_file, filename, &st);
+		if (rc)
+			fprintf(stderr, "Cannot stat path %s, %s\n",
+				d_name, strerror(errno));
+
+		if (S_ISREG(st.st_mode)) {
+			if (daos_src_file->type == DAOS && daos_dst_file->type == POSIX) {
+				daos_file_open(daos_src_file, filename, O_CREAT | O_RDWR, st.st_mode);
+				daos_file_open(daos_dst_file, dst_filename, O_CREAT | O_RDWR, st.st_mode);
+			} else {
+				daos_file_open(daos_src_file, filename, O_CREAT | O_RDWR, st.st_mode);
+				daos_file_open(daos_dst_file, filename, O_CREAT | O_RDWR, st.st_mode);
+			}
+
+			/* read from source file, then write to destination file */
+			uint64_t total_bytes = st.st_size;
+			uint64_t left_to_read = 0;
+			uint64_t buf_size = 64*1024*1024;
+			void *buf;
+			D_ALLOC(buf, buf_size * sizeof(char));
+				if (buf == NULL)
+					return ENOMEM;
+			while (left_to_read < total_bytes) {
+				left_to_read = total_bytes - left_to_read;
+				if (left_to_read > buf_size)
+					left_to_read = buf_size;
+				ssize_t bytes_read = daos_file_read(daos_src_file, filename,
+								    buf, left_to_read);
+				if (bytes_read < 0) {
+					fprintf(stderr, "read failed on %s\n", filename);
+				}
+				size_t bytes_to_write = (size_t) bytes_read;
+				ssize_t bytes_written;
+				if (daos_src_file->type == DAOS && daos_dst_file->type == POSIX) {
+					bytes_written = daos_file_write(daos_dst_file, dst_filename, buf, bytes_to_write);
+				} else {
+					bytes_written = daos_file_write(daos_dst_file, filename, buf, bytes_to_write);
+				}
+				if (bytes_written < 0) {
+					fprintf(stderr, "write failed on %s\n", filename);
+				}
+				left_to_read += (uint64_t) bytes_read;
+			}
+			if (buf != NULL)
+				D_FREE(buf);
+			daos_file_close(daos_src_file, filename);
+			daos_file_close(daos_dst_file, filename);
+		}
+
+		if (S_ISDIR(st.st_mode)) {
+			/* Check that the directory is not "d" or d's parent. */
+			if ((strcmp(d_name, "..") != 0) && (strcmp(d_name, ".") != 0)) {
+				char path[MAX_FILENAME];
+				char dpath[MAX_FILENAME];
+				path_length = snprintf(path, MAX_FILENAME, "%s", filename);
+				if (daos_src_file->type == DAOS && daos_dst_file->type == POSIX)
+					path_length = snprintf(dpath, MAX_FILENAME, "%s", dst_filename);
+				if (path_length >= MAX_FILENAME) 
+					fprintf(stderr, "Path length is too long.\n");
+				/* TODO create dst with write permissions, then after copying
+		 		 * make sure to change permissions to match the source */
+				if (daos_src_file->type == DAOS && daos_dst_file->type == POSIX) {
+					rc = daos_file_mkdir(daos_dst_file, dpath, st.st_mode);
+				} else {
+					rc = daos_file_mkdir(daos_dst_file, path, st.st_mode);
+				}
+				/* Recursively call "fs_copy" with the new path. */
+				rc = fs_copy(daos_src_file, daos_dst_file, path, fs_dst_prefix);
+			}
+		}
+	}
+
+	/* After going through all the entries, close the directory. */
+	if (daos_file_closedir(daos_src_file, src_dir))
+		fprintf(stderr, "Could not close '%s': %s\n",
+			dir_name, strerror (errno));
+	return rc;
+}
+
+static int
+fs_copy_connect(daos_file_t *daos_src_file,
+		   daos_file_t *daos_dst_file,
+		   struct cmd_args_s *ap,
+		   daos_cont_info_t *src_cont_info,
+		   daos_cont_info_t *dst_cont_info,
+		   struct duns_attr_t *src_dattr,
+		   struct duns_attr_t *dst_dattr)
+{
+	/* connect to source pool/conts */
+	int rc = 0;
+	if (daos_uuid_valid(ap->src_p_uuid)) { 
+		rc = daos_pool_connect(ap->src_p_uuid, ap->sysname, ap->src_mdsrv,
+				DAOS_PC_RW, &ap->pool, NULL, NULL);
+		if (rc != 0) {
+			fprintf(stderr, "failed to connect to destination pool: %d\n", rc);
+		} else {
+			if (daos_uuid_valid(ap->src_c_uuid)) { 
+				rc = daos_cont_open(ap->pool, ap->src_c_uuid, DAOS_COO_RW,
+					&ap->cont, src_cont_info, NULL);
+				if (rc != 0) {
+					fprintf(stderr, "failed to open source cont: %d\n", rc);
+				}
+				rc = dfs_mount(ap->pool, ap->cont, O_RDWR, &daos_src_file->dfs);
+				if (rc) {
+					fprintf(stderr, "dfs mount on source failed: %s, %d\n",
+						ap->src_path, rc);
+				}
+			}
+		}
+	} else {
+		/* Resolve pool, container UUIDs from src path if needed */
+        	if (ap->src_path != NULL) {
+			rc = duns_resolve_path(ap->src_path, src_dattr);
+			if (rc == 0) { 
+				ap->type = (*src_dattr).da_type;
+				uuid_copy(ap->src_p_uuid, (*src_dattr).da_puuid);
+				uuid_copy(ap->src_c_uuid, (*src_dattr).da_cuuid);
+				rc = daos_pool_connect(ap->src_p_uuid, ap->sysname, ap->src_mdsrv,
+						DAOS_PC_RW, &ap->pool, NULL, NULL);
+				if (rc != 0) {
+					fprintf(stderr, "failed to connect to destination pool: %d\n", rc);
+				}
+				rc = daos_cont_open(ap->pool, ap->src_c_uuid, DAOS_COO_RW,
+					&ap->cont, src_cont_info, NULL);
+				rc = dfs_mount(ap->pool, ap->cont, O_RDWR, &(daos_src_file->dfs));
+				if (rc) {
+					fprintf(stderr, "dfs mount on source failed: %s, %d\n",
+						ap->src_path, rc);
+				}
+			} else {
+				daos_src_file->type = POSIX;
+			}
+		}
+	}
+	/* connect to destination pool/conts */
+	if (daos_uuid_valid(ap->dst_p_uuid)) {
+			rc = daos_pool_connect(ap->dst_p_uuid, ap->sysname, ap->dst_mdsrv,
+			DAOS_PC_RW, &ap->dst_pool, NULL, NULL);
+			if (rc != 0) {
+				fprintf(stderr, "failed to connect to destination pool: %d\n", rc);
+			}
+		if (daos_uuid_valid(ap->dst_c_uuid)) { 
+			rc = daos_cont_open(ap->dst_pool, ap->dst_c_uuid, DAOS_COO_RW,
+				&ap->dst_cont, dst_cont_info, NULL);
+			rc = dfs_mount(ap->dst_pool, ap->dst_cont, O_RDWR, &(daos_dst_file->dfs));
+			if (rc) {
+				fprintf(stderr, "dfs mount on destination failed: %s, %d\n",
+					ap->dst_path, rc);
+			}
+		}
+	} else {
+		/* Resolve pool, container UUIDs from dst path if needed */
+        	if (ap->dst_path != NULL) {
+			rc = duns_resolve_path(ap->dst_path, dst_dattr);
+			if (rc == 0) { 
+				ap->type = (*dst_dattr).da_type;
+				uuid_copy(ap->dst_p_uuid, (*dst_dattr).da_puuid);
+				uuid_copy(ap->dst_c_uuid, (*dst_dattr).da_cuuid);
+				rc = daos_pool_connect(ap->dst_p_uuid, ap->sysname, ap->dst_mdsrv,
+						DAOS_PC_RW, &ap->dst_pool, NULL, NULL);
+				if (rc != 0) {
+					fprintf(stderr, "failed to connect to destination pool: %d\n", rc);
+				}
+				rc = daos_cont_open(ap->dst_pool, ap->dst_c_uuid, DAOS_COO_RW,
+					&ap->dst_cont, dst_cont_info, NULL);
+				rc = dfs_mount(ap->dst_pool, ap->dst_cont, O_RDWR, &(daos_dst_file->dfs));
+				if (rc) {
+					fprintf(stderr, "dfs mount on destination failed: %s, %d\n",
+						ap->dst_path, rc);
+				}
+			} else {
+				daos_dst_file->type = POSIX;
+			}
+		}
+	}
+	/* create DAOS POSIX destination container if it doesn't exist */
+	if (daos_dst_file->type == DAOS) {
+		if (daos_uuid_valid(ap->src_c_uuid) && !daos_uuid_valid(ap->dst_c_uuid)) {
+			/* create POSIX destination container if it doesn't exist */
+	    		if (uuid_is_null(ap->c_uuid))
+				uuid_generate(ap->dst_c_uuid);
+			rc = dfs_cont_create(ap->dst_pool, ap->dst_c_uuid, NULL, &(ap->dst_cont),
+						&(daos_dst_file->dfs));
+			if (rc != 0) {
+				fprintf(stderr, "failed to create container: %s (%d)\n",
+					d_errdesc(rc), rc);
+				return rc;
+			}
+			fprintf(stdout, "Successfully created container "DF_UUIDF"\n",
+				DP_UUID(ap->dst_c_uuid));
+		}
+	}
+	return rc;
+}
+
+static void
+daos_file_set_defaults(daos_file_t *daos_file)
+{
+	/* set defaults for daos_file struct */
+	daos_file->type	  = DAOS;
+	daos_file->fd     = -1; 
+	daos_file->offset = 0; 
+	daos_file->obj    = NULL; 
+	daos_file->dfs    = NULL; 
+}
+
+int
+fs_copy_hdlr(struct cmd_args_s *ap)
+{
+	int rc = 0;
+	daos_cont_info_t src_cont_info;
+	daos_cont_info_t dst_cont_info;
+	struct duns_attr_t dst_dattr = {0};
+	struct duns_attr_t src_dattr = {0};
+
+	/* daos_file_t abstraction for POSIX and DFS files */
+	daos_file_t daos_src_file;
+	daos_file_t daos_dst_file;
+	daos_file_set_defaults(&daos_src_file);
+	daos_file_set_defaults(&daos_dst_file);
+	fs_copy_connect(&daos_src_file, &daos_dst_file, ap,
+			   &src_cont_info, &dst_cont_info,
+			   &src_dattr, &dst_dattr);
+
+	/* set paths based on file type for source and destination */
+	char *name = NULL, *dname = NULL;
+	if (daos_src_file.type == POSIX && daos_dst_file.type == DAOS) {
+		ap->dst_path = "/";
+		parse_filename(ap->src_path, &name, &dname);
+		dfs_set_prefix(daos_dst_file.dfs, dname);
+		daos_file_mkdir(&daos_dst_file, ap->src_path, O_RDWR);
+		rc = fs_copy(&daos_src_file, &daos_dst_file,
+				ap->src_path, ap->dst_path);
+	} else if (daos_src_file.type == DAOS && daos_dst_file.type == POSIX) {
+		parse_filename(ap->dst_path, &name, &dname);
+		ap->src_path = "/";
+		rc = fs_copy(&daos_src_file, &daos_dst_file,
+				ap->src_path, dname);
+	} else if (daos_src_file.type == DAOS && daos_dst_file.type == DAOS) {
+		ap->src_path = "/";
+		ap->dst_path = "/";
+		rc = fs_copy(&daos_src_file, &daos_dst_file,
+				ap->src_path, dname);
+	}
 	return rc;
 }
 

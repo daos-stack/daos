@@ -21,6 +21,10 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
+enum fs_op {
+	FS_COPY
+};
+
 enum cont_op {
 	CONT_CREATE,
 	CONT_DESTROY,
@@ -61,6 +65,25 @@ enum obj_op {
 	OBJ_DUMP
 };
 
+#define NUM_DIRENTS 24
+#define MAX_FILENAME 256
+
+struct dfs_daos_t {
+	dfs_obj_t* dir;
+	struct dirent ents[NUM_DIRENTS];
+	daos_anchor_t anchor;
+	uint32_t num_ents;
+};
+
+typedef struct daos_file_t {
+	enum {POSIX, DAOS} type;
+	int                  fd;
+	/* DAOS specific variables for I/O */
+	daos_off_t offset;
+	dfs_obj_t* obj;
+	dfs_t* dfs;
+} daos_file_t;
+
 /* cmd_args_s: consolidated result of parsing command-line arguments
  * for pool, cont, obj commands, much of which is common.
  */
@@ -69,11 +92,22 @@ struct cmd_args_s {
 	enum pool_op		p_op;		/* pool sub-command */
 	enum cont_op		c_op;		/* cont sub-command */
 	enum obj_op		o_op;		/* obj sub-command */
+	enum fs_op		fs_op;		/* filesystem sub-command */
 	char			*sysname;	/* --sys-name or --sys */
 	uuid_t			p_uuid;		/* --pool */
+	uuid_t			src_p_uuid;	/* --src_pool */
+	uuid_t			dst_p_uuid;	/* --dst_pool */
+	uuid_t			src_c_uuid;	/* --src_cont */
+	uuid_t			dst_c_uuid;	/* --dst_cont */
+	char			*src_mdsrv_str;	/* --src_svc */
+	d_rank_list_t		*src_mdsrv;
+	char			*dst_mdsrv_str;	/* --dst_svc */
+	d_rank_list_t		*dst_mdsrv;
 	daos_handle_t		pool;
+	daos_handle_t		dst_pool;
 	uuid_t			c_uuid;		/* --cont */
 	daos_handle_t		cont;
+	daos_handle_t		dst_cont;
 	char			*mdsrv_str;	/* --svc */
 	d_rank_list_t		*mdsrv;
 	int			force;		/* --force */
@@ -82,6 +116,8 @@ struct cmd_args_s {
 
 	/* Container unified namespace (path) related */
 	char			*path;		/* --path cont namespace */
+	char			*src_path;	/* --src-path cont namespace */
+	char			*dst_path;	/* --dst-path cont namespace */
 	daos_cont_layout_t	type;		/* --type cont type */
 	daos_oclass_id_t	oclass;		/* --oclass object class */
 	daos_size_t		chunk_size;	/* --chunk_size of cont objs */
@@ -188,6 +224,9 @@ int pool_list_attrs_hdlr(struct cmd_args_s *ap);
  * int pool_list_cont_hdlr(struct cmd_args_s *ap);
  * int pool_stat_hdlr(struct cmd_args_s *ap);
  */
+
+/* filesystem operations */
+int fs_copy_hdlr(struct cmd_args_s *ap);
 
 /* Container operations */
 int cont_create_hdlr(struct cmd_args_s *ap);

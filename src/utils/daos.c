@@ -45,14 +45,24 @@
 #include <daos/rpc.h>
 #include <daos/debug.h>
 #include <daos/object.h>
+#include <sys/stat.h>
 
 #include "daos_types.h"
 #include "daos_api.h"
 #include "daos_uns.h"
+#include "daos_fs.h"
 #include "daos_hdlr.h"
 #include "dfuse_ioctl.h"
 
 const char		*default_sysname = DAOS_DEFAULT_SYS_NAME;
+
+static enum fs_op
+filesystem_op_parse(const char *str)
+{
+	if (strcmp(str, "copy") == 0)
+		return FS_COPY;
+	return 0;
+}
 
 static enum cont_op
 cont_op_parse(const char *str)
@@ -533,9 +543,17 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"pool",	required_argument,	NULL,	'p'},
 		{"svc",		required_argument,	NULL,	'm'},
 		{"cont",	required_argument,	NULL,	'c'},
+		{"src-pool",	required_argument,	NULL,	'S'},
+		{"dst-pool",	required_argument,	NULL,	'D'},
+		{"src-cont",	required_argument,	NULL,	'C'},
+		{"dst-cont",	required_argument,	NULL,	'T'},
+		{"src-svc",	required_argument,	NULL,	'X'},
+		{"dst-svc",	required_argument,	NULL,	'x'},
 		{"attr",	required_argument,	NULL,	'a'},
 		{"value",	required_argument,	NULL,	'v'},
 		{"path",	required_argument,	NULL,	'd'},
+		{"src-path",	required_argument,	NULL,	'R'},
+		{"dst-path",	required_argument,	NULL,	'Z'},
 		{"type",	required_argument,	NULL,	't'},
 		{"oclass",	required_argument,	NULL,	'o'},
 		{"chunk_size",	required_argument,	NULL,	'z'},
@@ -560,9 +578,10 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	char			*cmdname = NULL;
 
 	assert(ap != NULL);
-	ap->p_op = -1;
-	ap->c_op = -1;
-	ap->o_op = -1;
+	ap->p_op  = -1;
+	ap->c_op  = -1;
+	ap->o_op  = -1;
+	ap->fs_op  = -1;
 	D_STRNDUP(ap->sysname, default_sysname, strlen(default_sysname));
 	if (ap->sysname == NULL)
 		return RC_NO_HELP;
@@ -572,6 +591,14 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		ap->c_op = cont_op_parse(argv[2]);
 		if (ap->c_op == -1) {
 			fprintf(stderr, "invalid container command: %s\n",
+				argv[2]);
+			return RC_PRINT_HELP;
+		}
+	} else if ((strcmp(argv[1], "filesystem") == 0) ||
+	    (strcmp(argv[1], "fs") == 0)) {
+		ap->fs_op = filesystem_op_parse(argv[2]);
+		if (ap->fs_op == -1) {
+			fprintf(stderr, "invalid filesystem command: %s\n",
 				argv[2]);
 			return RC_PRINT_HELP;
 		}
@@ -630,6 +657,46 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			}
 			break;
+
+		case 'S':
+			if (uuid_parse(optarg, ap->src_p_uuid) != 0) {
+				fprintf(stderr, "failed to parse src pool UUID: %s\n", optarg);
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			}
+			break;
+		case 'D':
+			if (uuid_parse(optarg, ap->dst_p_uuid) != 0) {
+				fprintf(stderr, "failed to parse dst pool UUID: %s\n",
+					optarg);
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			}
+			break;
+		case 'C':
+			if (uuid_parse(optarg, ap->src_c_uuid) != 0) {
+				fprintf(stderr, "failed to parse src cont UUID: %s\n",
+					optarg);
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			}
+			break;
+		case 'T':
+			if (uuid_parse(optarg, ap->dst_c_uuid) != 0) {
+				fprintf(stderr, "failed to parse dst cont UUID: %s\n",
+					optarg);
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			}
+			break;
+		case 'X':
+			D_STRNDUP(ap->src_mdsrv_str, optarg, strlen(optarg));
+			if (ap->src_mdsrv_str == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			ap->src_mdsrv = daos_rank_list_parse(ap->src_mdsrv_str, ",");
+			break;
+		case 'x':
+			D_STRNDUP(ap->dst_mdsrv_str, optarg, strlen(optarg));
+			if (ap->dst_mdsrv_str == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			ap->dst_mdsrv = daos_rank_list_parse(ap->dst_mdsrv_str, ",");
+			break;
 		case 'm':
 			D_STRNDUP(ap->mdsrv_str, optarg, strlen(optarg));
 			if (ap->mdsrv_str == NULL)
@@ -660,6 +727,16 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		case 'd':
 			D_STRNDUP(ap->path, optarg, strlen(optarg));
 			if (ap->path == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
+		case 'R':
+			D_STRNDUP(ap->src_path, optarg, strlen(optarg));
+			if (ap->src_path == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
+		case 'Z':
+			D_STRNDUP(ap->dst_path, optarg, strlen(optarg));
+			if (ap->dst_path == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
 		case 't':
@@ -813,7 +890,9 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	/* Verify pool svc argument. If not provided pass NULL list to libdaos,
 	 * and client will query management service for rank list.
 	 */
-	ARGS_VERIFY_MDSRV(ap, out_free, rc = RC_PRINT_HELP);
+        if (ap->fs_op != FS_COPY) {
+		ARGS_VERIFY_MDSRV(ap, out_free, rc = RC_PRINT_HELP);
+        }
 
 	D_FREE(cmdname);
 	return 0;
@@ -824,12 +903,20 @@ out_free:
 		D_FREE(ap->sysname);
 	if (ap->mdsrv_str != NULL)
 		D_FREE(ap->mdsrv_str);
+	if (ap->src_mdsrv_str != NULL)
+		D_FREE(ap->src_mdsrv_str);
+	if (ap->dst_mdsrv_str != NULL)
+		D_FREE(ap->dst_mdsrv_str);
 	if (ap->attrname_str != NULL)
 		D_FREE(ap->attrname_str);
 	if (ap->value_str != NULL)
 		D_FREE(ap->value_str);
 	if (ap->path != NULL)
 		D_FREE(ap->path);
+	if (ap->src_path != NULL)
+		D_FREE(ap->src_path);
+	if (ap->dst_path != NULL)
+		D_FREE(ap->dst_path);
 	if (ap->snapname_str != NULL)
 		D_FREE(ap->snapname_str);
 	if (ap->epcrange_str != NULL)
@@ -925,6 +1012,23 @@ call_dfuse_ioctl(char *path, struct dfuse_il_reply *reply)
 		return EIO;
 
 	return 0;
+}
+
+static int
+fs_op_hdlr(struct cmd_args_s *ap)
+{
+	int rc = 0;
+	enum fs_op op;
+	assert(ap != NULL);
+	op = ap->fs_op;
+	switch (op) {
+	case FS_COPY:
+		rc = fs_copy_hdlr(ap);
+		break;
+	default:
+		break;
+	}
+	return rc; 
 }
 
 static int
@@ -1280,6 +1384,19 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 
 	if (argc <= 2) {
 		FIRST_LEVEL_HELP();
+	} else if (strcmp(argv[2], "filesystem") != 0) {
+		if (strcmp(argv[3], "copy") == 0) {
+			fprintf(stream,
+			" filesystem copy options (copy):\n"
+			"	--src-svc=RANKS    pool service replicas like 1,2,3\n"
+			"	--dst-svc=RANKS    pool service replicas like 1,2,3\n"
+			"	--src-pool=UUID    src pool UUID\n"
+			"	--dst-pool=UUID    dst pool UUID\n"
+			"	--src-cont=UUID    src cont UUID\n"
+			"	--dst-cont=UUID    dst cont UUID\n"
+			"	--src-path=PATH    POSIX or DFS source path\n"
+			"	--dst-path=PATH    POSIX or DFS destination path\n");
+		}
 	} else if (strcmp(argv[2], "pool") == 0) {
 		fprintf(stream, "\n"
 		"pool commands:\n"
@@ -1453,11 +1570,14 @@ main(int argc, char *argv[])
 		help_hdlr(argc, argv, &dargs);
 		return 2;
 	} else if ((strcmp(argv[1], "container") == 0) ||
-		 (strcmp(argv[1], "cont") == 0))
+		 (strcmp(argv[1], "cont") == 0)) {
 		hdlr = cont_op_hdlr;
-	else if (strcmp(argv[1], "pool") == 0)
+	} else if ((strcmp(argv[1], "filesystem") == 0) ||
+		 (strcmp(argv[1], "fs") == 0)) {
+		hdlr = fs_op_hdlr;
+	} else if (strcmp(argv[1], "pool") == 0) {
 		hdlr = pool_op_hdlr;
-	else if ((strcmp(argv[1], "object") == 0) ||
+	} else if ((strcmp(argv[1], "object") == 0) ||
 		 (strcmp(argv[1], "obj") == 0))
 		hdlr = obj_op_hdlr;
 
@@ -1491,8 +1611,12 @@ main(int argc, char *argv[])
 
 	/* Clean up dargs.mdsrv allocated in common_op_parse_hdlr() */
 	d_rank_list_free(dargs.mdsrv);
+	d_rank_list_free(dargs.src_mdsrv);
+	d_rank_list_free(dargs.dst_mdsrv);
 
 	D_FREE(dargs.mdsrv_str);
+	D_FREE(dargs.src_mdsrv_str);
+	D_FREE(dargs.dst_mdsrv_str);
 	D_FREE(dargs.sysname);
 	D_FREE(dargs.path);
 
