@@ -32,12 +32,11 @@ class ConfigGenerate(TestWithServers):
     the user specified, input verification and correct execution of the server
     once the generated configuration is propagated to the servers.
 
-    Test requirements:
-     - cluster must have both NVME and SCM
-     - the storage setup
-
     :avocado: recursive
     """
 
-    def generate_config(self):
-        """ Verify that dmg can generate an accurate configuration file.
+    def dmg_generate_config(self):
+        """ Verify that dmg can generate an accurate configuration file."""
+
+        # We need to start the servers in discovery mode
+
