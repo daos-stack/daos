@@ -496,7 +496,7 @@ class DaosServerManager(SubprocessManager):
 
         Raises:
             ServerFailed: if there was an error starting the servers after
-                formating.
+                formatting.
 
         """
         if host_qty is None:
