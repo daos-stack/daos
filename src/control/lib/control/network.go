@@ -148,7 +148,8 @@ func (nsr *NetworkScanResp) addHostResponse(hr *HostResponse) (err error) {
 		hf.Providers = append(hf.Providers, hfi.Provider)
 	}
 	hf.Providers = common.DedupeStringSlice(hf.Providers)
-	hf.NumaCount = uint32(pbResp.Numacount)
+	hf.NumaCount = uint32(pbResp.GetNumacount())
+	hf.CoresPerNuma = uint32(pbResp.GetCorespernuma())
 
 	if nsr.HostFabrics == nil {
 		nsr.HostFabrics = make(HostFabricMap)

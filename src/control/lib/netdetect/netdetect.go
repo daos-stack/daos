@@ -256,11 +256,11 @@ func (hpa *hwlocProtectedAccess) topology_init() (C.hwloc_topology_t, error) {
 }
 
 type netdetectContext struct {
-	topology         C.hwloc_topology_t
-	numaAware        bool
-	numNUMANodes     int
-	coresPerNumaNode int
-	deviceScanCfg    DeviceScan
+	topology      C.hwloc_topology_t
+	numaAware     bool
+	numNUMANodes  int
+	coresPerNuma  int
+	deviceScanCfg DeviceScan
 }
 
 func getContext(ctx context.Context) (*netdetectContext, error) {
@@ -289,12 +289,15 @@ func Init(parent context.Context) (context.Context, error) {
 	}
 	ndc.numNUMANodes = numNUMANodes(ndc.topology)
 	ndc.numaAware = ndc.numNUMANodes > 0
-	cores, err := coresPerNumaNode(ndc.topology)
-	if err != nil {
-		return nil, err
+	if ndc.numaAware {
+		cores, err := getCoreCount(ndc.topology)
+		if err != nil {
+			return nil, err
+		}
+		ndc.coresPerNuma = cores / ndc.numNUMANodes
+		log.Debugf("%d NUMA nodes detected with %d cores per node",
+			ndc.numNUMANodes, ndc.coresPerNuma)
 	}
-	ndc.coresPerNumaNode = cores
-	log.Debugf("%d NUMA nodes detected with %d cores per node", ndc.numNUMANodes, cores)
 
 	ndc.deviceScanCfg, err = initDeviceScan(ndc.topology)
 	log.Debugf("initDeviceScan completed.  Depth %d, numObj %d, systemDeviceNames %v, hwlocDeviceNames %v",
@@ -332,7 +335,7 @@ func CoresPerNuma(ctx context.Context) int {
 	if err != nil || !HasNUMA(ctx) {
 		return 0
 	}
-	return ndc.coresPerNumaNode
+	return ndc.coresPerNuma
 }
 
 // Cleanup releases the hwloc topology resources
@@ -613,7 +616,7 @@ func numNUMANodes(topology C.hwloc_topology_t) int {
 	return numObj
 }
 
-func coresPerNumaNode(topology C.hwloc_topology_t) (int, error) {
+func getCoreCount(topology C.hwloc_topology_t) (int, error) {
 	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_CORE)
 	if depth == C.HWLOC_TYPE_DEPTH_UNKNOWN {
 		return 0, errors.New("number of cpu cores could not be detected")
@@ -897,8 +900,6 @@ func libFabricToMercury(provider string) (string, error) {
 func convertLibFabricToMercury(provider string) (string, error) {
 	var mercuryProviderList string
 
-	//log.Debugf("Converting provider string: '%s' to Mercury", provider)
-
 	if len(provider) == 0 {
 		return "", errors.New("fabric provider was empty.")
 	}
@@ -1122,7 +1123,6 @@ func ValidateNUMAConfig(ctx context.Context, device string, numaNode uint) error
 }
 
 func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount int, resultsMap map[string]struct{}, excludeMap map[string]struct{}) (*FabricScan, error) {
-	//log.Debugf("Device scan target device name: %s", deviceScanCfg.targetDevice)
 	deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
 	if err != nil {
 		return nil, err
@@ -1141,7 +1141,6 @@ func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount i
 		// equivalent, and we want to filter those out right here.
 		return nil, err
 	}
-	//log.Debugf("Mercury provider list: %v", mercuryProviderList)
 
 	devClass, err := GetDeviceClass(deviceAffinity.DeviceName)
 	if err != nil {
@@ -1223,7 +1222,6 @@ func ScanFabric(ctx context.Context, provider string, excludes ...string) ([]*Fa
 			continue
 		}
 		ndc.deviceScanCfg.targetDevice = C.GoString(fi.domain_attr.name)
-		//log.Debugf("The target device is: %s", ndc.deviceScanCfg.targetDevice)
 		// Implements a workaround to handle the current psm2 provider behavior
 		// that reports fi.domain_attr.name as "psm2" instead of an actual device
 		// name like "hfi1_0".
@@ -1241,7 +1239,6 @@ func ScanFabric(ctx context.Context, provider string, excludes ...string) ([]*Fa
 			provider = "All"
 		}
 
-		//log.Debugf("This fabric info record has provider: %s", C.GoString(fi.fabric_attr.prov_name))
 		if strings.Contains(C.GoString(fi.fabric_attr.prov_name), "psm2") {
 			if strings.Contains(ndc.deviceScanCfg.targetDevice, "psm2") {
 				log.Debugf("psm2 provider and psm2 device found.")

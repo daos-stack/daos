@@ -74,5 +74,8 @@ func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScan
 	resp.Numacount = int32(netdetect.NumNumaNodes(netCtx))
 	resp.Corespernuma = int32(netdetect.CoresPerNuma(netCtx))
 
+	c.log.Debugf("NetworkScanResp: %d NUMA nodes with %d cores each",
+		resp.GetNumacount(), resp.GetCorespernuma())
+
 	return resp, nil
 }
