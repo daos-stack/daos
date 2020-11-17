@@ -332,6 +332,7 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
+	obj->cob_md.omd_ver = pool_map_get_version(pool->dp_map);
 	rc = pl_obj_place(map, &obj->cob_md, NULL, &layout);
 	pl_map_decref(map);
 	if (rc != 0) {
@@ -1264,12 +1265,12 @@ dc_obj_open(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = obj_ptr2pm_ver(obj, &obj->cob_md.omd_ver);
-	if (rc)
-		D_GOTO(out, rc);
-
 	rc = obj_layout_create(obj, false);
 	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = obj_ptr2pm_ver(obj, &obj->cob_md.omd_ver);
+	if (rc)
 		D_GOTO(out, rc);
 
 	obj_hdl_link(obj);
@@ -3077,6 +3078,11 @@ obj_shard_comp_cb(struct shard_auxi_args *shard_auxi,
 	tse_task_t		*task = obj_auxi->obj_task;
 	int			ret = task->dt_result;
 
+	if (shard_auxi == NULL) {
+		iter_arg->retry = false;
+		return ret;
+	}
+
 	/*
 	 * Check shard IO task's completion status:
 	 * 1) if succeed just stores the highest replied pm version.
@@ -3121,10 +3127,8 @@ obj_shard_comp_cb(struct shard_auxi_args *shard_auxi,
 		} else {
 			iter_arg->retry = false;
 		}
-	}
-
-	if (ret != 0)
 		return ret;
+	}
 
 	/* Then process each shards for enumeration */
 	if (obj_is_enum_opc(obj_auxi->opc)) {
@@ -4015,7 +4019,7 @@ dc_obj_fetch_task(tse_task_t *task)
 		}
 	}
 
-	dkey_hash = obj_dkey2hash(args->dkey);
+	dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, args->dkey);
 
 	if (args->extra_arg == NULL &&
 	    DAOS_FAIL_CHECK(DAOS_OBJ_SPECIAL_SHARD))
@@ -4120,7 +4124,7 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 		goto out_task;
 	}
 
-	dkey_hash = obj_dkey2hash(args->dkey);
+	dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, args->dkey);
 	rc = obj_req_get_tgts(obj, NULL, args->dkey, dkey_hash,
 			      obj_auxi->reasb_req.tgt_bitmap, map_ver, false,
 			      false, obj_auxi);
@@ -4512,7 +4516,8 @@ obj_list_get_shard(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 		uint64_t dkey_hash;
 
 		if (args->dkey != NULL) {
-			dkey_hash = obj_dkey2hash(args->dkey);
+			dkey_hash = obj_dkey2hash(obj->cob_md.omd_id,
+						  args->dkey);
 			grp_idx = obj_dkey2grpidx(obj, dkey_hash, map_ver);
 		} else {
 			D_ASSERT(args->dkey_anchor != NULL);
@@ -4733,7 +4738,7 @@ dc_obj_punch(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 
 	obj_task_init_common(task, opc, map_ver, api_args->th, &obj_auxi, obj);
 
-	dkey_hash = obj_dkey2hash(api_args->dkey);
+	dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, api_args->dkey);
 	rc = obj_req_get_tgts(obj, NULL, api_args->dkey, dkey_hash, NIL_BITMAP,
 			      map_ver, false, false, obj_auxi);
 	if (rc != 0) {
@@ -4982,7 +4987,7 @@ dc_obj_query_key(tse_task_t *api_task)
 		D_GOTO(out_task, rc);
 
 	D_ASSERTF(api_args->dkey != NULL, "dkey should not be NULL\n");
-	dkey_hash = obj_dkey2hash(api_args->dkey);
+	dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, api_args->dkey);
 	if (api_args->flags & DAOS_GET_DKEY) {
 		replicas = obj_get_replicas(obj);
 		shard_first = 0;
