@@ -61,20 +61,6 @@ RUN chown daos.daos /mnt/daos
 #USER $USER
 WORKDIR /home/$USER
 
-# set maven mirror
-RUN mkdir -p /home/$USER/.m2
-
-RUN echo -e "<settings>\n\
-        <mirrors>\n\
-                <mirror>\n\
-                        <id>google-maven-central</id>\n\
-                        <name>GCS Maven Central mirror</name>\n\
-                        <url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
-                        <mirrorOf>central</mirrorOf>\n\
-                </mirror>\n\
-        </mirrors>\n\
-</settings>" > /home/$USER/.m2/settings.xml
-
 # set NOBUILD to disable git clone & build
 ARG NOBUILD
 

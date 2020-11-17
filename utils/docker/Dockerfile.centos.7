@@ -170,20 +170,6 @@ RUN if [ "x$BULLSEYE" != "x" ]; then \
 ARG CACHEBUST=1
 RUN yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury
 
-# set maven mirror
-RUN mkdir -p /home/$USER/.m2
-
-RUN echo -e "<settings>\n\
-        <mirrors>\n\
-                <mirror>\n\
-                        <id>google-maven-central</id>\n\
-                        <name>GCS Maven Central mirror</name>\n\
-                        <url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
-                        <mirrorOf>central</mirrorOf>\n\
-                </mirror>\n\
-        </mirrors>\n\
-</settings>" > /home/$USER/.m2/settings.xml
-
 # Switch to new user
 #USER $USER
 WORKDIR /home/$USER
