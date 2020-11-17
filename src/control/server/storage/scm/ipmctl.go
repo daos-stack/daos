@@ -27,6 +27,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strings"
 
 	"github.com/dustin/go-humanize"
@@ -38,8 +39,9 @@ import (
 )
 
 const (
-	cmdScmShowRegions = "ipmctl show -d PersistentMemoryType,FreeCapacity -region"
-	outScmNoRegions   = "no Regions defined"
+	cmdIpmctlShowVersion = "ipmctl version"
+	cmdScmShowRegions    = "ipmctl show -d PersistentMemoryType,FreeCapacity -region"
+	outScmNoRegions      = "no Regions defined"
 	// creates a AppDirect/Interleaved memory allocation goal across all DCPMMs on a system.
 	cmdScmCreateRegions    = "ipmctl create -f -goal PersistentMemoryType=AppDirect"
 	cmdScmRemoveRegions    = "ipmctl create -f -goal MemoryMode=100"
@@ -91,6 +93,53 @@ func (r *cmdRunner) checkNdctl() error {
 	_, err := r.lookPath("ndctl")
 	if err != nil {
 		return FaultMissingNdctl
+	}
+
+	return nil
+}
+
+var badIpmctlVers = []semVer{
+	// https://github.com/intel/ipmctl/commit/9e3898cb15fa9eed3ef3e9de4488be1681d53ff4
+	{"02", "00", "00", "3809"},
+	{"02", "00", "00", "3814"},
+	{"02", "00", "00", "3816"},
+}
+
+type semVer []string
+
+func (sv semVer) String() string {
+	return strings.Join(sv, ".")
+}
+
+func validateSemVer(sv semVer, badList []semVer) error {
+	for _, badVer := range badList {
+		if sv.String() == badVer.String() {
+			return FaultIpmctlBadVersion(sv.String())
+		}
+	}
+
+	return nil
+}
+
+// checkIpmctl verifies ipmctl application version is acceptable.
+func (r *cmdRunner) checkIpmctl(badList []semVer) error {
+	cmdOut, err := r.runCmd(cmdIpmctlShowVersion)
+	if err != nil {
+		return errors.WithMessage(err, "show version cmd")
+	}
+
+	re := regexp.MustCompile(`(\d{2}).(\d{2}).(\d{2}).(\d{4})`)
+	matched := re.FindStringSubmatch(cmdOut)
+
+	if matched == nil {
+		return errors.Errorf("could not read ipmctl version (%s)", cmdOut)
+	}
+
+	ipmctlBinVer := matched[1:]
+	r.log.Debugf("ipmctl binary semver: %v", ipmctlBinVer)
+
+	if err := validateSemVer(ipmctlBinVer, badList); err != nil {
+		return err
 	}
 
 	return nil
@@ -231,6 +280,9 @@ func (r *cmdRunner) GetState() (storage.ScmState, error) {
 // Command output from external tools will be returned. State will be passed in.
 func (r *cmdRunner) Prep(state storage.ScmState) (needsReboot bool, pmemDevs storage.ScmNamespaces, err error) {
 	if err = r.checkNdctl(); err != nil {
+		return
+	}
+	if err = r.checkIpmctl(badIpmctlVers); err != nil {
 		return
 	}
 

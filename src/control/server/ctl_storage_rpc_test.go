@@ -26,7 +26,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1005,11 +1004,6 @@ func TestServer_CtlSvc_StoragePrepare(t *testing.T) {
 func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 	mockNvmeController0 := storage.MockNvmeController(0)
 	mockNvmeController1 := storage.MockNvmeController(1)
-	defaultAddrStr := "127.0.0.1:10001"
-	defaultAddr, err := net.ResolveTCPAddr("tcp", defaultAddrStr)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	for name, tc := range map[string]struct {
 		scmMounted       bool // if scmMounted we emulate ext4 fs is mounted
@@ -1506,12 +1500,6 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				if err := os.MkdirAll(root, 0777); err != nil {
 					t.Fatal(err)
 				}
-
-				msClientCfg := mgmtSvcClientCfg{
-					ControlAddr:  defaultAddr,
-					AccessPoints: []string{defaultAddrStr},
-				}
-				srv.msClient = newMgmtSvcClient(context.TODO(), log, msClientCfg)
 
 				// if the instance is expected to have a valid superblock, create one
 				if tc.superblockExists {

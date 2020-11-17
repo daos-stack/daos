@@ -275,6 +275,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 		LOG_MODE((HANDLE), _flag, O_PATH);			\
 		LOG_MODE((HANDLE), _flag, O_SYNC);			\
 		LOG_MODE((HANDLE), _flag, O_TRUNC);			\
+		LOG_MODE((HANDLE), _flag, O_NOFOLLOW);			\
 		if (_flag)						\
 			DFUSE_TRA_ERROR(HANDLE, "Flags 0%o", _flag);	\
 	} while (0)
@@ -343,13 +344,13 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_READLINK(req, path)					\
+#define DFUSE_REPLY_READLINK(ie, req, path)				\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(req, "Returning path '%s'", path);	\
+		DFUSE_TRA_DEBUG(ie, "Returning target '%s'", path);	\
 		__rc = fuse_reply_readlink(req, path);			\
 		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(req,				\
+			DFUSE_TRA_ERROR(ie,				\
 					"fuse_reply_readlink returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
