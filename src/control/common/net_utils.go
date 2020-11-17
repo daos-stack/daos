@@ -29,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/pkg/errors"
 )
 
@@ -97,4 +98,13 @@ func IsLocalAddr(testAddr *net.TCPAddr) bool {
 	}
 
 	return false
+}
+
+// LocalhostCtrlAddr returns a *net.TCPAddr representing
+// the default control address on localhost.
+func LocalhostCtrlAddr() *net.TCPAddr {
+	return &net.TCPAddr{
+		IP:   net.IPv4(127, 0, 0, 1),
+		Port: build.DefaultControlPort,
+	}
 }
