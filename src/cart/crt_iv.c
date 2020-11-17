@@ -1263,7 +1263,7 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 	} else {
 		D_ERROR("Group Version Changed: From %d: To %d\n",
 			 grp_ver, local_grp_ver);
-		D_GOTO(exit, rc);
+		D_GOTO(exit, rc=-DER_GRPVER);
 	}
 
 	rc = crt_req_send(rpc, handle_response_cb, cb_info);
@@ -3195,9 +3195,9 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 			grp_ver_current = ivns_internal->cii_grp_priv->
 							  gp_membs_ver;
 			if (grp_ver_entry != grp_ver_current) {
-				D_ERROR("Group (%s) version mismatch. ",
-					ivns_id.ii_group_name);
-				D_ERROR("On Entry: %d:: Changed to:%d\n",
+				D_ERROR("Group (%s) version mismatch. "
+					"On Entry: %d:: Changed to:%d\n",
+					ivns_id.ii_group_name,
 					grp_ver_entry, grp_ver_current);
 				D_GOTO(send_error, rc = -DER_GRPVER);
 			}
