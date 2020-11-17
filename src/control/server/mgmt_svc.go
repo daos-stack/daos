@@ -469,7 +469,6 @@ func (svc *mgmtSvc) smdReplace(ctx context.Context, req *mgmtpb.SmdQueryReq) (*m
 	}, nil
 }
 
-
 func (svc *mgmtSvc) SmdQuery(ctx context.Context, req *mgmtpb.SmdQueryReq) (*mgmtpb.SmdQueryResp, error) {
 	svc.log.Debugf("MgmtSvc.SmdQuery dispatch, req:%+v\n", *req)
 

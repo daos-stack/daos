@@ -65,7 +65,7 @@ type (
 		UUID             string // UUID of pool or device for single result
 		Rank             system.Rank
 		Target           string
-		ReplaceUUID	 string // UUID of new device to replace storage
+		ReplaceUUID      string // UUID of new device to replace storage
 	}
 
 	// SmdQueryResp represents the results of performing

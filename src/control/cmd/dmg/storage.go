@@ -48,7 +48,7 @@ type storageCmd struct {
 	Format  storageFormatCmd  `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
 	Query   storageQueryCmd   `command:"query" alias:"q" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
 	Set     setFaultyCmd      `command:"set" alias:"s" description:"Manually set the device state."`
-	Replace	storageReplaceCmd  `command:"replace" alias:"r" description:"Replace a storage device that has been hot-removed with a new device."`
+	Replace storageReplaceCmd `command:"replace" alias:"r" description:"Replace a storage device that has been hot-removed with a new device."`
 }
 
 // storagePrepareCmd is the struct representing the prep storage subcommand.
@@ -342,9 +342,9 @@ func (cmd *nvmeSetFaultyCmd) Execute(_ []string) error {
 // storageReplaceCmd is the struct representing the replace storage subcommand
 type storageReplaceCmd struct {
 	smdQueryCmd
-	OldDevUUID  string `long:"old-dev" description:"Device UUID of hot-removed SSD" required:"1"`
-	NewDevUUID  string `long:"new-dev" description:"Device UUID of new device" required:"1"`
-	NoReint     bool   `long:"no-reint" description:"Bypass reintegration of device and just bring back online."`
+	OldDevUUID string `long:"old-dev" description:"Device UUID of hot-removed SSD" required:"1"`
+	NewDevUUID string `long:"new-dev" description:"Device UUID of new device" required:"1"`
+	NoReint    bool   `long:"no-reint" description:"Bypass reintegration of device and just bring back online."`
 }
 
 // Execute is run when storageReplaceCmd activates
@@ -358,9 +358,8 @@ func (cmd *storageReplaceCmd) Execute(_ []string) error {
 
 	ctx := context.Background()
 	req := &control.SmdQueryReq{
-		UUID:		cmd.OldDevUUID,
-		ReplaceUUID:	cmd.NewDevUUID,
+		UUID:        cmd.OldDevUUID,
+		ReplaceUUID: cmd.NewDevUUID,
 	}
 	return cmd.makeRequest(ctx, req)
 }
-
