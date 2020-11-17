@@ -97,6 +97,9 @@ RUN echo "$USER:$PASSWD" | chpasswd
 RUN mkdir /mnt/daos
 RUN chown daos.daos /mnt/daos
 
+# Create maven dir
+RUN mkdir -p /home/$USER/.m2
+
 # Dependencies
 # Packages for NVML exist in CentOS, but are
 # unfortunately outdated. The DAOS build system will rebuild those packages.

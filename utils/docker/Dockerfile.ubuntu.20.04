@@ -57,6 +57,9 @@ RUN echo "$USER:$PASSWD" | chpasswd
 RUN mkdir /mnt/daos
 RUN chown daos.daos /mnt/daos
 
+# Create maven dir
+RUN mkdir -p /home/$USER/.m2
+
 # Switch to new user
 #USER $USER
 WORKDIR /home/$USER
