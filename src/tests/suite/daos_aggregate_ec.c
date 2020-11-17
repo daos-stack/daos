@@ -270,7 +270,7 @@ test_filled_stripe(void **statep)
 					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
 					      &ctx.fetch_iod, &ctx.fetch_sgl,
 					      &ctx.fetch_iom, &shard, NULL,
-					      NULL, &task);
+					      NULL, NULL, &task);
 		assert_int_equal(rc, 0);
 		rc = dc_task_schedule(task, true);
 		assert_int_equal(rc, 0);
@@ -287,7 +287,7 @@ test_filled_stripe(void **statep)
 					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
 					      &ctx.fetch_iod, &ctx.fetch_sgl,
 					      &ctx.fetch_iom, &shard, NULL,
-					      NULL, &task);
+					      NULL, NULL, &task);
 		assert_int_equal(rc, 0);
 		rc = dc_task_schedule(task, true);
 		assert_int_equal(rc, 0);
@@ -307,7 +307,7 @@ test_filled_stripe(void **statep)
 					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
 					      &ctx.fetch_iod, &ctx.fetch_sgl,
 					      &ctx.fetch_iom, &shard, NULL,
-					      NULL, &task);
+					      NULL, NULL, &task);
 		assert_int_equal(rc, 0);
 		rc = dc_task_schedule(task, true);
 		assert_int_equal(rc, 0);
@@ -324,7 +324,7 @@ test_filled_stripe(void **statep)
 					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
 					      &ctx.fetch_iod, &ctx.fetch_sgl,
 					      &ctx.fetch_iom, &shard, NULL,
-					      NULL, &task);
+					      NULL, NULL, &task);
 		assert_int_equal(rc, 0);
 		rc = dc_task_schedule(task, true);
 		assert_int_equal(rc, 0);
@@ -344,7 +344,7 @@ test_filled_stripe(void **statep)
 					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
 					      &ctx.fetch_iod, &ctx.fetch_sgl,
 					      &ctx.fetch_iom, &shard, NULL,
-					      NULL, &task);
+					      NULL, NULL, &task);
 		assert_int_equal(rc, 0);
 		rc = dc_task_schedule(task, true);
 		assert_int_equal(rc, 0);
@@ -361,7 +361,7 @@ test_filled_stripe(void **statep)
 					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
 					      &ctx.fetch_iod, &ctx.fetch_sgl,
 					      &ctx.fetch_iom, &shard, NULL,
-					      NULL, &task);
+					      NULL, NULL, &task);
 		assert_int_equal(rc, 0);
 		rc = dc_task_schedule(task, true);
 		assert_int_equal(rc, 0);
