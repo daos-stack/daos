@@ -1,3 +1,9 @@
+daos (1.1.1-6) unstable; urgency=medium
+  [ Mohamad Chaarawi ]
+  * Add dfs_test
+
+ -- Mohamad Chaarawi <mohamad.chaarawi@intel.com>
+
 daos (1.1.1-5) unstable; urgency=medium
   [ Jonathan Martinez Montes ]
   * Restore obj_ctl utility

@@ -319,7 +319,7 @@ func TestServer_ConfigValidation(t *testing.T) {
 			func(c *Server) *Server {
 				return c.WithAccessPoints("1.2.3.4:1234", "5.6.7.8:5678")
 			},
-			FaultConfigBadAccessPoints,
+			nil,
 		},
 		"no access points": {
 			func(c *Server) *Server {
