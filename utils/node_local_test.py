@@ -580,7 +580,7 @@ class DFuse():
 
     instance_num = 0
 
-    def __init__(self, daos, conf, pool=None, container=None, path=None):
+    def __init__(self, daos, conf, pool=None, container=None, path=None, multi_user=False):
         if path:
             self.dir = path
         else:
@@ -589,6 +589,7 @@ class DFuse():
         self.valgrind_file = None
         self.container = container
         self.conf = conf
+        self.multi_user = multi_user
         self._daos = daos
         self._sp = None
 
@@ -624,6 +625,9 @@ class DFuse():
         cmd = self.valgrind.get_cmd_prefix()
 
         cmd.extend([dfuse_bin, '-s', '0', '-m', self.dir, '-f'])
+
+        if self.multi_user:
+            cmd.append('--multi-user')
 
         if single_threaded:
             cmd.append('-S')
@@ -826,9 +830,34 @@ def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False):
     vh.convert_xml()
     return rc
 
-def show_cont(conf, pool):
+def get_conts(conf, pool, posix=True):
+    """Return a list of all container"""
+
+    cmd = ['pool', 'list-containers', '--svc', '0', '--pool', pool]
+    rc = run_daos_cmd(conf, cmd)
+    print('rc is {}'.format(rc))
+    assert rc.returncode == 0
+    containers = rc.stdout.decode('utf-8').splitlines()
+
+    matched = []
+    for container in containers:
+        cmd = ['container', 'get-prop', '--pool', pool, '--cont', container,
+               '--svc', '0']
+        rc = run_daos_cmd(conf, cmd)
+        for line in rc.stdout.decode('utf-8').splitlines():
+            (key, value) = line.split(':')
+            if (key == 'layout type'):
+                print(value.strip())
+                if not posix or value.strip() == 'POSIX (1)':
+                    matched.append(container)
+    return matched
+
+def show_cont(conf, pool, posix=False):
     """Create a container and return a container list"""
-    cmd = ['container', 'create', '--svc', '0', '--pool', pool]
+    if posix:
+        cmd = ['container', 'create', '--svc', '0', '--pool', pool, '--type', 'POSIX']
+    else:
+        cmd = ['container', 'create', '--svc', '0', '--pool', pool]
     rc = run_daos_cmd(conf, cmd)
     assert rc.returncode == 0
     print('rc is {}'.format(rc))
@@ -1270,18 +1299,26 @@ def run_in_fg(server, conf):
     while len(pools) < 1:
         pools = make_pool(server)
 
-    dfuse = DFuse(server, conf, pool=pools[0])
+    pool = pools[0]
+
+    containers = get_conts(conf, pool)
+    if not containers:
+        show_cont(conf, pool, posix=True)
+    containers = get_conts(conf, pool)
+
+    container = containers[0]
+    print('Container is {}'.format(container))
+
+    dfuse = DFuse(server, conf, pool=pool, container=container, multi_user=True)
     dfuse.start()
-    container = str(uuid.uuid4())
     t_dir = os.path.join(dfuse.dir, container)
-    os.mkdir(t_dir)
     print('Running at {}'.format(t_dir))
     print('daos container create --svc 0 --type POSIX' \
           '--pool {} --path {}/uns-link'.format(
-              pools[0], t_dir))
+              pool, t_dir))
     print('cd {}/uns-link'.format(t_dir))
     print('daos container destroy --svc 0 --path {}/uns-link'.format(t_dir))
-    print('daos pool list-containers --svc 0 --pool {}'.format(pools[0]))
+    print('daos pool list-containers --svc 0 --pool {}'.format(pool))
     try:
         dfuse.wait_for_exit()
     except KeyboardInterrupt:

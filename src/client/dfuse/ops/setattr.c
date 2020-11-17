@@ -29,9 +29,53 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 		 struct stat *attr, int to_set)
 {
 	int dfs_flags = 0;
+	struct stat attr_in = *attr;
 	int rc;
 
 	DFUSE_TRA_DEBUG(ie, "flags %#x", to_set);
+
+	/* The uid and gid flags are handled differently, unless
+	 * multi-user is enabled they're not supported at all, if
+	 * it is enabled then they're handled by extended
+	 * attributes.
+	 */
+	if (to_set & (FUSE_SET_ATTR_GID | FUSE_SET_ATTR_UID)) {
+		struct uid_entry entry;
+		daos_size_t size = sizeof(entry);
+		bool set_uid = to_set & FUSE_SET_ATTR_UID;
+		bool set_gid = to_set & FUSE_SET_ATTR_GID;
+		bool set_both = set_gid && set_uid;
+
+		if (!ie->ie_dfs->dfs_multi_user)
+			D_GOTO(err, rc = ENOTSUP);
+
+		if (!set_both) {
+			rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj,
+					XATTR_NAME, &entry, &size);
+			if (rc && rc != ENODATA)
+				D_GOTO(err, rc);
+		}
+
+		if (set_uid)
+			entry.uid = attr->st_uid;
+
+		if (set_gid)
+			entry.gid = attr->st_gid;
+
+		rc = dfs_setxattr(ie->ie_dfs->dfs_ns, ie->ie_obj, XATTR_NAME,
+				  &entry, sizeof(entry), 0);
+
+		to_set &= ~(FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID);
+		if (to_set == 0) {
+			rc = dfs_ostat(ie->ie_dfs->dfs_ns, ie->ie_obj, attr);
+			if (rc != 0)
+				D_GOTO(err, 0);
+
+			D_GOTO(reply, 0);
+		}
+
+		/* Fall through and do the set of the setattr here */
+	}
 
 	if (to_set & FUSE_SET_ATTR_MODE) {
 		DFUSE_TRA_DEBUG(ie, "mode %#o %#o",
@@ -74,15 +118,20 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 
 	if (to_set) {
 		DFUSE_TRA_WARNING(ie, "Unknown flags %#x", to_set);
-		DFUSE_REPLY_ERR_RAW(ie, req, ENOTSUP);
-		return;
+		D_GOTO(err, rc = ENOTSUP);
 	}
 
 	rc = dfs_osetattr(ie->ie_dfs->dfs_ns, ie->ie_obj, attr, dfs_flags);
-	if (rc) {
-		DFUSE_REPLY_ERR_RAW(ie, req, rc);
-		return;
-	}
+	if (rc)
+		D_GOTO(err, rc);
 
+	attr->st_uid = attr_in.st_uid;
+	attr->st_gid = attr_in.st_uid;
+
+reply:
 	DFUSE_REPLY_ATTR(ie, req, attr);
+	return;
+
+err:
+	DFUSE_REPLY_ERR_RAW(ie, req, rc);
 }

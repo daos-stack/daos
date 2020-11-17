@@ -32,7 +32,7 @@ dfuse_cb_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_inode_entry	*ie = NULL;
 	int				rc;
 
-	DFUSE_TRA_INFO(fs_handle,
+	DFUSE_TRA_INFO(parent,
 		       "Parent:%lu '%s'", parent->ie_stat.st_ino, name);
 
 	D_ALLOC_PTR(ie);

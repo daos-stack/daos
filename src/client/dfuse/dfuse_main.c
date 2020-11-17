@@ -161,7 +161,8 @@ dfuse_bg(struct dfuse_info *dfuse_info)
 			exit(2);
 		}
 		if (child_ret) {
-			printf("Exiting " DF_RC "\n", DP_RC(child_ret));
+			printf("Exiting %d %s\n", child_ret,
+			       d_errstr(child_ret));
 			exit(-(child_ret + DER_ERR_GURT_BASE));
 		} else {
 			exit(0);
@@ -276,6 +277,7 @@ main(int argc, char **argv)
 		{"svc",			required_argument, 0, 's'},
 		{"sys-name",		required_argument, 0, 'G'},
 		{"mountpoint",		required_argument, 0, 'm'},
+		{"multi-user",		no_argument,	   0, 'M'},
 		{"singlethread",	no_argument,	   0, 'S'},
 		{"enable-caching",	no_argument,	   0, 'A'},
 		{"disable-direct-io",	no_argument,	   0, 'D'},
@@ -325,6 +327,9 @@ main(int argc, char **argv)
 			break;
 		case 'm':
 			dfuse_info->di_mountpoint = optarg;
+			break;
+		case 'M':
+			dfuse_info->di_multi_user = true;
 			break;
 		case 'S':
 			dfuse_info->di_threaded = false;
@@ -384,6 +389,14 @@ main(int argc, char **argv)
 				exit(1);
 			}
 		}
+	} else if (dfuse_info->di_cont) {
+		printf("Pool uuid required with container uuid\n");
+		exit(1);
+	}
+
+	if (dfuse_info->di_multi_user && ! dfuse_info->di_cont) {
+		printf("Multi-user mode requires a container uuid\n");
+		exit(1);
 	}
 
 	if (!dfuse_info->di_foreground) {
@@ -422,41 +435,54 @@ main(int argc, char **argv)
 	if (dfuse_info->di_caching)
 		dfs->dfs_attr_timeout = 5;
 
+	if (dfuse_info->di_multi_user) {
+		dfs->dfs_attr_timeout = 1;
+		dfs->dfs_multi_user = true;
+	}
+
 	d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
 
 	dfs->dfs_dfp = dfp;
 
 	DFUSE_TRA_UP(dfs, dfp, "dfs");
 
+	if (dfuse_info->di_pool) {
+		if (uuid_parse(dfuse_info->di_pool,
+				dfp->dfp_pool) < 0) {
+			printf("Invalid pool uuid\n");
+			D_GOTO(out_dfs, ret = -DER_INVAL);
+		}
+		if (dfuse_info->di_cont) {
+			if (uuid_parse(dfuse_info->di_cont,
+				       dfs->dfs_cont) < 0) {
+				printf("Invalid container uuid\n");
+				D_GOTO(out_dfs, ret = -DER_INVAL);
+			}
+		}
+	}
+
 	rc = duns_resolve_path(dfuse_info->di_mountpoint, &duns_attr);
 	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() returned %d %s",
 		       rc, strerror(rc));
 	if (rc == 0) {
-		if (dfuse_info->di_pool) {
-			printf("UNS configured on mount point but pool provided\n");
-			D_GOTO(out_dfs, ret = -DER_INVAL);
+		if (dfuse_info->di_pool && (uuid_compare(duns_attr.da_puuid,
+											dfp->dfp_pool))) {
+			printf("Pools uuids do not match\n");
+			D_GOTO(out_dfs, rc = -DER_INVAL);
 		}
+
+		if (dfuse_info->di_cont && (uuid_compare(duns_attr.da_cuuid,
+											dfs->dfs_cont))) {
+			printf("Container uuids do not match\n");
+			D_GOTO(out_dfs, rc = -DER_INVAL);
+		}
+
 		uuid_copy(dfp->dfp_pool, duns_attr.da_puuid);
 		uuid_copy(dfs->dfs_cont, duns_attr.da_cuuid);
-	} else if (rc == ENODATA || rc == ENOTSUP) {
-		if (dfuse_info->di_pool) {
-			if (uuid_parse(dfuse_info->di_pool,
-				       dfp->dfp_pool) < 0) {
-				printf("Invalid pool uuid\n");
-				D_GOTO(out_dfs, ret = -DER_INVAL);
-			}
-			if (dfuse_info->di_cont) {
-				if (uuid_parse(dfuse_info->di_cont,
-					       dfs->dfs_cont) < 0) {
-					printf("Invalid container uuid\n");
-					D_GOTO(out_dfs, ret = -DER_INVAL);
-				}
-			}
-		}
 	} else if (rc == ENOENT) {
 		printf("Mount point does not exist\n");
 		D_GOTO(out_dfs, ret = daos_errno2der(rc));
-	} else {
+	} else if (rc != ENODATA && rc != ENOTSUP) {
 		/* Other errors from DUNS, it should have logged them already */
 		D_GOTO(out_dfs, ret = daos_errno2der(rc));
 	}
@@ -489,7 +515,11 @@ main(int argc, char **argv)
 				printf("dfs_mount failed (%d)\n", rc);
 				D_GOTO(out_dfs, ret = rc);
 			}
-			dfs->dfs_ops = &dfuse_dfs_ops;
+			if (dfuse_info->di_multi_user) {
+				dfs->dfs_ops = &dfuse_login_ops;
+			} else {
+				dfs->dfs_ops = &dfuse_dfs_ops;
+			}
 		} else {
 			dfs->dfs_ops = &dfuse_cont_ops;
 		}

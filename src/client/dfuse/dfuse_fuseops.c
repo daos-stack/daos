@@ -636,10 +636,28 @@ struct dfuse_inode_ops dfuse_dfs_ops = {
 	.create		= dfuse_cb_create,
 	.rename		= dfuse_cb_rename,
 	.symlink	= dfuse_cb_symlink,
+
+	.removexattr	= dfuse_cb_removexattr,
+	.setattr	= dfuse_cb_setattr,
+	.statfs		= dfuse_cb_statfs,
+};
+
+/* Operations for root/multi-user container
+ *
+ * The only write operations are mkdir/setattr.
+ */
+struct dfuse_inode_ops dfuse_login_ops = {
+	.lookup		= dfuse_cb_lookup,
+	.mkdir		= dfuse_cb_mkdir_with_id,
+	.opendir	= dfuse_cb_opendir,
+	.releasedir	= dfuse_cb_releasedir,
+	.getattr	= dfuse_cb_getattr,
+	.readdir	= dfuse_cb_readdir,
+	.unlink		= dfuse_cb_unlink,
+	.rename		= dfuse_cb_rename,
 	.setxattr	= dfuse_cb_setxattr,
 	.getxattr	= dfuse_cb_getxattr,
 	.listxattr	= dfuse_cb_listxattr,
-	.removexattr	= dfuse_cb_removexattr,
 	.setattr	= dfuse_cb_setattr,
 	.statfs		= dfuse_cb_statfs,
 };

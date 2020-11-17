@@ -26,6 +26,30 @@
 
 #include "daos_uns.h"
 
+int
+dfuse_get_uid(struct dfuse_inode_entry *ie)
+{
+	struct uid_entry	entry = {0};
+	daos_size_t		size = sizeof(entry);
+	int rc;
+
+	rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj, XATTR_NAME,
+			  &entry, &size);
+
+	if (rc == 0 && size != sizeof(entry))
+		rc = EIO;
+
+	if (rc == 0) {
+		ie->ie_stat.st_uid = entry.uid;
+		ie->ie_stat.st_gid = entry.gid;
+	}
+
+	if (rc == ENODATA)
+		rc = 0;
+
+	return rc;
+}
+
 void
 dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct dfuse_inode_entry *ie,
@@ -42,6 +66,12 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 
 	entry.attr_timeout = ie->ie_dfs->dfs_attr_timeout;
 	entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
+
+	if (ie->ie_dfs->dfs_multi_user) {
+		rc = dfuse_get_uid(ie);
+		if (rc)
+			D_GOTO(err, rc);
+	}
 
 	if (ie->ie_stat.st_ino == 0) {
 		rc = dfs_obj2id(ie->ie_obj, &oid);
@@ -206,7 +236,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		if (dfs == NULL)
 			D_GOTO(out_pool, ret = ENOMEM);
 
-		dfs->dfs_ops = ie->ie_dfs->dfs_ops;
+		dfs->dfs_ops = &dfuse_dfs_ops;
 		DFUSE_TRA_UP(dfs, dfp, "dfs");
 		d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
 		uuid_copy(dfs->dfs_cont, dattr.da_cuuid);

@@ -50,6 +50,7 @@ struct dfuse_info {
 	bool				di_foreground;
 	bool				di_direct_io;
 	bool				di_caching;
+	bool				di_multi_user;
 	/* List head of dfuse_pool entries */
 	d_list_t			di_dfp_list;
 	pthread_mutex_t			di_lock;
@@ -169,6 +170,7 @@ struct dfuse_event {
 };
 
 extern struct dfuse_inode_ops dfuse_dfs_ops;
+extern struct dfuse_inode_ops dfuse_login_ops;
 extern struct dfuse_inode_ops dfuse_cont_ops;
 extern struct dfuse_inode_ops dfuse_pool_ops;
 
@@ -194,7 +196,19 @@ struct dfuse_dfs {
 	/* List of dfuse_dfs entries in the dfuse_pool */
 	d_list_t		dfs_list;
 	pthread_mutex_t		dfs_read_mutex;
+	bool			dfs_multi_user;
 };
+
+/* Multiuser support */
+#define XATTR_NAME "system.dfuse.ids"
+
+struct uid_entry {
+	uid_t uid;
+	gid_t gid;
+};
+
+int
+dfuse_get_uid(struct dfuse_inode_entry *ie);
 
 /*
  * struct dfuse_info contains list of dfuse_pool
@@ -468,7 +482,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
  * Inode handle.
  *
  * Describes any entry in the projection that the kernel knows about, may
- * be a directory, file, symbolic link or anything else.
+ * be a directory, file,  symbolic link or anything else.
  */
 
 struct dfuse_inode_entry {
@@ -578,6 +592,10 @@ dfuse_cb_readlink(fuse_req_t, fuse_ino_t);
 void
 dfuse_cb_mkdir(fuse_req_t, struct dfuse_inode_entry *,
 	       const char *, mode_t);
+
+void
+dfuse_cb_mkdir_with_id(fuse_req_t, struct dfuse_inode_entry *,
+		       const char *, mode_t);
 
 void
 dfuse_cb_opendir(fuse_req_t, struct dfuse_inode_entry *,
