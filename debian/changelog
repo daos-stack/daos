@@ -1,3 +1,9 @@
+daos (1.1.1-8) unstable; urgency=medium
+  [ Li Wei ]
+  * Require raft-devel 0.7.0 that changes log indices and terms to 63-bit
+
+ -- Li Wei <wei.g.li@intel.com>
+
 daos (1.1.1-6) unstable; urgency=medium
   [ Mohamad Chaarawi ]
   * Add dfs_test
