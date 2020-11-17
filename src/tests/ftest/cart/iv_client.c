@@ -468,8 +468,8 @@ test_iv_get_grp_version()
 	/* Check for valid output */
 	version = output->version;
 	if (output->rc != 0)
-		DBG_PRINT("Grp Get Version FAILED 0x%08x : %d\n",
-			 version, version);
+		DBG_PRINT("Grp Get Version FAILED: rc %d\n",
+			 output->rc);
 	else
 		DBG_PRINT("Grp Get Version PASSED 0x%08x : %d\n",
 			 version, version);

@@ -113,13 +113,13 @@ enum {
 	/* Client issues invalidate call */
 	RPC_TEST_INVALIDATE_IV = CRT_PROTO_OPC(TEST_IV_BASE,
 					      TEST_IV_VER, 2),
-	/* send global ivns */
+	/* Send global ivns */
 	RPC_SET_IVNS = CRT_PROTO_OPC(TEST_IV_BASE, TEST_IV_VER, 3),
 	/* Request server shutdown */
 	RPC_SHUTDOWN = CRT_PROTO_OPC(TEST_IV_BASE, TEST_IV_VER, 4),
 	/* Change group version */
 	RPC_SET_GRP_VERSION = CRT_PROTO_OPC(TEST_IV_BASE, TEST_IV_VER, 5),
-	/* Change group version */
+	/* Get group version */
 	RPC_GET_GRP_VERSION = CRT_PROTO_OPC(TEST_IV_BASE, TEST_IV_VER, 6),
 
 } rpc_id_t;
