@@ -1301,9 +1301,20 @@ def run_in_fg(server, conf):
     dfuse = None
 
 def check_readdir_perf(server, conf):
-    """ Check and report on readdir performance"""
+    """ Check and report on readdir performance
+
+    Loop over number of files, measuring the time taken to
+    populate a directory, and to read the directory contents,
+    measure both files and directories as contents, and
+    readdir both with and without stat, restarting dfuse
+    between each test to avoid cache effects.
+
+    Continue testing until five minutes have passed, and print
+    a table of results.
+    """
 
     def make_dirs(parent, count):
+        """Populate the test directory"""
         print('Populating to {}'.format(count))
         dir_dir = os.path.join(parent,
                                'dirs.{}.in'.format(count))
@@ -1328,10 +1339,10 @@ def check_readdir_perf(server, conf):
                 if i + 1 == int(count / 2):
                     elapsed = time.time() - start_all
                     print('Creating {} dirs took {:.2f}'.format(i + 1,
-                                                             elapsed))
+                                                                elapsed))
             elapsed = time.time() - start_all
-            print('Creating {} dirs took {:.2f}'.format(i + 1,
-                                                         elapsed))
+            print('Creating {} dirs took {:.2f}'.format(count,
+                                                        elapsed))
             os.rename(dir_dir, t_dir)
 
         if not os.path.exists(t_file):
@@ -1355,6 +1366,7 @@ def check_readdir_perf(server, conf):
         return time.time() - start_all
 
     def print_results(results):
+        """Display the results"""
         for count in results:
             line = '{:-10d} '.format(count)
             rd = results[count]
@@ -1432,7 +1444,6 @@ def check_readdir_perf(server, conf):
                                                             elapsed))
         results[count]['files_with_stat'] = elapsed
 
-
         elapsed = time.time() - all_start
         if elapsed > 5 * 60:
             dfuse.stop()
@@ -1445,15 +1456,13 @@ def check_readdir_perf(server, conf):
         results[count]['create_time'] = create_time
         dfuse.stop()
 
-    if False:
-        rc = run_daos_cmd(conf, ['container',
-                                 'destroy',
-                                 '--svc', '0',
-                                 '--pool',
-                                 pool,
-                                 '--cont',
-                                 container])
-        print(rc)
+    run_daos_cmd(conf, ['container',
+                        'destroy',
+                        '--svc', '0',
+                        '--pool',
+                        pool,
+                        '--cont',
+                        container])
     print_results(results)
 
 def test_pydaos_kv(server, conf):
