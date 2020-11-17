@@ -44,15 +44,12 @@ const (
 
 // Superblock is the per-Instance superblock
 type Superblock struct {
-	Version     uint8
-	UUID        string
-	System      string
-	Rank        *system.Rank
-	URI         string
-	ValidRank   bool
-	MS          bool
-	CreateMS    bool
-	BootstrapMS bool
+	Version   uint8
+	UUID      string
+	System    string
+	Rank      *system.Rank
+	URI       string
+	ValidRank bool
 }
 
 // TODO: Marshal/Unmarshal using a binary representation?
@@ -136,14 +133,7 @@ func (srv *IOServerInstance) createSuperblock(recreate bool) error {
 		return err
 	}
 
-	// Only the first I/O server can be an MS replica.
-	msInfo := new(mgmtInfo)
-	if srv.Index() == 0 {
-		if msInfo, err = getMgmtInfo(srv); err != nil {
-			return err
-		}
-	}
-	srv.log.Debugf("idx %d createSuperblock() (ms: %+v)", srv.Index(), msInfo)
+	srv.log.Debugf("idx %d createSuperblock()", srv.Index())
 
 	if err := srv.MountScmDevice(); err != nil {
 		return err
@@ -161,15 +151,12 @@ func (srv *IOServerInstance) createSuperblock(recreate bool) error {
 	}
 
 	superblock := &Superblock{
-		Version:     superblockVersion,
-		UUID:        u.String(),
-		System:      systemName,
-		MS:          msInfo.isReplica,
-		CreateMS:    msInfo.isReplica,
-		BootstrapMS: msInfo.shouldBootstrap,
+		Version: superblockVersion,
+		UUID:    u.String(),
+		System:  systemName,
 	}
 
-	if cfg.Rank != nil || msInfo.isReplica && msInfo.shouldBootstrap {
+	if cfg.Rank != nil {
 		superblock.Rank = new(system.Rank)
 		if cfg.Rank != nil {
 			*superblock.Rank = *cfg.Rank

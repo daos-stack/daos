@@ -33,12 +33,12 @@ import (
 )
 
 // ControlService implements the control plane control service, satisfying
-
 // ctlpb.MgmtCtlServer, and is the data container for the service.
 type ControlService struct {
 	StorageControlService
 	harness    *IOServerHarness
 	membership *system.Membership
+	sysdb      *system.Database
 	rpcClient  control.Invoker
 	srvCfg     *config.Server
 }
@@ -48,7 +48,7 @@ type ControlService struct {
 func NewControlService(log logging.Logger, h *IOServerHarness,
 	bp *bdev.Provider, sp *scm.Provider,
 	cfg *config.Server, m *system.Membership,
-	rc control.Invoker) *ControlService {
+	db *system.Database, rc control.Invoker) *ControlService {
 
 	scs := NewStorageControlService(log, bp, sp, cfg.Servers)
 
@@ -56,6 +56,7 @@ func NewControlService(log logging.Logger, h *IOServerHarness,
 		StorageControlService: *scs,
 		harness:               h,
 		membership:            m,
+		sysdb:                 db,
 		rpcClient:             rc,
 		srvCfg:                cfg,
 	}

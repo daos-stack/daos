@@ -38,6 +38,7 @@ struct test_t {
 	int			 t_hold;
 	int			 t_shut_only;
 	bool			 t_save_cfg;
+	bool			 t_use_cfg;
 	char			*t_cfg_path;
 	uint32_t		 t_hold_time;
 	unsigned int		 t_srv_ctx_num;
@@ -300,12 +301,16 @@ test_parse_args(int argc, char **argv)
 		{"srv_ctx_num", required_argument, 0, 'c'},
 		{"shut_only", no_argument, &test_g.t_shut_only, 1},
 		{"cfg_path", required_argument, 0, 's'},
+		{"use_cfg", required_argument, 0, 'u'},
 		{0, 0, 0, 0}
 	};
 
+	test_g.t_use_cfg = true;
+
 	while (1) {
-		rc = getopt_long(argc, argv, "n:a:c:h:", long_options,
+		rc = getopt_long(argc, argv, "n:a:c:h:u:", long_options,
 				 &option_index);
+
 		if (rc == -1)
 			break;
 		switch (rc) {
@@ -341,6 +346,9 @@ test_parse_args(int argc, char **argv)
 		case 's':
 			test_g.t_save_cfg = true;
 			test_g.t_cfg_path = optarg;
+			break;
+		case 'u':
+			test_g.t_use_cfg = atoi(optarg);
 			break;
 		case '?':
 			return 1;
