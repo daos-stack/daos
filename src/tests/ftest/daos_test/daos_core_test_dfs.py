@@ -22,11 +22,12 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 
+import os
 from daos_core_base import DaosCoreBase
 
 class DaosCoreTestDfs(DaosCoreBase):
     """
-    Runs just DAOS file system tests.
+    Runs DAOS file system (DFS) tests.
 
     :avocado: recursive
     """
@@ -40,10 +41,11 @@ class DaosCoreTestDfs(DaosCoreBase):
         """
         Test ID: DAOS-5409
 
-        Test Description: Run DAOS file system tests 'daos_test -F' in parallel
+        Test Description: Run DAOS file system tests 'dfs_test'
 
         Use Cases: Daos File system tests
 
-        :avocado: tags=all,pr,hw,large,daos_test_dfs
+        :avocado: tags=all,pr,hw,large,dfs_test
         """
+        self.daos_test = os.path.join(self.bin, 'dfs_test')
         DaosCoreBase.run_subtest(self)
