@@ -258,7 +258,8 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		new_cont = true;
 		ie->ie_root = true;
 
-		dfs->dfs_ino = atomic_fetch_add_relaxed(&fs_handle->dpi_ino_next, 1);
+		dfs->dfs_ino = atomic_fetch_add_relaxed(&fs_handle->dpi_ino_next,
+							1);
 		dfs->dfs_root = dfs->dfs_ino;
 		dfs->dfs_dfp = dfp;
 	}

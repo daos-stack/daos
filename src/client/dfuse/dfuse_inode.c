@@ -39,9 +39,9 @@ dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
 	if (oid == NULL)
 		return EIO;
 
-	hi = (oid->hi & (-1ULL>>32)) | (dfs->dfs_root << 48);
+	hi = (oid->hi & (-1ULL >> 32)) | (dfs->dfs_root << 48);
 
-	*_ino = hi ^ (oid->lo<<32);
+	*_ino = hi ^ (oid->lo << 32);
 	return 0;
 };
 
