@@ -103,7 +103,6 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 	missingSB := newTestMgmtSvc(t, testLog)
 	missingSB.harness.instances[0]._superblock = nil
 	notAP := newTestMgmtSvc(t, testLog)
-	notAP.harness.instances[0]._superblock.MS = false
 
 	for name, tc := range map[string]struct {
 		mgmtSvc       *mgmtSvc
@@ -244,11 +243,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				var msCfg mgmtSvcClientCfg
-				msCfg.AccessPoints = append(msCfg.AccessPoints, "localhost")
-
-				srv := NewIOServerInstance(log, nil, nil, newMgmtSvcClient(context.TODO(), log, msCfg), r)
-				srv.setSuperblock(&Superblock{MS: true})
+				srv := NewIOServerInstance(log, nil, nil, nil, r)
 				srv.ready.SetTrue()
 
 				harness := NewIOServerHarness(log)
@@ -339,7 +334,6 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 	missingSB := newTestMgmtSvc(t, testLog)
 	missingSB.harness.instances[0]._superblock = nil
 	notAP := newTestMgmtSvc(t, testLog)
-	notAP.harness.instances[0]._superblock.MS = false
 	testPoolService := &system.PoolService{
 		PoolUUID: uuid.MustParse(mockUUID),
 		State:    system.PoolServiceStateReady,
@@ -427,7 +421,6 @@ func TestServer_MgmtSvc_PoolDrain(t *testing.T) {
 	missingSB := newTestMgmtSvc(t, testLog)
 	missingSB.harness.instances[0]._superblock = nil
 	notAP := newTestMgmtSvc(t, testLog)
-	notAP.harness.instances[0]._superblock.MS = false
 	testPoolService := &system.PoolService{
 		PoolUUID: uuid.MustParse(mockUUID),
 		State:    system.PoolServiceStateReady,
@@ -519,7 +512,6 @@ func TestServer_MgmtSvc_PoolEvict(t *testing.T) {
 	missingSB := newTestMgmtSvc(t, testLog)
 	missingSB.harness.instances[0]._superblock = nil
 	notAP := newTestMgmtSvc(t, testLog)
-	notAP.harness.instances[0]._superblock.MS = false
 	testPoolService := &system.PoolService{
 		PoolUUID: uuid.MustParse(mockUUID),
 		State:    system.PoolServiceStateReady,
@@ -637,7 +629,7 @@ func TestListPools_NoMS(t *testing.T) {
 		t.Errorf("Expected no response, got: %+v", resp)
 	}
 
-	common.CmpErr(t, &system.ErrNotReplica{}, err)
+	common.CmpErr(t, errors.New("replica"), err)
 }
 
 func TestListPools_Success(t *testing.T) {
@@ -704,7 +696,7 @@ func TestPoolGetACL_NoMS(t *testing.T) {
 		t.Errorf("Expected no response, got: %+v", resp)
 	}
 
-	common.CmpErr(t, &system.ErrNotReplica{}, err)
+	common.CmpErr(t, errors.New("replica"), err)
 }
 
 func TestPoolGetACL_Success(t *testing.T) {
@@ -791,7 +783,7 @@ func TestPoolOverwriteACL_NoMS(t *testing.T) {
 		t.Errorf("Expected no response, got: %+v", resp)
 	}
 
-	common.CmpErr(t, &system.ErrNotReplica{}, err)
+	common.CmpErr(t, errors.New("replica"), err)
 }
 
 func TestPoolOverwriteACL_DrpcFailed(t *testing.T) {
@@ -869,7 +861,7 @@ func TestPoolUpdateACL_NoMS(t *testing.T) {
 		t.Errorf("Expected no response, got: %+v", resp)
 	}
 
-	common.CmpErr(t, &system.ErrNotReplica{}, err)
+	common.CmpErr(t, errors.New("replica"), err)
 }
 
 func TestPoolUpdateACL_DrpcFailed(t *testing.T) {
@@ -954,7 +946,7 @@ func TestPoolDeleteACL_NoMS(t *testing.T) {
 		t.Errorf("Expected no response, got: %+v", resp)
 	}
 
-	common.CmpErr(t, &system.ErrNotReplica{}, err)
+	common.CmpErr(t, errors.New("replica"), err)
 }
 
 func TestPoolDeleteACL_DrpcFailed(t *testing.T) {

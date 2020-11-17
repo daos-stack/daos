@@ -184,7 +184,18 @@ func (ur *UnaryResponse) getMSResponse() (proto.Message, error) {
 		return nil, errors.New("response did not contain a management service response")
 	}
 
-	msResp := ur.Responses[0]
+	// As we may have sent the request to multiple MS replicas, just pick
+	// through the responses to find the one that succeeded. If none succeeded,
+	// return the error from the last response.
+	var msResp *HostResponse
+	for _, msResp = range ur.Responses {
+		if msResp.Error != nil || msResp.Message == nil {
+			continue
+		}
+
+		break
+	}
+
 	if msResp.Error != nil {
 		return nil, msResp.Error
 	}
