@@ -586,14 +586,22 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 
 	if (dlh->dlh_sub_cnt != 0)
 		rc = dtx_leader_wait(dlh);
-	else if (dth->dth_modification_cnt <= 1)
-		goto out;
 
 	if (daos_is_zero_dti(&dth->dth_xid))
 		D_GOTO(out, result = result < 0 ? result : rc);
 
-	if (result < 0 || rc < 0 || (!dth->dth_active && !dth->dth_resent))
+	if (result < 0 || rc < 0 || dth->dth_solo)
 		D_GOTO(abort, result = result < 0 ? result : rc);
+
+	if (!dth->dth_active && !dth->dth_resent) {
+		/* We do not know whether some other participants have
+		 * some active entry for this DTX, consider distributed
+		 * transaction case, the other participants may execute
+		 * different operations. Sync commit the DTX for safe.
+		 */
+		dth->dth_sync = 1;
+		goto sync;
+	}
 
 again:
 	/* If the DTX is started befoe DTX resync (for rebuild), then it is
@@ -628,22 +636,16 @@ again:
 		}
 	}
 
-	rc = vos_dtx_check_sync(dth->dth_coh, dth->dth_leader_oid, &epoch);
+	rc = 0;
+
+	if (dth->dth_modification_cnt != 0)
+		rc = vos_dtx_check_sync(dth->dth_coh, dth->dth_leader_oid,
+					&epoch);
+
 	/* Only add async DTX into the CoS cache. */
 	if (rc == 0) {
 		struct dtx_memberships	*mbs;
 		size_t			 size;
-
-		/* When we come here, the modification on all participants have
-		 * been done successfully. If 'dth->dth_active' is false, means
-		 * that it is for resent case. Under such case, we have no way
-		 * to mark it as committable, then commit it sychronously.
-		 */
-		if (!dth->dth_active) {
-			D_ASSERT(dth->dth_resent);
-
-			dth->dth_sync = 1;
-		}
 
 		/* For synchronous DTX, do not add it into CoS cache, otherwise,
 		 * we may have no way to remove it from the cache.
@@ -729,7 +731,7 @@ abort:
 	 * to locally retry for avoiding RPC timeout. The leader replica
 	 * will trigger retry globally without aborting 'prepared' ones.
 	 */
-	if (result < 0 && result != -DER_AGAIN) {
+	if (result < 0 && result != -DER_AGAIN && !dth->dth_solo) {
 		dte = &dth->dth_dte;
 		dtx_abort(cont->sc_pool->spc_uuid, cont->sc_uuid,
 			  dth->dth_epoch, &dte, 1);

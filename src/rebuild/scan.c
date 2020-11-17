@@ -329,13 +329,13 @@ struct rebuild_scan_arg {
  * larger buffer will be allocated and the request repeated until it succeeds.
  *
  * \param[in]	tgt_stack_array		stack buffer of size LOCAL_ARRAY_SIZE
- * 					to use if it is big enough
+ *					to use if it is big enough
  * \param[in]	shard_stack_array	stack buffer of size LOCAL_ARRAY_SIZE
- * 					to use if it is big enough
+ *					to use if it is big enough
  * \param[out]	tgts			filled remap list, caller must free if
- * 					it does not point to tgt_stack_array
+ *					it does not point to tgt_stack_array
  * \param[out]	shards			filled remap list, caller must free if
- * 					it does not point to shard_stack_array
+ *					it does not point to shard_stack_array
  * \param[in]	map			placement map
  * \param[in]	md			object metadata
  * \param[in]	num_rebuild_tgts	the number of targets being rebuilt now
@@ -343,7 +343,7 @@ struct rebuild_scan_arg {
  * \param[in]	rebuild_ver		the rebuild version
  * \param[in]	myrank			this system's rank
  * \param[out]	rebuild_nr		number of filled entries in tgts and
- * 					shards that need remapping
+ *					shards that need remapping
  *
  * \retval	0	Success
  * \retval	< 0	-DER_* error. Will not return -DER_REC2BIG
@@ -369,7 +369,7 @@ find_rebuild_shards(unsigned int *tgt_stack_array,
 	 * it was already allocated (on the stack)
 	 */
 	max_shards = num_rebuild_tgts > LOCAL_ARRAY_SIZE ? num_rebuild_tgts :
-	                                                   LOCAL_ARRAY_SIZE;
+							   LOCAL_ARRAY_SIZE;
 
 	/* Default to using the provided stack arrays */
 	*tgts = tgt_stack_array;
