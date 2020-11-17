@@ -324,8 +324,9 @@ func NumNumaNodes(ctx context.Context) int {
 	return ndc.numNUMANodes
 }
 
-// CoresPerNumaNode returns the number of detected NUMA nodes, or 0 if none.
-func CoresPerNumaNode(ctx context.Context) int {
+// CoresPerNuma returns the number of cores on each NUMA node, or 0 if not NUMA
+// aware.
+func CoresPerNuma(ctx context.Context) int {
 	ndc, err := getContext(ctx)
 	if err != nil || !HasNUMA(ctx) {
 		return 0

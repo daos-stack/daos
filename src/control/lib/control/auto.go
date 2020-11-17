@@ -83,8 +83,12 @@ func ConfigGenerate(ctx context.Context, req *ConfigGenerateReq) (*ConfigGenerat
 	req.Log.Debugf("ConfigGenerate called with request %v", req)
 
 	resp := new(ConfigGenerateResp)
-	coresPerNuma, err := req.checkNetwork(ctx, resp)
+	networkSet, err := req.getSingleNetworkSet(ctx, resp)
 	if err != nil {
+		return resp, err
+	}
+
+	if err := req.checkNetwork(ctx, networkSet, resp); err != nil {
 		return resp, err
 	}
 
@@ -92,7 +96,7 @@ func ConfigGenerate(ctx context.Context, req *ConfigGenerateReq) (*ConfigGenerat
 		return resp, err
 	}
 
-	if err := req.checkCPUs(ctx, coresPerNuma, resp); err != nil {
+	if err := req.checkCPUs(ctx, int(networkSet.HostFabric.CoresPerNuma), resp); err != nil {
 		return resp, err
 	}
 
@@ -237,27 +241,23 @@ func (req *ConfigGenerateReq) genConfig(interfaces []*HostFabricInterface) *conf
 //
 // Updates response config field in-place and returns number of cores per NUMA
 // node, which is the same on all hosts in the host set.
-func (req *ConfigGenerateReq) checkNetwork(ctx context.Context, resp *ConfigGenerateResp) (int, error) {
+func (req *ConfigGenerateReq) checkNetwork(ctx context.Context, hfs *HostFabricSet, resp *ConfigGenerateResp) error {
 	switch req.NetClass {
 	case NetDevAny, nd.Ether, nd.Infiniband:
 	default:
-		return 0, errors.Errorf("unsupported net dev class in request: %s",
+		return errors.Errorf("unsupported net dev class in request: %s",
 			nd.DevClassName(req.NetClass))
 	}
 	req.Log.Debugf("checkNetwork called with request %v", req)
 
-	networkSet, err := req.getSingleNetworkSet(ctx, resp)
-	if err != nil {
-		return 0, err
-	}
-	fabricInfo := networkSet.HostFabric
+	fabricInfo := hfs.HostFabric
+	hostSet := hfs.HostSet
 
 	if req.NumPmem == 0 {
 		// the number of network interfaces and pmem namespaces should
 		// be equal to the number of NUMA nodes for optimal
-		if fabricInfo.NumaCount == 0 {
-			return 0, errors.Errorf("no numa nodes reported on hosts %s",
-				networkSet.HostSet)
+		if hfs.HostFabric.NumaCount == 0 {
+			return errors.Errorf("no numa nodes reported on hosts %s", hostSet)
 		}
 
 		req.NumPmem = int(fabricInfo.NumaCount)
@@ -272,7 +272,7 @@ func (req *ConfigGenerateReq) checkNetwork(ctx context.Context, resp *ConfigGene
 
 	msg := fmt.Sprintf(
 		"Network hardware is consistent for hosts %s with %d NUMA nodes and %d cores per node:",
-		networkSet.HostSet.String(), fabricInfo.NumaCount, fabricInfo.CoresPerNumaNode)
+		hostSet.String(), fabricInfo.NumaCount, fabricInfo.CoresPerNuma)
 	for _, iface := range fabricInfo.Interfaces {
 		msg = fmt.Sprintf("%s\n\t%+v", msg, iface)
 	}
@@ -284,7 +284,7 @@ func (req *ConfigGenerateReq) checkNetwork(ctx context.Context, resp *ConfigGene
 		if req.NetClass != NetDevAny {
 			class = nd.DevClassName(req.NetClass)
 		}
-		return 0, errors.Errorf(
+		return errors.Errorf(
 			"insufficient matching %s network interfaces, want %d got %d %+v",
 			class, req.NumPmem, len(matching), matching)
 	}
@@ -293,7 +293,7 @@ func (req *ConfigGenerateReq) checkNetwork(ctx context.Context, resp *ConfigGene
 
 	resp.ConfigOut = req.genConfig(matching)
 
-	return int(fabricInfo.CoresPerNumaNode), nil
+	return nil
 
 }
 

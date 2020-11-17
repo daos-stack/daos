@@ -56,10 +56,10 @@ func (hfi *HostFabricInterface) String() string {
 
 // HostFabric describes a host fabric configuration.
 type HostFabric struct {
-	Interfaces       []*HostFabricInterface `hash:"set"`
-	Providers        []string               `hash:"set"`
-	NumaCount        uint32
-	CoresPerNumaNode uint32
+	Interfaces   []*HostFabricInterface `hash:"set"`
+	Providers    []string               `hash:"set"`
+	NumaCount    uint32
+	CoresPerNuma uint32
 }
 
 // HashKey returns a uint64 value suitable for use as a key into

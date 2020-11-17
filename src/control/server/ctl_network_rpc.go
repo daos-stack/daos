@@ -72,7 +72,7 @@ func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScan
 	}
 
 	resp.Numacount = int32(netdetect.NumNumaNodes(netCtx))
-	resp.Corespernuma = int32(netdetect.CoresPerNumaNode(netCtx))
+	resp.Corespernuma = int32(netdetect.CoresPerNuma(netCtx))
 
 	return resp, nil
 }
