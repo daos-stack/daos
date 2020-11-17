@@ -52,7 +52,7 @@ crt_li_destroy(struct crt_lookup_item *li)
 	}
 
 	D_MUTEX_DESTROY(&li->li_mutex);
-	D_FREE_PTR(li);
+	D_FREE(li);
 }
 
 struct crt_lookup_item *
@@ -259,7 +259,7 @@ crt_ui_destroy(struct crt_uri_item *ui)
 			D_FREE(ui->ui_uri[i]);
 	}
 
-	D_FREE_PTR(ui);
+	D_FREE(ui);
 }
 
 static inline char *
@@ -311,8 +311,6 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 	rlink = d_hash_rec_find(&grp_priv->gp_uri_lookup_cache,
 				(void *)&rank, sizeof(rank));
 	if (rlink == NULL) {
-		char *tmp_uri;
-
 		D_ALLOC_PTR(ui);
 		if (!ui)
 			D_GOTO(exit, rc = -DER_NOMEM);
@@ -323,10 +321,9 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 		ui->ui_rank = li->li_rank;
 
 		if (crt_provider_is_contig_ep(crt_gdata.cg_na_plugin)) {
-			D_STRNDUP(tmp_uri, uri, CRT_ADDR_STR_MAX_LEN);
-			if (!tmp_uri)
-				D_GOTO(exit, rc = -DER_NOMEM);
+			char tmp_uri[CRT_ADDR_STR_MAX_LEN];
 
+			strncpy(tmp_uri, uri, CRT_ADDR_STR_MAX_LEN - 1);
 			/* For now we assume contiguous endpoint providers are
 			 * port based. Based on that we generate URIs for every
 			 * tag of the rank from the base port.
@@ -336,15 +333,9 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 			 *
 			 * Parse both parts out
 			 */
-			p = tmp_uri;
-			while (*p != '\0')
-				p++;
-			while (*p != ':' && p != tmp_uri)
-				p--;
-
-			if (p == tmp_uri) {
+			p = strrchr(tmp_uri, ':');
+			if (p == NULL) {
 				D_ERROR("Badly formed URI '%s'\n", tmp_uri);
-				D_FREE(tmp_uri);
 				D_GOTO(exit, rc = -DER_INVAL);
 			}
 
@@ -356,7 +347,6 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 			if (base_port <= 0) {
 				D_ERROR("Failed to parse uri=%s correctly\n",
 					tmp_uri);
-				D_FREE(tmp_uri);
 				D_GOTO(exit, rc = -DER_INVAL);
 			}
 
@@ -372,18 +362,15 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 					for (k = 0; k < i; k++)
 						D_FREE(ui->ui_uri[k]);
 
-					D_FREE(tmp_uri);
 					D_GOTO(exit, rc = -DER_NOMEM);
 				}
 
 				ui->ui_uri[i] = tag_uri;
 			}
-
-			D_FREE(tmp_uri);
 		} else {
 			D_STRNDUP(ui->ui_uri[tag], uri, CRT_ADDR_STR_MAX_LEN);
 			if (!ui->ui_uri[tag]) {
-				D_FREE_PTR(ui);
+				D_FREE(ui);
 				D_GOTO(exit, rc = -DER_NOMEM);
 			}
 		}
@@ -401,7 +388,7 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 			} else {
 				D_FREE(ui->ui_uri[tag]);
 			}
-			D_FREE_PTR(ui);
+			D_FREE(ui);
 			D_GOTO(exit, rc);
 		}
 	} else {
@@ -1733,7 +1720,7 @@ crt_grp_fini(void)
 		D_GOTO(out, rc);
 
 	D_RWLOCK_DESTROY(&grp_gdata->gg_rwlock);
-	D_FREE_PTR(grp_gdata);
+	D_FREE(grp_gdata);
 	crt_gdata.cg_grp = NULL;
 	crt_gdata.cg_grp_inited = 0;
 
