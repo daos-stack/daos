@@ -578,7 +578,7 @@ def get_nvme_replacement(args):
         exit(1)
 
     # Get a list of NVMe devices from each specified server host
-    host_list = args.test_servers.split(",")
+    host_list = list(args.test_servers)
     command_list = [
         "/sbin/lspci -D", "grep 'Non-Volatile memory controller:'"]
     if ":" in args.nvme:
@@ -663,7 +663,7 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
 
         # Generate a list
         new_values = {
-            key: getattr(args, value).split(",") if getattr(args, value) else []
+            key: list(getattr(args, value)) if getattr(args, value) else []
             for key, value in YAML_KEYS.items()}
 
         # Assign replacement values for the test yaml entries to be replaced
@@ -788,12 +788,10 @@ def run_tests(test_files, tag_filter, args):
     return_code = 0
 
     # Determine the location of the avocado logs for archiving or renaming
-    avocado_logs_dir = None
-    if args.archive or args.rename:
-        data = get_output(["avocado", "config"]).strip()
-        avocado_logs_dir = re.findall(r"datadir\.paths\.logs_dir\s+(.*)", data)
-        avocado_logs_dir = os.path.expanduser(avocado_logs_dir[0])
-        print("Avocado logs stored in {}".format(avocado_logs_dir))
+    data = get_output(["avocado", "config"]).strip()
+    avocado_logs_dir = re.findall(r"datadir\.paths\.logs_dir\s+(.*)", data)
+    avocado_logs_dir = os.path.expanduser(avocado_logs_dir[0])
+    print("Avocado logs stored in {}".format(avocado_logs_dir))
 
     # Create the base avocado run command
     command_list = [
@@ -1650,6 +1648,10 @@ def main():
         help="verbose output")
     args = parser.parse_args()
     print("Arguments: {}".format(args))
+
+    # Convert host specifications into NodeSets
+    args.test_servers = NodeSet(args.test_servers)
+    args.test_clients = NodeSet(args.test_clients)
 
     # Setup the user environment
     set_test_environment(args)
