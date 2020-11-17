@@ -408,7 +408,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Tue Nov 10 2020 Li Wei <wei.g.li@intel.com> 1.1.1-8
+* Tue Nov 17 2020 Li Wei <wei.g.li@intel.com> 1.1.1-8
 - Require raft-devel 0.7.0 that changes log indices and terms to 63-bit
 
 * Wed Nov 11 2020 Tom Nabarro <tom.nabarro@intel.com> 1.1.1-7
