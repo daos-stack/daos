@@ -166,7 +166,7 @@ crt_context_init(crt_context_t crt_ctx)
 				      NULL /* priv */, &crt_timeout_bh_ops,
 				      &ctx->cc_bh_timeout);
 	if (rc != 0) {
-		D_ERROR("d_binheap_create_inplace failed, rc: %d.\n", rc);
+		D_ERROR("d_binheap_create() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out_mutex_destroy, rc);
 	}
 
@@ -175,7 +175,7 @@ crt_context_init(crt_context_t crt_ctx)
 					  NULL, &epi_table_ops,
 					  &ctx->cc_epi_table);
 	if (rc != 0) {
-		D_ERROR("d_hash_table_create_inplace failed, rc: %d.\n", rc);
+		D_ERROR("d_hash_table_create() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out_binheap_destroy, rc);
 	}
 	D_GOTO(out, rc);
@@ -212,7 +212,7 @@ crt_context_create(crt_context_t *crt_ctx)
 
 	rc = crt_context_init(ctx);
 	if (rc != 0) {
-		D_ERROR("crt_context_init failed, rc: %d.\n", rc);
+		D_ERROR("crt_context_init() failed, " DF_RC "\n", DP_RC(rc));
 		D_FREE_PTR(ctx);
 		D_GOTO(out, rc);
 	}
@@ -221,7 +221,7 @@ crt_context_create(crt_context_t *crt_ctx)
 
 	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, crt_gdata.cg_ctx_num);
 	if (rc != 0) {
-		D_ERROR("crt_hg_ctx_init failed rc: %d.\n", rc);
+		D_ERROR("crt_hg_ctx_init() failed, " DF_RC "\n", DP_RC(rc));
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		crt_context_destroy(ctx, true);
 		D_GOTO(out, rc);
@@ -293,14 +293,15 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 			cbinfo.cci_rc = rpc_priv->crp_reply_hdr.cch_rc;
 
 		if (cbinfo.cci_rc != 0)
-			RPC_ERROR(rpc_priv, "RPC failed; rc: %d\n",
-				  cbinfo.cci_rc);
+			RPC_ERROR(rpc_priv, "failed, " DF_RC "\n",
+				  DP_RC(cbinfo.cci_rc));
 
 		RPC_TRACE(DB_TRACE, rpc_priv,
-			  "Invoking RPC callback (rank %d tag %d) rc: %d.\n",
+			  "Invoking RPC callback (rank %d tag %d) rc: "
+			  DF_RC "\n",
 			  rpc_priv->crp_pub.cr_ep.ep_rank,
 			  rpc_priv->crp_pub.cr_ep.ep_tag,
-			  cbinfo.cci_rc);
+			  DP_RC(cbinfo.cci_rc));
 
 		rpc_priv->crp_complete_cb(&cbinfo);
 	}

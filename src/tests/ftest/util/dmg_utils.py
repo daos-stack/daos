@@ -623,15 +623,16 @@ class DmgCommand(DmgCommandBase):
     def pool_list(self):
         """List pools.
 
-        Returns:
-            list: a list containing pool uuids.
-
         Raises:
-            CommandFailure: if the dmg pool delete-acl command fails.
+            CommandFailure: if the dmg pool pool list command fails.
+
+        Returns:
+            dict: a dictionary of pool UUID keys and svc replica values
 
         """
         self._get_result(("pool", "list"))
 
+        # Populate a dictionary with svc replicas for each pool UUID key listed
         # Sample dmg pool list output:
         #    Pool UUID                            Svc Replicas
         #    ---------                            ------------
@@ -643,7 +644,6 @@ class DmgCommand(DmgCommandBase):
             self.result.stdout)
         for info in match:
             data[info[0]] = get_numeric_list(info[1])
-
         return data
 
     def pool_set_prop(self, pool, name, value):

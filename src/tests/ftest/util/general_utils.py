@@ -229,7 +229,7 @@ def get_host_data(hosts, command, text, error, timeout=None):
     DATA_ERROR = "[ERROR]"
 
     # Create a list of NodeSets with the same return code
-    data = {code: hosts for code, hosts in task.iter_retcodes()}
+    data = {code: host_list for code, host_list in task.iter_retcodes()}
 
     # Multiple return codes or a single non-zero return code
     # indicate at least one error obtaining the data
@@ -260,8 +260,8 @@ def get_host_data(hosts, command, text, error, timeout=None):
         host_data = {NodeSet.fromlist(hosts): DATA_ERROR}
 
     else:
-        for output, hosts in task.iter_buffers(data[0]):
-            host_data[NodeSet.fromlist(hosts)] = str(output)
+        for output, host_list in task.iter_buffers(data[0]):
+            host_data[NodeSet.fromlist(host_list)] = str(output)
 
     return host_data
 
@@ -274,7 +274,7 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
         command (str): the command to run in parallel
         verbose (bool, optional): display command output. Defaults to True.
         timeout (int, optional): command timeout in seconds. Defaults to None.
-        expect_rc (int, optional): exepcted return code. Defaults to 0.
+        expect_rc (int, optional): expected return code. Defaults to 0.
 
     Returns:
         dict: a dictionary of return codes keys and accompanying NodeSet
@@ -397,7 +397,7 @@ def process_host_list(hoststr):
     e.g. server-[26-27] becomes a list with entries server-26, server-27
 
     This works for every thing that has come up so far but I don't know what
-    all slurmfinds acceptable so it might not parse everything possible.
+    all slurm finds acceptable so it might not parse everything possible.
     """
     # 1st split into cluster name and range of hosts
     split_loc = hoststr.index('-')

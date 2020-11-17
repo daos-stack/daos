@@ -106,8 +106,10 @@ class DaosCoreBase(TestWithServers):
     def run_subtest(self):
         """Run daos_test with a subtest argument."""
         subtest = self.params.get("daos_test", self.TEST_PATH)
-        num_clients = self.params.get("num_clients",
-                                      '/run/daos_tests/num_clients/*')
+        num_clients = self.params.get("num_clients", self.TEST_PATH)
+        if num_clients is None:
+            num_clients = self.params.get("num_clients",
+                                          '/run/daos_tests/num_clients/*')
         scm_size = self.params.get("scm_size", '/run/pool/*')
         nvme_size = self.params.get("nvme_size", '/run/pool/*')
         args = self.params.get("args", self.TEST_PATH, "")
