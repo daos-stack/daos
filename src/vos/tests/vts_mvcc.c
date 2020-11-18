@@ -795,7 +795,7 @@ querymaxd_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 	for (i = 0; i < test_len; i++) {
 		test_ptr[i] = i*10;
-		print_message("test_ptr[%d]=%d\n", i, test_ptr[i]);
+		print_message("test_ptr[%d] = %d\n", i, test_ptr[i]);
 	}
 
 	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, NULL,
