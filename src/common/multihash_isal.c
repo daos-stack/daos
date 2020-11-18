@@ -154,6 +154,60 @@ struct hash_ft crc32_algo = {
 	.cf_type	= HASH_TYPE_CRC32
 };
 
+/** ADLER32 */
+static int
+adler32_init(void **daos_mhash_ctx)
+{
+	D_ALLOC(*daos_mhash_ctx, sizeof(uint32_t));
+	if (*daos_mhash_ctx == NULL)
+		return -DER_NOMEM;
+
+	return 0;
+}
+
+static int
+adler32_reset(void *daos_mhash_ctx)
+{
+	memset(daos_mhash_ctx, 0, sizeof(uint32_t));
+	return 0;
+}
+
+static void
+adler32_destroy(void *daos_mhash_ctx)
+{
+	D_FREE(daos_mhash_ctx);
+}
+
+static int
+adler32_update(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
+{
+	uint32_t *hash = (uint32_t *)daos_mhash_ctx;
+
+	*hash = isal_adler32(*hash, buf, buf_len);
+	return 0;
+}
+
+static int
+adler32_finish(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
+{
+	uint32_t *adler32 = (uint32_t *)daos_mhash_ctx;
+
+	*((uint32_t *)buf) = *adler32;
+
+	return 0;
+}
+
+struct hash_ft adler32_algo = {
+	.cf_update	= adler32_update,
+	.cf_init	= adler32_init,
+	.cf_reset	= adler32_reset,
+	.cf_destroy	= adler32_destroy,
+	.cf_finish	= adler32_finish,
+	.cf_hash_len	= sizeof(uint32_t),
+	.cf_name	= "adler32",
+	.cf_type	= HASH_TYPE_ADLER32
+};
+
 /** CRC64_REFL */
 static int
 crc64_init(void **daos_mhash_ctx)
@@ -195,7 +249,7 @@ crc64_finish(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
 {
 	uint64_t *crc64 = (uint64_t *)daos_mhash_ctx;
 
-	*((uint16_t *)buf) = *crc64;
+	*((uint64_t *)buf) = *crc64;
 
 	return 0;
 }
@@ -450,4 +504,5 @@ struct hash_ft *isal_hash_algo_table[] = {
 	&sha1_algo,
 	&sha256_algo,
 	&sha512_algo,
+	&adler32_algo,
 };

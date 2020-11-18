@@ -1231,17 +1231,17 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 		print_message("  update(%s, "DF_X64") before %s(%s, "
 			      DF_X64"): ", pp, re - 1, r->o_name, rp, re);
 		rc = update_f(arg, NULL /* txh */, pp, re - 1);
-		print_message("%d\n", rc);
+		print_message("%s\n", d_errstr(rc));
 		if (rc != 0) {
 			nfailed++;
 			goto out;
 		}
 	}
 
-	print_message("  %s(%s, "DF_X64") (expect %d): ",
-		      r->o_name, rp, re, expected_rrc);
+	print_message("  %s(%s, "DF_X64") (expect %s): ",
+		      r->o_name, rp, re, d_errstr(expected_rrc));
 	rc = r->o_func(arg, rtx, rp, re);
-	print_message("%d\n", rc);
+	print_message("%s\n", d_errstr(rc));
 	if (rc != expected_rrc) {
 		nfailed++;
 		goto out;
@@ -1272,10 +1272,10 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 		else if (w->o_rtype == R_NE && e)
 			expected_wrc = -DER_NONEXIST;
 	}
-	print_message("  %s(%s, "DF_X64") (expect %d): ",
-		      w->o_name, wp, we, expected_wrc);
+	print_message("  %s(%s, "DF_X64") (expect %s): ",
+		      w->o_name, wp, we, d_errstr(expected_wrc));
 	rc = w->o_func(arg, wtx, wp, we);
-	print_message("%d\n", rc);
+	print_message("%s\n", d_errstr(rc));
 	if (rc != expected_wrc)
 		nfailed++;
 
@@ -1434,10 +1434,12 @@ uncertainty_check_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 		char		pp[L_COUNT + 1] = "coda";
 		daos_epoch_t	pe = ae - 1;
 
+		D_ASSERT(strlen(wp) <= sizeof(pp) - 1);
 		memcpy(pp, wp, strlen(wp));
-		print_message("  update(%s, "DF_U64") (expect 0): ", pp, pe);
+		print_message("  update(%s, "DF_U64") (expect DER_SUCCESS): ",
+			      pp, pe);
 		rc = update_f(arg, NULL /* txh */, pp, pe);
-		print_message("%d\n", rc);
+		print_message("%s\n", d_errstr(rc));
 		if (rc != 0) {
 			nfailed++;
 			goto out;
@@ -1456,9 +1458,10 @@ uncertainty_check_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 	atx->th_epoch_bound = bound;
 
 	/* Perform w. */
-	print_message("  %s(%s, "DF_X64") (expect 0): ", w->o_name, wp, we);
+	print_message("  %s(%s, "DF_X64") (expect DER_SUCCESS): ", w->o_name,
+		      wp, we);
 	rc = w->o_func(arg, wtx, wp, we);
-	print_message("%d\n", rc);
+	print_message("%s\n", d_errstr(rc));
 	if (rc != 0) {
 		nfailed++;
 		goto out;
@@ -1479,13 +1482,14 @@ uncertainty_check_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 		}
 	}
 	if (is_punch(w) && we > bound)
-		print_message("  %s(%s, "DF_X64") (expect %d or %d): ",
-			      a->o_name, ap, ae, expected_arc, -DER_TX_RESTART);
+		print_message("  %s(%s, "DF_X64
+			      ") (expect %s or DER_TX_RESTART): ", a->o_name,
+			      ap, ae, d_errstr(expected_arc));
 	else
-		print_message("  %s(%s, "DF_X64") (expect %d): ",
-			      a->o_name, ap, ae, expected_arc);
+		print_message("  %s(%s, "DF_X64") (expect %s): ",
+			      a->o_name, ap, ae, d_errstr(expected_arc));
 	rc = a->o_func(arg, atx, ap, ae);
-	print_message("%d\n", rc);
+	print_message("%s\n", d_errstr(rc));
 	if (rc != expected_arc) {
 		if (is_punch(w) && we > bound && rc == -DER_TX_RESTART)
 			goto out;

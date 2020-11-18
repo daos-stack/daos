@@ -28,6 +28,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 )
 
 func TestUtils_HasPort(t *testing.T) {
@@ -76,7 +77,7 @@ func TestUtils_SplitPort(t *testing.T) {
 	}
 }
 
-func TestCommon_CmpTcpAddr(t *testing.T) {
+func TestCommon_CmpTCPAddr(t *testing.T) {
 	testA := &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)}
 	testB := &net.TCPAddr{IP: net.IPv4(127, 0, 0, 2)}
 	testC := &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 1}
@@ -119,7 +120,7 @@ func TestCommon_CmpTcpAddr(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if diff := cmp.Diff(tc.expRes, CmpTcpAddr(tc.a, tc.b)); diff != "" {
+			if diff := cmp.Diff(tc.expRes, CmpTCPAddr(tc.a, tc.b)); diff != "" {
 				t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -147,6 +148,50 @@ func TestCommon_IsLocalAddr(t *testing.T) {
 			if diff := cmp.Diff(tc.expRes, IsLocalAddr(tc.a)); diff != "" {
 				t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestCommon_ParsePCIAddress(t *testing.T) {
+	for name, tc := range map[string]struct {
+		addrStr string
+		expDom  uint64
+		expBus  uint64
+		expDev  uint64
+		expFun  uint64
+		expErr  error
+	}{
+		"valid": {
+			addrStr: "0000:80:00.0",
+			expBus:  0x80,
+		},
+		"invalid": {
+			addrStr: "0000:gg:00.0",
+			expErr:  errors.New("parsing \"gg\""),
+		},
+		"vmd address": {
+			addrStr: "0000:5d:05.5",
+			expBus:  0x5d,
+			expDev:  0x05,
+			expFun:  0x05,
+		},
+		"vmd backing device address": {
+			addrStr: "5d0505:01:00.0",
+			expDom:  0x5d0505,
+			expBus:  0x01,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dom, bus, dev, fun, err := ParsePCIAddress(tc.addrStr)
+			CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			AssertEqual(t, tc.expDom, dom, "bad domain")
+			AssertEqual(t, tc.expBus, bus, "bad bus")
+			AssertEqual(t, tc.expDev, dev, "bad device")
+			AssertEqual(t, tc.expFun, fun, "bad func")
 		})
 	}
 }
