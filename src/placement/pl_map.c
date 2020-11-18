@@ -568,11 +568,20 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 	oc_attr = daos_oclass_attr_find(oid);
 	if (oc_attr->ca_resil != DAOS_RES_REPL) {
 		int tgt_nr = oc_attr->u.ec.e_k + oc_attr->u.ec.e_p;
+		int fail_cnt = 0;
+		int idx = grp_idx * tgt_nr + tgt_nr - 1;
 
 		/* For EC object, elect last shard in the group (must to be
 		 * a parity node) as leader.
 		 */
-		shard = pl_get_shard(data, grp_idx * tgt_nr + tgt_nr - 1);
+		shard = pl_get_shard(data, idx);
+		while (shard->po_rebuilding) {
+			idx--;
+			if (++fail_cnt > oc_attr->u.ec.e_p)
+				return -DER_IO;
+			shard = pl_get_shard(data, idx);
+		}
+
 		if (for_tgt_id)
 			return shard->po_target == -1 ? -DER_IO :
 						shard->po_target;
