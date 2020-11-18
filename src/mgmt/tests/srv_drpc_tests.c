@@ -37,7 +37,7 @@
 #include "../acl.pb-c.h"
 #include "../pool.pb-c.h"
 #include "../cont.pb-c.h"
-#include "../srv.pb-c.h"
+#include "../svc.pb-c.h"
 #include "../drpc_internal.h"
 #include "mocks.h"
 

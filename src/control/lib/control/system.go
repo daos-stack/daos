@@ -27,6 +27,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 
 	"github.com/dustin/go-humanize/english"
 	"github.com/golang/protobuf/proto"
@@ -81,25 +82,53 @@ func (sr *sysResponse) DisplayAbsentHostsRanks() string {
 	}
 }
 
+// TODO: Unify this with system.JoinRequest
 // SystemJoinReq contains the inputs for the system join request.
 type SystemJoinReq struct {
 	unaryRequest
 	msRequest
+	ControlAddr *net.TCPAddr
+	UUID        string
+	Rank        system.Rank
+	URI         string
+	NumContexts uint32              `json:"Nctxs"`
+	FaultDomain *system.FaultDomain `json:"SrvFaultDomain"`
+	InstanceIdx uint32              `json:"Idx"`
+}
+
+func (sjr *SystemJoinReq) MarshalJSON() ([]byte, error) {
+	// use a type alias to leverage the default marshal for
+	// most fields
+	type toJSON SystemJoinReq
+	return json.Marshal(&struct {
+		Addr           string
+		SrvFaultDomain string
+		*toJSON
+	}{
+		Addr:           sjr.ControlAddr.String(),
+		SrvFaultDomain: sjr.FaultDomain.String(),
+		toJSON:         (*toJSON)(sjr),
+	})
 }
 
 // SystemJoinResp contains the request response.
 type SystemJoinResp struct {
-	Results system.MemberResults // resulting from harness starts
+	Rank      system.Rank
+	State     system.MemberState
+	LocalJoin bool
 }
 
 // SystemJoin will attempt to join a new member to the DAOS system.
-//
-// TODO: replace the method in mgmt_client.go with this one
 func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq) (*SystemJoinResp, error) {
+	pbReq := new(mgmtpb.JoinReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, err
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).Join(ctx, &mgmtpb.JoinReq{})
+		return mgmtpb.NewMgmtSvcClient(conn).Join(ctx, pbReq)
 	})
-	rpcClient.Debugf("DAOS system join request: %s", req)
+	rpcClient.Debugf("DAOS system join request: %+v", pbReq)
+	rpcClient.Debugf("DAOS system join req hosts: %+v", req.HostList)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
