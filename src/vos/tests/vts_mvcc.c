@@ -791,9 +791,9 @@ querymaxd_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	/* Test section */
 	int i;
 	int test_len = 10;
-	int *test_ptr = (int *)malloc(sizeof(int)*test_len);
-	for(i = 0; i < test_len; i++) {
-		test_ptr[i] = i;
+	int *test_ptr = (int *)malloc(sizeof(int) * test_len);
+
+	for (i = 0; i < test_len; i++) {
 	}
 
 	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, NULL,
