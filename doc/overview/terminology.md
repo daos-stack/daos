@@ -39,6 +39,7 @@
 |RDG|Redundancy Group|
 |RPC|Remote Procedure Call|
 |SCM|Storage-Class Memory|
+|SEP|Scalable End-Point|
 |[SWIM](http://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=1028914)|Scalable Weakly-consistent Infection-style process group Membership|
 |[SPDK](https://spdk.io/)|Storage Performance Development Kit|
 |SSD|Solid State Drive|
