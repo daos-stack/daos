@@ -77,8 +77,7 @@ class DaosServerTest(TestWithServers):
 
     def get_pool_list(self):
         """method to get the pool list contents"""
-        pool_list = self.get_dmg_command().get_output("pool_list")
-        pool_list.sort(key=lambda p: p[0])
+        pool_list = sorted(self.get_dmg_command().pool_list())
         self.log.info("get_pool-list: %s", pool_list)
         return pool_list
 

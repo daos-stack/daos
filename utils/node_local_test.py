@@ -589,6 +589,7 @@ class DFuse():
         self.valgrind_file = None
         self.container = container
         self.conf = conf
+        self.cores = None
         self._daos = daos
         self._sp = None
 
@@ -621,7 +622,13 @@ class DFuse():
         self.valgrind = ValgrindHelper(v_hint)
         if self.conf.args.memcheck == 'no':
             self.valgrind.use_valgrind = False
-        cmd = self.valgrind.get_cmd_prefix()
+
+        if self.cores:
+            cmd = ['numactl', '--physcpubind', '0-{}'.format(self.cores - 1)]
+        else:
+            cmd = []
+
+        cmd.extend(self.valgrind.get_cmd_prefix())
 
         cmd.extend([dfuse_bin, '-s', '0', '-m', self.dir, '-f'])
 
@@ -726,11 +733,15 @@ def get_pool_list():
         pools.append(fname)
     return pools
 
-def assert_file_size(ofd, size):
+def assert_file_size_fd(fd, size):
     """Verify the file size is as expected"""
-    my_stat = os.fstat(ofd.fileno())
+    my_stat = os.fstat(fd)
     print('Checking file size is {} {}'.format(size, my_stat.st_size))
     assert my_stat.st_size == size
+
+def assert_file_size(ofd, size):
+    """Verify the file size is as expected"""
+    assert_file_size_fd(ofd.fileno(), size)
 
 def import_daos(server, conf):
     """Return a handle to the pydaos module"""
@@ -879,6 +890,9 @@ def run_tests(dfuse):
     ofd.close()
     ret = il_cmd(dfuse, ['cat', fname], check_write=False)
     assert ret.returncode == 0
+    ofd = os.open(fname, os.O_TRUNC)
+    assert_file_size_fd(ofd, 0)
+    os.close(ofd)
     symlink_name = os.path.join(path, 'symlink_src')
     symlink_dest = 'missing_dest'
     os.symlink(symlink_dest, symlink_name)
@@ -1086,6 +1100,7 @@ def run_dfuse(server, conf):
     fatal_errors.add_result(dfuse.stop())
 
     dfuse = DFuse(server, conf, pool=pools[0], container=container)
+    dfuse.cores = 2
     pre_stat = os.stat(dfuse.dir)
     dfuse.start(v_hint='pool_and_cont')
     print('Running fuse with both')

@@ -41,12 +41,16 @@ extern "C" {
 
 /**
  * Initialize the DAOS library.
+ * Should be invoked prior to any DAOS calls. Can be called multiple times.
  */
 int
 daos_init(void);
 
 /**
  * Finalize the DAOS library.
+ * Should be invoked only when daos_init() was previously successfully executed.
+ * An internal reference count is maintained by the library that will tear down
+ * the DAOS stack on the last call to daos_fini()
  */
 int
 daos_fini(void);

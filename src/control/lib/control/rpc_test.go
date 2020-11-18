@@ -54,6 +54,10 @@ func (tr *testRequest) isMSRequest() bool {
 	return tr.toMS
 }
 
+func (tr *testRequest) SetHostList(hl []string) {
+	tr.HostList = hl
+}
+
 func (tr *testRequest) getHostList() []string {
 	return tr.HostList
 }
