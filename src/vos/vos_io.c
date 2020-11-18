@@ -1260,6 +1260,21 @@ vos_fetch_end(daos_handle_t ioh, int err)
 	return err;
 }
 
+/** If the object/key doesn't exist, we should augment the set with any missing
+ *  entries
+ */
+static void
+vos_fetch_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int iod_nr,
+		      daos_iod_t *iods)
+{
+	struct vos_akey_data	ad;
+
+	ad.ad_is_iod = false;
+	ad.ad_iods = iods;
+
+	vos_ts_add_missing(ts_set, dkey, iod_nr, &ad);
+}
+
 int
 vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		daos_key_t *dkey, unsigned int iod_nr,
@@ -1323,8 +1338,10 @@ out:
 			rc = -DER_TX_RESTART;
 	}
 
-	if (rc == -DER_NONEXIST || rc == 0)
+	if (rc == -DER_NONEXIST || rc == 0) {
+		vos_fetch_add_missing(ioc->ic_ts_set, dkey, iod_nr, iods);
 		vos_ts_set_update(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
+	}
 
 	if (rc != 0) {
 		daos_recx_ep_list_free(ioc->ic_recx_lists, ioc->ic_iod_nr);

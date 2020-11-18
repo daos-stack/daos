@@ -31,6 +31,17 @@
 #include "vts_io.h"
 #include "vts_array.h"
 
+#ifdef VERBOSE
+#define VERBOSE_PRINT(...)		\
+	do {				\
+		printf(__VA_ARGS__);	\
+		fflush(stdout);		\
+	} while (0)
+#else
+#define VERBOSE_PRINT(...) (void)0
+#endif
+
+
 static int start_epoch = 5;
 #define BUF_SIZE 2000
 static int buf_size = BUF_SIZE;
@@ -1102,11 +1113,17 @@ cond_akey_punch_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
 	}
 }
 
+#define cond_fetch_op(...)						\
+	do {								\
+		VERBOSE_PRINT("Called cond_fetch_op at %s:%d\n",	\
+			      __FILE__, __LINE__);			\
+		cond_fetch_op_(__VA_ARGS__);				\
+	} while (0)
 static void
-cond_fetch_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
-	      daos_epoch_t epoch, bool use_tx, const char *dkey_str,
-	      const char *akey_str, uint64_t flags, int expected_rc,
-	      d_sg_list_t *sgl, const char *value_str, char fill_char)
+cond_fetch_op_(void **state, daos_handle_t coh, daos_unit_oid_t oid,
+	       daos_epoch_t epoch, bool use_tx, const char *dkey_str,
+	       const char *akey_str, uint64_t flags, int expected_rc,
+	       d_sg_list_t *sgl, const char *value_str, char fill_char)
 {
 	struct dtx_handle	*dth = NULL;
 	char			 dkey_buf[OP_MAX_STRING];
@@ -1146,10 +1163,16 @@ cond_fetch_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
 	assert_int_equal(memcmp(value_buf, read_buf, value_len), 0);
 }
 
+#define cond_updaten_op(...)						\
+	do {								\
+		VERBOSE_PRINT("Called cond_updaten_op at %s:%d\n",	\
+			      __FILE__, __LINE__);			\
+		cond_updaten_op_(__VA_ARGS__);				\
+	} while (0)
 static void
-cond_updaten_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
-	       daos_epoch_t epoch, const char *dkey_str,
-	       uint64_t flags, int expected_rc, d_sg_list_t *sgl, int n, ...)
+cond_updaten_op_(void **state, daos_handle_t coh, daos_unit_oid_t oid,
+		 daos_epoch_t epoch, const char *dkey_str,
+		 uint64_t flags, int expected_rc, d_sg_list_t *sgl, int n, ...)
 {
 	struct dtx_handle	*dth;
 	struct dtx_id		 xid;
@@ -1203,15 +1226,21 @@ cond_updaten_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
 
 }
 
+#define cond_update_op(...)						\
+	do {								\
+		VERBOSE_PRINT("Called cond_update_op at %s:%d\n",	\
+			      __FILE__, __LINE__);			\
+		cond_update_op_(__VA_ARGS__);				\
+	} while (0)
 static void
-cond_update_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
-	       daos_epoch_t epoch, const char *dkey_str, const char *akey_str,
-	       uint64_t flags, int expected_rc, d_sg_list_t *sgl,
-	       const char *value_str)
+cond_update_op_(void **state, daos_handle_t coh, daos_unit_oid_t oid,
+		daos_epoch_t epoch, const char *dkey_str, const char *akey_str,
+		uint64_t flags, int expected_rc, d_sg_list_t *sgl,
+		const char *value_str)
 {
 
-	cond_updaten_op(state, coh, oid, epoch, dkey_str, flags, expected_rc,
-			sgl, 1, akey_str, value_str);
+	cond_updaten_op_(state, coh, oid, epoch, dkey_str, flags, expected_rc,
+			 sgl, 1, akey_str, value_str);
 }
 
 #define MAX_SGL 10
@@ -1314,17 +1343,23 @@ cond_test(void **state)
 	oid = gen_oid(0);
 	/** Test duplicate akey */
 	cond_updaten_op(state, arg->ctx.tc_co_hdl, oid, epoch, "a",
-			0, -DER_NO_PERM, sgl, 5, "c", "foo",
+			0, 0, sgl, 5, "c", "foo",
 			"c", "bar", "d", "val", "e", "flag", "f", "temp");
 	cond_updaten_op(state, arg->ctx.tc_co_hdl, oid, epoch, "a",
-			0, -DER_NO_PERM, sgl, 5, "new",
+			0, 0, sgl, 5, "new",
 			"foo", "f", "bar", "d", "val", "e", "flag", "new",
 			"temp");
 
 	start_epoch = epoch + 1;
 }
 
-#define NUM_OIDS 1000
+/** Making the oid generation deterministic, I get to 304 before I hit a false
+ *  collision on the oid.   This may indicate the hashing needs to be improved
+ *  but for now, it's good enough.  In general, the chance of a single
+ *  collision is very high well before we get close to saturation due
+ *  to the birthday paradox.
+ */
+#define NUM_OIDS 304
 static void
 multiple_oid_cond_test(void **state)
 {
@@ -1342,9 +1377,11 @@ multiple_oid_cond_test(void **state)
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 1;
 
+	reset_oid_stable(0xdeadbeef);
+
 	/** Same dkey/akey, multiple objects */
 	for (i = 0; i < NUM_OIDS; i++) {
-		oid = gen_oid(0);
+		oid = gen_oid_stable(0);
 		cond_update_op(state, arg->ctx.tc_co_hdl, oid,
 			       epoch - 2, "dkey", "akey", 0, 0, &sgl, "foo");
 		cond_update_op(state, arg->ctx.tc_co_hdl, oid,

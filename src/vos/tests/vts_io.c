@@ -136,6 +136,36 @@ gen_oid(daos_ofeat_t ofeats)
 	return dts_unit_oid_gen(0, ofeats, 0);
 }
 
+static uint32_t	oid_seed;
+static uint64_t	oid_count;
+
+void
+reset_oid_stable(uint32_t seed)
+{
+	oid_seed = seed;
+	oid_count = 0;
+}
+
+daos_unit_oid_t
+gen_oid_stable(daos_ofeat_t ofeats)
+{
+	daos_unit_oid_t	uoid = {0};
+	uint64_t	hdr;
+
+	hdr = oid_seed;
+	oid_seed += 2441; /* prime */
+	hdr <<= 32;
+
+	uoid.id_pub.lo = oid_count;
+	oid_count += 66179; /* prime */
+	uoid.id_pub.lo |= hdr;
+	daos_obj_generate_id(&uoid.id_pub, oid_count, OC_RP_XSF, oid_seed);
+	oid_count += 1171; /* prime */
+
+	vts_cntr.cn_oids++;
+	return uoid;
+}
+
 void
 inc_cntr(unsigned long op_flags)
 {
