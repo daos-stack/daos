@@ -34,14 +34,15 @@
  */
 void test_function1(int count)
 {
-	static struct d_tm_node_t *loop;
-	int rc;
-	int i;
+	static struct d_tm_node_t	*loop;
+	int				rc;
+	int				i;
 
 	for (i = 0; i < count - 1; i++) {
 		rc = d_tm_increment_counter(&loop, __FILE__, __func__,
 					    "loop counter", NULL);
-		if (rc != 0) {
+		if (rc != D_TM_SUCCESS) {
+			printf("d_tm_increment_counter failed, rc = %d\n", rc);
 			return;
 		}
 	}
@@ -53,7 +54,9 @@ void test_function1(int count)
 	 * anything.
 	 */
 	rc = d_tm_increment_counter(&loop, NULL);
-
+	if (rc != D_TM_SUCCESS) {
+		printf("d_tm_increment_counter failed, rc = %d\n", rc);
+	}
 
 }
 
@@ -63,9 +66,14 @@ void test_function1(int count)
  */
 void test_function2(void)
 {
-	static struct d_tm_node_t *ts;
+	static struct d_tm_node_t	*ts;
+	int				rc;
 
-	d_tm_record_timestamp(&ts, __FILE__, __func__, "last executed", NULL);
+	rc = d_tm_record_timestamp(&ts, __FILE__, __func__, "last executed",
+				   NULL);
+	if (rc != D_TM_SUCCESS) {
+		printf("d_tm_record_timestamp failed, rc = %d\n", rc);
+	}
 }
 
 /*
@@ -74,7 +82,8 @@ void test_function2(void)
  */
 void test_open_handle(void)
 {
-	static struct d_tm_node_t *numOpenHandles;
+	static struct d_tm_node_t	*numOpenHandles;
+	int				rc;
 
 	/*
 	 * Create / use a gauge at a known location so that it can be used by
@@ -82,8 +91,11 @@ void test_open_handle(void)
 	 * incremented by an arbitrary value.  We will incrememt by one for this
 	 * example.
 	 */
-	d_tm_increment_gauge(&numOpenHandles, 1, __FILE__, "open handles",
-			     NULL);
+	rc = d_tm_increment_gauge(&numOpenHandles, 1, __FILE__, "open handles",
+				  NULL);
+	if (rc != D_TM_SUCCESS) {
+		printf("d_tm_increment_gauge failed, rc = %d\n", rc);
+	}
 }
 
 /*
@@ -92,15 +104,19 @@ void test_open_handle(void)
  */
 void test_close_handle(void)
 {
-	static struct d_tm_node_t *numOpenHandles;
+	static struct d_tm_node_t	*numOpenHandles;
+	int				rc;
 
 	/*
 	 * The full name of this gauge matches the name in test_open_handle() so
 	 * that increments in test_open_handle() are changing the same metric
 	 * as the one used here.
 	 */
-	d_tm_decrement_gauge(&numOpenHandles, 1, __FILE__, "open handles",
-			     NULL);
+	rc = d_tm_decrement_gauge(&numOpenHandles, 1, __FILE__, "open handles",
+				  NULL);
+	if (rc != D_TM_SUCCESS) {
+		printf("d_tm_decrement_gauge failed, rc = %d\n", rc);
+	}
 }
 
 /*
@@ -111,20 +127,31 @@ void test_close_handle(void)
  */
 void highres_timer(void)
 {
-	static struct d_tm_node_t *t1;
-	static struct d_tm_node_t *t2;
-	static struct d_tm_node_t *t3;
-	static struct d_tm_node_t *t4;
-	struct timespec ts;
+	static struct d_tm_node_t	*t1;
+	static struct d_tm_node_t	*t2;
+	static struct d_tm_node_t	*t3;
+	static struct d_tm_node_t	*t4;
+	static struct d_tm_node_t	*t5;
+	static struct d_tm_node_t	*t6;
+	struct timespec			ts;
+	int				rc;
 
-	d_tm_record_high_res_timer(&t1, __FILE__, __func__, "timer 1", NULL);
+	rc = d_tm_record_high_res_timer(&t1, D_TM_CLOCK_REALTIME, __FILE__,
+					__func__, "snapshot 1", NULL);
+	if (rc != D_TM_SUCCESS) {
+		printf("d_tm_record_high_res_timer failed, rc = %d\n", rc);
+	}
 
 	/*
 	 * Do some stuff
 	 */
 	sleep(1);
 
-	d_tm_record_high_res_timer(&t2, __FILE__, __func__, "timer 2", NULL);
+	rc = d_tm_record_high_res_timer(&t2, D_TM_CLOCK_REALTIME, __FILE__,
+					__func__, "snapshot 2", NULL);
+	if (rc != D_TM_SUCCESS) {
+		printf("d_tm_record_high_res_timer failed, rc = %d\n", rc);
+	}
 
 	/*
 	 * Do some stuff
@@ -133,8 +160,11 @@ void highres_timer(void)
 	ts.tv_nsec = 50000000;
 	nanosleep(&ts, NULL);
 
-	d_tm_record_high_res_timer(&t3, __FILE__, __func__, "timer 3", NULL);
-
+	rc = d_tm_record_high_res_timer(&t3, D_TM_CLOCK_REALTIME, __FILE__,
+					__func__, "snapshot 3", NULL);
+	if (rc != D_TM_SUCCESS) {
+		printf("d_tm_record_high_res_timer failed, rc = %d\n", rc);
+	}
 
 	/*
 	 * Do some stuff (10x longer)
@@ -143,31 +173,48 @@ void highres_timer(void)
 	ts.tv_nsec = 500000000;
 	nanosleep(&ts, NULL);
 
-
-	d_tm_record_high_res_timer(&t4, __FILE__, __func__, "timer 4", NULL);
+	rc = d_tm_record_high_res_timer(&t4, D_TM_CLOCK_REALTIME, __FILE__,
+					__func__, "snapshot 4", NULL);
+	if (rc != D_TM_SUCCESS) {
+		printf("d_tm_record_high_res_timer failed, rc = %d\n", rc);
+	}
 
 	/*
-	 * How long did the sleep(1) take?  That's timer 2 - timer 1
-	 * How long did the 50000 iterations take?  That's timer 3 - timer 2
-	 * How long did the 500000 iterations take?  That's timer 4 - timer 3.
+	 * How long did the sleep(1) take?  That's t1 - t2
+	 * How long did the 50000 iterations take?  That's t3 - t2
+	 * How long did the 500000 iterations take?  That's t4 - t3.
 	 * How long did the sleep(1) and the 50000 iterations take?  That's
-	 * timer 3 - timer 1.
-	 * When was function entry?  That's timer 1.
-	 * When did the function exit the sleep(1)?  That's t timer 2.
+	 * t3 - t1.
+	 * When was function entry?  That's t1.
+	 * When did the function exit the sleep(1)?  That's t t2.
 	 */
+
+	/** This is how to specify a high resolution process CPU timer */
+	rc = d_tm_record_high_res_timer(&t5, D_TM_CLOCK_PROCESS_CPUTIME,
+					__FILE__, __func__, "snapshot 5", NULL);
+	if (rc != D_TM_SUCCESS) {
+		printf("d_tm_record_high_res_timer failed, rc = %d\n", rc);
+	}
+
+	/** This is how to specify a high resolution thread CPU timer */
+	rc = d_tm_record_high_res_timer(&t6, D_TM_CLOCK_THREAD_CPUTIME,
+					__FILE__, __func__, "snapshot 6", NULL);
+	if (rc != D_TM_SUCCESS) {
+		printf("d_tm_record_high_res_timer failed, rc = %d\n", rc);
+	}
 }
 
 
 int
 main(int argc, char **argv)
 {
-	static struct d_tm_node_t *entry;
-	static struct d_tm_node_t *loop;
-	static struct d_tm_node_t *timer1;
-	static struct d_tm_node_t *timer2;
-	int rc;
-	int simulatedRank = 0;
-	int i;
+	static struct d_tm_node_t	*entry;
+	static struct d_tm_node_t	*loop;
+	static struct d_tm_node_t	*timer1;
+	static struct d_tm_node_t	*timer2;
+	int 				rc;
+	int 				simulated_rank = 0;
+	int 				i;
 
 	if (argc < 2) {
 		printf("Specify an integer that identifies this producer's "
@@ -175,16 +222,16 @@ main(int argc, char **argv)
 		exit(0);
 	}
 
-	simulatedRank = atoi(argv[1]);
-	printf("This simulatedRank has ID: %d\n", simulatedRank);
+	simulated_rank = atoi(argv[1]);
+	printf("This simulated rank has ID: %d\n", simulated_rank);
 
 	/*
 	 * Call d_tm_init() only once per process,
 	 * i.e. in iosrv/init.c/server_init()
 	 */
-	rc = d_tm_init(simulatedRank, D_TM_SHARED_MEMORY_SIZE);
+	rc = d_tm_init(simulated_rank, D_TM_SHARED_MEMORY_SIZE);
 	if (rc != 0) {
-		D_GOTO(failure, rc);
+		goto failure;
 	}
 
 	/*
@@ -200,8 +247,9 @@ main(int argc, char **argv)
 	 */
 	rc = d_tm_increment_counter(&entry, __FILE__, __func__,
 				    "sample counter", NULL);
-	if (rc != 0) {
-		D_GOTO(failure, rc);
+	if (rc != D_TM_SUCCESS) {
+		printf("d_tm_increment_counter failed, rc = %d\n", rc);
+		goto failure;
 	}
 
 	/*
@@ -213,8 +261,9 @@ main(int argc, char **argv)
 	for (i = 0; i < 1000; i++) {
 		rc = d_tm_increment_counter(&loop, __FILE__, __func__,
 					    "loop counter", NULL);
-		if (rc != 0) {
-			D_GOTO(failure, rc);
+		if (rc != D_TM_SUCCESS) {
+			printf("d_tm_increment_counter failed, rc = %d\n", rc);
+			goto failure;
 		}
 	}
 
@@ -233,9 +282,17 @@ main(int argc, char **argv)
 				      __func__,
 				      "10000 iterations - REALTIME",
 				      NULL);
+	if (rc != D_TM_SUCCESS) {
+		printf("d_tm_mark_duration_start failed, rc = %d\n", rc);
+		goto failure;
+	}
+
 	test_function1(10000);
 	rc = d_tm_mark_duration_end(&timer1, NULL);
-
+	if (rc != D_TM_SUCCESS) {
+		printf("d_tm_mark_duration_end failed, rc = %d\n", rc);
+		goto failure;
+	}
 
 	/*
 	 * For the second timer, let's use the process clock
@@ -244,8 +301,17 @@ main(int argc, char **argv)
 				      __FILE__, __func__,
 				      "10000 iterations - PROCESS_CPUTIME",
 				      NULL);
+	if (rc != D_TM_SUCCESS) {
+		printf("d_tm_mark_duration_start failed, rc = %d\n", rc);
+		goto failure;
+	}
+
 	test_function1(10000);
 	rc = d_tm_mark_duration_end(&timer2, NULL);
+	if (rc != D_TM_SUCCESS) {
+		printf("d_tm_mark_duration_end failed, rc = %d\n", rc);
+		goto failure;
+	}
 
 	/*
 	 * Notice that the test_function1() metric named 'loop counter'
@@ -287,7 +353,10 @@ main(int argc, char **argv)
 	highres_timer();
 
 	d_tm_fini();
+
+	printf("Metrics added and ready to read.  Try the example consumer.\n");
 	return 0;
+
 failure:
 	d_tm_fini();
 	return -1;

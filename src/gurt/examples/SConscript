@@ -18,7 +18,7 @@
 # provided in Contract No. 8F-30005.
 # Any reproduction of computer software, computer software documentation, or
 # portions thereof marked with this legend must also reproduce the markings.
-"""Unit tests"""
+"""Example code"""
 
 import daos_build
 
@@ -28,12 +28,12 @@ def scons():
 
     unit_env = env.Clone()
 
-    daos_build.test(unit_env, 'telemetry_producer_tests',
-                    ['telem_producer.c'],
+    daos_build.test(unit_env, 'telemetry_producer_example',
+                    ['telem_producer_example.c'],
                     LIBS=['gurt'])
 
-    daos_build.test(unit_env, 'telemetry_consumer_tests',
-                    ['telem_consumer.c'],
+    daos_build.test(unit_env, 'telemetry_consumer_example',
+                    ['telem_consumer_example.c'],
                     LIBS=['gurt'])
 
 if __name__ == "SCons.Script":
