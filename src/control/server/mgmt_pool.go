@@ -214,7 +214,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	}
 
 	// let the caller know how many ranks were used
-	resp.Numranks = int32(len(req.Ranks))
+	resp.Numranks = uint32(len(req.Ranks))
 
 	if resp.GetStatus() != 0 {
 		if err := svc.sysdb.RemovePoolService(ps.PoolUUID); err != nil {
