@@ -45,7 +45,9 @@
 #include <semaphore.h>
 #include <errno.h>
 #include <stdbool.h>
-#include <gurt/telemetry.h>
+#include "gurt/telemetry_common.h"
+#include "gurt/telemetry_producer.h"
+#include "gurt/telemetry_consumer.h"
 
 /**
  * These globals are used for all data producers sharing the same process space
@@ -435,21 +437,21 @@ d_tm_print_timer_snapshot(struct timespec *tms, char *name, int tm_type,
 		return;
 
 	switch (tm_type) {
-		case D_TM_HIGH_RES_TIMER | D_TM_CLOCK_REALTIME:
+		case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_REALTIME:
 			fprintf(stream, "Timer snapshot (realtime): %s = %lds, "
 				"%ldns\n", name, tms->tv_sec, tms->tv_nsec);
 			break;
-		case D_TM_HIGH_RES_TIMER | D_TM_CLOCK_PROCESS_CPUTIME:
+		case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_PROCESS_CPUTIME:
 			fprintf(stream, "Timer snapshot (process): %s = %lds, "
 				"%ldns\n", name, tms->tv_sec, tms->tv_nsec);
 			break;
-		case D_TM_HIGH_RES_TIMER | D_TM_CLOCK_THREAD_CPUTIME:
+		case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_THREAD_CPUTIME:
 			fprintf(stream, "Timer snapshot (thread): %s = %lds, "
 				"%ldns\n", name, tms->tv_sec, tms->tv_nsec);
 			break;
 		default:
 			fprintf(stream, "Invalid timer snapshot type: 0x%x\n",
-				tm_type & ~D_TM_HIGH_RES_TIMER);
+				tm_type & ~D_TM_TIMER_SNAPSHOT);
 			break;
 	}
 }
@@ -552,10 +554,10 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 		}
 		d_tm_print_timestamp(&clk, name, stream);
 		break;
-	case (D_TM_HIGH_RES_TIMER | D_TM_CLOCK_REALTIME):
-	case (D_TM_HIGH_RES_TIMER | D_TM_CLOCK_PROCESS_CPUTIME):
-	case (D_TM_HIGH_RES_TIMER | D_TM_CLOCK_THREAD_CPUTIME):
-		rc = d_tm_get_highres_timer(&tms, shmem_root, node, NULL);
+	case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_REALTIME):
+	case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_PROCESS_CPUTIME):
+	case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_THREAD_CPUTIME):
+		rc = d_tm_get_timer_snapshot(&tms, shmem_root, node, NULL);
 		if (rc != D_TM_SUCCESS) {
 			fprintf(stream, "Error on highres timer read: %d\n",
 				rc);
@@ -859,7 +861,7 @@ failure:
 }
 
 /**
- * Read and store a high resolution timer value
+ * Read and store a high resolution timer snapshot value
  *
  * The timer is specified either by an initialized pointer or by a fully
  * qualified item name.  If an initialized pointer is provided, the metric is
@@ -885,8 +887,8 @@ failure:
  *							timer
  */
 int
-d_tm_record_high_res_timer(struct d_tm_node_t **metric, int clk_id,
-			   char *item, ...)
+d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
+			 char *item, ...)
 {
 	struct d_tm_node_t	*node = NULL;
 	char			path[D_TM_MAX_NAME_LEN] = {};
@@ -922,7 +924,7 @@ d_tm_record_high_res_timer(struct d_tm_node_t **metric, int clk_id,
 				"Failed to add metric: rc = %d\n", path, rc);
 			goto failure;
 		}
-		rc = d_tm_add_metric(&node, path, D_TM_HIGH_RES_TIMER | clk_id,
+		rc = d_tm_add_metric(&node, path, D_TM_TIMER_SNAPSHOT | clk_id,
 				     "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and record high resolution timer"
@@ -933,10 +935,10 @@ d_tm_record_high_res_timer(struct d_tm_node_t **metric, int clk_id,
 			*metric = node;
 	}
 
-	if (node->dtn_type & D_TM_HIGH_RES_TIMER) {
+	if (node->dtn_type & D_TM_TIMER_SNAPSHOT) {
 		D_MUTEX_LOCK(&node->dtn_lock);
 		clock_gettime(d_tm_clock_id(node->dtn_type &
-					    ~D_TM_HIGH_RES_TIMER),
+					    ~D_TM_TIMER_SNAPSHOT),
 			      &node->dtn_metric->dtm_data.tms[0]);
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
@@ -1704,8 +1706,8 @@ d_tm_get_timestamp(time_t *val, uint64_t *shmem_root, struct d_tm_node_t *node,
  *						timer
  */
 int
-d_tm_get_highres_timer(struct timespec *tms, uint64_t *shmem_root,
-		       struct d_tm_node_t *node, char *metric)
+d_tm_get_timer_snapshot(struct timespec *tms, uint64_t *shmem_root,
+			struct d_tm_node_t *node, char *metric)
 {
 	struct d_tm_metric_t	*metric_data = NULL;
 
@@ -1721,7 +1723,7 @@ d_tm_get_highres_timer(struct timespec *tms, uint64_t *shmem_root,
 	if (!d_tm_validate_shmem_ptr(shmem_root, (void *)node))
 		return -DER_METRIC_NOT_FOUND;
 
-	if (!(node->dtn_type & D_TM_HIGH_RES_TIMER))
+	if (!(node->dtn_type & D_TM_TIMER_SNAPSHOT))
 		return -DER_OP_NOT_PERMITTED;
 
 	metric_data = d_tm_conv_ptr(shmem_root, node->dtn_metric);
@@ -1967,8 +1969,8 @@ d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root, char *path,
 		D_ERROR("Path [%s] exceeds max length: rc = %d\n", path, rc);
 		goto failure;
 	}
-	rest = str;
 
+	rest = str;
 	parent_node = d_tm_get_root(shmem_root);
 	node = parent_node;
 	if (parent_node != NULL) {
@@ -1976,6 +1978,7 @@ d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root, char *path,
 		while (token != NULL) {
 			node = d_tm_find_child(shmem_root, parent_node, token);
 			if (node == NULL) {
+				printf("Token %s not found\n", token);
 				rc = -DER_METRIC_NOT_FOUND;
 				goto failure;
 			}

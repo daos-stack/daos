@@ -35,7 +35,8 @@
 #include <sys/shm.h>
 #include <stdbool.h>
 #include "gurt/common.h"
-#include "gurt/telemetry.h"
+#include "gurt/telemetry_common.h"
+#include "gurt/telemetry_consumer.h"
 
 /**
  * An example that shows how metrics are read.
@@ -61,7 +62,7 @@ void readMetrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 	printf("iteration: %d - %s/\n", iteration, dirname);
 	rc = d_tm_list(&nodelist, shmem_root, dirname,
 		       D_TM_DIRECTORY | D_TM_COUNTER | D_TM_TIMESTAMP |
-		       D_TM_HIGH_RES_TIMER | D_TM_DURATION |
+		       D_TM_TIMER_SNAPSHOT | D_TM_DURATION |
 		       D_TM_GAUGE);
 
 	if (rc == D_TM_SUCCESS)
@@ -71,7 +72,7 @@ void readMetrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 	       d_tm_get_num_objects(shmem_root, dirname,
 				    D_TM_DIRECTORY | D_TM_COUNTER |
 				    D_TM_TIMESTAMP |
-				    D_TM_HIGH_RES_TIMER |
+				    D_TM_TIMER_SNAPSHOT |
 				    D_TM_DURATION | D_TM_GAUGE));
 
 	printf("There are %"PRIu64" objects in the filtered list\n",
@@ -108,11 +109,11 @@ void readMetrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 			}
 			d_tm_print_timestamp(&clk, name, stdout);
 			break;
-		case (D_TM_HIGH_RES_TIMER | D_TM_CLOCK_REALTIME):
-		case (D_TM_HIGH_RES_TIMER | D_TM_CLOCK_PROCESS_CPUTIME):
-		case (D_TM_HIGH_RES_TIMER | D_TM_CLOCK_THREAD_CPUTIME):
-			rc = d_tm_get_highres_timer(&tms, shmem_root,
-						    nodelist->dtnl_node, NULL);
+		case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_REALTIME):
+		case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_PROCESS_CPUTIME):
+		case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_THREAD_CPUTIME):
+			rc = d_tm_get_timer_snapshot(&tms, shmem_root,
+						     nodelist->dtnl_node, NULL);
 			if (rc != D_TM_SUCCESS) {
 				printf("Error on highres timer read: %d\n", rc);
 				break;
@@ -187,9 +188,7 @@ main(int argc, char **argv)
 	       "0x%" PRIx64 "\n", simulated_rank, (uint64_t)shmem_root);
 
 	root = d_tm_get_root(shmem_root);
-
 	sprintf(dirname, "src/gurt/examples/telem_producer_example.c/main");
-
 	while (1) {
 		d_tm_print_my_children(shmem_root, root, 0, stdout);
 		readMetrics(shmem_root, root, dirname, iteration++);

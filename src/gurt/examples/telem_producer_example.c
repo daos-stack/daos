@@ -27,7 +27,8 @@
 #include <stdio.h>
 #include <time.h>
 #include "gurt/common.h"
-#include "gurt/telemetry.h"
+#include "gurt/telemetry_common.h"
+#include "gurt/telemetry_producer.h"
 
 /*
  * A sample function that creates and incremements a metric for a loop counter
@@ -125,7 +126,7 @@ void test_close_handle(void)
  * can then be interpreted depending on the need.  A duration type metric
  * is a simplified version of this metric that does the interval calculation.
  */
-void highres_timer(void)
+void timer_snapshot(void)
 {
 	static struct d_tm_node_t	*t1;
 	static struct d_tm_node_t	*t2;
@@ -136,10 +137,10 @@ void highres_timer(void)
 	struct timespec			ts;
 	int				rc;
 
-	rc = d_tm_record_high_res_timer(&t1, D_TM_CLOCK_REALTIME, __FILE__,
-					__func__, "snapshot 1", NULL);
+	rc = d_tm_take_timer_snapshot(&t1, D_TM_CLOCK_REALTIME, __FILE__,
+				      __func__, "snapshot 1", NULL);
 	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_record_high_res_timer failed, rc = %d\n", rc);
+		printf("d_tm_take_timer_snapshot failed, rc = %d\n", rc);
 	}
 
 	/*
@@ -147,10 +148,10 @@ void highres_timer(void)
 	 */
 	sleep(1);
 
-	rc = d_tm_record_high_res_timer(&t2, D_TM_CLOCK_REALTIME, __FILE__,
-					__func__, "snapshot 2", NULL);
+	rc = d_tm_take_timer_snapshot(&t2, D_TM_CLOCK_REALTIME, __FILE__,
+				      __func__, "snapshot 2", NULL);
 	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_record_high_res_timer failed, rc = %d\n", rc);
+		printf("d_tm_take_timer_snapshot failed, rc = %d\n", rc);
 	}
 
 	/*
@@ -160,10 +161,10 @@ void highres_timer(void)
 	ts.tv_nsec = 50000000;
 	nanosleep(&ts, NULL);
 
-	rc = d_tm_record_high_res_timer(&t3, D_TM_CLOCK_REALTIME, __FILE__,
-					__func__, "snapshot 3", NULL);
+	rc = d_tm_take_timer_snapshot(&t3, D_TM_CLOCK_REALTIME, __FILE__,
+				      __func__, "snapshot 3", NULL);
 	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_record_high_res_timer failed, rc = %d\n", rc);
+		printf("d_tm_take_timer_snapshot failed, rc = %d\n", rc);
 	}
 
 	/*
@@ -173,10 +174,10 @@ void highres_timer(void)
 	ts.tv_nsec = 500000000;
 	nanosleep(&ts, NULL);
 
-	rc = d_tm_record_high_res_timer(&t4, D_TM_CLOCK_REALTIME, __FILE__,
-					__func__, "snapshot 4", NULL);
+	rc = d_tm_take_timer_snapshot(&t4, D_TM_CLOCK_REALTIME, __FILE__,
+				      __func__, "snapshot 4", NULL);
 	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_record_high_res_timer failed, rc = %d\n", rc);
+		printf("d_tm_take_timer_snapshot failed, rc = %d\n", rc);
 	}
 
 	/*
@@ -190,17 +191,17 @@ void highres_timer(void)
 	 */
 
 	/** This is how to specify a high resolution process CPU timer */
-	rc = d_tm_record_high_res_timer(&t5, D_TM_CLOCK_PROCESS_CPUTIME,
-					__FILE__, __func__, "snapshot 5", NULL);
+	rc = d_tm_take_timer_snapshot(&t5, D_TM_CLOCK_PROCESS_CPUTIME,
+				      __FILE__, __func__, "snapshot 5", NULL);
 	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_record_high_res_timer failed, rc = %d\n", rc);
+		printf("d_tm_take_timer_snapshot failed, rc = %d\n", rc);
 	}
 
 	/** This is how to specify a high resolution thread CPU timer */
-	rc = d_tm_record_high_res_timer(&t6, D_TM_CLOCK_THREAD_CPUTIME,
-					__FILE__, __func__, "snapshot 6", NULL);
+	rc = d_tm_take_timer_snapshot(&t6, D_TM_CLOCK_THREAD_CPUTIME,
+				      __FILE__, __func__, "snapshot 6", NULL);
 	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_record_high_res_timer failed, rc = %d\n", rc);
+		printf("d_tm_take_timer_snapshot failed, rc = %d\n", rc);
 	}
 }
 
@@ -350,7 +351,7 @@ main(int argc, char **argv)
 	/*
 	 * Trying out the high resolution timer
 	 */
-	highres_timer();
+	timer_snapshot();
 
 	d_tm_fini();
 
