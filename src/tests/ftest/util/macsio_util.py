@@ -467,6 +467,10 @@ class MacsioCommand(ExecutableCommand):
             "DAOS_SVCL": self.daos_svcl,
             "DAOS_CONT": self.daos_cont,
         }
+        #mapping = {
+        #    "DAOS_POOL": self.daos_pool,
+        #    "DAOS_CONT": self.daos_cont,
+        #}
         for key in mapping:
             if mapping[key]:
                 env[key] = mapping[key]

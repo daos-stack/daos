@@ -11,7 +11,7 @@
 
 Name:          daos
 Version:       1.1.1
-Release:       6%{?relval}%{?dist}
+Release:       7%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -386,6 +386,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_prefix}/lib/daos/TESTING
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
+%{_bindir}/jobtest
 %exclude %{_bindir}/self_test
 %{_bindir}/smd_ut
 %{_bindir}/vea_ut

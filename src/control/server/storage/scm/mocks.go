@@ -128,9 +128,9 @@ func DefaultMockSysProvider() *MockSysProvider {
 type MockBackendConfig struct {
 	DiscoverRes          storage.ScmModules
 	DiscoverErr          error
-	GetNamespaceRes      storage.ScmNamespaces
-	GetNamespaceErr      error
-	GetStateErr          error
+	GetPmemNamespaceRes  storage.ScmNamespaces
+	GetPmemNamespaceErr  error
+	GetPmemStateErr      error
 	StartingState        storage.ScmState
 	NextState            storage.ScmState
 	PrepNeedsReboot      bool
@@ -151,13 +151,13 @@ func (mb *MockBackend) Discover() (storage.ScmModules, error) {
 	return mb.cfg.DiscoverRes, mb.cfg.DiscoverErr
 }
 
-func (mb *MockBackend) GetNamespaces() (storage.ScmNamespaces, error) {
-	return mb.cfg.GetNamespaceRes, mb.cfg.GetNamespaceErr
+func (mb *MockBackend) GetPmemNamespaces() (storage.ScmNamespaces, error) {
+	return mb.cfg.GetPmemNamespaceRes, mb.cfg.GetPmemNamespaceErr
 }
 
-func (mb *MockBackend) GetState() (storage.ScmState, error) {
-	if mb.cfg.GetStateErr != nil {
-		return storage.ScmStateUnknown, mb.cfg.GetStateErr
+func (mb *MockBackend) GetPmemState() (storage.ScmState, error) {
+	if mb.cfg.GetPmemStateErr != nil {
+		return storage.ScmStateUnknown, mb.cfg.GetPmemStateErr
 	}
 	mb.RLock()
 	defer mb.RUnlock()
