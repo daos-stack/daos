@@ -1388,9 +1388,12 @@ crt_hdlr_iv_fetch_aux(void *arg)
 	 */
 	IVNS_DECREF(ivns_internal);
 
-	/* Check group version match */
+	/*
+ 	 * Check if current group version matches that of the ifi structure.
+ 	 * If the in comming rpc request version number does not
+ 	 * match that of this node, then return error.
+ 	 */
 	grp_ver_entry = ivns_internal->cii_grp_priv->gp_membs_ver;
-
 	if (grp_ver_entry != input->ifi_grp_ver) {
 		D_ERROR("Group (%s) version mismatch. Local: %d Remote :%d\n",
 			ivns_id.ii_group_name, grp_ver_entry,
@@ -1457,8 +1460,12 @@ crt_hdlr_iv_fetch_aux(void *arg)
 
 		put_needed = true;
 
+		/* get group version and next node to transfer to */
+ 		D_RWLOCK_RDLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
+		grp_ver_current = ivns_internal->cii_grp_priv->gp_membs_ver;
 		rc = crt_iv_parent_get(ivns_internal, input->ifi_root_node,
 					&next_node);
+ 		D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 		if (rc != 0) {
 			D_DEBUG(DB_TRACE, "crt_iv_parent_get() returned %d\n",
 				rc);
@@ -1466,8 +1473,6 @@ crt_hdlr_iv_fetch_aux(void *arg)
 		}
 
 		/* Check here for change in group */
-		grp_ver_current = ivns_internal->
-					   cii_grp_priv->gp_membs_ver;
 		if (grp_ver_entry != grp_ver_current) {
 			D_ERROR("Group (%s) version changed. "
 				"On Entry: %d:: Changed To :%d\n",
@@ -2942,10 +2947,13 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 		 * Get group version to associate with next_rank.
 		 * Pass it down to crt_ivu_rpc_issue
 		 */
+ 		D_RWLOCK_RDLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 		grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
 
 		rc = crt_iv_parent_get(ivns_internal,
 					input->ivu_root_node, &next_rank);
+ 		D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
+
 		if (rc != 0) {
 			D_DEBUG(DB_TRACE, "crt_iv_parent_get() returned %d\n",
 				rc);

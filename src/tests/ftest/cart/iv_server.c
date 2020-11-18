@@ -413,8 +413,6 @@ dump_all_keys(char *msg)
 	if (g_verbose_mode < 2)
 		return;
 
-	DBG_PRINT("Dumping keys from:: %s\n", msg);
-
 	LOCK_KEYS();
 	d_list_for_each_entry(entry, &g_kv_pair_head, link) {
 		print_key_value(msg, &entry->key, &entry->value);
