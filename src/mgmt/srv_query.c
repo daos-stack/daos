@@ -262,7 +262,7 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 	struct bio_dev_info	   *dev_info = NULL, *tmp;
 	struct bio_list_devs_info   list_devs_info = { 0 };
 	enum bio_dev_state	    state;
-	int			    buflen = 20;
+	int			    buflen = 10;
 	int			    i = 0, j;
 	int			    rc = 0;
 
@@ -319,16 +319,18 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 		strncpy(resp->devices[i]->state,
 			bio_dev_state_enum_to_str(state), buflen);
 
-		D_ALLOC(resp->devices[i]->traddr, buflen);
-		if (resp->devices[i]->traddr == NULL) {
-			D_ERROR("Failed to allocate device transport ID");
-			rc = -DER_NOMEM;
-			break;
+		if (dev_info->bdi_traddr != NULL) {
+			buflen = strlen(dev_info->bdi_traddr) + 1;
+			D_ALLOC(resp->devices[i]->traddr, buflen);
+			if (resp->devices[i]->traddr == NULL) {
+				D_ERROR("Failed to allocate device traddr");
+				rc = -DER_NOMEM;
+				break;
+			}
+			/* Transport Addr -> Blobstore UUID mapping */
+			strncpy(resp->devices[i]->traddr, dev_info->bdi_traddr,
+				buflen);
 		}
-
-		/* Transport Addr -> Blobstore UUID mapping */
-		strncpy(resp->devices[i]->traddr, dev_info->bdi_traddr,
-			buflen);
 
 		resp->devices[i]->n_tgt_ids = dev_info->bdi_tgt_cnt;
 		D_ALLOC(resp->devices[i]->tgt_ids,
