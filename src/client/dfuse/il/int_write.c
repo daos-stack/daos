@@ -47,7 +47,7 @@ ioil_do_writex(const char *buff, size_t len, off_t position,
 	rc = dfs_write(entry->fd_cont->ioc_dfs,
 		       entry->fd_dfsoh, &sgl, position, NULL);
 	if (rc) {
-		DFUSE_TRA_DEBUG(entry, "dfs_write() failed: %d", rc);
+		DFUSE_TRA_DEBUG(entry->fd_dfsoh, "dfs_write() failed: %d", rc);
 		*errcode = rc;
 		return -1;
 	}

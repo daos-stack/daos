@@ -112,7 +112,8 @@ ioil_shrink(struct ioil_cont *cont)
 	if (!daos_handle_is_inval(cont->ioc_coh)) {
 		rc = daos_cont_close(cont->ioc_coh, NULL);
 		if (rc != 0)
-			D_ERROR("daos_cont_close() failed, %d\n", rc);
+			D_ERROR("daos_cont_close() failed, " DF_RC "\n",
+				DP_RC(rc));
 	}
 
 	pool = cont->ioc_pool;
@@ -124,7 +125,8 @@ ioil_shrink(struct ioil_cont *cont)
 
 	rc = daos_pool_disconnect(pool->iop_poh, NULL);
 	if (rc != 0)
-		D_ERROR("daos_pool_disconnect() failed, %d\n", rc);
+		D_ERROR("daos_pool_disconnect() failed, " DF_RC "\n",
+			DP_RC(rc));
 
 	d_list_del(&pool->iop_pools);
 	D_FREE(pool);
@@ -137,6 +139,8 @@ entry_array_close(void *arg) {
 	DFUSE_LOG_DEBUG("entry %p closing array fd_count %d",
 			entry, entry->fd_cont->ioc_open_count);
 
+
+	DFUSE_TRA_DOWN(entry->fd_dfsoh);
 	dfs_release(entry->fd_dfsoh);
 
 	entry->fd_cont->ioc_open_count -= 1;
@@ -220,15 +224,14 @@ pwritev_rpc(struct fd_entry *entry, const struct iovec *iov, int count,
 
 static pthread_once_t init_links_flag = PTHREAD_ONCE_INIT;
 
-/* This is also called from dfuse_fopen() */
+/* This is also called from dfuse_fopen()
+ * Calling anything that can open files in this function can cause deadlock
+ * so just do what's necessary for setup, and then return.
+ */
 static void
 init_links(void)
 {
 	FOREACH_INTERCEPT(IOIL_FORWARD_MAP_OR_FAIL);
-	daos_debug_init(DAOS_LOG_DEFAULT);
-	D_INIT_LIST_HEAD(&ioil_iog.iog_pools_head);
-	ioil_iog.iog_daos_init = false;
-	ioil_iog.iog_no_daos = false;
 }
 
 static __attribute__((constructor)) void
@@ -238,6 +241,10 @@ ioil_init(void)
 	int rc;
 
 	pthread_once(&init_links_flag, init_links);
+
+	D_INIT_LIST_HEAD(&ioil_iog.iog_pools_head);
+
+	daos_debug_init(DAOS_LOG_DEFAULT);
 
 	DFUSE_TRA_ROOT(&ioil_iog, "il");
 
@@ -349,7 +356,10 @@ fetch_dfs_obj_handle(int fd, struct fd_entry *entry)
 
 	D_FREE(iov.iov_buf);
 
-	DFUSE_TRA_UP(entry->fd_dfsoh, entry->fd_cont->ioc_dfs, "open file");
+	if (entry->fd_dfsoh)
+		DFUSE_TRA_UP(entry->fd_dfsoh,
+			     entry->fd_cont->ioc_dfs,
+			     "open file");
 
 	return rc;
 }
@@ -420,8 +430,9 @@ ioil_fetch_cont_handles(int fd, struct ioil_cont *cont)
 		rc = daos_pool_global2local(iov, &pool->iop_poh);
 		D_FREE(iov.iov_buf);
 		if (rc) {
-			DFUSE_LOG_WARNING("Failed to use pool handle %d", rc);
-			return rc;
+			DFUSE_LOG_WARNING("Failed to use pool handle " DF_RC,
+					  DP_RC(rc));
+			return daos_der2errno(rc);
 		}
 	}
 
@@ -449,9 +460,10 @@ ioil_fetch_cont_handles(int fd, struct ioil_cont *cont)
 
 	rc = daos_cont_global2local(pool->iop_poh, iov, &cont->ioc_coh);
 	if (rc) {
-		DFUSE_LOG_WARNING("Failed to use cont handle %d", rc);
+		DFUSE_LOG_WARNING("Failed to use cont handle " DF_RC,
+				  DP_RC(rc));
 		D_FREE(iov.iov_buf);
-		return rc;
+		return daos_der2errno(rc);
 	}
 
 	D_FREE(iov.iov_buf);
@@ -577,8 +589,10 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 		if (uuid_compare(pool->iop_uuid, il_reply.fir_pool) != 0)
 			continue;
 
-		d_list_for_each_entry(cont, &pool->iop_container_head, ioc_containers) {
-			if (uuid_compare(cont->ioc_uuid, il_reply.fir_cont) != 0)
+		d_list_for_each_entry(cont, &pool->iop_container_head,
+				      ioc_containers) {
+			if (uuid_compare(cont->ioc_uuid,
+					 il_reply.fir_cont) != 0)
 				continue;
 
 			D_GOTO(get_file, 0);
