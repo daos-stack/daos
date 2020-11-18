@@ -72,7 +72,7 @@ class IorInterceptDfuseMix(IorTestBase):
         min_mib = int(IorMetrics.Min_MiB)
         mean_mib = int(IorMetrics.Mean_MiB)
 
-        write_x = self.params.get("write_x", "/run/ior/iorflags/ssf/*",1)
+        write_x = self.params.get("write_x", "/run/ior/iorflags/ssf/*", 1)
         read_x = self.params.get("read_x", "/run/ior/iorflags/ssf/*", 1)
 
         # Verify that using interception library gives desired performance
@@ -132,5 +132,5 @@ class IorInterceptDfuseMix(IorTestBase):
                                "interception library", with_intercept[1])
         IorCommand.log_metrics(self.log, "1 client - without " +
                                "interception library", without_intercept[2])
-        IorCommand.log_metrics(self.log, "1 clients - without " +
+        IorCommand.log_metrics(self.log, "1 client - without " +
                                "interception library", with_intercept[2])
