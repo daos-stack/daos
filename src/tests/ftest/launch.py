@@ -278,6 +278,7 @@ def run_command(cmd):
                 " ".join(cmd), stdout))
     return stdout
 
+
 def get_output(cmd, check=True):
     """Get the output of given command executed on this host.
 
@@ -661,10 +662,16 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
         yaml_keys = list(YAML_KEYS.keys())
         yaml_find = find_values(yaml_data, yaml_keys)
 
-        # Generate a list
-        new_values = {
-            key: list(getattr(args, value)) if getattr(args, value) else []
-            for key, value in YAML_KEYS.items()}
+        # Generate a list of values that can be used as replacements
+        new_values = {}
+        for key, value in YAML_KEYS.items():
+            args_value = getattr(args, value)
+            if isinstance(args_value, NodeSet):
+                new_values[key] = list(args_value)
+            elif args_value:
+                new_values[key] = args_value.split(",")
+            else:
+                new_values[key] = []
 
         # Assign replacement values for the test yaml entries to be replaced
         display(args, "Detecting replacements for {} in {}".format(
