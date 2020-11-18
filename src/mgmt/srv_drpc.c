@@ -1457,6 +1457,10 @@ ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 				D_FREE(resp->devices[i]->uuid);
 			if (resp->devices[i]->tgt_ids != NULL)
 				D_FREE(resp->devices[i]->tgt_ids);
+			if (resp->devices[i]->state != NULL)
+				D_FREE(resp->devices[i]->state);
+			if (resp->devices[i]->traddr != NULL)
+				D_FREE(resp->devices[i]->traddr);
 			D_FREE(resp->devices[i]);
 		}
 	}

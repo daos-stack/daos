@@ -220,8 +220,8 @@ func PrintStorageFormatMap(hsm control.HostStorageMap, out io.Writer, opts ...Pr
 }
 
 func printSmdDevice(dev *storage.SmdDevice, out io.Writer, opts ...PrintConfigOption) error {
-	_, err := fmt.Fprintf(out, "UUID:%s Targets:%+v Rank:%d State:%s\n",
-		dev.UUID, dev.TargetIDs, dev.Rank, dev.State)
+	_, err := fmt.Fprintf(out, "UUID:%s [TrAddr:%s] \n\tTargets:%+v Rank:%d State:%s\n",
+		dev.UUID, dev.TrAddr, dev.TargetIDs, dev.Rank, dev.State)
 	return err
 }
 
