@@ -159,12 +159,6 @@ class RegionCounter():
                                                       end_time - start_time,
                                                       data)
 
-# CaRT Error numbers to convert to strings.
-C_ERRNOS = {0: '-DER_SUCCESS',
-            -1006: 'DER_UNREACH',
-            -1011: '-DER_TIMEDOUT',
-            -1032: '-DER_EVICTED'}
-
 # Use a global variable here so show_line can remember previously reported
 # error lines.
 shown_logs = set()
@@ -212,6 +206,7 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                      'cont_iv_prop_g2l': ('prop_entry->dpe_str'),
                      'ds_mgmt_drpc_group_update': ('body'),
                      'enum_cont_cb': ('ptr'),
+                     'pool_iv_conns_resize': ('new_conns'),
                      'obj_enum_prep_sgls': ('dst_sgls[i].sg_iovs',
                                             'dst_sgls[i].sg_iovs[j].iov_buf'),
                      'notify_ready': ('reqb'),
@@ -478,6 +473,16 @@ class LogTest():
 
         for line in self._li.new_iter(pid=pid, stateful=True):
             self.save_log_line(line)
+            try:
+                msg = ''.join(line._fields[2:])
+                # Warn if a line references the name of the function it was in,
+                # but skip short function names or _internal suffixes.
+                if line.function in msg and len(line.function) > 6 and \
+                   '{}_internal'.format(line.function) not in msg:
+                    show_line(line, 'NORMAL',
+                              'Logging references function name')
+            except AttributeError:
+                pass
             if abort_on_warning:
                 if line.level <= cart_logparse.LOG_LEVELS['WARN']:
                     show = True
@@ -489,6 +494,17 @@ class LogTest():
                             show = False
                             self.fi_location = line
                         elif '-1009' in line.get_msg():
+
+                            src_offset = line.lineno - self.fi_location.lineno
+                            if line.filename == self.fi_location.filename:
+                                src_offset = line.lineno - self.fi_location.lineno
+                                if src_offset > 0 and src_offset < 5:
+                                    show_line(line, 'NORMAL',
+                                              'Logging allocation failure')
+
+                            if not line.get_msg().endswith("DER_NOMEM(-1009): 'Out of memory'"):
+                                show_line(line, 'LOW',
+                                          'Error does not use DF_RC')
                             # For the fault injection test do not report
                             # errors for lines that print -DER_NOMEM, as
                             # this highlights other errors and lines which
@@ -709,8 +725,7 @@ class LogTest():
             elif line.is_callback():
                 rpc = line.descriptor
                 rpc_state = 'COMPLETED'
-                result = line.get_field(-1).rstrip('.')
-                result = C_ERRNOS.get(int(result), result)
+                result = line.get_field(13).split('(')[0]
                 c_state_names.add(result)
                 opcode = current_opcodes[line.descriptor]
                 try:
@@ -747,10 +762,10 @@ class LogTest():
         names = sorted(c_state_names)
         if names:
             try:
-                names.remove('-DER_SUCCESS')
+                names.remove('DER_SUCCESS')
             except ValueError:
                 pass
-            names.insert(0, '-DER_SUCCESS')
+            names.insert(0, 'DER_SUCCESS')
         headers = ['OPCODE',
                    'ALLOCATED',
                    'SUBMITTED',
@@ -759,7 +774,7 @@ class LogTest():
                    'DEALLOCATED']
 
         for state in names:
-            headers.append(state)
+            headers.append('-{}'.format(state))
         for (op, counts) in sorted(op_state_counters.items()):
             row = [op,
                    counts['ALLOCATED'],
