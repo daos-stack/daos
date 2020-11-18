@@ -91,7 +91,7 @@ func TestProviderScan(t *testing.T) {
 		"Discover fails": {
 			discoverErr: FaultDiscoveryFailed,
 		},
-		"GetState fails": {
+		"GetPmemState fails": {
 			getStateErr: errors.New("getstate failed"),
 		},
 	} {
@@ -106,11 +106,11 @@ func TestProviderScan(t *testing.T) {
 				tc.getNamespaceRes = storage.ScmNamespaces{defaultNamespace}
 			}
 			mbc := &MockBackendConfig{
-				DiscoverRes:     tc.discoverRes,
-				DiscoverErr:     tc.discoverErr,
-				GetNamespaceRes: tc.getNamespaceRes,
-				GetNamespaceErr: tc.getNamespaceErr,
-				GetStateErr:     tc.getStateErr,
+				DiscoverRes:         tc.discoverRes,
+				DiscoverErr:         tc.discoverErr,
+				GetPmemNamespaceRes: tc.getNamespaceRes,
+				GetPmemNamespaceErr: tc.getNamespaceErr,
+				GetPmemStateErr:     tc.getStateErr,
 			}
 			p := NewMockProvider(log, mbc, nil)
 			cmpRes := func(t *testing.T, want, got *ScanResponse) {
@@ -226,15 +226,15 @@ func TestProviderPrepare(t *testing.T) {
 				tc.getNamespaceRes = storage.ScmNamespaces{defaultNamespace}
 			}
 			mbc := &MockBackendConfig{
-				DiscoverErr:     tc.discoverErr,
-				DiscoverRes:     storage.ScmModules{defaultModule},
-				GetNamespaceRes: tc.getNamespaceRes,
-				GetNamespaceErr: tc.getNamespaceErr,
-				GetStateErr:     tc.getStateErr,
-				StartingState:   tc.startState,
-				NextState:       tc.expEndState,
-				PrepNeedsReboot: tc.shouldReboot,
-				PrepErr:         tc.prepErr,
+				DiscoverErr:         tc.discoverErr,
+				DiscoverRes:         storage.ScmModules{defaultModule},
+				GetPmemNamespaceRes: tc.getNamespaceRes,
+				GetPmemNamespaceErr: tc.getNamespaceErr,
+				GetPmemStateErr:     tc.getStateErr,
+				StartingState:       tc.startState,
+				NextState:           tc.expEndState,
+				PrepNeedsReboot:     tc.shouldReboot,
+				PrepErr:             tc.prepErr,
 			}
 			p := NewMockProvider(log, mbc, nil)
 
@@ -267,7 +267,7 @@ func TestProviderPrepare(t *testing.T) {
 	}
 }
 
-func TestProviderGetState(t *testing.T) {
+func TestProviderGetPmemState(t *testing.T) {
 	for name, tc := range map[string]struct {
 		startInitialized bool
 		discoverErr      error
@@ -291,11 +291,11 @@ func TestProviderGetState(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			mbc := &MockBackendConfig{
-				DiscoverErr:     tc.discoverErr,
-				DiscoverRes:     storage.ScmModules{defaultModule},
-				GetNamespaceErr: tc.getNamespaceErr,
-				StartingState:   tc.startState,
-				NextState:       tc.expEndState,
+				DiscoverErr:         tc.discoverErr,
+				DiscoverRes:         storage.ScmModules{defaultModule},
+				GetPmemNamespaceErr: tc.getNamespaceErr,
+				StartingState:       tc.startState,
+				NextState:           tc.expEndState,
 			}
 			p := NewMockProvider(log, mbc, nil)
 			p.scanCompleted = tc.startInitialized
@@ -306,7 +306,7 @@ func TestProviderGetState(t *testing.T) {
 				}
 			}
 
-			res, err := p.GetState()
+			res, err := p.GetPmemState()
 			if err != nil {
 				switch err {
 				case tc.discoverErr, tc.getNamespaceErr:
@@ -449,9 +449,9 @@ func TestProviderCheckFormat(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			mbc := &MockBackendConfig{
-				DiscoverErr:     tc.discoverErr,
-				DiscoverRes:     storage.ScmModules{defaultModule},
-				GetNamespaceErr: tc.getNamespaceErr,
+				DiscoverErr:         tc.discoverErr,
+				DiscoverRes:         storage.ScmModules{defaultModule},
+				GetPmemNamespaceErr: tc.getNamespaceErr,
 			}
 			msc := &MockSysConfig{
 				IsMountedBool: tc.alreadyMounted,
@@ -773,9 +773,9 @@ func TestProviderFormat(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			mbc := &MockBackendConfig{
-				DiscoverErr:     tc.discoverErr,
-				DiscoverRes:     storage.ScmModules{defaultModule},
-				GetNamespaceErr: tc.getNamespaceErr,
+				DiscoverErr:         tc.discoverErr,
+				DiscoverRes:         storage.ScmModules{defaultModule},
+				GetPmemNamespaceErr: tc.getNamespaceErr,
 			}
 			msc := &MockSysConfig{
 				IsMountedBool: tc.alreadyMounted,
