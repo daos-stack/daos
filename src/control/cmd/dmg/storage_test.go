@@ -208,7 +208,7 @@ func TestStorageCommands(t *testing.T) {
 			"Try to replace a device without a new device UUID specified",
 			"storage replace nvme --old-uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
 			"StorageReplaceNvme",
-			errors.New("the required flag --new-uuid was not specified"),
+			errors.New("the required flag `--new-uuid' was not specified"),
 		},
 	})
 }
