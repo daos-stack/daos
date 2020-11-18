@@ -166,7 +166,7 @@ class NvmePoolExtend(TestWithServers):
         """
         # Create a pool
         pool = {}
-        total_servers = len(self.hostlist_servers)
+        total_servers = len(self.hostlist_servers) * 2
 
         # Extend one of the ranks (or server)
         # rank index starts from zero
@@ -198,7 +198,7 @@ class NvmePoolExtend(TestWithServers):
         self.log.info("Extra Servers = %s", self.extra_servers)
         self.start_additional_servers(self.extra_servers)
         # Give sometime for the additional server to come up.
-        time.sleep(5)
+        time.sleep(25)
         self.log.info("Pool Version at the beginning %s", pver_begin)
         output = self.dmg_command.pool_extend(self.pool.uuid,
                                               rank, scm_size,
