@@ -726,11 +726,15 @@ def get_pool_list():
         pools.append(fname)
     return pools
 
-def assert_file_size(ofd, size):
+def assert_file_size_fd(fd, size):
     """Verify the file size is as expected"""
-    my_stat = os.fstat(ofd.fileno())
+    my_stat = os.fstat(fd)
     print('Checking file size is {} {}'.format(size, my_stat.st_size))
     assert my_stat.st_size == size
+
+def assert_file_size(ofd, size):
+    """Verify the file size is as expected"""
+    assert_file_size_fd(ofd.fileno(), size)
 
 def import_daos(server, conf):
     """Return a handle to the pydaos module"""
@@ -793,7 +797,12 @@ def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False):
 
     rc = subprocess.run(exec_cmd,
                         stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
                         env=cmd_env)
+
+    if rc.stderr != '':
+        print('Stderr from command')
+        print(rc.stderr.decode('utf-8').strip())
 
     show_memleaks = True
     skip_fi = False
@@ -809,11 +818,11 @@ def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False):
         show_memleaks = False
         fi_signal = -rc.returncode
 
-    log_test(conf,
-             log_file.name,
-             show_memleaks=show_memleaks,
-             skip_fi=skip_fi,
-             fi_signal=fi_signal)
+    rc.fi_loc = log_test(conf,
+                         log_file.name,
+                         show_memleaks=show_memleaks,
+                         skip_fi=skip_fi,
+                         fi_signal=fi_signal)
     vh.convert_xml()
     return rc
 
@@ -828,7 +837,7 @@ def show_cont(conf, pool):
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
     assert rc.returncode == 0
-    return rc.stdout.strip()
+    return rc.stdout.decode('utf-8').strip()
 
 def make_pool(daos):
     """Create a DAOS pool"""
@@ -874,6 +883,13 @@ def run_tests(dfuse):
     ofd.close()
     ret = il_cmd(dfuse, ['cat', fname], check_write=False)
     assert ret.returncode == 0
+    ofd = os.open(fname, os.O_TRUNC)
+    assert_file_size_fd(ofd, 0)
+    os.close(ofd)
+    symlink_name = os.path.join(path, 'symlink_src')
+    symlink_dest = 'missing_dest'
+    os.symlink(symlink_dest, symlink_name)
+    assert symlink_dest == os.readlink(symlink_name)
 
 def stat_and_check(dfuse, pre_stat):
     """Check that dfuse started"""
@@ -956,6 +972,8 @@ def log_test(conf,
 
     if check_write and 'dfuse_write' not in functions:
         raise NLTestNoFunction('dfuse_write')
+
+    return lto.fi_location
 
 def create_and_read_via_il(dfuse, path):
     """Create file in dir, write to and read
@@ -1285,7 +1303,7 @@ def test_pydaos_kv(server, conf):
     container = show_cont(conf, pool)
 
     print(container)
-    c_uuid = container.decode().split()[-1]
+    c_uuid = container.split()[-1]
     container = daos.Cont(pool, c_uuid)
 
     kv = container.get_kv_by_name('my_test_kv', create=True)
@@ -1330,7 +1348,7 @@ def test_pydaos_kv(server, conf):
     print('Closing container and opening new one')
     kv = container.get_kv_by_name('my_test_kv')
 
-def test_alloc_fail(server, conf):
+def test_alloc_fail(server, wf, conf):
     """run 'daos' client binary with fault injection
 
     Enable the fault injection for the daos binary, injecting
@@ -1356,6 +1374,10 @@ def test_alloc_fail(server, conf):
     fid = 1
 
     fatal_errors = False
+
+    # Create at least one container, and record what the output should be when
+    # the command works.
+    container = show_cont(conf, pool)
 
     while True:
         print()
@@ -1383,7 +1405,19 @@ def test_alloc_fail(server, conf):
                                   fi_file=fi_file.name,
                                   fi_valgrind=True)
                 fatal_errors = True
+
+            stdout = rc.stdout.decode('utf-8').strip()
+            stderr = rc.stderr.decode('utf-8').strip()
+            if not stderr.endswith("Out of memory (-1009)") and \
+               'error parsing command line arguments' not in stderr and \
+               stdout != container:
+                print(container)
+                print(stdout)
+                wf.add(rc.fi_loc,
+                       'NORMAL', "Incorrect stderr '{}'".format(stderr),
+                       mtype='Out of memory not reported correctly via stderr')
         except NLTestNoFi:
+
             print('Fault injection did not trigger, returning')
             break
 
@@ -1394,6 +1428,11 @@ def test_alloc_fail(server, conf):
         # through Jenkins.
         # if rc.returncode not in (1, 255):
         #   break
+
+    # Check that some errors were injected.  At the time of writing we get about
+    # 900, so round down a bit and check for that.
+    assert fid > 500
+
     return fatal_errors
 
 def main():
@@ -1430,13 +1469,13 @@ def main():
     elif args.mode == 'overlay':
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
     elif args.mode == 'fi':
-        fatal_errors.add_result(test_alloc_fail(server, conf))
+        fatal_errors.add_result(test_alloc_fail(server, wf, conf))
     elif args.mode == 'all':
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
         test_pydaos_kv(server, conf)
-        fatal_errors.add_result(test_alloc_fail(server, conf))
+        fatal_errors.add_result(test_alloc_fail(server, wf, conf))
     else:
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))

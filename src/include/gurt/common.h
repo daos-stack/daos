@@ -211,6 +211,18 @@ extern "C" {
 		goto label;			\
 	} while (0)
 
+#define D_FPRINTF(...)							\
+	({								\
+		int	printed = fprintf(__VA_ARGS__);			\
+		int	_rc = 0;					\
+									\
+		if (printed < 0) {					\
+			D_ERROR("failed to print to stream\n");		\
+			_rc = -DER_IO;					\
+		}							\
+		_rc;							\
+	})
+
 /* Internal helper macros, not to be called directly by the outside caller */
 #define __D_PTHREAD(fn, x)						\
 	({								\

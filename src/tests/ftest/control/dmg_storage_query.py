@@ -173,4 +173,4 @@ class DmgStorageQuery(ControlTestBase):
             self.get_dmg_output("storage_set_faulty", uuid=dev[0])
 
         # Check that devices are in FAULTY state
-        self.check_dev_state(self.get_device_info(), "FAULTY")
+        self.check_dev_state(self.get_device_info(), "EVICTED")
