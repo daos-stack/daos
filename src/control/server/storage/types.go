@@ -153,7 +153,7 @@ type (
 		TrAddr     string      `json:"trAddr"`
 		// TODO: included only for compatibility with storage_query smd
 		//       commands and should be removed when possible
-		Health    *NvmeHealth  `json:"health"`
+		Health *NvmeHealth `json:"health"`
 	}
 
 	// NvmeController represents a NVMe device controller which includes health
