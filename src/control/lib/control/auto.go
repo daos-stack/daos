@@ -49,8 +49,15 @@ const (
 	// NetDevAny matches any netdetect network device class
 	NetDevAny = math.MaxUint32
 
-	numNvmeMin = 1 // minimum supported number of SSDs in autoconfig
-	numNvmeMax = 8 // maximum supported number of SSDs in autoconfig
+	errNoNuma           = "no numa nodes reported on hosts %s"
+	errUnsupNetDevClass = "unsupported net dev class in request: %s"
+	errInsufNumIfaces   = "insufficient matching %s network interfaces, want %d got %d %+v"
+	errInsufNumPmem     = "insufficient number of pmem devices, want %d got %d"
+	errInvalNumPmem     = "unexpected number of pmem devices, want %d got %d"
+	errInvalPmemNuma    = "pmem devices %v bound to unexpected numa nodes, want %v got %v"
+	errInsufNumNvme     = "insufficient number of nvme devices for numa %d, want %d got %d"
+	errInvalNumCores    = "invalid number of cores for numa %d"
+	errInsufNumCores    = "insufficient cores for %d ssds, want %d got %d"
 )
 
 type (
@@ -88,7 +95,7 @@ func ConfigGenerate(ctx context.Context, req *ConfigGenerateReq) (*ConfigGenerat
 		return resp, err
 	}
 
-	if err := req.checkNetwork(ctx, networkSet, resp); err != nil {
+	if err := req.checkNetwork(networkSet, resp); err != nil {
 		return resp, err
 	}
 
@@ -96,7 +103,7 @@ func ConfigGenerate(ctx context.Context, req *ConfigGenerateReq) (*ConfigGenerat
 		return resp, err
 	}
 
-	if err := req.checkCPUs(ctx, int(networkSet.HostFabric.CoresPerNuma), resp); err != nil {
+	if err := req.checkCPUs(int(networkSet.HostFabric.CoresPerNuma), resp); err != nil {
 		return resp, err
 	}
 
@@ -241,12 +248,11 @@ func (req *ConfigGenerateReq) genConfig(interfaces []*HostFabricInterface) *conf
 //
 // Updates response config field in-place and returns number of cores per NUMA
 // node, which is the same on all hosts in the host set.
-func (req *ConfigGenerateReq) checkNetwork(ctx context.Context, hfs *HostFabricSet, resp *ConfigGenerateResp) error {
+func (req *ConfigGenerateReq) checkNetwork(hfs *HostFabricSet, resp *ConfigGenerateResp) error {
 	switch req.NetClass {
 	case NetDevAny, nd.Ether, nd.Infiniband:
 	default:
-		return errors.Errorf("unsupported net dev class in request: %s",
-			nd.DevClassName(req.NetClass))
+		return errors.Errorf(errUnsupNetDevClass, nd.DevClassName(req.NetClass))
 	}
 	req.Log.Debugf("checkNetwork called with request %v", req)
 
@@ -257,7 +263,7 @@ func (req *ConfigGenerateReq) checkNetwork(ctx context.Context, hfs *HostFabricS
 		// the number of network interfaces and pmem namespaces should
 		// be equal to the number of NUMA nodes for optimal
 		if hfs.HostFabric.NumaCount == 0 {
-			return errors.Errorf("no numa nodes reported on hosts %s", hostSet)
+			return errors.Errorf(errNoNuma, hostSet)
 		}
 
 		req.NumPmem = int(fabricInfo.NumaCount)
@@ -284,9 +290,8 @@ func (req *ConfigGenerateReq) checkNetwork(ctx context.Context, hfs *HostFabricS
 		if req.NetClass != NetDevAny {
 			class = nd.DevClassName(req.NetClass)
 		}
-		return errors.Errorf(
-			"insufficient matching %s network interfaces, want %d got %d %+v",
-			class, req.NumPmem, len(matching), matching)
+		return errors.Errorf(errInsufNumIfaces, class, req.NumPmem,
+			len(matching), matching)
 	}
 
 	req.Log.Debugf("selected network interfaces: %v", matching)
@@ -301,7 +306,7 @@ func (req *ConfigGenerateReq) checkNetwork(ctx context.Context, hfs *HostFabricS
 //
 // Return slice of pmem block device paths with index in slice equal to NUMA
 // node ID.
-func (req *ConfigGenerateReq) validateScmStorage(ctx context.Context, scmNamespaces storage.ScmNamespaces) ([]string, error) {
+func (req *ConfigGenerateReq) validateScmStorage(scmNamespaces storage.ScmNamespaces) ([]string, error) {
 	// sort namespaces so we can assume list index to be numa id
 	sort.Slice(scmNamespaces, func(i, j int) bool {
 		return scmNamespaces[i].NumaNode < scmNamespaces[j].NumaNode
@@ -317,8 +322,7 @@ func (req *ConfigGenerateReq) validateScmStorage(ctx context.Context, scmNamespa
 	req.Log.Debugf("selected pmem devs %v (%d)", pmemPaths, len(pmemPaths))
 
 	if len(pmemPaths) < req.NumPmem {
-		return nil, errors.Errorf("insufficient number of pmem devices, want %d got %d",
-			req.NumPmem, len(pmemPaths))
+		return nil, errors.Errorf(errInsufNumPmem, req.NumPmem, len(pmemPaths))
 	}
 
 	// sanity check that each pmem aligns with expected numa node
@@ -329,8 +333,7 @@ func (req *ConfigGenerateReq) validateScmStorage(ctx context.Context, scmNamespa
 		gotNodes = append(gotNodes, ns.NumaNode)
 
 		if int(ns.NumaNode) != idx {
-			return nil, errors.Errorf(
-				"pmem devices %v bound to unexpected numa nodes, want %v got %v",
+			return nil, errors.Errorf(errInvalPmemNuma,
 				pmemPaths, wantNodes, gotNodes)
 		}
 	}
@@ -342,18 +345,15 @@ func (req *ConfigGenerateReq) validateScmStorage(ctx context.Context, scmNamespa
 //
 // Return slice of slices of NVMe SSD PCI addresses. All SSD addresses in group
 // will be bound to NUMA node ID specified by the index of the outer slice.
+//
+// If zero NVMe SSDs requested (req.NumNvme) then return empty bdev slices.
 func (req *ConfigGenerateReq) validateNvmeStorage(ctrlrs storage.NvmeControllers, numaCount int) ([][]string, error) {
-	minCtrlrs := req.NumNvme
-	switch {
-	case minCtrlrs < numNvmeMin:
-		req.Log.Debugf("minimum number of nvme controllers per NUMA node is %d", numNvmeMin)
-		minCtrlrs = numNvmeMin
-	case minCtrlrs > numNvmeMax:
-		req.Log.Debugf("maximum number of nvme controllers per NUMA node is %d", numNvmeMax)
-		minCtrlrs = numNvmeMax
+	pciAddrsPerNuma := make([][]string, numaCount)
+
+	if req.NumNvme == 0 {
+		return pciAddrsPerNuma, nil
 	}
 
-	pciAddrsPerNuma := make([][]string, numaCount)
 	for _, ctrlr := range ctrlrs {
 		if int(ctrlr.SocketID) > (numaCount - 1) {
 			req.Log.Debugf(
@@ -369,15 +369,8 @@ func (req *ConfigGenerateReq) validateNvmeStorage(ctrlrs storage.NvmeControllers
 		num := len(numaCtrlrs)
 		req.Log.Debugf("nvme pci bound to numa %d: %v (%d)", idx, numaCtrlrs, num)
 
-		switch {
-		case num < minCtrlrs:
-			return nil, errors.Errorf(
-				"insufficient number of nvme devices for numa node %d, want %d got %d",
-				idx, minCtrlrs, num)
-		case num > numNvmeMax:
-			req.Log.Debugf("truncating nvme controllers per NUMA node to maximum of %d",
-				numNvmeMax)
-			pciAddrsPerNuma[idx] = numaCtrlrs[:numNvmeMax]
+		if num < req.NumNvme {
+			return nil, errors.Errorf(errInsufNumNvme, idx, req.NumNvme, num)
 		}
 	}
 
@@ -447,13 +440,13 @@ func (req *ConfigGenerateReq) checkStorage(ctx context.Context, resp *ConfigGene
 
 	// the pmemPaths is a slice of pmem block devices each pinned to NUMA
 	// node ID matching the index in the slice
-	pmemPaths, err := req.validateScmStorage(ctx, scmNamespaces)
+	pmemPaths, err := req.validateScmStorage(scmNamespaces)
 	if err != nil {
 		return errors.WithMessage(err, "validating scm storage requirements")
 	}
 
 	if len(pmemPaths) != len(resp.ConfigOut.Servers) {
-		return errors.Errorf("unexpected number of pmem devices, want %d got %d",
+		return errors.Errorf(errInvalNumPmem,
 			len(pmemPaths), len(resp.ConfigOut.Servers))
 	}
 
@@ -481,8 +474,7 @@ func (req *ConfigGenerateReq) checkStorage(ctx context.Context, resp *ConfigGene
 //
 // The target count should be a multiplier of the number of SSDs and typically
 // daos gets the best performance with 16x targets per I/O Server so target
-// count will be between 12 and 16. This allows to cover 1 to 8 SSDs which is
-// the supported range.
+// count will be between 12 and 20.
 //
 // Validate number of targets + 1 cores are available per IO servers, not
 // usually a problem as sockets normally have at least 18 cores.
@@ -490,39 +482,61 @@ func (req *ConfigGenerateReq) checkStorage(ctx context.Context, resp *ConfigGene
 // Create helper threads for the remaining available cores, e.g. with 24 cores,
 // allocate 7 helper threads. Number of helper threads should never be more than
 // number of targets.
-func (req *ConfigGenerateReq) checkCPUs(ctx context.Context, coresPerNuma int, resp *ConfigGenerateResp) error {
-	for _, ioCfg := range resp.ConfigOut.Servers {
+func (req *ConfigGenerateReq) checkCPUs(coresPerNuma int, resp *ConfigGenerateResp) error {
+	if coresPerNuma < 1 {
+		return errors.Errorf(errInvalNumCores, coresPerNuma)
+	}
+
+	for idx, ioCfg := range resp.ConfigOut.Servers {
 		var numTargets int
-		switch ioCfg.Storage.Bdev.DeviceCount {
+		ssdCount := len(ioCfg.Storage.Bdev.DeviceList)
+		switch ssdCount {
+		case 0:
+			numTargets = 16 // pmem-only mode
 		case 1, 2, 4, 8:
 			numTargets = 16
+		case 3, 6:
+			numTargets = 12
 		case 5:
 			numTargets = 15
 		case 7:
 			numTargets = 14
-		case 3, 6:
-			numTargets = 12
+		case 9:
+			if coresPerNuma > 18 {
+				numTargets = 18
+				break
+			}
+			numTargets = 9
+		case 10:
+			if coresPerNuma > 20 {
+				numTargets = 20
+				break
+			}
+			numTargets = 10
+		default:
+			numTargets = ssdCount
 		}
 
 		coresNeeded := numTargets + 1
 
 		if coresPerNuma < coresNeeded {
-			return errors.Errorf(
-				"insufficient number of cores per numa node, want %d got %d",
-				coresNeeded, coresPerNuma)
+			return errors.Errorf(errInsufNumCores,
+				ssdCount, coresNeeded, coresPerNuma)
 		}
 
-		ioCfg.TargetCount = numTargets
+		req.Log.Debugf("%d targets assigned with %d ssds", numTargets, ssdCount)
+
+		resp.ConfigOut.Servers[idx].TargetCount = numTargets
 
 		numHelpers := coresPerNuma - coresNeeded
 		if numHelpers > numTargets {
 			req.Log.Debugf(
-				"adjusting number of helper threads (%d) to less than number of targets (%d)",
+				"adjusting num helpers (%d) to < num targets (%d)",
 				numHelpers, numTargets)
 			numHelpers = numTargets - 1
 		}
 
-		ioCfg.HelperStreamCount = numHelpers
+		resp.ConfigOut.Servers[idx].HelperStreamCount = numHelpers
 	}
 
 	return nil

@@ -47,7 +47,7 @@ type configGenCmd struct {
 	jsonOutputCmd
 	AccessPoints string `short:"a" long:"access-points" description:"Comma separated list of access point addresses <ipv4addr/hostname>"`
 	NumPmem      int    `short:"p" long:"num-pmem" description:"Minimum number of SCM (pmem) devices required per storage host in DAOS system"`
-	NumNvme      int    `short:"n" long:"num-nvme" description:"Minimum number of NVMe devices required per storage host in DAOS system"`
+	NumNvme      int    `default:"1" short:"n" long:"num-nvme" description:"Minimum number of NVMe devices required per storage host in DAOS system, set to 0 to generate pmem-only config"`
 	NetClass     string `default:"best-available" short:"c" long:"net-class" description:"Network class preferred" choice:"best-available" choice:"ethernet" choice:"infiniband"`
 }
 

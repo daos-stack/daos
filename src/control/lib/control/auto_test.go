@@ -42,20 +42,26 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-var ioCfgWithSSDs = func(t *testing.T, numa int) *ioserver.Config {
-	var pciAddrs []string
-	for _, c := range MockServerScanResp(t, "withSpaceUsage").Nvme.Ctrlrs {
-		if int(c.Socketid) == numa {
-			pciAddrs = append(pciAddrs, c.Pciaddr)
-		}
+var (
+	ioCfg = func(t *testing.T, numa int) *ioserver.Config {
+		return ioserver.NewConfig().
+			WithScmClass(storage.ScmClassDCPM.String()).
+			WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", numa)).
+			WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", numa)).
+			WithBdevClass(storage.BdevClassNvme.String())
 	}
-	return ioserver.NewConfig().
-		WithScmClass(storage.ScmClassDCPM.String()).
-		WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", numa)).
-		WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", numa)).
-		WithBdevClass(storage.BdevClassNvme.String()).
-		WithBdevDeviceList(pciAddrs...)
-}
+
+	ioCfgWithSSDs = func(t *testing.T, numa int) *ioserver.Config {
+		var pciAddrs []string
+		for _, c := range MockServerScanResp(t, "withSpaceUsage").Nvme.Ctrlrs {
+			if int(c.Socketid) == numa {
+				pciAddrs = append(pciAddrs, c.Pciaddr)
+			}
+		}
+
+		return ioCfg(t, numa).WithBdevDeviceList(pciAddrs...)
+	}
+)
 
 func TestControl_AutoConfig_checkStorage(t *testing.T) {
 	dualHostResp := func(r1, r2 string) []*HostResponse {
@@ -86,6 +92,7 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 	for name, tc := range map[string]struct {
 		numPmem       int
 		minNvme       int
+		reqNoNvme     bool
 		uErr          error
 		hostResponses []*HostResponse
 		expHostErrors []*MockHostError
@@ -126,37 +133,52 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 		"no min pmem and 2 numa and 0 pmems present": {
 			numPmem:       2,
 			hostResponses: hostRespNoScmNs,
-			expCheckErr:   errors.New("insufficient number of pmem devices, want 2 got 0"),
+			expCheckErr:   errors.Errorf(errInsufNumPmem, 2, 0),
 		},
 		"2 min pmem and 1 pmems present": {
 			numPmem:       2,
 			hostResponses: hostRespWithScmNs,
-			expCheckErr:   errors.New("insufficient number of pmem devices, want 2 got 1"),
+			expCheckErr:   errors.Errorf(errInsufNumPmem, 2, 1),
 		},
 		"2 min pmem and 2 pmems present": {
 			numPmem:       2,
 			hostResponses: hostRespWithScmNss,
-			expCheckErr:   errors.New("insufficient number of nvme devices for numa node 0, want 1 got 0"),
+			expCheckErr:   errors.Errorf(errInsufNumNvme, 0, 1, 0),
 		},
 		"1 min pmem and 2 pmems present both numa 0": {
 			numPmem:       1,
 			hostResponses: hostRespWithScmNssNumaZero,
-			expCheckErr:   errors.New("insufficient number of nvme devices for numa node 0, want 1 got 0"),
+			expCheckErr:   errors.Errorf(errInsufNumNvme, 0, 1, 0),
 		},
 		"2 min pmem and 2 pmems present both numa 0": {
 			numPmem:       2,
 			hostResponses: hostRespWithScmNssNumaZero,
-			expCheckErr:   errors.New("bound to unexpected numa nodes"),
+			expCheckErr:   errors.New("bound to unexpected numa"),
 		},
 		"no min nvme and 1 ctrlr present on 1 numa node": {
 			numPmem:       2,
 			hostResponses: hostRespWithSingleSSD,
-			expCheckErr:   errors.New("insufficient number of nvme devices for numa node 1, want 1 got 0"),
+			expCheckErr:   errors.Errorf(errInsufNumNvme, 1, 1, 0),
 		},
 		"no min nvme and multiple ctrlrs present on 2 numa nodes": {
 			numPmem:       2,
 			hostResponses: hostRespWithSSDs,
-			expConfigOut:  config.DefaultServer().WithServers(ioCfgWithSSDs(t, 0), ioCfgWithSSDs(t, 1)),
+			expConfigOut: config.DefaultServer().
+				WithServers(ioCfgWithSSDs(t, 0), ioCfgWithSSDs(t, 1)),
+		},
+		"2 min nvme and multiple ctrlrs present on 2 numa nodes": {
+			numPmem:       2,
+			minNvme:       2,
+			hostResponses: hostRespWithSSDs,
+			expConfigOut: config.DefaultServer().
+				WithServers(ioCfgWithSSDs(t, 0), ioCfgWithSSDs(t, 1)),
+		},
+		"0 nvme and multiple ctrlrs present on 2 numa nodes": {
+			numPmem:       2,
+			reqNoNvme:     true,
+			hostResponses: hostRespWithSSDs,
+			expConfigOut: config.DefaultServer().
+				WithServers(ioCfg(t, 0), ioCfg(t, 1)),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -169,6 +191,13 @@ func TestControl_AutoConfig_checkStorage(t *testing.T) {
 					Responses: tc.hostResponses,
 				},
 			})
+
+			if tc.minNvme == 0 {
+				tc.minNvme = 1 // default set in dmg cmd caller
+			}
+			if tc.reqNoNvme {
+				tc.minNvme = 0 // user specifically requests no nvme
+			}
 
 			req := &ConfigGenerateReq{
 				NumPmem: tc.numPmem,
@@ -356,13 +385,14 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 		uErr          error
 		hostResponses []*HostResponse
 		expHostErrors []*MockHostError
-		expConfigOut  *config.Server
+		expNetErr     error
 		expCheckErr   error
+		expConfigOut  *config.Server
 	}{
 		"invoker error": {
 			uErr:          errors.New("unary error"),
 			hostResponses: dualHostRespSame(fabIfs1),
-			expCheckErr:   errors.New("unary error"),
+			expNetErr:     errors.New("unary error"),
 		},
 		"host network scan failed": {
 			hostResponses: hostRespRemoteFail,
@@ -370,7 +400,7 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 				{"host2", "remote failed"},
 				{"host2", "remote failed"},
 			},
-			expCheckErr: errors.New("1 host had errors"),
+			expNetErr: errors.New("1 host had errors"),
 		},
 		"host network scan failed on multiple hosts": {
 			hostResponses: hostRespRemoteFails,
@@ -378,28 +408,28 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 				{"host1", "remote failed"},
 				{"host2", "remote failed"},
 			},
-			expCheckErr: errors.New("2 hosts had errors"),
+			expNetErr: errors.New("2 hosts had errors"),
 		},
 		"host network scan no hosts": {
 			hostResponses: []*HostResponse{},
-			expCheckErr:   errors.New("no host responses"),
-		},
-		"unsupported network class in request": {
-			netDevClass:   2,
-			hostResponses: dualHostResp(fabIfs1, fabIfs2),
-			expCheckErr:   errors.New("unsupported net dev class in request"),
+			expNetErr:     errors.New("no host responses"),
 		},
 		"host network mismatch": {
 			hostResponses: dualHostResp(fabIfs1, fabIfs2),
-			expCheckErr:   errors.New("network hardware not consistent across hosts"),
+			expNetErr:     errors.New("network hardware not consistent across hosts"),
+		},
+		"no min pmem and no numa on one host": {
+			hostResponses: dualHostResp(fabIfs1, fabIfs1wNuma),
+			expNetErr:     errors.New("network hardware not consistent across hosts"),
+		},
+		"unsupported network class in request": {
+			netDevClass:   2,
+			hostResponses: dualHostRespSame(fabIfs1),
+			expCheckErr:   errors.New("unsupported net dev class in request"),
 		},
 		"no min pmem and no numa": {
 			hostResponses: dualHostRespSame(fabIfs1),
 			expCheckErr:   errors.New("no numa nodes reported on hosts host[1-2]"),
-		},
-		"no min pmem and no numa on one host": {
-			hostResponses: dualHostResp(fabIfs1, fabIfs1wNuma),
-			expCheckErr:   errors.New("network hardware not consistent across hosts"),
 		},
 		"no min pmem and two numa": {
 			hostResponses: dualHostRespSame(fabIfs1wNuma),
@@ -519,25 +549,126 @@ func TestControl_AutoConfig_checkNetwork(t *testing.T) {
 				HostErrorsResp: MockHostErrorsResp(t, tc.expHostErrors...),
 			}
 
+			networkSet, gotNetErr := req.getSingleNetworkSet(context.TODO(), resp)
+			common.CmpErr(t, tc.expNetErr, gotNetErr)
+			if tc.expNetErr != nil {
+				return
+			}
+
+			gotCheckErr := req.checkNetwork(networkSet, resp)
+			common.CmpErr(t, tc.expCheckErr, gotCheckErr)
+			if tc.expCheckErr != nil {
+				return
+			}
+
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(security.CertificateConfig{},
+					config.Server{}),
+				cmpopts.IgnoreFields(config.Server{}, "GetDeviceClassFn"),
+			}
+			cmpOpts = append(cmpOpts, defResCmpOpts()...)
+
+			diff := cmp.Diff(expResp.GetHostErrors(), resp.GetHostErrors(), cmpOpts...)
+			if diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+
+			if diff := cmp.Diff(expResp, resp, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_AutoConfig_checkCpus(t *testing.T) {
+	errCores := func(ssds, want, got int) error {
+		return errors.Errorf(errInsufNumCores, ssds, want, got)
+	}
+
+	for name, tc := range map[string]struct {
+		numCores      int
+		bdevCounts    []int // one for each I/O Server in resp.ConfigOut
+		expTgtCounts  []int
+		expHlprCounts []int
+		expCheckErr   error
+	}{
+		"no cores":           {expCheckErr: errors.Errorf(errInvalNumCores, 0)},
+		"24 cores no ssds":   {24, []int{0}, []int{16}, []int{7}, nil},
+		"24 cores 1 ssds":    {24, []int{1}, []int{16}, []int{7}, nil},
+		"24 cores 2 ssds":    {24, []int{2}, []int{16}, []int{7}, nil},
+		"24 cores 3 ssds":    {24, []int{3}, []int{12}, []int{11}, nil},
+		"24 cores 4 ssds":    {24, []int{4}, []int{16}, []int{7}, nil},
+		"24 cores 5 ssds":    {24, []int{5}, []int{15}, []int{8}, nil},
+		"24 cores 8 ssds":    {24, []int{8}, []int{16}, []int{7}, nil},
+		"24 cores 9 ssds":    {24, []int{9}, []int{18}, []int{5}, nil},
+		"24 cores 10 ssds":   {24, []int{10}, []int{20}, []int{3}, nil},
+		"24 cores 16 ssds":   {24, []int{16}, []int{16}, []int{7}, nil},
+		"18 cores no ssds":   {18, []int{0}, []int{16}, []int{1}, nil},
+		"18 cores 1 ssds":    {18, []int{1}, []int{16}, []int{1}, nil},
+		"18 cores 2 ssds":    {18, []int{2}, []int{16}, []int{1}, nil},
+		"18 cores 3 ssds":    {18, []int{3}, []int{12}, []int{5}, nil},
+		"18 cores 4 ssds":    {18, []int{4}, []int{16}, []int{1}, nil},
+		"18 cores 5 ssds":    {18, []int{5}, []int{15}, []int{2}, nil},
+		"18 cores 8 ssds":    {18, []int{8}, []int{16}, []int{1}, nil},
+		"18 cores 9 ssds":    {18, []int{9}, []int{9}, []int{8}, nil},
+		"18 cores 10 ssds":   {18, []int{10}, []int{10}, []int{7}, nil},
+		"18 cores 16 ssds":   {18, []int{16}, []int{16}, []int{1}, nil},
+		"16 cores no ssds":   {16, []int{0}, []int{16}, []int{1}, errCores(0, 17, 16)},
+		"16 cores 1 ssds":    {16, []int{1}, []int{16}, []int{1}, errCores(1, 17, 16)},
+		"16 cores 2 ssds":    {16, []int{2}, []int{16}, []int{1}, errCores(2, 17, 16)},
+		"16 cores 3 ssds":    {16, []int{3}, []int{12}, []int{3}, nil},
+		"16 cores 4 ssds":    {16, []int{4}, []int{16}, []int{1}, errCores(4, 17, 16)},
+		"16 cores 5 ssds":    {16, []int{5}, []int{15}, []int{0}, nil},
+		"16 cores 6 ssds":    {16, []int{6}, []int{12}, []int{3}, nil},
+		"16 cores 7 ssds":    {16, []int{7}, []int{14}, []int{1}, nil},
+		"16 cores 8 ssds":    {16, []int{8}, []int{16}, []int{1}, errCores(8, 17, 16)},
+		"16 cores 9 ssds":    {16, []int{9}, []int{9}, []int{6}, nil},
+		"16 cores 10 ssds":   {16, []int{10}, []int{10}, []int{5}, nil},
+		"16 cores 16 ssds":   {16, []int{16}, []int{16}, []int{1}, errCores(16, 17, 16)},
+		"32 cores 8:12 ssds": {32, []int{8, 12}, []int{16, 12}, []int{15, 11}, nil},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			req := &ConfigGenerateReq{
+				Log: log,
+			}
+
+			var ioCfgs []*ioserver.Config
+			for idx, count := range tc.bdevCounts {
+				ioCfgs = append(ioCfgs, ioCfg(t, idx).
+					WithBdevDeviceList(common.MockPCIAddrs(count)...))
+			}
+
+			resp := &ConfigGenerateResp{
+				ConfigOut: config.DefaultServer().WithServers(ioCfgs...),
+			}
+
 			cmpOpts := []cmp.Option{
 				cmpopts.IgnoreUnexported(security.CertificateConfig{}, config.Server{}),
 				cmpopts.IgnoreFields(config.Server{}, "GetDeviceClassFn"),
 			}
 			cmpOpts = append(cmpOpts, defResCmpOpts()...)
 
-			_, gotCheckErr := req.checkNetwork(context.Background(), resp)
-
-			if diff := cmp.Diff(expResp.GetHostErrors(), resp.GetHostErrors(), cmpOpts...); diff != "" {
-				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
-			}
-
+			gotCheckErr := req.checkCPUs(tc.numCores, resp)
 			common.CmpErr(t, tc.expCheckErr, gotCheckErr)
 			if tc.expCheckErr != nil {
 				return
 			}
 
-			if diff := cmp.Diff(expResp, resp, cmpOpts...); diff != "" {
-				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			if len(tc.expTgtCounts) != len(resp.ConfigOut.Servers) {
+				t.Fatal("bad test case, expTgtCounts != nr I/O Servers in cfg")
+			}
+			if len(tc.expHlprCounts) != len(resp.ConfigOut.Servers) {
+				t.Fatal("bad test case, expHlprCounts != nr I/O Servers in cfg")
+			}
+
+			for idx, ioCfg := range resp.ConfigOut.Servers {
+				common.AssertEqual(t, tc.expTgtCounts[idx],
+					ioCfg.TargetCount, "unexpected target count")
+				common.AssertEqual(t, tc.expHlprCounts[idx],
+					ioCfg.HelperStreamCount, "unexpected helper thread count")
 			}
 		})
 	}
