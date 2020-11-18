@@ -57,7 +57,7 @@ crt_hdlr_ctl_log_add_msg(crt_rpc_t *rpc_req)
 	struct crt_ctl_log_add_msg_out	*out_args;
 	int				rc = 0;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	in_args = crt_req_get(rpc_req);
 	out_args = crt_reply_get(rpc_req);
 
@@ -73,7 +73,7 @@ crt_hdlr_ctl_log_add_msg(crt_rpc_t *rpc_req)
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
 		D_ERROR("crt_reply_send() failed. rc: %d\n", rc);
-	DBG_EXIT();
+	CRT_EXIT();
 }
 
 void
@@ -83,7 +83,7 @@ crt_hdlr_ctl_log_set(crt_rpc_t *rpc_req)
 	struct crt_ctl_log_set_out	*out_args;
 	int				rc = 0;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	in_args = crt_req_get(rpc_req);
 	out_args = crt_reply_get(rpc_req);
 
@@ -93,7 +93,7 @@ crt_hdlr_ctl_log_set(crt_rpc_t *rpc_req)
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
 		D_ERROR("crt_reply_send() failed. rc: %d\n", rc);
-	DBG_EXIT();
+	CRT_EXIT();
 }
 
 void
@@ -104,7 +104,7 @@ crt_hdlr_ctl_fi_attr_set(crt_rpc_t *rpc_req)
 	struct d_fault_attr_t		 fa_in = {0};
 	int				 rc;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	in_args_fi_attr = crt_req_get(rpc_req);
 	out_args_fi_attr = crt_reply_get(rpc_req);
 
@@ -122,7 +122,7 @@ crt_hdlr_ctl_fi_attr_set(crt_rpc_t *rpc_req)
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
 		D_ERROR("crt_reply_send() failed. rc: %d\n", rc);
-	DBG_EXIT();
+	CRT_EXIT();
 }
 
 
@@ -255,7 +255,7 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 	struct crt_opc_info	*opc_info;
 	int			rc = 0;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	D_ASSERT(priv_allocated != NULL);
 
 	D_DEBUG(DB_TRACE, "entering (opc: %#x)\n", opc);
@@ -290,14 +290,14 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 		  &rpc_priv->crp_pub);
 
 out:
-	DBG_EXIT();
+	CRT_EXIT();
 	return rc;
 }
 
 void
 crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv)
 {
-	DBG_ENTRY();
+	CRT_ENTRY();
 	if (rpc_priv == NULL)
 		return;
 
@@ -310,13 +310,13 @@ crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv)
 	D_SPIN_DESTROY(&rpc_priv->crp_lock);
 
 	D_FREE(rpc_priv);
-	DBG_EXIT();
+	CRT_EXIT();
 }
 
 static inline void
 crt_rpc_priv_set_ep(struct crt_rpc_priv *rpc_priv, crt_endpoint_t *tgt_ep)
 {
-	DBG_ENTRY();
+	CRT_ENTRY();
 	if (tgt_ep->ep_grp == NULL) {
 		rpc_priv->crp_pub.cr_ep.ep_grp  =
 			&crt_gdata.cg_grp->gg_primary_grp->gp_pub;
@@ -326,7 +326,7 @@ crt_rpc_priv_set_ep(struct crt_rpc_priv *rpc_priv, crt_endpoint_t *tgt_ep)
 	rpc_priv->crp_pub.cr_ep.ep_rank = tgt_ep->ep_rank;
 	rpc_priv->crp_pub.cr_ep.ep_tag = tgt_ep->ep_tag;
 	rpc_priv->crp_have_ep = 1;
-	DBG_EXIT();
+	CRT_EXIT();
 }
 
 
@@ -357,7 +357,7 @@ crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 	struct crt_grp_priv	*grp_priv = NULL;
 	int			 rc;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	D_ASSERT(crt_ctx != CRT_CONTEXT_NULL && req != NULL);
 
 	rc = crt_rpc_priv_alloc(opc, &rpc_priv, forward);
@@ -390,7 +390,7 @@ crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 
 	*req = &rpc_priv->crp_pub;
 out:
-	DBG_EXIT();
+	CRT_EXIT();
 	return rc;
 }
 
@@ -402,7 +402,7 @@ crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	struct crt_grp_priv *grp_priv = NULL;
 	struct crt_rpc_priv	*rpc_priv;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	if (crt_ctx == CRT_CONTEXT_NULL || req == NULL) {
 		D_ERROR("invalid parameter (NULL crt_ctx or req).\n");
 		D_GOTO(out, rc = -DER_INVAL);
@@ -432,7 +432,7 @@ crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	}
 
 out:
-	DBG_EXIT();
+	CRT_EXIT();
 	return rc;
 }
 int
@@ -442,7 +442,7 @@ crt_req_set_endpoint(crt_rpc_t *req, crt_endpoint_t *tgt_ep)
 	struct crt_grp_priv	*grp_priv;
 	int			 rc = 0;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	if (req == NULL || tgt_ep == NULL) {
 		D_ERROR("invalid parameter (NULL req or tgt_ep).\n");
 		D_GOTO(out, rc = -DER_INVAL);
@@ -466,7 +466,7 @@ crt_req_set_endpoint(crt_rpc_t *req, crt_endpoint_t *tgt_ep)
 		  req->cr_ep.ep_rank, req->cr_ep.ep_tag);
 
 out:
-	DBG_EXIT();
+	CRT_EXIT();
 	return rc;
 }
 
@@ -476,7 +476,7 @@ crt_req_set_timeout(crt_rpc_t *req, uint32_t timeout_sec)
 	struct crt_rpc_priv	*rpc_priv;
 	int			 rc = 0;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	if (req == NULL || timeout_sec == 0) {
 		D_ERROR("invalid parameter (NULL req or zero timeout_sec).\n");
 		D_GOTO(out, rc = -DER_INVAL);
@@ -486,7 +486,7 @@ crt_req_set_timeout(crt_rpc_t *req, uint32_t timeout_sec)
 	rpc_priv->crp_timeout_sec = timeout_sec;
 
 out:
-	DBG_EXIT();
+	CRT_EXIT();
 	return rc;
 }
 
@@ -495,7 +495,7 @@ void
 crt_req_destroy(struct crt_rpc_priv *rpc_priv)
 {
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	if (rpc_priv->crp_reply_pending == 1) {
 		D_WARN("no reply sent for rpc_priv %p (opc: %#x).\n",
 		       rpc_priv, rpc_priv->crp_pub.cr_opc);
@@ -507,7 +507,7 @@ crt_req_destroy(struct crt_rpc_priv *rpc_priv)
 	}
 
 	crt_hg_req_destroy(rpc_priv);
-	DBG_EXIT();
+	CRT_EXIT();
 }
 
 int
@@ -516,7 +516,7 @@ crt_req_addref(crt_rpc_t *req)
 	struct crt_rpc_priv	*rpc_priv;
 	int			rc = 0;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	if (req == NULL) {
 		D_ERROR("invalid parameter (NULL req).\n");
 		D_GOTO(out, rc = -DER_INVAL);
@@ -526,7 +526,7 @@ crt_req_addref(crt_rpc_t *req)
 	RPC_ADDREF(rpc_priv);
 
 out:
-	DBG_EXIT();
+	CRT_EXIT();
 	return rc;
 }
 
@@ -536,7 +536,7 @@ crt_req_decref(crt_rpc_t *req)
 	struct crt_rpc_priv	*rpc_priv;
 	int			rc = 0;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	if (req == NULL) {
 		D_ERROR("invalid parameter (NULL req).\n");
 		D_GOTO(out, rc = -DER_INVAL);
@@ -546,7 +546,7 @@ crt_req_decref(crt_rpc_t *req)
 	RPC_DECREF(rpc_priv);
 
 out:
-	DBG_EXIT();
+	CRT_EXIT();
 	return rc;
 }
 
@@ -584,7 +584,7 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	crt_rpc_t			*lookup_rpc;
 	int				rc = 0;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	chained_rpc_priv = cb_info->cci_arg;
 	lookup_rpc  = cb_info->cci_rpc;
 
@@ -659,7 +659,7 @@ out:
 
 	/* Addref done in crt_issue_uri_lookup() */
 	RPC_DECREF(chained_rpc_priv);
-	DBG_EXIT();
+	CRT_EXIT();
 }
 
 /**
@@ -675,7 +675,7 @@ crt_client_get_contact_rank(crt_context_t crt_ctx, crt_group_t *grp,
 	char			*cached_uri = NULL;
 	struct crt_context	*ctx;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	grp_priv = crt_grp_pub2priv(grp);
 	ctx = crt_ctx;
 
@@ -693,7 +693,7 @@ crt_client_get_contact_rank(crt_context_t crt_ctx, crt_group_t *grp,
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
 out:
-	DBG_EXIT();
+	CRT_EXIT();
 	return contact_rank;
 }
 
@@ -705,7 +705,7 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 	crt_group_t	*grp;
 	int		rc;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
 	ctx = rpc_priv->crp_pub.cr_ctx;
 	grp = tgt_ep->ep_grp;
@@ -741,7 +741,7 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 	rc = crt_issue_uri_lookup(ctx, grp, tgt_ep->ep_rank, 0,
 				  tgt_ep->ep_rank, tgt_ep->ep_tag, rpc_priv);
 out:
-	DBG_EXIT();
+	CRT_EXIT();
 	return rc;
 }
 
@@ -756,7 +756,7 @@ crt_issue_uri_lookup(crt_context_t ctx, crt_group_t *group,
 	struct crt_uri_lookup_in	*ul_in;
 	int				rc;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	target_ep.ep_rank = contact_rank;
 	target_ep.ep_tag = contact_tag;
 	target_ep.ep_grp = group;
@@ -787,7 +787,7 @@ crt_issue_uri_lookup(crt_context_t ctx, crt_group_t *group,
 	}
 
 exit:
-	DBG_EXIT();
+	CRT_EXIT();
 	return rc;
 }
 
@@ -800,7 +800,7 @@ crt_lc_hg_addr_fill(struct crt_rpc_priv *rpc_priv)
 	crt_endpoint_t		*tgt_ep;
 	struct crt_context	*ctx;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	req = &rpc_priv->crp_pub;
 	ctx = req->cr_ctx;
 	tgt_ep = &req->cr_ep;
@@ -809,7 +809,7 @@ crt_lc_hg_addr_fill(struct crt_rpc_priv *rpc_priv)
 
 	crt_grp_lc_lookup(grp_priv, ctx->cc_idx, tgt_ep->ep_rank,
 			  tgt_ep->ep_tag, NULL, &rpc_priv->crp_hg_addr);
-	DBG_EXIT();
+	CRT_EXIT();
 }
 
 bool
@@ -820,7 +820,7 @@ crt_req_is_self(struct crt_rpc_priv *rpc_priv)
 	bool			 same_group;
 	bool			 same_rank;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	D_ASSERT(rpc_priv != NULL);
 	grp_priv_self = crt_grp_pub2priv(NULL);
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
@@ -829,7 +829,7 @@ crt_req_is_self(struct crt_rpc_priv *rpc_priv)
 					  grp_priv_self->gp_pub.cg_grpid);
 	same_rank = tgt_ep->ep_rank == grp_priv_self->gp_self;
 
-	DBG_EXIT();
+	CRT_EXIT();
 	return (same_group && same_rank);
 }
 
@@ -845,7 +845,7 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 	int			 rc = 0;
 	crt_phy_addr_t		 base_addr = NULL;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	req = &rpc_priv->crp_pub;
 	ctx = req->cr_ctx;
 	tgt_ep = &req->cr_ep;
@@ -927,7 +927,7 @@ out:
 	if (base_addr)
 		*uri_exists = true;
 	D_FREE(uri);
-	DBG_EXIT();
+	CRT_EXIT();
 	return rc;
 }
 
@@ -943,7 +943,7 @@ crt_req_hg_addr_lookup(struct crt_rpc_priv *rpc_priv)
 	struct crt_context	*crt_ctx;
 	int			 rc = 0;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
 	hg_ret = HG_Addr_lookup2(crt_ctx->cc_hg_ctx.chc_hgcla,
@@ -980,7 +980,7 @@ finish_rpc:
 	}
 
 out:
-	DBG_EXIT();
+	CRT_EXIT();
 	return rc;
 }
 
@@ -991,7 +991,7 @@ crt_req_send_immediately(struct crt_rpc_priv *rpc_priv)
 	struct crt_context		*ctx;
 	int				 rc = 0;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	D_ASSERT(rpc_priv != NULL);
 	D_ASSERT(rpc_priv->crp_hg_addr != NULL);
 
@@ -1013,7 +1013,7 @@ crt_req_send_immediately(struct crt_rpc_priv *rpc_priv)
 			  "crt_hg_req_send failed, rc: %d\n", rc);
 	}
 out:
-	DBG_EXIT();
+	CRT_EXIT();
 	return rc;
 }
 
@@ -1024,7 +1024,7 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 	bool		uri_exists = false;
 	int		rc = 0;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	req = &rpc_priv->crp_pub;
 	switch (rpc_priv->crp_state) {
 	case RPC_STATE_QUEUED:
@@ -1087,7 +1087,7 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 out:
 	if (rc != 0)
 		rpc_priv->crp_state = RPC_STATE_INITED;
-	DBG_EXIT();
+	CRT_EXIT();
 	return rc;
 }
 
@@ -1097,7 +1097,7 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 	struct crt_rpc_priv	*rpc_priv = NULL;
 	int			 rc = 0;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	if (req == NULL) {
 		D_ERROR("invalid parameter (NULL req).\n");
 		if (complete_cb != NULL) {
@@ -1179,7 +1179,7 @@ out:
 
 	/* corresponds to RPC_ADDREF in this function */
 	RPC_DECREF(rpc_priv);
-	DBG_EXIT();
+	CRT_EXIT();
 	return rc;
 }
 
@@ -1189,7 +1189,7 @@ crt_reply_send(crt_rpc_t *req)
 	struct crt_rpc_priv	*rpc_priv = NULL;
 	int			rc = 0;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	if (req == NULL) {
 		D_ERROR("invalid parameter (NULL req).\n");
 		D_GOTO(out, rc = -DER_INVAL);
@@ -1218,7 +1218,7 @@ crt_reply_send(crt_rpc_t *req)
 
 	rpc_priv->crp_reply_pending = 0;
 out:
-	DBG_EXIT();
+	CRT_EXIT();
 	return rc;
 }
 
@@ -1228,7 +1228,7 @@ crt_req_abort(crt_rpc_t *req)
 	struct crt_rpc_priv	*rpc_priv;
 	int			 rc = 0;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	if (req == NULL) {
 		D_ERROR("invalid parameter (NULL req).\n");
 		D_GOTO(out, rc = -DER_INVAL);
@@ -1262,7 +1262,7 @@ crt_req_abort(crt_rpc_t *req)
 	}
 
 out:
-	DBG_EXIT();
+	CRT_EXIT();
 	return rc;
 }
 
@@ -1271,7 +1271,7 @@ crt_rpc_inout_buff_fini(struct crt_rpc_priv *rpc_priv)
 {
 	crt_rpc_t	*rpc_pub;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	D_ASSERT(rpc_priv != NULL);
 	rpc_pub = &rpc_priv->crp_pub;
 
@@ -1285,7 +1285,7 @@ crt_rpc_inout_buff_fini(struct crt_rpc_priv *rpc_priv)
 		rpc_pub->cr_output_size = 0;
 		rpc_pub->cr_output = NULL;
 	}
-	DBG_EXIT();
+	CRT_EXIT();
 }
 
 static void
@@ -1294,7 +1294,7 @@ crt_rpc_inout_buff_init(struct crt_rpc_priv *rpc_priv)
 	crt_rpc_t		*rpc_pub;
 	struct crt_opc_info	*opc_info;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	D_ASSERT(rpc_priv != NULL);
 	rpc_pub = &rpc_priv->crp_pub;
 	D_ASSERT(rpc_pub->cr_input == NULL);
@@ -1320,7 +1320,7 @@ crt_rpc_inout_buff_init(struct crt_rpc_priv *rpc_priv)
 			opc_info->coi_output_offset;
 		rpc_pub->cr_output_size = opc_info->coi_crf->crf_size_out;
 	}
-	DBG_EXIT();
+	CRT_EXIT();
 }
 
 static inline void
@@ -1328,7 +1328,7 @@ crt_common_hdr_init(struct crt_rpc_priv *rpc_priv, crt_opcode_t opc)
 {
 	uint64_t	rpcid;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	rpcid = atomic_fetch_add(&crt_gdata.cg_rpcid, 1);
 
 	rpc_priv->crp_req_hdr.cch_opc = opc;
@@ -1336,7 +1336,7 @@ crt_common_hdr_init(struct crt_rpc_priv *rpc_priv, crt_opcode_t opc)
 
 	rpc_priv->crp_reply_hdr.cch_opc = opc;
 	rpc_priv->crp_reply_hdr.cch_rpcid = rpcid;
-	DBG_EXIT();
+	CRT_EXIT();
 }
 
 int
@@ -1347,7 +1347,7 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 	struct crt_context *ctx = crt_ctx;
 	int rc;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	rc = D_SPIN_INIT(&rpc_priv->crp_lock, PTHREAD_PROCESS_PRIVATE);
 	if (rc != 0)
 		D_GOTO(exit, rc);
@@ -1375,7 +1375,7 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 	rpc_priv->crp_timeout_sec = ctx->cc_timeout_sec;
 
 exit:
-	DBG_EXIT();
+	CRT_EXIT();
 	return rc;
 }
 
@@ -1392,7 +1392,7 @@ crt_handle_rpc(void *arg)
 	crt_rpc_t		*rpc_pub = arg;
 	struct crt_rpc_priv	*rpc_priv;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	D_ASSERT(rpc_pub != NULL);
 
 	rpc_priv = container_of(rpc_pub, struct crt_rpc_priv, crp_pub);
@@ -1416,7 +1416,7 @@ crt_handle_rpc(void *arg)
 	 */
 	if (rpc_priv->crp_srv || (rpc_priv->crp_coll && !rpc_priv->crp_srv))
 		RPC_DECREF(rpc_priv);
-	DBG_EXIT();
+	CRT_EXIT();
 }
 
 int
@@ -1427,7 +1427,7 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 	bool			skip_check = false;
 	d_rank_t		self_rank;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	D_ASSERT(rpc_priv != NULL);
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
@@ -1481,7 +1481,7 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 	}
 
 out:
-	DBG_EXIT();
+	CRT_EXIT();
 	return rc;
 }
 
@@ -1490,7 +1490,7 @@ timeout_bp_node_enter(struct d_binheap *h, struct d_binheap_node *e)
 {
 	struct crt_rpc_priv	*rpc_priv;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	D_ASSERT(h != NULL);
 	D_ASSERT(e != NULL);
 
@@ -1498,7 +1498,7 @@ timeout_bp_node_enter(struct d_binheap *h, struct d_binheap_node *e)
 
 	RPC_TRACE(DB_NET, rpc_priv, "entering the timeout binheap.\n");
 
-	DBG_EXIT();
+	CRT_EXIT();
 	return 0;
 }
 
@@ -1544,7 +1544,7 @@ crt_req_src_rank_get(crt_rpc_t *rpc, d_rank_t *rank)
 	struct crt_rpc_priv	*rpc_priv = NULL;
 	int			rc = 0;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	if (rpc == NULL) {
 		D_ERROR("NULL rpc passed\n");
 		D_GOTO(out, rc = -DER_INVAL);
@@ -1560,7 +1560,7 @@ crt_req_src_rank_get(crt_rpc_t *rpc, d_rank_t *rank)
 	*rank = rpc_priv->crp_req_hdr.cch_src_rank;
 
 out:
-	DBG_EXIT();
+	CRT_EXIT();
 	return rc;
 }
 
@@ -1570,7 +1570,7 @@ crt_req_dst_rank_get(crt_rpc_t *rpc, d_rank_t *rank)
 	struct crt_rpc_priv	*rpc_priv = NULL;
 	int			rc = 0;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	if (rpc == NULL) {
 		D_ERROR("NULL rpc passed\n");
 		D_GOTO(out, rc = -DER_INVAL);
@@ -1586,7 +1586,7 @@ crt_req_dst_rank_get(crt_rpc_t *rpc, d_rank_t *rank)
 	*rank = rpc_priv->crp_req_hdr.cch_dst_rank;
 
 out:
-	DBG_EXIT();
+	CRT_EXIT();
 	return rc;
 }
 
@@ -1596,7 +1596,7 @@ crt_req_dst_tag_get(crt_rpc_t *rpc, uint32_t *tag)
 	struct crt_rpc_priv	*rpc_priv = NULL;
 	int			rc = 0;
 
-	DBG_ENTRY();
+	CRT_ENTRY();
 	if (rpc == NULL) {
 		D_ERROR("NULL rpc passed\n");
 		D_GOTO(out, rc = -DER_INVAL);
@@ -1613,6 +1613,6 @@ crt_req_dst_tag_get(crt_rpc_t *rpc, uint32_t *tag)
 	*tag = rpc_priv->crp_req_hdr.cch_dst_tag;
 
 out:
-	DBG_EXIT();
+	CRT_EXIT();
 	return rc;
 }
