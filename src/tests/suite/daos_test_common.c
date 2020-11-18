@@ -82,6 +82,7 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		char		*env;
 		int		 size_gb;
 		daos_size_t	 nvme_size;
+		d_rank_list_t	 *rank_list = NULL;
 
 		env = getenv("POOL_SCM_SIZE");
 		if (env) {
@@ -104,19 +105,27 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 			nvme_size = (daos_size_t)size_gb << 30;
 		}
 
+		if (arg->pool_node_size > 0) {
+			rank_list = d_rank_list_alloc(arg->pool_node_size);
+			if (rank_list == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
 		print_message("setup: creating pool, SCM size="DF_U64" GB, "
 			      "NVMe size="DF_U64" GB\n",
 			      (outpool->pool_size >> 30), nvme_size >> 30);
 		rc = dmg_pool_create(dmg_config_file,
 				     arg->uid, arg->gid, arg->group,
-				     NULL, outpool->pool_size, nvme_size,
+				     rank_list, outpool->pool_size, nvme_size,
 				     prop, outpool->svc, outpool->pool_uuid);
 		if (rc)
 			print_message("dmg_pool_create failed, rc: %d\n", rc);
 		else
 			print_message("setup: created pool "DF_UUIDF"\n",
 				       DP_UUID(outpool->pool_uuid));
+		if (rank_list)
+			d_rank_list_free(rank_list);
 	}
+out:
 	/** broadcast pool create result */
 	if (arg->multi_rank) {
 		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -276,7 +285,7 @@ test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *po_prop,
 
 int
 test_setup(void **state, unsigned int step, bool multi_rank,
-	   daos_size_t pool_size, struct test_pool *pool)
+	   daos_size_t pool_size, int node_size, struct test_pool *pool)
 {
 	test_arg_t		*arg = *state;
 	struct timeval		 now;
@@ -316,6 +325,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		arg->uid = geteuid();
 		arg->gid = getegid();
 
+		arg->pool_node_size = node_size;
 		arg->group = server_group;
 		arg->dmg_config = dmg_config_file;
 		uuid_clear(arg->pool.pool_uuid);
@@ -842,7 +852,7 @@ daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 		dts_append_config(dmg_cmd, " -o %s", dmg_config);
 
 	rc = system(dmg_cmd);
-	print_message("%s rc 0x%x\n", dmg_cmd, rc);
+	print_message("%s rc %#x\n", dmg_cmd, rc);
 	assert_int_equal(rc, 0);
 }
 
@@ -935,7 +945,7 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 		dts_append_config(dmg_cmd, " -o %s", arg->dmg_config);
 
 	rc = system(dmg_cmd);
-	print_message(" %s rc 0x%x\n", dmg_cmd, rc);
+	print_message(" %s rc %#x\n", dmg_cmd, rc);
 	assert_int_equal(rc, 0);
 }
 
@@ -1141,8 +1151,8 @@ int verify_server_log_mask(char *host, char *server_config_file,
 	return 0;
 }
 
-int get_server_log_file(char *host, char *server_config_file,
-			char *log_file)
+int get_log_file(char *host, char *server_config_file,
+		 char *key_name, char *log_file)
 {
 	char	command[256];
 	size_t	len = 0;
@@ -1158,12 +1168,12 @@ int get_server_log_file(char *host, char *server_config_file,
 		return -DER_INVAL;
 
 	while ((read = getline(&line, &len, fp)) != -1) {
-		if (strstr(line, " log_file") != NULL)
+		if (strstr(line, key_name) != NULL)
 			strcat(log_file, strrchr(line, ':') + 1);
 	}
 
 	pclose(fp);
-	free(line);
+	D_FREE(line);
 	return 0;
 }
 
@@ -1230,6 +1240,47 @@ int wait_and_verify_blobstore_state(uuid_t bs_uuid, char *expected_state,
 			return 0;
 
 		sleep(MAX_BS_STATE_WAIT);
+		retry_cnt++;
+	};
+
+	return -DER_TIMEDOUT;
+}
+
+#define MAX_POOL_TGT_STATE_WAIT	   5 /* 5sec sleep between tgt state queries */
+#define MAX_POOL_TGT_STATE_RETRY   24 /* max timeout of 24 * 5sec= 2min */
+
+int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
+				   char *expected_state)
+{
+	daos_target_info_t	tgt_info = { 0 };
+	int			retry_cnt;
+	int			rc;
+
+	retry_cnt = 0;
+	while (retry_cnt <= MAX_POOL_TGT_STATE_RETRY) {
+		char *expected_state_dup = strdup(expected_state);
+		char *state = strtok(expected_state_dup, "|");
+
+		rc = daos_pool_query_target(poh, tgtidx, rank, &tgt_info, NULL);
+			if (rc)
+				return rc;
+
+		/* multiple states not present in expected_state str */
+		if (state == NULL) {
+			if (strcmp(daos_target_state_enum_to_str(tgt_info.ta_state),
+				   expected_state) == 0)
+				return 0;
+		/* multiple states separated by a '|' in expected_state str */
+		} else {
+			while (state != NULL) {
+				if (strcmp(daos_target_state_enum_to_str(tgt_info.ta_state),
+					   state) == 0)
+					return 0;
+				state = strtok(NULL, "|");
+			};
+		}
+
+		sleep(MAX_POOL_TGT_STATE_WAIT);
 		retry_cnt++;
 	};
 

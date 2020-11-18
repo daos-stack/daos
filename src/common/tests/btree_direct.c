@@ -490,6 +490,7 @@ sk_btr_kv_operate(void **state)
 		switch (opc) {
 		default:
 			fail_msg("Invalid opcode\n");
+			break;
 		case BTR_OPC_UPDATE:
 			d_iov_set(&val_iov, val, strlen(val) + 1);
 			rc = dbtree_update(sk_toh, &key_iov, &val_iov);
@@ -789,6 +790,17 @@ sk_btr_gen_keys(struct kv_node *kv, unsigned int key_nr)
 	}
 }
 
+static void
+sk_btr_destroy_keys(struct kv_node *kv, unsigned int key_nr)
+{
+	int	 i;
+
+	for (i = 0; i < key_nr; i++) {
+		D_FREE(kv[i].key.iov_buf);
+		D_FREE(kv[i].val.iov_buf);
+	}
+}
+
 static int
 sk_btr_check_order(struct kv_node *kv, unsigned int key_nr)
 {
@@ -963,6 +975,7 @@ sk_btr_batch_oper(void **state)
 		}
 	}
 	sk_btr_query(NULL);
+	sk_btr_destroy_keys(kv, key_nr);
 	D_FREE(kv);
 }
 
@@ -1037,6 +1050,7 @@ sk_btr_perf(void **state)
 	}
 	now = dts_time_now();
 	D_PRINT("delete = %10.2f/sec\n", key_nr / (now - then));
+	sk_btr_destroy_keys(kv, key_nr);
 	D_FREE(kv);
 }
 

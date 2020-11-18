@@ -36,7 +36,7 @@
 #include <daos/drpc.pb-c.h>
 #include <daos/event.h>
 #include <daos/job.h>
-#include "srv.pb-c.h"
+#include "svc.pb-c.h"
 #include "rpc.h"
 #include <errno.h>
 
@@ -360,7 +360,7 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 	resp = mgmt__get_attach_info_resp__unpack(&alloc.alloc, dresp->body.len,
 						  dresp->body.data);
 	if (alloc.oom)
-		D_GOTO(out_dresp, rc = -DER_MISC);
+		D_GOTO(out_dresp, rc = -DER_NOMEM);
 	if (resp == NULL) {
 		D_ERROR("failed to unpack GetAttachInfo response\n");
 		rc = -DER_MISC;
@@ -552,6 +552,57 @@ cleanup:
 	return rc;
 }
 
+/*
+ * Send an upcall to the agent to notify it of a clean process shutdown.
+ */
+int
+dc_mgmt_disconnect(void)
+{
+	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
+	struct drpc		 *ctx;
+	Drpc__Call		 *dreq;
+	Drpc__Response		 *dresp;
+	int			 rc;
+
+	D_DEBUG(DB_MGMT, "disconnecting process for pid:%d\n", getpid());
+
+	/* Connect to daos_agent. */
+	D_ASSERT(dc_agent_sockpath != NULL);
+	rc = drpc_connect(dc_agent_sockpath, &ctx);
+	if (rc != -DER_SUCCESS) {
+		D_ERROR("failed to connect to %s " DF_RC "\n",
+			dc_agent_sockpath, DP_RC(rc));
+		D_GOTO(out, 0);
+	}
+
+	rc = drpc_call_create(ctx, DRPC_MODULE_MGMT,
+			      DRPC_METHOD_MGMT_DISCONNECT, &dreq);
+	if (rc != 0)
+		goto out_ctx;
+
+	/* Make the Process Disconnect call and get the response. */
+	rc = drpc_call(ctx, R_SYNC, dreq, &dresp);
+	if (rc != 0) {
+		D_ERROR("Process Disconnect call failed: "DF_RC"\n", DP_RC(rc));
+		goto out_dreq;
+	}
+	if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("Process Disconnect unsuccessful: %d\n", dresp->status);
+		rc = -DER_MISC;
+		goto out_dresp;
+	}
+
+out_dresp:
+	drpc_response_free(dresp);
+out_dreq:
+	drpc_call_free(dreq);
+out_ctx:
+	drpc_close(ctx);
+out:
+	return rc;
+}
+
+
 #define SYS_BUF_MAGIC 0x98234ad3
 
 struct psr_buf {
@@ -621,14 +672,16 @@ attach_group(const char *name, int npsrs, struct dc_mgmt_psr *psrs,
 						psrs[i].rank, psrs[i].uri);
 		if (rc != 0) {
 			D_ERROR("failed to add rank %u URI %s to group %s: "
-				"%d\n", psrs[i].rank, psrs[i].uri, name, rc);
+				DF_RC "\n",
+				psrs[i].rank, psrs[i].uri, name, DP_RC(rc));
 			goto err_group;
 		}
 
 		rc = crt_group_psr_set(group, psrs[i].rank);
 		if (rc != 0) {
-			D_ERROR("failed to set rank %u as group %s PSR: %d\n",
-				psrs[i].rank, name, rc);
+			D_ERROR("failed to set rank %u as group %s PSR: "
+				DF_RC "\n",
+				psrs[i].rank, name, DP_RC(rc));
 			goto err_group;
 		}
 	}
@@ -893,6 +946,66 @@ dc_mgmt_sys_decode(void *buf, size_t len, struct dc_mgmt_sys **sysp)
 			  sysp);
 }
 
+/* For a given pool UUID, contact mgmt. service for up to date list
+ * of pool service replica ranks. Note: synchronous RPC with caller already
+ * in a task execution context. On successful return, caller is responsible
+ * for freeing the d_rank_list_t allocated here.
+ */
+int
+dc_mgmt_get_pool_svc_ranks(struct dc_mgmt_sys *sys, const uuid_t puuid,
+			   d_rank_list_t **svcranksp)
+{
+	crt_endpoint_t				srv_ep;
+	crt_rpc_t			       *rpc = NULL;
+	struct mgmt_pool_get_svcranks_in       *rpc_in;
+	struct mgmt_pool_get_svcranks_out      *rpc_out;
+	crt_opcode_t				opc;
+	int					rc;
+
+	/* TODO: when MS supports multiple replicas search for leader */
+	srv_ep.ep_grp = sys->sy_group;
+	srv_ep.ep_rank = sys->sy_psrs[0].rank;
+	srv_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
+	opc = DAOS_RPC_OPCODE(MGMT_POOL_GET_SVCRANKS, DAOS_MGMT_MODULE,
+			      DAOS_MGMT_VERSION);
+
+	rc = crt_req_create(daos_get_crt_ctx(), &srv_ep, opc, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID ": crt_req_create() failed, "DF_RC "\n",
+			DP_UUID(puuid), DP_RC(rc));
+		return rc;
+	}
+
+	rpc_in = crt_req_get(rpc);
+	D_ASSERT(rpc_in != NULL);
+	uuid_copy(rpc_in->gsr_puuid, puuid);
+
+	crt_req_addref(rpc);
+	rc = daos_rpc_send_wait(rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID ": daos_rpc_send_wait() failed, "DF_RC "\n",
+			DP_UUID(puuid), DP_RC(rc));
+		goto decref;
+	}
+
+	rpc_out = crt_reply_get(rpc);
+	D_ASSERT(rpc_out != NULL);
+	rc = rpc_out->gsr_rc;
+	if (rc != 0) {
+		D_ERROR(DF_UUID ": MGMT_POOL_GET_SVCRANKS rpc failed, "
+			DF_RC "\n", DP_UUID(puuid), DP_RC(rc));
+		goto decref;
+	}
+
+	rc = d_rank_list_dup(svcranksp, rpc_out->gsr_ranks);
+	if (rc != 0)
+		D_ERROR(DF_UUID ": d_rank_list_dup() failed, "DF_RC "\n",
+			DP_UUID(puuid), DP_RC(rc));
+
+decref:
+	crt_req_decref(rpc);
+	return rc;
+}
 /**
  * Initialize management interface
  */

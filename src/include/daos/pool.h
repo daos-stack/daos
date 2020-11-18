@@ -118,10 +118,10 @@ int dc_pool_evict(tse_task_t *task);
 int dc_pool_stop_svc(tse_task_t *task);
 int dc_pool_list_cont(tse_task_t *task);
 
-int dc_pool_add_replicas(tse_task_t *task);
-int dc_pool_remove_replicas(tse_task_t *task);
-
 int dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver);
 int dc_pool_update_map(daos_handle_t ph, struct pool_map *map);
+int dc_pool_choose_svc_rank(const uuid_t puuid, struct rsvc_client *cli,
+			    pthread_mutex_t *cli_lock, struct dc_mgmt_sys *sys,
+			    crt_endpoint_t *ep);
 
 #endif /* __DD_POOL_H__ */

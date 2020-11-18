@@ -161,8 +161,7 @@ dfuse_bg(struct dfuse_info *dfuse_info)
 			exit(2);
 		}
 		if (child_ret) {
-			printf("Exiting %d %s\n", child_ret,
-			       d_errstr(child_ret));
+			printf("Exiting " DF_RC "\n", DP_RC(child_ret));
 			exit(-(child_ret + DER_ERR_GURT_BASE));
 		} else {
 			exit(0);
@@ -178,12 +177,9 @@ ll_loop_fn(struct dfuse_info *dfuse_info)
 {
 	int			ret;
 
-	/*Blocking*/
+	/* Blocking */
 	if (dfuse_info->di_threaded) {
-		struct fuse_loop_config config = {.max_idle_threads = 10};
-
-		ret = fuse_session_loop_mt(dfuse_info->di_session,
-					   &config);
+		ret = dfuse_loop(dfuse_info);
 	} else {
 		ret = fuse_session_loop(dfuse_info->di_session);
 	}

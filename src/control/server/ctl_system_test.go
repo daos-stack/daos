@@ -36,6 +36,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -43,7 +44,6 @@ const defaultAP = "192.168.1.1:10001"
 
 func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 	for name, tc := range map[string]struct {
-		nilMembership  bool
 		members        system.Members
 		fanReq         fanoutRequest
 		mResps         []*control.HostResponse
@@ -63,11 +63,6 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 				Method: control.PingRanks, Hosts: "foo-[0-99]", Ranks: "0-99",
 			},
 			expErrMsg: "ranklist and hostlist cannot both be set in request",
-		},
-		"nil membership": {
-			fanReq:        fanoutRequest{Method: control.PingRanks},
-			nilMembership: true,
-			expErrMsg:     "nil system membership",
 		},
 		"empty membership": {
 			fanReq:     fanoutRequest{Method: control.PingRanks},
@@ -373,17 +368,13 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			cfg := emptyMockConfig(t)
+			cfg := config.DefaultServer()
 			cs := mockControlService(t, log, cfg, nil, nil, nil)
 			cs.srvCfg = cfg
 			cs.srvCfg.ControlPort = 10001
-			if !tc.nilMembership {
-				cs.membership = system.MockMembership(t, log)
-
-				for _, m := range tc.members {
-					if _, err := cs.membership.Add(m); err != nil {
-						t.Fatal(err)
-					}
+			for _, m := range tc.members {
+				if _, err := cs.membership.Add(m); err != nil {
+					t.Fatal(err)
 				}
 			}
 
@@ -647,7 +638,7 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			cfg := emptyMockConfig(t)
+			cfg := config.DefaultServer()
 			cs := mockControlService(t, log, cfg, nil, nil, nil)
 			cs.srvCfg = cfg
 			cs.srvCfg.ControlPort = 10001
@@ -661,13 +652,6 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 			mgmtSvc := newTestMgmtSvcMulti(t, log, maxIOServers, false)
 			cs.harness = mgmtSvc.harness
 			cs.harness.started.SetTrue()
-			m := newMgmtSvcClient(
-				context.Background(), log, mgmtSvcClientCfg{
-					AccessPoints: []string{defaultAP},
-				},
-			)
-			cs.harness.instances[0].msClient = m
-			cs.harness.instances[0]._superblock.MS = true
 			cs.harness.instances[0]._superblock.Rank = system.NewRankPtr(0)
 
 			ctx := context.TODO()
@@ -930,7 +914,7 @@ func TestServer_CtlSvc_SystemStart(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			cfg := emptyMockConfig(t)
+			cfg := config.DefaultServer()
 			cs := mockControlService(t, log, cfg, nil, nil, nil)
 			cs.srvCfg = cfg
 			cs.srvCfg.ControlPort = 10001
@@ -944,13 +928,6 @@ func TestServer_CtlSvc_SystemStart(t *testing.T) {
 			mgmtSvc := newTestMgmtSvcMulti(t, log, maxIOServers, false)
 			cs.harness = mgmtSvc.harness
 			cs.harness.started.SetTrue()
-			m := newMgmtSvcClient(
-				context.Background(), log, mgmtSvcClientCfg{
-					AccessPoints: []string{defaultAP},
-				},
-			)
-			cs.harness.instances[0].msClient = m
-			cs.harness.instances[0]._superblock.MS = true
 			cs.harness.instances[0]._superblock.Rank = system.NewRankPtr(0)
 
 			ctx := context.TODO()
@@ -1352,7 +1329,7 @@ func TestServer_CtlSvc_SystemStop(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			cfg := emptyMockConfig(t)
+			cfg := config.DefaultServer()
 			cs := mockControlService(t, log, cfg, nil, nil, nil)
 			cs.srvCfg = cfg
 			cs.srvCfg.ControlPort = 10001
@@ -1366,13 +1343,6 @@ func TestServer_CtlSvc_SystemStop(t *testing.T) {
 			mgmtSvc := newTestMgmtSvcMulti(t, log, maxIOServers, false)
 			cs.harness = mgmtSvc.harness
 			cs.harness.started.SetTrue()
-			m := newMgmtSvcClient(
-				context.Background(), log, mgmtSvcClientCfg{
-					AccessPoints: []string{defaultAP},
-				},
-			)
-			cs.harness.instances[0].msClient = m
-			cs.harness.instances[0]._superblock.MS = true
 			cs.harness.instances[0]._superblock.Rank = system.NewRankPtr(0)
 
 			ctx := context.TODO()
@@ -1582,7 +1552,7 @@ func TestServer_CtlSvc_SystemResetFormat(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			cfg := emptyMockConfig(t)
+			cfg := config.DefaultServer()
 			cs := mockControlService(t, log, cfg, nil, nil, nil)
 			cs.srvCfg = cfg
 			cs.srvCfg.ControlPort = 10001
@@ -1596,13 +1566,6 @@ func TestServer_CtlSvc_SystemResetFormat(t *testing.T) {
 			mgmtSvc := newTestMgmtSvcMulti(t, log, maxIOServers, false)
 			cs.harness = mgmtSvc.harness
 			cs.harness.started.SetTrue()
-			m := newMgmtSvcClient(
-				context.Background(), log, mgmtSvcClientCfg{
-					AccessPoints: []string{defaultAP},
-				},
-			)
-			cs.harness.instances[0].msClient = m
-			cs.harness.instances[0]._superblock.MS = true
 			cs.harness.instances[0]._superblock.Rank = system.NewRankPtr(0)
 
 			ctx := context.TODO()

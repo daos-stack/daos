@@ -253,9 +253,8 @@ dc_cont_create(tse_task_t *task)
 		DP_UUID(pool->dp_pool), DP_UUID(args->uuid));
 
 	ep.ep_grp = pool->dp_sys->sy_group;
-	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rc = rsvc_client_choose(&pool->dp_client, &ep);
-	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	rc = dc_pool_choose_svc_rank(pool->dp_pool, &pool->dp_client,
+				     &pool->dp_client_lock, pool->dp_sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(pool->dp_pool, args->uuid), DP_RC(rc));
@@ -355,9 +354,8 @@ dc_cont_destroy(tse_task_t *task)
 		DP_UUID(pool->dp_pool), DP_UUID(args->uuid), args->force);
 
 	ep.ep_grp = pool->dp_sys->sy_group;
-	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rc = rsvc_client_choose(&pool->dp_client, &ep);
-	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	rc = dc_pool_choose_svc_rank(pool->dp_pool, &pool->dp_client,
+				     &pool->dp_client_lock, pool->dp_sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(pool->dp_pool, args->uuid), DP_RC(rc));
@@ -607,9 +605,8 @@ dc_cont_open(tse_task_t *task)
 		args->flags);
 
 	ep.ep_grp = pool->dp_sys->sy_group;
-	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rc = rsvc_client_choose(&pool->dp_client, &ep);
-	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	rc = dc_pool_choose_svc_rank(pool->dp_pool, &pool->dp_client,
+				     &pool->dp_client_lock, pool->dp_sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(pool->dp_pool, args->uuid), DP_RC(rc));
@@ -789,9 +786,8 @@ dc_cont_close(tse_task_t *task)
 	}
 
 	ep.ep_grp = pool->dp_sys->sy_group;
-	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rc = rsvc_client_choose(&pool->dp_client, &ep);
-	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	rc = dc_pool_choose_svc_rank(pool->dp_pool, &pool->dp_client,
+				     &pool->dp_client_lock, pool->dp_sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
@@ -997,9 +993,8 @@ dc_cont_query(tse_task_t *task)
 		DP_UUID(cont->dc_cont_hdl));
 
 	ep.ep_grp  = pool->dp_sys->sy_group;
-	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rc = rsvc_client_choose(&pool->dp_client, &ep);
-	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	rc = dc_pool_choose_svc_rank(pool->dp_pool, &pool->dp_client,
+				     &pool->dp_client_lock, pool->dp_sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
@@ -1123,9 +1118,8 @@ dc_cont_set_prop(tse_task_t *task)
 		DP_UUID(cont->dc_cont_hdl));
 
 	ep.ep_grp  = pool->dp_sys->sy_group;
-	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rc = rsvc_client_choose(&pool->dp_client, &ep);
-	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	rc = dc_pool_choose_svc_rank(pool->dp_pool, &pool->dp_client,
+				     &pool->dp_client_lock, pool->dp_sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
@@ -1246,9 +1240,8 @@ dc_cont_update_acl(tse_task_t *task)
 		DP_UUID(cont->dc_cont_hdl));
 
 	ep.ep_grp  = pool->dp_sys->sy_group;
-	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rc = rsvc_client_choose(&pool->dp_client, &ep);
-	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	rc = dc_pool_choose_svc_rank(pool->dp_pool, &pool->dp_client,
+				     &pool->dp_client_lock, pool->dp_sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
@@ -1369,9 +1362,8 @@ dc_cont_delete_acl(tse_task_t *task)
 		DP_UUID(cont->dc_cont_hdl));
 
 	ep.ep_grp  = pool->dp_sys->sy_group;
-	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rc = rsvc_client_choose(&pool->dp_client, &ep);
-	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	rc = dc_pool_choose_svc_rank(pool->dp_pool, &pool->dp_client,
+				     &pool->dp_client_lock, pool->dp_sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
@@ -1827,7 +1819,7 @@ dc_cont_global2local(daos_handle_t poh, d_iov_t glob, daos_handle_t *coh)
 		D_ASSERT(cont_glob->dcg_magic == DC_CONT_GLOB_MAGIC);
 
 	} else if (cont_glob->dcg_magic != DC_CONT_GLOB_MAGIC) {
-		D_ERROR("Bad hgh_magic: 0x%x.\n", cont_glob->dcg_magic);
+		D_ERROR("Bad hgh_magic: %#x.\n", cont_glob->dcg_magic);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -1936,9 +1928,10 @@ cont_req_prepare(daos_handle_t coh, enum cont_operation opcode,
 	D_ASSERT(args->cra_pool != NULL);
 
 	ep.ep_grp  = args->cra_pool->dp_sys->sy_group;
-	D_MUTEX_LOCK(&args->cra_pool->dp_client_lock);
-	rc = rsvc_client_choose(&args->cra_pool->dp_client, &ep);
-	D_MUTEX_UNLOCK(&args->cra_pool->dp_client_lock);
+	rc = dc_pool_choose_svc_rank(args->cra_pool->dp_pool,
+				     &args->cra_pool->dp_client,
+				     &args->cra_pool->dp_client_lock,
+				     args->cra_pool->dp_sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(args->cra_pool->dp_pool,

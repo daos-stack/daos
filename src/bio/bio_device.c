@@ -48,17 +48,9 @@ revive_dev(struct bio_bdev *d_bdev)
 
 	bbs = d_bdev->bb_blobstore;
 	D_ASSERT(bbs != NULL);
-
-	/* Read bb_state from init xstream */
-	if (bbs->bb_state != BIO_BS_STATE_OUT) {
-		D_ERROR("Old dev "DF_UUID" isn't in %s state (%s)\n",
-			DP_UUID(d_bdev->bb_uuid),
-			bio_state_enum_to_str(BIO_BS_STATE_OUT),
-			bio_state_enum_to_str(bbs->bb_state));
-		return -DER_BUSY;
-	}
-
+	D_ASSERT(bbs->bb_state == BIO_BS_STATE_OUT);
 	D_ASSERT(owner_thread(bbs) != NULL);
+
 	spdk_thread_send_msg(owner_thread(bbs), setup_bio_bdev, d_bdev);
 
 	return 0;
@@ -318,22 +310,23 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 			DP_UUID(new_dev->bb_uuid), new_dev->bb_name);
 		return -DER_INVAL;
 	} else if (new_dev->bb_replacing) {
-		D_ERROR("New dev "DF_UUID"(%s) is being replaced\n",
+		D_ERROR("New dev "DF_UUID"(%s) is in replacing\n",
 			DP_UUID(new_dev->bb_uuid), new_dev->bb_name);
 		return -DER_BUSY;
 	}
 	/* Avoid re-enter or being destroyed by hot remove callback */
 	new_dev->bb_replacing = true;
 
-	/* Create existing blobs on new device */
 	D_INIT_LIST_HEAD(&pool_list);
+	D_INIT_LIST_HEAD(&blob_list);
+
+	/* Create existing blobs on new device */
 	rc = smd_pool_list(&pool_list, &pool_cnt);
 	if (rc) {
 		D_ERROR("Failed to list pools in SMD. "DF_RC"\n", DP_RC(rc));
-		goto out;
+		goto pool_list_out;
 	}
 
-	D_INIT_LIST_HEAD(&blob_list);
 	rc = create_old_blobs(xs_ctxt, old_info, new_dev, &pool_list,
 			      &blob_list);
 	if (rc) {
@@ -372,6 +365,7 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 
 out:
 	free_blob_list(xs_ctxt, &blob_list, new_dev);
+pool_list_out:
 	free_pool_list(&pool_list);
 	if (new_dev)
 		new_dev->bb_replacing = false;
@@ -384,6 +378,7 @@ bio_replace_dev(struct bio_xs_context *xs_ctxt, uuid_t old_dev_id,
 {
 	struct smd_dev_info	*old_info = NULL, *new_info = NULL;
 	struct bio_bdev		*old_dev, *new_dev;
+	struct bio_blobstore	*bbs;
 	int			 rc;
 
 	/* Caller ensures the request handling ULT created on init xstream */
@@ -412,16 +407,22 @@ bio_replace_dev(struct bio_xs_context *xs_ctxt, uuid_t old_dev_id,
 		goto out;
 	}
 
-	/* Change a faulty device back to normal, it's usually for testing */
-	if (uuid_compare(old_dev_id, new_dev_id) == 0) {
-		rc = revive_dev(old_dev);
+	bbs = old_dev->bb_blobstore;
+	D_ASSERT(bbs != NULL);
+
+	/* Read bb_state from init xstream */
+	if (bbs->bb_state != BIO_BS_STATE_OUT) {
+		D_ERROR("Old dev "DF_UUID" isn't in %s state (%s)\n",
+			DP_UUID(old_dev->bb_uuid),
+			bio_state_enum_to_str(BIO_BS_STATE_OUT),
+			bio_state_enum_to_str(bbs->bb_state));
+		rc = -DER_BUSY;
 		goto out;
 	}
 
-	if (old_dev->bb_desc != NULL) {
-		D_INFO("Old Dev "DF_UUID"(%s) isn't torndown\n",
-		       DP_UUID(old_dev->bb_uuid), old_dev->bb_name);
-		rc = -DER_BUSY;
+	/* Change a faulty device back to normal, it's usually for testing */
+	if (uuid_compare(old_dev_id, new_dev_id) == 0) {
+		rc = revive_dev(old_dev);
 		goto out;
 	}
 
@@ -454,5 +455,126 @@ out:
 		smd_free_dev_info(old_info);
 	if (new_info)
 		smd_free_dev_info(new_info);
+	return rc;
+}
+
+static struct bio_dev_info *
+alloc_dev_info(uuid_t dev_id, struct smd_dev_info *s_info)
+{
+	struct bio_dev_info	*info;
+	int			 tgt_cnt = 0, i;
+
+	D_ALLOC_PTR(info);
+	if (info == NULL)
+		return NULL;
+
+	if (s_info != NULL) {
+		tgt_cnt = s_info->sdi_tgt_cnt;
+		info->bdi_flags |= NVME_DEV_FL_INUSE;
+		if (s_info->sdi_state == SMD_DEV_FAULTY)
+			info->bdi_flags |= NVME_DEV_FL_FAULTY;
+	}
+
+	if (tgt_cnt != 0) {
+		D_ALLOC_ARRAY(info->bdi_tgts, tgt_cnt);
+		if (info->bdi_tgts == NULL) {
+			D_FREE(info);
+			return NULL;
+		}
+	}
+
+	D_INIT_LIST_HEAD(&info->bdi_link);
+	uuid_copy(info->bdi_dev_id, dev_id);
+	info->bdi_tgt_cnt = tgt_cnt;
+	for (i = 0; i < info->bdi_tgt_cnt; i++)
+		info->bdi_tgts[i] = s_info->sdi_tgts[i];
+
+	return info;
+}
+
+static struct smd_dev_info *
+find_smd_dev(uuid_t dev_id, d_list_t *s_dev_list)
+{
+	struct smd_dev_info	*s_info;
+
+	d_list_for_each_entry(s_info, s_dev_list, sdi_link) {
+		if (uuid_compare(s_info->sdi_id, dev_id) == 0)
+			return s_info;
+	}
+
+	return NULL;
+}
+
+int
+bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
+{
+	d_list_t		 s_dev_list;
+	struct bio_dev_info	*b_info;
+	struct smd_dev_info	*s_info, *s_tmp;
+	struct bio_bdev		*d_bdev;
+	int			 rc;
+
+	/* Caller ensures the request handling ULT created on init xstream */
+	D_ASSERT(is_init_xstream(xs_ctxt));
+
+	D_ASSERT(dev_list != NULL && d_list_empty(dev_list));
+	D_INIT_LIST_HEAD(&s_dev_list);
+
+	rc = smd_dev_list(&s_dev_list, dev_cnt);
+	if (rc) {
+		D_ERROR("Failed to get SMD dev list "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	*dev_cnt = 0;
+
+	/* Scan all devices present in bio_bdev list */
+	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
+		s_info = find_smd_dev(d_bdev->bb_uuid, &s_dev_list);
+
+		b_info = alloc_dev_info(d_bdev->bb_uuid, s_info);
+		if (b_info == NULL) {
+			D_ERROR("Failed to allocate device info\n");
+			rc = -DER_NOMEM;
+			goto out;
+		}
+		if (!d_bdev->bb_removed)
+			b_info->bdi_flags |= NVME_DEV_FL_PLUGGED;
+		d_list_add_tail(&b_info->bdi_link, dev_list);
+		(*dev_cnt)++;
+
+		/* delete the found device in SMD dev list */
+		if (s_info != NULL) {
+			d_list_del_init(&s_info->sdi_link);
+			smd_free_dev_info(s_info);
+		}
+	}
+
+	/*
+	 * Scan remaining SMD devices not present bio_bdev list.
+	 *
+	 * As for current implementation, there won't be any device
+	 * present in SMD but not in bio_bdev list, here we just do
+	 * it for sanity check.
+	 */
+	d_list_for_each_entry(s_info, &s_dev_list, sdi_link) {
+		D_ERROR("Found unexpected device "DF_UUID" in SMD\n",
+			DP_UUID(s_info->sdi_id));
+
+		b_info = alloc_dev_info(s_info->sdi_id, s_info);
+		if (b_info == NULL) {
+			D_ERROR("Failed to allocate device info\n");
+			rc = -DER_NOMEM;
+			goto out;
+		}
+		d_list_add_tail(&b_info->bdi_link, dev_list);
+		(*dev_cnt)++;
+	}
+out:
+	d_list_for_each_entry_safe(s_info, s_tmp, &s_dev_list, sdi_link) {
+		d_list_del_init(&s_info->sdi_link);
+		smd_free_dev_info(s_info);
+	}
+
 	return rc;
 }

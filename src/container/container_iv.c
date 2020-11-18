@@ -123,7 +123,7 @@ cont_iv_ent_init(struct ds_iv_key *iv_key, void *data,
 
 	rc = daos_sgl_init(&entry->iv_value, 1);
 	if (rc)
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(out, rc);
 
 	D_ALLOC(entry->iv_value.sg_iovs[0].iov_buf, sizeof(root_hdl));
 	if (entry->iv_value.sg_iovs[0].iov_buf == NULL)

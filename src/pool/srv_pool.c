@@ -2726,6 +2726,79 @@ out:
 	crt_reply_send(rpc);
 }
 
+/* Convert pool_comp_state_t to daos_target_state_t */
+static daos_target_state_t
+enum_pool_comp_state_to_tgt_state(int tgt_state)
+{
+
+	switch (tgt_state) {
+	case PO_COMP_ST_UNKNOWN: return DAOS_TS_UNKNOWN;
+	case PO_COMP_ST_NEW: return DAOS_TS_NEW;
+	case PO_COMP_ST_UP: return DAOS_TS_UP;
+	case PO_COMP_ST_UPIN: return DAOS_TS_UP_IN;
+	case PO_COMP_ST_DOWN: return  DAOS_TS_DOWN;
+	case PO_COMP_ST_DOWNOUT: return DAOS_TS_DOWN_OUT;
+	case PO_COMP_ST_DRAIN: return DAOS_TS_DRAIN;
+	}
+
+	return DAOS_TS_UNKNOWN;
+}
+
+void
+ds_pool_query_info_handler(crt_rpc_t *rpc)
+{
+	struct pool_query_info_in	*in = crt_req_get(rpc);
+	struct pool_query_info_out	*out = crt_reply_get(rpc);
+	struct pool_svc			*svc;
+	struct pool_target		*target = NULL;
+	int				 tgt_state;
+	int				 rc;
+
+	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
+		DP_UUID(in->pqii_op.pi_uuid), rpc, DP_UUID(in->pqii_op.pi_hdl));
+
+	rc = pool_svc_lookup_leader(in->pqii_op.pi_uuid, &svc,
+				    &out->pqio_op.po_hint);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	/* get the target state from pool map */
+	ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
+	rc = pool_map_find_target_by_rank_idx(svc->ps_pool->sp_map,
+					      in->pqii_rank,
+					      in->pqii_tgt,
+					      &target);
+	if (rc != 1) {
+		D_ERROR(DF_UUID": Failed to get rank:%u, idx:%d\n, rc:%d",
+			DP_UUID(in->pqii_op.pi_uuid), in->pqii_rank,
+			in->pqii_tgt, rc);
+		D_GOTO(out, rc = -DER_NONEXIST);
+	 } else {
+		rc = 0;
+	}
+
+	D_ASSERT(target != NULL);
+
+	tgt_state = target->ta_comp.co_status;
+	out->pqio_state = enum_pool_comp_state_to_tgt_state(tgt_state);
+
+	/**
+	 * TODO (DAOS-3625): Send pool tgt query RPC (server->server) to
+	 * return pool target space info (including fragmentation).
+	 */
+
+	ABT_rwlock_unlock(svc->ps_pool->sp_lock);
+	pool_svc_put_leader(svc);
+out:
+	out->pqio_op.po_rc = rc;
+	out->pqio_rank = in->pqii_rank;
+	out->pqio_tgt = in->pqii_tgt;
+
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
+		DP_UUID(in->pqii_op.pi_uuid), rpc, DP_RC(rc));
+	crt_reply_send(rpc);
+}
+
 static int
 process_query_result(daos_pool_info_t *info, uuid_t pool_uuid,
 		     uint32_t map_version, uint32_t leader_rank,
@@ -4497,6 +4570,8 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 			/* Pool evict, or pool destroy with force=true */
 			rc = pool_disconnect_hdls(&tx, svc, hdl_uuids,
 						  n_hdl_uuids, rpc->cr_ctx);
+			if (rc != 0)
+				D_GOTO(out_free, rc);
 		}
 	}
 
@@ -4929,7 +5004,8 @@ ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid, uint32_t version)
 	if (rc != 0)
 		goto out;
 
-	leader = pl_select_leader(oid->id_pub, oid->id_shard,
+	leader = pl_select_leader(oid->id_pub,
+				  oid->id_shard / layout->ol_grp_size,
 				  layout->ol_grp_size, true,
 				  pl_obj_get_shard, layout);
 	if (leader < 0) {

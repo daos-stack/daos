@@ -41,7 +41,7 @@
 #include <daos_security.h>
 #include <daos_prop.h>
 
-#include "srv.pb-c.h"
+#include "svc.pb-c.h"
 #include "storage_query.pb-c.h"
 #include "rpc.h"
 #include "srv_layout.h"
@@ -51,6 +51,7 @@ void ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc);
 void ds_mgmt_params_set_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_profile_hdlr(crt_rpc_t *rpc);
+void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_mark_hdlr(crt_rpc_t *rpc);
 
 /** srv_system.c */

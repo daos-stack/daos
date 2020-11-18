@@ -45,41 +45,57 @@ type MemberState int
 
 const (
 	// MemberStateUnknown is the default invalid state.
-	MemberStateUnknown MemberState = iota
+	MemberStateUnknown MemberState = 0x0000
 	// MemberStateAwaitFormat indicates the member is waiting for format.
-	MemberStateAwaitFormat
+	MemberStateAwaitFormat MemberState = 0x0001
 	// MemberStateStarting indicates the member has started but is not
 	// ready.
-	MemberStateStarting
+	MemberStateStarting MemberState = 0x0002
 	// MemberStateReady indicates the member has setup successfully.
-	MemberStateReady
+	MemberStateReady MemberState = 0x0004
 	// MemberStateJoined indicates the member has joined the system.
-	MemberStateJoined
+	MemberStateJoined MemberState = 0x0008
 	// MemberStateStopping indicates prep-shutdown successfully run.
-	MemberStateStopping
+	MemberStateStopping MemberState = 0x0010
 	// MemberStateStopped indicates process has been stopped.
-	MemberStateStopped
+	MemberStateStopped MemberState = 0x0020
 	// MemberStateEvicted indicates rank has been evicted from DAOS system.
-	MemberStateEvicted
+	MemberStateEvicted MemberState = 0x0040
 	// MemberStateErrored indicates the process stopped with errors.
-	MemberStateErrored
+	MemberStateErrored MemberState = 0x0080
 	// MemberStateUnresponsive indicates the process is not responding.
-	MemberStateUnresponsive
+	MemberStateUnresponsive MemberState = 0x0100
+
+	// AvailableMemberFilter defines the state(s) to be used when determining
+	// whether or not a member is available for the purposes of pool creation, etc.
+	AvailableMemberFilter = MemberStateReady | MemberStateJoined
+	// AllMemberFilter will match all valid member states.
+	AllMemberFilter = MemberState(0xFFFF)
 )
 
 func (ms MemberState) String() string {
-	return [...]string{
-		"Unknown",
-		"AwaitFormat",
-		"Starting",
-		"Ready",
-		"Joined",
-		"Stopping",
-		"Stopped",
-		"Evicted",
-		"Errored",
-		"Unresponsive",
-	}[ms]
+	switch ms {
+	case MemberStateAwaitFormat:
+		return "AwaitFormat"
+	case MemberStateStarting:
+		return "Starting"
+	case MemberStateReady:
+		return "Ready"
+	case MemberStateJoined:
+		return "Joined"
+	case MemberStateStopping:
+		return "Stopping"
+	case MemberStateStopped:
+		return "Stopped"
+	case MemberStateEvicted:
+		return "Evicted"
+	case MemberStateErrored:
+		return "Errored"
+	case MemberStateUnresponsive:
+		return "Unresponsive"
+	default:
+		return "Unknown"
+	}
 }
 
 // isTransitionIllegal indicates if given state transitions is legal.

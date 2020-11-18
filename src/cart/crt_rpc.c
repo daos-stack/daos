@@ -223,7 +223,8 @@ crt_internal_rpc_register(void)
 
 	rc = crt_proto_register_internal(&cpf);
 	if (rc != 0) {
-		D_ERROR("crt_proto_register_internal() failed. rc %d\n", rc);
+		D_ERROR("crt_proto_register_internal() failed, " DF_RC "\n",
+			DP_RC(rc));
 		return rc;
 	}
 
@@ -235,7 +236,7 @@ crt_internal_rpc_register(void)
 
 	rc = crt_proto_register(&cpf);
 	if (rc != 0)
-		D_ERROR("crt_proto_register() failed. rc %d\n", rc);
+		D_ERROR("crt_proto_register() failed, " DF_RC "\n", DP_RC(rc));
 
 	return rc;
 }
@@ -323,8 +324,10 @@ static int check_ep(crt_endpoint_t *tgt_ep, struct crt_grp_priv **ret_grp_priv)
 	int rc = 0;
 
 	grp_priv = crt_grp_pub2priv(tgt_ep->ep_grp);
-	if (grp_priv == NULL)
+	if (grp_priv == NULL) {
+		D_ERROR("crt_grp_pub2priv(%p) got NULL.\n", tgt_ep->ep_grp);
 		D_GOTO(out, rc = -DER_BAD_TARGET);
+	}
 
 out:
 	if (rc == 0)
@@ -346,7 +349,8 @@ crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 
 	rc = crt_rpc_priv_alloc(opc, &rpc_priv, forward);
 	if (rc != 0) {
-		D_ERROR("crt_rpc_priv_alloc, rc: %d, opc: %#x.\n", rc, opc);
+		D_ERROR("crt_rpc_priv_alloc(%#x) failed, " DF_RC "\n",
+			opc, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -365,7 +369,8 @@ crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, false /* srv_flag */);
 	if (rc != 0) {
 		RPC_ERROR(rpc_priv,
-			  "crt_rpc_priv_init, rc: %d, opc: %#x\n", rc, opc);
+			  "crt_rpc_priv_init(%#x) failed, " DF_RC "\n",
+			  opc, DP_RC(rc));
 		crt_rpc_priv_free(rpc_priv);
 		D_GOTO(out, rc);
 	}
@@ -400,8 +405,8 @@ crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	rc = crt_req_create_internal(crt_ctx, tgt_ep, opc, false /* forward */,
 				     req);
 	if (rc != 0) {
-		D_ERROR("crt_req_create_internal failed, opc: %#x, rc: %d.\n",
-			opc, rc);
+		D_ERROR("crt_req_create_internal(%#x) failed, " DF_RC "\n",
+			opc, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 	D_ASSERT(*req != NULL);
@@ -837,8 +842,9 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 	if (base_addr != NULL && rpc_priv->crp_hg_addr == NULL) {
 		rc = crt_req_fill_tgt_uri(rpc_priv, base_addr);
 		if (rc != 0)
-			D_ERROR("crt_req_fill_tgt_uri failed, "
-				"opc: %#x rc %d\n", req->cr_opc, rc);
+			RPC_ERROR(rpc_priv,
+				  "crt_req_fill_tgt_uri() failed, " DF_RC "\n",
+				  DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -984,8 +990,9 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 		rpc_priv->crp_hg_addr = NULL;
 		rc = crt_req_ep_lc_lookup(rpc_priv, &uri_exists);
 		if (rc != 0) {
-			D_ERROR("crt_grp_ep_lc_lookup() failed, rc %d, "
-				"opc: %#x.\n", rc, req->cr_opc);
+			RPC_ERROR(rpc_priv,
+				  "crt_grp_ep_lc_lookup() failed, " DF_RC "\n",
+				  DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 
@@ -1078,8 +1085,9 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 	if (rpc_priv->crp_coll) {
 		rc = crt_corpc_req_hdlr(rpc_priv);
 		if (rc != 0)
-			D_ERROR("crt_corpc_req_hdlr failed, "
-				"rc: %d,opc: %#x.\n", rc, req->cr_opc);
+			RPC_ERROR(rpc_priv,
+				  "crt_corpc_req_hdlr() failed, " DF_RC "\n",
+				  DP_RC(rc));
 		D_GOTO(out, rc);
 	} else {
 		if (!rpc_priv->crp_have_ep) {
@@ -1096,17 +1104,18 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 		/* tracked in crt_ep_inflight::epi_req_q */
 		rc = crt_req_send_internal(rpc_priv);
 		if (rc != 0) {
-			D_ERROR("crt_req_send_internal() failed, "
-				"rc %d, opc: %#x\n",
-				rc, rpc_priv->crp_pub.cr_opc);
+			RPC_ERROR(rpc_priv,
+				  "crt_req_send_internal() failed, " DF_RC "\n",
+				  DP_RC(rc));
 			crt_context_req_untrack(rpc_priv);
 		}
 	} else if (rc == CRT_REQ_TRACK_IN_WAITQ) {
 		/* queued in crt_hg_context::dhc_req_q */
 		rc = 0;
 	} else {
-		D_ERROR("crt_req_track failed, rc: %d, opc: %#x.\n",
-			rc, rpc_priv->crp_pub.cr_opc);
+		RPC_ERROR(rpc_priv,
+			  "crt_context_req_track() failed, " DF_RC "\n",
+			  DP_RC(rc));
 	}
 
 out:
@@ -1377,8 +1386,8 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 		(crt_ctx->cc_idx != rpc_priv->crp_req_hdr.cch_dst_tag)) {
 
 		if (!skip_check) {
-			D_DEBUG(DB_TRACE, "Mismatch rpc: %p opc: %x rank:%d "
-				"tag:%d self:%d cc_idx:%d ep_rank:%d ep_tag:%d\n",
+			D_ERROR("Mismatch rpc: %p opc: %x rank:%d tag:%d "
+				"self:%d cc_idx:%d ep_rank:%d ep_tag:%d\n",
 				rpc_priv,
 				rpc_priv->crp_pub.cr_opc,
 				rpc_priv->crp_req_hdr.cch_dst_rank,
