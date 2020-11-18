@@ -38,6 +38,8 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
+/* For test only */
+
 #define CLI_OBJ_IO_PARMS	8
 #define NIL_BITMAP		(NULL)
 
