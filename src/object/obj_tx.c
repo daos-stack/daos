@@ -2041,7 +2041,7 @@ dc_tx_restart(tse_task_t *task)
 	D_ASSERTF(args != NULL,
 		  "Task Argument OPC does not match DC OPC (restart)\n");
 
-	tx = tse_task_get_priv(task);
+	tx = tse_task_get_priv_internal(task);
 	if (tx == NULL) {
 		/* Executing task for the first time. */
 
@@ -2062,7 +2062,7 @@ dc_tx_restart(tse_task_t *task)
 		} else {
 			/*
 			 * Reinitialize task with a delay to implement the
-			 * backoff and call dc_tx_restart_end.
+			 * backoff and call dc_tx_restart_end below.
 			 */
 			rc = tse_task_reinit_with_delay(task, backoff);
 			if (rc != 0) {
@@ -2073,7 +2073,7 @@ dc_tx_restart(tse_task_t *task)
 			}
 			D_MUTEX_UNLOCK(&tx->tx_lock);
 			/* Pass our tx reference to task. */
-			tse_task_set_priv(task, tx);
+			tse_task_set_priv_internal(task, tx);
 			return 0;
 		}
 
@@ -2081,10 +2081,11 @@ out_tx_lock:
 		D_MUTEX_UNLOCK(&tx->tx_lock);
 		dc_tx_decref(tx);
 	} else {
-		/* Re-executing task after the reinitialization. */
+		/* Re-executing task after the reinitialization above. */
 		D_MUTEX_LOCK(&tx->tx_lock);
 		dc_tx_restart_end(tx);
 		D_MUTEX_UNLOCK(&tx->tx_lock);
+		dc_tx_decref(tx);
 	}
 
 out:

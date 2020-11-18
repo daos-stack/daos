@@ -701,13 +701,13 @@ d_free_string(struct d_string_buffer_t *buf)
  * the caller shall get:
  *
  *   Backoff	Range
- *         1	[0,     0]
- *         2	[0,    16]
- *         3	[0,    64]
- *         4	[0,   128]
+ *         1	[0,       0]
+ *         2	[0,      16]
+ *         3	[0,      64]
+ *         4	[0,     128]
  *       ...	...
- *        10	[0,  1024]
- *        11	[0,  1024]
+ *        10	[0, 1048576]
+ *        11	[0, 1048576]
  *       ...	...
  *
  * \param[in]	seq	backoff sequence
