@@ -1420,6 +1420,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	daos_size_t	num_records;
 	daos_off_t	record_i;
 	struct io_params *head = NULL;
+	bool		head_cb_registered = false;
 	daos_size_t	num_ios;
 	d_list_t	io_task_list;
 	daos_size_t	tot_num_records = 0;
@@ -1761,6 +1762,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 				       sizeof(head));
 	if (rc)
 		D_GOTO(err_iotask, rc);
+	head_cb_registered = true;
 
 	/*
 	 * If this is a byte array, schedule the get_size task with a prep
@@ -1775,7 +1777,6 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 
 			D_ALLOC_PTR(sparams);
 			if (sparams == NULL) {
-				D_ERROR("Failed memory allocation\n");
 				D_GOTO(err_iotask, rc = -DER_NOMEM);
 			}
 
@@ -1816,7 +1817,7 @@ err_stask:
 	if (op_type == DAOS_OPC_ARRAY_READ && array->byte_array)
 		tse_task_complete(stask, rc);
 err_task:
-	if (head)
+	if (head && !head_cb_registered)
 		tse_task_register_comp_cb(task, free_io_params_cb, &head,
 					  sizeof(head));
 	if (array)

@@ -755,7 +755,7 @@ def import_daos(server, conf):
     daos = __import__('pydaos')
     return daos
 
-def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False):
+def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False, prefix=True):
     """Run a DAOS command
 
     Run a command, returning what subprocess.run() would.
@@ -778,11 +778,16 @@ def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False):
     if not valgrind:
         vh.use_valgrind = False
 
-    exec_cmd = vh.get_cmd_prefix()
-    exec_cmd.append(os.path.join(conf['PREFIX'], 'bin', 'daos'))
-    exec_cmd.extend(cmd)
-
     cmd_env = get_base_env()
+
+    exec_cmd = vh.get_cmd_prefix()
+    if prefix:
+        exec_cmd.append(os.path.join(conf['PREFIX'], 'bin', 'daos'))
+    else:
+        cmd_env['LD_PRELOAD'] = os.path.join(conf['PREFIX'],
+                                             'lib64', 'libioil.so')
+
+    exec_cmd.extend(cmd)
 
     prefix = 'dnt_cmd_{}_'.format(get_inc_id())
     log_file = tempfile.NamedTemporaryFile(prefix=prefix,
@@ -792,8 +797,7 @@ def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False):
     if fi_file:
         cmd_env['D_FI_CONFIG'] = fi_file
     cmd_env['D_LOG_FILE'] = log_file.name
-    if conf.agent_dir:
-        cmd_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
+    cmd_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
 
     rc = subprocess.run(exec_cmd,
                         stdout=subprocess.PIPE,
@@ -1369,7 +1373,20 @@ def test_alloc_fail(server, wf, conf):
 
     pool = pools[0]
 
-    cmd = ['pool', 'list-containers', '--svc', '0', '--pool', pool]
+    dfuse = DFuse(server, conf, pool=pool)
+    dfuse.use_valgrind = False
+    dfuse.start()
+
+    container = str(uuid.uuid4())
+
+    os.mkdir(os.path.join(dfuse.dir, container))
+    target_file = os.path.join(dfuse.dir, container, 'test_file')
+
+    fd = open(target_file, 'w')
+    fd.write('Hello there')
+    fd.close()
+
+    cmd = ['cat', target_file]
 
     fid = 1
 
@@ -1396,19 +1413,19 @@ def test_alloc_fail(server, wf, conf):
         fi_file.flush()
 
         try:
-            rc = run_daos_cmd(conf, cmd, fi_file=fi_file.name)
+            rc = run_daos_cmd(conf, cmd, fi_file=fi_file.name, prefix=False)
             if rc.returncode < 0:
                 print(rc)
                 print('Rerunning test under valgrind, fid={}'.format(fid))
                 rc = run_daos_cmd(conf,
                                   cmd,
                                   fi_file=fi_file.name,
-                                  fi_valgrind=True)
+                                  fi_valgrind=True, prefix=False)
                 fatal_errors = True
 
             stdout = rc.stdout.decode('utf-8').strip()
             stderr = rc.stderr.decode('utf-8').strip()
-            if not stderr.endswith("Out of memory (-1009)") and \
+            if False and not stderr.endswith("Out of memory (-1009)") and \
                'error parsing command line arguments' not in stderr and \
                stdout != container:
                 print(container)

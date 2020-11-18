@@ -896,7 +896,11 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	D_INIT_LIST_HEAD(&remap_list);
 	rc = get_object_layout(jmap, layout, &jmop, &remap_list,
 				PL_PLACE_EXTENDED, md);
-	assert(rc == 0);
+	if (rc != 0) {
+		D_ERROR("get_layout_alloc failed, rc "DF_RC"\n", DP_RC(rc));
+		pl_obj_layout_free(layout);
+		return rc;
+	}
 	/* Needed to check if domains are being added to pool map */
 	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT,
 				  PO_COMP_ID_ALL, &root);

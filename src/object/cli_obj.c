@@ -1247,7 +1247,7 @@ dc_obj_open(tse_task_t *task)
 
 	obj = obj_alloc();
 	if (obj == NULL)
-		return -DER_NOMEM;
+		D_GOTO(err, rc = -DER_NOMEM);
 
 	obj->cob_coh  = args->coh;
 	obj->cob_mode = args->mode;
@@ -1278,6 +1278,7 @@ dc_obj_open(tse_task_t *task)
 
 out:
 	obj_decref(obj);
+err:
 	tse_task_complete(task, rc);
 	return rc;
 }

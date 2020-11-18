@@ -489,12 +489,17 @@ class LogTest():
                             # this highlights other errors and lines which
                             # report an error, but not a fault code.
                             show = False
+                        elif line.get_msg().endswith(' 12'):
+                            # dfs and dfuse use system error numbers, rather
+                            # than daos, so allow ENOMEM as well as
+                            # -DER_NOMEM
+                            show = False
                     elif line.rpc:
                         # Ignore the SWIM RPC opcode, as this often sends RPCs
                         # that fail during shutdown.
                         if line.rpc_opcode == '0xfe000000':
                             show = False
-                    elif line.fac == 'external':
+                    if line.fac == 'external':
                         show = False
                     if show:
                         # Allow WARNING or ERROR messages, but anything higher
