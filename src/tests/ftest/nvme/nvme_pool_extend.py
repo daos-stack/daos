@@ -48,6 +48,11 @@ class NvmePoolExtend(TestWithServers):
     """
     Test Class Description: This test runs
     NVME Pool Extend test cases.
+    - Start the few daos servers.
+    - Create a pool
+    - Run IOR with write mode
+    - Start a new server and extend the pool 
+    - Verfy IOR written data after extending the pool.
 
     :avocado: recursive
     """
@@ -88,7 +93,7 @@ class NvmePoolExtend(TestWithServers):
     def ior_thread(self, pool, oclass, api, test, flags, results):
         """Start threads and wait until all threads are finished.
         Args:
-            pool (object): pool handle
+            pool (object): pool
             oclass (str): IOR object class
             API (str): IOR API
             test (list): IOR test sequence
@@ -100,7 +105,7 @@ class NvmePoolExtend(TestWithServers):
         if mpio_util.mpich_installed(self.hostlist_clients) is False:
             self.fail("Exiting Test: Mpich not installed")
         self.pool = pool
-        # Define the arguments for the ior_runner_thread method
+        # Define the parameters for the ior_runner_thread method
         ior_cmd = IorCommand()
         ior_cmd.get_params(self)
         ior_cmd.set_daos_params(self.server_group, self.pool)
@@ -131,7 +136,8 @@ class NvmePoolExtend(TestWithServers):
             results.put("FAIL")
 
     def run_ior_thread(self, action, oclass, api, test):
-        """[summary]
+        """Start the IOR thread for either writing or
+        reading data to/from a container.
         Args:
             action (str): Start the IOR thread with Read or
                           Write
@@ -161,18 +167,19 @@ class NvmePoolExtend(TestWithServers):
 
     def run_nvme_pool_extend(self, num_pool):
         """Run Pool Extend
-            Args:
-             int : total pools to create for testing purposes.
+        Args:
+            int : total pools to create for testing purposes.
         """
-        # Create a pool
         pool = {}
         total_servers = len(self.hostlist_servers) * 2
+        self.log.info("Total Daos Servers (Initial): %d", total_servers)
 
         # Extend one of the ranks (or server)
         # rank index starts from zero
         rank = total_servers
 
         for val in range(0, num_pool):
+            # Create a pool
             pool[val] = TestPool(self.context, dmg_command=self.dmg_command)
             pool[val].get_params(self)
             # Split total SCM and NVME size for creating multiple pools.
@@ -189,47 +196,48 @@ class NvmePoolExtend(TestWithServers):
                                              self.ior_test_sequence):
                 self.run_ior_thread("Write", oclass, api, test)
 
-                scm_size = self.pool.scm_size
-                nvme_size = self.pool.nvme_size
+                scm_pool_size = self.pool.scm_size
+                nvme_pool_size = self.pool.nvme_size
                 self.pool.display_pool_daos_space("Pool space: Beginning")
                 pver_begin = self.get_pool_version()
 
-        # Start the additional servers and extend the pool
-        self.log.info("Extra Servers = %s", self.extra_servers)
-        self.start_additional_servers(self.extra_servers)
-        # Give sometime for the additional server to come up.
-        time.sleep(25)
-        self.log.info("Pool Version at the beginning %s", pver_begin)
-        output = self.dmg_command.pool_extend(self.pool.uuid,
-                                              rank, scm_size,
-                                              nvme_size)
-        self.log.info(output)
-        fail_count = 0
-        while fail_count <= 20:
-            pver_extend = self.get_pool_version()
-            time.sleep(15)
-            fail_count += 1
-            if pver_extend > pver_begin:
-                break
+                # Start the additional servers and extend the pool
+                self.log.info("Extra Servers = %s", self.extra_servers)
+                self.start_additional_servers(self.extra_servers)
+                # Give some time for the additional server to come up.
+                # Extending two ranks (two servers per node)
+                time.sleep(25)
+                self.log.info("Pool Version at the beginning %s", pver_begin)
+                output = self.dmg_command.pool_extend(self.pool.uuid,
+                                                      "6, 7", scm_pool_size,
+                                                      nvme_pool_size)
+                self.log.info(output)
+                fail_count = 0
+                while fail_count <= 20:
+                    pver_extend = self.get_pool_version()
+                    time.sleep(15)
+                    fail_count += 1
+                    if pver_extend > pver_begin:
+                        break
 
-        self.log.info("Pool Version after extend %s", pver_extend)
-        # Check pool version incremented after pool extend
-        self.assertTrue(pver_extend > pver_begin,
-                        "Pool Version Error:  After extend")
+                self.log.info("Pool Version after extend %s", pver_extend)
+                # Check pool version incremented after pool extend
+                self.assertTrue(pver_extend > pver_begin,
+                                "Pool Version Error:  After extend")
 
-        for val in range(0, num_pool):
-            self.pool = pool[val]
-            for oclass, api, test in product(self.ior_dfs_oclass,
-                                             self.ior_apis,
-                                             self.ior_test_sequence):
                 # Verify the data after pool extend
                 self.run_ior_thread("Read", oclass, api, test)
 
-        for val in range(0, num_pool):
-            display_string = "Pool{} space at the End".format(val)
-            self.pool = pool[val]
-            self.pool.display_pool_daos_space(display_string)
-            pool[val].destroy()
+                # Get the pool space at the end of the test
+                display_string = "Pool{} space at the End".format(val)
+                self.pool = pool[val]
+                self.pool.display_pool_daos_space(display_string)
+                pool[val].destroy()
+
+                # Stop the extra node servers (rank 6 and 7)
+                output = self.dmg_command.system_stop(self.pool.uuid,
+                                                      "6, 7")
+                self.log.info(output)
 
     @skipForTicket("DAOS-5869")
     def test_nvme_pool_extend(self):
