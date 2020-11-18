@@ -691,9 +691,9 @@ open_file(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 		rc = insert_entry(parent->oh, th, file->name, len, entry);
 		if (rc == EEXIST && !oexcl) {
 			/** just try refetching entry to open the file */
-			daos_obj_close(file->oh, NULL);
+			daos_array_close(file->oh, NULL);
 		} else if (rc) {
-			daos_obj_close(file->oh, NULL);
+			daos_array_close(file->oh, NULL);
 			D_ERROR("Inserting file entry %s failed (%d)\n",
 				file->name, rc);
 			return rc;
@@ -732,6 +732,15 @@ fopen:
 	if (rc != 0) {
 		D_ERROR("daos_array_open_with_attr() failed (%d)\n", rc);
 		return daos_der2errno(rc);
+	}
+
+	if (flags & O_TRUNC) {
+		rc = daos_array_set_size(file->oh, th, 0, NULL);
+		if (rc) {
+			D_ERROR("Failed to truncate file (%d)\n", rc);
+			daos_array_close(file->oh, NULL);
+			return daos_der2errno(rc);
+		}
 	}
 
 	oid_cp(&file->oid, entry.oid);
@@ -3249,12 +3258,15 @@ out_obj:
 int
 dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size)
 {
+	int rc;
+
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
 	if (obj == NULL || !S_ISREG(obj->mode))
 		return EINVAL;
 
-	return daos_array_get_size(obj->oh, DAOS_TX_NONE, size, NULL);
+	rc = daos_array_get_size(obj->oh, DAOS_TX_NONE, size, NULL);
+	return daos_der2errno(rc);
 }
 
 int

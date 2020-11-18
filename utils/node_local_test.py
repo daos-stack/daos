@@ -726,11 +726,15 @@ def get_pool_list():
         pools.append(fname)
     return pools
 
-def assert_file_size(ofd, size):
+def assert_file_size_fd(fd, size):
     """Verify the file size is as expected"""
-    my_stat = os.fstat(ofd.fileno())
+    my_stat = os.fstat(fd)
     print('Checking file size is {} {}'.format(size, my_stat.st_size))
     assert my_stat.st_size == size
+
+def assert_file_size(ofd, size):
+    """Verify the file size is as expected"""
+    assert_file_size_fd(ofd.fileno(), size)
 
 def import_daos(server, conf):
     """Return a handle to the pydaos module"""
@@ -879,6 +883,9 @@ def run_tests(dfuse):
     ofd.close()
     ret = il_cmd(dfuse, ['cat', fname], check_write=False)
     assert ret.returncode == 0
+    ofd = os.open(fname, os.O_TRUNC)
+    assert_file_size_fd(ofd, 0)
+    os.close(ofd)
     symlink_name = os.path.join(path, 'symlink_src')
     symlink_dest = 'missing_dest'
     os.symlink(symlink_dest, symlink_name)
