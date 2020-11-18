@@ -350,7 +350,7 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 				D_GOTO(exit, rc = -DER_INVAL);
 			}
 
-			for (i = 0; i < 255; i++) {
+			for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
 				char *tag_uri = NULL;
 
 				D_ASPRINTF(tag_uri, "%s:%d", tmp_uri,
@@ -383,7 +383,7 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 			D_ERROR("Entry already present\n");
 
 			if (crt_provider_is_contig_ep(crt_gdata.cg_na_plugin)) {
-				for (i = 0; i < 255; i++)
+				for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
 					D_FREE(ui->ui_uri[i]);
 			} else {
 				D_FREE(ui->ui_uri[tag]);
