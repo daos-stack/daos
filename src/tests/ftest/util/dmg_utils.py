@@ -191,7 +191,7 @@ class DmgCommand(DmgCommandBase):
         self.log.info("storage_scan data: %s", str(data))
         return data
 
-    def storage_format(self, reformat=False, timeout=30):
+    def storage_format(self, reformat=False, timeout=30, verbose=False):
         """Get the result of the dmg storage format command.
 
         Args:
@@ -201,6 +201,8 @@ class DmgCommand(DmgCommandBase):
                 formattable.
             timeout: seconds after which the format is considered a failure and
                 times out.
+            verbose (bool): show results of each SCM & NVMe device format
+                operation.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -212,9 +214,10 @@ class DmgCommand(DmgCommandBase):
         """
         saved_timeout = self.timeout
         self.timeout = timeout
-        result = self._get_result(("storage", "format"), reformat=reformat)
+        self._get_result(
+            ("storage", "format"), reformat=reformat, verbose=verbose)
         self.timeout = saved_timeout
-        return result
+        return self.result
 
     def storage_prepare(self, user=None, hugepages="4096", nvme=False,
                         scm=False, reset=False, force=True):
