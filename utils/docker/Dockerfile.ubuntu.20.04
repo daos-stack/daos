@@ -57,8 +57,18 @@ RUN echo "$USER:$PASSWD" | chpasswd
 RUN mkdir /mnt/daos
 RUN chown daos.daos /mnt/daos
 
-# Create maven dir
-RUN mkdir -p /home/$USER/.m2
+# Set maven repo mirror
+RUN mkdir -p /root/.m2
+RUN echo -e "<settings>\n\
+	<mirrors>\n\
+		<mirror>\n\
+			<id>google-maven-central</id>\n\
+			<name>GCS Maven Central mirror</name>\n\
+			<url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
+			<mirrorOf>central</mirrorOf>\n\
+		</mirror>\n\
+	</mirrors>\n\
+</settings>" > /root/.m2/settings.xml
 
 # Switch to new user
 #USER $USER
