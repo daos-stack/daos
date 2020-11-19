@@ -53,7 +53,8 @@ else
     if [ "$WITH_VALGRIND" == 'memcheck' ]; then
 	mv test_results/unit-test-*.memcheck.xml .
 	# Debugging
-	for i in $(ls); do
+	ls unit-test-*.memcheck.xml
+	for i in $(ls unit-test-*.memcheck.xml); do
 	    leaks=$(grep -E "<kind>" $i);
 	    if [ ! -z "$leaks" ]; then
 		echo ">> $i";
