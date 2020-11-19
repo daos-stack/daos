@@ -187,4 +187,10 @@ int ds_pool_iv_conn_hdl_fetch(struct ds_pool *pool, uuid_t key_uuid,
 			      d_iov_t *conn_iov);
 int ds_pool_iv_conn_hdl_invalidate(struct ds_pool *pool, uuid_t hdl_uuid);
 
+/*
+ * srv_pool_scrub.c
+ */
+int ds_start_scrubbing_ult(struct ds_pool_child *child);
+void ds_stop_scrubbing_ult(struct ds_pool_child *child);
+
 #endif /* __POOL_SRV_INTERNAL_H__ */

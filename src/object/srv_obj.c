@@ -3001,8 +3001,7 @@ ds_obj_sync_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = dtx_obj_sync(osi->osi_pool_uuid, osi->osi_co_uuid, ioc.ioc_coc,
-			  &osi->osi_oid, oso->oso_epoch);
+	rc = dtx_obj_sync(ioc.ioc_coc, &osi->osi_oid, oso->oso_epoch);
 
 out:
 	obj_reply_map_version_set(rpc, ioc.ioc_map_ver);
