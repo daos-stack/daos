@@ -1,3 +1,9 @@
+daos (1.1.1-7) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Update mercury to release 2.0.0
+
+ -- Alexander A Oganezov <alexander.a.oganezov@intel.com>  Fri, 19 Nov 2020 08:44:57 -0600
+
 daos (1.1.1-5) unstable; urgency=medium
   [ Jonathan Martinez Montes ]
   * Restore obj_ctl utility

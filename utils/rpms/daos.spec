@@ -2,7 +2,7 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
-%global mercury_version 2.0.0~rc3-1%{?dist}
+%global mercury_version 2.0.0-1%{?dist}
 
 
 Name:          daos
@@ -397,8 +397,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Mon Nov 2 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.1-7
-- Update to mercury 2.0.0rc3
+* Thu Nov 19 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.1-7
+- Update to mercury 2.0.0
 
 * Thu Oct 29 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> 1.1.1-6
 - Restore obj_ctl utility
