@@ -48,16 +48,24 @@ mdtest:
   client_processes:
     np: 30
   api: DFS
-  num_of_files_dirs: 1667      # creating total of 50K files with 30 np
   test_dir: "/"
   iteration: 1
   dfs_destroy: False
   manager: "MPICH"
-  mdtest_flags:
-    - "-F -C"
-    - "-F -E"
+  mux_dataset: !mux
+    many_files:                # creating total of 50K files with 30 np
+      num_of_files_dirs: 1667
+      mdtest_flags:
+        - "-F -C"
+        - "-F -E"
+    many_files_and_dirs:       # total of 40K files and 40K dirs with 30 np
+      num_of_files_dirs: 1667
+      mdtest_flags:
+        - "-C"
+        - "-E"
+      depth: 4
+      branching_factor: 4
   bytes: 4096
-  depth: 0
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
 datamover:
