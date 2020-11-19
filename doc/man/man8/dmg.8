@@ -1,4 +1,4 @@
-.TH dmg 1 "18 November 2020"
+.TH dmg 1 "19 November 2020"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -444,6 +444,28 @@ Show SCM & NVMe storage space utilization per storage server
 
 \fBAliases\fP: u
 
+.SS storage replace
+Replace a storage device that has been hot-removed with a new device.
+
+\fBAliases\fP: r
+
+.SS storage replace nvme
+Replace an evicted/FAULTY NVMe SSD with another device.
+
+\fBUsage\fP: replace nvme [nvme-OPTIONS]
+.TP
+
+\fBAliases\fP: n
+
+.TP
+\fB\fB\-\-old-uuid\fR (\fIrequired\fR)\fP
+Device UUID of hot-removed SSD
+.TP
+\fB\fB\-\-new-uuid\fR (\fIrequired\fR)\fP
+Device UUID of new device
+.TP
+\fB\fB\-\-no-reint\fR\fP
+Bypass reintegration of device and just bring back online.
 .SS storage scan
 Scan SCM and NVMe storage attached to remote servers.
 
