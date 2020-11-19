@@ -40,7 +40,7 @@ class DaosVol(VolTestBase):
             self.cancelForTicket("DAOS-5831")
         if testname == "h5_test_testhdf5":
             self.cancelForTicket("DAOS-5469")
-        if mpi_type == "mpich" and testname == "h5_partest_testhdf5":
+        if testname == "h5_partest_testphdf5":
             self.cancelForTicket("DAOS-6076")
         if testname == "h5_partest_t_bigio":
             self.cancelForTicket("DAOS-5496")

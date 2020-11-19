@@ -48,7 +48,7 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
 
         # List of ACL entries
         self.cont_acl = self.get_container_acl_list(
-            self.pool.uuid, self.pool.svc_ranks[0], self.container.uuid)
+            self.pool.uuid, self.container.uuid)
 
     def test_acl_overwrite_invalid_inputs(self):
         """
@@ -73,7 +73,6 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
             # Run overwrite command
             self.daos_cmd.container_overwrite_acl(
                 self.pool.uuid,
-                self.pool.svc_ranks[0],
                 self.container.uuid,
                 acl_file)
             test_errs.extend(self.error_handling(
@@ -110,7 +109,6 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
             # Run overwrite command
             self.daos_cmd.container_overwrite_acl(
                 self.pool.uuid,
-                self.pool.svc_ranks[0],
                 self.container.uuid,
                 path_to_file)
             test_errs.extend(self.error_handling(self.daos_cmd.result, "-1003"))
@@ -143,7 +141,6 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
             create_acl_file(path_to_file, content)
             self.daos_cmd.container_overwrite_acl(
                 self.pool.uuid,
-                self.pool.svc_ranks[0],
                 self.container.uuid,
                 path_to_file)
 
@@ -179,14 +176,13 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
             create_acl_file(path_to_file, content)
             self.daos_cmd.container_overwrite_acl(
                 self.pool.uuid,
-                self.pool.svc_ranks[0],
                 self.container.uuid,
                 path_to_file)
             test_errs.extend(self.error_handling(self.daos_cmd.result, "-1001"))
 
             # Check that the acl was unchanged.
             post_test_acls = self.get_container_acl_list(
-                self.pool.uuid, self.pool.svc_ranks[0], self.container.uuid)
+                self.pool.uuid, self.container.uuid)
             if not self.compare_acl_lists(self.cont_acl, post_test_acls):
                 self.fail("Previous ACL:\n{} Post command ACL:{}".format(
                     self.cont_acl, post_test_acls))
