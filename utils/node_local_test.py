@@ -835,12 +835,12 @@ def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False):
 
 def show_cont(conf, pool):
     """Create a container and return a container list"""
-    cmd = ['container', 'create', '--svc', '0', '--pool', pool]
+    cmd = ['container', 'create', '--pool', pool]
     rc = run_daos_cmd(conf, cmd)
     assert rc.returncode == 0
     print('rc is {}'.format(rc))
 
-    cmd = ['pool', 'list-containers', '--svc', '0', '--pool', pool]
+    cmd = ['pool', 'list-containers', '--pool', pool]
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
     assert rc.returncode == 0
@@ -1000,7 +1000,7 @@ def create_and_read_via_il(dfuse, path):
 def run_container_query(conf, path):
     """Query a path to extract container information"""
 
-    cmd = ['container', 'query', '--svc', '0', '--path', path]
+    cmd = ['container', 'query', '--path', path]
 
     rc = run_daos_cmd(conf, cmd)
 
@@ -1028,8 +1028,6 @@ def run_duns_overlay_test(server, conf):
 
     rc = run_daos_cmd(conf, ['container',
                              'create',
-                             '--svc',
-                             '0',
                              '--pool',
                              pools[0],
                              '--type',
@@ -1120,7 +1118,7 @@ def run_dfuse(server, conf):
 
     uns_container = str(uuid.uuid4())
 
-    cmd = ['container', 'create', '--svc', '0',
+    cmd = ['container', 'create',
            '--pool', pools[0], '--cont', uns_container, '--path', uns_path,
            '--type', 'POSIX']
 
@@ -1152,7 +1150,7 @@ def run_dfuse(server, conf):
     uns_container = str(uuid.uuid4())
 
     # Make a link within the new container.
-    cmd = ['container', 'create', '--svc', '0',
+    cmd = ['container', 'create',
            '--pool', pools[0], '--cont', uns_container,
            '--path', uns_path, '--type', 'POSIX']
 
@@ -1284,12 +1282,12 @@ def run_in_fg(server, conf):
     t_dir = os.path.join(dfuse.dir, container)
     os.mkdir(t_dir)
     print('Running at {}'.format(t_dir))
-    print('daos container create --svc 0 --type POSIX' \
+    print('daos container create --type POSIX' \
           '--pool {} --path {}/uns-link'.format(
               pools[0], t_dir))
     print('cd {}/uns-link'.format(t_dir))
-    print('daos container destroy --svc 0 --path {}/uns-link'.format(t_dir))
-    print('daos pool list-containers --svc 0 --pool {}'.format(pools[0]))
+    print('daos container destroy --path {}/uns-link'.format(t_dir))
+    print('daos pool list-containers --pool {}'.format(pools[0]))
     try:
         dfuse.wait_for_exit()
     except KeyboardInterrupt:
@@ -1377,7 +1375,7 @@ def test_alloc_fail(server, wf, conf):
 
     pool = pools[0]
 
-    cmd = ['pool', 'list-containers', '--svc', '0', '--pool', pool]
+    cmd = ['pool', 'list-containers', '--pool', pool]
 
     fid = 1
 
@@ -1499,7 +1497,7 @@ def main():
         server.start()
         pools = get_pool_list()
         for pool in pools:
-            cmd = ['pool', 'list-containers', '--svc', '0', '--pool', pool]
+            cmd = ['pool', 'list-containers', '--pool', pool]
             run_daos_cmd(conf, cmd, valgrind=False)
         if server.stop() != 0:
             fatal_errors.add_result(True)

@@ -89,7 +89,6 @@ class DaosCommandBase(CommandWithSubCommand):
                         "/run/daos/pool/{}/*".format(sub_command), sub_command)
                 self.pool = FormattedParameter("--pool={}")
                 self.sys_name = FormattedParameter("--sys-name={}")
-                self.svc = FormattedParameter("--svc={}")
                 self.sys = FormattedParameter("--sys={}")
 
         class ListContainersSubCommand(CommonPoolSubCommand):
@@ -220,7 +219,6 @@ class DaosCommandBase(CommandWithSubCommand):
                         sub_command)
                 self.pool = FormattedParameter("--pool={}")
                 self.sys_name = FormattedParameter("--sys-name={}")
-                self.svc = FormattedParameter("--svc={}")
                 self.cont = FormattedParameter("--cont={}")
                 self.path = FormattedParameter("--path={}")
 
@@ -497,7 +495,6 @@ class DaosCommandBase(CommandWithSubCommand):
                         sub_command)
                 self.pool = FormattedParameter("--pool={}")
                 self.sys_name = FormattedParameter("--sys-name={}")
-                self.svc = FormattedParameter("--svc={}")
                 self.cont = FormattedParameter("--cont={}")
                 self.oid = FormattedParameter("--oid={}")
 
