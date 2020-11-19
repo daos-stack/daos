@@ -1341,7 +1341,7 @@ main(int argc, char **argv)
 		case 'f':
 			if (strlen(optarg) > PATH_MAX - 5) {
 				fprintf(stderr, "filename size must be < %d\n",
-						PATH_MAX - 5);
+					PATH_MAX - 5);
 				return -1;
 			}
 			strncpy(ts_pmem_file, optarg, PATH_MAX - 5);
