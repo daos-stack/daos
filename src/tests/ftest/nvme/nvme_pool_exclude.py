@@ -208,7 +208,7 @@ class NvmePoolExclude(TestWithServers):
                 pver_begin = self.get_pool_version()
 
                 index = random.randint(1, len(rank_list))
-                rank = rank_list.pop(index)
+                rank = rank_list.pop(index-1)
                 self.log.info("Removing rank %d", rank)
 
                 time.sleep(5)
