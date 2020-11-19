@@ -7,7 +7,7 @@
 
 Name:          daos
 Version:       1.1.1
-Release:       7%{?relval}%{?dist}
+Release:       8%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -404,15 +404,13 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
-<<<<<<< HEAD
-* Thu Nov 19 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.1-7
+* Thu Nov 19 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.1-8
 - Update to mercury 2.0.0
-=======
+
 * Wed Nov 11 2020 Tom Nabarro <tom.nabarro@intel.com> 1.1.1-7
 - Add version validation for runtime daos_server ipmctl requirement to avoid
   potential corruption of PMMs when setting PMem goal, issue fixed in
   https://github.com/intel/ipmctl/commit/9e3898cb15fa9eed3ef3e9de4488be1681d53ff4
->>>>>>> master
 
 * Thu Oct 29 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> 1.1.1-6
 - Restore obj_ctl utility
