@@ -45,7 +45,6 @@ struct dfuse_info {
 	char				*di_cont;
 	char				*di_group;
 	char				*di_mountpoint;
-	d_rank_list_t			*di_svcl;
 	uint32_t			di_thread_count;
 	bool				di_threaded;
 	bool				di_foreground;

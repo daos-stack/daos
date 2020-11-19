@@ -257,6 +257,7 @@ main(int argc, char **argv)
 {
 	struct dfuse_info	*dfuse_info = NULL;
 	char			*svcl = NULL;
+	d_rank_list_t		*svcl_rl = NULL;
 	struct dfuse_pool	*dfp = NULL;
 	struct dfuse_pool	*dfpn;
 	struct dfuse_dfs	*dfs = NULL;
@@ -385,22 +386,18 @@ main(int argc, char **argv)
 		}
 
 		dfuse_info->di_thread_count = CPU_COUNT(&cpuset);
-
-		/* Reserve one CPU thread for the daos event queue */
-		dfuse_info->di_thread_count -= 1;
-
 	}
 
-	if (dfuse_info->di_thread_count < 1) {
-		printf("Dfuse needs more threads\n");
+	if (dfuse_info->di_thread_count < 2) {
+		printf("Dfuse needs at least two threads.\n");
 		exit(1);
 	}
 
-	/* svcl is optional. If unspecified libdaos will query
-	 * management service to get list of pool service replicas.
-	 */
+	/* Reserve one CPU thread for the daos event queue */
+	dfuse_info->di_thread_count -= 1;
 
 	if (dfuse_info->di_pool) {
+
 		if (uuid_parse(dfuse_info->di_pool, tmp_uuid) < 0) {
 			printf("Invalid pool uuid\n");
 			exit(1);
@@ -412,8 +409,23 @@ main(int argc, char **argv)
 				exit(1);
 			}
 		}
+
+		/* svcl is optional. If unspecified libdaos will query
+		 * management service to get list of pool service replicas.
+		 */
+
+		if (svcl) {
+			svcl_rl = daos_rank_list_parse(svcl, ":");
+			if (svcl_rl == NULL) {
+				printf("Invalid pool service rank list\n");
+				D_GOTO(out_dfuse, ret = -DER_INVAL);
+			}
+		}
 	} else if (dfuse_info->di_cont) {
 		printf("Pool uuid required with container uuid\n");
+		exit(1);
+	} else if (svcl) {
+		printf("Svcl not meaningful without pool uuid\n");
 		exit(1);
 	}
 
@@ -436,17 +448,9 @@ main(int argc, char **argv)
 
 	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
 
-	if (svcl) {
-		dfuse_info->di_svcl = daos_rank_list_parse(svcl, ":");
-		if (dfuse_info->di_svcl == NULL) {
-			printf("Invalid pool service rank list\n");
-			D_GOTO(out_dfuse, ret = -DER_INVAL);
-		}
-	}
-
 	D_ALLOC_PTR(dfp);
 	if (!dfp)
-		D_GOTO(out_svcl, ret = -DER_NOMEM);
+		D_GOTO(out_dfuse, ret = -DER_NOMEM);
 
 	DFUSE_TRA_UP(dfp, dfuse_info, "dfp");
 	D_INIT_LIST_HEAD(&dfp->dfp_dfs_list);
@@ -515,7 +519,7 @@ main(int argc, char **argv)
 	if (uuid_is_null(dfp->dfp_pool) == 0) {
 		/** Connect to DAOS pool */
 		rc = daos_pool_connect(dfp->dfp_pool, dfuse_info->di_group,
-				       dfuse_info->di_svcl, DAOS_PC_RW,
+				       svcl_rl, DAOS_PC_RW,
 				       &dfp->dfp_poh, &dfp->dfp_pool_info,
 				       NULL);
 		if (rc != -DER_SUCCESS) {
@@ -601,13 +605,15 @@ out_dfs:
 		DFUSE_TRA_DOWN(dfp);
 		D_FREE(dfp);
 	}
-out_svcl:
-	d_rank_list_free(dfuse_info->di_svcl);
 out_dfuse:
 	DFUSE_TRA_DOWN(dfuse_info);
 	D_MUTEX_DESTROY(&dfuse_info->di_lock);
 	daos_fini();
 out_debug:
+
+	if (svcl_rl)
+		d_rank_list_free(svcl_rl);
+
 	D_FREE(dfuse_info);
 	DFUSE_LOG_INFO("Exiting with status %d", ret);
 	daos_debug_fini();

@@ -631,7 +631,7 @@ class DFuse():
 
         cmd.extend(self.valgrind.get_cmd_prefix())
 
-        cmd.extend([dfuse_bin, '-s', '0', '-m', self.dir, '-f'])
+        cmd.extend([dfuse_bin, '-m', self.dir, '-f'])
 
         if self.multi_user:
             cmd.append('--multi-user')
