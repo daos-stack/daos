@@ -1390,8 +1390,9 @@ crt_hdlr_iv_fetch_aux(void *arg)
 
 	/*
  	 * Check if current group version matches that of the ifi structure.
- 	 * If the in comming rpc request version number does not
- 	 * match that of this node, then return error.
+ 	 * Test whether the current node changed its version number from 
+ 	 * the time it initially received a request to the time it
+ 	 * is to send the response.
  	 */
 	grp_ver_entry = ivns_internal->cii_grp_priv->gp_membs_ver;
 	if (grp_ver_entry != input->ifi_grp_ver) {

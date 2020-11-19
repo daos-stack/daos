@@ -78,8 +78,9 @@ extern uint32_t crt_swim_rpc_timeout;
 #	define CRT_EXIT()					\
 		D_DEBUG(DB_TRACE, "<<<< Exit %s: %d\n", __func__, __LINE__)
 #else
-#	define CRT_ENTRY()
-	#define CRT_EXIT()
+#	define CRT_ENTRY()	/* */
+#	define CRT_EXIT()	/* */
+
 #endif
 
 #endif /* __CRT_INTERNAL_H__ */
