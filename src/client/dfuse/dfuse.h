@@ -200,7 +200,7 @@ struct dfuse_dfs {
 };
 
 /* Multiuser support */
-#define XATTR_NAME "system.dfuse.ids"
+#define DFUSE_XID_XATTR_NAME "user.dfuse.ids"
 
 struct uid_entry {
 	uid_t uid;

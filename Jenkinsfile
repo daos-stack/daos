@@ -134,7 +134,7 @@ String unit_packages() {
                            'libpmemobj protobuf-c ' +
                            'spdk-devel libfabric-devel '+
                            'pmix numactl-devel ' +
-                           'libipmctl-devel ' +
+                           'libipmctl-devel python36-pyxattr' +
                            'python36-tabulate numactl'
         if (need_qb) {
             // TODO: these should be gotten from the Requires: of RPM

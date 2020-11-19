@@ -696,7 +696,8 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		if (rc) {
 			int err = errno;
 
-			D_ERROR("Failed to set DAOS xattr (rc = %d).\n", err);
+			D_ERROR("Failed to set DAOS xattr: %s\n",
+				strerror(err));
 			D_GOTO(err_link, rc = err);
 		}
 

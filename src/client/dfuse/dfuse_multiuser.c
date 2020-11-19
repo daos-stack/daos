@@ -34,7 +34,7 @@ set_uid(struct dfuse_inode_entry *ie, fuse_req_t req)
 	entry.uid = ctx->uid;
 	entry.gid = ctx->gid;
 
-	rc = dfs_setxattr(ie->ie_dfs->dfs_ns, ie->ie_obj, XATTR_NAME,
+	rc = dfs_setxattr(ie->ie_dfs->dfs_ns, ie->ie_obj, DFUSE_XID_XATTR_NAME,
 			  &entry, sizeof(entry), 0);
 	return rc;
 }
@@ -93,16 +93,12 @@ dfuse_cb_mkdir_with_id(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 unlink:
 	cleanup_rc = dfs_remove(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
-				false, &old_oid);
+				false, &oid);
 	if (cleanup_rc != 0) {
-		DFUSE_TRA_ERROR(parent, "Created but could not unlink %s",
-				name);
+		DFUSE_TRA_ERROR(parent,
+				"Created but could not unlink %s: %d, %s",
+				name, rc, strerror(rc));
 		D_GOTO(release, 0);
-	}
-	if (oid.lo != old_oid.lo || oid.hi != old_oid.hi) {
-		DFUSE_TRA_ERROR(parent, "Unlinked the wrong directory");
-		DFUSE_TRA_ERROR(parent, "%#lx %#lx", old_oid.lo, old_oid.hi);
-		rc = EIO;
 	}
 
 release:

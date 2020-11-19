@@ -17,6 +17,7 @@ import argparse
 import subprocess
 import tempfile
 import pickle
+import xattr
 
 from collections import OrderedDict
 
@@ -890,6 +891,25 @@ def make_pool(daos):
 
     return get_pool_list()
 
+def xattr_test(dfuse):
+    """Perform basic tests with extended attributes"""
+
+    new_file = os.path.join(dfuse.dir, 'attr_file')
+    fd = open(new_file, 'w')
+
+    x = xattr.xattr(fd)
+    x.set('user.mine', b'init_value')
+    # This should fail as a security test.
+    try:
+        x.set('user.dfuse.ids', b'other_value')
+        assert False
+    except PermissionError:
+        pass
+    x.set('user.dfuse.id', b'good_value')
+    x.set('user.dfuse.ids0', b'also_good_value')
+    for key in x:
+        print('xattr is {}:{}'.format(key, x.get(key)))
+
 def run_tests(dfuse):
     """Run some tests"""
     path = dfuse.dir
@@ -1137,6 +1157,7 @@ def run_dfuse(server, conf):
     create_and_read_via_il(dfuse, dfuse.dir)
 
     run_tests(dfuse)
+    xattr_test(dfuse)
 
     fatal_errors.add_result(dfuse.stop())
 

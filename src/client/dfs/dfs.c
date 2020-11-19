@@ -1719,6 +1719,12 @@ restart:
 	if (!exists)
 		D_GOTO(out, rc = ENOENT);
 
+	/* Check if the file is the expected one */
+	if (oid && (oid->lo != 0 || oid->hi != 0)) {
+		if (oid->lo != entry.oid.lo || oid->hi != entry.oid.hi)
+			D_GOTO(out, rc = EBADF);
+	}
+
 	if (S_ISDIR(entry.mode)) {
 		uint32_t nr = 0;
 		daos_handle_t oh;

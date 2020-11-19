@@ -33,7 +33,7 @@ dfuse_get_uid(struct dfuse_inode_entry *ie)
 	daos_size_t		size = sizeof(entry);
 	int rc;
 
-	rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj, XATTR_NAME,
+	rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj, DFUSE_XID_XATTR_NAME,
 			  &entry, &size);
 
 	if (rc == 0 && size != sizeof(entry))
