@@ -114,6 +114,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	crt_gdata.cg_inited = 0;
 	crt_gdata.cg_na_plugin = CRT_NA_OFI_SOCKETS;
 	crt_gdata.cg_sep_mode = false;
+	crt_gdata.cg_contig_ports = true;
 
 	srand(d_timeus_secdiff(0) + getpid());
 	start_rpcid = ((uint64_t)rand()) << 32;
@@ -292,8 +293,9 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	if (gdata_init_flag == 0) {
 		rc = data_init(server, opt);
 		if (rc != 0) {
-			D_ERROR("data_init failed, "DF_RC"\n", DP_RC(rc));
-			D_GOTO(out, rc);
+			D_ERROR("data_init failed, rc(%d) - %s.\n",
+				rc, strerror(rc));
+			D_GOTO(out, rc = -rc);
 		}
 	}
 	D_ASSERT(gdata_init_flag == 1);
