@@ -592,6 +592,7 @@ class DFuse():
         self.conf = conf
         self.cores = None
         self._daos = daos
+        self.use_valgrind = True
         self._sp = None
 
         prefix = 'dnt_dfuse_{}_'.format(get_inc_id())
@@ -622,6 +623,9 @@ class DFuse():
 
         self.valgrind = ValgrindHelper(v_hint)
         if self.conf.args.memcheck == 'no':
+            self.valgrind.use_valgrind = False
+
+        if not self.use_valgrind:
             self.valgrind.use_valgrind = False
 
         if self.cores:
@@ -763,7 +767,12 @@ def import_daos(server, conf):
     daos = __import__('pydaos')
     return daos
 
-def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False, prefix=True):
+def run_daos_cmd(conf,
+                 cmd,
+                 valgrind=True,
+                 fi_file=None,
+                 fi_valgrind=False,
+                 prefix=True):
     """Run a DAOS command
 
     Run a command, returning what subprocess.run() would.
