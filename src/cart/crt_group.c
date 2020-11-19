@@ -362,6 +362,7 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 					for (k = 0; k < i; k++)
 						D_FREE(ui->ui_uri[k]);
 
+					D_FREE(ui);
 					D_GOTO(exit, rc = -DER_NOMEM);
 				}
 
