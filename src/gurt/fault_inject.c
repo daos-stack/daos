@@ -646,23 +646,31 @@ d_should_fail(struct d_fault_attr_t *fault_attr)
 		return false;
 
 	D_SPIN_LOCK(&fault_attr->fa_lock);
-	if (fault_attr->fa_probability_x == 0)
-		D_GOTO(out, rc = false);
+	if (fault_attr->fa_probability_x == 0) {
+		rc = false;
+		goto out;
+	}
 
 	if (fault_attr->fa_max_faults != 0 &&
-	    fault_attr->fa_max_faults <= fault_attr->fa_num_faults)
-		D_GOTO(out, rc = false);
+		fault_attr->fa_max_faults <= fault_attr->fa_num_faults) {
+		rc = false;
+		goto out;
+	}
 
 	if (fault_attr->fa_interval > 1) {
 		fault_attr->fa_num_hits++;
-		if (fault_attr->fa_num_hits % fault_attr->fa_interval)
-			D_GOTO(out, rc = false);
+		if (fault_attr->fa_num_hits % fault_attr->fa_interval) {
+			rc = false;
+			goto out;
+		}
 	}
 
 	if (fault_attr->fa_probability_y != 0 &&
 	    fault_attr->fa_probability_x <=
-	    nrand48(fault_attr->fa_rand_state) % fault_attr->fa_probability_y)
-		D_GOTO(out, rc = false);
+		nrand48(fault_attr->fa_rand_state) % fault_attr->fa_probability_y) {
+		rc = false;
+		goto out;
+	}
 
 	fault_attr->fa_num_faults++;
 

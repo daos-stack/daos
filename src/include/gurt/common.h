@@ -204,12 +204,50 @@ extern "C" {
 #define D_ALLOC_ARRAY(ptr, count) D_ALLOC_CORE(ptr, sizeof(*ptr), count)
 #define D_FREE_PTR(ptr)		D_FREE(ptr)
 
-#define D_GOTO(label, rc)			\
-	do {					\
-		__typeof__(rc) __rc = (rc);		\
-		(void)(__rc);			\
-		goto label;			\
+/* _Generic() is part of the c11 standard but isn't yet supported by
+ * gcc until version 4.9 so check for that but enable it in all other
+ * cases.
+ */
+
+#ifdef __GNU__
+#if __GNUC__ > 4 || \
+	(__GNUC__ == 4 && (__GNUC_MINOR__ > 9 ||))
+#define VERBOSE_GOTO 0
+#else
+#define VERBOSE_GOTO 1
+#endif
+#define VERBOSE_GOTO 1
+#endif
+
+#if VERBOSE_GOTO
+#define DG_FMT(x) _Generic(__rc,					\
+				int: "%d",				\
+				unsigned int: "%u",			\
+				unsigned long: "%ul",			\
+				bool: "%d",				\
+				int64_t: "%ld", default: "%p")
+
+#define D_GOTO(label, rc)						\
+	do {								\
+		__typeof__(rc) __rc = (rc);				\
+		if (D_LOG_ENABLED(DB_TRACE)) {				\
+			char __result[20] = {0};			\
+			snprintf(__result, 20, DG_FMT(__rc), __rc);	\
+			D_DEBUG(DB_TRACE, "Jumping to " #label " '" #rc "' result '%s'\n", __result); \
+		}							\
+		(void)(__rc);						\
+		goto label;						\
 	} while (0)
+#else
+
+#define D_GOTO(label, rc)						\
+	do {								\
+		__typeof__(rc) __rc = (rc);				\
+		D_DEBUG(DB_TRACE, "Jumping to " #label " '" #rc "'\n"); \
+		(void)(__rc);						\
+		goto label;						\
+	} while (0)
+#endif
 
 #define D_FPRINTF(...)							\
 	({								\
