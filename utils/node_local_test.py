@@ -581,7 +581,13 @@ class DFuse():
 
     instance_num = 0
 
-    def __init__(self, daos, conf, pool=None, container=None, path=None, multi_user=False):
+    def __init__(self,
+                 daos,
+                 conf,
+                 pool=None,
+                 container=None,
+                 path=None,
+                 multi_user=False):
         if path:
             self.dir = path
         else:
@@ -854,7 +860,7 @@ def get_conts(conf, pool, posix=True):
         rc = run_daos_cmd(conf, cmd)
         for line in rc.stdout.decode('utf-8').splitlines():
             (key, value) = line.split(':')
-            if (key == 'layout type'):
+            if key == 'layout type':
                 print(value.strip())
                 if not posix or value.strip() == 'POSIX (1)':
                     matched.append(container)
@@ -897,18 +903,17 @@ def xattr_test(dfuse):
     new_file = os.path.join(dfuse.dir, 'attr_file')
     fd = open(new_file, 'w')
 
-    x = xattr.xattr(fd)
-    x.set('user.mine', b'init_value')
+    xattr.set(fd, 'user.mine', 'init_value')
     # This should fail as a security test.
     try:
-        x.set('user.dfuse.ids', b'other_value')
+        xattr.set(fd, 'user.dfuse.ids', b'other_value')
         assert False
     except PermissionError:
         pass
-    x.set('user.dfuse.id', b'good_value')
-    x.set('user.dfuse.ids0', b'also_good_value')
-    for key in x:
-        print('xattr is {}:{}'.format(key, x.get(key)))
+    xattr.set(fd, 'user.dfuse.id', 'good_value')
+    xattr.set(fd, 'user.dfuse.ids0', 'also_good_value')
+    for (key, value) in xattr.get_all(fd):
+        print('xattr is {}:{}'.format(key, value))
 
 def run_tests(dfuse):
     """Run some tests"""

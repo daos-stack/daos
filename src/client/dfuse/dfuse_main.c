@@ -429,7 +429,7 @@ main(int argc, char **argv)
 		exit(1);
 	}
 
-	if (dfuse_info->di_multi_user && ! dfuse_info->di_cont) {
+	if (dfuse_info->di_multi_user && !dfuse_info->di_cont) {
 		printf("Multi-user mode requires a container uuid\n");
 		exit(1);
 	}
@@ -477,7 +477,7 @@ main(int argc, char **argv)
 
 	if (dfuse_info->di_pool) {
 		if (uuid_parse(dfuse_info->di_pool,
-				dfp->dfp_pool) < 0) {
+			       dfp->dfp_pool) < 0) {
 			printf("Invalid pool uuid\n");
 			D_GOTO(out_dfs, ret = -DER_INVAL);
 		}
@@ -494,14 +494,14 @@ main(int argc, char **argv)
 	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() returned %d %s",
 		       rc, strerror(rc));
 	if (rc == 0) {
-		if (dfuse_info->di_pool && (uuid_compare(duns_attr.da_puuid,
-											dfp->dfp_pool))) {
+		if (dfuse_info->di_pool &&
+			(uuid_compare(duns_attr.da_puuid, dfp->dfp_pool))) {
 			printf("Pools uuids do not match\n");
 			D_GOTO(out_dfs, rc = -DER_INVAL);
 		}
 
-		if (dfuse_info->di_cont && (uuid_compare(duns_attr.da_cuuid,
-											dfs->dfs_cont))) {
+		if (dfuse_info->di_cont &&
+			(uuid_compare(duns_attr.da_cuuid, dfs->dfs_cont))) {
 			printf("Container uuids do not match\n");
 			D_GOTO(out_dfs, rc = -DER_INVAL);
 		}

@@ -51,7 +51,7 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 
 		if (!set_both) {
 			rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj,
-					DFUSE_XID_XATTR_NAME, &entry, &size);
+					  DFUSE_XID_XATTR_NAME, &entry, &size);
 			if (rc && rc != ENODATA)
 				D_GOTO(err, rc);
 		}

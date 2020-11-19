@@ -46,7 +46,6 @@ dfuse_cb_mkdir_with_id(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*ie = NULL;
 	daos_obj_id_t			oid;
-	daos_obj_id_t			old_oid;
 	int				rc;
 	int				cleanup_rc;
 
