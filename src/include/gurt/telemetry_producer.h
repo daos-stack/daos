@@ -23,9 +23,6 @@
 #ifndef __TELEMETRY_PRODUCER_H__
 #define __TELEMETRY_PRODUCER_H__
 
-#include "time.h"
-#include <stdarg.h>
-
 /* Developer facing server API to write data */
 int d_tm_increment_counter(struct d_tm_node_t **metric, char *item, ...);
 int d_tm_record_timestamp(struct d_tm_node_t **metric, char *item, ...);

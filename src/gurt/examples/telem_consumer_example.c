@@ -24,16 +24,6 @@
  * This file shows an example of using the telemetry API to consume metrics
  */
 
-#include <string.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#include <inttypes.h>
-#include <time.h>
-#include <sys/types.h>
-#include <sys/ipc.h>
-#include <sys/shm.h>
-#include <stdbool.h>
 #include "gurt/common.h"
 #include "gurt/telemetry_common.h"
 #include "gurt/telemetry_consumer.h"
@@ -46,8 +36,8 @@
  * This example doesn't _do_ anything with the data it reads other than print
  * it out.
  */
-void readMetrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
-		 int iteration)
+void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
+		  int filter, bool show_meta, int iteration)
 {
 	struct d_tm_nodeList_t	*nodelist = NULL;
 	struct d_tm_nodeList_t	*head = NULL;
@@ -59,11 +49,8 @@ void readMetrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 	char			*name;
 	int			rc;
 
-	printf("iteration: %d - %s/\n", iteration, dirname);
-	rc = d_tm_list(&nodelist, shmem_root, dirname,
-		       D_TM_DIRECTORY | D_TM_COUNTER | D_TM_TIMESTAMP |
-		       D_TM_TIMER_SNAPSHOT | D_TM_DURATION |
-		       D_TM_GAUGE);
+	printf("\niteration: %d - %s/\n", iteration, dirname);
+	rc = d_tm_list(&nodelist, shmem_root, dirname, filter);
 
 	if (rc == D_TM_SUCCESS)
 		head = nodelist;
@@ -150,13 +137,16 @@ void readMetrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 			break;
 		}
 
-		d_tm_get_metadata(&shortDesc, &longDesc, shmem_root,
-				  nodelist->dtnl_node, NULL);
-		printf("\tMetadata: %s and %s\n",
-		       shortDesc ? shortDesc : "N/A",
-		       longDesc ? longDesc : "N/A");
-		D_FREE_PTR(shortDesc);
-		D_FREE_PTR(longDesc);
+		if (show_meta) {
+			d_tm_get_metadata(&shortDesc, &longDesc, shmem_root,
+					  nodelist->dtnl_node, NULL);
+			printf("\tMetadata short description: %s\n"
+			       "\tMetadata long description: %s\n",
+			       shortDesc ? shortDesc : "N/A",
+			       longDesc ? longDesc : "N/A");
+			D_FREE_PTR(shortDesc);
+			D_FREE_PTR(longDesc);
+		}
 		nodelist = nodelist->dtnl_next;
 	}
 	d_tm_list_free(head);
@@ -168,8 +158,10 @@ main(int argc, char **argv)
 	struct d_tm_node_t	*root = NULL;
 	uint64_t 		*shmem_root = NULL;
 	char			dirname[D_TM_MAX_NAME_LEN] = {0};
+	bool			show_meta;
 	int			simulated_rank = 0;
 	int			iteration = 0;
+	int			filter;
 
 	if (argc < 2) {
 		printf("Specify an integer that identifies the producer's "
@@ -188,10 +180,25 @@ main(int argc, char **argv)
 	       "0x%" PRIx64 "\n", simulated_rank, (uint64_t)shmem_root);
 
 	root = d_tm_get_root(shmem_root);
-	sprintf(dirname, "src/gurt/examples/telem_producer_example.c/main");
 	while (1) {
 		d_tm_print_my_children(shmem_root, root, 0, stdout);
-		readMetrics(shmem_root, root, dirname, iteration++);
+
+		sprintf(dirname, "src/gurt/examples/telem_producer_example.c"
+			"/main");
+		filter = (D_TM_DIRECTORY | D_TM_COUNTER | D_TM_TIMESTAMP |
+			  D_TM_TIMER_SNAPSHOT | D_TM_DURATION | D_TM_GAUGE);
+		show_meta = false;
+		read_metrics(shmem_root, root, dirname, filter, show_meta,
+			     iteration);
+
+		filter = D_TM_COUNTER;
+		show_meta = true;
+		sprintf(dirname, "src/gurt/examples/telem_producer_example.c"
+			"/manually added");
+		read_metrics(shmem_root, root, dirname, filter, show_meta,
+			     iteration);
+
+		iteration++;
 		sleep(1);
 	}
 

@@ -23,9 +23,6 @@
 #ifndef __TELEMETRY_CONSUMER_H__
 #define __TELEMETRY_CONSUMER_H__
 
-#include "time.h"
-#include <stdarg.h>
-
 /* Developer facing client API to read data */
 int d_tm_get_counter(uint64_t *val, uint64_t *shmem_root,
 		     struct d_tm_node_t *node, char *metric);
@@ -50,7 +47,6 @@ uint64_t d_tm_get_num_objects(uint64_t *shmem_root, char *path,
 uint64_t d_tm_count_metrics(uint64_t *shmem_root, struct d_tm_node_t *node);
 int d_tm_list(struct d_tm_nodeList_t **nodelist, uint64_t *shmem_root,
 	      char *path, int dtn_type);
-void d_tm_list_free(struct d_tm_nodeList_t *nodeList);
 void d_tm_print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node,
 			    int level, FILE *stream);
 void d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,

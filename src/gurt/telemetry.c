@@ -27,24 +27,7 @@
 #define D_LOGFAC	DD_FAC(telem)
 
 #include <gurt/common.h>
-#include <string.h>
-#include <stdio.h>
-#include <stdarg.h>
-#include <time.h>
-#include <inttypes.h>
-#include <sys/types.h>
-#include <sys/ipc.h>
 #include <sys/shm.h>
-#include <sys/syscall.h>
-#include <sys/mman.h>
-#include <stdbool.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <pthread.h>
-#include <semaphore.h>
-#include <errno.h>
-#include <stdbool.h>
 #include "gurt/telemetry_common.h"
 #include "gurt/telemetry_producer.h"
 #include "gurt/telemetry_consumer.h"
@@ -200,7 +183,7 @@ d_tm_add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
 	struct d_tm_node_t	*node = NULL;
 	int			rc = D_TM_SUCCESS;
 
-	if ((parent == NULL) || (name == NULL)) {
+	if ((newnode == NULL) || (parent == NULL) || (name == NULL)) {
 		rc = -DER_INVAL;
 		goto failure;
 	}
@@ -724,6 +707,7 @@ failure:
  *				-DER_OP_NOT_PERMITTED	Operation not permitted
  *							because the \a item is
  *							not a counter
+ *				-DER_UNINIT		API not initialized
  */
 int
 d_tm_increment_counter(struct d_tm_node_t **metric, char *item, ...)
@@ -805,6 +789,7 @@ failure:
  *				-DER_OP_NOT_PERMITTED	Operation not permitted
  *							because the \a item is
  *							not a timestamp
+ *				-DER_UNINIT		API not initialized
  */
 int
 d_tm_record_timestamp(struct d_tm_node_t **metric, char *item, ...)
@@ -885,6 +870,8 @@ failure:
  *							because the \a item is
  *							not a high resolution
  *							timer
+ *				-DER_INVAL		invalid clock_id
+ *				-DER_UNINIT		API not initialized
  */
 int
 d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
@@ -978,7 +965,8 @@ failure:
  *				-DER_OP_NOT_PERMITTED	Operation not permitted
  *							because the \a item is
  *							not a duration
- *				-DER_INVAL		clk_id was invalid
+ *				-DER_INVAL		invalid clk_id
+ *				-DER_UNINIT		API not initialized
  */
 int
 d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
@@ -1073,6 +1061,7 @@ failure:
  *				-DER_DURATION_MISMATCH	This function was called
  *							without first calling
  *							d_tm_mark_duration_start
+ *				-DER_UNINIT		API not initialized
  */
 int
 d_tm_mark_duration_end(struct d_tm_node_t **metric, char *item, ...)
@@ -1154,6 +1143,7 @@ failure:
  *				-DER_OP_NOT_PERMITTED	Operation not permitted
  *							because the \a item is
  *							not a gauge
+ *				-DER_UNINIT		API not initialized
  */
 int
 d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value, char *item, ...)
@@ -1234,6 +1224,7 @@ failure:
  *				-DER_OP_NOT_PERMITTED	Operation not permitted
  *							because the \a item is
  *							not a gauge
+ *				-DER_UNINIT		API not initialized
  */
 int
 d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
@@ -1315,6 +1306,7 @@ failure:
  *				-DER_OP_NOT_PERMITTED	Operation not permitted
  *							because the \a item is
  *							not a gauge
+ *				-DER_UNINIT		API not initialized
  */
 int
 d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
@@ -1442,10 +1434,11 @@ d_tm_find_metric(uint64_t *shmem_root, char *path)
  * \return			D_TM_SUCCESS		Success
  *				-DER_NO_SHMEM		Out of shared memory
  *				-DER_NOMEM		Out of global heap
- *				-DER_EXCEEDS_PATH_LEN	Node name exceeds
+ *				-DER_EXCEEDS_PATH_LEN	node name exceeds
  *							path len
  *				-DER_INVAL		node is invalid
  *				-DER_ADD_METRIC_FAILED	Operation failed
+ *				-DER_UNINIT		API not initialized
  */
 int
 d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
@@ -1545,7 +1538,7 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 	}
 	strncpy(temp->dtn_metric->dtm_sh_desc, sh_desc, buff_len);
 
-	buff_len = strnlen(sh_desc, D_TM_MAX_LONG_LEN);
+	buff_len = strnlen(lng_desc, D_TM_MAX_LONG_LEN);
 	if (buff_len == D_TM_MAX_LONG_LEN) {
 		rc = -DER_EXCEEDS_PATH_LEN;
 		goto failure;
@@ -1603,7 +1596,7 @@ failure:
  * \param[in]		metric		Full path name to the stored metric
  *
  * \return		D_TM_SUCCESS		Success
- * 			-DER_INVAL		Bad pointer
+ * 			-DER_INVAL		Bad \a value pointer
  * 			-DER_METRIC_NOT_FOUND	Metric not found
  *			-DER_OP_NOT_PERMITTED	Metric was not a counter
  */
@@ -1652,7 +1645,7 @@ d_tm_get_counter(uint64_t *val, uint64_t *shmem_root, struct d_tm_node_t *node,
  * \param[in]		metric		Full path name to the stored metric
  *
  * \return		D_TM_SUCCESS		Success
- * 			-DER_INVAL		Bad pointer
+ * 			-DER_INVAL		Bad \a val pointer
  * 			-DER_METRIC_NOT_FOUND	Metric not found
  *			-DER_OP_NOT_PERMITTED	Metric was not a timestamp
  */
@@ -1700,7 +1693,7 @@ d_tm_get_timestamp(time_t *val, uint64_t *shmem_root, struct d_tm_node_t *node,
  * \param[in]		metric		Full path name to the stored metric
  *
  * \return		D_TM_SUCCESS		Success
- * 			-DER_INVAL		Bad pointer
+ * 			-DER_INVAL		Bad \a tms pointer
  * 			-DER_METRIC_NOT_FOUND	Metric not found
  *			-DER_OP_NOT_PERMITTED	Metric was not a high resolution
  *						timer
@@ -1750,7 +1743,7 @@ d_tm_get_timer_snapshot(struct timespec *tms, uint64_t *shmem_root,
  * \param[in]		metric		Full path name to the stored metric
  *
  * \return		D_TM_SUCCESS		Success
- * 			-DER_INVAL		Bad pointer
+ * 			-DER_INVAL		Bad \a tms pointer
  * 			-DER_METRIC_NOT_FOUND	Metric not found
  *			-DER_OP_NOT_PERMITTED	Metric was not a duration
  */
@@ -1799,7 +1792,7 @@ d_tm_get_duration(struct timespec *tms, uint64_t *shmem_root,
  * \param[in]		metric		Full path name to the stored metric
  *
  * \return		D_TM_SUCCESS		Success
- * 			-DER_INVAL		Bad pointer
+ * 			-DER_INVAL		Bad \a val pointer
  * 			-DER_METRIC_NOT_FOUND	Metric not found
  *			-DER_OP_NOT_PERMITTED	Metric was not a gauge
  */
@@ -1851,7 +1844,8 @@ d_tm_get_gauge(uint64_t *val, uint64_t *shmem_root, struct d_tm_node_t *node,
  * \param[in]		metric		Full path name to the stored metric
  *
  * \return		D_TM_SUCCESS		Success
- * 			-DER_INVAL		Bad pointer
+ * 			-DER_INVAL		Bad \a sh_desc or \a lng_desc
+ * 						pointer
  * 			-DER_METRIC_NOT_FOUND	Metric node not found
  *			-DER_OP_NOT_PERMITTED	Node is not a metric
  */
@@ -1935,7 +1929,8 @@ d_tm_get_version(void)
  * 						too long
  *			-DER_METRIC_NOT_FOUND	No items were found at the path
  *						provided
- *			-DER_INVAL		Bad \a path
+ *			-DER_INVAL		Invalid pointer for \a head or
+						\a path
  */
 int
 d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root, char *path,
@@ -1950,7 +1945,7 @@ d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root, char *path,
 	int			rc = D_TM_SUCCESS;
 	bool			search_siblings = false;
 
-	if (path == NULL) {
+	if ((head == NULL) || (path == NULL)) {
 		rc = -DER_INVAL;
 		goto failure;
 	}
