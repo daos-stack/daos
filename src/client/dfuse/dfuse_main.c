@@ -390,14 +390,9 @@ main(int argc, char **argv)
 		}
 	}
 
-	/* Is this required, or can we assume some kind of default for
-	 * this.
+	/* svcl is optional. If unspecified libdaos will query
+	 * management service to get list of pool service replicas.
 	 */
-	if (!svcl) {
-		printf("Svcl is required\n");
-		show_help(argv[0]);
-		D_GOTO(out_debug, ret = -DER_NO_HDL);
-	}
 
 	if (dfuse_info->di_pool) {
 		if (uuid_parse(dfuse_info->di_pool, tmp_uuid) < 0) {
@@ -427,10 +422,12 @@ main(int argc, char **argv)
 
 	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
 
-	dfuse_info->di_svcl = daos_rank_list_parse(svcl, ":");
-	if (dfuse_info->di_svcl == NULL) {
-		printf("Invalid pool service rank list\n");
-		D_GOTO(out_dfuse, ret = -DER_INVAL);
+	if (svcl) {
+		dfuse_info->di_svcl = daos_rank_list_parse(svcl, ":");
+		if (dfuse_info->di_svcl == NULL) {
+			printf("Invalid pool service rank list\n");
+			D_GOTO(out_dfuse, ret = -DER_INVAL);
+		}
 	}
 
 	D_ALLOC_PTR(dfp);

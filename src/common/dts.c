@@ -237,7 +237,7 @@ pool_init(struct dts_context *tsc)
 		if (rc)
 			goto bcast;
 
-		rc = daos_pool_connect(tsc->tsc_pool_uuid, NULL, svc,
+		rc = daos_pool_connect(tsc->tsc_pool_uuid, NULL, NULL /* svc */,
 				       DAOS_PC_EX, &poh, NULL, NULL);
 		if (rc)
 			goto bcast;

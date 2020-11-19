@@ -411,7 +411,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Mon Nov 16 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.1-8
+* Thu Nov 19 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.1-8
 - define scons_args to be BUILD_TYPE=<release|dev>
 - the scons default is BUILD_TYPE=release
 - BUILD_TYPE=release will disable fault injection in build

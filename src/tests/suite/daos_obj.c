@@ -3083,7 +3083,7 @@ tgt_idx_change_retry(void **state)
 		/** exclude target of the replica */
 		print_message("rank 0 excluding target rank %u ...\n", rank);
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
-				    arg->dmg_config, arg->pool.svc, rank);
+				    arg->dmg_config, NULL /* svc */, rank);
 		assert_int_equal(rc, 0);
 
 		/** progress the async IO (not must) */
@@ -3140,7 +3140,7 @@ tgt_idx_change_retry(void **state)
 	if (arg->myrank == 0) {
 		print_message("rank 0 adding target rank %u ...\n", rank);
 		daos_reint_server(arg->pool.pool_uuid, arg->group,
-				  arg->dmg_config, arg->pool.svc,
+				  arg->dmg_config, NULL /* svc */,
 				  rank);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -3196,7 +3196,7 @@ fetch_replica_unavail(void **state)
 
 		/* add back the excluded targets */
 		daos_reint_server(arg->pool.pool_uuid, arg->group,
-				  arg->dmg_config, arg->pool.svc,
+				  arg->dmg_config, NULL /* svc */,
 				  rank);
 
 		/* wait until reintegration is done */
