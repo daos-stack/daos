@@ -54,12 +54,15 @@ else
 	mv test_results/unit-test-*.memcheck.xml .
 	# Debugging
 	ls unit-test-*.memcheck.xml
+	set +x
 	for i in $(ls unit-test-*.memcheck.xml); do
-	    leaks=$(grep -E "<kind>" $i);
-	    if [ ! -z "$leaks" ]; then
-		echo ">> $i";
-		echo $leaks;
+	    kind="$(grep "<kind>" $i || true)"
+	    if [ ! -z "$kind" ]; then
+	        echo ">> $i";
+	        echo $kind;
+		echo ""
 	    fi;
 	done
+	set -x
     fi
 fi
