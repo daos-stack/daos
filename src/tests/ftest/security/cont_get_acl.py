@@ -66,7 +66,6 @@ class GetContainerACLTest(ContSecurityTestBase):
                 self.daos_cmd.exit_status_exception = False
                 self.daos_cmd.container_get_acl(
                     self.pool.uuid,
-                    self.pool.svc_ranks[0],
                     self.container.uuid,
                     verbose=verbose,
                     outfile=path_to_file)
@@ -80,7 +79,6 @@ class GetContainerACLTest(ContSecurityTestBase):
                 self.daos_cmd.exit_status_exception = False
                 self.daos_cmd.container_get_acl(
                     self.pool.uuid,
-                    self.pool.svc_ranks[0],
                     self.container.uuid,
                     verbose=verbose,
                     outfile=path_to_file)
@@ -116,7 +114,6 @@ class GetContainerACLTest(ContSecurityTestBase):
         test_errs = []
         self.daos_cmd.container_get_acl(
             self.pool.uuid,
-            self.pool.svc_ranks[0],
             self.container.uuid,
             outfile="outfile.txt")
         test_errs.extend(self.error_handling(self.daos_cmd.result, "-1001"))

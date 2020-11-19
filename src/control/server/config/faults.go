@@ -55,7 +55,7 @@ var (
 	FaultConfigBadAccessPoints = serverConfigFault(
 		code.ServerConfigBadAccessPoints,
 		"invalid list of access points in configuration",
-		"only a single access point is currently supported, specify only one and restart the control server",
+		"'access_points' must contain resolvable addresses; fix the configuration and restart the control server",
 	)
 	FaultConfigNoProvider = serverConfigFault(
 		code.ServerConfigBadProvider,

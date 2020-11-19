@@ -357,3 +357,78 @@ class ObjectMetadata(TestWithServers):
 
                 # Start the servers
                 self.start_server_managers()
+
+    @avocado.fail_on(DaosApiError)
+    def test_container_removal_after_der_nospace(self):
+        """JIRA ID: DAOS-4858
+
+        Test Description:
+           Verify container can be successfully deleted when the storage pool
+           is full ACL grant/remove modification.
+
+        :avocado: tags=metadata,metadata_der_nospace,nvme,large,hw
+        :avocado: tags=full_regression,der_nospace
+        """
+        self.pool.pool.connect(2)
+        init_container = NO_OF_MAX_CONTAINER
+        additional_container = 1000000
+        der_no_space = "RC: -1007"
+
+        container_array = []
+        self.log.info("(1)Start Creating %d containers..", init_container)
+        for cont in range(init_container):
+            container = DaosContainer(self.context)
+            container.create(self.pool.pool.handle)
+            container_array.append(container)
+
+        self.log.info("(1.1)%d Container Created.", init_container)
+        self.log.info("(1.2)Create additional 100 Containers, expect Fail.")
+
+        #Create additional containers to check for DaosApiError -1007
+        for cont in range(additional_container):
+            try:
+                container = DaosContainer(self.context)
+                container.create(self.pool.pool.handle)
+                container_array.append(container)
+            except DaosApiError as exc:
+                self.log.info("(1.3)Expected DaosApiError info: %s", exc)
+                if der_no_space not in str(exc):
+                    self.fail(
+                        "##Expecting der_no_space RC: -1007, not seen")
+                else:
+                    self.log.info(traceback.format_exc())
+                    self.log.info("(1.4)No space error shown with additional "
+                                  "%d containers created, test passed.", cont)
+                break
+        if cont == additional_container - 1:
+            self.fail(
+                "##Storage resource did not exhausted after {} containers "
+                "created".format(len(container_array)))
+        self.log.info(
+            "(1.5)Additional %d containers created and detected der_no_space.",
+            cont)
+        self.log.info(
+            "(2)Verify %d Container Removal after storage full.. ",
+            len(container_array))
+        for cont in container_array:
+            try:
+                cont.destroy()
+            except DaosApiError as exc:
+                self.fail(
+                    "##Container destroy failed after storage full.")
+        self.log.info("(2.1)Container Removal succeed after storage full.")
+
+        self.log.info(
+            "(3)Create %d containers after container cleanup.",
+            init_container)
+        for cont in range(init_container):
+            try:
+                container = DaosContainer(self.context)
+                container.create(self.pool.pool.handle)
+                container_array.append(container)
+            except DaosApiError as exc:
+                self.log.info(traceback.format_exc())
+                self.fail(
+                    "##Failed to create containers after container cleanup.")
+        self.log.info(
+            "(3.1)Create %d containers succeed after cleanup.", init_container)

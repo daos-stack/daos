@@ -68,7 +68,8 @@ crt_opc_map_create(unsigned int bits)
 	for (i = 0; i < 16; i++) {
 		rc = crt_opc_map_L2_create(&map->com_map[i]);
 		if (rc != DER_SUCCESS) {
-			D_ERROR("crt_opc_map_L2_create() failed, rc %d.\n", rc);
+			D_ERROR("crt_opc_map_L2_create() failed, " DF_RC "\n",
+				DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 	}
@@ -84,7 +85,8 @@ crt_opc_map_create(unsigned int bits)
 
 	rc = crt_internal_rpc_register();
 	if (rc != 0)
-		D_ERROR("crt_internal_rpc_register failed, rc: %d.\n", rc);
+		D_ERROR("crt_internal_rpc_register() failed, " DF_RC "\n",
+			DP_RC(rc));
 
 out:
 	if (rc != 0)
@@ -130,7 +132,7 @@ crt_opc_map_destroy(struct crt_opc_map *map)
 
 	/* map = crt_gdata.cg_opc_map; */
 	D_ASSERT(map != NULL);
-	D_DEBUG(DB_TRACE, "inside crt_opc_map_destroy\n");
+
 	if (map->com_map == NULL) {
 		D_DEBUG(DB_TRACE, "opc map empty, skipping.\n");
 		D_GOTO(skip, 0);
@@ -238,7 +240,7 @@ crt_opc_reg(struct crt_opc_info *opc_info, crt_opcode_t opc, uint32_t flags,
 	int	rc = 0;
 
 	if (opc_info->coi_inited == 1) {
-		D_ERROR("RPC with opcode 0x%x already registered\n",
+		D_ERROR("RPC with opcode %#x already registered\n",
 			opc_info->coi_opc);
 		D_GOTO(out, rc = -DER_EXIST);
 	};
@@ -416,7 +418,7 @@ crt_proto_reg_L2(struct crt_opc_map_L2 *L2_map,
 		L2_map->L2_num_slots_used++;
 	rc = crt_proto_reg_L3(L3_map, cpf);
 	if (rc != 0)
-		D_ERROR("crt_proto_reg_L3() failed, rc: %d.\n", rc);
+		D_ERROR("crt_proto_reg_L3() failed, " DF_RC "\n", DP_RC(rc));
 
 	return rc;
 }
@@ -440,7 +442,7 @@ crt_proto_reg_L1(struct crt_opc_map *map, struct crt_proto_format *cpf)
 
 	rc = crt_proto_reg_L2(L2_map, cpf);
 	if (rc != 0)
-		D_ERROR("crt_proto_reg_L2() failed, rc: %d.\n", rc);
+		D_ERROR("crt_proto_reg_L2() failed, " DF_RC "\n", DP_RC(rc));
 	D_RWLOCK_UNLOCK(&map->com_rwlock);
 
 	return rc;
@@ -478,8 +480,8 @@ crt_proto_register_common(struct crt_proto_format *cpf)
 	rc = crt_proto_reg_L1(crt_gdata.cg_opc_map, cpf);
 	if (rc != 0)
 		D_ERROR("crt_proto_reg_L1() failed, "
-			"protocol: '%s', version %u, base_opc %#x. %d\n",
-			cpf->cpf_name, cpf->cpf_ver, cpf->cpf_base, rc);
+			"protocol: '%s', version %u, base_opc %#x. " DF_RC "\n",
+			cpf->cpf_name, cpf->cpf_ver, cpf->cpf_base, DP_RC(rc));
 	else
 		D_DEBUG(DB_TRACE, "registered protocol: '%s', version %u, "
 			"base_opc %#x.\n",
