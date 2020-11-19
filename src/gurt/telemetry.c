@@ -76,7 +76,7 @@ d_tm_get_root(uint64_t *shmem)
  * \param[in]	name		The name of the child to find
  *
  * \return			Pointer to the child node
- * 				NULL if not found
+ *				NULL if not found
  */
 struct d_tm_node_t *
 d_tm_find_child(uint64_t *shmem_root, struct d_tm_node_t *parent, char *name)
@@ -115,10 +115,10 @@ d_tm_find_child(uint64_t *shmem_root, struct d_tm_node_t *parent, char *name)
  * \param[in]		name	The name of the new node
  *
  * \return		D_TM_SUCCESS		Success
- * 			-DER_NO_SHMEM		No shared memory available
- * 			-DER_EXCEEDS_PATH_LEN	The full name length is
- * 						too long
- * 			-DER_INVAL		bad pointers given
+ *			-DER_NO_SHMEM		No shared memory available
+ *			-DER_EXCEEDS_PATH_LEN	The full name length is
+ *						too long
+ *			-DER_INVAL		bad pointers given
  */
 int
 d_tm_alloc_node(struct d_tm_node_t **newnode, char *name)
@@ -169,10 +169,10 @@ failure:
  * \param[in]		name	The name of the new node
  *
  * \return		D_TM_SUCCESS		Success
- * 			-DER_NO_SHMEM		No shared memory available
- * 			-DER_EXCEEDS_PATH_LEN	The full name length is
- * 						too long
- * 			-DER_INVAL		Bad pointers given
+ *			-DER_NO_SHMEM		No shared memory available
+ *			-DER_EXCEEDS_PATH_LEN	The full name length is
+ *						too long
+ *			-DER_INVAL		Bad pointers given
  */
 int
 d_tm_add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
@@ -321,13 +321,13 @@ void d_tm_fini(void)
  *
  * \param[in]	shmem_root	Pointer to the shared memory segment
  * \param[in]	node		Pointer to the node containing the resources
- * 				to free
+ *				to free
  */
 void
 d_tm_free_node(uint64_t *shmem_root, struct d_tm_node_t *node)
 {
 	char	*name;
-	int 	rc = 0;
+	int	rc = 0;
 
 	if (node == NULL)
 		return;
@@ -401,7 +401,7 @@ d_tm_print_timestamp(time_t *clk, char *name, FILE *stream)
 	 * Remove the trailing newline character
 	 */
 	temp[D_TM_TIME_BUFF_LEN - 2] = 0;
-	fprintf(stream,"Timestamp: %s: %s\n", name, temp);
+	fprintf(stream, "Timestamp: %s: %s\n", name, temp);
 }
 
 /**
@@ -420,22 +420,22 @@ d_tm_print_timer_snapshot(struct timespec *tms, char *name, int tm_type,
 		return;
 
 	switch (tm_type) {
-		case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_REALTIME:
-			fprintf(stream, "Timer snapshot (realtime): %s = %lds, "
-				"%ldns\n", name, tms->tv_sec, tms->tv_nsec);
-			break;
-		case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_PROCESS_CPUTIME:
-			fprintf(stream, "Timer snapshot (process): %s = %lds, "
-				"%ldns\n", name, tms->tv_sec, tms->tv_nsec);
-			break;
-		case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_THREAD_CPUTIME:
-			fprintf(stream, "Timer snapshot (thread): %s = %lds, "
-				"%ldns\n", name, tms->tv_sec, tms->tv_nsec);
-			break;
-		default:
-			fprintf(stream, "Invalid timer snapshot type: 0x%x\n",
-				tm_type & ~D_TM_TIMER_SNAPSHOT);
-			break;
+	case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_REALTIME:
+		fprintf(stream, "Timer snapshot (realtime): %s = %lds, "
+			"%ldns\n", name, tms->tv_sec, tms->tv_nsec);
+		break;
+	case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_PROCESS_CPUTIME:
+		fprintf(stream, "Timer snapshot (process): %s = %lds, "
+			"%ldns\n", name, tms->tv_sec, tms->tv_nsec);
+		break;
+	case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_THREAD_CPUTIME:
+		fprintf(stream, "Timer snapshot (thread): %s = %lds, "
+			"%ldns\n", name, tms->tv_sec, tms->tv_nsec);
+		break;
+	default:
+		fprintf(stream, "Invalid timer snapshot type: 0x%x\n",
+			tm_type & ~D_TM_TIMER_SNAPSHOT);
+		break;
 	}
 }
 
@@ -454,22 +454,22 @@ d_tm_print_duration(struct timespec *tms, char *name, int tm_type, FILE *stream)
 		return;
 
 	switch (tm_type) {
-		case D_TM_DURATION | D_TM_CLOCK_REALTIME:
-			fprintf(stream, "Duration (realtime): %s = %.9fs\n",
-				name, tms->tv_sec + tms->tv_nsec / 1e9);
-			break;
-		case D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME:
-			fprintf(stream, "Duration (process): %s = %.9fs\n",
-				name, tms->tv_sec + tms->tv_nsec / 1e9);
-			break;
-		case D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME:
-			fprintf(stream, "Duration (thread): %s = %.9fs\n",
-				name, tms->tv_sec + tms->tv_nsec / 1e9);
-			break;
-		default:
-			fprintf(stream, "Invalid timer duration type: 0x%x\n",
-				tm_type & ~D_TM_DURATION);
-			break;
+	case D_TM_DURATION | D_TM_CLOCK_REALTIME:
+		fprintf(stream, "Duration (realtime): %s = %.9fs\n",
+			name, tms->tv_sec + tms->tv_nsec / 1e9);
+		break;
+	case D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME:
+		fprintf(stream, "Duration (process): %s = %.9fs\n",
+			name, tms->tv_sec + tms->tv_nsec / 1e9);
+		break;
+	case D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME:
+		fprintf(stream, "Duration (thread): %s = %.9fs\n",
+			name, tms->tv_sec + tms->tv_nsec / 1e9);
+		break;
+	default:
+		fprintf(stream, "Invalid timer duration type: 0x%x\n",
+			tm_type & ~D_TM_DURATION);
+		break;
 	}
 }
 
@@ -647,7 +647,7 @@ d_tm_count_metrics(uint64_t *shmem_root, struct d_tm_node_t *node)
  * Caller must call va_start prior to this call, and va_end after.
  *
  * \param[in,out]	path	Pointer to the path string buffer allocated by
- * 				caller.
+ *				caller.
  * \param[in]		item	First item added to the path
  * \param[in]		args	Optional strings that further qualify the path
  *
@@ -1451,7 +1451,7 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 	char			*token;
 	char			*rest;
 	int			buff_len;
-	int 			rc;
+	int			rc;
 
 	if (d_tm_shmem_root == NULL)
 		return -DER_UNINIT;
@@ -1596,8 +1596,8 @@ failure:
  * \param[in]		metric		Full path name to the stored metric
  *
  * \return		D_TM_SUCCESS		Success
- * 			-DER_INVAL		Bad \a value pointer
- * 			-DER_METRIC_NOT_FOUND	Metric not found
+ *			-DER_INVAL		Bad \a value pointer
+ *			-DER_METRIC_NOT_FOUND	Metric not found
  *			-DER_OP_NOT_PERMITTED	Metric was not a counter
  */
 int
@@ -1639,14 +1639,14 @@ d_tm_get_counter(uint64_t *val, uint64_t *shmem_root, struct d_tm_node_t *node,
  * mutex for this specific node.
  *
  * \param[in,out]	val		The value of the timestamp is stored
- * 					here
+ *					here
  * \param[in]		shmem_root	Pointer to the shared memory segment
  * \param[in]		node		Pointer to the stored metric node
  * \param[in]		metric		Full path name to the stored metric
  *
  * \return		D_TM_SUCCESS		Success
- * 			-DER_INVAL		Bad \a val pointer
- * 			-DER_METRIC_NOT_FOUND	Metric not found
+ *			-DER_INVAL		Bad \a val pointer
+ *			-DER_METRIC_NOT_FOUND	Metric not found
  *			-DER_OP_NOT_PERMITTED	Metric was not a timestamp
  */
 int
@@ -1693,8 +1693,8 @@ d_tm_get_timestamp(time_t *val, uint64_t *shmem_root, struct d_tm_node_t *node,
  * \param[in]		metric		Full path name to the stored metric
  *
  * \return		D_TM_SUCCESS		Success
- * 			-DER_INVAL		Bad \a tms pointer
- * 			-DER_METRIC_NOT_FOUND	Metric not found
+ *			-DER_INVAL		Bad \a tms pointer
+ *			-DER_METRIC_NOT_FOUND	Metric not found
  *			-DER_OP_NOT_PERMITTED	Metric was not a high resolution
  *						timer
  */
@@ -1743,8 +1743,8 @@ d_tm_get_timer_snapshot(struct timespec *tms, uint64_t *shmem_root,
  * \param[in]		metric		Full path name to the stored metric
  *
  * \return		D_TM_SUCCESS		Success
- * 			-DER_INVAL		Bad \a tms pointer
- * 			-DER_METRIC_NOT_FOUND	Metric not found
+ *			-DER_INVAL		Bad \a tms pointer
+ *			-DER_METRIC_NOT_FOUND	Metric not found
  *			-DER_OP_NOT_PERMITTED	Metric was not a duration
  */
 int
@@ -1792,8 +1792,8 @@ d_tm_get_duration(struct timespec *tms, uint64_t *shmem_root,
  * \param[in]		metric		Full path name to the stored metric
  *
  * \return		D_TM_SUCCESS		Success
- * 			-DER_INVAL		Bad \a val pointer
- * 			-DER_METRIC_NOT_FOUND	Metric not found
+ *			-DER_INVAL		Bad \a val pointer
+ *			-DER_METRIC_NOT_FOUND	Metric not found
  *			-DER_OP_NOT_PERMITTED	Metric was not a gauge
  */
 int
@@ -1836,17 +1836,17 @@ d_tm_get_gauge(uint64_t *val, uint64_t *shmem_root, struct d_tm_node_t *node,
  * \a sh_desc and \a lng_desc and should be freed by the caller.
  *
  * \param[in,out]	sh_desc		Memory is allocated and the short
- * 					description is copied here
+ *					description is copied here
  * \param[in,out]	lng_desc	Memory is allocated and the long
- * 					description is copied here
+ *					description is copied here
  * \param[in]		shmem_root	Pointer to the shared memory segment
  * \param[in]		node		Pointer to the stored metric node
  * \param[in]		metric		Full path name to the stored metric
  *
  * \return		D_TM_SUCCESS		Success
- * 			-DER_INVAL		Bad \a sh_desc or \a lng_desc
- * 						pointer
- * 			-DER_METRIC_NOT_FOUND	Metric node not found
+ *			-DER_INVAL		Bad \a sh_desc or \a lng_desc
+ *						pointer
+ *			-DER_METRIC_NOT_FOUND	Metric node not found
  *			-DER_OP_NOT_PERMITTED	Node is not a metric
  */
 int d_tm_get_metadata(char **sh_desc, char **lng_desc, uint64_t *shmem_root,
@@ -1926,11 +1926,11 @@ d_tm_get_version(void)
  * \return		D_TM_SUCCESS		Success
  *			-DER_NOMEM		Out of global heap
  *			-DER_EXCEEDS_PATH_LEN	The full name length is
- * 						too long
+ *						too long
  *			-DER_METRIC_NOT_FOUND	No items were found at the path
  *						provided
  *			-DER_INVAL		Invalid pointer for \a head or
-						\a path
+ *						\a path
  */
 int
 d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root, char *path,
@@ -1973,7 +1973,6 @@ d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root, char *path,
 		while (token != NULL) {
 			node = d_tm_find_child(shmem_root, parent_node, token);
 			if (node == NULL) {
-				printf("Token %s not found\n", token);
 				rc = -DER_METRIC_NOT_FOUND;
 				goto failure;
 			}
@@ -1997,7 +1996,7 @@ d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root, char *path,
 					*head = nodelist;
 			}
 			if (search_siblings)
-				node = 	d_tm_conv_ptr(shmem_root,
+				node =	d_tm_conv_ptr(shmem_root,
 						      node->dtn_sibling);
 			else
 				node = NULL;
@@ -2027,7 +2026,7 @@ failure:
  * \return		D_TM_SUCCESS		Success
  *			-DER_NOMEM		Out of global heap
  *			-DER_EXCEEDS_PATH_LEN	The full name length is
- * 						too long
+ *						too long
  *			-DER_METRIC_NOT_FOUND	No items were found at the path
  *						provided
  */
@@ -2139,11 +2138,11 @@ d_tm_add_node(struct d_tm_node_t *src, struct d_tm_nodeList_t *nodelist)
  * Server side function that allocates the shared memory segment for this rank.
  *
  * \param[in]	rank		A unique value that identifies the producer
- * 				process
+ *				process
  * \param[in]	mem_size	Size in bytes of the shared memory region
  *
  * \return			Address of the shared memory region
- * 				NULL if failure
+ *				NULL if failure
  */
 uint64_t *
 d_tm_allocate_shared_memory(int rank, size_t mem_size)
@@ -2165,9 +2164,9 @@ d_tm_allocate_shared_memory(int rank, size_t mem_size)
  * for this rank.
  *
  * \param[in]	rank		A unique value that identifies the producer
- * 				process that the client seeks to read data from
+ *				process that the client seeks to read data from
  * \return			Address of the shared memory region
- * 				NULL if failure
+ *				NULL if failure
  */
 uint64_t *
 d_tm_get_shared_memory(int rank)
@@ -2248,8 +2247,8 @@ d_tm_validate_shmem_ptr(uint64_t *shmem_root, void *ptr)
  * \param[in]	ptr		The pointer to convert
  *
  * \return			A pointer to the item in the clients address
- * 				space
- * 				NULL if the pointer is invalid
+ *				space
+ *				NULL if the pointer is invalid
  */
 void *
 d_tm_conv_ptr(uint64_t *shmem_root, void *ptr)

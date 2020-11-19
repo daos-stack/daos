@@ -224,16 +224,16 @@ void timer_snapshot(void)
  * a d_tm_nodeList_t for use elsewhere.
  *
  * \return	Pointer to a d_tm_nodeList if successful
- * 		NULL if failure
+ *		NULL if failure
  */
 struct d_tm_nodeList_t *add_metrics_manually(void)
 {
 	struct d_tm_nodeList_t	*node_list = NULL;
 	struct d_tm_nodeList_t	*head = NULL;
-	struct d_tm_node_t 	*counter1 = NULL;
-	struct d_tm_node_t 	*counter2 = NULL;
+	struct d_tm_node_t	*counter1 = NULL;
+	struct d_tm_node_t	*counter2 = NULL;
 	char			path[D_TM_MAX_NAME_LEN];
-	int 			rc;
+	int			rc;
 
 	/**
 	 * Create some metrics manually, and keep track of the pointers by
@@ -319,9 +319,9 @@ main(int argc, char **argv)
 	static struct d_tm_node_t	*timer2;
 	struct d_tm_nodeList_t		*node_list;
 	struct d_tm_nodeList_t		*head;
-	int 				rc;
-	int 				simulated_rank = 0;
-	int 				i;
+	int				rc;
+	int				simulated_rank = 0;
+	int				i;
 
 	if (argc < 2) {
 		printf("Specify an integer that identifies this producer's "
@@ -377,9 +377,9 @@ main(int argc, char **argv)
 	/**
 	 * How long does it take to execute test_function()?
 	 * When the duration timer is created, specify the clock type from:
- 	 * D_TM_CLOCK_REALTIME which is CLOCK_REALTIME
- 	 * D_TM_CLOCK_PROCESS_CPUTIME which is CLOCK_PROCESS_CPUTIME_ID
- 	 * D_TM_CLOCK_THREAD_CPUTIME which is CLOCK_THREAD_CPUTIME_ID
+	 * D_TM_CLOCK_REALTIME which is CLOCK_REALTIME
+	 * D_TM_CLOCK_PROCESS_CPUTIME which is CLOCK_PROCESS_CPUTIME_ID
+	 * D_TM_CLOCK_THREAD_CPUTIME which is CLOCK_THREAD_CPUTIME_ID
 	 */
 
 	/** For the first timer, let's use the realtime clock */

@@ -133,7 +133,7 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 			break;
 		default:
 			printf("Item: %s has unknown type: 0x%x\n",
-				name, nodelist->dtnl_node->dtn_type);
+			       name, nodelist->dtnl_node->dtn_type);
 			break;
 		}
 
@@ -156,7 +156,7 @@ int
 main(int argc, char **argv)
 {
 	struct d_tm_node_t	*root = NULL;
-	uint64_t 		*shmem_root = NULL;
+	uint64_t		*shmem_root = NULL;
 	char			dirname[D_TM_MAX_NAME_LEN] = {0};
 	bool			show_meta;
 	int			simulated_rank = 0;
