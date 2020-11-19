@@ -300,7 +300,7 @@ func TestClient_SendMsg_UnmarshalResponseFailure(t *testing.T) {
 
 	response, err := client.SendMsg(call)
 
-	expectedErr := "failed to unmarshal dRPC response: unexpected EOF"
+	expectedErr := errors.New("failed to unmarshal dRPC response")
 	common.AssertTrue(t, response == nil, "Expected no response")
-	common.ExpectError(t, err, expectedErr, "Expected protobuf error")
+	common.CmpErr(t, expectedErr, err)
 }

@@ -210,7 +210,7 @@ func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context) (bool, er
 		if err != nil {
 			// If the AP hasn't been started, it will respond as if it
 			// is not a replica.
-			if system.IsNotReplica(err) {
+			if system.IsNotReplica(err) || system.IsUnavailable(err) {
 				return false, nil
 			}
 			return false, errors.Wrap(err, "System-Query command failed")

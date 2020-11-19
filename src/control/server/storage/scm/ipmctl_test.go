@@ -116,9 +116,49 @@ func newMockIpmctl(cfg *mockIpmctlCfg) *mockIpmctl {
 	}
 }
 
-// TestGetState tests the internals of ipmCtlRunner, pass in mock runCmd to verify
+// TestIpmctl_checkIpmctl verified that bad versions trigger an error.
+func TestIpmctl_checkIpmctl(t *testing.T) {
+	preTxt := "Intel(R) Optane(TM) Persistent Memory Command Line Interface Version "
+
+	for name, tc := range map[string]struct {
+		verOut  string
+		badVers []semVer
+		expErr  error
+	}{
+		"no bad versions": {
+			verOut:  "02.00.00.3816",
+			badVers: []semVer{},
+		},
+		"good version": {
+			verOut:  "02.00.00.3825",
+			badVers: badIpmctlVers,
+		},
+		"bad version": {
+			verOut:  "02.00.00.3816",
+			badVers: badIpmctlVers,
+			expErr:  FaultIpmctlBadVersion("02.00.00.3816"),
+		},
+		"no version": {
+			expErr: errors.New("could not read ipmctl version"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			mockRun := func(_ string) (string, error) {
+				return preTxt + tc.verOut, nil
+			}
+
+			cr := newCmdRunner(log, nil, mockRun, nil)
+			CmpErr(t, tc.expErr, cr.checkIpmctl(tc.badVers))
+		})
+	}
+}
+
+// TestIpmctl_GetPmemState tests the internals of ipmCtlRunner, pass in mock runCmd to verify
 // behavior. Don't use mockPrepScm as we want to test prepScm logic.
-func TestGetState(t *testing.T) {
+func TestIpmctl_GetPmemState(t *testing.T) {
 	var regionsOut string  // variable cmd output
 	commands := []string{} // external commands issued
 	// ndctl create-namespace command return json format
@@ -135,26 +175,28 @@ func TestGetState(t *testing.T) {
 }
 `
 	oneNs, _ := parseNamespaces(fmt.Sprintf(nsOut, 1, 1, 0))
-	twoNsJson := "[" + fmt.Sprintf(nsOut, 1, 1, 0) + "," + fmt.Sprintf(nsOut, 2, 2, 1) + "]"
-	twoNs, _ := parseNamespaces(twoNsJson)
+	twoNsJSON := "[" + fmt.Sprintf(nsOut, 1, 1, 0) + "," + fmt.Sprintf(nsOut, 2, 2, 1) + "]"
+	twoNs, _ := parseNamespaces(twoNsJSON)
 	createRegionsOut := "hooray it worked\n"
-	pmemId := 1
+	pmemID := 1
 
 	mockRun := func(in string) (string, error) {
 		retString := in
 
 		switch in {
-		case cmdScmCreateRegions:
+		case cmdCreateRegions:
 			retString = createRegionsOut // example successful output
-		case cmdScmShowRegions:
+		case cmdShowRegions:
 			retString = regionsOut
-		case cmdScmCreateNamespace:
+		case cmdCreateNamespace:
 			// stimulate free capacity of region being used
 			regionsOut = strings.Replace(regionsOut, "3012.0", "0.0", 1)
-			retString = fmt.Sprintf(nsOut, pmemId, pmemId, pmemId-1)
-			pmemId += 1
-		case cmdScmListNamespaces:
-			retString = twoNsJson
+			retString = fmt.Sprintf(nsOut, pmemID, pmemID, pmemID-1)
+			pmemID++
+		case cmdListNamespaces:
+			retString = twoNsJSON
+		case cmdShowIpmctlVersion:
+			retString = "02.00.00.3825\n"
 		}
 
 		commands = append(commands, in)
@@ -162,20 +204,22 @@ func TestGetState(t *testing.T) {
 	}
 
 	tests := []struct {
-		desc              string
-		showRegionOut     string
-		expGetStateErrMsg string
-		expErrMsg         string
-		expRebootRequired bool
-		expNamespaces     storage.ScmNamespaces
-		expCommands       []string
-		lookPathErrMsg    string
+		desc                  string
+		showRegionOut         string
+		expGetPmemStateErrMsg string
+		expErrMsg             string
+		expRebootRequired     bool
+		expNamespaces         storage.ScmNamespaces
+		expCommands           []string
+		lookPathErrMsg        string
 	}{
 		{
 			desc:              "modules but no regions",
 			showRegionOut:     outScmNoRegions,
 			expRebootRequired: true,
-			expCommands:       []string{cmdScmShowRegions, cmdScmDeleteGoal, cmdScmCreateRegions},
+			expCommands: []string{
+				cmdShowRegions, cmdShowIpmctlVersion, cmdDeleteGoal, cmdCreateRegions,
+			},
 		},
 		{
 			desc: "single region with free capacity",
@@ -187,7 +231,9 @@ func TestGetState(t *testing.T) {
 				"   PersistentMemoryType=AppDirect\n" +
 				"   FreeCapacity=3012.0 GiB\n" +
 				"\n",
-			expCommands:   []string{cmdScmShowRegions, cmdScmCreateNamespace, cmdScmShowRegions},
+			expCommands: []string{
+				cmdShowRegions, cmdShowIpmctlVersion, cmdCreateNamespace, cmdShowRegions,
+			},
 			expNamespaces: oneNs,
 		},
 		{
@@ -201,8 +247,8 @@ func TestGetState(t *testing.T) {
 				"   FreeCapacity=3012.0 GiB\n" +
 				"\n",
 			expCommands: []string{
-				cmdScmShowRegions, cmdScmCreateNamespace, cmdScmShowRegions,
-				cmdScmCreateNamespace, cmdScmShowRegions,
+				cmdShowRegions, cmdShowIpmctlVersion, cmdCreateNamespace, cmdShowRegions,
+				cmdCreateNamespace, cmdShowRegions,
 			},
 			expNamespaces: twoNs,
 		},
@@ -216,7 +262,7 @@ func TestGetState(t *testing.T) {
 				"   PersistentMemoryType=AppDirect\n" +
 				"   FreeCapacity=0.0 GiB\n" +
 				"\n",
-			expCommands:   []string{cmdScmShowRegions, cmdScmListNamespaces},
+			expCommands:   []string{cmdShowRegions, cmdShowIpmctlVersion, cmdListNamespaces},
 			expNamespaces: twoNs,
 		},
 		{
@@ -229,14 +275,14 @@ func TestGetState(t *testing.T) {
 				"   PersistentMemoryType=AppDirect\n" +
 				"   FreeCapacity=0.000 GiB\n" +
 				"\n",
-			expCommands:   []string{cmdScmShowRegions, cmdScmListNamespaces},
+			expCommands:   []string{cmdShowRegions, cmdShowIpmctlVersion, cmdListNamespaces},
 			expNamespaces: twoNs,
 		},
 		{
 			desc: "unexpected output",
 			showRegionOut: "\n" +
 				"---ISetID=0x2aba7f4828ef2ccc---\n",
-			expGetStateErrMsg: "checking scm region capacity: expecting at least 4 lines, got 3",
+			expGetPmemStateErrMsg: "checking scm region capacity: expecting at least 4 lines, got 3",
 		},
 	}
 
@@ -259,12 +305,12 @@ func TestGetState(t *testing.T) {
 
 			// reset to initial values between tests
 			regionsOut = tt.showRegionOut
-			pmemId = 1
+			pmemID = 1
 			commands = nil
 
-			scmState, err := cr.GetState()
-			ExpectError(t, err, tt.expGetStateErrMsg, tt.desc)
-			if tt.expGetStateErrMsg != "" {
+			scmState, err := cr.GetPmemState()
+			ExpectError(t, err, tt.expGetPmemStateErrMsg, tt.desc)
+			if tt.expGetPmemStateErrMsg != "" {
 				return
 			}
 
@@ -284,7 +330,9 @@ func TestGetState(t *testing.T) {
 	}
 }
 
-func TestParseNamespaces(t *testing.T) {
+// TestIpTestIpmctl_parseNamespaces verified expected output from ndctl utility
+// can be converted into native storage ScmNamespaces type.
+func TestIpmctl_parseNamespaces(t *testing.T) {
 	// template for `ndctl list -N` output
 	listTmpl := `{
    "dev":"namespace%d.0",
@@ -355,9 +403,9 @@ func TestParseNamespaces(t *testing.T) {
 	}
 }
 
-// TestGetNamespaces tests the internals of prepScm, pass in mock runCmd to verify
+// TestIpmctl_GetPmemNamespaces tests the internals of prepScm, pass in mock runCmd to verify
 // behavior. Don't use mockPrepScm as we want to test prepScm logic.
-func TestGetNamespaces(t *testing.T) {
+func TestIpmctl_GetPmemNamespaces(t *testing.T) {
 	commands := []string{} // external commands issued
 	// ndctl create-namespace command return json format
 	nsOut := `{
@@ -373,8 +421,8 @@ func TestGetNamespaces(t *testing.T) {
 }
 `
 	oneNs, _ := parseNamespaces(fmt.Sprintf(nsOut, 1, 1, 0))
-	twoNsJson := "[" + fmt.Sprintf(nsOut, 1, 1, 0) + "," + fmt.Sprintf(nsOut, 2, 2, 1) + "]"
-	twoNs, _ := parseNamespaces(twoNsJson)
+	twoNsJSON := "[" + fmt.Sprintf(nsOut, 1, 1, 0) + "," + fmt.Sprintf(nsOut, 2, 2, 1) + "]"
+	twoNs, _ := parseNamespaces(twoNsJSON)
 
 	tests := []struct {
 		desc           string
@@ -387,19 +435,19 @@ func TestGetNamespaces(t *testing.T) {
 		{
 			desc:          "no namespaces",
 			cmdOut:        "",
-			expCommands:   []string{cmdScmListNamespaces},
+			expCommands:   []string{cmdListNamespaces},
 			expNamespaces: storage.ScmNamespaces{},
 		},
 		{
 			desc:          "single pmem device",
 			cmdOut:        fmt.Sprintf(nsOut, 1, 1, 0),
-			expCommands:   []string{cmdScmListNamespaces},
+			expCommands:   []string{cmdListNamespaces},
 			expNamespaces: oneNs,
 		},
 		{
 			desc:          "two pmem device",
-			cmdOut:        twoNsJson,
-			expCommands:   []string{cmdScmListNamespaces},
+			cmdOut:        twoNsJSON,
+			expCommands:   []string{cmdListNamespaces},
 			expNamespaces: twoNs,
 		},
 		{
@@ -438,13 +486,13 @@ func TestGetNamespaces(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			namespaces, err := cr.GetNamespaces()
+			namespaces, err := cr.GetPmemNamespaces()
 			if err != nil {
 				if tt.lookPathErrMsg != "" {
 					ExpectError(t, err, tt.lookPathErrMsg, tt.desc)
 					return
 				}
-				t.Fatal(tt.desc + ": GetNamespaces: " + err.Error())
+				t.Fatal(tt.desc + ": GetPmemNamespaces: " + err.Error())
 			}
 
 			AssertEqual(t, commands, tt.expCommands, tt.desc+": unexpected list of commands run")
