@@ -1,0 +1,30 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+    - server-E
+    - server-F
+    - server-G
+  test_clients:
+    - client-H
+timeouts:
+  test_create_max_pool_scm_only: 180
+  test_create_max_pool: 300
+  test_create_pool_quantity: 600
+  test_create_no_space: 300
+  test_create_no_space_loop: 1200
+server_config:
+  name: daos_server
+  servers:
+    0:
+      bdev_class: nvme
+      bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem0"]
+      scm_mount: /mnt/daos0
+pool:
+  name: daos_server
+  control_method: dmg
+  quantity: 100

@@ -36,7 +36,7 @@
 #include <daos/drpc.pb-c.h>
 #include <daos/event.h>
 #include <daos/job.h>
-#include "srv.pb-c.h"
+#include "svc.pb-c.h"
 #include "rpc.h"
 #include <errno.h>
 

@@ -34,6 +34,7 @@
  * DSS_POOL_IO		Update/Fetch/Punch, enumeration RPC handler ULTs
  * DSS_POOL_REBUILD	Rebuild/Reint scan & pull ULTs
  * DSS_POOL_GC		Space reclaiming ULTs like GC or aggregation
+ * DSS_POOL_SCRUB	Scrub checksums to discover silent data corruption
  */
 enum {
 	DSS_POOL_NET_POLL	= 0,
@@ -41,6 +42,7 @@ enum {
 	DSS_POOL_IO,
 	DSS_POOL_REBUILD,
 	DSS_POOL_GC,
+	DSS_POOL_SCRUB,
 	DSS_POOL_CNT,
 };
 

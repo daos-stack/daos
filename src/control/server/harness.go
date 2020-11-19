@@ -208,26 +208,6 @@ func (h *IOServerHarness) Start(ctx context.Context, membership *system.Membersh
 	return ctx.Err()
 }
 
-type mgmtInfo struct {
-	isReplica       bool
-	shouldBootstrap bool
-}
-
-func getMgmtInfo(srv *IOServerInstance) (*mgmtInfo, error) {
-	// Determine if an I/O server needs to createMS or bootstrapMS.
-	var err error
-	mi := &mgmtInfo{}
-	mi.isReplica, mi.shouldBootstrap, err = checkMgmtSvcReplica(
-		srv.msClient.cfg.ControlAddr,
-		srv.msClient.cfg.AccessPoints,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return mi, nil
-}
-
 // readyRanks returns rank assignment of configured harness instances that are
 // in a ready state. Rank assignments can be nil.
 func (h *IOServerHarness) readyRanks() []system.Rank {

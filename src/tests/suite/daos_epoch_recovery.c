@@ -145,7 +145,7 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 		if (arg->myrank == 0) {
 			print_message("evicting pool connections\n");
 			rc = daos_pool_evict(arg->pool.pool_uuid, arg->group,
-					     arg->pool.svc, NULL /* ev */);
+					     NULL /* svc */, NULL /* ev */);
 			assert_int_equal(rc, 0);
 		}
 		MPI_Barrier(MPI_COMM_WORLD);
@@ -164,7 +164,7 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 		print_message("reconnecting to pool\n");
 		if (arg->myrank == 0) {
 			rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-					       arg->pool.svc, DAOS_PC_RW,
+					       NULL /* svc */, DAOS_PC_RW,
 					       &arg->pool.poh, NULL /* info */,
 					       NULL /* ev */);
 			assert_int_equal(rc, 0);
