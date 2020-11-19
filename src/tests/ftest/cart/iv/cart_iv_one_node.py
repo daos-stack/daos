@@ -418,14 +418,14 @@ class CartIvOneNodeTest(Test):
             # Fetch variable from the first server.
             # Tests version-check in crt_hdlr_iv_fetch_aux.
             #
-            {"operation":"update", "rank":1, "key":(1, 42), "value":"carrot"},
-            {"operation":"set_grp_version", "rank":1, "key":(0, 42), "time":2,
-             "version":"0xdeadc0de", "return_code":0, "expected_value":""},
-            {"operation":"fetch", "rank":0, "key":(1, 42),
-             "return_code":-1036, "expected_value":""},
-            {"operation":"set_grp_version", "rank":1, "key":(0, 42),
-             "version":"0x0", "return_code":0, "expected_value":""},
-            {"operation":"invalidate", "rank":1, "key":(1, 42)},
+            #{"operation":"update", "rank":1, "key":(1, 42), "value":"carrot"},
+            #{"operation":"set_grp_version", "rank":1, "key":(0, 42), "time":2,
+            # "version":"0xdeadc0de", "return_code":0, "expected_value":""},
+            #{"operation":"fetch", "rank":0, "key":(1, 42),
+            # "return_code":-1036, "expected_value":""},
+            #{"operation":"set_grp_version", "rank":1, "key":(0, 42),
+            # "version":"0x0", "return_code":0, "expected_value":""},
+            #{"operation":"invalidate", "rank":1, "key":(1, 42)},
             #
             # ******************
             # Test invalidate with synchronization.

@@ -1258,6 +1258,7 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 	 *    input->ifi_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver
 	 */
 	local_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
+#ifdef DONT_do_IT
 	if (local_grp_ver == grp_ver) {
 		input->ifi_grp_ver = grp_ver;
 	} else {
@@ -1265,6 +1266,7 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 			 grp_ver, local_grp_ver);
 		D_GOTO(exit, rc=-DER_GRPVER);
 	}
+#endif
 
 	rc = crt_req_send(rpc, handle_response_cb, cb_info);
 
@@ -1395,12 +1397,14 @@ crt_hdlr_iv_fetch_aux(void *arg)
  	 * is to send the response.
  	 */
 	grp_ver_entry = ivns_internal->cii_grp_priv->gp_membs_ver;
+#ifdef DONT_DO_IT
 	if (grp_ver_entry != input->ifi_grp_ver) {
 		D_ERROR("Group (%s) version mismatch. Local: %d Remote :%d\n",
 			ivns_id.ii_group_name, grp_ver_entry,
 			input->ifi_grp_ver);
 		D_GOTO(send_error, rc = -DER_GRPVER);
 	}
+#endif
 
 	iv_ops = crt_iv_ops_get(ivns_internal, input->ifi_class_id);
 	if (iv_ops == NULL) {
