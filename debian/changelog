@@ -3,6 +3,11 @@ daos (1.1.1-7) unstable; urgency=medium
   * Combine memcheck suppressions files
 
  -- Ashley Pittman <ashley.m.pittman@intel.com>  Fri, 13 Nov 2020 13:33:21 -0000
+daos (1.1.1-6) unstable; urgency=medium
+  [ Mohamad Chaarawi ]
+  * Add dfs_test
+
+ -- Mohamad Chaarawi <mohamad.chaarawi@intel.com>
 
 daos (1.1.1-5) unstable; urgency=medium
   [ Jonathan Martinez Montes ]

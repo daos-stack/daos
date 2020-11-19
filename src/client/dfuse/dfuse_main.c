@@ -161,8 +161,7 @@ dfuse_bg(struct dfuse_info *dfuse_info)
 			exit(2);
 		}
 		if (child_ret) {
-			printf("Exiting %d %s\n", child_ret,
-			       d_errstr(child_ret));
+			printf("Exiting " DF_RC "\n", DP_RC(child_ret));
 			exit(-(child_ret + DER_ERR_GURT_BASE));
 		} else {
 			exit(0);
@@ -246,6 +245,7 @@ show_help(char *name)
 		"	   --container=UUID	container UUID\n"
 		"	   --sys-name=STR	DAOS system name context for servers\n"
 		"	-S --singlethreaded	Single threaded\n"
+		"	-t --thread-count=COUNT Number of fuse threads to use\n"
 		"	-f --foreground		Run in foreground\n"
 		"	   --enable-caching	Enable node-local caching (experimental)\n",
 		name);
@@ -265,6 +265,7 @@ main(int argc, char **argv)
 	char			c;
 	int			ret = -DER_SUCCESS;
 	int			rc;
+	bool			have_thread_count = false;
 
 	/* The 'daos' command uses -m as an alias for --scv however
 	 * dfuse uses -m for --mountpoint so this is inconsistent
@@ -277,6 +278,7 @@ main(int argc, char **argv)
 		{"svc",			required_argument, 0, 's'},
 		{"sys-name",		required_argument, 0, 'G'},
 		{"mountpoint",		required_argument, 0, 'm'},
+		{"thread-count",	required_argument, 0, 't'},
 		{"singlethread",	no_argument,	   0, 'S'},
 		{"enable-caching",	no_argument,	   0, 'A'},
 		{"disable-direct-io",	no_argument,	   0, 'D'},
@@ -330,6 +332,10 @@ main(int argc, char **argv)
 		case 'S':
 			dfuse_info->di_threaded = false;
 			break;
+		case 't':
+			dfuse_info->di_thread_count = atoi(optarg);
+			have_thread_count = true;
+			break;
 		case 'f':
 			dfuse_info->di_foreground = true;
 			break;
@@ -364,14 +370,29 @@ main(int argc, char **argv)
 		D_GOTO(out_debug, ret = -DER_NO_HDL);
 	}
 
-	/* Is this required, or can we assume some kind of default for
-	 * this.
-	 */
-	if (!svcl) {
-		printf("Svcl is required\n");
-		show_help(argv[0]);
-		D_GOTO(out_debug, ret = -DER_NO_HDL);
+	if (dfuse_info->di_threaded && !have_thread_count) {
+		cpu_set_t cpuset;
+
+		rc = sched_getaffinity(0, sizeof(cpuset), &cpuset);
+		if (rc != 0) {
+			printf("Failed to get cpuset information\n");
+			exit(1);
+		}
+
+		dfuse_info->di_thread_count = CPU_COUNT(&cpuset);
+
+		/* Reserve one CPU thread for the daos event queue */
+		dfuse_info->di_thread_count -= 1;
+
+		if (dfuse_info->di_thread_count < 1) {
+			printf("Dfuse needs more threads\n");
+			exit(1);
+		}
 	}
+
+	/* svcl is optional. If unspecified libdaos will query
+	 * management service to get list of pool service replicas.
+	 */
 
 	if (dfuse_info->di_pool) {
 		if (uuid_parse(dfuse_info->di_pool, tmp_uuid) < 0) {
@@ -401,10 +422,12 @@ main(int argc, char **argv)
 
 	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
 
-	dfuse_info->di_svcl = daos_rank_list_parse(svcl, ":");
-	if (dfuse_info->di_svcl == NULL) {
-		printf("Invalid pool service rank list\n");
-		D_GOTO(out_dfuse, ret = -DER_INVAL);
+	if (svcl) {
+		dfuse_info->di_svcl = daos_rank_list_parse(svcl, ":");
+		if (dfuse_info->di_svcl == NULL) {
+			printf("Invalid pool service rank list\n");
+			D_GOTO(out_dfuse, ret = -DER_INVAL);
+		}
 	}
 
 	D_ALLOC_PTR(dfp);

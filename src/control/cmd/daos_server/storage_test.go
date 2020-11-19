@@ -70,9 +70,9 @@ func TestDaosServer_StoragePrepare(t *testing.T) {
 		},
 		"prepared scm; success": {
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:     storage.ScmModules{storage.MockScmModule()},
-				GetNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
-				StartingState:   storage.ScmStateNoCapacity,
+				DiscoverRes:         storage.ScmModules{storage.MockScmModule()},
+				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+				StartingState:       storage.ScmStateNoCapacity,
 			},
 		},
 		"unprepared scm; warn": {

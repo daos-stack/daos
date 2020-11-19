@@ -407,6 +407,7 @@ def scons(): # pylint: disable=too-many-locals
     daos_build.install(env, "lib/daos/", ['.build_vars.sh', '.build_vars.json'])
     env.Install("$PREFIX/lib64/daos", "VERSION")
     env.Install("$PREFIX/lib64/daos", "API_VERSION")
+
     env.Install('$PREFIX/etc/bash_completion.d', ['utils/completion/daos.bash'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
                 ['utils/sl/env_modules.py'])
