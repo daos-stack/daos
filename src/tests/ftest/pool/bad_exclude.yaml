@@ -1,5 +1,5 @@
 server_config:
-   name: test_server
+   name: daos_server
 hosts:
    test_servers:
       - server-A
@@ -17,15 +17,6 @@ testparams:
             - 44
             - FAIL
       nulllist:
-         ranklist:
-            - NULLPTR
-            - FAIL
-   svrlist: !mux
-      goodlist:
-         ranklist:
-            - VALID
-            - PASS
-      badlist:
          ranklist:
             - NULLPTR
             - FAIL

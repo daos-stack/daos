@@ -1,0 +1,42 @@
+server_manager:
+  srv_timeout: 500
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+    - server-E
+  test_clients:
+    - client-F
+timeout: 700
+server_config:
+  name: daos_server
+  servers:
+      bdev_class: nvme
+      bdev_list: ["aaaa:aa:aa.a"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem0"]
+      scm_mount: /mnt/daos0
+pool:
+    mode: 146
+    name: daos_server
+    scm_size: 6000000000
+    nvme_size: 54000000000
+    svcn: 4
+    control_method: dmg
+container:
+  properties:
+    enable_checksum: True
+dkeys:
+  single:
+    no_of_dkeys:
+      - 50
+akeys:
+  single:
+    no_of_akeys:
+      - 10
+record:
+  1KB:
+    length:
+      - 1024

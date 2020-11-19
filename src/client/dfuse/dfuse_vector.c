@@ -122,9 +122,7 @@ expand_vector(struct vector *vector, unsigned int new_index)
 	if (num_entries > vector->max_entries)
 		num_entries = vector->max_entries;
 
-	D_REALLOC(data,
-		  vector->data,
-		  num_entries * sizeof(union ptr_lock));
+	D_REALLOC_ARRAY(data, vector->data, num_entries);
 	if (!data)
 		return -DER_NOMEM;
 	vector->data = data;

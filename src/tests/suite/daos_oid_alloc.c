@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ reconnect(test_arg_t *arg) {
 	flags = (DAOS_COO_RW | DAOS_COO_FORCE);
 	if (arg->myrank == 0) {
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       &arg->pool.svc, DAOS_PC_RW,
+				       NULL /* svc */, DAOS_PC_RW,
 				       &arg->pool.poh, &arg->pool.pool_info,
 				       NULL /* ev */);
 		if (rc)
@@ -255,10 +255,10 @@ oid_allocator_checker(void **state)
 			assert_int_equal(rc, 0);
 			if (info.pi_ntargets - info.pi_ndisabled >= 2) {
 				if (arg->myrank == 0)
-					daos_kill_exclude_server(arg,
+					daos_kill_server(arg,
 						arg->pool.pool_uuid,
 						arg->group,
-						&arg->pool.svc);
+						arg->pool.svc, -1);
 			}
 			MPI_Barrier(MPI_COMM_WORLD);
 		}
@@ -291,7 +291,7 @@ int
 oid_alloc_setup(void **state)
 {
 	return test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
-			  NULL);
+			  0, NULL);
 }
 
 int

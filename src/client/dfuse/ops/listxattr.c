@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ dfuse_cb_listxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 	int rc;
 
 	rc = dfs_listxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, NULL,
-			  &out_size);
+			   &out_size);
 	if (rc != 0)
 		D_GOTO(err, rc);
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,20 +32,20 @@ import (
 // Module is an interface that a type must implement to provide the
 // functionality needed by the ModuleService to process dRPC requests.
 type Module interface {
-	HandleCall(*Session, int32, []byte) ([]byte, error)
-	ID() int32
+	HandleCall(*Session, Method, []byte) ([]byte, error)
+	ID() ModuleID
 }
 
 // ModuleService is the collection of Modules used by
 // DomainSocketServer to be used to process messages.
 type ModuleService struct {
 	log     logging.Logger
-	modules map[int32]Module
+	modules map[ModuleID]Module
 }
 
 // NewModuleService creates an initialized ModuleService instance
 func NewModuleService(log logging.Logger) *ModuleService {
-	modules := make(map[int32]Module)
+	modules := make(map[ModuleID]Module)
 	return &ModuleService{
 		log:     log,
 		modules: modules,
@@ -55,18 +55,19 @@ func NewModuleService(log logging.Logger) *ModuleService {
 // RegisterModule will take in a type that implements the Module interface
 // and ensure that no other module is already registered with that module
 // identifier.
-func (r *ModuleService) RegisterModule(mod Module) error {
-	_, ok := r.GetModule(mod.ID())
-	if ok {
-		return errors.Errorf("module with ID %d already exists", mod.ID())
+func (r *ModuleService) RegisterModule(mod Module) {
+	_, found := r.GetModule(mod.ID())
+	if found {
+		// Not really an error that can be handled. It's a programming
+		// error that should manifest very quickly in test.
+		panic(errors.Errorf("module with ID %d already exists", mod.ID()))
 	}
 	r.modules[mod.ID()] = mod
-	return nil
 }
 
 // GetModule fetches the module for the given ID. Returns true if found, false
 // otherwise.
-func (r *ModuleService) GetModule(id int32) (Module, bool) {
+func (r *ModuleService) GetModule(id ModuleID) (Module, bool) {
 	mod, found := r.modules[id]
 	return mod, found
 }
@@ -114,14 +115,19 @@ func (r *ModuleService) ProcessMessage(session *Session, msgBytes []byte) ([]byt
 	if err != nil {
 		return marshalResponse(-1, Status_FAILED_UNMARSHAL_CALL, nil)
 	}
-	module, ok := r.GetModule(msg.GetModule())
+	module, ok := r.GetModule(ModuleID(msg.GetModule()))
 	if !ok {
-		err = errors.Errorf("Attempted to call unregistered module")
+		r.log.Errorf("Attempted to call unregistered module %d", msg.GetModule())
 		return marshalResponse(msg.GetSequence(), Status_UNKNOWN_MODULE, nil)
 	}
-	respBody, err := module.HandleCall(session, msg.GetMethod(), msg.GetBody())
+	var method Method
+	method, err = module.ID().GetMethod(msg.GetMethod())
 	if err != nil {
-		r.log.Errorf("HandleCall for %d:%d failed: %s\n", module.ID(), msg.GetMethod(), err)
+		return marshalResponse(msg.GetSequence(), Status_UNKNOWN_METHOD, nil)
+	}
+	respBody, err := module.HandleCall(session, method, msg.GetBody())
+	if err != nil {
+		r.log.Errorf("HandleCall for %s:%s failed: %s\n", module, method, err)
 		return marshalResponse(msg.GetSequence(), ErrorToStatus(err), nil)
 	}
 

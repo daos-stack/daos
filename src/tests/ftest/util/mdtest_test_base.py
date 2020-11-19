@@ -1,5 +1,5 @@
 #!/usr/bin/python
-'''
+"""
   (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,25 +20,16 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
-from __future__ import print_function
-
-import os
-import subprocess
-import re
-
-from ClusterShell.NodeSet import NodeSet
-from apricot import TestWithServers, get_log_file
-from test_utils_pool import TestPool
+"""
+from dfuse_test_base import DfuseTestBase
 from mpio_utils import MpioUtils
 from mdtest_utils import MdtestCommand
-from command_utils import Mpirun, Orterun, CommandFailure
-from dfuse_utils import Dfuse
-from daos_utils import DaosCommand
-import write_host_file
+from command_utils_base import CommandFailure
+from job_manager_utils import Mpirun, Orterun
 
 
-class MdtestBase(TestWithServers):
+class MdtestBase(DfuseTestBase):
+    # pylint: disable=too-many-ancestors
     """Base mdtest class.
 
     :avocado: recursive
@@ -50,8 +41,6 @@ class MdtestBase(TestWithServers):
         self.mdtest_cmd = None
         self.processes = None
         self.hostfile_clients_slots = None
-        self.dfuse = None
-        self.daos_cmd = None
 
     def setUp(self):
         """Set up each test case."""
@@ -60,131 +49,54 @@ class MdtestBase(TestWithServers):
         # Start the servers and agents
         super(MdtestBase, self).setUp()
 
-        # initialise daos_cmd
-        self.daos_cmd = DaosCommand(self.bin)
-
         # Get the parameters for Mdtest
         self.mdtest_cmd = MdtestCommand()
         self.mdtest_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/mdtest/client_processes/*')
         self.manager = self.params.get("manager", '/run/mdtest/*', "MPICH")
 
-        # Until DAOS-3320 is resolved run IOR for POSIX
-        # with single client node
-        if self.mdtest_cmd.api.value == "POSIX":
-            self.log.info("Restricting mdtest to one node")
-            self.hostlist_clients = [self.hostlist_clients[0]]
-            self.hostfile_clients = write_host_file.write_host_file(
-                self.hostlist_clients, self.workdir,
-                self.hostfile_clients_slots)
-
         self.log.info('Clients %s', self.hostlist_clients)
         self.log.info('Servers %s', self.hostlist_servers)
 
-    def tearDown(self):
-        """Tear down each test case."""
-        try:
-            self.dfuse = None
-        finally:
-            # Stop the servers and agents
-            super(MdtestBase, self).tearDown()
-
-    def _create_pool(self):
-        """Create a pool and execute Mdtest."""
-        # Get the pool params
-        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
-        self.pool.get_params(self)
-
-        # Create a pool
-        self.pool.create()
-
-    def _create_cont(self, doas_cmd):
-        """Create a container.
-
-        Args:
-            daos_cmd (DaosCommand): doas command to issue the container
-                create
-
-        Returns:
-            str: UUID of the created container
-
-        """
-        cont_type = self.params.get("type", "/run/container/*")
-        result = self.daos_cmd.container_create(
-            pool=self.pool.uuid, svc=self.pool.svc_ranks,
-            cont_type=cont_type)
-
-        # Extract the container UUID from the daos container create output
-        cont_uuid = re.findall(
-            "created\s+container\s+([0-9a-f-]+)", result.stdout)
-        if not cont_uuid:
-            self.fail(
-                "Error obtaining the container uuid from: {}".format(
-                    result.stdout))
-        return cont_uuid[0]
-
-    def _start_dfuse(self):
-        """Create a DfuseCommand object to start dfuse."""
-        # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients,
-                           self.tmp,
-                           log_file=get_log_file(self.client_log),
-                           dfuse_env=True)
-        self.dfuse.get_params(self)
-
-        # update dfuse params
-        self.dfuse.set_dfuse_params(self.pool)
-        self.dfuse.set_dfuse_cont_param(self._create_cont(self.daos_cmd))
-
-        try:
-            # start dfuse
-            self.dfuse.run()
-        except CommandFailure as error:
-            self.log.error("Dfuse command %s failed on hosts %s",
-                           str(self.dfuse), str(NodeSet(self.dfuse.hosts)),
-                           exc_info=error)
-            self.fail("Unable to launch Dfuse.\n")
-
-
     def execute_mdtest(self):
         """Runner method for Mdtest."""
-
         # Create a pool if one does not already exist
         if self.pool is None:
-            self._create_pool()
+            self.add_pool(connect=False)
+        # create container
+        if self.container is None:
+            self.add_container(self.pool)
         # set Mdtest params
         self.mdtest_cmd.set_daos_params(self.server_group, self.pool)
 
         # start dfuse if api is POSIX
         if self.mdtest_cmd.api.value == "POSIX":
-            # Connect to the pool, create container and then start dfuse
-            # Uncomment below two lines once DAOS-3355 is resolved
-            # self.pool.connect()
-            # self.create_cont()
-            self._start_dfuse()
+            self.start_dfuse(self.hostlist_clients, self.pool, self.container)
             self.mdtest_cmd.test_dir.update(self.dfuse.mount_dir.value)
 
-       # Run Mdtest
-        self.run_mdtest(self.get_job_manager_command(self.manager),
+        # Run Mdtest
+        self.run_mdtest(self.get_mdtest_job_manager_command(self.manager),
                         self.processes)
+        self.stop_dfuse()
 
-    def get_job_manager_command(self, manager):
+    def get_mdtest_job_manager_command(self, manager):
         """Get the MPI job manager command for Mdtest.
 
         Returns:
             JobManager: the object for the mpi job manager command
 
         """
+        # pylint: disable=redefined-variable-type
         # Initialize MpioUtils if mdtest needs to be run using mpich
         if manager == "MPICH":
             mpio_util = MpioUtils()
             if mpio_util.mpich_installed(self.hostlist_clients) is False:
                 self.fail("Exiting Test: Mpich not installed")
-            path = os.path.join(mpio_util.mpichinstall, "bin")
-            return Mpirun(self.mdtest_cmd, path, mpitype="mpich")
+            self.job_manager = Mpirun(self.mdtest_cmd, mpitype="mpich")
+        else:
+            self.job_manager = Orterun(self.mdtest_cmd)
 
-        path = os.path.join(self.ompi_prefix, "bin")
-        return Orterun(self.mdtest_cmd, path)
+        return self.job_manager
 
     def run_mdtest(self, manager, processes):
         """Run the Mdtest command.
@@ -193,9 +105,11 @@ class MdtestBase(TestWithServers):
             manager (str): mpi job manager command
             processes (int): number of host processes
         """
-        env = self.mdtest_cmd.get_default_env(
-            str(manager), get_log_file(self.client_log))
-        manager.setup_command(env, self.hostfile_clients, processes)
+        env = self.mdtest_cmd.get_default_env(str(manager), self.client_log)
+        manager.assign_hosts(
+            self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
+        manager.assign_processes(processes)
+        manager.assign_environment(env)
         try:
             self.pool.display_pool_daos_space()
             manager.run()

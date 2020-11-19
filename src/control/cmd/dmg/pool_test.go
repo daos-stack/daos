@@ -36,12 +36,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/build"
 	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
-func createACLFile(t *testing.T, path string, acl *client.AccessControlList) {
+func createACLFile(t *testing.T, path string, acl *control.AccessControlList) {
 	t.Helper()
 
 	file, err := os.Create(path)
@@ -50,7 +52,7 @@ func createACLFile(t *testing.T, path string, acl *client.AccessControlList) {
 	}
 	defer file.Close()
 
-	_, err = file.WriteString(formatACLDefault(acl))
+	_, err = file.WriteString(control.FormatACLDefault(acl))
 	if err != nil {
 		t.Fatalf("Couldn't write to file: %v", err)
 	}
@@ -75,7 +77,7 @@ func TestPoolCommands(t *testing.T) {
 
 	// Some tests need a valid ACL file
 	testACLFile := filepath.Join(tmpDir, "test_acl.txt")
-	testACL := &client.AccessControlList{
+	testACL := &control.AccessControlList{
 		Entries: []string{"A::OWNER@:rw", "A:G:GROUP@:rw"},
 	}
 	createACLFile(t, testACLFile, testACL)
@@ -116,13 +118,13 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with minimal arguments",
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3", testScmSizeStr),
 			strings.Join([]string{
-				"ConnectClients",
-				fmt.Sprintf("PoolCreate-%+v", &client.PoolCreateReq{
+				printRequest(t, &control.PoolCreateReq{
 					ScmBytes:   uint64(testScmSize),
 					NumSvcReps: 3,
 					Sys:        "daos_server", // FIXME: This should be a constant
-					Usr:        eUsr.Username + "@",
-					Grp:        eGrp.Name + "@",
+					User:       eUsr.Username + "@",
+					UserGroup:  eGrp.Name + "@",
+					Ranks:      []system.Rank{},
 				}),
 			}, " "),
 			nil,
@@ -132,14 +134,14 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo --group bar --nvme-size %s --sys fnord --acl-file %s",
 				testScmSizeStr, testNvmeSizeStr, testACLFile),
 			strings.Join([]string{
-				"ConnectClients",
-				fmt.Sprintf("PoolCreate-%+v", &client.PoolCreateReq{
+				printRequest(t, &control.PoolCreateReq{
 					ScmBytes:   uint64(testScmSize),
 					NvmeBytes:  uint64(testNvmeSize),
 					NumSvcReps: 3,
 					Sys:        "fnord",
-					Usr:        "foo@",
-					Grp:        "bar@",
+					User:       "foo@",
+					UserGroup:  "bar@",
+					Ranks:      []system.Rank{},
 					ACL:        testACL,
 				}),
 			}, " "),
@@ -150,14 +152,14 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo --group bar --nvme-size %s --sys fnord --acl-file %s",
 				strconv.Itoa(testScmSize), strconv.Itoa(testNvmeSize), testACLFile),
 			strings.Join([]string{
-				"ConnectClients",
-				fmt.Sprintf("PoolCreate-%+v", &client.PoolCreateReq{
+				printRequest(t, &control.PoolCreateReq{
 					ScmBytes:   uint64(testScmSize),
 					NvmeBytes:  uint64(testNvmeSize),
 					NumSvcReps: 3,
 					Sys:        "fnord",
-					Usr:        "foo@",
-					Grp:        "bar@",
+					User:       "foo@",
+					UserGroup:  "bar@",
+					Ranks:      []system.Rank{},
 					ACL:        testACL,
 				}),
 			}, " "),
@@ -167,13 +169,13 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with user and group domains",
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo@home --group bar@home", testScmSizeStr),
 			strings.Join([]string{
-				"ConnectClients",
-				fmt.Sprintf("PoolCreate-%+v", &client.PoolCreateReq{
+				printRequest(t, &control.PoolCreateReq{
 					ScmBytes:   uint64(testScmSize),
 					NumSvcReps: 3,
 					Sys:        "daos_server",
-					Usr:        "foo@home",
-					Grp:        "bar@home",
+					User:       "foo@home",
+					UserGroup:  "bar@home",
+					Ranks:      []system.Rank{},
 				}),
 			}, " "),
 			nil,
@@ -182,12 +184,13 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with user but no group",
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo", testScmSizeStr),
 			strings.Join([]string{
-				"ConnectClients",
-				fmt.Sprintf("PoolCreate-%+v", &client.PoolCreateReq{
+				printRequest(t, &control.PoolCreateReq{
 					ScmBytes:   uint64(testScmSize),
 					NumSvcReps: 3,
 					Sys:        "daos_server",
-					Usr:        "foo@",
+					User:       "foo@",
+					UserGroup:  eGrp.Name + "@",
+					Ranks:      []system.Rank{},
 				}),
 			}, " "),
 			nil,
@@ -196,12 +199,13 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with group but no user",
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --group foo", testScmSizeStr),
 			strings.Join([]string{
-				"ConnectClients",
-				fmt.Sprintf("PoolCreate-%+v", &client.PoolCreateReq{
+				printRequest(t, &control.PoolCreateReq{
 					ScmBytes:   uint64(testScmSize),
 					NumSvcReps: 3,
 					Sys:        "daos_server",
-					Grp:        "foo@",
+					User:       eUsr.Username + "@",
+					UserGroup:  "foo@",
+					Ranks:      []system.Rank{},
 				}),
 			}, " "),
 			nil,
@@ -209,21 +213,160 @@ func TestPoolCommands(t *testing.T) {
 		{
 			"Create pool with invalid ACL file",
 			fmt.Sprintf("pool create --scm-size %s --acl-file /not/a/real/file", testScmSizeStr),
-			"ConnectClients",
+			"",
 			dmgTestErr("opening ACL file: open /not/a/real/file: no such file or directory"),
 		},
 		{
 			"Create pool with empty ACL file",
 			fmt.Sprintf("pool create --scm-size %s --acl-file %s", testScmSizeStr, testEmptyFile),
-			"ConnectClients",
+			"",
 			dmgTestErr(fmt.Sprintf("ACL file '%s' contains no entries", testEmptyFile)),
 		},
+		{
+			"Exclude a target with single target idx",
+			"pool exclude --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
+			strings.Join([]string{
+				printRequest(t, &control.PoolExcludeReq{
+					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Rank:      0,
+					Targetidx: []uint32{1},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Exclude a target with multiple idx",
+			"pool exclude --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1,2,3",
+			strings.Join([]string{
+				printRequest(t, &control.PoolExcludeReq{
+					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Rank:      0,
+					Targetidx: []uint32{1, 2, 3},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Exclude a target with no idx given",
+			"pool exclude --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0",
+			strings.Join([]string{
+				printRequest(t, &control.PoolExcludeReq{
+					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Rank:      0,
+					Targetidx: []uint32{},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Drain a target with single target idx",
+			"pool drain --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
+			strings.Join([]string{
+				printRequest(t, &control.PoolDrainReq{
+					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Rank:      0,
+					Targetidx: []uint32{1},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Drain a target with multiple idx",
+			"pool drain --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1,2,3",
+			strings.Join([]string{
+				printRequest(t, &control.PoolDrainReq{
+					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Rank:      0,
+					Targetidx: []uint32{1, 2, 3},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Drain a target with no idx given",
+			"pool drain --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0",
+			strings.Join([]string{
+				printRequest(t, &control.PoolDrainReq{
+					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Rank:      0,
+					Targetidx: []uint32{},
+				}),
+			}, " "),
+			nil,
+		},
+		/* TODO: Tests need to be fixed after pull pool info */
+		{
+			"Extend pool with missing arguments",
+			"pool extend",
+			"",
+			errMissingFlag,
+		},
+		{
+			"Extend a pool with a single rank",
+			fmt.Sprintf("pool extend --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks=1 --scm-size %s", testScmSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolExtendReq{
+					UUID:     "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:    []system.Rank{1},
+					ScmBytes: uint64(testScmSize),
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Extend a pool with multiple ranks",
+			fmt.Sprintf("pool extend --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks=1,2,3 --scm-size %s", testScmSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolExtendReq{
+					UUID:     "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:    []system.Rank{1, 2, 3},
+					ScmBytes: uint64(testScmSize),
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Reintegrate a target with single target idx",
+			"pool reintegrate --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
+			strings.Join([]string{
+				printRequest(t, &control.PoolReintegrateReq{
+					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Rank:      0,
+					Targetidx: []uint32{1},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Reintegrate a target with multiple idx",
+			"pool reintegrate --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1,2,3",
+			strings.Join([]string{
+				printRequest(t, &control.PoolReintegrateReq{
+					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Rank:      0,
+					Targetidx: []uint32{1, 2, 3},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Reintegrate a target with no idx given",
+			"pool reintegrate --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0",
+			strings.Join([]string{
+				printRequest(t, &control.PoolReintegrateReq{
+					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Rank:      0,
+					Targetidx: []uint32{},
+				}),
+			}, " "),
+			nil,
+		},
+
 		{
 			"Destroy pool with force",
 			"pool destroy --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --force",
 			strings.Join([]string{
-				"ConnectClients",
-				fmt.Sprintf("PoolDestroy-%+v", &client.PoolDestroyReq{
+				printRequest(t, &control.PoolDestroyReq{
 					UUID:  "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Force: true,
 				}),
@@ -231,17 +374,32 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Evict pool",
+			"pool evict --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+			strings.Join([]string{
+				printRequest(t, &control.PoolEvictReq{
+					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Sys:  "daos_server",
+				}),
+			}, " "),
+			nil,
+		},
+
+		{
 			"List pools",
 			"pool list",
-			"ConnectClients ListPools-{daos_server}",
+			strings.Join([]string{
+				printRequest(t, &control.ListPoolsReq{
+					System: build.DefaultSystemName,
+				}),
+			}, " "),
 			nil,
 		},
 		{
 			"Set string pool property",
 			"pool set-prop --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --name reclaim --value lazy",
 			strings.Join([]string{
-				"ConnectClients",
-				fmt.Sprintf("PoolSetProp-%+v", client.PoolSetPropReq{
+				printRequest(t, &control.PoolSetPropReq{
 					UUID:     "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Property: "reclaim",
 					Value:    "lazy",
@@ -253,8 +411,7 @@ func TestPoolCommands(t *testing.T) {
 			"Set numeric pool property",
 			"pool set-prop --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --name answer --value 42",
 			strings.Join([]string{
-				"ConnectClients",
-				fmt.Sprintf("PoolSetProp-%+v", client.PoolSetPropReq{
+				printRequest(t, &control.PoolSetPropReq{
 					UUID:     "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Property: "answer",
 					Value:    42,
@@ -272,8 +429,7 @@ func TestPoolCommands(t *testing.T) {
 			"Get pool ACL",
 			"pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 			strings.Join([]string{
-				"ConnectClients",
-				fmt.Sprintf("PoolGetACL-%+v", client.PoolGetACLReq{
+				printRequest(t, &control.PoolGetACLReq{
 					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 				}),
 			}, " "),
@@ -283,8 +439,7 @@ func TestPoolCommands(t *testing.T) {
 			"Get pool ACL with verbose flag",
 			"pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --verbose",
 			strings.Join([]string{
-				"ConnectClients",
-				fmt.Sprintf("PoolGetACL-%+v", client.PoolGetACLReq{
+				printRequest(t, &control.PoolGetACLReq{
 					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 				}),
 			}, " "),
@@ -294,8 +449,7 @@ func TestPoolCommands(t *testing.T) {
 			"Get pool ACL with output to bad file",
 			"pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --outfile /foo/bar/acl.txt",
 			strings.Join([]string{
-				"ConnectClients",
-				fmt.Sprintf("PoolGetACL-%+v", client.PoolGetACLReq{
+				printRequest(t, &control.PoolGetACLReq{
 					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 				}),
 			}, " "),
@@ -305,8 +459,7 @@ func TestPoolCommands(t *testing.T) {
 			"Get pool ACL with output to existing file",
 			fmt.Sprintf("pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --outfile %s", testExistingFile),
 			strings.Join([]string{
-				"ConnectClients",
-				fmt.Sprintf("PoolGetACL-%+v", client.PoolGetACLReq{
+				printRequest(t, &control.PoolGetACLReq{
 					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 				}),
 			}, " "),
@@ -316,8 +469,7 @@ func TestPoolCommands(t *testing.T) {
 			"Get pool ACL with output to existing file with write-only perms",
 			fmt.Sprintf("pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --outfile %s", testWriteOnlyFile),
 			strings.Join([]string{
-				"ConnectClients",
-				fmt.Sprintf("PoolGetACL-%+v", client.PoolGetACLReq{
+				printRequest(t, &control.PoolGetACLReq{
 					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 				}),
 			}, " "),
@@ -327,8 +479,7 @@ func TestPoolCommands(t *testing.T) {
 			"Get pool ACL with output to existing file with force",
 			fmt.Sprintf("pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --outfile %s --force", testExistingFile),
 			strings.Join([]string{
-				"ConnectClients",
-				fmt.Sprintf("PoolGetACL-%+v", client.PoolGetACLReq{
+				printRequest(t, &control.PoolGetACLReq{
 					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 				}),
 			}, " "),
@@ -338,8 +489,7 @@ func TestPoolCommands(t *testing.T) {
 			"Get pool ACL with output to directory with no write perms",
 			fmt.Sprintf("pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --outfile %s", filepath.Join(testNoPermDir, "out.txt")),
 			strings.Join([]string{
-				"ConnectClients",
-				fmt.Sprintf("PoolGetACL-%+v", client.PoolGetACLReq{
+				printRequest(t, &control.PoolGetACLReq{
 					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 				}),
 			}, " "),
@@ -348,21 +498,20 @@ func TestPoolCommands(t *testing.T) {
 		{
 			"Overwrite pool ACL with invalid ACL file",
 			"pool overwrite-acl --pool 12345678-1234-1234-1234-1234567890ab --acl-file /not/a/real/file",
-			"ConnectClients",
+			"",
 			dmgTestErr("opening ACL file: open /not/a/real/file: no such file or directory"),
 		},
 		{
 			"Overwrite pool ACL with empty ACL file",
 			fmt.Sprintf("pool overwrite-acl --pool 12345678-1234-1234-1234-1234567890ab --acl-file %s", testEmptyFile),
-			"ConnectClients",
+			"",
 			dmgTestErr(fmt.Sprintf("ACL file '%s' contains no entries", testEmptyFile)),
 		},
 		{
 			"Overwrite pool ACL",
 			fmt.Sprintf("pool overwrite-acl --pool 12345678-1234-1234-1234-1234567890ab --acl-file %s", testACLFile),
 			strings.Join([]string{
-				"ConnectClients",
-				fmt.Sprintf("PoolOverwriteACL-%+v", client.PoolOverwriteACLReq{
+				printRequest(t, &control.PoolOverwriteACLReq{
 					UUID: "12345678-1234-1234-1234-1234567890ab",
 					ACL:  testACL,
 				}),
@@ -372,33 +521,32 @@ func TestPoolCommands(t *testing.T) {
 		{
 			"Update pool ACL with invalid ACL file",
 			"pool update-acl --pool 12345678-1234-1234-1234-1234567890ab --acl-file /not/a/real/file",
-			"ConnectClients",
+			"",
 			dmgTestErr("opening ACL file: open /not/a/real/file: no such file or directory"),
 		},
 		{
 			"Update pool ACL with empty ACL file",
 			fmt.Sprintf("pool update-acl --pool 12345678-1234-1234-1234-1234567890ab --acl-file %s", testEmptyFile),
-			"ConnectClients",
+			"",
 			dmgTestErr(fmt.Sprintf("ACL file '%s' contains no entries", testEmptyFile)),
 		},
 		{
 			"Update pool ACL without file or entry",
 			"pool update-acl --pool 12345678-1234-1234-1234-1234567890ab",
-			"ConnectClients",
+			"",
 			dmgTestErr("either ACL file or entry parameter is required"),
 		},
 		{
 			"Update pool ACL with both file and entry",
 			fmt.Sprintf("pool update-acl --pool 12345678-1234-1234-1234-1234567890ab --acl-file %s --entry A::user@:rw", testACLFile),
-			"ConnectClients",
+			"",
 			dmgTestErr("either ACL file or entry parameter is required"),
 		},
 		{
 			"Update pool ACL with ACL file",
 			fmt.Sprintf("pool update-acl --pool 12345678-1234-1234-1234-1234567890ab --acl-file %s", testACLFile),
 			strings.Join([]string{
-				"ConnectClients",
-				fmt.Sprintf("PoolUpdateACL-%+v", client.PoolUpdateACLReq{
+				printRequest(t, &control.PoolUpdateACLReq{
 					UUID: "12345678-1234-1234-1234-1234567890ab",
 					ACL:  testACL,
 				}),
@@ -409,10 +557,9 @@ func TestPoolCommands(t *testing.T) {
 			"Update pool ACL with entry",
 			"pool update-acl --pool 12345678-1234-1234-1234-1234567890ab --entry A::user@:rw",
 			strings.Join([]string{
-				"ConnectClients",
-				fmt.Sprintf("PoolUpdateACL-%+v", client.PoolUpdateACLReq{
+				printRequest(t, &control.PoolUpdateACLReq{
 					UUID: "12345678-1234-1234-1234-1234567890ab",
-					ACL:  &client.AccessControlList{Entries: []string{"A::user@:rw"}},
+					ACL:  &control.AccessControlList{Entries: []string{"A::user@:rw"}},
 				}),
 			}, " "),
 			nil,
@@ -420,15 +567,14 @@ func TestPoolCommands(t *testing.T) {
 		{
 			"Delete pool ACL without principal flag",
 			"pool delete-acl --pool 12345678-1234-1234-1234-1234567890ab",
-			"ConnectClients",
+			"",
 			dmgTestErr("the required flag `-p, --principal' was not specified"),
 		},
 		{
 			"Delete pool ACL",
 			"pool delete-acl --pool 12345678-1234-1234-1234-1234567890ab --principal OWNER@",
 			strings.Join([]string{
-				"ConnectClients",
-				fmt.Sprintf("PoolDeleteACL-%+v", client.PoolDeleteACLReq{
+				printRequest(t, &control.PoolDeleteACLReq{
 					UUID:      "12345678-1234-1234-1234-1234567890ab",
 					Principal: "OWNER@",
 				}),
@@ -453,8 +599,10 @@ func TestPoolGetACLToFile_Success(t *testing.T) {
 
 	aclFile := filepath.Join(tmpDir, "out.txt")
 
-	conn := newTestConn(t)
-	err := runCmd(t, fmt.Sprintf("pool get-acl --pool 12345678-1234-1234-123456789abc --outfile %s", aclFile), log, conn)
+	err := runCmd(t,
+		fmt.Sprintf("pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --outfile %s", aclFile),
+		log, control.DefaultMockInvoker(log),
+	)
 
 	if err != nil {
 		t.Fatalf("Expected no error, got: %+v", err)

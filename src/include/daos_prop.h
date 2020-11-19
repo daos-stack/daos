@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * DAOS pool/container intialization properties
+ * DAOS pool/container initialization properties
  */
 
 #ifndef __DAOS_PROP_H__
@@ -162,9 +162,21 @@ enum daos_cont_props {
 	 * Expected to be in the order: Owner, User(s), Group(s), Everyone
 	 */
 	DAOS_PROP_CO_ACL,
-	/** Compression on/off + compression type */
+	/**
+	 * Determine whether inline compression is enabled
+	 * Value: DAOS_PROP_CO_COMPRESS_OFF/LZ4/DEFLATE[1-4]
+	 * Default: DAOS_PROP_CO_COMPRESS_OFF
+	 */
 	DAOS_PROP_CO_COMPRESS,
-	/** Encryption on/off + encryption type */
+	/**
+	 * Determine whether encryption is enabled
+	 * Value:
+	 * DAOS_PROP_CO_ENCRYPT_OFF,
+	 * DAOS_PROP_CO_ENCRYPT_AES_XTS{128,256},
+	 * DAOS_PROP_CO_ENCRYPT_AES_CBC{128,192,256},
+	 * DAOS_PROP_CO_ENCRYPT_AES_GCM{128,256}
+	 * Default: DAOS_PROP_CO_ENCRYPT_OFF
+	 */
 	DAOS_PROP_CO_ENCRYPT,
 	/**
 	 * The user who acts as the owner of the container.
@@ -176,6 +188,18 @@ enum daos_cont_props {
 	 * Format: group@[domain]
 	 */
 	DAOS_PROP_CO_OWNER_GROUP,
+	/**
+	 * Determine whether deduplication is enabled
+	 * Require checksum to be enabled
+	 * Value DAOS_PROP_CO_DEDUP_OFF/MEMCMP/HASH
+	 * Default: DAOS_PROP_CO_DEDUP_OFF
+	 */
+	DAOS_PROP_CO_DEDUP,
+	/**
+	 * Deduplication threshold size
+	 * Default: 4K
+	 */
+	DAOS_PROP_CO_DEDUP_THRESHOLD,
 	DAOS_PROP_CO_MAX,
 };
 
@@ -199,7 +223,9 @@ enum {
 	DAOS_PROP_CO_CSUM_CRC16,
 	DAOS_PROP_CO_CSUM_CRC32,
 	DAOS_PROP_CO_CSUM_CRC64,
-	DAOS_PROP_CO_CSUM_SHA1
+	DAOS_PROP_CO_CSUM_SHA1,
+	DAOS_PROP_CO_CSUM_SHA256,
+	DAOS_PROP_CO_CSUM_SHA512
 };
 
 /** container checksum server verify */
@@ -208,15 +234,34 @@ enum {
 	DAOS_PROP_CO_CSUM_SV_ON
 };
 
+/** container deduplication */
+enum {
+	DAOS_PROP_CO_DEDUP_OFF,
+	DAOS_PROP_CO_DEDUP_MEMCMP,
+	DAOS_PROP_CO_DEDUP_HASH
+};
 
-/** container compress type */
+/** container compression type */
 enum {
 	DAOS_PROP_CO_COMPRESS_OFF,
+	DAOS_PROP_CO_COMPRESS_LZ4,
+	DAOS_PROP_CO_COMPRESS_DEFLATE, /** deflate default */
+	DAOS_PROP_CO_COMPRESS_DEFLATE1,
+	DAOS_PROP_CO_COMPRESS_DEFLATE2,
+	DAOS_PROP_CO_COMPRESS_DEFLATE3,
+	DAOS_PROP_CO_COMPRESS_DEFLATE4,
 };
 
 /** container encryption type */
 enum {
 	DAOS_PROP_CO_ENCRYPT_OFF,
+	DAOS_PROP_CO_ENCRYPT_AES_XTS128,
+	DAOS_PROP_CO_ENCRYPT_AES_XTS256,
+	DAOS_PROP_CO_ENCRYPT_AES_CBC128,
+	DAOS_PROP_CO_ENCRYPT_AES_CBC192,
+	DAOS_PROP_CO_ENCRYPT_AES_CBC256,
+	DAOS_PROP_CO_ENCRYPT_AES_GCM128,
+	DAOS_PROP_CO_ENCRYPT_AES_GCM256
 };
 
 /** container redundancy factor */
@@ -271,15 +316,24 @@ typedef struct {
  *
  * \return	allocated daos_prop_t pointer, NULL if failed.
  */
-DAOS_API daos_prop_t *
+daos_prop_t *
 daos_prop_alloc(uint32_t entries_nr);
+
+/**
+ * Free the DAOS property entries.
+ *
+ * \param[in]	prop	property entries to be freed.
+ */
+void
+daos_prop_entries_free(daos_prop_t *prop);
+
 
 /**
  * Free the DAOS properties.
  *
  * \param[in]	prop	properties to be freed.
  */
-DAOS_API void
+void
 daos_prop_free(daos_prop_t *prop);
 
 /**
@@ -290,7 +344,7 @@ daos_prop_free(daos_prop_t *prop);
  *
  * \return	Newly allocated merged property
  */
-DAOS_API daos_prop_t *
+daos_prop_t *
 daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop);
 
 /**
@@ -304,7 +358,7 @@ daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop);
  * \return		0		Success
  *			-DER_NOMEM	Out of memory
  */
-DAOS_API int
+int
 daos_prop_entry_dup_ptr(struct daos_prop_entry *entry_dst,
 			struct daos_prop_entry *entry_src, size_t len);
 
@@ -317,7 +371,7 @@ daos_prop_entry_dup_ptr(struct daos_prop_entry *entry_dst,
  * \return	0		Entries match
  *		-DER_MISMATCH	Entries do NOT match
  */
-DAOS_API int
+int
 daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1,
 			struct daos_prop_entry *entry2);
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -321,6 +321,8 @@ iterate_biov(struct bio_desc *biod,
 			if (rc)
 				break;
 		}
+		if (rc)
+			break;
 	}
 
 	return rc;
@@ -347,7 +349,7 @@ chunk_reserve(struct bio_dma_chunk *chk, unsigned int chk_pg_idx,
 	if (chk_pg_idx + pg_cnt > bio_chk_sz)
 		return NULL;
 
-	D_DEBUG(DB_IO, "Reserved on chunk:%p[%p], idx:%u, cnt:%u, off:%u\n",
+	D_DEBUG(DB_TRACE, "Reserved on chunk:%p[%p], idx:%u, cnt:%u, off:%u\n",
 		chk, chk->bdc_ptr, chk_pg_idx, pg_cnt, pg_off);
 
 	chk->bdc_pg_idx = chk_pg_idx + pg_cnt;
@@ -530,7 +532,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 	if (last_rg) {
 		uint64_t cur_pg, prev_pg_start, prev_pg_end;
 
-		D_DEBUG(DB_IO, "Last region %p:%d ["DF_U64","DF_U64")\n",
+		D_DEBUG(DB_TRACE, "Last region %p:%d ["DF_U64","DF_U64")\n",
 			last_rg->brr_chk, last_rg->brr_pg_idx,
 			last_rg->brr_off, last_rg->brr_end);
 
@@ -549,7 +551,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 			bio_iov_set_raw_buf(biov,
 				chunk_reserve(chk, chk_pg_idx, pg_cnt, pg_off));
 			if (bio_iov2raw_buf(biov) != NULL) {
-				D_DEBUG(DB_IO, "Consecutive reserve %p.\n",
+				D_DEBUG(DB_TRACE, "Consecutive reserve %p.\n",
 					bio_iov2raw_buf(biov));
 				last_rg->brr_end = end;
 				return 0;
@@ -635,8 +637,18 @@ rw_completion(void *cb_arg, int err)
 	D_ASSERT(xs_ctxt->bxc_blob_rw > 0);
 	xs_ctxt->bxc_blob_rw--;
 
-	if (biod->bd_result == 0 && err != 0) {
+	/* Induce NVMe Read/Write Error*/
+	if (biod->bd_update)
+		err = DAOS_FAIL_CHECK(DAOS_NVME_WRITE_ERR) ? -EIO : err;
+	else
+		err = DAOS_FAIL_CHECK(DAOS_NVME_READ_ERR) ? -EIO : err;
+
+	/* Return the error value of the first NVMe IO error */
+	if (biod->bd_result == 0 && err != 0)
 		biod->bd_result = daos_errno2der(-err);
+
+	/* Report all NVMe IO errors */
+	if (err != 0) {
 		D_ALLOC_PTR(mem);
 		if (mem == NULL)
 			goto skip_media_error;
@@ -781,9 +793,12 @@ bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 	struct umem_instance *umem = biod->bd_ctxt->bic_umem;
 
 	if (biod->bd_update && media == DAOS_MEDIA_SCM) {
-		/* NB: pmemobj_tx_commit will drain HW buffer */
-		pmemobj_memcpy(umem->umm_pool, media_addr, addr, n,
-			       PMEMOBJ_F_MEM_NODRAIN);
+		/*
+		 * We could do no_drain copy and rely on the tx commit to
+		 * drain controller, however, test shows calling a persistent
+		 * copy and drain controller here is faster.
+		 */
+		pmemobj_memcpy_persist(umem->umm_pool, media_addr, addr, n);
 	} else {
 		if (biod->bd_update)
 			memcpy(media_addr, addr, n);
@@ -820,7 +835,7 @@ copy_one(struct bio_desc *biod, struct bio_iov *biov,
 
 		nob = min(size, buf_len - arg->ca_iov_off);
 		if (addr != NULL) {
-			D_DEBUG(DB_IO, "bio copy %p size %zd\n",
+			D_DEBUG(DB_TRACE, "bio copy %p size %zd\n",
 				addr, nob);
 			bio_memcpy(biod, media, addr, iov->iov_buf +
 					arg->ca_iov_off, nob);
@@ -856,7 +871,7 @@ copy_one(struct bio_desc *biod, struct bio_iov *biov,
 	}
 
 	D_DEBUG(DB_TRACE, "Consumed all iovs, "DF_U64" bytes left\n", size);
-	return -DER_OVERFLOW;
+	return -DER_REC2BIG;
 }
 
 static void
@@ -980,6 +995,36 @@ bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl)
 	arg.ca_sgl_cnt = nr_sgl;
 
 	return iterate_biov(biod, copy_one, &arg);
+}
+
+static int
+flush_one(struct bio_desc *biod, struct bio_iov *biov,
+	  struct bio_copy_args *arg)
+{
+	struct umem_instance *umem = biod->bd_ctxt->bic_umem;
+
+	D_ASSERT(arg == NULL);
+	D_ASSERT(biov);
+
+	if (bio_addr_is_hole(&biov->bi_addr))
+		return 0;
+
+	if (biov->bi_addr.ba_type != DAOS_MEDIA_SCM)
+		return 0;
+
+	D_ASSERT(bio_iov2raw_buf(biov) != NULL);
+	D_ASSERT(bio_iov2req_len(biov) != 0);
+	pmemobj_flush(umem->umm_pool, bio_iov2req_buf(biov),
+		      bio_iov2req_len(biov));
+	return 0;
+}
+
+void
+bio_iod_flush(struct bio_desc *biod)
+{
+	D_ASSERT(biod->bd_buffer_prep);
+	if (biod->bd_update)
+		iterate_biov(biod, flush_one, NULL);
 }
 
 static int

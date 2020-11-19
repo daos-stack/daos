@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/lib/ipmctl"
@@ -42,7 +43,7 @@ import (
 func MockDiscovery() ipmctl.DeviceDiscovery {
 	m := proto.MockScmModule()
 
-	return ipmctl.DeviceDiscovery{
+	result := ipmctl.DeviceDiscovery{
 		Physical_id:          uint16(m.Physicalid),
 		Channel_id:           uint16(m.Channelid),
 		Channel_pos:          uint16(m.Channelposition),
@@ -50,6 +51,12 @@ func MockDiscovery() ipmctl.DeviceDiscovery {
 		Socket_id:            uint16(m.Socketid),
 		Capacity:             m.Capacity,
 	}
+
+	_ = copy(result.Uid[:], m.Uid)
+	_ = copy(result.Part_number[:], m.PartNumber)
+	_ = copy(result.Fw_revision[:], m.FirmwareRevision)
+
+	return result
 }
 
 // MockModule converts ipmctl type SCM module and returns storage/scm
@@ -61,27 +68,97 @@ func MockModule(d *ipmctl.DeviceDiscovery) storage.ScmModule {
 	}
 
 	return storage.ScmModule{
-		PhysicalID:      uint32(d.Physical_id),
-		ChannelID:       uint32(d.Channel_id),
-		ChannelPosition: uint32(d.Channel_pos),
-		ControllerID:    uint32(d.Memory_controller_id),
-		SocketID:        uint32(d.Socket_id),
-		Capacity:        d.Capacity,
+		PhysicalID:       uint32(d.Physical_id),
+		ChannelID:        uint32(d.Channel_id),
+		ChannelPosition:  uint32(d.Channel_pos),
+		ControllerID:     uint32(d.Memory_controller_id),
+		SocketID:         uint32(d.Socket_id),
+		Capacity:         d.Capacity,
+		UID:              d.Uid.String(),
+		PartNumber:       d.Part_number.String(),
+		FirmwareRevision: d.Fw_revision.String(),
 	}
 }
 
-type mockIpmctl struct {
-	discoverModulesRet error
-	modules            []ipmctl.DeviceDiscovery
-}
+type (
+	mockIpmctlCfg struct {
+		discoverModulesRet error
+		modules            []ipmctl.DeviceDiscovery
+		getFWInfoRet       error
+		fwInfo             ipmctl.DeviceFirmwareInfo
+		updateFirmwareRet  error
+	}
+
+	mockIpmctl struct {
+		cfg mockIpmctlCfg
+	}
+)
 
 func (m *mockIpmctl) Discover() ([]ipmctl.DeviceDiscovery, error) {
-	return m.modules, m.discoverModulesRet
+	return m.cfg.modules, m.cfg.discoverModulesRet
 }
 
-// TestGetState tests the internals of ipmCtlRunner, pass in mock runCmd to verify
-// behaviour. Don't use mockPrepScm as we want to test prepScm logic.
-func TestGetState(t *testing.T) {
+func (m *mockIpmctl) GetFirmwareInfo(uid ipmctl.DeviceUID) (ipmctl.DeviceFirmwareInfo, error) {
+	return m.cfg.fwInfo, m.cfg.getFWInfoRet
+}
+
+func (m *mockIpmctl) UpdateFirmware(uid ipmctl.DeviceUID, fwPath string, force bool) error {
+	return m.cfg.updateFirmwareRet
+}
+
+func newMockIpmctl(cfg *mockIpmctlCfg) *mockIpmctl {
+	if cfg == nil {
+		cfg = &mockIpmctlCfg{}
+	}
+
+	return &mockIpmctl{
+		cfg: *cfg,
+	}
+}
+
+// TestIpmctl_checkIpmctl verified that bad versions trigger an error.
+func TestIpmctl_checkIpmctl(t *testing.T) {
+	preTxt := "Intel(R) Optane(TM) Persistent Memory Command Line Interface Version "
+
+	for name, tc := range map[string]struct {
+		verOut  string
+		badVers []semVer
+		expErr  error
+	}{
+		"no bad versions": {
+			verOut:  "02.00.00.3816",
+			badVers: []semVer{},
+		},
+		"good version": {
+			verOut:  "02.00.00.3825",
+			badVers: badIpmctlVers,
+		},
+		"bad version": {
+			verOut:  "02.00.00.3816",
+			badVers: badIpmctlVers,
+			expErr:  FaultIpmctlBadVersion("02.00.00.3816"),
+		},
+		"no version": {
+			expErr: errors.New("could not read ipmctl version"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			mockRun := func(_ string) (string, error) {
+				return preTxt + tc.verOut, nil
+			}
+
+			cr := newCmdRunner(log, nil, mockRun, nil)
+			CmpErr(t, tc.expErr, cr.checkIpmctl(tc.badVers))
+		})
+	}
+}
+
+// TestIpmctl_GetPmemState tests the internals of ipmCtlRunner, pass in mock runCmd to verify
+// behavior. Don't use mockPrepScm as we want to test prepScm logic.
+func TestIpmctl_GetPmemState(t *testing.T) {
 	var regionsOut string  // variable cmd output
 	commands := []string{} // external commands issued
 	// ndctl create-namespace command return json format
@@ -98,26 +175,28 @@ func TestGetState(t *testing.T) {
 }
 `
 	oneNs, _ := parseNamespaces(fmt.Sprintf(nsOut, 1, 1, 0))
-	twoNsJson := "[" + fmt.Sprintf(nsOut, 1, 1, 0) + "," + fmt.Sprintf(nsOut, 2, 2, 1) + "]"
-	twoNs, _ := parseNamespaces(twoNsJson)
+	twoNsJSON := "[" + fmt.Sprintf(nsOut, 1, 1, 0) + "," + fmt.Sprintf(nsOut, 2, 2, 1) + "]"
+	twoNs, _ := parseNamespaces(twoNsJSON)
 	createRegionsOut := "hooray it worked\n"
-	pmemId := 1
+	pmemID := 1
 
 	mockRun := func(in string) (string, error) {
 		retString := in
 
 		switch in {
-		case cmdScmCreateRegions:
+		case cmdCreateRegions:
 			retString = createRegionsOut // example successful output
-		case cmdScmShowRegions:
+		case cmdShowRegions:
 			retString = regionsOut
-		case cmdScmCreateNamespace:
+		case cmdCreateNamespace:
 			// stimulate free capacity of region being used
 			regionsOut = strings.Replace(regionsOut, "3012.0", "0.0", 1)
-			retString = fmt.Sprintf(nsOut, pmemId, pmemId, pmemId-1)
-			pmemId += 1
-		case cmdScmListNamespaces:
-			retString = twoNsJson
+			retString = fmt.Sprintf(nsOut, pmemID, pmemID, pmemID-1)
+			pmemID++
+		case cmdListNamespaces:
+			retString = twoNsJSON
+		case cmdShowIpmctlVersion:
+			retString = "02.00.00.3825\n"
 		}
 
 		commands = append(commands, in)
@@ -125,19 +204,22 @@ func TestGetState(t *testing.T) {
 	}
 
 	tests := []struct {
-		desc              string
-		errMsg            string
-		showRegionOut     string
-		expRebootRequired bool
-		expNamespaces     storage.ScmNamespaces
-		expCommands       []string
-		lookPathErrMsg    string
+		desc                  string
+		showRegionOut         string
+		expGetPmemStateErrMsg string
+		expErrMsg             string
+		expRebootRequired     bool
+		expNamespaces         storage.ScmNamespaces
+		expCommands           []string
+		lookPathErrMsg        string
 	}{
 		{
 			desc:              "modules but no regions",
 			showRegionOut:     outScmNoRegions,
 			expRebootRequired: true,
-			expCommands:       []string{cmdScmShowRegions, cmdScmDeleteGoal, cmdScmCreateRegions},
+			expCommands: []string{
+				cmdShowRegions, cmdShowIpmctlVersion, cmdDeleteGoal, cmdCreateRegions,
+			},
 		},
 		{
 			desc: "single region with free capacity",
@@ -149,7 +231,9 @@ func TestGetState(t *testing.T) {
 				"   PersistentMemoryType=AppDirect\n" +
 				"   FreeCapacity=3012.0 GiB\n" +
 				"\n",
-			expCommands:   []string{cmdScmShowRegions, cmdScmCreateNamespace, cmdScmShowRegions},
+			expCommands: []string{
+				cmdShowRegions, cmdShowIpmctlVersion, cmdCreateNamespace, cmdShowRegions,
+			},
 			expNamespaces: oneNs,
 		},
 		{
@@ -163,8 +247,8 @@ func TestGetState(t *testing.T) {
 				"   FreeCapacity=3012.0 GiB\n" +
 				"\n",
 			expCommands: []string{
-				cmdScmShowRegions, cmdScmCreateNamespace, cmdScmShowRegions,
-				cmdScmCreateNamespace, cmdScmShowRegions,
+				cmdShowRegions, cmdShowIpmctlVersion, cmdCreateNamespace, cmdShowRegions,
+				cmdCreateNamespace, cmdShowRegions,
 			},
 			expNamespaces: twoNs,
 		},
@@ -178,8 +262,27 @@ func TestGetState(t *testing.T) {
 				"   PersistentMemoryType=AppDirect\n" +
 				"   FreeCapacity=0.0 GiB\n" +
 				"\n",
-			expCommands:   []string{cmdScmShowRegions, cmdScmListNamespaces},
+			expCommands:   []string{cmdShowRegions, cmdShowIpmctlVersion, cmdListNamespaces},
 			expNamespaces: twoNs,
+		},
+		{
+			desc: "v2 regions with no capacity",
+			showRegionOut: "\n" +
+				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+				"   PersistentMemoryType=AppDirect\n" +
+				"   FreeCapacity=0.000 GiB\n" +
+				"---ISetID=0x81187f4881f02ccb---\n" +
+				"   PersistentMemoryType=AppDirect\n" +
+				"   FreeCapacity=0.000 GiB\n" +
+				"\n",
+			expCommands:   []string{cmdShowRegions, cmdShowIpmctlVersion, cmdListNamespaces},
+			expNamespaces: twoNs,
+		},
+		{
+			desc: "unexpected output",
+			showRegionOut: "\n" +
+				"---ISetID=0x2aba7f4828ef2ccc---\n",
+			expGetPmemStateErrMsg: "checking scm region capacity: expecting at least 4 lines, got 3",
 		},
 	}
 
@@ -191,10 +294,10 @@ func TestGetState(t *testing.T) {
 			mockLookPath := func(string) (s string, err error) {
 				return
 			}
-			mockBinding := &mockIpmctl{
+			mockBinding := newMockIpmctl(&mockIpmctlCfg{
 				discoverModulesRet: nil,
 				modules:            []ipmctl.DeviceDiscovery{MockDiscovery()},
-			}
+			})
 			cr := newCmdRunner(log, mockBinding, mockRun, mockLookPath)
 			if _, err := cr.Discover(); err != nil {
 				t.Fatal(err)
@@ -202,17 +305,18 @@ func TestGetState(t *testing.T) {
 
 			// reset to initial values between tests
 			regionsOut = tt.showRegionOut
-			pmemId = 1
+			pmemID = 1
 			commands = nil
 
-			scmState, err := cr.GetState()
-			if err != nil {
-				t.Fatal(tt.desc + ": GetState: " + err.Error())
+			scmState, err := cr.GetPmemState()
+			ExpectError(t, err, tt.expGetPmemStateErrMsg, tt.desc)
+			if tt.expGetPmemStateErrMsg != "" {
+				return
 			}
 
 			needsReboot, namespaces, err := cr.Prep(scmState)
-			if tt.errMsg != "" {
-				ExpectError(t, err, tt.errMsg, tt.desc)
+			if tt.expErrMsg != "" {
+				ExpectError(t, err, tt.expErrMsg, tt.desc)
 				return
 			}
 			if err != nil {
@@ -226,7 +330,9 @@ func TestGetState(t *testing.T) {
 	}
 }
 
-func TestParseNamespaces(t *testing.T) {
+// TestIpTestIpmctl_parseNamespaces verified expected output from ndctl utility
+// can be converted into native storage ScmNamespaces type.
+func TestIpmctl_parseNamespaces(t *testing.T) {
 	// template for `ndctl list -N` output
 	listTmpl := `{
    "dev":"namespace%d.0",
@@ -297,9 +403,9 @@ func TestParseNamespaces(t *testing.T) {
 	}
 }
 
-// TestGetNamespaces tests the internals of prepScm, pass in mock runCmd to verify
-// behaviour. Don't use mockPrepScm as we want to test prepScm logic.
-func TestGetNamespaces(t *testing.T) {
+// TestIpmctl_GetPmemNamespaces tests the internals of prepScm, pass in mock runCmd to verify
+// behavior. Don't use mockPrepScm as we want to test prepScm logic.
+func TestIpmctl_GetPmemNamespaces(t *testing.T) {
 	commands := []string{} // external commands issued
 	// ndctl create-namespace command return json format
 	nsOut := `{
@@ -315,12 +421,12 @@ func TestGetNamespaces(t *testing.T) {
 }
 `
 	oneNs, _ := parseNamespaces(fmt.Sprintf(nsOut, 1, 1, 0))
-	twoNsJson := "[" + fmt.Sprintf(nsOut, 1, 1, 0) + "," + fmt.Sprintf(nsOut, 2, 2, 1) + "]"
-	twoNs, _ := parseNamespaces(twoNsJson)
+	twoNsJSON := "[" + fmt.Sprintf(nsOut, 1, 1, 0) + "," + fmt.Sprintf(nsOut, 2, 2, 1) + "]"
+	twoNs, _ := parseNamespaces(twoNsJSON)
 
 	tests := []struct {
 		desc           string
-		errMsg         string
+		expErrMsg      string
 		cmdOut         string
 		expNamespaces  storage.ScmNamespaces
 		expCommands    []string
@@ -329,25 +435,25 @@ func TestGetNamespaces(t *testing.T) {
 		{
 			desc:          "no namespaces",
 			cmdOut:        "",
-			expCommands:   []string{cmdScmListNamespaces},
+			expCommands:   []string{cmdListNamespaces},
 			expNamespaces: storage.ScmNamespaces{},
 		},
 		{
 			desc:          "single pmem device",
 			cmdOut:        fmt.Sprintf(nsOut, 1, 1, 0),
-			expCommands:   []string{cmdScmListNamespaces},
+			expCommands:   []string{cmdListNamespaces},
 			expNamespaces: oneNs,
 		},
 		{
 			desc:          "two pmem device",
-			cmdOut:        twoNsJson,
-			expCommands:   []string{cmdScmListNamespaces},
+			cmdOut:        twoNsJSON,
+			expCommands:   []string{cmdListNamespaces},
 			expNamespaces: twoNs,
 		},
 		{
 			desc:           "ndctl not installed",
 			lookPathErrMsg: FaultMissingNdctl.Error(),
-			errMsg:         FaultMissingNdctl.Error(),
+			expErrMsg:      FaultMissingNdctl.Error(),
 		},
 	}
 
@@ -370,27 +476,226 @@ func TestGetNamespaces(t *testing.T) {
 
 			commands = nil // reset to initial values between tests
 
-			mockBinding := &mockIpmctl{
+			mockBinding := newMockIpmctl(&mockIpmctlCfg{
 				discoverModulesRet: nil,
 				modules:            []ipmctl.DeviceDiscovery{MockDiscovery()},
-			}
+			})
 			cr := newCmdRunner(log, mockBinding, mockRun, mockLookPath)
 
 			if _, err := cr.Discover(); err != nil {
 				t.Fatal(err)
 			}
 
-			namespaces, err := cr.GetNamespaces()
+			namespaces, err := cr.GetPmemNamespaces()
 			if err != nil {
 				if tt.lookPathErrMsg != "" {
 					ExpectError(t, err, tt.lookPathErrMsg, tt.desc)
 					return
 				}
-				t.Fatal(tt.desc + ": GetNamespaces: " + err.Error())
+				t.Fatal(tt.desc + ": GetPmemNamespaces: " + err.Error())
 			}
 
 			AssertEqual(t, commands, tt.expCommands, tt.desc+": unexpected list of commands run")
 			AssertEqual(t, namespaces, tt.expNamespaces, tt.desc+": unexpected list of pmem device file names")
+		})
+	}
+}
+
+func TestIpmctl_Discover(t *testing.T) {
+	testDevices := []ipmctl.DeviceDiscovery{
+		MockDiscovery(),
+		MockDiscovery(),
+		MockDiscovery(),
+	}
+
+	expModules := storage.ScmModules{}
+	for _, dev := range testDevices {
+		mod := MockModule(&dev)
+		expModules = append(expModules, &mod)
+	}
+
+	for name, tc := range map[string]struct {
+		cfg       *mockIpmctlCfg
+		expErr    error
+		expResult storage.ScmModules
+	}{
+		"ipmctl.Discovery failed": {
+			cfg: &mockIpmctlCfg{
+				discoverModulesRet: errors.New("mock Discover"),
+			},
+			expErr: errors.New("failed to discover SCM modules: mock Discover"),
+		},
+		"no modules": {
+			cfg:       &mockIpmctlCfg{},
+			expResult: storage.ScmModules{},
+		},
+		"success with modules": {
+			cfg: &mockIpmctlCfg{
+				modules: testDevices,
+			},
+			expResult: expModules,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			mockBinding := newMockIpmctl(tc.cfg)
+			cr := newCmdRunner(log, mockBinding, nil, nil)
+
+			result, err := cr.Discover()
+
+			common.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+				t.Errorf("wrong firmware info (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestIpmctl_fwInfoStatusToUpdateStatus(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input     uint32
+		expResult storage.ScmFirmwareUpdateStatus
+	}{
+		"unknown": {
+			input:     ipmctl.FWUpdateStatusUnknown,
+			expResult: storage.ScmUpdateStatusUnknown,
+		},
+		"success": {
+			input:     ipmctl.FWUpdateStatusSuccess,
+			expResult: storage.ScmUpdateStatusSuccess,
+		},
+		"failure": {
+			input:     ipmctl.FWUpdateStatusFailed,
+			expResult: storage.ScmUpdateStatusFailed,
+		},
+		"staged": {
+			input:     ipmctl.FWUpdateStatusStaged,
+			expResult: storage.ScmUpdateStatusStaged,
+		},
+		"out of range": {
+			input:     uint32(500),
+			expResult: storage.ScmUpdateStatusUnknown,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result := scmFirmwareUpdateStatusFromIpmctl(tc.input)
+
+			AssertEqual(t, tc.expResult, result, "didn't match")
+		})
+	}
+}
+
+func TestIpmctl_GetFirmwareStatus(t *testing.T) {
+	testUID := "TestUID"
+	testActiveVersion := "1.0.0.1"
+	testStagedVersion := "2.0.0.2"
+	fwInfo := ipmctl.DeviceFirmwareInfo{
+		FWImageMaxSize: 65,
+		FWUpdateStatus: ipmctl.FWUpdateStatusStaged,
+	}
+	_ = copy(fwInfo.ActiveFWVersion[:], testActiveVersion)
+	_ = copy(fwInfo.StagedFWVersion[:], testStagedVersion)
+
+	// Representing a DIMM without a staged FW version
+	fwInfoUnstaged := ipmctl.DeviceFirmwareInfo{
+		FWImageMaxSize: 1,
+		FWUpdateStatus: ipmctl.FWUpdateStatusSuccess,
+	}
+	_ = copy(fwInfoUnstaged.ActiveFWVersion[:], testActiveVersion)
+	_ = copy(fwInfoUnstaged.StagedFWVersion[:], noFirmwareVersion)
+
+	for name, tc := range map[string]struct {
+		inputUID  string
+		cfg       *mockIpmctlCfg
+		expErr    error
+		expResult *storage.ScmFirmwareInfo
+	}{
+		"empty deviceUID": {
+			expErr: errors.New("invalid SCM module UID"),
+		},
+		"ipmctl.GetFirmwareInfo failed": {
+			inputUID: testUID,
+			cfg: &mockIpmctlCfg{
+				getFWInfoRet: errors.New("mock GetFirmwareInfo failed"),
+			},
+			expErr: errors.Errorf("failed to get firmware info for device %q: mock GetFirmwareInfo failed", testUID),
+		},
+		"success": {
+			inputUID: testUID,
+			cfg: &mockIpmctlCfg{
+				fwInfo: fwInfo,
+			},
+			expResult: &storage.ScmFirmwareInfo{
+				ActiveVersion:     testActiveVersion,
+				StagedVersion:     testStagedVersion,
+				ImageMaxSizeBytes: fwInfo.FWImageMaxSize * 4096,
+				UpdateStatus:      storage.ScmUpdateStatusStaged,
+			},
+		},
+		"nothing staged": {
+			inputUID: testUID,
+			cfg: &mockIpmctlCfg{
+				fwInfo: fwInfoUnstaged,
+			},
+			expResult: &storage.ScmFirmwareInfo{
+				ActiveVersion:     testActiveVersion,
+				ImageMaxSizeBytes: 4096,
+				UpdateStatus:      storage.ScmUpdateStatusSuccess,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			mockBinding := newMockIpmctl(tc.cfg)
+			cr := newCmdRunner(log, mockBinding, nil, nil)
+
+			result, err := cr.GetFirmwareStatus(tc.inputUID)
+
+			common.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+				t.Errorf("wrong firmware info (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestIpmctl_UpdateFirmware(t *testing.T) {
+	testUID := "testUID"
+	for name, tc := range map[string]struct {
+		inputUID string
+		cfg      *mockIpmctlCfg
+		expErr   error
+	}{
+		"bad UID": {
+			cfg:    &mockIpmctlCfg{},
+			expErr: errors.New("invalid SCM module UID"),
+		},
+		"success": {
+			inputUID: testUID,
+			cfg:      &mockIpmctlCfg{},
+		},
+		"ipmctl UpdateFirmware failed": {
+			inputUID: testUID,
+			cfg: &mockIpmctlCfg{
+				updateFirmwareRet: errors.New("mock UpdateFirmware failed"),
+			},
+			expErr: errors.Errorf("failed to update firmware for device %q: mock UpdateFirmware failed", testUID),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			mockBinding := newMockIpmctl(tc.cfg)
+			cr := newCmdRunner(log, mockBinding, nil, nil)
+
+			err := cr.UpdateFirmware(tc.inputUID, "/dont/care")
+
+			common.CmpErr(t, tc.expErr, err)
 		})
 	}
 }

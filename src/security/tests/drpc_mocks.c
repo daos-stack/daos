@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,11 +29,16 @@
 
 struct drpc *drpc_connect_return; /* value to be returned */
 char drpc_connect_sockaddr[PATH_MAX + 1]; /* saved copy of input */
-struct drpc *
-drpc_connect(char *sockaddr)
+int
+drpc_connect(char *sockaddr, struct drpc **drpcp)
 {
 	strncpy(drpc_connect_sockaddr, sockaddr, PATH_MAX);
-	return drpc_connect_return;
+
+	*drpcp = drpc_connect_return;
+	if (drpc_connect_return)
+		return -DER_SUCCESS;
+
+	return -DER_BADPATH;
 }
 
 void

@@ -294,22 +294,23 @@ func TestIOServer_ConfigValidation(t *testing.T) {
 
 func TestConfigToCmdVals(t *testing.T) {
 	var (
-		mountPoint     = "/mnt/test"
-		provider       = "test+foo"
-		interfaceName  = "qib0"
-		modules        = "foo,bar,baz"
-		systemName     = "test-system"
-		socketDir      = "/var/run/foo"
-		logMask        = "LOG_MASK_VALUE"
-		logFile        = "/path/to/log"
-		cfgPath        = "/path/to/nvme.conf"
-		shmId          = 42
-		interfacePort  = 20
-		targetCount    = 4
-		helperCount    = 1
-		serviceCore    = 8
-		index          = 2
-		pinnedNumaNode = uint(1)
+		mountPoint      = "/mnt/test"
+		provider        = "test+foo"
+		interfaceName   = "qib0"
+		modules         = "foo,bar,baz"
+		systemName      = "test-system"
+		socketDir       = "/var/run/foo"
+		logMask         = "LOG_MASK_VALUE"
+		logFile         = "/path/to/log"
+		cfgPath         = "/path/to/nvme.conf"
+		interfacePort   = 20
+		targetCount     = 4
+		helperCount     = 1
+		serviceCore     = 8
+		index           = 2
+		pinnedNumaNode  = uint(1)
+		crtCtxShareAddr = uint32(1)
+		crtTimeout      = uint32(30)
 	)
 	cfg := NewConfig().
 		WithScmMountPoint(mountPoint).
@@ -324,9 +325,10 @@ func TestConfigToCmdVals(t *testing.T) {
 		WithSocketDir(socketDir).
 		WithLogFile(logFile).
 		WithLogMask(logMask).
-		WithShmID(shmId).
 		WithBdevConfigPath(cfgPath).
-		WithSystemName(systemName)
+		WithSystemName(systemName).
+		WithCrtCtxShareAddr(crtCtxShareAddr).
+		WithCrtTimeout(crtTimeout)
 
 	cfg.Index = uint32(index)
 
@@ -338,7 +340,6 @@ func TestConfigToCmdVals(t *testing.T) {
 		"-f", strconv.Itoa(serviceCore),
 		"-g", systemName,
 		"-d", socketDir,
-		"-i", strconv.Itoa(shmId),
 		"-n", cfgPath,
 		"-I", strconv.Itoa(index),
 		"-p", strconv.FormatUint(uint64(pinnedNumaNode), 10),
@@ -349,6 +350,8 @@ func TestConfigToCmdVals(t *testing.T) {
 		"CRT_PHY_ADDR_STR=" + provider,
 		"D_LOG_FILE=" + logFile,
 		"D_LOG_MASK=" + logMask,
+		"CRT_TIMEOUT=" + strconv.FormatUint(uint64(crtTimeout), 10),
+		"CRT_CTX_SHARE_ADDR=" + strconv.FormatUint(uint64(crtCtxShareAddr), 10),
 	}
 
 	gotArgs, err := cfg.CmdLineArgs()

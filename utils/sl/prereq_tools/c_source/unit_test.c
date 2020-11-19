@@ -238,7 +238,7 @@ int main(int argc, char *argv[])
 			verbose_unit_test_output = TRUE;
 			break;
 		default:
-			print_error("Unkown option\n");
+			print_error("Unknown option\n");
 			print_usage();
 			return 1;
 		}

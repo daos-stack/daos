@@ -27,19 +27,22 @@ import (
 	"github.com/daos-stack/daos/src/control/pbin"
 )
 
-type Forwarder struct {
+// AdminForwarder forwards requests to the DAOS admin binary.
+type AdminForwarder struct {
 	pbin.Forwarder
 }
 
-func NewForwarder(log logging.Logger) *Forwarder {
+// NewAdminForwarder creates a new AdminForwarder.
+func NewAdminForwarder(log logging.Logger) *AdminForwarder {
 	pf := pbin.NewForwarder(log, pbin.DaosAdminName)
 
-	return &Forwarder{
+	return &AdminForwarder{
 		Forwarder: *pf,
 	}
 }
 
-func (f *Forwarder) Mount(req MountRequest) (*MountResponse, error) {
+// Mount forwards an SCM mount request.
+func (f *AdminForwarder) Mount(req MountRequest) (*MountResponse, error) {
 	req.Forwarded = true
 
 	res := new(MountResponse)
@@ -50,7 +53,8 @@ func (f *Forwarder) Mount(req MountRequest) (*MountResponse, error) {
 	return res, nil
 }
 
-func (f *Forwarder) Unmount(req MountRequest) (*MountResponse, error) {
+// Unmount forwards an SCM unmount request.
+func (f *AdminForwarder) Unmount(req MountRequest) (*MountResponse, error) {
 	req.Forwarded = true
 
 	res := new(MountResponse)
@@ -61,7 +65,8 @@ func (f *Forwarder) Unmount(req MountRequest) (*MountResponse, error) {
 	return res, nil
 }
 
-func (f *Forwarder) Format(req FormatRequest) (*FormatResponse, error) {
+// Format forwards a request request to format SCM.
+func (f *AdminForwarder) Format(req FormatRequest) (*FormatResponse, error) {
 	req.Forwarded = true
 
 	res := new(FormatResponse)
@@ -72,7 +77,8 @@ func (f *Forwarder) Format(req FormatRequest) (*FormatResponse, error) {
 	return res, nil
 }
 
-func (f *Forwarder) CheckFormat(req FormatRequest) (*FormatResponse, error) {
+// CheckFormat forwards a request to check the SCM formatting.
+func (f *AdminForwarder) CheckFormat(req FormatRequest) (*FormatResponse, error) {
 	req.Forwarded = true
 
 	res := new(FormatResponse)
@@ -83,7 +89,8 @@ func (f *Forwarder) CheckFormat(req FormatRequest) (*FormatResponse, error) {
 	return res, nil
 }
 
-func (f *Forwarder) Scan(req ScanRequest) (*ScanResponse, error) {
+// Scan forwards an SCM scan request.
+func (f *AdminForwarder) Scan(req ScanRequest) (*ScanResponse, error) {
 	req.Forwarded = true
 
 	res := new(ScanResponse)
@@ -94,7 +101,8 @@ func (f *Forwarder) Scan(req ScanRequest) (*ScanResponse, error) {
 	return res, nil
 }
 
-func (f *Forwarder) Prepare(req PrepareRequest) (*PrepareResponse, error) {
+// Prepare forwards a request to prep the SCM.
+func (f *AdminForwarder) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	req.Forwarded = true
 
 	res := new(PrepareResponse)

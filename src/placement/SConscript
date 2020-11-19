@@ -19,7 +19,8 @@ def scons():
 				     'tests/place_obj_common.c'])
 
     # generate server module
-    srv = daos_build.library(denv, 'placement', common_tgts)
+    srv = daos_build.library(denv, 'placement', common_tgts,
+                             install_off="../..")
     denv.Install('$PREFIX/lib64/daos_srv', srv)
 
     # placement client library

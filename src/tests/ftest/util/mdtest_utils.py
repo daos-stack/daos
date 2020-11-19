@@ -1,6 +1,6 @@
 #!/usr/bin/python
-'''
-  (C) Copyright 2019 Intel Corporation.
+"""
+  (C) Copyright 2019-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -20,14 +20,14 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
+"""
 
 from __future__ import print_function
 
 import uuid
 
-from command_utils import FormattedParameter, ExecutableCommand
-from command_utils import EnvironmentVariables
+from command_utils_base import FormattedParameter
+from command_utils import ExecutableCommand
 
 
 class MdtestCommand(ExecutableCommand):
@@ -84,29 +84,6 @@ class MdtestCommand(ExecutableCommand):
         self.stonewall_statusfile = FormattedParameter("-x {}")
         self.depth = FormattedParameter("-z {}")
 
-        # Module DAOS (Not intended to be used as of now, hence all
-        # arguments for DAOS module are commented)
-        # Required arguments
-        #  --daos.pool=STRING            pool uuid
-        #  --daos.svcl=STRING            pool SVCL
-        #  --daos.cont=STRING            container uuid
-
-        # Flags
-        #  --daos.destroy                Destroy Container
-
-        # Optional arguments
-        #  --daos.group=STRING           server group
-        #  --daos.chunk_size=1048576     chunk size
-        #  --daos.oclass=STRING          object class
-
-        # self.daos_pool_uuid = FormattedParameter("--daos.pool {}")
-        # self.daos_svcl = FormattedParameter("--daos.svcl {}")
-        # self.daos_cont = FormattedParameter("--daos.cont {}")
-        # self.daos_group = FormattedParameter("--daos.group {}")
-        # self.daos_chunk_size = FormattedParameter(" --daos.chunk_size {}")
-        # self.daos_oclass = FormattedParameter("--daos.oclass {}")
-        # self.daos_destroy = FormattedParameter("--daos.destroy", True)
-
         # Module DFS
         # Required arguments
         #  --dfs.pool=STRING             DAOS pool uuid
@@ -118,12 +95,23 @@ class MdtestCommand(ExecutableCommand):
 
         # Optional arguments
         #  --dfs.group=STRING            DAOS server group
+        #  --dfs.chunk_size=1048576      Chunk size
+        #  --dfs.oclass=STRING           DAOS object class
+        #  --dfs.dir_oclass=STRING       DAOS directory object class
+        #  --dfs.prefix=STRING           Mount prefix
 
         self.dfs_pool_uuid = FormattedParameter("--dfs.pool {}")
         self.dfs_svcl = FormattedParameter("--dfs.svcl {}")
         self.dfs_cont = FormattedParameter("--dfs.cont {}")
         self.dfs_group = FormattedParameter("--dfs.group {}")
         self.dfs_destroy = FormattedParameter("--dfs.destroy", True)
+        self.dfs_chunk = FormattedParameter("--dfs.chunk_size {}", 1048576)
+        self.dfs_oclass = FormattedParameter("--dfs.oclass {}", "SX")
+        self.dfs_prefix = FormattedParameter("--dfs.prefix {}")
+        self.dfs_dir_oclass = FormattedParameter("--dfs.dir_oclass {}", "SX")
+
+        # A list of environment variable names to set and export with ior
+        self._env_names = ["D_LOG_FILE"]
 
     def get_param_names(self):
         """Get a sorted list of the defined MdtestCommand parameters."""
@@ -139,7 +127,6 @@ class MdtestCommand(ExecutableCommand):
 
         return param_names
 
-
     def set_daos_params(self, group, pool, cont_uuid=None, display=True):
         """Set the Mdtest params for the DAOS group, pool, and container uuid.
 
@@ -153,7 +140,7 @@ class MdtestCommand(ExecutableCommand):
         self.set_daos_pool_params(pool, display)
         self.dfs_group.update(group, "dfs_group" if display else None)
         self.dfs_cont.update(
-            cont_uuid if cont_uuid else uuid.uuid4(),
+            cont_uuid if cont_uuid else str(uuid.uuid4()),
             "dfs_cont" if display else None)
 
     def set_daos_pool_params(self, pool, display=True):
@@ -181,7 +168,7 @@ class MdtestCommand(ExecutableCommand):
         self.dfs_svcl.update(svcl, "dfs_svcl" if display else None)
 
     def get_default_env(self, manager_cmd, log_file=None):
-        """Get the default enviroment settings for running mdtest.
+        """Get the default environment settings for running mdtest.
 
         Args:
             manager_cmd (str): job manager command
@@ -191,15 +178,15 @@ class MdtestCommand(ExecutableCommand):
             EnvironmentVariables: a dictionary of environment names and values
 
         """
-        env = EnvironmentVariables()
+        env = self.get_environment(None, log_file)
         env["MPI_LIB"] = "\"\""
-        env["FI_PSM2_DISCONNECT"] = 1
-        if log_file:
-            env["D_LOG_FILE"] = log_file
+        env["FI_PSM2_DISCONNECT"] = "1"
 
         if "mpirun" in manager_cmd or "srun" in manager_cmd:
             env["DAOS_POOL"] = self.dfs_pool_uuid.value
             env["DAOS_SVCL"] = self.dfs_svcl.value
-            env["FI_PSM2_DISCONNECT"] = 1
+            env["DAOS_CONT"] = self.dfs_cont.value
+            env["IOR_HINT__MPI__romio_daos_obj_class"] = \
+                self.dfs_oclass.value
 
         return env

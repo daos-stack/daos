@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package hostlist
 
 import (
@@ -35,6 +36,20 @@ type (
 		list *HostList
 	}
 )
+
+// MarshalJSON outputs JSON representation of HostSet.
+func (hs *HostSet) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + hs.RangedString() + `"`), nil
+}
+
+// MustCreateSet is like CreateSet but will panic on error.
+func MustCreateSet(stringHosts string) *HostSet {
+	hs, err := CreateSet(stringHosts)
+	if err != nil {
+		panic(err)
+	}
+	return hs
+}
 
 // CreateSet creates a new HostSet from the supplied string representation.
 func CreateSet(stringHosts string) (*HostSet, error) {
@@ -88,9 +103,7 @@ func (hs *HostSet) Insert(stringHosts string) (int, error) {
 	defer hs.Unlock()
 
 	startCount := hs.list.hostCount
-	if err := hs.list.PushList(newList); err != nil {
-		return -1, err
-	}
+	hs.list.PushList(newList)
 	hs.list.Uniq()
 
 	return int(hs.list.hostCount - startCount), nil
@@ -113,6 +126,23 @@ func (hs *HostSet) Delete(stringHosts string) (int, error) {
 	return int(hs.list.hostCount - startCount), nil
 }
 
+// ReplaceSet replaces this HostSet with the contents
+// of the supplied HostSet.
+func (hs *HostSet) ReplaceSet(other *HostSet) {
+	hs.initList()
+
+	if other == nil {
+		return
+	}
+
+	hs.Lock()
+	defer hs.Unlock()
+	other.Lock()
+	defer other.Unlock()
+
+	hs.list.ReplaceList(other.list)
+}
+
 // MergeSet merges the supplied HostSet into this one.
 func (hs *HostSet) MergeSet(other *HostSet) error {
 	hs.initList()
@@ -126,9 +156,7 @@ func (hs *HostSet) MergeSet(other *HostSet) error {
 	other.Lock()
 	defer other.Unlock()
 
-	if err := hs.list.PushList(other.list); err != nil {
-		return err
-	}
+	hs.list.PushList(other.list)
 	hs.list.Uniq()
 
 	return nil

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 	DFUSE_TRA_DEBUG(ie, "flags %#x", to_set);
 
 	if (to_set & FUSE_SET_ATTR_MODE) {
-		DFUSE_TRA_DEBUG(ie, "mode %#x %#x",
+		DFUSE_TRA_DEBUG(ie, "mode %#o %#o",
 				attr->st_mode, ie->ie_stat.st_mode);
 
 		to_set &= ~FUSE_SET_ATTR_MODE;

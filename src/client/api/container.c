@@ -494,6 +494,28 @@ daos_cont_set_attr(daos_handle_t coh, int n, char const *const names[],
 }
 
 int
+daos_cont_del_attr(daos_handle_t coh, int n, char const *const names[],
+		   daos_event_t *ev)
+{
+	daos_cont_del_attr_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, CONT_DEL_ATTR);
+
+	rc = dc_task_create(dc_cont_del_attr, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->n		= n;
+	args->names	= names;
+
+	return dc_task_schedule(task, true);
+}
+
+int
 daos_cont_list_snap(daos_handle_t coh, int *nr, daos_epoch_t *epochs,
 		    char **names, daos_anchor_t *anchor, daos_event_t *ev)
 {

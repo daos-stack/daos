@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@
 #ifndef __DFUSE_OBJ_DA_H__
 #define __DFUSE_OBJ_DA_H__
 
-#include <gurt/errno.h>
+#include <daos_errno.h>
 
 /* This data structure is intended for small objects */
 #define MAX_POOL_OBJ_SIZE 256

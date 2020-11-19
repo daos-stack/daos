@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -85,8 +85,8 @@ func TestSession_ProcessIncomingMessage_Success(t *testing.T) {
 	socket := newMockConn()
 	call := &Call{
 		Sequence: 123,
-		Module:   1,
-		Method:   2,
+		Module:   ModuleMgmt.ID(),
+		Method:   MethodPoolCreate.ID(),
 	}
 	callBytes, err := proto.Marshal(call)
 	if err != nil {
@@ -95,7 +95,7 @@ func TestSession_ProcessIncomingMessage_Success(t *testing.T) {
 	socket.ReadOutputBytes = callBytes
 	socket.ReadOutputNumBytes = len(callBytes)
 
-	mod := newTestModule(call.Module)
+	mod := newTestModule(ModuleID(call.Module))
 	svc := NewModuleService(log)
 	svc.RegisterModule(mod)
 
@@ -161,7 +161,9 @@ func TestServer_Start_CantUnlinkSocket(t *testing.T) {
 	if err := os.Chmod(tmpDir, 0000); err != nil {
 		t.Fatalf("Couldn't change permissions on dir: %v", err)
 	}
-	defer os.Chmod(tmpDir, 0700)
+	defer func() {
+		_ = os.Chmod(tmpDir, 0700)
+	}()
 
 	dss, _ := NewDomainSocketServer(context.Background(), log, path)
 
@@ -183,7 +185,9 @@ func TestServer_Start_CantListen(t *testing.T) {
 	if err := os.Chmod(tmpDir, 0500); err != nil {
 		t.Fatalf("Couldn't change permissions on dir: %v", err)
 	}
-	defer os.Chmod(tmpDir, 0700)
+	defer func() {
+		_ = os.Chmod(tmpDir, 0700)
+	}()
 
 	dss, _ := NewDomainSocketServer(context.Background(), log, path)
 
@@ -283,7 +287,9 @@ func TestServer_Shutdown(t *testing.T) {
 	<-lis.closed
 }
 
-func TestServer_Integration(t *testing.T) {
+// TestServer_IntegrationNoMethod verifies failure when adding a new
+// module without specifying a method.
+func TestServer_IntegrationNoMethod(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
@@ -293,8 +299,8 @@ func TestServer_Integration(t *testing.T) {
 
 	dss, _ := NewDomainSocketServer(context.Background(), log, path)
 
-	mod := newTestModule(5678)
-	mod.HandleCallResponse = []byte("successful!")
+	// TEST module as defined in <daos/drpc_modules.h> has id 0
+	mod := newTestModule(0)
 	dss.RegisterRPCModule(mod)
 
 	// Stand up a server loop
@@ -311,7 +317,7 @@ func TestServer_Integration(t *testing.T) {
 	defer client.Close()
 
 	call := &Call{
-		Module: mod.ID(),
+		Module: int32(mod.ID()),
 	}
 	resp, err := client.SendMsg(call)
 	if err != nil {
@@ -320,7 +326,7 @@ func TestServer_Integration(t *testing.T) {
 
 	expectedResp := &Response{
 		Sequence: call.Sequence,
-		Body:     mod.HandleCallResponse,
+		Status:   Status_UNKNOWN_METHOD,
 	}
 	cmpOpts := common.DefaultCmpOpts()
 	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {

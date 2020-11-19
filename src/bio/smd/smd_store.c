@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,16 +39,12 @@ struct smd_store	smd_store;
 static int
 smd_store_gen_fname(const char *path, char **store_fname)
 {
-	int	rc;
-
 	D_ASSERT(path != NULL);
 	D_ASSERT(store_fname != NULL);
 
-	rc = asprintf(store_fname, "%s/%s/%s", path, SMD_STORE_DIR,
-		      SMD_STORE_FILE);
-	if (rc < 0) {
-		D_ERROR("Generate SMD store filename failed. "DF_RC"\n",
-			DP_RC(rc));
+	D_ASPRINTF(*store_fname, "%s/%s/%s", path, SMD_STORE_DIR,
+		   SMD_STORE_FILE);
+	if (!*store_fname) {
 		return -DER_NOMEM;
 	}
 
@@ -122,7 +118,7 @@ smd_store_create(char *fname)
 		return -DER_NOMEM;
 	dir = dirname(dir);
 
-	rc = mkdir(dir, 0777);
+	rc = mkdir(dir, 0700);
 	if (rc < 0 && errno != EEXIST) {
 		D_ERROR("Create SMD dir %s failed. %s\n",
 			dir, strerror(errno));
@@ -148,7 +144,7 @@ smd_store_create(char *fname)
 	}
 	close(fd);
 
-	ph = pmemobj_create(fname, POBJ_LAYOUT_NAME(smd_md_layout), 0, 0666);
+	ph = pmemobj_create(fname, POBJ_LAYOUT_NAME(smd_md_layout), 0, 0600);
 	if (!ph) {
 		D_ERROR("Create SMD pmemobj pool %s failed. %s\n",
 			fname, pmemobj_errormsg());

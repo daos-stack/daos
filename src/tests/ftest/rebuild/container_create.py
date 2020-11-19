@@ -20,18 +20,17 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-import os
-
 from avocado.core.exceptions import TestFail
 from apricot import TestWithServers, skipForTicket
-from command_utils import CommandFailure, Mpirun
+from command_utils_base import CommandFailure
+from job_manager_utils import Mpirun
 from ior_utils import IorCommand
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 
 
 class ContainerCreate(TestWithServers):
-    """Rebuild with conatiner creation test cases.
+    """Rebuild with container creation test cases.
 
     Test Class Description:
         These rebuild tests verify the ability to create additional containers
@@ -150,20 +149,22 @@ class ContainerCreate(TestWithServers):
         self.pool = []
         for index in range(pool_qty):
             self.pool.append(
-                TestPool(self.context, dmg_command=self.get_dmg_command()))
+                TestPool(self.context, self.get_dmg_command()))
             self.pool[-1].get_params(self)
 
         if use_ior:
             # Get ior params
-            mpirun_path = os.path.join(self.ompi_prefix, "bin")
-            mpirun = Mpirun(IorCommand(), mpirun_path)
-            mpirun.job.get_params(self)
-            mpirun.setup_command(
-                mpirun.job.get_default_env("mpirun", self.tmp),
-                self.hostfile_clients, len(self.hostlist_clients))
+            self.job_manager = Mpirun(IorCommand())
+            self.job_manager.job.get_params(self)
+            self.job_manager.assign_hosts(
+                self.hostlist_clients, self.workdir,
+                self.hostfile_clients_slots)
+            self.job_manager.assign_processes(len(self.hostlist_clients))
+            self.job_manager.assign_environment(
+                self.job_manager.job.get_default_env("mpirun"))
 
         # Cancel any tests with tickets already assigned
-        if rank == 1 or rank == 2:
+        if rank in (1, 2):
             self.cancelForTicket("DAOS-2434")
 
         errors = [0 for _ in range(loop_qty)]
@@ -211,13 +212,17 @@ class ContainerCreate(TestWithServers):
 
             # Create a container with 1GB of data in the first pool
             if use_ior:
-                mpirun.job.flags.update("-v -w -W -G 1 -k", "ior.flags")
-                mpirun.job.daos_destroy.update(False, "ior.daos_destroy")
-                mpirun.job.set_daos_params(self.server_group, self.pool[0])
+                self.job_manager.job.flags.update(
+                    "-v -w -W -G 1 -k", "ior.flags")
+                self.job_manager.job.dfs_destroy.update(
+                    False, "ior.dfs_destroy")
+                self.job_manager.job.set_daos_params(
+                    self.server_group, self.pool[0])
                 self.log.info(
                     "%s: Running IOR on pool %s to fill container %s with data",
-                    loop_id, self.pool[0].uuid, mpirun.job.daos_cont.value)
-                self.run_ior(loop_id, mpirun)
+                    loop_id, self.pool[0].uuid,
+                    self.job_manager.job.dfs_cont.value)
+                self.run_ior(loop_id, self.job_manager)
             else:
                 self.container.append(TestContainer(self.pool[0]))
                 self.container[-1].get_params(self)
@@ -261,7 +266,7 @@ class ContainerCreate(TestWithServers):
                 status &= pool.check_rebuild_status(**rebuild_checks[index])
             self.assertTrue(status, "Error verifying pool info after rebuild")
 
-            # Verify that each of created containers exist by openning them
+            # Verify that each of created containers exist by opening them
             for index in range(start_index, len(self.container)):
                 count = "{}/{}".format(
                     index - start_index + 1, len(self.container) - start_index)
@@ -276,10 +281,12 @@ class ContainerCreate(TestWithServers):
             if use_ior:
                 self.log.info(
                     "%s: Running IOR on pool %s to verify container %s",
-                    loop_id, self.pool[0].uuid, mpirun.job.daos_cont.value)
-                mpirun.job.flags.update("-v -r -R -G 1 -E", "ior.flags")
-                mpirun.job.daos_destroy.update(True, "ior.daos_destroy")
-                self.run_ior(loop_id, mpirun)
+                    loop_id, self.pool[0].uuid,
+                    self.job_manager.job.dfs_cont.value)
+                self.job_manager.job.flags.update(
+                    "-v -r -R -G 1 -E", "ior.flags")
+                self.job_manager.job.dfs_destroy.update(True, "ior.dfs_destroy")
+                self.run_ior(loop_id, self.job_manager)
             else:
                 self.log.info(
                     "%s: Reading pool %s to verify container %s",

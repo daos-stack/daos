@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,6 +44,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <daos/tests_lib.h>
 #include <daos.h>
 #include "suite/daos_test.h"
 #include <mpi.h>
@@ -61,8 +62,7 @@ daos_handle_t	eq;
 
 /** Pool information */
 uuid_t			 pool_uuid;	/* only used on rank 0 */
-d_rank_t		 svc[13];	/* only used on rank 0 */
-d_rank_list_t	 svcl;		/* only used on rank 0 */
+d_rank_list_t		 svcl;		/* only used on rank 0 */
 daos_handle_t		 poh;		/* shared pool handle */
 
 /** Container information */
@@ -97,7 +97,7 @@ daos_oclass_id_t	 cid = 0x1;/* class identifier */
 #define	MAX_IOREQS	10	   /* number of concurrent i/o reqs in flight */
 
 /** an i/o request in flight */
-struct ioreq {
+struct io_req {
 	char		dstr[KEY_LEN];
 	daos_key_t	dkey;
 
@@ -136,25 +136,23 @@ pool_create(void)
 
 	/**
 	 * allocate list of service nodes, returned as output parameter of
-	 * daos_pool_create() and used to connect
+	 * dmg_pool_create() and used to connect
 	 */
 
 	/** create pool over all the storage targets */
-	svcl.rl_nr	= 3;
-	ASSERT(ARRAY_SIZE(svc) >= svcl.rl_nr);
-	svcl.rl_ranks	= svc;
-	rc = daos_pool_create(0731 /* mode */,
-			      geteuid() /* user owner */,
-			      getegid() /* group owner */,
-			      DSS_PSETID /* daos server process set ID */,
-			      NULL /* list of targets, NULL = all */,
-			      NULL /* storage type to use, use default */,
-			      10ULL << 30 /* target SCM size, 10G */,
-			      40ULL << 30 /* target NVMe size, 40G */,
-			      NULL, /* pool properties */
-			      &svcl /* pool service nodes, used for connect */,
-			      pool_uuid, /* the uuid of the pool created */
-			      NULL /* event, use blocking call for now */);
+	svcl.rl_nr = 3;
+	D_ALLOC_ARRAY(svcl.rl_ranks, svcl.rl_nr);
+	ASSERT(svcl.rl_ranks);
+	rc = dmg_pool_create(NULL /* config file */,
+			     geteuid() /* user owner */,
+			     getegid() /* group owner */,
+			     DSS_PSETID /* daos server process set ID */,
+			     NULL /* list of targets, NULL = all */,
+			     10ULL << 30 /* target SCM size, 10G */,
+			     40ULL << 30 /* target NVMe size, 40G */,
+			     NULL /* pool props */,
+			     &svcl /* pool service nodes */,
+			     pool_uuid /* the uuid of the pool created */);
 	ASSERT(rc == 0, "pool create failed with %d", rc);
 }
 
@@ -164,18 +162,18 @@ pool_destroy(void)
 	int	rc;
 
 	/** destroy the pool created in pool_create */
-	rc = daos_pool_destroy(pool_uuid, DSS_PSETID, 1 /* force */,
-			       NULL /* event */);
+	rc = dmg_pool_destroy(NULL, pool_uuid, DSS_PSETID, 1 /* force */);
 	ASSERT(rc == 0, "pool destroy failed with %d", rc);
+	D_FREE(svcl.rl_ranks);
 }
 
 static inline void
-ioreqs_init(struct ioreq *reqs) {
+ioreqs_init(struct io_req *reqs) {
 	int rc;
 	int j;
 
 	for (j = 0; j < MAX_IOREQS; j++) {
-		struct ioreq	*req = &reqs[j];
+		struct io_req	*req = &reqs[j];
 
 		/** initialize event */
 		rc = daos_event_init(&req->ev, eq, NULL);
@@ -216,7 +214,7 @@ void
 array(void)
 {
 	daos_handle_t	 oh;
-	struct ioreq	*reqs;
+	struct io_req	*reqs;
 	int		 rc;
 	int		 iter;
 	int		 k;
@@ -236,7 +234,7 @@ array(void)
 		daos_event_t	*evp[MAX_IOREQS];
 		uint64_t	 sid; /* slice ID */
 		int		 submitted = 0;
-		struct ioreq	*req = &reqs[0];
+		struct io_req	*req = &reqs[0];
 
 		/** store very basic array data */
 		for (k = 0; k < SLICE_SIZE; k++)
@@ -298,7 +296,7 @@ array(void)
 				       evp[0]->ev_error);
 
 				submitted--;
-				req = container_of(evp[0], struct ioreq, ev);
+				req = container_of(evp[0], struct io_req, ev);
 			}
 		}
 
@@ -437,7 +435,7 @@ committer()
 
 				if (epoch - ep_start == ITER_NR)
 					/**
-					 * all epochs are commited,
+					 * all epochs are committed,
 					 * we are done
 					 */
 					break;
@@ -489,7 +487,7 @@ main(int argc, char **argv)
 		pool_create();
 
 		/** connect to the just created DAOS pool */
-		rc = daos_pool_connect(pool_uuid, DSS_PSETID, &svcl,
+		rc = daos_pool_connect(pool_uuid, DSS_PSETID, NULL /* svc */,
 				       DAOS_PC_EX /* exclusive access */,
 				       &poh /* returned pool handle */,
 				       NULL /* returned pool info */,

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -142,6 +142,8 @@ struct ds_rsvc {
 	bool			s_map_distd_stop;
 };
 
+int ds_rsvc_start_nodb(enum ds_rsvc_class_id class, d_iov_t *id,
+		       uuid_t db_uuid);
 int ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 		  bool create, size_t size, d_rank_list_t *replicas, void *arg);
 int ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, bool destroy);
@@ -172,6 +174,8 @@ void ds_rsvc_put_leader(struct ds_rsvc *svc);
 void ds_rsvc_set_hint(struct ds_rsvc *svc, struct rsvc_hint *hint);
 
 int ds_rsvc_set_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
+		     crt_bulk_t remote_bulk, crt_rpc_t *rpc, uint64_t count);
+int ds_rsvc_del_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 		     crt_bulk_t remote_bulk, crt_rpc_t *rpc, uint64_t count);
 int ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 		     crt_bulk_t remote_bulk, crt_rpc_t *rpc, uint64_t count,

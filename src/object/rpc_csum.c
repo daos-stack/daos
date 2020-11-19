@@ -29,9 +29,6 @@
 #include "obj_rpc.h"
 #include "rpc_csum.h"
 
-#define ENCODING(proc) (proc_op == CRT_PROC_ENCODE)
-#define DECODING(proc) (proc_op == CRT_PROC_DECODE)
-#define FREEING(proc) (proc_op == CRT_PROC_FREE)
 #define PROC(type, value) \
 		do {\
 			rc = crt_proc_##type(proc, value); \
@@ -122,7 +119,7 @@ int
 crt_proc_struct_dcs_csum_info(crt_proc_t proc, struct dcs_csum_info **p_csum)
 {
 	crt_proc_op_t		proc_op;
-	bool			csum_enabled;
+	bool			csum_enabled = 0;
 	int			rc;
 
 	rc = crt_proc_get_op(proc, &proc_op);
@@ -211,7 +208,7 @@ crt_proc_struct_dcs_iod_csums_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 		}
 	}
 
-	if (DECODING(proc)) {
+	if (DECODING(proc_op)) {
 		PROC(uint32_t, &iod_csum->ic_nr);
 		D_ALLOC_ARRAY(iod_csum->ic_data, iod_csum->ic_nr);
 		for (i = 0; i < iod_csum->ic_nr; i++) {
@@ -224,7 +221,7 @@ crt_proc_struct_dcs_iod_csums_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 		}
 	}
 
-	if (FREEING(proc)) {
+	if (FREEING(proc_op)) {
 		for (i = 0; i < iod_csum->ic_nr; i++) {
 			rc = proc_struct_dcs_csum_info(proc,
 				&iod_csum->ic_data[i]);

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -175,7 +175,8 @@ reserve_large(struct vea_space_info *vsi, uint32_t blk_cnt,
 			if (rc)
 				return rc;
 
-			rc = compound_free(vsi, &vfe, VEA_FL_NO_MERGE);
+			rc = compound_free(vsi, &vfe, VEA_FL_NO_MERGE |
+						VEA_FL_NO_ACCOUNTING);
 			if (rc)
 				return rc;
 		}

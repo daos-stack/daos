@@ -45,7 +45,8 @@ if [ -f .localenv ]; then
 fi
 
 TEST_TAG_ARG="${1:-quick}"
-TEST_TAG_ARR=($TEST_TAG_ARG)
+mapfile -t TEST_TAG_ARR <<< "$TEST_TAG_ARG"
+
 TEST_TAG_DIR="/tmp/Functional_${TEST_TAG_ARG// /_}"
 
 NFS_SERVER=${NFS_SERVER:-${HOSTNAME%%.*}}
@@ -60,6 +61,9 @@ NVME_ARG=""
 if [ -n "${3}" ]; then
     NVME_ARG="-n ${3}"
 fi
+
+# Log size threshold
+LOGS_THRESHOLD="1G"
 
 # For nodes that are only rebooted between CI nodes left over mounts
 # need to be cleaned up.
@@ -114,7 +118,7 @@ cleanup() {
                     if [ -d $DAOS_BASE ]; then
                         ls -l $DAOS_BASE
                     else
-                        echo \"because it doesnt exist\"
+                        echo \"because it does not exist\"
                     fi
                     exit 1
                 fi
@@ -128,7 +132,14 @@ cleanup() {
 pre_clean
 
 # shellcheck disable=SC1091
-. .build_vars.sh
+if ${TEST_RPMS:-false}; then
+    PREFIX=/usr
+    SL_PREFIX=$PWD
+else
+    TEST_RPMS=false
+    PREFIX=install
+    . .build_vars.sh
+fi
 
 if ${TEARDOWN_ONLY:-false}; then
     cleanup
@@ -137,6 +148,8 @@ fi
 
 trap 'set +e; cleanup' EXIT
 
+# doesn't work: mapfile -t CLUSH_ARGS <<< "$CLUSH_ARGS"
+# shellcheck disable=SC2206
 CLUSH_ARGS=($CLUSH_ARGS)
 
 DAOS_BASE=${SL_PREFIX%/install}
@@ -149,7 +162,7 @@ if [ \\\"\\\$(ulimit -c)\\\" != \\\"unlimited\\\" ]; then
 fi
 echo \\\"/var/tmp/core.%e.%t.%p\\\" > /proc/sys/kernel/core_pattern\"
 rm -f /var/tmp/core.*
-if [ \"\${HOSTNAME%%%%.*}\" != \"${nodes[0]}\" ]; then
+if [ \"\${HOSTNAME%%.*}\" != \"${nodes[0]}\" ]; then
     if grep /mnt/daos\\  /proc/mounts; then
         sudo umount /mnt/daos
     else
@@ -178,54 +191,56 @@ fi
 current_username=\$(whoami)
 sudo bash -c \"set -ex
 if [ -d  /var/run/daos_agent ]; then
-    rmdir /var/run/daos_agent
+    rm -rf /var/run/daos_agent
 fi
 if [ -d  /var/run/daos_server ]; then
-    rmdir /var/run/daos_server
+    rm -rf /var/run/daos_server
 fi
 mkdir /var/run/daos_{agent,server}
 chown \$current_username -R /var/run/daos_{agent,server}
 chmod 0755 /var/run/daos_{agent,server}
-if [ -f $DAOS_BASE/SConstruct ]; then
+if $TEST_RPMS || [ -f $DAOS_BASE/SConstruct ]; then
     echo \\\"No need to NFS mount $DAOS_BASE\\\"
 else
     mkdir -p $DAOS_BASE
     ed <<EOF /etc/fstab
 \\\\\\\$a
-$NFS_SERVER:$PWD $DAOS_BASE nfs defaults 0 0 # DAOS_BASE # added by ftest.sh
+$NFS_SERVER:$PWD $DAOS_BASE nfs defaults,vers=3 0 0 # DAOS_BASE # added by ftest.sh
 .
 wq
 EOF
     mount \\\"$DAOS_BASE\\\"
 fi\"
 
-# set up symlinks to spdk scripts (none of this would be
-# necessary if we were testing from RPMs) in order to
-# perform NVMe operations via daos_admin
-sudo mkdir -p /usr/share/daos/control
-sudo ln -sf $SL_PREFIX/share/daos/control/setup_spdk.sh \
-           /usr/share/daos/control
-sudo mkdir -p /usr/share/spdk/scripts
-if [ ! -f /usr/share/spdk/scripts/setup.sh ]; then
-    sudo ln -sf $SL_PREFIX/share/spdk/scripts/setup.sh \
-               /usr/share/spdk/scripts
-fi
-if [ ! -f /usr/share/spdk/scripts/common.sh ]; then
-    sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh \
-               /usr/share/spdk/scripts
-fi
-if [ ! -f /usr/share/spdk/include/spdk/pci_ids.h ]; then
-    sudo rm -f /usr/share/spdk/include
-    sudo ln -s $SL_PREFIX/include \
-               /usr/share/spdk/include
-fi
+if ! $TEST_RPMS; then
+    # set up symlinks to spdk scripts (none of this would be
+    # necessary if we were testing from RPMs) in order to
+    # perform NVMe operations via daos_admin
+    sudo mkdir -p /usr/share/daos/control
+    sudo ln -sf $SL_PREFIX/share/daos/control/setup_spdk.sh \
+               /usr/share/daos/control
+    sudo mkdir -p /usr/share/spdk/scripts
+    if [ ! -f /usr/share/spdk/scripts/setup.sh ]; then
+        sudo ln -sf $SL_PREFIX/share/spdk/scripts/setup.sh \
+                   /usr/share/spdk/scripts
+    fi
+    if [ ! -f /usr/share/spdk/scripts/common.sh ]; then
+        sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh \
+                   /usr/share/spdk/scripts
+    fi
+    if [ ! -f /usr/share/spdk/include/spdk/pci_ids.h ]; then
+        sudo rm -f /usr/share/spdk/include
+        sudo ln -s $SL_PREFIX/include \
+                   /usr/share/spdk/include
+    fi
 
-# first, strip the execute bit from the in-tree binary,
-# then copy daos_admin binary into \$PATH and fix perms
-chmod -x $DAOS_BASE/install/bin/daos_admin && \
-sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin && \
-	sudo chown root /usr/bin/daos_admin && \
-	sudo chmod 4755 /usr/bin/daos_admin
+    # first, strip the execute bit from the in-tree binary,
+    # then copy daos_admin binary into \$PATH and fix perms
+    chmod -x $DAOS_BASE/install/bin/daos_admin && \
+    sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin && \
+	    sudo chown root /usr/bin/daos_admin && \
+	    sudo chmod 4755 /usr/bin/daos_admin
+fi
 
 rm -rf \"${TEST_TAG_DIR:?}/\"
 mkdir -p \"$TEST_TAG_DIR/\"
@@ -243,9 +258,21 @@ args+=" $*"
 # shellcheck disable=SC2029
 # shellcheck disable=SC2086
 if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" "set -ex
-rm -rf $DAOS_BASE/install/tmp
-mkdir -p $DAOS_BASE/install/tmp
-cd $DAOS_BASE
+if $TEST_RPMS; then
+    rm -rf $PWD/install/tmp
+    mkdir -p $PWD/install/tmp
+    # set the shared dir
+    # TODO: remove the need for a shared dir by copying needed files to
+    #       the test nodes
+    export DAOS_TEST_SHARED_DIR=${DAOS_TEST_SHARED_DIR:-$PWD/install/tmp}
+    logs_prefix=\"/var/tmp\"
+else
+    rm -rf $DAOS_BASE/install/tmp
+    mkdir -p $DAOS_BASE/install/tmp
+    logs_prefix=\"$DAOS_BASE/install/lib/daos/TESTING\"
+    cd $DAOS_BASE
+fi
+
 export CRT_PHY_ADDR_STR=ofi+sockets
 
 # Disable OFI_INTERFACE to allow launch.py to pick the fastest interface
@@ -259,7 +286,7 @@ export D_LOG_FILE=\"$TEST_TAG_DIR/daos.log\"
 mkdir -p ~/.config/avocado/
 cat <<EOF > ~/.config/avocado/avocado.conf
 [datadir.paths]
-logs_dir = $DAOS_BASE/install/lib/daos/TESTING/ftest/avocado/job-results
+logs_dir = \$logs_prefix/ftest/avocado/job-results
 
 [sysinfo.collectibles]
 files = \$HOME/.config/avocado/sysinfo/files
@@ -280,10 +307,20 @@ cat <<EOF > ~/.config/avocado/sysinfo/files
 EOF
 
 # apply patch for https://github.com/avocado-framework/avocado/pull/3076/
+for loc in /usr/lib/python2*/site-packages/ \\
+           /usr/lib/python3*/dist-packages/; do
+    if [ -f \$loc/avocado/core/runner.py ]; then
+        pydir=\$loc
+        break
+    fi
+    if [ -z \"\$loc\" ]; then
+        echo \"Could not determine avocado installation location\"
+        exit 1
+    fi
+done
 if ! grep TIMEOUT_TEARDOWN \
-    /usr/lib/python2.7/site-packages/avocado/core/runner.py; then
-    sudo yum -y install patch
-    sudo patch -p0 -d/ << \"EOF\"
+    \$pydir/avocado/core/runner.py; then
+    if ! sudo patch -p0 -d\$pydir << \"EOF\"; then
 From d9e5210cd6112b59f7caff98883a9748495c07dd Mon Sep 17 00:00:00 2001
 From: Cleber Rosa <crosa@redhat.com>
 Date: Wed, 20 Mar 2019 12:46:57 -0400
@@ -303,8 +340,8 @@ Signed-off-by: Cleber Rosa <crosa@redhat.com>
 
 diff --git /usr/lib/python2.7/site-packages/avocado/core/runner.py.old /usr/lib/python2.7/site-packages/avocado/core/runner.py
 index 1fc84844b..17e6215d0 100644
---- /usr/lib/python2.7/site-packages/avocado/core/runner.py.old
-+++ /usr/lib/python2.7/site-packages/avocado/core/runner.py
+--- avocado/core/runner.py.old
++++ avocado/core/runner.py
 @@ -45,6 +45,8 @@
  TIMEOUT_PROCESS_DIED = 10
  #: when test reported status but the process did not finish
@@ -338,22 +375,25 @@ index 1fc84844b..17e6215d0 100644
                      try:
                          os.kill(proc.pid, signal.SIGTERM)
 EOF
+        echo \"Failed to apply avocado PR-3076 patch\"
+        exit 1
+    fi
 fi
 # apply fix for https://github.com/avocado-framework/avocado/issues/2908
-sudo ed <<EOF /usr/lib/python2.7/site-packages/avocado/core/runner.py
+sudo ed <<EOF \$pydir/avocado/core/runner.py
 /TIMEOUT_TEST_INTERRUPTED/s/[0-9]*$/60/
 wq
 EOF
 # apply fix for https://github.com/avocado-framework/avocado/pull/2922
 if grep \"testsuite.setAttribute('name', 'avocado')\" \
-    /usr/lib/python2.7/site-packages/avocado/plugins/xunit.py; then
-    sudo ed <<EOF /usr/lib/python2.7/site-packages/avocado/plugins/xunit.py
+    \$pydir/avocado/plugins/xunit.py; then
+    sudo ed <<EOF \$pydir/avocado/plugins/xunit.py
 /testsuite.setAttribute('name', 'avocado')/s/'avocado'/os.path.basename(os.path.dirname(result.logfile))/
 wq
 EOF
 fi
 
-pushd install/lib/daos/TESTING/ftest
+pushd $PREFIX/lib/daos/TESTING/ftest
 
 # make sure no lingering corefiles or junit files exist
 rm -f core.* *_results.xml
@@ -372,18 +412,15 @@ if [[ \"${TEST_TAG_ARG}\" =~ soak ]]; then
     fi
 fi
 
-# install the debuginfo repo in case we get segfaults
-sudo bash -c \"cat <<\\\"EOF\\\" > /etc/yum.repos.d/CentOS-Debuginfo.repo
-[core-0-debuginfo]
-name=CentOS-7 - Debuginfo
-baseurl=http://debuginfo.centos.org/7/\\\$basearch/
-gpgcheck=1
-gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-Debug-7
-enabled=0
-EOF\"
-
+# can only process cores on EL7 currently
+if [ $(lsb_release -s -i) = CentOS ]; then
+    process_cores=\"p\"
+else
+    process_cores=\"\"
+fi
 # now run it!
-if ! ./launch.py -crispa -ts ${TEST_NODES} ${NVME_ARG} ${TEST_TAG_ARR[*]}; then
+if ! ./launch.py -cris\${process_cores}a -th ${LOGS_THRESHOLD} \\
+                 -ts ${TEST_NODES} ${NVME_ARG} ${TEST_TAG_ARR[*]}; then
     rc=\${PIPESTATUS[0]}
 else
     rc=0

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,8 @@
 #include <daos/pool.h>
 #include <daos_pool.h>
 #include "rpc.h"
+
+#define crt_proc_daos_target_state_t crt_proc_uint32_t
 
 static int
 crt_proc_struct_pool_target_addr(crt_proc_t proc, struct pool_target_addr *tgt)
@@ -163,23 +165,30 @@ CRT_RPC_DEFINE(pool_attr_list, DAOS_ISEQ_POOL_ATTR_LIST,
 		DAOS_OSEQ_POOL_ATTR_LIST)
 CRT_RPC_DEFINE(pool_attr_get, DAOS_ISEQ_POOL_ATTR_GET, DAOS_OSEQ_POOL_OP)
 CRT_RPC_DEFINE(pool_attr_set, DAOS_ISEQ_POOL_ATTR_SET, DAOS_OSEQ_POOL_OP)
+CRT_RPC_DEFINE(pool_attr_del, DAOS_ISEQ_POOL_ATTR_DEL, DAOS_OSEQ_POOL_OP)
 CRT_RPC_DEFINE(pool_replicas_add, DAOS_ISEQ_POOL_MEMBERSHIP,
 		DAOS_OSEQ_POOL_MEMBERSHIP)
 CRT_RPC_DEFINE(pool_replicas_remove, DAOS_ISEQ_POOL_MEMBERSHIP,
 		DAOS_OSEQ_POOL_MEMBERSHIP)
+CRT_RPC_DEFINE(pool_extend, DAOS_ISEQ_POOL_EXTEND,
+		DAOS_OSEQ_POOL_EXTEND)
 CRT_RPC_DEFINE(pool_add, DAOS_ISEQ_POOL_TGT_UPDATE, DAOS_OSEQ_POOL_TGT_UPDATE)
+CRT_RPC_DEFINE(pool_add_in, DAOS_ISEQ_POOL_TGT_UPDATE,
+		DAOS_OSEQ_POOL_TGT_UPDATE)
 CRT_RPC_DEFINE(pool_exclude, DAOS_ISEQ_POOL_TGT_UPDATE,
+		DAOS_OSEQ_POOL_TGT_UPDATE)
+CRT_RPC_DEFINE(pool_drain, DAOS_ISEQ_POOL_TGT_UPDATE,
 		DAOS_OSEQ_POOL_TGT_UPDATE)
 CRT_RPC_DEFINE(pool_exclude_out, DAOS_ISEQ_POOL_TGT_UPDATE,
 		DAOS_OSEQ_POOL_TGT_UPDATE)
 CRT_RPC_DEFINE(pool_evict, DAOS_ISEQ_POOL_EVICT, DAOS_OSEQ_POOL_EVICT)
 CRT_RPC_DEFINE(pool_svc_stop, DAOS_ISEQ_POOL_SVC_STOP, DAOS_OSEQ_POOL_SVC_STOP)
-CRT_RPC_DEFINE(pool_tgt_connect, DAOS_ISEQ_POOL_TGT_CONNECT,
-		DAOS_OSEQ_POOL_TGT_CONNECT)
 CRT_RPC_DEFINE(pool_tgt_disconnect, DAOS_ISEQ_POOL_TGT_DISCONNECT,
 		DAOS_OSEQ_POOL_TGT_DISCONNECT)
 CRT_RPC_DEFINE(pool_tgt_query, DAOS_ISEQ_POOL_TGT_QUERY,
 		DAOS_OSEQ_POOL_TGT_QUERY)
+CRT_RPC_DEFINE(pool_tgt_dist_hdls, DAOS_ISEQ_POOL_TGT_DIST_HDLS,
+		DAOS_OSEQ_POOL_TGT_DIST_HDLS)
 CRT_RPC_DEFINE(pool_prop_get, DAOS_ISEQ_POOL_PROP_GET, DAOS_OSEQ_POOL_PROP_GET)
 CRT_RPC_DEFINE(pool_prop_set, DAOS_ISEQ_POOL_PROP_SET, DAOS_OSEQ_POOL_PROP_SET)
 CRT_RPC_DEFINE(pool_acl_update, DAOS_ISEQ_POOL_ACL_UPDATE,
@@ -188,6 +197,8 @@ CRT_RPC_DEFINE(pool_acl_delete, DAOS_ISEQ_POOL_ACL_DELETE,
 		DAOS_OSEQ_POOL_ACL_DELETE)
 CRT_RPC_DEFINE(pool_list_cont, DAOS_ISEQ_POOL_LIST_CONT,
 		DAOS_OSEQ_POOL_LIST_CONT)
+CRT_RPC_DEFINE(pool_query_info, DAOS_ISEQ_POOL_QUERY_INFO,
+		DAOS_OSEQ_POOL_QUERY_INFO)
 
 /* Define for cont_rpcs[] array population below.
  * See POOL_PROTO_*_RPC_LIST macro definition
@@ -244,8 +255,8 @@ pool_target_addr_list_append(struct pool_target_addr_list *addr_list,
 	if (pool_target_addr_found(addr_list, addr))
 		return 0;
 
-	D_REALLOC(new_addrs, addr_list->pta_addrs, (addr_list->pta_number + 1) *
-			    sizeof(*addr_list->pta_addrs));
+	D_REALLOC_ARRAY(new_addrs, addr_list->pta_addrs,
+			addr_list->pta_number + 1);
 	if (new_addrs == NULL)
 		return -DER_NOMEM;
 

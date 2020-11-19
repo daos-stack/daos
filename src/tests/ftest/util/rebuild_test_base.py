@@ -22,7 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from apricot import TestWithServers
-from command_utils import ObjectWithParameters, BasicParameter
+from command_utils_base import ObjectWithParameters, BasicParameter
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 
@@ -67,7 +67,7 @@ class RebuildTestBase(TestWithServers):
 
     def setup_test_pool(self):
         """Define a TestPool object."""
-        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
+        self.pool = TestPool(self.context, self.get_dmg_command())
         self.pool.get_params(self)
 
     def setup_test_container(self):
@@ -168,7 +168,7 @@ class RebuildTestBase(TestWithServers):
         if self.container is not None:
             self.assertTrue(
                 self.container.read_objects(txn),
-                "Error verifying contianer data")
+                "Error verifying container data")
 
     def execute_rebuild_test(self, create_container=True):
         """Execute the rebuild test steps.

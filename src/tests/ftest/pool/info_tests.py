@@ -47,8 +47,7 @@ class InfoTests(TestWithServers):
         :avocado: tags=all,tiny,pr,pool,smoke,infotest
         """
         # Get the test params
-        self.pool = TestPool(self.context, self.log,
-                             dmg_command=self.get_dmg_command())
+        self.pool = TestPool(self.context, self.get_dmg_command())
         self.pool.get_params(self)
         permissions = self.params.get("permissions", "/run/test/*")
         targets = self.params.get("targets", "/run/server_config/*")
@@ -71,11 +70,11 @@ class InfoTests(TestWithServers):
             "pi_bits": 0xFFFFFFFFFFFFFFFF,
         }
         status = self.pool.check_pool_info(**checks)
-        self.assertTrue(status, "Invlaid pool information detected prior")
+        self.assertTrue(status, "Invalid pool information detected prior")
         checks = {
             "s_total": (self.pool.scm_size.value, 0),
             #"s_free": (self.pool.scm_size.value - (256 * pool_targets), 0),
         }
         status = self.pool.check_pool_daos_space(**checks)
-        self.assertTrue(status, "Invlaid pool space information detected")
+        self.assertTrue(status, "Invalid pool space information detected")
         self.log.info("Test Passed")

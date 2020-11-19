@@ -291,7 +291,7 @@ test_validate_creds_drpc_call_failed(void **state)
 
 	init_default_cred(&cred);
 
-	drpc_call_return = -DER_UNKNOWN;
+	drpc_call_return = -DER_MISC;
 	drpc_call_resp_return_ptr = NULL;
 
 	assert_int_equal(ds_sec_validate_credentials(&cred, &result),
@@ -411,11 +411,11 @@ test_validate_creds_drpc_response_bad_status(void **state)
 
 	init_default_cred(&cred);
 
-	resp.status = -DER_UNKNOWN;
+	resp.status = -DER_MISC;
 	pack_validate_resp_in_drpc_call_resp_body(&resp);
 
 	assert_int_equal(ds_sec_validate_credentials(&cred, &result),
-			 -DER_UNKNOWN);
+			 -DER_MISC);
 
 	assert_null(result);
 
@@ -579,7 +579,7 @@ expect_pool_get_capas_flags_invalid(uint64_t invalid_flags)
 	assert_non_null(valid_acl);
 	init_default_cred(&valid_cred);
 
-	printf("Expecting flags 0x%lx invalid\n", invalid_flags);
+	printf("Expecting flags %#lx invalid\n", invalid_flags);
 	assert_int_equal(ds_sec_pool_get_capabilities(invalid_flags,
 						      &valid_cred,
 						      &valid_owner, valid_acl,
@@ -716,7 +716,7 @@ test_pool_get_capas_validate_cred_failed(void **state)
 	acl = daos_acl_create(NULL, 0);
 
 	/* drpc call failure will fail validation */
-	drpc_call_return = -DER_UNKNOWN;
+	drpc_call_return = -DER_MISC;
 	drpc_call_resp_return_ptr = NULL;
 
 	assert_int_equal(ds_sec_pool_get_capabilities(DAOS_PC_RO, &cred,
@@ -1245,7 +1245,7 @@ test_pool_get_capas_fall_thru_everyone(void **state)
 	assert_int_equal(daos_acl_add_ace(&acl, ace), 0);
 
 	/*
-	 * Cred doesn't match owner/group, falls thru to everyone
+	 * Cred doesn't match owner/group, falls through to everyone
 	 */
 	expect_pool_capas_with_acl(acl, &cred, DAOS_PC_RW, POOL_CAPA_READ |
 			      POOL_CAPA_CREATE_CONT | POOL_CAPA_DEL_CONT);
@@ -1561,7 +1561,7 @@ expect_cont_get_capas_flags_invalid(uint64_t invalid_flags)
 	assert_non_null(valid_acl);
 	init_default_cred(&valid_cred);
 
-	printf("Expecting flags 0x%lx invalid\n", invalid_flags);
+	printf("Expecting flags %#lx invalid\n", invalid_flags);
 	assert_int_equal(ds_sec_cont_get_capabilities(invalid_flags,
 						      &valid_cred,
 						      &valid_owner, valid_acl,
@@ -1740,7 +1740,7 @@ expect_cont_capas_with_perms(uint64_t acl_perms, uint64_t flags,
 	acl = get_user_acl_with_perms("specificuser@", acl_perms);
 	init_default_ownership(&ownership);
 
-	printf("Perms: 0x%lx, Flags: 0x%lx\n", acl_perms, flags);
+	printf("Perms: %#lx, Flags: %#lx\n", acl_perms, flags);
 	assert_int_equal(ds_sec_cont_get_capabilities(flags, &cred, &ownership,
 						      acl, &result),
 			 0);
@@ -1821,7 +1821,7 @@ expect_cont_capas_with_owner_perms(uint64_t acl_perms, uint64_t flags,
 	acl = get_acl_with_perms(acl_perms, 0);
 	init_default_ownership(&ownership);
 
-	printf("Perms: 0x%lx, Flags: 0x%lx\n", acl_perms, flags);
+	printf("Perms: %#lx, Flags: %#lx\n", acl_perms, flags);
 	assert_int_equal(ds_sec_cont_get_capabilities(flags, &cred, &ownership,
 						      acl, &result),
 			 0);
@@ -2044,6 +2044,13 @@ test_get_rebuild_cont_capas(void **state)
 			 CONT_CAPA_READ_DATA);
 }
 
+static void
+test_get_admin_cont_capas(void **state)
+{
+	assert_int_equal(ds_sec_get_admin_cont_capabilities(),
+			 CONT_CAPAS_ALL);
+}
+
 /* Convenience macro for unit tests */
 #define ACL_UTEST(X)	cmocka_unit_test_setup_teardown(X, srv_acl_setup, \
 							srv_acl_teardown)
@@ -2118,6 +2125,7 @@ main(void)
 		cmocka_unit_test(test_cont_can_write_data),
 		cmocka_unit_test(test_cont_can_read_data),
 		cmocka_unit_test(test_get_rebuild_cont_capas),
+		cmocka_unit_test(test_get_admin_cont_capas),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);

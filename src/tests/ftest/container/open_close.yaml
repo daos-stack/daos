@@ -1,21 +1,21 @@
 hosts:
   test_servers:
     - server-A
-timeout: 40
+timeout: 60
 server_config:
     name: daos_server
 pool:
     mode: 146
     name: daos_server
-    scm_size: 1073741
+    scm_size: 1G
     control_method: dmg
 container:
     container_handle: !mux
-        goodcoh:
+        good_coh:
             coh:
                 - GOOD
                 - 'PASS'
-        badcoh:
+        bad_coh:
             coh:
                 - BAD
                 - 'FAIL'

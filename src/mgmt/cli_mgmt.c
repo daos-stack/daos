@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,8 +35,10 @@
 #include <daos/drpc_modules.h>
 #include <daos/drpc.pb-c.h>
 #include <daos/event.h>
-#include "srv.pb-c.h"
+#include <daos/job.h>
+#include "svc.pb-c.h"
 #include "rpc.h"
+#include <errno.h>
 
 struct cp_arg {
 	struct dc_mgmt_sys	*sys;
@@ -73,7 +75,7 @@ dc_mgmt_svc_rip(tse_task_t *task)
 	if (rc != 0) {
 		D_ERROR("failed to attach to grp %s, rc "DF_RC".\n",
 			args->grp, DP_RC(rc));
-		rc = DER_INVAL;
+		rc = -DER_INVAL;
 		goto out_task;
 	}
 
@@ -185,7 +187,7 @@ out_task:
 }
 
 int
-dc_mgmt_profile(uint64_t modules, char *path, int avg, bool start)
+dc_mgmt_profile(char *path, int avg, bool start)
 {
 	struct dc_mgmt_sys	*sys;
 	struct mgmt_profile_in	*in;
@@ -213,7 +215,6 @@ dc_mgmt_profile(uint64_t modules, char *path, int avg, bool start)
 
 	D_ASSERT(rpc != NULL);
 	in = crt_req_get(rpc);
-	in->p_module = modules;
 	in->p_path = path;
 	in->p_avg = avg;
 	in->p_op = start ? MGMT_PROFILE_START : MGMT_PROFILE_STOP;
@@ -269,14 +270,41 @@ struct dc_mgmt_psr {
 	char		*uri;
 };
 
+#define copy_str(dest, src)				\
+({							\
+	int	__rc = 1;				\
+	size_t	__size = strnlen(src, sizeof(dest));	\
+							\
+	if (__size != sizeof(dest)) {			\
+		memcpy(dest, src, __size + 1);		\
+		__rc = 0;				\
+	}						\
+	__rc;						\
+})
+
+static void
+put_attach_info(int npsrs, struct dc_mgmt_psr *psrs)
+{
+	int i;
+
+	if (psrs == NULL)
+		return;
+
+	for (i = 0; i < npsrs; i++)
+		D_FREE(psrs[i].uri);
+	D_FREE(psrs);
+}
+
 /*
  * Get the attach info (i.e., the CaRT PSRs) for name. npsrs outputs the number
  * of elements in psrs. psrs outputs the array of struct dc_mgmt_psr objects.
  * Callers are responsible for freeing psrs using put_attach_info.
  */
 static int
-get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs)
+get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
+		struct sys_info *sy_info)
 {
+	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
 	struct drpc		*ctx;
 	Mgmt__GetAttachInfoReq	 req = MGMT__GET_ATTACH_INFO_REQ__INIT;
 	Mgmt__GetAttachInfoResp	*resp;
@@ -292,15 +320,16 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs)
 
 	/* Connect to daos_agent. */
 	D_ASSERT(dc_agent_sockpath != NULL);
-	ctx = drpc_connect(dc_agent_sockpath);
-	if (ctx == NULL) {
-		D_ERROR("failed to connect to %s\n", dc_agent_sockpath);
-		rc = -DER_BADPATH;
-		goto out;
+	rc = drpc_connect(dc_agent_sockpath, &ctx);
+	if (rc != -DER_SUCCESS) {
+		D_ERROR("failed to connect to %s " DF_RC "\n",
+			dc_agent_sockpath, DP_RC(rc));
+		D_GOTO(out, 0);
 	}
 
 	/* Prepare the GetAttachInfo request. */
 	req.sys = (char *)name;
+	req.jobid = dc_jobid;
 	reqb_size = mgmt__get_attach_info_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);
 	if (reqb == NULL) {
@@ -308,10 +337,9 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs)
 		goto out_ctx;
 	}
 	mgmt__get_attach_info_req__pack(&req, reqb);
-	dreq = drpc_call_create(ctx, DRPC_MODULE_MGMT,
-				DRPC_METHOD_MGMT_GET_ATTACH_INFO);
-	if (dreq == NULL) {
-		rc = -DER_NOMEM;
+	rc = drpc_call_create(ctx, DRPC_MODULE_MGMT,
+				DRPC_METHOD_MGMT_GET_ATTACH_INFO, &dreq);
+	if (rc != 0) {
 		D_FREE(reqb);
 		goto out_ctx;
 	}
@@ -329,8 +357,10 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs)
 		rc = -DER_MISC;
 		goto out_dresp;
 	}
-	resp = mgmt__get_attach_info_resp__unpack(NULL, dresp->body.len,
+	resp = mgmt__get_attach_info_resp__unpack(&alloc.alloc, dresp->body.len,
 						  dresp->body.data);
+	if (alloc.oom)
+		D_GOTO(out_dresp, rc = -DER_NOMEM);
 	if (resp == NULL) {
 		D_ERROR("failed to unpack GetAttachInfo response\n");
 		rc = -DER_MISC;
@@ -367,8 +397,70 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs)
 	*npsrs = resp->n_psrs;
 	*psrs = p;
 
+	if (sy_info) {
+		if (strnlen(resp->provider, sizeof(sy_info->provider)) == 0) {
+			D_ERROR("GetAttachInfo failed: %d. "
+				"provider is undefined. "
+				"libdaos.so is incompatible with DAOS Agent.\n",
+				resp->status);
+			D_GOTO(out_resp, rc = -DER_AGENT_INCOMPAT);
+		}
+
+		if (strnlen(resp->interface, sizeof(sy_info->interface)) == 0) {
+			D_ERROR("GetAttachInfo failed: %d. "
+				"interface is undefined. "
+				"libdaos.so is incompatible with DAOS Agent.\n",
+				resp->status);
+			D_GOTO(out_resp, rc = -DER_AGENT_INCOMPAT);
+		}
+
+		if (strnlen(resp->domain, sizeof(sy_info->domain)) == 0) {
+			D_ERROR("GetAttachInfo failed: %d. "
+				"domain string is undefined. "
+				"libdaos.so is incompatible with DAOS Agent.\n",
+				resp->status);
+			D_GOTO(out_resp, rc = -DER_AGENT_INCOMPAT);
+		}
+
+		if (copy_str(sy_info->provider, resp->provider)) {
+			D_ERROR("GetAttachInfo failed: %d. "
+				"provider string too long.\n",
+				resp->status);
+
+			D_GOTO(out_resp, rc = -DER_INVAL);
+		}
+
+		if (copy_str(sy_info->interface, resp->interface)) {
+			D_ERROR("GetAttachInfo failed: %d. "
+				"interface string too long\n",
+				resp->status);
+			D_GOTO(out_resp, rc = -DER_INVAL);
+		}
+
+		if (copy_str(sy_info->domain, resp->domain)) {
+			D_ERROR("GetAttachInfo failed: %d. "
+				"domain string too long\n",
+				resp->status);
+			D_GOTO(out_resp, rc = -DER_INVAL);
+		}
+
+		sy_info->crt_ctx_share_addr = resp->crtctxshareaddr;
+		sy_info->crt_timeout = resp->crttimeout;
+
+		D_DEBUG(DB_MGMT,
+			"GetAttachInfo Provider: %s, Interface: %s, Domain: %s,"
+			"CRT_CTX_SHARE_ADDR: %u, CRT_TIMEOUT: %u\n",
+			sy_info->provider, sy_info->interface, sy_info->domain,
+			sy_info->crt_ctx_share_addr, sy_info->crt_timeout);
+	} else {
+		D_ERROR("GetAttachInfo failed: %d. "
+			"libdaos.so is incompatible with DAOS Agent.\n",
+			resp->status);
+		D_GOTO(out_resp, rc = -DER_AGENT_INCOMPAT);
+	}
+
 out_resp:
-	mgmt__get_attach_info_resp__free_unpacked(resp, NULL);
+	mgmt__get_attach_info_resp__free_unpacked(resp, &alloc.alloc);
 out_dresp:
 	drpc_response_free(dresp);
 out_dreq:
@@ -379,6 +471,137 @@ out_ctx:
 out:
 	return rc;
 }
+
+/*
+ * Get the CaRT network configuration for this client node
+ * via the get_attach_info() dRPC.
+ * Configure the client's local environment with these parameters
+ */
+int dc_mgmt_net_cfg(const char *name)
+{
+	int rc;
+	int npsrs = 0;
+	char buf[SYS_INFO_BUF_SIZE];
+	char *crt_timeout;
+	char *ofi_interface;
+	char *ofi_domain;
+	struct sys_info sy_info;
+	struct dc_mgmt_psr *psrs = NULL;
+
+	if (name == NULL)
+		name = DAOS_DEFAULT_SYS_NAME;
+
+	/* Query the agent for the CaRT network configuration parameters */
+	rc = get_attach_info(name, &npsrs, &psrs, &sy_info);
+	if (rc != 0)
+		goto cleanup;
+
+	/* These two are always set */
+	rc = setenv("CRT_PHY_ADDR_STR", sy_info.provider, 1);
+	if (rc != 0)
+		D_GOTO(cleanup, rc = d_errno2der(errno));
+
+	sprintf(buf, "%d", sy_info.crt_ctx_share_addr);
+	rc = setenv("CRT_CTX_SHARE_ADDR", buf, 1);
+	if (rc != 0)
+		D_GOTO(cleanup, rc = d_errno2der(errno));
+
+	/* Allow client env overrides for these three */
+	crt_timeout = getenv("CRT_TIMEOUT");
+	if (!crt_timeout) {
+		sprintf(buf, "%d", sy_info.crt_timeout);
+		rc = setenv("CRT_TIMEOUT", buf, 1);
+		if (rc != 0)
+			D_GOTO(cleanup, rc = d_errno2der(errno));
+	} else {
+		D_INFO("Using client provided CRT_TIMEOUT: %s\n",
+			crt_timeout);
+	}
+
+	ofi_interface = getenv("OFI_INTERFACE");
+	if (!ofi_interface) {
+		rc = setenv("OFI_INTERFACE", sy_info.interface, 1);
+		if (rc != 0)
+			D_GOTO(cleanup, rc = d_errno2der(errno));
+	} else {
+		D_INFO("Using client provided OFI_INTERFACE: %s\n",
+			ofi_interface);
+	}
+
+	ofi_domain = getenv("OFI_DOMAIN");
+	if (!ofi_domain) {
+		rc = setenv("OFI_DOMAIN", sy_info.domain, 1);
+		if (rc != 0)
+			D_GOTO(cleanup, rc = d_errno2der(errno));
+	} else {
+		D_INFO("Using client provided OFI_DOMAIN: %s\n", ofi_domain);
+	}
+
+	D_DEBUG(DB_MGMT,
+		"CaRT initialization with:\n"
+		"\tOFI_INTERFACE=%s, OFI_DOMAIN: %s, CRT_PHY_ADDR_STR: %s, "
+		"CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s\n",
+		getenv("OFI_INTERFACE"), getenv("OFI_DOMAIN"),
+		getenv("CRT_PHY_ADDR_STR"),
+		getenv("CRT_CTX_SHARE_ADDR"), getenv("CRT_TIMEOUT"));
+
+cleanup:
+	/* free the psrs allocated by get_attach_info() */
+	put_attach_info(npsrs, psrs);
+
+	return rc;
+}
+
+/*
+ * Send an upcall to the agent to notify it of a clean process shutdown.
+ */
+int
+dc_mgmt_disconnect(void)
+{
+	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
+	struct drpc		 *ctx;
+	Drpc__Call		 *dreq;
+	Drpc__Response		 *dresp;
+	int			 rc;
+
+	D_DEBUG(DB_MGMT, "disconnecting process for pid:%d\n", getpid());
+
+	/* Connect to daos_agent. */
+	D_ASSERT(dc_agent_sockpath != NULL);
+	rc = drpc_connect(dc_agent_sockpath, &ctx);
+	if (rc != -DER_SUCCESS) {
+		D_ERROR("failed to connect to %s " DF_RC "\n",
+			dc_agent_sockpath, DP_RC(rc));
+		D_GOTO(out, 0);
+	}
+
+	rc = drpc_call_create(ctx, DRPC_MODULE_MGMT,
+			      DRPC_METHOD_MGMT_DISCONNECT, &dreq);
+	if (rc != 0)
+		goto out_ctx;
+
+	/* Make the Process Disconnect call and get the response. */
+	rc = drpc_call(ctx, R_SYNC, dreq, &dresp);
+	if (rc != 0) {
+		D_ERROR("Process Disconnect call failed: "DF_RC"\n", DP_RC(rc));
+		goto out_dreq;
+	}
+	if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("Process Disconnect unsuccessful: %d\n", dresp->status);
+		rc = -DER_MISC;
+		goto out_dresp;
+	}
+
+out_dresp:
+	drpc_response_free(dresp);
+out_dreq:
+	drpc_call_free(dreq);
+out_ctx:
+	drpc_close(ctx);
+out:
+	return rc;
+}
+
 
 #define SYS_BUF_MAGIC 0x98234ad3
 
@@ -429,16 +652,6 @@ get_attach_info_from_buf(int npsrbs, struct psr_buf *psrbs, int *npsrs,
 	return 0;
 }
 
-static void
-put_attach_info(int npsrs, struct dc_mgmt_psr *psrs)
-{
-	int i;
-
-	for (i = 0; i < npsrs; i++)
-		D_FREE(psrs[i].uri);
-	D_FREE(psrs);
-}
-
 static int
 attach_group(const char *name, int npsrs, struct dc_mgmt_psr *psrs,
 	     crt_group_t **groupp)
@@ -459,14 +672,16 @@ attach_group(const char *name, int npsrs, struct dc_mgmt_psr *psrs,
 						psrs[i].rank, psrs[i].uri);
 		if (rc != 0) {
 			D_ERROR("failed to add rank %u URI %s to group %s: "
-				"%d\n", psrs[i].rank, psrs[i].uri, name, rc);
+				DF_RC "\n",
+				psrs[i].rank, psrs[i].uri, name, DP_RC(rc));
 			goto err_group;
 		}
 
 		rc = crt_group_psr_set(group, psrs[i].rank);
 		if (rc != 0) {
-			D_ERROR("failed to set rank %u as group %s PSR: %d\n",
-				psrs[i].rank, name, rc);
+			D_ERROR("failed to set rank %u as group %s PSR: "
+				DF_RC "\n",
+				psrs[i].rank, name, DP_RC(rc));
 			goto err_group;
 		}
 	}
@@ -524,7 +739,8 @@ attach(const char *name, int npsrbs, struct psr_buf *psrbs,
 	}
 
 	if (psrbs == NULL)
-		rc = get_attach_info(name, &sys->sy_npsrs, &sys->sy_psrs);
+		rc = get_attach_info(name, &sys->sy_npsrs, &sys->sy_psrs,
+				     &sys->sy_info);
 	else
 		rc = get_attach_info_from_buf(npsrbs, psrbs, &sys->sy_npsrs,
 					      &sys->sy_psrs);
@@ -532,6 +748,7 @@ attach(const char *name, int npsrbs, struct psr_buf *psrbs,
 		goto err_sys;
 	if (sys->sy_npsrs < 1) {
 		D_ERROR(">= 1 PSRs required: %d\n", sys->sy_npsrs);
+		rc = -DER_MISC;
 		goto err_psrs;
 	}
 
@@ -729,6 +946,66 @@ dc_mgmt_sys_decode(void *buf, size_t len, struct dc_mgmt_sys **sysp)
 			  sysp);
 }
 
+/* For a given pool UUID, contact mgmt. service for up to date list
+ * of pool service replica ranks. Note: synchronous RPC with caller already
+ * in a task execution context. On successful return, caller is responsible
+ * for freeing the d_rank_list_t allocated here.
+ */
+int
+dc_mgmt_get_pool_svc_ranks(struct dc_mgmt_sys *sys, const uuid_t puuid,
+			   d_rank_list_t **svcranksp)
+{
+	crt_endpoint_t				srv_ep;
+	crt_rpc_t			       *rpc = NULL;
+	struct mgmt_pool_get_svcranks_in       *rpc_in;
+	struct mgmt_pool_get_svcranks_out      *rpc_out;
+	crt_opcode_t				opc;
+	int					rc;
+
+	/* TODO: when MS supports multiple replicas search for leader */
+	srv_ep.ep_grp = sys->sy_group;
+	srv_ep.ep_rank = sys->sy_psrs[0].rank;
+	srv_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
+	opc = DAOS_RPC_OPCODE(MGMT_POOL_GET_SVCRANKS, DAOS_MGMT_MODULE,
+			      DAOS_MGMT_VERSION);
+
+	rc = crt_req_create(daos_get_crt_ctx(), &srv_ep, opc, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID ": crt_req_create() failed, "DF_RC "\n",
+			DP_UUID(puuid), DP_RC(rc));
+		return rc;
+	}
+
+	rpc_in = crt_req_get(rpc);
+	D_ASSERT(rpc_in != NULL);
+	uuid_copy(rpc_in->gsr_puuid, puuid);
+
+	crt_req_addref(rpc);
+	rc = daos_rpc_send_wait(rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID ": daos_rpc_send_wait() failed, "DF_RC "\n",
+			DP_UUID(puuid), DP_RC(rc));
+		goto decref;
+	}
+
+	rpc_out = crt_reply_get(rpc);
+	D_ASSERT(rpc_out != NULL);
+	rc = rpc_out->gsr_rc;
+	if (rc != 0) {
+		D_ERROR(DF_UUID ": MGMT_POOL_GET_SVCRANKS rpc failed, "
+			DF_RC "\n", DP_UUID(puuid), DP_RC(rc));
+		goto decref;
+	}
+
+	rc = d_rank_list_dup(svcranksp, rpc_out->gsr_ranks);
+	if (rc != 0)
+		D_ERROR(DF_UUID ": d_rank_list_dup() failed, "DF_RC "\n",
+			DP_UUID(puuid), DP_RC(rc));
+
+decref:
+	crt_req_decref(rpc);
+	return rc;
+}
 /**
  * Initialize management interface
  */

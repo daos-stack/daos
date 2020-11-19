@@ -21,11 +21,11 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from mpio_test_base import LlnlMpi4pyHdf5
+from mpio_test_base import MpiioTests
 
 
 # pylint: disable=too-many-ancestors
-class Hdf5(LlnlMpi4pyHdf5):
+class Hdf5(MpiioTests):
     """Runs HDF5 test suites.
 
     :avocado: recursive

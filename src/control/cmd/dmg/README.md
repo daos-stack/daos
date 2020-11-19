@@ -12,7 +12,7 @@ from a login node.
 ## Certificates
 
 Local certificate locations can be specified in the
-[client config file](/utils/config/daos.yml).
+[client config file](/utils/config/daos_control.yml).
 
 For more details on how certificates are used within DAOS, see the
 [Security documentation](/src/control/security/README.md#certificate-usage-in-daos).
@@ -26,7 +26,7 @@ running listening gRPC servers that host the control service.
 
 Communications take place over the management network and addresses of
 remote storage servers to connect to can be specified on the commandline
-or in the [client config file](/utils/config/daos.yml).
+or in the [client config file](/utils/config/daos_control.yml).
 
 For details on how gRPC communications are secured and authenticated, see the
 [Security documentation](/src/control/security/README.md#host-authentication-with-certificates).

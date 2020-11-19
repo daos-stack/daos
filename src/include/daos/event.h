@@ -44,7 +44,7 @@ enum daos_ev_flags {
 	DAOS_EVF_NO_POLL	= (1 << 0),
 	/**
 	 * Only useful for parent event:
-	 * without this flag, a parent event will be automatially launched
+	 * without this flag, a parent event will be automatically launched
 	 * if any child event is launched. With this flag, a parent event
 	 * always needs to be explicitly launched.
 	 */
@@ -52,9 +52,6 @@ enum daos_ev_flags {
 };
 
 struct tse_task_t;
-
-typedef int (*daos_event_comp_cb_t)(void *, daos_event_t *, int);
-extern bool dfs_no_cond_op;
 
 /**
  * Finish event queue library.
@@ -121,7 +118,7 @@ daos_ev2sched(struct daos_event *ev);
 /**
  * Return the EQ handle of the specified event.
  *
- * \param ev [IN]	event to retrive handle.
+ * \param ev [IN]	event to retrieve handle.
  */
 daos_handle_t
 daos_ev2eqh(struct daos_event *ev);
@@ -131,10 +128,6 @@ daos_event_destroy(struct daos_event *ev, bool force);
 
 int
 daos_event_destroy_children(struct daos_event *ev, bool force);
-
-int
-daos_event_register_comp_cb(struct daos_event *ev,
-			    daos_event_comp_cb_t cb, void *arg);
 
 
 /**

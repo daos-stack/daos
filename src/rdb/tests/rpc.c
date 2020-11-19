@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,8 +25,38 @@
 #include <daos/rpc.h>
 #include "rpc.h"
 
+static int
+crt_proc_struct_rsvc_hint(crt_proc_t proc, struct rsvc_hint *hint)
+{
+	int rc;
+
+	rc = crt_proc_uint32_t(proc, &hint->sh_flags);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint32_t(proc, &hint->sh_rank);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint64_t(proc, &hint->sh_term);
+	if (rc != 0)
+		return -DER_HG;
+
+	return 0;
+}
+
 CRT_RPC_DEFINE(rdbt_init, DAOS_ISEQ_RDBT_INIT_OP, DAOS_OSEQ_RDBT_INIT_OP)
 CRT_RPC_DEFINE(rdbt_fini, DAOS_ISEQ_RDBT_FINI_OP, DAOS_OSEQ_RDBT_FINI_OP)
+CRT_RPC_DEFINE(rdbt_replicas_add, DAOS_ISEQ_RDBT_MEMBERSHIP,
+	       DAOS_OSEQ_RDBT_MEMBERSHIP)
+CRT_RPC_DEFINE(rdbt_replicas_remove, DAOS_ISEQ_RDBT_MEMBERSHIP,
+	       DAOS_OSEQ_RDBT_MEMBERSHIP)
+CRT_RPC_DEFINE(rdbt_start_election, DAOS_ISEQ_RDBT_START_ELECTION,
+	       DAOS_OSEQ_RDBT_START_ELECTION)
+CRT_RPC_DEFINE(rdbt_ping, DAOS_ISEQ_RDBT_PING_OP, DAOS_OSEQ_RDBT_PING_OP)
+CRT_RPC_DEFINE(rdbt_create, DAOS_ISEQ_RDBT_CREATE_OP, DAOS_OSEQ_RDBT_CREATE_OP)
+CRT_RPC_DEFINE(rdbt_destroy, DAOS_ISEQ_RDBT_DESTROY_OP,
+	       DAOS_OSEQ_RDBT_DESTROY_OP)
 CRT_RPC_DEFINE(rdbt_test, DAOS_ISEQ_RDBT_TEST_OP, DAOS_OSEQ_RDBT_TEST_OP)
 
 /* Define for cont_rpcs[] array population below.

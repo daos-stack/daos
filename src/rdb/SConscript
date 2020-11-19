@@ -21,7 +21,7 @@ def scons():
                              ['rdb_util.c', 'rdb_path.c', 'rdb_layout.c',
                               'rdb_kvs.c', 'rdb_rpc.c', 'rdb_raft.c',
                               'rdb_tx.c', 'rdb.c', 'rdb_module.c'],
-                             LIBS=['raft'])
+                             install_off="../..", LIBS=['raft'])
     denv.Install('$PREFIX/lib64/daos_srv', rdb)
 
     # tests

@@ -32,7 +32,7 @@ class BasicSnapshot(TestWithServers):
     """DAOS-1370 Basic snapshot test.
 
     Test Class Description:
-        Test that a snapshot taken of a container remains unchaged even after
+        Test that a snapshot taken of a container remains unchanged even after
         an object in the container has been updated 500 times.
         Create the container.
         Write an object to the container.
@@ -88,18 +88,15 @@ class BasicSnapshot(TestWithServers):
             datasize = len(thedata) + 1
             dkey = "dkey"
             akey = "akey"
-            tx_handle = self.container.get_new_tx()
             obj = self.container.write_an_obj(thedata,
                                               datasize,
                                               dkey,
                                               akey,
-                                              obj_cls=obj_cls,
-                                              txn=tx_handle)
-            self.container.commit_tx(tx_handle)
+                                              obj_cls=obj_cls)
             obj.close()
             # Take a snapshot of the container
             self.snapshot = DaosSnapshot(self.context)
-            self.snapshot.create(self.container.coh, tx_handle)
+            self.snapshot.create(self.container.coh)
             self.log.info("Wrote an object and created a snapshot")
 
         except DaosApiError as error:

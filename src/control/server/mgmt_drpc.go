@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,10 +25,13 @@ package server
 
 import (
 	"github.com/golang/protobuf/proto"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // mgmtModule represents the daos_server mgmt dRPC module. It sends dRPCs to
@@ -36,35 +39,69 @@ import (
 type mgmtModule struct{}
 
 // HandleCall is the handler for calls to the mgmtModule
-func (m *mgmtModule) HandleCall(session *drpc.Session, method int32, body []byte) ([]byte, error) {
+func (m *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
 	return nil, drpc.UnknownMethodFailure()
 }
 
 // ID will return Mgmt module ID
-func (m *mgmtModule) ID() int32 {
+func (m *mgmtModule) ID() drpc.ModuleID {
 	return drpc.ModuleMgmt
 }
 
 // srvModule represents the daos_server dRPC module. It handles dRPCs sent by
 // the daos_io_server iosrv module (src/iosrv).
 type srvModule struct {
+	log    logging.Logger
+	sysdb  *system.Database
 	iosrvs []*IOServerInstance
 }
 
 // HandleCall is the handler for calls to the srvModule.
-func (mod *srvModule) HandleCall(session *drpc.Session, method int32, req []byte) ([]byte, error) {
+func (mod *srvModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
 	switch method {
 	case drpc.MethodNotifyReady:
 		return nil, mod.handleNotifyReady(req)
 	case drpc.MethodBIOError:
 		return nil, mod.handleBioErr(req)
+	case drpc.MethodGetPoolServiceRanks:
+		return mod.handleGetPoolServiceRanks(req)
 	default:
 		return nil, drpc.UnknownMethodFailure()
 	}
 }
 
-func (mod *srvModule) ID() int32 {
+func (mod *srvModule) ID() drpc.ModuleID {
 	return drpc.ModuleSrv
+}
+
+func (mod *srvModule) handleGetPoolServiceRanks(reqb []byte) ([]byte, error) {
+	req := new(srvpb.GetPoolSvcReq)
+	if err := proto.Unmarshal(reqb, req); err != nil {
+		return nil, drpc.UnmarshalingPayloadFailure()
+	}
+
+	uuid, err := uuid.Parse(req.GetUuid())
+	if err != nil {
+		return nil, errors.Wrapf(err, "invalid pool uuid %q", uuid)
+	}
+
+	mod.log.Debugf("handling GetPoolSvcReq: %+v", req)
+
+	resp := new(srvpb.GetPoolSvcResp)
+
+	ps, err := mod.sysdb.FindPoolServiceByUUID(uuid)
+	if err != nil {
+		resp.Status = int32(drpc.DaosNonexistant)
+		mod.log.Debugf("GetPoolSvcResp: %+v", resp)
+		return proto.Marshal(resp)
+		// return nil, err
+	}
+
+	resp.Svcreps = system.RanksToUint32(ps.Replicas)
+
+	mod.log.Debugf("GetPoolSvcResp: %+v", resp)
+
+	return proto.Marshal(resp)
 }
 
 func (mod *srvModule) handleNotifyReady(reqb []byte) error {
@@ -82,7 +119,7 @@ func (mod *srvModule) handleNotifyReady(reqb []byte) error {
 		return errors.Wrap(err, "check NotifyReady request socket path")
 	}
 
-	mod.iosrvs[req.InstanceIdx].NotifyReady(req)
+	mod.iosrvs[req.InstanceIdx].NotifyDrpcReady(req)
 
 	return nil
 }

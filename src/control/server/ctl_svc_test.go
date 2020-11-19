@@ -27,16 +27,19 @@ import (
 	"testing"
 
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
-// mockControlService takes cfgs for tuneable scm and sys provider behaviour but
-// default nvmeStorage behaviour (cs.nvoe can be subsequently replaced in test).
-func mockControlService(t *testing.T, log logging.Logger, cfg *Configuration, bmbc *bdev.MockBackendConfig, smbc *scm.MockBackendConfig, smsc *scm.MockSysConfig) *ControlService {
+// mockControlService takes cfgs for tuneable scm and sys provider behavior but
+// default nvmeStorage behavior (cs.nvoe can be subsequently replaced in test).
+func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bmbc *bdev.MockBackendConfig, smbc *scm.MockBackendConfig, smsc *scm.MockSysConfig) *ControlService {
 	t.Helper()
 
+	db := system.MockDatabase(t, log)
 	cs := ControlService{
 		StorageControlService: *NewStorageControlService(log,
 			bdev.NewMockProvider(log, bmbc),
@@ -46,6 +49,8 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *Configuration, bm
 		harness: &IOServerHarness{
 			log: log,
 		},
+		membership: system.NewMembership(log, db),
+		sysdb:      db,
 	}
 
 	scmProvider := cs.StorageControlService.scm

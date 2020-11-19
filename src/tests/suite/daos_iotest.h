@@ -38,32 +38,7 @@ extern int dts_obj_replica_cnt;
 extern int dts_ec_obj_class;
 extern int dts_ec_grp_size;
 
-#define IOREQ_IOD_NR	5
-#define IOREQ_SG_NR	5
-#define IOREQ_SG_IOD_NR	5
-
-#define DTS_MAX_EXT_NUM		5
-#define DTS_MAX_DISTANCE	10
-#define DTS_MAX_EXTENT_SIZE	50
-#define DTS_MAX_OFFSET		1048576
-#define DTS_MAX_EPOCH_TIMES	20
-
-struct ioreq {
-	daos_handle_t		oh;
-	test_arg_t		*arg;
-	daos_event_t		ev;
-	daos_key_t		dkey;
-	daos_key_t		akey;
-	d_iov_t			val_iov[IOREQ_SG_IOD_NR][IOREQ_SG_NR];
-	d_sg_list_t		sgl[IOREQ_SG_IOD_NR];
-	daos_recx_t		rex[IOREQ_SG_IOD_NR][IOREQ_IOD_NR];
-	daos_epoch_range_t	erange[IOREQ_SG_IOD_NR][IOREQ_IOD_NR];
-	daos_iod_t		iod[IOREQ_SG_IOD_NR];
-	daos_iod_type_t		iod_type;
-	uint64_t		fail_loc;
-	int			result;
-};
-
+#define OW_IOD_SIZE	1024ULL
 #define SEGMENT_SIZE (10 * 1048576) /* 10MB */
 
 void
@@ -76,6 +51,11 @@ ioreq_fini(struct ioreq *req);
 void
 insert_single(const char *dkey, const char *akey, uint64_t idx, void *value,
 	      daos_size_t iod_size, daos_handle_t th, struct ioreq *req);
+
+void
+insert_single_with_flags(const char *dkey, const char *akey, uint64_t idx,
+			 void *value, daos_size_t iod_size, daos_handle_t th,
+			 struct ioreq *req, uint64_t flags);
 
 void
 insert_single_with_rxnr(const char *dkey, const char *akey, uint64_t idx,
@@ -107,8 +87,8 @@ enumerate_akey(daos_handle_t th, char *dkey, uint32_t *number,
 	       daos_size_t len, struct ioreq *req);
 void
 insert(const char *dkey, int nr, const char **akey, daos_size_t *iod_size,
-	int *rx_nr, uint64_t *idx, void **val, daos_handle_t th,
-	struct ioreq *req);
+       int *rx_nr, uint64_t *idx, void **val, daos_handle_t th,
+       struct ioreq *req, uint64_t flags);
 
 void
 insert_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
@@ -127,8 +107,17 @@ void
 punch_dkey(const char *dkey, daos_handle_t th, struct ioreq *req);
 
 void
+punch_dkey_with_flags(const char *dkey, daos_handle_t th, struct ioreq *req,
+		      uint64_t flags);
+
+void
 punch_akey(const char *dkey, const char *akey, daos_handle_t th,
 	   struct ioreq *req);
+
+void
+punch_akey_with_flags(const char *dkey, const char *akey, daos_handle_t th,
+		      struct ioreq *req, uint64_t flags);
+
 void
 punch_recxs(const char *dkey, const char *akey, daos_recx_t *recxs,
 	    int nr, daos_handle_t th, struct ioreq *req);
@@ -166,22 +155,19 @@ enum test_op_type {
 	TEST_OP_MIN		= 0,
 	TEST_OP_UPDATE		= 0,
 	TEST_OP_PUNCH		= 1,
-	TEST_OP_EPOCH_DISCARD	= 2,
 	/* above are modification OP, below are read-only OP */
-	TEST_OP_FETCH		= 3,
-	TEST_OP_ENUMERATE	= 4,
-	TEST_OP_ADD		= 5,
-	TEST_OP_EXCLUDE		= 6,
-	TEST_OP_POOL_QUERY	= 7,
-	TEST_OP_MAX		= 7,
+	TEST_OP_FETCH		= 2,
+	TEST_OP_ENUMERATE	= 3,
+	TEST_OP_ADD		= 4,
+	TEST_OP_EXCLUDE		= 5,
+	TEST_OP_POOL_QUERY	= 6,
+	TEST_OP_MAX		= 6,
 };
 
 static inline bool
 test_op_is_modify(int op)
 {
-	return (op == TEST_OP_UPDATE	||
-		op == TEST_OP_PUNCH	||
-		op == TEST_OP_EPOCH_DISCARD);
+	return (op == TEST_OP_UPDATE || op == TEST_OP_PUNCH);
 }
 
 struct test_op_record;

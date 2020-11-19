@@ -39,17 +39,6 @@ func NewForwarder(log logging.Logger) *Forwarder {
 	}
 }
 
-func (f *Forwarder) Init(req InitRequest) error {
-	req.Forwarded = true
-
-	res := new(InitResponse)
-	if err := f.SendReq("BdevInit", req, res); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (f *Forwarder) Scan(req ScanRequest) (*ScanResponse, error) {
 	req.Forwarded = true
 

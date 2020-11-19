@@ -26,7 +26,6 @@ import ctypes
 from pydaos.raw import (DaosContainer, IORequest,
                         DaosObj)
 from apricot import TestWithServers
-from test_utils_pool import TestPool
 
 
 class ChecksumContainerValidation(TestWithServers):
@@ -36,9 +35,6 @@ class ChecksumContainerValidation(TestWithServers):
     single object inserts and verifies
     contents. This is a basic sanity
     test for enabling checksum testing.
-    This test case doesn't use TestPool/
-    TestContainer for now. TestPool/TestContainer
-    needs changes to support checksum.
     :avocado: recursive
     """
     # pylint: disable=too-many-instance-attributes
@@ -58,9 +54,7 @@ class ChecksumContainerValidation(TestWithServers):
         self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')[0]
         self.record_length = self.params.get("length", '/run/record/*')
 
-        self.pool = TestPool(self.context)
-        self.pool.get_params(self)
-        self.pool.create()
+        self.add_pool(connect=False)
         self.pool.connect(2)
 
         self.csum = self.params.get("enable_checksum", '/run/container/*')

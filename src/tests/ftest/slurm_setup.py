@@ -160,7 +160,7 @@ def start_munge(args):
 
     """
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
-    # exlude the control node
+    # exclude the control node
     nodes = NodeSet(str(args.nodes))
     nodes.difference_update(str(args.control))
 
@@ -258,7 +258,7 @@ def main():
     parser.add_argument(
         "-p", "--partition",
         default="daos_client",
-        help="Partiton name; all nodes will be in this partition")
+        help="Partition name; all nodes will be in this partition")
     parser.add_argument(
         "-u", "--user",
         default=getpass.getuser(),

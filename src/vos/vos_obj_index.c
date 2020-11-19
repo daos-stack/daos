@@ -94,7 +94,8 @@ oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	int			 rc;
 
 	/* Allocate a PMEM value of type vos_obj_df */
-	obj_off = umem_zalloc(&tins->ti_umm, sizeof(struct vos_obj_df));
+	obj_off = vos_slab_alloc(&tins->ti_umm, sizeof(struct vos_obj_df),
+				 VOS_SLAB_OBJ_DF);
 	if (UMOFF_IS_NULL(obj_off))
 		return -DER_NOSPACE;
 
@@ -119,7 +120,7 @@ oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	 * potential conflict with subsequent modifications against
 	 * the same object.
 	 */
-	if (dth != NULL)
+	if (dtx_is_valid_handle(dth))
 		dth->dth_sync = 1;
 
 	D_DEBUG(DB_TRACE, "alloc "DF_UOID" rec "DF_X64"\n",
@@ -144,6 +145,8 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 			DP_RC(rc));
 		return rc;
 	}
+
+	vos_ilog_ts_evict(&obj->vo_ilog, VOS_TS_TYPE_OBJ);
 
 	D_ASSERT(tins->ti_priv);
 	return gc_add_item((struct vos_pool *)tins->ti_priv, GC_OBJ,
@@ -173,6 +176,12 @@ oi_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	return 0;
 }
 
+static umem_off_t
+oi_node_alloc(struct btr_instance *tins, int size)
+{
+	return vos_slab_alloc(&tins->ti_umm, size, VOS_SLAB_OBJ_NODE);
+}
+
 static btr_ops_t oi_btr_ops = {
 	.to_rec_msize		= oi_rec_msize,
 	.to_hkey_size		= oi_hkey_size,
@@ -182,6 +191,7 @@ static btr_ops_t oi_btr_ops = {
 	.to_rec_free		= oi_rec_free,
 	.to_rec_fetch		= oi_rec_fetch,
 	.to_rec_update		= oi_rec_update,
+	.to_node_alloc		= oi_node_alloc,
 };
 
 /**
@@ -196,7 +206,6 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 	d_iov_t			 val_iov;
 	int			 rc;
 	int			 tmprc;
-	bool			 found = false;
 
 	*obj_p = NULL;
 	d_iov_set(&key_iov, &oid, sizeof(oid));
@@ -210,16 +219,12 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 		D_ASSERT(daos_unit_obj_id_equal(obj->vo_id, oid));
 		*obj_p = obj;
 		ilog = &obj->vo_ilog;
-
-		found = vos_ilog_ts_lookup(ts_set, ilog);
-		if (found)
-			goto out;
 	}
 
-	tmprc = vos_ilog_ts_cache(ts_set, ilog, &oid, sizeof(oid));
+	tmprc = vos_ilog_ts_add(ts_set, ilog, &oid, sizeof(oid));
 
 	D_ASSERT(tmprc == 0); /* Non-zero return for akey only */
-out:
+
 	return rc;
 }
 
@@ -231,6 +236,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 		  daos_epoch_t epoch, bool log, struct vos_obj_df **obj_p,
 		  struct vos_ts_set *ts_set)
 {
+	struct dtx_handle	*dth = vos_dth_get();
 	struct vos_obj_df	*obj = NULL;
 	d_iov_t			 key_iov;
 	d_iov_t			 val_iov;
@@ -271,7 +277,8 @@ do_log:
 	if (rc != 0)
 		return rc;
 
-	rc = ilog_update(loh, NULL, epoch, false);
+	rc = ilog_update(loh, NULL, epoch,
+			 dtx_is_valid_handle(dth) ? dth->dth_op_seq : 1, false);
 
 	ilog_close(loh);
 skip_log:
@@ -297,15 +304,14 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 		DP_UOID(oid), epoch);
 
 	rc = vos_ilog_punch(cont, &obj->vo_ilog, &epr, NULL,
-			    info, ts_set, true);
+			    info, ts_set, true,
+			    (flags & VOS_OF_REPLAY_PC) != 0);
 
-	if (rc == 0 && vos_ts_check_rh_conflict(ts_set, epoch))
-		rc = -DER_AGAIN;
+	if (rc == 0 && vos_ts_set_check_conflict(ts_set, epoch))
+		rc = -DER_TX_RESTART;
 
-	if (rc != 0)
-		D_CDEBUG(rc == -DER_NONEXIST, DB_IO, DLOG_ERR,
-			 "Failed to update incarnation log entry: "DF_RC"\n",
-			 DP_RC(rc));
+	VOS_TX_LOG_FAIL(rc, "Failed to update incarnation log entry: "DF_RC"\n",
+			DP_RC(rc));
 
 	return rc;
 }
@@ -438,7 +444,7 @@ oi_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 
 static int
 oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
-	   struct vos_iterator **iter_pp)
+	     struct vos_iterator **iter_pp, struct vos_ts_set *ts_set)
 {
 	struct vos_oi_iter	*oiter = NULL;
 	struct vos_container	*cont = NULL;
@@ -457,6 +463,9 @@ oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	D_ALLOC_PTR(oiter);
 	if (oiter == NULL)
 		return -DER_NOMEM;
+
+	rc = vos_ts_set_add(ts_set, cont->vc_ts_idx, NULL, 0);
+	D_ASSERT(rc == 0);
 
 	vos_ilog_fetch_init(&oiter->oit_ilog_info);
 	oiter->oit_iter.it_type = type;

@@ -48,7 +48,7 @@ static int
 __is_magic_valid(int input)
 {
 	if (input != PY_SHIM_MAGIC_NUMBER) {
-		D_ERROR("MAGIC number doesnt match, expected %d got %d\n",
+		D_ERROR("MAGIC number does not match, expected %d got %d\n",
 			PY_SHIM_MAGIC_NUMBER, input);
 		return 0;
 	}
@@ -132,12 +132,11 @@ __shim_handle__err_to_str(PyObject *self, PyObject *args)
  */
 
 static PyObject *
-cont_open(int ret, uuid_t puuid, uuid_t cuuid, char *svc_str, int flags)
+cont_open(int ret, uuid_t puuid, uuid_t cuuid, int flags)
 {
 	PyObject	*return_list;
 	daos_handle_t	 coh = {0};
 	daos_handle_t	 poh = {0};
-	d_rank_list_t	*svcl = NULL;
 	int		 rc;
 
 	if (ret != DER_SUCCESS) {
@@ -145,14 +144,8 @@ cont_open(int ret, uuid_t puuid, uuid_t cuuid, char *svc_str, int flags)
 		goto out;
 	}
 
-	svcl = daos_rank_list_parse(svc_str, ":");
-	if (svcl == NULL) {
-		rc = -DER_NOMEM;
-		goto out;
-	}
-
-	/** Connect to pool. XXX svcl is currently hardcoded */
-	rc = daos_pool_connect(puuid, "daos_server", svcl, DAOS_PC_RW, &poh,
+	/** Connect to pool */
+	rc = daos_pool_connect(puuid, "daos_server", NULL, DAOS_PC_RW, &poh,
 			       NULL, NULL);
 	if (rc)
 		goto out;
@@ -162,8 +155,6 @@ cont_open(int ret, uuid_t puuid, uuid_t cuuid, char *svc_str, int flags)
 	if (rc)
 		daos_pool_disconnect(poh, NULL);
 out:
-	if (svcl)
-		d_rank_list_free(svcl);
 	/* Populate return list */
 	return_list = PyList_New(3);
 	PyList_SetItem(return_list, 0, PyInt_FromLong(rc));
@@ -178,35 +169,37 @@ __shim_handle__cont_open(PyObject *self, PyObject *args)
 {
 	const char	*puuid_str;
 	const char	*cuuid_str;
-	char		*svc_str;
 	uuid_t		 puuid;
 	uuid_t		 cuuid;
 	int		 flags;
+	int		 rc;
 
 	/** Parse arguments, flags not used for now */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "sssi", &puuid_str, &cuuid_str,
-				       &svc_str, &flags);
-	uuid_parse(puuid_str, puuid);
-	uuid_parse(cuuid_str, cuuid);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "ssi", &puuid_str, &cuuid_str,
+				       &flags);
+	rc = uuid_parse(puuid_str, puuid);
+	if (rc)
+		goto out;
 
-	return cont_open(DER_SUCCESS, puuid, cuuid, svc_str, flags);
+	rc = uuid_parse(cuuid_str, cuuid);
+out:
+	return cont_open(rc, puuid, cuuid, flags);
 }
 
 static PyObject *
 __shim_handle__cont_open_by_path(PyObject *self, PyObject *args)
 {
 	const char		*path;
-	char			*svc_str;
 	int			 flags;
-	struct duns_attr_t	 attr;
+	struct duns_attr_t	 attr = {0};
 	int			 rc;
 
 	/** Parse arguments, flags not used for now */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "ssi", &path, &svc_str, &flags);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "si", &path, &flags);
 
 	rc = duns_resolve_path(path, &attr);
 
-	return cont_open(rc, attr.da_puuid, attr.da_cuuid, svc_str, flags);
+	return cont_open(rc, attr.da_puuid, attr.da_cuuid, flags);
 }
 
 static PyObject *
@@ -385,7 +378,7 @@ __shim_handle__obj_idroot(PyObject *self, PyObject *args)
 	oid.hi = 0;
 	oid.lo = 0;
 
-	daos_obj_generate_id(&oid, 0, cid, 0);
+	daos_obj_generate_id(&oid, DAOS_OF_KV_FLAT, cid, 0);
 
 	return_list = PyList_New(3);
 	PyList_SetItem(return_list, 0, PyInt_FromLong(DER_SUCCESS));
@@ -413,7 +406,7 @@ __shim_handle__obj_idgen(PyObject *self, PyObject *args)
 	oid.lo = rand();
 	oid.hi = 0;
 
-	daos_obj_generate_id(&oid, 0, cid, 0);
+	daos_obj_generate_id(&oid, DAOS_OF_KV_FLAT, cid, 0);
 
 	return_list = PyList_New(3);
 	PyList_SetItem(return_list, 0, PyInt_FromLong(DER_SUCCESS));
@@ -424,7 +417,7 @@ __shim_handle__obj_idgen(PyObject *self, PyObject *args)
 }
 
 static PyObject *
-__shim_handle__obj_open(PyObject *self, PyObject *args)
+__shim_handle__kv_open(PyObject *self, PyObject *args)
 {
 	PyObject	*return_list;
 	daos_handle_t	 coh;
@@ -438,7 +431,7 @@ __shim_handle__obj_open(PyObject *self, PyObject *args)
 				       &oid.lo, &flags);
 
 	/** Open object */
-	rc = daos_obj_open(coh, oid, DAOS_OO_RW, &oh, NULL);
+	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 
 	/* Populate return list */
 	return_list = PyList_New(2);
@@ -449,7 +442,7 @@ __shim_handle__obj_open(PyObject *self, PyObject *args)
 }
 
 static PyObject *
-__shim_handle__obj_close(PyObject *self, PyObject *args)
+__shim_handle__kv_close(PyObject *self, PyObject *args)
 {
 	daos_handle_t	 oh;
 	int		 rc;
@@ -458,7 +451,7 @@ __shim_handle__obj_close(PyObject *self, PyObject *args)
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "L", &oh.cookie);
 
 	/** Close object */
-	rc = daos_obj_close(oh, NULL);
+	rc = daos_kv_close(oh, NULL);
 
 	return PyInt_FromLong(rc);
 }
@@ -994,10 +987,10 @@ static PyMethodDef daosMethods[] = {
 	/** Object operations */
 	EXPORT_PYTHON_METHOD(obj_idgen),
 	EXPORT_PYTHON_METHOD(obj_idroot),
-	EXPORT_PYTHON_METHOD(obj_open),
-	EXPORT_PYTHON_METHOD(obj_close),
 
 	/** KV operations */
+	EXPORT_PYTHON_METHOD(kv_open),
+	EXPORT_PYTHON_METHOD(kv_close),
 	EXPORT_PYTHON_METHOD(kv_get),
 	EXPORT_PYTHON_METHOD(kv_put),
 	EXPORT_PYTHON_METHOD(kv_iter),
@@ -1051,7 +1044,7 @@ initpydaos_shim_27(void)
 	module = Py_InitModule("pydaos_shim_27", daosMethods);
 #endif
 
-#define DEFINE_PY_RETURN_CODE(name, desc) \
+#define DEFINE_PY_RETURN_CODE(name, desc, errstr) \
 	PyModule_AddIntConstant(module, ""#name, desc);
 
 	/** export return codes */

@@ -24,60 +24,54 @@ package server
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/dustin/go-humanize"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 var (
 	FaultUnknown = serverFault(
 		code.ServerUnknown,
-		"unknown control server error", "")
-	FaultBadConfig = serverFault(
-		code.ServerBadConfig,
-		"insufficient information in configuration",
-		"supply path to valid configuration file, use examples for reference",
-	)
-	FaultConfigNoPath = serverFault(
-		code.ServerNoConfigPath,
-		"configuration file path not set",
-		"supply the path to a server configuration file when restarting the control server with commandline option '-o'",
-	)
-	FaultConfigBadControlPort = serverFault(
-		code.ServerConfigBadControlPort,
-		"invalid control port in configuration",
-		"specify a nonzero control port in configuration ('port' parameter) and restart the control server",
-	)
-	FaultConfigBadAccessPoints = serverFault(
-		code.ServerConfigBadAccessPoints,
-		"invalid list of access points in configuration",
-		"only a single access point is currently supported, specify only one and restart the control server",
-	)
-	FaultConfigNoProvider = serverFault(
-		code.ServerConfigBadProvider,
-		"provider not specified in configuration",
-		"specify a valid network provider in configuration ('provider' parameter) and restart the control server",
-	)
-	FaultConfigNoServers = serverFault(
-		code.ServerConfigNoServers,
-		"no DAOS IO Servers specified in configuration",
-		"specify at least one IO Server configuration ('servers' list parameter) and restart the control server",
+		"unknown control server error",
+		"",
 	)
 	FaultIommuDisabled = serverFault(
 		code.ServerIommuDisabled,
 		"no IOMMU detected while running as non-root user with NVMe devices",
 		"enable IOMMU per the DAOS Admin Guide or run daos_server as root",
 	)
+	FaultVfioDisabled = serverFault(
+		code.ServerVfioDisabled,
+		"disable_vfio: true in config while running as non-root user with NVMe devices",
+		"set disable_vfio: false or run daos_server as root",
+	)
 	FaultHarnessNotStarted = serverFault(
 		code.ServerHarnessNotStarted,
-		fmt.Sprintf("%s harness not started", DataPlaneName),
+		fmt.Sprintf("%s harness not started", build.DataPlaneName),
+		"retry the operation or check server logs for more details",
+	)
+	FaultDataPlaneNotStarted = serverFault(
+		code.ServerDataPlaneNotStarted,
+		fmt.Sprintf("%s instance not started or not responding on dRPC", build.DataPlaneName),
 		"retry the operation or check server logs for more details",
 	)
 )
+
+func FaultInstancesNotStopped(action string, rank system.Rank) *fault.Fault {
+	return serverFault(
+		code.ServerInstancesNotStopped,
+		fmt.Sprintf("%s not supported when rank %d is running", action, rank),
+		fmt.Sprintf("retry %s operation after stopping rank %d", action, rank),
+	)
+}
 
 func FaultPoolNvmeTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
 	return serverFault(
@@ -98,6 +92,20 @@ func FaultPoolScmTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
 			humanize.IBytes(ioserver.ScmMinBytesPerTarget*uint64(targetCount))),
 		fmt.Sprintf("SCM capacity should be larger than %s",
 			humanize.IBytes(ioserver.ScmMinBytesPerTarget*uint64(targetCount))),
+	)
+}
+
+func FaultPoolInvalidRanks(invalid []system.Rank) *fault.Fault {
+	rs := make([]string, len(invalid))
+	for i, r := range invalid {
+		rs[i] = r.String()
+	}
+	sort.Strings(rs)
+
+	return serverFault(
+		code.ServerPoolInvalidRanks,
+		fmt.Sprintf("pool request contains invalid ranks: %s", strings.Join(rs, ",")),
+		"retry the request with a valid set of ranks",
 	)
 }
 
@@ -122,47 +130,6 @@ func FaultBdevNotFound(bdevs []string) *fault.Fault {
 		code.ServerBdevNotFound,
 		fmt.Sprintf("NVMe SSD%s %v not found", common.Pluralise("", len(bdevs)), bdevs),
 		fmt.Sprintf("check SSD%s %v that are specified in server config exist", common.Pluralise("", len(bdevs)), bdevs),
-	)
-}
-
-func FaultConfigDuplicateFabric(curIdx, seenIdx int) *fault.Fault {
-	return serverFault(
-		code.ServerConfigDuplicateFabric,
-		fmt.Sprintf("the fabric configuration in IO server %d is a duplicate of server %d", curIdx, seenIdx),
-		"ensure that each IO server has a unique combination of provider,fabric_iface,fabric_iface_port and restart",
-	)
-}
-
-func FaultConfigDuplicateLogFile(curIdx, seenIdx int) *fault.Fault {
-	return dupeValue(
-		code.ServerConfigDuplicateLogFile, "log_file", curIdx, seenIdx,
-	)
-}
-
-func FaultConfigDuplicateScmMount(curIdx, seenIdx int) *fault.Fault {
-	return dupeValue(
-		code.ServerConfigDuplicateScmMount, "scm_mount", curIdx, seenIdx,
-	)
-}
-
-func FaultConfigDuplicateScmDeviceList(curIdx, seenIdx int) *fault.Fault {
-	return dupeValue(
-		code.ServerConfigDuplicateScmDeviceList, "scm_list", curIdx, seenIdx,
-	)
-}
-
-func FaultConfigOverlappingBdevDeviceList(curIdx, seenIdx int) *fault.Fault {
-	return serverFault(
-		code.ServerConfigOverlappingBdevDeviceList,
-		fmt.Sprintf("the bdev_list value in IO server %d overlaps with entries in server %d", curIdx, seenIdx),
-		"ensure that each IO server has a unique set of bdev_list entries and restart",
-	)
-}
-
-func dupeValue(code code.Code, name string, curIdx, seenIdx int) *fault.Fault {
-	return serverFault(code,
-		fmt.Sprintf("the %s value in IO server %d is a duplicate of server %d", name, curIdx, seenIdx),
-		fmt.Sprintf("ensure that each IO server has a unique %s value and restart", name),
 	)
 }
 

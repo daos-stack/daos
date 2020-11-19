@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,8 @@ POBJ_LAYOUT_END(smd_md_layout);
 
 #define SMD_DF_MAGIC		0x5eaf00d
 
-#define SMD_DF_VER_1		1
+/* The lowest supported version */
+#define SMD_DF_VER_1		2
 /* The current SMD DF version */
 #define SMD_DF_VERSION		SMD_DF_VER_1
 
@@ -106,5 +107,9 @@ smd_unlock(struct smd_store *store)
 }
 
 extern struct smd_store		smd_store;
+
+/* smd_pool.c */
+int
+smd_replace_blobs(struct smd_pool_info *info, uint32_t tgt_cnt, int *tgts);
 
 #endif /** __SMD_INTERNAL_H__ */

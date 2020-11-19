@@ -31,19 +31,23 @@ import (
 	"os"
 	"os/signal"
 	"os/user"
+	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
-	"time"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
+	"github.com/daos-stack/daos/src/control/build"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/security"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -51,20 +55,11 @@ import (
 )
 
 const (
-	// ControlPlaneName defines a consistent name for the control plane server.
-	ControlPlaneName = "DAOS Control Server"
-	// DataPlaneName defines a consistent name for the ioserver.
-	DataPlaneName = "DAOS I/O Server"
-	// define supported maximum number of I/O servers
-	maxIOServers = 2
-
 	iommuPath        = "/sys/class/iommu"
 	minHugePageCount = 128
 )
 
-var ioserverShutdownTimeout = 15 * time.Second
-
-func cfgHasBdev(cfg *Configuration) bool {
+func cfgHasBdev(cfg *config.Server) bool {
 	for _, srvCfg := range cfg.Servers {
 		if len(srvCfg.Storage.Bdev.DeviceList) > 0 {
 			return true
@@ -72,10 +67,6 @@ func cfgHasBdev(cfg *Configuration) bool {
 	}
 
 	return false
-}
-
-func instanceShmID(idx int) int {
-	return os.Getpid() + idx + 1
 }
 
 func iommuDetected() bool {
@@ -89,21 +80,53 @@ func iommuDetected() bool {
 	return len(dmars) > 0
 }
 
+func raftDir(cfg *config.Server) string {
+	if len(cfg.Servers) == 0 {
+		return "" // can't save to SCM
+	}
+	return filepath.Join(cfg.Servers[0].Storage.SCM.MountPoint, "control_raft")
+}
+
+func hostname() string {
+	hn, err := os.Hostname()
+	if err != nil {
+		return fmt.Sprintf("Hostname() failed: %s", err.Error())
+	}
+	return hn
+}
+
 // Start is the entry point for a daos_server instance.
-func Start(log *logging.LeveledLogger, cfg *Configuration) error {
+func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	err := cfg.Validate(log)
 	if err != nil {
 		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
+	// Temporary notification while the feature is still being polished.
+	if len(cfg.AccessPoints) > 1 {
+		log.Info("\n*******\nNOTICE: Support for multiple access points is an alpha feature and is not well-tested!\n*******\n\n")
+	}
+
 	// Backup active config.
-	saveActiveConfig(log, cfg)
+	config.SaveActiveConfig(log, cfg)
 
 	if cfg.HelperLogFile != "" {
 		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cfg.HelperLogFile); err != nil {
 			return errors.Wrap(err, "unable to configure privileged helper logging")
 		}
 	}
+
+	if cfg.FWHelperLogFile != "" {
+		if err := os.Setenv(pbin.DaosFWLogFileEnvVar, cfg.FWHelperLogFile); err != nil {
+			return errors.Wrap(err, "unable to configure privileged firmware helper logging")
+		}
+	}
+
+	faultDomain, err := getFaultDomain(cfg)
+	if err != nil {
+		return err
+	}
+	log.Debugf("fault domain: %s", faultDomain.String())
 
 	// Create the root context here. All contexts should
 	// inherit from this one so that they can be shut down
@@ -122,18 +145,35 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return errors.Wrap(err, "unable to lookup current user")
 	}
 
+	iommuDisabled := !iommuDetected()
 	// Perform an automatic prepare based on the values in the config file.
 	prepReq := bdev.PrepareRequest{
 		// Default to minimum necessary for scan to work correctly.
 		HugePageCount: minHugePageCount,
 		TargetUser:    runningUser.Username,
-		PCIWhitelist:  strings.Join(cfg.BdevInclude, ","),
+		PCIWhitelist:  strings.Join(cfg.BdevInclude, " "),
+		PCIBlacklist:  strings.Join(cfg.BdevExclude, " "),
+		DisableVFIO:   cfg.DisableVFIO,
+		DisableVMD:    cfg.DisableVMD || cfg.DisableVFIO || iommuDisabled,
+		// TODO: pass vmd include/white list
 	}
 
 	if cfgHasBdev(cfg) {
 		// The config value is intended to be per-ioserver, so we need to adjust
 		// based on the number of ioservers.
 		prepReq.HugePageCount = cfg.NrHugepages * len(cfg.Servers)
+
+		// Perform these checks to avoid even trying a prepare if the system
+		// isn't configured properly.
+		if runningUser.Uid != "0" {
+			if cfg.DisableVFIO {
+				return FaultVfioDisabled
+			}
+
+			if iommuDisabled {
+				return FaultIommuDisabled
+			}
+		}
 	}
 
 	log.Debugf("automatic NVMe prepare req: %+v", prepReq)
@@ -146,33 +186,72 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return errors.Wrap(err, "unable to read system hugepage info")
 	}
 
-	// Don't bother with these checks if there aren't any block devices configured.
 	if cfgHasBdev(cfg) {
+		// Double-check that we got the requested number of huge pages after prepare.
 		if hugePages.Free < prepReq.HugePageCount {
 			return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
 		}
+	}
 
-		if runningUser.Uid != "0" && !iommuDetected() {
-			return FaultIommuDisabled
+	var dbReplicas []*net.TCPAddr
+	for _, ap := range cfg.AccessPoints {
+		apAddr, err := net.ResolveTCPAddr("tcp", ap)
+		if err != nil {
+			return config.FaultConfigBadAccessPoints
 		}
+		dbReplicas = append(dbReplicas, apAddr)
 	}
 
 	// If this daos_server instance ends up being the MS leader,
 	// this will record the DAOS system membership.
-	membership := system.NewMembership(log)
+	sysdb, err := system.NewDatabase(log, &system.DatabaseConfig{
+		Replicas:   dbReplicas,
+		RaftDir:    raftDir(cfg),
+		SystemName: cfg.SystemName,
+	})
+	if err != nil {
+		return errors.Wrap(err, "failed to create system database")
+	}
+	membership := system.NewMembership(log, sysdb)
 	scmProvider := scm.DefaultProvider(log)
-	harness := NewIOServerHarness(log)
-	for i, srvCfg := range cfg.Servers {
-		if i+1 > maxIOServers {
-			break
-		}
+	harness := NewIOServerHarness(log).WithFaultDomain(faultDomain)
+	mgmtSvc := newMgmtSvc(harness, membership, sysdb)
+	var netDevClass uint32
 
+	// Create rpcClient for inter-server communication.
+	cliCfg := control.DefaultConfig()
+	cliCfg.TransportConfig = cfg.TransportConfig
+	rpcClient := control.NewClient(
+		control.WithConfig(cliCfg),
+		control.WithClientLogger(log))
+
+	netCtx, err := netdetect.Init(context.Background())
+	if err != nil {
+		return err
+	}
+	defer netdetect.CleanUp(netCtx)
+
+	// On a NUMA-aware system, emit a message when the configuration
+	// may be sub-optimal.
+	numaCount := netdetect.NumNumaNodes(netCtx)
+	if numaCount > 0 && len(cfg.Servers) > numaCount {
+		log.Infof("NOTICE: Detected %d NUMA node(s); %d-server config may not perform as expected", numaCount, len(cfg.Servers))
+	}
+
+	// Create a closure to be used for joining ioserver instances.
+	joinInstance := func(ctx context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
+		req.SetHostList(cfg.AccessPoints)
+		req.ControlAddr = controlAddr
+		return control.SystemJoin(ctx, rpcClient, req)
+	}
+
+	for idx, srvCfg := range cfg.Servers {
 		// Provide special handling for the ofi+verbs provider.
 		// Mercury uses the interface name such as ib0, while OFI uses the device name such as hfi1_0
 		// CaRT and Mercury will now support the new OFI_DOMAIN environment variable so that we can
 		// specify the correct device for each.
 		if strings.HasPrefix(srvCfg.Fabric.Provider, "ofi+verbs") && !srvCfg.HasEnvVar("OFI_DOMAIN") {
-			deviceAlias, err := netdetect.GetDeviceAlias(srvCfg.Fabric.Interface)
+			deviceAlias, err := netdetect.GetDeviceAlias(netCtx, srvCfg.Fabric.Interface)
 			if err != nil {
 				return errors.Wrapf(err, "failed to resolve alias for %s", srvCfg.Fabric.Interface)
 			}
@@ -190,33 +269,63 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			srvCfg.Storage.Bdev.MemSize -= srvCfg.Storage.Bdev.MemSize / 16
 		}
 
-		// Each instance must have a unique shmid in order to run as SPDK primary.
-		// Use a stable identifier that's easy to construct elsewhere if we don't
-		// have access to the instance configuration.
-		srvCfg.Storage.Bdev.ShmID = instanceShmID(i)
+		// Indicate whether VMD devices have been detected and can be used.
+		srvCfg.Storage.Bdev.VmdDisabled = bdevProvider.IsVMDDisabled()
 
 		bp, err := bdev.NewClassProvider(log, srvCfg.Storage.SCM.MountPoint, &srvCfg.Storage.Bdev)
 		if err != nil {
 			return err
 		}
 
-		msClient := newMgmtSvcClient(ctx, log, mgmtSvcClientCfg{
-			AccessPoints:    cfg.AccessPoints,
-			ControlAddr:     controlAddr,
-			TransportConfig: cfg.TransportConfig,
-		})
-
-		srv := NewIOServerInstance(log, bp, scmProvider, msClient, ioserver.NewRunner(log, srvCfg))
+		srv := NewIOServerInstance(log, bp, scmProvider, joinInstance, ioserver.NewRunner(log, srvCfg)).
+			WithHostFaultDomain(faultDomain)
 		if err := harness.AddInstance(srv); err != nil {
 			return err
+		}
+
+		if idx == 0 {
+			netDevClass, err = cfg.GetDeviceClassFn(srvCfg.Fabric.Interface)
+			if err != nil {
+				return err
+			}
+
+			if !sysdb.IsReplica() {
+				continue
+			}
+
+			// Start the system db after instance 0's SCM is
+			// ready.
+			var once sync.Once
+			srv.OnStorageReady(func(ctx context.Context) (err error) {
+				once.Do(func() {
+					err = errors.Wrap(sysdb.Start(ctx),
+						"failed to start system db",
+					)
+				})
+				return
+			})
+
+			if !sysdb.IsBootstrap() {
+				continue
+			}
+
+			// For historical reasons, we reserve rank 0 for the first
+			// instance on the raft bootstrap server. This implies that
+			// rank 0 will always be associated with a MS replica, but
+			// it is not guaranteed to always be the leader.
+			srv.joinSystem = func(ctx context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
+				if sb := srv.getSuperblock(); !sb.ValidRank {
+					srv.log.Debug("marking bootstrap instance as rank 0")
+					req.Rank = 0
+					sb.Rank = system.NewRankPtr(0)
+				}
+				return joinInstance(ctx, req)
+			}
 		}
 	}
 
 	// Create and setup control service.
-	controlService, err := NewControlService(log, harness, bdevProvider, scmProvider, cfg, membership)
-	if err != nil {
-		return errors.Wrap(err, "init control service")
-	}
+	controlService := NewControlService(log, harness, bdevProvider, scmProvider, cfg, membership, sysdb, rpcClient)
 	if err := controlService.Setup(); err != nil {
 		return errors.Wrap(err, "setup control service")
 	}
@@ -230,16 +339,16 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	// Create new grpc server, register services and start serving.
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		unaryErrorInterceptor,
+		unaryStatusInterceptor,
 	}
 	streamInterceptors := []grpc.StreamServerInterceptor{
 		streamErrorInterceptor,
 	}
-	opts := []grpc.ServerOption{}
 	tcOpt, err := security.ServerOptionForTransportConfig(cfg.TransportConfig)
 	if err != nil {
 		return err
 	}
-	opts = append(opts, tcOpt)
+	srvOpts := []grpc.ServerOption{tcOpt}
 
 	uintOpt, err := unaryInterceptorForTransportConfig(cfg.TransportConfig)
 	if err != nil {
@@ -255,52 +364,54 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	if sintOpt != nil {
 		streamInterceptors = append(streamInterceptors, sintOpt)
 	}
-	opts = append(opts, []grpc.ServerOption{
+	srvOpts = append(srvOpts, []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(unaryInterceptors...),
 		grpc.ChainStreamInterceptor(streamInterceptors...),
 	}...)
 
-	grpcServer := grpc.NewServer(opts...)
+	grpcServer := grpc.NewServer(srvOpts...)
 	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
-	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness, membership))
+
+	mgmtSvc.clientNetworkCfg = &config.ClientNetworkCfg{
+		Provider:        cfg.Fabric.Provider,
+		CrtCtxShareAddr: cfg.Fabric.CrtCtxShareAddr,
+		CrtTimeout:      cfg.Fabric.CrtTimeout,
+		NetDevClass:     netDevClass,
+	}
+	mgmtpb.RegisterMgmtSvcServer(grpcServer, mgmtSvc)
+
+	tSec, err := security.DialOptionForTransportConfig(cfg.TransportConfig)
+	if err != nil {
+		return err
+	}
+	sysdb.ConfigureTransport(grpcServer, tSec)
+	sysdb.OnLeadershipGained(func(ctx context.Context) error {
+		log.Infof("MS leader running on %s", hostname())
+		mgmtSvc.startJoinLoop(ctx)
+		return nil
+	})
+	sysdb.OnLeadershipLost(func() error {
+		log.Infof("MS leader no longer running on %s", hostname())
+		return nil
+	})
 
 	go func() {
 		_ = grpcServer.Serve(lis)
 	}()
 	defer grpcServer.GracefulStop()
 
-	log.Infof("%s (pid %d) listening on %s", ControlPlaneName, os.Getpid(), controlAddr)
+	log.Infof("%s (pid %d) listening on %s", build.ControlPlaneName, os.Getpid(), controlAddr)
 
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	go func() {
-		var err error
+		// SIGKILL I/O servers immediately on exit.
+		// TODO: Re-enable attempted graceful shutdown of I/O servers.
 		sig := <-sigChan
 		log.Debugf("Caught signal: %s", sig)
 
-		defer func() {
-			if errors.Cause(err) == context.DeadlineExceeded {
-				log.Debug("resorting to kill signal")
-			}
-			shutdown() // Kill I/O servers if running after graceful shutdown.
-		}()
-
-		stopCtx, cancel := context.WithTimeout(ctx, ioserverShutdownTimeout)
-		defer cancel()
-
-		// Attampt graceful shutdown of I/O servers.
-		if _, err = harness.StopInstances(stopCtx, sig); err != nil {
-			log.Error(errors.Wrap(err, "graceful shutdown").Error())
-		}
+		shutdown()
 	}()
 
-	if err := harness.AwaitStorageReady(ctx, cfg.RecreateSuperblocks); err != nil {
-		return err
-	}
-
-	if err := harness.CreateSuperblocks(cfg.RecreateSuperblocks); err != nil {
-		return err
-	}
-
-	return errors.Wrapf(harness.Start(ctx, membership, cfg), "%s exited with error", DataPlaneName)
+	return errors.Wrapf(harness.Start(ctx, membership, sysdb, cfg), "%s exited with error", build.DataPlaneName)
 }

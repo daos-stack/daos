@@ -22,13 +22,6 @@
 //
 package mgmt
 
-import (
-	"errors"
-
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
-	"github.com/daos-stack/daos/src/control/system"
-)
-
 // SetPropertyName sets the Property field to a string-based name.
 func (r *PoolSetPropReq) SetPropertyName(name string) {
 	r.Property = &PoolSetPropReq_Name{
@@ -57,23 +50,55 @@ func (r *PoolSetPropReq) SetValueNumber(numVal uint64) {
 	}
 }
 
-// SetSystemRanks is a convenience method to convert a slice of
-// system ranks to a slice of uint32 ranks for this request.
-func (m *RanksReq) SetSystemRanks(sysRanks []system.Rank) error {
-	if m == nil {
-		return errors.New("nil request")
-	}
-	return convert.Types(sysRanks, &m.Ranks)
+// The following set of addons implements the poolServiceReq interface
+// in mgmt_pool.go.
+
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *PoolSetPropReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
 }
 
-// GetSystemRanks is a convenience method to convert this request's
-// slice of uint32 ranks to a slice of system ranks.
-func (m *RanksReq) GetSystemRanks() []system.Rank {
-	if m != nil {
-		var sysRanks []system.Rank
-		if err := convert.Types(m.GetRanks(), &sysRanks); err == nil {
-			return sysRanks
-		}
-	}
-	return nil
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *PoolEvictReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}
+
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *PoolExcludeReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}
+
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *PoolDrainReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}
+
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *PoolReintegrateReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}
+
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *PoolExtendReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}
+
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *PoolQueryReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}
+
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *GetACLReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}
+
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *ModifyACLReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}
+
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *DeleteACLReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
 }

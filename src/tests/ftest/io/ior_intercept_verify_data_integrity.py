@@ -36,14 +36,6 @@ class IorInterceptVerifyDataIntegrity(IorTestBase):
     :avocado: recursive
     """
 
-    def setUp(self):
-        """Set up each test case."""
-        super(IorInterceptVerifyDataIntegrity, self).setUp()
-        # Following line can be removed once the constraint in the
-        # IorTestBase is resolved. #DAOS-3320
-        self.hostlist_clients = self.params.get(
-            "test_clients", "/run/hosts/*")
-
     def test_ior_intercept_verify_data(self):
         """Jira ID: DAOS-3502.
 

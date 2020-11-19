@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,9 +56,29 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	oh->doh_dfs = ie->ie_dfs->dfs_ns;
 	oh->doh_ie = ie;
 
-	if (fi->direct_io)
-		fi_out.direct_io = 1;
+	if (fs_handle->dpi_info->di_direct_io) {
+		if (ie->ie_dfs->dfs_attr_timeout == 0) {
+			fi_out.direct_io = 1;
+		} else {
+			if (fi->flags & O_DIRECT)
+				fi_out.direct_io = 1;
+		}
+	}
+
 	fi_out.fh = (uint64_t)oh;
+
+	LOG_FLAGS(ie, fi->flags);
+
+	/*
+	 * dfs_dup() just locally duplicates the file handle. If we have
+	 * O_TRUNC flag, we need to truncate the file manually.
+	 */
+	if (fi->flags & O_TRUNC) {
+		rc = dfs_punch(ie->ie_dfs->dfs_ns, ie->ie_obj, 0,
+			       DFS_MAX_FSIZE);
+		if (rc)
+			D_GOTO(err, rc);
+	}
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	DFUSE_REPLY_OPEN(oh, req, &fi_out);

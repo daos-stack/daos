@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,6 +32,15 @@ import (
 
 func makeStringRef(in string) *string {
 	return &in
+}
+
+func makeTestList(t *testing.T, in string) *hostlist.HostList {
+	t.Helper()
+	hl, err := hostlist.Create(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return hl
 }
 
 func TestHostList_Create(t *testing.T) {
@@ -138,9 +147,16 @@ func TestHostList_Create(t *testing.T) {
 			startList: "node[0-1",
 			expErr:    errors.New("invalid range"),
 		},
+		"no hostname": {
+			startList: "[0-1,3-5]",
+			expErr:    errors.New("invalid range"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			hl, gotErr := hostlist.Create(tc.startList)
+			if gotErr != nil {
+				t.Log(gotErr.Error())
+			}
 			cmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
@@ -224,6 +240,84 @@ func TestHostList_Push(t *testing.T) {
 			if gotCount != tc.expUniqCount {
 				t.Fatalf("expected count to be %d; got %d", tc.expUniqCount, gotCount)
 			}
+		})
+	}
+}
+
+func TestHostList_PushList(t *testing.T) {
+	for name, tc := range map[string]struct {
+		startList string
+		pushList  *hostlist.HostList
+		expOut    string
+	}{
+		"nil other": {
+			startList: "node[2-5]",
+			expOut:    "node[2-5]",
+		},
+		"empty start": {
+			startList: "",
+			pushList:  makeTestList(t, "node5,node6,node12,node[1-2]"),
+			expOut:    "node[1-2,5-6,12]",
+		},
+		"empty other": {
+			startList: "node[2-5]",
+			pushList:  makeTestList(t, ""),
+			expOut:    "node[2-5]",
+		},
+		"success": {
+			startList: "node[2-5]",
+			pushList:  makeTestList(t, "node5,node6,node12,node[1-2]"),
+			expOut:    "node[1-6,12]",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			hl, err := hostlist.Create(tc.startList)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			hl.PushList(tc.pushList)
+			hl.Uniq()
+			cmpOut(t, tc.expOut, hl.String())
+		})
+	}
+}
+
+func TestHostList_ReplaceList(t *testing.T) {
+	for name, tc := range map[string]struct {
+		startList string
+		pushList  *hostlist.HostList
+		expOut    string
+	}{
+		"nil other": {
+			startList: "node[2-5]",
+			expOut:    "node[2-5]",
+		},
+		"empty start": {
+			startList: "",
+			pushList:  makeTestList(t, "node5,node6,node12,node[1-2]"),
+			expOut:    "node[1-2,5-6,12]",
+		},
+		"empty other": {
+			startList: "node[2-5]",
+			pushList:  makeTestList(t, ""),
+			expOut:    "",
+		},
+		"success": {
+			startList: "node[2-5]",
+			pushList:  makeTestList(t, "node5,node6,node12,node[1-2]"),
+			expOut:    "node[1-2,5-6,12]",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			hl, err := hostlist.Create(tc.startList)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			hl.ReplaceList(tc.pushList)
+			hl.Uniq()
+			cmpOut(t, tc.expOut, hl.String())
 		})
 	}
 }

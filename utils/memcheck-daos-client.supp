@@ -13,6 +13,23 @@
    fun:clone
 }
 {
+   uninit-1
+   Memcheck:Param
+   socketcall.sendto(msg)
+   ...
+   fun:send
+   ...
+   fun:sock_comm_send_socket.isra.4
+   fun:sock_comm_flush
+   fun:sock_pe_progress_tx_send
+   fun:sock_pe_progress_tx_entry
+   fun:sock_pe_new_tx_entry
+   fun:sock_pe_progress_tx_ctx
+   fun:sock_pe_progress_thread
+   fun:start_thread
+   fun:clone
+}
+{
    cont-open-leak
    Memcheck:Leak
    match-leak-kinds: definite

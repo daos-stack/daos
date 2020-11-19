@@ -54,6 +54,10 @@ vos_tree_get_overhead(int alloc_overhead, enum VOS_TREE_CLASS tclass,
 		tree_order = VOS_SVT_ORDER;
 		btr_class = VOS_BTR_SINGV;
 		break;
+	case VOS_TC_VEA:
+		tree_order = VEA_TREE_ODR;
+		btr_class = DBTREE_CLASS_IV;
+		break;
 	default:
 		D_ASSERT(0);
 		break;

@@ -1,0 +1,17 @@
+daos (1.1.1-6) unstable; urgency=medium
+  [ Mohamad Chaarawi ]
+  * Add dfs_test
+
+ -- Mohamad Chaarawi <mohamad.chaarawi@intel.com>
+
+daos (1.1.1-5) unstable; urgency=medium
+  [ Jonathan Martinez Montes ]
+  * Restore obj_ctl utility
+
+ -- Jonathan Martinez Montes <jonathan.martinez.montes@intel.com>  Fri, 30 Oct 2020 08:44:57 -0600
+
+daos (1.1.1-4) unstable; urgency=medium
+  [ Brian J. Murrell ]
+   * 1.1.1-4 version of DAOS
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Mon, 26 Oct 2020 12:43:49 -0400

@@ -30,13 +30,19 @@
 #ifndef __VOS_TS__
 #define __VOS_TS__
 
+#include <daos/dtx.h>
+#include <lru_array.h>
 #include <vos_tls.h>
 
+struct vos_ts_table;
+
 struct vos_ts_info {
-	/** Least recently accessed index */
-	uint32_t		ti_lru;
-	/** Most recently accessed index */
-	uint32_t		ti_mru;
+	/** The LRU array */
+	struct lru_array	*ti_array;
+	/** Back pointer to table */
+	struct vos_ts_table	*ti_table;
+	/** Miss indexes for the type */
+	uint32_t		*ti_misses;
 	/** Type identifier */
 	uint32_t		ti_type;
 	/** mask for hash of negative entries */
@@ -45,36 +51,53 @@ struct vos_ts_info {
 	uint32_t		ti_count;
 };
 
+struct vos_ts_pair {
+	/** Low read time or read time for the object/key */
+	daos_epoch_t	tp_ts_rl;
+	/** High read time or read time for the object/key */
+	daos_epoch_t	tp_ts_rh;
+	/** Low read tx */
+	struct dtx_id	tp_tx_rl;
+	/** High read tx */
+	struct dtx_id	tp_tx_rh;
+};
+
 struct vos_ts_entry {
 	struct vos_ts_info	*te_info;
-	/** Uniquely identifies the record */
-	void			*te_record_ptr;
+	/** Key for current occupant */
+	uint32_t		*te_record_ptr;
 	/** Uniquely identifies the parent record */
 	uint32_t		*te_parent_ptr;
 	/** negative entry cache */
 	uint32_t		*te_miss_idx;
-	/** Low read time or read time for the object/key */
-	daos_epoch_t		 te_ts_rl;
-	/** Max read time for subtrees */
-	daos_epoch_t		 te_ts_rh;
-	/** Write time */
-	daos_epoch_t		 te_ts_w;
-	/** uuid's of transactions.  These can potentially be changed
-	 *  to 16 bits and save some space here.  But for now, stick
-	 *  with the full id.
-	 */
-	/** Low read tx */
-	uuid_t			 te_tx_rl;
-	/** high read tx */
-	uuid_t			 te_tx_rh;
-	/** write tx */
-	uuid_t			 te_tx_w;
-	/** Next most recently used */
-	uint32_t		 te_next_idx;
-	/** Previous most recently used */
-	uint32_t		 te_prev_idx;
+	/** The timestamps for the entry */
+	struct vos_ts_pair	 te_ts;
 	/** Hash index in parent */
 	uint32_t		 te_hash_idx;
+};
+
+/** Check/update flags for a ts set entry */
+enum {
+	/** Mark operation as CONT read */
+	VOS_TS_READ_CONT	= (1 << 0),
+	/** Mark operation as OBJ read */
+	VOS_TS_READ_OBJ		= (1 << 1),
+	/** Mark operation as DKEY read */
+	VOS_TS_READ_DKEY	= (1 << 2),
+	/** Mark operation as AKEY read */
+	VOS_TS_READ_AKEY	= (1 << 3),
+	/** Read mask */
+	VOS_TS_READ_MASK	= (VOS_TS_READ_CONT | VOS_TS_READ_OBJ |
+				   VOS_TS_READ_DKEY | VOS_TS_READ_AKEY),
+	/** Mark operation as OBJ write */
+	VOS_TS_WRITE_OBJ	= (1 << 4),
+	/** Mark operation as DKEY write */
+	VOS_TS_WRITE_DKEY	= (1 << 5),
+	/** Mark operation as AKEY write */
+	VOS_TS_WRITE_AKEY	= (1 << 6),
+	/** Write mask */
+	VOS_TS_WRITE_MASK	= (VOS_TS_WRITE_DKEY | VOS_TS_WRITE_AKEY |
+				   VOS_TS_WRITE_OBJ),
 };
 
 struct vos_ts_set_entry {
@@ -84,12 +107,28 @@ struct vos_ts_set_entry {
 	uint32_t		*se_create_idx;
 	/** Cache of calculated hash for obj/key */
 	uint64_t		 se_hash;
+	/** The expected type of this entry. */
+	uint32_t		 se_etype;
 };
 
 /** Structure looking up and caching operation flags */
 struct vos_ts_set {
 	/** Operation flags */
 	uint64_t		 ts_flags;
+	/** type of next entry */
+	uint32_t		 ts_etype;
+	/** true if inside a transaction */
+	bool			 ts_in_tx;
+	/** The Check/update flags for the set */
+	uint16_t		 ts_cflags;
+	/** Write level for the set */
+	uint16_t		 ts_wr_level;
+	/** Read level for the set */
+	uint16_t		 ts_rd_level;
+	/** Max type */
+	uint16_t		 ts_max_type;
+	/** Transaction that owns the set */
+	struct dtx_id		 ts_tx_id;
 	/** size of the set */
 	uint32_t		 ts_set_size;
 	/** Number of initialized entries */
@@ -98,105 +137,43 @@ struct vos_ts_set {
 	struct vos_ts_set_entry	 ts_entries[0];
 };
 
-/** Table will be per xstream */
-#define VOS_TS_BITS	23
-#define VOS_TS_SIZE	(1 << VOS_TS_BITS)
-#define VOS_TS_MASK	(VOS_TS_SIZE - 1)
-
-/** Timestamp types */
+/** Timestamp types (should all be powers of 2) */
 #define D_FOREACH_TS_TYPE(ACTION)					\
-	ACTION(VOS_TS_TYPE_CONT, "container", 1024,       32 * 1024)	\
-	ACTION(VOS_TS_TYPE_OBJ,  "object",    96 * 1024,  128 * 1024)	\
-	ACTION(VOS_TS_TYPE_DKEY, "dkey",      896 * 1024, 1024 * 1024)	\
-	ACTION(VOS_TS_TYPE_AKEY, "akey",      0,          0)		\
+	ACTION(VOS_TS_TYPE_CONT,	"container",	1024)		\
+	ACTION(VOS_TS_TYPE_OBJ_MISS,	"object miss",	16 * 1024)	\
+	ACTION(VOS_TS_TYPE_OBJ,		"object",	32 * 1024)	\
+	ACTION(VOS_TS_TYPE_DKEY_MISS,	"dkey miss",	64 * 1024)	\
+	ACTION(VOS_TS_TYPE_DKEY,	"dkey",		128 * 1024)	\
+	ACTION(VOS_TS_TYPE_AKEY_MISS,	"akey miss",	256 * 1024)	\
+	ACTION(VOS_TS_TYPE_AKEY,	"akey",		512 * 1024)
 
-#define DEFINE_TS_TYPE(type, desc, count, child_count)	type, type##_CHILD,
+#define DEFINE_TS_TYPE(type, desc, count)	type,
 
 enum {
 	D_FOREACH_TS_TYPE(DEFINE_TS_TYPE)
 	/** Number of timestamp types */
-	VOS_TS_TYPE_COUNT = VOS_TS_TYPE_AKEY_CHILD,
+	VOS_TS_TYPE_COUNT,
 };
+
+/** Each level in set has two potential types of entries, for positive and
+ *  negative entries (e.g. VOS_TS_TYPE_OBJ and VOS_TS_TYPE_OBJ_MISS)
+ */
+#define VOS_TS_PER_LEVEL	2
 
 struct vos_ts_table {
 	/** Global read low timestamp for type */
 	daos_epoch_t		tt_ts_rl;
 	/** Global read high timestamp for type */
 	daos_epoch_t		tt_ts_rh;
-	/** Global write timestamp for type */
-	daos_epoch_t		tt_ts_w;
+	/** Transaciton id associated with global read low timestamp */
+	struct dtx_id		tt_tx_rl;
+	/** Transaciton id associated with global read high timestamp */
+	struct dtx_id		tt_tx_rh;
+	/** Miss index table */
+	uint32_t		*tt_misses;
 	/** Timestamp table pointers for a type */
 	struct vos_ts_info	tt_type_info[VOS_TS_TYPE_COUNT];
-	/** The table entries */
-	struct vos_ts_entry	tt_table[VOS_TS_SIZE];
 };
-
-/** Internal API: Evict the LRU, move it to MRU, update relevant time stamps,
- *  and return the index
- */
-void
-vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *parent,
-		 struct vos_ts_entry **entryp, uint32_t *idx, uint32_t hash_idx,
-		 uint32_t type);
-
-/** Internal API: Evict selected entry from the cache, update global
- *  timestamps
- */
-void
-vos_ts_evict_entry(struct vos_ts_table *ts_table, struct vos_ts_entry *entry,
-		   uint32_t idx);
-
-/** Internal API: Remove an entry from the lru list */
-static inline void
-remove_ts_entry(struct vos_ts_entry *entries, struct vos_ts_entry *entry)
-{
-	struct vos_ts_entry	*prev = &entries[entry->te_prev_idx];
-	struct vos_ts_entry	*next = &entries[entry->te_next_idx];
-
-	prev->te_next_idx = entry->te_next_idx;
-	next->te_prev_idx = entry->te_prev_idx;
-}
-
-/** Internal API: Insert an entry in the lru list */
-static inline void
-insert_ts_entry(struct vos_ts_entry *entries, struct vos_ts_entry *entry,
-		uint32_t idx, uint32_t prev_idx, uint32_t next_idx)
-{
-	struct vos_ts_entry	*prev;
-	struct vos_ts_entry	*next;
-
-	prev = &entries[prev_idx];
-	next = &entries[next_idx];
-	next->te_prev_idx = idx;
-	prev->te_next_idx = idx;
-	entry->te_prev_idx = prev_idx;
-	entry->te_next_idx = next_idx;
-}
-
-/** Internal API: Make the entry the mru */
-static inline void
-move_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *entry,
-	 uint32_t idx)
-{
-	struct vos_ts_info	*info = entry->te_info;
-
-	if (info->ti_mru == idx) {
-		/** Already the mru */
-		return;
-	}
-
-	if (info->ti_lru == idx)
-		info->ti_lru = entry->te_next_idx;
-
-	/** First remove */
-	remove_ts_entry(&ts_table->tt_table[0], entry);
-
-	/** Now add */
-	insert_ts_entry(&ts_table->tt_table[0], entry, idx, info->ti_mru,
-			info->ti_lru);
-
-	info->ti_mru = idx;
-}
 
 /** Internal API: Grab the parent entry from the set */
 static inline struct vos_ts_entry *
@@ -209,7 +186,8 @@ ts_set_get_parent(struct vos_ts_set *ts_set)
 	D_ASSERT(ts_set->ts_set_size != ts_set->ts_init_count);
 	if (ts_set->ts_init_count > 0) {
 		/** 2 is dkey index in case there are multiple akeys */
-		parent_set_idx = MIN(ts_set->ts_init_count - 1, 2);
+		parent_set_idx = MIN(ts_set->ts_init_count - 1,
+				     VOS_TS_TYPE_DKEY / VOS_TS_PER_LEVEL);
 		set_entry = &ts_set->ts_entries[parent_set_idx];
 		parent = set_entry->se_entry;
 	}
@@ -218,73 +196,53 @@ ts_set_get_parent(struct vos_ts_set *ts_set)
 
 }
 
-/** Internal API to lookup entry from index */
-static inline struct vos_ts_entry *
-vos_ts_lookup_idx(struct vos_ts_table *ts_table, uint32_t *idx)
+/** Returns true of we are inside a transaction and the
+ *  timestamp set is valid.
+ *
+ * \param[in]	ts_set	The timestamp set
+ */
+static inline bool
+vos_ts_in_tx(const struct vos_ts_set *ts_set)
 {
-	struct vos_ts_entry	*entry;
-	uint32_t		 tindex = *idx & VOS_TS_MASK;
+	if (ts_set == NULL || !ts_set->ts_in_tx)
+		return false;
 
-	entry = &ts_table->tt_table[tindex];
-	if (entry->te_record_ptr == idx) {
-		move_lru(ts_table, entry, tindex);
-		return entry;
-	}
-
-	return NULL;
+	return true;
 }
 
 /** Reset the index in the set so an entry can be replaced
  *
- * \param	ts_set[in]	The timestamp set
- * \param	type[in]	Type of entry
- * \param	akey_idx[in]	Set to 0 if not akey, otherwise idx of akey
+ * \param[in]	ts_set		The timestamp set
+ * \param[in]	type		Type of entry
+ * \param[in]	akey_idx	Set to 0 if not akey, otherwise idx of akey
  */
 static inline void
 vos_ts_set_reset(struct vos_ts_set *ts_set, uint32_t type, uint32_t akey_nr)
 {
 	uint32_t	idx;
 
-	if (ts_set == NULL)
+	if (!vos_ts_in_tx(ts_set))
 		return;
 
 	D_ASSERT((type == VOS_TS_TYPE_AKEY) || (akey_nr == 0));
 	D_ASSERT((type & 1) == 0);
-	idx = type / 2 + akey_nr;
+	idx = type / VOS_TS_PER_LEVEL + akey_nr;
 	D_ASSERT(idx <= ts_set->ts_init_count);
 	ts_set->ts_init_count = idx;
 }
 
-/** Lookup an entry in the timestamp cache and save it to the set.
- *
- * \param	ts_set[in]	The timestamp set
- * \param	idx[in,out]	Address of the entry index.
- * \param	reset[in]	Remove the last entry in the set before checking
- * \param	entryp[in,out]	Valid only if function returns true.  Will be
- *				NULL if ts_set is NULL.
- *
- * \return true if the timestamp set is NULL or the entry is found in cache
- */
 static inline bool
-vos_ts_lookup(struct vos_ts_set *ts_set, uint32_t *idx, bool reset,
-	      struct vos_ts_entry **entryp)
+vos_ts_lookup_internal(struct vos_ts_set *ts_set, uint32_t type, uint32_t *idx,
+		       struct vos_ts_entry **entryp)
 {
 	struct vos_ts_table	*ts_table = vos_ts_table_get();
-	struct vos_ts_entry	*entry;
+	struct vos_ts_info	*info = &ts_table->tt_type_info[type];
+	void			*entry;
 	struct vos_ts_set_entry	 set_entry = {0};
+	bool found;
 
-	*entryp = NULL;
-
-	if (ts_set == NULL)
-		return true;
-
-	if (reset)
-		ts_set->ts_init_count--;
-
-	ts_table = vos_ts_table_get();
-
-	entry = vos_ts_lookup_idx(ts_table, idx);
-	if (entry != NULL) {
+	found = lrua_lookup(info->ti_array, idx, &entry);
+	if (found) {
 		D_ASSERT(ts_set->ts_set_size != ts_set->ts_init_count);
 		set_entry.se_entry = entry;
 		ts_set->ts_entries[ts_set->ts_init_count++] = set_entry;
@@ -295,12 +253,47 @@ vos_ts_lookup(struct vos_ts_set *ts_set, uint32_t *idx, bool reset,
 	return false;
 }
 
+/** Lookup an entry in the timestamp cache and save it to the set.
+ *
+ * \param[in]		ts_set	The timestamp set
+ * \param[in,out]	idx	Address of the entry index.
+ * \param[in]		reset	Remove the last entry in the set before checking
+ * \param[in]		entryp	Valid only if function returns true.  Will be
+ *				NULL if ts_set is NULL.
+ *
+ * \return true if the timestamp set is NULL or the entry is found in cache
+ */
+static inline bool
+vos_ts_lookup(struct vos_ts_set *ts_set, uint32_t *idx, bool reset,
+	      struct vos_ts_entry **entryp)
+{
+	uint32_t		 type;
+
+	*entryp = NULL;
+
+	if (!vos_ts_in_tx(ts_set))
+		return true;
+
+	if (reset)
+		ts_set->ts_init_count--;
+
+	type = MIN(ts_set->ts_init_count * VOS_TS_PER_LEVEL, VOS_TS_TYPE_AKEY);
+
+	return vos_ts_lookup_internal(ts_set, type, idx, entryp);
+}
+
+/** Internal function to evict LRU and initialize an entry */
+void
+vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *parent,
+		 struct vos_ts_entry **new_entry, uint32_t *idx,
+		 uint32_t hash_idx, uint32_t new_type);
+
 /** Allocate a new entry in the set.   Lookup should be called first and this
  * should only be called if it returns false.
  *
- * \param	ts_set[in]	The timestamp set
- * \param	idx[in,out]	Address of the entry index.
- * \param	hash[in]	Hash to identify the item
+ * \param[in]	ts_set	The timestamp set
+ * \param[in]	idx	Address of the entry index.
+ * \param[in]	hash	Hash to identify the item
  *
  * \return	Returns a pointer to the entry or NULL if ts_set is not
  *		allocated or we detected a duplicate akey.
@@ -316,7 +309,7 @@ vos_ts_alloc(struct vos_ts_set *ts_set, uint32_t *idx, uint64_t hash)
 	uint32_t		 hash_idx;
 	uint32_t		 new_type = 0;
 
-	if (ts_set == NULL)
+	if (!vos_ts_in_tx(ts_set))
 		return NULL;
 
 	ts_table = vos_ts_table_get();
@@ -335,7 +328,7 @@ vos_ts_alloc(struct vos_ts_set *ts_set, uint32_t *idx, uint64_t hash)
 			return NULL;
 		}
 		hash_idx = hash & info->ti_cache_mask;
-		new_type = info->ti_type + 2;
+		new_type = info->ti_type + VOS_TS_PER_LEVEL;
 	}
 
 	D_ASSERT((info->ti_type & 1) == 0);
@@ -352,7 +345,7 @@ vos_ts_alloc(struct vos_ts_set *ts_set, uint32_t *idx, uint64_t hash)
 
 /** Get the last entry in the set
  *
- * \param	ts_set[in]	The timestamp set
+ * \param[in]	ts_set	The timestamp set
  *
  * \return Returns the last entry added to the set or NULL
  */
@@ -361,66 +354,20 @@ vos_ts_set_get_entry(struct vos_ts_set *ts_set)
 {
 	struct vos_ts_set_entry	*entry;
 
-	if (ts_set == NULL || ts_set->ts_init_count == 0)
+	if (!vos_ts_in_tx(ts_set) || ts_set->ts_init_count == 0)
 		return NULL;
 
 	entry = &ts_set->ts_entries[ts_set->ts_init_count - 1];
 	return entry->se_entry;
-}
-
-/** Get the specified entry in the set
- *
- * \param	ts_set[in]	The timestamp set
- * \param	type[in]	The type of entry
- * \param	akey_idx[in]	0 or index of the akey
- *
- * \return Returns the last entry added to the set or NULL
- */
-static inline struct vos_ts_entry *
-vos_ts_set_get_entry_type(struct vos_ts_set *ts_set, uint32_t type,
-			  int akey_idx)
-{
-	struct vos_ts_set_entry	*entry;
-	uint32_t		 idx = (type / 2) + akey_idx;
-
-	D_ASSERT(akey_idx == 0 || type == VOS_TS_TYPE_AKEY);
-
-	if (ts_set == NULL || idx >= ts_set->ts_init_count)
-		return NULL;
-
-	entry = &ts_set->ts_entries[idx];
-	return entry->se_entry;
-}
-
-/** Set the index of the associated positive entry in the last entry
- *  in the set.
- *
- *  \param	ts_set[in]	The timestamp set
- *  \param	idx[in]		Pointer to the index that will be used
- *				when allocating the positive entry
- */
-static inline void
-vos_ts_set_mark_entry(struct vos_ts_set *ts_set, uint32_t *idx)
-{
-	struct vos_ts_set_entry	*entry;
-
-	if (ts_set == NULL || ts_set->ts_init_count == 0)
-		return;
-
-	entry = &ts_set->ts_entries[ts_set->ts_init_count - 1];
-
-	/** Should be a negative entry */
-	D_ASSERT(entry->se_entry->te_info->ti_type & 1);
-	entry->se_create_idx = idx;
 }
 
 /** When a subtree doesn't exist, we need a negative entry.  The entry in this
  *  case is identified by a hash.  This looks up the negative entry and
  *  allocates it if necessary.  Resets te_create_idx to NULL.
  *
- * \param	ts_set[in]	The timestamp set
- * \param	hash		The hash of the missing subtree entry
- * \param	reset[in]	Remove the last entry in the set before checking
+ * \param[in]	ts_set	The timestamp set
+ * \param[in]	hash	The hash of the missing subtree entry
+ * \param[in]	reset	Remove the last entry in the set before checking
  *
  * \return	The entry for negative lookups on the subtree
  */
@@ -434,7 +381,7 @@ vos_ts_get_negative(struct vos_ts_set *ts_set, uint64_t hash, bool reset)
 	struct vos_ts_set_entry	 set_entry = {0};
 	uint32_t		 idx;
 
-	if (ts_set == NULL)
+	if (!vos_ts_in_tx(ts_set))
 		return NULL;
 
 	if (reset)
@@ -443,8 +390,6 @@ vos_ts_get_negative(struct vos_ts_set *ts_set, uint64_t hash, bool reset)
 	parent = ts_set_get_parent(ts_set);
 
 	D_ASSERT(parent != NULL);
-
-	ts_table = vos_ts_table_get();
 
 	info = parent->te_info;
 	if (info->ti_type & 1) {
@@ -455,12 +400,18 @@ vos_ts_get_negative(struct vos_ts_set *ts_set, uint64_t hash, bool reset)
 		goto add_to_set;
 	}
 
+	ts_table = vos_ts_table_get();
+
 	idx = hash & info->ti_cache_mask;
-	if (vos_ts_lookup(ts_set, &parent->te_miss_idx[idx], false, &neg_entry))
+	if (vos_ts_lookup_internal(ts_set, info->ti_type + 1,
+				   &parent->te_miss_idx[idx], &neg_entry)) {
+		D_ASSERT(idx == neg_entry->te_hash_idx);
 		goto out;
+	}
 
 	vos_ts_evict_lru(ts_table, parent, &neg_entry,
 			 &parent->te_miss_idx[idx], idx, info->ti_type + 1);
+	D_ASSERT(idx == neg_entry->te_hash_idx);
 add_to_set:
 	set_entry.se_entry = neg_entry;
 	ts_set->ts_entries[ts_set->ts_init_count++] = set_entry;
@@ -470,33 +421,148 @@ out:
 	return neg_entry;
 }
 
+
+/** Set the type of the next entry.  This gets set automatically
+ *  by default in vos_ts_set_add to child type of entry being
+ *  inserted so only required when this isn't suitable
+ *
+ *  \param[in]	ts_set	The timestamp set
+ *  \param[in]	type	The type of the next insertion
+ */
+static inline void
+vos_ts_set_type(struct vos_ts_set *ts_set, uint32_t type)
+{
+	if (!vos_ts_in_tx(ts_set))
+		return;
+
+	ts_set->ts_etype = type;
+}
+
+static inline int
+vos_ts_set_add(struct vos_ts_set *ts_set, uint32_t *idx, const void *rec,
+	       size_t rec_size)
+{
+	struct vos_ts_set_entry	*se;
+	struct vos_ts_entry	*entry;
+	uint64_t		 hash = 0;
+	uint32_t		 expected_type;
+
+	if (!vos_ts_in_tx(ts_set))
+		return 0;
+
+	if (idx == NULL)
+		goto calc_hash;
+
+	if (ts_set->ts_flags & VOS_OF_PUNCH_PROPAGATE)
+		return 0; /* Set already populated */
+
+	if (ts_set->ts_init_count == ts_set->ts_set_size)
+		return -DER_BUSY; /** No more room in the set */
+
+	if (vos_ts_lookup(ts_set, idx, false, &entry)) {
+		expected_type = entry->te_info->ti_type;
+		D_ASSERT(expected_type == ts_set->ts_etype);
+		goto set_params;
+	}
+
+calc_hash:
+	if (ts_set->ts_etype > VOS_TS_TYPE_CONT)
+		hash = vos_hash_get(rec, rec_size);
+
+	if (idx != NULL) {
+		entry = vos_ts_alloc(ts_set, idx, hash);
+		if (entry == NULL)
+			return -DER_NO_PERM;
+		expected_type = entry->te_info->ti_type;
+		D_ASSERT(expected_type == ts_set->ts_etype);
+	} else {
+		entry = vos_ts_get_negative(ts_set, hash, false);
+		D_ASSERT(entry != NULL);
+		expected_type = entry->te_info->ti_type + 1;
+	}
+
+set_params:
+	D_ASSERT(ts_set->ts_init_count >= 1);
+	se = &ts_set->ts_entries[ts_set->ts_init_count - 1];
+	se->se_etype = ts_set->ts_etype;
+	if (se->se_etype > ts_set->ts_max_type)
+		ts_set->ts_max_type = se->se_etype;
+	if (expected_type != VOS_TS_TYPE_AKEY)
+		ts_set->ts_etype = expected_type + 2;
+	se->se_entry = entry;
+	se->se_hash = hash;
+	se->se_create_idx = NULL;
+
+	return 0;
+}
+
+/** Get the specified entry in the set
+ *
+ * \param[in]	ts_set		The timestamp set
+ * \param[in]	type		The type of entry
+ * \param[in]	akey_idx	0 or index of the akey
+ *
+ * \return Returns the last entry added to the set or NULL
+ */
+static inline struct vos_ts_entry *
+vos_ts_set_get_entry_type(struct vos_ts_set *ts_set, uint32_t type,
+			  int akey_idx)
+{
+	struct vos_ts_set_entry	*entry;
+	uint32_t		 idx = (type / 2) + akey_idx;
+
+	D_ASSERT(akey_idx == 0 || type == VOS_TS_TYPE_AKEY);
+
+	if (!vos_ts_in_tx(ts_set) || idx >= ts_set->ts_init_count)
+		return NULL;
+
+	entry = &ts_set->ts_entries[idx];
+	return entry->se_entry;
+}
+
+/** Set the index of the associated positive entry in the last entry
+ *  in the set.
+ *
+ *  \param[in]	ts_set	The timestamp set
+ *  \param[in]	idx	Pointer to the index that will be used
+ *			when allocating the positive entry
+ */
+static inline void
+vos_ts_set_mark_entry(struct vos_ts_set *ts_set, uint32_t *idx)
+{
+	struct vos_ts_set_entry	*entry;
+
+	if (!vos_ts_in_tx(ts_set) || *idx >= ts_set->ts_init_count)
+		return;
+
+	entry = &ts_set->ts_entries[ts_set->ts_init_count - 1];
+
+	/** Should be a negative entry */
+	D_ASSERT(entry->se_entry->te_info->ti_type & 1);
+	entry->se_create_idx = idx;
+}
+
 /** If an entry is still in the thread local timestamp cache, evict it and
  *  update global timestamps for the type.  Move the evicted entry to the LRU
  *  and mark it as already evicted.
  *
- * \param	idx[in]		Address of the entry index.
- * \param	type[in]	Type of the object
+ * \param[in]	idx	Address of the entry index.
+ * \param[in]	type	Type of the object
  */
 static inline void
-vos_ts_evict(uint32_t *idx)
+vos_ts_evict(uint32_t *idx, uint32_t type)
 {
 	struct vos_ts_table	*ts_table = vos_ts_table_get();
-	struct vos_ts_entry	*entry;
-	uint32_t		 tindex = *idx & VOS_TS_MASK;
 
-	entry = &ts_table->tt_table[tindex];
-	if (entry->te_record_ptr != idx)
-		return;
-
-	vos_ts_evict_entry(ts_table, entry, *idx);
+	lrua_evict(ts_table->tt_type_info[type].ti_array, idx);
 }
 
 /** Allocate thread local timestamp cache.   Set the initial global times
  *
- * \param	ts_table[in,out]	Thread local table pointer
+ * \param[in,out]	ts_table	Thread local table pointer
  *
- * \return	-DER_NOMEM	Not enough memory available
- *		0		Success
+ * \return		-DER_NOMEM	Not enough memory available
+ *			0		Success
  */
 int
 vos_ts_table_alloc(struct vos_ts_table **ts_table);
@@ -504,79 +570,37 @@ vos_ts_table_alloc(struct vos_ts_table **ts_table);
 
 /** Free the thread local timestamp cache and reset pointer to NULL
  *
- * \param	ts_table[in,out]	Thread local table pointer
+ * \param[in,out]	ts_table	Thread local table pointer
  */
 void
 vos_ts_table_free(struct vos_ts_table **ts_table);
 
-/** Update the low read timestamp, if applicable
- *
- *  \param	entry[in,out]	Entry to update
- *  \param	epoch[in]	Update epoch
- */
-static inline void
-vos_ts_update_read_low(struct vos_ts_entry *entry, daos_epoch_t epoch)
-{
-	if (entry == NULL)
-		return;
-	entry->te_ts_rl = MAX(entry->te_ts_rl, epoch);
-}
-
-/** Update the high read timestamp, if applicable
- *
- *  \param	entry[in,out]	Entry to update
- *  \param	epoch[in]	Update epoch
- */
-static inline void
-vos_ts_update_read_high(struct vos_ts_entry *entry, daos_epoch_t epoch)
-{
-	if (entry == NULL)
-		return;
-	entry->te_ts_rh = MAX(entry->te_ts_rh, epoch);
-}
-
-/** Update the write timestamp, if applicable
- *
- *  \param	entry[in,out]	Entry to update
- *  \param	epoch[in]	Update epoch
- */
-static inline void
-vos_ts_update_write(struct vos_ts_entry *entry, daos_epoch_t epoch,
-		    const uuid_t xid)
-{
-	if (entry == NULL)
-		return;
-
-	if (entry->te_ts_w >= epoch)
-		return;
-
-	entry->te_ts_w = epoch;
-	uuid_copy(entry->te_tx_w, xid);
-}
-
 /** Allocate a timestamp set
  *
- * \param	ts_set[in,out]	Pointer to set
- * \param	flags[in]	Operations flags
- * \param	akey_nr[in]	Number of akeys in operation
+ * \param[in,out]	ts_set	Pointer to set
+ * \param[in]		flags	Operations flags
+ * \param[in]		cflags	Check/update flags
+ * \param[in]		akey_nr	Number of akeys in operation
+ * \param[in]		tx_id	Optional transaction id
  *
  * \return	0 on success, error otherwise.
  */
 int
 vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
-		    uint32_t akey_nr);
+		    uint16_t cflags, uint32_t akey_nr,
+		    const struct dtx_id *tx_id);
 
 /** Upgrade any negative entries in the set now that the associated
  *  update/punch has committed
  *
- *  \param	ts_set[in]	Pointer to set
+ *  \param[in]	ts_set	Pointer to set
  */
 void
 vos_ts_set_upgrade(struct vos_ts_set *ts_set);
 
 /** Free an allocated timestamp set
  *
- * \param	ts_set[in]	Set to free
+ * \param[in]	ts_set	Set to free
  */
 static inline void
 vos_ts_set_free(struct vos_ts_set *ts_set)
@@ -584,50 +608,183 @@ vos_ts_set_free(struct vos_ts_set *ts_set)
 	D_FREE(ts_set);
 }
 
-/** Check the read low timestamp at current entry.
- *
- * \param	ts_set[in]	The timestamp set
- * \param	write_time[in]	The write time
- *
- * \return	true	Conflict
- *		false	No conflict (or no timestamp set)
- */
-static inline bool
-vos_ts_check_rl_conflict(struct vos_ts_set *ts_set, daos_epoch_t write_time)
+/** Internal API to copy timestamp */
+static inline void
+vos_ts_copy(daos_epoch_t *dest_epc, struct dtx_id *dest_id,
+	    daos_epoch_t src_epc, const struct dtx_id *src_id)
 {
-	struct vos_ts_entry	*entry;
-
-	entry = vos_ts_set_get_entry(ts_set);
-	if (entry == NULL || write_time > entry->te_ts_rl)
-		return false;
-
-	/** TODO: Need to eventually handle == case but it should not be an
-	 * issue without MVCC.
-	 */
-	return true;
+	*dest_epc = src_epc;
+	daos_dti_copy(dest_id, src_id);
 }
 
-/** Check the read high timestamp at current entry.
- *
- * \param	ts_set[in]	The timestamp set
- * \param	write_time[in]	The write time
- *
- * \return	true	Conflict
- *		false	No conflict (or no timestamp set)
- */
-static inline bool
-vos_ts_check_rh_conflict(struct vos_ts_set *ts_set, daos_epoch_t write_time)
+/** Internal API to update low read timestamp and tx id */
+static inline void
+vos_ts_rl_update(struct vos_ts_entry *entry, daos_epoch_t read_time,
+		 const struct dtx_id *tx_id)
 {
-	struct vos_ts_entry	*entry;
+	if (entry == NULL || read_time < entry->te_ts.tp_ts_rl)
+		return;
 
-	entry = vos_ts_set_get_entry(ts_set);
-	if (entry == NULL || write_time > entry->te_ts_rh)
-		return false;
-
-	/** TODO: Need to eventually handle == case but it should not be an
-	 * issue without MVCC.
-	 */
-	return true;
+	vos_ts_copy(&entry->te_ts.tp_ts_rl, &entry->te_ts.tp_tx_rl,
+		    read_time, tx_id);
 }
 
+/** Internal API to update high read timestamp and tx id */
+static inline void
+vos_ts_rh_update(struct vos_ts_entry *entry, daos_epoch_t read_time,
+		 const struct dtx_id *tx_id)
+{
+	if (entry == NULL || read_time < entry->te_ts.tp_ts_rh)
+		return;
+
+	vos_ts_copy(&entry->te_ts.tp_ts_rh, &entry->te_ts.tp_tx_rh,
+		    read_time, tx_id);
+}
+
+/** Internal API to check read conflict of a given entry */
+bool
+vos_ts_check_read_conflict(struct vos_ts_set *ts_set, int idx,
+			   daos_epoch_t write_time);
+
+/** Checks the set for read/write conflicts
+ *
+ * \param[in]	ts_set		The timestamp read set
+ * \param[in]	write_time	The time of the update
+ *
+ * \return	true		Conflict
+ *		false		No conflict (or no timestamp set)
+ */
+static inline int
+vos_ts_set_check_conflict(struct vos_ts_set *ts_set, daos_epoch_t write_time)
+{
+	int			 i;
+
+	if (!vos_ts_in_tx(ts_set))
+		return false;
+
+	if ((ts_set->ts_cflags & VOS_TS_WRITE_MASK) == 0)
+		return false;
+
+	for (i = 0; i < ts_set->ts_init_count; i++) {
+		/** Will check the appropriate read timestamp based on the type
+		 *  of the entry at index i.
+		 */
+		if (vos_ts_check_read_conflict(ts_set, i, write_time))
+			return true;
+	}
+
+	return false;
+}
+
+/** Append VOS_OF flags to timestamp set
+ *  \param[in] ts_set		The timestamp set
+ *  \param[in] flags		VOS_OF flag(s) to add to set
+ */
+static inline void
+vos_ts_set_append_vflags(struct vos_ts_set *ts_set, uint64_t flags)
+{
+	if (!vos_ts_in_tx(ts_set))
+		return;
+
+	ts_set->ts_flags |= flags;
+}
+
+/** Append check/update flags to timestamp set
+ *  \param[in] ts_set		The timestamp set
+ *  \param[in] flags		flags
+ */
+static inline void
+vos_ts_set_append_cflags(struct vos_ts_set *ts_set, uint16_t flags)
+{
+	if (!vos_ts_in_tx(ts_set))
+		return;
+
+	ts_set->ts_cflags |= flags;
+
+	if (ts_set->ts_cflags & VOS_TS_WRITE_OBJ)
+		ts_set->ts_wr_level = VOS_TS_TYPE_OBJ;
+	else if (ts_set->ts_cflags & VOS_TS_WRITE_DKEY)
+		ts_set->ts_wr_level = VOS_TS_TYPE_DKEY;
+	else if (ts_set->ts_cflags & VOS_TS_WRITE_AKEY)
+		ts_set->ts_wr_level = VOS_TS_TYPE_AKEY;
+
+	if (ts_set->ts_cflags & VOS_TS_READ_CONT)
+		ts_set->ts_rd_level = VOS_TS_TYPE_CONT;
+	else if (ts_set->ts_cflags & VOS_TS_READ_OBJ)
+		ts_set->ts_rd_level = VOS_TS_TYPE_OBJ;
+	else if (ts_set->ts_cflags & VOS_TS_READ_DKEY)
+		ts_set->ts_rd_level = VOS_TS_TYPE_DKEY;
+	else if (ts_set->ts_cflags & VOS_TS_READ_AKEY)
+		ts_set->ts_rd_level = VOS_TS_TYPE_AKEY;
+}
+
+/** Update the read timestamps for the set after a successful operation
+ *
+ *  \param[in]	ts_set		The timestamp set
+ *  \param[in]	read_time	The new read timestamp
+ */
+static inline void
+vos_ts_set_update(struct vos_ts_set *ts_set, daos_epoch_t read_time)
+{
+	struct vos_ts_set_entry	*se;
+	int			 i;
+	uint16_t		 read_level;
+
+	if (!vos_ts_in_tx(ts_set))
+		return;
+
+	if (DAOS_FAIL_CHECK(DAOS_DTX_NO_READ_TS))
+		return;
+
+	if ((ts_set->ts_cflags & VOS_TS_READ_MASK) == 0)
+		return;
+
+	if (ts_set->ts_max_type < ts_set->ts_rd_level)
+		read_level = ts_set->ts_max_type;
+	else
+		read_level = ts_set->ts_rd_level;
+
+	for (i = 0; i < ts_set->ts_init_count; i++) {
+		se = &ts_set->ts_entries[i];
+
+		if (se->se_etype > read_level)
+			continue; /** We would have updated the high
+				   *  timestamp at a higher level
+				   */
+
+		if (se->se_etype == read_level)
+			vos_ts_rl_update(se->se_entry, read_time,
+					 &ts_set->ts_tx_id);
+		vos_ts_rh_update(se->se_entry, read_time,
+				 &ts_set->ts_tx_id);
+	}
+}
+
+/** Save the current state of the set
+ *
+ * \param[in]	ts_set	The timestamp set
+ * \param[out]	save	Target to save state to
+ */
+static inline void
+vos_ts_set_save(struct vos_ts_set *ts_set, struct vos_ts_set *save)
+{
+	if (ts_set == NULL)
+		return;
+
+	*save = *ts_set;
+}
+
+/** Restore previously saved state of the set
+ *
+ * \param[in]	ts_set	The timestamp set
+ * \param[in]	restore	The saved state
+ */
+static inline void
+vos_ts_set_restore(struct vos_ts_set *ts_set, const struct vos_ts_set *restore)
+{
+	if (ts_set == NULL)
+		return;
+
+	*ts_set = *restore;
+}
 #endif /* __VOS_TS__ */

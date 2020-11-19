@@ -301,7 +301,7 @@ static struct option abt_ops[] = {
 	{ "num",	required_argument,	NULL,	'n'	},
 	/** test duration in seconds.  */
 	{ "sec",	required_argument,	NULL,	's'	},
-	/** stack szie (kilo-bytes) */
+	/** stack size (kilo-bytes) */
 	{ "stack",	required_argument,	NULL,	'S'	},
 };
 

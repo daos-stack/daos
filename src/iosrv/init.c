@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@
 #include <daos.h> /* for daos_init() */
 
 #define MAX_MODULE_OPTIONS	64
-#define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,pool,cont,dtx,obj,rebuild"
+#define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild"
 
 /** List of modules to load */
 static char		modules[MAX_MODULE_OPTIONS + 1];
@@ -161,15 +161,14 @@ register_dbtree_classes(void)
 }
 
 static int
-modules_load(uint64_t *facs)
+modules_load(void)
 {
 	char		*mod;
 	char		*sep;
 	char		*run;
-	uint64_t	 mod_facs;
 	int		 rc = 0;
 
-	sep = strdup(modules);
+	D_STRNDUP(sep, modules, MAX_MODULE_OPTIONS + 1);
 	if (sep == NULL)
 		return -DER_NOMEM;
 	run = sep;
@@ -188,16 +187,12 @@ modules_load(uint64_t *facs)
 		else if (strcmp(mod, "vos") == 0)
 			mod = "vos_srv";
 
-		mod_facs = 0;
-		rc = dss_module_load(mod, &mod_facs);
+		rc = dss_module_load(mod);
 		if (rc != 0) {
 			D_ERROR("Failed to load module %s: %d\n",
 				mod, rc);
 			break;
 		}
-
-		if (facs != NULL)
-			*facs |= mod_facs;
 
 		mod = strsep(&run, ",");
 	}
@@ -205,6 +200,7 @@ modules_load(uint64_t *facs)
 	D_FREE(sep);
 	return rc;
 }
+
 
 /**
  * Get the appropriate number of main XS based on the number of cores and
@@ -465,11 +461,15 @@ abt_fini(void)
 static int
 server_init(int argc, char *argv[])
 {
+	uint64_t	bound;
+	int64_t		diff;
 	unsigned int	ctx_nr;
 	char		hostname[256] = { 0 };
 	int		rc;
 
-	rc = daos_debug_init(NULL);
+	bound = crt_hlc_epsilon_get_bound(crt_hlc_get());
+
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
 		return rc;
 
@@ -492,6 +492,14 @@ server_init(int argc, char *argv[])
 		goto exit_abt_init;
 
 	D_INFO("Module interface successfully initialized\n");
+	/* load modules.  Split load an init so first call to dlopen
+	 * is from the ioserver to avoid DAOS-4557
+	 */
+	rc = modules_load();
+	if (rc)
+		/* Some modules may have been loaded successfully. */
+		D_GOTO(exit_mod_loaded, rc);
+	D_INFO("Module %s successfully loaded\n", modules);
 
 	/* initialize the network layer */
 	ctx_nr = dss_ctx_nr_get();
@@ -504,12 +512,12 @@ server_init(int argc, char *argv[])
 
 	ds_iv_init();
 
-	/* load modules */
-	rc = modules_load(&dss_mod_facs);
+	/* init modules */
+	rc = dss_module_init_all(&dss_mod_facs);
 	if (rc)
 		/* Some modules may have been loaded successfully. */
 		D_GOTO(exit_mod_loaded, rc);
-	D_INFO("Module %s successfully loaded\n", modules);
+	D_INFO("Module %s successfully initialized\n", modules);
 
 	/* initialize service */
 	rc = dss_srv_init();
@@ -561,6 +569,30 @@ server_init(int argc, char *argv[])
 	}
 
 	server_init_state_wait(DSS_INIT_STATE_SET_UP);
+
+	diff = bound - crt_hlc_get();
+	if (diff > 0) {
+		struct timespec		tv;
+
+		tv.tv_sec = diff / NSEC_PER_SEC;
+		tv.tv_nsec = diff % NSEC_PER_SEC;
+
+		/* XXX: If the server restart so quickly as to all related
+		 *	things are handled within HLC epsilon, then it is
+		 *	possible that current local HLC after restart may
+		 *	be older than some HLC that was generated before
+		 *	server restart because of the clock drift between
+		 *	servers. So here, we control the server (re)start
+		 *	process to guarantee that the restart time window
+		 *	will be longer than the HLC epsilon, then new HLC
+		 *	generated after server restart will not rollback.
+		 */
+		D_INFO("nanosleep %lu:%lu before open external service.\n",
+		       tv.tv_sec, tv.tv_nsec);
+		nanosleep(&tv, NULL);
+	}
+
+	dss_set_start_epoch();
 
 	rc = dss_module_setup_all();
 	if (rc != 0)
@@ -827,6 +859,11 @@ print_backtrace(int signo, siginfo_t *info, void *p)
 {
 	void	*bt[128];
 	int	 bt_size, i, rc;
+
+	/* since we mainly handle fatal signals here, flush the log to not
+	 * risk losing any debug traces
+	 */
+	d_log_sync();
 
 	fprintf(stderr, "*** Process %d received signal %d ***\n", getpid(),
 		signo);

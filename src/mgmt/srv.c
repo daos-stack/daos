@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,26 +88,29 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_SET_RANK:
 		ds_mgmt_drpc_set_rank(drpc_req, drpc_resp);
 		break;
-	case DRPC_METHOD_MGMT_CREATE_MS:
-		ds_mgmt_drpc_create_mgmt_svc(drpc_req, drpc_resp);
-		break;
-	case DRPC_METHOD_MGMT_START_MS:
-		ds_mgmt_drpc_start_mgmt_svc(drpc_req, drpc_resp);
-		break;
-	case DRPC_METHOD_MGMT_GET_ATTACH_INFO:
-		ds_mgmt_drpc_get_attach_info(drpc_req, drpc_resp);
-		break;
-	case DRPC_METHOD_MGMT_JOIN:
-		ds_mgmt_drpc_join(drpc_req, drpc_resp);
-		break;
 	case DRPC_METHOD_MGMT_POOL_CREATE:
 		ds_mgmt_drpc_pool_create(drpc_req, drpc_resp);
 		break;
 	case DRPC_METHOD_MGMT_POOL_DESTROY:
 		ds_mgmt_drpc_pool_destroy(drpc_req, drpc_resp);
 		break;
+	case DRPC_METHOD_MGMT_POOL_EVICT:
+		ds_mgmt_drpc_pool_evict(drpc_req, drpc_resp);
+		break;
 	case DRPC_METHOD_MGMT_SET_UP:
 		ds_mgmt_drpc_set_up(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_EXCLUDE:
+		ds_mgmt_drpc_pool_exclude(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_DRAIN:
+		ds_mgmt_drpc_pool_drain(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_REINTEGRATE:
+		ds_mgmt_drpc_pool_reintegrate(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_EXTEND:
+		ds_mgmt_drpc_pool_extend(drpc_req, drpc_resp);
 		break;
 	case DRPC_METHOD_MGMT_BIO_HEALTH_QUERY:
 		ds_mgmt_drpc_bio_health_query(drpc_req, drpc_resp);
@@ -124,11 +127,11 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_DEV_SET_FAULTY:
 		ds_mgmt_drpc_dev_set_faulty(drpc_req, drpc_resp);
 		break;
+	case DRPC_METHOD_MGMT_DEV_REPLACE:
+		ds_mgmt_drpc_dev_replace(drpc_req, drpc_resp);
+		break;
 	case DRPC_METHOD_MGMT_POOL_GET_ACL:
 		ds_mgmt_drpc_pool_get_acl(drpc_req, drpc_resp);
-		break;
-	case DRPC_METHOD_MGMT_LIST_POOLS:
-		ds_mgmt_drpc_list_pools(drpc_req, drpc_resp);
 		break;
 	case DRPC_METHOD_MGMT_POOL_OVERWRITE_ACL:
 		ds_mgmt_drpc_pool_overwrite_acl(drpc_req, drpc_resp);
@@ -147,6 +150,12 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		break;
 	case DRPC_METHOD_MGMT_POOL_QUERY:
 		ds_mgmt_drpc_pool_query(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_CONT_SET_OWNER:
+		ds_mgmt_drpc_cont_set_owner(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_GROUP_UPDATE:
+		ds_mgmt_drpc_group_update(drpc_req, drpc_resp);
 		break;
 	default:
 		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;
@@ -256,7 +265,6 @@ ds_mgmt_profile_hdlr(crt_rpc_t *rpc)
 	tc_in = crt_req_get(tc_req);
 	D_ASSERT(tc_in != NULL);
 
-	tc_in->p_module = in->p_module;
 	tc_in->p_path = in->p_path;
 	tc_in->p_op = in->p_op;
 	tc_in->p_avg = in->p_avg;
@@ -362,6 +370,34 @@ ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc)
 	kill(getpid(), sig);
 }
 
+void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc)
+{
+	struct mgmt_pool_get_svcranks_in	*in;
+	struct mgmt_pool_get_svcranks_out	*out;
+	int					 rc;
+
+	in = crt_req_get(rpc);
+	D_ASSERT(in != NULL);
+
+	D_DEBUG(DB_MGMT, "get svcranks for pool "DF_UUIDF"\n",
+		DP_UUID(in->gsr_puuid));
+
+	out = crt_reply_get(rpc);
+
+	rc =  get_pool_svc_ranks(in->gsr_puuid, &out->gsr_ranks);
+	if (rc != 0)
+		D_ERROR(DF_UUID ": get_pool_svc_ranks() upcall failed, "
+			DF_RC "\n", DP_UUID(in->gsr_puuid), DP_RC(rc));
+	out->gsr_rc = rc;
+
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR(DF_UUID ": crt_reply_send() failed, " DF_RC "\n",
+			DP_UUID(in->gsr_puuid), DP_RC(rc));
+
+	d_rank_list_free(out->gsr_ranks);
+}
+
 static int
 ds_mgmt_init()
 {
@@ -371,7 +407,7 @@ ds_mgmt_init()
 	if (rc != 0)
 		return rc;
 
-	D_DEBUG(DB_MGMT, "successfull init call\n");
+	D_DEBUG(DB_MGMT, "successful init call\n");
 	return 0;
 }
 

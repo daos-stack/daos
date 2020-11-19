@@ -34,6 +34,7 @@
 
 /** Server crt group ID */
 const char *server_group;
+const char *dmg_config_file;
 
 /** Pool service replicas */
 unsigned int svc_nreplicas = 1;
@@ -42,6 +43,8 @@ unsigned int svc_nreplicas = 1;
 unsigned int	dt_csum_type;
 unsigned int	dt_csum_chunksize;
 bool		dt_csum_server_verify;
+int		dt_obj_class;
+
 
 /* Create or import a single pool with option to store info in arg->pool
  * or an alternate caller-specified test_pool structure.
@@ -54,7 +57,7 @@ bool		dt_csum_server_verify;
  */
 int
 test_setup_pool_create(void **state, struct test_pool *ipool,
-	struct test_pool *opool, daos_prop_t *prop)
+		       struct test_pool *opool, daos_prop_t *prop)
 {
 	test_arg_t		*arg = *state;
 	struct test_pool	*outpool;
@@ -67,10 +70,8 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		assert_int_equal(outpool->slave, 0);
 		outpool->pool_size = ipool->pool_size;
 		uuid_copy(outpool->pool_uuid, ipool->pool_uuid);
-		outpool->alive_svc.rl_nr = ipool->alive_svc.rl_nr;
-		outpool->svc.rl_nr = ipool->svc.rl_nr;
-		memcpy(outpool->ranks, ipool->ranks,
-		       sizeof(outpool->ranks[0]) * TEST_RANKS_MAX_NUM);
+		d_rank_list_dup(&outpool->alive_svc, ipool->alive_svc);
+		d_rank_list_dup(&outpool->svc, ipool->svc);
 		outpool->slave = 1;
 		if (arg->multi_rank)
 			MPI_Barrier(MPI_COMM_WORLD);
@@ -81,6 +82,7 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		char		*env;
 		int		 size_gb;
 		daos_size_t	 nvme_size;
+		d_rank_list_t	 *rank_list = NULL;
 
 		env = getenv("POOL_SCM_SIZE");
 		if (env) {
@@ -91,31 +93,39 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		}
 
 		/*
-		 * Set the default NVMe partition size to "2 * scm_size", so
+		 * Set the default NVMe partition size to "4 * scm_size", so
 		 * that we need to specify SCM size only for each test case.
 		 *
 		 * Set env POOL_NVME_SIZE to overwrite the default NVMe size.
 		 */
-		nvme_size = outpool->pool_size * 2;
+		nvme_size = outpool->pool_size * 4;
 		env = getenv("POOL_NVME_SIZE");
 		if (env) {
 			size_gb = atoi(env);
 			nvme_size = (daos_size_t)size_gb << 30;
 		}
 
+		if (arg->pool_node_size > 0) {
+			rank_list = d_rank_list_alloc(arg->pool_node_size);
+			if (rank_list == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
 		print_message("setup: creating pool, SCM size="DF_U64" GB, "
 			      "NVMe size="DF_U64" GB\n",
 			      (outpool->pool_size >> 30), nvme_size >> 30);
-		rc = daos_pool_create(0, arg->uid, arg->gid, arg->group,
-				      NULL, "pmem", outpool->pool_size,
-				      nvme_size, prop, &outpool->svc,
-				      outpool->pool_uuid, NULL);
+		rc = dmg_pool_create(dmg_config_file,
+				     arg->uid, arg->gid, arg->group,
+				     rank_list, outpool->pool_size, nvme_size,
+				     prop, outpool->svc, outpool->pool_uuid);
 		if (rc)
-			print_message("daos_pool_create failed, rc: %d\n", rc);
+			print_message("dmg_pool_create failed, rc: %d\n", rc);
 		else
 			print_message("setup: created pool "DF_UUIDF"\n",
 				       DP_UUID(outpool->pool_uuid));
+		if (rank_list)
+			d_rank_list_free(rank_list);
 	}
+out:
 	/** broadcast pool create result */
 	if (arg->multi_rank) {
 		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -123,12 +133,12 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		if (!rc) {
 			MPI_Bcast(outpool->pool_uuid, 16,
 				  MPI_CHAR, 0, MPI_COMM_WORLD);
-			MPI_Bcast(&outpool->svc.rl_nr,
-				  sizeof(outpool->svc.rl_nr),
+			MPI_Bcast(&outpool->svc->rl_nr,
+				  sizeof(outpool->svc->rl_nr),
 				  MPI_CHAR, 0, MPI_COMM_WORLD);
-			MPI_Bcast(outpool->ranks,
-				  sizeof(outpool->ranks[0]) *
-					 outpool->svc.rl_nr,
+			MPI_Bcast(outpool->svc->rl_ranks,
+				  sizeof(outpool->svc->rl_ranks[0]) *
+					 outpool->svc->rl_nr,
 				  MPI_CHAR, 0, MPI_COMM_WORLD);
 		}
 	}
@@ -139,7 +149,7 @@ static int
 test_setup_pool_connect(void **state, struct test_pool *pool)
 {
 	test_arg_t *arg = *state;
-	int rc;
+	int rc = -DER_INVAL;
 
 	if (pool != NULL) {
 		assert_int_equal(arg->pool.slave, 1);
@@ -157,7 +167,7 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 
 		print_message("setup: connecting to pool\n");
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       &arg->pool.svc,
+				       NULL /* arg->pool.svc */,
 				       arg->pool.pool_connect_flags,
 				       &arg->pool.poh, &arg->pool.pool_info,
 				       NULL /* ev */);
@@ -259,8 +269,8 @@ test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *po_prop,
 		return daos_eq_create(&arg->eq);
 	case SETUP_EQ:
 		arg->setup_state = SETUP_POOL_CREATE;
-		return test_setup_pool_create(state, pool, NULL /*opool */,
-					      po_prop);
+		return test_setup_pool_create(state, pool,
+					      NULL /*opool */, po_prop);
 	case SETUP_POOL_CREATE:
 		arg->setup_state = SETUP_POOL_CONNECT;
 		return test_setup_pool_connect(state, pool);
@@ -275,7 +285,7 @@ test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *po_prop,
 
 int
 test_setup(void **state, unsigned int step, bool multi_rank,
-	   daos_size_t pool_size, struct test_pool *pool)
+	   daos_size_t pool_size, int node_size, struct test_pool *pool)
 {
 	test_arg_t		*arg = *state;
 	struct timeval		 now;
@@ -291,6 +301,8 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	srandom(seed);
 
 	if (arg == NULL) {
+		d_rank_list_t	tmp_list;
+
 		D_ALLOC(arg, sizeof(test_arg_t));
 		if (arg == NULL)
 			return -1;
@@ -303,16 +315,19 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		arg->pool.pool_size = pool_size;
 		arg->setup_state = -1;
 
-		arg->pool.alive_svc.rl_nr = svc_nreplicas;
-		arg->pool.alive_svc.rl_ranks = arg->pool.ranks;
-		arg->pool.svc.rl_nr = svc_nreplicas;
-		arg->pool.svc.rl_ranks = arg->pool.ranks;
+		tmp_list.rl_nr = svc_nreplicas;
+		tmp_list.rl_ranks = arg->pool.ranks;
+
+		d_rank_list_dup(&arg->pool.alive_svc, &tmp_list);
+		d_rank_list_dup(&arg->pool.svc, &tmp_list);
 		arg->pool.slave = false;
 
 		arg->uid = geteuid();
 		arg->gid = getegid();
 
+		arg->pool_node_size = node_size;
 		arg->group = server_group;
+		arg->dmg_config = dmg_config_file;
 		uuid_clear(arg->pool.pool_uuid);
 		uuid_clear(arg->co_uuid);
 
@@ -321,13 +336,15 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		arg->pool.pool_connect_flags = DAOS_PC_RW;
 		arg->coh = DAOS_HDL_INVAL;
 		arg->cont_open_flags = DAOS_COO_RW;
-
+		arg->obj_class = dt_obj_class;
 		arg->pool.destroyed = false;
 	}
 
 	/** Look at variables set by test arguments and setup container props */
 	if (dt_csum_type) {
-		printf("\n-------\nChecksum enabled in test!\n-------\n");
+		print_message("\n-------\n"
+			      "Checksum enabled in test!"
+			      "\n-------\n");
 		entry = &csum_entry[co_props.dpp_nr];
 		entry->dpe_type = DAOS_PROP_CO_CSUM;
 		entry->dpe_val = dt_csum_type;
@@ -379,10 +396,10 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 
 	if (daos_handle_is_inval(poh)) {
 		rc = daos_pool_connect(pool->pool_uuid, arg->group,
-				       &pool->svc, DAOS_PC_RW,
+				       NULL /* svc */, DAOS_PC_RW,
 				       &poh, &pool->pool_info,
 				       NULL /* ev */);
-		if (rc != 0) { /* destroy straightaway */
+		if (rc != 0) { /* destroy straight away */
 			print_message("failed to connect pool: %d\n", rc);
 			poh = DAOS_HDL_INVAL;
 		}
@@ -411,9 +428,10 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 
 	daos_pool_disconnect(poh, NULL);
 
-	rc = daos_pool_destroy(pool->pool_uuid, arg->group, 1, NULL);
+	rc = dmg_pool_destroy(dmg_config_file,
+			      pool->pool_uuid, arg->group, 1);
 	if (rc && rc != -DER_TIMEDOUT)
-		print_message("daos_pool_destroy failed, rc: %d\n", rc);
+		print_message("dmg_pool_destroy failed, rc: %d\n", rc);
 	if (rc == 0)
 		print_message("teardown: destroyed pool "DF_UUIDF"\n",
 			      DP_UUID(pool->pool_uuid));
@@ -498,15 +516,16 @@ test_teardown(void **state)
 			 * rebuild mechanism(REBUILD24/25), so even the
 			 * container is not closed, then delete will fail
 			 * here, but if we do not free the arg, then next
-			 * subtest might fail, expecially for rebuild test.
-			 * so let's destory the arg anyway. Though some pool
+			 * subtest might fail, especially for rebuild test.
+			 * so let's destroy the arg anyway. Though some pool
 			 * might be left here. XXX
 			 */
 			goto free;
 		}
 	}
 
-	if (!uuid_is_null(arg->pool.pool_uuid) && !arg->pool.slave) {
+	if (!uuid_is_null(arg->pool.pool_uuid) && !arg->pool.slave &&
+	    !arg->pool.destroyed) {
 		if (arg->myrank != 0) {
 			if (!daos_handle_is_inval(arg->pool.poh))
 				rc = daos_pool_disconnect(arg->pool.poh, NULL);
@@ -535,6 +554,10 @@ test_teardown(void **state)
 	}
 
 free:
+	if (arg->pool.svc)
+		d_rank_list_free(arg->pool.svc);
+	if (arg->pool.alive_svc)
+		d_rank_list_free(arg->pool.alive_svc);
 	D_FREE(arg);
 	*state = NULL;
 	return 0;
@@ -587,8 +610,7 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 		if (arg->srv_nnodes - disable_nodes < required_nodes) {
 			if (arg->myrank == 0)
 				print_message("Not enough targets(need %d),"
-					      " skipping "
-					      "(%d/%d)\n",
+					      " skipping (%d/%d)\n",
 					      required_nodes,
 					      arg->srv_ntgts,
 					      arg->srv_disabled_ntgts);
@@ -615,7 +637,7 @@ test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo)
 
 	if (daos_handle_is_inval(arg->pool.poh)) {
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       &arg->pool.svc, DAOS_PC_RW,
+				       NULL /* svc */, DAOS_PC_RW,
 				       &arg->pool.poh, pinfo,
 				       NULL /* ev */);
 		if (rc) {
@@ -653,7 +675,7 @@ rebuild_pool_wait(test_arg_t *arg)
 	pinfo.pi_bits = DPI_REBUILD_STATUS;
 	rc = test_pool_get_info(arg, &pinfo);
 	rst = &pinfo.pi_rebuild_st;
-	if (rst->rs_done || rc != 0) {
+	if ((rst->rs_done || rc != 0) && rst->rs_version != 0) {
 		print_message("Rebuild "DF_UUIDF" (ver=%d) is done %d/%d, "
 			      "obj="DF_U64", rec="DF_U64".\n",
 			       DP_UUID(arg->pool.pool_uuid), rst->rs_version,
@@ -712,9 +734,11 @@ test_rebuild_query(test_arg_t **args, int args_cnt)
 	int i;
 
 	for (i = 0; i < args_cnt; i++) {
-		bool done;
+		bool done = true;
 
-		done = rebuild_pool_wait(args[i]);
+		if (!args[i]->pool.destroyed)
+			done = rebuild_pool_wait(args[i]);
+
 		if (!done)
 			all_done = false;
 	}
@@ -746,11 +770,11 @@ run_daos_sub_tests_only(char *test_name, const struct CMUnitTest *tests,
 		}
 
 		for (i = 0; i < sub_tests_size; i++) {
-			if (sub_tests[i] > tests_size || sub_tests[i] < 1) {
+			if (sub_tests[i] >= tests_size || sub_tests[i] < 0) {
 				print_message("No subtest %d\n", sub_tests[i]);
 				continue;
 			}
-			subtests[i] = tests[sub_tests[i] - 1];
+			subtests[i] = tests[sub_tests[i]];
 			subtestsnb++;
 		}
 
@@ -810,84 +834,83 @@ run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 	return rc;
 }
 
-void
-daos_exclude_target(const uuid_t pool_uuid, const char *grp,
-		    const d_rank_list_t *svc, d_rank_t rank,
-		    int tgt_idx)
+static void
+daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
+		     const char *grp, const char *dmg_config,
+		     const d_rank_list_t *svc, d_rank_t rank, int tgt_idx)
 {
-	struct d_tgt_list	targets;
-	int			rc;
+	char		dmg_cmd[DTS_CFG_MAX];
+	int		rc;
 
-	/** exclude from the pool */
-	targets.tl_nr = 1;
-	targets.tl_ranks = &rank;
-	targets.tl_tgts = &tgt_idx;
-	rc = daos_pool_tgt_exclude(pool_uuid, grp, svc, &targets, NULL);
-	if (rc)
-		print_message("exclude pool failed rc %d\n", rc);
+	/* build and invoke dmg cmd */
+	dts_create_config(dmg_cmd, "dmg pool %s -i --pool=%s --rank=%d",
+			  sub_cmd, DP_UUID(pool_uuid), rank);
+
+	if (tgt_idx != -1)
+		dts_append_config(dmg_cmd, " --target-idx=%d", tgt_idx);
+	if (dmg_config != NULL)
+		dts_append_config(dmg_cmd, " -o %s", dmg_config);
+
+	rc = system(dmg_cmd);
+	print_message("%s rc %#x\n", dmg_cmd, rc);
 	assert_int_equal(rc, 0);
 }
 
 void
-daos_add_target(const uuid_t pool_uuid, const char *grp,
-		const d_rank_list_t *svc, d_rank_t rank, int tgt_idx)
+daos_exclude_target(const uuid_t pool_uuid, const char *grp,
+		    const char *dmg_config, const d_rank_list_t *svc,
+		    d_rank_t rank, int tgt_idx)
 {
-	struct d_tgt_list	targets;
-	int			rc;
+	daos_dmg_pool_target("exclude", pool_uuid, grp, dmg_config, svc,
+			     rank, tgt_idx);
+}
 
-	/** add tgt to the pool */
-	targets.tl_nr = 1;
-	targets.tl_ranks = &rank;
-	targets.tl_tgts = &tgt_idx;
-	rc = daos_pool_add_tgt(pool_uuid, grp, svc, &targets, NULL);
-	if (rc)
-		print_message("add pool failed rc %d\n", rc);
-	assert_int_equal(rc, 0);
+void
+daos_reint_target(const uuid_t pool_uuid, const char *grp,
+		  const char *dmg_config, const d_rank_list_t *svc,
+		  d_rank_t rank, int tgt_idx)
+{
+	daos_dmg_pool_target("reintegrate", pool_uuid, grp, dmg_config, svc,
+			     rank, tgt_idx);
+}
+
+void
+daos_drain_target(const uuid_t pool_uuid, const char *grp,
+		  const char *dmg_config, const d_rank_list_t *svc,
+		  d_rank_t rank, int tgt_idx)
+{
+
+	daos_dmg_pool_target("drain", pool_uuid, grp, dmg_config, svc,
+			     rank, tgt_idx);
 }
 
 void
 daos_exclude_server(const uuid_t pool_uuid, const char *grp,
-		    const d_rank_list_t *svc, d_rank_t rank)
+		    const char *dmg_config, const d_rank_list_t *svc,
+		    d_rank_t rank)
 {
-	daos_exclude_target(pool_uuid, grp, svc, rank, -1);
+	daos_exclude_target(pool_uuid, grp, dmg_config, svc, rank, -1);
 }
 
 void
-daos_add_server(const uuid_t pool_uuid, const char *grp,
-		const d_rank_list_t *svc, d_rank_t rank)
+daos_reint_server(const uuid_t pool_uuid, const char *grp,
+		  const char *dmg_config, const d_rank_list_t *svc,
+		  d_rank_t rank)
 {
-	daos_add_target(pool_uuid, grp, svc, rank, -1);
+	daos_reint_target(pool_uuid, grp, dmg_config, svc, rank, -1);
 }
 
 void
-daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
-		 d_rank_list_t *svc, d_rank_t rank)
-{
-	int tgts_per_node = arg->srv_ntgts / arg->srv_nnodes;
-	int rc;
-
-	arg->srv_disabled_ntgts += tgts_per_node;
-	if (d_rank_in_rank_list(svc, rank))
-		svc->rl_nr--;
-	print_message("\tKilling rank %d (total of %d with %d already "
-		      "disabled, svc->rl_nr %d)!\n", rank, arg->srv_ntgts,
-		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
-
-	/** kill server */
-	rc = daos_mgmt_svc_rip(grp, rank, true, NULL);
-	assert_int_equal(rc, 0);
-}
-
-void
-daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
-			 const char *grp, d_rank_list_t *svc)
+daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
+		 const char *grp, d_rank_list_t *svc, d_rank_t rank)
 {
 	int		tgts_per_node;
 	int		disable_nodes;
 	int		failures = 0;
 	int		max_failure;
 	int		i;
-	d_rank_t	rank;
+	int		rc;
+	char		dmg_cmd[DTS_CFG_MAX];
 
 	tgts_per_node = arg->srv_ntgts / arg->srv_nnodes;
 	disable_nodes = (arg->srv_disabled_ntgts + tgts_per_node - 1) /
@@ -906,10 +929,24 @@ daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
 		return;
 	}
 
-	rank = arg->srv_nnodes - disable_nodes - 1;
+	if ((int)rank == -1)
+		rank = arg->srv_nnodes - disable_nodes - 1;
 
-	daos_kill_server(arg, pool_uuid, grp, svc, rank);
-	daos_exclude_server(pool_uuid, grp, svc, rank);
+	arg->srv_disabled_ntgts += tgts_per_node;
+	if (d_rank_in_rank_list(svc, rank))
+		svc->rl_nr--;
+	print_message("\tKilling rank %d (total of %d with %d already "
+		      "disabled, svc->rl_nr %d)!\n", rank, arg->srv_ntgts,
+		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
+
+	/* build and invoke dmg cmd to stop the server */
+	dts_create_config(dmg_cmd, "dmg system stop -i -r %d --force", rank);
+	if (arg->dmg_config != NULL)
+		dts_append_config(dmg_cmd, " -o %s", arg->dmg_config);
+
+	rc = system(dmg_cmd);
+	print_message(" %s rc %#x\n", dmg_cmd, rc);
+	assert_int_equal(rc, 0);
 }
 
 struct daos_acl *
@@ -997,4 +1034,255 @@ get_daos_prop_with_user_acl_perms(uint64_t perms)
 	daos_acl_free(acl);
 	D_FREE(user);
 	return prop;
+}
+
+int
+get_pid_of_process(char *host, char *dpid, char *proc)
+{
+	char    command[256];
+	size_t  len = 0;
+	size_t  read;
+	char    *line = NULL;
+
+	snprintf(command, sizeof(command),
+		 "ssh %s pgrep %s", host, proc);
+	FILE *fp1 = popen(command, "r");
+
+	print_message("Command= %s\n", command);
+	if (fp1 == NULL)
+		return -DER_INVAL;
+
+	while ((read = getline(&line, &len, fp1)) != -1) {
+		print_message("%s pid = %s", proc, line);
+		strcat(dpid, line);
+	}
+
+	pclose(fp1);
+	return 0;
+}
+
+int
+get_server_config(char *host, char *server_config_file)
+{
+	char	command[256];
+	size_t	len = 0;
+	size_t	read;
+	char	*line = NULL;
+	char	*pch;
+	char    *dpid;
+	int	rc;
+	char    daos_proc[16] = "daos_server";
+
+	D_ALLOC(dpid, 16);
+	rc = get_pid_of_process(host, dpid, daos_proc);
+	assert_int_equal(rc, 0);
+
+	snprintf(command, sizeof(command),
+		 "ssh %s ps ux -A | grep %s", host, dpid);
+	FILE *fp = popen(command, "r");
+
+	print_message("Command %s", command);
+	if (fp == NULL)
+		return -DER_INVAL;
+
+	while ((read = getline(&line, &len, fp)) != -1) {
+		print_message("line %s", line);
+		if (strstr(line, "--config") != NULL ||
+		    strstr(line, "-o") != NULL)
+			break;
+	}
+
+	pch = strtok(line, " ");
+	while (pch != NULL) {
+		if (strstr(pch, "--config") != NULL) {
+			if (strchr(pch, '=') != NULL)
+				strcpy(server_config_file,
+				       strchr(pch, '=') + 1);
+			else {
+				pch = strtok(NULL, " ");
+				strcpy(server_config_file, pch);
+			}
+			break;
+		}
+
+		if (strstr(pch, "-o") != NULL) {
+			pch = strtok(NULL, " ");
+			strcpy(server_config_file, pch);
+			break;
+		}
+		pch = strtok(NULL, " ");
+	}
+
+	pclose(fp);
+
+	D_FREE(dpid);
+	free(line);
+	return 0;
+}
+
+int verify_server_log_mask(char *host, char *server_config_file,
+			   char *log_mask){
+	char	command[256];
+	size_t	len = 0;
+	size_t	read;
+	char	*line = NULL;
+
+	snprintf(command, sizeof(command),
+		 "ssh %s cat %s", host, server_config_file);
+
+	FILE *fp = popen(command, "r");
+
+	if (fp == NULL)
+		return -DER_INVAL;
+
+	while ((read = getline(&line, &len, fp)) != -1) {
+		if (strstr(line, " log_mask") != NULL) {
+			if (strstr(line, log_mask) == NULL) {
+				print_message(
+					"Expected log_mask = %s, Found %s\n ",
+					log_mask, line);
+				return -DER_INVAL;
+			}
+		}
+	}
+
+	pclose(fp);
+	free(line);
+	return 0;
+}
+
+int get_log_file(char *host, char *server_config_file,
+		 char *key_name, char *log_file)
+{
+	char	command[256];
+	size_t	len = 0;
+	size_t	read;
+	char	*line = NULL;
+
+	snprintf(command, sizeof(command),
+		 "ssh %s cat %s", host, server_config_file);
+
+	FILE *fp = popen(command, "r");
+
+	if (fp == NULL)
+		return -DER_INVAL;
+
+	while ((read = getline(&line, &len, fp)) != -1) {
+		if (strstr(line, key_name) != NULL)
+			strcat(log_file, strrchr(line, ':') + 1);
+	}
+
+	pclose(fp);
+	D_FREE(line);
+	return 0;
+}
+
+int verify_state_in_log(char *host, char *log_file, char *state)
+{
+	char	command[1024];
+	size_t	len = 0;
+	size_t	read;
+	char	*line = NULL;
+	char	*pch = NULL;
+	int		length;
+	char	*tmp = NULL;
+	FILE	*fp;
+
+	D_ALLOC(tmp, 1024);
+	strcpy(tmp, log_file);
+
+	pch = strtok(tmp, "\n");
+	while (pch != NULL) {
+		length = strlen(pch);
+		if (pch[length - 1] == '\n')
+			pch[length - 1]  = '\0';
+
+		snprintf(command, sizeof(command),
+			 "ssh %s cat %s | grep \"%s\"", host, pch, state);
+		fp = popen(command, "r");
+		while ((read = getline(&line, &len, fp)) != -1) {
+			if (strstr(line, state) != NULL) {
+				print_message("Found state %s in Log file %s\n",
+					      state, pch);
+				goto out;
+			}
+		}
+		pch = strtok(NULL, " ");
+		pclose(fp);
+		free(line);
+	}
+
+	D_FREE(tmp);
+	return -DER_INVAL;
+out:
+	D_FREE(tmp);
+	return 0;
+}
+
+#define MAX_BS_STATE_WAIT	20 /* 20sec sleep between bs state queries */
+#define MAX_BS_STATE_RETRY	15 /* max timeout of 15 * 20sec= 5min */
+
+int wait_and_verify_blobstore_state(uuid_t bs_uuid, char *expected_state,
+				    const char *group)
+{
+	int	bs_state;
+	int	retry_cnt;
+	int	rc;
+
+	retry_cnt = 0;
+	while (retry_cnt <= MAX_BS_STATE_RETRY) {
+		rc = daos_mgmt_get_bs_state(group, bs_uuid, &bs_state,
+					    NULL /*ev*/);
+		if (rc)
+			return rc;
+
+		if (verify_blobstore_state(bs_state, expected_state) == 0)
+			return 0;
+
+		sleep(MAX_BS_STATE_WAIT);
+		retry_cnt++;
+	};
+
+	return -DER_TIMEDOUT;
+}
+
+#define MAX_POOL_TGT_STATE_WAIT	   5 /* 5sec sleep between tgt state queries */
+#define MAX_POOL_TGT_STATE_RETRY   24 /* max timeout of 24 * 5sec= 2min */
+
+int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
+				   char *expected_state)
+{
+	daos_target_info_t	tgt_info = { 0 };
+	int			retry_cnt;
+	int			rc;
+
+	retry_cnt = 0;
+	while (retry_cnt <= MAX_POOL_TGT_STATE_RETRY) {
+		char *expected_state_dup = strdup(expected_state);
+		char *state = strtok(expected_state_dup, "|");
+
+		rc = daos_pool_query_target(poh, tgtidx, rank, &tgt_info, NULL);
+			if (rc)
+				return rc;
+
+		/* multiple states not present in expected_state str */
+		if (state == NULL) {
+			if (strcmp(daos_target_state_enum_to_str(tgt_info.ta_state),
+				   expected_state) == 0)
+				return 0;
+		/* multiple states separated by a '|' in expected_state str */
+		} else {
+			while (state != NULL) {
+				if (strcmp(daos_target_state_enum_to_str(tgt_info.ta_state),
+					   state) == 0)
+					return 0;
+				state = strtok(NULL, "|");
+			};
+		}
+
+		sleep(MAX_POOL_TGT_STATE_WAIT);
+		retry_cnt++;
+	};
+
+	return -DER_TIMEDOUT;
 }

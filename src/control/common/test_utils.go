@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,10 +32,10 @@ import (
 	"reflect"
 	"sort"
 	"strings"
-	"syscall"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"golang.org/x/sys/unix"
 )
 
 // AssertTrue asserts b is true
@@ -60,7 +60,7 @@ func AssertFalse(t *testing.T, b bool, message string) {
 //
 // Whilst suitable in most situations, reflect.DeepEqual() may not be
 // suitable for nontrivial struct element comparisons, go-cmp should
-// then be used but will introduce a third party dep.
+// then be used.
 func AssertEqual(
 	t *testing.T, a interface{}, b interface{}, message string) {
 	t.Helper()
@@ -73,6 +73,25 @@ func AssertEqual(
 	}
 
 	t.Fatalf(message+"%#v != %#v", a, b)
+}
+
+// AssertNotEqual asserts b is not equal to a
+//
+// Whilst suitable in most situations, reflect.DeepEqual() may not be
+// suitable for nontrivial struct element comparisons, go-cmp should
+// then be used.
+func AssertNotEqual(
+	t *testing.T, a interface{}, b interface{}, message string) {
+	t.Helper()
+
+	if !reflect.DeepEqual(a, b) {
+		return
+	}
+	if len(message) > 0 {
+		message += ", "
+	}
+
+	t.Fatalf(message+"%#v == %#v", a, b)
 }
 
 // AssertStringsEqual sorts string slices before comparing.
@@ -163,10 +182,7 @@ func ShowBufferOnFailure(t *testing.T, buf fmt.Stringer) {
 func DefaultCmpOpts() []cmp.Option {
 	// Avoid comparing the internal Protobuf fields
 	isHiddenPBField := func(path cmp.Path) bool {
-		if strings.HasPrefix(path.Last().String(), ".XXX_") {
-			return true
-		}
-		return false
+		return strings.HasPrefix(path.Last().String(), ".XXX_")
 	}
 	return []cmp.Option{
 		cmp.FilterPath(isHiddenPBField, cmp.Ignore()),
@@ -195,6 +211,8 @@ func CreateTestDir(t *testing.T) (string, func()) {
 // CreateTestSocket creates a Unix Domain Socket that can listen for connections
 // on a given path. It returns the listener and a cleanup function.
 func CreateTestSocket(t *testing.T, sockPath string) (*net.UnixListener, func()) {
+	t.Helper()
+
 	addr := &net.UnixAddr{Name: sockPath, Net: "unixpacket"}
 	sock, err := net.ListenUnix("unixpacket", addr)
 	if err != nil {
@@ -202,8 +220,11 @@ func CreateTestSocket(t *testing.T, sockPath string) (*net.UnixListener, func())
 	}
 
 	cleanup := func() {
+		t.Helper()
 		sock.Close()
-		syscall.Unlink(sockPath)
+		if err := unix.Unlink(sockPath); err != nil && !os.IsNotExist(err) {
+			t.Fatalf("Unlink(%s): %s", sockPath, err)
+		}
 	}
 
 	err = os.Chmod(sockPath, 0777)
@@ -222,6 +243,7 @@ func CreateTestSocket(t *testing.T, sockPath string) (*net.UnixListener, func())
 // It returns the path to the socket, to allow the client to connect, and a
 // cleanup function.
 func SetupTestListener(t *testing.T, conn chan *net.UnixConn) (string, func()) {
+	t.Helper()
 	tmpDir, tmpCleanup := CreateTestDir(t)
 
 	path := filepath.Join(tmpDir, "test.sock")
@@ -234,7 +256,8 @@ func SetupTestListener(t *testing.T, conn chan *net.UnixConn) (string, func()) {
 	go func() {
 		newConn, err := sock.AcceptUnix()
 		if err != nil {
-			t.Fatalf("Failed to accept connection: %v", err)
+			t.Logf("Failed to accept connection: %v", err)
+			return
 		}
 		conn <- newConn
 	}()

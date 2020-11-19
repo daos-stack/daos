@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,7 +60,6 @@ type DomainSocketServer struct {
 // sessions.
 func (d *DomainSocketServer) closeSession(s *Session) {
 	d.sessionsMutex.Lock()
-	d.log.Debug("Closing a session")
 	s.Close()
 	delete(d.sessions, s.Conn)
 	d.sessionsMutex.Unlock()
@@ -89,11 +88,13 @@ func (d *DomainSocketServer) Listen() {
 	for {
 		conn, err := d.listener.Accept()
 		if err != nil {
-			d.log.Errorf("%s: failed to accept connection: %v", d.sockFile, err)
+			// If we're shutting down anyhow, don't print connection errors.
+			if d.ctx.Err() == nil {
+				d.log.Errorf("%s: failed to accept connection: %v", d.sockFile, err)
+			}
 			return
 		}
 
-		d.log.Debug("Creating session for connection")
 		c := NewSession(conn, d.service)
 		d.sessionsMutex.Lock()
 		d.sessions[conn] = c

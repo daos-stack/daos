@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +36,6 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_pool		*dfp = parent->ie_dfs->dfs_dfp;
 	struct dfuse_dfs		*dfs;
 	struct dfuse_dfs		*dfsi;
-	dfs_t				*ddfs;
 	int				rc;
 
 	/* This code is only supposed to support one level of directory descent
@@ -46,9 +45,8 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	D_ASSERT(parent->ie_stat.st_ino == parent->ie_dfs->dfs_root);
 
 	D_ALLOC_PTR(dfs);
-	if (!dfs) {
+	if (!dfs)
 		D_GOTO(err, rc = ENOMEM);
-	}
 
 	dfuse_dfs_init(dfs, parent->ie_dfs);
 
@@ -73,15 +71,16 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	if (create) {
 		rc = dfs_cont_create(dfp->dfp_poh, dfs->dfs_cont,
-				     NULL, NULL, NULL);
+				     NULL, &dfs->dfs_coh, &dfs->dfs_ns);
 		if (rc) {
 			DFUSE_TRA_ERROR(dfs,
 					"dfs_cont_create() failed: (%d)",
 					rc);
 			D_GOTO(err_unlock, rc);
 		}
+		d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
+		D_GOTO(alloc_ie, 0);
 	} else {
-
 		d_list_for_each_entry(dfsi,
 				      &dfp->dfp_dfs_list,
 				      dfs_list) {
@@ -104,8 +103,9 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 					D_FREE(dfs);
 					dfs = dfsi;
 					D_GOTO(alloc_ie, 0);
-				} else
+				} else {
 					D_ASSERT(rc == -DER_SUCCESS);
+				}
 
 				DFUSE_TRA_INFO(ie,
 					       "Reusing existing container entry without reconnect");
@@ -144,27 +144,24 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(err_unlock, rc = daos_der2errno(rc));
 	}
 
-	rc = dfs_mount(dfp->dfp_poh, dfs->dfs_coh, O_RDWR, &ddfs);
+	rc = dfs_mount(dfp->dfp_poh, dfs->dfs_coh, O_RDWR, &dfs->dfs_ns);
 	if (rc) {
 		DFUSE_TRA_ERROR(ie, "dfs_mount() failed: (%s)", strerror(rc));
 		D_GOTO(close, rc);
 	}
 
-	dfs->dfs_ns = ddfs;
-
 	d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
 
 alloc_ie:
 	D_ALLOC_PTR(ie);
-	if (!ie) {
+	if (!ie)
 		D_GOTO(close, rc = ENOMEM);
-	}
 
 	ie->ie_root = true;
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
-	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDONLY, &ie->ie_obj, NULL,
+	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL,
 			&ie->ie_stat);
 	if (rc) {
 		DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: (%s)", strerror(rc));
@@ -175,7 +172,7 @@ alloc_ie:
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
 
-	atomic_fetch_add(&ie->ie_ref, 1);
+	atomic_store_relaxed(&ie->ie_ref, 1);
 	ie->ie_dfs = dfs;
 
 	rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, NULL,
@@ -202,7 +199,6 @@ err_unlock:
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	D_FREE(dfs);
-	return;
 }
 
 void

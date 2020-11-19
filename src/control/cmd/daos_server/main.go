@@ -38,7 +38,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
-	"github.com/daos-stack/daos/src/control/server"
 )
 
 const (
@@ -51,9 +50,9 @@ type mainOpts struct {
 	ConfigPath string `short:"o" long:"config" description:"Server config file path"`
 	// TODO(DAOS-3129): This should be -d, but it conflicts with the start
 	// subcommand's -d flag when we default to running it.
-	Debug  bool `short:"b" long:"debug" description:"Enable debug output"`
-	JSON   bool `short:"j" long:"json" description:"Enable JSON output"`
-	Syslog bool `long:"syslog" description:"Enable logging to syslog"`
+	Debug   bool `short:"b" long:"debug" description:"Enable debug output"`
+	JSONLog bool `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
+	Syslog  bool `long:"syslog" description:"Enable logging to syslog"`
 
 	// Define subcommands
 	Storage storageCmd `command:"storage" description:"Perform tasks related to locally-attached storage"`
@@ -97,13 +96,18 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 	p := flags.NewParser(opts, flags.HelpFlag|flags.PassDoubleDash)
 	p.SubcommandsOptional = false
 	p.CommandHandler = func(cmd flags.Commander, cmdArgs []string) error {
+		if len(cmdArgs) > 0 {
+			// don't support positional arguments, extra cmdArgs are unexpected
+			return errors.Errorf("unexpected commandline arguments: %v", cmdArgs)
+		}
+
 		if !opts.AllowProxy {
 			common.ScrubProxyVariables()
 		}
 		if opts.Debug {
 			log.SetLevel(logging.LogLevelDebug)
 		}
-		if opts.JSON {
+		if opts.JSONLog {
 			log.WithJSONOutput()
 		}
 		if opts.Syslog {
@@ -127,7 +131,7 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			if err := cfgCmd.loadConfig(opts.ConfigPath); err != nil {
 				return errors.Wrapf(err, "failed to load config from %s", cfgCmd.configPath())
 			}
-			log.Debugf("DAOS config loaded from %s", cfgCmd.configPath())
+			log.Infof("DAOS Server config loaded from %s", cfgCmd.configPath())
 
 			if ovrCmd, ok := cfgCmd.(cliOverrider); ok {
 				if err := ovrCmd.setCLIOverrides(); err != nil {
@@ -163,7 +167,7 @@ func main() {
 
 	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
 		if errors.Cause(err) == context.Canceled {
-			log.Infof("%s (pid %d) shutting down", server.ControlPlaneName, os.Getpid())
+			log.Infof("%s (pid %d) shutting down", build.ControlPlaneName, os.Getpid())
 			os.Exit(0)
 		}
 		exitWithError(log, err)

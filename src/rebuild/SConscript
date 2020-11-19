@@ -14,7 +14,7 @@ def scons():
     # rebuild
     rebuild = daos_build.library(denv, 'rebuild',
                                  ['scan.c', 'srv.c', 'rpc.c',
-                                  'rebuild_iv.c'])
+                                  'rebuild_iv.c'], install_off="../..")
     denv.Install('$PREFIX/lib64/daos_srv', rebuild)
 
 if __name__ == "SCons.Script":

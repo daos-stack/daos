@@ -283,7 +283,7 @@ func ResolvePath(inPath string, defaultPath string) (outPath string, err error) 
 
 // FindBinary attempts to locate the named binary by checking $PATH first.
 // If the binary is not found in $PATH, look in the directory containing the
-// running process' binary as well as the working directory.
+// running processes binary as well as the working directory.
 func FindBinary(binName string) (string, error) {
 	binPath, err := exec.LookPath(binName)
 	if err == nil {

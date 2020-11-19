@@ -62,7 +62,7 @@ def continuous_io(container, seconds):
         if data != data2.value:
             raise ValueError("Data mismatch in ContinousIo")
 
-        # collapse down the commited epochs
+        # collapse down the committed epochs
         container.consolidate_epochs()
 
         total_written += size
@@ -94,7 +94,7 @@ def write_until_full(container):
             _oid = container.write_an_obj(data, size, dkey, akey)
             total_written += size
 
-            # collapse down the commited epochs
+            # collapse down the committed epochs
             container.slip_epoch()
 
     except ValueError as exp:
@@ -134,7 +134,7 @@ def write_quantity(container, size_in_bytes):
             _oid = container.write_an_obj(data, size, dkey, akey)
             total_written += size
 
-            # collapse down the commited epochs
+            # collapse down the committed epochs
             container.slip_epoch()
 
     except ValueError as exp:

@@ -31,12 +31,6 @@
 extern "C" {
 #endif
 
-#if __GNUC__ >= 4
-	#define DAOS_API __attribute__ ((visibility ("default")))
-#else
-	#define DAOS_API
-#endif
-
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -51,6 +45,9 @@ extern "C" {
 
 /** Maximum length (excluding the '\0') of a DAOS system name */
 #define DAOS_SYS_NAME_MAX 15
+
+/** Maximum length (excluding the '\0') of info string info via GetAttachInfo */
+#define DAOS_SYS_INFO_STRING_MAX 63
 
 /**
  * Generic data type definition
@@ -74,11 +71,13 @@ typedef enum {
 } daos_anchor_type_t;
 
 /** Iteration Anchor */
-#define DAOS_ANCHOR_BUF_MAX	120
+#define DAOS_ANCHOR_BUF_MAX	104
 typedef struct {
 	uint16_t	da_type; /** daos_anchor_type_t */
 	uint16_t	da_shard;
 	uint32_t	da_flags; /** see enum daos_anchor_flags */
+	/* record the offset for each shards for EC object */
+	uint64_t	da_sub_anchors;
 	uint8_t		da_buf[DAOS_ANCHOR_BUF_MAX];
 } daos_anchor_t;
 
@@ -130,6 +129,12 @@ static inline bool
 daos_handle_is_inval(daos_handle_t hdl)
 {
 	return hdl.cookie == 0;
+}
+
+static inline bool
+daos_handle_is_valid(daos_handle_t hdl)
+{
+	return !daos_handle_is_inval(hdl);
 }
 
 /**
@@ -207,7 +212,9 @@ typedef enum {
  * index within the rank
  */
 struct d_tgt_list {
+	/** array of ranks */
 	d_rank_t	*tl_ranks;
+	/** array of targets */
 	int32_t		*tl_tgts;
 	/** number of ranks & tgts */
 	uint32_t	tl_nr;
@@ -228,6 +235,7 @@ enum {
 	DAOS_HTYPE_OBJ		= 7, /**< object */
 	DAOS_HTYPE_ARRAY	= 9, /**< array */
 	DAOS_HTYPE_TX		= 11, /**< transaction */
+	DAOS_HTYPE_KV		= 13, /**< KV */
 	/* Must enlarge D_HTYPE_BITS to add more types */
 };
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 
 /** Test Suite Function Declarations */
 int daos_checksum_tests_run(void);
+int daos_compress_tests_run(void);
 int misc_tests_run(void);
 
 #endif

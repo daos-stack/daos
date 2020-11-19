@@ -1,0 +1,7 @@
+hosts:
+  test_servers:
+    - server-A
+timeout: 90
+server_config:
+  servers:
+    targets: 16

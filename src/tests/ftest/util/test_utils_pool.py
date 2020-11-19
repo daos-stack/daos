@@ -28,40 +28,30 @@ import ctypes
 from test_utils_base import TestDaosApiBase
 
 from avocado import fail_on
-from avocado.utils import process
 from command_utils import BasicParameter, CommandFailure
 from pydaos.raw import (DaosApiError, DaosServer, DaosPool, c_uuid_to_str,
                         daos_cref)
-from general_utils import check_pool_files, DaosTestError
+from general_utils import check_pool_files, DaosTestError, run_command
 from env_modules import load_mpi
-
-from dmg_utils import get_pool_uuid_service_replicas_from_stdout
 
 
 class TestPool(TestDaosApiBase):
+    # pylint: disable=too-many-public-methods
     """A class for functional testing of DaosPools objects."""
 
-    # Constants to define whether to use API or dmg to create and destroy
-    # pool.
-    USE_API = "API"
-    USE_DMG = "dmg"
-
-    def __init__(self, context, log=None, cb_handler=None, dmg_command=None):
+    def __init__(self, context, dmg_command, cb_handler=None):
         # pylint: disable=unused-argument
         """Initialize a TestPool object.
 
-        Note: 'log' is now a defunct argument and will be removed in the future
-
         Args:
             context (DaosContext): [description]
+            dmg_command (DmgCommand): DmgCommand used to call dmg command. This
+                value can be obtained by calling self.get_dmg_command() from a
+                test. It'll return the object with -l <Access Point host:port>
+                and --insecure.
             log (logging): logging object used to report the pool status
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
-            dmg_command (DmgCommand): DmgCommand used to call dmg command. If
-                control_method is set to dmg, this value needs to be set. It
-                can be obtained by calling self.get_dmg_command() from a test.
-                It'll return the object with -l <Access Point host:port> and
-                --insecure.
         """
         super(TestPool, self).__init__("/run/pool/*", cb_handler)
         self.context = context
@@ -74,35 +64,27 @@ class TestPool(TestDaosApiBase):
         self.target_list = BasicParameter(None)
         self.scm_size = BasicParameter(None)
         self.nvme_size = BasicParameter(None)
-
-        # Set USE_API to use API or USE_DMG to use dmg. If it's not set, API is
-        # used.
-        self.control_method = BasicParameter(self.USE_API, self.USE_API)
+        self.prop_name = BasicParameter(None)       # name of property to be set
+        self.prop_value = BasicParameter(None)      # value of property
 
         self.pool = None
         self.uuid = None
         self.info = None
         self.svc_ranks = None
         self.connected = False
+
         self.dmg = dmg_command
+        self.query_data = []
 
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
     def create(self):
-        """Create a pool with either API or dmg.
+        """Create a pool with dmg.
 
-        To use dmg, the test needs to set control_method.value to USE_DMG
-        prior to calling this method. The recommended way is to specify the
-        pool block in yaml. For example,
+        To use dmg, the test needs to set dmg_command through the constructor.
+        For example,
 
-            pool:
-                control_method: dmg
-
-        This tells this method to use dmg. The test also needs to set
-        dmg_bin_path through the constructor if dmg is used. For example,
-
-            self.pool = TestPool(
-                self.context, dmg_bin_path=self.basepath + '/install/bin')
+            self.pool = TestPool(self.context, DmgCommand(self.bin))
 
         If it wants to use --nsvc option, it needs to set the value to
         svcn.value. Otherwise, 1 is used. If it wants to use --group, it needs
@@ -112,8 +94,8 @@ class TestPool(TestDaosApiBase):
         more details.
 
         To test the negative case on create, the test needs to catch
-        CommandFailure for dmg and DaosApiError for API. Thus, we need to make
-        more than one line modification to the test only for this purpose.
+        CommandFailure. Thus, we need to make more than one line modification
+        to the test only for this purpose.
         Currently, pool_svc is the only test that needs this change.
         """
         self.destroy()
@@ -135,34 +117,35 @@ class TestPool(TestDaosApiBase):
                 kwargs[key] = value
 
         if self.control_method.value == self.USE_API:
-            # Create a pool with the API method
-            kwargs["mode"] = self.mode.value
-            self._call_method(self.pool.create, kwargs)
+            raise CommandFailure(
+                "Error: control method {} not supported for create()".format(
+                    self.control_method.value))
 
         elif self.control_method.value == self.USE_DMG and self.dmg:
-            # Create a pool with the dmg command
+            # Create a pool with the dmg command and store its CmdResult
             self._log_method("dmg.pool_create", kwargs)
-            result = self.dmg.pool_create(**kwargs)
-            uuid, svc = get_pool_uuid_service_replicas_from_stdout(
-                result.stdout)
+            data = self.dmg.pool_create(**kwargs)
+            if self.dmg.result.exit_status == 0:
+                # Populate the empty DaosPool object with the properties of the
+                # pool created with dmg pool create.
+                if self.name.value:
+                    self.pool.group = ctypes.create_string_buffer(
+                        self.name.value)
 
-            # Populte the empty DaosPool object with the properties of the pool
-            # created with dmg pool create.
-            if self.name.value:
-                self.pool.group = ctypes.create_string_buffer(self.name.value)
+                # Convert the string of service replicas from the dmg command
+                # output into an ctype array for the DaosPool object using the
+                # same technique used in DaosPool.create().
+                service_replicas = [
+                    int(value) for value in data["svc"].split(",")]
+                rank_t = ctypes.c_uint * len(service_replicas)
+                rank = rank_t(*list([svc for svc in service_replicas]))
+                rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
+                self.pool.svc = daos_cref.RankList(
+                    rl_ranks, len(service_replicas))
 
-            # Convert the string of service replicas from the dmg command output
-            # into an ctype array for the DaosPool object using the same
-            # technique used in DaosPool.create().
-            service_replicas = [int(value) for value in svc.split(",")]
-            rank_t = ctypes.c_uint * len(service_replicas)
-            rank = rank_t(*list([svc for svc in service_replicas]))
-            rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
-            self.pool.svc = daos_cref.RankList(rl_ranks, len(service_replicas))
-
-            # Set UUID and attached to the DaosPool object
-            self.pool.set_uuid_str(uuid)
-            self.pool.attached = 1
+                # Set UUID and attached to the DaosPool object
+                self.pool.set_uuid_str(data["uuid"])
+                self.pool.attached = 1
 
         elif self.control_method.value == self.USE_DMG:
             self.log.error("Error: Undefined dmg command")
@@ -173,10 +156,11 @@ class TestPool(TestDaosApiBase):
                 self.control_method.value)
 
         # Set the TestPool attributes for the created pool
-        self.svc_ranks = [
-            int(self.pool.svc.rl_ranks[index])
-            for index in range(self.pool.svc.rl_nr)]
-        self.uuid = self.pool.get_uuid_str()
+        if self.pool.attached:
+            self.svc_ranks = [
+                int(self.pool.svc.rl_ranks[index])
+                for index in range(self.pool.svc.rl_nr)]
+            self.uuid = self.pool.get_uuid_str()
 
     @fail_on(DaosApiError)
     def connect(self, permission=2):
@@ -210,7 +194,7 @@ class TestPool(TestDaosApiBase):
 
         """
         if self.pool and self.connected:
-            self.log.info("Disonnecting from pool %s", self.uuid)
+            self.log.info("Disconnecting from pool %s", self.uuid)
             self._call_method(self.pool.disconnect, {})
             self.connected = False
             return True
@@ -218,7 +202,7 @@ class TestPool(TestDaosApiBase):
 
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
-    def destroy(self, force=1):
+    def destroy(self, force=1, disconnect=1):
         """Destroy the pool with either API or dmg.
 
         It uses control_method member previously set, so if you want to use the
@@ -226,6 +210,7 @@ class TestPool(TestDaosApiBase):
 
         Args:
             force (int, optional): force flag. Defaults to 1.
+            disconnect (int, optional): disconnect flag. Defaults to 1.
 
         Returns:
             bool: True if the pool has been destroyed; False if the pool is not
@@ -234,7 +219,8 @@ class TestPool(TestDaosApiBase):
         """
         status = False
         if self.pool:
-            self.disconnect()
+            if disconnect:
+                self.disconnect()
             if self.pool.attached:
                 self.log.info("Destroying pool %s", self.uuid)
 
@@ -263,6 +249,42 @@ class TestPool(TestDaosApiBase):
 
         return status
 
+    @fail_on(CommandFailure)
+    def set_property(self, prop_name=None, prop_value=None):
+        """Set Property.
+
+        It sets property for a given pool uuid using
+        dmg.
+
+        Args:
+            prop_name (str, optional): pool property name. Defaults to
+                None, which uses the TestPool.prop_name.value
+            prop_value (str, optional): value to be set for the property.
+                Defaults to None, which uses the TestPool.prop_value.value
+
+        Returns:
+            None
+
+        """
+        if self.pool:
+            self.log.info("Set-prop for Pool: %s", self.uuid)
+
+            if self.control_method.value == self.USE_DMG and self.dmg:
+                # If specific values are not provided, use the class values
+                if prop_name is None:
+                    prop_name = self.prop_name.value
+                if prop_value is None:
+                    prop_value = self.prop_value.value
+                self.dmg.pool_set_prop(self.uuid, prop_name, prop_value)
+
+            elif self.control_method.value == self.USE_DMG:
+                self.log.error("Error: Undefined dmg command")
+
+            else:
+                self.log.error(
+                    "Error: Undefined control_method: %s",
+                    self.control_method.value)
+
     @fail_on(DaosApiError)
     def get_info(self):
         """Query the pool for information.
@@ -281,8 +303,8 @@ class TestPool(TestDaosApiBase):
         """Check the pool info attributes.
 
         Note:
-            Arguments may also be provided as a string with a number preceeded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            Arguments may also be provided as a string with a number preceded
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Args:
@@ -295,8 +317,8 @@ class TestPool(TestDaosApiBase):
             pi_bits (int, optional): pool bits. Defaults to None.
 
         Note:
-            Arguments may also be provided as a string with a number preceeded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            Arguments may also be provided as a string with a number preceded
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Returns:
@@ -320,8 +342,8 @@ class TestPool(TestDaosApiBase):
         """Check the pool info space attributes.
 
         Note:
-            Arguments may also be provided as a string with a number preceeded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            Arguments may also be provided as a string with a number preceded
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Args:
@@ -335,8 +357,8 @@ class TestPool(TestDaosApiBase):
             ps_padding (int, optional): space padding. Defaults to None.
 
         Note:
-            Arguments may also be provided as a string with a number preceeded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            Arguments may also be provided as a string with a number preceded
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Returns:
@@ -365,8 +387,8 @@ class TestPool(TestDaosApiBase):
         """Check the pool info daos space attributes.
 
         Note:
-            Arguments may also be provided as a string with a number preceeded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            Arguments may also be provided as a string with a number preceded
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Args:
@@ -374,8 +396,8 @@ class TestPool(TestDaosApiBase):
             s_free (list, optional): free space per device. Defaults to None.
 
         Note:
-            Arguments may also be provided as a string with a number preceeded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            Arguments may also be provided as a string with a number preceded
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Returns:
@@ -402,8 +424,8 @@ class TestPool(TestDaosApiBase):
         """Check the pool info rebuild attributes.
 
         Note:
-            Arguments may also be provided as a string with a number preceeded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            Arguments may also be provided as a string with a number preceded
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Args:
@@ -422,8 +444,8 @@ class TestPool(TestDaosApiBase):
             rs_size (int, optional): size of all rebuilt records.
 
         Note:
-            Arguments may also be provided as a string with a number preceeded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            Arguments may also be provided as a string with a number preceded
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Returns:
@@ -540,17 +562,23 @@ class TestPool(TestDaosApiBase):
 
         """
         self.log.info("Writing %s bytes to pool %s", size, self.uuid)
+        #env = {
+        #    "DAOS_POOL": self.uuid,
+        #    "DAOS_SVCL": "1",
+        #    "PYTHONPATH": os.getenv("PYTHONPATH", "")
+        #}
         env = {
             "DAOS_POOL": self.uuid,
-            "DAOS_SVCL": "1",
             "PYTHONPATH": os.getenv("PYTHONPATH", "")
         }
-        load_mpi("openmpi")
+        if not load_mpi("openmpi"):
+            raise CommandFailure("Failed to load openmpi")
+
         current_path = os.path.dirname(os.path.abspath(__file__))
         command = "{} --np {} --hostfile {} {} {} testfile".format(
             orterun, processes, hostfile,
             os.path.join(current_path, "write_some_data.py"), size)
-        return process.run(command, timeout, True, False, "both", True, env)
+        return run_command(command, timeout, True, env=env)
 
     def get_pool_daos_space(self):
         """Get the pool info daos space attributes as a dictionary.
@@ -562,6 +590,26 @@ class TestPool(TestDaosApiBase):
         self.get_info()
         keys = ("s_total", "s_free")
         return {key: getattr(self.info.pi_space.ps_space, key) for key in keys}
+
+    def get_pool_free_space(self, device="scm"):
+        """Get SCM or NVME free space.
+
+        Args:
+            device (str, optional): device type, e.g. "scm" or "nvme". Defaults
+                to "scm".
+
+        Returns:
+            str: free SCM or NVME space
+
+        """
+        free_space = "0"
+        dev = device.lower()
+        daos_space = self.get_pool_daos_space()
+        if dev == "scm":
+            free_space = daos_space["s_free"][0]
+        elif dev == "nvme":
+            free_space = daos_space["s_free"][1]
+        return free_space
 
     def display_pool_daos_space(self, msg=None):
         """Display the pool info daos space attributes.
@@ -579,6 +627,20 @@ class TestPool(TestDaosApiBase):
             "Pool %s space%s:\n  %s", self.uuid,
             " " + msg if isinstance(msg, str) else "", "\n  ".join(sizes))
 
+    def pool_percentage_used(self):
+        """Get the pool storage used % for SCM and NVMe.
+
+        Returns:
+            dict: a dictionary of SCM/NVMe pool space usage in %(float)
+
+        """
+        daos_space = self.get_pool_daos_space()
+        pool_percent = {'scm': round(float(daos_space["s_free"][0]) /
+                                     float(daos_space["s_total"][0]) * 100, 2),
+                        'nvme': round(float(daos_space["s_free"][1]) /
+                                      float(daos_space["s_total"][1]) * 100, 2)}
+        return pool_percent
+
     def get_pool_rebuild_status(self):
         """Get the pool info rebuild status attributes as a dictionary.
 
@@ -588,7 +650,7 @@ class TestPool(TestDaosApiBase):
         """
         self.get_info()
         keys = (
-            "rs_version", "rs_pad_32", "rs_errno", "rs_done",
+            "rs_version", "rs_padding32", "rs_errno", "rs_done",
             "rs_toberb_obj_nr", "rs_obj_nr", "rs_rec_nr")
         return {key: getattr(self.info.pi_rebuild_st, key) for key in keys}
 
@@ -607,7 +669,7 @@ class TestPool(TestDaosApiBase):
             container (TestContainer): container from which to read data
 
         Returns:
-            bool: True if all the data is read sucessfully befoire rebuild
+            bool: True if all the data is read successfully before rebuild
                 completes; False otherwise
 
         """
@@ -635,3 +697,16 @@ class TestPool(TestDaosApiBase):
         elif not status:
             self.log.error("Errors detected reading data during rebuild")
         return status
+
+    @fail_on(CommandFailure)
+    def set_query_data(self):
+        """Execute dmg pool query and store the results.
+
+        Only supported with the dmg control method.
+        """
+        self.query_data = []
+        if self.pool:
+            if self.dmg:
+                self.query_data = self.dmg.pool_query(self.pool.get_uuid_str())
+            else:
+                self.log.error("Error: Undefined dmg command")

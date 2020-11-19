@@ -32,6 +32,22 @@
 #include <cart/api.h>
 
 int
+crt_proc_struct_dtx_id(crt_proc_t proc, struct dtx_id *dti)
+{
+	int rc;
+
+	rc = crt_proc_uuid_t(proc, &dti->dti_uuid);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint64_t(proc, &dti->dti_hlc);
+	if (rc != 0)
+		return -DER_HG;
+
+	return 0;
+}
+
+int
 crt_proc_struct_daos_acl(crt_proc_t proc, struct daos_acl **data)
 {
 	int		rc;
@@ -61,7 +77,7 @@ crt_proc_struct_daos_acl(crt_proc_t proc, struct daos_acl **data)
 		*data = (struct daos_acl *)iov.iov_buf;
 		break;
 	case CRT_PROC_FREE:
-		daos_acl_free(*data);
+		*data = NULL;
 		break;
 	default:
 		D_ERROR("bad proc_op %d.\n", proc_op);
@@ -114,7 +130,7 @@ crt_proc_daos_prop_t(crt_proc_t proc, daos_prop_t **data)
 {
 	daos_prop_t		*prop;
 	crt_proc_op_t		 proc_op;
-	uint32_t		 nr, tmp;
+	uint32_t		 nr = 0, tmp = 0;
 	int			 rc;
 
 	if (proc == NULL || data == NULL)

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -319,10 +319,13 @@ static int
 nv_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	      d_iov_t *key, d_iov_t *val)
 {
-	struct nv_rec  *r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	void	       *v;
+	struct nv_rec	*r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	void		*v;
+	int		rc;
 
-	umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
+	rc = umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
+	if (rc != 0)
+		return rc;
 
 	if (r->nr_value_buf_size < val->iov_len) {
 		umem_off_t voff;
@@ -650,10 +653,13 @@ static int
 uv_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	      d_iov_t *key, d_iov_t *val)
 {
-	struct uv_rec  *r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	void	       *v;
+	struct uv_rec	*r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	void		*v;
+	int		rc;
 
-	umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
+	rc = umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
+	if (rc != 0)
+		return rc;
 
 	if (r->ur_value_buf_size < val->iov_len) {
 		umem_off_t voff;
@@ -945,11 +951,15 @@ ec_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	      d_iov_t *key, d_iov_t *val)
 {
 	struct ec_rec  *r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	int rc;
 
 	if (val->iov_len != sizeof(r->er_counter))
 		return -DER_INVAL;
 
-	umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
+	rc = umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
+	if (rc)
+		return rc;
+
 	r->er_counter = *(uint64_t *)val->iov_buf;
 	return 0;
 }
@@ -1181,10 +1191,14 @@ static int
 kv_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	      d_iov_t *key, d_iov_t *val)
 {
-	struct kv_rec  *r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	void	       *v;
+	struct kv_rec	*r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	void		*v;
+	int		rc;
 
-	umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
+	rc = umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
+	if (rc != 0)
+		return rc;
+
 	if (r->kr_value_cap < val->iov_len) {
 		umem_off_t voff;
 
@@ -1358,11 +1372,15 @@ static int
 iv_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	      d_iov_t *key, d_iov_t *val)
 {
-	struct iv_rec  *r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	void	       *v;
+	struct iv_rec	*r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	void		*v;
+	int		rc;
 
 	D_ASSERTF(key->iov_len == sizeof(uint64_t), DF_U64"\n", key->iov_len);
-	umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
+	rc = umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
+	if (rc != 0)
+		return rc;
+
 	if (r->ir_value_cap < val->iov_len) {
 		umem_off_t voff;
 
@@ -1398,7 +1416,21 @@ iv_rec_string(struct btr_instance *tins, struct btr_record *rec, bool leaf,
 	return buf;
 }
 
+static int
+iv_key_msize(int alloc_overhead)
+{
+	return alloc_overhead + sizeof(struct iv_rec);
+}
+
+static int
+iv_hkey_size(void)
+{
+	return sizeof(uint32_t);
+}
+
 btr_ops_t dbtree_iv_ops = {
+	.to_rec_msize	= iv_key_msize,
+	.to_hkey_size	= iv_hkey_size,
 	.to_key_cmp	= iv_key_cmp,
 	.to_key_encode	= iv_key_encode,
 	.to_key_decode	= iv_key_decode,

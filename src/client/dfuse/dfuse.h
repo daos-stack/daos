@@ -24,6 +24,8 @@
 #ifndef __DFUSE_H__
 #define __DFUSE_H__
 
+#include <semaphore.h>
+
 #include <fuse3/fuse.h>
 #include <fuse3/fuse_lowlevel.h>
 
@@ -44,8 +46,10 @@ struct dfuse_info {
 	char				*di_group;
 	char				*di_mountpoint;
 	d_rank_list_t			*di_svcl;
+	uint32_t			di_thread_count;
 	bool				di_threaded;
 	bool				di_foreground;
+	bool				di_direct_io;
 	bool				di_caching;
 	/* List head of dfuse_pool entries */
 	d_list_t			di_dfp_list;
@@ -63,10 +67,18 @@ struct dfuse_projection_info {
 	struct dfuse_info		*dpi_info;
 	uint32_t			dpi_max_read;
 	uint32_t			dpi_max_write;
-	/** Hash table of open inodes */
+	/** Hash table of open inodes, this matches kernel ref counts */
 	struct d_hash_table		dpi_iet;
+	/** Hash table of all known/seen inodes */
 	struct d_hash_table		dpi_irt;
+	/** Next available inode number */
 	ATOMIC uint64_t			dpi_ino_next;
+	/* Event queue for async events */
+	daos_handle_t			dpi_eq;
+	/** Semaphore to signal event waiting for async thread */
+	sem_t				dpi_sem;
+	pthread_t			dpi_thread;
+	bool				dpi_shutdown;
 };
 
 /*
@@ -148,6 +160,15 @@ struct dfuse_inode_ops {
 	void (*statfs)(fuse_req_t req, struct dfuse_inode_entry *inode);
 };
 
+struct dfuse_event {
+	fuse_req_t	de_req;
+	daos_event_t	de_ev;
+	void		(*de_complete_cb)(struct dfuse_event *ev);
+	size_t		de_len;
+	d_iov_t		de_iov;
+	d_sg_list_t	de_sgl;
+};
+
 extern struct dfuse_inode_ops dfuse_dfs_ops;
 extern struct dfuse_inode_ops dfuse_cont_ops;
 extern struct dfuse_inode_ops dfuse_pool_ops;
@@ -213,6 +234,11 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs);
 int
 dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle);
 
+/* dfuse_thread.c */
+
+extern int
+dfuse_loop(struct dfuse_info *dfuse_info);
+
 struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 
 /* Helper macros for open() and creat() to log file access modes */
@@ -223,7 +249,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 	} while (0)
 
 /**
- * Dump the file open mode to the logile.
+ * Dump the file open mode to the logfile.
  *
  * On a 64 bit system O_LARGEFILE is assumed so always set but defined to zero
  * so set LARGEFILE here for debugging
@@ -250,6 +276,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 		LOG_MODE((HANDLE), _flag, O_PATH);			\
 		LOG_MODE((HANDLE), _flag, O_SYNC);			\
 		LOG_MODE((HANDLE), _flag, O_TRUNC);			\
+		LOG_MODE((HANDLE), _flag, O_NOFOLLOW);			\
 		if (_flag)						\
 			DFUSE_TRA_ERROR(HANDLE, "Flags 0%o", _flag);	\
 	} while (0)
@@ -280,7 +307,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					"Invalid call to fuse_reply_err: 0"); \
 			__err = EIO;					\
 		}							\
-		if (__err == ENOTSUP || __err == EIO)			\
+		if (__err == ENOTSUP || __err == EIO || __err == EINVAL) \
 			DFUSE_TRA_WARNING(desc, "Returning %d '%s'",	\
 					  __err, strerror(__err));	\
 		else							\
@@ -307,7 +334,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define DFUSE_REPLY_ATTR(ie, req, attr)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(ie, "Returning attr mode %#x dir:%d",	\
+		DFUSE_TRA_DEBUG(ie, "Returning attr mode %#o dir:%d",	\
 				(attr)->st_mode,			\
 				S_ISDIR(((attr)->st_mode)));		\
 		__rc = fuse_reply_attr(req, attr,			\
@@ -318,13 +345,13 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_READLINK(req, path)					\
+#define DFUSE_REPLY_READLINK(ie, req, path)				\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(req, "Returning path '%s'", path);	\
+		DFUSE_TRA_DEBUG(ie, "Returning target '%s'", path);	\
 		__rc = fuse_reply_readlink(req, path);			\
 		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(req,				\
+			DFUSE_TRA_ERROR(ie,				\
 					"fuse_reply_readlink returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
@@ -341,7 +368,6 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-
 #define DFUSE_REPLY_WRITE(desc, req, bytes)				\
 	do {								\
 		int __rc;						\
@@ -355,15 +381,15 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 
 #if HAVE_CACHE_READDIR
 
-#define DFUSE_REPLY_OPEN(oh, req, fi)					\
+#define DFUSE_REPLY_OPEN(oh, req, _fi)					\
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(oh, "Returning open");		\
 		if ((oh)->doh_ie->ie_dfs->dfs_attr_timeout > 0) {	\
-			(fi)->keep_cache = 1;				\
-			(fi)->cache_readdir = 1;			\
+			(_fi)->keep_cache = 1;				\
+			(_fi)->cache_readdir = 1;			\
 		}							\
-		__rc = fuse_reply_open(req, fi);			\
+		__rc = fuse_reply_open(req, _fi);			\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(oh,				\
 					"fuse_reply_open returned %d:%s", \
@@ -372,14 +398,14 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 
 #else
 
-#define DFUSE_REPLY_OPEN(oh, req, fi)					\
+#define DFUSE_REPLY_OPEN(oh, req, _fi)					\
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(oh, "Returning open");		\
 		if ((oh)->doh_ie->ie_dfs->dfs_attr_timeout > 0) {	\
-			(fi)->keep_cache = 1;				\
+			(_fi)->keep_cache = 1;				\
 		}							\
-		__rc = fuse_reply_open(req, fi);			\
+		__rc = fuse_reply_open(req, _fi);			\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(oh,				\
 					"fuse_reply_open returned %d:%s", \
@@ -403,7 +429,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(desc,					\
-				"Returning entry inode %li mode %#x dir:%d", \
+				"Returning entry inode %li mode %#o dir:%d", \
 				(entry).attr.st_ino,			\
 				(entry).attr.st_mode,			\
 				S_ISDIR((entry).attr.st_mode));		\
@@ -589,7 +615,7 @@ dfuse_cb_rename(fuse_req_t, struct dfuse_inode_entry *, const char *,
 		struct dfuse_inode_entry *, const char *, unsigned int);
 
 void
-dfuse_cb_write(fuse_req_t, fuse_ino_t, const char *, size_t, off_t,
+dfuse_cb_write(fuse_req_t, fuse_ino_t, struct fuse_bufvec *, off_t,
 	       struct fuse_file_info *);
 
 void

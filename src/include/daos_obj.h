@@ -108,7 +108,7 @@ enum {
 };
 
 /** Number of bits reserved in IO flags bitmap for conditional checks.  */
-#define IO_FLAGS_COND_BITS	7
+#define IO_FLAGS_COND_BITS	8
 
 enum {
 	/* Conditional Op: Punch key if it exists, fail otherwise */
@@ -125,6 +125,11 @@ enum {
 	DAOS_COND_AKEY_UPDATE	= (1 << 5),
 	/* Conditional Op: Fetch akey if it exists, fail otherwise */
 	DAOS_COND_AKEY_FETCH	= (1 << 6),
+	/* Inidication of per akey conditional ops.  If set, the global
+	 * flag should not have any akey conditional ops specified. The
+	 * per akey flags will be read from the iod_flags field.
+	 */
+	DAOS_COND_PER_AKEY	= (1 << 7),
 	/** Mask for convenience */
 	DAOS_COND_MASK		= ((1 << IO_FLAGS_COND_BITS) - 1),
 };
@@ -198,7 +203,7 @@ typedef struct {
 typedef enum {
 	/** is a dkey */
 	DAOS_IOD_NONE		= 0,
-	/** one indivisble value udpate atomically */
+	/** one indivisble value update atomically */
 	DAOS_IOD_SINGLE		= 1,
 	/** an array of records where each record is update atomically */
 	DAOS_IOD_ARRAY		= 2,
@@ -226,6 +231,10 @@ typedef struct {
 	daos_iod_type_t		iod_type;
 	/** Size of the single value or the record size of the array */
 	daos_size_t		iod_size;
+	/** Per akey conditional. If DAOS_COND_PER_AKEY not set, this is
+	 *  ignored.
+	 */
+	uint64_t		iod_flags;
 	/*
 	 * Number of entries in the \a iod_recxs for arrays,
 	 * should be 1 if single value.
@@ -240,6 +249,22 @@ typedef struct {
 } daos_iod_t;
 
 /**
+ * I/O map flags -
+ * DAOS_IOMF_DETAIL	zero means only need to know the iom_recx_hi/lo.
+ *			1 means need to retrieve detailed iom_recxs array, in
+ *			that case user can either -
+ *			1) provides allocated iom_recxs buffer (iom_nr indicates
+ *			   #elements allocated), if returned iom_nr_out is
+ *			   greater than iom_nr, iom_recxs will still be
+ *			   populated, but it will be a truncated list).
+ *			2) provides NULL iod_recxs and zero iom_nr, in that case
+ *			   DAOS will internally allocated needed buffer for
+ *			   iom_recxs array (#elements is iom_nr, and equals
+ *			   iom_nr_out). User is responsible for free the
+ *			   iom_recxs buffer after using.
+ */
+#define DAOS_IOMF_DETAIL		(0x1U)
+/**
  * A I/O map represents the physical extent mapping inside an array for a
  * given range of indices.
  */
@@ -247,10 +272,17 @@ typedef struct {
 	/** type of akey value (SV or AR)*/
 	daos_iod_type_t		 iom_type;
 	/**
-	 * Number of extents in the mapping, that's the size of all the
-	 * external arrays listed below. 1 for SV.
+	 * Number of elements allocated in iom_recxs.
 	 */
-	unsigned int		 iom_nr;
+	uint32_t		 iom_nr;
+	/**
+	 * Number of extents in the mapping. If iom_nr_out is greater than
+	 * iom_nr, iom_recxs will still be populated, but it will be a
+	 * truncated list.
+	 * 1 for SV.
+	 */
+	uint32_t		 iom_nr_out;
+	uint32_t		 iom_flags;
 	/** Size of the single value or the record size */
 	daos_size_t		 iom_size;
 	/**
@@ -264,7 +296,9 @@ typedef struct {
 	 * or there is only one returned recx.
 	 */
 	daos_recx_t		 iom_recx_hi;
-	/** All the returned recxs within the requested extents */
+	/** All the returned recxs within the requested extents. Must be
+	 * allocated and freed by caller.
+	 */
 	daos_recx_t		*iom_recxs;
 } daos_iom_t;
 
@@ -300,10 +334,6 @@ typedef struct {
 	 * It is ignored for dkey enumeration.
 	 */
 	uint32_t	kd_val_type;
-	/** Checksum type */
-	uint16_t	kd_csum_type;
-	/** Checksum length */
-	uint16_t	kd_csum_len;
 } daos_key_desc_t;
 
 /**
@@ -319,7 +349,7 @@ typedef struct {
  * \param[in]	cid	Class Identifier
  * \param[in]	args	Reserved.
  */
-static inline int
+static inline void
 daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
 		     daos_oclass_id_t cid, uint32_t args)
 {
@@ -340,8 +370,6 @@ daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
 	hdr |= ((uint64_t)ofeats << OID_FMT_FEAT_SHIFT);
 	hdr |= ((uint64_t)cid << OID_FMT_CLASS_SHIFT);
 	oid->hi |= hdr;
-
-	return 0;
 }
 
 /**
@@ -365,7 +393,7 @@ daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
  *			-DER_EP_OLD	Epoch is too old and has no data for
  *					this object
  */
-DAOS_API int
+int
 daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, unsigned int mode,
 	      daos_handle_t *oh, daos_event_t *ev);
 
@@ -381,7 +409,7 @@ daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, unsigned int mode,
  *			0		Success
  *			-DER_NO_HDL	Invalid object open handle
  */
-DAOS_API int
+int
 daos_obj_close(daos_handle_t oh, daos_event_t *ev);
 
 /**
@@ -405,7 +433,7 @@ daos_obj_close(daos_handle_t oh, daos_event_t *ev);
  *					related resent history may have been
  *					aggregated. Punch result is undefined.
  */
-DAOS_API int
+int
 daos_obj_punch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 	       daos_event_t *ev);
 
@@ -432,7 +460,7 @@ daos_obj_punch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *					related resent history may have been
  *					aggregated. Punch result is undefined.
  */
-DAOS_API int
+int
 daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 		     unsigned int nr, daos_key_t *dkeys, daos_event_t *ev);
 
@@ -460,7 +488,7 @@ daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *					related resent history may have been
  *					aggregated. Punch result is undefined.
  */
-DAOS_API int
+int
 daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 		     daos_key_t *dkey, unsigned int nr, daos_key_t *akeys,
 		     daos_event_t *ev);
@@ -470,8 +498,6 @@ daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  * Caller should provide at least one of the output parameters.
  *
  * \param[in]	oh	Object open handle.
- * \param[in]	th	Optional transaction handle to query with.
- *			Use DAOS_TX_NONE for an independent transaction.
  * \param[out]	oa	Returned object attributes.
  * \param[out]	ranks	Ordered list of ranks where the object is stored.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
@@ -484,9 +510,9 @@ daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
  */
-DAOS_API int
-daos_obj_query(daos_handle_t oh, daos_handle_t th, struct daos_obj_attr *oa,
-	       d_rank_list_t *ranks, daos_event_t *ev);
+int
+daos_obj_query(daos_handle_t oh, struct daos_obj_attr *oa, d_rank_list_t *ranks,
+	       daos_event_t *ev);
 
 /*
  * Object I/O API
@@ -511,9 +537,7 @@ daos_obj_query(daos_handle_t oh, daos_handle_t th, struct daos_obj_attr *oa,
  *		iods	[in]: Array of I/O descriptors. Each descriptor is
  *			associated with a given akey and describes the list of
  *			record extents to fetch from the array.
- *			A different epoch can be passed for each extent via
- *			\a iods[]::iod_eprs[] and in this case, \a epoch will be
- *			ignored. [out]: Checksum of each extent is returned via
+ *			[out]: Checksum of each extent is returned via
  *			\a iods[]::iod_csums[]. If the record size of an
  *			extent is unknown (i.e. set to DAOS_REC_ANY as input),
  *			then the actual record size will be returned in
@@ -530,14 +554,14 @@ daos_obj_query(daos_handle_t oh, daos_handle_t th, struct daos_obj_attr *oa,
  *			For an unfound record, the output length of the
  *			corresponding sgl is set to zero.
  *
- * \param[out]	maps	Optional, upper layers can simply pass in NULL.
+ * \param[out]	ioms	Optional, upper layers can simply pass in NULL.
  *			It is the sink buffer to store the returned actual
  *			layout of the iods used in fetch. It gives information
  *			for every iod on the highest/lowest extent in that dkey,
  *			in additional to the valid extents from the ones fetched
  *			(if asked for). If the extents don't fit in the io_map,
  *			the number required is set on the fetch in
- *			\a maps[]::iom_nr for that particular iod.
+ *			\a ioms[]::iom_nr for that particular iod.
  *
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -552,10 +576,10 @@ daos_obj_query(daos_handle_t oh, daos_handle_t th, struct daos_obj_attr *oa,
  *					fit into output buffer
  *			-DER_EP_OLD	Epoch is too old and has no data
  */
-DAOS_API int
+int
 daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 	       daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
-	       d_sg_list_t *sgls, daos_iom_t *maps, daos_event_t *ev);
+	       d_sg_list_t *sgls, daos_iom_t *ioms, daos_event_t *ev);
 
 /**
  * Insert or update object records stored in co-located arrays.
@@ -575,9 +599,6 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  * \param[in]	iods	Array of I/O descriptor. Each descriptor is associated
  *			with an array identified by its akey and describes the
  *			list of record extent to update.
- *			A different epoch can be passed for each extent via
- *			\a iods[]::iod_eprs[] and in this case, \a epoch will be
- *			ignored.
  *			Checksum of each record extent is stored in
  *			\a iods[]::iod_csums[]. If the record size of an extent
  *			is zero, then it is effectively a punch for the
@@ -608,7 +629,7 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *					related resent history may have been
  *					aggregated. Update result is undefined.
  */
-DAOS_API int
+int
 daos_obj_update(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 		daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
 		d_sg_list_t *sgls, daos_event_t *ev);
@@ -658,7 +679,7 @@ daos_obj_update(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *					times \a kds[0].kd_key_len) and do the
  *					enumerate again.
  */
-DAOS_API int
+int
 daos_obj_list_dkey(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
 		   daos_key_desc_t *kds, d_sg_list_t *sgl,
 		   daos_anchor_t *anchor, daos_event_t *ev);
@@ -709,7 +730,7 @@ daos_obj_list_dkey(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
  *					times \a kds[0].kd_key_len) and do the
  *					enumerate again.
  */
-DAOS_API int
+int
 daos_obj_list_akey(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
 		   uint32_t *nr, daos_key_desc_t *kds, d_sg_list_t *sgl,
 		   daos_anchor_t *anchor, daos_event_t *ev);
@@ -762,7 +783,7 @@ daos_obj_list_akey(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
  */
-DAOS_API int
+int
 daos_obj_list_recx(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
 		   daos_key_t *akey, daos_size_t *size, uint32_t *nr,
 		   daos_recx_t *recxs, daos_epoch_range_t *eprs,
@@ -812,7 +833,7 @@ daos_obj_list_recx(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
  */
-DAOS_API int
+int
 daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 		   daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
 		   daos_event_t *ev);
@@ -830,8 +851,52 @@ daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *			-DER_NO_HDL	Invalid object open handle
  *			-DER_MISMATCH	Found data inconsistency
  */
-DAOS_API int
+int
 daos_obj_verify(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch);
+
+/**
+ * Provide a function for objects to split an anchor to be able to execute a
+ * parallel listing/enumeration. This routine suggests the optimal number of
+ * anchors to use instead of just 1 and optionally returns all those
+ * anchors. The user would allocate the array of anchors after querying the
+ * number of anchors needed. Alternatively, user does not provide an array and
+ * can call daos_obj_anchor_set() for every anchor to set.
+ *
+ * The user could suggest how many anchors to split the iteration over. This
+ * feature is not supported yet.
+ *
+ * \param[in]	oh	Open object handle.
+ * \param[in/out]
+ *		nr	[in]: Number of anchors requested and allocated in
+ *			\a anchors. Pass 0 for DAOS to recommend split num.
+ *			[out]: Number of anchors recommended if 0 is passed in.
+ * \param[in]	anchors	Optional array of anchors that are split.
+ *
+ * \return		These values will be returned:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ */
+int
+daos_obj_anchor_split(daos_handle_t oh, uint32_t *nr, daos_anchor_t *anchors);
+
+/**
+ * Set an anchor with an index based on split done with daos_obj_anchor_split.
+ * The anchor passed will be re-intialized and set to start and finish iteration
+ * based on the specified index.
+ *
+ * \param[in]   oh	Open object handle.
+ * \param[in]	index	Index of set this anchor for iteration.
+ * \param[in,out]
+ *		anchor	Hash anchor to set.
+ *
+ * \return		These values will be returned:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ */
+int
+daos_obj_anchor_set(daos_handle_t oh, uint32_t index, daos_anchor_t *anchor);
 
 #if defined(__cplusplus)
 }

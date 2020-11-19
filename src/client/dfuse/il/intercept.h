@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -117,25 +117,5 @@
 		__attribute__((weak, alias("__wrap_" #name)));
 
 #endif /* IOIL_PRELOAD */
-
-struct fd_entry {
-	daos_handle_t	fd_aoh;
-	off_t		fd_pos;
-	int		fd_flags;
-	int		fd_status;
-};
-
-ssize_t
-ioil_do_pread(char *buff, size_t len, off_t position,
-	      struct fd_entry *entry, int *errcode);
-ssize_t
-ioil_do_preadv(const struct iovec *iov, int count, off_t position,
-	       struct fd_entry *entry, int *errcode);
-ssize_t
-ioil_do_writex(const char *buff, size_t len, off_t position,
-	       struct fd_entry *entry, int *errcode);
-ssize_t
-ioil_do_pwritev(const struct iovec *iov, int count, off_t position,
-		struct fd_entry *entry, int *errcode);
 
 #endif /* __INTERCEPT_H__ */

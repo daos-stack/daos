@@ -35,18 +35,18 @@ import (
 type mockModule struct {
 	HandleCallResponse []byte
 	HandleCallErr      error
-	IDValue            int32
+	IDValue            ModuleID
 }
 
-func (m *mockModule) HandleCall(session *Session, method int32, input []byte) ([]byte, error) {
+func (m *mockModule) HandleCall(session *Session, method Method, input []byte) ([]byte, error) {
 	return m.HandleCallResponse, m.HandleCallErr
 }
 
-func (m *mockModule) ID() int32 {
+func (m *mockModule) ID() ModuleID {
 	return m.IDValue
 }
 
-func newTestModule(ID int32) *mockModule {
+func newTestModule(ID ModuleID) *mockModule {
 	return &mockModule{
 		IDValue: ID,
 	}

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,21 +31,47 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 )
 
+// helloMethod is a type alias for a drpc agent hello method.
+type helloMethod int32
+
+func (hm helloMethod) String() string {
+	return "hello"
+}
+
+// Module returns the module that the method belongs to.
+func (hm helloMethod) Module() drpc.ModuleID {
+	return HelloModule{}.ID()
+}
+
+func (hm helloMethod) ID() int32 {
+	return int32(hm)
+}
+
+func (hm helloMethod) IsValid() bool {
+	return true
+}
+
+const (
+	methodGreeting helloMethod = helloMethod(Function_GREETING)
+)
+
 //HelloModule is the RPC Handler for the Hello Module
 type HelloModule struct{}
 
-//HandleCall is the handler for calls to the hello module
-func (m *HelloModule) HandleCall(session *drpc.Session, function int32, body []byte) ([]byte, error) {
-	if function != int32(Function_GREETING) {
+//HandleCall is the handler for calls to the Hello module
+func (m HelloModule) HandleCall(session *drpc.Session, method drpc.Method, body []byte) ([]byte, error) {
+	if method != methodGreeting {
 		return nil, fmt.Errorf("Attempt to call unregistered function")
 	}
+
 	helloMsg := &Hello{}
-	proto.Unmarshal(body, helloMsg)
+	if err := proto.Unmarshal(body, helloMsg); err != nil {
+		return nil, err
+	}
 
 	greeting := fmt.Sprintf("Hello %s", helloMsg.Name)
 
-	var response HelloResponse
-	response = HelloResponse{
+	response := HelloResponse{
 		Greeting: greeting,
 	}
 
@@ -56,7 +82,7 @@ func (m *HelloModule) HandleCall(session *drpc.Session, function int32, body []b
 	return responseBytes, nil
 }
 
-//ID will return Module_HELLO in int32 form
-func (m *HelloModule) ID() int32 {
-	return int32(Module_HELLO)
+//ID will return Module_HELLO as a ModuleID type
+func (m HelloModule) ID() drpc.ModuleID {
+	return drpc.ModuleID(Module_HELLO)
 }

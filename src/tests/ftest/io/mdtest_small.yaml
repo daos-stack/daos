@@ -7,9 +7,17 @@ hosts:
   test_clients:
     - client-E
     - client-F
-timeout: 1500
+timeout: 605
 server_config:
   name: daos_server
+  transport_config:
+    allow_insecure: True
+agent_config:
+  transport_config:
+    allow_insecure: True
+dmg:
+  transport_config:
+    allow_insecure: True
 pool:
   mode: 146
   name: daos_server
@@ -18,6 +26,8 @@ pool:
   control_method: dmg
 container:
   type: POSIX
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+  control_method: daos
 mdtest:
   client_processes:
     np_8:
@@ -38,4 +48,4 @@ mdtest:
     - [POSIX, 0, 0, 2, 10, 5, '-u']
 
 dfuse:
-  mount_dir: "/tmp/daos_dfuse"
+  mount_dir: "/tmp/daos_dfuse/"

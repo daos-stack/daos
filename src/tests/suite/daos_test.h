@@ -39,6 +39,7 @@
 #include <dirent.h>
 
 #include <cmocka.h>
+#ifdef OVERRIDE_CMOCKA_SKIP
 /* redefine cmocka's skip() so it will no longer abort()
  * if CMOCKA_TEST_ABORT=1
  *
@@ -54,6 +55,7 @@
 			_skip(__FILE__, __LINE__); \
 		return; \
 	} while  (0)
+#endif
 
 #include <mpi.h>
 #include <daos/debug.h>
@@ -71,11 +73,13 @@ extern const char *server_group;
 
 /** Pool service replicas */
 extern unsigned int svc_nreplicas;
+extern const char *dmg_config_file;
 
 /** Checksum Type & info*/
 extern unsigned int dt_csum_type;
 extern unsigned int dt_csum_chunksize;
 extern bool dt_csum_server_verify;
+extern int  dt_obj_class;
 
 /* the temporary IO dir*/
 extern char *test_io_dir;
@@ -96,12 +100,12 @@ struct test_pool {
 	/* Updated if some ranks are killed during degraged or rebuild
 	 * test, so we know whether some tests is allowed to be run.
 	 */
-	d_rank_list_t		alive_svc;
+	d_rank_list_t		*alive_svc;
 	/* Used for all pool related operation, since client will
 	 * use this rank list to find out the real leader, so it
 	 * can not be changed.
 	 */
-	d_rank_list_t		svc;
+	d_rank_list_t		*svc;
 	/* flag of slave that share the pool of other test_arg_t */
 	bool			slave;
 	bool			destroyed;
@@ -124,7 +128,8 @@ typedef struct {
 	bool			multi_rank;
 	int			myrank;
 	int			rank_size;
-	const char	       *group;
+	const char		*group;
+	const char		*dmg_config;
 	struct test_pool	pool;
 	uuid_t			co_uuid;
 	unsigned int		uid;
@@ -143,11 +148,14 @@ typedef struct {
 	int			expect_result;
 	daos_size_t		size;
 	int			nr;
+	int			pool_node_size;
 	int			srv_nnodes;
 	int			srv_ntgts;
 	int			srv_disabled_ntgts;
 	int			index;
 	daos_epoch_t		hce;
+	int			obj_class;
+
 	/* The callback is called before pool rebuild. like disconnect
 	 * pool etc.
 	 */
@@ -173,6 +181,33 @@ typedef struct {
 	/* List containers (pool tests) */
 	void			*pool_lc_args;
 } test_arg_t;
+
+#define IOREQ_IOD_NR	5
+#define IOREQ_SG_NR	5
+#define IOREQ_SG_IOD_NR	5
+
+#define DTS_MAX_EXT_NUM		5
+#define DTS_MAX_DISTANCE	10
+#define DTS_MAX_EXTENT_SIZE	50
+#define DTS_MAX_OFFSET		1048576
+#define DTS_MAX_EPOCH_TIMES	20
+
+struct ioreq {
+	daos_handle_t		oh;
+	test_arg_t		*arg;
+	daos_event_t		ev;
+	daos_key_t		dkey;
+	daos_key_t		akey;
+	d_iov_t			val_iov[IOREQ_SG_IOD_NR][IOREQ_SG_NR];
+	d_sg_list_t		sgl[IOREQ_SG_IOD_NR];
+	daos_recx_t		rex[IOREQ_SG_IOD_NR][IOREQ_IOD_NR];
+	daos_epoch_range_t	erange[IOREQ_SG_IOD_NR][IOREQ_IOD_NR];
+	daos_iod_t		iod[IOREQ_SG_IOD_NR];
+	daos_iod_type_t		iod_type;
+	uint64_t		fail_loc;
+	int			result;
+};
+
 
 enum {
 	SETUP_EQ,
@@ -211,7 +246,7 @@ int
 test_teardown_cont(test_arg_t *arg);
 int
 test_setup(void **state, unsigned int step, bool multi_rank,
-	   daos_size_t pool_size, struct test_pool *pool);
+	   daos_size_t pool_size, int node_size, struct test_pool *pool);
 int
 test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *po_prop,
 		     daos_prop_t *co_prop);
@@ -241,6 +276,7 @@ async_disable(void **state)
 	return 0;
 }
 
+#if 0
 static inline int
 async_overlap(void **state)
 {
@@ -250,6 +286,7 @@ async_overlap(void **state)
 	arg->async   = true;
 	return 0;
 }
+#endif
 
 static inline int
 test_case_teardown(void **state)
@@ -287,19 +324,26 @@ int run_daos_md_replication_test(int rank, int size);
 int run_daos_oid_alloc_test(int rank, int size);
 int run_daos_degraded_test(int rank, int size);
 int run_daos_rebuild_test(int rank, int size, int *tests, int test_size);
-int run_daos_dtx_test(int rank, int size, int *tests, int test_size);
+int run_daos_base_tx_test(int rank, int size, int *tests, int test_size);
+int run_daos_dist_tx_test(int rank, int size, int *tests, int test_size);
 int run_daos_vc_test(int rank, int size, int *tests, int test_size);
 int run_daos_checksum_test(int rank, int size, int *sub_tests,
 			   int sub_tests_size);
-int run_daos_fs_test(int rank, int size, int *tests, int test_size);
+int run_daos_aggregation_ec_test(int rank, int size, int *sub_tests,
+				 int sub_tests_size);
+int run_daos_dedup_test(int rank, int size, int *sub_tests,
+			   int sub_tests_size);
+unsigned int daos_checksum_test_arg2type(char *optarg);
 int run_daos_nvme_recov_test(int rank, int size, int *sub_tests,
 			     int sub_tests_size);
 int run_daos_rebuild_simple_test(int rank, int size, int *tests, int test_size);
-
+int run_daos_drain_simple_test(int rank, int size, int *tests, int test_size);
+int run_daos_rebuild_simple_ec_test(int rank, int size, int *tests,
+				    int test_size);
+int run_daos_degrade_simple_ec_test(int rank, int size, int *sub_tests,
+				    int sub_tests_size);
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);
-void daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
-			      const char *grp, d_rank_list_t *svc);
 struct daos_acl *get_daos_acl_with_owner_perms(uint64_t perms);
 daos_prop_t *get_daos_prop_with_owner_acl_perms(uint64_t perms,
 						uint32_t prop_type);
@@ -316,14 +360,27 @@ int test_get_leader(test_arg_t *arg, d_rank_t *rank);
 bool test_rebuild_query(test_arg_t **args, int args_cnt);
 void test_rebuild_wait(test_arg_t **args, int args_cnt);
 void daos_exclude_target(const uuid_t pool_uuid, const char *grp,
-			 const d_rank_list_t *svc, d_rank_t rank, int tgt);
-void daos_add_target(const uuid_t pool_uuid, const char *grp,
-		     const d_rank_list_t *svc, d_rank_t rank, int tgt);
-
+			 const char *dmg_config, const d_rank_list_t *svc,
+			 d_rank_t rank, int tgt);
+void daos_reint_target(const uuid_t pool_uuid, const char *grp,
+		       const char *dmg_config, const d_rank_list_t *svc,
+		       d_rank_t rank, int tgt);
+void daos_drain_target(const uuid_t pool_uuid, const char *grp,
+		       const char *dmg_config, const d_rank_list_t *svc,
+		       d_rank_t rank, int tgt);
 void daos_exclude_server(const uuid_t pool_uuid, const char *grp,
-			 const d_rank_list_t *svc, d_rank_t rank);
-void daos_add_server(const uuid_t pool_uuid, const char *grp,
-		     const d_rank_list_t *svc, d_rank_t rank);
+			 const char *dmg_config, const d_rank_list_t *svc,
+			 d_rank_t rank);
+void daos_reint_server(const uuid_t pool_uuid, const char *grp,
+		       const char *dmg_config, const d_rank_list_t *svc,
+		       d_rank_t rank);
+
+void
+get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data,
+			int parity, d_rank_t *ranks, int *ranks_num);
+
+d_rank_t
+get_rank_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid, uint32_t shard);
 
 int run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 		       int tests_size, int *sub_tests, int sub_tests_size,
@@ -336,13 +393,62 @@ void rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr);
 void rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 			 bool discard);
 void rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
-				int failed_tgt);
+				int failed_tgt, bool kill);
+void rebuild_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill);
+void rebuild_pools_ranks(test_arg_t **args, int args_cnt,
+		d_rank_t *failed_ranks, int ranks_nr, bool kill);
+
+void reintegrate_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
+		int failed_tgt);
+void reintegrate_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank);
+void reintegrate_pools_ranks(test_arg_t **args, int args_cnt,
+		d_rank_t *failed_ranks,  int ranks_nr);
+
+void drain_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
+				int failed_tgt, bool kill);
+void drain_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill);
+void drain_pools_ranks(test_arg_t **args, int args_cnt,
+		d_rank_t *failed_ranks, int ranks_nr, bool kill);
+
+int rebuild_pool_create(test_arg_t **new_arg, test_arg_t *old_arg, int flag,
+		struct test_pool *pool);
 void rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank,
 			   int *failed_tgts, int nr);
+int rebuild_pool_disconnect_internal(void *data);
+int rebuild_pool_connect_internal(void *data);
+
 
 int rebuild_sub_setup(void **state);
 int rebuild_sub_teardown(void **state);
 int rebuild_small_sub_setup(void **state);
+
+int get_server_config(char *host, char *server_config_file);
+int get_log_file(char *host, char *server_config_file,
+		 char *key_name, char *log_file);
+int verify_server_log_mask(char *host, char *server_config_file,
+			   char *log_mask);
+int verify_state_in_log(char *host, char *log_file, char *state);
+
+int wait_and_verify_blobstore_state(uuid_t bs_uuid, char *expected_state,
+				    const char *group);
+int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
+				   char *expected_state);
+
+enum op_type {
+	PARTIAL_UPDATE	=	1,
+	FULL_UPDATE,
+	FULL_PARTIAL_UPDATE,
+	PARTIAL_FULL_UPDATE
+};
+
+void write_ec_partial(struct ioreq *req, int test_idx, daos_off_t off);
+void verify_ec_partial(struct ioreq *req, int test_idx, daos_off_t off);
+void write_ec_full(struct ioreq *req, int test_idx, daos_off_t off);
+void verify_ec_full(struct ioreq *req, int test_idx, daos_off_t off);
+void write_ec_full_partial(struct ioreq *req, int test_idx, daos_off_t off);
+void write_ec_partial_full(struct ioreq *req, int test_idx, daos_off_t off);
+void verify_ec_full_partial(struct ioreq *req, int test_idx, daos_off_t off);
+void make_buffer(char *buffer, char start, int total);
 
 static inline void
 daos_test_print(int rank, char *message)

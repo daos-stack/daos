@@ -319,7 +319,9 @@ func init() {
 	proto.RegisterType((*StorageFormatResp)(nil), "ctl.StorageFormatResp")
 }
 
-func init() { proto.RegisterFile("storage.proto", fileDescriptor_0d2c4ccf1453ffdb) }
+func init() {
+	proto.RegisterFile("storage.proto", fileDescriptor_0d2c4ccf1453ffdb)
+}
 
 var fileDescriptor_0d2c4ccf1453ffdb = []byte{
 	// 320 bytes of a gzipped FileDescriptorProto

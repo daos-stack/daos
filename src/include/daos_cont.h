@@ -33,7 +33,6 @@
 extern "C" {
 #endif
 
-#include <daos_types.h>
 #include <daos_security.h>
 
 /**
@@ -47,7 +46,7 @@ extern "C" {
  * daos_epoch_commit().
  *
  * DAOS_COO_FORCE skips the check to see if the pool meets the redundancy
- * factor/level requirments of the container.
+ * factor/level requirements of the container.
  */
 #define DAOS_COO_RO	(1U << 0)
 #define DAOS_COO_RW	(1U << 1)
@@ -61,7 +60,7 @@ extern "C" {
 typedef struct {
 	/** Container UUID */
 	uuid_t			ci_uuid;
-	/** Epoch of latest persisten snapshot */
+	/** Epoch of latest persistent snapshot */
 	daos_epoch_t		ci_lsnapshot;
 	/** Number of snapshots */
 	uint32_t		ci_nsnapshots;
@@ -74,7 +73,7 @@ typedef struct {
 
 
 /**
- * Generate a rank list from a string with a seprator argument. This is a
+ * Generate a rank list from a string with a separator argument. This is a
  * convenience function to generate the rank list required by
  * daos_pool_connect().
  *
@@ -85,8 +84,7 @@ typedef struct {
  * \return		allocated rank list that user is responsible to free
  *			with d_rank_list_free().
  */
-DAOS_API d_rank_list_t *
-daos_rank_list_parse(const char *str, const char *sep);
+d_rank_list_t *daos_rank_list_parse(const char *str, const char *sep);
 
 /**
  * Convert a local container handle to global representation data which can be
@@ -108,7 +106,7 @@ daos_rank_list_parse(const char *str, const char *sep);
  *					required buffer size is returned through
  *					glob->iov_buf_len.
  */
-DAOS_API int
+int
 daos_cont_local2global(daos_handle_t coh, d_iov_t *glob);
 
 /**
@@ -125,7 +123,7 @@ daos_cont_local2global(daos_handle_t coh, d_iov_t *glob);
  *			-DER_INVAL	Invalid parameter
  *			-DER_NO_HDL	Pool handle is nonexistent
  */
-DAOS_API int
+int
 daos_cont_global2local(daos_handle_t poh, d_iov_t glob, daos_handle_t *coh);
 
 /*
@@ -151,7 +149,7 @@ daos_cont_global2local(daos_handle_t poh, d_iov_t glob, daos_handle_t *coh);
  *			-DER_NO_PERM	Permission denied
  *			-DER_UNREACH	network is unreachable
  */
-DAOS_API int
+int
 daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop,
 		 daos_event_t *ev);
 
@@ -178,7 +176,7 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop,
  *			-DER_NO_PERM	Permission denied
  *			-DER_NONEXIST	Container is nonexistent
  */
-DAOS_API int
+int
 daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	       daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev);
 
@@ -197,7 +195,7 @@ daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_HDL	Invalid container handle
  */
-DAOS_API int
+int
 daos_cont_close(daos_handle_t coh, daos_event_t *ev);
 
 /**
@@ -224,7 +222,7 @@ daos_cont_close(daos_handle_t coh, daos_event_t *ev);
  *			-DER_NONEXIST	Container is nonexistent
  *			-DER_BUSY	Pool is busy
  */
-DAOS_API int
+int
 daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 		  daos_event_t *ev);
 
@@ -261,7 +259,7 @@ daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_HDL	Invalid container handle
  */
-DAOS_API int
+int
 daos_cont_query(daos_handle_t container, daos_cont_info_t *info,
 		daos_prop_t *cont_prop, daos_event_t *ev);
 
@@ -284,7 +282,7 @@ daos_cont_query(daos_handle_t container, daos_cont_info_t *info,
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_HDL	Invalid container handle
  */
-DAOS_API int
+int
 daos_cont_get_acl(daos_handle_t container, daos_prop_t **acl_prop,
 		  daos_event_t *ev);
 /**
@@ -303,7 +301,7 @@ daos_cont_get_acl(daos_handle_t container, daos_prop_t **acl_prop,
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_HDL	Invalid container handle
  */
-DAOS_API int
+int
 daos_cont_set_prop(daos_handle_t coh, daos_prop_t *prop, daos_event_t *ev);
 
 /**
@@ -322,7 +320,7 @@ daos_cont_set_prop(daos_handle_t coh, daos_prop_t *prop, daos_event_t *ev);
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_HDL	Invalid container handle
  */
-DAOS_API int
+int
 daos_cont_overwrite_acl(daos_handle_t coh, struct daos_acl *acl,
 			daos_event_t *ev);
 
@@ -346,7 +344,7 @@ daos_cont_overwrite_acl(daos_handle_t coh, struct daos_acl *acl,
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_HDL	Invalid container handle
  */
-DAOS_API int
+int
 daos_cont_update_acl(daos_handle_t coh, struct daos_acl *acl, daos_event_t *ev);
 
 /**
@@ -369,7 +367,7 @@ daos_cont_update_acl(daos_handle_t coh, struct daos_acl *acl, daos_event_t *ev);
  *			-DER_NOMEM	Out of memory
  *			-DER_NONEXIST	Principal is not in the ACL
  */
-DAOS_API int
+int
 daos_cont_delete_acl(daos_handle_t coh, enum daos_acl_principal_type type,
 		     d_string_t name, daos_event_t *ev);
 
@@ -391,7 +389,7 @@ daos_cont_delete_acl(daos_handle_t coh, enum daos_acl_principal_type type,
  *			-DER_NO_HDL	Invalid container handle
  *			-DER_NOMEM	Out of memory
  */
-DAOS_API int
+int
 daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group,
 		    daos_event_t *ev);
 
@@ -411,7 +409,7 @@ daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group,
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
-DAOS_API int
+int
 daos_cont_list_attr(daos_handle_t coh, char *buffer, size_t *size,
 		    daos_event_t *ev);
 
@@ -433,7 +431,7 @@ daos_cont_list_attr(daos_handle_t coh, char *buffer, size_t *size,
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
-DAOS_API int
+int
 daos_cont_get_attr(daos_handle_t coh, int n, char const *const names[],
 		   void *const buffers[], size_t sizes[], daos_event_t *ev);
 
@@ -449,9 +447,31 @@ daos_cont_get_attr(daos_handle_t coh, int n, char const *const names[],
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
-DAOS_API int
+int
 daos_cont_set_attr(daos_handle_t coh, int n, char const *const names[],
 		   void const *const values[], size_t const sizes[],
+		   daos_event_t *ev);
+
+/**
+ * Delete a list of user-defined container attributes.
+ *
+ * \param[in]	coh	Container handle
+ * \param[in]	n	Number of attributes
+ * \param[in]	names	Array of \a n null-terminated attribute names.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_NOMEM	Out of memory
+ */
+int
+daos_cont_del_attr(daos_handle_t coh, int n, char const *const names[],
 		   daos_event_t *ev);
 
 /**
@@ -476,7 +496,7 @@ daos_cont_set_attr(daos_handle_t coh, int n, char const *const names[],
  *			-DER_NO_HDL	Invalid container open handle
  *			-DER_UNREACH	Network is unreachable
  */
-DAOS_API int
+int
 daos_cont_alloc_oids(daos_handle_t coh, daos_size_t num_oids, uint64_t *oid,
 		     daos_event_t *ev);
 
@@ -489,18 +509,18 @@ daos_cont_alloc_oids(daos_handle_t coh, daos_size_t num_oids, uint64_t *oid,
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
-DAOS_API int
+int
 daos_cont_aggregate(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
 
 /**
  * Rollback to a specific persistent snapshot.
  *
  * \param[in]	coh	Container handle
- * \param[in]	epoch	Epoch if persistent snapshot to rollback to.
+ * \param[in]	epoch	Epoch of a persistent snapshot to rollback to.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
-DAOS_API int
+int
 daos_cont_rollback(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
 
 /**
@@ -519,7 +539,7 @@ daos_cont_rollback(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
-DAOS_API int
+int
 daos_cont_subscribe(daos_handle_t coh, daos_epoch_t *epoch, daos_event_t *ev);
 
 #define DAOS_SNAPSHOT_MAX_LEN 128
@@ -537,7 +557,7 @@ daos_cont_subscribe(daos_handle_t coh, daos_epoch_t *epoch, daos_event_t *ev);
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
-DAOS_API int
+int
 daos_cont_create_snap(daos_handle_t coh, daos_epoch_t *epoch, char *name,
 		      daos_event_t *ev);
 
@@ -560,7 +580,7 @@ daos_cont_create_snap(daos_handle_t coh, daos_epoch_t *epoch, char *name,
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
-DAOS_API int
+int
 daos_cont_list_snap(daos_handle_t coh, int *nr, daos_epoch_t *epochs,
 		    char **names, daos_anchor_t *anchor, daos_event_t *ev);
 
@@ -577,7 +597,7 @@ daos_cont_list_snap(daos_handle_t coh, int *nr, daos_epoch_t *epochs,
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
-DAOS_API int
+int
 daos_cont_destroy_snap(daos_handle_t coh, daos_epoch_range_t epr,
 		       daos_event_t *ev);
 

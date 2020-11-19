@@ -30,8 +30,6 @@
 extern "C" {
 #endif
 
-#include <daos_types.h>
-
 /** Type of storage target */
 typedef enum {
 	DAOS_TP_UNKNOWN,
@@ -56,6 +54,10 @@ typedef enum {
 	DAOS_TS_UP,
 	/* Up and running */
 	DAOS_TS_UP_IN,
+	/* Intermediate state for pool map change */
+	DAOS_TS_NEW,
+	/* Being drained */
+	DAOS_TS_DRAIN,
 } daos_target_state_t;
 
 /** Description of target performance */
@@ -184,7 +186,7 @@ struct daos_pool_cont_info {
  *
  * \param[in]	uuid	UUID to identify a pool.
  * \param[in]	grp	Process set name of the DAOS servers managing the pool
- * \param[in]	svc	Pool service replica ranks, as reported by
+ * \param[in]	svc	Optional, pool service replica ranks, as reported by
  *			daos_pool_create().
  * \param[in]	flags	Connect mode represented by the DAOS_PC_ bits.
  * \param[out]	poh	Returned open handle.
@@ -202,7 +204,7 @@ struct daos_pool_cont_info {
  *			-DER_NO_PERM	Permission denied
  *			-DER_NONEXIST	Pool is nonexistent
  */
-DAOS_API int
+int
 daos_pool_connect(const uuid_t uuid, const char *grp,
 		  const d_rank_list_t *svc, unsigned int flags,
 		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev);
@@ -221,8 +223,27 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_HDL	Invalid pool handle
  */
-DAOS_API int
+int
 daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev);
+
+/**
+ * Evict all connections to a pool.
+ *
+ * \param uuid	[IN]	UUID of the pool
+ * \param grp	[IN]	process set name of the DAOS servers managing the pool
+ * \param svc	[IN]	list of pool service ranks
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NONEXIST	Pool is nonexistent
+ */
+int
+daos_pool_evict(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
+		daos_event_t *ev);
 
 /*
  * Handle API
@@ -248,7 +269,7 @@ daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev);
  *					required buffer size is returned through
  *					glob->iov_buf_len.
  */
-DAOS_API int
+int
 daos_pool_local2global(daos_handle_t poh, d_iov_t *glob);
 
 /**
@@ -263,7 +284,7 @@ daos_pool_local2global(daos_handle_t poh, d_iov_t *glob);
  *			0		Success
  *			-DER_INVAL	Invalid parameter
  */
-DAOS_API int
+int
 daos_pool_global2local(d_iov_t glob, daos_handle_t *poh);
 
 /**
@@ -299,7 +320,7 @@ daos_pool_global2local(d_iov_t glob, daos_handle_t *poh);
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_HDL	Invalid pool handle
  */
-DAOS_API int
+int
 daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
 		daos_prop_t *pool_prop, daos_event_t *ev);
 
@@ -307,11 +328,9 @@ daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
  * Query information of storage targets within a DAOS pool.
  *
  * \param[in]	poh	Pool connection handle.
- * \param[in]	tgts	A list of targets to query.
- * \param[out]	failed	Optional, buffer to store faulty targets on failure.
- * \param[out]	info_list
- *			Returned storage information of \a tgts, it is an array
- *			and array size must equal to tgts::rl_llen.
+ * \param[in]	tgt	A single target index to query.
+ * \param[in]	rank	Rank of the target index to query.
+ * \param[out]	info	Returned storage information of \a tgt.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
@@ -321,12 +340,11 @@ daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
  *			-DER_INVAL	Invalid parameter
  *			-DER_NO_HDL	Invalid pool handle
  *			-DER_UNREACH	Network is unreachable
- *			-DER_NONEXIST	No pool on specified targets
+ *			-DER_NONEXIST	No pool on specified target
  */
-DAOS_API int
-daos_pool_query_target(daos_handle_t poh, d_rank_list_t *tgts,
-		       d_rank_list_t *failed, daos_target_info_t *info_list,
-		       daos_event_t *ev);
+int
+daos_pool_query_target(daos_handle_t poh, uint32_t tgt, d_rank_t rank,
+		       daos_target_info_t *info, daos_event_t *ev);
 
 /**
  * List the names of all user-defined pool attributes.
@@ -345,7 +363,7 @@ daos_pool_query_target(daos_handle_t poh, d_rank_list_t *tgts,
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
-DAOS_API int
+int
 daos_pool_list_attr(daos_handle_t poh, char *buffer, size_t *size,
 		    daos_event_t *ev);
 
@@ -367,7 +385,7 @@ daos_pool_list_attr(daos_handle_t poh, char *buffer, size_t *size,
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
-DAOS_API int
+int
 daos_pool_get_attr(daos_handle_t poh, int n, char const *const names[],
 		   void *const buffers[], size_t sizes[], daos_event_t *ev);
 
@@ -383,9 +401,31 @@ daos_pool_get_attr(daos_handle_t poh, int n, char const *const names[],
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
-DAOS_API int
+int
 daos_pool_set_attr(daos_handle_t poh, int n, char const *const names[],
 		   void const *const values[], size_t const sizes[],
+		   daos_event_t *ev);
+
+/**
+ * Delete a list of user-defined pool attributes.
+ *
+ * \param[in]	poh	Pool handle
+ * \param[in]	n	Number of attributes
+ * \param[in]	names	Array of \a n null-terminated attribute names.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_NOMEM	Out of memory
+ */
+int
+daos_pool_del_attr(daos_handle_t poh, int n, char const *const names[],
 		   daos_event_t *ev);
 
 /**
@@ -405,7 +445,7 @@ daos_pool_set_attr(daos_handle_t poh, int n, char const *const names[],
  * \return		0		Success
  *			-DER_TRUNC	\a cbuf cannot hold \a ncont items
  */
-DAOS_API int
+int
 daos_pool_list_cont(daos_handle_t poh, daos_size_t *ncont,
 		    struct daos_pool_cont_info *cbuf, daos_event_t *ev);
 

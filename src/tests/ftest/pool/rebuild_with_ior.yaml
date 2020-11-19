@@ -33,7 +33,7 @@ ior:
             np: 8
     repetitions: 1
     api: MPIIO
-    daos_oclass: "RP_2GX"
+    dfs_oclass: "RP_2GX"
     iorflags:
         write:
           F: "-w -W -k -G 1"

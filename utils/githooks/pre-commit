@@ -1,0 +1,29 @@
+#!/bin/bash
+
+# A git hook to validate  and correct the copyright date in source files.
+if [ -n "${NO_PRE_COMMIT:=""}" ]; then
+    exit 0
+fi
+
+regex='(^\s*[\*/].*)((Copyright\s*)([0-9]{4})(-([0-9]{4}))?)(\s*(Intel.*$))'
+year=$(date +%Y)
+errors=0
+
+files=$(git diff --diff-filter=AM --name-only --cached -- \
+       '*.c' '*.h' '*.go' 'Makefile')
+for file in $files; do
+    if [[ "$file" == *vendor* ]] || [[ "$file" == *pb.go ]] || \
+       [[ "$file" == *_string.go ]] || [[ "$file" == *pb-c* ]]; then
+        continue
+    fi
+	read -r y1 y2 <<< "$(sed -nre "s/^.*$regex.*$/\4 \6/p" "$file")"
+	if [[ -z $y1 ]] ; then
+		echo "Copyright Information not found in: $file"
+		errors=$((errors + 1))
+	elif [[ $y1 -ne $year && $year -ne $y2 ]] ; then
+		git reset "$file" || (echo "Unable to un-stage $file" && exit 1)
+		sed -i -re "s/$regex/\1Copyright $y1-$year \8/" "$file" || exit 1
+		git add "$file" || (echo "Unable to re-stage $file" && exit 1)
+	fi
+done
+[[ $errors = 0 ]] || (echo "$errors errors while checking/fixing copyrights.")

@@ -29,6 +29,8 @@
 #define D_LOGFAC	DD_FAC(container)
 
 #include <daos/container.h>
+#include <daos/cont_props.h>
+#include <daos/dedup.h>
 #include <daos/event.h>
 #include <daos/mgmt.h>
 #include <daos/pool.h>
@@ -251,9 +253,8 @@ dc_cont_create(tse_task_t *task)
 		DP_UUID(pool->dp_pool), DP_UUID(args->uuid));
 
 	ep.ep_grp = pool->dp_sys->sy_group;
-	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rc = rsvc_client_choose(&pool->dp_client, &ep);
-	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	rc = dc_pool_choose_svc_rank(pool->dp_pool, &pool->dp_client,
+				     &pool->dp_client_lock, pool->dp_sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(pool->dp_pool, args->uuid), DP_RC(rc));
@@ -353,9 +354,8 @@ dc_cont_destroy(tse_task_t *task)
 		DP_UUID(pool->dp_pool), DP_UUID(args->uuid), args->force);
 
 	ep.ep_grp = pool->dp_sys->sy_group;
-	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rc = rsvc_client_choose(&pool->dp_client, &ep);
-	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	rc = dc_pool_choose_svc_rank(pool->dp_pool, &pool->dp_client,
+				     &pool->dp_client_lock, pool->dp_sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(pool->dp_pool, args->uuid), DP_RC(rc));
@@ -394,20 +394,17 @@ err:
 }
 
 static void
-dc_cont_free(struct d_hlink *hlink)
+dc_cont_hop_free(struct d_hlink *hlink)
 {
 	struct dc_cont *dc;
 
 	dc = container_of(hlink, struct dc_cont, dc_hlink);
 	D_ASSERT(daos_hhash_link_empty(&dc->dc_hlink));
-	D_RWLOCK_DESTROY(&dc->dc_obj_list_lock);
-	D_ASSERT(d_list_empty(&dc->dc_po_list));
-	D_ASSERT(d_list_empty(&dc->dc_obj_list));
-	D_FREE(dc);
+	dc_cont_free(dc);
 }
 
 static struct d_hlink_ops cont_h_ops = {
-	.hop_free	= dc_cont_free,
+	.hop_free	= dc_cont_hop_free,
 };
 
 void
@@ -416,19 +413,29 @@ dc_cont_put(struct dc_cont *dc)
 	daos_hhash_link_putref(&dc->dc_hlink);
 }
 
-static void
+void
 dc_cont_hdl_link(struct dc_cont *dc)
 {
 	daos_hhash_link_insert(&dc->dc_hlink, DAOS_HTYPE_CO);
 }
 
-static void
+void
 dc_cont_hdl_unlink(struct dc_cont *dc)
 {
 	daos_hhash_link_delete(&dc->dc_hlink);
 }
 
-static struct dc_cont *
+void
+dc_cont_free(struct dc_cont *dc)
+{
+	D_ASSERT(daos_hhash_link_empty(&dc->dc_hlink));
+	D_RWLOCK_DESTROY(&dc->dc_obj_list_lock);
+	D_ASSERT(d_list_empty(&dc->dc_po_list));
+	D_ASSERT(d_list_empty(&dc->dc_obj_list));
+	D_FREE(dc);
+}
+
+struct dc_cont *
 dc_cont_alloc(const uuid_t uuid)
 {
 	struct dc_cont *dc;
@@ -449,24 +456,35 @@ dc_cont_alloc(const uuid_t uuid)
 	return dc;
 }
 
-static void
-dc_cont_csum_init(struct dc_cont *cont, daos_prop_t *props)
+static int
+dc_cont_props_init(struct dc_cont *cont)
 {
-	uint32_t		csum_type_prop;
-	enum DAOS_CSUM_TYPE	csum_type;
-	uint64_t		chunksize;
+	uint32_t	csum_type = cont->dc_props.dcp_csum_type;
+	uint32_t	compress_type = cont->dc_props.dcp_compress_type;
+	uint32_t	encrypt_type = cont->dc_props.dcp_encrypt_type;
+	bool		dedup_only = false;
+	int		rc;
 
-	csum_type_prop = daos_cont_prop2csum(props);
-	if (csum_type_prop == DAOS_PROP_CO_CSUM_OFF) {
-		cont->dc_csummer = NULL;
-		return;
+	cont->dc_props.dcp_compress_enabled =
+			daos_cont_compress_prop_is_enabled(compress_type);
+	cont->dc_props.dcp_encrypt_enabled =
+			daos_cont_encrypt_prop_is_enabled(encrypt_type);
+
+	if (csum_type == DAOS_PROP_CO_CSUM_OFF) {
+		dedup_only = true;
+		csum_type = dedup_get_csum_algo(&cont->dc_props);
 	}
 
-	csum_type = daos_contprop2csumtype(csum_type_prop);
-	chunksize = daos_cont_prop2chunksize(props);
-	daos_csummer_init(&cont->dc_csummer,
-			  daos_csum_type2algo(csum_type),
-			  chunksize);
+	if (!daos_cont_csum_prop_is_enabled(csum_type))
+		return 0;
+
+	rc = daos_csummer_init_with_type(&cont->dc_csummer, csum_type,
+				    cont->dc_props.dcp_chunksize, 0);
+
+	if (dedup_only)
+		dedup_configure_csummer(cont->dc_csummer, &cont->dc_props);
+
+	return rc;
 }
 
 struct cont_open_args {
@@ -524,7 +542,10 @@ cont_open_complete(tse_task_t *task, void *data)
 	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
 	cont->dc_pool_hdl = arg->hdl;
 
-	dc_cont_csum_init(cont, out->coo_prop);
+	daos_props_2cont_props(out->coo_prop, &cont->dc_props);
+	rc = dc_cont_props_init(cont);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
@@ -550,80 +571,6 @@ out:
 	if (put_cont)
 		dc_cont_put(cont);
 	dc_pool_put(pool);
-	return rc;
-}
-
-int
-dc_cont_local_close(daos_handle_t ph, daos_handle_t coh)
-{
-	struct dc_cont *cont = NULL;
-	struct dc_pool *pool = NULL;
-	int		rc = 0;
-
-	cont = dc_hdl2cont(coh);
-	if (cont == NULL)
-		return 0;
-
-	pool = dc_hdl2pool(ph);
-	if (pool == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
-
-	dc_cont_put(cont);
-
-	/* Remove the container from pool container list */
-	D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
-	d_list_del_init(&cont->dc_po_list);
-	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
-
-out:
-	if (cont != NULL)
-		dc_cont_put(cont);
-	if (pool != NULL)
-		dc_pool_put(pool);
-
-	return rc;
-}
-
-int
-dc_cont_local_open(uuid_t cont_uuid, uuid_t cont_hdl_uuid,
-		   unsigned int flags, daos_handle_t ph,
-		   daos_handle_t *coh)
-{
-	struct dc_cont	*cont = NULL;
-	struct dc_pool	*pool = NULL;
-	int		rc = 0;
-
-	if (!daos_handle_is_inval(*coh)) {
-		cont = dc_hdl2cont(*coh);
-		if (cont != NULL)
-			D_GOTO(out, rc);
-	}
-
-	cont = dc_cont_alloc(cont_uuid);
-	if (cont == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	D_ASSERT(!daos_handle_is_inval(ph));
-	pool = dc_hdl2pool(ph);
-	if (pool == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
-
-	uuid_copy(cont->dc_cont_hdl, cont_hdl_uuid);
-	cont->dc_capas = flags;
-
-	D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
-	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
-	cont->dc_pool_hdl = ph;
-	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
-
-	dc_cont_hdl_link(cont);
-	dc_cont2hdl(cont, coh);
-out:
-	if (cont != NULL)
-		dc_cont_put(cont);
-	if (pool != NULL)
-		dc_pool_put(pool);
-
 	return rc;
 }
 
@@ -663,9 +610,8 @@ dc_cont_open(tse_task_t *task)
 		args->flags);
 
 	ep.ep_grp = pool->dp_sys->sy_group;
-	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rc = rsvc_client_choose(&pool->dp_client, &ep);
-	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	rc = dc_pool_choose_svc_rank(pool->dp_pool, &pool->dp_client,
+				     &pool->dp_client_lock, pool->dp_sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(pool->dp_pool, args->uuid), DP_RC(rc));
@@ -683,10 +629,12 @@ dc_cont_open(tse_task_t *task)
 	uuid_copy(in->coi_op.ci_hdl, cont->dc_cont_hdl);
 	in->coi_flags = args->flags;
 	/** Determine which container properties need to be retrieved while
-	 * opening the contianer
+	 * opening the container
 	 */
 	in->coi_prop_bits	= DAOS_CO_QUERY_PROP_CSUM |
-				  DAOS_CO_QUERY_PROP_CSUM_CHUNK;
+				  DAOS_CO_QUERY_PROP_CSUM_CHUNK |
+				  DAOS_CO_QUERY_PROP_DEDUP |
+				  DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD;
 	arg.coa_pool		= pool;
 	arg.coa_info		= args->info;
 	arg.rpc			= rpc;
@@ -824,6 +772,7 @@ dc_cont_close(tse_task_t *task)
 		DP_UUID(cont->dc_cont_hdl));
 
 	if (cont->dc_slave) {
+		daos_csummer_destroy(&cont->dc_csummer);
 		dc_cont_hdl_unlink(cont);
 		dc_cont_put(cont);
 
@@ -842,9 +791,8 @@ dc_cont_close(tse_task_t *task)
 	}
 
 	ep.ep_grp = pool->dp_sys->sy_group;
-	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rc = rsvc_client_choose(&pool->dp_client, &ep);
-	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	rc = dc_pool_choose_svc_rank(pool->dp_pool, &pool->dp_client,
+				     &pool->dp_client_lock, pool->dp_sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
@@ -986,6 +934,11 @@ cont_query_bits(daos_prop_t *prop)
 		case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
 			bits |= DAOS_CO_QUERY_PROP_CSUM_SERVER;
 			break;
+		case DAOS_PROP_CO_DEDUP:
+			bits |= DAOS_CO_QUERY_PROP_DEDUP;
+			break;
+		case DAOS_PROP_CO_DEDUP_THRESHOLD:
+			bits |= DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD;
 		case DAOS_PROP_CO_REDUN_FAC:
 			bits |= DAOS_CO_QUERY_PROP_REDUN_FAC;
 			break;
@@ -1031,7 +984,7 @@ dc_cont_query(tse_task_t *task)
 	int			 rc;
 
 	args = dc_task_get_args(task);
-	D_ASSERTF(args != NULL, "Task Argumetn OPC does not match DC OPC\n");
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	cont = dc_hdl2cont(args->coh);
 	if (cont == NULL)
@@ -1045,9 +998,8 @@ dc_cont_query(tse_task_t *task)
 		DP_UUID(cont->dc_cont_hdl));
 
 	ep.ep_grp  = pool->dp_sys->sy_group;
-	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rc = rsvc_client_choose(&pool->dp_client, &ep);
-	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	rc = dc_pool_choose_svc_rank(pool->dp_pool, &pool->dp_client,
+				     &pool->dp_client_lock, pool->dp_sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
@@ -1064,6 +1016,8 @@ dc_cont_query(tse_task_t *task)
 	uuid_copy(in->cqi_op.ci_uuid, cont->dc_uuid);
 	uuid_copy(in->cqi_op.ci_hdl, cont->dc_cont_hdl);
 	in->cqi_bits = cont_query_bits(args->prop);
+	if (args->info != NULL)
+		in->cqi_bits |= DAOS_CO_QUERY_TGT;
 
 	arg.cqa_pool = pool;
 	arg.cqa_cont = cont;
@@ -1169,9 +1123,8 @@ dc_cont_set_prop(tse_task_t *task)
 		DP_UUID(cont->dc_cont_hdl));
 
 	ep.ep_grp  = pool->dp_sys->sy_group;
-	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rc = rsvc_client_choose(&pool->dp_client, &ep);
-	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	rc = dc_pool_choose_svc_rank(pool->dp_pool, &pool->dp_client,
+				     &pool->dp_client_lock, pool->dp_sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
@@ -1292,9 +1245,8 @@ dc_cont_update_acl(tse_task_t *task)
 		DP_UUID(cont->dc_cont_hdl));
 
 	ep.ep_grp  = pool->dp_sys->sy_group;
-	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rc = rsvc_client_choose(&pool->dp_client, &ep);
-	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	rc = dc_pool_choose_svc_rank(pool->dp_pool, &pool->dp_client,
+				     &pool->dp_client_lock, pool->dp_sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
@@ -1415,9 +1367,8 @@ dc_cont_delete_acl(tse_task_t *task)
 		DP_UUID(cont->dc_cont_hdl));
 
 	ep.ep_grp  = pool->dp_sys->sy_group;
-	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rc = rsvc_client_choose(&pool->dp_client, &ep);
-	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	rc = dc_pool_choose_svc_rank(pool->dp_pool, &pool->dp_client,
+				     &pool->dp_client_lock, pool->dp_sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
@@ -1490,8 +1441,7 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 	struct dc_cont *cont = arg->coaa_cont;
 	int rc = task->dt_result;
 
-	if (daos_rpc_retryable_rc(rc) || rc == -DER_STALE ||
-	    rc == -DER_EVICTED) {
+	if (daos_rpc_retryable_rc(rc) || rc == -DER_STALE) {
 		tse_sched_t *sched = tse_task2sched(task);
 		daos_pool_query_t *pargs;
 		tse_task_t *ptask;
@@ -1659,17 +1609,24 @@ err:
 
 /* Structure of global buffer for dc_cont */
 struct dc_cont_glob {
-	/* magic number, DC_CONT_GLOB_MAGIC */
+	/** magic number, DC_CONT_GLOB_MAGIC */
 	uint32_t	dcg_magic;
 	uint32_t	dcg_padding;
-	/* pool connection handle */
+	/** pool connection handle */
 	uuid_t		dcg_pool_hdl;
-	/* container uuid and capas */
+	/** container uuid and capas */
 	uuid_t		dcg_uuid;
 	uuid_t		dcg_cont_hdl;
 	uint64_t	dcg_capas;
+	/** specific features */
 	uint16_t	dcg_csum_type;
+	uint16_t        dcg_encrypt_type;
+	uint32_t	dcg_compress_type;
 	uint32_t	dcg_csum_chunksize;
+	uint32_t        dcg_dedup_th;
+	uint32_t	dcg_csum_srv_verify:1,
+			dcg_dedup_enabled:1,
+			dcg_dedup_verify:1;
 };
 
 static inline daos_size_t
@@ -1724,16 +1681,23 @@ dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 	if (pool == NULL)
 		D_GOTO(out_cont, rc = -DER_NO_HDL);
 
-	/* init global handle */
+	/** init global handle */
 	cont_glob = (struct dc_cont_glob *)glob->iov_buf;
 	cont_glob->dcg_magic = DC_CONT_GLOB_MAGIC;
 	uuid_copy(cont_glob->dcg_pool_hdl, pool->dp_pool_hdl);
 	uuid_copy(cont_glob->dcg_uuid, cont->dc_uuid);
 	uuid_copy(cont_glob->dcg_cont_hdl, cont->dc_cont_hdl);
 	cont_glob->dcg_capas = cont->dc_capas;
-	cont_glob->dcg_csum_type = daos_csummer_get_type(cont->dc_csummer);
-	cont_glob->dcg_csum_chunksize =
-		daos_csummer_get_chunksize(cont->dc_csummer);
+
+	/** transfer container properties */
+	cont_glob->dcg_csum_type	= cont->dc_props.dcp_csum_type;
+	cont_glob->dcg_csum_chunksize	= cont->dc_props.dcp_chunksize;
+	cont_glob->dcg_csum_srv_verify	= cont->dc_props.dcp_srv_verify;
+	cont_glob->dcg_dedup_enabled	= cont->dc_props.dcp_dedup_enabled;
+	cont_glob->dcg_dedup_verify	= cont->dc_props.dcp_dedup_verify;
+	cont_glob->dcg_dedup_th		= cont->dc_props.dcp_dedup_size;
+	cont_glob->dcg_compress_type	= cont->dc_props.dcp_compress_type;
+	cont_glob->dcg_encrypt_type	= cont->dc_props.dcp_encrypt_type;
 
 	dc_pool_put(pool);
 out_cont:
@@ -1765,19 +1729,6 @@ dc_cont_local2global(daos_handle_t coh, d_iov_t *glob)
 
 out:
 	return rc;
-}
-
-static void
-csum_cont_g2l(const struct dc_cont_glob *cont_glob, struct dc_cont *cont)
-{
-	struct csum_ft *csum_algo;
-
-	csum_algo = daos_csum_type2algo(cont_glob->dcg_csum_type);
-	if (csum_algo != NULL)
-		daos_csummer_init(&cont->dc_csummer, csum_algo,
-				  cont_glob->dcg_csum_chunksize);
-	else
-		cont->dc_csummer = NULL;
 }
 
 static int
@@ -1821,7 +1772,18 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	cont->dc_pool_hdl = poh;
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
-	csum_cont_g2l(cont_glob, cont);
+	/** extract container properties */
+	cont->dc_props.dcp_dedup_enabled = cont_glob->dcg_dedup_enabled;
+	cont->dc_props.dcp_csum_type	 = cont_glob->dcg_csum_type;
+	cont->dc_props.dcp_srv_verify	 = cont_glob->dcg_csum_srv_verify;
+	cont->dc_props.dcp_chunksize	 = cont_glob->dcg_csum_chunksize;
+	cont->dc_props.dcp_dedup_size	 = cont_glob->dcg_dedup_th;
+	cont->dc_props.dcp_dedup_verify  = cont_glob->dcg_dedup_verify;
+	cont->dc_props.dcp_compress_type = cont_glob->dcg_compress_type;
+	cont->dc_props.dcp_encrypt_type	 = cont_glob->dcg_encrypt_type;
+	rc = dc_cont_props_init(cont);
+	if (rc != 0)
+		D_GOTO(out_cont, rc);
 
 	dc_cont_hdl_link(cont);
 	dc_cont2hdl(cont, coh);
@@ -1864,7 +1826,7 @@ dc_cont_global2local(daos_handle_t poh, d_iov_t glob, daos_handle_t *coh)
 		D_ASSERT(cont_glob->dcg_magic == DC_CONT_GLOB_MAGIC);
 
 	} else if (cont_glob->dcg_magic != DC_CONT_GLOB_MAGIC) {
-		D_ERROR("Bad hgh_magic: 0x%x.\n", cont_glob->dcg_magic);
+		D_ERROR("Bad hgh_magic: %#x.\n", cont_glob->dcg_magic);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -1973,9 +1935,10 @@ cont_req_prepare(daos_handle_t coh, enum cont_operation opcode,
 	D_ASSERT(args->cra_pool != NULL);
 
 	ep.ep_grp  = args->cra_pool->dp_sys->sy_group;
-	D_MUTEX_LOCK(&args->cra_pool->dp_client_lock);
-	rc = rsvc_client_choose(&args->cra_pool->dp_client, &ep);
-	D_MUTEX_UNLOCK(&args->cra_pool->dp_client_lock);
+	rc = dc_pool_choose_svc_rank(args->cra_pool->dp_pool,
+				     &args->cra_pool->dp_client,
+				     &args->cra_pool->dp_client_lock,
+				     args->cra_pool->dp_sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(args->cra_pool->dp_pool,
@@ -2090,12 +2053,20 @@ attr_bulk_create(int n, char *names[], void *values[], size_t sizes[],
 	int		j;
 	d_sg_list_t	sgl;
 
-	/* Buffers = 'n' names + non-null values + 1 sizes */
+	/* Buffers = 'n' names */
 	sgl.sg_nr_out	= 0;
-	sgl.sg_nr	= n + 1;
-	for (j = 0; j < n; j++)
-		if (sizes[j] > 0)
-			++sgl.sg_nr;
+	sgl.sg_nr	= n;
+
+	/* + 1 sizes */
+	if (sizes != NULL)
+		++sgl.sg_nr;
+
+	/* + non-null values */
+	if (sizes != NULL && values != NULL) {
+		for (j = 0; j < n; j++)
+			if (sizes[j] > 0)
+				++sgl.sg_nr;
+	}
 
 	D_ALLOC_ARRAY(sgl.sg_iovs, sgl.sg_nr);
 	if (sgl.sg_iovs == NULL)
@@ -2107,14 +2078,18 @@ attr_bulk_create(int n, char *names[], void *values[], size_t sizes[],
 			     strlen(names[j]) + 1 /* trailing '\0' */);
 
 	/* TODO: Add packing/unpacking of non-byte-arrays to rpc.[hc] ? */
+
 	/* sizes */
-	d_iov_set(&sgl.sg_iovs[i++], (void *)sizes, n * sizeof(*sizes));
+	if (sizes != NULL)
+		d_iov_set(&sgl.sg_iovs[i++], (void *)sizes, n * sizeof(*sizes));
 
 	/* values */
-	for (j = 0; j < n; ++j)
-		if (sizes[j] > 0)
-			d_iov_set(&sgl.sg_iovs[i++],
-				     values[j], sizes[j]);
+	if (sizes != NULL && values != NULL) {
+		for (j = 0; j < n; ++j)
+			if (sizes[j] > 0)
+				d_iov_set(&sgl.sg_iovs[i++],
+					  values[j], sizes[j]);
+	}
 
 	rc = crt_bulk_create(crt_ctx, &sgl, perm, bulk);
 	D_FREE(sgl.sg_iovs);
@@ -2133,8 +2108,8 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 {
 	int i;
 
-	if (n <= 0 || names == NULL || sizes == NULL
-	    || (values == NULL && !readonly)) {
+	if (n <= 0 || names == NULL || ((sizes == NULL
+	    || values == NULL) && !readonly)) {
 		D_ERROR("Invalid Arguments: n = %d, names = %p, values = %p"
 			", sizes = %p", n, names, values, sizes);
 		return -DER_INVAL;
@@ -2147,16 +2122,17 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 
 			return -DER_INVAL;
 		}
-		if (values == NULL)
-			sizes[i] = 0; /* executes only if 'readonly' is true */
-		else if (values[i] == NULL || sizes[i] == 0) {
-			if (!readonly) {
-				D_ERROR("Invalid Arguments: values[%d] = %p"
-					", sizes[%d] = %lu",
-					i, values[i], i, sizes[i]);
-				return -DER_INVAL;
+		if (sizes != NULL) {
+			if (values == NULL)
+				sizes[i] = 0;
+			else if (values[i] == NULL || sizes[i] == 0) {
+				if (!readonly) {
+					D_ERROR("Invalid Arguments: values[%d] = %p, sizes[%d] = %lu",
+						i, values[i], i, sizes[i]);
+					return -DER_INVAL;
+				}
+				sizes[i] = 0;
 			}
-			sizes[i] = 0;
 		}
 	}
 	return 0;
@@ -2285,6 +2261,59 @@ out:
 	return rc;
 }
 
+int
+dc_cont_del_attr(tse_task_t *task)
+{
+	daos_cont_set_attr_t	*args;
+	struct cont_attr_del_in	*in;
+	struct cont_req_arg	 cb_args;
+	int			 rc;
+
+	args = dc_task_get_args(task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	rc = attr_check_input(args->n, args->names, NULL, NULL, true);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = cont_req_prepare(args->coh, CONT_ATTR_DEL,
+			      daos_task2ctx(task), &cb_args);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	D_DEBUG(DF_DSMC, DF_CONT": deleting attributes: hdl="DF_UUID"\n",
+		DP_CONT(cb_args.cra_pool->dp_pool_hdl,
+			cb_args.cra_cont->dc_uuid),
+		DP_UUID(cb_args.cra_cont->dc_cont_hdl));
+
+	in = crt_req_get(cb_args.cra_rpc);
+	in->cadi_count = args->n;
+	rc = attr_bulk_create(args->n, (char **)args->names, NULL, NULL,
+			      daos_task2ctx(task), CRT_BULK_RO, &in->cadi_bulk);
+	if (rc != 0)
+		D_GOTO(cleanup, rc);
+
+	cb_args.cra_bulk = in->cadi_bulk;
+	rc = tse_task_register_comp_cb(task, cont_req_complete,
+				       &cb_args, sizeof(cb_args));
+	if (rc != 0)
+		D_GOTO(cleanup, rc);
+
+	crt_req_addref(cb_args.cra_rpc);
+	rc = daos_rpc_send(cb_args.cra_rpc, task);
+	if (rc != 0)
+		D_GOTO(cleanup, rc);
+
+	return rc;
+cleanup:
+	cont_req_cleanup(CLEANUP_BULK, &cb_args);
+out:
+	tse_task_complete(task, rc);
+	D_DEBUG(DF_DSMC, "Failed to del container attributes: "DF_RC"\n",
+		DP_RC(rc));
+	return rc;
+}
+
 struct epoch_op_arg {
 	/* eoa_req must always be the first member of epoch_op_arg */
 	struct cont_req_arg	 eoa_req;
@@ -2329,8 +2358,7 @@ dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	D_DEBUG(DF_DSMC, DF_CONT": op=%u; hdl="DF_UUID"; epoch="DF_U64"\n",
 		DP_CONT(arg.eoa_req.cra_pool->dp_pool_hdl,
 			arg.eoa_req.cra_cont->dc_uuid), opc,
-		DP_UUID(arg.eoa_req.cra_cont->dc_cont_hdl),
-		epoch == NULL ? 0 : *epoch);
+		DP_UUID(arg.eoa_req.cra_cont->dc_cont_hdl), *epoch);
 
 	in = crt_req_get(arg.eoa_req.cra_rpc);
 	in->cei_epoch = *epoch;
@@ -2353,8 +2381,7 @@ dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	return rc;
 out:
 	tse_task_complete(task, rc);
-	D_DEBUG(DF_DSMC, "epoch op %u("DF_U64") failed: %d\n", opc,
-		epoch == NULL ? 0 : *epoch, rc);
+	D_DEBUG(DF_DSMC, "epoch op %u("DF_U64") failed: %d\n", opc, *epoch, rc);
 	return rc;
 }
 
@@ -2402,7 +2429,7 @@ dc_cont_create_snap(tse_task_t *task)
 	if (args->name != NULL) {
 		D_ERROR("Named Snapshots not yet supported\n");
 		tse_task_complete(task, -DER_NOSYS);
-		return DER_NOSYS;
+		return -DER_NOSYS;
 	}
 
 	if (args->epoch == NULL) {
@@ -2645,5 +2672,22 @@ dc_cont_hdl2csummer(daos_handle_t coh)
 	dc_cont_put(dc);
 
 	return csum;
+
+}
+
+struct cont_props
+dc_cont_hdl2props(daos_handle_t coh)
+{
+	struct dc_cont	*dc = NULL;
+	struct cont_props result = {0};
+
+	dc = dc_hdl2cont(coh);
+	if (dc == NULL)
+		return result;
+
+	result = dc->dc_props;
+	dc_cont_put(dc);
+
+	return result;
 
 }

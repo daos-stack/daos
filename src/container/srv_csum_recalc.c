@@ -22,6 +22,7 @@
  */
 
 #define D_LOGFAC	DD_FAC(csum)
+#define C_TRACE(...)	D_DEBUG(DB_CSUM, __VA_ARGS__)
 
 #include <daos/common.h>
 #include <daos/checksum.h>
@@ -36,7 +37,7 @@
  * one per input segment. These segments are coalecsed into a single
  * output segment by the overall aggregation process.
  *
- * The input data is held in a buffer that is specifed by a bio sg_list.
+ * The input data is held in a buffer that is specified by a bio sg_list.
  * The data for the output segment is place within the initial range of
  * the buffer. Following this range, the additional data required for
  * checksum data is stored. These additional segments, either prefix
@@ -50,7 +51,7 @@
  * the data for each input segment.
  *
  * The calculated checksums, are then compared to the checksums
- * associatied with the input segments. These input checksums were
+ * associated with the input segments. These input checksums were
  * returned by the evtree iterator that generates the input extents.
  * Input segments that overlap a merge window are an exception to this.
  * Here, the checksums used for verification are from the overlapping
@@ -132,12 +133,17 @@ calc_csum_params(struct dcs_csum_info *csum_info, struct csum_recalc *recalc,
 	return low_idx;
 }
 
-/* Verifies checksums for an input segement. */
+/* Verifies checksums for an input segment. */
 static bool
 csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 		unsigned int rec_size, unsigned int prefix_len)
 {
 	unsigned int	j = 0;
+
+	if (recalc->cr_phy_off && DAOS_FAIL_CHECK(DAOS_VOS_AGG_MW_THRESH)) {
+		D_INFO("CHECKSUM merge window failure injection.\n");
+		return false;
+	}
 
 	/* The index j is used to determine the start offset within
 	 * the prior checksum array (associated with the input physical
@@ -174,7 +180,7 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 	}
 
 	/* Comparison is for the full length of the output csum array,
-	 * starting a the corrent offset of the checksum array for the inout
+	 * starting at the correct offset of the checksum array for the input
 	 * segment.
 	 */
 	return !memcmp(new_csum->cs_csum,
@@ -182,8 +188,8 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 		       new_csum->cs_nr * new_csum->cs_len);
 }
 
-/* Driver for the checksum verification of input segements, and calculation
- * of checksum array for the output segment. This fuction is called directly
+/* Driver for the checksum verification of input segments, and calculation
+ * of checksum array for the output segment. This function is called directly
  * from the VOS unit test, but is invoked in a ULT (running in a helper xstream
  * when available) for standard aggregation running within the DAOS server.
  */
@@ -205,11 +211,11 @@ ds_csum_agg_recalc(void *recalc_args)
 	/* need at most prefix + buf + suffix in sgl */
 	rc = daos_sgl_init(&sgl, 3);
 	if (rc) {
-		args->cra_rc = -DER_NOMEM;
+		args->cra_rc = rc;
 		return;
 	}
-	daos_csummer_type_init(&csummer, csum_info.cs_type,
-			       csum_info.cs_chunksize);
+	daos_csummer_init_with_type(&csummer, csum_info.cs_type,
+				    csum_info.cs_chunksize, 0);
 	for (i = 0; i < args->cra_seg_cnt; i++) {
 		bool		is_valid = false;
 		unsigned int	this_buf_nr, this_buf_idx;
@@ -291,6 +297,7 @@ ds_csum_recalc(void *args)
 	struct csum_recalc_args	*cs_args = (struct csum_recalc_args *) args;
 	struct dss_module_info  *info;
 
+	C_TRACE("Checksum Aggregation\n");
 	ABT_eventual_create(0, &cs_args->csum_eventual);
 	dss_ult_create(ds_csum_agg_recalc, args,
 		       DSS_ULT_CHECKSUM, DSS_TGT_SELF, 0, NULL);

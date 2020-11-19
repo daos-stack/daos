@@ -24,7 +24,6 @@
 package spdk
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -113,47 +112,5 @@ func TestSpdk_WrapCleanError(t *testing.T) {
 			gotErr := wrapCleanError(tc.inErr, tc.cleanErr)
 			common.CmpErr(t, tc.expOutErr, gotErr)
 		})
-	}
-}
-
-func TestDiscover(t *testing.T) {
-	//	var se Env
-	//	var n Nvme
-
-	tests := []struct {
-		shmID         int
-		shouldSucceed bool
-	}{
-		{
-			shmID:         0,
-			shouldSucceed: true,
-		},
-		//		{
-		//			shmID:         1,
-		//			shouldSucceed: true,
-		//		},
-	}
-
-	for _, _ = range tests {
-		fmt.Println("spdk binding tests currently disabled")
-
-		// TODO
-		//		if err := se.InitSPDKEnv(tt.shmID); err != nil {
-		//			t.Fatal(err.Error())
-		//		}
-		//
-		//		cs, nss, err := n.Discover()
-		//		if checkFailure(tt.shouldSucceed, err) != nil {
-		//			t.Errorf("case %d: %v", i, err)
-		//		}
-		//		fmt.Printf("controllers: %#v\n", cs)
-		//		fmt.Printf("namespaces: %#v\n", nss)
-
-		//		_, _, err = n.Update(0, "", 0)
-		//		if checkFailure(tt.shouldSucceed, err) != nil {
-		//			t.Errorf("case %d: %v", i, err)
-		//		}
-
-		//		n.Cleanup()
 	}
 }
