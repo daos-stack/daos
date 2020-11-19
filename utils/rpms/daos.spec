@@ -11,7 +11,7 @@
 
 Name:          daos
 Version:       1.1.1
-Release:       6%{?relval}%{?dist}
+Release:       7%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
