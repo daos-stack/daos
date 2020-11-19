@@ -480,17 +480,12 @@ fetch_daos_handles(int fd, struct fd_entry *entry)
 static int
 connect_daos_cont(int fd, struct dfuse_il_reply *il_reply)
 {
-	d_rank_list_t		*svcl;
 	int			rc;
 
-	svcl = daos_rank_list_parse("0", ":");
-
-	rc = daos_pool_connect(il_reply->fir_pool, NULL, svcl, DAOS_PC_RW,
+	rc = daos_pool_connect(il_reply->fir_pool, NULL, NULL, DAOS_PC_RW,
 			       &ioil_ioc.ioc_poh, NULL, NULL);
-	if (rc) {
-		D_FREE(svcl);
+	if (rc)
 		return rc;
-	}
 
 	rc = daos_cont_open(ioil_ioc.ioc_poh, il_reply->fir_cont, DAOS_COO_RW,
 			    &ioil_ioc.ioc_coh, NULL, NULL);
