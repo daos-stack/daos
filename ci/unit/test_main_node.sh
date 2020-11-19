@@ -54,7 +54,6 @@ else
 	mv test_results/unit-test-*.memcheck.xml .
 	# Debugging
 	ls unit-test-*.memcheck.xml
-	set +x
 	for i in $(ls unit-test-*.memcheck.xml); do
 	    kind="$(grep "<kind>" $i || true)"
 	    if [ ! -z "$kind" ]; then
@@ -63,6 +62,5 @@ else
 		echo ""
 	    fi;
 	done
-	set -x
     fi
 fi
