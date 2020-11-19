@@ -1480,7 +1480,7 @@ main(int argc, char **argv)
 			int len = snprintf(NULL, 0, "/mnt/daos/vos_perf%d.pmem",
 					   ts_ctx.tsc_mpi_rank) + 1;
 			snprintf(ts_pmem_file, len, "/mnt/daos/vos_perf%d.pmem",
-				ts_ctx.tsc_mpi_rank);
+				 ts_ctx.tsc_mpi_rank);
 		} else {
 			char id[4];
 			int  len = snprintf(NULL, 0, "%d",
