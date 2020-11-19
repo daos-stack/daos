@@ -79,6 +79,9 @@ func (cmd *startCmd) Execute(_ []string) error {
 		cmd.log.Debugf("This system is not NUMA aware.  Any devices found are reported as NUMA node 0.")
 	}
 
+	procmon := NewProcMon(cmd.log)
+	procmon.startMonitoring(ctx)
+
 	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.log, cmd.cfg.TransportConfig))
 	drpcServer.RegisterRPCModule(&mgmtModule{
 		log:        cmd.log,
@@ -87,6 +90,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 		aiCache:    &attachInfoCache{log: cmd.log, enabled: enabled},
 		numaAware:  numaAware,
 		netCtx:     netCtx,
+		monitor:    procmon,
 	})
 
 	err = drpcServer.Start()

@@ -77,7 +77,7 @@ d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src)
 
 	rc = d_rank_list_dup(dst, src);
 	if (rc != 0) {
-		D_ERROR("d_rank_list_dup failed, rc: %d.\n", rc);
+		D_ERROR("d_rank_list_dup() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, 0);
 	}
 
@@ -598,7 +598,7 @@ void d_getenv_int(const char *env, unsigned *int_val)
 	}
 
 	value = atoi(env_val);
-	D_DEBUG(DB_TRACE, "d_getenv_int(), get ENV %s as %d.\n", env, value);
+	D_DEBUG(DB_TRACE, "get ENV %s as %d.\n", env, value);
 	*int_val = value;
 }
 
