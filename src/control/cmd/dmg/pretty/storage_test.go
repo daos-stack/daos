@@ -1150,14 +1150,14 @@ host1
 							Devices: []*storage.SmdDevice{
 								{
 									UUID:      common.MockUUID(0),
-									TrAddr:    "0000:8a:0.0",
+									TrAddr:    "0000:8a:00.0",
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      0,
 									State:     "NORMAL",
 								},
 								{
 									UUID:      common.MockUUID(1),
-									TrAddr:    "0000:8b:0.0",
+									TrAddr:    "0000:8b:00.0",
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      1,
 									State:     "FAULTY",
@@ -1173,9 +1173,9 @@ host1
 -----
   Devices
     UUID:00000000-0000-0000-0000-000000000000 [TrAddr:0000:8a:00.0]
-        Targets:[0 1 2] Rank:0 State:NORMAL
+      Targets:[0 1 2] Rank:0 State:NORMAL
     UUID:11111111-1111-1111-1111-111111111111 [TrAddr:0000:8b:00.0]
-        Targets:[0 1 2] Rank:1 State:FAULTY
+      Targets:[0 1 2] Rank:1 State:FAULTY
 `,
 		},
 		"list-devices (none found)": {
@@ -1224,7 +1224,8 @@ host1
 host1
 -----
   Devices
-    UUID:00000000-0000-0000-0000-000000000000 Targets:[0 1 2] Rank:0 State:NORMAL
+    UUID:00000000-0000-0000-0000-000000000000 [TrAddr:]
+      Targets:[0 1 2] Rank:0 State:NORMAL
       Health Stats:
         Temperature:%dK(%.02fC)
         Temperature Warning Duration:%dm0s
