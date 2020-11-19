@@ -36,7 +36,6 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_pool		*dfp = parent->ie_dfs->dfs_dfp;
 	struct dfuse_dfs		*dfs;
 	struct dfuse_dfs		*dfsi;
-	dfs_t				*ddfs;
 	int				rc;
 
 	/* This code is only supposed to support one level of directory descent
@@ -72,13 +71,15 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	if (create) {
 		rc = dfs_cont_create(dfp->dfp_poh, dfs->dfs_cont,
-				     NULL, NULL, NULL);
+				     NULL, &dfs->dfs_coh, &dfs->dfs_ns);
 		if (rc) {
 			DFUSE_TRA_ERROR(dfs,
 					"dfs_cont_create() failed: (%d)",
 					rc);
 			D_GOTO(err_unlock, rc);
 		}
+		d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
+		D_GOTO(alloc_ie, 0);
 	} else {
 		d_list_for_each_entry(dfsi,
 				      &dfp->dfp_dfs_list,
@@ -143,13 +144,11 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(err_unlock, rc = daos_der2errno(rc));
 	}
 
-	rc = dfs_mount(dfp->dfp_poh, dfs->dfs_coh, O_RDWR, &ddfs);
+	rc = dfs_mount(dfp->dfp_poh, dfs->dfs_coh, O_RDWR, &dfs->dfs_ns);
 	if (rc) {
 		DFUSE_TRA_ERROR(ie, "dfs_mount() failed: (%s)", strerror(rc));
 		D_GOTO(close, rc);
 	}
-
-	dfs->dfs_ns = ddfs;
 
 	d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
 

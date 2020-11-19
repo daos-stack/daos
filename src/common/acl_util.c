@@ -918,3 +918,67 @@ daos_acl_to_strs(struct daos_acl *acl, char ***ace_strs, size_t *ace_nr)
 
 	return 0;
 }
+
+static int
+verbose_str_to_stream(FILE *stream, const char *ace_str)
+{
+	char	verbose_str[DAOS_ACL_MAX_ACE_STR_LEN * 2];
+	int	rc;
+
+	rc = daos_ace_str_get_verbose(ace_str, verbose_str,
+				      sizeof(verbose_str));
+	/* String may have been truncated - that's OK */
+	if (rc != 0 && rc != -DER_TRUNC) {
+		D_ERROR("failed verbose translation for ACE string '%s': %d\n",
+			ace_str, rc);
+		return rc;
+	}
+
+	return D_FPRINTF(stream, "# %s\n", verbose_str);
+}
+
+int
+daos_acl_to_stream(FILE *stream, struct daos_acl *acl, bool verbose)
+{
+	int	rc = 0;
+	char	**aces = NULL;
+	size_t	aces_nr, i;
+
+	if (stream == NULL) {
+		D_ERROR("Invalid stream\n");
+		return -DER_INVAL;
+	}
+
+	if (acl != NULL) {
+		rc = daos_acl_to_strs(acl, &aces, &aces_nr);
+		if (rc != 0)
+			return rc;
+	}
+
+	rc = D_FPRINTF(stream, "# Entries:\n");
+	if (rc != 0)
+		goto out;
+
+	if (acl == NULL || acl->dal_len == 0) {
+		rc = D_FPRINTF(stream, "#   None\n");
+		goto out;
+	}
+
+	for (i = 0; i < aces_nr; i++) {
+		if (verbose) {
+			rc = verbose_str_to_stream(stream, aces[i]);
+			if (rc != 0)
+				goto out;
+		}
+		rc = D_FPRINTF(stream, "%s\n", aces[i]);
+		if (rc != 0)
+			goto out;
+	}
+
+out:
+	if (aces != NULL) {
+		free_strings(aces, aces_nr);
+		D_FREE(aces);
+	}
+	return rc;
+}

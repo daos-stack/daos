@@ -109,7 +109,7 @@ func drespToMemberResult(rank system.Rank, dresp *drpc.Response, err error, tSta
 	resp := &mgmtpb.DaosResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return system.NewMemberResult(rank,
-			errors.WithMessagef(err, "rank %s dRPC unmarshal failed", &rank),
+			errors.Errorf("rank %s dRPC unmarshal failed", &rank),
 			system.MemberStateErrored)
 	}
 	if resp.GetStatus() != 0 {
