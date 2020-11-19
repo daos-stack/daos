@@ -513,16 +513,10 @@ ioil_open_cont_handles(int fd, struct dfuse_il_reply *il_reply,
 	struct ioil_pool       *pool = cont->ioc_pool;
 
 	if (daos_handle_is_inval(pool->iop_poh)) {
-		d_rank_list_t		*svcl;
-
-		svcl = daos_rank_list_parse("0", ":");
-
-		rc = daos_pool_connect(il_reply->fir_pool, NULL, svcl,
+		rc = daos_pool_connect(il_reply->fir_pool, NULL, NULL,
 				       DAOS_PC_RW, &pool->iop_poh, NULL, NULL);
-		if (rc) {
-			D_FREE(svcl);
+		if (rc)
 			return false;
-		}
 	}
 
 	rc = daos_cont_open(pool->iop_poh, il_reply->fir_cont, DAOS_COO_RW,
