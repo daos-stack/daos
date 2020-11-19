@@ -263,6 +263,8 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		}
 
 		singv_lo = (singv_los == NULL) ? NULL : &singv_los[i];
+		if (singv_lo != NULL)
+			singv_lo->cs_cell_align = 1;
 		rc = daos_csummer_verify_iod(csummer_copy, &shard_iod,
 					     &shard_sgl, iod_csum, singv_lo,
 					     shard_idx, map);
@@ -345,27 +347,37 @@ iom_recx_merge(daos_iom_t *dst, daos_recx_t *recx, bool iom_realloc)
 
 static int
 obj_ec_iom_merge(struct obj_reasb_req *reasb_req, uint32_t tgt_idx,
-		 const daos_iom_t *src, daos_iom_t *dst)
+		 const daos_iom_t *src, daos_iom_t *dst,
+		 struct daos_recx_ep_list *recov_list)
 {
 	struct daos_oclass_attr	*oca = reasb_req->orr_oca;
 	uint64_t		 stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
 	uint64_t		 cell_rec_nr = obj_ec_cell_rec_nr(oca);
 	uint64_t		 end, rec_nr;
 	daos_recx_t		 hi, lo, recx, tmpr;
+	daos_recx_t		 recov_hi, recov_lo;
 	uint32_t		 iom_nr, i;
 	bool			 done;
 	int			 rc = 0;
 
 	D_ASSERT(tgt_idx < obj_ec_data_tgt_nr(oca));
 
+	if (recov_list != NULL)
+		daos_recx_ep_list_hilo(recov_list, &recov_hi, &recov_lo);
+
 	D_SPIN_LOCK(&reasb_req->orr_spin);
+
 	/* merge iom_recx_hi */
 	hi = src->iom_recx_hi;
 	end = DAOS_RECX_END(hi);
-	hi.rx_idx = max(hi.rx_idx, rounddown(end - 1, cell_rec_nr));
+	if (end > 0)
+		hi.rx_idx = max(hi.rx_idx, rounddown(end - 1, cell_rec_nr));
 	hi.rx_nr = end - hi.rx_idx;
 	hi.rx_idx = obj_ec_idx_vos2daos(hi.rx_idx, stripe_rec_nr,
 					cell_rec_nr, tgt_idx);
+	if (recov_list != NULL &&
+	    DAOS_RECX_END(recov_hi) > DAOS_RECX_END(hi))
+		hi = recov_hi;
 	if (reasb_req->orr_iom_tgt_nr == 0)
 		dst->iom_recx_hi = hi;
 	else if (DAOS_RECX_OVERLAP(dst->iom_recx_hi, hi) ||
@@ -380,6 +392,9 @@ obj_ec_iom_merge(struct obj_reasb_req *reasb_req, uint32_t tgt_idx,
 	lo.rx_nr = min(end, roundup(lo.rx_idx + 1, cell_rec_nr)) - lo.rx_idx;
 	lo.rx_idx = obj_ec_idx_vos2daos(lo.rx_idx, stripe_rec_nr,
 					cell_rec_nr, tgt_idx);
+	if (recov_list != NULL &&
+	    DAOS_RECX_END(recov_lo) < DAOS_RECX_END(lo))
+		lo = recov_lo;
 	if (reasb_req->orr_iom_tgt_nr == 0)
 		dst->iom_recx_lo = lo;
 	else if (DAOS_RECX_OVERLAP(dst->iom_recx_lo, lo) ||
@@ -439,6 +454,22 @@ obj_ec_iom_merge(struct obj_reasb_req *reasb_req, uint32_t tgt_idx,
 		}
 		if (rc)
 			break;
+	}
+
+	/* merge recov list */
+	if (recov_list != NULL && rc == 0) {
+		for (i = 0; i < recov_list->re_nr; i++) {
+			rc = iom_recx_merge(dst,
+					    &recov_list->re_items[i].re_recx,
+					    reasb_req->orr_iom_realloc);
+			if (rc == -DER_NOMEM)
+				break;
+			if (rc == -DER_REC2BIG) {
+				if (done)
+					dst->iom_nr_out += recov_list->re_nr;
+				rc = 0;
+			}
+		}
 	}
 
 	if (rc == 0 && done) {
@@ -643,17 +674,25 @@ dc_rw_cb(tse_task_t *task, void *arg)
 			    DAOS_OC_IS_EC(reasb_req->orr_oca);
 
 		if (rw_args->maps != NULL && orwo->orw_maps.ca_count > 0) {
-			daos_iom_t	*reply_maps;
+			daos_iom_t			*reply_maps;
+			struct daos_recx_ep_list	*recov_list;
 
 			/** Should have 1 map per iod */
 			D_ASSERT(orwo->orw_maps.ca_count == orw->orw_nr);
 			for (i = 0; i < orw->orw_nr; i++) {
 				reply_maps = &orwo->orw_maps.ca_arrays[i];
+				recov_list = orwo->orw_rels.ca_arrays;
+				if (recov_list != NULL) {
+					recov_list += i;
+					if (recov_list->re_nr == 0)
+						recov_list = NULL;
+				}
 				if (is_ec_obj &&
 				    reply_maps->iom_type == DAOS_IOD_ARRAY) {
 					rc = obj_ec_iom_merge(reasb_req,
 						orw->orw_tgt_idx, reply_maps,
-						&rw_args->maps[i]);
+						&rw_args->maps[i],
+						recov_list);
 				} else {
 					rc = daos_iom_copy(reply_maps,
 						&rw_args->maps[i]);
@@ -941,7 +980,10 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	rw_args.shard_args = args;
 	/* remember the sgl to copyout the data inline for fetch */
 	rw_args.rwaa_sgls = (opc == DAOS_OBJ_RPC_FETCH) ? sgls : NULL;
-	rw_args.maps = args->api_args->ioms;
+	if (args->reasb_req && args->reasb_req->orr_recov)
+		rw_args.maps = NULL;
+	else
+		rw_args.maps = args->api_args->ioms;
 	if (opc == DAOS_OBJ_RPC_FETCH) {
 		if (args->iod_csums != NULL) {
 			orw->orw_flags |= (ORF_CREATE_MAP |

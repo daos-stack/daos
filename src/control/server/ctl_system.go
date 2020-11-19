@@ -190,6 +190,10 @@ func (svc *ControlService) SystemQuery(ctx context.Context, pbReq *ctlpb.SystemQ
 		return nil, errors.Errorf("nil %T request", pbReq)
 	}
 
+	if err := svc.sysdb.CheckLeader(); err != nil {
+		return nil, err
+	}
+
 	fanResp, rankSet, err := svc.rpcFanout(ctx, fanoutRequest{
 		Method: control.PingRanks,
 		Hosts:  pbReq.GetHosts(),
@@ -243,6 +247,10 @@ func (svc *ControlService) SystemStop(ctx context.Context, pbReq *ctlpb.SystemSt
 
 	if pbReq == nil {
 		return nil, errors.Errorf("nil %T request", pbReq)
+	}
+
+	if err := svc.sysdb.CheckLeader(); err != nil {
+		return nil, err
 	}
 
 	// TODO: consider locking to prevent join attempts when shutting down
@@ -306,6 +314,10 @@ func (svc *ControlService) SystemStart(ctx context.Context, pbReq *ctlpb.SystemS
 		return nil, errors.Errorf("nil %T request", pbReq)
 	}
 
+	if err := svc.sysdb.CheckLeader(); err != nil {
+		return nil, err
+	}
+
 	fanResp, _, err := svc.rpcFanout(ctx, fanoutRequest{
 		Method: control.StartRanks,
 		Hosts:  pbReq.GetHosts(),
@@ -343,6 +355,14 @@ func (svc *ControlService) SystemResetFormat(ctx context.Context, pbReq *ctlpb.S
 
 	if pbReq == nil {
 		return nil, errors.Errorf("nil %T request", pbReq)
+	}
+
+	// We can't rely on the db being up and running, as one of the
+	// use cases for this command is to nuke the system from orbit
+	// regardless of what state it's in. But we should at least enforce
+	// that the RPC is being handled on a MS replica.
+	if err := svc.sysdb.CheckReplica(); err != nil {
+		return nil, err
 	}
 
 	fanResp, _, err := svc.rpcFanout(ctx, fanoutRequest{

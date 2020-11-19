@@ -468,8 +468,6 @@ lookup_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
 	     daos_handle_t th, daos_recx_t *recxs, int nr, void *data,
 	     daos_size_t data_size, struct ioreq *req)
 {
-	assert_in_range(nr, 1, IOREQ_IOD_NR);
-
 	/* dkey */
 	ioreq_dkey_set(req, dkey);
 
@@ -667,7 +665,6 @@ io_overwrite_small(void **state, daos_obj_id_t oid)
 #endif
 }
 
-#define OW_IOD_SIZE	1024ULL /* used for mixed record overwrite */
 /**
  * Test mixed SCM & NVMe overwrites in different transactions with a large
  * record size. Iod size is needed for insert/lookup since the same akey is
@@ -3084,7 +3081,7 @@ tgt_idx_change_retry(void **state)
 		/** exclude target of the replica */
 		print_message("rank 0 excluding target rank %u ...\n", rank);
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
-				    arg->dmg_config, arg->pool.svc, rank);
+				    arg->dmg_config, NULL /* svc */, rank);
 		assert_int_equal(rc, 0);
 
 		/** progress the async IO (not must) */
@@ -3141,7 +3138,7 @@ tgt_idx_change_retry(void **state)
 	if (arg->myrank == 0) {
 		print_message("rank 0 adding target rank %u ...\n", rank);
 		daos_reint_server(arg->pool.pool_uuid, arg->group,
-				  arg->dmg_config, arg->pool.svc,
+				  arg->dmg_config, NULL /* svc */,
 				  rank);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -3197,7 +3194,7 @@ fetch_replica_unavail(void **state)
 
 		/* add back the excluded targets */
 		daos_reint_server(arg->pool.pool_uuid, arg->group,
-				  arg->dmg_config, arg->pool.svc,
+				  arg->dmg_config, NULL /* svc */,
 				  rank);
 
 		/* wait until reintegration is done */
@@ -4201,7 +4198,7 @@ obj_setup(void **state)
 	int	rc;
 
 	rc = test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
-			NULL);
+			0, NULL);
 	if (rc != 0)
 		return rc;
 

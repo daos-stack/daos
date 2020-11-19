@@ -42,8 +42,11 @@
 #include "task_internal.h"
 #include <pthread.h>
 
+/** protect against concurrent daos_init/fini calls */
 static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
-static bool		module_initialized;
+
+/** refcount on how many times daos_init has been called */
+static int		module_initialized;
 
 const struct daos_task_api dc_funcs[] = {
 	/** Management */
@@ -51,8 +54,6 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_pool_extend, sizeof(daos_pool_extend_t)},
 	{dc_pool_evict, sizeof(daos_pool_evict_t)},
 	{dc_mgmt_set_params, sizeof(daos_set_params_t)},
-	{dc_pool_add_replicas, sizeof(daos_pool_replicas_t)},
-	{dc_pool_remove_replicas, sizeof(daos_pool_replicas_t)},
 	{dc_mgmt_get_bs_state, sizeof(daos_mgmt_get_bs_state_t)},
 
 	/** Pool */
@@ -129,7 +130,10 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_array_get_size, sizeof(daos_array_get_size_t)},
 	{dc_array_set_size, sizeof(daos_array_set_size_t)},
 
-	/** HL */
+	/** Key-Value Store */
+	{dc_kv_open, sizeof(daos_kv_open_t)},
+	{dc_kv_close, sizeof(daos_kv_close_t)},
+	{dc_kv_destroy, sizeof(daos_kv_destroy_t)},
 	{dc_kv_get, sizeof(daos_kv_get_t)},
 	{dc_kv_put, sizeof(daos_kv_put_t)},
 	{dc_kv_remove, sizeof(daos_kv_remove_t)},
@@ -145,8 +149,11 @@ daos_init(void)
 	int rc;
 
 	D_MUTEX_LOCK(&module_lock);
-	if (module_initialized)
-		D_GOTO(unlock, rc = -DER_ALREADY);
+	if (module_initialized > 0) {
+		/** already initialized, report success */
+		module_initialized++;
+		D_GOTO(unlock, rc = 0);
+	}
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
@@ -204,7 +211,7 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_co, rc);
 
-	module_initialized = true;
+	module_initialized++;
 	D_GOTO(unlock, rc = 0);
 
 out_co:
@@ -239,8 +246,17 @@ daos_fini(void)
 	int	rc;
 
 	D_MUTEX_LOCK(&module_lock);
-	if (!module_initialized)
+	if (module_initialized == 0) {
+		/** calling fini without init, report an error */
 		D_GOTO(unlock, rc = -DER_UNINIT);
+	} else if (module_initialized > 1) {
+		/**
+		 * DAOS was initialized multiple times.
+		 * Can happen when using multiple DAOS-aware middleware.
+		 */
+		module_initialized--;
+		D_GOTO(unlock, rc = 0);
+	}
 
 	rc = daos_eq_lib_fini();
 	if (rc != 0) {
@@ -252,13 +268,19 @@ daos_fini(void)
 	dc_cont_fini();
 	dc_pool_fini();
 	dc_mgmt_fini();
+
+	rc = dc_mgmt_disconnect();
+	if (rc != 0) {
+		D_ERROR("failed to disconnect some resources may leak: %d", rc);
+	}
+
 	dc_agent_fini();
 	dc_job_fini();
 
 	pl_fini();
 	daos_hhash_fini();
 	daos_debug_fini();
-	module_initialized = false;
+	module_initialized = 0;
 unlock:
 	D_MUTEX_UNLOCK(&module_lock);
 	return rc;

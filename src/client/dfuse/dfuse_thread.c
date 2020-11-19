@@ -67,7 +67,7 @@ static void
 			break;
 		}
 
-		DFUSE_TRA_INFO(dt, "Received %d bytes", rc);
+		DFUSE_TRA_DEBUG(dt, "Received %d bytes", rc);
 
 		D_MUTEX_LOCK(&dtm->tm_lock);
 		if (dtm->tm_exit) {
@@ -145,11 +145,13 @@ dfuse_loop(struct dfuse_info *dfuse_info)
 	dtm->tm_se = se;
 	dtm->tm_error = 0;
 
-	sem_init(&dtm->tm_finish, 0, 0);
+	rc = sem_init(&dtm->tm_finish, 0, 0);
+	if (rc != 0)
+		D_GOTO(out, rc);
 	D_MUTEX_INIT(&dtm->tm_lock, NULL);
 
 	D_MUTEX_LOCK(&dtm->tm_lock);
-	for (i = 0 ; i < 4 ; i++) {
+	for (i = 0 ; i < dfuse_info->di_thread_count ; i++) {
 		rc = start_one(dtm);
 		if (rc != 0) {
 			fuse_session_exit(se);

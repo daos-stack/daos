@@ -568,15 +568,25 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 	oc_attr = daos_oclass_attr_find(oid);
 	if (oc_attr->ca_resil != DAOS_RES_REPL) {
 		int tgt_nr = oc_attr->u.ec.e_k + oc_attr->u.ec.e_p;
+		int fail_cnt = 0;
+		int idx = grp_idx * tgt_nr + tgt_nr - 1;
 
 		/* For EC object, elect last shard in the group (must to be
 		 * a parity node) as leader.
 		 */
-		shard = pl_get_shard(data, grp_idx * tgt_nr + tgt_nr - 1);
-		if (for_tgt_id)
-			return shard->po_target;
+		shard = pl_get_shard(data, idx);
+		while (shard->po_rebuilding) {
+			idx--;
+			if (++fail_cnt > oc_attr->u.ec.e_p)
+				return -DER_IO;
+			shard = pl_get_shard(data, idx);
+		}
 
-		return shard->po_shard;
+		if (for_tgt_id)
+			return shard->po_target == -1 ? -DER_IO :
+						shard->po_target;
+
+		return shard->po_shard == -1 ? -DER_IO : shard->po_shard;
 	}
 
 	replicas = oc_attr->u.rp.r_num;
@@ -591,13 +601,11 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 		if (shard->po_target == -1)
 			return -DER_IO;
 
-		/* Single replicated object will not rebuild. */
-		D_ASSERT(!shard->po_rebuilding);
-		/* During target adding, it will add some -1 targets
-		 * into the object layout, so this assert is not right
-		 * anymore. see pl_map_extend().
+		/*
+		 * Note that even though there's only one replica here, this
+		 * object can still be rebuilt during addition or drain as
+		 * it moves between ranks
 		 */
-		/*D_ASSERT(shard->po_shard == shard_idx);*/
 
 		if (for_tgt_id)
 			return shard->po_target;

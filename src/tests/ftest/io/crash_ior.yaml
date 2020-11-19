@@ -13,18 +13,13 @@ server_config:
     bdev_list: ["0000:81:00.0"]
     scm_class: dcpm
     scm_list: ["/dev/pmem0"]
-
 pool:
-  createmode:
-    mode_RW:
-      mode: 146
-  createset:
-    setname: daos_server
-  createsize:
-    scm_size: 6000000000
-    nvme_size: 60000000000
-  createsvc:
-    svcn: 1
+  mode: 146
+  name: daos_server
+  scm_size: 6000000000
+  nvme_size: 60000000000
+  svcn: 1
+  control_method: dmg
 container:
   type: POSIX
   control_method: daos

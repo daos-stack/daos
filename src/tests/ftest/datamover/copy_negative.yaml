@@ -1,0 +1,31 @@
+hosts:
+    test_servers:
+        - server-A
+    test_clients:
+        - server-B
+timeout: 600
+server_config:
+    name: daos_server
+pool:
+    mode: 146
+    name: daos_server
+    scm_size: 1G
+    control_method: dmg
+container:
+    type: POSIX
+    control_method: daos
+ior:
+    client_processes:
+        np: 1
+    test_file: testFile
+    copy_negative:
+        flags_write:
+            - "-v -w -k"
+        block_size_large: '1100M' # Over 1G
+    block_size: '1K'
+    transfer_size: '1K'
+    signature: 5
+datamover:
+    processes: 3
+dfuse:
+    mount_dir: "/tmp/daos_dfuse"
