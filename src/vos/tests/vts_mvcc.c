@@ -794,9 +794,10 @@ querymaxd_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	int *test_ptr = (int *)malloc(sizeof(int) * test_len);
 
 	for (i = 0; i < test_len; i++) {
-		test_ptr[i] = i*10;
+		test_ptr[i] = i * 10;
 		print_message("test_ptr[%d] = %d\n", i, test_ptr[i]);
 	}
+	assert_true(test_ptr[0] == 0);
 
 	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, NULL,
 			NULL, DAOS_GET_DKEY | DAOS_GET_MAX, mvcc_arg->i, path);
