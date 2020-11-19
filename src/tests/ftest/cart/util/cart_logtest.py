@@ -222,7 +222,8 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                      'auth_cred_to_iov': ('packed'),
                      'd_sgl_init': ('sgl->sg_iovs'),
                      'daos_csummer_alloc_iods_csums': ('buf'),
-                     'daos_sgl_init': ('sgl->sg_iovs')}
+                     'daos_sgl_init': ('sgl->sg_iovs'),
+                     'get_pool_svc_ranks': ('req')}
 # pylint: enable=line-too-long
 
 mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
