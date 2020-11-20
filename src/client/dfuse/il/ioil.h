@@ -30,12 +30,27 @@
 
 #include "daos_fs.h"
 
+struct ioil_cont {
+	/* Container open handle */
+	daos_handle_t	ioc_coh;
+	/* ioil pool descriptor */
+	struct ioil_pool *ioc_pool;
+	/* uuid of container */
+	uuid_t		ioc_uuid;
+	/* dfs handle */
+	dfs_t		*ioc_dfs;
+	/* List of containers */
+	d_list_t	ioc_containers;
+	/* Number of files open in container */
+	int		ioc_open_count;
+};
+
 struct fd_entry {
-	dfs_obj_t	*fd_dfsoh;
-	dfs_t		*fd_dfs;
-	off_t		fd_pos;
-	int		fd_flags;
-	int		fd_status;
+	struct ioil_cont	*fd_cont;
+	dfs_obj_t		*fd_dfsoh;
+	off_t			fd_pos;
+	int			fd_flags;
+	int			fd_status;
 };
 
 ssize_t
