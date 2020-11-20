@@ -1153,6 +1153,20 @@ cont_decode_props(daos_prop_t *props)
 		D_PRINT("owner-group:\t\t%s\n", entry->dpe_str);
 	}
 
+	/* Only print the ACL if it was included */
+	entry = daos_prop_entry_get(props, DAOS_PROP_CO_ACL);
+	if (entry != NULL && entry->dpe_val_ptr != NULL) {
+		D_PRINT("acl:\n");
+		rc = daos_acl_to_stream(stdout,
+					(struct daos_acl *)entry->dpe_val_ptr,
+					false);
+		if (rc != 0) {
+			fprintf(stderr,
+				"unable to print ACL property: %s (%d)\n",
+				d_errstr(rc), rc);
+		}
+	}
+
 	return rc;
 }
 
@@ -1174,7 +1188,7 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 
 	entry_type = DAOS_PROP_CO_MIN + 1;
 	for (i = 0; i < prop_query->dpp_nr; entry_type++) {
-		if (entry_type == DAOS_PROP_CO_ACL)
+		if (!ap->include_acl && entry_type == DAOS_PROP_CO_ACL)
 			continue; /* skip ACL */
 		prop_query->dpp_entries[i].dpe_type = entry_type;
 		i++;

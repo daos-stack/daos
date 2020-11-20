@@ -515,6 +515,7 @@ daos_parse_properties(char *props_string, daos_prop_t *props)
 /* values to identify options with no small value in getopt_long() */
 enum {
 	DAOS_PROPERTIES_OPTION = 1,
+	DAOS_INCLUDE_ACL_OPTION,
 };
 
 /* resource and command arguments (ie "container create" for example) can be
@@ -552,6 +553,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"user",	required_argument,	NULL,	'u'},
 		{"group",	required_argument,	NULL,	'g'},
 		{"principal",	required_argument,	NULL,	'P'},
+		{"include-acl",	no_argument,		NULL,	DAOS_INCLUDE_ACL_OPTION},
 		{NULL,		0,			NULL,	0}
 	};
 	int			rc;
@@ -770,6 +772,9 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			rc = daos_parse_properties(optarg, ap->props);
 			if (rc != 0)
 				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
+		case DAOS_INCLUDE_ACL_OPTION:
+			ap->include_acl = true;
 			break;
 		default:
 			fprintf(stderr, "unknown option : %d\n", rc);
@@ -1399,10 +1404,14 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"	--group=ID         group who will own the container.\n"
 			"			   format: groupname@[domain]\n");
 			ALL_BUT_CONT_CREATE_OPTS_HELP();
+		} else if (strcmp(argv[3], "get-prop") == 0) {
+			fprintf(stream,
+			"container options (get-prop):\n"
+			"	--include-acl      include ACL in the list\n");
+			ALL_BUT_CONT_CREATE_OPTS_HELP();
 		} else if (strcmp(argv[3], "list-objects") == 0 ||
 			   strcmp(argv[3], "list-obj") == 0 ||
 			   strcmp(argv[3], "query") == 0 ||
-			   strcmp(argv[3], "get-prop") == 0 ||
 			   strcmp(argv[3], "stat") == 0 ||
 			   strcmp(argv[3], "list-attrs") == 0 ||
 			   strcmp(argv[3], "list-snaps") == 0) {
