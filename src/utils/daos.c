@@ -61,7 +61,7 @@ filesystem_op_parse(const char *str)
 {
 	if (strcmp(str, "copy") == 0)
 		return FS_COPY;
-	return 0;
+	return -1;
 }
 
 static enum cont_op
@@ -1384,7 +1384,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 
 	if (argc <= 2) {
 		FIRST_LEVEL_HELP();
-	} else if (strcmp(argv[2], "filesystem") != 0) {
+	} else if (strcmp(argv[2], "filesystem") != 0 || strcmp(argv[2], "fs") != 0) {
 		if (strcmp(argv[3], "copy") == 0) {
 			fprintf(stream,
 			" filesystem copy options (copy):\n"
