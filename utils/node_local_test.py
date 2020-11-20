@@ -481,7 +481,14 @@ class DaosServer():
         return subprocess.run(exe_cmd, stdout=subprocess.PIPE)
 
 def il_cmd(dfuse, cmd, check_read=True, check_write=True):
-    """Run a command under the interception library"""
+    """Run a command under the interception library
+
+    Do not run valgrind here, not because it's not useful
+    but the options needed are different.  Valgrind handles
+    linking differently so some memory is wrongly lost that
+    would be freed in the _fini() function, and a lot of
+    commands do not free all memory anyway.
+    """
     my_env = get_base_env()
     prefix = 'dnt_dfuse_il_{}_'.format(get_inc_id())
     log_file = tempfile.NamedTemporaryFile(prefix=prefix,
@@ -494,13 +501,13 @@ def il_cmd(dfuse, cmd, check_read=True, check_write=True):
     ret = subprocess.run(cmd, env=my_env)
     print('Logged il to {}'.format(log_file.name))
     print(ret)
-    assert ret.returncode == 0
 
     try:
         log_test(dfuse.conf,
                  log_file.name,
                  check_read=check_read,
                  check_write=check_write)
+        assert ret.returncode == 0
     except NLTestNoFunction as error:
         print("ERROR: command '{}' did not log via {}".format(' '.join(cmd),
                                                               error.function))
@@ -1243,9 +1250,8 @@ def run_il_test(server, conf):
     fd = open(f, 'w')
     fd.write('Hello')
     fd.close()
-    # Copy it across containers.  This will read via IL but not write
-    # as only one container is supported concurrently
-    ret = il_cmd(dfuse, ['cp', f, dirs[-1]], check_write=False)
+    # Copy it across containers.
+    ret = il_cmd(dfuse, ['cp', f, dirs[-1]])
     assert ret.returncode == 0
 
     # Copy it within the container.
