@@ -114,7 +114,6 @@ class IoAggregation(IorTestBase):
         # obtain highest epoch before snapshot destroy via container query
         kwargs = {
             "pool": self.pool.uuid,
-            "svc": self.pool.svc_ranks[0],
             "cont": self.container.uuid
         }
         highest_epc_before_snap_destroy = self.highest_epoch(kwargs)
