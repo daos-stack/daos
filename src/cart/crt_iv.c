@@ -3567,7 +3567,6 @@ crt_iv_get_nchildren(crt_iv_namespace_t ivns, uint32_t class_id,
 			root_rank, self_rank);
 		D_ERROR("failed, rc=%d.\n", rc);
 
-
 exit:
 	/* addref done in crt_ivns_internal_get() */
 	if (ivns_internal)
