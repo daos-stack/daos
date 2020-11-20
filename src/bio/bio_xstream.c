@@ -856,8 +856,12 @@ replace_bio_bdev(struct bio_bdev *old_dev, struct bio_bdev *new_dev)
 	new_dev->bb_tgt_cnt = old_dev->bb_tgt_cnt;
 	old_dev->bb_tgt_cnt = 0;
 
-	d_list_del_init(&old_dev->bb_link);
-	destroy_bio_bdev(old_dev);
+	if (old_dev->bb_removed) {
+		d_list_del_init(&old_dev->bb_link);
+		destroy_bio_bdev(old_dev);
+	} else {
+		old_dev->bb_faulty = true;
+	}
 }
 
 /*
