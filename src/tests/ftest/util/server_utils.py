@@ -43,6 +43,7 @@ class DaosServerCommand(YamlCommand):
     NORMAL_PATTERN = "DAOS I/O server.*started"
     FORMAT_PATTERN = "(SCM format required)(?!;)"
     REFORMAT_PATTERN = "Metadata format required"
+    DISCOVER_PATTERN = "DAOS Control Server (pid.*) listening on.*"
 
     def __init__(self, path="", yaml_cfg=None, timeout=20):
         """Create a daos_server command object.
@@ -124,13 +125,16 @@ class DaosServerCommand(YamlCommand):
         """Update the pattern used to determine if the daos_server started.
 
         Args:
-            mode (str): operation mode for the 'daos_server start' command
+            mode (str): operation mode for the 'daos_server start' command.
+                Defaults to detecting NORMAL mode if pattern is not idetified.
             host_qty (int): number of hosts issuing 'daos_server start'
         """
         if mode == "format":
             self.pattern = self.FORMAT_PATTERN
         elif mode == "reformat":
             self.pattern = self.REFORMAT_PATTERN
+        elif mode == "discover":
+            self.pattern = self.DISCOVER_PATTERN
         else:
             self.pattern = self.NORMAL_PATTERN
         self.pattern_count = host_qty * len(self.yaml.server_params)
@@ -476,11 +480,19 @@ class DaosServerManager(SubprocessManager):
                 dev_type = "dcpm"
             raise ServerFailed("Error preparing {} storage".format(dev_type))
 
-    def detect_format_ready(self, reformat=False):
-        """Detect when all the daos_servers are ready for storage format."""
-        f_type = "format" if not reformat else "reformat"
-        self.log.info("<SERVER> Waiting for servers to be ready for format")
-        self.manager.job.update_pattern(f_type, len(self._hosts))
+    def detect_start_mode(self, mode, qty=None):
+        """Detect when all the daos_servers reached desired mode at start.
+
+        Args:
+            mode (str): mode to detect using associated pattern.
+            qty (int, optional): number of pattern ocurrences expected to be
+                detected. If None is provided the method will use self._hosts.
+        """
+        if qty is None:
+            qty = len(self._hosts)
+        self.log.info(
+            "<SERVER> Waiting for servers to be ready in %s mode", mode)
+        self.manager.job.update_pattern(mode, qty)
         try:
             self.manager.run()
         except CommandFailure as error:
@@ -551,7 +563,7 @@ class DaosServerManager(SubprocessManager):
         self.prepare()
 
         # Start the servers and wait for them to be ready for storage format
-        self.detect_format_ready()
+        self.detect_start_mode("format")
 
         # Format storage and wait for server to change ownership
         self.log.info(

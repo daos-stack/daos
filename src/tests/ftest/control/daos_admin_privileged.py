@@ -99,7 +99,7 @@ class DaosAdminPrivTest(TestWithServers):
         # Start server
         self.log.info("Starting server as non-root")
         try:
-            self.server_managers[0].detect_format_ready()
+            self.server_managers[0].detect_start_mode("format")
         except ServerFailed as error:
             self.fail(
                 "Failed starting server before format as non-root user: "

@@ -28,9 +28,11 @@ from grp import getgrgid
 from pwd import getpwuid
 import re
 import json
+import yaml
 
 from dmg_utils_base import DmgCommandBase
 from general_utils import get_numeric_list
+from command_utils import CommandFailure
 
 
 class DmgCommand(DmgCommandBase):
@@ -910,6 +912,40 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_result(("pool", "evict"), pool=pool, sys=sys)
+
+    def config_generate(self, access_points=None, num_pmem=None, num_nvme=None,
+                        net_class=None):
+        """Produce a server configuration.
+
+        Args:
+            access_points (str): Comma separated list of access point addresses.
+                Defaults to None.
+            num_pmem (int): Minimum number of SCM (pmem) devices required per
+                storage host in DAOS system. Defaults to None.
+            num_nvme (int): Minimum number of NVMe devices required per storage
+                host in DAOS system. Defaults to None.
+            net_class (str): Network class preferred. Defaults to None.
+                i.e. "best-available"|"ethernet"|"infiniband"
+
+        Returns:
+            dict: the contents of the generate config file.
+
+        Raises:
+            CommandFailure: if the dmg config generate command fails or if YAML
+                parser encounters an error condition while parsing the contents.
+
+        """
+        result = self._get_result(
+            ("config", "generate"), access_points=access_points,
+            num_pmem=num_pmem, num_nvme=num_nvme, net_class=net_class)
+
+        try:
+            yaml_data = yaml.safe_load(result.stdout)
+        except yaml.YAMLError as error:
+            raise CommandFailure(
+                "Error loading dmg generated config: {}".format(error))
+
+        return yaml_data
 
 
 def check_system_query_status(data):

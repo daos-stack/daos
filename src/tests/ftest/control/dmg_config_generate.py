@@ -23,6 +23,9 @@
 """
 
 from apricot import TestWithServers
+from avocado import fail_on
+from server_utils import ServerFailed
+from general_utils import pcmd
 
 
 class ConfigGenerate(TestWithServers):
@@ -35,8 +38,46 @@ class ConfigGenerate(TestWithServers):
     :avocado: recursive
     """
 
+    def __init__(self, *args, **kwargs):
+        """Initialize a ConfigGenerate object."""
+        super(ConfigGenerate, self).__init__(*args, **kwargs)
+        self.setup_start_servers = False
+
+    @fail_on(ServerFailed)
     def dmg_generate_config(self):
         """ Verify that dmg can generate an accurate configuration file."""
 
-        # We need to start the servers in discovery mode
+        # Let's create an empty config file on the server/s
+        cfg_file = self.get_config_file("daos_server", "server_discover")
+        pcmd(self.hostlist_servers, "touch {}".format(cfg_file))
+
+        # Setup the server managers
+        self.add_server_manager()
+        self.configure_manager(
+            "server", self.server_managers[0], self.hostlist_servers,
+            self.hostfile_servers_slots)
+
+        # Update the config value for the server to an empty config file.
+        # Then, start the server in discovery mode
+        self.server_managers[0].manager.job.config.update(
+            cfg_file, "daos_server.config")
+        try:
+            self.server_managers[0].detect_start_mode("discover")
+        except ServerFailed as err:
+            self.fail("Error starting server in discovery mode: {}".format(err))
+
+        # We need to scan storage and net to check what's on the config file
+        storage_info = self.get_dmg_command().storage_scan(verbose=True)
+        network_info = self.dmg_dmg_command().network_scan()
+
+
+        # Let's get the config file contents
+        yaml_data = self.get_dmg_command().config_generate()
+
+        # Verify yaml_data contents
+
+        # Propagate file to other servers
+
+
+        # Verify that all daos_io_server instances are started.
 

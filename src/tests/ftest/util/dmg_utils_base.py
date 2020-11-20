@@ -99,6 +99,35 @@ class DmgCommandBase(YamlCommand):
         else:
             self.sub_command_class = None
 
+    class ConfigSubCommand(CommandWithSubCommand):
+        """Defines an object for the dmg config sub command."""
+        def __init__(self):
+            """Create a dmg config subcommand object."""
+            super(DmgCommandBase.ConfigSubcommand, self).__init__(
+                "run/dmg/config/*", "config")
+
+        def get_sub_command_class(self):
+            # pylint: disable=redefined-variable-type
+            """Get the dmg config sub command object."""
+            if self.sub_command.value == "generate":
+                self.sub_command_class = self.GenerateSubCommand()
+            else:
+                self.sub_command_class = None
+
+        class GenerateSubCommand(CommandWithParameters):
+            """Defines an object for the dmg config generate command."""
+
+            def __init__(self):
+                """Create a dmg config generate object."""
+                super(
+                    DmgCommandBase.ConfigSubCommand.GenerateSubCommand,
+                    self).__init__(
+                        "/run/dmg/config/generate/*", "generate")
+                self.access_points = FormattedParameter("-a {}", None)
+                self.num_pmem = FormattedParameter("-p {}", None)
+                self.num_nvme = FormattedParameter("-n {}", None)
+                self.net_class = FormattedParameter("-c {}", None)
+
     class ContSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg cont sub command."""
         def __init__(self):
