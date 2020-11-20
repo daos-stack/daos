@@ -186,11 +186,11 @@ test_input_validation(void **state)
 
 	/** Specifying a null pointer and no path should fail */
 	rc = d_tm_increment_counter(NULL, NULL);
-	assert(rc = -DER_INVAL);
+	assert(rc == -DER_INVAL);
 
 	/** Specifying a null pointer and no path should fail */
 	rc = d_tm_increment_counter(&temp, NULL);
-	assert(rc = -DER_INVAL);
+	assert(rc == -DER_INVAL);
 
 	/**
 	 * The API accepts a path length that is D_TM_MAX_NAME_LEN including
@@ -204,7 +204,7 @@ test_input_validation(void **state)
 		path[i] = '0' + i % 10;
 	path[D_TM_MAX_NAME_LEN] = 0;
 	rc = d_tm_increment_counter(NULL, path, NULL);
-	assert(rc = -DER_EXCEEDS_PATH_LEN);
+	assert(rc == -DER_EXCEEDS_PATH_LEN);
 
 	/** Now trim the path by 1 character to make it fit */
 	path[D_TM_MAX_NAME_LEN - 1] = 0;
