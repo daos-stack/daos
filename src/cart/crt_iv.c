@@ -1087,8 +1087,6 @@ handle_ivfetch_response(const struct crt_cb_info *cb_info)
 	struct ivf_key_in_progress	*kip_entry;
 	uint32_t			class_id;
 	int				rc;
-	crt_iv_ver_t			rpc_version = input->ifi_grp_ver;
-	uint32_t			local_version;
 
 	CRT_ENTRY();
 	if (cb_info->cci_rc == 0x0)
@@ -1098,15 +1096,6 @@ handle_ivfetch_response(const struct crt_cb_info *cb_info)
 
 	ivns = iv_info->ifc_ivns_internal;
 	class_id = iv_info->ifc_class_id;
-
-	/* Check to see if version change on while waiting for reponse */
-	/* Not an error. But good to know.			     */
-	local_version = ivns->cii_grp_priv->gp_membs_ver;
-	if (local_version != rpc_version) {
-		D_DEBUG(DB_ALL, "Group Version Changed: "
-				"rpc_version 0x%x: Local version 0x%x\n",
-				rpc_version, local_version);
-	}
 
 	iv_ops = crt_iv_ops_get(ivns, class_id);
 	D_ASSERT(iv_ops != NULL);
@@ -1170,9 +1159,7 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 	struct ivf_key_in_progress	*entry;
 	int				rc = 0;
 	struct crt_iv_ops		*iv_ops;
-#ifdef DONT_do_IT
 	uint32_t			local_grp_ver;
-#endif
 
 	CRT_ENTRY();
 	ivns_internal = cb_info->ifc_ivns_internal;
@@ -1259,7 +1246,6 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 	 * MUST not set (could cause a race):
 	 *    input->ifi_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver
 	 */
-#ifdef DONT_do_IT
 	local_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
 	if (local_grp_ver == grp_ver) {
 		input->ifi_grp_ver = grp_ver;
@@ -1268,7 +1254,6 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 			 grp_ver, local_grp_ver);
 		D_GOTO(exit, rc = -DER_GRPVER);
 	}
-#endif
 
 	rc = crt_req_send(rpc, handle_response_cb, cb_info);
 
@@ -1399,14 +1384,12 @@ crt_hdlr_iv_fetch_aux(void *arg)
 	 * is to send the response.
 	 */
 	grp_ver_entry = ivns_internal->cii_grp_priv->gp_membs_ver;
-#ifdef DONT_DO_IT
 	if (grp_ver_entry != input->ifi_grp_ver) {
 		D_ERROR("Group (%s) version mismatch. Local: %d Remote :%d\n",
 			ivns_id.ii_group_name, grp_ver_entry,
 			input->ifi_grp_ver);
 		D_GOTO(send_error, rc = -DER_GRPVER);
 	}
-#endif
 
 	iv_ops = crt_iv_ops_get(ivns_internal, input->ifi_class_id);
 	if (iv_ops == NULL) {
@@ -2139,23 +2122,16 @@ call_pre_sync_cb(struct crt_ivns_internal *ivns_internal,
 			D_ERROR("Failed to allocate temporary iovs\n");
 			D_GOTO(exit, rc);
 		}
-	}
 
-	D_ALLOC_ARRAY(tmp_iovs, iv_value.sg_nr);
-	if (tmp_iovs == NULL) {
-		D_ERROR("Failed to allocate temporary iovs\n");
-		D_GOTO(exit, rc);
-	}
+		tmp_iv.sg_nr = iv_value.sg_nr;
+		tmp_iv.sg_iovs = tmp_iovs;
 
-	tmp_iv.sg_nr = iv_value.sg_nr;
-	tmp_iv.sg_iovs = tmp_iovs;
-
-	/* Populate tmp_iv.sg_iovs[0] to [sg_nr] */
-	rc = crt_bulk_access(rpc_req->cr_co_bulk_hdl, &tmp_iv);
-	if (rc != 0) {
-		D_FREE(tmp_iovs);
-		D_ERROR("crt_bulk_access() failed; rc=%d\n", rc);
-		D_GOTO(exit, rc);
+		/* Populate tmp_iv.sg_iovs[0] to [sg_nr] */
+		rc = crt_bulk_access(rpc_req->cr_co_bulk_hdl, &tmp_iv);
+		if (rc != 0) {
+			D_ERROR("crt_bulk_access() failed; rc=%d\n", rc);
+			D_GOTO(exit, rc);
+		}
 	}
 
 	D_DEBUG(DB_TRACE, "Executing ivo_pre_sync\n");
@@ -2164,9 +2140,9 @@ call_pre_sync_cb(struct crt_ivns_internal *ivns_internal,
 	if (rc != 0)
 		D_ERROR("ivo_pre_sync() failed; rc=%d\n", rc);
 
-	D_FREE(tmp_iovs);
-
 exit:
+	if (tmp_iovs)	
+		D_FREE(tmp_iovs);
 	if (need_put)
 		iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
 	CRT_EXIT();
