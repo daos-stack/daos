@@ -54,6 +54,7 @@
 	ACTION(ssize_t, pwritev,   (int, const struct iovec *, int, off_t))   \
 	ACTION(void *,  mmap,      (void *, size_t, int, int, int, off_t))
 
+
 #define FOREACH_SINGLE_INTERCEPT(ACTION)                                      \
 	ACTION(int,     fclose,    (FILE *))                                  \
 	ACTION(int,     close,     (int))                                     \
@@ -65,9 +66,10 @@
 	ACTION(int,     fdatasync, (int))                                     \
 	ACTION(int,     dup,       (int))                                     \
 	ACTION(int,     dup2,      (int, int))                                \
-	ACTION(int,     fcntl,     (int fd, int cmd, ...))                    \
-	ACTION(FILE *,  fdopen,    (int, const char *))
-
+	ACTION(int,     fcntl,     (int, int, ...))                           \
+	ACTION(FILE *,  fdopen,    (int, const char *))                       \
+	ACTION(int,     fstatfs,   (int, struct stat *))\
+	ACTION(int,     fstatfs64,   (int, struct stat64 *))
 #define FOREACH_INTERCEPT(ACTION)            \
 	FOREACH_SINGLE_INTERCEPT(ACTION)     \
 	FOREACH_ALIASED_INTERCEPT(ACTION)

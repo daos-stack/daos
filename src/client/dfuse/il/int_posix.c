@@ -1334,6 +1334,62 @@ do_real_fclose:
 }
 
 DFUSE_PUBLIC int
+dfuse_fstatfs(int fd, struct stat *buf)
+{
+	struct fd_entry *entry = NULL;
+	int rc;
+
+	DFUSE_TRA_INFO(entry, "fstat() returned %d", fd);
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fstat;
+
+	rc = dfs_ostat(entry->fd_dfs, entry->fd_dfsoh, buf);
+
+	DFUSE_TRA_INFO(entry, "fstat() returned %d", rc);
+
+	vector_decref(&fd_table, entry);
+
+	if (rc) {
+		errno = rc;
+		return -1;
+	}
+
+	return 0;
+do_real_fstat:
+	return __real_fstatfs(fd, buf);
+}
+
+DFUSE_PUBLIC int
+dfuse_fstatfs64(int fd, struct stat64 *buf)
+{
+	struct fd_entry *entry = NULL;
+	int rc;
+
+	DFUSE_TRA_INFO(entry, "fstat() returned %d", fd);
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fstat;
+
+	rc = dfs_ostat(entry->fd_dfs, entry->fd_dfsoh, buf);
+
+	DFUSE_TRA_INFO(entry, "fstat() returned %d", rc);
+
+	vector_decref(&fd_table, entry);
+
+	if (rc) {
+		errno = rc;
+		return -1;
+	}
+
+	return 0;
+do_real_fstat:
+	return __real_fstatfs64(fd, buf);
+}
+
+DFUSE_PUBLIC int
 dfuse_get_bypass_status(int fd)
 {
 	struct fd_entry *entry;
