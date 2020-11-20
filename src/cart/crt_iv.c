@@ -1170,7 +1170,9 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 	struct ivf_key_in_progress	*entry;
 	int				rc = 0;
 	struct crt_iv_ops		*iv_ops;
+#ifdef DONT_do_IT
 	uint32_t			local_grp_ver;
+#endif
 
 	CRT_ENTRY();
 	ivns_internal = cb_info->ifc_ivns_internal;
@@ -1257,14 +1259,14 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 	 * MUST not set (could cause a race):
 	 *    input->ifi_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver
 	 */
-	local_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
 #ifdef DONT_do_IT
+	local_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
 	if (local_grp_ver == grp_ver) {
 		input->ifi_grp_ver = grp_ver;
 	} else {
 		D_ERROR("Group Version Changed: From %d: To %d\n",
 			 grp_ver, local_grp_ver);
-		D_GOTO(exit, rc=-DER_GRPVER);
+		D_GOTO(exit, rc = -DER_GRPVER);
 	}
 #endif
 
@@ -1391,11 +1393,11 @@ crt_hdlr_iv_fetch_aux(void *arg)
 	IVNS_DECREF(ivns_internal);
 
 	/*
- 	 * Check if current group version matches that of the ifi structure.
- 	 * Test whether the current node changed its version number from 
- 	 * the time it initially received a request to the time it
- 	 * is to send the response.
- 	 */
+	 * Check if current group version matches that of the ifi structure.
+	 * Test whether the current node changed its version number from
+	 * the time it initially received a request to the time it
+	 * is to send the response.
+	 */
 	grp_ver_entry = ivns_internal->cii_grp_priv->gp_membs_ver;
 #ifdef DONT_DO_IT
 	if (grp_ver_entry != input->ifi_grp_ver) {
@@ -1466,11 +1468,11 @@ crt_hdlr_iv_fetch_aux(void *arg)
 		put_needed = true;
 
 		/* get group version and next node to transfer to */
- 		D_RWLOCK_RDLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
+		D_RWLOCK_RDLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 		grp_ver_current = ivns_internal->cii_grp_priv->gp_membs_ver;
 		rc = crt_iv_parent_get(ivns_internal, input->ifi_root_node,
 					&next_node);
- 		D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
+		D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 		if (rc != 0) {
 			D_DEBUG(DB_TRACE, "crt_iv_parent_get() returned %d\n",
 				rc);
@@ -1717,10 +1719,12 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 
 	/* Get local version for latter comparison.  */
 	/* MUST obtain before getting root rank      */
+	D_RWLOCK_RDLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	grp_ver_entry = ivns_internal->cii_grp_priv->gp_membs_ver;
 
 	/* Get iv_key root rank */
 	rc = iv_ops->ivo_on_hash(ivns_internal, iv_key, &root_rank);
+	D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	if (rc != 0) {
 		D_ERROR("Failed to get hash\n");
 		D_GOTO(exit, rc);
@@ -2952,12 +2956,12 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 		 * Get group version to associate with next_rank.
 		 * Pass it down to crt_ivu_rpc_issue
 		 */
- 		D_RWLOCK_RDLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
+		D_RWLOCK_RDLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 		grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
 
 		rc = crt_iv_parent_get(ivns_internal,
 					input->ivu_root_node, &next_rank);
- 		D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
+		D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 
 		if (rc != 0) {
 			D_DEBUG(DB_TRACE, "crt_iv_parent_get() returned %d\n",
