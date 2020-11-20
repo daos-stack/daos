@@ -1410,6 +1410,8 @@ def test_alloc_fail(server, wf, conf):
 
     cmd = ['cat', target_file]
 
+    # The first fail location causes deadlock with the interception library,
+    # and opening the fault injecton file.
     fid = 1
 
     fatal_errors = False
