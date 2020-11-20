@@ -242,7 +242,8 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
  *			lookup/release the root object.
  * \param[in]	name	Link name of the object to create/open.
  * \param[in]	mode	mode_t (permissions + type).
- * \param[in]	flags	Access flags (O_RDONLY, O_RDWR, O_EXCL, O_CREAT).
+ * \param[in]	flags	Access flags (handles: O_RDONLY, O_RDWR, O_EXCL,
+ *			O_CREAT, O_TRUNC).
  * \param[in]	cid	DAOS object class id (pass 0 for default MAX_RW).
  *			Valid on create only; ignored otherwise.
  * \param[in]	chunk_size

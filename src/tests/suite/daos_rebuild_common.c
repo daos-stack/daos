@@ -65,7 +65,7 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 	for (i = 0; i < arg_cnt; i++) {
 		daos_exclude_target(args[i]->pool.pool_uuid,
 				    args[i]->group, args[i]->dmg_config,
-				    args[i]->pool.svc,
+				    NULL /* svc */,
 				    rank, tgt_idx);
 	}
 }
@@ -81,7 +81,7 @@ rebuild_add_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 			daos_reint_target(args[i]->pool.pool_uuid,
 					  args[i]->group,
 					  args[i]->dmg_config,
-					  args[i]->pool.svc,
+					  NULL /* svc */,
 					  rank, tgt_idx);
 		sleep(2);
 	}
@@ -98,7 +98,7 @@ rebuild_drain_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 			daos_drain_target(args[i]->pool.pool_uuid,
 					args[i]->group,
 					args[i]->dmg_config,
-					args[i]->pool.svc,
+					NULL /* svc */,
 					rank, tgt_idx);
 		sleep(2);
 	}
@@ -242,7 +242,7 @@ rebuild_pool_connect_internal(void *data)
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       arg->pool.svc, DAOS_PC_RW,
+				       NULL /* svc */, DAOS_PC_RW,
 				       &arg->pool.poh, &arg->pool.pool_info,
 				       NULL /* ev */);
 		if (rc)
@@ -362,7 +362,7 @@ rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank, int *failed_tgts,
 
 		for (i = 0; i < nr; i++)
 			daos_reint_target(arg->pool.pool_uuid, arg->group,
-					  arg->dmg_config, arg->pool.svc,
+					  arg->dmg_config, NULL /* svc */,
 					  failed_rank,
 					  failed_tgts ? failed_tgts[i] : -1);
 	}

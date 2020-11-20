@@ -36,14 +36,18 @@ import (
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-type onStorageReadyFn func(ctx context.Context) error
-type onReadyFn func(ctx context.Context) error
+type (
+	systemJoinFn     func(context.Context, *control.SystemJoinReq) (*control.SystemJoinResp, error)
+	onStorageReadyFn func(context.Context) error
+	onReadyFn        func(context.Context) error
+)
 
 // IOServerInstance encapsulates control-plane specific configuration
 // and functionality for managed I/O server instances. The distinction
@@ -57,7 +61,6 @@ type IOServerInstance struct {
 	runner            IOServerRunner
 	bdevClassProvider *bdev.ClassProvider
 	scmProvider       *scm.Provider
-	msClient          *mgmtSvcClient
 	waitFormat        atm.Bool
 	storageReady      chan bool
 	waitDrpc          atm.Bool
@@ -66,6 +69,7 @@ type IOServerInstance struct {
 	startLoop         chan bool // restart loop
 	fsRoot            string
 	hostFaultDomain   *system.FaultDomain
+	joinSystem        systemJoinFn
 	onStorageReady    []onStorageReadyFn
 	onReady           []onReadyFn
 
@@ -81,14 +85,14 @@ type IOServerInstance struct {
 // its dependencies.
 func NewIOServerInstance(log logging.Logger,
 	bcp *bdev.ClassProvider, sp *scm.Provider,
-	msc *mgmtSvcClient, r IOServerRunner) *IOServerInstance {
+	joinFn systemJoinFn, r IOServerRunner) *IOServerInstance {
 
 	return &IOServerInstance{
 		log:               log,
 		runner:            r,
 		bdevClassProvider: bcp,
 		scmProvider:       sp,
-		msClient:          msc,
+		joinSystem:        joinFn,
 		drpcReady:         make(chan *srvpb.NotifyReadyReq),
 		storageReady:      make(chan bool),
 		startLoop:         make(chan bool),
@@ -190,34 +194,29 @@ func (srv *IOServerInstance) determineRank(ctx context.Context, ready *srvpb.Not
 		r = *superblock.Rank
 	}
 
-	if !superblock.ValidRank {
-		// FIXME DAOS-5656: retain dependency on rank 0
-		if superblock.BootstrapMS {
-			r = system.Rank(0)
-			srv.log.Debugf("marking instance %d as rank 0", srv.Index())
-		}
-	}
-
-	resp, err := srv.msClient.Join(ctx, &mgmtpb.JoinReq{
-		Uuid:           superblock.UUID,
-		Rank:           r.Uint32(),
-		Uri:            ready.Uri,
-		Nctxs:          ready.Nctxs,
-		SrvFaultDomain: srv.hostFaultDomain.String(),
-		Idx:            srv.Index(),
-		// Addr member populated in msClient
+	resp, err := srv.joinSystem(ctx, &control.SystemJoinReq{
+		UUID:        superblock.UUID,
+		Rank:        r,
+		URI:         ready.GetUri(),
+		NumContexts: ready.GetNctxs(),
+		FaultDomain: srv.hostFaultDomain,
+		InstanceIdx: srv.Index(),
 	})
 	if err != nil {
-		return system.NilRank, resp.LocalJoin, err
-	} else if resp.State == mgmtpb.JoinResp_OUT {
+		return system.NilRank, false, err
+	} else if resp.State == system.MemberStateEvicted {
 		return system.NilRank, resp.LocalJoin, errors.Errorf("rank %d excluded", resp.Rank)
 	}
 	r = system.Rank(resp.Rank)
+
+	// TODO: Check to see if ready.Uri != superblock.URI, which might
+	// need to trigger some kind of update?
 
 	if !superblock.ValidRank {
 		superblock.Rank = new(system.Rank)
 		*superblock.Rank = r
 		superblock.ValidRank = true
+		superblock.URI = ready.GetUri()
 		srv.setSuperblock(superblock)
 		if err := srv.WriteSuperblock(); err != nil {
 			return system.NilRank, resp.LocalJoin, err
@@ -227,9 +226,9 @@ func (srv *IOServerInstance) determineRank(ctx context.Context, ready *srvpb.Not
 	return r, resp.LocalJoin, nil
 }
 
-// joinSystem determines the instance rank and sends a SetRank dRPC request
+// handleReady determines the instance rank and sends a SetRank dRPC request
 // to the IOServer.
-func (srv *IOServerInstance) joinSystem(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
+func (srv *IOServerInstance) handleReady(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
 	r, localJoin, err := srv.determineRank(ctx, ready)
 	if err != nil {
 		return err

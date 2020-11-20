@@ -690,9 +690,9 @@ open_file(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 		rc = insert_entry(parent->oh, th, file->name, len, entry);
 		if (rc == EEXIST && !oexcl) {
 			/** just try refetching entry to open the file */
-			daos_obj_close(file->oh, NULL);
+			daos_array_close(file->oh, NULL);
 		} else if (rc) {
-			daos_obj_close(file->oh, NULL);
+			daos_array_close(file->oh, NULL);
 			D_ERROR("Inserting file entry %s failed (%d)\n",
 				file->name, rc);
 			return rc;
@@ -733,7 +733,17 @@ fopen:
 		return daos_der2errno(rc);
 	}
 
-	if (size) {
+
+	if (flags & O_TRUNC) {
+		rc = daos_array_set_size(file->oh, th, 0, NULL);
+		if (rc) {
+			D_ERROR("Failed to truncate file (%d)\n", rc);
+			daos_array_close(file->oh, NULL);
+			return daos_der2errno(rc);
+		}
+		if (size)
+			*size = 0;
+	} else if (size) {
 		rc = daos_array_get_size(file->oh, th, size, NULL);
 		if (rc != 0) {
 			daos_array_close(file->oh, NULL);
@@ -1134,7 +1144,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 		rc = daos_cont_close(coh, NULL);
 		if (rc) {
 			D_ERROR("daos_cont_close() failed (%d)\n", rc);
-			D_GOTO(err_destroy, rc);
+			D_GOTO(err_destroy, rc = daos_der2errno(rc));
 		}
 	}
 
@@ -1430,7 +1440,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 		D_ASSERT(dfs_params->magic == DFS_GLOB_MAGIC);
 
 	} else if (dfs_params->magic != DFS_GLOB_MAGIC) {
-		D_ERROR("Bad magic value: 0x%x.\n", dfs_params->magic);
+		D_ERROR("Bad magic value: %#x.\n", dfs_params->magic);
 		return EINVAL;
 	}
 
@@ -1478,7 +1488,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 
 	rc = daos_obj_open(coh, super_oid, DAOS_OO_RO, &dfs->super_oh, NULL);
 	if (rc) {
-		D_ERROR("daos_obj_open() Failed (%d)\n", rc);
+		D_ERROR("daos_obj_open() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 	}
 
@@ -1494,7 +1504,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 	obj_mode = get_daos_obj_mode(flags);
 	rc = daos_obj_open(coh, dfs->root.oid, obj_mode, &dfs->root.oh, NULL);
 	if (rc) {
-		D_ERROR("daos_obj_open() Failed (%d)\n", rc);
+		D_ERROR("daos_obj_open() failed, " DF_RC "\n", DP_RC(rc));
 		daos_obj_close(dfs->super_oh, NULL);
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 	}
@@ -2602,7 +2612,7 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 		swap_obj_glob(obj_glob);
 		D_ASSERT(obj_glob->magic == DFS_OBJ_GLOB_MAGIC);
 	} else if (obj_glob->magic != DFS_OBJ_GLOB_MAGIC) {
-		D_ERROR("Bad magic value: 0x%x.\n", obj_glob->magic);
+		D_ERROR("Bad magic value: %#x.\n", obj_glob->magic);
 		return EINVAL;
 	}
 
@@ -2632,7 +2642,8 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 				       daos_mode, 1, obj_glob->chunk_size,
 				       &obj->oh, NULL);
 	if (rc) {
-		D_ERROR("daos_array_open_with_attr() failed (%d)\n", rc);
+		D_ERROR("daos_array_open_with_attr() failed, " DF_RC "\n",
+			DP_RC(rc));
 		D_FREE(obj);
 		return daos_der2errno(rc);
 	}
@@ -2660,7 +2671,7 @@ dfs_release(dfs_obj_t *obj)
 		D_ASSERT(0);
 
 	if (rc) {
-		D_ERROR("daos_obj_close() Failed (%d)\n", rc);
+		D_ERROR("daos_obj_close() failed, " DF_RC "\n", DP_RC(rc));
 		return daos_der2errno(rc);
 	}
 
@@ -2787,7 +2798,8 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 
 		rc = daos_array_read(obj->oh, DAOS_TX_NONE, &iod, sgl, NULL);
 		if (rc) {
-			D_ERROR("daos_array_read() failed (%d)\n", rc);
+			D_ERROR("daos_array_read() failed, " DF_RC "\n",
+				DP_RC(rc));
 			return daos_der2errno(rc);
 		}
 

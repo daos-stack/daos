@@ -167,7 +167,7 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 
 		print_message("setup: connecting to pool\n");
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       arg->pool.svc,
+				       NULL /* arg->pool.svc */,
 				       arg->pool.pool_connect_flags,
 				       &arg->pool.poh, &arg->pool.pool_info,
 				       NULL /* ev */);
@@ -396,7 +396,7 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 
 	if (daos_handle_is_inval(poh)) {
 		rc = daos_pool_connect(pool->pool_uuid, arg->group,
-				       pool->svc, DAOS_PC_RW,
+				       NULL /* svc */, DAOS_PC_RW,
 				       &poh, &pool->pool_info,
 				       NULL /* ev */);
 		if (rc != 0) { /* destroy straight away */
@@ -637,7 +637,7 @@ test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo)
 
 	if (daos_handle_is_inval(arg->pool.poh)) {
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       arg->pool.svc, DAOS_PC_RW,
+				       NULL /* svc */, DAOS_PC_RW,
 				       &arg->pool.poh, pinfo,
 				       NULL /* ev */);
 		if (rc) {
@@ -852,7 +852,7 @@ daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 		dts_append_config(dmg_cmd, " -o %s", dmg_config);
 
 	rc = system(dmg_cmd);
-	print_message("%s rc 0x%x\n", dmg_cmd, rc);
+	print_message("%s rc %#x\n", dmg_cmd, rc);
 	assert_int_equal(rc, 0);
 }
 
@@ -945,7 +945,7 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 		dts_append_config(dmg_cmd, " -o %s", arg->dmg_config);
 
 	rc = system(dmg_cmd);
-	print_message(" %s rc 0x%x\n", dmg_cmd, rc);
+	print_message(" %s rc %#x\n", dmg_cmd, rc);
 	assert_int_equal(rc, 0);
 }
 
