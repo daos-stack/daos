@@ -449,6 +449,7 @@ func TestServer_ConfigDuplicateValues(t *testing.T) {
 		return ioserver.NewConfig().
 			WithLogFile("a").
 			WithFabricInterface("a").
+			WithFabricInterfacePort(42).
 			WithScmClass("ram").
 			WithScmRamdiskSize(1).
 			WithScmMountPoint("a")
@@ -457,6 +458,7 @@ func TestServer_ConfigDuplicateValues(t *testing.T) {
 		return ioserver.NewConfig().
 			WithLogFile("b").
 			WithFabricInterface("b").
+			WithFabricInterfacePort(42).
 			WithScmClass("ram").
 			WithScmRamdiskSize(1).
 			WithScmMountPoint("b")
@@ -529,6 +531,7 @@ func TestServer_ConfigNetworkDeviceClass(t *testing.T) {
 			WithLogFile("a").
 			WithScmClass("ram").
 			WithScmRamdiskSize(1).
+			WithFabricInterfacePort(42).
 			WithScmMountPoint("a")
 	}
 	configB := func() *ioserver.Config {
@@ -536,6 +539,7 @@ func TestServer_ConfigNetworkDeviceClass(t *testing.T) {
 			WithLogFile("b").
 			WithScmClass("ram").
 			WithScmRamdiskSize(1).
+			WithFabricInterfacePort(43).
 			WithScmMountPoint("b")
 	}
 

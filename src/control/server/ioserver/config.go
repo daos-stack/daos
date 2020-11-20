@@ -94,10 +94,13 @@ func (fc *FabricConfig) GetNumaNode() (uint, error) {
 // Validate ensures that the configuration meets minimum standards.
 func (fc *FabricConfig) Validate() error {
 	if fc.Provider == "" {
-		return errors.New("missing provider")
+		return errors.New("provider not set")
 	}
 	if fc.Interface == "" {
-		return errors.New("missing interface")
+		return errors.New("fabric_iface not set")
+	}
+	if fc.InterfacePort == 0 {
+		return errors.New("fabric_iface_port not set")
 	}
 	return nil
 }
