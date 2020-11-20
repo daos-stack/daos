@@ -100,15 +100,22 @@ class IorTestBase(DfuseTestBase):
         # create container
         self.container.create()
 
-    def display_pool_space(self):
+    def display_pool_space(self, pool=None):
         """Display the current pool space.
 
         If the TestPool object has a DmgCommand object assigned, also display
         the free pool space per target.
+
+        Args:
+            pool (TestPool, optional): The pool for which to display space.
+                    Default is self.pool.
         """
-        self.pool.display_pool_daos_space()
-        if self.pool.dmg:
-            self.pool.set_query_data()
+        if not pool:
+            pool = self.pool
+
+        pool.display_pool_daos_space()
+        if pool.dmg:
+            pool.set_query_data()
 
     def run_ior_with_pool(self, intercept=None, test_file_suffix="",
                           test_file="daos:testFile", create_pool=True,
@@ -224,18 +231,22 @@ class IorTestBase(DfuseTestBase):
             self.fail("Exiting Test: Subprocess not running")
 
     def run_ior(self, manager, processes, intercept=None, display_space=True,
-                plugin_path=None, fail_on_warning=None):
+                plugin_path=None, fail_on_warning=False, pool=None):
         """Run the IOR command.
 
         Args:
             manager (str): mpi job manager command
             processes (int): number of host processes
-            intercept (str): path to interception library.
+            intercept (str, optional): path to interception library.
+            display_space (bool, optional): Whether to display the pool
+                space. Defaults to True.
             plugin_path (str, optional): HDF5 vol connector library path.
                 This will enable dfuse (xattr) working directory which is
                 needed to run vol connector for DAOS. Default is None.
-            fail_on_warning (bool): Controls whether the test should
-                fail if a 'WARNING' is found.
+            fail_on_warning (bool, optional): Controls whether the test
+                should fail if a 'WARNING' is found. Default is False.
+            pool (TestPool, optional): The pool for which to display space.
+                Default is self.pool.
         """
         env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
@@ -249,9 +260,12 @@ class IorTestBase(DfuseTestBase):
         manager.assign_processes(processes)
         manager.assign_environment(env)
 
+        if not pool:
+            pool = self.pool
+
         try:
             if display_space:
-                self.display_pool_space()
+                self.display_pool_space(pool)
             out = manager.run()
 
             if self.subprocess:
@@ -271,7 +285,7 @@ class IorTestBase(DfuseTestBase):
             self.fail("Test was expected to pass but it failed.\n")
         finally:
             if not self.subprocess and display_space:
-                self.display_pool_space()
+                self.display_pool_space(pool)
 
     def stop_ior(self):
         """Stop IOR process.
