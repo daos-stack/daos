@@ -46,7 +46,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
 
         # List of ACL entries
         self.cont_acl = self.get_container_acl_list(
-            self.pool.uuid, self.pool.svc_ranks[0], self.container.uuid)
+            self.pool.uuid, self.container.uuid)
 
     def test_acl_update_invalid_inputs(self):
         """
@@ -71,7 +71,6 @@ class UpdateContainerACLTest(ContSecurityTestBase):
             # Run update command
             self.daos_cmd.container_update_acl(
                 self.pool.uuid,
-                self.pool.svc_ranks[0],
                 self.container.uuid,
                 entry=entry)
             test_errs.extend(self.error_handling(self.daos_cmd.result, "-1003"))
@@ -84,7 +83,6 @@ class UpdateContainerACLTest(ContSecurityTestBase):
             # Run update command
             self.daos_cmd.container_update_acl(
                 self.pool.uuid,
-                self.pool.svc_ranks[0],
                 self.container.uuid,
                 acl_file=acl_file)
             test_errs.extend(self.error_handling(
@@ -119,7 +117,6 @@ class UpdateContainerACLTest(ContSecurityTestBase):
             # Run update command
             self.daos_cmd.container_update_acl(
                 self.pool.uuid,
-                self.pool.svc_ranks[0],
                 self.container.uuid,
                 path_to_file)
             test_errs.extend(self.error_handling(self.daos_cmd.result, "-1003"))
@@ -151,7 +148,6 @@ class UpdateContainerACLTest(ContSecurityTestBase):
         # Run update command
         self.daos_cmd.container_update_acl(
             self.pool.uuid,
-            self.pool.svc_ranks[0],
             self.container.uuid,
             acl_file=path_to_file)
 
@@ -165,7 +161,6 @@ class UpdateContainerACLTest(ContSecurityTestBase):
         # Run update command
         self.daos_cmd.container_update_acl(
             self.pool.uuid,
-            self.pool.svc_ranks[0],
             self.container.uuid,
             acl_file=path_to_file)
 
@@ -179,7 +174,6 @@ class UpdateContainerACLTest(ContSecurityTestBase):
         # Run update command
         self.daos_cmd.container_update_acl(
             self.pool.uuid,
-            self.pool.svc_ranks[0],
             self.container.uuid,
             acl_file=path_to_file)
 
@@ -215,7 +209,6 @@ class UpdateContainerACLTest(ContSecurityTestBase):
             create_acl_file(path_to_file, content)
             self.daos_cmd.container_update_acl(
                 self.pool.uuid,
-                self.pool.svc_ranks[0],
                 self.container.uuid,
                 path_to_file)
             test_errs.extend(self.error_handling(self.daos_cmd.result, "-1001"))

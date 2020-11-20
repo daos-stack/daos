@@ -1004,6 +1004,121 @@ test_ace_str_to_verbose_truncated(void **state)
 	assert_string_equal(result, "Allow::user@:");
 }
 
+static void
+test_acl_to_stream_bad_stream(void **state)
+{
+	struct daos_acl *valid_acl = daos_acl_create(NULL, 0);
+
+	assert_int_equal(daos_acl_to_stream(NULL, valid_acl, false),
+			 -DER_INVAL);
+
+	daos_acl_free(valid_acl);
+}
+
+static void
+assert_stream_written(FILE *stream, const char *exp_str)
+{
+	char	result[DAOS_ACL_MAX_ACE_STR_LEN];
+	char	*exp_str_mutable;
+	char	*pch;
+
+	/* Arbitrary max size - these are just tests, after all */
+	D_STRNDUP(exp_str_mutable, exp_str, DAOS_ACL_MAX_ACE_STR_LEN * 5);
+	assert_non_null(exp_str_mutable);
+
+	rewind(stream);
+
+	/* Check line by line */
+	pch = strtok(exp_str_mutable, "\n");
+	while (pch != NULL) {
+		char *end;
+
+		memset(result, 0, sizeof(result));
+		assert_non_null(fgets(result, sizeof(result), stream));
+
+		/* trim result to match the line from exp_str */
+		end = strpbrk(result, "\n");
+		assert_non_null(end);
+		*end = '\0';
+
+		assert_string_equal(result, pch);
+
+		pch = strtok(NULL, "\n");
+	}
+
+	/* Should be no more output in stream */
+	assert_null(fgets(result, sizeof(result), stream));
+
+	D_FREE(exp_str_mutable);
+}
+
+static void
+add_ace_allow(struct daos_acl **acl, enum daos_acl_principal_type type,
+	      const char *principal, uint64_t perms)
+{
+	struct daos_ace *ace = daos_ace_create(type, principal);
+
+	assert_non_null(ace);
+	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace->dae_allow_perms = perms;
+	assert_int_equal(daos_acl_add_ace(acl, ace), 0);
+
+	daos_ace_free(ace);
+}
+
+static void
+test_acl_to_stream_success(void **state)
+{
+	FILE		*tmpstream = tmpfile();
+	struct daos_acl	*acl = daos_acl_create(NULL, 0);
+	const char	*exp_empty_str = "# Entries:\n"
+					 "#   None\n";
+
+	assert_non_null(acl); /* sanity check */
+
+	printf("= NULL ACL\n");
+	assert_int_equal(daos_acl_to_stream(tmpstream, NULL, false), 0);
+	assert_stream_written(tmpstream, exp_empty_str);
+
+	rewind(tmpstream);
+
+	printf("= Empty ACL\n");
+	assert_int_equal(daos_acl_to_stream(tmpstream, acl, false), 0);
+	assert_stream_written(tmpstream, exp_empty_str);
+
+	rewind(tmpstream);
+
+	printf("= Empty ACL (verbose)\n");
+	assert_int_equal(daos_acl_to_stream(tmpstream, acl, true), 0);
+	assert_stream_written(tmpstream, exp_empty_str);
+
+	rewind(tmpstream);
+
+	printf("= ACL with entries\n");
+	add_ace_allow(&acl, DAOS_ACL_OWNER, NULL, DAOS_ACL_PERM_CONT_ALL);
+	add_ace_allow(&acl, DAOS_ACL_GROUP, "readers@", DAOS_ACL_PERM_READ);
+	assert_int_equal(daos_acl_to_stream(tmpstream, acl, false), 0);
+	assert_stream_written(tmpstream,
+			      "# Entries:\n"
+			      "A::OWNER@:rwdtTaAo\n"
+			      "A:G:readers@:r\n");
+
+	rewind(tmpstream);
+
+	printf("= ACL with entries (verbose)\n");
+	assert_int_equal(daos_acl_to_stream(tmpstream, acl, true), 0);
+	assert_stream_written(tmpstream,
+			      "# Entries:\n"
+			      "# Allow::Owner:Read/Write/Delete-Container/"
+			      "Get-Prop/Set-Prop/Get-ACL/Set-ACL/Set-Owner\n"
+			      "A::OWNER@:rwdtTaAo\n"
+			      "# Allow:Group:readers@:Read\n"
+			      "A:G:readers@:r\n");
+	fclose(tmpstream);
+
+	daos_acl_free(acl);
+}
+
 int
 main(void)
 {
@@ -1057,6 +1172,8 @@ main(void)
 		cmocka_unit_test(test_ace_str_to_verbose_invalid),
 		cmocka_unit_test(test_ace_str_to_verbose_valid),
 		cmocka_unit_test(test_ace_str_to_verbose_truncated),
+		cmocka_unit_test(test_acl_to_stream_bad_stream),
+		cmocka_unit_test(test_acl_to_stream_success),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);

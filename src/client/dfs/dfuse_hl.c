@@ -45,7 +45,6 @@ struct dfuse_data {
 	int		singlethread;
 	char		*mountpoint;
 	char		*pool;
-	char		*svcl;
 	char		*group;
 	char		*cont;
 	bool		root_cont;
@@ -1052,7 +1051,6 @@ static struct fuse_opt dfuse_opts[] = {
 	DFUSE_OPT("-f", foreground, 1),
 	DFUSE_OPT("-s", singlethread, 1),
 	DFUSE_OPT("-p %s", pool, 0),
-	DFUSE_OPT("-l %s", svcl, 0),
 	DFUSE_OPT("-g %s", group, 0),
 	DFUSE_OPT("-c %s", cont, 0),
 	DFUSE_OPT("--root-cont", root_cont, 1),
@@ -1074,12 +1072,10 @@ int main(int argc, char *argv[])
 {
 	struct fuse_args	args = FUSE_ARGS_INIT(argc, argv);
 	bool			free_pool = true;
-	bool			free_svcl = true;
 	bool			free_grp = true;
 	uuid_t			pool_uuid, co_uuid;
 	daos_pool_info_t	pool_info = {};
 	daos_cont_info_t	co_info;
-	d_rank_list_t		*svcl = NULL;
 	daos_handle_t		poh, coh;
 	int			rc;
 
@@ -1122,22 +1118,6 @@ int main(int argc, char *argv[])
 		D_GOTO(out_str, rc = 1);
 	}
 
-	/** Parse DAOS pool SVCL */
-	if (!dfuse_fs.svcl) {
-		dfuse_fs.svcl = getenv("DAOS_SVCL");
-		free_svcl = false;
-	}
-	if (!dfuse_fs.svcl) {
-		fprintf(stderr, "missing pool service rank list\n");
-		fprintf(stderr, "see `%s -h' for usage\n", argv[0]);
-		D_GOTO(out_str, rc = 1);
-	}
-	svcl = daos_rank_list_parse(dfuse_fs.svcl, ":");
-	if (svcl == NULL) {
-		fprintf(stderr, "Invalid pool service rank list\n");
-		D_GOTO(out_str, rc = 1);
-	}
-
 	/** Check if server group is passed */
 	if (!dfuse_fs.group) {
 		dfuse_fs.group = getenv("DAOS_GROUP");
@@ -1154,13 +1134,11 @@ int main(int argc, char *argv[])
 	if (dfuse_fs.debug) {
 		fprintf(stderr, "Pool Connect...\n");
 		fprintf(stderr, "DFS Pool = %s\n", dfuse_fs.pool);
-		fprintf(stderr, "DFS SVCL = %s\n", dfuse_fs.svcl);
 	}
 
 	/** Connect to DAOS pool */
-	rc = daos_pool_connect(pool_uuid, dfuse_fs.group, svcl, DAOS_PC_RW,
+	rc = daos_pool_connect(pool_uuid, dfuse_fs.group, NULL, DAOS_PC_RW,
 			       &poh, &pool_info, NULL);
-	d_rank_list_free(svcl);
 	if (rc < 0) {
 		fprintf(stderr, "Failed to connect to pool (%d)\n", rc);
 		D_GOTO(out_daos, rc = 1);
@@ -1246,8 +1224,6 @@ out_str:
 		free(dfuse_fs.mountpoint);
 	if (dfuse_fs.pool && free_pool)
 		free(dfuse_fs.pool);
-	if (dfuse_fs.svcl && free_svcl)
-		free(dfuse_fs.svcl);
 	if (dfuse_fs.group && free_grp)
 		free(dfuse_fs.group);
 	return rc;
