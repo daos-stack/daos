@@ -29,7 +29,8 @@ class SSDSocketTest(TestWithServers):
     """Test Class Description: Verify NVMe NUMA socket values.
 
     This test covers the requirement SRS-10-0034.
-    dmg supports listing of available storage (NVDIMMs, SSD) and netwok adapters and in all cases shows socket affinity
+    dmg supports listing of available storage (NVDIMMs, SSD) and netwok adapters
+    and in all cases shows socket affinity
 
     Call dmg storage scan --verbose to obtain NUMA socket value (Socket ID) of
     each NVMe disk. Verify against the value in
@@ -116,7 +117,7 @@ class SSDSocketTest(TestWithServers):
             if fs_socket_id != cmd_socket_id:
                 errors.append(
                     "Unexpected socket ID! Cmd: {}; FS: {}".format(
-                    cmd_socket_id, fs_socket_id))
+                        cmd_socket_id, fs_socket_id))
 
         if errors:
             # Since we're dealing with system files and we don't have access to
