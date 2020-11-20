@@ -98,6 +98,10 @@ enum {
 	DAOS_OC_EC_K2P2_L32K,	/* Erasure code, 2 data cells, 2 parity cells,
 				 * cell size 32K.
 				 */
+	DAOS_OC_EC_K4P1_L32K,	/* Erasure code, 4 data cells, 1 parity cells,
+				 * cell size 32K.
+				 */
+
 	DAOS_OC_EC_K4P2_L32K,	/* Erasure code, 4 data cells, 2 parity cells,
 				 * cell size 32K.
 				 */

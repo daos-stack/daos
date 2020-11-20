@@ -1726,7 +1726,6 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 	daos_key_t		*dkey;
 	struct daos_oclass_attr	*oca;
 	struct bio_desc		*biod;
-	daos_epoch_range_t	 epoch_range = { 0 };
 	daos_iod_t		 iod = { 0 };
 	daos_recx_t		 recx = { 0 };
 	struct obj_io_context	 ioc;
@@ -1749,56 +1748,76 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 	iod.iod_type = DAOS_IOD_ARRAY;
 	iod.iod_size = oea->ea_rsize;
 	iod.iod_nr = 1;
-	recx.rx_idx = (oea->ea_stripenum * oca->u.ec.e_len) | PARITY_INDICATOR;
-	recx.rx_nr = oca->u.ec.e_len;
-	iod.iod_recxs = &recx;
-	rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oea->ea_oid,
-			      oea->ea_epoch, 0, dkey, 1, &iod, NULL,
-			      NULL, 0, &ioh, NULL);
-	if (rc) {
-		D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
-			DP_UOID(oea->ea_oid), DP_RC(rc));
-		goto out;
-	}
-	biod = vos_ioh2desc(ioh);
-	rc = bio_iod_prep(biod);
-	if (rc) {
-		D_ERROR(DF_UOID" bio_iod_prep failed: "DF_RC".\n",
-			DP_UOID(oea->ea_oid), DP_RC(rc));
-		goto out;
-	}
-	rc = obj_bulk_transfer(rpc, CRT_BULK_PUT, false, &oea->ea_bulk, NULL,
-			       ioh, NULL, NULL, 1, NULL);
-	if (rc) {
-		D_ERROR(DF_UOID" bulk transfer failed: "DF_RC".\n",
-			DP_UOID(oea->ea_oid), DP_RC(rc));
-		goto out;
-	}
+	if (iod.iod_size) {
+		recx.rx_idx = (oea->ea_stripenum * oca->u.ec.e_len) |
+			PARITY_INDICATOR;
+		recx.rx_nr = oca->u.ec.e_len;
+		iod.iod_recxs = &recx;
+		rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oea->ea_oid,
+				      oea->ea_epoch_range.epr_hi, 0, dkey, 1,
+				      &iod, NULL, NULL, 0, &ioh, NULL);
+		if (rc) {
+			D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
+				DP_UOID(oea->ea_oid), DP_RC(rc));
+			goto out;
+		}
+		biod = vos_ioh2desc(ioh);
+		rc = bio_iod_prep(biod);
+		if (rc) {
+			D_ERROR(DF_UOID" bio_iod_prep failed: "DF_RC".\n",
+				DP_UOID(oea->ea_oid), DP_RC(rc));
+			goto out;
+		}
+		rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &oea->ea_bulk,
+				       NULL, ioh, NULL, NULL, 1, NULL);
+		if (rc) {
+			D_ERROR(DF_UOID" bulk transfer failed: "DF_RC".\n",
+				DP_UOID(oea->ea_oid), DP_RC(rc));
+			goto out;
+		}
 
-	rc = bio_iod_post(biod);
-	if (rc) {
-		D_ERROR(DF_UOID" bio_iod_post failed: "DF_RC".\n",
-			DP_UOID(oea->ea_oid), DP_RC(rc));
-		goto out;
+		rc = bio_iod_post(biod);
+		if (rc) {
+			D_ERROR(DF_UOID" bio_iod_post failed: "DF_RC".\n",
+				DP_UOID(oea->ea_oid), DP_RC(rc));
+			goto out;
+		}
+		rc = vos_update_end(ioh, ioc.ioc_map_ver, dkey, rc, NULL);
+		if (rc) {
+			D_ERROR(DF_UOID" vos_update_end failed: "DF_RC".\n",
+				DP_UOID(oea->ea_oid), DP_RC(rc));
+			goto out;
+		}
 	}
-	rc = vos_update_end(ioh, ioc.ioc_map_ver, dkey, rc, NULL);
-	if (rc) {
-		D_ERROR(DF_UOID" vos_update_end failed: "DF_RC".\n",
-			DP_UOID(oea->ea_oid), DP_RC(rc));
-		goto out;
-	}
-	epoch_range.epr_lo = 0ULL;
-	epoch_range.epr_hi = oea->ea_epoch;
-	recx.rx_idx = oea->ea_stripenum * oca->u.ec.e_len * oca->u.ec.e_k -
-							oea->ea_prior_len;
-	recx.rx_nr = oca->u.ec.e_k * oca->u.ec.e_len +
-		oea->ea_prior_len - oea->ea_after_len;
-	rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oea->ea_oid,
-				  &epoch_range, dkey, &oea->ea_akey, &recx);
-	if (rc) {
-		D_ERROR(DF_UOID" vos_obj_array_remove failed: "DF_RC"\n",
-			DP_UOID(oea->ea_oid), DP_RC(rc));
-		rc = 0;
+	if (oea->ea_remove_nr) {
+		daos_epoch_range_t	epr;
+		int			i;
+
+		for (i = 0; i < oea->ea_remove_nr; i++) {
+			epr.epr_hi = epr.epr_lo =
+				oea->ea_remove_eps.ca_arrays[i];
+			rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl,
+						  oea->ea_oid, &epr, dkey,
+						  &oea->ea_akey,
+						  &oea->
+						  ea_remove_recxs.ca_arrays[i]);
+			if (rc) {
+				D_ERROR(DF_UOID"array_remove failed: "DF_RC"\n",
+					DP_UOID(oea->ea_oid), DP_RC(rc));
+			}
+		}
+
+	} else {
+		recx.rx_idx = oea->ea_stripenum * oca->u.ec.e_len *
+			oca->u.ec.e_k;
+		recx.rx_nr = oca->u.ec.e_k * oca->u.ec.e_len;
+		rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oea->ea_oid,
+					  &oea->ea_epoch_range, dkey,
+					  &oea->ea_akey, &recx);
+		if (rc) {
+			D_ERROR(DF_UOID"array_remove failed: "DF_RC"\n",
+				DP_UOID(oea->ea_oid), DP_RC(rc));
+		}
 	}
 out:
 	obj_rw_reply(rpc, rc, 0, &ioc);
