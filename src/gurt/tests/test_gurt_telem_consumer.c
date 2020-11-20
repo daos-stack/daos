@@ -35,8 +35,8 @@
 #include "gurt/telemetry_common.h"
 #include "gurt/telemetry_consumer.h"
 
-struct d_tm_node_t	*root = NULL;
-uint64_t		*shmem_root = NULL;
+struct d_tm_node_t	*root;
+uint64_t		*shmem_root;
 
 static int
 init_tests(void **state)
@@ -184,7 +184,7 @@ test_timer_snapshot(void **state)
 
 	rc = d_tm_get_timer_snapshot(&tms1, shmem_root, NULL,
 				     "gurt/tests/telem/snapshot sample 1");
-	assert (rc == D_TM_SUCCESS);
+	assert(rc == D_TM_SUCCESS);
 
 	rc = d_tm_get_timer_snapshot(&tms2, shmem_root, NULL,
 				     "gurt/tests/telem/snapshot sample 2");
@@ -201,6 +201,7 @@ test_timer_snapshot(void **state)
 	 */
 	assert((tms3.tv_sec + tms3.tv_nsec) > 0);
 }
+
 static int
 fini_tests(void **state)
 {

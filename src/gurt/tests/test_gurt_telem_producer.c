@@ -54,7 +54,7 @@ test_increment_counter(void **state)
 
 	for (i = 0; i < count - 1; i++) {
 		rc = d_tm_increment_counter(&loop, "gurt", "tests", "telem",
-					   "loop counter", NULL);
+					    "loop counter", NULL);
 		assert(rc == D_TM_SUCCESS);
 	}
 
@@ -101,7 +101,7 @@ test_record_timestamp(void **state)
 	int				rc;
 
 	rc = d_tm_record_timestamp(&ts, "gurt", "tests", "telem",
-				  "last executed", NULL);
+				   "last executed", NULL);
 	assert(rc == D_TM_SUCCESS);
 }
 
@@ -174,13 +174,13 @@ test_input_validation(void **state)
 	assert(rc == D_TM_SUCCESS);
 
 	/** Verify correct function associated with this metric type is used */
-	printf("This operation is expected to generate an error: \n");
+	printf("This operation is expected to generate an error:\n");
 	rc = d_tm_increment_gauge(NULL, 1, "gurt", "tests", "telem",
-				    "counter 1", NULL);
+				  "counter 1", NULL);
 	assert(rc == -DER_OP_NOT_PERMITTED);
 
 	/** Verify correct function associated with this metric type is used */
-	printf("This operation is expected to generate an error: \n");
+	printf("This operation is expected to generate an error:\n");
 	rc = d_tm_increment_gauge(&node, 1, NULL);
 	assert(rc == -DER_OP_NOT_PERMITTED);
 
