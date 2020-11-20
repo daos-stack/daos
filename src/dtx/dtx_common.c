@@ -28,7 +28,6 @@
 #include <abt.h>
 #include <uuid/uuid.h>
 #include <daos/btree_class.h>
-#include <daos_srv/pool.h>
 #include <daos_srv/container.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/dtx_srv.h>
@@ -115,7 +114,6 @@ dtx_flush_on_deregister(struct dss_module_info *dmi,
 			struct dtx_batched_commit_args *dbca)
 {
 	struct ds_cont_child	*cont = dbca->dbca_cont;
-	struct ds_pool_child	*pool = cont->sc_pool;
 	int			 rc;
 
 	D_ASSERT(dbca->dbca_deregistering != NULL);
@@ -127,8 +125,7 @@ dtx_flush_on_deregister(struct dss_module_info *dmi,
 		if (rc <= 0)
 			break;
 
-		rc = dtx_commit(pool->spc_uuid, cont->sc_uuid,
-				dtes, rc, true);
+		rc = dtx_commit(cont, dtes, rc, true);
 		dtx_free_committable(dtes);
 	} while (rc >= 0);
 
@@ -179,15 +176,14 @@ dtx_batched_commit(void *arg)
 			rc = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT,
 						   NULL, DAOS_EPOCH_MAX, &dtes);
 			if (rc > 0) {
-				rc = dtx_commit(cont->sc_pool->spc_uuid,
-						cont->sc_uuid, dtes, rc, true);
-				if (rc != 0) {
-					D_ERROR("Fail to commit dtx: "DF_RC"\n",
-						DP_RC(rc));
-					goto check;
-				}
-
+				rc = dtx_commit(cont, dtes, rc, true);
 				dtx_free_committable(dtes);
+				if (rc != 0)
+					/* Not fatal, continue other batched
+					 * DTX commit, DTX aggregation.
+					 */
+					D_WARN("Fail to batched commit dtx: "
+					       DF_RC"\n", DP_RC(rc));
 
 				if (dbca->dbca_deregistering) {
 					dtx_flush_on_deregister(dmi, dbca);
@@ -716,8 +712,7 @@ again:
 sync:
 	if (dth->dth_sync) {
 		dte = &dth->dth_dte;
-		rc = dtx_commit(cont->sc_pool->spc_uuid, cont->sc_uuid,
-				&dte, 1, false);
+		rc = dtx_commit(cont, &dte, 1, false);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": Fail to sync commit DTX "DF_DTI
 				": "DF_RC"\n", DP_UUID(cont->sc_uuid),
@@ -733,8 +728,7 @@ abort:
 	 */
 	if (result < 0 && result != -DER_AGAIN && !dth->dth_solo) {
 		dte = &dth->dth_dte;
-		dtx_abort(cont->sc_pool->spc_uuid, cont->sc_uuid,
-			  dth->dth_epoch, &dte, 1);
+		dtx_abort(cont, dth->dth_epoch, &dte, 1);
 	}
 
 	vos_dtx_rsrvd_fini(dth);
@@ -1145,8 +1139,8 @@ out:
 }
 
 int
-dtx_obj_sync(uuid_t po_uuid, uuid_t co_uuid, struct ds_cont_child *cont,
-	     daos_unit_oid_t *oid, daos_epoch_t epoch)
+dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
+	     daos_epoch_t epoch)
 {
 	int	rc = 0;
 
@@ -1163,7 +1157,7 @@ dtx_obj_sync(uuid_t po_uuid, uuid_t co_uuid, struct ds_cont_child *cont,
 		if (rc == 0)
 			break;
 
-		rc = dtx_commit(po_uuid, co_uuid, dtes, rc, true);
+		rc = dtx_commit(cont, dtes, rc, true);
 		dtx_free_committable(dtes);
 		if (rc < 0) {
 			D_ERROR("Fail to commit dtx: "DF_RC"\n", DP_RC(rc));

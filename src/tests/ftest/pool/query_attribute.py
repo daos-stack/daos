@@ -64,7 +64,7 @@ class QueryAttributeTest(TestWithServers):
         daos_cmd = DaosCommand(self.bin)
         # Call daos pool query, obtain pool UUID and SCM size, and compare
         # against those used when creating the pool.
-        kwargs = {"pool": expected["uuid"], "svc": expected["svc"]}
+        kwargs = {"pool": expected["uuid"]}
         query_result = daos_cmd.get_output("pool_query", **kwargs)
         actual_uuid = query_result[0][0]
         actual_size = query_result[2][4]
@@ -83,12 +83,11 @@ class QueryAttributeTest(TestWithServers):
             sample_attrs.append(sample_attr)
             sample_vals.append(sample_val)
             daos_cmd.pool_set_attr(
-                pool=actual_uuid, attr=sample_attr, value=sample_val,
-                svc=expected["svc"])
+                pool=actual_uuid, attr=sample_attr, value=sample_val)
             expected_attrs.append(sample_attr)
             expected_attrs_dict[sample_attr] = sample_val
         # List the attribute names and compare against those set.
-        kwargs = {"pool": actual_uuid, "svc": expected["svc"]}
+        kwargs = {"pool": actual_uuid}
         actual_attrs = daos_cmd.get_output("pool_list_attrs", **kwargs)
         actual_attrs.sort()
         expected_attrs.sort()
@@ -98,7 +97,6 @@ class QueryAttributeTest(TestWithServers):
             kwargs = {
                 "pool": actual_uuid,
                 "attr": sample_attrs[i],
-                "svc": expected["svc"]
             }
             actual_val = daos_cmd.get_output("pool_get_attr", **kwargs)[0]
             self.assertEqual(sample_vals[i], actual_val)

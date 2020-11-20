@@ -151,7 +151,7 @@ pool_create(void)
 			     10ULL << 30 /* target SCM size, 10G */,
 			     40ULL << 30 /* target NVMe size, 40G */,
 			     NULL /* pool props */,
-			     &svcl /* pool service nodes, used for connect */,
+			     &svcl /* pool service nodes */,
 			     pool_uuid /* the uuid of the pool created */);
 	ASSERT(rc == 0, "pool create failed with %d", rc);
 }
@@ -487,7 +487,7 @@ main(int argc, char **argv)
 		pool_create();
 
 		/** connect to the just created DAOS pool */
-		rc = daos_pool_connect(pool_uuid, DSS_PSETID, &svcl,
+		rc = daos_pool_connect(pool_uuid, DSS_PSETID, NULL /* svc */,
 				       DAOS_PC_EX /* exclusive access */,
 				       &poh /* returned pool handle */,
 				       NULL /* returned pool info */,
