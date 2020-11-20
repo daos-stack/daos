@@ -87,6 +87,7 @@ class BadEvictTest(TestWithServers):
                     saveduuid[item] = pool.pool.uuid[item]
                 pool.pool.uuid[4] = 244
 
+            # evict the pool
             self.get_dmg_command().pool_evict(pool=pool.pool.get_uuid_str())
 
             if expected_result in ['FAIL']:
