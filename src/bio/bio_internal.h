@@ -101,6 +101,12 @@ struct bio_bdev {
 	bool			 bb_removed;
 	bool			 bb_replacing;
 	bool			 bb_trigger_reint;
+	/*
+	 * If a faulty device is replaced but still plugged, we'll keep
+	 * the 'faulty' information here, so that we know this device was
+	 * marked as faulty (at least before next server restart).
+	 */
+	bool			 bb_faulty;
 };
 
 /*

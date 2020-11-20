@@ -38,16 +38,16 @@ read_bulk(char *buff, size_t len, off_t position,
 	d_sg_list_t		sgl = {};
 	int rc;
 
-	DFUSE_TRA_INFO(entry->fd_dfsoh, "%#zx-%#zx",
-		       position, position + len - 1);
+	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "%#zx-%#zx",
+			position, position + len - 1);
 
 	sgl.sg_nr = 1;
 	d_iov_set(&iov, (void *)buff, len);
 	sgl.sg_iovs = &iov;
-	rc = dfs_read(entry->fd_dfs, entry->fd_dfsoh, &sgl,
+	rc = dfs_read(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, &sgl,
 		      position,	&read_size, NULL);
 	if (rc) {
-		DFUSE_TRA_INFO(entry, "dfs_read() failed: %d", rc);
+		DFUSE_TRA_DEBUG(entry->fd_dfsoh, "dfs_read() failed: %d", rc);
 		*errcode = rc;
 		return -1;
 	}
