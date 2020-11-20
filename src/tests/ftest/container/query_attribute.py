@@ -60,8 +60,7 @@ class ContainerQueryAttributeTest(TestWithServers):
         self.add_pool()
         self.daos_cmd = DaosCommand(self.bin)
         self.expected_cont_uuid = self.daos_cmd.get_output(
-            "container_create", pool=self.pool.uuid,
-            svc=self.pool.svc_ranks[0])[0]
+            "container_create", pool=self.pool.uuid)[0]
 
     def test_container_query_attr(self):
         """JIRA ID: DAOS-4640
@@ -81,7 +80,6 @@ class ContainerQueryAttributeTest(TestWithServers):
         # compare against those used when creating the pool and the container.
         kwargs = {
             "pool": self.pool.uuid,
-            "svc": self.pool.svc_ranks[0],
             "cont": self.expected_cont_uuid
         }
         query_output = self.daos_cmd.get_output("container_query", **kwargs)[0]
@@ -131,8 +129,7 @@ class ContainerQueryAttributeTest(TestWithServers):
         for attr_value in attr_values:
             self.daos_cmd.container_set_attr(
                 pool=actual_pool_uuid, cont=actual_cont_uuid,
-                attr=attr_value[0], val=attr_value[1],
-                svc=self.pool.svc_ranks[0])
+                attr=attr_value[0], val=attr_value[1])
             kwargs["attr"] = attr_value[0]
             output = self.daos_cmd.container_get_attr(**kwargs)
             actual_val = output["value"]
@@ -159,7 +156,6 @@ class ContainerQueryAttributeTest(TestWithServers):
         expected_attrs.sort()
         kwargs = {
             "pool": actual_pool_uuid,
-            "svc": self.pool.svc_ranks[0],
             "cont": actual_cont_uuid
         }
         data = self.daos_cmd.container_list_attrs(**kwargs)
@@ -188,11 +184,10 @@ class ContainerQueryAttributeTest(TestWithServers):
         for expected_attr, val in zip(expected_attrs, vals):
             _ = self.daos_cmd.container_set_attr(
                 pool=self.pool.uuid, cont=self.expected_cont_uuid,
-                attr=expected_attr, val=val, svc=self.pool.svc_ranks[0])
+                attr=expected_attr, val=val)
         expected_attrs.sort()
         kwargs = {
             "pool": self.pool.uuid,
-            "svc": self.pool.svc_ranks[0],
             "cont": self.expected_cont_uuid
         }
         data = self.daos_cmd.container_list_attrs(**kwargs)
