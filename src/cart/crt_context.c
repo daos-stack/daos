@@ -166,7 +166,7 @@ crt_context_init(crt_context_t crt_ctx)
 				      NULL /* priv */, &crt_timeout_bh_ops,
 				      &ctx->cc_bh_timeout);
 	if (rc != 0) {
-		D_ERROR("d_binheap_create_inplace failed, rc: %d.\n", rc);
+		D_ERROR("d_binheap_create() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out_mutex_destroy, rc);
 	}
 
@@ -175,7 +175,7 @@ crt_context_init(crt_context_t crt_ctx)
 					  NULL, &epi_table_ops,
 					  &ctx->cc_epi_table);
 	if (rc != 0) {
-		D_ERROR("d_hash_table_create_inplace failed, rc: %d.\n", rc);
+		D_ERROR("d_hash_table_create() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out_binheap_destroy, rc);
 	}
 	D_GOTO(out, rc);
@@ -193,6 +193,7 @@ crt_context_create(crt_context_t *crt_ctx)
 {
 	struct crt_context	*ctx = NULL;
 	int			rc = 0;
+	na_size_t		uri_len = CRT_ADDR_STR_MAX_LEN;
 
 	if (crt_ctx == NULL) {
 		D_ERROR("invalid parameter of NULL crt_ctx.\n");
@@ -212,16 +213,27 @@ crt_context_create(crt_context_t *crt_ctx)
 
 	rc = crt_context_init(ctx);
 	if (rc != 0) {
-		D_ERROR("crt_context_init failed, rc: %d.\n", rc);
+		D_ERROR("crt_context_init() failed, " DF_RC "\n", DP_RC(rc));
 		D_FREE_PTR(ctx);
 		D_GOTO(out, rc);
 	}
 
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 
-	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, crt_gdata.cg_ctx_num);
+	ctx->provider = crt_gdata.cg_na_plugin;
+	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, ctx->provider,
+			     crt_gdata.cg_ctx_num);
 	if (rc != 0) {
-		D_ERROR("crt_hg_ctx_init failed rc: %d.\n", rc);
+		D_ERROR("crt_hg_ctx_init() failed, " DF_RC "\n", DP_RC(rc));
+		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
+		crt_context_destroy(ctx, true);
+		D_GOTO(out, rc);
+	}
+
+	rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla,
+			     ctx->cc_self_uri, &uri_len);
+	if (rc != 0) {
+		D_ERROR("ctx_hg_get_addr() failed; rc: %d.\n", rc);
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		crt_context_destroy(ctx, true);
 		D_GOTO(out, rc);
@@ -293,14 +305,15 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 			cbinfo.cci_rc = rpc_priv->crp_reply_hdr.cch_rc;
 
 		if (cbinfo.cci_rc != 0)
-			RPC_ERROR(rpc_priv, "RPC failed; rc: %d\n",
-				  cbinfo.cci_rc);
+			RPC_ERROR(rpc_priv, "failed, " DF_RC "\n",
+				  DP_RC(cbinfo.cci_rc));
 
 		RPC_TRACE(DB_TRACE, rpc_priv,
-			  "Invoking RPC callback (rank %d tag %d) rc: %d.\n",
+			  "Invoking RPC callback (rank %d tag %d) rc: "
+			  DF_RC "\n",
 			  rpc_priv->crp_pub.cr_ep.ep_rank,
 			  rpc_priv->crp_pub.cr_ep.ep_tag,
-			  cbinfo.cci_rc);
+			  DP_RC(cbinfo.cci_rc));
 
 		rpc_priv->crp_complete_cb(&cbinfo);
 	}
@@ -1109,8 +1122,7 @@ crt_self_uri_get(int tag, char **uri)
 {
 	struct crt_context	*tmp_crt_ctx;
 	char			*tmp_uri = NULL;
-	na_size_t		 uri_len = CRT_ADDR_STR_MAX_LEN;
-	int			 rc;
+	int			 rc = 0;
 
 	if (uri == NULL) {
 		D_ERROR("uri can't be NULL.\n");
@@ -1123,17 +1135,7 @@ crt_self_uri_get(int tag, char **uri)
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
-	D_ALLOC(tmp_uri, CRT_ADDR_STR_MAX_LEN);
-	if (tmp_uri == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	rc = crt_hg_get_addr(tmp_crt_ctx->cc_hg_ctx.chc_hgcla,
-			tmp_uri, &uri_len);
-	if (rc != 0) {
-		D_ERROR("crt_hg_get_addr failed, rc: %d.\n", rc);
-		D_FREE(tmp_uri);
-		D_GOTO(out, rc = -DER_HG);
-	}
+	D_STRNDUP(tmp_uri, tmp_crt_ctx->cc_self_uri, CRT_ADDR_STR_MAX_LEN - 1);
 
 	*uri = tmp_uri;
 

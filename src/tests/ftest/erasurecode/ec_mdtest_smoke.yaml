@@ -18,7 +18,7 @@ server_config:
       pinned_numa_node: 0
       nr_xs_helpers: 1
       fabric_iface: ib0
-      fabric_iface_port: 31416
+      fabric_iface_port: 31317
       log_file: daos_server0.log
       bdev_class: nvme
       bdev_list: ["0000:81:00.0"]

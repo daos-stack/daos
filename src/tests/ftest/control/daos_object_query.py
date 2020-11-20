@@ -23,7 +23,6 @@
 """
 from apricot import TestWithServers
 from daos_utils import DaosCommand
-from general_utils import convert_list
 
 
 class DaosObjectQuery(TestWithServers):
@@ -96,7 +95,6 @@ class DaosObjectQuery(TestWithServers):
             oid_concat = "{}.{}".format(expected_oid_hi, expected_oid_lo)
             kwargs = {
                 "pool": self.pool.uuid,
-                "svc": convert_list(self.pool.svc_ranks),
                 "cont": self.container.uuid,
                 "oid": oid_concat
             }
