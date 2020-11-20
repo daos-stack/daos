@@ -666,7 +666,7 @@ int obj_ec_get_degrade(struct obj_reasb_req *reasb_req, uint16_t fail_tgt_idx,
 struct obj_rw_in;
 int obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 			uint32_t iod_nr, uint32_t start_shard,
-			void *tgt_map, uint32_t map_size,
+			uint32_t max_shard, void *tgt_map, uint32_t map_size,
 			uint32_t tgt_nr, struct daos_shard_tgt *tgts,
 			struct obj_ec_split_req **split_req);
 void obj_ec_split_req_fini(struct obj_ec_split_req *req);

@@ -921,6 +921,8 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	daos_dti_copy(&orw->orw_dti, &args->dti);
 	orw->orw_flags = auxi->flags | flags;
 	orw->orw_tgt_idx = auxi->ec_tgt_idx;
+	if (args->reasb_req && args->reasb_req->orr_oca)
+		orw->orw_tgt_max = obj_ec_tgt_nr(args->reasb_req->orr_oca) - 1;
 	if (obj_op_is_ec_fetch(auxi->obj_auxi) &&
 	    (auxi->shard != (auxi->start_shard + auxi->ec_tgt_idx)))
 		orw->orw_flags |= ORF_EC_DEGRADED;

@@ -1959,7 +1959,8 @@ again:
 	if (orw->orw_iod_array.oia_oiods != NULL && split_req == NULL) {
 		rc = obj_ec_rw_req_split(orw->orw_oid, &orw->orw_iod_array,
 					 orw->orw_nr, orw->orw_start_shard,
-					 NULL, 0, orw->orw_shard_tgts.ca_count,
+					 orw->orw_tgt_max, NULL, 0,
+					 orw->orw_shard_tgts.ca_count,
 					 orw->orw_shard_tgts.ca_arrays,
 					 &split_req);
 		if (rc != 0) {
@@ -3645,7 +3646,7 @@ ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
 			continue;
 
 		rc = obj_ec_rw_req_split(dcsr->dcsr_oid, &dcu->dcu_iod_array,
-					 dcsr->dcsr_nr, dcu->dcu_start_shard,
+					 dcsr->dcsr_nr, dcu->dcu_start_shard, 0,
 					 dcu->dcu_ec_tgts, dcsr->dcsr_ec_tgt_nr,
 					 tgt_cnt, tgts, &dcu->dcu_ec_split_req);
 		if (rc != 0) {
