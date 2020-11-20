@@ -313,6 +313,8 @@ void d_tm_fini(void)
 		 * and only frees the resources if it's the last one using it.
 		 */
 		shmdt(d_tm_shmem_root);
+		d_tm_shmem_root = NULL;
+		d_tm_root = NULL;
 	}
 }
 
@@ -654,12 +656,23 @@ d_tm_count_metrics(uint64_t *shmem_root, struct d_tm_node_t *node)
  * \return			D_TM_SUCCESS		Success
  *				-DER_EXCEEDS_PATH_LEN	The full name length is
  *							too long
+ *				-DER_INVAL		\a item was NULL
  */
 int
 d_tm_build_path(char **path, char *item, va_list args)
 {
 	char	*str;
 	int	rc = D_TM_SUCCESS;
+
+	if (item == NULL) {
+		rc = -DER_INVAL;
+		goto failure;
+	}
+
+	if (strnlen(item, D_TM_MAX_NAME_LEN) == D_TM_MAX_NAME_LEN) {
+		rc = -DER_EXCEEDS_PATH_LEN;
+		goto failure;
+	}
 
 	snprintf(*path, D_TM_MAX_NAME_LEN, "%s", item);
 	str = va_arg(args, char *);
@@ -680,6 +693,7 @@ d_tm_build_path(char **path, char *item, va_list args)
 			goto failure;
 		}
 	}
+
 failure:
 	return rc;
 }
@@ -708,6 +722,8 @@ failure:
  *							because the \a item is
  *							not a counter
  *				-DER_UNINIT		API not initialized
+ *				-DER_INVAL		\a metric and \a item
+ *							are NULL
  */
 int
 d_tm_increment_counter(struct d_tm_node_t **metric, char *item, ...)
@@ -724,6 +740,11 @@ d_tm_increment_counter(struct d_tm_node_t **metric, char *item, ...)
 	} else {
 		va_list	args;
 		char	*p;
+
+		if (item == NULL) {
+			rc = -DER_INVAL;
+			goto failure;
+		}
 
 		va_start(args, item);
 		p = path;
@@ -790,6 +811,8 @@ failure:
  *							because the \a item is
  *							not a timestamp
  *				-DER_UNINIT		API not initialized
+ *				-DER_INVAL		\a metric and \a item
+ *							are NULL
  */
 int
 d_tm_record_timestamp(struct d_tm_node_t **metric, char *item, ...)
@@ -807,11 +830,15 @@ d_tm_record_timestamp(struct d_tm_node_t **metric, char *item, ...)
 		va_list	args;
 		char	*p;
 
+		if (item == NULL) {
+			rc = -DER_INVAL;
+			goto failure;
+		}
+
 		va_start(args, item);
 		p = path;
 		rc = d_tm_build_path(&p, item, args);
 		va_end(args);
-
 		if (rc != D_TM_SUCCESS)
 			goto failure;
 		node = d_tm_find_metric(d_tm_shmem_root, path);
@@ -870,8 +897,10 @@ failure:
  *							because the \a item is
  *							not a high resolution
  *							timer
- *				-DER_INVAL		invalid clock_id
  *				-DER_UNINIT		API not initialized
+ *				-DER_INVAL		\a metric and \a item
+ *							are NULL
+ *							Invalid \a clk_id
  */
 int
 d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
@@ -890,11 +919,15 @@ d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
 		va_list	args;
 		char	*p;
 
+		if (item == NULL) {
+			rc = -DER_INVAL;
+			goto failure;
+		}
+
 		va_start(args, item);
 		p = path;
 		rc = d_tm_build_path(&p, item, args);
 		va_end(args);
-
 		if (rc != D_TM_SUCCESS)
 			goto failure;
 		node = d_tm_find_metric(d_tm_shmem_root, path);
@@ -965,8 +998,10 @@ failure:
  *				-DER_OP_NOT_PERMITTED	Operation not permitted
  *							because the \a item is
  *							not a duration
- *				-DER_INVAL		invalid clk_id
  *				-DER_UNINIT		API not initialized
+ *				-DER_INVAL		\a metric and \a item
+ *							are NULL
+ *							Invalid \a clk_id
  */
 int
 d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
@@ -984,6 +1019,11 @@ d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
 	} else {
 		va_list	args;
 		char	*p;
+
+		if (item == NULL) {
+			rc = -DER_INVAL;
+			goto failure;
+		}
 
 		va_start(args, item);
 		p = path;
@@ -1062,6 +1102,8 @@ failure:
  *							without first calling
  *							d_tm_mark_duration_start
  *				-DER_UNINIT		API not initialized
+ *				-DER_INVAL		\a metric and \a item
+ *							are NULL
  */
 int
 d_tm_mark_duration_end(struct d_tm_node_t **metric, char *item, ...)
@@ -1080,11 +1122,15 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, char *item, ...)
 		va_list	args;
 		char	*p;
 
+		if (item == NULL) {
+			rc = -DER_INVAL;
+			goto failure;
+		}
+
 		va_start(args, item);
 		p = path;
 		rc = d_tm_build_path(&p, item, args);
 		va_end(args);
-
 		if (rc != D_TM_SUCCESS)
 			goto failure;
 		node = d_tm_find_metric(d_tm_shmem_root, path);
@@ -1144,6 +1190,8 @@ failure:
  *							because the \a item is
  *							not a gauge
  *				-DER_UNINIT		API not initialized
+ *				-DER_INVAL		\a metric and \a item
+ *							are NULL
  */
 int
 d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value, char *item, ...)
@@ -1160,6 +1208,11 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value, char *item, ...)
 	} else {
 		va_list	args;
 		char	*p;
+
+		if (item == NULL) {
+			rc = -DER_INVAL;
+			goto failure;
+		}
 
 		va_start(args, item);
 		p = path;
@@ -1225,6 +1278,8 @@ failure:
  *							because the \a item is
  *							not a gauge
  *				-DER_UNINIT		API not initialized
+ *				-DER_INVAL		\a metric and \a item
+ *							are NULL
  */
 int
 d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
@@ -1242,6 +1297,11 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 	} else {
 		va_list	args;
 		char	*p;
+
+		if (item == NULL) {
+			rc = -DER_INVAL;
+			goto failure;
+		}
 
 		va_start(args, item);
 		p = path;
@@ -1307,6 +1367,8 @@ failure:
  *							because the \a item is
  *							not a gauge
  *				-DER_UNINIT		API not initialized
+ *				-DER_INVAL		\a metric and \a item
+ *							are NULL
  */
 int
 d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
@@ -1324,6 +1386,11 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 	} else {
 		va_list	args;
 		char	*p;
+
+		if (item == NULL) {
+			rc = -DER_INVAL;
+			goto failure;
+		}
 
 		va_start(args, item);
 		p = path;
@@ -1403,7 +1470,14 @@ d_tm_find_metric(uint64_t *shmem_root, char *path)
 	char			*token;
 	char			*rest = str;
 
+	if ((shmem_root == NULL) || (path == NULL))
+		return NULL;
+
 	parent_node = d_tm_get_root(shmem_root);
+
+	if (parent_node == NULL)
+		return NULL;
+
 	snprintf(str, sizeof(str), "%s", path);
 	token = strtok_r(rest, "/", &rest);
 	while (token != NULL) {
