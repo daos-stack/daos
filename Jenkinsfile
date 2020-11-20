@@ -1078,7 +1078,7 @@ pipeline {
                       expression { ! skip_stage('nlt') }
                     }
                     agent {
-                        label 'ci_hdwr1'
+                        label 'ci_vm1'
                     }
                     steps {
                         unitTest timeout_time: 20,
