@@ -38,6 +38,10 @@ type testTgtChooser struct {
 	toMS     bool
 }
 
+func (ttc *testTgtChooser) SetHostList(hl []string) {
+	ttc.hostList = hl
+}
+
 func (ttc *testTgtChooser) getHostList() []string {
 	return ttc.hostList
 }

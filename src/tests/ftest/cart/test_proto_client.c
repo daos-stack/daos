@@ -95,7 +95,7 @@ test_run()
 			   test.tg_remote_group_name,
 			   &grp, &rank_list, &test.tg_crt_ctx,
 			   &test.tg_tid, 1,
-			   true, NULL);
+			   test.tg_use_cfg, NULL);
 
 	rc = sem_init(&test.tg_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
