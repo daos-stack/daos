@@ -361,7 +361,7 @@ daos_test_cb_add(test_arg_t *arg, struct test_op_record *op,
 	print_message("add rank %u\n", op->ae_arg.ua_rank);
 	test_rebuild_wait(&arg, 1);
 	daos_reint_server(arg->pool.pool_uuid, arg->group, arg->dmg_config,
-			  arg->pool.svc, op->ae_arg.ua_rank);
+			  NULL /* arg->pool.svc */, op->ae_arg.ua_rank);
 	return 0;
 }
 
@@ -372,13 +372,13 @@ daos_test_cb_exclude(test_arg_t *arg, struct test_op_record *op,
 	if (op->ae_arg.ua_tgt == -1) {
 		print_message("exclude rank %u\n", op->ae_arg.ua_rank);
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
-				    arg->dmg_config, arg->pool.svc,
+				    arg->dmg_config, NULL /* arg->pool.svc */,
 				    op->ae_arg.ua_rank);
 	} else {
 		print_message("exclude rank %u target %d\n",
 			       op->ae_arg.ua_rank, op->ae_arg.ua_tgt);
 		daos_exclude_target(arg->pool.pool_uuid, arg->group,
-				    arg->dmg_config, arg->pool.svc,
+				    arg->dmg_config, NULL /* arg->pool.svc */,
 				    op->ae_arg.ua_rank, op->ae_arg.ua_tgt);
 	}
 	return 0;

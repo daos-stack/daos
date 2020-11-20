@@ -2141,7 +2141,7 @@ call_pre_sync_cb(struct crt_ivns_internal *ivns_internal,
 		D_ERROR("ivo_pre_sync() failed; rc=%d\n", rc);
 
 exit:
-	if (tmp_iovs)	
+	if (tmp_iovs)
 		D_FREE(tmp_iovs);
 	if (need_put)
 		iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);

@@ -780,7 +780,6 @@ aggregate_done:
 		/* Corresponding ADDREF done before crt_req_send() */
 		RPC_DECREF(parent_rpc_priv);
 	}
-	return;
 	CRT_EXIT();
 }
 
