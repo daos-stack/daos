@@ -309,6 +309,26 @@ done:
 	return false;
 }
 
+/** Return true if the rectangle falls in the uncertainty window
+ *
+ * \param[IN]	filter	The optional input filter
+ * \param[IN]	rect	The rectangle to check
+ * \param[IN]	leaf	Indicates if the rectangle is a leaf entry
+ */
+static inline bool
+evt_epoch_uncertain(const struct evt_filter *filter,
+		    const struct evt_rect *rect, bool leaf)
+{
+	if (filter == NULL || !leaf)
+		return false;
+
+	if (rect->rc_epc > filter->fr_epoch &&
+	    rect->rc_epc <= filter->fr_epr.epr_hi)
+		return true;
+
+	return false;
+}
+
 /** Create an equivalent evt_rect from an evt_entry
  *
  * \param[OUT]	rect	The output rectangle

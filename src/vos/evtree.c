@@ -1942,7 +1942,8 @@ evt_large_hole_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 	struct evt_entry_array	 ent_array;
 	int			 rc = 0;
 
-	filter.fr_epr.epr_hi = entry->ei_rect.rc_epc;
+	filter.fr_epr.epr_hi = entry->ei_bound;
+	filter.fr_epoch = entry->ei_rect.rc_epc;
 	filter.fr_ex = entry->ei_rect.rc_ex;
 
 	evt_ent_array_init(&ent_array);
@@ -2003,9 +2004,7 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 			return evt_large_hole_insert(toh, entry);
 		}
 		D_ERROR("Extent is too large\n");
-		/** If it's a punch, we can do a find on the rectangle and
-		 *  punch visible extents but for now, just reject the update
-		 */
+		/** The update isn't a punch, just reject it as too large */
 		return -DER_NO_PERM;
 	}
 
@@ -2013,10 +2012,11 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 
 	filter.fr_ex = entry->ei_rect.rc_ex;
 	filter.fr_epr.epr_lo = entry->ei_rect.rc_epc;
-	filter.fr_epr.epr_hi = entry->ei_rect.rc_epc;
+	filter.fr_epr.epr_hi = entry->ei_bound;
+	filter.fr_epoch = entry->ei_rect.rc_epc;
 	filter.fr_punch_epc = 0;
 	filter.fr_punch_minor_epc = 0;
-	/* Phase-1: Check for overwrite */
+	/* Phase-1: Check for overwrite and uncertainty */
 	rc = evt_ent_array_fill(tcx, EVT_FIND_OVERWRITE, DAOS_INTENT_UPDATE,
 				&filter, &entry->ei_rect, &ent_array);
 	if (rc != 0)
@@ -2182,6 +2182,13 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				break; /* overlapped */
 			}
 
+			if (evt_epoch_uncertain(filter, &rtmp, leaf)) {
+				V_TRACE(DB_TRACE, "Epoch uncertainty found for "
+					DF_RECT" filter="DF_FILTER"\n",
+					DP_RECT(&rtmp), DP_FILTER(filter));
+				D_GOTO(out, rc = -DER_TX_RESTART);
+			}
+
 			switch (time_overlap) {
 			default:
 				D_ASSERT(0);
@@ -2338,6 +2345,7 @@ evt_find(daos_handle_t toh, const struct evt_filter *filter,
 	int			 rc;
 
 	D_ASSERT(filter != NULL);
+	D_ASSERT(filter->fr_epoch != 0);
 
 	tcx = evt_hdl2tcx(toh);
 	if (tcx == NULL)
@@ -2345,7 +2353,7 @@ evt_find(daos_handle_t toh, const struct evt_filter *filter,
 
 	evt_ent_array_init(ent_array);
 	rect.rc_ex = filter->fr_ex;
-	rect.rc_epc = filter->fr_epr.epr_hi;
+	rect.rc_epc = filter->fr_epoch;
 	rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
 
 	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_DEFAULT,
@@ -3206,6 +3214,7 @@ evt_delete_internal(struct evt_context *tcx, const struct evt_rect *rect,
 	filter.fr_ex = rect->rc_ex;
 	filter.fr_epr.epr_lo = rect->rc_epc;
 	filter.fr_epr.epr_hi = rect->rc_epc;
+	filter.fr_epoch = rect->rc_epc;
 	rc = evt_ent_array_fill(tcx, EVT_FIND_SAME, DAOS_INTENT_PURGE,
 				&filter, rect, &ent_array);
 	if (rc != 0)
@@ -3274,6 +3283,7 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 
 	filter.fr_ex = rect.rc_ex;
 	filter.fr_epr = *epr;
+	filter.fr_epoch = epr->epr_hi;
 	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_PURGE,
 				&filter, &rect, &ent_array);
 	if (rc != 0) {
