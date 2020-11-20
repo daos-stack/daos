@@ -191,7 +191,7 @@ void timer_snapshot(void)
 	}
 
 	/**
-	 * How long did the sleep(1) take?  That's t1 - t2
+	 * How long did the sleep(1) take?  That's t2 - t1
 	 * How long did the 50000 iterations take?  That's t3 - t2
 	 * How long did the 500000 iterations take?  That's t4 - t3.
 	 * How long did the sleep(1) and the 50000 iterations take?  That's

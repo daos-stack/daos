@@ -226,8 +226,6 @@ test_input_validation(void **state)
 	path[D_TM_MAX_NAME_LEN - 6] = 0;
 	rc = d_tm_increment_counter(NULL, "root", path, NULL);
 	assert(rc == D_TM_SUCCESS);
-
-
 	D_FREE_PTR(path);
 }
 
