@@ -576,9 +576,9 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	char			*cmdname = NULL;
 
 	assert(ap != NULL);
-	ap->p_op  = -1;
-	ap->c_op  = -1;
-	ap->o_op  = -1;
+	ap->p_op = -1;
+	ap->c_op = -1;
+	ap->o_op = -1;
 	ap->fs_op = -1;
 	D_STRNDUP(ap->sysname, default_sysname, strlen(default_sysname));
 	if (ap->sysname == NULL)
