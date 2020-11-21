@@ -30,26 +30,27 @@ from daos_utils import DaosCommand
 
 
 class IoAggregation(IorTestBase):
+    # pylint: disable=too-many-ancestors
     """Test class Description: Verify Aggregation across system shutdown.
 
     :avocado: recursive
     """
 
     def setUp(self):
-        """Set up test before executing"""
+        """Set up test before executing."""
         super(IoAggregation, self).setUp()
         self.dmg = self.get_dmg_command()
         self.daos_cmd = DaosCommand(self.bin)
 
     def get_nvme_free_space(self):
-        """ Display pool free space """
+        """Display pool free space."""
         free_space = self.pool.get_pool_free_space("nvme")
         self.log.info("Free nvme space: %s", free_space)
 
         return free_space
 
     def highest_epoch(self, kwargs):
-        """Returns Highest Epoch for the container
+        """Return the Highest Epoch for the container.
 
         Args:
           kwargs (dict): Dictionary of arguments to be passed to
@@ -57,6 +58,7 @@ class IoAggregation(IorTestBase):
 
         Returns:
           Highest epoch value for a given container.
+
         """
         highest_epoch = self.daos_cmd.get_output(
             "container_query", **kwargs)[0][4]
@@ -65,8 +67,10 @@ class IoAggregation(IorTestBase):
 
     def test_ioaggregation(self):
         """Jira ID: DAOS-4332.
+
         Test Description:
             Verify Aggregation across system shutdown.
+
         Use Cases:
             Create Pool.
             Create Container.
@@ -86,9 +90,9 @@ class IoAggregation(IorTestBase):
             If current free space is equal to free space after first
             ior write, then pass otherwise fail the test after waiting
             for 4 attempts.
+
         :avocado: tags=all,daosio,hw,small,full_regression,ioaggregation
         """
-
         # update ior signature option
         self.ior_cmd.signature.update("123")
         # run ior write process
@@ -110,7 +114,6 @@ class IoAggregation(IorTestBase):
         # obtain highest epoch before snapshot destroy via container query
         kwargs = {
             "pool": self.pool.uuid,
-            "svc": self.pool.svc_ranks[0],
             "cont": self.container.uuid
         }
         highest_epc_before_snap_destroy = self.highest_epoch(kwargs)
@@ -124,7 +127,7 @@ class IoAggregation(IorTestBase):
         self.get_dmg_command().system_start()
 
         # check if all servers started as expected
-        scan_info = self.get_dmg_command().get_output("system_query")
+        scan_info = self.get_dmg_command().system_query()
         if not check_system_query_status(scan_info):
             self.fail("One or more servers crashed")
 
@@ -134,7 +137,7 @@ class IoAggregation(IorTestBase):
         returned_space = (self.get_nvme_free_space() -
                           free_space_before_snap_destroy)
         while returned_space < int(self.ior_cmd.block_size.value) or \
-            highest_epc_before_snap_destroy >= self.highest_epoch(kwargs):
+                highest_epc_before_snap_destroy >= self.highest_epoch(kwargs):
             # try to wait for 4 x 60 secs for aggregation to be completed or
             # else exit the test with a failure.
             if counter > 4:

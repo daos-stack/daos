@@ -487,7 +487,6 @@ agg_get_obj_handle(struct ec_agg_entry *entry)
 					layout->ol_shards[i]->
 					os_shard_data[j].sd_tgt_idx;
 				}
-
 		daos_obj_layout_free(layout);
 	}
 	return rc;
@@ -718,7 +717,7 @@ agg_stripe_is_filled(struct ec_agg_entry *entry, bool has_parity)
 }
 
 /* True if all original extents are contained within the current stripe.
- */
+*/
 static bool
 agg_contained(struct ec_agg_entry *entry)
 {
@@ -817,6 +816,7 @@ agg_update_vos(struct ec_agg_entry *entry, bool write_parity)
 					  entry->ae_oid, &epoch_range,
 					  &entry->ae_dkey, &entry->ae_akey,
 					  &recx);
+
 	} else {
 		d_list_for_each_entry(ext, &entry->ae_cur_stripe.as_dextents,
 				      ae_link) {
@@ -843,6 +843,7 @@ agg_update_vos(struct ec_agg_entry *entry, bool write_parity)
 					rc = erc;
 			}
 		}
+
 	}
 out:
 	return rc;
@@ -1980,10 +1981,9 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 		goto out;
 	}
 
-	rc = ds_pool_check_leader(agg_param->ap_pool_info.api_pool_uuid,
-				  &entry->ie_oid, agg_param->
-				  ap_pool_info.api_pool->sp_map_version);
-
+	rc = ds_pool_check_dtx_leader(agg_param->ap_pool_info.api_pool,
+				      &entry->ie_oid, agg_param->
+				      ap_pool_info.api_pool->sp_map_version);
 
 	if (rc == 1 && entry->ie_oid.id_shard >= oca->u.ec.e_k) {
 		agg_reset_entry(&agg_param->ap_agg_entry, entry, oca);

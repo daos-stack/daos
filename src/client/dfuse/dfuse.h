@@ -46,6 +46,7 @@ struct dfuse_info {
 	char				*di_group;
 	char				*di_mountpoint;
 	d_rank_list_t			*di_svcl;
+	uint32_t			di_thread_count;
 	bool				di_threaded;
 	bool				di_foreground;
 	bool				di_direct_io;
@@ -275,6 +276,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 		LOG_MODE((HANDLE), _flag, O_PATH);			\
 		LOG_MODE((HANDLE), _flag, O_SYNC);			\
 		LOG_MODE((HANDLE), _flag, O_TRUNC);			\
+		LOG_MODE((HANDLE), _flag, O_NOFOLLOW);			\
 		if (_flag)						\
 			DFUSE_TRA_ERROR(HANDLE, "Flags 0%o", _flag);	\
 	} while (0)

@@ -216,12 +216,12 @@ ec_setup_single_recx_data(struct ec_agg_test_ctx *ctx, unsigned int mode,
 	ctx->fetch_iod.iod_type = ctx->update_iod.iod_type;
 }
 
-static daos_oclass_id_t dts_ec_agg_oc = DAOS_OC_EC_K2P1_SPEC_RANK_L32K;
+static daos_oclass_id_t dts_ec_agg_oc = DAOS_OC_EC_K2P1_L32K;
 
 static int
 	incremental_fill(void **statep)
 {
-	dts_ec_agg_oc = DAOS_OC_EC_K2P1_SPEC_RANK_L32K;
+	dts_ec_agg_oc = DAOS_OC_EC_K2P1_L32K;
 	return 0;
 }
 
@@ -255,7 +255,7 @@ test_filled_stripe(struct ec_agg_test_ctx *ctx)
 	unsigned int		 len;
 	int			 i, j, rc;
 
-	dts_ec_agg_oc = DAOS_OC_EC_K2P1_SPEC_RANK_L32K;
+	dts_ec_agg_oc = DAOS_OC_EC_K2P1_L32K;
 	ec_setup_cont_obj(ctx, dts_ec_agg_oc);
 	assert_int_equal(daos_oclass_is_ec(ctx->oid, &oca), true);
 	assert_int_equal(oca->u.ec.e_k, 2);
@@ -599,7 +599,7 @@ test_all_ec_agg(void **statep)
 	test_half_stripe(&ctx);
 	test_partial_stripe(&ctx);
 	sleep(30);
-	verify_1p(&ctx, DAOS_OC_EC_K2P1_SPEC_RANK_L32K, 2);
+	verify_1p(&ctx, DAOS_OC_EC_K2P1_L32K, 2);
 	verify_2p(&ctx, DAOS_OC_EC_K2P2_L32K);
 	verify_1p(&ctx, DAOS_OC_EC_K4P1_L32K, 4);
 	cleanup_ec_agg_tests(&ctx);
