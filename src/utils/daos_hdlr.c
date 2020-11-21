@@ -2063,7 +2063,6 @@ fs_copy(daos_file_t *daos_src_file,
 			void *buf;
 			D_ALLOC(buf, buf_size * sizeof(char));
 				if (buf == NULL)
-
 					return ENOMEM;
 			while (left_to_read < total_bytes) {
 				left_to_read = total_bytes - left_to_read;
@@ -2137,7 +2136,7 @@ fs_copy_connect(daos_file_t *daos_src_file,
 	/* connect to source pool/conts */
 	int rc = 0;
 	if (daos_uuid_valid(ap->src_p_uuid)) { 
-		rc = daos_pool_connect(ap->src_p_uuid, ap->sysname, ap->src_mdsrv,
+		rc = daos_pool_connect(ap->src_p_uuid, ap->sysname, NULL,
 				DAOS_PC_RW, &ap->pool, NULL, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "failed to connect to destination pool: %d\n", rc);
@@ -2167,7 +2166,7 @@ fs_copy_connect(daos_file_t *daos_src_file,
 				ap->type = (*src_dattr).da_type;
 				uuid_copy(ap->src_p_uuid, (*src_dattr).da_puuid);
 				uuid_copy(ap->src_c_uuid, (*src_dattr).da_cuuid);
-				rc = daos_pool_connect(ap->src_p_uuid, ap->sysname, ap->src_mdsrv,
+				rc = daos_pool_connect(ap->src_p_uuid, ap->sysname, NULL,
 						DAOS_PC_RW, &ap->pool, NULL, NULL);
 				if (rc != 0) {
 					fprintf(stderr, "failed to connect to destination pool: %d\n", rc);
@@ -2188,7 +2187,7 @@ fs_copy_connect(daos_file_t *daos_src_file,
 	}
 	/* connect to destination pool/conts */
 	if (daos_uuid_valid(ap->dst_p_uuid)) {
-			rc = daos_pool_connect(ap->dst_p_uuid, ap->sysname, ap->dst_mdsrv,
+			rc = daos_pool_connect(ap->dst_p_uuid, ap->sysname, NULL,
 			DAOS_PC_RW, &ap->dst_pool, NULL, NULL);
 			if (rc != 0) {
 				fprintf(stderr, "failed to connect to destination pool: %d\n", rc);
@@ -2212,7 +2211,7 @@ fs_copy_connect(daos_file_t *daos_src_file,
 				ap->type = (*dst_dattr).da_type;
 				uuid_copy(ap->dst_p_uuid, (*dst_dattr).da_puuid);
 				uuid_copy(ap->dst_c_uuid, (*dst_dattr).da_cuuid);
-				rc = daos_pool_connect(ap->dst_p_uuid, ap->sysname, ap->dst_mdsrv,
+				rc = daos_pool_connect(ap->dst_p_uuid, ap->sysname, NULL,
 						DAOS_PC_RW, &ap->dst_pool, NULL, NULL);
 				if (rc != 0) {
 					fprintf(stderr, "failed to connect to destination pool: %d\n", rc);
@@ -2248,6 +2247,8 @@ fs_copy_connect(daos_file_t *daos_src_file,
 				DP_UUID(ap->dst_c_uuid));
 		}
 	}
+	/* TODO: make sure to cleanup on errors, such as if the source pool and
+	 * container are connected, but the dfs_mount fails */
 out:
 	return rc;
 }

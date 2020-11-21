@@ -547,8 +547,6 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"dst-pool",	required_argument,	NULL,	'D'},
 		{"src-cont",	required_argument,	NULL,	'C'},
 		{"dst-cont",	required_argument,	NULL,	'T'},
-		{"src-svc",	required_argument,	NULL,	'X'},
-		{"dst-svc",	required_argument,	NULL,	'x'},
 		{"attr",	required_argument,	NULL,	'a'},
 		{"value",	required_argument,	NULL,	'v'},
 		{"path",	required_argument,	NULL,	'd'},
@@ -581,7 +579,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	ap->p_op  = -1;
 	ap->c_op  = -1;
 	ap->o_op  = -1;
-	ap->fs_op  = -1;
+	ap->fs_op = -1;
 	D_STRNDUP(ap->sysname, default_sysname, strlen(default_sysname));
 	if (ap->sysname == NULL)
 		return RC_NO_HELP;
@@ -684,18 +682,6 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 					optarg);
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			}
-			break;
-		case 'X':
-			D_STRNDUP(ap->src_mdsrv_str, optarg, strlen(optarg));
-			if (ap->src_mdsrv_str == NULL)
-				D_GOTO(out_free, rc = RC_NO_HELP);
-			ap->src_mdsrv = daos_rank_list_parse(ap->src_mdsrv_str, ",");
-			break;
-		case 'x':
-			D_STRNDUP(ap->dst_mdsrv_str, optarg, strlen(optarg));
-			if (ap->dst_mdsrv_str == NULL)
-				D_GOTO(out_free, rc = RC_NO_HELP);
-			ap->dst_mdsrv = daos_rank_list_parse(ap->dst_mdsrv_str, ",");
 			break;
 		case 'm':
 			D_STRNDUP(ap->mdsrv_str, optarg, strlen(optarg));
@@ -903,10 +889,6 @@ out_free:
 		D_FREE(ap->sysname);
 	if (ap->mdsrv_str != NULL)
 		D_FREE(ap->mdsrv_str);
-	if (ap->src_mdsrv_str != NULL)
-		D_FREE(ap->src_mdsrv_str);
-	if (ap->dst_mdsrv_str != NULL)
-		D_FREE(ap->dst_mdsrv_str);
 	if (ap->attrname_str != NULL)
 		D_FREE(ap->attrname_str);
 	if (ap->value_str != NULL)
@@ -1019,11 +1001,14 @@ fs_op_hdlr(struct cmd_args_s *ap)
 {
 	int rc = 0;
 	enum fs_op op;
+
 	assert(ap != NULL);
 	op = ap->fs_op;
+
 	switch (op) {
 	case FS_COPY:
 		rc = fs_copy_hdlr(ap);
+		assert(rc == 0);
 		break;
 	default:
 		break;
@@ -1330,6 +1315,19 @@ do { \
 	fprintf(stream, "use 'daos help RESOURCE' for resource specifics\n"); \
 } while (0)
 
+#define ALL_FS_CMDS_HELP() \
+do { \
+	fprintf(stream, "\n" \
+	" filesystem copy options (copy):\n" \
+	"	--src-pool=UUID    src pool UUID\n" \
+	"	--dst-pool=UUID    dst pool UUID\n" \
+	"	--src-cont=UUID    src cont UUID\n" \
+	"	--dst-cont=UUID    dst cont UUID\n" \
+	"	--src-path=PATH    POSIX or DFS source path\n" \
+	"	--dst-path=PATH    POSIX or DFS destination path\n"); \
+	fprintf(stream, "\n"); \
+} while (0)
+
 #define ALL_CONT_CMDS_HELP() \
 do { \
 	fprintf(stream, "\n" \
@@ -1384,12 +1382,12 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 
 	if (argc <= 2) {
 		FIRST_LEVEL_HELP();
-	} else if (strcmp(argv[2], "filesystem") != 0 || strcmp(argv[2], "fs") != 0) {
-		if (strcmp(argv[3], "copy") == 0) {
+	} else if (strcmp(argv[2], "filesystem") == 0 || strcmp(argv[2], "fs") == 0) {
+		if (argc == 3) {
+			ALL_FS_CMDS_HELP();
+		} else if (strcmp(argv[3], "copy") == 0) {
 			fprintf(stream,
 			" filesystem copy options (copy):\n"
-			"	--src-svc=RANKS    pool service replicas like 1,2,3\n"
-			"	--dst-svc=RANKS    pool service replicas like 1,2,3\n"
 			"	--src-pool=UUID    src pool UUID\n"
 			"	--dst-pool=UUID    dst pool UUID\n"
 			"	--src-cont=UUID    src cont UUID\n"
@@ -1611,12 +1609,8 @@ main(int argc, char *argv[])
 
 	/* Clean up dargs.mdsrv allocated in common_op_parse_hdlr() */
 	d_rank_list_free(dargs.mdsrv);
-	d_rank_list_free(dargs.src_mdsrv);
-	d_rank_list_free(dargs.dst_mdsrv);
 
 	D_FREE(dargs.mdsrv_str);
-	D_FREE(dargs.src_mdsrv_str);
-	D_FREE(dargs.dst_mdsrv_str);
 	D_FREE(dargs.sysname);
 	D_FREE(dargs.path);
 
