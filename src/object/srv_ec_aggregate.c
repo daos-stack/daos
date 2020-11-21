@@ -415,8 +415,7 @@ agg_overlap(unsigned int estart, unsigned int elen, unsigned int cell,
 	estart += k * len * stripenum;
 	if (cell_start <= estart && estart < cell_start + len)
 		return true;
-	if (estart <= cell_start &&
-		 cell_start < estart + elen)
+	if (estart <= cell_start && cell_start < estart + elen)
 		return true;
 	return false;
 }
@@ -760,7 +759,7 @@ agg_remove_holdovers(struct ec_agg_entry *entry)
 					   &ext->ae_orig_recx);
 			if (erc)
 				D_ERROR("array_remov failed: "DF_RC"\n",
-				DP_RC(erc));
+					DP_RC(erc));
 			if (!rc && erc)
 				rc = erc;
 	}

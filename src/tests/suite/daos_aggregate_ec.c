@@ -89,7 +89,7 @@ struct ec_agg_test_ctx {
 
 static void
 iov_update_pfill(d_iov_t *iov, unsigned int cell, unsigned int len,
-		unsigned int overwrite)
+		 unsigned int overwrite)
 {
 	char	*dest = iov->iov_buf;
 	int	 k, i = 0;
