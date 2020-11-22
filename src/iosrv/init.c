@@ -498,7 +498,7 @@ server_init(int argc, char *argv[])
 	rc = modules_load();
 	if (rc)
 		/* Some modules may have been loaded successfully. */
-		D_GOTO(exit_mod_loaded, rc);
+		D_GOTO(exit_mod_init, rc);
 	D_INFO("Module %s successfully loaded\n", modules);
 
 	/* initialize the network layer */
