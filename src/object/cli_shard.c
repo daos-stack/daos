@@ -357,7 +357,7 @@ obj_ec_iom_merge(struct obj_reasb_req *reasb_req, uint32_t shard,
 	daos_recx_t		 hi, lo, recx, tmpr;
 	daos_recx_t		 recov_hi, recov_lo;
 	uint32_t		 iom_nr, i;
-	bool			 done;
+	bool			 done, is_data_shard;
 	int			 rc = 0;
 
 	D_ASSERT(tgt_idx < obj_ec_data_tgt_nr(oca));
@@ -365,17 +365,18 @@ obj_ec_iom_merge(struct obj_reasb_req *reasb_req, uint32_t shard,
 	if (recov_list != NULL)
 		daos_recx_ep_list_hilo(recov_list, &recov_hi, &recov_lo);
 
+	is_data_shard = (shard % obj_ec_tgt_nr(oca)) < obj_ec_data_tgt_nr(oca);
 	D_SPIN_LOCK(&reasb_req->orr_spin);
 
 	/* merge iom_recx_hi */
 	hi = src->iom_recx_hi;
 	end = DAOS_RECX_END(hi);
-	if (end > 0)
+	if (end > 0 && is_data_shard) {
 		hi.rx_idx = max(hi.rx_idx, rounddown(end - 1, cell_rec_nr));
-	hi.rx_nr = end - hi.rx_idx;
-	if (shard < obj_ec_data_tgt_nr(oca))
+		hi.rx_nr = end - hi.rx_idx;
 		hi.rx_idx = obj_ec_idx_vos2daos(hi.rx_idx, stripe_rec_nr,
 						cell_rec_nr, tgt_idx);
+	}
 	if (recov_list != NULL &&
 	    DAOS_RECX_END(recov_hi) > DAOS_RECX_END(hi))
 		hi = recov_hi;
@@ -390,12 +391,14 @@ obj_ec_iom_merge(struct obj_reasb_req *reasb_req, uint32_t shard,
 	/* merge iom_recx_lo */
 	lo = src->iom_recx_lo;
 	end = DAOS_RECX_END(lo);
-	lo.rx_nr = min(end, roundup(lo.rx_idx + 1, cell_rec_nr)) - lo.rx_idx;
-	if (shard < obj_ec_data_tgt_nr(oca))
+	if (end > 0 && is_data_shard) {
+		lo.rx_nr = min(end, roundup(lo.rx_idx + 1, cell_rec_nr)) -
+			   lo.rx_idx;
 		lo.rx_idx = obj_ec_idx_vos2daos(lo.rx_idx, stripe_rec_nr,
 						cell_rec_nr, tgt_idx);
-	if (recov_list != NULL &&
-	    DAOS_RECX_END(recov_lo) < DAOS_RECX_END(lo))
+	}
+	if (recov_list != NULL && (end == 0 ||
+	    DAOS_RECX_END(recov_lo) < DAOS_RECX_END(lo)))
 		lo = recov_lo;
 	if (reasb_req->orr_iom_tgt_nr == 0)
 		dst->iom_recx_lo = lo;
@@ -437,18 +440,23 @@ obj_ec_iom_merge(struct obj_reasb_req *reasb_req, uint32_t shard,
 		end = DAOS_RECX_END(recx);
 		rec_nr = 0;
 		while (rec_nr < recx.rx_nr) {
-			tmpr.rx_idx = recx.rx_idx + rec_nr;
-			tmpr.rx_nr = min(roundup(tmpr.rx_idx + 1, cell_rec_nr),
-					 end) - tmpr.rx_idx;
-			rec_nr += tmpr.rx_nr;
-			/* If it is from parity shard(partial update recover),
-			 * then it is DAOS offset already.
-			 */
-			if (shard < obj_ec_data_tgt_nr(oca))
+			if (is_data_shard) {
+				tmpr.rx_idx = recx.rx_idx + rec_nr;
+				tmpr.rx_nr = min(roundup(tmpr.rx_idx + 1,
+							 cell_rec_nr), end) -
+						 tmpr.rx_idx;
+				rec_nr += tmpr.rx_nr;
 				tmpr.rx_idx = obj_ec_idx_vos2daos(tmpr.rx_idx,
 								  stripe_rec_nr,
 								  cell_rec_nr,
 								  tgt_idx);
+			} else {
+				/* If it is from parity shard then it is DAOS
+				 * offset already, and need not break to small
+				 * recxs. */
+				tmpr = recx;
+				rec_nr = recx.rx_nr;
+			}
 			rc = iom_recx_merge(dst, &tmpr,
 					    reasb_req->orr_iom_realloc);
 			if (rc == -DER_NOMEM)
@@ -698,7 +706,8 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				if (is_ec_obj &&
 				    reply_maps->iom_type == DAOS_IOD_ARRAY) {
 					rc = obj_ec_iom_merge(reasb_req,
-						orw->orw_oid.id_shard, orw->orw_tgt_idx, reply_maps,
+						orw->orw_oid.id_shard,
+						orw->orw_tgt_idx, reply_maps,
 						&rw_args->maps[i],
 						recov_list);
 				} else {

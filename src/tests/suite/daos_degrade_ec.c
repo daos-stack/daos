@@ -251,10 +251,10 @@ degrade_dfs_internal(void **state, int *shards, int shards_nr)
 
 	D_FREE(buf);
 	rc = dfs_umount(dfs_mt);
- 	assert_int_equal(rc, 0);
+	assert_int_equal(rc, 0);
 
 	rc = daos_cont_close(co_hdl, NULL);
- 	assert_int_equal(rc, 0);
+	assert_int_equal(rc, 0);
 
 	rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
 	assert_int_equal(rc, 0);
@@ -283,6 +283,7 @@ static void
 degrade_dfs_fail_data_s3(void **state)
 {
 	int shard = 3;
+
 	degrade_dfs_internal(state, &shard, 1);
 }
 
