@@ -582,13 +582,9 @@ class TestPool(TestDaosApiBase):
 
         """
         self.log.info("Writing %s bytes to pool %s", size, self.uuid)
-        #env = {
-        #    "DAOS_POOL": self.uuid,
-        #    "DAOS_SVCL": "1",
-        #    "PYTHONPATH": os.getenv("PYTHONPATH", "")
-        #}
         env = {
             "DAOS_POOL": self.uuid,
+            "DAOS_SVCL": "1",
             "PYTHONPATH": os.getenv("PYTHONPATH", "")
         }
         if not load_mpi("openmpi"):
