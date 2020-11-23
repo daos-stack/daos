@@ -1988,8 +1988,8 @@ vos_dtx_check_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t *epoch)
 	 * care about whether it is for punch or update, use
 	 * DAOS_INTENT_COS to bypass DTX conflict check.
 	 */
-	rc = vos_obj_hold(occ, cont, oid, &epr, true,
-			  DAOS_INTENT_COS, true, &obj, 0);
+	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_VISIBLE,
+			  DAOS_INTENT_COS, &obj, 0);
 	if (rc != 0) {
 		D_ERROR(DF_UOID" fail to check sync: rc = "DF_RC"\n",
 			DP_UOID(oid), DP_RC(rc));
@@ -2012,8 +2012,8 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 
 	cont = vos_hdl2cont(coh);
 	occ = vos_obj_cache_current();
-	rc = vos_obj_hold(occ, cont, oid, &epr, true,
-			  DAOS_INTENT_DEFAULT, true, &obj, 0);
+	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_VISIBLE,
+			  DAOS_INTENT_DEFAULT, &obj, 0);
 	if (rc != 0) {
 		D_ERROR(DF_UOID" fail to mark sync: rc = "DF_RC"\n",
 			DP_UOID(oid), DP_RC(rc));
@@ -2274,6 +2274,44 @@ vos_dtx_cleanup(struct dtx_handle *dth)
 
 	for (i = 0; i < max; i++)
 		vos_obj_evict_by_oid(vos_obj_cache_current(), cont, oids[i]);
+}
+
+int
+vos_dtx_pin(struct dtx_handle *dth)
+{
+	struct vos_container	*cont;
+	struct umem_instance	*umm;
+	int			 rc;
+
+	D_ASSERT(dtx_is_valid_handle(dth));
+	D_ASSERT(dth->dth_ent == NULL);
+
+	if (dth->dth_solo)
+		return 0;
+
+	cont = vos_hdl2cont(dth->dth_coh);
+	D_ASSERT(cont != NULL);
+
+	umm = vos_cont2umm(cont);
+	rc = vos_dtx_alloc(umm, dth);
+	if (rc != 0)
+		goto out;
+
+	rc = umem_tx_begin(umm, NULL);
+	if (rc == 0) {
+		rc = vos_dtx_prepared(dth);
+		rc = umem_tx_end(umm, rc);
+	}
+
+	if (rc != 0)
+		vos_dtx_cleanup_internal(dth);
+
+out:
+	if (rc != 0)
+		D_ERROR("Failed to pin DTX entry for "DF_DTI": "DF_RC"\n",
+			DP_DTI(&dth->dth_xid), DP_RC(rc));
+
+	return rc;
 }
 
 /** Allocate space for saving the vos reservations and deferred actions */

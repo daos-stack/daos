@@ -694,7 +694,6 @@ int
 main(int argc, char **argv)
 {
 	uuid_t		pool_uuid, co_uuid;
-	d_rank_list_t	*svcl = NULL;
 	int		rc;
 
 	rc = MPI_Init(&argc, &argv);
@@ -706,8 +705,8 @@ main(int argc, char **argv)
 	rc = gethostname(node, sizeof(node));
 	ASSERT(rc == 0, "buffer for hostname too small");
 
-	if (argc != 3) {
-		fprintf(stderr, "args: pool svcl\n");
+	if (argc != 2) {
+		fprintf(stderr, "args: pool\n");
 		exit(1);
 	}
 
@@ -719,13 +718,9 @@ main(int argc, char **argv)
 	rc = uuid_parse(argv[1], pool_uuid);
 	ASSERT(rc == 0, "Failed to parse 'Pool uuid': %s", argv[1]);
 
-	svcl = daos_rank_list_parse(argv[2], ":");
-	if (svcl == NULL)
-		ASSERT(svcl != NULL, "Failed to allocate svcl");
-
 	/** Call connect on rank 0 only and broadcast handle to others */
 	if (rank == 0) {
-		rc = daos_pool_connect(pool_uuid, NULL, svcl, DAOS_PC_RW, &poh,
+		rc = daos_pool_connect(pool_uuid, NULL, NULL, DAOS_PC_RW, &poh,
 				       NULL, NULL);
 		ASSERT(rc == 0, "pool connect failed with %d", rc);
 	}
@@ -736,7 +731,7 @@ main(int argc, char **argv)
 	 * Create and open container on rank 0 and share the handle.
 	 *
 	 * Alternatively, one could create the container outside of this program
-	 * using the daos utility: daos cont create --pool=puuid --svc=svclist
+	 * using the daos utility: daos cont create --pool=puuid
 	 * and pass the uuid to the app.
 	 */
 	if (rank == 0) {
