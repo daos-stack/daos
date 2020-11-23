@@ -135,7 +135,7 @@ String unit_packages() {
                            'spdk-devel libfabric-devel '+
                            'pmix numactl-devel ' +
                            'libipmctl-devel ' +
-                           'python36-tabulate '
+                           'python36-tabulate numactl'
         if (need_qb) {
             // TODO: these should be gotten from the Requires: of RPM
             packages += " spdk-tools mercury-2.0.0~rc1" +
@@ -228,7 +228,7 @@ String functional_packages(String distro) {
                   "hdf5-vol-daos-openmpi3-tests-daos-0 " +
                   "MACSio-mpich2-daos-0 " +
                   "MACSio-openmpi3-daos-0 " +
-                  "mpifileutils-mpich-daos-0"
+                  "mpifileutils-mpich-daos-0 "
     if (distro == "leap15") {
         if (quickbuild()) {
             pkgs += " spdk-tools"

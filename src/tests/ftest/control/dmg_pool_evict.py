@@ -64,7 +64,7 @@ class DmgPoolEvictTest(TestWithServers):
         daos_cmd = self.get_daos_command()
         try:
             daos_cmd.pool_list_cont(
-                pool=self.pool[0].uuid, svc=self.pool[0].svc_ranks[0])
+                pool=self.pool[0].uuid)
             self.log.info(
                 "daos pool list-cont with first pool succeeded as expected")
         except CommandFailure:
@@ -75,7 +75,7 @@ class DmgPoolEvictTest(TestWithServers):
         # -1012.
         try:
             daos_cmd.pool_list_cont(
-                pool=self.pool[1].uuid, svc=self.pool[1].svc_ranks[0])
+                pool=self.pool[1].uuid)
             self.fail(
                 "daos pool list-cont with second pool succeeded after pool " +
                 "evict!")
@@ -89,11 +89,11 @@ class DmgPoolEvictTest(TestWithServers):
         # list, and destroy.
         self.container.append(self.get_container(self.pool[0]))
         data = daos_cmd.pool_list_cont(
-            pool=self.pool[0].uuid, svc=self.pool[0].svc_ranks[0])
+            pool=self.pool[0].uuid)
         self.assertEqual(len(data["uuids"]), len(self.container))
         self.container[0].destroy()
         data = daos_cmd.pool_list_cont(
-            pool=self.pool[0].uuid, svc=self.pool[0].svc_ranks[0])
+            pool=self.pool[0].uuid)
 
         # Create list of container UUIDs and compare. Convert command output to
         # upper case since we use upper case in object.

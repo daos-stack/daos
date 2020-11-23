@@ -79,11 +79,11 @@ class ContSecurityTestBase(TestWithServers):
 
         Returns:
             pool_uuid (str): Pool UUID, randomly generated.
-            pool_svc (str): Pool service replica
+            pool_svc (str): Pool service replica rank list
         """
         self.prepare_pool()
         pool_uuid = self.pool.pool.get_uuid_str()
-        pool_svc = self.pool.svc_ranks[0]
+        pool_svc = self.pool.svc_ranks
 
         return pool_uuid, pool_svc
 
@@ -129,13 +129,12 @@ class ContSecurityTestBase(TestWithServers):
 
         return container_uuid
 
-    def get_container_acl_list(self, pool_uuid, pool_svc, container_uuid,
+    def get_container_acl_list(self, pool_uuid, container_uuid,
                                verbose=False, outfile=None):
         """Get daos container acl list by daos container get-acl.
 
         Args:
             pool_uuid (str): Pool uuid.
-            pool_svc (str): Pool service replicas.
             container_uuid (str): Container uuid.
             verbose (bool, optional): Verbose mode.
             outfile (str, optional): Write ACL to file
@@ -153,9 +152,8 @@ class ContSecurityTestBase(TestWithServers):
                 "    Invalid Container UUID '{}' provided.".format(
                     container_uuid))
 
-        result = self.daos_tool.container_get_acl(pool_uuid, pool_svc,
-                                                  container_uuid, verbose,
-                                                  outfile)
+        result = self.daos_tool.container_get_acl(pool_uuid, container_uuid,
+                                                  verbose, outfile)
 
         cont_permission_list = []
         for line in result.stdout.splitlines():
@@ -182,7 +180,7 @@ class ContSecurityTestBase(TestWithServers):
         """
         self.daos_tool.exit_status_exception = False
         result = self.daos_tool.container_overwrite_acl(
-            self.pool_uuid, self.pool_svc, self.container_uuid, acl_file)
+            self.pool_uuid, self.container_uuid, acl_file)
         return result
 
     def update_container_acl(self, entry):
@@ -196,15 +194,14 @@ class ContSecurityTestBase(TestWithServers):
         """
         self.daos_tool.exit_status_exception = False
         result = self.daos_tool.container_update_acl(
-            self.pool_uuid, self.pool_svc, self.container_uuid, entry=entry)
+            self.pool_uuid, self.container_uuid, entry=entry)
         return result
 
-    def test_container_destroy(self, pool_uuid, pool_svc, container_uuid):
+    def test_container_destroy(self, pool_uuid, container_uuid):
         """Test container destroy/delete.
 
         Args:
             pool_uuid (str): pool uuid.
-            pool_svc  (str): pool service replica.
             container_uuid (str): container uuid.
 
         Return:
@@ -212,16 +209,15 @@ class ContSecurityTestBase(TestWithServers):
         """
         self.daos_tool.exit_status_exception = False
         result = self.daos_tool.container_destroy(
-            pool_uuid, pool_svc, container_uuid, True)
+            pool_uuid, container_uuid, True)
         return result
 
     def set_container_attribute(
-            self, pool_uuid, pool_svc, container_uuid, attr, value):
+            self, pool_uuid, container_uuid, attr, value):
         """Write/Set container attribute.
 
         Args:
             pool_uuid (str): pool uuid.
-            pool_svc  (str): pool service replica.
             container_uuid (str): container uuid.
             attr (str): container attribute.
             value (str): container attribute value to be set.
@@ -231,16 +227,15 @@ class ContSecurityTestBase(TestWithServers):
         """
         self.daos_tool.exit_status_exception = False
         result = self.daos_tool.container_set_attr(
-            pool_uuid, container_uuid, attr, value, pool_svc)
+            pool_uuid, container_uuid, attr, value)
         return result
 
     def get_container_attribute(
-            self, pool_uuid, pool_svc, container_uuid, attr):
+            self, pool_uuid, container_uuid, attr):
         """Get container attribute.
 
         Args:
             pool_uuid (str): pool uuid.
-            pool_svc  (str): pool service replica.
             container_uuid (str): container uuid.
             attr (str): container attribute.
 
@@ -250,16 +245,15 @@ class ContSecurityTestBase(TestWithServers):
         """
         self.daos_tool.exit_status_exception = False
         self.daos_tool.container_get_attr(
-            pool_uuid, container_uuid, attr, pool_svc)
+            pool_uuid, container_uuid, attr)
         return self.daos_tool.result
 
     def list_container_attribute(
-            self, pool_uuid, pool_svc, container_uuid):
+            self, pool_uuid, container_uuid):
         """List container attribute.
 
         Args:
             pool_uuid (str): pool uuid.
-            pool_svc  (str): pool service replica.
             container_uuid (str): container uuid.
 
         Return:
@@ -267,17 +261,16 @@ class ContSecurityTestBase(TestWithServers):
         """
         self.daos_tool.exit_status_exception = False
         result = self.daos_tool.container_list_attrs(
-            pool_uuid, container_uuid, pool_svc)
+            pool_uuid, container_uuid)
         return result
 
 
     def set_container_property(
-            self, pool_uuid, pool_svc, container_uuid, prop, value):
+            self, pool_uuid, container_uuid, prop, value):
         """Write/Set container property.
 
         Args:
             pool_uuid (str): pool uuid.
-            pool_svc  (str): pool service replica.
             container_uuid (str): container uuid.
             prop (str): container property name.
             value (str): container property value to be set.
@@ -287,15 +280,14 @@ class ContSecurityTestBase(TestWithServers):
         """
         self.daos_tool.exit_status_exception = False
         result = self.daos_tool.container_set_prop(
-            pool_uuid, container_uuid, prop, value, pool_svc)
+            pool_uuid, container_uuid, prop, value)
         return result
 
-    def get_container_property(self, pool_uuid, pool_svc, container_uuid):
+    def get_container_property(self, pool_uuid, container_uuid):
         """Get container property.
 
         Args:
             pool_uuid (str): pool uuid.
-            pool_svc  (str): pool service replica.
             container_uuid (str): container uuid.
 
         Return:
@@ -303,16 +295,15 @@ class ContSecurityTestBase(TestWithServers):
         """
         self.daos_tool.exit_status_exception = False
         result = self.daos_tool.container_get_prop(
-            pool_uuid, container_uuid, pool_svc)
+            pool_uuid, container_uuid)
         return result
 
     def set_container_owner(
-            self, pool_uuid, pool_svc, container_uuid, user, group):
+            self, pool_uuid, container_uuid, user, group):
         """Set container owner.
 
         Args:
             pool_uuid (str): pool uuid.
-            pool_svc  (str): pool service replica.
             container_uuid (str): container uuid.
             user (str): container user-name to be set owner to.
             group (str): container group-name to be set owner to.
@@ -322,7 +313,7 @@ class ContSecurityTestBase(TestWithServers):
         """
         self.daos_tool.exit_status_exception = False
         result = self.daos_tool.container_set_owner(
-            pool_uuid, container_uuid, user, group, pool_svc)
+            pool_uuid, container_uuid, user, group)
         return result
 
     def compare_acl_lists(self, get_acl_list, expected_list):
@@ -450,7 +441,7 @@ class ContSecurityTestBase(TestWithServers):
                 contents are same. Defaults to True.
         """
         current_acl = self.get_container_acl_list(
-            self.pool.uuid, self.pool.svc_ranks[0], self.container.uuid)
+            self.pool.uuid, self.container.uuid)
         if self.compare_acl_lists(prev_acl, current_acl) != flag:
             self.fail("Previous ACL:\n{} \nPost command ACL:\n{}".format(
                 prev_acl, current_acl))

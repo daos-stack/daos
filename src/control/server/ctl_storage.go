@@ -181,7 +181,7 @@ func (c *StorageControlService) NvmePrepare(req bdev.PrepareRequest) (*bdev.Prep
 // GetScmState performs required initialization and returns current state
 // of SCM module preparation.
 func (c *StorageControlService) GetScmState() (storage.ScmState, error) {
-	return c.scm.GetState()
+	return c.scm.GetPmemState()
 }
 
 // ScmPrepare preps locally attached modules and returns need to reboot message,
