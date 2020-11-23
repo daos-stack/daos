@@ -93,186 +93,6 @@ func cmpHostErrs(t *testing.T, expErrs []*MockHostError, gotErrs *HostErrorsResp
 	}
 }
 
-func TestControl_AutoConfig_getStorageParams(t *testing.T) {
-	dualHostResp := func(r1, r2 string) []*HostResponse {
-		return []*HostResponse{
-			{
-				Addr:    "host1",
-				Message: MockServerScanResp(t, r1),
-			},
-			{
-				Addr:    "host2",
-				Message: MockServerScanResp(t, r2),
-			},
-		}
-	}
-	dualHostRespSame := func(r1 string) []*HostResponse {
-		return dualHostResp(r1, r1)
-	}
-	hostRespOneScanFail := dualHostResp("standard", "bothFailed")
-	hostRespScanFail := dualHostRespSame("bothFailed")
-	hostRespNoScmNs := dualHostRespSame("standard")
-	hostRespOneWithScmNs := dualHostResp("withNamespace", "standard")
-	hostRespWithScmNs := dualHostRespSame("withNamespace")
-	hostRespWithScmNss := dualHostRespSame("withNamespaces")
-	hostRespWithScmNssNumaZero := dualHostRespSame("withNamespacesNumaZero")
-	hostRespWithSingleSSD := dualHostRespSame("withSingleSSD")
-	hostRespWithSSDs := dualHostRespSame("withSpaceUsage")
-
-	for name, tc := range map[string]struct {
-		numPmem       int
-		minNvme       int
-		reqNoNvme     bool
-		uErr          error
-		hostResponses []*HostResponse
-		expErr        error
-		expPmems      []string
-		expBdevLists  [][]string
-		expHostErrs   []*MockHostError
-	}{
-		"invoker error": {
-			uErr:          errors.New("unary error"),
-			hostResponses: hostRespOneWithScmNs,
-			expErr:        errors.New("unary error"),
-		},
-		"host storage scan failed": {
-			hostResponses: hostRespOneScanFail,
-			expHostErrs: []*MockHostError{
-				{"host2", "scm scan failed"},
-				{"host2", "nvme scan failed"},
-			},
-			expErr: errors.New("1 host had errors"),
-		},
-		"host storage scan failed on multiple hosts": {
-			hostResponses: hostRespScanFail,
-			expHostErrs: []*MockHostError{
-				{"host1", "scm scan failed"},
-				{"host1", "nvme scan failed"},
-				{"host2", "scm scan failed"},
-				{"host2", "nvme scan failed"},
-			},
-			expErr: errors.New("2 hosts had errors"),
-		},
-		"host storage scan no hosts": {
-			hostResponses: []*HostResponse{},
-			expErr:        errors.New("no host responses"),
-		},
-		"host storage mismatch": {
-			hostResponses: hostRespOneWithScmNs,
-			expErr:        errors.New("storage hardware not consistent across hosts"),
-		},
-		"zero min pmem and dual numa and zero pmems present": {
-			numPmem:       2,
-			hostResponses: hostRespNoScmNs,
-			expErr:        errors.Errorf(errInsufNumPmem, "[]", 2, 0),
-		},
-		"dual min pmem and single pmems present": {
-			numPmem:       2,
-			hostResponses: hostRespWithScmNs,
-			expErr:        errors.Errorf(errInsufNumPmem, "[/dev/pmem0]", 2, 1),
-		},
-		"dual min pmem and dual pmems present": {
-			numPmem:       2,
-			hostResponses: hostRespWithScmNss,
-			expErr:        errors.Errorf(errInsufNumNvme, 0, 1, 0),
-		},
-		"one min pmem and dual pmems present both numa zero": {
-			numPmem:       1,
-			hostResponses: hostRespWithScmNssNumaZero,
-			expErr:        errors.Errorf(errInsufNumNvme, 0, 1, 0),
-		},
-		"dual min pmem and dual pmems present both numa zero": {
-			numPmem:       2,
-			hostResponses: hostRespWithScmNssNumaZero,
-			expErr:        errors.New("bound to unexpected numa"),
-		},
-		"zero min nvme and single ctrlr present on single numa node": {
-			numPmem:       2,
-			hostResponses: hostRespWithSingleSSD,
-			expErr:        errors.Errorf(errInsufNumNvme, 1, 1, 0),
-		},
-		"zero min nvme and multiple ctrlrs present on dual numa nodes": {
-			numPmem:       2,
-			hostResponses: hostRespWithSSDs,
-			expPmems: []string{
-				ioCfgWithSSDs(t, 0).Storage.SCM.DeviceList[0],
-				ioCfgWithSSDs(t, 1).Storage.SCM.DeviceList[0],
-			},
-			expBdevLists: [][]string{
-				ioCfgWithSSDs(t, 0).Storage.Bdev.DeviceList,
-				ioCfgWithSSDs(t, 1).Storage.Bdev.DeviceList,
-			},
-		},
-		"dual min nvme and multiple ctrlrs present on dual numa nodes": {
-			numPmem:       2,
-			minNvme:       2,
-			hostResponses: hostRespWithSSDs,
-			expPmems: []string{
-				ioCfgWithSSDs(t, 0).Storage.SCM.DeviceList[0],
-				ioCfgWithSSDs(t, 1).Storage.SCM.DeviceList[0],
-			},
-			expBdevLists: [][]string{
-				ioCfgWithSSDs(t, 0).Storage.Bdev.DeviceList,
-				ioCfgWithSSDs(t, 1).Storage.Bdev.DeviceList,
-			},
-		},
-		"zero nvme and multiple ctrlrs present on dual numa nodes": {
-			numPmem:       2,
-			reqNoNvme:     true,
-			hostResponses: hostRespWithSSDs,
-			expPmems: []string{
-				ioCfgWithSSDs(t, 0).Storage.SCM.DeviceList[0],
-				ioCfgWithSSDs(t, 1).Storage.SCM.DeviceList[0],
-			},
-			expBdevLists: [][]string{nil, nil},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-
-			mi := NewMockInvoker(log, &MockInvokerConfig{
-				UnaryError: tc.uErr,
-				UnaryResponse: &UnaryResponse{
-					Responses: tc.hostResponses,
-				},
-			})
-
-			if tc.minNvme == 0 {
-				tc.minNvme = 1 // default set in dmg cmd caller
-			}
-			if tc.reqNoNvme {
-				tc.minNvme = 0 // user specifically requests no nvme
-			}
-
-			req := ConfigGenerateReq{
-				NumPmem: tc.numPmem,
-				NumNvme: tc.minNvme,
-				Client:  mi,
-				Log:     log,
-			}
-
-			gotPmems, gotBdevLists, gotHostErrs, gotErr := getStorageParams(
-				context.TODO(), req, tc.numPmem)
-			common.CmpErr(t, tc.expErr, gotErr)
-			cmpHostErrs(t, tc.expHostErrs, gotHostErrs)
-			if tc.expErr != nil {
-				return
-			}
-			if tc.expHostErrs != nil || gotHostErrs != nil {
-				t.Fatal("expected or received host errors without outer error")
-			}
-
-			if diff := cmp.Diff(tc.expPmems, gotPmems); diff != "" {
-				t.Fatalf("unexpected pmem paths (-want, +got):\n%s\n", diff)
-			}
-			if diff := cmp.Diff(tc.expBdevLists, gotBdevLists); diff != "" {
-				t.Fatalf("unexpected bdev lists (-want, +got):\n%s\n", diff)
-			}
-		})
-	}
-}
-
 func TestControl_AutoConfig_getNetworkParams(t *testing.T) {
 	if1PB := &ctlpb.FabricInterface{
 		Provider: "test-provider", Device: "test-device", Numanode: 42,
@@ -499,6 +319,186 @@ func TestControl_AutoConfig_getNetworkParams(t *testing.T) {
 			}
 			common.AssertEqual(t, tc.expCoresPerNuma,
 				int(gotNetSet.HostFabric.CoresPerNuma), "unexpected numa cores")
+		})
+	}
+}
+
+func TestControl_AutoConfig_getStorageParams(t *testing.T) {
+	dualHostResp := func(r1, r2 string) []*HostResponse {
+		return []*HostResponse{
+			{
+				Addr:    "host1",
+				Message: MockServerScanResp(t, r1),
+			},
+			{
+				Addr:    "host2",
+				Message: MockServerScanResp(t, r2),
+			},
+		}
+	}
+	dualHostRespSame := func(r1 string) []*HostResponse {
+		return dualHostResp(r1, r1)
+	}
+	hostRespOneScanFail := dualHostResp("standard", "bothFailed")
+	hostRespScanFail := dualHostRespSame("bothFailed")
+	hostRespNoScmNs := dualHostRespSame("standard")
+	hostRespOneWithScmNs := dualHostResp("withNamespace", "standard")
+	hostRespWithScmNs := dualHostRespSame("withNamespace")
+	hostRespWithScmNss := dualHostRespSame("withNamespaces")
+	hostRespWithScmNssNumaZero := dualHostRespSame("withNamespacesNumaZero")
+	hostRespWithSingleSSD := dualHostRespSame("withSingleSSD")
+	hostRespWithSSDs := dualHostRespSame("withSpaceUsage")
+
+	for name, tc := range map[string]struct {
+		numPmem       int
+		minNvme       int
+		reqNoNvme     bool
+		uErr          error
+		hostResponses []*HostResponse
+		expErr        error
+		expPmems      []string
+		expBdevLists  [][]string
+		expHostErrs   []*MockHostError
+	}{
+		"invoker error": {
+			uErr:          errors.New("unary error"),
+			hostResponses: hostRespOneWithScmNs,
+			expErr:        errors.New("unary error"),
+		},
+		"host storage scan failed": {
+			hostResponses: hostRespOneScanFail,
+			expHostErrs: []*MockHostError{
+				{"host2", "scm scan failed"},
+				{"host2", "nvme scan failed"},
+			},
+			expErr: errors.New("1 host had errors"),
+		},
+		"host storage scan failed on multiple hosts": {
+			hostResponses: hostRespScanFail,
+			expHostErrs: []*MockHostError{
+				{"host1", "scm scan failed"},
+				{"host1", "nvme scan failed"},
+				{"host2", "scm scan failed"},
+				{"host2", "nvme scan failed"},
+			},
+			expErr: errors.New("2 hosts had errors"),
+		},
+		"host storage scan no hosts": {
+			hostResponses: []*HostResponse{},
+			expErr:        errors.New("no host responses"),
+		},
+		"host storage mismatch": {
+			hostResponses: hostRespOneWithScmNs,
+			expErr:        errors.New("storage hardware not consistent across hosts"),
+		},
+		"zero min pmem and dual numa and zero pmems present": {
+			numPmem:       2,
+			hostResponses: hostRespNoScmNs,
+			expErr:        errors.Errorf(errInsufNumPmem, "[]", 2, 0),
+		},
+		"dual min pmem and single pmems present": {
+			numPmem:       2,
+			hostResponses: hostRespWithScmNs,
+			expErr:        errors.Errorf(errInsufNumPmem, "[/dev/pmem0]", 2, 1),
+		},
+		"dual min pmem and dual pmems present": {
+			numPmem:       2,
+			hostResponses: hostRespWithScmNss,
+			expErr:        errors.Errorf(errInsufNumNvme, 0, 1, 0),
+		},
+		"one min pmem and dual pmems present both numa zero": {
+			numPmem:       1,
+			hostResponses: hostRespWithScmNssNumaZero,
+			expErr:        errors.Errorf(errInsufNumNvme, 0, 1, 0),
+		},
+		"dual min pmem and dual pmems present both numa zero": {
+			numPmem:       2,
+			hostResponses: hostRespWithScmNssNumaZero,
+			expErr:        errors.New("bound to unexpected numa"),
+		},
+		"zero min nvme and single ctrlr present on single numa node": {
+			numPmem:       2,
+			hostResponses: hostRespWithSingleSSD,
+			expErr:        errors.Errorf(errInsufNumNvme, 1, 1, 0),
+		},
+		"zero min nvme and multiple ctrlrs present on dual numa nodes": {
+			numPmem:       2,
+			hostResponses: hostRespWithSSDs,
+			expPmems: []string{
+				ioCfgWithSSDs(t, 0).Storage.SCM.DeviceList[0],
+				ioCfgWithSSDs(t, 1).Storage.SCM.DeviceList[0],
+			},
+			expBdevLists: [][]string{
+				ioCfgWithSSDs(t, 0).Storage.Bdev.DeviceList,
+				ioCfgWithSSDs(t, 1).Storage.Bdev.DeviceList,
+			},
+		},
+		"dual min nvme and multiple ctrlrs present on dual numa nodes": {
+			numPmem:       2,
+			minNvme:       2,
+			hostResponses: hostRespWithSSDs,
+			expPmems: []string{
+				ioCfgWithSSDs(t, 0).Storage.SCM.DeviceList[0],
+				ioCfgWithSSDs(t, 1).Storage.SCM.DeviceList[0],
+			},
+			expBdevLists: [][]string{
+				ioCfgWithSSDs(t, 0).Storage.Bdev.DeviceList,
+				ioCfgWithSSDs(t, 1).Storage.Bdev.DeviceList,
+			},
+		},
+		"zero nvme and multiple ctrlrs present on dual numa nodes": {
+			numPmem:       2,
+			reqNoNvme:     true,
+			hostResponses: hostRespWithSSDs,
+			expPmems: []string{
+				ioCfgWithSSDs(t, 0).Storage.SCM.DeviceList[0],
+				ioCfgWithSSDs(t, 1).Storage.SCM.DeviceList[0],
+			},
+			expBdevLists: [][]string{nil, nil},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mi := NewMockInvoker(log, &MockInvokerConfig{
+				UnaryError: tc.uErr,
+				UnaryResponse: &UnaryResponse{
+					Responses: tc.hostResponses,
+				},
+			})
+
+			if tc.minNvme == 0 {
+				tc.minNvme = 1 // default set in dmg cmd caller
+			}
+			if tc.reqNoNvme {
+				tc.minNvme = 0 // user specifically requests no nvme
+			}
+
+			req := ConfigGenerateReq{
+				NumPmem: tc.numPmem,
+				NumNvme: tc.minNvme,
+				Client:  mi,
+				Log:     log,
+			}
+
+			gotPmems, gotBdevLists, gotHostErrs, gotErr := getStorageParams(
+				context.TODO(), req, tc.numPmem)
+			common.CmpErr(t, tc.expErr, gotErr)
+			cmpHostErrs(t, tc.expHostErrs, gotHostErrs)
+			if tc.expErr != nil {
+				return
+			}
+			if tc.expHostErrs != nil || gotHostErrs != nil {
+				t.Fatal("expected or received host errors without outer error")
+			}
+
+			if diff := cmp.Diff(tc.expPmems, gotPmems); diff != "" {
+				t.Fatalf("unexpected pmem paths (-want, +got):\n%s\n", diff)
+			}
+			if diff := cmp.Diff(tc.expBdevLists, gotBdevLists); diff != "" {
+				t.Fatalf("unexpected bdev lists (-want, +got):\n%s\n", diff)
+			}
 		})
 	}
 }

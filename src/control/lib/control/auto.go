@@ -83,14 +83,16 @@ type (
 	}
 )
 
+// getNetworkParams retrieves recommended network interfaces for the chosen set
+// of NUMA nodes that will populate the fabric parameters in the server config.
+//
+// Returns slice of fabric interfaces, host errors and outer error.
 func getNetworkParams(ctx context.Context, req ConfigGenerateReq) ([]*HostFabricInterface, *HostFabricSet, *HostErrorsResp, error) {
 	hostErrs, netSet, err := getSingleNetworkSet(ctx, req.Log, req.HostList, req.Client)
 	if err != nil {
 		return nil, nil, hostErrs, err
 	}
 
-	// number of interface groups returned implies number of selected NUMA
-	// nodes in generated config
 	ifaces, err := checkNetwork(req.Log, req.NetClass, req.NumPmem, netSet)
 	if err != nil {
 		return nil, nil, nil, err
@@ -99,6 +101,12 @@ func getNetworkParams(ctx context.Context, req ConfigGenerateReq) ([]*HostFabric
 	return ifaces, netSet, nil, nil
 }
 
+// getStorageParams retrieves recommended pmem device path and NVMe SSD PCI
+// addresses used to populate scm_list and bdev_list parameters in server
+// config.
+//
+// Returns pmem block device paths, SSD PCI address lists or host error response
+// and outer error.
 func getStorageParams(ctx context.Context, req ConfigGenerateReq, numNuma int) ([]string, [][]string, *HostErrorsResp, error) {
 	hostErrs, storSet, err := getSingleStorageSet(ctx, req.Log, req.HostList, req.Client)
 	if err != nil {
@@ -113,6 +121,10 @@ func getStorageParams(ctx context.Context, req ConfigGenerateReq, numNuma int) (
 	return pmemPaths, bdevLists, nil, nil
 }
 
+// getCPUParams retrieves recommended VOS target count and helper xstream thread
+// count parameters for server config.
+//
+// Returns target and helper thread counts and error.
 func getCPUParams(log logging.Logger, bdevLists [][]string, coresPerNuma int) ([]int, []int, error) {
 	if coresPerNuma < 1 {
 		return nil, nil, errors.Errorf(errInvalNumCores, coresPerNuma)
@@ -133,7 +145,9 @@ func getCPUParams(log logging.Logger, bdevLists [][]string, coresPerNuma int) ([
 }
 
 // ConfigGenerate attempts to automatically detect hardware and generate a DAOS
-// server config file for a set of hosts.
+// server config file for a set of hosts with homogenous hardware setup.
+//
+// Returns API response and error.
 func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerateResp, error) {
 	req.Log.Debugf("ConfigGenerate called with request %v", req)
 
@@ -268,64 +282,6 @@ func parseInterfaces(log logging.Logger, reqClass uint32, numPmem int, interface
 	}
 
 	return matching, complete
-}
-
-func defaultIOSrvCfg(idx int) *ioserver.Config {
-	return ioserver.NewConfig().
-		WithTargetCount(defaultTargetCount).
-		WithLogFile(fmt.Sprintf("%s.%d.log", defaultIOSrvLogFile, idx)).
-		WithScmClass(storage.ScmClassDCPM.String()).
-		WithBdevClass(storage.BdevClassNvme.String())
-}
-
-// genConfig validate input indices and generates server config file from
-// calculated network, storage and CPU parameters.
-func genConfig(accessPoints, pmemPaths []string, ifaces []*HostFabricInterface, bdevLists [][]string, nTgts, nHlprs []int) (*config.Server, error) {
-	if len(pmemPaths) == 0 {
-		return nil, errors.Errorf(errInvalNumPmem, 1, 0)
-	}
-	if len(ifaces) != len(pmemPaths) {
-		return nil, errors.Errorf(errInsufNumIfaces, "", len(pmemPaths), len(ifaces),
-			ifaces)
-	}
-	if len(nTgts) != len(ifaces) {
-		return nil, errors.Errorf(errInvalNumTgtCounts, len(ifaces), len(nTgts))
-	}
-	if len(bdevLists) != len(pmemPaths) {
-		return nil, errors.New("programming error, bdevLists != pmemPaths")
-	}
-
-	cfg := config.DefaultServer()
-	for idx, iface := range ifaces {
-		nn := uint(iface.NumaNode)
-		iocfg := defaultIOSrvCfg(idx).
-			WithScmMountPoint(fmt.Sprintf("%s%d", scmMountPrefix, idx)).
-			WithScmDeviceList(pmemPaths[idx]).
-			WithBdevDeviceList(bdevLists[idx]...).
-			WithTargetCount(nTgts[idx]).
-			WithHelperStreamCount(nHlprs[idx])
-
-		iocfg.Fabric = ioserver.FabricConfig{
-			Provider:       iface.Provider,
-			Interface:      iface.Device,
-			InterfacePort:  int(defaultFiPort + (nn * defaultFiPortInterval)),
-			PinnedNumaNode: &nn,
-		}
-
-		cfg.Servers = append(cfg.Servers, iocfg)
-	}
-
-	if len(accessPoints) != 0 {
-		cfg = cfg.WithAccessPoints(accessPoints...)
-	}
-
-	// apply global config parameters across iosrvs
-	return cfg.WithSystemName(cfg.SystemName).
-		WithSocketDir(cfg.SocketDir).
-		WithFabricProvider(cfg.Servers[0].Fabric.Provider).
-		WithSystemName(cfg.SystemName).
-		WithSocketDir(cfg.SocketDir).
-		WithControlLogFile(defaultControlLogFile), nil
 }
 
 // checkNetwork scans fabric network interfaces and returns a slice of
@@ -486,8 +442,8 @@ func getSingleStorageSet(ctx context.Context, log logging.Logger, hostList []str
 	return nil, scanResp.HostStorage[scanResp.HostStorage.Keys()[0]], nil
 }
 
-// checkStorage validates minimum NVMe and SCM device counts and populates
-// ioserver storage config with detected device identifiers if thresholds met.
+// checkStorage generates recommended device allocations for NVMe and SCM based
+// on requested thresholds and NUMA bindings of available devices.
 func checkStorage(log logging.Logger, numPmem, reqNumNvme int, storageSet *HostStorageSet) ([]string, [][]string, error) {
 	scmNamespaces := storageSet.HostStorage.ScmNamespaces
 	nvmeControllers := storageSet.HostStorage.NvmeDevices
@@ -581,4 +537,62 @@ func checkCPUs(log logging.Logger, numSsds, coresPerNuma int) (int, int, error) 
 	}
 
 	return numTargets, numHelpers, nil
+}
+
+func defaultIOSrvCfg(idx int) *ioserver.Config {
+	return ioserver.NewConfig().
+		WithTargetCount(defaultTargetCount).
+		WithLogFile(fmt.Sprintf("%s.%d.log", defaultIOSrvLogFile, idx)).
+		WithScmClass(storage.ScmClassDCPM.String()).
+		WithBdevClass(storage.BdevClassNvme.String())
+}
+
+// genConfig validates input device lists and generates server config file from
+// calculated network, storage and CPU parameters.
+func genConfig(accessPoints, pmemPaths []string, ifaces []*HostFabricInterface, bdevLists [][]string, nTgts, nHlprs []int) (*config.Server, error) {
+	if len(pmemPaths) == 0 {
+		return nil, errors.Errorf(errInvalNumPmem, 1, 0)
+	}
+	if len(ifaces) != len(pmemPaths) {
+		return nil, errors.Errorf(errInsufNumIfaces, "", len(pmemPaths), len(ifaces),
+			ifaces)
+	}
+	if len(nTgts) != len(ifaces) {
+		return nil, errors.Errorf(errInvalNumTgtCounts, len(ifaces), len(nTgts))
+	}
+	if len(bdevLists) != len(pmemPaths) {
+		return nil, errors.New("programming error, bdevLists != pmemPaths")
+	}
+
+	cfg := config.DefaultServer()
+	for idx, iface := range ifaces {
+		nn := uint(iface.NumaNode)
+		iocfg := defaultIOSrvCfg(idx).
+			WithScmMountPoint(fmt.Sprintf("%s%d", scmMountPrefix, idx)).
+			WithScmDeviceList(pmemPaths[idx]).
+			WithBdevDeviceList(bdevLists[idx]...).
+			WithTargetCount(nTgts[idx]).
+			WithHelperStreamCount(nHlprs[idx])
+
+		iocfg.Fabric = ioserver.FabricConfig{
+			Provider:       iface.Provider,
+			Interface:      iface.Device,
+			InterfacePort:  int(defaultFiPort + (nn * defaultFiPortInterval)),
+			PinnedNumaNode: &nn,
+		}
+
+		cfg.Servers = append(cfg.Servers, iocfg)
+	}
+
+	if len(accessPoints) != 0 {
+		cfg = cfg.WithAccessPoints(accessPoints...)
+	}
+
+	// apply global config parameters across iosrvs
+	return cfg.WithSystemName(cfg.SystemName).
+		WithSocketDir(cfg.SocketDir).
+		WithFabricProvider(cfg.Servers[0].Fabric.Provider).
+		WithSystemName(cfg.SystemName).
+		WithSocketDir(cfg.SocketDir).
+		WithControlLogFile(defaultControlLogFile), nil
 }
