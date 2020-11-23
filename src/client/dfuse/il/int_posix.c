@@ -123,11 +123,12 @@ ioil_shrink(struct ioil_cont *cont)
 	if (!d_list_empty(&pool->iop_container_head))
 		return;
 
-	rc = daos_pool_disconnect(pool->iop_poh, NULL);
-	if (rc != 0)
-		D_ERROR("daos_pool_disconnect() failed, " DF_RC "\n",
-			DP_RC(rc));
-
+	if (!daos_handle_is_inval(pool->iop_poh)) {
+		rc = daos_pool_disconnect(pool->iop_poh, NULL);
+		if (rc != 0)
+			D_ERROR("daos_pool_disconnect() failed, " DF_RC "\n",
+				DP_RC(rc));
+	}
 	d_list_del(&pool->iop_pools);
 	D_FREE(pool);
 }
@@ -157,7 +158,8 @@ ioil_initialize_fd_table(int max_fds)
 			 entry_array_close);
 	if (rc != 0)
 		DFUSE_LOG_ERROR("Could not allocate file descriptor table"
-				", disabling kernel bypass: rc = %d", rc);
+				", disabling kernel bypass: rc = " DF_RC,
+				DP_RC(rc));
 	return rc;
 }
 
@@ -253,15 +255,13 @@ ioil_init(void)
 	if (rc != 0) {
 		DFUSE_LOG_ERROR("Could not get process file descriptor limit"
 				", disabling kernel bypass");
-		printf("Failed\n");
 		return;
 	}
 
 	rc = ioil_initialize_fd_table(rlimit.rlim_max);
 	if (rc != 0) {
-		DFUSE_LOG_ERROR("Could not create fd_table, rc = %d,"
-				", disabling kernel bypass", rc);
-		printf("Failed.\n");
+		DFUSE_LOG_ERROR("Could not create fd_table, disabling kernel bypass, rc = " DF_RC,
+				DP_RC(rc));
 		return;
 	}
 

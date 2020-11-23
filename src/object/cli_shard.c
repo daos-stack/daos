@@ -580,7 +580,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		 * If any failure happens inside Cart, let's reset failure to
 		 * TIMEDOUT, so the upper layer can retry.
 		 */
-		D_ERROR("RPC %d failed: %d\n", opc, ret);
+		D_ERROR("RPC %d failed, " DF_RC "\n", opc, DP_RC(ret));
 		D_GOTO(out, ret);
 	}
 
@@ -1723,7 +1723,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	opc = opc_get(cb_args->rpc->cr_opc);
 
 	if (ret != 0) {
-		D_ERROR("RPC %d failed: %d\n", opc, ret);
+		D_ERROR("RPC %d failed, " DF_RC "\n", opc, DP_RC(ret));
 		D_GOTO(out, ret);
 	}
 

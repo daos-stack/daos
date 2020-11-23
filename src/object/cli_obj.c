@@ -1644,7 +1644,7 @@ out:
 
 		D_FREE(bulks);
 
-		D_ERROR("%s obj_bulk_prep failed "DF_RC".\n",
+		D_ERROR("%s failed " DF_RC "\n",
 			bulk_perm == CRT_BULK_RO ? "update" : "fetch",
 			DP_RC(rc));
 	}
