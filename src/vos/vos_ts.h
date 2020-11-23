@@ -62,6 +62,13 @@ struct vos_ts_pair {
 	struct dtx_id	tp_tx_rh;
 };
 
+struct vos_wts_cache {
+	/** Highest two write timestamps. */
+	daos_epoch_t	wc_ts_w[2];
+	/** Index of highest timestamp in wc_ts_w */
+	uint32_t	wc_w_high;
+};
+
 struct vos_ts_entry {
 	struct vos_ts_info	*te_info;
 	/** Key for current occupant */
@@ -72,6 +79,8 @@ struct vos_ts_entry {
 	uint32_t		*te_miss_idx;
 	/** The timestamps for the entry */
 	struct vos_ts_pair	 te_ts;
+	/** Write timestamps for epoch bound check */
+	struct vos_wts_cache	 te_w_cache;
 	/** Hash index in parent */
 	uint32_t		 te_hash_idx;
 };
@@ -165,6 +174,8 @@ struct vos_ts_table {
 	daos_epoch_t		tt_ts_rl;
 	/** Global read high timestamp for type */
 	daos_epoch_t		tt_ts_rh;
+	/** Global write timestamps */
+	struct vos_wts_cache	tt_w_cache;
 	/** Transaciton id associated with global read low timestamp */
 	struct dtx_id		tt_tx_rl;
 	/** Transaciton id associated with global read high timestamp */
@@ -421,6 +432,66 @@ out:
 	return neg_entry;
 }
 
+/** Do an uncertainty check on the entry.  Return true if there
+ *  is a write within the epoch uncertainty bound or if it
+ *  can't be determined that the epoch is safe (e.g. a cache miss).
+ *
+ *  There are the following cases for an uncertainty check
+ *  1. The access timestamp is earlier than both.  In such
+ *     case, we have a cache miss and can't determine whether
+ *     there is uncertainty so we must reject the access.
+ *  2. The access is later than the first and the bound is
+ *     less than or equal to the high time.  No conflict in
+ *     this case because the write is outside the undertainty
+ *     bound.
+ *  3. The access is later than the first but the bound is
+ *     greater than the high timestamp.  We must reject the
+ *     access because there is an uncertain write.
+ *  4. The access is later than both timestamps.  No conflict
+ *     in this case.
+ *
+ *  \param[in]	ts_set	The timestamp set
+ *  \param[in]	epoch	The epoch of the update
+ *  \param[in]	bound	The uncertainty bound
+ */
+static inline bool
+vos_ts_wcheck(struct vos_ts_set *ts_set, daos_epoch_t epoch,
+	      daos_epoch_t bound)
+{
+	struct vos_wts_cache	*wcache;
+	struct vos_ts_set_entry	*se;
+	uint32_t		 high_idx;
+	daos_epoch_t		 high;
+	daos_epoch_t		 second;
+
+	if (!vos_ts_in_tx(ts_set) || ts_set->ts_init_count == 0 ||
+	    bound <= epoch)
+		return false;
+
+	se = &ts_set->ts_entries[ts_set->ts_init_count - 1];
+
+	if (se->se_entry == NULL)
+		return false;
+
+	wcache = &se->se_entry->te_w_cache;
+	high_idx = wcache->wc_w_high;
+	high = wcache->wc_ts_w[high_idx];
+	if (epoch >= high) /* Case #4, the access is newer than any write */
+		return false;
+
+	second = wcache->wc_ts_w[1 - high_idx];
+	if (epoch < second) /* Case #1, Cache miss, not enough history */
+		return true;
+
+	/* We know at this point that second <= epoch so we need to determine
+	 * only if the high time is inside the uncertainty bound.
+	 */
+	if (bound >= high) /* Case #3, Uncertain write conflict */
+		return true;
+
+	/* Case #2, No write conflict, all writes outside the bound */
+	return false;
+}
 
 /** Set the type of the next entry.  This gets set automatically
  *  by default in vos_ts_set_add to child type of entry being
@@ -757,6 +828,54 @@ vos_ts_set_update(struct vos_ts_set *ts_set, daos_epoch_t read_time)
 					 &ts_set->ts_tx_id);
 		vos_ts_rh_update(se->se_entry, read_time,
 				 &ts_set->ts_tx_id);
+	}
+}
+
+static inline void
+vos_ts_update_wcache(struct vos_wts_cache *wcache, daos_epoch_t write_time)
+{
+	daos_epoch_t		*high;
+	daos_epoch_t		*second;
+
+	/** We store only the highest two timestamps so workout which timestamp
+	 *  should be replaced, if any and replace it
+	 */
+	high = &wcache->wc_ts_w[wcache->wc_w_high];
+	second = &wcache->wc_ts_w[1 - wcache->wc_w_high];
+
+	if (write_time <= *second || write_time == *high)
+		return;
+
+	/** We know it's not older than both timestamps and is unique, so
+	 *  check for which one to replace.  If the high needs to be
+	 *  replaced, we simply move the index of the high and still
+	 *  replace the second one.
+	 */
+	if (write_time > *high)
+		wcache->wc_w_high = 1 - wcache->wc_w_high;
+	*second = write_time;
+}
+
+/** Update the write timestamps for the set after a successful operation
+ *
+ *  \param[in]	ts_set		The timestamp set
+ *  \param[in]	write_time	The new write timestamp
+ */
+static inline void
+vos_ts_set_wupdate(struct vos_ts_set *ts_set, daos_epoch_t write_time)
+{
+	struct vos_ts_set_entry	*se;
+	int			 i;
+
+	if (!vos_ts_in_tx(ts_set))
+		return;
+
+	for (i = 0; i < ts_set->ts_init_count; i++) {
+		se = &ts_set->ts_entries[i];
+		if (se->se_entry == NULL)
+			continue;
+
+		vos_ts_update_wcache(&se->se_entry->te_w_cache, write_time);
 	}
 }
 

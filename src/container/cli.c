@@ -456,13 +456,14 @@ dc_cont_alloc(const uuid_t uuid)
 	return dc;
 }
 
-static void
+static int
 dc_cont_props_init(struct dc_cont *cont)
 {
 	uint32_t	csum_type = cont->dc_props.dcp_csum_type;
 	uint32_t	compress_type = cont->dc_props.dcp_compress_type;
 	uint32_t	encrypt_type = cont->dc_props.dcp_encrypt_type;
 	bool		dedup_only = false;
+	int		rc;
 
 	cont->dc_props.dcp_compress_enabled =
 			daos_cont_compress_prop_is_enabled(compress_type);
@@ -475,13 +476,15 @@ dc_cont_props_init(struct dc_cont *cont)
 	}
 
 	if (!daos_cont_csum_prop_is_enabled(csum_type))
-		return;
+		return 0;
 
-	daos_csummer_init_with_type(&cont->dc_csummer, csum_type,
+	rc = daos_csummer_init_with_type(&cont->dc_csummer, csum_type,
 				    cont->dc_props.dcp_chunksize, 0);
 
 	if (dedup_only)
 		dedup_configure_csummer(cont->dc_csummer, &cont->dc_props);
+
+	return rc;
 }
 
 struct cont_open_args {
@@ -540,7 +543,9 @@ cont_open_complete(tse_task_t *task, void *data)
 	cont->dc_pool_hdl = arg->hdl;
 
 	daos_props_2cont_props(out->coo_prop, &cont->dc_props);
-	rc = daos_csummer_init_with_props(&cont->dc_csummer, out->coo_prop);
+	rc = dc_cont_props_init(cont);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
@@ -1776,7 +1781,9 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	cont->dc_props.dcp_dedup_verify  = cont_glob->dcg_dedup_verify;
 	cont->dc_props.dcp_compress_type = cont_glob->dcg_compress_type;
 	cont->dc_props.dcp_encrypt_type	 = cont_glob->dcg_encrypt_type;
-	dc_cont_props_init(cont);
+	rc = dc_cont_props_init(cont);
+	if (rc != 0)
+		D_GOTO(out_cont, rc);
 
 	dc_cont_hdl_link(cont);
 	dc_cont2hdl(cont, coh);
@@ -1819,7 +1826,7 @@ dc_cont_global2local(daos_handle_t poh, d_iov_t glob, daos_handle_t *coh)
 		D_ASSERT(cont_glob->dcg_magic == DC_CONT_GLOB_MAGIC);
 
 	} else if (cont_glob->dcg_magic != DC_CONT_GLOB_MAGIC) {
-		D_ERROR("Bad hgh_magic: 0x%x.\n", cont_glob->dcg_magic);
+		D_ERROR("Bad hgh_magic: %#x.\n", cont_glob->dcg_magic);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 

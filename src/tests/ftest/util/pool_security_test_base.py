@@ -178,13 +178,11 @@ class PoolSecurityTestBase(TestWithServers):
         """
         if action.lower() == "write":
             result = self.set_container_attribute(self.pool_uuid,
-                                                  self.pool_svc,
                                                   self.container_uuid,
                                                   attribute,
                                                   value)
         elif action.lower() == "read":
             result = self.get_container_attribute(self.pool_uuid,
-                                                  self.pool_svc,
                                                   self.container_uuid,
                                                   attribute)
         else:
@@ -209,13 +207,11 @@ class PoolSecurityTestBase(TestWithServers):
         """
         if action.lower() == "write":
             result = self.set_container_property(self.pool_uuid,
-                                                 self.pool_svc,
                                                  self.container_uuid,
                                                  cont_property,
                                                  value)
         elif action.lower() == "read":
             result = self.get_container_property(self.pool_uuid,
-                                                 self.pool_svc,
                                                  self.container_uuid)
         else:
             self.fail(
@@ -237,7 +233,6 @@ class PoolSecurityTestBase(TestWithServers):
         """
         action = "set"
         result = self.set_container_owner(self.pool_uuid,
-                                          self.pool_svc,
                                           self.container_uuid,
                                           user,
                                           group)
@@ -259,7 +254,6 @@ class PoolSecurityTestBase(TestWithServers):
             result = self.update_container_acl(entry)
         elif action.lower() == "read":
             result = self.get_container_acl_list(self.pool_uuid,
-                                                 self.pool_svc,
                                                  self.container_uuid)
         else:
             self.fail(
@@ -307,7 +301,7 @@ class PoolSecurityTestBase(TestWithServers):
         """
         action = "cont_delete"
         result = self.test_container_destroy(
-            self.pool_uuid, self.pool_svc, self.container)
+            self.pool_uuid, self.container)
         self.log.info(
             "  In verify_cont_delete %s.\n =test_container_destroy() result:"
             "\n%s", action, result)
@@ -351,11 +345,10 @@ class PoolSecurityTestBase(TestWithServers):
                 "##setup_container_acl_and_permission, fail on "
                 "update_container_acl, expected Pass, but Failed.")
 
-    def verify_pool_readwrite(self, svc, uuid, action, expect='Pass'):
+    def verify_pool_readwrite(self, uuid, action, expect='Pass'):
         """Verify client is able to perform read or write on a pool.
 
         Args:
-            svc (int):  pool svc number.
             uuid (str): pool uuid number.
             action (str): read or write on pool.
             expect (str): expecting behavior pass or deny with RC -1001.
@@ -368,9 +361,9 @@ class PoolSecurityTestBase(TestWithServers):
         daos_cmd = DaosCommand(self.bin)
         daos_cmd.exit_status_exception = False
         if action.lower() == "write":
-            result = daos_cmd.container_create(pool=uuid, svc=svc)
+            result = daos_cmd.container_create(pool=uuid)
         elif action.lower() == "read":
-            result = daos_cmd.pool_query(pool=uuid, svc=svc)
+            result = daos_cmd.pool_query(pool=uuid)
         else:
             self.fail(
                 "##In verify_pool_readwrite, invalid action: {}".format(action))
@@ -435,8 +428,7 @@ class PoolSecurityTestBase(TestWithServers):
             secTestBase.add_del_user(self.hostlist_clients, "groupdel",
                                      groupname)
 
-    def verify_pool_acl_prim_sec_groups(self, pool_acl_list, acl_file, uuid,
-                                        svc):
+    def verify_pool_acl_prim_sec_groups(self, pool_acl_list, acl_file, uuid):
         """Verify daos pool acl access.
 
         Verify access with primary and secondary groups access permission.
@@ -445,7 +437,6 @@ class PoolSecurityTestBase(TestWithServers):
             pool_acl_list (list): pool acl entry list.
             acl_file (str): acl file to be used.
             uuid (str): daos pool uuid.
-            svc (int):  daos pool svc.
 
         Return:
             None.
@@ -504,13 +495,13 @@ class PoolSecurityTestBase(TestWithServers):
         # daos pool query --pool <uuid>
         self.log.info("  (8-6)Verify pool read by: daos pool query --pool")
         exp_read = sec_group_rw[0]
-        self.verify_pool_readwrite(svc, uuid, "read", expect=exp_read)
+        self.verify_pool_readwrite(uuid, "read", expect=exp_read)
 
         # Verify pool write operation
         # daos container create --pool <uuid>
         self.log.info("  (8-7)Verify pool write by: daos container create pool")
         exp_write = sec_group_rw[1]
-        self.verify_pool_readwrite(svc, uuid, "write", expect=exp_write)
+        self.verify_pool_readwrite(uuid, "write", expect=exp_write)
 
         for group in sec_group:
             secTestBase.add_del_user(self.hostlist_clients, "groupdel", group)
@@ -593,17 +584,17 @@ class PoolSecurityTestBase(TestWithServers):
         #    daos pool query --pool <uuid>
         self.log.info("  (7)Verify pool read by: daos pool query --pool")
         self.verify_pool_readwrite(
-            data["svc"], data["uuid"], "read", expect=read)
+            data["uuid"], "read", expect=read)
 
         # (8)Verify pool write operation
         #    daos container create --pool <uuid>
         self.log.info("  (8)Verify pool write by: daos container create --pool")
         self.verify_pool_readwrite(
-            data["svc"], data["uuid"], "write", expect=write)
+            data["uuid"], "write", expect=write)
         if secondary_grp_test:
             self.log.info("  (8-0)Verifying verify_pool_acl_prim_sec_groups")
             self.verify_pool_acl_prim_sec_groups(
-                pool_acl_list, acl_file, data["uuid"], data["svc"])
+                pool_acl_list, acl_file, data["uuid"])
 
         # (9)Cleanup user and destroy pool
         self.log.info("  (9)Cleanup users and groups")

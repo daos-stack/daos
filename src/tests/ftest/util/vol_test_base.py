@@ -64,7 +64,8 @@ class VolTestBase(DfuseTestBase):
 
         env = EnvironmentVariables()
         env["DAOS_POOL"] = "{}".format(self.pool.uuid)
-        env["DAOS_SVCL"] = "{}".format(self.pool.svc_ranks[0])
+        env["DAOS_SVCL"] = "{}".format(",".join([str(item) for item in
+                                                 self.pool.svc_ranks]))
         env["DAOS_CONT"] = "{}".format(self.container.uuid)
         env["HDF5_VOL_CONNECTOR"] = "daos"
         env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)

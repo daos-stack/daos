@@ -44,18 +44,17 @@ class ListContainerTest(TestWithServers):
         super(ListContainerTest, self).__init__(*args, **kwargs)
         self.daos_cmd = None
 
-    def create_list(self, count, pool_uuid, sr, expected_uuids):
+    def create_list(self, count, pool_uuid, expected_uuids):
         """Create container and call daos pool list-cont to list and verify.
 
         Args:
             count (Integer): Number of containers to create.
             pool_uuid (String): Pool UUID to create containers in.
-            sr (String): Service replicas of the pool to create containers.
             expected_uuids (List of string): List that contains container UUID.
                 It should contain all the container UUIDs for the given pool.
         """
         # Create containers and store the container UUIDs into expected_uuids.
-        kwargs = {"pool": pool_uuid, "svc": sr}
+        kwargs = {"pool": pool_uuid}
         for _ in range(count):
             expected_uuids.append(
                 self.daos_cmd.get_output("container_create", **kwargs)[0])
@@ -82,13 +81,13 @@ class ListContainerTest(TestWithServers):
         self.daos_cmd = DaosCommand(self.bin)
 
         # 1. Create 1 container and list.
-        self.create_list(1, data1["uuid"], data1["svc"], expected_uuids1)
+        self.create_list(1, data1["uuid"], expected_uuids1)
 
         # 2. Create 1 more container and list; 2 total.
-        self.create_list(1, data1["uuid"], data1["svc"], expected_uuids1)
+        self.create_list(1, data1["uuid"], expected_uuids1)
 
         # 3. Create 98 more containers and list; 100 total.
-        self.create_list(98, data1["uuid"], data1["svc"], expected_uuids1)
+        self.create_list(98, data1["uuid"], expected_uuids1)
 
         # 4. Create 2 additional pools and create 10 containers in each pool.
         data2 = self.get_dmg_command().pool_create(scm_size="150MB")
@@ -96,7 +95,7 @@ class ListContainerTest(TestWithServers):
 
         # Create 10 containers in pool 2 and verify.
         expected_uuids2 = []
-        self.create_list(10, data2["uuid"], data2["svc"], expected_uuids2)
+        self.create_list(10, data2["uuid"], expected_uuids2)
         # Create 10 containers in pool 3 and verify.
         expected_uuids3 = []
-        self.create_list(10, data3["uuid"], data3["svc"], expected_uuids3)
+        self.create_list(10, data3["uuid"], expected_uuids3)

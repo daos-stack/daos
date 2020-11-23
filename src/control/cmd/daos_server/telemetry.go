@@ -1,0 +1,93 @@
+//
+// (C) Copyright 2020 Intel Corporation.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+// The Government's rights to use, modify, reproduce, release, perform, display,
+// or disclose this software are subject to the terms of the Apache License as
+// provided in Contract No. 8F-30005.
+// Any reproduction of computer software, computer software documentation, or
+// portions thereof marked with this legend must also reproduce the markings.
+//
+//	telemetry.StartTelemetry(99)
+
+package main
+
+import (
+//	"context"
+//	"strings"
+
+//	"github.com/pkg/errors"
+
+//	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+//	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/telem"
+)
+
+type telemetryCmd struct {
+	Scan telemetryScanCmd `command:"scan" description:"Read the telemetry from the local I/O Servers"`
+}
+
+type telemetryScanCmd struct {
+	cfgCmd
+	logCmd
+	Rank int `short:"r" long:"rank" description:"Display telemetry for the given rank"`
+}
+
+func (cmd *telemetryScanCmd) Execute(args []string) error {
+
+//	telemetry.StartTelemetry(cmd.Rank)
+
+//	telemetry.InitTelemetry(cmd.Rank)
+
+	telemetry.Test(cmd.Rank, "src/gurt/examples/telem_producer_example.c/main/loop counter")
+//	telemetry.Test(cmd.Rank, "src/gurt/examples/telem_producer.c/main/10000 iterations - REALTIME")
+//	telemetry.Test(cmd.Rank, "src/gurt/examples/telem_producer.c/main/10000 iterations - PROCESS_CPUTIME")
+//	telemetry.Test(cmd.Rank, "src/gurt/examples/telem_producer.c/test_function1/loop counter")
+//	telemetry.Test(cmd.Rank, "src/gurt/examples/telem_producer.c/test_function2/last executed")
+//	telemetry.Test(cmd.Rank, "src/gurt/examples/telem_producer.c/timer_snapshot/timer 1")
+//	telemetry.Test(cmd.Rank, "src/gurt/examples/telem_producer.c/timer_snapshot/timer 2")
+//	telemetry.Test(cmd.Rank, "src/gurt/examples/telem_producer.c/timer_snapshot/timer 3")
+//	telemetry.Test(cmd.Rank, "src/gurt/examples/telem_producer.c/timer_snapshot/timer 4")
+//	telemetry.Test(cmd.Rank, "src/gurt/examples/telem_producer.c/open handles")
+
+/*
+
+	results, err := netdetect.ScanFabric(netCtx, provider, defaultExcludeInterfaces)
+	if err != nil {
+		return errors.WithMessage(err, "failed to execute the fabric and device scan")
+	}
+
+	hf := &control.HostFabric{}
+	for _, fi := range results {
+		hf.AddInterface(&control.HostFabricInterface{
+			Provider: fi.Provider,
+			Device:   fi.DeviceName,
+			NumaNode: uint32(fi.NUMANode),
+		})
+	}
+
+	hfm := make(control.HostFabricMap)
+	if err := hfm.Add("localhost", hf); err != nil {
+		return err
+	}
+
+	var bld strings.Builder
+	if err := pretty.PrintHostFabricMap(hfm, &bld); err != nil {
+		return err
+	}
+	cmd.log.Info(bld.String())
+*/
+	return nil
+}
