@@ -25,7 +25,7 @@ import traceback
 import ctypes
 
 from apricot import TestWithServers
-from command_utils_base import CommandFailure
+from pydaos.raw import DaosApiError
 from test_utils_pool import TestPool
 
 
@@ -88,12 +88,12 @@ class BadEvictTest(TestWithServers):
                 pool.pool.uuid[4] = 244
 
             # evict the pool
-            self.get_dmg_command().pool_evict(pool=pool.pool.get_uuid_str())
+            pool.pool.evict()
 
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
 
-        except CommandFailure as excep:
+        except DaosApiError as excep:
             self.log.error(str(excep))
             self.log.error(traceback.format_exc())
             if expected_result in ['PASS']:
