@@ -3411,8 +3411,8 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 
 		D_GOTO(exit, rc);
 	} else  if (rc == -DER_IVCB_FORWARD) {
-		/* 
- 		 * Send synchronization to parent
+		/*
+		 * Send synchronization to parent
 		 * Need to get a version number associated with next node.
 		 * Need to compare with previous version.  If not equal,
 		 * then there has been a version change in betwen.
