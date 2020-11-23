@@ -963,6 +963,9 @@ ds_pool_iv_conn_hdl_fetch(struct ds_pool *pool, uuid_t key_uuid,
 	struct pool_iv_key	*pool_key;
 	int			rc;
 
+	if (conn_iov == NULL)
+		return -DER_INVAL;
+
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = conn_iov;
@@ -1169,6 +1172,9 @@ ds_pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop)
 
 	/* Serialize the prop */
 	prop_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_LIST);
+	if (prop_entry == NULL)
+		D_GOTO(out, rc = -DER_NONEXIST);
+
 	svc_list = prop_entry->dpe_val_ptr;
 
 	size = pool_iv_prop_ent_size(DAOS_ACL_MAX_ACE_LEN, svc_list->rl_nr);

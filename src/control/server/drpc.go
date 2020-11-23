@@ -36,6 +36,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
@@ -77,11 +78,10 @@ func isRetryable(msg proto.Message) (*retryableDrpcReq, bool) {
 		return msg, true
 	// Pool creates are notorious for needing retry logic
 	// while things are starting up in CI testing.
-	case *mgmtpb.PoolCreateReq:
+	case *mgmtpb.PoolCreateReq, *mgmtpb.PoolDestroyReq:
 		return &retryableDrpcReq{
 			Message: msg,
 			RetryableStatuses: []drpc.DaosStatus{
-				drpc.DaosOutOfGroup,
 				drpc.DaosGroupVersionMismatch,
 				drpc.DaosTimedOut,
 			},
@@ -137,7 +137,7 @@ func checkSocketDir(sockDir string) error {
 }
 
 // drpcServerSetup specifies socket path and starts drpc server.
-func drpcServerSetup(ctx context.Context, log logging.Logger, sockDir string, iosrvs []*IOServerInstance, tc *security.TransportConfig) error {
+func drpcServerSetup(ctx context.Context, log logging.Logger, sockDir string, iosrvs []*IOServerInstance, tc *security.TransportConfig, db *system.Database) error {
 	// Clean up any previous execution's sockets before we create any new sockets
 	if err := drpcCleanup(sockDir); err != nil {
 		return err
@@ -152,7 +152,11 @@ func drpcServerSetup(ctx context.Context, log logging.Logger, sockDir string, io
 	// Create and add our modules
 	drpcServer.RegisterRPCModule(NewSecurityModule(log, tc))
 	drpcServer.RegisterRPCModule(&mgmtModule{})
-	drpcServer.RegisterRPCModule(&srvModule{iosrvs})
+	drpcServer.RegisterRPCModule(&srvModule{
+		log:    log,
+		sysdb:  db,
+		iosrvs: iosrvs,
+	})
 
 	if err := drpcServer.Start(); err != nil {
 		return errors.Wrapf(err, "unable to start socket server on %s", sockPath)
@@ -220,10 +224,10 @@ func newDrpcCall(method drpc.Method, bodyMessage proto.Message) (*drpc.Call, err
 // protobuf message marshalled in the body, and closes the connection.
 // drpc response is returned after basic checks.
 func makeDrpcCall(ctx context.Context, log logging.Logger, client drpc.DomainSocketClient, method drpc.Method, body proto.Message) (drpcResp *drpc.Response, err error) {
-	client.Lock()
-	defer client.Unlock()
-
 	tryCall := func(msg proto.Message) (*drpc.Response, error) {
+		client.Lock()
+		defer client.Unlock()
+
 		drpcCall, err := newDrpcCall(method, msg)
 		if err != nil {
 			return nil, errors.Wrap(err, "build drpc call")

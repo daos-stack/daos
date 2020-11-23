@@ -70,6 +70,20 @@ def acl_principal(usergroup, name):
         entry = "u:" + name + "@"
     return entry
 
+def get_user_type(test_user):
+    """Get test user's user type for ACE access control entry.
+
+    Args:
+        test_user (str): test user name.
+
+    Return:
+        str: test user type user/group for ACE.
+
+    """
+    user_type = "user"
+    if "group" in test_user.lower():
+        user_type = "group"
+    return user_type
 
 def add_del_user(hosts, bash_cmd, user):
     """Add or delete the daos user and group on host by sudo command.

@@ -272,9 +272,7 @@ func PoolDiscoveriesFromPB(pbPools []*mgmtpb.ListPoolsResp_Pool) []*common.PoolD
 	pools := make([]*common.PoolDiscovery, 0, len(pbPools))
 	for _, pbPool := range pbPools {
 		svcReps := make([]uint32, 0, len(pbPool.Svcreps))
-		for _, rep := range pbPool.Svcreps {
-			svcReps = append(svcReps, rep)
-		}
+		svcReps = append(svcReps, pbPool.Svcreps...)
 
 		pools = append(pools, &common.PoolDiscovery{
 			UUID:        pbPool.Uuid,

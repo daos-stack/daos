@@ -27,6 +27,13 @@
 #include <daos/tse.h>
 #include <daos_obj.h>
 
+/* EC parity is stored in a private address range that is selected by setting
+ * the most-significant bit of the offset (an unsigned long). This effectively
+ * limits the addressing of user extents to the lower 63 bits of the offset
+ * range.
+ */
+#define DAOS_EC_PARITY_BIT	(1ULL << 63)
+
 static inline daos_oclass_id_t
 daos_obj_id2class(daos_obj_id_t oid)
 {
@@ -508,6 +515,43 @@ static inline bool
 daos_recx_ep_list_ep_valid(struct daos_recx_ep_list *list)
 {
 	return (list->re_ep_valid == 1);
+}
+
+/** Query the highest and lowest recx in the recx_ep_list */
+static inline void
+daos_recx_ep_list_hilo(struct daos_recx_ep_list *list, daos_recx_t *hi_ptr,
+		       daos_recx_t *lo_ptr)
+{
+	struct daos_recx_ep		*recx_ep;
+	daos_recx_t			*recx;
+	daos_recx_t			 hi = {0};
+	daos_recx_t			 lo = {0};
+	uint64_t			 end, end_hi, end_lo;
+	unsigned int			 i;
+
+	if (list == NULL)
+		goto out;
+
+	end_hi = 0;
+	end_lo = -1;
+	for (i = 0; i < list->re_nr; i++) {
+		recx_ep = &list->re_items[i];
+		recx = &recx_ep->re_recx;
+		end = DAOS_RECX_PTR_END(recx);
+		if (end > end_hi) {
+			hi = *recx;
+			end_hi = end;
+		}
+		if (end < end_lo) {
+			lo = *recx;
+			end_lo = end;
+		}
+		D_ASSERT(end_hi >= end_lo);
+	}
+
+out:
+	*hi_ptr = hi;
+	*lo_ptr = lo;
 }
 
 static inline void

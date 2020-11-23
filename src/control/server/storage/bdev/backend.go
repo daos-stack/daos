@@ -96,7 +96,6 @@ func (w *spdkWrapper) init(log logging.Logger, spdkOpts spdk.EnvOptions) (func()
 		return nil, errors.Wrap(err, "failed to suppress spdk output")
 	}
 
-	// provide empty whitelist on init so all devices are discovered
 	if err := w.InitSPDKEnv(log, spdkOpts); err != nil {
 		restore()
 		return nil, errors.Wrap(err, "failed to init spdk env")
@@ -130,7 +129,8 @@ func (b *spdkBackend) IsVMDDisabled() bool {
 // Scan discovers NVMe controllers accessible by SPDK.
 func (b *spdkBackend) Scan(req ScanRequest) (*ScanResponse, error) {
 	restoreOutput, err := b.binding.init(b.log, spdk.EnvOptions{
-		DisableVMD: b.IsVMDDisabled(),
+		PciWhiteList: req.DeviceList,
+		DisableVMD:   b.IsVMDDisabled(),
 	})
 	if err != nil {
 		return nil, err
@@ -204,48 +204,7 @@ func (b *spdkBackend) formatRespFromResults(results []*spdk.FormatResult) (*Form
 	return resp, nil
 }
 
-func (b *spdkBackend) format(class storage.BdevClass, deviceList []string) (*FormatResponse, error) {
-	// TODO (DAOS-3844): Kick off device formats parallel?
-	switch class {
-	case storage.BdevClassKdev, storage.BdevClassFile, storage.BdevClassMalloc:
-		resp := &FormatResponse{
-			DeviceResponses: make(DeviceFormatResponses),
-		}
-
-		for _, device := range deviceList {
-			resp.DeviceResponses[device] = &DeviceFormatResponse{
-				Formatted: true,
-			}
-			b.log.Debugf("%s format for non-NVMe bdev skipped on %s", class, device)
-		}
-
-		return resp, nil
-	case storage.BdevClassNvme:
-		if len(deviceList) == 0 {
-			return nil, errors.New("empty pci address list in format request")
-		}
-
-		results, err := b.binding.Format(b.log)
-		if err != nil {
-			return nil, errors.Wrapf(err, "spdk format %v", deviceList)
-		}
-
-		if len(results) == 0 {
-			return nil, errors.New("empty results from spdk binding format request")
-		}
-
-		return b.formatRespFromResults(results)
-	default:
-		return nil, FaultFormatUnknownClass(class.String())
-	}
-}
-
-// Format initializes the SPDK environment, defers the call to finalize the same
-// environment and calls private format() routine to format all devices in the
-// request device list in a manner specific to the supplied bdev class.
-//
-// Remove any stale SPDK lockfiles after format.
-func (b *spdkBackend) Format(req FormatRequest) (*FormatResponse, error) {
+func (b *spdkBackend) formatNvme(req FormatRequest) (*FormatResponse, error) {
 	spdkOpts := spdk.EnvOptions{
 		MemSize:      req.MemSize,
 		PciWhiteList: req.DeviceList,
@@ -258,9 +217,52 @@ func (b *spdkBackend) Format(req FormatRequest) (*FormatResponse, error) {
 	}
 	defer restoreOutput()
 	defer b.binding.FiniSPDKEnv(b.log, spdkOpts)
-	defer b.binding.CleanLockfiles(b.log, req.DeviceList...)
+	defer func() {
+		if err := b.binding.CleanLockfiles(b.log, req.DeviceList...); err != nil {
+			b.log.Errorf("cleanup failed after format: %s", err)
+		}
+	}()
 
-	return b.format(req.Class, req.DeviceList)
+	results, err := b.binding.Format(b.log)
+	if err != nil {
+		return nil, errors.Wrapf(err, "spdk format %v", req.DeviceList)
+	}
+
+	if len(results) == 0 {
+		return nil, errors.New("empty results from spdk binding format request")
+	}
+
+	return b.formatRespFromResults(results)
+}
+
+// Format initializes the SPDK environment, defers the call to finalize the same
+// environment and calls private format() routine to format all devices in the
+// request device list in a manner specific to the supplied bdev class.
+//
+// Remove any stale SPDK lockfiles after format.
+func (b *spdkBackend) Format(req FormatRequest) (*FormatResponse, error) {
+	// TODO (DAOS-3844): Kick off device formats parallel?
+	switch req.Class {
+	case storage.BdevClassKdev, storage.BdevClassFile, storage.BdevClassMalloc:
+		resp := &FormatResponse{
+			DeviceResponses: make(DeviceFormatResponses),
+		}
+
+		for _, device := range req.DeviceList {
+			resp.DeviceResponses[device] = new(DeviceFormatResponse)
+			b.log.Debugf("%s format for non-NVMe bdev skipped on %s", req.Class, device)
+		}
+
+		return resp, nil
+	case storage.BdevClassNvme:
+		if len(req.DeviceList) == 0 {
+			return nil, errors.New("empty pci address list in nvme format request")
+		}
+
+		return b.formatNvme(req)
+	default:
+		return nil, FaultFormatUnknownClass(req.Class.String())
+	}
 }
 
 // detectVMD returns whether VMD devices have been found and a slice of VMD

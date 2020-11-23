@@ -49,3 +49,56 @@ func (r *PoolSetPropReq) SetValueNumber(numVal uint64) {
 		Numval: numVal,
 	}
 }
+
+// The following set of addons implements the poolServiceReq interface
+// in mgmt_pool.go.
+
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *PoolSetPropReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}
+
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *PoolEvictReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}
+
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *PoolExcludeReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}
+
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *PoolDrainReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}
+
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *PoolReintegrateReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}
+
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *PoolExtendReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}
+
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *PoolQueryReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}
+
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *GetACLReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}
+
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *ModifyACLReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}
+
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *DeleteACLReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}

@@ -74,67 +74,6 @@ daos_mgmt_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
 }
 
 int
-daos_pool_create(uint32_t mode, uid_t uid, gid_t gid, const char *grp,
-		 const d_rank_list_t *tgts, const char *dev,
-		 daos_size_t scm_size, daos_size_t nvme_size,
-		 daos_prop_t *pool_prop, d_rank_list_t *svc,
-		 uuid_t uuid, daos_event_t *ev)
-{
-	daos_pool_create_t	*args;
-	tse_task_t		*task;
-	int			 rc;
-
-	DAOS_API_ARG_ASSERT(*args, POOL_CREATE);
-	if (pool_prop != NULL && !daos_prop_valid(pool_prop, true, true)) {
-		D_ERROR("Invalid pool properties.\n");
-		return -DER_INVAL;
-	}
-
-	rc = dc_task_create(dc_pool_create, NULL, ev, &task);
-	if (rc)
-		return rc;
-
-	args = dc_task_get_args(task);
-	args->mode	= mode;
-	args->uid	= uid;
-	args->gid	= gid;
-	args->grp	= grp;
-	args->tgts	= tgts;
-	args->dev	= dev;
-	args->scm_size	= scm_size;
-	args->nvme_size	= nvme_size;
-	args->prop	= pool_prop;
-	args->svc	= svc;
-	args->uuid	= uuid;
-
-	return dc_task_schedule(task, true);
-}
-
-int
-daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
-		  daos_event_t *ev)
-{
-	daos_pool_destroy_t	*args;
-	tse_task_t		*task;
-	int			 rc;
-
-	DAOS_API_ARG_ASSERT(*args, POOL_DESTROY);
-	if (!daos_uuid_valid(uuid))
-		return -DER_INVAL;
-
-	rc = dc_task_create(dc_pool_destroy, NULL, ev, &task);
-	if (rc)
-		return rc;
-
-	args = dc_task_get_args(task);
-	args->grp	= grp;
-	args->force	= force;
-	uuid_copy((unsigned char *)args->uuid, uuid);
-
-	return dc_task_schedule(task, true);
-}
-
-int
 daos_pool_reint_tgt(const uuid_t uuid, const char *grp,
 		    const d_rank_list_t *svc, struct d_tgt_list *tgts,
 		    daos_event_t *ev)
@@ -243,87 +182,33 @@ daos_pool_extend(const uuid_t uuid, const char *grp, d_rank_list_t *tgts,
 }
 
 int
-daos_pool_add_replicas(const uuid_t uuid, const char *group,
-		       d_rank_list_t *svc, d_rank_list_t *targets,
-		       d_rank_list_t *failed, daos_event_t *ev)
+daos_mgmt_add_mark(const char *mark)
 {
-	daos_pool_replicas_t	*args;
-	tse_task_t		*task;
-	int			 rc;
-
-	DAOS_API_ARG_ASSERT(*args, POOL_ADD_REPLICAS);
-	if (!daos_uuid_valid(uuid))
-		return -DER_INVAL;
-
-	rc = dc_task_create(dc_pool_add_replicas, NULL, ev, &task);
-	if (rc)
-		return rc;
-
-	args = dc_task_get_args(task);
-	uuid_copy((unsigned char *)args->uuid, uuid);
-	args->group	= group;
-	args->svc	= svc;
-	args->targets	= targets;
-	args->failed	= failed;
-
-	return dc_task_schedule(task, true);
+	return dc_mgmt_add_mark(mark);
 }
 
 int
-daos_pool_remove_replicas(const uuid_t uuid, const char *group,
-			  d_rank_list_t *svc, d_rank_list_t *targets,
-			  d_rank_list_t *failed, daos_event_t *ev)
+daos_mgmt_get_bs_state(const char *group, uuid_t blobstore_uuid,
+		       int *blobstore_state, daos_event_t *ev)
 {
-	daos_pool_replicas_t	*args;
-	tse_task_t		*task;
-	int			 rc;
+	daos_mgmt_get_bs_state_t	*args;
+	tse_task_t			*task;
+	int				rc;
 
-	DAOS_API_ARG_ASSERT(*args, POOL_REMOVE_REPLICAS);
-	if (!daos_uuid_valid(uuid))
-		return -DER_INVAL;
+	DAOS_API_ARG_ASSERT(*args, MGMT_GET_BS_STATE);
 
-	rc = dc_task_create(dc_pool_remove_replicas, NULL, ev, &task);
-	if (rc)
-		return rc;
-
-	args = dc_task_get_args(task);
-	uuid_copy((unsigned char *)args->uuid, uuid);
-	args->group	= group;
-	args->svc	= svc;
-	args->targets	= targets;
-	args->failed	= failed;
-
-	return dc_task_schedule(task, true);
-}
-
-int
-daos_mgmt_list_pools(const char *group, daos_size_t *npools,
-		     daos_mgmt_pool_info_t *pools, daos_event_t *ev)
-{
-	daos_mgmt_list_pools_t	*args;
-	tse_task_t		*task;
-	int			 rc;
-
-	DAOS_API_ARG_ASSERT(*args, MGMT_LIST_POOLS);
-
-	if (npools == NULL) {
-		D_ERROR("npools must be non-NULL\n");
+	if (uuid_is_null(blobstore_uuid)) {
+		D_ERROR("Blobstore UUID must be non-NULL\n");
 		return -DER_INVAL;
 	}
 
-	rc = dc_task_create(dc_mgmt_list_pools, NULL, ev, &task);
+	rc = dc_task_create(dc_mgmt_get_bs_state, NULL, ev, &task);
 	if (rc)
 		return rc;
 	args = dc_task_get_args(task);
 	args->grp = group;
-	args->pools = pools;
-	args->npools = npools;
+	args->state = blobstore_state;
+	uuid_copy(args->uuid, blobstore_uuid);
 
 	return dc_task_schedule(task, true);
-}
-
-int
-daos_mgmt_add_mark(const char *mark)
-{
-	return dc_mgmt_add_mark(mark);
 }

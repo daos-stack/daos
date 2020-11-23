@@ -79,7 +79,7 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	 * set it before reporting the value.
 	 */
 	conn->max_read = fs_handle->dpi_max_read;
-	conn->max_write = fs_handle->dpi_max_read;
+	conn->max_write = fs_handle->dpi_max_write;
 
 	DFUSE_TRA_INFO(fs_handle, "max read %#x", conn->max_read);
 	DFUSE_TRA_INFO(fs_handle, "max write %#x", conn->max_write);

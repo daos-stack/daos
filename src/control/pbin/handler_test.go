@@ -48,7 +48,7 @@ func TestPbin_NewResponseWithError(t *testing.T) {
 }
 
 func TestPbin_NewResponseWithPayload(t *testing.T) {
-	payload := testPayload{result: "here's the real result"}
+	payload := testPayload{Result: "here's the real result"}
 	expPayloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		t.Fatalf("couldn't marshal payload: %v", err)

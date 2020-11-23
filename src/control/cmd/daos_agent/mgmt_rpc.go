@@ -51,10 +51,11 @@ type mgmtModule struct {
 	numaAware  bool
 	netCtx     context.Context
 	mutex      sync.Mutex
+	monitor    *procMon
 }
 
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
-	if method != drpc.MethodGetAttachInfo {
+	if method != drpc.MethodGetAttachInfo && method != drpc.MethodDisconnect {
 		return nil, drpc.UnknownMethodFailure()
 	}
 
@@ -75,7 +76,19 @@ func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req
 		return nil, err
 	}
 
-	return mod.handleGetAttachInfo(req, cred.Pid)
+	ctx := context.TODO() // FIXME: Should be the top-level context.
+
+	switch method {
+	case drpc.MethodGetAttachInfo:
+		return mod.handleGetAttachInfo(ctx, req, cred.Pid)
+	case drpc.MethodDisconnect:
+		// There isn't anything we can do here if this fails so just
+		// call the disconnect handler and return success.
+		mod.handleDisconnect(ctx, cred.Pid)
+		return nil, nil
+	}
+
+	return nil, drpc.UnknownMethodFailure()
 }
 
 func (mod *mgmtModule) ID() drpc.ModuleID {
@@ -93,7 +106,7 @@ func (mod *mgmtModule) ID() drpc.ModuleID {
 // time this dRPC is invoked. Subsequent calls receive the cached data.
 // The use of cached data may be disabled by exporting
 // "DAOS_AGENT_DISABLE_CACHE=true" in the environment running the daos_agent.
-func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, error) {
+func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid int32) ([]byte, error) {
 	var err error
 	numaNode := mod.aiCache.defaultNumaNode
 
@@ -108,6 +121,7 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 	// caching is enabled, there's data in the info cache and the agent can quickly return
 	// a response without the overhead of a mutex.
 	if mod.aiCache.isCached() {
+		mod.monitor.RegisterProcess(ctx, pid)
 		return mod.aiCache.getResponse(numaNode)
 	}
 
@@ -119,6 +133,7 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 	// If another thread succeeded in initializing the cache while this thread waited
 	// to get the mutex, return the cached response instead of initializing the cache again.
 	if mod.aiCache.isCached() {
+		mod.monitor.RegisterProcess(ctx, pid)
 		return mod.aiCache.getResponse(numaNode)
 	}
 
@@ -133,7 +148,6 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 		return nil, errors.Errorf("unknown system name %s", pbReq.Sys)
 	}
 
-	ctx := context.TODO() // FIXME: Should be the top-level context.
 	resp, err := control.GetAttachInfo(ctx, mod.ctlInvoker, &control.GetAttachInfoReq{
 		System: pbReq.Sys,
 	})
@@ -163,5 +177,20 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 		return nil, err
 	}
 
-	return mod.aiCache.getResponse(numaNode)
+	cacheResp, err := mod.aiCache.getResponse(numaNode)
+	if err != nil {
+		return nil, err
+	}
+
+	mod.monitor.RegisterProcess(ctx, pid)
+
+	return cacheResp, err
+}
+
+// handleDisconnect crafts a new request for the process monitor to inform the
+// monitor that a process is exiting. Even though the process is terminating
+// cleanly disconnect will inform the control plane of any outstanding handles
+// that the process held open.
+func (mod *mgmtModule) handleDisconnect(ctx context.Context, pid int32) {
+	mod.monitor.UnregisterProcess(ctx, pid)
 }

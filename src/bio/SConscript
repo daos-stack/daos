@@ -4,7 +4,7 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env', 'prereqs', 'control_tgts')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
@@ -14,6 +14,7 @@ def scons():
 
     SConscript('smd/SConscript')
     denv.AppendUnique(LIBPATH=['smd'])
+    denv.AppendUnique(OBJPREFIX='b_')
 
     # SPDK related libs
     libs = ['spdk_env_dpdk', 'spdk_thread', 'spdk_bdev', 'spdk_copy']
@@ -28,8 +29,8 @@ def scons():
     # Other libs
     libs += ['numa', 'dl', 'smd']
 
-    bio = daos_build.library(denv, "bio", Glob('*.c'), install_off="../..",
-                             LIBS=libs)
+    tgts = Glob('*.c') + control_tgts
+    bio = daos_build.library(denv, "bio", tgts, install_off="../..", LIBS=libs)
     denv.Install('$PREFIX/lib64/daos_srv', bio)
 
 if __name__ == "SCons.Script":

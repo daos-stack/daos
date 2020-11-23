@@ -436,7 +436,7 @@ static const struct CMUnitTest tests[] = {
 static int
 setup(void **state)
 {
-	return test_setup(state, SETUP_EQ, false, DEFAULT_POOL_SIZE, NULL);
+	return test_setup(state, SETUP_EQ, false, DEFAULT_POOL_SIZE, 0, NULL);
 }
 
 int

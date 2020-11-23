@@ -850,7 +850,7 @@ vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
 
 static int
 tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
-		 struct vos_krec_df *krec, daos_handle_t *sub_toh)
+		 struct vos_krec_df *krec, bool created, daos_handle_t *sub_toh)
 {
 	struct umem_attr        *uma = vos_obj2uma(obj);
 	struct vos_pool		*pool = vos_obj2pool(obj);
@@ -899,6 +899,16 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		 */
 		rc = -DER_NONEXIST;
 		goto out;
+	}
+
+	if (!created) {
+		rc = umem_tx_add_ptr(vos_obj2umm(obj), krec,
+				     sizeof(*krec));
+		if (rc != 0) {
+			D_ERROR("Failed to add key record to transaction,"
+				" rc = %d", rc);
+			goto out;
+		}
 	}
 
 	if (flags & SUBTR_EVT) {
@@ -966,6 +976,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	struct dcs_csum_info	 csum;
 	struct vos_rec_bundle	 rbund;
 	d_iov_t			 riov;
+	bool			 created = false;
 	int			 rc;
 	int			 tmprc;
 
@@ -1031,11 +1042,13 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 		}
 		krec = rbund.rb_krec;
 		vos_ilog_ts_mark(ts_set, &krec->kr_ilog);
+		created = true;
 	}
 
 	if (sub_toh) {
 		D_ASSERT(krec != NULL);
-		rc = tree_open_create(obj, tclass, flags, krec, sub_toh);
+		rc = tree_open_create(obj, tclass, flags, krec, created,
+				      sub_toh);
 	}
 
 	if (rc)
@@ -1068,9 +1081,9 @@ key_tree_release(daos_handle_t toh, bool is_array)
  */
 int
 key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
-	       d_iov_t *key_iov, d_iov_t *val_iov, uint64_t flags,
-	       struct vos_ts_set *ts_set, struct vos_ilog_info *parent,
-	       struct vos_ilog_info *info)
+	       daos_epoch_t bound, d_iov_t *key_iov, d_iov_t *val_iov,
+	       uint64_t flags, struct vos_ts_set *ts_set,
+	       struct vos_ilog_info *parent, struct vos_ilog_info *info)
 {
 	struct vos_rec_bundle	*rbund = iov2rec_bundle(val_iov);
 	struct vos_krec_df	*krec;
@@ -1095,14 +1108,19 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 			rc = lrc;
 			goto done;
 		}
-
-		if (rc == -DER_NONEXIST && (flags & VOS_OF_COND_PUNCH)) {
-			rc = -DER_NONEXIST;
-			goto done;
+		if (rc == -DER_NONEXIST) {
+			if (flags & VOS_OF_COND_PUNCH)
+				goto done;
 		}
+	} else if (rc != 0) {
+		/** Abort on any other error */
+		goto done;
 	}
 
 	if (rc != 0) {
+		/** If it's not a replay punch, we should not insert
+		 *  anything.   In such case, ts_set will be NULL
+		 */
 		D_ASSERT(rc == -DER_NONEXIST);
 		/* use BTR_PROBE_BYPASS to avoid probe again */
 		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, DAOS_INTENT_UPDATE,
@@ -1121,12 +1139,10 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	if (mark)
 		vos_ilog_ts_mark(ts_set, ilog);
 
-	rc = vos_ilog_punch(obj->obj_cont, ilog, &epr, parent,
+	rc = vos_ilog_punch(obj->obj_cont, ilog, &epr, bound, parent,
 			    info, ts_set, true,
 			    (flags & VOS_OF_REPLAY_PC) != 0);
 
-	if (rc == 0 && vos_ts_set_check_conflict(ts_set, epoch))
-		rc = -DER_TX_RESTART;
 done:
 	VOS_TX_LOG_FAIL(rc, "Failed to punch key: "DF_RC"\n", DP_RC(rc));
 

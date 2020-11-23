@@ -15,11 +15,14 @@ sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
 sudo mkdir -p "$DAOS_BASE"
 sudo mount -t nfs "$HOSTNAME":"$HOSTPWD" "$DAOS_BASE"
 sudo cp "$DAOS_BASE/install/bin/daos_admin" /usr/bin/daos_admin
-set +x
 if [ -n "$BULLSEYE" ]; then
   pushd "$DAOS_BASE/bullseye"
+set +x
+    echo + sudo ./install --quiet --key "**********" \
+                   --prefix /opt/BullseyeCoverage
     sudo ./install --quiet --key "${BULLSEYE}" \
                    --prefix /opt/BullseyeCoverage
+set -x
   popd
   rm -rf bullseye
   export COVFILE="$DAOS_BASE/test.cov"
@@ -41,15 +44,13 @@ else
 fi
 
 cd "$DAOS_BASE"
-IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" utils/run_test.sh
-mkdir -p vm_test
-
-# Remove DAOS_BASE from memcheck xml results
-set -x
-if [ "$WITH_VALGRIND" == 'memcheck' ]; then
-    find test_results -maxdepth 1 -name '*.memcheck.xml' \
-        -print0 | xargs -0 sed -i "s:$DAOS_BASE::g"
-    mv test_results/unit-test-*.memcheck.xml .
-elif [ -z "$BULLSEYE" ]; then
+if ${NLT:-false}; then
+    mkdir -p vm_test
     ./utils/node_local_test.py --output-file=vm_test/nlt-errors.json all
+else
+    IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" utils/run_test.sh
+
+    if [ "$WITH_VALGRIND" == 'memcheck' ]; then
+	mv test_results/unit-test-*.memcheck.xml .
+    fi
 fi

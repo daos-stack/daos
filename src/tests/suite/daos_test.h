@@ -148,6 +148,7 @@ typedef struct {
 	int			expect_result;
 	daos_size_t		size;
 	int			nr;
+	int			pool_node_size;
 	int			srv_nnodes;
 	int			srv_ntgts;
 	int			srv_disabled_ntgts;
@@ -180,6 +181,33 @@ typedef struct {
 	/* List containers (pool tests) */
 	void			*pool_lc_args;
 } test_arg_t;
+
+#define IOREQ_IOD_NR	5
+#define IOREQ_SG_NR	5
+#define IOREQ_SG_IOD_NR	5
+
+#define DTS_MAX_EXT_NUM		5
+#define DTS_MAX_DISTANCE	10
+#define DTS_MAX_EXTENT_SIZE	50
+#define DTS_MAX_OFFSET		1048576
+#define DTS_MAX_EPOCH_TIMES	20
+
+struct ioreq {
+	daos_handle_t		oh;
+	test_arg_t		*arg;
+	daos_event_t		ev;
+	daos_key_t		dkey;
+	daos_key_t		akey;
+	d_iov_t			val_iov[IOREQ_SG_IOD_NR][IOREQ_SG_NR];
+	d_sg_list_t		sgl[IOREQ_SG_IOD_NR];
+	daos_recx_t		rex[IOREQ_SG_IOD_NR][IOREQ_IOD_NR];
+	daos_epoch_range_t	erange[IOREQ_SG_IOD_NR][IOREQ_IOD_NR];
+	daos_iod_t		iod[IOREQ_SG_IOD_NR];
+	daos_iod_type_t		iod_type;
+	uint64_t		fail_loc;
+	int			result;
+};
+
 
 enum {
 	SETUP_EQ,
@@ -218,7 +246,7 @@ int
 test_teardown_cont(test_arg_t *arg);
 int
 test_setup(void **state, unsigned int step, bool multi_rank,
-	   daos_size_t pool_size, struct test_pool *pool);
+	   daos_size_t pool_size, int node_size, struct test_pool *pool);
 int
 test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *po_prop,
 		     daos_prop_t *co_prop);
@@ -301,17 +329,19 @@ int run_daos_dist_tx_test(int rank, int size, int *tests, int test_size);
 int run_daos_vc_test(int rank, int size, int *tests, int test_size);
 int run_daos_checksum_test(int rank, int size, int *sub_tests,
 			   int sub_tests_size);
+int run_daos_aggregation_ec_test(int rank, int size, int *sub_tests,
+				 int sub_tests_size);
 int run_daos_dedup_test(int rank, int size, int *sub_tests,
 			   int sub_tests_size);
 unsigned int daos_checksum_test_arg2type(char *optarg);
-int run_daos_fs_test(int rank, int size, int *tests, int test_size);
 int run_daos_nvme_recov_test(int rank, int size, int *sub_tests,
 			     int sub_tests_size);
 int run_daos_rebuild_simple_test(int rank, int size, int *tests, int test_size);
 int run_daos_drain_simple_test(int rank, int size, int *tests, int test_size);
 int run_daos_rebuild_simple_ec_test(int rank, int size, int *tests,
 				    int test_size);
-
+int run_daos_degrade_simple_ec_test(int rank, int size, int *sub_tests,
+				    int sub_tests_size);
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);
 struct daos_acl *get_daos_acl_with_owner_perms(uint64_t perms);
@@ -393,11 +423,32 @@ int rebuild_sub_teardown(void **state);
 int rebuild_small_sub_setup(void **state);
 
 int get_server_config(char *host, char *server_config_file);
-int get_server_log_file(char *host, char *server_config_file,
-			char *log_file);
+int get_log_file(char *host, char *server_config_file,
+		 char *key_name, char *log_file);
 int verify_server_log_mask(char *host, char *server_config_file,
 			   char *log_mask);
 int verify_state_in_log(char *host, char *log_file, char *state);
+
+int wait_and_verify_blobstore_state(uuid_t bs_uuid, char *expected_state,
+				    const char *group);
+int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
+				   char *expected_state);
+
+enum op_type {
+	PARTIAL_UPDATE	=	1,
+	FULL_UPDATE,
+	FULL_PARTIAL_UPDATE,
+	PARTIAL_FULL_UPDATE
+};
+
+void write_ec_partial(struct ioreq *req, int test_idx, daos_off_t off);
+void verify_ec_partial(struct ioreq *req, int test_idx, daos_off_t off);
+void write_ec_full(struct ioreq *req, int test_idx, daos_off_t off);
+void verify_ec_full(struct ioreq *req, int test_idx, daos_off_t off);
+void write_ec_full_partial(struct ioreq *req, int test_idx, daos_off_t off);
+void write_ec_partial_full(struct ioreq *req, int test_idx, daos_off_t off);
+void verify_ec_full_partial(struct ioreq *req, int test_idx, daos_off_t off);
+void make_buffer(char *buffer, char start, int total);
 
 static inline void
 daos_test_print(int rank, char *message)

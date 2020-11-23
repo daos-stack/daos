@@ -91,6 +91,9 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
                          '-B %s"' % gen_build_id()])
     # Must be run from the top of the source dir in order to
     # pick up the vendored modules.
+    # Propagate useful GO environment variables from the caller
+    if 'GOCACHE' in os.environ:
+        denv['ENV']['GOCACHE'] = os.environ['GOCACHE']
     denv.Command(build_bin, src + gurt_lib,
                  'cd %s; %s build -mod vendor -v %s %s %s -o %s %s' %
                  (gosrc, GO_BIN, go_ldflags(), get_build_flags(denv), get_build_tags(denv),

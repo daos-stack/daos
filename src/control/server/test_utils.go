@@ -24,7 +24,6 @@
 package server
 
 import (
-	"context"
 	"sync"
 	"testing"
 	"time"
@@ -86,13 +85,18 @@ func (cfg *mockDrpcClientConfig) setResponseDelay(duration time.Duration) {
 	cfg.ResponseDelay = duration
 }
 
+type mockDrpcCall struct {
+	Method drpc.Method
+	Body   []byte
+}
+
 // mockDrpcClient is a mock of the DomainSocketClient interface
 type mockDrpcClient struct {
 	sync.Mutex
 	cfg              mockDrpcClientConfig
 	CloseCallCount   int
 	SendMsgInputCall *drpc.Call
-	Calls            []drpc.Method
+	calls            []*mockDrpcCall
 }
 
 func (c *mockDrpcClient) IsConnected() bool {
@@ -108,18 +112,25 @@ func (c *mockDrpcClient) Close() error {
 	return c.cfg.CloseError
 }
 
+func (c *mockDrpcClient) CalledMethods() (methods []drpc.Method) {
+	for _, call := range c.calls {
+		methods = append(methods, call.Method)
+	}
+	return
+}
+
 func (c *mockDrpcClient) SendMsg(call *drpc.Call) (*drpc.Response, error) {
 	c.SendMsgInputCall = call
 	method, err := drpc.ModuleMgmt.GetMethod(call.GetMethod())
 	if err != nil {
 		return nil, err
 	}
-	c.Calls = append(c.Calls, method)
+	c.calls = append(c.calls, &mockDrpcCall{method, call.Body})
 
 	<-time.After(c.cfg.ResponseDelay)
 
 	if len(c.cfg.SendMsgResponseList) > 0 {
-		idx := len(c.Calls) - 1
+		idx := len(c.calls) - 1
 		if idx < 0 {
 			idx = 0
 		}
@@ -162,21 +173,15 @@ func setupMockDrpcClient(svc *mgmtSvc, resp proto.Message, err error) {
 // newTestIOServer returns an IOServerInstance configured for testing.
 func newTestIOServer(log logging.Logger, isAP bool, ioCfg ...*ioserver.Config) *IOServerInstance {
 	if len(ioCfg) == 0 {
-		ioCfg = append(ioCfg, ioserver.NewConfig())
+		ioCfg = append(ioCfg, ioserver.NewConfig().WithTargetCount(1))
 	}
 	r := ioserver.NewTestRunner(&ioserver.TestRunnerConfig{
 		Running: atm.NewBool(true),
 	}, ioCfg[0])
 
-	var msCfg mgmtSvcClientCfg
-	if isAP {
-		msCfg.AccessPoints = append(msCfg.AccessPoints, "localhost")
-	}
-
-	srv := NewIOServerInstance(log, nil, nil, newMgmtSvcClient(context.TODO(), log, msCfg), r)
+	srv := NewIOServerInstance(log, nil, nil, nil, r)
 	srv.setSuperblock(&Superblock{
 		Rank: system.NewRankPtr(0),
-		MS:   isAP,
 	})
 	srv.ready.SetTrue()
 
@@ -185,16 +190,17 @@ func newTestIOServer(log logging.Logger, isAP bool, ioCfg ...*ioserver.Config) *
 
 // newTestMgmtSvc creates a mgmtSvc that contains an IOServerInstance
 // properly set up as an MS.
-func newTestMgmtSvc(log logging.Logger) *mgmtSvc {
+func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
 	srv := newTestIOServer(log, true)
 
 	harness := NewIOServerHarness(log)
 	if err := harness.AddInstance(srv); err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 	harness.started.SetTrue()
 
-	return newMgmtSvc(harness, nil, nil)
+	db := system.MockDatabase(t, log)
+	return newMgmtSvc(harness, system.NewMembership(log, db), db)
 }
 
 // newTestMgmtSvcMulti creates a mgmtSvc that contains the requested
@@ -214,4 +220,12 @@ func newTestMgmtSvcMulti(t *testing.T, log logging.Logger, count int, isAP bool)
 	harness.started.SetTrue()
 
 	return newMgmtSvc(harness, nil, nil)
+}
+
+// newTestMgmtSvcNonReplica creates a mgmtSvc that is configured to
+// fail if operations expect it to be a replica.
+func newTestMgmtSvcNonReplica(t *testing.T, log logging.Logger) *mgmtSvc {
+	svc := newTestMgmtSvc(t, log)
+	svc.sysdb = system.MockDatabaseWithAddr(t, log, nil)
+	return svc
 }

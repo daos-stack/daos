@@ -154,7 +154,6 @@ pl_obj_place(struct pl_map *map, struct daos_obj_md *md,
  * \param  tgt_rank [OUT]       spare target ranks
  * \param  shard_id [OUT]       shard ids to be rebuilt
  * \param  array_size [IN]      array size of tgt_rank & shard_id
- * \prarm  myrank [IN]          rank of current server in communication group
 
  * \return      > 0     the array size of tgt_rank & shard_id, so it means
  *                      getting the spare targets for the failure shards.
@@ -165,7 +164,7 @@ int
 pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		    struct daos_obj_shard_md *shard_md,
 		    uint32_t rebuild_ver, uint32_t *tgt_rank,
-		    uint32_t *shard_id, unsigned int array_size, int myrank)
+		    uint32_t *shard_id, unsigned int array_size)
 {
 	D_ASSERT(map->pl_ops != NULL);
 
@@ -173,15 +172,14 @@ pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		return -DER_NOSYS;
 
 	return map->pl_ops->o_obj_find_rebuild(map, md, shard_md, rebuild_ver,
-					       tgt_rank, shard_id, array_size,
-					       myrank);
+					       tgt_rank, shard_id, array_size);
 }
 
 int
 pl_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 		    struct daos_obj_shard_md *shard_md,
 		    uint32_t reint_ver, uint32_t *tgt_rank,
-		    uint32_t *shard_id, unsigned int array_size, int myrank)
+		    uint32_t *shard_id, unsigned int array_size)
 {
 	D_ASSERT(map->pl_ops != NULL);
 
@@ -189,15 +187,14 @@ pl_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 		return -DER_NOSYS;
 
 	return map->pl_ops->o_obj_find_reint(map, md, shard_md, reint_ver,
-					       tgt_rank, shard_id, array_size,
-					       myrank);
+					       tgt_rank, shard_id, array_size);
 }
 
 int
 pl_obj_find_addition(struct pl_map *map, struct daos_obj_md *md,
 		     struct daos_obj_shard_md *shard_md,
 		    uint32_t reint_ver, uint32_t *tgt_rank,
-		    uint32_t *shard_id, unsigned int array_size, int myrank)
+		    uint32_t *shard_id, unsigned int array_size)
 {
 	D_ASSERT(map->pl_ops != NULL);
 
@@ -205,8 +202,7 @@ pl_obj_find_addition(struct pl_map *map, struct daos_obj_md *md,
 		return -DER_NOSYS;
 
 	return map->pl_ops->o_obj_find_addition(map, md, shard_md, reint_ver,
-					       tgt_rank, shard_id, array_size,
-					       myrank);
+					       tgt_rank, shard_id, array_size);
 }
 
 void
@@ -543,7 +539,7 @@ pl_map_version(struct pl_map *map)
  * Select leader replica for the given object's shard.
  *
  * \param [IN]  oid             The object identifier.
- * \param [IN]  shard_idx       The shard index.
+ * \param [IN]  grp_idx         The group index.
  * \param [IN]  grp_size        Group size of obj layout.
  * \param [IN]  for_tgt_id      Require leader target id or leader shard index.
  * \param [IN]  pl_get_shard    The callback function to parse out pl_obj_shard
@@ -554,33 +550,39 @@ pl_map_version(struct pl_map *map)
  *                              shard index. Negative value if error.
  */
 int
-pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
+pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 		 bool for_tgt_id, pl_get_shard_t pl_get_shard, void *data)
 {
 	struct pl_obj_shard             *shard;
 	struct daos_oclass_attr         *oc_attr;
 	uint32_t                         replicas;
-	int                              preferred;
-	int                              rdg_idx;
 	int                              start;
 	int                              pos;
-	int                              off;
 	int                              replica_idx;
 	int                              i;
 
 	oc_attr = daos_oclass_attr_find(oid);
 	if (oc_attr->ca_resil != DAOS_RES_REPL) {
 		int tgt_nr = oc_attr->u.ec.e_k + oc_attr->u.ec.e_p;
+		int fail_cnt = 0;
+		int idx = grp_idx * tgt_nr + tgt_nr - 1;
 
 		/* For EC object, elect last shard in the group (must to be
 		 * a parity node) as leader.
 		 */
-		shard = pl_get_shard(data, rounddown(shard_idx, tgt_nr) +
-					   tgt_nr - 1);
-		if (for_tgt_id)
-			return shard->po_target;
+		shard = pl_get_shard(data, idx);
+		while (shard->po_rebuilding) {
+			idx--;
+			if (++fail_cnt > oc_attr->u.ec.e_p)
+				return -DER_IO;
+			shard = pl_get_shard(data, idx);
+		}
 
-		return shard->po_shard;
+		if (for_tgt_id)
+			return shard->po_target == -1 ? -DER_IO :
+						shard->po_target;
+
+		return shard->po_shard == -1 ? -DER_IO : shard->po_shard;
 	}
 
 	replicas = oc_attr->u.rp.r_num;
@@ -591,17 +593,15 @@ pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
 		return -DER_INVAL;
 
 	if (replicas == 1) {
-		shard = pl_get_shard(data, shard_idx);
+		shard = pl_get_shard(data, grp_idx * grp_size);
 		if (shard->po_target == -1)
 			return -DER_IO;
 
-		/* Single replicated object will not rebuild. */
-		D_ASSERT(!shard->po_rebuilding);
-		/* During target adding, it will add some -1 targets
-		 * into the object layout, so this assert is not right
-		 * anymore. see pl_map_extend().
+		/*
+		 * Note that even though there's only one replica here, this
+		 * object can still be rebuilt during addition or drain as
+		 * it moves between ranks
 		 */
-		/*D_ASSERT(shard->po_shard == shard_idx);*/
 
 		if (for_tgt_id)
 			return shard->po_target;
@@ -617,14 +617,12 @@ pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
 	 *      The one with the lowest f_seq will be elected as the leader
 	 *      to avoid leader switch.
 	 */
-	rdg_idx = shard_idx / grp_size;
-	start = rdg_idx * grp_size;
-	replica_idx = (oid.lo + rdg_idx) % grp_size;
-	preferred = start + replica_idx;
+	start = grp_idx * grp_size;
+	replica_idx = (oid.lo + grp_idx) % grp_size;
+	for (i = 0, pos = -1; i < replicas;
+	     i++, replica_idx = (replica_idx + 1) % replicas) {
+		int off = start + replica_idx;
 
-	for (i = 0, off = preferred, pos = -1; i < replicas;
-	     i++, replica_idx = (replica_idx + 1) % replicas,
-	     off = start + replica_idx) {
 		shard = pl_get_shard(data, off);
 		/*
 		 * shard->po_shard != off is necessary because during

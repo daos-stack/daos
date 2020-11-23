@@ -226,13 +226,14 @@ func printSmdDevice(dev *storage.SmdDevice, out io.Writer, opts ...PrintConfigOp
 }
 
 func printSmdPool(pool *control.SmdPool, out io.Writer, opts ...PrintConfigOption) error {
-	_, err := fmt.Fprintf(out, "Rank:%d Targets:%+v", pool.Rank, pool.TargetIDs)
+	ew := txtfmt.NewErrWriter(out)
+	fmt.Fprintf(ew, "Rank:%d Targets:%+v", pool.Rank, pool.TargetIDs)
 	cfg := getPrintConfig(opts...)
 	if cfg.Verbose {
-		_, err = fmt.Fprintf(out, " Blobs:%+v", pool.Blobs)
+		fmt.Fprintf(ew, " Blobs:%+v", pool.Blobs)
 	}
-	_, err = fmt.Fprintln(out)
-	return err
+	fmt.Fprintln(ew)
+	return ew.Err
 }
 
 // PrintSmdInfoMap generates a human-readable representation of the supplied

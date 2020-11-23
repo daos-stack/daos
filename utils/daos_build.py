@@ -143,7 +143,8 @@ def configure_mpi(env, libs, required=None):
             mpis = required
 
     for mpi in mpis:
-        load_mpi(mpi)
+        if not load_mpi(mpi):
+            continue
         comp = mpi
         if mpi == "openmpi":
             comp = "ompi"

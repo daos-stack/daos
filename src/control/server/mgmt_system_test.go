@@ -37,11 +37,13 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/peer"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
 	. "github.com/daos-stack/daos/src/control/system"
@@ -49,7 +51,6 @@ import (
 
 const (
 	// test aliases for member states
-	msJoined     = uint32(MemberStateJoined)
 	msReady      = uint32(MemberStateReady)
 	msWaitFormat = uint32(MemberStateAwaitFormat)
 	msStopped    = uint32(MemberStateStopped)
@@ -57,13 +58,9 @@ const (
 )
 
 func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
-	missingSB := newTestMgmtSvc(nil)
-	missingSB.harness.instances[0]._superblock = nil
-	missingAPs := newTestMgmtSvc(nil)
-	missingAPs.harness.instances[0].msClient.cfg.AccessPoints = nil
+	localhost := common.LocalhostCtrlAddr()
 
 	for name, tc := range map[string]struct {
-		mgmtSvc *mgmtSvc
 		req     *mgmtpb.LeaderQueryReq
 		expResp *mgmtpb.LeaderQueryResp
 		expErr  error
@@ -77,26 +74,11 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 			},
 			expErr: errors.New("wrong system"),
 		},
-		"no i/o servers": {
-			mgmtSvc: newMgmtSvc(NewIOServerHarness(nil), nil, nil),
-			req:     &mgmtpb.LeaderQueryReq{},
-			expErr:  errors.New("no I/O servers"),
-		},
-		"missing superblock": {
-			mgmtSvc: missingSB,
-			req:     &mgmtpb.LeaderQueryReq{},
-			expErr:  errors.New("no I/O superblock"),
-		},
-		"fail to get current leader address": {
-			mgmtSvc: missingAPs,
-			req:     &mgmtpb.LeaderQueryReq{},
-			expErr:  errors.New("current leader address"),
-		},
 		"successful query": {
-			req: &mgmtpb.LeaderQueryReq{},
+			req: &mgmtpb.LeaderQueryReq{System: build.DefaultSystemName},
 			expResp: &mgmtpb.LeaderQueryResp{
-				CurrentLeader: "localhost",
-				Replicas:      []string{"localhost"},
+				CurrentLeader: localhost.String(),
+				Replicas:      []string{localhost.String()},
 			},
 		},
 	} {
@@ -104,11 +86,25 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			if tc.mgmtSvc == nil {
-				tc.mgmtSvc = newTestMgmtSvc(log)
+			mgmtSvc := newTestMgmtSvc(t, log)
+			db, cleanup := system.TestDatabase(t, log)
+			defer cleanup()
+			mgmtSvc.sysdb = db
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if err := db.Start(ctx); err != nil {
+				t.Fatal(err)
 			}
 
-			gotResp, gotErr := tc.mgmtSvc.LeaderQuery(context.TODO(), tc.req)
+			// wait for the bootstrap to finish
+			for {
+				if db.IsLeader() {
+					break
+				}
+			}
+
+			gotResp, gotErr := mgmtSvc.LeaderQuery(context.TODO(), tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -128,10 +124,7 @@ func checkUnorderedRankResults(t *testing.T, expResults, gotResults []*mgmtpb.Ra
 	t.Helper()
 
 	isMsgField := func(path cmp.Path) bool {
-		if path.Last().String() == ".Msg" {
-			return true
-		}
-		return false
+		return path.Last().String() == ".Msg"
 	}
 	opts := append(common.DefaultCmpOpts(),
 		cmp.FilterPath(isMsgField, cmp.Ignore()))
@@ -458,10 +451,7 @@ func TestServer_MgmtSvc_StopRanks(t *testing.T) {
 			// RankResult.Msg generation is tested in
 			// TestServer_MgmtSvc_DrespToRankResult unit tests
 			isMsgField := func(path cmp.Path) bool {
-				if path.Last().String() == ".Msg" {
-					return true
-				}
-				return false
+				return path.Last().String() == ".Msg"
 			}
 			opts := append(common.DefaultCmpOpts(),
 				cmp.FilterPath(isMsgField, cmp.Ignore()))
@@ -803,10 +793,7 @@ func TestServer_MgmtSvc_ResetFormatRanks(t *testing.T) {
 			// RankResult.Msg generation is tested in
 			// TestServer_MgmtSvc_DrespToRankResult unit tests
 			isMsgField := func(path cmp.Path) bool {
-				if path.Last().String() == ".Msg" {
-					return true
-				}
-				return false
+				return path.Last().String() == ".Msg"
 			}
 			opts := append(common.DefaultCmpOpts(),
 				cmp.FilterPath(isMsgField, cmp.Ignore()))
@@ -914,7 +901,10 @@ func TestServer_MgmtSvc_StartRanks(t *testing.T) {
 
 					// set instance runner started and ready
 					ch := make(chan error, 1)
-					s.runner.Start(context.TODO(), ch)
+					if err := s.runner.Start(context.TODO(), ch); err != nil {
+						t.Logf("failed to start runner: %s", err)
+						return
+					}
 					<-ch
 					s.ready.SetTrue()
 				}(srv, tc.startFails)
@@ -936,10 +926,7 @@ func TestServer_MgmtSvc_StartRanks(t *testing.T) {
 			// RankResult.Msg generation is tested in
 			// TestServer_MgmtSvc_DrespToRankResult unit tests
 			isMsgField := func(path cmp.Path) bool {
-				if path.Last().String() == ".Msg" {
-					return true
-				}
-				return false
+				return path.Last().String() == ".Msg"
 			}
 			opts := append(common.DefaultCmpOpts(),
 				cmp.FilterPath(isMsgField, cmp.Ignore()))
@@ -1006,17 +993,17 @@ func TestServer_MgmtSvc_getPeerListenAddr(t *testing.T) {
 func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mgmtSvc          *mgmtSvc
-		clientNetworkCfg *ClientNetworkCfg
+		clientNetworkCfg *config.ClientNetworkCfg
 		req              *mgmtpb.GetAttachInfoReq
 		expResp          *mgmtpb.GetAttachInfoResp
 	}{
 		"Server uses verbs + Infiniband": {
-			clientNetworkCfg: &ClientNetworkCfg{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: netdetect.Infiniband},
+			clientNetworkCfg: &config.ClientNetworkCfg{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: netdetect.Infiniband},
 			req:              &mgmtpb.GetAttachInfoReq{},
 			expResp:          &mgmtpb.GetAttachInfoResp{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: netdetect.Infiniband},
 		},
 		"Server uses sockets + Ethernet": {
-			clientNetworkCfg: &ClientNetworkCfg{Provider: "ofi+sockets", CrtCtxShareAddr: 0, CrtTimeout: 5, NetDevClass: netdetect.Ether},
+			clientNetworkCfg: &config.ClientNetworkCfg{Provider: "ofi+sockets", CrtCtxShareAddr: 0, CrtTimeout: 5, NetDevClass: netdetect.Ether},
 			req:              &mgmtpb.GetAttachInfoReq{},
 			expResp:          &mgmtpb.GetAttachInfoResp{Provider: "ofi+sockets", CrtCtxShareAddr: 0, CrtTimeout: 5, NetDevClass: netdetect.Ether},
 		},
@@ -1037,7 +1024,8 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			rb, _ := proto.Marshal(&mgmtpb.GetAttachInfoResp{})
 			cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, nil)
 			srv.setDrpcClient(newMockDrpcClient(cfg))
-			tc.mgmtSvc = newMgmtSvc(harness, nil, tc.clientNetworkCfg)
+			tc.mgmtSvc = newMgmtSvc(harness, nil, system.MockDatabase(t, log))
+			tc.mgmtSvc.clientNetworkCfg = tc.clientNetworkCfg
 			gotResp, gotErr := tc.mgmtSvc.GetAttachInfo(context.TODO(), tc.req)
 			if gotErr != nil {
 				t.Fatalf("unexpected error: %+v\n", gotErr)

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -241,13 +241,20 @@ func parseBracketedHostList(input, rangeSep, rangeOp string, nameOptional bool) 
 		for _, hr := range ranges {
 			hr.prefix = prefix
 			hr.suffix = suffix
-			if err := hl.pushRange(hr); err != nil {
-				return nil, err
-			}
+			hl.pushRange(hr)
 		}
 	}
 
 	return hl, nil
+}
+
+// MustCreate is like Create but will panic on error.
+func MustCreate(stringHosts string) *HostList {
+	hl, err := Create(stringHosts)
+	if err != nil {
+		panic(err)
+	}
+	return hl
 }
 
 // Create creates a new HostList from the supplied string representation.
@@ -336,7 +343,8 @@ func (hl *HostList) Push(stringHosts string) error {
 		return err
 	}
 
-	return hl.PushList(other)
+	hl.PushList(other)
+	return nil
 }
 
 // PushHost adds a single host to this HostList.
@@ -350,7 +358,7 @@ func (hl *HostList) PushHost(stringHost string) error {
 	defer hl.Unlock()
 
 	if hn.hasNumber {
-		return hl.pushRange(&hostRange{
+		hl.pushRange(&hostRange{
 			prefix:  hn.prefix,
 			suffix:  hn.suffix,
 			lo:      hn.number,
@@ -358,43 +366,66 @@ func (hl *HostList) PushHost(stringHost string) error {
 			width:   hn.width,
 			isRange: true,
 		})
+		return nil
 	}
 
-	return hl.pushRange(&hostRange{
+	hl.pushRange(&hostRange{
 		prefix: stringHost,
 	})
+	return nil
 }
 
-func (hl *HostList) pushRange(hr *hostRange) error {
+func (hl *HostList) pushRange(hr *hostRange) {
 	if len(hl.ranges) > 0 {
 		tail := hl.ranges[len(hl.ranges)-1]
 		if tail.canAppend(hr) {
 			tail.hi = hr.hi
 			hl.hostCount += hr.count()
-			return nil
+			return
 		}
 	}
 
 	hl.ranges = append(hl.ranges, hr)
 	hl.hostCount += hr.count()
-
-	return nil
 }
 
-// PushList adds the supplied HostList onto this HostList.
-func (hl *HostList) PushList(other *HostList) error {
+// ReplaceList replaces this HostList's contents with the supplied HostList.
+func (hl *HostList) ReplaceList(other *HostList) {
+	if other == nil {
+		return
+	}
+
 	hl.Lock()
 	defer hl.Unlock()
 	other.RLock()
 	defer other.RUnlock()
 
+	hl.ranges = nil
+	hl.hostCount = 0
+	hl.pushList(other)
+}
+
+func (hl *HostList) pushList(other *HostList) {
 	for _, hr := range other.ranges {
-		if err := hl.pushRange(hr); err != nil {
-			return err
-		}
+		// Make copies of the ranges to ensure that they are independent.
+		newRange := new(hostRange)
+		*newRange = *hr
+		hl.pushRange(newRange)
+	}
+}
+
+// PushList adds the supplied HostList onto this HostList.
+func (hl *HostList) PushList(other *HostList) {
+	if other == nil {
+		return
 	}
 
-	return nil
+	hl.Lock()
+	defer hl.Unlock()
+	other.RLock()
+	defer other.RUnlock()
+
+	hl.pushList(other)
 }
 
 func fmtRangeHost(hr *hostRange, num uint) string {

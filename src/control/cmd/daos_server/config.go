@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@
 package main
 
 import (
-	"github.com/daos-stack/daos/src/control/server"
+	"github.com/daos-stack/daos/src/control/server/config"
 )
 
 type cfgLoader interface {
@@ -37,7 +37,7 @@ type cliOverrider interface {
 }
 
 type cfgCmd struct {
-	config *server.Configuration
+	config *config.Server
 }
 
 func (c *cfgCmd) configPath() string {
@@ -55,7 +55,7 @@ func (c *cfgCmd) loadConfig(cfgPath string) error {
 		return nil
 	}
 
-	c.config = server.NewConfiguration()
+	c.config = config.DefaultServer()
 	if err := c.config.SetPath(cfgPath); err != nil {
 		return err
 	}

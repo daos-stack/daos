@@ -36,6 +36,7 @@ message SystemMember {
 	uint32 state = 4;
 	// ancillary info e.g. error msg or reason for state change
 	string info = 5;
+	string faultDomain = 6;
 }
 
 // RankResult is a generic result for a system operation on a rank.
