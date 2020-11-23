@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015, 2016 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@
 
 int
 daos_pool_connect(const uuid_t uuid, const char *grp,
-		  const d_rank_list_t *svc, unsigned int flags,
+		  unsigned int flags,
 		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
 {
 	daos_pool_connect_t	*args;
@@ -47,7 +47,6 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
 
 	args = dc_task_get_args(task);
 	args->grp		= grp;
-	args->svc		= svc;
 	args->flags		= flags;
 	args->poh		= poh;
 	args->info		= info;
@@ -277,8 +276,7 @@ daos_pool_stop_svc(daos_handle_t poh, daos_event_t *ev)
 }
 
 int
-daos_pool_evict(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
-		daos_event_t *ev)
+daos_pool_evict(const uuid_t uuid, const char *grp, daos_event_t *ev)
 {
 	daos_pool_evict_t       *args;
 	tse_task_t              *task;
@@ -294,7 +292,6 @@ daos_pool_evict(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
 
 	args = dc_task_get_args(task);
 	args->grp       = grp;
-	args->svc       = (d_rank_list_t *)svc;
 	uuid_copy((unsigned char *)args->uuid, uuid);
 
 	return dc_task_schedule(task, true);
