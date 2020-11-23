@@ -490,26 +490,45 @@ class TestPool(TestDaosApiBase):
             "Rebuild %s detected", "start" if to_start else "completion")
 
     @fail_on(DaosApiError)
-    def start_rebuild(self, ranks, daos_log):
-        """Kill the specific server ranks using this pool.
+    def start_rebuild(self, ranks, daos_log, use_kill=False):
+        """Kill/Stop the specific server ranks using this pool.
 
         Args:
             ranks (list): a list of daos server ranks (int) to kill
             daos_log (DaosLog): object for logging messages
+            use_kill (bool, optional): Use 'kill' to kill servers
 
         Returns:
-            bool: True if the server ranks have been killed and the ranks have
-            been excluded from the pool; False if the pool is undefined
+            bool: True if the server ranks have been killed/stopped and the
+            ranks have been excluded from the pool; False otherwise.
 
         """
         msg = "Killing DAOS ranks {} from server group {}".format(
             ranks, self.name.value)
         self.log.info(msg)
         daos_log.info(msg)
-        for rank in ranks:
-            server = DaosServer(self.context, self.name.value, rank)
-            self._call_method(server.kill, {"force": 1})
-        return self.exclude(ranks, daos_log)
+        
+        if use_kill:
+            # Stop desired ranks using kill
+            for rank in ranks:
+                server = DaosServer(self.context, self.name.value, rank)
+                self._call_method(server.kill, {"force": 1})
+            return True
+
+        elif self.control_method.value == self.USE_DMG and self.dmg:
+            # Stop desired ranks using dmg
+            self.dmg.system_stop(ranks=",".join([str(item) for item in ranks]))
+            return True
+
+        elif self.control_method.value == self.USE_DMG:
+            self.log.error("Error: Undefined dmg command")
+
+        else:
+            self.log.error(
+                "Error: Undefined control_method: %s",
+                self.control_method.value)
+
+        return False
 
     @fail_on(DaosApiError)
     def exclude(self, ranks, daos_log):
