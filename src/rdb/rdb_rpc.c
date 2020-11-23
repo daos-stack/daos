@@ -1,4 +1,4 @@
-/**
+/*
  * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,10 +21,12 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
+ * \file
+ *
  * rdb: RPCs
  */
 
-#define D_LOGFAC	DD_FAC(rdb)
+#define D_LOGFAC DD_FAC(rdb)
 
 #include <daos_srv/rdb.h>
 
@@ -37,16 +39,16 @@ crt_proc_msg_requestvote_t(crt_proc_t proc, msg_requestvote_t *p)
 {
 	int rc;
 
-	rc = crt_proc_int32_t(proc, &p->term);
+	rc = crt_proc_int64_t(proc, &p->term);
 	if (rc != 0)
 		return -DER_HG;
 	rc = crt_proc_int32_t(proc, &p->candidate_id);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &p->last_log_idx);
+	rc = crt_proc_int64_t(proc, &p->last_log_idx);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &p->last_log_term);
+	rc = crt_proc_int64_t(proc, &p->last_log_term);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -59,7 +61,7 @@ crt_proc_msg_requestvote_response_t(crt_proc_t proc,
 {
 	int rc;
 
-	rc = crt_proc_int32_t(proc, &p->term);
+	rc = crt_proc_int64_t(proc, &p->term);
 	if (rc != 0)
 		return -DER_HG;
 	rc = crt_proc_int32_t(proc, &p->vote_granted);
@@ -78,10 +80,10 @@ crt_proc_msg_entry_t(crt_proc_t proc, msg_entry_t *p)
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_uint32_t(proc, &p->term);
+	rc = crt_proc_int64_t(proc, &p->term);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_uint32_t(proc, &p->id);
+	rc = crt_proc_int32_t(proc, &p->id);
 	if (rc != 0)
 		return -DER_HG;
 	rc = crt_proc_int32_t(proc, &p->type);
@@ -123,16 +125,16 @@ crt_proc_msg_appendentries_t(crt_proc_t proc, msg_appendentries_t *p)
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &p->term);
+	rc = crt_proc_int64_t(proc, &p->term);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &p->prev_log_idx);
+	rc = crt_proc_int64_t(proc, &p->prev_log_idx);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &p->prev_log_term);
+	rc = crt_proc_int64_t(proc, &p->prev_log_term);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &p->leader_commit);
+	rc = crt_proc_int64_t(proc, &p->leader_commit);
 	if (rc != 0)
 		return -DER_HG;
 	rc = crt_proc_int32_t(proc, &p->n_entries);
@@ -167,16 +169,16 @@ crt_proc_msg_appendentries_response_t(crt_proc_t proc,
 {
 	int rc;
 
-	rc = crt_proc_int32_t(proc, &p->term);
+	rc = crt_proc_int64_t(proc, &p->term);
 	if (rc != 0)
 		return -DER_HG;
 	rc = crt_proc_int32_t(proc, &p->success);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &p->current_idx);
+	rc = crt_proc_int64_t(proc, &p->current_idx);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &p->first_idx);
+	rc = crt_proc_int64_t(proc, &p->first_idx);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -188,13 +190,13 @@ crt_proc_msg_installsnapshot_t(crt_proc_t proc, msg_installsnapshot_t *p)
 {
 	int rc;
 
-	rc = crt_proc_int32_t(proc, &p->term);
+	rc = crt_proc_int64_t(proc, &p->term);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &p->last_idx);
+	rc = crt_proc_int64_t(proc, &p->last_idx);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &p->last_term);
+	rc = crt_proc_int64_t(proc, &p->last_term);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -207,10 +209,10 @@ crt_proc_msg_installsnapshot_response_t(crt_proc_t proc,
 {
 	int rc;
 
-	rc = crt_proc_int32_t(proc, &p->term);
+	rc = crt_proc_int64_t(proc, &p->term);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &p->last_idx);
+	rc = crt_proc_int64_t(proc, &p->last_idx);
 	if (rc != 0)
 		return -DER_HG;
 	rc = crt_proc_int32_t(proc, &p->complete);

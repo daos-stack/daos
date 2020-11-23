@@ -450,7 +450,7 @@ plt_spare_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 	md.omd_ver = *po_ver;
 	*spare_cnt = pl_obj_find_rebuild(pl_map, &md, NULL, *po_ver,
 					 spare_tgt_ranks, shard_ids,
-					 spare_max_nr, -1);
+					 spare_max_nr);
 	D_PRINT("spare_cnt %d for version %d -\n", *spare_cnt, *po_ver);
 	for (i = 0; i < *spare_cnt; i++)
 		D_PRINT("shard %d, spare target rank %d\n",
@@ -567,9 +567,8 @@ plt_reint_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 	D_ASSERT(pl_map != NULL);
 	dc_obj_fetch_md(oid, &md);
 	md.omd_ver = *po_ver;
-	rc = pl_obj_find_reint(pl_map, &md, NULL, *po_ver,
-					 spare_tgt_ranks, shard_ids,
-					 spare_max_nr, -1);
+	rc = pl_obj_find_reint(pl_map, &md, NULL, *po_ver, spare_tgt_ranks,
+			       shard_ids, spare_max_nr);
 
 	D_ASSERT(rc >= 0);
 	*spare_cnt = rc;

@@ -382,6 +382,15 @@ crt_provider_is_block_mode(int provider)
 	return true;
 }
 
+bool
+crt_provider_is_contig_ep(int provider)
+{
+	if (provider == CRT_NA_OFI_PSM2)
+		return false;
+
+	return crt_na_dict[provider].nad_port_bind;
+}
+
 static bool
 crt_provider_is_sep(int provider)
 {
@@ -393,31 +402,32 @@ crt_get_info_string(char **string, int ctx_idx)
 {
 	int	 provider;
 	char	*provider_str;
-	int	 port;
+	int	 start_port;
 	char	*domain_str;
 	char	*ip_str;
 
 	provider = crt_gdata.cg_na_plugin;
 
 	provider_str = crt_provider_name_get(provider);
-	port = crt_provider_ctx0_port_get(provider);
+	start_port = crt_provider_ctx0_port_get(provider);
 	domain_str = crt_provider_domain_get(provider);
 	ip_str = crt_provider_ip_str_get(provider);
 
-	if (!crt_na_dict[provider].nad_port_bind) {
+	if (provider == CRT_NA_SM) {
 		D_ASPRINTF(*string, "%s://", provider_str);
-	} else {
-		/* If OFI_PORT is set, context0 gets it */
-		if (ctx_idx == 0 && port != -1) {
-			D_ASPRINTF(*string, "%s://%s/%s:%d",
-				   provider_str, domain_str, ip_str, port);
-		} else {
-			/* All other contexts get random port */
-			D_ASPRINTF(*string, "%s://%s/%s",
-				   provider_str, domain_str, ip_str);
-		}
+		D_GOTO(out, 0);
 	}
 
+	if (crt_provider_is_contig_ep(provider) && start_port != -1) {
+		D_ASPRINTF(*string, "%s://%s/%s:%d",
+			   provider_str, domain_str, ip_str,
+			   start_port + ctx_idx);
+	} else {
+		D_ASPRINTF(*string, "%s://%s/%s",
+			   provider_str, domain_str, ip_str);
+	}
+
+out:
 	if (*string == NULL)
 		return -DER_NOMEM;
 
@@ -557,14 +567,13 @@ out:
 }
 
 int
-crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
+crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int provider, int idx)
 {
 	struct crt_context	*crt_ctx;
 	hg_class_t		*hg_class = NULL;
 	hg_context_t		*hg_context = NULL;
 	hg_return_t		 hg_ret;
 	bool			 sep_mode;
-	int			 provider;
 	int			 rc = 0;
 
 	D_ASSERT(hg_ctx != NULL);
@@ -573,7 +582,6 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 	D_DEBUG(DB_NET, "crt_gdata.cg_sep_mode %d, crt_is_service() %d\n",
 		crt_gdata.cg_sep_mode, crt_is_service());
 
-	provider = crt_gdata.cg_na_plugin;
 	sep_mode = crt_provider_is_sep(provider);
 
 	/* In SEP mode all contexts share same hg_class*/
@@ -1021,10 +1029,14 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 				rpc_priv->crp_output_got = 1;
 				rc = rpc_priv->crp_reply_hdr.cch_rc;
 			} else {
-				RPC_ERROR(rpc_priv,
-					  "HG_Get_output failed, hg_ret: %d\n",
-					  hg_ret);
-				rc = -DER_HG;
+				if (hg_ret != HG_NOMEM) {
+					RPC_ERROR(rpc_priv,
+						  "HG_Get_output failed, "
+						  "hg_ret: %d\n", hg_ret);
+					rc = -DER_HG;
+				} else {
+					rc = -DER_NOMEM;
+				}
 			}
 		}
 	}
@@ -1034,8 +1046,8 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	crt_cbinfo.cci_rc = rc;
 
 	if (crt_cbinfo.cci_rc != 0)
-		RPC_ERROR(rpc_priv, "RPC failed; rc: %d\n",
-			  crt_cbinfo.cci_rc);
+		RPC_ERROR(rpc_priv, "RPC failed; rc: " DF_RC "\n",
+			  DP_RC(crt_cbinfo.cci_rc));
 
 	RPC_TRACE(DB_TRACE, rpc_priv,
 		  "Invoking RPC callback (rank %d tag %d) rc: " DF_RC "\n",

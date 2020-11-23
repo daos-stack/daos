@@ -70,14 +70,12 @@ class DaosCommand(DaosCommandBase):
             r"Highest Aggregated Epoch:\s+(\d+)",
     }
 
-    def pool_query(self, pool, sys_name=None, svc=None, sys=None):
+    def pool_query(self, pool, sys_name=None, sys=None):
         """Query a pool.
 
         Args:
             pool (str): pool UUID
             sys_name (str, optional): DAOS system name context for servers.
-                Defaults to None.
-            svc (str, optional): the pool service replicas, e.g. '1,2,3'.
                 Defaults to None.
             sys (str, optional): [description]. Defaults to None.
 
@@ -90,9 +88,9 @@ class DaosCommand(DaosCommandBase):
 
         """
         return self._get_result(
-            ("pool", "query"), pool=pool, sys_name=sys_name, svc=svc, sys=sys)
+            ("pool", "query"), pool=pool, sys_name=sys_name, sys=sys)
 
-    def container_create(self, pool, sys_name=None, svc=None, cont=None,
+    def container_create(self, pool, sys_name=None, cont=None,
                          path=None, cont_type=None, oclass=None,
                          chunk_size=None, properties=None, acl_file=None):
         # pylint: disable=too-many-arguments
@@ -101,8 +99,6 @@ class DaosCommand(DaosCommandBase):
         Args:
             pool (str): UUID of the pool in which to create the container
             sys_name (str, optional):  DAOS system name context for servers.
-                Defaults to None.
-            svc (str, optional): the pool service replicas, e.g. '1,2,3'.
                 Defaults to None.
             cont (str, optional): container UUID. Defaults to None.
             path (str, optional): container namespace path. Defaults to None.
@@ -125,16 +121,15 @@ class DaosCommand(DaosCommandBase):
 
         """
         return self._get_result(
-            ("container", "create"), pool=pool, sys_name=sys_name, svc=svc,
+            ("container", "create"), pool=pool, sys_name=sys_name,
             cont=cont, path=path, type=cont_type, oclass=oclass,
             chunk_size=chunk_size, properties=properties, acl_file=acl_file)
 
-    def container_destroy(self, pool, svc, cont, force=None, sys_name=None):
+    def container_destroy(self, pool, cont, force=None, sys_name=None):
         """Destroy a container.
 
         Args:
             pool (str): UUID of the pool in which to create the container
-            svc (str): the pool service replicas, e.g. '1,2,3'.
             cont (str): container UUID.
             force (bool, optional): Force the container destroy. Defaults to
                 None.
@@ -150,16 +145,15 @@ class DaosCommand(DaosCommandBase):
 
         """
         return self._get_result(
-            ("container", "destroy"), pool=pool, sys_name=sys_name, svc=svc,
+            ("container", "destroy"), pool=pool, sys_name=sys_name,
             cont=cont, force=force)
 
-    def container_get_acl(self, pool, svc, cont,
+    def container_get_acl(self, pool, cont,
                           verbose=False, outfile=None):
         """Get the ACL for a given container.
 
         Args:
             pool (str): Pool UUID
-            svc (str): Service replicas
             cont (str): Container for which to get the ACL.
             verbose (bool, optional): Verbose mode.
             outfile (str, optional): Write ACL to file.
@@ -173,15 +167,14 @@ class DaosCommand(DaosCommandBase):
 
         """
         return self._get_result(
-            ("container", "get-acl"), pool=pool, svc=svc, cont=cont,
+            ("container", "get-acl"), pool=pool, cont=cont,
             verbose=verbose, outfile=outfile)
 
-    def container_delete_acl(self, pool, svc, cont, principal):
+    def container_delete_acl(self, pool, cont, principal):
         """Delete an entry for a given principal in an existing container ACL.
 
         Args:
             pool (str): Pool UUID
-            svc (str): Service replicas
             cont (str): Container for which to get the ACL.
             principal (str): principal portion of the ACL.
 
@@ -194,15 +187,14 @@ class DaosCommand(DaosCommandBase):
 
         """
         return self._get_result(
-            ("container", "delete-acl"), pool=pool, svc=svc, cont=cont,
+            ("container", "delete-acl"), pool=pool, cont=cont,
             principal=principal)
 
-    def container_overwrite_acl(self, pool, svc, cont, acl_file):
+    def container_overwrite_acl(self, pool, cont, acl_file):
         """Overwrite the ACL for a given container.
 
         Args:
             pool (str): Pool UUID
-            svc (str): Service replicas
             cont (str): Container for which to get the ACL.
             acl_file (str): input file containing ACL
 
@@ -215,15 +207,14 @@ class DaosCommand(DaosCommandBase):
 
         """
         return self._get_result(
-            ("container", "overwrite-acl"), pool=pool, svc=svc, cont=cont,
+            ("container", "overwrite-acl"), pool=pool, cont=cont,
             acl_file=acl_file)
 
-    def container_update_acl(self, pool, svc, cont, entry=None, acl_file=None):
+    def container_update_acl(self, pool, cont, entry=None, acl_file=None):
         """Add or update the ACL entries for a given container.
 
         Args:
             pool (str): Pool UUID
-            svc (str): Service replicas
             cont (str): Container for which to get the ACL.
             entry (bool, optional): Add or modify a single ACL entry
             acl_file (str, optional): Input file containing ACL
@@ -237,16 +228,14 @@ class DaosCommand(DaosCommandBase):
 
         """
         return self._get_result(
-            ("container", "update-acl"), pool=pool, svc=svc, cont=cont,
+            ("container", "update-acl"), pool=pool, cont=cont,
             entry=entry, acl_file=acl_file)
 
-    def pool_list_cont(self, pool, svc, sys_name=None):
+    def pool_list_cont(self, pool, sys_name=None):
         """List containers in the given pool.
 
         Args:
             pool (str): Pool UUID
-            svc (str): Service replicas. If there are multiple, numbers must be
-                separated by comma like 1,2,3
             sys_name (str, optional): System name. Defaults to None.
 
         Returns:
@@ -257,7 +246,7 @@ class DaosCommand(DaosCommandBase):
 
         """
         self._get_result(
-            ("pool", "list-containers"), pool=pool, svc=svc, sys_name=sys_name)
+            ("pool", "list-containers"), pool=pool, sys_name=sys_name)
         # Sample output.
         # c8bfc7c9-cb19-4574-bae2-af4046d24b58
         # 182347e4-08ce-4069-b5e2-0dd04406dffd
@@ -266,14 +255,13 @@ class DaosCommand(DaosCommandBase):
             data["uuids"] = re.findall(r"([0-9a-f-]{36})", self.result.stdout)
         return data
 
-    def pool_set_attr(self, pool, attr, value, svc):
+    def pool_set_attr(self, pool, attr, value):
         """Set pool attribute.
 
         Args:
             pool (str): Pool UUID.
             attr (str): Attribute name.
             value (str): Attribute value
-            svc (str): Service replicas.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -284,15 +272,14 @@ class DaosCommand(DaosCommandBase):
 
         """
         return self._get_result(
-            ("pool", "set-attr"), pool=pool, svc=svc, attr=attr, value=value)
+            ("pool", "set-attr"), pool=pool, attr=attr, value=value)
 
-    def pool_get_attr(self, pool, attr, svc):
+    def pool_get_attr(self, pool, attr):
         """Set pool attribute.
 
         Args:
             pool (str): Pool UUID.
             attr (str): Pool UUID.
-            svc (str): Service replicas.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -303,14 +290,13 @@ class DaosCommand(DaosCommandBase):
 
         """
         return self._get_result(
-            ("pool", "get-attr"), pool=pool, svc=svc, attr=attr)
+            ("pool", "get-attr"), pool=pool, attr=attr)
 
-    def pool_list_attrs(self, pool, svc):
+    def pool_list_attrs(self, pool):
         """List pool attributes.
 
         Args:
             pool (str): Pool UUID.
-            svc (str): Service replicas.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -320,16 +306,14 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos pool list-attrs command fails.
 
         """
-        return self._get_result(("pool", "list-attrs"), pool=pool, svc=svc)
+        return self._get_result(("pool", "list-attrs"), pool=pool)
 
-    def container_query(self, pool, cont, svc=None, sys_name=None):
+    def container_query(self, pool, cont, sys_name=None):
         """Query a container.
 
         Args:
             pool (str): Pool UUID.
             cont (str): Container UUID.
-            svc (str, optional): pool service replicas, e.g., '1,2,3'. Defaults
-                to None.
             sys_name (str, optional): DAOS system name context for servers.
                 Defaults to None.
 
@@ -342,10 +326,10 @@ class DaosCommand(DaosCommandBase):
 
         """
         return self._get_result(
-            ("container", "query"), pool=pool, svc=svc, cont=cont,
+            ("container", "query"), pool=pool, cont=cont,
             sys_name=sys_name)
 
-    def container_set_prop(self, pool, cont, prop, value, svc=None):
+    def container_set_prop(self, pool, cont, prop, value):
         """Call daos container set-prop.
 
         Args:
@@ -353,8 +337,6 @@ class DaosCommand(DaosCommandBase):
             cont (str): Container UUID.
             prop (str): Container property-name.
             value (str): Container property-name value to set.
-            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
-                to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -367,16 +349,14 @@ class DaosCommand(DaosCommandBase):
         prop_value = ":".join([prop, value])
         return self._get_result(
             ("container", "set-prop"),
-            pool=pool, svc=svc, cont=cont, prop=prop_value)
+            pool=pool, cont=cont, prop=prop_value)
 
-    def container_get_prop(self, pool, cont, svc=None):
+    def container_get_prop(self, pool, cont):
         """Call daos container get-prop.
 
         Args:
             pool (str): Pool UUID.
             cont (str): Container UUID.
-            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
-                to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -387,9 +367,9 @@ class DaosCommand(DaosCommandBase):
 
         """
         return self._get_result(
-            ("container", "get-prop"), pool=pool, svc=svc, cont=cont)
+            ("container", "get-prop"), pool=pool, cont=cont)
 
-    def container_set_owner(self, pool, cont, user, group, svc=None):
+    def container_set_owner(self, pool, cont, user, group):
         """Call daos container set-owner.
 
         Args:
@@ -397,8 +377,6 @@ class DaosCommand(DaosCommandBase):
             cont (str): Container UUID.
             user (str): New-user who will own the container.
             group (str): New-group who will own the container.
-            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
-                to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -410,10 +388,10 @@ class DaosCommand(DaosCommandBase):
         """
         return self._get_result(
             ("container", "set-owner"),
-            pool=pool, svc=svc, cont=cont, user=user, group=group)
+            pool=pool, cont=cont, user=user, group=group)
 
     def container_set_attr(
-            self, pool, cont, attr, val, svc=None, sys_name=None):
+            self, pool, cont, attr, val, sys_name=None):
         """Call daos container set-attr.
 
         Args:
@@ -421,8 +399,6 @@ class DaosCommand(DaosCommandBase):
             cont (str): Container UUID.
             attr (str): Attribute name.
             val (str): Attribute value.
-            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
-                to None.
             sys_name (str, optional): DAOS system name context for servers.
                 Defaults to None.
 
@@ -435,18 +411,16 @@ class DaosCommand(DaosCommandBase):
 
         """
         return self._get_result(
-            ("container", "set-attr"), pool=pool, svc=svc, cont=cont,
+            ("container", "set-attr"), pool=pool, cont=cont,
             sys_name=sys_name, attr=attr, value=val)
 
-    def container_get_attr(self, pool, cont, attr, svc=None, sys_name=None):
+    def container_get_attr(self, pool, cont, attr, sys_name=None):
         """Call daos container get-attr.
 
         Args:
             pool (str): Pool UUID.
             cont (str): Container UUID.
             attr (str): Attribute name.
-            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
-                to None.
             sys_name (str, optional): DAOS system name context for servers.
                 Defaults to None.
 
@@ -459,7 +433,7 @@ class DaosCommand(DaosCommandBase):
 
         """
         self._get_result(
-            ("container", "get-attr"), pool=pool, svc=svc, cont=cont,
+            ("container", "get-attr"), pool=pool, cont=cont,
             sys_name=sys_name, attr=attr)
 
         # Sample output.
@@ -474,14 +448,12 @@ class DaosCommand(DaosCommandBase):
 
         return data
 
-    def container_list_attrs(self, pool, cont, svc=None, sys_name=None):
+    def container_list_attrs(self, pool, cont, sys_name=None):
         """Call daos container list-attrs.
 
         Args:
             pool (str): Pool UUID.
             cont (str): Container UUID.
-            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
-                to None.
             sys_name (str, optional): DAOS system name context for servers.
                 Defaults to None.
 
@@ -493,7 +465,7 @@ class DaosCommand(DaosCommandBase):
 
         """
         self._get_result(
-            ("container", "list-attrs"), pool=pool, svc=svc, cont=cont,
+            ("container", "list-attrs"), pool=pool, cont=cont,
             sys_name=sys_name)
 
         # Sample output.
@@ -506,7 +478,7 @@ class DaosCommand(DaosCommandBase):
         return {"attrs": match}
 
     def container_create_snap(self, pool, cont, snap_name=None, epoch=None,
-                              svc=None, sys_name=None):
+                              sys_name=None):
         """Call daos container create-snap.
 
         Args:
@@ -514,8 +486,6 @@ class DaosCommand(DaosCommandBase):
             cont (str): Container UUID.
             snap_name (str, optional): Snapshot name. Defaults to None.
             epoch (str, optional): Epoch number. Defaults to None.
-            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
-                to None.
             sys_name (str, optional): DAOS system name context for servers.
                 Defaults to None.
 
@@ -527,7 +497,7 @@ class DaosCommand(DaosCommandBase):
 
         """
         self._get_result(
-            ("container", "create-snap"), pool=pool, svc=svc, cont=cont,
+            ("container", "create-snap"), pool=pool, cont=cont,
             sys_name=sys_name, snap=snap_name, epc=epoch)
 
         # Sample create-snap output.
@@ -541,7 +511,7 @@ class DaosCommand(DaosCommandBase):
         return data
 
     def container_destroy_snap(self, pool, cont, snap_name=None, epc=None,
-                               svc=None, sys_name=None, epcrange=None):
+                               sys_name=None, epcrange=None):
         """Call daos container destroy-snap.
 
         Args:
@@ -550,8 +520,6 @@ class DaosCommand(DaosCommandBase):
             snap_name (str, optional): Snapshot name. Defaults to None.
             epc (str, optional): Epoch value of the snapshot to be destroyed.
                 Defaults to None.
-            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
-                to None.
             sys_name (str, optional): DAOS system name context for servers.
                 Defaults to None.
             epcrange (str, optional): Epoch range in the format "<start>-<end>".
@@ -567,29 +535,28 @@ class DaosCommand(DaosCommandBase):
         """
         kwargs = {
             "pool": pool,
-            "svc": svc,
             "cont": cont,
             "sys_name": sys_name,
             "snap": snap_name,
             "epc": epc,
             "epcrange": epcrange
         }
+
         return self._get_result(("container", "destroy-snap"), **kwargs)
 
-    def container_list_snaps(self, pool, cont, svc=None):
+    def container_list_snaps(self, pool, cont):
         """List snapshot in a container.
 
         Args:
             pool (str): Pool UUID.
             cont (str): Container UUID.
-            svc (str): Service replicas. Defaults to None.
 
         Returns:
             dict: Dictionary that contains epoch values in key "epochs". Value
                 is a list of string.
         """
         self._get_result(
-            ("container", "list-snaps"), pool=pool, cont=cont, svc=svc)
+            ("container", "list-snaps"), pool=pool, cont=cont)
 
         # Sample container list-snaps output.
         # Container's snapshots :
@@ -600,13 +567,11 @@ class DaosCommand(DaosCommandBase):
             data["epochs"] = match
         return data
 
-    def object_query(self, pool, svc, cont, oid, sys_name=None):
+    def object_query(self, pool, cont, oid, sys_name=None):
         """Call daos object query and return its output with a dictionary.
 
         Args:
             pool (str): Pool UUID
-            svc (str): Service replicas. If there are multiple, numbers must be
-                separated by comma like 1,2,3
             cont (str): Container UUID
             oid (str): oid hi lo value in the format <hi>.<lo>
             sys_name (str, optional): System name. Defaults to None.
@@ -623,7 +588,7 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos object query command fails.
         """
         self._get_result(
-            ("object", "query"), pool=pool, svc=svc, cont=cont,
+            ("object", "query"), pool=pool, cont=cont,
             oid=oid, sys_name=sys_name)
 
         # Sample daos object query output.
