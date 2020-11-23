@@ -1839,8 +1839,6 @@ exit:
  * IV UPDATE codebase
  **************************************************************/
 
-/***** Question: Should there be version checks in these handlers ?? */
-
 static void
 crt_hdlr_iv_sync_aux(void *arg)
 {
@@ -1874,7 +1872,7 @@ crt_hdlr_iv_sync_aux(void *arg)
 	ivns_internal = crt_ivns_internal_lookup(&ivns_id);
 
 	/*
-	 * In some use-cases sync can arrive to a node that hasn't attached
+	 * In some use-cases, sync can arrive to a node that hasn't attached
 	 * iv namespace yet. Treat such errors as fatal if the flag is set.
 	 */
 	if (ivns_internal == NULL) {
@@ -2926,9 +2924,8 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 	update_cb_info->uci_bulk_hdl = cb_info->buc_bulk_hdl;
 
 	if (update_rc == -DER_IVCB_FORWARD) {
-		/* Forward request to the parent    */
-
 		/*
+		 * Forward request to the parent
 		 * Get group version to associate with next_rank.
 		 * Pass it down to crt_ivu_rpc_issue
 		 */
@@ -3173,6 +3170,8 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 			/*
 			 * MUST use version number prior to rpc version
 			 * check get next_rank to send to.
+			 * Otherwise, we could miss a version change that
+			 * happens between these 2 points.
 			 */
 			rc = crt_iv_parent_get(ivns_internal,
 					input->ivu_root_node, &next_rank);
@@ -3345,6 +3344,7 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 	void				*priv;
 	int				 rc = 0;
 	uint32_t			 grp_ver;
+	uint32_t			 grp_ver2;
 
 	CRT_ENTRY();
 	rc = check_sync_type(&sync_type);
@@ -3373,9 +3373,11 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 	}
 
 	/* Need to get a version number associated with root_rank. */
+	D_RWLOCK_RDLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	grp_ver =  ivns_internal->cii_grp_priv->gp_membs_ver;
 
 	rc = iv_ops->ivo_on_hash(ivns, iv_key, &root_rank);
+	D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	if (rc != 0) {
 		D_ERROR("ivo_on_hash() failed; rc=%d\n", rc);
 		D_GOTO(exit, rc);
@@ -3409,16 +3411,29 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 
 		D_GOTO(exit, rc);
 	} else  if (rc == -DER_IVCB_FORWARD) {
-		/* Send synchronization to parent */
-		/* Need to get a version number associated with next node. */
-		grp_ver =  ivns_internal->cii_grp_priv->gp_membs_ver;
+		/* 
+ 		 * Send synchronization to parent
+		 * Need to get a version number associated with next node.
+		 * Need to compare with previous version.  If not equal,
+		 * then there has been a version change in betwen.
+		 */
+		D_RWLOCK_RDLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
+		grp_ver2 =  ivns_internal->cii_grp_priv->gp_membs_ver;
 
 		rc = get_shortcut_path(ivns_internal, root_rank, shortcut,
 					&next_node);
+		D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 		if (rc != 0)
 			D_GOTO(put, rc);
 
-		/* SAB: Need a check betwen grp_ver and version in rpc */
+		if (grp_ver != grp_ver2) {
+			D_ERROR("Group (%s) version mismatch. "
+				"On Entry: %d:: Changed to:%d\n",
+				ivns_internal->cii_gns.gn_ivns_id.ii_group_name,
+				grp_ver, grp_ver2);
+			D_GOTO(exit, rc = -DER_GRPVER);
+		}
+
 
 		/* comp_cb is only for sync update for now */
 		D_ASSERT(sync_type.ivs_comp_cb == NULL);

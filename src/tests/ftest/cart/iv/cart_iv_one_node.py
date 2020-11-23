@@ -339,8 +339,6 @@ class CartIvOneNodeTest(Test):
             #
             # ******************
             # Invalidate the value
-            #{"operation":"invalidate", "rank":0, "key":(0, 42),
-            #  "sync":"eager_notify"},
             {"operation":"invalidate", "rank":0, "key":(0, 42),
               "sync":"eager_update"},
             #
@@ -363,11 +361,11 @@ class CartIvOneNodeTest(Test):
             ######################
             # Test of verison skew on fetch between rank 0 and rank 1.
             # Make sure we can set version numbers.
-            {"operation":"set_grp_version", "rank":0, "key":(1, 42),
+            {"operation":"set_grp_version", "rank":0, "key":(0, 42),
              "version":"0xdeadc0de", "return_code":0, "expected_value":""},
-            {"operation":"get_grp_version", "rank":0, "key":(1, 42),
+            {"operation":"get_grp_version", "rank":0, "key":(0, 42),
              "return_code":0, "expected_value":"0xdeadc0de"},
-            {"operation":"set_grp_version", "rank":0, "key":(1, 42),
+            {"operation":"set_grp_version", "rank":0, "key":(0, 42),
              "version":"", "return_code":0, "expected_value":""},
             #
             # ******************
@@ -379,14 +377,14 @@ class CartIvOneNodeTest(Test):
             # First, do test for normal failure.
             {"operation":"fetch", "rank":0, "key":(1, 42), "return_code":-1,
              "expected_value":""},
-            {"operation":"set_grp_version", "rank":0, "key":(1, 42),
+            {"operation":"set_grp_version", "rank":0, "key":(0, 42),
              "version":"0xdeadc0de", "return_code":0, "expected_value":""},
 
             {"operation":"fetch", "rank":0, "key":(1, 42),
              "return_code":-1036, "expected_value":""},
             {"operation":"fetch", "rank":1, "key":(0, 42),
              "return_code":-1036, "expected_value":""},
-            {"operation":"set_grp_version", "rank":0, "key":(1, 42),
+            {"operation":"set_grp_version", "rank":0, "key":(0, 42),
              "version":"0x0", "return_code":0, "expected_value":""},
             {"operation":"invalidate", "rank":1, "key":(1, 42)},
             #
@@ -400,7 +398,8 @@ class CartIvOneNodeTest(Test):
             #   that should work.
             # Need to invalidate on both nodes, stale data.
             {"operation":"update", "rank":1, "key":(1, 42), "value":"beans"},
-            {"operation":"set_grp_version", "rank":0, "key":(1, 42), "time":1,
+            {"operation":"set_grp_version", "rank":0, "key":(0, 42), 
+             "time":1,
              "version":"0xc001c001", "return_code":0, "expected_value":""},
             {"operation":"fetch", "rank":0, "key":(1, 42),
              "return_code":0, "expected_value":"beans"},
@@ -419,11 +418,11 @@ class CartIvOneNodeTest(Test):
             # Tests version-check in crt_hdlr_iv_fetch_aux.
             #
             {"operation":"update", "rank":1, "key":(1, 42), "value":"carrot"},
-            {"operation":"set_grp_version", "rank":1, "key":(0, 42), "time":2,
+            {"operation":"set_grp_version", "rank":1, "key":(1, 42), "time":2,
              "version":"0xdeadc0de", "return_code":0, "expected_value":""},
             {"operation":"fetch", "rank":0, "key":(1, 42),
              "return_code":-1036, "expected_value":""},
-            {"operation":"set_grp_version", "rank":1, "key":(0, 42),
+            {"operation":"set_grp_version", "rank":1, "key":(1, 42),
              "version":"0x0", "return_code":0, "expected_value":""},
             {"operation":"invalidate", "rank":1, "key":(1, 42)},
             #
@@ -470,7 +469,7 @@ class CartIvOneNodeTest(Test):
             #   Should return error and no iv variable created.
             # Make sure nothing is left behind on other nodes.
             #
-            {"operation":"set_grp_version", "rank":4, "key":(0, 42),
+            {"operation":"set_grp_version", "rank":4, "key":(4, 42),
              "version":"0xdeadc0de", "return_code":0, "expected_value":""},
             {"operation":"update", "rank":0, "key":(0, 42), "value":"beans",
              "sync":"eager_update", "return_code":-1036 },
@@ -487,7 +486,7 @@ class CartIvOneNodeTest(Test):
              "sync":"eager_notify", "return_code":0},
             {"operation":"fetch", "rank":0, "key":(0, 42),
              "return_code":-1, "expected_value":""},
-            {"operation":"set_grp_version", "rank":4, "key":(0, 42),
+            {"operation":"set_grp_version", "rank":4, "key":(4, 42),
              "version":"0x0", "return_code":0, "expected_value":""},
             {"operation":"fetch", "rank":1, "key":(0, 42),
              "return_code":-1, "expected_value":""},
