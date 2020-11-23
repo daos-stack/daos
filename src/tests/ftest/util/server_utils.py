@@ -332,19 +332,21 @@ class DaosServerManager(SubprocessManager):
         # Get the values for the dmg parameters
         self.dmg.get_params(test)
 
-    def prepare(self, storage=True):
+    def prepare(self, storage=True, config_data=None):
         """Prepare to start daos_server.
 
         Args:
-            storage (bool, optional): whether or not to prepare dspm/nvme
+            storage (bool, optional): whether or not to prepare dcpm/nvme
                 storage. Defaults to True.
+            config_data (dict, optional): dictionary cotaining config yaml data
+                in the form of a daos yaml configuration file.
         """
         self.log.info(
             "<SERVER> Preparing to start daos_server on %s with %s",
             self._hosts, self.manager.command)
 
         # Create the daos_server yaml file
-        self.manager.job.create_yaml_file()
+        self.manager.job.create_yaml_file(config_data)
 
         # Copy certificates
         self.manager.job.copy_certificates(
@@ -485,8 +487,14 @@ class DaosServerManager(SubprocessManager):
 
         Args:
             mode (str): mode to detect using associated pattern.
+                i.e. "normal", "format", "reformat", "discover"
             qty (int, optional): number of pattern ocurrences expected to be
                 detected. If None is provided the method will use self._hosts.
+
+        Raises:
+            ServerFailed: if the server fails to start in the user provided
+                mode or expected quatity of servers to be started is not met.
+
         """
         if qty is None:
             qty = len(self._hosts)
@@ -498,7 +506,7 @@ class DaosServerManager(SubprocessManager):
         except CommandFailure as error:
             self.kill()
             raise ServerFailed(
-                "Failed to start servers before format: {}".format(error))
+                "Failed to start servers in <{}> mode: {}".format(mode, error))
 
     def detect_io_server_start(self):
         """Detect when all the daos_io_servers have started."""
@@ -557,10 +565,10 @@ class DaosServerManager(SubprocessManager):
         if cmd_list:
             pcmd(self._hosts, "; ".join(cmd_list), verbose)
 
-    def start(self):
+    def start(self, config_data=None):
         """Start the server through the job manager."""
         # Prepare the servers
-        self.prepare()
+        self.prepare(config_data)
 
         # Start the servers and wait for them to be ready for storage format
         self.detect_start_mode("format")
