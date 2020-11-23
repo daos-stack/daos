@@ -49,7 +49,7 @@ const (
 	// NetDevAny matches any netdetect network device class
 	NetDevAny = math.MaxUint32
 
-	errNoNuma            = "no numa nodes reported on hosts %s"
+	errNoNuma            = "zero numa nodes reported on hosts %s"
 	errUnsupNetDevClass  = "unsupported net dev class in request: %s"
 	errInsufNumIfaces    = "insufficient matching %s network interfaces, want %d got %d %+v"
 	errInsufNumPmem      = "insufficient number of pmem devices %v, want %d got %d"
@@ -83,56 +83,86 @@ type (
 	}
 )
 
-// ConfigGenerate attempts to automatically detect hardware and generate a DAOS
-// server config file for a set of hosts.
-func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerateResp, error) {
-	req.Log.Debugf("ConfigGenerate called with request %v", req)
-
-	switch req.NetClass {
-	case NetDevAny, nd.Ether, nd.Infiniband:
-	default:
-		return nil, errors.Errorf(errUnsupNetDevClass, nd.DevClassName(req.NetClass))
-	}
-
+func getNetworkParams(ctx context.Context, req ConfigGenerateReq) ([]*HostFabricInterface, *HostFabricSet, *HostErrorsResp, error) {
 	hostErrs, netSet, err := getSingleNetworkSet(ctx, req.Log, req.HostList, req.Client)
 	if err != nil {
-		return &ConfigGenerateResp{
-			HostErrorsResp: *hostErrs,
-		}, err
+		return nil, nil, hostErrs, err
 	}
-	coresPerNuma := int(netSet.HostFabric.CoresPerNuma)
 
 	// number of interface groups returned implies number of selected NUMA
 	// nodes in generated config
 	ifaces, err := checkNetwork(req.Log, req.NetClass, req.NumPmem, netSet)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 
+	return ifaces, netSet, nil, nil
+}
+
+func getStorageParams(ctx context.Context, req ConfigGenerateReq, numNuma int) ([]string, [][]string, *HostErrorsResp, error) {
 	hostErrs, storSet, err := getSingleStorageSet(ctx, req.Log, req.HostList, req.Client)
 	if err != nil {
-		return &ConfigGenerateResp{
-			HostErrorsResp: *hostErrs,
-		}, err
+		return nil, nil, hostErrs, err
 	}
 
-	pmemPaths, bdevLists, err := checkStorage(req.Log, len(ifaces), req.NumNvme, storSet)
+	pmemPaths, bdevLists, err := checkStorage(req.Log, numNuma, req.NumNvme, storSet)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
+	}
+
+	return pmemPaths, bdevLists, nil, nil
+}
+
+func getCPUParams(log logging.Logger, bdevLists [][]string, coresPerNuma int) ([]int, []int, error) {
+	if coresPerNuma < 1 {
+		return nil, nil, errors.Errorf(errInvalNumCores, coresPerNuma)
 	}
 
 	ioNumTgts := make([]int, len(bdevLists))
 	ioNumHlprs := make([]int, len(bdevLists))
-	for idx, bdevLists := range bdevLists {
-		nTgts, nHlprs, err := checkCPUs(req.Log, len(bdevLists), coresPerNuma)
+	for idx, bdevList := range bdevLists {
+		nTgts, nHlprs, err := checkCPUs(log, len(bdevList), coresPerNuma)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		ioNumTgts[idx] = nTgts
 		ioNumHlprs[idx] = nHlprs
 	}
 
-	cfg, err := genConfig(req.AccessPoints, pmemPaths, ifaces, bdevLists, ioNumTgts, ioNumHlprs)
+	return ioNumTgts, ioNumHlprs, nil
+}
+
+// ConfigGenerate attempts to automatically detect hardware and generate a DAOS
+// server config file for a set of hosts.
+func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerateResp, error) {
+	req.Log.Debugf("ConfigGenerate called with request %v", req)
+
+	ifaces, netSet, hostErrs, err := getNetworkParams(ctx, req)
+	if err != nil {
+		if hostErrs == nil {
+			hostErrs = new(HostErrorsResp)
+		}
+
+		return &ConfigGenerateResp{HostErrorsResp: *hostErrs}, err
+	}
+
+	pmemPaths, bdevLists, hostErrs, err := getStorageParams(ctx, req, len(ifaces))
+	if err != nil {
+		if hostErrs == nil {
+			hostErrs = new(HostErrorsResp)
+		}
+
+		return &ConfigGenerateResp{HostErrorsResp: *hostErrs}, err
+	}
+
+	ioNumTgts, ioNumHlprs, err := getCPUParams(req.Log, bdevLists,
+		int(netSet.HostFabric.CoresPerNuma))
+	if err != nil {
+		return nil, err
+	}
+
+	cfg, err := genConfig(req.AccessPoints, pmemPaths, ifaces, bdevLists,
+		ioNumTgts, ioNumHlprs)
 	if err != nil {
 		return nil, err
 	}
@@ -240,24 +270,35 @@ func parseInterfaces(log logging.Logger, reqClass uint32, numPmem int, interface
 	return matching, complete
 }
 
+func defaultIOSrvCfg(idx int) *ioserver.Config {
+	return ioserver.NewConfig().
+		WithTargetCount(defaultTargetCount).
+		WithLogFile(fmt.Sprintf("%s.%d.log", defaultIOSrvLogFile, idx)).
+		WithScmClass(storage.ScmClassDCPM.String()).
+		WithBdevClass(storage.BdevClassNvme.String())
+}
+
 // genConfig validate input indices and generates server config file from
 // calculated network, storage and CPU parameters.
 func genConfig(accessPoints, pmemPaths []string, ifaces []*HostFabricInterface, bdevLists [][]string, nTgts, nHlprs []int) (*config.Server, error) {
-	if len(pmemPaths) != len(ifaces) {
-		return nil, errors.Errorf(errInvalNumPmem, len(ifaces), len(pmemPaths))
+	if len(pmemPaths) == 0 {
+		return nil, errors.Errorf(errInvalNumPmem, 1, 0)
+	}
+	if len(ifaces) != len(pmemPaths) {
+		return nil, errors.Errorf(errInsufNumIfaces, "", len(pmemPaths), len(ifaces),
+			ifaces)
 	}
 	if len(nTgts) != len(ifaces) {
 		return nil, errors.Errorf(errInvalNumTgtCounts, len(ifaces), len(nTgts))
+	}
+	if len(bdevLists) != len(pmemPaths) {
+		return nil, errors.New("programming error, bdevLists != pmemPaths")
 	}
 
 	cfg := config.DefaultServer()
 	for idx, iface := range ifaces {
 		nn := uint(iface.NumaNode)
-		iocfg := ioserver.NewConfig().
-			WithTargetCount(defaultTargetCount).
-			WithLogFile(fmt.Sprintf("%s.%d.log", defaultIOSrvLogFile, idx)).
-			WithScmClass(storage.ScmClassDCPM.String()).
-			WithBdevClass(storage.BdevClassNvme.String()).
+		iocfg := defaultIOSrvCfg(idx).
 			WithScmMountPoint(fmt.Sprintf("%s%d", scmMountPrefix, idx)).
 			WithScmDeviceList(pmemPaths[idx]).
 			WithBdevDeviceList(bdevLists[idx]...).
@@ -291,6 +332,12 @@ func genConfig(accessPoints, pmemPaths []string, ifaces []*HostFabricInterface, 
 // interfaces matching the number and NUMA affinity of assigned pmem
 // devices.
 func checkNetwork(log logging.Logger, reqClass uint32, numPmem int, hfs *HostFabricSet) ([]*HostFabricInterface, error) {
+	switch reqClass {
+	case NetDevAny, nd.Ether, nd.Infiniband:
+	default:
+		return nil, errors.Errorf(errUnsupNetDevClass, nd.DevClassName(reqClass))
+	}
+
 	fabric := hfs.HostFabric
 	hostSet := hfs.HostSet
 
@@ -474,7 +521,7 @@ func checkStorage(log logging.Logger, numPmem, reqNumNvme int, storageSet *HostS
 	return pmemPaths, bdevLists, nil
 }
 
-// checkCpus validates and returns VOS target count and xstream helper thread count
+// checkCPUs validates and returns VOS target count and xstream helper thread count
 // recommended values
 //
 // The target count should be a multiplier of the number of SSDs and typically
@@ -490,10 +537,6 @@ func checkStorage(log logging.Logger, numPmem, reqNumNvme int, storageSet *HostS
 //
 // TODO: generalize formula.
 func checkCPUs(log logging.Logger, numSsds, coresPerNuma int) (int, int, error) {
-	if coresPerNuma < 1 {
-		return 0, 0, errors.Errorf(errInvalNumCores, coresPerNuma)
-	}
-
 	var numTargets int
 	switch numSsds {
 	case 0:

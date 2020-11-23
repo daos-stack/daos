@@ -59,7 +59,7 @@ type configGenCmd struct {
 func (cmd *configGenCmd) Execute(_ []string) error {
 	ctx := context.Background()
 
-	req := &control.ConfigGenerateReq{
+	req := control.ConfigGenerateReq{
 		NumPmem:  cmd.NumPmem,
 		NumNvme:  cmd.NumNvme,
 		HostList: cmd.hostlist,
