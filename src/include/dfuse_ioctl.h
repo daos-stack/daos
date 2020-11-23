@@ -28,7 +28,7 @@
 
 #define DFUSE_IOCTL_TYPE 0xA3       /* Arbitrary "unique" type of the IOCTL */
 #define DFUSE_IOCTL_REPLY_BASE 0xC1 /* Number of the IOCTL.  Also arbitrary */
-#define DFUSE_IOCTL_VERSION 5       /* Version of ioctl protocol */
+#define DFUSE_IOCTL_VERSION 6       /* Version of ioctl protocol */
 
 #define DFUSE_IOCTL_REPLY_CORE (DFUSE_IOCTL_REPLY_BASE)
 
@@ -56,12 +56,12 @@ struct dfuse_hs_reply {
 	int		fsr_version;
 	size_t		fsr_pool_size;
 	size_t		fsr_cont_size;
+	size_t		fsr_dfs_size;
 };
 
 /* Query for global dfs/object handle sizes */
 struct dfuse_hsd_reply {
 	int		fsr_version;
-	size_t		fsr_dfs_size;
 	size_t		fsr_dobj_size;
 };
 
