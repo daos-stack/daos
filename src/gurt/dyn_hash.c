@@ -417,7 +417,7 @@ split_bucket(struct dyn_hash *htable, dh_bucket_t *bucket,
 		}
 	}
 	if (new_counter == 0) {
-		/**/
+		/* Retry required */
 		D_GOTO(out, rc = -DER_AGAIN);
 	}
 	D_ASSERT((counter + new_counter) == bucket->counter);
