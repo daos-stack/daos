@@ -27,8 +27,6 @@
  * cli_debug.h
  */
 
-#define D_LOGFAC	DD_FAC(mgmt)
-
 #include <daos/mgmt.h>
 #include <daos/sys_debug.h>
 
@@ -37,7 +35,6 @@
 #include <daos/drpc.pb-c.h>
 #include <daos/event.h>
 #include <daos/job.h>
-#include "srv.pb-c.h"
 #include "rpc.h"
 #include <errno.h>
 
