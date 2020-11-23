@@ -504,10 +504,6 @@ func TestControl_AutoConfig_getStorageParams(t *testing.T) {
 }
 
 func TestControl_AutoConfig_getCPUParams(t *testing.T) {
-	errCores := func(ssds, want, got int) error {
-		return errors.Errorf(errInsufNumCores, ssds, want, got)
-	}
-
 	for name, tc := range map[string]struct {
 		coresPerNuma  int   // physical cores per NUMA node
 		bdevListSizes []int // size of pci-address lists, one for each I/O Server
@@ -517,38 +513,39 @@ func TestControl_AutoConfig_getCPUParams(t *testing.T) {
 	}{
 		"no cores":           {expErr: errors.Errorf(errInvalNumCores, 0)},
 		"24 cores no ssds":   {24, []int{0}, []int{16}, []int{7}, nil},
-		"24 cores 1 ssds":    {24, []int{1}, []int{16}, []int{7}, nil},
-		"24 cores 2 ssds":    {24, []int{2}, []int{16}, []int{7}, nil},
-		"24 cores 3 ssds":    {24, []int{3}, []int{12}, []int{11}, nil},
-		"24 cores 4 ssds":    {24, []int{4}, []int{16}, []int{7}, nil},
-		"24 cores 5 ssds":    {24, []int{5}, []int{15}, []int{8}, nil},
+		"24 cores 1 ssds":    {24, []int{1}, []int{23}, []int{0}, nil},
+		"24 cores 2 ssds":    {24, []int{2}, []int{22}, []int{1}, nil},
+		"24 cores 3 ssds":    {24, []int{3}, []int{21}, []int{2}, nil},
+		"24 cores 4 ssds":    {24, []int{4}, []int{20}, []int{3}, nil},
+		"24 cores 5 ssds":    {24, []int{5}, []int{20}, []int{3}, nil},
 		"24 cores 8 ssds":    {24, []int{8}, []int{16}, []int{7}, nil},
 		"24 cores 9 ssds":    {24, []int{9}, []int{18}, []int{5}, nil},
 		"24 cores 10 ssds":   {24, []int{10}, []int{20}, []int{3}, nil},
 		"24 cores 16 ssds":   {24, []int{16}, []int{16}, []int{7}, nil},
 		"18 cores no ssds":   {18, []int{0}, []int{16}, []int{1}, nil},
-		"18 cores 1 ssds":    {18, []int{1}, []int{16}, []int{1}, nil},
+		"18 cores 1 ssds":    {18, []int{1}, []int{17}, []int{0}, nil},
 		"18 cores 2 ssds":    {18, []int{2}, []int{16}, []int{1}, nil},
-		"18 cores 3 ssds":    {18, []int{3}, []int{12}, []int{5}, nil},
+		"18 cores 3 ssds":    {18, []int{3}, []int{15}, []int{2}, nil},
 		"18 cores 4 ssds":    {18, []int{4}, []int{16}, []int{1}, nil},
 		"18 cores 5 ssds":    {18, []int{5}, []int{15}, []int{2}, nil},
 		"18 cores 8 ssds":    {18, []int{8}, []int{16}, []int{1}, nil},
 		"18 cores 9 ssds":    {18, []int{9}, []int{9}, []int{8}, nil},
 		"18 cores 10 ssds":   {18, []int{10}, []int{10}, []int{7}, nil},
 		"18 cores 16 ssds":   {18, []int{16}, []int{16}, []int{1}, nil},
-		"16 cores no ssds":   {16, []int{0}, []int{16}, []int{1}, errCores(0, 17, 16)},
-		"16 cores 1 ssds":    {16, []int{1}, []int{16}, []int{1}, errCores(1, 17, 16)},
-		"16 cores 2 ssds":    {16, []int{2}, []int{16}, []int{1}, errCores(2, 17, 16)},
-		"16 cores 3 ssds":    {16, []int{3}, []int{12}, []int{3}, nil},
-		"16 cores 4 ssds":    {16, []int{4}, []int{16}, []int{1}, errCores(4, 17, 16)},
+		"16 cores no ssds":   {16, []int{0}, []int{15}, []int{0}, nil},
+		"16 cores 1 ssds":    {16, []int{1}, []int{15}, []int{0}, nil},
+		"16 cores 2 ssds":    {16, []int{2}, []int{14}, []int{1}, nil},
+		"16 cores 3 ssds":    {16, []int{3}, []int{15}, []int{0}, nil},
+		"16 cores 4 ssds":    {16, []int{4}, []int{12}, []int{3}, nil},
 		"16 cores 5 ssds":    {16, []int{5}, []int{15}, []int{0}, nil},
 		"16 cores 6 ssds":    {16, []int{6}, []int{12}, []int{3}, nil},
 		"16 cores 7 ssds":    {16, []int{7}, []int{14}, []int{1}, nil},
-		"16 cores 8 ssds":    {16, []int{8}, []int{16}, []int{1}, errCores(8, 17, 16)},
+		"16 cores 8 ssds":    {16, []int{8}, []int{8}, []int{7}, nil},
 		"16 cores 9 ssds":    {16, []int{9}, []int{9}, []int{6}, nil},
 		"16 cores 10 ssds":   {16, []int{10}, []int{10}, []int{5}, nil},
-		"16 cores 16 ssds":   {16, []int{16}, []int{16}, []int{1}, errCores(16, 17, 16)},
-		"32 cores 8:12 ssds": {32, []int{8, 12}, []int{16, 12}, []int{15, 11}, nil},
+		"16 cores 16 ssds":   {16, []int{16}, []int{16}, []int{1}, errors.New("need more")},
+		"32 cores 8:12 ssds": {32, []int{8, 12}, []int{24, 24}, []int{7, 7}, nil},
+		"64 cores 8:8 ssds":  {64, []int{8, 8}, []int{56, 56}, []int{7, 7}, nil},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())

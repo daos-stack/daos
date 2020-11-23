@@ -477,6 +477,22 @@ func checkStorage(log logging.Logger, numPmem, reqNumNvme int, storageSet *HostS
 	return pmemPaths, bdevLists, nil
 }
 
+func calcHelpers(log logging.Logger, targets, cores int) int {
+	helpers := cores - targets - 1
+	if helpers <= 1 {
+		return helpers
+	}
+
+	if helpers > targets {
+		log.Debugf("adjusting num helpers (%d) to < num targets (%d), new: %d",
+			helpers, targets, targets-1)
+
+		return targets - 1
+	}
+
+	return helpers
+}
+
 // checkCPUs validates and returns VOS target count and xstream helper thread count
 // recommended values
 //
@@ -492,51 +508,29 @@ func checkStorage(log logging.Logger, numPmem, reqNumNvme int, storageSet *HostS
 // number of targets.
 //
 // TODO: generalize formula.
-func checkCPUs(log logging.Logger, numSsds, coresPerNuma int) (int, int, error) {
+func checkCPUs(log logging.Logger, numSSDs, coresPerNUMA int) (int, int, error) {
 	var numTargets int
-	switch numSsds {
-	case 0:
-		numTargets = 16 // pmem-only mode
-	case 1, 2, 4, 8:
-		numTargets = 16
-	case 3, 6:
-		numTargets = 12
-	case 5:
-		numTargets = 15
-	case 7:
-		numTargets = 14
-	case 9:
-		if coresPerNuma > 18 {
-			numTargets = 18
-			break
+	if numSSDs == 0 {
+		numTargets = defaultTargetCount
+		if numTargets >= coresPerNUMA {
+			return coresPerNUMA - 1, 0, nil
 		}
-		numTargets = 9
-	case 10:
-		if coresPerNuma > 20 {
-			numTargets = 20
-			break
-		}
-		numTargets = 10
-	default:
-		numTargets = numSsds
+
+		return numTargets, calcHelpers(log, numTargets, coresPerNUMA), nil
 	}
 
-	coresNeeded := numTargets + 1
-
-	if coresPerNuma < coresNeeded {
-		return 0, 0, errors.Errorf(errInsufNumCores, numSsds, coresNeeded, coresPerNuma)
+	if numSSDs >= coresPerNUMA {
+		return 0, 0, errors.Errorf("need more cores than ssds, got %d want %d",
+			coresPerNUMA, numSSDs)
 	}
 
-	log.Debugf("%d targets assigned with %d ssds", numTargets, numSsds)
-
-	numHelpers := coresPerNuma - coresNeeded
-	if numHelpers > numTargets {
-		log.Debugf("adjusting num helpers (%d) to < num targets (%d)", numHelpers,
-			numTargets)
-		numHelpers = numTargets - 1
+	for tgts := numSSDs; tgts < coresPerNUMA; tgts += numSSDs {
+		numTargets = tgts
 	}
 
-	return numTargets, numHelpers, nil
+	log.Debugf("%d targets assigned with %d ssds", numTargets, numSSDs)
+
+	return numTargets, calcHelpers(log, numTargets, coresPerNUMA), nil
 }
 
 func defaultIOSrvCfg(idx int) *ioserver.Config {
