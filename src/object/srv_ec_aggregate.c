@@ -57,7 +57,7 @@
 
 /* Pool/container info. */
 struct ec_agg_pool_info {
-	uuid_t		 api_pool_uuid;		/* open pool, check leader    */
+	struct ds_pool	*api_pool;		/* open pool, check leader    */
 	uuid_t		 api_cont_uuid;		/* container uuid             */
 	uint32_t	 api_pool_version;	/* pool ver, for check leader */
 };
@@ -914,10 +914,9 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 		goto out;
 	}
 
-	rc = ds_pool_check_leader(agg_param->ap_pool_info.api_pool_uuid,
-				  &entry->ie_oid,
-				  agg_param->ap_pool_info.api_pool_version);
-
+	rc = ds_pool_check_dtx_leader(agg_param->ap_pool_info.api_pool,
+				&entry->ie_oid,
+				agg_param->ap_pool_info.api_pool_version);
 	if (rc == 1 && entry->ie_oid.id_shard >= oca->u.ec.e_k) {
 		agg_reset_entry(&agg_param->ap_agg_entry, entry, oca);
 		rc = 0;
@@ -986,8 +985,8 @@ ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	struct ec_agg_param	 agg_param = { 0 };
 	int			 rc = 0;
 
-	uuid_copy(agg_param.ap_pool_info.api_pool_uuid,
-		  cont->sc_pool->spc_uuid);
+	/* The caller holds the pool reference (via @cont). */
+	agg_param.ap_pool_info.api_pool = cont->sc_pool->spc_pool;
 	uuid_copy(agg_param.ap_pool_info.api_cont_uuid, cont->sc_uuid);
 
 	agg_param.ap_pool_info.api_pool_version =

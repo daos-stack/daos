@@ -13,6 +13,7 @@ timeouts:
   test_metadata_find_svc: 100
   test_metadata_fillup: 300
   test_metadata_addremove: 900
+  test_container_removal_after_der_nospace: 150
 server_config:
   name: daos_server
   servers_per_host: 2
@@ -22,7 +23,7 @@ server_config:
       first_core: 0
       pinned_numa_node: 0
       fabric_iface: ib0
-      fabric_iface_port: 31416
+      fabric_iface_port: 31317
       log_file: daos_server0.log
       scm_mount: /mnt/daos0
       # common items below (same in server 0 and server 1)
