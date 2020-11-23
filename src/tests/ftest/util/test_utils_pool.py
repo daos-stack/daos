@@ -507,7 +507,6 @@ class TestPool(TestDaosApiBase):
             ranks, self.name.value)
         self.log.info(msg)
         daos_log.info(msg)
-        print("ranks list: {}".format(",".join([str(item) for item in ranks])))
 
         if use_kill:
             # Stop desired ranks using kill
@@ -582,9 +581,13 @@ class TestPool(TestDaosApiBase):
 
         """
         self.log.info("Writing %s bytes to pool %s", size, self.uuid)
+        #env = {                
+        #    "DAOS_POOL": self.uuid,           
+        #    "DAOS_SVCL": "1",         
+        #    "PYTHONPATH": os.getenv("PYTHONPATH", "")         
+        #}
         env = {
             "DAOS_POOL": self.uuid,
-            "DAOS_SVCL": "1",
             "PYTHONPATH": os.getenv("PYTHONPATH", "")
         }
         if not load_mpi("openmpi"):
