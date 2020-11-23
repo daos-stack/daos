@@ -429,10 +429,10 @@ rebuild_destroy_pool_internal(void **state, uint64_t fail_loc)
 
 	/* hang the rebuild */
 	if (arg->myrank == 0) {
-		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, fail_loc,
-				     0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      fail_loc, 0, NULL);
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 5,
-				     0, NULL);
+				      0, NULL);
 	}
 
 	new_arg->rebuild_cb = rebuild_destroy_pool_cb;
@@ -600,8 +600,8 @@ rebuild_tgt_pool_disconnect_internal(void **state, unsigned int fail_loc)
 
 	/* hang the rebuild during scan */
 	if (arg->myrank == 0)
-		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, fail_loc,
-				     0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      fail_loc, 0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	/* NB: During the test, one target will be excluded from the pool map,
@@ -669,8 +669,8 @@ rebuild_offline_pool_connect_internal(void **state, unsigned int fail_loc)
 
 	/* hang the rebuild */
 	if (arg->myrank == 0)
-		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, fail_loc,
-				     0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      fail_loc, 0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	arg->rebuild_pre_cb = rebuild_pool_disconnect_internal;
