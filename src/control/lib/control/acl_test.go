@@ -143,6 +143,7 @@ func TestControl_ParseACL_EmptyFile(t *testing.T) {
 
 	if result == nil {
 		t.Error("Expected result, got nil")
+		return
 	}
 
 	if len(result.Entries) != 0 {

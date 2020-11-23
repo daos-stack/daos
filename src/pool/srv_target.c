@@ -119,7 +119,6 @@ gc_ult(void *arg)
 
 	D_ASSERT(child->spc_gc_req != NULL);
 	while (!dss_ult_exiting(child->spc_gc_req)) {
-
 		rc = vos_gc_pool_run(child->spc_hdl, -1, dss_ult_yield,
 				     (void *)child->spc_gc_req);
 		if (rc < 0)
@@ -247,6 +246,12 @@ pool_child_add_one(void *varg)
 		return rc;
 	}
 
+	rc = ds_start_scrubbing_ult(child);
+	if (rc != 0) {
+		D_FREE(child);
+		return rc;
+	}
+
 	d_list_add(&child->spc_list, &tls->dt_pool_list);
 	/* Load all containers */
 	rc = ds_cont_child_start_all(child);
@@ -254,6 +259,7 @@ pool_child_add_one(void *varg)
 		d_list_del_init(&child->spc_list);
 		ds_cont_child_stop_all(child);
 		stop_gc_ult(child);
+		ds_stop_scrubbing_ult(child);
 		vos_pool_close(child->spc_hdl);
 		D_FREE(child);
 		return rc;
@@ -279,6 +285,7 @@ pool_child_delete_one(void *uuid)
 	d_list_del_init(&child->spc_list);
 	ds_cont_child_stop_all(child);
 	stop_gc_ult(child);
+	ds_stop_scrubbing_ult(child);
 	ds_pool_child_put(child); /* -1 for the list */
 
 	ds_pool_child_put(child); /* -1 for lookup */
@@ -380,7 +387,10 @@ err_iv_ns:
 err_group:
 	crt_group_secondary_destroy(pool->sp_group);
 err_done_cond:
-	ABT_cond_free(&pool->sp_fetch_hdls_done_cond);
+	rc = ABT_cond_free(&pool->sp_fetch_hdls_done_cond);
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to destroy pool group: %d\n",
+			DP_UUID(pool->sp_uuid), rc);
 err_cond:
 	ABT_cond_free(&pool->sp_fetch_hdls_cond);
 err_mutex:
@@ -459,7 +469,7 @@ ds_pool_cache_init(void)
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
 	rc = daos_lru_cache_create(-1 /* bits */, D_HASH_FT_NOLOCK /* feats */,
-				     &pool_cache_ops, &pool_cache);
+				   &pool_cache_ops, &pool_cache);
 	if (rc != 0)
 		ABT_mutex_free(&pool_cache_lock);
 	return rc;
@@ -1059,7 +1069,7 @@ out:
 
 int
 ds_pool_tgt_disconnect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
-					void *priv)
+				  void *priv)
 {
 	struct pool_tgt_disconnect_out *out_source = crt_reply_get(source);
 	struct pool_tgt_disconnect_out *out_result = crt_reply_get(result);
@@ -1208,15 +1218,15 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		uuid_copy(arg->pool_uuid, pool->sp_uuid);
 		arg->version = pool->sp_map_version;
 		ret = dss_ult_create(dtx_resync_ult, arg, DSS_ULT_POOL_SRV,
-				    0, 0, NULL);
+				     0, 0, NULL);
 		if (ret) {
 			D_ERROR("dtx_resync_ult failure %d\n", ret);
 			D_FREE_PTR(arg);
 		}
 	} else {
 		D_WARN("Ignore update pool "DF_UUID" %d -> %d\n",
-			DP_UUID(pool->sp_uuid), pool->sp_map_version,
-			map_version);
+		       DP_UUID(pool->sp_uuid), pool->sp_map_version,
+		       map_version);
 	}
 out:
 	ABT_rwlock_unlock(pool->sp_lock);

@@ -54,7 +54,7 @@ def DDHHMMSS_format(seconds):
     seconds = int(seconds)
     if seconds < 86400:
         return time.strftime("%H:%M:%S", time.gmtime(seconds))
-    num_days = seconds/86400
+    num_days = seconds / 86400
     return "{} {} {}".format(
         num_days, 'Day' if num_days == 1 else 'Days', time.strftime(
             "%H:%M:%S", time.gmtime(seconds % 86400)))
@@ -70,8 +70,8 @@ def add_pools(self, pool_names):
     for pool_name in pool_names:
         path = "".join(["/run/", pool_name, "/*"])
         # Create a pool and add it to the overall list of pools
-        self.pool.append(TestPool(
-            self.context, self.log, dmg_command=self.get_dmg_command()))
+        self.pool.append(
+            TestPool(self.context, self.get_dmg_command()))
         self.pool[-1].namespace = path
         self.pool[-1].get_params(self)
         self.pool[-1].create()
@@ -580,17 +580,17 @@ def build_job_script(self, commands, job, ppn, nodesperjob):
             cmd = [cmd]
         output = os.path.join(
             self.test_log_dir, self.test_name + "_" + job + "_" +
-            log_name + "_" + str(ppn*nodesperjob) + "_%N_" + "%j_")
+            log_name + "_" + str(ppn * nodesperjob) + "_%N_" + "%j_")
         error = os.path.join(
             self.test_log_dir, self.test_name + "_" + job + "_" +
             log_name + "_" +
-            str(ppn*nodesperjob) + "_%N_" + "%j_" + "ERROR_")
+            str(ppn * nodesperjob) + "_%N_" + "%j_" + "ERROR_")
         sbatch = {
             "time": str(self.job_timeout) + ":00",
             "exclude": NodeSet.fromlist(self.exclude_slurm_nodes),
             "error": str(error),
             "export": "ALL"
-            }
+        }
         # include the cluster specific params
         sbatch.update(self.srun_params)
         unique = get_random_string(5, self.used)

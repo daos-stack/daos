@@ -193,14 +193,15 @@ crt_proc_daos_iod_and_csum(crt_proc_t proc, crt_proc_op_t proc_op,
 	if (rc != 0)
 		return rc;
 
-	if (rc != 0)
-		return rc;
-
 	rc = crt_proc_memcpy(proc, &iod->iod_type, sizeof(iod->iod_type));
 	if (rc != 0)
 		return -DER_HG;
 
 	rc = crt_proc_uint64_t(proc, &iod->iod_size);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint64_t(proc, &iod->iod_flags);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -308,25 +309,14 @@ free:
 static int crt_proc_daos_iom_t(crt_proc_t proc, daos_iom_t *map)
 {
 	crt_proc_op_t		 proc_op;
+	uint32_t		 iom_nr = 0;
 	int			 i, rc;
 
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (rc)
 		return rc;
 
-	rc = crt_proc_uint64_t(proc, &map->iom_size);
-	if (rc != 0)
-		return -DER_HG;
-
 	rc = crt_proc_memcpy(proc, &map->iom_type, sizeof(map->iom_type));
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint32_t(proc, &map->iom_nr);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint32_t(proc, &map->iom_nr_out);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -342,7 +332,19 @@ static int crt_proc_daos_iom_t(crt_proc_t proc, daos_iom_t *map)
 	if (rc != 0)
 		return -DER_HG;
 
-	if (DECODING(proc_op)) {
+	if (ENCODING(proc_op)) {
+		iom_nr = map->iom_nr;
+		if ((map->iom_flags & DAOS_IOMF_DETAIL) == 0)
+			iom_nr = 0;
+	}
+
+	rc = crt_proc_uint32_t(proc, &iom_nr);
+	if (rc != 0)
+		return -DER_HG;
+
+	if (DECODING(proc_op) && iom_nr > 0) {
+		map->iom_nr = iom_nr;
+		map->iom_nr_out = iom_nr;
 		D_ALLOC_ARRAY(map->iom_recxs, map->iom_nr);
 		if (map->iom_recxs == NULL)
 			return -DER_NOMEM;
@@ -355,8 +357,8 @@ static int crt_proc_daos_iom_t(crt_proc_t proc, daos_iom_t *map)
 		}
 	}
 
-	if (ENCODING(proc_op)) {
-		for (i = 0; i < map->iom_nr; i++) {
+	if (ENCODING(proc_op) && iom_nr > 0) {
+		for (i = 0; i < iom_nr; i++) {
 			rc = crt_proc_daos_recx_t(proc, &map->iom_recxs[i]);
 			if (rc != 0)
 				return -DER_HG;
@@ -682,7 +684,11 @@ crt_proc_struct_dtx_redundancy_group(crt_proc_t proc,
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint32_t(proc, &drg->drg_redundancy);
+	rc = crt_proc_uint16_t(proc, &drg->drg_redundancy);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint16_t(proc, &drg->drg_flags);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -714,11 +720,25 @@ crt_proc_struct_dtx_memberships(crt_proc_t proc, struct dtx_memberships *mbs)
 	if (rc != 0)
 		return -DER_HG;
 
+	rc = crt_proc_uint16_t(proc, &mbs->dm_flags);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint16_t(proc, &mbs->dm_padding);
+	if (rc != 0)
+		return -DER_HG;
+
 	for (i = 0; i < mbs->dm_tgt_cnt; i++) {
 		rc = crt_proc_struct_dtx_daos_target(proc, &mbs->dm_tgts[i]);
 		if (rc != 0)
 			return rc;
 	}
+
+	/* We do not need the group information if all the targets are
+	 * in the same redundancy group.
+	 */
+	if (mbs->dm_grp_cnt == 1)
+		return 0;
 
 	drg = (struct dtx_redundancy_group *)mbs->dm_data;
 	rc = sizeof(mbs->dm_tgts[0]) * mbs->dm_tgt_cnt;
@@ -737,7 +757,7 @@ crt_proc_struct_daos_cpd_sub_head(crt_proc_t proc,
 				  struct daos_cpd_sub_head *dcsh)
 {
 	crt_proc_op_t	proc_op;
-	uint32_t	size;
+	uint32_t	size = 0;
 	int		rc;
 
 	rc = crt_proc_get_op(proc, &proc_op);
@@ -818,6 +838,10 @@ crt_proc_daos_iod_t(crt_proc_t proc, daos_iod_t *iod)
 		return -DER_HG;
 
 	rc = crt_proc_uint64_t(proc, &iod->iod_size);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint64_t(proc, &iod->iod_flags);
 	if (rc != 0)
 		return -DER_HG;
 

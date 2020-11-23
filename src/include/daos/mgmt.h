@@ -36,13 +36,11 @@ int dc_mgmt_init(void);
 void dc_mgmt_fini(void);
 
 int dc_mgmt_svc_rip(tse_task_t *task);
-int dc_pool_create(tse_task_t *task);
-int dc_pool_destroy(tse_task_t *task);
 int dc_pool_extend(tse_task_t *task);
 int dc_mgmt_set_params(tse_task_t *task);
-int dc_mgmt_list_pools(tse_task_t *task);
 int dc_mgmt_profile(char *path, int avg, bool start);
 int dc_mgmt_add_mark(const char *mark);
+int dc_mgmt_get_bs_state(tse_task_t *task);
 
 #define SYS_INFO_BUF_SIZE 16
 
@@ -72,5 +70,7 @@ int dc_mgmt_sys_attach(const char *name, struct dc_mgmt_sys **sysp);
 void dc_mgmt_sys_detach(struct dc_mgmt_sys *sys);
 ssize_t dc_mgmt_sys_encode(struct dc_mgmt_sys *sys, void *buf, size_t cap);
 ssize_t dc_mgmt_sys_decode(void *buf, size_t len, struct dc_mgmt_sys **sysp);
-
+int dc_mgmt_get_pool_svc_ranks(struct dc_mgmt_sys *sys, const uuid_t puuid,
+			       d_rank_list_t **svcranksp);
+int dc_mgmt_disconnect(void);
 #endif

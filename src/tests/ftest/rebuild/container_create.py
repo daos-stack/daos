@@ -149,7 +149,7 @@ class ContainerCreate(TestWithServers):
         self.pool = []
         for index in range(pool_qty):
             self.pool.append(
-                TestPool(self.context, dmg_command=self.get_dmg_command()))
+                TestPool(self.context, self.get_dmg_command()))
             self.pool[-1].get_params(self)
 
         if use_ior:

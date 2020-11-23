@@ -17,7 +17,7 @@ pool:
     name: daos_server
     # 300 G
     scm_size: 30000000000
-    nvme_size: 320000000000
+    nvme_size: 420000000000
     svcn: 1
     control_method: dmg
 container:
@@ -35,8 +35,8 @@ ior:
         ssf:
           flags: "-v -D 300 -w -r"
           ior_api:
-            posix:
-              api: POSIX
+            - DFS
+            - POSIX
           transfersize_blocksize:
             1M:
               transfer_size: '1M'
@@ -51,4 +51,4 @@ ior:
             oclass_SX:
               dfs_oclass: "SX"
 dfuse:
-    mount_dir: "/tmp/daos_dfuse"
+    mount_dir: "/tmp/daos_dfuse/"

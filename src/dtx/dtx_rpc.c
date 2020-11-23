@@ -444,18 +444,14 @@ dtx_dti_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head,
 }
 
 static int
-dtx_dti_classify(uuid_t po_uuid, daos_handle_t tree, struct dtx_entry **dtes,
-		 int count, d_list_t *head, struct dtx_id **dtis)
+dtx_dti_classify(struct ds_pool *pool, daos_handle_t tree,
+		 struct dtx_entry **dtes, int count,
+		 d_list_t *head, struct dtx_id **dtis)
 {
 	struct dtx_id		*dti = NULL;
-	struct ds_pool		*pool;
 	int			 length = 0;
 	int			 rc = 0;
 	int			 i;
-
-	pool = ds_pool_lookup(po_uuid);
-	if (pool == NULL)
-		return -DER_INVAL;
 
 	D_ALLOC_ARRAY(dti, count);
 	if (dti != NULL) {
@@ -476,7 +472,6 @@ dtx_dti_classify(uuid_t po_uuid, daos_handle_t tree, struct dtx_entry **dtes,
 		rc = -DER_NOMEM;
 	}
 
-	ds_pool_put(pool);
 	return rc < 0 ? rc : length;
 }
 
@@ -495,11 +490,11 @@ dtx_dti_classify(uuid_t po_uuid, daos_handle_t tree, struct dtx_entry **dtes,
  * targets when dtx_resync() is triggered next time.
  */
 int
-dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry **dtes,
+dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	   int count, bool drop_cos)
 {
 	struct dtx_req_args	 dra;
-	struct ds_cont_child	*cont = NULL;
+	struct ds_pool		*pool = cont->sc_pool->spc_pool;
 	struct dtx_id		*dti = NULL;
 	struct dtx_cos_key	*dcks = NULL;
 	struct umem_attr	 uma;
@@ -511,10 +506,6 @@ dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry **dtes,
 	int			 rc1 = 0;
 	int			 rc2 = 0;
 
-	rc = ds_cont_child_lookup(po_uuid, co_uuid, &cont);
-	if (rc != 0)
-		return rc;
-
 	D_INIT_LIST_HEAD(&head);
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
@@ -523,14 +514,14 @@ dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry **dtes,
 	if (rc != 0)
 		goto out;
 
-	length = dtx_dti_classify(po_uuid, tree_hdl, dtes, count, &head, &dti);
+	length = dtx_dti_classify(pool, tree_hdl, dtes, count, &head, &dti);
 	if (length < 0)
 		D_GOTO(out, rc = length);
 
 	dra.dra_future = ABT_FUTURE_NULL;
 	if (!d_list_empty(&head)) {
-		rc = dtx_req_list_send(&dra, DTX_COMMIT, &head, length, po_uuid,
-				       co_uuid, crt_hlc_get());
+		rc = dtx_req_list_send(&dra, DTX_COMMIT, &head, length,
+				       pool->sp_uuid, cont->sc_uuid, 0);
 		if (rc != 0)
 			goto out;
 	}
@@ -577,18 +568,15 @@ out:
 
 	D_ASSERT(d_list_empty(&head));
 
-	if (cont != NULL)
-		ds_cont_child_put(cont);
-
 	return rc < 0 ? rc : (rc1 < 0 ? rc1 : (rc2 < 0 ? rc2 : 0));
 }
 
 int
-dtx_abort(uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch,
+dtx_abort(struct ds_cont_child *cont, daos_epoch_t epoch,
 	  struct dtx_entry **dtes, int count)
 {
 	struct dtx_req_args	 dra;
-	struct ds_cont_child	*cont = NULL;
+	struct ds_pool		*pool = cont->sc_pool->spc_pool;
 	struct dtx_id		*dti = NULL;
 	struct umem_attr	 uma;
 	struct btr_root		 tree_root = { 0 };
@@ -596,10 +584,6 @@ dtx_abort(uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch,
 	d_list_t		 head;
 	int			 length;
 	int			 rc;
-
-	rc = ds_cont_child_lookup(po_uuid, co_uuid, &cont);
-	if (rc != 0)
-		return rc;
 
 	D_INIT_LIST_HEAD(&head);
 	memset(&uma, 0, sizeof(uma));
@@ -609,7 +593,7 @@ dtx_abort(uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch,
 	if (rc != 0)
 		goto out;
 
-	length = dtx_dti_classify(po_uuid, tree_hdl, dtes, count, &head, &dti);
+	length = dtx_dti_classify(pool, tree_hdl, dtes, count, &head, &dti);
 	if (length < 0)
 		D_GOTO(out, rc = length);
 
@@ -621,8 +605,8 @@ dtx_abort(uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch,
 		rc = 0;
 
 	if (rc == 0 && !d_list_empty(&head)) {
-		rc = dtx_req_list_send(&dra, DTX_ABORT, &head, length, po_uuid,
-				       co_uuid, epoch);
+		rc = dtx_req_list_send(&dra, DTX_ABORT, &head, length,
+				       pool->sp_uuid, cont->sc_uuid, epoch);
 		if (rc != 0)
 			goto out;
 
@@ -643,18 +627,15 @@ out:
 
 	D_ASSERT(d_list_empty(&head));
 
-	if (cont != NULL)
-		ds_cont_child_put(cont);
-
 	return rc < 0 ? rc : 0;
 }
 
 int
-dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte)
+dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 {
 	struct dtx_req_args	 dra;
 	struct dtx_memberships	*mbs = dte->dte_mbs;
-	struct ds_pool		*pool;
+	struct ds_pool		*pool = cont->sc_pool->spc_pool;
 	struct dtx_req_rec	*drr;
 	struct dtx_req_rec	*next;
 	d_list_t		 head;
@@ -671,10 +652,6 @@ dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte)
 	 */
 	if (mbs->dm_tgt_cnt == 1)
 		return DTX_ST_PREPARED;
-
-	pool = ds_pool_lookup(po_uuid);
-	if (pool == NULL)
-		return -DER_INVAL;
 
 	D_INIT_LIST_HEAD(&head);
 	crt_group_rank(NULL, &myrank);
@@ -722,8 +699,8 @@ dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte)
 		goto out;
 	}
 
-	rc = dtx_req_list_send(&dra, DTX_CHECK, &head, length, po_uuid,
-			       co_uuid, crt_hlc_get());
+	rc = dtx_req_list_send(&dra, DTX_CHECK, &head, length, pool->sp_uuid,
+			       cont->sc_uuid, epoch);
 	if (rc == 0)
 		rc = dtx_req_wait(&dra);
 
@@ -733,6 +710,5 @@ out:
 		D_FREE_PTR(drr);
 	}
 
-	ds_pool_put(pool);
 	return rc;
 }

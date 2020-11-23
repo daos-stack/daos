@@ -179,6 +179,7 @@ class DaosIODescriptor(ctypes.Structure):
     _fields_ = [("iod_name", IOV),
                 ("iod_type", ctypes.c_int),
                 ("iod_size", ctypes.c_uint64),
+                ("iod_flags", ctypes.c_uint64),
                 ("iod_nr", ctypes.c_uint32),
                 ("iod_recxs", ctypes.POINTER(Extent))]
 

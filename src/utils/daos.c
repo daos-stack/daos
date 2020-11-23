@@ -51,7 +51,6 @@
 #include "daos_uns.h"
 #include "daos_hdlr.h"
 #include "dfuse_ioctl.h"
-#include "obj_ctl.h"
 
 const char		*default_sysname = DAOS_DEFAULT_SYS_NAME;
 
@@ -811,7 +810,9 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		D_GOTO(out_free, rc = RC_NO_HELP);
 	}
 
-	/* Verify pool svc provided */
+	/* Verify pool svc argument. If not provided pass NULL list to libdaos,
+	 * and client will query management service for rank list.
+	 */
 	ARGS_VERIFY_MDSRV(ap, out_free, rc = RC_PRINT_HELP);
 
 	D_FREE(cmdname);
@@ -1219,7 +1220,6 @@ do { \
 	"	  pool             pool\n" \
 	"	  container (cont) container\n" \
 	"	  object (obj)     object\n" \
-	"	  shell            shell\n" \
 	"	  version          print command version\n" \
 	"	  help             print this message and exit\n"); \
 	fprintf(stream, "\n"); \
@@ -1448,9 +1448,6 @@ main(int argc, char *argv[])
 		dargs.ostream = stdout;
 		help_hdlr(argc, argv, &dargs);
 		return 0;
-	} else if (strcmp(argv[1], "shell") == 0) {
-		rc = shell(argc, argv);
-		return rc;
 	} else if (argc <= 2) {
 		dargs.ostream = stdout;
 		help_hdlr(argc, argv, &dargs);

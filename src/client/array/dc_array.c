@@ -179,8 +179,10 @@ free_io_params_cb(tse_task_t *task, void *data)
 	while (io_list) {
 		struct io_params *current = io_list;
 
-		if (current->iom.iom_recxs)
-			D_FREE(current->iom.iom_recxs);
+		if (current->iom.iom_recxs) {
+			daos_recx_free(current->iom.iom_recxs);
+			current->iom.iom_recxs = NULL;
+		}
 		if (current->iod.iod_recxs)
 			D_FREE(current->iod.iod_recxs);
 		if (!current->user_sgl_used && current->sgl.sg_iovs)
@@ -459,7 +461,7 @@ dc_array_global2local(daos_handle_t coh, d_iov_t glob, unsigned int mode,
 		D_ASSERT(array_glob->magic == DC_ARRAY_GLOB_MAGIC);
 
 	} else if (array_glob->magic != DC_ARRAY_GLOB_MAGIC) {
-		D_ERROR("Bad magic value: 0x%x.\n", array_glob->magic);
+		D_ERROR("Bad magic value: %#x.\n", array_glob->magic);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -1097,6 +1099,7 @@ struct hole_params {
 static int
 zero_out_cb(uint8_t *buf, size_t len, void *args)
 {
+	D_DEBUG(DB_IO, "zero hole segment, buf %p, len %zu\n", buf, len);
 	memset(buf, 0, len);
 	return 0;
 }
@@ -1187,37 +1190,6 @@ process_iod(daos_off_t start_off, daos_size_t array_size,
 }
 
 static int
-reprocess_iom_cb(tse_task_t *task, void *data)
-{
-	struct io_params	*current = *((struct io_params **)data);
-	daos_obj_fetch_t	*io_arg = daos_task_get_args(task);
-	daos_off_t		start_off;
-	unsigned int		i, iom_nr;
-	struct daos_sgl_idx	idx = {0};
-	int			rc = task->dt_result;
-
-	if (rc != 0) {
-		D_ERROR("Array Read Failed (%d)\n", rc);
-		return rc;
-	}
-
-	D_ASSERT(current);
-
-	start_off = (current->dkey_val - 1) * current->chunk_size;
-	iom_nr = 0;
-
-	for (i = 0; i < current->iod.iod_nr; i++) {
-		rc = process_iod(start_off, current->array_size, io_arg->sgls,
-				 &idx, &current->iod.iod_recxs[i],
-				 &current->iom, &iom_nr);
-		if (rc)
-			return rc;
-	}
-
-	return 0;
-}
-
-static int
 process_iomap(struct hole_params *params, daos_array_io_t *args)
 {
 	struct io_params        *io_list;
@@ -1242,63 +1214,7 @@ process_iomap(struct hole_params *params, daos_array_io_t *args)
 		if (sgl->sg_nr == 0)
 			goto next;
 
-		/*
-		 * If the iomap array was not enough, refetch with more ioms.
-		 * TODO - support iomap refresh without fetching data again.
-		 */
-		if (current->iom.iom_nr_out > current->iom.iom_nr) {
-			daos_obj_fetch_t	*io_arg;
-			tse_task_t		*io_task = NULL;
-
-			rc = daos_task_create(DAOS_OPC_OBJ_FETCH,
-					      tse_task2sched(params->ptask),
-					      0, NULL, &io_task);
-			if (rc)
-				return rc;
-
-			io_arg = daos_task_get_args(io_task);
-			io_arg->oh	= params->oh;
-			io_arg->th	= args->th;
-			io_arg->dkey	= &current->dkey;
-			io_arg->nr	= 1;
-			io_arg->iods	= &current->iod;
-			io_arg->sgls	= sgl;
-
-			current->iom.iom_nr = current->iom.iom_nr_out;
-			current->iom.iom_nr_out = 0;
-			D_FREE(current->iom.iom_recxs);
-			D_ALLOC_ARRAY(current->iom.iom_recxs,
-				      current->iom.iom_nr);
-			if (current->iom.iom_recxs == NULL) {
-				tse_task_complete(io_task, -DER_NOMEM);
-				return -DER_NOMEM;
-			}
-			io_arg->ioms = &current->iom;
-			current->array_size = params->array_size;
-
-			rc = tse_task_register_cbs(io_task, NULL, NULL, 0,
-						   reprocess_iom_cb, &current,
-						   sizeof(current));
-			if (rc) {
-				tse_task_complete(io_task, rc);
-				return rc;
-			}
-
-			rc = tse_task_register_deps(params->ptask, 1, &io_task);
-			if (rc) {
-				tse_task_complete(io_task, rc);
-				return rc;
-			}
-
-			rc = tse_task_schedule(io_task, false);
-			if (rc) {
-				tse_task_complete(io_task, rc);
-				return rc;
-			}
-
-			goto next;
-		}
-
+		D_ASSERT(current->iom.iom_nr_out <= current->iom.iom_nr);
 		start_off = (current->dkey_val - 1) * current->chunk_size;
 
 		iom_nr = 0;
@@ -1799,10 +1715,9 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 
 			/** if this is a byte array, add ioms for hole mgmt */
 			if (array->byte_array) {
-				iom->iom_nr = iod->iod_nr * 2;
-				D_ALLOC_ARRAY(iom->iom_recxs, iom->iom_nr);
-				if (iom->iom_recxs == NULL)
-					D_GOTO(err_iotask, rc = -DER_NOMEM);
+				iom->iom_nr = 0;
+				iom->iom_recxs = NULL;
+				iom->iom_flags = DAOS_IOMF_DETAIL;
 				io_arg->ioms = iom;
 				rc = tse_task_register_deps(stask, 1, &io_task);
 				if (rc)

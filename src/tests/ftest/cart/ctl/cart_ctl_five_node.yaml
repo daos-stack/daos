@@ -8,8 +8,7 @@ defaultENV:
   CRT_PHY_ADDR_STR: "ofi+sockets"
   OFI_INTERFACE: "eth0"
   test_servers_CRT_CTX_NUM: "0"
-  test_clients_1_CRT_CTX_NUM: "0"
-  test_clients_2_CRT_CTX_NUM: "0"
+  test_clients_CRT_CTX_NUM: "0"
 env_CRT_CTX_SHARE_ADDR: !mux
   no_sep:
     env: no_sep
@@ -23,10 +22,9 @@ hosts: !mux
       - boro-C
       - boro-D
       - boro-E
-    test_clients_1:
+    test_clients:
       - boro-A
-    test_clients_2:
-      - boro-A
+timeout: 600
 tests: !mux
   ctl:
     name: ctl_basic
@@ -35,12 +33,9 @@ tests: !mux
     test_servers_env: ""
     test_servers_ppn: "1"
 
-    test_clients_1_bin: cart_ctl
-    test_clients_1_arg: "get_uri_cache --group-name server_grp --rank 0,2-3,4"
-    test_clients_1_env: ""
-    test_clients_1_ppn: "1"
-
-    test_clients_2_bin: cart_ctl
-    test_clients_2_arg: "list_ctx --group-name server_grp --rank 0,2-3,4"
-    test_clients_2_env: ""
-    test_clients_2_ppn: "1"
+    test_clients_bin: cart_ctl
+    test_clients_env: ""
+    test_clients_ppn: "1"
+    test_clients_arg:
+      - "get_uri_cache --group-name server_grp --rank 0,2-3,4"
+      - "list_ctx --group-name server_grp --rank 0,2-3,4"

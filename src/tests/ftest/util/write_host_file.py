@@ -26,6 +26,7 @@ from logging import getLogger
 import os
 import random
 
+from collections import Counter
 
 def write_host_file(hostlist, path='/tmp', slots=1):
     """Write out a hostfile suitable for orterun.
@@ -43,6 +44,7 @@ def write_host_file(hostlist, path='/tmp', slots=1):
         str: the full path of the written hostfile
 
     """
+
     log = getLogger()
     unique = random.randint(1, 100000)
 

@@ -48,14 +48,10 @@ typedef enum {
 
 	/** Management APIs */
 	DAOS_OPC_SVC_RIP = 0,
-	DAOS_OPC_POOL_CREATE,
-	DAOS_OPC_POOL_DESTROY,
 	DAOS_OPC_POOL_EXTEND,
 	DAOS_OPC_POOL_EVICT,
 	DAOS_OPC_SET_PARAMS,
-	DAOS_OPC_POOL_ADD_REPLICAS,
-	DAOS_OPC_POOL_REMOVE_REPLICAS,
-	DAOS_OPC_MGMT_LIST_POOLS,
+	DAOS_OPC_MGMT_GET_BS_STATE,
 
 	/** Pool APIs */
 	DAOS_OPC_POOL_CONNECT,
@@ -64,7 +60,7 @@ typedef enum {
 	DAOS_OPC_POOL_EXCLUDE_OUT,
 	DAOS_OPC_POOL_ADD,
 	DAOS_OPC_POOL_QUERY,
-	DAOS_OPC_POOL_QUERY_TARGET,
+	DAOS_OPC_POOL_QUERY_INFO,
 	DAOS_OPC_POOL_LIST_ATTR,
 	DAOS_OPC_POOL_GET_ATTR,
 	DAOS_OPC_POOL_SET_ATTR,
@@ -275,12 +271,12 @@ typedef struct {
 typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
-	/** Array of targets to query. */
-	d_rank_list_t		*tgts;
-	/** Optional, buffer to store faulty targets on failure. */
-	d_rank_list_t		*failed;
-	/** Returned storage information of targets. */
-	daos_target_info_t	*info_list;
+	/** Single targets to query. */
+	uint32_t		tgt_idx;
+	/** Rank of target to query. */
+	d_rank_t		rank;
+	/** Returned storage information of target. */
+	daos_target_info_t	*info;
 } daos_pool_query_target_t;
 
 /** pool container list args */
@@ -364,6 +360,13 @@ typedef struct {
 	/** length of array */
 	daos_size_t		*npools;
 } daos_mgmt_list_pools_t;
+
+/** Blobstore state query args */
+typedef struct {
+	const char		*grp;
+	uuid_t			uuid;
+	int			*state;
+} daos_mgmt_get_bs_state_t;
 
 /** pool service stop args */
 typedef struct {
@@ -1063,6 +1066,23 @@ int
 daos_task_create(daos_opc_t opc, tse_sched_t *sched,
 		 unsigned int num_deps, tse_task_t *dep_tasks[],
 		 tse_task_t **taskp);
+
+/**
+ * Reset a DAOS task with another opcode. The task must have been completed or
+ * not in the running state yet, and has not been freed yet (use must take a
+ * ref count on the task to prevent it to be freed after the DAOS operation has
+ * completed).
+ *
+ * \param task	[IN]	Task to reset.
+ * \param opc	[IN]	Operation code to identify the daos op to associate with
+ *			the task.
+ *
+ * \return		0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NOSYS	Unsupported opc
+ */
+int
+daos_task_reset(tse_task_t *task, daos_opc_t opc);
 
 /**
  * Return a pointer to the DAOS task argument structure. This is called to set

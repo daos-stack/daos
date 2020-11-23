@@ -54,14 +54,12 @@ class DaosSnapshotTest(TestWithServers):
         """Initialize a DaosSnapshotTest object."""
         super(DaosSnapshotTest, self).__init__(*args, **kwargs)
         self.daos_cmd = None
-        self.svc = None
 
-    def create_snapshot(self, pool_uuid, svc, cont_uuid, count):
+    def create_snapshot(self, pool_uuid, cont_uuid, count):
         """Create snapshots and return the epoch values obtained from stdout.
 
         Args:
             pool_uuid (str): Pool UUID.
-            svc (str): Service replicas.
             cont_uuid (str): Container UUID.
             count (int): Number of snapshots to create.
 
@@ -72,8 +70,7 @@ class DaosSnapshotTest(TestWithServers):
         for _ in range(count):
             epochs.append(
                 self.daos_cmd.container_create_snap(pool=pool_uuid,
-                                                    cont=cont_uuid,
-                                                    svc=svc)["epoch"])
+                                                    cont=cont_uuid)["epoch"])
         return epochs
 
     def prepare_pool_container(self):
@@ -81,7 +78,6 @@ class DaosSnapshotTest(TestWithServers):
         """
         self.daos_cmd = DaosCommand(self.bin)
         self.add_pool(connect=False)
-        self.svc = ",".join(str(rank) for rank in self.pool.svc_ranks)
         self.add_container(self.pool)
 
     def create_verify_snapshots(self, count):
@@ -95,15 +91,14 @@ class DaosSnapshotTest(TestWithServers):
         """
         # Create 5 snapshots.
         expected_epochs = self.create_snapshot(
-            pool_uuid=self.pool.uuid, svc=self.svc,
+            pool_uuid=self.pool.uuid,
             cont_uuid=self.container.uuid, count=count)
         expected_epochs.sort()
         self.log.info("Expected Epochs = {}".format(expected_epochs))
 
         # List the snapshots and verify their epochs.
         actual_epochs = self.daos_cmd.container_list_snaps(
-            pool=self.pool.uuid, cont=self.container.uuid,
-            svc=self.svc)["epochs"]
+            pool=self.pool.uuid, cont=self.container.uuid)["epochs"]
         actual_epochs.sort()
         self.log.info("Actual Epochs = {}".format(actual_epochs))
         self.assertEqual(expected_epochs, actual_epochs)
@@ -132,12 +127,11 @@ class DaosSnapshotTest(TestWithServers):
         # Destroy all the snapshots.
         for epoch in actual_epochs:
             self.daos_cmd.container_destroy_snap(
-                pool=self.pool.uuid, cont=self.container.uuid, epc=epoch,
-                svc=self.svc)
+                pool=self.pool.uuid, cont=self.container.uuid, epc=epoch)
 
         # List and verify that there's no snapshot.
         epochs = self.daos_cmd.container_list_snaps(
-            pool=self.pool.uuid, cont=self.container.uuid, svc=self.svc)
+            pool=self.pool.uuid, cont=self.container.uuid)
         self.assertTrue(not epochs)
 
     @skipForTicket("DAOS-4691")
@@ -163,10 +157,9 @@ class DaosSnapshotTest(TestWithServers):
         # Destroy all snapshots with --epcrange.
         epcrange = "{}-{}".format(actual_epochs[0], actual_epochs[-1])
         self.daos_cmd.container_destroy_snap(
-            pool=self.pool.uuid, cont=self.container.uuid, epcrange=epcrange,
-            svc=self.svc)
+            pool=self.pool.uuid, cont=self.container.uuid, epcrange=epcrange)
 
         # List and verify that there's no snapshot.
         epochs = self.daos_cmd.container_list_snaps(
-            pool=self.pool.uuid, cont=self.container.uuid, svc=self.svc)
+            pool=self.pool.uuid, cont=self.container.uuid)
         self.assertTrue(not epochs)

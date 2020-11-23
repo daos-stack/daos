@@ -119,3 +119,11 @@ class UnitTestWithoutServers(Test):
         :avocado: tags=all,unittest,tiny,full_regression,agent_tests
         """
         unittest_runner(self, "agent_tests")
+
+    def test_job_tests(self):
+        """
+        Test Description: Test daos job unittest.
+        Use Cases: daos_job tests for job environment variables.
+        :avocado: tags=all,unittest,tiny,full_regression,job_tests
+        """
+        unittest_runner(self, "job_tests")

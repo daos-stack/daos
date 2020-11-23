@@ -232,6 +232,7 @@ plt_obj_reint_layout_check(struct pl_obj_layout *layout,
 	if (contains_reint_tgt == false) {
 		D_ASSERT(plt_obj_layout_match(layout, org_layout));
 		D_ASSERT(num_spares_returned == 0);
+		D_FREE(target_set);
 		return;
 	}
 
@@ -247,6 +248,7 @@ plt_obj_reint_layout_check(struct pl_obj_layout *layout,
 		reint_id = spare_tgt_ranks[i];
 		D_ASSERT(target_set[reint_id] == 2);
 	}
+	D_FREE(target_set);
 }
 
 void
@@ -289,6 +291,7 @@ plt_obj_add_layout_check(struct pl_obj_layout *layout,
 	if (contains_new_tgt == false || org_layout->ol_nr == layout->ol_nr) {
 		D_ASSERT(plt_obj_layout_match(layout, org_layout));
 		D_ASSERT(num_spares_returned == 0);
+		D_FREE(target_set);
 		return;
 	}
 
@@ -303,6 +306,7 @@ plt_obj_add_layout_check(struct pl_obj_layout *layout,
 		spare_id = spare_tgt_ranks[i];
 		D_ASSERT(target_set[spare_id] == 2);
 	}
+	D_FREE(target_set);
 }
 void
 plt_obj_rebuild_unique_check(uint32_t *shard_ids, uint32_t num_shards,
@@ -446,7 +450,7 @@ plt_spare_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 	md.omd_ver = *po_ver;
 	*spare_cnt = pl_obj_find_rebuild(pl_map, &md, NULL, *po_ver,
 					 spare_tgt_ranks, shard_ids,
-					 spare_max_nr, -1);
+					 spare_max_nr);
 	D_PRINT("spare_cnt %d for version %d -\n", *spare_cnt, *po_ver);
 	for (i = 0; i < *spare_cnt; i++)
 		D_PRINT("shard %d, spare target rank %d\n",
@@ -563,9 +567,8 @@ plt_reint_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 	D_ASSERT(pl_map != NULL);
 	dc_obj_fetch_md(oid, &md);
 	md.omd_ver = *po_ver;
-	rc = pl_obj_find_reint(pl_map, &md, NULL, *po_ver,
-					 spare_tgt_ranks, shard_ids,
-					 spare_max_nr, -1);
+	rc = pl_obj_find_reint(pl_map, &md, NULL, *po_ver, spare_tgt_ranks,
+			       shard_ids, spare_max_nr);
 
 	D_ASSERT(rc >= 0);
 	*spare_cnt = rc;

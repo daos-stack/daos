@@ -8,7 +8,7 @@ if ! grep ":$MY_UID:" /etc/group; then
 fi
 mkdir -p /localhome
 if ! grep ":$MY_UID:$MY_UID:" /etc/passwd; then
-  useradd -b /localhome -g "$MY_UID" -u "$MY_UID" jenkins
+  useradd -b /localhome -g "$MY_UID" -u "$MY_UID" -s /bin/bash jenkins
 fi
 mkdir -p /localhome/jenkins/.ssh
 cat /tmp/ci_key.pub >> /localhome/jenkins/.ssh/authorized_keys

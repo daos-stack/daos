@@ -42,7 +42,9 @@ func TestDaosServer_StoragePrepare(t *testing.T) {
 	failedErr := errors.New("it failed")
 	var printNamespace strings.Builder
 	msns := storage.ScmNamespaces{storage.MockScmNamespace()}
-	pretty.PrintScmNamespaces(msns, &printNamespace)
+	if err := pretty.PrintScmNamespaces(msns, &printNamespace); err != nil {
+		t.Fatal(err)
+	}
 
 	for name, tc := range map[string]struct {
 		nvmeOnly  bool
@@ -68,9 +70,9 @@ func TestDaosServer_StoragePrepare(t *testing.T) {
 		},
 		"prepared scm; success": {
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:     storage.ScmModules{storage.MockScmModule()},
-				GetNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
-				StartingState:   storage.ScmStateNoCapacity,
+				DiscoverRes:         storage.ScmModules{storage.MockScmModule()},
+				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+				StartingState:       storage.ScmStateNoCapacity,
 			},
 		},
 		"unprepared scm; warn": {

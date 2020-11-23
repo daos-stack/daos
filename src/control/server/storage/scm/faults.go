@@ -115,6 +115,14 @@ var (
 		"adjust or relax the filters and try again")
 )
 
+func FaultIpmctlBadVersion(version string) *fault.Fault {
+	return scmFault(
+		code.BadVersionSoftwareDependency,
+		fmt.Sprintf("DAOS will not work with ipmctl package version %s", version),
+		"upgrade system ipmctl package to meet version requirements",
+	)
+}
+
 // FaultFormatMissingDevice creates a Fault for the case where a requested
 // device was not found.
 func FaultFormatMissingDevice(device string) *fault.Fault {

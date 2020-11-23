@@ -31,10 +31,13 @@ message NetworkScanReq {
 
 message NetworkScanResp {
   repeated FabricInterface interfaces = 1;
+  int32 numacount = 2;
 }
 
 message FabricInterface {
   string provider = 1;
   string device = 2;
   uint32 numanode = 3;
+  uint32 priority = 4;
+  uint32 netdevclass = 5;
 }

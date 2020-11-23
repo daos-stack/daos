@@ -380,12 +380,18 @@ rebuild_snap_punch_keys(void **state)
 	for (i = 0; i < 5; i++) {
 		char dkey[20] = { 0 };
 		char akey[20] = { 0 };
+		char akey2[20] = { 0 };
 
 		/* Update string for each snapshot */
 		sprintf(dkey, "dkey_%d", i);
 		sprintf(akey, "akey_%d", i);
+		sprintf(akey2, "akey_%d", i + 100);
 		insert_single(dkey, "a_key", 0, "data", 1, DAOS_TX_NONE, &req);
 		insert_single("dkey", akey, 0, "data", 1, DAOS_TX_NONE, &req);
+		/* Add an extra akey so punch propagation doesn't get rid of
+		 * the dkey on the punch below
+		 */
+		insert_single("dkey", akey2, 0, "data", 1, DAOS_TX_NONE, &req);
 	}
 
 	/* Insert dkey/akey by different epoch */
@@ -415,9 +421,11 @@ rebuild_snap_punch_keys(void **state)
 		daos_fail_value_set(i);
 		for (j = 0; j < 5; j++) {
 			daos_handle_t th_open;
+			int rc;
 
-			daos_tx_open_snap(arg->coh, snap_epoch[j], &th_open,
-					  NULL);
+			rc = daos_tx_open_snap(arg->coh, snap_epoch[j],
+					       &th_open, NULL);
+			assert_int_equal(rc, 0);
 			number = 10;
 			memset(&anchor, 0, sizeof(anchor));
 			enumerate_dkey(th_open, &number, kds, &anchor, buf,
@@ -428,7 +436,7 @@ rebuild_snap_punch_keys(void **state)
 			memset(&anchor, 0, sizeof(anchor));
 			enumerate_akey(th_open, "dkey", &number, kds,
 				       &anchor, buf, buf_len, &req);
-			assert_int_equal(number, 5 - j);
+			assert_int_equal(number, 10 - j);
 
 			daos_tx_close(th_open, NULL);
 		}
@@ -443,7 +451,7 @@ rebuild_snap_punch_keys(void **state)
 		memset(&anchor, 0, sizeof(anchor));
 		enumerate_akey(DAOS_TX_NONE, "dkey", &number, kds, &anchor,
 			       buf, buf_len, &req);
-		assert_int_equal(number, 0);
+		assert_int_equal(number, 5);
 	}
 
 	ioreq_fini(&req);
@@ -630,6 +638,48 @@ rebuild_objects(void **state)
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
+static void
+rebuild_sx_object(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	char		dkey[32];
+	const char	akey[] = "test_update akey";
+	const char	rec[]  = "test_update record";
+	d_rank_t	rank = 2;
+	int		rank_nr = 1;
+	int		i;
+
+	if (!test_runable(arg, 4))
+		return;
+
+	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	print_message("insert 100 dkeys\n");
+	for (i = 0; i < 100; i++) {
+		sprintf(dkey, "dkey_%d\n", i);
+		insert_single(dkey, akey, 0, (void *)rec, strlen(rec),
+			      DAOS_TX_NONE, &req);
+	}
+
+	get_killing_rank_by_oid(arg, oid, 1, 0, &rank, &rank_nr);
+	/** exclude the target of this obj's replicas */
+	daos_exclude_server(arg->pool.pool_uuid, arg->group,
+			    arg->dmg_config, arg->pool.svc, rank);
+
+	/* wait until rebuild done */
+	test_rebuild_wait(&arg, 1);
+
+	/* add back the excluded targets */
+	daos_reint_server(arg->pool.pool_uuid, arg->group,
+			  arg->dmg_config, arg->pool.svc, rank);
+
+	/* wait until reintegration is done */
+	test_rebuild_wait(&arg, 1);
+	ioreq_fini(&req);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD1: rebuild small rec multiple dkeys",
@@ -654,6 +704,8 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_objects, rebuild_sub_setup, test_teardown},
 	{"REBUILD11: rebuild snapshotted punched object",
 	 rebuild_snap_punch_empty, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD12: rebuild sx object",
+	 rebuild_sx_object, rebuild_small_sub_setup, test_teardown},
 };
 
 int
@@ -668,9 +720,9 @@ run_daos_rebuild_simple_test(int rank, int size, int *sub_tests,
 		sub_tests = NULL;
 	}
 
-	run_daos_sub_tests_only("DAOS rebuild simple tests", rebuild_tests,
-				ARRAY_SIZE(rebuild_tests), sub_tests,
-				sub_tests_size);
+	rc = run_daos_sub_tests_only("DAOS rebuild simple tests", rebuild_tests,
+				     ARRAY_SIZE(rebuild_tests), sub_tests,
+				     sub_tests_size);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 

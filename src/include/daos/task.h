@@ -48,13 +48,14 @@ struct daos_task_args {
 		daos_pool_replicas_t	pool_add_replicas;
 		daos_pool_replicas_t	pool_remove_replicas;
 		daos_mgmt_list_pools_t	mgmt_list_pools;
+		daos_mgmt_get_bs_state_t mgmt_get_bs_state;
 
 		/** Pool */
 		daos_pool_connect_t	pool_connect;
 		daos_pool_disconnect_t	pool_disconnect;
 		daos_pool_update_t	pool_update;
 		daos_pool_query_t	pool_query;
-		daos_pool_query_target_t pool_query_tgt;
+		daos_pool_query_target_t pool_query_info;
 		daos_pool_list_attr_t	pool_list_attr;
 		daos_pool_get_attr_t	pool_get_attr;
 		daos_pool_set_attr_t	pool_set_attr;

@@ -96,6 +96,8 @@ struct dc_object {
 	 * version in it.
 	 */
 	struct daos_obj_md	 cob_md;
+	/** object class attribute */
+	struct daos_oclass_attr	*cob_oca;
 	/** container open handle */
 	daos_handle_t		 cob_coh;
 	/** object open mode */
@@ -143,9 +145,15 @@ struct obj_reasb_req {
 	struct dcs_layout		*orr_singv_los;
 	/* to record returned data size from each targets */
 	daos_size_t			*orr_data_sizes;
+	/* number of targets this IO req involves */
 	uint32_t			 orr_tgt_nr;
+	/* number of targets that with IOM handled */
+	uint32_t			 orr_iom_tgt_nr;
+	/* number of iom extends */
+	uint32_t			 orr_iom_nr;
 	struct daos_oclass_attr		*orr_oca;
 	struct obj_ec_codec		*orr_codec;
+	pthread_spinlock_t		 orr_spin;
 	/* target bitmap, one bit for each target (from first data cell to last
 	 * parity cell.
 	 */
@@ -166,7 +174,9 @@ struct obj_reasb_req {
 	/* only with single target flag */
 					 orr_single_tgt:1,
 	/* only for single-value IO flag */
-					 orr_singv_only:1;
+					 orr_singv_only:1,
+	/* the flag of IOM re-allocable (used for EC IOM merge) */
+					 orr_iom_realloc:1;
 };
 
 static inline void
@@ -451,6 +461,8 @@ void obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr);
 int obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
 		  crt_bulk_perm_t bulk_perm, tse_task_t *task,
 		  crt_bulk_t **p_bulks);
+struct daos_oclass_attr *obj_get_oca(struct dc_object *obj, bool force_check);
+bool obj_is_ec(struct dc_object *obj);
 int obj_get_replicas(struct dc_object *obj);
 int obj_shard_open(struct dc_object *obj, unsigned int shard,
 		   unsigned int map_ver, struct dc_obj_shard **shard_ptr);
@@ -471,6 +483,14 @@ obj_singv_ec_rw_filter(daos_unit_oid_t *oid, daos_iod_t *iods, uint64_t *offs,
 		       daos_epoch_t epoch, uint32_t flags, uint32_t start_shard,
 		       uint32_t nr, bool for_update, bool deg_fetch,
 		       struct daos_recx_ep_list **recov_lists_ptr);
+
+static inline struct pl_obj_shard*
+obj_get_shard(void *data, int idx)
+{
+	struct dc_object	*obj = data;
+
+	return &obj->cob_shards->do_shards[idx].do_pl_shard;
+}
 
 static inline bool
 obj_retry_error(int err)
@@ -675,14 +695,76 @@ ds_obj_cpd_get_tgt_cnt(crt_rpc_t *rpc, int dtx_idx)
 }
 
 static inline uint64_t
-obj_dkey2hash(daos_key_t *dkey)
+obj_dkey2hash(daos_obj_id_t oid, daos_key_t *dkey)
 {
 	/* return 0 for NULL dkey, for example obj punch and list dkey */
 	if (dkey == NULL)
 		return 0;
 
+	if (daos_obj_id2feat(oid) & DAOS_OF_DKEY_UINT64)
+		return *(uint64_t *)dkey->iov_buf;
+
 	return d_hash_murmur64((unsigned char *)dkey->iov_buf,
 			       dkey->iov_len, 5731);
+}
+
+static inline int
+recx_compare(const void *rank1, const void *rank2)
+{
+	const daos_recx_t *r1 = rank1;
+	const daos_recx_t *r2 = rank2;
+
+	D_ASSERT(r1 != NULL && r2 != NULL);
+	if (r1->rx_idx < r2->rx_idx)
+		return -1;
+	else if (r1->rx_idx == r2->rx_idx)
+		return 0;
+	else /** r1->rx_idx < r2->rx_idx */
+		return 1;
+}
+
+static inline void
+daos_iom_sort(daos_iom_t *map)
+{
+	if (map == NULL)
+		return;
+	qsort(map->iom_recxs, map->iom_nr_out,
+	      sizeof(*map->iom_recxs), recx_compare);
+}
+
+static inline void
+daos_iom_dump(daos_iom_t *iom)
+{
+	uint32_t	i;
+
+	if (iom == NULL)
+		return;
+
+	if (iom->iom_type == DAOS_IOD_ARRAY)
+		D_PRINT("iom_type array\n");
+	else if (iom->iom_type == DAOS_IOD_SINGLE)
+		D_PRINT("iom_type single\n");
+	else
+		D_PRINT("iom_type bad (%d)\n", iom->iom_type);
+
+	D_PRINT("iom_nr %d, iom_nr_out %d, iom_flags %d\n",
+		iom->iom_nr, iom->iom_nr_out, iom->iom_flags);
+	D_PRINT("iom_size "DF_U64"\n", iom->iom_size);
+	D_PRINT("iom_recx_lo - "DF_RECX"\n", DP_RECX(iom->iom_recx_lo));
+	D_PRINT("iom_recx_hi - "DF_RECX"\n", DP_RECX(iom->iom_recx_hi));
+
+	if (iom->iom_recxs == NULL) {
+		D_PRINT("NULL iom_recxs array\n");
+		return;
+	}
+
+	D_PRINT("iom_recxs array -\n");
+	for (i = 0; i < iom->iom_nr_out; i++) {
+		D_PRINT("[%d] "DF_RECX" ", i, DP_RECX(iom->iom_recxs[i]));
+		if (i % 8 == 7)
+			D_PRINT("\n");
+	}
+	D_PRINT("\n");
 }
 
 int  obj_utils_init(void);
@@ -715,6 +797,9 @@ dc_tx_get_dti(daos_handle_t th, struct dtx_id *dti);
 
 int
 dc_tx_attach(daos_handle_t th, enum obj_rpc_opc opc, tse_task_t *task);
+
+int
+dc_tx_convert(enum obj_rpc_opc opc, tse_task_t *task);
 
 /* obj_enum.c */
 int

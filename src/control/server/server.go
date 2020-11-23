@@ -31,7 +31,9 @@ import (
 	"os"
 	"os/signal"
 	"os/user"
+	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/pkg/errors"
@@ -45,6 +47,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/security"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -56,7 +59,7 @@ const (
 	minHugePageCount = 128
 )
 
-func cfgHasBdev(cfg *Configuration) bool {
+func cfgHasBdev(cfg *config.Server) bool {
 	for _, srvCfg := range cfg.Servers {
 		if len(srvCfg.Storage.Bdev.DeviceList) > 0 {
 			return true
@@ -77,15 +80,35 @@ func iommuDetected() bool {
 	return len(dmars) > 0
 }
 
+func raftDir(cfg *config.Server) string {
+	if len(cfg.Servers) == 0 {
+		return "" // can't save to SCM
+	}
+	return filepath.Join(cfg.Servers[0].Storage.SCM.MountPoint, "control_raft")
+}
+
+func hostname() string {
+	hn, err := os.Hostname()
+	if err != nil {
+		return fmt.Sprintf("Hostname() failed: %s", err.Error())
+	}
+	return hn
+}
+
 // Start is the entry point for a daos_server instance.
-func Start(log *logging.LeveledLogger, cfg *Configuration) error {
+func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	err := cfg.Validate(log)
 	if err != nil {
 		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
+	// Temporary notification while the feature is still being polished.
+	if len(cfg.AccessPoints) > 1 {
+		log.Info("\n*******\nNOTICE: Support for multiple access points is an alpha feature and is not well-tested!\n*******\n\n")
+	}
+
 	// Backup active config.
-	saveActiveConfig(log, cfg)
+	config.SaveActiveConfig(log, cfg)
 
 	if cfg.HelperLogFile != "" {
 		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cfg.HelperLogFile); err != nil {
@@ -170,12 +193,37 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		}
 	}
 
+	var dbReplicas []*net.TCPAddr
+	for _, ap := range cfg.AccessPoints {
+		apAddr, err := net.ResolveTCPAddr("tcp", ap)
+		if err != nil {
+			return config.FaultConfigBadAccessPoints
+		}
+		dbReplicas = append(dbReplicas, apAddr)
+	}
+
 	// If this daos_server instance ends up being the MS leader,
 	// this will record the DAOS system membership.
-	membership := system.NewMembership(log)
+	sysdb, err := system.NewDatabase(log, &system.DatabaseConfig{
+		Replicas:   dbReplicas,
+		RaftDir:    raftDir(cfg),
+		SystemName: cfg.SystemName,
+	})
+	if err != nil {
+		return errors.Wrap(err, "failed to create system database")
+	}
+	membership := system.NewMembership(log, sysdb)
 	scmProvider := scm.DefaultProvider(log)
 	harness := NewIOServerHarness(log).WithFaultDomain(faultDomain)
+	mgmtSvc := newMgmtSvc(harness, membership, sysdb)
 	var netDevClass uint32
+
+	// Create rpcClient for inter-server communication.
+	cliCfg := control.DefaultConfig()
+	cliCfg.TransportConfig = cfg.TransportConfig
+	rpcClient := control.NewClient(
+		control.WithConfig(cliCfg),
+		control.WithClientLogger(log))
 
 	netCtx, err := netdetect.Init(context.Background())
 	if err != nil {
@@ -190,7 +238,14 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		log.Infof("NOTICE: Detected %d NUMA node(s); %d-server config may not perform as expected", numaCount, len(cfg.Servers))
 	}
 
-	for i, srvCfg := range cfg.Servers {
+	// Create a closure to be used for joining ioserver instances.
+	joinInstance := func(ctx context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
+		req.SetHostList(cfg.AccessPoints)
+		req.ControlAddr = controlAddr
+		return control.SystemJoin(ctx, rpcClient, req)
+	}
+
+	for idx, srvCfg := range cfg.Servers {
 		// Provide special handling for the ofi+verbs provider.
 		// Mercury uses the interface name such as ib0, while OFI uses the device name such as hfi1_0
 		// CaRT and Mercury will now support the new OFI_DOMAIN environment variable so that we can
@@ -222,35 +277,55 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			return err
 		}
 
-		msClient := newMgmtSvcClient(ctx, log, mgmtSvcClientCfg{
-			AccessPoints:    cfg.AccessPoints,
-			ControlAddr:     controlAddr,
-			TransportConfig: cfg.TransportConfig,
-		})
-
-		srv := NewIOServerInstance(log, bp, scmProvider, msClient, ioserver.NewRunner(log, srvCfg)).
+		srv := NewIOServerInstance(log, bp, scmProvider, joinInstance, ioserver.NewRunner(log, srvCfg)).
 			WithHostFaultDomain(faultDomain)
 		if err := harness.AddInstance(srv); err != nil {
 			return err
 		}
 
-		if i == 0 {
-			netDevClass, err = cfg.getDeviceClassFn(srvCfg.Fabric.Interface)
+		if idx == 0 {
+			netDevClass, err = cfg.GetDeviceClassFn(srvCfg.Fabric.Interface)
 			if err != nil {
 				return err
+			}
+
+			if !sysdb.IsReplica() {
+				continue
+			}
+
+			// Start the system db after instance 0's SCM is
+			// ready.
+			var once sync.Once
+			srv.OnStorageReady(func(ctx context.Context) (err error) {
+				once.Do(func() {
+					err = errors.Wrap(sysdb.Start(ctx),
+						"failed to start system db",
+					)
+				})
+				return
+			})
+
+			if !sysdb.IsBootstrap() {
+				continue
+			}
+
+			// For historical reasons, we reserve rank 0 for the first
+			// instance on the raft bootstrap server. This implies that
+			// rank 0 will always be associated with a MS replica, but
+			// it is not guaranteed to always be the leader.
+			srv.joinSystem = func(ctx context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
+				if sb := srv.getSuperblock(); !sb.ValidRank {
+					srv.log.Debug("marking bootstrap instance as rank 0")
+					req.Rank = 0
+					sb.Rank = system.NewRankPtr(0)
+				}
+				return joinInstance(ctx, req)
 			}
 		}
 	}
 
-	// Create rpcClient for inter-server communication.
-	cliCfg := control.DefaultConfig()
-	cliCfg.TransportConfig = cfg.TransportConfig
-	rpcClient := control.NewClient(
-		control.WithConfig(cliCfg),
-		control.WithClientLogger(log))
-
 	// Create and setup control service.
-	controlService := NewControlService(log, harness, bdevProvider, scmProvider, cfg, membership, rpcClient)
+	controlService := NewControlService(log, harness, bdevProvider, scmProvider, cfg, membership, sysdb, rpcClient)
 	if err := controlService.Setup(); err != nil {
 		return errors.Wrap(err, "setup control service")
 	}
@@ -269,12 +344,11 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	streamInterceptors := []grpc.StreamServerInterceptor{
 		streamErrorInterceptor,
 	}
-	opts := []grpc.ServerOption{}
 	tcOpt, err := security.ServerOptionForTransportConfig(cfg.TransportConfig)
 	if err != nil {
 		return err
 	}
-	opts = append(opts, tcOpt)
+	srvOpts := []grpc.ServerOption{tcOpt}
 
 	uintOpt, err := unaryInterceptorForTransportConfig(cfg.TransportConfig)
 	if err != nil {
@@ -290,21 +364,36 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	if sintOpt != nil {
 		streamInterceptors = append(streamInterceptors, sintOpt)
 	}
-	opts = append(opts, []grpc.ServerOption{
+	srvOpts = append(srvOpts, []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(unaryInterceptors...),
 		grpc.ChainStreamInterceptor(streamInterceptors...),
 	}...)
 
-	grpcServer := grpc.NewServer(opts...)
+	grpcServer := grpc.NewServer(srvOpts...)
 	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
 
-	clientNetworkCfg := ClientNetworkCfg{
+	mgmtSvc.clientNetworkCfg = &config.ClientNetworkCfg{
 		Provider:        cfg.Fabric.Provider,
 		CrtCtxShareAddr: cfg.Fabric.CrtCtxShareAddr,
 		CrtTimeout:      cfg.Fabric.CrtTimeout,
 		NetDevClass:     netDevClass,
 	}
-	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness, membership, &clientNetworkCfg))
+	mgmtpb.RegisterMgmtSvcServer(grpcServer, mgmtSvc)
+
+	tSec, err := security.DialOptionForTransportConfig(cfg.TransportConfig)
+	if err != nil {
+		return err
+	}
+	sysdb.ConfigureTransport(grpcServer, tSec)
+	sysdb.OnLeadershipGained(func(ctx context.Context) error {
+		log.Infof("MS leader running on %s", hostname())
+		mgmtSvc.startJoinLoop(ctx)
+		return nil
+	})
+	sysdb.OnLeadershipLost(func() error {
+		log.Infof("MS leader no longer running on %s", hostname())
+		return nil
+	})
 
 	go func() {
 		_ = grpcServer.Serve(lis)
@@ -324,5 +413,5 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		shutdown()
 	}()
 
-	return errors.Wrapf(harness.Start(ctx, membership, cfg), "%s exited with error", build.DataPlaneName)
+	return errors.Wrapf(harness.Start(ctx, membership, sysdb, cfg), "%s exited with error", build.DataPlaneName)
 }

@@ -42,6 +42,20 @@ struct dev_state_msg_arg {
 	ABT_eventual			 eventual;
 };
 
+/*
+ * Used for getting bio device list, which requires exclusive access from
+ * the init xstream.
+ */
+struct bio_dev_list_msg_arg {
+	struct bio_xs_context		*xs;
+	d_list_t			*dev_list;
+	int				 dev_list_cnt;
+	ABT_eventual			 eventual;
+	int				 rc;
+};
+
+
+/* Collect space utilisation for blobstore */
 static void
 collect_bs_usage(struct spdk_blob_store *bs, struct nvme_stats *stats)
 {
@@ -132,6 +146,15 @@ bio_get_dev_state(struct nvme_stats *state, struct bio_xs_context *xs)
 }
 
 /*
+ * Copy out the internal BIO blobstore device state.
+ */
+void
+bio_get_bs_state(int *bs_state, struct bio_xs_context *xs)
+{
+	*bs_state = xs->bxc_blobstore->bb_state;
+}
+
+/*
  * Call internal method to set BIO device state to FAULTY and trigger device
  * state transition. Called from the device owner xstream.
  */
@@ -162,13 +185,28 @@ bio_dev_set_faulty(struct bio_xs_context *xs)
 	return rc;
 }
 
+static inline struct bio_dev_health *
+xs_ctxt2dev_health(struct bio_xs_context *ctxt)
+{
+	D_ASSERT(ctxt != NULL);
+	/* bio_xsctxt_free() is underway */
+	if (ctxt->bxc_blobstore == NULL)
+		return NULL;
+
+	return &ctxt->bxc_blobstore->bb_dev_health;
+}
+
 static void
 get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 				 void *cb_arg)
 {
-	struct bio_dev_health			 *dev_health = cb_arg;
-	int					  sc, sct;
-	uint32_t				  cdw0;
+	struct bio_xs_context	*ctxt = cb_arg;
+	struct bio_dev_health	*dev_health = xs_ctxt2dev_health(ctxt);
+	int			 sc, sct;
+	uint32_t		 cdw0;
+
+	if (dev_health == NULL)
+		goto out;
 
 	D_ASSERT(dev_health->bdh_inflights == 1);
 
@@ -177,40 +215,38 @@ get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	if (sc)
 		D_ERROR("NVMe status code/type: %d/%d\n", sc, sct);
 
-	/* Free I/O request in the completion callback */
-	spdk_bdev_free_io(bdev_io);
 	/*Decrease inflights on error or successful callback completion chain*/
 	dev_health->bdh_inflights--;
+out:
+	/* Free I/O request in the completion callback */
+	spdk_bdev_free_io(bdev_io);
 }
 
 static int
 populate_health_cdata(const struct spdk_nvme_ctrlr_data *cdata,
-		      struct nvme_stats *dev_state)
+		      struct nvme_stats *state)
 {
-	int	written, rc = 0;
-
-	written = snprintf(dev_state->model, sizeof(dev_state->model),
-			   "%-20.20s", cdata->mn);
-	if (written >= sizeof(dev_state->model)) {
-		D_WARN("data truncated when writing model to health state");
-		rc = -DER_TRUNC;
+	if (copy_ascii(state->model, sizeof(state->model), cdata->mn,
+		       sizeof(cdata->mn)) != 0) {
+		D_ERROR("data truncated when writing model to health state");
+		return -DER_TRUNC;
 	}
 
-	written = snprintf(dev_state->serial, sizeof(dev_state->serial),
-			   "%-20.20s", cdata->sn);
-	if (written >= sizeof(dev_state->serial)) {
-		D_WARN("data truncated when writing model to health state");
-		rc = -DER_TRUNC;
+	if (copy_ascii(state->serial, sizeof(state->serial), cdata->sn,
+		       sizeof(cdata->sn)) != 0) {
+		D_ERROR("data truncated when writing serial to health state");
+		return -DER_TRUNC;
 	}
 
-	return rc;
+	return 0;
 }
 
 static void
 get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 				   void *cb_arg)
 {
-	struct bio_dev_health		*dev_health = cb_arg;
+	struct bio_xs_context		*ctxt = cb_arg;
+	struct bio_dev_health		*dev_health = xs_ctxt2dev_health(ctxt);
 	struct spdk_nvme_ctrlr_data	*cdata;
 	struct spdk_bdev		*bdev;
 	struct spdk_nvme_cmd		 cmd;
@@ -220,6 +256,9 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	int				 rc;
 	int				 sc, sct;
 	uint32_t			 cdw0;
+
+	if (dev_health == NULL)
+		goto out;
 
 	D_ASSERT(dev_health->bdh_inflights == 1);
 
@@ -239,7 +278,6 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	cdata = dev_health->bdh_ctrlr_buf;
 	rc = populate_health_cdata(cdata, &dev_health->bdh_health_state);
 	if (rc != 0) {
-		D_ERROR("failed to populate device details in health state");
 		goto out;
 	}
 
@@ -271,7 +309,7 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 					   dev_health->bdh_error_buf,
 					   ep_buf_sz,
 					   get_spdk_err_log_page_completion,
-					   dev_health);
+					   ctxt);
 	if (rc) {
 		D_ERROR("NVMe admin passthru (error log), rc:%d\n", rc);
 		dev_health->bdh_inflights--;
@@ -310,12 +348,16 @@ static void
 get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 			     void *cb_arg)
 {
-	struct bio_dev_health	*dev_health = cb_arg;
+	struct bio_xs_context	*ctxt = cb_arg;
+	struct bio_dev_health	*dev_health = xs_ctxt2dev_health(ctxt);
 	struct spdk_bdev	*bdev;
 	struct spdk_nvme_cmd	 cmd;
 	uint32_t		 cp_sz;
 	int			 rc, sc, sct;
 	uint32_t		 cdw0;
+
+	if (dev_health == NULL)
+		goto out;
 
 	D_ASSERT(dev_health->bdh_inflights == 1);
 
@@ -352,7 +394,7 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 					   dev_health->bdh_ctrlr_buf,
 					   cp_sz,
 					   get_spdk_identify_ctrlr_completion,
-					   dev_health);
+					   ctxt);
 	if (rc) {
 		D_ERROR("NVMe admin passthru (identify ctrlr), rc:%d\n", rc);
 		dev_health->bdh_inflights--;
@@ -366,22 +408,37 @@ out:
 static int
 auto_detect_faulty(struct bio_blobstore *bbs)
 {
+	uint64_t	tgtidx;
+	int		i;
+
 	if (bbs->bb_state != BIO_BS_STATE_NORMAL)
 		return 0;
 	/*
 	 * TODO: Check the health data stored in @bbs, and mark the bbs as
 	 *	 faulty when certain faulty criteria are satisfied.
 	 */
-	if (DAOS_FAIL_CHECK(DAOS_NVME_FAULTY))
-		return bio_bs_state_set(bbs, BIO_BS_STATE_FAULTY);
+
+	/*
+	 * Used for DAOS NVMe Recovery Tests. Will trigger bs faulty reaction
+	 * only if the specified target is assigned to the device.
+	 */
+	if (DAOS_FAIL_CHECK(DAOS_NVME_FAULTY)) {
+		tgtidx = daos_fail_value_get();
+		for (i = 0; i < bbs->bb_ref; i++) {
+			if (bbs->bb_xs_ctxts[i]->bxc_tgt_id == tgtidx)
+				return bio_bs_state_set(bbs,
+							BIO_BS_STATE_FAULTY);
+		}
+	}
 
 	return 0;
 }
 
 /* Collect the raw device health state through SPDK admin APIs */
 static void
-collect_raw_health_data(struct bio_dev_health *dev_health)
+collect_raw_health_data(struct bio_xs_context *ctxt)
 {
+	struct bio_dev_health	*dev_health = xs_ctxt2dev_health(ctxt);
 	struct spdk_bdev	*bdev;
 	struct spdk_nvme_cmd	 cmd;
 	uint32_t		 numd, numdl, numdu;
@@ -435,14 +492,13 @@ collect_raw_health_data(struct bio_dev_health *dev_health)
 					   dev_health->bdh_health_buf,
 					   health_page_sz,
 					   get_spdk_log_page_completion,
-					   dev_health);
+					   ctxt);
 	if (rc) {
 		D_ERROR("NVMe admin passthru (health log), rc:%d\n", rc);
 		dev_health->bdh_inflights--;
 	}
 }
 
-/* Collect space utilisation for blobstore */
 void
 bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {
@@ -477,7 +533,7 @@ bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
 		D_ERROR("State transition on target %d failed. %d\n",
 			ctxt->bxc_tgt_id, rc);
 
-	collect_raw_health_data(dev_health);
+	collect_raw_health_data(ctxt);
 }
 
 /* Print the io stat every few seconds, for debug only */

@@ -159,10 +159,10 @@ func (c *ControlService) scanInstanceBdevs(ctx context.Context) (*bdev.ScanRespo
 	instances := c.harness.Instances()
 
 	for _, srv := range instances {
-		bdevReq := bdev.ScanRequest{} // use cached controller details by default
-
 		// only retrieve results for devices listed in server config
-		bdevReq.DeviceList = c.instanceStorage[srv.Index()].Bdev.GetNvmeDevs()
+		bdevReq := bdev.ScanRequest{
+			DeviceList: c.instanceStorage[srv.Index()].Bdev.GetNvmeDevs(),
+		}
 		c.log.Debugf("instance %d storage scan: only show bdev devices in config %v",
 			srv.Index(), bdevReq.DeviceList)
 
@@ -177,7 +177,7 @@ func (c *ControlService) scanInstanceBdevs(ctx context.Context) (*bdev.ScanRespo
 				return nil, errors.Wrap(err, "nvme scan")
 			}
 
-			ctrlrs = append(ctrlrs, bsr.Controllers...)
+			ctrlrs = ctrlrs.Update(bsr.Controllers...)
 			continue
 		}
 
@@ -198,10 +198,19 @@ func (c *ControlService) scanInstanceBdevs(ctx context.Context) (*bdev.ScanRespo
 			return nil, errors.Wrap(err, "updating bdev health and smd info")
 		}
 
-		ctrlrs = append(ctrlrs, bsr.Controllers...)
+		ctrlrs = ctrlrs.Update(bsr.Controllers...)
 	}
 
 	return &bdev.ScanResponse{Controllers: ctrlrs}, nil
+}
+
+// stripNvmeDetails removes all controller details leaving only PCI address and
+// NUMA node/socket ID. Useful when scanning only device topology.
+func stripNvmeDetails(pbc *ctlpb.NvmeController) {
+	pbc.Serial = ""
+	pbc.Model = ""
+	pbc.Fwrev = ""
+	pbc.Namespaces = nil
 }
 
 // newScanBdevResp populates protobuf NVMe scan response with controller info
@@ -222,11 +231,14 @@ func newScanNvmeResp(req *ctlpb.ScanNvmeReq, inResp *bdev.ScanResponse, inErr er
 
 	// trim unwanted fields so responses can be coalesced from hash map
 	for _, pbc := range pbCtrlrs {
-		if !req.Health {
+		if !req.GetHealth() {
 			pbc.Healthstats = nil
 		}
-		if !req.Meta {
+		if !req.GetMeta() {
 			pbc.Smddevices = nil
+		}
+		if req.GetBasic() {
+			stripNvmeDetails(pbc)
 		}
 	}
 
@@ -240,7 +252,6 @@ func newScanNvmeResp(req *ctlpb.ScanNvmeReq, inResp *bdev.ScanResponse, inErr er
 func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq) (*ctlpb.ScanNvmeResp, error) {
 	if req.Health || req.Meta {
 		// filter results based on config file bdev_list contents
-		c.log.Debug("scanning in-use nvme devices")
 		resp, err := c.scanInstanceBdevs(ctx)
 
 		return newScanNvmeResp(req, resp, err)
@@ -328,7 +339,6 @@ func (c *ControlService) scanScm(ctx context.Context) (*ctlpb.ScanScmResp, error
 	ssr, scanErr := c.ScmScan(scmReq)
 	if scanErr == nil && len(ssr.Namespaces) > 0 {
 		// update namespace info if storage is online
-		c.log.Debug("scanning in-use scm devices")
 		ssr, scanErr = c.scanInstanceScm(ctx, ssr)
 	}
 
