@@ -202,6 +202,15 @@ daos_getntime_coarse(void)
 	return (tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec); /* nano seconds */
 }
 
+static inline uint64_t
+daos_getutime(void)
+{
+	struct timespec tv;
+
+	d_gettime(&tv);
+	return d_time2us(tv);
+}
+
 static inline int daos_gettime_coarse(uint64_t *time)
 {
 	struct timespec	now;
@@ -450,6 +459,7 @@ daos_errno2der(int err)
 	case EPROTO:		return -DER_PROTO;
 	case EINVAL:		return -DER_INVAL;
 	case ENOTDIR:		return -DER_NOTDIR;
+	case EIO:		return -DER_IO;
 	case EFAULT:
 	case ENXIO:
 	case ENODEV:
@@ -656,6 +666,8 @@ enum {
 #define DAOS_VC_LOST_REPLICA		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x43)
 
 #define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
+#define DAOS_NVME_WRITE_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x51)
+#define DAOS_NVME_READ_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x52)
 
 #define DAOS_POOL_CREATE_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x60)
 #define DAOS_POOL_DESTROY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x61)
@@ -674,6 +686,8 @@ enum {
 #define DAOS_FAIL_LOST_REQ		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x72)
 
 #define DAOS_SHARD_OBJ_RW_DROP_REPLY (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x80)
+#define DAOS_OBJ_FETCH_DATA_LOST	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x81)
+#define DAOS_OBJ_TRY_SPECIAL_SHARD	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x82)
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 

@@ -278,6 +278,7 @@ do {						\
 #define DAE_EPOCH(dae)		((dae)->dae_base.dae_epoch)
 #define DAE_LID(dae)		((dae)->dae_base.dae_lid)
 #define DAE_FLAGS(dae)		((dae)->dae_base.dae_flags)
+#define DAE_MBS_FLAGS(dae)	((dae)->dae_base.dae_mbs_flags)
 #define DAE_REC_INLINE(dae)	((dae)->dae_base.dae_rec_inline)
 #define DAE_REC_CNT(dae)	((dae)->dae_base.dae_rec_cnt)
 #define DAE_VER(dae)		((dae)->dae_base.dae_ver)
@@ -784,6 +785,7 @@ struct vos_iterator {
 	struct vos_iter_ops	*it_ops;
 	struct vos_iterator	*it_parent; /* parent iterator */
 	struct vos_ts_set	*it_ts_set;
+	daos_epoch_t		 it_bound;
 	vos_iter_type_t		 it_type;
 	enum vos_iter_state	 it_state;
 	uint32_t		 it_ref_cnt;
@@ -982,9 +984,9 @@ void
 key_tree_release(daos_handle_t toh, bool is_array);
 int
 key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
-	       d_iov_t *key_iov, d_iov_t *val_iov, uint64_t flags,
-	       struct vos_ts_set *ts_set, struct vos_ilog_info *parent,
-	       struct vos_ilog_info *info);
+	       daos_epoch_t bound, d_iov_t *key_iov, d_iov_t *val_iov,
+	       uint64_t flags, struct vos_ts_set *ts_set,
+	       struct vos_ilog_info *parent, struct vos_ilog_info *info);
 
 /* vos_io.c */
 daos_size_t
@@ -1179,6 +1181,17 @@ vos_epc_punched(daos_epoch_t epc, uint16_t minor_epc,
 		return true;
 
 	return false;
+}
+
+static inline bool
+vos_has_uncertainty(struct vos_ts_set *ts_set,
+		    const struct vos_ilog_info *info, daos_epoch_t epoch,
+		    daos_epoch_t bound)
+{
+	if (info->ii_uncertain_create)
+		return true;
+
+	return vos_ts_wcheck(ts_set, epoch, bound);
 }
 
 

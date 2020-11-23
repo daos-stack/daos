@@ -37,11 +37,13 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/peer"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
 	. "github.com/daos-stack/daos/src/control/system"
@@ -56,14 +58,9 @@ const (
 )
 
 func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
-	testLog, _ := logging.NewTestLogger(t.Name())
-	missingSB := newTestMgmtSvc(t, testLog)
-	missingSB.harness.instances[0]._superblock = nil
-	missingAPs := newTestMgmtSvc(t, testLog)
-	missingAPs.harness.instances[0].msClient.cfg.AccessPoints = nil
+	localhost := common.LocalhostCtrlAddr()
 
 	for name, tc := range map[string]struct {
-		mgmtSvc *mgmtSvc
 		req     *mgmtpb.LeaderQueryReq
 		expResp *mgmtpb.LeaderQueryResp
 		expErr  error
@@ -77,26 +74,11 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 			},
 			expErr: errors.New("wrong system"),
 		},
-		"no i/o servers": {
-			mgmtSvc: newMgmtSvc(NewIOServerHarness(nil), nil, nil),
-			req:     &mgmtpb.LeaderQueryReq{},
-			expErr:  errors.New("no I/O servers"),
-		},
-		"missing superblock": {
-			mgmtSvc: missingSB,
-			req:     &mgmtpb.LeaderQueryReq{},
-			expErr:  errors.New("no I/O superblock"),
-		},
-		"fail to get current leader address": {
-			mgmtSvc: missingAPs,
-			req:     &mgmtpb.LeaderQueryReq{},
-			expErr:  errors.New("current leader address"),
-		},
 		"successful query": {
-			req: &mgmtpb.LeaderQueryReq{},
+			req: &mgmtpb.LeaderQueryReq{System: build.DefaultSystemName},
 			expResp: &mgmtpb.LeaderQueryResp{
-				CurrentLeader: "localhost",
-				Replicas:      []string{"localhost"},
+				CurrentLeader: localhost.String(),
+				Replicas:      []string{localhost.String()},
 			},
 		},
 	} {
@@ -104,11 +86,25 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			if tc.mgmtSvc == nil {
-				tc.mgmtSvc = newTestMgmtSvc(t, log)
+			mgmtSvc := newTestMgmtSvc(t, log)
+			db, cleanup := system.TestDatabase(t, log)
+			defer cleanup()
+			mgmtSvc.sysdb = db
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if err := db.Start(ctx); err != nil {
+				t.Fatal(err)
 			}
 
-			gotResp, gotErr := tc.mgmtSvc.LeaderQuery(context.TODO(), tc.req)
+			// wait for the bootstrap to finish
+			for {
+				if db.IsLeader() {
+					break
+				}
+			}
+
+			gotResp, gotErr := mgmtSvc.LeaderQuery(context.TODO(), tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -997,17 +993,17 @@ func TestServer_MgmtSvc_getPeerListenAddr(t *testing.T) {
 func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mgmtSvc          *mgmtSvc
-		clientNetworkCfg *ClientNetworkCfg
+		clientNetworkCfg *config.ClientNetworkCfg
 		req              *mgmtpb.GetAttachInfoReq
 		expResp          *mgmtpb.GetAttachInfoResp
 	}{
 		"Server uses verbs + Infiniband": {
-			clientNetworkCfg: &ClientNetworkCfg{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: netdetect.Infiniband},
+			clientNetworkCfg: &config.ClientNetworkCfg{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: netdetect.Infiniband},
 			req:              &mgmtpb.GetAttachInfoReq{},
 			expResp:          &mgmtpb.GetAttachInfoResp{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: netdetect.Infiniband},
 		},
 		"Server uses sockets + Ethernet": {
-			clientNetworkCfg: &ClientNetworkCfg{Provider: "ofi+sockets", CrtCtxShareAddr: 0, CrtTimeout: 5, NetDevClass: netdetect.Ether},
+			clientNetworkCfg: &config.ClientNetworkCfg{Provider: "ofi+sockets", CrtCtxShareAddr: 0, CrtTimeout: 5, NetDevClass: netdetect.Ether},
 			req:              &mgmtpb.GetAttachInfoReq{},
 			expResp:          &mgmtpb.GetAttachInfoResp{Provider: "ofi+sockets", CrtCtxShareAddr: 0, CrtTimeout: 5, NetDevClass: netdetect.Ether},
 		},

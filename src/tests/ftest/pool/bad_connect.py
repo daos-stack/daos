@@ -25,7 +25,6 @@ from __future__ import print_function
 
 import traceback
 import ctypes
-from pydaos.raw import RankList
 from avocado.core.exceptions import TestFail
 from apricot import TestWithServers
 from test_utils_pool import TestPool
@@ -51,10 +50,6 @@ class BadConnectTest(TestWithServers):
         connectmode = modelist[0]
         expected_for_param.append(modelist[1])
 
-        svclist = self.params.get("ranklist", '/run/connecttests/svrlist/*/')
-        svc = svclist[0]
-        expected_for_param.append(svclist[1])
-
         setlist = self.params.get("setname",
                                   '/run/connecttests/connectsetnames/*/')
         connectset = setlist[0]
@@ -73,7 +68,6 @@ class BadConnectTest(TestWithServers):
                 break
 
         puuid = (ctypes.c_ubyte * 16)()
-        psvc = RankList()
         pgroup = ctypes.create_string_buffer(0)
         # initialize a python pool object then create the underlying
         # daos storage
@@ -82,13 +76,6 @@ class BadConnectTest(TestWithServers):
         self.pool.create()
         # save this uuid since we might trash it as part of the test
         ctypes.memmove(puuid, self.pool.pool.uuid, 16)
-
-        # trash the the pool service rank list
-        psvc.rl_ranks = self.pool.pool.svc.rl_ranks
-        psvc.rl_nr = self.pool.pool.svc.rl_nr
-        if not svc == 'VALID':
-            rl_ranks = ctypes.POINTER(ctypes.c_uint)()
-            self.pool.pool.svc = RankList(rl_ranks, 1)
 
         # trash the pool group value
         pgroup = self.pool.pool.group
@@ -117,8 +104,6 @@ class BadConnectTest(TestWithServers):
         finally:
             if self.pool is not None and self.pool.pool.attached == 1:
                 # restore values in case we trashed them during test
-                self.pool.pool.svc.rl_ranks = psvc.rl_ranks
-                self.pool.pool.svc.rl_nr = psvc.rl_nr
                 self.pool.pool.group = pgroup
                 if self.pool.pool.uuid is None:
                     self.pool.pool.uuid = (ctypes.c_ubyte * 16)()

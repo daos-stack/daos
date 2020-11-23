@@ -138,7 +138,7 @@ fio_stress:
     - global
     - test
   global:
-    directory: "/tmp/daos_dfuse"
+    directory: "/tmp/daos_dfuse/"
     ioengine: 'libaio'
     thread: 1
     group_reporting: 1
@@ -158,6 +158,6 @@ fio_stress:
         - 'rw'
         - 'randrw'
 dfuse:
-  mount_dir: "/tmp/daos_dfuse"
+  mount_dir: "/tmp/daos_dfuse/"
   disable_direct_io: True
 

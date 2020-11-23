@@ -666,7 +666,7 @@ calc_csum_sv(struct daos_csummer *obj, d_sg_list_t *sgl, size_t rec_len,
 			 * data cell possibly with less valid bytes, and
 			 * followed by parity cells.
 			 */
-			if (singv_idx < data_tgt_nr)
+			if (singv_lo->cs_cell_align || singv_idx < data_tgt_nr)
 				singv_off = singv_idx * singv_lo->cs_bytes;
 			else
 				singv_off = rec_len +
