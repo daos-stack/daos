@@ -438,10 +438,13 @@ func (c *Server) Validate(log logging.Logger) (err error) {
 		return FaultConfigNoProvider
 	}
 
-	// only single access point valid for now
-	if len(c.AccessPoints) != 1 {
+	switch {
+	case len(c.AccessPoints) < 1:
 		return FaultConfigBadAccessPoints
+	case len(c.AccessPoints)%2 == 0:
+		return FaultConfigEvenAccessPoints
 	}
+
 	for i := range c.AccessPoints {
 		// apply configured control port if not supplied
 		host, port, err := common.SplitPort(c.AccessPoints[i], c.ControlPort)

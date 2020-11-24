@@ -38,6 +38,7 @@ class ContainerCopy(MdtestBase, IorTestBase):
         self.container = []
 
     def create_cont(self):
+        # pylint: disable=arguments-differ
         """Create a TestContainer object to be used to create container."""
         # Get container params and create
         self.container.append(self.get_container(self.pool, create=False))

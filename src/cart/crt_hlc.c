@@ -65,10 +65,13 @@ uint64_t crt_hlc_get(void)
 	return ret;
 }
 
-uint64_t crt_hlc_get_msg(uint64_t msg)
+int crt_hlc_get_msg(uint64_t msg, uint64_t *hlc_out)
 {
 	uint64_t pt = crt_hlc_localtime_get();
 	uint64_t hlc, ret, ml = msg & ~CRT_HLC_MASK;
+
+	if (ml > pt && ml - pt > crt_hlc_epsilon)
+		return -DER_HLC_SYNC;
 
 	do {
 		hlc = crt_hlc;
@@ -82,7 +85,9 @@ uint64_t crt_hlc_get_msg(uint64_t msg)
 			ret = hlc + 1;
 	} while (!atomic_compare_exchange(&crt_hlc, hlc, ret));
 
-	return ret;
+	if (hlc_out != NULL)
+		*hlc_out = ret;
+	return 0;
 }
 
 uint64_t crt_hlc2sec(uint64_t hlc)

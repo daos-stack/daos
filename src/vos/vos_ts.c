@@ -61,6 +61,8 @@ ts_update_on_evict(struct vos_ts_table *ts_table, struct vos_ts_entry *entry)
 	struct vos_ts_info	*info = entry->te_info;
 	struct vos_ts_info	*parent_info;
 	struct vos_ts_info	*neg_info = NULL;
+	struct vos_wts_cache	*wcache;
+	struct vos_wts_cache	*dest;
 	uint32_t		*idx;
 
 	if (entry->te_record_ptr == NULL)
@@ -83,7 +85,9 @@ ts_update_on_evict(struct vos_ts_table *ts_table, struct vos_ts_entry *entry)
 		}
 	}
 
+	wcache = &entry->te_w_cache;
 	if (other == NULL) {
+		dest = &ts_table->tt_w_cache;
 		if (entry->te_ts.tp_ts_rl > ts_table->tt_ts_rl) {
 			vos_ts_copy(&ts_table->tt_ts_rl, &ts_table->tt_tx_rl,
 				    entry->te_ts.tp_ts_rl,
@@ -94,11 +98,15 @@ ts_update_on_evict(struct vos_ts_table *ts_table, struct vos_ts_entry *entry)
 				    entry->te_ts.tp_ts_rh,
 				    &entry->te_ts.tp_tx_rh);
 		}
-		return true;
+		goto update_w_cache;
 	}
 
+	dest = &other->te_w_cache;
 	vos_ts_rl_update(other, entry->te_ts.tp_ts_rl, &entry->te_ts.tp_tx_rl);
 	vos_ts_rh_update(other, entry->te_ts.tp_ts_rh, &entry->te_ts.tp_tx_rh);
+update_w_cache:
+	vos_ts_update_wcache(dest, wcache->wc_ts_w[0]);
+	vos_ts_update_wcache(dest, wcache->wc_ts_w[1]);
 
 	return true;
 }
@@ -272,6 +280,7 @@ vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *parent,
 			    ts_table->tt_ts_rl, &ts_table->tt_tx_rl);
 		vos_ts_copy(&entry->te_ts.tp_ts_rh, &entry->te_ts.tp_tx_rh,
 			    ts_table->tt_ts_rh, &ts_table->tt_tx_rh);
+		entry->te_w_cache = ts_table->tt_w_cache;
 		entry->te_parent_ptr = NULL;
 	} else {
 		entry->te_parent_ptr = parent->te_record_ptr;
@@ -301,6 +310,8 @@ vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *parent,
 				    ts_source->te_ts.tp_ts_rh,
 				    &ts_source->te_ts.tp_tx_rh);
 		}
+		/** copy write entries */
+		entry->te_w_cache = ts_source->te_w_cache;
 		/** Low timestamp is always copied as is */
 		vos_ts_copy(&entry->te_ts.tp_ts_rl, &entry->te_ts.tp_tx_rl,
 			    ts_source->te_ts.tp_ts_rl,

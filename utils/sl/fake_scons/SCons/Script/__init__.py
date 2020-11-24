@@ -27,161 +27,161 @@ import copy
 class SConscript():
     """Fake SConscript"""
 
-    def __init__(self, *args, **kw):
+    def __init__(self, *_args, **_kw):
         """init function"""
 
 
 class DefaultEnvironment():
     """Default environment"""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *_args, **_kwargs):
         """constructor"""
 
-    def RunTests(self, *args, **kw):
+    def RunTests(self, *_args, **_kw):
         """Fake tests builder (defined by prereq_tools)"""
         return []
 
-    def RunMemcheckTests(self, *args, **kw):
+    def RunMemcheckTests(self, *_args, **_kw):
         """Fake tests builder (defined by prereq_tools)"""
         return []
 
-    def RunHelgrindTests(self, *args, **kw):
+    def RunHelgrindTests(self, *_args, **_kw):
         """Fake tests builder (defined by prereq_tools)"""
         return []
 
-    def CFile(self, *args, **kw):
+    def CFile(self, *_args, **_kw):
         """Fake CFile"""
         return []
 
-    def WhereIs(self, *args, **kw):
+    def WhereIs(self, *_args, **_kw):
         """Fake WhereIs"""
         return []
 
-    def Java(self, *args, **kw):
+    def Java(self, *_args, **_kw):
         """Fake Java"""
         return []
 
-    def Jar(self, *args, **kw):
+    def Jar(self, *_args, **_kw):
         """Fake Jar"""
         return []
 
-    def StaticLibrary(self, *args, **kw):
+    def StaticLibrary(self, *_args, **_kw):
         """Fake StaticLibrary"""
         return []
 
-    def M4(self, *args, **kw):
+    def M4(self, *_args, **_kw):
         """Fake M4"""
         return []
 
-    def DVI(self, *args, **kw):
+    def DVI(self, *_args, **_kw):
         """Fake DVI"""
         return []
 
-    def Zip(self, *args, **kw):
+    def Zip(self, *_args, **_kw):
         """Fake Zip"""
         return []
 
-    def CXXFile(self, *args, **kw):
+    def CXXFile(self, *_args, **_kw):
         """Fake CXXFile"""
         return []
 
-    def InstallAs(self, *args, **kw):
+    def InstallAs(self, *_args, **_kw):
         """Fake InstallAs"""
         return []
 
-    def InstallVersionedLib(self, *args, **kw):
+    def InstallVersionedLib(self, *_args, **_kw):
         """Fake InstallVersionedLib"""
         return []
 
-    def RPCGenHeader(self, *args, **kw):
+    def RPCGenHeader(self, *_args, **_kw):
         """Fake RPCGenHeader"""
         return []
 
-    def RPCGenXDR(self, *args, **kw):
+    def RPCGenXDR(self, *_args, **_kw):
         """Fake RPCGenXDR"""
         return []
 
-    def JavaClassDir(self, *args, **kw):
+    def JavaClassDir(self, *_args, **_kw):
         """Fake JavaClassDir"""
         return []
 
-    def LoadableModule(self, *args, **kw):
+    def LoadableModule(self, *_args, **_kw):
         """Fake LoadableModule"""
         return []
 
-    def JavaFile(self, *args, **kw):
+    def JavaFile(self, *_args, **_kw):
         """Fake JavaFile"""
         return []
 
-    def Command(self, *args, **kw):
+    def Command(self, *_args, **_kw):
         """Fake Command"""
         return []
 
-    def CopyAs(self, *args, **kw):
+    def CopyAs(self, *_args, **_kw):
         """Fake CopyAs"""
         return []
 
-    def JavaH(self, *args, **kw):
+    def JavaH(self, *_args, **_kw):
         """Fake JavaH"""
         return []
 
-    def CopyTo(self, *args, **kw):
+    def CopyTo(self, *_args, **_kw):
         """Fake CopyTo"""
         return []
 
-    def PDF(self, *args, **kw):
+    def PDF(self, *_args, **_kw):
         """Fake PDF"""
         return []
 
-    def StaticObject(self, *args, **kw):
+    def StaticObject(self, *_args, **_kw):
         """Fake StaticObject"""
         return []
 
-    def Gs(self, *args, **kw):
+    def Gs(self, *_args, **_kw):
         """Fake Gs"""
         return []
 
-    def Tar(self, *args, **kw):
+    def Tar(self, *_args, **_kw):
         """Fake Tar"""
         return []
 
-    def JavaClassFile(self, *args, **kw):
+    def JavaClassFile(self, *_args, **_kw):
         """Fake JavaClassFile"""
         return []
 
-    def RPCGenService(self, *args, **kw):
+    def RPCGenService(self, *_args, **_kw):
         """Fake RPCGenService"""
         return []
 
-    def RPCGenClient(self, *args, **kw):
+    def RPCGenClient(self, *_args, **_kw):
         """Fake RPCGenClient"""
         return []
 
-    def Literal(self, *args, **kw):
+    def Literal(self, *_args, **_kw):
         """Fake Literal"""
         return []
 
-    def Library(self, *args, **kw):
+    def Library(self, *_args, **_kw):
         """Fake Library"""
         return []
 
-    def RMIC(self, *args, **kw):
+    def RMIC(self, *_args, **_kw):
         """Fake RMIC"""
         return []
 
-    def PostScript(self, *args, **kw):
+    def PostScript(self, *_args, **_kw):
         """Fake PostScript"""
         return []
 
-    def Rpm(self, *args, **kw):
+    def Rpm(self, *_args, **_kw):
         """Fake Rpm"""
         return []
 
-    def Program(self, *args, **kw):
+    def Program(self, *_args, **_kw):
         """Fake Program"""
         return []
 
-    def Alias(self, *args, **kw):
+    def Alias(self, *_args, **_kw):
         """Fake Alias"""
         return []
 
@@ -189,46 +189,46 @@ class DefaultEnvironment():
         """Fake __getitem__"""
         return []
 
-    def Install(self, *args, **kw):
+    def Install(self, *_args, **_kw):
         """Fake Install"""
 
-    def SharedLibrary(self, *args, **kw):
+    def SharedLibrary(self, *_args, **_kw):
         """Fake SharedLibrary"""
         return []
 
-    def SharedObject(self, *args, **kw):
+    def SharedObject(self, *_args, **_kw):
         """Fake SharedObject"""
         return []
 
-    def Object(self, *args, **kw):
+    def Object(self, *_args, **_kw):
         """Fake Object"""
         return []
 
-    def Replace(self, *args, **kw):
+    def Replace(self, *_args, **_kw):
         """Fake Replace"""
 
-    def Clone(self, *args, **kw):
+    def Clone(self, *_args, **_kw):
         """Fake Replace"""
         return copy.copy(self)
 
-    def Append(self, *args, **kw):
+    def Append(self, *_args, **_kw):
         """Fake Append"""
 
-    def AppendUnique(self, *args, **kw):
+    def AppendUnique(self, *_args, **_kw):
         """Fake Append Unique"""
 
-    def AppendIfSupported(self, *args, **kw):
+    def AppendIfSupported(self, *_args, **_kw):
         """Fake AppendIfSupported"""
 
     def subst(self, val):
         """Fake subst"""
         return val
 
-    def get(self, var, *args, **kw):
+    def get(self, var, *_args, **_kw):
         """Fake get"""
         return var
 
-    def GetOption(self, *args, **kw):
+    def GetOption(self, *_args, **_kw):
         """Fake GetOption"""
         return []
 
@@ -236,60 +236,60 @@ class DefaultEnvironment():
 class Variables():
     """Fake variables"""
 
-    def __init__(self, *args, **kw):
+    def __init__(self, *_args, **_kw):
         """constructor"""
 
-    def Add(self, *args, **kw):
+    def Add(self, *_args, **_kw):
         """Fake Add function"""
 
-    def Update(self, *args, **kw):
+    def Update(self, *_args, **_kw):
         """Fake Update function"""
 
-    def GenerateHelpText(self, *args, **kw):
+    def GenerateHelpText(self, *_args, **_kw):
         """Fake GenerateHelpText"""
 
-    def UnknownVariables(self, *args, **kw):
+    def UnknownVariables(self, *_args, **_kw):
         """Fake UnknownVariables"""
 
-    def Save(self, *args, **kw):
+    def Save(self, *_args, **_kw):
         """Fake Save"""
 
 
 class Configure():
     """Fake Configure"""
-    def __init__(self, *args, **kw):
+    def __init__(self, *_args, **_kw):
         self.env = DefaultEnvironment()
         """constructor"""
 
-    def CheckHeader(self, *args, **kw):
+    def CheckHeader(self, *_args, **_kw):
         """Fake CheckHeader"""
         return True
 
-    def CheckLib(self, *args, **kw):
+    def CheckLib(self, *_args, **_kw):
         """Fake CheckLib"""
         return True
 
-    def CheckLibWithHeader(self, *args, **kw):
+    def CheckLibWithHeader(self, *_args, **_kw):
         """Fake CheckLibWithHeader"""
         return True
 
-    def CheckStructMember(self, *args, **kw):
+    def CheckStructMember(self, *_args, **_kw):
         """Fake CheckStructMember"""
         return True
 
-    def CheckCmockaSkip(self, *args, **kw):
+    def CheckCmockaSkip(self, *_args, **_kw):
         """Fake CheckCmockaSkip"""
         return True
 
-    def CheckProg(self, *args, **kw):
+    def CheckProg(self, *_args, **_kw):
         """Fake CheckProg"""
         return True
 
-    def CheckFunc(self, *args, **kw):
+    def CheckFunc(self, *_args, **_kw):
         """Fake CheckFunc"""
         return True
 
-    def CheckFlag(self, *args, **kw):
+    def CheckFlag(self, *_args, **_kw):
         """Fake CheckFlag"""
         return True
 
@@ -300,12 +300,12 @@ class Configure():
 class Literal():
     """Fake Literal"""
 
-    def __init__(self, *args, **kw):
+    def __init__(self, *_args, **_kw):
         """constructor"""
 
 class Dir():
     """Fake Dir"""
-    def __init__(self, *args, **kw):
+    def __init__(self, *_args, **_kw):
         self.abspath = os.getcwd()
         self.path = os.getcwd()
 
@@ -314,69 +314,72 @@ class Dir():
         return self
 
 
-def VariantDir(*args, **kw):
+def VariantDir(*_args, **_kw):
     """Fake VariantDir"""
 
 
-def AddOption(*args, **kw):
+def AddOption(*_args, **_kw):
     """Fake AddOption"""
     return True
 
 
-def GetOption(*args, **kw):
+def GetOption(*_args, **_kw):
     """Fake GetOption"""
     return []
 
 
-def SetOption(*args, **kw):
+def SetOption(*_args, **_kw):
     """Fake SetOption"""
     return True
 
 
 class Help():
     """Fake Help"""
-    def __init__(self, *args, **kw):
+    def __init__(self, *_args, **_kw):
         """constructor"""
 
 
-def Glob(*args):
+def Glob(*_args):
     """Fake Glob"""
     return []
 
+def Split(*_args):
+    """Fake Split"""
+    return []
 
 def Exit(status):
     """Fake Exit"""
     sys.exit(status)
 
 
-def Import(*args):
+def Import(*_args):
     """Fake Import"""
 
 
-def Export(*args):
+def Export(*_args):
     """Fake Export"""
 
 
-def Default(*args):
+def Default(*_args):
     """Fake Default"""
 
-def Delete(*args, **kw):
+def Delete(*_args, **_kw):
     """Fake Delete"""
     return ["fake"]
 
-def AlwaysBuild(*args):
+def AlwaysBuild(*_args):
     """Fake AlwaysBuild"""
 
-def Copy(*args, **kw):
+def Copy(*_args, **_kw):
     """Fake Copy"""
     return ["fake"]
 
-def Command(*args, **kw):
+def Command(*_args, **_kw):
     """Fake Command"""
     return ["fake"]
 
 
-def Builder(*args, **kw):
+def Builder(*_args, **_kw):
     """Fake Builder"""
     return ["fake"]
 
@@ -386,7 +389,7 @@ def Platform():
     return ''
 
 
-def Depends(*args, **kw):
+def Depends(*_args, **_kw):
     """Fake Depends"""
 
 
@@ -407,6 +410,7 @@ __all__ = ['DefaultEnvironment',
            'Dir',
            'Help',
            'Glob',
+           'Split',
            'Exit',
            'Import',
            'Export',

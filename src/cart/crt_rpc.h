@@ -160,7 +160,10 @@ struct crt_rpc_priv {
 	struct crt_hg_hdl	*crp_hdl_reuse; /* reused hg_hdl */
 	crt_phy_addr_t		crp_tgt_uri; /* target uri address */
 	crt_rpc_t		*crp_ul_req; /* uri lookup request */
+
 	uint32_t		crp_ul_retry; /* uri lookup retry counter */
+
+	int			crp_ul_idx; /* index last tried */
 
 	struct crt_grp_priv	*crp_grp_priv; /* group private pointer */
 	/*
@@ -298,7 +301,15 @@ enum {
 	CRT_FI_RPCS_LIST
 };
 
+#define CRT_OPC_SWIM_PROTO	0xFE000000U
+
 #undef X
+
+static inline bool
+crt_opc_is_swim(crt_opcode_t opc)
+{
+	return ((opc & CRT_PROTO_BASEOPC_MASK) == CRT_OPC_SWIM_PROTO);
+}
 
 #define CRT_SEQ_GRP_CACHE					 \
 	((d_rank_t)		(gc_rank)		CRT_VAR) \

@@ -192,6 +192,7 @@ struct dss_xstream;
 
 bool dss_xstream_exiting(struct dss_xstream *dxs);
 bool dss_xstream_is_busy(void);
+daos_epoch_t dss_get_start_epoch(void);
 
 struct dss_module_info {
 	crt_context_t		dmi_ctx;
@@ -251,6 +252,7 @@ enum {
 	SCHED_REQ_UPDATE	= 0,
 	SCHED_REQ_FETCH,
 	SCHED_REQ_GC,
+	SCHED_REQ_SCRUB,
 	SCHED_REQ_MIGRATE,
 	SCHED_REQ_MAX,
 };

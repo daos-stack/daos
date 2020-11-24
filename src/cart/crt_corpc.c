@@ -755,7 +755,6 @@ aggregate_done:
 		/* Corresponding ADDREF done before crt_req_send() */
 		RPC_DECREF(parent_rpc_priv);
 	}
-	return;
 }
 
 int
@@ -897,8 +896,13 @@ forward_done:
 	if (co_info->co_child_num == 0 && co_info->co_root_excluded)
 		crt_corpc_complete(rpc_priv);
 
-	if (co_info->co_root_excluded == 1)
+	if (co_info->co_root_excluded == 1) {
+		if (co_info->co_grp_priv->gp_self == co_info->co_root) {
+			/* don't return error for root */
+			rc = 0;
+		}
 		D_GOTO(out, rc);
+	}
 
 	/* invoke RPC handler on local node */
 	rc = crt_rpc_common_hdlr(rpc_priv);

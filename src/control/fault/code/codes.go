@@ -63,6 +63,7 @@ const (
 	// general fault codes
 	Unknown Code = iota
 	MissingSoftwareDependency
+	BadVersionSoftwareDependency
 	PrivilegedHelperNotPrivileged
 	PrivilegedHelperNotAvailable
 	PrivilegedHelperRequestFailed
@@ -129,6 +130,7 @@ const (
 	ServerNoConfigPath
 	ServerConfigBadControlPort
 	ServerConfigBadAccessPoints
+	ServerConfigEvenAccessPoints
 	ServerConfigBadProvider
 	ServerConfigNoServers
 	ServerConfigDuplicateFabric

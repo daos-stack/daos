@@ -34,11 +34,13 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 var defaultMessage = &MockMessage{}
@@ -52,6 +54,10 @@ type testRequest struct {
 
 func (tr *testRequest) isMSRequest() bool {
 	return tr.toMS
+}
+
+func (tr *testRequest) SetHostList(hl []string) {
+	tr.HostList = hl
 }
 
 func (tr *testRequest) getHostList() []string {
@@ -204,6 +210,13 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 	clientCfg := DefaultConfig()
 	clientCfg.TransportConfig.AllowInsecure = true
 
+	fnGen := func(inner func(*int) (proto.Message, error)) func(_ context.Context, _ *grpc.ClientConn) (proto.Message, error) {
+		callCount := 0
+		return func(_ context.Context, _ *grpc.ClientConn) (proto.Message, error) {
+			return inner(&callCount)
+		}
+	}
+
 	for name, tc := range map[string]struct {
 		withCancel *ctxCancel
 		req        *testRequest
@@ -255,6 +268,87 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 					},
 					{
 						Addr:    "127.0.0.1:2",
+						Message: defaultMessage,
+					},
+				},
+			},
+		},
+		"multiple hosts in MS request, first fails": {
+			req: &testRequest{
+				HostList: []string{"127.0.0.1:1", "127.0.0.1:2"},
+				toMS:     true,
+				rpcFn: fnGen(func(callCount *int) (proto.Message, error) {
+					*callCount++
+					if *callCount == 1 {
+						return nil, errors.New("whoops")
+					}
+					return defaultMessage, nil
+				}),
+			},
+			expResp: &UnaryResponse{
+				Responses: []*HostResponse{
+					{
+						Addr:    "127.0.0.1:2",
+						Message: defaultMessage,
+					},
+				},
+			},
+		},
+		"request to non-leader replica": {
+			req: &testRequest{
+				toMS: true,
+				rpcFn: fnGen(func(callCount *int) (proto.Message, error) {
+					*callCount++
+					if *callCount == 1 {
+						return nil, &system.ErrNotLeader{LeaderHint: "foo:1"}
+					}
+					return defaultMessage, nil
+				}),
+			},
+			expResp: &UnaryResponse{
+				Responses: []*HostResponse{
+					{
+						Addr:    "foo:1",
+						Message: defaultMessage,
+					},
+				},
+			},
+		},
+		"request to non-leader replica; no current leader": {
+			req: &testRequest{
+				toMS: true,
+				rpcFn: fnGen(func(callCount *int) (proto.Message, error) {
+					*callCount++
+					if *callCount == 1 {
+						return nil, &system.ErrNotLeader{Replicas: []string{"foo:1"}}
+					}
+					return defaultMessage, nil
+				}),
+			},
+			expResp: &UnaryResponse{
+				Responses: []*HostResponse{
+					{
+						Addr:    "foo:1",
+						Message: defaultMessage,
+					},
+				},
+			},
+		},
+		"request to non-replica": {
+			req: &testRequest{
+				toMS: true,
+				rpcFn: fnGen(func(callCount *int) (proto.Message, error) {
+					*callCount++
+					if *callCount == 1 {
+						return nil, &system.ErrNotReplica{Replicas: []string{"foo:1"}}
+					}
+					return defaultMessage, nil
+				}),
+			},
+			expResp: &UnaryResponse{
+				Responses: []*HostResponse{
+					{
+						Addr:    "foo:1",
 						Message: defaultMessage,
 					},
 				},

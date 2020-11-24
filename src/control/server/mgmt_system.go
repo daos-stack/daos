@@ -220,10 +220,6 @@ func (svc *mgmtSvc) join(ctx context.Context, req *batchJoinRequest) *batchJoinR
 	} else {
 		svc.log.Debugf("updated system member: rank %d, uri %s, %s->%s",
 			member.Rank, member.FabricURI, joinResponse.PrevState, member.State())
-		if joinResponse.PrevState == member.State() {
-			svc.log.Errorf("unexpected same state in rank %d update (%s->%s)",
-				member.Rank, joinResponse.PrevState, member.State())
-		}
 	}
 
 	resp := &batchJoinResponse{
@@ -324,9 +320,13 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.JoinResp, error) {
 	svc.log.Debugf("MgmtSvc.Join dispatch, req:%#v\n", req)
 
+	if err := svc.sysdb.CheckLeader(); err != nil {
+		return nil, err
+	}
+
 	replyAddr, err := getPeerListenAddr(ctx, req.GetAddr())
 	if err != nil {
-		return nil, errors.WithMessage(err, "combining peer addr with listener port")
+		return nil, errors.Wrapf(err, "failed to parse %q into a peer control address", req.GetAddr())
 	}
 
 	bjr := &batchJoinRequest{
@@ -663,28 +663,23 @@ func (svc *mgmtSvc) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq)
 		return nil, errors.New("nil request")
 	}
 
-	if len(svc.harness.instances) == 0 {
-		return nil, errors.New("no I/O servers configured; can't determine leader")
-	}
+	svc.log.Debugf("MgmtSvc.LeaderQuery dispatch, req:%+v\n", req)
 
-	instance := svc.harness.instances[0]
-	sb := instance.getSuperblock()
-	if sb == nil {
-		return nil, errors.New("no I/O superblock found; can't determine leader")
-	}
-
-	if req.System != sb.System {
+	if req.System != svc.sysdb.SystemName() {
 		return nil, errors.Errorf("received leader query for wrong system (local: %q, req: %q)",
-			sb.System, req.System)
+			svc.sysdb.SystemName(), req.System)
 	}
 
-	leaderAddr, err := instance.msClient.LeaderAddress()
+	leaderAddr, replicas, err := svc.sysdb.LeaderQuery()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to determine current leader address")
+		return nil, err
 	}
 
-	return &mgmtpb.LeaderQueryResp{
+	resp := &mgmtpb.LeaderQueryResp{
 		CurrentLeader: leaderAddr,
-		Replicas:      instance.msClient.cfg.AccessPoints,
-	}, nil
+		Replicas:      replicas,
+	}
+
+	svc.log.Debugf("MgmtSvc.LeaderQuery dispatch, resp:%+v\n", resp)
+	return resp, nil
 }

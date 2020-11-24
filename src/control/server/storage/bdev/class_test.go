@@ -127,7 +127,7 @@ func TestParseBdev(t *testing.T) {
 			bdevClass:       storage.BdevClassFile,
 			bdevVmdDisabled: true,
 			bdevList:        []string{"myfile", "myotherfile"},
-			bdevSize:        5, // GB/file
+			bdevSize:        1, // GB/file
 			wantBuf: []string{
 				`[AIO]`,
 				`    AIO myfile AIO__0 4096`,
