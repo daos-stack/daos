@@ -28,7 +28,7 @@
 
 #include "dfuse_ioctl.h"
 
-#define MAX_IOCTL_SIZE ((1024*16)-1)
+#define MAX_IOCTL_SIZE ((1024 * 16) - 1)
 
 static void
 handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
