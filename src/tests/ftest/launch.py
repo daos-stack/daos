@@ -721,21 +721,6 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
         with open(yaml_file) as yaml_buffer:
             yaml_data = yaml_buffer.read()
 
-        # Handle missing timeout parameter
-        pattern = r"\n\s*timeout\s*:\s*\d+"
-        if not re.findall(pattern, yaml_data):
-            # Default to 10 minutes, or use the user-specified global timeout
-            # param
-            default_timeout = 600
-            if args.timeout:
-                default_timeout = args.timeout
-
-            insert_timeout_parameter_here = "\n\s*tests\s*:"
-            yaml_data = re.sub(insert_timeout_parameter_here, 
-                               "\ntimeout: {}\n{}".format(default_timeout,
-                                                          "tests:"),
-                               yaml_data)
-
         # Apply the placeholder replacements
         missing_replacements = []
         display(args, "Modifying contents: {}".format(yaml_file))
@@ -1659,11 +1644,6 @@ def main():
              "server placeholders in each test's yaml file.  If the "
              "'--test_clients' argument is not specified, this list of hosts "
              "will also be used to replace client placeholders.")
-    parser.add_argument(
-        "-t", "--timeout",
-        action="store",
-        help="value in seconds for job timeout in case one is not specified in" 
-             "yaml file ")
     parser.add_argument(
         "-v", "--verbose",
         action="store_true",
