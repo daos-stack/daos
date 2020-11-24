@@ -75,6 +75,7 @@ dfuse_progress_thread(void *arg)
 
 /* Inode entry hash table operations */
 
+/* Shrink a 64 bit value into 32 bits to avoid hash collisions */
 static uint32_t
 ih_key_hash(struct d_hash_table *htable, const void *key,
 	    unsigned int ksize)

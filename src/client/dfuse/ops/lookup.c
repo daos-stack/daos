@@ -48,8 +48,8 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		if (rc)
 			D_GOTO(out_decref, rc);
 
-		rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, &ie->ie_oid,
-					&ie->ie_stat.st_ino);
+		rc = dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid,
+					 &ie->ie_stat.st_ino);
 		if (rc)
 			D_GOTO(out_decref, rc);
 	}
@@ -88,7 +88,12 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 				ie->ie_oid.hi,
 				ie->ie_oid.lo);
 
-
+		/* Check for conflicts, in either the dfs or oid space.  This
+		 * can happen because of the fact we squash larger identifiers
+		 * into a shorter 64 bit space, but if the bitshifting is right
+		 * it shouldn't happen until there are a large number of active
+		 * files. DAOS-4928 has more details.
+		 */
 		if (ie->ie_dfs != inode->ie_dfs) {
 			DFUSE_TRA_ERROR(inode, "Duplicate inode found (dfs)");
 			D_GOTO(out_err, rc = EIO);

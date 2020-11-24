@@ -525,36 +525,33 @@ struct dfuse_inode_entry {
 	bool			ie_root;
 };
 
-/**
- * Inode record.
+/* Generate the inode to use for this dfs object.  This is generating a single
+ * 64 bit number from three 64 bit numbers so will not be perfect but does
+ * avoid most conflicts.
  *
- * Describes all inodes observed by the system since start, including all inodes
- * known by the kernel, and all inodes that have been in the past.
- *
- * This is needed to be able to generate 64 bit inode numbers from 128 bit DAOS
- * objects, to support multiple containers/pools within a filesystem and to
- * provide consistent inode numbering for the same file over time, even if the
- * kernel cache is dropped, for example because of memory pressure.
+ * Take the sequence parts of both the hi and lo object id and put them in
+ * different parts of the inode, then or in the inode number of the root
+ * of this dfs object, to avoid conflicts across containers.
  */
-struct dfuse_inode_record_id {
-	struct dfuse_dfs	*irid_dfs;
-	daos_obj_id_t		irid_oid;
-};
+static inline int
+dfuse_compute_inode(struct dfuse_dfs *dfs,
+		    daos_obj_id_t *oid,
+		    ino_t *_ino)
+{
+	uint64_t hi;
 
-struct dfuse_inode_record {
-	struct dfuse_inode_record_id	ir_id;
-	d_list_t			ir_htl;
-	ino_t				ir_ino;
+	hi = (oid->hi & (-1ULL >> 32)) | (dfs->dfs_root << 48);
+
+	*_ino = hi ^ (oid->lo << 32);
+	return 0;
 };
 
 /* dfuse_inode.c */
 
-int
-dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
-		   struct dfuse_dfs *dfs,
-		   daos_obj_id_t *oid,
-		   ino_t *_ino);
-
+/* This should probably be replaced with a entry pointer in the dfs which
+ * would improve lookup speed when accessing containers/pools, however needs
+ * thorough testing with respect to ref counting
+ */
 int
 dfuse_check_for_inode(struct dfuse_projection_info *fs_handle,
 		      struct dfuse_dfs *dfs,

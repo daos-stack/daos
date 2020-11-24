@@ -25,26 +25,6 @@
 #include "dfuse.h"
 #include "daos_api.h"
 
-/* Lookup a the union inode number for the specific dfs/oid combination
- * allocating a new one if necessary.
- */
-int
-dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
-		   struct dfuse_dfs *dfs,
-		   daos_obj_id_t *oid,
-		   ino_t *_ino)
-{
-	uint64_t hi;
-
-	if (oid == NULL)
-		return EIO;
-
-	hi = (oid->hi & (-1ULL >> 32)) | (dfs->dfs_root << 48);
-
-	*_ino = hi ^ (oid->lo << 32);
-	return 0;
-};
-
 /* Check a DFS to see if an inode is already in place for it.  This is used
  * for looking up pools and containers to see if a record already exists to
  * allow reuse of already open handles.
