@@ -31,7 +31,8 @@ from avocado import fail_on
 from command_utils import BasicParameter, CommandFailure
 from pydaos.raw import (DaosApiError, DaosServer, DaosPool, c_uuid_to_str,
                         daos_cref)
-from general_utils import check_pool_files, DaosTestError, run_command
+from general_utils import (check_pool_files, DaosTestError, run_command,
+                           convert_list)
 from env_modules import load_mpi
 
 
@@ -490,13 +491,13 @@ class TestPool(TestDaosApiBase):
             "Rebuild %s detected", "start" if to_start else "completion")
 
     @fail_on(DaosApiError)
-    def start_rebuild(self, ranks, daos_log, use_kill=False):
+    @fail_on(CommandFailure)
+    def start_rebuild(self, ranks, daos_log):
         """Kill/Stop the specific server ranks using this pool.
 
         Args:
             ranks (list): a list of daos server ranks (int) to kill
             daos_log (DaosLog): object for logging messages
-            use_kill (bool, optional): Use 'kill' to kill servers
 
         Returns:
             bool: True if the server ranks have been killed/stopped and the
@@ -507,8 +508,8 @@ class TestPool(TestDaosApiBase):
             ranks, self.name.value)
         self.log.info(msg)
         daos_log.info(msg)
-        
-        if use_kill:
+
+        if self.control_method.value == self.USE_API:
             # Stop desired ranks using kill
             for rank in ranks:
                 server = DaosServer(self.context, self.name.value, rank)
@@ -517,7 +518,7 @@ class TestPool(TestDaosApiBase):
 
         elif self.control_method.value == self.USE_DMG and self.dmg:
             # Stop desired ranks using dmg
-            self.dmg.system_stop(ranks=",".join([str(item) for item in ranks]))
+            self.dmg.system_stop(ranks=convert_list(value=ranks))
             return True
 
         elif self.control_method.value == self.USE_DMG:
