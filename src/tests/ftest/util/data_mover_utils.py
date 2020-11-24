@@ -141,6 +141,7 @@ class DataMover(DataMoverCommand):
         self.hosts = hosts
 
     def run(self, tmp, processes):
+        # pylint: disable=arguments-differ
         """Run the datamover command.
 
         Args:

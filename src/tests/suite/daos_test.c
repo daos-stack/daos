@@ -70,9 +70,8 @@ print_usage(int rank)
 	print_message("daos_test -i|--io\n");
 	print_message("daos_test -Z|--agg_ec\n");
 	print_message("daos_test -x|--epoch_io\n");
-	print_message("daos_test -A|--array\n");
-	print_message("daos_test -F|--dfs\n");
 	print_message("daos_test -D|--array\n");
+	print_message("daos_test -A|--obj_array\n");
 	print_message("daos_test -K|--daos_kv\n");
 	print_message("daos_test -d|--degraded\n");
 	print_message("daos_test -e|--epoch\n");
@@ -337,7 +336,7 @@ main(int argc, char **argv)
 		{"io",		no_argument,		NULL,	'i'},
 		{"checksum",	no_argument,		NULL,	'z'},
 		{"agg_ec",	no_argument,		NULL,	'Z'},
-		{"dedup",	no_argument,		NULL,	'u'},
+		{"dedup",	no_argument,		NULL,	'U'},
 		{"epoch_io",	no_argument,		NULL,	'x'},
 		{"obj_array",	no_argument,		NULL,	'A'},
 		{"array",	no_argument,		NULL,	'D'},
@@ -382,7 +381,7 @@ main(int argc, char **argv)
 
 	while ((opt =
 		getopt_long(argc, argv,
-			    "ampcCdtTVizZxADKeoROg:n:s:u:E:f:w:W:hrNvbSXl:",
+			    "ampcCdtTVizUZxADKeoROg:n:s:u:E:f:w:W:hrNvbSXl:",
 			     long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;

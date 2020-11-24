@@ -484,7 +484,14 @@ class DaosServer():
         return subprocess.run(exe_cmd, stdout=subprocess.PIPE)
 
 def il_cmd(dfuse, cmd, check_read=True, check_write=True):
-    """Run a command under the interception library"""
+    """Run a command under the interception library
+
+    Do not run valgrind here, not because it's not useful
+    but the options needed are different.  Valgrind handles
+    linking differently so some memory is wrongly lost that
+    would be freed in the _fini() function, and a lot of
+    commands do not free all memory anyway.
+    """
     my_env = get_base_env()
     prefix = 'dnt_dfuse_il_{}_'.format(get_inc_id())
     log_file = tempfile.NamedTemporaryFile(prefix=prefix,
@@ -497,13 +504,13 @@ def il_cmd(dfuse, cmd, check_read=True, check_write=True):
     ret = subprocess.run(cmd, env=my_env)
     print('Logged il to {}'.format(log_file.name))
     print(ret)
-    assert ret.returncode == 0
 
     try:
         log_test(dfuse.conf,
                  log_file.name,
                  check_read=check_read,
                  check_write=check_write)
+        assert ret.returncode == 0
     except NLTestNoFunction as error:
         print("ERROR: command '{}' did not log via {}".format(' '.join(cmd),
                                                               error.function))
@@ -593,6 +600,7 @@ class DFuse():
         self.valgrind_file = None
         self.container = container
         self.conf = conf
+        self.cores = None
         self._daos = daos
         self._sp = None
 
@@ -625,7 +633,13 @@ class DFuse():
         self.valgrind = ValgrindHelper(v_hint)
         if self.conf.args.memcheck == 'no':
             self.valgrind.use_valgrind = False
-        cmd = self.valgrind.get_cmd_prefix()
+
+        if self.cores:
+            cmd = ['numactl', '--physcpubind', '0-{}'.format(self.cores - 1)]
+        else:
+            cmd = []
+
+        cmd.extend(self.valgrind.get_cmd_prefix())
 
         cmd.extend([dfuse_bin, '-s', '0', '-m', self.dir, '-f'])
 
@@ -832,12 +846,12 @@ def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False):
 
 def show_cont(conf, pool):
     """Create a container and return a container list"""
-    cmd = ['container', 'create', '--svc', '0', '--pool', pool]
+    cmd = ['container', 'create', '--pool', pool]
     rc = run_daos_cmd(conf, cmd)
     assert rc.returncode == 0
     print('rc is {}'.format(rc))
 
-    cmd = ['pool', 'list-containers', '--svc', '0', '--pool', pool]
+    cmd = ['pool', 'list-containers', '--pool', pool]
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
     assert rc.returncode == 0
@@ -998,7 +1012,7 @@ def create_and_read_via_il(dfuse, path):
 def run_container_query(conf, path):
     """Query a path to extract container information"""
 
-    cmd = ['container', 'query', '--svc', '0', '--path', path]
+    cmd = ['container', 'query', '--path', path]
 
     rc = run_daos_cmd(conf, cmd)
 
@@ -1026,8 +1040,6 @@ def run_duns_overlay_test(server, conf):
 
     rc = run_daos_cmd(conf, ['container',
                              'create',
-                             '--svc',
-                             '0',
                              '--pool',
                              pools[0],
                              '--type',
@@ -1098,6 +1110,7 @@ def run_dfuse(server, conf):
     fatal_errors.add_result(dfuse.stop())
 
     dfuse = DFuse(server, conf, pool=pools[0], container=container)
+    dfuse.cores = 2
     pre_stat = os.stat(dfuse.dir)
     dfuse.start(v_hint='pool_and_cont')
     print('Running fuse with both')
@@ -1117,7 +1130,7 @@ def run_dfuse(server, conf):
 
     uns_container = str(uuid.uuid4())
 
-    cmd = ['container', 'create', '--svc', '0',
+    cmd = ['container', 'create',
            '--pool', pools[0], '--cont', uns_container, '--path', uns_path,
            '--type', 'POSIX']
 
@@ -1149,7 +1162,7 @@ def run_dfuse(server, conf):
     uns_container = str(uuid.uuid4())
 
     # Make a link within the new container.
-    cmd = ['container', 'create', '--svc', '0',
+    cmd = ['container', 'create',
            '--pool', pools[0], '--cont', uns_container,
            '--path', uns_path, '--type', 'POSIX']
 
@@ -1228,9 +1241,8 @@ def run_il_test(server, conf):
     fd = open(f, 'w')
     fd.write('Hello')
     fd.close()
-    # Copy it across containers.  This will read via IL but not write
-    # as only one container is supported concurrently
-    ret = il_cmd(dfuse, ['cp', f, dirs[-1]], check_write=False)
+    # Copy it across containers.
+    ret = il_cmd(dfuse, ['cp', f, dirs[-1]])
     assert ret.returncode == 0
 
     # Copy it within the container.
@@ -1281,12 +1293,12 @@ def run_in_fg(server, conf):
     t_dir = os.path.join(dfuse.dir, container)
     os.mkdir(t_dir)
     print('Running at {}'.format(t_dir))
-    print('daos container create --svc 0 --type POSIX' \
+    print('daos container create --type POSIX' \
           '--pool {} --path {}/uns-link'.format(
               pools[0], t_dir))
     print('cd {}/uns-link'.format(t_dir))
-    print('daos container destroy --svc 0 --path {}/uns-link'.format(t_dir))
-    print('daos pool list-containers --svc 0 --pool {}'.format(pools[0]))
+    print('daos container destroy --path {}/uns-link'.format(t_dir))
+    print('daos pool list-containers --pool {}'.format(pools[0]))
     try:
         dfuse.wait_for_exit()
     except KeyboardInterrupt:
@@ -1435,7 +1447,7 @@ def test_alloc_fail(server, wf, conf):
 
     pool = pools[0]
 
-    cmd = ['pool', 'list-containers', '--svc', '0', '--pool', pool]
+    cmd = ['pool', 'list-containers', '--pool', pool]
 
     fid = 1
 
@@ -1565,7 +1577,7 @@ def main():
         server.start()
         pools = get_pool_list()
         for pool in pools:
-            cmd = ['pool', 'list-containers', '--svc', '0', '--pool', pool]
+            cmd = ['pool', 'list-containers', '--pool', pool]
             run_daos_cmd(conf, cmd, valgrind=False)
         if server.stop() != 0:
             fatal_errors.add_result(True)

@@ -71,8 +71,7 @@ class MpiioTests(TestWithServers):
         """
         cont_type = self.params.get("type", "/run/container/*")
         result = self.daos_cmd.container_create(
-            pool=self.pool.uuid, svc=self.pool.svc_ranks,
-            cont_type=cont_type)
+            pool=self.pool.uuid, cont_type=cont_type)
 
         # Extract the container UUID from the daos container create output
         cont_uuid = re.findall(

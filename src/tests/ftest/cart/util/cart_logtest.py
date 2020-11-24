@@ -237,8 +237,8 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                      'd_sgl_init': ('sgl->sg_iovs'),
 		     'co_properties': ('prop->dpp_entries[0].dpe_str'),
                      'daos_csummer_alloc_iods_csums': ('buf'),
-		     'co_owner_implicit_access': ('tmp_prop->dpp_entries[0].dpe_str'),
-                     'daos_sgl_init': ('sgl->sg_iovs')}
+                     'daos_sgl_init': ('sgl->sg_iovs'),
+                     'get_pool_svc_ranks': ('req')}
 # pylint: enable=line-too-long
 
 mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
@@ -515,7 +515,7 @@ class LogTest():
                         # that fail during shutdown.
                         if line.rpc_opcode == '0xfe000000':
                             show = False
-                    elif line.fac == 'external':
+                    if line.fac == 'external':
                         show = False
                     if show:
                         # Allow WARNING or ERROR messages, but anything higher
