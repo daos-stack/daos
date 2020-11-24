@@ -44,7 +44,7 @@ class DeleteContainerACLTest(ContSecurityTestBase):
 
         # Get list of ACL entries
         cont_acl = self.get_container_acl_list(
-            self.pool.uuid, self.pool.svc_ranks[0], self.container.uuid)
+            self.pool.uuid, self.container.uuid)
 
         # Get principals
         self.principals_table = {}
@@ -71,7 +71,6 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         for principal in invalid_principals:
             self.daos_cmd.container_delete_acl(
                 self.pool.uuid,
-                self.pool.svc_ranks[0],
                 self.container.uuid,
                 principal)
             test_errs.extend(self.error_handling(self.daos_cmd.result, "-1003"))
@@ -92,7 +91,6 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         for principal in self.principals_table:
             self.daos_cmd.container_delete_acl(
                 self.pool.uuid,
-                self.pool.svc_ranks[0],
                 self.container.uuid,
                 principal)
             if self.principals_table[principal] in self.daos_cmd.result.stdout:
@@ -125,7 +123,6 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         for principal in self.principals_table:
             self.daos_cmd.container_delete_acl(
                 self.pool.uuid,
-                self.pool.svc_ranks[0],
                 self.container.uuid,
                 principal)
             test_errs.extend(self.error_handling(self.daos_cmd.result, "-1001"))

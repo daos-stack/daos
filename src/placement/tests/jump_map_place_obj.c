@@ -145,7 +145,7 @@ rebuild_object_class(daos_oclass_id_t cid)
 			num_new_spares = pl_obj_find_rebuild(pl_map,
 					&md_arr[test_num], NULL, po_ver,
 					spare_tgt_ranks, shard_ids,
-					SPARE_MAX_NUM, -1);
+					SPARE_MAX_NUM);
 
 			spares_left = NUM_TARGETS - layout->ol_nr + fail_tgt;
 			plt_obj_rebuild_layout_check(layout,
@@ -279,7 +279,7 @@ reint_object_class(daos_oclass_id_t cid)
 
 			num_reint = pl_obj_find_reint(pl_map, &md_arr[test_num],
 					NULL, po_ver,  spare_tgt_ranks,
-					shard_ids, SPARE_MAX_NUM, -1);
+					shard_ids, SPARE_MAX_NUM);
 
 			plt_obj_reint_layout_check(temp_layout,
 					layout[fail_tgt][test_num],
@@ -395,7 +395,7 @@ drain_object_class(daos_oclass_id_t cid)
 			num_new_spares = pl_obj_find_rebuild(pl_map,
 					&md_arr[test_num], NULL, po_ver,
 					spare_tgt_ranks, shard_ids,
-					SPARE_MAX_NUM, -1);
+					SPARE_MAX_NUM);
 
 			plt_obj_layout_check(layout, COMPONENT_NR,
 					layout->ol_nr);
@@ -515,7 +515,7 @@ add_object_class(daos_oclass_id_t cid)
 						      NULL, po_ver,
 						      spare_tgt_ranks,
 						      shard_ids,
-						      SPARE_MAX_NUM, -1);
+						      SPARE_MAX_NUM);
 		D_ASSERT(num_new_spares >= 0);
 
 		plt_obj_add_layout_check(layout, org_layout[test_num],

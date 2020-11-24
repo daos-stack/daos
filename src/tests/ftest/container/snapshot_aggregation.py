@@ -123,7 +123,7 @@ class SnapshotAggregation(IorTestBase):
 
         # Delete the snapshot.
         daos.container_destroy_snap(
-            pool=self.pool.uuid, svc=self.pool.svc_ranks,
+            pool=self.pool.uuid,
             cont=self.container.uuid, epc=self.container.epoch)
 
         # Wait for aggregation to start and finish.
