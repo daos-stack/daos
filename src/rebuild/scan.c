@@ -374,22 +374,22 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		rebuild_nr = pl_obj_find_rebuild(map, &md, NULL,
 						 rpt->rt_rebuild_ver,
 						 tgts, shards,
-						 rpt->rt_tgts_num, myrank);
+						 rpt->rt_tgts_num);
 	} else if (rpt->rt_rebuild_op == RB_OP_DRAIN) {
 		rebuild_nr = pl_obj_find_rebuild(map, &md, NULL,
 						 rpt->rt_rebuild_ver,
 						 tgts, shards,
-						 rpt->rt_tgts_num, -1);
+						 rpt->rt_tgts_num);
 	} else if (rpt->rt_rebuild_op == RB_OP_REINT) {
 		rebuild_nr = pl_obj_find_reint(map, &md, NULL,
 					       rpt->rt_rebuild_ver,
 					       tgts, shards,
-					       rpt->rt_tgts_num, myrank);
+					       rpt->rt_tgts_num);
 	} else if (rpt->rt_rebuild_op == RB_OP_EXTEND) {
 		rebuild_nr = pl_obj_find_addition(map, &md, NULL,
 						  rpt->rt_rebuild_ver,
 						  tgts, shards,
-						  rpt->rt_tgts_num, myrank);
+						  rpt->rt_tgts_num);
 	} else {
 		D_ASSERT(rpt->rt_rebuild_op == RB_OP_FAIL ||
 			 rpt->rt_rebuild_op == RB_OP_DRAIN ||
