@@ -21,25 +21,22 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-package io.daos.dfs;
+package io.daos;
+
+import java.io.Closeable;
+import java.io.IOException;
 
 /**
- * error code to message.
+ * A interface extended from {@link Closeable} to add one more method {@link #forceClose()}.
+ * When it's called, resource cleanup or disconnection should be done immediately no matter
+ * what circumstance it is. It's usually called at JVM shutdown.
  */
-public class ErrorCode {
-  private final int code;
-  private final String msg;
+public interface ForceCloseable extends Closeable {
 
-  public ErrorCode(int code, String msg) {
-    this.code = code;
-    this.msg = msg;
-  }
-
-  public int getCode() {
-    return code;
-  }
-
-  public String getMsg() {
-    return msg;
-  }
+  /**
+   * close at any circumstance.
+   *
+   * @throws IOException
+   */
+  void forceClose() throws IOException;
 }
