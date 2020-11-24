@@ -39,7 +39,7 @@ class CartCtlOneNodeTest(Test):
     """
     Runs basic CaRT ctl tests
 
-    :avocado: tags=all,cart,pr,ctl,one_node
+    :avocado: recursive
     """
     def setUp(self):
         """ Test setup """

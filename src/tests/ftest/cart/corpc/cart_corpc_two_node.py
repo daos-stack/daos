@@ -39,7 +39,7 @@ class CartCoRpcTwoNodeTest(Test):
     """
     Runs basic CaRT CoRPC tests
 
-    :avocado: tags=all,cart,pr,corpc,two_node
+    :avocado: recursive
     """
     def setUp(self):
         """ Test setup """

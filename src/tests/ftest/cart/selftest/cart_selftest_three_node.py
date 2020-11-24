@@ -39,7 +39,7 @@ class CartSelfThreeNodeTest(Test):
     """
     Runs basic CaRT self test
 
-    :avocado: tags=all,cart,pr,selftest,three_node
+    :avocado: recursive
     """
     def setUp(self):
         """ Test setup """

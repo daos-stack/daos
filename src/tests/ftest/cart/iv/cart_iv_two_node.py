@@ -95,7 +95,7 @@ class CartIvTwoNodeTest(Test):
     """
     Runs basic CaRT tests on one-node
 
-    :avocado: tags=all,cart,pr,iv,two_node
+    :avocado: recursive
     """
     def setUp(self):
         """ Test setup """

@@ -40,7 +40,7 @@ class CartNoPmixOneNodeTest(Test):
     """
     Runs basic CaRT no_pmix tests
 
-    :avocado: tags=all,cart,pr,no_pmix,one_node
+    :avocado: recursive
     """
     def setUp(self):
         """ Test setup """
