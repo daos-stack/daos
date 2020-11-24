@@ -27,7 +27,7 @@ from __future__ import print_function
 import sys
 import subprocess
 
-from avocado       import Test
+from apricot       import TestWithoutServers
 from avocado       import main
 
 sys.path.append('./util')
@@ -36,7 +36,7 @@ sys.path.append('./util')
 # pylint: disable=wrong-import-position
 from cart_utils import CartUtils
 
-class CartNoPmixOneNodeTest(Test):
+class CartNoPmixOneNodeTest(TestWithoutServers):
     """
     Runs basic CaRT no_pmix tests
 

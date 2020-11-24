@@ -26,7 +26,7 @@ from __future__ import print_function
 
 import sys
 
-from avocado       import Test
+from apricot       import TestWithoutServers
 from avocado       import main
 
 sys.path.append('./util')
@@ -35,7 +35,7 @@ sys.path.append('./util')
 # pylint: disable=wrong-import-position
 from cart_utils import CartUtils
 
-class CartCtlOneNodeTest(Test):
+class CartCtlOneNodeTest(TestWithoutServers):
     """
     Runs basic CaRT ctl tests
 
