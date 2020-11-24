@@ -663,7 +663,7 @@ func (svc *mgmtSvc) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq)
 		return nil, errors.New("nil request")
 	}
 
-	svc.log.Debugf("MgmtSvc.StartRanks dispatch, req:%+v\n", *req)
+	svc.log.Debugf("MgmtSvc.LeaderQuery dispatch, req:%+v\n", req)
 
 	if req.System != svc.sysdb.SystemName() {
 		return nil, errors.Errorf("received leader query for wrong system (local: %q, req: %q)",
@@ -672,7 +672,7 @@ func (svc *mgmtSvc) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq)
 
 	leaderAddr, replicas, err := svc.sysdb.LeaderQuery()
 	if err != nil {
-		replicas = err.(*system.ErrNotReplica).Replicas
+		return nil, err
 	}
 
 	resp := &mgmtpb.LeaderQueryResp{
@@ -680,6 +680,6 @@ func (svc *mgmtSvc) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq)
 		Replicas:      replicas,
 	}
 
-	svc.log.Debugf("MgmtSvc.StartRanks dispatch, resp:%+v\n", *resp)
+	svc.log.Debugf("MgmtSvc.LeaderQuery dispatch, resp:%+v\n", resp)
 	return resp, nil
 }
