@@ -288,12 +288,12 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 					 3, fs_handle, &ie_hops,
 					 &fs_handle->dpi_iet);
 	if (rc != 0)
-		D_GOTO(err, 0);
+		D_GOTO(err, rc);
 
 	rc = d_hash_table_create_inplace(D_HASH_FT_RWLOCK, 3, fs_handle,
 					 &ir_hops, &fs_handle->dpi_irt);
 	if (rc != 0)
-		D_GOTO(err_iet, 0);
+		D_GOTO(err_iet, rc);
 
 	atomic_store_relaxed(&fs_handle->dpi_ino_next, 2);
 
@@ -367,22 +367,22 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	if (rc != -DER_SUCCESS) {
 		DFUSE_TRA_ERROR(fs_handle, "hash_insert() failed: %d",
 				rc);
-		D_GOTO(err_ie_remove, 0);
+		D_GOTO(err_ie_remove, rc);
 	}
 
 	rc = daos_eq_create(&fs_handle->dpi_eq);
 	if (rc != -DER_SUCCESS)
-		D_GOTO(err, 0);
+		D_GOTO(err, rc);
 
 	rc = sem_init(&fs_handle->dpi_sem, 0, 0);
 	if (rc != 0)
-		D_GOTO(err, 0);
+		D_GOTO(err, rc);
 
 	fs_handle->dpi_shutdown = false;
 	rc = pthread_create(&fs_handle->dpi_thread, NULL,
 			    dfuse_progress_thread, fs_handle);
 	if (rc != 0)
-		D_GOTO(err, 0);
+		D_GOTO(err, rc);
 
 	pthread_setname_np(fs_handle->dpi_thread, "dfuse_progress");
 

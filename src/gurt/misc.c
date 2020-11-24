@@ -41,7 +41,7 @@ d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src)
 	}
 
 	if (src == NULL)
-		D_GOTO(out, 0);
+		goto out;
 
 	D_ALLOC_PTR(rank_list);
 	if (rank_list == NULL)
@@ -49,11 +49,11 @@ d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src)
 
 	rank_list->rl_nr = src->rl_nr;
 	if (rank_list->rl_nr == 0)
-		D_GOTO(out, 0);
+		goto out;
 
 	D_ALLOC_ARRAY(rank_list->rl_ranks, rank_list->rl_nr);
 	if (rank_list->rl_ranks == NULL) {
-		D_FREE_PTR(rank_list);
+		D_FREE(rank_list);
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
@@ -78,19 +78,19 @@ d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src)
 	rc = d_rank_list_dup(dst, src);
 	if (rc != 0) {
 		D_ERROR("d_rank_list_dup() failed, " DF_RC "\n", DP_RC(rc));
-		D_GOTO(out, 0);
+		D_GOTO(out, rc);
 	}
 
 	rank_list = *dst;
 	if (rank_list == NULL || rank_list->rl_ranks == NULL)
-		D_GOTO(out, 0);
+		goto out;
 
 	d_rank_list_sort(rank_list);
 
 	/* uniq - remove same rank number in the list */
 	rank_num = src->rl_nr;
 	if (rank_num <= 1)
-		D_GOTO(out, 0);
+		goto out;
 	identical_num = 0;
 	rank_tmp = rank_list->rl_ranks[0];
 	for (i = 1; i < rank_num; i++) {
@@ -311,7 +311,7 @@ d_rank_list_del(d_rank_list_t *rank_list, d_rank_t rank)
 	}
 	if (!d_rank_list_find(rank_list, rank, &idx)) {
 		D_DEBUG(DB_TRACE, "Rank %d not in the rank list.\n", rank);
-		D_GOTO(out, 0);
+		goto out;
 	}
 	new_num = rank_list->rl_nr - 1;
 	src = &rank_list->rl_ranks[idx + 1];

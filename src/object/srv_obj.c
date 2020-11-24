@@ -1472,7 +1472,7 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 		ds_cont_child_get(coh->sch_cont);
 		coc = coh->sch_cont;
 		if (uuid_compare(cont_uuid, coc->sc_uuid) == 0)
-			D_GOTO(out, rc = 0);
+			goto out;
 
 		D_ERROR("Stale container handle "DF_UUID" != "DF_UUID"\n",
 			DP_UUID(cont_uuid), DP_UUID(coh->sch_uuid));
@@ -1918,7 +1918,7 @@ re_fetch:
 			goto re_fetch;
 		}
 
-		D_GOTO(out, rc);
+		goto out;
 	}
 
 	tgts = orw->orw_shard_tgts.ca_arrays;

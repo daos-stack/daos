@@ -524,7 +524,7 @@ int main(int argc, char **argv)
 
 	/* All ranks except for 0 wait for RPCs. rank=0 initiates test */
 	if (my_rank != 1)
-		D_GOTO(join, 0);
+		goto join;
 
 	/* Wait for all servers to load up */
 	/* TODO: This will be replaced by proper sync when CART-715 is done */

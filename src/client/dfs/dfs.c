@@ -3235,7 +3235,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	iod.iod_nr = i;
 
 	if (i == 0)
-		D_GOTO(out_stat, 0);
+		goto out_stat;
 
 	sgl.sg_nr	= i;
 	sgl.sg_nr_out	= 0;

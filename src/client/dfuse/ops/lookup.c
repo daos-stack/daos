@@ -331,10 +331,10 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 			entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
 
 			DFUSE_REPLY_ENTRY(parent, req, entry);
-			D_GOTO(free, 0);
+			goto free;
 		}
 
-		D_GOTO(err, rc);
+		goto err;
 	}
 
 	strncpy(ie->ie_name, name, NAME_MAX);

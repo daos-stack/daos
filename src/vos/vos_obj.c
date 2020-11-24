@@ -776,7 +776,7 @@ key_iter_next(struct vos_obj_iter *oiter)
 
 	rc = dbtree_iter_next(oiter->it_hdl);
 	if (rc)
-		D_GOTO(out, rc);
+		goto out;
 
 	rc = key_iter_match_probe(oiter);
 	if (rc)

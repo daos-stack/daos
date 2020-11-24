@@ -324,7 +324,7 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 	if (rc != -DER_SUCCESS) {
 		D_ERROR("failed to connect to %s " DF_RC "\n",
 			dc_agent_sockpath, DP_RC(rc));
-		D_GOTO(out, 0);
+		D_GOTO(out, rc);
 	}
 
 	/* Prepare the GetAttachInfo request. */
@@ -572,7 +572,7 @@ dc_mgmt_disconnect(void)
 	if (rc != -DER_SUCCESS) {
 		D_ERROR("failed to connect to %s " DF_RC "\n",
 			dc_agent_sockpath, DP_RC(rc));
-		D_GOTO(out, 0);
+		D_GOTO(out, rc);
 	}
 
 	rc = drpc_call_create(ctx, DRPC_MODULE_MGMT,

@@ -79,7 +79,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 			D_GOTO(err_unlock, rc);
 		}
 		d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
-		D_GOTO(alloc_ie, 0);
+		goto alloc_ie;
 	} else {
 		d_list_for_each_entry(dfsi,
 				      &dfp->dfp_dfs_list,
@@ -102,7 +102,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 				if (rc == -DER_NONEXIST) {
 					D_FREE(dfs);
 					dfs = dfsi;
-					D_GOTO(alloc_ie, 0);
+					goto alloc_ie;
 				} else {
 					D_ASSERT(rc == -DER_SUCCESS);
 				}

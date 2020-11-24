@@ -493,7 +493,7 @@ main(int argc, char **argv)
 				       NULL);
 		if (rc != -DER_SUCCESS) {
 			printf("Failed to connect to pool (%d)\n", rc);
-			D_GOTO(out_dfs, 0);
+			D_GOTO(out_dfs, rc);
 		}
 
 		if (uuid_is_null(dfs->dfs_cont) == 0) {

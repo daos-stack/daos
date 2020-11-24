@@ -191,7 +191,7 @@ crt_proc_d_rank_list_t(crt_proc_t proc, d_rank_list_t **data)
 		rank_list = *data;
 		if (rank_list == NULL) {
 			*buf = 0;
-			D_GOTO(out, rc = 0);
+			goto out;
 		}
 
 		nr = rank_list->rl_nr;
@@ -205,7 +205,7 @@ crt_proc_d_rank_list_t(crt_proc_t proc, d_rank_list_t **data)
 		nr = *buf;
 		if (nr == 0) {
 			*data = NULL;
-			D_GOTO(out, rc = 0);
+			goto out;
 		}
 
 		D_ALLOC_PTR(rank_list);
@@ -250,7 +250,7 @@ crt_proc_d_iov_t(crt_proc_t proc, d_iov_t *div)
 		div->iov_buf = NULL;
 		div->iov_buf_len = 0;
 		div->iov_len = 0;
-		D_GOTO(out, rc = 0);
+		goto out;
 	}
 
 	rc = crt_proc_uint64_t(proc, &div->iov_buf_len);

@@ -254,7 +254,7 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 
 	if (nchildren == 0) {
 		*children_rank_list = NULL;
-		D_GOTO(out, rc = 0);
+		goto out;
 	}
 	result_rank_list = d_rank_list_alloc(nchildren);
 	if (result_rank_list == NULL)

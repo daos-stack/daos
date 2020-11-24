@@ -1984,7 +1984,7 @@ ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
 		else
 			D_ERROR("set iterator cursor failed: "DF_RC"\n",
 				DP_RC(rc));
-		D_GOTO(iter_fini, rc);
+		goto iter_fini;
 	}
 
 	while (1) {

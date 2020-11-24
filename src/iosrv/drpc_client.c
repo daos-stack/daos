@@ -258,7 +258,7 @@ drpc_init(void)
 	D_ASSERT(dss_drpc_ctx == NULL);
 	rc = drpc_connect(path, &dss_drpc_ctx);
 	if (dss_drpc_ctx == NULL)
-		D_GOTO(out_path, 0);
+		goto out_path;
 
 	rc = notify_ready();
 	if (rc != 0) {

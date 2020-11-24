@@ -209,14 +209,15 @@ extern "C" {
  * cases.
  */
 
-#ifdef __GNU__
-#if __GNUC__ > 4 || \
-	(__GNUC__ == 4 && (__GNUC_MINOR__ > 9 ||))
+#ifdef __clang__
+#define VERBOSE_GOTO 1
+#else
+#if defined  __GNUC__ && __GNUC__ > 4 || \
+	(__GNUC__ == 4 && (__GNUC_MINOR__ < 9))
 #define VERBOSE_GOTO 0
 #else
 #define VERBOSE_GOTO 1
 #endif
-#define VERBOSE_GOTO 1
 #endif
 
 #if VERBOSE_GOTO
@@ -230,15 +231,16 @@ extern "C" {
 #define D_GOTO(label, rc)						\
 	do {								\
 		__typeof__(rc) __rc = (rc);				\
-		if (D_LOG_ENABLED(DB_TRACE)) {				\
+		if (D_LOG_ENABLED(DB_GOTO)) {				\
 			char __result[20] = {0};			\
 			snprintf(__result, 20, DG_FMT(__rc), __rc);	\
-			D_DEBUG(DB_TRACE, "Jumping to " #label " '" #rc "' result '%s'\n", __result); \
+			D_DEBUG(DB_GOTO, "Jumping to " #label " '" #rc "' result '%s'\n", __result); \
 		}							\
 		(void)(__rc);						\
 		goto label;						\
 	} while (0)
-#else
+
+#else /* VERBOSE_GOTO */
 
 #define D_GOTO(label, rc)						\
 	do {								\
@@ -247,7 +249,8 @@ extern "C" {
 		(void)(__rc);						\
 		goto label;						\
 	} while (0)
-#endif
+
+#endif /* VERBOSE_GOTO */
 
 #define D_FPRINTF(...)							\
 	({								\

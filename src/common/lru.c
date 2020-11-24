@@ -232,7 +232,7 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key,
 	link = d_hash_rec_find(&lcache->dlc_htable, key, key_size);
 	if (link != NULL) {
 		llink = link2llink(link);
-		D_GOTO(found, rc = 0);
+		goto found;
 	}
 
 	if (create_args == NULL)

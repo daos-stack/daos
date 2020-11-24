@@ -1715,7 +1715,7 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new,
 			mbr_changed = evt_node_mbr_update(tcx, nd_cur, mbr,
 							  trace->tr_at);
 			if (!mbr_changed || level == 0)
-				D_GOTO(out, 0);
+				goto out;
 
 			/* continue to merge MBR with upper level node */
 			mbr = nd_cur;
@@ -1736,7 +1736,7 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new,
 			 */
 			mbr_changed |= changed;
 			if (!mbr_changed || level == 0)
-				D_GOTO(out, 0);
+				goto out;
 
 			/* continue to merge MBR with upper level node */
 			mbr = nd_cur;
@@ -2287,7 +2287,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				 * NB: clip is not implemented yet.
 				 */
 				evt_tcx_set_trace(tcx, level, nd_off, i, false);
-				D_GOTO(out, rc = 0);
+				goto out;
 
 			case EVT_FIND_ALL:
 				break;
