@@ -31,6 +31,26 @@ import (
 	"strings"
 )
 
+var (
+	// knownWrappers provides a lookup table of known
+	// function wrapper names to be ignored when determining
+	// the real caller location.
+	knownWrappers = map[string]struct{}{
+		"Trace":   {},
+		"Tracef":  {},
+		"Debug":   {},
+		"Debugf":  {},
+		"Info":    {},
+		"Infof":   {},
+		"Notice":  {},
+		"Noticef": {},
+		"Warn":    {},
+		"Warnf":   {},
+		"Error":   {},
+		"Errorf":  {},
+	}
+)
+
 const debugLogFlags = log.Lmicroseconds | log.Lshortfile
 
 // NewDebugLogger returns a DebugLogger configured for outputting
@@ -66,7 +86,7 @@ func (l *DefaultDebugLogger) Debugf(format string, args ...interface{}) {
 				break
 			}
 			fnName := frame.Function[strings.LastIndex(frame.Function, ".")+1:]
-			if fnName == "Debug" || fnName == "Debugf" {
+			if _, found := knownWrappers[fnName]; found {
 				depth++
 			}
 		}

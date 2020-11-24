@@ -34,6 +34,12 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+var (
+	suppressedMessages = map[string]struct{}{
+		"failed to contact": {},
+	}
+)
+
 // hcLogger implements the hclog.Logger interface to
 // provide a wrapper around our logger. As hclog is a
 // structured (key/val) logger, we have to join the
@@ -62,6 +68,9 @@ func (hlc *hcLogger) argString(args ...interface{}) string {
 func (hlc *hcLogger) Trace(msg string, args ...interface{}) {}
 
 func (hlc *hcLogger) Debug(msg string, args ...interface{}) {
+	if _, found := suppressedMessages[msg]; found {
+		return
+	}
 	hlc.log.Debugf(msg+": %s", hlc.argString(args...))
 }
 
@@ -71,9 +80,8 @@ func (hlc *hcLogger) Info(msg string, args ...interface{}) {
 }
 
 func (hlc *hcLogger) Warn(msg string, args ...interface{}) {
-	// As we don't have a warn level with our logger, just
-	// escalate these messages to ERROR.
-	hlc.log.Errorf(msg+": %s", hlc.argString(args...))
+	// Only errors should be printed at ERROR.
+	hlc.log.Debugf(msg+": %s", hlc.argString(args...))
 }
 
 func (hlc *hcLogger) Error(msg string, args ...interface{}) {

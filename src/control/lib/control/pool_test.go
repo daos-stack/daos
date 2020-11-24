@@ -257,12 +257,14 @@ func TestControl_PoolCreate(t *testing.T) {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolCreateResp{
-						Svcreps: []uint32{0, 1, 2},
+						Svcreps:  []uint32{0, 1, 2},
+						Numranks: 32,
 					},
 				),
 			},
 			expResp: &PoolCreateResp{
-				SvcReps: []uint32{0, 1, 2},
+				SvcReps:  []uint32{0, 1, 2},
+				NumRanks: 32,
 			},
 		},
 	} {
