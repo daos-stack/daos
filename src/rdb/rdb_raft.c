@@ -1,4 +1,4 @@
-/**
+/*
  * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
+ * \file
+ *
  * rdb: Raft Integration
  *
  * Each replica employs four daemon ULTs:
@@ -38,7 +40,7 @@
  * assertion in rdb_raft_rc()).
  */
 
-#define D_LOGFAC	DD_FAC(rdb)
+#define D_LOGFAC DD_FAC(rdb)
 
 #include <daos_srv/rdb.h>
 
@@ -88,7 +90,7 @@ rdb_raft_cb_send_requestvote(raft_server_t *raft, void *arg, raft_node_t *node,
 	int				rc;
 
 	D_ASSERT(db->d_raft == raft);
-	D_DEBUG(DB_TRACE, DF_DB": sending rv to node %d rank %u: term=%d\n",
+	D_DEBUG(DB_TRACE, DF_DB": sending rv to node %d rank %u: term=%ld\n",
 		DP_DB(db), raft_node_get_id(node), rdb_node->dn_rank,
 		msg->term);
 
@@ -171,7 +173,7 @@ rdb_raft_cb_send_appendentries(raft_server_t *raft, void *arg,
 	int				rc;
 
 	D_ASSERT(db->d_raft == raft);
-	D_DEBUG(DB_TRACE, DF_DB": sending ae to node %u rank %u: term=%d\n",
+	D_DEBUG(DB_TRACE, DF_DB": sending ae to node %u rank %u: term=%ld\n",
 		DP_DB(db), raft_node_get_id(node), rdb_node->dn_rank,
 		msg->term);
 
@@ -212,9 +214,9 @@ static int
 rdb_lc_store_replicas(daos_handle_t lc, uint64_t index,
 		      const d_rank_list_t *replicas)
 {
-	d_iov_t		keys[2];
-	d_iov_t		vals[2];
-	uint8_t			nreplicas;
+	d_iov_t	keys[2];
+	d_iov_t	vals[2];
+	uint8_t	nreplicas;
 
 	D_ASSERTF(replicas->rl_nr <= UINT8_MAX, "nreplicas = %u",
 		  replicas->rl_nr);
@@ -223,7 +225,7 @@ rdb_lc_store_replicas(daos_handle_t lc, uint64_t index,
 	d_iov_set(&vals[0], &nreplicas, sizeof(nreplicas));
 	keys[1] = rdb_lc_replicas;
 	d_iov_set(&vals[1], replicas->rl_ranks,
-		     sizeof(*replicas->rl_ranks) * nreplicas);
+		  sizeof(*replicas->rl_ranks) * nreplicas);
 	return rdb_lc_update(lc, index, RDB_LC_ATTRS, true /* crit */,
 			     2 /* n */, keys, vals);
 }
@@ -270,8 +272,8 @@ static int
 rdb_raft_load_replicas(struct rdb *db, uint64_t index)
 {
 	d_iov_t	value;
-	uint8_t		nreplicas;
-	int		rc;
+	uint8_t	nreplicas;
+	int	rc;
 
 	rc = rdb_raft_get_nreplicas(db, index, &nreplicas);
 	if (rc != 0)
@@ -304,7 +306,7 @@ err:
 static void
 rdb_raft_unload_replicas(struct rdb *db)
 {
-	int	i;
+	int i;
 
 	if (db->d_replicas == NULL)
 		return;
@@ -330,8 +332,8 @@ rdb_raft_unload_replicas(struct rdb *db)
 static int
 rdb_raft_load_snapshot(struct rdb *db)
 {
-	int rc;
-	int i;
+	int	rc;
+	int	i;
 
 	D_DEBUG(DB_MD, DF_DB": loading snapshot: base="DF_U64" term="DF_U64"\n",
 		DP_DB(db), db->d_lc_record.dlr_base,
@@ -526,8 +528,9 @@ rdb_raft_cb_send_installsnapshot(raft_server_t *raft, void *arg,
 		goto err_data_bulk;
 	}
 
-	D_DEBUG(DB_TRACE, DF_DB": sent is to node %u rank %u: term=%d "
-		"last_idx=%d seq="DF_U64" kds.len="DF_U64" data.len="DF_U64"\n",
+	D_DEBUG(DB_TRACE,
+		DF_DB": sent is to node %u rank %u: term=%ld last_idx=%ld seq="
+		DF_U64" kds.len="DF_U64" data.len="DF_U64"\n",
 		DP_DB(db), raft_node_get_id(node), rdb_node->dn_rank,
 		in->isi_msg.term, in->isi_msg.last_idx, in->isi_seq,
 		kds.iov_len, data.iov_len);
@@ -694,6 +697,7 @@ static int
 rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
 {
 	struct rdb_raft_unpack_arg *unpack_arg = arg;
+
 #if 0
 	int i;
 
@@ -755,8 +759,8 @@ rdb_raft_cb_recv_installsnapshot(raft_server_t *raft, void *arg,
 	struct rdb_lc_record	       *slc_record = &db->d_slc_record;
 	uint64_t			seq;
 	struct rdb_anchor		anchor;
-	d_iov_t			keys[2];
-	d_iov_t			values[2];
+	d_iov_t				keys[2];
+	d_iov_t				values[2];
 	int				rc;
 
 	in = container_of(msg, struct rdb_installsnapshot_in, isi_msg);
@@ -767,24 +771,28 @@ rdb_raft_cb_recv_installsnapshot(raft_server_t *raft, void *arg,
 		bool destroy = false;
 
 		/* As msg->term == currentTerm and currentTerm >= dlr_term... */
-		D_ASSERTF(msg->term >= slc_record->dlr_term, "%d >= "DF_U64"\n",
-			  msg->term, slc_record->dlr_term);
+		D_ASSERTF(msg->term >= slc_record->dlr_term,
+			  "%ld >= "DF_U64"\n", msg->term,
+			  slc_record->dlr_term);
 
 		if (msg->term == slc_record->dlr_term) {
 			if (msg->last_idx < slc_record->dlr_base) {
-				D_DEBUG(DB_TRACE, DF_DB": stale snapshot: %d < "
-					DF_U64"\n", DP_DB(db), msg->last_idx,
+				D_DEBUG(DB_TRACE,
+					DF_DB": stale snapshot: %ld < "DF_U64
+					"\n", DP_DB(db), msg->last_idx,
 					slc_record->dlr_base);
 				/* Ask the leader to fast-forward matchIndex. */
 				return 1;
 			} else if (msg->last_idx > slc_record->dlr_base) {
-				D_DEBUG(DB_TRACE, DF_DB": new snapshot: %d > "
-					DF_U64"\n", DP_DB(db), msg->last_idx,
+				D_DEBUG(DB_TRACE,
+					DF_DB": new snapshot: %ld > "DF_U64"\n",
+					DP_DB(db), msg->last_idx,
 					slc_record->dlr_base);
 				destroy = true;
 			}
 		} else {
-			D_DEBUG(DB_TRACE, DF_DB": new leader: %d != "DF_U64"\n",
+			D_DEBUG(DB_TRACE,
+				DF_DB": new leader: %ld != "DF_U64"\n",
 				DP_DB(db), msg->term, slc_record->dlr_term);
 			/*
 			 * We destroy the SLC anyway, even when the index
@@ -810,7 +818,7 @@ rdb_raft_cb_recv_installsnapshot(raft_server_t *raft, void *arg,
 
 	/* If necessary, create a new SLC. */
 	if (daos_handle_is_inval(*slc)) {
-		D_DEBUG(DB_TRACE, DF_DB": creating slc: %d\n", DP_DB(db),
+		D_DEBUG(DB_TRACE, DF_DB": creating slc: %ld\n", DP_DB(db),
 			msg->last_idx);
 		rc = rdb_raft_create_lc(db->d_pool, db->d_mc, &rdb_mc_slc,
 					msg->last_idx, msg->last_term,
@@ -842,7 +850,7 @@ rdb_raft_cb_recv_installsnapshot(raft_server_t *raft, void *arg,
 	rc = rdb_raft_unpack_chunk(*slc, &in->isi_local.rl_kds_iov,
 				   &in->isi_local.rl_data_iov, msg->last_idx);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to unpack IS chunk %d/"DF_U64": %d\n",
+		D_ERROR(DF_DB": failed to unpack IS chunk %ld/"DF_U64": %d\n",
 			DP_DB(db), in->isi_msg.last_idx, in->isi_seq, rc);
 		return rc;
 	}
@@ -946,33 +954,36 @@ rdb_raft_cb_recv_installsnapshot_resp(raft_server_t *raft, void *arg,
 	/* If no longer transferring this snapshot, ignore this response. */
 	if (rdb_node->dn_term != raft_get_current_term(raft) ||
 	    is->dis_index != resp->last_idx) {
-		D_DEBUG(DB_TRACE, DF_DB": rank %u: stale term "DF_U64
-			" != %d or index "DF_U64" != %d\n", DP_DB(db),
-			rdb_node->dn_rank, rdb_node->dn_term,
-			raft_get_current_term(raft), is->dis_index,
-			resp->last_idx);
+		D_DEBUG(DB_TRACE,
+			DF_DB": rank %u: stale term "DF_U64" != %ld or index "
+			DF_U64" != %ld\n", DP_DB(db), rdb_node->dn_rank,
+			rdb_node->dn_term, raft_get_current_term(raft),
+			is->dis_index, resp->last_idx);
 		return 0;
 	}
 
 	/* If this chunk isn't successfully stored, ignore this response. */
 	if (!out->iso_success) {
-		D_DEBUG(DB_TRACE, DF_DB": rank %u: unsuccessful chunk %d/"DF_U64
-			"("DF_U64")\n", DP_DB(db), rdb_node->dn_rank,
+		D_DEBUG(DB_TRACE,
+			DF_DB": rank %u: unsuccessful chunk %ld/"DF_U64"("
+			DF_U64")\n", DP_DB(db), rdb_node->dn_rank,
 			resp->last_idx, out->iso_seq, is->dis_seq);
 		return 0;
 	}
 
 	/* Ignore this stale response. */
 	if (out->iso_seq <= is->dis_seq) {
-		D_DEBUG(DB_TRACE, DF_DB": rank %u: stale chunk %d/"DF_U64"("
-			DF_U64")\n", DP_DB(db), rdb_node->dn_rank,
-			resp->last_idx, out->iso_seq, is->dis_seq);
+		D_DEBUG(DB_TRACE,
+			DF_DB": rank %u: stale chunk %ld/"DF_U64"("DF_U64")\n",
+			DP_DB(db), rdb_node->dn_rank, resp->last_idx,
+			out->iso_seq, is->dis_seq);
 		return 0;
 	}
 
-	D_DEBUG(DB_TRACE, DF_DB": rank %u: completed chunk %d/"DF_U64"("DF_U64
-		")\n", DP_DB(db), rdb_node->dn_rank, resp->last_idx,
-		out->iso_seq, is->dis_seq);
+	D_DEBUG(DB_TRACE,
+		DF_DB": rank %u: completed chunk %ld/"DF_U64"("DF_U64")\n",
+		DP_DB(db), rdb_node->dn_rank, resp->last_idx, out->iso_seq,
+		is->dis_seq);
 
 	/* Update the last sequence number and anchor. */
 	is->dis_seq = out->iso_seq;
@@ -982,10 +993,10 @@ rdb_raft_cb_recv_installsnapshot_resp(raft_server_t *raft, void *arg,
 }
 
 static int
-rdb_raft_cb_persist_vote(raft_server_t *raft, void *arg, int vote)
+rdb_raft_cb_persist_vote(raft_server_t *raft, void *arg, raft_node_id_t vote)
 {
 	struct rdb     *db = arg;
-	d_iov_t	value;
+	d_iov_t		value;
 	int		rc;
 
 	d_iov_set(&value, &vote, sizeof(vote));
@@ -998,11 +1009,12 @@ rdb_raft_cb_persist_vote(raft_server_t *raft, void *arg, int vote)
 }
 
 static int
-rdb_raft_cb_persist_term(raft_server_t *raft, void *arg, int term, int vote)
+rdb_raft_cb_persist_term(raft_server_t *raft, void *arg, raft_term_t term,
+			 raft_node_id_t vote)
 {
 	struct rdb     *db = arg;
-	d_iov_t	keys[2];
-	d_iov_t	values[2];
+	d_iov_t		keys[2];
+	d_iov_t		values[2];
 	int		rc;
 
 	/* Update rdb_mc_term and rdb_mc_vote atomically. */
@@ -1012,7 +1024,7 @@ rdb_raft_cb_persist_term(raft_server_t *raft, void *arg, int term, int vote)
 	d_iov_set(&values[1], &vote, sizeof(vote));
 	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 2 /* n */, keys, values);
 	if (rc != 0)
-		D_ERROR(DF_DB": failed to update term %d and vote %d: %d\n",
+		D_ERROR(DF_DB": failed to update term %ld and vote %d: %d\n",
 			DP_DB(db), term, vote, rc);
 	return rc;
 }
@@ -1115,8 +1127,8 @@ rdb_raft_log_offer_single(raft_server_t *raft, void *arg,
 			  raft_entry_t *entry, uint64_t index)
 {
 	struct rdb	       *db = arg;
-	d_iov_t		keys[2];
-	d_iov_t		values[2];
+	d_iov_t			keys[2];
+	d_iov_t			values[2];
 	struct rdb_entry	header;
 	int			n = 0;
 	bool			crit;
@@ -1150,9 +1162,11 @@ rdb_raft_log_offer_single(raft_server_t *raft, void *arg,
 		D_ASSERTF(0, "Unknown entry type %d\n", entry->type);
 	}
 
-	/* Persist the header and the data (if nonempty). */
+	/*
+	 * Persist the header and the data (if nonempty). Discard the unused
+	 * entry->id.
+	 */
 	header.dre_term = entry->term;
-	header.dre_id = entry->id;
 	header.dre_type = entry->type;
 	header.dre_size = entry->data.len;
 	keys[n] = rdb_lc_entry_header;
@@ -1198,7 +1212,8 @@ rdb_raft_log_offer_single(raft_server_t *raft, void *arg,
 		goto err_discard;
 	}
 
-	D_DEBUG(DB_TRACE, DF_DB": appended entry "DF_U64": term=%d type=%d "
+	D_DEBUG(DB_TRACE,
+		DF_DB": appended entry "DF_U64": term=%ld type=%d "
 		"buf=%p len=%u\n", DP_DB(db), index, entry->term, entry->type,
 		entry->data.buf, entry->data.len);
 	return 0;
@@ -1213,10 +1228,10 @@ err_discard:
 
 static int
 rdb_raft_cb_log_offer(raft_server_t *raft, void *arg, raft_entry_t *entries,
-		      int index, int *n_entries)
+		      raft_index_t index, int *n_entries)
 {
-	int i;
-	int rc = 0;
+	int	i;
+	int	rc = 0;
 
 	for (i = 0; i < *n_entries; ++i) {
 		rc = rdb_raft_log_offer_single(raft, arg, &entries[i],
@@ -1230,18 +1245,18 @@ rdb_raft_cb_log_offer(raft_server_t *raft, void *arg, raft_entry_t *entries,
 
 static int
 rdb_raft_cb_log_poll(raft_server_t *raft, void *arg, raft_entry_t *entries,
-		     int index, int *n_entries)
+		     raft_index_t index, int *n_entries)
 {
 	struct rdb     *db = arg;
 	uint64_t	base = db->d_lc_record.dlr_base;
 	uint64_t	base_term = db->d_lc_record.dlr_base_term;
-	d_iov_t	value;
+	d_iov_t		value;
 	int		rc;
 
-	D_DEBUG(DB_TRACE, DF_DB": polling [%d, %d]\n", DP_DB(db), index,
+	D_DEBUG(DB_TRACE, DF_DB": polling [%ld, %ld]\n", DP_DB(db), index,
 		index + *n_entries - 1);
-	D_ASSERTF(index == db->d_lc_record.dlr_base + 1, "%d == "DF_U64" + 1\n",
-		  index, db->d_lc_record.dlr_base);
+	D_ASSERTF(index == db->d_lc_record.dlr_base + 1,
+		  "%ld == "DF_U64" + 1\n", index, db->d_lc_record.dlr_base);
 
 	/* Update the log base index and term. */
 	db->d_lc_record.dlr_base = index + *n_entries - 1;
@@ -1266,12 +1281,12 @@ rdb_raft_cb_log_poll(raft_server_t *raft, void *arg, raft_entry_t *entries,
 
 static int
 rdb_raft_cb_log_pop(raft_server_t *raft, void *arg, raft_entry_t *entry,
-		    int index, int *n_entries)
+		    raft_index_t index, int *n_entries)
 {
 	struct rdb     *db = arg;
 	uint64_t	i = index;
 	uint64_t	tail = db->d_lc_record.dlr_tail;
-	d_iov_t	value;
+	d_iov_t		value;
 	int		rc;
 
 	D_ASSERTF(i > db->d_lc_record.dlr_base, DF_U64" > "DF_U64"\n", i,
@@ -1311,9 +1326,9 @@ rdb_raft_cb_log_pop(raft_server_t *raft, void *arg, raft_entry_t *entry,
 	return 0;
 }
 
-static int
+static raft_node_id_t
 rdb_raft_cb_log_get_node_id(raft_server_t *raft, void *arg, raft_entry_t *entry,
-			    int index)
+			    raft_index_t index)
 {
 	return *((d_rank_t *) entry->data.buf);
 }
@@ -1882,8 +1897,8 @@ rdb_raft_append_apply_internal(struct rdb *db, msg_entry_t *mentry,
 	}
 
 	/* The actual index must match the expected index. */
-	D_ASSERTF(mresponse.idx == index, "%d == "DF_U64"\n", mresponse.idx,
-		  index);
+	D_ASSERTF(mresponse.idx == index, "%ld == "DF_U64"\n",
+		  mresponse.idx, index);
 	rc = rdb_raft_wait_applied(db, mresponse.idx, mresponse.term);
 	raft_apply_all(db->d_raft);
 
@@ -2131,7 +2146,7 @@ rdb_raft_init(daos_handle_t pool, daos_handle_t mc,
 static int
 rdb_raft_load_entry(struct rdb *db, uint64_t index)
 {
-	d_iov_t		value;
+	d_iov_t			value;
 	struct rdb_entry	header;
 	raft_entry_t		entry;
 	int			n_entries;
@@ -2147,7 +2162,7 @@ rdb_raft_load_entry(struct rdb *db, uint64_t index)
 		return rc;
 	}
 	entry.term = header.dre_term;
-	entry.id = header.dre_id;
+	entry.id = 0; /* unused */
 	entry.type = header.dre_type;
 	entry.data.len = header.dre_size;
 
@@ -2192,9 +2207,10 @@ rdb_raft_load_entry(struct rdb *db, uint64_t index)
 		return rdb_raft_rc(rc);
 	}
 
-	D_DEBUG(DB_TRACE, DF_DB": loaded entry "DF_U64
-		": term=%d type=%d buf=%p len=%u\n", DP_DB(db), index,
-		entry.term, entry.type, entry.data.buf, entry.data.len);
+	D_DEBUG(DB_TRACE,
+		DF_DB": loaded entry "DF_U64": term=%ld type=%d buf=%p "
+		"len=%u\n", DP_DB(db), index, entry.term, entry.type,
+		entry.data.buf, entry.data.len);
 	return 0;
 }
 
@@ -2327,8 +2343,8 @@ rdb_raft_get_compact_thres(void)
 int
 rdb_raft_start(struct rdb *db)
 {
-	d_iov_t	value;
-	int		term;
+	d_iov_t		value;
+	uint64_t	term;
 	int		vote;
 	int		election_timeout;
 	int		request_timeout;
@@ -2574,7 +2590,7 @@ rdb_raft_campaign(struct rdb *db)
 	}
 
 	rdb_raft_save_state(db, &state);
-	D_DEBUG(DB_MD, DF_DB": calling election from current term %d\n",
+	D_DEBUG(DB_MD, DF_DB": calling election from current term %ld\n",
 		DP_DB(db), raft_get_current_term(db->d_raft));
 	rc = raft_election_start(db->d_raft);
 	rc = rdb_raft_check_state(db, &state, rc /* raft_rc */);
@@ -2732,8 +2748,8 @@ rdb_installsnapshot_handler(crt_rpc_t *rpc)
 	rc = rdb_raft_recv_is(db, rpc, &in->isi_local.rl_kds_iov,
 			      &in->isi_local.rl_data_iov);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to receive INSTALLSNAPSHOT chunk %d/"
-			DF_U64": %d\n", DP_DB(db), in->isi_msg.last_idx,
+		D_ERROR(DF_DB": failed to receive INSTALLSNAPSHOT chunk %ld"
+			"/"DF_U64": %d\n", DP_DB(db), in->isi_msg.last_idx,
 			in->isi_seq, rc);
 		goto out_db;
 	}

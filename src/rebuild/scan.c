@@ -415,22 +415,22 @@ find_rebuild_shards(unsigned int *tgt_stack_array,
 			rc = pl_obj_find_rebuild(map, md, NULL,
 						 rebuild_ver,
 						 *tgts, *shards,
-						 max_shards, myrank);
+						 max_shards);
 		} else if (rebuild_op == RB_OP_DRAIN) {
 			rc = pl_obj_find_rebuild(map, md, NULL,
 						 rebuild_ver,
 						 *tgts, *shards,
-						 max_shards, -1);
+						 max_shards);
 		} else if (rebuild_op == RB_OP_REINT) {
 			rc = pl_obj_find_reint(map, md, NULL,
 					       rebuild_ver,
 					       *tgts, *shards,
-					       max_shards, myrank);
+					       max_shards);
 		} else if (rebuild_op == RB_OP_EXTEND) {
 			rc = pl_obj_find_addition(map, md, NULL,
 						  rebuild_ver,
 						  *tgts, *shards,
-						  max_shards, myrank);
+						  max_shards);
 		} else {
 			D_ASSERT(rebuild_op == RB_OP_FAIL ||
 				 rebuild_op == RB_OP_DRAIN ||
