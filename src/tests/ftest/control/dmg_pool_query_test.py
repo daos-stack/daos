@@ -40,7 +40,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         super(DmgPoolQueryTest, self).setUp()
 
         # Init the pool
-        self.pool = TestPool(self.context, dmg_command=self.dmg)
+        self.pool = TestPool(self.context, self.dmg)
         self.pool.get_params(self)
         self.pool.create()
         self.uuid = self.pool.pool.get_uuid_str()

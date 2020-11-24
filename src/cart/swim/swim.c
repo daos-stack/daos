@@ -278,25 +278,8 @@ update:
 	/* if member is suspected, remove from suspect list */
 	TAILQ_FOREACH(item, &ctx->sc_suspects, si_link) {
 		if (item->si_id == id) {
-			uint64_t timeout = swim_ping_timeout_get();
-
 			/* remove this member from suspect list */
 			TAILQ_REMOVE(&ctx->sc_suspects, item, si_link);
-
-			timeout += timeout / 2;
-			swim_ping_timeout_set(timeout);
-			SWIM_ERROR("%lu: increase ping timeout to %lu ms\n",
-				   ctx->sc_self, timeout);
-
-			/* according protocol period requirement */
-			timeout *= 3;
-			if (timeout > swim_period_get()) {
-				swim_period_set(timeout);
-				/* according protocol requirement */
-				timeout *= 3;
-				swim_suspect_timeout_set(timeout);
-			}
-
 			D_FREE(item);
 			break;
 		}
@@ -602,6 +585,7 @@ void
 swim_fini(struct swim_context *ctx)
 {
 	struct swim_item *next, *item;
+	int    rc;
 
 	if (ctx == NULL)
 		return;
@@ -638,14 +622,19 @@ swim_fini(struct swim_context *ctx)
 		item = next;
 	}
 
-	SWIM_MUTEX_DESTROY(ctx->sc_mutex);
+	rc = SWIM_MUTEX_DESTROY(ctx->sc_mutex);
+	if (rc != 0)
+		D_DEBUG(DB_TRACE, "Failed to destroy lock %d %s",
+			rc, strerror(rc));
 
 	D_FREE(ctx);
 }
 
 int
-swim_net_glitch_update(struct swim_context *ctx, uint64_t net_glitch_delay)
+swim_net_glitch_update(struct swim_context *ctx, swim_id_t id,
+		       uint64_t delay)
 {
+	swim_id_t self_id = swim_self_get(ctx);
 	struct swim_item *item;
 	int rc = 0;
 
@@ -653,31 +642,32 @@ swim_net_glitch_update(struct swim_context *ctx, uint64_t net_glitch_delay)
 
 	/* update expire time of suspected members */
 	TAILQ_FOREACH(item, &ctx->sc_suspects, si_link) {
-		item->u.si_deadline += net_glitch_delay;
+		if (id == self_id || id == item->si_id)
+			item->u.si_deadline += delay;
 	}
 	/* update expire time of ipinged members */
 	TAILQ_FOREACH(item, &ctx->sc_ipings, si_link) {
-		item->u.si_deadline += net_glitch_delay;
+		if (id == self_id || id == item->si_id)
+			item->u.si_deadline += delay;
 	}
 
-	switch (swim_state_get(ctx)) {
-	case SCS_BEGIN:
-		ctx->sc_next_tick_time += net_glitch_delay;
-		break;
-	case SCS_DPINGED:
-		ctx->sc_dping_deadline += net_glitch_delay;
-		break;
-	case SCS_IPINGED:
-		ctx->sc_iping_deadline += net_glitch_delay;
-		break;
-	default:
-		break;
+	if (id == self_id || id == ctx->sc_target) {
+		switch (swim_state_get(ctx)) {
+		case SCS_DPINGED:
+			ctx->sc_dping_deadline += delay;
+			break;
+		case SCS_IPINGED:
+			ctx->sc_iping_deadline += delay;
+			break;
+		default:
+			break;
+		}
 	}
 
 	swim_ctx_unlock(ctx);
 
-	SWIM_ERROR("Network glitch delay for %lu ms is detected.\n",
-		   net_glitch_delay);
+	SWIM_ERROR("%lu: A network glitch of %lu with %lu msec delay"
+		   " is detected.\n", self_id, id, delay);
 	return rc;
 }
 
@@ -796,16 +786,15 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 			ctx->sc_iping_deadline += net_glitch_delay;
 			if (now > ctx->sc_iping_deadline) {
 				/* no response from indirect pings,
-				 * dead this member
+				 * will be dead by suspicion timeout
+				 * if there are no gossips about it.
 				 */
 				SWIM_ERROR("%lu: iping timeout {%lu %c %lu}\n",
 					   ctx->sc_self, ctx->sc_target,
 					   SWIM_STATUS_CHARS[
 						       target_state.sms_status],
 					   target_state.sms_incarnation);
-				swim_member_dead(ctx, ctx->sc_self,
-						 ctx->sc_target,
-						 target_state.sms_incarnation);
+				/* So, just goto next member. */
 				ctx_state = SCS_DEAD;
 			}
 			break;
@@ -855,7 +844,6 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 			ctx->sc_target = ctx->sc_ops->get_dping_target(ctx);
 			if (ctx->sc_target == SWIM_ID_INVALID) {
 				swim_ctx_unlock(ctx);
-				SWIM_ERROR("SWIM shutdown\n");
 				D_GOTO(out, rc = -ESHUTDOWN);
 			}
 
@@ -985,7 +973,6 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 						  upds[i].smu_state.sms_status],
 					   upds[i].smu_state.sms_incarnation,
 					   from);
-				SWIM_ERROR("SWIM shutdown\n");
 				D_GOTO(out, rc = -ESHUTDOWN);
 			}
 

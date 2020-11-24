@@ -298,7 +298,9 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	if (!scm_sz) {
 		struct stat lstat;
 
-		stat(path, &lstat);
+		rc = stat(path, &lstat);
+		if (rc != 0)
+			D_GOTO(close, rc = daos_errno2der(errno));
 		scm_sz = lstat.st_size;
 	}
 

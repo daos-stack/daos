@@ -54,6 +54,8 @@ struct crt_gdata {
 	bool			cg_server;
 	/* Flag indicating whether scalable endpoint mode is enabled */
 	bool			cg_sep_mode;
+	/* Flag indicating to use contiguous port ranges for contexts */
+	bool			cg_contig_ports;
 	int			cg_na_plugin; /* NA plugin type */
 
 	/* global timeout value (second) for all RPCs */
@@ -163,6 +165,10 @@ struct crt_context {
 	pthread_mutex_t		 cc_mutex;
 	/* timeout per-context */
 	uint32_t		 cc_timeout_sec;
+	/* Stores self uri for the current context */
+	char			 cc_self_uri[CRT_ADDR_STR_MAX_LEN];
+	/* provider on which context is allocated */
+	int			provider;
 };
 
 /* in-flight RPC req list, be tracked per endpoint for every crt_context */

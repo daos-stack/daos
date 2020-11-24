@@ -46,7 +46,7 @@ func expectAuthSysErrorForToken(t *testing.T, badToken *Token, expectedErrorMess
 		t.Error("Expected a nil AuthSys")
 	}
 
-	ExpectError(t, err, expectedErrorMessage, "")
+	CmpErr(t, errors.New(expectedErrorMessage), err)
 }
 
 // AuthSysFromAuthToken tests
@@ -66,7 +66,7 @@ func TestAuthSysFromAuthToken_ErrorsIfTokenCannotBeUnmarshaled(t *testing.T) {
 	badToken := Token{Flavor: Flavor_AUTH_SYS,
 		Data: zeroArray}
 	expectAuthSysErrorForToken(t, &badToken,
-		"unmarshaling AUTH_SYS: proto: auth.Sys: illegal tag 0 (wire type 0)")
+		"unmarshaling AUTH_SYS:")
 }
 
 func TestAuthSysFromAuthToken_SucceedsWithGoodToken(t *testing.T) {
@@ -148,7 +148,7 @@ func TestAuthSysRequestFromCreds_returnsAuthSys(t *testing.T) {
 		groupIDs: gids,
 	}
 	ext.LookupGroupIDResults = []*user.Group{
-		&user.Group{
+		{
 			Name: expectedGroup,
 		},
 	}
@@ -264,7 +264,7 @@ func TestAuthSysRequestFromCreds_GroupIDListFails(t *testing.T) {
 	ext.LookupUserIDResult = testUser
 
 	ext.LookupGroupIDResults = []*user.Group{
-		&user.Group{
+		{
 			Name: "group@",
 		},
 	}

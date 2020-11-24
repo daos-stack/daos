@@ -38,6 +38,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -104,7 +105,7 @@ func checkMgmtSvcReplica(self *net.TCPAddr, accessPoints []string) (isReplica, b
 // resolveAccessPoints resolves the strings in accessPoints into addresses in
 // addrs. If a port isn't specified, assume the default port.
 func resolveAccessPoints(accessPoints []string) (addrs []*net.TCPAddr, err error) {
-	defaultPort := NewConfiguration().ControlPort
+	defaultPort := config.DefaultServer().ControlPort
 	for _, ap := range accessPoints {
 		if !common.HasPort(ap) {
 			ap = net.JoinHostPort(ap, strconv.Itoa(defaultPort))
@@ -147,8 +148,8 @@ type mgmtSvc struct {
 	harness          *IOServerHarness
 	membership       *system.Membership // if MS leader, system membership list
 	sysdb            *system.Database
-	clientNetworkCfg *ClientNetworkCfg
-	updateReqChan    chan struct{}
+	clientNetworkCfg *config.ClientNetworkCfg
+	joinReqs         joinReqChan
 }
 
 func newMgmtSvc(h *IOServerHarness, m *system.Membership, s *system.Database) *mgmtSvc {
@@ -157,8 +158,8 @@ func newMgmtSvc(h *IOServerHarness, m *system.Membership, s *system.Database) *m
 		harness:          h,
 		membership:       m,
 		sysdb:            s,
-		clientNetworkCfg: &ClientNetworkCfg{},
-		updateReqChan:    make(chan struct{}),
+		clientNetworkCfg: new(config.ClientNetworkCfg),
+		joinReqs:         make(joinReqChan),
 	}
 }
 
@@ -416,6 +417,59 @@ func (svc *mgmtSvc) smdSetFaulty(ctx context.Context, req *mgmtpb.SmdQueryReq) (
 	}, nil
 }
 
+func (svc *mgmtSvc) smdReplace(ctx context.Context, req *mgmtpb.SmdQueryReq) (*mgmtpb.SmdQueryResp, error) {
+	req.Rank = uint32(system.NilRank)
+	rank, device, err := svc.smdQueryDevice(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if device == nil {
+		return nil, errors.Errorf("smdReplace on %s did not match any devices", req.Uuid)
+	}
+
+	srvs, err := svc.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", rank))
+	if err != nil {
+		return nil, err
+	}
+	if len(srvs) == 0 {
+		return nil, errors.Errorf("failed to retrieve instance for rank %d", rank)
+	}
+
+	svc.log.Debugf("calling storage replace on rank %d for %s", rank, req.Uuid)
+
+	dresp, err := srvs[0].CallDrpc(ctx, drpc.MethodReplaceStorage, &mgmtpb.DevReplaceReq{
+		OldDevUuid: req.Uuid,
+		NewDevUuid: req.ReplaceUUID,
+		NoReint:    req.NoReint,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	drr := &mgmtpb.DevReplaceResp{}
+	if err = proto.Unmarshal(dresp.Body, drr); err != nil {
+		return nil, errors.Wrap(err, "unmarshal StorageReplace response")
+	}
+
+	if drr.Status != 0 {
+		return nil, errors.Wrap(drpc.DaosStatus(drr.Status), "smdReplace failed")
+	}
+
+	return &mgmtpb.SmdQueryResp{
+		Ranks: []*mgmtpb.SmdQueryResp_RankResp{
+			{
+				Rank: rank.Uint32(),
+				Devices: []*mgmtpb.SmdQueryResp_Device{
+					{
+						Uuid:  drr.NewDevUuid,
+						State: drr.DevState,
+					},
+				},
+			},
+		},
+	}, nil
+}
+
 func (svc *mgmtSvc) SmdQuery(ctx context.Context, req *mgmtpb.SmdQueryReq) (*mgmtpb.SmdQueryResp, error) {
 	svc.log.Debugf("MgmtSvc.SmdQuery dispatch, req:%+v\n", *req)
 
@@ -428,6 +482,10 @@ func (svc *mgmtSvc) SmdQuery(ctx context.Context, req *mgmtpb.SmdQueryReq) (*mgm
 
 	if req.SetFaulty {
 		return svc.smdSetFaulty(ctx, req)
+	}
+
+	if req.ReplaceUUID != "" {
+		return svc.smdReplace(ctx, req)
 	}
 
 	if req.Uuid != "" && (!req.OmitDevices && !req.OmitPools) {

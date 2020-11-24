@@ -22,8 +22,11 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 from __future__ import print_function
+from __future__ import division
 import yaml
 import random
+import math
+
 
 def convert(stat):
     """Convert byte value to pretty string"""
@@ -34,10 +37,12 @@ def convert(stat):
         size = size / 1024
     return "%10d  " % stat
 
+
 def print_total(name, stat, total):
     "Pretty print"
     print("\t%-20s: %s (%5.2f%%)" % (name, convert(stat),
                                      100 * float(stat) / total))
+
 
 def check_key_type(spec):
     """check key type field"""
@@ -48,8 +53,10 @@ def check_key_type(spec):
     if "size" not in spec:
         raise RuntimeError("Size required for hashed key %s" % spec)
 
+
 class Stats(object):
     """Class for calculating and storing stats"""
+
     def __init__(self):
         """Construct a stat object"""
         self.stats = {
@@ -106,7 +113,8 @@ class Stats(object):
     def pretty_print(self):
         """Pretty print statistics"""
         print("Metadata breakdown:")
-        self.stats["scm_total"] = self.stats["total"] - self.stats["nvme_total"]
+        self.stats["scm_total"] = self.stats["total"] - \
+            self.stats["nvme_total"]
         self.print_stat("pool")
         self.print_stat("container")
         self.print_stat("object")
@@ -127,21 +135,24 @@ class Stats(object):
         print("Total storage required: {0}".format(pretty_total))
 
 # pylint: disable=too-many-instance-attributes
+
+
 class MetaOverhead(object):
     """Class for calculating overheads"""
+
     def __init__(self, args, num_pools, meta_yaml):
         """class for keeping track of overheads"""
         self.args = args
-        self.csum_size = 0
         self.meta = meta_yaml
         self.num_pools = num_pools
         self.pools = []
         for _index in range(0, self.num_pools):
-            self.pools.append({"trees": [], "dup" : 1, "key" : "container",
-                               "count" : 0})
+            self.pools.append({"trees": [], "dup": 1, "key": "container",
+                               "count": 0})
         self.next_cont = 1
         self.next_object = 1
         self._scm_cutoff = meta_yaml.get("scm_cutoff", 4096)
+        csummers = meta_yaml.get("csummers", {})
 
     def set_scm_cutoff(self, scm_cutoff):
         self._scm_cutoff = scm_cutoff
@@ -154,8 +165,9 @@ class MetaOverhead(object):
         for pool in self.pools:
             pool["count"] += int(cont_spec.get("count", 1))
             cont = {"dup": int(cont_spec.get("count", 1)), "key": "object",
-                    "count": 0, "csum_size": int(cont_spec.get("csum_size", 0)),
-                    "csum_gran": int(cont_spec.get("csum_gran", 16384)),
+                    "count": 0,
+                    "csum_size": int(cont_spec.get("csum_size", 0)),
+                    "csum_gran": int(cont_spec.get("csum_gran", 1048576)),
                     "trees": []}
             pool["trees"].append(cont)
 
@@ -235,21 +247,26 @@ class MetaOverhead(object):
         nvme = True
         if self._scm_cutoff > size:
             nvme = False
-        csum_size = cont["csum_size"]
-        if csum_size != 0:
-            if akey["key"] == "single_value" or size < cont["csum_gran"]:
-                size += csum_size
-            else:
-                size += (size // cont["csum_gran"]) * csum_size
-                if value_spec.get("aligned", "Yes") == "No":
-                    size += (csum_size * 2)
-        akey["count"] += value_spec.get("count", 1) # Number of values
+
+        akey["count"] += value_spec.get("count", 1)  # Number of values
         if value_spec.get("overhead", "user") == "user":
-            akey["value_size"] += size * value_spec.get("count", 1) # total size
+            akey["value_size"] += size * \
+                value_spec.get("count", 1)  # total size
         else:
-            akey["meta_size"] += size * value_spec.get("count", 1) # total size
+            akey["meta_size"] += size * \
+                value_spec.get("count", 1)  # total size
         if nvme:
-            akey["nvme_size"] += size * value_spec.get("count", 1) # total size
+            akey["nvme_size"] += size * \
+                value_spec.get("count", 1)  # total size
+
+        # Add checksum overhead
+
+        csum_size = cont["csum_size"]
+        if akey["key"] == "array":
+            csum_size = int(math.ceil(size / cont["csum_gran"]) * csum_size)
+
+        akey["meta_size"] += csum_size * \
+            value_spec.get("count", 1)
 
     def load_container(self, cont_spec):
         """calculate metadata for update(s)"""
@@ -276,13 +293,12 @@ class MetaOverhead(object):
             return leaf_node_size, int_node_size, tree_nodes
 
         if self.meta["trees"][key]["num_dynamic"] == 0:
-            return 0,0,0
+            return 0, 0, 0
 
         for item in self.meta["trees"][key]["dynamic"]:
             if item["order"] >= num_values:
                 return item["size"], item["size"], 1
         raise "Bug parsing dynamic tree order information!!!"
-
 
     def calc_tree(self, stats, tree):
         """calculate the totals"""
@@ -299,7 +315,7 @@ class MetaOverhead(object):
         else:
             overhead = tree_nodes * leaf_size + rec_overhead
         if key == "akey" or key == "single_value" or key == "array":
-            #key refers to child tree
+            # key refers to child tree
             if tree["overhead"] == "user":
                 tree_stats.add_user_meta(num_values * tree["size"])
             else:

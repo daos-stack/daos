@@ -170,6 +170,7 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 {
 	struct vos_iter_dict	*dict;
 	struct vos_iterator	*iter;
+	struct dtx_handle	*old = NULL;
 	struct vos_ts_set	*ts_set = NULL;
 	int			 rc;
 	int			 rlevel;
@@ -237,17 +238,18 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 	if (rc != 0)
 		goto out;
 
-
+	if (dtx_is_valid_handle(dth)) {
+		old = vos_dth_get();
+		vos_dth_set(dth);
+	}
 	D_DEBUG(DB_TRACE, "Preparing standalone iterator of type %s\n",
 		dict->id_name);
 	rc = dict->id_ops->iop_prepare(type, param, &iter, ts_set);
+	if (dtx_is_valid_handle(dth))
+		vos_dth_set(old);
 	if (rc != 0) {
-		if (rc == -DER_NONEXIST)
-			D_DEBUG(DB_TRACE, "No %s to iterate: "DF_RC"\n",
-				dict->id_name, DP_RC(rc));
-		else
-			D_ERROR("Failed to prepare %s iterator: "DF_RC"\n",
-				dict->id_name, DP_RC(rc));
+		VOS_TX_LOG_FAIL(rc, "Could not prepare iterator for %s: "DF_RC
+				"\n", dict->id_name, DP_RC(rc));
 
 		goto out;
 	}
@@ -263,8 +265,12 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 
 	*ih = vos_iter2hdl(iter);
 out:
-	if (rc == -DER_NONEXIST && dtx_is_valid_handle(dth))
-		vos_ts_set_update(ts_set, dth->dth_epoch);
+	if (rc == -DER_NONEXIST && dtx_is_valid_handle(dth)) {
+		if (vos_ts_wcheck(ts_set, dth->dth_epoch, dth->dth_epoch_bound))
+			rc = -DER_TX_RESTART;
+		else
+			vos_ts_set_update(ts_set, dth->dth_epoch);
+	}
 	if (rc != 0)
 		vos_ts_set_free(ts_set);
 	return rc;
@@ -286,16 +292,22 @@ iter_decref(struct vos_iterator *iter)
 	return iter->it_ops->iop_finish(iter);
 }
 
-void
-vos_iter_ts_set_update(daos_handle_t ih, daos_epoch_t read_time)
+static int
+vos_iter_ts_set_update(daos_handle_t ih, daos_epoch_t read_time, int rc)
 {
 	struct vos_iterator	*iter;
 
 	if (daos_handle_is_inval(ih))
-		return;
+		return rc;
 
 	iter = vos_hdl2iter(ih);
+
+	if (vos_ts_wcheck(iter->it_ts_set, read_time, iter->it_bound))
+		return -DER_TX_RESTART;
+
 	vos_ts_set_update(iter->it_ts_set, read_time);
+
+	return rc;
 }
 
 int
@@ -616,8 +628,9 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 			daos_anchor_set_eof(anchor);
 			rc = 0;
 		} else {
-			D_ERROR("failed to prepare iterator (type=%d): "
-				""DF_RC"\n", type, DP_RC(rc));
+			VOS_TX_LOG_FAIL(rc, "failed to prepare iterator "
+					"(type=%d): "DF_RC"\n", type,
+					DP_RC(rc));
 		}
 
 		return rc;
@@ -732,7 +745,7 @@ probe:
 	}
 out:
 	if (rc >= 0)
-		vos_iter_ts_set_update(ih, read_time);
+		rc = vos_iter_ts_set_update(ih, read_time, rc);
 
 	VOS_TX_LOG_FAIL(rc, "abort iteration type:%d, "DF_RC"\n", type,
 			DP_RC(rc));

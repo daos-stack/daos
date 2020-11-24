@@ -22,7 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 from mdtest_test_base import MdtestBase
-from apricot import skipForTicket
 
 class ErasureCodeMdtest(MdtestBase):
     # pylint: disable=too-many-ancestors
@@ -31,7 +30,6 @@ class ErasureCodeMdtest(MdtestBase):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-5809")
     def test_mdtest_large(self):
         """
         Jira ID: DAOS-2494

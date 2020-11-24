@@ -76,8 +76,7 @@ class IorTestBase(DfuseTestBase):
     def create_pool(self):
         """Create a TestPool object to use with ior."""
         # Get the pool params
-        self.pool = TestPool(
-            self.context, dmg_command=self.get_dmg_command())
+        self.pool = TestPool(self.context, self.get_dmg_command())
         self.pool.get_params(self)
 
         # Create a pool
@@ -100,6 +99,23 @@ class IorTestBase(DfuseTestBase):
 
         # create container
         self.container.create()
+
+    def display_pool_space(self, pool=None):
+        """Display the current pool space.
+
+        If the TestPool object has a DmgCommand object assigned, also display
+        the free pool space per target.
+
+        Args:
+            pool (TestPool, optional): The pool for which to display space.
+                    Default is self.pool.
+        """
+        if not pool:
+            pool = self.pool
+
+        pool.display_pool_daos_space()
+        if pool.dmg:
+            pool.set_query_data()
 
     def run_ior_with_pool(self, intercept=None, test_file_suffix="",
                           test_file="daos:testFile", create_pool=True,
@@ -215,18 +231,22 @@ class IorTestBase(DfuseTestBase):
             self.fail("Exiting Test: Subprocess not running")
 
     def run_ior(self, manager, processes, intercept=None, display_space=True,
-                plugin_path=None, fail_on_warning=None):
+                plugin_path=None, fail_on_warning=False, pool=None):
         """Run the IOR command.
 
         Args:
             manager (str): mpi job manager command
             processes (int): number of host processes
-            intercept (str): path to interception library.
+            intercept (str, optional): path to interception library.
+            display_space (bool, optional): Whether to display the pool
+                space. Defaults to True.
             plugin_path (str, optional): HDF5 vol connector library path.
                 This will enable dfuse (xattr) working directory which is
                 needed to run vol connector for DAOS. Default is None.
-            fail_on_warning (bool): Controls whether the test should
-                fail if a 'WARNING' is found.
+            fail_on_warning (bool, optional): Controls whether the test
+                should fail if a 'WARNING' is found. Default is False.
+            pool (TestPool, optional): The pool for which to display space.
+                Default is self.pool.
         """
         env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
@@ -240,28 +260,32 @@ class IorTestBase(DfuseTestBase):
         manager.assign_processes(processes)
         manager.assign_environment(env)
 
+        if not pool:
+            pool = self.pool
+
         try:
             if display_space:
-                self.pool.display_pool_daos_space()
+                self.display_pool_space(pool)
             out = manager.run()
 
-            if not self.subprocess:
-                for line in out.stdout.splitlines():
-                    if 'WARNING' in line:
-                        if fail_on_warning:
-                            self.fail("IOR command issued warnings.\n")
-                        else:
-                            self.log.warning("IOR command issued warnings.\n")
+            if self.subprocess:
+                return out
+
+            if fail_on_warning:
+                report_warning = self.fail
+            else:
+                report_warning = self.log.warning
+
+            for line in out.stdout.splitlines():
+                if 'WARNING' in line:
+                    report_warning("IOR command issued warnings.\n")
             return out
         except CommandFailure as error:
             self.log.error("IOR Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
         finally:
             if not self.subprocess and display_space:
-                self.pool.display_pool_daos_space()
-                if self.pool.dmg:
-                    # Display the per-target free space
-                    self.pool.set_query_data()
+                self.display_pool_space(pool)
 
     def stop_ior(self):
         """Stop IOR process.
@@ -269,8 +293,8 @@ class IorTestBase(DfuseTestBase):
         Args:
             manager (str): mpi job manager command
         """
-        self.log.info(
-            "<IOR> Stopping in-progress IOR command: %s", str(self.job_manager))
+        self.log.info("<IOR> Stopping in-progress IOR command: %s",
+                      str(self.job_manager))
 
         try:
             out = self.job_manager.stop()
@@ -279,7 +303,7 @@ class IorTestBase(DfuseTestBase):
             self.log.error("IOR stop Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
         finally:
-            self.pool.display_pool_daos_space()
+            self.display_pool_space()
 
     def run_multiple_ior_with_pool(self, results, intercept=None):
         """Execute ior with optional overrides for ior flags and object_class.
@@ -353,12 +377,15 @@ class IorTestBase(DfuseTestBase):
         env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
             env["LD_PRELOAD"] = intercept
-        manager.assign_hosts(clients, self.workdir, self.hostfile_clients_slots)
+        manager.assign_hosts(
+            clients,
+            self.workdir,
+            self.hostfile_clients_slots)
         manager.assign_processes(procs)
         manager.assign_environment(env)
         self.lock.release()
         try:
-            self.pool.display_pool_daos_space()
+            self.display_pool_space()
             out = manager.run()
             self.lock.acquire(True)
             results[job_num] = IorCommand.get_ior_metrics(out)
@@ -367,7 +394,7 @@ class IorTestBase(DfuseTestBase):
             self.log.error("IOR Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
         finally:
-            self.pool.display_pool_daos_space()
+            self.display_pool_space()
 
     def verify_pool_size(self, original_pool_info, processes):
         """Validate the pool size.
@@ -416,7 +443,10 @@ class IorTestBase(DfuseTestBase):
         try:
             # execute bash cmds
             ret = pcmd(
-                self.hostlist_clients, cmd, verbose=display_output, timeout=300)
+                self.hostlist_clients,
+                cmd,
+                verbose=display_output,
+                timeout=300)
             if 0 not in ret:
                 error_hosts = NodeSet(
                     ",".join(

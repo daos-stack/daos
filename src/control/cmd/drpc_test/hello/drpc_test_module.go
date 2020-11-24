@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -65,12 +65,13 @@ func (m HelloModule) HandleCall(session *drpc.Session, method drpc.Method, body 
 	}
 
 	helloMsg := &Hello{}
-	proto.Unmarshal(body, helloMsg)
+	if err := proto.Unmarshal(body, helloMsg); err != nil {
+		return nil, err
+	}
 
 	greeting := fmt.Sprintf("Hello %s", helloMsg.Name)
 
-	var response HelloResponse
-	response = HelloResponse{
+	response := HelloResponse{
 		Greeting: greeting,
 	}
 

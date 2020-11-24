@@ -56,10 +56,7 @@ func TestService_RegisterModule_Single_Success(t *testing.T) {
 	expectedID := defaultTestModID
 	testMod := newTestModule(expectedID)
 
-	if err := service.RegisterModule(testMod); err != nil {
-		t.Fatalf("expected no error, got: %v", err)
-	}
-
+	service.RegisterModule(testMod)
 	mod, ok := service.GetModule(expectedID)
 
 	if !ok {
@@ -83,9 +80,7 @@ func TestService_RegisterModule_Multiple_Success(t *testing.T) {
 		mod := newTestModule(id)
 		testMods = append(testMods, mod)
 
-		if err := service.RegisterModule(mod); err != nil {
-			t.Fatalf("expected no error, got: %v", err)
-		}
+		service.RegisterModule(mod)
 	}
 
 	for i, id := range expectedIDs {
@@ -109,13 +104,14 @@ func TestService_RegisterModule_DuplicateID(t *testing.T) {
 	testMod := newTestModule(ModuleMgmt)
 	dupMod := newTestModule(testMod.IDValue)
 
-	if err := service.RegisterModule(testMod); err != nil {
-		t.Fatalf("expected no error for initial registration, got: %v", err)
-	}
+	service.RegisterModule(testMod)
 
-	err := service.RegisterModule(dupMod)
-
-	common.CmpErr(t, errors.New("already exists"), err)
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected duplicate registration to panic")
+		}
+	}()
+	service.RegisterModule(dupMod)
 }
 
 func TestService_GetModule_NotFound(t *testing.T) {
@@ -123,9 +119,7 @@ func TestService_GetModule_NotFound(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)
 
 	service := NewModuleService(log)
-	if err := service.RegisterModule(newTestModule(defaultTestModID)); err != nil {
-		t.Fatalf("couldn't register module: %v", err)
-	}
+	service.RegisterModule(newTestModule(defaultTestModID))
 
 	_, ok := service.GetModule(defaultTestModID + 1)
 

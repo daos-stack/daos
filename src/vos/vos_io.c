@@ -38,6 +38,8 @@
 
 /** I/O context */
 struct vos_io_context {
+	/** The epoch bound including uncertainty */
+	daos_epoch_t		 ic_bound;
 	daos_epoch_range_t	 ic_epr;
 	daos_unit_oid_t		 ic_oid;
 	struct vos_container	*ic_cont;
@@ -101,7 +103,7 @@ recx_csum_len(daos_recx_t *recx, struct dcs_csum_info *csum,
 {
 	if (!ci_is_valid(csum) || rsize == 0)
 		return 0;
-	return csum->cs_len * csum_chunk_count(csum->cs_chunksize,
+	return (daos_size_t)csum->cs_len * csum_chunk_count(csum->cs_chunksize,
 			recx->rx_idx, recx->rx_idx + recx->rx_nr - 1, rsize);
 }
 
@@ -465,6 +467,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	struct vos_container	*cont;
 	struct vos_io_context	*ioc = NULL;
 	struct bio_io_context	*bioc;
+	daos_epoch_t		 bound;
 	uint64_t		 cflags = 0;
 	int			 i, rc;
 
@@ -483,6 +486,8 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_iod_nr = iod_nr;
 	ioc->ic_iods = iods;
 	ioc->ic_epr.epr_hi = dtx_is_valid_handle(dth) ? dth->dth_epoch : epoch;
+	bound = dtx_is_valid_handle(dth) ? dth->dth_epoch_bound : epoch;
+	ioc->ic_bound = MAX(bound, ioc->ic_epr.epr_hi);
 	ioc->ic_epr.epr_lo = 0;
 	ioc->ic_oid = oid;
 	ioc->ic_cont = vos_hdl2cont(coh);
@@ -492,9 +497,10 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_save_recx = ((vos_flags & VOS_OF_FETCH_RECX_LIST) != 0);
 	ioc->ic_dedup = dedup;
 	ioc->ic_dedup_th = dedup_th;
-	ioc->ic_read_ts_only = ((vos_flags & VOS_OF_FETCH_SET_TS_ONLY) != 0);
-	ioc->ic_check_existence =
-		((vos_flags & VOS_OF_FETCH_CHECK_EXISTENCE) != 0);
+	if (vos_flags & VOS_OF_FETCH_CHECK_EXISTENCE)
+		ioc->ic_read_ts_only = ioc->ic_check_existence = 1;
+	else if (vos_flags & VOS_OF_FETCH_SET_TS_ONLY)
+		ioc->ic_read_ts_only = 1;
 	ioc->ic_remove =
 		((vos_flags & VOS_OF_REMOVE) != 0);
 	ioc->ic_umoffs_cnt = ioc->ic_umoffs_at = 0;
@@ -690,7 +696,7 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 	struct dcs_csum_info	csum_info = {0};
 
 	d_iov_set(&kiov, &key, sizeof(key));
-	key.sk_epoch	= epr->epr_hi;
+	key.sk_epoch	= ioc->ic_bound;
 	key.sk_minor_epc = VOS_MINOR_EPC_MAX;
 
 	tree_rec_bundle2iov(&rbund, &riov);
@@ -713,7 +719,11 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 		rc = 0;
 		rbund.rb_rsize = 0;
 		bio_addr_set_hole(&biov.bi_addr, 1);
+	} else if (key.sk_epoch > epr->epr_hi) {
+		/* Uncertainty violation */
+		D_GOTO(out, rc = -DER_TX_RESTART);
 	}
+
 	if (ci_is_valid(&csum_info))
 		save_csum(ioc, &csum_info, NULL, 0);
 
@@ -806,7 +816,9 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 
 	filter.fr_ex.ex_lo = index;
 	filter.fr_ex.ex_hi = end - 1;
-	filter.fr_epr = *epr;
+	filter.fr_epoch = epr->epr_hi;
+	filter.fr_epr.epr_lo = epr->epr_lo;
+	filter.fr_epr.epr_hi = ioc->ic_bound;
 	filter.fr_punch_epc = ioc->ic_akey_info.ii_prior_punch.pr_epc;
 	filter.fr_punch_minor_epc =
 		ioc->ic_akey_info.ii_prior_punch.pr_minor_epc;
@@ -949,7 +961,7 @@ key_ilog_check(struct vos_io_context *ioc, struct vos_krec_df *krec,
 	umm = vos_obj2umm(ioc->ic_obj);
 	rc = vos_ilog_fetch(umm, vos_cont2hdl(ioc->ic_cont),
 			    DAOS_INTENT_DEFAULT, &krec->kr_ilog,
-			    epr.epr_hi, 0, parent, info);
+			    epr.epr_hi, ioc->ic_bound, 0, parent, info);
 	if (rc != 0)
 		goto out;
 
@@ -1000,23 +1012,28 @@ no_shadow:
 }
 
 static bool
-stop_on_empty(struct vos_io_context *ioc, uint64_t cond, daos_iod_t *iod,
-	      int *rc)
+stop_check(struct vos_io_context *ioc, uint64_t cond, daos_iod_t *iod, int *rc,
+	   bool check_uncertainty)
 {
 	uint64_t	flags;
 
-	if (*rc != -DER_NONEXIST)
+	if (*rc == 0)
 		return false;
 
-	if (ioc->ic_check_existence)
+	if (*rc != -DER_NONEXIST)
 		return true;
 
-	if (ioc->ic_ts_set == NULL)
-		return false;
+	if (ioc->ic_check_existence)
+		goto check;
+
+	if (ioc->ic_ts_set == NULL) {
+		*rc = 0;
+		return true;
+	}
 
 	if (ioc->ic_read_ts_only) {
 		*rc = 0;
-		return true;
+		goto check;
 	}
 
 	if (iod != NULL && ioc->ic_ts_set->ts_flags & VOS_OF_COND_PER_AKEY) {
@@ -1026,12 +1043,27 @@ stop_on_empty(struct vos_io_context *ioc, uint64_t cond, daos_iod_t *iod,
 		flags = ioc->ic_ts_set->ts_flags;
 	}
 
-	if (flags & cond)
+	if ((flags & cond) == 0) {
+		*rc = 0;
+		if (check_uncertainty)
+			goto check;
 		return true;
+	}
+check:
+	if (vos_ts_wcheck(ioc->ic_ts_set, ioc->ic_epr.epr_hi,
+			  ioc->ic_bound))
+		*rc = -DER_TX_RESTART;
 
-	return false;
+	return true;
 }
 
+static bool
+has_uncertainty(const struct vos_io_context *ioc,
+		const struct vos_ilog_info *info)
+{
+	return vos_has_uncertainty(ioc->ic_ts_set, info, ioc->ic_epr.epr_hi,
+				   ioc->ic_bound);
+}
 
 static int
 akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
@@ -1057,40 +1089,29 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 			      VOS_BTR_AKEY, &iod->iod_name, flags,
 			      DAOS_INTENT_DEFAULT, &krec, &toh, ioc->ic_ts_set);
 
-	if (rc != 0) {
-		if (stop_on_empty(ioc, VOS_OF_COND_AKEY_FETCH, iod, &rc))
-			goto out;
-		if (rc == -DER_NONEXIST) {
-			D_DEBUG(DB_IO, "Nonexistent akey "DF_KEY"\n",
-				DP_KEY(&iod->iod_name));
+	if (stop_check(ioc, VOS_OF_COND_AKEY_FETCH, iod, &rc, true)) {
+		if (rc == 0 && !ioc->ic_read_ts_only)
 			iod_empty_sgl(ioc, ioc->ic_sgl_at);
-			rc = 0;
-		} else {
-			D_ERROR("Failed to fetch akey: "DF_RC"\n", DP_RC(rc));
-		}
+		VOS_TX_LOG_FAIL(rc, "Failed to get akey "DF_KEY" "DF_RC"\n",
+				DP_KEY(&iod->iod_name), DP_RC(rc));
 		goto out;
 	}
 
 	rc = key_ilog_check(ioc, krec, &ioc->ic_dkey_info, &val_epr,
 			    &ioc->ic_akey_info);
 
-	if (rc != 0) {
-		if (stop_on_empty(ioc, VOS_OF_COND_AKEY_FETCH, iod, &rc))
-			goto out;
-		if (rc == -DER_NONEXIST) {
+	if (stop_check(ioc, VOS_OF_COND_AKEY_FETCH, iod, &rc, false)) {
+		if (rc == 0 && !ioc->ic_read_ts_only) {
+			if (has_uncertainty(ioc, &ioc->ic_akey_info))
+				goto fetch_value;
 			iod_empty_sgl(ioc, ioc->ic_sgl_at);
-			D_DEBUG(DB_IO, "Nonexistent akey %.*s\n",
-				(int)iod->iod_name.iov_len,
-				(char *)iod->iod_name.iov_buf);
-			rc = 0;
-		} else {
-			D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
-				 "Fetch akey failed: rc="DF_RC"\n",
-				 DP_RC(rc));
 		}
+		VOS_TX_LOG_FAIL(rc, "Fetch akey failed: rc="DF_RC"\n",
+				DP_RC(rc));
 		goto out;
 	}
 
+fetch_value:
 	if (ioc->ic_read_ts_only || ioc->ic_check_existence)
 		goto out; /* skip value fetch */
 
@@ -1181,43 +1202,40 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 			      dkey, 0, DAOS_INTENT_DEFAULT, &krec,
 			      &toh, ioc->ic_ts_set);
 
-	if (stop_on_empty(ioc, VOS_COND_FETCH_MASK | VOS_OF_COND_PER_AKEY, NULL,
-			  &rc))
-		goto out;
-	if (rc == -DER_NONEXIST) {
-		for (i = 0; i < ioc->ic_iod_nr; i++)
-			iod_empty_sgl(ioc, i);
-		D_DEBUG(DB_IO, "Nonexistent dkey\n");
-		rc = 0;
-		goto out;
-	}
-
-	if (rc != 0) {
-		D_ERROR("Failed to prepare subtree: "DF_RC"\n", DP_RC(rc));
+	if (stop_check(ioc, VOS_COND_FETCH_MASK | VOS_OF_COND_PER_AKEY, NULL,
+		       &rc, true)) {
+		if (rc == 0 && !ioc->ic_read_ts_only) {
+			for (i = 0; i < ioc->ic_iod_nr; i++)
+				iod_empty_sgl(ioc, i);
+		} else {
+			VOS_TX_LOG_FAIL(rc, "Failed to fetch dkey: "DF_RC"\n",
+					DP_RC(rc));
+		}
 		goto out;
 	}
 
 	rc = key_ilog_check(ioc, krec, &obj->obj_ilog_info, &ioc->ic_epr,
 			    &ioc->ic_dkey_info);
 
-	if (rc != 0) {
-		if (stop_on_empty(ioc,
-				  VOS_COND_FETCH_MASK | VOS_OF_COND_PER_AKEY,
-				  NULL, &rc))
-			goto out;
-		if (rc == -DER_NONEXIST) {
+	if (stop_check(ioc, VOS_COND_FETCH_MASK | VOS_OF_COND_PER_AKEY, NULL,
+		       &rc, false)) {
+		if (rc == 0 && !ioc->ic_read_ts_only) {
+			if (has_uncertainty(ioc, &ioc->ic_dkey_info)) {
+				/** There is a value in the uncertainty range so
+				 *  we need to continue the fetch.
+				 */
+				goto fetch_akey;
+			}
 			for (i = 0; i < ioc->ic_iod_nr; i++)
 				iod_empty_sgl(ioc, i);
-			D_DEBUG(DB_IO, "Nonexistent dkey\n");
-			rc = 0;
 		} else {
-			D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
-				 "Fetch dkey failed: rc="DF_RC"\n",
-				 DP_RC(rc));
+			VOS_TX_LOG_FAIL(rc, "Fetch dkey failed: rc="DF_RC"\n",
+					DP_RC(rc));
 		}
 		goto out;
 	}
 
+fetch_akey:
 	for (i = 0; i < ioc->ic_iod_nr; i++) {
 		iod_set_cursor(ioc, i);
 		rc = akey_fetch(ioc, toh);
@@ -1267,37 +1285,43 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	D_ASSERT(rc == 0);
 
 	rc = vos_obj_hold(vos_obj_cache_current(), ioc->ic_cont, oid,
-			  &ioc->ic_epr, true, DAOS_INTENT_DEFAULT, true,
-			  &ioc->ic_obj, ioc->ic_ts_set);
-	if (rc != -DER_NONEXIST && rc != 0)
-		goto out;
-
-	if (stop_on_empty(ioc, VOS_COND_FETCH_MASK | VOS_OF_COND_PER_AKEY,
-			  NULL, &rc)) {
-		if (rc == 0)
-			goto set_ioc;
-		goto out;
-	}
-	if (rc == -DER_NONEXIST) {
-		rc = 0;
-		for (i = 0; i < iod_nr; i++)
-			iod_empty_sgl(ioc, i);
-	} else {
-		if (dkey == NULL || dkey->iov_len == 0) {
+			  &ioc->ic_epr, ioc->ic_bound, VOS_OBJ_VISIBLE,
+			  DAOS_INTENT_DEFAULT, &ioc->ic_obj, ioc->ic_ts_set);
+	if (stop_check(ioc, VOS_COND_FETCH_MASK | VOS_OF_COND_PER_AKEY, NULL,
+		       &rc, false)) {
+		if (rc == 0) {
 			if (ioc->ic_read_ts_only)
 				goto set_ioc;
-			D_GOTO(out, rc = -DER_INVAL);
+			if (ioc->ic_obj != NULL &&
+			    has_uncertainty(ioc, &ioc->ic_obj->obj_ilog_info))
+				goto fetch_dkey;
+			for (i = 0; i < iod_nr; i++)
+				iod_empty_sgl(ioc, i);
+			goto set_ioc;
 		}
-
-		rc = dkey_fetch(ioc, dkey);
-		if (rc != 0)
-			goto out;
+		goto out;
+	}
+fetch_dkey:
+	if (dkey == NULL || dkey->iov_len == 0) {
+		if (ioc->ic_read_ts_only)
+			goto set_ioc;
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
+	rc = dkey_fetch(ioc, dkey);
+	if (rc != 0)
+		goto out;
 set_ioc:
 	*ioh = vos_ioc2ioh(ioc);
 out:
 	vos_dth_set(NULL);
+
+	if (rc == -DER_NONEXIST || rc == -DER_INPROGRESS ||
+	    (rc == 0 && ioc->ic_read_ts_only)) {
+		if (vos_ts_wcheck(ioc->ic_ts_set, ioc->ic_epr.epr_hi,
+				  ioc->ic_bound))
+			rc = -DER_TX_RESTART;
+	}
 
 	if (rc == -DER_NONEXIST || rc == 0)
 		vos_ts_set_update(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
@@ -1404,6 +1428,7 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 
 	D_ASSERT(recx->rx_nr > 0);
 	memset(&ent, 0, sizeof(ent));
+	ent.ei_bound = ioc->ic_bound;
 	ent.ei_rect.rc_epc = epoch;
 	ent.ei_rect.rc_ex.ex_lo = recx->rx_idx;
 	ent.ei_rect.rc_ex.ex_hi = recx->rx_idx + recx->rx_nr - 1;
@@ -1482,8 +1507,8 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	}
 
 	rc = vos_ilog_update(ioc->ic_cont, &krec->kr_ilog, &ioc->ic_epr,
-			     &ioc->ic_dkey_info, &ioc->ic_akey_info,
-			     update_cond, ioc->ic_ts_set);
+			     ioc->ic_bound, &ioc->ic_dkey_info,
+			     &ioc->ic_akey_info, update_cond, ioc->ic_ts_set);
 	if (update_cond == VOS_ILOG_COND_UPDATE && rc == -DER_NONEXIST) {
 		D_DEBUG(DB_IO, "Conditional update on non-existent akey\n");
 		goto out;
@@ -1568,8 +1593,8 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey,
 	}
 
 	rc = vos_ilog_update(ioc->ic_cont, &krec->kr_ilog, &ioc->ic_epr,
-			     &obj->obj_ilog_info, &ioc->ic_dkey_info,
-			     update_cond, ioc->ic_ts_set);
+			     ioc->ic_bound, &obj->obj_ilog_info,
+			     &ioc->ic_dkey_info, update_cond, ioc->ic_ts_set);
 	if (update_cond == VOS_ILOG_COND_UPDATE && rc == -DER_NONEXIST) {
 		D_DEBUG(DB_IO, "Conditional update on non-existent akey\n");
 		goto out;
@@ -2010,8 +2035,9 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	}
 
 	err = vos_obj_hold(vos_obj_cache_current(), ioc->ic_cont, ioc->ic_oid,
-			  &ioc->ic_epr, false, DAOS_INTENT_UPDATE, true,
-			  &ioc->ic_obj, ioc->ic_ts_set);
+			   &ioc->ic_epr, ioc->ic_bound,
+			   VOS_OBJ_CREATE | VOS_OBJ_VISIBLE, DAOS_INTENT_UPDATE,
+			   &ioc->ic_obj, ioc->ic_ts_set);
 	if (err != 0)
 		goto abort;
 
@@ -2033,6 +2059,13 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	}
 
 abort:
+	if (err == -DER_NONEXIST || err == -DER_EXIST ||
+	    err == -DER_INPROGRESS) {
+		if (vos_ts_wcheck(ioc->ic_ts_set, ioc->ic_epr.epr_hi,
+				  ioc->ic_bound)) {
+			err = -DER_TX_RESTART;
+		}
+	}
 	err = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm,
 			 &ioc->ic_blk_exts, tx_started, err);
 
@@ -2051,8 +2084,11 @@ abort:
 	if (err == 0)
 		vos_ts_set_upgrade(ioc->ic_ts_set);
 
-	if (err == -DER_NONEXIST || err == -DER_EXIST || err == 0)
+	if (err == -DER_NONEXIST || err == -DER_EXIST || err == 0) {
 		vos_ts_set_update(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
+		if (err == 0)
+			vos_ts_set_wupdate(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
+	}
 
 	VOS_TIME_END(time, VOS_UPDATE_END);
 	vos_space_unhold(vos_cont2pool(ioc->ic_cont), &ioc->ic_space_held[0]);
@@ -2189,7 +2225,7 @@ vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
 
 	rc = bio_sgl_init(bsgl_dup, bsgl->bs_nr_out);
 	if (rc != 0)
-		return -DER_NOMEM;
+		return rc;
 
 	bsgl_dup->bs_nr_out = bsgl->bs_nr_out;
 

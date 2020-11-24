@@ -324,8 +324,10 @@ entries_set(struct entries *entries, enum entries_op op, ...)
 		if (epoch == ENTRIES_END)
 			break;
 
-		if (entries->entry_count == entries->alloc_count)
+		if (entries->entry_count == entries->alloc_count) {
+			va_end(ap);
 			return -DER_NOMEM;
+		}
 
 		desc = &entries->entries[entries->entry_count];
 		desc->epoch = epoch;
@@ -446,8 +448,8 @@ do_update(daos_handle_t loh, daos_epoch_t epoch,
 		*prior_punch = punch;
 		*prior_status = current_status;
 	} else if (verbose) {
-		print_message("Skipping "DF_U64" punch=%s status=%d\n",
-			      epoch, punch ? "true" : "false", current_status);
+		print_message("Skipping "DF_U64" status=%d\n",
+			      epoch, current_status);
 	}
 
 	return 0;
@@ -608,6 +610,7 @@ ilog_test_update(void **state)
 		LOG_FAIL(rc, 0, "Failed to insert log entry\n");
 		rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0,
 				   entries);
+		LOG_FAIL(rc, 0, "Punch or epoch mismatch\n");
 		epoch++;
 	}
 	/** NB: It's a bit of a hack to insert aborted entries.   Since fetch

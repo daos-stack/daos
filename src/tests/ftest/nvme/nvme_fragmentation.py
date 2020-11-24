@@ -132,8 +132,8 @@ class NvmeFragmentation(TestWithServers):
         # Destroy the container created by thread
         for key in container_info:
             cmd.sub_command_class.sub_command_class.pool.value = self.pool.uuid
-            cmd.sub_command_class.sub_command_class.svc.value = \
-                self.pool.svc_ranks
+            #cmd.sub_command_class.sub_command_class.svc.value = \
+            #    self.pool.svc_ranks
             cmd.sub_command_class.sub_command_class.cont.value = \
                 container_info[key]
 
@@ -161,7 +161,7 @@ class NvmeFragmentation(TestWithServers):
         """
         no_of_jobs = self.params.get("no_parallel_job", '/run/ior/*')
         # Create a pool
-        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
+        self.pool = TestPool(self.context, self.get_dmg_command())
         self.pool.get_params(self)
         self.pool.create()
         self.pool.display_pool_daos_space("Pool space at the Beginning")

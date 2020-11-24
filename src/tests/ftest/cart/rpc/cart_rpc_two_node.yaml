@@ -23,6 +23,7 @@ hosts: !mux
       - boro-A
     test_clients:
       - boro-B
+timeout: 600
 tests: !mux
   proto_np_1:
     name: proto_np_1
@@ -57,7 +58,7 @@ tests: !mux
   test_group:
     name: test_group_basic
     test_servers_bin: crt_launch
-    test_servers_arg: "-e ../tests/test_group_np_srv --name tg_srv_grp"
+    test_servers_arg: "-e ../tests/test_group_np_srv --name tg_srv_grp --use_cfg 0"
     test_servers_env: "-x D_FI_CONFIG=/usr/etc/fault-inject-cart.yaml"
     test_servers_ppn: "1"
     test_clients_bin: ../tests/test_group_np_cli

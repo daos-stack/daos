@@ -153,13 +153,14 @@ func (c *cfgCmd) setConfig(cfg *control.Config) {
 
 type cliOptions struct {
 	AllowProxy     bool       `long:"allow-proxy" description:"Allow proxy configuration via environment"`
-	HostList       string     `short:"l" long:"host-list" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
+	HostList       string     `short:"l" long:"host-list" description:"comma separated list of addresses <ipv4addr/hostname>"`
 	Insecure       bool       `short:"i" long:"insecure" description:"have dmg attempt to connect without certificates"`
 	Debug          bool       `short:"d" long:"debug" description:"enable debug output"`
 	JSON           bool       `short:"j" long:"json" description:"Enable JSON output"`
 	JSONLogs       bool       `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
 	ConfigPath     string     `short:"o" long:"config-path" description:"Client config file path"`
 	Storage        storageCmd `command:"storage" alias:"st" description:"Perform tasks related to storage attached to remote servers"`
+	Config         configCmd  `command:"config" alias:"co" description:"Perform tasks related to configuration of hardware remote servers"`
 	System         SystemCmd  `command:"system" alias:"sy" description:"Perform distributed tasks related to DAOS system"`
 	Network        NetCmd     `command:"network" alias:"n" description:"Perform tasks related to network devices attached to remote servers"`
 	Pool           PoolCmd    `command:"pool" alias:"p" description:"Perform tasks related to DAOS pools"`

@@ -11,7 +11,7 @@
 
 Name:          daos
 Version:       1.1.1
-Release:       3%{?relval}%{?dist}
+Release:       8%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -55,7 +55,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: raft-devel = 0.6.0
+BuildRequires: raft-devel = 0.7.0
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -63,12 +63,15 @@ BuildRequires: libcmocka-devel
 BuildRequires: readline-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
+BuildRequires: python-devel
+BuildRequires: python-distro
 %if (0%{?rhel} >= 7)
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
 BuildRequires: golang-bin >= 1.12
+# needed to retrieve PMM region info through control-plane
 BuildRequires: libipmctl-devel
-BuildRequires: python-devel python36-devel
+BuildRequires: python36-devel
 BuildRequires: Lmod
 %else
 %if (0%{?suse_version} >= 1315)
@@ -83,7 +86,8 @@ BuildRequires: distribution-release
 BuildRequires: libnuma-devel
 BuildRequires: cunit-devel
 BuildRequires: ipmctl-devel
-BuildRequires: python-devel python3-devel
+BuildRequires: python3-devel
+BuildRequires: python3-distro
 BuildRequires: lua-lmod
 BuildRequires: systemd-rpm-macros
 %if 0%{?is_opensuse}
@@ -126,13 +130,19 @@ Requires: %{name} = %{version}-%{release}
 Requires: %{name}-client = %{version}-%{release}
 Requires: spdk-tools
 Requires: ndctl
-Requires: ipmctl
+# needed to set PMem configuration goals in BIOS through control-plane
+%if (0%{?suse_version} >= 1500)
+Requires: ipmctl < 02.00.00.3809
+%else
+Requires: ipmctl > 02.00.00.3816
+%endif
 Requires: hwloc
 Requires: mercury = %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: libfabric >= 1.8.0
-%systemd_requires
+%{?systemd_requires}
+Obsoletes: cart
 
 %description server
 This is the package needed to run a DAOS server
@@ -143,6 +153,7 @@ Requires: %{name} = %{version}-%{release}
 Requires: mercury = %{mercury_version}
 Requires: libfabric >= 1.8.0
 Requires: fuse3 >= 3.4.2
+Obsoletes: cart
 %if (0%{?suse_version} >= 1500)
 Requires: libfuse3-3 >= 3.4.2
 %else
@@ -150,7 +161,7 @@ Requires: libfuse3-3 >= 3.4.2
 # get it when fuse3 Requires: /etc/fuse.conf
 Requires: fuse < 3, fuse3-libs >= 3.4.2
 %endif
-%systemd_requires
+%{?systemd_requires}
 
 %description client
 This is the package needed to run a DAOS client
@@ -159,6 +170,7 @@ This is the package needed to run a DAOS client
 Summary: The DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
+Requires: python-distro
 Requires: python2-tabulate
 Requires: fio
 Requires: lbzip2
@@ -194,7 +206,7 @@ Summary: The DAOS development libraries and headers
 This is the package needed to build software with the DAOS library.
 
 %prep
-%setup -q
+%autosetup
 
 %build
 
@@ -256,6 +268,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 # you might think libdaos_tests.so goes in the tests RPM but
 # the 4 tools following it need it
 %{_libdir}/libdaos_tests.so
+%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_bindir}/io_conf
 %{_bindir}/jump_pl_map
 %{_bindir}/ring_pl_map
@@ -264,7 +277,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/libvos.so
 %{_libdir}/libcart*
 %{_libdir}/libgurt*
-%{_prefix}/etc/memcheck-cart.supp
+%{_prefix}/%{_sysconfdir}/memcheck-cart.supp
 %dir %{_prefix}%{_sysconfdir}
 %{_prefix}%{_sysconfdir}/vos_size_input.yaml
 %dir %{_sysconfdir}/bash_completion.d
@@ -285,7 +298,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %dir %{conf_dir}/certs/clients
 %attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
 %attr(0644,root,root) %{conf_dir}/daos_server.yml
-%{_sysconfdir}/ld.so.conf.d/daos.conf
 # set daos_admin to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_admins) %{_bindir}/daos_admin
 # set daos_server to be setgid daos_admins in order to invoke daos_admin
@@ -374,11 +386,14 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_prefix}/lib/daos/TESTING
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
+%{_bindir}/jobtest
+%exclude %{_bindir}/self_test
 %{_bindir}/smd_ut
 %{_bindir}/vea_ut
 %{_bindir}/daos_perf
 %{_bindir}/daos_racer
 %{_bindir}/evt_ctl
+%{_bindir}/obj_ctl
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
 %{_bindir}/crt_launch
@@ -393,6 +408,25 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Tue Nov 17 2020 Li Wei <wei.g.li@intel.com> 1.1.1-8
+- Require raft-devel 0.7.0 that changes log indices and terms to 63-bit
+
+* Wed Nov 11 2020 Tom Nabarro <tom.nabarro@intel.com> 1.1.1-7
+- Add version validation for runtime daos_server ipmctl requirement to avoid
+  potential corruption of PMMs when setting PMem goal, issue fixed in
+  https://github.com/intel/ipmctl/commit/9e3898cb15fa9eed3ef3e9de4488be1681d53ff4
+
+* Thu Oct 29 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> 1.1.1-6
+- Restore obj_ctl utility
+
+* Wed Oct 28 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.1-5
+- Use %%autosetup
+- Only use systemd_requires if it exists
+- Obsoletes: cart now that it's included in daos
+
+* Sat Oct 24 2020 Maureen Jean <maureen.jean@intel.com> 1.1.1-4
+- Add daos.conf to the daos package to resolve the path to libbio.so
+
 * Tue Oct 13 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> 1.1.1-3
 - Remove obj_ctl from Tests RPM package
 - Add libdts.so shared library that is used by daos_perf, daos_racer and

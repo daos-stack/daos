@@ -345,6 +345,19 @@ class GitRepoRetriever():
 
     def get(self, subdir, **kw):
         """Downloads sources from a git repository into subdir"""
+
+        # Now checkout the commit_sha if specified
+        passed_commit_sha = kw.get("commit_sha", None)
+        if passed_commit_sha is None:
+            comp = os.path.basename(subdir)
+            print("""
+*********************** ERROR ************************
+No commit_versions entry in utils/build.config for
+%s. Please specify one to avoid breaking the
+build with random upstream changes.
+*********************** ERROR ************************\n""" % comp)
+            raise DownloadFailure(self.url, subdir)
+
         commands = ['git clone %s %s' % (self.url, subdir)]
         if not RUNNER.run_commands(commands):
             raise DownloadFailure(self.url, subdir)

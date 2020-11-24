@@ -29,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/pkg/errors"
 )
 
@@ -74,4 +75,36 @@ func CmpTcpAddr(a, b *net.TCPAddr) bool {
 		return false
 	}
 	return a.Zone == b.Zone
+}
+
+// IsLocalAddr returns true if the supplied net.TCPAddr
+// matches one of the local IP addresses, false otherwise.
+func IsLocalAddr(testAddr *net.TCPAddr) bool {
+	if testAddr == nil {
+		return false
+	}
+
+	ifaceAddrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return false
+	}
+
+	for _, ia := range ifaceAddrs {
+		if in, ok := ia.(*net.IPNet); ok {
+			if in.IP.Equal(testAddr.IP) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// LocalhostCtrlAddr returns a *net.TCPAddr representing
+// the default control address on localhost.
+func LocalhostCtrlAddr() *net.TCPAddr {
+	return &net.TCPAddr{
+		IP:   net.IPv4(127, 0, 0, 1),
+		Port: build.DefaultControlPort,
+	}
 }

@@ -22,7 +22,7 @@ server_config:
       pinned_numa_node: 0
       nr_xs_helpers: 1
       fabric_iface: ib0
-      fabric_iface_port: 31416
+      fabric_iface_port: 31317
       log_file: daos_server0.log
       bdev_class: nvme
       bdev_list: ["0000:81:00.0"]
@@ -138,6 +138,17 @@ daos_tests:
       test_name: Checksum tests
       test_timeout: 220
     test_S:
-      daos_test: S 
+      daos_test: S
       test_name: DAOS rebuild ec tests
       test_timeout: 900
+    test_Z:
+      daos_test: Z
+      test_name: DAOS aggregate ec tests
+    test_X:
+      daos_test: X
+      test_name: DAOS degraded ec tests
+      test_timeout: 900
+    test_U:
+      daos_test: U
+      test_name: DAOS dedup tests
+      test_timeout: 220

@@ -23,16 +23,11 @@
 """
 import time
 import random
-import ctypes
-from avocado import fail_on
-from apricot import TestWithServers
+from osa_utils import OSAUtils
 from test_utils_pool import TestPool
-from command_utils import CommandFailure
-from pydaos.raw import (DaosContainer, IORequest,
-                        DaosObj, DaosApiError)
 
 
-class OSAOfflineReintegration(TestWithServers):
+class OSAOfflineReintegration(OSAUtils):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
@@ -44,66 +39,6 @@ class OSAOfflineReintegration(TestWithServers):
         """Set up for test case."""
         super(OSAOfflineReintegration, self).setUp()
         self.dmg_command = self.get_dmg_command()
-        self.no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')
-        self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')
-        self.record_length = self.params.get("length", '/run/record/*')
-
-    @fail_on(CommandFailure)
-    def get_pool_leader(self):
-        """Get the pool leader.
-
-        Returns:
-            int: pool leader number
-
-        """
-        data = self.dmg_command.pool_query(self.pool.uuid)
-        return int(data["leader"])
-
-    @fail_on(CommandFailure)
-    def get_pool_version(self):
-        """Get the pool version.
-
-        Returns:
-            int: pool version number
-
-        """
-        data = self.dmg_command.pool_query(self.pool.uuid)
-        return int(data["version"])
-
-    @fail_on(DaosApiError)
-    def write_single_object(self):
-        """Write some data to the existing pool.
-        """
-        self.pool.connect(2)
-        csum = self.params.get("enable_checksum", '/run/container/*')
-        container = DaosContainer(self.context)
-        input_param = container.cont_input_values
-        input_param.enable_chksum = csum
-        container.create(poh=self.pool.pool.handle,
-                         con_prop=input_param)
-        container.open()
-        obj = DaosObj(self.context, container)
-        obj.create(objcls=1)
-        obj.open()
-        ioreq = IORequest(self.context,
-                          container,
-                          obj, objtype=4)
-        self.log.info("Writing the Single Dataset")
-        record_index = 0
-        for dkey in range(self.no_of_dkeys):
-            for akey in range(self.no_of_akeys):
-                indata = ("{0}".format(str(akey)[0])
-                          * self.record_length[record_index])
-                d_key_value = "dkey {0}".format(dkey)
-                c_dkey = ctypes.create_string_buffer(d_key_value)
-                a_key_value = "akey {0}".format(akey)
-                c_akey = ctypes.create_string_buffer(a_key_value)
-                c_value = ctypes.create_string_buffer(indata)
-                c_size = ctypes.c_size_t(ctypes.sizeof(c_value))
-                ioreq.single_insert(c_dkey, c_akey, c_value, c_size)
-                record_index = record_index + 1
-                if record_index == len(self.record_length):
-                    record_index = 0
 
     def run_offline_reintegration_test(self, num_pool, data=False):
         """Run the offline reintegration without data.
@@ -187,7 +122,9 @@ class OSAOfflineReintegration(TestWithServers):
             display_string = "Pool{} space at the End".format(val)
             self.pool = pool[val]
             self.pool.display_pool_daos_space(display_string)
-            pool[val].destroy()
+
+        if data:
+            self.verify_single_object()
 
     def test_osa_offline_reintegration(self):
         """Test ID: DAOS-4749
@@ -197,7 +134,4 @@ class OSAOfflineReintegration(TestWithServers):
         """
         # Perform reintegration testing with 1 to 3 pools
         for x in range(1, 4):
-            self.run_offline_reintegration_test(x)
-        # Perform reintegration testing : inserting data in pool
-        # Remove the comment below after DAOS-4946 is fixed.
-        # self.run_offline_reintegration_test(1, True)
+            self.run_offline_reintegration_test(x, True)

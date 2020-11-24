@@ -23,7 +23,6 @@
 """
 from apricot import TestWithServers
 from daos_utils import DaosCommand
-from general_utils import convert_list
 
 
 class DaosObjectQuery(TestWithServers):
@@ -53,7 +52,7 @@ class DaosObjectQuery(TestWithServers):
         """
         JIRA ID: DAOS-4694
         Test Description: Test daos object query.
-        :avocado: tags=all,container,tiny,full_regression,daos_object_query
+        :avocado: tags=all,container,hw,small,full_regression,daos_object_query
         """
         daos_cmd = DaosCommand(self.bin)
         errors = []
@@ -61,6 +60,7 @@ class DaosObjectQuery(TestWithServers):
         # Create a pool and a container.
         self.add_pool()
         self.add_container(self.pool)
+        self.pool.connect()
         self.container.open(pool_handle=self.pool.pool.handle.value)
 
         # Prepare to write object.
@@ -95,7 +95,6 @@ class DaosObjectQuery(TestWithServers):
             oid_concat = "{}.{}".format(expected_oid_hi, expected_oid_lo)
             kwargs = {
                 "pool": self.pool.uuid,
-                "svc": convert_list(self.pool.svc_ranks),
                 "cont": self.container.uuid,
                 "oid": oid_concat
             }

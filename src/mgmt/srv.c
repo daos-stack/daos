@@ -127,6 +127,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_DEV_SET_FAULTY:
 		ds_mgmt_drpc_dev_set_faulty(drpc_req, drpc_resp);
 		break;
+	case DRPC_METHOD_MGMT_DEV_REPLACE:
+		ds_mgmt_drpc_dev_replace(drpc_req, drpc_resp);
+		break;
 	case DRPC_METHOD_MGMT_POOL_GET_ACL:
 		ds_mgmt_drpc_pool_get_acl(drpc_req, drpc_resp);
 		break;
@@ -367,9 +370,43 @@ ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc)
 	kill(getpid(), sig);
 }
 
+void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc)
+{
+	struct mgmt_pool_get_svcranks_in	*in;
+	struct mgmt_pool_get_svcranks_out	*out;
+	int					 rc;
+
+	in = crt_req_get(rpc);
+	D_ASSERT(in != NULL);
+
+	D_DEBUG(DB_MGMT, "get svcranks for pool "DF_UUIDF"\n",
+		DP_UUID(in->gsr_puuid));
+
+	out = crt_reply_get(rpc);
+
+	rc =  get_pool_svc_ranks(in->gsr_puuid, &out->gsr_ranks);
+	if (rc != 0)
+		D_ERROR(DF_UUID ": get_pool_svc_ranks() upcall failed, "
+			DF_RC "\n", DP_UUID(in->gsr_puuid), DP_RC(rc));
+	out->gsr_rc = rc;
+
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR(DF_UUID ": crt_reply_send() failed, " DF_RC "\n",
+			DP_UUID(in->gsr_puuid), DP_RC(rc));
+
+	d_rank_list_free(out->gsr_ranks);
+}
+
 static int
 ds_mgmt_init()
 {
+	int rc;
+
+	rc = ds_mgmt_system_module_init();
+	if (rc != 0)
+		return rc;
+
 	D_DEBUG(DB_MGMT, "successful init call\n");
 	return 0;
 }
@@ -377,6 +414,8 @@ ds_mgmt_init()
 static int
 ds_mgmt_fini()
 {
+	ds_mgmt_system_module_fini();
+
 	D_DEBUG(DB_MGMT, "successful fini call\n");
 	return 0;
 }
@@ -391,7 +430,7 @@ static int
 ds_mgmt_cleanup()
 {
 	ds_mgmt_tgt_cleanup();
-	return 0;
+	return ds_mgmt_svc_stop();
 }
 
 struct dss_module mgmt_module = {
