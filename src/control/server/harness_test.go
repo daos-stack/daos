@@ -241,8 +241,12 @@ func TestServer_Harness_Start(t *testing.T) {
 				}
 				scmProvider := scm.NewMockProvider(log, nil, &scm.MockSysConfig{IsMountedBool: true})
 
+				srv := NewIOServerInstance(log, bdevProvider, scmProvider,
+					nil, nil, nil, false, runner)
 				idx := uint32(i)
-				joinFn := func(_ context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
+				srv.joinSystem = func(_ context.Context, req *control.SystemJoinReq) (
+					*control.SystemJoinResp, error) {
+
 					// appease the race detector
 					joinMu.Lock()
 					defer joinMu.Unlock()
@@ -252,7 +256,6 @@ func TestServer_Harness_Start(t *testing.T) {
 					}, nil
 				}
 
-				srv := NewIOServerInstance(log, bdevProvider, scmProvider, joinFn, runner)
 				var isAP bool
 				if tc.isAP && i == 0 { // first instance will be AP & bootstrap MS
 					isAP = true
@@ -299,7 +302,7 @@ func TestServer_Harness_Start(t *testing.T) {
 			sysdb := system.MockDatabase(t, log)
 			done := make(chan struct{})
 			go func(ctxIn context.Context) {
-				gotErr = harness.Start(ctxIn, membership, sysdb, config)
+				gotErr = harness.Start(ctxIn, sysdb, config)
 				close(done)
 			}(ctx)
 

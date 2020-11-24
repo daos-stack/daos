@@ -26,6 +26,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // ScrubEnvironment modifies the environment variables set for
@@ -79,4 +80,23 @@ func ScrubProxyVariables() {
 	if !proxyScrubIsDisabled() {
 		ScrubEnvironment(proxyVars)
 	}
+}
+
+const (
+	// Use ISO8601 format for timestamps as it's
+	// widely supported by parsers (e.g. javascript, etc).
+	iso8601NoMicro = "2006-01-02T15:04:05Z0700"
+	iso8601        = "2006-01-02T15:04:05.000000Z0700"
+)
+
+// FormatTime returns ISO8671 formatted representation of timestamp with
+// microsecond resolution.
+func FormatTime(t time.Time) string {
+	return t.Format(iso8601)
+}
+
+// FormatTimeNoMicro returns ISO8671 formatted representation of timestamp with
+// second resolution.
+func FormatTimeNoMicro(t time.Time) string {
+	return t.Format(iso8601NoMicro)
 }

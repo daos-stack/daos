@@ -46,7 +46,7 @@ message GroupUpdateResp {
 }
 
 message JoinReq {
-	string uuid = 1;	// Servee UUID.
+	string uuid = 1;	// Server UUID.
 	uint32 rank = 2;	// Server rank desired, if not -1.
 	string uri = 3;		// Server CaRT base URI (i.e., for context 0).
 	uint32 nctxs = 4;	// Server CaRT context count.
@@ -68,12 +68,39 @@ message JoinResp {
 }
 
 message LeaderQueryReq {
-	string system = 1;		// System name.
+	string system = 1;	// System name.
 }
 
 message LeaderQueryResp {
 	string currentLeader = 1;
 	repeated string replicas = 2;
+}
+
+// RASEvent describes a RAS event in the DAOS system.
+message RASEvent {
+	string name = 1;		// Unique identifier, 64-char.
+	string timestamp = 2;		// Fully qualified timestamp (us) incl timezone.
+	uint32 severity = 3;		// Event severity Fatal/Warning/Error/Info.
+	string msg = 4;			// Human readable message describing event.
+	uint32 rank = 5; 		// (optional) DAOS rank involved in event.
+	string hostname = 6;		// (optional) Hostname of node involved in event.
+	bytes data = 7;			// (optional) Instance data treated as blob.
+	uint32 eid = 8;			// Unique numeric event identifier.
+	uint32 type = 9;		// Event type StateChange/InfoOnly.
+	uint32 instance_idx = 10;	// (optional) DAOS harness instance index.
+}
+
+// ClusterEventReq wraps an event subtype e.g. RASEvent.
+message ClusterEventReq {
+	uint32 id = 1;		// Sequence identifier for cluster events.
+	oneof event {
+		RASEvent ras = 2;
+	}
+}
+
+// ClusterEventResp contains response to an event notification.
+message ClusterEventResp {
+	uint32 id = 1;
 }
 
 message GetAttachInfoReq {

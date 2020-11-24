@@ -277,7 +277,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				srv := NewIOServerInstance(log, nil, nil, nil, r)
+				srv := NewIOServerInstance(log, nil, nil, nil, nil, nil, false, r)
 				srv.ready.SetTrue()
 
 				harness := NewIOServerHarness(log)

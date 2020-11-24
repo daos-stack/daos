@@ -26,6 +26,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"sync"
 
@@ -45,6 +46,7 @@ import (
 
 type (
 	systemJoinFn     func(context.Context, *control.SystemJoinReq) (*control.SystemJoinResp, error)
+	systemNotifyFn   func(context.Context, *control.SystemNotifyReq) (*control.SystemNotifyResp, error)
 	onStorageReadyFn func(context.Context) error
 	onReadyFn        func(context.Context) error
 )
@@ -70,6 +72,7 @@ type IOServerInstance struct {
 	fsRoot            string
 	hostFaultDomain   *system.FaultDomain
 	joinSystem        systemJoinFn
+	notifySystem      systemNotifyFn
 	onStorageReady    []onStorageReadyFn
 	onReady           []onReadyFn
 
@@ -83,20 +86,60 @@ type IOServerInstance struct {
 
 // NewIOServerInstance returns an *IOServerInstance initialized with
 // its dependencies.
-func NewIOServerInstance(log logging.Logger,
-	bcp *bdev.ClassProvider, sp *scm.Provider,
-	joinFn systemJoinFn, r IOServerRunner) *IOServerInstance {
+func NewIOServerInstance(log logging.Logger, bcp *bdev.ClassProvider,
+	sp *scm.Provider, accessPoints []string, ctlAddr *net.TCPAddr,
+	client control.UnaryInvoker, rankZero bool,
+	runner IOServerRunner) *IOServerInstance {
 
-	return &IOServerInstance{
+	srv := &IOServerInstance{
 		log:               log,
-		runner:            r,
+		runner:            runner,
 		bdevClassProvider: bcp,
 		scmProvider:       sp,
-		joinSystem:        joinFn,
 		drpcReady:         make(chan *srvpb.NotifyReadyReq),
 		storageReady:      make(chan bool),
 		startLoop:         make(chan bool),
 	}
+
+	// Closure for notifying the MS of ioserver instance events.
+	srv.notifySystem = func(ctx context.Context,
+		req *control.SystemNotifyReq) (*control.SystemNotifyResp, error) {
+
+		req.ControlAddr = ctlAddr
+		req.SetHostList(accessPoints)
+
+		return control.SystemNotify(ctx, client, req)
+	}
+
+	// Closure for joining ioserver instances.
+	joinFn := func(ctx context.Context, req *control.SystemJoinReq) (
+		*control.SystemJoinResp, error) {
+
+		req.ControlAddr = ctlAddr
+		req.SetHostList(accessPoints)
+
+		return control.SystemJoin(ctx, client, req)
+	}
+
+	if rankZero {
+		srv.joinSystem = func(ctx context.Context,
+			req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
+
+			if sb := srv.getSuperblock(); !sb.ValidRank {
+				srv.log.Debug("marking bootstrap instance as rank 0")
+				req.Rank = 0
+				sb.Rank = system.NewRankPtr(0)
+			}
+
+			return joinFn(ctx, req)
+		}
+
+		return srv
+	}
+
+	srv.joinSystem = joinFn
+
+	return srv
 }
 
 // WithHostFaultDomain adds a fault domain for the host this instance is running

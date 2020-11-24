@@ -31,9 +31,9 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
-	"github.com/daos-stack/daos/src/control/server/config"
+	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/ras"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 // IOServerRunner defines an interface for starting and stopping the
@@ -131,13 +131,26 @@ func (srv *IOServerInstance) finishStartup(ctx context.Context, ready *srvpb.Not
 	return nil
 }
 
-func (srv *IOServerInstance) exit(exitErr error) {
-	srv.log.Infof("instance %d exited: %s", srv.Index(),
+func (srv *IOServerInstance) exit(ctx context.Context, exitErr error) {
+	srvIdx := srv.Index()
+
+	srv.log.Infof("instance %d exited: %s", srvIdx,
 		ioserver.GetExitStatus(exitErr))
+
+	rank, err := srv.GetRank()
+	if err != nil {
+		srv.log.Debugf("instance %d: no rank assigned", srv.Index())
+	}
 
 	srv._lastErr = exitErr
 	if err := srv.removeSocket(); err != nil {
 		srv.log.Errorf("removing socket file: %s", err)
+	}
+
+	if _, err := srv.notifySystem(ctx, &control.SystemNotifyReq{
+		Event: ras.NewRankFailEvent(srvIdx, rank.Uint32(), exitErr),
+	}); err != nil {
+		srv.log.Errorf("notifySystem: %s", err.Error())
 	}
 }
 
@@ -145,7 +158,7 @@ func (srv *IOServerInstance) exit(exitErr error) {
 // will only return (if no errors are returned during setup) on IO server
 // process exit (triggered by harness shutdown through context cancellation
 // or abnormal IO server process termination).
-func (srv *IOServerInstance) run(ctx context.Context, membership *system.Membership, recreateSBs bool) (err error) {
+func (srv *IOServerInstance) run(ctx context.Context, recreateSBs bool) (err error) {
 	errChan := make(chan error)
 
 	if err = srv.format(ctx, recreateSBs); err != nil {
@@ -166,7 +179,7 @@ func (srv *IOServerInstance) run(ctx context.Context, membership *system.Members
 
 // Run is the processing loop for an IOServerInstance. Starts are triggered by
 // receiving true on instance start channel.
-func (srv *IOServerInstance) Run(ctx context.Context, membership *system.Membership, cfg *config.Server) {
+func (srv *IOServerInstance) Run(ctx context.Context, recreateSBs bool) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -175,7 +188,7 @@ func (srv *IOServerInstance) Run(ctx context.Context, membership *system.Members
 			if !relaunch {
 				return
 			}
-			srv.exit(srv.run(ctx, membership, cfg.RecreateSuperblocks))
+			srv.exit(ctx, srv.run(ctx, recreateSBs))
 		}
 	}
 }

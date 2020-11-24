@@ -32,6 +32,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -62,7 +63,7 @@ func printNvmeHealth(stat *storage.NvmeHealth, out io.Writer, opts ...PrintConfi
 
 	if stat.Timestamp > 0 {
 		fmt.Fprintf(iw, "Timestamp:%s\n",
-			time.Unix(int64(stat.Timestamp), 0).Format(time.UnixDate))
+			common.FormatTime(time.Unix(int64(stat.Timestamp), 0)))
 	}
 
 	fmt.Fprintf(iw, "Temperature:%dK(%.02fC)\n", stat.TempK(), stat.TempC())

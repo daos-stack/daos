@@ -238,32 +238,32 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		log.Infof("NOTICE: Detected %d NUMA node(s); %d-server config may not perform as expected", numaCount, len(cfg.Servers))
 	}
 
-	// Create a closure to be used for joining ioserver instances.
-	joinInstance := func(ctx context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
-		req.SetHostList(cfg.AccessPoints)
-		req.ControlAddr = controlAddr
-		return control.SystemJoin(ctx, rpcClient, req)
-	}
-
 	for idx, srvCfg := range cfg.Servers {
 		// Provide special handling for the ofi+verbs provider.
-		// Mercury uses the interface name such as ib0, while OFI uses the device name such as hfi1_0
-		// CaRT and Mercury will now support the new OFI_DOMAIN environment variable so that we can
+		// Mercury uses the interface name such as ib0, while OFI uses
+		// the device name such as hfi1_0 CaRT and Mercury will now
+		//support the new OFI_DOMAIN environment variable so that we can
 		// specify the correct device for each.
-		if strings.HasPrefix(srvCfg.Fabric.Provider, "ofi+verbs") && !srvCfg.HasEnvVar("OFI_DOMAIN") {
-			deviceAlias, err := netdetect.GetDeviceAlias(netCtx, srvCfg.Fabric.Interface)
+		if strings.HasPrefix(srvCfg.Fabric.Provider, "ofi+verbs") &&
+			!srvCfg.HasEnvVar("OFI_DOMAIN") {
+
+			deviceAlias, err := netdetect.GetDeviceAlias(netCtx,
+				srvCfg.Fabric.Interface)
 			if err != nil {
-				return errors.Wrapf(err, "failed to resolve alias for %s", srvCfg.Fabric.Interface)
+				return errors.Wrapf(err, "failed to resolve alias for %s",
+					srvCfg.Fabric.Interface)
 			}
 			envVar := "OFI_DOMAIN=" + deviceAlias
 			srvCfg.WithEnvVars(envVar)
 		}
 
-		// If the configuration specifies that we should explicitly set hugepage values
-		// per instance, do it. Otherwise, let SPDK/DPDK figure it out.
+		// If the configuration specifies that we should explicitly set
+		// hugepage values per instance, do it. Otherwise, let SPDK/DPDK
+		// figure it out.
 		if cfg.SetHugepages {
-			// If we have multiple I/O instances with block devices, then we need to apportion
-			// the hugepage memory among the instances.
+			// If we have multiple I/O instances with block devices,
+			// then we need to apportion the hugepage memory among the
+			// instances.
 			srvCfg.Storage.Bdev.MemSize = hugePages.FreeMB() / len(cfg.Servers)
 			// reserve a little for daos_admin
 			srvCfg.Storage.Bdev.MemSize -= srvCfg.Storage.Bdev.MemSize / 16
@@ -272,12 +272,23 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		// Indicate whether VMD devices have been detected and can be used.
 		srvCfg.Storage.Bdev.VmdDisabled = bdevProvider.IsVMDDisabled()
 
-		bp, err := bdev.NewClassProvider(log, srvCfg.Storage.SCM.MountPoint, &srvCfg.Storage.Bdev)
+		bp, err := bdev.NewClassProvider(log, srvCfg.Storage.SCM.MountPoint,
+			&srvCfg.Storage.Bdev)
 		if err != nil {
 			return err
 		}
 
-		srv := NewIOServerInstance(log, bp, scmProvider, joinInstance, ioserver.NewRunner(log, srvCfg)).
+		// For historical reasons, we reserve rank 0 for the first
+		// instance on the raft bootstrap server. This implies that rank
+		// 0 will always be associated with a MS replica, but it is not
+		// guaranteed to always be the leader.
+		setRankZero := false
+		if idx == 0 && sysdb.IsReplica() && sysdb.IsBootstrap() {
+			setRankZero = true
+		}
+
+		srv := NewIOServerInstance(log, bp, scmProvider, cfg.AccessPoints,
+			controlAddr, rpcClient, setRankZero, ioserver.NewRunner(log, srvCfg)).
 			WithHostFaultDomain(faultDomain)
 		if err := harness.AddInstance(srv); err != nil {
 			return err
@@ -304,28 +315,12 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 				})
 				return
 			})
-
-			if !sysdb.IsBootstrap() {
-				continue
-			}
-
-			// For historical reasons, we reserve rank 0 for the first
-			// instance on the raft bootstrap server. This implies that
-			// rank 0 will always be associated with a MS replica, but
-			// it is not guaranteed to always be the leader.
-			srv.joinSystem = func(ctx context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
-				if sb := srv.getSuperblock(); !sb.ValidRank {
-					srv.log.Debug("marking bootstrap instance as rank 0")
-					req.Rank = 0
-					sb.Rank = system.NewRankPtr(0)
-				}
-				return joinInstance(ctx, req)
-			}
 		}
 	}
 
 	// Create and setup control service.
-	controlService := NewControlService(log, harness, bdevProvider, scmProvider, cfg, membership, sysdb, rpcClient)
+	controlService := NewControlService(log, harness, bdevProvider, scmProvider,
+		cfg, membership, sysdb, rpcClient)
 	if err := controlService.Setup(); err != nil {
 		return errors.Wrap(err, "setup control service")
 	}
@@ -413,5 +408,5 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		shutdown()
 	}()
 
-	return errors.Wrapf(harness.Start(ctx, membership, sysdb, cfg), "%s exited with error", build.DataPlaneName)
+	return errors.Wrapf(harness.Start(ctx, sysdb, cfg), "%s exited with error", build.DataPlaneName)
 }

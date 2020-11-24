@@ -38,7 +38,7 @@ import (
 
 func getTestIOServerInstance(logger logging.Logger) *IOServerInstance {
 	runner := ioserver.NewRunner(logger, &ioserver.Config{})
-	return NewIOServerInstance(logger, nil, nil, nil, runner)
+	return NewIOServerInstance(logger, nil, nil, nil, nil, nil, false, runner)
 }
 
 func getTestBioErrorReq(t *testing.T, sockPath string, idx uint32, tgt int32, unmap bool, read bool, write bool) *srvpb.BioErrorReq {

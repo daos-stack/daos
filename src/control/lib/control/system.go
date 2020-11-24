@@ -39,6 +39,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/ras"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -82,8 +83,8 @@ func (sr *sysResponse) DisplayAbsentHostsRanks() string {
 	}
 }
 
-// TODO: Unify this with system.JoinRequest
 // SystemJoinReq contains the inputs for the system join request.
+// TODO: Unify this with system.JoinRequest
 type SystemJoinReq struct {
 	unaryRequest
 	msRequest
@@ -96,6 +97,7 @@ type SystemJoinReq struct {
 	InstanceIdx uint32              `json:"Idx"`
 }
 
+// MarshalJSON packs SystemJoinResp struct into a JSON message.
 func (sjr *SystemJoinReq) MarshalJSON() ([]byte, error) {
 	// use a type alias to leverage the default marshal for
 	// most fields
@@ -136,6 +138,63 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 	}
 
 	resp := new(SystemJoinResp)
+	return resp, convertMSResponse(ur, resp)
+}
+
+// SystemNotifyReq contains the inputs for the system notify request.
+type SystemNotifyReq struct {
+	unaryRequest
+	msRequest
+	ControlAddr *net.TCPAddr
+	Event       *ras.Event
+}
+
+// MarshalJSON packs SystemNotifyResp struct into a JSON message.
+func (snr *SystemNotifyReq) MarshalJSON() ([]byte, error) {
+	// use a type alias to leverage the default marshal for
+	// most fields
+	type toJSON SystemNotifyReq
+	return json.Marshal(&struct {
+		Addr string
+		*toJSON
+	}{
+		Addr:   snr.ControlAddr.String(),
+		toJSON: (*toJSON)(snr),
+	})
+}
+
+// SystemNotifyResp contains the request response.
+type SystemNotifyResp struct{}
+
+// SystemNotify will attempt to notify the DAOS system of a cluster event.
+func SystemNotify(ctx context.Context, rpcClient UnaryInvoker, req *SystemNotifyReq) (*SystemNotifyResp, error) {
+	if req == nil {
+		return nil, errors.New("nil system notify request")
+	}
+	if req.Event == nil {
+		return nil, errors.New("nil event in system notify request")
+	}
+	if rpcClient == nil {
+		return nil, errors.New("nil rpc client")
+	}
+
+	pbEvent := new(mgmtpb.ClusterEventReq_Ras)
+	if err := convert.Types(req.Event, pbEvent); err != nil {
+		return nil, err
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).ClusterEvent(ctx,
+			&mgmtpb.ClusterEventReq{Event: pbEvent})
+	})
+	rpcClient.Debugf("DAOS system notify request: %+v", pbEvent)
+	rpcClient.Debugf("DAOS system notify req hosts: %+v", req.HostList)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(SystemNotifyResp)
 	return resp, convertMSResponse(ur, resp)
 }
 

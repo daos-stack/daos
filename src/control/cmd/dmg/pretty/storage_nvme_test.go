@@ -49,7 +49,7 @@ func TestPretty_PrintNVMeHealthMap(t *testing.T) {
 		t.Fatal(err)
 	}
 	controllerAwTS.HealthStats.Timestamp = tt
-	ttStr := time.Unix(int64(tt), 0).Format(time.UnixDate)
+	ttStr := common.FormatTime(time.Unix(int64(tt), 0))
 
 	for name, tc := range map[string]struct {
 		hsm         control.HostStorageMap

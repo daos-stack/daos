@@ -826,7 +826,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 				runner := ioserver.NewTestRunner(&ioserver.TestRunnerConfig{
 					Running: atm.NewBool(tc.serversRunning),
 				}, ioserver.NewConfig())
-				instance := NewIOServerInstance(log, nil, nil, nil, runner)
+				instance := NewIOServerInstance(log, nil, nil, nil, nil, nil, false, runner)
 				if !tc.noRankServers {
 					instance._superblock = &Superblock{}
 					instance._superblock.ValidRank = true

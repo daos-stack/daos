@@ -39,10 +39,12 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/ras"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
@@ -105,6 +107,69 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 			}
 
 			gotResp, gotErr := mgmtSvc.LeaderQuery(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
+	rasEvent := ras.NewRankFailEvent(0, 0, nil)
+	rasEventPB := new(mgmtpb.RASEvent)
+	if err := convert.Types(rasEvent, rasEventPB); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, tc := range map[string]struct {
+		req     *mgmtpb.ClusterEventReq
+		expResp *mgmtpb.ClusterEventResp
+		expErr  error
+	}{
+		"nil request": {
+			expErr: errors.New("nil request"),
+		},
+		"nil event": {
+			req:    &mgmtpb.ClusterEventReq{},
+			expErr: errors.New("unexpected event type"),
+		},
+		"successful notification": {
+			req: &mgmtpb.ClusterEventReq{
+				Event: &mgmtpb.ClusterEventReq_Ras{
+					Ras: rasEventPB,
+				},
+			},
+			expResp: &mgmtpb.ClusterEventResp{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mgmtSvc := newTestMgmtSvc(t, log)
+			db, cleanup := system.TestDatabase(t, log)
+			defer cleanup()
+			mgmtSvc.sysdb = db
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if err := db.Start(ctx); err != nil {
+				t.Fatal(err)
+			}
+
+			// wait for the bootstrap to finish
+			for {
+				if db.IsLeader() {
+					break
+				}
+			}
+
+			gotResp, gotErr := mgmtSvc.ClusterEvent(context.TODO(), tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

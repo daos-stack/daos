@@ -60,7 +60,7 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 			t.Fatal(err)
 		}
 		runner := ioserver.NewRunner(log, srvCfg)
-		instance := NewIOServerInstance(log, bp, scmProvider, nil, runner)
+		instance := NewIOServerInstance(log, bp, scmProvider, nil, nil, nil, false, runner)
 		if err := cs.harness.AddInstance(instance); err != nil {
 			t.Fatal(err)
 		}

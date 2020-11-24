@@ -38,6 +38,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/ras"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -710,5 +711,40 @@ func (svc *mgmtSvc) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq)
 	}
 
 	svc.log.Debugf("MgmtSvc.LeaderQuery dispatch, resp:%+v\n", resp)
+	return resp, nil
+}
+
+// ClusterEvent management service gRPC handler receives ClusterEvent requests
+// from control-plane instances attempting to notify the MS of a cluster event
+// in the DAOS system.
+//
+// On receipt of the cluster event request, process any encapsulated RAS event
+// messages (handling of other types to be supported in the future).
+//
+// Necessary state updates for the rank involved in the event will be
+// registered in the system membership.
+func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *mgmtpb.ClusterEventReq) (*mgmtpb.ClusterEventResp, error) {
+	if req == nil {
+		return nil, errors.New("ClusterEvent: nil request")
+	}
+	svc.log.Debugf("MgmtSvc.ClusterEvent dispatch, req:%#v\n", req)
+
+	if err := svc.sysdb.CheckLeader(); err != nil {
+		return nil, err
+	}
+
+	rasEvent := req.GetRas()
+	if rasEvent == nil {
+		return nil, errors.Errorf("unexpected event type received, want RAS got %T",
+			req.GetEvent())
+	}
+
+	if err := ras.ProcessEvent(svc.log, *rasEvent); err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.ClusterEventResp{Id: req.Id}
+	svc.log.Debugf("MgmtSvc.ClusterEvent dispatch, resp:%#v\n", resp)
+
 	return resp, nil
 }

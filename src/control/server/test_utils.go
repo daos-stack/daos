@@ -179,7 +179,7 @@ func newTestIOServer(log logging.Logger, isAP bool, ioCfg ...*ioserver.Config) *
 		Running: atm.NewBool(true),
 	}, ioCfg[0])
 
-	srv := NewIOServerInstance(log, nil, nil, nil, r)
+	srv := NewIOServerInstance(log, nil, nil, nil, nil, nil, false, r)
 	srv.setSuperblock(&Superblock{
 		Rank: system.NewRankPtr(0),
 	})
