@@ -80,6 +80,22 @@ def add_pools(self, pool_names):
         self.log.info("Valid Pool UUID is %s", self.pool[-1].uuid)
 
 
+def add_containers(self, pool):
+    """Create a list of containers that the various jobs use for storage.
+
+    Args:
+        pool: pool to create container
+
+    """
+    # Create a container and add it to the overall list of containers
+    path = "".join(["/run/container/*"])
+    self.container.append(
+        TestContainer(pool, daos_command=self.get_daos_command()))
+    self.container[-1].namespace = path
+    self.container[-1].get_params(self)
+    self.container[-1].create()
+
+
 def get_remote_logs(self):
     """Copy files from remote dir to local dir.
 
@@ -283,7 +299,7 @@ def launch_exclude_reintegrate(self, pool, name):
                   "vars": {"rank": rank, "tgt_idx": tgt_idx}}
         self.log.info("<<<PASS %s: %s started on rank %s at %s >>>\n",
                       self.loop, name, rank, time.ctime())
-        status = pool.dmg_exclude(rank, tgt_idx)
+        status = pool.exclude(rank, tgt_idx=tgt_idx)
     elif name == "REINTEGRATE":
         if self.harasser_results["EXCLUDE"]:
             rank = self.harasser_args["EXCLUDE"]["rank"]
@@ -291,7 +307,7 @@ def launch_exclude_reintegrate(self, pool, name):
             self.log.info("<<<PASS %s: %s started on rank %s at %s>>>\n",
                           self.loop, name, rank, time.ctime())
 
-            status = pool.dmg_reintegrate(rank, tgt_idx)
+            status = pool.reintegrate(rank, tgt_idx)
         else:
             self.log.error("<<<PASS %s: %s failed due to EXCLUDE failure >>>",
                            self.loop, name)
@@ -354,10 +370,11 @@ def start_dfuse(self, pool, nodesperjob, resource_mgr=None):
     # update dfuse params; mountpoint for each container
     unique = get_random_string(5, self.used)
     self.used.append(unique)
+    add_containers(self, pool)
     mount_dir = dfuse.mount_dir.value + unique
     dfuse.mount_dir.update(mount_dir)
     dfuse.set_dfuse_params(pool)
-    dfuse.set_dfuse_cont_param(self.get_container(pool))
+    dfuse.set_dfuse_cont_param(self.container[-1])
 
     dfuse_start_cmds = [
         "mkdir -p {}".format(dfuse.mount_dir.value),
@@ -464,10 +481,13 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                     ior_cmd.block_size.update(b_size)
                     ior_cmd.transfer_size.update(t_size)
                     ior_cmd.dfs_oclass.update(o_type)
+                    ior_cmd.dfs_dir_oclass.update(o_type)
                     if ior_cmd.api.value == "DFS":
                         ior_cmd.test_file.update(
                             os.path.join("/", "testfile"))
-                    ior_cmd.set_daos_params(self.server_group, pool)
+                    add_containers(self, pool)
+                    ior_cmd.set_daos_params(
+                        self.server_group, pool, self.container[-1].uuid)
                     env = ior_cmd.get_default_env("srun")
                     sbatch_cmds = ["module load -q {}".format(mpi_module)]
                     # include dfuse cmdlines

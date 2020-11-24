@@ -467,8 +467,16 @@ class TestPool(TestDaosApiBase):
             bool: True if pool rebuild is complete; False otherwise
 
         """
-        self.display_pool_rebuild_status()
-        return self.info.pi_rebuild_st.rs_done == 1
+        status = False
+        if self.control_method.value == self.USE_API:
+            self.display_pool_rebuild_status()
+            status = self.info.pi_rebuild_st.rs_done == 1
+        elif self.control_method.value == self.USE_DMG and self.dmg:
+            self.set_query_data()
+            self.log.info(
+                "Pool %s query data: %s\n",  self.uuid, self.query_data)
+            status = self.query_data["rebuild"]["status"] != "busy"
+        return status
 
     def wait_for_rebuild(self, to_start, interval=1):
         """Wait for the rebuild to start or end.
@@ -485,6 +493,7 @@ class TestPool(TestDaosApiBase):
             self.log.info(
                 "  Rebuild %s ...",
                 "has not yet started" if to_start else "in progress")
+            self.set_query_data()
             sleep(interval)
         self.log.info(
             "Rebuild %s detected", "start" if to_start else "completion")
@@ -512,26 +521,40 @@ class TestPool(TestDaosApiBase):
         return self.exclude(ranks, daos_log)
 
     @fail_on(DaosApiError)
-    def exclude(self, ranks, daos_log):
+    def exclude(self, ranks, daos_log=None, tgt_idx=None):
         """Manually exclude a rank from this pool.
 
         Args:
             ranks (list): a list daos server ranks (int) to exclude
             daos_log (DaosLog): object for logging messages
+            tgt_idx (string): str of targets to exclude on ranks ex: "1,2"
 
         Returns:
             bool: True if the ranks were excluded from the pool; False if the
                 pool is undefined
 
         """
-        if self.pool:
+        status = False
+        if self.control_method.value == self.USE_API:
             msg = "Excluding server ranks {} from pool {}".format(
                 ranks, self.uuid)
             self.log.info(msg)
-            daos_log.info(msg)
+            if daos_log is not None:
+                daos_log.info(msg)
             self._call_method(self.pool.exclude, {"rank_list": ranks})
-            return True
-        return False
+            status = True
+
+        elif self.control_method.value == self.USE_DMG and self.dmg:
+            self.dmg.pool_exclude(self.uuid, ranks, tgt_idx)
+            self.wait_for_rebuild(False)
+            # display rebuild status
+            self.set_query_data()
+            rebuild_status = self.query_data["rebuild"]["status"]
+            self.log.info(
+                "Pool %s rebuild status:%s\n", self.uuid, rebuild_status)
+            if rebuild_status == "done":
+                status = True
+        return status
 
     def check_files(self, hosts):
         """Check if pool files exist on the specified list of hosts.
@@ -711,66 +734,8 @@ class TestPool(TestDaosApiBase):
             else:
                 self.log.error("Error: Undefined dmg command")
 
-    def wait_for_pool_version_update(self, version, num_tgt=None, interval=1):
-        """Wait for the pool version to update after exclude.
-
-        Args:
-            version (int): initial pool version before exclude
-            num_tgt (int): number of targets that were excluded
-            interval (int): number of seconds to wait in between rebuild
-                completion checks
-        """
-        count = 0
-        if num_tgt is None:
-            # This should be num of actual targets
-            num_tgt = 8
-        self.log.info("Initial pool version is %s\n", version)
-        query_data = self.dmg.pool_query(self.pool.get_uuid_str())
-        current_version = int(query_data["version"])
-        while current_version < version + num_tgt and count < interval*2:
-            self.log.info(
-                "waiting for pool version to update  %s\n", current_version)
-            sleep(interval)
-            query_data = self.dmg.pool_query(self.pool.get_uuid_str())
-            current_version = int(query_data["version"])
-            count += 1
-        if current_version >= version + num_tgt:
-            self.log.info("nPool version %s detected\n", current_version)
-            return True
-        self.log.error("nPool version %s detected\n", current_version)
-        return False
-
     @fail_on(CommandFailure)
-    def dmg_exclude(self, rank, tgt_idx=None):
-        """Use dmg to exclude a rank and targets from this pool.
-
-        Only supported with the dmg control method.
-        Args:
-            rank (str): daos server rank to exclude
-            tgt_idx (string): str of targets to exclude on ranks ex: "1,2"
-
-        Returns:
-            bool: True if the rank was excluded from the pool; False if the
-                  exclude failed
-
-        """
-        status = False
-        self.log.info("Exclude rank %s from Pool: %s", self.uuid)
-        query_data = self.dmg.pool_query(self.pool.get_uuid_str())
-        initial_version = int(query_data["version"])
-        self.log.info("Pool version before exlude: %s\n", initial_version)
-        self.dmg.pool_exclude(self.uuid, rank, tgt_idx)
-
-        # wait for rebuild to complete
-        self.wait_for_rebuild(False)
-
-        # check for exclude to complete
-        status = self.wait_for_pool_version_update(
-            initial_version, len(tgt_idx), 10)
-        return status
-
-    @fail_on(CommandFailure)
-    def dmg_reintegrate(self, rank, tgt_idx=None):
+    def reintegrate(self, rank, tgt_idx=None):
         """Use dmg to reintegrate the rank and targets into this pool.
 
         Only supported with the dmg control method.
@@ -784,16 +749,13 @@ class TestPool(TestDaosApiBase):
 
         """
         status = False
-        self.log.info("Exclude rank %s from Pool: %s", self.uuid)
-        # dmg exclude excludes a single rank
-        query_data = self.dmg.pool_query(self.pool.get_uuid_str())
-        initial_version = int(query_data["version"])
-        self.log.info(
-            "Pool version before reintegrate: %s\n", initial_version)
         self.dmg.pool_reintegrate(self.uuid, rank, tgt_idx)
-        # wait for rebuild to complete
         self.wait_for_rebuild(False)
-        # check for exclude to complete
-        status = self.wait_for_pool_version_update(
-            initial_version, len(tgt_idx), 10)
+        # display rebuild status
+        self.set_query_data()
+        self.log.info("Pool %s query data: %s\n",  self.uuid, self.query_data)
+        rebuild_status = self.query_data["rebuild"]["status"]
+        self.log.info("Pool %s rebuild status:%s\n", self.uuid, rebuild_status)
+        if rebuild_status == "done":
+            status = True
         return status

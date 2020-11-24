@@ -113,7 +113,6 @@ soak_faults:
 # sequential
 ior_faults:
     api:
-    api:
         - DFS
         - MPIIO
         - POSIX
@@ -130,6 +129,8 @@ ior_faults:
         - '1m'
     segment_count: 1
     dfs_oclass:
+        - 'RP_2G1'
+    dfs_dir_oclass:
         - 'RP_2G1'
     dfs_destroy: True
 dfuse:

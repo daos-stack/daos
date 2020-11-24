@@ -90,10 +90,9 @@ soak_harassers:
     # harasser test timeout in hours
     test_timeout: 12
     # maximum timeout for a single job in test in minutes
-    job_timeout: 10
+    job_timeout: 30
     nodesperjob:
         - 2
-    # used for performance benchmarks
     taskspernode:
         - 16
     joblist:
@@ -127,7 +126,8 @@ ior_harasser:
     segment_count: 1
     dfs_oclass:
         - 'RP_2G1'
-    dfs_destroy: True
+    dfs_dir_oclass:
+        - 'RP_2G1'
 fio_harasser:
   names:
       - global

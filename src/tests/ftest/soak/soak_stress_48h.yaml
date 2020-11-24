@@ -86,18 +86,15 @@ soak_stress:
     # maximum timeout for a single job in test in minutes
     job_timeout: 30
     nodesperjob:
-        - -1
         - 2
         - 4
         - 8
+        - -1
     # used for performance benchmarks
     taskspernode:
         - 1
         - 16
         - 32
-    poollist:
-        - pool_ior
-        - pool_fio
     joblist:
         - ior_stress
         - fio_stress
@@ -124,6 +121,8 @@ ior_stress:
         - '512K'
         - '64k'
     dfs_oclass:
+        - 'RP_2G1'
+    dfs_dir_oclass:
         - 'RP_2G1'
     dfs_destroy: True
 fio_stress:

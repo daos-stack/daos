@@ -52,7 +52,6 @@ class SoakTestBase(TestWithServers):
         self.test_log_dir = None
         self.exclude_slurm_nodes = None
         self.loop = None
-        self.loop_time = None
         self.log_dir = None
         self.outputsoakdir = None
         self.test_name = None
@@ -65,12 +64,12 @@ class SoakTestBase(TestWithServers):
         self.srun_params = None
         self.harassers = None
         self.harasser_results = None
-        self.run_harasser = False
         self.all_failed_jobs = None
         self.username = None
         self.used = None
         self.dfuse = []
         self.harasser_args = None
+        self.harasser_loop_time = None
 
     def setUp(self):
         """Define test setup to be done."""
@@ -79,7 +78,6 @@ class SoakTestBase(TestWithServers):
         self.username = getuser()
         # Initialize loop param for all tests
         self.loop = 1
-        self.harasser_loop = 2
         self.exclude_slurm_nodes = []
         # Setup logging directories for soak logfiles
         # self.output dir is an avocado directory .../data/
@@ -108,10 +106,10 @@ class SoakTestBase(TestWithServers):
             self.srun_params["reservation"] = self.client_reservation
         # Check if the server nodes are in the client list;
         # this will happen when only one partition is specified
-        # for host_server in self.hostlist_servers:
-        #     if host_server in self.hostlist_clients:
-        #         self.hostlist_clients.remove(host_server)
-        #         self.exclude_slurm_nodes.append(host_server)
+        for host_server in self.hostlist_servers:
+            if host_server in self.hostlist_clients:
+                self.hostlist_clients.remove(host_server)
+                self.exclude_slurm_nodes.append(host_server)
         # Include test node for log cleanup; remove from client list
         local_host_list = include_local_host(None)
         self.exclude_slurm_nodes.extend(local_host_list)
@@ -228,7 +226,6 @@ class SoakTestBase(TestWithServers):
                 "<< HARASSER is alive %s FAILED to join>> ", job.name)
             raise SoakTestError(
                 "<<FAILED: Harasser {} has failed. ".format(name))
-            status &= False
         # Check if the completed job passed
         if not self.harasser_results[name.upper()]:
             self.log.error("<< HARASSER %s FAILED in pass %s at %s>> ",
@@ -350,8 +347,9 @@ class SoakTestBase(TestWithServers):
         harasser_interval = 0
         harasser_timer = time.time()
         # loop time exists after the first pass; no harassers in the first pass
-        if self.loop_time and self.harassers:
-            harasser_interval = self.loop_time / (len(self.harassers) + 1)
+        if self.harasser_loop_time and self.harassers:
+            harasser_interval = self.harasser_loop_time / (
+                len(self.harassers) + 3)
         # If there is nothing to do; exit
         if job_id_list:
             # wait for all the jobs to finish
@@ -366,9 +364,9 @@ class SoakTestBase(TestWithServers):
                         _ = slurm_utils.cancel_jobs(int(job))
 
                 # launch harassers if enabled;
-                # one harasser at a time
+                # one harasser at a time starting on pass2
                 if self.harassers:
-                    if self.loop >= self.harasser_loop and (
+                    if self.loop >= 2 and (
                             time.time() > harasser_timer + harasser_interval):
                         harasser = self.harassers.pop(0)
                         harasser_timer += harasser_interval
@@ -469,8 +467,11 @@ class SoakTestBase(TestWithServers):
         """
         self.soak_results = {}
         self.pool = []
+        self.container = []
         self.harasser_results = {}
         self.harasser_args = {}
+        run_harasser = False
+        self.all_failed_jobs = []
         test_to = self.params.get("test_timeout", test_param + "*")
         self.job_timeout = self.params.get("job_timeout", test_param + "*")
         self.test_name = self.params.get("name", test_param + "*")
@@ -482,7 +483,7 @@ class SoakTestBase(TestWithServers):
         obj_class = self.params.get("oclass", "/run/container_reserved/*")
         if self.harassers:
             harasserlist = self.harassers[:]
-            self.run_harasser = True
+            run_harasser = True
             self.log.info("<<< Initial harrasser list = %s", " ".join(
                 [harasser for harasser in self.harassers]))
         # Create the reserved pool with data
@@ -493,10 +494,9 @@ class SoakTestBase(TestWithServers):
 
         # Create the container and populate with a known data
         # TO-DO: use IOR to write and later read verify the data
-        self.container = self.get_container(
+        resv_cont = self.get_container(
             self.pool[0], "/run/container_reserved/*", True)
-        self.container.write_objects(rank, obj_class)
-        self.all_failed_jobs = []
+        resv_cont.write_objects(rank, obj_class)
 
         # cleanup soak log directories before test on all nodes
         result = slurm_utils.srun(
@@ -533,7 +533,7 @@ class SoakTestBase(TestWithServers):
                 "Current pools: %s",
                 " ".join([pool.uuid for pool in self.pool]))
             # Initialize if harassers
-            if self.run_harasser and not self.harassers:
+            if run_harasser and not self.harassers:
                 self.harasser_results = {}
                 self.harasser_args = {}
                 self.harassers = harasserlist[:]
@@ -543,8 +543,10 @@ class SoakTestBase(TestWithServers):
                 self.fail(error)
             # Check space after jobs done
             self.pool[1].display_pool_daos_space()
-            errors = self.destroy_pools(self.pool[1])
+            errors = self.destroy_containers(self.container)
+            errors.extend(self.destroy_pools(self.pool[1]))
             # remove the test pools from self.pool; preserving reserved pool
+            self.container = []
             self.pool = [self.pool[0]]
             self.log.info(
                 "Current pools: %s",
@@ -553,16 +555,20 @@ class SoakTestBase(TestWithServers):
             # Break out of loop if smoke
             if "smoke" in self.test_name:
                 break
-            self.loop_time = time.time() - start_loop_time
+            loop_time = time.time() - start_loop_time
             self.log.info(
-                "<<PASS %s completed in %s >>", self.loop, DDHHMMSS_format(
-                    self.loop_time))
+                "<<PASS %s completed in %s at %s>>", self.loop, DDHHMMSS_format(
+                    loop_time), time.ctime())
+            # Initilize harasser loop time from first pass loop time
+            if self.loop == 1 and self.harassers:
+                self.harasser_loop_time = loop_time
             self.loop += 1
         # TO-DO: use IOR
         self.assertTrue(
-            self.container.read_objects(),
+            resv_cont.read_objects(),
             "Data verification error on reserved pool"
             "after SOAK completed")
+        self.container.append(resv_cont)
         # gather the daos logs from the client nodes
         self.log.info(
             "<<<<SOAK TOTAL TEST TIME = %s>>>", DDHHMMSS_format(

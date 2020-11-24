@@ -122,7 +122,6 @@ ior_smoke:
     segment_count: 1
     dfs_oclass:
         - 'SX'
-    dfs_destroy: True
 fio_smoke:
   names:
       - global

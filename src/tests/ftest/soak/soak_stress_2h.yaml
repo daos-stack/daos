@@ -99,8 +99,6 @@ soak_stress:
     taskspernode:
         - 1
         - 4
-    poollist:
-        - pool_ior
     joblist:
         - ior_stress
 # Commandline parameters
