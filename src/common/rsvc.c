@@ -49,18 +49,23 @@ rsvc_client_reset_leader(struct rsvc_client *client)
  * Initialize \a client.
  *
  * \param[out]	client	client state
- * \param[in]	ranks	ranks of (potential) service replicas
+ * \param[in]	ranks	(optional) ranks of (potential) service replicas
  */
 int
 rsvc_client_init(struct rsvc_client *client, const d_rank_list_t *ranks)
 {
-	int rc;
+	if (ranks) {
+		int	rc;
 
-	if (ranks->rl_nr == 0)
-		return -DER_INVAL;
-	rc = daos_rank_list_dup_sort_uniq(&client->sc_ranks, ranks);
-	if (rc != 0)
-		return rc;
+		rc = daos_rank_list_dup_sort_uniq(&client->sc_ranks, ranks);
+		if (rc != 0)
+			return rc;
+	} else {
+		client->sc_ranks = d_rank_list_alloc(0);
+
+		if (client->sc_ranks == NULL)
+			return -DER_NOMEM;
+	}
 	rsvc_client_reset_leader(client);
 	client->sc_next = 0;
 	return 0;
@@ -75,6 +80,7 @@ void
 rsvc_client_fini(struct rsvc_client *client)
 {
 	d_rank_list_free(client->sc_ranks);
+	client->sc_ranks = NULL;
 }
 
 /**
@@ -99,7 +105,7 @@ rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep)
 	}
 
 	if (chosen == -1) {
-		D_WARN("replica list empty\n");
+		D_DEBUG(DB_MD, "replica list empty\n");
 		return -DER_NOTREPLICA;
 	} else {
 		D_ASSERTF(chosen >= 0 && chosen < client->sc_ranks->rl_nr,

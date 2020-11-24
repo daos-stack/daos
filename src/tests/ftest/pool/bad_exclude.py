@@ -27,7 +27,7 @@ import traceback
 import ctypes
 
 from apricot import TestWithServers
-from pydaos.raw import DaosApiError, RankList
+from pydaos.raw import DaosApiError
 
 
 class BadExcludeTest(TestWithServers):
@@ -59,10 +59,6 @@ class BadExcludeTest(TestWithServers):
             targets.append(tgtlist[0])
         expected_for_param.append(tgtlist[1])
 
-        svclist = self.params.get("ranklist", '/run/testparams/svrlist/*/')
-        svc = svclist[0]
-        expected_for_param.append(svclist[1])
-
         setlist = self.params.get("setname",
                                   '/run/testparams/connectsetnames/*/')
         connectset = setlist[0]
@@ -80,17 +76,9 @@ class BadExcludeTest(TestWithServers):
                 expected_result = 'FAIL'
                 break
 
-        saved_svc = None
         saved_grp = None
         saved_uuid = None
         self.prepare_pool()
-
-        # trash the the pool service rank list
-        if not svc == 'VALID':
-            self.cancel("skipping this test until DAOS-1931 is fixed")
-            saved_svc = RankList(
-                self.pool.pool.svc.rl_ranks, self.pool.pool.svc.rl_nr)
-            self.pool.pool.svc = None
 
         saved_grp = self.pool.pool.group
         if connectset == 'NULLPTR':
@@ -121,8 +109,6 @@ class BadExcludeTest(TestWithServers):
             if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")
         finally:
-            if saved_svc is not None:
-                self.pool.pool.svc = saved_svc
             if saved_grp is not None:
                 self.pool.pool.group = saved_grp
             if saved_uuid is not None:
