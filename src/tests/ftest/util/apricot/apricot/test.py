@@ -181,6 +181,9 @@ class TestWithoutServers(Test):
         self.context = None
         self.d_log = None
 
+        # Default to 10 minute timeout
+        self.timeout = 300
+
         # Create a default TestLogger w/o a DaosLog object to prevent errors in
         # tearDown() if setUp() is not completed.  The DaosLog is added upon the
         # completion of setUp().
