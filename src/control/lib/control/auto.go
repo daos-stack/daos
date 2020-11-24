@@ -154,7 +154,7 @@ func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerate
 	ifaces, netSet, hostErrs, err := getNetworkParams(ctx, req)
 	if err != nil {
 		if hostErrs == nil {
-			hostErrs = new(HostErrorsResp)
+			hostErrs = &HostErrorsResp{}
 		}
 
 		return &ConfigGenerateResp{HostErrorsResp: *hostErrs}, err
@@ -163,7 +163,7 @@ func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerate
 	pmemPaths, bdevLists, hostErrs, err := getStorageParams(ctx, req, len(ifaces))
 	if err != nil {
 		if hostErrs == nil {
-			hostErrs = new(HostErrorsResp)
+			hostErrs = &HostErrorsResp{}
 		}
 
 		return &ConfigGenerateResp{HostErrorsResp: *hostErrs}, err
