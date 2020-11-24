@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
+#import os
 from avocado.utils import process
 from general_utils import get_file_path
 from apricot import Test
@@ -40,8 +41,12 @@ def unittest_runner(self, unit_testname):
                            .format(unit_testname))
     server = self.params.get("test_servers", "/run/hosts/*")
     bin_path = get_file_path(name, "install/bin")
+    #test_exe = os.path.join(self.prefix, 'bin', name)
+    self.log.info("+++DM: get_file_path = {}".format(bin_path))
+    #self.log.info("+++DM: test_exe = {}".format(test_exe))
 
     cmd = ("/usr/bin/ssh {} {}".format(server[0], bin_path[0]))
+    #cmd = ("/usr/bin/ssh {} {}".format(server[0], test_exe))
 
     return_code = process.system(cmd, ignore_status=True,
                                  allow_output_check="both")

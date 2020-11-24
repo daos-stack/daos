@@ -377,12 +377,14 @@ def get_file_path(bin_name, dir_path=""):
     Raises:
         OSError: If failed to find the bin_name file
     """
+    log = getLogger()
     with open('../../.build_vars.json') as json_file:
         build_paths = json.load(json_file)
     basepath = os.path.normpath(build_paths['PREFIX'] + "/../{0}"
                                 .format(dir_path))
 
     file_path = list(Path(basepath).glob('**/{0}'.format(bin_name)))
+    log.info("+++DM: get_file_path.file_path = {}".format(file_path))
     if not file_path:
         raise OSError(ENOENT, "File {0} not found inside {1} Directory"
                       .format(bin_name, basepath))
