@@ -74,7 +74,7 @@ drain_dkeys(void **state)
 	}
 	ioreq_fini(&req);
 
-	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	drain_single_pool_target(arg, ranks_to_kill[0], tgt);
 
 }
 
@@ -107,7 +107,7 @@ drain_akeys(void **state)
 	}
 	ioreq_fini(&req);
 
-	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	drain_single_pool_target(arg, ranks_to_kill[0], tgt);
 
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
@@ -144,7 +144,7 @@ drain_indexes(void **state)
 	ioreq_fini(&req);
 
 	/* Drain rank 1 */
-	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	drain_single_pool_target(arg, ranks_to_kill[0], tgt);
 
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
@@ -189,7 +189,7 @@ drain_snap_update_recs(void **state)
 			      strlen(data) + 1, &req);
 	}
 
-	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	drain_single_pool_target(arg, ranks_to_kill[0], tgt);
 
 	for (i = 0; i < 5; i++) {
 		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
@@ -240,7 +240,7 @@ drain_snap_punch_recs(void **state)
 		punch_recxs("d_key", "a_key", &recx, 1, DAOS_TX_NONE, &req);
 	}
 
-	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	drain_single_pool_target(arg, ranks_to_kill[0], tgt);
 
 	for (i = 0; i < 5; i++) {
 		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
@@ -285,7 +285,7 @@ drain_snap_update_keys(void **state)
 		insert_single("dkey", akey, 0, "data", 1, DAOS_TX_NONE, &req);
 	}
 
-	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	drain_single_pool_target(arg, ranks_to_kill[0], tgt);
 
 	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD);
 	for (i = 0; i < OBJ_REPLICAS; i++) {
@@ -379,7 +379,7 @@ drain_snap_punch_keys(void **state)
 		punch_akey("dkey", akey, DAOS_TX_NONE, &req);
 	}
 
-	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	drain_single_pool_target(arg, ranks_to_kill[0], tgt);
 
 	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD);
 	for (i = 0; i < OBJ_REPLICAS; i++) {
@@ -466,7 +466,7 @@ drain_multiple(void **state)
 	}
 	ioreq_fini(&req);
 
-	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	drain_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
 static void
@@ -500,7 +500,7 @@ drain_large_rec(void **state)
 	}
 	ioreq_fini(&req);
 
-	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	drain_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
 static void
@@ -522,7 +522,7 @@ drain_objects(void **state)
 
 	rebuild_io(arg, oids, OBJ_NR);
 
-	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	drain_single_pool_target(arg, ranks_to_kill[0], tgt);
 
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }

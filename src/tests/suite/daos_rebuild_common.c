@@ -176,24 +176,24 @@ rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 }
 
 void
-drain_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
-			   int failed_tgt, bool kill)
+drain_single_pool_target(test_arg_t *arg, d_rank_t failed_rank, int failed_tgt)
 {
-	rebuild_targets(&arg, 1, &failed_rank, &failed_tgt, 1, kill,
+	rebuild_targets(&arg, 1, &failed_rank, &failed_tgt, 1, false,
 			RB_OP_TYPE_DRAIN);
 }
 
 void
-drain_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill)
+drain_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank)
 {
-	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, kill, RB_OP_TYPE_DRAIN);
+	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, false,
+			RB_OP_TYPE_DRAIN);
 }
 
 void
 drain_pools_ranks(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
-		    int ranks_nr, bool kill)
+		  int ranks_nr)
 {
-	rebuild_targets(args, args_cnt, failed_ranks, NULL, ranks_nr, kill,
+	rebuild_targets(args, args_cnt, failed_ranks, NULL, ranks_nr, false,
 			RB_OP_TYPE_DRAIN);
 }
 
@@ -540,7 +540,13 @@ rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 			continue;
 
 		rc = daos_obj_verify(arg->coh, oids[i], DAOS_EPOCH_MAX);
-		assert_int_equal(rc, 0);
+		if (rc != DER_SUCCESS) {
+			fail_msg("Not successful for object id[%d] "DF_OID"!! "
+				"Error code: " DF_RC,
+				 i,
+				 DP_OID(oids[i]),
+				 DP_RC(rc));
+		}
 	}
 }
 

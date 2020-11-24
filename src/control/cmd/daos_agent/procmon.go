@@ -158,7 +158,7 @@ func (p *procMon) handleProcessAttach(ctx context.Context, request *procMonReque
 	info, found := p.procs[request.pid]
 
 	if found {
-		p.log.Errorf("Attempted to monitor process %d more than once", request.pid)
+		// p.log.Errorf("Attempted to monitor process %d more than once", request.pid)
 		return
 	}
 
