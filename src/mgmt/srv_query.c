@@ -299,7 +299,6 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 
 		D_ALLOC(resp->devices[i]->state, buflen);
 		if (resp->devices[i]->state == NULL) {
-			D_ERROR("Failed to allocate device state");
 			rc = -DER_NOMEM;
 			break;
 		}
@@ -655,7 +654,6 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid,
 
 	D_ALLOC(resp->new_dev_uuid, DAOS_UUID_STR_SIZE);
 	if (resp->new_dev_uuid == NULL) {
-		D_ERROR("Failed to allocate new device uuid");
 		rc = -DER_NOMEM;
 		goto out;
 	}
@@ -663,7 +661,6 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid,
 
 	D_ALLOC(resp->dev_state, buflen);
 	if (resp->dev_state == NULL) {
-		D_ERROR("Failed to allocate device state");
 		rc = -DER_NOMEM;
 		goto out;
 	}
