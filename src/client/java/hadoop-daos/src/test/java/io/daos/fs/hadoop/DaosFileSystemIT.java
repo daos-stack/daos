@@ -86,9 +86,9 @@ public class DaosFileSystemIT {
     File file = Files.createTempDirectory("uns").toFile();
     try {
       String path = file.getAbsolutePath();
-      String daosAttr = String.format(io.daos.dfs.Constants.DUNS_XATTR_FMT, Layout.POSIX.name(),
+      String daosAttr = String.format(io.daos.Constants.DUNS_XATTR_FMT, Layout.POSIX.name(),
           DaosFSFactory.getPoolUuid(), DaosFSFactory.getContUuid());
-      DaosUns.setAppInfo(path, io.daos.dfs.Constants.DUNS_XATTR_NAME, daosAttr);
+      DaosUns.setAppInfo(path, io.daos.Constants.DUNS_XATTR_NAME, daosAttr);
       DaosUns.setAppInfo(path, Constants.UNS_ATTR_NAME_HADOOP,
           Constants.DAOS_POOL_FLAGS + "=2:");
 
@@ -118,9 +118,9 @@ public class DaosFileSystemIT {
     File file = Files.createTempDirectory("uns").toFile();
     try {
       String path = file.getAbsolutePath();
-      String daosAttr = String.format(io.daos.dfs.Constants.DUNS_XATTR_FMT, Layout.POSIX.name(),
+      String daosAttr = String.format(io.daos.Constants.DUNS_XATTR_FMT, Layout.POSIX.name(),
           DaosFSFactory.getPoolUuid(), DaosFSFactory.getContUuid());
-      DaosUns.setAppInfo(path, io.daos.dfs.Constants.DUNS_XATTR_NAME, daosAttr);
+      DaosUns.setAppInfo(path, io.daos.Constants.DUNS_XATTR_NAME, daosAttr);
       String originPath = path;
       path += "/abc";
       String uriStr = "daos://" + unsId.getAndIncrement() +
@@ -168,9 +168,9 @@ public class DaosFileSystemIT {
     File file = Files.createTempDirectory("uns").toFile();
     try {
       String path = file.getAbsolutePath();
-      String daosAttr = String.format(io.daos.dfs.Constants.DUNS_XATTR_FMT, Layout.POSIX.name(),
+      String daosAttr = String.format(io.daos.Constants.DUNS_XATTR_FMT, Layout.POSIX.name(),
           DaosFSFactory.getPoolUuid(), DaosFSFactory.getContUuid());
-      DaosUns.setAppInfo(path, io.daos.dfs.Constants.DUNS_XATTR_NAME, daosAttr);
+      DaosUns.setAppInfo(path, io.daos.Constants.DUNS_XATTR_NAME, daosAttr);
       String originPath = path;
       path += "/abc/def";
       String uriStr = "daos://" + ":" + unsId.getAndIncrement() +
@@ -201,9 +201,9 @@ public class DaosFileSystemIT {
     File file = Files.createTempDirectory("uns").toFile();
     try {
       String path = file.getAbsolutePath();
-      String daosAttr = String.format(io.daos.dfs.Constants.DUNS_XATTR_FMT, Layout.POSIX.name(),
+      String daosAttr = String.format(io.daos.Constants.DUNS_XATTR_FMT, Layout.POSIX.name(),
           DaosFSFactory.getPoolUuid(), DaosFSFactory.getContUuid());
-      DaosUns.setAppInfo(path, io.daos.dfs.Constants.DUNS_XATTR_NAME, daosAttr);
+      DaosUns.setAppInfo(path, io.daos.Constants.DUNS_XATTR_NAME, daosAttr);
       String originPath = path;
       path += "/hij/klm";
       String uriStr = "daos://" + ":" + unsId.getAndIncrement() +
@@ -232,9 +232,9 @@ public class DaosFileSystemIT {
     File file = Files.createTempDirectory("uns").toFile();
     try {
       String path = file.getAbsolutePath();
-      String daosAttr = String.format(io.daos.dfs.Constants.DUNS_XATTR_FMT, Layout.POSIX.name(),
+      String daosAttr = String.format(io.daos.Constants.DUNS_XATTR_FMT, Layout.POSIX.name(),
           DaosFSFactory.getPoolUuid(), DaosFSFactory.getContUuid());
-      DaosUns.setAppInfo(path, io.daos.dfs.Constants.DUNS_XATTR_NAME, daosAttr);
+      DaosUns.setAppInfo(path, io.daos.Constants.DUNS_XATTR_NAME, daosAttr);
       String originPath = path;
       path += "";
       String uriStr = "daos://" + ":" + unsId.getAndIncrement() +
