@@ -474,7 +474,7 @@ class TestPool(TestDaosApiBase):
         elif self.control_method.value == self.USE_DMG and self.dmg:
             self.set_query_data()
             self.log.info(
-                "Pool %s query data: %s\n",  self.uuid, self.query_data)
+                "Pool %s query data: %s\n", self.uuid, self.query_data)
             status = self.query_data["rebuild"]["status"] != "busy"
         return status
 
@@ -753,7 +753,7 @@ class TestPool(TestDaosApiBase):
         self.wait_for_rebuild(False)
         # display rebuild status
         self.set_query_data()
-        self.log.info("Pool %s query data: %s\n",  self.uuid, self.query_data)
+        self.log.info("Pool %s query data: %s\n", self.uuid, self.query_data)
         rebuild_status = self.query_data["rebuild"]["status"]
         self.log.info("Pool %s rebuild status:%s\n", self.uuid, rebuild_status)
         if rebuild_status == "done":

@@ -559,7 +559,7 @@ class SoakTestBase(TestWithServers):
             self.log.info(
                 "<<PASS %s completed in %s at %s>>", self.loop, DDHHMMSS_format(
                     loop_time), time.ctime())
-            # Initilize harasser loop time from first pass loop time
+            # Initialize harasser loop time from first pass loop time
             if self.loop == 1 and self.harassers:
                 self.harasser_loop_time = loop_time
             self.loop += 1
