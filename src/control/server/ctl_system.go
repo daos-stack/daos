@@ -178,11 +178,15 @@ func (svc *ControlService) rpcFanout(parent context.Context, fanReq fanoutReques
 // Return status of system members specified in request rank list (or all
 // members if request rank list is empty).
 //
-// Request harnesses to ping their instances (system members) to determine
-// IO Server process responsiveness. Update membership appropriately.
+// Request harnesses to ping their instances (system members) to determine IO
+// Server process responsiveness. Update membership appropriately.
+//
+// Ping performed through SystemQuery is non-invasive and does not interrogate
+// ranks directly over dRPC (see mgmt_system.go:PingRanks for details).
 //
 // This control service method is triggered from the control API method of the
-// same name in lib/control/system.go and returns results from all selected ranks.
+// same name in lib/control/system.go and returns results from all selected
+// ranks.
 func (svc *ControlService) SystemQuery(ctx context.Context, pbReq *ctlpb.SystemQueryReq) (*ctlpb.SystemQueryResp, error) {
 	svc.log.Debug("Received SystemQuery RPC")
 
@@ -198,7 +202,8 @@ func (svc *ControlService) SystemQuery(ctx context.Context, pbReq *ctlpb.SystemQ
 		Method: control.PingRanks,
 		Hosts:  pbReq.GetHosts(),
 		Ranks:  pbReq.GetRanks(),
-	}, true)
+		Force:  false, // ping harness only, not over drpc
+	}, true) // update membership on ping rank failures
 	if err != nil {
 		return nil, err
 	}

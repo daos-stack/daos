@@ -2383,9 +2383,9 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	 */
 	if (type == VOS_ITER_SINGLE)
 		anchors->ia_sv = anchors->ia_ev;
-	else if (oei->oei_oid.id_shard % 2 == 0 &&
+	else if (oei->oei_oid.id_shard % 3 == 1 &&
 		 DAOS_FAIL_CHECK(DAOS_VC_LOST_REPLICA))
-		D_GOTO(failed, rc =  -DER_NONEXIST);
+		D_GOTO(failed, rc = -DER_NONEXIST);
 
 	if (oei->oei_flags & ORF_ENUM_WITHOUT_EPR) {
 		epoch.oe_value = oei->oei_epr.epr_hi;
