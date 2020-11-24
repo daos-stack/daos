@@ -2198,9 +2198,9 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	 */
 	if (type == VOS_ITER_SINGLE)
 		anchors->ia_sv = anchors->ia_ev;
-	else if (oei->oei_oid.id_shard % 2 == 0 &&
+	else if (oei->oei_oid.id_shard % 3 == 1 &&
 		 DAOS_FAIL_CHECK(DAOS_VC_LOST_REPLICA))
-		D_GOTO(failed, rc =  -DER_NONEXIST);
+		D_GOTO(failed, rc = -DER_NONEXIST);
 
 	if (oei->oei_flags & ORF_ENUM_WITHOUT_EPR) {
 		epoch.oe_value = oei->oei_epr.epr_hi;
@@ -3001,8 +3001,7 @@ ds_obj_sync_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = dtx_obj_sync(osi->osi_pool_uuid, osi->osi_co_uuid, ioc.ioc_coc,
-			  &osi->osi_oid, oso->oso_epoch);
+	rc = dtx_obj_sync(ioc.ioc_coc, &osi->osi_oid, oso->oso_epoch);
 
 out:
 	obj_reply_map_version_set(rpc, ioc.ioc_map_ver);

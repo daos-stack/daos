@@ -87,12 +87,16 @@ func (mod *srvModule) handleGetPoolServiceRanks(reqb []byte) ([]byte, error) {
 
 	mod.log.Debugf("handling GetPoolSvcReq: %+v", req)
 
+	resp := new(srvpb.GetPoolSvcResp)
+
 	ps, err := mod.sysdb.FindPoolServiceByUUID(uuid)
 	if err != nil {
-		return nil, err
+		resp.Status = int32(drpc.DaosNonexistant)
+		mod.log.Debugf("GetPoolSvcResp: %+v", resp)
+		return proto.Marshal(resp)
+		// return nil, err
 	}
 
-	resp := new(srvpb.GetPoolSvcResp)
 	resp.Svcreps = system.RanksToUint32(ps.Replicas)
 
 	mod.log.Debugf("GetPoolSvcResp: %+v", resp)
