@@ -41,7 +41,7 @@
 #include <errno.h>
 
 int
-cp(tse_task_t *task, void *data)
+dc_cp(tse_task_t *task, void *data)
 {
 	struct cp_arg	*arg = data;
 	int		 rc = task->dt_result;
@@ -96,7 +96,7 @@ dc_mgmt_svc_rip(tse_task_t *task)
 	crt_req_addref(rpc);
 	cp_arg.rpc = rpc;
 
-	rc = tse_task_register_comp_cb(task, cp, &cp_arg, sizeof(cp_arg));
+	rc = tse_task_register_comp_cb(task, dc_cp, &cp_arg, sizeof(cp_arg));
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
