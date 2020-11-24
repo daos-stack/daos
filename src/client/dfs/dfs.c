@@ -519,6 +519,7 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 		return ENOENT;
 
 	switch (entry.mode & S_IFMT) {
+	case S_IFIFO:
 	case S_IFDIR:
 		size = sizeof(entry);
 		break;
@@ -814,7 +815,7 @@ open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
 	if (!exists)
 		return ENOENT;
 
-	if (!S_ISDIR(entry.mode))
+	if ((S_ISDIR(dir->mode) && !S_ISDIR(entry.mode)))
 		return ENOTDIR;
 
 	rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &dir->oh, NULL);
@@ -2200,7 +2201,8 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	obj->mode = entry.mode;
 
 	/** if entry is a file, open the array object and return */
-	if (S_ISREG(entry.mode)) {
+	switch (entry.mode & S_IFMT) {
+	case S_IFREG:
 		rc = daos_array_open_with_attr(dfs->coh, entry.oid,
 			DAOS_TX_NONE, daos_mode, 1, entry.chunk_size ?
 			entry.chunk_size : dfs->attr.da_chunk_size, &obj->oh,
@@ -2226,7 +2228,8 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 			stbuf->st_size = size;
 			stbuf->st_blocks = (stbuf->st_size + (1 << 9) - 1) >> 9;
 		}
-	} else if (S_ISLNK(entry.mode)) {
+		break;
+	case S_IFLNK:
 		/* Create a truncated version of the string */
 		D_STRNDUP(obj->value, entry.value, entry.value_len + 1);
 		if (obj->value == NULL)
@@ -2234,7 +2237,9 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		D_FREE(entry.value);
 		if (stbuf)
 			stbuf->st_size = entry.value_len;
-	} else if (S_ISDIR(entry.mode)) {
+		break;
+	case S_IFIFO:
+	case S_IFDIR:
 		rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &obj->oh,
 				   NULL);
 		if (rc) {
@@ -2243,7 +2248,8 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		}
 		if (stbuf)
 			stbuf->st_size = sizeof(entry);
-	} else {
+		break;
+	default:
 		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
 		D_GOTO(err_obj, rc = EINVAL);
 	}
@@ -2325,6 +2331,7 @@ restart:
 			D_GOTO(out, rc);
 		}
 		break;
+	case S_IFIFO:
 	case S_IFDIR:
 		rc = open_dir(dfs, th, parent->oh, flags, cid, len, obj);
 		if (rc) {
@@ -2402,6 +2409,7 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 		return ENOMEM;
 
 	switch (obj->mode & S_IFMT) {
+	case S_IFIFO:
 	case S_IFDIR:
 		rc = daos_obj_open(dfs->coh, obj->oid, daos_mode,
 				   &new_obj->oh, NULL);
@@ -2622,14 +2630,21 @@ dfs_release(dfs_obj_t *obj)
 	if (obj == NULL)
 		return EINVAL;
 
-	if (S_ISDIR(obj->mode))
+	switch (obj->mode & S_IFMT) {
+	case S_IFIFO:
+	case S_IFDIR:
 		rc = daos_obj_close(obj->oh, NULL);
-	else if (S_ISREG(obj->mode))
+		break;
+	case S_IFREG:
 		rc = daos_array_close(obj->oh, NULL);
-	else if (S_ISLNK(obj->mode))
+		break;
+	case S_IFLNK:
 		D_FREE(obj->value);
-	else
-		D_ASSERT(0);
+		break;
+	default:
+		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
+		rc = EINVAL;
+	}
 
 	if (rc) {
 		D_ERROR("daos_obj_close() failed, " DF_RC "\n", DP_RC(rc));

@@ -42,21 +42,24 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	 * would otherwise be using and check that is set.
 	 */
 	if (!(fi->flags & LARGEFILE)) {
-		DFUSE_TRA_INFO(req, "O_LARGEFILE required 0%o", fi->flags);
+		DFUSE_TRA_INFO(fs_handle, "O_LARGEFILE required 0%o",
+			       fi->flags);
 		D_GOTO(err, rc = ENOTSUP);
 	}
 
 	/* Check for flags that do not make sense in this context.
 	 */
 	if (fi->flags & DFUSE_UNSUPPORTED_CREATE_FLAGS) {
-		DFUSE_TRA_INFO(req, "unsupported flag requested 0%o",
+		DFUSE_TRA_INFO(fs_handle, "unsupported flag requested 0%o",
 			       fi->flags);
 		D_GOTO(err, rc = ENOTSUP);
 	}
 
 	/* Check that only the flag for a regular file is specified */
 	if ((mode & S_IFMT) != S_IFREG) {
-		DFUSE_TRA_INFO(req, "unsupported mode requested 0%o", mode);
+		DFUSE_TRA_INFO(fs_handle,
+			       "unsupported mode requested 0%o",
+			       mode);
 		D_GOTO(err, rc = ENOTSUP);
 	}
 

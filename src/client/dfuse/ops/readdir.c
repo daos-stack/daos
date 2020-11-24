@@ -64,6 +64,11 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 	if (rc)
 		D_GOTO(out, rc);
 
+	if (S_ISFIFO(stbuf.st_mode)) {
+		stbuf.st_mode &= ~S_IFIFO;
+		stbuf.st_mode |= S_IFDIR;
+	}
+
 	rc = dfuse_lookup_inode(fs_handle, udata->inode->ie_dfs, &oid,
 				&stbuf.st_ino);
 	if (rc)

@@ -127,6 +127,8 @@ struct dfuse_inode_ops {
 	void (*create)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name, mode_t mode,
 		       struct fuse_file_info *fi);
+	void (*mknod)(fuse_req_t req, struct dfuse_inode_entry *parent,
+		      const char *name, mode_t mode);
 	void (*getattr)(fuse_req_t req, struct dfuse_inode_entry *inode);
 	void (*setattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			struct stat *attr, int to_set);
@@ -285,6 +287,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define LOG_MODES(HANDLE, INPUT) do {					\
 		int _flag = (INPUT) & S_IFMT;				\
 		LOG_MODE((HANDLE), _flag, S_IFREG);			\
+		LOG_MODE((HANDLE), _flag, S_IFIFO);			\
 		LOG_MODE((HANDLE), _flag, S_ISUID);			\
 		LOG_MODE((HANDLE), _flag, S_ISGID);			\
 		LOG_MODE((HANDLE), _flag, S_ISVTX);			\
@@ -591,6 +594,10 @@ dfuse_cb_releasedir(fuse_req_t, struct dfuse_inode_entry *,
 void
 dfuse_cb_create(fuse_req_t, struct dfuse_inode_entry *,
 		const char *, mode_t, struct fuse_file_info *);
+
+void
+dfuse_cb_mknod(fuse_req_t, struct dfuse_inode_entry *,
+	       const char *, mode_t);
 
 void
 dfuse_cb_open(fuse_req_t, fuse_ino_t, struct fuse_file_info *);

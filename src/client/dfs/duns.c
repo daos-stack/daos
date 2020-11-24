@@ -650,7 +650,12 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 #endif
 
 		/** create a new directory if POSIX/MPI-IO container */
-		rc = mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+		if (backend_dfuse)
+			rc = mknod(path,
+				   S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH | S_IFIFO,
+				   0);
+		else
+			rc = mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 		if (rc == -1) {
 			int err = errno;
 

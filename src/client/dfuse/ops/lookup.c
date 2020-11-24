@@ -341,12 +341,14 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_name[NAME_MAX] = '\0';
 	atomic_store_relaxed(&ie->ie_ref, 1);
 
-	if (S_ISDIR(ie->ie_stat.st_mode)) {
+	if (S_ISFIFO(ie->ie_stat.st_mode)) {
 		rc = check_for_uns_ep(fs_handle, ie);
 		DFUSE_TRA_DEBUG(ie,
 				"check_for_uns_ep() returned %d", rc);
 		if (rc != 0 && rc != EPERM)
 			D_GOTO(err, rc);
+		ie->ie_stat.st_mode &= ~S_IFIFO;
+		ie->ie_stat.st_mode |= S_IFDIR;
 	}
 
 	dfuse_reply_entry(fs_handle, ie, NULL, req);

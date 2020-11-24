@@ -132,6 +132,35 @@ err:
 }
 
 void
+df_ll_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
+	    mode_t mode, dev_t rdev)
+{
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*parent_inode;
+	d_list_t			*rlink;
+	int				rc;
+
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
+	if (!rlink) {
+		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
+				parent);
+		D_GOTO(err, rc = ENOENT);
+	}
+
+	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	if (!parent_inode->ie_dfs->dfs_ops->mknod)
+		D_GOTO(err, rc = ENOTSUP);
+
+	parent_inode->ie_dfs->dfs_ops->mknod(req, parent_inode, name, mode);
+
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+	return;
+err:
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+}
+
+void
 df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
@@ -634,6 +663,7 @@ struct dfuse_inode_ops dfuse_dfs_ops = {
 	.unlink		= dfuse_cb_unlink,
 	.readdir	= dfuse_cb_readdir,
 	.create		= dfuse_cb_create,
+	.mknod		= dfuse_cb_mknod,
 	.rename		= dfuse_cb_rename,
 	.symlink	= dfuse_cb_symlink,
 	.setxattr	= dfuse_cb_setxattr,
@@ -675,6 +705,7 @@ struct fuse_lowlevel_ops
 	fuse_ops->rmdir		= df_ll_unlink;
 	fuse_ops->readdir	= df_ll_readdir;
 	fuse_ops->create	= df_ll_create;
+	fuse_ops->mknod		= df_ll_mknod;
 	fuse_ops->rename	= df_ll_rename;
 	fuse_ops->symlink	= df_ll_symlink;
 	fuse_ops->setxattr	= df_ll_setxattr;
