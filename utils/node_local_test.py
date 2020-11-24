@@ -1633,6 +1633,7 @@ def main():
     parser.add_argument('--dfuse-debug', default=None)
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
+    parser.add_argument('--perf-check', action='store_true')
     parser.add_argument('--dtx', action='store_true')
     parser.add_argument('mode', nargs='?')
     args = parser.parse_args()
@@ -1687,6 +1688,19 @@ def main():
             run_daos_cmd(conf, cmd, valgrind=False)
         if server.stop() != 0:
             fatal_errors.add_result(True)
+
+    # If the perf-check option is given then re-start everything without much
+    # debugging enabled and run some microbenchmarks to give numbers for use
+    # as a comparison against other builds.
+    if args.perf_check:
+        args.server_debug = 'INFO'
+        args.memcheck = 'no'
+        args.dfuse_debug = 'ERR'
+        server = DaosServer(conf)
+        server.start()
+        check_readdir_perf(server, conf)
+        if server.stop() != 0:
+            fatal_errors.fail()
 
     wf.close()
     if fatal_errors.errors:
