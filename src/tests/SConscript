@@ -25,6 +25,7 @@ def scons():
     prereqs.require(denv, 'argobots', 'hwloc', 'protobufc')
 
     daos_build.program(denv, 'simple_array', 'simple_array.c', LIBS=libs)
+    daos_build.program(denv, 'simple_obj', 'simple_obj.c', LIBS=libs)
     libs += ['vos', 'bio', 'pthread', 'abt', 'dts']
 
     daos_perf = daos_build.program(denv, 'daos_perf',
