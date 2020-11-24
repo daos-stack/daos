@@ -28,6 +28,8 @@
 
 #include "dfuse_ioctl.h"
 
+#define MAX_IOCTL_SIZE ((1024*16)-1)
+
 static void
 handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 {
@@ -67,18 +69,24 @@ handle_size_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 		D_GOTO(err, rc = daos_der2errno(rc));
 
 	hs_reply.fsr_pool_size = iov.iov_buf_len;
+	if (hs_reply.fsr_pool_size > MAX_IOCTL_SIZE)
+		D_GOTO(err, rc = EOVERFLOW);
 
 	rc = daos_cont_local2global(oh->doh_ie->ie_dfs->dfs_coh, &iov);
 	if (rc)
 		D_GOTO(err, rc = daos_der2errno(rc));
 
 	hs_reply.fsr_cont_size = iov.iov_buf_len;
+	if (hs_reply.fsr_cont_size > MAX_IOCTL_SIZE)
+		D_GOTO(err, rc = EOVERFLOW);
 
 	rc = dfs_local2global(oh->doh_ie->ie_dfs->dfs_ns, &iov);
 	if (rc)
 		D_GOTO(err, rc);
 
 	hs_reply.fsr_dfs_size = iov.iov_buf_len;
+	if (hs_reply.fsr_dfs_size > MAX_IOCTL_SIZE)
+		D_GOTO(err, rc = EOVERFLOW);
 
 	DFUSE_REPLY_IOCTL(oh, req, hs_reply);
 	return;
@@ -160,6 +168,8 @@ handle_dsize_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 		D_GOTO(err, rc = daos_der2errno(rc));
 
 	hsd_reply.fsr_dobj_size = iov.iov_buf_len;
+	if (hsd_reply.fsr_dobj_size > MAX_IOCTL_SIZE)
+		D_GOTO(err, rc = EOVERFLOW);
 
 	DFUSE_REPLY_IOCTL(oh, req, hsd_reply);
 	return;
