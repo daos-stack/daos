@@ -31,7 +31,6 @@ import java.util.Map;
 
 import com.google.protobuf.TextFormat;
 
-import io.daos.*;
 import io.daos.dfs.uns.*;
 
 import org.apache.commons.lang.ObjectUtils;
@@ -101,8 +100,8 @@ public class DaosUns {
     byte[] bytes = attribute.toByteArray();
     ByteBuffer buffer = BufferAllocator.directBuffer(bytes.length);
     buffer.put(bytes);
-    poolHandle = DaosClient.daosOpenPool(builder.poolUuid, builder.serverGroup,
-        builder.ranks, builder.poolFlags);
+    poolHandle = DaosFsClient.daosOpenPool(builder.poolUuid, builder.serverGroup,
+      builder.ranks, builder.poolFlags);
     try {
       String cuuid = DaosFsClient.dunsCreatePath(poolHandle, builder.path,
           ((DirectBuffer) buffer).address(), bytes.length);
@@ -111,7 +110,7 @@ public class DaosUns {
       return cuuid;
     } finally {
       if (poolHandle != 0) {
-        DaosClient.daosClosePool(poolHandle);
+        DaosFsClient.daosClosePool(poolHandle);
       }
     }
   }
@@ -151,11 +150,11 @@ public class DaosUns {
     }
     if (attrName.length() > Constants.UNS_ATTR_NAME_MAX_LEN) {
       throw new IllegalArgumentException("attribute name " + attrName + ", length should not exceed " +
-          Constants.UNS_ATTR_NAME_MAX_LEN);
+        Constants.UNS_ATTR_NAME_MAX_LEN);
     }
     if (value != null && value.length() > Constants.UNS_ATTR_VALUE_MAX_LEN) {
       throw new IllegalArgumentException("attribute value length should not exceed " +
-          Constants.UNS_ATTR_VALUE_MAX_LEN);
+        Constants.UNS_ATTR_VALUE_MAX_LEN);
     }
     DaosFsClient.dunsSetAppInfo(path, attrName, value);
   }
@@ -179,11 +178,11 @@ public class DaosUns {
     }
     if (attrName.length() > Constants.UNS_ATTR_NAME_MAX_LEN) {
       throw new IllegalArgumentException("attribute name " + attrName + ", length should not exceed " +
-          Constants.UNS_ATTR_NAME_MAX_LEN);
+        Constants.UNS_ATTR_NAME_MAX_LEN);
     }
     if (maxValueLen > Constants.UNS_ATTR_VALUE_MAX_LEN) {
       throw new IllegalArgumentException("maximum value length should not exceed " +
-          Constants.UNS_ATTR_VALUE_MAX_LEN);
+        Constants.UNS_ATTR_VALUE_MAX_LEN);
     }
     return DaosFsClient.dunsGetAppInfo(path, attrName, maxValueLen);
   }
@@ -197,14 +196,14 @@ public class DaosUns {
   public void destroyPath() throws IOException {
     long poolHandle = 0;
 
-    poolHandle = DaosClient.daosOpenPool(builder.poolUuid, builder.serverGroup,
-        builder.ranks, builder.poolFlags);
+    poolHandle = DaosFsClient.daosOpenPool(builder.poolUuid, builder.serverGroup,
+      builder.ranks, builder.poolFlags);
     try {
       DaosFsClient.dunsDestroyPath(poolHandle, builder.path);
       log.info("UNS path {} destroyed");
     } finally {
       if (poolHandle != 0) {
-        DaosClient.daosClosePool(poolHandle);
+        DaosFsClient.daosClosePool(poolHandle);
       }
     }
   }
@@ -234,8 +233,8 @@ public class DaosUns {
    * {@link DaosIOException}
    */
   public static DunsInfo getAccessInfo(String path, String appInfoAttrName) throws IOException {
-    return getAccessInfo(path, appInfoAttrName, Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT,
-        false);
+    return getAccessInfo(path, appInfoAttrName, io.daos.dfs.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT,
+      false);
   }
 
   /**
@@ -265,7 +264,7 @@ public class DaosUns {
     String value = null;
     try {
       value = DaosUns.getAppInfo(path, appInfoAttrName,
-          maxValueLen);
+        maxValueLen);
     } catch (DaosIOException e) {
       if (expectAppInfo) {
         throw e;
@@ -613,7 +612,7 @@ public class DaosUns {
     }
     if (args.length < 1) {
       throw new IllegalArgumentException("need one of commands" +
-          " [create|resolve|destroy|parse|util]\n" + getUsage());
+        " [create|resolve|destroy|parse|util]\n" + getUsage());
     }
     switch (args[0]) {
       case "create":

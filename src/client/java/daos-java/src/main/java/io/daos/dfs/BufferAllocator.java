@@ -21,48 +21,19 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-package io.daos;
+package io.daos.dfs;
 
-public abstract class Sharable {
+import java.nio.ByteBuffer;
 
-  private volatile boolean inited;
+/**
+ * Entry point for getting buffer.
+ *
+ * <p>
+ * TODO: buffer cache logic to be implemented
+ */
+public class BufferAllocator {
 
-  private int refCnt;
-
-  protected boolean isInited() {
-    return inited;
+  public static ByteBuffer directBuffer(int size) {
+    return ByteBuffer.allocateDirect(size);
   }
-
-  protected void setInited(boolean inited) {
-    this.inited = inited;
-  }
-
-  /**
-   * increase reference count by one.
-   *
-   * @throws IllegalStateException if this client is disconnected.
-   */
-  protected synchronized void incrementRef() {
-    if (!inited) {
-      throw new IllegalStateException("DaosFsClient is not initialized or disconnected.");
-    }
-    refCnt++;
-  }
-
-  /**
-   * decrease reference count by one.
-   */
-  protected synchronized void decrementRef() {
-    refCnt--;
-  }
-
-  /**
-   * get reference count.
-   *
-   * @return reference count
-   */
-  public synchronized int getRefCnt() {
-    return refCnt;
-  }
-
 }

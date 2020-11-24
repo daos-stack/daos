@@ -1,4 +1,4 @@
-package io.daos;
+package io.daos.dfs;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -7,7 +7,7 @@ public class DaosIOExceptionTest {
 
   @Test
   public void testLoadErrorCode() {
-    Assert.assertEquals(6, DaosIOException.errorMap.size());
+    Assert.assertEquals(5, DaosIOException.errorMap.size());
     ErrorCode errorCode = Constants.CUSTOM_ERR_NO_POOL_SIZE;
     Assert.assertEquals(errorCode.getMsg(), DaosIOException.errorMap.get(errorCode.getCode()));
 

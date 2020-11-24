@@ -1,4 +1,4 @@
-package io.daos;
+package io.daos.dfs;
 
 import org.junit.Test;
 
@@ -6,7 +6,7 @@ public class zCleanerIT {
 
   @Test
   public void clean() throws Exception {
-    DaosClient.closeAll();
-    DaosClient.daosSafeFinalize();
+    DaosFsClient.closeAll();
+    DaosFsClient.daosFinalize();
   }
 }

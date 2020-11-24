@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-package io.daos;
+package io.daos.dfs;
 
 import java.util.Deque;
 import java.util.concurrent.ConcurrentLinkedDeque;

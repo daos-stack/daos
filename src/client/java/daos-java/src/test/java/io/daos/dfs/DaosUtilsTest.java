@@ -1,4 +1,4 @@
-package io.daos;
+package io.daos.dfs;
 
 import org.apache.commons.lang.StringEscapeUtils;
 import org.junit.Assert;

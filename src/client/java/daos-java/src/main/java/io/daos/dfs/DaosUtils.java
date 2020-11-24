@@ -21,9 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-package io.daos;
+package io.daos.dfs;
 
-import io.daos.dfs.StatAttributes;
 import org.apache.commons.lang.StringUtils;
 
 import java.util.regex.Matcher;
