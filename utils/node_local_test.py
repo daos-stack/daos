@@ -1558,7 +1558,6 @@ def main():
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
         test_pydaos_kv(server, conf)
         fatal_errors.add_result(test_alloc_fail(server, wf, conf))
-        fatal_errors.add_result(test_alloc_fail(server, conf))
     elif not args.mode:
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
