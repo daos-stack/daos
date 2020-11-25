@@ -193,7 +193,7 @@ int dyn_hash_table_destroy_inplace(struct d_hash_table *htable, bool force);
  * \return			found item
  */
 dh_item_t dyn_hash_rec_find(struct d_hash_table *htable, const void *key,
-		            unsigned int ksize, uint64_t siphash);
+			    unsigned int ksize, uint64_t siphash);
 
 /**
  * Lookup \p key in the hash table, if there is a matched record, it should be

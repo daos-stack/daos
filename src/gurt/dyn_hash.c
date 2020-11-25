@@ -1054,7 +1054,7 @@ dyn_hash_rec_insert(struct d_hash_table *gtable, const void *key,
 
 bool
 dyn_hash_rec_delete(struct d_hash_table *gtable, const void *key,
-         	    unsigned int ksize, uint64_t siphash)
+		    unsigned int ksize, uint64_t siphash)
 {
 	uint32_t	index;
 	dh_bucket_t	*bucket;
