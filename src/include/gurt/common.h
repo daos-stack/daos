@@ -227,7 +227,7 @@ extern "C" {
 #define DG_FMT(x) _Generic(__rc,					\
 				int: "%d",				\
 				unsigned int: "%u",			\
-				unsigned long: "%ul",			\
+				unsigned long: "%lu",			\
 				bool: "%d",				\
 				int64_t: "%ld", default: "%p")
 

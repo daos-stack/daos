@@ -1248,7 +1248,7 @@ pool_query_cb(tse_task_t *task, void *data)
 			pool_buf_size(map_buf->pb_nr), out->pqo_map_buf_size);
 
 		/* retry with map buffer size required by server */
-		D_INFO("retry with map buffer size required by server (%ul)\n",
+		D_INFO("retry with map buffer size required by server (%u)\n",
 		       out->pqo_map_buf_size);
 		pool->dp_map_sz = out->pqo_map_buf_size;
 		rc = tse_task_reinit(task);
