@@ -50,12 +50,11 @@ Java_io_daos_DaosClient_daosOpenPool(JNIEnv *env,
 	const char *server_group = (*env)->GetStringUTFChars(env, serverGroup,
 								0);
 	const char *svc_ranks = (*env)->GetStringUTFChars(env, ranks, 0);
-
 	uuid_t pool_uuid;
-	uuid_parse(pool_str, pool_uuid);
 	d_rank_list_t *svcl = daos_rank_list_parse(svc_ranks, ":");
 	jlong ret;
 
+	uuid_parse(pool_str, pool_uuid);
 	if (svcl == NULL) {
 		char *tmp = "Invalid pool service rank list (%s) when open pool (%s)";
 		char *msg = (char *)malloc(strlen(tmp) + strlen(svc_ranks) +
