@@ -168,7 +168,8 @@ func TestServer_MgmtSvc_PrepShutdownRanks(t *testing.T) {
 		"missing superblock": {
 			req:       &mgmtpb.RanksReq{Ranks: "0-3"},
 			missingSB: true,
-			expErr:    errors.New("nil superblock"),
+			// no results as rank cannot be read from superblock
+			expResults: []*mgmtpb.RanksResp_RankResult{},
 		},
 		"instances stopped": {
 			req:              &mgmtpb.RanksReq{Ranks: "0-3"},
@@ -346,7 +347,8 @@ func TestServer_MgmtSvc_StopRanks(t *testing.T) {
 		"missing superblock": {
 			req:       &mgmtpb.RanksReq{Ranks: "0-3"},
 			missingSB: true,
-			expErr:    errors.New("nil superblock"),
+			// no results as rank cannot be read from superblock
+			expResults: []*mgmtpb.RanksResp_RankResult{},
 		},
 		"missing ranks": {
 			req:        &mgmtpb.RanksReq{Ranks: "0,3"},
@@ -506,7 +508,8 @@ func TestServer_MgmtSvc_PingRanks(t *testing.T) {
 		"missing superblock": {
 			req:       &mgmtpb.RanksReq{Ranks: "0-3"},
 			missingSB: true,
-			expErr:    errors.New("nil superblock"),
+			// no results as rank can't be read from superblock
+			expResults: []*mgmtpb.RanksResp_RankResult{},
 		},
 		"instances stopped": {
 			req:              &mgmtpb.RanksReq{Ranks: "0-3"},
@@ -516,8 +519,16 @@ func TestServer_MgmtSvc_PingRanks(t *testing.T) {
 				{Rank: 2, State: msStopped},
 			},
 		},
+		"instances started": {
+			req: &mgmtpb.RanksReq{Ranks: "0-3"},
+			expResults: []*mgmtpb.RanksResp_RankResult{
+				{Rank: 1, State: msReady},
+				{Rank: 2, State: msReady},
+			},
+		},
 		"dRPC resp fails": {
-			req:     &mgmtpb.RanksReq{Ranks: "0-3"},
+			// force flag in request triggers dRPC ping
+			req:     &mgmtpb.RanksReq{Ranks: "0-3", Force: true},
 			drpcRet: errors.New("call failed"),
 			drpcResps: []proto.Message{
 				&mgmtpb.DaosResp{Status: 0},
@@ -529,15 +540,17 @@ func TestServer_MgmtSvc_PingRanks(t *testing.T) {
 			},
 		},
 		"dRPC resp junk": {
-			req:      &mgmtpb.RanksReq{Ranks: "0-3"},
+			// force flag in request triggers dRPC ping
+			req:      &mgmtpb.RanksReq{Ranks: "0-3", Force: true},
 			junkResp: true,
 			expResults: []*mgmtpb.RanksResp_RankResult{
 				{Rank: 1, State: msErrored, Errored: true},
 				{Rank: 2, State: msErrored, Errored: true},
 			},
 		},
-		"ping timeout": { // dRPC req-resp duration > rankReqTimeout
-			req:           &mgmtpb.RanksReq{Ranks: "0-3"},
+		"dRPC ping timeout": { // dRPC req-resp duration > rankReqTimeout
+			// force flag in request triggers dRPC ping
+			req:           &mgmtpb.RanksReq{Ranks: "0-3", Force: true},
 			responseDelay: 200 * time.Millisecond,
 			drpcResps: []proto.Message{
 				&mgmtpb.DaosResp{Status: 0},
@@ -548,8 +561,9 @@ func TestServer_MgmtSvc_PingRanks(t *testing.T) {
 				{Rank: 2, State: uint32(MemberStateUnresponsive)},
 			},
 		},
-		"context timeout": { // dRPC req-resp duration > parent context Timeout
-			req:           &mgmtpb.RanksReq{Ranks: "0-3"},
+		"dRPC context timeout": { // dRPC req-resp duration > parent context Timeout
+			// force flag in request triggers dRPC ping
+			req:           &mgmtpb.RanksReq{Ranks: "0-3", Force: true},
 			responseDelay: 40 * time.Millisecond,
 			ctxTimeout:    10 * time.Millisecond,
 			drpcResps: []proto.Message{
@@ -561,8 +575,9 @@ func TestServer_MgmtSvc_PingRanks(t *testing.T) {
 				{Rank: 2, State: uint32(MemberStateUnresponsive)},
 			},
 		},
-		"context cancel": { // dRPC req-resp duration > when parent context is canceled
-			req:           &mgmtpb.RanksReq{Ranks: "0-3"},
+		"dRPC context cancel": { // dRPC req-resp duration > when parent context is canceled
+			// force flag in request triggers dRPC ping
+			req:           &mgmtpb.RanksReq{Ranks: "0-3", Force: true},
 			responseDelay: 40 * time.Millisecond,
 			ctxCancel:     10 * time.Millisecond,
 			drpcResps: []proto.Message{
@@ -571,8 +586,9 @@ func TestServer_MgmtSvc_PingRanks(t *testing.T) {
 			},
 			expErr: errors.New("nil result"), // parent ctx cancel
 		},
-		"unsuccessful call": {
-			req: &mgmtpb.RanksReq{Ranks: "0-3"},
+		"dRPC unsuccessful call": {
+			// force flag in request triggers dRPC ping
+			req: &mgmtpb.RanksReq{Ranks: "0-3", Force: true},
 			drpcResps: []proto.Message{
 				&mgmtpb.DaosResp{Status: -1},
 				&mgmtpb.DaosResp{Status: -1},
@@ -582,8 +598,9 @@ func TestServer_MgmtSvc_PingRanks(t *testing.T) {
 				{Rank: 2, State: msErrored, Errored: true},
 			},
 		},
-		"successful call": {
-			req: &mgmtpb.RanksReq{Ranks: "0-3"},
+		"dRPC successful call": {
+			// force flag in request triggers dRPC ping
+			req: &mgmtpb.RanksReq{Ranks: "0-3", Force: true},
 			drpcResps: []proto.Message{
 				&mgmtpb.DaosResp{Status: 0},
 				&mgmtpb.DaosResp{Status: 0},
@@ -593,8 +610,9 @@ func TestServer_MgmtSvc_PingRanks(t *testing.T) {
 				{Rank: 2, State: msReady},
 			},
 		},
-		"filtered ranks": {
-			req: &mgmtpb.RanksReq{Ranks: "0-1,3"},
+		"dRPC filtered ranks": {
+			// force flag in request triggers dRPC ping
+			req: &mgmtpb.RanksReq{Ranks: "0-1,3", Force: true},
 			drpcResps: []proto.Message{
 				&mgmtpb.DaosResp{Status: 0},
 				&mgmtpb.DaosResp{Status: 0},
@@ -692,7 +710,8 @@ func TestServer_MgmtSvc_ResetFormatRanks(t *testing.T) {
 		"missing superblock": {
 			req:       &mgmtpb.RanksReq{Ranks: "0-3"},
 			missingSB: true,
-			expErr:    errors.New("nil superblock"),
+			// no results as rank can't be read from superblock
+			expResults: []*mgmtpb.RanksResp_RankResult{},
 		},
 		"missing ranks": {
 			req:        &mgmtpb.RanksReq{Ranks: "0,3"},
@@ -827,7 +846,8 @@ func TestServer_MgmtSvc_StartRanks(t *testing.T) {
 		"missing superblock": {
 			req:       &mgmtpb.RanksReq{Ranks: "0-3"},
 			missingSB: true,
-			expErr:    errors.New("nil superblock"),
+			// no results as rank cannot be read from superblock
+			expResults: []*mgmtpb.RanksResp_RankResult{},
 		},
 		"missing ranks": {
 			req:        &mgmtpb.RanksReq{Ranks: "0,3"},
