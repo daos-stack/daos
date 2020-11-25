@@ -107,7 +107,7 @@ func (aic *attachInfoCache) isCached() bool {
 
 // initResponseCache generates a unique dRPC response corresponding to each device specified
 // in the scanResults.  The responses are differentiated based on the network device NUMA affinity.
-func (aic *attachInfoCache) initResponseCache(ctx context.Context, resp *mgmtpb.GetAttachInfoResp, scanResults []netdetect.FabricScan) error {
+func (aic *attachInfoCache) initResponseCache(ctx context.Context, resp *mgmtpb.GetAttachInfoResp, scanResults []*netdetect.FabricScan) error {
 	aic.mutex.Lock()
 	defer aic.mutex.Unlock()
 
