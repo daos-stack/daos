@@ -194,8 +194,9 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) (*Database, error) {
 				Addrs: make(MemberAddrMap),
 			},
 			Pools: &PoolDatabase{
-				Ranks: make(PoolRankMap),
-				Uuids: make(PoolUuidMap),
+				Ranks:  make(PoolRankMap),
+				Uuids:  make(PoolUuidMap),
+				Labels: make(PoolLabelMap),
 			},
 			SchemaVersion: CurrentSchemaVersion,
 		},
@@ -691,6 +692,14 @@ func (db *Database) FindMembersByAddr(addr *net.TCPAddr) ([]*Member, error) {
 	return nil, &ErrMemberNotFound{byAddr: addr}
 }
 
+// copyPoolService makes a copy of the supplied PoolService pointer
+// for safe use outside of the database.
+func copyPoolService(in *PoolService) *PoolService {
+	out := new(PoolService)
+	*out = *in
+	return out
+}
+
 // PoolServiceList returns a list of pool services registered
 // with the system.
 func (db *Database) PoolServiceList() ([]*PoolService, error) {
@@ -705,9 +714,8 @@ func (db *Database) PoolServiceList() ([]*PoolService, error) {
 	// elsewhere.
 	dbCopy := make([]*PoolService, len(db.data.Pools.Uuids))
 	copyIdx := 0
-	for _, dbRec := range db.data.Pools.Uuids {
-		dbCopy[copyIdx] = new(PoolService)
-		*dbCopy[copyIdx] = *dbRec
+	for _, ps := range db.data.Pools.Uuids {
+		dbCopy[copyIdx] = copyPoolService(ps)
 		copyIdx++
 	}
 	return dbCopy, nil
@@ -723,10 +731,26 @@ func (db *Database) FindPoolServiceByUUID(uuid uuid.UUID) (*PoolService, error) 
 	defer db.data.RUnlock()
 
 	if p, found := db.data.Pools.Uuids[uuid]; found {
-		return p, nil
+		return copyPoolService(p), nil
 	}
 
 	return nil, &ErrPoolNotFound{byUUID: &uuid}
+}
+
+// FindPoolServiceByLabel searches the pool database by Label. If no
+// pool service is found, an error is returned.
+func (db *Database) FindPoolServiceByLabel(label string) (*PoolService, error) {
+	if err := db.CheckLeader(); err != nil {
+		return nil, err
+	}
+	db.data.RLock()
+	defer db.data.RUnlock()
+
+	if p, found := db.data.Pools.Labels[label]; found {
+		return copyPoolService(p), nil
+	}
+
+	return nil, &ErrPoolNotFound{byLabel: &label}
 }
 
 // AddPoolService creates an entry for a new pool service in the pool database.

@@ -357,7 +357,7 @@ static int
 pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 {
 	struct daos_prop_entry	*entry;
-	d_iov_t		 value;
+	d_iov_t			 value;
 	int			 i;
 	int			 rc = 0;
 
@@ -368,6 +368,15 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 		entry = &prop->dpp_entries[i];
 		switch (entry->dpe_type) {
 		case DAOS_PROP_PO_LABEL:
+			if (entry->dpe_str == NULL ||
+			    strlen(entry->dpe_str) == 0) {
+				entry = daos_prop_entry_get(&pool_prop_default,
+							    entry->dpe_type);
+				if (entry == NULL) {
+					D_ERROR("no default label property");
+					return -DER_INVAL;
+				}
+			}
 			d_iov_set(&value, entry->dpe_str,
 				     strlen(entry->dpe_str));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_label,
