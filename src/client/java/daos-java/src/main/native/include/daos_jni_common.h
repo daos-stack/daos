@@ -21,6 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
+#include <jni.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>

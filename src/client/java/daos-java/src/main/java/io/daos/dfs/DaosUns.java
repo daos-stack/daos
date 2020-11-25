@@ -497,7 +497,7 @@ public class DaosUns {
         builder.setCuuid(contUuid);
       }
       builder.setLayoutType(layout);
-      builder.setObjectType(objectType.name());
+      builder.setObjectType(objectType.nameWithoutOc());
       builder.setChunkSize(chunkSize);
       builder.setOnLustre(onLustre);
       buildProperties(builder);
