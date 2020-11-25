@@ -57,7 +57,7 @@ Java_io_daos_DaosClient_daosOpenPool(JNIEnv *env,
 	uuid_parse(pool_str, pool_uuid);
 	if (svcl == NULL) {
 		char *tmp = "Invalid pool service rank list (%s) when "
-		            "open pool (%s)";
+					"open pool (%s)";
 		char *msg = (char *)malloc(strlen(tmp) + strlen(svc_ranks) +
 				strlen(pool_str));
 
