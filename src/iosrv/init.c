@@ -41,6 +41,8 @@
 #include <daos/placement.h>
 #include "srv_internal.h"
 #include "drpc_internal.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 #include <daos.h> /* for daos_init() */
 
@@ -473,18 +475,22 @@ server_init(int argc, char *argv[])
 	if (rc != 0)
 		return rc;
 
+	rc = d_tm_init(dss_instance_idx, D_TM_SHARED_MEMORY_SIZE);
+	if (rc != 0)
+		goto exit_debug_init;
+
 	rc = register_dbtree_classes();
 	if (rc != 0)
-		D_GOTO(exit_debug_init, rc);
+		D_GOTO(exit_telemetry_init, rc);
 
 	/** initialize server topology data */
 	rc = dss_topo_init();
 	if (rc != 0)
-		D_GOTO(exit_debug_init, rc);
+		D_GOTO(exit_telemetry_init, rc);
 
 	rc = abt_init(argc, argv);
 	if (rc != 0)
-		goto exit_debug_init;
+		goto exit_telemetry_init;
 
 	/* initialize the modular interface */
 	rc = dss_module_init();
@@ -634,6 +640,8 @@ exit_mod_init:
 	dss_module_fini(true);
 exit_abt_init:
 	abt_fini();
+exit_telemetry_init:
+	d_tm_fini();
 exit_debug_init:
 	daos_debug_fini();
 	return rc;
