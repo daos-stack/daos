@@ -52,7 +52,7 @@ static const uint32_t type_counts[] = {
 		(entry)->te_record_ptr, (entry)->te_ts.tp_ts_rh,	\
 		(entry)->te_ts.tp_ts_rl)
 
-/** The entry is being evicted either because there is now space in the cache or
+/** The entry is being evicted either because there is no space in the cache or
  *  the item it represents has been removed.  In either case, update the
  *  corresponding negative entry.
  */

@@ -57,8 +57,10 @@ vos_tls_get(void)
 #endif /* VOS_STANDALONE */
 }
 
-/** Add missing timestamp cache entries
- *  entries
+/** Add missing timestamp cache entries.  This should be called
+ *  when execution may have been short circuited by a non-existent
+ *  entity so we can fill in the negative timestamps before doing
+ *  timestamp updates.
  */
 void
 vos_ts_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int akey_nr,

@@ -1269,7 +1269,7 @@ vos_fetch_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int iod_nr,
 {
 	struct vos_akey_data	ad;
 
-	ad.ad_is_iod = false;
+	ad.ad_is_iod = true;
 	ad.ad_iods = iods;
 
 	vos_ts_add_missing(ts_set, dkey, iod_nr, &ad);
