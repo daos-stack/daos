@@ -257,8 +257,8 @@ def get_base_env():
     env = os.environ.copy()
     env['DD_MASK'] = 'all'
     env['DD_SUBSYS'] = 'all'
-    env['D_LOG_SIZE'] = '5g'
     env['D_LOG_MASK'] = 'DEBUG'
+    env['D_LOG_SIZE'] = '5g'
     env['FI_UNIVERSE_SIZE'] = '128'
     return env
 
@@ -785,6 +785,9 @@ def run_daos_cmd(conf,
     Run a command, returning what subprocess.run() would.
 
     Enable logging, and valgrind for the command.
+
+    if prefix is set to False do not run a DAOS command, but instead run what's
+    provided, however run it under the IL.
     """
     vh = ValgrindHelper()
 
@@ -1374,10 +1377,27 @@ def test_pydaos_kv(server, conf):
     print('Closing container and opening new one')
     kv = container.get_kv_by_name('my_test_kv')
 
-def test_alloc_fail(server, wf, conf):
-    """run 'daos' client binary with fault injection
+class AllocFailTest():
+    """Class to describe fault injection command"""
 
-    Enable the fault injection for the daos binary, injecting
+    def __init__(self, conf, cmd):
+        self.conf = conf
+        self.cmd = cmd
+        self.prefix = True
+        self.check_stderr = False
+        self.expected_stdout = ''
+
+    def run(self, **kwargs):
+        """Run the actual test"""
+        return run_daos_cmd(self.conf,
+                            self.cmd,
+                            prefix=self.prefix,
+                            **kwargs)
+
+def run_fi_test(test_cmd, wf):
+    """Run a command with fault injection enabled.
+
+    Enable the fault injection for the command, injecting
     allocation failures at different locations.  Keep going until
     the client runs with no faults injected (about 800 iterations).
 
@@ -1386,6 +1406,73 @@ def test_alloc_fail(server, wf, conf):
 
     Ignore new error messages containing the numeric value of -DER_NOMEM
     but warn on all other warnings generated.
+    """
+
+    # The first fail location causes deadlock with the interception library,
+    # and opening the fault injecton file.
+    fid = 1
+
+    fatal_errors = False
+
+    while True:
+        print()
+
+        fc = {}
+        fc['fault_config'] = [{'id': 0,
+                               'probability_x': 1,
+                               'probability_y': 1,
+                               'interval': fid,
+                               'max_faults': 1}]
+
+        fi_file = tempfile.NamedTemporaryFile(prefix='fi_',
+                                              suffix='.yaml')
+
+        fi_file.write(yaml.dump(fc, encoding='utf=8'))
+        fi_file.flush()
+
+        try:
+            rc = test_cmd.run(fi_file=fi_file.name)
+            if rc.returncode < 0:
+                print(rc)
+                print('Rerunning test under valgrind, fid={}'.format(fid))
+                rc = test_cmd.run(fi_file=fi_file.name, fi_valgrind=True)
+                fatal_errors = True
+
+            stdout = rc.stdout.decode('utf-8').strip()
+            stderr = rc.stderr.decode('utf-8').strip()
+            if test_cmd.check_stderr and \
+               not stderr.endswith("Out of memory (-1009)") and \
+               'error parsing command line arguments' not in stderr and \
+               stdout != test_cmd.expected_stdout:
+                print(test_cmd.expected_stdout)
+                print(stdout)
+                wf.add(rc.fi_loc,
+                       'NORMAL', "Incorrect stderr '{}'".format(stderr),
+                       mtype='Out of memory not reported correctly via stderr')
+        except NLTestNoFi:
+
+            print('Fault injection did not trigger, returning')
+            break
+
+        print(rc)
+        fid += 1
+        # Keep going until program runs to completion.  We should add checking
+        # of exit code at some point, but it would need to be reported properly
+        # through Jenkins.
+        # if rc.returncode not in (1, 255):
+        #   break
+
+    # Check that some errors were injected.  At the time of writing we get about
+    # 900, so round down a bit and check for that.
+    assert fid > 500
+
+    return fatal_errors
+
+def test_alloc_fail_cat(server, wf, conf):
+    """Run the Interception library with fault injection
+
+    Start dfuse for this test, and do not do output checking on the command
+    itself yet.
     """
 
     pools = get_pool_list()
@@ -1410,71 +1497,32 @@ def test_alloc_fail(server, wf, conf):
 
     cmd = ['cat', target_file]
 
-    # The first fail location causes deadlock with the interception library,
-    # and opening the fault injecton file.
-    fid = 1
+    test_cmd = AllocFailTest(conf, cmd)
+    test_cmd.prefix = False
 
-    fatal_errors = False
+    rc = run_fi_test(test_cmd, wf)
+    dfuse.stop()
+    return rc;
+
+def test_alloc_fail(server, wf, conf):
+    """run 'daos' client binary with fault injection"""
+
+    pools = get_pool_list()
+
+    while len(pools) < 1:
+        pools = make_pool(server)
+
+    pool = pools[0]
+
+    cmd = ['pool', 'list-containers', '--pool', pool]
+    test_cmd = AllocFailTest(conf, cmd)
 
     # Create at least one container, and record what the output should be when
     # the command works.
-    container = show_cont(conf, pool)
+    test_cmd.expected_stdout = show_cont(conf, pool)
+    test_cmd.check_stderr = True
 
-    while True:
-        print()
-
-        fc = {}
-        fc['fault_config'] = [{'id': 0,
-                               'probability_x': 1,
-                               'probability_y': 1,
-                               'interval': fid,
-                               'max_faults': 1}]
-
-        fi_file = tempfile.NamedTemporaryFile(prefix='fi_',
-                                              suffix='.yaml')
-
-        fi_file.write(yaml.dump(fc, encoding='utf=8'))
-        fi_file.flush()
-
-        try:
-            rc = run_daos_cmd(conf, cmd, fi_file=fi_file.name, prefix=False)
-            if rc.returncode < 0:
-                print(rc)
-                print('Rerunning test under valgrind, fid={}'.format(fid))
-                rc = run_daos_cmd(conf,
-                                  cmd,
-                                  fi_file=fi_file.name,
-                                  fi_valgrind=True, prefix=False)
-                fatal_errors = True
-
-            stdout = rc.stdout.decode('utf-8').strip()
-            stderr = rc.stderr.decode('utf-8').strip()
-            if False and not stderr.endswith("Out of memory (-1009)") and \
-               'error parsing command line arguments' not in stderr and \
-               stdout != container:
-                print(container)
-                print(stdout)
-                wf.add(rc.fi_loc,
-                       'NORMAL', "Incorrect stderr '{}'".format(stderr),
-                       mtype='Out of memory not reported correctly via stderr')
-        except NLTestNoFi:
-
-            print('Fault injection did not trigger, returning')
-            break
-
-        print(rc)
-        fid += 1
-        # Keep going until program runs to completion.  We should add checking
-        # of exit code at some point, but it would need to be reported properly
-        # through Jenkins.
-        # if rc.returncode not in (1, 255):
-        #   break
-
-    # Check that some errors were injected.  At the time of writing we get about
-    # 900, so round down a bit and check for that.
-    assert fid > 500
-
-    return fatal_errors
+    return run_fi_test(test_cmd, wf)
 
 def main():
     """Main entry point"""
@@ -1510,12 +1558,14 @@ def main():
     elif args.mode == 'overlay':
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
     elif args.mode == 'fi':
+        fatal_errors.add_result(test_alloc_fail_cat(server, wf, conf))
         fatal_errors.add_result(test_alloc_fail(server, wf, conf))
     elif args.mode == 'all':
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
         test_pydaos_kv(server, conf)
+        fatal_errors.add_result(test_alloc_fail_cat(server, wf, conf))
         fatal_errors.add_result(test_alloc_fail(server, wf, conf))
     else:
         fatal_errors.add_result(run_il_test(server, conf))
