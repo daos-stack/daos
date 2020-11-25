@@ -31,8 +31,8 @@
  * \param[in]	reserved	reserved for future
  *
  * \return	JNI_VERSION expected by JVM on success return.
- * 		JNI_ERR or non-zeor rc code of daos_init() for any error. In
- * 		this case, JVM throws JNI error.
+ *	JNI_ERR or non-zeor rc code of daos_init() for any error. In
+ *	this case, JVM throws JNI error.
  */
 jint
 JNI_OnLoad(JavaVM *vm, void *reserved)
@@ -52,7 +52,7 @@ JNI_OnLoad(JavaVM *vm, void *reserved)
 			"(Ljava/lang/String;)V");
 
 	new_exception_msg = (*env)->NewGlobalRef(env, m1);
-	if(new_exception_msg == NULL){
+	if (new_exception_msg == NULL) {
 		printf("failed to get constructor msg\n");
 		return JNI_ERR;
 	}
@@ -61,7 +61,7 @@ JNI_OnLoad(JavaVM *vm, void *reserved)
 			"(Ljava/lang/Throwable;)V");
 
 	new_exception_cause = (*env)->NewGlobalRef(env, m2);
-	if(new_exception_cause == NULL){
+	if (new_exception_cause == NULL) {
 		printf("failed to get constructor cause\n");
 		return JNI_ERR;
 	}
@@ -70,7 +70,7 @@ JNI_OnLoad(JavaVM *vm, void *reserved)
 			"(Ljava/lang/String;ILjava/lang/String;)V");
 
 	new_exception_msg_code_msg = (*env)->NewGlobalRef(env, m3);
-	if(new_exception_msg_code_msg == NULL){
+	if (new_exception_msg_code_msg == NULL) {
 		printf("failed to get constructor msg, code and daos msg\n");
 		return JNI_ERR;
 	}
@@ -79,7 +79,7 @@ JNI_OnLoad(JavaVM *vm, void *reserved)
 			"(Ljava/lang/String;ILjava/lang/Throwable;)V");
 
 	new_exception_msg_code_cause = (*env)->NewGlobalRef(env, m4);
-	if(new_exception_msg_code_cause == NULL){
+	if (new_exception_msg_code_cause == NULL) {
 		printf("failed to get constructor msg, code and cause\n");
 		return JNI_ERR;
 	}
@@ -91,10 +91,10 @@ JNI_OnLoad(JavaVM *vm, void *reserved)
 		return rc;
 	}
 	rc = daos_eq_lib_init();
-    if (rc) {
-        printf("Failed daos_eq_lib_init: %d\n", rc);
-        return rc;
-    }
+	if (rc) {
+		printf("Failed daos_eq_lib_init: %d\n", rc);
+		return rc;
+	}
 	return JNI_VERSION;
 }
 
@@ -106,7 +106,7 @@ throw_exception_base(JNIEnv *env, char *msg, int error_code,
 	jstring jmsg = (*env)->NewStringUTF(env, strdup(msg));
 
 	if (error_code > CUSTOM_ERROR_CODE_BASE) {
-		const char* temp = posix_error ?
+		const char *temp = posix_error ?
 				strerror(error_code) : d_errstr(error_code);
 
 		daos_msg = temp;
@@ -155,7 +155,7 @@ throw_exception_const_msg_object(JNIEnv *env, char *msg, int error_code)
  * \param[in]	reserved	reserved for future
  */
 void
-JNI_OnUnload(JavaVM* vm, void *reserved)
+JNI_OnUnload(JavaVM *vm, void *reserved)
 {
 	JNIEnv *env;
 

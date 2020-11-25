@@ -50,14 +50,14 @@ Java_io_daos_DaosClient_daosOpenPool(JNIEnv *env,
 	const char *server_group = (*env)->GetStringUTFChars(env, serverGroup,
 								0);
 	const char *svc_ranks = (*env)->GetStringUTFChars(env, ranks, 0);
+
 	uuid_t pool_uuid;
 	uuid_parse(pool_str, pool_uuid);
 	d_rank_list_t *svcl = daos_rank_list_parse(svc_ranks, ":");
 	jlong ret;
 
 	if (svcl == NULL) {
-		char *tmp = "Invalid pool service rank list (%s) when open " \
-				"pool (%s)";
+		char *tmp = "Invalid pool service rank list (%s) when open pool (%s)";
 		char *msg = (char *)malloc(strlen(tmp) + strlen(svc_ranks) +
 				strlen(pool_str));
 
@@ -67,6 +67,7 @@ Java_io_daos_DaosClient_daosOpenPool(JNIEnv *env,
 	} else {
 		daos_handle_t poh;
 		int rc;
+
 		rc = daos_pool_connect(pool_uuid, server_group, svcl,
 			flags,
 			&poh /* returned pool handle */,
@@ -137,10 +138,10 @@ Java_io_daos_DaosClient_daosOpenCont(JNIEnv *env,
 	daos_cont_info_t co_info;
 	const char *cont_str = (*env)->GetStringUTFChars(env, contUuid, NULL);
 	uuid_t cont_uuid;
-	uuid_parse(cont_str, cont_uuid);
 	daos_handle_t coh;
 	jlong ret = -1;
 
+	uuid_parse(cont_str, cont_uuid);
 	memcpy(&poh, &poolHandle, sizeof(poh));
 	int rc = daos_cont_open(poh, cont_uuid, mode, &coh, &co_info, NULL);
 
@@ -173,6 +174,7 @@ Java_io_daos_DaosClient_daosCloseContainer(JNIEnv *env,
 
 	memcpy(&coh, &contHandle, sizeof(coh));
 	int rc = daos_cont_close(coh, NULL);
+
 	if (rc) {
 		printf("Failed to close container rc: %d\n", rc);
 		printf("error msg: %s\n", d_errstr(rc));
