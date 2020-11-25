@@ -68,11 +68,11 @@ const char keys[16] = { 0, 1, 2, 3, 4, 5, 6, 7, 8,
 static uint64_t
 gen_siphash(const void *src, uint32_t src_sz)
 {
-	const uint64_t	*_key = (uint64_t *) keys;
+	const uint64_t	*_key = (uint64_t *)keys;
 	uint64_t	k0 = _le64toh(_key[0]);
 	uint64_t	k1 = _le64toh(_key[1]);
-	uint64_t	b = (uint64_t) src_sz << 56;
-	const uint64_t	*in = (uint64_t *) src;
+	uint64_t	b = (uint64_t)src_sz << 56;
+	const uint64_t	*in = (uint64_t *)src;
 
 	uint64_t v0 = k0 ^ 0x736f6d6570736575ULL;
 	uint64_t v1 = k1 ^ 0x646f72616e646f6dULL;
@@ -101,7 +101,7 @@ gen_siphash(const void *src, uint32_t src_sz)
 	case 5:
 		pt[4] = m[4];
 	case 4:
-		*((uint32_t *)&pt[0]) = *((uint32_t *) &m[0]);
+		*((uint32_t *)&pt[0]) = *((uint32_t *)&m[0]);
 		break;
 	case 3:
 		pt[2] = m[2];
@@ -411,7 +411,7 @@ split_bucket(struct dyn_hash *htable, dh_bucket_t *bucket,
 
 	D_ASSERT(new_bucket != NULL);
 	D_ASSERT(bucket->counter == DYNHASH_BUCKET);
-	vector_idx = (uint32_t) (bucket->field[DYNHASH_BUCKET / 2].siphash
+	vector_idx = (uint32_t)(bucket->field[DYNHASH_BUCKET / 2].siphash
 			>> htable->ht_shift);
 
 	D_ALLOC(ad_bucket, sizeof(*bucket));
@@ -422,7 +422,7 @@ split_bucket(struct dyn_hash *htable, dh_bucket_t *bucket,
 	memset(ad_bucket, 0, sizeof(*ad_bucket));
 	D_MUTEX_INIT(&bucket->mtx, NULL);
 	for (idx = 0, ix = 0; idx < bucket->counter; idx++) {
-		bucket_idx = (uint32_t) (bucket->field[idx].siphash >>
+		bucket_idx = (uint32_t)(bucket->field[idx].siphash >>
 		htable->ht_shift);
 		if (bucket_idx <= vector_idx) {
 			D_ASSERT(!b_switch);
@@ -450,6 +450,7 @@ out:
 	}
 	return rc;
 }
+
 static int
 split_vector(struct dyn_hash *htable)
 {
@@ -517,6 +518,7 @@ add_record(dh_bucket_t *bucket, uint64_t siphash, dh_item_t item)
 	bucket->field[idx].record = item;
 	bucket->counter++;
 }
+
 typedef enum {
 	DH_INSERT_INCLUSIVE = 0,
 	DH_INSERT_EXCLUSIVE = 1,
@@ -565,7 +567,7 @@ do_insert(struct dyn_hash *htable, const void *key, unsigned int ksize,
 		htable->ht_rw_unlock(htable);
 		add_record(bucket, siphash, data);
 		if (!(htable->gtable->ht_feats & D_HASH_FT_EPHEMERAL) ||
-				mode == DH_LOOKUP_INSERT) {
+		    mode == DH_LOOKUP_INSERT) {
 			htable->ht_ops.hop_rec_addref(htable->gtable, *item);
 		}
 		htable->bucket_unlock(bucket);
@@ -589,12 +591,12 @@ do_insert(struct dyn_hash *htable, const void *key, unsigned int ksize,
 		D_GOTO(unlock, rc);
 	}
 	sk1 = splt_bucket->field[0].siphash;
-	index = (uint32_t) (sk1 >> htable->ht_shift);
+	index = (uint32_t)(sk1 >> htable->ht_shift);
 	prev_bucket = htable->ht_vector.data[index];
 	sk2 = prev_bucket->field[0].siphash;
 
 	/* make sure vector is ready for bucket updates */
-	if (index == (uint32_t) (sk2 >> htable->ht_shift)) {
+	if (index == (uint32_t)(sk2 >> htable->ht_shift)) {
 		rc = split_vector(htable);
 		if (rc == 0) {
 			/**/
@@ -620,8 +622,8 @@ out:
 /* caller is responsible to lock global lock and bucket */
 static bool
 do_delete(struct d_hash_table *gtable, const void *key,
-		unsigned int ksize, uint64_t siphash,
-		dh_bucket_t *bucket, uint32_t index)
+	  unsigned int ksize, uint64_t siphash,
+	  dh_bucket_t *bucket, uint32_t index)
 {
 	bool		rc = true;
 	int		bucket_idx;
@@ -643,7 +645,7 @@ do_delete(struct d_hash_table *gtable, const void *key,
 	}
 	item = bucket->field[bucket_idx].record;
 	if (bucket->counter == 1 &&
-		gtable->ht_feats & D_HASH_FT_SHRINK) {
+	    gtable->ht_feats & D_HASH_FT_SHRINK) {
 
 		bucket->counter = 0;
 		htable->ht_records--;
@@ -664,7 +666,7 @@ do_delete(struct d_hash_table *gtable, const void *key,
 		bucket->counter--;
 	}
 	if ((htable->gtable->ht_feats & D_HASH_FT_EPHEMERAL) == 0 &&
-	     htable->ht_ops.hop_rec_decref(gtable, item) != 0) {
+	    htable->ht_ops.hop_rec_decref(gtable, item) != 0) {
 		htable->ht_ops.hop_rec_free(gtable, item);
 	}
 	htable->bucket_unlock(bucket);
@@ -708,7 +710,8 @@ out:
 
 int
 dyn_hash_table_create_inplace(uint32_t feats, uint32_t bits, void *priv,
-		d_hash_table_ops_t *hops, struct d_hash_table *gtable)
+			      d_hash_table_ops_t *hops,
+			      struct d_hash_table *gtable)
 {
 	int		rc = 0;
 	uint32_t	idx;
@@ -856,7 +859,7 @@ out:
 
 int
 dyn_hash_table_traverse(struct d_hash_table *gtable, d_hash_traverse_cb_t cb,
-		void *arg)
+			void *arg)
 {
 	int		rc = 0;
 	uint32_t	idx;
@@ -961,7 +964,7 @@ out:
 
 dh_item_t
 dyn_hash_rec_find(struct d_hash_table *gtable, const void *key,
-		unsigned int ksize, uint64_t siphash)
+		  unsigned int ksize, uint64_t siphash)
 {
 	int		rc = 0;
 	dh_bucket_t	*bucket;
@@ -977,7 +980,7 @@ dyn_hash_rec_find(struct d_hash_table *gtable, const void *key,
 		sip_update = true;
 	}
 	htable->ht_read_lock(htable);
-	index = (uint32_t) (siphash >> htable->ht_shift);
+	index = (uint32_t)(siphash >> htable->ht_shift);
 	bucket = htable->ht_vector.data[index];
 	htable->bucket_lock(bucket);
 	htable->ht_rw_unlock(htable);
@@ -1000,7 +1003,7 @@ dyn_hash_rec_find(struct d_hash_table *gtable, const void *key,
 
 dh_item_t
 dyn_hash_rec_find_insert(struct d_hash_table *gtable, const void *key,
-		unsigned int ksize, dh_item_t item, uint64_t siphash)
+			 unsigned int ksize, dh_item_t item, uint64_t siphash)
 {
 	int		rc = 0;
 	bool		set_siphash = false;
@@ -1026,7 +1029,7 @@ dyn_hash_rec_find_insert(struct d_hash_table *gtable, const void *key,
 
 int
 dyn_hash_rec_insert(struct d_hash_table *gtable, const void *key,
-		unsigned int ksize, dh_item_t item, bool exclusive)
+		    unsigned int ksize, dh_item_t item, bool exclusive)
 {
 	int		rc = 0;
 	uint64_t	siphash;
@@ -1038,8 +1041,8 @@ dyn_hash_rec_insert(struct d_hash_table *gtable, const void *key,
 	siphash = gen_siphash(key, ksize);
 	do {
 		rc = do_insert(htable, key, ksize, &item,
-		       siphash, exclusive ? DH_INSERT_EXCLUSIVE :
-				       DH_INSERT_INCLUSIVE);
+			       siphash, exclusive ? DH_INSERT_EXCLUSIVE :
+			       DH_INSERT_INCLUSIVE);
 	} while (rc == -DER_AGAIN);
 
 	if (rc == 0) {
@@ -1070,6 +1073,7 @@ dyn_hash_rec_delete(struct d_hash_table *gtable, const void *key,
 	htable->bucket_lock(bucket);
 	return do_delete(gtable, key, ksize, siphash, bucket, index);
 }
+
 bool
 dyn_hash_rec_delete_at(struct d_hash_table *gtable, dh_item_t item)
 {
@@ -1094,14 +1098,14 @@ out:
 
 bool
 dyn_hash_rec_evict(struct d_hash_table *htable, const void *key,
-		unsigned int ksize)
+		   unsigned int ksize)
 {
 	return false;
 }
 
 bool
 dyn_hash_rec_evict_at(struct d_hash_table *htable, dh_item_t item,
-		uint64_t siphash)
+		      uint64_t siphash)
 {
 	return false;
 }
