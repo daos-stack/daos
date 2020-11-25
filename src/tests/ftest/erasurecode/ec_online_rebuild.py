@@ -38,7 +38,7 @@ class EcOnlineRebuild(ErasureCodeIor):
         """Set up for test case."""
         super(EcOnlineRebuild, self).setUp()
         #Enabled Online rebuild
-        self.set_online_rebuild = True        
+        self.set_online_rebuild = True
 
     def test_ec_offline_rebuild(self):
         """Jira ID: DAOS-5894.
@@ -52,7 +52,7 @@ class EcOnlineRebuild(ErasureCodeIor):
         :avocado: tags=all,pr,hw,large,full_regression,ec,ec_online_rebuild
         """
         # Kill the last server rank
-        self.rank_to_kill = self.server_count - 1        
+        self.rank_to_kill = self.server_count - 1
         #Write IOR data set with different EC object.
         #kill single server while IOR Write phase is in progress.
         self.ior_write_dataset()
