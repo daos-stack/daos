@@ -42,8 +42,8 @@
  * \return	copied pool handle in long
  */
 JNIEXPORT jlong JNICALL
-Java_io_daos_DaosClient_daosOpenPool(JNIEnv * env,
-				     jclass clientClass, jstring poolId, jstring serverGroup,
+Java_io_daos_DaosClient_daosOpenPool(JNIEnv *env,
+		jclass clientClass, jstring poolId, jstring serverGroup,
 		jstring ranks, jint flags)
 {
 	const char *pool_str = (*env)->GetStringUTFChars(env, poolId, 0);
