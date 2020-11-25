@@ -39,7 +39,7 @@ class CartCoRpcOneNodeTest(TestWithoutServers):
     """
     Runs CaRT ghost rank RPC test
 
-    #:avocado: tags=all,cart,pr,ghost_rank_rpc,one_node
+    #:avocado: recursive
     """
     def setUp(self):
         """ Test setup """
