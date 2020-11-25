@@ -68,7 +68,7 @@ const char keys[16] = { 0, 1, 2, 3, 4, 5, 6, 7, 8,
 static uint64_t
 gen_siphash(const void *src, uint32_t src_sz)
 {
-	const uint64_t *_key = (uint64_t *) keys;
+	const uint64_t	*_key = (uint64_t *) keys;
 	uint64_t	k0 = _le64toh(_key[0]);
 	uint64_t	k1 = _le64toh(_key[1]);
 	uint64_t	b = (uint64_t) src_sz << 56;
@@ -90,8 +90,8 @@ gen_siphash(const void *src, uint32_t src_sz)
 	}
 
 	uint64_t t = 0;
-	uint8_t *pt = (uint8_t *) &t;
-	uint8_t *m = (uint8_t *) in;
+	uint8_t *pt = (uint8_t *)&t;
+	uint8_t *m = (uint8_t *)in;
 
 	switch (src_sz) {
 	case 7:
@@ -101,7 +101,7 @@ gen_siphash(const void *src, uint32_t src_sz)
 	case 5:
 		pt[4] = m[4];
 	case 4:
-		*((uint32_t *) &pt[0]) = *((uint32_t *) &m[0]);
+		*((uint32_t *)&pt[0]) = *((uint32_t *) &m[0]);
 		break;
 	case 3:
 		pt[2] = m[2];
@@ -123,13 +123,14 @@ gen_siphash(const void *src, uint32_t src_sz)
 	DOUBLE_ROUND(v0, v1, v2, v3);
 	return (v0 ^ v1) ^ (v2 ^ v3);
 }
+
 static inline int
 vec_init(dh_vector_t *vec, unsigned char power)
 {
 	int	rc = 0;
 
 	memset(vec, 0, sizeof(*vec));
-	vec->size = (size_t) (1 << power) * sizeof(void *);
+	vec->size = (size_t)(1 << power) * sizeof(void *);
 	D_ALLOC(vec->data, sizeof(*vec->data) * (1 << power));
 	if (vec->data == NULL) {
 		/* out of memory */
@@ -137,6 +138,7 @@ vec_init(dh_vector_t *vec, unsigned char power)
 	}
 	return rc;
 }
+
 static inline void
 vec_destroy(dh_vector_t *vec)
 {
@@ -152,50 +154,60 @@ bucket_lock(dh_bucket_t *bucket)
 {
 	D_MUTEX_LOCK(&bucket->mtx);
 }
+
 static inline void
 bucket_unlock(dh_bucket_t *bucket)
 {
 	D_MUTEX_UNLOCK(&bucket->mtx);
 }
+
 static void
 no_bucket_lock(dh_bucket_t *bucket)
 {
 }
+
 static inline void
 read_lock(struct dyn_hash *htable)
 {
 	D_RWLOCK_RDLOCK(&htable->gtable->ht_lock.rwlock);
 }
+
 static inline void
 write_lock(struct dyn_hash *htable)
 {
 	D_RWLOCK_WRLOCK(&htable->gtable->ht_lock.rwlock);
 }
+
 static inline void
 mutex_lock(struct dyn_hash *htable)
 {
 	D_MUTEX_LOCK(&htable->gtable->ht_lock.mutex);
 }
+
 static inline void
 spinlock(struct dyn_hash *htable)
 {
 	D_SPIN_LOCK(&htable->gtable->ht_lock.spin);
 }
+
 static inline void
 rw_unlock(struct dyn_hash *htable)
 {
 	D_RWLOCK_UNLOCK(&htable->gtable->ht_lock.rwlock);
 }
+
 static inline void
 mutex_unlock(struct dyn_hash *htable)
 {
 	D_MUTEX_UNLOCK(&htable->gtable->ht_lock.mutex);
 }
+
 static inline void
 spinunlock(struct dyn_hash *htable)
 {
 	D_SPIN_UNLOCK(&htable->gtable->ht_lock.spin);
 }
+
 static void no_global_lock(struct dyn_hash *htable)
 {
 }
@@ -206,24 +218,29 @@ def_hop_getkey(dh_item_t item, void **key, unsigned int *ksize)
 {
 	return false;
 }
+
 static inline void
 def_hop_siphash_set(dh_item_t item, uint64_t siphash)
 {
 }
+
 static inline void
 def_hop_addref_free(struct d_hash_table *gtable, d_list_t *item)
 {
 }
+
 static inline bool
 def_hop_decref(struct d_hash_table *gtable, d_list_t *item)
 {
 	return false;
 }
+
 static inline int
 def_hop_ndecref(struct d_hash_table *gtable, d_list_t *item, int count)
 {
 	return 0;
 }
+
 /*-----End of default customized member functions--*/
 
 static inline void
@@ -240,8 +257,8 @@ prepare_insert(dh_bucket_t *bucket, unsigned char index)
 
 static inline void
 prepare_lookup(dh_bucket_t *bucket, uint64_t siphash,
-		unsigned char *out_first,
-		unsigned char *out_last)
+	       unsigned char *out_first,
+	       unsigned char *out_last)
 {
 	unsigned char first = 0;
 	unsigned char last = bucket->counter;
@@ -297,7 +314,7 @@ find_insert_index(dh_bucket_t *bucket, uint64_t siphash)
 
 static inline int
 find_exact_match(struct dyn_hash *htable, dh_bucket_t *bucket,
-			uint64_t siphash, const void *key,
+		 uint64_t siphash, const void *key,
 			unsigned int ksize)
 {
 	unsigned char	idx;
@@ -331,6 +348,7 @@ find_exact_match(struct dyn_hash *htable, dh_bucket_t *bucket,
 out:
 	return rc;
 }
+
 static void
 shrink_vector(struct dyn_hash *htable, dh_bucket_t *bucket,
 	      uint32_t index)
@@ -379,7 +397,7 @@ shrink_vector(struct dyn_hash *htable, dh_bucket_t *bucket,
 
 static int
 split_bucket(struct dyn_hash *htable, dh_bucket_t *bucket,
-	      dh_bucket_t **new_bucket)
+	     dh_bucket_t **new_bucket)
 {
 	dh_bucket_t	*ad_bucket = NULL;
 	unsigned char	idx;
