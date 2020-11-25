@@ -90,7 +90,7 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
 		return err
 	}
-	cmd.log.Info(bld.String()) // no-op if no host level errors
+	cmd.log.Error(bld.String()) // no-op if no host level errors
 
 	// includes hardware validation errors e.g. hardware across hostset differs
 	if err != nil {
