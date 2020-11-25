@@ -83,16 +83,16 @@ static uint8_t KEY_LIST_CODE_REACH_LIMIT = (uint8_t)4;
  * \param[in]	env		JNI environment
  * \param[in]	msg		error message provided by caller
  * \param[in]	error_code	non-zero return code of DFS function or
- * 				customized error code
+ *				customized error code
  * \param[in]	release_msg	is \a msg needed to be released, (0 or 1)
  * \param[in]	posix_error	is \a error_code posix error,
- * 				1 for true, 0 for false
+ *				1 for true, 0 for false
  *
  * \return	return code of Throw function of \a env
  */
 int
 throw_exception_base(JNIEnv *env, char *msg, int error_code,
-			int release_msg, int posix_error);
+		int release_msg, int posix_error);
 
 /**
  * throw Java exception with dynamically constructed message for posix error.
