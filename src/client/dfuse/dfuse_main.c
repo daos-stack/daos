@@ -495,13 +495,13 @@ main(int argc, char **argv)
 		       rc, strerror(rc));
 	if (rc == 0) {
 		if (dfuse_info->di_pool &&
-			(uuid_compare(duns_attr.da_puuid, dfp->dfp_pool))) {
+		    (uuid_compare(duns_attr.da_puuid, dfp->dfp_pool))) {
 			printf("Pools uuids do not match\n");
 			D_GOTO(out_dfs, rc = -DER_INVAL);
 		}
 
 		if (dfuse_info->di_cont &&
-			(uuid_compare(duns_attr.da_cuuid, dfs->dfs_cont))) {
+		    (uuid_compare(duns_attr.da_cuuid, dfs->dfs_cont))) {
 			printf("Container uuids do not match\n");
 			D_GOTO(out_dfs, rc = -DER_INVAL);
 		}

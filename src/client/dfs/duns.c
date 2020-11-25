@@ -386,17 +386,17 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	if (s < 0 || s > DUNS_MAX_XATTR_LEN) {
 		int err = errno;
 
-		if (err == ENOTSUP)
-			D_ERROR("Path is not in a filesystem that supports the"
-				" DAOS unified namespace\n");
-		else if (err == ENODATA) {
+		if (err == ENOTSUP) {
+			D_INFO("Path is not in a filesystem that supports the DAOS unified namespace\n");
+		} else if (err == ENODATA) {
 			D_INFO("Path does not represent a DAOS link\n");
 		} else if (s > DUNS_MAX_XATTR_LEN) {
 			err = EIO;
 			D_ERROR("Invalid xattr length\n");
+		} else {
+			D_ERROR("Invalid DAOS unified namespace xattr: %s\n",
+				strerror(err));
 		}
-		else
-			D_ERROR("Invalid DAOS unified namespace xattr\n");
 
 		return err;
 	}

@@ -24,6 +24,36 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
+int
+dfuse_get_uid(struct dfuse_inode_entry *ie)
+{
+	struct uid_entry	entry = {0};
+	daos_size_t		size = sizeof(entry);
+	int rc;
+
+	rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj, DFUSE_XID_XATTR_NAME,
+			  &entry, &size);
+
+	if (rc == 0 && size != sizeof(entry)) {
+		rc = EIO;
+		goto out;
+	}
+
+	if (rc == ENODATA) {
+		rc = 0;
+		goto out;
+	}
+
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	ie->ie_stat.st_uid = entry.uid;
+	ie->ie_stat.st_gid = entry.gid;
+
+out:
+	return rc;
+}
+
 static int
 set_uid(struct dfuse_inode_entry *ie, fuse_req_t req)
 {

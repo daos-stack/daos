@@ -26,30 +26,6 @@
 
 #include "daos_uns.h"
 
-int
-dfuse_get_uid(struct dfuse_inode_entry *ie)
-{
-	struct uid_entry	entry = {0};
-	daos_size_t		size = sizeof(entry);
-	int rc;
-
-	rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj, DFUSE_XID_XATTR_NAME,
-			  &entry, &size);
-
-	if (rc == 0 && size != sizeof(entry))
-		rc = EIO;
-
-	if (rc == 0) {
-		ie->ie_stat.st_uid = entry.uid;
-		ie->ie_stat.st_gid = entry.gid;
-	}
-
-	if (rc == ENODATA)
-		rc = 0;
-
-	return rc;
-}
-
 void
 dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct dfuse_inode_entry *ie,
