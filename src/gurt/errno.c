@@ -108,6 +108,32 @@ out:
 }
 
 int
+d_get_errstr(int rc, char **code)
+{
+	struct d_error_reg	*entry;
+
+	if (rc == 0) {
+		*code = (char *)&"DER_SUCCESS";
+		return 0;
+	}
+
+	if (rc > 0)
+		return -DER_NONEXIST;
+
+	rc = D_ABS(rc);
+
+	d_list_for_each_entry(entry, &g_error_reg_list, er_link) {
+		if (rc <= entry->er_base || rc >= entry->er_limit)
+			continue;
+		*code = (char *)entry->er_strings[rc - entry->er_base - 1];
+		return 0;
+	}
+
+	return -DER_NONEXIST;
+}
+
+
+int
 d_errno_register_range(int start, int end, const char * const *error_strings,
 		       const char * const *strerror)
 {

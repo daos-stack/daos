@@ -295,6 +295,15 @@ D_FOREACH_ERR_RANGE(D_DEFINE_RANGE_ERRNO)
  */
 const char *d_errstr(int rc);
 
+/** Fetch a string associated with a registered gurt errno
+ *
+ * \param[in]	rc	The error code
+ * \param[out]  code    String value of error code.
+ *
+ * \return	0 if found, -DER_NONEXIST if not;
+ */
+int d_get_errstr(int rc, char **code);
+
 /** Register error codes with gurt.  Use D_REGISTER_RANGE.
  *
  * \param[in]	start		Start of error range. Actual errors start at

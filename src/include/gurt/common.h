@@ -221,6 +221,9 @@ extern "C" {
 #endif
 
 #if VERBOSE_GOTO
+
+#define maybe_derrcode(x) _Generic((x), int: true, default: false)
+
 #define DG_FMT(x) _Generic(__rc,					\
 				int: "%d",				\
 				unsigned int: "%u",			\
@@ -233,8 +236,16 @@ extern "C" {
 		__typeof__(rc) __rc = (rc);				\
 		if (D_LOG_ENABLED(DB_GOTO)) {				\
 			char __result[20] = {0};			\
+			char *__errcode = NULL;				\
+			if (maybe_derrcode(__rc)) {			\
+				d_get_errstr((int)__rc, &__errcode);	\
+			}						\
 			snprintf(__result, 20, DG_FMT(__rc), __rc);	\
-			D_DEBUG(DB_GOTO, "Jumping to " #label " '" #rc "' result '%s'\n", __result); \
+			if (__errcode) {				\
+				D_DEBUG(DB_GOTO, "Jumping to " #label " '" #rc "' result '%s': %s\n", __result, __errcode); \
+			} else {					\
+				D_DEBUG(DB_GOTO, "Jumping to " #label " '" #rc "' result '%s'\n", __result); \
+			}						\
 		}							\
 		(void)(__rc);						\
 		goto label;						\
