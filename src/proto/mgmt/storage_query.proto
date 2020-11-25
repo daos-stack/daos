@@ -115,6 +115,18 @@ message DevReplaceResp {
 	string dev_state = 3; // BIO device state
 }
 
+message DevIdentifyReq {
+	string dev_uuid = 1; // UUID of VMD uuid
+	string dev_traddr = 2; // transport ID of the VMD SSD
+}
+
+message DevIdentifyResp {
+	int32 status = 1; // DAOS error code
+	string dev_uuid = 2; // UUID of VMD uuid
+	string dev_traddr = 3; // transport ID of the VMD SSD
+	string led_state = 4; // VMD LED state
+}
+
 message SmdQueryReq {
 	bool omitDevices = 1; // query should omit devices
 	bool omitPools = 2; // query should omit pools
@@ -125,6 +137,7 @@ message SmdQueryReq {
 	string target = 7; // response should only include information about this VOS target
 	string replaceUUID = 8; // UUID of new device to replace storage with
 	bool noReint = 9; // specify if device reint is needed (used for replace cmd)
+	string traddr = 10; // transport ID of the VMD SSD
 }
 
 message SmdQueryResp {

@@ -67,6 +67,7 @@ type (
 		Target           string
 		ReplaceUUID      string // UUID of new device to replace storage
 		NoReint          bool   // for device replacement
+		Traddr           string // transport address used for VMD identify
 	}
 
 	// SmdQueryResp represents the results of performing
@@ -139,7 +140,7 @@ func SmdQuery(ctx context.Context, rpcClient UnaryInvoker, req *SmdQueryReq) (*S
 	}
 	if req.UUID != "" {
 		if err := checkUUID(req.UUID); err != nil {
-			return nil, errors.Wrap(err, "bad old device UUID for replacement")
+			return nil, errors.Wrap(err, "bad device UUID")
 		}
 	}
 	if req.ReplaceUUID != "" {

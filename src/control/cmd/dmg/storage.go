@@ -43,12 +43,13 @@ const (
 
 // storageCmd is the struct representing the top-level storage subcommand.
 type storageCmd struct {
-	Prepare storagePrepareCmd `command:"prepare" alias:"p" description:"Prepare SCM and NVMe storage attached to remote servers."`
-	Scan    storageScanCmd    `command:"scan" alias:"s" description:"Scan SCM and NVMe storage attached to remote servers."`
-	Format  storageFormatCmd  `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
-	Query   storageQueryCmd   `command:"query" alias:"q" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
-	Set     setFaultyCmd      `command:"set" alias:"s" description:"Manually set the device state."`
-	Replace storageReplaceCmd `command:"replace" alias:"r" description:"Replace a storage device that has been hot-removed with a new device."`
+	Prepare  storagePrepareCmd  `command:"prepare" alias:"p" description:"Prepare SCM and NVMe storage attached to remote servers."`
+	Scan     storageScanCmd     `command:"scan" alias:"s" description:"Scan SCM and NVMe storage attached to remote servers."`
+	Format   storageFormatCmd   `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
+	Query    storageQueryCmd    `command:"query" alias:"q" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
+	Set      setFaultyCmd       `command:"set" alias:"s" description:"Manually set the device state."`
+	Replace  storageReplaceCmd  `command:"replace" alias:"r" description:"Replace a storage device that has been hot-removed with a new device."`
+	Identify storageIdentifyCmd `command:"identify" alias:"i" description:"Blink the status LED on a given VMD device for visual SSD identification."`
 }
 
 // storagePrepareCmd is the struct representing the prep storage subcommand.
@@ -369,6 +370,25 @@ func (cmd *nvmeReplaceCmd) Execute(_ []string) error {
 		UUID:        cmd.OldDevUUID,
 		ReplaceUUID: cmd.NewDevUUID,
 		NoReint:     cmd.NoReint,
+	}
+	return cmd.makeRequest(ctx, req)
+}
+
+// storageIdentifyCmd is the struct representing the identify storage subcommand.
+type storageIdentifyCmd struct {
+	smdQueryCmd
+	UUID   string `long:"uuid" description:"Device UUID of the VMD device to identify" required:"1"`
+	Traddr string `long:"traddr" description:"Transport address of the VMD device to identify (ie: 5d0505:01:00.0)" required:"1"`
+}
+
+// Execute is run when storageIdentifyCmd activates.
+//
+// Runs SPDK VMD API commands to set the LED state on the VMD to "IDENTIFY"
+func (cmd *storageIdentifyCmd) Execute(_ []string) error {
+	ctx := context.Background()
+	req := &control.SmdQueryReq{
+		UUID:   cmd.UUID,
+		Traddr: cmd.Traddr,
 	}
 	return cmd.makeRequest(ctx, req)
 }

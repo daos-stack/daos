@@ -134,6 +134,8 @@ int ds_mgmt_get_bs_state(uuid_t bs_uuid, int *bs_state);
 void ds_mgmt_hdlr_get_bs_state(crt_rpc_t *rpc_req);
 int ds_mgmt_dev_replace(uuid_t old_uuid, uuid_t new_uuid,
 			Mgmt__DevReplaceResp *resp);
+int ds_mgmt_dev_identify(uuid_t uuid, char *traddr,
+			 Mgmt__DevIdentifyResp *resp);
 
 /** srv_target.c */
 int ds_mgmt_tgt_setup(void);

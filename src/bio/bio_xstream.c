@@ -714,6 +714,9 @@ destroy_bio_bdev(struct bio_bdev *d_bdev)
 	if (d_bdev->bb_name != NULL)
 		D_FREE(d_bdev->bb_name);
 
+	if (d_bdev->bb_led_traddr != NULL)
+		D_FREE(d_bdev->bb_led_traddr);
+
 	D_FREE(d_bdev);
 }
 
@@ -1714,6 +1717,41 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 	nvme_glb.bd_scan_age = now;
 }
 
+void
+bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
+{
+	struct bio_bdev         *d_bdev;
+	struct spdk_bdev        *bdev;
+	static uint64_t          led_event_period = NVME_LED_EVENT_PERIOD;
+
+	for (bdev = spdk_bdev_first(); bdev != NULL;
+	     bdev = spdk_bdev_next(bdev)) {
+		d_bdev = lookup_dev_by_name(spdk_bdev_get_name(bdev));
+		if (d_bdev == NULL)
+			continue;
+
+		/* Transport addr only gets alloc'd on an LED event command */
+		if (d_bdev->bb_led_traddr != NULL) {
+			if (strlen(d_bdev->bb_led_traddr) == 0)
+				continue;
+			/* Init the start time of the LED event to current time */
+			if (d_bdev->bb_led_start_time == 0) {
+				d_bdev->bb_led_start_time = now;
+				return;
+			}
+			/*
+			 * TODO: Make NVME_LED_EVENT_PERIOD configurable from
+			 * command line
+			 */
+			if (d_bdev->bb_led_start_time + led_event_period >= now)
+				return;
+
+			if (bio_set_led_state_orig(ctxt, d_bdev) != 0)
+				D_ERROR("Failed returning LED to original state\n");
+		}
+	}
+}
+
 /*
  * Execute the messages on msg ring, call all registered pollers.
  *
@@ -1755,8 +1793,10 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 	    is_bbs_owner(ctxt, ctxt->bxc_blobstore))
 		bio_bs_monitor(ctxt, now);
 
-	if (is_init_xstream(ctxt))
+	if (is_init_xstream(ctxt)) {
 		scan_bio_bdevs(ctxt, now);
+		bio_led_event_monitor(ctxt, now);
+	}
 
 	return rc;
 }

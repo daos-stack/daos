@@ -94,6 +94,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, []string{"--force", "-u", common.MockUUID()}...)
 			case "storage replace nvme":
 				testArgs = append(testArgs, []string{"--old-uuid", common.MockUUID(), "--new-uuid", common.MockUUID()}...)
+			case "storage identify":
+				testArgs = append(testArgs, []string{"--traddr", "foo", "--uuid", common.MockUUID()}...)
 			case "pool create":
 				testArgs = append(testArgs, []string{"-s", "1TB"}...)
 			case "pool destroy", "pool evict", "pool query", "pool get-acl":

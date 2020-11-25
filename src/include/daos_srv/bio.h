@@ -686,4 +686,18 @@ bool bio_need_nvme_poll(struct bio_xs_context *xs);
  */
 int bio_replace_dev(struct bio_xs_context *xs, uuid_t old_dev_id,
 		    uuid_t new_dev_id);
+
+/*
+ * Set the LED on a VMD device to new state.
+ *
+ * \param xs            [IN]    xstream context
+ * \param traddr        [IN]    Transport ID of the VMD device
+ * \param devid		[IN]	UUID of the VMD device
+ * \param led_state	[IN]	State to set the LED to
+ *				(ie identify, off, on)
+ *
+ * \return                      Zero on success, negative value on error
+ */
+int bio_set_led_state(struct bio_xs_context *xs, char *traddr, uuid_t devid,
+		      const char *led_state);
 #endif /* __BIO_API_H__ */
