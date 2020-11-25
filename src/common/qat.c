@@ -52,7 +52,7 @@ struct callback_data {
 	void *user_cb_data;
 };
 
-static int inst_num = 0;
+static int inst_num;
 
 /** Memory */
 static inline CpaStatus
@@ -109,6 +109,7 @@ static void
 user_callback(void *user_cb_data, int produced, int status)
 {
 	int *cb_data = (int *)user_cb_data;
+
 	if (status == DC_STATUS_OK)
 		*cb_data = produced;
 	else
@@ -123,9 +124,10 @@ dc_callback(void *pCallbackTag, CpaStatus status)
 	int produced = 0;
 	dc_callback_fn user_cb_fn;
 	void *user_cb_data;
+
 	if (pCallbackTag != NULL) {
-		struct callback_data* cb_data =
-				(struct callback_data*)pCallbackTag;
+		struct callback_data *cb_data =
+				(struct callback_data *)pCallbackTag;
 		user_cb_fn = cb_data->user_cb_fn;
 		user_cb_data = cb_data->user_cb_data;
 		produced = cb_data->dcResults->produced;
@@ -459,21 +461,22 @@ qat_dc_compress(CpaInstanceHandle *dcInstHandle,
 
 	status = qat_dc_compress_async(dcInstHandle, sessionHdl,
 				       src, srcLen, dst, dstLen, dir,
-				       user_callback, (void*)&user_cb_data);
+				       user_callback, (void *)&user_cb_data);
 
-	if (CPA_STATUS_SUCCESS == status) {
+	if (status == DC_STATUS_OK) {
 		/** wait until the completion of the operation */
 		do {
 			icp_sal_DcPollInstance(*dcInstHandle, 0);
 		} while (user_cb_data == 0);
+
+		if (user_cb_data > 0) {
+			*produced = user_cb_data;
+			return DC_STATUS_OK;
+		}
+		return user_cb_data;
 	}
 
-	if (user_cb_data > 0) {
-		*produced = user_cb_data;
-		return DC_STATUS_OK;
-	}
-
-	return user_cb_data;
+	return status;
 }
 
 int

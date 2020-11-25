@@ -120,7 +120,7 @@ deflate_compress_async(void *daos_dc_ctx, uint8_t *src, size_t src_len,
 	return qat_dc_compress_async(
 		&ctx->dc_inst_hdl,
 		&ctx->session_hdl,
-		src, src_len, 
+		src, src_len,
 		dst, dst_len, DIR_COMPRESS,
 		cb_fn, cb_data);
 }

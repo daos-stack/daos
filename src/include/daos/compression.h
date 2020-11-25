@@ -94,13 +94,13 @@ struct compress_ft {
 				uint8_t *dst, size_t dst_len,
 				size_t *produced);
 	int		(*cf_compress_async)(
-				void *daos_dc_ctx, 
+				void *daos_dc_ctx,
 				uint8_t *src, size_t src_len,
 				uint8_t *dst, size_t dst_len,
 				dc_callback_fn cb_fn,
 				void *cb_data);
 	int		(*cf_decompress_async)(
-				void *daos_dc_ctx, 
+				void *daos_dc_ctx,
 				uint8_t *src, size_t src_len,
 				uint8_t *dst, size_t dst_len,
 				dc_callback_fn cb_fn,
