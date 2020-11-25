@@ -98,7 +98,7 @@ func (h *IOServerHarness) FilterInstancesByRankSet(ranks string) ([]*IOServerIns
 	for _, i := range h.instances {
 		r, err := i.GetRank()
 		if err != nil {
-			return nil, errors.WithMessage(err, "filtering instances by rank")
+			continue // no rank to check against
 		}
 		if r.InList(rankList) {
 			out = append(out, i)
