@@ -36,7 +36,7 @@ dfuse_cb_readlink(fuse_req_t req, fuse_ino_t ino)
 
 	rlink = d_hash_rec_find(&fsh->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
-		DFUSE_TRA_ERROR(fsh, "Failed to find inode %lu", ino);
+		DFUSE_TRA_ERROR(fsh, "Failed to find inode %#lx", ino);
 		D_GOTO(err, rc = EIO);
 	}
 
