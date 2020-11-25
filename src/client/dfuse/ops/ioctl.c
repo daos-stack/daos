@@ -74,6 +74,12 @@ handle_size_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 
 	hs_reply.fsr_cont_size = iov.iov_buf_len;
 
+	rc = dfs_local2global(oh->doh_ie->ie_dfs->dfs_ns, &iov);
+	if (rc)
+		D_GOTO(err, rc);
+
+	hs_reply.fsr_dfs_size = iov.iov_buf_len;
+
 	DFUSE_REPLY_IOCTL(oh, req, hs_reply);
 	return;
 err:
@@ -147,12 +153,6 @@ handle_dsize_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 	DFUSE_TRA_INFO(oh, "Requested");
 
 	hsd_reply.fsr_version = DFUSE_IOCTL_VERSION;
-
-	rc = dfs_local2global(oh->doh_ie->ie_dfs->dfs_ns, &iov);
-	if (rc)
-		D_GOTO(err, rc = daos_der2errno(rc));
-
-	hsd_reply.fsr_dfs_size = iov.iov_buf_len;
 
 	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj,
 				  &iov);

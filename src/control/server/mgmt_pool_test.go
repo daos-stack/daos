@@ -43,6 +43,40 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+func addTestPoolService(t *testing.T, sysdb *system.Database, ps *system.PoolService) {
+	t.Helper()
+
+	for _, r := range ps.Replicas {
+		_, err := sysdb.FindMemberByRank(r)
+		if err == nil {
+			continue
+		}
+		if !system.IsMemberNotFound(err) {
+			t.Fatal(err)
+		}
+
+		if err := sysdb.AddMember(system.MockMember(t, 0, system.MemberStateJoined)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := sysdb.AddPoolService(ps); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func addTestPools(t *testing.T, sysdb *system.Database, poolUUIDs ...string) {
+	t.Helper()
+
+	for _, uuidStr := range poolUUIDs {
+		addTestPoolService(t, sysdb, &system.PoolService{
+			PoolUUID: uuid.MustParse(uuidStr),
+			State:    system.PoolServiceStateReady,
+			Replicas: []system.Rank{0},
+		})
+	}
+}
+
 func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 	for name, tc := range map[string]struct {
 		state   system.PoolServiceState
@@ -424,6 +458,7 @@ func TestServer_MgmtSvc_PoolDrain(t *testing.T) {
 	testPoolService := &system.PoolService{
 		PoolUUID: uuid.MustParse(mockUUID),
 		State:    system.PoolServiceStateReady,
+		Replicas: []system.Rank{0},
 	}
 
 	for name, tc := range map[string]struct {
@@ -481,9 +516,7 @@ func TestServer_MgmtSvc_PoolDrain(t *testing.T) {
 				tc.mgmtSvc = newTestMgmtSvc(t, log)
 			}
 			tc.mgmtSvc.log = log
-			if err := tc.mgmtSvc.sysdb.AddPoolService(testPoolService); err != nil {
-				t.Fatal(err)
-			}
+			addTestPoolService(t, tc.mgmtSvc.sysdb, testPoolService)
 
 			if _, err := tc.mgmtSvc.harness.getMSLeaderInstance(); err == nil {
 				if tc.setupMockDrpc == nil {
@@ -515,6 +548,7 @@ func TestServer_MgmtSvc_PoolEvict(t *testing.T) {
 	testPoolService := &system.PoolService{
 		PoolUUID: uuid.MustParse(mockUUID),
 		State:    system.PoolServiceStateReady,
+		Replicas: []system.Rank{0},
 	}
 
 	for name, tc := range map[string]struct {
@@ -568,9 +602,7 @@ func TestServer_MgmtSvc_PoolEvict(t *testing.T) {
 				tc.mgmtSvc = newTestMgmtSvc(t, log)
 			}
 			tc.mgmtSvc.log = log
-			if err := tc.mgmtSvc.sysdb.AddPoolService(testPoolService); err != nil {
-				t.Fatal(err)
-			}
+			addTestPoolService(t, tc.mgmtSvc.sysdb, testPoolService)
 
 			if _, err := tc.mgmtSvc.harness.getMSLeaderInstance(); err == nil {
 				if tc.setupMockDrpc == nil {
@@ -591,21 +623,6 @@ func TestServer_MgmtSvc_PoolEvict(t *testing.T) {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
-	}
-}
-
-func addTestPools(t *testing.T, sysdb *system.Database, poolUUIDs ...string) {
-	t.Helper()
-
-	for _, uuidStr := range poolUUIDs {
-		ps := &system.PoolService{
-			PoolUUID: uuid.MustParse(uuidStr),
-			State:    system.PoolServiceStateReady,
-			Replicas: []system.Rank{0},
-		}
-		if err := sysdb.AddPoolService(ps); err != nil {
-			t.Fatal(err)
-		}
 	}
 }
 
@@ -1017,6 +1034,18 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 	missingSB := newTestMgmtSvc(t, testLog)
 	missingSB.harness.instances[0]._superblock = nil
 
+	allRanksDown := newTestMgmtSvc(t, testLog)
+	downRanksPool := common.MockUUID(9)
+	addTestPools(t, allRanksDown.sysdb, downRanksPool)
+	if err := allRanksDown.membership.UpdateMemberStates(system.MemberResults{
+		&system.MemberResult{
+			Rank:  0,
+			State: system.MemberStateStopped,
+		},
+	}, true); err != nil {
+		t.Fatal(err)
+	}
+
 	for name, tc := range map[string]struct {
 		mgmtSvc       *mgmtSvc
 		setupMockDrpc func(_ *mgmtSvc, _ error)
@@ -1051,6 +1080,13 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 				setupMockDrpcClientBytes(svc, badBytes, err)
 			},
 			expErr: errors.New("unmarshal"),
+		},
+		"no ranks available": {
+			mgmtSvc: allRanksDown,
+			req: &mgmtpb.PoolQueryReq{
+				Uuid: downRanksPool,
+			},
+			expErr: errors.New("available"),
 		},
 		"successful query": {
 			req: &mgmtpb.PoolQueryReq{

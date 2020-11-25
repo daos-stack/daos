@@ -314,6 +314,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 		for (i = oh->doh_dre_index; i < oh->doh_dre_last_index ; i++) {
 			struct dfuse_readdir_entry	*dre = &oh->doh_dre[i];
 			struct stat			stbuf = {0};
+			daos_obj_id_t			oid;
 			dfs_obj_t			*obj;
 			size_t				written;
 
@@ -339,10 +340,15 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 				D_GOTO(reply, 0);
 			}
 
-			rc = dfuse_lookup_inode_from_obj(fs_handle,
-							 oh->doh_ie->ie_dfs,
-							 obj,
-							 &stbuf.st_ino);
+			rc = dfs_obj2id(obj, &oid);
+			if (rc) {
+				dfs_release(obj);
+				D_GOTO(reply, rc);
+			}
+
+			rc = dfuse_compute_inode(oh->doh_ie->ie_dfs,
+						 &oid,
+						 &stbuf.st_ino);
 			if (rc) {
 				DFUSE_TRA_DEBUG(oh, "Problem looking up file");
 				dfs_release(obj);

@@ -506,7 +506,7 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 	int                     rc;
 
 
-	remap_dump(remap_list, md, "before remap:");
+	remap_dump(remap_list, md, "remap:");
 
 	for_reint = (op_type == PL_REINT);
 	current = remap_list->next;
@@ -552,7 +552,6 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 		if (rc != 0)
 			return rc;
 	}
-	remap_dump(remap_list, md, "after remap:");
 	return 0;
 }
 
@@ -955,9 +954,6 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
  *                              rebuilt (This is allocated by the caller)
  * \param[in]   array_size      The max size of the passed in arrays to store
  *                              info about the shards that need to be rebuilt.
- * \param[in]   myrank          The rank of the server. Only servers who are
- *                              the leader for a particular failed shard will
- *                              initiate a rebuild for it.
  *
  * \return                      The number of shards that need to be rebuilt on
  *                              another target, Or 0 if none need to be rebuilt.
@@ -966,8 +962,7 @@ static int
 jump_map_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 			  struct daos_obj_shard_md *shard_md,
 			  uint32_t rebuild_ver, uint32_t *tgt_id,
-			  uint32_t *shard_idx, unsigned int array_size,
-			  int myrank)
+			  uint32_t *shard_idx, unsigned int array_size)
 {
 	struct pl_jump_map              *jmap;
 	struct pl_obj_layout            *layout;
@@ -1017,8 +1012,7 @@ jump_map_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 	obj_layout_dump(oid, layout);
 
 	rc = remap_list_fill(map, md, shard_md, rebuild_ver, tgt_id, shard_idx,
-			     array_size, myrank, &idx, layout, &remap_list,
-			     false);
+			     array_size, &idx, layout, &remap_list, false);
 
 out:
 	remap_list_free_all(&remap_list);
@@ -1030,8 +1024,7 @@ static int
 jump_map_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 			struct daos_obj_shard_md *shard_md,
 			uint32_t reint_ver, uint32_t *tgt_rank,
-			uint32_t *shard_id, unsigned int array_size,
-			int myrank)
+			uint32_t *shard_id, unsigned int array_size)
 {
 	struct pl_jump_map              *jmap;
 	struct pl_obj_layout            *layout;
@@ -1085,15 +1078,15 @@ jump_map_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 
 	/* Get placement after reintegration. */
 	rc = get_object_layout(jmap, reint_layout, &jop, &remap_list, PL_REINT,
-				md);
+			       md);
 	if (rc)
 		goto out;
 
 	layout_find_diff(jmap, layout, reint_layout, &reint_list);
 
 	rc = remap_list_fill(map, md, shard_md, reint_ver, tgt_rank, shard_id,
-			     array_size, myrank, &idx, reint_layout,
-			     &reint_list, false);
+			     array_size, &idx, reint_layout, &reint_list,
+			     false);
 out:
 	remap_list_free_all(&reint_list);
 	remap_list_free_all(&remap_list);
@@ -1109,9 +1102,8 @@ out:
 static int
 jump_map_obj_find_addition(struct pl_map *map, struct daos_obj_md *md,
 			   struct daos_obj_shard_md *shard_md,
-			uint32_t reint_ver, uint32_t *tgt_rank,
-			uint32_t *shard_id, unsigned int array_size,
-			int myrank)
+			   uint32_t reint_ver, uint32_t *tgt_rank,
+			   uint32_t *shard_id, unsigned int array_size)
 {
 	struct pl_jump_map              *jmap;
 	struct pl_obj_layout            *layout;
@@ -1171,8 +1163,7 @@ jump_map_obj_find_addition(struct pl_map *map, struct daos_obj_md *md,
 	layout_find_diff(jmap, layout, add_layout, &add_list);
 
 	rc = remap_list_fill(map, md, shard_md, reint_ver, tgt_rank, shard_id,
-			     array_size, myrank, &idx, add_layout,
-			     &add_list, true);
+			     array_size, &idx, add_layout, &add_list, true);
 out:
 	remap_list_free_all(&add_list);
 	remap_list_free_all(&remap_list);
@@ -1194,5 +1185,4 @@ struct pl_map_ops       jump_map_ops = {
 	.o_obj_find_rebuild     = jump_map_obj_find_rebuild,
 	.o_obj_find_reint       = jump_map_obj_find_reint,
 	.o_obj_find_addition      = jump_map_obj_find_addition,
-
 };

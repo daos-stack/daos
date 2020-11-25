@@ -186,7 +186,7 @@ struct daos_pool_cont_info {
  *
  * \param[in]	uuid	UUID to identify a pool.
  * \param[in]	grp	Process set name of the DAOS servers managing the pool
- * \param[in]	svc	Pool service replica ranks, as reported by
+ * \param[in]	svc	Optional, pool service replica ranks, as reported by
  *			daos_pool_create().
  * \param[in]	flags	Connect mode represented by the DAOS_PC_ bits.
  * \param[out]	poh	Returned open handle.

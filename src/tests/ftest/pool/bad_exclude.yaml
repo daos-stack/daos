@@ -20,15 +20,6 @@ testparams:
          ranklist:
             - NULLPTR
             - FAIL
-   svrlist: !mux
-      goodlist:
-         ranklist:
-            - VALID
-            - PASS
-      badlist:
-         ranklist:
-            - NULLPTR
-            - FAIL
    connectsetnames: !mux
       goodname:
          setname:
