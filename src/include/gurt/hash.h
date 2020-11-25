@@ -409,7 +409,7 @@ int  d_hash_table_destroy_inplace(struct d_hash_table *htable, bool force);
  * \return			found chain link
  */
 d_list_t *d_hash_rec_find(struct d_hash_table *htable, const void *key,
-			unsigned int ksize);
+			  unsigned int ksize);
 
 /**
  * Lookup \p key in the hash table, if there is a matched record, it should be

@@ -193,7 +193,7 @@ int dyn_hash_table_destroy_inplace(struct d_hash_table *htable, bool force);
  * \return			found item
  */
 dh_item_t dyn_hash_rec_find(struct d_hash_table *htable, const void *key,
-		unsigned int ksize, uint64_t siphash);
+		            unsigned int ksize, uint64_t siphash);
 
 /**
  * Lookup \p key in the hash table, if there is a matched record, it should be
@@ -209,7 +209,8 @@ dh_item_t dyn_hash_rec_find(struct d_hash_table *htable, const void *key,
  * \return			matched record
  */
 dh_item_t dyn_hash_rec_find_insert(struct d_hash_table *htable, const void *key,
-		unsigned int ksize, dh_item_t item, uint64_t siphash);
+		                   unsigned int ksize, dh_item_t item,
+				   uint64_t siphash);
 
 /**
  * Insert a new key and its record into the hash table. The hash
@@ -228,7 +229,7 @@ dh_item_t dyn_hash_rec_find_insert(struct d_hash_table *htable, const void *key,
  * \return			0 on success, negative value on error
  */
 int dyn_hash_rec_insert(struct d_hash_table *htable, const void *key,
-		unsigned int ksize, dh_item_t item,  bool exclusive);
+		        unsigned int ksize, dh_item_t item,  bool exclusive);
 
 /**
  * Delete the record identified by \p key from the hash table.
@@ -242,7 +243,7 @@ int dyn_hash_rec_insert(struct d_hash_table *htable, const void *key,
  * \retval			false	Can't find the record by \p key
  */
 bool dyn_hash_rec_delete(struct d_hash_table *htable, const void *key,
-		unsigned int ksize, uint64_t siphash);
+		         unsigned int ksize, uint64_t siphash);
 
 /**
  * Delete the record.
@@ -269,7 +270,7 @@ bool dyn_hash_rec_delete_at(struct d_hash_table *htable, dh_item_t item);
  * \retval			false	Can't find the record by \p key
  */
 bool dyn_hash_rec_evict(struct d_hash_table *htable, const void *key,
-		unsigned int ksize);
+		        unsigned int ksize);
 
 /**
  * Evict the record.
@@ -282,7 +283,7 @@ bool dyn_hash_rec_evict(struct d_hash_table *htable, const void *key,
  * \retval			false	Not LRU feature
  */
 bool dyn_hash_rec_evict_at(struct d_hash_table *htable, dh_item_t item,
-		uint64_t siphash);
+		           uint64_t siphash);
 
 /**
  * Increase the refcount of the record.

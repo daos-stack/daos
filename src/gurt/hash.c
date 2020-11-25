@@ -491,7 +491,8 @@ d_hash_rec_find_insert(struct d_hash_table *htable, const void *key,
 
 	if (htable->ht_feats & D_HASH_FT_DYNAMIC)
 		return (d_list_t *)dyn_hash_rec_find_insert(htable, key,
-			ksize, (void *)link, 0);
+							    ksize, (void *)link,
+							    0);
 
 	D_ASSERT(key != NULL && ksize != 0);
 	idx = ch_key_hash(htable, key, ksize);

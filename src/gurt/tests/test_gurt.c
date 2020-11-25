@@ -905,6 +905,7 @@ test_gurt_hash_op_rec_free(struct d_hash_table *thtab, d_list_t *link)
 
 	D_FREE(tlink);
 }
+
 static bool
 test_gurt_hash_op_key_get(void *item, void **key, unsigned int *ksize)
 {
@@ -914,6 +915,7 @@ test_gurt_hash_op_key_get(void *item, void **key, unsigned int *ksize)
 	*ksize = TEST_GURT_HASH_KEY_LEN;
 	return true;
 }
+
 static d_hash_table_ops_t th_ops = {
 	.hop_key_cmp	= test_gurt_hash_op_key_cmp,
 	.hop_rec_hash	= test_gurt_hash_op_rec_hash,
@@ -1457,7 +1459,7 @@ _test_gurt_hash_threaded_same_operations(void *(*fn)(struct hash_thread_arg *),
 
 	/* Use barrier to make sure all threads start at the same time */
 	rc = pthread_barrier_init(&barrier, NULL,
-				TEST_GURT_HASH_NUM_THREADS + 1);
+				  TEST_GURT_HASH_NUM_THREADS + 1);
 	assert_int_equal(rc, 0);
 
 	for (i = 0; i < TEST_GURT_HASH_NUM_THREADS; i++) {
