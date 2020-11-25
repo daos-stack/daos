@@ -23,7 +23,7 @@
 
 package io.daos;
 
-public abstract class Sharable {
+public abstract class Shareable {
 
   private volatile boolean inited;
 

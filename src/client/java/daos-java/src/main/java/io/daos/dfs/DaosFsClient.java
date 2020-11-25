@@ -35,7 +35,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * A sharable Java DAOS DFS client to wrap all DFS related operations, including
+ * A shareable Java DAOS DFS client to wrap all DFS related operations, including
  * <li>mount/unmount DAOS FS on container</li>
  * <li>call DFS methods, including release DFS files in the cleaner executor</li>
  * <li>construct {@link DaosFile} instance</li>
@@ -79,7 +79,7 @@ import org.slf4j.LoggerFactory;
  * @see DaosFile
  * @see Cleaner
  */
-public final class DaosFsClient extends SharableClient implements ForceCloseable {
+public final class DaosFsClient extends ShareableClient implements ForceCloseable {
 
   private long dfsPtr;
 

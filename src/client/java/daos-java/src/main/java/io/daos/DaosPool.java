@@ -31,7 +31,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class DaosPool extends Sharable implements Closeable {
+public class DaosPool extends Shareable implements Closeable {
 
   private long poolPtr;
 

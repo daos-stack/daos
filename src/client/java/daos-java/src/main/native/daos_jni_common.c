@@ -100,7 +100,7 @@ JNI_OnLoad(JavaVM *vm, void *reserved)
 
 int
 throw_exception_base(JNIEnv *env, char *msg, int error_code,
-			int release_msg, int posix_error)
+		int release_msg, int posix_error)
 {
 	char *daos_msg;
 	jstring jmsg = (*env)->NewStringUTF(env, strdup(msg));
