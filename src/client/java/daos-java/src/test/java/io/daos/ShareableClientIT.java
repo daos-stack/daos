@@ -6,7 +6,7 @@ import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-public class SharableClientIT {
+public class ShareableClientIT {
   private static String poolId;
   private static String contId;
 

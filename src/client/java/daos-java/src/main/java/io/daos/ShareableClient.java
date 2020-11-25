@@ -31,7 +31,7 @@ import java.io.IOException;
  * It also maintains state of client, like initialized and reference count, so that client can be
  * correctly shared and closed.
  */
-public abstract class SharableClient extends Sharable implements ForceCloseable {
+public abstract class ShareableClient extends Shareable implements ForceCloseable {
 
   private String poolId;
 
@@ -41,7 +41,7 @@ public abstract class SharableClient extends Sharable implements ForceCloseable 
 
   private DaosClient.DaosClientBuilder builder;
 
-  protected SharableClient(String poolId, String contId, DaosClient.DaosClientBuilder builder) {
+  protected ShareableClient(String poolId, String contId, DaosClient.DaosClientBuilder builder) {
     this.poolId = poolId;
     this.contId = contId;
     this.builder = builder;
