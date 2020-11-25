@@ -65,8 +65,8 @@ class EcDisabledRebuild(ErasureCodeIor):
         #written before killing the single server
         self.ior_read_dataset()
 
-        # Kill the another server rank and wait for 20 seconds,Rebuild is disabled
-        # so data should not be rebuild. Read/verify data with Parity 2
+        # Kill the another server rank and wait for 20 seconds,Rebuild will
+        # not happens because i's disabled.Read/verify data with Parity 2.
         self.pool.start_rebuild([self.server_count - 2], self.d_log)
         time.sleep(20)
 
