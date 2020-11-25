@@ -282,12 +282,75 @@ func InitTelemetry(rank int) (*C.uint64_t, C.d_tm_node_p, error) {
 
 func BuildNodeList(shmemRoot *C.uint64_t, list *C.d_tm_nodeList, dirname string, filter int) (*C.d_tm_nodeList, error) {
 
+	if (&list == nil) {
+		fmt.Printf("Bad list ptr ... \n")
+		return nil, errors.Errorf("error: bad list ptr")
+	}
+
 	rc := C.d_tm_list(&list, shmemRoot, C.CString(dirname), C.int(filter))
 	if (rc == C.D_TM_SUCCESS) {
 		return list, nil
 	}
-	fmt.Printf("error %d\n", rc)
 	return nil, errors.Errorf("error: %d", rc)
+}
+
+func convertNodeList(shmemRoot *C.uint64_t, nodeList *C.d_tm_nodeList) ([]string, []string, error) {
+	var directory []string
+	var metrics []string
+
+	if (nodeList != nil) {
+		for ; nodeList != nil; nodeList = nodeList.dtnl_next {
+			name := C.d_tm_conv_char_ptr(shmemRoot, unsafe.Pointer(nodeList.dtnl_node.dtn_name))
+			if (name == nil) {
+				continue
+			}
+			if (nodeList.dtnl_node.dtn_type == C.D_TM_DIRECTORY) {
+				directory = append(directory, C.GoString(name))
+			} else {
+				metrics = append(metrics, C.GoString(name))
+			}
+		}
+	}
+	return directory, metrics, nil
+}
+
+
+func DiscoveryTree(shmemRoot *C.uint64_t, nodeList *C.d_tm_nodeList, dirname string, filter int) (*C.d_tm_nodeList, error) {
+
+	fmt.Printf("Discovering tree for: %s\n", dirname)
+
+	nodeList, err := BuildNodeList(shmemRoot, nodeList, dirname, filter)
+	if (err != nil) {
+		return nodeList, err
+	}
+
+	head := nodeList
+
+	directories, metrics, err := convertNodeList(shmemRoot, nodeList)
+
+	fmt.Printf("The directories are:")
+	for _, d := range directories {
+		fmt.Printf("\t%s", d)
+	}
+	fmt.Printf("\n")
+
+	fmt.Printf("The metrics are:")
+	for _, m := range metrics {
+		fmt.Printf("\t%s", m)
+	}
+	fmt.Printf("\n")
+
+	for _, d := range directories {
+		var subdir string
+		if dirname == "" {
+			subdir = d
+		} else {
+			subdir = dirname + "/" + d
+		}
+		nodeList, err = DiscoveryTree(shmemRoot, nodeList, subdir, filter)
+	}
+
+	return head, nil
 }
 
 func FindMetric(shmemRoot *C.uint64_t, name string) (C.d_tm_node_p) {
@@ -341,8 +404,10 @@ func GetGauge(shmemRoot *C.uint64_t, node C.d_tm_node_p, name string) (uint64, e
 
 func Test(rank int, name string) error {
 	var nl *C.d_tm_nodeList
+//	var tnl *C.d_tm_nodeList
 
-	shmemRoot, root, err := InitTelemetry(rank)
+	//shmemRoot, root, err := InitTelemetry(rank)
+	shmemRoot, _, err := InitTelemetry(rank)
 	if (err != nil) {
 		fmt.Printf("Failed to init telemetry for rank: %d\n", rank)
 		return err;
@@ -353,7 +418,7 @@ func Test(rank int, name string) error {
 		fmt.Printf("metric:[%s] was not found\n", name)
 		return errors.Errorf("metric:[%s] was not found", name)
 	}
-
+/*
 	switch node.dtn_type {
 	case C.D_TM_COUNTER:
 		val, err := GetCounter(shmemRoot, node, "")
@@ -463,11 +528,10 @@ func Test(rank int, name string) error {
 
 	dirname = "src/gurt/examples/telem_producer_example.c/main"
 	C.readMetrics(shmemRoot, root, C.CString(dirname), 0)
-
-
-	filter = C.D_TM_DIRECTORY | C.D_TM_COUNTER | C.D_TM_TIMESTAMP | C.D_TM_TIMER_SNAPSHOT | C.D_TM_DURATION | C.D_TM_GAUGE
+*/
+	filter := C.D_TM_DIRECTORY | C.D_TM_COUNTER | C.D_TM_TIMESTAMP | C.D_TM_TIMER_SNAPSHOT | C.D_TM_DURATION | C.D_TM_GAUGE
+/*
 	dirname = ""
-
 	nodeList, err = BuildNodeList(shmemRoot, nl, dirname, filter)
 	if (err != nil) {
 		fmt.Printf("Error after build node list: %v\n", err)
@@ -478,14 +542,39 @@ func Test(rank int, name string) error {
 		for ; nodeList != nil; nodeList = nodeList.dtnl_next {
 			name := C.d_tm_conv_char_ptr(shmemRoot, unsafe.Pointer(nodeList.dtnl_node.dtn_name))
 			if (name != nil) {
-				fmt.Printf("Name is: %s\n", C.GoString(name))
+				fmt.Printf("Name (list 1) is: %s\n", C.GoString(name))
 			}
 		}
 		C.d_tm_list_free(head)
 	}
-
-
-
-
+*/
+	nl = nil
+	//nl, err = DiscoveryTree(shmemRoot, nl, "src/gurt/examples/telem_producer_example.c", filter)
+//	nl, err = DiscoveryTree(shmemRoot, nl, "src/gurt/examples/telem_producer_example.c", filter)
+	nl, err = DiscoveryTree(shmemRoot, nl, "", filter)
+/*
+	if (nl2 != nil) {
+		head := nl2
+		for ; nl2 != nil; nl2 = nl2.dtnl_next {
+			name := C.d_tm_conv_char_ptr(shmemRoot, unsafe.Pointer(nl2.dtnl_node.dtn_name))
+			if (name != nil) {
+				fmt.Printf("Final directory tree list has name: %s\n", C.GoString(name))
+			}
+		}
+		C.d_tm_list_free(head)
+	}
+*/
+	if (nl != nil) {
+		head := nl
+		for ; nl != nil; nl = nl.dtnl_next {
+			name := C.d_tm_conv_char_ptr(shmemRoot, unsafe.Pointer(nl.dtnl_node.dtn_name))
+			if (name != nil) {
+				fmt.Printf("Final directory tree list has name: %s\n", C.GoString(name))
+			}
+		}
+		C.d_tm_list_free(head)
+	} else {
+		fmt.Printf("nl is null .. doh!\n")
+	}
 	return nil
 }
