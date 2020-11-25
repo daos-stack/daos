@@ -20,7 +20,7 @@ hosts: !mux
     config: one_node
     test_servers:
       - boro-A
-#timeout: 1
+timeout: 600
 tests: !mux
   corpc_prefwd:
     name: corpc_prefwd
