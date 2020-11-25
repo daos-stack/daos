@@ -68,9 +68,10 @@ Java_io_daos_DaosClient_daosOpenPool(JNIEnv * env,
 		daos_handle_t poh;
 		int rc;
 
+		int rc;
+
 		rc = daos_pool_connect(pool_uuid, server_group, svcl,
-			flags,
-			&poh /* returned pool handle */,
+				       flags,
 			NULL /* returned pool info */,
 			NULL /* event */);
 
