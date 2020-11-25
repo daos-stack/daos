@@ -1,5 +1,5 @@
-/**
- * (C) Copyright 2015, 2016 Intel Corporation.
+/*
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,9 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-
 /**
+ * \file
+ *
  * Task Execution Engine: Generic scheduler for creating tasks and dependencies
  * between them.
  */
@@ -38,7 +39,7 @@
 /* 8 bytes used for public members */
 #define TSE_PRIV_SIZE		1016
 /* tse_task arguments max length */
-#define TSE_TASK_ARG_LEN		888
+#define TSE_TASK_ARG_LEN		880
 
 typedef struct tse_task {
 	int			dt_result;
@@ -213,6 +214,20 @@ int
 tse_task_schedule(tse_task_t *task, bool instant);
 
 /**
+ * Same as tse_task_schedule, expect that \a task will not be executed within
+ * \a delay microseconds if \a instant is false.
+ *
+ * \param task [input]		task to be scheduled.
+ * \param instant [input]	flag to indicate whether task should be
+ *				executed immediately.
+ * \param delay [input]		scheduling delay in microseconds.
+ *
+ * \return			0 if success negative errno if fail.
+ */
+int
+tse_task_schedule_with_delay(tse_task_t *task, bool instant, uint64_t delay);
+
+/**
  * register complete callback for the task.
  *
  * \param task [input]		task to be registered complete callback.
@@ -323,6 +338,19 @@ tse_task_register_cbs(tse_task_t *task, tse_task_cb_t prep_cb,
  */
 int
 tse_task_reinit(tse_task_t *task);
+
+/**
+ * Same as tse_task_reinit, except that \a task will not be re-executed within
+ * \a delay microseconds.
+ *
+ * \param task	[IN]	Task to reinitialize
+ * \param delay	[IN]	Scheduling delay in microseconds
+ *
+ * \return		0 if success.
+ *			negative errno if it fails.
+ */
+int
+tse_task_reinit_with_delay(tse_task_t *task, uint64_t delay);
 
 /**
  * Reset a task with a new body function. The task must have already completed

@@ -1271,7 +1271,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_resp__field_descriptors[
     "numranks",
     3,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT32,
+    PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
     offsetof(Mgmt__PoolCreateResp, numranks),
     NULL,

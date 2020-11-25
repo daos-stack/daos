@@ -1478,7 +1478,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 
 	rc = daos_obj_open(coh, super_oid, DAOS_OO_RO, &dfs->super_oh, NULL);
 	if (rc) {
-		D_ERROR("daos_obj_open() Failed (%d)\n", rc);
+		D_ERROR("daos_obj_open() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 	}
 
@@ -1494,7 +1494,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 	obj_mode = get_daos_obj_mode(flags);
 	rc = daos_obj_open(coh, dfs->root.oid, obj_mode, &dfs->root.oh, NULL);
 	if (rc) {
-		D_ERROR("daos_obj_open() Failed (%d)\n", rc);
+		D_ERROR("daos_obj_open() failed, " DF_RC "\n", DP_RC(rc));
 		daos_obj_close(dfs->super_oh, NULL);
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 	}
@@ -2609,7 +2609,8 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 				       daos_mode, 1, obj_glob->chunk_size,
 				       &obj->oh, NULL);
 	if (rc) {
-		D_ERROR("daos_array_open_with_attr() failed (%d)\n", rc);
+		D_ERROR("daos_array_open_with_attr() failed, " DF_RC "\n",
+			DP_RC(rc));
 		D_FREE(obj);
 		return daos_der2errno(rc);
 	}
@@ -2637,7 +2638,7 @@ dfs_release(dfs_obj_t *obj)
 		D_ASSERT(0);
 
 	if (rc) {
-		D_ERROR("daos_obj_close() Failed (%d)\n", rc);
+		D_ERROR("daos_obj_close() failed, " DF_RC "\n", DP_RC(rc));
 		return daos_der2errno(rc);
 	}
 
@@ -2764,7 +2765,8 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 
 		rc = daos_array_read(obj->oh, DAOS_TX_NONE, &iod, sgl, NULL);
 		if (rc) {
-			D_ERROR("daos_array_read() failed (%d)\n", rc);
+			D_ERROR("daos_array_read() failed, " DF_RC "\n",
+				DP_RC(rc));
 			return daos_der2errno(rc);
 		}
 

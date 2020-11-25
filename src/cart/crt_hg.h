@@ -110,7 +110,7 @@ struct crt_hg_context {
 /* crt_hg.c */
 int crt_hg_init(void);
 int crt_hg_fini(void);
-int crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx);
+int crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int provider, int idx);
 int crt_hg_ctx_fini(struct crt_hg_context *hg_ctx);
 int crt_hg_req_create(struct crt_hg_context *hg_ctx,
 		      struct crt_rpc_priv *rpc_priv);
@@ -133,6 +133,8 @@ void crt_hg_unpack_cleanup(crt_proc_t proc);
 int crt_hg_unpack_body(struct crt_rpc_priv *rpc_priv, crt_proc_t proc);
 int crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data);
 int crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data);
+
+bool crt_provider_is_contig_ep(int provider);
 
 static inline int
 crt_hgret_2_der(int hg_ret)

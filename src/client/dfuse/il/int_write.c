@@ -37,16 +37,17 @@ ioil_do_writex(const char *buff, size_t len, off_t position,
 	d_sg_list_t		sgl = {};
 	int rc;
 
-	DFUSE_TRA_INFO(entry->fd_dfsoh, "%#zx-%#zx",
-		       position, position + len - 1);
+	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "%#zx-%#zx",
+			position, position + len - 1);
 
 	sgl.sg_nr = 1;
 	d_iov_set(&iov, (void *)buff, len);
 	sgl.sg_iovs = &iov;
 
-	rc = dfs_write(entry->fd_dfs, entry->fd_dfsoh, &sgl, position, NULL);
+	rc = dfs_write(entry->fd_cont->ioc_dfs,
+		       entry->fd_dfsoh, &sgl, position, NULL);
 	if (rc) {
-		DFUSE_TRA_INFO(entry, "dfs_write() failed: %d",	rc);
+		DFUSE_TRA_DEBUG(entry->fd_dfsoh, "dfs_write() failed: %d", rc);
 		*errcode = rc;
 		return -1;
 	}
