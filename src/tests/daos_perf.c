@@ -67,16 +67,19 @@ unsigned int		 ts_obj_p_cont	= 1;	/* # objects per container */
 unsigned int		 ts_dkey_p_obj	= 1;	/* # dkeys per object */
 unsigned int		 ts_akey_p_dkey	= 100;	/* # akeys per dkey */
 unsigned int		 ts_recx_p_akey	= 1000;	/* # recxs per akey */
+unsigned int		 ts_vsize	= 64;	/* default value size */
+unsigned int		 ts_seed;
 /* value type: single or array */
 bool			 ts_single	= true;
 /* always overwrite value of an akey */
 bool			 ts_overwrite;
 /* use zero-copy API for VOS, ignored for "echo" or "daos" */
 bool			 ts_zero_copy;
-/* verify the output of fetch */
-bool			 ts_verify_fetch;
 /* shuffle the offsets of the array */
 bool			 ts_shuffle	= false;
+bool			 ts_pause	= false;
+
+bool			 ts_oid_init	= false;
 
 daos_handle_t		*ts_ohs;		/* all opened objects */
 daos_obj_id_t		*ts_oids;		/* object IDs */
@@ -95,6 +98,43 @@ bool			ts_profile_vos;
 char			*ts_profile_vos_path = ".";
 int			ts_profile_vos_avg = 100;
 static ABT_xstream	abt_xstream;
+
+#define PF_DKEY_PREF	"blade"
+#define PF_AKEY_PREF	"walker"
+
+struct pf_param {
+	/* output performance */
+	bool		pa_perf;
+	/* no key reset */
+	bool		pa_no_reset;
+	/* output parameter */
+	double		pa_duration;
+	union {
+		/* private paramter for rebuild */
+		struct {
+			bool scan;
+			bool pull;
+		} pa_rebuild;
+		/* private parameter for iteration */
+		struct {
+			bool nested;
+		} pa_iter;
+	};
+};
+
+struct pf_test {
+	/* identifier of test */
+	char	  ts_code;
+	char	 *ts_name;
+	int	(*ts_parse)(char *str, struct pf_param *param, char **strpp);
+	int	(*ts_func)(struct pf_test *ts, struct pf_param *param);
+};
+
+typedef void (*pf_parse_cb_t)(char *, struct pf_param *, char **);
+
+static void ts_print_usage(void);
+static void show_result(double duration, uint64_t start, uint64_t end,
+			char *test_name);
 
 int
 ts_abt_init(void)
@@ -290,7 +330,7 @@ vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 static int
 daos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 		     struct dts_io_credit *cred, daos_epoch_t epoch,
-		     double *duration)
+		     bool verify, double *duration)
 {
 	int	rc;
 	uint64_t start = 0;
@@ -304,7 +344,8 @@ daos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	} else {
 		rc = daos_obj_fetch(ts_ohs[obj_idx], DAOS_TX_NONE, 0,
 				    &cred->tc_dkey, 1, &cred->tc_iod,
-				    &cred->tc_sgl, NULL, cred->tc_evp);
+				    &cred->tc_sgl, NULL,
+				    verify ? NULL : cred->tc_evp);
 	}
 
 	if (!dts_is_async(&ts_ctx))
@@ -313,26 +354,38 @@ daos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	return rc;
 }
 
-static void
-set_value_buffer(char *buffer, int idx)
+static int
+set_check_buffer(char *buf, int size, bool check)
 {
-	/* Sets a pattern of Aa, Bb, ..., Yy, Zz, Aa, ... */
-	buffer[0] = 'A' + idx % 26;
-	buffer[1] = 'a' + idx % 26;
-	buffer[TEST_VAL_SIZE - 1] = 0;
+	int	i;
+	int	j;
+
+	for (i = 0, j = 1; j < size; j = (1 << ++i)) {
+		char	val = 'A' + i % 26;
+
+		if (check) {
+			if (buf[j] == val)
+				continue;
+
+			fprintf(stderr, "buf[%d] %c != %c\n", j, buf[j], val);
+			return -1;
+		} else {
+			buf[j] = val;
+		}
+	}
+	return 0;
 }
 
 static int
 akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 		     char *dkey, char *akey, daos_epoch_t *epoch,
-		     uint64_t *indices, int idx, char *verify_buff,
+		     uint64_t *indices, int idx, bool verify,
 		     double *duration)
 {
 	struct dts_io_credit *cred;
 	daos_iod_t	     *iod;
 	d_sg_list_t	     *sgl;
 	daos_recx_t	     *recx;
-	int		      vsize = ts_ctx.tsc_cred_vsize;
 	int		      rc = 0;
 
 	cred = dts_credit_take(&ts_ctx);
@@ -359,15 +412,15 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	memcpy(cred->tc_abuf, akey, DTS_KEY_LEN);
 	d_iov_set(&iod->iod_name, cred->tc_abuf,
 			strlen(cred->tc_abuf));
-	iod->iod_size = vsize;
+	iod->iod_size = ts_vsize;
 	recx->rx_nr  = 1;
 	if (ts_single) {
 		iod->iod_type = DAOS_IOD_SINGLE;
 	} else {
 		iod->iod_type = DAOS_IOD_ARRAY;
 		iod->iod_size = 1;
-		recx->rx_nr  = vsize;
-		recx->rx_idx = ts_overwrite ? 0 : indices[idx] * vsize;
+		recx->rx_nr  = ts_vsize;
+		recx->rx_idx = ts_overwrite ? 0 : indices[idx] * ts_vsize;
 	}
 
 	iod->iod_nr    = 1;
@@ -375,13 +428,14 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 
 	if (op_type == TS_DO_UPDATE) {
 		/* initialize value buffer and setup sgl */
-		set_value_buffer(cred->tc_vbuf, idx);
+		set_check_buffer(cred->tc_vbuf, ts_vsize, false);
+		verify = false;
 	} else {
-		/* Clear the buffer for fetch */
-		memset(cred->tc_vbuf, 0, vsize);
+		if (verify) /* Clear the buffer for verify */
+			memset(cred->tc_vbuf, 0, ts_vsize);
 	}
 
-	d_iov_set(&cred->tc_val, cred->tc_vbuf, vsize);
+	d_iov_set(&cred->tc_val, cred->tc_vbuf, ts_vsize);
 	sgl->sg_iovs = &cred->tc_val;
 	sgl->sg_nr = 1;
 
@@ -390,7 +444,7 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 					 duration);
 	else
 		rc = daos_update_or_fetch(obj_idx, op_type, cred, *epoch,
-					  duration);
+					  verify, duration);
 
 	if (rc != 0) {
 		fprintf(stderr, "%s failed. rc=%d, epoch=%"PRIu64"\n",
@@ -405,15 +459,17 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	if (!ts_overwrite)
 		(*epoch)++;
 
-	if (verify_buff != NULL)
-		memcpy(verify_buff, cred->tc_vbuf, TEST_VAL_SIZE);
-
-	return rc;
+	if (verify) {
+		rc = set_check_buffer(cred->tc_vbuf, ts_vsize, true);
+		dts_credit_return(&ts_ctx, cred);
+		return rc;
+	}
+	return 0;
 }
 
 static int
 dkey_update_or_fetch(enum ts_op_type op_type, char *dkey, daos_epoch_t *epoch,
-		     double *duration)
+		     bool verify, double *duration)
 {
 	uint64_t	*indices;
 	char		 akey[DTS_KEY_LEN];
@@ -426,11 +482,11 @@ dkey_update_or_fetch(enum ts_op_type op_type, char *dkey, daos_epoch_t *epoch,
 	D_ASSERT(indices != NULL);
 
 	for (i = 0; i < ts_akey_p_dkey; i++) {
-		dts_key_gen(akey, DTS_KEY_LEN, "walker");
+		dts_key_gen(akey, DTS_KEY_LEN, PF_AKEY_PREF);
 		for (j = 0; j < ts_recx_p_akey; j++) {
 			for (k = 0; k < ts_obj_p_cont; k++) {
 				rc = akey_update_or_fetch(k, op_type, dkey,
-						akey, epoch, indices, j, NULL,
+						akey, epoch, indices, j, verify,
 						duration);
 				if (rc)
 					goto failed;
@@ -444,15 +500,19 @@ failed:
 }
 
 static int
-ts_io_prep(void)
+objects_open(void)
 {
 	int	i;
 	int	rc;
 
 	for (i = 0; i < ts_obj_p_cont; i++) {
-		ts_oids[i] = dts_oid_gen(ts_class, 0, ts_ctx.tsc_mpi_rank);
-		if (ts_class == DAOS_OC_R2S_SPEC_RANK)
-			ts_oids[i] = dts_oid_set_rank(ts_oids[i], RANK_ZERO);
+		if (!ts_oid_init) {
+			ts_oids[i] = dts_oid_gen(ts_class, 0,
+						 ts_ctx.tsc_mpi_rank);
+			if (ts_class == DAOS_OC_R2S_SPEC_RANK)
+				ts_oids[i] = dts_oid_set_rank(ts_oids[i],
+							      RANK_ZERO);
+		}
 
 		if (ts_mode == TS_MODE_DAOS || ts_mode == TS_MODE_ECHO) {
 			rc = daos_obj_open(ts_ctx.tsc_coh, ts_oids[i],
@@ -466,19 +526,33 @@ ts_io_prep(void)
 			ts_uoids[i].id_pub = ts_oids[i];
 		}
 	}
-
+	ts_oid_init = true;
 	return 0;
 }
 
 static int
-objects_update(double *duration, d_rank_t rank)
+objects_close(void)
+{
+	int i;
+	int rc = 0;
+
+	if (ts_mode == TS_MODE_VOS || !ts_oid_init)
+		return 0; /* nothing to do */
+
+	for (i = 0; i < ts_obj_p_cont; i++) {
+		rc = daos_obj_close(ts_ohs[i], NULL);
+		D_ASSERT(rc == 0);
+	}
+	return 0;
+}
+
+static int
+objects_update(double *duration)
 {
 	int		i;
 	int		rc;
 	uint64_t	start = 0;
 	daos_epoch_t	epoch = 1;
-
-	dts_reset_key();
 
 	if (!ts_overwrite)
 		++epoch;
@@ -489,14 +563,14 @@ objects_update(double *duration, d_rank_t rank)
 	for (i = 0; i < ts_dkey_p_obj; i++) {
 		char	 dkey[DTS_KEY_LEN];
 
-		dts_key_gen(dkey, DTS_KEY_LEN, "blade");
-		rc = dkey_update_or_fetch(TS_DO_UPDATE, dkey, &epoch, duration);
+		dts_key_gen(dkey, DTS_KEY_LEN, PF_DKEY_PREF);
+		rc = dkey_update_or_fetch(TS_DO_UPDATE, dkey, &epoch,
+					  false, duration);
 		if (rc)
 			return rc;
 	}
 
 	rc = dts_credit_drain(&ts_ctx);
-
 	if (dts_is_async(&ts_ctx))
 		TS_TIME_END(duration, start);
 
@@ -504,101 +578,13 @@ objects_update(double *duration, d_rank_t rank)
 }
 
 static int
-dkey_verify(char *dkey, daos_epoch_t *epoch)
-{
-	int		 i;
-	int		 j;
-	uint64_t	*indices;
-	char		 ground_truth[TEST_VAL_SIZE];
-	char		 test_string[TEST_VAL_SIZE];
-	char		 akey[DTS_KEY_LEN];
-	int		 rc = 0;
-
-	indices = dts_rand_iarr_alloc_set(ts_recx_p_akey, 0, ts_shuffle);
-	D_ASSERT(indices != NULL);
-	dts_key_gen(akey, DTS_KEY_LEN, "walker");
-
-	for (i = 0; i < ts_recx_p_akey; i++) {
-		set_value_buffer(ground_truth, i);
-		for (j = 0; j < ts_obj_p_cont; j++) {
-			rc = akey_update_or_fetch(j, TS_DO_FETCH, dkey, akey,
-						  epoch, indices, i,
-						  test_string, NULL);
-			if (rc)
-				goto failed;
-			if (memcmp(test_string, ground_truth, TEST_VAL_SIZE)
-			    != 0) {
-				D_PRINT("MISMATCH! ground_truth=%s, "
-					"test_string=%s\n",
-					ground_truth, test_string);
-				rc = -1;
-				goto failed;
-			}
-		}
-	}
-failed:
-	D_FREE(indices);
-	return rc;
-}
-
-static int
-objects_verify(void)
-{
-	int		j;
-	int		k;
-	int		rc = 0;
-	char		dkey[DTS_KEY_LEN];
-	daos_epoch_t	epoch = 1;
-
-	dts_reset_key();
-	if (!ts_overwrite)
-		++epoch;
-
-	for (j = 0; j < ts_dkey_p_obj; j++) {
-		dts_key_gen(dkey, DTS_KEY_LEN, "blade");
-		for (k = 0; k < ts_akey_p_dkey; k++) {
-			rc = dkey_verify(dkey, &epoch);
-			if (rc != 0)
-				return rc;
-		}
-	}
-
-	rc = dts_credit_drain(&ts_ctx);
-	return rc;
-}
-
-static int
-objects_verify_close(void)
-{
-	int i;
-	int rc = 0;
-
-	if (ts_verify_fetch) {
-		if (ts_single || ts_overwrite) {
-			fprintf(stdout, "Verification is unsupported\n");
-		} else {
-			rc = objects_verify();
-			fprintf(stdout, "Fetch verification: %s\n",
-				rc ? "Failed" : "Success");
-		}
-	}
-
-	for (i = 0; ts_mode == TS_MODE_DAOS && i < ts_obj_p_cont; i++) {
-		rc = daos_obj_close(ts_ohs[i], NULL);
-		D_ASSERT(rc == 0);
-	}
-	return 0;
-}
-
-static int
-objects_fetch(double *duration, d_rank_t rank)
+objects_fetch(double *duration, bool verify)
 {
 	int		i;
 	int		rc = 0;
 	uint64_t	start = 0;
 	daos_epoch_t	epoch = crt_hlc_get();
 
-	dts_reset_key();
 	if (!ts_overwrite)
 		epoch = crt_hlc_get();
 
@@ -608,12 +594,12 @@ objects_fetch(double *duration, d_rank_t rank)
 	for (i = 0; i < ts_dkey_p_obj; i++) {
 		char	 dkey[DTS_KEY_LEN];
 
-		dts_key_gen(dkey, DTS_KEY_LEN, "blade");
-		rc = dkey_update_or_fetch(TS_DO_FETCH, dkey, &epoch, duration);
+		dts_key_gen(dkey, DTS_KEY_LEN, PF_DKEY_PREF);
+		rc = dkey_update_or_fetch(TS_DO_FETCH, dkey, &epoch,
+					  verify, duration);
 		if (rc != 0)
 			return rc;
 	}
-
 	rc = dts_credit_drain(&ts_ctx);
 
 	if (dts_is_async(&ts_ctx))
@@ -710,7 +696,7 @@ iter_dkey_cb(daos_handle_t ih, vos_iter_entry_t *key_ent,
 
 /* Iterate all of dkey/akey/record */
 static int
-ts_iterate_records_internal(double *duration, d_rank_t rank)
+iterate_records(double *duration)
 {
 	vos_iter_param_t	param = {};
 	int			rc = 0;
@@ -733,48 +719,76 @@ ts_iterate_records_internal(double *duration, d_rank_t rank)
 }
 
 static int
-ts_prep_fetch(void)
+pf_update(struct pf_test *ts, struct pf_param *param)
 {
 	int	rc;
 
-	rc = ts_io_prep();
+	rc = objects_open();
 	if (rc)
 		return rc;
-	return objects_update(NULL, RANK_ZERO);
+
+	rc = objects_update(&param->pa_duration);
+	if (rc)
+		return rc;
+
+	rc = objects_close();
+	return rc;
 }
 
 static int
-ts_post_verify(void)
+pf_fetch(struct pf_test *ts, struct pf_param *param)
 {
-	return objects_verify_close();
+	int	rc;
+
+	rc = objects_open();
+	if (rc)
+		return rc;
+
+	rc = objects_fetch(&param->pa_duration, false);
+	if (rc)
+		return rc;
+
+	rc = objects_close();
+	return rc;
 }
 
 static int
-ts_write_perf(double *duration)
+pf_verify(struct pf_test *ts, struct pf_param *param)
 {
-	return objects_update(duration, RANK_ZERO);
+	int	rc;
+
+	if (ts_overwrite || (ts_single && ts_recx_p_akey > 1)) {
+		fprintf(stdout, "Verification is unsupported\n");
+		return 0;
+	}
+
+	rc = objects_open();
+	if (rc)
+		return rc;
+
+	rc = objects_fetch(&param->pa_duration, true);
+	if (rc)
+		return rc;
+
+	rc = objects_close();
+	return rc;
 }
 
+
 static int
-ts_fetch_perf(double *duration)
+pf_iterate(struct pf_test *pf, struct pf_param *param)
 {
-	return objects_fetch(duration, RANK_ZERO);
+	if (ts_mode != TS_MODE_VOS) {
+		fprintf(stderr, "iterator can only run with -T \"vos\"\n");
+		if (ts_ctx.tsc_mpi_rank == 0)
+			ts_print_usage();
+		return -1;
+	}
+	return iterate_records(&param->pa_duration);
 }
 
 static int
-ts_iterate_perf(double *duration)
-{
-	return ts_iterate_records_internal(duration, RANK_ZERO);
-}
-
-static int
-ts_update_fetch_perf(double *duration)
-{
-	return objects_fetch(duration, RANK_ZERO);
-}
-
-static int
-ts_exclude_server(d_rank_t rank)
+exclude_server(d_rank_t rank)
 {
 	struct d_tgt_list	targets;
 	int			tgt = -1;
@@ -791,7 +805,7 @@ ts_exclude_server(d_rank_t rank)
 }
 
 static int
-ts_reint_server(d_rank_t rank)
+reint_server(d_rank_t rank)
 {
 	struct d_tgt_list	targets;
 	int			tgt = -1;
@@ -807,7 +821,7 @@ ts_reint_server(d_rank_t rank)
 }
 
 static void
-ts_rebuild_wait(double *duration)
+wait_rebuild(double *duration)
 {
 	daos_pool_info_t	   pinfo;
 	struct daos_rebuild_status *rst = &pinfo.pi_rebuild_st;
@@ -830,36 +844,323 @@ ts_rebuild_wait(double *duration)
 }
 
 static int
-ts_rebuild_perf(double *duration)
+pf_rebuild(struct pf_test *ts, struct pf_param *param)
 {
 	int rc;
 
-	/* prepare the record */
-	ts_class = DAOS_OC_R2S_SPEC_RANK;
-	rc = objects_update(NULL, RANK_ZERO);
-	if (rc)
-		return rc;
+	if (ts_mode != TS_MODE_DAOS) {
+		fprintf(stderr, "Can only run in DAOS full stack mode\n");
+		return -1;
+	}
 
-	if (ts_rebuild_only_iteration)
+	if (ts_class != DAOS_OC_R2S_SPEC_RANK) {
+		fprintf(stderr, "Please choose R2S_SPEC_RANK\n");
+		return -1;
+	}
+
+	if (param->pa_rebuild.scan) {
 		daos_mgmt_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
 				     DAOS_REBUILD_NO_REBUILD,
 				     0, NULL);
-	else if (ts_rebuild_no_update)
+	} else if (param->pa_rebuild.pull) {
 		daos_mgmt_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
 				     DAOS_REBUILD_NO_UPDATE,
 				     0, NULL);
+	}
 
-	rc = ts_exclude_server(RANK_ZERO);
+	rc = exclude_server(RANK_ZERO);
 	if (rc)
 		return rc;
 
-	ts_rebuild_wait(duration);
+	wait_rebuild(&param->pa_duration);
 
-	rc = ts_reint_server(RANK_ZERO);
+	rc = reint_server(RANK_ZERO);
+	if (rc)
+		return rc;
 
 	daos_mgmt_set_params(NULL, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
-
 	return rc;
+}
+
+/* Test command Format: "C;p=x;q D;a;b"
+ *
+ * The upper-case charactor is command, e.g. U=update, F=fetch, anything after
+ * semicolon is parameter of the command. Space or tab is the separator between
+ * commands.
+ */
+
+#define PARAM_SEP	';'
+#define PARAM_ASSIGN	'='
+
+static int
+pf_parse_common(char *str, struct pf_param *param, pf_parse_cb_t parse_cb,
+	        char **strp)
+{
+	bool skip = false;
+
+	/* parse parameters and execute the function. */
+	while (1) {
+		if (isspace(*str) || *str == 0)
+			break; /* end of a test command + parameters */
+
+		if (*str == PARAM_SEP) { /* test command has parameters */
+			skip = false;
+			str++;
+			continue;
+		}
+		if (skip) { /* skip the current test command */
+			str++;
+			continue;
+		}
+
+		switch (*str) {
+		default:
+			if (parse_cb)
+				parse_cb(str, param, &str);
+			else
+				str++;
+			skip = true;
+			break;
+		case 'k':
+			param->pa_no_reset = true;
+			str++;
+			break;
+		case 'p':
+			param->pa_perf = true;
+			str++;
+			break;
+		}
+	}
+	*strp = str;
+	return 0;
+}
+
+static int
+pf_parse(char *str, struct pf_param *param, char **strp)
+{
+	return pf_parse_common(str, param, NULL, strp);
+}
+
+/**
+ * Example: "U;p R;p;o=p"
+ * 'U' is update test
+ *	'p': parameter of update and it means outputing performance result
+ *
+ * 'R' is rebuild test
+ * 	'p' is parameter of rebuild and it means outputing performance result
+ * 	'o=p' means only run pull (no write) for rebuild.
+ */
+static void
+pf_parse_rebuild_cb(char *str, struct pf_param *param, char **strp)
+{
+	switch (*str) {
+	default:
+		str++;
+		break;
+	case 'o':
+		str++;
+		if (*str != PARAM_ASSIGN)
+			return;
+
+		str++;
+		if (*str == 's') {
+			/* scan objects only */
+			param->pa_rebuild.scan = true;
+		} else if (*str == 'p') {
+			/* scan objects, read data but no write */
+			param->pa_rebuild.pull = true;
+		}
+		str++;
+		break;
+	}
+	*strp = str;
+	return;
+}
+
+static int
+pf_parse_rebuild(char *str, struct pf_param *pa, char **strp)
+{
+	return pf_parse_common(str, pa, pf_parse_rebuild_cb, strp);
+}
+
+static void
+pf_parse_iterate_cb(char *str, struct pf_param *pa, char **strp)
+{
+	switch (*str) {
+	default:
+		str++;
+		break;
+	case 'n':
+		pa->pa_iter.nested = true;
+		str++;
+		break;
+	}
+	*strp = str;
+	return;
+}
+
+static int
+pf_parse_iterate(char *str, struct pf_param *pa, char **strp)
+{
+	return pf_parse_common(str, pa, pf_parse_iterate_cb, strp);
+}
+
+struct pf_test pf_tests[] = {
+	{
+		.ts_code	= 'U',
+		.ts_name	= "UPDATE",
+		.ts_parse	= pf_parse,
+		.ts_func	= pf_update,
+	},
+	{
+		.ts_code	= 'F',
+		.ts_name	= "FETCH",
+		.ts_parse	= pf_parse,
+		.ts_func	= pf_fetch,
+	},
+	{
+		.ts_code	= 'V',
+		.ts_name	= "VERIFY",
+		.ts_parse	= pf_parse,
+		.ts_func	= pf_verify,
+	},
+	{
+		.ts_code	= 'I',
+		.ts_name	= "ITERATE",
+		.ts_parse	= pf_parse_iterate,
+		.ts_func	= pf_iterate,
+	},
+	{
+		.ts_code	= 'R',
+		.ts_name	= "REBUILD",
+		.ts_parse	= pf_parse_rebuild,
+		.ts_func	= pf_rebuild,
+	},
+	{
+		.ts_code	= 0,
+	},
+};
+
+struct pf_test *
+find_test(char code)
+{
+	struct pf_test	*ts;
+	int		 i;
+
+	for (i = 0;; i++) {
+		ts = &pf_tests[i];
+		if (ts->ts_code == 0)
+			break;
+
+		if (ts->ts_code == code)
+			return ts;
+	}
+	fprintf(stderr, "uknown test code %c\n", code);
+	return NULL;
+}
+
+void
+pause_test(char *name)
+{
+	int	c;
+
+	while (ts_ctx.tsc_mpi_rank == 0) {
+		D_PRINT("Type 'y|Y' to run test=%s: ", name);
+		c = getc(stdin);
+		if (c == 'y' || c == 'Y')
+			break;
+	}
+	if (ts_ctx.tsc_mpi_size > 1)
+		MPI_Barrier(MPI_COMM_WORLD);
+}
+
+int
+run_one(struct pf_test *ts, struct pf_param *param)
+{
+	double	start;
+	double	end;
+	int	rc;
+
+	/* guarantee the each test can generate the same OIDs/keys */
+	srand(ts_seed);
+
+	start = daos_get_ntime();
+	if (!param->pa_no_reset)
+		dts_reset_key();
+
+	fprintf(stdout, "Running %s test\n", ts->ts_name);
+	rc = ts->ts_func(ts, param);
+	end = daos_get_ntime();
+	if (ts_ctx.tsc_mpi_size > 1) {
+		int	rc_g = 0;
+
+		MPI_Allreduce(&rc, &rc_g, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+		rc = rc_g;
+	}
+
+	if (rc != 0) {
+		fprintf(stderr, "Failed: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	if (param->pa_perf)
+		show_result(param->pa_duration, start, end, ts->ts_name);
+
+	return 0;
+}
+
+int
+run_commands(char *cmds)
+{
+	struct pf_test	*ts = NULL;
+	bool		 skip = false;
+	int		 rc;
+
+	while (1) {
+		struct pf_param param;
+		char		code;
+
+		if (ts) {
+			if (ts_pause)
+				pause_test(ts->ts_name);
+			else
+				D_PRINT("Running test=%s\n", ts->ts_name);
+
+			memset(&param, 0, sizeof(param));
+			/* parse private parameters for the test */
+			ts->ts_parse(cmds, &param, &cmds);
+
+			/* run the test */
+			rc = run_one(ts, &param);
+			if (rc) {
+				D_PRINT("%s failed\n", ts->ts_name);
+				return rc;
+			}
+			D_PRINT("Completed test=%s\n", ts->ts_name);
+			ts = NULL; /* reset */
+			continue;
+		}
+
+		code = *cmds;
+		cmds++;
+		if (code == 0)
+			return 0;
+
+		if (isspace(code)) { /* move to a new command */
+			skip = false;
+			continue;
+		}
+
+		if (skip) /* unknown test code, skip all parameters */
+			continue;
+
+		ts = find_test(code);
+		if (!ts) {
+			fprintf(stdout, "Skip unknown test code=%c\n", code);
+			skip = true;
+			continue;
+		}
+	}
 }
 
 static uint64_t
@@ -1002,20 +1303,7 @@ The options are as follows:\n\
 	same extent in the same epoch. This option can reduce usage of\n\
 	storage space.\n\
 \n\
--U	Only run update performance test.\n\
-\n\
--F	Only run fetch performance test. This does an update first, but only\n\
-	measures the time for the fetch portion.\n\
-\n\
--v	Verify fetch. Checks that what was read from the filesystem is what\n\
-	was written to it. This verifcation is not part of timed\n\
-	performance measurement. This is turned off by default.\n\
-\n\
--R	Only run rebuild performance test.\n\
-\n\
 -B	Profile performance of both update and fetch.\n\
-\n\
--I	Only run iterate performance test. Only runs in vos mode.\n\
 \n\
 -n	Only run iterate performance test but with nesting iterator\n\
 	enable.  This can only run in vos mode.\n\
@@ -1044,16 +1332,15 @@ static struct option ts_ops[] = {
 	{ "size",	required_argument,	NULL,	's' },
 	{ "zcopy",	no_argument,		NULL,	'z' },
 	{ "overwrite",	no_argument,		NULL,	't' },
-	{ "nest_iter",	no_argument,		NULL,	'n' },
+	{ "run",	required_argument,	NULL,	'R' },
 	{ "file",	required_argument,	NULL,	'f' },
 	{ "help",	no_argument,		NULL,	'h' },
-	{ "verify",	no_argument,		NULL,	'v' },
 	{ "wait",	no_argument,		NULL,	'w' },
 	{ NULL,		0,			NULL,	0   },
 };
 
-void show_result(double duration, uint64_t start, uint64_t end,
-		 int vsize, char *test_name)
+static void
+show_result(double duration, uint64_t start, uint64_t end, char *test_name)
 {
 	double		agg_duration;
 	uint64_t	first_start;
@@ -1098,7 +1385,7 @@ void show_result(double duration, uint64_t start, uint64_t end,
 
 		rate = total / agg_duration;
 		latency = duration_max / total;
-		bandwidth = (rate * vsize) / (1024 * 1024);
+		bandwidth = (rate * ts_vsize) / (1024 * 1024);
 
 		fprintf(stdout, "%s successfully completed:\n"
 			"\tduration : %-10.6f sec\n"
@@ -1118,43 +1405,17 @@ void show_result(double duration, uint64_t start, uint64_t end,
 	}
 }
 
-enum {
-	UPDATE_TEST = 0,
-	FETCH_TEST,
-	ITERATE_TEST,
-	REBUILD_TEST,
-	UPDATE_FETCH_TEST,
-	TEST_SIZE,
-};
-
-static int (*perf_tests[TEST_SIZE])(double *duration);
-static int (*perf_tests_prep[TEST_SIZE])(void);
-static int (*perf_tests_post[TEST_SIZE])(void);
-
-char	*perf_tests_name[] = {
-	"update",
-	"fetch",
-	"iterate",
-	"rebuild",
-	"update and fetch"
-};
-
 int
 main(int argc, char **argv)
 {
-	struct timeval	tv;
-	daos_size_t	scm_size = (2ULL << 30); /* default pool SCM size */
-	daos_size_t	nvme_size = (8ULL << 30); /* default pool NVMe size */
+	char		*cmds	  = NULL;
+	char		*dmg_conf = NULL;
+	char		uuid_buf[256];
+	daos_size_t	scm_size  = (2ULL << 30); /* default pool SCM size */
+	daos_size_t	nvme_size = (16ULL << 30); /* default pool NVMe size */
 	int		credits   = -1;	/* sync mode */
-	int		vsize	   = 32;	/* default value size */
-	int		ec_vsize = 0;
+	int		ec_vsize  = 0;
 	d_rank_t	svc_rank  = 0;	/* pool service rank */
-	int		i;
-	daos_obj_id_t	tmp_oid;
-	struct daos_oclass_attr	*oca;
-	double		duration = 0;
-	bool		pause = false;
-	unsigned	seed = 0;
 	int		rc;
 
 	MPI_Init(&argc, &argv);
@@ -1163,7 +1424,7 @@ main(int argc, char **argv)
 
 	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
 	while ((rc = getopt_long(argc, argv,
-				 "P:N:T:C:c:o:d:a:r:nASG:s:ztf:hUFRBvIiuwxp",
+				 "P:N:T:C:c:o:d:a:r:R:ASg:G:s:ztf:hBwxp",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -1172,7 +1433,7 @@ main(int argc, char **argv)
 			fprintf(stderr, "Unknown option %c\n", rc);
 			return -1;
 		case 'w':
-			pause = true;
+			ts_pause = true;
 			break;
 		case 'T':
 			if (!strcasecmp(optarg, "echo")) {
@@ -1259,13 +1520,19 @@ main(int argc, char **argv)
 		case 'S':
 			ts_shuffle = true;
 			break;
+		case 'g':
+			dmg_conf = optarg;
+			break;
 		case 'G':
-			seed = atoi(optarg);
+			ts_seed = atoi(optarg);
+			break;
+		case 'R':
+			cmds = optarg;
 			break;
 		case 's':
-			vsize = strtoul(optarg, &endp, 0);
-			vsize = ts_val_factor(vsize, *endp);
-			if (vsize < TEST_VAL_SIZE) {
+			ts_vsize = strtoul(optarg, &endp, 0);
+			ts_vsize = ts_val_factor(ts_vsize, *endp);
+			if (ts_vsize < TEST_VAL_SIZE) {
 				fprintf(stderr, "ERROR: value size must be >= "
 					"%d\n", TEST_VAL_SIZE);
 				return -1;
@@ -1280,40 +1547,6 @@ main(int argc, char **argv)
 		case 'f':
 			strncpy(ts_pmem_file, optarg, PATH_MAX - 1);
 			break;
-		case 'U':
-			perf_tests_prep[UPDATE_TEST] = ts_io_prep;
-			perf_tests[UPDATE_TEST] = ts_write_perf;
-			perf_tests_post[UPDATE_TEST] = ts_post_verify;
-			break;
-		case 'F':
-			perf_tests_prep[FETCH_TEST] = ts_prep_fetch;
-			perf_tests[FETCH_TEST] = ts_fetch_perf;
-			perf_tests_post[FETCH_TEST] = ts_post_verify;
-			break;
-		case 'R':
-			perf_tests_prep[REBUILD_TEST] = ts_io_prep;
-			perf_tests[REBUILD_TEST] = ts_rebuild_perf;
-			break;
-		case 'i':
-			ts_rebuild_only_iteration = true;
-			break;
-		case 'u':
-			ts_rebuild_no_update = true;
-			break;
-		case 'B':
-			perf_tests_prep[UPDATE_FETCH_TEST] = ts_prep_fetch;
-			perf_tests[UPDATE_FETCH_TEST] = ts_update_fetch_perf;
-			perf_tests_post[UPDATE_FETCH_TEST] = ts_post_verify;
-			break;
-		case 'v':
-			ts_verify_fetch = true;
-			break;
-		case 'n':
-			ts_nest_iterator = true;
-			break;
-		case 'I':
-			perf_tests[ITERATE_TEST] = ts_iterate_perf;
-			break;
 		case 'x':
 			ts_in_ult = true;
 			break;
@@ -1327,9 +1560,16 @@ main(int argc, char **argv)
 		}
 	}
 
-	if (seed == 0) {
+	if (!cmds) {
+		ts_print_usage();
+		return -1;
+	}
+
+	if (ts_seed == 0) {
+		struct timeval	tv;
+
 		gettimeofday(&tv, NULL);
-		seed = tv.tv_usec;
+		ts_seed = tv.tv_usec;
 	}
 
 	/* Convert object classes for echo mode.
@@ -1347,38 +1587,6 @@ main(int argc, char **argv)
 			ts_class = DAOS_OC_ECHO_TINY_RW;
 	}
 
-	/* It will run write tests by default */
-	if (perf_tests[REBUILD_TEST] == NULL &&
-	    perf_tests[FETCH_TEST] == NULL && perf_tests[UPDATE_TEST] == NULL &&
-	    perf_tests[UPDATE_FETCH_TEST] == NULL &&
-	    perf_tests[ITERATE_TEST] == NULL) {
-		perf_tests_prep[UPDATE_TEST] = ts_io_prep;
-		perf_tests[UPDATE_TEST] = ts_write_perf;
-		perf_tests_post[UPDATE_TEST] = ts_post_verify;
-	}
-
-	if ((perf_tests[FETCH_TEST] != NULL ||
-	     perf_tests[UPDATE_FETCH_TEST] != NULL) && ts_overwrite) {
-		fprintf(stdout, "Note: Fetch tests are incompatible with "
-			"the overwrite option (-t).\n      Remove the -t option"
-			" and try again.\n");
-		return -1;
-	}
-
-	if (perf_tests[REBUILD_TEST] && ts_class != OC_S1) {
-		fprintf(stderr, "rebuild can only run with -T \"daos\"\n");
-		if (ts_ctx.tsc_mpi_rank == 0)
-			ts_print_usage();
-		return -1;
-	}
-
-	if (perf_tests[ITERATE_TEST] && ts_class != DAOS_OC_RAW) {
-		fprintf(stderr, "iterate can only run with -T \"vos\"\n");
-		if (ts_ctx.tsc_mpi_rank == 0)
-			ts_print_usage();
-		return -1;
-	}
-
 	if (ts_dkey_p_obj == 0 || ts_akey_p_dkey == 0 ||
 	    ts_recx_p_akey == 0) {
 		fprintf(stderr, "Invalid arguments %d/%d/%d/\n",
@@ -1389,12 +1597,12 @@ main(int argc, char **argv)
 		return -1;
 	}
 
-	if (vsize <= sizeof(int))
-		vsize = sizeof(int);
-
+	memset(uuid_buf, 0, sizeof(uuid_buf));
 	if (ts_ctx.tsc_mpi_rank == 0 || ts_mode == TS_MODE_VOS) {
 		uuid_generate(ts_ctx.tsc_pool_uuid);
 		uuid_generate(ts_ctx.tsc_cont_uuid);
+
+		uuid_unparse(ts_ctx.tsc_pool_uuid, uuid_buf);
 	}
 
 	if (ts_mode == TS_MODE_VOS) {
@@ -1423,26 +1631,31 @@ main(int argc, char **argv)
 	}
 
 	if (ts_class != DAOS_OC_RAW) {
+		daos_obj_id_t	tmp_oid;
+		struct daos_oclass_attr	*oca;
+
 		tmp_oid = dts_oid_gen(ts_class, 0, 0);
 		oca = daos_oclass_attr_find(tmp_oid);
 		D_ASSERT(oca != NULL);
 		if (DAOS_OC_IS_EC(oca))
 			ec_vsize = oca->u.ec.e_len * oca->u.ec.e_k;
-		if (ec_vsize != 0 && vsize % ec_vsize != 0 &&
+		if (ec_vsize != 0 && ts_vsize % ec_vsize != 0 &&
 		    ts_ctx.tsc_mpi_rank == 0)
 			fprintf(stdout, "for EC obj perf test, vsize (-s) %d "
 				"should be multiple of %d (full-stripe size) "
 				"to get better performance.\n",
-				vsize, ec_vsize);
+				ts_vsize, ec_vsize);
 	}
 
-	ts_ctx.tsc_cred_vsize	= vsize;
+	ts_ctx.tsc_cred_vsize	= ts_vsize;
 	ts_ctx.tsc_scm_size	= scm_size;
 	ts_ctx.tsc_nvme_size	= nvme_size;
+	ts_ctx.tsc_dmg_conf	= dmg_conf;
 
 	if (ts_ctx.tsc_mpi_rank == 0) {
 		fprintf(stdout,
 			"Test :\n\t%s\n"
+			"Pool :\n\t%s\n"
 			"Parameters :\n"
 			"\tpool size     : SCM: %u MB, NVMe: %u MB\n"
 			"\tcredits       : %d (sync I/O for -ve)\n"
@@ -1454,9 +1667,8 @@ main(int argc, char **argv)
 			"\tvalue size    : %u\n"
 			"\tzero copy     : %s\n"
 			"\toverwrite     : %s\n"
-			"\tverify fetch  : %s\n"
 			"\tVOS file      : %s\n",
-			ts_class_name(),
+			ts_class_name(), uuid_buf,
 			(unsigned int)(scm_size >> 20),
 			(unsigned int)(nvme_size >> 20),
 			credits,
@@ -1466,10 +1678,9 @@ main(int argc, char **argv)
 			ts_akey_p_dkey,
 			ts_recx_p_akey,
 			ts_val_type(),
-			vsize,
+			ts_vsize,
 			ts_yes_or_no(ts_zero_copy),
 			ts_yes_or_no(ts_overwrite),
-			ts_yes_or_no(ts_verify_fetch),
 			ts_mode == TS_MODE_VOS ? ts_pmem_file : "<NULL>");
 	}
 
@@ -1486,70 +1697,18 @@ main(int argc, char **argv)
 	if (rc)
 		return -1;
 
-	if (ts_ctx.tsc_mpi_rank == 0) {
-		if (pause) {
-			fprintf(stdout, "Ready to start...If you wish to"
-				" attach a tool, do so now and then hit"
-				" enter.\n");
-			getc(stdin);
-		}
-		fprintf(stdout, "Started...\n");
-	}
-
 	if (ts_profile_vos)
 		vos_profile_start(ts_profile_vos_path, ts_profile_vos_avg);
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	for (i = 0; i < TEST_SIZE; i++) {
-		double	start;
-		double	end;
-		int	rc_g = 0;
-
-		if (perf_tests[i] == NULL)
-			continue;
-
-		srand(seed);
-
-		if (perf_tests_prep[i] !=  NULL) {
-			rc = perf_tests_prep[i]();
-			if (rc != 0)
-				fprintf(stderr, "perf_tests_prep[%d] failed, "
-					"rc %d\n", i, rc);
-		}
-		MPI_Allreduce(&rc, &rc_g, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
-		if (rc != 0)
-			break;
-
-		start = daos_get_ntime();
-		rc = perf_tests[i](&duration);
-		end = daos_get_ntime();
-		if (ts_ctx.tsc_mpi_size > 1) {
-
-			MPI_Allreduce(&rc, &rc_g, 1, MPI_INT, MPI_MIN,
-				      MPI_COMM_WORLD);
-			rc = rc_g;
-		}
-
-		if (rc != 0) {
-			fprintf(stderr, "Failed: "DF_RC"\n", DP_RC(rc));
-			break;
-		}
-
-		show_result(duration, start, end, vsize, perf_tests_name[i]);
-
-		if (perf_tests_post[i] !=  NULL) {
-			rc = perf_tests_post[i]();
-			if (rc != 0)
-				fprintf(stderr, "perf_tests_post[%d] failed, "
-					"rc %d\n", i, rc);
-		}
-	}
+	rc = run_commands(cmds);
 
 	if (ts_in_ult)
 		ts_abt_fini();
 
 	if (ts_profile_vos)
 		vos_profile_stop();
+
 	dts_ctx_fini(&ts_ctx);
 	MPI_Finalize();
 	free(ts_ohs);
