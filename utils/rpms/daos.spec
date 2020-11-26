@@ -11,7 +11,7 @@
 
 Name:          daos
 Version:       1.1.1
-Release:       8%{?relval}%{?dist}
+Release:       9%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -55,7 +55,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: raft-devel = 0.6.0
+BuildRequires: raft-devel = 0.7.0
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -407,8 +407,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Fri Nov 13 2020 Ashley Pittman <ashley.m.pittman@intel.com> 1.1.1-8
+
+* Thu Nov 26 2020 Ashley Pittman <ashley.m.pittman@intel.com> 1.1.1-9
 - Combine the two memcheck suppressions files.
+
+* Tue Nov 17 2020 Li Wei <wei.g.li@intel.com> 1.1.1-8
+- Require raft-devel 0.7.0 that changes log indices and terms to 63-bit
 
 * Wed Nov 11 2020 Tom Nabarro <tom.nabarro@intel.com> 1.1.1-7
 - Add version validation for runtime daos_server ipmctl requirement to avoid

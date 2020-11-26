@@ -1,13 +1,20 @@
-daos (1.1.1-7) unstable; urgency=medium
+daos (1.1.1-8) unstable; urgency=medium
   [ Ashley Pittman ]
   * Combine memcheck suppressions files
 
- -- Ashley Pittman <ashley.m.pittman@intel.com>  Fri, 13 Nov 2020 13:33:21 -0000
+ -- Ashley Pittman <ashley.m.pittman@intel.com>  Thu, 26 Nov 2020 13:33:21 -0000
+
+daos (1.1.1-8) unstable; urgency=medium
+  [ Li Wei ]
+  * Require raft-devel 0.7.0 that changes log indices and terms to 63-bit
+
+ -- Li Wei <wei.g.li@intel.com>  Tue, 17 Nov 2020 09:44:00 +0800
+
 daos (1.1.1-6) unstable; urgency=medium
   [ Mohamad Chaarawi ]
   * Add dfs_test
 
- -- Mohamad Chaarawi <mohamad.chaarawi@intel.com>
+ -- Mohamad Chaarawi <mohamad.chaarawi@intel.com>  Mon, 16 Nov 2020 13:29:11 -0400
 
 daos (1.1.1-5) unstable; urgency=medium
   [ Jonathan Martinez Montes ]
