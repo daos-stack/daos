@@ -28,16 +28,25 @@ import (
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
-	"crypto/rand"
+	crand "crypto/rand"
 	"encoding/hex"
 	"flag"
 	"io/ioutil"
+	mrand "math/rand"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
 var update = flag.Bool("update", false, "update .golden files")
+
+func SeededSigner() *TokenSigner {
+	//This should ensure we get the same signature every time for testing purposes.
+	r := mrand.New(mrand.NewSource(1))
+	return &TokenSigner{
+		randPool: r,
+	}
+}
 
 func SignTestSetup(t *testing.T) (rsaKey, ecdsaKey crypto.PrivateKey, source []byte) {
 	keyPath := "testdata/certs/daosCA.key"
@@ -48,7 +57,7 @@ func SignTestSetup(t *testing.T) (rsaKey, ecdsaKey crypto.PrivateKey, source []b
 	if err != nil {
 		t.Fatalf("Unable to load private key for %s: %s", keyPath, err.Error())
 	}
-	ecdsaKey, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	ecdsaKey, err = ecdsa.GenerateKey(elliptic.P256(), crand.Reader)
 	if err != nil {
 		t.Fatal("Failed to generate ecdsa key for testing")
 	}
@@ -62,7 +71,7 @@ func SignTestSetup(t *testing.T) (rsaKey, ecdsaKey crypto.PrivateKey, source []b
 func TestSign(t *testing.T) {
 
 	rsaKey, ecdsaKey, source := SignTestSetup(t)
-	tokenSigner := DefaultTokenSigner()
+	tokenSigner := SeededSigner()
 
 	testCases := []struct {
 		name string
@@ -108,7 +117,7 @@ func VerifyTestSetup(t *testing.T) (rsaKey, ecdsaKey crypto.PublicKey, source []
 		t.Fatalf("Unable to load certificate for %s: %s", certPath, err.Error())
 	}
 	rsaKey = cert.PublicKey
-	gen, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	gen, err := ecdsa.GenerateKey(elliptic.P256(), crand.Reader)
 	if err != nil {
 		t.Fatal("Failed to generate ecdsa key for testing")
 	}

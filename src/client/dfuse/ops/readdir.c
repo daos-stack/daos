@@ -40,7 +40,6 @@ int
 filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 {
 	struct iterate_data	*udata = (struct iterate_data *)_udata;
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(udata->req);
 	struct dfuse_obj_hdl	*oh = udata->oh;
 	dfs_obj_t		*obj;
 	daos_obj_id_t		oid;
@@ -60,17 +59,18 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 	if (rc)
 		return rc;
 
-	rc = dfs_obj2id(obj, &oid);
-	if (rc)
-		D_GOTO(out, rc);
 
 	if (S_ISFIFO(stbuf.st_mode)) {
 		stbuf.st_mode &= ~S_IFIFO;
 		stbuf.st_mode |= S_IFDIR;
 	}
 
-	rc = dfuse_lookup_inode(fs_handle, udata->inode->ie_dfs, &oid,
-				&stbuf.st_ino);
+	rc = dfs_obj2id(obj, &oid);
+	if (rc)
+		D_GOTO(out, rc);
+
+	rc = dfuse_compute_inode(udata->inode->ie_dfs, &oid,
+				 &stbuf.st_ino);
 	if (rc)
 		D_GOTO(out, rc);
 
