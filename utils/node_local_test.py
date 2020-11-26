@@ -1331,11 +1331,11 @@ def check_readdir_perf(server, conf):
         dir_dir = os.path.join(parent,
                                'dirs.{}.in'.format(count))
         t_dir = os.path.join(parent,
-                               'dirs.{}'.format(count))
+                             'dirs.{}'.format(count))
         file_dir = os.path.join(parent,
                                 'files.{}.in'.format(count))
         t_file = os.path.join(parent,
-                                'files.{}'.format(count))
+                              'files.{}'.format(count))
 
         start_all = time.time()
         if not os.path.exists(t_dir):
@@ -1348,10 +1348,6 @@ def check_readdir_perf(server, conf):
                     os.mkdir(os.path.join(dir_dir, str(i)))
                 except FileExistsError:
                     pass
-                if i + 1 == int(count / 2):
-                    elapsed = time.time() - start_all
-                    print('Creating {} dirs took {:.2f}'.format(i + 1,
-                                                                elapsed))
             elapsed = time.time() - start_all
             print('Creating {} dirs took {:.2f}'.format(count,
                                                         elapsed))
@@ -1366,10 +1362,6 @@ def check_readdir_perf(server, conf):
             for i in range(count):
                 f = open(os.path.join(file_dir, str(i)), 'w')
                 f.close()
-                if i + 1 == int(count / 2):
-                    elapsed = time.time() - start
-                    print('Creating {} files took {:.2f}'.format(i + 1,
-                                                                 elapsed))
             elapsed = time.time() - start
             print('Creating {} files took {:.2f}'.format(i + 1,
                                                          elapsed))
