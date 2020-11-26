@@ -178,11 +178,20 @@ daos_fail_init(void)
 	int rc;
 
 	rc = d_fault_inject_init();
-	if (rc)
-		return rc;
+	if (rc != 0)
+		D_GOTO(out, rc);
 
+	/* Log, but no not propagate error on registering the fault as this
+	 * leads to incorrect reference counts in daos_debug_init() and
+	 * resulting resource leaks.
+	 */
 	rc = d_fault_attr_set(DAOS_FAIL_UNIT_TEST_GROUP, attr);
+	if (rc != 0)
+		D_ERROR("Failed to set fault attr, " DF_RC "\n",
+			DP_RC(rc));
+	rc = 0;
 
+out:
 	return rc;
 }
 
