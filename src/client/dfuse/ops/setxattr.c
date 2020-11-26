@@ -35,13 +35,6 @@ dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 
 	DFUSE_TRA_DEBUG(inode, "Attribute '%s'", name);
 
-	/* Don't allow setting of uid/gid extended attribute */
-	if (strncmp(name,
-		    DFUSE_XID_XATTR_NAME,
-		    sizeof(DFUSE_XID_XATTR_NAME)) == 0) {
-		D_GOTO(err, rc = EPERM);
-	}
-
 	if (strcmp(name, DUNS_XATTR_NAME) == 0) {
 		struct duns_attr_t	dattr = {};
 

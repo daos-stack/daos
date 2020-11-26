@@ -199,6 +199,13 @@ struct dfuse_dfs {
 	bool			dfs_multi_user;
 };
 
+/* Xattr namespace used by dfuse.
+ *
+ * Extended attributes with this prefix can only be set by dfuse itself
+ * or directly though dfs/daos but not through dfuse.
+ */
+#define DFUSE_XATTR_PREFIX "user.dfuse"
+
 /* Multiuser support */
 #define DFUSE_XID_XATTR_NAME "user.dfuse.ids"
 

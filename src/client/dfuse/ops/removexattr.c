@@ -32,19 +32,11 @@ dfuse_cb_removexattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 
 	DFUSE_TRA_DEBUG(inode, "Attribute '%s'", name);
 
-	/* Don't allow setting of uid/gid extended attribute */
-	if (strncmp(name,
-		    DFUSE_XID_XATTR_NAME,
-		    sizeof(DFUSE_XID_XATTR_NAME)) == 0) {
-		D_GOTO(err, rc = EPERM);
-	}
-
 	rc = dfs_removexattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name);
 	if (rc == 0) {
 		DFUSE_REPLY_ZERO(inode, req);
 		return;
 	}
 
-err:
 	DFUSE_REPLY_ERR_RAW(inode, req, rc);
 }
