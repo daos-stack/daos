@@ -219,10 +219,21 @@ func PrintStorageFormatMap(hsm control.HostStorageMap, out io.Writer, opts ...Pr
 	return nil
 }
 
-func printSmdDevice(dev *storage.SmdDevice, out io.Writer, opts ...PrintConfigOption) error {
-	_, err := fmt.Fprintf(out, "UUID:%s Targets:%+v Rank:%d State:%s\n",
-		dev.UUID, dev.TargetIDs, dev.Rank, dev.State)
-	return err
+func printSmdDevice(dev *storage.SmdDevice, iw io.Writer, opts ...PrintConfigOption) error {
+	if _, err := fmt.Fprintf(iw, "UUID:%s [TrAddr:%s]\n",
+		dev.UUID, dev.TrAddr); err != nil {
+
+		return err
+	}
+
+	iw1 := txtfmt.NewIndentWriter(iw)
+	if _, err := fmt.Fprintf(iw1, "Targets:%+v Rank:%d State:%s\n",
+		dev.TargetIDs, dev.Rank, dev.State); err != nil {
+
+		return err
+	}
+
+	return nil
 }
 
 func printSmdPool(pool *control.SmdPool, out io.Writer, opts ...PrintConfigOption) error {
