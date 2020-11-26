@@ -764,7 +764,11 @@ def import_daos(server, conf):
                                  pydir,
                                  'site-packages'))
 
-    os.environ["DAOS_AGENT_DRPC_DIR"] = server.agent_dir
+    os.environ['DD_MASK'] = 'all'
+    os.environ['DD_SUBSYS'] = 'all'
+    os.environ['D_LOG_MASK'] = 'DEBUG'
+    os.environ['FI_UNIVERSE_SIZE'] = '128'
+    os.environ['DAOS_AGENT_DRPC_DIR'] = server.agent_dir
 
     daos = __import__('pydaos')
     return daos
@@ -1303,6 +1307,11 @@ def run_in_fg(server, conf):
 def test_pydaos_kv(server, conf):
     """Test the KV interface"""
 
+    pydaos_log_file = tempfile.NamedTemporaryFile(prefix='dnt_pydaos_',
+                                                  suffix='.log',
+                                                  delete=False)
+
+    os.environ['D_LOG_FILE'] = pydaos_log_file.name
     daos = import_daos(server, conf)
 
     pools = get_pool_list()
@@ -1359,6 +1368,10 @@ def test_pydaos_kv(server, conf):
     kv = None
     print('Closing container and opening new one')
     kv = container.get_kv_by_name('my_test_kv')
+    kv = None
+    container = None
+    daos._cleanup()
+    log_test(conf, pydaos_log_file.name)
 
 def test_alloc_fail(server, wf, conf):
     """run 'daos' client binary with fault injection
