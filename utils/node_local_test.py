@@ -917,8 +917,14 @@ def xattr_test(dfuse):
         assert False
     except PermissionError:
         pass
-    xattr.set(fd, 'user.dfuse.id', 'good_value')
-    xattr.set(fd, 'user.dfuse.ids0', 'also_good_value')
+
+    try:
+        xattr.set(fd, 'user.dfuse', b'other_value')
+        assert False
+    except PermissionError:
+        pass
+
+    xattr.set(fd, 'user.Xfuse.ids', b'other_value')
     for (key, value) in xattr.get_all(fd):
         print('xattr is {}:{}'.format(key, value))
 
