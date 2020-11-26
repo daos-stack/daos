@@ -73,75 +73,18 @@ dfuse_progress_thread(void *arg)
 	return NULL;
 }
 
-/* Inode record hash table operations */
-
-/* Use a custom hash function for this table, as the key contains a pointer
- * to some entries which need to be checked, therefore different pointer
- * values will return different hash buckets, even if the data pointed to
- * would match.  By providing a custom hash function this ensures that only
- * invariant data is checked.
- */
-static uint32_t
-ir_key_hash(struct d_hash_table *htable, const void *key,
-	    unsigned int ksize)
-{
-	const struct dfuse_inode_record_id *ir_id = key;
-
-	return (uint32_t)ir_id->irid_oid.hi;
-}
-
-static bool
-ir_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
-	   const void *key, unsigned int ksize)
-{
-	const struct dfuse_inode_record		*ir;
-	const struct dfuse_inode_record_id	*ir_id = key;
-
-	ir = container_of(rlink, struct dfuse_inode_record, ir_htl);
-
-	/* First check if it's the same container (dfs struct) */
-	if (ir->ir_id.irid_dfs != ir_id->irid_dfs)
-		return false;
-
-	/* Then check if the both parts of the OID match */
-	if (ir->ir_id.irid_oid.lo != ir_id->irid_oid.lo)
-		return false;
-
-	if (ir->ir_id.irid_oid.hi != ir_id->irid_oid.hi)
-		return false;
-
-	return true;
-}
-
-static uint32_t
-ir_rec_hash(struct d_hash_table *htable, d_list_t *rlink)
-{
-	const struct dfuse_inode_record		*ir;
-
-	ir = container_of(rlink, struct dfuse_inode_record, ir_htl);
-
-	return (uint32_t)ir->ir_id.irid_oid.hi;
-}
-
-static void
-ir_free(struct d_hash_table *htable, d_list_t *rlink)
-{
-	struct dfuse_inode_record *ir;
-
-	ir = container_of(rlink, struct dfuse_inode_record, ir_htl);
-
-	D_FREE(ir);
-}
-
 /* Inode entry hash table operations */
 
+/* Shrink a 64 bit value into 32 bits to avoid hash collisions */
 static uint32_t
 ih_key_hash(struct d_hash_table *htable, const void *key,
 	    unsigned int ksize)
 {
-	const ino_t *ino = key;
+	const ino_t *_ino = key;
+	ino_t ino = *_ino;
+	uint32_t hash = ino ^ (ino >> 32);
 
-	return (uint32_t)(*ino);
+	return hash;
 }
 
 static bool
@@ -163,7 +106,9 @@ ih_rec_hash(struct d_hash_table *htable, d_list_t *rlink)
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	return (uint32_t)ie->ie_stat.st_ino;
+	return ih_key_hash(NULL,
+			   &ie->ie_stat.st_ino,
+			   sizeof(ie->ie_stat.st_ino));
 }
 
 static void
@@ -242,14 +187,6 @@ static d_hash_table_ops_t ie_hops = {
 	.hop_rec_free		= ih_free,
 };
 
-static d_hash_table_ops_t ir_hops = {
-	.hop_key_cmp		= ir_key_cmp,
-	.hop_key_hash		= ir_key_hash,
-	.hop_rec_hash		= ir_rec_hash,
-	.hop_rec_free		= ir_free,
-
-};
-
 void
 dfuse_dfs_init(struct dfuse_dfs *dfs, struct dfuse_dfs *parent)
 {
@@ -284,16 +221,11 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	fs_handle->dpi_max_read = 1024 * 1024 * 4;
 	fs_handle->dpi_max_write = 1024 * 1024;
 
-	rc = d_hash_table_create_inplace(D_HASH_FT_RWLOCK | D_HASH_FT_EPHEMERAL,
-					 3, fs_handle, &ie_hops,
+	rc = d_hash_table_create_inplace(D_HASH_FT_MUTEX | D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL,
+					 5, fs_handle, &ie_hops,
 					 &fs_handle->dpi_iet);
 	if (rc != 0)
 		D_GOTO(err, 0);
-
-	rc = d_hash_table_create_inplace(D_HASH_FT_RWLOCK, 3, fs_handle,
-					 &ir_hops, &fs_handle->dpi_irt);
-	if (rc != 0)
-		D_GOTO(err_iet, 0);
 
 	atomic_store_relaxed(&fs_handle->dpi_ino_next, 2);
 
@@ -305,36 +237,36 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	args.allocated = 1;
 	args.argv = calloc(sizeof(*args.argv), args.argc);
 	if (!args.argv)
-		D_GOTO(err_irt, rc = -DER_NOMEM);
+		D_GOTO(err_iet, rc = -DER_NOMEM);
 
 	args.argv[0] = strndup("", 1);
 	if (!args.argv[0])
-		D_GOTO(err_irt, rc = -DER_NOMEM);
+		D_GOTO(err_iet, rc = -DER_NOMEM);
 
 	args.argv[1] = strndup("-ofsname=dfuse", 32);
 	if (!args.argv[1])
-		D_GOTO(err_irt, rc = -DER_NOMEM);
+		D_GOTO(err_iet, rc = -DER_NOMEM);
 
 	args.argv[2] = strndup("-osubtype=daos", 32);
 	if (!args.argv[2])
-		D_GOTO(err_irt, rc = -DER_NOMEM);
+		D_GOTO(err_iet, rc = -DER_NOMEM);
 
 	rc = asprintf(&args.argv[3], "-omax_read=%u", fs_handle->dpi_max_read);
 	if (rc < 0 || !args.argv[3])
-		D_GOTO(err_irt, rc = -DER_NOMEM);
+		D_GOTO(err_iet, rc = -DER_NOMEM);
 
 	args.argv[4] = strndup("-odefault_permissions", 32);
 	if (!args.argv[4])
-		D_GOTO(err_irt, rc = -DER_NOMEM);
+		D_GOTO(err_iet, rc = -DER_NOMEM);
 
 	fuse_ops = dfuse_get_fuse_ops();
 	if (!fuse_ops)
-		D_GOTO(err_irt, rc = -DER_NOMEM);
+		D_GOTO(err_iet, rc = -DER_NOMEM);
 
 	/* Create the root inode and insert into table */
 	D_ALLOC_PTR(ie);
 	if (!ie)
-		D_GOTO(err_irt, rc = -DER_NOMEM);
+		D_GOTO(err_iet, rc = -DER_NOMEM);
 
 	DFUSE_TRA_UP(ie, fs_handle, "root_inode");
 
@@ -348,6 +280,7 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	ie->ie_stat.st_gid = getegid();
 	ie->ie_stat.st_mode = 0700 | S_IFDIR;
 	dfs->dfs_root = ie->ie_stat.st_ino;
+	dfs->dfs_ino = dfs->dfs_root;
 
 	if (dfs->dfs_ops == &dfuse_dfs_ops) {
 		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj,
@@ -355,7 +288,7 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 		if (rc) {
 			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: (%s)",
 					strerror(rc));
-			D_GOTO(err_irt, rc = daos_errno2der(rc));
+			D_GOTO(err_iet, rc = daos_errno2der(rc));
 		}
 	}
 
@@ -397,8 +330,6 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 
 err_ie_remove:
 	d_hash_rec_delete_at(&fs_handle->dpi_iet, &ie->ie_htl);
-err_irt:
-	d_hash_table_destroy_inplace(&fs_handle->dpi_irt, false);
 err_iet:
 	d_hash_table_destroy_inplace(&fs_handle->dpi_iet, false);
 err:
@@ -502,28 +433,6 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 	}
 
 	rc = d_hash_table_destroy_inplace(&fs_handle->dpi_iet, false);
-	if (rc) {
-		DFUSE_TRA_WARNING(fs_handle, "Failed to close inode handles");
-		rcp = EINVAL;
-	}
-
-	DFUSE_TRA_INFO(fs_handle, "Draining inode record table");
-	do {
-		struct dfuse_inode_record *ir;
-
-		rlink = d_hash_rec_first(&fs_handle->dpi_irt);
-
-		if (!rlink)
-			break;
-
-		ir = container_of(rlink, struct dfuse_inode_record, ir_htl);
-
-		d_hash_rec_delete_at(&fs_handle->dpi_irt, rlink);
-
-		D_FREE(ir);
-	} while (rlink);
-
-	rc = d_hash_table_destroy_inplace(&fs_handle->dpi_irt, false);
 	if (rc) {
 		DFUSE_TRA_WARNING(fs_handle, "Failed to close inode handles");
 		rcp = EINVAL;

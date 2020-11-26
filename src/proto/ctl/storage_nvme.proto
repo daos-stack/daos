@@ -73,6 +73,7 @@ message NvmeController {
 		uint32 rank = 4;		// DAOS I/O server using controller
 		uint64 total_bytes = 5;		// blobstore clusters total bytes
 		uint64 avail_bytes = 6;		// blobstore clusters available bytes
+		string tr_addr = 7;		// transport address of the blobstore
 	}
 
 	string model = 1;	// model name
