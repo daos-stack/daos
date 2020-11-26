@@ -1456,11 +1456,6 @@ def run_fi_test(test_cmd, wf):
 
         print(rc)
         fid += 1
-        # Keep going until program runs to completion.  We should add checking
-        # of exit code at some point, but it would need to be reported properly
-        # through Jenkins.
-        # if rc.returncode not in (1, 255):
-        #   break
 
     # Check that some errors were injected.  At the time of writing we get about
     # 900, so round down a bit and check for that.
