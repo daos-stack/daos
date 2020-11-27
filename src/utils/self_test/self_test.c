@@ -73,6 +73,8 @@ static const char * const crt_st_msg_type_str[] = { "EMPTY",
 /* Global shutdown flag, used to terminate the progress thread */
 static int g_shutdown_flag;
 
+static bool g_randomize_endpoints;
+
 static void *progress_fn(void *arg)
 {
 	int		 ret;
@@ -750,6 +752,35 @@ static int test_msg_size(crt_context_t crt_ctx,
 	return 0;
 }
 
+static void
+randomize_endpts(struct st_endpoint *endpts, uint32_t num_endpts)
+{
+	struct st_endpoint	tmp;
+	int			r_index;
+	int			i;
+	int			k;
+
+	srand(time(NULL));
+
+	printf("Randomizing order of endpoints\n");
+	/* Shuffle endpoints few times */
+
+	for (k = 0; k < 10; k++)
+	for (i = 0; i < num_endpts; i++) {
+		r_index = rand() % num_endpts;
+
+		tmp = endpts[i];
+		endpts[i] = endpts[r_index];
+		endpts[r_index] = tmp;
+	}
+
+	printf("New order:\n");
+	for (i = 0; i < num_endpts; i++) {
+		printf("%d:%d ", endpts[i].rank, endpts[i].tag);
+	}
+	printf("\n");
+}
+
 static int run_self_test(struct st_size_params all_params[],
 			 int num_msg_sizes, int rep_count, int max_inflight,
 			 char *dest_name, struct st_endpoint *ms_endpts_in,
@@ -927,6 +958,10 @@ static int run_self_test(struct st_size_params all_params[],
 			D_GOTO(cleanup, ret);
 		}
 		D_ASSERT(latencies_bulk_hdl != CRT_BULK_NULL);
+	}
+
+	if (g_randomize_endpoints) {
+		randomize_endpts(endpts, num_endpts);
 	}
 
 	for (size_idx = 0; size_idx < num_msg_sizes; size_idx++) {
@@ -1665,12 +1700,13 @@ int main(int argc, char *argv[])
 			{"align", required_argument, 0, 'a'},
 			{"Mbits", no_argument, 0, 'b'},
 			{"singleton", no_argument, 0, 't'},
+			{"randomize-endpoints", no_argument, 0, 'q'},
 			{"path", required_argument, 0, 'p'},
 			{"nopmix", no_argument, 0, 'n'},
 			{0, 0, 0, 0}
 		};
 
-		c = getopt_long(argc, argv, "g:m:e:s:r:i:a:btnp:",
+		c = getopt_long(argc, argv, "g:m:e:s:r:i:a:btnqp:",
 				long_options, NULL);
 		if (c == -1)
 			break;
@@ -1725,6 +1761,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'p':
 			attach_info_path = optarg;
+			break;
+		case 'q':
+			g_randomize_endpoints = true;
 			break;
 		case 'n':
 			break;
