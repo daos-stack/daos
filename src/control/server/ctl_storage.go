@@ -28,7 +28,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -108,31 +107,6 @@ func substBdevVmdAddrs(cfgBdevs []string, scanResp bdev.ScanResponse) ([]string,
 	}
 
 	return newCfgBdevs, nil
-}
-
-func revertBdevVmdAddrs(cfgBdevs []string) ([]string, error) {
-	var vmdAddrs []string
-
-	for _, dev := range cfgBdevs {
-		domain, _, _, _, err := bdev.ParsePCIAddress(dev)
-		if err != nil {
-			return nil, err
-		}
-		if domain == 0 {
-			continue
-		}
-		domainStr := fmt.Sprintf("%x", domain)
-		if len(domainStr) != 6 {
-			return nil, errors.New("unexpected length of domain")
-		}
-		vmdAddr := fmt.Sprintf("0000:%s:%s.%s",
-			domainStr[:2], domainStr[2:4], domainStr[5:])
-		if !common.Includes(vmdAddrs, vmdAddr) {
-			vmdAddrs = append(vmdAddrs, vmdAddr)
-		}
-	}
-
-	return vmdAddrs, nil
 }
 
 // canAccessBdevs evaluates if any specified Bdevs are not accessible.

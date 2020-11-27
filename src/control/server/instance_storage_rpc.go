@@ -101,20 +101,12 @@ func (srv *IOServerInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeCon
 		return
 	}
 
-	deviceList := cfg.DeviceList
-	if !p.IsVMDDisabled() {
-		newDeviceList, err := revertBdevVmdAddrs(deviceList)
-		if err != nil {
-			return
-		}
-		deviceList = newDeviceList
-	}
 	srv.log.Infof("Instance %d: starting format of %s block devices %v",
-		srvIdx, cfg.Class, deviceList)
+		srvIdx, cfg.Class, cfg.DeviceList)
 
 	res, err := p.Format(bdev.FormatRequest{
 		Class:      cfg.Class,
-		DeviceList: deviceList,
+		DeviceList: cfg.DeviceList,
 		MemSize:    cfg.MemSize,
 	})
 	if err != nil {
@@ -132,7 +124,7 @@ func (srv *IOServerInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeCon
 	}
 
 	srv.log.Infof("Instance %d: finished format of %s block devices %v",
-		srvIdx, cfg.Class, deviceList)
+		srvIdx, cfg.Class, cfg.DeviceList)
 
 	return
 }

@@ -45,7 +45,9 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 )
 
 // Env is the interface that provides SPDK environment management.
@@ -70,8 +72,8 @@ type EnvOptions struct {
 	DisableVMD   bool     // flag if VMD devices should not be included
 }
 
-func (o EnvOptions) toC() (opts *C.struct_spdk_env_opts, cWhiteListPtr *unsafe.Pointer, err error) {
-	opts = new(C.struct_spdk_env_opts)
+func (o EnvOptions) toC() (*C.struct_spdk_env_opts, *unsafe.Pointer, error) {
+	opts := new(C.struct_spdk_env_opts)
 
 	C.spdk_env_opts_init(opts)
 
@@ -83,17 +85,31 @@ func (o EnvOptions) toC() (opts *C.struct_spdk_env_opts, cWhiteListPtr *unsafe.P
 	opts.env_context = unsafe.Pointer(C.CString("--log-level=lib.eal:4"))
 
 	if len(o.PciWhiteList) > 0 {
-		cWhiteListPtr, err = pciListToC(o.PciWhiteList)
-		if err != nil {
-			return
+		if !o.DisableVMD {
+			// DPDK will not accept VMD backing device addresses
+			// so convert to VMD address
+			newWhiteList, err := revertBackingToVmd(o.PciWhiteList)
+			if err != nil {
+				return nil, nil, err
+			}
+			o.PciWhiteList = newWhiteList
 		}
+
+		cWhiteListPtr, err := pciListToC(o.PciWhiteList)
+		if err != nil {
+			return nil, nil, err
+		}
+
 		opts.pci_whitelist = (*C.struct_spdk_pci_addr)(*cWhiteListPtr)
 		opts.num_pci_addr = C.ulong(len(o.PciWhiteList))
+
+		return opts, cWhiteListPtr, nil
 	}
 
-	return
+	return opts, nil, nil
 }
 
+// pciListToC allocates memory and populate array of C SPDK PCI addresses.
 func pciListToC(inAddrs []string) (*unsafe.Pointer, error) {
 	var tmpAddr *C.struct_spdk_pci_addr
 	structSize := unsafe.Sizeof(*tmpAddr)
@@ -111,6 +127,38 @@ func pciListToC(inAddrs []string) (*unsafe.Pointer, error) {
 	}
 
 	return &outAddrs, nil
+}
+
+// revertBackingPciToVmd converts VMD backing device PCI addresses (with the VMD
+// address encoded in the domain component of the PCI address) back to the PCI
+// address of the VMD e.g. [5d0505:01:00.0, 5d0505:03:00.0] -> [0000:5d:05.5].
+//
+// Many assumptions are made as to the input and output PCI address structure in
+// the conversion.
+func revertBackingPciToVmd(cfgBdevs []string) ([]string, error) {
+	var outAddrs []string
+
+	for _, inAddr := range cfgBdevs {
+		domain, _, _, _, err := bdev.ParsePCIAddress(inAddr)
+		if err != nil {
+			return nil, err
+		}
+		if domain == 0 {
+			outAddrs = append(outAddrs, inAddr)
+			continue
+		}
+		domainStr := fmt.Sprintf("%x", domain)
+		if len(domainStr) != 6 {
+			return nil, errors.New("unexpected length of domain")
+		}
+		outAddr := fmt.Sprintf("0000:%s:%s.%s",
+			domainStr[:2], domainStr[2:4], domainStr[5:])
+		if !common.Includes(outAddrs, outAddr) {
+			outAddrs = append(outAddrs, outAddr)
+		}
+	}
+
+	return outAddrs, nil
 }
 
 // InitSPDKEnv initializes the SPDK environment.
