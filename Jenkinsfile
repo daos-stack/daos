@@ -271,17 +271,13 @@ def getuid() {
     return cached_uid
 }
 
-
 // Set priority for the pipeline.  Priority is set vai a job parameter so does
 // not exist for the first build of a PR which will always build at priority
 // 2, so use that value for PRs, slower for master and faster for Queue-jump
 // builds.
 
-
 String get_priority() {
-    if (cachedCommitPragma(pragma: 'Queue-jump') == 'true') {
-        return '1'
-    } else if ('${env.CHANGE_ID}') {
+    if ('${env.CHANGE_ID}') {
         return '2'
     } else {
         return '3'
