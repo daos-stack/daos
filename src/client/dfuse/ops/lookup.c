@@ -49,9 +49,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	}
 
 	if (ie->ie_stat.st_ino == 0) {
-		rc = dfs_obj2id(ie->ie_obj, &ie->ie_oid);
-		if (rc)
-			D_GOTO(out_decref, rc);
+		dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
 		dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid,
 				    &ie->ie_stat.st_ino);
@@ -154,7 +152,7 @@ out_err:
  * On failure it will return error.
  *
  */
-static int
+int
 check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		 struct dfuse_inode_entry *ie)
 {

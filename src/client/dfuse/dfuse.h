@@ -566,6 +566,10 @@ dfuse_compute_inode(struct dfuse_dfs *dfs,
 	return 0;
 };
 
+int
+check_for_uns_ep(struct dfuse_projection_info *fs_handle,
+		 struct dfuse_inode_entry *ie);
+
 /* dfuse_inode.c */
 
 /* This should probably be replaced with a entry pointer in the dfs which

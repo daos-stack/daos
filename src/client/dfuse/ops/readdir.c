@@ -117,6 +117,8 @@ create_entry(struct dfuse_projection_info *fs_handle,
 	ie->ie_obj = obj;
 	ie->ie_stat = entry->attr;
 
+	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
+
 	entry->attr_timeout = parent->ie_dfs->dfs_attr_timeout;
 	entry->entry_timeout = parent->ie_dfs->dfs_attr_timeout;
 
@@ -126,12 +128,15 @@ create_entry(struct dfuse_projection_info *fs_handle,
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
 
-	/* TODO:
-	 * See if we need to check for UNS entry point here.  It may be that
-	 * we can just return the inode here and if it gets looked up again
-	 * that the UNS code will work at that point, potentially giving it
-	 * a new inode number but it may be that we need to handle it here.
-	 */
+	if (S_ISFIFO(ie->ie_stat.st_mode)) {
+		rc = check_for_uns_ep(fs_handle, ie);
+		DFUSE_TRA_DEBUG(ie,
+				"check_for_uns_ep() returned %d", rc);
+		if (rc != 0 && rc != EPERM)
+			D_GOTO(out, rc);
+		ie->ie_stat.st_mode &= ~S_IFIFO;
+		ie->ie_stat.st_mode |= S_IFDIR;
+	}
 
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
