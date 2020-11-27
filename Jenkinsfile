@@ -460,11 +460,12 @@ pipeline {
                 beforeAgent true
                 expression { ! skip_prebuild() }
             }
-            parameters {
-                string(name: 'BuildPriority', defaultValue: get_priority(), description: 'Priority of the build.  DO NOT USE WITHOUT PERMISSION.')
-            }
             parallel {
                 stage('checkpatch') {
+		    parameters {
+                        string(name: 'BuildPriority', defaultValue: get_priority(), description: 'Priority of the build.  DO NOT USE WITHOUT PERMISSION.')
+                    }
+
                     when {
                         beforeAgent true
                         expression { ! skip_checkpatch() }
