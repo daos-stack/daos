@@ -433,8 +433,13 @@ pipeline {
     }
 
     // Default priority is 2, lower is better.
+    // The parameter for a job is set using the script/Jenkinsfile from the
+    // previous build, so the first build of any PR will always run at
+    // priority 2, but subsequent ones will use the value from here.  The
+    // advantage therefore is not to change the priority of PRs, but to
+    // change the master branch itself.
     parameters {
-        string(name: 'BuildPriority', defaultValue: env.BRANCH_NAME == 'master' ? '3' : '1')
+        string(name: 'BuildPriority', defaultValue: env.BRANCH_NAME == 'master' ? '3' : '2')
     }
 
     stages {
