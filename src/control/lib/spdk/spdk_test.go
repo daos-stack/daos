@@ -26,9 +26,11 @@ package spdk
 import (
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func TestSpdk_revertBackingToVmd(t *testing.T) {
@@ -60,7 +62,10 @@ func TestSpdk_revertBackingToVmd(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			gotAddrs, gotErr := revertBackingToVmd(tc.inAddrs)
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			gotAddrs, gotErr := revertBackingToVmd(log, tc.inAddrs)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
