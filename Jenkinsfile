@@ -446,7 +446,7 @@ pipeline {
     }
 
     parameters {
-        string(name: 'BuildPriority', defaultValue: env.BRANCH_NAME == 'amittman-prio' ? '3': '2')
+        string(name: 'BuildPriority', defaultValue: env.BRANCH_NAME == 'amittman-prio' ? 'yes': 'no')
     }
 
     stages {
