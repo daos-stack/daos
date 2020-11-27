@@ -265,7 +265,7 @@ if (!env.CHANGE_ID &&
 // 2, so use that value for PRs, slower for master and faster for Queue-jump
 // builds.
 
-def get_priority() {
+String get_priority() {
     if (cachedCommitPragma(pragma: 'Queue-jump') == 'true') {
         return '1'
     } else if (env.CHANGE_ID) {
@@ -447,8 +447,10 @@ pipeline {
         ansiColor('xterm')
     }
 
+    def priority = get_priority()
+
     parameters {
-        string(name: 'BuildPriority', defaultValue: '1', description: 'Priority of the build.  DO NOT USE WITHOUT PERMISSION.')
+        string(name: 'BuildPriority', defaultValue: '$priority', description: 'Priority of the build.  DO NOT USE WITHOUT PERMISSION.')
     }
 
     stages {
