@@ -277,6 +277,7 @@ def getuid() {
 // 2, so use that value for PRs, slower for master and faster for Queue-jump
 // builds.
 
+
 String get_priority() {
     if (cachedCommitPragma(pragma: 'Queue-jump') == 'true') {
         return '1'
