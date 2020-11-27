@@ -260,6 +260,18 @@ if (!env.CHANGE_ID &&
    return
 }
 
+// Set priority for the pipeline.  Priority is set vai a job parameter so does
+// not exist for the first build of a PR which will always build at priority
+// 2, so use that value for PRs, slower for master and faster for Queue-jump
+// builds.
+//if (cachedCommitPragma(pragma: 'Queue-jump') == 'true') {
+//  priority = '4'
+//} else if (env.CHANGE_ID) {
+//  priority = '2'
+//} else {
+//  priority = '3'
+//}
+
 // The docker agent setup and the provisionNodes step need to know the
 // UID that the build agent is running under.
 cached_uid = 0
@@ -431,7 +443,6 @@ pipeline {
         preserveStashes(buildCount: 5)
         ansiColor('xterm')
     }
-
 
     parameters {
         string(name: 'BuildPriority', defaultValue: '1', description: 'Priority of the build.  DO NOT USE WITHOUT PERMISSION.')
