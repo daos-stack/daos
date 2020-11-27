@@ -161,7 +161,8 @@ dfuse_bg(struct dfuse_info *dfuse_info)
 			exit(2);
 		}
 		if (child_ret) {
-			printf("Exiting " DF_RC "\n", DP_RC(child_ret));
+			printf("Exiting %d %s\n", child_ret,
+			       d_errstr(child_ret));
 			exit(-(child_ret + DER_ERR_GURT_BASE));
 		} else {
 			exit(0);
@@ -256,6 +257,7 @@ main(int argc, char **argv)
 {
 	struct dfuse_info	*dfuse_info = NULL;
 	char			*svcl = NULL;
+	d_rank_list_t		*svcl_rl = NULL;
 	struct dfuse_pool	*dfp = NULL;
 	struct dfuse_pool	*dfpn;
 	struct dfuse_dfs	*dfs = NULL;
@@ -278,6 +280,7 @@ main(int argc, char **argv)
 		{"svc",			required_argument, 0, 's'},
 		{"sys-name",		required_argument, 0, 'G'},
 		{"mountpoint",		required_argument, 0, 'm'},
+		{"multi-user",		no_argument,	   0, 'M'},
 		{"thread-count",	required_argument, 0, 't'},
 		{"singlethread",	no_argument,	   0, 'S'},
 		{"enable-caching",	no_argument,	   0, 'A'},
@@ -304,7 +307,7 @@ main(int argc, char **argv)
 	dfuse_info->di_direct_io = true;
 
 	while (1) {
-		c = getopt_long(argc, argv, "s:m:Sfh",
+		c = getopt_long(argc, argv, "s:m:t:Sfh",
 				long_options, NULL);
 
 		if (c == -1)
@@ -328,6 +331,9 @@ main(int argc, char **argv)
 			break;
 		case 'm':
 			dfuse_info->di_mountpoint = optarg;
+			break;
+		case 'M':
+			dfuse_info->di_multi_user = true;
 			break;
 		case 'S':
 			dfuse_info->di_threaded = false;
@@ -380,21 +386,18 @@ main(int argc, char **argv)
 		}
 
 		dfuse_info->di_thread_count = CPU_COUNT(&cpuset);
-
-		/* Reserve one CPU thread for the daos event queue */
-		dfuse_info->di_thread_count -= 1;
-
-		if (dfuse_info->di_thread_count < 1) {
-			printf("Dfuse needs more threads\n");
-			exit(1);
-		}
 	}
 
-	/* svcl is optional. If unspecified libdaos will query
-	 * management service to get list of pool service replicas.
-	 */
+	if (dfuse_info->di_thread_count < 2) {
+		printf("Dfuse needs at least two threads.\n");
+		exit(1);
+	}
+
+	/* Reserve one CPU thread for the daos event queue */
+	dfuse_info->di_thread_count -= 1;
 
 	if (dfuse_info->di_pool) {
+
 		if (uuid_parse(dfuse_info->di_pool, tmp_uuid) < 0) {
 			printf("Invalid pool uuid\n");
 			exit(1);
@@ -406,6 +409,29 @@ main(int argc, char **argv)
 				exit(1);
 			}
 		}
+
+		/* svcl is optional. If unspecified libdaos will query
+		 * management service to get list of pool service replicas.
+		 */
+
+		if (svcl) {
+			svcl_rl = daos_rank_list_parse(svcl, ":");
+			if (svcl_rl == NULL) {
+				printf("Invalid pool service rank list\n");
+				D_GOTO(out_dfuse, ret = -DER_INVAL);
+			}
+		}
+	} else if (dfuse_info->di_cont) {
+		printf("Pool uuid required with container uuid\n");
+		exit(1);
+	} else if (svcl) {
+		printf("Svcl not meaningful without pool uuid\n");
+		exit(1);
+	}
+
+	if (dfuse_info->di_multi_user && !dfuse_info->di_cont) {
+		printf("Multi-user mode requires a container uuid\n");
+		exit(1);
 	}
 
 	if (!dfuse_info->di_foreground) {
@@ -422,17 +448,9 @@ main(int argc, char **argv)
 
 	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
 
-	if (svcl) {
-		dfuse_info->di_svcl = daos_rank_list_parse(svcl, ":");
-		if (dfuse_info->di_svcl == NULL) {
-			printf("Invalid pool service rank list\n");
-			D_GOTO(out_dfuse, ret = -DER_INVAL);
-		}
-	}
-
 	D_ALLOC_PTR(dfp);
 	if (!dfp)
-		D_GOTO(out_svcl, ret = -DER_NOMEM);
+		D_GOTO(out_dfuse, ret = -DER_NOMEM);
 
 	DFUSE_TRA_UP(dfp, dfuse_info, "dfp");
 	D_INIT_LIST_HEAD(&dfp->dfp_dfs_list);
@@ -446,41 +464,54 @@ main(int argc, char **argv)
 	if (dfuse_info->di_caching)
 		dfs->dfs_attr_timeout = 5;
 
+	if (dfuse_info->di_multi_user) {
+		dfs->dfs_attr_timeout = 1;
+		dfs->dfs_multi_user = true;
+	}
+
 	d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
 
 	dfs->dfs_dfp = dfp;
 
 	DFUSE_TRA_UP(dfs, dfp, "dfs");
 
+	if (dfuse_info->di_pool) {
+		if (uuid_parse(dfuse_info->di_pool,
+			       dfp->dfp_pool) < 0) {
+			printf("Invalid pool uuid\n");
+			D_GOTO(out_dfs, ret = -DER_INVAL);
+		}
+		if (dfuse_info->di_cont) {
+			if (uuid_parse(dfuse_info->di_cont,
+				       dfs->dfs_cont) < 0) {
+				printf("Invalid container uuid\n");
+				D_GOTO(out_dfs, ret = -DER_INVAL);
+			}
+		}
+	}
+
 	rc = duns_resolve_path(dfuse_info->di_mountpoint, &duns_attr);
 	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() returned %d %s",
 		       rc, strerror(rc));
 	if (rc == 0) {
-		if (dfuse_info->di_pool) {
-			printf("UNS configured on mount point but pool provided\n");
-			D_GOTO(out_dfs, ret = -DER_INVAL);
+		if (dfuse_info->di_pool &&
+		    (uuid_compare(duns_attr.da_puuid, dfp->dfp_pool))) {
+			printf("Pools uuids do not match\n");
+			D_GOTO(out_dfs, rc = -DER_INVAL);
 		}
+
+		if (dfuse_info->di_cont &&
+		    (uuid_compare(duns_attr.da_cuuid, dfs->dfs_cont))) {
+			printf("Container uuids do not match\n");
+			D_GOTO(out_dfs, rc = -DER_INVAL);
+		}
+
 		uuid_copy(dfp->dfp_pool, duns_attr.da_puuid);
 		uuid_copy(dfs->dfs_cont, duns_attr.da_cuuid);
-	} else if (rc == ENODATA || rc == ENOTSUP) {
-		if (dfuse_info->di_pool) {
-			if (uuid_parse(dfuse_info->di_pool,
-				       dfp->dfp_pool) < 0) {
-				printf("Invalid pool uuid\n");
-				D_GOTO(out_dfs, ret = -DER_INVAL);
-			}
-			if (dfuse_info->di_cont) {
-				if (uuid_parse(dfuse_info->di_cont,
-					       dfs->dfs_cont) < 0) {
-					printf("Invalid container uuid\n");
-					D_GOTO(out_dfs, ret = -DER_INVAL);
-				}
-			}
-		}
 	} else if (rc == ENOENT) {
 		printf("Mount point does not exist\n");
 		D_GOTO(out_dfs, ret = daos_errno2der(rc));
-	} else {
+	} else if (rc != ENODATA && rc != ENOTSUP) {
 		/* Other errors from DUNS, it should have logged them already */
 		D_GOTO(out_dfs, ret = daos_errno2der(rc));
 	}
@@ -488,7 +519,7 @@ main(int argc, char **argv)
 	if (uuid_is_null(dfp->dfp_pool) == 0) {
 		/** Connect to DAOS pool */
 		rc = daos_pool_connect(dfp->dfp_pool, dfuse_info->di_group,
-				       dfuse_info->di_svcl, DAOS_PC_RW,
+				       svcl_rl, DAOS_PC_RW,
 				       &dfp->dfp_poh, &dfp->dfp_pool_info,
 				       NULL);
 		if (rc != -DER_SUCCESS) {
@@ -513,7 +544,11 @@ main(int argc, char **argv)
 				printf("dfs_mount failed (%d)\n", rc);
 				D_GOTO(out_dfs, ret = rc);
 			}
-			dfs->dfs_ops = &dfuse_dfs_ops;
+			if (dfuse_info->di_multi_user) {
+				dfs->dfs_ops = &dfuse_login_ops;
+			} else {
+				dfs->dfs_ops = &dfuse_dfs_ops;
+			}
 		} else {
 			dfs->dfs_ops = &dfuse_cont_ops;
 		}
@@ -570,13 +605,15 @@ out_dfs:
 		DFUSE_TRA_DOWN(dfp);
 		D_FREE(dfp);
 	}
-out_svcl:
-	d_rank_list_free(dfuse_info->di_svcl);
 out_dfuse:
 	DFUSE_TRA_DOWN(dfuse_info);
 	D_MUTEX_DESTROY(&dfuse_info->di_lock);
 	daos_fini();
 out_debug:
+
+	if (svcl_rl)
+		d_rank_list_free(svcl_rl);
+
 	D_FREE(dfuse_info);
 	DFUSE_LOG_INFO("Exiting with status %d", ret);
 	daos_debug_fini();

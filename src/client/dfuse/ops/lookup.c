@@ -42,16 +42,19 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	entry.attr_timeout = ie->ie_dfs->dfs_attr_timeout;
 	entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
 
-	if (ie->ie_stat.st_ino == 0) {
+	if (ie->ie_dfs->dfs_multi_user) {
+		rc = dfuse_get_uid(ie);
+		if (rc)
+			D_GOTO(out_decref, rc);
+	}
 
+	if (ie->ie_stat.st_ino == 0) {
 		rc = dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 		if (rc)
 			D_GOTO(out_decref, rc);
 
-		rc = dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid,
-					 &ie->ie_stat.st_ino);
-		if (rc)
-			D_GOTO(out_decref, rc);
+		dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid,
+				    &ie->ie_stat.st_ino);
 	}
 
 	entry.attr = ie->ie_stat;
@@ -115,7 +118,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		} else {
 			rc = dfs_update_parent(inode->ie_obj, ie->ie_obj,
 					       ie->ie_name);
-			if (rc != -DER_SUCCESS)
+			if (rc != 0)
 				DFUSE_TRA_ERROR(inode,
 						"dfs_update_parent() failed %d",
 						rc);
@@ -213,7 +216,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		/* Connect to DAOS pool */
 		rc = daos_pool_connect(dfp->dfp_pool,
 				       fs_handle->dpi_info->di_group,
-				       fs_handle->dpi_info->di_svcl, DAOS_PC_RW,
+				       NULL, DAOS_PC_RW,
 				       &dfp->dfp_poh, &dfp->dfp_pool_info,
 				       NULL);
 		if (rc != -DER_SUCCESS) {
@@ -237,7 +240,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		if (dfs == NULL)
 			D_GOTO(out_pool, ret = ENOMEM);
 
-		dfs->dfs_ops = ie->ie_dfs->dfs_ops;
+		dfs->dfs_ops = &dfuse_dfs_ops;
 		DFUSE_TRA_UP(dfs, dfp, "dfs");
 		d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
 		uuid_copy(dfs->dfs_cont, dattr.da_cuuid);
@@ -367,12 +370,14 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_name[NAME_MAX] = '\0';
 	atomic_store_relaxed(&ie->ie_ref, 1);
 
-	if (S_ISDIR(ie->ie_stat.st_mode)) {
+	if (S_ISFIFO(ie->ie_stat.st_mode)) {
 		rc = check_for_uns_ep(fs_handle, ie);
 		DFUSE_TRA_DEBUG(ie,
 				"check_for_uns_ep() returned %d", rc);
 		if (rc != 0 && rc != EPERM)
 			D_GOTO(err, rc);
+		ie->ie_stat.st_mode &= ~S_IFIFO;
+		ie->ie_stat.st_mode |= S_IFDIR;
 	}
 
 	dfuse_reply_entry(fs_handle, ie, NULL, req);

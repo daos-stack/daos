@@ -85,11 +85,15 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	DFUSE_TRA_INFO(fs_handle, "max write %#x", conn->max_write);
 	DFUSE_TRA_INFO(fs_handle, "readahead %#x", conn->max_readahead);
 
-	DFUSE_TRA_INFO(fs_handle, "Capability supported %#x", conn->capable);
+	DFUSE_TRA_INFO(fs_handle, "Capability supported by kernel %#x",
+		       conn->capable);
 
 	dfuse_show_flags(fs_handle, conn->capable);
 
 	DFUSE_TRA_INFO(fs_handle, "Capability requested %#x", conn->want);
+
+	conn->want |= FUSE_CAP_READDIRPLUS;
+	conn->want |= FUSE_CAP_READDIRPLUS_AUTO;
 
 	dfuse_show_flags(fs_handle, conn->want);
 
@@ -124,6 +128,35 @@ df_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 
 	parent_inode->ie_dfs->dfs_ops->create(req, parent_inode, name, mode,
 					      fi);
+
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+	return;
+err:
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+}
+
+void
+df_ll_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
+	    mode_t mode, dev_t rdev)
+{
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*parent_inode;
+	d_list_t			*rlink;
+	int				rc;
+
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
+	if (!rlink) {
+		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
+				parent);
+		D_GOTO(err, rc = ENOENT);
+	}
+
+	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	if (!parent_inode->ie_dfs->dfs_ops->mknod)
+		D_GOTO(err, rc = ENOTSUP);
+
+	parent_inode->ie_dfs->dfs_ops->mknod(req, parent_inode, name, mode);
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	return;
@@ -352,41 +385,38 @@ err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
 
-/*
- * Implement readdir without a opendir/closedir pair.  This works perfectly
- * well, but adding (open|close)dir would allow us to cache the inode_entry
- * between calls which would help performance, and may be necessary later on
- * to support directories which require multiple calls to readdir() to return
- * all entries.
+/* Handle readdir and readdirplus slightly differently, the presence of the
+ * opendir callback will mean fi->fh is set for dfs files but not containers
+ * or pools to use this fact to avoid a hash table lookup on the inode.
  */
 static void
 df_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 	      struct fuse_file_info *fi)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry	*inode;
-	d_list_t			*rlink;
-	int				rc;
+	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
 
-	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
-	if (!rlink) {
-		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %#lx", ino);
-		D_GOTO(err, rc = ENOENT);
+	if (oh == NULL) {
+		DFUSE_REPLY_ERR_RAW(fs_handle, req, ENOTSUP);
+		return;
 	}
 
-	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+	dfuse_cb_readdir(req, oh, size, offset, false);
+}
 
-	if (!inode->ie_dfs->dfs_ops->readdir)
-		D_GOTO(decref, rc = ENOTSUP);
+static void
+df_ll_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
+		  struct fuse_file_info *fi)
+{
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
 
-	inode->ie_dfs->dfs_ops->readdir(req, inode, size, offset, fi);
+	if (oh == NULL) {
+		DFUSE_REPLY_ERR_RAW(fs_handle, req, ENOTSUP);
+		return;
+	}
 
-	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
-	return;
-decref:
-	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
-err:
-	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+	dfuse_cb_readdir(req, oh, size, offset, true);
 }
 
 void
@@ -427,6 +457,12 @@ df_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 	struct dfuse_inode_entry	*inode;
 	d_list_t			*rlink;
 	int				rc;
+
+	/* Don't allow setting of uid/gid extended attribute */
+	if (strncmp(name, DFUSE_XATTR_PREFIX,
+		    sizeof(DFUSE_XATTR_PREFIX) - 1) == 0) {
+		D_GOTO(err, rc = ENOTSUP);
+	}
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
@@ -485,6 +521,15 @@ df_ll_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
 	struct dfuse_inode_entry	*inode;
 	d_list_t			*rlink;
 	int				rc;
+
+	/* Don't allow removing of dfuse extended attribute.  This will return
+	 * regardless of it the attribute exists or not, but the alternative
+	 * is a round-trip to check, so this seems like the best option here.
+	 */
+	if (strncmp(name, DFUSE_XATTR_PREFIX,
+		    sizeof(DFUSE_XATTR_PREFIX) - 1) == 0) {
+		D_GOTO(err, rc = ENOTSUP);
+	}
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
@@ -632,10 +677,30 @@ struct dfuse_inode_ops dfuse_dfs_ops = {
 	.releasedir	= dfuse_cb_releasedir,
 	.getattr	= dfuse_cb_getattr,
 	.unlink		= dfuse_cb_unlink,
-	.readdir	= dfuse_cb_readdir,
 	.create		= dfuse_cb_create,
+	.mknod		= dfuse_cb_mknod,
 	.rename		= dfuse_cb_rename,
 	.symlink	= dfuse_cb_symlink,
+	.setxattr	= dfuse_cb_setxattr,
+	.getxattr	= dfuse_cb_getxattr,
+	.listxattr	= dfuse_cb_listxattr,
+	.removexattr	= dfuse_cb_removexattr,
+	.setattr	= dfuse_cb_setattr,
+	.statfs		= dfuse_cb_statfs,
+};
+
+/* Operations for root/multi-user container
+ *
+ * The only write operations are mkdir/setattr.
+ */
+struct dfuse_inode_ops dfuse_login_ops = {
+	.lookup		= dfuse_cb_lookup,
+	.mkdir		= dfuse_cb_mkdir_with_id,
+	.opendir	= dfuse_cb_opendir,
+	.releasedir	= dfuse_cb_releasedir,
+	.getattr	= dfuse_cb_getattr,
+	.unlink		= dfuse_cb_unlink,
+	.rename		= dfuse_cb_rename,
 	.setxattr	= dfuse_cb_setxattr,
 	.getxattr	= dfuse_cb_getxattr,
 	.listxattr	= dfuse_cb_listxattr,
@@ -674,7 +739,9 @@ struct fuse_lowlevel_ops
 	fuse_ops->unlink	= df_ll_unlink;
 	fuse_ops->rmdir		= df_ll_unlink;
 	fuse_ops->readdir	= df_ll_readdir;
+	fuse_ops->readdirplus	= df_ll_readdirplus;
 	fuse_ops->create	= df_ll_create;
+	fuse_ops->mknod		= df_ll_mknod;
 	fuse_ops->rename	= df_ll_rename;
 	fuse_ops->symlink	= df_ll_symlink;
 	fuse_ops->setxattr	= df_ll_setxattr;

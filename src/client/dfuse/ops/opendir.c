@@ -67,6 +67,6 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino,
 		DFUSE_REPLY_ZERO(oh, req);
 	else
 		DFUSE_REPLY_ERR_RAW(oh, req, rc);
-	D_FREE(oh->doh_buf);
+	D_FREE(oh->doh_dre);
 	D_FREE(oh);
 };

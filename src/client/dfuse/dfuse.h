@@ -45,12 +45,12 @@ struct dfuse_info {
 	char				*di_cont;
 	char				*di_group;
 	char				*di_mountpoint;
-	d_rank_list_t			*di_svcl;
 	uint32_t			di_thread_count;
 	bool				di_threaded;
 	bool				di_foreground;
 	bool				di_direct_io;
 	bool				di_caching;
+	bool				di_multi_user;
 	/* List head of dfuse_pool entries */
 	d_list_t			di_dfp_list;
 	pthread_mutex_t			di_lock;
@@ -79,52 +79,53 @@ struct dfuse_projection_info {
 	bool				dpi_shutdown;
 };
 
-/*
- * Max number of 4k (fuse buffer size for readdir) blocks that need offset
- * tracking in the readdir implementation. Since in readdir implementation we
- * specify a larger buffer size (16k) to fetch the dir entries, the buffer we
- * track those entries on the OH needs to know where fuse_add_direntry() exceeds
- * the 4k size of a block that we return to readdir. In the next call to
- * readdir, we need to resume from that last offset before we exceeded that 4k
- * size. We define this max number of blocks to 8 (not 4 - 16k/4k) to account
- * for the possibility that we need to re-alloc that buffer on OH since
- * fuse_add_direntry() adds more metadata (the fuse direntry attributes) in
- * addition to the entry name, which could exceed 16K in some cases. We just
- * double the buffer size inthis case to 32k, and so we need a max of 8 offsets
- * to track in this case.
- */
-#define READDIR_BLOCKS 8
-
 struct dfuse_inode_entry;
 
-/** what is returned as the handle for fuse fuse_file_info on create/open */
+struct dfuse_readdir_entry {
+	/* Name of this directory entry */
+	char	dre_name[NAME_MAX + 1];
+
+	/* Offset of this directory entry */
+	off_t	dre_offset;
+
+	/* Offset of the next directory entry
+	 * A value of DFUSE_READDIR_EOD means end
+	 * of directory.
+	 */
+	off_t	dre_next_offset;
+};
+
+/** what is returned as the handle for fuse fuse_file_info on
+ * create/open/opendir
+ */
 struct dfuse_obj_hdl {
 	/** pointer to dfs_t */
-	dfs_t		*doh_dfs;
+	dfs_t				*doh_dfs;
 	/** the DFS object handle */
-	dfs_obj_t	*doh_obj;
+	dfs_obj_t			*doh_obj;
 	/** the inode entry for the file */
-	struct dfuse_inode_entry *doh_ie;
+	struct dfuse_inode_entry	*doh_ie;
+
+	/* Below here is only used for directories */
 	/** an anchor to track listing in readdir */
-	daos_anchor_t	doh_anchor;
-	/** current offset in dir stream (what is returned to fuse) */
-	off_t		doh_fuse_off;
-	/** current offset in dir stream (includes cached entries) */
-	off_t		doh_dir_off[READDIR_BLOCKS];
-	/** Buffer with all entries listed from DFS with the fuse dirents */
-	void		*doh_buf;
-	/** offset to start from of doh_buffer */
-	off_t		doh_start_off[READDIR_BLOCKS];
-	/** ending offset in doh_buf */
-	off_t		doh_cur_off;
-	/** current idx to process in doh_start_off */
-	uint32_t	doh_idx;
+	daos_anchor_t			doh_anchor;
+
+	/** Array of entries returned by dfs but not reported to kernel */
+	struct dfuse_readdir_entry	*doh_dre;
+	/** Current index into doh_dre array */
+	uint32_t			doh_dre_index;
+	/** Last index containing valid data */
+	uint32_t			doh_dre_last_index;
+	/** Next value from anchor */
+	uint32_t			doh_anchor_index;
 };
 
 struct dfuse_inode_ops {
 	void (*create)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name, mode_t mode,
 		       struct fuse_file_info *fi);
+	void (*mknod)(fuse_req_t req, struct dfuse_inode_entry *parent,
+		      const char *name, mode_t mode);
 	void (*getattr)(fuse_req_t req, struct dfuse_inode_entry *inode);
 	void (*setattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			struct stat *attr, int to_set);
@@ -136,8 +137,6 @@ struct dfuse_inode_ops {
 			struct fuse_file_info *fi);
 	void (*releasedir)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			   struct fuse_file_info *fi);
-	void (*readdir)(fuse_req_t req, struct dfuse_inode_entry *inode,
-			size_t size, off_t offset, struct fuse_file_info *fi);
 	void (*rename)(fuse_req_t req, struct dfuse_inode_entry *parent_inode,
 		       const char *name,
 		       struct dfuse_inode_entry *newparent_inode,
@@ -168,6 +167,7 @@ struct dfuse_event {
 };
 
 extern struct dfuse_inode_ops dfuse_dfs_ops;
+extern struct dfuse_inode_ops dfuse_login_ops;
 extern struct dfuse_inode_ops dfuse_cont_ops;
 extern struct dfuse_inode_ops dfuse_pool_ops;
 
@@ -194,7 +194,26 @@ struct dfuse_dfs {
 	/* List of dfuse_dfs entries in the dfuse_pool */
 	d_list_t		dfs_list;
 	pthread_mutex_t		dfs_read_mutex;
+	bool			dfs_multi_user;
 };
+
+/* Xattr namespace used by dfuse.
+ *
+ * Extended attributes with this prefix can only be set by dfuse itself
+ * or directly though dfs/daos but not through dfuse.
+ */
+#define DFUSE_XATTR_PREFIX "user.dfuse"
+
+/* Multiuser support */
+#define DFUSE_XID_XATTR_NAME "user.dfuse.ids"
+
+struct uid_entry {
+	uid_t uid;
+	gid_t gid;
+};
+
+int
+dfuse_get_uid(struct dfuse_inode_entry *ie);
 
 /*
  * struct dfuse_info contains list of dfuse_pool
@@ -284,6 +303,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define LOG_MODES(HANDLE, INPUT) do {					\
 		int _flag = (INPUT) & S_IFMT;				\
 		LOG_MODE((HANDLE), _flag, S_IFREG);			\
+		LOG_MODE((HANDLE), _flag, S_IFIFO);			\
 		LOG_MODE((HANDLE), _flag, S_ISUID);			\
 		LOG_MODE((HANDLE), _flag, S_ISGID);			\
 		LOG_MODE((HANDLE), _flag, S_ISVTX);			\
@@ -468,7 +488,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
  * Inode handle.
  *
  * Describes any entry in the projection that the kernel knows about, may
- * be a directory, file, symbolic link or anything else.
+ * be a directory, file,  symbolic link or anything else.
  */
 
 struct dfuse_inode_entry {
@@ -582,6 +602,10 @@ dfuse_cb_mkdir(fuse_req_t, struct dfuse_inode_entry *,
 	       const char *, mode_t);
 
 void
+dfuse_cb_mkdir_with_id(fuse_req_t, struct dfuse_inode_entry *,
+		       const char *, mode_t);
+
+void
 dfuse_cb_opendir(fuse_req_t, struct dfuse_inode_entry *,
 		 struct fuse_file_info *fi);
 
@@ -592,6 +616,10 @@ dfuse_cb_releasedir(fuse_req_t, struct dfuse_inode_entry *,
 void
 dfuse_cb_create(fuse_req_t, struct dfuse_inode_entry *,
 		const char *, mode_t, struct fuse_file_info *);
+
+void
+dfuse_cb_mknod(fuse_req_t, struct dfuse_inode_entry *,
+	       const char *, mode_t);
 
 void
 dfuse_cb_open(fuse_req_t, fuse_ino_t, struct fuse_file_info *);
@@ -608,8 +636,7 @@ dfuse_cb_unlink(fuse_req_t, struct dfuse_inode_entry *,
 		const char *);
 
 void
-dfuse_cb_readdir(fuse_req_t, struct dfuse_inode_entry *, size_t, off_t,
-		 struct fuse_file_info *);
+dfuse_cb_readdir(fuse_req_t, struct dfuse_obj_hdl *, size_t, off_t, bool);
 
 void
 dfuse_cb_rename(fuse_req_t, struct dfuse_inode_entry *, const char *,
