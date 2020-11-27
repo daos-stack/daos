@@ -52,8 +52,8 @@ func MockNvmeNamespace(varIdx ...int32) *ctlpb.NvmeController_Namespace {
 
 // MockSmdDevice is a mock protobuf SmdDevice message used in tests for
 // multiple packages.
-func MockSmdDevice(varIdx ...int32) *ctlpb.NvmeController_SmdDevice {
-	native := storage.MockSmdDevice(varIdx...)
+func MockSmdDevice(parentTrAddr string, varIdx ...int32) *ctlpb.NvmeController_SmdDevice {
+	native := storage.MockSmdDevice(parentTrAddr, varIdx...)
 	pb := new(SmdDevice)
 
 	if err := pb.FromNative(native); err != nil {

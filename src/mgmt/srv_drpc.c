@@ -1459,8 +1459,8 @@ ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 				D_FREE(resp->devices[i]->tgt_ids);
 			if (resp->devices[i]->state != NULL)
 				D_FREE(resp->devices[i]->state);
-			if (resp->devices[i]->traddr != NULL)
-				D_FREE(resp->devices[i]->traddr);
+			if (resp->devices[i]->tr_addr != NULL)
+				D_FREE(resp->devices[i]->tr_addr);
 			D_FREE(resp->devices[i]);
 		}
 	}
@@ -1628,19 +1628,6 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp->read_only_warn = stats.read_only_warn;
 	resp->dev_reliability_warn = stats.dev_reliability_warn;
 	resp->volatile_mem_warn = stats.volatile_mem_warn;
-
-	D_STRNDUP(resp->model, stats.model, HEALTH_STAT_STR_LEN);
-	if (resp->model == NULL) {
-		D_ERROR("failed to allocate model ID buffer");
-		D_GOTO(out, rc = -DER_NOMEM);
-	}
-
-	D_STRNDUP(resp->serial, stats.serial, HEALTH_STAT_STR_LEN);
-	if (resp->serial == NULL) {
-		D_ERROR("failed to allocate serial ID buffer");
-		D_GOTO(out, rc = -DER_NOMEM);
-	}
-
 	resp->total_bytes = stats.total_bytes;
 	resp->avail_bytes = stats.avail_bytes;
 out:

@@ -127,23 +127,17 @@ func (c *StorageControlService) StoragePrepare(ctx context.Context, req *ctlpb.S
 	return resp, nil
 }
 
-// mapCtrlrs maps controllers to an alternate (as opposed to PCI address) key.
+// mapCtrlrs maps controllers to PCI address) key.
 func mapCtrlrs(ctrlrs storage.NvmeControllers) (map[string]*storage.NvmeController, error) {
 	ctrlrMap := make(map[string]*storage.NvmeController)
 
 	for _, ctrlr := range ctrlrs {
-		key, err := ctrlr.GenAltKey()
-		if err != nil {
-			return nil, errors.Wrapf(err, "generate alternate key for controller %s",
+		if _, exists := ctrlrMap[ctrlr.PciAddr]; exists {
+			return nil, errors.Errorf("duplicate entries for controller %s",
 				ctrlr.PciAddr)
 		}
 
-		if _, exists := ctrlrMap[key]; exists {
-			return nil, errors.Errorf("duplicate entries for controller %s, key %s",
-				ctrlr.PciAddr, key)
-		}
-
-		ctrlrMap[key] = ctrlr
+		ctrlrMap[ctrlr.PciAddr] = ctrlr
 	}
 
 	return ctrlrMap, nil
@@ -159,8 +153,9 @@ func (c *ControlService) scanInstanceBdevs(ctx context.Context) (*bdev.ScanRespo
 	instances := c.harness.Instances()
 
 	for _, srv := range instances {
+		c.log.Debugf("idx %d, cfgDevs: %s", srv.Index(),
+			c.instanceStorage[srv.Index()].Bdev.GetNvmeDevs())
 		nvmeDevs := c.instanceStorage[srv.Index()].Bdev.GetNvmeDevs()
-
 		if len(nvmeDevs) == 0 {
 			continue
 		}

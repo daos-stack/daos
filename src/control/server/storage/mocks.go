@@ -89,29 +89,31 @@ func MockNvmeNamespace(varIdx ...int32) *NvmeNamespace {
 }
 
 // MockSmdDevice returns struct with examples values.
-func MockSmdDevice(varIdx ...int32) *SmdDevice {
+func MockSmdDevice(parentTrAddr string, varIdx ...int32) *SmdDevice {
 	idx := common.GetIndex(varIdx...)
 	startTgt := (idx * 4) + 1
 	return &SmdDevice{
 		UUID:      common.MockUUID(idx),
 		TargetIDs: []int32{startTgt, startTgt + 1, startTgt + 2, startTgt + 3},
 		State:     "NORMAL",
+		TrAddr:    parentTrAddr,
 	}
 }
 
 // MockNvmeController returns struct with examples values.
 func MockNvmeController(varIdx ...int32) *NvmeController {
 	idx := common.GetIndex(varIdx...)
+	pciAddr := concat("0000:80:00", idx, ".")
 
 	return &NvmeController{
 		Model:       concat("model", idx),
 		Serial:      concat("serial", getRandIdx()),
-		PciAddr:     concat("0000:80:00", idx, "."),
+		PciAddr:     pciAddr,
 		FwRev:       concat("fwRev", idx),
 		SocketID:    idx,
 		HealthStats: MockNvmeHealth(idx),
-		Namespaces:  []*NvmeNamespace{MockNvmeNamespace(idx)},
-		SmdDevices:  []*SmdDevice{MockSmdDevice(idx)},
+		Namespaces:  []*NvmeNamespace{MockNvmeNamespace(1)},
+		SmdDevices:  []*SmdDevice{MockSmdDevice(pciAddr, idx)},
 	}
 }
 

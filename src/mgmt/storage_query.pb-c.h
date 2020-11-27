@@ -56,8 +56,6 @@ struct  _Mgmt__BioHealthReq
 struct  _Mgmt__BioHealthResp
 {
   ProtobufCMessage base;
-  char *model;
-  char *serial;
   uint64_t timestamp;
   /*
    * Device health details
@@ -114,7 +112,7 @@ struct  _Mgmt__BioHealthResp
 };
 #define MGMT__BIO_HEALTH_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__bio_health_resp__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, 0 }
+    , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, 0 }
 
 
 struct  _Mgmt__SmdDevReq
@@ -145,7 +143,7 @@ struct  _Mgmt__SmdDevResp__Device
   /*
    * Transport address of blobstore
    */
-  char *traddr;
+  char *tr_addr;
 };
 #define MGMT__SMD_DEV_RESP__DEVICE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__smd_dev_resp__device__descriptor) \

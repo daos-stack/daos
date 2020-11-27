@@ -331,14 +331,14 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 
 		if (dev_info->bdi_traddr != NULL) {
 			buflen = strlen(dev_info->bdi_traddr) + 1;
-			D_ALLOC(resp->devices[i]->traddr, buflen);
-			if (resp->devices[i]->traddr == NULL) {
-				D_ERROR("Failed to allocate device traddr");
+			D_ALLOC(resp->devices[i]->tr_addr, buflen);
+			if (resp->devices[i]->tr_addr == NULL) {
+				D_ERROR("Failed to allocate device tr_addr");
 				rc = -DER_NOMEM;
 				break;
 			}
 			/* Transport Addr -> Blobstore UUID mapping */
-			strncpy(resp->devices[i]->traddr, dev_info->bdi_traddr,
+			strncpy(resp->devices[i]->tr_addr, dev_info->bdi_traddr,
 				buflen);
 		}
 
@@ -376,8 +376,8 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 					D_FREE(resp->devices[i]->tgt_ids);
 				if (resp->devices[i]->state != NULL)
 					D_FREE(resp->devices[i]->state);
-				if (resp->devices[i]->traddr != NULL)
-					D_FREE(resp->devices[i]->traddr);
+				if (resp->devices[i]->tr_addr != NULL)
+					D_FREE(resp->devices[i]->tr_addr);
 				D_FREE(resp->devices[i]);
 			}
 		}

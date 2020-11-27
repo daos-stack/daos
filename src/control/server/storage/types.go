@@ -27,10 +27,8 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/dustin/go-humanize"
-	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/system"
@@ -111,8 +109,6 @@ type (
 	// NvmeHealth represents a set of health statistics for a NVMe device
 	// and mirrors C.struct_nvme_stats.
 	NvmeHealth struct {
-		Model           string `json:"model"`
-		Serial          string `json:"serial"`
 		Timestamp       uint64 `json:"timestamp"`
 		TempWarnTime    uint32 `json:"warn_temp_time"`
 		TempCritTime    uint32 `json:"crit_temp_time"`
@@ -150,10 +146,7 @@ type (
 		Rank       system.Rank `json:"rank"`
 		TotalBytes uint64      `json:"total_bytes"`
 		AvailBytes uint64      `json:"avail_bytes"`
-		TrAddr     string      `json:"trAddr"`
-		// TODO: included only for compatibility with storage_query smd
-		//       commands and should be removed when possible
-		Health *NvmeHealth `json:"health"`
+		TrAddr     string      `json:"tr_addr"`
 	}
 
 	// NvmeController represents a NVMe device controller which includes health
@@ -308,36 +301,6 @@ func (nch *NvmeHealth) TempC() float32 {
 // TempF returns controller temperature in degrees Fahrenheit.
 func (nch *NvmeHealth) TempF() float32 {
 	return nch.TempC()*(9/5) + 32
-}
-
-// genAltKey verifies non-null model and serial identifiers exist and return the
-// concatenated identifier (new key) and error if either is empty.
-func genAltKey(model, serial string) (string, error) {
-	var empty string
-	m := strings.TrimSpace(model)
-	s := strings.TrimSpace(serial)
-
-	if m == "" {
-		empty = "model"
-	} else if s == "" {
-		empty = "serial"
-	}
-	if empty != "" {
-		return "", errors.Errorf("missing %s identifier", empty)
-	}
-
-	return m + s, nil
-}
-
-// GenAltKey generates an alternative key identifier for an NVMe Controller
-// from its returned health statistics.
-func (nch *NvmeHealth) GenAltKey() (string, error) {
-	return genAltKey(nch.Model, nch.Serial)
-}
-
-// GenAltKey generates an alternative key identifier for an NVMe Controller.
-func (nc *NvmeController) GenAltKey() (string, error) {
-	return genAltKey(nc.Model, nc.Serial)
 }
 
 // UpdateSmd adds or updates SMD device entry for an NVMe Controller.

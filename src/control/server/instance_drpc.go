@@ -217,6 +217,7 @@ func (srv *IOServerInstance) listSmdDevices(ctx context.Context, req *mgmtpb.Smd
 // retrieve metadata and health stats for each SMD device (blobstore) on
 // a given I/O server instance. Update input map with new stats/smd info.
 func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[string]*storage.NvmeController) error {
+	srv.log.Debugf("instance %d updating %v ctrlrs", srv.Index(), ctrlrMap)
 	smdDevs, err := srv.listSmdDevices(ctx, new(mgmtpb.SmdDevReq))
 	if err != nil {
 		return errors.Wrapf(err, "instance %d listSmdDevices()", srv.Index())
@@ -224,42 +225,33 @@ func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[
 
 	hasUpdatedHealth := make(map[string]bool)
 	for _, dev := range smdDevs.Devices {
+		msg := fmt.Sprintf("instance %d: smd %s with transport address %s",
+			srv.Index(), dev.GetUuid(), dev.GetTrAddr())
+
+		ctrlr, exists := ctrlrMap[dev.GetTrAddr()]
+		if !exists {
+			return errors.Errorf("%s: didn't match any known controllers", msg)
+		}
+
 		pbStats, err := srv.getBioHealth(ctx, &mgmtpb.BioHealthReq{
-			DevUuid: dev.Uuid,
+			DevUuid: dev.GetUuid(),
 		})
 		if err != nil {
 			return errors.Wrapf(err, "instance %d getBioHealth()", srv.Index())
 		}
-
-		msg := fmt.Sprintf("instance %d: health stats from smd uuid %s", srv.Index(),
-			dev.GetUuid())
 
 		health := new(storage.NvmeHealth)
 		if err := convert.Types(pbStats, health); err != nil {
 			return errors.Wrapf(err, msg)
 		}
 
-		key, err := health.GenAltKey()
-		if err != nil {
-			return errors.Wrapf(err, msg)
-		}
-
-		msg += fmt.Sprintf(" with key %s", key)
-
-		ctrlr, exists := ctrlrMap[key]
-		if !exists {
-			srv.log.Debugf("%s didn't match any known controllers", msg)
-			continue
-		}
-
-		srv.log.Debugf("%s->%s", msg, ctrlr.PciAddr)
-
 		// multiple updates for the same key expected when
 		// more than one controller namespaces (and resident
 		// blobstores) exist, stats will be the same for each
-		if _, already := hasUpdatedHealth[key]; !already {
+		if _, already := hasUpdatedHealth[ctrlr.PciAddr]; !already {
 			ctrlr.HealthStats = health
-			hasUpdatedHealth[key] = true
+			msg = fmt.Sprintf("%s: health stats updated", msg)
+			hasUpdatedHealth[ctrlr.PciAddr] = true
 		}
 
 		smdDev := new(storage.SmdDevice)
@@ -271,14 +263,13 @@ func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[
 			return errors.Wrapf(err, "get rank")
 		}
 		smdDev.Rank = srvRank
+		smdDev.TrAddr = dev.GetTrAddr()
 		// space utilisation stats for each smd device
 		smdDev.TotalBytes = pbStats.TotalBytes
 		smdDev.AvailBytes = pbStats.AvailBytes
 
-		srv.log.Debugf("update smd/bs %s usage on ctrlr %s: %+v",
-			dev.GetUuid(), ctrlr.PciAddr, smdDev)
-
 		ctrlr.UpdateSmd(smdDev)
+		srv.log.Debugf("%s: smd usage updated", msg)
 	}
 
 	return nil
