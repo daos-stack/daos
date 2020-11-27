@@ -299,11 +299,13 @@ host1
 -----
 PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
   SMD Devices
-    UUID:%s Targets:%v Rank:%d State:%s
+    UUID:%s [TrAddr:]
+      Targets:%v Rank:%d State:%s
 
 PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
   SMD Devices
-    UUID:%s Targets:%v Rank:%d State:%s
+    UUID:%s [TrAddr:]
+      Targets:%v Rank:%d State:%s
 
 `,
 				controllerC.PciAddr, controllerC.Model, controllerC.FwRev,
@@ -334,13 +336,17 @@ host1
 -----
 PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
   SMD Devices
-    UUID:%s Targets:%v Rank:%d State:%s
-    UUID:%s Targets:%v Rank:%d State:%s
+    UUID:%s [TrAddr:]
+      Targets:%v Rank:%d State:%s
+    UUID:%s [TrAddr:]
+      Targets:%v Rank:%d State:%s
 
 PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
   SMD Devices
-    UUID:%s Targets:%v Rank:%d State:%s
-    UUID:%s Targets:%v Rank:%d State:%s
+    UUID:%s [TrAddr:]
+      Targets:%v Rank:%d State:%s
+    UUID:%s [TrAddr:]
+      Targets:%v Rank:%d State:%s
 
 `,
 				controllerE.PciAddr, controllerE.Model, controllerE.FwRev,
