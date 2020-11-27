@@ -439,7 +439,9 @@ pipeline {
     // advantage therefore is not to change the priority of PRs, but to
     // change the master branch itself.
     parameters {
-        string(name: 'BuildPriority', defaultValue: env.BRANCH_NAME == 'master' ? '3' : '2', description: 'Set from Jenkinsfile')
+        string(name: 'BuildPriority',
+	       defaultValue: env.BRANCH_NAME == 'master' ? '3' : '2',
+	       description: 'Priority of the build.  DO NOT USE WITHOUT PERMISSION.')
     }
 
     stages {
