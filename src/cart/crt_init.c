@@ -220,7 +220,7 @@ crt_plugin_init(void)
 		crt_plugin_gdata.cpg_prog_cbs_old[i] = NULL;
 		D_ALLOC_ARRAY(cbs_prog, cbs_size);
 		if (cbs_prog == NULL) {
-			while (i > 0)
+			while (i >= 0)
 				D_FREE(crt_plugin_gdata.cpg_prog_cbs[--i]);
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
