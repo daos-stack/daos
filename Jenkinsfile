@@ -402,7 +402,7 @@ String quick_build_deps(String distro) {
     } else {
         error("Unknown distro: ${distro} in quick_build_deps()")
     }
-    return sh(label:'Get Quickbuild dependencies',
+    return sh(label: 'Get Quickbuild dependencies',
               script: "rpmspec -q " +
                       "--srpm " +
                       rpmspec_args + ' ' +
