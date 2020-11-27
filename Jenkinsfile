@@ -449,7 +449,7 @@ pipeline {
     }
 
     parameters {
-        string(name: 'BuildPriority', defaultValue: env.BRANCH_NAME == 'master' ? '4': '1')
+        string(name: 'BuildPriority', defaultValue: env.BRANCH_NAME == 'amittman-prio' ? '3': '2')
     }
 
     stages {
