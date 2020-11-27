@@ -530,7 +530,6 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	if (rebuild_nr <= 0) /* No need rebuild */
 		D_GOTO(out, rc = rebuild_nr);
 
-	D_ASSERT(rebuild_nr <= rpt->rt_tgts_num);
 	for (i = 0; i < rebuild_nr; i++) {
 		struct pool_target *target;
 
