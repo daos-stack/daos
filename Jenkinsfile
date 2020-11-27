@@ -447,19 +447,6 @@ pipeline {
         ansiColor('xterm')
     }
 
-    def priority = get_priority()
-
-//    parameters {
-//        string(name: 'BuildPriority', defaultValue: '$priority', description: 'Priority of the build.  DO NOT USE WITHOUT PERMISSION.')
-//    }
-
-    parameters {
-        AbstractScriptableParameter(name: 'BuildPriority',
-                                    script: [ $class: 'GroovyScript',
-                                             script: "return '4'"
-                                            ])
-    }
- 
     
     stages {
         stage('Cancel Previous Builds') {
@@ -472,6 +459,9 @@ pipeline {
             when {
                 beforeAgent true
                 expression { ! skip_prebuild() }
+            }
+            parameters {
+                string(name: 'BuildPriority', defaultValue: get_priority(), description: 'Priority of the build.  DO NOT USE WITHOUT PERMISSION.')
             }
             parallel {
                 stage('checkpatch') {
