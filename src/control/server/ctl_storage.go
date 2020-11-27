@@ -28,6 +28,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -64,7 +65,7 @@ func findBdevsWithDomain(scanResp bdev.ScanResponse, prefix string) ([]string, e
 	var found []string
 
 	for _, ctrlr := range scanResp.Controllers {
-		domain, _, _, _, err := bdev.ParsePCIAddress(ctrlr.PciAddr)
+		domain, _, _, _, err := common.ParsePCIAddress(ctrlr.PciAddr)
 		if err != nil {
 			return nil, err
 		}
@@ -90,7 +91,7 @@ func substBdevVmdAddrs(cfgBdevs []string, scanResp bdev.ScanResponse) ([]string,
 
 	var newCfgBdevs []string
 	for _, dev := range cfgBdevs {
-		_, b, d, f, err := bdev.ParsePCIAddress(dev)
+		_, b, d, f, err := common.ParsePCIAddress(dev)
 		if err != nil {
 			return nil, err
 		}

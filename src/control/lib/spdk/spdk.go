@@ -47,7 +47,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 )
 
 // Env is the interface that provides SPDK environment management.
@@ -129,17 +128,17 @@ func pciListToC(inAddrs []string) (*unsafe.Pointer, error) {
 	return &outAddrs, nil
 }
 
-// revertBackingPciToVmd converts VMD backing device PCI addresses (with the VMD
+// revertBackingToVmd converts VMD backing device PCI addresses (with the VMD
 // address encoded in the domain component of the PCI address) back to the PCI
 // address of the VMD e.g. [5d0505:01:00.0, 5d0505:03:00.0] -> [0000:5d:05.5].
 //
 // Many assumptions are made as to the input and output PCI address structure in
 // the conversion.
-func revertBackingPciToVmd(cfgBdevs []string) ([]string, error) {
+func revertBackingToVmd(pciAddrs []string) ([]string, error) {
 	var outAddrs []string
 
-	for _, inAddr := range cfgBdevs {
-		domain, _, _, _, err := bdev.ParsePCIAddress(inAddr)
+	for _, inAddr := range pciAddrs {
+		domain, _, _, _, err := common.ParsePCIAddress(inAddr)
 		if err != nil {
 			return nil, err
 		}
