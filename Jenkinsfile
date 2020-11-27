@@ -449,7 +449,7 @@ pipeline {
     }
 
     parameters {
-        string(name: 'BuildPriority', defaultValue: env.BRANCH_NAME == 'master' ? '4': '0')
+        string(name: 'BuildPriority', defaultValue: env.BRANCH_NAME == 'master' ? '4': '1')
     }
 
     stages {
