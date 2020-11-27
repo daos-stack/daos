@@ -260,21 +260,6 @@ if (!env.CHANGE_ID &&
    return
 }
 
-// Set priority for the pipeline.  Priority is set vai a job parameter so does
-// not exist for the first build of a PR which will always build at priority
-// 2, so use that value for PRs, slower for master and faster for Queue-jump
-// builds.
-
-String get_priority() {
-    if (cachedCommitPragma(pragma: 'Queue-jump') == 'true') {
-        return '1'
-    } else if (env.CHANGE_ID) {
-        return '2'
-    } else {
-        return '3'
-    }
-}
-
 // The docker agent setup and the provisionNodes step need to know the
 // UID that the build agent is running under.
 cached_uid = 0
@@ -284,6 +269,22 @@ def getuid() {
                         script: "id -u",
                         returnStdout: true).trim()
     return cached_uid
+}
+
+
+// Set priority for the pipeline.  Priority is set vai a job parameter so does
+// not exist for the first build of a PR which will always build at priority
+// 2, so use that value for PRs, slower for master and faster for Queue-jump
+// builds.
+
+String get_priority() {
+    if (cachedCommitPragma(pragma: 'Queue-jump') == 'true') {
+        return '1'
+    } else if ('${env.CHANGE_ID}') {
+        return '2'
+    } else {
+        return '3'
+    }
 }
 
 String rpm_test_version() {
@@ -448,7 +449,7 @@ pipeline {
     }
 
     parameters {
-        string(name: 'BuildPriority', defaultValue: get_priority())
+        string(name: 'BuildPriority', defaultValue: env.BRANCH_NAME == 'master' ? '4': '2')
     }
 
     stages {
