@@ -271,19 +271,6 @@ def getuid() {
     return cached_uid
 }
 
-// Set priority for the pipeline.  Priority is set vai a job parameter so does
-// not exist for the first build of a PR which will always build at priority
-// 2, so use that value for PRs, slower for master and faster for Queue-jump
-// builds.
-
-String get_priority() {
-    if ('${env.CHANGE_ID}') {
-        return '2'
-    } else {
-        return '3'
-    }
-}
-
 String rpm_test_version() {
     return cachedCommitPragma(pragma: 'RPM-test-version')
 }
@@ -445,9 +432,9 @@ pipeline {
         ansiColor('xterm')
     }
 
-    // test.
+    // Default priority is 2, lower is better.
     parameters {
-        string(name: 'BuildPriority', defaultValue: env.BRANCH_NAME == 'master' ? 'yes': env.branch_name)
+        string(name: 'BuildPriority', defaultValue: env.BRANCH_NAME == 'master' ? '3' : '1')
     }
 
     stages {
