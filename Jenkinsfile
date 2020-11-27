@@ -447,7 +447,10 @@ pipeline {
         ansiColor('xterm')
     }
 
-    
+    parameters {
+        string(name: 'BuildPriority', defaultValue: get_priority())
+    }
+
     stages {
         stage('Cancel Previous Builds') {
             when { changeRequest() }
@@ -462,10 +465,6 @@ pipeline {
             }
             parallel {
                 stage('checkpatch') {
-		    parameters {
-                        string(name: 'BuildPriority', defaultValue: get_priority(), description: 'Priority of the build.  DO NOT USE WITHOUT PERMISSION.')
-                    }
-
                     when {
                         beforeAgent true
                         expression { ! skip_checkpatch() }
