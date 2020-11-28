@@ -28,6 +28,7 @@ from general_utils import get_remote_file_size, run_task
 
 
 class POSIXStatTest(IorTestBase):
+    # pylint: disable=too-many-ancestors
     """Test class description:
 
     Requirement: SRS-10-0303
@@ -107,7 +108,6 @@ class POSIXStatTest(IorTestBase):
                 self.hostlist_clients[0], testfile_path)
 
             # Adjust the file size and verify that it matches the expected size.
-            unit = block_size[-1]
             expected_size = block_size[:-1]
             # Obtained size is in byte, so convert it to MB.
             file_size_adjusted = file_size / 1024 / 1024
