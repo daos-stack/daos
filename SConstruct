@@ -5,7 +5,16 @@ import platform
 import subprocess
 import time
 import errno
+# pylint: disable=no-name-in-module
+# pylint: disable=import-error
+import SCons.Warnings
+# pylint: enable=no-name-in-module
+# pylint: enable=import-error
 from SCons.Script import BUILD_TARGETS
+
+# pylint: disable=no-member
+SCons.Warnings.warningAsException()
+# pylint: enable=no-member
 
 try:
     input = raw_input # pylint: disable=redefined-builtin
