@@ -50,11 +50,12 @@ dmg:
     allow_insecure: True
 daos_tests:
   Tests: !mux
-    test_u:
-      daos_test: u
-      num_clients: 1
-      test_name: DFS unit tests
-      test_timeout: 100
+# XXX Disabled until DAOS-6090 is fixed.
+#    test_u:
+#      daos_test: u
+#      num_clients: 1
+#      test_name: DFS unit tests
+#      test_timeout: 100
     test_p:
       daos_test: p
       num_clients: 32
