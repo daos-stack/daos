@@ -188,8 +188,9 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 	}
 
 	return &PoolCreateResp{
-		UUID:    pbReq.Uuid,
-		SvcReps: pbPcr.GetSvcreps(),
+		UUID:     pbReq.Uuid,
+		SvcReps:  pbPcr.GetSvcreps(),
+		NumRanks: pbPcr.GetNumranks(),
 	}, nil
 }
 

@@ -131,6 +131,7 @@ func (db *Database) configureRaft() error {
 	rc.ElectionTimeout = 250 * time.Millisecond
 	rc.LeaderLeaseTimeout = 125 * time.Millisecond
 	rc.LocalID = raft.ServerID(db.serverAddress())
+	rc.NotifyCh = db.raftLeaderNotifyCh
 
 	snaps, err := raft.NewFileSnapshotStoreWithLogger(db.cfg.RaftDir, 2, rc.Logger)
 	if err != nil {

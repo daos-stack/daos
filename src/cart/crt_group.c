@@ -52,7 +52,7 @@ crt_li_destroy(struct crt_lookup_item *li)
 	}
 
 	D_MUTEX_DESTROY(&li->li_mutex);
-	D_FREE_PTR(li);
+	D_FREE(li);
 }
 
 struct crt_lookup_item *
@@ -259,7 +259,7 @@ crt_ui_destroy(struct crt_uri_item *ui)
 			D_FREE(ui->ui_uri[i]);
 	}
 
-	D_FREE_PTR(ui);
+	D_FREE(ui);
 }
 
 static inline char *
@@ -301,6 +301,9 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 	crt_phy_addr_t		uri_dup;
 	d_rank_t		rank;
 	int			rc = 0;
+	char			*p;
+	int			base_port;
+	int			i;
 
 	rank = li->li_rank;
 	grp_priv = li->li_grp_priv;
@@ -316,20 +319,77 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 		ui->ui_ref = 0;
 		ui->ui_initialized = 1;
 		ui->ui_rank = li->li_rank;
-		D_STRNDUP(ui->ui_uri[tag], uri, CRT_ADDR_STR_MAX_LEN);
-		if (!ui->ui_uri[tag]) {
-			D_FREE_PTR(ui);
-			D_GOTO(exit, rc = -DER_NOMEM);
+
+		if (crt_provider_is_contig_ep(crt_gdata.cg_na_plugin)) {
+			char tmp_uri[CRT_ADDR_STR_MAX_LEN];
+
+			strncpy(tmp_uri, uri, CRT_ADDR_STR_MAX_LEN - 1);
+			/* For now we assume contiguous endpoint providers are
+			 * port based. Based on that we generate URIs for every
+			 * tag of the rank from the base port.
+			 *
+			 * Port-based providers have form of
+			 * string:port
+			 *
+			 * Parse both parts out
+			 */
+			p = strrchr(tmp_uri, ':');
+			if (p == NULL) {
+				D_ERROR("Badly formed URI '%s'\n", tmp_uri);
+				D_GOTO(exit, rc = -DER_INVAL);
+			}
+
+			/* Split <string> from <port> part in URI */
+			*p = '\0';
+			p++;
+			base_port = atoi(p) - tag;
+
+			if (base_port <= 0) {
+				D_ERROR("Failed to parse uri=%s correctly\n",
+					tmp_uri);
+				D_GOTO(exit, rc = -DER_INVAL);
+			}
+
+			for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
+				char *tag_uri = NULL;
+
+				D_ASPRINTF(tag_uri, "%s:%d", tmp_uri,
+					   base_port + i);
+
+				if (tag_uri == NULL) {
+					int k;
+
+					for (k = 0; k < i; k++)
+						D_FREE(ui->ui_uri[k]);
+
+					D_FREE(ui);
+					D_GOTO(exit, rc = -DER_NOMEM);
+				}
+
+				ui->ui_uri[i] = tag_uri;
+			}
+		} else {
+			D_STRNDUP(ui->ui_uri[tag], uri, CRT_ADDR_STR_MAX_LEN);
+			if (!ui->ui_uri[tag]) {
+				D_FREE(ui);
+				D_GOTO(exit, rc = -DER_NOMEM);
+			}
 		}
 
 		rc = d_hash_rec_insert(&grp_priv->gp_uri_lookup_cache,
-				&rank, sizeof(rank),
-				&ui->ui_link,
-				true /* exclusive */);
+				       &rank, sizeof(rank),
+				       &ui->ui_link,
+				       true /* exclusive */);
 		if (rc != 0) {
 			D_ERROR("Entry already present\n");
-			D_FREE(ui->ui_uri[tag]);
-			D_FREE_PTR(ui);
+
+			if (crt_provider_is_contig_ep(crt_gdata.cg_na_plugin)) {
+				for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
+					D_FREE(ui->ui_uri[i]);
+			} else {
+				D_FREE(ui->ui_uri[tag]);
+			}
+			D_FREE(ui);
 			D_GOTO(exit, rc);
 		}
 	} else {
@@ -593,18 +653,18 @@ err_free_li:
 out:
 	return rc;
 }
+
 /*
  * Fill in the base URI of rank in the lookup cache of the crt_ctx.
  */
 int
-crt_grp_lc_uri_insert(struct crt_grp_priv *passed_grp_priv, int ctx_idx,
+crt_grp_lc_uri_insert(struct crt_grp_priv *passed_grp_priv,
 		      d_rank_t rank, uint32_t tag, const char *uri)
 {
 	struct crt_grp_priv	*grp_priv;
 	int			 rc = 0;
 	int			 i;
 
-	D_ASSERT(ctx_idx >= 0 && ctx_idx < CRT_SRV_CONTEXT_NUM);
 	if (tag >= CRT_SRV_CONTEXT_NUM) {
 		D_ERROR("tag %d out of range [0, %d].\n",
 			tag, CRT_SRV_CONTEXT_NUM - 1);
@@ -620,8 +680,7 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *passed_grp_priv, int ctx_idx,
 
 	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		ctx_idx = i;
-		rc = grp_lc_uri_insert_internal_locked(grp_priv, ctx_idx, rank,
+		rc = grp_lc_uri_insert_internal_locked(grp_priv, i, rank,
 						tag, uri);
 		if (rc != 0) {
 			D_ERROR("Insertion failed, " DF_RC "\n", DP_RC(rc));
@@ -634,33 +693,6 @@ unlock:
 
 	return rc;
 
-}
-
-/**
- * Fill in the base URI of rank in the lookup cache of all crt_ctx. grp can be
- * NULL
- */
-int
-crt_grp_lc_uri_insert_all(crt_group_t *grp, d_rank_t rank, int tag,
-			const char *uri)
-{
-	struct crt_grp_priv	*grp_priv;
-	int			 i;
-	int			 rc = 0;
-
-	grp_priv = crt_grp_pub2priv(grp);
-
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		rc = crt_grp_lc_uri_insert(grp_priv, i, rank, tag, uri);
-		if (rc != 0) {
-			D_ERROR("crt_grp_lc_uri_insert(%p, %d, %d, %d, %s)"
-				" failed. rc: %d\n", grp_priv, i, rank, tag,
-				uri, rc);
-			return rc;
-		}
-	}
-
-	return rc;
 }
 
 int
@@ -1689,7 +1721,7 @@ crt_grp_fini(void)
 		D_GOTO(out, rc);
 
 	D_RWLOCK_DESTROY(&grp_gdata->gg_rwlock);
-	D_FREE_PTR(grp_gdata);
+	D_FREE(grp_gdata);
 	crt_gdata.cg_grp = NULL;
 	crt_gdata.cg_grp_inited = 0;
 
@@ -2111,54 +2143,85 @@ out:
 }
 
 int
-crt_register_event_cb(crt_event_cb event_handler, void *arg)
+crt_register_event_cb(crt_event_cb func, void *args)
 {
-	struct crt_event_cb_priv	*cb_priv, *cb_priv2;
-	int				 rc = DER_SUCCESS;
+	struct crt_event_cb_priv *cbs_event;
+	size_t i, cbs_size;
+	int rc = 0;
 
-	D_ALLOC_PTR(cb_priv);
-	if (cb_priv == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-	cb_priv->cecp_func = event_handler;
-	cb_priv->cecp_args = arg;
+	D_MUTEX_LOCK(&crt_plugin_gdata.cpg_mutex);
 
-	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_event_rwlock);
-	d_list_for_each_entry(cb_priv2, &crt_plugin_gdata.cpg_event_cbs,
-			      cecp_link) {
-		if (cb_priv2->cecp_func == event_handler &&
-		    cb_priv2->cecp_args == arg) {
-			D_FREE(cb_priv);
-			rc = -DER_EXIST;
-			break;
+	cbs_size = crt_plugin_gdata.cpg_event_size;
+	cbs_event = crt_plugin_gdata.cpg_event_cbs;
+
+	for (i = 0; i < cbs_size; i++) {
+		if (cbs_event[i].cecp_func == func &&
+		    cbs_event[i].cecp_args == args) {
+			D_GOTO(out_unlock, rc = -DER_EXIST);
 		}
 	}
-	if (rc == 0)
-		d_list_add_tail(&cb_priv->cecp_link,
-				&crt_plugin_gdata.cpg_event_cbs);
-	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 
-out:
+	for (i = 0; i < cbs_size; i++) {
+		if (cbs_event[i].cecp_func == NULL) {
+			cbs_event[i].cecp_args = args;
+			cbs_event[i].cecp_func = func;
+			D_GOTO(out_unlock, rc = 0);
+		}
+	}
+
+	D_FREE(crt_plugin_gdata.cpg_event_cbs_old);
+
+	crt_plugin_gdata.cpg_event_cbs_old = cbs_event;
+	cbs_size += CRT_CALLBACKS_NUM;
+
+	D_ALLOC_ARRAY(cbs_event, cbs_size);
+	if (cbs_event == NULL) {
+		crt_plugin_gdata.cpg_event_cbs_old = NULL;
+		D_GOTO(out_unlock, rc = -DER_NOMEM);
+	}
+
+	if (i > 0)
+		memcpy(cbs_event, crt_plugin_gdata.cpg_event_cbs_old,
+		       i * sizeof(*cbs_event));
+	cbs_event[i].cecp_args = args;
+	cbs_event[i].cecp_func = func;
+
+	crt_plugin_gdata.cpg_event_cbs  = cbs_event;
+	crt_plugin_gdata.cpg_event_size = cbs_size;
+
+out_unlock:
+	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
 	return rc;
 }
 
 int
-crt_unregister_event_cb(crt_event_cb event_handler, void *arg)
+crt_unregister_event_cb(crt_event_cb func, void *args)
 {
-	struct crt_event_cb_priv	*cb_priv;
-	int				 rc = -DER_NONEXIST;
+	struct crt_event_cb_priv *cb_event;
+	size_t i, cbs_size;
+	int rc = -DER_NONEXIST;
 
-	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_event_rwlock);
-	d_list_for_each_entry(cb_priv, &crt_plugin_gdata.cpg_event_cbs,
-			      cecp_link) {
-		if (cb_priv->cecp_func == event_handler &&
-		    cb_priv->cecp_args == arg) {
-			d_list_del(&cb_priv->cecp_link);
-			D_FREE(cb_priv);
-			rc = DER_SUCCESS;
-			break;
+	D_MUTEX_LOCK(&crt_plugin_gdata.cpg_mutex);
+
+	cbs_size = crt_plugin_gdata.cpg_event_size;
+	cb_event = crt_plugin_gdata.cpg_event_cbs;
+
+	for (i = 0; i < cbs_size; i++) {
+		if (cb_event[i].cecp_func == func &&
+		    cb_event[i].cecp_args == args) {
+			cb_event[i].cecp_func = NULL;
+			cb_event[i].cecp_args = NULL;
+			D_GOTO(out_unlock, rc = 0);
 		}
 	}
-	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
+
+out_unlock:
+	if (crt_plugin_gdata.cpg_event_cbs_old != NULL) {
+		D_FREE(crt_plugin_gdata.cpg_event_cbs_old);
+		crt_plugin_gdata.cpg_event_cbs_old = NULL;
+	}
+
+	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
 	return rc;
 }
 
@@ -2377,7 +2440,6 @@ static int
 crt_group_primary_add_internal(struct crt_grp_priv *grp_priv,
 				d_rank_t rank, int tag, char *uri)
 {
-	int i;
 	int rc;
 
 	if (!grp_priv->gp_primary) {
@@ -2385,13 +2447,11 @@ crt_group_primary_add_internal(struct crt_grp_priv *grp_priv,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		rc = crt_grp_lc_uri_insert(grp_priv, i, rank, tag, uri);
-		if (rc != 0) {
-			D_ERROR("crt_grp_lc_uri_insert() failed, " DF_RC "\n",
-				DP_RC(rc));
-			D_GOTO(out, rc);
-		}
+	rc = crt_grp_lc_uri_insert(grp_priv, rank, tag, uri);
+	if (rc != 0) {
+		D_ERROR("crt_grp_lc_uri_insert() failed, " DF_RC "\n",
+			DP_RC(rc));
+		D_GOTO(out, rc);
 	}
 
 	/* Only add node to membership list once, for tag 0 */
@@ -2452,10 +2512,10 @@ crt_rank_self_set(d_rank_t rank)
 			D_GOTO(unlock, rc);
 		}
 
-		rc = crt_grp_lc_uri_insert_all(NULL, rank, ctx->cc_idx,
-					uri_addr);
+		rc = crt_grp_lc_uri_insert(default_grp_priv, rank, ctx->cc_idx,
+					   uri_addr);
 		if (rc != 0) {
-			D_ERROR("crt_grp_lc_uri_insert_all() failed; rc=%d\n",
+			D_ERROR("crt_grp_lc_uri_insert() failed; rc=%d\n",
 				rc);
 			D_GOTO(unlock, rc);
 		}

@@ -114,6 +114,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	crt_gdata.cg_inited = 0;
 	crt_gdata.cg_na_plugin = CRT_NA_OFI_SOCKETS;
 	crt_gdata.cg_sep_mode = false;
+	crt_gdata.cg_contig_ports = true;
 
 	srand(d_timeus_secdiff(0) + getpid());
 	start_rpcid = ((uint64_t)rand()) << 32;
@@ -207,38 +208,56 @@ exit:
 static int
 crt_plugin_init(void)
 {
+	struct crt_prog_cb_priv *cbs_prog;
+	struct crt_timeout_cb_priv *cbs_timeout;
+	struct crt_event_cb_priv *cbs_event;
+	size_t cbs_size = CRT_CALLBACKS_NUM;
 	int i, rc;
 
 	D_ASSERT(crt_plugin_gdata.cpg_inited == 0);
 
-	/** init the lists */
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_prog_cbs[i]);
-		rc = D_RWLOCK_INIT(&crt_plugin_gdata.cpg_prog_rwlock[i], NULL);
-		if (rc != 0)
-			D_GOTO(out, rc);
+		crt_plugin_gdata.cpg_prog_cbs_old[i] = NULL;
+		D_ALLOC_ARRAY(cbs_prog, cbs_size);
+		if (cbs_prog == NULL) {
+			while (i > 0)
+				D_FREE(crt_plugin_gdata.cpg_prog_cbs[--i]);
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+		crt_plugin_gdata.cpg_prog_size[i] = cbs_size;
+		crt_plugin_gdata.cpg_prog_cbs[i]  = cbs_prog;
 	}
 
-	D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_timeout_cbs);
-	rc = D_RWLOCK_INIT(&crt_plugin_gdata.cpg_timeout_rwlock, NULL);
-	if (rc != 0)
-		D_GOTO(out_destroy_prog, rc);
+	crt_plugin_gdata.cpg_timeout_cbs_old = NULL;
+	D_ALLOC_ARRAY(cbs_timeout, cbs_size);
+	if (cbs_timeout == NULL) {
+		D_GOTO(out_destroy_prog, rc = -DER_NOMEM);
+	}
+	crt_plugin_gdata.cpg_timeout_size = cbs_size;
+	crt_plugin_gdata.cpg_timeout_cbs  = cbs_timeout;
 
-	D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_event_cbs);
-	rc = D_RWLOCK_INIT(&crt_plugin_gdata.cpg_event_rwlock, NULL);
-	if (rc != 0)
-		D_GOTO(out_destroy_timeout, rc);
+	crt_plugin_gdata.cpg_event_cbs_old = NULL;
+	D_ALLOC_ARRAY(cbs_event, cbs_size);
+	if (cbs_event == NULL) {
+		D_GOTO(out_destroy_timeout, rc = -DER_NOMEM);
+	}
+	crt_plugin_gdata.cpg_event_size = cbs_size;
+	crt_plugin_gdata.cpg_event_cbs  = cbs_event;
 
+	rc = D_MUTEX_INIT(&crt_plugin_gdata.cpg_mutex, NULL);
+	if (rc)
+		D_GOTO(out_destroy_event, rc);
 
 	crt_plugin_gdata.cpg_inited = 1;
 	D_GOTO(out, rc = 0);
 
-	D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_event_rwlock);
+out_destroy_event:
+	D_FREE(crt_plugin_gdata.cpg_event_cbs);
 out_destroy_timeout:
-	D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_timeout_rwlock);
+	D_FREE(crt_plugin_gdata.cpg_timeout_cbs);
 out_destroy_prog:
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
-		D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_prog_rwlock[i]);
+		D_FREE(crt_plugin_gdata.cpg_prog_cbs[i]);
 out:
 	return rc;
 }
@@ -292,8 +311,9 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	if (gdata_init_flag == 0) {
 		rc = data_init(server, opt);
 		if (rc != 0) {
-			D_ERROR("data_init failed, "DF_RC"\n", DP_RC(rc));
-			D_GOTO(out, rc);
+			D_ERROR("data_init failed, rc(%d) - %s.\n",
+				rc, strerror(rc));
+			D_GOTO(out, rc = -rc);
 		}
 	}
 	D_ASSERT(gdata_init_flag == 1);
@@ -470,37 +490,24 @@ crt_initialized()
 void
 crt_plugin_fini(void)
 {
-	struct crt_prog_cb_priv		*prog_cb_priv;
-	struct crt_timeout_cb_priv	*timeout_cb_priv;
-	struct crt_event_cb_priv	*event_cb_priv;
-	int				 i;
+	int i;
 
 	D_ASSERT(crt_plugin_gdata.cpg_inited == 1);
 
+	crt_plugin_gdata.cpg_inited = 0;
+
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		while ((prog_cb_priv = d_list_pop_entry(
-					&crt_plugin_gdata.cpg_prog_cbs[i],
-					struct crt_prog_cb_priv,
-					cpcp_link))) {
-			D_FREE(prog_cb_priv);
-		}
+		D_FREE(crt_plugin_gdata.cpg_prog_cbs[i]);
+		D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[i]);
 	}
 
-	while ((timeout_cb_priv = d_list_pop_entry(&crt_plugin_gdata.cpg_timeout_cbs,
-						   struct crt_timeout_cb_priv,
-						   ctcp_link))) {
-		D_FREE(timeout_cb_priv);
-	}
-	while ((event_cb_priv = d_list_pop_entry(&crt_plugin_gdata.cpg_event_cbs,
-						 struct crt_event_cb_priv,
-						 cecp_link))) {
-		D_FREE(event_cb_priv);
-	}
+	D_FREE(crt_plugin_gdata.cpg_timeout_cbs);
+	D_FREE(crt_plugin_gdata.cpg_timeout_cbs_old);
 
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
-		D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_prog_rwlock[i]);
-	D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_timeout_rwlock);
-	D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_event_rwlock);
+	D_FREE(crt_plugin_gdata.cpg_event_cbs);
+	D_FREE(crt_plugin_gdata.cpg_event_cbs_old);
+
+	D_MUTEX_DESTROY(&crt_plugin_gdata.cpg_mutex);
 }
 
 int

@@ -398,7 +398,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	go func() {
 		_ = grpcServer.Serve(lis)
 	}()
-	defer grpcServer.GracefulStop()
+	defer grpcServer.Stop()
 
 	log.Infof("%s (pid %d) listening on %s", build.ControlPlaneName, os.Getpid(), controlAddr)
 
