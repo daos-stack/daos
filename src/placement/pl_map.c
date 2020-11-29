@@ -568,9 +568,10 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 		 * a parity node) as leader.
 		 */
 		shard = pl_get_shard(data, idx);
-		while (shard->po_rebuilding) {
+		while (shard->po_rebuilding || shard->po_shard == -1 ||
+		       shard->po_target == -1) {
 			idx--;
-			if (++fail_cnt > oc_attr->u.ec.e_p)
+			if (++fail_cnt >= oc_attr->u.ec.e_p)
 				return -DER_IO;
 			shard = pl_get_shard(data, idx);
 		}
