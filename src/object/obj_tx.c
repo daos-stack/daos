@@ -1530,7 +1530,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 			if (rc < 0)
 				goto out;
 
-			if (rc > (OBJ_BULK_LIMIT >> 2)) {
+			if (rc > (OBJ_BULK_LIMIT >> 1)) {
 				rc = tx_bulk_prepare(dcsr, task);
 				if (rc != 0)
 					goto out;
