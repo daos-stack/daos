@@ -43,8 +43,8 @@ static const uint32_t type_counts[] = {
 };
 
 #define OBJ_MISS_SIZE (1 << 16)
-#define DKEY_MISS_SIZE (1 << 20)
-#define AKEY_MISS_SIZE (1 << 20)
+#define DKEY_MISS_SIZE (1 << 16)
+#define AKEY_MISS_SIZE (1 << 16)
 
 #define TS_TRACE(action, entry, idx, type)				\
 	D_DEBUG(DB_TRACE, "%s %s at idx %d(%p), read.hi="DF_U64		\
