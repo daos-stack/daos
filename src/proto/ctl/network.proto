@@ -32,6 +32,7 @@ message NetworkScanReq {
 message NetworkScanResp {
   repeated FabricInterface interfaces = 1;
   int32 numacount = 2;
+  int32 corespernuma = 3; // physical cores per numa node
 }
 
 message FabricInterface {

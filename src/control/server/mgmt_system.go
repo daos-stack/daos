@@ -365,7 +365,7 @@ func (svc *mgmtSvc) drpcOnLocalRanks(parent context.Context, req *mgmtpb.RanksRe
 
 	instances, err := svc.harness.FilterInstancesByRankSet(req.GetRanks())
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "sending request over dRPC to local ranks")
 	}
 
 	inflight := 0
@@ -382,7 +382,7 @@ func (svc *mgmtSvc) drpcOnLocalRanks(parent context.Context, req *mgmtpb.RanksRe
 		result := <-ch
 		inflight--
 		if result == nil {
-			return nil, errors.New("nil result")
+			return nil, errors.New("sending request over dRPC to local ranks: nil result")
 		}
 		results = append(results, result)
 	}
@@ -407,7 +407,7 @@ func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq)
 
 	results, err := svc.drpcOnLocalRanks(ctx, req, drpc.MethodPrepShutdown)
 	if err != nil {
-		return nil, errors.Wrap(err, "sending request over dRPC to local ranks")
+		return nil, err
 	}
 
 	resp := &mgmtpb.RanksResp{}
@@ -501,12 +501,40 @@ func (svc *mgmtSvc) StopRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 	return resp, nil
 }
 
+func (svc *mgmtSvc) queryLocalRanks(ctx context.Context, req *mgmtpb.RanksReq) ([]*system.MemberResult, error) {
+	if req.Force {
+		return svc.drpcOnLocalRanks(ctx, req, drpc.MethodPingRank)
+	}
+
+	instances, err := svc.harness.FilterInstancesByRankSet(req.GetRanks())
+	if err != nil {
+		return nil, err
+	}
+
+	results := make(system.MemberResults, 0, len(instances))
+	for _, srv := range instances {
+		rank, err := srv.GetRank()
+		if err != nil {
+			// shouldn't happen, instances already filtered by ranks
+			return nil, err
+		}
+		results = append(results, &system.MemberResult{
+			Rank: rank, State: srv.LocalState(),
+		})
+	}
+
+	return results, nil
+}
+
 // PingRanks implements the method defined for the Management Service.
 //
-// Query data-plane all instances (DAOS system members) managed by harness to verify
-// responsiveness.
+// Query data-plane ranks (DAOS system members) managed by harness to verify
+// responsiveness. If force flag is set in request, perform invasive ping by
+// sending request over dRPC to be handled by rank process. If forced flag
+// is not set in request then perform non-invasive ping by retrieving rank
+// instance state (AwaitFormat/Stopped/Starting/Started) from harness.
 //
-// Iterate over local instances, issuing async Ping dRPCs and record results.
+// Iterate over local instances, ping and record results.
 func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
 	if req == nil {
 		return nil, errors.New("nil request")
@@ -514,11 +542,12 @@ func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 	if len(req.GetRanks()) == 0 {
 		return nil, errors.New("no ranks specified in request")
 	}
+
 	svc.log.Debugf("MgmtSvc.PingRanks dispatch, req:%+v\n", *req)
 
-	results, err := svc.drpcOnLocalRanks(ctx, req, drpc.MethodPingRank)
+	results, err := svc.queryLocalRanks(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "sending request over dRPC to local ranks")
+		return nil, err
 	}
 
 	resp := &mgmtpb.RanksResp{}
@@ -663,7 +692,7 @@ func (svc *mgmtSvc) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq)
 		return nil, errors.New("nil request")
 	}
 
-	svc.log.Debugf("MgmtSvc.StartRanks dispatch, req:%+v\n", *req)
+	svc.log.Debugf("MgmtSvc.LeaderQuery dispatch, req:%+v\n", req)
 
 	if req.System != svc.sysdb.SystemName() {
 		return nil, errors.Errorf("received leader query for wrong system (local: %q, req: %q)",
@@ -672,7 +701,7 @@ func (svc *mgmtSvc) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq)
 
 	leaderAddr, replicas, err := svc.sysdb.LeaderQuery()
 	if err != nil {
-		replicas = err.(*system.ErrNotReplica).Replicas
+		return nil, err
 	}
 
 	resp := &mgmtpb.LeaderQueryResp{
@@ -680,6 +709,6 @@ func (svc *mgmtSvc) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq)
 		Replicas:      replicas,
 	}
 
-	svc.log.Debugf("MgmtSvc.StartRanks dispatch, resp:%+v\n", *resp)
+	svc.log.Debugf("MgmtSvc.LeaderQuery dispatch, resp:%+v\n", resp)
 	return resp, nil
 }

@@ -267,7 +267,11 @@ func (c *Client) InvokeUnaryRPC(ctx context.Context, req UnaryRequest) (*UnaryRe
 		_, err = ur.getMSResponse()
 		switch e := err.(type) {
 		case *system.ErrNotLeader:
-			req.SetHostList(e.Replicas)
+			if e.LeaderHint == "" {
+				req.SetHostList(e.Replicas)
+				break
+			}
+			req.SetHostList([]string{e.LeaderHint})
 		case *system.ErrNotReplica:
 			req.SetHostList(e.Replicas)
 		default:
@@ -281,9 +285,7 @@ func (c *Client) InvokeUnaryRPC(ctx context.Context, req UnaryRequest) (*UnaryRe
 			req.SetHostList(req.getHostList()[1:])
 		}
 
-		c.log.Debugf("err: %v", err)
-
-		c.log.Debugf("no valid MS response received; retrying after %s", defaultMSRetry)
+		c.log.Debugf("MS request error: %v; retrying after %s", err, defaultMSRetry)
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
