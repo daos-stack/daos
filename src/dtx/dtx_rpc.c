@@ -73,6 +73,10 @@ struct dtx_req_args {
 	int				 dra_length;
 	/* The collective RPC result. */
 	int				 dra_result;
+	/* Pointer to the DTX handle, used for DTX_REFRESH case. */
+	struct dtx_handle		*dra_dth;
+	/* Pointer to the container, used for DTX_REFRESH case. */
+	struct ds_cont_child		*dra_cont;
 };
 
 /* The record for the DTX classify-tree in DRAM.
@@ -89,6 +93,7 @@ struct dtx_req_rec {
 	int				 drr_count; /* DTX count */
 	int				 drr_result; /* The RPC result */
 	struct dtx_id			*drr_dti; /* The DTX array */
+	struct dtx_share_peer		**drr_cb_args; /* Used by dtx_req_cb. */
 };
 
 struct dtx_cf_rec_bundle {
@@ -125,12 +130,82 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 	struct dtx_in		*din = crt_req_get(req);
 	struct dtx_out		*dout;
 	int			 rc = cb_info->cci_rc;
+	int			 i;
 
-	if (rc == 0) {
-		dout = crt_reply_get(req);
-		rc = dout->do_status;
+	if (rc != 0)
+		goto out;
+
+	dout = crt_reply_get(req);
+	if (dra->dra_opc != DTX_REFRESH)
+		D_GOTO(out, rc = dout->do_status);
+
+	if (din->di_dtx_array.ca_count != dout->do_sub_rets.ca_count)
+		D_GOTO(out, rc = -DER_PROTO);
+
+	for (i = 0; i < dout->do_sub_rets.ca_count; i++) {
+		struct dtx_handle	*dth = dra->dra_dth;
+		struct dtx_share_peer	*dsp;
+		int			*ret;
+		int			 rc1;
+
+		dsp = drr->drr_cb_args[i];
+		if (dsp == NULL)
+			continue;
+
+		drr->drr_cb_args[i] = NULL;
+		ret = (int *)dout->do_sub_rets.ca_arrays + i;
+
+		switch (*ret) {
+		case DTX_ST_PREPARED:
+			/* Not committable yet. */
+			d_list_add_tail(&dsp->dsp_link,
+					&dth->dth_share_act_list);
+			break;
+		case DTX_ST_COMMITTABLE:
+			/* Committable, will be committed soon. */
+			d_list_add_tail(&dsp->dsp_link,
+					&dth->dth_share_cmt_list);
+			break;
+		case DTX_ST_COMMITTED:
+			/* Has been committed on leader, we may miss related
+			 * commit request, so let's commit it locally.
+			 */
+			rc1 = vos_dtx_commit(dra->dra_cont->sc_hdl,
+					     &dsp->dsp_xid, 1, NULL);
+			if (rc1 < 0 && rc1 != -DER_NONEXIST)
+				d_list_add_tail(&dsp->dsp_link,
+						&dth->dth_share_cmt_list);
+			else
+				D_FREE(dsp);
+			break;
+		case DTX_ST_CORRUPTED:
+			/* The DTX entry is corrupted. */
+			D_FREE(dsp);
+			D_GOTO(out, rc = -DER_DATA_LOSS);
+		case DTX_ST_UNCERTAIN:
+			/* The DTX is in resync, ask client to retry. */
+			D_FREE(dsp);
+			D_GOTO(out, rc = -DER_INPROGRESS);
+		case -DER_NONEXIST:
+			/* The leader does not have related DTX info,
+			 * we may miss related DTX abort request, so
+			 * let's abort it locally.
+			 */
+			rc1 = vos_dtx_abort(dra->dra_cont->sc_hdl,
+					    DAOS_EPOCH_MAX, &dsp->dsp_xid, 1);
+			if (rc1 < 0 && rc1 != -DER_NONEXIST)
+				d_list_add_tail(&dsp->dsp_link,
+						&dth->dth_share_act_list);
+			else
+				D_FREE(dsp);
+			break;
+		default:
+			D_FREE(dsp);
+			D_GOTO(out, rc = *ret);
+		}
 	}
 
+out:
 	drr->drr_result = rc;
 	rc = ABT_future_set(dra->dra_future, drr);
 	D_ASSERTF(rc == ABT_SUCCESS,
@@ -198,6 +273,7 @@ dtx_req_list_cb(void **args)
 			drr = args[i];
 			switch (drr->drr_result) {
 			case DTX_ST_COMMITTED:
+			case DTX_ST_COMMITTABLE:
 				dra->dra_result = DTX_ST_COMMITTED;
 				/* As long as one target has committed the DTX,
 				 * then the DTX is committable on all targets.
@@ -208,8 +284,13 @@ dtx_req_list_cb(void **args)
 					drr->drr_rank, drr->drr_tag);
 				return;
 			case DTX_ST_PREPARED:
+				if (dra->dra_result == 0 ||
+				    dra->dra_result == DTX_ST_CORRUPTED)
+					dra->dra_result = drr->drr_result;
+				break;
+			case DTX_ST_CORRUPTED:
 				if (dra->dra_result == 0)
-					dra->dra_result = DTX_ST_PREPARED;
+					dra->dra_result = drr->drr_result;
 				break;
 			default:
 				dra->dra_result = drr->drr_result >= 0 ?
@@ -258,7 +339,8 @@ dtx_req_wait(struct dtx_req_args *dra)
 
 static int
 dtx_req_list_send(struct dtx_req_args *dra, crt_opcode_t opc, d_list_t *head,
-		  int len, uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch)
+		  int len, uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch,
+		  struct dtx_handle *dth, struct ds_cont_child *cont)
 {
 	ABT_future		 future;
 	struct dtx_req_rec	*drr;
@@ -271,6 +353,8 @@ dtx_req_list_send(struct dtx_req_args *dra, crt_opcode_t opc, d_list_t *head,
 	dra->dra_list = head;
 	dra->dra_length = len;
 	dra->dra_result = 0;
+	dra->dra_dth = dth;
+	dra->dra_cont = cont;
 
 	rc = ABT_future_create(len, dtx_req_list_cb, &future);
 	if (rc != ABT_SUCCESS) {
@@ -344,6 +428,7 @@ dtx_cf_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 	drr = (struct dtx_req_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	d_list_del(&drr->drr_link);
+	D_FREE(drr->drr_cb_args);
 	D_FREE(drr->drr_dti);
 	D_FREE_PTR(drr);
 
@@ -412,8 +497,10 @@ dtx_dti_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head,
 		d_iov_t			 kiov;
 		d_iov_t			 riov;
 
+		ABT_rwlock_wrlock(pool->sp_lock);
 		rc = pool_map_find_target(pool->sp_map,
 					  mbs->dm_tgts[i].ddt_id, &target);
+		ABT_rwlock_unlock(pool->sp_lock);
 		D_ASSERT(rc == 1);
 
 		/* Skip the target that (re-)joined the system after the DTX. */
@@ -521,7 +608,8 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	dra.dra_future = ABT_FUTURE_NULL;
 	if (!d_list_empty(&head)) {
 		rc = dtx_req_list_send(&dra, DTX_COMMIT, &head, length,
-				       pool->sp_uuid, cont->sc_uuid, 0);
+				       pool->sp_uuid, cont->sc_uuid, 0,
+				       NULL, NULL);
 		if (rc != 0)
 			goto out;
 	}
@@ -606,7 +694,8 @@ dtx_abort(struct ds_cont_child *cont, daos_epoch_t epoch,
 
 	if (rc == 0 && !d_list_empty(&head)) {
 		rc = dtx_req_list_send(&dra, DTX_ABORT, &head, length,
-				       pool->sp_uuid, cont->sc_uuid, epoch);
+				       pool->sp_uuid, cont->sc_uuid, epoch,
+				       NULL, NULL);
 		if (rc != 0)
 			goto out;
 
@@ -658,8 +747,10 @@ dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 	for (i = 0; i < mbs->dm_tgt_cnt; i++) {
 		struct pool_target	*target;
 
+		ABT_rwlock_wrlock(pool->sp_lock);
 		rc = pool_map_find_target(pool->sp_map,
 					  mbs->dm_tgts[i].ddt_id, &target);
+		ABT_rwlock_unlock(pool->sp_lock);
 		D_ASSERT(rc == 1);
 
 		/* Skip the target that (re-)joined the system after the DTX. */
@@ -700,7 +791,7 @@ dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 	}
 
 	rc = dtx_req_list_send(&dra, DTX_CHECK, &head, length, pool->sp_uuid,
-			       cont->sc_uuid, epoch);
+			       cont->sc_uuid, epoch, NULL, NULL);
 	if (rc == 0)
 		rc = dtx_req_wait(&dra);
 
@@ -711,4 +802,131 @@ out:
 	}
 
 	return rc;
+}
+
+/*
+ * Because of async batched commit semantics, the DTX status on the leader
+ * maybe different from the one on non-leaders. For the leader, it exactly
+ * knows whether the DTX is committable or not, but the non-leader does not
+ * know if the DTX is in 'prepared' status. If someone on non-leader wants
+ * to know whether some 'prepared' DTX is real committable or not, it needs
+ * to refresh such DTX status from the leader. The DTX_REFRESH RPC is used
+ * for such purpose.
+ */
+int
+dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont)
+{
+	struct ds_pool		*pool = cont->sc_pool->spc_pool;
+	struct pool_target	*target;
+	struct dtx_share_peer	*dsp;
+	struct dtx_req_rec	*drr;
+	struct dtx_req_args	 dra;
+	d_list_t		 head;
+	int			 len = 0;
+	int			 rc = 0;
+
+	D_INIT_LIST_HEAD(&head);
+
+	d_list_for_each_entry(dsp, &dth->dth_share_tbd_list, dsp_link) {
+		if (dsp->dsp_leader == PO_COMP_ID_ALL) {
+
+again:
+			rc = ds_pool_elect_dtx_leader(pool, &dsp->dsp_oid,
+						      dsp->dsp_ver);
+			if (rc < 0) {
+				D_ERROR("Failed to find DTX leader for "DF_DTI
+					": "DF_RC"\n",
+					DP_DTI(&dsp->dsp_xid), DP_RC(rc));
+				goto out;
+			}
+
+			/* Still get the same leader, ask client to retry. */
+			if (dsp->dsp_leader == rc)
+				D_GOTO(out, rc = -DER_INPROGRESS);
+
+			dsp->dsp_leader = rc;
+		}
+
+		ABT_rwlock_wrlock(pool->sp_lock);
+		rc = pool_map_find_target(pool->sp_map, dsp->dsp_leader,
+					  &target);
+		ABT_rwlock_unlock(pool->sp_lock);
+		D_ASSERT(rc == 1);
+
+		/* The leader is not healthy, related DTX will be resynced
+		 * by the new leader, let's find out new leader and retry.
+		 */
+		if (target->ta_comp.co_status != PO_COMP_ST_UPIN)
+			goto again;
+
+		d_list_for_each_entry(drr, &head, drr_link) {
+			if (drr->drr_rank == target->ta_comp.co_rank &&
+			    drr->drr_tag == target->ta_comp.co_index) {
+				drr->drr_dti[drr->drr_count] = dsp->dsp_xid;
+				drr->drr_cb_args[drr->drr_count++] = dsp;
+				goto next;
+			}
+		}
+
+		D_ALLOC_PTR(drr);
+		if (drr == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		D_ALLOC_ARRAY(drr->drr_dti, dth->dth_share_tbd_count);
+		if (drr->drr_dti == NULL) {
+			D_FREE(drr);
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+
+		D_ALLOC_ARRAY(drr->drr_cb_args, dth->dth_share_tbd_count);
+		if (drr->drr_cb_args == NULL) {
+			D_FREE(drr->drr_dti);
+			D_FREE(drr);
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+
+		drr->drr_rank = target->ta_comp.co_rank;
+		drr->drr_tag = target->ta_comp.co_index;
+		drr->drr_count = 1;
+		drr->drr_dti[0] = dsp->dsp_xid;
+		drr->drr_cb_args[0] = dsp;
+		d_list_add_tail(&drr->drr_link, &head);
+		len++;
+
+next:
+		d_list_del(&dsp->dsp_link);
+		dth->dth_share_tbd_count--;
+		D_ASSERT(dth->dth_share_tbd_count >= 0);
+	}
+
+	rc = dtx_req_list_send(&dra, DTX_REFRESH, &head, len,
+			       pool->sp_uuid, cont->sc_uuid, 0, dth, cont);
+	if (rc == 0)
+		rc = dtx_req_wait(&dra);
+
+out:
+	dth->dth_local_retry = 0;
+
+	while ((drr = d_list_pop_entry(&head, struct dtx_req_rec,
+				       drr_link)) != NULL) {
+		D_FREE(drr->drr_cb_args);
+		D_FREE(drr->drr_dti);
+		D_FREE(drr);
+	}
+
+	/* If some DTX entry is corrupted, then reply -DER_DATA_LOSS.
+	 * Otherwise if we cannot resolve the DTX status, then reply
+	 * -DER_INPROGRESS to the client for retry in further. As for
+	 * the other cases, return -DER_AGAIN for retry locally.
+	 */
+
+	if (rc < 0)
+		return rc == -DER_DATA_LOSS ? rc : -DER_INPROGRESS;
+
+	vos_dtx_cleanup(dth);
+	dtx_handle_reinit(dth);
+
+	D_ASSERT(dth->dth_share_tbd_count == 0);
+
+	return -DER_AGAIN;
 }

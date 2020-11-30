@@ -128,7 +128,12 @@ vos_dth_set(struct dtx_handle *dth)
 static inline struct dtx_handle *
 vos_dth_get(void)
 {
-	return vos_tls_get()->vtl_dth;
+	struct vos_tls	*tls = vos_tls_get();
+
+	if (tls != NULL)
+		return vos_tls_get()->vtl_dth;
+
+	return NULL;
 }
 
 static inline void

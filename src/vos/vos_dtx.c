@@ -109,30 +109,82 @@ dtx_set_aborted(uint32_t *tx_lid)
 
 static inline int
 dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
-	       bool for_read, int pos)
+	       bool for_read, bool check_share, int pos)
 {
-	/* If the modifications crosses multiple redundancy groups, then it
-	 * is possible that the sub modifications on the DTX leader are not
-	 * the same as the ones on non-leaders. Under such case, if someone
-	 * wants to read the data on some non-leader but hits non-committed
-	 * DTX, then asking the client to retry with leader maybe not help.
-	 * Instead, we can ask make the client to retry the read again (and
-	 * again) sometime later. We do sync commit the DTX with 'DTE_BLOCK'
-	 * flag. So it will not cause the client to retry read for too many
-	 * times unless such DTX hit some trouble (such as client or server
-	 * failure) that may cause current readers to be blocked until such
-	 * DTX has been handled by the new leader via DTX recovery.
-	 */
-	if (DAE_FLAGS(dae) & DTE_BLOCK && for_read && dth != NULL &&
-	    dth->dth_modification_cnt == 0)
-		dth->dth_local_retry = 1;
-	else if (dth != NULL)
-		dth->dth_local_retry = 0;
+	struct dtx_share_peer	*dsp;
+	bool			 s_retry = false;
 
+	if (dth == NULL)
+		goto out;
+
+	if (DAE_FLAGS(dae) & DTE_LEADER) {
+		dth->dth_local_retry = 0;
+		goto out;
+	}
+
+	/* For the DTX with 'DTE_BLOCK' flag, we will sych commit them. But
+	 * before it is committed, if someone wants to read related data on
+	 * non-leader, we can make related IO handle to retry locally, that
+	 * will not cause too much overhead unless the DTX hit some trouble
+	 * (such as client or server failure) that may cause current reader
+	 * to be blocked until such DTX has been handled by the new leader.
+	 */
+
+	if (DAE_FLAGS(dae) & DTE_BLOCK && for_read &&
+	    dth->dth_modification_cnt == 0) {
+		dth->dth_local_retry = 1;
+		goto out;
+	}
+
+	if (DAE_MBS_FLAGS(dae) & DMF_SRDG_REP || !check_share) {
+		dth->dth_local_retry = 0;
+		goto out;
+	}
+
+	s_retry = true;
+
+	d_list_for_each_entry(dsp, &dth->dth_share_tbd_list, dsp_link) {
+		if (memcmp(&dsp->dsp_xid, &DAE_XID(dae),
+			   sizeof(struct dtx_id)) == 0)
+			goto out;
+	}
+
+	if (dth->dth_share_tbd_count >= DTX_DETECT_MAX)
+		goto out;
+
+	D_ALLOC_PTR(dsp);
+	if (dsp == NULL) {
+		D_ERROR("Hit uncommitted DTX "DF_DTI" at %d: lid=%d, "
+			"but fail to alloc DRAM.\n",
+			DP_DTI(&DAE_XID(dae)), pos, DAE_LID(dae));
+		return -DER_NOMEM;
+	}
+
+	dsp->dsp_xid = DAE_XID(dae);
+	dsp->dsp_oid = DAE_OID(dae);
+	if (DAE_MBS_FLAGS(dae) & DMF_CONTAIN_LEADER) {
+		struct umem_instance	*umm;
+		struct dtx_daos_target	*ddt;
+
+		if (DAE_MBS_DSIZE(dae) <= sizeof(DAE_MBS_INLINE(dae))) {
+			ddt = DAE_MBS_INLINE(dae);
+		} else {
+			umm = vos_cont2umm(vos_hdl2cont(dth->dth_coh));
+			ddt = umem_off2ptr(umm, DAE_MBS_OFF(dae));
+		}
+		dsp->dsp_leader = ddt->ddt_id;
+	} else {
+		dsp->dsp_leader = PO_COMP_ID_ALL;
+	}
+
+	d_list_add_tail(&dsp->dsp_link, &dth->dth_share_tbd_list);
+	dth->dth_share_tbd_count++;
+
+out:
 	D_DEBUG(DB_IO,
-		"Hit uncommitted DTX "DF_DTI" at %d: lid=%d, need %s retry\n",
-		DP_DTI(&DAE_XID(dae)), pos, DAE_LID(dae),
-		(dth != NULL && dth->dth_local_retry) ? "local" : "remote");
+		"Hit uncommitted DTX "DF_DTI" at %d: lid=%d, need %s retry.\n",
+		DP_DTI(&DAE_XID(dae)), pos, DAE_LID(dae), s_retry ? "server" :
+		(dth != NULL && dth->dth_local_retry) ? "local" : "client");
 
 	return -DER_INPROGRESS;
 }
@@ -903,21 +955,47 @@ vos_dtx_abort_one(struct vos_container *cont, daos_epoch_t epoch,
 		goto out;
 	}
 
-	if (epoch != 0 && DAE_EPOCH(dae) > epoch)
-		D_GOTO(out, rc = -DER_NONEXIST);
+	/* XXX: If @epoch is zero, then it is a special abort: we will mark
+	 *	related DTX as 'corrupted'. An corrupted DTX entry will not
+	 *	be removed (destroyed) from the system, instead, it will be
+	 *	kept there until related corruption (lost servers) has been
+	 *	recovered or being cleanup via some special tools.
+	 */
+	if (epoch == 0) {
+		struct umem_instance		*umm = vos_cont2umm(cont);
+		struct vos_dtx_act_ent_df	*dae_df;
 
-	rc = dtx_rec_release(cont, dae, true);
-	if (rc != 0) {
-		*fatal = true;
-		goto out;
+		dae_df = umem_off2ptr(umm, dae->dae_df_off);
+		D_ASSERT(dae_df != NULL);
+
+		rc = umem_tx_add_ptr(umm, &dae_df->dae_flags,
+				     sizeof(dae_df->dae_flags));
+		if (rc == 0) {
+			dae_df->dae_flags |= DTE_CORRUPTED;
+			DAE_FLAGS(dae) |= DTE_CORRUPTED;
+		}
+	} else {
+		if (DAE_EPOCH(dae) > epoch)
+			D_GOTO(out, rc = -DER_NONEXIST);
+
+		rc = dtx_rec_release(cont, dae, true);
+		if (rc != 0) {
+			*fatal = true;
+			goto out;
+		}
+
+		D_ASSERT(dae_p != NULL);
+		*dae_p = dae;
 	}
 
-	D_ASSERT(dae_p != NULL);
-	*dae_p = dae;
-
 out:
-	D_DEBUG(DB_IO, "Abort the DTX "DF_DTI": rc = "DF_RC"\n", DP_DTI(dti),
-		DP_RC(rc));
+	if (epoch == 0)
+		D_CDEBUG(rc != 0, DLOG_ERR, DLOG_WARN,
+			 "Mark the DTX entry "DF_DTI" as corrupted: "DF_RC"\n",
+			 DP_DTI(dti), DP_RC(rc));
+	else
+		D_DEBUG(DB_IO, "Abort the DTX "DF_DTI": rc = "DF_RC"\n",
+			DP_DTI(dti), DP_RC(rc));
 
 	return rc;
 }
@@ -1112,6 +1190,9 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	struct vos_dtx_act_ent		*dae = NULL;
 	bool				 found;
 
+	if (dth != NULL && dth->dth_for_migration)
+		intent = DAOS_INTENT_MIGRATION;
+
 	switch (type) {
 	case DTX_RT_SVT:
 	case DTX_RT_EVT:
@@ -1139,25 +1220,31 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	if (entry == DTX_LID_COMMITTED)
 		return ALB_AVAILABLE_CLEAN;
 
-	if (intent == DAOS_INTENT_PURGE)
-		return ALB_AVAILABLE_DIRTY;
-
 	/* Aborted */
 	if (dtx_is_aborted(entry))
-		return ALB_UNAVAILABLE;
-
-	/* The DTX owner can always see the DTX. */
-	if (dtx_is_valid_handle(dth) && dth->dth_ent != NULL) {
-		dae = dth->dth_ent;
-		if (DAE_LID(dae) == entry && DAE_EPOCH(dae) == epoch)
-			return ALB_AVAILABLE_CLEAN;
-	}
+		return intent == DAOS_INTENT_PURGE ?
+			ALB_AVAILABLE_DIRTY : ALB_UNAVAILABLE;
 
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
 	found = lrua_lookupx(cont->vc_dtx_array, entry - DTX_LID_RESERVED,
 			     epoch, &dae);
+
+	/* The DTX owner can always see the DTX. */
+	if (found && dtx_is_valid_handle(dth) && dae == dth->dth_ent)
+		return ALB_AVAILABLE_CLEAN;
+
+	if (intent == DAOS_INTENT_PURGE) {
+		/* XXX: For the corrupted DTX entry, we need some special
+		 *	tools (TBD) to recover or handle it. So NOT purge
+		 *	it via general VOS aggregation.
+		 */
+		if (found && DAE_FLAGS(dae) & DTE_CORRUPTED)
+			return ALB_UNAVAILABLE;
+
+		return ALB_AVAILABLE_DIRTY;
+	}
 
 	if (!found) {
 		/** If we move to not marking entries explicitly, this
@@ -1175,21 +1262,68 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	if (dae->dae_aborted)
 		return ALB_UNAVAILABLE;
 
-	/* The following are for non-committable cases. */
+	/* Access corrupted DTX entry. */
+	if (DAE_FLAGS(dae) & DTE_CORRUPTED) {
+		/* Allow update/punch against corrupted SV or EV with new
+		 * epoch. But if the obj/key is corrupted, or it is fetch
+		 * opeartion, then return -DER_DATA_LOSS.
+		 */
+		if ((intent == DAOS_INTENT_UPDATE ||
+		     intent == DAOS_INTENT_PUNCH) &&
+		    (type == DTX_RT_SVT || type == DTX_RT_EVT))
+			return ALB_AVAILABLE_CLEAN;
 
-	if (intent == DAOS_INTENT_DEFAULT || intent == DAOS_INTENT_REBUILD ||
+		/* Corrupted DTX is invisible to data migration. */
+		if (intent == DAOS_INTENT_MIGRATION)
+			return ALB_UNAVAILABLE;
+
+		return -DER_DATA_LOSS;
+	}
+
+	if (!(DAE_FLAGS(dae) & DTE_LEADER) &&
+	    !(DAE_MBS_FLAGS(dae) & DMF_SRDG_REP) && dth != NULL) {
+		struct dtx_share_peer	*dsp;
+
+		d_list_for_each_entry(dsp, &dth->dth_share_cmt_list, dsp_link) {
+			if (memcmp(&dsp->dsp_xid, &DAE_XID(dae),
+				   sizeof(struct dtx_id)) == 0)
+				return ALB_AVAILABLE_CLEAN;
+		}
+
+		d_list_for_each_entry(dsp, &dth->dth_share_act_list, dsp_link) {
+			if (memcmp(&dsp->dsp_xid, &DAE_XID(dae),
+				   sizeof(struct dtx_id)) == 0) {
+				if (dtx_is_valid_handle(dth) &&
+				    intent != DAOS_INTENT_IGNORE_NONCOMMITTED)
+					return dtx_inprogress(dae, dth, true,
+							      false, 4);
+
+				return ALB_UNAVAILABLE;
+			}
+		}
+	}
+
+	/* The following are for non-committable cases.
+	 *
+	 * Current CoS mechanism only works for single RDG based replicated
+	 * object modification. For other cases, such as transaction across
+	 * multiple RDGs, or modifying EC object, we may have to query with
+	 * related leader.
+	 */
+
+	if (intent == DAOS_INTENT_DEFAULT || intent == DAOS_INTENT_MIGRATION ||
 	    intent == DAOS_INTENT_IGNORE_NONCOMMITTED) {
 		if (!(DAE_FLAGS(dae) & DTE_LEADER) ||
 		    DAOS_FAIL_CHECK(DAOS_VOS_NON_LEADER)) {
-			/* Inavailable for rebuild case. */
-			if (intent == DAOS_INTENT_REBUILD)
+			/* Inavailable for data migration case. */
+			if (intent == DAOS_INTENT_MIGRATION)
 				return ALB_UNAVAILABLE;
 
 			/* Non-leader and non-rebuild case, return
 			 * -DER_INPROGRESS, then the caller will retry
 			 * the RPC with leader replica.
 			 */
-			return dtx_inprogress(dae, dth, true, 1);
+			return dtx_inprogress(dae, dth, true, true, 1);
 		}
 
 		/* For transactional read, has to wait the non-committed
@@ -1197,7 +1331,7 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		 */
 		if (dtx_is_valid_handle(dth) &&
 		    intent != DAOS_INTENT_IGNORE_NONCOMMITTED)
-			return dtx_inprogress(dae, dth, true, 2);
+			return dtx_inprogress(dae, dth, true, true, 2);
 
 		/* For stand-alone read on leader, ignore non-committed DTX. */
 		return ALB_UNAVAILABLE;
@@ -1219,7 +1353,7 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 			 */
 			return ALB_UNAVAILABLE;
 
-		return dtx_inprogress(dae, dth, false, 3);
+		return dtx_inprogress(dae, dth, false, true, 3);
 	}
 
 	D_ASSERTF(intent == DAOS_INTENT_UPDATE,
@@ -1500,9 +1634,34 @@ vos_dtx_prepared(struct dtx_handle *dth)
 	return 0;
 }
 
+static struct dtx_memberships *
+vos_dtx_pack_mbs(struct umem_instance *umm, struct vos_dtx_act_ent *dae)
+{
+	struct dtx_memberships	*tmp;
+	size_t			 size;
+
+	size = sizeof(*tmp) + DAE_MBS_DSIZE(dae);
+	D_ALLOC(tmp, size);
+	if (tmp == NULL)
+		return NULL;
+
+	tmp->dm_tgt_cnt = DAE_TGT_CNT(dae);
+	tmp->dm_grp_cnt = DAE_GRP_CNT(dae);
+	tmp->dm_data_size = DAE_MBS_DSIZE(dae);
+	tmp->dm_flags = DAE_MBS_FLAGS(dae);
+	tmp->dm_dte_flags = DAE_FLAGS(dae);
+	if (tmp->dm_data_size <= sizeof(DAE_MBS_INLINE(dae)))
+		memcpy(tmp->dm_data, DAE_MBS_INLINE(dae), tmp->dm_data_size);
+	else
+		memcpy(tmp->dm_data, umem_off2ptr(umm, DAE_MBS_OFF(dae)),
+		       tmp->dm_data_size);
+
+	return tmp;
+}
+
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, bool for_resent)
+	      uint32_t *pm_ver, struct dtx_memberships **mbs, bool for_resent)
 {
 	struct vos_container	*cont;
 	struct vos_dtx_act_ent	*dae;
@@ -1518,8 +1677,23 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
 	if (rc == 0) {
 		dae = (struct vos_dtx_act_ent *)riov.iov_buf;
-		if (dae->dae_committable || dae->dae_committed)
+
+		if (DAE_FLAGS(dae) & DTE_CORRUPTED)
+			return DTX_ST_CORRUPTED;
+
+		if (pm_ver != NULL)
+			*pm_ver = DAE_VER(dae);
+
+		if (dae->dae_committed)
 			return DTX_ST_COMMITTED;
+
+		if (dae->dae_committable) {
+			if (mbs != NULL)
+				*mbs = vos_dtx_pack_mbs(vos_cont2umm(cont),
+							dae);
+
+			return DTX_ST_COMMITTABLE;
+		}
 
 		if (dae->dae_aborted)
 			return -DER_NONEXIST;
@@ -1530,9 +1704,6 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 			else if (*epoch != DAE_EPOCH(dae))
 				return -DER_MISMATCH;
 		}
-
-		if (pm_ver != NULL)
-			*pm_ver = DAE_VER(dae);
 
 		return DTX_ST_PREPARED;
 	}
@@ -1773,6 +1944,7 @@ vos_dtx_post_handle(struct vos_container *cont, struct vos_dtx_act_ent **daes,
 				daes[i]->dae_aborted = 1;
 			else
 				daes[i]->dae_committed = 1;
+			DAE_FLAGS(daes[i]) &= ~DTE_CORRUPTED;
 		}
 	}
 }
@@ -1969,6 +2141,7 @@ vos_dtx_mark_committable(struct dtx_handle *dth)
 		D_ASSERT(dae != NULL);
 
 		dae->dae_committable = 1;
+		DAE_FLAGS(dae) &= ~DTE_CORRUPTED;
 	}
 }
 
@@ -2347,8 +2520,10 @@ vos_dtx_rsrvd_init(struct dtx_handle *dth)
 void
 vos_dtx_rsrvd_fini(struct dtx_handle *dth)
 {
-	D_ASSERT(d_list_empty(&dth->dth_deferred_nvme));
-	D_FREE(dth->dth_deferred);
-	if (dth->dth_rsrvds != &dth->dth_rsrvd_inline)
-		D_FREE(dth->dth_rsrvds);
+	if (dth->dth_rsrvds != NULL) {
+		D_ASSERT(d_list_empty(&dth->dth_deferred_nvme));
+		D_FREE(dth->dth_deferred);
+		if (dth->dth_rsrvds != &dth->dth_rsrvd_inline)
+			D_FREE(dth->dth_rsrvds);
+	}
 }

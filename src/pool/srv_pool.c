@@ -4962,6 +4962,42 @@ out:
 	crt_reply_send(rpc);
 }
 
+int
+ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
+			 uint32_t version)
+{
+	struct pl_map		*map;
+	struct pl_obj_layout	*layout;
+	struct daos_obj_md	 md = { 0 };
+	int			 rc = 0;
+
+	map = pl_map_find(pool->sp_uuid, oid->id_pub);
+	if (map == NULL) {
+		D_WARN("Failed to find pool map tp select leader for "
+		       DF_UOID" version = %d\n", DP_UOID(*oid), version);
+		return -DER_INVAL;
+	}
+
+	md.omd_id = oid->id_pub;
+	md.omd_ver = version;
+	rc = pl_obj_place(map, &md, NULL, &layout);
+	if (rc != 0)
+		goto out;
+
+	rc = pl_select_leader(oid->id_pub, oid->id_shard / layout->ol_grp_size,
+			      layout->ol_grp_size, true,
+			      pl_obj_get_shard, layout);
+	pl_obj_layout_free(layout);
+	if (rc < 0)
+		D_WARN("Failed to select leader for "DF_UOID
+		       "version = %d: rc = %d\n",
+		       DP_UOID(*oid), version, rc);
+
+out:
+	pl_map_decref(map);
+	return rc;
+}
+
 /**
  * Check whether the leader replica of the given object resides
  * on current server or not.
@@ -4978,59 +5014,31 @@ int
 ds_pool_check_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 			 uint32_t version)
 {
-	struct pl_map		*map;
-	struct pl_obj_layout	*layout = NULL;
 	struct pool_target	*target;
-	struct daos_obj_md	 md = { 0 };
-	int			 leader;
 	d_rank_t		 myrank;
-	int			 rc = 0;
+	int			 leader;
+	int			 rc;
 
-	map = pl_map_find(pool->sp_uuid, oid->id_pub);
-	if (map == NULL) {
-		D_WARN("Failed to find pool map tp select leader for "
-		       DF_UOID" version = %d\n", DP_UOID(*oid), version);
-		return -DER_INVAL;
-	}
-
-	md.omd_id = oid->id_pub;
-	md.omd_ver = version;
-	rc = pl_obj_place(map, &md, NULL, &layout);
-	if (rc != 0)
-		goto out;
-
-	leader = pl_select_leader(oid->id_pub,
-				  oid->id_shard / layout->ol_grp_size,
-				  layout->ol_grp_size, true,
-				  pl_obj_get_shard, layout);
-	if (leader < 0) {
-		D_WARN("Failed to select leader for "DF_UOID
-		       "version = %d: rc = %d\n",
-		       DP_UOID(*oid), version, leader);
-		D_GOTO(out, rc = leader);
-	}
+	leader = ds_pool_elect_dtx_leader(pool, oid, version);
+	if (leader < 0)
+		return leader;
 
 	D_DEBUG(DB_TRACE, "get new leader tgt id %d\n", leader);
 	rc = pool_map_find_target(pool->sp_map, leader, &target);
 	if (rc < 0)
-		goto out;
+		return rc;
 
 	if (rc != 1)
-		D_GOTO(out, rc = -DER_INVAL);
+		return -DER_INVAL;
 
 	rc = crt_group_rank(NULL, &myrank);
 	if (rc < 0)
-		goto out;
+		return rc;
 
 	if (myrank != target->ta_comp.co_rank)
 		rc = 0;
 	else
 		rc = 1;
-
-out:
-	if (layout != NULL)
-		pl_obj_layout_free(layout);
-	pl_map_decref(map);
 
 	return rc;
 }

@@ -331,12 +331,12 @@ struct obj_ec_singv_local {
 
 /** Query if the single value record is stored in one data target */
 static inline bool
-obj_ec_singv_one_tgt(daos_iod_t *iod, d_sg_list_t *sgl,
+obj_ec_singv_one_tgt(daos_size_t iod_size, d_sg_list_t *sgl,
 		     struct daos_oclass_attr *oca)
 {
 	uint64_t size = OBJ_EC_SINGV_EVENDIST_SZ(obj_ec_data_tgt_nr(oca));
 
-	if ((iod->iod_size != DAOS_REC_ANY && iod->iod_size <= size) ||
+	if ((iod_size != DAOS_REC_ANY && iod_size <= size) ||
 	    (sgl != NULL && daos_sgl_buf_size(sgl) <= size))
 		return true;
 

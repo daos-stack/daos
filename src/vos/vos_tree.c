@@ -850,7 +850,8 @@ vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
 
 static int
 tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
-		 struct vos_krec_df *krec, bool created, daos_handle_t *sub_toh)
+		 struct vos_krec_df *krec, bool created, uint32_t intent,
+		 daos_handle_t *sub_toh)
 {
 	struct umem_attr        *uma = vos_obj2uma(obj);
 	struct vos_pool		*pool = vos_obj2pool(obj);
@@ -881,6 +882,11 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 
 	vos_evt_desc_cbs_init(&cbs, pool, coh);
 	if (krec->kr_bmap & expected_flag) {
+		if ((intent == DAOS_INTENT_UPDATE ||
+		     intent == DAOS_INTENT_PUNCH) &&
+		    vos_dtx_hit_inprogress())
+			D_GOTO(out, rc = -DER_INPROGRESS);
+
 		if (flags & SUBTR_EVT) {
 			rc = evt_open(&krec->kr_evt, uma, &cbs, sub_toh);
 		} else {
@@ -893,7 +899,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		goto out;
 	}
 
-	if ((flags & SUBTR_CREATE) == 0) {
+	if (!(flags & SUBTR_CREATE) || vos_dtx_hit_inprogress()) {
 		/** This can happen if application does a punch first before any
 		 *  updates.   Simply return -DER_NONEXIST in such case.
 		 */
@@ -1030,7 +1036,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	}
 
 	if (rc == -DER_NONEXIST) {
-		if (!(flags & SUBTR_CREATE))
+		if (!(flags & SUBTR_CREATE) || vos_dtx_hit_inprogress())
 			goto out;
 
 		rbund.rb_iov	= key;
@@ -1048,7 +1054,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	if (sub_toh) {
 		D_ASSERT(krec != NULL);
 		rc = tree_open_create(obj, tclass, flags, krec, created,
-				      sub_toh);
+				      intent, sub_toh);
 	}
 
 	if (rc)
@@ -1116,6 +1122,9 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 		/** Abort on any other error */
 		goto done;
 	}
+
+	if (vos_dtx_hit_inprogress())
+		return -DER_INPROGRESS;
 
 	if (rc != 0) {
 		/** If it's not a replay punch, we should not insert

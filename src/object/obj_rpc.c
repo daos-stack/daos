@@ -967,7 +967,7 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc,
 		if (dcsr->dcsr_nr == 0)
 			D_GOTO(out, rc = 0);
 
-		if (dcu->dcu_flags & DRF_CPD_BULK) {
+		if (dcu->dcu_flags & ORF_CPD_BULK) {
 			if (proc_op == CRT_PROC_DECODE) {
 				D_ALLOC_ARRAY(dcu->dcu_bulks, dcsr->dcsr_nr);
 				if (dcu->dcu_bulks == NULL)
