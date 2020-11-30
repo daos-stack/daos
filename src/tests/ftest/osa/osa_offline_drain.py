@@ -108,13 +108,13 @@ class OSAOfflineDrain(OSAUtils):
         if data:
             self.verify_single_object()
 
+    @skipForTicket("DAOS-6107")
     def test_osa_offline_drain(self):
         """
         JIRA ID: DAOS-4750
 
         Test Description: Validate Offline Drain
 
-        Disabled from pr until DAOS-6107 is fixed.
         :avocado: tags=all,hw,large,osa,osa_drain,offline_drain
         """
         for pool_num in range(1, 3):

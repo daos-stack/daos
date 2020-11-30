@@ -272,12 +272,12 @@ class OSAOnlineReintegration(TestWithServers):
             self.pool.display_pool_daos_space(display_string)
             pool[val].destroy()
 
+    @skipForTicket("DAOS-6123")
     def test_osa_online_reintegration(self):
         """Test ID: DAOS-5075.
 
         Test Description: Validate Online Reintegration
 
-        XXX Disabled from pr testing until DAOS-6123 is fixed.
         :avocado: tags=all,hw,large,osa,online_reintegration,DAOS_5610
         """
         # Perform reintegration testing with 1 pool.

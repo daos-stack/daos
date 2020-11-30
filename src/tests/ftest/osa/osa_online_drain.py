@@ -220,11 +220,11 @@ class OSAOnlineDrain(TestWithServers):
             self.pool.display_pool_daos_space(display_string)
             pool[val].destroy()
 
+    @skipForTicket("DAOS-6061")
     def test_osa_online_drain(self):
         """Test ID: DAOS-4750
         Test Description: Validate Online drain
 
-        XXX Disabled from pr testing until DAOS-6061 is fixed.
         :avocado: tags=all,hw,large,osa,osa_drain,online_drain,DAOS_5610
         """
         # Perform drain testing with 1 to 2 pools
