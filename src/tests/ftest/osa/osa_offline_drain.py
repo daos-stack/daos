@@ -25,6 +25,7 @@ import time
 import random
 from osa_utils import OSAUtils
 from test_utils_pool import TestPool
+from apricot import skipForTicket
 
 
 class OSAOfflineDrain(OSAUtils):

@@ -37,6 +37,7 @@ from write_host_file import write_host_file
 from command_utils import CommandFailure
 from mpio_utils import MpioUtils
 from daos_racer_utils import DaosRacerCommand
+from apricot import skipForTicket
 
 try:
     # python 3.x
