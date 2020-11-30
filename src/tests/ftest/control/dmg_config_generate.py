@@ -99,16 +99,15 @@ class ConfigGenerate(TestWithServers):
             self.fail("Error starting servers with dmg generated"
                       " config: {}".format(err))
 
+    def test_dmg_config_generate(self):
+        """Verify that dmg can generate an accurate configuration file."""
 
-def test_dmg_config_generate(self):
-    """Verify that dmg can generate an accurate configuration file."""
+        vals = {
+            "access_point": self.hostlist_servers[0],
+            "num_pmem": None,
+            "num_nvme": None,
+            "net_class": None,
+        }
 
-    vals = {
-        "access_point": self.hostlist_servers[0],
-        "num_pmem": None,
-        "num_nvme": None,
-        "net_class": None,
-    }
-
-    # Run test
-    self.config_generate(vals)
+        # Run test
+        self.config_generate(vals)
