@@ -51,7 +51,7 @@ class NvmePoolExtend(TestWithServers):
     - Start the few daos servers.
     - Create a pool
     - Run IOR with write mode
-    - Start a new server and extend the pool 
+    - Start a new server and extend the pool
     - Verfy IOR written data after extending the pool.
 
     :avocado: recursive
@@ -173,10 +173,6 @@ class NvmePoolExtend(TestWithServers):
         pool = {}
         total_servers = len(self.hostlist_servers) * 2
         self.log.info("Total Daos Servers (Initial): %d", total_servers)
-
-        # Extend one of the ranks (or server)
-        # rank index starts from zero
-        rank = total_servers
 
         for val in range(0, num_pool):
             # Create a pool
