@@ -488,7 +488,7 @@ class DaosServerManager(SubprocessManager):
         Args:
             mode (str): mode to detect using associated pattern.
                 i.e. "normal", "format", "reformat", "discover"
-            qty (int, optional): number of pattern ocurrences expected to be
+            qty (int, optional): number of pattern occurrences expected to be
                 detected. If None is provided the method will use self._hosts.
 
         Raises:
@@ -576,10 +576,10 @@ class DaosServerManager(SubprocessManager):
         if cmd_list:
             pcmd(self._hosts, "; ".join(cmd_list), verbose)
 
-    def start(self, config_data=None):
+    def start(self):
         """Start the server through the job manager."""
         # Prepare the servers
-        self.prepare(config_data)
+        self.prepare()
 
         # Start the servers and wait for them to be ready for storage format
         self.detect_start_mode("format")

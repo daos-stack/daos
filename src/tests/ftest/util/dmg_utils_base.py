@@ -96,6 +96,8 @@ class DmgCommandBase(YamlCommand):
             self.sub_command_class = self.SystemSubCommand()
         elif self.sub_command.value == "cont":
             self.sub_command_class = self.ContSubCommand()
+        elif self.sub_command.value == "config":
+            self.sub_command_class = self.ConfigSubCommand()
         else:
             self.sub_command_class = None
 

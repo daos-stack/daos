@@ -31,7 +31,7 @@ from command_utils_base import CommandFailure
 class ConfigGenerate(TestWithServers):
     """Test Class Description:
 
-    Verify the veracity of the configuration created by the commmand and what
+    Verify the veracity of the configuration created by the command and what
     the user specified, input verification and correct execution of the server
     once the generated configuration is propagated to the servers.
 
@@ -43,7 +43,18 @@ class ConfigGenerate(TestWithServers):
         super(ConfigGenerate, self).__init__(*args, **kwargs)
         self.setup_start_servers = False
 
-    def dmg_generate_config(self):
+    def start_with_config_data(self, config_data):
+        """Start up servers with config data.
+
+        Args:
+            config_data (dict): the contents of the server yaml config file
+        """
+        self.server_managers[-1].prepare(config_data)
+        self.server_managers[-1].detect_start_mode("format")
+        self.server_managers[-1].dmg.storage_format(timeout=40)
+        self.server_managers[-1].detect_io_server_start()
+
+    def config_generate(self, kwargs):
         """ Verify that dmg can generate an accurate configuration file."""
 
         # Let's create an empty config file on the server/s
@@ -64,10 +75,13 @@ class ConfigGenerate(TestWithServers):
             self.fail("Error starting server in discovery mode: {}".format(err))
 
         # Let's get the config file contents
-        yaml_data = self.get_dmg_command().config_generate()
+        yaml_data = self.get_dmg_command().config_generate(**kwargs)
 
         # Stop server
         self.server_managers[-1].stop()
+
+        # Verify values we got from config generate command
+        # self.verify(yaml_data, kwargs)
 
         # Setup and start the servers
         extra_servers = self.params.get("test_servers", "/run/extra_servers/*")
@@ -80,8 +94,21 @@ class ConfigGenerate(TestWithServers):
 
         # Verify that all daos_io_server instances are started.
         try:
-            self.server_managers[-1].start(config_data=yaml_data)
+            self.start_with_config_data(yaml_data)
         except CommandFailure as err:
             self.fail("Error starting servers with dmg generated"
                       " config: {}".format(err))
 
+
+def test_dmg_config_generate(self):
+    """Verify that dmg can generate an accurate configuration file."""
+
+    vals = {
+        "access_point": self.hostlist_servers[0],
+        "num_pmem": None,
+        "num_nvme": None,
+        "net_class": None,
+    }
+
+    # Run test
+    self.config_generate(vals)
