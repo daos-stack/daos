@@ -281,18 +281,13 @@ def getuid() {
 // in faster time-to-result for PRs.
 
 String get_priority() {
-    node {
-        checkoutScm()
-        if (cachedCommitPragma(pragma: 'Queue-jump', def_val: false)) {
-	    string p = '2'
-	} else if (env.BRANCH_NAME == 'master') {
-	    string p = '4'
-	} else {
-	    string p = ''
-	}
-	echo "Build priority set to " + p
-	return p
+    if (env.BRANCH_NAME == 'master') {
+        string p = '4'
+    } else {
+        string p = ''
     }
+    echo "Build priority set to " + p
+    return p
 }
 
 String rpm_test_version() {
