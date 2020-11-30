@@ -52,7 +52,7 @@ dc_debug_set_params(tse_task_t *task)
 	args = dc_task_get_args(task);
 	rc = dc_mgmt_sys_attach(args->grp, &cp_arg.sys);
 	if (rc != 0) {
-		D_ERROR("failed to attach to grp %s, rc "DF_RC".\n", args->grp,
+		D_ERROR("failed to attach to grp %s, rc "DF_RC"\n", args->grp,
 			DP_RC(rc));
 		rc = -DER_INVAL;
 		goto out_task;
@@ -68,7 +68,7 @@ dc_debug_set_params(tse_task_t *task)
 			      DAOS_MGMT_VERSION);
 	rc = crt_req_create(daos_task2ctx(task), &ep, opc, &rpc);
 	if (rc != 0) {
-		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: "DF_RC".\n",
+		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: "DF_RC"\n",
 			DP_RC(rc));
 		D_GOTO(err_grp, rc);
 	}
@@ -90,7 +90,7 @@ dc_debug_set_params(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
-	D_DEBUG(DB_MGMT, "set parameter %d/%u/"DF_U64".\n", args->rank,
+	D_DEBUG(DB_MGMT, "set parameter %d/%u/"DF_U64"\n", args->rank,
 		args->key_id, args->value);
 
 	/** send the request */
