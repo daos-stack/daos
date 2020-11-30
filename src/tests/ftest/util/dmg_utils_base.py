@@ -105,7 +105,7 @@ class DmgCommandBase(YamlCommand):
         """Defines an object for the dmg config sub command."""
         def __init__(self):
             """Create a dmg config subcommand object."""
-            super(DmgCommandBase.ConfigSubcommand, self).__init__(
+            super(DmgCommandBase.ConfigSubCommand, self).__init__(
                 "run/dmg/config/*", "config")
 
         def get_sub_command_class(self):
