@@ -395,6 +395,11 @@ find_rebuild_shards(unsigned int *tgt_stack_array,
 
 			/* Increase by the step size */
 			max_shards += NUM_SHARDS_STEP_INCREASE;
+
+			D_DEBUG(DB_REBUILD, "Got REC2BIG, increasing rebuild "
+					    "array size by %u to %u",
+					    NUM_SHARDS_STEP_INCREASE,
+					    max_shards);
 		}
 
 		/*
