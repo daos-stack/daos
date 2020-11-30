@@ -1,10 +1,13 @@
 """Build FUSE client"""
 import daos_build
 
-def configure_lustre(denv):
+def configure_lustre(env):
     """Do Lustre configure checks"""
     if GetOption('help') or GetOption('clean'):
-        return denv
+        return env
+    # copy env to run configure tasks and prevent liblustreapi to be
+    # added in main env's LIBS list for builds
+    denv = env.Clone()
     #If Lustre installed build a Lustre-aware libduns
     conf = Configure(denv)
     gotversion = False
@@ -20,10 +23,12 @@ def configure_lustre(denv):
             gotversion = True
     if gotversion is True:
         print("Building with Lustre bindings.")
-        conf.env.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
+        # add compile flag to orig env
+        env.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
     else:
         print("Not building with Lustre bindings.")
-    return conf.Finish()
+    conf.Finish()
+    return env
 
 def scons():
     """Execute build"""
