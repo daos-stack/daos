@@ -26,8 +26,10 @@ package pretty
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -1027,6 +1029,8 @@ NVMe PCI Format Result
 }
 
 func TestPretty_PrintSmdInfoMap(t *testing.T) {
+	mockController := storage.MockNvmeController(1)
+
 	for name, tc := range map[string]struct {
 		req         *control.SmdQueryReq
 		hsm         control.HostStorageMap
@@ -1208,20 +1212,45 @@ host1
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      0,
 									State:     "NORMAL",
+									Health:    mockController.HealthStats,
 								},
 							},
 						},
 					},
 				},
 			),
-			expPrintStr: `
+			expPrintStr: fmt.Sprintf(`
 -----
 host1
 -----
   Devices
     UUID:00000000-0000-0000-0000-000000000000 [TrAddr:]
       Targets:[0 1 2] Rank:0 State:NORMAL
+      Health Stats:
+        Temperature:%dK(%.02fC)
+        Temperature Warning Duration:%dm0s
+        Temperature Critical Duration:%dm0s
+        Controller Busy Time:%dm0s
+        Power Cycles:%d
+        Power On Duration:%s
+        Unsafe Shutdowns:%d
+        Media Errors:%d
+        Error Log Entries:%d
+      Critical Warnings:
+        Temperature: WARNING
+        Available Spare: WARNING
+        Device Reliability: WARNING
+        Read Only: WARNING
+        Volatile Memory Backup: WARNING
+
 `,
+				mockController.HealthStats.TempK(), mockController.HealthStats.TempC(),
+				mockController.HealthStats.TempWarnTime, mockController.HealthStats.TempCritTime,
+				mockController.HealthStats.CtrlBusyTime, mockController.HealthStats.PowerCycles,
+				time.Duration(mockController.HealthStats.PowerOnHours)*time.Hour,
+				mockController.HealthStats.UnsafeShutdowns, mockController.HealthStats.MediaErrors,
+				mockController.HealthStats.ErrorLogEntries,
+			),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

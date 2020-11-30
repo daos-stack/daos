@@ -146,6 +146,7 @@ type (
 		Rank       system.Rank `json:"rank"`
 		TotalBytes uint64      `json:"total_bytes"`
 		AvailBytes uint64      `json:"avail_bytes"`
+		Health     *NvmeHealth `json:"health"`
 		TrAddr     string      `json:"tr_addr"`
 	}
 

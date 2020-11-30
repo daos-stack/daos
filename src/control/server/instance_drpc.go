@@ -40,8 +40,8 @@ import (
 )
 
 var (
-	dRPCNotReady     = errors.New("no dRPC client set (data plane not started?)")
-	instanceNotReady = errors.New("instance not ready yet")
+	errDRPCNotReady     = errors.New("no dRPC client set (data plane not started?)")
+	errInstanceNotReady = errors.New("instance not ready yet")
 )
 
 func (srv *IOServerInstance) setDrpcClient(c drpc.DomainSocketClient) {
@@ -54,7 +54,7 @@ func (srv *IOServerInstance) getDrpcClient() (drpc.DomainSocketClient, error) {
 	srv.RLock()
 	defer srv.RUnlock()
 	if srv._drpcClient == nil {
-		return nil, dRPCNotReady
+		return nil, errDRPCNotReady
 	}
 	return srv._drpcClient, nil
 }
@@ -217,7 +217,6 @@ func (srv *IOServerInstance) listSmdDevices(ctx context.Context, req *mgmtpb.Smd
 // retrieve metadata and health stats for each SMD device (blobstore) on
 // a given I/O server instance. Update input map with new stats/smd info.
 func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[string]*storage.NvmeController) error {
-	srv.log.Debugf("instance %d updating %v ctrlrs", srv.Index(), ctrlrMap)
 	smdDevs, err := srv.listSmdDevices(ctx, new(mgmtpb.SmdDevReq))
 	if err != nil {
 		return errors.Wrapf(err, "instance %d listSmdDevices()", srv.Index())

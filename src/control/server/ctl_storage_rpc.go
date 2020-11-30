@@ -153,8 +153,6 @@ func (c *ControlService) scanInstanceBdevs(ctx context.Context) (*bdev.ScanRespo
 	instances := c.harness.Instances()
 
 	for _, srv := range instances {
-		c.log.Debugf("idx %d, cfgDevs: %s", srv.Index(),
-			c.instanceStorage[srv.Index()].Bdev.GetNvmeDevs())
 		nvmeDevs := c.instanceStorage[srv.Index()].Bdev.GetNvmeDevs()
 		if len(nvmeDevs) == 0 {
 			continue

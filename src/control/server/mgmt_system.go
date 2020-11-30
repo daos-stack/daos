@@ -154,7 +154,7 @@ func (svc *mgmtSvc) joinLoop(parent context.Context) {
 
 			for i := 0; i < len(svc.harness.Instances()); i++ {
 				if err := svc.doGroupUpdate(parent); err != nil {
-					if err == instanceNotReady {
+					if err == errInstanceNotReady {
 						svc.log.Debug("group update not ready (retrying)")
 						continue
 					}
@@ -285,7 +285,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 	svc.log.Debugf("group update request: version: %d, ranks: %s", req.MapVersion, rankSet)
 	dResp, err := svc.harness.CallDrpc(ctx, drpc.MethodGroupUpdate, req)
 	if err != nil {
-		if err == instanceNotReady {
+		if err == errInstanceNotReady {
 			return err
 		}
 		svc.log.Errorf("dRPC GroupUpdate call failed: %s", err)

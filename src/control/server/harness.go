@@ -133,13 +133,13 @@ func (h *IOServerHarness) CallDrpc(ctx context.Context, method drpc.Method, body
 	// If the request fails, that error will be returned.
 	for _, i := range h.Instances() {
 		if !i.isReady() {
-			err = instanceNotReady
+			err = errInstanceNotReady
 			continue
 		}
 		resp, err = i.CallDrpc(ctx, method, body)
 
 		switch errors.Cause(err) {
-		case dRPCNotReady, FaultDataPlaneNotStarted:
+		case errDRPCNotReady, FaultDataPlaneNotStarted:
 			continue
 		default:
 			return

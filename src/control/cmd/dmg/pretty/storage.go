@@ -273,6 +273,13 @@ func PrintSmdInfoMap(req *control.SmdQueryReq, hsm control.HostStorageMap, out i
 					if err := printSmdDevice(device, iw1, opts...); err != nil {
 						return err
 					}
+					if device.Health != nil {
+						iw2 := txtfmt.NewIndentWriter(iw1)
+						if err := printNvmeHealth(device.Health, iw2, opts...); err != nil {
+							return err
+						}
+						fmt.Fprintln(out)
+					}
 				}
 			} else {
 				fmt.Fprintln(iw, "No devices found")
