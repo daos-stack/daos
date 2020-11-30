@@ -371,10 +371,11 @@ out:
 static void
 crt_swim_notify_rank_state(d_rank_t rank, struct swim_member_state *state)
 {
-	struct crt_event_cb_priv *cb_priv;
-	enum crt_event_type	 cb_type;
+	struct crt_event_cb_priv *cbs_event;
 	crt_event_cb		 cb_func;
-	void			*cb_arg;
+	void			*cb_args;
+	enum crt_event_type	 cb_type;
+	size_t			 i, cbs_size;
 
 	D_ASSERT(state != NULL);
 	switch (state->sms_status) {
@@ -389,14 +390,16 @@ crt_swim_notify_rank_state(d_rank_t rank, struct swim_member_state *state)
 	}
 
 	/* walk the global list to execute the user callbacks */
-	D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_event_rwlock);
-	d_list_for_each_entry(cb_priv, &crt_plugin_gdata.cpg_event_cbs,
-			      cecp_link) {
-		cb_func = cb_priv->cecp_func;
-		cb_arg  = cb_priv->cecp_args;
-		cb_func(rank, CRT_EVS_SWIM, cb_type, cb_arg);
+	cbs_size = crt_plugin_gdata.cpg_event_size;
+	cbs_event = crt_plugin_gdata.cpg_event_cbs;
+
+	for (i = 0; i < cbs_size; i++) {
+		cb_func = cbs_event[i].cecp_func;
+		cb_args = cbs_event[i].cecp_args;
+		/* check for and execute event callbacks here */
+		if (cb_func != NULL)
+			cb_func(rank, CRT_EVS_SWIM, cb_type, cb_args);
 	}
-	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 }
 
 static int crt_swim_get_member_state(struct swim_context *ctx,

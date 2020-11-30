@@ -273,10 +273,21 @@ void crt_self_test_service_init(void)
 	D_RWLOCK_INIT(&g_all_session_lock, NULL);
 }
 
+void crt_self_test_service_fini(void)
+{
+	D_RWLOCK_DESTROY(&g_all_session_lock);
+}
+
 void crt_self_test_init(void)
 {
 	crt_self_test_service_init();
 	crt_self_test_client_init();
+}
+
+void crt_self_test_fini(void)
+{
+	crt_self_test_service_fini();
+	crt_self_test_client_fini();
 }
 
 void

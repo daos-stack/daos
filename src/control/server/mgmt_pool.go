@@ -71,7 +71,23 @@ func (svc *mgmtSvc) getPoolServiceRanks(uuidStr string) ([]uint32, error) {
 		return nil, drpc.DaosTryAgain
 	}
 
-	return system.RanksToUint32(ps.Replicas), nil
+	readyRanks := make([]system.Rank, 0, len(ps.Replicas))
+	for _, r := range ps.Replicas {
+		m, err := svc.sysdb.FindMemberByRank(r)
+		if err != nil {
+			return nil, err
+		}
+		if m.State()&system.AvailableMemberFilter == 0 {
+			continue
+		}
+		readyRanks = append(readyRanks, r)
+	}
+
+	if len(readyRanks) == 0 {
+		return nil, errors.Errorf("unable to find any available service ranks for pool %s", uuid)
+	}
+
+	return system.RanksToUint32(readyRanks), nil
 }
 
 // calculateCreateStorage determines the amount of SCM/NVMe storage to
@@ -214,7 +230,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	}
 
 	// let the caller know how many ranks were used
-	resp.Numranks = int32(len(req.Ranks))
+	resp.Numranks = uint32(len(req.Ranks))
 
 	if resp.GetStatus() != 0 {
 		if err := svc.sysdb.RemovePoolService(ps.PoolUUID); err != nil {
