@@ -170,11 +170,11 @@ class OSAOnlineDrain(TestWithServers):
 
         # Drain the pool_uuid, rank and targets
         for val in range(0, num_pool):
+            threads = []
             for oclass, api, test, flags in product(self.ior_dfs_oclass,
                                                     self.ior_apis,
                                                     self.ior_test_sequence,
                                                     self.ior_flags):
-                threads = []
                 for thrd in range(0, num_jobs):
                     # Add a thread for these IOR arguments
                     threads.append(threading.Thread(target=self.ior_thread,
@@ -212,7 +212,7 @@ class OSAOnlineDrain(TestWithServers):
                             "Pool Version Error:  After drain")
             # Wait to finish the threads
             for thrd in threads:
-                thrd.join()
+                thrd.join(timeout=240)
 
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)

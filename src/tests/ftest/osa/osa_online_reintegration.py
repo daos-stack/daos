@@ -198,11 +198,11 @@ class OSAOnlineReintegration(TestWithServers):
 
         # Exclude and reintegrate the pool_uuid, rank and targets
         for val in range(0, num_pool):
+            threads = []
             for oclass, api, test, flags in product(self.ior_dfs_oclass,
                                                     self.ior_apis,
                                                     self.ior_test_sequence,
                                                     self.ior_flags):
-                threads = []
                 for _ in range(0, num_jobs):
                     # Add a thread for these IOR arguments
                     threads.append(threading.Thread(target=self.ior_thread,
@@ -257,7 +257,7 @@ class OSAOnlineReintegration(TestWithServers):
                             "Pool Version Error:  After reintegrate")
             # Wait to finish the threads
             for thrd in threads:
-                thrd.join()
+                thrd.join(timeout=240)
 
         # Check data consistency for IOR in future
         # Presently, we are running daos_racer in parallel

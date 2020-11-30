@@ -224,12 +224,11 @@ class OSAOnlineParallelTest(TestWithServers):
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
-
+            threads = []
             for oclass, api, test, flags in product(self.ior_dfs_oclass,
                                                     self.ior_apis,
                                                     self.ior_test_sequence,
                                                     self.ior_flags):
-                threads = []
                 # Action dictionary with OSA dmg command parameters
                 action_args = {
                     "drain": {"pool": self.pool.uuid, "rank": rank,
@@ -266,7 +265,7 @@ class OSAOnlineParallelTest(TestWithServers):
 
                 # Wait to finish the threads
                 for thrd in threads:
-                    thrd.join()
+                    thrd.join(timeout=240)
 
             # Check data consistency for IOR in future
             # Presently, we are running daos_racer in parallel
