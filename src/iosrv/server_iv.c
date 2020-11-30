@@ -833,11 +833,7 @@ ds_iv_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	struct iv_cb_info	*cb_info = cb_arg;
 	int			ret = 0;
 
-	/* FIXME: Temporarily ignore certain IV errors. See DAOS-3545. */
-	if (rc == -DER_UNREACH || rc == -DER_TIMEDOUT)
-		cb_info->result = 0;
-	else
-		cb_info->result = rc;
+	cb_info->result = rc;
 
 	if (cb_info->opc == IV_FETCH && cb_info->value && rc == 0) {
 		struct ds_iv_entry	*entry;
