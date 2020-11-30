@@ -100,16 +100,26 @@ func (f *FaultDomain) TopLevel() string {
 	return top
 }
 
-// Overlaps determines if the two fault domains share any common parents at
-// higher levels.
-func (f *FaultDomain) Overlaps(d *FaultDomain) bool {
+// IsAncestorOf determines if this fault domain is an ancestor of the one passed in.
+func (f *FaultDomain) IsAncestorOf(d *FaultDomain) bool {
 	if f.Empty() {
-		return false
-	}
-	if f.TopLevel() == d.TopLevel() {
+		// root is the ancestor of all
 		return true
 	}
-	return false
+	if f.NumLevels() > d.NumLevels() {
+		// f can't be an ancestor - d is a higher-level domain
+		return false
+	}
+	if f.Equals(d) {
+		return true
+	}
+	for i, domain1 := range f.Domains {
+		domain2 := d.Domains[i]
+		if domain1 != domain2 {
+			return false
+		}
+	}
+	return true
 }
 
 // NewChild creates a FaultDomain with a level below this one.
@@ -267,6 +277,31 @@ func (t *FaultDomainTree) mergeTree(toBeMerged *FaultDomainTree) {
 	return
 }
 
+// RemoveDomain removes a given fault domain from the tree.
+func (t *FaultDomainTree) RemoveDomain(domain *FaultDomain) error {
+	if t == nil {
+		return errors.New("nil FaultDomainTree")
+	}
+	if domain == nil {
+		return nil // nothing to remove
+	}
+	if domain.Equals(t.Domain) {
+		return errors.New("cannot remove root fault domain from tree")
+	}
+	for i := len(t.Children) - 1; i >= 0; i-- {
+		child := t.Children[i]
+		if child.Domain.Equals(domain) {
+			// found it
+			t.Children = append(t.Children[:i], t.Children[i+1:]...)
+			return nil
+		}
+		if child.Domain.IsAncestorOf(domain) {
+			_ = child.RemoveDomain(domain)
+		}
+	}
+	return nil
+}
+
 // IsRoot verifies if the FaultDomainTree is a root node.
 func (t *FaultDomainTree) IsRoot() bool {
 	if t == nil {
@@ -350,7 +385,8 @@ func (t *FaultDomainTree) nodeToString(w io.Writer, depth int, fullDomain bool) 
 // passed-in fault domains.
 func NewFaultDomainTree(domains ...*FaultDomain) *FaultDomainTree {
 	tree := &FaultDomainTree{
-		Domain: MustCreateFaultDomain(), // Empty fault domain will not fail
+		Domain:   MustCreateFaultDomain(), // Empty fault domain will not fail
+		Children: make([]*FaultDomainTree, 0),
 	}
 	for _, d := range domains {
 		subtree := faultDomainTreeFromDomain(d)

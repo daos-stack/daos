@@ -140,7 +140,20 @@ func (mdb *MemberDatabase) addMember(m *Member) {
 	mdb.Ranks[m.Rank] = m
 	mdb.Uuids[m.UUID] = m
 	mdb.Addrs.addMember(m.Addr, m)
-	mdb.FaultDomains.AddDomain(m.FaultDomain)
+	mdb.FaultDomains.AddDomain(m.RankFaultDomain())
+}
+
+func (mdb *MemberDatabase) updateMember(m *Member) {
+	cur, found := mdb.Uuids[m.UUID]
+	if !found {
+		panic(errors.Errorf("member update for unknown member %+v", m))
+	}
+	cur.state = m.state
+	cur.Info = m.Info
+
+	mdb.FaultDomains.RemoveDomain(cur.RankFaultDomain())
+	cur.FaultDomain = m.FaultDomain
+	mdb.FaultDomains.AddDomain(cur.RankFaultDomain())
 }
 
 // removeMember is responsible for removing new Member and updating all
@@ -149,5 +162,5 @@ func (mdb *MemberDatabase) removeMember(m *Member) {
 	delete(mdb.Ranks, m.Rank)
 	delete(mdb.Uuids, m.UUID)
 	delete(mdb.Addrs, m.Addr.String())
-	// TODO KJ: remove fault domain if no one else needs it
+	mdb.FaultDomains.RemoveDomain(m.RankFaultDomain())
 }

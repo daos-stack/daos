@@ -332,12 +332,7 @@ func (d *dbData) applyMemberUpdate(op raftOp, data []byte) {
 	case raftOpAddMember:
 		d.Members.addMember(m.Member)
 	case raftOpUpdateMember:
-		cur, found := d.Members.Uuids[m.Member.UUID]
-		if !found {
-			panic(errors.Errorf("member update for unknown member %+v", m))
-		}
-		cur.state = m.Member.state
-		cur.Info = m.Member.Info
+		d.Members.updateMember(m.Member)
 	case raftOpRemoveMember:
 		d.Members.removeMember(m.Member)
 	default:
