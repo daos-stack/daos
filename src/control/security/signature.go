@@ -78,7 +78,7 @@ func (s *TokenSigner) Sign(key crypto.PrivateKey, data []byte) ([]byte, error) {
 	switch signingKey := key.(type) {
 	// TODO: Support key types other than RSA
 	case *rsa.PrivateKey:
-		return rsa.SignPKCS1v15(s.randPool, signingKey, crypto.SHA512, digest)
+		return rsa.SignPSS(s.randPool, signingKey, crypto.SHA512, digest, nil)
 	default:
 		return nil, &UnsupportedKeyError{}
 	}
@@ -95,7 +95,7 @@ func (s *TokenSigner) Verify(key crypto.PublicKey, data []byte, sig []byte) erro
 	switch signingKey := key.(type) {
 	// TODO: Support key types other than RSA
 	case *rsa.PublicKey:
-		return rsa.VerifyPKCS1v15(signingKey, crypto.SHA512, digest, sig)
+		return rsa.VerifyPSS(signingKey, crypto.SHA512, digest, sig, nil)
 	default:
 		return &UnsupportedKeyError{}
 	}

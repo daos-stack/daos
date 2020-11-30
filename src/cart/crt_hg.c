@@ -385,6 +385,9 @@ crt_provider_is_block_mode(int provider)
 bool
 crt_provider_is_contig_ep(int provider)
 {
+	if (provider == CRT_NA_OFI_PSM2)
+		return false;
+
 	return crt_na_dict[provider].nad_port_bind;
 }
 

@@ -760,11 +760,14 @@ hold_objects(struct vos_object **objs, struct daos_lru_cache *occ,
 {
 	int			i = 0, rc = 0;
 	daos_epoch_range_t	epr = {0, 1};
+	uint64_t		hold_flags;
 
+	hold_flags = no_create ? 0 : VOS_OBJ_CREATE;
+	hold_flags |= VOS_OBJ_VISIBLE;
 	for (i = start; i < end; i++) {
-		rc = vos_obj_hold(occ, vos_hdl2cont(*coh), *oid, &epr,
-				  no_create, no_create ? DAOS_INTENT_DEFAULT :
-				  DAOS_INTENT_UPDATE, true, &objs[i], 0);
+		rc = vos_obj_hold(occ, vos_hdl2cont(*coh), *oid, &epr, 0,
+				  hold_flags, no_create ? DAOS_INTENT_DEFAULT :
+				  DAOS_INTENT_UPDATE, &objs[i], 0);
 		if (rc != exp_rc)
 			return 1;
 	}
@@ -829,13 +832,15 @@ io_obj_cache_test(void **state)
 	oids[0] = gen_oid(arg->ofeat);
 	oids[1] = gen_oid(arg->ofeat);
 
-	rc = vos_obj_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &epr,
-			  false, DAOS_INTENT_DEFAULT, true, &objs[0], 0);
+	rc = vos_obj_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &epr, 0,
+			  VOS_OBJ_CREATE | VOS_OBJ_VISIBLE, DAOS_INTENT_DEFAULT,
+			  &objs[0], 0);
 	assert_int_equal(rc, 0);
 	vos_obj_release(occ, objs[0], false);
 
-	rc = vos_obj_hold(occ, vos_hdl2cont(l_coh), oids[1], &epr, false,
-			  DAOS_INTENT_DEFAULT, true, &objs[0], 0);
+	rc = vos_obj_hold(occ, vos_hdl2cont(l_coh), oids[1], &epr, 0,
+			  VOS_OBJ_CREATE | VOS_OBJ_VISIBLE, DAOS_INTENT_DEFAULT,
+			  &objs[0], 0);
 	assert_int_equal(rc, 0);
 	vos_obj_release(occ, objs[0], false);
 
@@ -848,8 +853,8 @@ io_obj_cache_test(void **state)
 
 	rc = hold_objects(objs, occ, &l_coh, &oids[1], 10, 15, true, 0);
 	assert_int_equal(rc, 0);
-	rc = vos_obj_hold(occ, vos_hdl2cont(l_coh), oids[1], &epr, true,
-			  DAOS_INTENT_DEFAULT, true, &objs[16], 0);
+	rc = vos_obj_hold(occ, vos_hdl2cont(l_coh), oids[1], &epr, 0,
+			  VOS_OBJ_VISIBLE, DAOS_INTENT_DEFAULT, &objs[16], 0);
 	assert_int_equal(rc, 0);
 
 	vos_obj_release(occ, objs[16], false);
