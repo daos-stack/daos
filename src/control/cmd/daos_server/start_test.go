@@ -63,7 +63,8 @@ func genMinimalConfig() *config.Server {
 				WithScmClass("ram").
 				WithScmRamdiskSize(1).
 				WithScmMountPoint("/mnt/daos").
-				WithFabricInterface("foo0"),
+				WithFabricInterface("foo0").
+				WithFabricInterfacePort(42),
 		)
 	cfg.Path = path.Join(os.Args[0], cfg.Path)
 	return cfg
@@ -78,7 +79,8 @@ func genDefaultExpected() *config.Server {
 				WithScmClass("ram").
 				WithScmRamdiskSize(1).
 				WithScmMountPoint("/mnt/daos").
-				WithFabricInterface("foo0"),
+				WithFabricInterface("foo0").
+				WithFabricInterfacePort(42),
 		)
 }
 
