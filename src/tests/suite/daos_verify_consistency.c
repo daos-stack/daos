@@ -321,7 +321,8 @@ vc_8(void **state)
 
 	if (arg->myrank == 0)
 		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-				     DAOS_VC_LOST_REPLICA, 0, NULL);
+				     DAOS_VC_LOST_REPLICA | DAOS_FAIL_ALWAYS,
+				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	rc = vc_obj_verify(arg, oid);
