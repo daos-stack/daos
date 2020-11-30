@@ -51,7 +51,7 @@ class PoolDestroyWithIO(IorTestBase):
           Destroy Pool during rebuild.
           Re-create pool on reamining ranks.
 
-        :avocado: tags=all,pr,small,pool,rebuild,pooldestroywithio
+        :avocado: tags=all,pr,hw,small,pool,rebuild,pooldestroywithio
         """
         # set params
         targets = self.params.get("targets", "/run/server_config/*/0/*")
