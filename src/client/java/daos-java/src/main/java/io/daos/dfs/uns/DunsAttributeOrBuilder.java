@@ -61,23 +61,41 @@ public interface DunsAttributeOrBuilder extends
   long getChunkSize();
 
   /**
-   * <code>bool on_lustre = 6;</code>
+   * <code>string rel_path = 6;</code>
+   * @return The relPath.
+   */
+  java.lang.String getRelPath();
+  /**
+   * <code>string rel_path = 6;</code>
+   * @return The bytes for relPath.
+   */
+  com.google.protobuf.ByteString
+      getRelPathBytes();
+
+  /**
+   * <code>bool on_lustre = 7;</code>
    * @return The onLustre.
    */
   boolean getOnLustre();
 
   /**
-   * <code>.uns.Properties properties = 7;</code>
+   * <code>.uns.Properties properties = 8;</code>
    * @return Whether the properties field is set.
    */
   boolean hasProperties();
   /**
-   * <code>.uns.Properties properties = 7;</code>
+   * <code>.uns.Properties properties = 8;</code>
    * @return The properties.
    */
   io.daos.dfs.uns.Properties getProperties();
   /**
-   * <code>.uns.Properties properties = 7;</code>
+   * <code>.uns.Properties properties = 8;</code>
    */
   io.daos.dfs.uns.PropertiesOrBuilder getPropertiesOrBuilder();
+
+  /**
+   * <code>bool no_prefix = 9;</code>
+   * @return The noPrefix.
+   */
+  boolean getNoPrefix();
 }

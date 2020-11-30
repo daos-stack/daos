@@ -6,7 +6,7 @@ package io.daos.dfs.uns;
 /**
  * Protobuf type {@code uns.DunsAttribute}
  */
-public final class DunsAttribute extends
+public  final class DunsAttribute extends
     com.google.protobuf.GeneratedMessageV3 implements
     // @@protoc_insertion_point(message_implements:uns.DunsAttribute)
     DunsAttributeOrBuilder {
@@ -20,6 +20,7 @@ private static final long serialVersionUID = 0L;
     cuuid_ = "";
     layoutType_ = 0;
     objectType_ = "";
+    relPath_ = "";
   }
 
   @java.lang.Override
@@ -81,12 +82,18 @@ private static final long serialVersionUID = 0L;
             chunkSize_ = input.readUInt64();
             break;
           }
-          case 48: {
+          case 50: {
+            java.lang.String s = input.readStringRequireUtf8();
+
+            relPath_ = s;
+            break;
+          }
+          case 56: {
 
             onLustre_ = input.readBool();
             break;
           }
-          case 58: {
+          case 66: {
             io.daos.dfs.uns.Properties.Builder subBuilder = null;
             if (properties_ != null) {
               subBuilder = properties_.toBuilder();
@@ -97,6 +104,11 @@ private static final long serialVersionUID = 0L;
               properties_ = subBuilder.buildPartial();
             }
 
+            break;
+          }
+          case 72: {
+
+            noPrefix_ = input.readBool();
             break;
           }
           default: {
@@ -137,7 +149,6 @@ private static final long serialVersionUID = 0L;
    * <code>string puuid = 1;</code>
    * @return The puuid.
    */
-  @java.lang.Override
   public java.lang.String getPuuid() {
     java.lang.Object ref = puuid_;
     if (ref instanceof java.lang.String) {
@@ -154,7 +165,6 @@ private static final long serialVersionUID = 0L;
    * <code>string puuid = 1;</code>
    * @return The bytes for puuid.
    */
-  @java.lang.Override
   public com.google.protobuf.ByteString
       getPuuidBytes() {
     java.lang.Object ref = puuid_;
@@ -175,7 +185,6 @@ private static final long serialVersionUID = 0L;
    * <code>string cuuid = 2;</code>
    * @return The cuuid.
    */
-  @java.lang.Override
   public java.lang.String getCuuid() {
     java.lang.Object ref = cuuid_;
     if (ref instanceof java.lang.String) {
@@ -192,7 +201,6 @@ private static final long serialVersionUID = 0L;
    * <code>string cuuid = 2;</code>
    * @return The bytes for cuuid.
    */
-  @java.lang.Override
   public com.google.protobuf.ByteString
       getCuuidBytes() {
     java.lang.Object ref = cuuid_;
@@ -213,14 +221,14 @@ private static final long serialVersionUID = 0L;
    * <code>.uns.Layout layout_type = 3;</code>
    * @return The enum numeric value on the wire for layoutType.
    */
-  @java.lang.Override public int getLayoutTypeValue() {
+  public int getLayoutTypeValue() {
     return layoutType_;
   }
   /**
    * <code>.uns.Layout layout_type = 3;</code>
    * @return The layoutType.
    */
-  @java.lang.Override public io.daos.dfs.uns.Layout getLayoutType() {
+  public io.daos.dfs.uns.Layout getLayoutType() {
     @SuppressWarnings("deprecation")
     io.daos.dfs.uns.Layout result = io.daos.dfs.uns.Layout.valueOf(layoutType_);
     return result == null ? io.daos.dfs.uns.Layout.UNRECOGNIZED : result;
@@ -232,7 +240,6 @@ private static final long serialVersionUID = 0L;
    * <code>string object_type = 4;</code>
    * @return The objectType.
    */
-  @java.lang.Override
   public java.lang.String getObjectType() {
     java.lang.Object ref = objectType_;
     if (ref instanceof java.lang.String) {
@@ -249,7 +256,6 @@ private static final long serialVersionUID = 0L;
    * <code>string object_type = 4;</code>
    * @return The bytes for objectType.
    */
-  @java.lang.Override
   public com.google.protobuf.ByteString
       getObjectTypeBytes() {
     java.lang.Object ref = objectType_;
@@ -270,46 +276,87 @@ private static final long serialVersionUID = 0L;
    * <code>uint64 chunk_size = 5;</code>
    * @return The chunkSize.
    */
-  @java.lang.Override
   public long getChunkSize() {
     return chunkSize_;
   }
 
-  public static final int ON_LUSTRE_FIELD_NUMBER = 6;
+  public static final int REL_PATH_FIELD_NUMBER = 6;
+  private volatile java.lang.Object relPath_;
+  /**
+   * <code>string rel_path = 6;</code>
+   * @return The relPath.
+   */
+  public java.lang.String getRelPath() {
+    java.lang.Object ref = relPath_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      relPath_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string rel_path = 6;</code>
+   * @return The bytes for relPath.
+   */
+  public com.google.protobuf.ByteString
+      getRelPathBytes() {
+    java.lang.Object ref = relPath_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      relPath_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int ON_LUSTRE_FIELD_NUMBER = 7;
   private boolean onLustre_;
   /**
-   * <code>bool on_lustre = 6;</code>
+   * <code>bool on_lustre = 7;</code>
    * @return The onLustre.
    */
-  @java.lang.Override
   public boolean getOnLustre() {
     return onLustre_;
   }
 
-  public static final int PROPERTIES_FIELD_NUMBER = 7;
+  public static final int PROPERTIES_FIELD_NUMBER = 8;
   private io.daos.dfs.uns.Properties properties_;
   /**
-   * <code>.uns.Properties properties = 7;</code>
+   * <code>.uns.Properties properties = 8;</code>
    * @return Whether the properties field is set.
    */
-  @java.lang.Override
   public boolean hasProperties() {
     return properties_ != null;
   }
   /**
-   * <code>.uns.Properties properties = 7;</code>
+   * <code>.uns.Properties properties = 8;</code>
    * @return The properties.
    */
-  @java.lang.Override
   public io.daos.dfs.uns.Properties getProperties() {
     return properties_ == null ? io.daos.dfs.uns.Properties.getDefaultInstance() : properties_;
   }
   /**
-   * <code>.uns.Properties properties = 7;</code>
+   * <code>.uns.Properties properties = 8;</code>
    */
-  @java.lang.Override
   public io.daos.dfs.uns.PropertiesOrBuilder getPropertiesOrBuilder() {
     return getProperties();
+  }
+
+  public static final int NO_PREFIX_FIELD_NUMBER = 9;
+  private boolean noPrefix_;
+  /**
+   * <code>bool no_prefix = 9;</code>
+   * @return The noPrefix.
+   */
+  public boolean getNoPrefix() {
+    return noPrefix_;
   }
 
   private byte memoizedIsInitialized = -1;
@@ -341,11 +388,17 @@ private static final long serialVersionUID = 0L;
     if (chunkSize_ != 0L) {
       output.writeUInt64(5, chunkSize_);
     }
+    if (!getRelPathBytes().isEmpty()) {
+      com.google.protobuf.GeneratedMessageV3.writeString(output, 6, relPath_);
+    }
     if (onLustre_ != false) {
-      output.writeBool(6, onLustre_);
+      output.writeBool(7, onLustre_);
     }
     if (properties_ != null) {
-      output.writeMessage(7, getProperties());
+      output.writeMessage(8, getProperties());
+    }
+    if (noPrefix_ != false) {
+      output.writeBool(9, noPrefix_);
     }
     unknownFields.writeTo(output);
   }
@@ -373,13 +426,20 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeUInt64Size(5, chunkSize_);
     }
+    if (!getRelPathBytes().isEmpty()) {
+      size += com.google.protobuf.GeneratedMessageV3.computeStringSize(6, relPath_);
+    }
     if (onLustre_ != false) {
       size += com.google.protobuf.CodedOutputStream
-        .computeBoolSize(6, onLustre_);
+        .computeBoolSize(7, onLustre_);
     }
     if (properties_ != null) {
       size += com.google.protobuf.CodedOutputStream
-        .computeMessageSize(7, getProperties());
+        .computeMessageSize(8, getProperties());
+    }
+    if (noPrefix_ != false) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeBoolSize(9, noPrefix_);
     }
     size += unknownFields.getSerializedSize();
     memoizedSize = size;
@@ -405,6 +465,8 @@ private static final long serialVersionUID = 0L;
         .equals(other.getObjectType())) return false;
     if (getChunkSize()
         != other.getChunkSize()) return false;
+    if (!getRelPath()
+        .equals(other.getRelPath())) return false;
     if (getOnLustre()
         != other.getOnLustre()) return false;
     if (hasProperties() != other.hasProperties()) return false;
@@ -412,6 +474,8 @@ private static final long serialVersionUID = 0L;
       if (!getProperties()
           .equals(other.getProperties())) return false;
     }
+    if (getNoPrefix()
+        != other.getNoPrefix()) return false;
     if (!unknownFields.equals(other.unknownFields)) return false;
     return true;
   }
@@ -434,6 +498,8 @@ private static final long serialVersionUID = 0L;
     hash = (37 * hash) + CHUNK_SIZE_FIELD_NUMBER;
     hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
         getChunkSize());
+    hash = (37 * hash) + REL_PATH_FIELD_NUMBER;
+    hash = (53 * hash) + getRelPath().hashCode();
     hash = (37 * hash) + ON_LUSTRE_FIELD_NUMBER;
     hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
         getOnLustre());
@@ -441,6 +507,9 @@ private static final long serialVersionUID = 0L;
       hash = (37 * hash) + PROPERTIES_FIELD_NUMBER;
       hash = (53 * hash) + getProperties().hashCode();
     }
+    hash = (37 * hash) + NO_PREFIX_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
+        getNoPrefix());
     hash = (29 * hash) + unknownFields.hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -584,6 +653,8 @@ private static final long serialVersionUID = 0L;
 
       chunkSize_ = 0L;
 
+      relPath_ = "";
+
       onLustre_ = false;
 
       if (propertiesBuilder_ == null) {
@@ -592,6 +663,8 @@ private static final long serialVersionUID = 0L;
         properties_ = null;
         propertiesBuilder_ = null;
       }
+      noPrefix_ = false;
+
       return this;
     }
 
@@ -623,12 +696,14 @@ private static final long serialVersionUID = 0L;
       result.layoutType_ = layoutType_;
       result.objectType_ = objectType_;
       result.chunkSize_ = chunkSize_;
+      result.relPath_ = relPath_;
       result.onLustre_ = onLustre_;
       if (propertiesBuilder_ == null) {
         result.properties_ = properties_;
       } else {
         result.properties_ = propertiesBuilder_.build();
       }
+      result.noPrefix_ = noPrefix_;
       onBuilt();
       return result;
     }
@@ -695,11 +770,18 @@ private static final long serialVersionUID = 0L;
       if (other.getChunkSize() != 0L) {
         setChunkSize(other.getChunkSize());
       }
+      if (!other.getRelPath().isEmpty()) {
+        relPath_ = other.relPath_;
+        onChanged();
+      }
       if (other.getOnLustre() != false) {
         setOnLustre(other.getOnLustre());
       }
       if (other.hasProperties()) {
         mergeProperties(other.getProperties());
+      }
+      if (other.getNoPrefix() != false) {
+        setNoPrefix(other.getNoPrefix());
       }
       this.mergeUnknownFields(other.unknownFields);
       onChanged();
@@ -887,7 +969,7 @@ private static final long serialVersionUID = 0L;
      * <code>.uns.Layout layout_type = 3;</code>
      * @return The enum numeric value on the wire for layoutType.
      */
-    @java.lang.Override public int getLayoutTypeValue() {
+    public int getLayoutTypeValue() {
       return layoutType_;
     }
     /**
@@ -904,7 +986,6 @@ private static final long serialVersionUID = 0L;
      * <code>.uns.Layout layout_type = 3;</code>
      * @return The layoutType.
      */
-    @java.lang.Override
     public io.daos.dfs.uns.Layout getLayoutType() {
       @SuppressWarnings("deprecation")
       io.daos.dfs.uns.Layout result = io.daos.dfs.uns.Layout.valueOf(layoutType_);
@@ -1016,7 +1097,6 @@ private static final long serialVersionUID = 0L;
      * <code>uint64 chunk_size = 5;</code>
      * @return The chunkSize.
      */
-    @java.lang.Override
     public long getChunkSize() {
       return chunkSize_;
     }
@@ -1042,17 +1122,92 @@ private static final long serialVersionUID = 0L;
       return this;
     }
 
+    private java.lang.Object relPath_ = "";
+    /**
+     * <code>string rel_path = 6;</code>
+     * @return The relPath.
+     */
+    public java.lang.String getRelPath() {
+      java.lang.Object ref = relPath_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        relPath_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string rel_path = 6;</code>
+     * @return The bytes for relPath.
+     */
+    public com.google.protobuf.ByteString
+        getRelPathBytes() {
+      java.lang.Object ref = relPath_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        relPath_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string rel_path = 6;</code>
+     * @param value The relPath to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRelPath(
+        java.lang.String value) {
+      if (value == null) {
+    throw new NullPointerException();
+  }
+  
+      relPath_ = value;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string rel_path = 6;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRelPath() {
+      
+      relPath_ = getDefaultInstance().getRelPath();
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string rel_path = 6;</code>
+     * @param value The bytes for relPath to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRelPathBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) {
+    throw new NullPointerException();
+  }
+  checkByteStringIsUtf8(value);
+      
+      relPath_ = value;
+      onChanged();
+      return this;
+    }
+
     private boolean onLustre_ ;
     /**
-     * <code>bool on_lustre = 6;</code>
+     * <code>bool on_lustre = 7;</code>
      * @return The onLustre.
      */
-    @java.lang.Override
     public boolean getOnLustre() {
       return onLustre_;
     }
     /**
-     * <code>bool on_lustre = 6;</code>
+     * <code>bool on_lustre = 7;</code>
      * @param value The onLustre to set.
      * @return This builder for chaining.
      */
@@ -1063,7 +1218,7 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
-     * <code>bool on_lustre = 6;</code>
+     * <code>bool on_lustre = 7;</code>
      * @return This builder for chaining.
      */
     public Builder clearOnLustre() {
@@ -1077,14 +1232,14 @@ private static final long serialVersionUID = 0L;
     private com.google.protobuf.SingleFieldBuilderV3<
         io.daos.dfs.uns.Properties, io.daos.dfs.uns.Properties.Builder, io.daos.dfs.uns.PropertiesOrBuilder> propertiesBuilder_;
     /**
-     * <code>.uns.Properties properties = 7;</code>
+     * <code>.uns.Properties properties = 8;</code>
      * @return Whether the properties field is set.
      */
     public boolean hasProperties() {
       return propertiesBuilder_ != null || properties_ != null;
     }
     /**
-     * <code>.uns.Properties properties = 7;</code>
+     * <code>.uns.Properties properties = 8;</code>
      * @return The properties.
      */
     public io.daos.dfs.uns.Properties getProperties() {
@@ -1095,7 +1250,7 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
-     * <code>.uns.Properties properties = 7;</code>
+     * <code>.uns.Properties properties = 8;</code>
      */
     public Builder setProperties(io.daos.dfs.uns.Properties value) {
       if (propertiesBuilder_ == null) {
@@ -1111,7 +1266,7 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
-     * <code>.uns.Properties properties = 7;</code>
+     * <code>.uns.Properties properties = 8;</code>
      */
     public Builder setProperties(
         io.daos.dfs.uns.Properties.Builder builderForValue) {
@@ -1125,7 +1280,7 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
-     * <code>.uns.Properties properties = 7;</code>
+     * <code>.uns.Properties properties = 8;</code>
      */
     public Builder mergeProperties(io.daos.dfs.uns.Properties value) {
       if (propertiesBuilder_ == null) {
@@ -1143,7 +1298,7 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
-     * <code>.uns.Properties properties = 7;</code>
+     * <code>.uns.Properties properties = 8;</code>
      */
     public Builder clearProperties() {
       if (propertiesBuilder_ == null) {
@@ -1157,7 +1312,7 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
-     * <code>.uns.Properties properties = 7;</code>
+     * <code>.uns.Properties properties = 8;</code>
      */
     public io.daos.dfs.uns.Properties.Builder getPropertiesBuilder() {
       
@@ -1165,7 +1320,7 @@ private static final long serialVersionUID = 0L;
       return getPropertiesFieldBuilder().getBuilder();
     }
     /**
-     * <code>.uns.Properties properties = 7;</code>
+     * <code>.uns.Properties properties = 8;</code>
      */
     public io.daos.dfs.uns.PropertiesOrBuilder getPropertiesOrBuilder() {
       if (propertiesBuilder_ != null) {
@@ -1176,7 +1331,7 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
-     * <code>.uns.Properties properties = 7;</code>
+     * <code>.uns.Properties properties = 8;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
         io.daos.dfs.uns.Properties, io.daos.dfs.uns.Properties.Builder, io.daos.dfs.uns.PropertiesOrBuilder> 
@@ -1190,6 +1345,36 @@ private static final long serialVersionUID = 0L;
         properties_ = null;
       }
       return propertiesBuilder_;
+    }
+
+    private boolean noPrefix_ ;
+    /**
+     * <code>bool no_prefix = 9;</code>
+     * @return The noPrefix.
+     */
+    public boolean getNoPrefix() {
+      return noPrefix_;
+    }
+    /**
+     * <code>bool no_prefix = 9;</code>
+     * @param value The noPrefix to set.
+     * @return This builder for chaining.
+     */
+    public Builder setNoPrefix(boolean value) {
+      
+      noPrefix_ = value;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>bool no_prefix = 9;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearNoPrefix() {
+      
+      noPrefix_ = false;
+      onChanged();
+      return this;
     }
     @java.lang.Override
     public final Builder setUnknownFields(

@@ -6,7 +6,7 @@ package io.daos.dfs.uns;
 /**
  * Protobuf type {@code uns.Properties}
  */
-public final class Properties extends
+public  final class Properties extends
     com.google.protobuf.GeneratedMessageV3 implements
     // @@protoc_insertion_point(message_implements:uns.Properties)
     PropertiesOrBuilder {
@@ -105,7 +105,6 @@ private static final long serialVersionUID = 0L;
    * <code>uint32 reserved = 1;</code>
    * @return The reserved.
    */
-  @java.lang.Override
   public int getReserved() {
     return reserved_;
   }
@@ -115,14 +114,12 @@ private static final long serialVersionUID = 0L;
   /**
    * <code>repeated .uns.Entry entries = 2;</code>
    */
-  @java.lang.Override
   public java.util.List<io.daos.dfs.uns.Entry> getEntriesList() {
     return entries_;
   }
   /**
    * <code>repeated .uns.Entry entries = 2;</code>
    */
-  @java.lang.Override
   public java.util.List<? extends io.daos.dfs.uns.EntryOrBuilder> 
       getEntriesOrBuilderList() {
     return entries_;
@@ -130,21 +127,18 @@ private static final long serialVersionUID = 0L;
   /**
    * <code>repeated .uns.Entry entries = 2;</code>
    */
-  @java.lang.Override
   public int getEntriesCount() {
     return entries_.size();
   }
   /**
    * <code>repeated .uns.Entry entries = 2;</code>
    */
-  @java.lang.Override
   public io.daos.dfs.uns.Entry getEntries(int index) {
     return entries_.get(index);
   }
   /**
    * <code>repeated .uns.Entry entries = 2;</code>
    */
-  @java.lang.Override
   public io.daos.dfs.uns.EntryOrBuilder getEntriesOrBuilder(
       int index) {
     return entries_.get(index);
@@ -514,7 +508,6 @@ private static final long serialVersionUID = 0L;
      * <code>uint32 reserved = 1;</code>
      * @return The reserved.
      */
-    @java.lang.Override
     public int getReserved() {
       return reserved_;
     }

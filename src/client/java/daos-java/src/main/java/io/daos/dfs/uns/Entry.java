@@ -6,7 +6,7 @@ package io.daos.dfs.uns;
 /**
  * Protobuf type {@code uns.Entry}
  */
-public final class Entry extends
+public  final class Entry extends
     com.google.protobuf.GeneratedMessageV3 implements
     // @@protoc_insertion_point(message_implements:uns.Entry)
     EntryOrBuilder {
@@ -166,14 +166,14 @@ private static final long serialVersionUID = 0L;
    * <code>.uns.PropType type = 1;</code>
    * @return The enum numeric value on the wire for type.
    */
-  @java.lang.Override public int getTypeValue() {
+  public int getTypeValue() {
     return type_;
   }
   /**
    * <code>.uns.PropType type = 1;</code>
    * @return The type.
    */
-  @java.lang.Override public io.daos.dfs.uns.PropType getType() {
+  public io.daos.dfs.uns.PropType getType() {
     @SuppressWarnings("deprecation")
     io.daos.dfs.uns.PropType result = io.daos.dfs.uns.PropType.valueOf(type_);
     return result == null ? io.daos.dfs.uns.PropType.UNRECOGNIZED : result;
@@ -185,7 +185,6 @@ private static final long serialVersionUID = 0L;
    * <code>uint32 reserved = 2;</code>
    * @return The reserved.
    */
-  @java.lang.Override
   public int getReserved() {
     return reserved_;
   }
@@ -195,7 +194,6 @@ private static final long serialVersionUID = 0L;
    * <code>uint64 val = 3;</code>
    * @return The val.
    */
-  @java.lang.Override
   public long getVal() {
     if (valueCase_ == 3) {
       return (java.lang.Long) value_;
@@ -253,7 +251,6 @@ private static final long serialVersionUID = 0L;
    * <code>.uns.DaosAcl pval = 5;</code>
    * @return Whether the pval field is set.
    */
-  @java.lang.Override
   public boolean hasPval() {
     return valueCase_ == 5;
   }
@@ -261,7 +258,6 @@ private static final long serialVersionUID = 0L;
    * <code>.uns.DaosAcl pval = 5;</code>
    * @return The pval.
    */
-  @java.lang.Override
   public io.daos.dfs.uns.DaosAcl getPval() {
     if (valueCase_ == 5) {
        return (io.daos.dfs.uns.DaosAcl) value_;
@@ -271,7 +267,6 @@ private static final long serialVersionUID = 0L;
   /**
    * <code>.uns.DaosAcl pval = 5;</code>
    */
-  @java.lang.Override
   public io.daos.dfs.uns.DaosAclOrBuilder getPvalOrBuilder() {
     if (valueCase_ == 5) {
        return (io.daos.dfs.uns.DaosAcl) value_;
@@ -708,7 +703,7 @@ private static final long serialVersionUID = 0L;
      * <code>.uns.PropType type = 1;</code>
      * @return The enum numeric value on the wire for type.
      */
-    @java.lang.Override public int getTypeValue() {
+    public int getTypeValue() {
       return type_;
     }
     /**
@@ -725,7 +720,6 @@ private static final long serialVersionUID = 0L;
      * <code>.uns.PropType type = 1;</code>
      * @return The type.
      */
-    @java.lang.Override
     public io.daos.dfs.uns.PropType getType() {
       @SuppressWarnings("deprecation")
       io.daos.dfs.uns.PropType result = io.daos.dfs.uns.PropType.valueOf(type_);
@@ -761,7 +755,6 @@ private static final long serialVersionUID = 0L;
      * <code>uint32 reserved = 2;</code>
      * @return The reserved.
      */
-    @java.lang.Override
     public int getReserved() {
       return reserved_;
     }
@@ -825,7 +818,6 @@ private static final long serialVersionUID = 0L;
      * <code>string str = 4;</code>
      * @return The str.
      */
-    @java.lang.Override
     public java.lang.String getStr() {
       java.lang.Object ref = "";
       if (valueCase_ == 4) {
@@ -847,7 +839,6 @@ private static final long serialVersionUID = 0L;
      * <code>string str = 4;</code>
      * @return The bytes for str.
      */
-    @java.lang.Override
     public com.google.protobuf.ByteString
         getStrBytes() {
       java.lang.Object ref = "";
@@ -916,7 +907,6 @@ private static final long serialVersionUID = 0L;
      * <code>.uns.DaosAcl pval = 5;</code>
      * @return Whether the pval field is set.
      */
-    @java.lang.Override
     public boolean hasPval() {
       return valueCase_ == 5;
     }
@@ -924,7 +914,6 @@ private static final long serialVersionUID = 0L;
      * <code>.uns.DaosAcl pval = 5;</code>
      * @return The pval.
      */
-    @java.lang.Override
     public io.daos.dfs.uns.DaosAcl getPval() {
       if (pvalBuilder_ == null) {
         if (valueCase_ == 5) {
@@ -1018,7 +1007,6 @@ private static final long serialVersionUID = 0L;
     /**
      * <code>.uns.DaosAcl pval = 5;</code>
      */
-    @java.lang.Override
     public io.daos.dfs.uns.DaosAclOrBuilder getPvalOrBuilder() {
       if ((valueCase_ == 5) && (pvalBuilder_ != null)) {
         return pvalBuilder_.getMessageOrBuilder();
