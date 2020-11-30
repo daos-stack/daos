@@ -210,7 +210,10 @@ class ExecutableCommand(CommandWithParameters):
                     self._command, str(state))
                 self._process.send_signal(signal_to_send)
                 if signal_list:
-                    time.sleep(5)
+                    try:
+                        self._process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        pass
 
             if not signal_list:
                 if state and (len(state) > 1 or state[0] not in ("D", "Z")):
