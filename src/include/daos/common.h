@@ -202,6 +202,15 @@ daos_getntime_coarse(void)
 	return (tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec); /* nano seconds */
 }
 
+static inline uint64_t
+daos_getutime(void)
+{
+	struct timespec tv;
+
+	d_gettime(&tv);
+	return d_time2us(tv);
+}
+
 static inline int daos_gettime_coarse(uint64_t *time)
 {
 	struct timespec	now;

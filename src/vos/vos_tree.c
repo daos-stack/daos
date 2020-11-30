@@ -1081,9 +1081,9 @@ key_tree_release(daos_handle_t toh, bool is_array)
  */
 int
 key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
-	       d_iov_t *key_iov, d_iov_t *val_iov, uint64_t flags,
-	       struct vos_ts_set *ts_set, struct vos_ilog_info *parent,
-	       struct vos_ilog_info *info)
+	       daos_epoch_t bound, d_iov_t *key_iov, d_iov_t *val_iov,
+	       uint64_t flags, struct vos_ts_set *ts_set,
+	       struct vos_ilog_info *parent, struct vos_ilog_info *info)
 {
 	struct vos_rec_bundle	*rbund = iov2rec_bundle(val_iov);
 	struct vos_krec_df	*krec;
@@ -1139,7 +1139,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	if (mark)
 		vos_ilog_ts_mark(ts_set, ilog);
 
-	rc = vos_ilog_punch(obj->obj_cont, ilog, &epr, parent,
+	rc = vos_ilog_punch(obj->obj_cont, ilog, &epr, bound, parent,
 			    info, ts_set, true,
 			    (flags & VOS_OF_REPLAY_PC) != 0);
 

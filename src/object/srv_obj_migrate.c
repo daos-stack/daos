@@ -1966,7 +1966,7 @@ migrate_one_epoch_object(daos_handle_t oh, daos_epoch_range_t *epr,
 		num = KDS_NUM;
 		daos_anchor_set_flags(&dkey_anchor,
 				      DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
-				      DIOF_TO_SPEC_SHARD);
+				      DIOF_TO_SPEC_GROUP);
 retry:
 		rc = dsc_obj_list_obj(oh, epr, NULL, NULL, &size,
 				     &num, kds, &sgl, &anchor,
@@ -2004,7 +2004,7 @@ retry:
 			   DIOF_TO_LEADER) {
 			daos_anchor_set_flags(&dkey_anchor,
 					      DIOF_WITH_SPEC_EPOCH |
-					      DIOF_TO_SPEC_SHARD);
+					      DIOF_TO_SPEC_GROUP);
 			D_DEBUG(DB_REBUILD, "No leader available %d retry"
 				DF_UOID"\n", rc, DP_UOID(arg->oid));
 			D_GOTO(retry, rc);
