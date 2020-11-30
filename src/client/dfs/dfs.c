@@ -1948,7 +1948,6 @@ lookup_rel_path_loop:
 				if (!parent_fully_valid &&
 				    strncmp(entry.value, "..", 2) == 0) {
 					D_FREE(entry.value);
-					D_FREE(sym);
 					D_GOTO(err_obj, rc = ENOTSUP);
 				}
 
