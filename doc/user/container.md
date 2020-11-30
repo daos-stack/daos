@@ -11,9 +11,8 @@ provided to manage containers.
 !!! note
     In DAOS 1.0, in order to use the `daos` command the following environment
     variables need to be set (this is no longer needed in later versions of DAOS):
-	
-	- **For Omni-Path:** `export OFI_INTERFACE="ib0"; export CRT_PHY_ADDR_STR="ofi+psm2"`
-	- **For InfiniBand:** `export OFI_INTERFACE="ib0"; export CRT_PHY_ADDR_STR="ofi+verbs;ofi_rxm"; export OFI_DOMAIN="mlx5_0"`
+- **For Omni-Path:** `export OFI_INTERFACE="ib0"; export CRT_PHY_ADDR_STR="ofi+psm2"`
+- **For InfiniBand:** `export OFI_INTERFACE="ib0"; export CRT_PHY_ADDR_STR="ofi+verbs;ofi_rxm"; export OFI_DOMAIN="mlx5_0"`
 
 To create a container:
 ```bash
