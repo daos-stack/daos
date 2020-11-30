@@ -227,7 +227,6 @@ class NvmePoolExtend(TestWithServers):
 
                 # Verify the data after pool extend
                 self.run_ior_thread("Read", oclass, api, test)
-
                 # Get the pool space at the end of the test
                 display_string = "Pool{} space at the End".format(val)
                 self.pool = pool[val]
