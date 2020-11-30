@@ -286,7 +286,7 @@ String get_priority() {
     } else {
         string p = ''
     }
-    echo "Build priority set to " + p
+    echo "Build priority set to " + p == '' ? 'default' : p
     return p
 }
 
