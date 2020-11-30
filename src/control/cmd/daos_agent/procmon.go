@@ -29,6 +29,7 @@ import (
 	"syscall"
 	"time"
 
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -38,6 +39,10 @@ type procMonRequest struct {
 	pid int32
 	// Whether the message is an attach or disconnect. Uses drpc method identifiers.
 	action drpc.MgmtMethod
+	// The UUID of the pool if action is poolconnect/disconnect
+	poolUUID string
+	// The UUID of the pool handle returned from pool connect if action is poolconnect/disconnect
+	poolHandleUUID string
 }
 
 type procMonResponse struct {
@@ -52,6 +57,7 @@ type procInfo struct {
 	pid       int32
 	cancelCtx func()
 	response  chan *procMonResponse
+	handles   map[string]map[string]bool
 }
 
 func getProcPidInode(pid int32) (uint64, error) {
@@ -135,56 +141,115 @@ func NewProcMon(logger logging.Logger) *procMon {
 	}
 }
 
-func (p *procMon) RegisterProcess(ctx context.Context, Pid int32) {
-	p.submitRequest(ctx, Pid, drpc.MethodGetAttachInfo)
+func (p *procMon) RegisterPool(ctx context.Context, Pid int32, poolReq *mgmtpb.PoolMonitorReq) {
+	req := &procMonRequest{
+		pid:            Pid,
+		action:         drpc.MethodPoolConnect,
+		poolUUID:       poolReq.PoolUUID,
+		poolHandleUUID: poolReq.PoolHandleUUID,
+	}
+	p.submitRequest(ctx, req)
 }
 
-func (p *procMon) UnregisterProcess(ctx context.Context, Pid int32) {
-	p.submitRequest(ctx, Pid, drpc.MethodDisconnect)
+func (p *procMon) DisconnectPool(ctx context.Context, Pid int32, poolReq *mgmtpb.PoolMonitorReq) {
+	req := &procMonRequest{
+		pid:            Pid,
+		action:         drpc.MethodPoolDisconnect,
+		poolUUID:       poolReq.PoolUUID,
+		poolHandleUUID: poolReq.PoolHandleUUID,
+	}
+	p.submitRequest(ctx, req)
 }
 
-func (p *procMon) submitRequest(ctx context.Context, Pid int32, Action drpc.MgmtMethod) {
+func (p *procMon) DisconnectProcess(ctx context.Context, Pid int32) {
 	req := &procMonRequest{
 		pid:    Pid,
-		action: Action,
+		action: drpc.MethodDisconnect,
 	}
+	p.submitRequest(ctx, req)
+}
+
+func (p *procMon) submitRequest(ctx context.Context, request *procMonRequest) {
 	select {
 	case <-ctx.Done():
-	case p.request <- req:
+	case p.request <- request:
 	}
 }
 
-func (p *procMon) handleProcessAttach(ctx context.Context, request *procMonRequest) {
+func (p *procMon) handlePoolConnect(ctx context.Context, request *procMonRequest) {
+	p.log.Debugf("Received request to connect pool:%s with handle %s, for pid:%d", request.poolUUID, request.poolHandleUUID, request.pid)
+
 	info, found := p.procs[request.pid]
 
-	if found {
-		p.log.Errorf("Attempted to monitor process %d more than once", request.pid)
+	if !found {
+		child, cancel := context.WithCancel(ctx)
+		info = &procInfo{
+			log:       p.log,
+			pid:       request.pid,
+			cancelCtx: cancel,
+			response:  p.response,
+			handles:   make(map[string]map[string]bool),
+		}
+
+		p.procs[request.pid] = info
+		go info.monitorProcess(child)
+	}
+
+	_, found = info.handles[request.poolUUID]
+	if !found {
+		info.handles[request.poolUUID] = make(map[string]bool)
+	}
+	info.handles[request.poolUUID][request.poolHandleUUID] = true
+
+}
+
+func (p *procMon) handlePoolDisconnect(request *procMonRequest) {
+	p.log.Debugf("Received request to disconnect pool:%s with handle %s, for pid:%d", request.poolUUID, request.poolHandleUUID, request.pid)
+
+	info, found := p.procs[request.pid]
+
+	if !found || len(info.handles) == 0 {
+		p.log.Debugf("Process has no registered pools to disconnect from.")
 		return
 	}
 
-	child, cancel := context.WithCancel(ctx)
-	info = &procInfo{
-		log:       p.log,
-		pid:       request.pid,
-		cancelCtx: cancel,
-		response:  p.response,
+	if info.handles[request.poolUUID][request.poolHandleUUID] {
+		delete(info.handles[request.poolUUID], request.poolHandleUUID)
+		if len(info.handles[request.poolUUID]) == 0 {
+			delete(info.handles, request.poolUUID)
+		}
 	}
 
-	p.procs[request.pid] = info
-	go info.monitorProcess(child)
+}
+
+func (p *procMon) cleanupLeakedHandles(info *procInfo) {
+	if len(info.handles) == 0 {
+		p.log.Debugf("No leaked pool handles to clean up for pid: %d", info.pid)
+		return
+	}
+
+	for poolUUID, element := range info.handles {
+		p.log.Debugf("Cleaning up %d leaked handles from Pool UUID: %s\n", len(element), poolUUID)
+		for poolHandleUUID, _ := range element {
+			p.log.Debugf("\t%s\n", poolHandleUUID)
+		}
+		// We should construct the data structure for the gRPC call here.
+	}
+	// This is where we should make a call to the control plane with the
+	// combined set of all poolUUID and their associated poolHandleUUIDs
+
+	delete(p.procs, info.pid)
 }
 
 func (p *procMon) handleProcessDisconnect(request *procMonRequest) {
 	info, found := p.procs[request.pid]
 
 	p.log.Debugf("Received request to disconnect pid:%d\n", request.pid)
-	if !found {
-		p.log.Errorf("Attempted to disconnect process %d but process is missing", request.pid)
+	if found {
+		info.cancelCtx()
+		p.cleanupLeakedHandles(info)
+		p.log.Debugf("Process %d has disconnected", info.pid)
 	}
-
-	info.cancelCtx()
-	delete(p.procs, request.pid)
-	p.log.Debugf("Process %d has disconnected", info.pid)
 }
 
 func (p *procMon) handleRequests(ctx context.Context) {
@@ -194,8 +259,10 @@ func (p *procMon) handleRequests(ctx context.Context) {
 			return
 		case request := <-p.request:
 			switch request.action {
-			case drpc.MethodGetAttachInfo:
-				p.handleProcessAttach(ctx, request)
+			case drpc.MethodPoolConnect:
+				p.handlePoolConnect(ctx, request)
+			case drpc.MethodPoolDisconnect:
+				p.handlePoolDisconnect(request)
 			case drpc.MethodDisconnect:
 				p.handleProcessDisconnect(request)
 			default:
@@ -203,6 +270,11 @@ func (p *procMon) handleRequests(ctx context.Context) {
 			}
 		case resp := <-p.response:
 			p.log.Debugf("Received response from Process %d, terminated with %s", resp.pid, resp.err)
+			info, found := p.procs[resp.pid]
+
+			if found {
+				p.cleanupLeakedHandles(info)
+			}
 		}
 	}
 }

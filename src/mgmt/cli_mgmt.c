@@ -36,6 +36,7 @@
 #include <daos/drpc.pb-c.h>
 #include <daos/event.h>
 #include <daos/job.h>
+#include <daos/pool.h>
 #include "svc.pb-c.h"
 #include "rpc.h"
 #include <errno.h>
@@ -218,7 +219,6 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 
 	/* Prepare the GetAttachInfo request. */
 	req.sys = (char *)name;
-	req.jobid = dc_jobid;
 	reqb_size = mgmt__get_attach_info_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);
 	if (reqb == NULL) {
@@ -439,6 +439,90 @@ cleanup:
 	put_attach_info(npsrs, psrs);
 
 	return rc;
+}
+
+static int issue_monitor_request(struct dc_pool *pool, int request_type)
+{
+	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
+	struct drpc		 *ctx;
+	Mgmt__PoolMonitorReq	 req = MGMT__POOL_MONITOR_REQ__INIT;
+	uint8_t			 *reqb;
+	size_t			 reqb_size;
+	char			 pool_uuid[37], pool_hdl_uuid[37];
+	Drpc__Call		 *dreq;
+	Drpc__Response		 *dresp;
+	int			 rc;
+
+	D_DEBUG(DB_MGMT, "disconnecting process for pid:%d\n", getpid());
+
+	/* Connect to daos_agent. */
+	D_ASSERT(dc_agent_sockpath != NULL);
+	rc = drpc_connect(dc_agent_sockpath, &ctx);
+	if (rc != -DER_SUCCESS) {
+		D_ERROR("failed to connect to %s " DF_RC "\n",
+			dc_agent_sockpath, DP_RC(rc));
+		D_GOTO(out, 0);
+	}
+
+	uuid_unparse(pool->dp_pool,pool_uuid);
+	uuid_unparse(pool->dp_pool_hdl, pool_hdl_uuid);
+	req.pooluuid = pool_uuid;
+	req.poolhandleuuid = pool_hdl_uuid;
+	req.jobid = dc_jobid;
+
+	reqb_size = mgmt__pool_monitor_req__get_packed_size(&req);
+	D_ALLOC(reqb, reqb_size);
+	if (reqb == NULL) {
+		rc = -DER_NOMEM;
+		goto out_ctx;
+	}
+	mgmt__pool_monitor_req__pack(&req, reqb);
+
+	rc = drpc_call_create(ctx, DRPC_MODULE_MGMT,
+			      request_type, &dreq);
+	if (rc != 0) {
+		D_FREE(reqb);
+		goto out_ctx;
+	}
+	dreq->body.len = reqb_size;
+	dreq->body.data = reqb;
+
+	/* Make the Process Disconnect call and get the response. */
+	rc = drpc_call(ctx, R_SYNC, dreq, &dresp);
+	if (rc != 0) {
+		D_ERROR("Pool Disconnect call failed: "DF_RC"\n", DP_RC(rc));
+		goto out_dreq;
+	}
+	if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("Pool Disconnect unsuccessful: %d\n", dresp->status);
+		rc = -DER_MISC;
+		goto out_dresp;
+	}
+
+out_dresp:
+	drpc_response_free(dresp);
+out_dreq:
+	drpc_call_free(dreq);
+out_ctx:
+	drpc_close(ctx);
+out:
+	return rc;
+}
+
+/*
+ * Send an upcall to the agent to notify it of a pool disconnect.
+ */
+int
+dc_mgmt_pool_disconnect(struct dc_pool *pool) {
+	return issue_monitor_request(pool, DRPC_METHOD_MGMT_POOL_DISCONNECT);
+}
+
+/*
+ * Send an upcall to the agent to notify it of a successful pool connect.
+ */
+int
+dc_mgmt_pool_connect(struct dc_pool *pool) {
+	return issue_monitor_request(pool, DRPC_METHOD_MGMT_POOL_CONNECT);
 }
 
 /*
