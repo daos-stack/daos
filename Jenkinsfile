@@ -283,7 +283,7 @@ def getuid() {
 String get_priority() {
     node {
         checkoutScm()
-        if (cachedCommitPragma(pragma: 'Jump-queue', def_val: false)) {
+        if (cachedCommitPragma(pragma: 'Queue-jump', def_val: false)) {
 	    return '2'
 	} else if (env.BRANCH_NAME == 'master') {
 	    return '4'
