@@ -130,6 +130,7 @@ const (
 	ServerNoConfigPath
 	ServerConfigBadControlPort
 	ServerConfigBadAccessPoints
+	ServerConfigEvenAccessPoints
 	ServerConfigBadProvider
 	ServerConfigNoServers
 	ServerConfigDuplicateFabric
