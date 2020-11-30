@@ -11,7 +11,7 @@ hosts:
     - client-F
     - client-G
     - client-H
-timeout: 300
+timeout: 450
 pool:
   scm_size: 8G
 server_config:
@@ -50,12 +50,11 @@ dmg:
     allow_insecure: True
 daos_tests:
   Tests: !mux
-# XXX Disabled until DAOS-6090 is fixed.
-#    test_u:
-#      daos_test: u
-#      num_clients: 1
-#      test_name: DFS unit tests
-#      test_timeout: 100
+    test_u:
+      daos_test: u
+      num_clients: 1
+      test_name: DFS unit tests
+      test_timeout: 250
     test_p:
       daos_test: p
       num_clients: 32
