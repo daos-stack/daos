@@ -319,6 +319,19 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 		strncpy(resp->devices[i]->state,
 			bio_dev_state_enum_to_str(state), buflen);
 
+		if (dev_info->bdi_traddr != NULL) {
+			buflen = strlen(dev_info->bdi_traddr) + 1;
+			D_ALLOC(resp->devices[i]->traddr, buflen);
+			if (resp->devices[i]->traddr == NULL) {
+				D_ERROR("Failed to allocate device traddr");
+				rc = -DER_NOMEM;
+				break;
+			}
+			/* Transport Addr -> Blobstore UUID mapping */
+			strncpy(resp->devices[i]->traddr, dev_info->bdi_traddr,
+				buflen);
+		}
+
 		resp->devices[i]->n_tgt_ids = dev_info->bdi_tgt_cnt;
 		D_ALLOC(resp->devices[i]->tgt_ids,
 			sizeof(int) * dev_info->bdi_tgt_cnt);
@@ -353,6 +366,8 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 					D_FREE(resp->devices[i]->tgt_ids);
 				if (resp->devices[i]->state != NULL)
 					D_FREE(resp->devices[i]->state);
+				if (resp->devices[i]->traddr != NULL)
+					D_FREE(resp->devices[i]->traddr);
 				D_FREE(resp->devices[i]);
 			}
 		}
@@ -614,6 +629,93 @@ out:
 			D_FREE(resp->dev_state);
 		if (resp->dev_uuid != NULL)
 			D_FREE(resp->dev_uuid);
+	}
+
+	return rc;
+}
+
+struct bio_replace_dev_info {
+	uuid_t		old_dev;
+	uuid_t		new_dev;
+};
+
+static int
+bio_storage_dev_replace(void *arg)
+{
+	struct bio_replace_dev_info	*replace_dev_info = arg;
+	struct dss_module_info		*info = dss_get_module_info();
+	struct bio_xs_context		*bxc;
+	int				 rc;
+
+	D_ASSERT(info != NULL);
+
+	bxc = info->dmi_nvme_ctxt;
+	if (bxc == NULL) {
+		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
+			info->dmi_xs_id, info->dmi_tgt_id);
+		return -DER_INVAL;
+	}
+
+	rc = bio_replace_dev(bxc, replace_dev_info->old_dev,
+			     replace_dev_info->new_dev);
+	if (rc != 0) {
+		D_ERROR("Error replacing BIO device\n");
+		return rc;
+	}
+
+	return 0;
+}
+
+int
+ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid,
+		    Mgmt__DevReplaceResp *resp)
+{
+	struct bio_replace_dev_info	 replace_dev_info = { 0 };
+	int				 buflen = 10;
+	int				 rc = 0;
+
+	if (uuid_is_null(old_dev_uuid))
+		return -DER_INVAL;
+	if (uuid_is_null(new_dev_uuid))
+		return -DER_INVAL;
+
+	D_DEBUG(DB_MGMT, "Replacing device:"DF_UUID" with device:"DF_UUID"\n",
+		DP_UUID(old_dev_uuid), DP_UUID(new_dev_uuid));
+
+	D_ALLOC(resp->new_dev_uuid, DAOS_UUID_STR_SIZE);
+	if (resp->new_dev_uuid == NULL) {
+		D_ERROR("Failed to allocate new device uuid");
+		rc = -DER_NOMEM;
+		goto out;
+	}
+	uuid_unparse_lower(new_dev_uuid, resp->new_dev_uuid);
+
+	D_ALLOC(resp->dev_state, buflen);
+	if (resp->dev_state == NULL) {
+		D_ERROR("Failed to allocate device state");
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	uuid_copy(replace_dev_info.old_dev, old_dev_uuid);
+	uuid_copy(replace_dev_info.new_dev, new_dev_uuid);
+	rc = dss_ult_execute(bio_storage_dev_replace, &replace_dev_info, NULL,
+			     NULL, DSS_ULT_GC, 0, 0);
+	if (rc != 0) {
+		D_ERROR("Unable to create a ULT\n");
+		goto out;
+	}
+
+	/* BIO device state after reintegration should be NORMAL */
+	strncpy(resp->dev_state, smd_state_enum_to_str(SMD_DEV_NORMAL),
+		buflen);
+out:
+
+	if (rc != 0) {
+		if (resp->dev_state != NULL)
+			D_FREE(resp->dev_state);
+		if (resp->new_dev_uuid != NULL)
+			D_FREE(resp->new_dev_uuid);
 	}
 
 	return rc;

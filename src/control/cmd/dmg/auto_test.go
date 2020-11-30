@@ -35,7 +35,7 @@ import (
 func TestDmg_ConfigCommands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
 		{
-			"Generate",
+			"Generate with defaults",
 			"config generate",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
@@ -43,8 +43,24 @@ func TestDmg_ConfigCommands(t *testing.T) {
 			errors.New("no host responses"),
 		},
 		{
-			"Generate with minimum storage parameters",
+			"Generate with no nvme",
+			"config generate --num-nvme 0",
+			strings.Join([]string{
+				printRequest(t, &control.NetworkScanReq{}),
+			}, " "),
+			errors.New("no host responses"),
+		},
+		{
+			"Generate with storage parameters",
 			"config generate --num-pmem 2 --num-nvme 4",
+			strings.Join([]string{
+				printRequest(t, &control.NetworkScanReq{}),
+			}, " "),
+			errors.New("no host responses"),
+		},
+		{
+			"Generate with short option storage parameters",
+			"config generate -p 2 -n 4",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),

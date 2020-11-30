@@ -64,14 +64,15 @@ class DmgCommand(DmgCommandBase):
             r"[-]+\s+([a-z0-9-]+)\s+[-]+|(?:UUID:([a-z0-9-]+)\s+Rank:([0-9]+)"
             r"\s+Targets:\[([0-9 ]+)\])(?:\s+Blobs:\[([0-9 ]+)\]\s+?$)",
         "storage_query_list_devices":
-            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+.*\s+|(?:UUID:([a-z0-9-]+)\s+"
-            r"Targets:\[([0-9 ]+)\]\s+Rank:([0-9]+)\s+State:([A-Z]+))",
+            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+.*\s+|UUID:([a-f0-90-]{36}).*"
+            r"TrAddr:([a-z0-9:.]+)]\s+Targets:\[([0-9 ]+).*Rank:([0-9]+)"
+            r"\s+State:([A-Z]+)",
         "storage_query_device_health":
-            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+.*\s+UUID:([a-z0-9-]+)\s+Targets:"
-            r"\[([0-9 ]+)\]\s+Rank:([0-9]+)\s+State:(\w+)\s+.*\s+|(?:Temp.*|"
-            r"Cont.*Busy Time|Pow.*Cycles|Pow.*Duration|Unsafe.*|Media.*|"
-            r"Read.*|Write.*|Unmap.*|Checksum.*|Err.*Entries|Avail.*|"
-            r"Dev.*Reli.*|Vola.*):\s*([A-Za-z0-9]+)",
+            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+.*\s+|UUID:([a-f0-90-]{36}).*"
+            r"TrAddr:([a-z0-9:.]+)]\s+Targets:\[([0-9 ]+).*Rank:([0-9]+)\s+"
+            r"State:([A-Z]+)|(?:Timestamp|Temp.*|Cont.*Busy Time|Pow.*Cycles"
+            r"|Pow.*Duration|Unsafe.*|Media.*|Read.*|Write.*|Unmap.*|Checksum"
+            r".*|Err.*Entries|Avail.*|Dev.*Reli.*|Vola.*):\s*([A-Za-z0-9 :]+)",
         "storage_query_target_health":
             r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+|Devices\s+|UUID:([a-z0-9-]+)\s+"
             r"Targets:\[([0-9 ]+)\]\s+Rank:(\d+)\s+State:(\w+)|"
@@ -191,7 +192,7 @@ class DmgCommand(DmgCommandBase):
         self.log.info("storage_scan data: %s", str(data))
         return data
 
-    def storage_format(self, reformat=False, timeout=30):
+    def storage_format(self, reformat=False, timeout=30, verbose=False):
         """Get the result of the dmg storage format command.
 
         Args:
@@ -201,6 +202,8 @@ class DmgCommand(DmgCommandBase):
                 formattable.
             timeout: seconds after which the format is considered a failure and
                 times out.
+            verbose (bool): show results of each SCM & NVMe device format
+                operation.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -212,9 +215,10 @@ class DmgCommand(DmgCommandBase):
         """
         saved_timeout = self.timeout
         self.timeout = timeout
-        result = self._get_result(("storage", "format"), reformat=reformat)
+        self._get_result(
+            ("storage", "format"), reformat=reformat, verbose=verbose)
         self.timeout = saved_timeout
-        return result
+        return self.result
 
     def storage_prepare(self, user=None, hugepages="4096", nvme=False,
                         scm=False, reset=False, force=True):

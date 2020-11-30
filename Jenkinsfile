@@ -228,7 +228,7 @@ String functional_packages(String distro) {
                   "hdf5-vol-daos-openmpi3-tests-daos-0 " +
                   "MACSio-mpich2-daos-0 " +
                   "MACSio-openmpi3-daos-0 " +
-                  "mpifileutils-mpich-daos-0"
+                  "mpifileutils-mpich-daos-0 "
     if (distro == "leap15") {
         if (quickbuild()) {
             pkgs += " spdk-tools"
@@ -402,7 +402,7 @@ String quick_build_deps(String distro) {
     } else {
         error("Unknown distro: ${distro} in quick_build_deps()")
     }
-    return sh(label:'Get Quickbuild dependencies',
+    return sh(label: 'Get Quickbuild dependencies',
               script: "rpmspec -q " +
                       "--srpm " +
                       rpmspec_args + ' ' +
@@ -430,6 +430,10 @@ pipeline {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
         ansiColor('xterm')
+    }
+
+    parameters {
+        string(name: 'BuildPriority', defaultValue: '', description: 'Priority of the build.  DO NOT USE WITHOUT PERMISSION.')
     }
 
     stages {

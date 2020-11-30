@@ -372,6 +372,7 @@ ts_add_rect(void **state)
 	}
 	entry.ei_addr = bio_addr;
 	entry.ei_ver = 0;
+	entry.ei_bound = entry.ei_rect.rc_epc;
 	entry.ei_inob = val == NULL ? 0 : 1;
 
 	rc = evt_insert(ts_toh, &entry, NULL);
@@ -498,6 +499,7 @@ ts_find_rect(void **state)
 
 	filter.fr_epr.epr_lo = 0;
 	filter.fr_epr.epr_hi = rect.rc_epc;
+	filter.fr_epoch = filter.fr_epr.epr_hi;
 	filter.fr_ex = rect.rc_ex;
 	evt_ent_array_init(&ent_array);
 	rc = evt_find(ts_toh, &filter, &ent_array);
@@ -541,6 +543,7 @@ ts_list_rect(void **state)
 		filter.fr_ex.ex_hi = ~(0ULL);
 		filter.fr_epr.epr_lo = 0;
 		filter.fr_epr.epr_hi = DAOS_EPOCH_MAX;
+		filter.fr_epoch = filter.fr_epr.epr_hi;
 		goto start;
 	}
 
@@ -550,6 +553,7 @@ ts_list_rect(void **state)
 	filter.fr_ex = rect.rc_ex;
 	filter.fr_epr.epr_lo = rect.rc_epc;
 	filter.fr_epr.epr_hi = high;
+	filter.fr_epoch = filter.fr_epr.epr_hi;
 	if (!val)
 		goto start;
 
@@ -753,6 +757,7 @@ ts_many_add(void **state)
 			D_FATAL("Insufficient memory for test\n");
 			fail();
 		}
+		entry.ei_bound = entry.ei_rect.rc_epc;
 		entry.ei_addr = bio_addr;
 		entry.ei_ver = 0;
 		entry.ei_inob = 1;
@@ -1078,14 +1083,14 @@ test_evt_iter_flags(void **state)
 	rc = evt_create(arg->ta_root, ts_feats, ORDER_DEF_INTERNAL, arg->ta_uma,
 			&ts_evt_desc_cbs, &toh);
 	assert_int_equal(rc, 0);
-	D_ALLOC_ARRAY(data, (NUM_EPOCHS+1));
+	D_ALLOC_ARRAY(data, (NUM_EPOCHS + 1));
 	if (data == NULL)
 		goto end;
-	for (count = 0; count < NUM_EPOCHS+1; count++) {
+	for (count = 0; count < NUM_EPOCHS + 1; count++) {
 		D_ALLOC_ARRAY(data[count], (NUM_EPOCHS+NUM_EXTENTS+1));
 		if (data[count] == NULL) {
 			print_message("Cannot allocate Memory\n");
-			goto end;
+			goto finish3;
 		}
 	}
 	D_ALLOC_ARRAY(exp_val, (NUM_EPOCHS+1)*
@@ -1111,6 +1116,7 @@ test_evt_iter_flags(void **state)
 			entry.ei_rect.rc_epc = epoch;
 			memset(&entry.ei_csum, 0, sizeof(entry.ei_csum));
 			entry.ei_ver = 0;
+			entry.ei_bound = epoch;
 			/* Insert a hole at random epoch */
 			if (epoch == hole_epoch)
 				entry.ei_inob = 0;
@@ -1218,6 +1224,9 @@ finish1:
 	D_FREE(actual_val);
 finish2:
 	D_FREE(exp_val);
+finish3:
+	for (count = 0; count < NUM_EPOCHS + 1; count++)
+		D_FREE(data[count]);
 end:
 	D_FREE(data);
 	rc = evt_destroy(toh);
@@ -1251,6 +1260,7 @@ test_evt_iter_delete(void **state)
 			entry.ei_rect.rc_ex.ex_lo = offset;
 			entry.ei_rect.rc_ex.ex_hi = offset;
 			entry.ei_rect.rc_epc = epoch;
+			entry.ei_bound = epoch;
 			memset(&entry.ei_csum, 0, sizeof(entry.ei_csum));
 			entry.ei_ver = 0;
 			entry.ei_inob = sizeof(offset);
@@ -1298,6 +1308,7 @@ test_evt_iter_delete(void **state)
 	filter.fr_ex.ex_hi = NUM_EPOCHS + NUM_EXTENTS;
 	filter.fr_epr.epr_lo = NUM_EPOCHS - NUM_PARTIAL + 1;
 	filter.fr_epr.epr_hi = DAOS_EPOCH_MAX;
+	filter.fr_epoch = filter.fr_epr.epr_hi;
 	rc = evt_iter_prepare(toh, 0, &filter, &ih);
 	assert_int_equal(rc, 0);
 
@@ -1394,6 +1405,7 @@ test_evt_find_internal(void **state)
 			entry.ei_rect.rc_ex.ex_lo = offset;
 			entry.ei_rect.rc_ex.ex_hi = offset+sizeof(testdata);
 			entry.ei_rect.rc_epc = epoch;
+			entry.ei_bound = epoch;
 			memset(&entry.ei_csum, 0, sizeof(entry.ei_csum));
 			entry.ei_ver = 0;
 			/* Insert a hole at random epoch */
@@ -1429,6 +1441,7 @@ test_evt_find_internal(void **state)
 		filter.fr_ex.ex_lo = epoch - 1;
 		filter.fr_ex.ex_hi = epoch + 9;
 		filter.fr_epr.epr_hi = epoch;
+		filter.fr_epoch = filter.fr_epr.epr_hi;
 		evt_ent_array_init(&ent_array);
 		rc = evt_find(toh, &filter, &ent_array);
 		if (rc != 0)
@@ -1471,6 +1484,7 @@ test_evt_find_internal(void **state)
 		entry.ei_rect.rc_ex.ex_lo = epoch;
 		entry.ei_rect.rc_ex.ex_hi = filter.fr_ex.ex_hi;
 		entry.ei_rect.rc_epc = filter.fr_epr.epr_hi;
+		filter.fr_epoch = filter.fr_epr.epr_hi;
 		rc = evt_delete(toh, &entry.ei_rect, NULL);
 		assert_int_equal(rc, 0);
 		rc = utest_check_mem_decrease(arg->ta_utx);
@@ -1518,6 +1532,7 @@ test_evt_iter_delete_internal(void **state)
 			entry.ei_rect.rc_ex.ex_lo = offset;
 			entry.ei_rect.rc_ex.ex_hi = offset;
 			entry.ei_rect.rc_epc = epoch;
+			entry.ei_bound = epoch;
 			memset(&entry.ei_csum, 0, sizeof(entry.ei_csum));
 			entry.ei_ver = 0;
 			entry.ei_inob = sizeof(offset);
@@ -1585,6 +1600,7 @@ test_evt_variable_record_size_internal(void **state)
 			entry.ei_rect.rc_epc = epoch;
 			entry.ei_ver = 0;
 			entry.ei_inob = data_size;
+			entry.ei_bound = epoch;
 
 			memset(&entry.ei_csum, 0, sizeof(entry.ei_csum));
 
@@ -1651,6 +1667,7 @@ test_evt_various_data_size_internal(void **state)
 			entry.ei_rect.rc_ex.ex_hi = epoch + data_size - 1;
 			entry.ei_rect.rc_epc = epoch;
 			entry.ei_ver = 0;
+			entry.ei_bound = epoch;
 			entry.ei_inob = data_size;
 
 			memset(&entry.ei_csum, 0, sizeof(entry.ei_csum));
@@ -1675,6 +1692,7 @@ test_evt_various_data_size_internal(void **state)
 				filter.fr_ex.ex_lo = epoch;
 				filter.fr_ex.ex_hi = epoch + data_size - 1;
 				filter.fr_epr.epr_hi = epoch;
+				filter.fr_epoch = filter.fr_epr.epr_hi;
 				rc = evt_find(toh, &filter, &ent_array);
 				if (rc != 0)
 					D_FATAL("Find rect failed "DF_RC"\n",
@@ -1788,6 +1806,7 @@ set_data(struct test_arg *arg, daos_handle_t toh, char *dest_data,
 	entry.ei_rect.rc_ex.ex_lo = start;
 	entry.ei_rect.rc_ex.ex_hi = end - 1;
 	entry.ei_rect.rc_epc = major_epc;
+	entry.ei_bound = major_epc;
 	entry.ei_rect.rc_minor_epc = minor_epc;
 	entry.ei_ver = 0;
 	entry.ei_inob = 1;
@@ -1966,6 +1985,7 @@ insert_and_check(daos_handle_t toh, struct evt_entry_in *entry, int idx, int nr)
 	entry->ei_rect.rc_ex.ex_lo = idx;
 	entry->ei_rect.rc_ex.ex_hi = idx + nr - 1;
 	entry->ei_rect.rc_epc = epoch;
+	entry->ei_bound = epoch;
 	rc = evt_insert(toh, entry, NULL);
 	assert_int_equal(rc, 0);
 
@@ -2109,6 +2129,7 @@ test_evt_outer_punch(void **state)
 			entry.ei_rect.rc_ex.ex_lo = offset;
 			entry.ei_rect.rc_ex.ex_hi = offset;
 			entry.ei_rect.rc_epc = epoch;
+			entry.ei_bound = epoch;
 			memset(&entry.ei_csum, 0, sizeof(entry.ei_csum));
 			entry.ei_ver = 0;
 			entry.ei_inob = sizeof(offset);
@@ -2127,6 +2148,7 @@ test_evt_outer_punch(void **state)
 	filter.fr_punch_epc = NUM_EPOCHS - 1;
 	filter.fr_punch_minor_epc = EVT_MINOR_EPC_MAX;
 	filter.fr_epr.epr_hi = DAOS_EPOCH_MAX;
+	filter.fr_epoch = filter.fr_epr.epr_hi;
 	rc = evt_iter_prepare(toh, EVT_ITER_VISIBLE | EVT_ITER_COVERED,
 			      &filter, &ih);
 	assert_int_equal(rc, 0);

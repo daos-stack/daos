@@ -1,4 +1,4 @@
-.TH dmg 1 "9 November 2020"
+.TH dmg 1 "19 November 2020"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -53,8 +53,8 @@ Comma separated list of access point addresses <ipv4addr/hostname>
 \fB\fB\-p\fR, \fB\-\-num-pmem\fR\fP
 Minimum number of SCM (pmem) devices required per storage host in DAOS system
 .TP
-\fB\fB\-n\fR, \fB\-\-num-nvme\fR\fP
-Minimum number of NVMe devices required per storage host in DAOS system
+\fB\fB\-n\fR, \fB\-\-num-nvme\fR <default: \fI"1"\fR>\fP
+Minimum number of NVMe devices required per storage host in DAOS system, set to 0 to generate pmem-only config
 .TP
 \fB\fB\-c\fR, \fB\-\-net-class\fR <default: \fI"best-available"\fR>\fP
 Network class preferred
@@ -444,6 +444,28 @@ Show SCM & NVMe storage space utilization per storage server
 
 \fBAliases\fP: u
 
+.SS storage replace
+Replace a storage device that has been hot-removed with a new device.
+
+\fBAliases\fP: r
+
+.SS storage replace nvme
+Replace an evicted/FAULTY NVMe SSD with another device.
+
+\fBUsage\fP: replace nvme [nvme-OPTIONS]
+.TP
+
+\fBAliases\fP: n
+
+.TP
+\fB\fB\-\-old-uuid\fR (\fIrequired\fR)\fP
+Device UUID of hot-removed SSD
+.TP
+\fB\fB\-\-new-uuid\fR (\fIrequired\fR)\fP
+Device UUID of new device
+.TP
+\fB\fB\-\-no-reint\fR\fP
+Bypass reintegration of device and just bring back online.
 .SS storage scan
 Scan SCM and NVMe storage attached to remote servers.
 

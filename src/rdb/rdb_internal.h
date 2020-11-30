@@ -1,4 +1,4 @@
-/**
+/*
  * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
+ * \file
+ *
  * rdb: Internal Declarations
  */
 
@@ -235,14 +237,13 @@ CRT_RPC_DECLARE(rdb_appendentries, DAOS_ISEQ_RDB_APPENDENTRIES,
 		DAOS_OSEQ_RDB_APPENDENTRIES)
 
 struct rdb_local {
-	d_iov_t		rl_kds_iov;	/* isi_kds buffer */
-	d_iov_t		rl_data_iov;	/* isi_data buffer */
+	d_iov_t	rl_kds_iov;	/* isi_kds buffer */
+	d_iov_t	rl_data_iov;	/* isi_data buffer */
 };
 
 #define DAOS_ISEQ_RDB_INSTALLSNAPSHOT /* input fields */	 \
 	((struct rdb_op_in)	(isi_op)		CRT_VAR) \
 	((msg_installsnapshot_t) (isi_msg)		CRT_VAR) \
-	((uint32_t)		(isi_padding)		CRT_VAR) \
 	/* chunk sequence number */				 \
 	((uint64_t)		(isi_seq)		CRT_VAR) \
 	/* chunk anchor */					 \
