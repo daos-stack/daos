@@ -13,6 +13,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@corci-1013") _
 
 boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
@@ -1062,10 +1063,14 @@ pipeline {
                       expression { ! skip_unit_test() }
                     }
                     agent {
-                        label 'ci_vm1'
+                        label 'stage_vm1'
                     }
                     steps {
                         unitTest timeout_time: 30,
+                                 target: 'el7.9',
+                                 stashes: ['centos7-gcc-tests',
+                                           'centos7-gcc-install',
+                                           'centos7-gcc-build-vars'],
                                  inst_repos: pr_repos(),
                                  inst_rpms: unit_packages()
                     }
@@ -1086,6 +1091,10 @@ pipeline {
                     }
                     steps {
                         unitTest timeout_time: 20,
+                                 target: 'el7.9',
+                                 stashes: ['centos7-gcc-tests',
+                                           'centos7-gcc-install',
+                                           'centos7-gcc-build-vars'],
                                  inst_repos: pr_repos(),
                                  inst_rpms: unit_packages()
                     }
@@ -1129,10 +1138,14 @@ pipeline {
                       expression { ! skip_stage('unit-test-memcheck') }
                     }
                     agent {
-                        label 'ci_vm1'
+                        label 'stage_vm1'
                     }
                     steps {
                         unitTest timeout_time: 30,
+                                 target: 'el7.9',
+                                 stashes: ['centos7-gcc-tests',
+                                           'centos7-gcc-install',
+                                           'centos7-gcc-build-vars'],
                                  ignore_failure: true,
                                  inst_repos: pr_repos(),
                                  inst_rpms: unit_packages()
@@ -1189,10 +1202,13 @@ pipeline {
                         expression { ! skip_ftest('el7') }
                     }
                     agent {
-                        label 'ci_vm9'
+                        label 'stage_vm9'
                     }
                     steps {
                         functionalTest inst_repos: daos_repos(),
+                                       target: 'el7.9',
+                                       stashes: ['centos7-gcc-install',
+                                                 'centos7-gcc-build-vars'],
                                        inst_rpms: functional_packages()
                     }
                     post {
@@ -1247,7 +1263,10 @@ pipeline {
                         label 'ci_nvme3'
                     }
                     steps {
-                        functionalTest target: hw_distro_target(),
+                        // functionalTest target: hw_distro_target(),
+                        functionalTest target: 'el7.9',
+                                       stashes: ['centos7-gcc-install',
+                                                 'centos7-gcc-build-vars'],
                                        inst_repos: daos_repos(),
                                        inst_rpms: functional_packages()
                     }
@@ -1264,7 +1283,7 @@ pipeline {
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
-                        label 'ci_nvme5'
+                        label 'ci_test5'
                     }
                     steps {
                         functionalTest target: hw_distro_target(),
@@ -1303,10 +1322,11 @@ pipeline {
                         expression { ! skip_test_rpms_centos7() }
                     }
                     agent {
-                        label 'ci_vm1'
+                        label 'stage_vm1'
                     }
                     steps {
                         testRpm inst_repos: daos_repos(),
+                                target: 'el7.9',
                                 daos_pkg_version: daos_packages_version()
                    }
                 } // stage('Test CentOS 7 RPMs')
@@ -1316,10 +1336,11 @@ pipeline {
                         expression { ! skip_scan_rpms_centos7() }
                     }
                     agent {
-                        label 'ci_vm1'
+                        label 'stage_vm1'
                     }
                     steps {
                         scanRpms inst_repos: daos_repos(),
+                                 target: 'el7.9',
                                  daos_pkg_version: daos_packages_version(),
                                  inst_rpms: 'clamav clamav-devel',
                                  test_script: 'ci/rpm/scan_daos.sh',

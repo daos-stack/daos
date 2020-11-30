@@ -92,4 +92,9 @@ EOF
 
     # now make sure everything is fully up-to-date
     time yum -y upgrade --exclude fuse,mercury,daos,daos-\*
+
+    # Disable swap for physical nodes
+    if [ -e /dev/sda2 ]; then
+      swapoff -a
+    fi
 }
