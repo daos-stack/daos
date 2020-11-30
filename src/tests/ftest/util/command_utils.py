@@ -25,6 +25,7 @@ from logging import getLogger
 import re
 import time
 import signal
+import subprocess
 import os
 
 from avocado.utils import process
@@ -210,8 +211,12 @@ class ExecutableCommand(CommandWithParameters):
                     self._command, str(state))
                 self._process.send_signal(signal_to_send)
                 if signal_list:
+                    start = time.time()
                     try:
                         self._process.wait(timeout=5)
+                        elapsed = time.time() - start
+                        print('Waited {:.2f}, saved {:.2f}'.format(elapsed,
+                                                                   5 - elapsed))
                     except subprocess.TimeoutExpired:
                         pass
 
