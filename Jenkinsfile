@@ -456,7 +456,7 @@ pipeline {
     parameters {
         string(name: 'BuildPriority',
                defaultValue: get_priority(),
-               description: 'Priority of the build.  DO NOT USE WITHOUT PERMISSION.')
+               description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
     }
 
     stages {
