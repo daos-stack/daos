@@ -47,6 +47,67 @@ Jump Map remaps each shard of an object individually. This means that the shards
 
 The Jump map algorithm is well suited for Pool extension because of the incorporation of the Jump Consistent Hashing algorithm. When a domain is extended the Jump Map algorithm will recalculate the layouts as part of the rebalance operation. For each object the original layout will be calculated using the dimensions of the previous pool map. Then the layout will be recalculated now including the new domain extensions. The two layouts will then be compared and the shards that changed location will be returned to be used in the later steps of the rebalance operation.
 
+## Use in DAOS for changing pool component state
+
+This section details the state transitions that the jump map handles as part of DAOS.
+
+<a id="state_transitions"></a>
+**Pool component state transition diagram**
+![../../doc/graph/pool_component_state_transition_diagram.png](../../doc/graph/pool_component_state_transition_diagram.png "Pool component state transition diagram")
+
+### Drain
+
+Steps:
+- Component set from UPIN -> DRAIN
+- DRAIN is considered the same as UPIN for regular placement API operations, and DOWN for rebuild API operations
+- Data migration begins
+-- For scan phase, will scan only this node for objects that need to be migrated.
+-- For pull phase, other nodes will pull data in a declustered way from all components that have that data, including but not limited to the draining components
+- After migration complete, drained components are set from DRAIN -> DOWNOUT
+
+#### Failure during reintegration
+Regardless of whether the failure happens to a reintegrating UP component or an existing UPIN component, reintegration will run to completion before handling that failure.
+
+If the failure was to non-reintegrating (UPIN) component, failure recovery will happen normally after the reintegration operation completes.
+If the failure was to the reintegrating (UP) component, no failure recovery is needed - it is set directly to DOWNOUT, as data is already present on the fallback targets as a result of the original rebuild process for this component when it first failed.
+
+### Reintegration
+
+Steps:
+- Component set from DOWNOUT -> UP
+- Data migration copies data from other UPIN components to UP components
+- After migration complete, components are set from UP -> UPIN
+- Space reclamation deletes unreachable objects that were migrated
+
+#### Failure during reintegration
+Regardless of whether the failure happens to a reintegrating UP component or an existing UPIN component, reintegration will run to completion before handling that failure.
+
+If the failure was to non-reintegrating (UPIN) component, failure recovery will happen normally after the reintegration operation completes.
+If the failure was to the reintegrating (UP) component, no failure recovery is needed - it is set directly to DOWNOUT, as data is already present on the fallback targets as a result of the original rebuild process for this component when it first failed.
+
+### Addition
+
+Steps:
+- Extend pool map by adding NEW-state components with fseq=0 at the end of their respective level
+- Data migration happens, copying data to NEW components with fseq==0
+- States are updated from NEW fseq==0 -> UPIN fseq==0
+- Space reclamation deletes unreachable objects that were migrated
+
+Whenever placement is invoked to generate a layout, it will ignore all NEW-state objects at the end of each level when computing how many buckets are available for placement. For example, starting with 3 ranks and adding 2, those 2 new ranks will be in state NEW. When placement is invoked, it will be called with a pool map with 5 ranks - however placement will determine that only 3 existed prior to addition, and that addition has not yet completed, so jump consistent hash will only be over the first three.
+
+#### Failure during addition
+Regardless of whether the failure happens to a NEW component or an existing UPIN component, addition will run to completion before handling that failure.
+
+If failure was to a component that already existed before addition, the normal failure recovery process begins.
+
+If failure happens to a component in the NEW state before addition is complete, those components have their fseq number set, indicating they failed. These are NOT set to DOWN, as a failure of the first added component would make it hard to determine the original number of buckets prior to addition.
+
+Migration to other new components with fseq==0 will continue until complete or there are no non-failed NEW components remaining.
+
+After addition completes, NEW components are set to UPIN (fseq==0) or DOWN (fseq!=0).
+Failure recovery can then occur via the normal process.
+Note that this might mean that a non-replicated object is temporarily unavailable - it might move to a NEW component that fails. During addition, the data will still be accessible (as placement is computed over the original layout size). However, once addition completes, that data will be unreachable, even though it still exists (fallback target location after failure is not the same as pre-addition location!). However, because the original data has not been deleted, when that node scans itself it will find the object and send it to the failure recovery location, at which point it will be accessible again.
+
 
 
 
