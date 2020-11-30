@@ -28,14 +28,13 @@ import threading
 
 from itertools import product
 from avocado import fail_on
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 from test_utils_pool import TestPool
 from ior_utils import IorCommand
 from job_manager_utils import Mpirun
 from write_host_file import write_host_file
 from command_utils import CommandFailure
 from mpio_utils import MpioUtils
-from apricot import skipForTicket
 
 try:
     # python 3.x
