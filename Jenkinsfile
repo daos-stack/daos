@@ -284,11 +284,14 @@ String get_priority() {
     node {
         checkoutScm()
         if (cachedCommitPragma(pragma: 'Queue-jump', def_val: false)) {
-	    return '2'
+	    string p = '2'
 	} else if (env.BRANCH_NAME == 'master') {
-	    return '4'
+	    string p = '4'
+	} else {
+	    string p = ''
 	}
-	return ''
+	echo "Build priority set to " + p
+	return p
     }
 }
 
