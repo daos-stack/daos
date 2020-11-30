@@ -122,7 +122,7 @@ struct  _Mgmt__PoolCreateResp
   /*
    * number of target ranks used
    */
-  int32_t numranks;
+  uint32_t numranks;
 };
 #define MGMT__POOL_CREATE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_resp__descriptor) \

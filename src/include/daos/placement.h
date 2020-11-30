@@ -138,22 +138,19 @@ int pl_obj_find_rebuild(struct pl_map *map,
 			struct daos_obj_md *md,
 			struct daos_obj_shard_md *shard_md,
 			uint32_t rebuild_ver, uint32_t *tgt_rank,
-			uint32_t *shard_id, unsigned int array_size,
-			int myrank);
+			uint32_t *shard_id, unsigned int array_size);
 
 int pl_obj_find_reint(struct pl_map *map,
 			struct daos_obj_md *md,
 			struct daos_obj_shard_md *shard_md,
 			uint32_t rebuild_ver, uint32_t *tgt_rank,
-			uint32_t *shard_id, unsigned int array_size,
-			int myrank);
+			uint32_t *shard_id, unsigned int array_size);
 
 int pl_obj_find_addition(struct pl_map *map,
 			 struct daos_obj_md *md,
 			struct daos_obj_shard_md *shard_md,
 			uint32_t rebuild_ver, uint32_t *tgt_rank,
-			uint32_t *shard_id, unsigned int array_size,
-			int myrank);
+			uint32_t *shard_id, unsigned int array_size);
 
 typedef struct pl_obj_shard *(*pl_get_shard_t)(void *data, int idx);
 
