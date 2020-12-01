@@ -94,33 +94,18 @@ struct crt_gdata {
 extern struct crt_gdata		crt_gdata;
 
 struct crt_prog_cb_priv {
-	d_list_t		 cpcp_link;
 	crt_progress_cb		 cpcp_func;
 	void			*cpcp_args;
 };
 
 struct crt_timeout_cb_priv {
-	d_list_t		 ctcp_link;
 	crt_timeout_cb		 ctcp_func;
 	void			*ctcp_args;
 };
 
 struct crt_event_cb_priv {
-	d_list_t		 cecp_link;
 	crt_event_cb		 cecp_func;
 	void			*cecp_args;
-};
-
-/* TODO: remove the three structs above, use the following one for all */
-struct crt_plugin_cb_priv {
-	d_list_t			 cp_link;
-	union {
-		crt_progress_cb		 cp_prog_cb;
-		crt_timeout_cb		 cp_timeout_cb;
-		crt_event_cb		 cp_event_cb;
-		crt_eviction_cb		 cp_eviction_cb;
-	};
-	void				*cp_args;
 };
 
 /* TODO may use a RPC to query server-side context number */
@@ -128,18 +113,27 @@ struct crt_plugin_cb_priv {
 # define CRT_SRV_CONTEXT_NUM		(256)
 #endif
 
+#ifndef CRT_PROGRESS_NUM
+# define CRT_CALLBACKS_NUM		(4)	/* start number of CBs */
+#endif
+
 /* structure of global fault tolerance data */
 struct crt_plugin_gdata {
 	/* list of progress callbacks */
-	d_list_t		cpg_prog_cbs[CRT_SRV_CONTEXT_NUM];
+	size_t				 cpg_prog_size[CRT_SRV_CONTEXT_NUM];
+	struct crt_prog_cb_priv		*cpg_prog_cbs[CRT_SRV_CONTEXT_NUM];
+	struct crt_prog_cb_priv		*cpg_prog_cbs_old[CRT_SRV_CONTEXT_NUM];
 	/* list of rpc timeout callbacks */
-	d_list_t		cpg_timeout_cbs;
+	size_t				 cpg_timeout_size;
+	struct crt_timeout_cb_priv	*cpg_timeout_cbs;
+	struct crt_timeout_cb_priv	*cpg_timeout_cbs_old;
 	/* list of event notification callbacks */
-	d_list_t		cpg_event_cbs;
-	uint32_t		cpg_inited:1;
-	pthread_rwlock_t	cpg_prog_rwlock[CRT_SRV_CONTEXT_NUM];
-	pthread_rwlock_t	cpg_timeout_rwlock;
-	pthread_rwlock_t	cpg_event_rwlock;
+	size_t				 cpg_event_size;
+	struct crt_event_cb_priv	*cpg_event_cbs;
+	struct crt_event_cb_priv	*cpg_event_cbs_old;
+	uint32_t			 cpg_inited:1;
+	/* mutex to protect all callbacks change only */
+	pthread_mutex_t			 cpg_mutex;
 };
 
 extern struct crt_plugin_gdata		crt_plugin_gdata;
