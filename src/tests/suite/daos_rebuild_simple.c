@@ -680,6 +680,62 @@ rebuild_sx_object(void **state)
 	ioreq_fini(&req);
 }
 
+static void
+rebuild_object_overflow(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	char		dkey[32];
+	const char	akey[] = "test_update akey";
+	char		buf[8192];
+	d_rank_t	rank = 2;
+	int		rank_nr = 1;
+	int		rc;
+	int		i;
+
+	if (!test_runable(arg, 4))
+		return;
+
+	oid = dts_oid_gen(arg->obj_class, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	print_message("insert 10 dkeys\n");
+	dts_buf_render(buf, 8192);
+	for (i = 0; i < 10; i++) {
+		sprintf(dkey, "dkey_%d\n", i);
+		insert_single(dkey, akey, 0, (void *)buf, 8192,
+			      DAOS_TX_NONE, &req);
+	}
+
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     DAOS_REBUILD_OVERFLOW | DAOS_FAIL_ALWAYS,
+				     0, NULL);
+
+	get_killing_rank_by_oid(arg, oid, 1, 0, &rank, &rank_nr);
+	/** exclude the target of this obj's replicas */
+	daos_exclude_server(arg->pool.pool_uuid, arg->group,
+			    arg->dmg_config, arg->pool.svc, rank);
+
+	/* wait until rebuild done */
+	test_rebuild_wait(&arg, 1);
+
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	assert_true(rc == 0 || rc == -DER_NOSYS);
+
+	/* add back the excluded targets */
+	daos_reint_server(arg->pool.pool_uuid, arg->group,
+			  arg->dmg_config, arg->pool.svc, rank);
+
+	/* wait until reintegration is done */
+	test_rebuild_wait(&arg, 1);
+	ioreq_fini(&req);
+
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     0, 0, NULL);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD1: rebuild small rec multiple dkeys",
@@ -706,6 +762,8 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_snap_punch_empty, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD12: rebuild sx object",
 	 rebuild_sx_object, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD13: rebuild overflow",
+	 rebuild_object_overflow, rebuild_small_sub_setup, test_teardown},
 };
 
 int

@@ -531,12 +531,10 @@ mrone_recx_vos2_daos(struct migrate_one *mrone, struct daos_oclass_attr *oca,
 	mrone_recx_daos_vos_internal(mrone, oca, false, shard);
 }
 
-#define MIGRATE_STACK_SIZE	131072
-#define MAX_BUF_SIZE		2048
-
+#define MAX_BUF_SIZE	2048
 static int
-migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
-			    struct ds_cont_child *ds_cont)
+migrate_fetch_update(struct migrate_one *mrone, daos_handle_t oh,
+		     struct ds_cont_child *ds_cont)
 {
 	d_sg_list_t		 sgls[DSS_ENUM_UNPACK_MAX_IODS];
 	d_iov_t			 iov[DSS_ENUM_UNPACK_MAX_IODS];
@@ -551,15 +549,29 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 
 	D_ASSERT(mrone->mo_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
 	for (i = 0; i < mrone->mo_iod_num; i++) {
-		if (mrone->mo_iods[i].iod_size == 0)
+		daos_iod_t *iod = &mrone->mo_iods[i];
+		daos_size_t data_size;
+
+		if (iod->iod_size == 0)
 			continue;
 
 		if (mrone->mo_sgls != NULL && mrone->mo_sgls[i].sg_nr > 0) {
+			/* The data has been piggybacked by obj enumeration */
 			sgls[i] = mrone->mo_sgls[i];
 		} else {
 			sgls[i].sg_nr = 1;
 			sgls[i].sg_nr_out = 1;
-			d_iov_set(&iov[i], iov_buf[i], MAX_BUF_SIZE);
+			data_size = daos_iods_len(iod, 1);
+			if (data_size <= MAX_BUF_SIZE) {
+				d_iov_set(&iov[i], iov_buf[i], MAX_BUF_SIZE);
+			} else {
+				char *data;
+
+				D_ALLOC(data, data_size);
+				if (data == NULL)
+					D_GOTO(out, rc = -DER_NOMEM);
+				d_iov_set(&iov[i], data, data_size);
+			}
 			sgls[i].sg_iovs = &iov[i];
 			fetch = true;
 		}
@@ -629,6 +641,13 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 				    0, &mrone->mo_dkey, iod_cnt,
 				    &mrone->mo_iods[start], iod_csums,
 				    &sgls[start]);
+	}
+
+out:
+	for (i = 0; i < mrone->mo_iod_num; i++) {
+		if (sgls[i].sg_iovs &&
+		    sgls[i].sg_iovs[0].iov_buf != iov_buf[i])
+			D_FREE(sgls[i].sg_iovs[0].iov_buf);
 	}
 
 	return rc;
@@ -930,6 +949,10 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	if (DAOS_OC_IS_EC(oca))
 		mrone_recx_daos2_vos(mrone, oca);
 
+	/**
+	 * let's try to reserve the BIO(DMA) buffer first, then fetch the data
+	 * to the BIO buffer directly to avoid extra buffer copy.
+	 */
 	D_ASSERT(mrone->mo_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
 	rc = vos_update_begin(ds_cont->sc_hdl, mrone->mo_oid,
 			      mrone->mo_update_epoch, 0, &mrone->mo_dkey,
@@ -942,6 +965,10 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	}
 
 	rc = bio_iod_prep(vos_ioh2desc(ioh));
+	if (DAOS_FAIL_CHECK(DAOS_REBUILD_OVERFLOW)) {
+		bio_iod_post(vos_ioh2desc(ioh));
+		rc = -DER_OVERFLOW;
+	}
 	if (rc) {
 		D_ERROR("Prepare EIOD for "DF_UOID" error: %d\n",
 			DP_UOID(mrone->mo_oid), rc);
@@ -1117,13 +1144,17 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone)
 		D_GOTO(obj_close, rc);
 	}
 
-	if (mrone->mo_iods[0].iod_type == DAOS_IOD_SINGLE)
+	if (mrone->mo_iods[0].iod_type == DAOS_IOD_SINGLE) {
 		rc = migrate_fetch_update_single(mrone, oh, cont);
-	else if (data_size < MAX_BUF_SIZE || data_size == (daos_size_t)(-1))
-		rc = migrate_fetch_update_inline(mrone, oh, cont);
-	else
+	} else if (data_size < MAX_BUF_SIZE || data_size == (daos_size_t)(-1)) {
+		rc = migrate_fetch_update(mrone, oh, cont);
+	} else {
 		rc = migrate_fetch_update_bulk(mrone, oh, cont);
-
+		if (rc == -DER_OVERFLOW) {
+			D_DEBUG(DB_REBUILD, "retry mrone %p.\n", mrone);
+			rc = migrate_fetch_update(mrone, oh, cont);
+		}
+	}
 	tls->mpt_rec_count += mrone->mo_rec_num;
 	tls->mpt_size += mrone->mo_size;
 obj_close:
@@ -1664,6 +1695,8 @@ migrate_obj_punch_one(void *data)
 	migrate_pool_tls_put(tls);
 	return rc;
 }
+
+#define MIGRATE_STACK_SIZE	131072
 
 static int
 migrate_start_ult(struct enum_unpack_arg *unpack_arg)
