@@ -299,7 +299,7 @@ func (t *FaultDomainTree) RemoveDomain(domain *FaultDomain) error {
 			_ = child.RemoveDomain(domain)
 		}
 	}
-	return nil
+	return nil // not found - consider it already removed
 }
 
 // IsRoot verifies if the FaultDomainTree is a root node.

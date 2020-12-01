@@ -68,6 +68,23 @@ func (mam MemberAddrMap) addMember(addr *net.TCPAddr, m *Member) {
 	mam[addr.String()] = append(mam[addr.String()], m)
 }
 
+func (mam MemberAddrMap) removeMember(m *Member) {
+	members, ok := mam[m.Addr.String()]
+	if !ok {
+		return
+	}
+	for i, mem := range members {
+		if m.UUID.String() == mem.UUID.String() {
+			// remove from slice
+			members = append(members[:i], members[i+1:]...)
+			break
+		}
+	}
+	if len(members) == 0 {
+		delete(mam, m.Addr.String())
+	}
+}
+
 // MarshalJSON creates a serialized representation of the MemberAddrMap.
 // The member's UUID is used to represent the member in order to
 // avoid duplicating member details in the serialized format.
@@ -140,7 +157,10 @@ func (mdb *MemberDatabase) addMember(m *Member) {
 	mdb.Ranks[m.Rank] = m
 	mdb.Uuids[m.UUID] = m
 	mdb.Addrs.addMember(m.Addr, m)
-	mdb.FaultDomains.AddDomain(m.RankFaultDomain())
+
+	if err := mdb.FaultDomains.AddDomain(m.RankFaultDomain()); err != nil {
+		panic(err)
+	}
 }
 
 func (mdb *MemberDatabase) updateMember(m *Member) {
@@ -151,9 +171,13 @@ func (mdb *MemberDatabase) updateMember(m *Member) {
 	cur.state = m.state
 	cur.Info = m.Info
 
-	mdb.FaultDomains.RemoveDomain(cur.RankFaultDomain())
+	if err := mdb.FaultDomains.RemoveDomain(cur.RankFaultDomain()); err != nil {
+		panic(err)
+	}
 	cur.FaultDomain = m.FaultDomain
-	mdb.FaultDomains.AddDomain(cur.RankFaultDomain())
+	if err := mdb.FaultDomains.AddDomain(cur.RankFaultDomain()); err != nil {
+		panic(err)
+	}
 }
 
 // removeMember is responsible for removing new Member and updating all
@@ -161,6 +185,8 @@ func (mdb *MemberDatabase) updateMember(m *Member) {
 func (mdb *MemberDatabase) removeMember(m *Member) {
 	delete(mdb.Ranks, m.Rank)
 	delete(mdb.Uuids, m.UUID)
-	delete(mdb.Addrs, m.Addr.String())
-	mdb.FaultDomains.RemoveDomain(m.RankFaultDomain())
+	mdb.Addrs.removeMember(m)
+	if err := mdb.FaultDomains.RemoveDomain(m.RankFaultDomain()); err != nil {
+		panic(err)
+	}
 }
