@@ -55,7 +55,7 @@ cont_iv_snap_alloc_internal(d_sg_list_t *sgl)
 	int			entry_size;
 	int			rc;
 
-	rc = daos_sgl_init(sgl, 1);
+	rc = d_sgl_init(sgl, 1);
 	if (rc)
 		return rc;
 
@@ -68,7 +68,7 @@ cont_iv_snap_alloc_internal(d_sg_list_t *sgl)
 	d_iov_set(&sgl->sg_iovs[0], entry, entry_size);
 out:
 	if (rc)
-		daos_sgl_fini(sgl, true);
+		d_sgl_fini(sgl, true);
 
 	return rc;
 }
@@ -86,7 +86,7 @@ cont_iv_prop_alloc_internal(d_sg_list_t *sgl)
 	int			entry_size;
 	int			rc;
 
-	rc = daos_sgl_init(sgl, 1);
+	rc = d_sgl_init(sgl, 1);
 	if (rc)
 		return rc;
 
@@ -98,7 +98,7 @@ cont_iv_prop_alloc_internal(d_sg_list_t *sgl)
 	d_iov_set(&sgl->sg_iovs[0], entry, entry_size);
 out:
 	if (rc)
-		daos_sgl_fini(sgl, true);
+		d_sgl_fini(sgl, true);
 
 	return rc;
 }
@@ -121,7 +121,7 @@ cont_iv_ent_init(struct ds_iv_key *iv_key, void *data,
 	entry->iv_key.class_id = iv_key->class_id;
 	entry->iv_key.rank = iv_key->rank;
 
-	rc = daos_sgl_init(&entry->iv_value, 1);
+	rc = d_sgl_init(&entry->iv_value, 1);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -133,7 +133,7 @@ cont_iv_ent_init(struct ds_iv_key *iv_key, void *data,
 out:
 	if (rc != 0) {
 		dbtree_destroy(root_hdl, NULL);
-		daos_sgl_fini(&entry->iv_value, true);
+		d_sgl_fini(&entry->iv_value, true);
 	}
 
 	return rc;
@@ -199,7 +199,7 @@ cont_iv_ent_destroy(d_sg_list_t *sgl)
 		dbtree_destroy(*root_hdl, NULL);
 	}
 
-	daos_sgl_fini(sgl, true);
+	d_sgl_fini(sgl, true);
 
 	return 0;
 }
@@ -547,13 +547,13 @@ cont_iv_capa_alloc_internal(d_sg_list_t *sgl)
 	struct cont_iv_entry	*entry;
 	int			rc;
 
-	rc = daos_sgl_init(sgl, 1);
+	rc = d_sgl_init(sgl, 1);
 	if (rc)
 		return rc;
 
 	D_ALLOC_PTR(entry);
 	if (!entry) {
-		daos_sgl_fini(sgl, true);
+		d_sgl_fini(sgl, true);
 		return -DER_NOMEM;
 	}
 
