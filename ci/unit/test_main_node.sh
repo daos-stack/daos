@@ -49,6 +49,8 @@ if ${NLT:-false}; then
     ./utils/node_local_test.py --output-file=vm_test/nlt-errors.json all
 else
     ls
+    ls test_results || true
+    ls test_results_debug || true
     IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" RUN_TEST_FILTER="vos_test" utils/run_test.sh
     ls
     ls test_results_debug || true
