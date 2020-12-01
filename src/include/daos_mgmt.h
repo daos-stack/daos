@@ -48,19 +48,6 @@ typedef struct {
  */
 
 /**
- * Kill a remote server.
- *
- * \param grp	[IN]	Process set name of the DAOS servers managing the pool
- * \param rank	[IN]	Rank to kill
- * \param force	[IN]	Abrupt shutdown, no cleanup
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- */
-int
-daos_mgmt_svc_rip(const char *grp, d_rank_t rank, bool force,
-		  daos_event_t *ev);
-
-/**
  * Exclude a set of storage targets from a pool.
  *
  * \param uuid	[IN]	UUID of the pool
@@ -84,34 +71,6 @@ int
 daos_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 		      const d_rank_list_t *svc, struct d_tgt_list *tgts,
 		      daos_event_t *ev);
-
-/**
- * Extend the pool to more targets. If \a tgts is NULL, this function
- * will extend the pool to all the targets in the group, otherwise it will
- * only extend the pool to the included targets.
- *
- * NB: Doubling storage targets in the pool can have better performance than
- * arbitrary targets adding.
- *
- * \param uuid	[IN]	UUID of the pool to extend
- * \param grp	[IN]	Process set name of the DAOS servers managing the pool
- * \param tgts	[IN]	Optional, only extend the pool to included targets.
- * \param failed
- *		[OUT]	Optional, buffer to store faulty targets on failure.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
- *			-DER_NO_PERM	Permission denied
- *			-DER_NONEXIST	Storage target is nonexistent
- */
-int
-daos_pool_extend(const uuid_t uuid, const char *grp, d_rank_list_t *tgts,
-		 d_rank_list_t *failed, daos_event_t *ev);
 
 /**
  * reintegrate a set of storage targets from a pool.
