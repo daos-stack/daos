@@ -77,8 +77,6 @@
 
 #define EC_AGG_ITERATION_MAX 256
 
-static d_rank_t myrank;
-
 /* Pool/container info. Shared handle UUIDs, and service list are initialized
  * in system Xstream.
  */
@@ -2150,7 +2148,6 @@ ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
 	iter_param.ip_recx.rx_idx	= 0ULL;
 	iter_param.ip_recx.rx_nr	= ~PARITY_INDICATOR;
-	crt_group_rank(NULL, &myrank);
 
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
 			 agg_iterate_pre_cb, agg_iterate_post_cb,

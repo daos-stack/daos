@@ -349,7 +349,7 @@ static struct daos_obj_class daos_obj_classes[] = {
 		},
 	},
 	{
-		.oc_name	= "DAOS_OC_EC_K4P1_L32K",
+		.oc_name	= "DAOS_OC_EC_K4P2_L32K",
 		.oc_id		= DAOS_OC_EC_K4P2_L32K,
 		{
 			.ca_schema		= DAOS_OS_SINGLE,

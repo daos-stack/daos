@@ -176,7 +176,7 @@ struct daos_obj_shard_md {
 	uint32_t		smd_padding;
 };
 
-struct daos_shard_data {
+struct daos_shard_loc {
 	uint32_t	sd_rank;
 	uint32_t	sd_tgt_idx;
 };
