@@ -61,7 +61,7 @@ func NewStorageControlService(log logging.Logger, bdev *bdev.Provider, scm *scm.
 
 // findBdevsWithDomain retrieves controllers in scan response that match the
 // input prefix in the domain component of their PCI address.
-func findBdevsWithDomain(scanResp bdev.ScanResponse, prefix string) ([]string, error) {
+func findBdevsWithDomain(scanResp *bdev.ScanResponse, prefix string) ([]string, error) {
 	var found []string
 
 	for _, ctrlr := range scanResp.Controllers {
@@ -84,7 +84,7 @@ func findBdevsWithDomain(scanResp bdev.ScanResponse, prefix string) ([]string, e
 // address domain.
 //
 // Return new device list with PCI addresses of devices behind the VMD.
-func substBdevVmdAddrs(cfgBdevs []string, scanResp bdev.ScanResponse) ([]string, error) {
+func substBdevVmdAddrs(cfgBdevs []string, scanResp *bdev.ScanResponse) ([]string, error) {
 	if len(scanResp.Controllers) == 0 {
 		return nil, nil
 	}
@@ -116,7 +116,7 @@ func substBdevVmdAddrs(cfgBdevs []string, scanResp bdev.ScanResponse) ([]string,
 //
 // Return any device addresses missing from the scan response and ok set to true
 // if no devices are missing.
-func canAccessBdevs(cfgBdevs []string, scanResp bdev.ScanResponse) ([]string, bool) {
+func canAccessBdevs(cfgBdevs []string, scanResp *bdev.ScanResponse) ([]string, bool) {
 	var missing []string
 
 	for _, pciAddr := range cfgBdevs {
@@ -153,7 +153,7 @@ func (c *StorageControlService) checkCfgBdevs(scanResp *bdev.ScanResponse) error
 
 		if !c.bdev.IsVMDDisabled() {
 			c.log.Debug("checkCfgBdevs: VMD detected, processing PCI addresses")
-			newBdevs, err := substBdevVmdAddrs(cfgBdevs, *scanResp)
+			newBdevs, err := substBdevVmdAddrs(cfgBdevs, scanResp)
 			if err != nil {
 				return err
 			}
@@ -168,7 +168,7 @@ func (c *StorageControlService) checkCfgBdevs(scanResp *bdev.ScanResponse) error
 		}
 
 		// fail if config specified nvme devices are inaccessible
-		missing, ok := canAccessBdevs(cfgBdevs, *scanResp)
+		missing, ok := canAccessBdevs(cfgBdevs, scanResp)
 		if !ok {
 			return FaultBdevNotFound(missing)
 		}

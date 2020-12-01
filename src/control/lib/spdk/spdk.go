@@ -71,7 +71,7 @@ type EnvOptions struct {
 	DisableVMD     bool     // flag if VMD devices should not be included
 }
 
-func (o *EnvOptions) toC(log logging.Logger) (*C.struct_spdk_env_opts, *unsafe.Pointer, error) {
+func (o *EnvOptions) toC(log logging.Logger) (*C.struct_spdk_env_opts, func(), error) {
 	opts := new(C.struct_spdk_env_opts)
 
 	C.spdk_env_opts_init(opts)
@@ -84,18 +84,24 @@ func (o *EnvOptions) toC(log logging.Logger) (*C.struct_spdk_env_opts, *unsafe.P
 	opts.env_context = unsafe.Pointer(C.CString("--log-level=lib.eal:4"))
 
 	if len(o.PciIncludeList) > 0 {
-		cIncludeListPtr, err := pciListToC(log, o.PciIncludeList)
+		cPtr, err := pciListToC(log, o.PciIncludeList)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		opts.pci_whitelist = (*C.struct_spdk_pci_addr)(*cIncludeListPtr)
+		opts.pci_whitelist = (*C.struct_spdk_pci_addr)(*cPtr)
 		opts.num_pci_addr = C.ulong(len(o.PciIncludeList))
 
-		return opts, cIncludeListPtr, nil
+		closure := func() {
+			if cPtr != nil {
+				C.free(unsafe.Pointer(*cPtr))
+			}
+		}
+
+		return opts, closure, nil
 	}
 
-	return opts, nil, nil
+	return opts, func() {}, nil
 }
 
 func (o *EnvOptions) sanitizeIncludeList(log logging.Logger) error {
@@ -182,14 +188,11 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 		return errors.Wrap(err, "sanitizing PCI include list")
 	}
 
-	cOpts, toFree, err := opts.toC(log)
+	cOpts, freeMem, err := opts.toC(log)
 	if err != nil {
 		return errors.Wrap(err, "convert spdk env opts to C")
 	}
-	if toFree != nil {
-		defer C.free(unsafe.Pointer(*toFree))
-	}
-
+	defer freeMem()
 	log.Debugf("spdk init c opts: %+v", cOpts)
 
 	if rc := C.spdk_env_init(cOpts); rc != 0 {
