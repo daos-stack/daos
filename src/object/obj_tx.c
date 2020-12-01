@@ -394,9 +394,8 @@ dc_tx_cleanup_one(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr)
 
 		if (dcsr->dcsr_sgls != NULL) {
 			for (i = 0; i < dcsr->dcsr_nr; i++)
-				daos_sgl_fini(&dcsr->dcsr_sgls[i],
-					      !(tx->tx_flags &
-						DAOS_TF_ZERO_COPY));
+				d_sgl_fini(&dcsr->dcsr_sgls[i],
+					   !(tx->tx_flags & DAOS_TF_ZERO_COPY));
 
 			D_FREE(dcsr->dcsr_sgls);
 		}
@@ -2157,7 +2156,7 @@ fail:
 
 		if (dcsr->dcsr_sgls != NULL) {
 			for (i = 0; i < nr; i++)
-				daos_sgl_fini(&dcsr->dcsr_sgls[i],
+				d_sgl_fini(&dcsr->dcsr_sgls[i],
 					      !(tx->tx_flags &
 						DAOS_TF_ZERO_COPY));
 

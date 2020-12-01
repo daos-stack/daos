@@ -605,8 +605,7 @@ iv_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *user_priv)
 	assert(user_priv == &g_test_user_priv);
 
 	/* Frees the IOV buf also */
-	if (iv_value != NULL)
-		d_sgl_fini(iv_value, true);
+	d_sgl_fini(iv_value, true);
 
 	dump_all_keys("ON_PUTVALUE");
 	DBG_EXIT();

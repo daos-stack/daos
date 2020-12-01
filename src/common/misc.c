@@ -30,45 +30,6 @@
 #include <daos/checksum.h>
 #include <daos/dtx.h>
 
-/**
- * Initialize a scatter/gather list, create an array to store @nr iovecs.
- */
-int
-daos_sgl_init(d_sg_list_t *sgl, unsigned int nr)
-{
-	memset(sgl, 0, sizeof(*sgl));
-
-	sgl->sg_nr = nr;
-	if (nr == 0)
-		return 0;
-
-	D_ALLOC_ARRAY(sgl->sg_iovs, nr);
-
-	return sgl->sg_iovs == NULL ? -DER_NOMEM : 0;
-}
-
-/**
- * Finalise a scatter/gather list, it can also free iovecs if @free_iovs
- * is true.
- */
-void
-daos_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
-{
-	int	i;
-
-	if (sgl == NULL || sgl->sg_iovs == NULL)
-		return;
-
-	for (i = 0; free_iovs && i < sgl->sg_nr; i++) {
-		if (sgl->sg_iovs[i].iov_buf != NULL) {
-			D_FREE(sgl->sg_iovs[i].iov_buf);
-		}
-	}
-
-	D_FREE(sgl->sg_iovs);
-	memset(sgl, 0, sizeof(*sgl));
-}
-
 static int
 daos_sgls_copy_internal(d_sg_list_t *dst_sgl, uint32_t dst_nr,
 			d_sg_list_t *src_sgl, uint32_t src_nr,
@@ -97,7 +58,7 @@ daos_sgls_copy_internal(d_sg_list_t *dst_sgl, uint32_t dst_nr,
 		if (alloc) {
 			int rc;
 
-			rc = daos_sgl_init(&dst_sgl[i], src_sgl[i].sg_nr);
+			rc = d_sgl_init(&dst_sgl[i], src_sgl[i].sg_nr);
 			if (rc)
 				return rc;
 		}
@@ -397,7 +358,6 @@ daos_iov_free(d_iov_t *iov)
 	D_ASSERT(iov->iov_buf_len > 0);
 
 	D_FREE(iov->iov_buf);
-	iov->iov_buf = NULL;
 	iov->iov_buf_len = 0;
 	iov->iov_len = 0;
 }

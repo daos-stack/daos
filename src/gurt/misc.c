@@ -490,39 +490,6 @@ rank_list_to_uint32_array(d_rank_list_t *rl, uint32_t **ints, size_t *len)
 	return 0;
 }
 
-/**
- * Initialize a scatter/gather list, create an array to store @nr iovecs.
- */
-int
-d_sgl_init(d_sg_list_t *sgl, unsigned int nr)
-{
-	memset(sgl, 0, sizeof(*sgl));
-
-	sgl->sg_nr = sgl->sg_nr_out = nr;
-	D_ALLOC_ARRAY(sgl->sg_iovs, nr);
-
-	return sgl->sg_iovs == NULL ? -DER_NOMEM : 0;
-}
-
-/**
- * Finalise a scatter/gather list, it can also free iovecs if @free_iovs
- * is true.
- */
-void
-d_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
-{
-	int	i;
-
-	if (sgl->sg_iovs == NULL)
-		return;
-
-	for (i = 0; free_iovs && i < sgl->sg_nr; i++)
-		D_FREE(sgl->sg_iovs[i].iov_buf);
-
-	D_FREE(sgl->sg_iovs);
-	memset(sgl, 0, sizeof(*sgl));
-}
-
 static inline bool
 dis_integer_str(char *str)
 {
