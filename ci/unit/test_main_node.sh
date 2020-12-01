@@ -50,7 +50,7 @@ if ${NLT:-false}; then
 else
     ls
     ls test_results || true
-    IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" utils/run_test.sh
+    IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" RUN_TEST_FILTER="vos_tests" utils/run_test.sh
     ls
     ls test_results || true
     if [ "$WITH_VALGRIND" == 'memcheck' ]; then
