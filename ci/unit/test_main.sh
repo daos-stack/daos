@@ -10,8 +10,6 @@ rm -rf unit_memcheck_vm_test unit_test_memcheck_logs unit-test*.memcheck.xml
 rm -rf nlt_logs unit_test_logs
 rm -rf test_results
 mkdir test_results
-rm -rf test_results_debug
-mkdir test_results_debug
 
 # Check if this is a Bulleye stage
 USE_BULLSEYE=false
