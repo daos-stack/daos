@@ -1343,10 +1343,10 @@ cond_test(void **state)
 	oid = gen_oid(0);
 	/** Test duplicate akey */
 	cond_updaten_op(state, arg->ctx.tc_co_hdl, oid, epoch, "a",
-			0, 0, sgl, 5, "c", "foo",
+			0, -DER_NO_PERM, sgl, 5, "c", "foo",
 			"c", "bar", "d", "val", "e", "flag", "f", "temp");
 	cond_updaten_op(state, arg->ctx.tc_co_hdl, oid, epoch, "a",
-			0, 0, sgl, 5, "new",
+			0, -DER_NO_PERM, sgl, 5, "new",
 			"foo", "f", "bar", "d", "val", "e", "flag", "new",
 			"temp");
 
@@ -1606,11 +1606,6 @@ minor_epoch_punch_sv(void **state)
 	iod.iod_name = akey;
 	iod.iod_recxs = NULL;
 	iod.iod_nr = 1;
-
-	/* Allocate memory for the scatter-gather list */
-	rc = daos_sgl_init(&sgl, 1);
-	assert_int_equal(rc, 0);
-
 
 	/* Allocate memory for the scatter-gather list */
 	rc = daos_sgl_init(&sgl, 1);
@@ -2469,6 +2464,8 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 		vts_dtx_end(dth);
 
 	start_epoch = epoch + 1;
+	daos_sgl_fini(&sgl[0], false);
+	daos_sgl_fini(&sgl[1], false);
 }
 
 static void

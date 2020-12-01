@@ -2116,6 +2116,35 @@ abort:
 	return err;
 }
 
+static int
+vos_check_akeys(int iod_nr, daos_iod_t *iods)
+{
+	int	i, j;
+
+	for (i = 0; i < iod_nr - 1; i++) {
+		for (j = i + 1; j < iod_nr; j++) {
+			if (iods[i].iod_name.iov_len !=
+			    iods[j].iod_name.iov_len)
+				continue;
+
+			if (iods[i].iod_name.iov_buf ==
+			    iods[j].iod_name.iov_buf)
+				return -DER_NO_PERM;
+
+			if (iods[i].iod_name.iov_buf == NULL ||
+			    iods[j].iod_name.iov_buf == NULL)
+				continue;
+
+			if (memcmp(iods[i].iod_name.iov_buf,
+				   iods[j].iod_name.iov_buf,
+				   iods[i].iod_name.iov_len) == 0)
+				return -DER_NO_PERM;
+		}
+	}
+
+	return 0;
+}
+
 int
 vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		 uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
@@ -2129,6 +2158,12 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	D_DEBUG(DB_TRACE, "Prepare IOC for "DF_UOID", iod_nr %d, epc "DF_X64
 		", flags="DF_X64"\n", DP_UOID(oid), iod_nr,
 		dtx_is_valid_handle(dth) ? dth->dth_epoch :  epoch, flags);
+
+	rc = vos_check_akeys(iod_nr, iods);
+	if (rc != 0) {
+		D_ERROR("Detected duplicate akeys, operation not allowed\n");
+		return rc;
+	}
 
 	rc = vos_ioc_create(coh, oid, false, epoch, iod_nr, iods, iods_csums,
 			    flags, NULL, dedup, dedup_th, dth, &ioc);
