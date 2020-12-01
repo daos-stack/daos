@@ -627,7 +627,7 @@ punch_model_test(void **state)
 	iod.iod_nr = 1;
 
 	/* Allocate memory for the scatter-gather list */
-	rc = daos_sgl_init(&sgl, 1);
+	rc = d_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
 
 	d_iov_set(&sgl.sg_iovs[0], (void *)under, strlen(under));
@@ -742,7 +742,7 @@ punch_model_test(void **state)
 	assert_int_equal(sgl.sg_iovs[0].iov_len, strlen(latest));
 	assert_int_equal(strncmp(buf, latest, strlen(latest)), 0);
 
-	daos_sgl_fini(&sgl, false);
+	d_sgl_fini(&sgl, false);
 
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid,
 			       DAOS_GET_RECX | DAOS_GET_MAX,
@@ -777,7 +777,7 @@ simple_multi_update(void **state)
 	d_iov_set(&dkey, &dkey_val, sizeof(dkey_val));
 
 	for (i = 0; i < 2; i++) {
-		rc = daos_sgl_init(&sgl[i], 1);
+		rc = d_sgl_init(&sgl[i], 1);
 		assert_int_equal(rc, 0);
 		iod[i].iod_type = DAOS_IOD_SINGLE;
 		iod[i].iod_size = strlen(values[i]) + 1;
@@ -831,7 +831,7 @@ simple_multi_update(void **state)
 		assert_true(iod[i].iod_size == (strlen(overwrite[i]) + 1));
 		assert_memory_equal(buf[i], overwrite[i],
 				    strlen(overwrite[i]) + 1);
-		daos_sgl_fini(&sgl[i], false);
+		d_sgl_fini(&sgl[i], false);
 	}
 }
 
@@ -858,7 +858,7 @@ object_punch_and_fetch(void **state)
 
 	test_args_reset(arg, VPOOL_SIZE);
 
-	rc = daos_sgl_init(&sgl, 1);
+	rc = d_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
 	d_iov_set(&update_keys[0], &stable_key, sizeof(stable_key));
 	d_iov_set(&update_keys[1], &key1, sizeof(key1));
@@ -903,7 +903,7 @@ object_punch_and_fetch(void **state)
 		assert_int_equal(iod.iod_size, 0);
 	}
 
-	daos_sgl_fini(&sgl, false);
+	d_sgl_fini(&sgl, false);
 }
 
 #define SM_BUF_LEN 64
@@ -1608,7 +1608,7 @@ minor_epoch_punch_sv(void **state)
 	iod.iod_nr = 1;
 
 	/* Allocate memory for the scatter-gather list */
-	rc = daos_sgl_init(&sgl, 1);
+	rc = d_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
 
 	d_iov_set(&sgl.sg_iovs[0], (void *)first, iod.iod_size);
@@ -1646,7 +1646,7 @@ tx_end:
 	assert_int_equal(iod.iod_size, 0);
 	assert_memory_equal(buf, expected, strlen(expected));
 
-	daos_sgl_fini(&sgl, false);
+	d_sgl_fini(&sgl, false);
 	start_epoch = epoch + 1;
 }
 
@@ -1693,7 +1693,7 @@ minor_epoch_punch_array(void **state)
 	iod.iod_nr = 1;
 
 	/* Allocate memory for the scatter-gather list */
-	rc = daos_sgl_init(&sgl, 1);
+	rc = d_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
 
 	d_iov_set(&sgl.sg_iovs[0], (void *)first, rex.rx_nr);
@@ -1742,7 +1742,7 @@ tx_end:
 
 	assert_memory_equal(buf, expected, strlen(expected));
 
-	daos_sgl_fini(&sgl, false);
+	d_sgl_fini(&sgl, false);
 	start_epoch = epoch + 1;
 }
 
@@ -1777,7 +1777,7 @@ minor_epoch_punch_rebuild(void **state)
 	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
 	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
 
-	rc = daos_sgl_init(&sgl, 1);
+	rc = d_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
 
 	rex.rx_idx = 0;
@@ -1835,7 +1835,7 @@ minor_epoch_punch_rebuild(void **state)
 	assert_memory_equal(buf, expected, strlen(expected));
 	epoch += 2;
 
-	daos_sgl_fini(&sgl, false);
+	d_sgl_fini(&sgl, false);
 
 	start_epoch = epoch + 1;
 }
@@ -1882,7 +1882,7 @@ test_inprogress_parent_punch(void **state)
 	set_iov(&akey2, &akey2_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
 	set_iov(&akey3, &akey3_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
 
-	rc = daos_sgl_init(&sgl, 1);
+	rc = d_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
 
 	rex.rx_idx = 0;
@@ -1970,7 +1970,7 @@ test_inprogress_parent_punch(void **state)
 	assert_int_equal(rc, 0);
 	assert_memory_equal(buf, expected, strlen(expected));
 
-	daos_sgl_fini(&sgl, false);
+	d_sgl_fini(&sgl, false);
 
 	start_epoch = epoch + 1;
 }
@@ -2111,9 +2111,9 @@ many_tx(void **state)
 
 	memset(&iod, 0, sizeof(iod));
 
-	rc = daos_sgl_init(&sgl, 1);
+	rc = d_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
-	rc = daos_sgl_init(&fetch_sgl, 1);
+	rc = d_sgl_init(&fetch_sgl, 1);
 	assert_int_equal(rc, 0);
 
 	/* Set up dkey and akey */
@@ -2248,8 +2248,8 @@ start_over:
 	printf("Total transactions %d, success %d, writes %d\n", total, success,
 	       writes);
 
-	daos_sgl_fini(&sgl, false);
-	daos_sgl_fini(&fetch_sgl, false);
+	d_sgl_fini(&sgl, false);
+	d_sgl_fini(&fetch_sgl, false);
 	start_epoch = epoch + 1;
 }
 
@@ -2291,9 +2291,9 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 	set_iov(&akey1, &akey1_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
 	set_iov(&akey2, &akey2_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
 
-	rc = daos_sgl_init(&sgl[0], 1);
+	rc = d_sgl_init(&sgl[0], 1);
 	assert_int_equal(rc, 0);
-	rc = daos_sgl_init(&sgl[1], 1);
+	rc = d_sgl_init(&sgl[1], 1);
 	assert_int_equal(rc, 0);
 
 	rex[0].rx_idx = 0;
@@ -2464,8 +2464,8 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 		vts_dtx_end(dth);
 
 	start_epoch = epoch + 1;
-	daos_sgl_fini(&sgl[0], false);
-	daos_sgl_fini(&sgl[1], false);
+	d_sgl_fini(&sgl[0], false);
+	d_sgl_fini(&sgl[1], false);
 }
 
 static void
