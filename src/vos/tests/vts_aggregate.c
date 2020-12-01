@@ -58,7 +58,7 @@ update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	d_iov_set(&dkey_iov, dkey, strlen(dkey));
 	d_iov_set(&akey_iov, akey, strlen(akey));
 
-	rc = daos_sgl_init(&sgl, 1);
+	rc = d_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
 
 	if (type == DAOS_IOD_SINGLE)
@@ -90,7 +90,7 @@ update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 				true);
 	assert_int_equal(rc, 0);
 
-	daos_sgl_fini(&sgl, false);
+	d_sgl_fini(&sgl, false);
 	arg->ta_flags &= ~TF_ZERO_COPY;
 }
 
@@ -113,7 +113,7 @@ fetch_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	d_iov_set(&dkey_iov, dkey, strlen(dkey));
 	d_iov_set(&akey_iov, akey, strlen(akey));
 
-	rc = daos_sgl_init(&sgl, 1);
+	rc = d_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
 
 	if (type == DAOS_IOD_SINGLE)
@@ -140,7 +140,7 @@ fetch_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	assert_int_equal(rc, 0);
 	assert_true(iod.iod_size == 0 || iod.iod_size == iod_size);
 
-	daos_sgl_fini(&sgl, false);
+	d_sgl_fini(&sgl, false);
 	arg->ta_flags &= ~TF_ZERO_COPY;
 }
 
