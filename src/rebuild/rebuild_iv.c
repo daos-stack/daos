@@ -48,7 +48,7 @@ rebuild_iv_alloc_internal(d_sg_list_t *sgl)
 {
 	int	rc;
 
-	rc = daos_sgl_init(sgl, 1);
+	rc = d_sgl_init(sgl, 1);
 	if (rc)
 		return rc;
 
@@ -58,7 +58,7 @@ rebuild_iv_alloc_internal(d_sg_list_t *sgl)
 	sgl->sg_iovs[0].iov_buf_len = sizeof(struct rebuild_iv);
 free:
 	if (rc)
-		daos_sgl_fini(sgl, true);
+		d_sgl_fini(sgl, true);
 	return rc;
 }
 
@@ -92,7 +92,7 @@ rebuild_iv_ent_put(struct ds_iv_entry *entry, void **priv)
 static int
 rebuild_iv_ent_destroy(d_sg_list_t *sgl)
 {
-	daos_sgl_fini(sgl, true);
+	d_sgl_fini(sgl, true);
 	return 0;
 }
 
@@ -280,16 +280,15 @@ int
 rebuild_iv_fetch(void *ns, struct rebuild_iv *rebuild_iv)
 {
 	d_sg_list_t		sgl;
-	d_iov_t		iov;
+	d_iov_t			iov;
 	struct ds_iv_key	key;
 	int			rc;
 
-	memset(&sgl, 0, sizeof(sgl));
-	memset(&iov, 0, sizeof(iov));
 	iov.iov_buf = rebuild_iv;
 	iov.iov_len = sizeof(*rebuild_iv);
 	iov.iov_buf_len = sizeof(*rebuild_iv);
 	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;
 
 	memset(&key, 0, sizeof(key));
@@ -306,7 +305,7 @@ rebuild_iv_update(void *ns, struct rebuild_iv *iv, unsigned int shortcut,
 		  unsigned int sync_mode, bool retry)
 {
 	d_sg_list_t		sgl;
-	d_iov_t		iov;
+	d_iov_t			iov;
 	struct ds_iv_key	key;
 	int			rc;
 

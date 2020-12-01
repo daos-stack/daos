@@ -279,7 +279,7 @@ test_daos_checksummer_with_single_iov_single_chunk(void **state)
 	assert_int_equal(1, *ic_idx2csum(actual, 0, 0));
 
 	daos_csummer_free_ic(csummer, &actual);
-	daos_sgl_fini(&sgl, true);
+	d_sgl_fini(&sgl, true);
 	daos_csummer_destroy(&csummer);
 }
 
@@ -324,7 +324,7 @@ test_daos_checksummer_with_unaligned_recx(void **state)
 	assert_int_equal(1, *ic_idx2csum(actual, 0, 1));
 
 	daos_csummer_free_ic(csummer, &actual);
-	daos_sgl_fini(&sgl, true);
+	d_sgl_fini(&sgl, true);
 	daos_csummer_destroy(&csummer);
 }
 
@@ -365,7 +365,7 @@ test_daos_checksummer_with_mult_iov_single_chunk(void **state)
 	 */
 	assert_int_equal(3, *ic_idx2csum(actual, 0, 0));
 
-	daos_sgl_fini(&sgl, true);
+	d_sgl_fini(&sgl, true);
 	daos_csummer_free_ic(csummer, &actual);
 	daos_csummer_destroy(&csummer);
 
@@ -413,7 +413,7 @@ test_daos_checksummer_with_multi_iov_multi_extents(void **state)
 	assert_int_equal(1, *ic_idx2csum(actual, 0, 0));
 	assert_int_equal(2, *ic_idx2csum(actual, 1, 0));
 
-	daos_sgl_fini(&sgl, true);
+	d_sgl_fini(&sgl, true);
 	daos_csummer_free_ic(csummer, &actual);
 	daos_csummer_destroy(&csummer);
 
@@ -465,7 +465,7 @@ test_daos_checksummer_with_multiple_chunks(void **state)
 	assert_int_equal(15, fake_update_bytes_seen);
 	assert_string_equal("akey|0123|4567|89", fake_update_buf_copy);
 
-	daos_sgl_fini(&sgl, true);
+	d_sgl_fini(&sgl, true);
 	daos_csummer_free_ic(csummer, &actual);
 	daos_csummer_destroy(&csummer);
 }
@@ -601,7 +601,7 @@ test_skip_csum_calculations_when_skip_set(void **state)
 	assert_string_equal("", fake_update_buf_copy); /** update not called */
 
 	daos_csummer_free_ic(csummer, &iod_csums);
-	daos_sgl_fini(&sgl, true);
+	d_sgl_fini(&sgl, true);
 	daos_csummer_destroy(&csummer);
 }
 
@@ -671,7 +671,7 @@ holes_test_case(struct holes_test_args *args)
 	assert_string_equal(args->expected_checksum_updates,
 			    fake_update_buf_copy);
 
-	daos_sgl_fini(&sgl, true);
+	d_sgl_fini(&sgl, true);
 	daos_csummer_free_ic(csummer, &actual);
 	daos_csummer_destroy(&csummer);
 }
@@ -849,7 +849,7 @@ test_compare_checksums(void **state)
 	assert_true(daos_csummer_compare_csum_info(csummer, one->ic_data,
 						   two->ic_data));
 
-	daos_sgl_fini(&sgl, true);
+	d_sgl_fini(&sgl, true);
 	daos_csummer_free_ic(csummer, &one);
 	daos_csummer_free_ic(csummer, &two);
 	daos_csummer_destroy(&csummer);
@@ -1021,7 +1021,7 @@ test_all_algo_basic(void **state)
 		daos_csummer_destroy(&csummer);
 	}
 
-	daos_sgl_fini(&sgl, true);
+	d_sgl_fini(&sgl, true);
 }
 
 static void
@@ -1569,7 +1569,7 @@ simple_sv(void **state)
 	assert_int_equal(1, *ci_idx2csum(actual->ic_data, 0));
 
 	daos_csummer_free_ic(csummer, &actual);
-	daos_sgl_fini(&sgl, true);
+	d_sgl_fini(&sgl, true);
 	daos_csummer_destroy(&csummer);
 }
 
@@ -1605,7 +1605,7 @@ test_compare_sv_checksums(void **state)
 	assert_true(daos_csummer_compare_csum_info(csummer, one->ic_data,
 						   two->ic_data));
 
-	daos_sgl_fini(&sgl, true);
+	d_sgl_fini(&sgl, true);
 	daos_csummer_free_ic(csummer, &one);
 	daos_csummer_free_ic(csummer, &two);
 	daos_csummer_destroy(&csummer);
@@ -1697,7 +1697,7 @@ test_akey_csum(void **state)
 	assert_int_equal(1, *ic_idx2csum(actual, 0, 0));
 
 	daos_csummer_free_ic(csummer, &actual);
-	daos_sgl_fini(&sgl, true);
+	d_sgl_fini(&sgl, true);
 	daos_csummer_destroy(&csummer);
 }
 
