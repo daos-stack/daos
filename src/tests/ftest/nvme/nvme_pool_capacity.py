@@ -217,7 +217,7 @@ class NvmePoolCapacity(TestWithServers):
                 time.sleep(5)
             # Wait to finish the threads
             for thrd in threads:
-                thrd.join()
+                thrd.join(timeout=240)
 
             # Verify the queue and make sure no FAIL for any IOR run
             # Test should fail with ENOSPC.
