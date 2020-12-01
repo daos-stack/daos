@@ -509,6 +509,7 @@ daos_der2errno(int err)
 	case -DER_BADPATH:
 	case -DER_NOTDIR:	return ENOTDIR;
 	case -DER_STALE:	return ESTALE;
+	case -DER_TX_RESTART:	return ERESTART;
 	default:		return EIO;
 	}
 };
