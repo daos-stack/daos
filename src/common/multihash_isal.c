@@ -54,7 +54,10 @@ crc16_init(void **daos_mhash_ctx)
 static int
 crc16_reset(void *daos_mhash_ctx)
 {
-	memset(daos_mhash_ctx, 0, sizeof(uint16_t));
+	uint16_t *crc16 = daos_mhash_ctx;
+
+	*crc16 = 0;
+
 	return 0;
 }
 
@@ -108,7 +111,10 @@ crc32_init(void **daos_mhash_ctx)
 static int
 crc32_reset(void *daos_mhash_ctx)
 {
-	memset(daos_mhash_ctx, 0, sizeof(uint32_t));
+	uint32_t *crc32 = daos_mhash_ctx;
+
+	*crc32 = 0;
+
 	return 0;
 }
 
@@ -162,7 +168,10 @@ crc64_init(void **daos_mhash_ctx)
 static int
 crc64_reset(void *daos_mhash_ctx)
 {
-	memset(daos_mhash_ctx, 0, sizeof(uint64_t));
+	uint64_t *crc64 = daos_mhash_ctx;
+
+	*crc64 = 0;
+
 	return 0;
 }
 

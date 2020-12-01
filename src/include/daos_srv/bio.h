@@ -232,26 +232,33 @@ uint16_t bio_iov2media(const struct bio_iov *biov)
 static inline int
 bio_sgl_init(struct bio_sglist *sgl, unsigned int nr)
 {
-	memset(sgl, 0, sizeof(*sgl));
-
+	sgl->bs_nr_out = 0;
 	sgl->bs_nr = nr;
+
+	if (nr == 0) {
+		sgl->bs_iovs = NULL;
+		return 0;
+	}
+
 	D_ALLOC_ARRAY(sgl->bs_iovs, nr);
+
 	return sgl->bs_iovs == NULL ? -DER_NOMEM : 0;
 }
 
 static inline void
 bio_sgl_fini(struct bio_sglist *sgl)
 {
-	if (sgl->bs_iovs == NULL)
+	if (sgl == NULL || sgl->bs_iovs == NULL)
 		return;
 
 	D_FREE(sgl->bs_iovs);
-	memset(sgl, 0, sizeof(*sgl));
+	sgl->bs_nr_out = 0;
+	sgl->bs_nr = 0;
 }
 
 /*
  * Convert bio_sglist into d_sg_list_t, caller is responsible to
- * call daos_sgl_fini(sgl, false) to free iovs.
+ * call d_sgl_fini(sgl, false) to free iovs.
  */
 static inline int
 bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl, bool deduped_skip)
@@ -261,7 +268,7 @@ bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl, bool deduped_skip)
 	D_ASSERT(sgl != NULL);
 	D_ASSERT(bsgl != NULL);
 
-	rc = daos_sgl_init(sgl, bsgl->bs_nr_out);
+	rc = d_sgl_init(sgl, bsgl->bs_nr_out);
 	if (rc != 0)
 		return rc;
 
