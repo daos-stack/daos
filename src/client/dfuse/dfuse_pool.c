@@ -50,7 +50,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	 * so check that the lookup is relative to the root of the sub-tree, and
 	 * abort if not.
 	 */
-	D_ASSERT(parent->ie_stat.st_ino == parent->ie_dfs->dfs_root);
+	D_ASSERT(parent->ie_stat.st_ino == parent->ie_dfs->dfs_ino);
 
 	D_ALLOC_PTR(dfp);
 	if (!dfp)
@@ -195,7 +195,6 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	dfs->dfs_ino = atomic_fetch_add_relaxed(&fs_handle->dpi_ino_next, 1);
 
-	dfs->dfs_root = dfs->dfs_ino;
 	ie->ie_stat.st_ino = dfs->dfs_ino;
 	dfs->dfs_ops = &dfuse_cont_ops;
 

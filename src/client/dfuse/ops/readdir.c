@@ -160,10 +160,10 @@ create_entry(struct dfuse_projection_info *fs_handle,
 		/* Update the existing object with the new name/parent */
 
 		DFUSE_TRA_DEBUG(inode,
-				"Maybe updating parent inode %lu dfs_root %lu",
-				entry->ino, ie->ie_dfs->dfs_root);
+				"Maybe updating parent inode %lu dfs_ino %lu",
+				entry->ino, ie->ie_dfs->dfs_ino);
 
-		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_root) {
+		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino) {
 			DFUSE_TRA_DEBUG(inode, "Not updating parent");
 		} else {
 			rc = dfs_update_parent(inode->ie_obj, ie->ie_obj,
@@ -350,20 +350,10 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 				stbuf.st_mode |= S_IFDIR;
 			}
 
-			rc = dfs_obj2id(obj, &oid);
-			if (rc) {
-				dfs_release(obj);
-				D_GOTO(reply, rc);
-			}
+			dfs_obj2id(obj, &oid);
 
-			rc = dfuse_compute_inode(oh->doh_ie->ie_dfs,
-						 &oid,
-						 &stbuf.st_ino);
-			if (rc) {
-				DFUSE_TRA_DEBUG(oh, "Problem looking up file");
-				dfs_release(obj);
-				D_GOTO(reply, 0);
-			}
+			dfuse_compute_inode(oh->doh_ie->ie_dfs,
+					    &oid, &stbuf.st_ino);
 
 			if (plus) {
 				struct fuse_entry_param	entry = {0};

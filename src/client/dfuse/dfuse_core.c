@@ -288,8 +288,7 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	ie->ie_stat.st_uid = geteuid();
 	ie->ie_stat.st_gid = getegid();
 	ie->ie_stat.st_mode = 0700 | S_IFDIR;
-	dfs->dfs_root = ie->ie_stat.st_ino;
-	dfs->dfs_ino = dfs->dfs_root;
+	dfs->dfs_ino = ie->ie_stat.st_ino;
 
 	if (dfs->dfs_ops == &dfuse_dfs_ops ||
 	    dfs->dfs_ops == &dfuse_login_ops) {

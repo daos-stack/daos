@@ -187,8 +187,8 @@ struct dfuse_dfs {
 	dfs_t			*dfs_ns;
 	uuid_t			dfs_cont;
 	daos_handle_t		dfs_coh;
-	daos_cont_info_t	dfs_co_info;
-	ino_t			dfs_root;
+
+	/** Inode number of the root of this container */
 	ino_t			dfs_ino;
 	double			dfs_attr_timeout;
 	/* List of dfuse_dfs entries in the dfuse_pool */
@@ -326,7 +326,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					"Invalid call to fuse_reply_err: 0"); \
 			__err = EIO;					\
 		}							\
-		if (__err == ENOTSUP || __err == EIO || __err == EINVAL) \
+		if (__err == EIO || __err == EINVAL) \
 			DFUSE_TRA_WARNING(desc, "Returning %d '%s'",	\
 					  __err, strerror(__err));	\
 		else							\
@@ -553,17 +553,16 @@ struct dfuse_inode_entry {
  * different parts of the inode, then or in the inode number of the root
  * of this dfs object, to avoid conflicts across containers.
  */
-static inline int
+static inline void
 dfuse_compute_inode(struct dfuse_dfs *dfs,
 		    daos_obj_id_t *oid,
 		    ino_t *_ino)
 {
 	uint64_t hi;
 
-	hi = (oid->hi & (-1ULL >> 32)) | (dfs->dfs_root << 48);
+	hi = (oid->hi & (-1ULL >> 32)) | (dfs->dfs_ino << 48);
 
 	*_ino = hi ^ (oid->lo << 32);
-	return 0;
 };
 
 int

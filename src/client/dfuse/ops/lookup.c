@@ -79,13 +79,13 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 
 		DFUSE_TRA_DEBUG(ie, "inode dfs %p %ld hi %#lx lo %#lx",
 				inode->ie_dfs,
-				inode->ie_dfs->dfs_root,
+				inode->ie_dfs->dfs_ino,
 				inode->ie_oid.hi,
 				inode->ie_oid.lo);
 
 		DFUSE_TRA_DEBUG(ie, "inode dfs %p %ld hi %#lx lo %#lx",
 				ie->ie_dfs,
-				ie->ie_dfs->dfs_root,
+				ie->ie_dfs->dfs_ino,
 				ie->ie_oid.hi,
 				ie->ie_oid.lo);
 
@@ -108,10 +108,10 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		}
 
 		DFUSE_TRA_DEBUG(inode,
-				"Maybe updating parent inode %#lx dfs_root %#lx",
-				entry.ino, ie->ie_dfs->dfs_root);
+				"Maybe updating parent inode %#lx dfs_ino %#lx",
+				entry.ino, ie->ie_dfs->dfs_ino);
 
-		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_root) {
+		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino) {
 			DFUSE_TRA_DEBUG(inode, "Not updating parent");
 		} else {
 			rc = dfs_update_parent(inode->ie_obj, ie->ie_obj,
@@ -247,7 +247,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 
 		/* Try to open the DAOS container (the mountpoint) */
 		rc = daos_cont_open(dfp->dfp_poh, dfs->dfs_cont, DAOS_COO_RW,
-				    &dfs->dfs_coh, &dfs->dfs_co_info,
+				    &dfs->dfs_coh, NULL,
 				    NULL);
 		if (rc) {
 			DFUSE_LOG_ERROR("Failed container open (%d)",
@@ -266,7 +266,6 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 
 		dfs->dfs_ino = atomic_fetch_add_relaxed(&fs_handle->dpi_ino_next,
 							1);
-		dfs->dfs_root = dfs->dfs_ino;
 		dfs->dfs_dfp = dfp;
 	}
 
@@ -290,7 +289,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	ie->ie_dfs = dfs;
 
 	DFUSE_TRA_INFO(dfs, "UNS entry point activated, root %lu",
-		       dfs->dfs_root);
+		       dfs->dfs_ino);
 
 	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 	return 0;

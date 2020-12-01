@@ -531,7 +531,7 @@ main(int argc, char **argv)
 			/** Try to open the DAOS container (the mountpoint) */
 			rc = daos_cont_open(dfp->dfp_poh, dfs->dfs_cont,
 					    DAOS_COO_RW, &dfs->dfs_coh,
-					    &dfs->dfs_co_info, NULL);
+					    NULL, NULL);
 			if (rc) {
 				printf("Failed container open (%d)\n", rc);
 				D_GOTO(out_dfs, ret = rc);
