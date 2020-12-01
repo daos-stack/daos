@@ -50,14 +50,16 @@ if ${NLT:-false}; then
 else
     ls
     ls test_results || true
-    IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" RUN_TEST_FILTER="vos_test" utils/run_test.sh
+    IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" utils/run_test.sh
     ls
+    ls test_results || true
     if [ "$WITH_VALGRIND" == 'memcheck' ]; then
 	cp test_results/unit-test-*.memcheck.xml .
 	# Debugging
+	ls test_results || true
 	ls unit-test-*.memcheck.xml
 	for i in $(ls unit-test-*.memcheck.xml); do
-	    kind="$(grep "<kind>" $i || true)"
+	    kind="$(grep "<kind>" "$i" || true)"
 	    if [ ! -z "$kind" ]; then
 	        echo ">> $i";
 	        echo $kind;
@@ -67,7 +69,7 @@ else
         echo "marj>> xmls content"
         for i in $(ls unit-test-*.memcheck.xml); do
             echo ">> file is $i"
-            cat $i 
+            cat "$i" 
         done
     fi
 fi
