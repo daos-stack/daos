@@ -274,27 +274,3 @@ class CopySymlinksTest(DataMoverTestBase):
             "popd"
         ]
         self.execute_cmd_list(cmd_list)
-
-    def execute_cmd_list(self, cmd_list):
-        """
-        Executes a list of commands.
-
-        Args:
-            cmd_list (list): A list of strings of commands
-        """
-        cmd = "; \\\n".join(cmd_list)
-        self.execute_cmd(cmd)
-
-    # TODO move this to TestBase and formalize
-    def run_diff(self, src, dst, dereference):
-        """
-        Runs diff on two directories.
-
-        Args:
-            dereference (bool): Whether or not diff should dereference
-                symlinks.
-        """
-        if dereference:
-            self.execute_cmd("diff -r " + src + " " + dst)
-        else:
-            self.execute_cmd("diff -r --no-dereference " + src + " " + dst)

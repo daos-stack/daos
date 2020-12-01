@@ -190,8 +190,9 @@ class DataMoverTestBase(IorTestBase):
 
     def new_posix_dir(self):
         """Creates and returns a new, unique, POSIX path"""
-        dir_name = "dir{}".join(str(self._new_posix_dir_v))
+        dir_name = "dir{}".format(str(self._new_posix_dir_v))
         path = join(self.posix_path, dir_name)
+        self._new_posix_dir_v += 1
 
         # Create the directory
         cmd = "mkdir -p '{}'".format(path)
@@ -418,3 +419,29 @@ class DataMoverTestBase(IorTestBase):
                 self.fail("Expected {}: {}".format(s, test_desc))
 
         return result
+
+    def execute_cmd_list(self, cmd_list):
+        """
+        Executes a list of commands.
+        Appends a newline to the end of each command for readability.
+
+        Args:
+            cmd_list (list): A list of strings of commands
+        """
+        cmd = "; \\\n".join(cmd_list)
+        self.execute_cmd(cmd)
+
+    def run_diff(self, path1, path2, dereference=False):
+        """
+        Runs diff on two files/directories.
+
+        Args:
+            path1 (str): The first file/directory
+            path2 (str): The second file/directory
+            dereference (bool, optional): Whether or not diff should dereference
+                symlinks. Defaults to False.
+        """
+        cmd = "diff -r "
+        if not dereference:
+            cmd += "--no-dereference "
+        self.execute_cmd(cmd + str(path1) + " " + str(path2))
