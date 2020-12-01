@@ -2121,6 +2121,9 @@ vos_check_akeys(int iod_nr, daos_iod_t *iods)
 {
 	int	i, j;
 
+	if (iod_nr == 0)
+		return 0;
+
 	for (i = 0; i < iod_nr - 1; i++) {
 		for (j = i + 1; j < iod_nr; j++) {
 			if (iods[i].iod_name.iov_len !=
