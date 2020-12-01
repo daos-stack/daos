@@ -181,8 +181,10 @@ rdb_oid_to_uoid(rdb_oid_t oid, daos_unit_oid_t *uoid)
 {
 	daos_ofeat_t feat = 0;
 
-	memset(uoid, 0, sizeof(*uoid));
 	uoid->id_pub.lo = oid & ~RDB_OID_CLASS_MASK;
+	uoid->id_pub.hi = 0;
+	uoid->id_shard  = 0;
+	uoid->id_pad_32 = 0;
 	/* Since we don't really use d-keys, use HASHED for both classes. */
 	if ((oid & RDB_OID_CLASS_MASK) != RDB_OID_CLASS_GENERIC)
 		feat = DAOS_OF_AKEY_UINT64;
@@ -244,9 +246,10 @@ rdb_vos_set_iods(enum rdb_vos_op op, int n, d_iov_t akeys[],
 	int i;
 
 	for (i = 0; i < n; i++) {
-		memset(&iods[i], 0, sizeof(iods[i]));
 		iods[i].iod_name = akeys[i];
 		iods[i].iod_type = DAOS_IOD_SINGLE;
+		iods[i].iod_size = 0;
+		iods[i].iod_recxs = NULL;
 		if (op == RDB_VOS_UPDATE) {
 			D_ASSERT(values[i].iov_len > 0);
 			iods[i].iod_size = values[i].iov_len;
@@ -262,8 +265,8 @@ rdb_vos_set_sgls(enum rdb_vos_op op, int n, d_iov_t values[],
 	int i;
 
 	for (i = 0; i < n; i++) {
-		memset(&sgls[i], 0, sizeof(sgls[i]));
 		sgls[i].sg_nr = 1;
+		sgls[i].sg_nr_out = 0;
 		if (op == RDB_VOS_UPDATE)
 			D_ASSERT(values[i].iov_len > 0);
 		sgls[i].sg_iovs = &values[i];
