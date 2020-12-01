@@ -14,6 +14,7 @@ import json
 import signal
 import stat
 import argparse
+import tabulate
 import subprocess
 import tempfile
 import pickle
@@ -592,7 +593,13 @@ class DFuse():
 
     instance_num = 0
 
-    def __init__(self, daos, conf, pool=None, container=None, path=None):
+    def __init__(self,
+                 daos,
+                 conf,
+                 pool=None,
+                 container=None,
+                 path=None,
+                 caching=False):
         if path:
             self.dir = path
         else:
@@ -603,6 +610,7 @@ class DFuse():
         self.conf = conf
         self.cores = None
         self._daos = daos
+        self.caching = caching
         self._sp = None
 
         prefix = 'dnt_dfuse_{}_'.format(get_inc_id())
@@ -620,7 +628,6 @@ class DFuse():
         dfuse_bin = os.path.join(self.conf['PREFIX'], 'bin', 'dfuse')
 
         single_threaded = False
-        caching = False
 
         pre_inode = os.stat(self.dir).st_ino
 
@@ -650,7 +657,7 @@ class DFuse():
         if single_threaded:
             cmd.append('-S')
 
-        if caching:
+        if self.caching:
             cmd.append('--enable-caching')
 
         if self.pool:
@@ -1325,6 +1332,12 @@ def check_readdir_perf(server, conf):
     a table of results.
     """
 
+    headers = ['count', 'create\ndirs', 'create\nfiles']
+    headers.extend(['dirs', 'files', 'dirs\nwith stat', 'files\nwith stat'])
+    headers.extend(['caching\n1st', 'caching\n2nd'])
+
+    results = []
+
     def make_dirs(parent, count):
         """Populate the test directory"""
         print('Populating to {}'.format(count))
@@ -1348,9 +1361,9 @@ def check_readdir_perf(server, conf):
                     os.mkdir(os.path.join(dir_dir, str(i)))
                 except FileExistsError:
                     pass
-            elapsed = time.time() - start_all
+            dir_time = time.time() - start_all
             print('Creating {} dirs took {:.2f}'.format(count,
-                                                        elapsed))
+                                                        dir_time))
             os.rename(dir_dir, t_dir)
 
         if not os.path.exists(t_file):
@@ -1362,21 +1375,19 @@ def check_readdir_perf(server, conf):
             for i in range(count):
                 f = open(os.path.join(file_dir, str(i)), 'w')
                 f.close()
-            elapsed = time.time() - start
-            print('Creating {} files took {:.2f}'.format(i + 1,
-                                                         elapsed))
+            file_time = time.time() - start
+            print('Creating {} files took {:.2f}'.format(count,
+                                                         file_time))
             os.rename(file_dir, t_file)
 
-        return time.time() - start_all
+        return [dir_time, file_time]
 
-    def print_results(results):
+    def print_results():
         """Display the results"""
-        for count in results:
-            line = '{:-10d} '.format(count)
-            rd = results[count]
-            for name, value in rd.items():
-                line += '{} {:.2f} '.format(name, value)
-            print(line)
+
+        print(tabulate.tabulate(results,
+                                headers=headers,
+                                floatfmt=".2f"))
 
     pools = get_pool_list()
 
@@ -1397,16 +1408,15 @@ def check_readdir_perf(server, conf):
         os.mkdir(parent)
     except FileExistsError:
         pass
-    create_time = make_dirs(parent, count)
+    create_times = make_dirs(parent, count)
     dfuse.stop()
 
-    results = OrderedDict()
-    results[count] = OrderedDict()
-    results[count]['create_time'] = create_time
     all_start = time.time()
 
     while True:
 
+        row = [count]
+        row.extend(create_times)
         dfuse = DFuse(server, conf, pool=pool, container=container)
         dir_dir = os.path.join(dfuse.dir,
                                'dirs.{}'.format(count))
@@ -1414,20 +1424,20 @@ def check_readdir_perf(server, conf):
                                 'files.{}'.format(count))
         dfuse.start()
         start = time.time()
-        subprocess.run(['/bin/ls', '-U', dir_dir], stdout=subprocess.PIPE)
+        subprocess.run(['/bin/ls', dir_dir], stdout=subprocess.PIPE)
         elapsed = time.time() - start
         print('processed {} dirs in {:.2f} seconds'.format(count,
                                                            elapsed))
-        results[count]['dirs'] = elapsed
+        row.append(elapsed)
         dfuse.stop()
         dfuse = DFuse(server, conf, pool=pool, container=container)
         dfuse.start()
         start = time.time()
-        subprocess.run(['/bin/ls', '-U', file_dir], stdout=subprocess.PIPE)
+        subprocess.run(['/bin/ls', file_dir], stdout=subprocess.PIPE)
         elapsed = time.time() - start
         print('processed {} files in {:.2f} seconds'.format(count,
                                                             elapsed))
-        results[count]['files'] = elapsed
+        row.append(elapsed)
         dfuse.stop()
 
         dfuse = DFuse(server, conf, pool=pool, container=container)
@@ -1437,37 +1447,56 @@ def check_readdir_perf(server, conf):
         elapsed = time.time() - start
         print('processed {} dirs in {:.2f} seconds'.format(count,
                                                            elapsed))
-        results[count]['dirs_with_stat'] = elapsed
+        row.append(elapsed)
         dfuse.stop()
         dfuse = DFuse(server, conf, pool=pool, container=container)
+        dfuse.start()
+        start = time.time()
+        # Use sort by time here so ls calls stat, if you run ls -l then it will
+        # also call getxattr twice which skews the figures.
+        subprocess.run(['/bin/ls', '-t', file_dir], stdout=subprocess.PIPE)
+        elapsed = time.time() - start
+        print('processed {} files in {:.2f} seconds'.format(count,
+                                                            elapsed))
+        row.append(elapsed)
+        dfuse.stop()
+
+        # Test with caching enabled.  Check the file directory, and do it twice
+        # without restarting, to see the effect of populating the cache, and
+        # reading from the cache.
+        dfuse = DFuse(server, conf, pool=pool, container=container, caching=True)
         dfuse.start()
         start = time.time()
         subprocess.run(['/bin/ls', '-t', file_dir], stdout=subprocess.PIPE)
         elapsed = time.time() - start
         print('processed {} files in {:.2f} seconds'.format(count,
                                                             elapsed))
-        results[count]['files_with_stat'] = elapsed
+        row.append(elapsed)
+        start = time.time()
+        subprocess.run(['/bin/ls', '-t', file_dir], stdout=subprocess.PIPE)
+        elapsed = time.time() - start
+        print('processed {} files in {:.2f} seconds'.format(count,
+                                                            elapsed))
+        row.append(elapsed)
+        results.append(row)
 
         elapsed = time.time() - all_start
         if elapsed > 5 * 60:
             dfuse.stop()
             break
 
-        print_results(results)
+        print_results()
         count *= 2
-        results[count] = OrderedDict()
-        create_time = make_dirs(dfuse.dir, count)
-        results[count]['create_time'] = create_time
+        create_times = make_dirs(dfuse.dir, count)
         dfuse.stop()
 
     run_daos_cmd(conf, ['container',
                         'destroy',
-                        '--svc', '0',
                         '--pool',
                         pool,
                         '--cont',
                         container])
-    print_results(results)
+    print_results()
 
 def test_pydaos_kv(server, conf):
     """Test the KV interface"""
