@@ -671,7 +671,7 @@ out:
 	if (obj_class && obj_class != default_class)
 		D_FREE(obj_class);
 
-	if (fd > 0)
+	if (fd >= 0)
 		close(fd);
 	return rc;
 }
