@@ -919,7 +919,7 @@ static int
 migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 			  struct ds_cont_child *ds_cont)
 {
-	d_sg_list_t	 sgls[DSS_ENUM_UNPACK_MAX_IODS], *sgl;
+	d_sg_list_t	 sgls[DSS_ENUM_UNPACK_MAX_IODS];
 	daos_handle_t	 ioh;
 	struct daos_oclass_attr *oca;
 	int		 rc, i, ret, sgl_cnt = 0;
@@ -953,9 +953,8 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 
 		bsgl = vos_iod_sgl_at(ioh, i);
 		D_ASSERT(bsgl != NULL);
-		sgl = &sgls[i];
 
-		rc = bio_sgl_convert(bsgl, sgl, false);
+		rc = bio_sgl_convert(bsgl, &sgls[i], false);
 		if (rc)
 			goto post;
 		sgl_cnt++;
@@ -976,10 +975,8 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		D_ERROR("migrate dkey "DF_KEY" failed rc %d\n",
 			DP_KEY(&mrone->mo_dkey), rc);
 post:
-	for (i = 0; i < sgl_cnt; i++) {
-		sgl = &sgls[i];
-		daos_sgl_fini(sgl, false);
-	}
+	for (i = 0; i < sgl_cnt; i++)
+		d_sgl_fini(&sgls[i], false);
 
 	if (DAOS_OC_IS_EC(oca))
 		mrone_recx_daos2_vos(mrone, oca);
@@ -1159,7 +1156,7 @@ migrate_one_destroy(struct migrate_one *mrone)
 
 	if (mrone->mo_sgls) {
 		for (i = 0; i < mrone->mo_iod_alloc_num; i++)
-			daos_sgl_fini(&mrone->mo_sgls[i], true);
+			d_sgl_fini(&mrone->mo_sgls[i], true);
 		D_FREE(mrone->mo_sgls);
 	}
 
@@ -1762,7 +1759,7 @@ migrate_one_epoch_object(daos_handle_t oh, daos_epoch_range_t *epr,
 		num = KDS_NUM;
 		daos_anchor_set_flags(&dkey_anchor,
 				      DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
-				      DIOF_TO_SPEC_SHARD);
+				      DIOF_TO_SPEC_GROUP);
 retry:
 		rc = dsc_obj_list_obj(oh, epr, NULL, NULL, &size,
 				     &num, kds, &sgl, &anchor,
@@ -1800,7 +1797,7 @@ retry:
 			   DIOF_TO_LEADER) {
 			daos_anchor_set_flags(&dkey_anchor,
 					      DIOF_WITH_SPEC_EPOCH |
-					      DIOF_TO_SPEC_SHARD);
+					      DIOF_TO_SPEC_GROUP);
 			D_DEBUG(DB_REBUILD, "No leader available %d retry"
 				DF_UOID"\n", rc, DP_UOID(arg->oid));
 			D_GOTO(retry, rc);

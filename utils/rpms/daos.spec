@@ -10,8 +10,8 @@
 %endif
 
 Name:          daos
-Version:       1.1.1
-Release:       8%{?relval}%{?dist}
+Version:       1.1.2
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -408,6 +408,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Tue Dec 01 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.2-1
+- Version bump up to 1.1.2
+
 * Tue Nov 17 2020 Li Wei <wei.g.li@intel.com> 1.1.1-8
 - Require raft-devel 0.7.0 that changes log indices and terms to 63-bit
 

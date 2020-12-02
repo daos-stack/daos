@@ -75,3 +75,18 @@ func MockHostAddr(varIdx ...int32) *net.TCPAddr {
 
 	return hostAddrs[idx]
 }
+
+// MockPCIAddr returns mock PCIAddr values for use in tests.
+func MockPCIAddr(varIdx ...int32) string {
+	idx := GetIndex(varIdx...)
+
+	return fmt.Sprintf("0000:%02d:00.0", idx)
+}
+
+func MockPCIAddrs(num int) (addrs []string) {
+	for i := 1; i < num+1; i++ {
+		addrs = append(addrs, MockPCIAddr(int32(i)))
+	}
+
+	return
+}
