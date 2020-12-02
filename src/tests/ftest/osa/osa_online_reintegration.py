@@ -289,6 +289,7 @@ class OSAOnlineReintegration(TestWithServers):
             self.pool.display_pool_daos_space(display_string)
             pool[val].destroy()
 
+    @skipForTicket("DAOS-6123")
     def test_osa_online_reintegration(self):
         """Test ID: DAOS-5075.
 

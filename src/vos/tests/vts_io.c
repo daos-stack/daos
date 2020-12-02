@@ -1698,7 +1698,7 @@ io_sgl_update(void **state)
 	iod.iod_nr = 1;
 
 	/* Allocate memory for the scatter-gather list */
-	rc = daos_sgl_init(&sgl, SGL_TEST_BUF_COUNT);
+	rc = d_sgl_init(&sgl, SGL_TEST_BUF_COUNT);
 	assert_int_equal(rc, 0);
 
 	/* Allocate memory for the SGL_TEST_BUF_COUNT buffers */
@@ -1718,7 +1718,7 @@ io_sgl_update(void **state)
 	/* Write/Update */
 	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 1, 0, 0, &dkey, 1,
 			    &iod, NULL, &sgl);
-	daos_sgl_fini(&sgl, true);
+	d_sgl_fini(&sgl, true);
 
 	if (rc) {
 		print_error("Failed to update: "DF_RC"\n", DP_RC(rc));
@@ -1728,7 +1728,7 @@ io_sgl_update(void **state)
 
 	/* Now fetch */
 	memset(fetch_buf, 0, SGL_TEST_BUF_COUNT * SGL_TEST_BUF_SIZE);
-	rc = daos_sgl_init(&sgl, 1);
+	rc = d_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
 	d_iov_set(sgl.sg_iovs, &fetch_buf[0], SGL_TEST_BUF_COUNT *
 		     SGL_TEST_BUF_SIZE);
@@ -1738,7 +1738,7 @@ io_sgl_update(void **state)
 		print_error("Failed to fetch: "DF_RC"\n", DP_RC(rc));
 		goto exit;
 	}
-	daos_sgl_fini(&sgl, false);
+	d_sgl_fini(&sgl, false);
 	/* Test if ground truth matches fetch_buf */
 	assert_memory_equal(ground_truth, fetch_buf, SGL_TEST_BUF_COUNT *
 			    SGL_TEST_BUF_SIZE);
@@ -1790,7 +1790,7 @@ io_sgl_fetch(void **state)
 	memcpy(&ground_truth[0], &update_buf[0], SGL_TEST_BUF_COUNT *
 		SGL_TEST_BUF_SIZE);
 	/* Attach the buffer to the scatter-gather list */
-	daos_sgl_init(&sgl, 1);
+	d_sgl_init(&sgl, 1);
 	d_iov_set(sgl.sg_iovs, &update_buf[0], SGL_TEST_BUF_COUNT *
 		     SGL_TEST_BUF_SIZE);
 
@@ -1799,11 +1799,11 @@ io_sgl_fetch(void **state)
 			    &iod, NULL, &sgl);
 	if (rc)
 		goto exit;
-	daos_sgl_fini(&sgl, false);
+	d_sgl_fini(&sgl, false);
 	inc_cntr(arg->ta_flags);
 
 	/* Allocate memory for the scatter-gather list */
-	daos_sgl_init(&sgl, SGL_TEST_BUF_COUNT);
+	d_sgl_init(&sgl, SGL_TEST_BUF_COUNT);
 
 	/* Allocate memory for the SGL_TEST_BUF_COUNT fetch buffers */
 	for (i = 0; i < SGL_TEST_BUF_COUNT; i++) {
@@ -1824,7 +1824,7 @@ io_sgl_fetch(void **state)
 		assert_memory_equal(&ground_truth[i * SGL_TEST_BUF_SIZE],
 			fetch_buffs[i], SGL_TEST_BUF_SIZE);
 	}
-	daos_sgl_fini(&sgl, true);
+	d_sgl_fini(&sgl, true);
 exit:
 	assert_int_equal(rc, 0);
 }
