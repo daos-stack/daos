@@ -787,7 +787,7 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case MGMT__POOL_SET_PROP_REQ__VALUE_STRVAL:
 		if (req->strval == NULL) {
 			D_ERROR("string value is NULL\n");
-			D_GOTO(out, rc = -DER_INVAL);
+			D_GOTO(out, rc = -DER_PROTO);
 		}
 
 		entry = &new_prop->dpp_entries[0];

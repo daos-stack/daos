@@ -166,13 +166,13 @@ type poolCmd struct {
 
 // resolveID attempts to resolve the supplied pool ID into a UUID.
 func (cmd *poolCmd) resolveID() error {
+	if cmd.ID == "" {
+		return errors.New("no pool ID supplied")
+	}
+
 	if _, err := uuid.Parse(cmd.ID); err == nil {
 		cmd.UUID = cmd.ID
 		return nil
-	}
-
-	if cmd.ID == "" {
-		return errors.New("no pool ID supplied")
 	}
 
 	ctx := context.Background()

@@ -372,10 +372,7 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			    strlen(entry->dpe_str) == 0) {
 				entry = daos_prop_entry_get(&pool_prop_default,
 							    entry->dpe_type);
-				if (entry == NULL) {
-					D_ERROR("no default label property");
-					return -DER_INVAL;
-				}
+				D_ASSERT(entry != NULL);
 			}
 			d_iov_set(&value, entry->dpe_str,
 				     strlen(entry->dpe_str));

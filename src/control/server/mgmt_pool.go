@@ -565,11 +565,21 @@ func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq)
 		}
 
 		if label != "" {
-			// Setting new label, must be unique
-			_, err := svc.sysdb.FindPoolServiceByLabel(label)
-			if err == nil {
+			// If we're setting a label, first check to see
+			// if a pool has already had the label applied.
+			found, err := svc.sysdb.FindPoolServiceByLabel(label)
+			if found != nil && found.PoolUUID != ps.PoolUUID {
+				// If we find a pool with this label but the
+				// UUID differs, then we should fail the request.
 				return nil, FaultPoolDuplicateLabel(label)
 			}
+			if err != nil && !system.IsPoolNotFound(err) {
+				// If the query failed, then we should fail
+				// the request.
+				return nil, err
+			}
+			// Otherwise, allow the label to be set again on the same
+			// pool for idempotency.
 		}
 
 		defer func() {

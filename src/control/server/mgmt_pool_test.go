@@ -1209,15 +1209,21 @@ func TestServer_MgmtSvc_PoolSetProp_Label(t *testing.T) {
 	defaultLabel := "test-label"
 
 	for name, tc := range map[string]struct {
-		label  string
-		expErr error
+		poolUUID string
+		label    string
+		expErr   error
 	}{
 		"labels must be unique": {
-			label:  defaultLabel,
-			expErr: FaultPoolDuplicateLabel(defaultLabel),
+			poolUUID: common.MockUUID(3),
+			label:    defaultLabel,
+			expErr:   FaultPoolDuplicateLabel(defaultLabel),
 		},
 		"success": {
 			label: "unique-label",
+		},
+		"pool label application should be idempotent": {
+			poolUUID: mockUUID,
+			label:    defaultLabel,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1233,6 +1239,9 @@ func TestServer_MgmtSvc_PoolSetProp_Label(t *testing.T) {
 					Strval: tc.label,
 				}}, nil)
 			addTestPools(t, ms.sysdb, mockUUID)
+			if tc.poolUUID != "" && tc.poolUUID != mockUUID {
+				addTestPools(t, ms.sysdb, tc.poolUUID)
+			}
 			ps, err := ms.sysdb.FindPoolServiceByUUID(uuid.MustParse(mockUUID))
 			if err != nil {
 				t.Fatal(err)
@@ -1243,16 +1252,23 @@ func TestServer_MgmtSvc_PoolSetProp_Label(t *testing.T) {
 			}
 
 			req := propWithStrVal(propWithName(new(mgmtpb.PoolSetPropReq), "label"), tc.label)
-			req.Uuid = mockUUID
+			req.Uuid = tc.poolUUID
+			if req.Uuid == "" {
+				req.Uuid = mockUUID
+			}
 			_, gotErr := ms.PoolSetProp(context.TODO(), req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
-			_, err = ms.sysdb.FindPoolServiceByLabel(tc.label)
+			found, err := ms.sysdb.FindPoolServiceByLabel(tc.label)
 			if err != nil {
 				t.Fatal(err)
+			}
+
+			if found.PoolUUID != ps.PoolUUID {
+				t.Fatalf("after labeling, found pool UUID doesn't match original: %s != %s", found.PoolUUID, ps.PoolUUID)
 			}
 		})
 	}
