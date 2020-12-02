@@ -30,6 +30,20 @@
 #include <daos/checksum.h>
 #include <daos/dtx.h>
 
+int
+daos_sgl_init(d_sg_list_t *sgl, unsigned int nr)
+{
+	D_ASSERTF(0, "This function is deprecated.  Use d_sgl_init\n");
+	return 0;
+}
+
+int
+daos_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
+{
+	D_ASSERTF(0, "This function is deprecated.  Use d_sgl_fini\n");
+	return 0;
+}
+
 static int
 daos_sgls_copy_internal(d_sg_list_t *dst_sgl, uint32_t dst_nr,
 			d_sg_list_t *src_sgl, uint32_t src_nr,
