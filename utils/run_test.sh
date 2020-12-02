@@ -28,6 +28,7 @@ lock_test()
 {
     (
         # clean up all files except the lock
+	set -x
         flock 9
         find /mnt/daos -maxdepth 1 -mindepth 1 \! -name jenkins.lock -print0 | \
              xargs -0r rm -vrf
@@ -99,7 +100,7 @@ if [ -d "/mnt/daos" ]; then
             [ -z "$VALGRIND_SUPP" ] &&
                 VALGRIND_SUPP="$(pwd)/utils/test_memcheck.supp"
             VALGRIND_XML_PATH="test_results/unit-test-%p.memcheck.xml"
-            VALGRIND_CMD="valgrind --leak-check=full --show-reachable=yes \
+            export VALGRIND_CMD="valgrind --leak-check=full --show-reachable=yes \
                                    --error-limit=no \
                                    --suppressions=${VALGRIND_SUPP} \
                                    --xml=yes --xml-file=${VALGRIND_XML_PATH}"
@@ -159,6 +160,7 @@ if [ -d "/mnt/daos" ]; then
     run_test src/vos/tests/evt_ctl.sh pmem
     unset USE_VALGRIND
     unset VALGRIND_SUPP
+    cat /mnt/daos/jenkins.lock
 
     # Reporting
     if [ $failed -eq 0 ]; then
