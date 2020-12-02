@@ -35,6 +35,39 @@
 #include "test_group_rpc.h"
 #include "test_group_np_common.h"
 
+typedef void
+(*crt_event_cb) (d_rank_t rank, enum crt_event_source src,
+   enum crt_event_type type, void *arg);
+
+
+// Callback to process a SWIM message
+static void
+swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
+       enum crt_event_type type, void *arg)
+{
+		DBG_PRINT("Cart callback event: "
+							"rank = %d, "
+							"crt_event_source = %d, "
+							"crt_event_type = %d\n",
+							 rank, src, type);
+
+		// Rank 2 has been killed, so we expect it to be CRT_EVT_DEAD
+		if (rank == 2 ) {
+			if (type == CRT_EVT_DEAD) {
+				D_ASSERTF(type == CRT_EVT_DEAD,
+									"SWIM protocol should notify CRT_EVT_DEAD for rank #2.\n");
+				exit(0);
+			} else {
+				exit(1);
+			}
+		}
+
+		return;
+}
+
+// Dummy, unused variable to satisfy crt_register_event_cb
+int a = 1234567;
+
 void
 test_run(d_rank_t my_rank)
 {
@@ -45,6 +78,19 @@ test_run(d_rank_t my_rank)
 
 	tc_srv_start_basic(test_g.t_local_group_name, &test_g.t_crt_ctx[0],
 			   &test_g.t_tid[0], &grp, &grp_size, NULL);
+
+  // Register event callback after CaRT has initialized
+	if (test_g.t_register_swim_callback) {
+		// Give server time to load, so that swim callback can register
+		sleep(10);
+
+		crt_register_event_cb(swim_crt_event_cb, &a);
+	}
+
+	// Trigger the CRT_EVS_SWIM CRT_EVT_ALIVE event
+	if (my_rank == 2) {
+		exit(0);
+	}
 
 	DBG_PRINT("Basic server started, group_size=%d\n", grp_size);
 	rc = sem_init(&test_g.t_token_to_proceed, 0, 0);

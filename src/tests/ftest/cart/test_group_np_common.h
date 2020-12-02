@@ -39,6 +39,7 @@ struct test_t {
 	int			 t_shut_only;
 	bool			 t_save_cfg;
 	bool			 t_use_cfg;
+	bool			 t_register_swim_callback;
 	char			*t_cfg_path;
 	uint32_t		 t_hold_time;
 	unsigned int		 t_srv_ctx_num;
@@ -302,13 +303,15 @@ test_parse_args(int argc, char **argv)
 		{"shut_only", no_argument, &test_g.t_shut_only, 1},
 		{"cfg_path", required_argument, 0, 's'},
 		{"use_cfg", required_argument, 0, 'u'},
+		{"register_swim_callback", required_argument, 0, 'r'},
 		{0, 0, 0, 0}
 	};
 
 	test_g.t_use_cfg = true;
+	test_g.t_register_swim_callback = false;
 
 	while (1) {
-		rc = getopt_long(argc, argv, "n:a:c:h:u:", long_options,
+		rc = getopt_long(argc, argv, "n:a:c:h:u:r:", long_options,
 				 &option_index);
 
 		if (rc == -1)
@@ -342,6 +345,9 @@ test_parse_args(int argc, char **argv)
 		case 'h':
 			test_g.t_hold = 1;
 			test_g.t_hold_time = atoi(optarg);
+			break;
+		case 'r':
+			test_g.t_register_swim_callback = atoi(optarg);
 			break;
 		case 's':
 			test_g.t_save_cfg = true;
