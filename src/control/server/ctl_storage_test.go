@@ -27,7 +27,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -72,7 +71,36 @@ func TestServer_CtlSvc_checkCfgBdevs(t *testing.T) {
 		"vmd with no backing devices with addr in cfg bdev list": {
 			vmdEnabled:     true,
 			inCfgBdevLists: [][]string{{"0000:d7:05.5"}},
-			expErr:         errors.New("unexpected empty bdev list"),
+			expErr:         FaultBdevNotFound([]string{"0000:d7:05.5"}),
+		},
+		"vmd and non vmd with no backing devices with addr in cfg bdev list": {
+			vmdEnabled:     true,
+			inCfgBdevLists: [][]string{{"0000:8a:00.0", "0000:d7:05.5"}},
+			expErr:         FaultBdevNotFound([]string{"0000:d7:05.5"}),
+		},
+		"vmd and non vmd in scan with addr in cfg bdev list": {
+			vmdEnabled:     true,
+			inCfgBdevLists: [][]string{{"0000:8a:00.0", "0000:8d:00.0", "0000:5d:05.5"}},
+			expCfgBdevLists: [][]string{
+				{"0000:8a:00.0", "0000:8d:00.0", "5d0505:01:00.0", "5d0505:03:00.0"},
+			},
+		},
+		"vmd and non vmd in scan with addr in cfg bdev list on multiple io servers": {
+			numIOSrvs:  2,
+			vmdEnabled: true,
+			inScanResp: &bdev.ScanResponse{
+				Controllers: append(scanCtrlrs,
+					&storage.NvmeController{PciAddr: "d70505:01:00.0"},
+					&storage.NvmeController{PciAddr: "d70505:02:00.0"}),
+			},
+			inCfgBdevLists: [][]string{
+				{"0000:90:00.0", "0000:d8:00.0", "0000:d7:05.5"},
+				{"0000:8a:00.0", "0000:8d:00.0", "0000:5d:05.5"},
+			},
+			expCfgBdevLists: [][]string{
+				{"0000:90:00.0", "0000:d8:00.0", "d70505:01:00.0", "d70505:02:00.0"},
+				{"0000:8a:00.0", "0000:8d:00.0", "5d0505:01:00.0", "5d0505:03:00.0"},
+			},
 		},
 		"missing ssd in cfg bdev list": {
 			numIOSrvs:      2,

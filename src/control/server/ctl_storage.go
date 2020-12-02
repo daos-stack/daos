@@ -101,7 +101,7 @@ func substBdevVmdAddrs(cfgBdevs []string, scanResp *bdev.ScanResponse) ([]string
 			return nil, err
 		}
 		if len(matchDevs) == 0 {
-			matchDevs = append(matchDevs, dev)
+			newCfgBdevs = append(newCfgBdevs, dev)
 			continue
 		}
 		newCfgBdevs = append(newCfgBdevs, matchDevs...)
@@ -139,7 +139,7 @@ func canAccessBdevs(cfgBdevs []string, scanResp *bdev.ScanResponse) ([]string, b
 // checkCfgBdevs performs validation on NVMe returned from initial scan.
 func (c *StorageControlService) checkCfgBdevs(scanResp *bdev.ScanResponse) error {
 	if scanResp == nil {
-		return errors.New("checkCfgBdevs: received nil scan response")
+		return errors.New("received nil scan response")
 	}
 	if len(c.instanceStorage) == 0 {
 		return nil
@@ -152,7 +152,7 @@ func (c *StorageControlService) checkCfgBdevs(scanResp *bdev.ScanResponse) error
 		}
 
 		if !c.bdev.IsVMDDisabled() {
-			c.log.Debug("checkCfgBdevs: VMD detected, processing PCI addresses")
+			c.log.Debug("VMD detected, processing PCI addresses")
 			newBdevs, err := substBdevVmdAddrs(cfgBdevs, scanResp)
 			if err != nil {
 				return err
@@ -161,7 +161,7 @@ func (c *StorageControlService) checkCfgBdevs(scanResp *bdev.ScanResponse) error
 				return errors.New("unexpected empty bdev list returned " +
 					"check vmd address has backing devices")
 			}
-			c.log.Debugf("checkCfgBdevs: instance %d: subst vmd addrs %v->%v",
+			c.log.Debugf("instance %d: subst vmd addrs %v->%v",
 				idx, cfgBdevs, newBdevs)
 			cfgBdevs = newBdevs
 			c.instanceStorage[idx].Bdev.DeviceList = cfgBdevs
@@ -197,7 +197,7 @@ func (c *StorageControlService) Setup() error {
 	}
 
 	if err := c.checkCfgBdevs(nvmeScanResp); err != nil {
-		return err
+		return errors.Wrap(err, "validate server config bdevs")
 	}
 
 	return nil
