@@ -33,7 +33,7 @@ lock_test()
         find /mnt/daos -maxdepth 1 -mindepth 1 \! -name jenkins.lock -print0 | \
              xargs -0r rm -vrf
     	echo "marj debug VALGRIND_CMD value=$VALGRIND_CMD"
-        eval "${VALGRIND_CMD}" "$@" 2>&1 | grep -v "SUCCESS! NO TEST FAILURE"
+        eval "$@" 2>&1 | grep -v "SUCCESS! NO TEST FAILURE"
         exit "${PIPESTATUS[0]}"
     ) 9>/mnt/daos/jenkins.lock
 }
@@ -110,37 +110,35 @@ if [ -d "/mnt/daos" ]; then
     fi
 
     # Tests
-    run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/test_linkage"
-    run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt"
-    run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_producer"
-    run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_consumer"
-    run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_hlc"
-    run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_swim"
-    run_test "${SL_PREFIX}/bin/vos_tests" -A 500
-    run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
+    run_test "${VALGRIND_CMD} ${SL_BUILD_DIR}/src/tests/ftest/cart/utest/test_linkage"
+    run_test "${VALGRIND_CMD} ${SL_BUILD_DIR}/src/gurt/tests/test_gurt"
+    run_test "${VALGRIND_CMD} ${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_producer"
+    run_test "${VALGRIND_CMD} ${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_consumer"
+    run_test "${VALGRIND_CMD} ${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_hlc"
+    run_test "${VALGRIND_CMD} ${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_swim"
+    run_test "${VALGRIND_CMD} ${SL_PREFIX}/bin/vos_tests" -A 500
+    run_test "${VALGRIND_CMD} ${SL_PREFIX}/bin/vos_tests" -n -A 500
     export DAOS_IO_BYPASS=pm
-    run_test "${SL_PREFIX}/bin/vos_tests" -A 50
-    export DAOS_IO_BYPASS=pm_snap
-    run_test "${SL_PREFIX}/bin/vos_tests" -A 50
+    run_test "${VALGRIND_CMD} ${SL_PREFIX}/bin/vos_tests" -A 50
     unset DAOS_IO_BYPASS
-    run_test "${SL_BUILD_DIR}/src/common/tests/umem_test"
-    run_test "${SL_BUILD_DIR}/src/common/tests/sched"
-    run_test "${SL_BUILD_DIR}/src/common/tests/drpc_tests"
-    run_test "${SL_BUILD_DIR}/src/client/api/tests/eq_tests"
-    run_test "${SL_BUILD_DIR}/src/bio/smd/tests/smd_ut"
-    run_test "${SL_PREFIX}/bin/vea_ut"
-    run_test "${SL_BUILD_DIR}/src/security/tests/cli_security_tests"
-    run_test "${SL_BUILD_DIR}/src/security/tests/srv_acl_tests"
-    run_test "${SL_BUILD_DIR}/src/common/tests/acl_api_tests"
-    run_test "${SL_BUILD_DIR}/src/common/tests/acl_valid_tests"
-    run_test "${SL_BUILD_DIR}/src/common/tests/acl_util_tests"
-    run_test "${SL_BUILD_DIR}/src/common/tests/acl_principal_tests"
-    run_test "${SL_BUILD_DIR}/src/common/tests/acl_real_tests"
-    run_test "${SL_BUILD_DIR}/src/common/tests/prop_tests"
-    run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_progress_tests"
-    run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_handler_tests"
-    run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_listener_tests"
-    run_test "${SL_BUILD_DIR}/src/mgmt/tests/srv_drpc_tests"
+    run_test "${VALGRIND_CMD} ${SL_BUILD_DIR}/src/common/tests/umem_test"
+    run_test "${VALGRIND_CMD} ${SL_BUILD_DIR}/src/common/tests/sched"
+    run_test "${VALGRIND_CMD} ${SL_BUILD_DIR}/src/common/tests/drpc_tests"
+    run_test "${VALGRIND_CMD} ${SL_BUILD_DIR}/src/client/api/tests/eq_tests"
+    run_test "${VALGRIND_CMD} ${SL_BUILD_DIR}/src/bio/smd/tests/smd_ut"
+    run_test "${VALGRIND_CMD} ${SL_PREFIX}/bin/vea_ut"
+    run_test "${VALGRIND_CMD} ${SL_BUILD_DIR}/src/security/tests/cli_security_tests"
+    run_test "${VALGRIND_CMD} ${SL_BUILD_DIR}/src/security/tests/srv_acl_tests"
+    run_test "${VALGRIND_CMD} ${SL_BUILD_DIR}/src/common/tests/acl_api_tests"
+    run_test "${VALGRIND_CMD} ${SL_BUILD_DIR}/src/common/tests/acl_valid_tests"
+    run_test "${VALGRIND_CMD} ${SL_BUILD_DIR}/src/common/tests/acl_util_tests"
+    run_test "${VALGRIND_CMD} ${SL_BUILD_DIR}/src/common/tests/acl_principal_tests"
+    run_test "${VALGRIND_CMD} ${SL_BUILD_DIR}/src/common/tests/acl_real_tests"
+    run_test "${VALGRIND_CMD} ${SL_BUILD_DIR}/src/common/tests/prop_tests"
+    run_test "${VALGRIND_CMD} ${SL_BUILD_DIR}/src/iosrv/tests/drpc_progress_tests"
+    run_test "${VALGRIND_CMD} ${SL_BUILD_DIR}/src/iosrv/tests/drpc_handler_tests"
+    run_test "${VALGRIND_CMD} ${SL_BUILD_DIR}/src/iosrv/tests/drpc_listener_tests"
+    run_test "${VALGRIND_CMD} ${SL_BUILD_DIR}/src/mgmt/tests/srv_drpc_tests"
 
     # Scripts launching tests
     export USE_VALGRIND=${RUN_TEST_VALGRIND}
