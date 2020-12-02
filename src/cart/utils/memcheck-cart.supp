@@ -5,8 +5,9 @@
    fun:_dl_init
 }
 {
-    d lopen leaks
+    dl open leaks
     Memcheck:Leak
+    ...
     fun:_dl_open
 }
 {
