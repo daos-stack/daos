@@ -32,7 +32,7 @@ lock_test()
         flock 9
         find /mnt/daos -maxdepth 1 -mindepth 1 \! -name jenkins.lock -print0 | \
              xargs -0r rm -vrf
-        eval "${VALGRIND_CMD} $@" 2>&1 | grep -v "SUCCESS! NO TEST FAILURE"
+        eval "$@" 2>&1 | grep -v "SUCCESS! NO TEST FAILURE"
         exit "${PIPESTATUS[0]}"
     ) 9>/mnt/daos/jenkins.lock
 }
@@ -64,7 +64,7 @@ run_test()
     #    in that error message so that we don't guarantee printing that in
     #    every run's output, thereby making all tests here always pass.
     echo "marj debug VALGRIND_CMD value=$VALGRIND_CMD"
-    if ! time $lock_test "$@"; then
+    if ! time $lock_test "${VALGRIND_CMD} $@"; then
         echo "Test $* failed with exit status ${PIPESTATUS[0]}."
         ((failed = failed + 1))
         failures+=("$*")
@@ -158,7 +158,6 @@ if [ -d "/mnt/daos" ]; then
     run_test src/vos/tests/evt_ctl.sh pmem
     unset USE_VALGRIND
     unset VALGRIND_SUPP
-    cat /mnt/daos/jenkins.lock
 
     # Reporting
     if [ $failed -eq 0 ]; then
