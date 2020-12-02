@@ -273,6 +273,7 @@ func detectVMD() ([]string, error) {
 	lspciCmd := exec.Command("lspci")
 	vmdCmd := exec.Command("grep", "-i", "-E", "201d|Volume Management Device")
 	var cmdOut bytes.Buffer
+	var prefixIncluded bool
 
 	vmdCmd.Stdin, _ = lspciCmd.StdoutPipe()
 	vmdCmd.Stdout = &cmdOut
@@ -285,6 +286,16 @@ func detectVMD() ([]string, error) {
 	}
 
 	vmdCount := bytes.Count(cmdOut.Bytes(), []byte("0000:"))
+	if vmdCount == 0 {
+		// sometimes the output may not include "0000:" prefix
+		// usually when muliple devices are in the PCI_WHITELIST
+		vmdCount = bytes.Count(cmdOut.Bytes(), []byte("Volume"))
+		if vmdCount == 0 {
+			vmdCount = bytes.Count(cmdOut.Bytes(), []byte("201d"))
+		}
+	} else {
+		prefixIncluded = true
+	}
 	vmdAddrs := make([]string, 0, vmdCount)
 
 	i := 0
@@ -294,6 +305,9 @@ func detectVMD() ([]string, error) {
 			break
 		}
 		s := strings.Split(scanner.Text(), " ")
+		if !prefixIncluded {
+			s[0] = "0000:" + s[0]
+		}
 		vmdAddrs = append(vmdAddrs, strings.TrimSpace(s[0]))
 		i++
 	}
