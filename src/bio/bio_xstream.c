@@ -1734,7 +1734,7 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 		if (d_bdev->bb_led_traddr != NULL) {
 			if (strlen(d_bdev->bb_led_traddr) == 0)
 				continue;
-			/* Init the start time of the LED event to current time */
+			/* Init the start time of the LED event */
 			if (d_bdev->bb_led_start_time == 0) {
 				d_bdev->bb_led_start_time = now;
 				return;
@@ -1747,7 +1747,7 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 				return;
 
 			if (bio_set_led_state_orig(ctxt, d_bdev) != 0)
-				D_ERROR("Failed returning LED to original state\n");
+				D_ERROR("Failed resetting LED state\n");
 		}
 	}
 }

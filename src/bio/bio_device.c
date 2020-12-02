@@ -767,8 +767,8 @@ bio_set_led_state(struct bio_xs_context *xs_ctxt, char *dev_traddr,
 	else {
 		/* Verify the correct state is set */
 		if (current_led_state != new_led_state)
-			D_ERROR("LED of device:%s is in an unexpected state:%d\n",
-				dev_traddr, current_led_state);
+			D_ERROR("LED of device:%s is in an unexpected state:"
+				"%d\n", dev_traddr, current_led_state);
 	}
 
 state_set:
