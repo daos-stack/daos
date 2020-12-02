@@ -146,11 +146,11 @@ ec_setup_single_recx_data(struct ec_agg_test_ctx *ctx, unsigned int mode,
 	else
 		iov_alloc_str(&ctx->update_iod.iod_name, "akey");
 
-	daos_sgl_init(&ctx->update_sgl, 1);
+	d_sgl_init(&ctx->update_sgl, 1);
 	iov_alloc(&ctx->update_sgl.sg_iovs[0], data_bytes);
 	iov_update_fill(ctx->update_sgl.sg_iovs);
 
-	daos_sgl_init(&ctx->fetch_sgl, 1);
+	d_sgl_init(&ctx->fetch_sgl, 1);
 	iov_alloc(&ctx->fetch_sgl.sg_iovs[0], data_bytes);
 
 	ctx->recx[0].rx_idx = offset;

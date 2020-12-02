@@ -914,23 +914,6 @@ dss_enum_unpack_io_init(struct dss_enum_unpack_io *io, daos_unit_oid_t oid,
 
 }
 
-static void
-clear_iod(daos_iod_t *iod, d_sg_list_t *sgl, int *recxs_cap)
-{
-	daos_iov_free(&iod->iod_name);
-	if (iod->iod_recxs != NULL)
-		D_FREE(iod->iod_recxs);
-	memset(iod, 0, sizeof(*iod));
-
-	if (sgl != NULL) {
-		if (sgl->sg_iovs != NULL)
-			D_FREE(sgl->sg_iovs);
-		memset(sgl, 0, sizeof(*sgl));
-	}
-
-	*recxs_cap = 0;
-}
-
 /**
  * Clear the iods/sgls in \a io.
  *
@@ -942,20 +925,23 @@ dss_enum_unpack_io_clear(struct dss_enum_unpack_io *io)
 	int i;
 
 	for (i = 0; i <= io->ui_iods_top; i++) {
-		d_sg_list_t *sgl = NULL;
-
 		if (io->ui_sgls != NULL)
-			sgl = &io->ui_sgls[i];
+			d_sgl_fini(&io->ui_sgls[i], false);
 		daos_iov_free(&io->ui_csum_iov);
-		clear_iod(&io->ui_iods[i], sgl, &io->ui_recxs_caps[i]);
-	}
 
-	if (io->ui_akey_punch_ephs)
+
+		daos_iov_free(&io->ui_iods[i].iod_name);
+		D_FREE(io->ui_iods[i].iod_recxs);
+	}
+	memset(io->ui_iods, 0, sizeof(*io->ui_iods) * io->ui_iods_cap);
+	memset(io->ui_recxs_caps, 0,
+	       sizeof(*io->ui_recxs_caps) * io->ui_iods_cap);
+	if (io->ui_akey_punch_ephs != NULL)
 		memset(io->ui_akey_punch_ephs, 0,
-		       sizeof(daos_epoch_t) * io->ui_iods_cap);
-	if (io->ui_rec_punch_ephs)
+		       sizeof(*io->ui_akey_punch_ephs) * io->ui_iods_cap);
+	if (io->ui_rec_punch_ephs != NULL)
 		memset(io->ui_rec_punch_ephs, 0,
-		       sizeof(daos_epoch_t) * io->ui_iods_cap);
+		       sizeof(*io->ui_rec_punch_ephs) * io->ui_iods_cap);
 	io->ui_dkey_punch_eph = 0;
 	io->ui_iods_top = -1;
 	io->ui_version = 0;
@@ -983,13 +969,17 @@ clear_top_iod(struct dss_enum_unpack_io *io)
 		return;
 
 	if (io->ui_iods[idx].iod_nr == 0) {
-		d_sg_list_t *sgl = NULL;
-
 		D_DEBUG(DB_IO, "iod without recxs: %d\n", idx);
+
 		if (io->ui_sgls != NULL)
-			sgl = &io->ui_sgls[idx];
+			d_sgl_fini(&io->ui_sgls[idx], false);
 		daos_iov_free(io_csums_iov(io));
-		clear_iod(&io->ui_iods[idx], sgl, &io->ui_recxs_caps[idx]);
+
+		daos_iov_free(&io->ui_iods[idx].iod_name);
+		D_FREE(io->ui_iods[idx].iod_recxs);
+		memset(&io->ui_iods[idx], 0, sizeof(*io->ui_iods));
+
+		io->ui_recxs_caps[idx] = 0;
 		io->ui_iods_top--;
 	}
 }

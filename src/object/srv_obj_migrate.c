@@ -1119,7 +1119,7 @@ static int
 migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 			  struct ds_cont_child *ds_cont)
 {
-	d_sg_list_t		 sgls[DSS_ENUM_UNPACK_MAX_IODS], *sgl;
+	d_sg_list_t		 sgls[DSS_ENUM_UNPACK_MAX_IODS];
 	daos_handle_t		 ioh;
 	struct daos_oclass_attr *oca;
 	int			 rc, i, ret, sgl_cnt = 0;
@@ -1158,9 +1158,8 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 
 		bsgl = vos_iod_sgl_at(ioh, i);
 		D_ASSERT(bsgl != NULL);
-		sgl = &sgls[i];
 
-		rc = bio_sgl_convert(bsgl, sgl, false);
+		rc = bio_sgl_convert(bsgl, &sgls[i], false);
 		if (rc)
 			goto post;
 		sgl_cnt++;
@@ -1197,10 +1196,8 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 
 	vos_set_io_csum(ioh, iod_csums);
 post:
-	for (i = 0; i < sgl_cnt; i++) {
-		sgl = &sgls[i];
-		daos_sgl_fini(sgl, false);
-	}
+	for (i = 0; i < sgl_cnt; i++)
+		d_sgl_fini(&sgls[i], false);
 
 	if (DAOS_OC_IS_EC(oca))
 		mrone_recx_daos2_vos(mrone, oca);
@@ -1384,7 +1381,7 @@ migrate_one_destroy(struct migrate_one *mrone)
 
 	if (mrone->mo_sgls) {
 		for (i = 0; i < mrone->mo_iod_alloc_num; i++)
-			daos_sgl_fini(&mrone->mo_sgls[i], true);
+			d_sgl_fini(&mrone->mo_sgls[i], true);
 		D_FREE(mrone->mo_sgls);
 	}
 
