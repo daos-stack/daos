@@ -26,14 +26,15 @@ log_num=0
 if ${OLD_CI:-true}; then
 lock_test()
 {
-    (
         # clean up all files except the lock
-        flock 9
+    	exec 9>/mnt/daos/jenkins.lock || exit 1
+	flock -n 9 || { echo "ERROR: flock() failed." >&2; exit 1;}
         find /mnt/daos -maxdepth 1 -mindepth 1 \! -name jenkins.lock -print0 | \
              xargs -0r rm -vrf
+    	echo "marj debug inside flock $@"
         eval "$@" 2>&1 | grep -v "SUCCESS! NO TEST FAILURE"
         exit "${PIPESTATUS[0]}"
-    ) 9>/mnt/daos/jenkins.lock
+	flock -u 9
 }
 
 lock_test="lock_test"
