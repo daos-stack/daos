@@ -236,7 +236,7 @@ enum {
  */
 int
 daos_debug_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
-		     uint64_t value, uint64_t value_extra, daos_event_t *ev);
+		      uint64_t value, uint64_t value_extra, daos_event_t *ev);
 
 /**
  * Add mark to servers.
