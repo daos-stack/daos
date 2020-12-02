@@ -36,7 +36,7 @@ class PoolDestroyWithIO(IorTestBase):
     :avocado: recursive
     """
 
-#    @skipForTicket("DAOS-5868")
+    @skipForTicket("DAOS-5868")
     def test_pool_destroy_with_io(self):
         """Jira ID: DAOS-3794.
 
