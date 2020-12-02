@@ -27,6 +27,7 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/google/uuid"
@@ -36,12 +37,14 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
-	defaultSvcReps = 1
+	defaultPoolSvcReps       = 1
+	defaultPoolCreateTimeout = 10 * time.Minute // be generous for large pools
 )
 
 type (
@@ -113,7 +116,7 @@ func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err err
 	}
 
 	if in.NumSvcReps == 0 {
-		in.NumSvcReps = defaultSvcReps
+		in.NumSvcReps = defaultPoolSvcReps
 	}
 
 	// ensure we have a system name in the request
@@ -126,11 +129,7 @@ func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err err
 		return nil, err
 	}
 
-	genUUID, err := uuid.NewRandom()
-	if err != nil {
-		return nil, err
-	}
-	out.Uuid = genUUID.String()
+	out.Uuid = uuid.New().String()
 
 	return
 }
@@ -140,6 +139,7 @@ type (
 	PoolCreateReq struct {
 		msRequest
 		unaryRequest
+		retryableRequest
 		ScmBytes   uint64
 		NvmeBytes  uint64
 		Ranks      []system.Rank
@@ -166,9 +166,32 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to generate PoolCreate request")
 	}
+	// TODO: Set this timeout based on the SCM size, when we have a
+	// better understanding of the relationship.
+	req.SetTimeout(defaultPoolCreateTimeout)
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolCreate(ctx, pbReq)
 	})
+	req.retryTestFn = func(reqErr error, _ uint) bool {
+		switch e := reqErr.(type) {
+		case drpc.DaosStatus:
+			switch e {
+			// These create errors can be retried.
+			case drpc.DaosTimedOut, drpc.DaosGroupVersionMismatch:
+				return true
+			default:
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	req.retryFn = func(_ context.Context, _ uint) error {
+		// Generate a new pool UUID on retry in order to avoid
+		// clashing with cleanup from the previous attempt.
+		pbReq.Uuid = uuid.New().String()
+		return nil
+	}
 
 	rpcClient.Debugf("Create DAOS pool request: %+v\n", req)
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
