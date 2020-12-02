@@ -1160,6 +1160,10 @@ process_iod(daos_off_t start_off, daos_size_t array_size,
 		/** IOM is beyond the iod recx; this is a hole */
 		if (end <= iom->iom_recxs[i].rx_idx) {
 			bytes_proc = end - idx;
+			D_DEBUG(DB_IO, "zero out sg_idx %u/"DF_U64
+				" end "DF_U64" iom idx "DF_U64" idx "DF_U64"\n",
+				sg_idx->iov_idx, sg_idx->iov_offset,
+				end, iom->iom_recxs[i].rx_idx, idx);
 			rc = daos_sgl_processor(sgl, true, sg_idx, bytes_proc,
 						zero_out_cb, NULL);
 			if (rc)
@@ -1176,6 +1180,9 @@ process_iod(daos_off_t start_off, daos_size_t array_size,
 		} else {
 			/** iom beyond current index, this is a hole */
 			bytes_proc = iom->iom_recxs[i].rx_idx - idx;
+			D_DEBUG(DB_IO, "zero out sg_idx %u/"DF_U64"/"DF_U64"\n",
+				sg_idx->iov_idx, sg_idx->iov_offset,
+				bytes_proc);
 			rc = daos_sgl_processor(sgl, true, sg_idx, bytes_proc,
 						zero_out_cb, NULL);
 		}
