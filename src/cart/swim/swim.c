@@ -546,7 +546,6 @@ swim_init(swim_id_t self_id, struct swim_ops *swim_ops, void *data)
 	D_ALLOC_PTR(ctx);
 	if (ctx == NULL)
 		D_GOTO(out, ctx = NULL);
-	memset(ctx, 0, sizeof(*ctx));
 
 	rc = SWIM_MUTEX_CREATE(ctx->sc_mutex, NULL);
 	if (rc != 0) {
