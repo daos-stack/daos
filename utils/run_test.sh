@@ -28,7 +28,6 @@ lock_test()
 {
     (
         # clean up all files except the lock
-	set -x
         flock 9
         find /mnt/daos -maxdepth 1 -mindepth 1 \! -name jenkins.lock -print0 | \
              xargs -0r rm -vrf
@@ -64,7 +63,9 @@ run_test()
     #    in that error message so that we don't guarantee printing that in
     #    every run's output, thereby making all tests here always pass.
     echo "marj debug VALGRIND_CMD value=$VALGRIND_CMD"
-    if ! time $lock_test "${VALGRIND_CMD} $@"; then
+    tmp="${VALGRIND_CMD} $@"
+    echo "checking tmp=$tmp"
+    if ! time $lock_test "$tmp"; then
         echo "Test $* failed with exit status ${PIPESTATUS[0]}."
         ((failed = failed + 1))
         failures+=("$*")
@@ -119,7 +120,9 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
     run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
     export DAOS_IO_BYPASS=pm
-    run_test "$${SL_PREFIX}/bin/vos_tests" -A 50
+    run_test "${SL_PREFIX}/bin/vos_tests" -A 50
+    export DAOS_IO_BYPASS=pm_snap
+    run_test "${SL_PREFIX}/bin/vos_tests" -A 50
     unset DAOS_IO_BYPASS
     run_test "${SL_BUILD_DIR}/src/common/tests/umem_test"
     run_test "${SL_BUILD_DIR}/src/common/tests/sched"
