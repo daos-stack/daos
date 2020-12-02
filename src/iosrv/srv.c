@@ -1309,12 +1309,19 @@ dss_dump_ABT_state(FILE *fp)
 					"rc = %d, for DAOS xstream %p, ABT "
 					"xstream %p, progress ULT %p\n", rc, dx,
 					dx->dx_xstream, dx->dx_progress);
+			/* XXX
+			 * do not print stack content as if unwiding with
+			 * libunwind is enabled current implementation runs
+			 * w/o synchronisation/suspend of current ULT which
+			 * is highly racy since unwiding will occur using
+			 * the same stack
 			rc = ABT_info_print_thread_stack(fp, dx->dx_progress);
 			if (rc != ABT_SUCCESS)
 				D_ERROR("ABT_info_print_thread_stack() error, "
 					"rc = %d, for DAOS xstream %p, ABT "
 					"xstream %p, progress ULT %p\n", rc, dx,
 					dx->dx_xstream, dx->dx_progress);
+			 */
 		}
 		/* only one sched per xstream */
 		rc = ABT_xstream_get_main_sched(dx->dx_xstream, &sched);
@@ -1382,12 +1389,16 @@ dss_dump_ABT_state(FILE *fp)
 					"for DAOS xstream %p, ABT xstream %p, "
 					"sched %p, pool[%d]\n", rc, dx,
 					dx->dx_xstream, dx->dx_sched, i);
+			/* XXX
+			 * same concern than with ABT_info_print_thread_stack()
+			 * before
 			rc = ABT_info_print_thread_stacks_in_pool(fp, pools[i]);
 			if (rc != ABT_SUCCESS)
 				D_ERROR("ABT_info_print_thread_stacks_in_pool() error, rc = %d, "
 					"for DAOS xstream %p, ABT xstream %p, "
 					"sched %p, pool[%d]\n", rc, dx,
 					dx->dx_xstream, dx->dx_sched, i);
+			 */
 		}
 	}
 	ABT_mutex_unlock(xstream_data.xd_mutex);
