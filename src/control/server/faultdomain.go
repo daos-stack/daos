@@ -25,7 +25,13 @@ package server
 
 import (
 	"os"
+	"os/exec"
+	"strings"
 
+	"github.com/pkg/errors"
+	"golang.org/x/sys/unix"
+
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -42,16 +48,22 @@ func getDefaultFaultDomain(getHostname hostnameGetterFn) (*system.FaultDomain, e
 }
 
 // getFaultDomain determines the fault domain for the system.
-func getFaultDomain(cfg *Configuration) (*system.FaultDomain, error) {
+func getFaultDomain(cfg *config.Server) (*system.FaultDomain, error) {
 	if cfg == nil {
-		return nil, FaultBadConfig
+		return nil, config.FaultBadConfig
+	}
+
+	if cfg.FaultPath != "" && cfg.FaultCb != "" {
+		return nil, config.FaultConfigBothFaultPathAndCb
 	}
 
 	if cfg.FaultPath != "" {
 		return newFaultDomainFromConfig(cfg.FaultPath)
 	}
 
-	// TODO DAOS-4449: Try to get fault domain from callback
+	if cfg.FaultCb != "" {
+		return getFaultDomainFromCallback(cfg.FaultCb)
+	}
 
 	return getDefaultFaultDomain(os.Hostname)
 }
@@ -59,7 +71,33 @@ func getFaultDomain(cfg *Configuration) (*system.FaultDomain, error) {
 func newFaultDomainFromConfig(domainStr string) (*system.FaultDomain, error) {
 	fd, err := system.NewFaultDomainFromString(domainStr)
 	if err != nil {
-		return nil, FaultConfigFaultDomainInvalid
+		return nil, config.FaultConfigFaultDomainInvalid
 	}
 	return fd, nil
+}
+
+func getFaultDomainFromCallback(callbackPath string) (*system.FaultDomain, error) {
+	if callbackPath == "" {
+		return nil, errors.New("no callback path supplied")
+	}
+
+	// Fault callback can't be an arbitrary command. Must point to a
+	// specific executable file.
+	if err := unix.Stat(callbackPath, nil); os.IsNotExist(err) {
+		return nil, config.FaultConfigFaultCallbackNotFound
+	}
+
+	output, err := exec.Command(callbackPath).Output()
+	if os.IsPermission(err) {
+		return nil, config.FaultConfigFaultCallbackBadPerms
+	} else if err != nil {
+		return nil, config.FaultConfigFaultCallbackFailed(err)
+	}
+
+	trimmedOutput := strings.TrimSpace(string(output))
+	if trimmedOutput == "" {
+		return nil, config.FaultConfigFaultCallbackEmpty
+	}
+
+	return newFaultDomainFromConfig(trimmedOutput)
 }

@@ -63,7 +63,7 @@ RUN zypper --non-interactive --no-gpg-checks refresh; \
            readline-devel sg3_utils which yasm                        \
            python-devel python3-devel valgrind-devel hwloc-devel      \
            openmpi3-devel man fuse3-devel patchelf scons lua-lmod     \
-           libjson-c-devel liblz4-devel
+           libjson-c-devel liblz4-devel python3-distro
 # Monkey-patch MODULEPATH
 RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then        \
         sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/' /etc/profile.d/lmod.sh; \

@@ -77,8 +77,7 @@ def test_runner(self, size, record_size, index, array_size, thread_per_size=4):
         thread_per_size (int): threads per rec size
     """
     # pool initialization
-    self.pool.append(TestPool(
-        self.context, dmg_command=self.get_dmg_command()))
+    self.pool.append(TestPool(self.context, self.get_dmg_command()))
     self.pool[index].get_params(self)
 
     # set pool size

@@ -24,6 +24,8 @@ package server
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/dustin/go-humanize"
 
@@ -31,7 +33,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -39,36 +40,8 @@ import (
 var (
 	FaultUnknown = serverFault(
 		code.ServerUnknown,
-		"unknown control server error", "")
-	FaultBadConfig = serverFault(
-		code.ServerBadConfig,
-		"insufficient information in configuration",
-		"supply path to valid configuration file, use examples for reference",
-	)
-	FaultConfigNoPath = serverFault(
-		code.ServerNoConfigPath,
-		"configuration file path not set",
-		"supply the path to a server configuration file when restarting the control server with commandline option '-o'",
-	)
-	FaultConfigBadControlPort = serverFault(
-		code.ServerConfigBadControlPort,
-		"invalid control port in configuration",
-		"specify a nonzero control port in configuration ('port' parameter) and restart the control server",
-	)
-	FaultConfigBadAccessPoints = serverFault(
-		code.ServerConfigBadAccessPoints,
-		"invalid list of access points in configuration",
-		"only a single access point is currently supported, specify only one and restart the control server",
-	)
-	FaultConfigNoProvider = serverFault(
-		code.ServerConfigBadProvider,
-		"provider not specified in configuration",
-		"specify a valid network provider in configuration ('provider' parameter) and restart the control server",
-	)
-	FaultConfigNoServers = serverFault(
-		code.ServerConfigNoServers,
-		"no DAOS IO Servers specified in configuration",
-		"specify at least one IO Server configuration ('servers' list parameter) and restart the control server",
+		"unknown control server error",
+		"",
 	)
 	FaultIommuDisabled = serverFault(
 		code.ServerIommuDisabled,
@@ -89,11 +62,6 @@ var (
 		code.ServerDataPlaneNotStarted,
 		fmt.Sprintf("%s instance not started or not responding on dRPC", build.DataPlaneName),
 		"retry the operation or check server logs for more details",
-	)
-	FaultConfigFaultDomainInvalid = serverFault(
-		code.ServerConfigFaultDomainInvalid,
-		"invalid fault domain",
-		"specify a valid fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
 	)
 )
 
@@ -127,6 +95,20 @@ func FaultPoolScmTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
 	)
 }
 
+func FaultPoolInvalidRanks(invalid []system.Rank) *fault.Fault {
+	rs := make([]string, len(invalid))
+	for i, r := range invalid {
+		rs[i] = r.String()
+	}
+	sort.Strings(rs)
+
+	return serverFault(
+		code.ServerPoolInvalidRanks,
+		fmt.Sprintf("pool request contains invalid ranks: %s", strings.Join(rs, ",")),
+		"retry the request with a valid set of ranks",
+	)
+}
+
 func FaultInsufficientFreeHugePages(free, requested int) *fault.Fault {
 	return serverFault(
 		code.ServerInsufficientFreeHugePages,
@@ -148,56 +130,6 @@ func FaultBdevNotFound(bdevs []string) *fault.Fault {
 		code.ServerBdevNotFound,
 		fmt.Sprintf("NVMe SSD%s %v not found", common.Pluralise("", len(bdevs)), bdevs),
 		fmt.Sprintf("check SSD%s %v that are specified in server config exist", common.Pluralise("", len(bdevs)), bdevs),
-	)
-}
-
-func FaultConfigDuplicateFabric(curIdx, seenIdx int) *fault.Fault {
-	return serverFault(
-		code.ServerConfigDuplicateFabric,
-		fmt.Sprintf("the fabric configuration in IO server %d is a duplicate of server %d", curIdx, seenIdx),
-		"ensure that each IO server has a unique combination of provider,fabric_iface,fabric_iface_port and restart",
-	)
-}
-
-func FaultConfigDuplicateLogFile(curIdx, seenIdx int) *fault.Fault {
-	return dupeValue(
-		code.ServerConfigDuplicateLogFile, "log_file", curIdx, seenIdx,
-	)
-}
-
-func FaultConfigDuplicateScmMount(curIdx, seenIdx int) *fault.Fault {
-	return dupeValue(
-		code.ServerConfigDuplicateScmMount, "scm_mount", curIdx, seenIdx,
-	)
-}
-
-func FaultConfigDuplicateScmDeviceList(curIdx, seenIdx int) *fault.Fault {
-	return dupeValue(
-		code.ServerConfigDuplicateScmDeviceList, "scm_list", curIdx, seenIdx,
-	)
-}
-
-func FaultConfigOverlappingBdevDeviceList(curIdx, seenIdx int) *fault.Fault {
-	return serverFault(
-		code.ServerConfigOverlappingBdevDeviceList,
-		fmt.Sprintf("the bdev_list value in IO server %d overlaps with entries in server %d", curIdx, seenIdx),
-		"ensure that each IO server has a unique set of bdev_list entries and restart",
-	)
-}
-
-func FaultConfigInvalidNetDevClass(curIdx int, primaryDevClass, thisDevClass uint32, iface string) *fault.Fault {
-	return serverFault(
-		code.ServerConfigInvalidNetDevClass,
-		fmt.Sprintf("IO server %d specifies fabric_iface %q of class %q that conflicts with the primary server's device class %q",
-			curIdx, iface, netdetect.DevClassName(thisDevClass), netdetect.DevClassName(primaryDevClass)),
-		"ensure that each IO server specifies a fabric_iface with a matching device class and restart",
-	)
-}
-
-func dupeValue(code code.Code, name string, curIdx, seenIdx int) *fault.Fault {
-	return serverFault(code,
-		fmt.Sprintf("the %s value in IO server %d is a duplicate of server %d", name, curIdx, seenIdx),
-		fmt.Sprintf("ensure that each IO server has a unique %s value and restart", name),
 	)
 }
 

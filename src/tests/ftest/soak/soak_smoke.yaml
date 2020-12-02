@@ -8,13 +8,9 @@ hosts:
 # servers if a server partition is defined
     # server_partition: daos_server
     client_partition: daos_client
+    client_reservation:
 orterun:
     allow_run_as_root: True
-# include Cluster specific slurm params
-srun:
-    reservation:
-srun_params:
-    reservation:
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 24 Min test
 timeout: 30M
@@ -139,7 +135,7 @@ fio_smoke:
       - global
       - test
   global:
-    directory: "/tmp/daos_dfuse"
+    directory: "/tmp/daos_dfuse/"
     ioengine: 'libaio'
     thread: 1
     group_reporting: 1
@@ -157,7 +153,7 @@ fio_smoke:
         - 'rw'
         - 'randrw'
 dfuse:
-    mount_dir: "/tmp/daos_dfuse"
+    mount_dir: "/tmp/daos_dfuse/"
     disable_direct_io: True
 hdf5_vol:
     plugin_path: "/usr/lib64/mpich/lib"

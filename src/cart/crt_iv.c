@@ -1001,8 +1001,6 @@ crt_ivf_bulk_transfer(struct crt_ivns_internal *ivns_internal,
 	/* crt_req_decref done in crt_ivf_bulk_transfer_done_cb */
 	RPC_PUB_ADDREF(rpc);
 
-	memset(&bulk_desc, 0x0, sizeof(struct crt_bulk_desc));
-
 	bulk_desc.bd_rpc = rpc;
 	bulk_desc.bd_bulk_op = CRT_BULK_PUT;
 	bulk_desc.bd_remote_hdl = dest_bulk;
@@ -1685,11 +1683,12 @@ exit:
 
 		if (put_needed)
 			iv_ops->ivo_on_put(ivns, iv_value, user_priv);
-		D_ERROR("Failed to issue IV fetch; rc = %d\n", rc);
+		D_ERROR("Failed to issue IV fetch; rc = " DF_RC "\n",
+			DP_RC(rc));
 
 		if (cb_info) {
 			IVNS_DECREF(cb_info->ifc_ivns_internal);
-			D_FREE_PTR(cb_info);
+			D_FREE(cb_info);
 		}
 	}
 
@@ -1935,7 +1934,7 @@ call_pre_sync_cb(struct crt_ivns_internal *ivns_internal,
 	struct crt_iv_ops	*iv_ops;
 	d_sg_list_t		 iv_value;
 	d_sg_list_t		 tmp_iv;
-	d_iov_t			*tmp_iovs;
+	d_iov_t			*tmp_iovs = NULL;
 	void			*user_priv;
 	bool			 need_put = false;
 	int			 rc;
@@ -1952,21 +1951,22 @@ call_pre_sync_cb(struct crt_ivns_internal *ivns_internal,
 	}
 	need_put = true;
 
-	D_ALLOC_ARRAY(tmp_iovs, iv_value.sg_nr);
-	if (tmp_iovs == NULL) {
-		D_ERROR("Failed to allocate temporary iovs\n");
-		D_GOTO(exit, rc);
-	}
+	if (rpc_req->cr_co_bulk_hdl != CRT_BULK_NULL) {
+		D_ALLOC_ARRAY(tmp_iovs, iv_value.sg_nr);
+		if (tmp_iovs == NULL) {
+			D_ERROR("Failed to allocate temporary iovs\n");
+			D_GOTO(exit, rc);
+		}
 
-	tmp_iv.sg_nr = iv_value.sg_nr;
-	tmp_iv.sg_iovs = tmp_iovs;
+		tmp_iv.sg_nr = iv_value.sg_nr;
+		tmp_iv.sg_iovs = tmp_iovs;
 
-	/* Populate tmp_iv.sg_iovs[0] to [sg_nr] */
-	rc = crt_bulk_access(rpc_req->cr_co_bulk_hdl, &tmp_iv);
-	if (rc != 0) {
-		D_FREE(tmp_iovs);
-		D_ERROR("crt_bulk_access() failed; rc=%d\n", rc);
-		D_GOTO(exit, rc);
+		/* Populate tmp_iv.sg_iovs[0] to [sg_nr] */
+		rc = crt_bulk_access(rpc_req->cr_co_bulk_hdl, &tmp_iv);
+		if (rc != 0) {
+			D_ERROR("crt_bulk_access() failed; rc=%d\n", rc);
+			D_GOTO(exit, rc);
+		}
 	}
 
 	D_DEBUG(DB_TRACE, "Executing ivo_pre_sync\n");
@@ -1974,10 +1974,9 @@ call_pre_sync_cb(struct crt_ivns_internal *ivns_internal,
 				  &tmp_iv, user_priv);
 	if (rc != 0)
 		D_ERROR("ivo_pre_sync() failed; rc=%d\n", rc);
-
-	D_FREE(tmp_iovs);
-
 exit:
+	if (tmp_iovs)
+		D_FREE(tmp_iovs);
 	if (need_put)
 		iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
 	return rc;
@@ -2062,7 +2061,8 @@ handle_ivsync_response(const struct crt_cb_info *cb_info)
 	struct iv_sync_cb_info	*iv_sync = cb_info->cci_arg;
 	struct crt_iv_ops	*iv_ops;
 
-	crt_bulk_free(iv_sync->isc_bulk_hdl);
+	if (iv_sync->isc_bulk_hdl != CRT_BULK_NULL)
+		crt_bulk_free(iv_sync->isc_bulk_hdl);
 
 	/* do_callback is set based on sync value specified */
 	if (iv_sync->isc_do_callback) {
@@ -2580,7 +2580,7 @@ handle_response_internal(void *arg)
 		handle_ivupdate_response(cb_info);
 		break;
 	default:
-		D_ERROR("wrong opc 0x%x\n", rpc->cr_opc);
+		D_ERROR("wrong opc %#x\n", rpc->cr_opc);
 	}
 }
 
@@ -2738,7 +2738,7 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 					&cb_info->buc_iv_value,
 					cb_info->buc_user_priv);
 		output->rc = rc;
-		rc = crt_reply_send(info->bci_bulk_desc->bd_rpc);
+		crt_reply_send(info->bci_bulk_desc->bd_rpc);
 
 		RPC_PUB_DECREF(info->bci_bulk_desc->bd_rpc);
 		IVNS_DECREF(update_cb_info->uci_ivns_internal);

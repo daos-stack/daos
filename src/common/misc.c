@@ -30,43 +30,18 @@
 #include <daos/checksum.h>
 #include <daos/dtx.h>
 
-/**
- * Initialize a scatter/gather list, create an array to store @nr iovecs.
- */
 int
 daos_sgl_init(d_sg_list_t *sgl, unsigned int nr)
 {
-	memset(sgl, 0, sizeof(*sgl));
-
-	sgl->sg_nr = nr;
-	if (nr == 0)
-		return 0;
-
-	D_ALLOC_ARRAY(sgl->sg_iovs, nr);
-
-	return sgl->sg_iovs == NULL ? -DER_NOMEM : 0;
+	D_ASSERTF(0, "This function is deprecated.  Use d_sgl_init\n");
+	return 0;
 }
 
-/**
- * Finalise a scatter/gather list, it can also free iovecs if @free_iovs
- * is true.
- */
-void
+int
 daos_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
 {
-	int	i;
-
-	if (sgl == NULL || sgl->sg_iovs == NULL)
-		return;
-
-	for (i = 0; free_iovs && i < sgl->sg_nr; i++) {
-		if (sgl->sg_iovs[i].iov_buf != NULL) {
-			D_FREE(sgl->sg_iovs[i].iov_buf);
-		}
-	}
-
-	D_FREE(sgl->sg_iovs);
-	memset(sgl, 0, sizeof(*sgl));
+	D_ASSERTF(0, "This function is deprecated.  Use d_sgl_fini\n");
+	return 0;
 }
 
 static int
@@ -94,8 +69,13 @@ daos_sgls_copy_internal(d_sg_list_t *dst_sgl, uint32_t dst_nr,
 		if (num == 0)
 			continue;
 
-		if (alloc)
-			daos_sgl_init(&dst_sgl[i], src_sgl[i].sg_nr);
+		if (alloc) {
+			int rc;
+
+			rc = d_sgl_init(&dst_sgl[i], src_sgl[i].sg_nr);
+			if (rc)
+				return rc;
+		}
 
 		if (src_sgl[i].sg_nr > dst_sgl[i].sg_nr) {
 			D_ERROR("%d : %u > %u\n", i,
@@ -392,7 +372,6 @@ daos_iov_free(d_iov_t *iov)
 	D_ASSERT(iov->iov_buf_len > 0);
 
 	D_FREE(iov->iov_buf);
-	iov->iov_buf = NULL;
 	iov->iov_buf_len = 0;
 	iov->iov_len = 0;
 }
@@ -654,4 +633,23 @@ daos_dti_gen(struct dtx_id *dti, bool zero)
 		uuid_copy(dti->dti_uuid, uuid);
 		dti->dti_hlc = crt_hlc_get();
 	}
+}
+
+/**
+ * daos_recx_alloc/_free to provide same log facility for recx's alloc and free
+ * for iom->iom_recxs' usage for example.
+ */
+daos_recx_t *
+daos_recx_alloc(uint32_t nr)
+{
+	daos_recx_t	*recxs;
+
+	D_ALLOC_ARRAY(recxs, nr);
+	return recxs;
+}
+
+void
+daos_recx_free(daos_recx_t *recx)
+{
+	D_FREE(recx);
 }

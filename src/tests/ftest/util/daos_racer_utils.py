@@ -93,6 +93,7 @@ class DaosRacerCommand(ExecutableCommand):
         env["OMPI_MCA_btl"] = "tcp,self"
         env["OMPI_MCA_oob"] = "tcp"
         env["OMPI_MCA_pml"] = "ob1"
+        env["D_LOG_MASK"] = "ERR"
         return env
 
     def set_environment(self, env):

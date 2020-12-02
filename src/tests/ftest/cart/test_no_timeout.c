@@ -43,6 +43,7 @@ struct test_t {
 	char		*t_remote_group_name;
 	uint32_t	 t_remote_group_size;
 	d_rank_t	 t_my_rank;
+	int		 t_use_cfg;
 	int		 t_save_cfg;
 	char		*t_cfg_path;
 	unsigned int	 t_srv_ctx_num;
@@ -200,7 +201,7 @@ test_run(void)
 			   test_g.t_remote_group_name,
 			   &grp, &rank_list, &test_g.t_crt_ctx[0],
 			   &test_g.t_tid[0], test_g.t_srv_ctx_num,
-			   true, NULL);
+			   test_g.t_use_cfg, NULL);
 
 	rc = sem_init(&test_g.t_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
@@ -257,8 +258,8 @@ test_run(void)
 		}
 	}
 
-	D_FREE(rank_list->rl_ranks);
-	D_FREE(rank_list);
+	d_rank_list_free(rank_list);
+	rank_list = NULL;
 
 	if (test_g.t_save_cfg) {
 		rc = crt_group_detach(grp);
@@ -296,11 +297,14 @@ test_parse_args(int argc, char **argv)
 		{"attach_to", required_argument, 0, 'a'},
 		{"srv_ctx_num", required_argument, 0, 'c'},
 		{"cfg_path", required_argument, 0, 's'},
+		{"use_cfg", required_argument, 0, 'u'},
 		{0, 0, 0, 0}
 	};
 
+  test_g.t_use_cfg = true;
+
 	while (1) {
-		rc = getopt_long(argc, argv, "n:a:c:h:", long_options,
+		rc = getopt_long(argc, argv, "n:a:c:u:h:", long_options,
 				 &option_index);
 		if (rc == -1)
 			break;
@@ -334,7 +338,9 @@ test_parse_args(int argc, char **argv)
 			test_g.t_save_cfg = 1;
 			test_g.t_cfg_path = optarg;
 			break;
-
+		case 'u':
+			test_g.t_use_cfg = atoi(optarg);
+			break;
 		case '?':
 			return 1;
 		default:

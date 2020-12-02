@@ -196,7 +196,8 @@ func TestIOServer_SCMConfigValidation(t *testing.T) {
 	baseValidConfig := func() *Config {
 		return NewConfig().
 			WithFabricProvider("test"). // valid enough to pass "not-blank" test
-			WithFabricInterface("test")
+			WithFabricInterface("test").
+			WithFabricInterfacePort(42)
 	}
 
 	for name, tc := range map[string]struct {
@@ -283,12 +284,47 @@ func TestIOServer_ConfigValidation(t *testing.T) {
 	// create a minimally-valid config
 	good := NewConfig().WithFabricProvider("foo").
 		WithFabricInterface("qib0").
+		WithFabricInterfacePort(42).
 		WithScmClass("ram").
 		WithScmRamdiskSize(1).
 		WithScmMountPoint("/foo/bar")
 
 	if err := good.Validate(); err != nil {
 		t.Fatalf("expected %#v to validate; got %s", good, err)
+	}
+}
+
+func TestIOServer_FabricConfigValidation(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg    FabricConfig
+		expErr error
+	}{
+		"missing provider": {
+			cfg: FabricConfig{
+				Interface:     "bar",
+				InterfacePort: 42,
+			},
+			expErr: errors.New("provider"),
+		},
+		"missing interface": {
+			cfg: FabricConfig{
+				Provider:      "foo",
+				InterfacePort: 42,
+			},
+			expErr: errors.New("fabric_iface"),
+		},
+		"missing port": {
+			cfg: FabricConfig{
+				Provider:  "foo",
+				Interface: "bar",
+			},
+			expErr: errors.New("fabric_iface_port"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotErr := tc.cfg.Validate()
+			common.CmpErr(t, tc.expErr, gotErr)
+		})
 	}
 }
 

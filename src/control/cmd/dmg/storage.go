@@ -48,6 +48,7 @@ type storageCmd struct {
 	Format  storageFormatCmd  `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
 	Query   storageQueryCmd   `command:"query" alias:"q" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
 	Set     setFaultyCmd      `command:"set" alias:"s" description:"Manually set the device state."`
+	Replace storageReplaceCmd `command:"replace" alias:"r" description:"Replace a storage device that has been hot-removed with a new device."`
 }
 
 // storagePrepareCmd is the struct representing the prep storage subcommand.
@@ -108,10 +109,10 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	}
 
 	var bld strings.Builder
-	if err := control.PrintResponseErrors(resp, &bld); err != nil {
+	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
 		return err
 	}
-	if err := control.PrintStoragePrepareMap(resp.HostStorage, &bld); err != nil {
+	if err := pretty.PrintStoragePrepareMap(resp.HostStorage, &bld); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())
@@ -145,7 +146,7 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 
 	if cmd.jsonOutputEnabled() {
 		if cmd.Verbose {
-			cmd.log.Info("--verbose flag ignored if --json specified")
+			cmd.log.Error("--verbose flag ignored if --json specified")
 		}
 
 		return cmd.outputJSON(resp, err)
@@ -156,8 +157,8 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 	}
 
 	var bld strings.Builder
-	verbose := control.PrintWithVerboseOutput(cmd.Verbose)
-	if err := control.PrintResponseErrors(resp, &bld); err != nil {
+	verbose := pretty.PrintWithVerboseOutput(cmd.Verbose)
+	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
 		return err
 	}
 	if cmd.NvmeHealth {
@@ -182,7 +183,7 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 
 		return resp.Errors()
 	}
-	if err := control.PrintHostStorageMap(resp.HostStorage, &bld, verbose); err != nil {
+	if err := pretty.PrintHostStorageMap(resp.HostStorage, &bld, verbose); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())
@@ -210,7 +211,7 @@ func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context) (bool, er
 		if err != nil {
 			// If the AP hasn't been started, it will respond as if it
 			// is not a replica.
-			if system.IsNotReplica(err) {
+			if system.IsNotReplica(err) || system.IsUnavailable(err) {
 				return false, nil
 			}
 			return false, errors.Wrap(err, "System-Query command failed")
@@ -228,9 +229,7 @@ func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context) (bool, er
 		}
 		for _, member := range resp.Members {
 			if member.State() != system.MemberStateStopped {
-				if err := notStoppedRanks.Add(member.Rank); err != nil {
-					return false, errors.Wrap(err, "adding to rank set")
-				}
+				notStoppedRanks.Add(member.Rank)
 			}
 		}
 		if notStoppedRanks.Count() > 0 {
@@ -295,11 +294,11 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 
 func (cmd *storageFormatCmd) printFormatResp(resp *control.StorageFormatResp) error {
 	var bld strings.Builder
-	verbose := control.PrintWithVerboseOutput(cmd.Verbose)
-	if err := control.PrintResponseErrors(resp, &bld); err != nil {
+	verbose := pretty.PrintWithVerboseOutput(cmd.Verbose)
+	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
 		return err
 	}
-	if err := control.PrintStorageFormatMap(resp.HostStorage, &bld, verbose); err != nil {
+	if err := pretty.PrintStorageFormatMap(resp.HostStorage, &bld, verbose); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())
@@ -336,6 +335,40 @@ func (cmd *nvmeSetFaultyCmd) Execute(_ []string) error {
 	req := &control.SmdQueryReq{
 		UUID:      cmd.UUID,
 		SetFaulty: true,
+	}
+	return cmd.makeRequest(ctx, req)
+}
+
+// storageReplaceCmd is the struct representing the replace storage subcommand
+type storageReplaceCmd struct {
+	NVMe nvmeReplaceCmd `command:"nvme" alias:"n" description:"Replace an evicted/FAULTY NVMe SSD with another device."`
+}
+
+// nvmeReplaceCmd is the struct representing the replace nvme storage subcommand
+type nvmeReplaceCmd struct {
+	smdQueryCmd
+	OldDevUUID string `long:"old-uuid" description:"Device UUID of hot-removed SSD" required:"1"`
+	NewDevUUID string `long:"new-uuid" description:"Device UUID of new device" required:"1"`
+	NoReint    bool   `long:"no-reint" description:"Bypass reintegration of device and just bring back online."`
+}
+
+// Execute is run when storageReplaceCmd activates
+// Replace a hot-removed device with a newly plugged device, or reuse a FAULTY device
+func (cmd *nvmeReplaceCmd) Execute(_ []string) error {
+	if cmd.OldDevUUID == cmd.NewDevUUID {
+		cmd.log.Info("WARNING: Attempting to reuse a previously set FAULTY device!")
+	}
+
+	// TODO: Implement no-reint flag option
+	if cmd.NoReint {
+		cmd.log.Info("NoReint is not currently implemented")
+	}
+
+	ctx := context.Background()
+	req := &control.SmdQueryReq{
+		UUID:        cmd.OldDevUUID,
+		ReplaceUUID: cmd.NewDevUUID,
+		NoReint:     cmd.NoReint,
 	}
 	return cmd.makeRequest(ctx, req)
 }

@@ -82,6 +82,68 @@
    ...
 }
 {
+   FI leak 6
+   Memcheck:Leak
+   match-leak-kinds: possible
+   ...
+   obj:/usr/lib64/librdmacm.so.1.1.22.1
+   ...
+}
+{
+   FI leak 7
+   Memcheck:Leak
+   ...
+   fun:fi_ini
+   fun:fi_getinfo@@FABRIC_1.3
+   ...
+}
+{
+   FI leak 8
+   Memcheck:Leak
+   fun:calloc
+   ...
+   fun:verbs_open_device
+   ...
+   fun:rdma_bind_addr
+   ...
+   fun:fi_verbs_ini
+}
+# We couldn't find a rte_log_fini() function or similar on SPDK codebase to
+# suppress the leak warning message. The rte_log_init() function is called
+# from a constructor while loading the SPDK libraries.
+{
+   spdk leak 0
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:calloc
+   fun:rte_log_init
+   ...
+}
+{
+   spdk leak 1
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:calloc
+   fun:spdk_nvme_transport_register
+   ...
+}
+{
+   spdk leak 2
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:calloc
+   fun:spdk_rpc_register_method
+   ...
+}
+{
+   spdk leak 3
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:calloc
+   fun:spdk_rpc_register_alias_deprecated
+   ...
+}
+{
     CRYPTO leaks malloc
     Memcheck:Leak
     match-leak-kinds: reachable

@@ -23,7 +23,6 @@
 """
 from __future__ import print_function
 from logging import getLogger
-
 import os
 import re
 import json
@@ -43,35 +42,70 @@ class DaosTestError(Exception):
     """DAOS API exception class."""
 
 
-def human_to_bytes(h_size):
-    """Convert human readable size values to respective byte value.
+def human_to_bytes(size):
+    """Convert a human readable size value to respective byte value.
 
     Args:
-        h_size (str): human readable size value to be converted.
+        size (str): human readable size value to be converted.
+
+    Raises:
+        DaosTestError: when an invalid human readable size value is provided
 
     Returns:
         int: value translated to bytes.
 
     """
-    units = {"b": 1,
-             "kb": (2**10),
-             "k": (2**10),
-             "mb": (2**20),
-             "m": (2**20),
-             "gb": (2**30),
-             "g": (2**30)}
-    pattern = r"([0-9.]+|[a-zA-Z]+)"
-    val, unit = re.findall(pattern, h_size)
+    conversion_sizes = ("", "k", "m", "g", "t", "p", "e")
+    conversion = {
+        1000: ["{}b".format(item) for item in conversion_sizes],
+        1024: ["{}ib".format(item) for item in conversion_sizes],
+    }
+    match = re.findall(r"([0-9.]+)\s*([a-zA-Z]+|)", size)
+    try:
+        multiplier = 1
+        if match[0][1]:
+            multiplier = -1
+            unit = match[0][1].lower()
+            for item in conversion:
+                if unit in conversion[item]:
+                    multiplier = item ** conversion[item].index(unit)
+                    break
+            if multiplier == -1:
+                raise DaosTestError(
+                    "Invalid unit detected, not in {}: {}".format(
+                        conversion[1000] + conversion[1024][1:], unit))
+        value = float(match[0][0]) * multiplier
+    except IndexError:
+        raise DaosTestError(
+            "Invalid human readable size format: {}".format(size))
+    return int(value) if value.is_integer() else value
 
-    # Check if float or int and then convert
-    val = float(val) if "." in val else int(val)
-    if unit.lower() in units:
-        val = val * units[unit.lower()]
-    else:
-        print("Unit not found! Provide a valid unit i.e: b,k,kb,m,mb,g,gb")
-        val = -1
 
-    return val
+def bytes_to_human(size, digits=2, binary=True):
+    """Convert a byte value to the largest (> 1.0) human readable size.
+
+    Args:
+        size (int): byte size value to be converted.
+        digits (int, optional): number of digits used to round the converted
+            value. Defaults to 2.
+        binary (bool, optional): convert to binary (True) or decimal (False)
+            units. Defaults to True.
+
+    Returns:
+        str: value translated to a human readable size.
+
+    """
+    units = 1024 if binary else 1000
+    conversion = ["B", "KB", "MB", "GB", "TB", "PB", "EB"]
+    index = 0
+    value = [size if isinstance(size, (int, float)) else 0, conversion.pop(0)]
+    while value[0] > units and conversion:
+        index += 1
+        value[0] = float(size) / (units ** index)
+        value[1] = conversion.pop(0)
+        if units == 1024 and len(value[1]) > 1:
+            value[1] = "{}i{}".format(*value[1])
+    return "".join([str(round(value[0], digits)), value[1]])
 
 
 def run_command(command, timeout=60, verbose=True, raise_exception=True,
@@ -195,7 +229,7 @@ def get_host_data(hosts, command, text, error, timeout=None):
     DATA_ERROR = "[ERROR]"
 
     # Create a list of NodeSets with the same return code
-    data = {code: hosts for code, hosts in task.iter_retcodes()}
+    data = {code: host_list for code, host_list in task.iter_retcodes()}
 
     # Multiple return codes or a single non-zero return code
     # indicate at least one error obtaining the data
@@ -226,8 +260,8 @@ def get_host_data(hosts, command, text, error, timeout=None):
         host_data = {NodeSet.fromlist(hosts): DATA_ERROR}
 
     else:
-        for output, hosts in task.iter_buffers(data[0]):
-            host_data[NodeSet.fromlist(hosts)] = str(output)
+        for output, host_list in task.iter_buffers(data[0]):
+            host_data[NodeSet.fromlist(host_list)] = str(output)
 
     return host_data
 
@@ -240,7 +274,7 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
         command (str): the command to run in parallel
         verbose (bool, optional): display command output. Defaults to True.
         timeout (int, optional): command timeout in seconds. Defaults to None.
-        expect_rc (int, optional): exepcted return code. Defaults to 0.
+        expect_rc (int, optional): expected return code. Defaults to 0.
 
     Returns:
         dict: a dictionary of return codes keys and accompanying NodeSet
@@ -363,7 +397,7 @@ def process_host_list(hoststr):
     e.g. server-[26-27] becomes a list with entries server-26, server-27
 
     This works for every thing that has come up so far but I don't know what
-    all slurmfinds acceptable so it might not parse everything possible.
+    all slurm finds acceptable so it might not parse everything possible.
     """
     # 1st split into cluster name and range of hosts
     split_loc = hoststr.index('-')
@@ -499,12 +533,12 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60):
     return result
 
 
-def get_partition_hosts(partition):
-    """Get a list of hosts in the specified slurm partition.
+def get_partition_hosts(partition, reservation=None):
+    """Get a list of hosts in the specified slurm partition and reservation.
 
     Args:
         partition (str): name of the partition
-
+        reservation (str): name of reservation
     Returns:
         list: list of hosts in the specified partition
 
@@ -531,6 +565,34 @@ def get_partition_hosts(partition):
                 log.warning(
                     "Unable to obtain hosts from the %s slurm partition "
                     "output: %s", partition, output)
+                hosts = []
+            if hosts and reservation is not None:
+                # Get the list of hosts from the reservation information
+                cmd = "scontrol show reservation {}".format(reservation)
+                try:
+                    result = process.run(cmd, timeout=10)
+                except process.CmdError as error:
+                    log.warning(
+                        "Unable to obtain hosts from the %s slurm "
+                        "reservation: %s", reservation, error)
+                    result = None
+                    hosts = []
+                if result:
+                    # Get the list of hosts from the reservation information
+                    output = result.stdout
+                    try:
+                        reservation_hosts = list(
+                            NodeSet(re.findall(r"\sNodes=(\S+)", output)[0]))
+                    except (NodeSetParseError, IndexError):
+                        log.warning(
+                            "Unable to obtain hosts from the %s slurm "
+                            "reservation output: %s", reservation, output)
+                        reservation_hosts = []
+                    is_subset = set(reservation_hosts).issubset(set(hosts))
+                    if reservation_hosts and is_subset:
+                        hosts = reservation_hosts
+                    else:
+                        hosts = []
     return hosts
 
 
@@ -561,6 +623,40 @@ def check_uuid_format(uuid):
     """
     pattern = re.compile("([0-9a-fA-F-]+)")
     return bool(len(uuid) == 36 and pattern.match(uuid))
+
+
+def get_numeric_list(numeric_range):
+    """Convert a string of numeric ranges into an expanded list of integers.
+
+    Example: "0-3,7,9-13,15" -> [0, 1, 2, 3, 7, 9, 10, 11, 12, 13, 15]
+
+    Args:
+        numeric_range (str): the string of numbers and/or ranges of numbers to
+            convert
+
+    Raises:
+        AttributeError: if the syntax of the numeric_range argument is invalid
+
+    Returns:
+        list: an expanded list of integers
+
+    """
+    numeric_list = []
+    try:
+        for item in numeric_range.split(","):
+            if "-" in item:
+                range_args = [int(val) for val in item.split("-")]
+                range_args[-1] += 1
+                numeric_list.extend([int(val) for val in range(*range_args)])
+            else:
+                numeric_list.append(int(item))
+    except (AttributeError, ValueError, TypeError):
+        raise AttributeError(
+            "Invalid 'numeric_range' argument - must be a string containing "
+            "only numbers, dashes (-), and/or commas (,): {}".format(
+                numeric_range))
+
+    return numeric_list
 
 
 def get_remote_file_size(host, file_name):

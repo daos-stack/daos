@@ -36,7 +36,7 @@
 #include <daos/common.h>
 #include <daos/tests_lib.h>
 #include <daos_test.h>
-#include "dts_common.h"
+#include <daos/dts.h>
 
 enum {
 	UPDATE,

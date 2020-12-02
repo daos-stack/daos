@@ -714,7 +714,7 @@ drpc_close(struct drpc *ctx)
 	new_count = ctx->ref_count;
 
 	if (new_count == 0) {
-		D_INFO("Closing dRPC socket fd=%d\n", ctx->comm->fd);
+		D_DEBUG(DB_MGMT, "Closing dRPC socket fd=%d\n", ctx->comm->fd);
 
 		ret = unixcomm_close(ctx->comm);
 		if (ret != 0)

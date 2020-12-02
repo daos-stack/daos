@@ -90,7 +90,7 @@ func Filter(ss []string, f func(string) bool) (nss []string) {
 // FilterStringMatches checks whether a filter string matches the actual string
 // in a case-insensitive way. If the filter string is empty, a match is assumed.
 func FilterStringMatches(filterStr, actualStr string) bool {
-	return filterStr == "" || strings.ToUpper(actualStr) == strings.ToUpper(filterStr)
+	return filterStr == "" || strings.EqualFold(actualStr, filterStr)
 }
 
 // IsAlphabetic checks of a string just contains alphabetic characters.
@@ -172,4 +172,18 @@ func StringSliceHasDuplicates(slice []string) bool {
 		found[s] = true
 	}
 	return false
+}
+
+// PercentageString returns string representation of percentage given
+// nominator and denominator unsigned integers.
+func PercentageString(part, total uint64) string {
+	if total == 0 {
+		return "N/A"
+	}
+	if part == 0 {
+		return fmt.Sprintf("%v %%", 0)
+	}
+
+	return fmt.Sprintf("%v %%",
+		int((float64(part)/float64(total))*float64(100)))
 }

@@ -25,6 +25,7 @@
 import time
 from mdtest_test_base import MdtestBase
 
+
 class AggregationPunching(MdtestBase):
     # pylint: disable=too-many-ancestors
     """Test class Description: Runs Mdtest with in small config and
@@ -49,7 +50,7 @@ class AggregationPunching(MdtestBase):
         """
 
         if self.pool is None:
-            self.create_pool()
+            self.add_pool(connect=False)
         self.pool.connect()
 
         storage_index = 1 # SSD

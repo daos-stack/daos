@@ -64,23 +64,6 @@ crt_proc_daos_epoch_range_t(crt_proc_t proc, daos_epoch_range_t *erange)
 	return 0;
 }
 
-static int
-crt_proc_struct_cont_tgt_close_rec(crt_proc_t proc,
-				   struct cont_tgt_close_rec *rec)
-{
-	int rc;
-
-	rc = crt_proc_uuid_t(proc, &rec->tcr_hdl);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint64_t(proc, &rec->tcr_hce);
-	if (rc != 0)
-		return -DER_HG;
-
-	return 0;
-}
-
 CRT_RPC_DEFINE(cont_op, DAOS_ISEQ_CONT_OP, DAOS_OSEQ_CONT_OP)
 CRT_RPC_DEFINE(cont_create, DAOS_ISEQ_CONT_CREATE, DAOS_OSEQ_CONT_CREATE)
 CRT_RPC_DEFINE(cont_destroy, DAOS_ISEQ_CONT_DESTROY, DAOS_OSEQ_CONT_DESTROY)
@@ -102,7 +85,6 @@ CRT_RPC_DEFINE(cont_snap_create, DAOS_ISEQ_CONT_EPOCH_OP,
 CRT_RPC_DEFINE(cont_snap_destroy, DAOS_ISEQ_CONT_EPOCH_OP,
 		DAOS_OSEQ_CONT_EPOCH_OP)
 CRT_RPC_DEFINE(cont_tgt_destroy, DAOS_ISEQ_TGT_DESTROY, DAOS_OSEQ_TGT_DESTROY)
-CRT_RPC_DEFINE(cont_tgt_close, DAOS_ISEQ_TGT_CLOSE, DAOS_OSEQ_TGT_CLOSE)
 CRT_RPC_DEFINE(cont_tgt_query, DAOS_ISEQ_TGT_QUERY, DAOS_OSEQ_TGT_QUERY)
 CRT_RPC_DEFINE(cont_tgt_epoch_aggregate, DAOS_ISEQ_CONT_TGT_EPOCH_AGGREGATE,
 		DAOS_OSEQ_CONT_TGT_EPOCH_AGGREGATE)

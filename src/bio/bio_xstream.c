@@ -118,6 +118,7 @@ opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
 	int			rc;
 	size_t			count = opts->num_pci_addr;
 	struct spdk_pci_addr   *tmp = *list;
+	struct spdk_pci_addr   *new;
 
 	rc = is_addr_in_whitelist(traddr, *list, count);
 	if (rc < 0) {
@@ -127,13 +128,11 @@ opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
 		return 0;
 	}
 
-	tmp = realloc(tmp, sizeof(struct spdk_pci_addr) * (count + 1));
-	if (tmp == NULL) {
-		D_ERROR("realloc error\n");
+	D_REALLOC_ARRAY(new, tmp, count + 1);
+	if (new == NULL)
 		return -DER_NOMEM;
-	}
 
-	*list = tmp;
+	*list = new;
 	if (spdk_pci_addr_parse(*list + count, traddr) < 0) {
 		D_ERROR("Invalid address %s\n", traddr);
 		return -DER_INVAL;
@@ -243,8 +242,6 @@ populate_whitelist(struct spdk_env_opts *opts)
 		return -DER_NOMEM;
 
 	for (i = 0; i < DAOS_NVME_MAX_CTRLRS; i++) {
-		memset(trid, 0, sizeof(struct spdk_nvme_transport_id));
-
 		val = spdk_conf_section_get_nmval(sp, "TransportID", i, 0);
 		if (val == NULL) {
 			break;
@@ -288,6 +285,9 @@ populate_whitelist(struct spdk_env_opts *opts)
 			rc = -DER_INVAL;
 			break;
 		}
+
+		/* Clear it for the next loop */
+		memset(trid, 0, sizeof(*trid));
 	}
 
 	D_FREE(trid);
@@ -513,6 +513,12 @@ is_server_started(void)
 	return nvme_glb.bd_started;
 }
 
+inline d_list_t *
+bio_bdev_list(void)
+{
+	return &nvme_glb.bd_bdevs;
+}
+
 inline bool
 is_init_xstream(struct bio_xs_context *ctxt)
 {
@@ -537,8 +543,9 @@ struct common_cp_arg {
 static void
 common_prep_arg(struct common_cp_arg *arg)
 {
-	memset(arg, 0, sizeof(*arg));
 	arg->cca_inflights = 1;
+	arg->cca_rc = 0;
+	arg->cca_bs = NULL;
 }
 
 static void
@@ -750,8 +757,14 @@ bio_release_bdev(void *arg)
 	if (d_bdev->bb_desc == NULL)
 		return;
 
-	spdk_bdev_close(d_bdev->bb_desc);
-	d_bdev->bb_desc = NULL;
+	/*
+	 * It could be called from faulty device teardown procedure, where
+	 * the device is still plugged.
+	 */
+	if (d_bdev->bb_removed) {
+		spdk_bdev_close(d_bdev->bb_desc);
+		d_bdev->bb_desc = NULL;
+	}
 }
 
 static void
@@ -828,13 +841,14 @@ bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 		return;
 	}
 
-	spdk_thread_send_msg(owner_thread(bbs), teardown_bio_bdev, d_bdev);
+	if (bbs != NULL)
+		spdk_thread_send_msg(owner_thread(bbs), teardown_bio_bdev,
+				     d_bdev);
 }
 
 void
 replace_bio_bdev(struct bio_bdev *old_dev, struct bio_bdev *new_dev)
 {
-	D_ASSERT(old_dev->bb_removed);
 	D_ASSERT(old_dev->bb_blobstore != NULL);
 
 	new_dev->bb_blobstore = old_dev->bb_blobstore;
@@ -844,8 +858,12 @@ replace_bio_bdev(struct bio_bdev *old_dev, struct bio_bdev *new_dev)
 	new_dev->bb_tgt_cnt = old_dev->bb_tgt_cnt;
 	old_dev->bb_tgt_cnt = 0;
 
-	d_list_del_init(&old_dev->bb_link);
-	destroy_bio_bdev(old_dev);
+	if (old_dev->bb_removed) {
+		d_list_del_init(&old_dev->bb_link);
+		destroy_bio_bdev(old_dev);
+	} else {
+		old_dev->bb_faulty = true;
+	}
 }
 
 /*
@@ -964,6 +982,7 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 			       DP_UUID(old_dev->bb_uuid), old_dev->bb_name);
 			destroy_bio_bdev(d_bdev);
 		} else {
+			D_ASSERT(old_dev->bb_removed);
 			replace_bio_bdev(old_dev, d_bdev);
 			d_list_add(&d_bdev->bb_link, &nvme_glb.bd_bdevs);
 			/* Inform caller to trigger device setup */
@@ -1631,6 +1650,9 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 
 		D_INFO("Detected hot plugged device %s\n",
 		       spdk_bdev_get_name(bdev));
+		/* Print a console message */
+		D_PRINT("Detected hot plugged device %s\n",
+			spdk_bdev_get_name(bdev));
 
 		scan_period = 0;
 
@@ -1681,8 +1703,9 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 			continue;
 
 		scan_period = 0;
-		spdk_thread_send_msg(owner_thread(bbs), teardown_bio_bdev,
-				     d_bdev);
+		if (bbs != NULL)
+			spdk_thread_send_msg(owner_thread(bbs),
+					     teardown_bio_bdev, d_bdev);
 	}
 
 	if (scan_period == 0)

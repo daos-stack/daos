@@ -122,6 +122,34 @@ print_record(struct d_string_buffer_t *buf, const char *name,
 	d_write_string_buffer(buf, "\n    ]\n");
 }
 
+static int
+get_daos_csummers(struct d_string_buffer_t *buf)
+{
+	enum DAOS_HASH_TYPE	 type;
+	struct daos_csummer	*csummer = NULL;
+	struct hash_ft *ft;
+	int	rc, csum_size;
+
+	d_write_string_buffer(buf, "csummers:\n");
+
+	for (type = HASH_TYPE_UNKNOWN + 1; type < HASH_TYPE_END; type++) {
+		ft = daos_mhash_type2algo(type);
+		rc = daos_csummer_init(&csummer, ft, 128, 0);
+
+		if (rc != 0) {
+			return rc;
+		}
+
+		csum_size = daos_csummer_get_csum_len(csummer);
+
+		d_write_string_buffer(buf, "    %s: %d\n",
+				      ft->cf_name, csum_size);
+		daos_csummer_destroy(&csummer);
+	}
+
+	return DER_SUCCESS;
+}
+
 int
 get_vos_structure_sizes_yaml(int alloc_overhead, struct d_string_buffer_t *buf)
 {
@@ -150,6 +178,11 @@ get_vos_structure_sizes_yaml(int alloc_overhead, struct d_string_buffer_t *buf)
 	FOREACH_TYPE(PRINT_DYNAMIC)
 	d_write_string_buffer(buf, "trees:\n");
 	FOREACH_TYPE(PRINT_RECORD)
+
+	rc = get_daos_csummers(buf);
+	if (rc) {
+		goto exit_2;
+	}
 
 	if (buf->status != 0) {
 		d_free_string(buf);

@@ -110,7 +110,7 @@ struct crt_hg_context {
 /* crt_hg.c */
 int crt_hg_init(void);
 int crt_hg_fini(void);
-int crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx);
+int crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int provider, int idx);
 int crt_hg_ctx_fini(struct crt_hg_context *hg_ctx);
 int crt_hg_req_create(struct crt_hg_context *hg_ctx,
 		      struct crt_rpc_priv *rpc_priv);
@@ -134,6 +134,8 @@ int crt_hg_unpack_body(struct crt_rpc_priv *rpc_priv, crt_proc_t proc);
 int crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data);
 int crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data);
 
+bool crt_provider_is_contig_ep(int provider);
+
 static inline int
 crt_hgret_2_der(int hg_ret)
 {
@@ -142,16 +144,37 @@ crt_hgret_2_der(int hg_ret)
 		return 0;
 	case HG_TIMEOUT:
 		return -DER_TIMEDOUT;
-	case HG_INVALID_PARAM:
+	case HG_INVALID_ARG:
 		return -DER_INVAL;
-	case HG_SIZE_ERROR:
+	case HG_MSGSIZE:
 		return -DER_OVERFLOW;
-	case HG_NOMEM_ERROR:
+	case HG_NOMEM:
 		return -DER_NOMEM;
 	case HG_CANCELED:
 		return -DER_CANCELED;
 	default:
 		return -DER_HG;
+	};
+}
+
+static inline int
+crt_der_2_hgret(int der)
+{
+	switch (der) {
+	case 0:
+		return HG_SUCCESS;
+	case -DER_TIMEDOUT:
+		return HG_TIMEOUT;
+	case -DER_INVAL:
+		return HG_INVALID_ARG;
+	case -DER_OVERFLOW:
+		return HG_MSGSIZE;
+	case -DER_NOMEM:
+		return HG_NOMEM;
+	case -DER_CANCELED:
+		return HG_CANCELED;
+	default:
+		return HG_OTHER_ERROR;
 	};
 }
 

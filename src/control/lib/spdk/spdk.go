@@ -43,8 +43,9 @@ import (
 	"fmt"
 	"unsafe"
 
-	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // Env is the interface that provides SPDK environment management.

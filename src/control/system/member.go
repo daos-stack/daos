@@ -32,6 +32,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -44,41 +45,57 @@ type MemberState int
 
 const (
 	// MemberStateUnknown is the default invalid state.
-	MemberStateUnknown MemberState = iota
+	MemberStateUnknown MemberState = 0x0000
 	// MemberStateAwaitFormat indicates the member is waiting for format.
-	MemberStateAwaitFormat
+	MemberStateAwaitFormat MemberState = 0x0001
 	// MemberStateStarting indicates the member has started but is not
 	// ready.
-	MemberStateStarting
+	MemberStateStarting MemberState = 0x0002
 	// MemberStateReady indicates the member has setup successfully.
-	MemberStateReady
+	MemberStateReady MemberState = 0x0004
 	// MemberStateJoined indicates the member has joined the system.
-	MemberStateJoined
+	MemberStateJoined MemberState = 0x0008
 	// MemberStateStopping indicates prep-shutdown successfully run.
-	MemberStateStopping
+	MemberStateStopping MemberState = 0x0010
 	// MemberStateStopped indicates process has been stopped.
-	MemberStateStopped
+	MemberStateStopped MemberState = 0x0020
 	// MemberStateEvicted indicates rank has been evicted from DAOS system.
-	MemberStateEvicted
+	MemberStateEvicted MemberState = 0x0040
 	// MemberStateErrored indicates the process stopped with errors.
-	MemberStateErrored
+	MemberStateErrored MemberState = 0x0080
 	// MemberStateUnresponsive indicates the process is not responding.
-	MemberStateUnresponsive
+	MemberStateUnresponsive MemberState = 0x0100
+
+	// AvailableMemberFilter defines the state(s) to be used when determining
+	// whether or not a member is available for the purposes of pool creation, etc.
+	AvailableMemberFilter = MemberStateReady | MemberStateJoined
+	// AllMemberFilter will match all valid member states.
+	AllMemberFilter = MemberState(0xFFFF)
 )
 
 func (ms MemberState) String() string {
-	return [...]string{
-		"Unknown",
-		"AwaitFormat",
-		"Starting",
-		"Ready",
-		"Joined",
-		"Stopping",
-		"Stopped",
-		"Evicted",
-		"Errored",
-		"Unresponsive",
-	}[ms]
+	switch ms {
+	case MemberStateAwaitFormat:
+		return "AwaitFormat"
+	case MemberStateStarting:
+		return "Starting"
+	case MemberStateReady:
+		return "Ready"
+	case MemberStateJoined:
+		return "Joined"
+	case MemberStateStopping:
+		return "Stopping"
+	case MemberStateStopped:
+		return "Stopped"
+	case MemberStateEvicted:
+		return "Evicted"
+	case MemberStateErrored:
+		return "Errored"
+	case MemberStateUnresponsive:
+		return "Unresponsive"
+	default:
+		return "Unknown"
+	}
 }
 
 // isTransitionIllegal indicates if given state transitions is legal.
@@ -93,32 +110,32 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 		return true // identical state
 	}
 	return map[MemberState]map[MemberState]bool{
-		MemberStateAwaitFormat: map[MemberState]bool{
+		MemberStateAwaitFormat: {
 			MemberStateEvicted: true,
 		},
-		MemberStateStarting: map[MemberState]bool{
+		MemberStateStarting: {
 			MemberStateEvicted: true,
 		},
-		MemberStateReady: map[MemberState]bool{
+		MemberStateReady: {
 			MemberStateEvicted: true,
 		},
-		MemberStateJoined: map[MemberState]bool{
+		MemberStateJoined: {
 			MemberStateReady: true,
 		},
-		MemberStateStopping: map[MemberState]bool{
+		MemberStateStopping: {
 			MemberStateReady: true,
 		},
-		MemberStateEvicted: map[MemberState]bool{
+		MemberStateEvicted: {
 			MemberStateReady:    true,
 			MemberStateJoined:   true,
 			MemberStateStopping: true,
 		},
-		MemberStateErrored: map[MemberState]bool{
+		MemberStateErrored: {
 			MemberStateReady:    true,
 			MemberStateJoined:   true,
 			MemberStateStopping: true,
 		},
-		MemberStateUnresponsive: map[MemberState]bool{
+		MemberStateUnresponsive: {
 			MemberStateReady:    true,
 			MemberStateJoined:   true,
 			MemberStateStopping: true,
@@ -129,26 +146,35 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 // Member refers to a data-plane instance that is a member of this DAOS
 // system running on host with the control-plane listening at "Addr".
 type Member struct {
-	Rank  Rank
-	UUID  string
-	Addr  net.Addr
-	state MemberState
-	Info  string
+	Rank           Rank
+	UUID           uuid.UUID
+	Addr           *net.TCPAddr
+	FabricURI      string
+	FabricContexts uint32
+	state          MemberState
+	Info           string
+	FaultDomain    *FaultDomain
 }
 
 // MarshalJSON marshals system.Member to JSON.
 func (sm *Member) MarshalJSON() ([]byte, error) {
+	if sm == nil {
+		return nil, errors.New("tried to marshal nil Member")
+	}
+
 	// use a type alias to leverage the default marshal for
 	// most fields
 	type toJSON Member
 	return json.Marshal(&struct {
-		Addr  string
-		State int
+		Addr        string
+		State       int
+		FaultDomain string
 		*toJSON
 	}{
-		Addr:   sm.Addr.String(),
-		State:  int(sm.state),
-		toJSON: (*toJSON)(sm),
+		Addr:        sm.Addr.String(),
+		State:       int(sm.state),
+		FaultDomain: sm.FaultDomain.String(),
+		toJSON:      (*toJSON)(sm),
 	})
 }
 
@@ -162,8 +188,9 @@ func (sm *Member) UnmarshalJSON(data []byte) error {
 	// most fields
 	type fromJSON Member
 	from := &struct {
-		Addr  string
-		State int
+		Addr        string
+		State       int
+		FaultDomain string
 		*fromJSON
 	}{
 		fromJSON: (*fromJSON)(sm),
@@ -180,6 +207,12 @@ func (sm *Member) UnmarshalJSON(data []byte) error {
 	sm.Addr = addr
 
 	sm.state = MemberState(from.State)
+
+	fd, err := NewFaultDomainFromString(from.FaultDomain)
+	if err != nil {
+		return err
+	}
+	sm.FaultDomain = fd
 
 	return nil
 }
@@ -199,9 +232,19 @@ func (sm *Member) WithInfo(msg string) *Member {
 	return sm
 }
 
+// WithFaultDomain adds the fault domain field and returns the updated member.
+func (sm *Member) WithFaultDomain(fd *FaultDomain) *Member {
+	sm.FaultDomain = fd
+	return sm
+}
+
 // NewMember returns a reference to a new member struct.
-func NewMember(rank Rank, uuid string, addr net.Addr, state MemberState) *Member {
-	return &Member{Rank: rank, UUID: uuid, Addr: addr, state: state}
+func NewMember(rank Rank, uuidStr, uri string, addr *net.TCPAddr, state MemberState) *Member {
+	// FIXME: Either require a valid uuid.UUID to be supplied
+	// or else change the return signature to include an error
+	newUUID := uuid.MustParse(uuidStr)
+	return &Member{Rank: rank, UUID: newUUID, FabricURI: uri, Addr: addr,
+		state: state, FaultDomain: MustCreateFaultDomain()}
 }
 
 // Members is a type alias for a slice of member references
@@ -286,26 +329,20 @@ func (smr MemberResults) HasErrors() bool {
 // Membership tracks details of system members.
 type Membership struct {
 	sync.RWMutex
-	log     logging.Logger
-	members map[Rank]*Member
+	log logging.Logger
+	db  *Database
 }
 
 func (m *Membership) addMember(member *Member) error {
-	if _, found := m.members[member.Rank]; found {
-		return FaultMemberExists(member.Rank)
-	}
 	m.log.Debugf("adding system member: %s", member)
 
-	m.members[member.Rank] = member
-
-	return nil
+	return m.db.AddMember(member)
 }
 
-func (m *Membership) updateMember(member *Member) {
-	old := m.members[member.Rank]
-	m.log.Debugf("updating system member: %s->%s", old, member)
+func (m *Membership) updateMember(member *Member) error {
+	m.log.Debugf("updating system member: %s", member)
 
-	m.members[member.Rank] = member
+	return m.db.UpdateMember(member)
 }
 
 // Add adds member to membership, returns member count.
@@ -317,22 +354,114 @@ func (m *Membership) Add(member *Member) (int, error) {
 		return -1, err
 	}
 
-	return len(m.members), nil
+	count, err := m.db.MemberCount()
+	if err != nil {
+		return -1, err
+	}
+
+	return count, nil
+}
+
+// Count returns the number of members.
+func (m *Membership) Count() (int, error) {
+	return m.db.MemberCount()
+}
+
+type JoinRequest struct {
+	Rank           Rank
+	UUID           uuid.UUID
+	ControlAddr    *net.TCPAddr
+	FabricURI      string
+	FabricContexts uint32
+	FaultDomain    *FaultDomain
+}
+
+type JoinResponse struct {
+	Member     *Member
+	Created    bool
+	PrevState  MemberState
+	MapVersion uint32
+}
+
+// Join creates or updates an entry in the membership for the given
+// JoinRequest.
+func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
+	m.Lock()
+	defer m.Unlock()
+
+	resp = new(JoinResponse)
+	curMember, err := m.db.FindMemberByUUID(req.UUID)
+	if err == nil {
+		if !curMember.Rank.Equals(req.Rank) {
+			return nil, errors.Errorf("re-joining server %s has different rank (%d != %d)",
+				req.UUID, req.Rank, curMember.Rank)
+		}
+
+		if !curMember.FaultDomain.Equals(req.FaultDomain) {
+			m.log.Infof("fault domain for rank %d changed from %q to %q",
+				curMember.Rank,
+				curMember.FaultDomain.String(),
+				req.FaultDomain.String())
+		}
+
+		resp.PrevState = curMember.state
+		curMember.state = MemberStateJoined
+		curMember.Addr = req.ControlAddr
+		curMember.FabricURI = req.FabricURI
+		curMember.FabricContexts = req.FabricContexts
+		curMember.FaultDomain = req.FaultDomain
+		if err := m.db.UpdateMember(curMember); err != nil {
+			return nil, err
+		}
+		resp.Member = curMember
+
+		resp.MapVersion, err = m.db.CurMapVersion()
+		if err != nil {
+			return nil, err
+		}
+
+		return resp, err
+	}
+
+	if !IsMemberNotFound(err) {
+		return nil, err
+	}
+
+	newMember := &Member{
+		Rank:           req.Rank,
+		UUID:           req.UUID,
+		Addr:           req.ControlAddr,
+		FabricURI:      req.FabricURI,
+		FabricContexts: req.FabricContexts,
+		FaultDomain:    req.FaultDomain,
+		state:          MemberStateJoined,
+	}
+	if err := m.db.AddMember(newMember); err != nil {
+		return nil, err
+	}
+	resp.Created = true
+	resp.Member = newMember
+	resp.MapVersion, err = m.db.CurMapVersion()
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
 }
 
 // AddOrReplace adds member to membership or replaces member if it exists.
 //
 // Note: this method updates state without checking if state transition is
 //       legal so use with caution.
-func (m *Membership) AddOrReplace(newMember *Member) {
+func (m *Membership) AddOrReplace(newMember *Member) error {
 	m.Lock()
 	defer m.Unlock()
 
 	if err := m.addMember(newMember); err == nil {
-		return
+		return nil
 	}
 
-	m.updateMember(newMember)
+	return m.updateMember(newMember)
 }
 
 // Remove removes member from membership, idempotent.
@@ -340,15 +469,14 @@ func (m *Membership) Remove(rank Rank) {
 	m.Lock()
 	defer m.Unlock()
 
-	delete(m.members, rank)
-}
-
-func (m *Membership) getMember(rank Rank) (*Member, error) {
-	if member, found := m.members[rank]; found {
-		return member, nil
+	member, err := m.db.FindMemberByRank(rank)
+	if err != nil {
+		m.log.Debugf("remove %d failed: %s", rank, err)
+		return
 	}
-
-	return nil, FaultMemberMissing(rank)
+	if err := m.db.RemoveMember(member); err != nil {
+		m.log.Debugf("remove %d failed: %s", rank, err)
+	}
 }
 
 // Get retrieves member reference from membership based on Rank.
@@ -356,21 +484,12 @@ func (m *Membership) Get(rank Rank) (*Member, error) {
 	m.RLock()
 	defer m.RUnlock()
 
-	return m.getMember(rank)
+	return m.db.FindMemberByRank(rank)
 }
 
 // RankList returns slice of all ordered member ranks.
-func (m *Membership) RankList() (ranks []Rank) {
-	m.RLock()
-	defer m.RUnlock()
-
-	for rank := range m.members {
-		ranks = append(ranks, rank)
-	}
-
-	sort.Slice(ranks, func(i, j int) bool { return ranks[i] < ranks[j] })
-
-	return
+func (m *Membership) RankList() ([]Rank, error) {
+	return m.db.MemberRanks()
 }
 
 func (m *Membership) getHostRanks(rankSet *RankSet) map[string][]Rank {
@@ -381,7 +500,13 @@ func (m *Membership) getHostRanks(rankSet *RankSet) map[string][]Rank {
 		rankList = rankSet.Ranks()
 	}
 
-	for _, member := range m.members {
+	members, err := m.db.AllMembers()
+	if err != nil {
+		m.log.Errorf("failed to get all members: %s", err)
+		return nil
+	}
+
+	for _, member := range members {
 		addr := member.Addr.String()
 
 		if len(rankList) != 0 && !member.Rank.InList(rankList) {
@@ -440,12 +565,15 @@ func (m *Membership) Members(rankSet *RankSet) (members Members) {
 	defer m.RUnlock()
 
 	if rankSet == nil || rankSet.Count() == 0 {
-		for _, member := range m.members {
-			members = append(members, member)
+		var err error
+		members, err = m.db.AllMembers()
+		if err != nil {
+			m.log.Errorf("failed to get all members: %s", err)
+			return nil
 		}
 	} else {
 		for _, rank := range rankSet.Ranks() {
-			if member, exists := m.members[rank]; exists {
+			if member, err := m.db.FindMemberByRank(rank); err == nil {
 				members = append(members, member)
 			}
 		}
@@ -464,7 +592,7 @@ func (m *Membership) UpdateMemberStates(results MemberResults, updateOnFail bool
 	defer m.Unlock()
 
 	for _, result := range results {
-		member, err := m.getMember(result.Rank)
+		member, err := m.db.FindMemberByRank(result.Rank)
 		if err != nil {
 			return err
 		}
@@ -492,6 +620,10 @@ func (m *Membership) UpdateMemberStates(results MemberResults, updateOnFail bool
 		}
 		member.state = result.State
 		member.Info = result.Msg
+
+		if err := m.db.UpdateMember(member); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -504,36 +636,23 @@ func (m *Membership) CheckRanks(ranks string) (hit, miss *RankSet, err error) {
 	m.RLock()
 	defer m.RUnlock()
 
-	hit, err = CreateRankSet("")
+	var allRanks, toTest []Rank
+	allRanks, err = m.db.MemberRanks()
 	if err != nil {
 		return
 	}
-	miss, err = CreateRankSet("")
+	toTest, err = ParseRanks(ranks)
 	if err != nil {
 		return
 	}
 
-	var rankList []Rank
 	if ranks == "" {
-		rankList = m.RankList()
-	} else {
-		rankList, err = ParseRanks(ranks)
-		if err != nil {
-			return
-		}
+		return RankSetFromRanks(allRanks), RankSetFromRanks(nil), nil
 	}
 
-	for _, rank := range rankList {
-		if _, found := m.members[rank]; !found {
-			if err = miss.Add(rank); err != nil {
-				return
-			}
-			continue
-		}
-		if err = hit.Add(rank); err != nil {
-			return
-		}
-	}
+	missing := CheckRankMembership(allRanks, toTest)
+	miss = RankSetFromRanks(missing)
+	hit = RankSetFromRanks(CheckRankMembership(missing, toTest))
 
 	return
 }
@@ -579,9 +698,7 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int, resolveFn resolveFnSi
 		if rankList, exists := hostRanks[tcpAddr.String()]; exists {
 			m.log.Debugf("CheckHosts(): %v ranks found at %s", rankList, origHostString)
 			for _, rank := range rankList {
-				if err = rs.Add(rank); err != nil {
-					return nil, nil, err
-				}
+				rs.Add(rank)
 			}
 			continue
 		}
@@ -595,6 +712,6 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int, resolveFn resolveFnSi
 }
 
 // NewMembership returns a reference to a new DAOS system membership.
-func NewMembership(log logging.Logger) *Membership {
-	return &Membership{members: make(map[Rank]*Member), log: log}
+func NewMembership(log logging.Logger, db *Database) *Membership {
+	return &Membership{db: db, log: log}
 }

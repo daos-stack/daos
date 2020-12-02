@@ -5,6 +5,43 @@
 System monitoring and telemetry data will be provided as part of the
 control plane and will be documented in a future revision.
 
+## Storage Operations
+
+### Per-Storage-Server Space Utilization
+
+To query SCM and NVMe storage space usage and show how much space is available to
+create new DAOS pools with, run the following command:
+
+```bash
+bash-4.2$ dmg storage query usage
+Hosts   SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used
+-----   --------- -------- -------- ---------- --------- ---------
+wolf-71 6.4 TB    2.0 TB   68 %     1.5 TB     1.1 TB    27 %
+wolf-72 6.4 TB    2.0 TB   68 %     1.5 TB     1.1 TB    27 %
+```
+
+The command output shows online DAOS storage utilization, only including storage
+statistics for devices that have been formatted by DAOS control-plane and assigned
+to a currently running rank of the DAOS system. This represents the storage that
+can host DAOS pools.
+
+Note that the table values are per-host (storage server) and SCM/NVMe capacity
+pool component values specified in
+[`dmg pool create`](https://daos-stack.github.io/admin/pool_operations/#pool-creationdestroy)
+are per rank.
+If multiple ranks (I/O processes) have been configured per host in the server
+configuration file
+[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+then the values supplied to `dmg pool create` should be
+a maximum of the SCM/NVMe free space divided by the number of ranks per host.
+
+For example if 2.0 TB SCM and 10.0 TB NVMe free space is reported by
+`dmg storage query usage` and the server configuration file used to start the
+system specifies 2 I/O processes (2 "server" sections), the maximum pool size
+that can be specified is approximately `dmg pool create -s 1T -n 5T` (may need to
+specify slightly below the maximum to take account of negligible metadata
+overhead).
+
 ### NVMe SSD Health Monitoring
 
 Useful admin dmg commands to query NVMe SSD health:
@@ -15,8 +52,13 @@ Useful admin dmg commands to query NVMe SSD health:
 
 Queries persistently stored device and pool metadata tables. The device table maps
 the internal device UUID to attached VOS target IDs. The rank number of the server
-where the device is located is also listed, along with the current persistent
-device state (NORMAL|FAULTY).
+where the device is located is also listed, along with the current device state.
+The available device states are the following:
+  - NORMAL: a fully, functional device in-use by DAOS
+  - EVICTED: the device is no longer in-use by DAOS
+  - UNPLUGGED: the device is currently unplugged from the system (may or not be evicted)
+  - NEW: the device is plugged and available, and not currently in-use by DAOS
+
 The pool table maps the DAOS pool UUID to attached VOS target IDs, and will list
 all of the server ranks that the pool is distributed on. With the additional
 --verbose flag, the mapping of SPDK blob IDs to VOS target IDs is also displayed.
@@ -26,8 +68,12 @@ $ dmg -l boro-11,boro-13 storage query list-devices
 boro-11
 -------
   Devices
-    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 Targets:[0 1 2 3] Rank:0 State:NORMAL
-    UUID:80c9f1be-84b9-4318-a1be-c416c96ca48b Targets:[0 1 2 3] Rank:1 State:FAULTY
+    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 Targets:[0 2] Rank:0 State:NORMAL
+    UUID:80c9f1be-84b9-4318-a1be-c416c96ca48b Targets:[1 3] Rank:0 State:FAULTY
+    UUID:051b77e4-1524-4662-9f32-f8e4d2542c2d Targets:[] Rank:0 State:NEW
+    UUID:81905b24-be44-4106-8ff9-03002e9dd86a Targets:[0 2] Rank:1 State:UNPLUGGED
+    UUID:2ccb8afb-5d32-454e-86e3-762ec5dca7be Targets:[1 3] Rank:1 State:NORMAL
+    UUID:3f08da48-d88d-42dc-bca5-d1ab8419a401 Targets:[] Rank:1 State:NEW
 ```
 ```bash
 $ dmg -l boro-11,boro-13 storage query list-pools
@@ -89,21 +135,55 @@ boro-11
         Read Only: OK
         Volatile Memory Backup: OK
 ```
+### NVMe SSD Eviction and Hotplug
 
-- Manually Set Device State to FAULTY: `dmg storage set nvme-faulty`
+- Manually Evict an NVMe SSD: `dmg storage set nvme-faulty`
 
-Allows the admin to manually set the device state of the given device to FAULTY,
-which will trigger faulty device reaction (all targets on the SSD will be
-rebuilt and the SSD will remain in an OUT state until reintegration is
-supported).
+To manually evict an NVMe SSD (auto eviction will be supported in a future release),
+the device state needs to be set to "FAULTY" by running the following command:
 ```bash
 $ dmg -l boro-11 storage set nvme-faulty --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
 -------
 boro-11
 -------
   Devices
-    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 Targets:[0] Rank:1 State:FAULTY
+    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 Targets:[] Rank:1 State:FAULTY
 ```
+The device state will transition from "NORMAL" to "FAULTY" (shown above), which will
+trigger the faulty device reaction (all targets on the SSD will be rebuilt and the SSD
+will remain evicted until device replacement occurs).
+
+- Replace an Evicted SSD with a New Device: `dmg storage replace nvme`
+
+To replace an NVMe SSD with an evicted device and reintegrate it into use with
+DAOS, run the following command:
+```bash
+$ dmg -l boro-11 storage replace nvme --old-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 --new-uuid=80c9f1be-84b9-4318-a1be-c416c96ca48b
+-------
+boro-11
+-------
+  Devices
+    UUID:80c9f1be-84b9-4318-a1be-c416c96ca48b Targets:[] Rank:1 State:NORMAL
+```
+The old, now replaced device will remain in an "EVICTED" state until it is unplugged.
+The new device will transition from a "NEW" state to a "NORMAL" state (shown above).
+
+- Reuse a FAULTY Device: `dmg storage replace nvme`
+
+In order to reuse a device that was previously set as FAULTY and evicted from the DAOS
+system, an admin can run the following command (setting the old device UUID to be the
+new device UUID):
+```bash
+$ dmg -l boro-11 storage replace nvme --old-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 --new-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
+-------
+boro-11
+-------
+  Devices
+    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 Targets:[] Rank:1 State:NORMAL
+```
+The FAULTY device will transition from an "EVICTED" state back to a "NORMAL" state,
+and will again be available for use with DAOS. The use case of this command will mainly
+be for testing, or for accidental device eviction.
 
 ## System Operations
 

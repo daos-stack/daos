@@ -92,6 +92,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, []string{"-u", common.MockUUID()}...)
 			case "storage set nvme-faulty":
 				testArgs = append(testArgs, []string{"--force", "-u", common.MockUUID()}...)
+			case "storage replace nvme":
+				testArgs = append(testArgs, []string{"--old-uuid", common.MockUUID(), "--new-uuid", common.MockUUID()}...)
 			case "pool create":
 				testArgs = append(testArgs, []string{"-s", "1TB"}...)
 			case "pool destroy", "pool evict", "pool query", "pool get-acl":
@@ -115,7 +117,7 @@ func TestDmg_JsonOutput(t *testing.T) {
 			r, w, _ := os.Pipe()
 			done := make(chan struct{})
 			go func() {
-				io.Copy(&result, r)
+				_, _ = io.Copy(&result, r)
 				close(done)
 			}()
 			stdout := os.Stdout

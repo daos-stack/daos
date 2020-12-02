@@ -89,9 +89,11 @@ static int test_send_message(struct swim_context *ctx, swim_id_t to,
 		item->np_upds  = upds;
 		item->np_nupds = nupds;
 
-		pthread_mutex_lock(&g.mutex);
+		rc = pthread_mutex_lock(&g.mutex);
+		D_ASSERT(rc == 0);
 		TAILQ_INSERT_TAIL(&g.pkts, item, np_link);
-		pthread_mutex_unlock(&g.mutex);
+		rc = pthread_mutex_unlock(&g.mutex);
+		D_ASSERT(rc == 0);
 	}
 
 	return rc;
@@ -255,11 +257,13 @@ static void *network_thread(void *arg)
 	fprintf(stderr, "network  thread running on core %d\n", sched_getcpu());
 
 	do {
-		pthread_mutex_lock(&g.mutex);
+		rc = pthread_mutex_lock(&g.mutex);
+		D_ASSERT(rc == 0);
 		item = TAILQ_FIRST(&g.pkts);
 		if (item != NULL) {
 			TAILQ_REMOVE(&g.pkts, item, np_link);
-			pthread_mutex_unlock(&g.mutex);
+			rc = pthread_mutex_unlock(&g.mutex);
+			D_ASSERT(rc == 0);
 
 			pkt_total++;
 			if (!(rand() % failures)) {
@@ -282,7 +286,8 @@ static void *network_thread(void *arg)
 			D_FREE(item->np_upds);
 			free(item);
 		} else {
-			pthread_mutex_unlock(&g.mutex);
+			rc = pthread_mutex_unlock(&g.mutex);
+			D_ASSERT(rc == 0);
 		}
 
 		if (pkt_last != pkt_total && !(pkt_total % members_count)) {
@@ -351,7 +356,8 @@ int test_fini(void)
 			fprintf(stderr, "pthread_join() failed rc=%d\n", rc);
 	}
 
-	pthread_mutex_destroy(&g.mutex);
+	rc = pthread_mutex_destroy(&g.mutex);
+	D_ASSERT(rc == 0);
 
 	for (i = 0; i < members_count; i++) {
 		swim_fini(g.swim_ctx[i]);

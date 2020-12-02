@@ -2,12 +2,12 @@
 
 # This is the script used for running unit testing
 # run_tests.sh and run_tests.sh with memcheck stages on the CI
-set -ex
+set -uex
 
 # JENKINS-52781 tar function is breaking symlinks
 
 rm -rf unit_memcheck_vm_test unit_test_memcheck_logs unit-test*.memcheck.xml
-rm -rf unit_vm_test unit_test_logs
+rm -rf nlt_logs unit_test_logs
 rm -rf test_results
 mkdir test_results
 
@@ -27,6 +27,12 @@ else
   BULLSEYE=
 fi
 
+if [ "$STAGE_NAME" = NLT ]; then
+    NLT=true
+else
+    NLT=false
+fi
+
 # shellcheck disable=SC1091
 source ./.build_vars.sh
 rm -f "${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control"
@@ -44,5 +50,6 @@ ssh "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$DAOS_BASE      \
                                      HOSTPWD=$PWD              \
                                      SL_PREFIX=$SL_PREFIX      \
                                      WITH_VALGRIND=$WITH_VALGRIND \
+                                     NLT=$NLT                  \
                                      BULLSEYE=$BULLSEYE        \
                                      $(cat "$mydir/test_main_node.sh")"

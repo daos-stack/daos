@@ -446,6 +446,12 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 			bbs->bb_owner_xs->bxc_tgt_id,
 			bio_state_enum_to_str(bbs->bb_state),
 			bio_state_enum_to_str(new_state));
+		/* Print a console message */
+		D_PRINT("Blobstore state transitioned. tgt: %d, %s -> %s\n",
+			bbs->bb_owner_xs->bxc_tgt_id,
+			bio_state_enum_to_str(bbs->bb_state),
+			bio_state_enum_to_str(new_state));
+
 		bbs->bb_state = new_state;
 
 		if (new_state == BIO_BS_STATE_FAULTY) {
@@ -529,8 +535,11 @@ bio_bs_state_transit(struct bio_blobstore *bbs)
 		break;
 	case BIO_BS_STATE_SETUP:
 		rc = on_setup(bbs);
-		if (rc == 0)
+		if (rc == 0) {
 			rc = bio_bs_state_set(bbs, BIO_BS_STATE_NORMAL);
+			if (rc == 0)
+				on_normal(bbs);
+		}
 		break;
 	default:
 		rc = -DER_INVAL;
@@ -551,7 +560,7 @@ void
 bio_media_error(void *msg_arg)
 {
 	struct media_error_msg		*mem = msg_arg;
-	struct nvme_health_stats	*dev_state;
+	struct nvme_stats		*dev_state;
 	int				 rc;
 
 	dev_state = &mem->mem_bs->bb_dev_health.bdh_health_state;

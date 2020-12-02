@@ -45,7 +45,7 @@ reconnect(test_arg_t *arg) {
 	flags = (DAOS_COO_RW | DAOS_COO_FORCE);
 	if (arg->myrank == 0) {
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       arg->pool.svc, DAOS_PC_RW,
+				       NULL /* svc */, DAOS_PC_RW,
 				       &arg->pool.poh, &arg->pool.pool_info,
 				       NULL /* ev */);
 		if (rc)
@@ -291,7 +291,7 @@ int
 oid_alloc_setup(void **state)
 {
 	return test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
-			  NULL);
+			  0, NULL);
 }
 
 int

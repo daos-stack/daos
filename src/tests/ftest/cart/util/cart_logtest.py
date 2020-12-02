@@ -159,12 +159,6 @@ class RegionCounter():
                                                       end_time - start_time,
                                                       data)
 
-# CaRT Error numbers to convert to strings.
-C_ERRNOS = {0: '-DER_SUCCESS',
-            -1006: 'DER_UNREACH',
-            -1011: '-DER_TIMEDOUT',
-            -1032: '-DER_EVICTED'}
-
 # Use a global variable here so show_line can remember previously reported
 # error lines.
 shown_logs = set()
@@ -203,10 +197,14 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                                         'prop->dpp_entries[idx].dpe_val_ptr'),
                      'cont_prop_default_copy': ('entry_def->dpe_str'),
                      'cont_iv_prop_g2l': ('prop_entry->dpe_str'),
+                     'ds_mgmt_drpc_group_update': ('body'),
                      'enum_cont_cb': ('ptr'),
+                     'pool_iv_conns_resize': ('new_conns'),
                      'obj_enum_prep_sgls': ('dst_sgls[i].sg_iovs',
                                             'dst_sgls[i].sg_iovs[j].iov_buf'),
                      'notify_ready': ('reqb'),
+                     'test_iv_fetch': ('buf'),
+                     'iv_on_get': ('iv_value->sg_iovs[0].iov_buf'),
                      'oid_iv_ent_init': ('oid_entry'),
                      'pool_svc_name_cb': ('s'),
                      'local_name_to_principal_name': ('*name'),
@@ -220,15 +218,20 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                      'pool_iv_value_alloc_internal': ('sgl->sg_iovs[0].iov_buf'),
                      'daos_prop_entry_copy': ('entry_dup->dpe_str'),
                      'daos_prop_dup': ('entry_dup->dpe_str'),
+                     'rank_list_to_uint32_array': ('*ints'),
                      'auth_cred_to_iov': ('packed'),
+                     'd_sgl_init': ('sgl->sg_iovs'),
                      'daos_csummer_alloc_iods_csums': ('buf'),
-                     'daos_sgl_init': ('sgl->sg_iovs')}
+                     'get_pool_svc_ranks': ('req')}
 # pylint: enable=line-too-long
 
 mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'crt_group_psr_set': ('uri'),
                     'crt_hdlr_uri_lookup': ('tmp_uri'),
                     'crt_rpc_priv_free': ('rpc_priv'),
+                    'crt_group_config_save': ('url'),
+                    'get_self_uri': ('uri'),
+                    'tc_srv_start_basic': ('my_uri'),
                     'crt_init_opt': ('crt_gdata.cg_addr'),
                     'cont_prop_default_copy': ('entry_def->dpe_str'),
                     'ds_pool_list_cont_handler': ('cont_buf'),
@@ -236,15 +239,17 @@ mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'init_pool_metadata': ('uuids'),
                     'fini_free': ('svc->s_name',
                                   'svc->s_db_path'),
-                    'daos_sgl_fini': ('sgl->sg_iovs[i].iov_buf',
-                                      'sgl->sg_iovs'),
+                    'd_sgl_fini': ('sgl->sg_iovs[i].iov_buf',
+                                   'sgl->sg_iovs'),
                     'd_rank_list_free': ('rank_list',
                                          'rank_list->rl_ranks'),
                     'pool_prop_default_copy': ('entry_def->dpe_str'),
                     'pool_svc_store_uuid_cb': ('path'),
                     'ds_mgmt_svc_start': ('uri'),
+                    'ds_mgmt_drpc_pool_create': ('resp.svcreps'),
                     'ds_rsvc_lookup': ('path'),
                     'daos_acl_free': ('acl'),
+                    'update_done': ('iv_value->sg_iovs'),
                     'daos_drpc_free': ('pointer'),
                     'pool_child_add_one': ('path'),
                     'bio_sgl_fini': ('sgl->bs_iovs'),
@@ -288,6 +293,10 @@ class hwm_counter():
         self.__hwm = 0
         self.__acount = 0
         self.__fcount = 0
+
+    def has_data(self):
+        """Return true if there is any data registered"""
+        return self.__hwm != 0
 
     def __str__(self):
         return "Total:{:,} HWM:{:,} {} allocations, {} frees".\
@@ -353,9 +362,10 @@ class LogTest():
         for (loc, count) in self.log_locs.most_common(10):
             if count < 10:
                 break
+            percent = 100 * count / self.log_count
             print('Logging used {} times at {} ({:.1f}%)'.format(count,
                                                                  loc,
-                                                                 100*count/self.log_count))
+                                                                 percent))
         print('Most common facilities')
         for (fac, count) in self.log_fac.most_common(10):
             if count < 10:
@@ -441,6 +451,16 @@ class LogTest():
 
         for line in self._li.new_iter(pid=pid, stateful=True):
             self.save_log_line(line)
+            try:
+                msg = ''.join(line._fields[2:])
+                # Warn if a line references the name of the function it was in,
+                # but skip short function names or _internal suffixes.
+                if line.function in msg and len(line.function) > 6 and \
+                   '{}_internal'.format(line.function) not in msg:
+                    show_line(line, 'NORMAL',
+                              'Logging references function name')
+            except AttributeError:
+                pass
             if abort_on_warning:
                 if line.level <= cart_logparse.LOG_LEVELS['WARN']:
                     show = True
@@ -452,6 +472,17 @@ class LogTest():
                             show = False
                             self.fi_location = line
                         elif '-1009' in line.get_msg():
+
+                            src_offset = line.lineno - self.fi_location.lineno
+                            if line.filename == self.fi_location.filename:
+                                src_offset = line.lineno - self.fi_location.lineno
+                                if src_offset > 0 and src_offset < 5:
+                                    show_line(line, 'NORMAL',
+                                              'Logging allocation failure')
+
+                            if not line.get_msg().endswith("DER_NOMEM(-1009): 'Out of memory'"):
+                                show_line(line, 'LOW',
+                                          'Error does not use DF_RC')
                             # For the fault injection test do not report
                             # errors for lines that print -DER_NOMEM, as
                             # this highlights other errors and lines which
@@ -462,7 +493,7 @@ class LogTest():
                         # that fail during shutdown.
                         if line.rpc_opcode == '0xfe000000':
                             show = False
-                    elif line.fac == 'external':
+                    if line.fac == 'external':
                         show = False
                     if show:
                         # Allow WARNING or ERROR messages, but anything higher
@@ -604,7 +635,8 @@ class LogTest():
                                                                   trace_lines,
                                                                   p_trace))
 
-        print("Memsize: {}".format(memsize))
+        if memsize.has_data():
+            print("Memsize: {}".format(memsize))
 
         # Special case the fuse arg values as these are allocated by IOF
         # but freed by fuse itself.
@@ -671,8 +703,7 @@ class LogTest():
             elif line.is_callback():
                 rpc = line.descriptor
                 rpc_state = 'COMPLETED'
-                result = line.get_field(-1).rstrip('.')
-                result = C_ERRNOS.get(int(result), result)
+                result = line.get_field(13).split('(')[0]
                 c_state_names.add(result)
                 opcode = current_opcodes[line.descriptor]
                 try:
@@ -702,7 +733,6 @@ class LogTest():
             op_state_counters[opcode][rpc_state] += 1
 
         if not bool(op_state_counters):
-            print('No rpcs in log file')
             return
 
         table = []
@@ -710,10 +740,10 @@ class LogTest():
         names = sorted(c_state_names)
         if names:
             try:
-                names.remove('-DER_SUCCESS')
+                names.remove('DER_SUCCESS')
             except ValueError:
                 pass
-            names.insert(0, '-DER_SUCCESS')
+            names.insert(0, 'DER_SUCCESS')
         headers = ['OPCODE',
                    'ALLOCATED',
                    'SUBMITTED',
@@ -722,7 +752,7 @@ class LogTest():
                    'DEALLOCATED']
 
         for state in names:
-            headers.append(state)
+            headers.append('-{}'.format(state))
         for (op, counts) in sorted(op_state_counters.items()):
             row = [op,
                    counts['ALLOCATED'],
@@ -762,12 +792,21 @@ def run():
                         action='store_true')
     parser.add_argument('file', help='input file')
     args = parser.parse_args()
-    log_iter = cart_logparse.LogIter(args.file)
+    try:
+        log_iter = cart_logparse.LogIter(args.file)
+    except IsADirectoryError:
+        print('Log tracing on directory not possible')
+        return
     test_iter = LogTest(log_iter)
     if args.dfuse:
         test_iter.check_dfuse_io()
     else:
-        test_iter.check_log_file(False)
+        try:
+            test_iter.check_log_file(False)
+        except LogError:
+            print('Errors in log file, ignoring')
+        except NotAllFreed:
+            print('Memory leaks, ignoring')
 
 if __name__ == '__main__':
     run()

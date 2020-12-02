@@ -32,12 +32,15 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/daos-stack/daos/src/control/security"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
 	// Start with this value... If anything takes longer than this,
 	// it almost certainly needs to be fixed.
 	defaultRequestTimeout = 5 * time.Minute
+
+	defaultMSRetry = 250 * time.Millisecond
 )
 
 type (
@@ -231,23 +234,62 @@ func (c *Client) InvokeUnaryRPCAsync(parent context.Context, req UnaryRequest) (
 // items which represent the success or failure of the RPC invocation for each host
 // in the request.
 func (c *Client) InvokeUnaryRPC(ctx context.Context, req UnaryRequest) (*UnaryResponse, error) {
-	respChan, err := c.InvokeUnaryRPCAsync(ctx, req)
-	if err != nil {
-		return nil, err
+	gatherResponses := func(ctx context.Context, respChan chan *HostResponse, ur *UnaryResponse) error {
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case hr := <-respChan:
+				if hr == nil {
+					return nil
+				}
+				ur.Responses = append(ur.Responses, hr)
+			}
+		}
 	}
 
-	ur := &UnaryResponse{
-		fromMS: req.isMSRequest(),
-	}
 	for {
+		respChan, err := c.InvokeUnaryRPCAsync(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+
+		ur := &UnaryResponse{
+			fromMS: req.isMSRequest(),
+		}
+		if err := gatherResponses(ctx, respChan, ur); err != nil {
+			return nil, err
+		}
+
+		if !ur.fromMS {
+			return ur, nil
+		}
+		_, err = ur.getMSResponse()
+		switch e := err.(type) {
+		case *system.ErrNotLeader:
+			if e.LeaderHint == "" {
+				req.SetHostList(e.Replicas)
+				break
+			}
+			req.SetHostList([]string{e.LeaderHint})
+		case *system.ErrNotReplica:
+			req.SetHostList(e.Replicas)
+		default:
+			// If the request succeeded, or there was only one host to try,
+			// return now. Otherwise, remove the failed host from the list
+			// and try again.
+			if err == nil || len(req.getHostList()) < 2 {
+				return ur, nil
+			}
+			c.log.Debugf("removing %s from request hosts due to %s", req.getHostList()[0], e)
+			req.SetHostList(req.getHostList()[1:])
+		}
+
+		c.log.Debugf("MS request error: %v; retrying after %s", err, defaultMSRetry)
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case hr := <-respChan:
-			if hr == nil {
-				return ur, nil
-			}
-			ur.Responses = append(ur.Responses, hr)
+		case <-time.After(defaultMSRetry):
 		}
 	}
 }

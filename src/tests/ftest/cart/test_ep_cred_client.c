@@ -87,7 +87,7 @@ test_run()
 	tc_cli_start_basic(test.tg_local_group_name,
 			   test.tg_remote_group_name,
 			   &grp, &rank_list, &test.tg_crt_ctx,
-			   &test.tg_tid, true, true, &opt);
+			   &test.tg_tid, true, test.tg_use_cfg, &opt);
 
 	rc = sem_init(&test.tg_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
@@ -164,8 +164,8 @@ test_run()
 		tc_sem_timedwait(&test.tg_token_to_proceed, 61, __LINE__);
 	}
 
-	D_FREE(rank_list->rl_ranks);
-	D_FREE(rank_list);
+	d_rank_list_free(rank_list);
+	rank_list = NULL;
 
 	if (test.tg_save_cfg) {
 		rc = crt_group_detach(grp);

@@ -70,6 +70,10 @@
  * be handed out to random cart contexts.
  *
  * echo 31416-31516 > /proc/sys/net/ipv4/ip_local_reserved_ports
+ *
+ * Alternatively a port selected must be outside of the local port
+ * range specified by:
+ * /proc/sys/net/ipv4/ip_local_port_range
  */
 #define START_PORT 31416
 
@@ -87,6 +91,8 @@ struct options_t {
 	int	show_help;
 	char	*app_to_exec;
 	int	app_args_indx;
+	int	start_port;
+	int	num_ctx;
 };
 
 struct options_t g_opt;
@@ -96,9 +102,11 @@ show_usage(const char *msg)
 {
 	printf("----------------------------------------------\n");
 	printf("%s\n", msg);
-	printf("Usage: crt_launch [-ch] <-e app_to_exec app_args>\n");
+	printf("Usage: crt_launch [-cph] <-e app_to_exec app_args>\n");
 	printf("Options:\n");
 	printf("-c	: Indicate app is a client\n");
+	printf("-n	: Optional arg to set num of contexts (default 32)\n");
+	printf("-p	: Optional argument to set first port to use\n");
 	printf("-h	: Print this help and exit\n");
 	printf("----------------------------------------------\n");
 }
@@ -110,17 +118,25 @@ parse_args(int argc, char **argv)
 	int				rc = 0;
 	struct option			long_options[] = {
 		{"client",	no_argument,		0, 'c'},
+		{"port",	required_argument,	0, 'p'},
 		{"help",	no_argument,		0, 'h'},
+		{"num_ctx",	required_argument,	0, 'n'},
 		{"exec",	required_argument,	0, 'e'},
 		{0, 0, 0, 0}
 	};
 
+	g_opt.start_port = START_PORT;
+	g_opt.num_ctx = 32;
+
 	while (1) {
-		rc = getopt_long(argc, argv, "e:ch", long_options,
+		rc = getopt_long(argc, argv, "e:p:n:ch", long_options,
 				 &option_index);
 		if (rc == -1)
 			break;
 		switch (rc) {
+		case 'n':
+			g_opt.num_ctx = atoi(optarg);
+			break;
 		case 'c':
 			g_opt.is_client = true;
 			break;
@@ -131,6 +147,9 @@ parse_args(int argc, char **argv)
 			g_opt.app_to_exec = optarg;
 			g_opt.app_args_indx = optind - 1;
 			return 0;
+		case 'p':
+			g_opt.start_port = atoi(optarg);
+			break;
 		default:
 			g_opt.show_help = true;
 			return 1;
@@ -149,13 +168,12 @@ get_self_uri(struct host *h, int rank)
 	char		*p;
 	int		len;
 	int		rc;
-	char		*str_port;
+	char		*str_port = NULL;
 
-	/* Assign ports sequentually to each rank starting from START_PORT */
-	rc = asprintf(&str_port, "%d", START_PORT + rank);
-	if (rc == -1) {
+	/* Assign ports sequentually to each rank */
+	D_ASPRINTF(str_port, "%d", g_opt.start_port + rank * g_opt.num_ctx);
+	if (str_port == NULL)
 		return -DER_NOMEM;
-	}
 
 	setenv("OFI_PORT", str_port, 1);
 
@@ -210,6 +228,7 @@ get_self_uri(struct host *h, int rank)
 	}
 
 out:
+	D_FREE(str_port);
 	return rc;
 }
 
@@ -284,6 +303,12 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
+	if (access(g_opt.app_to_exec, F_OK) == -1) {
+		fprintf(stderr, "ERROR: Unable to locate '%s'\n",
+			g_opt.app_to_exec);
+		return -1;
+	}
+
 	/*
 	 * Using MPI negotiate ranks between each process and retrieve
 	 * URI.
@@ -328,6 +353,9 @@ int main(int argc, char **argv)
 
 	sprintf(str_rank, "%d", hostbuf->my_rank);
 	sprintf(str_port, "%d", hostbuf->ofi_port);
+	/* Set CRT_L_RANK and OFI_PORT */
+	setenv("CRT_L_RANK", str_rank, true);
+	setenv("OFI_PORT", str_port, true);
 exit:
 	if (hostbuf)
 		free(hostbuf);
@@ -336,10 +364,6 @@ exit:
 		free(recv_buf);
 
 	MPI_Finalize();
-
-	/* Set CRT_L_RANK and OFI_PORT */
-	setenv("CRT_L_RANK", str_rank, true);
-	setenv("OFI_PORT", str_port, true);
 
 	if (rc == 0) {
 		/* Exec passed application with rest of arguments */

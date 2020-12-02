@@ -29,9 +29,9 @@ from general_utils import get_remote_file_size
 from ior_test_base import IorTestBase
 
 
-# pylint: disable=too-many-ancestors
 class DfuseSparseFile(IorTestBase):
-    """Dfuse Sparse File base class
+    # pylint: disable=too-many-ancestors,too-few-public-methods
+    """Dfuse Sparse File base class.
 
     :avocado: recursive
     """
@@ -42,7 +42,7 @@ class DfuseSparseFile(IorTestBase):
         self.space_before = None
 
     def test_dfusesparsefile(self):
-        """Jira ID: DAOS-3768
+        """Jira ID: DAOS-3768.
 
         Test Description:
             Purpose of this test is to mount dfuse and verify behavior
@@ -64,7 +64,7 @@ class DfuseSparseFile(IorTestBase):
         # Create a pool, container and start dfuse.
         self.create_pool()
         self.create_cont()
-        self._start_dfuse()
+        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
         # get scm space before write
         self.space_before = self.pool.get_pool_free_space("nvme")
@@ -127,8 +127,9 @@ class DfuseSparseFile(IorTestBase):
         self.assertTrue(check_first_byte == check_1024th_byte)
 
         # check the middle 1022 bytes if they are filled with zeros
-        middle_1022_bytes = u"cmp --ignore-initial=1 --bytes=1022 {} {}".\
-                                  format(sparse_file, "/dev/zero")
+        middle_1022_bytes = \
+            u"cmp --ignore-initial=1 --bytes=1022 {} {}".format(
+                sparse_file, "/dev/zero")
         self.execute_cmd(middle_1022_bytes)
 
         # read last 512 bytes which should be zeros till end of file.

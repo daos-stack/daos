@@ -63,7 +63,7 @@ profile_chunk_alloc(int chunk_size)
 		return NULL;
 
 	D_INIT_LIST_HEAD(&chunk->dpc_chunk_list);
-	D_ALLOC(chunk->dpc_chunks, chunk_size * sizeof(*chunk->dpc_chunks));
+	D_ALLOC_ARRAY(chunk->dpc_chunks, chunk_size);
 	chunk->dpc_chunk_size = chunk_size;
 	chunk->dpc_chunk_offset = 0;
 	if (chunk->dpc_chunks == NULL) {

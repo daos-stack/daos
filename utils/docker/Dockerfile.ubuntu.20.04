@@ -30,7 +30,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
             pylint python-dev python3-dev scons sg3-utils uuid-dev      \
             yasm valgrind libhwloc-dev man fuse3 libfuse3-dev           \
             openjdk-8-jdk maven libopenmpi-dev patchelf libjson-c-dev   \
-            liblz4-dev
+            liblz4-dev python3-distro
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
                        software-properties-common &&                    \
@@ -45,20 +45,6 @@ RUN locale-gen en_US.UTF-8 || cat /usr/share/i18n/SUPPORTED
 # use Java 8 instead of default Java 11
 RUN update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
 
-# set maven mirror
-RUN mkdir -p /home/$USER/.m2
-
-RUN echo -e "<settings>\n\
-	<mirrors>\n\
-		<mirror>\n\
-			<id>google-maven-central</id>\n\
-			<name>GCS Maven Central mirror</name>\n\
-			<url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
-			<mirrorOf>central</mirrorOf>\n\
-		</mirror>\n\
-	</mirrors>\n\
-</settings>" > /home/$USER/.m2/settings.xml
-
 # Dependencies
 
 # Add DAOS user
@@ -70,6 +56,19 @@ RUN echo "$USER:$PASSWD" | chpasswd
 # Create directory for DAOS backend storage
 RUN mkdir /mnt/daos
 RUN chown daos.daos /mnt/daos
+
+# Set maven repo mirror
+RUN mkdir -p /root/.m2
+RUN echo -e "<settings>\n\
+	<mirrors>\n\
+		<mirror>\n\
+			<id>google-maven-central</id>\n\
+			<name>GCS Maven Central mirror</name>\n\
+			<url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
+			<mirrorOf>central</mirrorOf>\n\
+		</mirror>\n\
+	</mirrors>\n\
+</settings>" > /root/.m2/settings.xml
 
 # Switch to new user
 #USER $USER

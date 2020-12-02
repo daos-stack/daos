@@ -922,7 +922,7 @@ rebuild_multiple_tgts(void **state)
 				daos_exclude_server(arg->pool.pool_uuid,
 						    arg->group,
 						    arg->dmg_config,
-						    arg->pool.svc,
+						    NULL /* svc */,
 						    rank);
 				if (++fail_cnt >= 2)
 					break;
@@ -947,9 +947,9 @@ rebuild_multiple_tgts(void **state)
 	/* Add back the target if it is not being killed */
 	if (arg->myrank == 0) {
 		for (i = 0; i < 2; i++)
-			daos_add_server(arg->pool.pool_uuid, arg->group,
-					arg->dmg_config, arg->pool.svc,
-					exclude_ranks[i]);
+			daos_reint_server(arg->pool.pool_uuid, arg->group,
+					  arg->dmg_config, arg->pool.svc,
+					  exclude_ranks[i]);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 }
@@ -1320,7 +1320,7 @@ rebuild_test_setup(void **state)
 	int rc;
 
 	rc = test_setup(state, SETUP_CONT_CONNECT, true, REBUILD_POOL_SIZE,
-			NULL);
+			0, NULL);
 	if (rc)
 		return rc;
 

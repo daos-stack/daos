@@ -526,7 +526,7 @@ lru_array_stress_test(void **state)
 		assert_true(entry->magic1 == MAGIC1);
 		assert_true(entry->magic2 == MAGIC2);
 		assert_true(entry->record == &stress_entries[i]);
-		assert_true(stress_entries[i].value = i);
+		assert_true(stress_entries[i].value == i);
 
 		lrua_evict(ts_arg->array, &stress_entries[i].idx);
 	}

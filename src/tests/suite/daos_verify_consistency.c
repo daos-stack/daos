@@ -227,7 +227,8 @@ vc_4(void **state)
 	oid = dts_oid_gen(dts_vc_class, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 
-	vc_gen_modifications(arg, &req, oid, 7, 7, 7, 0, 0, DAOS_VC_DIFF_REC);
+	vc_gen_modifications(arg, &req, oid, 7, 7, 7, 0, 0,
+			     DAOS_VC_DIFF_REC | DAOS_FAIL_ALWAYS);
 
 	rc = vc_obj_verify(arg, oid);
 	assert_int_equal(rc, -DER_MISMATCH);
@@ -320,7 +321,8 @@ vc_8(void **state)
 
 	if (arg->myrank == 0)
 		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-				     DAOS_VC_LOST_REPLICA, 0, NULL);
+				     DAOS_VC_LOST_REPLICA | DAOS_FAIL_ALWAYS,
+				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	rc = vc_obj_verify(arg, oid);
@@ -386,7 +388,7 @@ vc_test_setup(void **state)
 	int     rc;
 
 	rc = test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
-			NULL);
+			0, NULL);
 
 	return rc;
 }

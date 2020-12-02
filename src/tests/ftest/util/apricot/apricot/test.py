@@ -88,6 +88,9 @@ class Test(avocadoTest):
         """Initialize a Test object."""
         super(Test, self).__init__(*args, **kwargs)
 
+        # Define a test ID using the test_* method name
+        self.test_id = self.get_test_name()
+
         # Support specifying timeout values with units, e.g. "1d 2h 3m 4s".
         # Any unit combination may be used, but they must be specified in
         # descending order. Spaces can optionally be used between units and
@@ -111,10 +114,14 @@ class Test(avocadoTest):
                 if dhms[index] is not None:
                     self.timeout += multiplier * int(dhms[index])
 
-        # param to add multiple timeouts for different tests under
-        # same test class
-        self.timeouts = self.params.get(self.get_test_name(),
-                                        "/run/timeouts/*")
+        # Support unique test case timeout values.  These test case specific
+        # timeouts are read from the test yaml using the test case method name
+        # as the key, e.g.:
+        #   timeouts:
+        #     test_quick: 120
+        #     test_long: 1200
+        self.timeouts = self.params.get(self.test_id, "/run/timeouts/*")
+
         # If not specified, set a default timeout of 1 minute.
         # Tests that require a longer timeout should set a "timeout: <int>"
         # entry in their yaml file.  All tests should have a timeout defined.
@@ -182,8 +189,8 @@ class TestWithoutServers(Test):
     def setUp(self):
         """Set up run before each test."""
         super(TestWithoutServers, self).setUp()
-
-        load_mpi('openmpi')
+        if not load_mpi("openmpi"):
+            self.fail("Failed to load openmpi")
 
         self.orterun = find_executable('orterun')
         if self.orterun is None:
@@ -272,6 +279,8 @@ class TestWithServers(TestWithoutServers):
         self.hostfile_clients = None
         self.server_partition = None
         self.client_partition = None
+        self.server_reservation = None
+        self.client_reservation = None
         self.hostfile_servers_slots = 1
         self.hostfile_clients_slots = 1
         self.pool = None
@@ -284,8 +293,6 @@ class TestWithServers(TestWithoutServers):
         self.config_file_base = "test"
         self.log_dir = os.path.split(
             os.getenv("D_LOG_FILE", "/tmp/server.log"))[0]
-        self.test_id = "{}-{}".format(
-            os.path.split(self.filename)[1], self.name.str_uid)
         # self.debug = False
         # self.config = None
         self.job_manager = None
@@ -318,13 +325,21 @@ class TestWithServers(TestWithoutServers):
         for name in ("servers", "clients"):
             host_list_name = "_".join(["hostlist", name])
             partition_name = "_".join([name[:-1], "partition"])
+            reservation_name = "_".join([name[:-1], "reservation"])
             partition = self.params.get(partition_name, "/run/hosts/*")
+            reservation = self.params.get(reservation_name, "/run/hosts/*")
             host_list = getattr(self, host_list_name)
             if partition is not None and host_list is None:
                 # If a partition is provided instead of a list of hosts use the
                 # partition information to populate the list of hosts.
                 setattr(self, partition_name, partition)
-                setattr(self, host_list_name, get_partition_hosts(partition))
+                setattr(self, reservation_name, reservation)
+                slurm_nodes = get_partition_hosts(partition, reservation)
+                if not slurm_nodes:
+                    self.fail(
+                        "No valid nodes in {} partition with {} "
+                        "reservation".format(partition, reservation))
+                setattr(self, host_list_name, slurm_nodes)
             elif partition is not None and host_list is not None:
                 self.fail(
                     "Specifying both a {} partition name and a list of hosts "
@@ -350,6 +365,8 @@ class TestWithServers(TestWithoutServers):
         self.log.info("hostlist_clients:  %s", self.hostlist_clients)
         self.log.info("server_partition:  %s", self.server_partition)
         self.log.info("client_partition:  %s", self.client_partition)
+        self.log.info("server_reservation:  %s", self.server_reservation)
+        self.log.info("client_reservation:  %s", self.client_reservation)
 
         # Kill commands left running on the hosts (from a previous test) before
         # starting any tests.  Currently only handles 'orterun' processes, but
@@ -377,6 +394,28 @@ class TestWithServers(TestWithoutServers):
         if manager_class_name is not None:
             self.job_manager = get_job_manager_class(
                 manager_class_name, None, manager_subprocess, manager_mpi_type)
+            self.set_job_manager_timeout()
+
+    def set_job_manager_timeout(self):
+        """Set the timeout for the job manager.
+
+        Use the following priority when setting the job_manager timeout:
+            1) use the test method specific timeout from the test yaml, e.g.
+                job_manager_timeout:
+                    test_one: 30
+                    test_two: 60
+            2) use the common job_manager timeout from the test yaml, e.g.
+                job_manager_timeout: 45
+            3) use the avocado test timeout minus 30 seconds
+        """
+        if self.job_manager:
+            self.job_manager.timeout = self.params.get(
+                self.get_test_name(), "/run/job_manager_timeout/*", None)
+            if self.job_manager.timeout is None:
+                self.job_manager.timeout = self.params.get(
+                    "job_manager_timeout", default=None)
+                if self.job_manager.timeout is None:
+                    self.job_manager.timeout = self.timeout - 30
 
     def stop_leftover_processes(self, processes, hosts):
         """Stop leftover processes on the specified hosts before starting tests.
@@ -485,7 +524,7 @@ class TestWithServers(TestWithoutServers):
         filename = "{}_{}_{}.yaml".format(self.config_file_base, name, command)
         return os.path.join(self.tmp, filename)
 
-    def add_agent_manager(self, config_file=None, common_cfg=None, timeout=5):
+    def add_agent_manager(self, config_file=None, common_cfg=None, timeout=15):
         """Add a new daos agent manager object to the agent manager list.
 
         Args:
@@ -828,7 +867,7 @@ class TestWithServers(TestWithoutServers):
         """Get a DaosCommand object.
 
         Returns:
-            DaosCommand: New DaosCommand object.
+            DaosCommand: a new DaosCommand object
 
         """
         return DaosCommand(self.bin)
@@ -861,7 +900,7 @@ class TestWithServers(TestWithoutServers):
             TestPool: the created test pool object.
 
         """
-        pool = TestPool(self.context, dmg_command=self.get_dmg_command(index))
+        pool = TestPool(self.context, self.get_dmg_command(index))
         if namespace is not None:
             pool.namespace = namespace
         pool.get_params(self)

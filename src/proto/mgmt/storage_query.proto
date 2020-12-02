@@ -38,7 +38,6 @@ message BioHealthResp {
 	string model = 1;
 	string serial = 2;
 	uint64 timestamp = 3;
-	uint64 err_count = 4;
 	// Device health details
 	uint32 warn_temp_time = 5;
 	uint32 crit_temp_time = 6;
@@ -62,6 +61,9 @@ message BioHealthResp {
 	bool volatile_mem_warn = 22; // volatile memory backup
 	int32 status = 23; // DAOS err code
 	string dev_uuid = 24; // UUID of blobstore
+	// Usage stats
+	uint64 total_bytes = 25; // size of blobstore
+	uint64 avail_bytes = 26; // free space in blobstore
 }
 
 message SmdDevReq {
@@ -71,7 +73,8 @@ message SmdDevResp {
 	message Device {
 		string uuid = 1; // UUID of blobstore
 		repeated int32 tgt_ids = 2; // VOS target IDs
-		string state = 3; // NORMAL or FAULTY
+		string state = 3; // BIO device state
+		string trAddr = 4; // Transport address of blobstore
 	}
 	int32 status = 1;
 	repeated Device devices = 2;
@@ -97,7 +100,19 @@ message DevStateReq {
 message DevStateResp {
 	int32 status = 1; // DAOS error code
 	string dev_uuid = 2; // UUID of blobstore
-	string dev_state=3; //NORMAL or FAULTY
+	string dev_state = 3; // Transport address of blobstore
+}
+
+message DevReplaceReq {
+	string old_dev_uuid = 1; // UUID of old (hot-removed) blobstore/device
+	string new_dev_uuid = 2; // UUID of new (hot-plugged) blobstore/device
+	bool   noReint      = 3; // Skip device reintegration if set
+}
+
+message DevReplaceResp {
+	int32 status = 1; // DAOS error code
+	string new_dev_uuid = 2; // UUID of new (hot-plugged) blobstore/device
+	string dev_state = 3; // BIO device state
 }
 
 message SmdQueryReq {
@@ -108,14 +123,17 @@ message SmdQueryReq {
 	string uuid = 5; // constrain query to this UUID (pool or device)
 	uint32 rank = 6; // response should only include information about this rank
 	string target = 7; // response should only include information about this VOS target
+	string replaceUUID = 8; // UUID of new device to replace storage with
+	bool noReint = 9; // specify if device reint is needed (used for replace cmd)
 }
 
 message SmdQueryResp {
 	message Device {
 		string uuid = 1; // UUID of blobstore
 		repeated int32 tgt_ids = 2; // VOS target IDs
-		string state = 3; // NORMAL or FAULTY
-		BioHealthResp health = 4; // optional BIO health
+		string state = 3; // BIO device state
+		string trAddr = 4; // Transport address of blobstore
+		BioHealthResp health = 5; // optional BIO health
 	}
 	message Pool {
 		string uuid = 1; // UUID of VOS pool

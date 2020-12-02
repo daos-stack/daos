@@ -24,7 +24,6 @@
 package control
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -35,58 +34,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 )
-
-type mockHostError struct {
-	Hosts string
-	Error string
-}
-
-func mockHostErrorsMap(t *testing.T, hostErrors ...*mockHostError) HostErrorsMap {
-	hem := make(HostErrorsMap)
-
-	for _, he := range hostErrors {
-		if hes, found := hem[he.Error]; found {
-			if _, err := hes.HostSet.Insert(he.Hosts); err != nil {
-				t.Fatal(err)
-			}
-			continue
-		}
-		hem[he.Error] = &HostErrorSet{
-			HostError: errors.New(he.Error),
-			HostSet:   mockHostSet(t, he.Hosts),
-		}
-	}
-
-	return hem
-}
-
-func mockHostErrorsResp(t *testing.T, hostErrors ...*mockHostError) HostErrorsResp {
-	if len(hostErrors) == 0 {
-		return HostErrorsResp{}
-	}
-	return HostErrorsResp{
-		HostErrors: mockHostErrorsMap(t, hostErrors...),
-	}
-}
-
-func mockHostSet(t *testing.T, hosts string) *hostlist.HostSet {
-	hs, err := hostlist.CreateSet(hosts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return hs
-}
-
-func mockHostResponses(t *testing.T, count int, fmtStr string, respMsg proto.Message) []*HostResponse {
-	hrs := make([]*HostResponse, count)
-	for i := 0; i < count; i++ {
-		hrs[i] = &HostResponse{
-			Addr:    fmt.Sprintf(fmtStr, i),
-			Message: respMsg,
-		}
-	}
-	return hrs
-}
 
 func defResCmpOpts() []cmp.Option {
 	return []cmp.Option{
@@ -122,38 +69,38 @@ func TestControl_HostErrorsMap(t *testing.T) {
 		"one host one error": {
 			hosts:     makeHosts("host1"),
 			errors:    makeErrors("whoops"),
-			expErrMap: mockHostErrorsMap(t, &mockHostError{"host1", "whoops"}),
+			expErrMap: mockHostErrorsMap(t, &MockHostError{"host1", "whoops"}),
 		},
 		"two hosts one error": {
 			hosts:  makeHosts("host1", "host2"),
 			errors: makeErrors("whoops", "whoops"),
 			expErrMap: mockHostErrorsMap(t,
-				&mockHostError{"host1", "whoops"},
-				&mockHostError{"host2", "whoops"},
+				&MockHostError{"host1", "whoops"},
+				&MockHostError{"host2", "whoops"},
 			),
 		},
 		"two hosts two errors": {
 			hosts:  makeHosts("host1", "host2"),
 			errors: makeErrors("whoops", "oops"),
 			expErrMap: mockHostErrorsMap(t,
-				&mockHostError{"host1", "whoops"},
-				&mockHostError{"host2", "oops"},
+				&MockHostError{"host1", "whoops"},
+				&MockHostError{"host2", "oops"},
 			),
 		},
 		"two hosts same port one error": {
 			hosts:  makeHosts("host1:1", "host2:1"),
 			errors: makeErrors("whoops", "whoops"),
 			expErrMap: mockHostErrorsMap(t,
-				&mockHostError{"host1:1", "whoops"},
-				&mockHostError{"host2:1", "whoops"},
+				&MockHostError{"host1:1", "whoops"},
+				&MockHostError{"host2:1", "whoops"},
 			),
 		},
 		"two hosts different port one error": {
 			hosts:  makeHosts("host1:1", "host2:2"),
 			errors: makeErrors("whoops", "whoops"),
 			expErrMap: mockHostErrorsMap(t,
-				&mockHostError{"host1:1", "whoops"},
-				&mockHostError{"host2:2", "whoops"},
+				&MockHostError{"host1:1", "whoops"},
+				&MockHostError{"host2:2", "whoops"},
 			),
 		},
 	} {

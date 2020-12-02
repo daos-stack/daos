@@ -119,7 +119,7 @@ int
 crt_proc_struct_dcs_csum_info(crt_proc_t proc, struct dcs_csum_info **p_csum)
 {
 	crt_proc_op_t		proc_op;
-	bool			csum_enabled;
+	bool			csum_enabled = 0;
 	int			rc;
 
 	rc = crt_proc_get_op(proc, &proc_op);

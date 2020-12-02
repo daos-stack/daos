@@ -37,7 +37,7 @@ ior:
     np: 1
   dfs_destroy: False
   iorflags:
-      flags: "-w -E -k"
+      flags: "-w -k"
   repetitions: 1
   transfersize_blocksize:
     4K:

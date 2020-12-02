@@ -62,9 +62,8 @@ snap_list_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val,
 			if (i_args->sla_index < i_args->sla_count) {
 				void *ptr;
 
-				D_REALLOC(ptr, i_args->sla_buf,
-					  i_args->sla_count *
-					  sizeof(daos_epoch_t));
+				D_REALLOC_ARRAY(ptr, i_args->sla_buf,
+						i_args->sla_count);
 				if (ptr == NULL)
 					return -DER_NOMEM;
 				i_args->sla_buf = ptr;
@@ -218,20 +217,14 @@ ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	daos_epoch_t			snap_eph;
 	int				rc;
 
-	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
-		in->cei_epoch);
+	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc);
 
 	/* Verify handle has write access */
 	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
 		D_ERROR(DF_CONT": permission denied to create snapshot\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
 		rc = -DER_NO_PERM;
-		goto out;
-	}
-
-	if (in->cei_epoch >= DAOS_EPOCH_MAX) {
-		rc = -DER_OVERFLOW;
 		goto out;
 	}
 
