@@ -620,7 +620,7 @@ open_cont:
 		d_list_add(&pool->iop_pools, &ioil_iog.iog_pools_head);
 
 	rc = ioil_fetch_cont_handles(fd, cont);
-	if (rc == EPERM) {
+	if (rc == EPERM || rc == EOVERFLOW) {
 		bool rcb;
 
 		DFUSE_LOG_DEBUG("ioil_fetch_cont_handles() failed, backing off");

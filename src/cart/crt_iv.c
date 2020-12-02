@@ -1001,8 +1001,6 @@ crt_ivf_bulk_transfer(struct crt_ivns_internal *ivns_internal,
 	/* crt_req_decref done in crt_ivf_bulk_transfer_done_cb */
 	RPC_PUB_ADDREF(rpc);
 
-	memset(&bulk_desc, 0x0, sizeof(struct crt_bulk_desc));
-
 	bulk_desc.bd_rpc = rpc;
 	bulk_desc.bd_bulk_op = CRT_BULK_PUT;
 	bulk_desc.bd_remote_hdl = dest_bulk;

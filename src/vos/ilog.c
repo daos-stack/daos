@@ -1223,11 +1223,13 @@ ilog_fetch_cached(struct umem_instance *umm, struct ilog_root *root,
 
 	return true;
 reset:
-	memset(lctx, 0, sizeof(*lctx));
 	lctx->ic_root = root;
 	lctx->ic_root_off = umem_ptr2off(umm, root);
 	lctx->ic_umm = *umm;
 	lctx->ic_cbs = *cbs;
+	lctx->ic_ref = 0;
+	lctx->ic_in_txn = false;
+	lctx->ic_ver_inc = false;
 
 	if (!daos_handle_is_inval(priv->ip_ih)) {
 		dbtree_iter_finish(priv->ip_ih);

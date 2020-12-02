@@ -943,7 +943,7 @@ out:
 }
 
 static int
-cont_decode_props(daos_prop_t *props)
+cont_decode_props(daos_prop_t *props, daos_prop_t *prop_acl)
 {
 
 	struct daos_prop_entry		*entry;
@@ -1153,6 +1153,22 @@ cont_decode_props(daos_prop_t *props)
 		D_PRINT("owner-group:\t\t%s\n", entry->dpe_str);
 	}
 
+	/* Only mention ACL if there's something to print */
+	if (prop_acl != NULL) {
+		entry = daos_prop_entry_get(prop_acl, DAOS_PROP_CO_ACL);
+		if (entry != NULL && entry->dpe_val_ptr != NULL) {
+			struct daos_acl *acl;
+
+			acl = (struct daos_acl *)entry->dpe_val_ptr;
+			D_PRINT("acl:\n");
+			rc = daos_acl_to_stream(stdout, acl, false);
+			if (rc)
+				fprintf(stderr,
+					"unable to decode ACL: %s (%d)\n",
+					d_errdesc(rc), rc);
+		}
+	}
+
 	return rc;
 }
 
@@ -1161,12 +1177,13 @@ int
 cont_get_prop_hdlr(struct cmd_args_s *ap)
 {
 	daos_prop_t		*prop_query;
+	daos_prop_t		*prop_acl = NULL;
 	int			rc = 0;
 	uint32_t		i;
 	uint32_t		entry_type;
 
 	/*
-	 * Get all props except the ACL
+	 * Get all props except the ACL first.
 	 */
 	prop_query = daos_prop_alloc(DAOS_PROP_CO_NUM - 1);
 	if (prop_query == NULL)
@@ -1187,12 +1204,21 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 		D_GOTO(err_out, rc);
 	}
 
+	/* Fetch the ACL separately in case user doesn't have access */
+	rc = daos_cont_get_acl(ap->cont, &prop_acl, NULL);
+	if (rc && rc != -DER_NO_PERM) {
+		fprintf(stderr, "failed to query container ACL "DF_UUIDF
+			": %s (%d)\n", DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
+		D_GOTO(err_out, rc);
+	}
+
 	D_PRINT("Container properties for "DF_UUIDF" :\n", DP_UUID(ap->c_uuid));
 
-	rc = cont_decode_props(prop_query);
+	rc = cont_decode_props(prop_query, prop_acl);
 
 err_out:
 	daos_prop_free(prop_query);
+	daos_prop_free(prop_acl);
 	return rc;
 }
 

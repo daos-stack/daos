@@ -16,13 +16,17 @@ post_provision_config_nodes() {
     # Reserve port ranges 31416-31516 for DAOS and CART servers
     echo 31416-31516 > /proc/sys/net/ipv4/ip_local_reserved_ports
 
+    # allow vendor changes
+    echo "solver.allowVendorChange = true" >> /etc/zypp/zypp.conf
+
     if [ -n "$DAOS_STACK_GROUP_REPO" ]; then
-         # rm -f /etc/yum.repos.d/*"$DAOS_STACK_GROUP_REPO"
+        # rm -f /etc/yum.repos.d/*"$DAOS_STACK_GROUP_REPO"
         zypper --non-interactive ar                                           \
                "$REPOSITORY_URL"/"$DAOS_STACK_GROUP_REPO" daos-stack-group-repo
         zypper --non-interactive mr --gpgcheck-allow-unsigned-repo \
                daos-stack-group-repo
-        rpm --import 'https://download.opensuse.org/repositories/science:/HPC/openSUSE_Leap_15.2/repodata/repomd.xml.key'
+        # Need the GPG key for the GO language repo (part of the group repo above)                                    \
+        rpm --import "${REPOSITORY_URL}${DAOS_STACK_GROUP_REPO%/*}/opensuse-15.2-devel-languages-go-x86_64-proxy/repodata/repomd.xml.key"; \
     fi
 
     if [ -n "$DAOS_STACK_LOCAL_REPO" ]; then
@@ -78,6 +82,6 @@ post_provision_config_nodes() {
     fi
 
     # now make sure everything is fully up-to-date
-    zypper addlock daos daos-\*
+    zypper addlock fuse fuse-libs fuse-devel daos daos-\*
     time zypper --non-interactive up
 }
