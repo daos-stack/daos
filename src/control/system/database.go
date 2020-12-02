@@ -708,6 +708,11 @@ func (db *Database) FindMembersByAddr(addr *net.TCPAddr) ([]*Member, error) {
 	return nil, &ErrMemberNotFound{byAddr: addr}
 }
 
+// FaultDomainTree returns the tree of fault domains of joined members.
+func (db *Database) FaultDomainTree() *FaultDomainTree {
+	return db.data.Members.FaultDomains
+}
+
 // copyPoolService makes a copy of the supplied PoolService pointer
 // for safe use outside of the database.
 func copyPoolService(in *PoolService) *PoolService {
