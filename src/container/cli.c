@@ -939,6 +939,7 @@ cont_query_bits(daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_DEDUP_THRESHOLD:
 			bits |= DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD;
+			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			bits |= DAOS_CO_QUERY_PROP_REDUN_FAC;
 			break;
