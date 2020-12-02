@@ -113,12 +113,12 @@
 	X(DAOS_OBJ_RPC_EC_AGGREGATE,					\
 		0, &CQF_obj_ec_agg,					\
 		ds_obj_ec_agg_handler, NULL),				\
-	X(DAOS_OBJ_RPC_CPD,						\
-		0, &CQF_obj_cpd,					\
-		ds_obj_cpd_handler, NULL),				\
 	X(DAOS_OBJ_RPC_EC_REPLICATE,					\
 		0, &CQF_obj_ec_agg,					\
-		ds_obj_ec_rep_handler, NULL)
+		ds_obj_ec_rep_handler, NULL),				\
+	X(DAOS_OBJ_RPC_CPD,						\
+		0, &CQF_obj_cpd,					\
+		ds_obj_cpd_handler, NULL)
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
 

@@ -337,6 +337,18 @@ static struct daos_obj_class daos_obj_classes[] = {
 		},
 	},
 	{
+		.oc_name	= "EC_4P2G1",
+		.oc_id		= OC_EC_4P2G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 4,
+			.ca_ec_p		= 2,
+			.ca_ec_cell		= 1 << 20,
+		},
+	},
+	{
 		.oc_name	= "DAOS_OC_EC_K4P1_L32K",
 		.oc_id		= DAOS_OC_EC_K4P1_L32K,
 		{

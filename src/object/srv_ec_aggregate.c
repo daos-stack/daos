@@ -463,26 +463,26 @@ agg_get_obj_handle(struct ec_agg_entry *entry)
 			opened = true;
 	}
 	if (opened) {
-		d_rank_t mmyrank, prevrank = ~0;
+		d_rank_t myrank, prevrank = ~0;
 		uint32_t previdx = ~0;
 
-		crt_group_rank(NULL, &mmyrank);
+		crt_group_rank(NULL, &myrank);
 		dc_obj_layout_get(entry->ae_obj_hdl, &layout);
 		for (i = 0; i < layout->ol_nr; i++)
 			for (j = 0; j < layout->ol_shards[i]->os_replica_nr;
 			     j++)
 				if (layout->ol_shards[i]->
-				    os_shard_data[j].sd_rank == myrank) {
+				    os_shard_loc[j].sd_rank == myrank) {
 					entry->ae_peer_rank = prevrank;
 					D_ASSERT(previdx != ~0);
 					entry->ae_peer_idx = previdx;
 				} else {
 					prevrank =
 					layout->ol_shards[i]->
-					os_shard_data[j].sd_rank;
+					os_shard_loc[j].sd_rank;
 					previdx =
 					layout->ol_shards[i]->
-					os_shard_data[j].sd_tgt_idx;
+					os_shard_loc[j].sd_tgt_idx;
 				}
 		daos_obj_layout_free(layout);
 	}
@@ -2155,8 +2155,7 @@ ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 
 	dsc_cont_close(ph, agg_param.ap_pool_info.api_cont_hdl);
 out:
-	daos_prop_entries_free(agg_param.ap_prop);
-	D_FREE(agg_param.ap_prop);
+	daos_prop_free(agg_param.ap_prop);
 	ABT_eventual_free(&agg_param.ap_pool_info.api_eventual);
 	agg_sgl_fini(&agg_param.ap_agg_entry.ae_sgl);
 	dsc_pool_close(ph);

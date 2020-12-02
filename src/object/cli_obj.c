@@ -1352,7 +1352,7 @@ daos_obj_layout_alloc(struct daos_obj_layout **layout, uint32_t grp_nr,
 	for (i = 0; i < grp_nr; i++) {
 		D_ALLOC((*layout)->ol_shards[i],
 			sizeof(struct daos_obj_shard) +
-			grp_size * sizeof(struct daos_shard_data));
+			grp_size * sizeof(struct daos_shard_loc));
 		if ((*layout)->ol_shards[i] == NULL)
 			D_GOTO(free, rc = -DER_NOMEM);
 
@@ -1413,8 +1413,8 @@ dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout)
 			if (rc != 0)
 				D_GOTO(out, rc);
 
-			shard->os_shard_data[j].sd_rank = tgt->ta_comp.co_rank;
-			shard->os_shard_data[j].sd_tgt_idx =
+			shard->os_shard_loc[j].sd_rank = tgt->ta_comp.co_rank;
+			shard->os_shard_loc[j].sd_tgt_idx =
 							tgt->ta_comp.co_index;
 		}
 	}

@@ -186,7 +186,7 @@ struct daos_shard_loc {
  **/
 struct daos_obj_shard {
 	uint32_t		os_replica_nr;
-	struct daos_shard_data	os_shard_data[0];
+	struct daos_shard_loc	os_shard_loc[0];
 };
 
 struct daos_obj_layout {
