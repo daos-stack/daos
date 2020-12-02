@@ -199,11 +199,11 @@ class OSAOnlineReintegration(TestWithServers):
 
         # Exclude and reintegrate the pool_uuid, rank and targets
         for val in range(0, num_pool):
+            threads = []
             for oclass, api, test, flags in product(self.ior_dfs_oclass,
                                                     self.ior_apis,
                                                     self.ior_test_sequence,
                                                     self.ior_flags):
-                threads = []
                 for _ in range(0, num_jobs):
                     # Add a thread for these IOR arguments
                     threads.append(threading.Thread(target=self.ior_thread,
@@ -227,8 +227,9 @@ class OSAOnlineReintegration(TestWithServers):
                 output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                        rank, t_string)
             else:
-                output = self.dmg_command.system_stop(self.pool.uuid,
-                                                      rank)
+                output = self.dmg_command.system_stop(ranks=rank)
+                time.sleep(15)
+
             self.log.info(output)
             fail_count = 0
             while fail_count <= 20:
@@ -249,8 +250,7 @@ class OSAOnlineReintegration(TestWithServers):
                 self.assertTrue(pver_exclude > (pver_begin + len(target_list)),
                                 "Pool Version Error:  After server stop")
                 # Now start the server
-                output = self.dmg_command.system_start(self.pool.uuid,
-                                                       rank)
+                output = self.dmg_command.system_start(ranks=rank)
                 time.sleep(30)
                 self.log.info(output)
 
@@ -273,7 +273,7 @@ class OSAOnlineReintegration(TestWithServers):
                             "Pool Version Error:  After reintegrate")
             # Wait to finish the threads
             for thrd in threads:
-                thrd.join()
+                thrd.join(timeout=240)
 
         # Check data consistency for IOR in future
         # Presently, we are running daos_racer in parallel
@@ -300,7 +300,6 @@ class OSAOnlineReintegration(TestWithServers):
         for pool_num in range(1, 2):
             self.run_online_reintegration_test(pool_num)
 
-    @skipForTicket("DAOS-6069")
     def test_osa_online_reintegration_server_stop(self):
         """Test ID: DAOS-5920.
 
