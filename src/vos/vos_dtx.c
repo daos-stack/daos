@@ -2281,7 +2281,7 @@ vos_dtx_pin(struct dtx_handle *dth)
 {
 	struct vos_container	*cont;
 	struct umem_instance	*umm;
-	bool			 began;
+	bool			 began = false;
 	int			 rc;
 
 	D_ASSERT(dtx_is_valid_handle(dth));
