@@ -98,23 +98,33 @@ class MdtestBase(DfuseTestBase):
 
         return self.job_manager
 
-    def run_mdtest(self, manager, processes):
+    def run_mdtest(self, manager, processes, display_space=True, pool=None):
         """Run the Mdtest command.
 
         Args:
             manager (str): mpi job manager command
             processes (int): number of host processes
+            display_space (bool, optional): Whether to display the pool
+                space. Defaults to True.
+            pool (TestPool, optional): The pool for which to display space.
+                Default is self.pool.
         """
         env = self.mdtest_cmd.get_default_env(str(manager), self.client_log)
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
         manager.assign_processes(processes)
         manager.assign_environment(env)
+
+        if not pool:
+            pool = self.pool
+
         try:
-            self.pool.display_pool_daos_space()
+            if display_space:
+                pool.display_pool_daos_space()
             manager.run()
         except CommandFailure as error:
             self.log.error("Mdtest Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
         finally:
-            self.pool.display_pool_daos_space()
+            if display_space:
+                pool.display_pool_daos_space()

@@ -22,19 +22,20 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 from data_mover_test_base import DataMoverTestBase
-from os.path import join, sep
-from apricot import skipForTicket
+from os.path import basename, join
 
 
 class CopyBasicsTest(DataMoverTestBase):
     # pylint: disable=too-many-ancestors
-    """Test class for basic Datamover validation.
+    """Test class for basic POSIX DataMover validation.
 
     Test Class Description:
-        Tests basic functionality of the datamover utility.
+        Tests basic functionality of the POSIX DataMover utilities.
         Tests the following cases:
             Copying between UUIDs, UNS paths, and external POSIX systems.
             Copying between pools.
+            Auto-creating destination POSIX containers on copy.
+            Copying subsets of POSIX containers.
     :avocado: recursive
     """
 
@@ -44,26 +45,16 @@ class CopyBasicsTest(DataMoverTestBase):
         super(CopyBasicsTest, self).setUp()
 
         # Get the parameters
-        self.flags_write = self.params.get(
-            "flags_write", "/run/ior/copy_basics/*")
-        self.flags_read = self.params.get(
-            "flags_read", "/run/ior/copy_basics/*")
-        self.test_file = self.params.get(
-            "test_file", "/run/ior/copy_basics/*")
-
-        # Setup the directory structures
-        self.posix_test_paths.append(join(self.workdir, "posix_test") + sep)
-        self.posix_test_paths.append(join(self.workdir, "posix_test2") + sep)
-
-        # Create the directories
-        cmd = "mkdir -p {}".format(self.get_posix_test_path_string())
-        self.execute_cmd(cmd)
+        self.ior_flags = self.params.get(
+            "ior_flags", "/run/ior/*")
+        self.test_file = self.ior_cmd.test_file.value
 
     def test_copy_types(self):
         """
         Test Description:
-            DAOS-5508: Verify copy between POSIX, UUIDs, and UNS paths
-            Daos-5511: Verify copy across pools.
+             Tests POSIX copy with different source and destination types.
+             DAOS-5508: Verify copy between POSIX, UUIDs, and UNS paths.
+             Daos-5511: Verify copy across pools.
         Use Cases:
             Create pool1 and pool2.
             Create POSIX type cont1 and cont2 in pool1 with UNS paths.
@@ -83,7 +74,10 @@ class CopyBasicsTest(DataMoverTestBase):
             Copy all data from POSIX to cont2 (UUIDs).
             Copy all data from POSIX to cont2 (UNS).
             Copy all data from POSIX FS to a different POSIX FS.
-        :avocado: tags=all,datamover,daily_regression
+            Repeat the copy operations, but specify file -> file.
+            Repeat the copy operations, but specify file -> dir.
+        :avocado: tags=all,daily_regression
+        :avocado: tags=datamover
         :avocado: tags=copy_basics,copy_types
         """
         # Start dfuse to hold all pools/containers
@@ -103,12 +97,12 @@ class CopyBasicsTest(DataMoverTestBase):
 
         # Create each source location
         p1_c1 = ["/", pool1, container1]
-        posix1 = [self.posix_test_paths[0], None, None]
+        posix1 = [self.new_posix_test_path(), None, None]
 
         # Create each destination location
         p1_c2 = ["/", pool1, container2]
         p2_c3 = ["/", pool2, container3]
-        posix2 = [self.posix_test_paths[1], None, None]
+        posix2 = [self.new_posix_test_path(), None, None]
 
         # Create the source files
         self.write_location("DAOS_UUID", *p1_c1)
@@ -193,52 +187,40 @@ class CopyBasicsTest(DataMoverTestBase):
         # Run and verify each copy.
         # Each src or dst is a list of params:
         #   [param_type, path, pool, cont]
+        #   where the path is a directory.
         for (test_desc, src, dst) in copy_list:
-            self.set_src_location(*src)
-            self.set_dst_location(*dst)
-            self.run_datamover(test_desc=test_desc)
-            self.read_verify_location(*dst)
+            # dir -> dir variation
+            self.run_datamover(
+                test_desc + " (dir->dir)",
+                src[0], src[1], src[2], src[3],
+                dst[0], dst[1], dst[2], dst[3])
 
-    def test_copy_auto_create_dest(self):
-        """
-        Test Description:
-            DAOS-5653: Verify auto-creation of destination container
-        Use Cases:
-            Create pool1 and pool2.
-            Create POSIX cont1 in pool1.
-            Create a single 1K file in cont1 using ior.
-            Copy all data from cont1 to pool1, with a new cont UUID.
-            Copy all data from cont1 to pool2, with a new cont UUID.
-        :avocado: tags=all,datamover,daily_regression
-        :avocado: tags=copy_basics,copy_auto_create_dest
-        """
-        # Create pools and src container
-        pool1 = self.create_pool()
-        pool2 = self.create_pool()
-        container1 = self.create_cont(pool1)
+            # The source directory is created IN the destination
+            # so append the directory name to the destination path.
+            self.read_verify_location(dst[0], join(dst[1], basename(src[1])),
+                                      dst[2], dst[3])
 
-        # Create the source file
-        self.write_location("DAOS_UUID", "/", pool1, container1)
+            # file -> file variation
+            # A UNS subset is not supported for both src and dst.
+            if not (src[0] == "DAOS_UNS" and dst[0] == "DAOS_UNS"):
+                self.run_datamover(
+                    test_desc + " (file->file)",
+                    src[0], join(src[1], self.test_file), src[2], src[3],
+                    dst[0], join(dst[1], self.test_file), dst[2], dst[3])
+                self.read_verify_location(dst[0], dst[1], dst[2], dst[3])
 
-        # Set the source location
-        self.set_src_location("DAOS_UUID", "/", pool1, container1)
+            # file -> dir variation
+            # This works because the destination dir is already created above
+            self.run_datamover(
+                test_desc + " (file->dir)",
+                src[0], join(src[1], self.test_file), src[2], src[3],
+                dst[0], dst[1], dst[2], dst[3])
+            self.read_verify_location(dst[0], dst[1], dst[2], dst[3])
 
-        # pool1 -> pool1
-        new_uuid = self.gen_uuid()
-        self.set_dst_location("DAOS_UUID", "/", pool1, new_uuid)
-        self.run_datamover(test_desc="copy_auto_create_dest (same pool)")
-        self.read_verify_location("DAOS_UUID", "/", pool1, new_uuid)
-
-        # pool1 -> pool2
-        new_uuid = self.gen_uuid()
-        self.set_dst_location("DAOS_UUID", "/", pool2, new_uuid)
-        self.run_datamover(test_desc="copy_auto_create_dest (different pool)")
-        self.read_verify_location("DAOS_UUID", "/", pool2, new_uuid)
-
-    @skipForTicket("DAOS-5512")
     def test_copy_subsets(self):
         """
         Test Description:
+            Tests copying POSIX container subsets.
             DAOS-5512: Verify ability to copy container subsets
         Use Cases:
             Create pool1.
@@ -250,7 +232,8 @@ class CopyBasicsTest(DataMoverTestBase):
             Copy depth 2 to a new directory of depth 1, using UUIDS.
             Copy depth 2 to a new directory of depth 2, using UUIDS.
             Repeat, but with UNS paths.
-        :avocado: tags=all,datamover,daily_regression
+        :avocado: tags=all,daily_regression
+        :avocado: tags=datamover
         :avocado: tags=copy_basics,copy_subsets
         """
         # Start dfuse to hold all pools/containers
@@ -266,11 +249,8 @@ class CopyBasicsTest(DataMoverTestBase):
         container1 = self.create_cont(pool1, True, pool1, uns_cont)
 
         # Create some source directories in the container
-        sub_dir = self.gen_daos_path()
-        sub_sub_dir = self.gen_daos_path(prefix=sub_dir)
-        cmd = "mkdir -p '{}'".format(
-            container1.path.value + sub_sub_dir)
-        self.execute_cmd(cmd)
+        sub_dir = self.new_daos_test_path(False)
+        sub_sub_dir = self.new_daos_test_path(True, container1, sub_dir)
 
         # Create initial test files
         self.write_location("DAOS_UUID", sub_dir, pool1, container1)
@@ -281,37 +261,37 @@ class CopyBasicsTest(DataMoverTestBase):
         # For each copy, use a new destination directory.
         # This ensures that the source directory is copied
         # *to* the destination, instead of *into* it.
-        sub_dir2 = self.gen_daos_path()
+        sub_dir2 = self.new_daos_test_path(False)
         copy_list.append([
             "copy_subsets (uuid sub_dir to uuid sub_dir)",
             ["DAOS_UUID", sub_dir, pool1, container1],
             ["DAOS_UUID", sub_dir2, pool1, container1]])
 
-        sub_sub_dir2 = self.gen_daos_path(prefix=sub_dir2)
+        sub_sub_dir2 = self.new_daos_test_path(False, parent=sub_dir2)
         copy_list.append([
             "copy_subsets (uuid sub_sub_dir to uuid sub_sub_dir)",
             ["DAOS_UUID", sub_sub_dir, pool1, container1],
             ["DAOS_UUID", sub_sub_dir2, pool1, container1]])
 
-        sub_dir2 = self.gen_daos_path()
+        sub_dir2 = self.new_daos_test_path(False)
         copy_list.append([
             "copy_subsets (uuid sub_dir to uns sub_dir)",
             ["DAOS_UUID", sub_dir, pool1, container1],
             ["DAOS_UNS", sub_dir2, pool1, container1]])
 
-        sub_sub_dir2 = self.gen_daos_path(prefix=sub_dir2)
+        sub_sub_dir2 = self.new_daos_test_path(False, parent=sub_dir2)
         copy_list.append([
             "copy_subsets (uuid sub_dir to uns sub_sub_dir)",
             ["DAOS_UUID", sub_dir, pool1, container1],
             ["DAOS_UNS", sub_sub_dir2, pool1, container1]])
 
-        sub_dir2 = self.gen_daos_path()
+        sub_dir2 = self.new_daos_test_path(False)
         copy_list.append([
             "copy_subsets (uns sub_dir to uuid sub_dir)",
             ["DAOS_UNS", sub_dir, pool1, container1],
             ["DAOS_UUID", sub_dir2, pool1, container1]])
 
-        sub_sub_dir2 = self.gen_daos_path(prefix=sub_dir2)
+        sub_sub_dir2 = self.new_daos_test_path(False, parent=sub_dir2)
         copy_list.append([
             "copy_subsets (uns sub_sub_dir to uuid sub_dir)",
             ["DAOS_UNS", sub_sub_dir, pool1, container1],
@@ -321,17 +301,18 @@ class CopyBasicsTest(DataMoverTestBase):
         # Each src or dst is a list of params:
         #   [param_type, path, pool, cont]
         for (test_desc, src, dst) in copy_list:
-            self.set_src_location(*src)
-            self.set_dst_location(*dst)
-            self.run_datamover(test_desc=test_desc)
+            self.run_datamover(
+                test_desc,
+                src[0], src[1], src[2], src[3],
+                dst[0], dst[1], dst[2], dst[3])
             self.read_verify_location(*dst)
 
     def write_location(self, param_type, path, pool=None, cont=None):
         """Write the test data using ior."""
-        self.set_ior_location_and_run(param_type, path, pool, cont,
-                                      self.test_file, self.flags_write)
+        self.run_ior_with_params(param_type, path, pool, cont,
+                                 self.test_file, self.ior_flags[0])
 
     def read_verify_location(self, param_type, path, pool=None, cont=None):
         """Read and verify the test data using ior."""
-        self.set_ior_location_and_run(param_type, path, pool, cont,
-                                      self.test_file, self.flags_read)
+        self.run_ior_with_params(param_type, path, pool, cont,
+                                 self.test_file, self.ior_flags[1])

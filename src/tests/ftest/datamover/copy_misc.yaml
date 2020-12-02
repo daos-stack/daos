@@ -3,7 +3,8 @@ hosts:
         - server-A
     test_clients:
         - server-B
-timeout: 300
+timeouts:
+    test_copy_auto_create_dest_dcp: 120
 server_config:
     name: daos_server
 pool:
@@ -15,19 +16,15 @@ container:
     type: POSIX
     control_method: daos
 ior:
-    api: 'DFS'
     client_processes:
         np: 1
-    test_file: "testFile"
+    test_file: testFile
     ior_flags:
         - "-v -w -k" # write
         - "-v -r -R" # read-verify
-    block_size: '100M'
+    block_size: '1K'
+    transfer_size: '1K'
     signature: 5
-datamover:
-    tool: "DCP"
 dcp:
-    blocksize: '8MB'
-    chunksize: '4MB'
-    copy_procs:
-        processes: [3, 7, 16]
+    client_processes:
+        np: 1
