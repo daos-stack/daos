@@ -44,8 +44,9 @@ enum DAOS_HASH_TYPE {
 	HASH_TYPE_SHA1	= 4,
 	HASH_TYPE_SHA256 = 5,
 	HASH_TYPE_SHA512 = 6,
+	HASH_TYPE_ADLER32 = 7,
 
-	HASH_TYPE_END	= 7,
+	HASH_TYPE_END	= 8,
 };
 
 /** Lookup the appropriate HASH_TYPE given daos container property */
