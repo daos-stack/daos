@@ -10,8 +10,8 @@
 %endif
 
 Name:          daos
-Version:       1.1.1
-Release:       9%{?relval}%{?dist}
+Version:       1.1.2
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -408,8 +408,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 
 %changelog
 
-* Thu Nov 26 2020 Ashley Pittman <ashley.m.pittman@intel.com> 1.1.1-9
+* Wed Dec 02 2020 Ashley Pittman <ashley.m.pittman@intel.com> 1.1.2-2
 - Combine the two memcheck suppressions files.
+
+* Tue Dec 01 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.2-1
+- Version bump up to 1.1.2
 
 * Tue Nov 17 2020 Li Wei <wei.g.li@intel.com> 1.1.1-8
 - Require raft-devel 0.7.0 that changes log indices and terms to 63-bit

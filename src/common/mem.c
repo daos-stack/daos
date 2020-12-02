@@ -552,7 +552,6 @@ umem_class_init(struct umem_attr *uma, struct umem_instance *umm)
 
 	D_DEBUG(DB_MEM, "Instantiate memory class %s\n", umc->umc_name);
 
-	memset(umm, 0, sizeof(*umm));
 	umm->umm_id		= umc->umc_id;
 	umm->umm_ops		= umc->umc_ops;
 	umm->umm_name		= umc->umc_name;
@@ -586,26 +585,25 @@ int
 umem_init_txd(struct umem_tx_stage_data *txd)
 {
 	D_ASSERT(txd != NULL);
-	memset(txd, 0, sizeof(*txd));
 	txd->txd_magic = UMEM_TX_DATA_MAGIC;
 
 	D_ALLOC_ARRAY(txd->txd_commit_vec, TXD_CB_NUM);
-	if (txd->txd_commit_vec == NULL)
-		goto fail;
-	txd->txd_commit_max = TXD_CB_NUM;
+	txd->txd_commit_max = txd->txd_commit_vec != NULL ? TXD_CB_NUM : 0;
+	txd->txd_commit_cnt = 0;
 
 	D_ALLOC_ARRAY(txd->txd_abort_vec, TXD_CB_NUM);
-	if (txd->txd_abort_vec == NULL)
-		goto fail;
-	txd->txd_abort_max = TXD_CB_NUM;
+	txd->txd_abort_max = txd->txd_abort_vec != NULL ? TXD_CB_NUM : 0;
+	txd->txd_abort_cnt = 0;
 
 	D_ALLOC_ARRAY(txd->txd_end_vec, TXD_CB_NUM);
-	if (txd->txd_end_vec == NULL)
-		goto fail;
-	txd->txd_end_max = TXD_CB_NUM;
+	txd->txd_end_max = txd->txd_end_vec != NULL ? TXD_CB_NUM : 0;
+	txd->txd_end_cnt = 0;
 
-	return 0;
-fail:
+	if (txd->txd_commit_vec != NULL &&
+	    txd->txd_abort_vec  != NULL &&
+	    txd->txd_end_vec    != NULL)
+		return 0;
+
 	umem_fini_txd(txd);
 	return -DER_NOMEM;
 }
