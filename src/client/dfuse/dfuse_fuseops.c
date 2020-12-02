@@ -91,6 +91,9 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 
 	DFUSE_TRA_INFO(fs_handle, "Capability requested %#x", conn->want);
 
+	if (fs_handle->dpi_info->di_caching)
+		conn->want |= FUSE_CAP_WRITEBACK_CACHE;
+
 	dfuse_show_flags(fs_handle, conn->want);
 
 	conn->max_background = 16;
