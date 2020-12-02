@@ -236,7 +236,7 @@ check_tx(daos_handle_t th, int rc)
 {
 	/** if we are not using a DTX, no restart is possible */
 	if (daos_handle_is_valid(th)) {
-		int ret = rc;
+		int ret;
 
 		if (rc == ERESTART) {
 			/** restart the TX handle */
