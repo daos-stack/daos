@@ -177,7 +177,7 @@ class OSAOnlineParallelTest(TestWithServers):
         # elif action == "extend":
         #    dmg.pool_extend(puuid, (rank + 2))
 
-    def run_online_parallel_test(self, num_pool):
+    def run_online_parallel_test(self, num_pool, racer=False):
         """Run multiple OSA commands / IO in parallel.
             Args:
             num_pool (int) : total pools to create for testing purposes.
@@ -200,11 +200,12 @@ class OSAOnlineParallelTest(TestWithServers):
         rank = 2
 
         # Start the daos_racer thread
-        kwargs = {"results": self.ds_racer_queue}
-        daos_racer_thread = threading.Thread(target=self.daos_racer_thread,
-                                             kwargs=kwargs)
-        daos_racer_thread.start()
-        time.sleep(30)
+        if racer is True:
+            kwargs = {"results": self.ds_racer_queue}
+            daos_racer_thread = threading.Thread(target=self.daos_racer_thread,
+                                                 kwargs=kwargs)
+            daos_racer_thread.start()
+            time.sleep(30)
 
         for val in range(0, num_pool):
             pool[val] = TestPool(self.context,
@@ -272,7 +273,8 @@ class OSAOnlineParallelTest(TestWithServers):
             # to IOR and checking the data consistency only
             # for the daos_racer objects after exclude
             # and reintegration.
-            daos_racer_thread.join()
+            if racer is True:
+                daos_racer_thread.join()
 
             for val in range(0, num_pool):
                 display_string = "Pool{} space at the End".format(val)

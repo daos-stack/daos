@@ -156,7 +156,7 @@ class OSAOnlineReintegration(TestWithServers):
         except CommandFailure as _error:
             results.put("FAIL")
 
-    def run_online_reintegration_test(self, num_pool):
+    def run_online_reintegration_test(self, num_pool, racer=False):
         """Run the Online reintegration without data.
 
         Args:
@@ -181,9 +181,10 @@ class OSAOnlineReintegration(TestWithServers):
         rank = random.randint(1, exclude_servers)
 
         # Start the daos_racer thread
-        daos_racer_thread = threading.Thread(target=self.daos_racer_thread)
-        daos_racer_thread.start()
-        time.sleep(30)
+        if racer is True:
+            daos_racer_thread = threading.Thread(target=self.daos_racer_thread)
+            daos_racer_thread.start()
+            time.sleep(30)
 
         for val in range(0, num_pool):
             pool[val] = TestPool(self.context, self.get_dmg_command())
@@ -264,7 +265,8 @@ class OSAOnlineReintegration(TestWithServers):
         # to IOR and checking the data consistency only
         # for the daos_racer objects after exclude
         # and reintegration.
-        daos_racer_thread.join()
+        if racer is True:
+            daos_racer_thread.join()
 
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
