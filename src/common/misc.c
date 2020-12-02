@@ -34,12 +34,14 @@ int
 daos_sgl_init(d_sg_list_t *sgl, unsigned int nr)
 {
 	D_ASSERTF(0, "This function is deprecated.  Use d_sgl_init\n");
+	return 0;
 }
 
 int
 daos_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
 {
 	D_ASSERTF(0, "This function is deprecated.  Use d_sgl_fini\n");
+	return 0;
 }
 
 static int
