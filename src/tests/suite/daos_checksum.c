@@ -214,13 +214,13 @@ setup_single_recx_data(struct csum_test_ctx *ctx, char *seed_data,
 	iov_alloc_str(&ctx->dkey, "dkey");
 	iov_alloc_str(&ctx->update_iod.iod_name, "akey");
 
-	rc = daos_sgl_init(&ctx->update_sgl, 1);
+	rc = d_sgl_init(&ctx->update_sgl, 1);
 	if (rc)
 		return;
 	iov_alloc(&ctx->update_sgl.sg_iovs[0], data_bytes);
 	iov_update_fill(ctx->update_sgl.sg_iovs, seed_data, data_bytes);
 
-	daos_sgl_init(&ctx->fetch_sgl, 1);
+	d_sgl_init(&ctx->fetch_sgl, 1);
 	iov_alloc(&ctx->fetch_sgl.sg_iovs[0], data_bytes);
 
 	ctx->recx[0].rx_idx = 0;
@@ -246,13 +246,13 @@ setup_single_value_data(struct csum_test_ctx *ctx, char *seed_data,
 	iov_alloc_str(&ctx->dkey, "dkey");
 	iov_alloc_str(&ctx->update_iod.iod_name, "akey");
 
-	rc = daos_sgl_init(&ctx->update_sgl, 1);
+	rc = d_sgl_init(&ctx->update_sgl, 1);
 	if (rc)
 		return;
 	iov_alloc(&ctx->update_sgl.sg_iovs[0], data_bytes);
 	iov_update_fill(ctx->update_sgl.sg_iovs, seed_data, data_bytes);
 
-	daos_sgl_init(&ctx->fetch_sgl, 1);
+	d_sgl_init(&ctx->fetch_sgl, 1);
 	iov_alloc(&ctx->fetch_sgl.sg_iovs[0], data_bytes);
 
 	ctx->update_iod.iod_size = daos_sgl_buf_size(&ctx->update_sgl);
@@ -1572,7 +1572,7 @@ two_iods_two_recxs(void **state)
 	iov_alloc_str(&ctx.dkey, "dkey");
 
 	/** Setup the first iod/sgl to have multiple recxs */
-	daos_sgl_init(&sgls[0], 1);
+	d_sgl_init(&sgls[0], 1);
 	iov_alloc(&sgls[0].sg_iovs[0], 6);
 	iov_update_fill(&sgls[0].sg_iovs[0], "1", 6);
 
@@ -1587,7 +1587,7 @@ two_iods_two_recxs(void **state)
 	iods[0].iod_type = DAOS_IOD_ARRAY;
 
 	/** setup the second iod/sgl to be a */
-	daos_sgl_init(&sgls[1], 1);
+	d_sgl_init(&sgls[1], 1);
 	iov_alloc(&sgls[1].sg_iovs[0], 6);
 	iov_update_fill(&sgls[1].sg_iovs[0], "2", 6);
 
@@ -2384,7 +2384,7 @@ run_daos_checksum_test(int rank, int size, int *sub_tests, int sub_tests_size)
 	if (sub_tests_size == 0) {
 		if (getenv("DAOS_CSUM_TEST_ALL_TYPE")) {
 			for (i = DAOS_PROP_CO_CSUM_OFF + 1;
-			     i <= DAOS_PROP_CO_CSUM_SHA512; i++) {
+			     i <= DAOS_PROP_CO_CSUM_ADLER32; i++) {
 				dts_csum_prop_type = i;
 				print_message("Running tests with csum_type: "
 					      "%d\n", i);
