@@ -46,6 +46,8 @@ daos_contprop2hashtype(int contprop_csum_val)
 		return HASH_TYPE_CRC16;
 	case DAOS_PROP_CO_CSUM_CRC32:
 		return HASH_TYPE_CRC32;
+	case DAOS_PROP_CO_CSUM_ADLER32:
+		return HASH_TYPE_ADLER32;
 	case DAOS_PROP_CO_CSUM_CRC64:
 		return HASH_TYPE_CRC64;
 	case DAOS_PROP_CO_CSUM_SHA1:
@@ -67,6 +69,8 @@ daos_hashtype2contprop(enum DAOS_HASH_TYPE daos_hash_type)
 		return DAOS_PROP_CO_CSUM_CRC16;
 	case HASH_TYPE_CRC32:
 		return DAOS_PROP_CO_CSUM_CRC32;
+	case HASH_TYPE_ADLER32:
+		return DAOS_PROP_CO_CSUM_ADLER32;
 	case HASH_TYPE_CRC64:
 		return DAOS_PROP_CO_CSUM_CRC64;
 	case HASH_TYPE_SHA1:

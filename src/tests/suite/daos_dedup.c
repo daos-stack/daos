@@ -95,7 +95,7 @@ setup_sgl(struct dedup_test_ctx *ctx)
 					 " sed do eiusmod tempor incididunt ut"
 					 " labore et dolore magna aliqua.");
 
-	daos_sgl_init(&ctx->fetch_sgl, 1);
+	d_sgl_init(&ctx->fetch_sgl, 1);
 	iov_alloc(&ctx->fetch_sgl.sg_iovs[0],
 		daos_sgl_buf_size(&ctx->update_sgl));
 }

@@ -93,23 +93,22 @@ ENV PASSWD daos
 RUN useradd -u $UID -ms /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
 
-# set maven mirror
-RUN mkdir -p /home/$USER/.m2
-
-RUN echo -e "<settings>\n\
-	<mirrors>\n\
-		<mirror>\n\
-			<id>google-maven-central</id>\n\
-			<name>GCS Maven Central mirror</name>\n\
-			<url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
-			<mirrorOf>central</mirrorOf>\n\
-		</mirror>\n\
-	</mirrors>\n\
-</settings>" > /home/$USER/.m2/settings.xml
-
 # Create directory for DAOS backend storage
 RUN mkdir /mnt/daos
 RUN chown daos.daos /mnt/daos
+
+# Set maven repo mirror
+RUN mkdir -p /root/.m2
+RUN echo -e "<settings>\n\
+        <mirrors>\n\
+                <mirror>\n\
+                        <id>google-maven-central</id>\n\
+                        <name>GCS Maven Central mirror</name>\n\
+                        <url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
+                        <mirrorOf>central</mirrorOf>\n\
+                </mirror>\n\
+        </mirrors>\n\
+</settings>" > /root/.m2/settings.xml
 
 # Dependencies
 # Packages for NVML exist in CentOS, but are
