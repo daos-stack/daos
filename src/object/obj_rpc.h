@@ -44,7 +44,7 @@
 
 #define ENCODING(proc_op) (proc_op == CRT_PROC_ENCODE)
 #define DECODING(proc_op) (proc_op == CRT_PROC_DECODE)
-#define FREEING(proc_op) (proc_op == CRT_PROC_FREE)
+#define FREEING(proc_op)  (proc_op == CRT_PROC_FREE)
 
 /* It cannot exceed the mercury unexpected msg size (4KB), reserves half-KB
  * for other RPC fields and cart/HG headers.
@@ -63,10 +63,10 @@
  */
 #define OBJ_PROTO_CLI_RPC_LIST						\
 	X(DAOS_OBJ_RPC_UPDATE,						\
-		0, &CQF_obj_rw,					\
+		0, &CQF_obj_rw,						\
 		ds_obj_rw_handler, NULL),				\
 	X(DAOS_OBJ_RPC_FETCH,						\
-		0, &CQF_obj_rw,					\
+		0, &CQF_obj_rw,						\
 		ds_obj_rw_handler, NULL),				\
 	X(DAOS_OBJ_DKEY_RPC_ENUMERATE,					\
 		0, &CQF_obj_key_enum,					\
@@ -96,7 +96,7 @@
 		0, &CQF_obj_sync,					\
 		ds_obj_sync_handler, NULL),				\
 	X(DAOS_OBJ_RPC_TGT_UPDATE,					\
-		0, &CQF_obj_rw,					\
+		0, &CQF_obj_rw,						\
 		ds_obj_tgt_update_handler, NULL),			\
 	X(DAOS_OBJ_RPC_TGT_PUNCH,					\
 		0, &CQF_obj_punch,					\
@@ -164,8 +164,8 @@ enum obj_rpc_flags {
 
 /* common for update/fetch */
 #define DAOS_ISEQ_OBJ_RW	/* input fields */		 \
-	((struct dtx_id)	(orw_dti)		CRT_VAR) \
-	((daos_unit_oid_t)	(orw_oid)		CRT_VAR) \
+	((struct dtx_id)	(orw_dti)		CRT_RAW) \
+	((daos_unit_oid_t)	(orw_oid)		CRT_RAW) \
 	((uuid_t)		(orw_pool_uuid)		CRT_VAR) \
 	((uuid_t)		(orw_co_hdl)		CRT_VAR) \
 	((uuid_t)		(orw_co_uuid)		CRT_VAR) \
@@ -202,8 +202,8 @@ CRT_RPC_DECLARE(obj_rw,		DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 
 /* object Enumerate in/out */
 #define DAOS_ISEQ_OBJ_KEY_ENUM	/* input fields */		 \
-	((struct dtx_id)	(oei_dti)		CRT_VAR) \
-	((daos_unit_oid_t)	(oei_oid)		CRT_VAR) \
+	((struct dtx_id)	(oei_dti)		CRT_RAW) \
+	((daos_unit_oid_t)	(oei_oid)		CRT_RAW) \
 	((uuid_t)		(oei_pool_uuid)		CRT_VAR) \
 	((uuid_t)		(oei_co_hdl)		CRT_VAR) \
 	((uuid_t)		(oei_co_uuid)		CRT_VAR) \
@@ -214,9 +214,9 @@ CRT_RPC_DECLARE(obj_rw,		DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 	((uint32_t)		(oei_flags)		CRT_VAR) \
 	((daos_key_t)		(oei_dkey)		CRT_VAR) \
 	((daos_key_t)		(oei_akey)		CRT_VAR) \
-	((daos_anchor_t)	(oei_anchor)		CRT_VAR) \
-	((daos_anchor_t)	(oei_dkey_anchor)	CRT_VAR) \
-	((daos_anchor_t)	(oei_akey_anchor)	CRT_VAR) \
+	((daos_anchor_t)	(oei_anchor)		CRT_RAW) \
+	((daos_anchor_t)	(oei_dkey_anchor)	CRT_RAW) \
+	((daos_anchor_t)	(oei_akey_anchor)	CRT_RAW) \
 	((d_sg_list_t)		(oei_sgl)		CRT_VAR) \
 	((crt_bulk_t)		(oei_bulk)		CRT_VAR) \
 	((crt_bulk_t)		(oei_kds_bulk)		CRT_VAR)
@@ -228,9 +228,9 @@ CRT_RPC_DECLARE(obj_rw,		DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 	((uint32_t)		(oeo_num)		CRT_VAR) \
 	((uint32_t)		(oeo_padding)		CRT_VAR) \
 	((uint64_t)		(oeo_size)		CRT_VAR) \
-	((daos_anchor_t)	(oeo_anchor)		CRT_VAR) \
-	((daos_anchor_t)	(oeo_dkey_anchor)	CRT_VAR) \
-	((daos_anchor_t)	(oeo_akey_anchor)	CRT_VAR) \
+	((daos_anchor_t)	(oeo_anchor)		CRT_RAW) \
+	((daos_anchor_t)	(oeo_dkey_anchor)	CRT_RAW) \
+	((daos_anchor_t)	(oeo_akey_anchor)	CRT_RAW) \
 	((daos_key_desc_t)	(oeo_kds)		CRT_ARRAY) \
 	((d_sg_list_t)		(oeo_sgl)		CRT_VAR) \
 	((d_iov_t)		(oeo_csum_iov)		CRT_VAR) \
@@ -240,11 +240,11 @@ CRT_RPC_DECLARE(obj_rw,		DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 CRT_RPC_DECLARE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
 
 #define DAOS_ISEQ_OBJ_PUNCH	/* input fields */		 \
-	((struct dtx_id)	(opi_dti)		CRT_VAR) \
+	((struct dtx_id)	(opi_dti)		CRT_RAW) \
 	((uuid_t)		(opi_pool_uuid)		CRT_VAR) \
 	((uuid_t)		(opi_co_hdl)		CRT_VAR) \
 	((uuid_t)		(opi_co_uuid)		CRT_VAR) \
-	((daos_unit_oid_t)	(opi_oid)		CRT_VAR) \
+	((daos_unit_oid_t)	(opi_oid)		CRT_RAW) \
 	((uint64_t)		(opi_epoch)		CRT_VAR) \
 	((uint64_t)		(opi_api_flags)		CRT_VAR) \
 	((uint64_t)		(opi_dkey_hash)		CRT_VAR) \
@@ -262,11 +262,11 @@ CRT_RPC_DECLARE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
 CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 
 #define DAOS_ISEQ_OBJ_QUERY_KEY	/* input fields */		 \
-	((struct dtx_id)	(okqi_dti)		CRT_VAR) \
+	((struct dtx_id)	(okqi_dti)		CRT_RAW) \
 	((uuid_t)		(okqi_co_hdl)		CRT_VAR) \
 	((uuid_t)		(okqi_pool_uuid)	CRT_VAR) \
 	((uuid_t)		(okqi_co_uuid)		CRT_VAR) \
-	((daos_unit_oid_t)	(okqi_oid)		CRT_VAR) \
+	((daos_unit_oid_t)	(okqi_oid)		CRT_RAW) \
 	((uint64_t)		(okqi_epoch)		CRT_VAR) \
 	((uint64_t)		(okqi_epoch_first)	CRT_VAR) \
 	((uint32_t)		(okqi_map_ver)		CRT_VAR) \
@@ -294,7 +294,7 @@ CRT_RPC_DECLARE(obj_query_key, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY)
 	((uuid_t)		(osi_co_hdl)		CRT_VAR) \
 	((uuid_t)		(osi_pool_uuid)		CRT_VAR) \
 	((uuid_t)		(osi_co_uuid)		CRT_VAR) \
-	((daos_unit_oid_t)	(osi_oid)		CRT_VAR) \
+	((daos_unit_oid_t)	(osi_oid)		CRT_RAW) \
 	((uint64_t)		(osi_epoch)		CRT_VAR) \
 	((uint32_t)		(osi_map_ver)		CRT_VAR) \
 	((uint32_t)		(osi_padding)		CRT_VAR)
