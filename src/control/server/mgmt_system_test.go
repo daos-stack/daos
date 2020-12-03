@@ -99,7 +99,7 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 
 			// wait for the bootstrap to finish
 			for {
-				if db.IsLeader() {
+				if leader, _, _ := db.LeaderQuery(); leader != "" {
 					break
 				}
 			}
