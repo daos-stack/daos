@@ -12,7 +12,7 @@ hosts:
 orterun:
     allow_run_as_root: True
 # This timeout must be longer than the test_timeout param (+15minutes)
-# 1 hour test
+# 12 hour test
 timeout: 12H15M
 setup:
     start_servers: True
@@ -59,10 +59,10 @@ pool_reserved:
 container:
     type: POSIX
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-    oclass: RP_2G1
+    oclass: RP_2GX
     control_method: daos
 container_reserved:
-    oclass: OC_RP_2G1
+    oclass: OC_RP_2GX
     akey_size: 5
     dkey_size: 5
     data_size: 4096
@@ -99,11 +99,9 @@ soak_harassers:
         - ior_harasser
         - fio_harasser
     harasserlist:
-    #    - snapshot
-    #    - rebuild
+        - snapshot
         - exclude
         - reintegrate
-    #    - create_destroy
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -125,9 +123,9 @@ ior_harasser:
         - '1m'
     segment_count: 1
     dfs_oclass:
-        - 'RP_2G1'
+        - 'RP_2GX'
     dfs_dir_oclass:
-        - 'RP_2G1'
+        - 'RP_2GX'
 fio_harasser:
   names:
       - global

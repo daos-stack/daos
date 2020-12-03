@@ -376,10 +376,10 @@ class SoakTestBase(TestWithServers):
                         if harasser_job:
                             self.harasser_completion(harasser_job, harasser)
 
-                # # Check system health while waiting for jobs to complete
-                # for pool in self.pool[1:]:
-                #     pool.display_pool_daos_space()
-                #     time.sleep(30)
+                # Check system health while waiting for jobs to complete
+                for pool in self.pool[1:]:
+                    pool.display_pool_daos_space()
+                    time.sleep(30)
 
             # check for JobStatus = COMPLETED or CANCELLED (i.e. TEST TO)
             for job, result in self.soak_results.items():
