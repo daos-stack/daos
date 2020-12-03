@@ -896,6 +896,10 @@ forward_done:
 	if (co_info->co_child_num == 0 && co_info->co_root_excluded)
 		crt_corpc_complete(rpc_priv);
 
+	/* NOTE: root is never exlcuded when called from crt_corpc_initiate
+	 * and as such not returning proper rc here is not problematic for
+	 * those cases where crt_corpc_initiate() relies on rc to be set
+	 */
 	if (co_info->co_root_excluded == 1) {
 		if (co_info->co_grp_priv->gp_self == co_info->co_root) {
 			/* don't return error for root */
@@ -903,6 +907,10 @@ forward_done:
 		}
 		D_GOTO(out, rc);
 	}
+
+	/* Don't execute local handler below if errors happened */
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	/* invoke RPC handler on local node */
 	rc = crt_rpc_common_hdlr(rpc_priv);
