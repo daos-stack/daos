@@ -315,8 +315,6 @@ static void
 pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
 		 struct pl_map_init_attr *mia)
 {
-	memset(mia, 0, sizeof(*mia));
-
 	switch (type) {
 	default:
 		D_ASSERTF(0, "Unknown placemet map type: %d.\n", type);
@@ -329,9 +327,8 @@ pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
 		break;
 	case PL_TYPE_JUMP_MAP:
 		mia->ia_type            = PL_TYPE_JUMP_MAP;
-		mia->ia_jump_map.domain  = DSR_JUMP_MAP_DOMAIN;
+		mia->ia_jump_map.domain = DSR_JUMP_MAP_DOMAIN;
 	}
-
 }
 
 struct pl_map *
