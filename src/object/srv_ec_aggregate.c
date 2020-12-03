@@ -835,8 +835,8 @@ agg_update_vos(struct ec_agg_entry *entry, bool write_parity)
 							   &entry->ae_akey,
 							   &ext->ae_orig_recx);
 				if (erc)
-					D_ERROR("array_remov failed: "DF_RC"\n",
-					DP_RC(erc));
+					D_ERROR("array_remove failed: "DF_RC"\n",
+						DP_RC(erc));
 				if (!rc && erc)
 					rc = erc;
 			}
