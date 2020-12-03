@@ -1364,7 +1364,8 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 	rc = pool_map_find_failed_tgts(agg_param->ap_pool_info.api_pool->sp_map,
 				       &targets, &failed_tgts_cnt);
 	if (rc) {
-		D_ERROR("pool_map_find_failed_tgts failed: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("pool_map_find_failed_tgts failed: "DF_RC"\n",
+			DP_RC(rc));
 		goto out;
 	}
 	if (targets != NULL) {
@@ -1465,7 +1466,8 @@ agg_process_holes_ult(void *arg)
 	if (last_ext_end < k * len) {
 		stripe_ud->asu_recxs[ext_cnt].rx_idx =
 			ss + last_ext_end;
-		stripe_ud->asu_recxs[ext_cnt].rx_nr = ss + k * len - last_ext_end;
+		stripe_ud->asu_recxs[ext_cnt].rx_nr = ss + k * len -
+			last_ext_end;
 		ext_tot_len += stripe_ud->asu_recxs[ext_cnt++].rx_nr;
 	}
 	stripe_ud->asu_cell_cnt = ext_cnt;
