@@ -876,15 +876,15 @@ def get_conts(conf, pool, posix=True):
     containers = rc.stdout.decode('utf-8').splitlines()
 
     matched = []
-    for container in containers:
+    for container in sorted(containers):
         cmd = ['container', 'get-prop', '--pool', pool, '--cont', container]
         rc = run_daos_cmd(conf, cmd)
         for line in rc.stdout.decode('utf-8').splitlines():
-            (key, value) = line.split(':')
+            (key, value) = line.split(':', maxsplit=1)
             if key == 'layout type':
-                print(value.strip())
                 if not posix or value.strip() == 'POSIX (1)':
                     matched.append(container)
+                    return matched
     return matched
 
 def create_cont(conf, pool, posix=False):
@@ -1281,6 +1281,8 @@ def run_dfuse(server, conf):
 
     print('Inserting entry point')
     rc = run_daos_cmd(conf, cmd)
+    print(rc)
+    assert rc.returncode == 0
     print('rc is {}'.format(rc))
     print(os.stat(uns_path))
     print(os.stat(uns_path))
@@ -1434,7 +1436,7 @@ def run_in_fg(server, conf):
 
     pool = pools[0]
 
-    containers = get_conts(cond, pool, posix=True)
+    containers = get_conts(conf, pool, posix=True)
     if not containers:
         containers = create_cont(conf, pool, posix=True)
 
@@ -1443,8 +1445,9 @@ def run_in_fg(server, conf):
 
     dfuse = DFuse(server, conf, pool=pool, container=container, multi_user=True)
     dfuse.start()
-    t_dir = os.path.join(dfuse.dir, container)
+    t_dir = dfuse.dir
     print('Running at {}'.format(t_dir))
+    print('export DAOS_AGENT_DRPC_DIR={}'.format(conf.agent_dir))
     print('daos container create --type POSIX ' \
           '--pool {} --path {}/uns-link'.format(
               pool, t_dir))

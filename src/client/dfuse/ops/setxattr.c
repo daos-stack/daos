@@ -36,7 +36,7 @@ dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 	DFUSE_TRA_DEBUG(inode, "Attribute '%s'", name);
 
 	if (strcmp(name, DUNS_XATTR_NAME) == 0) {
-		struct duns_attr_t	dattr = {};
+		struct duns_attr_t dattr = {};
 
 		rc = duns_parse_attr((char *)value, size, &dattr);
 		if (rc)

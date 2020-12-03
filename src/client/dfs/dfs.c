@@ -840,9 +840,9 @@ open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
 
 static int
 open_symlink(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
-	     const char *value, size_t len, dfs_obj_t *sym)
+	     const char *value, struct dfs_entry *entry,
+	     size_t len, dfs_obj_t *sym)
 {
-	struct dfs_entry	entry = {0};
 	size_t			value_len;
 	int			rc;
 
@@ -858,17 +858,17 @@ open_symlink(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 		rc = oid_gen(dfs, 0, false, &sym->oid);
 		if (rc != 0)
 			return rc;
-		oid_cp(&entry.oid, sym->oid);
-		entry.mode = sym->mode | S_IRWXO | S_IRWXU | S_IRWXG;
-		entry.atime = entry.mtime = entry.ctime = time(NULL);
-		entry.chunk_size = 0;
+		oid_cp(&entry->oid, sym->oid);
+		entry->mode = sym->mode | S_IRWXO | S_IRWXU | S_IRWXG;
+		entry->atime = entry->mtime = entry->ctime = time(NULL);
+		entry->chunk_size = 0;
 		D_STRNDUP(sym->value, value, value_len + 1);
 		if (sym->value == NULL)
 			return ENOMEM;
 
-		entry.value = sym->value;
-		entry.value_len = value_len;
-		rc = insert_entry(parent->oh, th, sym->name, len, &entry);
+		entry->value = sym->value;
+		entry->value_len = value_len;
+		rc = insert_entry(parent->oh, th, sym->name, len, entry);
 		if (rc) {
 			D_FREE(sym->value);
 			D_ERROR("Inserting entry %s failed (rc = %d)\n",
@@ -2329,8 +2329,6 @@ dfs_open2(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	if (stbuf) {
 		if (!(flags & O_CREAT))
 			return ENOTSUP;
-		if (!S_ISREG(mode) && !S_ISDIR(mode))
-			return ENOTSUP;
 	}
 
 	rc = check_name(name, &len);
@@ -2374,11 +2372,13 @@ restart:
 		}
 		break;
 	case S_IFLNK:
-		rc = open_symlink(dfs, th, parent, flags, value, len, obj);
+		rc = open_symlink(dfs, th, parent, flags, value, &entry,
+				  len, obj);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open symlink (%d)\n", rc);
 			D_GOTO(out, rc);
 		}
+		file_size = strlen(value);
 		break;
 	default:
 		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");

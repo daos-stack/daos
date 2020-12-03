@@ -167,6 +167,7 @@ struct dfuse_event {
 };
 
 extern struct dfuse_inode_ops dfuse_dfs_ops;
+extern struct dfuse_inode_ops dfuse_dfs_ops_safe;
 extern struct dfuse_inode_ops dfuse_login_ops;
 extern struct dfuse_inode_ops dfuse_cont_ops;
 extern struct dfuse_inode_ops dfuse_pool_ops;
@@ -194,6 +195,10 @@ struct dfuse_dfs {
 	/* List of dfuse_dfs entries in the dfuse_pool */
 	d_list_t		dfs_list;
 	pthread_mutex_t		dfs_read_mutex;
+
+	/** This container is multi-user, so should access uid/gid acls
+	 * on access
+	 */
 	bool			dfs_multi_user;
 };
 
@@ -211,6 +216,9 @@ struct uid_entry {
 	uid_t uid;
 	gid_t gid;
 };
+
+int
+ie_set_uid(struct dfuse_inode_entry *ie, fuse_req_t req);
 
 int
 dfuse_get_uid(struct dfuse_inode_entry *ie);
@@ -303,6 +311,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define LOG_MODES(HANDLE, INPUT) do {					\
 		int _flag = (INPUT) & S_IFMT;				\
 		LOG_MODE((HANDLE), _flag, S_IFREG);			\
+		LOG_MODE((HANDLE), _flag, S_IFDIR);			\
 		LOG_MODE((HANDLE), _flag, S_IFIFO);			\
 		LOG_MODE((HANDLE), _flag, S_ISUID);			\
 		LOG_MODE((HANDLE), _flag, S_ISGID);			\
@@ -601,11 +610,11 @@ void
 dfuse_cb_readlink(fuse_req_t, fuse_ino_t);
 
 void
-dfuse_cb_mkdir(fuse_req_t, struct dfuse_inode_entry *,
-	       const char *, mode_t);
+dfuse_cb_mknod_safe(fuse_req_t, struct dfuse_inode_entry *,
+		    const char *, mode_t);
 
 void
-dfuse_cb_mkdir_with_id(fuse_req_t, struct dfuse_inode_entry *,
+dfuse_cb_mknod_with_id(fuse_req_t, struct dfuse_inode_entry *,
 		       const char *, mode_t);
 
 void
@@ -685,6 +694,7 @@ void
 dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct dfuse_inode_entry *inode,
 		  struct fuse_file_info *fi_out,
+		  bool is_new,
 		  fuse_req_t req);
 
 /* dfuse_cont.c */

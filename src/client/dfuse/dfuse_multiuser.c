@@ -54,8 +54,8 @@ out:
 	return rc;
 }
 
-static int
-set_uid(struct dfuse_inode_entry *ie, fuse_req_t req)
+int
+ie_set_uid(struct dfuse_inode_entry *ie, fuse_req_t req)
 {
 	const struct fuse_ctx *ctx = fuse_req_ctx(req);
 	struct uid_entry entry;
@@ -70,7 +70,7 @@ set_uid(struct dfuse_inode_entry *ie, fuse_req_t req)
 }
 
 void
-dfuse_cb_mkdir_with_id(fuse_req_t req, struct dfuse_inode_entry *parent,
+dfuse_cb_mknod_with_id(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name, mode_t mode)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
@@ -90,16 +90,11 @@ dfuse_cb_mkdir_with_id(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	DFUSE_TRA_DEBUG(ie, "directory '%s' mode 0%o", name, mode);
 
-	rc = dfs_open(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
-		      mode | S_IFDIR, O_CREAT | O_RDWR,
-		      0, 0, NULL, &ie->ie_obj);
+	rc = dfs_open2(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
+		       mode, O_CREAT | O_RDWR,
+		       0, 0, NULL, &ie->ie_stat, &ie->ie_obj);
 	if (rc)
 		D_GOTO(err, rc);
-
-	/* This can only fail on NULL inputs so do not unlink */
-	rc = dfs_obj2id(ie->ie_obj, &oid);
-	if (rc)
-		D_GOTO(release, rc);
 
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
@@ -107,30 +102,23 @@ dfuse_cb_mkdir_with_id(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_dfs = parent->ie_dfs;
 	atomic_store_relaxed(&ie->ie_ref, 1);
 
-	rc = set_uid(ie, req);
+	rc = ie_set_uid(ie, req);
 	if (rc)
 		D_GOTO(unlink, rc);
 
-	rc = dfs_ostat(parent->ie_dfs->dfs_ns, ie->ie_obj, &ie->ie_stat);
-	if (rc)
-		D_GOTO(release, rc);
-
 	/* Return the new inode data, and keep the parent ref */
-	dfuse_reply_entry(fs_handle, ie, NULL, req);
+	dfuse_reply_entry(fs_handle, ie, NULL, true, req);
 
 	return;
 
 unlink:
 	cleanup_rc = dfs_remove(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
 				false, &oid);
-	if (cleanup_rc != 0) {
+	if (cleanup_rc != 0)
 		DFUSE_TRA_ERROR(parent,
 				"Created but could not unlink %s: %d, %s",
 				name, rc, strerror(rc));
-		D_GOTO(release, 0);
-	}
 
-release:
 	dfs_release(ie->ie_obj);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);

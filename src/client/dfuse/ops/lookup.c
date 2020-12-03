@@ -30,6 +30,7 @@ void
 dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct dfuse_inode_entry *ie,
 		  struct fuse_file_info *fi_out,
+		  bool is_new,
 		  fuse_req_t req)
 {
 	struct fuse_entry_param	entry = {0};
@@ -39,10 +40,15 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	D_ASSERT(ie->ie_parent);
 	D_ASSERT(ie->ie_dfs);
 
-	entry.attr_timeout = ie->ie_dfs->dfs_attr_timeout;
-	entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
+	/* Set the caching attributes of this entry, but do not allow
+	 * any caching on fifos.
+	 */
+	if (!S_ISFIFO(ie->ie_stat.st_mode)) {
+		entry.attr_timeout = ie->ie_dfs->dfs_attr_timeout;
+		entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
+	}
 
-	if (ie->ie_dfs->dfs_multi_user) {
+	if (!is_new && ie->ie_dfs->dfs_multi_user) {
 		rc = dfuse_get_uid(ie);
 		if (rc)
 			D_GOTO(out_decref, rc);
@@ -58,7 +64,8 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	entry.attr = ie->ie_stat;
 	entry.generation = 1;
 	entry.ino = entry.attr.st_ino;
-	DFUSE_TRA_DEBUG(ie, "Inserting inode %#lx", entry.ino);
+	DFUSE_TRA_DEBUG(ie, "Inserting inode %#lx mode 0%o",
+			entry.ino, ie->ie_stat.st_mode);
 
 	rlink = d_hash_rec_find_insert(&fs_handle->dpi_iet,
 				       &ie->ie_stat.st_ino,
@@ -238,7 +245,10 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		if (dfs == NULL)
 			D_GOTO(out_pool, ret = ENOMEM);
 
-		dfs->dfs_ops = &dfuse_dfs_ops;
+		if (fs_handle->dpi_info->di_multi_user)
+			dfs->dfs_ops = &dfuse_dfs_ops_safe;
+		else
+			dfs->dfs_ops = &dfuse_dfs_ops;
 		DFUSE_TRA_UP(dfs, dfp, "dfs");
 		d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
 		uuid_copy(dfs->dfs_cont, dattr.da_cuuid);
@@ -377,7 +387,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		ie->ie_stat.st_mode |= S_IFDIR;
 	}
 
-	dfuse_reply_entry(fs_handle, ie, NULL, req);
+	dfuse_reply_entry(fs_handle, ie, NULL, false, req);
 	return;
 
 err:

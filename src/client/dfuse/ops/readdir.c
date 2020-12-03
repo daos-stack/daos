@@ -128,6 +128,14 @@ create_entry(struct dfuse_projection_info *fs_handle,
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
 
+	if (ie->ie_dfs->dfs_multi_user) {
+		rc = dfuse_get_uid(ie);
+		if (rc)
+			D_GOTO(out, rc);
+		entry->attr.st_gid = ie->ie_stat.st_gid;
+		entry->attr.st_uid = ie->ie_stat.st_uid;
+	}
+
 	if (S_ISFIFO(ie->ie_stat.st_mode)) {
 		rc = check_for_uns_ep(fs_handle, ie);
 		DFUSE_TRA_DEBUG(ie,
@@ -136,6 +144,7 @@ create_entry(struct dfuse_projection_info *fs_handle,
 			D_GOTO(out, rc);
 		ie->ie_stat.st_mode &= ~S_IFIFO;
 		ie->ie_stat.st_mode |= S_IFDIR;
+		entry->attr.st_mode = ie->ie_stat.st_mode;
 	}
 
 	strncpy(ie->ie_name, name, NAME_MAX);
@@ -342,7 +351,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 			} else if (rc != 0) {
 				DFUSE_TRA_DEBUG(oh, "Problem finding file %d",
 						rc);
-				D_GOTO(reply, 0);
+				D_GOTO(reply, rc);
 			}
 
 			if (S_ISFIFO(stbuf.st_mode)) {
