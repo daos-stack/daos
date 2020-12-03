@@ -747,7 +747,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		/* update the sizes in iods */
 		for (i = 0; i < orw->orw_nr; i++) {
 			D_DEBUG(DB_IO, DF_UOID" size "DF_U64
-				DF_U64"\n", DP_UOID(orw->orw_oid), sizes[i],
+				" eph "DF_U64"\n", DP_UOID(orw->orw_oid), sizes[i],
 				orw->orw_epoch);
 			if (!is_ec_obj || reasb_req->orr_fail == NULL ||
 			    iods[i].iod_size == 0 || sizes[i] != 0)
