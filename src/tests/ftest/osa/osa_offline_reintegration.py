@@ -130,7 +130,8 @@ class OSAOfflineReintegration(OSAUtils):
         """Test ID: DAOS-4749
         Test Description: Validate Offline Reintegration
 
-        :avocado: tags=all,pr,hw,large,osa,offline_reintegration
+        :avocado: tags=all,pr,hw,medium,ib2
+        :avocado: tags=osa,offline_reintegration
         """
         # Perform reintegration testing with 1 to 3 pools
         for x in range(1, 4):
