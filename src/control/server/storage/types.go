@@ -150,6 +150,7 @@ type (
 		Rank       system.Rank `json:"rank"`
 		TotalBytes uint64      `json:"total_bytes"`
 		AvailBytes uint64      `json:"avail_bytes"`
+		TrAddr     string      `json:"trAddr"`
 		// TODO: included only for compatibility with storage_query smd
 		//       commands and should be removed when possible
 		Health *NvmeHealth `json:"health"`

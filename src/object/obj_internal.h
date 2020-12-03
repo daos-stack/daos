@@ -208,6 +208,12 @@ struct migrate_pool_tls {
 	daos_handle_t		mpt_root_hdl;
 	struct btr_root		mpt_root;
 
+	/* Container/objects already migrated will be attached to the tree, to
+	 * avoid the object being migrated multiple times.
+	 */
+	daos_handle_t		mpt_migrated_root_hdl;
+	struct btr_root		mpt_migrated_root;
+
 	/* Hash table to store the container uuids which have already been
 	 * deleted (used by reintegration)
 	 */

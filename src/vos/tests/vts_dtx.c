@@ -579,6 +579,8 @@ dtx_16(void **state)
 	char				 fetch_buf[UPDATE_BUF_SIZE];
 	int				 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	vts_dtx_prep_update(args, &val_iov, &dkey_iov, &dkey, dkey_buf,
 			    &akey, akey_buf, &iod, &sgl, &rex, update_buf,
 			    UPDATE_BUF_SIZE, UPDATE_REC_SIZE, &dkey_hash,
