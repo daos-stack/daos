@@ -386,6 +386,8 @@ func TestSystem_Database_BadApply(t *testing.T) {
 }
 
 func raftUpdateTestMember(t *testing.T, db *Database, op raftOp, member *Member) {
+	t.Helper()
+
 	mu := &memberUpdate{
 		Member: member,
 	}

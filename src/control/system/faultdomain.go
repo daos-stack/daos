@@ -101,6 +101,7 @@ func (f *FaultDomain) TopLevel() string {
 }
 
 // IsAncestorOf determines if this fault domain is an ancestor of the one passed in.
+// This includes a 0th-degree ancestor (i.e. it is identical).
 func (f *FaultDomain) IsAncestorOf(d *FaultDomain) bool {
 	if f.Empty() {
 		// root is the ancestor of all
@@ -296,7 +297,7 @@ func (t *FaultDomainTree) RemoveDomain(domain *FaultDomain) error {
 			return nil
 		}
 		if child.Domain.IsAncestorOf(domain) {
-			_ = child.RemoveDomain(domain)
+			return child.RemoveDomain(domain)
 		}
 	}
 	return nil // not found - consider it already removed

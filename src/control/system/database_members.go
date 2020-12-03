@@ -69,12 +69,12 @@ func (mam MemberAddrMap) addMember(addr *net.TCPAddr, m *Member) {
 }
 
 func (mam MemberAddrMap) removeMember(m *Member) {
-	members, ok := mam[m.Addr.String()]
-	if !ok {
+	members, exists := mam[m.Addr.String()]
+	if !exists {
 		return
 	}
-	for i, mem := range members {
-		if m.UUID.String() == mem.UUID.String() {
+	for i, cur := range members {
+		if m.UUID == cur.UUID {
 			// remove from slice
 			members = append(members[:i], members[i+1:]...)
 			break
