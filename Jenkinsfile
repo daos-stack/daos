@@ -322,6 +322,7 @@ boolean skip_scan_rpms_centos7() {
 
 boolean skip_ftest_hw(String size) {
     return env.DAOS_STACK_CI_HARDWARE_SKIP == 'true' ||
+           skip_stage('func-test') ||
            skip_stage('func-hw-test') ||
            skip_stage('func-hw-test-' + size)
 }

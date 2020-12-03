@@ -1,11 +1,26 @@
 #!/bin/bash
 
-post_provision_config_nodes() {
-    local yum_repo_args="--disablerepo=*"
-    yum_repo_args+=" --enablerepo=repo.dc.hpdd.intel.com_repository_*"
-    yum_repo_args+=",build.hpdd.intel.com_job_daos-stack*"
+url_to_repo() {
+    local URL="$1"
 
-    # Reserve port ranges for DAOS and CART servers
+    local repo=${URL#*://}
+    repo="${repo//%252F/_}"
+    repo="${repo//\//_}"
+
+    echo "$repo"
+}
+
+disable_gpg_check() {
+    local REPO="$1"
+
+    # make sure the option exists otherwise disable won't disable it
+    yum-config-manager --save --setopt="$(url_to_repo "$REPO")".gpgcheck=1
+    yum-config-manager --save --setopt="$(url_to_repo "$REPO")".gpgcheck=0
+}
+
+post_provision_config_nodes() {
+
+    # Reserve port ranges 31416-31516 for DAOS and CART servers
     echo 31416-31516 > /proc/sys/net/ipv4/ip_local_reserved_ports
 
     if $CONFIG_POWER_ONLY; then
@@ -17,18 +32,24 @@ post_provision_config_nodes() {
                      libpmemblk munge-libs munge slurm             \
                      slurm-example-configs slurmctld slurm-slurmmd
     fi
+
+    local yum_repo_args="--disablerepo=*"
+
     if [ -n "$DAOS_STACK_GROUP_REPO" ]; then
          rm -f /etc/yum.repos.d/*"$DAOS_STACK_GROUP_REPO"
          yum-config-manager \
-             --add-repo="$REPOSITORY_URL"/"$DAOS_STACK_GROUP_REPO"
+             --add-repo="${REPOSITORY_URL}${DAOS_STACK_GROUP_REPO}"
     fi
 
     if [ -n "$DAOS_STACK_LOCAL_REPO" ]; then
         rm -f /etc/yum.repos.d/*"$DAOS_STACK_LOCAL_REPO"
-        yum-config-manager --add-repo="$REPOSITORY_URL"/"$DAOS_STACK_LOCAL_REPO"
-        echo "gpgcheck = False" >> \
-            /etc/yum.repos.d/*"${DAOS_STACK_LOCAL_REPO//\//_}".repo
+        local repo="${REPOSITORY_URL}${DAOS_STACK_LOCAL_REPO}"
+        yum-config-manager --add-repo="${repo}"
+        disable_gpg_check "$repo"
     fi
+
+    # TODO: this should be per repo for the above two repos
+    yum_repo_args+=" --enablerepo=repo.dc.hpdd.intel.com_repository_*"
 
     if [ -n "$INST_REPOS" ]; then
         for repo in $INST_REPOS; do
@@ -42,14 +63,12 @@ post_provision_config_nodes() {
                     branch="${branch%:*}"
                 fi
             fi
-            yum-config-manager --add-repo="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/centos7/
-            pname=$(ls /etc/yum.repos.d/*.hpdd.intel.com_job_daos-stack_job_"${repo}"_job_"${branch//\//%252F}"_"${build_number}"_artifact_artifacts_centos7_.repo)
-            if [ "$pname" != "${pname//%252F/_}" ]; then
-                mv "$pname" "${pname//%252F/_}"
+            local repo="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/centos7/
+            yum-config-manager --add-repo="${repo}"
+            disable_gpg_check "$repo"
+            if [ -n "$INST_REPOS" ]; then
+                yum_repo_args+=",build.hpdd.intel.com_job_daos-stack*"
             fi
-            pname="${pname//%252F/_}"
-            sed -i -e '/^\[/s/%252F/_/g' -e '$s/^$/gpgcheck = False/' "$pname"
-            cat "$pname"
         done
     fi
     if [ -n "$INST_RPMS" ]; then
