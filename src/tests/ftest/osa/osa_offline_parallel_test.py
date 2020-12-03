@@ -27,6 +27,7 @@ import threading
 import copy
 from osa_utils import OSAUtils
 from test_utils_pool import TestPool
+from command_utils import CommandFailure
 from apricot import skipForTicket
 
 try:
