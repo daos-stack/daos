@@ -322,6 +322,7 @@ boolean skip_scan_rpms_centos7() {
 
 boolean skip_ftest_hw(String size) {
     return env.DAOS_STACK_CI_HARDWARE_SKIP == 'true' ||
+           skip_stage('func-test') ||
            skip_stage('func-hw-test') ||
            skip_stage('func-hw-test-' + size)
 }
@@ -402,7 +403,7 @@ String quick_build_deps(String distro) {
     } else {
         error("Unknown distro: ${distro} in quick_build_deps()")
     }
-    return sh(label:'Get Quickbuild dependencies',
+    return sh(label: 'Get Quickbuild dependencies',
               script: "rpmspec -q " +
                       "--srpm " +
                       rpmspec_args + ' ' +
@@ -430,6 +431,10 @@ pipeline {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
         ansiColor('xterm')
+    }
+
+    parameters {
+        string(name: 'BuildPriority', defaultValue: '', description: 'Priority of the build.  DO NOT USE WITHOUT PERMISSION.')
     }
 
     stages {

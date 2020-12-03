@@ -944,7 +944,7 @@ out:
 }
 
 static int
-cont_decode_props(daos_prop_t *props)
+cont_decode_props(daos_prop_t *props, daos_prop_t *prop_acl)
 {
 
 	struct daos_prop_entry		*entry;
@@ -1154,6 +1154,22 @@ cont_decode_props(daos_prop_t *props)
 		D_PRINT("owner-group:\t\t%s\n", entry->dpe_str);
 	}
 
+	/* Only mention ACL if there's something to print */
+	if (prop_acl != NULL) {
+		entry = daos_prop_entry_get(prop_acl, DAOS_PROP_CO_ACL);
+		if (entry != NULL && entry->dpe_val_ptr != NULL) {
+			struct daos_acl *acl;
+
+			acl = (struct daos_acl *)entry->dpe_val_ptr;
+			D_PRINT("acl:\n");
+			rc = daos_acl_to_stream(stdout, acl, false);
+			if (rc)
+				fprintf(stderr,
+					"unable to decode ACL: %s (%d)\n",
+					d_errdesc(rc), rc);
+		}
+	}
+
 	return rc;
 }
 
@@ -1162,12 +1178,13 @@ int
 cont_get_prop_hdlr(struct cmd_args_s *ap)
 {
 	daos_prop_t		*prop_query;
+	daos_prop_t		*prop_acl = NULL;
 	int			rc = 0;
 	uint32_t		i;
 	uint32_t		entry_type;
 
 	/*
-	 * Get all props except the ACL
+	 * Get all props except the ACL first.
 	 */
 	prop_query = daos_prop_alloc(DAOS_PROP_CO_NUM - 1);
 	if (prop_query == NULL)
@@ -1188,12 +1205,21 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 		D_GOTO(err_out, rc);
 	}
 
+	/* Fetch the ACL separately in case user doesn't have access */
+	rc = daos_cont_get_acl(ap->cont, &prop_acl, NULL);
+	if (rc && rc != -DER_NO_PERM) {
+		fprintf(stderr, "failed to query container ACL "DF_UUIDF
+			": %s (%d)\n", DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
+		D_GOTO(err_out, rc);
+	}
+
 	D_PRINT("Container properties for "DF_UUIDF" :\n", DP_UUID(ap->c_uuid));
 
-	rc = cont_decode_props(prop_query);
+	rc = cont_decode_props(prop_query, prop_acl);
 
 err_out:
 	daos_prop_free(prop_query);
+	daos_prop_free(prop_acl);
 	return rc;
 }
 
@@ -2032,13 +2058,16 @@ fs_copy(daos_file_t *daos_src_file,
 		d_name = entry->d_name;
 		char filename[MAX_FILENAME];
 		char dst_filename[MAX_FILENAME];
-		snprintf(filename, MAX_FILENAME, "%s/%s", dir_name, d_name);
-
 		int path_length = 0;
-		if (daos_src_file->type == DAOS && daos_dst_file->type == POSIX)
+		path_length = snprintf(filename, MAX_FILENAME, "%s/%s", dir_name, d_name);
+		if (path_length >= MAX_FILENAME) 
+			fprintf(stderr, "Path length is too long.\n");
+
+		if (daos_src_file->type == DAOS && daos_dst_file->type == POSIX) {
 			path_length = snprintf(dst_filename, MAX_FILENAME, "%s/%s", fs_dst_prefix, filename);
 			if (path_length >= MAX_FILENAME) 
 				fprintf(stderr, "Path length is too long.\n");
+		}
 
 		/* stat the source file */
 		struct stat st;
@@ -2057,17 +2086,18 @@ fs_copy(daos_file_t *daos_src_file,
 			}
 
 			/* read from source file, then write to destination file */
-			uint64_t total_bytes = st.st_size;
-			uint64_t left_to_read = 0;
+			uint64_t file_length = st.st_size;
+			uint64_t total_bytes = 0;
 			uint64_t buf_size = 64*1024*1024;
 			void *buf;
 			D_ALLOC(buf, buf_size * sizeof(char));
-				if (buf == NULL)
-					return ENOMEM;
-			while (left_to_read < total_bytes) {
-				left_to_read = total_bytes - left_to_read;
-				if (left_to_read > buf_size)
-					left_to_read = buf_size;
+			if (buf == NULL)
+				return ENOMEM;
+			while (total_bytes < file_length) {
+				size_t left_to_read = buf_size;
+				uint64_t bytes_left = file_length - total_bytes;
+				if (bytes_left < buf_size)
+					left_to_read = (size_t) bytes_left;
 				ssize_t bytes_read = daos_file_read(daos_src_file, filename,
 								    buf, left_to_read);
 				if (bytes_read < 0) {
@@ -2081,9 +2111,8 @@ fs_copy(daos_file_t *daos_src_file,
 					bytes_written = daos_file_write(daos_dst_file, filename, buf, bytes_to_write);
 				}
 				if (bytes_written < 0) {
-					fprintf(stderr, "write failed on %s\n", filename);
 				}
-				left_to_read += (uint64_t) bytes_read;
+				total_bytes += bytes_read;
 			}
 			if (buf != NULL)
 				D_FREE(buf);

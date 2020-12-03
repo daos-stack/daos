@@ -291,6 +291,16 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 			break;
 		}
 		mgmt__smd_dev_resp__device__init(resp->devices[i]);
+		/*
+		 * XXX: These fields are initialized as "empty string" by above
+		 * protobuf auto-generated function, to avoid error cleanup
+		 * code mistakenly free the "empty string", let's reset them as
+		 * NULL.
+		 */
+		resp->devices[i]->uuid = NULL;
+		resp->devices[i]->state = NULL;
+		resp->devices[i]->traddr = NULL;
+
 		D_ALLOC(resp->devices[i]->uuid, DAOS_UUID_STR_SIZE);
 		if (resp->devices[i]->uuid == NULL) {
 			rc = -DER_NOMEM;
@@ -318,6 +328,19 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 
 		strncpy(resp->devices[i]->state,
 			bio_dev_state_enum_to_str(state), buflen);
+
+		if (dev_info->bdi_traddr != NULL) {
+			buflen = strlen(dev_info->bdi_traddr) + 1;
+			D_ALLOC(resp->devices[i]->traddr, buflen);
+			if (resp->devices[i]->traddr == NULL) {
+				D_ERROR("Failed to allocate device traddr");
+				rc = -DER_NOMEM;
+				break;
+			}
+			/* Transport Addr -> Blobstore UUID mapping */
+			strncpy(resp->devices[i]->traddr, dev_info->bdi_traddr,
+				buflen);
+		}
 
 		resp->devices[i]->n_tgt_ids = dev_info->bdi_tgt_cnt;
 		D_ALLOC(resp->devices[i]->tgt_ids,
@@ -353,6 +376,8 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 					D_FREE(resp->devices[i]->tgt_ids);
 				if (resp->devices[i]->state != NULL)
 					D_FREE(resp->devices[i]->state);
+				if (resp->devices[i]->traddr != NULL)
+					D_FREE(resp->devices[i]->traddr);
 				D_FREE(resp->devices[i]);
 			}
 		}
@@ -399,6 +424,9 @@ ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp)
 			break;
 		}
 		mgmt__smd_pool_resp__pool__init(resp->pools[i]);
+		/* See "empty string" comments in ds_mgmt_smd_list_devs() */
+		resp->pools[i]->uuid = NULL;
+
 		D_ALLOC(resp->pools[i]->uuid, DAOS_UUID_STR_SIZE);
 		if (resp->pools[i]->uuid == NULL) {
 			rc = -DER_NOMEM;
