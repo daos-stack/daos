@@ -731,9 +731,9 @@ static int
 bio_storage_dev_identify(void *arg)
 {
 	struct bio_identify_dev_info *identify_info = arg;
-	struct dss_module_info	    *info = dss_get_module_info();
-	struct bio_xs_context	    *bxc;
-	int			     rc;
+	struct dss_module_info	     *info = dss_get_module_info();
+	struct bio_xs_context	     *bxc;
+	int			      rc;
 
 	D_ASSERT(info != NULL);
 
@@ -760,8 +760,8 @@ int
 ds_mgmt_dev_identify(uuid_t dev_uuid, char *traddr, Mgmt__DevIdentifyResp *resp)
 {
 	struct bio_identify_dev_info identify_info = { 0 };
-	int			    buflen = 10;
-	int			    rc = 0;
+	int			     buflen = 10;
+	int			     rc = 0;
 
 	if (uuid_is_null(dev_uuid) && strlen(traddr) == 0)
 		return -DER_INVAL;
@@ -783,7 +783,7 @@ ds_mgmt_dev_identify(uuid_t dev_uuid, char *traddr, Mgmt__DevIdentifyResp *resp)
 		rc = -DER_NOMEM;
 		goto out;
 	}
-	strncpy(resp->dev_traddr, traddr, strlen(traddr));
+	strncpy(resp->dev_traddr, traddr, strlen(resp->dev_traddr));
 
 	D_ALLOC(resp->led_state, buflen);
 	if (resp->led_state == NULL) {

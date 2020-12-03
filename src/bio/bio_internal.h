@@ -109,7 +109,7 @@ struct bio_bdev {
 	 * state after allotted time.
 	 */
 	int			 bb_led_state;
-	int			 bb_led_start_time;
+	uint64_t		 bb_led_start_time;
 	char			*bb_led_traddr;
 	bool			 bb_removed;
 	bool			 bb_replacing;
