@@ -39,11 +39,11 @@
 #define NVME_MONITOR_PERIOD	    (60ULL * (NSEC_PER_SEC / NSEC_PER_USEC))
 #define NVME_MONITOR_SHORT_PERIOD   (3ULL * (NSEC_PER_SEC / NSEC_PER_USEC))
 
-/* Period for VMD LED event to occur. 60 seconds by default.
+/* Period for VMD LED event to occur. 180 seconds by default.
  * TODO Make this configurable on the command line for dmg storage led
  * commands.
  */
-#define NVME_LED_EVENT_PERIOD   (60ULL * (NSEC_PER_SEC / NSEC_PER_USEC))
+#define NVME_LED_EVENT_PERIOD   (180ULL * (NSEC_PER_SEC / NSEC_PER_USEC))
 /* DMA buffer is managed in chunks */
 struct bio_dma_chunk {
 	/* Link to edb_idle_list or edb_used_list */
