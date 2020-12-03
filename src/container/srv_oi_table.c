@@ -67,7 +67,7 @@ struct oit_scan_args {
 	d_sg_list_t		oa_sgls[OID_SEND_MAX];
 	/** IOD for OID each bucket */
 	daos_iod_t		oa_iods[OID_SEND_MAX];
-	/** OID buckets, IODs are hashed into different buckets */
+	/** OID buckets, OIDs are hashed into different buckets */
 	struct oit_bucket	oa_buckets[OIT_BUCKET_MAX];
 };
 
@@ -205,7 +205,7 @@ cont_child_gather_oids(struct ds_cont_child *coc, uuid_t coh_uuid,
 	if (rc)
 		D_GOTO(out, rc);
 
-	/* send out remainded OIDs */
+	/* send out remaining OIDs */
 	for (i = 0; i < OIT_BUCKET_MAX; i++) {
 		if (oa->oa_buckets[i].ob_nr > 0)
 			rc = cont_send_oit_bucket(oa, i);
