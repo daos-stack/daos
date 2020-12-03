@@ -45,10 +45,14 @@ run_test()
     #    before deciding this. Also, we intentionally leave off the last 'S'
     #    in that error message so that we don't guarantee printing that in
     #    every run's output, thereby making all tests here always pass.
-    if [ -f "$@" ]; then
+    ff=$(echo "$@" | cut -d' ' -f1-1)
+    echo "marj1> $ff"
+    if [ -f "$ff" ]; then
 	    echo "File exists: $@"
 	    echo "VALGRIND_CMD is: $VALGRIND_CMD"
-	    if ! time "${VALGRIND_CMD} $@"; then
+            time eval "${VALGRIND_CMD} $@"
+	    retcode=$?
+	    if [ "${retcode}" -ne 0 ]; then
 		echo "Test $* failed with exit status ${PIPESTATUS[0]}."
 		((failed = failed + 1))
 		failures+=("$*")
