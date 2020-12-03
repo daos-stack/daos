@@ -15,6 +15,7 @@
 #  Note: Uses .build_vars.sh to find daos artifacts
 #  Note: New tests should return non-zero if there are any
 #    failures.
+set -x
 
 #check for existence of /mnt/daos first:
 failed=0
@@ -44,10 +45,14 @@ run_test()
     #    before deciding this. Also, we intentionally leave off the last 'S'
     #    in that error message so that we don't guarantee printing that in
     #    every run's output, thereby making all tests here always pass.
-    if ! time "${VALGRIND_CMD} $@"; then
-        echo "Test $* failed with exit status ${PIPESTATUS[0]}."
-        ((failed = failed + 1))
-        failures+=("$*")
+    if [ -f "$@" ]; then
+	    echo "File exists: $@"
+	    echo "VALGRIND_CMD is: $VALGRIND_CMD"
+	    if ! time "${VALGRIND_CMD} $@"; then
+		echo "Test $* failed with exit status ${PIPESTATUS[0]}."
+		((failed = failed + 1))
+		failures+=("$*")
+	    fi
     fi
 
     ((log_num += 1))
@@ -80,7 +85,7 @@ if [ -d "/mnt/daos" ]; then
             [ -z "$VALGRIND_SUPP" ] &&
                 VALGRIND_SUPP="$(pwd)/utils/test_memcheck.supp"
             VALGRIND_XML_PATH="test_results/unit-test-%p.memcheck.xml"
-            VALGRIND_CMD="valgrind --leak-check=full --show-reachable=yes \
+            export VALGRIND_CMD="valgrind --leak-check=full --show-reachable=yes \
                                    --error-limit=no \
                                    --suppressions=${VALGRIND_SUPP} \
                                    --xml=yes --xml-file=${VALGRIND_XML_PATH}"
@@ -96,6 +101,7 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_consumer"
     run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_hlc"
     run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_swim"
+    ls "${SL_PREFIX}/bin" || true
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
     run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
     export DAOS_IO_BYPASS=pm
