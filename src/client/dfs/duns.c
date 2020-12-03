@@ -591,12 +591,16 @@ duns_set_fuse_acl(int dfd, daos_handle_t coh)
 	ace.dae_allow_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
 
 	acl = daos_acl_create(&aces, 1);
+	if (acl == NULL)
+		D_GOTO(out, rc = EIO);
 
-	if (acl) {
-		daos_acl_free(acl);
-	}
+#if  0
+	rc = daos_cont_overwrite_acl(coh, acl, NULL);
+#endif
 
-	D_ERROR("%p rc is " DF_RC "\n", acl, DP_RC(rc));
+	daos_acl_free(acl);
+
+out:
 	return rc;
 }
 
@@ -667,9 +671,10 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		close(fd);
 	} else if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
 
-		if (fs.f_type == FUSE_SUPER_MAGIC) {
+		unlink_flag = AT_REMOVEDIR;
+
+		if (fs.f_type == FUSE_SUPER_MAGIC)
 			backend_dfuse = true;
-		}
 
 #ifdef LUSTRE_INCLUDE
 		if (fs.f_type == LL_SUPER_MAGIC) {
@@ -683,15 +688,13 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 #endif
 
 		/** create a new directory if POSIX/MPI-IO container */
-		if (backend_dfuse) {
+		if (backend_dfuse)
 			rc = mknodat(dfd, spart,
 				     S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH | S_IFIFO,
 				     0);
-		} else {
-			unlink_flag = AT_REMOVEDIR;
+		else
 			rc = mkdirat(dfd, spart,
 				     S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-		}
 		if (rc == -1) {
 			int err = errno;
 
