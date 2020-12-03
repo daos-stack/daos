@@ -87,7 +87,7 @@ test_run(d_rank_t my_rank)
 		crt_register_event_cb(swim_crt_event_cb, &a);
 	}
 
-	// Trigger the CRT_EVS_SWIM CRT_EVT_ALIVE event
+	// Trigger the CRT_EVS_SWIM CRT_EVT_DEAD event
 	if (my_rank == 2) {
 		exit(0);
 	}
