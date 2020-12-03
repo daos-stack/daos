@@ -50,10 +50,10 @@ pool_reserved:
 container:
     type: POSIX
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-    oclass: RP_2GX
+    oclass: RP_2G1
     control_method: daos
 container_reserved:
-    oclass: OC_RP_2GX
+    oclass: OC_RP_2G1
     akey_size: 5
     dkey_size: 5
     data_size: 4096
@@ -129,9 +129,9 @@ ior_faults:
         - '1m'
     segment_count: 1
     dfs_oclass:
-        - 'RP_2GX'
+        - 'RP_2G1'
     dfs_dir_oclass:
-        - 'RP_2GX'
+        - 'RP_2G1'
     dfs_destroy: True
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"
