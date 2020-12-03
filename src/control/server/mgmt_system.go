@@ -725,7 +725,10 @@ func (svc *mgmtSvc) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq)
 // registered in the system membership.
 func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *mgmtpb.ClusterEventReq) (*mgmtpb.ClusterEventResp, error) {
 	if req == nil {
-		return nil, errors.New("ClusterEvent: nil request")
+		return nil, errors.New("nil request")
+	}
+	if req.Sequence < 1 {
+		return nil, errors.New("invalid sequence number in request")
 	}
 	svc.log.Debugf("MgmtSvc.ClusterEvent dispatch, req:%#v\n", req)
 
@@ -743,7 +746,7 @@ func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *mgmtpb.ClusterEventRe
 		return nil, err
 	}
 
-	resp := &mgmtpb.ClusterEventResp{Id: req.Id}
+	resp := &mgmtpb.ClusterEventResp{Sequence: req.Sequence}
 	svc.log.Debugf("MgmtSvc.ClusterEvent dispatch, resp:%#v\n", resp)
 
 	return resp, nil

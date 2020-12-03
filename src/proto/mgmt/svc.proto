@@ -85,22 +85,22 @@ message RASEvent {
 	uint32 rank = 5; 		// (optional) DAOS rank involved in event.
 	string hostname = 6;		// (optional) Hostname of node involved in event.
 	bytes data = 7;			// (optional) Instance data treated as blob.
-	uint32 eid = 8;			// Unique numeric event identifier.
+	uint32 id = 8;			// Unique numeric event identifier.
 	uint32 type = 9;		// Event type StateChange/InfoOnly.
 	uint32 instance_idx = 10;	// (optional) DAOS harness instance index.
 }
 
 // ClusterEventReq wraps an event subtype e.g. RASEvent.
 message ClusterEventReq {
-	uint32 id = 1;		// Sequence identifier for cluster events.
+	uint32 sequence = 1;		// Sequence identifier for cluster events.
 	oneof event {
 		RASEvent ras = 2;
 	}
 }
 
-// ClusterEventResp contains response to an event notification.
+// ClusterEventResp acknowledges receipt of an event notification.
 message ClusterEventResp {
-	uint32 id = 1;
+	uint32 sequence = 1;		// Sequence identifier for cluster events.
 }
 
 message GetAttachInfoReq {

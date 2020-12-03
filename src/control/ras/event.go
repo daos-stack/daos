@@ -57,8 +57,8 @@ func (id EventID) Desc() string {
 	return C.GoString(C.ras_event_id_enum_to_msg(uint32(id)))
 }
 
-// Uint32 returns numeric ID of event.
-func (id EventID) Uint32() uint32 {
+// ID returns numeric ID of event.
+func (id EventID) ID() uint32 {
 	return uint32(id)
 }
 
@@ -97,7 +97,7 @@ type Event struct {
 	Msg         string `json:"msg"`
 	Hostname    string `json:"hostname"`
 	Data        []byte `json:"data"`
-	Eid         uint32 `json:"eid"`
+	ID          uint32 `json:"id"`
 	Rank        uint32 `json:"rank"`
 	InstanceIdx uint32 `json:"instance_idx"`
 	Severity    EventSeverityID
@@ -156,7 +156,7 @@ func NewRankFailEvent(instanceIdx uint32, rank uint32, exitErr error) *Event {
 		Timestamp:   common.FormatTime(time.Now().UTC()),
 		Msg:         EventRankFail.Desc(),
 		InstanceIdx: instanceIdx,
-		Eid:         EventRankFail.Uint32(),
+		ID:          EventRankFail.ID(),
 		Rank:        rank,
 		Type:        EventTypeStateChange,
 		Severity:    EventSeverityInfo,
@@ -177,12 +177,12 @@ func NewRankFailEvent(instanceIdx uint32, rank uint32, exitErr error) *Event {
 func ProcessEvent(log logging.Logger, event mgmtpb.RASEvent) error {
 	log.Debugf("processing RAS event: %s", event.GetMsg())
 
-	eid := EventID(uint32(event.Eid))
-	switch eid {
+	id := EventID(uint32(event.Id))
+	switch id {
 	case EventRankFail, EventRankNoResp:
-		log.Debugf("processing %s (%s) event", eid.String(), eid.Desc())
+		log.Debugf("processing %s (%s) event", id.String(), id.Desc())
 	default:
-		return errors.Errorf("unrecognised event ID: %d", event.Eid)
+		return errors.Errorf("unrecognised event ID: %d", event.Id)
 	}
 
 	return nil

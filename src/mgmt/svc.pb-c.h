@@ -227,7 +227,7 @@ struct  _Mgmt__RASEvent
   /*
    * Unique numeric event identifier.
    */
-  uint32_t eid;
+  uint32_t id;
   /*
    * Event type StateChange/InfoOnly.
    */
@@ -257,7 +257,7 @@ struct  _Mgmt__ClusterEventReq
   /*
    * Sequence identifier for cluster events.
    */
-  uint32_t id;
+  uint32_t sequence;
   Mgmt__ClusterEventReq__EventCase event_case;
   union {
     Mgmt__RASEvent *ras;
@@ -269,12 +269,15 @@ struct  _Mgmt__ClusterEventReq
 
 
 /*
- * ClusterEventResp contains response to an event notification.
+ * ClusterEventResp acknowledges receipt of an event notification.
  */
 struct  _Mgmt__ClusterEventResp
 {
   ProtobufCMessage base;
-  uint32_t id;
+  /*
+   * Sequence identifier for cluster events.
+   */
+  uint32_t sequence;
 };
 #define MGMT__CLUSTER_EVENT_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__cluster_event_resp__descriptor) \

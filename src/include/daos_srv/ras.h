@@ -16,7 +16,7 @@
  * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
  * The Government's rights to use, modify, reproduce, release, perform, display,
  * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B620873.
+ * provided in Contract No. B609815.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
@@ -41,8 +41,10 @@ static inline char *
 ras_event_id_enum_to_name(enum ras_event_id id)
 {
 	switch (id) {
-	case RAS_RANK_FAIL: return "daos_rank_failed";
-	case RAS_RANK_NO_RESP: return "daos_rank_no_response";
+	case RAS_RANK_FAIL:
+		return "daos_rank_failed";
+	case RAS_RANK_NO_RESP:
+		return "daos_rank_no_response";
 	}
 
 	return RAS_ID_UNKNOWN_STR;
@@ -52,8 +54,10 @@ static inline char *
 ras_event_id_enum_to_msg(enum ras_event_id id)
 {
 	switch (id) {
-	case RAS_RANK_FAIL: return "DAOS rank terminated unexpectedly";
-	case RAS_RANK_NO_RESP: return "DAOS rank unresponsive";
+	case RAS_RANK_FAIL:
+		return "DAOS rank terminated unexpectedly";
+	case RAS_RANK_NO_RESP:
+		return "DAOS rank unresponsive";
 	}
 
 	return RAS_ID_UNKNOWN_STR;
@@ -70,10 +74,14 @@ static inline char *
 ras_event_sev_enum_to_name(enum ras_event_sev severity)
 {
 	switch (severity) {
-	case RAS_SEV_FATAL: "FATAL";
-	case RAS_SEV_WARN: "WARN";
-	case RAS_SEV_ERROR: "ERROR";
-	case RAS_SEV_INFO: "INFO";
+	case RAS_SEV_FATAL:
+		return "FATAL";
+	case RAS_SEV_WARN:
+		return "WARN";
+	case RAS_SEV_ERROR:
+		return "ERROR";
+	case RAS_SEV_INFO:
+		return "INFO";
 	}
 
 	return RAS_SEV_UNKNOWN_STR;
@@ -88,8 +96,10 @@ static inline char *
 ras_event_type_enum_to_name(enum ras_event_type type)
 {
 	switch (type) {
-	case RAS_TYPE_STATE_CHANGE: "STATE_CHANGE";
-	case RAS_TYPE_INFO_ONLY: "INFO_ONLY";
+	case RAS_TYPE_STATE_CHANGE:
+		return "STATE_CHANGE";
+	case RAS_TYPE_INFO_ONLY:
+		return "INFO_ONLY";
 	}
 
 	return RAS_TYPE_UNKNOWN_STR;

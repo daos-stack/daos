@@ -134,12 +134,11 @@ func (srv *IOServerInstance) finishStartup(ctx context.Context, ready *srvpb.Not
 func (srv *IOServerInstance) exit(ctx context.Context, exitErr error) {
 	srvIdx := srv.Index()
 
-	srv.log.Infof("instance %d exited: %s", srvIdx,
-		ioserver.GetExitStatus(exitErr))
+	srv.log.Infof("instance %d exited: %s", srvIdx, ioserver.GetExitStatus(exitErr))
 
 	rank, err := srv.GetRank()
 	if err != nil {
-		srv.log.Debugf("instance %d: no rank assigned", srv.Index())
+		srv.log.Debugf("instance %d: no rank (%s)", srv.Index(), err)
 	}
 
 	srv._lastErr = exitErr
@@ -150,7 +149,7 @@ func (srv *IOServerInstance) exit(ctx context.Context, exitErr error) {
 	if _, err := srv.notifySystem(ctx, &control.SystemNotifyReq{
 		Event: ras.NewRankFailEvent(srvIdx, rank.Uint32(), exitErr),
 	}); err != nil {
-		srv.log.Errorf("notifySystem: %s", err.Error())
+		srv.log.Errorf("notifySystem: %s", err)
 	}
 }
 

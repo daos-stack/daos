@@ -135,16 +135,30 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			expErr: errors.New("nil request"),
 		},
 		"nil event": {
-			req:    &mgmtpb.ClusterEventReq{},
+			req: &mgmtpb.ClusterEventReq{
+				Sequence: 1,
+			},
 			expErr: errors.New("unexpected event type"),
 		},
-		"successful notification": {
+		"invalid sequence": {
 			req: &mgmtpb.ClusterEventReq{
+				Sequence: 0,
 				Event: &mgmtpb.ClusterEventReq_Ras{
 					Ras: rasEventPB,
 				},
 			},
-			expResp: &mgmtpb.ClusterEventResp{},
+			expErr: errors.New("invalid sequence"),
+		},
+		"successful notification": {
+			req: &mgmtpb.ClusterEventReq{
+				Sequence: 1,
+				Event: &mgmtpb.ClusterEventReq_Ras{
+					Ras: rasEventPB,
+				},
+			},
+			expResp: &mgmtpb.ClusterEventResp{
+				Sequence: 1,
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

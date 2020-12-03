@@ -1282,12 +1282,12 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[10] =
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "eid",
+    "id",
     8,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, eid),
+    offsetof(Mgmt__RASEvent, id),
     NULL,
     NULL,
     0,             /* flags */
@@ -1320,8 +1320,8 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[10] =
 };
 static const unsigned mgmt__rasevent__field_indices_by_name[] = {
   6,   /* field[6] = data */
-  7,   /* field[7] = eid */
   5,   /* field[5] = hostname */
+  7,   /* field[7] = id */
   9,   /* field[9] = instance_idx */
   3,   /* field[3] = msg */
   0,   /* field[0] = name */
@@ -1353,12 +1353,12 @@ const ProtobufCMessageDescriptor mgmt__rasevent__descriptor =
 static const ProtobufCFieldDescriptor mgmt__cluster_event_req__field_descriptors[2] =
 {
   {
-    "id",
+    "sequence",
     1,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__ClusterEventReq, id),
+    offsetof(Mgmt__ClusterEventReq, sequence),
     NULL,
     NULL,
     0,             /* flags */
@@ -1378,8 +1378,8 @@ static const ProtobufCFieldDescriptor mgmt__cluster_event_req__field_descriptors
   },
 };
 static const unsigned mgmt__cluster_event_req__field_indices_by_name[] = {
-  0,   /* field[0] = id */
   1,   /* field[1] = ras */
+  0,   /* field[0] = sequence */
 };
 static const ProtobufCIntRange mgmt__cluster_event_req__number_ranges[1 + 1] =
 {
@@ -1404,12 +1404,12 @@ const ProtobufCMessageDescriptor mgmt__cluster_event_req__descriptor =
 static const ProtobufCFieldDescriptor mgmt__cluster_event_resp__field_descriptors[1] =
 {
   {
-    "id",
+    "sequence",
     1,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__ClusterEventResp, id),
+    offsetof(Mgmt__ClusterEventResp, sequence),
     NULL,
     NULL,
     0,             /* flags */
@@ -1417,7 +1417,7 @@ static const ProtobufCFieldDescriptor mgmt__cluster_event_resp__field_descriptor
   },
 };
 static const unsigned mgmt__cluster_event_resp__field_indices_by_name[] = {
-  0,   /* field[0] = id */
+  0,   /* field[0] = sequence */
 };
 static const ProtobufCIntRange mgmt__cluster_event_resp__number_ranges[1 + 1] =
 {
