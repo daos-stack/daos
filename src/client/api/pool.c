@@ -276,6 +276,7 @@ daos_pool_stop_svc(daos_handle_t poh, daos_event_t *ev)
 	return dc_task_schedule(task, true);
 }
 
+/*
 int
 daos_pool_evict(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
 		daos_event_t *ev)
@@ -299,4 +300,4 @@ daos_pool_evict(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
 
 	return dc_task_schedule(task, true);
 }
-
+*/

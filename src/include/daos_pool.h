@@ -241,9 +241,11 @@ daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev);
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NONEXIST	Pool is nonexistent
  */
+/*
 int
 daos_pool_evict(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
 		daos_event_t *ev);
+*/
 
 /*
  * Handle API

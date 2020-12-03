@@ -1524,6 +1524,7 @@ struct pool_evict_state {
 	struct dc_mgmt_sys     *sys;
 };
 
+/*
 static int
 pool_evict_cp(tse_task_t *task, void *data)
 {
@@ -1606,7 +1607,7 @@ dc_pool_evict(tse_task_t *task)
 
 	ep.ep_grp = state->sys->sy_group;
 	rc = dc_pool_choose_svc_rank(args->uuid, &state->client,
-				     NULL /* mutex */, state->sys, &ep);
+				     NULL , state->sys, &ep);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
 			DP_UUID(args->uuid), DP_RC(rc));
@@ -1647,6 +1648,7 @@ out_task:
 	tse_task_complete(task, rc);
 	return rc;
 }
+*/
 
 int
 dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver)
