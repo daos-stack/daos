@@ -28,7 +28,7 @@ import threading
 
 from itertools import product
 from avocado import fail_on
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 from test_utils_pool import TestPool
 from ior_utils import IorCommand
 from job_manager_utils import Mpirun
@@ -272,6 +272,7 @@ class OSAOnlineReintegration(TestWithServers):
             self.pool.display_pool_daos_space(display_string)
             pool[val].destroy()
 
+    @skipForTicket("DAOS-6123")
     def test_osa_online_reintegration(self):
         """Test ID: DAOS-5075.
 
