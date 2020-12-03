@@ -504,7 +504,7 @@ server_init(int argc, char *argv[])
 
 	ds_iv_init();
 
-	/* load modules.  Split load an init so first call to dlopen
+	/* load modules. Split load and init so first call to dlopen()
 	 * is from the ioserver to avoid DAOS-4557
 	 */
 	rc = modules_load();
