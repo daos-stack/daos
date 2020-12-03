@@ -1412,7 +1412,7 @@ main(int argc, char **argv)
 	char		*dmg_conf = NULL;
 	char		uuid_buf[256];
 	daos_size_t	scm_size  = (2ULL << 30); /* default pool SCM size */
-	daos_size_t	nvme_size = (16ULL << 30); /* default pool NVMe size */
+	daos_size_t	nvme_size = 0;	/* default pool NVMe size */
 	int		credits   = -1;	/* sync mode */
 	int		ec_vsize  = 0;
 	d_rank_t	svc_rank  = 0;	/* pool service rank */
@@ -1597,14 +1597,6 @@ main(int argc, char **argv)
 		return -1;
 	}
 
-	memset(uuid_buf, 0, sizeof(uuid_buf));
-	if (ts_ctx.tsc_mpi_rank == 0 || ts_mode == TS_MODE_VOS) {
-		uuid_generate(ts_ctx.tsc_pool_uuid);
-		uuid_generate(ts_ctx.tsc_cont_uuid);
-
-		uuid_unparse(ts_ctx.tsc_pool_uuid, uuid_buf);
-	}
-
 	if (ts_mode == TS_MODE_VOS) {
 		ts_ctx.tsc_cred_nr = -1; /* VOS can only support sync mode */
 		if (strlen(ts_pmem_file) == 0)
@@ -1652,6 +1644,24 @@ main(int argc, char **argv)
 	ts_ctx.tsc_nvme_size	= nvme_size;
 	ts_ctx.tsc_dmg_conf	= dmg_conf;
 
+	if (ts_ctx.tsc_mpi_rank == 0 || ts_mode == TS_MODE_VOS) {
+		uuid_generate(ts_ctx.tsc_cont_uuid);
+		uuid_generate(ts_ctx.tsc_pool_uuid);
+	}
+
+	rc = dts_ctx_init(&ts_ctx);
+	if (rc)
+		return -1;
+
+	/* For daos mode test, tsc_pool_uuid is a output parameter of
+	 * dmg_pool_create; for vos mode test, tsc_pool_uuid is a input
+	 * parameter of vos_pool_create.
+	 * So uuid_unparse() the pool_uuid after dts_ctx_init.
+	 */
+	memset(uuid_buf, 0, sizeof(uuid_buf));
+	if (ts_ctx.tsc_mpi_rank == 0 || ts_mode == TS_MODE_VOS)
+		uuid_unparse(ts_ctx.tsc_pool_uuid, uuid_buf);
+
 	if (ts_ctx.tsc_mpi_rank == 0) {
 		fprintf(stdout,
 			"Test :\n\t%s\n"
@@ -1692,10 +1702,6 @@ main(int argc, char **argv)
 			ts_obj_p_cont);
 		return -1;
 	}
-
-	rc = dts_ctx_init(&ts_ctx);
-	if (rc)
-		return -1;
 
 	if (ts_profile_vos)
 		vos_profile_start(ts_profile_vos_path, ts_profile_vos_avg);
