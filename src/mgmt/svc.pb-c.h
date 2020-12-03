@@ -205,13 +205,21 @@ struct  _Mgmt__RASEvent
    */
   char *timestamp;
   /*
-   * Event severity Fatal/Warning/Error/Info.
+   * Event severity.
    */
   uint32_t severity;
   /*
    * Human readable message describing event.
    */
   char *msg;
+  /*
+   * Unique numeric event identifier.
+   */
+  uint32_t id;
+  /*
+   * Event type.
+   */
+  uint32_t type;
   /*
    * (optional) DAOS rank involved in event.
    */
@@ -224,22 +232,10 @@ struct  _Mgmt__RASEvent
    * (optional) Instance data treated as blob.
    */
   ProtobufCBinaryData data;
-  /*
-   * Unique numeric event identifier.
-   */
-  uint32_t id;
-  /*
-   * Event type StateChange/InfoOnly.
-   */
-  uint32_t type;
-  /*
-   * (optional) DAOS harness instance index.
-   */
-  uint32_t instance_idx;
 };
 #define MGMT__RASEVENT__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__rasevent__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, {0,NULL}, 0, 0, 0 }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, 0, 0, (char *)protobuf_c_empty_string, {0,NULL} }
 
 
 typedef enum {

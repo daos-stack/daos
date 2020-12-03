@@ -80,14 +80,13 @@ message LeaderQueryResp {
 message RASEvent {
 	string name = 1;		// Unique identifier, 64-char.
 	string timestamp = 2;		// Fully qualified timestamp (us) incl timezone.
-	uint32 severity = 3;		// Event severity Fatal/Warning/Error/Info.
+	uint32 severity = 3;		// Event severity.
 	string msg = 4;			// Human readable message describing event.
-	uint32 rank = 5; 		// (optional) DAOS rank involved in event.
-	string hostname = 6;		// (optional) Hostname of node involved in event.
-	bytes data = 7;			// (optional) Instance data treated as blob.
-	uint32 id = 8;			// Unique numeric event identifier.
-	uint32 type = 9;		// Event type StateChange/InfoOnly.
-	uint32 instance_idx = 10;	// (optional) DAOS harness instance index.
+	uint32 id = 5;			// Unique numeric event identifier.
+	uint32 type = 6;		// Event type.
+	uint32 rank = 7; 		// (optional) DAOS rank involved in event.
+	string hostname = 8;		// (optional) Hostname of node involved in event.
+	bytes data = 9;			// (optional) Instance data treated as blob.
 }
 
 // ClusterEventReq wraps an event subtype e.g. RASEvent.
