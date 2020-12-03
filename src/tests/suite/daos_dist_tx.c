@@ -599,6 +599,8 @@ dtx_14(void **state)
 	int		 nrestarts = 13;
 	int		 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("DTX restart because of conflict with others\n");
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
@@ -665,6 +667,8 @@ dtx_15(void **state)
 	daos_handle_t	 th = { 0 };
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
+
+	FAULT_INJECTION_REQUIRED();
 
 	print_message("DTX restart because of stale pool map\n");
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
@@ -790,6 +794,8 @@ dtx_18(void **state)
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 	int		 rc;
+
+	FAULT_INJECTION_REQUIRED();
 
 	print_message("Spread read time-stamp when commit\n");
 

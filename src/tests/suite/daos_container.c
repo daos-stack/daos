@@ -2055,6 +2055,8 @@ co_open_fail_destroy(void **state)
 	daos_cont_info_t info;
 	int		 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (arg->myrank != 0)
 		return;
 
