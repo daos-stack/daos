@@ -82,10 +82,8 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	if (dss_ult_exiting(cont->sc_agg_req))
 		return 1;
 
-	/*
 	rc = vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc, dss_ult_yield,
 			   (void *)cont->sc_agg_req);
-			   */
 
 	/* Wake up GC ULT */
 	sched_req_wakeup(cont->sc_pool->spc_gc_req);
@@ -396,7 +394,6 @@ cont_aggregate_ult(void *arg)
 			/* Sleep 2 seconds when last aggregation failed */
 			msecs = 2ULL * 1000;
 		}
-		msecs = 2ULL * 1000;
 
 		if (dss_ult_exiting(cont->sc_agg_req))
 			break;
