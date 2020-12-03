@@ -777,13 +777,13 @@ ds_mgmt_dev_identify(uuid_t dev_uuid, char *traddr, Mgmt__DevIdentifyResp *resp)
 	}
 	uuid_unparse_lower(dev_uuid, resp->dev_uuid);
 
-	D_ALLOC(resp->dev_traddr, strlen(traddr) + 1);
+	D_ALLOC(resp->dev_traddr, TRADDR_MAX);
 	if (resp->dev_traddr == NULL) {
 		D_ERROR("Failed to allocate device traddr");
 		rc = -DER_NOMEM;
 		goto out;
 	}
-	strncpy(resp->dev_traddr, traddr, strlen(resp->dev_traddr));
+	strncpy(resp->dev_traddr, traddr, TRADDR_MAX - 1);
 
 	D_ALLOC(resp->led_state, buflen);
 	if (resp->led_state == NULL) {
