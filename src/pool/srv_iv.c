@@ -67,7 +67,7 @@ pool_iv_value_alloc_internal(struct ds_iv_key *key, d_sg_list_t *sgl)
 	int		rc;
 
 	D_ASSERT(buf_size > 0);
-	rc = daos_sgl_init(sgl, 1);
+	rc = d_sgl_init(sgl, 1);
 	if (rc)
 		return rc;
 
@@ -85,7 +85,7 @@ pool_iv_value_alloc_internal(struct ds_iv_key *key, d_sg_list_t *sgl)
 	}
 free:
 	if (rc)
-		daos_sgl_fini(sgl, true);
+		d_sgl_fini(sgl, true);
 
 	return rc;
 }
@@ -415,7 +415,7 @@ pool_iv_ent_put(struct ds_iv_entry *entry, void **priv)
 static int
 pool_iv_ent_destroy(d_sg_list_t *sgl)
 {
-	daos_sgl_fini(sgl, true);
+	d_sgl_fini(sgl, true);
 	return 0;
 }
 

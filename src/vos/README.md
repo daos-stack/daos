@@ -24,7 +24,8 @@ This document contains the following sections:
 - <a href="#73">Key Array Stores</a>
 - <a href="#82">Conditional Update and MVCC</a>
     - <a href="#821">Read Timestamps</a>
-    - <a href="#822">MVCC Rules</a>
+    - <a href="#822">Write Timestamps</a>
+    - <a href="#823">MVCC Rules</a>
 - <a href="#74">Epoch Based Operations</a>
     - <a href="#741">VOS Discard</a>
     - <a href="#742">VOS Aggregate</a>
@@ -429,7 +430,7 @@ For deleting nodes from an EV-Tree, the same approach as search can be used to l
 Once deleted, to coalesce multiple leaf-nodes that have less than order/2 entries, reinsertion is done.
 EV-tree reinserts are done (instead of merging leaf-nodes as in B+ trees) because on deletion of leaf node/slots, the size of bounding boxes changes, and it is important to make sure the rectangles are organized into minimum bounding boxes without unnecessary overlaps.
 In VOS, delete is required only during aggregation and discard operations.
-These operations are discussed in a following section (<a hfer="#74">Epoch Based Operations</a>).
+These operations are discussed in a following section (<a href="#74">Epoch Based Operations</a>).
 
 <a id="82"></a>
 ## Conditional Update and MVCC
@@ -453,9 +454,11 @@ MVCC to prevent read/write races and provide atomicity guarantees.
 VOS tracks multiple read timestamps for containers, objects, dkeys, and akeys
 for the express purpose of supporting conditional operations and
 distributed transactions from individual clients.  These timestamps are
-allocated from a flat array, partitioned by type, using an LRU algorithm
-for each type (container, object, dkey, akey, and negative entries for
-each).   For example, when a key is accessed, it is looked up by the stored
+allocated from an array for each type using an LRU algorithm.  Each entry
+is associated with the runtime location of the corresponding metadata
+for the container, object, dkey, or akey.
+
+For example, when a key is accessed, it is looked up by the stored
 index.  If it's still in cache, the timestamps are used.   If it isn't
 in cache, or upon creation, it is pulled into cache by evicting the LRU
 entry for the type.   This provides an O(1) lookup for timestamps
@@ -466,7 +469,35 @@ indicating that _at least_ one node in the subtree rooted at the entity has
 been read at entity.high. For any leaf node (i.e., akey), low == high; for any
 non-leaf node, low <= high.
 
+For some operations, the actual entity does not exist so there is nothing
+in the VOS trees with which to associate the timestamp. A global, per-type array
+is used to associate timestamps with such non-existent entries.  Each entry in
+the negative cache is indexed by a hash of the key or oid as well as the index
+of the parent entry in the negative cache.  This approach balances
+performance and accuracy to avoid most, but not all, false conflicts on common
+operations such as conditional updates on a non-existent entry.
+
 <a id="822"></a>
+### Write Timestamps
+
+In order to detect epoch uncertainty violations, VOS also maintains a pair of
+write timestamps for each container, object, dkey, and akey. Logically,
+the timestamps represent the latest two updates to either the entity itself
+or to an entity in a subtree. At least two timestamps are required to avoid
+assuming uncertainty if there are any later updates.  The figure
+<a href="#8a">below</a> shows the need for at least two timestamps.  With a
+single timestamp only, the first, second, and third cases would be
+indistinguishable and would be rejected as uncertain.  The most accurate write
+timestamp is used in all cases.  For instance, if the access is an array fetch,
+we will check for conflicting extents in the absence of an uncertain punch of
+the corresponding key or object.
+
+<a id="8a"></a>
+<b>Scenarios illustrating utility of write timestamp cache</b>
+
+![../../doc/graph/uncertainty.png](../../doc/graph/uncertainty.png "Scenarios illustrating utility of write timestamp cache")
+
+<a id="823"></a>
 ### MVCC Rules
 
 Every DAOS I/O operation belongs to a transaction. If a user does not associate
