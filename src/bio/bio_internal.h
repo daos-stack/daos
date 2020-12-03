@@ -39,11 +39,6 @@
 #define NVME_MONITOR_PERIOD	    (60ULL * (NSEC_PER_SEC / NSEC_PER_USEC))
 #define NVME_MONITOR_SHORT_PERIOD   (3ULL * (NSEC_PER_SEC / NSEC_PER_USEC))
 
-/* Period for VMD LED event to occur. 180 seconds by default.
- * TODO Make this configurable on the command line for dmg storage led
- * commands.
- */
-#define NVME_LED_EVENT_PERIOD   (180ULL * (NSEC_PER_SEC / NSEC_PER_USEC))
 /* DMA buffer is managed in chunks */
 struct bio_dma_chunk {
 	/* Link to edb_idle_list or edb_used_list */
@@ -110,7 +105,6 @@ struct bio_bdev {
 	 */
 	int			 bb_led_state;
 	uint64_t		 bb_led_start_time;
-	char			*bb_led_traddr;
 	bool			 bb_removed;
 	bool			 bb_replacing;
 	bool			 bb_trigger_reint;
@@ -334,7 +328,5 @@ int bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state);
 
 /* bio_device.c */
 void bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now);
-int bio_set_led_state_orig(struct bio_xs_context *xs_ctxt,
-			   struct bio_bdev *bio_dev);
 
 #endif /* __BIO_INTERNAL_H__ */

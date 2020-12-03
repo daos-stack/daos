@@ -698,13 +698,15 @@ int bio_replace_dev(struct bio_xs_context *xs, uuid_t old_dev_id,
  * Set the LED on a VMD device to new state.
  *
  * \param xs            [IN]    xstream context
- * \param traddr        [IN]    Transport ID of the VMD device
  * \param devid		[IN]	UUID of the VMD device
  * \param led_state	[IN]	State to set the LED to
- *				(ie identify, off, on)
+ *				(ie identify, off, fault/on)
+ * \param reset		[IN]	Reset flag indicates that the led_state
+ * 				will be determined by the saved state in
+ * 				bio_bdev (bb_led_state)
  *
  * \return                      Zero on success, negative value on error
  */
-int bio_set_led_state(struct bio_xs_context *xs, char *traddr, uuid_t devid,
-		      const char *led_state);
+int bio_set_led_state(struct bio_xs_context *xs, uuid_t devid,
+		      const char *led_state, bool reset);
 #endif /* __BIO_API_H__ */

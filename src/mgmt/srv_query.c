@@ -721,10 +721,8 @@ out:
 	return rc;
 }
 
-#define TRADDR_MAX 32
 struct bio_identify_dev_info {
 	uuid_t		devid;
-	char		traddr[TRADDR_MAX];
 };
 
 static int
@@ -744,11 +742,11 @@ bio_storage_dev_identify(void *arg)
 		return -DER_INVAL;
 	}
 
-	rc = bio_set_led_state(bxc, identify_info->traddr,
-			       identify_info->devid, "identify");
+	rc = bio_set_led_state(bxc, identify_info->devid, "identify",
+			       false/*reset*/);
 	if (rc != 0) {
-		D_ERROR("Error managing LED on device %s\n",
-			identify_info->traddr);
+		D_ERROR("Error managing LED on device:"DF_UUID"\n",
+			DP_UUID(identify_info->devid));
 		return rc;
 	}
 
@@ -757,17 +755,16 @@ bio_storage_dev_identify(void *arg)
 
 
 int
-ds_mgmt_dev_identify(uuid_t dev_uuid, char *traddr, Mgmt__DevIdentifyResp *resp)
+ds_mgmt_dev_identify(uuid_t dev_uuid, Mgmt__DevIdentifyResp *resp)
 {
 	struct bio_identify_dev_info identify_info = { 0 };
 	int			     buflen = 10;
 	int			     rc = 0;
 
-	if (uuid_is_null(dev_uuid) && strlen(traddr) == 0)
+	if (uuid_is_null(dev_uuid))
 		return -DER_INVAL;
 
-	D_DEBUG(DB_MGMT, "Identifying device:"DF_UUID" traddr:%s\n",
-		DP_UUID(dev_uuid), traddr);
+	D_DEBUG(DB_MGMT, "Identifying device:"DF_UUID"\n", DP_UUID(dev_uuid));
 
 	D_ALLOC(resp->dev_uuid, DAOS_UUID_STR_SIZE);
 	if (resp->dev_uuid == NULL) {
@@ -777,14 +774,6 @@ ds_mgmt_dev_identify(uuid_t dev_uuid, char *traddr, Mgmt__DevIdentifyResp *resp)
 	}
 	uuid_unparse_lower(dev_uuid, resp->dev_uuid);
 
-	D_ALLOC(resp->dev_traddr, TRADDR_MAX);
-	if (resp->dev_traddr == NULL) {
-		D_ERROR("Failed to allocate device traddr");
-		rc = -DER_NOMEM;
-		goto out;
-	}
-	strncpy(resp->dev_traddr, traddr, TRADDR_MAX - 1);
-
 	D_ALLOC(resp->led_state, buflen);
 	if (resp->led_state == NULL) {
 		D_ERROR("Failed to allocate device led state");
@@ -793,7 +782,6 @@ ds_mgmt_dev_identify(uuid_t dev_uuid, char *traddr, Mgmt__DevIdentifyResp *resp)
 	}
 
 	uuid_copy(identify_info.devid, dev_uuid);
-	strncpy(identify_info.traddr, traddr, TRADDR_MAX - 1);
 	rc = dss_ult_execute(bio_storage_dev_identify, &identify_info, NULL,
 			     NULL, DSS_ULT_GC, 0, 0);
 	if (rc != 0)
@@ -808,8 +796,6 @@ out:
 			D_FREE(resp->led_state);
 		if (resp->dev_uuid != NULL)
 			D_FREE(resp->dev_uuid);
-		if (resp->dev_traddr != NULL)
-			D_FREE(resp->dev_traddr);
 	}
 
 	return rc;

@@ -1578,7 +1578,7 @@ const ProtobufCMessageDescriptor mgmt__dev_replace_resp__descriptor =
   (ProtobufCMessageInit) mgmt__dev_replace_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__dev_identify_req__field_descriptors[2] =
+static const ProtobufCFieldDescriptor mgmt__dev_identify_req__field_descriptors[1] =
 {
   {
     "dev_uuid",
@@ -1592,27 +1592,14 @@ static const ProtobufCFieldDescriptor mgmt__dev_identify_req__field_descriptors[
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
-  {
-    "dev_traddr",
-    2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__DevIdentifyReq, dev_traddr),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
 };
 static const unsigned mgmt__dev_identify_req__field_indices_by_name[] = {
-  1,   /* field[1] = dev_traddr */
   0,   /* field[0] = dev_uuid */
 };
 static const ProtobufCIntRange mgmt__dev_identify_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 2 }
+  { 0, 1 }
 };
 const ProtobufCMessageDescriptor mgmt__dev_identify_req__descriptor =
 {
@@ -1622,14 +1609,14 @@ const ProtobufCMessageDescriptor mgmt__dev_identify_req__descriptor =
   "Mgmt__DevIdentifyReq",
   "mgmt",
   sizeof(Mgmt__DevIdentifyReq),
-  2,
+  1,
   mgmt__dev_identify_req__field_descriptors,
   mgmt__dev_identify_req__field_indices_by_name,
   1,  mgmt__dev_identify_req__number_ranges,
   (ProtobufCMessageInit) mgmt__dev_identify_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__dev_identify_resp__field_descriptors[4] =
+static const ProtobufCFieldDescriptor mgmt__dev_identify_resp__field_descriptors[3] =
 {
   {
     "status",
@@ -1656,20 +1643,8 @@ static const ProtobufCFieldDescriptor mgmt__dev_identify_resp__field_descriptors
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "dev_traddr",
-    3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__DevIdentifyResp, dev_traddr),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
     "led_state",
-    4,
+    3,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
@@ -1681,15 +1656,14 @@ static const ProtobufCFieldDescriptor mgmt__dev_identify_resp__field_descriptors
   },
 };
 static const unsigned mgmt__dev_identify_resp__field_indices_by_name[] = {
-  2,   /* field[2] = dev_traddr */
   1,   /* field[1] = dev_uuid */
-  3,   /* field[3] = led_state */
+  2,   /* field[2] = led_state */
   0,   /* field[0] = status */
 };
 static const ProtobufCIntRange mgmt__dev_identify_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 4 }
+  { 0, 3 }
 };
 const ProtobufCMessageDescriptor mgmt__dev_identify_resp__descriptor =
 {
@@ -1699,7 +1673,7 @@ const ProtobufCMessageDescriptor mgmt__dev_identify_resp__descriptor =
   "Mgmt__DevIdentifyResp",
   "mgmt",
   sizeof(Mgmt__DevIdentifyResp),
-  4,
+  3,
   mgmt__dev_identify_resp__field_descriptors,
   mgmt__dev_identify_resp__field_indices_by_name,
   1,  mgmt__dev_identify_resp__number_ranges,
@@ -1817,19 +1791,20 @@ static const ProtobufCFieldDescriptor mgmt__smd_query_req__field_descriptors[10]
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "traddr",
+    "identify",
     10,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
+    PROTOBUF_C_TYPE_BOOL,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__SmdQueryReq, traddr),
+    offsetof(Mgmt__SmdQueryReq, identify),
     NULL,
-    &protobuf_c_empty_string,
+    NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
 static const unsigned mgmt__smd_query_req__field_indices_by_name[] = {
+  9,   /* field[9] = identify */
   2,   /* field[2] = includeBioHealth */
   8,   /* field[8] = noReint */
   0,   /* field[0] = omitDevices */
@@ -1838,7 +1813,6 @@ static const unsigned mgmt__smd_query_req__field_indices_by_name[] = {
   7,   /* field[7] = replaceUUID */
   3,   /* field[3] = setFaulty */
   6,   /* field[6] = target */
-  9,   /* field[9] = traddr */
   4,   /* field[4] = uuid */
 };
 static const ProtobufCIntRange mgmt__smd_query_req__number_ranges[1 + 1] =

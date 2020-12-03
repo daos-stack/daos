@@ -67,7 +67,7 @@ type (
 		Target           string
 		ReplaceUUID      string // UUID of new device to replace storage
 		NoReint          bool   // for device replacement
-		Traddr           string // transport address used for VMD identify
+		Identify         bool   // for VMD LED device identification
 	}
 
 	// SmdQueryResp represents the results of performing

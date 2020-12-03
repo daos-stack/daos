@@ -376,19 +376,23 @@ func (cmd *nvmeReplaceCmd) Execute(_ []string) error {
 
 // storageIdentifyCmd is the struct representing the identify storage subcommand.
 type storageIdentifyCmd struct {
-	smdQueryCmd
-	UUID   string `long:"uuid" description:"Device UUID of the VMD device to identify" required:"1"`
-	Traddr string `long:"traddr" description:"Transport address of the VMD device to identify (ie: 5d0505:01:00.0)" required:"1"`
+	VMD vmdIdentifyCmd `command:"vmd" alias:"n" description:"Quickly blink the status LED on a VMD NVMe SSD for device identification."`
 }
 
-// Execute is run when storageIdentifyCmd activates.
+// vmdIdentifyCmd is the struct representing the identify vmd storage subcommand.
+type vmdIdentifyCmd struct {
+	smdQueryCmd
+	UUID string `long:"uuid" description:"Device UUID of the VMD device to identify" required:"1"`
+}
+
+// Execute is run when vmdIdentifyCmd activates.
 //
 // Runs SPDK VMD API commands to set the LED state on the VMD to "IDENTIFY"
-func (cmd *storageIdentifyCmd) Execute(_ []string) error {
+func (cmd *vmdIdentifyCmd) Execute(_ []string) error {
 	ctx := context.Background()
 	req := &control.SmdQueryReq{
-		UUID:   cmd.UUID,
-		Traddr: cmd.Traddr,
+		UUID:     cmd.UUID,
+		Identify: true,
 	}
 	return cmd.makeRequest(ctx, req)
 }

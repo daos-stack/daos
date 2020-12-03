@@ -493,8 +493,7 @@ func (svc *mgmtSvc) smdIdentify(ctx context.Context, req *mgmtpb.SmdQueryReq) (*
 	svc.log.Debugf("calling storage identify on rank %d for %s", rank, req.Uuid)
 
 	dresp, err := srvs[0].CallDrpc(ctx, drpc.MethodIdentifyStorage, &mgmtpb.DevIdentifyReq{
-		DevUuid:   req.Uuid,
-		DevTraddr: req.Traddr,
+		DevUuid: req.Uuid,
 	})
 	if err != nil {
 		return nil, err
@@ -515,9 +514,8 @@ func (svc *mgmtSvc) smdIdentify(ctx context.Context, req *mgmtpb.SmdQueryReq) (*
 				Rank: rank.Uint32(),
 				Devices: []*mgmtpb.SmdQueryResp_Device{
 					{
-						Uuid:   drr.DevUuid,
-						TrAddr: drr.DevTraddr,
-						State:  drr.LedState,
+						Uuid:  drr.DevUuid,
+						State: drr.LedState,
 					},
 				},
 			},
@@ -543,7 +541,7 @@ func (svc *mgmtSvc) SmdQuery(ctx context.Context, req *mgmtpb.SmdQueryReq) (*mgm
 		return svc.smdReplace(ctx, req)
 	}
 
-	if req.Traddr != "" {
+	if req.Identify {
 		return svc.smdIdentify(ctx, req)
 	}
 

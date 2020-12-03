@@ -716,9 +716,6 @@ destroy_bio_bdev(struct bio_bdev *d_bdev)
 	if (d_bdev->bb_name != NULL)
 		D_FREE(d_bdev->bb_name);
 
-	if (d_bdev->bb_led_traddr != NULL)
-		D_FREE(d_bdev->bb_led_traddr);
-
 	D_FREE(d_bdev);
 }
 
@@ -1724,7 +1721,7 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {
 	struct bio_bdev         *d_bdev;
 	struct spdk_bdev        *bdev;
-	static uint64_t          led_event_period = NVME_LED_EVENT_PERIOD;
+	static uint64_t          led_event_period = NVME_MONITOR_PERIOD;
 
 	for (bdev = spdk_bdev_first(); bdev != NULL;
 	     bdev = spdk_bdev_next(bdev)) {
@@ -1732,23 +1729,16 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 		if (d_bdev == NULL)
 			continue;
 
-		/* Transport addr only gets alloc'd on an LED event command */
-		if (d_bdev->bb_led_traddr != NULL) {
-			if (strlen(d_bdev->bb_led_traddr) == 0)
-				continue;
-			/* Init the start time of the LED event */
-			if (d_bdev->bb_led_start_time == 0) {
-				d_bdev->bb_led_start_time = now;
-				return;
-			}
+		if (d_bdev->bb_led_start_time != 0) {
 			/*
 			 * TODO: Make NVME_LED_EVENT_PERIOD configurable from
 			 * command line
 			 */
 			if (d_bdev->bb_led_start_time + led_event_period >= now)
-				return;
+				continue;
 
-			if (bio_set_led_state_orig(ctxt, d_bdev) != 0)
+			if (bio_set_led_state(ctxt, d_bdev->bb_uuid, NULL,
+					      true/*reset*/) != 0)
 				D_ERROR("Failed resetting LED state\n");
 		}
 	}

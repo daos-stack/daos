@@ -676,17 +676,36 @@ out:
 }
 
 int
-bio_set_led_state(struct bio_xs_context *xs_ctxt, char *dev_traddr,
-		  uuid_t dev_uuid, const char *led_state)
+bio_set_led_state(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid,
+		  const char *led_state, bool reset)
 {
 	struct spdk_pci_addr	pci_addr;
 	struct spdk_pci_device *pci_device;
 	struct bio_bdev	       *bio_dev;
+	struct bio_dev_info	b_info = { 0 };
 	char			addr_buf[128];
 	enum spdk_vmd_led_state current_led_state;
 	int			new_led_state;
 	int			rc = 0;
 	bool			found = false;
+
+	D_ASSERT(is_init_xstream(xs_ctxt));
+
+	bio_dev = lookup_dev_by_id(dev_uuid);
+	if (bio_dev == NULL) {
+		D_ERROR("Failed to find dev "DF_UUID"\n",
+			DP_UUID(dev_uuid));
+		return -DER_NONEXIST;
+	}
+
+	/* LED wil be reset to the orignal saved state */
+	if (reset) {
+		new_led_state = bio_dev->bb_led_state;
+		D_GOTO(skip_led_str, rc = 0);
+	}
+
+	if (led_state == NULL)
+		return -DER_INVAL;
 
 	/* Determine SPDK LED state based on led_state string */
 	if (strcasecmp(led_state, "identify") == 0)
@@ -702,15 +721,11 @@ bio_set_led_state(struct bio_xs_context *xs_ctxt, char *dev_traddr,
 		return -DER_NOSYS;
 	}
 
-	bio_dev = lookup_dev_by_id(dev_uuid);
-	if (bio_dev == NULL) {
-		D_ERROR("Failed to find dev "DF_UUID"\n",
-			DP_UUID(dev_uuid));
-		return -DER_NONEXIST;
-	}
+skip_led_str:
+	rc = fill_in_traddr(&b_info, bio_dev->bb_name);
 
-	if (spdk_pci_addr_parse(&pci_addr, dev_traddr)) {
-		D_ERROR("Unable to parse PCI address: %s\n", dev_traddr);
+	if (spdk_pci_addr_parse(&pci_addr, b_info.bdi_traddr)) {
+		D_ERROR("Unable to parse PCI address: %s\n", b_info.bdi_traddr);
 		return -DER_INVAL;
 	}
 
@@ -724,7 +739,7 @@ bio_set_led_state(struct bio_xs_context *xs_ctxt, char *dev_traddr,
 
 	if (found) {
 		if (strcmp(spdk_pci_device_get_type(pci_device), "vmd") != 0) {
-			D_ERROR("%s is not a VMD device\n", dev_traddr);
+			D_ERROR("%s is not a VMD device\n", b_info.bdi_traddr);
 			return -DER_NOSYS;
 		}
 	} else {
@@ -738,8 +753,12 @@ bio_set_led_state(struct bio_xs_context *xs_ctxt, char *dev_traddr,
 		return -DER_INVAL;
 	}
 
-	D_DEBUG(DB_MGMT, "Setting VMD device:%s LED state to %s(%d)\n",
-		dev_traddr, led_state, new_led_state);
+	if (!reset)
+		D_DEBUG(DB_MGMT, "Setting VMD device:%s LED state to %s(%d)\n",
+			b_info.bdi_traddr, led_state, new_led_state);
+	else
+		D_DEBUG(DB_MGMT, "Resetting VMD device:%s LED state to %d\n",
+			b_info.bdi_traddr, bio_dev->bb_led_state);
 
 	/* First check the current state of the VMD LED */
 	rc = spdk_vmd_get_led_state(pci_device, &current_led_state);
@@ -768,110 +787,25 @@ bio_set_led_state(struct bio_xs_context *xs_ctxt, char *dev_traddr,
 		/* Verify the correct state is set */
 		if (current_led_state != new_led_state)
 			D_ERROR("LED of device:%s is in an unexpected state:"
-				"%d\n", dev_traddr, current_led_state);
+				"%d\n", b_info.bdi_traddr, current_led_state);
 	}
 
 state_set:
-	/*
-	 * Init the start time for the LED to 0 for a new event. Time will
-	 * be set in bio_led_event_monitor() by the init xstream, which will
-	 * return the LED to original state after allotted time has passed.
-	 * Also save the transport address needed by SPDK to set the VMD LED
-	 * state.
-	 */
-	bio_dev->bb_led_start_time = 0;
-	D_STRNDUP(bio_dev->bb_led_traddr, dev_traddr, strlen(dev_traddr));
-
-	return rc;
-}
-
-int
-bio_set_led_state_orig(struct bio_xs_context *xs_ctxt, struct bio_bdev *bio_dev)
-{
-	struct spdk_pci_addr	pci_addr;
-	struct spdk_pci_device *pci_device;
-	char			addr_buf[128];
-	enum spdk_vmd_led_state current_led_state;
-	int			orig_led_state;
-	int			rc = 0;
-	bool			found = false;
-
-	D_ASSERT(bio_dev != NULL);
-	D_ASSERT(bio_dev->bb_led_traddr != NULL);
-
-	if (spdk_pci_addr_parse(&pci_addr, bio_dev->bb_led_traddr)) {
-		D_ERROR("Unable to parse PCI address: %s\n",
-			bio_dev->bb_led_traddr);
-		return -DER_INVAL;
-	}
-
-	for (pci_device = spdk_pci_get_first_device(); pci_device != NULL;
-	     pci_device = spdk_pci_get_next_device(pci_device)) {
-		if (spdk_pci_addr_compare(&pci_addr, &pci_device->addr) == 0) {
-			found = true;
-			break;
-		}
-	}
-
-	if (found) {
-		if (strcmp(spdk_pci_device_get_type(pci_device), "vmd") != 0) {
-			D_ERROR("%s is not a VMD device\n",
-				bio_dev->bb_led_traddr);
-			return -DER_NOSYS;
-		}
+	if (reset) {
+		/*
+		 * Reset the LED start time to indicate a LED event has
+		 * completed.
+		 */
+		bio_dev->bb_led_start_time = 0;
 	} else {
-		D_ERROR("Unable to set led state, VMD device not found\n");
-		return -DER_INVAL;
+		/*
+		 * Init the start time for the LED for a new event.
+		 */
+		bio_dev->bb_led_start_time = d_timeus_secdiff(0);
 	}
 
-	rc = spdk_pci_addr_fmt(addr_buf, sizeof(addr_buf), &pci_device->addr);
-	if (rc != 0) {
-		D_ERROR("Failed to format VMD's PCI address\n");
-		return -DER_INVAL;
-	}
-
-	D_DEBUG(DB_MGMT, "Resetting VMD device:%s LED state to %d\n",
-		bio_dev->bb_led_traddr, bio_dev->bb_led_state);
-
-	/*
-	 * Restore the VMD NVMe SSD LED to its original state.
-	 */
-	orig_led_state = bio_dev->bb_led_state;
-	/* First check the current state of the VMD LED */
-	rc = spdk_vmd_get_led_state(pci_device, &current_led_state);
-	if (rc) {
-		D_ERROR("Failed to get the VMD LED state\n");
-		return -DER_INVAL;
-	}
-
-	if (current_led_state == orig_led_state)
-		return rc;
-
-	rc = spdk_vmd_set_led_state(pci_device, orig_led_state);
-	if (rc) {
-		D_ERROR("Failed to restore the VMD LED state\n");
-		return -DER_INVAL;
-	}
-
-	rc = spdk_vmd_get_led_state(pci_device, &current_led_state);
-	if (rc) {
-		D_ERROR("Failed to get the VMD LED state\n");
-		return -DER_INVAL;
-	}
-
-	/* Verify the original state is set */
-	if (current_led_state != orig_led_state) {
-		D_ERROR("LED of device:%s is in an unexpected state:%d\n",
-			bio_dev->bb_led_traddr, current_led_state);
-		return -DER_INVAL;
-	}
-
-	/*
-	 * Clear the traddr from the bio_bdev. Alloc'd traddr indicates a new
-	 * LED device event has occurred.
-	 */
-	D_FREE(bio_dev->bb_led_traddr);
-	bio_dev->bb_led_traddr = NULL;
+	if (b_info.bdi_traddr != NULL)
+		D_FREE(b_info.bdi_traddr);
 
 	return rc;
 }

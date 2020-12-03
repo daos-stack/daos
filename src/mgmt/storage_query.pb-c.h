@@ -293,14 +293,10 @@ struct  _Mgmt__DevIdentifyReq
    * UUID of VMD uuid
    */
   char *dev_uuid;
-  /*
-   * transport ID of the VMD SSD
-   */
-  char *dev_traddr;
 };
 #define MGMT__DEV_IDENTIFY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__dev_identify_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string }
 
 
 struct  _Mgmt__DevIdentifyResp
@@ -315,17 +311,13 @@ struct  _Mgmt__DevIdentifyResp
    */
   char *dev_uuid;
   /*
-   * transport ID of the VMD SSD
-   */
-  char *dev_traddr;
-  /*
    * VMD LED state
    */
   char *led_state;
 };
 #define MGMT__DEV_IDENTIFY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__dev_identify_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 struct  _Mgmt__SmdQueryReq
@@ -368,13 +360,13 @@ struct  _Mgmt__SmdQueryReq
    */
   protobuf_c_boolean noreint;
   /*
-   * transport ID of the VMD SSD
+   * set the VMD LED state to quickly blink
    */
-  char *traddr;
+  protobuf_c_boolean identify;
 };
 #define MGMT__SMD_QUERY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__smd_query_req__descriptor) \
-    , 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string }
+    , 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0 }
 
 
 struct  _Mgmt__SmdQueryResp__Device

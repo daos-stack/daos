@@ -1940,6 +1940,9 @@ ds_mgmt_drpc_dev_identify(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	/* Response status is populated with SUCCESS on init. */
 	mgmt__dev_identify_resp__init(resp);
+	/* Init empty strings to NULL to avoid error cleanup with free */
+	resp->dev_uuid = NULL;
+	resp->led_state = NULL;
 
 	if (uuid_parse(req->dev_uuid, dev_uuid) != 0) {
 		D_ERROR("Unable to parse device UUID %s: %d\n",
@@ -1947,7 +1950,7 @@ ds_mgmt_drpc_dev_identify(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		uuid_clear(dev_uuid); /* need to set uuid = NULL */
 	}
 
-	rc = ds_mgmt_dev_identify(dev_uuid, req->dev_traddr, resp);
+	rc = ds_mgmt_dev_identify(dev_uuid, resp);
 	if (rc != 0)
 		D_ERROR("Failed to set LED to IDENTIFY on device :%d\n", rc);
 
@@ -1970,8 +1973,6 @@ ds_mgmt_drpc_dev_identify(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			D_FREE(resp->led_state);
 		if (resp->dev_uuid != NULL)
 			D_FREE(resp->dev_uuid);
-		if (resp->dev_traddr != NULL)
-			D_FREE(resp->dev_traddr);
 	}
 
 	D_FREE(resp);
