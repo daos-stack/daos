@@ -95,7 +95,8 @@ class NvmePoolExclude(TestWithServers):
         return int(data["version"])
 
     def ior_thread(self, pool, oclass, api, test, flags, results):
-        """Start threads and wait until all threads are finished.
+        """This method calls job manager for IOR command
+        invocation.
         Args:
             pool (object): pool handle
             oclass (str): IOR object class
@@ -140,7 +141,8 @@ class NvmePoolExclude(TestWithServers):
             results.put("FAIL")
 
     def run_ior_thread(self, action, oclass, api, test):
-        """[summary]
+        """ This method calls ior_thread method to generate
+        IOR command and starts the thread.
         Args:
             action (str): Start the IOR thread with Read or
                           Write
@@ -169,9 +171,16 @@ class NvmePoolExclude(TestWithServers):
         process.join()
 
     def run_nvme_pool_exclude(self, num_pool):
-        """Run Pool Exclude
-            Args:
-             int : total pools to create for testing purposes.
+        """This is the main method which performs the actual
+        testing. It does the following jobs:
+        - Create number of TestPools
+        - Start the IOR threads for running on each pools.
+        - On each pool do the following:
+            - Perform an IOR write (using a container)
+            - Exclude a daos_server
+            - Perform an IOR read/verify (same container used for write)
+        Args:
+            int : total pools to create for testing purposes.
         """
         # Create a pool
         pool = {}
@@ -243,7 +252,9 @@ class NvmePoolExclude(TestWithServers):
     @skipForTicket("DAOS-6108")
     def test_nvme_pool_excluded(self):
         """Test ID: DAOS-2086
-        Test Description: NVME Pool Exclude
+        Test Description: This method is called from
+        the avocado test infrastructure. This method invokes
+        NVME pool exclude testing on multiple pools.
 
         :avocado: tags=all,full_regression,hw,large,nvme
         :avocado: tags=nvme_pool_exclude
