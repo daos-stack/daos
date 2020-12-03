@@ -130,7 +130,6 @@ struct ec_agg_entry {
 	struct ec_agg_par_extent ae_par_extent;	 /* Parity extent             */
 	daos_handle_t		 ae_obj_hdl;	 /* Object handle for cur obj */
 	struct daos_shard_loc	 ae_peer_pshards[OBJ_EC_MAX_P - 1];
-	uint32_t		 ae_tgt_idx;     /* Index of this target      */
 };
 
 /* Parameters used to drive iterate all.
@@ -483,11 +482,6 @@ agg_get_obj_handle(struct ec_agg_entry *entry)
 						os_shard_loc[j].sd_rank;
 					entry->ae_peer_pshards[p++].sd_tgt_idx
 						= layout->ol_shards[i]->
-						os_shard_loc[j].sd_tgt_idx;
-				} else if (layout->ol_shards[i]->
-					   os_shard_loc[j].sd_rank == myrank) {
-					entry->ae_tgt_idx =
-						layout->ol_shards[i]->
 						os_shard_loc[j].sd_tgt_idx;
 				}
 			}
