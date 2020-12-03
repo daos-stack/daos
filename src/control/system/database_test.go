@@ -30,6 +30,8 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net"
+	"sort"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -44,16 +46,6 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func setupTestDatabase(t *testing.T, log logging.Logger, replicas []string) (*Database, func()) {
-	testDir, cleanup := common.CreateTestDir(t)
-
-	db := NewDatabase(log, &DatabaseConfig{
-		RaftDir:  testDir + "/raft",
-		Replicas: replicas,
-	})
-	return db, cleanup
-}
-
 func waitForLeadership(t *testing.T, ctx context.Context, db *Database, gained bool, timeout time.Duration) {
 	t.Helper()
 	timer := time.NewTimer(timeout)
@@ -63,7 +55,11 @@ func waitForLeadership(t *testing.T, ctx context.Context, db *Database, gained b
 			t.Fatal(ctx.Err())
 			return
 		case <-timer.C:
-			t.Fatal("leadership state did not change before timeout")
+			state := "gained"
+			if !gained {
+				state = "lost"
+			}
+			t.Fatalf("leadership was not %s before timeout", state)
 			return
 		default:
 			if db.IsLeader() == gained {
@@ -74,87 +70,68 @@ func waitForLeadership(t *testing.T, ctx context.Context, db *Database, gained b
 	}
 }
 
-func TestSystem_Database_checkReplica(t *testing.T) {
-	for name, tc := range map[string]struct {
-		replicas     []string
-		controlAddr  *net.TCPAddr
-		expRepAddr   *net.TCPAddr
-		expBootstrap bool
-		expErr       error
-	}{
-		"not replica": {
-			replicas:    []string{mockControlAddr(t, 2).String()},
-			controlAddr: mockControlAddr(t, 1),
+func TestSystem_Database_filterMembers(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	db := MockDatabase(t, log)
+	memberStates := []MemberState{
+		MemberStateUnknown, MemberStateAwaitFormat, MemberStateStarting,
+		MemberStateReady, MemberStateJoined, MemberStateStopping, MemberStateStopped,
+		MemberStateEvicted, MemberStateErrored, MemberStateUnresponsive,
+	}
+
+	for i, ms := range memberStates {
+		if err := db.AddMember(MockMember(t, uint32(i), ms)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for name, tf := range map[string]func(t *testing.T){
+		"individual state filters": func(t *testing.T) {
+			for _, ms := range memberStates {
+				matches := db.filterMembers(ms)
+				matchLen := len(matches)
+				if matchLen != 1 {
+					t.Fatalf("expected exactly 1 member to match %s (got %d)", ms, matchLen)
+				}
+				if matches[0].state != ms {
+					t.Fatalf("filtered member doesn't match requested state (%s != %s)", matches[0].state, ms)
+				}
+			}
 		},
-		"replica, no bootstrap": {
-			replicas: []string{
-				mockControlAddr(t, 2).String(),
-				mockControlAddr(t, 1).String(),
-			},
-			controlAddr: mockControlAddr(t, 1),
-			expRepAddr:  mockControlAddr(t, 1),
+		"all members filter": func(t *testing.T) {
+			matchLen := len(db.filterMembers(AllMemberFilter))
+			if matchLen != len(memberStates) {
+				t.Fatalf("expected all members to be %d; got %d", len(memberStates), matchLen)
+			}
 		},
-		"replica, bootstrap": {
-			replicas: []string{
-				mockControlAddr(t, 1).String(),
-			},
-			controlAddr:  mockControlAddr(t, 1),
-			expRepAddr:   mockControlAddr(t, 1),
-			expBootstrap: true,
-		},
-		"replica, unspecified control address": {
-			replicas: []string{
-				mockControlAddr(t, 1).String(),
-			},
-			controlAddr: &net.TCPAddr{
-				IP:   net.IPv4zero,
-				Port: build.DefaultControlPort,
-			},
-			expRepAddr:   mockControlAddr(t, 1),
-			expBootstrap: true,
+		"subset filter": func(t *testing.T) {
+			filter := []MemberState{memberStates[1], memberStates[2]}
+			matches := db.filterMembers(filter...)
+			matchLen := len(matches)
+			if matchLen != 2 {
+				t.Fatalf("expected 2 members to match; got %d", matchLen)
+			}
+
+			// sort the results for stable comparison
+			sort.Slice(matches, func(i, j int) bool { return matches[i].state < matches[j].state })
+			for i, ms := range filter {
+				if matches[i].state != ms {
+					t.Fatalf("filtered member %d doesn't match requested state (%s != %s)", i, matches[i].state, ms)
+				}
+			}
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-
-			db, cleanup := setupTestDatabase(t, log, tc.replicas)
-			defer cleanup()
-
-			repAddr, isBootstrap, gotErr := db.checkReplica(tc.controlAddr)
-			common.CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
-
-			// Just to get a bit of extra coverage
-			if repAddr != nil {
-				db.replicaAddr.Addr = repAddr
-				var err error
-				repAddr, err = db.ReplicaAddr()
-				if err != nil {
-					t.Fatal(err)
-				}
-			} else {
-				_, err := db.ReplicaAddr()
-				common.CmpErr(t, &ErrNotReplica{tc.replicas}, err)
-			}
-
-			if diff := cmp.Diff(tc.expRepAddr, repAddr); diff != "" {
-				t.Fatalf("unexpected repAddr (-want, +got):\n%s\n", diff)
-			}
-			if diff := cmp.Diff(tc.expBootstrap, isBootstrap); diff != "" {
-				t.Fatalf("unexpected isBootstrap (-want, +got)\n:%s\n", diff)
-			}
+			buf.Reset()
+			tf(t)
 		})
 	}
 }
 
 func TestSystem_Database_Cancel(t *testing.T) {
-	localhost := &net.TCPAddr{
-		IP: net.IPv4(127, 0, 0, 1),
-	}
-
+	localhost := common.LocalhostCtrlAddr()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
@@ -162,15 +139,32 @@ func TestSystem_Database_Cancel(t *testing.T) {
 	defer cancel()
 	dbCtx, dbCancel := context.WithCancel(ctx)
 
-	db, cleanup := setupTestDatabase(t, log, []string{localhost.String()})
+	db, cleanup := TestDatabase(t, log, localhost)
 	defer cleanup()
-	if err := db.Start(dbCtx, localhost); err != nil {
+	if err := db.Start(dbCtx); err != nil {
 		t.Fatal(err)
 	}
 
-	waitForLeadership(t, ctx, db, true, 5*time.Second)
+	var onGainedCalled, onLostCalled uint32
+	db.OnLeadershipGained(func(_ context.Context) error {
+		atomic.StoreUint32(&onGainedCalled, 1)
+		return nil
+	})
+	db.OnLeadershipLost(func() error {
+		atomic.StoreUint32(&onLostCalled, 1)
+		return nil
+	})
+
+	waitForLeadership(t, ctx, db, true, 10*time.Second)
 	dbCancel()
-	waitForLeadership(t, ctx, db, false, 5*time.Second)
+	waitForLeadership(t, ctx, db, false, 10*time.Second)
+
+	if atomic.LoadUint32(&onGainedCalled) != 1 {
+		t.Fatal("OnLeadershipGained callbacks didn't execute")
+	}
+	if atomic.LoadUint32(&onLostCalled) != 1 {
+		t.Fatal("OnLeadershipLost callbacks didn't execute")
+	}
 }
 
 func replicaGen(ctx context.Context, maxRanks, maxReplicas int) chan []Rank {
@@ -257,7 +251,7 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	db0, cleanup0 := setupTestDatabase(t, log, nil)
+	db0, cleanup0 := TestDatabase(t, log, nil)
 	defer cleanup0()
 
 	nextAddr := ctrlAddrGen(ctx, net.IPv4(127, 0, 0, 1), 4)
@@ -308,7 +302,7 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db1, cleanup1 := setupTestDatabase(t, log, nil)
+	db1, cleanup1 := TestDatabase(t, log, nil)
 	defer cleanup1()
 
 	if err := (*fsm)(db1).Restore(sink.Reader()); err != nil {
@@ -328,7 +322,7 @@ func TestSystem_Database_SnapshotRestoreBadVersion(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	db0, cleanup0 := setupTestDatabase(t, log, nil)
+	db0, cleanup0 := TestDatabase(t, log, nil)
 	defer cleanup0()
 	db0.data.SchemaVersion = 1024 // arbitrarily large, should never get here
 
@@ -341,7 +335,7 @@ func TestSystem_Database_SnapshotRestoreBadVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db1, cleanup1 := setupTestDatabase(t, log, nil)
+	db1, cleanup1 := TestDatabase(t, log, nil)
 	defer cleanup1()
 
 	wantErr := errors.Errorf("%d != %d", db0.data.SchemaVersion, CurrentSchemaVersion)
@@ -374,7 +368,7 @@ func TestSystem_Database_BadApply(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			db0, cleanup0 := setupTestDatabase(t, log, nil)
+			db0, cleanup0 := TestDatabase(t, log, nil)
 			defer cleanup0()
 
 			defer func() {

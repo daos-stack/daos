@@ -139,6 +139,8 @@ func createEmptyFile(log logging.Logger, path string, size int64) error {
 			if err := file.Truncate(size); err != nil {
 				return err
 			}
+		} else {
+			return err
 		}
 	}
 

@@ -169,7 +169,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (rc != 0) {
 		DFUSE_TRA_ERROR(dfp, "Unable to convert owner to uid: (%d)",
 				rc);
-		D_GOTO(close, rc);
+		D_GOTO(close, rc = daos_der2errno(rc));
 	}
 
 	prop_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER_GROUP);
@@ -180,7 +180,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		DFUSE_TRA_ERROR(dfp,
 				"Unable to convert owner-group to gid: (%d)",
 				rc);
-		D_GOTO(close, rc);
+		D_GOTO(close, rc = daos_der2errno(rc));
 	}
 
 	/*
@@ -193,14 +193,10 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	d_list_add(&dfp->dfp_list, &fs_handle->dpi_info->di_dfp_list);
 
-	rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, NULL,
-				&ie->ie_stat.st_ino);
-	if (rc) {
-		DFUSE_TRA_ERROR(ie, "dfuse_lookup_inode() failed: (%d)", rc);
-		D_GOTO(close, rc = rc);
-	}
+	dfs->dfs_ino = atomic_fetch_add_relaxed(&fs_handle->dpi_ino_next, 1);
 
-	dfs->dfs_root = ie->ie_stat.st_ino;
+	dfs->dfs_root = dfs->dfs_ino;
+	ie->ie_stat.st_ino = dfs->dfs_ino;
 	dfs->dfs_ops = &dfuse_cont_ops;
 
 	dfuse_reply_entry(fs_handle, ie, NULL, req);

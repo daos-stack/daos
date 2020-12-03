@@ -596,6 +596,7 @@ dtx_14(void **state)
 	daos_handle_t	 th = { 0 };
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
+	int		 nrestarts = 13;
 	int		 rc;
 
 	print_message("DTX restart because of conflict with others\n");
@@ -606,6 +607,8 @@ dtx_14(void **state)
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	dts_buf_render(write_buf, DTX_IO_SMALL);
+again:
+	req.arg->expect_result = 0;
 	insert_single(dkey, akey, 0, write_buf, DTX_IO_SMALL, th, &req);
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -631,6 +634,12 @@ dtx_14(void **state)
 		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
+
+	nrestarts--;
+	if (nrestarts > 0) {
+		print_message("Simulate another conflict/restart...\n");
+		goto again;
+	}
 
 	req.arg->expect_result = 0;
 	insert_single(dkey, akey, 0, write_buf, DTX_IO_SMALL, th, &req);
@@ -981,7 +990,7 @@ dtx_test_setup(void **state)
 	int     rc;
 
 	rc = test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
-			NULL);
+			0, NULL);
 
 	return rc;
 }

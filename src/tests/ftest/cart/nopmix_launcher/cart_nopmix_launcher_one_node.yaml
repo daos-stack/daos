@@ -13,6 +13,7 @@ hosts: !mux
       - boro-A
     test_clients:
       - boro-A
+timeout: 600
 tests: !mux
   no_pmix_launcher:
     name: no_pmix_launcher
@@ -26,9 +27,9 @@ tests: !mux
   test_group_np:
     name: test_group_basic
     test_servers_bin: crt_launch
-    test_servers_arg: "-e ../tests/test_group_np_srv --name server_grp"
+    test_servers_arg: "-e ../tests/test_group_np_srv --name server_grp --use_cfg 0"
     test_servers_ppn: "1"
     test_servers_slt: "2"
     test_clients_bin: crt_launch
-    test_clients_arg: "-c -e ../tests/test_group_np_cli --name client_grp --attach_to server_grp"
+    test_clients_arg: "-c -e ../tests/test_group_np_cli --name client_grp --attach_to server_grp --use_cfg 0"
     test_clients_ppn: "1"

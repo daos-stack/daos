@@ -501,8 +501,13 @@ pool_list_containers_hdlr(struct cmd_args_s *ap)
 	 */
 	ncont += extra_cont_margin;
 	D_ALLOC_ARRAY(conts, ncont);
-	if (conts == NULL)
-		D_GOTO(out_disconnect, rc = -DER_NOMEM);
+	if (conts == NULL) {
+		rc = -DER_NOMEM;
+		fprintf(stderr, "failed to allocate memory for "
+			"pool "DF_UUIDF": %s (%d)\n", DP_UUID(ap->p_uuid),
+			d_errdesc(rc), rc);
+		D_GOTO(out_disconnect, 0);
+	}
 
 	rc = daos_pool_list_cont(ap->pool, &ncont, conts, NULL /* ev */);
 	if (rc != 0) {
@@ -938,7 +943,7 @@ out:
 }
 
 static int
-cont_decode_props(daos_prop_t *props)
+cont_decode_props(daos_prop_t *props, daos_prop_t *prop_acl)
 {
 
 	struct daos_prop_entry		*entry;
@@ -1148,6 +1153,22 @@ cont_decode_props(daos_prop_t *props)
 		D_PRINT("owner-group:\t\t%s\n", entry->dpe_str);
 	}
 
+	/* Only mention ACL if there's something to print */
+	if (prop_acl != NULL) {
+		entry = daos_prop_entry_get(prop_acl, DAOS_PROP_CO_ACL);
+		if (entry != NULL && entry->dpe_val_ptr != NULL) {
+			struct daos_acl *acl;
+
+			acl = (struct daos_acl *)entry->dpe_val_ptr;
+			D_PRINT("acl:\n");
+			rc = daos_acl_to_stream(stdout, acl, false);
+			if (rc)
+				fprintf(stderr,
+					"unable to decode ACL: %s (%d)\n",
+					d_errdesc(rc), rc);
+		}
+	}
+
 	return rc;
 }
 
@@ -1156,12 +1177,13 @@ int
 cont_get_prop_hdlr(struct cmd_args_s *ap)
 {
 	daos_prop_t		*prop_query;
+	daos_prop_t		*prop_acl = NULL;
 	int			rc = 0;
 	uint32_t		i;
 	uint32_t		entry_type;
 
 	/*
-	 * Get all props except the ACL
+	 * Get all props except the ACL first.
 	 */
 	prop_query = daos_prop_alloc(DAOS_PROP_CO_NUM - 1);
 	if (prop_query == NULL)
@@ -1182,12 +1204,21 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 		D_GOTO(err_out, rc);
 	}
 
+	/* Fetch the ACL separately in case user doesn't have access */
+	rc = daos_cont_get_acl(ap->cont, &prop_acl, NULL);
+	if (rc && rc != -DER_NO_PERM) {
+		fprintf(stderr, "failed to query container ACL "DF_UUIDF
+			": %s (%d)\n", DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
+		D_GOTO(err_out, rc);
+	}
+
 	D_PRINT("Container properties for "DF_UUIDF" :\n", DP_UUID(ap->c_uuid));
 
-	rc = cont_decode_props(prop_query);
+	rc = cont_decode_props(prop_query, prop_acl);
 
 err_out:
 	daos_prop_free(prop_query);
+	daos_prop_free(prop_acl);
 	return rc;
 }
 
@@ -1536,24 +1567,10 @@ print_acl(FILE *outstream, daos_prop_t *acl_prop, bool verbose)
 	int			rc = 0;
 	struct daos_prop_entry	*entry;
 	struct daos_acl		*acl = NULL;
-	char			**acl_str = NULL;
-	size_t			nr_acl_str;
-	char			verbose_str[DAOS_ACL_MAX_ACE_STR_LEN * 2];
-	size_t			i;
 
-	/*
-	 * Validate the ACL before we start printing anything out.
-	 */
 	entry = daos_prop_entry_get(acl_prop, DAOS_PROP_CO_ACL);
-	if (entry != NULL && entry->dpe_val_ptr != NULL) {
+	if (entry != NULL)
 		acl = entry->dpe_val_ptr;
-		rc = daos_acl_to_strs(acl, &acl_str, &nr_acl_str);
-		if (rc != 0) {
-			fprintf(stderr,
-				"Invalid ACL cannot be displayed\n");
-			return rc;
-		}
-	}
 
 	entry = daos_prop_entry_get(acl_prop, DAOS_PROP_CO_OWNER);
 	if (entry != NULL && entry->dpe_str != NULL)
@@ -1563,28 +1580,13 @@ print_acl(FILE *outstream, daos_prop_t *acl_prop, bool verbose)
 	if (entry != NULL && entry->dpe_str != NULL)
 		fprintf(outstream, "# Owner-Group: %s\n", entry->dpe_str);
 
-	fprintf(outstream, "# Entries:\n");
-
-	if (acl == NULL || acl->dal_len == 0) {
-		fprintf(outstream, "#   None\n");
-		return 0;
+	rc = daos_acl_to_stream(outstream, acl, verbose);
+	if (rc != 0) {
+		fprintf(stderr, "failed to print ACL: %s (%d)\n",
+			d_errstr(rc), rc);
 	}
 
-	for (i = 0; i < nr_acl_str; i++) {
-		if (verbose) {
-			rc = daos_ace_str_get_verbose(acl_str[i], verbose_str,
-						      sizeof(verbose_str));
-			/*
-			 * If the ACE is invalid, we'll still print it out -
-			 * we just can't parse it to any helpful verbose string.
-			 */
-			if (rc != -DER_INVAL)
-				fprintf(outstream, "# %s\n", verbose_str);
-		}
-		fprintf(outstream, "%s\n", acl_str[i]);
-	}
-
-	return 0;
+	return rc;
 }
 
 int
@@ -1617,7 +1619,7 @@ cont_get_acl_hdlr(struct cmd_args_s *ap)
 			": %s (%d)\n", DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
 	} else {
 		rc = print_acl(outstream, prop, ap->verbose);
-		if (ap->outfile)
+		if (rc == 0 && ap->outfile)
 			fprintf(stdout, "Wrote ACL to output file: %s\n",
 				ap->outfile);
 	}

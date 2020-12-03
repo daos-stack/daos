@@ -135,7 +135,7 @@ String unit_packages() {
                            'spdk-devel libfabric-devel '+
                            'pmix numactl-devel ' +
                            'libipmctl-devel ' +
-                           'python36-tabulate '
+                           'python36-tabulate numactl'
         if (need_qb) {
             // TODO: these should be gotten from the Requires: of RPM
             packages += " spdk-tools mercury-2.0.0~rc1" +
@@ -227,7 +227,8 @@ String functional_packages(String distro) {
                   "hdf5-vol-daos-mpich2-tests-daos-0 " +
                   "hdf5-vol-daos-openmpi3-tests-daos-0 " +
                   "MACSio-mpich2-daos-0 " +
-                  "MACSio-openmpi3-daos-0"
+                  "MACSio-openmpi3-daos-0 " +
+                  "mpifileutils-mpich-daos-0 "
     if (distro == "leap15") {
         if (quickbuild()) {
             pkgs += " spdk-tools"
@@ -363,6 +364,14 @@ boolean skip_build_on_leap15_icc() {
            quickbuild()
 }
 
+boolean skip_unit_testing_stage() {
+    return  env.NO_CI_TESTING == 'true' ||
+            (skip_stage('build') &&
+             rpm_test_version() == '') ||
+            doc_only_change() ||
+            skip_stage('unit-tests')
+}
+
 boolean skip_testing_stage() {
     return  env.NO_CI_TESTING == 'true' ||
             (skip_stage('build') &&
@@ -393,7 +402,7 @@ String quick_build_deps(String distro) {
     } else {
         error("Unknown distro: ${distro} in quick_build_deps()")
     }
-    return sh(label:'Get Quickbuild dependencies',
+    return sh(label: 'Get Quickbuild dependencies',
               script: "rpmspec -q " +
                       "--srpm " +
                       rpmspec_args + ' ' +
@@ -421,6 +430,10 @@ pipeline {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
         ansiColor('xterm')
+    }
+
+    parameters {
+        string(name: 'BuildPriority', defaultValue: '', description: 'Priority of the build.  DO NOT USE WITHOUT PERMISSION.')
     }
 
     stages {
@@ -1040,7 +1053,7 @@ pipeline {
         stage('Unit Tests') {
             when {
                 beforeAgent true
-                expression { ! skip_testing_stage() }
+                expression { ! skip_unit_testing_stage() }
             }
             parallel {
                 stage('Unit Test') {
@@ -1052,15 +1065,35 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
-                        unitTest timeout_time: 60,
+                        unitTest timeout_time: 30,
                                  inst_repos: pr_repos(),
                                  inst_rpms: unit_packages()
                     }
                     post {
                       always {
-                            unitTestPost artifacts: ['unit_test_logs/*',
-                                                     'unit_vm_test/**'],
-                                         valgrind_stash: 'centos7-gcc-unit-valg'
+                            unitTestPost artifacts: ['unit_test_logs/*'],
+                                         record_issues: false
+                        }
+                    }
+                }
+                stage('NLT') {
+                    when {
+                      beforeAgent true
+                      expression { ! skip_stage('nlt') }
+                    }
+                    agent {
+                        label 'ci_hdwr1'
+                    }
+                    steps {
+                        unitTest timeout_time: 20,
+                                 inst_repos: pr_repos(),
+                                 inst_rpms: unit_packages()
+                    }
+                    post {
+                      always {
+                            unitTestPost artifacts: ['nlt_logs/*'],
+                                         testResults: 'None',
+                                         valgrind_stash: 'centos7-gcc-nlt-memcheck'
                         }
                     }
                 }
@@ -1099,20 +1132,15 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
-                        unitTest timeout_time: 60,
+                        unitTest timeout_time: 30,
                                  ignore_failure: true,
                                  inst_repos: pr_repos(),
                                  inst_rpms: unit_packages()
                     }
                     post {
                         always {
-                            // This is only set while dealing with issues
-                            // caused by code coverage instrumentation affecting
-                            // test results, and while code coverage is being
-                            // added.
-                            unitTestPost ignore_failure: true,
-                                         artifacts: ['unit_test_memcheck_logs.tar.gz',
-                                                     'unit_memcheck_vm_test/**'],
+                            unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
+                                                     'unit_test_memcheck_logs/*.log'],
                                          valgrind_stash: 'centos7-gcc-unit-memcheck'
                         }
                     }
@@ -1340,7 +1368,7 @@ pipeline {
     } // stages
     post {
         always {
-            valgrindReportPublish valgrind_stashes: ['centos7-gcc-unit-valg',
+            valgrindReportPublish valgrind_stashes: ['centos7-gcc-nlt-memcheck',
                                                      'centos7-gcc-unit-memcheck']
         }
         unsuccessful {

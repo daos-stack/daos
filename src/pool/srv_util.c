@@ -76,7 +76,8 @@ map_ranks_init(const struct pool_map *map, enum map_ranks_class class,
 	}
 
 	if (n == 0) {
-		memset(ranks, 0, sizeof(*ranks));
+		ranks->rl_nr = 0;
+		ranks->rl_ranks = NULL;
 		return 0;
 	}
 
@@ -321,7 +322,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index, map);
 			target->ta_comp.co_status = PO_COMP_ST_UP;
-			target->ta_comp.co_fseq = ++(*version);
+			++(*version);
 
 			D_PRINT("Target (rank %u idx %u) start reintegration\n",
 				target->ta_comp.co_rank,
@@ -515,9 +516,12 @@ ds_pool_check_failed_replicas(struct pool_map *map, d_rank_list_t *replicas,
 		++nfailed;
 	}
 
+	failed->rl_nr = 0;
+	failed->rl_ranks = NULL;
+
 	if (nfailed == 0) {
-		memset(failed, 0, sizeof(*failed));
-		memset(alt, 0, sizeof(*alt));
+		alt->rl_nr = 0;
+		alt->rl_ranks = NULL;
 		return 0;
 	}
 
@@ -526,7 +530,6 @@ ds_pool_check_failed_replicas(struct pool_map *map, d_rank_list_t *replicas,
 	alt->rl_ranks = replicas->rl_ranks + (replicas->rl_nr - nfailed);
 
 	/** Copy failed ranks to make room for replacements **/
-	memset(failed, 0, sizeof(*failed));
 	rc = daos_rank_list_copy(failed, alt);
 	if (rc != 0)
 		return rc;

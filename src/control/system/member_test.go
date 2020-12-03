@@ -799,7 +799,7 @@ func TestSystem_Membership_Join(t *testing.T) {
 		"not leader": {
 			notLeader: true,
 			req:       &JoinRequest{},
-			expErr:    &ErrNotLeader{},
+			expErr:    errors.New("leader"),
 		},
 		"successful rejoin": {
 			req: &JoinRequest{
@@ -867,7 +867,7 @@ func TestSystem_Membership_Join(t *testing.T) {
 				t.Fatal(err)
 			}
 			if tc.notLeader {
-				_ = db.raft.Shutdown().Error()
+				_ = db.ShutdownRaft()
 			}
 
 			gotResp, gotErr := ms.Join(tc.req)

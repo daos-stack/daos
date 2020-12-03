@@ -26,28 +26,29 @@ package server
 import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
 // ControlService implements the control plane control service, satisfying
-
 // ctlpb.MgmtCtlServer, and is the data container for the service.
 type ControlService struct {
 	StorageControlService
 	harness    *IOServerHarness
 	membership *system.Membership
+	sysdb      *system.Database
 	rpcClient  control.Invoker
-	srvCfg     *Configuration
+	srvCfg     *config.Server
 }
 
 // NewControlService returns ControlService to be used as gRPC control service
 // datastore. Initialized with sensible defaults and provided components.
 func NewControlService(log logging.Logger, h *IOServerHarness,
 	bp *bdev.Provider, sp *scm.Provider,
-	cfg *Configuration, m *system.Membership,
-	rc control.Invoker) *ControlService {
+	cfg *config.Server, m *system.Membership,
+	db *system.Database, rc control.Invoker) *ControlService {
 
 	scs := NewStorageControlService(log, bp, sp, cfg.Servers)
 
@@ -55,6 +56,7 @@ func NewControlService(log logging.Logger, h *IOServerHarness,
 		StorageControlService: *scs,
 		harness:               h,
 		membership:            m,
+		sysdb:                 db,
 		rpcClient:             rc,
 		srvCfg:                cfg,
 	}

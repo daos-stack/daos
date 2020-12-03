@@ -29,6 +29,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 )
@@ -37,6 +38,7 @@ const (
 	defaultExcludeInterfaces = "lo"
 )
 
+// NetworkScan retrieves details of network interfaces on remote hosts.
 func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScanReq) (*ctlpb.NetworkScanResp, error) {
 	c.log.Debugf("NetworkScanDevices() Received request: %s", req.GetProvider())
 	excludes := req.GetExcludeinterfaces()
@@ -64,13 +66,16 @@ func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScan
 	}
 
 	resp := new(ctlpb.NetworkScanResp)
-	for _, sr := range results {
-		resp.Interfaces = append(resp.Interfaces, &ctlpb.FabricInterface{
-			Provider: sr.Provider,
-			Device:   sr.DeviceName,
-			Numanode: uint32(sr.NUMANode),
-		})
+	resp.Interfaces = make([]*ctlpb.FabricInterface, len(results))
+	if err := convert.Types(results, &resp.Interfaces); err != nil {
+		return nil, errors.Wrap(err, "converting fabric interfaces to protobuf format")
 	}
+
+	resp.Numacount = int32(netdetect.NumNumaNodes(netCtx))
+	resp.Corespernuma = int32(netdetect.CoresPerNuma(netCtx))
+
+	c.log.Debugf("NetworkScanResp: %d NUMA nodes with %d cores each",
+		resp.GetNumacount(), resp.GetCorespernuma())
 
 	return resp, nil
 }
