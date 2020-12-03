@@ -143,6 +143,7 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			expResp: &mgmtpb.ClusterEventResp{
 				Sequence: 1,
 			},
+			expErr: errors.New("unexpected event type"),
 		},
 		"unknown event type": {
 			rasEvent: &ras.Event{ID: math.MaxUint32},
