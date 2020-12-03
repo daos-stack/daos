@@ -177,7 +177,8 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 		case drpc.DaosStatus:
 			switch e {
 			// These create errors can be retried.
-			case drpc.DaosTimedOut, drpc.DaosGroupVersionMismatch:
+			case drpc.DaosTimedOut, drpc.DaosGroupVersionMismatch,
+				drpc.DaosTryAgain:
 				return true
 			default:
 				return false
@@ -185,12 +186,6 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 		default:
 			return false
 		}
-	}
-	req.retryFn = func(_ context.Context, _ uint) error {
-		// Generate a new pool UUID on retry in order to avoid
-		// clashing with cleanup from the previous attempt.
-		pbReq.Uuid = uuid.New().String()
-		return nil
 	}
 
 	rpcClient.Debugf("Create DAOS pool request: %+v\n", req)
