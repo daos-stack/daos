@@ -23,6 +23,8 @@
 '''
 from data_mover_test_base import DataMoverTestBase
 from os.path import join, sep
+from apricot import skipForTicket
+
 
 class CopyProcsTest(DataMoverTestBase):
     # pylint: disable=too-many-ancestors
@@ -74,6 +76,7 @@ class CopyProcsTest(DataMoverTestBase):
         # Stop the servers and agents
         super(CopyProcsTest, self).tearDown()
 
+    @skipForTicket("DAOS-6194")
     def test_copy_procs(self):
         """
         Test Description:
