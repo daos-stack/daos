@@ -90,7 +90,7 @@ func (w *spdkWrapper) suppressOutput() (restore func(), err error) {
 	return
 }
 
-func (w *spdkWrapper) init(log logging.Logger, spdkOpts spdk.EnvOptions) (func(), error) {
+func (w *spdkWrapper) init(log logging.Logger, spdkOpts *spdk.EnvOptions) (func(), error) {
 	restore, err := w.suppressOutput()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to suppress spdk output")
@@ -128,9 +128,9 @@ func (b *spdkBackend) IsVMDDisabled() bool {
 
 // Scan discovers NVMe controllers accessible by SPDK.
 func (b *spdkBackend) Scan(req ScanRequest) (*ScanResponse, error) {
-	restoreOutput, err := b.binding.init(b.log, spdk.EnvOptions{
-		PciWhiteList: req.DeviceList,
-		DisableVMD:   b.IsVMDDisabled(),
+	restoreOutput, err := b.binding.init(b.log, &spdk.EnvOptions{
+		PciIncludeList: req.DeviceList,
+		DisableVMD:     b.IsVMDDisabled(),
 	})
 	if err != nil {
 		return nil, err
@@ -205,10 +205,10 @@ func (b *spdkBackend) formatRespFromResults(results []*spdk.FormatResult) (*Form
 }
 
 func (b *spdkBackend) formatNvme(req FormatRequest) (*FormatResponse, error) {
-	spdkOpts := spdk.EnvOptions{
-		MemSize:      req.MemSize,
-		PciWhiteList: req.DeviceList,
-		DisableVMD:   b.IsVMDDisabled(),
+	spdkOpts := &spdk.EnvOptions{
+		MemSize:        req.MemSize,
+		PciIncludeList: req.DeviceList,
+		DisableVMD:     b.IsVMDDisabled(),
 	}
 
 	restoreOutput, err := b.binding.init(b.log, spdkOpts)
@@ -354,7 +354,7 @@ func (b *spdkBackend) UpdateFirmware(pciAddr string, path string, slot int32) er
 		return FaultBadPCIAddr("")
 	}
 
-	restoreOutput, err := b.binding.init(b.log, spdk.EnvOptions{
+	restoreOutput, err := b.binding.init(b.log, &spdk.EnvOptions{
 		DisableVMD: b.IsVMDDisabled(),
 	})
 	if err != nil {
