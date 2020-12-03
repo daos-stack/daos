@@ -96,7 +96,8 @@ class OSAOfflineDrain(OSAUtils):
                     break
 
             rebuild_status = self.get_rebuild_status()
-            self.assertTrue(rebuild_status == "failed",
+            self.log.info("Rebuild Status: %s", rebuild_status)
+            self.assertTrue(rebuild_status != "failed",
                             "Rebuild failed")
 
             pver_drain = self.get_pool_version()

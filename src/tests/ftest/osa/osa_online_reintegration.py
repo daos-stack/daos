@@ -176,7 +176,8 @@ class OSAOnlineReintegration(OSAUtils):
                     break
 
             rebuild_status = self.get_rebuild_status()
-            self.assertTrue(rebuild_status == "failed",
+            self.log.info("Rebuild Status: %s", rebuild_status)
+            self.assertTrue(rebuild_status != "failed",
                             "Rebuild failed")
 
             self.log.info("Pool Version after reintegrate %d", pver_reint)
