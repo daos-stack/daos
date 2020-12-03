@@ -35,6 +35,7 @@ container:
     type: POSIX
     control_method: daos
     properties: cksum:crc64,cksum_size:16384,srv_cksum:on
+    oclass: RP_2G1
 ior:
     no_parallel_job: 5
     clientslots:

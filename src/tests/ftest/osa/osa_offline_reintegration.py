@@ -112,6 +112,10 @@ class OSAOfflineReintegration(OSAUtils):
                 if pver_reint > (pver_exclude + 1):
                     break
 
+            rebuild_status = self.get_rebuild_status()
+            self.assertTrue(rebuild_status == "failed",
+                            "Rebuild failed")
+
             pver_reint = self.get_pool_version()
             self.log.info("Pool Version after reintegrate %d", pver_reint)
             # Check pool version incremented after pool reintegrate

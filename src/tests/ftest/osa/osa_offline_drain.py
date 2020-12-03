@@ -95,6 +95,10 @@ class OSAOfflineDrain(OSAUtils):
                 if pver_drain > pver_begin + 1:
                     break
 
+            rebuild_status = self.get_rebuild_status()
+            self.assertTrue(rebuild_status == "failed",
+                            "Rebuild failed")
+
             pver_drain = self.get_pool_version()
             self.log.info("Pool Version after drain %d", pver_drain)
             # Check pool version incremented after pool drain

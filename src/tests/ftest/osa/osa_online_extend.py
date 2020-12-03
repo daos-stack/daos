@@ -29,12 +29,10 @@ from itertools import product
 from avocado import fail_on
 from apricot import TestWithServers, skipForTicket
 from test_utils_pool import TestPool
-from ior_utils import IorCommand
-from job_manager_utils import Mpirun
 from write_host_file import write_host_file
 from command_utils import CommandFailure
-from mpio_utils import MpioUtils
 from daos_racer_utils import DaosRacerCommand
+from osa_utils import OSAUtils
 
 try:
     # python 3.x
@@ -44,7 +42,7 @@ except ImportError:
     import Queue as queue
 
 
-class OSAOnlineExtend(TestWithServers):
+class OSAOnlineExtend(OSAUtils):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
@@ -75,17 +73,6 @@ class OSAOnlineExtend(TestWithServers):
         self.ds_racer_queue = queue.Queue()
         self.daos_racer = None
 
-    @fail_on(CommandFailure)
-    def get_pool_version(self):
-        """Get the pool version.
-
-        Returns:
-            int: pool_version_value
-
-        """
-        data = self.dmg_command.pool_query(self.pool.uuid)
-        return int(data["version"])
-
     def daos_racer_thread(self):
         """Start the daos_racer thread."""
         self.daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0],
@@ -95,53 +82,7 @@ class OSAOnlineExtend(TestWithServers):
             self.daos_racer.get_environment(self.server_managers[0]))
         self.daos_racer.run()
 
-    def ior_thread(self, pool, oclass, api, test, flags, results):
-        """Start threads and wait until all threads are finished.
-        Args:
-            pool (object): pool handle
-            oclass (str): IOR object class
-            API (str): IOR API
-            test (list): IOR test sequence
-            flags (str): IOR flags
-            results (queue): queue for returning thread results
-        """
-        processes = self.params.get("slots", "/run/ior/clientslots/*")
-        container_info = {}
-        mpio_util = MpioUtils()
-        if mpio_util.mpich_installed(self.hostlist_clients) is False:
-            self.fail("Exiting Test: Mpich not installed")
-        self.pool = pool
-        # Define the arguments for the ior_runner_thread method
-        ior_cmd = IorCommand()
-        ior_cmd.get_params(self)
-        ior_cmd.set_daos_params(self.server_group, self.pool)
-        ior_cmd.dfs_oclass.update(oclass)
-        ior_cmd.api.update(api)
-        ior_cmd.transfer_size.update(test[2])
-        ior_cmd.block_size.update(test[3])
-        ior_cmd.flags.update(flags)
-
-        container_info["{}{}{}"
-                       .format(oclass,
-                               api,
-                               test[2])] = str(uuid.uuid4())
-
-        # Define the job manager for the IOR command
-        manager = Mpirun(ior_cmd, mpitype="mpich")
-        key = "".join([oclass, api, str(test[2])])
-        manager.job.dfs_cont.update(container_info[key])
-        env = ior_cmd.get_default_env(str(manager))
-        manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-        manager.assign_processes(processes)
-        manager.assign_environment(env, True)
-
-        # run IOR Command
-        try:
-            manager.run()
-        except CommandFailure as _error:
-            results.put("FAIL")
-
-    def run_online_extend_test(self, num_pool, racer=False):
+   def run_online_extend_test(self, num_pool, racer=False):
         """Run the Online extend without data.
             Args:
              int : total pools to create for testing purposes.
@@ -219,6 +160,10 @@ class OSAOnlineExtend(TestWithServers):
                 fail_count += 1
                 if pver_extend > pver_begin:
                     break
+
+            rebuild_status = self.get_rebuild_status()
+            self.assertTrue(rebuild_status == "failed",
+                            "Rebuild failed")
 
             self.log.info("Pool Version after extend %s", pver_extend)
             # Check pool version incremented after pool exclude

@@ -99,6 +99,10 @@ class OSAOfflineExtend(OSAUtils):
                 if pver_extend > pver_begin:
                     break
 
+            rebuild_status = self.get_rebuild_status()
+            self.assertTrue(rebuild_status == "failed",
+                            "Rebuild failed")
+
             pver_extend = self.get_pool_version()
             self.log.info("Pool Version after extend %d", pver_extend)
             # Check pool version incremented after pool extend

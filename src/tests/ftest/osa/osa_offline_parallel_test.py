@@ -165,6 +165,11 @@ class OSAOfflineParallelTest(OSAUtils):
                 fail_count += 1
                 if pver_end > 23:
                     break
+
+            rebuild_status = self.get_rebuild_status()
+            self.assertTrue(rebuild_status == "failed",
+                            "Rebuild failed")
+           
             self.log.info("Pool Version at the End %s", pver_end)
             self.assertTrue(pver_end == 25,
                             "Pool Version Error:  at the end")

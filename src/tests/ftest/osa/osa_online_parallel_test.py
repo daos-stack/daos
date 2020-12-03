@@ -37,6 +37,7 @@ from write_host_file import write_host_file
 from command_utils import CommandFailure
 from mpio_utils import MpioUtils
 from daos_racer_utils import DaosRacerCommand
+from osa_utils import OSAUtils
 
 try:
     # python 3.x
@@ -46,7 +47,7 @@ except ImportError:
     import Queue as queue
 
 
-class OSAOnlineParallelTest(TestWithServers):
+class OSAOnlineParallelTest(OSAUtils):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
@@ -59,9 +60,6 @@ class OSAOnlineParallelTest(TestWithServers):
         """Set up for test case."""
         super(OSAOnlineParallelTest, self).setUp()
         self.dmg_command = self.get_dmg_command()
-        self.no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')
-        self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')
-        self.record_length = self.params.get("length", '/run/record/*')
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
         self.ior_test_sequence = self.params.get("ior_test_sequence",
@@ -76,17 +74,6 @@ class OSAOnlineParallelTest(TestWithServers):
         self.ds_racer_queue = queue.Queue()
         self.daos_racer = None
 
-    @fail_on(CommandFailure)
-    def get_pool_version(self):
-        """Get the pool version.
-
-        Returns:
-            int: pool_version_value
-
-        """
-        data = self.dmg_command.pool_query(self.pool.uuid)
-        return int(data["version"])
-
     def daos_racer_thread(self, results):
         """Start the daos_racer thread.
         """
@@ -97,56 +84,6 @@ class OSAOnlineParallelTest(TestWithServers):
             self.daos_racer.get_environment(self.server_managers[0]))
         self.daos_racer.run()
         results.put("Daos Racer Started")
-
-    def ior_thread(self, pool, oclass, api, test, flags, results):
-        """Start threads and wait until all threads are finished.
-        Args:
-            pool (object): pool handle
-            oclass (str): IOR object class
-            api (str): IOR api
-            test (list): IOR test sequence
-            flags (str): IOR flags
-            results (queue): queue for returning thread results
-
-        Returns:
-            None
-        """
-        processes = self.params.get("slots", "/run/ior/clientslots/*")
-        container_info = {}
-        mpio_util = MpioUtils()
-        if mpio_util.mpich_installed(self.hostlist_clients) is False:
-            self.fail("Exiting Test : Mpich not installed on :"
-                      " {}".format(self.hostfile_clients[0]))
-        self.pool = pool
-        # Define the arguments for the ior_runner_thread method
-        ior_cmd = IorCommand()
-        ior_cmd.get_params(self)
-        ior_cmd.set_daos_params(self.server_group, self.pool)
-        ior_cmd.dfs_oclass.update(oclass)
-        ior_cmd.api.update(api)
-        ior_cmd.transfer_size.update(test[2])
-        ior_cmd.block_size.update(test[3])
-        ior_cmd.flags.update(flags)
-
-        container_info["{}{}{}"
-                       .format(oclass,
-                               api,
-                               test[2])] = str(uuid.uuid4())
-
-        # Define the job manager for the IOR command
-        manager = Mpirun(ior_cmd, mpitype="mpich")
-        key = "".join([oclass, api, str(test[2])])
-        manager.job.dfs_cont.update(container_info[key])
-        env = ior_cmd.get_default_env(str(manager))
-        manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-        manager.assign_processes(processes)
-        manager.assign_environment(env, True)
-
-        # run IOR Command
-        try:
-            manager.run()
-        except CommandFailure as _error:
-            results.put("FAIL")
 
     def dmg_thread(self, action, action_args, results):
         """Generate different dmg command related to OSA.
@@ -286,6 +223,11 @@ class OSAOnlineParallelTest(TestWithServers):
                     fail_count += 1
                     if pver_end > 23:
                         break
+
+                rebuild_status = self.get_rebuild_status()
+                self.assertTrue(rebuild_status == "failed",
+                                "Rebuild failed")
+
                 self.log.info("Pool Version at the End %s", pver_end)
                 self.assertTrue(pver_end == 25,
                                 "Pool Version Error:  at the end")
