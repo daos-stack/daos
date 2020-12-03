@@ -446,7 +446,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		}
 	next:
 		if (sgls == NULL)
-			daos_sgl_fini(sgl, false);
+			d_sgl_fini(sgl, false);
 		if (rc)
 			break;
 	}
@@ -479,7 +479,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		bio_sgl_convert(fbsgl, &fsgl, false);
 		fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
 		*fbuffer += 0x2;
-		daos_sgl_fini(&fsgl, false);
+		d_sgl_fini(&fsgl, false);
 		ds_pool_put(pool);
 	}
 	return rc;
@@ -635,8 +635,8 @@ obj_echo_rw(crt_rpc_t *rpc, daos_iod_t *split_iods, uint64_t *split_offs)
 
 	/* Let's check if tls already have enough buffer */
 	if (p_sgl->sg_nr < iod->iod_nr) {
-		daos_sgl_fini(p_sgl, true);
-		rc = daos_sgl_init(p_sgl, iod->iod_nr);
+		d_sgl_fini(p_sgl, true);
+		rc = d_sgl_init(p_sgl, iod->iod_nr);
 		if (rc)
 			D_GOTO(out, rc);
 
@@ -2090,20 +2090,11 @@ obj_enum_complete(crt_rpc_t *rpc, int status, int map_version,
 	if (rc != 0)
 		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 
-	if (oeo->oeo_kds.ca_arrays != NULL)
-		D_FREE(oeo->oeo_kds.ca_arrays);
-
-	if (oeo->oeo_sgl.sg_iovs != NULL)
-		daos_sgl_fini(&oeo->oeo_sgl, true);
-
-	if (oeo->oeo_eprs.ca_arrays != NULL)
-		D_FREE(oeo->oeo_eprs.ca_arrays);
-
-	if (oeo->oeo_recxs.ca_arrays != NULL)
-		D_FREE(oeo->oeo_recxs.ca_arrays);
-
-	if (oeo->oeo_csum_iov.iov_buf != NULL)
-		D_FREE(oeo->oeo_csum_iov.iov_buf);
+	d_sgl_fini(&oeo->oeo_sgl, true);
+	D_FREE(oeo->oeo_kds.ca_arrays);
+	D_FREE(oeo->oeo_eprs.ca_arrays);
+	D_FREE(oeo->oeo_recxs.ca_arrays);
+	D_FREE(oeo->oeo_csum_iov.iov_buf);
 }
 
 static int
@@ -2198,9 +2189,9 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	 */
 	if (type == VOS_ITER_SINGLE)
 		anchors->ia_sv = anchors->ia_ev;
-	else if (oei->oei_oid.id_shard % 2 == 0 &&
+	else if (oei->oei_oid.id_shard % 3 == 1 &&
 		 DAOS_FAIL_CHECK(DAOS_VC_LOST_REPLICA))
-		D_GOTO(failed, rc =  -DER_NONEXIST);
+		D_GOTO(failed, rc = -DER_NONEXIST);
 
 	if (oei->oei_flags & ORF_ENUM_WITHOUT_EPR) {
 		epoch.oe_value = oei->oei_epr.epr_hi;
@@ -2320,7 +2311,7 @@ obj_enum_reply_bulk(crt_rpc_t *rpc)
 
 	/* Free oeo_sgl here to avoid rpc reply the data inline */
 	if (oei->oei_bulk)
-		daos_sgl_fini(&oeo->oeo_sgl, true);
+		d_sgl_fini(&oeo->oeo_sgl, true);
 
 	return rc;
 }
@@ -3047,7 +3038,7 @@ obj_verify_bio_csum(daos_obj_id_t oid, daos_iod_t *iods,
 						     &iod_csums[i], NULL, 0,
 						     NULL);
 
-		daos_sgl_fini(&sgl, false);
+		d_sgl_fini(&sgl, false);
 
 		if (rc != 0) {
 			if (iod->iod_type == DAOS_IOD_SINGLE) {

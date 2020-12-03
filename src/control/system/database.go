@@ -98,6 +98,7 @@ type (
 		replicaAddr        *syncTCPAddr
 		raft               syncRaft
 		raftTransport      raft.Transport
+		raftLeaderNotifyCh chan bool
 		onLeadershipGained []onLeadershipGainedFn
 		onLeadershipLost   []onLeadershipLostFn
 		shutdownCb         context.CancelFunc
@@ -138,8 +139,11 @@ func (sr *syncRaft) withReadLock(fn func(raftService) error) error {
 	return fn(sr.svc)
 }
 
-func (cfg *DatabaseConfig) stringReplicas() (replicas []string) {
+func (cfg *DatabaseConfig) stringReplicas(excludeAddr *net.TCPAddr) (replicas []string) {
 	for _, r := range cfg.Replicas {
+		if common.CmpTCPAddr(r, excludeAddr) {
+			continue
+		}
 		replicas = append(replicas, r.String())
 	}
 	return
@@ -175,10 +179,11 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) (*Database, error) {
 	}
 
 	db := &Database{
-		log:           log,
-		cfg:           cfg,
-		replicaAddr:   &syncTCPAddr{},
-		shutdownErrCh: make(chan error),
+		log:                log,
+		cfg:                cfg,
+		replicaAddr:        &syncTCPAddr{},
+		shutdownErrCh:      make(chan error),
+		raftLeaderNotifyCh: make(chan bool),
 
 		data: &dbData{
 			log: log,
@@ -210,7 +215,7 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) (*Database, error) {
 // a known replica address.
 func (db *Database) isReplica(ctrlAddr *net.TCPAddr) bool {
 	for _, candidate := range db.cfg.Replicas {
-		if common.CmpTcpAddr(ctrlAddr, candidate) {
+		if common.CmpTCPAddr(ctrlAddr, candidate) {
 			return true
 		}
 	}
@@ -226,17 +231,17 @@ func (db *Database) SystemName() string {
 // LeaderQuery returns the system leader, if known.
 func (db *Database) LeaderQuery() (leader string, replicas []string, err error) {
 	if !db.IsReplica() {
-		return "", nil, &ErrNotReplica{db.cfg.stringReplicas()}
+		return "", nil, &ErrNotReplica{db.cfg.stringReplicas(nil)}
 	}
 
-	return db.leaderHint(), db.cfg.stringReplicas(), nil
+	return db.leaderHint(), db.cfg.stringReplicas(nil), nil
 }
 
 // ReplicaAddr returns the system's replica address if
 // the system is configured as a MS replica.
 func (db *Database) ReplicaAddr() (*net.TCPAddr, error) {
 	if !db.IsReplica() {
-		return nil, &ErrNotReplica{db.cfg.stringReplicas()}
+		return nil, &ErrNotReplica{db.cfg.stringReplicas(nil)}
 	}
 	return db.getReplica(), nil
 }
@@ -266,13 +271,13 @@ func (db *Database) IsBootstrap() bool {
 	}
 	// Only the first replica should bootstrap. All the others
 	// should be added as voters.
-	return common.CmpTcpAddr(db.cfg.Replicas[0], db.getReplica())
+	return common.CmpTCPAddr(db.cfg.Replicas[0], db.getReplica())
 }
 
 // CheckReplica returns an error if the node is not a replica.
 func (db *Database) CheckReplica() error {
 	if !db.IsReplica() {
-		return &ErrNotReplica{db.cfg.stringReplicas()}
+		return &ErrNotReplica{db.cfg.stringReplicas(nil)}
 	}
 
 	return nil
@@ -290,7 +295,7 @@ func (db *Database) CheckLeader() error {
 		if svc.State() != raft.Leader {
 			return &ErrNotLeader{
 				LeaderHint: db.leaderHint(),
-				Replicas:   db.cfg.stringReplicas(),
+				Replicas:   db.cfg.stringReplicas(db.getReplica()),
 			}
 		}
 		return nil
@@ -386,16 +391,13 @@ func (db *Database) Stop() error {
 // set with OnLeadershipGained() or OnLeadershipLost(), as appropriate.
 func (db *Database) monitorLeadershipState(parent context.Context) {
 	var cancelGainedCtx context.CancelFunc
-	var leaderCh <-chan bool
 
-	if err := db.raft.withReadLock(func(svc raftService) error {
-		leaderCh = svc.LeaderCh()
-		return nil
-	}); err != nil {
-		// The only error we could get from withReadLock() is an
-		// ErrRaftUnavail, meaning that this is the result of a
-		// programming error and is not something we could handle.
-		panic(err)
+	runOnLeadershipLost := func() {
+		for _, fn := range db.onLeadershipLost {
+			if err := fn(); err != nil {
+				db.log.Errorf("failure in onLeadershipLost callback: %s", err)
+			}
+		}
 	}
 
 	for {
@@ -404,21 +406,18 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 			if cancelGainedCtx != nil {
 				cancelGainedCtx()
 			}
+			runOnLeadershipLost()
+
 			db.shutdownErrCh <- db.ShutdownRaft()
 			close(db.shutdownErrCh)
 			return
-		case isLeader := <-leaderCh:
+		case isLeader := <-db.raftLeaderNotifyCh:
 			if !isLeader {
 				db.log.Debugf("node %s lost MS leader state", db.replicaAddr)
 				if cancelGainedCtx != nil {
 					cancelGainedCtx()
 				}
-
-				for _, fn := range db.onLeadershipLost {
-					if err := fn(); err != nil {
-						db.log.Errorf("failure in onLeadershipLost callback: %s", err)
-					}
-				}
+				runOnLeadershipLost()
 
 				return
 			}
@@ -607,7 +606,7 @@ func (db *Database) AddMember(newMember *Member) error {
 
 	// If the new member is hosted by a MS replica other than this one,
 	// add it as a voter.
-	if !common.CmpTcpAddr(db.getReplica(), newMember.Addr) {
+	if !common.CmpTCPAddr(db.getReplica(), newMember.Addr) {
 		if db.isReplica(newMember.Addr) {
 			repAddr := newMember.Addr
 			rsi := raft.ServerID(repAddr.String())
