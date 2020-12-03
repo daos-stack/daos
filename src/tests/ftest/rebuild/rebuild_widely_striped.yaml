@@ -1,0 +1,74 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_servers:
+    - boro-14
+    - boro-13
+#    - server-A
+#    - server-B
+  test_clients:
+    - boro-13
+#    - client-C
+timeout: 180
+server_config:
+  servers_per_host: 2
+  name: daos_server
+  servers:
+    0:
+      targets: 4
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: eth0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+#      bdev_class: nvme
+#      bdev_list: ["0000:81:00.0"]
+#      scm_class: dcpm
+#      scm_list: ["/dev/pmem0"]
+      scm_mount: /mnt/daos0
+      scm_class: ram
+      scm_size: 29
+    1:
+      targets: 4
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: eth0
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+#      bdev_class: nvme
+#      bdev_list: ["0000:da:00.0"]
+#      scm_class: dcpm
+#      scm_list: ["/dev/pmem1"]
+      scm_mount: /mnt/daos1
+      scm_class: ram
+      scm_size: 29
+testparams:
+  ranks:
+    rank_to_kill: 3
+pool:
+  mode: 146
+  name: daos_server
+  scm_size: 28G
+#  scm_size: 1500000000
+#  nvme_size: 25000000000
+  svcn: 1
+  control_method: dmg
+container:
+  type: POSIX
+  control_method: daos
+  oclass: RP_2GX
+mdtest:
+  api: DFS
+  client_processes:
+    np: 30
+  num_of_files_dirs: 4067         # creating total of 50K files
+  test_dir: "/"
+  iteration: 1
+  dfs_destroy: True
+  dfs_oclass: RP_2GX
+  dfs_dir_oclass: RP_2GX
+  manager: "MPICH"
+  flags: "-F -C"
+  write_bytes: 4096
+#  read_bytes: 4096
+  depth: 0
