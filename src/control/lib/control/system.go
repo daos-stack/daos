@@ -53,7 +53,7 @@ type sysResponse struct {
 	AbsentHosts hostlist.HostSet
 }
 
-func (sr *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
+func (resp *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
 	ahs, err := hostlist.CreateSet(inHosts)
 	if err != nil {
 		return err
@@ -62,22 +62,22 @@ func (sr *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
 	if err != nil {
 		return err
 	}
-	sr.AbsentHosts.ReplaceSet(ahs)
-	sr.AbsentRanks.ReplaceSet(ars)
+	resp.AbsentHosts.ReplaceSet(ahs)
+	resp.AbsentRanks.ReplaceSet(ars)
 
 	return nil
 }
 
-func (sr *sysResponse) DisplayAbsentHostsRanks() string {
+func (resp *sysResponse) DisplayAbsentHostsRanks() string {
 	switch {
-	case sr.AbsentHosts.Count() > 0:
+	case resp.AbsentHosts.Count() > 0:
 		return fmt.Sprintf("\nUnknown %s: %s",
-			english.Plural(sr.AbsentHosts.Count(), "host", "hosts"),
-			sr.AbsentHosts.String())
-	case sr.AbsentRanks.Count() > 0:
+			english.Plural(resp.AbsentHosts.Count(), "host", "hosts"),
+			resp.AbsentHosts.String())
+	case resp.AbsentRanks.Count() > 0:
 		return fmt.Sprintf("\nUnknown %s: %s",
-			english.Plural(sr.AbsentRanks.Count(), "rank", "ranks"),
-			sr.AbsentRanks.String())
+			english.Plural(resp.AbsentRanks.Count(), "rank", "ranks"),
+			resp.AbsentRanks.String())
 	default:
 		return ""
 	}
@@ -98,7 +98,7 @@ type SystemJoinReq struct {
 }
 
 // MarshalJSON packs SystemJoinResp struct into a JSON message.
-func (sjr *SystemJoinReq) MarshalJSON() ([]byte, error) {
+func (req *SystemJoinReq) MarshalJSON() ([]byte, error) {
 	// use a type alias to leverage the default marshal for
 	// most fields
 	type toJSON SystemJoinReq
@@ -107,9 +107,9 @@ func (sjr *SystemJoinReq) MarshalJSON() ([]byte, error) {
 		SrvFaultDomain string
 		*toJSON
 	}{
-		Addr:           sjr.ControlAddr.String(),
-		SrvFaultDomain: sjr.FaultDomain.String(),
-		toJSON:         (*toJSON)(sjr),
+		Addr:           req.ControlAddr.String(),
+		SrvFaultDomain: req.FaultDomain.String(),
+		toJSON:         (*toJSON)(req),
 	})
 }
 
@@ -141,16 +141,20 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 	return resp, convertMSResponse(ur, resp)
 }
 
+// LookupAddrFn is an alias for net.LookupAddr signature.
+type LookupAddrFn func(string) ([]string, error)
+
 // SystemNotifyReq contains the inputs for the system notify request.
 type SystemNotifyReq struct {
 	unaryRequest
 	msRequest
-	ControlAddr *net.TCPAddr
-	Event       *ras.Event
+	lookupAddrFn LookupAddrFn
+	ControlAddr  *net.TCPAddr
+	Event        *ras.Event
 }
 
 // MarshalJSON packs SystemNotifyResp struct into a JSON message.
-func (snr *SystemNotifyReq) MarshalJSON() ([]byte, error) {
+func (req *SystemNotifyReq) MarshalJSON() ([]byte, error) {
 	// use a type alias to leverage the default marshal for
 	// most fields
 	type toJSON SystemNotifyReq
@@ -158,9 +162,39 @@ func (snr *SystemNotifyReq) MarshalJSON() ([]byte, error) {
 		Addr string
 		*toJSON
 	}{
-		Addr:   snr.ControlAddr.String(),
-		toJSON: (*toJSON)(snr),
+		Addr:   req.ControlAddr.String(),
+		toJSON: (*toJSON)(req),
 	})
+}
+
+// ToClusterEventReq converts the system notify request to a cluster events
+// request. Resolve control address to a hostname if possible.
+func (req *SystemNotifyReq) ToClusterEventReq() (*mgmtpb.ClusterEventReq, error) {
+	if req.Event == nil {
+		return nil, errors.New("nil event in request")
+	}
+	if req.ControlAddr == nil {
+		return nil, errors.New("nil control address in request")
+	}
+
+	pbRASEvent := new(mgmtpb.RASEvent)
+	if err := convert.Types(req.Event, pbRASEvent); err != nil {
+		return nil, errors.Wrap(err, "convert system notify to cluster event request")
+	}
+
+	if req.lookupAddrFn == nil {
+		req.lookupAddrFn = net.LookupAddr
+	}
+	names, err := req.lookupAddrFn(req.ControlAddr.String())
+	if err == nil && len(names) != 0 {
+		pbRASEvent.Hostname = names[0]
+	}
+
+	return &mgmtpb.ClusterEventReq{
+		Event: &mgmtpb.ClusterEventReq_Ras{
+			Ras: pbRASEvent,
+		},
+	}, nil
 }
 
 // SystemNotifyResp contains the request response.
@@ -169,25 +203,24 @@ type SystemNotifyResp struct{}
 // SystemNotify will attempt to notify the DAOS system of a cluster event.
 func SystemNotify(ctx context.Context, rpcClient UnaryInvoker, req *SystemNotifyReq) (*SystemNotifyResp, error) {
 	if req == nil {
-		return nil, errors.New("nil system notify request")
+		return nil, errors.New("nil request")
 	}
 	if req.Event == nil {
-		return nil, errors.New("nil event in system notify request")
+		return nil, errors.New("nil event in request")
 	}
 	if rpcClient == nil {
 		return nil, errors.New("nil rpc client")
 	}
 
-	pbEvent := new(mgmtpb.ClusterEventReq_Ras)
-	if err := convert.Types(req.Event, pbEvent); err != nil {
+	rpcClient.Debugf("DAOS system notify request: %+v, event: %+v", req, req.Event)
+	pbReq, err := req.ToClusterEventReq()
+	if err != nil {
 		return nil, err
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).ClusterEvent(ctx,
-			&mgmtpb.ClusterEventReq{Event: pbEvent})
+		return mgmtpb.NewMgmtSvcClient(conn).ClusterEvent(ctx, pbReq)
 	})
-	rpcClient.Debugf("DAOS system notify request: %+v", pbEvent)
-	rpcClient.Debugf("DAOS system notify req hosts: %+v", req.HostList)
+	rpcClient.Debugf("DAOS cluster event request: %+v, event: %+v", pbReq, pbReq.GetRas())
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {

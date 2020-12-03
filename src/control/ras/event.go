@@ -35,7 +35,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -57,8 +56,8 @@ func (id EventID) Desc() string {
 	return C.GoString(C.ras_event_id_enum_to_msg(uint32(id)))
 }
 
-// ID returns numeric ID of event.
-func (id EventID) ID() uint32 {
+// Uint32 returns uint32 representation of event ID.
+func (id EventID) Uint32() uint32 {
 	return uint32(id)
 }
 
@@ -77,6 +76,11 @@ func (sev EventSeverityID) String() string {
 	return C.GoString(C.ras_event_sev_enum_to_name(uint32(sev)))
 }
 
+// Uint32 returns uint32 representation of event severity.
+func (sev EventSeverityID) Uint32() uint32 {
+	return uint32(sev)
+}
+
 // EventTypeID describes the type of a given RAS event.
 type EventTypeID uint32
 
@@ -90,6 +94,11 @@ func (typ EventTypeID) String() string {
 	return C.GoString(C.ras_event_type_enum_to_name(uint32(typ)))
 }
 
+// Uint32 returns uint32 representation of event type.
+func (typ EventTypeID) Uint32() uint32 {
+	return uint32(typ)
+}
+
 // Event describes details of a specific RAS event.
 type Event struct {
 	Name        string `json:"name"`
@@ -97,9 +106,9 @@ type Event struct {
 	Msg         string `json:"msg"`
 	Hostname    string `json:"hostname"`
 	Data        []byte `json:"data"`
-	ID          uint32 `json:"id"`
 	Rank        uint32 `json:"rank"`
 	InstanceIdx uint32 `json:"instance_idx"`
+	ID          EventID
 	Severity    EventSeverityID
 	Type        EventTypeID
 }
@@ -110,12 +119,14 @@ func (evt *Event) MarshalJSON() ([]byte, error) {
 	// most fields
 	type toJSON Event
 	return json.Marshal(&struct {
+		ID       uint32
 		Severity uint32
 		Type     uint32
 		*toJSON
 	}{
-		Severity: uint32(evt.Severity),
-		Type:     uint32(evt.Type),
+		ID:       evt.ID.Uint32(),
+		Severity: evt.Severity.Uint32(),
+		Type:     evt.Type.Uint32(),
 		toJSON:   (*toJSON)(evt),
 	})
 }
@@ -130,6 +141,7 @@ func (evt *Event) UnmarshalJSON(data []byte) error {
 	// most fields
 	type fromJSON Event
 	from := &struct {
+		ID       uint32
 		Severity uint32
 		Type     uint32
 		*fromJSON
@@ -141,6 +153,7 @@ func (evt *Event) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
+	evt.ID = EventID(from.ID)
 	evt.Severity = EventSeverityID(from.Severity)
 	evt.Type = EventTypeID(from.Type)
 
@@ -156,7 +169,7 @@ func NewRankFailEvent(instanceIdx uint32, rank uint32, exitErr error) *Event {
 		Timestamp:   common.FormatTime(time.Now().UTC()),
 		Msg:         EventRankFail.Desc(),
 		InstanceIdx: instanceIdx,
-		ID:          EventRankFail.ID(),
+		ID:          EventRankFail,
 		Rank:        rank,
 		Type:        EventTypeStateChange,
 		Severity:    EventSeverityInfo,
@@ -173,16 +186,19 @@ func NewRankFailEvent(instanceIdx uint32, rank uint32, exitErr error) *Event {
 	return evt
 }
 
-// ProcessEvent evaluate and actions the given RAS event.
-func ProcessEvent(log logging.Logger, event mgmtpb.RASEvent) error {
-	log.Debugf("processing RAS event: %s", event.GetMsg())
+// ProcessEvent evaluates and actions the given RAS event.
+func ProcessEvent(log logging.Logger, evt *Event) error {
+	if evt == nil {
+		return errors.New("attempt to process nil ras event")
+	}
+	log.Debugf("processing RAS event %q from rank %d on host %q", evt.Msg, evt.Rank,
+		evt.Hostname)
 
-	id := EventID(uint32(event.Id))
-	switch id {
+	switch evt.ID {
 	case EventRankFail, EventRankNoResp:
-		log.Debugf("processing %s (%s) event", id.String(), id.Desc())
+		log.Debugf("processing %s (%s) event", evt.ID.String(), evt.ID.Desc())
 	default:
-		return errors.Errorf("unrecognised event ID: %d", event.Id)
+		return errors.Errorf("unknown event ID: %d", evt.ID)
 	}
 
 	return nil

@@ -25,6 +25,7 @@ package server
 
 import (
 	"context"
+	"math"
 	"net"
 	"os"
 	"sync"
@@ -120,45 +121,32 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
-	rasEvent := ras.NewRankFailEvent(0, 0, nil)
-	rasEventPB := new(mgmtpb.RASEvent)
-	if err := convert.Types(rasEvent, rasEventPB); err != nil {
-		t.Fatal(err)
-	}
+	rasEventRankFail := ras.NewRankFailEvent(0, 0, nil)
 
 	for name, tc := range map[string]struct {
-		req     *mgmtpb.ClusterEventReq
-		expResp *mgmtpb.ClusterEventResp
-		expErr  error
+		nilReq   bool
+		zeroSeq  bool
+		rasEvent *ras.Event
+		expResp  *mgmtpb.ClusterEventResp
+		expErr   error
 	}{
 		"nil request": {
+			nilReq: true,
 			expErr: errors.New("nil request"),
 		},
-		"nil event": {
-			req: &mgmtpb.ClusterEventReq{
-				Sequence: 1,
-			},
-			expErr: errors.New("unexpected event type"),
-		},
-		"invalid sequence": {
-			req: &mgmtpb.ClusterEventReq{
-				Sequence: 0,
-				Event: &mgmtpb.ClusterEventReq_Ras{
-					Ras: rasEventPB,
-				},
-			},
-			expErr: errors.New("invalid sequence"),
+		"invalid sequence number": {
+			zeroSeq: true,
+			expErr:  errors.New("invalid sequence"),
 		},
 		"successful notification": {
-			req: &mgmtpb.ClusterEventReq{
-				Sequence: 1,
-				Event: &mgmtpb.ClusterEventReq_Ras{
-					Ras: rasEventPB,
-				},
-			},
+			rasEvent: rasEventRankFail,
 			expResp: &mgmtpb.ClusterEventResp{
 				Sequence: 1,
 			},
+		},
+		"unknown event type": {
+			rasEvent: &ras.Event{ID: math.MaxUint32},
+			expErr:   errors.New("unknown event ID"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -183,7 +171,26 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 				}
 			}
 
-			gotResp, gotErr := mgmtSvc.ClusterEvent(context.TODO(), tc.req)
+			var pbReq *mgmtpb.ClusterEventReq
+			switch {
+			case tc.nilReq:
+			case tc.zeroSeq:
+				pbReq = &mgmtpb.ClusterEventReq{Sequence: 0}
+			default:
+				rasEventPB := new(mgmtpb.RASEvent)
+				if err := convert.Types(tc.rasEvent, rasEventPB); err != nil {
+					t.Fatal(err)
+				}
+
+				pbReq = &mgmtpb.ClusterEventReq{
+					Sequence: 1,
+					Event: &mgmtpb.ClusterEventReq_Ras{
+						Ras: rasEventPB,
+					},
+				}
+			}
+
+			gotResp, gotErr := mgmtSvc.ClusterEvent(context.TODO(), pbReq)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

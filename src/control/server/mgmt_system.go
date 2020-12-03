@@ -736,13 +736,17 @@ func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *mgmtpb.ClusterEventRe
 		return nil, err
 	}
 
-	rasEvent := req.GetRas()
-	if rasEvent == nil {
+	rasEventPB := req.GetRas()
+	if rasEventPB == nil {
 		return nil, errors.Errorf("unexpected event type received, want RAS got %T",
 			req.GetEvent())
 	}
 
-	if err := ras.ProcessEvent(svc.log, *rasEvent); err != nil {
+	rasEvent := new(ras.Event)
+	if err := convert.Types(rasEventPB, rasEvent); err != nil {
+		return nil, errors.Wrap(err, "convert proto to ras event")
+	}
+	if err := ras.ProcessEvent(svc.log, rasEvent); err != nil {
 		return nil, err
 	}
 
