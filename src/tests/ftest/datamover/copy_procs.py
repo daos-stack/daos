@@ -23,7 +23,7 @@
 '''
 from data_mover_test_base import DataMoverTestBase
 from os.path import join, sep
-from avocado import skipForTicket
+from apricot import skipForTicket
 
 
 class CopyProcsTest(DataMoverTestBase):
