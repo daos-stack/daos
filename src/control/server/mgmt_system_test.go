@@ -39,9 +39,9 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/ras"
@@ -120,46 +120,50 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
-	rasEvent := ras.NewRankFailEvent(0, 0, nil)
-	rasEventPB := new(mgmtpb.RASEvent)
-	if err := convert.Types(rasEvent, rasEventPB); err != nil {
-		t.Fatal(err)
-	}
+	rasEventRankFail := ras.NewRankFailEvent(0, 0, nil)
 
 	for name, tc := range map[string]struct {
-		req     *mgmtpb.ClusterEventReq
-		expResp *mgmtpb.ClusterEventResp
-		expErr  error
+		notifyReq *control.SystemNotifyReq
+		sequence  int
+		expResp   *mgmtpb.ClusterEventResp
+		expErr    error
 	}{
 		"nil request": {
 			expErr: errors.New("nil request"),
 		},
 		"nil event": {
-			req: &mgmtpb.ClusterEventReq{
-				Sequence: 1,
+			notifyReq: &control.SystemNotifyReq{},
+			expErr:    errors.New("unexpected event type"),
+		},
+		"successful notification": {
+			notifyReq: &control.SystemNotifyReq{
+				Event: rasEventRankFail,
 			},
 			expErr: errors.New("unexpected event type"),
 		},
-		"invalid sequence": {
-			req: &mgmtpb.ClusterEventReq{
-				Sequence: 0,
-				Event: &mgmtpb.ClusterEventReq_Ras{
-					Ras: rasEventPB,
-				},
-			},
-			expErr: errors.New("invalid sequence"),
-		},
-		"successful notification": {
-			req: &mgmtpb.ClusterEventReq{
-				Sequence: 1,
-				Event: &mgmtpb.ClusterEventReq_Ras{
-					Ras: rasEventPB,
-				},
-			},
-			expResp: &mgmtpb.ClusterEventResp{
-				Sequence: 1,
-			},
-		},
+		// "unsupported event type": {
+		//		"unrecognised event type": {
+		//		"invalid sequence": {
+		//			zeroSeq: true
+		//			req: &mgmtpb.ClusterEventReq{
+		//				Sequence: 0,
+		//				Event: &mgmtpb.ClusterEventReq_Ras{
+		//					Ras: rasEventPB,
+		//				},
+		//			},
+		//			expErr: errors.New("invalid sequence"),
+		//		},
+		//		"successful notification": {
+		//			req: &mgmtpb.ClusterEventReq{
+		//				Sequence: 1,
+		//				Event: &mgmtpb.ClusterEventReq_Ras{
+		//					Ras: rasEventPB,
+		//				},
+		//			},
+		//			expResp: &mgmtpb.ClusterEventResp{
+		//				Sequence: 1,
+		//			},
+		//		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -183,7 +187,22 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 				}
 			}
 
-			gotResp, gotErr := mgmtSvc.ClusterEvent(context.TODO(), tc.req)
+			mockLookupAddr := func(addr string) ([]string, error) {
+				return map[string][]string{
+					"192.168.0.1": {"foo.bar.com"},
+				}[addr], nil
+			}
+
+			var pbReq *mgmtpb.ClusterEventReq
+			if tc.notifyReq != nil {
+				var err error
+				pbReq, err = tc.notifyReq.ToClusterEventReq(mockLookupAddr)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			gotResp, gotErr := mgmtSvc.ClusterEvent(context.TODO(), pbReq)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

@@ -141,6 +141,8 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 	return resp, convertMSResponse(ur, resp)
 }
 
+type LookupAddrFnSig func(string) ([]string, error)
+
 // SystemNotifyReq contains the inputs for the system notify request.
 type SystemNotifyReq struct {
 	unaryRequest
@@ -163,6 +165,26 @@ func (snr *SystemNotifyReq) MarshalJSON() ([]byte, error) {
 	})
 }
 
+// ToClusterEventReq converts the system notify request to a cluster events
+// request. Resolve control address to a hostname if possible.
+func (snr *SystemNotifyReq) ToClusterEventReq(lookupAddr LookupAddrFnSig) (*mgmtpb.ClusterEventReq, error) {
+	pbRASEvent := new(mgmtpb.RASEvent)
+	if err := convert.Types(snr.Event, pbRASEvent); err != nil {
+		return nil, errors.Wrap(err, "convert system notify to cluster event request")
+	}
+
+	names, err := lookupAddr(snr.ControlAddr.String())
+	if err == nil && len(names) != 0 {
+		pbRASEvent.Hostname = names[0]
+	}
+
+	return &mgmtpb.ClusterEventReq{
+		Event: &mgmtpb.ClusterEventReq_Ras{
+			Ras: pbRASEvent,
+		},
+	}, nil
+}
+
 // SystemNotifyResp contains the request response.
 type SystemNotifyResp struct{}
 
@@ -178,16 +200,15 @@ func SystemNotify(ctx context.Context, rpcClient UnaryInvoker, req *SystemNotify
 		return nil, errors.New("nil rpc client")
 	}
 
-	pbEvent := new(mgmtpb.ClusterEventReq_Ras)
-	if err := convert.Types(req.Event, pbEvent); err != nil {
+	rpcClient.Debugf("DAOS system notify request: %+v, event: %+v", req, req.Event)
+	pbReq, err := req.ToClusterEventReq(net.LookupAddr)
+	if err != nil {
 		return nil, err
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).ClusterEvent(ctx,
-			&mgmtpb.ClusterEventReq{Event: pbEvent})
+		return mgmtpb.NewMgmtSvcClient(conn).ClusterEvent(ctx, pbReq)
 	})
-	rpcClient.Debugf("DAOS system notify request: %+v", pbEvent)
-	rpcClient.Debugf("DAOS system notify req hosts: %+v", req.HostList)
+	rpcClient.Debugf("DAOS cluster event request: %+v, event: %+v", pbReq, pbReq.GetRas())
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
