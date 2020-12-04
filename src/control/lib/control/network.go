@@ -56,9 +56,10 @@ func (hfi *HostFabricInterface) String() string {
 
 // HostFabric describes a host fabric configuration.
 type HostFabric struct {
-	Interfaces []*HostFabricInterface `hash:"set"`
-	Providers  []string               `hash:"set"`
-	NumaCount  uint32
+	Interfaces   []*HostFabricInterface `hash:"set"`
+	Providers    []string               `hash:"set"`
+	NumaCount    uint32
+	CoresPerNuma uint32
 }
 
 // HashKey returns a uint64 value suitable for use as a key into
@@ -147,7 +148,8 @@ func (nsr *NetworkScanResp) addHostResponse(hr *HostResponse) (err error) {
 		hf.Providers = append(hf.Providers, hfi.Provider)
 	}
 	hf.Providers = common.DedupeStringSlice(hf.Providers)
-	hf.NumaCount = uint32(pbResp.Numacount)
+	hf.NumaCount = uint32(pbResp.GetNumacount())
+	hf.CoresPerNuma = uint32(pbResp.GetCorespernuma())
 
 	if nsr.HostFabrics == nil {
 		nsr.HostFabrics = make(HostFabricMap)

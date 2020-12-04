@@ -997,7 +997,7 @@ const ProtobufCMessageDescriptor mgmt__smd_dev_req__descriptor =
   (ProtobufCMessageInit) mgmt__smd_dev_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__smd_dev_resp__device__field_descriptors[3] =
+static const ProtobufCFieldDescriptor mgmt__smd_dev_resp__device__field_descriptors[4] =
 {
   {
     "uuid",
@@ -1035,16 +1035,29 @@ static const ProtobufCFieldDescriptor mgmt__smd_dev_resp__device__field_descript
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "trAddr",
+    4,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__SmdDevResp__Device, traddr),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__smd_dev_resp__device__field_indices_by_name[] = {
   2,   /* field[2] = state */
   1,   /* field[1] = tgt_ids */
+  3,   /* field[3] = trAddr */
   0,   /* field[0] = uuid */
 };
 static const ProtobufCIntRange mgmt__smd_dev_resp__device__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 3 }
+  { 0, 4 }
 };
 const ProtobufCMessageDescriptor mgmt__smd_dev_resp__device__descriptor =
 {
@@ -1054,7 +1067,7 @@ const ProtobufCMessageDescriptor mgmt__smd_dev_resp__device__descriptor =
   "Mgmt__SmdDevResp__Device",
   "mgmt",
   sizeof(Mgmt__SmdDevResp__Device),
-  3,
+  4,
   mgmt__smd_dev_resp__device__field_descriptors,
   mgmt__smd_dev_resp__device__field_indices_by_name,
   1,  mgmt__smd_dev_resp__device__number_ranges,
@@ -1617,7 +1630,7 @@ const ProtobufCMessageDescriptor mgmt__smd_query_req__descriptor =
   (ProtobufCMessageInit) mgmt__smd_query_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__smd_query_resp__device__field_descriptors[4] =
+static const ProtobufCFieldDescriptor mgmt__smd_query_resp__device__field_descriptors[5] =
 {
   {
     "uuid",
@@ -1656,8 +1669,20 @@ static const ProtobufCFieldDescriptor mgmt__smd_query_resp__device__field_descri
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "health",
+    "trAddr",
     4,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__SmdQueryResp__Device, traddr),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "health",
+    5,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_MESSAGE,
     0,   /* quantifier_offset */
@@ -1669,15 +1694,16 @@ static const ProtobufCFieldDescriptor mgmt__smd_query_resp__device__field_descri
   },
 };
 static const unsigned mgmt__smd_query_resp__device__field_indices_by_name[] = {
-  3,   /* field[3] = health */
+  4,   /* field[4] = health */
   2,   /* field[2] = state */
   1,   /* field[1] = tgt_ids */
+  3,   /* field[3] = trAddr */
   0,   /* field[0] = uuid */
 };
 static const ProtobufCIntRange mgmt__smd_query_resp__device__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 4 }
+  { 0, 5 }
 };
 const ProtobufCMessageDescriptor mgmt__smd_query_resp__device__descriptor =
 {
@@ -1687,7 +1713,7 @@ const ProtobufCMessageDescriptor mgmt__smd_query_resp__device__descriptor =
   "Mgmt__SmdQueryResp__Device",
   "mgmt",
   sizeof(Mgmt__SmdQueryResp__Device),
-  4,
+  5,
   mgmt__smd_query_resp__device__field_descriptors,
   mgmt__smd_query_resp__device__field_indices_by_name,
   1,  mgmt__smd_query_resp__device__number_ranges,

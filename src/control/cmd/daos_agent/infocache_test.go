@@ -45,7 +45,7 @@ const maxConcurrent = 100
 
 type netdetectCleanup func(context.Context)
 
-func initCache(t *testing.T, scanResults []netdetect.FabricScan, aiCache *attachInfoCache) (context.Context, netdetectCleanup) {
+func initCache(t *testing.T, scanResults []*netdetect.FabricScan, aiCache *attachInfoCache) (context.Context, netdetectCleanup) {
 	netCtx, err := netdetect.Init(context.Background())
 	if err != nil {
 		t.Fatalf("failed to init netdetect context: %v", err)
@@ -61,7 +61,7 @@ func TestInfoCacheInitNoScanResults(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 	enabled := atm.NewBool(true)
-	scanResults := []netdetect.FabricScan{}
+	scanResults := []*netdetect.FabricScan{}
 	aiCache := attachInfoCache{log: log, enabled: enabled}
 
 	netCtx, cleanupFn := initCache(t, scanResults, &aiCache)
@@ -107,7 +107,7 @@ func TestInfoCacheInit(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 	enabled := atm.NewBool(true)
-	scanResults := []netdetect.FabricScan{
+	scanResults := []*netdetect.FabricScan{
 		{Provider: "ofi+sockets", DeviceName: "eth0_node0", NUMANode: 0},
 		{Provider: "ofi+sockets", DeviceName: "eth1_node0", NUMANode: 0},
 		{Provider: "ofi+sockets", DeviceName: "eth2_node0", NUMANode: 0},
@@ -155,7 +155,7 @@ func TestInfoCacheInitWithDeviceFiltering(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)
 	enabled := atm.NewBool(true)
 
-	scanResults := []netdetect.FabricScan{
+	scanResults := []*netdetect.FabricScan{
 		{Provider: "ofi+sockets", DeviceName: "eth0_node0", NUMANode: 0, NetDevClass: netdetect.Ether},
 		{Provider: "ofi+sockets", DeviceName: "eth1_node0", NUMANode: 0, NetDevClass: netdetect.Ether},
 		{Provider: "ofi+sockets", DeviceName: "eth2_node0", NUMANode: 0, NetDevClass: netdetect.Ether},
@@ -226,7 +226,7 @@ func TestInfoCacheGetResponse(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 	enabled := atm.NewBool(true)
-	scanResults := []netdetect.FabricScan{
+	scanResults := []*netdetect.FabricScan{
 		{Provider: "ofi+sockets", DeviceName: "eth0", NUMANode: 0},
 		{Provider: "ofi+sockets", DeviceName: "eth1", NUMANode: 1},
 		{Provider: "ofi+sockets", DeviceName: "eth2", NUMANode: 2}}
@@ -276,7 +276,7 @@ func TestInfoCacheDefaultNumaNode(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 	enabled := atm.NewBool(true)
-	scanResults := []netdetect.FabricScan{
+	scanResults := []*netdetect.FabricScan{
 		{Provider: "ofi+sockets", DeviceName: "eth1", NUMANode: 1},
 		{Provider: "ofi+sockets", DeviceName: "eth2", NUMANode: 2}}
 
@@ -327,7 +327,7 @@ func TestInfoCacheLoadBalancer(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 	enabled := atm.NewBool(true)
-	scanResults := []netdetect.FabricScan{
+	scanResults := []*netdetect.FabricScan{
 		{Provider: "ofi+sockets", DeviceName: "eth0_node0", NUMANode: 0},
 		{Provider: "ofi+sockets", DeviceName: "eth1_node0", NUMANode: 0},
 		{Provider: "ofi+sockets", DeviceName: "eth2_node0", NUMANode: 0},
@@ -447,7 +447,7 @@ func TestInfoCacheConcurrentAccess(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 	enabled := atm.NewBool(true)
-	scanResults := []netdetect.FabricScan{
+	scanResults := []*netdetect.FabricScan{
 		{Provider: "ofi+sockets", DeviceName: "eth0_node0", NUMANode: 0, Priority: 0},
 		{Provider: "ofi+sockets", DeviceName: "eth1_node0", NUMANode: 0, Priority: 1},
 		{Provider: "ofi+sockets", DeviceName: "eth2_node0", NUMANode: 0, Priority: 2},
