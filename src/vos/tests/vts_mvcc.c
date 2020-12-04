@@ -1423,6 +1423,7 @@ uncertainty_check_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 		char		pp[L_COUNT + 1] = "coda";
 		daos_epoch_t	pe = ae - 1;
 
+		D_ASSERT(strlen(wp) <= sizeof(pp) - 1);
 		memcpy(pp, wp, strlen(wp));
 		print_message("  update(%s, "DF_U64") (expect DER_SUCCESS): ",
 			      pp, pe);
