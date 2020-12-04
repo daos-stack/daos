@@ -33,6 +33,13 @@ else
     NLT=false
 fi
 
+if [ "$STAGE_NAME" = "Unit Test" ]; then
+    XMLSTAGE="UT"
+fi
+if [ "$STAGE_NAME" = "Unit Test with memcheck" ]; then
+    XMLSTAGE="UTmem"
+fi
+
 # shellcheck disable=SC1091
 source ./.build_vars.sh
 rm -f "${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control"
@@ -51,5 +58,6 @@ ssh -tt "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$DAOS_BASE      \
                                          SL_PREFIX=$SL_PREFIX      \
                                          WITH_VALGRIND=$WITH_VALGRIND \
                                          NLT=$NLT                  \
+                                         XMLSTAGE=$XMLSTAGE        \
                                          BULLSEYE=$BULLSEYE        \
                                          $(cat "$mydir/test_main_node.sh")"

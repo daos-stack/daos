@@ -70,6 +70,47 @@ run_test()
     ((log_num += 1))
 }
 
+run_test_n()
+{
+    local in="$*"
+    local a="${in// /-}"
+    local b="${a////-}"
+
+    if [ -n "${RUN_TEST_FILTER}" ]; then
+        if ! [[ "$*" =~ ${RUN_TEST_FILTER} ]]; then
+            echo "Skipping test: $in"
+            return
+        fi
+    fi
+    export D_LOG_FILE="/tmp/daos_${b}-${log_num}.log"
+    echo "Running $* with log file: ${D_LOG_FILE}"
+
+    # We use flock as a way of locking /mnt/daos so multiple runs can't hit it
+    #     at the same time.
+    # We use grep to filter out any potential "SUCCESS! NO TEST FAILURES"
+    #    messages as daos_post_build.sh will look for this and mark the tests
+    #    as passed, which we don't want as we need to check all of the tests
+    #    before deciding this. Also, we intentionally leave off the last 'S'
+    #    in that error message so that we don't guarantee printing that in
+    #    every run's output, thereby making all tests here always pass.
+    if ! time $lock_test "$@"; then
+        echo "Test $* failed with exit status ${PIPESTATUS[0]}."
+        ((failed = failed + 1))
+        failures+=("$*")
+    fi
+
+    ((log_num += 1))
+
+    if [ -z "$RUN_TEST_VALGRIND" ]; then
+        XMLFILE=${DAOS_BASE}/test_results/${FILE}.xml
+    else
+        XMLFILE=${DAOS_BASE}/test_results/${FILE}_${RUN_TEST_VALGRIND}.xml
+    fi
+
+    SUITE=`grep "testsuite name=" $XMLFILE | grep -Po "name=\"\K.*(?=\" time=)"`
+    sed -i "s/testcase name=/testcase classname=\"${XMLSTAGE}_${CATEGORY}.${SUITE}\" name=/" ${XMLFILE}
+}
+
 if [ -d "/mnt/daos" ]; then
     # shellcheck disable=SC1091
     source ./.build_vars.sh
@@ -107,12 +148,22 @@ if [ -d "/mnt/daos" ]; then
     fi
 
     # Tests
-    run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/test_linkage"
-    run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt"
-    run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_producer"
-    run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_consumer"
-    run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_hlc"
-    run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_swim"
+    CATEGORY="Cart"
+    FILE="test_linkage"
+    run_test_n "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/test_linkage"
+    FILE="utest_hlc"
+    run_test_n "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_hlc"
+    FILE="utest_swim"
+    run_test_n "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_swim"
+
+    CATEGORY="Gurt"
+    FILE="test_gurt"
+    runn_test_n "${SL_BUILD_DIR}/src/gurt/tests/test_gurt"
+    FILE="test_gurt_telem_producer"
+    run_test_n "${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_producer"
+    FILE="test_gurt_telem_consumer"
+    run_test_n "${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_consumer"
+
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
     run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
     export DAOS_IO_BYPASS=pm

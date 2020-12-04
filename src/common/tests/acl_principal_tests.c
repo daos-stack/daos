@@ -265,7 +265,7 @@ free_test_group(struct group *grp)
 static void
 test_acl_uid_to_principal_null(void **state)
 {
-	assert_int_equal(daos_acl_uid_to_principal(2, NULL), -DER_INVAL);
+	assert_int_equal(daos_acl_uid_to_principal(2, NULL), 1);
 }
 
 static void
