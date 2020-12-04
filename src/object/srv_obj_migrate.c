@@ -1838,11 +1838,21 @@ retry:
 			continue;
 		} else if (rc && daos_anchor_get_flags(&dkey_anchor) &
 			   DIOF_TO_LEADER) {
-			daos_anchor_set_flags(&dkey_anchor,
-					      DIOF_WITH_SPEC_EPOCH |
-					      DIOF_TO_SPEC_GROUP);
-			D_DEBUG(DB_REBUILD, "No leader available %d retry"
-				DF_UOID"\n", rc, DP_UOID(arg->oid));
+			if (rc != -DER_INPROGRESS) {
+				daos_anchor_set_flags(&dkey_anchor,
+						      DIOF_WITH_SPEC_EPOCH |
+						      DIOF_TO_SPEC_GROUP);
+				D_DEBUG(DB_REBUILD, DF_UOID "retry to non"
+					"leader %d retry.\n", DP_UOID(arg->oid),
+					rc);
+			} else {
+				/* Keep retry on leader if it is inprogress,
+				 * since the new dtx leader might still
+				 * resync the uncommitted records.
+				 */
+				D_DEBUG(DB_REBUILD, "retry leader "DF_UOID"\n",
+					DP_UOID(arg->oid));
+			}
 			D_GOTO(retry, rc);
 		} else if (rc) {
 			/* container might have been destroyed. Or there is
