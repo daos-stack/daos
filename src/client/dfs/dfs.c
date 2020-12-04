@@ -1855,6 +1855,9 @@ lookup_rel_path_loop:
 
 			/* Cannot go outside the container */
 			if (daos_oid_cmp(parent.oid, dfs->root.oid) == 0) {
+				D_DEBUG(DB_TRACE,
+					"Failed to lookup path outside container: %s\n",
+					path);
 				D_GOTO(err_obj, rc = ENOENT);
 			}
 
@@ -2064,7 +2067,7 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 	   mode_t *mode, struct stat *stbuf)
 {
 	if (dfs == NULL || !dfs->mounted)
-	return EINVAL;
+		return EINVAL;
 	if (_obj == NULL)
 		return EINVAL;
 	if (path == NULL || strnlen(path, PATH_MAX) > PATH_MAX - 1)
