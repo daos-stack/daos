@@ -1438,7 +1438,8 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 			rc = PROBE_RC_ERR;
 			goto out;
 		}
-		D_ASSERTF(cmp == BTR_CMP_EQ, "Hash collision is unsupported\n");
+		D_ASSERTF(cmp == BTR_CMP_EQ,
+			  "Hash collision is unsupported cmp=%d\n", cmp);
 	}
 
 	alb.nd_off = nd_off;

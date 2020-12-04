@@ -244,21 +244,28 @@ static int
 ktr_key_cmp(struct btr_instance *tins, struct btr_record *rec,
 	    d_iov_t *key_iov)
 {
+	d_iov_t			 key;
 	struct vos_krec_df	*krec;
 	uint64_t		 feats = tins->ti_root->tr_feats;
 	int			 cmp = 0;
 
 	krec  = vos_rec2krec(tins, rec);
 
-	if (feats & VOS_KEY_CMP_LEXICAL)
+	if (feats & VOS_KEY_CMP_LEXICAL) {
 		cmp = ktr_key_cmp_lexical(krec, key_iov);
-	else
+	} else {
 		cmp = ktr_key_cmp_default(krec, key_iov);
+		if (!(feats & BTR_FEAT_DIRECT_KEY)) {
+			d_iov_set(&key, vos_krec2key(krec), krec->kr_size);
+			if (cmp == BTR_CMP_LT || cmp == BTR_CMP_GT) {
+				D_ERROR("hash collision detected "DF_KEY" != "
+					DF_KEY"\n", DP_KEY(key_iov),
+					DP_KEY(&key));
+			}
+		}
+	}
 
-	if (cmp != BTR_CMP_EQ)
-		return cmp;
-
-	return BTR_CMP_EQ;
+	return cmp;
 }
 
 static void
