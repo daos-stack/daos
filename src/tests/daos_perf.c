@@ -1339,7 +1339,7 @@ main(int argc, char **argv)
 			ts_zero_copy = true;
 			break;
 		case 'f':
-			if (strlen(optarg) > PATH_MAX - 5) {
+			if (strnlen(optarg, PATH_MAX) < (PATH_MAX - 5)) {
 				fprintf(stderr, "filename size must be < %d\n",
 					PATH_MAX - 5);
 				return -1;
