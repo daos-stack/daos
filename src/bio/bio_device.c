@@ -615,10 +615,11 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 
 	/* Scan all devices present in bio_bdev list */
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
+		char *dev_name = d_bdev->bb_removed ? NULL : d_bdev->bb_name;
+
 		s_info = find_smd_dev(d_bdev->bb_uuid, &s_dev_list);
 
-		b_info = alloc_dev_info(d_bdev->bb_uuid, d_bdev->bb_name,
-					s_info);
+		b_info = alloc_dev_info(d_bdev->bb_uuid, dev_name, s_info);
 		if (b_info == NULL) {
 			D_ERROR("Failed to allocate device info\n");
 			rc = -DER_NOMEM;

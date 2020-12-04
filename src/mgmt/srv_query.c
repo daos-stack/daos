@@ -291,6 +291,16 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 			break;
 		}
 		mgmt__smd_dev_resp__device__init(resp->devices[i]);
+		/*
+		 * XXX: These fields are initialized as "empty string" by above
+		 * protobuf auto-generated function, to avoid error cleanup
+		 * code mistakenly free the "empty string", let's reset them as
+		 * NULL.
+		 */
+		resp->devices[i]->uuid = NULL;
+		resp->devices[i]->state = NULL;
+		resp->devices[i]->traddr = NULL;
+
 		D_ALLOC(resp->devices[i]->uuid, DAOS_UUID_STR_SIZE);
 		if (resp->devices[i]->uuid == NULL) {
 			rc = -DER_NOMEM;
@@ -414,6 +424,9 @@ ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp)
 			break;
 		}
 		mgmt__smd_pool_resp__pool__init(resp->pools[i]);
+		/* See "empty string" comments in ds_mgmt_smd_list_devs() */
+		resp->pools[i]->uuid = NULL;
+
 		D_ALLOC(resp->pools[i]->uuid, DAOS_UUID_STR_SIZE);
 		if (resp->pools[i]->uuid == NULL) {
 			rc = -DER_NOMEM;
