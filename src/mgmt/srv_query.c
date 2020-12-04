@@ -299,7 +299,7 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 		 */
 		resp->devices[i]->uuid = NULL;
 		resp->devices[i]->state = NULL;
-		resp->devices[i]->traddr = NULL;
+		resp->devices[i]->tr_addr = NULL;
 
 		D_ALLOC(resp->devices[i]->uuid, DAOS_UUID_STR_SIZE);
 		if (resp->devices[i]->uuid == NULL) {
