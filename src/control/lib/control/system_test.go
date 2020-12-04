@@ -34,9 +34,9 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/ras"
 	"github.com/daos-stack/daos/src/control/system"
 	. "github.com/daos-stack/daos/src/control/system"
 )
@@ -1070,7 +1070,7 @@ func TestControl_SystemReformat(t *testing.T) {
 }
 
 func TestControl_SystemNotify(t *testing.T) {
-	rasEventRankFail := ras.NewRankFailEvent(0, 0, nil)
+	rasEventRankFail := events.NewRankFailEvent(0, 0, nil)
 
 	for name, tc := range map[string]struct {
 		req     *SystemNotifyReq

@@ -31,8 +31,8 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/ras"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
 
@@ -147,7 +147,7 @@ func (srv *IOServerInstance) exit(ctx context.Context, exitErr error) {
 	}
 
 	if _, err := srv.notifySystem(ctx, &control.SystemNotifyReq{
-		Event: ras.NewRankFailEvent(srvIdx, rank.Uint32(), exitErr),
+		Event: events.NewRankFailEvent(srvIdx, rank.Uint32(), exitErr),
 	}); err != nil {
 		srv.log.Errorf("notifySystem: %s", err)
 	}

@@ -38,8 +38,8 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
-	"github.com/daos-stack/daos/src/control/ras"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -150,7 +150,7 @@ type SystemNotifyReq struct {
 	msRequest
 	lookupAddrFn LookupAddrFn
 	ControlAddr  *net.TCPAddr
-	Event        *ras.Event
+	Event        *events.RASEvent
 }
 
 // MarshalJSON packs SystemNotifyResp struct into a JSON message.

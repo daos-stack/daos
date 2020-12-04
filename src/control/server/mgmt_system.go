@@ -38,7 +38,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/ras"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -742,11 +742,11 @@ func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *mgmtpb.ClusterEventRe
 			req.GetEvent())
 	}
 
-	rasEvent := new(ras.Event)
+	rasEvent := new(events.RASEvent)
 	if err := convert.Types(rasEventPB, rasEvent); err != nil {
 		return nil, errors.Wrap(err, "convert proto to ras event")
 	}
-	if err := ras.ProcessEvent(svc.log, rasEvent); err != nil {
+	if err := events.ProcessRASEvent(svc.log, rasEvent); err != nil {
 		return nil, err
 	}
 

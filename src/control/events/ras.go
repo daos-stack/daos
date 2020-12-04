@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package ras
+package events
 
 /*
 #include "daos_srv/ras.h"
@@ -36,69 +36,69 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-// EventID describes a given RAS event.
-type EventID uint32
+// RASID describes a given RAS event.
+type RASID uint32
 
-// EventID constant definitions.
+// RASID constant definitions.
 const (
-	EventRankFail   EventID = C.RAS_RANK_FAIL
-	EventRankNoResp EventID = C.RAS_RANK_NO_RESP
+	RASRankFail   RASID = C.RAS_RANK_FAIL
+	RASRankNoResp RASID = C.RAS_RANK_NO_RESP
 )
 
-func (id EventID) String() string {
+func (id RASID) String() string {
 	return C.GoString(C.ras_event_id_enum_to_name(uint32(id)))
 }
 
 // Desc returns a description of the event.
-func (id EventID) Desc() string {
+func (id RASID) Desc() string {
 	return C.GoString(C.ras_event_id_enum_to_msg(uint32(id)))
 }
 
 // Uint32 returns uint32 representation of event ID.
-func (id EventID) Uint32() uint32 {
+func (id RASID) Uint32() uint32 {
 	return uint32(id)
 }
 
-// EventSeverityID describes the severity of a given RAS event.
-type EventSeverityID uint32
+// RASSeverityID describes the severity of a given RAS event.
+type RASSeverityID uint32
 
-// EventSeverityID constant definitions.
+// RASSeverityID constant definitions.
 const (
-	EventSeverityFatal EventSeverityID = C.RAS_SEV_FATAL
-	EventSeverityWarn  EventSeverityID = C.RAS_SEV_WARN
-	EventSeverityError EventSeverityID = C.RAS_SEV_ERROR
-	EventSeverityInfo  EventSeverityID = C.RAS_SEV_INFO
+	RASSeverityFatal RASSeverityID = C.RAS_SEV_FATAL
+	RASSeverityWarn  RASSeverityID = C.RAS_SEV_WARN
+	RASSeverityError RASSeverityID = C.RAS_SEV_ERROR
+	RASSeverityInfo  RASSeverityID = C.RAS_SEV_INFO
 )
 
-func (sev EventSeverityID) String() string {
+func (sev RASSeverityID) String() string {
 	return C.GoString(C.ras_event_sev_enum_to_name(uint32(sev)))
 }
 
 // Uint32 returns uint32 representation of event severity.
-func (sev EventSeverityID) Uint32() uint32 {
+func (sev RASSeverityID) Uint32() uint32 {
 	return uint32(sev)
 }
 
-// EventTypeID describes the type of a given RAS event.
-type EventTypeID uint32
+// RASTypeID describes the type of a given RAS event.
+type RASTypeID uint32
 
-// EventTypeID constant definitions.
+// RASTypeID constant definitions.
 const (
-	EventTypeStateChange EventTypeID = C.RAS_TYPE_STATE_CHANGE
-	EventTypeInfoOnly    EventTypeID = C.RAS_TYPE_INFO_ONLY
+	RASTypeStateChange RASTypeID = C.RAS_TYPE_STATE_CHANGE
+	RASTypeInfoOnly    RASTypeID = C.RAS_TYPE_INFO_ONLY
 )
 
-func (typ EventTypeID) String() string {
+func (typ RASTypeID) String() string {
 	return C.GoString(C.ras_event_type_enum_to_name(uint32(typ)))
 }
 
 // Uint32 returns uint32 representation of event type.
-func (typ EventTypeID) Uint32() uint32 {
+func (typ RASTypeID) Uint32() uint32 {
 	return uint32(typ)
 }
 
-// Event describes details of a specific RAS event.
-type Event struct {
+// RASEvent describes details of a specific RAS event.
+type RASEvent struct {
 	Name        string `json:"name"`
 	Timestamp   string `json:"timestamp"`
 	Msg         string `json:"msg"`
@@ -106,16 +106,16 @@ type Event struct {
 	Data        []byte `json:"data"`
 	Rank        uint32 `json:"rank"`
 	InstanceIdx uint32 `json:"instance_idx"`
-	ID          EventID
-	Severity    EventSeverityID
-	Type        EventTypeID
+	ID          RASID
+	Severity    RASSeverityID
+	Type        RASTypeID
 }
 
-// MarshalJSON marshals ras.Event to JSON.
-func (evt *Event) MarshalJSON() ([]byte, error) {
+// MarshalJSON marshals RASEvent to JSON.
+func (evt *RASEvent) MarshalJSON() ([]byte, error) {
 	// use a type alias to leverage the default marshal for
 	// most fields
-	type toJSON Event
+	type toJSON RASEvent
 	return json.Marshal(&struct {
 		ID       uint32
 		Severity uint32
@@ -129,15 +129,15 @@ func (evt *Event) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// UnmarshalJSON unmarshals ras.Event from JSON.
-func (evt *Event) UnmarshalJSON(data []byte) error {
+// UnmarshalJSON unmarshals RASEvent from JSON.
+func (evt *RASEvent) UnmarshalJSON(data []byte) error {
 	if string(data) == "null" {
 		return nil
 	}
 
 	// use a type alias to leverage the default unmarshal for
 	// most fields
-	type fromJSON Event
+	type fromJSON RASEvent
 	from := &struct {
 		ID       uint32
 		Severity uint32
@@ -151,15 +151,15 @@ func (evt *Event) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	evt.ID = EventID(from.ID)
-	evt.Severity = EventSeverityID(from.Severity)
-	evt.Type = EventTypeID(from.Type)
+	evt.ID = RASID(from.ID)
+	evt.Severity = RASSeverityID(from.Severity)
+	evt.Type = RASTypeID(from.Type)
 
 	return nil
 }
 
-// ProcessEvent evaluates and actions the given RAS event.
-func ProcessEvent(log logging.Logger, evt *Event) error {
+// ProcessRASEvent evaluates and actions the given RAS event.
+func ProcessRASEvent(log logging.Logger, evt *RASEvent) error {
 	if evt == nil {
 		return errors.New("attempt to process nil ras event")
 	}
@@ -167,7 +167,7 @@ func ProcessEvent(log logging.Logger, evt *Event) error {
 		evt.Hostname)
 
 	switch evt.ID {
-	case EventRankFail, EventRankNoResp:
+	case RASRankFail, RASRankNoResp:
 		log.Debugf("processing %s (%s) event", evt.ID.String(), evt.ID.Desc())
 	default:
 		return errors.Errorf("unknown event ID: %d", evt.ID)

@@ -21,10 +21,9 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package ras
+package events
 
 import (
-	"encoding/json"
 	"time"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -34,7 +33,7 @@ var RankExit rankExit
 
 // RankExitPayload is the data for when a DAOS rank exits.
 type RankExitPayload struct {
-	*Event
+	*RASEvent
 	InstanceIdx uint32
 	ExitErr     error
 }
@@ -59,25 +58,24 @@ func (re rankExit) Trigger(payload RankExitPayload) {
 // with RAS info.
 //
 // Hostname should be populated by caller.
-func NewRankFailEvent(instanceIdx uint32, rank uint32, exitErr error) *Event {
-	evt := &Event{
-		Name:        EventRankFail.String(),
+func NewRankFailEvent(instanceIdx uint32, rank uint32, exitErr error) *RASEvent {
+	evt := &RASEvent{
+		Name:        RASRankFail.String(),
 		Timestamp:   common.FormatTime(time.Now().UTC()),
-		Msg:         EventRankFail.Desc(),
+		Msg:         RASRankFail.Desc(),
 		InstanceIdx: instanceIdx,
-		ID:          EventRankFail,
+		ID:          RASRankFail,
 		Rank:        rank,
-		Type:        EventTypeStateChange,
-		Severity:    EventSeverityInfo,
+		Type:        RASTypeStateChange,
+		Severity:    RASSeverityInfo,
 	}
 
 	if exitErr != nil {
-		evt.Severity = EventSeverityError
-		// encode exit error message in event
-		// marshal on string will never fail
-		errBytes, _ := json.Marshal(exitErr.Error())
-		evt.Data = errBytes
+		evt.Severity = RASSeverityError
 	}
+	// TODO: change function to generate RankExitPayload which when
+	// converted will populate EventInfo proto field with relevant oneof for
+	// specific payload including the exit error and instance index.
 
 	return evt
 }

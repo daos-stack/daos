@@ -43,9 +43,9 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/ras"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
@@ -121,12 +121,12 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
-	rasEventRankFail := ras.NewRankFailEvent(0, 0, nil)
+	rasEventRankFail := events.NewRankFailEvent(0, 0, nil)
 
 	for name, tc := range map[string]struct {
 		nilReq   bool
 		zeroSeq  bool
-		rasEvent *ras.Event
+		rasEvent *events.RASEvent
 		expResp  *mgmtpb.ClusterEventResp
 		expErr   error
 	}{
@@ -145,7 +145,7 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			},
 		},
 		"unknown event type": {
-			rasEvent: &ras.Event{ID: math.MaxUint32},
+			rasEvent: &events.RASEvent{ID: math.MaxUint32},
 			expErr:   errors.New("unknown event ID"),
 		},
 	} {
