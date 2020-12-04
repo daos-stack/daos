@@ -177,7 +177,6 @@ class OSAOfflineParallelTest(OSAUtils):
         if data:
             self.verify_single_object()
 
-    @skipForTicket("DAOS-6107")
     def test_osa_offline_parallel_test(self):
         """
         JIRA ID: DAOS-4752
