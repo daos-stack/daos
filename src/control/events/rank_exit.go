@@ -29,6 +29,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 )
 
+// RankExit event indicates a termination of a rank process.
 var RankExit rankExit
 
 // RankExitPayload is the data for when a DAOS rank exits.
@@ -60,14 +61,13 @@ func (re rankExit) Trigger(payload RankExitPayload) {
 // Hostname should be populated by caller.
 func NewRankFailEvent(instanceIdx uint32, rank uint32, exitErr error) *RASEvent {
 	evt := &RASEvent{
-		Name:        RASRankFail.String(),
-		Timestamp:   common.FormatTime(time.Now().UTC()),
-		Msg:         RASRankFail.Desc(),
-		InstanceIdx: instanceIdx,
-		ID:          RASRankFail,
-		Rank:        rank,
-		Type:        RASTypeStateChange,
-		Severity:    RASSeverityInfo,
+		Name:      RASRankFail.String(),
+		Timestamp: common.FormatTime(time.Now()),
+		Msg:       RASRankFail.Desc(),
+		ID:        RASRankFail,
+		Rank:      rank,
+		Type:      RASTypeStateChange,
+		Severity:  RASSeverityInfo,
 	}
 
 	if exitErr != nil {
