@@ -22,3 +22,43 @@
 //
 
 package events
+
+import (
+	"testing"
+
+	"github.com/google/go-cmp/cmp"
+
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+)
+
+func TestEvents_ConvertRASEvent(t *testing.T) {
+	rasEvent := &RASEvent{
+		Name:      "some name",
+		Timestamp: "some date",
+		Msg:       "some message",
+		Hostname:  "some hostname",
+		Rank:      1,
+		ID:        RASRankNoResp,
+		Severity:  RASSeverityInfo,
+		Type:      RASTypeInfoOnly,
+	}
+
+	pbRASEvent := new(mgmtpb.RASEvent)
+	if err := convert.Types(rasEvent, pbRASEvent); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Logf("proto ras event: %+v", pbRASEvent)
+
+	returnedRASEvent := new(RASEvent)
+	if err := convert.Types(pbRASEvent, returnedRASEvent); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Logf("native ras event: %+v", returnedRASEvent)
+
+	if diff := cmp.Diff(rasEvent, returnedRASEvent); diff != "" {
+		t.Fatalf("unexpected event (-want, +got):\n%s\n", diff)
+	}
+}

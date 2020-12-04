@@ -99,15 +99,15 @@ func (typ RASTypeID) Uint32() uint32 {
 
 // RASEvent describes details of a specific RAS event.
 type RASEvent struct {
-	Name      string        `json:"name"`
-	Timestamp string        `json:"timestamp"`
-	Msg       string        `json:"msg"`
-	Hostname  string        `json:"hostname"`
-	Data      []byte        `json:"data"`
-	Rank      uint32        `json:"rank"`
-	ID        RASID         `json:"id"`
-	Severity  RASSeverityID `json:"severity"`
-	Type      RASTypeID     `json:"type"`
+	Name      string `json:"name"`
+	Timestamp string `json:"timestamp"`
+	Msg       string `json:"msg"`
+	Hostname  string `json:"hostname"`
+	Data      []byte `json:"data"`
+	Rank      uint32 `json:"rank"`
+	ID        RASID
+	Severity  RASSeverityID
+	Type      RASTypeID
 }
 
 // MarshalJSON marshals RASEvent to JSON.
