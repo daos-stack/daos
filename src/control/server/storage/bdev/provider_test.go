@@ -239,8 +239,9 @@ func TestBdevScan(t *testing.T) {
 		expVMDDisabled bool
 	}{
 		"no devices": {
-			req:    ScanRequest{},
-			expRes: &ScanResponse{},
+			req:            ScanRequest{},
+			expRes:         &ScanResponse{},
+			expVMDDisabled: true, // disabled in mock by default
 		},
 		"single device": {
 			req: ScanRequest{},
@@ -248,6 +249,7 @@ func TestBdevScan(t *testing.T) {
 				ScanRes: &ScanResponse{
 					Controllers: storage.NvmeControllers{ctrlr1},
 				},
+				VmdEnabled: true,
 			},
 			expRes: &ScanResponse{
 				Controllers: storage.NvmeControllers{ctrlr1},
@@ -267,6 +269,7 @@ func TestBdevScan(t *testing.T) {
 					ctrlr1, ctrlr2, ctrlr3,
 				},
 			},
+			expVMDDisabled: true,
 		},
 		"multiple devices with vmd disabled": {
 			req:       ScanRequest{DisableVMD: true},

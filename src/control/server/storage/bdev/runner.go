@@ -80,7 +80,7 @@ func run(log logging.Logger, env []string, cmdStr string, args ...string) (strin
 	log.Debugf("running script: %s", cmdPath)
 	cmd := exec.Command(cmdPath, args...)
 	cmd.Env = env
-	out, err := cmd.Output()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", &runCmdError{
 			wrapped: err,

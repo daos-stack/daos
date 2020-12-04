@@ -2281,6 +2281,7 @@ vos_dtx_pin(struct dtx_handle *dth)
 {
 	struct vos_container	*cont;
 	struct umem_instance	*umm;
+	bool			 began = false;
 	int			 rc;
 
 	D_ASSERT(dtx_is_valid_handle(dth));
@@ -2293,23 +2294,26 @@ vos_dtx_pin(struct dtx_handle *dth)
 	D_ASSERT(cont != NULL);
 
 	umm = vos_cont2umm(cont);
-	rc = vos_dtx_alloc(umm, dth);
+	rc = umem_tx_begin(umm, NULL);
 	if (rc != 0)
 		goto out;
 
-	rc = umem_tx_begin(umm, NULL);
-	if (rc == 0) {
+	began = true;
+	rc = vos_dtx_alloc(umm, dth);
+	if (rc == 0)
 		rc = vos_dtx_prepared(dth);
-		rc = umem_tx_end(umm, rc);
-	}
-
-	if (rc != 0)
-		vos_dtx_cleanup_internal(dth);
 
 out:
-	if (rc != 0)
+	if (rc != 0) {
+		if (dth->dth_ent != NULL)
+			vos_dtx_cleanup_internal(dth);
+
 		D_ERROR("Failed to pin DTX entry for "DF_DTI": "DF_RC"\n",
 			DP_DTI(&dth->dth_xid), DP_RC(rc));
+	}
+
+	if (began)
+		rc = umem_tx_end(umm, rc);
 
 	return rc;
 }
