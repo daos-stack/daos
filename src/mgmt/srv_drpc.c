@@ -740,13 +740,12 @@ out:
 
 void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	struct drpc_alloc		alloc = PROTO_ALLOCATOR_INIT(alloc);
-	Mgmt__PoolSetPropReq	*req         = NULL;
-	Mgmt__PoolSetPropResp	 resp        = MGMT__POOL_SET_PROP_RESP__INIT;
-	daos_prop_t		*new_prop    = NULL;
-	daos_prop_t		*result      = NULL;
-	char			*out_str_val = NULL;
-	struct daos_prop_entry	*entry;
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__PoolSetPropReq	*req = NULL;
+	Mgmt__PoolSetPropResp	 resp = MGMT__POOL_SET_PROP_RESP__INIT;
+	daos_prop_t		*new_prop = NULL;
+	daos_prop_t		*result = NULL;
+	struct daos_prop_entry	*entry = NULL;
 	uuid_t			 uuid;
 	d_rank_list_t		*svc_ranks = NULL;
 	uint8_t			*body;
@@ -786,10 +785,16 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	switch (req->value_case) {
 	case MGMT__POOL_SET_PROP_REQ__VALUE_STRVAL:
-		D_ASPRINTF(out_str_val, "%s", req->strval);
-		if (out_str_val == NULL)
+		if (req->strval == NULL) {
+			D_ERROR("string value is NULL\n");
+			D_GOTO(out, rc = -DER_PROTO);
+		}
+
+		entry = &new_prop->dpp_entries[0];
+		D_STRNDUP(entry->dpe_str, req->strval,
+			  DAOS_PROP_LABEL_MAX_LEN);
+		if (entry->dpe_str == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-		new_prop->dpp_entries[0].dpe_str = out_str_val;
 		break;
 	case MGMT__POOL_SET_PROP_REQ__VALUE_NUMVAL:
 		new_prop->dpp_entries[0].dpe_val = req->numval;
@@ -857,7 +862,6 @@ out_ranks:
 	d_rank_list_free(svc_ranks);
 out:
 	daos_prop_free(new_prop);
-	D_FREE(out_str_val);
 
 	resp.status = rc;
 	len = mgmt__pool_set_prop_resp__get_packed_size(&resp);
