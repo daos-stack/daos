@@ -545,12 +545,46 @@ out:
 	return rc;
 }
 
+struct bio_faulty_dev_info {
+	uuid_t          devid;
+};
+
+static int
+bio_faulty_led_set(void *arg)
+{
+	struct bio_faulty_dev_info *faulty_info = arg;
+	struct dss_module_info	   *info = dss_get_module_info();
+	struct bio_xs_context	   *bxc;
+	int			    rc;
+
+	D_ASSERT(info != NULL);
+	D_DEBUG(DB_MGMT, "BIO health state set on xs:%d, tgt:%d\n",
+		info->dmi_xs_id, info->dmi_tgt_id);
+
+	bxc = info->dmi_nvme_ctxt;
+	if (bxc == NULL) {
+		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
+			info->dmi_xs_id, info->dmi_tgt_id);
+		return -DER_INVAL;
+	}
+
+	/* Set the LED of the VMD device to a FAULT state */
+	rc = bio_set_led_state(bxc, faulty_info->devid, "fault",
+			       false/*reset*/);
+	if (rc != 0)
+		D_ERROR("Error managing LED on device:"DF_UUID"\n",
+			DP_UUID(faulty_info->devid));
+
+	return 0;
+
+}
+
 static void
 bio_faulty_state_set(void *arg)
 {
-	struct dss_module_info	*info = dss_get_module_info();
-	struct bio_xs_context	*bxc;
-	int			 rc;
+	struct dss_module_info	   *info = dss_get_module_info();
+	struct bio_xs_context	   *bxc;
+	int			    rc;
 
 	D_ASSERT(info != NULL);
 	D_DEBUG(DB_MGMT, "BIO health state set on xs:%d, tgt:%d\n",
@@ -573,11 +607,12 @@ bio_faulty_state_set(void *arg)
 int
 ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
 {
-	struct smd_dev_info	*dev_info;
-	ABT_thread		 thread;
-	int			 tgt_id;
-	int			 buflen = 10;
-	int			 rc = 0;
+	struct bio_faulty_dev_info  faulty_info = { 0 };
+	struct smd_dev_info	   *dev_info;
+	ABT_thread		    thread;
+	int			    tgt_id;
+	int			    buflen = 10;
+	int			    rc = 0;
 
 	if (uuid_is_null(dev_uuid))
 		return -DER_INVAL;
@@ -630,6 +665,15 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
 
 	ABT_thread_join(thread);
 	ABT_thread_free(&thread);
+
+	uuid_copy(faulty_info.devid, dev_uuid);
+	/* set the VMD LED to FAULTY state on init xstream */
+	rc = dss_ult_execute(bio_faulty_led_set, &faulty_info, NULL,
+			     NULL, DSS_ULT_GC, 0, 0);
+	if (rc) {
+		D_ERROR("FAULT LED state not set on device:"DF_UUID"\n",
+			DP_UUID(dev_uuid));
+	}
 
 out:
 	dev_info->sdi_state = SMD_DEV_FAULTY;
