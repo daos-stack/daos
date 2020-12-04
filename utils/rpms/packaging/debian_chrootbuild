@@ -40,4 +40,4 @@ cd "$DEB_TOP"
 # shellcheck disable=SC2086
 sudo pbuilder update --override-config $DISTRO_ID_OPT ${repo_args:+--othermirror "$repo_args"}
 # fail the build if the *.symbols file(s) need updating
-sudo DPKG_GENSYMBOLS_CHECK_LEVEL="${DPKG_GENSYMBOLS_CHECK_LEVEL:-4}" pbuilder build "$DEB_DSC"
+sudo SCONS_ARGS="${SCONS_ARGS}" DPKG_GENSYMBOLS_CHECK_LEVEL="${DPKG_GENSYMBOLS_CHECK_LEVEL:-4}" pbuilder build "$DEB_DSC"

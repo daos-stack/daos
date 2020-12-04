@@ -59,9 +59,9 @@ func SplitPort(addrPattern string, defaultPort int) (string, string, error) {
 	return host, port, err
 }
 
-// CmpTcpAddr compares two *net.TCPAddr instances and returns
+// CmpTCPAddr compares two *net.TCPAddr instances and returns
 // true if they are equivalent, false otherwise.
-func CmpTcpAddr(a, b *net.TCPAddr) bool {
+func CmpTCPAddr(a, b *net.TCPAddr) bool {
 	if a == nil && b == nil {
 		return true
 	}
@@ -107,4 +107,29 @@ func LocalhostCtrlAddr() *net.TCPAddr {
 		IP:   net.IPv4(127, 0, 0, 1),
 		Port: build.DefaultControlPort,
 	}
+}
+
+// ParsePCIAddress returns separated components of BDF format PCI address.
+func ParsePCIAddress(addr string) (dom, bus, dev, fun uint64, err error) {
+	parts := strings.Split(addr, ":")
+	devFunc := strings.Split(parts[len(parts)-1], ".")
+	if len(parts) != 3 || len(devFunc) != 2 {
+		err = errors.Errorf("unexpected pci address bdf format: %q", addr)
+		return
+	}
+
+	if dom, err = strconv.ParseUint(parts[0], 16, 64); err != nil {
+		return
+	}
+	if bus, err = strconv.ParseUint(parts[1], 16, 32); err != nil {
+		return
+	}
+	if dev, err = strconv.ParseUint(devFunc[0], 16, 32); err != nil {
+		return
+	}
+	if fun, err = strconv.ParseUint(devFunc[1], 16, 32); err != nil {
+		return
+	}
+
+	return
 }

@@ -243,8 +243,6 @@ int daos_array_find(void *array, unsigned int len, uint64_t key,
 		    daos_sort_ops_t *ops);
 void daos_array_shuffle(void *arr, unsigned int len, daos_sort_ops_t *ops);
 
-int  daos_sgl_init(d_sg_list_t *sgl, unsigned int nr);
-void daos_sgl_fini(d_sg_list_t *sgl, bool free_iovs);
 int daos_sgls_copy_ptr(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
 		       int src_nr);
 int daos_sgls_copy_data_out(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
@@ -509,6 +507,7 @@ daos_der2errno(int err)
 	case -DER_BADPATH:
 	case -DER_NOTDIR:	return ENOTDIR;
 	case -DER_STALE:	return ESTALE;
+	case -DER_TX_RESTART:	return ERESTART;
 	default:		return EIO;
 	}
 };

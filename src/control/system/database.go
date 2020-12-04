@@ -141,7 +141,7 @@ func (sr *syncRaft) withReadLock(fn func(raftService) error) error {
 
 func (cfg *DatabaseConfig) stringReplicas(excludeAddr *net.TCPAddr) (replicas []string) {
 	for _, r := range cfg.Replicas {
-		if common.CmpTcpAddr(r, excludeAddr) {
+		if common.CmpTCPAddr(r, excludeAddr) {
 			continue
 		}
 		replicas = append(replicas, r.String())
@@ -194,8 +194,9 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) (*Database, error) {
 				Addrs: make(MemberAddrMap),
 			},
 			Pools: &PoolDatabase{
-				Ranks: make(PoolRankMap),
-				Uuids: make(PoolUuidMap),
+				Ranks:  make(PoolRankMap),
+				Uuids:  make(PoolUuidMap),
+				Labels: make(PoolLabelMap),
 			},
 			SchemaVersion: CurrentSchemaVersion,
 		},
@@ -215,7 +216,7 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) (*Database, error) {
 // a known replica address.
 func (db *Database) isReplica(ctrlAddr *net.TCPAddr) bool {
 	for _, candidate := range db.cfg.Replicas {
-		if common.CmpTcpAddr(ctrlAddr, candidate) {
+		if common.CmpTCPAddr(ctrlAddr, candidate) {
 			return true
 		}
 	}
@@ -271,7 +272,7 @@ func (db *Database) IsBootstrap() bool {
 	}
 	// Only the first replica should bootstrap. All the others
 	// should be added as voters.
-	return common.CmpTcpAddr(db.cfg.Replicas[0], db.getReplica())
+	return common.CmpTCPAddr(db.cfg.Replicas[0], db.getReplica())
 }
 
 // CheckReplica returns an error if the node is not a replica.
@@ -606,7 +607,7 @@ func (db *Database) AddMember(newMember *Member) error {
 
 	// If the new member is hosted by a MS replica other than this one,
 	// add it as a voter.
-	if !common.CmpTcpAddr(db.getReplica(), newMember.Addr) {
+	if !common.CmpTCPAddr(db.getReplica(), newMember.Addr) {
 		if db.isReplica(newMember.Addr) {
 			repAddr := newMember.Addr
 			rsi := raft.ServerID(repAddr.String())
@@ -691,6 +692,14 @@ func (db *Database) FindMembersByAddr(addr *net.TCPAddr) ([]*Member, error) {
 	return nil, &ErrMemberNotFound{byAddr: addr}
 }
 
+// copyPoolService makes a copy of the supplied PoolService pointer
+// for safe use outside of the database.
+func copyPoolService(in *PoolService) *PoolService {
+	out := new(PoolService)
+	*out = *in
+	return out
+}
+
 // PoolServiceList returns a list of pool services registered
 // with the system.
 func (db *Database) PoolServiceList() ([]*PoolService, error) {
@@ -705,9 +714,8 @@ func (db *Database) PoolServiceList() ([]*PoolService, error) {
 	// elsewhere.
 	dbCopy := make([]*PoolService, len(db.data.Pools.Uuids))
 	copyIdx := 0
-	for _, dbRec := range db.data.Pools.Uuids {
-		dbCopy[copyIdx] = new(PoolService)
-		*dbCopy[copyIdx] = *dbRec
+	for _, ps := range db.data.Pools.Uuids {
+		dbCopy[copyIdx] = copyPoolService(ps)
 		copyIdx++
 	}
 	return dbCopy, nil
@@ -723,10 +731,26 @@ func (db *Database) FindPoolServiceByUUID(uuid uuid.UUID) (*PoolService, error) 
 	defer db.data.RUnlock()
 
 	if p, found := db.data.Pools.Uuids[uuid]; found {
-		return p, nil
+		return copyPoolService(p), nil
 	}
 
 	return nil, &ErrPoolNotFound{byUUID: &uuid}
+}
+
+// FindPoolServiceByLabel searches the pool database by Label. If no
+// pool service is found, an error is returned.
+func (db *Database) FindPoolServiceByLabel(label string) (*PoolService, error) {
+	if err := db.CheckLeader(); err != nil {
+		return nil, err
+	}
+	db.data.RLock()
+	defer db.data.RUnlock()
+
+	if p, found := db.data.Pools.Labels[label]; found {
+		return copyPoolService(p), nil
+	}
+
+	return nil, &ErrPoolNotFound{byLabel: &label}
 }
 
 // AddPoolService creates an entry for a new pool service in the pool database.
