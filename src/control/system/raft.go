@@ -370,8 +370,7 @@ func (d *dbData) applyPoolUpdate(op raftOp, data []byte) {
 		if !found {
 			panic(errors.Errorf("pool service update for unknown pool %+v", ps))
 		}
-		cur.State = ps.State
-		cur.Replicas = ps.Replicas
+		d.Pools.updateService(cur, ps)
 	case raftOpRemovePoolService:
 		d.Pools.removeService(ps)
 	default:
