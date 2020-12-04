@@ -1260,57 +1260,104 @@ out:
 }
 
 static int
-rw_iod_pack(struct migrate_one *mrone, daos_iod_t *iod, d_sg_list_t *sgls)
+migrate_one_iod_merge_recx(daos_unit_oid_t oid, daos_iod_t *dst_iod,
+			   daos_iod_t *src_iod);
+
+static int
+rw_iod_pack(struct migrate_one *mrone, daos_iod_t *iod, d_sg_list_t *sgl)
 {
-	int idx = mrone->mo_iod_num;
-	int rec_cnt = 0;
 	uint64_t total_size = 0;
-	int i;
-	int rc;
+	int	 rec_cnt = 0;
+	bool	 free_recxs = true;
+	int	 i;
+	int	 rc;
 
 	D_ASSERT(iod->iod_size > 0);
 
-	rc = daos_iod_copy(&mrone->mo_iods[idx], iod);
-	if (rc)
-		return rc;
-
-	for (i = 0; i < iod->iod_nr; i++) {
-		D_DEBUG(DB_REBUILD, "recx "DF_U64"/"DF_U64"\n",
-			iod->iod_recxs[i].rx_idx, iod->iod_recxs[i].rx_nr);
-		rec_cnt += iod->iod_recxs[i].rx_nr;
-		total_size += iod->iod_recxs[i].rx_nr * iod->iod_size;
+	if (sgl && mrone->mo_sgls == NULL) {
+		D_ASSERT(mrone->mo_iod_alloc_num > 0);
+		D_ALLOC_ARRAY(mrone->mo_sgls, mrone->mo_iod_alloc_num);
+		if (mrone->mo_sgls == NULL)
+			return -DER_NOMEM;
 	}
+
+	for (i = 0; i < mrone->mo_iod_num; i++) {
+		if (daos_iov_cmp(&mrone->mo_iods[i].iod_name,
+				 &iod->iod_name))
+			break;
+	}
+
+	if (i < mrone->mo_iod_num) {
+		daos_iod_t *dst_iod = &mrone->mo_iods[i];
+
+		/*merge the iods to the existent IOD */
+		D_DEBUG(DB_REBUILD, "Merge akey "DF_KEY" to %d\n",
+			DP_KEY(&iod->iod_name), i);
+		if (dst_iod->iod_size != iod->iod_size ||
+		    dst_iod->iod_type != iod->iod_type) {
+			D_ERROR(DF_KEY" dst_iod size "DF_U64" != "DF_U64
+				" dst_iod type %d != %d\n",
+				DP_KEY(&iod->iod_name), dst_iod->iod_size,
+				iod->iod_size, dst_iod->iod_type,
+				iod->iod_type);
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+
+		rc = migrate_one_iod_merge_recx(mrone->mo_oid, dst_iod, iod);
+		if (rc)
+			D_GOTO(out, rc);
+
+		if (sgl) {
+			rc = daos_sgl_merge(&mrone->mo_sgls[i], sgl);
+			if (rc)
+				D_GOTO(out, rc);
+		}
+	} else {
+		rc = daos_iod_copy(&mrone->mo_iods[i], iod);
+		if (rc)
+			D_GOTO(out, rc);
+
+		free_recxs = false;
+		mrone->mo_iod_num++;
+		if (sgl) {
+			rc = daos_sgl_alloc_copy_data(&mrone->mo_sgls[i], sgl);
+			if (rc)
+				D_GOTO(out, rc);
+		}
+	}
+
+	if (iod->iod_type == DAOS_IOD_SINGLE) {
+		mrone->mo_iods[i].iod_recxs = NULL;
+		rec_cnt = 1;
+		total_size = iod->iod_size;
+	} else {
+		for (i = 0; i < iod->iod_nr; i++) {
+			D_DEBUG(DB_REBUILD, "recx "DF_U64"/"DF_U64"\n",
+				iod->iod_recxs[i].rx_idx,
+				iod->iod_recxs[i].rx_nr);
+			rec_cnt += iod->iod_recxs[i].rx_nr;
+			total_size += iod->iod_recxs[i].rx_nr * iod->iod_size;
+		}
+	}
+
+	/**
+	 * If free_recxs is true, then the caller needs to free iod_recxs later,
+	 * so do not set iod_recxs to NULL here, otherwise this mrone will
+	 * reuse recxs.
+	 */
+	if (!free_recxs)
+		iod->iod_recxs = NULL;
 
 	D_DEBUG(DB_REBUILD,
 		"idx %d akey "DF_KEY" nr %d size "DF_U64" type %d rec %d total "
-		DF_U64"\n", idx, DP_KEY(&iod->iod_name), iod->iod_nr,
-		iod->iod_size, iod->iod_type, rec_cnt, total_size);
+		DF_U64"\n", mrone->mo_iod_num - 1, DP_KEY(&iod->iod_name),
+		iod->iod_nr, iod->iod_size, iod->iod_type, rec_cnt, total_size);
 
-	/* Check if data has been retrieved by iteration */
-	if (sgls) {
-		if (mrone->mo_sgls == NULL) {
-			D_ASSERT(mrone->mo_iod_alloc_num > 0);
-			D_ALLOC_ARRAY(mrone->mo_sgls, mrone->mo_iod_alloc_num);
-			if (mrone->mo_sgls == NULL)
-				return -DER_NOMEM;
-		}
-
-		rc = daos_sgl_alloc_copy_data(&mrone->mo_sgls[idx], sgls);
-		if (rc)
-			D_GOTO(out, rc);
-	}
-
-	if (iod->iod_type == DAOS_IOD_SINGLE)
-		mrone->mo_iods[idx].iod_recxs = NULL;
-	else
-		iod->iod_recxs = NULL;
-
-	mrone->mo_iod_num++;
 	mrone->mo_rec_num += rec_cnt;
 	mrone->mo_size += total_size;
 
 out:
-	return 0;
+	return rc;
 }
 
 static int
@@ -1527,7 +1574,13 @@ migrate_one_insert(struct enum_unpack_arg *arg,
 	if (mrone->mo_akey_punch_ephs == NULL)
 		D_GOTO(free, rc = -DER_NOMEM);
 
+	mrone->mo_oid = oid;
+	mrone->mo_oid.id_shard = iter_arg->shard;
+	uuid_copy(mrone->mo_cont_uuid, iter_arg->cont_uuid);
+	uuid_copy(mrone->mo_pool_uuid, tls->mpt_pool_uuid);
+	mrone->mo_pool_tls_version = tls->mpt_version;
 	mrone->mo_iod_alloc_num = iod_eph_total;
+
 	/* only do the copy below when each with inline recx data */
 	for (i = 0; i < iod_eph_total; i++) {
 		int j;
@@ -1561,22 +1614,22 @@ migrate_one_insert(struct enum_unpack_arg *arg,
 
 		if (iods[i].iod_size == 0) {
 			rc = punch_iod_pack(mrone, &iods[i], rec_ephs[i]);
+			if (rc)
+				D_GOTO(free, rc);
 		} else {
 			rc = rw_iod_pack(mrone, &iods[i],
 					 inline_copy ? &sgls[i] : NULL);
+			if (rc)
+				D_GOTO(free, rc);
+			/**
+			 * mrone owns the allocated memory now and will free
+			 * it in migrate_one_destroy().
+			 */
 			mrone->mo_iods_csums[mrone->mo_iod_num - 1] =
 				iods_csums[i];
+			iods_csums[i].ic_data = NULL;
+			iods_csums[i].ic_nr = 0;
 		}
-
-		if (rc != 0)
-			goto free;
-
-		/**
-		 * mrone owns the allocated memory now and will free it in
-		 * migrate_one_destroy
-		 */
-		iods_csums[i].ic_data = NULL;
-		iods_csums[i].ic_nr = 0;
 	}
 
 	mrone->mo_version = version;
@@ -1587,11 +1640,6 @@ migrate_one_insert(struct enum_unpack_arg *arg,
 	if (rc != 0)
 		D_GOTO(free, rc);
 
-	mrone->mo_oid = oid;
-	mrone->mo_oid.id_shard = iter_arg->shard;
-	uuid_copy(mrone->mo_cont_uuid, iter_arg->cont_uuid);
-	uuid_copy(mrone->mo_pool_uuid, tls->mpt_pool_uuid);
-	mrone->mo_pool_tls_version = tls->mpt_version;
 	D_DEBUG(DB_REBUILD, DF_UOID" %p dkey "DF_KEY" migrate on idx %d"
 		" iod_num %d\n", DP_UOID(mrone->mo_oid), mrone,
 		DP_KEY(dkey), iter_arg->tgt_idx,

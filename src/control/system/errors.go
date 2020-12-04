@@ -130,8 +130,9 @@ func IsMemberNotFound(err error) bool {
 // ErrPoolNotFound indicates a failure to find a pool service with the
 // given search criterion.
 type ErrPoolNotFound struct {
-	byRank *Rank
-	byUUID *uuid.UUID
+	byRank  *Rank
+	byUUID  *uuid.UUID
+	byLabel *string
 }
 
 func (err *ErrPoolNotFound) Error() string {
@@ -140,6 +141,8 @@ func (err *ErrPoolNotFound) Error() string {
 		return fmt.Sprintf("unable to find pool service with rank %d", *err.byRank)
 	case err.byUUID != nil:
 		return fmt.Sprintf("unable to find pool service with uuid %s", *err.byUUID)
+	case err.byLabel != nil:
+		return fmt.Sprintf("unable to find pool service with label %q", *err.byLabel)
 	default:
 		return "unable to find pool service"
 	}

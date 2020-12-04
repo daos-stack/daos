@@ -140,6 +140,17 @@ message ListPoolsResp {
 	repeated Pool pools = 2; // pools list
 }
 
+// PoolResolveIDReq contains the parameters to resolve a user-friendly pool ID
+// to a UUID for use in API requests.
+message PoolResolveIDReq {
+	string humanID = 1; // Unique pool identifier
+}
+
+// PoolResolveIDResp returns the pool UUID resolved from the request parameters.
+message PoolResolveIDResp {
+	string uuid = 1; // Pool UUID to be used for API requests
+}
+
 // ListContainers
 // Initial implementation differs from C API
 // (numContainers not provided in request - get whole list)
