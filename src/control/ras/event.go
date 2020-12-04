@@ -30,11 +30,9 @@ import "C"
 
 import (
 	"encoding/json"
-	"time"
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -158,32 +156,6 @@ func (evt *Event) UnmarshalJSON(data []byte) error {
 	evt.Type = EventTypeID(from.Type)
 
 	return nil
-}
-
-// NewRankFailEvent creates a specific RAS event entry.
-//
-// Hostname should be populated by caller.
-func NewRankFailEvent(instanceIdx uint32, rank uint32, exitErr error) *Event {
-	evt := &Event{
-		Name:        EventRankFail.String(),
-		Timestamp:   common.FormatTime(time.Now().UTC()),
-		Msg:         EventRankFail.Desc(),
-		InstanceIdx: instanceIdx,
-		ID:          EventRankFail,
-		Rank:        rank,
-		Type:        EventTypeStateChange,
-		Severity:    EventSeverityInfo,
-	}
-
-	if exitErr != nil {
-		evt.Severity = EventSeverityError
-		// encode exit error message in event
-		// marshal on string will never fail
-		errBytes, _ := json.Marshal(exitErr.Error())
-		evt.Data = errBytes
-	}
-
-	return evt
 }
 
 // ProcessEvent evaluates and actions the given RAS event.
