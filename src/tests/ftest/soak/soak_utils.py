@@ -269,7 +269,7 @@ def launch_snapshot(self, pool):
     container.destroy()
     self.log.info(
         "<<<PASS %s: snapshot completed at %s>>>", self.loop, time.ctime())
-    params = {"name": "SNAPSHOT", "status": status}
+    params = {"name": "SNAPSHOT", "status": status, "vars": {}}
     with H_LOCK:
         self.harasser_job_done(params)
 
