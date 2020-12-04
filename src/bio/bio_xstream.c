@@ -1720,15 +1720,10 @@ void
 bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {
 	struct bio_bdev         *d_bdev;
-	struct spdk_bdev        *bdev;
 	static uint64_t          led_event_period = NVME_MONITOR_PERIOD;
 
-	for (bdev = spdk_bdev_first(); bdev != NULL;
-	     bdev = spdk_bdev_next(bdev)) {
-		d_bdev = lookup_dev_by_name(spdk_bdev_get_name(bdev));
-		if (d_bdev == NULL)
-			continue;
-
+	/* Scan all devices present in bio_bdev list */
+	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
 		if (d_bdev->bb_led_start_time != 0) {
 			/*
 			 * TODO: Make NVME_LED_EVENT_PERIOD configurable from

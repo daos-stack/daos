@@ -683,7 +683,6 @@ bio_set_led_state(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid,
 	struct spdk_pci_device *pci_device;
 	struct bio_bdev	       *bio_dev;
 	struct bio_dev_info	b_info = { 0 };
-	char			addr_buf[128];
 	enum spdk_vmd_led_state current_led_state;
 	int			new_led_state;
 	int			rc = 0;
@@ -723,10 +722,16 @@ bio_set_led_state(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid,
 
 skip_led_str:
 	rc = fill_in_traddr(&b_info, bio_dev->bb_name);
+	if (rc) {
+		D_ERROR("Unable to get traddr for device:%s\n",
+			bio_dev->bb_name);
+		return -DER_INVAL;
+	}
+
 
 	if (spdk_pci_addr_parse(&pci_addr, b_info.bdi_traddr)) {
 		D_ERROR("Unable to parse PCI address: %s\n", b_info.bdi_traddr);
-		return -DER_INVAL;
+		D_GOTO(free_traddr, rc = -DER_INVAL);
 	}
 
 	for (pci_device = spdk_pci_get_first_device(); pci_device != NULL;
@@ -740,17 +745,11 @@ skip_led_str:
 	if (found) {
 		if (strcmp(spdk_pci_device_get_type(pci_device), "vmd") != 0) {
 			D_ERROR("%s is not a VMD device\n", b_info.bdi_traddr);
-			return -DER_NOSYS;
+			D_GOTO(free_traddr, rc = -DER_NOSYS);
 		}
 	} else {
 		D_ERROR("Unable to set led state, VMD device not found\n");
-		return -DER_INVAL;
-	}
-
-	rc = spdk_pci_addr_fmt(addr_buf, sizeof(addr_buf), &pci_device->addr);
-	if (rc != 0) {
-		D_ERROR("Failed to format VMD's PCI address\n");
-		return -DER_INVAL;
+		D_GOTO(free_traddr, rc = -DER_INVAL);
 	}
 
 	if (!reset)
@@ -764,11 +763,12 @@ skip_led_str:
 	rc = spdk_vmd_get_led_state(pci_device, &current_led_state);
 	if (rc) {
 		D_ERROR("Failed to get the VMD LED state\n");
-		return -DER_INVAL;
+		D_GOTO(free_traddr, rc = -DER_INVAL);
 	}
 
 	/* Save the current state in bio_bdev, will be restored by init xs */
-	bio_dev->bb_led_state = current_led_state;
+	if (!reset)
+		bio_dev->bb_led_state = current_led_state;
 
 	if (current_led_state == new_led_state)
 		D_GOTO(state_set, rc);
@@ -777,7 +777,7 @@ skip_led_str:
 	rc = spdk_vmd_set_led_state(pci_device, new_led_state);
 	if (rc) {
 		D_ERROR("Failed to set LED state to %s\n", led_state);
-		return -DER_INVAL;
+		D_GOTO(free_traddr, rc = -DER_INVAL);
 	}
 
 	rc = spdk_vmd_get_led_state(pci_device, &current_led_state);
@@ -804,6 +804,7 @@ state_set:
 		bio_dev->bb_led_start_time = d_timeus_secdiff(0);
 	}
 
+free_traddr:
 	if (b_info.bdi_traddr != NULL)
 		D_FREE(b_info.bdi_traddr);
 

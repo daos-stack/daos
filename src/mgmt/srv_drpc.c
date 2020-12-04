@@ -1952,7 +1952,8 @@ ds_mgmt_drpc_dev_identify(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = ds_mgmt_dev_identify(dev_uuid, resp);
 	if (rc != 0)
-		D_ERROR("Failed to set LED to IDENTIFY on device :%d\n", rc);
+		D_ERROR("Failed to set LED to IDENTIFY on device:%s\n",
+			req->dev_uuid);
 
 	resp->status = rc;
 	len = mgmt__dev_identify_resp__get_packed_size(resp);
