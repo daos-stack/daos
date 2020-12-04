@@ -26,6 +26,7 @@ package system
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -279,9 +280,10 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 
 	for i := 0; i < maxPools; i++ {
 		ps := &PoolService{
-			PoolUUID: uuid.New(),
-			State:    PoolServiceStateReady,
-			Replicas: <-replicas,
+			PoolUUID:  uuid.New(),
+			PoolLabel: fmt.Sprintf("pool%04d", i),
+			State:     PoolServiceStateReady,
+			Replicas:  <-replicas,
 		}
 		data, err := createRaftUpdate(raftOpAddPoolService, ps)
 		if err != nil {
