@@ -30,6 +30,7 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include "daos_iotest.h"
+#include "dfs_test.h"
 #include <daos/pool.h>
 #include <daos/mgmt.h>
 #include <daos/container.h>
@@ -77,10 +78,9 @@ degrade_ec_internal(void **state, int *shards, int shards_nr, int write_type)
 		verify_ec_full(&req, arg->index, 0);
 
 	ioreq_fini(&req);
-#if 0
+
 	while (idx > 0)
 		rebuild_add_back_tgts(arg, ranks[--idx], NULL, 1);
-#endif
 }
 
 static void
@@ -161,6 +161,252 @@ degrade_full_fail_data_parity(void **state)
 	degrade_ec_internal(state, shards, 2, FULL_UPDATE);
 }
 
+static void
+degrade_dfs_internal(void **state, int *shards, int shards_nr)
+{
+	dfs_t		*dfs_mt;
+	daos_handle_t	co_hdl;
+	test_arg_t	*arg = *state;
+	d_sg_list_t	sgl;
+	d_iov_t		iov;
+	dfs_obj_t	*obj;
+	daos_size_t	buf_size = 32 * 1024 * 32;
+	daos_size_t	partial_size = 32 * 1024 * 2;
+	daos_size_t	chunk_size = 32 * 1024 * 4;
+	daos_size_t	fetch_size = 0;
+	uuid_t		co_uuid;
+	char		filename[32];
+	d_rank_t	ranks[4] = { -1 };
+	int		idx = 0;
+	daos_obj_id_t	oid;
+	char		*buf;
+	char		*vbuf;
+	int		i;
+	int		rc;
+
+	uuid_generate(co_uuid);
+	rc = dfs_cont_create(arg->pool.poh, co_uuid, NULL, &co_hdl,
+			     &dfs_mt);
+	assert_int_equal(rc, 0);
+	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
+
+	D_ALLOC(buf, buf_size);
+	assert_true(buf != NULL);
+	D_ALLOC(vbuf, buf_size);
+	assert_true(vbuf != NULL);
+
+	d_iov_set(&iov, buf, buf_size);
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs = &iov;
+
+	dts_buf_render(buf, buf_size);
+	memcpy(vbuf, buf, buf_size);
+
+	/* Full stripe update */
+	sprintf(filename, "degrade_file");
+	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT, DAOS_OC_EC_K4P2_L32K, chunk_size,
+		      NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_write(dfs_mt, obj, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Partial update after that */
+	d_iov_set(&iov, buf, partial_size);
+	for (i = 0; i < 10; i++) {
+		dfs_write(dfs_mt, obj, &sgl, buf_size + i * 100 * 1024, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	dfs_obj2id(obj, &oid);
+	while (shards_nr-- > 0) {
+		ranks[idx] = get_rank_by_oid_shard(arg, oid, shards[idx]);
+		idx++;
+	}
+	rebuild_pools_ranks(&arg, 1, ranks, idx, false);
+
+	/* Verify full stripe */
+	d_iov_set(&iov, buf, buf_size);
+	fetch_size = 0;
+	rc = dfs_read(dfs_mt, obj, &sgl, 0, &fetch_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(fetch_size, buf_size);
+	assert_memory_equal(buf, vbuf, buf_size);
+
+	/* Verify partial stripe */
+	d_iov_set(&iov, buf, partial_size);
+	for (i = 0; i < 10; i++) {
+		memset(buf, 0, buf_size);
+		fetch_size = 0;
+		dfs_read(dfs_mt, obj, &sgl, buf_size + i * 100 * 1024,
+			 &fetch_size, NULL);
+		assert_int_equal(rc, 0);
+		assert_int_equal(fetch_size, partial_size);
+		assert_memory_equal(buf, vbuf, partial_size);
+	}
+
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	D_FREE(buf);
+	rc = dfs_umount(dfs_mt);
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_close(co_hdl, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
+	assert_int_equal(rc, 0);
+
+	while (idx > 0)
+		rebuild_add_back_tgts(arg, ranks[--idx], NULL, 1);
+}
+
+static void
+degrade_dfs_fail_data_s0(void **state)
+{
+	int shard = 0;
+
+	degrade_dfs_internal(state, &shard, 1);
+}
+
+static void
+degrade_dfs_fail_data_s1(void **state)
+{
+	int shard = 1;
+
+	degrade_dfs_internal(state, &shard, 1);
+}
+
+static void
+degrade_dfs_fail_data_s3(void **state)
+{
+	int shard = 3;
+
+	degrade_dfs_internal(state, &shard, 1);
+}
+
+static void
+degrade_dfs_fail_2data_s0s1(void **state)
+{
+	int shards[2];
+
+	shards[0] = 0;
+	shards[1] = 1;
+	degrade_dfs_internal(state, shards, 2);
+}
+
+static void
+degrade_dfs_fail_2data_s0s2(void **state)
+{
+	int shards[2];
+
+	shards[0] = 0;
+	shards[1] = 2;
+	degrade_dfs_internal(state, shards, 2);
+}
+
+static void
+degrade_dfs_fail_2data_s0s3(void **state)
+{
+	int shards[2];
+
+	shards[0] = 0;
+	shards[1] = 3;
+	degrade_dfs_internal(state, shards, 2);
+}
+
+static void
+degrade_dfs_fail_2data_s1s2(void **state)
+{
+	int shards[2];
+
+	shards[0] = 1;
+	shards[1] = 2;
+	degrade_dfs_internal(state, shards, 2);
+}
+
+static void
+degrade_dfs_fail_2data_s1s3(void **state)
+{
+	int shards[2];
+
+	shards[0] = 1;
+	shards[1] = 3;
+	degrade_dfs_internal(state, shards, 2);
+}
+
+static void
+degrade_dfs_fail_2data_s2s3(void **state)
+{
+	int shards[2];
+
+	shards[0] = 2;
+	shards[1] = 3;
+	degrade_dfs_internal(state, shards, 2);
+}
+
+static void
+degrade_dfs_fail_data_parity_s0p1(void **state)
+{
+	int shards[2];
+
+	shards[0] = 0;
+	shards[1] = 5;
+	degrade_dfs_internal(state, shards, 2);
+}
+
+static void
+degrade_dfs_fail_data_parity_s3p1(void **state)
+{
+	int shards[2];
+
+	shards[0] = 3;
+	shards[1] = 5;
+	degrade_dfs_internal(state, shards, 2);
+}
+
+static void
+degrade_dfs_fail_data_parity_s2p1(void **state)
+{
+	int shards[2];
+
+	shards[0] = 2;
+	shards[1] = 5;
+	degrade_dfs_internal(state, shards, 2);
+}
+
+static void
+degrade_dfs_fail_data_parity_s0p0(void **state)
+{
+	int shards[2];
+
+	shards[0] = 0;
+	shards[1] = 4;
+	degrade_dfs_internal(state, shards, 2);
+}
+
+static void
+degrade_dfs_fail_data_parity_s2p0(void **state)
+{
+	int shards[2];
+
+	shards[0] = 2;
+	shards[1] = 4;
+	degrade_dfs_internal(state, shards, 2);
+}
+
+static void
+degrade_dfs_fail_data_parity_s3p0(void **state)
+{
+	int shards[2];
+
+	shards[0] = 3;
+	shards[1] = 4;
+	degrade_dfs_internal(state, shards, 2);
+}
+
 #define DEGRADE_SMALL_POOL_SIZE (1ULL << 28)
 int
 degrade_small_sub_setup(void **state)
@@ -193,6 +439,51 @@ static const struct CMUnitTest degrade_tests[] = {
 	 test_teardown},
 	{"DEGRADE7: degrade full update with data/parity tgt fail ",
 	 degrade_full_fail_data_parity, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE8: degrade io with data(s0) tgt fail ",
+	 degrade_dfs_fail_data_s0, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE9: degrade io with data(s1) tgt fail ",
+	 degrade_dfs_fail_data_s1, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE10: degrade io with data(s1) tgt fail ",
+	 degrade_dfs_fail_data_s3, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE11: degrade io with data(s0, s1) tgt fail ",
+	 degrade_dfs_fail_2data_s0s1, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE12: degrade io with data(s0, s2) tgt fail ",
+	 degrade_dfs_fail_2data_s0s2, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE13: degrade io with data(s0, s3) tgt fail ",
+	 degrade_dfs_fail_2data_s0s3, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE14: degrade io with data(s1, s2) tgt fail ",
+	 degrade_dfs_fail_2data_s1s2, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE15: degrade io with data(s1, s3) tgt fail ",
+	 degrade_dfs_fail_2data_s1s3, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE16: degrade io with data(s2, s3) tgt fail ",
+	 degrade_dfs_fail_2data_s2s3, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE17: degrade io with 1data 1parity(s0, p1)",
+	 degrade_dfs_fail_data_parity_s0p1, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE18: degrade io with 1data 1parity(s3, p1)",
+	 degrade_dfs_fail_data_parity_s3p1, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE19: degrade io with 1data 1parity(s2, p1)",
+	 degrade_dfs_fail_data_parity_s2p1, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE20: degrade io with 1data 1parity(s0, p0)",
+	 degrade_dfs_fail_data_parity_s0p0, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE21: degrade io with 1data 1parity(s3, p0)",
+	 degrade_dfs_fail_data_parity_s3p0, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE22: degrade io with 1data 1parity(s2, p0)",
+	 degrade_dfs_fail_data_parity_s2p0, degrade_small_sub_setup,
 	 test_teardown},
 };
 

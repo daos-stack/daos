@@ -1449,8 +1449,10 @@ evt_node_weight_diff(struct evt_context *tcx, struct evt_node *nd,
 	struct evt_weight  wt_org;
 	struct evt_weight  wt_new;
 
-	memset(&wt_org, 0, sizeof(wt_org));
-	memset(&wt_new, 0, sizeof(wt_new));
+	wt_org.wt_major = 0;
+	wt_org.wt_minor = 0;
+	wt_new.wt_major = 0;
+	wt_new.wt_minor = 0;
 
 	evt_mbr_read(&rtmp, nd);
 	tcx->tc_ops->po_rect_weight(tcx, &rtmp, &wt_org);
@@ -2755,7 +2757,6 @@ static int
 evt_common_rect_weight(struct evt_context *tcx, const struct evt_rect *rect,
 		       struct evt_weight *weight)
 {
-	memset(weight, 0, sizeof(*weight));
 	weight->wt_major = rect->rc_ex.ex_hi - rect->rc_ex.ex_lo;
 	weight->wt_minor = 0; /* Disable minor weight in favor of distance */
 
@@ -3391,8 +3392,6 @@ evt_entry_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 	if (tcx->tc_root->tr_csum_len == 0)
 		return;
 
-	memset(&entry->en_csum, 0, sizeof(entry->en_csum));
-
 	/**
 	 * Fill these in even if is a hole. Aggregation depends on these
 	 * being set to always know checksums is enabled
@@ -3400,8 +3399,14 @@ evt_entry_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 	entry->en_csum.cs_type = tcx->tc_root->tr_csum_type;
 	entry->en_csum.cs_len = tcx->tc_root->tr_csum_len;
 	entry->en_csum.cs_chunksize = tcx->tc_root->tr_csum_chunk_size;
-	if (bio_addr_is_hole(&desc->dc_ex_addr))
+
+	if (bio_addr_is_hole(&desc->dc_ex_addr)) {
+		entry->en_csum.cs_nr = 0;
+		entry->en_csum.cs_buf_len = 0;
+		entry->en_csum.cs_csum = NULL;
 		return;
+	}
+
 	D_DEBUG(DB_TRACE, "Filling entry csum from evt_desc");
 	csum_count = evt_csum_count(tcx, &entry->en_ext);
 	entry->en_csum.cs_nr = csum_count;
