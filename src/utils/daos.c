@@ -48,11 +48,24 @@
 
 #include "daos_types.h"
 #include "daos_api.h"
+#include "daos_fs.h"
 #include "daos_uns.h"
 #include "daos_hdlr.h"
 #include "dfuse_ioctl.h"
 
 const char		*default_sysname = DAOS_DEFAULT_SYS_NAME;
+
+static inline int
+daos_parse_cmode(const char *string, uint32_t *mode)
+{
+	if (strcasecmp(string, "relaxed") == 0)
+		*mode = DFS_RELAXED;
+	else if (strcasecmp(string, "balanced") == 0)
+		*mode = DFS_BALANCED;
+	else
+		return -1;
+	return 0;
+}
 
 static enum cont_op
 cont_op_parse(const char *str)
@@ -538,6 +551,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"value",	required_argument,	NULL,	'v'},
 		{"path",	required_argument,	NULL,	'd'},
 		{"type",	required_argument,	NULL,	't'},
+		{"mode",	required_argument,	NULL,	'M'},
 		{"oclass",	required_argument,	NULL,	'o'},
 		{"chunk_size",	required_argument,	NULL,	'z'},
 		{"snap",	required_argument,	NULL,	's'},
@@ -564,6 +578,8 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	ap->p_op = -1;
 	ap->c_op = -1;
 	ap->o_op = -1;
+	ap->mode = 0;
+
 	D_STRNDUP(ap->sysname, default_sysname, strlen(default_sysname));
 	if (ap->sysname == NULL)
 		return RC_NO_HELP;
@@ -668,6 +684,14 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			if (ap->type == DAOS_PROP_CO_LAYOUT_UNKOWN) {
 				fprintf(stderr, "unknown container type %s\n",
 						optarg);
+				D_GOTO(out_free, rc = RC_PRINT_HELP);
+			}
+			break;
+		case 'M':
+			if (daos_parse_cmode(optarg, &ap->mode) != 0) {
+				fprintf(stderr,
+					"Invalid POSIX consistency mode: %s\n",
+					optarg);
 				D_GOTO(out_free, rc = RC_PRINT_HELP);
 			}
 			break;
@@ -1317,6 +1341,9 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"	--path=PATHSTR     container namespace path\n"
 			"container create common optional options:\n"
 			"	--type=CTYPESTR    container type (HDF5, POSIX)\n"
+			"	--mode=FLAG        In case of POSIX type, select consistency mode:\n"
+			"                          relaxed: weaker consistency semantics.\n"
+			"                          balanced (default): stronger consistency semantics.\n"
 			"	--oclass=OCLSSTR   container object class\n"
 			"			   (");
 			/* vs hardcoded list like "tiny, small, large, R2, R2S, repl_max" */

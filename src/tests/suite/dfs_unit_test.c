@@ -85,6 +85,96 @@ dfs_test_mount(void **state)
 }
 
 static void
+dfs_test_modes(void **state)
+{
+	test_arg_t		*arg = *state;
+	uuid_t			cuuid;
+	daos_cont_info_t	co_info;
+	daos_handle_t		coh;
+	dfs_attr_t		attr = {0};
+	dfs_t			*dfs;
+	int			rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	/** create a DFS container in Relaxed mode */
+	attr.da_mode = DFS_RELAXED;
+	rc = dfs_cont_create(arg->pool.poh, cuuid, &attr, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
+			    &coh, &co_info, NULL);
+	assert_int_equal(rc, 0);
+	/** mount in Relaxed mode should succeed */
+	rc = dfs_mount(arg->pool.poh, coh, O_RDWR | DFS_RELAXED, &dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_umount(dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_mount(arg->pool.poh, coh, O_RDONLY | DFS_RELAXED, &dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_umount(dfs);
+	assert_int_equal(rc, 0);
+	/** mount in Balanced mode should succeed */
+	rc = dfs_mount(arg->pool.poh, coh, O_RDWR | DFS_BALANCED, &dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_umount(dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_mount(arg->pool.poh, coh, O_RDONLY | DFS_BALANCED, &dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_umount(dfs);
+	assert_int_equal(rc, 0);
+	/** destroy */
+	rc = daos_cont_close(coh, NULL);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
+	assert_int_equal(rc, 0);
+
+	/** create a DFS container in Balanced mode */
+	attr.da_mode = DFS_BALANCED;
+	rc = dfs_cont_create(arg->pool.poh, cuuid, &attr, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
+			    &coh, &co_info, NULL);
+	assert_int_equal(rc, 0);
+	/** mount in Relaxed mode should fail with EPERM */
+	rc = dfs_mount(arg->pool.poh, coh, O_RDWR | DFS_RELAXED, &dfs);
+	assert_int_equal(rc, EPERM);
+	rc = dfs_mount(arg->pool.poh, coh, O_RDONLY | DFS_RELAXED, &dfs);
+	assert_int_equal(rc, EPERM);
+	/** mount in Balanced / default mode should succeed */
+	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_umount(dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_mount(arg->pool.poh, coh, O_RDONLY | DFS_BALANCED, &dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_umount(dfs);
+	assert_int_equal(rc, 0);
+	/** destroy */
+	rc = daos_cont_close(coh, NULL);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
+	assert_int_equal(rc, 0);
+
+	/** create a DFS container with no mode specified */
+	rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
+			    &coh, &co_info, NULL);
+	assert_int_equal(rc, 0);
+	/** mount in Relaxed mode should fail with EPERM */
+	rc = dfs_mount(arg->pool.poh, coh, O_RDWR | DFS_RELAXED, &dfs);
+	assert_int_equal(rc, EPERM);
+	rc = dfs_mount(arg->pool.poh, coh, O_RDONLY | DFS_RELAXED, &dfs);
+	assert_int_equal(rc, EPERM);
+	/** destroy */
+	rc = daos_cont_close(coh, NULL);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
+	assert_int_equal(rc, 0);
+}
+
+static void
 dfs_test_syml(void **state)
 {
 	test_arg_t		*arg = *state;
@@ -284,9 +374,11 @@ dfs_test_read_shared_file(void **state)
 static const struct CMUnitTest dfs_unit_tests[] = {
 	{ "DFS_UNIT_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST2: Simple Symlinks",
+	{ "DFS_UNIT_TEST2: DFS container modes",
+	  dfs_test_modes, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST3: Simple Symlinks",
 	  dfs_test_syml, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST3: multi-threads read shared file",
+	{ "DFS_UNIT_TEST4: multi-threads read shared file",
 	  dfs_test_read_shared_file, async_disable, test_case_teardown},
 };
 
