@@ -149,6 +149,9 @@ def set_defaults(env):
         #could refine this but for now, just assume these warnings are ok
         env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)
 
+    if env.get('BUILD_TYPE') != 'release':
+        env.Append(CCFLAGS=['-DFAULT_INJECTION=1'])
+
 def preload_prereqs(prereqs):
     """Preload prereqs specific to platform"""
 

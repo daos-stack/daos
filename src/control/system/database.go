@@ -141,7 +141,7 @@ func (sr *syncRaft) withReadLock(fn func(raftService) error) error {
 
 func (cfg *DatabaseConfig) stringReplicas(excludeAddr *net.TCPAddr) (replicas []string) {
 	for _, r := range cfg.Replicas {
-		if common.CmpTcpAddr(r, excludeAddr) {
+		if common.CmpTCPAddr(r, excludeAddr) {
 			continue
 		}
 		replicas = append(replicas, r.String())
@@ -215,7 +215,7 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) (*Database, error) {
 // a known replica address.
 func (db *Database) isReplica(ctrlAddr *net.TCPAddr) bool {
 	for _, candidate := range db.cfg.Replicas {
-		if common.CmpTcpAddr(ctrlAddr, candidate) {
+		if common.CmpTCPAddr(ctrlAddr, candidate) {
 			return true
 		}
 	}
@@ -271,7 +271,7 @@ func (db *Database) IsBootstrap() bool {
 	}
 	// Only the first replica should bootstrap. All the others
 	// should be added as voters.
-	return common.CmpTcpAddr(db.cfg.Replicas[0], db.getReplica())
+	return common.CmpTCPAddr(db.cfg.Replicas[0], db.getReplica())
 }
 
 // CheckReplica returns an error if the node is not a replica.
@@ -606,7 +606,7 @@ func (db *Database) AddMember(newMember *Member) error {
 
 	// If the new member is hosted by a MS replica other than this one,
 	// add it as a voter.
-	if !common.CmpTcpAddr(db.getReplica(), newMember.Addr) {
+	if !common.CmpTCPAddr(db.getReplica(), newMember.Addr) {
 		if db.isReplica(newMember.Addr) {
 			repAddr := newMember.Addr
 			rsi := raft.ServerID(repAddr.String())
