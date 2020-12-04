@@ -238,6 +238,12 @@ func (sm *Member) WithFaultDomain(fd *FaultDomain) *Member {
 	return sm
 }
 
+// RankFaultDomain generates the fault domain representing this Member rank.
+func (sm *Member) RankFaultDomain() *FaultDomain {
+	rankDomain := fmt.Sprintf("rank%d", uint32(sm.Rank))
+	return sm.FaultDomain.MustCreateChild(rankDomain) // "rankX" string can't fail
+}
+
 // NewMember returns a reference to a new member struct.
 func NewMember(rank Rank, uuidStr, uri string, addr *net.TCPAddr, state MemberState) *Member {
 	// FIXME: Either require a valid uuid.UUID to be supplied

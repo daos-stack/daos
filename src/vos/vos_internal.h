@@ -1194,5 +1194,32 @@ vos_has_uncertainty(struct vos_ts_set *ts_set,
 	return vos_ts_wcheck(ts_set, epoch, bound);
 }
 
+/** For dealing with common routines between punch and update where akeys are
+ *  passed in different structures
+ */
+struct vos_akey_data {
+	union {
+		/** If ad_is_iod is true, array of iods is used for akeys */
+		daos_iod_t	*ad_iods;
+		/** If ad_is_iod is false, it's an array of akeys */
+		daos_key_t	*ad_keys;
+	};
+	/** True if the the field above is an iod array */
+	bool		 ad_is_iod;
+};
+
+/** Add any missing timestamps to the read set when an operation fails due to
+ *  -DER_NONEXST.   This allows for fewer false conflicts on negative
+ *  entries.
+ *
+ *  \param[in]	ts_set	The timestamp set
+ *  \param[in]	dkey	Pointer to the dkey or NULL
+ *  \param[in]	akey_nr	Number of akeys (or 0 if no akeys)
+ *  \param[in]	ad	The actual akeys (either an array of akeys or iods)
+ */
+void
+vos_ts_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int akey_nr,
+		   struct vos_akey_data *ad);
+
 
 #endif /* __VOS_INTERNAL_H__ */

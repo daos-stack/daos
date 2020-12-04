@@ -23,6 +23,7 @@
 #define D_LOGFAC	DD_FAC(client)
 
 #include <daos/mgmt.h>
+#include <daos/sys_debug.h>
 #include <daos/pool.h>
 #include <daos/task.h>
 #include <daos_mgmt.h>
@@ -51,7 +52,7 @@ daos_mgmt_svc_rip(const char *grp, d_rank_t rank, bool force,
 }
 
 int
-daos_mgmt_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
+daos_debug_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
 		     uint64_t value, uint64_t value_extra, daos_event_t *ev)
 {
 	daos_set_params_t	*args;
@@ -59,7 +60,7 @@ daos_mgmt_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, SET_PARAMS);
-	rc = dc_task_create(dc_mgmt_set_params, NULL, ev, &task);
+	rc = dc_task_create(dc_debug_set_params, NULL, ev, &task);
 	if (rc)
 		return rc;
 
@@ -182,9 +183,9 @@ daos_pool_extend(const uuid_t uuid, const char *grp, d_rank_list_t *tgts,
 }
 
 int
-daos_mgmt_add_mark(const char *mark)
+daos_debug_add_mark(const char *mark)
 {
-	return dc_mgmt_add_mark(mark);
+	return dc_debug_add_mark(mark);
 }
 
 int

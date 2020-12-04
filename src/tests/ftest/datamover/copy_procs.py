@@ -44,23 +44,22 @@ class CopyProcsTest(DataMoverTestBase):
         super(CopyProcsTest, self).setUp()
 
         # Get the parameters
-        self.test_file = self.params.get(
-            "test_file", "/run/ior/*")
-        self.flags_write = self.params.get(
-            "flags_write", "/run/ior/copy_procs/*")
-        self.flags_read = self.params.get(
-            "flags_read", "/run/ior/copy_procs/*")
+        self.ior_flags = self.params.get(
+            "ior_flags", "/run/ior/*")
+        self.flags_write = self.ior_flags[0]
+        self.flags_read = self.ior_flags[1]
+        self.test_file = self.ior_cmd.test_file.value
 
         # Setup the directory structures
-        self.posix_test_path = join(self.workdir, "posix_test") + sep
+        self.posix_test_path1 = join(self.workdir, "posix_test") + sep
         self.posix_test_path2 = join(self.workdir, "posix_test2") + sep
-        self.posix_test_file = join(self.posix_test_path, self.test_file)
+        self.posix_test_file = join(self.posix_test_path1, self.test_file)
         self.posix_test_file2 = join(self.posix_test_path2, self.test_file)
         self.daos_test_file = join("/", self.test_file)
 
         # Create the directories
         cmd = "mkdir -p '{}' '{}'".format(
-            self.posix_test_path,
+            self.posix_test_path1,
             self.posix_test_path2)
         self.execute_cmd(cmd)
 
@@ -68,7 +67,7 @@ class CopyProcsTest(DataMoverTestBase):
         """Tear down each test case."""
         # Remove the created directories
         cmd = "rm -rf '{}' '{}'".format(
-            self.posix_test_path,
+            self.posix_test_path1,
             self.posix_test_path2)
         self.execute_cmd(cmd)
 
@@ -82,7 +81,10 @@ class CopyProcsTest(DataMoverTestBase):
         Use Cases:
             Create pool.
             Crate POSIX container1 and container2 in pool.
-            Create a single 100M file in container1 using ior.
+            Create a single file in container1 using ior.
+            Using varying processes:
+                Copy all data from container1 to external POSIX.
+                Copy all data from external POSIX to container2.
         :avocado: tags=all,datamover,pr
         :avocado: tags=copy_procs
         """
@@ -117,7 +119,7 @@ class CopyProcsTest(DataMoverTestBase):
 
         # POSIX -> DAOS
         # Run with varying number of processes
-        self.set_src_location("POSIX", self.posix_test_path)
+        self.set_src_location("POSIX", self.posix_test_path1)
         self.set_dst_location("DAOS_UUID", "/", pool1, container2)
         for num_procs in procs_list:
             test_desc = "copy_procs (POSIX->DAOS with {} processes)".format(

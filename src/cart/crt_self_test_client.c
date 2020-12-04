@@ -178,6 +178,11 @@ void crt_self_test_client_init(void)
 	D_MUTEX_INIT(&g_data_lock, NULL);
 }
 
+void crt_self_test_client_fini(void)
+{
+	D_MUTEX_DESTROY(&g_data_lock);
+}
+
 static void
 close_session_cb(const struct crt_cb_info *cb_info)
 {
