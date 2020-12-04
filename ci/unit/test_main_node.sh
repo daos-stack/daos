@@ -54,7 +54,7 @@ else
     ls
     ls test_results || true
     if [ "$WITH_VALGRIND" == 'memcheck' ]; then
-	cp test_results/unit-test-*.memcheck.xml .
+	mv test_results/unit-test-*.memcheck.xml .
 	# Debugging
 	ls test_results || true
 	ls unit-test-*.memcheck.xml
