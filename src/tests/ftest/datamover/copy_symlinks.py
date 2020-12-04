@@ -26,10 +26,10 @@ from os.path import join
 
 class CopySymlinksTest(DataMoverTestBase):
     # pylint: disable=too-many-ancestors
-    """Test class for basic Datamover symlink validation
+    """Test class for basic POSIX DataMover symlink validation
 
     Test Class Description:
-        Tests datamover symlink copying and dereferencing.
+        Tests POSIX DataMover symlink copying and dereferencing.
     :avocado: recursive
     """
 
@@ -40,8 +40,8 @@ class CopySymlinksTest(DataMoverTestBase):
     def test_copy_symlinks(self):
         """
         Test Description:
+            Tests copying POSIX symlinks.
             DAOS-5998: Verify ability to copy and dereference symlinks
-
         Use Cases:
             1. Create pool
             2. Create container
