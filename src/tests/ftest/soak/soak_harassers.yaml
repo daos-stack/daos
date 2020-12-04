@@ -59,10 +59,10 @@ pool_reserved:
 container:
     type: POSIX
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-    oclass: RP_2G1
+    oclass: RP_2GX
     control_method: daos
 container_reserved:
-    oclass: OC_RP_2G1
+    oclass: OC_RP_2GX
     akey_size: 5
     dkey_size: 5
     data_size: 4096
@@ -123,9 +123,9 @@ ior_harasser:
         - '1m'
     segment_count: 1
     dfs_oclass:
-        - 'RP_2G1'
+        - 'RP_2GX'
     dfs_dir_oclass:
-        - 'RP_2G1'
+        - 'RP_2GX'
 fio_harasser:
   names:
       - global
