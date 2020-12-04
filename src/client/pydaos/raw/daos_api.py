@@ -2192,31 +2192,6 @@ class DaosSnapshot(object):
         if retcode != 0:
             raise Exception("Failed to destroy the snapshot. RC: {0}"
                             .format(retcode))
-
-class DaosServer(object):
-    # pylint: disable=too-few-public-methods
-    """Represent a DAOS Server."""
-
-    def __init__(self, context, group, rank):
-        """Set up the python pool object, not the real pool."""
-        self.context = context
-        self.group_name = group
-        self.rank = rank
-
-    def kill(self, force):
-        """Send a pool creation request to the daos server group."""
-        c_group = ctypes.create_string_buffer(self.group_name)
-        c_force = ctypes.c_int(force)
-        c_rank = ctypes.c_uint(self.rank)
-
-        func = self.context.get_function('kill-server')
-        ret = func(c_group, c_rank, c_force, None)
-        if ret != 0:
-            raise DaosApiError("Server kill returned non-zero. RC: {0}"
-                               .format(ret))
-
-
-class DaosContext(object):
     # pylint: disable=too-few-public-methods
     """Provides environment and other info for a DAOS client."""
 
