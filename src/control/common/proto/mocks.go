@@ -159,6 +159,10 @@ func (m *MockMgmtSvcClient) PoolCreate(ctx context.Context, req *mgmtpb.PoolCrea
 	return &mgmtpb.PoolCreateResp{}, nil
 }
 
+func (m *MockMgmtSvcClient) PoolResolveID(ctx context.Context, req *mgmtpb.PoolResolveIDReq, o ...grpc.CallOption) (*mgmtpb.PoolResolveIDResp, error) {
+	return &mgmtpb.PoolResolveIDResp{}, nil
+}
+
 func (m *MockMgmtSvcClient) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq, o ...grpc.CallOption) (*mgmtpb.PoolDestroyResp, error) {
 	// return successful pool destroy results
 	// initialize with zero values indicating mgmt.CTL_SUCCESS
