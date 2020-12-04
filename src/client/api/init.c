@@ -29,6 +29,7 @@
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/mgmt.h>
+#include <daos/sys_debug.h>
 #include <daos/pool.h>
 #include <daos/container.h>
 #include <daos/object.h>
@@ -51,7 +52,7 @@ static int		module_initialized;
 const struct daos_task_api dc_funcs[] = {
 	/** Management */
 	{dc_pool_evict, sizeof(daos_pool_evict_t)},
-	{dc_mgmt_set_params, sizeof(daos_set_params_t)},
+	{dc_debug_set_params, sizeof(daos_set_params_t)},
 	{dc_mgmt_get_bs_state, sizeof(daos_mgmt_get_bs_state_t)},
 
 	/** Pool */
@@ -269,7 +270,8 @@ daos_fini(void)
 
 	rc = dc_mgmt_disconnect();
 	if (rc != 0) {
-		D_ERROR("failed to disconnect some resources may leak: %d", rc);
+		D_ERROR("failed to disconnect some resources may leak, " DF_RC "\n",
+			DP_RC(rc));
 	}
 
 	dc_agent_fini();
