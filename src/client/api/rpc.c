@@ -41,9 +41,8 @@ daos_rpc_cb(const struct crt_cb_info *cb_info)
 int
 daos_rpc_complete(crt_rpc_t *rpc, tse_task_t *task)
 {
-	struct crt_cb_info      cbinfo;
+	struct crt_cb_info cbinfo;
 
-	memset(&cbinfo, 0, sizeof(cbinfo));
 	cbinfo.cci_arg = task;
 	cbinfo.cci_rc  = 0;
 	daos_rpc_cb(&cbinfo);

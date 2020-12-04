@@ -377,6 +377,8 @@ pool_create_and_destroy_retry(void **state)
 	uuid_t		 uuid;
 	int		 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (arg->myrank != 0)
 		return;
 
@@ -440,13 +442,23 @@ setup(void **state)
 }
 
 int
-run_daos_mgmt_test(int rank, int size)
+run_daos_mgmt_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int	rc;
 
-	if (rank == 0)
-		rc = cmocka_run_group_tests_name("Management tests", tests,
-						 setup, test_teardown);
+	if (rank == 0) {
+		if (sub_tests_size == 0) {
+			rc = cmocka_run_group_tests_name(
+				"Management tests", tests, setup,
+				test_teardown);
+		} else {
+			rc = run_daos_sub_tests(
+				"Management tests", tests,
+				ARRAY_SIZE(tests),
+				sub_tests, sub_tests_size, setup,
+				test_teardown);
+		}
+	}
 
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	return rc;
