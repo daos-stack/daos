@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+# pylint: disable=too-many-lines
 
 # Some useful test classes inherited from avocado.Test
 
@@ -33,6 +34,7 @@ from getpass import getuser
 
 from avocado import Test as avocadoTest
 from avocado import skip, TestFail, fail_on
+from avocado.utils.distro import detect
 
 import fault_config_utils
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
@@ -139,6 +141,12 @@ class Test(avocadoTest):
 
         self.log.info("Job-ID: %s", self.job_id)
         self.log.info("Test PID: %s", os.getpid())
+        self._timeout_reported = False
+
+    def setUp(self):
+        """Set up each test case."""
+        self.log.info("*** SETUP running on %s ***", str(detect()))
+        super(Test, self).setUp()
 
     # pylint: disable=invalid-name
     def cancelForTicket(self, ticket):
@@ -154,6 +162,39 @@ class Test(avocadoTest):
 
         """
         return (self.__str__().split(".", 4)[3]).split(";", 1)[0]
+
+    def report_timeout(self):
+        """Report whether or not this test case was timed out."""
+        if not self._timeout_reported:
+            # Update the elapsed time
+            self.get_state()
+            if self.timeout is None:
+                # self.timeout is not set - this is a problem
+                self.log.error("*** TEARDOWN called with UNKNOWN timeout ***")
+                self.log.error("self.timeout undefined - please investigate!")
+            elif self.time_elapsed > self.timeout:
+                # Timeout has expired
+                self.log.info(
+                    "*** TEARDOWN called due to TIMEOUT: "
+                    "%s second timeout exceeded ***", str(self.timeout))
+                self.log.info("test execution has been terminated by avocado")
+            else:
+                # Normal opperation
+                remaining = str(self.timeout - self.time_elapsed)
+                self.log.info(
+                    "*** TEARDOWN called after test completion: elapsed time: "
+                    "%s seconds ***", str(self.time_elapsed))
+                self.log.info(
+                    "Amount of time left in test timeout: %s seconds",
+                    remaining)
+
+        # Disable reporting the timeout upon subsequent inherited calls
+        self._timeout_reported = True
+
+    def tearDown(self):
+        """Tear down after each test case."""
+        self.report_timeout()
+        super(Test, self).tearDown()
 
 
 class TestWithoutServers(Test):
@@ -241,6 +282,7 @@ class TestWithoutServers(Test):
 
     def tearDown(self):
         """Tear down after each test case."""
+        self.report_timeout()
         super(TestWithoutServers, self).tearDown()
 
         if self.fault_file:
@@ -643,6 +685,9 @@ class TestWithServers(TestWithoutServers):
 
     def tearDown(self):
         """Tear down after each test case."""
+        # Report whether or not the timeout has expired
+        self.report_timeout()
+
         # Tear down any test-specific items
         errors = self.pre_tear_down()
 
@@ -681,7 +726,7 @@ class TestWithServers(TestWithoutServers):
             list: a list of error strings to report at the end of tearDown().
 
         """
-        self.log.info("teardown() started")
+        self.log.debug("no pre-teardown steps defined")
         return []
 
     def stop_job_managers(self):
