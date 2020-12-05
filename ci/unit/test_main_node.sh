@@ -48,9 +48,8 @@ if ${NLT:-false}; then
     mkdir -p vm_test
     ./utils/node_local_test.py --output-file=vm_test/nlt-errors.json all
 else
-    ls
-    ls test_results || true
     IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" utils/run_test.sh
+    echo "marj - debug - finish run_test.sh"
     ls
     ls test_results || true
     if [ "$WITH_VALGRIND" == 'memcheck' ]; then
