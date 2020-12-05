@@ -37,7 +37,7 @@ set_fail_loc(test_arg_t *arg, d_rank_t rank, uint64_t tgtidx,
 	     uint64_t fail_loc)
 {
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, rank, DMG_KEY_FAIL_LOC,
+		daos_debug_set_params(arg->group, rank, DMG_KEY_FAIL_LOC,
 				     fail_loc, tgtidx, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 }
