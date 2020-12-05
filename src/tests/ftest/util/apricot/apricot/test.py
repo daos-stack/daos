@@ -179,7 +179,7 @@ class Test(avocadoTest):
                     "%s second timeout exceeded ***", str(self.timeout))
                 self.log.info("test execution has been terminated by avocado")
             else:
-                # Normal opperation
+                # Normal operation
                 remaining = str(self.timeout - self.time_elapsed)
                 self.log.info(
                     "*** TEARDOWN called after test completion: elapsed time: "
