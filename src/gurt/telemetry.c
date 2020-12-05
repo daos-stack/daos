@@ -1981,108 +1981,88 @@ d_tm_get_version(void)
 }
 
 /**
- * Perform a directory listing at the path provided for the items described by
- * the \a d_tm_type bitmask.  A result is added to the list it if matches
- * one of the metric types specified by that filter mask. The mask may
- * be a combination of d_tm_metric_types.  The search is performed only on the
- * direct children specified by the path.  Returns a linked list that points to
+ * Perform a recursive directory listing from the given \a node for the items
+ * described by the \a d_tm_type bitmask.  A result is added to the list if it
+ * matches one of the metric types specified by that filter mask. The mask may
+ * be a combination of d_tm_metric_types.  Creates a linked list that points to
  * each node found that matches the search criteria.  Adds elements to an
  * existing node list if head is already initialized. The client should free the
  * memory with d_tm_list_free().
  *
  * \param[in,out]	head		Pointer to a nodelist
  * \param[in]		shmem_root	Pointer to the shared memory segment
- * \param[in]		path		Full path name to the directory or
- *					metric to list
+ * \param[in]		node		The recursive directory listing starts
+ *					from this node.
  * \param[in]		d_tm_type	A bitmask of d_tm_metric_types that
  *					filters the results.
  *
  * \return		D_TM_SUCCESS		Success
  *			-DER_NOMEM		Out of global heap
- *			-DER_EXCEEDS_PATH_LEN	The full name length is
- *						too long
- *			-DER_METRIC_NOT_FOUND	No items were found at the path
- *						provided
  *			-DER_INVAL		Invalid pointer for \a head or
- *						\a path
+ *						\a node
  */
 int
-d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root, char *path,
-	  int d_tm_type)
+d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root,
+	  struct d_tm_node_t *node, int d_tm_type)
 {
 	struct d_tm_nodeList_t	*nodelist = NULL;
-	struct d_tm_node_t	*node = NULL;
-	struct d_tm_node_t	*parent_node = NULL;
-	char			*str = NULL;
-	char			*token;
-	char			*rest;
 	int			rc = D_TM_SUCCESS;
-	bool			search_siblings = false;
 
-	if ((head == NULL) || (path == NULL)) {
+	if ((head == NULL) || (node == NULL)) {
 		rc = -DER_INVAL;
 		goto failure;
 	}
 
-	D_STRNDUP(str, path, D_TM_MAX_NAME_LEN);
+	nodelist = *head;
+	if (d_tm_type & node->dtn_type) {
+		nodelist = d_tm_add_node(node, *head);
+		if (nodelist == NULL) {
+			rc = -DER_NOMEM;
+			goto failure;
+		}
+		if (*head == NULL)
+			*head = nodelist;
+	}
 
-	if (str == NULL) {
-		rc = -DER_NOMEM;
-		D_ERROR("Failed to allocate memory for path [%s]: rc = %d\n",
-			path, rc);
+	node = node->dtn_child;
+	if (node == NULL) {
+		goto success;
+	}
+
+	node = d_tm_conv_ptr(shmem_root, node);
+	if (node == NULL) {
+		rc = -DER_INVAL;
 		goto failure;
 	}
 
-	if (strnlen(str, D_TM_MAX_NAME_LEN) == D_TM_MAX_NAME_LEN) {
-		rc = -DER_EXCEEDS_PATH_LEN;
-		D_ERROR("Path [%s] exceeds max length: rc = %d\n", path, rc);
+	rc = d_tm_list(&nodelist, shmem_root, node, d_tm_type);
+	if (rc != D_TM_SUCCESS)
 		goto failure;
+	if (*head == NULL)
+		*head = nodelist;
+
+	node = node->dtn_sibling;
+	if (node == NULL)
+		return rc;
+
+	node = d_tm_conv_ptr(shmem_root, node);
+	while (node != NULL) {
+		rc = d_tm_list(&nodelist, shmem_root, node, d_tm_type);
+		if (rc != D_TM_SUCCESS) {
+			goto failure;
+		}
+		if (*head == NULL)
+			*head = nodelist;
+		node = node->dtn_sibling;
+		node = d_tm_conv_ptr(shmem_root, node);
 	}
-
-	rest = str;
-	parent_node = d_tm_get_root(shmem_root);
-	node = parent_node;
-	if (parent_node != NULL) {
-		token = strtok_r(rest, "/", &rest);
-		while (token != NULL) {
-			node = d_tm_find_child(shmem_root, parent_node, token);
-			if (node == NULL) {
-				rc = -DER_METRIC_NOT_FOUND;
-				goto failure;
-			}
-			parent_node = node;
-			token = strtok_r(rest, "/", &rest);
-		}
-
-		if (node == NULL)
-			node = parent_node;
-
-		if (node->dtn_type == D_TM_DIRECTORY) {
-			search_siblings = true;
-			node = d_tm_conv_ptr(shmem_root, node->dtn_child);
-		}
-
-		nodelist = *head;
-		while (node != NULL) {
-			if (d_tm_type & node->dtn_type) {
-				nodelist = d_tm_add_node(node, nodelist);
-				if (*head == NULL)
-					*head = nodelist;
-			}
-			if (search_siblings)
-				node =	d_tm_conv_ptr(shmem_root,
-						      node->dtn_sibling);
-			else
-				node = NULL;
-		}
-	}
-	D_FREE_PTR(str);
+success:
 	return rc;
 
 failure:
-	D_FREE_PTR(str);
 	return rc;
 }
+
 
 /**
  * Returns the number of metrics found at the \a path provided for the items
@@ -2207,7 +2187,6 @@ d_tm_add_node(struct d_tm_node_t *src, struct d_tm_nodeList_t *nodelist)
 	}
 	return NULL;
 }
-
 /**
  * Server side function that allocates the shared memory segment for this rank.
  *

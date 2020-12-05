@@ -27,15 +27,7 @@ package telemetry
 
 /*
 #cgo LDFLAGS: -lgurt
-#include <string.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <inttypes.h>
-#include <time.h>
-#include <sys/types.h>
-#include <sys/ipc.h>
-#include <sys/shm.h>
-#include <stdbool.h>
+
 #include "gurt/common.h"
 #include "gurt/telemetry_common.h"
 #include "gurt/telemetry_consumer.h"
@@ -44,225 +36,41 @@ typedef struct d_tm_node_t *d_tm_node_p;
 typedef struct d_tm_nodeList_t d_tm_nodeList;
 typedef struct d_tm_metric_t *d_tm_metric_p;
 typedef struct timespec tspec;
-
-char *
-d_tm_conv_char_ptr(uint64_t *cshmemRoot, void *ptr)
-{
-	return (char *)d_tm_conv_ptr(cshmemRoot, ptr);
-}
-
-void
-readMetrics(uint64_t *shmemRoot, struct d_tm_node_t *root, char *dirname,
-		 int iteration)
-{
-	uint64_t val;
-	struct d_tm_nodeList_t *nodelist = NULL;
-	struct d_tm_nodeList_t *head = NULL;
-	char *shortDesc;
-	char *longDesc;
-	char *name;
-	time_t clk;
-	char tmp[64];
-	int len = 0;
-	int rc;
-	struct timespec tms;
-
-	printf("----------------------------------------\n");
-
-	printf("iteration: %d - %s/\n", iteration, dirname);
-	rc = d_tm_list(&nodelist, shmemRoot, dirname,
-		       D_TM_DIRECTORY | D_TM_COUNTER | D_TM_TIMESTAMP |
-		       D_TM_TIMER_SNAPSHOT | D_TM_DURATION |
-		       D_TM_GAUGE);
-
-	if (rc == D_TM_SUCCESS)
-		head = nodelist;
-
-	printf("There are %"PRIu64" objects in the unfiltered list\n",
-	       d_tm_get_num_objects(shmemRoot, dirname,
-				    D_TM_DIRECTORY | D_TM_COUNTER |
-				    D_TM_TIMESTAMP |
-				    D_TM_TIMER_SNAPSHOT |
-				    D_TM_DURATION | D_TM_GAUGE));
-
-	printf("There are %"PRIu64" objects in the filtered list\n",
-	       d_tm_get_num_objects(shmemRoot, dirname,
-				    D_TM_COUNTER | D_TM_TIMESTAMP));
-
-	printf("There are %"PRIu64" metrics in the tree\n",
-	       d_tm_count_metrics(shmemRoot, root));
-
-	while (nodelist) {
-		name = (char *)d_tm_conv_ptr(shmemRoot,
-					     nodelist->dtnl_node->dtn_name);
-		if (name == NULL)
-			break;
-		switch (nodelist->dtnl_node->dtn_type) {
-		case D_TM_DIRECTORY:
-			printf("\tDIRECTORY: %s has %"PRIu64
-			       " metrics underneath it\n",
-			       name ? name : "Unavailable",
-			d_tm_count_metrics(shmemRoot, nodelist->dtnl_node));
-			break;
-		case D_TM_COUNTER:
-			rc = d_tm_get_counter(&val, shmemRoot,
-					      nodelist->dtnl_node, NULL);
-			if (rc == D_TM_SUCCESS) {
-				d_tm_get_metadata(&shortDesc, &longDesc,
-						  shmemRoot,
-						  nodelist->dtnl_node, NULL);
-				printf("\tCOUNTER: %s %" PRIu64
-				       " With metadata: %s and %s\n",
-				       name ? name : "Unavailable", val,
-				       shortDesc, longDesc);
-				free(shortDesc);
-				free(longDesc);
-			} else
-				printf("Error on counter read: %d\n", rc);
-			break;
-		case D_TM_TIMESTAMP:
-			rc = d_tm_get_timestamp(&clk, shmemRoot,
-						nodelist->dtnl_node, NULL);
-			if (rc == D_TM_SUCCESS) {
-				strncpy(tmp, ctime(&clk), sizeof(tmp) - 1);
-				len = strlen(tmp);
-				if (len) {
-					if (tmp[len - 1] == '\n') {
-						tmp[len - 1] = 0;
-					}
-					printf("\tTIMESTAMP %s: %s\n",
-					name ? name : "Unavailable", tmp);
-				}
-			} else
-				printf("Error on timestamp read: %d\n", rc);
-			break;
-		case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_REALTIME:
-			rc = d_tm_get_timer_snapshot(&tms, shmemRoot,
-						     nodelist->dtnl_node, NULL);
-			if (rc == D_TM_SUCCESS) {
-				printf("\tREALTIME HIGH RES TIMER %s: %lds, "
-				       "%ldns\n", name ? name :
-				       "Unavailable", tms.tv_sec,
-				       tms.tv_nsec);
-			} else
-				printf("Error on highres timer read: %d\n", rc);
-			break;
-		case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_PROCESS_CPUTIME:
-			rc = d_tm_get_timer_snapshot(&tms, shmemRoot,
-						     nodelist->dtnl_node, NULL);
-			if (rc == D_TM_SUCCESS) {
-				printf("\tPROCESS HIGH RES TIMER %s: %lds, "
-				       "%ldns\n", name ? name :
-				       "Unavailable", tms.tv_sec,
-				       tms.tv_nsec);
-			} else
-				printf("Error on highres timer read: %d\n", rc);
-			break;
-		case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_THREAD_CPUTIME:
-			rc = d_tm_get_timer_snapshot(&tms, shmemRoot,
-						    nodelist->dtnl_node, NULL);
-			if (rc == D_TM_SUCCESS) {
-				printf("\tTHREAD HIGH RES TIMER %s: %lds, "
-				       "%ldns\n", name ? name :
-				       "Unavailable", tms.tv_sec,
-				       tms.tv_nsec);
-			} else
-				printf("Error on highres timer read: %d\n", rc);
-			break;
-		case D_TM_DURATION | D_TM_CLOCK_REALTIME:
-			rc = d_tm_get_duration(&tms, shmemRoot,
-					       nodelist->dtnl_node, NULL);
-			if (rc == D_TM_SUCCESS) {
-				printf("\tD_TM_CLOCK_REALTIME DURATION"
-				       " %s: %.9fs\n", name ? name :
-				       "Unavailable", tms.tv_sec +
-				       tms.tv_nsec / 1e9);
-			} else
-				printf("Error on duration read: %d\n", rc);
-			break;
-		case D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME:
-			rc = d_tm_get_duration(&tms, shmemRoot,
-					       nodelist->dtnl_node, NULL);
-			if (rc == D_TM_SUCCESS) {
-				printf("\tD_TM_CLOCK_PROCESS_CPUTIME "
-				       "DURATION %s: %.9fs\n",
-				       name ? name : "Unavailable",
-				       tms.tv_sec + tms.tv_nsec / 1e9);
-			} else
-				printf("Error on duration read: %d\n", rc);
-			break;
-		case D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME:
-			rc = d_tm_get_duration(&tms, shmemRoot,
-					       nodelist->dtnl_node, NULL);
-			if (rc == D_TM_SUCCESS) {
-				printf("\tD_TM_CLOCK_THREAD_CPUTIME "
-				       "DURATION %s: %.9fs\n",
-				       name ? name : "Unavailable",
-				       tms.tv_sec + tms.tv_nsec / 1e9);
-			} else
-				printf("Error on duration read: %d\n", rc);
-			break;
-		case D_TM_DURATION:
-			rc = d_tm_get_duration(&tms, shmemRoot,
-					       nodelist->dtnl_node, NULL);
-			if (rc == D_TM_SUCCESS) {
-				printf("\tDEFAULT REALTIME DURATION %s:"
-				       " %.9fs\n", name ? name :
-				       "Unavailable", tms.tv_sec +
-				       tms.tv_nsec / 1e9);
-			} else
-				printf("Error on duration read: %d\n", rc);
-			break;
-		case D_TM_GAUGE:
-			rc = d_tm_get_gauge(&val, shmemRoot,
-					    nodelist->dtnl_node, NULL);
-			if (rc == D_TM_SUCCESS) {
-				printf("\tGAUGE: %s %" PRIu64 "\n",
-				       name ? name :
-				       "Unavailable", val);
-			} else
-				printf("Error on gauge read: %d\n", rc);
-			break;
-		default:
-			printf("\tUNKNOWN!: %s Type: %d\n",
-			       name ? name : "Unavailable",
-			       nodelist->dtnl_node->dtn_type);
-			break;
-		}
-		nodelist = nodelist->dtnl_next;
-	}
-	d_tm_list_free(head);
-}
-
 */
 import "C"
 
-
 import (
-//	"context"
-	"fmt"
-//	"io/ioutil"
-//	"net"
-//	"strconv"
-//	"strings"
-//	"sync"
 	"unsafe"
 
 	"github.com/pkg/errors"
-
-	"github.com/daos-stack/daos/src/control/logging"
 )
 
-type logger interface {
-	Debug(string)
-	Debugf(string, ...interface{})
+type Counter struct {
+	name	string
+	value	uint64
 }
 
-var log logger = logging.NewStdoutLogger("telemetry")
+type Gauge struct {
+	name	string
+	value	uint64
+}
 
-// SetLogger sets the package-level logger
-func SetLogger(l logger) {
-	log = l
+type Timestamp struct {
+	name	string
+	ts	string
+	clk	C.time_t
+}
+
+type Duration struct {
+	name	string
+	sec	uint64
+	nsec	uint64
+}
+
+type Snapshot struct {
+	name	string
+	sec	uint64
+	nsec	uint64
 }
 
 func InitTelemetry(rank int) (*C.uint64_t, C.d_tm_node_p, error) {
@@ -280,79 +88,6 @@ func InitTelemetry(rank int) (*C.uint64_t, C.d_tm_node_p, error) {
 	return shmemRoot, root, nil
 }
 
-func BuildNodeList(shmemRoot *C.uint64_t, list *C.d_tm_nodeList, dirname string, filter int) (*C.d_tm_nodeList, error) {
-
-	if (&list == nil) {
-		fmt.Printf("Bad list ptr ... \n")
-		return nil, errors.Errorf("error: bad list ptr")
-	}
-
-	rc := C.d_tm_list(&list, shmemRoot, C.CString(dirname), C.int(filter))
-	if (rc == C.D_TM_SUCCESS) {
-		return list, nil
-	}
-	return nil, errors.Errorf("error: %d", rc)
-}
-
-func convertNodeList(shmemRoot *C.uint64_t, nodeList *C.d_tm_nodeList) ([]string, []string, error) {
-	var directory []string
-	var metrics []string
-
-	if (nodeList != nil) {
-		for ; nodeList != nil; nodeList = nodeList.dtnl_next {
-			name := C.d_tm_conv_char_ptr(shmemRoot, unsafe.Pointer(nodeList.dtnl_node.dtn_name))
-			if (name == nil) {
-				continue
-			}
-			if (nodeList.dtnl_node.dtn_type == C.D_TM_DIRECTORY) {
-				directory = append(directory, C.GoString(name))
-			} else {
-				metrics = append(metrics, C.GoString(name))
-			}
-		}
-	}
-	return directory, metrics, nil
-}
-
-
-func DiscoveryTree(shmemRoot *C.uint64_t, nodeList *C.d_tm_nodeList, dirname string, filter int) (*C.d_tm_nodeList, error) {
-
-	fmt.Printf("Discovering tree for: %s\n", dirname)
-
-	nodeList, err := BuildNodeList(shmemRoot, nodeList, dirname, filter)
-	if (err != nil) {
-		return nodeList, err
-	}
-
-	head := nodeList
-
-	directories, metrics, err := convertNodeList(shmemRoot, nodeList)
-
-	fmt.Printf("The directories are:")
-	for _, d := range directories {
-		fmt.Printf("\t%s", d)
-	}
-	fmt.Printf("\n")
-
-	fmt.Printf("The metrics are:")
-	for _, m := range metrics {
-		fmt.Printf("\t%s", m)
-	}
-	fmt.Printf("\n")
-
-	for _, d := range directories {
-		var subdir string
-		if dirname == "" {
-			subdir = d
-		} else {
-			subdir = dirname + "/" + d
-		}
-		nodeList, err = DiscoveryTree(shmemRoot, nodeList, subdir, filter)
-	}
-
-	return head, nil
-}
-
 func FindMetric(shmemRoot *C.uint64_t, name string) (C.d_tm_node_p) {
 	return C.d_tm_find_metric(shmemRoot, C.CString(name))
 }
@@ -366,13 +101,13 @@ func GetCounter(shmemRoot *C.uint64_t, node C.d_tm_node_p, name string) (uint64,
 	return 0, errors.Errorf("error %d", int(res))
 }
 
-func GetTimestamp(shmemRoot *C.uint64_t, node C.d_tm_node_p, name string) (string, error) {
+func GetTimestamp(shmemRoot *C.uint64_t, node C.d_tm_node_p, name string) (string, C.time_t, error) {
 	var clk C.time_t;
 	res := C.d_tm_get_timestamp(&clk, shmemRoot, node, C.CString(name))
 	if (res == C.D_TM_SUCCESS) {
-		return C.GoString(C.ctime(&clk))[:24], nil
+		return C.GoString(C.ctime(&clk))[:24], clk, nil
 	}
-	return "", errors.Errorf("error %d", int(res))
+	return "", 0, errors.Errorf("error %d", int(res))
 }
 
 func GetTimerSnapshot(shmemRoot *C.uint64_t, node C.d_tm_node_p, name string) (uint64, uint64, error) {
@@ -402,179 +137,76 @@ func GetGauge(shmemRoot *C.uint64_t, node C.d_tm_node_p, name string) (uint64, e
 	return 0, errors.Errorf("error %d", int(res))
 }
 
-func Test(rank int, name string) error {
-	var nl *C.d_tm_nodeList
-//	var tnl *C.d_tm_nodeList
+func GetMetadata(shmemRoot *C.uint64_t, node C.d_tm_node_p, name string) (string, string, error) {
+	var shortDesc *C.char
+	var longDesc *C.char
+	res := C.d_tm_get_metadata(&shortDesc, &longDesc, shmemRoot, node, C.CString(name))
+	if (res == C.D_TM_SUCCESS) {
+		short := C.GoString(shortDesc)
+		long := C.GoString(longDesc)
+		C.free(unsafe.Pointer(shortDesc))
+		C.free(unsafe.Pointer(longDesc))
+		return short, long, nil
+	}
+	return "", "", errors.Errorf("error %d", int(res))
+}
 
-	//shmemRoot, root, err := InitTelemetry(rank)
-	shmemRoot, _, err := InitTelemetry(rank)
-	if (err != nil) {
-		fmt.Printf("Failed to init telemetry for rank: %d\n", rank)
-		return err;
-	}
+func GetNodeName(shmemRoot *C.uint64_t, node C.d_tm_node_p) string {
+	nodeName := (*C.char)(C.d_tm_conv_ptr(shmemRoot, unsafe.Pointer(node.dtn_name)))
+	return C.GoString(nodeName)
+}
 
-	node := FindMetric(shmemRoot, name)
-	if (node == nil) {
-		fmt.Printf("metric:[%s] was not found\n", name)
-		return errors.Errorf("metric:[%s] was not found", name)
-	}
-/*
-	switch node.dtn_type {
-	case C.D_TM_COUNTER:
-		val, err := GetCounter(shmemRoot, node, "")
-		if (err != nil) {
-			break
-		}
-		fmt.Printf("Counter: [%s] Value: %d\n", name, val)
-	case C.D_TM_TIMESTAMP:
-		ts, err := GetTimestamp(shmemRoot, node, "")
-		if (err != nil) {
-			break
-		}
-		fmt.Printf("Timestamp: [%s]:%s\n", name, ts)
-	case C.D_TM_TIMER_SNAPSHOT:
-		sec, ns, err := GetTimerSnapshot(shmemRoot, node, "")
-		if (err != nil) {
-			break
-		}
-		fmt.Printf("High resolution timer: [%s]: %d(sec) %d(ns) \n", name, sec, ns)
-	case C.D_TM_DURATION | C.D_TM_CLOCK_REALTIME:
-		sec, ns, err := GetDuration(shmemRoot, node, "")
-		if (err != nil) {
-			break
-		}
-		fmt.Printf("Duration w/clock realtime: [%s]: %.9fs\n", name, float64(sec) + float64(ns) / float64(1e9))
-	case C.D_TM_DURATION | C.D_TM_CLOCK_PROCESS_CPUTIME:
-		sec, ns, err := GetDuration(shmemRoot, node, "")
-		if (err != nil) {
-			break
-		}
-		fmt.Printf("Duration w/clock process CPU time: [%s]: %.9fs\n", name, float64(sec) + float64(ns) / float64(1e9))
-	case C.D_TM_DURATION | C.D_TM_CLOCK_THREAD_CPUTIME:
-		sec, ns, err := GetDuration(shmemRoot, node, "")
-		if (err != nil) {
-			break
-		}
-		fmt.Printf("Duration w/clock thread CPU time: [%s]: %.9fs\n", name, float64(sec) + float64(ns) / float64(1e9))
-	case C.D_TM_GAUGE:
-		val, err := GetGauge(shmemRoot, node, "")
-		if (err != nil) {
-			break
-		}
-		fmt.Printf("Gauge: [%s] Value: %d\n", name, val)
-	case C.D_TM_DIRECTORY:
-		fmt.Printf("Directory: [%s]\n", name)
-	default:
-	}
+func GetNumObjects(shmemRoot *C.uint64_t, dirname string, filter int) uint64 {
+	num := C.d_tm_get_num_objects(shmemRoot, C.CString(dirname), C.int(filter))
+	return uint64(num)
+}
 
-	filter := C.D_TM_DIRECTORY | C.D_TM_COUNTER | C.D_TM_TIMESTAMP | C.D_TM_TIMER_SNAPSHOT | C.D_TM_DURATION | C.D_TM_GAUGE
-	dirname := "src/gurt/examples/telem_producer_example.c/main/"
+func CountMetrics(shmemRoot *C.uint64_t, node C.d_tm_node_p) uint64 {
+	num := C.d_tm_count_metrics(shmemRoot, node)
+	return uint64(num)
+}
 
-	nodeList, err := BuildNodeList(shmemRoot, nl, dirname, filter)
-	if (err != nil) {
-		return err
-	}
+func PrintMyChildren(shmemRoot *C.uint64_t, node C.d_tm_node_p, level int, stream *C.FILE) {
+	C.d_tm_print_my_children(shmemRoot, node, C.int(level), stream);
+}
 
-	dirname = "src/gurt/examples/telem_producer_example.c/test_function1/"
-	nodeList, err = BuildNodeList(shmemRoot, nodeList, dirname, filter)
-	if (err != nil) {
-		return err
-	}
+func PrintNode(shmemRoot *C.uint64_t, node C.d_tm_node_p, level int, stream *C.FILE) {
+	C.d_tm_print_node(shmemRoot, node, C.int(level), stream);
+}
 
-	dirname = "src/gurt/examples/telem_producer_example.c/timer_snapshot/snapshot 3"
-	nodeList, err = BuildNodeList(shmemRoot, nodeList, dirname, filter)
-	if (err != nil) {
-		return err
-	}
+func PrintCounter(val uint64, name string, stream *C.FILE) {
+	C.d_tm_print_counter(C.uint64_t(val), C.CString(name), stream);
+}
 
+func PrintTimestamp(clk *C.time_t, name string, stream *C.FILE) {
+	C.d_tm_print_timestamp(clk, C.CString(name), stream)
+}
 
-	dirname = "src/gurt/examples/telem_producer_example.c/test_function2/"
-	nodeList, err = BuildNodeList(shmemRoot, nodeList, dirname, filter)
-	if (err != nil) {
-		return err
-	}
+func PrintTimerSnapshot(sec uint64, nsec uint64, name string, tm_type C.int, stream *C.FILE) {
+	var tms C.tspec
 
-	dirname = "src/gurt/examples/telem_producer_example.c/timer_snapshot/"
-	nodeList, err = BuildNodeList(shmemRoot, nodeList, dirname, filter)
-	if (err != nil) {
-		return err
-	}
+	tms.tv_sec = C.time_t(sec)
+	tms.tv_nsec = C.long(nsec)
+	C.d_tm_print_timer_snapshot(&tms, C.CString(name), tm_type, stream)
+}
 
-	dirname = "src/gurt/examples/telem_producer_example.c/timer_snapshot/snapshot 2"
-	nodeList, err = BuildNodeList(shmemRoot, nodeList, dirname, filter)
-	if (err != nil) {
-		return err
-	}
+func PrintDuration(sec uint64, nsec uint64, name string, tm_type C.int, stream *C.FILE) {
+	var tms C.tspec
 
-	dirname = "src/gurt/examples/telem_producer_example.c/timer_snapshot/snapshot 4"
-	nodeList, err = BuildNodeList(shmemRoot, nodeList, dirname, filter)
-	if (err != nil) {
-		return err
-	}
+	tms.tv_sec = C.time_t(sec)
+	tms.tv_nsec = C.long(nsec)
+	C.d_tm_print_duration(&tms, C.CString(name), tm_type, stream)
+}
 
-	if (nodeList != nil) {
-		head := nodeList
-		for ; nodeList != nil; nodeList = nodeList.dtnl_next {
-			name := C.d_tm_conv_char_ptr(shmemRoot, unsafe.Pointer(nodeList.dtnl_node.dtn_name))
-			if (name != nil) {
-				fmt.Printf("Name is: %s\n", C.GoString(name))
-			}
-		}
-		C.d_tm_list_free(head)
-	}
+func PrintGauge(val uint64, name string, stream *C.FILE) {
+	C.d_tm_print_gauge(C.uint64_t(val), C.CString(name), stream);
+}
 
-	dirname = "src/gurt/examples/telem_producer_example.c/timer_snapshot"
-	C.readMetrics(shmemRoot, root, C.CString(dirname), 0)
+func ListFree(nodeList *C.d_tm_nodeList) {
+	C.d_tm_list_free(nodeList);
+}
 
-	dirname = "src/gurt/examples/telem_producer_example.c/main"
-	C.readMetrics(shmemRoot, root, C.CString(dirname), 0)
-*/
-	filter := C.D_TM_DIRECTORY | C.D_TM_COUNTER | C.D_TM_TIMESTAMP | C.D_TM_TIMER_SNAPSHOT | C.D_TM_DURATION | C.D_TM_GAUGE
-/*
-	dirname = ""
-	nodeList, err = BuildNodeList(shmemRoot, nl, dirname, filter)
-	if (err != nil) {
-		fmt.Printf("Error after build node list: %v\n", err)
-		return err
-	}
-	if (nodeList != nil) {
-		head := nodeList
-		for ; nodeList != nil; nodeList = nodeList.dtnl_next {
-			name := C.d_tm_conv_char_ptr(shmemRoot, unsafe.Pointer(nodeList.dtnl_node.dtn_name))
-			if (name != nil) {
-				fmt.Printf("Name (list 1) is: %s\n", C.GoString(name))
-			}
-		}
-		C.d_tm_list_free(head)
-	}
-*/
-	nl = nil
-	//nl, err = DiscoveryTree(shmemRoot, nl, "src/gurt/examples/telem_producer_example.c", filter)
-//	nl, err = DiscoveryTree(shmemRoot, nl, "src/gurt/examples/telem_producer_example.c", filter)
-	nl, err = DiscoveryTree(shmemRoot, nl, "", filter)
-/*
-	if (nl2 != nil) {
-		head := nl2
-		for ; nl2 != nil; nl2 = nl2.dtnl_next {
-			name := C.d_tm_conv_char_ptr(shmemRoot, unsafe.Pointer(nl2.dtnl_node.dtn_name))
-			if (name != nil) {
-				fmt.Printf("Final directory tree list has name: %s\n", C.GoString(name))
-			}
-		}
-		C.d_tm_list_free(head)
-	}
-*/
-	if (nl != nil) {
-		head := nl
-		for ; nl != nil; nl = nl.dtnl_next {
-			name := C.d_tm_conv_char_ptr(shmemRoot, unsafe.Pointer(nl.dtnl_node.dtn_name))
-			if (name != nil) {
-				fmt.Printf("Final directory tree list has name: %s\n", C.GoString(name))
-			}
-		}
-		C.d_tm_list_free(head)
-	} else {
-		fmt.Printf("nl is null .. doh!\n")
-	}
-	return nil
+func GetAPIVersion() int {
+	version := C.d_tm_get_version()
+	return int(version)
 }

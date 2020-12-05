@@ -36,58 +36,31 @@ import (
 )
 
 type telemetryCmd struct {
-	Scan telemetryScanCmd `command:"scan" description:"Read the telemetry from the local I/O Servers"`
+	Tree telemetryScanCmd `command:"tree" description:"Show the telemetry in tree format"`
+	List telemetryListCmd `command:"list" description:"Read/list the telemetry "`
 }
 
 type telemetryScanCmd struct {
 	cfgCmd
 	logCmd
-	Rank int `short:"r" long:"rank" description:"Display telemetry for the given rank"`
+	Rank int `short:"r" long:"rank" description:"Use this rank for telemetry data"`
+	Path string `short:"p" long:"path" description:"Scan telemetry from this path"`
+}
+
+type telemetryListCmd struct {
+	cfgCmd
+	logCmd
+	Rank int `short:"r" long:"rank" description:"Use this rank for telemetry data"`
+	Path string `short:"p" long:"path" description:"List telemetry from this path"`
+	Iterations int `short:"i" long:"iter" description:"Number of iterations to print before exiting"`
 }
 
 func (cmd *telemetryScanCmd) Execute(args []string) error {
+	telemetry.ShowDirectoryTree(cmd.Rank, cmd.Path)
+	return nil
+}
 
-//	telemetry.StartTelemetry(cmd.Rank)
-
-//	telemetry.InitTelemetry(cmd.Rank)
-
-	telemetry.Test(cmd.Rank, "src/gurt/examples/telem_producer_example.c/main/loop counter")
-//	telemetry.Test(cmd.Rank, "src/gurt/examples/telem_producer.c/main/10000 iterations - REALTIME")
-//	telemetry.Test(cmd.Rank, "src/gurt/examples/telem_producer.c/main/10000 iterations - PROCESS_CPUTIME")
-//	telemetry.Test(cmd.Rank, "src/gurt/examples/telem_producer.c/test_function1/loop counter")
-//	telemetry.Test(cmd.Rank, "src/gurt/examples/telem_producer.c/test_function2/last executed")
-//	telemetry.Test(cmd.Rank, "src/gurt/examples/telem_producer.c/timer_snapshot/timer 1")
-//	telemetry.Test(cmd.Rank, "src/gurt/examples/telem_producer.c/timer_snapshot/timer 2")
-//	telemetry.Test(cmd.Rank, "src/gurt/examples/telem_producer.c/timer_snapshot/timer 3")
-//	telemetry.Test(cmd.Rank, "src/gurt/examples/telem_producer.c/timer_snapshot/timer 4")
-//	telemetry.Test(cmd.Rank, "src/gurt/examples/telem_producer.c/open handles")
-
-/*
-
-	results, err := netdetect.ScanFabric(netCtx, provider, defaultExcludeInterfaces)
-	if err != nil {
-		return errors.WithMessage(err, "failed to execute the fabric and device scan")
-	}
-
-	hf := &control.HostFabric{}
-	for _, fi := range results {
-		hf.AddInterface(&control.HostFabricInterface{
-			Provider: fi.Provider,
-			Device:   fi.DeviceName,
-			NumaNode: uint32(fi.NUMANode),
-		})
-	}
-
-	hfm := make(control.HostFabricMap)
-	if err := hfm.Add("localhost", hf); err != nil {
-		return err
-	}
-
-	var bld strings.Builder
-	if err := pretty.PrintHostFabricMap(hfm, &bld); err != nil {
-		return err
-	}
-	cmd.log.Info(bld.String())
-*/
+func (cmd *telemetryListCmd) Execute(args []string) error {
+	telemetry.ListMetrics(cmd.Rank, cmd.Path, cmd.Iterations)
 	return nil
 }
