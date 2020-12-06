@@ -71,6 +71,7 @@
 #include <daos/debug.h>
 #include <daos/common.h>
 #include <daos/mgmt.h>
+#include <daos/sys_debug.h>
 #include <daos/tests_lib.h>
 #include <daos.h>
 

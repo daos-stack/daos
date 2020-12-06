@@ -114,7 +114,7 @@ client_clear_fault()
 static void
 server_corrupt_disk(const char *group)
 {
-	int rc = daos_mgmt_set_params(group, -1, DMG_KEY_FAIL_LOC,
+	int rc = daos_debug_set_params(group, -1, DMG_KEY_FAIL_LOC,
 				      DAOS_CSUM_CORRUPT_DISK | DAOS_FAIL_ALWAYS,
 				      0, NULL);
 	assert_int_equal(rc, 0);
@@ -123,7 +123,7 @@ server_corrupt_disk(const char *group)
 static void
 server_clear_fault(const char *group)
 {
-	int rc = daos_mgmt_set_params(group, -1,
+	int rc = daos_debug_set_params(group, -1,
 				      DMG_KEY_FAIL_LOC, 0, 0, NULL);
 	assert_int_equal(rc, 0);
 }
