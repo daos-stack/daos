@@ -1928,6 +1928,10 @@ static int
 agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	 struct ec_agg_entry *agg_entry, unsigned int *acts)
 {
+	if (entry->ie_child_type == VOS_ITER_SINGLE) {
+		*acts |= VOS_ITER_CB_SKIP;
+		return 0;
+	}
 	if (agg_key_compare(agg_entry->ae_akey, entry->ie_key)) {
 		agg_entry->ae_akey = entry->ie_key;
 		agg_entry->ae_thdl = ih;
@@ -2083,6 +2087,7 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		rc = agg_data_extent(entry, agg_entry, acts);
 		break;
 	default:
+		D_ASSERT(0);
 		break;
 	}
 
@@ -2202,6 +2207,7 @@ ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	iter_param.ip_hdl		= cont->sc_hdl;
 	iter_param.ip_epr.epr_lo	= epr->epr_lo;
 	iter_param.ip_epr.epr_hi	= epr->epr_hi;
+	iter_param.ip_epc_expr		= VOS_IT_EPC_RR;
 	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
 	iter_param.ip_recx.rx_idx	= 0ULL;
 	iter_param.ip_recx.rx_nr	= ~PARITY_INDICATOR;
