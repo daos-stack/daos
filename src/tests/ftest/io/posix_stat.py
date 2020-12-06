@@ -76,7 +76,7 @@ class POSIXStatTest(IorTestBase):
 
             # Run ior command.
             try:
-                self.run_ior_with_pool(timeout=40, stop_dfuse=False)
+                self.run_ior_with_pool(timeout=200, stop_dfuse=False)
             except TestFail:
                 self.log.info("ior failed! " + str(self.ior_cmd))
 

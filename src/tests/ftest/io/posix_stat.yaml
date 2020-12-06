@@ -3,7 +3,7 @@ hosts:
     - server-A
   test_clients:
     - client-B
-timeout: 170
+timeout: 600
 pool:
   scm_size: 10G
   control_method: dmg
