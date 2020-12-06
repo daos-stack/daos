@@ -75,14 +75,14 @@ struct dfs_daos_t {
 	uint32_t num_ents;
 };
 
-typedef struct daos_file_t {
+typedef struct file_dfs_t {
 	enum {POSIX, DAOS} type;
 	int                  fd;
 	/* DAOS specific variables for I/O */
 	daos_off_t offset;
 	dfs_obj_t* obj;
 	dfs_t* dfs;
-} daos_file_t;
+} file_dfs_t;
 
 /* cmd_args_s: consolidated result of parsing command-line arguments
  * for pool, cont, obj commands, much of which is common.
@@ -112,8 +112,8 @@ struct cmd_args_s {
 
 	/* Container unified namespace (path) related */
 	char			*path;		/* --path cont namespace */
-	char			*src_path;	/* --src-path cont namespace */
-	char			*dst_path;	/* --dst-path cont namespace */
+	char			*src;		/* --src path for filesystem copy */
+	char			*dst;		/* --dst path for filesystem copy */
 	daos_cont_layout_t	type;		/* --type cont type */
 	daos_oclass_id_t	oclass;		/* --oclass object class */
 	daos_size_t		chunk_size;	/* --chunk_size of cont objs */

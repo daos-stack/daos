@@ -552,7 +552,9 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"value",	required_argument,	NULL,	'v'},
 		{"path",	required_argument,	NULL,	'd'},
 		{"src-path",	required_argument,	NULL,	'R'},
+		{"src",		required_argument,	NULL,	'U'},
 		{"dst-path",	required_argument,	NULL,	'Z'},
+		{"dst",		required_argument,	NULL,	'I'},
 		{"type",	required_argument,	NULL,	't'},
 		{"oclass",	required_argument,	NULL,	'o'},
 		{"chunk_size",	required_argument,	NULL,	'z'},
@@ -577,9 +579,9 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	char			*cmdname = NULL;
 
 	assert(ap != NULL);
-	ap->p_op = -1;
-	ap->c_op = -1;
-	ap->o_op = -1;
+	ap->p_op  = -1;
+	ap->c_op  = -1;
+	ap->o_op  = -1;
 	ap->fs_op = -1;
 	D_STRNDUP(ap->sysname, default_sysname, strlen(default_sysname));
 	if (ap->sysname == NULL)
@@ -716,14 +718,14 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			if (ap->path == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
-		case 'R':
-			D_STRNDUP(ap->src_path, optarg, strlen(optarg));
-			if (ap->src_path == NULL)
+		case 'U':
+			D_STRNDUP(ap->src, optarg, strlen(optarg));
+			if (ap->src == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
-		case 'Z':
-			D_STRNDUP(ap->dst_path, optarg, strlen(optarg));
-			if (ap->dst_path == NULL)
+		case 'I':
+			D_STRNDUP(ap->dst, optarg, strlen(optarg));
+			if (ap->dst == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
 		case 't':
@@ -896,10 +898,10 @@ out_free:
 		D_FREE(ap->value_str);
 	if (ap->path != NULL)
 		D_FREE(ap->path);
-	if (ap->src_path != NULL)
-		D_FREE(ap->src_path);
-	if (ap->dst_path != NULL)
-		D_FREE(ap->dst_path);
+	if (ap->src != NULL)
+		D_FREE(ap->src);
+	if (ap->dst != NULL)
+		D_FREE(ap->dst);
 	if (ap->snapname_str != NULL)
 		D_FREE(ap->snapname_str);
 	if (ap->epcrange_str != NULL)
@@ -1008,7 +1010,7 @@ fs_op_hdlr(struct cmd_args_s *ap)
 
 	switch (op) {
 	case FS_COPY:
-		if (ap->src_path == NULL || ap->dst_path == NULL) {
+		if (ap->src == NULL || ap->dst == NULL) {
 			fprintf(stderr, "a source and destination path must be provided\n");
 		} else {
 			rc = fs_copy_hdlr(ap);
