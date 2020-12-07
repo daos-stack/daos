@@ -322,8 +322,40 @@ int d_rank_list_append(d_rank_list_t *rank_list, d_rank_t rank);
 int d_rank_list_dump(d_rank_list_t *rank_list, d_string_t name, int name_len);
 d_rank_list_t *uint32_array_to_rank_list(uint32_t *ints, size_t len);
 int rank_list_to_uint32_array(d_rank_list_t *rl, uint32_t **ints, size_t *len);
-int d_sgl_init(d_sg_list_t *sgl, unsigned int nr);
-void d_sgl_fini(d_sg_list_t *sgl, bool free_iovs);
+
+static inline int
+d_sgl_init(d_sg_list_t *sgl, unsigned int nr)
+{
+	sgl->sg_nr_out = 0;
+	sgl->sg_nr = nr;
+
+	if (unlikely(nr == 0)) {
+		sgl->sg_iovs = NULL;
+		return 0;
+	}
+
+	D_ALLOC_ARRAY(sgl->sg_iovs, nr);
+
+	return sgl->sg_iovs == NULL ? -DER_NOMEM : 0;
+}
+
+static inline void
+d_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
+{
+	uint32_t i;
+
+	if (unlikely(sgl == NULL || sgl->sg_iovs == NULL))
+		return;
+
+	if (free_iovs)
+		for (i = 0; i < sgl->sg_nr; i++)
+			D_FREE(sgl->sg_iovs[i].iov_buf);
+
+	D_FREE(sgl->sg_iovs);
+	sgl->sg_nr_out = 0;
+	sgl->sg_nr = 0;
+}
+
 void d_getenv_bool(const char *env, bool *bool_val);
 void d_getenv_int(const char *env, unsigned int *int_val);
 int d_write_string_buffer(struct d_string_buffer_t *buf, const char *fmt, ...);
@@ -538,6 +570,26 @@ d_time2s(struct timespec t)
 {
 	return (double) t.tv_sec + (double) t.tv_nsec / 1e9;
 }
+
+/**
+ * Backoff sequence (opaque)
+ *
+ * Used to generate a sequence of uint32_t backoffs with user-defined semantics
+ * (e.g., numbers of microseconds for delaying RPC retries). See
+ * d_backoff_seq_init and d_backoff_seq_next for the algorithm.
+ */
+struct d_backoff_seq {
+	uint8_t		bos_flags;	/* unused */
+	uint8_t		bos_nzeros;
+	uint16_t	bos_factor;
+	uint32_t	bos_max;
+	uint32_t	bos_next;
+};
+
+int d_backoff_seq_init(struct d_backoff_seq *seq, uint8_t nzeros,
+		       uint16_t factor, uint32_t next, uint32_t max);
+void d_backoff_seq_fini(struct d_backoff_seq *seq);
+uint32_t d_backoff_seq_next(struct d_backoff_seq *seq);
 
 static inline bool
 is_on_stack(void *ptr)

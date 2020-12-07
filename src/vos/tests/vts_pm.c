@@ -31,6 +31,17 @@
 #include "vts_io.h"
 #include "vts_array.h"
 
+#ifdef VERBOSE
+#define VERBOSE_PRINT(...)		\
+	do {				\
+		printf(__VA_ARGS__);	\
+		fflush(stdout);		\
+	} while (0)
+#else
+#define VERBOSE_PRINT(...) (void)0
+#endif
+
+
 static int start_epoch = 5;
 #define BUF_SIZE 2000
 static int buf_size = BUF_SIZE;
@@ -616,7 +627,7 @@ punch_model_test(void **state)
 	iod.iod_nr = 1;
 
 	/* Allocate memory for the scatter-gather list */
-	rc = daos_sgl_init(&sgl, 1);
+	rc = d_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
 
 	d_iov_set(&sgl.sg_iovs[0], (void *)under, strlen(under));
@@ -731,7 +742,7 @@ punch_model_test(void **state)
 	assert_int_equal(sgl.sg_iovs[0].iov_len, strlen(latest));
 	assert_int_equal(strncmp(buf, latest, strlen(latest)), 0);
 
-	daos_sgl_fini(&sgl, false);
+	d_sgl_fini(&sgl, false);
 
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid,
 			       DAOS_GET_RECX | DAOS_GET_MAX,
@@ -766,7 +777,7 @@ simple_multi_update(void **state)
 	d_iov_set(&dkey, &dkey_val, sizeof(dkey_val));
 
 	for (i = 0; i < 2; i++) {
-		rc = daos_sgl_init(&sgl[i], 1);
+		rc = d_sgl_init(&sgl[i], 1);
 		assert_int_equal(rc, 0);
 		iod[i].iod_type = DAOS_IOD_SINGLE;
 		iod[i].iod_size = strlen(values[i]) + 1;
@@ -820,7 +831,7 @@ simple_multi_update(void **state)
 		assert_true(iod[i].iod_size == (strlen(overwrite[i]) + 1));
 		assert_memory_equal(buf[i], overwrite[i],
 				    strlen(overwrite[i]) + 1);
-		daos_sgl_fini(&sgl[i], false);
+		d_sgl_fini(&sgl[i], false);
 	}
 }
 
@@ -847,7 +858,7 @@ object_punch_and_fetch(void **state)
 
 	test_args_reset(arg, VPOOL_SIZE);
 
-	rc = daos_sgl_init(&sgl, 1);
+	rc = d_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
 	d_iov_set(&update_keys[0], &stable_key, sizeof(stable_key));
 	d_iov_set(&update_keys[1], &key1, sizeof(key1));
@@ -892,7 +903,7 @@ object_punch_and_fetch(void **state)
 		assert_int_equal(iod.iod_size, 0);
 	}
 
-	daos_sgl_fini(&sgl, false);
+	d_sgl_fini(&sgl, false);
 }
 
 #define SM_BUF_LEN 64
@@ -1102,11 +1113,17 @@ cond_akey_punch_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
 	}
 }
 
+#define cond_fetch_op(...)						\
+	do {								\
+		VERBOSE_PRINT("Called cond_fetch_op at %s:%d\n",	\
+			      __FILE__, __LINE__);			\
+		cond_fetch_op_(__VA_ARGS__);				\
+	} while (0)
 static void
-cond_fetch_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
-	      daos_epoch_t epoch, bool use_tx, const char *dkey_str,
-	      const char *akey_str, uint64_t flags, int expected_rc,
-	      d_sg_list_t *sgl, const char *value_str, char fill_char)
+cond_fetch_op_(void **state, daos_handle_t coh, daos_unit_oid_t oid,
+	       daos_epoch_t epoch, bool use_tx, const char *dkey_str,
+	       const char *akey_str, uint64_t flags, int expected_rc,
+	       d_sg_list_t *sgl, const char *value_str, char fill_char)
 {
 	struct dtx_handle	*dth = NULL;
 	char			 dkey_buf[OP_MAX_STRING];
@@ -1146,10 +1163,16 @@ cond_fetch_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
 	assert_int_equal(memcmp(value_buf, read_buf, value_len), 0);
 }
 
+#define cond_updaten_op(...)						\
+	do {								\
+		VERBOSE_PRINT("Called cond_updaten_op at %s:%d\n",	\
+			      __FILE__, __LINE__);			\
+		cond_updaten_op_(__VA_ARGS__);				\
+	} while (0)
 static void
-cond_updaten_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
-	       daos_epoch_t epoch, const char *dkey_str,
-	       uint64_t flags, int expected_rc, d_sg_list_t *sgl, int n, ...)
+cond_updaten_op_(void **state, daos_handle_t coh, daos_unit_oid_t oid,
+		 daos_epoch_t epoch, const char *dkey_str,
+		 uint64_t flags, int expected_rc, d_sg_list_t *sgl, int n, ...)
 {
 	struct dtx_handle	*dth;
 	struct dtx_id		 xid;
@@ -1203,15 +1226,21 @@ cond_updaten_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
 
 }
 
+#define cond_update_op(...)						\
+	do {								\
+		VERBOSE_PRINT("Called cond_update_op at %s:%d\n",	\
+			      __FILE__, __LINE__);			\
+		cond_update_op_(__VA_ARGS__);				\
+	} while (0)
 static void
-cond_update_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
-	       daos_epoch_t epoch, const char *dkey_str, const char *akey_str,
-	       uint64_t flags, int expected_rc, d_sg_list_t *sgl,
-	       const char *value_str)
+cond_update_op_(void **state, daos_handle_t coh, daos_unit_oid_t oid,
+		daos_epoch_t epoch, const char *dkey_str, const char *akey_str,
+		uint64_t flags, int expected_rc, d_sg_list_t *sgl,
+		const char *value_str)
 {
 
-	cond_updaten_op(state, coh, oid, epoch, dkey_str, flags, expected_rc,
-			sgl, 1, akey_str, value_str);
+	cond_updaten_op_(state, coh, oid, epoch, dkey_str, flags, expected_rc,
+			 sgl, 1, akey_str, value_str);
 }
 
 #define MAX_SGL 10
@@ -1324,7 +1353,13 @@ cond_test(void **state)
 	start_epoch = epoch + 1;
 }
 
-#define NUM_OIDS 1000
+/** Making the oid generation deterministic, I get to 304 before I hit a false
+ *  collision on the oid.   This may indicate the hashing needs to be improved
+ *  but for now, it's good enough.  In general, the chance of a single
+ *  collision is very high well before we get close to saturation due
+ *  to the birthday paradox.
+ */
+#define NUM_OIDS 304
 static void
 multiple_oid_cond_test(void **state)
 {
@@ -1342,9 +1377,11 @@ multiple_oid_cond_test(void **state)
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 1;
 
+	reset_oid_stable(0xdeadbeef);
+
 	/** Same dkey/akey, multiple objects */
 	for (i = 0; i < NUM_OIDS; i++) {
-		oid = gen_oid(0);
+		oid = gen_oid_stable(0);
 		cond_update_op(state, arg->ctx.tc_co_hdl, oid,
 			       epoch - 2, "dkey", "akey", 0, 0, &sgl, "foo");
 		cond_update_op(state, arg->ctx.tc_co_hdl, oid,
@@ -1571,12 +1608,7 @@ minor_epoch_punch_sv(void **state)
 	iod.iod_nr = 1;
 
 	/* Allocate memory for the scatter-gather list */
-	rc = daos_sgl_init(&sgl, 1);
-	assert_int_equal(rc, 0);
-
-
-	/* Allocate memory for the scatter-gather list */
-	rc = daos_sgl_init(&sgl, 1);
+	rc = d_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
 
 	d_iov_set(&sgl.sg_iovs[0], (void *)first, iod.iod_size);
@@ -1614,7 +1646,7 @@ tx_end:
 	assert_int_equal(iod.iod_size, 0);
 	assert_memory_equal(buf, expected, strlen(expected));
 
-	daos_sgl_fini(&sgl, false);
+	d_sgl_fini(&sgl, false);
 	start_epoch = epoch + 1;
 }
 
@@ -1661,7 +1693,7 @@ minor_epoch_punch_array(void **state)
 	iod.iod_nr = 1;
 
 	/* Allocate memory for the scatter-gather list */
-	rc = daos_sgl_init(&sgl, 1);
+	rc = d_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
 
 	d_iov_set(&sgl.sg_iovs[0], (void *)first, rex.rx_nr);
@@ -1710,7 +1742,7 @@ tx_end:
 
 	assert_memory_equal(buf, expected, strlen(expected));
 
-	daos_sgl_fini(&sgl, false);
+	d_sgl_fini(&sgl, false);
 	start_epoch = epoch + 1;
 }
 
@@ -1745,7 +1777,7 @@ minor_epoch_punch_rebuild(void **state)
 	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
 	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
 
-	rc = daos_sgl_init(&sgl, 1);
+	rc = d_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
 
 	rex.rx_idx = 0;
@@ -1803,7 +1835,7 @@ minor_epoch_punch_rebuild(void **state)
 	assert_memory_equal(buf, expected, strlen(expected));
 	epoch += 2;
 
-	daos_sgl_fini(&sgl, false);
+	d_sgl_fini(&sgl, false);
 
 	start_epoch = epoch + 1;
 }
@@ -1850,7 +1882,7 @@ test_inprogress_parent_punch(void **state)
 	set_iov(&akey2, &akey2_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
 	set_iov(&akey3, &akey3_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
 
-	rc = daos_sgl_init(&sgl, 1);
+	rc = d_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
 
 	rex.rx_idx = 0;
@@ -1938,7 +1970,7 @@ test_inprogress_parent_punch(void **state)
 	assert_int_equal(rc, 0);
 	assert_memory_equal(buf, expected, strlen(expected));
 
-	daos_sgl_fini(&sgl, false);
+	d_sgl_fini(&sgl, false);
 
 	start_epoch = epoch + 1;
 }
@@ -2079,9 +2111,9 @@ many_tx(void **state)
 
 	memset(&iod, 0, sizeof(iod));
 
-	rc = daos_sgl_init(&sgl, 1);
+	rc = d_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
-	rc = daos_sgl_init(&fetch_sgl, 1);
+	rc = d_sgl_init(&fetch_sgl, 1);
 	assert_int_equal(rc, 0);
 
 	/* Set up dkey and akey */
@@ -2216,8 +2248,8 @@ start_over:
 	printf("Total transactions %d, success %d, writes %d\n", total, success,
 	       writes);
 
-	daos_sgl_fini(&sgl, false);
-	daos_sgl_fini(&fetch_sgl, false);
+	d_sgl_fini(&sgl, false);
+	d_sgl_fini(&fetch_sgl, false);
 	start_epoch = epoch + 1;
 }
 
@@ -2259,9 +2291,9 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 	set_iov(&akey1, &akey1_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
 	set_iov(&akey2, &akey2_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
 
-	rc = daos_sgl_init(&sgl[0], 1);
+	rc = d_sgl_init(&sgl[0], 1);
 	assert_int_equal(rc, 0);
-	rc = daos_sgl_init(&sgl[1], 1);
+	rc = d_sgl_init(&sgl[1], 1);
 	assert_int_equal(rc, 0);
 
 	rex[0].rx_idx = 0;
@@ -2432,6 +2464,8 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 		vts_dtx_end(dth);
 
 	start_epoch = epoch + 1;
+	d_sgl_fini(&sgl[0], false);
+	d_sgl_fini(&sgl[1], false);
 }
 
 static void

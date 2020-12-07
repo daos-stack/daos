@@ -357,6 +357,8 @@ strarg2ft(char *str)
 		return daos_mhash_type2algo(HASH_TYPE_CRC16);
 	if (csum_str_match(str, "crc32"))
 		return daos_mhash_type2algo(HASH_TYPE_CRC32);
+	if (csum_str_match(str, "adler32"))
+		return daos_mhash_type2algo(HASH_TYPE_ADLER32);
 	if (csum_str_match(str, "crc64"))
 		return daos_mhash_type2algo(HASH_TYPE_CRC64);
 	if (csum_str_match(str, "sha1"))

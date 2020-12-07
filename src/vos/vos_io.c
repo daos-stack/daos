@@ -1260,6 +1260,21 @@ vos_fetch_end(daos_handle_t ioh, int err)
 	return err;
 }
 
+/** If the object/key doesn't exist, we should augment the set with any missing
+ *  entries
+ */
+static void
+vos_fetch_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int iod_nr,
+		      daos_iod_t *iods)
+{
+	struct vos_akey_data	ad;
+
+	ad.ad_is_iod = true;
+	ad.ad_iods = iods;
+
+	vos_ts_add_missing(ts_set, dkey, iod_nr, &ad);
+}
+
 int
 vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		daos_key_t *dkey, unsigned int iod_nr,
@@ -1323,8 +1338,10 @@ out:
 			rc = -DER_TX_RESTART;
 	}
 
-	if (rc == -DER_NONEXIST || rc == 0)
+	if (rc == -DER_NONEXIST || rc == 0) {
+		vos_fetch_add_missing(ioc->ic_ts_set, dkey, iod_nr, iods);
 		vos_ts_set_update(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
+	}
 
 	if (rc != 0) {
 		daos_recx_ep_list_free(ioc->ic_recx_lists, ioc->ic_iod_nr);
@@ -2099,6 +2116,38 @@ abort:
 	return err;
 }
 
+static int
+vos_check_akeys(int iod_nr, daos_iod_t *iods)
+{
+	int	i, j;
+
+	if (iod_nr == 0)
+		return 0;
+
+	for (i = 0; i < iod_nr - 1; i++) {
+		for (j = i + 1; j < iod_nr; j++) {
+			if (iods[i].iod_name.iov_len !=
+			    iods[j].iod_name.iov_len)
+				continue;
+
+			if (iods[i].iod_name.iov_buf ==
+			    iods[j].iod_name.iov_buf)
+				return -DER_NO_PERM;
+
+			if (iods[i].iod_name.iov_buf == NULL ||
+			    iods[j].iod_name.iov_buf == NULL)
+				continue;
+
+			if (memcmp(iods[i].iod_name.iov_buf,
+				   iods[j].iod_name.iov_buf,
+				   iods[i].iod_name.iov_len) == 0)
+				return -DER_NO_PERM;
+		}
+	}
+
+	return 0;
+}
+
 int
 vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		 uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
@@ -2112,6 +2161,12 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	D_DEBUG(DB_TRACE, "Prepare IOC for "DF_UOID", iod_nr %d, epc "DF_X64
 		", flags="DF_X64"\n", DP_UOID(oid), iod_nr,
 		dtx_is_valid_handle(dth) ? dth->dth_epoch :  epoch, flags);
+
+	rc = vos_check_akeys(iod_nr, iods);
+	if (rc != 0) {
+		D_ERROR("Detected duplicate akeys, operation not allowed\n");
+		return rc;
+	}
 
 	rc = vos_ioc_create(coh, oid, false, epoch, iod_nr, iods, iods_csums,
 			    flags, NULL, dedup, dedup_th, dth, &ioc);
