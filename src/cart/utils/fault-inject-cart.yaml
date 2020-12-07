@@ -37,3 +37,22 @@ fault_config:
     interval:     1
     max_faults:   2
     err_code:     1011
+
+    # SWIM messages drop fault injection
+    # probability_x should be 1 always to drop SWIM messages
+    # Change probability_y to non-zero to introduce random failures.
+    # probability_y: 20  - will introduce 5% of message loss
+    # probability_y: 100 - will introduce 1% of message loss
+  - id:            65025
+    interval:      0
+    max_faults:    0
+    probability_x: 1
+    probability_y: 0
+    err_code:      0
+    # Comma separated list of SWIM messages drop fault injection arguments:
+    # rank=<num> - Set it to the rank number which should be evicted by
+    # simulation of network failures.
+    # delay=<num> - Set it to the number of seconds on which fault injection
+    # will be delayed. It can be useful to complete an initialization and
+    # creation of pool/container need for testing.
+    argument:     "rank=1,delay=10"
