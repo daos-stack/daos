@@ -42,6 +42,7 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -215,8 +216,6 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	membership := system.NewMembership(log, sysdb)
 	scmProvider := scm.DefaultProvider(log)
 	harness := NewIOServerHarness(log).WithFaultDomain(faultDomain)
-	mgmtSvc := newMgmtSvc(harness, membership, sysdb)
-	var netDevClass uint32
 
 	// Create rpcClient for inter-server communication.
 	cliCfg := control.DefaultConfig()
@@ -224,6 +223,32 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	rpcClient := control.NewClient(
 		control.WithConfig(cliCfg),
 		control.WithClientLogger(log))
+
+	// Init management RPC subsystem.
+	mgmtSvc := newMgmtSvc(harness, membership, sysdb)
+	eventPubSub := events.NewPubSub(log)
+	defer eventPubSub.Close()
+
+	// Dispatcher for incoming forwarded events.
+	mgmtSvc.dispatchEvent = func(evt *events.RASEvent) {
+		eventPubSub.Publish(evt)
+	}
+
+	// Until we become MS leader, forward published events.
+	var seq uint64
+	forwardEventFn := func(evt *events.RASEvent) {
+		seq++
+		req := &control.SystemNotifyReq{Event: evt, Sequence: seq}
+		req.ControlAddr = controlAddr
+		req.SetHostList(cfg.AccessPoints)
+
+		if _, err := control.SystemNotify(ctx, rpcClient, req); err != nil {
+			log.Errorf("forward event to MS: %s", err)
+		}
+	}
+	eventPubSub.Subscribe(events.RASTypeRankStateChange, forwardEventFn)
+
+	var netDevClass uint32
 
 	netCtx, err := netdetect.Init(context.Background())
 	if err != nil {
@@ -282,6 +307,11 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		if err := harness.AddInstance(srv); err != nil {
 			return err
 		}
+		// Register callback to publish I/O Server process exit events.
+		srv.OnInstanceExit(func(ctx context.Context, rank system.Rank, exitErr error) error {
+			eventPubSub.Publish(events.NewRankExitEvent(srv.Index(), rank.Uint32(), exitErr))
+			return nil
+		})
 
 		if idx == 0 {
 			netDevClass, err = cfg.GetDeviceClassFn(srvCfg.Fabric.Interface)
@@ -388,10 +418,23 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	sysdb.OnLeadershipGained(func(ctx context.Context) error {
 		log.Infof("MS leader running on %s", hostname())
 		mgmtSvc.startJoinLoop(ctx)
+
+		// On gaining leadership, stop forwarding MS events.
+		eventPubSub.Reset()
+		// Handle rank state change notifications.
+		eventPubSub.Subscribe(events.RASTypeRankStateChange, membership.ProcessEvent)
+
 		return nil
 	})
 	sysdb.OnLeadershipLost(func() error {
 		log.Infof("MS leader no longer running on %s", hostname())
+
+		// On losing leadership, stop handling MS events.
+		eventPubSub.Reset()
+		seq = 0
+		// Forward events to new MS leader.
+		eventPubSub.Subscribe(events.RASTypeRankStateChange, forwardEventFn)
+
 		return nil
 	})
 

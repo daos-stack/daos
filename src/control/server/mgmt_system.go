@@ -33,6 +33,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -193,6 +194,10 @@ func (svc *mgmtSvc) StopRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 	if err != nil {
 		return nil, err
 	}
+	// TODO: ignore rank exit events whilst performing controlled shutdown
+	//svc.publishExcludeEvents(RankExitEvent)
+	//defer svc.publishIncludeEvents(RankExitEvent)
+
 	for _, srv := range instances {
 		if !srv.isStarted() {
 			continue
@@ -405,6 +410,46 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 	}
 
 	svc.log.Debugf("MgmtSvc.StartRanks dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
+// ClusterEvent management service gRPC handler receives ClusterEvent requests
+// from control-plane instances attempting to notify the MS of a cluster event
+// in the DAOS system.
+//
+// On receipt of the cluster event request, process any encapsulated RAS event
+// messages (handling of other types to be supported in the future).
+//
+// Necessary state updates for the rank involved in the event will be
+// registered in the system membership.
+func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *mgmtpb.ClusterEventReq) (*mgmtpb.ClusterEventResp, error) {
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+	if req.Sequence < 1 {
+		return nil, errors.New("invalid sequence number in request")
+	}
+	svc.log.Debugf("MgmtSvc.ClusterEvent dispatch, req:%#v\n", req)
+
+	if err := svc.sysdb.CheckLeader(); err != nil {
+		return nil, err
+	}
+
+	rasEventPB := req.GetRas()
+	if rasEventPB == nil {
+		return nil, errors.Errorf("unexpected event type received, want RAS got %T",
+			req.GetEvent())
+	}
+
+	rasEvent := new(events.RASEvent)
+	if err := convert.Types(rasEventPB, rasEvent); err != nil {
+		return nil, errors.Wrap(err, "convert proto to ras event")
+	}
+	svc.dispatchEvent(rasEvent)
+
+	resp := &mgmtpb.ClusterEventResp{Sequence: req.Sequence}
+	svc.log.Debugf("MgmtSvc.ClusterEvent dispatch, resp:%#v\n", resp)
 
 	return resp, nil
 }

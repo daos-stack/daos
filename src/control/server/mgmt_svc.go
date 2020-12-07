@@ -36,6 +36,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/system"
@@ -68,6 +69,7 @@ type mgmtSvc struct {
 	harness          *IOServerHarness
 	membership       *system.Membership // if MS leader, system membership list
 	sysdb            *system.Database
+	dispatchEvent    func(*events.RASEvent)
 	clientNetworkCfg *config.ClientNetworkCfg
 	joinReqs         joinReqChan
 }

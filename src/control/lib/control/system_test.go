@@ -34,6 +34,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
@@ -1056,6 +1057,85 @@ func TestControl_SystemReformat(t *testing.T) {
 			})
 
 			gotResp, gotErr := SystemReformat(context.TODO(), mi, tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp, defResCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_SystemNotify(t *testing.T) {
+	rasEventRankExit := events.NewRankExitEvent(0, 0, nil)
+
+	for name, tc := range map[string]struct {
+		req     *SystemNotifyReq
+		uErr    error
+		uResp   *UnaryResponse
+		lookErr error
+		expResp *SystemNotifyResp
+		expErr  error
+	}{
+		"nil req": {
+			req:    nil,
+			expErr: errors.New("nil request"),
+		},
+		"nil event": {
+			req:    &SystemNotifyReq{},
+			expErr: errors.New("nil event in request"),
+		},
+		"nil control address": {
+			req:    &SystemNotifyReq{Event: rasEventRankExit},
+			expErr: errors.New("nil control address in request"),
+		},
+		"local failure": {
+			req: &SystemNotifyReq{
+				Event:       rasEventRankExit,
+				ControlAddr: common.MockHostAddr(),
+			},
+			uErr:   errors.New("local failed"),
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req: &SystemNotifyReq{
+				Event:       rasEventRankExit,
+				ControlAddr: common.MockHostAddr(),
+			},
+			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
+			expErr: errors.New("remote failed"),
+		},
+		"empty response": {
+			req: &SystemNotifyReq{
+				Event:       rasEventRankExit,
+				ControlAddr: common.MockHostAddr(),
+			},
+			uResp:   MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.ClusterEventResp{}),
+			expResp: &SystemNotifyResp{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mi := NewMockInvoker(log, &MockInvokerConfig{
+				UnaryError:    tc.uErr,
+				UnaryResponse: tc.uResp,
+			})
+
+			mockLookupAddrFn := func(addr string) ([]string, error) {
+				return map[string][]string{
+					"192.168.0.1": {"foo.bar.com"},
+				}[addr], tc.lookErr
+			}
+			if tc.req != nil {
+				tc.req.lookupAddrFn = mockLookupAddrFn
+			}
+
+			gotResp, gotErr := SystemNotify(context.TODO(), mi, tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
