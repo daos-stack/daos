@@ -162,8 +162,8 @@ tree_cache_create_internal(daos_handle_t toh, unsigned int tree_class,
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
 
-	rc = dbtree_create_inplace(tree_class, 0, 32, &uma, broot,
-				   &root.root_hdl);
+	rc = dbtree_create_inplace(tree_class, BTR_FEAT_DIRECT_KEY, 32,
+				   &uma, broot, &root.root_hdl);
 	if (rc) {
 		D_ERROR("failed to create rebuild tree: "DF_RC"\n", DP_RC(rc));
 		D_FREE(broot);
@@ -2434,7 +2434,7 @@ migrate_init_object_tree(struct migrate_pool_tls *tls)
 		/* migrate tree root init */
 		memset(&uma, 0, sizeof(uma));
 		uma.uma_id = UMEM_CLASS_VMEM;
-		rc = dbtree_create_inplace(DBTREE_CLASS_NV, 0, 4, &uma,
+		rc = dbtree_create_inplace(DBTREE_CLASS_UV, 0, 4, &uma,
 					   &tls->mpt_root,
 					   &tls->mpt_root_hdl);
 		if (rc != 0) {
@@ -2447,7 +2447,7 @@ migrate_init_object_tree(struct migrate_pool_tls *tls)
 		/* migrate tree root init */
 		memset(&uma, 0, sizeof(uma));
 		uma.uma_id = UMEM_CLASS_VMEM;
-		rc = dbtree_create_inplace(DBTREE_CLASS_NV, 0, 4, &uma,
+		rc = dbtree_create_inplace(DBTREE_CLASS_UV, 0, 4, &uma,
 					   &tls->mpt_migrated_root,
 					   &tls->mpt_migrated_root_hdl);
 		if (rc != 0) {
