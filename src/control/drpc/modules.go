@@ -238,6 +238,8 @@ const (
 	MethodGroupUpdate MgmtMethod = C.DRPC_METHOD_MGMT_GROUP_UPDATE
 	// MethodDisconnect defines a method for signaling a clean client shutdown
 	MethodDisconnect MgmtMethod = C.DRPC_METHOD_MGMT_DISCONNECT
+	// MethodIdentifyStorage is a ModuleMgmt method
+	MethodIdentifyStorage MgmtMethod = C.DRPC_METHOD_MGMT_DEV_IDENTIFY
 )
 
 type srvMethod int32
