@@ -96,6 +96,10 @@ RUN echo "$USER:$PASSWD" | chpasswd
 # Create directory for DAOS backend storage
 RUN mkdir /mnt/daos
 RUN chown daos.daos /mnt/daos
+RUN mkdir /var/run/daos_server
+RUN chown daos.daos /var/run/daos_server
+RUN mkdir /var/run/daos_agent
+RUN chown daos.daos /var/run/daos_agent
 
 # Set maven repo mirror
 RUN mkdir -p /root/.m2

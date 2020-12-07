@@ -122,6 +122,10 @@ RUN echo -e "<settings>\n\
 # Create directory for DAOS backend storage
 RUN mkdir /mnt/daos
 RUN chown daos.daos /mnt/daos || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown daos /mnt/daos; chgrp daos /mnt/daos; ls -ld /mnt/daos; }
+RUN mkdir /var/run/daos_server
+RUN chown daos.daos /var/run/daos_server
+RUN mkdir /var/run/daos_agent
+RUN chown daos.daos /var/run/daos_agent
 
 # Dependencies
 # Packages for NVML exist in CentOS, but are
