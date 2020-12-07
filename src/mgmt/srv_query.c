@@ -582,9 +582,9 @@ bio_faulty_led_set(void *arg)
 static void
 bio_faulty_state_set(void *arg)
 {
-	struct dss_module_info	   *info = dss_get_module_info();
-	struct bio_xs_context	   *bxc;
-	int			    rc;
+	struct dss_module_info	*info = dss_get_module_info();
+	struct bio_xs_context	*bxc;
+	int			 rc;
 
 	D_ASSERT(info != NULL);
 	D_DEBUG(DB_MGMT, "BIO health state set on xs:%d, tgt:%d\n",

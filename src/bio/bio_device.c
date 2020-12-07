@@ -786,9 +786,9 @@ skip_led_str:
 	}
 
 	rc = spdk_vmd_get_led_state(pci_device, &current_led_state);
-	if (rc)
+	if (rc) {
 		D_ERROR("Failed to get the VMD LED state\n");
-	else {
+	} else {
 		/* Verify the correct state is set */
 		if (current_led_state != new_led_state)
 			D_ERROR("LED of device:%s is in an unexpected state:"
