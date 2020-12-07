@@ -251,4 +251,8 @@ int cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop);
 int cont_iv_snapshots_refresh(void *ns, uuid_t cont_uuid);
 int cont_iv_snapshots_update(void *ns, uuid_t cont_uuid,
 			     uint64_t *snapshots, int snap_count);
+
+int cont_child_gather_oids(struct ds_cont_child *cont, uuid_t coh_uuid,
+			   daos_epoch_t epoch);
+
 #endif /* __CONTAINER_SRV_INTERNAL_H__ */

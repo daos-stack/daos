@@ -43,9 +43,10 @@ type (
 	// up members and provides methods for managing the
 	// membership.
 	MemberDatabase struct {
-		Ranks MemberRankMap
-		Uuids MemberUuidMap
-		Addrs MemberAddrMap
+		Ranks        MemberRankMap
+		Uuids        MemberUuidMap
+		Addrs        MemberAddrMap
+		FaultDomains *FaultDomainTree
 	}
 )
 
@@ -65,6 +66,23 @@ func (mam MemberAddrMap) addMember(addr *net.TCPAddr, m *Member) {
 		mam[addr.String()] = []*Member{}
 	}
 	mam[addr.String()] = append(mam[addr.String()], m)
+}
+
+func (mam MemberAddrMap) removeMember(m *Member) {
+	members, exists := mam[m.Addr.String()]
+	if !exists {
+		return
+	}
+	for i, cur := range members {
+		if m.UUID == cur.UUID {
+			// remove from slice
+			members = append(members[:i], members[i+1:]...)
+			break
+		}
+	}
+	if len(members) == 0 {
+		delete(mam, m.Addr.String())
+	}
 }
 
 // MarshalJSON creates a serialized representation of the MemberAddrMap.
@@ -139,6 +157,27 @@ func (mdb *MemberDatabase) addMember(m *Member) {
 	mdb.Ranks[m.Rank] = m
 	mdb.Uuids[m.UUID] = m
 	mdb.Addrs.addMember(m.Addr, m)
+
+	if err := mdb.FaultDomains.AddDomain(m.RankFaultDomain()); err != nil {
+		panic(err)
+	}
+}
+
+func (mdb *MemberDatabase) updateMember(m *Member) {
+	cur, found := mdb.Uuids[m.UUID]
+	if !found {
+		panic(errors.Errorf("member update for unknown member %+v", m))
+	}
+	cur.state = m.state
+	cur.Info = m.Info
+
+	if err := mdb.FaultDomains.RemoveDomain(cur.RankFaultDomain()); err != nil {
+		panic(err)
+	}
+	cur.FaultDomain = m.FaultDomain
+	if err := mdb.FaultDomains.AddDomain(cur.RankFaultDomain()); err != nil {
+		panic(err)
+	}
 }
 
 // removeMember is responsible for removing new Member and updating all
@@ -146,5 +185,8 @@ func (mdb *MemberDatabase) addMember(m *Member) {
 func (mdb *MemberDatabase) removeMember(m *Member) {
 	delete(mdb.Ranks, m.Rank)
 	delete(mdb.Uuids, m.UUID)
-	delete(mdb.Addrs, m.Addr.String())
+	mdb.Addrs.removeMember(m)
+	if err := mdb.FaultDomains.RemoveDomain(m.RankFaultDomain()); err != nil {
+		panic(err)
+	}
 }
