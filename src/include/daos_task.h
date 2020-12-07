@@ -556,6 +556,8 @@ typedef struct {
 typedef struct {
 	/** Container open handle. */
 	daos_handle_t		coh;
+	/** bit flags, see enum daos_snapshot_opts */
+	unsigned int		opts;
 	/** Returned epoch of persistent snapshot taken. */
 	daos_epoch_t		*epoch;
 	/** Optional null terminated name for snapshot. */

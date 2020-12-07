@@ -26,6 +26,8 @@
  * tests/suite/daos_obj.c
  */
 #define D_LOGFAC	DD_FAC(tests)
+#include "daos_test.h"
+
 #include "daos_iotest.h"
 #include <daos_types.h>
 #include <daos/checksum.h>
@@ -2910,6 +2912,8 @@ io_nospace(void **state)
 	char		key[10];
 	int		i;
 
+	FAULT_INJECTION_REQUIRED();
+
 	/** choose random object */
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 
@@ -3037,7 +3041,7 @@ tgt_idx_change_retry(void **state)
 	arg->fail_loc = DAOS_OBJ_TGT_IDX_CHANGE;
 	arg->fail_num = replica;
 	if (arg->myrank == 0) {
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				     DAOS_OBJ_TGT_IDX_CHANGE,
 				     replica, NULL);
 	}
@@ -3107,7 +3111,7 @@ tgt_idx_change_retry(void **state)
 
 	daos_fail_loc_set(0);
 	if (arg->myrank == 0) {
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
 				     0, NULL);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -3738,7 +3742,7 @@ io_pool_map_refresh_trigger(void **state)
 	oid = dts_oid_set_rank(oid, leader - 1);
 
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				 DAOS_FORCE_REFRESH_POOL_MAP | DAOS_FAIL_ONCE,
 				 0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -3749,7 +3753,7 @@ io_pool_map_refresh_trigger(void **state)
 		      strlen("data") + 1, DAOS_TX_NONE, &req);
 
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				     0, 0, NULL);
 
 	ioreq_fini(&req);
@@ -3938,7 +3942,7 @@ io_capa_iv_fetch(void **state)
 	oid = dts_oid_set_rank(oid, leader - 1);
 
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				 DAOS_FORCE_CAPA_FETCH | DAOS_FAIL_ONCE,
 				 0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -3949,7 +3953,7 @@ io_capa_iv_fetch(void **state)
 		      strlen("data") + 1, DAOS_TX_NONE, &req);
 
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				     0, 0, NULL);
 
 	ioreq_fini(&req);
@@ -4069,7 +4073,7 @@ io_fetch_retry_another_replica(void **state)
 
 	/* Fail the first try */
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
+		daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
 				 DAOS_OBJ_FETCH_DATA_LOST | DAOS_FAIL_ONCE,
 				 0, NULL);
 

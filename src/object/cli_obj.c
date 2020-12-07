@@ -3115,8 +3115,9 @@ obj_shard_comp_cb(struct shard_auxi_args *shard_auxi,
 		    !obj_auxi->spec_group && !obj_auxi->to_leader) {
 			int new_tgt;
 
-			/* Check if there are other replicas avaible to fulfill the
-			 * request */
+			/* Check if there are other replicas available to
+			 * fulfill the request
+			 */
 			obj_auxi_add_failed_tgt(obj_auxi, shard_auxi->target);
 			new_tgt = obj_shard_find_replica(obj_auxi->obj,
 						 shard_auxi->target,

@@ -235,8 +235,8 @@ enum {
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_mgmt_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
-		     uint64_t value, uint64_t value_extra, daos_event_t *ev);
+daos_debug_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
+		      uint64_t value, uint64_t value_extra, daos_event_t *ev);
 
 /**
  * Add mark to servers.
@@ -244,7 +244,7 @@ daos_mgmt_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
  * \param mark	[IN]	mark to add to the debug log.
  */
 int
-daos_mgmt_add_mark(const char *mark);
+daos_debug_add_mark(const char *mark);
 
 /**
  * Query internal blobstore state for given blobstore uuid in the specified

@@ -252,6 +252,7 @@ int daos_sgls_copy_all(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
 int daos_sgl_copy_data_out(d_sg_list_t *dst, d_sg_list_t *src);
 int daos_sgl_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
 int daos_sgl_alloc_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
+int daos_sgl_merge(d_sg_list_t *dst, d_sg_list_t *src);
 daos_size_t daos_sgl_data_len(d_sg_list_t *sgl);
 daos_size_t daos_sgl_buf_size(d_sg_list_t *sgl);
 daos_size_t daos_sgls_buf_size(d_sg_list_t *sgls, int nr);
@@ -509,6 +510,7 @@ daos_der2errno(int err)
 	case -DER_BADPATH:
 	case -DER_NOTDIR:	return ENOTDIR;
 	case -DER_STALE:	return ESTALE;
+	case -DER_TX_RESTART:	return ERESTART;
 	default:		return EIO;
 	}
 };
@@ -762,8 +764,10 @@ int crt_proc_struct_daos_acl(crt_proc_t proc, struct daos_acl **data);
 
 bool daos_prop_valid(daos_prop_t *prop, bool pool, bool input);
 daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool);
-struct daos_prop_entry *daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
 int daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply);
+void daos_prop_fini(daos_prop_t *prop);
+
+struct daos_prop_entry *daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
 int daos_prop_entry_copy(struct daos_prop_entry *entry,
 			 struct daos_prop_entry *entry_dup);
 daos_recx_t *daos_recx_alloc(uint32_t nr);
