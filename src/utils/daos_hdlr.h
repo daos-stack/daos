@@ -52,7 +52,8 @@ enum pool_op {
 	POOL_SET_ATTR,
 	POOL_GET_ATTR,
 	POOL_LIST_ATTRS,
-	POOL_DEL_ATTR
+	POOL_DEL_ATTR,
+	POOL_AUTOTEST,
 };
 
 enum obj_op {
@@ -184,6 +185,7 @@ int pool_set_attr_hdlr(struct cmd_args_s *ap);
 int pool_del_attr_hdlr(struct cmd_args_s *ap);
 int pool_get_attr_hdlr(struct cmd_args_s *ap);
 int pool_list_attrs_hdlr(struct cmd_args_s *ap);
+int pool_autotest_hdlr(struct cmd_args_s *ap);
 /* TODO: implement these pool op functions
  * int pool_list_cont_hdlr(struct cmd_args_s *ap);
  * int pool_stat_hdlr(struct cmd_args_s *ap);
