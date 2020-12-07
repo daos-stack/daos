@@ -57,10 +57,21 @@
 	} while  (0)
 #endif
 
+#if FAULT_INJECTION
+#define FAULT_INJECTION_REQUIRED() do { } while (0)
+#else
+#define FAULT_INJECTION_REQUIRED() \
+	do { \
+		print_message("Fault injection required for test, skipping...\n"); \
+		skip();\
+	} while (0)
+#endif /* FAULT_INJECTION */
+
 #include <mpi.h>
 #include <daos/debug.h>
 #include <daos/common.h>
 #include <daos/mgmt.h>
+#include <daos/sys_debug.h>
 #include <daos/tests_lib.h>
 #include <daos.h>
 
@@ -309,7 +320,7 @@ enum {
 	HANDLE_CO
 };
 
-int run_daos_mgmt_test(int rank, int size);
+int run_daos_mgmt_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_pool_test(int rank, int size);
 int run_daos_cont_test(int rank, int size);
 int run_daos_capa_test(int rank, int size);
