@@ -981,7 +981,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	int			 tmprc;
 
 	/** reset the saved hash */
-	vos_kh_set(0);
+	vos_kh_clear();
 
 	if (krecp != NULL)
 		*krecp = NULL;
@@ -1016,10 +1016,11 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 		ilog = &krec->kr_ilog;
 		/** fall through to cache re-cache entry */
 	case -DER_NONEXIST:
-		/** Key hash already be calculated by dbtree_fetch so no need
-		 *  to pass in the key here.
+		/** Key hash may already be calculated but isn't for some key
+		 * types so pass it in here.
 		 */
-		tmprc = vos_ilog_ts_add(ts_set, ilog, NULL, 0);
+		tmprc = vos_ilog_ts_add(ts_set, ilog, key->iov_buf,
+					(int)key->iov_len);
 		if (tmprc != 0) {
 			rc = tmprc;
 			D_ASSERT(tmprc == -DER_NO_PERM);
@@ -1103,7 +1104,8 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 			ilog = &krec->kr_ilog;
 		}
 
-		lrc = vos_ilog_ts_add(ts_set, ilog, NULL, 0);
+		lrc = vos_ilog_ts_add(ts_set, ilog, key_iov->iov_buf,
+				      (int)key_iov->iov_len);
 		if (lrc != 0) {
 			rc = lrc;
 			goto done;

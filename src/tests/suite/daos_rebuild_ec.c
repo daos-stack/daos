@@ -92,10 +92,13 @@ rebuild_ec_internal(void **state, uint16_t oclass, int kill_data_nr,
 		verify_ec_full(&req, arg->index, 0);
 
 	ioreq_fini(&req);
+#if 0
+	/* Disable reintegrate due to DAOS-5884 */
 	if (kill_parity_nr > 0)
 		reintegrate_pools_ranks(&arg, 1, &kill_data_rank, 1);
 
 	reintegrate_pools_ranks(&arg, 1, kill_ranks, kill_ranks_num);
+#endif
 }
 
 static void
