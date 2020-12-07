@@ -185,7 +185,6 @@ int pool_del_attr_hdlr(struct cmd_args_s *ap);
 int pool_get_attr_hdlr(struct cmd_args_s *ap);
 int pool_list_attrs_hdlr(struct cmd_args_s *ap);
 /* TODO: implement these pool op functions
- * int pool_list_cont_hdlr(struct cmd_args_s *ap);
  * int pool_stat_hdlr(struct cmd_args_s *ap);
  */
 
@@ -210,14 +209,13 @@ int cont_update_acl_hdlr(struct cmd_args_s *ap);
 int cont_delete_acl_hdlr(struct cmd_args_s *ap);
 int cont_set_owner_hdlr(struct cmd_args_s *ap);
 int cont_rollback_hdlr(struct cmd_args_s *ap);
+int cont_list_objs_hdlr(struct cmd_args_s *ap);
 
 /* TODO implement the following container op functions
  * all with signatures similar to this:
  * int cont_FN_hdlr(struct cmd_args_s *ap)
  *
- * cont_list_objs_hdlr()
  * int cont_stat_hdlr()
- * int cont_del_attr_hdlr()
  * int cont_rollback_hdlr()
  */
 

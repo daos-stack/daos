@@ -627,7 +627,6 @@ out:
  * all with signatures similar to this:
  * int cont_FN_hdlr(struct cmd_args_s *ap)
  *
- * cont_list_objs_hdlr()
  * int cont_stat_hdlr()
  */
 
@@ -1917,6 +1916,49 @@ cont_rollback_hdlr(struct cmd_args_s *ap)
 
 	fprintf(stdout, "successfully rollback container\n");
 	return rc;
+}
+
+int
+cont_list_objs_hdlr(struct cmd_args_s *ap)
+{
+	static const int OID_ARR_SIZE	= 8;
+	daos_obj_id_t oids[OID_ARR_SIZE];
+	daos_handle_t oit;
+	daos_anchor_t anchor;
+	uint32_t oids_nr;
+	int rc, rc2 = 0, i;
+
+	/* create a snapshot */
+	rc = cont_create_snap_hdlr(ap);
+	if (rc != 0)
+		goto out;
+
+	/* open OIT */
+	rc = daos_oit_open(ap->cont, ap->epc, &oit, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "open of container's OIT failed: %d\n", rc);
+		goto out_snap;
+	}
+
+	memset(&anchor, 0, sizeof(anchor));
+	while (!daos_anchor_is_eof(&anchor)) {
+		oids_nr = OID_ARR_SIZE;
+		rc = daos_oit_list(oit, oids, &oids_nr, &anchor, NULL);
+		if (rc != 0) {
+			fprintf(stderr, "object IDs enumeration failed: %d\n", rc);
+			D_GOTO(out_close, rc);
+		}
+
+		for (i = 0; i < oids_nr; i++)
+			D_PRINT(DF_OID"\n", DP_OID(oids[i]));
+	}
+
+out_close:
+	daos_oit_close(oit, NULL);
+out_snap:
+	cont_destroy_snap_hdlr(ap);
+out:
+	return rc ? rc : rc2;
 }
 
 int
