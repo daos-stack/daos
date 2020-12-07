@@ -277,15 +277,16 @@ static struct daos_obj_class daos_obj_classes[] = {
 		},
 	},
 	{
-		.oc_name	= "DAOS_OC_EC_K2P1_L32K",
-		.oc_id		= DAOS_OC_EC_K2P1_L32K,
+		.oc_name	= "OBJ_ID_TABLE",
+		.oc_id		= DAOS_OC_OIT,
 		{
 			.ca_schema		= DAOS_OS_SINGLE,
-			.ca_resil		= DAOS_RES_EC,
+			.ca_resil		= DAOS_RES_REPL,
+			/* XXX use 1 replica and 1 groop for simplicity,
+			 * it should be more scalable
+			 */
 			.ca_grp_nr		= 1,
-			.ca_ec_k		= 2,
-			.ca_ec_p		= 1,
-			.ca_ec_cell		= 1 << 15,
+			.ca_rp_nr		= 1,
 		},
 	},
 	{
@@ -298,6 +299,18 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_ec_k		= 2,
 			.ca_ec_p		= 1,
 			.ca_ec_cell		= 1 << 20,
+		},
+	},
+	{
+		.oc_name	= "DAOS_OC_EC_K2P1_L32K",
+		.oc_id		= DAOS_OC_EC_K2P1_L32K,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 2,
+			.ca_ec_p		= 1,
+			.ca_ec_cell		= 1 << 15,
 		},
 	},
 	{
