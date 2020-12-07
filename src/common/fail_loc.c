@@ -178,7 +178,7 @@ daos_fail_init(void)
 	int rc;
 
 	rc = d_fault_inject_init();
-	if (rc != 0)
+	if (rc != 0 && rc != -DER_NOSYS)
 		D_GOTO(out, rc);
 
 	/* Log, but no not propagate error on registering the fault as this

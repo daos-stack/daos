@@ -87,6 +87,9 @@ func TestSpdk_CleanLockfiles(t *testing.T) {
 
 			gotErr := cleanLockfiles(log, mockRemove, tc.pciAddrs...)
 			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
 
 			if diff := cmp.Diff(tc.expCalls, mockExt.removeCalls); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)

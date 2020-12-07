@@ -183,9 +183,9 @@ open_retry:
 			goto open_retry;
 		}
 
-		memset(&oid, 0, sizeof(oid));
-		oid.id_shard = obj_shard->do_shard;
-		oid.id_pub   = obj->cob_md.omd_id;
+		oid.id_shard  = obj_shard->do_shard;
+		oid.id_pub    = obj->cob_md.omd_id;
+		oid.id_pad_32 = 0;
 		/* NB: obj open is a local operation, so it is ok to call
 		 * it in sync mode, at least for now.
 		 */
@@ -792,7 +792,7 @@ obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr)
 			return;
 		if (iod->iod_recxs != NULL)
 			D_FREE(iod->iod_recxs);
-		daos_sgl_fini(reasb_req->orr_sgls + i, false);
+		d_sgl_fini(reasb_req->orr_sgls + i, false);
 		obj_io_desc_fini(reasb_req->orr_oiods + i);
 		obj_ec_recxs_fini(&reasb_req->orr_recxs[i]);
 		obj_ec_seg_sorter_fini(&reasb_req->orr_sorters[i]);
@@ -1313,8 +1313,10 @@ dc_obj_fetch_md(daos_obj_id_t oid, struct daos_obj_md *md)
 	/* For predefined object classes, do nothing at here. But for those
 	 * customized classes, we need to fetch for the remote OI table.
 	 */
-	memset(md, 0, sizeof(*md));
-	md->omd_id = oid;
+	md->omd_id      = oid;
+	md->omd_ver     = 0;
+	md->omd_padding = 0;
+	md->omd_loff    = 0;
 	return 0;
 }
 
@@ -2709,7 +2711,7 @@ shard_list_task_fini(tse_task_t *task, void *arg)
 	shard_arg->la_recxs = NULL;
 	shard_arg->la_kds = NULL;
 	if (shard_arg->la_sgl != NULL && shard_arg->la_sgl != obj_arg->sgl)
-		daos_sgl_fini(shard_arg->la_sgl, false);
+		d_sgl_fini(shard_arg->la_sgl, false);
 
 	return 0;
 }
@@ -3112,8 +3114,9 @@ obj_shard_comp_cb(struct shard_auxi_args *shard_auxi,
 		    !obj_auxi->spec_group && !obj_auxi->to_leader) {
 			int new_tgt;
 
-			/* Check if there are other replicas avaible to fulfill the
-			 * request */
+			/* Check if there are other replicas available to
+			 * fulfill the request
+			 */
 			obj_auxi_add_failed_tgt(obj_auxi, shard_auxi->target);
 			new_tgt = obj_shard_find_replica(obj_auxi->obj,
 						 shard_auxi->target,
