@@ -108,7 +108,7 @@ class DataMoverTestBase(IorTestBase):
             str: a string of all of the quoted posix test path strings
 
         """
-        return " ".join(self.get_posix_test_path_list)
+        return " ".join(self.get_posix_test_path_list())
 
     def validate_param_type(self, param_type):
         """Validates the param_type.
