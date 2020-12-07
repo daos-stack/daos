@@ -26,11 +26,8 @@ import random
 import threading
 
 from itertools import product
-from avocado import fail_on
-from apricot import TestWithServers
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
-from command_utils import CommandFailure
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
 
@@ -141,7 +138,7 @@ class OSAOnlineReintegration(OSAUtils):
                 for thrd in threads:
                     self.log.info("Thread : %s", thrd)
                     thrd.start()
-                    time.sleep(5)
+                    time.sleep(1)
             self.pool = pool[val]
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
@@ -153,7 +150,7 @@ class OSAOnlineReintegration(OSAUtils):
             fail_count = 0
             while fail_count <= 20:
                 pver_exclude = self.get_pool_version()
-                time.sleep(10)
+                time.sleep(3)
                 fail_count += 1
                 if pver_exclude > (pver_begin + len(target_list)):
                     break
@@ -170,7 +167,7 @@ class OSAOnlineReintegration(OSAUtils):
             fail_count = 0
             while fail_count <= 20:
                 pver_reint = self.get_pool_version()
-                time.sleep(10)
+                time.sleep(3)
                 fail_count += 1
                 if pver_reint > (pver_exclude + 1):
                     break

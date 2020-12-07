@@ -23,19 +23,13 @@
 """
 import time
 import random
-import uuid
 import threading
 import copy
 
 from itertools import product
-from avocado import fail_on
-from apricot import TestWithServers
 from test_utils_pool import TestPool
-from ior_utils import IorCommand
-from job_manager_utils import Mpirun
 from write_host_file import write_host_file
 from command_utils import CommandFailure
-from mpio_utils import MpioUtils
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
 
@@ -199,7 +193,7 @@ class OSAOnlineParallelTest(OSAUtils):
                 for thrd in threads:
                     self.log.info("Thread : %s", thrd)
                     thrd.start()
-                    time.sleep(3)
+                    time.sleep(1)
 
                 # Wait to finish the threads
                 for thrd in threads:
@@ -219,7 +213,7 @@ class OSAOnlineParallelTest(OSAUtils):
                 fail_count = 0
                 while fail_count <= 20:
                     pver_end = self.get_pool_version()
-                    time.sleep(10)
+                    time.sleep(3)
                     fail_count += 1
                     if pver_end > 23:
                         break

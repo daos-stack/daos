@@ -28,7 +28,6 @@ import copy
 from osa_utils import OSAUtils
 from test_utils_pool import TestPool
 from command_utils import CommandFailure
-from apricot import skipForTicket
 
 try:
     # python 3.x
@@ -170,7 +169,7 @@ class OSAOfflineParallelTest(OSAUtils):
             self.log.info("Rebuild Status: %s", rebuild_status)
             self.assertTrue(rebuild_status != "failed",
                             "Rebuild failed")
-           
+
             self.log.info("Pool Version at the End %s", pver_end)
             self.assertTrue(pver_end == 25,
                             "Pool Version Error:  at the end")

@@ -22,15 +22,12 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import time
-import uuid
 import threading
 
 from itertools import product
-from avocado import fail_on
-from apricot import TestWithServers, skipForTicket
+from apricot import skipForTicket
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
-from command_utils import CommandFailure
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
 
@@ -135,7 +132,7 @@ class OSAOnlineExtend(OSAUtils):
                 for thrd in threads:
                     self.log.info("Thread : %s", thrd)
                     thrd.start()
-                    time.sleep(5)
+                    time.sleep(1)
             self.pool = pool[val]
             scm_size = self.pool.scm_size
             nvme_size = self.pool.nvme_size
@@ -146,7 +143,7 @@ class OSAOnlineExtend(OSAUtils):
             self.log.info("Extra Servers = %s", self.extra_servers)
             self.start_additional_servers(self.extra_servers)
             # Give sometime for the additional server to come up.
-            time.sleep(5)
+            time.sleep(25)
             self.log.info("Pool Version at the beginning %s", pver_begin)
             output = self.dmg_command.pool_extend(self.pool.uuid,
                                                   rank, scm_size,
@@ -156,7 +153,7 @@ class OSAOnlineExtend(OSAUtils):
             fail_count = 0
             while fail_count <= 20:
                 pver_extend = self.get_pool_version()
-                time.sleep(15)
+                time.sleep(3)
                 fail_count += 1
                 if pver_extend > pver_begin:
                     break

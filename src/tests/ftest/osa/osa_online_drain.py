@@ -26,11 +26,8 @@ import random
 import threading
 
 from itertools import product
-from avocado import fail_on
-from apricot import TestWithServers
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
-from command_utils import CommandFailure
 from osa_utils import OSAUtils
 
 try:
@@ -118,7 +115,7 @@ class OSAOnlineDrain(OSAUtils):
                 for thrd in threads:
                     self.log.info("Thread : %s", thrd)
                     thrd.start()
-                    time.sleep(5)
+                    time.sleep(1)
             self.pool = pool[val]
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
@@ -130,7 +127,7 @@ class OSAOnlineDrain(OSAUtils):
             fail_count = 0
             while fail_count <= 20:
                 pver_drain = self.get_pool_version()
-                time.sleep(10)
+                time.sleep(3)
                 fail_count += 1
                 if pver_drain > pver_begin + 1:
                     break
