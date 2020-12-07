@@ -25,6 +25,7 @@ package server
 
 import (
 	"context"
+	"math"
 	"net"
 	"os"
 	"sync"
@@ -39,8 +40,10 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
@@ -103,6 +106,89 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 			}
 
 			gotResp, gotErr := mgmtSvc.LeaderQuery(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
+	rasEventRankExit := events.NewRankExitEvent(0, 0, nil)
+
+	for name, tc := range map[string]struct {
+		nilReq   bool
+		zeroSeq  bool
+		rasEvent *events.RASEvent
+		expResp  *mgmtpb.ClusterEventResp
+		expErr   error
+	}{
+		"nil request": {
+			nilReq: true,
+			expErr: errors.New("nil request"),
+		},
+		"invalid sequence number": {
+			zeroSeq: true,
+			expErr:  errors.New("invalid sequence"),
+		},
+		"successful notification": {
+			rasEvent: rasEventRankExit,
+			expResp: &mgmtpb.ClusterEventResp{
+				Sequence: 1,
+			},
+		},
+		"unknown event type": {
+			rasEvent: &events.RASEvent{ID: math.MaxUint32},
+			expErr:   errors.New("unknown event ID"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mgmtSvc := newTestMgmtSvc(t, log)
+			db, cleanup := system.TestDatabase(t, log)
+			defer cleanup()
+			mgmtSvc.sysdb = db
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if err := db.Start(ctx); err != nil {
+				t.Fatal(err)
+			}
+
+			// wait for the bootstrap to finish
+			for {
+				if db.IsLeader() {
+					break
+				}
+			}
+
+			var pbReq *mgmtpb.ClusterEventReq
+			switch {
+			case tc.nilReq:
+			case tc.zeroSeq:
+				pbReq = &mgmtpb.ClusterEventReq{Sequence: 0}
+			default:
+				rasEventPB := new(mgmtpb.RASEvent)
+				if err := convert.Types(tc.rasEvent, rasEventPB); err != nil {
+					t.Fatal(err)
+				}
+
+				pbReq = &mgmtpb.ClusterEventReq{
+					Sequence: 1,
+					Event: &mgmtpb.ClusterEventReq_Ras{
+						Ras: rasEventPB,
+					},
+				}
+			}
+
+			gotResp, gotErr := mgmtSvc.ClusterEvent(context.TODO(), pbReq)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

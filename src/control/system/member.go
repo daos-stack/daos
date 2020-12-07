@@ -36,6 +36,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -715,6 +716,37 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int, resolveFn resolveFnSi
 	}
 
 	return rs, missHS, nil
+}
+
+func (m *Membership) onEvent(evt *events.RASEvent) {
+	m.log.Debugf("processing RAS event %q from rank %d on host %q", evt.Msg, evt.Rank,
+		evt.Hostname)
+
+	if evt.ID != events.RASRankExit {
+		m.log.Errorf("%s event unsupported, want %s", evt.ID, events.RASRankExit)
+	}
+
+	if err := m.UpdateMemberStates(MemberResults{
+		NewMemberResult(Rank(evt.Rank), errors.New(evt.Msg), MemberStateErrored),
+	}, true); err != nil {
+		m.log.Errorf("updating member states: %s", err)
+	}
+	member, _ := m.Get(Rank(evt.Rank))
+	m.log.Debugf("successfully updated rank %d to %+v", evt.Rank, member)
+}
+
+// ProcessEvent handles events on channel and updates member states
+// accordingly.
+func (m *Membership) ProcessEvent(evt *events.RASEvent) {
+	switch {
+	case evt == nil:
+		m.log.Error("attempt to process nil ras event")
+	case evt.Type != events.RASTypeRankStateChange:
+		m.log.Errorf("expecting event type %s, got %s",
+			events.RASTypeRankStateChange, evt.Type)
+	default:
+		m.onEvent(evt)
+	}
 }
 
 // NewMembership returns a reference to a new DAOS system membership.

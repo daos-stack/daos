@@ -38,6 +38,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -96,6 +97,7 @@ type SystemJoinReq struct {
 	InstanceIdx uint32              `json:"Idx"`
 }
 
+// MarshalJSON packs SystemJoinResp struct into a JSON message.
 func (req *SystemJoinReq) MarshalJSON() ([]byte, error) {
 	// use a type alias to leverage the default marshal for
 	// most fields
@@ -136,6 +138,98 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 	}
 
 	resp := new(SystemJoinResp)
+	return resp, convertMSResponse(ur, resp)
+}
+
+// LookupAddrFn is an alias for net.LookupAddr signature.
+type LookupAddrFn func(string) ([]string, error)
+
+// SystemNotifyReq contains the inputs for the system notify request.
+type SystemNotifyReq struct {
+	unaryRequest
+	msRequest
+	lookupAddrFn LookupAddrFn
+	ControlAddr  *net.TCPAddr
+	Event        *events.RASEvent
+	Sequence     uint64
+}
+
+// MarshalJSON packs SystemNotifyResp struct into a JSON message.
+func (req *SystemNotifyReq) MarshalJSON() ([]byte, error) {
+	// use a type alias to leverage the default marshal for
+	// most fields
+	type toJSON SystemNotifyReq
+	return json.Marshal(&struct {
+		Addr string
+		*toJSON
+	}{
+		Addr:   req.ControlAddr.String(),
+		toJSON: (*toJSON)(req),
+	})
+}
+
+// ToClusterEventReq converts the system notify request to a cluster events
+// request. Resolve control address to a hostname if possible.
+func (req *SystemNotifyReq) ToClusterEventReq() (*mgmtpb.ClusterEventReq, error) {
+	if req.Event == nil {
+		return nil, errors.New("nil event in request")
+	}
+	if req.ControlAddr == nil {
+		return nil, errors.New("nil control address in request")
+	}
+
+	pbRASEvent := new(mgmtpb.RASEvent)
+	if err := convert.Types(req.Event, pbRASEvent); err != nil {
+		return nil, errors.Wrap(err, "convert system notify to cluster event request")
+	}
+
+	if req.lookupAddrFn == nil {
+		req.lookupAddrFn = net.LookupAddr
+	}
+	names, err := req.lookupAddrFn(req.ControlAddr.String())
+	if err == nil && len(names) != 0 {
+		pbRASEvent.Hostname = names[0]
+	}
+
+	return &mgmtpb.ClusterEventReq{
+		Sequence: req.Sequence,
+		Event: &mgmtpb.ClusterEventReq_Ras{
+			Ras: pbRASEvent,
+		},
+	}, nil
+}
+
+// SystemNotifyResp contains the request response.
+type SystemNotifyResp struct{}
+
+// SystemNotify will attempt to notify the DAOS system of a cluster event.
+func SystemNotify(ctx context.Context, rpcClient UnaryInvoker, req *SystemNotifyReq) (*SystemNotifyResp, error) {
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+	if req.Event == nil {
+		return nil, errors.New("nil event in request")
+	}
+	if rpcClient == nil {
+		return nil, errors.New("nil rpc client")
+	}
+
+	rpcClient.Debugf("DAOS system notify request: %+v, event: %+v", req, req.Event)
+	pbReq, err := req.ToClusterEventReq()
+	if err != nil {
+		return nil, err
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).ClusterEvent(ctx, pbReq)
+	})
+	rpcClient.Debugf("DAOS cluster event request: %+v", pbReq)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(SystemNotifyResp)
 	return resp, convertMSResponse(ur, resp)
 }
 

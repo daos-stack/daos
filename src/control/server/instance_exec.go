@@ -129,13 +129,27 @@ func (srv *IOServerInstance) finishStartup(ctx context.Context, ready *srvpb.Not
 	return nil
 }
 
-func (srv *IOServerInstance) exit(exitErr error) {
-	srv.log.Infof("instance %d exited: %s", srv.Index(),
-		ioserver.GetExitStatus(exitErr))
+func (srv *IOServerInstance) exit(ctx context.Context, exitErr error) {
+	srvIdx := srv.Index()
+
+	srv.log.Infof("instance %d exited: %s", srvIdx, ioserver.GetExitStatus(exitErr))
+
+	rank, err := srv.GetRank()
+	if err != nil {
+		srv.log.Debugf("instance %d: no rank (%s)", srv.Index(), err)
+	}
 
 	srv._lastErr = exitErr
 	if err := srv.removeSocket(); err != nil {
 		srv.log.Errorf("removing socket file: %s", err)
+	}
+
+	// After we know that the instance has exited, fire off
+	// any callbacks that were waiting for this state.
+	for _, exitFn := range srv.onInstanceExit {
+		if err := exitFn(ctx, rank, exitErr); err != nil {
+			srv.log.Errorf("onExit: %s", err)
+		}
 	}
 }
 
@@ -173,7 +187,7 @@ func (srv *IOServerInstance) Run(ctx context.Context, recreateSBs bool) {
 			if !relaunch {
 				return
 			}
-			srv.exit(srv.run(ctx, recreateSBs))
+			srv.exit(ctx, srv.run(ctx, recreateSBs))
 		}
 	}
 }
