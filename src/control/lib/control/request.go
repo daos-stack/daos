@@ -110,7 +110,7 @@ func (r *request) AddHost(hostAddr string) {
 }
 
 // SetTimeout sets a deadline by which the request must have
-// completed. It is calcluated from the supplied time.Duration.
+// completed. It is calculated from the supplied time.Duration.
 func (r *request) SetTimeout(timeout time.Duration) {
 	r.deadline = time.Now().Add(timeout)
 }
@@ -144,8 +144,8 @@ func (r *request) onRetry(_ context.Context, _ uint) error {
 
 // retryAfter implements the retrier interface and always returns
 // a time channel defined by the supplied duration.
-func (r *request) retryAfter(dur time.Duration) <-chan time.Time {
-	return time.After(dur)
+func (r *request) retryAfter(interval time.Duration) <-chan time.Time {
+	return time.After(interval)
 }
 
 // msRequest is an embeddable struct to implement the targetChooser
@@ -173,11 +173,11 @@ type retryableRequest struct {
 	retryFn func(context.Context, uint) error
 }
 
-func (r *retryableRequest) retryAfter(defaultInt time.Duration) <-chan time.Time {
+func (r *retryableRequest) retryAfter(defInterval time.Duration) <-chan time.Time {
 	if r.retryInterval > 0 {
 		return time.After(r.retryInterval)
 	}
-	return time.After(defaultInt)
+	return time.After(defInterval)
 }
 
 func (r *retryableRequest) canRetry(err error, cur uint) bool {
