@@ -51,13 +51,13 @@ class EcOnlineRebuild(ErasureCodeIor):
 
         :avocado: tags=all,pr,hw,large,full_regression,ec,ec_online_rebuild
         """
-        # Kill the last server rank
+        # Kill last server rank
         self.rank_to_kill = self.server_count - 1
         #Write IOR data set with different EC object.
         #kill single server while IOR Write phase is in progress.
         self.ior_write_dataset()
 
-        #Enabled Online rebuild
+        #Disabled Online rebuild
         self.set_online_rebuild = False
         #Read IOR data and verify for different EC object
         #kill single server while IOR Read phase is in progress.
@@ -65,6 +65,8 @@ class EcOnlineRebuild(ErasureCodeIor):
 
         #Enabled Online rebuild during Read phase
         self.set_online_rebuild = True
+        # Kill another server rank
+        self.rank_to_kill = self.server_count - 2 
         #Read IOR data and verify for EC object again
         #EC data was written with +2 parity so after killing Two servers data
         #should be intact and no data corruption observed.
