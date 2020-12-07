@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -24,17 +24,19 @@
 
 from daos_core_base import DaosCoreBase
 
+
 class DaosCoreTest(DaosCoreBase):
-    """
-    Runs just the non-rebuild daos_test tests
+    # pylint: disable=too-many-ancestors
+    """Runs just the non-rebuild daos_test tests.
 
     :avocado: recursive
     """
-    def test_subtest(self):
-        """
-        Test ID: DAOS-1568
 
-        Test Description: Run daos_test with a subtest argument
+    def test_subtest(self):
+        """Run daos_test tests/subtests.
+
+        Test ID: DAOS-1568
+        Test Description: Run daos_test tests/subtests.
 
         Use Cases: core tests for daos_test
 

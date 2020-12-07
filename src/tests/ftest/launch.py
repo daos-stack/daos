@@ -496,19 +496,28 @@ def get_test_list(tags):
     """
     test_tags = []
     test_list = []
+    # Check if fault injection is enabled ( 0 return status)
+    faults_disabled = time_command(["fault_status"])
     for tag in tags:
         if ".py" in tag:
             # Assume '.py' indicates a test and just add it to the list
             test_list.append(tag)
+            fault_filter = "--filter-by-tags=-faults"
+            if faults_disabled and fault_filter not in test_tags:
+                test_tags.append(fault_filter)
         else:
             # Otherwise it is assumed that this is a tag
-            test_tags.extend(["--filter-by-tags", str(tag)])
+            if faults_disabled:
+                tag = ",".join((tag, "-faults"))
+            test_tags.append("--filter-by-tags={}".format(tag))
 
     # Update the list of tests with any test that match the specified tags.
     # Exclude any specified tests that do not match the specified tags.  If no
     # tags and no specific tests have been specified then all of the functional
     # tests will be added.
     if test_tags or not test_list:
+        if not test_list:
+            test_list = ["./"]
         command = ["avocado", "list", "--paginator=off"]
         for test_tag in test_tags:
             command.append(str(test_tag))
@@ -1286,7 +1295,7 @@ def resolve_debuginfo(pkg):
         pkg (str): a package name
 
     Returns:
-        str: the debuginfo package name
+        dict: dictionary of debug package information
 
     """
     import yum      # pylint: disable=import-error,import-outside-toplevel
@@ -1309,8 +1318,7 @@ def resolve_debuginfo(pkg):
             print("Package {} not installed, "
                   "skipping debuginfo".format(pkg))
             return None
-        else:
-            raise
+        raise
 
     return {'name': debug_pkg,
             'version': pkg_data['version'],
