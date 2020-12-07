@@ -58,6 +58,7 @@ SWIM_TESTS = ['test_swim.c', 'test_swim_net.c', 'test_swim_emu.c']
 HLC_TESTS = ['test_hlc_net.c']
 TEST_GROUP_NP_TESTS = ['test_group_np_srv.c', 'test_group_np_cli.c',
                        'no_pmix_group_version.c']
+FI_TEST = ['fault_status.c']
 
 def scons():
     """scons function"""
@@ -96,6 +97,10 @@ def scons():
         target = daos_build.test(tenv, test, install_off='../../../../')
         tenv.Requires(target, [cart_lib, gurt_lib])
         tenv.Install(tests_dir, target)
+
+    target = tenv.Program(FI_TEST)
+    tenv.Requires(target, [cart_lib, gurt_lib])
+    tenv.Install(os.path.join("$PREFIX", 'bin'), target)
 
     benv = tenv.Clone()
 

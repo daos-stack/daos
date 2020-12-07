@@ -599,6 +599,8 @@ dtx_14(void **state)
 	int		 nrestarts = 13;
 	int		 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("DTX restart because of conflict with others\n");
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
@@ -614,7 +616,7 @@ again:
 	MPI_Barrier(MPI_COMM_WORLD);
 	/* Simulate the conflict with other DTX. */
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				     DAOS_DTX_RESTART | DAOS_FAIL_ALWAYS,
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -631,7 +633,7 @@ again:
 	/* Reset the fail_loc */
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -666,6 +668,8 @@ dtx_15(void **state)
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("DTX restart because of stale pool map\n");
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
@@ -676,7 +680,7 @@ dtx_15(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 	daos_fail_loc_set(DAOS_DTX_STALE_PM | DAOS_FAIL_ALWAYS);
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				     DAOS_DTX_STALE_PM | DAOS_FAIL_ALWAYS,
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -688,7 +692,7 @@ dtx_15(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 	daos_fail_loc_set(0);
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -731,7 +735,7 @@ dtx_handle_resent(test_arg_t *arg, uint64_t fail_loc)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				     fail_loc | DAOS_FAIL_ALWAYS, 0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -740,7 +744,7 @@ dtx_handle_resent(test_arg_t *arg, uint64_t fail_loc)
 	/* Reset the fail_loc */
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -791,6 +795,8 @@ dtx_18(void **state)
 	struct ioreq	 req;
 	int		 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("Spread read time-stamp when commit\n");
 
 	if (!test_runable(arg, 3))
@@ -810,7 +816,7 @@ dtx_18(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0)
 		/* DAOS_DTX_NO_READ_TS will skip the initial read TS. */
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 			DAOS_DTX_NO_READ_TS | DAOS_FAIL_ALWAYS, 0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -819,7 +825,7 @@ dtx_18(void **state)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
