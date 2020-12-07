@@ -1230,16 +1230,13 @@ agg_peer_update_ult(void *arg)
 	struct obj_ec_agg_in	*ec_agg_in = NULL;
 	struct obj_ec_agg_out	*ec_agg_out = NULL;
 	struct ec_agg_param	*agg_param;
-	crt_opcode_t		 opcode;
 	crt_rpc_t		*rpc;
 	int			 rc = 0;
 
 	tgt_ep.ep_rank = entry->ae_peer_pshards[0].sd_rank;
 	tgt_ep.ep_tag = entry->ae_peer_pshards[0].sd_tgt_idx;
-	opcode = DAOS_RPC_OPCODE(DAOS_OBJ_RPC_EC_AGGREGATE, DAOS_OBJ_MODULE,
-				 DAOS_OBJ_VERSION);
-	rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opcode,
-			    &rpc);
+	rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
+			    DAOS_OBJ_RPC_EC_AGGREGATE, &rpc);
 	if (rc) {
 		D_ERROR("obj_req_create failed: "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -1425,7 +1422,6 @@ agg_process_holes_ult(void *arg)
 	struct obj_ec_rep_in	*ec_rep_in = NULL;
 	struct obj_ec_rep_out	*ec_rep_out = NULL;
 	crt_rpc_t		*rpc;
-	crt_opcode_t		 opcode;
 	unsigned int		 len = entry->ae_oca->u.ec.e_len;
 	unsigned int		 k = entry->ae_oca->u.ec.e_k;
 	unsigned long		 ss = entry->ae_cur_stripe.as_stripenum *
@@ -1514,10 +1510,8 @@ agg_process_holes_ult(void *arg)
 
 	tgt_ep.ep_rank = entry->ae_peer_pshards[0].sd_rank;
 	tgt_ep.ep_tag = entry->ae_peer_pshards[0].sd_tgt_idx;
-	opcode = DAOS_RPC_OPCODE(DAOS_OBJ_RPC_EC_REPLICATE, DAOS_OBJ_MODULE,
-				 DAOS_OBJ_VERSION);
-	rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opcode,
-			    &rpc);
+	rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
+			    DAOS_OBJ_RPC_EC_REPLICATE, &rpc);
 	if (rc) {
 		D_ERROR("obj_req_create failed: "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -1889,7 +1883,6 @@ agg_akey_post(daos_handle_t ih, vos_iter_entry_t *entry,
 		agg_entry->ae_cur_stripe.as_hi_epoch	= 0UL;
 		agg_entry->ae_cur_stripe.as_stripe_fill = 0UL;
 		agg_entry->ae_cur_stripe.as_offset	= 0U;
-		D_ASSERT(agg_entry->ae_cur_stripe.as_extent_cnt == 0);
 		D_ASSERT(agg_entry->ae_cur_stripe.as_ho_ext_cnt == 0);
 
 		*acts |= VOS_ITER_CB_YIELD;
@@ -2087,6 +2080,7 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		rc = agg_data_extent(entry, agg_entry, acts);
 		break;
 	default:
+		/* Verify that single values are always skipped */
 		D_ASSERT(0);
 		break;
 	}
