@@ -204,6 +204,7 @@ int ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		       uint32_t map_ver);
 int ds_pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop);
 int ds_pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop);
+int ds_pool_iv_svc_fetch(struct ds_pool *pool, d_rank_list_t **svc_p);
 
 int ds_pool_iv_srv_hdl_fetch(struct ds_pool *pool, uuid_t *pool_hdl_uuid,
 			     uuid_t *cont_hdl_uuid);
