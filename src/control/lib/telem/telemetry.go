@@ -156,13 +156,8 @@ func GetNodeName(shmemRoot *C.uint64_t, node C.d_tm_node_p) string {
 	return C.GoString(nodeName)
 }
 
-func GetNumObjects(shmemRoot *C.uint64_t, dirname string, filter int) uint64 {
-	num := C.d_tm_get_num_objects(shmemRoot, C.CString(dirname), C.int(filter))
-	return uint64(num)
-}
-
-func CountMetrics(shmemRoot *C.uint64_t, node C.d_tm_node_p) uint64 {
-	num := C.d_tm_count_metrics(shmemRoot, node)
+func CountMetrics(shmemRoot *C.uint64_t, node C.d_tm_node_p, filter int) uint64 {
+	num := C.d_tm_count_metrics(shmemRoot, node, C.int(filter))
 	return uint64(num)
 }
 

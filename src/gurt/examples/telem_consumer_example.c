@@ -70,7 +70,8 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 	head = nodelist;
 
 	printf("\nThere are %"PRIu64" metrics in the directory %s\n",
-	       d_tm_count_metrics(shmem_root, node), dirname ? dirname : "/");
+	       d_tm_count_metrics(shmem_root, node, filter),
+	       dirname ? dirname : "/");
 
 	while (nodelist) {
 		name = d_tm_conv_ptr(shmem_root, nodelist->dtnl_node->dtn_name);

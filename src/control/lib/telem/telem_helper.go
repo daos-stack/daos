@@ -243,7 +243,8 @@ func PrintNodeList(shmemRoot *C.uint64_t, nl *C.d_tm_nodeList, dirname string, l
 	if dirname == "" {
 		dirname = "/"
 	}
-	numMetrics := CountMetrics(shmemRoot, nl.dtnl_node)
+	filter := C.D_TM_DIRECTORY | C.D_TM_COUNTER | C.D_TM_TIMESTAMP | C.D_TM_TIMER_SNAPSHOT | C.D_TM_DURATION | C.D_TM_GAUGE
+	numMetrics := CountMetrics(shmemRoot, nl.dtnl_node, filter)
 
 	i := 0
 	fmt.Printf("There are %d metrics under: %s\n", numMetrics, dirname)

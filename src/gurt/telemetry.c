@@ -614,18 +614,21 @@ d_tm_print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node,
  *
  * \param[in]	shmem_root	Pointer to the shared memory segment
  * \param[in]	node		Pointer to a parent or child node
+ * \param[in]	d_tm_type	A bitmask of d_tm_metric_types that
+ *				determines if an item should be counted
  *
  * \return			Number of metrics found
  */
 uint64_t
-d_tm_count_metrics(uint64_t *shmem_root, struct d_tm_node_t *node)
+d_tm_count_metrics(uint64_t *shmem_root, struct d_tm_node_t *node,
+		   int d_tm_type)
 {
 	uint64_t	count = 0;
 
 	if (node == NULL)
 		return 0;
 
-	if (node->dtn_type != D_TM_DIRECTORY)
+	if (d_tm_type & node->dtn_type)
 		count++;
 
 	node = node->dtn_child;
@@ -633,11 +636,11 @@ d_tm_count_metrics(uint64_t *shmem_root, struct d_tm_node_t *node)
 	if (node == NULL)
 		return count;
 
-	count += d_tm_count_metrics(shmem_root, node);
+	count += d_tm_count_metrics(shmem_root, node, d_tm_type);
 	node = node->dtn_sibling;
 	node = d_tm_conv_ptr(shmem_root, node);
 	while (node != NULL) {
-		count += d_tm_count_metrics(shmem_root, node);
+		count += d_tm_count_metrics(shmem_root, node, d_tm_type);
 		node = node->dtn_sibling;
 		node = d_tm_conv_ptr(shmem_root, node);
 	}
@@ -2062,71 +2065,6 @@ success:
 failure:
 	return rc;
 }
-
-
-/**
- * Returns the number of metrics found at the \a path provided for the items
- * matching an element of the \a d_tm_type bitmask.  A result is counted if it
- * matches one of the metric types specified by that filter mask. The mask may
- * be a combination of d_tm_metric_types.  The count is performed only on the
- * direct children specified by the path.
- *
- * \param[in]		shmem_root	Pointer to the shared memory segment
- * \param[in]		path		Full path name to the directory or
- *					metric to count
- * \param[in]		d_tm_type	A bitmask of d_tm_metric_types that
- *					determines if an item should be counted
- *
- * \return		D_TM_SUCCESS		Success
- *			-DER_NOMEM		Out of global heap
- *			-DER_EXCEEDS_PATH_LEN	The full name length is
- *						too long
- *			-DER_METRIC_NOT_FOUND	No items were found at the path
- *						provided
- */
-uint64_t
-d_tm_get_num_objects(uint64_t *shmem_root, char *path, int d_tm_type)
-{
-	struct d_tm_node_t	*parent_node = NULL;
-	struct d_tm_node_t	*node = NULL;
-	uint64_t		count = 0;
-	char			str[D_TM_MAX_NAME_LEN];
-	char			*token;
-	char			*rest = str;
-
-	snprintf(str, sizeof(str), "%s", path);
-
-	parent_node = d_tm_get_root(shmem_root);
-	node = parent_node;
-	if (parent_node != NULL) {
-		token = strtok_r(rest, "/", &rest);
-		while (token != NULL) {
-			node = d_tm_find_child(shmem_root, parent_node, token);
-			if (node == NULL)
-				/** no node was found matching the token */
-				return count;
-			parent_node = node;
-			token = strtok_r(rest, "/", &rest);
-		}
-		if (node == NULL)
-			node = parent_node;
-
-		if (node->dtn_type == D_TM_DIRECTORY) {
-			node = d_tm_conv_ptr(shmem_root, node->dtn_child);
-			while (node != NULL) {
-				if (d_tm_type & node->dtn_type)
-					count++;
-				node = d_tm_conv_ptr(shmem_root,
-						     node->dtn_sibling);
-			}
-		} else {
-			if (d_tm_type & node->dtn_type)
-				count++;
-		}
-	}
-	return count;
-}
-
 
 /**
  * Frees the memory allocated for the given \a nodeList
