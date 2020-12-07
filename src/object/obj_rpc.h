@@ -184,7 +184,9 @@ enum obj_rpc_flags {
 	((d_sg_list_t)		(orw_sgls)		CRT_ARRAY) \
 	((crt_bulk_t)		(orw_bulks)		CRT_ARRAY) \
 	((struct daos_shard_tgt)(orw_shard_tgts)	CRT_ARRAY) \
-	((uint32_t)		(orw_tgt_idx)		CRT_VAR)
+	/* orw_tgt_idx and orw_tgt_max only for EC obj */	   \
+	((uint32_t)		(orw_tgt_idx)		CRT_VAR)   \
+	((uint32_t)		(orw_tgt_max)		CRT_VAR)
 
 #define DAOS_OSEQ_OBJ_RW	/* output fields */		 \
 	((int32_t)		(orw_ret)		CRT_VAR) \

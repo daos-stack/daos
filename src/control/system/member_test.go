@@ -115,6 +115,39 @@ func TestSystem_Member_MarshalUnmarshalJSON(t *testing.T) {
 	}
 }
 
+func TestSystem_Member_RankFaultDomain(t *testing.T) {
+	for name, tc := range map[string]struct {
+		rank        Rank
+		faultDomain *FaultDomain
+		expResult   *FaultDomain
+	}{
+		"nil fault domain": {
+			expResult: MustCreateFaultDomain("rank0"),
+		},
+		"empty fault domain": {
+			rank:        Rank(2),
+			faultDomain: MustCreateFaultDomain(),
+			expResult:   MustCreateFaultDomain("rank2"),
+		},
+		"existing fault domain": {
+			rank:        Rank(1),
+			faultDomain: MustCreateFaultDomain("one", "two"),
+			expResult:   MustCreateFaultDomain("one", "two", "rank1"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := NewMember(tc.rank, uuid.New().String(), "dontcare", &net.TCPAddr{}, MemberStateJoined).
+				WithFaultDomain(tc.faultDomain)
+
+			result := m.RankFaultDomain()
+
+			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestSystem_Membership_Get(t *testing.T) {
 	for name, tc := range map[string]struct {
 		memberToAdd *Member
