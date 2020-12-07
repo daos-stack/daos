@@ -24,42 +24,69 @@
 package main
 
 import (
-//	"context"
-//	"strings"
-
-//	"github.com/pkg/errors"
-
-//	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
-//	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/telem"
 )
 
-type telemetryCmd struct {
-	Tree telemetryScanCmd `command:"tree" description:"Show the telemetry in tree format"`
-	List telemetryListCmd `command:"list" description:"Read/list the telemetry "`
+type telemCmd struct {
+	Tree telemScanCmd `command:"tree" description:"Show the telemetry in tree format"`
+	List telemListCmd `command:"list" description:"Read/list the telemetry "`
 }
 
-type telemetryScanCmd struct {
+type telemScanCmd struct {
 	cfgCmd
 	logCmd
 	Rank int `short:"r" long:"rank" description:"Use this rank for telemetry data"`
 	Path string `short:"p" long:"path" description:"Scan telemetry from this path"`
 }
 
-type telemetryListCmd struct {
+type telemListCmd struct {
 	cfgCmd
 	logCmd
 	Rank int `short:"r" long:"rank" description:"Use this rank for telemetry data"`
 	Path string `short:"p" long:"path" description:"List telemetry from this path"`
 	Iterations int `short:"i" long:"iter" description:"Number of iterations to print before exiting"`
+	Counter bool `short:"c" long:"counter" description:"Include counters in the listing"`
+	Duration bool `short:"d" long:"duration" description:"Include durations in the listing"`
+	Gauge bool `short:"g" long:"gauge" description:"Include gauges in the listing"`
+	Snapshot bool `short:"s" long:"snapshot" description:"Include timer snapshots in the listing"`
+	Timestamp bool `short:"t" long:"timestamp" description:"Include timestamps in the listing"`
 }
 
-func (cmd *telemetryScanCmd) Execute(args []string) error {
+func (cmd *telemScanCmd) Execute(args []string) error {
 	telemetry.ShowDirectoryTree(cmd.Rank, cmd.Path)
 	return nil
 }
 
-func (cmd *telemetryListCmd) Execute(args []string) error {
-	telemetry.ListMetrics(cmd.Rank, cmd.Path, cmd.Iterations)
+func (cmd *telemListCmd) Execute(args []string) error {
+	var filter string
+
+	// Didn't want to use CGO to include the header for these constants
+	// Making a string representation instead which is parsed later
+	if (cmd.Counter) {
+		filter += "c"
+	}
+
+	if (cmd.Duration) {
+		filter += "d"
+	}
+
+	if (cmd.Gauge) {
+		filter += "g"
+	}
+
+	if (cmd.Snapshot) {
+		filter += "s"
+	}
+
+	if (cmd.Timestamp) {
+		filter += "t"
+	}
+
+	// If nothing added to the filter, allow everything
+	if len(filter) == 0 {
+		filter = "cdgst"
+	}
+
+	telemetry.ListMetrics(cmd.Rank, cmd.Path, cmd.Iterations, filter)
 	return nil
 }

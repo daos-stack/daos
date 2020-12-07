@@ -39,6 +39,7 @@ typedef struct timespec tspec;
 import "C"
 import (
 	"fmt"
+	"strings"
 	"time"
 	"unsafe"
 
@@ -321,7 +322,7 @@ func ShowDirectoryTree(rank int, dirname string) error {
 // that facilitate reading the associated metric's data.  In this example, the
 // metrics are read in a loop 'iterations' times, and each entry is printed. A
 // 1 second delay is inserted between each iteration
-func ListMetrics(rank int, dirname string, iterations int) error {
+func ListMetrics(rank int, dirname string, iterations int, filterString string) error {
 	var nl *C.d_tm_nodeList
 
 	shmemRoot, _, err := InitTelemetry(rank)
@@ -332,7 +333,26 @@ func ListMetrics(rank int, dirname string, iterations int) error {
 
 	fmt.Printf("DAOS Telemetry & Metrics API version: %d\n", GetAPIVersion())
 
-	filter := C.D_TM_DIRECTORY | C.D_TM_COUNTER | C.D_TM_TIMESTAMP | C.D_TM_TIMER_SNAPSHOT | C.D_TM_DURATION | C.D_TM_GAUGE
+	filter := 0
+	if (strings.Contains(filterString, "c")) {
+		filter |= C.D_TM_COUNTER
+	}
+
+	if (strings.Contains(filterString, "d")) {
+		filter |= C.D_TM_DURATION
+	}
+
+	if (strings.Contains(filterString, "g")) {
+		filter |= C.D_TM_GAUGE
+	}
+
+	if (strings.Contains(filterString, "s")) {
+		filter |= C.D_TM_TIMER_SNAPSHOT
+	}
+
+	if (strings.Contains(filterString, "t")) {
+		filter |= C.D_TM_TIMESTAMP
+	}
 
 	err = GetDirListing(shmemRoot, &nl, dirname, filter)
 	if (err != nil) {
