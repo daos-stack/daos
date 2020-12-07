@@ -310,6 +310,9 @@ func ShowDirectoryTree(rank int, dirname string) error {
 		}
 	}
 
+	filter := C.D_TM_COUNTER | C.D_TM_TIMESTAMP | C.D_TM_TIMER_SNAPSHOT | C.D_TM_DURATION | C.D_TM_GAUGE
+	numMetrics := CountMetrics(shmemRoot, node, filter)
+	fmt.Printf("There are %d metrics found in the tree.\n", numMetrics)
 	PrintMyChildren(shmemRoot, node, 0, C.stdout)
 	return nil
 }

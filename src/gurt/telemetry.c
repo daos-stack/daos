@@ -96,7 +96,7 @@ d_tm_find_child(uint64_t *shmem_root, struct d_tm_node_t *parent, char *name)
 	if (child != NULL)
 		client_name = d_tm_conv_ptr(shmem_root, child->dtn_name);
 
-	while ((child != NULL) &&
+	while ((child != NULL) && (client_name != NULL) &&
 	       strncmp(client_name, name, D_TM_MAX_NAME_LEN) != 0) {
 		child = d_tm_conv_ptr(shmem_root, child->dtn_sibling);
 		client_name = NULL;

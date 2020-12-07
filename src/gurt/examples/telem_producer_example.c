@@ -265,7 +265,7 @@ struct d_tm_nodeList_t *add_metrics_manually(void)
 	}
 	node_list = d_tm_add_node(counter2, node_list);
 
-	if (node_list == NULL) {
+	if ((node_list == NULL) || (head == NULL)) {
 		printf("d_tm_add_node failed\n");
 		return NULL;
 	}
