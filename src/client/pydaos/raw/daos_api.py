@@ -2192,6 +2192,8 @@ class DaosSnapshot(object):
         if retcode != 0:
             raise Exception("Failed to destroy the snapshot. RC: {0}"
                             .format(retcode))
+
+class DaosContext(object):
     # pylint: disable=too-few-public-methods
     """Provides environment and other info for a DAOS client."""
 
