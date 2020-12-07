@@ -82,7 +82,7 @@ class OSAOnlineExtend(OSAUtils):
             self.daos_racer.get_environment(self.server_managers[0]))
         self.daos_racer.run()
 
-   def run_online_extend_test(self, num_pool, racer=False):
+    def run_online_extend_test(self, num_pool, racer=False):
         """Run the Online extend without data.
             Args:
              int : total pools to create for testing purposes.
