@@ -569,6 +569,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"principal",	required_argument,	NULL,	'P'},
 		{NULL,		0,			NULL,	0}
 	};
+	bool			posix_mode_set = false;
 	int			rc;
 	const int		RC_PRINT_HELP = 2;
 	const int		RC_NO_HELP = -2;
@@ -688,6 +689,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			}
 			break;
 		case 'M':
+			posix_mode_set = true;
 			if (daos_parse_cmode(optarg, &ap->mode) != 0) {
 				fprintf(stderr,
 					"Invalid POSIX consistency mode: %s\n",
@@ -810,6 +812,11 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	}
 
 	cmd_args_print(ap);
+
+	if (posix_mode_set && ap->type != DAOS_PROP_CO_LAYOUT_POSIX) {
+		fprintf(stderr, "--mode is valid only for a POSIX container\n");
+		D_GOTO(out_free, rc = RC_NO_HELP);
+	}
 
 	/* Check for any unimplemented commands, print help */
 	if (ap->p_op != -1 &&
@@ -1342,8 +1349,8 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"container create common optional options:\n"
 			"	--type=CTYPESTR    container type (HDF5, POSIX)\n"
 			"	--mode=FLAG        In case of POSIX type, select consistency mode:\n"
-			"                          relaxed: weaker consistency semantics.\n"
-			"                          balanced (default): stronger consistency semantics.\n"
+			"			   relaxed: weaker consistency semantics.\n"
+			"			   balanced (default): stronger consistency semantics.\n"
 			"	--oclass=OCLSSTR   container object class\n"
 			"			   (");
 			/* vs hardcoded list like "tiny, small, large, R2, R2S, repl_max" */

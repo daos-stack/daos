@@ -1009,11 +1009,6 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 		return 0;
 	}
 
-	sb_ver = 0;
-	layout_ver = 0;
-	magic = 0;
-	mode = 0;
-
 	/* otherwise fetch the values and verify SB */
 	rc = daos_obj_fetch(*oh, DAOS_TX_NONE, 0, &dkey, SB_AKEYS, iods, sgls,
 			    NULL, NULL);
@@ -1128,20 +1123,26 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 		D_GOTO(err_destroy, rc = daos_der2errno(rc));
 	}
 
-	if (attr && attr->da_chunk_size != 0)
-		dattr.da_chunk_size = attr->da_chunk_size;
-	else
-		dattr.da_chunk_size = DFS_DEFAULT_CHUNK_SIZE;
+	if (attr) {
+		/** check non default chunk size */
+		if (attr->da_chunk_size != 0)
+			dattr.da_chunk_size = attr->da_chunk_size;
+		else
+			dattr.da_chunk_size = DFS_DEFAULT_CHUNK_SIZE;
 
-	if (attr && attr->da_oclass_id != OC_UNKNOWN)
-		dattr.da_oclass_id = attr->da_oclass_id;
-	else
-		dattr.da_oclass_id = DFS_DEFAULT_OBJ_CLASS;
+		/** check non default object class */
+		if (attr->da_oclass_id != OC_UNKNOWN)
+			dattr.da_oclass_id = attr->da_oclass_id;
+		else
+			dattr.da_oclass_id = DFS_DEFAULT_OBJ_CLASS;
 
-	if (attr && attr->da_mode == DFS_RELAXED)
-		dattr.da_mode = attr->da_mode;
-	else
-		dattr.da_mode = DFS_BALANCED;
+		/** check non default mode */
+		if ((attr->da_mode & MODE_MASK) == DFS_RELAXED ||
+		    (attr->da_mode & MODE_MASK) == DFS_BALANCED)
+			dattr.da_mode = attr->da_mode;
+		else
+			dattr.da_mode = DFS_BALANCED;
+	}
 
 	/** Create SB */
 	rc = open_sb(coh, true, &dattr, &super_oh);
