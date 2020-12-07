@@ -281,7 +281,8 @@ CRT_RPC_DECLARE(cont_attr_del, DAOS_ISEQ_CONT_ATTR_DEL, DAOS_OSEQ_CONT_ATTR_DEL)
 
 #define DAOS_ISEQ_CONT_EPOCH_OP	/* input fields */		 \
 	((struct cont_op_in)	(cei_op)		CRT_VAR) \
-	((daos_epoch_t)		(cei_epoch)		CRT_VAR)
+	((daos_epoch_t)		(cei_epoch)		CRT_VAR) \
+	((uint64_t)		(cei_opts)		CRT_VAR)
 
 #define DAOS_OSEQ_CONT_EPOCH_OP	/* output fields */		 \
 	((struct cont_op_out)	(ceo_op)		CRT_VAR) \
@@ -345,7 +346,10 @@ CRT_RPC_DECLARE(cont_tgt_epoch_aggregate, DAOS_ISEQ_CONT_TGT_EPOCH_AGGREGATE,
 
 #define DAOS_ISEQ_CONT_TGT_SNAPSHOT_NOTIFY /* input fields */	 \
 	((uuid_t)		(tsi_cont_uuid)		CRT_VAR) \
-	((uuid_t)		(tsi_pool_uuid)		CRT_VAR)
+	((uuid_t)		(tsi_pool_uuid)		CRT_VAR) \
+	((uuid_t)		(tsi_coh_uuid)		CRT_VAR) \
+	((daos_epoch_t)		(tsi_epoch)		CRT_VAR) \
+	((uint64_t)		(tsi_opts)		CRT_VAR)
 
 #define DAOS_OSEQ_CONT_TGT_SNAPSHOT_NOTIFY /* output fields */	 \
 				/* number of errors */		 \
