@@ -984,7 +984,7 @@ static void
 rebuild_master_failure(void **state)
 {
 	test_arg_t		*arg = *state;
-	daos_obj_id_t		oids[OBJ_NR];
+	daos_obj_id_t		oids[10 * OBJ_NR];
 	daos_pool_info_t	pinfo = {0};
 	daos_pool_info_t	pinfo_new = {0};
 	int			i;
@@ -997,18 +997,18 @@ rebuild_master_failure(void **state)
 	}
 
 	test_get_leader(arg, &ranks_to_kill[0]);
-	for (i = 0; i < OBJ_NR; i++) {
+	for (i = 0; i < 10 * OBJ_NR; i++) {
 		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
 	/* prepare the data */
-	rebuild_io(arg, oids, OBJ_NR);
+	rebuild_io(arg, oids, 10 * OBJ_NR);
 
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], true);
 
 	/* Verify the data */
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_validate(arg, oids, 10 * OBJ_NR, true);
 
 	/* Verify the POOL_QUERY get same rebuild status after leader change */
 	pinfo.pi_bits = DPI_REBUILD_STATUS;
