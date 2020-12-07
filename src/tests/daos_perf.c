@@ -1339,7 +1339,7 @@ main(int argc, char **argv)
 			ts_zero_copy = true;
 			break;
 		case 'f':
-			if (strnlen(optarg, PATH_MAX) < (PATH_MAX - 5)) {
+			if (strnlen(optarg, PATH_MAX) >= (PATH_MAX - 5)) {
 				fprintf(stderr, "filename size must be < %d\n",
 					PATH_MAX - 5);
 				return -1;
@@ -1483,10 +1483,9 @@ main(int argc, char **argv)
 				 ts_ctx.tsc_mpi_rank);
 		} else {
 			char id[4];
-			int  len = snprintf(NULL, 0, "%d",
-					    ts_ctx.tsc_mpi_rank);
-			snprintf(id, len, "%d", ts_ctx.tsc_mpi_rank);
-			strcat(ts_pmem_file, id);
+			snprintf(id, sizeof(id), "%d", ts_ctx.tsc_mpi_rank);
+			strncat(ts_pmem_file, id,
+				(sizeof(ts_pmem_file) - strlen(ts_pmem_file)));
 		}
 		ts_ctx.tsc_pmem_file = ts_pmem_file;
 		if (ts_in_ult) {
