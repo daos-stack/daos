@@ -24,6 +24,7 @@
 //
 
 package telemetry
+
 /*
 #cgo LDFLAGS: -lgurt
 
@@ -50,13 +51,13 @@ func ConvertNodeList(shmemRoot *C.uint64_t, nodeList *C.d_tm_nodeList) ([]string
 	var directory []string
 	var metrics []string
 
-	if (nodeList != nil) {
+	if nodeList != nil {
 		for ; nodeList != nil; nodeList = nodeList.dtnl_next {
 			name := (*C.char)(C.d_tm_conv_ptr(shmemRoot, unsafe.Pointer(nodeList.dtnl_node.dtn_name)))
-			if (name == nil) {
+			if name == nil {
 				continue
 			}
-			if (nodeList.dtnl_node.dtn_type == C.D_TM_DIRECTORY) {
+			if nodeList.dtnl_node.dtn_type == C.D_TM_DIRECTORY {
 				directory = append(directory, C.GoString(name))
 			} else {
 				metrics = append(metrics, C.GoString(name))
@@ -66,19 +67,19 @@ func ConvertNodeList(shmemRoot *C.uint64_t, nodeList *C.d_tm_nodeList) ([]string
 	return directory, metrics, nil
 }
 
-func GetDirListing(shmemRoot *C.uint64_t, nl **C.d_tm_nodeList, dirname string, filter int)  error {
+func GetDirListing(shmemRoot *C.uint64_t, nl **C.d_tm_nodeList, dirname string, filter int) error {
 	node := C.d_tm_get_root(shmemRoot)
 
 	if dirname != "/" && dirname != "" {
 		node = FindMetric(shmemRoot, dirname)
 	}
 
-	if (node == nil) {
+	if node == nil {
 		return errors.Errorf("Directory or metric:[%s] was not found", dirname)
 	}
 
-	rc := C.d_tm_list(nl, shmemRoot, node, C.int(filter));
-	if (rc != C.D_TM_SUCCESS) {
+	rc := C.d_tm_list(nl, shmemRoot, node, C.int(filter))
+	if rc != C.D_TM_SUCCESS {
 		return errors.Errorf("Unable to find entry for %s.  rc = %d\n", dirname, rc)
 	}
 
@@ -93,8 +94,8 @@ func UpdateCounters(shmemRoot *C.uint64_t, counterMap map[C.d_tm_node_p]Counter)
 			continue
 		}
 		counterMap[node] = Counter{
-			name:	nodeName,
-			value:	val,
+			name:  nodeName,
+			value: val,
 		}
 	}
 	return nil
@@ -108,13 +109,12 @@ func UpdateGauges(shmemRoot *C.uint64_t, gaugeMap map[C.d_tm_node_p]Gauge) error
 			continue
 		}
 		gaugeMap[node] = Gauge{
-			name:	nodeName,
-			value:	val,
+			name:  nodeName,
+			value: val,
 		}
 	}
 	return nil
 }
-
 
 func UpdateTimestamps(shmemRoot *C.uint64_t, timestampMap map[C.d_tm_node_p]Timestamp) error {
 	for node, _ := range timestampMap {
@@ -124,9 +124,9 @@ func UpdateTimestamps(shmemRoot *C.uint64_t, timestampMap map[C.d_tm_node_p]Time
 			continue
 		}
 		timestampMap[node] = Timestamp{
-			name:	nodeName,
-			ts:	ts,
-			clk:	clk,
+			name: nodeName,
+			ts:   ts,
+			clk:  clk,
 		}
 	}
 	return nil
@@ -140,9 +140,9 @@ func UpdateDurations(shmemRoot *C.uint64_t, durationMap map[C.d_tm_node_p]Durati
 			continue
 		}
 		durationMap[node] = Duration{
-			name:	nodeName,
-			sec:	sec,
-			nsec:	nsec,
+			name: nodeName,
+			sec:  sec,
+			nsec: nsec,
 		}
 	}
 	return nil
@@ -156,16 +156,16 @@ func UpdateSnapshots(shmemRoot *C.uint64_t, snapshotMap map[C.d_tm_node_p]Snapsh
 			continue
 		}
 		snapshotMap[node] = Snapshot{
-			name:	nodeName,
-			sec:	sec,
-			nsec:	nsec,
+			name: nodeName,
+			sec:  sec,
+			nsec: nsec,
 		}
 	}
 	return nil
 }
 
 func InitMaps(shmemRoot *C.uint64_t, nl *C.d_tm_nodeList, counterMap map[C.d_tm_node_p]Counter, gaugeMap map[C.d_tm_node_p]Gauge, timestampMap map[C.d_tm_node_p]Timestamp, durationMap map[C.d_tm_node_p]Duration, snapshotMap map[C.d_tm_node_p]Snapshot) error {
-	if (nl == nil) {
+	if nl == nil {
 		return errors.Errorf("nodelist is uninitialized\n")
 	}
 
@@ -179,8 +179,8 @@ func InitMaps(shmemRoot *C.uint64_t, nl *C.d_tm_nodeList, counterMap map[C.d_tm_
 				continue
 			}
 			counterMap[nl.dtnl_node] = Counter{
-				name:	nodeName,
-				value:	val,
+				name:  nodeName,
+				value: val,
 			}
 		case C.D_TM_TIMESTAMP:
 			ts, clk, err := GetTimestamp(shmemRoot, nl.dtnl_node, "")
@@ -188,9 +188,9 @@ func InitMaps(shmemRoot *C.uint64_t, nl *C.d_tm_nodeList, counterMap map[C.d_tm_
 				continue
 			}
 			timestampMap[nl.dtnl_node] = Timestamp{
-				name:	nodeName,
-				ts:	ts,
-				clk:	clk,
+				name: nodeName,
+				ts:   ts,
+				clk:  clk,
 			}
 		case C.D_TM_TIMER_SNAPSHOT | C.D_TM_CLOCK_REALTIME:
 			fallthrough
@@ -202,9 +202,9 @@ func InitMaps(shmemRoot *C.uint64_t, nl *C.d_tm_nodeList, counterMap map[C.d_tm_
 				continue
 			}
 			snapshotMap[nl.dtnl_node] = Snapshot{
-				name:	nodeName,
-				sec:	sec,
-				nsec:	nsec,
+				name: nodeName,
+				sec:  sec,
+				nsec: nsec,
 			}
 		case C.D_TM_DURATION | C.D_TM_CLOCK_REALTIME:
 			fallthrough
@@ -216,9 +216,9 @@ func InitMaps(shmemRoot *C.uint64_t, nl *C.d_tm_nodeList, counterMap map[C.d_tm_
 				continue
 			}
 			durationMap[nl.dtnl_node] = Duration{
-				name:	nodeName,
-				sec:	sec,
-				nsec:	nsec,
+				name: nodeName,
+				sec:  sec,
+				nsec: nsec,
 			}
 		case C.D_TM_GAUGE:
 			val, err := GetGauge(shmemRoot, nl.dtnl_node, "")
@@ -226,8 +226,8 @@ func InitMaps(shmemRoot *C.uint64_t, nl *C.d_tm_nodeList, counterMap map[C.d_tm_
 				continue
 			}
 			gaugeMap[nl.dtnl_node] = Gauge{
-				name:	nodeName,
-				value:	val,
+				name:  nodeName,
+				value: val,
 			}
 		default:
 			return errors.Errorf("Unknown type: %s : %d\n", nodeName, nl.dtnl_node.dtn_type)
@@ -237,7 +237,7 @@ func InitMaps(shmemRoot *C.uint64_t, nl *C.d_tm_nodeList, counterMap map[C.d_tm_
 }
 
 func PrintNodeList(shmemRoot *C.uint64_t, nl *C.d_tm_nodeList, dirname string, level int) error {
-	if (nl == nil) {
+	if nl == nil {
 		return errors.Errorf("nodelist is uninitialized\n")
 	}
 
@@ -251,7 +251,7 @@ func PrintNodeList(shmemRoot *C.uint64_t, nl *C.d_tm_nodeList, dirname string, l
 	fmt.Printf("There are %d metrics under: %s\n", numMetrics, dirname)
 
 	for ; nl != nil; nl = nl.dtnl_next {
-		if (nl.dtnl_node.dtn_type != C.D_TM_DIRECTORY) {
+		if nl.dtnl_node.dtn_type != C.D_TM_DIRECTORY {
 			fmt.Printf("%d) ", i)
 			PrintNode(shmemRoot, nl.dtnl_node, level, C.stdout)
 			i++
@@ -266,27 +266,27 @@ func PrintNodeList(shmemRoot *C.uint64_t, nl *C.d_tm_nodeList, dirname string, l
 
 func ReadMetrics(shmemRoot *C.uint64_t, counterMap map[C.d_tm_node_p]Counter, gaugeMap map[C.d_tm_node_p]Gauge, timestampMap map[C.d_tm_node_p]Timestamp, durationMap map[C.d_tm_node_p]Duration, snapshotMap map[C.d_tm_node_p]Snapshot) {
 	err := UpdateCounters(shmemRoot, counterMap)
-	if (err != nil) {
+	if err != nil {
 		fmt.Printf("Error %v", err)
 	}
 
 	err = UpdateGauges(shmemRoot, gaugeMap)
-	if (err != nil) {
+	if err != nil {
 		fmt.Printf("Error %v", err)
 	}
 
 	err = UpdateTimestamps(shmemRoot, timestampMap)
-	if (err != nil) {
+	if err != nil {
 		fmt.Printf("Error %v", err)
 	}
 
 	err = UpdateDurations(shmemRoot, durationMap)
-	if (err != nil) {
+	if err != nil {
 		fmt.Printf("Error %v", err)
 	}
 
 	err = UpdateSnapshots(shmemRoot, snapshotMap)
-	if (err != nil) {
+	if err != nil {
 		fmt.Printf("Error %v", err)
 	}
 }
@@ -296,7 +296,7 @@ func ReadMetrics(shmemRoot *C.uint64_t, counterMap map[C.d_tm_node_p]Counter, ga
 // printed.  It is not stored anywhere for later use.
 func ShowDirectoryTree(rank int, dirname string) error {
 	shmemRoot, root, err := InitTelemetry(rank)
-	if (err != nil) {
+	if err != nil {
 		fmt.Printf("Failed to init telemetry for rank: %d\n", rank)
 		return err
 	}
@@ -306,7 +306,7 @@ func ShowDirectoryTree(rank int, dirname string) error {
 	node := root
 	if dirname != "/" && dirname != "" {
 		node = FindMetric(shmemRoot, dirname)
-		if (node == nil) {
+		if node == nil {
 			return errors.Errorf("Cound not find an entry for: %s", dirname)
 		}
 	}
@@ -326,7 +326,7 @@ func ListMetrics(rank int, dirname string, iterations int, filterString string) 
 	var nl *C.d_tm_nodeList
 
 	shmemRoot, _, err := InitTelemetry(rank)
-	if (err != nil) {
+	if err != nil {
 		fmt.Printf("Failed to init telemetry for rank: %d\n", rank)
 		return err
 	}
@@ -334,28 +334,28 @@ func ListMetrics(rank int, dirname string, iterations int, filterString string) 
 	fmt.Printf("DAOS Telemetry & Metrics API version: %d\n", GetAPIVersion())
 
 	filter := 0
-	if (strings.Contains(filterString, "c")) {
+	if strings.Contains(filterString, "c") {
 		filter |= C.D_TM_COUNTER
 	}
 
-	if (strings.Contains(filterString, "d")) {
+	if strings.Contains(filterString, "d") {
 		filter |= C.D_TM_DURATION
 	}
 
-	if (strings.Contains(filterString, "g")) {
+	if strings.Contains(filterString, "g") {
 		filter |= C.D_TM_GAUGE
 	}
 
-	if (strings.Contains(filterString, "s")) {
+	if strings.Contains(filterString, "s") {
 		filter |= C.D_TM_TIMER_SNAPSHOT
 	}
 
-	if (strings.Contains(filterString, "t")) {
+	if strings.Contains(filterString, "t") {
 		filter |= C.D_TM_TIMESTAMP
 	}
 
 	err = GetDirListing(shmemRoot, &nl, dirname, filter)
-	if (err != nil) {
+	if err != nil {
 		return err
 	}
 
@@ -367,7 +367,7 @@ func ListMetrics(rank int, dirname string, iterations int, filterString string) 
 
 	// Initialize maps for each data type with the metrics found in the node list
 	err = InitMaps(shmemRoot, nl, counterMap, gaugeMap, timestampMap, durationMap, snapshotMap)
-	if (err != nil) {
+	if err != nil {
 		return err
 	}
 	ListFree(nl)
@@ -375,11 +375,11 @@ func ListMetrics(rank int, dirname string, iterations int, filterString string) 
 	fmt.Printf("There are %d counters, %d gauges, %d timestamps, %d durations and %d snapshots\n",
 		len(counterMap), len(gaugeMap), len(timestampMap), len(durationMap), len(snapshotMap))
 
-	if (iterations <= 1) {
+	if iterations <= 1 {
 		iterations = 1
 	}
 
-	for i := 0; i < iterations;  i++ {
+	for i := 0; i < iterations; i++ {
 
 		// Iterate through all the nodes stored in all the maps, to read the metrics associated
 		// with each node.  The data is stored in associated map entry.
@@ -408,7 +408,7 @@ func ListMetrics(rank int, dirname string, iterations int, filterString string) 
 			default:
 				name = "Duration (Unknown!)"
 			}
-			fmt.Printf("\t%s: %s = %.9fs\n", name, duration.name, float64(duration.sec) + float64(duration.nsec) / 1e9)
+			fmt.Printf("\t%s: %s = %.9fs\n", name, duration.name, float64(duration.sec)+float64(duration.nsec)/1e9)
 		}
 		for node, snapshot := range snapshotMap {
 			var name string

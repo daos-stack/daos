@@ -35,21 +35,21 @@ type telemCmd struct {
 type telemScanCmd struct {
 	cfgCmd
 	logCmd
-	Rank int `short:"r" long:"rank" description:"Use this rank for telemetry data"`
+	Rank int    `short:"r" long:"rank" description:"Use this rank for telemetry data"`
 	Path string `short:"p" long:"path" description:"Scan telemetry from this path"`
 }
 
 type telemListCmd struct {
 	cfgCmd
 	logCmd
-	Rank int `short:"r" long:"rank" description:"Use this rank for telemetry data"`
-	Path string `short:"p" long:"path" description:"List telemetry from this path"`
-	Iterations int `short:"i" long:"iter" description:"Number of iterations to print before exiting"`
-	Counter bool `short:"c" long:"counter" description:"Include counters in the listing"`
-	Duration bool `short:"d" long:"duration" description:"Include durations in the listing"`
-	Gauge bool `short:"g" long:"gauge" description:"Include gauges in the listing"`
-	Snapshot bool `short:"s" long:"snapshot" description:"Include timer snapshots in the listing"`
-	Timestamp bool `short:"t" long:"timestamp" description:"Include timestamps in the listing"`
+	Rank       int    `short:"r" long:"rank" description:"Use this rank for telemetry data"`
+	Path       string `short:"p" long:"path" description:"List telemetry from this path"`
+	Iterations int    `short:"i" long:"iter" description:"Number of iterations to print before exiting"`
+	Counter    bool   `short:"c" long:"counter" description:"Include counters in the listing"`
+	Duration   bool   `short:"d" long:"duration" description:"Include durations in the listing"`
+	Gauge      bool   `short:"g" long:"gauge" description:"Include gauges in the listing"`
+	Snapshot   bool   `short:"s" long:"snapshot" description:"Include timer snapshots in the listing"`
+	Timestamp  bool   `short:"t" long:"timestamp" description:"Include timestamps in the listing"`
 }
 
 func (cmd *telemScanCmd) Execute(args []string) error {
@@ -62,23 +62,23 @@ func (cmd *telemListCmd) Execute(args []string) error {
 
 	// Didn't want to use CGO to include the header for these constants
 	// Making a string representation instead which is parsed later
-	if (cmd.Counter) {
+	if cmd.Counter {
 		filter += "c"
 	}
 
-	if (cmd.Duration) {
+	if cmd.Duration {
 		filter += "d"
 	}
 
-	if (cmd.Gauge) {
+	if cmd.Gauge {
 		filter += "g"
 	}
 
-	if (cmd.Snapshot) {
+	if cmd.Snapshot {
 		filter += "s"
 	}
 
-	if (cmd.Timestamp) {
+	if cmd.Timestamp {
 		filter += "t"
 	}
 

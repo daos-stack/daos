@@ -46,65 +46,65 @@ import (
 )
 
 type Counter struct {
-	name	string
-	value	uint64
+	name  string
+	value uint64
 }
 
 type Gauge struct {
-	name	string
-	value	uint64
+	name  string
+	value uint64
 }
 
 type Timestamp struct {
-	name	string
-	ts	string
-	clk	C.time_t
+	name string
+	ts   string
+	clk  C.time_t
 }
 
 type Duration struct {
-	name	string
-	sec	uint64
-	nsec	uint64
+	name string
+	sec  uint64
+	nsec uint64
 }
 
 type Snapshot struct {
-	name	string
-	sec	uint64
-	nsec	uint64
+	name string
+	sec  uint64
+	nsec uint64
 }
 
 func InitTelemetry(rank int) (*C.uint64_t, C.d_tm_node_p, error) {
 
 	shmemRoot := C.d_tm_get_shared_memory(C.int(rank))
-	if (shmemRoot == nil) {
+	if shmemRoot == nil {
 		return nil, nil, errors.Errorf("no shared memory segment found for rank: %d", rank)
 	}
 
 	root := C.d_tm_get_root(shmemRoot)
-	if (root == nil) {
+	if root == nil {
 		return nil, nil, errors.Errorf("no root node found in shared memory segment for rank: %d", rank)
 	}
 
 	return shmemRoot, root, nil
 }
 
-func FindMetric(shmemRoot *C.uint64_t, name string) (C.d_tm_node_p) {
+func FindMetric(shmemRoot *C.uint64_t, name string) C.d_tm_node_p {
 	return C.d_tm_find_metric(shmemRoot, C.CString(name))
 }
 
 func GetCounter(shmemRoot *C.uint64_t, node C.d_tm_node_p, name string) (uint64, error) {
 	var val C.uint64_t
 	res := C.d_tm_get_counter(&val, shmemRoot, node, C.CString(name))
-	if (res == C.D_TM_SUCCESS) {
+	if res == C.D_TM_SUCCESS {
 		return uint64(val), nil
 	}
 	return 0, errors.Errorf("error %d", int(res))
 }
 
 func GetTimestamp(shmemRoot *C.uint64_t, node C.d_tm_node_p, name string) (string, C.time_t, error) {
-	var clk C.time_t;
+	var clk C.time_t
 	res := C.d_tm_get_timestamp(&clk, shmemRoot, node, C.CString(name))
-	if (res == C.D_TM_SUCCESS) {
+	if res == C.D_TM_SUCCESS {
 		return C.GoString(C.ctime(&clk))[:24], clk, nil
 	}
 	return "", 0, errors.Errorf("error %d", int(res))
@@ -113,7 +113,7 @@ func GetTimestamp(shmemRoot *C.uint64_t, node C.d_tm_node_p, name string) (strin
 func GetTimerSnapshot(shmemRoot *C.uint64_t, node C.d_tm_node_p, name string) (uint64, uint64, error) {
 	var tms C.tspec
 	res := C.d_tm_get_timer_snapshot(&tms, shmemRoot, node, C.CString(name))
-	if (res == C.D_TM_SUCCESS) {
+	if res == C.D_TM_SUCCESS {
 		return uint64(tms.tv_sec), uint64(tms.tv_nsec), nil
 	}
 	return 0, 0, errors.Errorf("error %d", int(res))
@@ -122,7 +122,7 @@ func GetTimerSnapshot(shmemRoot *C.uint64_t, node C.d_tm_node_p, name string) (u
 func GetDuration(shmemRoot *C.uint64_t, node C.d_tm_node_p, name string) (uint64, uint64, error) {
 	var tms C.tspec
 	res := C.d_tm_get_duration(&tms, shmemRoot, node, C.CString(name))
-	if (res == C.D_TM_SUCCESS) {
+	if res == C.D_TM_SUCCESS {
 		return uint64(tms.tv_sec), uint64(tms.tv_nsec), nil
 	}
 	return 0, 0, errors.Errorf("error %d", int(res))
@@ -131,7 +131,7 @@ func GetDuration(shmemRoot *C.uint64_t, node C.d_tm_node_p, name string) (uint64
 func GetGauge(shmemRoot *C.uint64_t, node C.d_tm_node_p, name string) (uint64, error) {
 	var val C.uint64_t
 	res := C.d_tm_get_gauge(&val, shmemRoot, node, C.CString(name))
-	if (res == C.D_TM_SUCCESS) {
+	if res == C.D_TM_SUCCESS {
 		return uint64(val), nil
 	}
 	return 0, errors.Errorf("error %d", int(res))
@@ -141,7 +141,7 @@ func GetMetadata(shmemRoot *C.uint64_t, node C.d_tm_node_p, name string) (string
 	var shortDesc *C.char
 	var longDesc *C.char
 	res := C.d_tm_get_metadata(&shortDesc, &longDesc, shmemRoot, node, C.CString(name))
-	if (res == C.D_TM_SUCCESS) {
+	if res == C.D_TM_SUCCESS {
 		short := C.GoString(shortDesc)
 		long := C.GoString(longDesc)
 		C.free(unsafe.Pointer(shortDesc))
@@ -162,15 +162,15 @@ func CountMetrics(shmemRoot *C.uint64_t, node C.d_tm_node_p, filter int) uint64 
 }
 
 func PrintMyChildren(shmemRoot *C.uint64_t, node C.d_tm_node_p, level int, stream *C.FILE) {
-	C.d_tm_print_my_children(shmemRoot, node, C.int(level), stream);
+	C.d_tm_print_my_children(shmemRoot, node, C.int(level), stream)
 }
 
 func PrintNode(shmemRoot *C.uint64_t, node C.d_tm_node_p, level int, stream *C.FILE) {
-	C.d_tm_print_node(shmemRoot, node, C.int(level), stream);
+	C.d_tm_print_node(shmemRoot, node, C.int(level), stream)
 }
 
 func PrintCounter(val uint64, name string, stream *C.FILE) {
-	C.d_tm_print_counter(C.uint64_t(val), C.CString(name), stream);
+	C.d_tm_print_counter(C.uint64_t(val), C.CString(name), stream)
 }
 
 func PrintTimestamp(clk *C.time_t, name string, stream *C.FILE) {
@@ -194,11 +194,11 @@ func PrintDuration(sec uint64, nsec uint64, name string, tm_type C.int, stream *
 }
 
 func PrintGauge(val uint64, name string, stream *C.FILE) {
-	C.d_tm_print_gauge(C.uint64_t(val), C.CString(name), stream);
+	C.d_tm_print_gauge(C.uint64_t(val), C.CString(name), stream)
 }
 
 func ListFree(nodeList *C.d_tm_nodeList) {
-	C.d_tm_list_free(nodeList);
+	C.d_tm_list_free(nodeList)
 }
 
 func GetAPIVersion() int {
