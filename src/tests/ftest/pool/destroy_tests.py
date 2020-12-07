@@ -53,7 +53,7 @@ class DestroyTests(TestWithServers):
                 raised when destroying the pool. Defaults to False.
         """
         # Start servers with the server group
-        self.start_servers({group_name: hosts})
+        self.start_servers({group_name: {"servers": hosts}})
 
         # Validate the creation of a pool
         self.validate_pool_creation(hosts, group_name)

@@ -49,7 +49,7 @@ class ManagementServiceResilience(TestWithServers):
         Test Description:
             Test management service is accessible after instances are removed.
 
-        :avocado: tags=all,full_regression,medium,control,ms_resilience
+        :avocado: tags=all,full_regression,large,control,ms_resilience
         """
         # Start up 2 servers as access_points, so MS will be replicated
         access_list = random.sample(self.hostlist_servers, 3)
