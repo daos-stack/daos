@@ -417,8 +417,10 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		goto out;
 	}
 
-	if (obj->obj_ilog_info.ii_uncertain_create)
-		return -DER_TX_RESTART;
+	if (obj->obj_ilog_info.ii_uncertain_create) {
+		rc = -DER_TX_RESTART;
+		goto out;
+	}
 
 	D_ASSERT(obj != NULL);
 	/* only integer keys supported */

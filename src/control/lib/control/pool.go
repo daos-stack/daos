@@ -194,6 +194,45 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 	}, nil
 }
 
+type (
+	// PoolResolveIDReq contains the parameters for a request to resolve
+	// a human-friendly pool identifier to a UUID.
+	PoolResolveIDReq struct {
+		msRequest
+		unaryRequest
+		HumanID string
+	}
+
+	// PoolResolveIDResp contains the result of a successful request.
+	PoolResolveIDResp struct {
+		UUID string
+	}
+)
+
+// PoolResolveID resolves a user-friendly Pool identifier into a UUID for use
+// in subsequent API requests.
+func PoolResolveID(ctx context.Context, rpcClient UnaryInvoker, req *PoolResolveIDReq) (*PoolResolveIDResp, error) {
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolResolveID(ctx, &mgmtpb.PoolResolveIDReq{
+			HumanID: req.HumanID,
+		})
+	})
+
+	rpcClient.Debugf("Resolve DAOS pool ID request: %+v\n", req)
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	prid := new(PoolResolveIDResp)
+	if err := convertMSResponse(ur, prid); err != nil {
+		return nil, err
+	}
+	rpcClient.Debugf("Resolve DAOS pool ID response: %s\n", prid)
+
+	return prid, nil
+}
+
 // PoolDestroyReq contains the parameters for a pool destroy request.
 type PoolDestroyReq struct {
 	msRequest
