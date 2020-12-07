@@ -17,7 +17,7 @@ server_config:
       scm_mount: /mnt/daos0
       log_mask: DEBUG,MEM=ERR
       env_vars:
-        - DD_MASK=mgmt,io,md,epc,rebuild
+        - DD_MASK=mgmt,md,rebuild
   transport_config:
     allow_insecure: True
 agent_config:
