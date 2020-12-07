@@ -36,7 +36,7 @@ type (
 		FormatErr       error
 		ScanRes         *ScanResponse
 		ScanErr         error
-		vmdDisabled     bool // set through public access methods
+		VmdEnabled      bool // set disabled by default
 		UpdateErr       error
 	}
 
@@ -95,11 +95,11 @@ func (mb *MockBackend) Prepare(_ PrepareRequest) (*PrepareResponse, error) {
 }
 
 func (mb *MockBackend) DisableVMD() {
-	mb.cfg.vmdDisabled = true
+	mb.cfg.VmdEnabled = false
 }
 
 func (mb *MockBackend) IsVMDDisabled() bool {
-	return mb.cfg.vmdDisabled
+	return !mb.cfg.VmdEnabled
 }
 
 func (mb *MockBackend) UpdateFirmware(_ string, _ string, _ int32) error {
