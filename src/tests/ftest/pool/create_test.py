@@ -25,6 +25,7 @@ import time
 
 from pool_test_base import PoolTestBase
 from server_utils import ServerFailed
+from apricot import skipForTicket
 
 
 class PoolCreateTests(PoolTestBase):
@@ -90,6 +91,7 @@ class PoolCreateTests(PoolTestBase):
         self.pool = self.get_pool_list(1, 0.9, 0.9)
         self.check_pool_creation(240)
 
+    @skipForTicket("DAOS-6200")
     def test_create_pool_quantity(self):
         """JIRA ID: DAOS-3599.
 
@@ -189,6 +191,7 @@ class PoolCreateTests(PoolTestBase):
             "should succeed."
         )
 
+    @skipForTicket("DAOS-6174")
     def test_create_no_space_loop(self):
         """JIRA ID: DAOS-3728.
 

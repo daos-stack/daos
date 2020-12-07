@@ -46,21 +46,25 @@ type (
 	// PoolService represents a pool service created to manage metadata
 	// for a DAOS Pool.
 	PoolService struct {
-		PoolUUID uuid.UUID
-		State    PoolServiceState
-		Replicas []Rank
+		PoolUUID  uuid.UUID
+		PoolLabel string
+		State     PoolServiceState
+		Replicas  []Rank
 	}
 
 	// PoolRankMap provides a map of Rank->[]*PoolService.
 	PoolRankMap map[Rank][]*PoolService
 	// PoolUuidMap provides a map of UUID->*PoolService.
 	PoolUuidMap map[uuid.UUID]*PoolService
+	// PoolLabelMap provides a map of Label->*PoolService.
+	PoolLabelMap map[string]*PoolService
 
 	// PoolDatabase contains a set of maps for looking up DAOS Pool
 	// Service instances and methods for managing the pool membership.
 	PoolDatabase struct {
-		Ranks PoolRankMap
-		Uuids PoolUuidMap
+		Ranks  PoolRankMap
+		Uuids  PoolUuidMap
+		Labels PoolLabelMap
 	}
 )
 
@@ -88,6 +92,17 @@ func (prm PoolRankMap) MarshalJSON() ([]byte, error) {
 	return json.Marshal(jm)
 }
 
+// MarshalJSON creates a serialized representation of the PoolLabelMap.
+// The pool's UUID is used to represent the pool service in order to
+// avoid duplicating pool service details in the serialized format.
+func (plm PoolLabelMap) MarshalJSON() ([]byte, error) {
+	jm := make(map[string]uuid.UUID)
+	for label, svc := range plm {
+		jm[label] = svc.PoolUUID
+	}
+	return json.Marshal(jm)
+}
+
 // UnmarshalJSON "inflates" the PoolDatabase from a compressed and
 // serialized representation. The PoolUuidMap contains a full representation
 // of each PoolService, whereas the other serialized maps simply use the
@@ -99,10 +114,12 @@ func (pdb *PoolDatabase) UnmarshalJSON(data []byte) error {
 
 	type fromJSON PoolDatabase
 	from := &struct {
-		Ranks map[Rank][]uuid.UUID
+		Ranks  map[Rank][]uuid.UUID
+		Labels map[string]uuid.UUID
 		*fromJSON
 	}{
 		Ranks:    make(map[Rank][]uuid.UUID),
+		Labels:   make(map[string]uuid.UUID),
 		fromJSON: (*fromJSON)(pdb),
 	}
 
@@ -124,6 +141,18 @@ func (pdb *PoolDatabase) UnmarshalJSON(data []byte) error {
 		}
 	}
 
+	for label, uuid := range from.Labels {
+		svc, found := pdb.Uuids[uuid]
+		if !found {
+			return errors.Errorf("label %q missing UUID", label)
+		}
+
+		if _, exists := pdb.Labels[label]; exists {
+			return errors.Errorf("pool label %q was already restored", label)
+		}
+		pdb.Labels[label] = svc
+	}
+
 	return nil
 }
 
@@ -131,8 +160,28 @@ func (pdb *PoolDatabase) UnmarshalJSON(data []byte) error {
 // updating all of the relevant maps.
 func (pdb *PoolDatabase) addService(ps *PoolService) {
 	pdb.Uuids[ps.PoolUUID] = ps
+	pdb.Labels[ps.PoolLabel] = ps
 	for _, rank := range ps.Replicas {
 		pdb.Ranks[rank] = append(pdb.Ranks[rank], ps)
+	}
+}
+
+// updateService is responsible for updating relevant maps
+// after a pool service update. The cur PoolService
+// pointer must exist in the database.
+func (pdb *PoolDatabase) updateService(cur, new *PoolService) {
+	if cur != pdb.Uuids[cur.PoolUUID] {
+		panic("PoolDatabase.updateService() called with non-member pointer")
+	}
+	cur.State = new.State
+
+	// TODO: Update svc rank map
+	cur.Replicas = new.Replicas
+
+	delete(pdb.Labels, cur.PoolLabel)
+	cur.PoolLabel = new.PoolLabel
+	if cur.PoolLabel != "" {
+		pdb.Labels[cur.PoolLabel] = cur
 	}
 }
 
@@ -140,6 +189,7 @@ func (pdb *PoolDatabase) addService(ps *PoolService) {
 // updating all of the relevant maps.
 func (pdb *PoolDatabase) removeService(ps *PoolService) {
 	delete(pdb.Uuids, ps.PoolUUID)
+	delete(pdb.Labels, ps.PoolLabel)
 	for _, rank := range ps.Replicas {
 		rankServices := pdb.Ranks[rank]
 		for idx, rs := range rankServices {
