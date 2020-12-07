@@ -1751,7 +1751,6 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 int
 bio_nvme_poll(struct bio_xs_context *ctxt)
 {
-
 	uint64_t now = d_timeus_secdiff(0);
 	int rc;
 

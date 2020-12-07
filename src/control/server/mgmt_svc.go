@@ -480,8 +480,6 @@ func (svc *mgmtSvc) smdIdentify(ctx context.Context, req *mgmtpb.SmdQueryReq) (*
 		return nil, errors.Errorf("smdIdentify on %s did not match any devices", req.Uuid)
 	}
 
-	// TODO: Make sure the device is a VMD device (Here??)
-
 	srvs, err := svc.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", rank))
 	if err != nil {
 		return nil, err

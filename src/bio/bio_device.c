@@ -698,7 +698,7 @@ bio_set_led_state(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid,
 		return -DER_NONEXIST;
 	}
 
-	/* LED will be reset to the orignal saved state */
+	/* LED will be reset to the original saved state */
 	if (reset) {
 		new_led_state = bio_dev->bb_led_state;
 		D_GOTO(skip_led_str, rc = 0);
@@ -708,15 +708,15 @@ bio_set_led_state(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid,
 		return -DER_INVAL;
 
 	/* Determine SPDK LED state based on led_state string */
-	if (strcasecmp(led_state, "identify") == 0)
+	if (strcasecmp(led_state, "identify") == 0) {
 		new_led_state = SPDK_VMD_LED_STATE_IDENTIFY;
-	else if (strcasecmp(led_state, "on") == 0)
+	} else if (strcasecmp(led_state, "on") == 0) {
 		new_led_state = SPDK_VMD_LED_STATE_FAULT;
-	else if (strcasecmp(led_state, "fault") == 0)
+	} else if (strcasecmp(led_state, "fault") == 0) {
 		new_led_state = SPDK_VMD_LED_STATE_FAULT;
-	else if (strcasecmp(led_state, "off") == 0)
+	} else if (strcasecmp(led_state, "off") == 0) {
 		new_led_state = SPDK_VMD_LED_STATE_OFF;
-	else {
+	} else {
 		D_ERROR("LED state is not valid or supported\n");
 		return -DER_NOSYS;
 	}
@@ -782,9 +782,9 @@ skip_led_str:
 	}
 
 	rc = spdk_vmd_get_led_state(pci_device, &current_led_state);
-	if (rc)
+	if (rc) {
 		D_ERROR("Failed to get the VMD LED state\n");
-	else {
+	} else {
 		/* Verify the correct state is set */
 		if (current_led_state != new_led_state)
 			D_ERROR("LED of device:%s is in an unexpected state:"
