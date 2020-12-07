@@ -444,7 +444,7 @@ class IorTestBase(DfuseTestBase):
         """
         try:
             # Execute the bash command on each client host
-            result = self._execute_cmd(command, fail_on_err, display_output)
+            result = self._execute_command(command, fail_on_err, display_output)
 
         except CommandFailure as error:
             # Report an error if any command fails
@@ -453,7 +453,7 @@ class IorTestBase(DfuseTestBase):
 
         return result
 
-    def _execute_cmd(self, command, fail_on_err=True, display_output=True):
+    def _execute_command(self, command, fail_on_err=True, display_output=True):
         """Execute the command on all client hosts.
 
         Optionally verify if the command returns a non zero return code.
