@@ -698,7 +698,7 @@ bio_set_led_state(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid,
 		return -DER_NONEXIST;
 	}
 
-	/* LED wil be reset to the orignal saved state */
+	/* LED will be reset to the orignal saved state */
 	if (reset) {
 		new_led_state = bio_dev->bb_led_state;
 		D_GOTO(skip_led_str, rc = 0);
