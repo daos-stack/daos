@@ -409,6 +409,26 @@ class DaosServer():
 
         if not self._sp:
             return
+        rc = self.run_dmg(['system', 'stop'])
+        print(rc)
+
+        start = time.time()
+        while True:
+            time.sleep(0.5)
+            rc = self.run_dmg(['system', 'query'])
+            print(rc)
+            ready = False
+            if rc.returncode == 0:
+                for line in rc.stdout.decode('utf-8').splitlines():
+                    if line.startswith('status'):
+                        if 'Stopped' in line:
+                            ready = True
+            if ready:
+                break
+            if time.time() - start > 20:
+                print('Failed to stop')
+                break
+        print('Server stopped in {:.2f} seconds'.format(time.time() - start))
 
         # daos_server does not correctly shutdown daos_io_server yet
         # so find and kill daos_io_server directly.  This may cause
@@ -466,7 +486,7 @@ class DaosServer():
         # often segfaults at shutdown.
         if os.path.exists(self._log_file):
             # TODO: Enable memleak checking when server shutdown works.
-            log_test(self.conf, self._log_file, show_memleaks=False)
+            log_test(self.conf, self._log_file, show_memleaks=True)
         self.running = False
         return ret
 
