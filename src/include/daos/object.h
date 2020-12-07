@@ -104,7 +104,17 @@ enum {
 
 	DAOS_OC_EC_K2P1_SPEC_RANK_L32K,
 	DAOS_OC_EC_K4P1_SPEC_RANK_L32K,
+	/**
+	 * Object class reserved by Object Index Table (OIT)
+	 * It is the 1st version and could be changed in the future
+	 *
+	 * NB: it should be smaller than OC_BACK_COMPAT (50)
+	 */
+	DAOS_OC_OIT_V1	= 45,
 };
+
+/* default version of OIT object class */
+#define DAOS_OC_OIT	DAOS_OC_OIT_V1
 
 static inline bool
 daos_obj_is_echo(daos_obj_id_t oid)
@@ -305,6 +315,17 @@ daos_oclass_is_ec(daos_obj_id_t oid, struct daos_oclass_attr **attr)
 		return false;
 
 	return DAOS_OC_IS_EC(oca);
+}
+
+/* generate ID for Object ID Table which is just an object */
+static inline daos_obj_id_t
+daos_oit_gen_id(daos_epoch_t epoch)
+{
+	daos_obj_id_t	oid = {0};
+
+	daos_obj_generate_id(&oid, 0, DAOS_OC_OIT, 0);
+	oid.lo = epoch;
+	return oid;
 }
 
 static inline bool
