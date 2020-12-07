@@ -200,10 +200,11 @@ out:
 
 static int
 create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
-		  const char **ace_list, size_t ace_nr)
+		  char *label, const char **ace_list, size_t ace_nr)
 {
 	char		*out_owner = NULL;
 	char		*out_owner_grp = NULL;
+	char		*out_label = NULL;
 	struct daos_acl	*out_acl = NULL;
 	daos_prop_t	*new_prop = NULL;
 	uint32_t	entries = 0;
@@ -234,6 +235,14 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 		entries++;
 	}
 
+	if (label != NULL && *label != '\0') {
+		D_ASPRINTF(out_label, "%s", label);
+		if (out_label == NULL)
+			D_GOTO(err_out, rc = -DER_NOMEM);
+
+		entries++;
+	}
+
 	if (entries == 0) {
 		D_ERROR("No prop entries provided, aborting!\n");
 		D_GOTO(err_out, rc = -DER_INVAL);
@@ -255,6 +264,12 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 		idx++;
 	}
 
+	if (out_label != NULL) {
+		new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_LABEL;
+		new_prop->dpp_entries[idx].dpe_val_ptr = out_label;
+		idx++;
+	}
+
 	if (out_acl != NULL) {
 		new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_ACL;
 		new_prop->dpp_entries[idx].dpe_val_ptr = out_acl;
@@ -268,6 +283,7 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 err_out:
 	daos_prop_free(new_prop);
 	daos_acl_free(out_acl);
+	D_FREE(out_label);
 	D_FREE(out_owner_grp);
 	D_FREE(out_owner);
 	return rc;
@@ -312,7 +328,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
 
-	rc = create_pool_props(&prop, req->user, req->usergroup,
+	rc = create_pool_props(&prop, req->user, req->usergroup, req->name,
 			       (const char **)req->acl, req->n_acl);
 	if (rc != 0)
 		goto out;
@@ -330,7 +346,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_ASSERT(svc->rl_nr > 0);
 
-	rc = rank_list_to_uint32_array(svc, &resp.svcreps, &resp.n_svcreps);
+	rc = rank_list_to_uint32_array(svc, &resp.svc_reps, &resp.n_svc_reps);
 	if (rc != 0)
 		D_GOTO(out_svc, rc);
 
@@ -356,8 +372,7 @@ out:
 	daos_prop_free(prop);
 
 	/** check for '\0' which is a static allocation from protobuf */
-	if (resp.svcreps)
-		D_FREE(resp.svcreps);
+	D_FREE(resp.svc_reps);
 }
 
 void
