@@ -107,7 +107,8 @@ class EvictTests(TestWithServers):
             self.fail("Invalid yaml parameters - check \"params\" values")
         try:
             # call daos evict api directly
-            self.pool.pool.evict()
+            #self.pool.pool.evict()
+            self.pool.dmg.pool_evict(pool=self.pool.pool.get_uuid_str())
         # exception is expected
         except DaosApiError as result:
             if test_param == "BAD_SERVER_NAME":
@@ -210,7 +211,8 @@ class EvictTests(TestWithServers):
                 "Attempting to evict clients from pool with UUID: %s",
                 pool[-1].uuid)
             # Evict the last pool in the list
-            pool[-1].pool.evict()
+            #pool[-1].pool.evict()
+            pool[-1].dmg.pool_evict(pool=self.pool.pool.get_uuid_str())
         except DaosApiError as result:
             self.fail(
                 "Detected exception while evicting a client {}".format(
