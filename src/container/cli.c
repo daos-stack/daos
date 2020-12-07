@@ -939,6 +939,7 @@ cont_query_bits(daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_DEDUP_THRESHOLD:
 			bits |= DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD;
+			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			bits |= DAOS_CO_QUERY_PROP_REDUN_FAC;
 			break;
@@ -2340,7 +2341,7 @@ cont_epoch_op_req_complete(tse_task_t *task, void *data)
 
 int
 dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
-	    tse_task_t *task)
+	    unsigned int opts, tse_task_t *task)
 {
 	struct cont_epoch_op_in	*in;
 	struct epoch_op_arg	 arg;
@@ -2365,6 +2366,7 @@ dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	in = crt_req_get(arg.eoa_req.cra_rpc);
 	if (opc != CONT_SNAP_CREATE)
 		in->cei_epoch = *epoch;
+	in->cei_opts  = opts;
 
 	arg.eoa_epoch = epoch;
 
@@ -2402,7 +2404,8 @@ dc_cont_aggregate(tse_task_t *task)
 		return -DER_INVAL;
 	}
 
-	return dc_epoch_op(args->coh, CONT_EPOCH_AGGREGATE, &args->epoch, task);
+	return dc_epoch_op(args->coh, CONT_EPOCH_AGGREGATE, &args->epoch,
+			   0, task);
 }
 
 int
@@ -2429,6 +2432,11 @@ dc_cont_create_snap(tse_task_t *task)
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
+	if (!(args->opts & DAOS_SNAP_OPT_CR)) {
+		D_ERROR("Specified snapshot is not supported\n");
+		return -DER_NOSYS;
+	}
+
 	if (args->name != NULL) {
 		D_ERROR("Named Snapshots not yet supported\n");
 		tse_task_complete(task, -DER_NOSYS);
@@ -2440,7 +2448,8 @@ dc_cont_create_snap(tse_task_t *task)
 		return -DER_INVAL;
 	}
 
-	return dc_epoch_op(args->coh, CONT_SNAP_CREATE, args->epoch, task);
+	return dc_epoch_op(args->coh, CONT_SNAP_CREATE, args->epoch,
+			   args->opts, task);
 }
 
 int
@@ -2464,7 +2473,7 @@ dc_cont_destroy_snap(tse_task_t *task)
 	}
 
 	return dc_epoch_op(args->coh, CONT_SNAP_DESTROY, &args->epr.epr_lo,
-			   task);
+			   0, task);
 
 err:
 	tse_task_complete(task, -DER_INVAL);

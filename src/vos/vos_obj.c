@@ -280,6 +280,21 @@ failed:
 	return rc;
 }
 
+/** If the object/key doesn't exist, we should augment the set with any missing
+ *  entries
+ */
+static void
+vos_punch_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int akey_nr,
+		      daos_key_t *akeys)
+{
+	struct vos_akey_data	ad;
+
+	ad.ad_is_iod = false;
+	ad.ad_keys = akeys;
+
+	vos_ts_add_missing(ts_set, dkey, akey_nr, &ad);
+}
+
 /**
  * Punch an object, or punch a dkey, or punch an array of akeys.
  */
@@ -400,6 +415,7 @@ reset:
 		if (vos_ts_wcheck(ts_set, epr.epr_hi, bound)) {
 			rc = -DER_TX_RESTART;
 		} else {
+			vos_punch_add_missing(ts_set, dkey, akey_nr, akeys);
 			vos_ts_set_update(ts_set, epr.epr_hi);
 			if (rc == 0)
 				vos_ts_set_wupdate(ts_set, epr.epr_hi);
