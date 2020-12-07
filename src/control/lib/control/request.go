@@ -50,8 +50,19 @@ type (
 	// retryer defines an interface to be implemented by
 	// requests that may be retryable.
 	retryer interface {
+		// canRetry should be called before calling onRetry, in order to
+		// evaluate whether or not the error is retryable. If no test
+		// logic is defined, the assumption is that the error is retryable
+		// because the request embedded this type.
 		canRetry(error, uint) bool
+		// onRetry is intended to be called on every retry iteration. It can be
+		// used to limit the number of retries and/or execute some custom retry
+		// logic on each iteration.
 		onRetry(context.Context, uint) error
+		// retryAfter returns a channel to be waited on in order to pause
+		// a goroutine's execution for some duration. For safety, the
+		// channel should be waited on in a select with a context in order to
+		// avoid blocking a goroutine forever.
 		retryAfter(time.Duration) <-chan time.Time
 	}
 
@@ -162,21 +173,13 @@ type retryableRequest struct {
 	retryFn func(context.Context, uint) error
 }
 
-// retryAfter returns a channel to be waited on in order to pause
-// a goroutine's execution for some duration. For safety, the
-// channel should be waited on in a select with a context in order to
-// avoid blocking a goroutine forever.
-func (r *retryableRequest) retryAfter(defInt time.Duration) <-chan time.Time {
+func (r *retryableRequest) retryAfter(defaultInt time.Duration) <-chan time.Time {
 	if r.retryInterval > 0 {
 		return time.After(r.retryInterval)
 	}
-	return time.After(defInt)
+	return time.After(defaultInt)
 }
 
-// canRetry should be called before calling onRetry, in order to
-// evaluate whether or not the error is retryable. If no test
-// logic is defined, the assumption is that the error is retryable
-// because the request embedded this type.
 func (r *retryableRequest) canRetry(err error, cur uint) bool {
 	// don't bother with anything else if there was no error
 	if err == nil {
@@ -189,9 +192,6 @@ func (r *retryableRequest) canRetry(err error, cur uint) bool {
 	return true
 }
 
-// onRetry is intended to be called on every retry iteration. It can be
-// used to limit the number of retries and/or execute some custom retry
-// logic on each iteration.
 func (r *retryableRequest) onRetry(ctx context.Context, cur uint) error {
 	if r.retryMaxTries > 0 && cur > r.retryMaxTries {
 		return errors.Errorf("max retries exceeded (%d > %d)", cur, r.retryMaxTries)
