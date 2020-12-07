@@ -897,6 +897,29 @@ class DmgCommand(DmgCommandBase):
                 data[rank] = info[1].strip()
         return data
 
+    def system_leader_query(self):
+        """Query the system MS leader.
+
+        Raises:
+            CommandFailure: if the dmg system stop command fails.
+
+        Returns:
+            dict: a dictionary of host ranks and their unique states.
+
+        """
+        self._get_result(("system", "leader-query"))
+
+        # Current Leader: 10.7.1.10:10001
+        #    Replica Set: 10.7.1.10:10001, 10.7.1.68:10001, 10.7.1.9:10001
+        data = {}
+        match = re.findall(
+            r"(?:Current Leader|Replica Set):\s+([0-9.:, ]+)",
+            self.result.stdout)
+        data["leader"] = match[0]
+        data["replicas"] = match[-1].split(", ")
+
+        return data
+
     def pool_evict(self, pool, sys=None):
         """Evict a pool.
 

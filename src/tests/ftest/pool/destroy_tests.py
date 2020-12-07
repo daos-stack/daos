@@ -171,7 +171,7 @@ class DestroyTests(TestWithServers):
         hostlist_servers = self.hostlist_servers[:1]
 
         # Start servers
-        self.start_servers({self.server_group: hostlist_servers})
+        self.start_servers({self.server_group: {"servers": hostlist_servers}})
 
         counter = 0
         while counter < 10:
@@ -194,7 +194,7 @@ class DestroyTests(TestWithServers):
         hostlist_servers = self.hostlist_servers[:6]
 
         # Start servers
-        self.start_servers({self.server_group: hostlist_servers})
+        self.start_servers({self.server_group: {"servers": hostlist_servers}})
 
         counter = 0
         while counter < 10:
@@ -219,7 +219,7 @@ class DestroyTests(TestWithServers):
         setid = self.params.get("setname", '/run/setnames/validsetname/')
 
         # Start servers
-        self.start_servers({setid: hostlist_servers})
+        self.start_servers({setid: {"servers": hostlist_servers}})
 
         # Create a pool
         self.validate_pool_creation(hostlist_servers, setid)
@@ -251,7 +251,7 @@ class DestroyTests(TestWithServers):
         badsetid = self.params.get("setname", '/run/setnames/badsetname/')
 
         # Start servers
-        self.start_servers({setid: hostlist_servers})
+        self.start_servers({setid: {"servers": hostlist_servers}})
 
         # Create a pool
         self.validate_pool_creation(hostlist_servers, setid)
@@ -284,8 +284,8 @@ class DestroyTests(TestWithServers):
         """
         group_names = [self.server_group + "_a", self.server_group + "_b"]
         group_hosts = {
-            group_names[0]: self.hostlist_servers[:1],
-            group_names[1]: self.hostlist_servers[1:2],
+            group_names[0]: {"servers": self.hostlist_servers[:1]},
+            group_names[1]: {"servers": self.hostlist_servers[1:2]},
         }
         self.start_servers(group_hosts)
 
@@ -297,18 +297,18 @@ class DestroyTests(TestWithServers):
 
         # Commented out due to DAOS-3836.
         # self.assertTrue(
-        #    self.pool.check_files(group_hosts[group_names[0]]),
+        #    self.pool.check_files(group_hosts[group_names[0]]["servers"]),
         #    "Pool UUID {} not dected in server group {}".format(
         #        self.pool.uuid, group_names[0]))
         # self.assertFalse(
-        #    self.pool.check_files(group_hosts[group_names[1]]),
+        #    self.pool.check_files(group_hosts[group_names[1]]["servers"]),
         #    "Pool UUID {} detected in server group {}".format(
         #        self.pool.uuid, group_names[1]))
 
         # Attempt to delete the pool from the wrong server group - should fail
         self.pool.pool.group = ctypes.create_string_buffer(group_names[1])
         self.validate_pool_destroy(
-            group_hosts[group_names[0]],
+            group_hosts[group_names[0]]["servers"],
             "{} from the wrong server group {}".format(
                 self.pool.uuid, group_names[1]),
             True)
@@ -316,7 +316,7 @@ class DestroyTests(TestWithServers):
         # Attempt to delete the pool from the right server group - should pass
         self.pool.pool.group = ctypes.create_string_buffer(group_names[0])
         self.validate_pool_destroy(
-            group_hosts[group_names[1]],
+            group_hosts[group_names[1]]["servers"],
             "{} from the right server group {}".format(
                 self.pool.uuid, group_names[0]),
             False)
@@ -333,7 +333,7 @@ class DestroyTests(TestWithServers):
         hostlist_servers = self.hostlist_servers[:1]
 
         # Start servers
-        self.start_servers({self.server_group: hostlist_servers})
+        self.start_servers({self.server_group: {"servers":hostlist_servers}})
 
         # Create the pool
         self.validate_pool_creation(hostlist_servers, self.server_group)
@@ -383,7 +383,7 @@ class DestroyTests(TestWithServers):
         hostlist_servers = self.hostlist_servers[:1]
 
         # Start servers
-        self.start_servers({self.server_group: hostlist_servers})
+        self.start_servers({self.server_group: {"servers": hostlist_servers}})
 
         # Create the pool
         self.validate_pool_creation(hostlist_servers, self.server_group)
@@ -422,7 +422,7 @@ class DestroyTests(TestWithServers):
         hostlist_servers = self.hostlist_servers[:1]
 
         # Start servers
-        self.start_servers({self.server_group: hostlist_servers})
+        self.start_servers({self.server_group: {"servers": hostlist_servers}})
 
         # Attempt to destroy the pool with an invalid server group name
         self.validate_pool_creation(hostlist_servers, self.server_group)
@@ -482,8 +482,8 @@ class DestroyTests(TestWithServers):
         # Start two server groups
         group_names = [self.server_group + "_a", self.server_group + "_b"]
         group_hosts = {
-            group_names[0]: self.hostlist_servers[:1],
-            group_names[1]: self.hostlist_servers[1:2]
+            group_names[0]: {"servers": self.hostlist_servers[:1]},
+            group_names[1]: {"servers": self.hostlist_servers[1:2]},
         }
         self.start_servers(group_hosts)
 
@@ -496,13 +496,13 @@ class DestroyTests(TestWithServers):
         # Commented out due to DAOS-3836.
         # # Check that the pool was created on server_group_a
         # self.assertTrue(
-        #    self.pool.check_files(group_hosts[group_names[0]]),
+        #    self.pool.check_files(group_hosts[group_names[0]]["servers"]),
         #    "Pool data not detected on servers before destroy")
 
         # Commented out due to DAOS-3836.
         # # Check that the pool was not created on server_group_b
         # self.assertFalse(
-        #    self.pool.check_files(group_hosts[group_names[1]]),
+        #    self.pool.check_files(group_hosts[group_names[1]]["servers"]),
         #    "Pool data detected on servers before destroy")
 
         # Create callback handler
@@ -517,7 +517,7 @@ class DestroyTests(TestWithServers):
 
         # Commented out due to DAOS-3836.
         # self.assertFalse(
-        #    self.pool.check_files(group_hosts[group_names[0]]),
+        #    self.pool.check_files(group_hosts[group_names[0]]["servers"]),
         #    "Pool data detected on {} after destroy".format(group_names[0]))
 
         # Destroy pool with callback while stopping other server
@@ -531,13 +531,13 @@ class DestroyTests(TestWithServers):
         # Commented out due to DAOS-3836.
         # # Check that the pool was created on server_group_a
         # self.assertTrue(
-        #    self.pool.check_files(group_hosts[group_names[0]]),
+        #    self.pool.check_files(group_hosts[group_names[0]]["servers"]),
         #    "Pool data not detected on servers before destroy")
 
         # Commented out due to DAOS-3836.
         # # Check that the pool was not created on server_group_b
         # self.assertFalse(
-        #    self.pool.check_files(group_hosts[group_names[1]]),
+        #    self.pool.check_files(group_hosts[group_names[1]]["servers"]),
         #    "Pool data detected on servers before destroy")
 
         self.log.info("Stopping one server")
@@ -558,5 +558,5 @@ class DestroyTests(TestWithServers):
 
         # Commented out due to DAOS-3836.
         # self.assertFalse(
-        #    self.pool.check_files(group_hosts[group_names[1]]),
+        #    self.pool.check_files(group_hosts[group_names[1]]["servers"]),
         #    "Pool data detected on servers after destroy")

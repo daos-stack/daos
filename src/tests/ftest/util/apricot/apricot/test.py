@@ -487,12 +487,22 @@ class TestWithServers(TestWithoutServers):
 
         """
         if server_groups is None:
-            server_groups = {self.server_group: self.hostlist_servers}
+            server_groups = {
+                self.server_group: {
+                    "servers": self.hostlist_servers, "access_list": []
+                },
+            }
 
         self.log.debug("--- STARTING SERVER GROUPS: %s ---", server_groups)
 
         if isinstance(server_groups, dict):
             for group, hosts in server_groups.items():
+                servers = hosts["servers"]
+                if "access_list" in hosts and hosts["access_list"]:
+                    access_list = hosts["access_list"]
+                else:
+                    access_list = servers
+
                 transport = DaosServerTransportCredentials(self.workdir)
                 # Use the unique agent group name to create a unique yaml file
                 config_file = self.get_config_file(group, "server")
@@ -505,9 +515,9 @@ class TestWithServers(TestWithoutServers):
                 self.configure_manager(
                     "server",
                     self.server_managers[-1],
-                    hosts,
+                    servers,
                     self.hostfile_servers_slots,
-                    hosts)
+                    access_list)
             self.start_server_managers()
 
     def get_config_file(self, name, command):
