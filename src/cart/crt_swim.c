@@ -216,7 +216,7 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 		swim_net_glitch_update(ctx, from_id, snd_delay - max_delay);
 
 	if (CRT_SWIM_SHOULD_FAIL(d_fa_swim_drop_rpc, self_id)) {
-		rc = -d_fa_swim_drop_rpc->fa_err_code;
+		rc = d_fa_swim_drop_rpc->fa_err_code;
 		D_ERROR("*** DROP incoming opc %#x with %zu updates "
 			"%lu <= %lu error: "DF_RC"\n", rpc_req->cr_opc,
 			rpc_swim_input->upds.ca_count, self_id, from_id,
@@ -327,7 +327,7 @@ static int crt_swim_send_message(struct swim_context *ctx, swim_id_t to,
 	opc = CRT_PROTO_OPC(CRT_OPC_SWIM_PROTO, CRT_OPC_SWIM_VERSION, opc_idx);
 
 	if (CRT_SWIM_SHOULD_FAIL(d_fa_swim_drop_rpc, self_id)) {
-		rc = -d_fa_swim_drop_rpc->fa_err_code;
+		rc = d_fa_swim_drop_rpc->fa_err_code;
 		D_ERROR("*** DROP outgoing opc %#x with %zu updates "
 			"%lu => %lu error: "DF_RC"\n", opc, nupds,
 			self_id, to, DP_RC(rc));
