@@ -172,7 +172,8 @@ On Mac, please make sure that the Docker settings under
 To build the Docker image directly from GitHub, run the following command:
 
 ```bash
-$ docker build https://github.com/daos-stack/daos.git#master:utils/docker/Dockerfile.centos.7
+$ docker build https://github.com/daos-stack/daos.git#master:utils/docker \
+        -f Dockerfile.centos.7 -t daos
 ```
 
 This creates a CentOS 7 image, fetches the latest DAOS version from GitHub,
@@ -219,7 +220,7 @@ Then execute the following command to build and install DAOS in the
 container:
 
 ```bash
-$ docker exec server scons --build-deps=yes install PREFIX=/usr
+$ docker exec server scons --build-deps=yes install PREFIX=/usr/local
 ```
 
 ### Simple Docker Setup
