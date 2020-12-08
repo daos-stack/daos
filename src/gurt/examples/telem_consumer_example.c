@@ -24,7 +24,6 @@
  * This file shows an example of using the telemetry API to consume metrics
  */
 
-#include "gurt/common.h"
 #include "gurt/telemetry_common.h"
 #include "gurt/telemetry_consumer.h"
 

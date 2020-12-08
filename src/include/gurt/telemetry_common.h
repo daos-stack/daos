@@ -23,6 +23,8 @@
 #ifndef __TELEMETRY_COMMON_H__
 #define __TELEMETRY_COMMON_H__
 
+#include <gurt/common.h>
+
 #define D_TM_VERSION			1
 #define D_TM_MAX_NAME_LEN		256
 #define D_TM_MAX_SHORT_LEN		64

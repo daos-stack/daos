@@ -24,7 +24,6 @@
  * This file shows an example of using the telemetry API to produce metrics
  */
 
-#include "gurt/common.h"
 #include "gurt/telemetry_common.h"
 #include "gurt/telemetry_producer.h"
 
@@ -229,7 +228,6 @@ void timer_snapshot(void)
 struct d_tm_nodeList_t *add_metrics_manually(void)
 {
 	struct d_tm_nodeList_t	*node_list = NULL;
-	struct d_tm_nodeList_t	*head = NULL;
 	struct d_tm_node_t	*counter1 = NULL;
 	struct d_tm_node_t	*counter2 = NULL;
 	char			path[D_TM_MAX_NAME_LEN];
@@ -249,7 +247,7 @@ struct d_tm_nodeList_t *add_metrics_manually(void)
 	if (rc != D_TM_SUCCESS) {
 		printf("d_tm_add_metric failed, rc = %d\n", rc);
 	}
-	head = node_list = d_tm_add_node(counter1, NULL);
+	node_list = d_tm_add_node(counter1, NULL);
 
 	if (node_list == NULL) {
 		printf("d_tm_add_node failed\n");
@@ -265,12 +263,12 @@ struct d_tm_nodeList_t *add_metrics_manually(void)
 	}
 	node_list = d_tm_add_node(counter2, node_list);
 
-	if ((node_list == NULL) || (head == NULL)) {
+	if (node_list == NULL) {
 		printf("d_tm_add_node failed\n");
 		return NULL;
 	}
 
-	return head;
+	return node_list;
 }
 
 /**
@@ -318,7 +316,6 @@ main(int argc, char **argv)
 	static struct d_tm_node_t	*timer1;
 	static struct d_tm_node_t	*timer2;
 	struct d_tm_nodeList_t		*node_list;
-	struct d_tm_nodeList_t		*head;
 	int				rc;
 	int				simulated_rank = 0;
 	int				i;
@@ -462,7 +459,7 @@ main(int argc, char **argv)
 	 * be accessed by a pointer and avoid the cost of the lookup, just like
 	 * when the metrics are created implicitly with the other functions.
 	 */
-	head = node_list = add_metrics_manually();
+	node_list = add_metrics_manually();
 
 	/**
 	 * After calling add_metrics_manually, the counters have value = 0
@@ -473,7 +470,7 @@ main(int argc, char **argv)
 	 */
 	for (i = 0; i < 3; i++)
 		use_manually_added_metrics(node_list);
-	d_tm_list_free(head);
+	d_tm_list_free(node_list);
 
 	d_tm_fini();
 
