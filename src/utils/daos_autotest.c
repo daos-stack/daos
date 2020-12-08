@@ -16,7 +16,7 @@
  * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
  * The Government's rights to use, modify, reproduce, release, perform, display,
  * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
+ * provided in Contract No. B620873.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
@@ -43,7 +43,7 @@ struct cmd_args_s *autotest_ap;
 /** How many concurrent I/O in flight */
 #define MAX_INFLIGHT 16
 
-#define UUID_STR_SIZE 37	/* 36 + 1 for '\0' */
+/** To convert UUID to string */
 char uuid_str[UUID_STR_SIZE];
 
 /** Step timing  */
