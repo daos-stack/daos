@@ -114,7 +114,7 @@ client_clear_fault()
 static void
 server_corrupt_disk(const char *group)
 {
-	int rc = daos_mgmt_set_params(group, -1, DMG_KEY_FAIL_LOC,
+	int rc = daos_debug_set_params(group, -1, DMG_KEY_FAIL_LOC,
 				      DAOS_CSUM_CORRUPT_DISK | DAOS_FAIL_ALWAYS,
 				      0, NULL);
 	assert_int_equal(rc, 0);
@@ -123,7 +123,7 @@ server_corrupt_disk(const char *group)
 static void
 server_clear_fault(const char *group)
 {
-	int rc = daos_mgmt_set_params(group, -1,
+	int rc = daos_debug_set_params(group, -1,
 				      DMG_KEY_FAIL_LOC, 0, 0, NULL);
 	assert_int_equal(rc, 0);
 }
@@ -393,6 +393,8 @@ io_with_server_side_verify(void **state)
 	daos_oclass_id_t	 oc = dts_csum_oc;
 	int			 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (csum_ec_enabled() && !test_runable(*state, csum_ec_grp_size()))
 		skip();
 
@@ -460,6 +462,8 @@ test_server_data_corruption(void **state)
 	daos_oclass_id_t	 oc = dts_csum_oc;
 	int			 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	setup_from_test_args(&ctx, *state);
 	setup_cont_obj(&ctx, dts_csum_prop_type, false, 1024*8, oc);
 
@@ -490,6 +494,8 @@ test_fetch_array(void **state)
 	daos_oclass_id_t	oc = dts_csum_oc;
 	uint32_t		node_nr;
 	int			rc;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (csum_ec_enabled() && !test_runable(*state, csum_ec_grp_size()))
 		skip();
@@ -1253,6 +1259,8 @@ single_value_test(void **state, bool large_buf)
 static void
 single_value(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
+
 	if (csum_ec_enabled() && !test_runable(*state, csum_ec_grp_size()))
 		skip();
 
@@ -1309,6 +1317,8 @@ mix_test(void **state)
 	d_sg_list_t		 fetch_sgls[2] = {0};
 	d_sg_list_t		*fetch_sv_sgl = &fetch_sgls[0];
 	d_sg_list_t		*fetch_array_sgl = &fetch_sgls[1];
+
+	FAULT_INJECTION_REQUIRED();
 
 	setup_from_test_args(&ctx, *state);
 
@@ -1901,6 +1911,8 @@ punch_before_insert(void **state)
 static void
 test_update_fetch_a_key(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
+
 	key_csum_fetch_update(state,
 			      DAOS_CSUM_CORRUPT_UPDATE_AKEY,
 			      DAOS_CSUM_CORRUPT_FETCH_AKEY);
@@ -1909,6 +1921,8 @@ test_update_fetch_a_key(void **state)
 static void
 test_update_fetch_d_key(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
+
 	key_csum_fetch_update(state,
 			      DAOS_CSUM_CORRUPT_UPDATE_DKEY,
 			      DAOS_CSUM_CORRUPT_FETCH_DKEY);
@@ -1927,6 +1941,8 @@ test_enumerate_a_key(void **state)
 	daos_key_desc_t		kds[KDS_NR] = {0};
 	d_sg_list_t		sgl = {0};
 	uint32_t		nr = KDS_NR;
+
+	FAULT_INJECTION_REQUIRED();
 
 	setup_from_test_args(&ctx, *state);
 	setup_cont_obj(&ctx, dts_csum_prop_type, false, 1024, oc);
@@ -1979,6 +1995,8 @@ test_enumerate_d_key(void **state)
 	d_sg_list_t		sgl = {0};
 	uint32_t		nr = KDS_NR;
 	uint32_t		key_count = 0;
+
+	FAULT_INJECTION_REQUIRED();
 
 	setup_from_test_args(&ctx, *state);
 	setup_cont_obj(&ctx, dts_csum_prop_type, false, 1024, oc);
@@ -2072,6 +2090,8 @@ test_enumerate_object(void **state)
 	uint32_t		 i;
 	uint32_t		 nr;
 	int			 rc;
+
+	FAULT_INJECTION_REQUIRED();
 
 	memset(kds, 0, enum_nr * sizeof(*kds));
 
@@ -2364,7 +2384,7 @@ run_daos_checksum_test(int rank, int size, int *sub_tests, int sub_tests_size)
 	if (sub_tests_size == 0) {
 		if (getenv("DAOS_CSUM_TEST_ALL_TYPE")) {
 			for (i = DAOS_PROP_CO_CSUM_OFF + 1;
-			     i <= DAOS_PROP_CO_CSUM_SHA512; i++) {
+			     i <= DAOS_PROP_CO_CSUM_ADLER32; i++) {
 				dts_csum_prop_type = i;
 				print_message("Running tests with csum_type: "
 					      "%d\n", i);

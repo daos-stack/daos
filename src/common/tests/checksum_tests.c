@@ -964,6 +964,7 @@ test_all_algo_basic(void **state)
 	/** expected checksum lengths */
 	csum_lens[HASH_TYPE_CRC16]	= 2;
 	csum_lens[HASH_TYPE_CRC32]	= 4;
+	csum_lens[HASH_TYPE_ADLER32]	= 4;
 	csum_lens[HASH_TYPE_CRC64]	= 8;
 	csum_lens[HASH_TYPE_SHA1]	= 20;
 	csum_lens[HASH_TYPE_SHA256]	= 256 / 8;
@@ -1499,6 +1500,8 @@ test_container_prop_to_csum_type(void **state)
 			 daos_contprop2hashtype(DAOS_PROP_CO_CSUM_CRC16));
 	assert_int_equal(HASH_TYPE_CRC32,
 			 daos_contprop2hashtype(DAOS_PROP_CO_CSUM_CRC32));
+	assert_int_equal(HASH_TYPE_ADLER32,
+			 daos_contprop2hashtype(DAOS_PROP_CO_CSUM_ADLER32));
 	assert_int_equal(HASH_TYPE_CRC64,
 			 daos_contprop2hashtype(DAOS_PROP_CO_CSUM_CRC64));
 	assert_int_equal(HASH_TYPE_SHA1,
@@ -1515,6 +1518,8 @@ test_is_valid_csum(void **state)
 	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_OFF));
 	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_CRC16));
 	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_CRC32));
+	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_ADLER32));
+	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_CRC64));
 	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_SHA1));
 	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_SHA256));
 	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_SHA512));
@@ -1528,6 +1533,8 @@ test_is_csum_enabled(void **state)
 {
 	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_CRC16));
 	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_CRC32));
+	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_ADLER32));
+	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_CRC64));
 	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_SHA1));
 	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_SHA256));
 	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_SHA512));
