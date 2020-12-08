@@ -1150,7 +1150,7 @@ cont_iv_prop_fetch(struct ds_iv_ns *ns, uuid_t cont_uuid,
 	arg.prop = cont_prop;
 	arg.eventual = eventual;
 	rc = dss_ult_create(cont_iv_prop_fetch_ult, &arg,
-			    DSS_ULT_POOL_SRV, 0, 0, NULL);
+			    DSS_ULT_POOL_SRV, 0, DSS_DEEP_STACK_SZ, NULL);
 	if (rc)
 		D_GOTO(out, rc);
 
