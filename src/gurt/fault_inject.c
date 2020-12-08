@@ -242,7 +242,7 @@ d_fault_attr_err_code(uint32_t fault_id)
 	err_code = fault_attr->fa_err_code;
 	D_SPIN_UNLOCK(&fault_attr->fa_lock);
 
-	return (int) err_code;
+	return err_code;
 }
 
 static int
