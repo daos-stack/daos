@@ -195,7 +195,13 @@ dfuse_dfs_init(struct dfuse_dfs *dfs, struct dfuse_dfs *parent)
 	if (!parent)
 		return;
 
-	dfs->dfs_attr_timeout = parent->dfs_attr_timeout;
+
+	/* Do not set timeout here, as caching only affects the mounted
+	 * container itself, not other containers linked via UNS or
+	 * otherwise
+	 *
+	 * dfs->dfs_attr_timeout = parent->dfs_attr_timeout;
+	 */
 }
 
 int
