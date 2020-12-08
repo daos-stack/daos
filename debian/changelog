@@ -1,8 +1,16 @@
-daos (1.1.2-2) unstable; urgency=medium
+daos (1.1.2-4) unstable; urgency=medium
   [ Ashley Pittman ]
   * Combine memcheck suppressions files
 
- -- Ashley Pittman <ashley.m.pittman@intel.com>  Fri, 4 Dec 2020 13:33:21 -0000
+ -- Ashley Pittman <ashley.m.pittman@intel.com>  Tue, 8 Dec 2020 13:33:21 -0000
+
+daos (1.1.2-3) unstable; urgency=medium
+  [ Li Wei ]
+  * Require raft-devel 0.7.1 that fixes recent Coverity issues
+
+ -- Li Wei <wei.g.li@intel.com>  Fri, 04 Dec 2020 14:30:00 +0800
+
+>>>>>>> master
 daos (1.1.2-1) unstable; urgency=medium
   [ Brian J. Murrell ]
   * Version bump up to 1.1.2
