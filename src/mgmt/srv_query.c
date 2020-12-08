@@ -733,3 +733,83 @@ out:
 
 	return rc;
 }
+
+struct bio_identify_dev_info {
+	uuid_t		devid;
+};
+
+static int
+bio_storage_dev_identify(void *arg)
+{
+	struct bio_identify_dev_info *identify_info = arg;
+	struct dss_module_info	     *info = dss_get_module_info();
+	struct bio_xs_context	     *bxc;
+	int			      rc;
+
+	D_ASSERT(info != NULL);
+
+	bxc = info->dmi_nvme_ctxt;
+	if (bxc == NULL) {
+		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
+			info->dmi_xs_id, info->dmi_tgt_id);
+		return -DER_INVAL;
+	}
+
+	rc = bio_set_led_state(bxc, identify_info->devid, "identify",
+			       false/*reset*/);
+	if (rc != 0) {
+		D_ERROR("Error managing LED on device:"DF_UUID"\n",
+			DP_UUID(identify_info->devid));
+		return rc;
+	}
+
+	return 0;
+}
+
+
+int
+ds_mgmt_dev_identify(uuid_t dev_uuid, Mgmt__DevIdentifyResp *resp)
+{
+	struct bio_identify_dev_info identify_info = { 0 };
+	int			     buflen = 10;
+	int			     rc = 0;
+
+	if (uuid_is_null(dev_uuid))
+		return -DER_INVAL;
+
+	D_DEBUG(DB_MGMT, "Identifying device:"DF_UUID"\n", DP_UUID(dev_uuid));
+
+	D_ALLOC(resp->dev_uuid, DAOS_UUID_STR_SIZE);
+	if (resp->dev_uuid == NULL) {
+		D_ERROR("Failed to allocate device uuid");
+		rc = -DER_NOMEM;
+		goto out;
+	}
+	uuid_unparse_lower(dev_uuid, resp->dev_uuid);
+
+	D_ALLOC(resp->led_state, buflen);
+	if (resp->led_state == NULL) {
+		D_ERROR("Failed to allocate device led state");
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	uuid_copy(identify_info.devid, dev_uuid);
+	rc = dss_ult_execute(bio_storage_dev_identify, &identify_info, NULL,
+			     NULL, DSS_ULT_GC, 0, 0);
+	if (rc != 0)
+		goto out;
+
+	strcpy(resp->led_state, "IDENTIFY");
+
+out:
+
+	if (rc != 0) {
+		if (resp->led_state != NULL)
+			D_FREE(resp->led_state);
+		if (resp->dev_uuid != NULL)
+			D_FREE(resp->dev_uuid);
+	}
+
+	return rc;
+}

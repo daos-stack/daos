@@ -756,7 +756,7 @@ parse(int argc, char **argv)
 			       "instead.\n");
 		case 't':
 			nr = strtoul(optarg, &end, 10);
-			if (end == optarg || nr == ULONG_MAX) {
+			if ((end == optarg) || (nr == ULONG_MAX)) {
 				rc = -DER_INVAL;
 				break;
 			}
@@ -764,7 +764,7 @@ parse(int argc, char **argv)
 			break;
 		case 'x':
 			nr = strtoul(optarg, &end, 10);
-			if (end == optarg || nr == ULONG_MAX) {
+			if ((end == optarg) || (nr == ULONG_MAX)) {
 				rc = -DER_INVAL;
 				break;
 			}
@@ -772,7 +772,7 @@ parse(int argc, char **argv)
 			break;
 		case 'f':
 			nr = strtoul(optarg, &end, 10);
-			if (end == optarg || nr == ULONG_MAX) {
+			if ((end == optarg) || (nr == ULONG_MAX)) {
 				rc = -DER_INVAL;
 				break;
 			}
@@ -805,7 +805,7 @@ parse(int argc, char **argv)
 			break;
 		case 'r':
 			nr = strtoul(optarg, &end, 10);
-			if (end == optarg || nr == ULONG_MAX) {
+			if ((end == optarg) || (nr == ULONG_MAX)) {
 				rc = -DER_INVAL;
 				break;
 			}
