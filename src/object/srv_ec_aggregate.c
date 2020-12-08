@@ -1146,7 +1146,7 @@ agg_process_partial_stripe(struct ec_agg_entry *entry)
 						    elen, k, len, entry->
 						    ae_cur_stripe.as_stripenum,
 						    &full_cell_cnt);
-			estart = extent->ae_recx.rx_idx;
+			estart = extent->ae_recx.rx_idx - ss;
 			elen = 0;
 		}
 		elen += extent->ae_recx.rx_nr;
