@@ -87,11 +87,6 @@ test_run(d_rank_t my_rank)
 		crt_register_event_cb(swim_crt_event_cb, &a);
 	}
 
-	// Trigger the CRT_EVS_SWIM CRT_EVT_DEAD event
-	if (my_rank == 2) {
-		exit(0);
-	}
-
 	DBG_PRINT("Basic server started, group_size=%d\n", grp_size);
 	rc = sem_init(&test_g.t_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
