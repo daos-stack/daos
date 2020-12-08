@@ -1481,7 +1481,8 @@ main(int argc, char **argv)
 				 "/mnt/daos/vos_perf%d.pmem",
 				 ts_ctx.tsc_mpi_rank);
 		} else {
-			char id[4];
+			char id[16];
+
 
 			snprintf(id, sizeof(id), "%d", ts_ctx.tsc_mpi_rank);
 			strncat(ts_pmem_file, id,
