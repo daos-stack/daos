@@ -628,17 +628,26 @@ class SubProcessCommand(CommandWithSubCommand):
                 timed_out = time.time() - start > self.pattern_timeout.value
 
             # Summarize results
-            msg = "{}/{} '{}' messages detected in {}/{} seconds".format(
-                detected, self.pattern_count, self.pattern,
-                time.time() - start, self.pattern_timeout.value)
+            msg = "{}/{} '{}' messages detected in {}".format(
+                detected, self.pattern_count, self.pattern, time.time() - start)
 
             if not complete:
                 # Report the error / timeout
-                self.log.info(
-                    "%s detected - %s:\n%s",
-                    "Time out" if timed_out else "Error",
-                    msg,
-                    sub_process.get_stdout())
+                reason = "TIMEOUT detected, exceeded {} seconds".format(
+                    self.pattern_timeout.value)
+                if not timed_out:
+                    reason = "ERROR detected"
+                    msg = "{}/{}".format(msg, self.pattern_timeout.value)
+                msg = "{} seconds".format(msg)
+                if not self.verbose:
+                    # Include the stdout if verbose is not enabled
+                    msg = "{}:\n{}".format(msg, sub_process.get_stdout())
+                self.log.info("%s - '%s'", reason, msg)
+                if timed_out:
+                    self.log.debug(
+                        "If needed the %s second timeout can be adjusted via "
+                        "the 'pattern_timeout' test yaml parameter under %s",
+                        self.pattern_timeout.value, self.namespace)
 
                 # Stop the timed out process
                 if timed_out:
@@ -646,7 +655,8 @@ class SubProcessCommand(CommandWithSubCommand):
             else:
                 # Report the successful start
                 self.log.info(
-                    "%s subprocess startup detected - %s", self._command, msg)
+                    "%s subprocess startup detected - %s seconds",
+                    self._command, msg)
 
         return complete
 
