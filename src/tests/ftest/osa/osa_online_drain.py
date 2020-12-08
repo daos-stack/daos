@@ -72,7 +72,7 @@ class OSAOnlineDrain(OSAUtils):
         pool = {}
         pool_uuid = []
         target_list = []
-        drain_servers = len(self.hostlist_servers) - 1
+        drain_servers = (len(self.hostlist_servers) * 2) - 1
 
         # Exclude target : random two targets  (target idx : 0-7)
         n = random.randint(0, 6)
@@ -132,10 +132,7 @@ class OSAOnlineDrain(OSAUtils):
                 if pver_drain > pver_begin + 1:
                     break
 
-            rebuild_status = self.get_rebuild_status()
-            self.log.info("Rebuild Status: %s", rebuild_status)
-            self.assertTrue(rebuild_status != "failed",
-                            "Rebuild failed")
+            self.assert_on_rebuild_failure()
 
             self.log.info("Pool Version after drain %s", pver_drain)
             # Check pool version incremented after pool exclude

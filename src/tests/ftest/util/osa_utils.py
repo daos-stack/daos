@@ -25,7 +25,7 @@ import ctypes
 import uuid
 
 from avocado import fail_on
-from apricot import TestWithServers
+from ior_test_base import IorTestBase
 from command_utils import CommandFailure
 from ior_utils import IorCommand
 from job_manager_utils import Mpirun
@@ -33,7 +33,7 @@ from mpio_utils import MpioUtils
 from pydaos.raw import (DaosContainer, IORequest,
                         DaosObj, DaosApiError)
 
-class OSAUtils(TestWithServers):
+class OSAUtils(IorTestBase):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
@@ -76,6 +76,17 @@ class OSAUtils(TestWithServers):
         """
         data = self.dmg_command.pool_query(self.pool.uuid)
         return data["rebuild"]["status"]
+
+    @fail_on(CommandFailure)
+    def assert_on_rebuild_failure(self):
+        """If the rebuild is not successful, 
+        raise assert.
+        """
+        rebuild_status = self.get_rebuild_status()
+        self.log.info("Rebuild Status: %s", rebuild_status)
+        rebuild_failed_string = ["failed", "scanning", "aborted"]
+        self.assertTrue(rebuild_status not in rebuild_failed_string,
+                        "Rebuild failed")
 
     @fail_on(CommandFailure)
     def get_pool_version(self):
@@ -160,7 +171,6 @@ class OSAUtils(TestWithServers):
             results (queue): queue for returning thread results
 
         """
-        processes = self.params.get("slots", "/run/ior/clientslots/*")
         container_info = {}
         mpio_util = MpioUtils()
         if mpio_util.mpich_installed(self.hostlist_clients) is False:
@@ -188,7 +198,7 @@ class OSAUtils(TestWithServers):
         self.job_manager.job.dfs_cont.update(container_info[key])
         env = ior_cmd.get_default_env(str(self.job_manager))
         self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-        self.job_manager.assign_processes(processes)
+        self.job_manager.assign_processes(self.processes)
         self.job_manager.assign_environment(env, True)
 
         # run IOR Command

@@ -193,7 +193,7 @@ class OSAOnlineParallelTest(OSAUtils):
                 for thrd in threads:
                     self.log.info("Thread : %s", thrd)
                     thrd.start()
-                    time.sleep(1)
+                    time.sleep(2)
 
                 # Wait to finish the threads
                 for thrd in threads:
@@ -218,10 +218,7 @@ class OSAOnlineParallelTest(OSAUtils):
                     if pver_end > 23:
                         break
 
-                rebuild_status = self.get_rebuild_status()
-                self.log.info("Rebuild Status: %s", rebuild_status)
-                self.assertTrue(rebuild_status != "failed",
-                                "Rebuild failed")
+                self.assert_on_rebuild_failure()
 
                 self.log.info("Pool Version at the End %s", pver_end)
                 self.assertTrue(pver_end == 25,

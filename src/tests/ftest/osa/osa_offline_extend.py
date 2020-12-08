@@ -52,11 +52,9 @@ class OSAOfflineExtend(OSAUtils):
         # Create a pool
         pool = {}
         pool_uuid = []
-        total_servers = len(self.hostlist_servers)
 
-        # Extend a rank (or server)
-        # rank index starts from zero
-        rank = total_servers
+        # Extend a ranks 4 and 5
+        rank = [4, 5]
 
         for val in range(0, num_pool):
             pool[val] = TestPool(self.context, dmg_command=self.dmg_command)
@@ -99,10 +97,7 @@ class OSAOfflineExtend(OSAUtils):
                 if pver_extend > pver_begin:
                     break
 
-            rebuild_status = self.get_rebuild_status()
-            self.log.info("Rebuild Status: %s", rebuild_status)
-            self.assertTrue(rebuild_status != "failed",
-                            "Rebuild failed")
+            self.assert_on_rebuild_failure()
 
             pver_extend = self.get_pool_version()
             self.log.info("Pool Version after extend %d", pver_extend)

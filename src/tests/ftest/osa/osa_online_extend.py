@@ -88,11 +88,9 @@ class OSAOnlineExtend(OSAUtils):
         # Create a pool
         pool = {}
         pool_uuid = []
-        total_servers = len(self.hostlist_servers)
 
-        # Extend one of the ranks (or server)
-        # rank index starts from zero
-        rank = total_servers
+        # Extend one of the ranks 4 and 5
+        rank = [4, 5]
 
         # Start the daos_racer thread
         if racer is True:
@@ -158,10 +156,7 @@ class OSAOnlineExtend(OSAUtils):
                 if pver_extend > pver_begin:
                     break
 
-            rebuild_status = self.get_rebuild_status()
-            self.log.info("Rebuild Status: %s", rebuild_status)
-            self.assertTrue(rebuild_status != "failed",
-                            "Rebuild failed")
+            self.assert_on_rebuild_failure()
 
             self.log.info("Pool Version after extend %s", pver_extend)
             # Check pool version incremented after pool exclude
@@ -190,7 +185,7 @@ class OSAOnlineExtend(OSAUtils):
         """Test ID: DAOS-4751
         Test Description: Validate Online extend
 
-        :avocado: tags=all,pr,hw,large,
+        :avocado: tags=all,pr,hw,medium,ib2
         :avocado: tags=osa,osa_extend,online_extend
         """
         # Perform extend testing with 1 to 2 pools

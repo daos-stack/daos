@@ -165,10 +165,7 @@ class OSAOfflineParallelTest(OSAUtils):
                 if pver_end > 23:
                     break
 
-            rebuild_status = self.get_rebuild_status()
-            self.log.info("Rebuild Status: %s", rebuild_status)
-            self.assertTrue(rebuild_status != "failed",
-                            "Rebuild failed")
+            self.assert_on_rebuild_failure()
 
             self.log.info("Pool Version at the End %s", pver_end)
             self.assertTrue(pver_end == 25,
@@ -182,7 +179,7 @@ class OSAOfflineParallelTest(OSAUtils):
 
         Test Description: Runs multiple OSA commands in parallel.
 
-        :avocado: tags=all,pr,hw,large
+        :avocado: tags=all,pr,hw,medium,ib2
         :avocado: tags=osa,osa_parallel,offline_parallel
         """
         # Run the parallel offline test.

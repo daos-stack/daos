@@ -89,7 +89,7 @@ class OSAOnlineReintegration(OSAUtils):
         pool = {}
         pool_uuid = []
         target_list = []
-        exclude_servers = len(self.hostlist_servers) - 1
+        exclude_servers = (len(self.hostlist_servers) * 2) - 1
 
         # Exclude target : random two targets  (target idx : 0-7)
         n = random.randint(0, 6)
@@ -172,10 +172,7 @@ class OSAOnlineReintegration(OSAUtils):
                 if pver_reint > (pver_exclude + 1):
                     break
 
-            rebuild_status = self.get_rebuild_status()
-            self.log.info("Rebuild Status: %s", rebuild_status)
-            self.assertTrue(rebuild_status != "failed",
-                            "Rebuild failed")
+            self.assert_on_rebuild_failure()
 
             self.log.info("Pool Version after reintegrate %d", pver_reint)
             # Check pool version incremented after pool reintegrate
