@@ -99,7 +99,6 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_consumer"
     run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_hlc"
     run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_swim"
-    ls "${SL_PREFIX}/bin" || true
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
     run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
     export DAOS_IO_BYPASS=pm
