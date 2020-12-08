@@ -29,6 +29,18 @@ ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \
    DAOS_BASE=$DAOS_BASE             \
    $(cat "$mydir/test_post_always_node.sh")"
 
+use_rsync=0
+case $STAGE_NAME in
+    *NLT*)
+	use_rsync=1
+	;;
+esac
+
+if [ $use_rsync -eq 1]
+then
+    rsync -av -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":/tmp/tmp/dnt*.log nlt_logs/
+fi
+
 # Note that we are taking advantage of the NFS mount here and if that
 # should ever go away, we need to pull run_test.sh/ from $NODE
 python utils/fix_cmocka_xml.py
