@@ -783,6 +783,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	}
 
 	rpc_priv->crp_opc_info = opc_info;
+	rpc_priv->crp_fail_hlc = rpc_tmp.crp_fail_hlc;
 	rpc_pub->cr_opc = rpc_tmp.crp_pub.cr_opc;
 	rpc_pub->cr_ep.ep_rank = rpc_priv->crp_req_hdr.cch_dst_rank;
 	rpc_pub->cr_ep.ep_tag = rpc_priv->crp_req_hdr.cch_dst_tag;
