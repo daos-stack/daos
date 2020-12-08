@@ -740,7 +740,6 @@ parse(int argc, char **argv)
 	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:t:s:x:I:",
 				opts, NULL)) != -1) {
 		unsigned int	 nr;
-		char		*end;
 
 		switch (c) {
 		case 'm':
@@ -755,24 +754,24 @@ parse(int argc, char **argv)
 			printf("\"-c\" option is deprecated, please use \"-t\" "
 			       "instead.\n");
 		case 't':
-			nr = strtoul(optarg, &end, 10);
-			if ((end == optarg) || (nr == ULONG_MAX)) {
+			nr = strtoul(optarg, NULL, 10);
+			if (nr == ULONG_MAX) {
 				rc = -DER_INVAL;
 				break;
 			}
 			nr_threads = nr;
 			break;
 		case 'x':
-			nr = strtoul(optarg, &end, 10);
-			if ((end == optarg) || (nr == ULONG_MAX)) {
+			nr = strtoul(optarg, NULL, 10);
+			if (nr == ULONG_MAX) {
 				rc = -DER_INVAL;
 				break;
 			}
 			dss_tgt_offload_xs_nr = nr;
 			break;
 		case 'f':
-			nr = strtoul(optarg, &end, 10);
-			if ((end == optarg) || (nr == ULONG_MAX)) {
+			nr = strtoul(optarg, NULL, 10);
+			if (nr == ULONG_MAX) {
 				rc = -DER_INVAL;
 				break;
 			}
@@ -804,8 +803,8 @@ parse(int argc, char **argv)
 			dss_nvme_shm_id = atoi(optarg);
 			break;
 		case 'r':
-			nr = strtoul(optarg, &end, 10);
-			if ((end == optarg) || (nr == ULONG_MAX)) {
+			nr = strtoul(optarg, NULL, 10);
+			if (nr == ULONG_MAX) {
 				rc = -DER_INVAL;
 				break;
 			}
