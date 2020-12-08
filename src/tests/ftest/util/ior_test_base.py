@@ -84,6 +84,7 @@ class IorTestBase(DfuseTestBase):
 
     def create_cont(self, oclass):
         """Create a TestContainer object to be used to create container.
+
         Args:
             oclass: Explicitly supply object class for container create
         """
@@ -426,14 +427,15 @@ class IorTestBase(DfuseTestBase):
                 "Pool Free Size did not match: actual={}, expected={}".format(
                     actual_pool_size, expected_pool_size))
 
-    def execute_cmd(self, cmd, fail_on_err=True, display_output=True):
+    def execute_cmd(self, command, fail_on_err=True, display_output=True):
         """Execute cmd using general_utils.pcmd.
 
         Args:
-            cmd (str): String command to be executed
-            fail_on_err (bool): Boolean for whether to fail the test if command
-                execution returns non zero return code.
-            display_output (bool): Boolean for whether to display output.
+            command (str): the command to execute on the client hosts
+            fail_on_err (bool, optional): whether or not to fail the test if
+                command returns a non zero return code. Defaults to True.
+            display_output (bool, optional): whether or not to display output.
+                Defaults to True.
 
         Returns:
             dict: a dictionary of return codes keys and accompanying NodeSet
@@ -441,24 +443,42 @@ class IorTestBase(DfuseTestBase):
 
         """
         try:
-            # execute bash cmds
-            ret = pcmd(
-                self.hostlist_clients,
-                cmd,
-                verbose=display_output,
-                timeout=300)
-            if 0 not in ret:
-                error_hosts = NodeSet(
-                    ",".join(
-                        [str(node_set) for code, node_set in
-                         ret.items() if code != 0]))
-                if fail_on_err:
-                    raise CommandFailure(
-                        "Error running '{}' on the following "
-                        "hosts: {}".format(cmd, error_hosts))
+            # Execute the bash command on each client host
+            result = self._execute_command(command, fail_on_err, display_output)
 
-        # report error if any command fails
         except CommandFailure as error:
+            # Report an error if any command fails
             self.log.error("DfuseSparseFile Test Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
-        return ret
+
+        return result
+
+    def _execute_command(self, command, fail_on_err=True, display_output=True):
+        """Execute the command on all client hosts.
+
+        Optionally verify if the command returns a non zero return code.
+
+        Args:
+            command (str): the command to execute on the client hosts
+            fail_on_err (bool, optional): whether or not to fail the test if
+                command returns a non zero return code. Defaults to True.
+            display_output (bool, optional): whether or not to display output.
+                Defaults to True.
+
+        Raises:
+            CommandFailure: if 'fail_on_err' is set and the command fails on at
+                least one of the client hosts
+
+        Returns:
+            dict: a dictionary of return codes keys and accompanying NodeSet
+                values indicating which hosts yielded the return code.
+
+        """
+        result = pcmd(
+            self.hostlist_clients, command, verbose=display_output, timeout=300)
+        if 0 not in result and fail_on_err:
+            hosts = [str(nodes) for code, nodes in result.items() if code != 0]
+            raise CommandFailure(
+                "Error running '{}' on the following hosts: {}".format(
+                    command, NodeSet(",".join(hosts))))
+        return result

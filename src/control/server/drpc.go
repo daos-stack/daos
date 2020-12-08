@@ -32,7 +32,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
@@ -76,16 +75,6 @@ func isRetryable(msg proto.Message) (*retryableDrpcReq, bool) {
 	switch msg := msg.(type) {
 	case *retryableDrpcReq:
 		return msg, true
-	// Pool creates are notorious for needing retry logic
-	// while things are starting up in CI testing.
-	case *mgmtpb.PoolCreateReq, *mgmtpb.PoolDestroyReq:
-		return &retryableDrpcReq{
-			Message: msg,
-			RetryableStatuses: []drpc.DaosStatus{
-				drpc.DaosGroupVersionMismatch,
-				drpc.DaosTimedOut,
-			},
-		}, true
 	}
 
 	return nil, false
