@@ -1509,8 +1509,8 @@ cont_query_hdlr(struct cmd_args_s *ap)
 			if (rc) {
 				fprintf(stderr, "failed to mount container "
 					DF_UUIDF": %s (%d)\n",
-					DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
-				D_GOTO(err_out, rc);
+					DP_UUID(ap->c_uuid), strerror(rc), rc);
+				D_GOTO(err_out, rc = daos_errno2der(rc));
 			}
 
 			dfs_query(dfs, &attr);
@@ -1522,8 +1522,8 @@ cont_query_hdlr(struct cmd_args_s *ap)
 			if (rc) {
 				fprintf(stderr, "failed to unmount container "
 					DF_UUIDF": %s (%d)\n",
-					DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
-				D_GOTO(err_out, rc);
+					DP_UUID(ap->c_uuid), strerror(rc), rc);
+				D_GOTO(err_out, rc = daos_errno2der(rc));
 			}
 		}
 	}

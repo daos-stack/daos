@@ -139,6 +139,7 @@ create_entry(struct dfuse_projection_info *fs_handle,
 				"check_for_uns_ep() returned %d", rc);
 		if (rc != 0 && rc != EPERM)
 			D_GOTO(out, rc);
+		rc = 0;
 		ie->ie_stat.st_mode &= ~S_IFIFO;
 		ie->ie_stat.st_mode |= S_IFDIR;
 		entry->attr.st_mode = ie->ie_stat.st_mode;

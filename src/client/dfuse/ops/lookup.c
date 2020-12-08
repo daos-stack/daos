@@ -213,7 +213,10 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 
 		DFUSE_TRA_UP(dfp, ie->ie_dfs->dfs_dfp, "dfp");
 		D_INIT_LIST_HEAD(&dfp->dfp_dfs_list);
+
 		d_list_add(&dfp->dfp_list, &fs_handle->dpi_info->di_dfp_list);
+		new_pool = true;
+
 		uuid_copy(dfp->dfp_pool, dattr.da_puuid);
 
 		/* Connect to DAOS pool */
@@ -223,10 +226,16 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 				       &dfp->dfp_poh, &dfp->dfp_pool_info,
 				       NULL);
 		if (rc != -DER_SUCCESS) {
-			DFUSE_LOG_ERROR("Failed to connect to pool (%d)", rc);
+			if (rc == -DER_NO_PERM)
+				DFUSE_TRA_DEBUG(ie,
+						"daos_pool_connect() failed, " DF_RC "\n",
+						DP_RC(rc));
+			else
+				DFUSE_TRA_WARNING(ie,
+						  "daos_pool_connect() failed, " DF_RC "\n",
+						  DP_RC(rc));
 			D_GOTO(out_err, ret = daos_der2errno(rc));
 		}
-		new_pool = true;
 	}
 
 	d_list_for_each_entry(dfsi, &dfp->dfp_dfs_list,	dfs_list) {
@@ -248,15 +257,17 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		else
 			dfs->dfs_ops = &dfuse_dfs_ops;
 		DFUSE_TRA_UP(dfs, dfp, "dfs");
-		d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
 		uuid_copy(dfs->dfs_cont, dattr.da_cuuid);
+
+		d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
+
+		new_cont = true;
 
 		dfuse_dfs_init(dfs, ie->ie_dfs);
 
 		/* Try to open the DAOS container (the mountpoint) */
 		rc = daos_cont_open(dfp->dfp_poh, dfs->dfs_cont, DAOS_COO_RW,
-				    &dfs->dfs_coh, NULL,
-				    NULL);
+				    &dfs->dfs_coh, NULL, NULL);
 		if (rc) {
 			DFUSE_LOG_ERROR("Failed container open (%d)",
 					rc);
@@ -266,10 +277,11 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		rc = dfs_mount(dfp->dfp_poh, dfs->dfs_coh, O_RDWR,
 			       &dfs->dfs_ns);
 		if (rc) {
-			DFUSE_LOG_ERROR("dfs_mount failed (%d)", rc);
+			DFUSE_LOG_ERROR("dfs_mount() failed: (%s)",
+					strerror(rc));
 			D_GOTO(out_cont, ret = rc);
 		}
-		new_cont = true;
+
 		ie->ie_root = true;
 
 		dfs->dfs_ino = atomic_fetch_add_relaxed(&fs_handle->dpi_ino_next,
@@ -307,7 +319,8 @@ out_umount:
 	if (new_cont) {
 		rc = dfs_umount(dfs->dfs_ns);
 		if (rc)
-			DFUSE_TRA_ERROR(dfs, "dfs_umount() failed %d", rc);
+			DFUSE_TRA_ERROR(dfs, "dfs_umount() failed: (%s)",
+					strerror(rc));
 	}
 out_cont:
 	if (new_cont) {

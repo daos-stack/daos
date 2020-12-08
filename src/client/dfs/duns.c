@@ -36,6 +36,7 @@
 #include <sys/ioctl.h>
 #include <dlfcn.h>
 #include <regex.h>
+#include <pwd.h>
 #ifdef LUSTRE_INCLUDE
 #include <lustre/lustreapi.h>
 #include <linux/lustre/lustre_idl.h>
@@ -578,29 +579,79 @@ err:
 }
 #endif
 
+#define PW_BUF_SIZE 1024
+
 static int
 duns_set_fuse_acl(int dfd, daos_handle_t coh)
 {
-	int rc = 0;
-	struct daos_acl *acl;
-	struct daos_ace ace = {};
-	struct daos_ace *aces = &ace;
+	char		*buf;
+	int		rc = 0;
+	struct daos_acl	*acl;
+	struct daos_ace	*ace;
+	struct stat	stbuf = {};
+	int		uid;
+	struct passwd	pwd = {};
+	struct passwd	*pwdp = NULL;
+	char		*name;
 
-	ace.dae_access_types = DAOS_ACL_ACCESS_ALLOW;
-	ace.dae_principal_type = DAOS_ACL_USER;
-	ace.dae_allow_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
+	rc = fstat(dfd, &stbuf);
+	if (rc == -1)
+		return errno;
 
-	acl = daos_acl_create(&aces, 1);
-	if (acl == NULL)
-		D_GOTO(out, rc = EIO);
+	uid = geteuid();
 
-#if  0
-	rc = daos_cont_overwrite_acl(coh, acl, NULL);
+	if (uid == stbuf.st_uid) {
+#if 1
+		/* For debugging */
+		D_ERROR("Same user, returning\n");
+#else
+		D_DEBUG(DB_TRACE, "Same user, returning\n");
+		return 0;
 #endif
+	}
+
+	D_ALLOC(buf, PW_BUF_SIZE);
+	if (buf == NULL)
+		return ENOMEM;
+
+	errno = 0;
+	rc = getpwuid_r(stbuf.st_uid, &pwd, buf, PW_BUF_SIZE, &pwdp);
+	if (rc == -1 || pwdp == NULL) {
+		int err = errno;
+		D_ERROR("getpwuid() failed, (%s)\n", strerror(rc));
+		D_GOTO(out_buf, rc = err);
+	}
+
+	D_ASPRINTF(name, "%s@", pwdp->pw_name);
+	if (name == NULL)
+		D_GOTO(out_buf, rc = ENOMEM);
+
+	ace = daos_ace_create(DAOS_ACL_USER, name);
+	if (ace == NULL) {
+		D_ERROR("daos_ace_create() failed.\n");
+		D_GOTO(out_name, rc = EIO);
+	}
+
+	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace->dae_allow_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
+
+	acl = daos_acl_create(&ace, 1);
+	if (acl == NULL)
+		D_GOTO(out_ace, rc = EIO);
+
+	rc = daos_cont_update_acl(coh, acl, NULL);
+	if (rc) {
+		D_ERROR("Failed to apply ACL, " DF_RC "\n", DP_RC(rc));
+	}
 
 	daos_acl_free(acl);
 
-out:
+out_ace:
+	daos_ace_free(ace);
+out_name:
+	D_FREE(name);
+out_buf:
+	D_FREE(buf);
 	return rc;
 }
 

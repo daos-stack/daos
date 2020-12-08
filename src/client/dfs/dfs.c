@@ -1217,7 +1217,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 
 	rc = daos_cont_query(coh, NULL, prop, NULL);
 	if (rc) {
-		D_ERROR("daos_cont_query() Failed (%d)\n", rc);
+		D_ERROR("daos_cont_query() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
 	}
 

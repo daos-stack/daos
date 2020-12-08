@@ -765,7 +765,7 @@ def get_pool_list():
         except ValueError:
             continue
         pools.append(fname)
-    return pools
+    return sorted(pools)
 
 def assert_file_size_fd(fd, size):
     """Verify the file size is as expected"""
@@ -877,7 +877,9 @@ def get_conts(conf, pool, posix=True):
     cmd = ['pool', 'list-containers', '--pool', pool]
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
-    assert rc.returncode == 0
+    if rc.returncode != 0:
+        return []
+
     containers = rc.stdout.decode('utf-8').splitlines()
 
     matched = []
@@ -1439,9 +1441,13 @@ def run_in_fg(server, conf):
     while len(pools) < 1:
         pools = make_pool(server)
 
-    pool = pools[0]
+    # Load the first available container, but skip over any which are not
+    # suitable.
+    for pool in pools:
+        containers = get_conts(conf, pool, posix=True)
+        if containers:
+            break
 
-    containers = get_conts(conf, pool, posix=True)
     if not containers:
         containers = create_cont(conf, pool, posix=True)
 
