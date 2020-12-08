@@ -306,7 +306,7 @@ func ShowDirectoryTree(rank int, dirname string) error {
 	if dirname != "/" && dirname != "" {
 		node = FindMetric(shmemRoot, dirname)
 		if node == nil {
-			return errors.Errorf("Cound not find an entry for: %s", dirname)
+			return errors.Errorf("Could not find an entry for: %s", dirname)
 		}
 	}
 

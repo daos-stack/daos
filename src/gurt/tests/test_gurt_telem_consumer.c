@@ -158,7 +158,6 @@ test_find_metric(void **state)
 	assert_null(node);
 }
 
-
 static void
 test_verify_gauge(void **state)
 {

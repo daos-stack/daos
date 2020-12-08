@@ -159,7 +159,6 @@ failure:
 	return rc;
 }
 
-
 /**
  * Add a child node the \a parent node in shared memory.
  * A child will either be a first child, or a sibling of an existing child.
@@ -256,7 +255,7 @@ d_tm_init(int rank, uint64_t mem_size)
 	d_tm_shmem_idx = (uint8_t *)d_tm_shmem_root;
 	d_tm_shmem_free = mem_size;
 	D_DEBUG(DB_TRACE, "Shared memory allocation success!\n"
-		"Memory size is %"PRIu64" bytes at address 0x%"PRIx64
+		"Memory size is %" PRIu64 " bytes at address 0x%" PRIx64
 		"\n", mem_size, (uint64_t)d_tm_shmem_root);
 	/**
 	 * Store the base address of the shared memory as seen by the
@@ -787,7 +786,6 @@ d_tm_increment_counter(struct d_tm_node_t **metric, char *item, ...)
 failure:
 	return rc;
 }
-
 
 /**
  * Record the current timestamp
@@ -2027,9 +2025,8 @@ d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root,
 	}
 
 	node = node->dtn_child;
-	if (node == NULL) {
+	if (node == NULL)
 		goto success;
-	}
 
 	node = d_tm_conv_ptr(shmem_root, node);
 	if (node == NULL) {
@@ -2050,9 +2047,8 @@ d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root,
 	node = d_tm_conv_ptr(shmem_root, node);
 	while (node != NULL) {
 		rc = d_tm_list(&nodelist, shmem_root, node, d_tm_type);
-		if (rc != D_TM_SUCCESS) {
+		if (rc != D_TM_SUCCESS)
 			goto failure;
-		}
 		if (*head == NULL)
 			*head = nodelist;
 		node = node->dtn_sibling;
@@ -2220,8 +2216,8 @@ d_tm_validate_shmem_ptr(uint64_t *shmem_root, void *ptr)
 	if (((uint64_t)ptr < (uint64_t)shmem_root) ||
 	    ((uint64_t)ptr >= (uint64_t)shmem_root + D_TM_SHARED_MEMORY_SIZE)) {
 		D_DEBUG(DB_TRACE,
-			"shmem ptr 0x%"PRIx64" was outside the shmem range "
-			"0x%"PRIx64" to 0x%"PRIx64, (uint64_t)ptr,
+			"shmem ptr 0x%" PRIx64 " was outside the shmem range "
+			"0x%" PRIx64 " to 0x%" PRIx64, (uint64_t)ptr,
 			(uint64_t)shmem_root, (uint64_t)shmem_root +
 			D_TM_SHARED_MEMORY_SIZE);
 		return false;

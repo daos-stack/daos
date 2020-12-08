@@ -90,7 +90,6 @@ test_gauge(void **state)
 					  "gauge", NULL);
 		assert(rc == D_TM_SUCCESS);
 	}
-
 }
 
 static void
