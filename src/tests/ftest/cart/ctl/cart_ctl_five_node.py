@@ -28,7 +28,6 @@ import sys
 import time
 
 from apricot  import TestWithoutServers
-from avocado  import main
 
 sys.path.append('./util')
 

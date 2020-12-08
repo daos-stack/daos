@@ -36,7 +36,6 @@ import shlex
 import traceback
 
 from apricot       import TestWithoutServers
-from avocado       import main
 
 sys.path.append('./util')
 

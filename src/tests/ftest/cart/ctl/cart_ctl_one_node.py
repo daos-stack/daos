@@ -27,7 +27,6 @@ from __future__ import print_function
 import sys
 
 from apricot       import TestWithoutServers
-from avocado       import main
 
 sys.path.append('./util')
 
