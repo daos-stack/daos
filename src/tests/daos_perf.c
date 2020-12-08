@@ -1477,12 +1477,12 @@ main(int argc, char **argv)
 		}
 		ts_ctx.tsc_cred_nr = -1; /* VOS can only support sync mode */
 		if (strlen(ts_pmem_file) == 0) {
-			int len = snprintf(NULL, 0, "/mnt/daos/vos_perf%d.pmem",
-					   ts_ctx.tsc_mpi_rank) + 1;
-			snprintf(ts_pmem_file, len, "/mnt/daos/vos_perf%d.pmem",
+			snprintf(ts_pmem_file, sizeof(ts_pmem_file),
+				 "/mnt/daos/vos_perf%d.pmem",
 				 ts_ctx.tsc_mpi_rank);
 		} else {
 			char id[4];
+
 			snprintf(id, sizeof(id), "%d", ts_ctx.tsc_mpi_rank);
 			strncat(ts_pmem_file, id,
 				(sizeof(ts_pmem_file) - strlen(ts_pmem_file)));
