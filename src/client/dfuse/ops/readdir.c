@@ -122,9 +122,6 @@ create_entry(struct dfuse_projection_info *fs_handle,
 	entry->attr_timeout = parent->ie_dfs->dfs_attr_timeout;
 	entry->entry_timeout = parent->ie_dfs->dfs_attr_timeout;
 
-	entry->generation = 1;
-	entry->ino = entry->attr.st_ino;
-
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
 
@@ -145,11 +142,18 @@ create_entry(struct dfuse_projection_info *fs_handle,
 		ie->ie_stat.st_mode &= ~S_IFIFO;
 		ie->ie_stat.st_mode |= S_IFDIR;
 		entry->attr.st_mode = ie->ie_stat.st_mode;
+		entry->attr.st_ino = ie->ie_stat.st_ino;
 	}
+
+	entry->generation = 1;
+	entry->ino = entry->attr.st_ino;
 
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
 	atomic_store_relaxed(&ie->ie_ref, 1);
+
+	DFUSE_TRA_DEBUG(ie, "Inserting inode %#lx mode 0%o",
+			entry->ino, ie->ie_stat.st_mode);
 
 	rlink = d_hash_rec_find_insert(&fs_handle->dpi_iet,
 				       &ie->ie_stat.st_ino,
@@ -169,7 +173,7 @@ create_entry(struct dfuse_projection_info *fs_handle,
 		/* Update the existing object with the new name/parent */
 
 		DFUSE_TRA_DEBUG(inode,
-				"Maybe updating parent inode %lu dfs_ino %lu",
+				"Maybe updating parent inode %#lx dfs_ino %lu",
 				entry->ino, ie->ie_dfs->dfs_ino);
 
 		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino) {
@@ -354,11 +358,6 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 				D_GOTO(reply, rc);
 			}
 
-			if (S_ISFIFO(stbuf.st_mode)) {
-				stbuf.st_mode &= ~S_IFIFO;
-				stbuf.st_mode |= S_IFDIR;
-			}
-
 			dfs_obj2id(obj, &oid);
 
 			dfuse_compute_inode(oh->doh_ie->ie_dfs,
@@ -392,6 +391,11 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 
 			} else {
 				dfs_release(obj);
+
+				if (S_ISFIFO(stbuf.st_mode)) {
+					stbuf.st_mode &= ~S_IFIFO;
+					stbuf.st_mode |= S_IFDIR;
+				}
 
 				written = fuse_add_direntry(req,
 							    &reply_buff[buff_offset],

@@ -178,6 +178,8 @@ alloc_ie:
 	ie->ie_stat.st_ino = dfs->dfs_ino;
 	dfs->dfs_ops = &dfuse_dfs_ops;
 
+	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
+
 	dfuse_reply_entry(fs_handle, ie, NULL, true, req);
 	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 	return;

@@ -261,6 +261,7 @@ def get_base_env():
     env['DD_MASK'] = 'all'
     env['DD_SUBSYS'] = 'all'
     env['D_LOG_MASK'] = 'DEBUG'
+    env['D_LOG_SIZE'] = '5g'
     env['FI_UNIVERSE_SIZE'] = '128'
     return env
 

@@ -115,6 +115,11 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	LOG_FLAGS(ie, fi->flags);
 	LOG_MODES(ie, mode);
 
+	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
+
+	dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid,
+			    &ie->ie_stat.st_ino);
+
 	/* Return the new inode data, and keep the parent ref */
 	dfuse_reply_entry(fs_handle, ie, &fi_out, true, req);
 
