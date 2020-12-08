@@ -43,14 +43,14 @@ server_config:
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DD_MASK=mgmt,io,md,epc,rebuild
-  transport_config:
-    allow_insecure: True
-agent_config:
-  transport_config:
-    allow_insecure: True
-dmg:
-  transport_config:
-    allow_insecure: True
+#  transport_config:
+#    allow_insecure: True
+#agent_config:
+#  transport_config:
+#    allow_insecure: True
+#dmg:
+#  transport_config:
+#    allow_insecure: True
 daos_tests:
   num_clients:
     num_clients: 1
