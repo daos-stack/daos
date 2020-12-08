@@ -78,14 +78,14 @@ duration(void)
 }
 
 static inline void
-step_success(const char *comment, ...)
+step_print(const char *status, const char *comment, ...)
 {
 	va_list	ap;
 	char	timing[8];
 	int	i;
 
 	end = clock();
-	printf("  \033[0;32mOK\033[0m    ");
+	printf("  %s    ", status);
 	sprintf(timing, "%03.3f", duration());
 	for (i = strlen(timing); i < 7; i++)
 		printf(" ");
@@ -97,23 +97,23 @@ step_success(const char *comment, ...)
 }
 
 static inline void
+step_success(const char *comment, ...)
+{
+	va_list	ap;
+
+	va_start(ap, comment);
+	step_print("\033[0;32mOK\033[0m",comment, ap);
+	va_end(ap);
+}
+
+static inline void
 step_fail(const char *comment, ...)
 {
 	va_list	ap;
-	char	timing[8];
-	int	i;
 
-	end = clock();
-	printf("  \033[0;31mKO\033[0m    ");
-	sprintf(timing, "%03.3f", duration());
-	for (i = strlen(timing); i < 7; i++)
-		printf(" ");
-	printf("%s  ", timing);
 	va_start(ap, comment);
-	vprintf(comment, ap);
+	step_print("\033[0;31mKO\033[0m",comment, ap);
 	va_end(ap);
-	printf("\n");
-
 }
 
 static inline void
@@ -269,7 +269,7 @@ kv_put(daos_handle_t oh, daos_size_t size, uint64_t nr)
 	daos_event_t	*evp;
 	uint64_t	i;
 	int		rc;
-	int		ret;
+	int		eq_rc;
 
 	/** Create event queue to manage asynchronous I/Os */
 	rc = daos_eq_create(&eq);
@@ -278,7 +278,7 @@ kv_put(daos_handle_t oh, daos_size_t size, uint64_t nr)
 	}
 
 	/** allocate buffer to store value */
-	val = malloc(size * MAX_INFLIGHT);
+	D_ALLOC(val, size * MAX_INFLIGHT);
 	if (val == NULL) {
 		rc = daos_eq_destroy(eq, 0);
 		return -DER_NOMEM;
@@ -342,23 +342,23 @@ kv_put(daos_handle_t oh, daos_size_t size, uint64_t nr)
 
 	/** Wait for completion of all in-flight requests */
 	do {
-		ret = daos_eq_poll(eq, 1, DAOS_EQ_WAIT, 1, &evp);
-		if (rc == 0 && ret == 1) {
+		eq_rc = daos_eq_poll(eq, 1, DAOS_EQ_WAIT, 1, &evp);
+		if (rc == 0 && eq_rc == 1) {
 			rc = evp->ev_error;
 		}
-	} while (ret == 1);
+	} while (eq_rc == 1);
 
-	if (rc == 0 && ret < 0) {
-		rc = ret;
+	if (rc == 0 && eq_rc < 0) {
+		rc = eq_rc;
 	}
 
-	free(val);
+	D_FREE(val);
 
 	/** Destroy event queue */
-	ret = daos_eq_destroy(eq, 0);
-	if (ret) {
+	eq_rc = daos_eq_destroy(eq, 0);
+	if (eq_rc) {
 		if (rc == 0)
-			rc = ret;
+			rc = eq_rc;
 	}
 
 	return rc;
@@ -376,7 +376,7 @@ kv_get(daos_handle_t oh, daos_size_t size, uint64_t nr)
 	uint64_t	i;
 	uint64_t	res = 0;
 	int		rc;
-	int		ret;
+	int		eq_rc;
 
 	/** Create event queue to manage asynchronous I/Os */
 	rc = daos_eq_create(&eq);
@@ -385,9 +385,9 @@ kv_get(daos_handle_t oh, daos_size_t size, uint64_t nr)
 	}
 
 	/** allocate buffer to store value */
-	val = malloc(size * MAX_INFLIGHT);
+	D_ALLOC(val, size * MAX_INFLIGHT);
 	if (val == NULL) {
-		ret = daos_eq_destroy(eq, 0);
+		eq_rc = daos_eq_destroy(eq, 0);
 		return -DER_NOMEM;
 	}
 
@@ -459,8 +459,8 @@ kv_get(daos_handle_t oh, daos_size_t size, uint64_t nr)
 
 	/** Wait for completion of all in-flight requests */
 	do {
-		ret = daos_eq_poll(eq, 1, DAOS_EQ_WAIT, 1, &evp);
-		if (rc == 0 && ret == 1) {
+		eq_rc = daos_eq_poll(eq, 1, DAOS_EQ_WAIT, 1, &evp);
+		if (rc == 0 && eq_rc == 1) {
 			rc = evp->ev_error;
 			if (rc == 0) {
 				int slot = evp - ev_array;
@@ -472,21 +472,21 @@ kv_get(daos_handle_t oh, daos_size_t size, uint64_t nr)
 				}
 			}
 		}
-	} while (ret == 1);
+	} while (eq_rc == 1);
 
-	if (rc == 0 && ret < 0) {
-		rc = ret;
+	if (rc == 0 && eq_rc < 0) {
+		rc = eq_rc;
 	}
 
-	free(val);
+	D_FREE(val);
 
 	/** Destroy event queue */
-	ret = daos_eq_destroy(eq, 0);
-	if (ret) {
+	eq_rc = daos_eq_destroy(eq, 0);
+	if (eq_rc) {
 		if (rc)
 			return rc;
 		else
-			return ret;
+			return eq_rc;
 	}
 
 	/** verify that we got the sum of all integers from 1 to nr */
@@ -500,7 +500,7 @@ static int
 kv_insert128(void)
 {
 	daos_handle_t	oh = DAOS_HDL_INVAL; /** object handle */
-	int		ret;
+	int		put_rc;
 	int		rc;
 
 	new_oid();
@@ -512,11 +512,11 @@ kv_insert128(void)
 		return -1;
 	}
 
-	ret = kv_put(oh, 128, 1000000);
+	put_rc = kv_put(oh, 128, 1000000);
 	rc = daos_kv_close(oh, NULL);
 
-	if (ret) {
-		step_fail("failed to insert: %s", d_errdesc(ret));
+	if (put_rc) {
+		step_fail("failed to insert: %s", d_errdesc(put_rc));
 		return -1;
 	}
 
@@ -533,7 +533,7 @@ static int
 kv_read128(void)
 {
 	daos_handle_t	oh = DAOS_HDL_INVAL; /** object handle */
-	int		ret;
+	int		get_rc;
 	int		rc;
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
@@ -542,11 +542,11 @@ kv_read128(void)
 		return -1;
 	}
 
-	ret = kv_get(oh, 128, 1000000);
+	get_rc = kv_get(oh, 128, 1000000);
 	rc = daos_kv_close(oh, NULL);
 
-	if (ret) {
-		step_fail("failed to insert: %s", d_errdesc(ret));
+	if (get_rc) {
+		step_fail("failed to insert: %s", d_errdesc(get_rc));
 		return -1;
 	}
 
@@ -560,11 +560,15 @@ kv_read128(void)
 }
 
 #if 0
+/**
+ * Disable since it triggers an assertion error on the client.
+ * Will be enabled once problem is fixed.
+ */
 static int
 kv_punch(void)
 {
 	daos_handle_t	oh = DAOS_HDL_INVAL; /** object handle */
-	int		ret;
+	int		punch_rc;
 	int		rc;
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
@@ -573,11 +577,11 @@ kv_punch(void)
 		return -1;
 	}
 
-	ret = daos_obj_punch(oh, DAOS_TX_NONE, 0, NULL);
+	punch_rc = daos_obj_punch(oh, DAOS_TX_NONE, 0, NULL);
 	rc = daos_kv_close(oh, NULL);
 
-	if (ret) {
-		step_fail("failed to punch object: %s", d_errdesc(ret));
+	if (punch_rc) {
+		step_fail("failed to punch object: %s", d_errdesc(punch_rc));
 		return -1;
 	}
 
@@ -595,7 +599,7 @@ static int
 kv_insert4k(void)
 {
 	daos_handle_t	oh = DAOS_HDL_INVAL; /** object handle */
-	int		ret;
+	int		put_rc;
 	int		rc;
 
 	new_oid();
@@ -607,11 +611,11 @@ kv_insert4k(void)
 		return -1;
 	}
 
-	ret = kv_put(oh, 4096, 1000000);
+	put_rc = kv_put(oh, 4096, 1000000);
 	rc = daos_kv_close(oh, NULL);
 
-	if (ret) {
-		step_fail("failed to insert: %s", d_errdesc(ret));
+	if (put_rc) {
+		step_fail("failed to insert: %s", d_errdesc(put_rc));
 		return -1;
 	}
 
@@ -628,7 +632,7 @@ static int
 kv_read4k(void)
 {
 	daos_handle_t	oh = DAOS_HDL_INVAL; /** object handle */
-	int		ret;
+	int		get_rc;
 	int		rc;
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RO, &oh, NULL);
@@ -637,11 +641,11 @@ kv_read4k(void)
 		return -1;
 	}
 
-	ret = kv_get(oh, 4096, 1000000);
+	get_rc = kv_get(oh, 4096, 1000000);
 	rc = daos_kv_close(oh, NULL);
 
-	if (ret) {
-		step_fail("failed to insert: %s", d_errdesc(ret));
+	if (get_rc) {
+		step_fail("failed to insert: %s", d_errdesc(get_rc));
 		return -1;
 	}
 
@@ -658,7 +662,7 @@ static int
 kv_insert1m(void)
 {
 	daos_handle_t	oh = DAOS_HDL_INVAL; /** object handle */
-	int		ret;
+	int		put_rc;
 	int		rc;
 
 	new_oid();
@@ -670,11 +674,11 @@ kv_insert1m(void)
 		return -1;
 	}
 
-	ret = kv_put(oh, 1048576, 100000);
+	put_rc = kv_put(oh, 1048576, 100000);
 	rc = daos_kv_close(oh, NULL);
 
-	if (ret) {
-		step_fail("failed to insert: %s", d_errdesc(ret));
+	if (put_rc) {
+		step_fail("failed to insert: %s", d_errdesc(put_rc));
 		return -1;
 	}
 
@@ -691,7 +695,7 @@ static int
 kv_read1m(void)
 {
 	daos_handle_t	oh = DAOS_HDL_INVAL; /** object handle */
-	int		ret;
+	int		get_rc;
 	int		rc;
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RO, &oh, NULL);
@@ -700,11 +704,11 @@ kv_read1m(void)
 		return -1;
 	}
 
-	ret = kv_get(oh, 1048576, 100000);
+	get_rc = kv_get(oh, 1048576, 100000);
 	rc = daos_kv_close(oh, NULL);
 
-	if (ret) {
-		step_fail("failed to insert: %s", d_errdesc(ret));
+	if (get_rc) {
+		step_fail("failed to insert: %s", d_errdesc(get_rc));
 		return -1;
 	}
 
