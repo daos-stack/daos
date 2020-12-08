@@ -63,10 +63,10 @@ struct obj_shard_iod {
 	uint32_t		 siod_tgt_idx;
 	/** start index in extend array in daos_iod_t */
 	uint32_t		 siod_idx;
-	/** number of extends in extend array in daos_iod_t */
-	uint32_t		 siod_nr;
 	/** the byte offset of this shard's data to the sgl/bulk */
 	uint64_t		 siod_off;
+	/** number of extends in extend array in daos_iod_t */
+	uint32_t		 siod_nr;
 };
 
 struct obj_iod_array {
