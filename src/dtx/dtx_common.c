@@ -1123,7 +1123,8 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 	 */
 	dlh->dlh_result = 0;
 	rc = dss_ult_create(dtx_leader_exec_ops_ult, ult_arg, DSS_ULT_IOFW,
-			    dss_get_module_info()->dmi_tgt_id, 0, NULL);
+			    dss_get_module_info()->dmi_tgt_id,
+			    DSS_DEEP_STACK_SZ, NULL);
 	if (rc != 0) {
 		D_ERROR("ult create failed "DF_RC"\n", DP_RC(rc));
 		D_FREE_PTR(ult_arg);
