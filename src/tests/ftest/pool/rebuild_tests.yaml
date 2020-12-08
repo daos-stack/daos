@@ -8,11 +8,11 @@ hosts:
     - server-D
     - server-E
     - server-F
-timeout: 1200
+timeout: 300
 server_config:
   name: daos_server
   servers:
-    targets: 8
+    targets: 1
 pool:
   mode: 511
   name: daos_server
