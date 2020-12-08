@@ -632,7 +632,7 @@ Since conditional operations rely on an emptiness semantic, VOS read
 operations, particularly listing can be very expensive because they would
 require potentially reading the subtree to see if the entity is empty or not.
 In order to alieviate this problem, VOS instead does punch propagation.
-On a punch operation, the parent tree is read to see if the punch 
+On a punch operation, the parent tree is read to see if the punch
 causes it to be empty.  If it does, the parent tree is punched as well.
 Propagation presently stops at the dkey level, meaning the object will
 not be punched. Punch propagation only applies when punching keys, not
