@@ -36,6 +36,13 @@ run_test()
     export D_LOG_FILE="/tmp/daos_${b}-${log_num}.log"
     echo "Running $* with log file: ${D_LOG_FILE}"
 
+    memcheck_log="${b}-${log_num}"
+    echo "memcheck log is: ${memcheck_log}"
+    echo "valgrind cmd is: ${VALGRIND_CMD}"
+    VALGRIND_CMD="${VALGRIND_CMD/unit-test-replace/$memcheck_log}"
+    echo "valgrind cmd is: ${VALGRIND_CMD}"
+
+    exit 1
     # We use flock as a way of locking /mnt/daos so multiple runs can't hit it
     #     at the same time.
     # We use grep to filter out any potential "SUCCESS! NO TEST FAILURES"
@@ -81,7 +88,7 @@ if [ -d "/mnt/daos" ]; then
         if [ "$RUN_TEST_VALGRIND" = "memcheck" ]; then
             [ -z "$VALGRIND_SUPP" ] &&
                 VALGRIND_SUPP="$(pwd)/utils/test_memcheck.supp"
-            VALGRIND_XML_PATH="test_results/unit-test-%p.memcheck.xml"
+            VALGRIND_XML_PATH="test_results/unit-test-replace.memcheck.xml"
             export VALGRIND_CMD="valgrind --leak-check=full --show-reachable=yes \
                                    --error-limit=no \
                                    --suppressions=${VALGRIND_SUPP} \
