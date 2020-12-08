@@ -39,7 +39,7 @@ run_test()
     memcheck_log="${b}-${log_num}"
     echo "memcheck log is: ${memcheck_log}"
     echo "valgrind cmd is: ${VALGRIND_CMD}"
-    VALGRIND_CMD="${VALGRIND_CMD/unit-test-replace/$memcheck_log}"
+    VALGRIND_CMD="${VALGRIND_CMD/replace/$memcheck_log}"
     echo "valgrind cmd is: ${VALGRIND_CMD}"
 
     exit 1
