@@ -173,6 +173,21 @@ func (c *Client) dialOptions() ([]grpc.DialOption, error) {
 	return opts, nil
 }
 
+// setDeadlineIfUnset sets a deadline on the context unless there is already
+// one set. If the request does not define a specific deadline, then the
+// default timeout is used.
+func setDeadlineIfUnset(parent context.Context, req UnaryRequest) (context.Context, context.CancelFunc) {
+	if _, hasDeadline := parent.Deadline(); hasDeadline {
+		return parent, func() {}
+	}
+
+	rd := req.getDeadline()
+	if rd.IsZero() {
+		rd = time.Now().Add(defaultRequestTimeout)
+	}
+	return context.WithDeadline(parent, rd)
+}
+
 // InvokeUnaryRPCAsync performs an asynchronous invocation of the given RPC
 // across all hosts in the provided host list. The returned HostResponseChan
 // provides access to a stream of HostResponse items as they are received, and
@@ -189,14 +204,8 @@ func (c *Client) InvokeUnaryRPCAsync(parent context.Context, req UnaryRequest) (
 	// in order to perform adequately at scale.
 	respChan := make(HostResponseChan, len(hosts))
 	go func() {
-		// Set a timeout for the entire request across all hosts.
-		reqTimeout := defaultRequestTimeout
-		if tg, ok := req.(timeoutGetter); ok {
-			if tg.getTimeout() > 0 {
-				reqTimeout = tg.getTimeout()
-			}
-		}
-		ctx, cancel := context.WithTimeout(parent, reqTimeout)
+		// Set a deadline for all requests to fan out/in.
+		ctx, cancel := setDeadlineIfUnset(parent, req)
 		defer cancel()
 
 		var wg sync.WaitGroup
@@ -229,11 +238,10 @@ func (c *Client) InvokeUnaryRPCAsync(parent context.Context, req UnaryRequest) (
 	return respChan, nil
 }
 
-// InvokeUnaryRPC performs a synchronous (blocking) invocation of the request's
-// RPC across all hosts in the request. The response contains a slice of HostResponse
-// items which represent the success or failure of the RPC invocation for each host
-// in the request.
-func (c *Client) InvokeUnaryRPC(ctx context.Context, req UnaryRequest) (*UnaryResponse, error) {
+// invokeUnaryRPC is the actual implementation which is called by the
+// real Client as well as the MockInvoker. This allows us to ensure that
+// the retry logic here gets adequate test coverage.
+func invokeUnaryRPC(parent context.Context, log debugLogger, c UnaryInvoker, req UnaryRequest) (*UnaryResponse, error) {
 	gatherResponses := func(ctx context.Context, respChan chan *HostResponse, ur *UnaryResponse) error {
 		for {
 			select {
@@ -248,7 +256,13 @@ func (c *Client) InvokeUnaryRPC(ctx context.Context, req UnaryRequest) (*UnaryRe
 		}
 	}
 
+	// Set a deadline for the request across all retries.
+	ctx, cancel := setDeadlineIfUnset(parent, req)
+	defer cancel()
+
+	var tries uint = 0
 	for {
+		tries++
 		respChan, err := c.InvokeUnaryRPCAsync(ctx, req)
 		if err != nil {
 			return nil, err
@@ -267,29 +281,55 @@ func (c *Client) InvokeUnaryRPC(ctx context.Context, req UnaryRequest) (*UnaryRe
 		_, err = ur.getMSResponse()
 		switch e := err.(type) {
 		case *system.ErrNotLeader:
+			// If we sent the request to a non-leader MS replica,
+			// then the error should give us a hint for where to
+			// send the retry. In the event that the hint was
+			// empty (as can happen during an election), just send
+			// the retry to all of the replicas.
 			if e.LeaderHint == "" {
 				req.SetHostList(e.Replicas)
 				break
 			}
 			req.SetHostList([]string{e.LeaderHint})
 		case *system.ErrNotReplica:
+			// If we went the request to a non-replica host, then
+			// the error should give us the list of replicas to try.
+			// One of them should be the current leader and will
+			// service the request.
 			req.SetHostList(e.Replicas)
 		default:
+			// If the request defines its own retry criteria, run
+			// that logic and break out early.
+			if req.canRetry(err, tries) {
+				if err := req.onRetry(ctx, tries); err != nil {
+					return ur, nil
+				}
+				break
+			}
+
 			// If the request succeeded, or there was only one host to try,
 			// return now. Otherwise, remove the failed host from the list
 			// and try again.
 			if err == nil || len(req.getHostList()) < 2 {
 				return ur, nil
 			}
-			c.log.Debugf("removing %s from request hosts due to %s", req.getHostList()[0], e)
+			log.Debugf("removing %s from request hosts due to %s", req.getHostList()[0], e)
 			req.SetHostList(req.getHostList()[1:])
 		}
 
-		c.log.Debugf("MS request error: %v; retrying after %s", err, defaultMSRetry)
+		log.Debugf("MS request error: %v; retrying after %s", err, defaultMSRetry)
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(defaultMSRetry):
+		case <-req.retryAfter(defaultMSRetry):
 		}
 	}
+}
+
+// InvokeUnaryRPC performs a synchronous (blocking) invocation of the request's
+// RPC across all hosts in the request. The response contains a slice of HostResponse
+// items which represent the success or failure of the RPC invocation for each host
+// in the request.
+func (c *Client) InvokeUnaryRPC(ctx context.Context, req UnaryRequest) (*UnaryResponse, error) {
+	return invokeUnaryRPC(ctx, c.log, c, req)
 }

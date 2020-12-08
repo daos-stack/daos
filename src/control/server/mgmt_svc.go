@@ -470,6 +470,57 @@ func (svc *mgmtSvc) smdReplace(ctx context.Context, req *mgmtpb.SmdQueryReq) (*m
 	}, nil
 }
 
+func (svc *mgmtSvc) smdIdentify(ctx context.Context, req *mgmtpb.SmdQueryReq) (*mgmtpb.SmdQueryResp, error) {
+	req.Rank = uint32(system.NilRank)
+	rank, device, err := svc.smdQueryDevice(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if device == nil {
+		return nil, errors.Errorf("smdIdentify on %s did not match any devices", req.Uuid)
+	}
+
+	srvs, err := svc.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", rank))
+	if err != nil {
+		return nil, err
+	}
+	if len(srvs) == 0 {
+		return nil, errors.Errorf("failed to retrieve instance for rank %d", rank)
+	}
+
+	svc.log.Debugf("calling storage identify on rank %d for %s", rank, req.Uuid)
+
+	dresp, err := srvs[0].CallDrpc(ctx, drpc.MethodIdentifyStorage, &mgmtpb.DevIdentifyReq{
+		DevUuid: req.Uuid,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	drr := &mgmtpb.DevIdentifyResp{}
+	if err = proto.Unmarshal(dresp.Body, drr); err != nil {
+		return nil, errors.Wrap(err, "unmarshal StorageIdentify response")
+	}
+
+	if drr.Status != 0 {
+		return nil, errors.Wrap(drpc.DaosStatus(drr.Status), "smdIdentify failed")
+	}
+
+	return &mgmtpb.SmdQueryResp{
+		Ranks: []*mgmtpb.SmdQueryResp_RankResp{
+			{
+				Rank: rank.Uint32(),
+				Devices: []*mgmtpb.SmdQueryResp_Device{
+					{
+						Uuid:  drr.DevUuid,
+						State: drr.LedState,
+					},
+				},
+			},
+		},
+	}, nil
+}
+
 func (svc *mgmtSvc) SmdQuery(ctx context.Context, req *mgmtpb.SmdQueryReq) (*mgmtpb.SmdQueryResp, error) {
 	svc.log.Debugf("MgmtSvc.SmdQuery dispatch, req:%+v\n", *req)
 
@@ -486,6 +537,10 @@ func (svc *mgmtSvc) SmdQuery(ctx context.Context, req *mgmtpb.SmdQueryReq) (*mgm
 
 	if req.ReplaceUUID != "" {
 		return svc.smdReplace(ctx, req)
+	}
+
+	if req.Identify {
+		return svc.smdIdentify(ctx, req)
 	}
 
 	if req.Uuid != "" && (!req.OmitDevices && !req.OmitPools) {
