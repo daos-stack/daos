@@ -3,8 +3,8 @@ hosts:
         - server-A
     test_clients:
         - client-B
-timeout: 800
-job_manager_timeout: 700
+timeout: 1800
+job_manager_timeout: 1700
 server_config:
     name: daos_server
     servers:
