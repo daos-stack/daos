@@ -56,6 +56,10 @@ RUN echo "$USER:$PASSWD" | chpasswd
 # Create directory for DAOS backend storage
 RUN mkdir /mnt/daos
 RUN chown daos.daos /mnt/daos
+RUN mkdir /var/run/daos_server
+RUN chown daos.daos /var/run/daos_server
+RUN mkdir /var/run/daos_agent
+RUN chown daos.daos /var/run/daos_agent
 
 # Set maven repo mirror
 RUN mkdir -p /root/.m2
@@ -86,8 +90,9 @@ WORKDIR /home/$USER/daos
 RUN if [ "x$NOBUILD" = "x" ] ; then \
   git submodule init && git submodule update; fi
 RUN if [ "x$NOBUILD" = "x" ] ; then \
-  scons --build-deps=yes install PREFIX=/usr; fi
+  scons --build-deps=yes install PREFIX=/usr/local; fi
 
 # Set environment variables
-ENV LD_LIBRARY_PATH=/usr/lib:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib64:$LD_LIBRARY_PATH
+ENV PATH=/usr/local/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1

@@ -1,4 +1,4 @@
-.TH dmg 1 "30 November 2020"
+.TH dmg 1 "4 December 2020"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -346,6 +346,22 @@ Show results of each SCM & NVMe device format operation
 .TP
 \fB\fB\-\-reformat\fR\fP
 Reformat storage overwriting any existing filesystem (CAUTION: destructive operation)
+.SS storage identify
+Blink the status LED on a given VMD device for visual SSD identification.
+
+\fBAliases\fP: i
+
+.SS storage identify vmd
+Quickly blink the status LED on a VMD NVMe SSD for device identification.
+
+\fBUsage\fP: identify vmd [vmd-OPTIONS]
+.TP
+
+\fBAliases\fP: n
+
+.TP
+\fB\fB\-\-uuid\fR (\fIrequired\fR)\fP
+Device UUID of the VMD device to identify
 .SS storage prepare
 Prepare SCM and NVMe storage attached to remote servers.
 
