@@ -36,7 +36,7 @@ case $STAGE_NAME in
 	;;
 esac
 
-if [ $use_rsync -eq 1]
+if [ $use_rsync -eq 1 ]
 then
     rsync -av -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":/tmp/tmp/dnt*.log nlt_logs/
 fi
