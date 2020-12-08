@@ -15,7 +15,7 @@
 #  Note: Uses .build_vars.sh to find daos artifacts
 #  Note: New tests should return non-zero if there are any
 #    failures.
-set -x
+
 #check for existence of /mnt/daos first:
 failed=0
 failures=()
@@ -44,7 +44,6 @@ run_test()
     #    before deciding this. Also, we intentionally leave off the last 'S'
     #    in that error message so that we don't guarantee printing that in
     #    every run's output, thereby making all tests here always pass.
-    echo "marj - debug - command to run:${VALGRIND_CMD} $@"
     time eval "${VALGRIND_CMD} $@"
     retcode=$?
     if [ "${retcode}" -ne 0 ]; then
