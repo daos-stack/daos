@@ -57,6 +57,7 @@ daos_tests:
   num_replicas:
     num_replicas: 1
   Tests: !mux
+# Skipped for DAOS-5851
 #    test_r_0-10:
 #      daos_test: r
 #      test_name: rebuild tests 0-10
@@ -75,6 +76,7 @@ daos_tests:
       daos_test: r
       test_name: rebuild tests 17
       args: -s3 -u subtests="17"
+# Skipped for DAOS-6247
 #    test_r_18:
 #      daos_test: r
 #      test_name: rebuild tests 18
@@ -91,6 +93,7 @@ daos_tests:
       daos_test: r
       test_name: rebuild tests 21
       args: -s3 -u subtests="21"
+# Skipped for DAOS-6187
 #    test_r_22:
 #      daos_test: r
 #      test_name: rebuild tests 22
@@ -99,6 +102,7 @@ daos_tests:
       daos_test: r
       test_name: rebuild tests 23
       args: -s3 -u subtests="23"
+# Skipped for DAOS-6187
 #    test_r_24:
 #      daos_test: r
 #      test_name: rebuild tests 24
