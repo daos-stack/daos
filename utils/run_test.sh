@@ -39,8 +39,8 @@ run_test()
     memcheck_log="${b}-${log_num}"
     echo "memcheck log is: ${memcheck_log}"
     echo "valgrind cmd is: ${VALGRIND_CMD}"
-    VALGRIND_CMD="${VALGRIND_CMD/replace/$memcheck_log}"
-    echo "valgrind cmd is: ${VALGRIND_CMD}"
+    VALGRIND_CMD_SPECIFIC="${VALGRIND_CMD/replace/$memcheck_log}"
+    echo "valgrind cmd is: ${VALGRIND_CMD_SPECIFIC}"
 
     # We use flock as a way of locking /mnt/daos so multiple runs can't hit it
     #     at the same time.
@@ -50,7 +50,7 @@ run_test()
     #    before deciding this. Also, we intentionally leave off the last 'S'
     #    in that error message so that we don't guarantee printing that in
     #    every run's output, thereby making all tests here always pass.
-    time eval "${VALGRIND_CMD} $@"
+    time eval "${VALGRIND_CMD_SPECIFIC} $@"
     retcode=$?
     if [ "${retcode}" -ne 0 ]; then
 	echo "Test $* failed with exit status ${retcode}."

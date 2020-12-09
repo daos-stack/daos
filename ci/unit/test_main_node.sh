@@ -51,12 +51,13 @@ else
     IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" utils/run_test.sh
     echo "marj - debug - finish run_test.sh"
     ls
-    ls test_results || true
+    ls -lah test_results || true
     if [ "$WITH_VALGRIND" == 'memcheck' ]; then
 	mv test_results/unit-test-*.memcheck.xml .
 	# Debugging
 	ls test_results || true
 	ls unit-test-*.memcheck.xml
+	ls unit-test-*.memcheck.xml | wc
 	for i in $(ls unit-test-*.memcheck.xml); do
 	    kind="$(grep "<kind>" "$i" || true)"
 	    if [ ! -z "$kind" ]; then
