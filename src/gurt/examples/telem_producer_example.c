@@ -235,7 +235,7 @@ struct d_tm_nodeList_t *add_metrics_manually(void)
 			     "to use.");
 	if (rc != D_TM_SUCCESS)
 		printf("d_tm_add_metric failed, rc = %d\n", rc);
-	node_list = d_tm_add_node(counter1, NULL);
+	d_tm_add_node(counter1, &node_list);
 
 	snprintf(path, sizeof(path), "%s/manually added/counter 2", __FILE__);
 	rc = d_tm_add_metric(&counter2, path, D_TM_COUNTER,
@@ -243,7 +243,7 @@ struct d_tm_nodeList_t *add_metrics_manually(void)
 			     "Much less metadata to report this time.");
 	if (rc != D_TM_SUCCESS)
 		printf("d_tm_add_metric failed, rc = %d\n", rc);
-	d_tm_add_node(counter2, node_list);
+	d_tm_add_node(counter2, &node_list);
 
 	return node_list;
 }

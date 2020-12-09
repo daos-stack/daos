@@ -74,8 +74,7 @@ void *d_tm_shmalloc(int length);
 uint64_t *d_tm_allocate_shared_memory(int rank, size_t mem_size);
 int d_tm_clock_id(int clk_id);
 bool d_tm_validate_shmem_ptr(uint64_t *shmem_root, void *ptr);
-struct d_tm_nodeList_t *d_tm_add_node(struct d_tm_node_t *src,
-				      struct d_tm_nodeList_t *nodelist);
+int d_tm_add_node(struct d_tm_node_t *src, struct d_tm_nodeList_t **nodelist);
 void d_tm_list_free(struct d_tm_nodeList_t *nodeList);
 void d_tm_free_node(uint64_t *shmem_root, struct d_tm_node_t *node);
 struct d_tm_node_t *d_tm_find_child(uint64_t *shmem_root,

@@ -2005,23 +2005,19 @@ int
 d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root,
 	  struct d_tm_node_t *node, int d_tm_type)
 {
-	struct d_tm_nodeList_t	*nodelist = NULL;
-	int			rc = D_TM_SUCCESS;
+	int	rc = D_TM_SUCCESS;
 
 	if ((head == NULL) || (node == NULL)) {
 		rc = -DER_INVAL;
 		goto failure;
 	}
 
-	nodelist = *head;
 	if (d_tm_type & node->dtn_type) {
-		nodelist = d_tm_add_node(node, *head);
-		if (nodelist == NULL) {
+		d_tm_add_node(node, head);
+		if (*head == NULL) {
 			rc = -DER_NOMEM;
 			goto failure;
 		}
-		if (*head == NULL)
-			*head = nodelist;
 	}
 
 	node = node->dtn_child;
@@ -2034,11 +2030,9 @@ d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root,
 		goto failure;
 	}
 
-	rc = d_tm_list(&nodelist, shmem_root, node, d_tm_type);
+	rc = d_tm_list(head, shmem_root, node, d_tm_type);
 	if (rc != D_TM_SUCCESS)
 		goto failure;
-	if (*head == NULL)
-		*head = nodelist;
 
 	node = node->dtn_sibling;
 	if (node == NULL)
@@ -2046,11 +2040,9 @@ d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root,
 
 	node = d_tm_conv_ptr(shmem_root, node);
 	while (node != NULL) {
-		rc = d_tm_list(&nodelist, shmem_root, node, d_tm_type);
+		rc = d_tm_list(head, shmem_root, node, d_tm_type);
 		if (rc != D_TM_SUCCESS)
 			goto failure;
-		if (*head == NULL)
-			*head = nodelist;
 		node = node->dtn_sibling;
 		node = d_tm_conv_ptr(shmem_root, node);
 	}
@@ -2082,30 +2074,33 @@ d_tm_list_free(struct d_tm_nodeList_t *nodeList)
 /**
  * Adds a node to an existing nodeList, or creates it if the list is empty.
  *
- * \param[in]	src		The src node to add
- * \param[in]	nodelist	The nodelist to add \a src to
+ * \param[in]		src		The src node to add
+ * \param[in,out]	nodelist	The nodelist to add \a src to
  *
- * \return			Pointer to the new entry that was added.
- *				Subsequent calls can pass this back here
- *				as \a nodelist so that the new node can be added
- *				without traversing the list
+ * \return		D_TM_SUCCESS	Success
+ *			-DER_NOMEM	Out of global heap
+ *			-DER_INVAL	Invalid pointer for \a head or
+ *					\a node
  */
-struct d_tm_nodeList_t *
-d_tm_add_node(struct d_tm_node_t *src, struct d_tm_nodeList_t *nodelist)
+int
+d_tm_add_node(struct d_tm_node_t *src, struct d_tm_nodeList_t **nodelist)
 {
 	struct d_tm_nodeList_t	*list = NULL;
 
-	if (nodelist == NULL) {
-		D_ALLOC_PTR(nodelist);
-		if (nodelist) {
-			nodelist->dtnl_node = src;
-			nodelist->dtnl_next = NULL;
-			return nodelist;
+	if (nodelist == NULL)
+		return -DER_INVAL;
+
+	if (*nodelist == NULL) {
+		D_ALLOC_PTR(*nodelist);
+		if (*nodelist) {
+			(*nodelist)->dtnl_node = src;
+			(*nodelist)->dtnl_next = NULL;
+			return D_TM_SUCCESS;
 		}
-		return NULL;
+		return -DER_NOMEM;
 	}
 
-	list = nodelist;
+	list = *nodelist;
 
 	/** advance to the last node in the list */
 	while (list->dtnl_next)
@@ -2116,9 +2111,9 @@ d_tm_add_node(struct d_tm_node_t *src, struct d_tm_nodeList_t *nodelist)
 		list = list->dtnl_next;
 		list->dtnl_node = src;
 		list->dtnl_next = NULL;
-		return list;
+		return D_TM_SUCCESS;
 	}
-	return NULL;
+	return -DER_NOMEM;
 }
 /**
  * Server side function that allocates the shared memory segment for this rank.
