@@ -83,6 +83,13 @@ if [ -d "/mnt/daos" ]; then
             echo "$go_spdk_ctests missing, SPDK_SRC not available when built?"
         fi
         run_test src/control/run_go_tests.sh
+	# Debug - do not run with valgrind to reduce time
+        run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
+        export DAOS_IO_BYPASS=pm
+        run_test "${SL_PREFIX}/bin/vos_tests" -A 50
+        export DAOS_IO_BYPASS=pm_snap
+        run_test "${SL_PREFIX}/bin/vos_tests" -A 50
+        unset DAOS_IO_BYPASS
     else
         if [ "$RUN_TEST_VALGRIND" = "memcheck" ]; then
             [ -z "$VALGRIND_SUPP" ] &&
@@ -105,12 +112,6 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_hlc"
     run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_swim"
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
-    run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
-    export DAOS_IO_BYPASS=pm
-    run_test "${SL_PREFIX}/bin/vos_tests" -A 50
-    export DAOS_IO_BYPASS=pm_snap
-    run_test "${SL_PREFIX}/bin/vos_tests" -A 50
-    unset DAOS_IO_BYPASS
     run_test "${SL_BUILD_DIR}/src/common/tests/umem_test"
     run_test "${SL_BUILD_DIR}/src/common/tests/sched"
     run_test "${SL_BUILD_DIR}/src/common/tests/drpc_tests"
@@ -130,7 +131,7 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_listener_tests"
     run_test "${SL_BUILD_DIR}/src/mgmt/tests/srv_drpc_tests"
 
-    # Scripts launching tests
+    # Tests launched by scripts
     export USE_VALGRIND=${RUN_TEST_VALGRIND}
     export VALGRIND_SUPP=${VALGRIND_SUPP}
     unset VALGRIND_CMD
@@ -148,6 +149,10 @@ if [ -d "/mnt/daos" ]; then
     run_test src/vos/tests/evt_ctl.sh pmem
     unset USE_VALGRIND
     unset VALGRIND_SUPP
+
+    # Tests that shall not run under Valgrind 
+    export USE_VALGRIND=""
+
 
     # Reporting
     if [ $failed -eq 0 ]; then
