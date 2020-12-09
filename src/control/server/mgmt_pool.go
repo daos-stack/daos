@@ -119,8 +119,8 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 // are per-ioserver so need to be larger than (minimum_target_allocation *
 // target_count).
 func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (resp *mgmtpb.PoolCreateResp, err error) {
-	if req == nil {
-		return nil, errors.New("nil request")
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
 	}
 	resp = new(mgmtpb.PoolCreateResp)
 
@@ -253,8 +253,8 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 // PoolResolveID implements a handler for resolving a user-friendly Pool ID into
 // a UUID.
 func (svc *mgmtSvc) PoolResolveID(ctx context.Context, req *mgmtpb.PoolResolveIDReq) (*mgmtpb.PoolResolveIDResp, error) {
-	if req == nil {
-		return nil, errors.New("nil request")
+	if err := svc.checkReplicaRequest(req); err != nil {
+		return nil, err
 	}
 	svc.log.Debugf("MgmtSvc.PoolResolveID dispatch, req:%+v", req)
 
@@ -285,8 +285,8 @@ func (svc *mgmtSvc) PoolResolveID(ctx context.Context, req *mgmtpb.PoolResolveID
 
 // PoolDestroy implements the method defined for the Management Service.
 func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq) (*mgmtpb.PoolDestroyResp, error) {
-	if req == nil {
-		return nil, errors.New("nil request")
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
 	}
 	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, req:%+v\n", req)
 
@@ -348,8 +348,8 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 
 // PoolEvict implements the method defined for the Management Service.
 func (svc *mgmtSvc) PoolEvict(ctx context.Context, req *mgmtpb.PoolEvictReq) (*mgmtpb.PoolEvictResp, error) {
-	if req == nil {
-		return nil, errors.New("nil request")
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
 	}
 	svc.log.Debugf("MgmtSvc.PoolEvict dispatch, req:%+v\n", req)
 
@@ -370,8 +370,8 @@ func (svc *mgmtSvc) PoolEvict(ctx context.Context, req *mgmtpb.PoolEvictReq) (*m
 
 // PoolExclude implements the method defined for the Management Service.
 func (svc *mgmtSvc) PoolExclude(ctx context.Context, req *mgmtpb.PoolExcludeReq) (*mgmtpb.PoolExcludeResp, error) {
-	if req == nil {
-		return nil, errors.New("nil request")
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
 	}
 	svc.log.Debugf("MgmtSvc.PoolExclude dispatch, req:%+v\n", req)
 
@@ -392,8 +392,8 @@ func (svc *mgmtSvc) PoolExclude(ctx context.Context, req *mgmtpb.PoolExcludeReq)
 
 // PoolDrain implements the method defined for the Management Service.
 func (svc *mgmtSvc) PoolDrain(ctx context.Context, req *mgmtpb.PoolDrainReq) (*mgmtpb.PoolDrainResp, error) {
-	if req == nil {
-		return nil, errors.New("nil request")
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
 	}
 	svc.log.Debugf("MgmtSvc.PoolDrain dispatch, req:%+v\n", req)
 
@@ -414,8 +414,8 @@ func (svc *mgmtSvc) PoolDrain(ctx context.Context, req *mgmtpb.PoolDrainReq) (*m
 
 // PoolExtend implements the method defined for the Management Service.
 func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (*mgmtpb.PoolExtendResp, error) {
-	if req == nil {
-		return nil, errors.New("nil request")
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
 	}
 	svc.log.Debugf("MgmtSvc.PoolExtend dispatch, req:%+v\n", req)
 
@@ -436,8 +436,8 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 
 // PoolReintegrate implements the method defined for the Management Service.
 func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReintegrateReq) (*mgmtpb.PoolReintegrateResp, error) {
-	if req == nil {
-		return nil, errors.New("nil request")
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
 	}
 	svc.log.Debugf("MgmtSvc.PoolReintegrate dispatch, req:%+v\n", req)
 
@@ -458,8 +458,8 @@ func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReinteg
 
 // PoolQuery forwards a pool query request to the I/O server.
 func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*mgmtpb.PoolQueryResp, error) {
-	if req == nil {
-		return nil, errors.New("nil request")
+	if err := svc.checkReplicaRequest(req); err != nil {
+		return nil, err
 	}
 	svc.log.Debugf("MgmtSvc.PoolQuery dispatch, req:%+v\n", req)
 
@@ -536,11 +536,10 @@ func resolvePoolPropVal(req *mgmtpb.PoolSetPropReq) (*mgmtpb.PoolSetPropReq, err
 
 // PoolSetProp forwards a request to the I/O server to set a pool property.
 func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq) (resp *mgmtpb.PoolSetPropResp, err error) {
-	svc.log.Debugf("MgmtSvc.PoolSetProp dispatch, req:%+v", req)
-
-	if err := svc.sysdb.CheckLeader(); err != nil {
+	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
+	svc.log.Debugf("MgmtSvc.PoolSetProp dispatch, req:%+v", req)
 
 	newReq, err := resolvePoolPropVal(req)
 	if err != nil {
@@ -634,6 +633,9 @@ func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq)
 
 // PoolGetACL forwards a request to the IO server to fetch a pool's Access Control List
 func (svc *mgmtSvc) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq) (*mgmtpb.ACLResp, error) {
+	if err := svc.checkReplicaRequest(req); err != nil {
+		return nil, err
+	}
 	svc.log.Debugf("MgmtSvc.PoolGetACL dispatch, req:%+v\n", req)
 
 	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolGetACL, req)
@@ -653,6 +655,9 @@ func (svc *mgmtSvc) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq) (*mgm
 
 // PoolOverwriteACL forwards a request to the IO server to overwrite a pool's Access Control List
 func (svc *mgmtSvc) PoolOverwriteACL(ctx context.Context, req *mgmtpb.ModifyACLReq) (*mgmtpb.ACLResp, error) {
+	if err := svc.checkReplicaRequest(req); err != nil {
+		return nil, err
+	}
 	svc.log.Debugf("MgmtSvc.PoolOverwriteACL dispatch, req:%+v\n", req)
 
 	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolOverwriteACL, req)
@@ -673,6 +678,9 @@ func (svc *mgmtSvc) PoolOverwriteACL(ctx context.Context, req *mgmtpb.ModifyACLR
 // PoolUpdateACL forwards a request to the IO server to add or update entries in
 // a pool's Access Control List
 func (svc *mgmtSvc) PoolUpdateACL(ctx context.Context, req *mgmtpb.ModifyACLReq) (*mgmtpb.ACLResp, error) {
+	if err := svc.checkReplicaRequest(req); err != nil {
+		return nil, err
+	}
 	svc.log.Debugf("MgmtSvc.PoolUpdateACL dispatch, req:%+v\n", req)
 
 	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolUpdateACL, req)
@@ -693,6 +701,9 @@ func (svc *mgmtSvc) PoolUpdateACL(ctx context.Context, req *mgmtpb.ModifyACLReq)
 // PoolDeleteACL forwards a request to the IO server to delete an entry from a
 // pool's Access Control List.
 func (svc *mgmtSvc) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq) (*mgmtpb.ACLResp, error) {
+	if err := svc.checkReplicaRequest(req); err != nil {
+		return nil, err
+	}
 	svc.log.Debugf("MgmtSvc.PoolDeleteACL dispatch, req:%+v\n", req)
 
 	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolDeleteACL, req)
@@ -713,6 +724,9 @@ func (svc *mgmtSvc) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq)
 // ListPools forwards a gRPC request to the DAOS IO server to fetch a list of
 // all pools in the system.
 func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*mgmtpb.ListPoolsResp, error) {
+	if err := svc.checkReplicaRequest(req); err != nil {
+		return nil, err
+	}
 	svc.log.Debugf("MgmtSvc.ListPools dispatch, req:%+v\n", req)
 
 	psList, err := svc.sysdb.PoolServiceList()
