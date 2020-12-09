@@ -8,6 +8,7 @@ hosts:
   test_clients:
     - client-D
 timeout: 1000
+job_manager_timeout: 300
 server_config:
   name: daos_server
   servers_per_host: 2
