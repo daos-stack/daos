@@ -42,7 +42,6 @@ run_test()
     VALGRIND_CMD="${VALGRIND_CMD/replace/$memcheck_log}"
     echo "valgrind cmd is: ${VALGRIND_CMD}"
 
-    exit 1
     # We use flock as a way of locking /mnt/daos so multiple runs can't hit it
     #     at the same time.
     # We use grep to filter out any potential "SUCCESS! NO TEST FAILURES"
