@@ -79,7 +79,7 @@ class OSAUtils(IorTestBase):
 
     @fail_on(CommandFailure)
     def assert_on_rebuild_failure(self):
-        """If the rebuild is not successful, 
+        """If the rebuild is not successful,
         raise assert.
         """
         rebuild_status = self.get_rebuild_status()

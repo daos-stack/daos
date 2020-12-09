@@ -51,7 +51,7 @@ class OSAOfflineDrain(OSAUtils):
         pool = {}
         pool_uuid = []
         target_list = []
-        drain_servers = (len(self.hostlist_servers) * 2 ) - 1
+        drain_servers = (len(self.hostlist_servers) * 2) - 1
 
         # Exclude target : random two targets  (target idx : 0-7)
         n = random.randint(0, 6)
