@@ -36,8 +36,7 @@ struct blob_cp_arg {
 	 * Completion could run on different xstream when NVMe
 	 * device is shared by multiple xstreams.
 	 */
-	ABT_mutex		 bca_mutex;
-	ABT_cond		 bca_done;
+	ABT_eventual		 bca_eventual;
 	unsigned int		 bca_inflights;
 	int			 bca_rc;
 };
@@ -51,28 +50,22 @@ struct blob_msg_arg {
 	bool			 bma_async;
 };
 
-static int
+static inline int
 blob_cp_arg_init(struct blob_cp_arg *ba)
 {
 	int	rc;
 
-	rc = ABT_mutex_create(&ba->bca_mutex);
+	rc = ABT_eventual_create(0, &ba->bca_eventual);
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
 
-	rc = ABT_cond_create(&ba->bca_done);
-	if (rc != ABT_SUCCESS) {
-		ABT_mutex_free(&ba->bca_mutex);
-		return dss_abterr2der(rc);
-	}
 	return 0;
 }
 
-static void
+static inline void
 blob_cp_arg_fini(struct blob_cp_arg *ba)
 {
-	ABT_cond_free(&ba->bca_done);
-	ABT_mutex_free(&ba->bca_mutex);
+	ABT_eventual_free(&ba->bca_eventual);
 }
 
 static void
@@ -104,15 +97,11 @@ blob_msg_arg_alloc()
 static void
 blob_common_cb(struct blob_cp_arg *ba, int rc)
 {
-	ABT_mutex_lock(ba->bca_mutex);
-
 	ba->bca_rc = daos_errno2der(-rc);
 
 	D_ASSERT(ba->bca_inflights == 1);
 	ba->bca_inflights--;
-	ABT_cond_broadcast(ba->bca_done);
-
-	ABT_mutex_unlock(ba->bca_mutex);
+	ABT_eventual_set(ba->bca_eventual, NULL, 0);
 }
 
 /*
@@ -144,11 +133,17 @@ blob_open_cb(void *arg, struct spdk_blob *blob, int rc)
 {
 	struct blob_msg_arg	*bma = arg;
 	struct blob_cp_arg	*ba = &bma->bma_cp_arg;
+	bool			 async = bma->bma_async;
 
 	ba->bca_blob = blob;
 	blob_common_cb(ba, rc);
 
-	if (bma->bma_async) {
+	/*
+	 * When sync open caller is on different xstream, the 'bma' could
+	 * be changed/freed after blob_common_cb(), so we have to use the
+	 * saved 'async' here.
+	 */
+	if (async) {
 		struct bio_io_context	*ioc = bma->bma_ioc;
 
 		ioc->bic_opening = 0;
@@ -163,10 +158,12 @@ blob_close_cb(void *arg, int rc)
 {
 	struct blob_msg_arg	*bma = arg;
 	struct blob_cp_arg	*ba = &bma->bma_cp_arg;
+	bool			 async = bma->bma_async;
 
 	blob_common_cb(ba, rc);
 
-	if (bma->bma_async) {
+	/* See comments in blob_open_cb() */
+	if (async) {
 		struct bio_io_context	*ioc = bma->bma_ioc;
 
 		ioc->bic_closing = 0;
@@ -193,10 +190,7 @@ blob_wait_completion(struct bio_xs_context *xs_ctxt, struct blob_cp_arg *ba)
 		D_DEBUG(DB_IO, "Self poll xs_ctxt:%p\n", xs_ctxt);
 		xs_poll_completion(xs_ctxt, &ba->bca_inflights);
 	} else {
-		ABT_mutex_lock(ba->bca_mutex);
-		if (ba->bca_inflights)
-			ABT_cond_wait(ba->bca_done, ba->bca_mutex);
-		ABT_mutex_unlock(ba->bca_mutex);
+		ABT_eventual_wait(ba->bca_eventual, NULL);
 	}
 }
 
