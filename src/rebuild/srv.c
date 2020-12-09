@@ -956,8 +956,9 @@ rebuild_try_merge_tgts(const uuid_t pool_uuid, uint32_t map_ver,
 		found->dst_map_ver = map_ver;
 	}
 
-	D_PRINT("Rebuild [queued] ("DF_UUID" ver=%u) id %u\n",
-		DP_UUID(pool_uuid), map_ver, tgts->pti_ids[0].pti_id);
+	D_PRINT("Rebuild [queued] ("DF_UUID" ver=%u) id %u op=%s\n",
+		DP_UUID(pool_uuid), map_ver, tgts->pti_ids[0].pti_id,
+		RB_OP_STR(rebuild_op));
 
 	return 1;
 }
@@ -1230,6 +1231,10 @@ rebuild_ults(void *arg)
 
 		d_list_for_each_entry_safe(task, task_tmp,
 				      &rebuild_gst.rg_queue_list, dst_list) {
+			/* If a pool is already handling a rebuild operation,
+			 * wait to start the next operation until the current
+			 * one completes
+			 */
 			if (pool_is_rebuilding(task->dst_pool_uuid))
 				continue;
 
@@ -1378,6 +1383,103 @@ rebuild_print_list_update(const char *const str, const uuid_t uuid,
 	D_PRINT("\n");
 }
 
+/* Here we want to schedule this new rebuild task by placing it on the
+ * queue. However, the ordering is important - tasks will be consumed
+ * by iterating the queue and running the first available one for each
+ * pool. So what we do here is iterate through the queue, and insert
+ * this task before the first other found task for the same pool that
+ * should run with lower priority. By doing this, the list will always
+ * be sorted
+ */
+static void
+rebuild_schedule_insert_task(struct rebuild_task *new_task)
+{
+	struct rebuild_task	*task_tmp;
+	struct rebuild_task	*iter;
+	struct rebuild_task	*insert_before = NULL;
+	struct rebuild_task	*insert_after = NULL;
+
+
+	d_list_for_each_entry_safe(iter, task_tmp,
+				   &rebuild_gst.rg_queue_list, dst_list) {
+		if (uuid_compare(iter->dst_pool_uuid,
+				 new_task->dst_pool_uuid) == 0) {
+			/* This is the same pool - but is it higher priority? */
+			if (new_task->dst_rebuild_op < iter->dst_rebuild_op) {
+				/* Yes, this is higher priority. Make note of
+				 * the task we need to insert this in front of
+				 * and stop looping
+				 */
+				insert_before = iter;
+				break;
+			}
+		}
+		insert_after = iter;
+	}
+
+	if (insert_before != NULL)
+		/* Found something lower priority that this needs to be
+		 * inserted before
+		 */
+		if (insert_after == NULL)
+			/* This new element needs to become head of the list */
+			d_list_add(&new_task->dst_list,
+				   &rebuild_gst.rg_queue_list);
+		else
+			/* This element needs to be inserted between two
+			 * existing elements
+			 */
+			__gurt_list_add(&new_task->dst_list,
+					&insert_after->dst_list,
+					&insert_before->dst_list);
+	else
+		/* Did not find a lower priority task on the list.
+		 * Just insert this new task at the end
+		 */
+		d_list_add_tail(&new_task->dst_list,
+				&rebuild_gst.rg_queue_list);
+}
+
+/**
+ * Print out all of the currently queued rebuild tasks
+ */
+static void
+rebuild_debug_print_queue()
+{
+	struct rebuild_task *task_tmp;
+	struct rebuild_task *task;
+	/* Uninitialized stack buffer to write target list into */
+	char tgts_buf[512];
+	int i;
+	/* Position in stack buffer where str data should be written next */
+	size_t tgts_pos = 0;
+
+	D_DEBUG(DB_REBUILD, "Current rebuild queue:\n");
+
+	d_list_for_each_entry_safe(task, task_tmp,
+				   &rebuild_gst.rg_queue_list, dst_list) {
+
+		for (i = 0; i < task->dst_tgts.pti_number; i++) {
+			if (tgts_pos > sizeof(tgts_buf) - 10) {
+				/* In case all the targets won't fit */
+				tgts_pos += snprintf(&tgts_buf[tgts_pos],
+						     sizeof(tgts_buf) -
+						     tgts_pos, "...");
+				break;
+			}
+			tgts_pos += snprintf(&tgts_buf[tgts_pos],
+					     sizeof(tgts_buf) - tgts_pos,
+					     "%u ",
+					     task->dst_tgts.pti_ids[i].pti_id);
+		}
+
+		D_DEBUG(DB_REBUILD, "  " DF_UUID " op=%s ver=%u tgts=%s\n",
+			DP_UUID(task->dst_pool_uuid),
+			RB_OP_STR(task->dst_rebuild_op),
+			task->dst_map_ver, tgts_buf);
+	}
+}
+
 /**
  * Add rebuild task to the rebuild list and another ULT will rebuild the
  * pool.
@@ -1409,9 +1511,14 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 	if (rc)
 		D_GOTO(free, rc);
 
+	/* Insert this new task into the queue at an appropriate location */
+	rebuild_schedule_insert_task(task);
+
+	/* Print out the current queue to the debug log */
+	rebuild_debug_print_queue();
+
 	rebuild_print_list_update("Rebuild queued",
 				  uuid, map_ver, rebuild_op, tgts);
-	d_list_add_tail(&task->dst_list, &rebuild_gst.rg_queue_list);
 
 	if (!rebuild_gst.rg_rebuild_running) {
 		rc = ABT_cond_create(&rebuild_gst.rg_stop_cond);
