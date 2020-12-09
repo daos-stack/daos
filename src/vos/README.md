@@ -448,7 +448,7 @@ following operations are supported:
 These operations provide atomic operations enabling certain use cases that
 require such.  Conditional operations are implemented using a combination of
 existence checks and read timestamps.   The read timestamps enable limited
-MVCC to prevent read/write races and provide atomicity guarantees.
+MVCC to prevent read/write races and provide serializability guarantees.
 
 <a id="821"><a>
 ### VOS Timestamp Cache
@@ -456,38 +456,38 @@ MVCC to prevent read/write races and provide atomicity guarantees.
 VOS maintains an in-memory cache of read and write timestamps in order to
 enforce MVCC semantics.  The timestamp cache itself consists of two parts:
 
-1. A global array per target for each type of entity including objects, dkeys,
-and akeys.  The index at each level is determined by the combination of the
-index of the parent entity, or 0 in the case of containers, and the hash
-of the entity in question.   If two different keys map to the same index,
-they share timestamp entries.   This will result in some false conflicts
-but does not affect correctness so long as progress can be made.  The purpose
-of this array is to store timestamps for entries that do not exist in the
-VOS tree.   Once an entry is created, it will use the mechanism described
+1. Negative entry cache. A global array per target for each type of entity
+including objects, dkeys, and akeys.  The index at each level is determined by
+the combination of the index of the parent entity, or 0 in the case of
+containers, and the hash of the entity in question.   If two different keys map
+to the same index, they share timestamp entries.   This will result in some
+false conflicts but does not affect correctness so long as progress can be made.
+The purpose of this array is to store timestamps for entries that do not exist
+in the VOS tree.   Once an entry is created, it will use the mechanism described
 in #2 below.  Note that multiple pools in the same target use this shared
 cache so it is also possible for false conflicts across pools before an
 entity exists.  These entries are initialized at startup using the global
 time of the starting server.   This ensures that any updates at an earlier
 time are forced to restart to ensure we maintain automicity since timestamp
 data is lost when a server goes down.
-2. An LRU cache per target for existing containers, objects, dkeys, and akeys.
-One LRU array is used for each level such that containers, objects, dkeys, and
-akeys only conflict with cache entries of the same type.  Some accuracy is lost
-when existing items are evicted from the cache as the values will be merged
-with the corresponding negative entry described in #1 above until such time
-as the entry is brought back into cache.   The index of the cached entry
-is stored in the VOS tree though it is only valid at runtime.  On server
-restarts, the LRU cache is initialized from the global time when the restart
-occurs and all entries are automatically invalidated.  When a new entry is
-brought into the LRU, it is initialized using the corresponding negative entry.
-The index of the LRU entry is stored in the VOS tree providing O(1) lookup
-on subsequent accesses.
+2. Postive entry cache. An LRU cache per target for existing containers,
+objects, dkeys, and akeys.  One LRU array is used for each level such that
+containers, objects, dkeys, and akeys only conflict with cache entries of the
+same type.  Some accuracy is lost when existing items are evicted from the cache
+as the values will be merged with the corresponding negative entry described in
+#1 above until such time as the entry is brought back into cache.   The index of
+the cached entry is stored in the VOS tree though it is only valid at runtime.
+On server restarts, the LRU cache is initialized from the global time when the
+restart occurs and all entries are automatically invalidated.  When a new entry
+is brought into the LRU, it is initialized using the corresponding negative
+entry.  The index of the LRU entry is stored in the VOS tree providing O(1)
+lookup on subsequent accesses.
 
 <a id="822"></a>
 ### Read Timestamps
 
 Each entry in the timestamp cache contains two read timestamps in order to
-provide atomicity guarantees for DAOS operations.  These timestamps are
+provide serializability guarantees for DAOS operations.  These timestamps are
 
 1. A low timestamp (entity.low) indicating that _all_ nodes in the subtree
 rooted at the entity have been read at entity.low
