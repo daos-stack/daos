@@ -298,7 +298,7 @@ def getuid() {
 
 String get_priority() {
     if (env.BRANCH_NAME == 'master') {
-        string p = '4'
+        string p = '2'
     } else {
         string p = ''
     }
@@ -451,7 +451,8 @@ pipeline {
     agent { label 'lightweight' }
 
     triggers {
-        cron(env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
+        cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0,12 * * *\n' : '' +
+             env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
     }
 
     environment {

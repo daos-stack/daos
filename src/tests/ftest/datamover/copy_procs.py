@@ -71,7 +71,7 @@ class CopyProcsTest(DataMoverTestBase):
             Create pool.
             Crate POSIX container1 and container2 in pool.
             Create a single 100M file in container1 using ior.
-        :avocado: tags=all,datamover,pr
+        :avocado: tags=all,datamover,daily_regression
         :avocado: tags=copy_procs
         """
         # Create pool and containers

@@ -225,7 +225,8 @@ class OSAOnlineDrain(TestWithServers):
         """Test ID: DAOS-4750
         Test Description: Validate Online drain
 
-        :avocado: tags=all,pr,hw,large,osa,osa_drain,online_drain,DAOS_5610
+        :avocado: tags=all,pr,daily_regression,hw,large,osa,osa_drain,online_drain
+        :avocado: tags=DAOS_5610
         """
         # Perform drain testing with 1 to 2 pools
         for pool_num in range(1, 3):
