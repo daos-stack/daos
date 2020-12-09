@@ -45,11 +45,11 @@ NODE=${NODELIST%%,*}
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
 # shellcheck disable=SC2029
-ssh "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$DAOS_BASE      \
-                                     HOSTNAME=$HOSTNAME        \
-                                     HOSTPWD=$PWD              \
-                                     SL_PREFIX=$SL_PREFIX      \
-                                     WITH_VALGRIND=$WITH_VALGRIND \
-                                     NLT=$NLT                  \
-                                     BULLSEYE=$BULLSEYE        \
-                                     $(cat "$mydir/test_main_node.sh")"
+ssh -tt "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$DAOS_BASE      \
+                                         HOSTNAME=$HOSTNAME        \
+                                         HOSTPWD=$PWD              \
+                                         SL_PREFIX=$SL_PREFIX      \
+                                         WITH_VALGRIND=$WITH_VALGRIND \
+                                         NLT=$NLT                  \
+                                         BULLSEYE=$BULLSEYE        \
+                                         $(cat "$mydir/test_main_node.sh")"

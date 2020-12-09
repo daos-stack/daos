@@ -377,11 +377,13 @@ pool_create_and_destroy_retry(void **state)
 	uuid_t		 uuid;
 	int		 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (arg->myrank != 0)
 		return;
 
 	print_message("setting DAOS_POOL_CREATE_FAIL_CORPC ... ");
-	rc = daos_mgmt_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
+	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
 				  DAOS_POOL_CREATE_FAIL_CORPC | DAOS_FAIL_ONCE,
 				  0, NULL);
 	assert_int_equal(rc, 0);
@@ -407,7 +409,7 @@ pool_create_and_destroy_retry(void **state)
 	 * recovery mechanism handle for this test scenario.
 
 	print_message("setting DAOS_POOL_DESTROY_FAIL_CORPC ... ");
-	rc = daos_mgmt_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
+	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
 				  DAOS_POOL_DESTROY_FAIL_CORPC | DAOS_FAIL_ONCE,
 				  0, NULL);
 	assert_int_equal(rc, 0);
@@ -440,13 +442,23 @@ setup(void **state)
 }
 
 int
-run_daos_mgmt_test(int rank, int size)
+run_daos_mgmt_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int	rc;
 
-	if (rank == 0)
-		rc = cmocka_run_group_tests_name("Management tests", tests,
-						 setup, test_teardown);
+	if (rank == 0) {
+		if (sub_tests_size == 0) {
+			rc = cmocka_run_group_tests_name(
+				"Management tests", tests, setup,
+				test_teardown);
+		} else {
+			rc = run_daos_sub_tests(
+				"Management tests", tests,
+				ARRAY_SIZE(tests),
+				sub_tests, sub_tests_size, setup,
+				test_teardown);
+		}
+	}
 
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	return rc;

@@ -57,6 +57,42 @@ vos_tls_get(void)
 #endif /* VOS_STANDALONE */
 }
 
+/** Add missing timestamp cache entries.  This should be called
+ *  when execution may have been short circuited by a non-existent
+ *  entity so we can fill in the negative timestamps before doing
+ *  timestamp updates.
+ */
+void
+vos_ts_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int akey_nr,
+		   struct vos_akey_data *ad)
+{
+	daos_key_t	*akey;
+	int		 i, rc, remaining;
+
+	if (!vos_ts_in_tx(ts_set) || dkey == NULL)
+		return;
+
+	if (ts_set->ts_etype == VOS_TS_TYPE_DKEY) {
+		/** Add the negative dkey entry */
+		rc = vos_ts_set_add(ts_set, 0 /* don't care */,
+				    dkey->iov_buf,
+				    (int)dkey->iov_len);
+		D_ASSERT(rc == 0);
+	}
+
+	remaining = (VOS_TS_TYPE_AKEY + akey_nr) - ts_set->ts_init_count;
+
+	/** Add negative akey entries */
+	for (i = akey_nr - remaining; i < akey_nr; i++) {
+		akey = ad->ad_is_iod ?
+			&ad->ad_iods[i].iod_name : &ad->ad_keys[i];
+		rc = vos_ts_set_add(ts_set, 0 /* don't care */,
+				    akey->iov_buf,
+				    (int)akey->iov_len);
+		D_ASSERT(rc == 0);
+	}
+}
+
 #ifdef VOS_STANDALONE
 int
 vos_profile_start(char *path, int avg)

@@ -48,46 +48,37 @@ struct ts_test_arg {
 static void
 run_negative_entry_test(struct ts_test_arg *ts_arg, uint32_t type)
 {
-	struct vos_ts_info	*info;
 	struct vos_ts_entry	*entry;
-	struct vos_ts_entry	*parent = NULL;
 	uint32_t		*idx_ptr;
 	uint32_t		 idx;
-	uint32_t		 saved_idx;
-	uint32_t		 parent_idx;
 	bool			 found;
 	bool			 reset;
 
-	for (parent_idx = 0; parent_idx < ts_arg->ta_counts[type - 1];
-	     parent_idx++) {
-		vos_ts_set_reset(ts_arg->ta_ts_set, type - 1, 0);
-		idx_ptr = &ts_arg->ta_records[type - 1][parent_idx];
+	if (type == 0) {
+		vos_ts_set_reset(ts_arg->ta_ts_set, type, 0);
+		entry = vos_ts_alloc(ts_arg->ta_ts_set,
+				     &ts_arg->ta_records[type][0], 0);
+		/** Entry should be alloca0ted */
+		assert_non_null(entry);
+		assert_int_equal(entry->te_info->ti_type, type);
+		return;
+	}
+
+	reset = false;
+	for (idx = 0; idx <= VOS_TS_SIZE; idx++) {
+		entry = vos_ts_get_negative(ts_arg->ta_ts_set, idx,
+					    reset);
+		reset = true;
+		assert_non_null(entry);
+	}
+
+	for (idx = 0; idx < ts_arg->ta_counts[type];
+	     idx++) {
+		idx_ptr = &ts_arg->ta_records[type][idx];
 		found = vos_ts_lookup(ts_arg->ta_ts_set, idx_ptr, false,
-				      &parent);
-		assert_true(found);
-		assert_non_null(parent);
-		info = parent->te_info;
-
-		reset = false;
-		for (idx = 0; idx <= info->ti_cache_mask; idx++) {
-			entry = vos_ts_get_negative(ts_arg->ta_ts_set, idx,
-						    reset);
-			reset = true;
-			assert_non_null(entry);
-			idx_ptr = &parent->te_miss_idx[entry->te_hash_idx];
-			ts_arg->ta_records[type][idx] = *idx_ptr;
-		}
-
-		for (idx = info->ti_cache_mask + 1;
-		     idx < (info->ti_cache_mask + 1) * 2; idx++) {
-			entry = vos_ts_get_negative(ts_arg->ta_ts_set, idx,
-						    true);
-			assert_non_null(entry);
-			idx_ptr = &parent->te_miss_idx[entry->te_hash_idx];
-			saved_idx = idx & info->ti_cache_mask;
-			assert_int_equal(ts_arg->ta_records[type][saved_idx],
-					 *idx_ptr);
-		}
+				      &entry);
+		assert_false(found);
+		assert_null(entry);
 	}
 }
 
@@ -112,10 +103,10 @@ run_positive_entry_test(struct ts_test_arg *ts_arg, uint32_t type)
 		assert_false(found);
 
 		if (type != VOS_TS_TYPE_CONT) {
-			vos_ts_set_reset(ts_arg->ta_ts_set, type - 2, 0);
+			vos_ts_set_reset(ts_arg->ta_ts_set, type - 1, 0);
 			/** ignore the entries that were evicted */
 			parent_idx = idx / children_per_parent + NUM_EXTRA + 1;
-			idx_ptr = &ts_arg->ta_records[type - 2][parent_idx];
+			idx_ptr = &ts_arg->ta_records[type - 1][parent_idx];
 			found = vos_ts_lookup(ts_arg->ta_ts_set, idx_ptr,
 					      false, &entry);
 			assert_true(found);
@@ -135,7 +126,7 @@ run_positive_entry_test(struct ts_test_arg *ts_arg, uint32_t type)
 		/** New lookup should get same entry */
 		assert_ptr_equal(same, entry);
 	}
-	assert_int_equal(ts_arg->ta_ts_set->ts_init_count, 1 + type / 2);
+	assert_int_equal(ts_arg->ta_ts_set->ts_init_count, 1 + type);
 
 	/** Lookup an entry entry */
 	found = vos_ts_lookup(ts_arg->ta_ts_set,
@@ -144,7 +135,7 @@ run_positive_entry_test(struct ts_test_arg *ts_arg, uint32_t type)
 	assert_true(found);
 	assert_non_null(entry);
 
-	assert_int_equal(ts_arg->ta_ts_set->ts_init_count, 1 + type / 2);
+	assert_int_equal(ts_arg->ta_ts_set->ts_init_count, 1 + type);
 	/** Now evict a few entries */
 	for (idx = 0; idx < NUM_EXTRA; idx++) {
 		vos_ts_set_reset(ts_arg->ta_ts_set, type, 0);
@@ -153,7 +144,7 @@ run_positive_entry_test(struct ts_test_arg *ts_arg, uint32_t type)
 		assert_non_null(entry);
 		assert_int_equal(entry->te_info->ti_type, type);
 	}
-	assert_int_equal(ts_arg->ta_ts_set->ts_init_count, 1 + type / 2);
+	assert_int_equal(ts_arg->ta_ts_set->ts_init_count, 1 + type);
 
 	/** Now check original entries, only the one used above should still be
 	 * there.   Others will have been evicted by LRU policy
@@ -213,25 +204,40 @@ ilog_test_ts_get(void **state)
 	struct vos_ts_entry	*entry;
 	struct ts_test_arg	*ts_arg = *state;
 	uint32_t		 type;
+	uint32_t		 idx;
 	bool			 found;
 
-	for (type = 0; type < VOS_TS_TYPE_COUNT; type++) {
-		if (type & 1)
-			run_negative_entry_test(ts_arg, type);
-		else
-			run_positive_entry_test(ts_arg, type);
-	}
+	for (type = 0; type < VOS_TS_TYPE_COUNT; type++)
+		run_positive_entry_test(ts_arg, type);
 
-	for (type = VOS_TS_TYPE_AKEY;; type -= 2) {
-		vos_ts_evict(&ts_arg->ta_records[type][0], type);
-		found = vos_ts_lookup(ts_arg->ta_ts_set,
-				      &ts_arg->ta_records[type][0], true,
-				      &entry);
-		assert_false(found);
+	for (type = VOS_TS_TYPE_AKEY;; type--) {
+		for (idx = 0; idx < ts_arg->ta_counts[type]; idx++) {
+			vos_ts_evict(&ts_arg->ta_records[type][idx], type);
+			found = vos_ts_lookup(ts_arg->ta_ts_set,
+					      &ts_arg->ta_records[type][idx],
+					      true, &entry);
+			assert_false(found);
+		}
 
 		if (type == VOS_TS_TYPE_CONT)
 			break;
 	}
+
+	for (type = 0; type < VOS_TS_TYPE_COUNT; type++)
+		run_negative_entry_test(ts_arg, type);
+
+	for (type = VOS_TS_TYPE_AKEY;; type--) {
+		for (idx = 0; idx < ts_arg->ta_counts[type]; idx++) {
+			found = vos_ts_lookup(ts_arg->ta_ts_set,
+					      &ts_arg->ta_records[type][idx],
+					      true, &entry);
+			assert_false(found);
+		}
+
+		if (type == VOS_TS_TYPE_CONT)
+			break;
+	}
+
 }
 
 static int

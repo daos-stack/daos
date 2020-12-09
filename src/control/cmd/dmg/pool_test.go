@@ -43,6 +43,10 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+var (
+	defaultPoolUUID = MockUUID()
+)
+
 func createACLFile(t *testing.T, path string, acl *control.AccessControlList) {
 	t.Helper()
 
@@ -580,6 +584,35 @@ func TestPoolCommands(t *testing.T) {
 				}),
 			}, " "),
 			nil,
+		},
+		{
+			"Query pool with UUID",
+			"pool query --pool 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					UUID: "12345678-1234-1234-1234-1234567890ab",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool with Label",
+			"pool query --pool test-label",
+			strings.Join([]string{
+				printRequest(t, &control.PoolResolveIDReq{
+					HumanID: "test-label",
+				}),
+				printRequest(t, &control.PoolQueryReq{
+					UUID: defaultPoolUUID,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool with empty ID",
+			"pool query --pool \"\"",
+			"",
+			fmt.Errorf("pool ID"),
 		},
 		{
 			"Nonexistent subcommand",

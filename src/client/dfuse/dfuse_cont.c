@@ -175,22 +175,15 @@ alloc_ie:
 	atomic_store_relaxed(&ie->ie_ref, 1);
 	ie->ie_dfs = dfs;
 
-	rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, NULL,
-				&ie->ie_stat.st_ino);
-	if (rc) {
-		DFUSE_TRA_ERROR(ie, "dfuse_lookup_inode() failed: (%d)", rc);
-		D_GOTO(release, rc);
-	}
-
-	dfs->dfs_root = ie->ie_stat.st_ino;
+	dfs->dfs_ino = atomic_fetch_add_relaxed(&fs_handle->dpi_ino_next, 1);
+	dfs->dfs_root = dfs->dfs_ino;
+	ie->ie_stat.st_ino = dfs->dfs_root;
 	dfs->dfs_ops = &dfuse_dfs_ops;
 
 	dfuse_reply_entry(fs_handle, ie, NULL, req);
 	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 	return;
 
-release:
-	dfs_release(ie->ie_obj);
 close:
 	daos_cont_close(dfs->dfs_coh, NULL);
 	D_FREE(ie);
