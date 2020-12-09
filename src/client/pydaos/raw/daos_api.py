@@ -222,29 +222,6 @@ class DaosPool(object):
         """Extend the pool to more targets."""
         raise NotImplementedError("Extend not implemented in C API yet.")
 
-    #def evict(self, cb_func=None):
-    #    """Evict all connections to a pool."""
-    #    func = self.context.get_function('evict-client')
-
-    #    # phasing out the pool service rank list argument
-    #    no_svcl = daos_cref.RankList(None, 0)
-
-    #    if cb_func is None:
-    #        ret = func(self.uuid, self.group, ctypes.byref(no_svcl), None)
-    #        if ret != 0:
-    #            raise DaosApiError("Pool evict returned non-zero. "
-    #                               "RC: {0}".format(ret))
-    #    else:
-    #        event = daos_cref.DaosEvent()
-    #        params = [self.uuid, self.group, ctypes.byref(no_svcl), event]
-    #        thread = threading.Thread(target=daos_cref.AsyncWorker1,
-    #                                  args=(func,
-    #                                        params,
-    #                                        self.context,
-    #                                        cb_func,
-    #                                        self))
-    #        thread.start()
-
     def tgt_reint(self, rank_list, tgt=-1, cb_func=None):
         """Reintegrate a set of storage targets to a pool that had previously
            failed.
@@ -2257,7 +2234,6 @@ class DaosContext(object):
             'destroy-snap':    self.libdaos.daos_cont_destroy_snap,
             'destroy-tx':      self.libdaos.daos_tx_abort,
             'disconnect-pool': self.libdaos.daos_pool_disconnect,
-            #'evict-client':    self.libdaos.daos_pool_evict,
             'exclude-target':  self.libdaos.daos_pool_tgt_exclude,
             'extend-pool':     self.libdaos.daos_pool_extend,
             'fetch-obj':       self.libdaos.daos_obj_fetch,

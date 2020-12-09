@@ -49,7 +49,6 @@ typedef enum {
 	/** Management APIs */
 	DAOS_OPC_SVC_RIP = 0,
 	DAOS_OPC_POOL_EXTEND,
-	/* DAOS_OPC_POOL_EVICT, */
 	DAOS_OPC_SET_PARAMS,
 	DAOS_OPC_MGMT_GET_BS_STATE,
 
@@ -211,16 +210,6 @@ typedef struct {
 	d_rank_list_t		*failed;
 } daos_pool_extend_t;
 
-/** pool evict args */
-/* typedef struct { */
-	/** UUID of the pool. */
-/*	const uuid_t		uuid; */
-	/** Process set name of the DAOS servers managing the pool. */
-/*	const char		*grp; */
-	/** list of pool service ranks. */
-/*	d_rank_list_t		*svc; */
-/*} daos_pool_evict_t; */
-
 /** pool connect args */
 typedef struct {
 	/** UUID of the pool. */
@@ -237,7 +226,7 @@ typedef struct {
 	daos_pool_info_t	*info;
 } daos_pool_connect_t;
 
-/** poo disconnect args */
+/** pool disconnect args */
 typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
