@@ -2013,11 +2013,9 @@ d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root,
 	}
 
 	if (d_tm_type & node->dtn_type) {
-		d_tm_add_node(node, head);
-		if (*head == NULL) {
-			rc = -DER_NOMEM;
+		rc = d_tm_add_node(node, head);
+		if (rc != D_TM_SUCCESS)
 			goto failure;
-		}
 	}
 
 	node = node->dtn_child;

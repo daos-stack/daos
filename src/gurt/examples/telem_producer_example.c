@@ -233,17 +233,32 @@ struct d_tm_nodeList_t *add_metrics_manually(void)
 			     "If I had a lot to say about it, I'd write that "
 			     "here.  I have D_TM_MAX_LONG_LEN characters "
 			     "to use.");
-	if (rc != D_TM_SUCCESS)
+	if (rc != D_TM_SUCCESS) {
 		printf("d_tm_add_metric failed, rc = %d\n", rc);
-	d_tm_add_node(counter1, &node_list);
+		return NULL;
+	}
+
+	rc = d_tm_add_node(counter1, &node_list);
+	if (rc != D_TM_SUCCESS) {
+		printf("d_tm_add_metric failed, rc = %d\n", rc);
+		return NULL;
+	}
 
 	snprintf(path, sizeof(path), "%s/manually added/counter 2", __FILE__);
 	rc = d_tm_add_metric(&counter2, path, D_TM_COUNTER,
 			     "Another manually added counter",
 			     "Much less metadata to report this time.");
-	if (rc != D_TM_SUCCESS)
+	if (rc != D_TM_SUCCESS) {
+		d_tm_list_free(node_list);
 		printf("d_tm_add_metric failed, rc = %d\n", rc);
+		return NULL;
+	}
+
 	d_tm_add_node(counter2, &node_list);
+	if (rc != D_TM_SUCCESS) {
+		d_tm_list_free(node_list);
+		printf("d_tm_add_metric failed, rc = %d\n", rc);
+	}
 
 	return node_list;
 }
@@ -434,6 +449,8 @@ main(int argc, char **argv)
 	 * when the metrics are created implicitly with the other functions.
 	 */
 	node_list = add_metrics_manually();
+	if (node_list == NULL)
+		goto failure;
 
 	/**
 	 * After calling add_metrics_manually, the counters have value = 0
