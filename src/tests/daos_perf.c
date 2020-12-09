@@ -1339,7 +1339,12 @@ main(int argc, char **argv)
 			ts_zero_copy = true;
 			break;
 		case 'f':
-			strncpy(ts_pmem_file, optarg, PATH_MAX - 1);
+			if (strnlen(optarg, PATH_MAX) >= (PATH_MAX - 5)) {
+				fprintf(stderr, "filename size must be < %d\n",
+					PATH_MAX - 5);
+				return -1;
+			}
+			strncpy(ts_pmem_file, optarg, PATH_MAX - 5);
 			break;
 		case 'U':
 			perf_tests_prep[UPDATE_TEST] = ts_io_prep;
@@ -1464,10 +1469,25 @@ main(int argc, char **argv)
 	}
 
 	if (ts_mode == TS_MODE_VOS) {
+		if (ts_ctx.tsc_mpi_size > 1 &&
+		    (access("/etc/daos_nvme.conf", F_OK) != -1)) {
+			fprintf(stderr,
+				"no support: multi-proc vos_perf with NVMe\n");
+			return -1;
+		}
 		ts_ctx.tsc_cred_nr = -1; /* VOS can only support sync mode */
-		if (strlen(ts_pmem_file) == 0)
-			strcpy(ts_pmem_file, "/mnt/daos/vos_perf.pmem");
+		if (strlen(ts_pmem_file) == 0) {
+			snprintf(ts_pmem_file, sizeof(ts_pmem_file),
+				 "/mnt/daos/vos_perf%d.pmem",
+				 ts_ctx.tsc_mpi_rank);
+		} else {
+			char id[16];
 
+
+			snprintf(id, sizeof(id), "%d", ts_ctx.tsc_mpi_rank);
+			strncat(ts_pmem_file, id,
+				(sizeof(ts_pmem_file) - strlen(ts_pmem_file)));
+		}
 		ts_ctx.tsc_pmem_file = ts_pmem_file;
 		if (ts_in_ult) {
 			rc = ts_abt_init();
