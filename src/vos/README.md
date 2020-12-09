@@ -470,7 +470,7 @@ entity exists.  These entries are initialized at startup using the global
 time of the starting server.   This ensures that any updates at an earlier
 time are forced to restart to ensure we maintain automicity since timestamp
 data is lost when a server goes down.
-2. Postive entry cache. An LRU cache per target for existing containers,
+2. Positive entry cache. An LRU cache per target for existing containers,
 objects, dkeys, and akeys.  One LRU array is used for each level such that
 containers, objects, dkeys, and akeys only conflict with cache entries of the
 same type.  Some accuracy is lost when existing items are evicted from the cache
