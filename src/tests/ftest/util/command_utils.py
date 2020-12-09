@@ -211,10 +211,8 @@ class ExecutableCommand(CommandWithParameters):
                 self._process.send_signal(signal_to_send)
                 if signal_list:
                     start = time.time()
-                    while time.time() - start < 5:
+                    while self._process._popen.poll() is None and time.time() - start < 5:
                         time.sleep(0.01)
-                        if self._process._popen.poll():
-                            break
                     elapsed = time.time() - start
                     self.log.info('Waited %.2f, saved %.2f', elapsed, 5 - elapsed)
 
