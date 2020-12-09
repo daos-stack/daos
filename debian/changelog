@@ -2,7 +2,7 @@ daos (1.1.2.1-1) unstable; urgency=medium
   [ Johann Lombardi ]
   * Version bump up to 1.1.2.1
 
- -- Johann Lombardi <johann.lombardi@intel.com>  Fri, 04 Dec 2020 14:30:00 +0800
+ -- Johann Lombardi <johann.lombardi@intel.com>  Wed, 09 Dec 2020 19:30:00 +0100
 
 daos (1.1.2-3) unstable; urgency=medium
   [ Li Wei ]
