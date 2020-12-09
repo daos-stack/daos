@@ -462,22 +462,24 @@ func (db *Database) GroupMap() (*GroupMap, error) {
 	return gm, nil
 }
 
-// ReplicaRanks returns the set of ranks associated with MS replicas.
-func (db *Database) ReplicaRanks() (*GroupMap, error) {
+// GroupMapWithReplicaRanks returns the latest system group map with
+// the set of ranks associated with MS replicas.
+func (db *Database) GroupMapWithReplicaRanks() (*GroupMap, []Rank, error) {
 	if err := db.CheckReplica(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	db.data.RLock()
 	defer db.data.RUnlock()
 
 	gm := newGroupMap(db.data.MapVersion)
-	for _, srv := range db.filterMembers(AvailableMemberFilter) {
-		if !db.isReplica(srv.Addr) {
-			continue
+	var replicaRanks []Rank
+	for _, srv := range db.data.Members.Ranks {
+		if srv.state&AvailableMemberFilter > 0 && db.isReplica(srv.Addr) {
+			replicaRanks = append(replicaRanks, srv.Rank)
 		}
 		gm.RankURIs[srv.Rank] = srv.FabricURI
 	}
-	return gm, nil
+	return gm, replicaRanks, nil
 }
 
 // copyMember makes a copy of the supplied Member pointer

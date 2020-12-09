@@ -148,8 +148,11 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 		return nil, errors.Errorf("unknown system name %s", pbReq.Sys)
 	}
 
+	// Ask the MS for _all_ info, regardless of pbReq.AllRanks, so that the
+	// cache can serve future "pbReq.AllRanks == true" requests.
 	resp, err := control.GetAttachInfo(ctx, mod.ctlInvoker, &control.GetAttachInfoReq{
-		System: pbReq.Sys,
+		System:   pbReq.Sys,
+		AllRanks: true,
 	})
 	if err != nil {
 		return nil, errors.Wrapf(err, "GetAttachInfo %+v", pbReq)
@@ -181,6 +184,11 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 	if err != nil {
 		return nil, err
 	}
+
+	// If pbReq.AllRanks == false, we shouldn't return the rank URIs.
+	// Implementing that may require changing the cache to either hold
+	// unmarshalled responses (more computation work for daos_agent) or
+	// two variants of marshalled responses.
 
 	mod.monitor.RegisterProcess(ctx, pid)
 

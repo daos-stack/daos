@@ -317,7 +317,7 @@ func TestControl_GetAttachInfo(t *testing.T) {
 		"success": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("", nil, &mgmtpb.GetAttachInfoResp{
-					Psrs: []*mgmtpb.GetAttachInfoResp_Psr{
+					RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 						{
 							Rank: 42,
 							Uri:  "foo://bar",

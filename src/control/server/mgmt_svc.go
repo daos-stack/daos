@@ -110,8 +110,9 @@ func (svc *mgmtSvc) checkReplicaRequest(req proto.Message) error {
 // GetAttachInfo handles a request to retrieve a map of ranks to fabric URIs, in addition
 // to client network autoconfiguration hints.
 //
-// The default use case is for libdaos clients to obtain the set of ranks associated
-// with MS replicas.
+// The default use case, where req.AllRanks is false, is for libdaos clients to obtain
+// the client network autoconfiguration hints. If req.AllRanks is true, all ranks' fabric
+// URIs are also given the client.
 func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
 	if err := svc.checkReplicaRequest(req); err != nil {
 		return nil, err
@@ -122,28 +123,27 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		return nil, errors.New("clientNetworkCfg is missing")
 	}
 
-	var groupMap *system.GroupMap
-	var err error
-	if req.GetAllRanks() {
-		groupMap, err = svc.sysdb.GroupMap()
-	} else {
-		groupMap, err = svc.sysdb.ReplicaRanks()
-	}
+	groupMap, replicaRanks, err := svc.sysdb.GroupMapWithReplicaRanks()
 	if err != nil {
 		return nil, err
 	}
 
 	resp := new(mgmtpb.GetAttachInfoResp)
-	for rank, uri := range groupMap.RankURIs {
-		resp.Psrs = append(resp.Psrs, &mgmtpb.GetAttachInfoResp_Psr{
-			Rank: rank.Uint32(),
-			Uri:  uri,
-		})
+	if req.GetAllRanks() {
+		for rank, uri := range groupMap.RankURIs {
+			resp.RankUris = append(resp.RankUris, &mgmtpb.GetAttachInfoResp_RankUri{
+				Rank: rank.Uint32(),
+				Uri:  uri,
+			})
+		}
 	}
 	resp.Provider = svc.clientNetworkCfg.Provider
 	resp.CrtCtxShareAddr = svc.clientNetworkCfg.CrtCtxShareAddr
 	resp.CrtTimeout = svc.clientNetworkCfg.CrtTimeout
 	resp.NetDevClass = svc.clientNetworkCfg.NetDevClass
+	for _, rank := range replicaRanks {
+		resp.MsRanks = append(resp.MsRanks, rank.Uint32())
+	}
 
 	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, resp:%+v\n", *resp)
 	return resp, nil
