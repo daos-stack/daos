@@ -444,6 +444,11 @@ struct dss_module {
  */
 #define DSS_TGT_SELF	(-1)
 
+/**
+ * Stack size used for ULTs with deep stack
+ */
+#define DSS_DEEP_STACK_SZ	65536
+
 /** ULT types to determine on which XS to schedule the ULT */
 enum dss_ult_type {
 	/** for dtx_resync */
