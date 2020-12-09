@@ -213,11 +213,10 @@ class ExecutableCommand(CommandWithParameters):
                     start = time.time()
                     while time.time() - start < 5:
                         time.sleep(0.01)
-                        ret = self._process._popen.poll()
-                        if ret:
+                        if self._process._popen.poll():
                             break
                     elapsed = time.time() - start
-                    print('Waited {:.2f}, saved {:.2f}'.format(elapsed, 5 - elapsed))
+                    self.log.info('Waited %.2f, saved %.2f', elapsed, 5 - elapsed)
 
             if not signal_list:
                 if state and (len(state) > 1 or state[0] not in ("D", "Z")):
