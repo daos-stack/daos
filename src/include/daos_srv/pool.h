@@ -56,6 +56,11 @@ struct ds_pool {
 	ABT_cond		sp_fetch_hdls_cond;
 	ABT_cond		sp_fetch_hdls_done_cond;
 	struct ds_iv_ns	       *sp_iv_ns;
+
+	/* structure related to EC aggregate epoch query */
+	d_list_t		sp_ec_ephs_list;
+	struct sched_request	*sp_ec_ephs_req;
+
 	uint32_t		sp_dtx_resync_version;
 	/* Special pool/container handle uuid, which are
 	 * created on the pool leader step up, and propagated

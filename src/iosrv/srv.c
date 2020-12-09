@@ -523,6 +523,8 @@ dss_srv_handler(void *arg)
 	}
 
 	if (dx->dx_main_xs) {
+		ABT_thread_attr attr;
+
 		/* Initialize NVMe context for main XS which accesses NVME */
 		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, dmi->dmi_tgt_id);
 		if (rc != 0) {
@@ -531,9 +533,23 @@ dss_srv_handler(void *arg)
 			D_GOTO(tse_fini, rc);
 		}
 
+		rc = ABT_thread_attr_create(&attr);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("Create ABT thread attr failed. %d\n", rc);
+			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
+		}
+
+		rc = ABT_thread_attr_set_stacksize(attr, DSS_DEEP_STACK_SZ);
+		if (rc != ABT_SUCCESS) {
+			ABT_thread_attr_free(&attr);
+			D_ERROR("Set ABT stack size failed. %d\n", rc);
+			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
+		}
+
 		rc = ABT_thread_create(dx->dx_pools[DSS_POOL_NVME_POLL],
-				       dss_nvme_poll_ult, NULL,
+				       dss_nvme_poll_ult, attr,
 				       ABT_THREAD_ATTR_NULL, NULL);
+		ABT_thread_attr_free(&attr);
 		if (rc != ABT_SUCCESS) {
 			D_ERROR("create NVMe poll ULT failed: %d\n", rc);
 			ABT_future_set(dx->dx_shutdown, dx);
@@ -749,7 +765,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 		D_GOTO(out_xstream, rc = dss_abterr2der(rc));
 	}
 
-	rc = ABT_thread_attr_set_stacksize(attr, 65536);
+	rc = ABT_thread_attr_set_stacksize(attr, DSS_DEEP_STACK_SZ);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("ABT_thread_attr_set_stacksize fails %d\n", rc);
 		D_GOTO(out_xstream, rc = dss_abterr2der(rc));
