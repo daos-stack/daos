@@ -60,7 +60,7 @@ class MultipleCreatesTest(TestWithServers):
         """
         Test issuing a single  pool create commands at once.
 
-        :avocado: tags=all,pool,smoke,pr,small,createone
+        :avocado: tags=all,pool,smoke,pr,daily_regression,small,createone
         """
 
         self.pool = self.create_pool()
@@ -74,7 +74,7 @@ class MultipleCreatesTest(TestWithServers):
         """
         Test issuing multiple pool create commands at once.
 
-        :avocado: tags=all,pool,smoke,pr,small,createtwo
+        :avocado: tags=all,pool,smoke,pr,daily_regression,small,createtwo
         """
 
         self.pool = [self.create_pool() for _ in range(2)]
@@ -90,7 +90,7 @@ class MultipleCreatesTest(TestWithServers):
         """
         Test issuing multiple pool create commands at once.
 
-        :avocado: tags=all,pool,pr,small,createthree
+        :avocado: tags=all,pool,pr,daily_regression,small,createthree
         """
 
         self.pool = [self.create_pool() for _ in range(3)]
