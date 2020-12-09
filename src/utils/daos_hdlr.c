@@ -1739,11 +1739,11 @@ file_open_dfs(file_dfs_t *file_dfs, char *file, int flags, ...)
 			file_dfs->fd = open(file, flags);
 		}
 		if (file_dfs->fd < 0)
-			fprintf(stderr, "daos_open failed: %d\n", file_dfs->fd);
+			fprintf(stderr, "daos_open failed on %s: %d\n", file, file_dfs->fd);
 	} else if (file_dfs->type == DAOS) {
 		rc = open_dfs(file_dfs, file, flags, mode);
 		if (rc != 0)
-			fprintf(stderr, "daos_open failed: %d\n", rc);
+			fprintf(stderr, "daos_open failed on %s: %d\n", file, rc);
 	} else {
 		rc = -1;
 		fprintf(stderr, "File type not known: %s type=%d\n",
@@ -1788,11 +1788,19 @@ file_mkdir_dfs(struct file_dfs_t *file_dfs, const char *dir, mode_t *mode)
 	int rc = 0;
 	if (file_dfs->type == POSIX) {
 		rc = mkdir(dir, *mode);
+		if (errno == EEXIST) {
+			fprintf(stdout, "mkdir %s already exists, %s\n",
+				dir, strerror(errno));
+		} else if (rc) {	
+			fprintf(stderr, "mkdir %s failed, %s\n",
+				dir, strerror(errno));
+		}
 	} else if (file_dfs->type == DAOS) {
 		rc = mkdir_dfs(file_dfs, dir, mode);
 	} else {
 		rc = -1;
-		fprintf(stderr, "File type not known: %s type=%d\n", dir, file_dfs->type);
+		fprintf(stderr, "File type not known: %s type=%d\n",
+			dir, file_dfs->type);
 	}
 	return rc;
 }
@@ -1886,9 +1894,6 @@ stat_dfs(file_dfs_t *file_dfs, const char *path, struct stat *buf)
 	char *dir_name    = NULL;
 
 	parse_filename_dfs(path, &name, &dir_name);
-	printf("stat PATH: %s\n", path);
-	printf("stat DIRNAME: %s\n", dir_name);
-	printf("stat NAME: %s\n", name);
 	assert(dir_name);
 	/* Lookup the parent directory */
 	rc = dfs_lookup(file_dfs->dfs, dir_name, O_RDWR, &parent, NULL, NULL);
@@ -2089,7 +2094,6 @@ static int
 fs_copy(file_dfs_t *src_file_dfs,
 		file_dfs_t *dst_file_dfs,
 		const char *dir_name,
-		const char *dst_dir,
 		const char *fs_dst_prefix)
 {
 	int rc = 0;
@@ -2259,7 +2263,7 @@ fs_copy(file_dfs_t *src_file_dfs,
 				}
 
 				/* Recursively call "fs_copy" with the new path. */
-				rc = fs_copy(src_file_dfs, dst_file_dfs, path, dst_dir, fs_dst_prefix);
+				rc = fs_copy(src_file_dfs, dst_file_dfs, path, fs_dst_prefix);
 
 				/* set original source perms on directories after copying */
 				rc = file_chmod_dfs(src_file_dfs, path, st.st_mode);
@@ -2446,26 +2450,24 @@ static int fs_copy_parse_uuids(char* str,
 {
 	int rc = 0;
 	/* check for DAOS pool/cont or UNS path */ 
-	pool = strtok_r(str, "/", str_ptr);
-	printf("pool or dfs path: %s\n", pool);
-	if (str != NULL)
-		rc = duns_resolve_path(str, dattr);
-	if (rc != 0 || str == NULL) {
+	rc = duns_resolve_path(str, dattr);
+	if (rc != 0) {
+		pool = strtok_r(str, "/", str_ptr);
 		if (uuid_parse(pool, *p_uuid) == 0) {
 			cont = strtok_r(NULL, "/", str_ptr);
-			printf("cont: %s\n", cont);
 			if ((rc = uuid_parse(cont, *c_uuid)) != 0) {
 				fprintf(stderr, "failed to parse cont uuid\n");
-				//D_GOTO(out, rc);
+				D_GOTO(out, rc);
 			}
 		} else {
 			fprintf(stderr, "failed to parse uuid or path\n");
-			//D_GOTO(out, rc = -1);
+			D_GOTO(out, rc = -1);
 		}	
 	} else {
 		uuid_copy(*p_uuid, (*dattr).da_puuid);
 		uuid_copy(*c_uuid, (*dattr).da_cuuid);
 	}
+out:
 	return rc;
 }
 
@@ -2488,129 +2490,56 @@ fs_copy_parse(struct cmd_args_s *ap,
 	char *src_type, *dst_type;
 	char *src, *dst;
 	char *src_pool, *src_cont;
-	char *src_dfs_path, *dst_dfs_path;
-	int is_dfs_root = 1;
 	char *dst_pool, *dst_cont;
 
 	/* parse type, posix or daos */
 	src_type = strtok_r(ap->src, ":", &src_saveptr);
 	src = strtok_r(NULL, ":", &src_saveptr);
-	printf("src: %s\n", src);
 	dst_type = strtok_r(ap->dst, ":", &dst_saveptr);
 	dst = strtok_r(NULL, ":", &dst_saveptr);
-	printf("dst: %s\n", src);
 
 	/* check for src DAOS pool/cont or UNS path */ 
 	if (strcmp(src_type, "daos") == 0) {
 		/* check if this copy is from root of DFS cont */
-		is_dfs_root = strncmp("//", src, strlen("//"));
-		printf("src is dfs root: %d\n", is_dfs_root);
-		if (is_dfs_root == 0) { 
-			*src_str = "/";
-			rc = fs_copy_parse_uuids(src, &src_saveptr,
-						 &(ap->src_p_uuid), &(ap->src_c_uuid),
-						 src_pool, src_cont, src_dattr); 
-#if 0
-			/* check for DAOS pool/cont or UNS path */ 
-			src_pool = strtok_r(src, "/", &src_saveptr);
-			printf("src pool or dfs path: %s\n", src_pool);
-			rc = duns_resolve_path(src, src_dattr);
-			if (rc != 0) {
-				if (uuid_parse(src_pool, ap->src_p_uuid) == 0) {
-					src_cont = strtok_r(NULL, "/", &src_saveptr);
-					printf("src cont: %s\n", src_cont);
-					if ((rc = uuid_parse(src_cont, ap->src_c_uuid)) != 0) {
-						fprintf(stderr, "failed to parse cont uuid\n");
-						D_GOTO(out, rc);
-					}
-				} else {
-					fprintf(stderr, "failed to parse uuid or path\n");
-					D_GOTO(out, rc = -1);
-				}	
-			} else {
-				uuid_copy(ap->src_p_uuid, (*src_dattr).da_puuid);
-				uuid_copy(ap->src_c_uuid, (*src_dattr).da_cuuid);
-			}
-#endif
-		} else {
-			/* TODO: handle relative paths into pool/cont for DFS */
-			printf("SRC IS RELATIVE DFS PATH: %s\n", src);
-			src_dfs_path = strtok_r(src, "/", &src_saveptr);
-			printf("SRC DFS PATH: %s\n", src_dfs_path);
-			char dfs_str[MAX_FILENAME];
-			strcat(dfs_str, "/");
-			strcat(dfs_str, src_dfs_path);
-			*src_str = strdup(dfs_str);
-			printf("NEW SRC STRING: %s\n", *src_str);
-			/* now parse pool/cont uuids */
-			rc = fs_copy_parse_uuids(NULL, &src_saveptr,
-						 &(ap->src_p_uuid), &(ap->src_c_uuid),
-						 src_pool, src_cont, src_dattr); 
-			//printf("SRC POOL: %s\n", src_pool);
-			//printf("SRC CONT: %s\n", src_cont);
+		*src_str = "/";
+		rc = fs_copy_parse_uuids(src, &src_saveptr,
+					 &(ap->src_p_uuid), &(ap->src_c_uuid),
+					 src_pool, src_cont, src_dattr); 
+		if (rc != 0) {
+			fprintf(stderr, "failed to parse source DAOS uuids\n");
+			D_GOTO(out, rc);
 		}
 	} else if (strcmp(src_type, "posix") == 0) {
 		*src_str = strdup(src);
 		src_file_dfs->type = POSIX;
+	} else {
+		rc = -1;
+		fprintf(stderr, "source format incorrect, please specify a type:"
+			" --src={posix | daos}:{$pool/$cont | path}\n"); 
+		D_GOTO(out, rc);
 	}
 
 	/* check for dst DAOS pool/cont or UNS path */ 
 	if (strcmp(dst_type, "daos") == 0) {
 		/* check for DAOS pool/cont or UNS path */ 
-		is_dfs_root = strncmp("//", dst, strlen("//"));
-		printf("dst is dfs root: %d\n", is_dfs_root);
-		if (is_dfs_root == 0) {
-			*dst_str = "/";
-			rc = fs_copy_parse_uuids(dst, &dst_saveptr,
-						 &(ap->dst_p_uuid), &(ap->dst_c_uuid),
-						 dst_pool, dst_cont, dst_dattr); 
-#if 0
-			dst_pool = strtok_r(dst, "/", &src_saveptr);
-			printf("dst pool: %s\n", dst_pool);
-			rc = duns_resolve_path(dst, dst_dattr);
-			if (rc != 0) {
-				dst_pool = strtok_r(dst, "//", &dst_saveptr);
-				printf("dst pool or dfs path: %s\n", dst_pool);
-				if (uuid_parse(dst_pool, ap->dst_p_uuid) == 0) {
-					dst_cont = strtok_r(NULL, "/", &src_saveptr);
-					printf("dst cont: %s\n", dst_cont);
-					if ((rc = uuid_parse(dst_cont, ap->dst_c_uuid)) != 0) {
-						fprintf(stderr, "failed to parse cont uuid\n");
-						D_GOTO(out, rc);
-					}
-				} else {
-					fprintf(stderr, "failed to parse uuid or path\n");
-					D_GOTO(out, rc = -1);
-				}	
-			} else {
-				uuid_copy(ap->dst_p_uuid, (*dst_dattr).da_puuid);
-				uuid_copy(ap->dst_c_uuid, (*dst_dattr).da_cuuid);
-			} 
-#endif 
-		} else {
-			/* TODO: handle relative paths into pool/cont for DFS */
-			printf("DST IS RELATIVE DFS PATH: %s\n", dst);
-			dst_dfs_path = strtok_r(dst, "/", &dst_saveptr);
-			printf("DST DFS PATH: %s\n", dst_dfs_path);
-			*dst_str = strdup(dst);
-			char dfs_str[MAX_FILENAME];
-			strcat(dfs_str, "/");
-			strcat(dfs_str, dst);
-			*dst_str = strdup(dfs_str);
-			printf("NEW DST STRING: %s\n", *dst_str);
-			/* now parse pool/cont uuids */
-			rc = fs_copy_parse_uuids(NULL, &dst_saveptr,
-						 &(ap->dst_p_uuid), &(ap->dst_c_uuid),
-						 dst_pool, dst_cont, dst_dattr); 
-			//printf("DST POOL: %s\n", dst_pool);
-			//printf("DST CONT: %s\n", dst_cont);
+		*dst_str = "/";
+		rc = fs_copy_parse_uuids(dst, &dst_saveptr,
+					 &(ap->dst_p_uuid), &(ap->dst_c_uuid),
+					 dst_pool, dst_cont, dst_dattr); 
+		if (rc != 0) {
+			fprintf(stderr, "failed to parse destination DAOS uuids\n");
+			D_GOTO(out, rc);
 		}
 	} else if (strcmp(dst_type, "posix") == 0) {
 		*dst_str = strdup(dst);
 		dst_file_dfs->type = POSIX;
+	} else {
+		rc = -1;
+		fprintf(stderr, "destination format incorrect, please specify a type:"
+			" --dst={posix | daos}:{$pool/$cont | path}\n"); 
+		D_GOTO(out, rc);
 	}
-
-//out:
+out:
 	return rc;
 }
 
@@ -2647,27 +2576,25 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	/* set paths based on file type for source and destination */
 	char *name = NULL, *dname = NULL;
 	if (src_file_dfs.type == POSIX && dst_file_dfs.type == DAOS) {
-		//dst_str = "/";
 		parse_filename_dfs(src_str, &name, &dname);
 		dfs_set_prefix(dst_file_dfs.dfs, dname);
 		mode_t tmp_mode_dir = S_IRWXU;
 		file_mkdir_dfs(&dst_file_dfs, src_str, &tmp_mode_dir);
 		rc = fs_copy(&src_file_dfs, &dst_file_dfs,
-				src_str, name, dname);
+				src_str, NULL);
 		if (rc != 0)
 			D_GOTO(out_disconnect, rc);
 	} else if (src_file_dfs.type == DAOS && dst_file_dfs.type == POSIX) {
-		//src_str = "/";
 		parse_filename_dfs(dst_str, &name, &dname);
+		mode_t tmp_mode_dir = S_IRWXU;
+		file_mkdir_dfs(&dst_file_dfs, dst_str, &tmp_mode_dir);
 		rc = fs_copy(&src_file_dfs, &dst_file_dfs,
-				src_str, name, dname);
+				src_str, dst_str);
 		if (rc != 0)
 			D_GOTO(out_disconnect, rc);
 	} else if (src_file_dfs.type == DAOS && dst_file_dfs.type == DAOS) {
-		//src_str = "/";
-		//dst_str = "/";
 		rc = fs_copy(&src_file_dfs, &dst_file_dfs,
-				src_str, name, dname);
+				src_str, NULL);
 		if (rc != 0)
 			D_GOTO(out_disconnect, rc);
 	/* TODO: handle POSIX->POSIX case here */
