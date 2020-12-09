@@ -46,20 +46,15 @@ swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
        enum crt_event_type type, void *arg)
 {
 		DBG_PRINT("Cart callback event: "
-							"rank = %d, "
-							"crt_event_source = %d, "
-							"crt_event_type = %d\n",
-							 rank, src, type);
+			"rank = %d, "
+			"crt_event_source = %d, "
+			"crt_event_type = %d\n",
+			 rank, src, type);
 
 		// Rank 2 has been killed, so we expect it to be CRT_EVT_DEAD
-		if (rank == 2 ) {
-			if (type == CRT_EVT_DEAD) {
-				D_ASSERTF(type == CRT_EVT_DEAD,
-									"SWIM protocol should notify CRT_EVT_DEAD for rank #2.\n");
-				exit(0);
-			} else {
-				exit(1);
-			}
+		if (rank != test_g.t_rank_to_shutdown) {
+			D_ASSERTF(type != CRT_EVT_DEAD,
+				"SWIM protocol is expected to notify CRT_EVT_DEAD for rank %d, but not other ranks.\n", test_g.t_rank_to_shutdown);
 		}
 
 		return;
