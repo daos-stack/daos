@@ -238,23 +238,13 @@ struct d_tm_nodeList_t *add_metrics_manually(void)
 		printf("d_tm_add_metric failed, rc = %d\n", rc);
 	node_list = d_tm_add_node(counter1, NULL);
 
-	if (node_list == NULL) {
-		printf("d_tm_add_node failed\n");
-		return NULL;
-	}
-
 	snprintf(path, sizeof(path), "%s/manually added/counter 2", __FILE__);
 	rc = d_tm_add_metric(&counter2, path, D_TM_COUNTER,
 			     "Another manually added counter",
 			     "Much less metadata to report this time.");
 	if (rc != D_TM_SUCCESS)
 		printf("d_tm_add_metric failed, rc = %d\n", rc);
-	node_list = d_tm_add_node(counter2, node_list);
-
-	if (node_list == NULL) {
-		printf("d_tm_add_node failed\n");
-		return NULL;
-	}
+	d_tm_add_node(counter2, node_list);
 
 	return node_list;
 }
@@ -450,7 +440,7 @@ main(int argc, char **argv)
 	 * After calling add_metrics_manually, the counters have value = 0
 	 * Each call to use_manually_added_metrics() increments the counters
 	 * by 1.  After the three calls, they should have value = 3.
-	 * This simply demonsrates how to use the node pointers that were
+	 * This simply demonstrates how to use the node pointers that were
 	 * initialized when adding the metrics manually.
 	 */
 	for (i = 0; i < 3; i++)
