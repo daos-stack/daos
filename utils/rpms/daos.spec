@@ -411,7 +411,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Wed Dec 09 2020 Li Wei <wei.g.li@intel.com> 1.1.2.1-1
+* Wed Dec 09 2020 Johann Lombardi <johann.lombardi@intel.com> 1.1.2.1-1
 - Version bump up to 1.1.2.1
 
 * Fri Dec 04 2020 Li Wei <wei.g.li@intel.com> 1.1.2-3
