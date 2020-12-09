@@ -1088,7 +1088,7 @@ static int
 obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 		  struct daos_oclass_attr *oca,
 		  struct obj_reasb_req *reasb_req, uint32_t iod_idx,
-		  bool update)
+		  bool update, int *valid_tgt_nr)
 {
 	struct obj_ec_recx_array	*ec_recx_array =
 						&reasb_req->orr_recxs[iod_idx];
@@ -1112,7 +1112,7 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 	daos_recx_t			*recx, *full_recx, tmp_recx;
 	d_iov_t				*iovs = NULL;
 	uint32_t			 i, j, k, idx, last;
-	uint32_t			 tgt_nr, empty_nr, valid_tgt_nr;
+	uint32_t			 tgt_nr, empty_nr;
 	uint32_t			 iov_idx = 0, iov_nr = sgl->sg_nr;
 	uint64_t			 iov_off = 0, recx_end, full_end;
 	uint64_t			 rec_nr, iod_size = iod->iod_size;
@@ -1245,11 +1245,11 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 		last = tgt_recx_idxs[i] + tgt_recx_nrs[i];
 	}
 	oiod->oiod_nr = idx;
-	valid_tgt_nr = 0;
+	*valid_tgt_nr = 0;
 	for (i = 0, rec_nr = 0, last = 0; i < tgt_nr; i++) {
 		if (tgt_recx_nrs[i] == 0)
 			continue;
-		valid_tgt_nr++;
+		(*valid_tgt_nr)++;
 		siod = &oiod->oiod_siods[tidx[i]];
 		siod->siod_tgt_idx = i;
 		siod->siod_idx = tgt_recx_idxs[i];
@@ -1261,8 +1261,6 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 		}
 		last = tgt_recx_idxs[i] + tgt_recx_nrs[i];
 	}
-	D_ASSERT(valid_tgt_nr >= 1);
-	reasb_req->orr_single_tgt = (valid_tgt_nr == 1);
 
 #if EC_DEBUG
 	obj_reasb_req_dump(reasb_req, sgl, oca, stripe_rec_nr, iod_idx);
@@ -1590,6 +1588,7 @@ obj_ec_req_reasb(daos_iod_t *iods, d_sg_list_t *sgls, daos_obj_id_t oid,
 {
 	bool	singv_only = true;
 	int	i, rc = 0;
+	int	valid_tgt_nr = 0;
 
 	reasb_req->orr_oid = oid;
 	reasb_req->orr_iod_nr = iod_nr;
@@ -1619,6 +1618,8 @@ obj_ec_req_reasb(daos_iod_t *iods, d_sg_list_t *sgls, daos_obj_id_t oid,
 	}
 
 	for (i = 0; i < iod_nr; i++) {
+		int tgt_nr = 0;
+
 		if (iods[i].iod_type == DAOS_IOD_SINGLE) {
 			rc = obj_ec_singv_req_reasb(oid, &iods[i], &sgls[i],
 						    oca, reasb_req, i, update);
@@ -1641,14 +1642,16 @@ obj_ec_req_reasb(daos_iod_t *iods, d_sg_list_t *sgls, daos_obj_id_t oid,
 		}
 
 		rc = obj_ec_recx_reasb(&iods[i], &sgls[i], oca, reasb_req, i,
-				       update);
+				       update, &tgt_nr);
 		if (rc) {
 			D_ERROR(DF_OID" obj_ec_recx_reasb failed %d.\n",
 				DP_OID(oid), rc);
 			goto out;
 		}
+		valid_tgt_nr = max(valid_tgt_nr, tgt_nr);
 	}
 
+	reasb_req->orr_single_tgt = valid_tgt_nr == 1;
 	reasb_req->orr_singv_only = singv_only;
 	rc = obj_ec_encode(reasb_req);
 	if (rc) {
