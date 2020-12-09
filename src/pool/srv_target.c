@@ -318,6 +318,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	struct dss_module_info	       *info = dss_get_module_info();
 	unsigned int			iv_ns_id;
 	int				rc;
+	int				rc_tmp;
 
 	if (arg == NULL) {
 		/* The caller doesn't want to create a ds_pool object. */
@@ -385,12 +386,12 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 err_iv_ns:
 	ds_iv_ns_destroy(pool->sp_iv_ns);
 err_group:
-	crt_group_secondary_destroy(pool->sp_group);
+	rc_tmp = crt_group_secondary_destroy(pool->sp_group);
+	if (rc_tmp != 0)
+		D_ERROR(DF_UUID": failed to destroy pool group: "DF_RC"\n",
+			DP_UUID(pool->sp_uuid), DP_RC(rc_tmp));
 err_done_cond:
-	rc = ABT_cond_free(&pool->sp_fetch_hdls_done_cond);
-	if (rc != 0)
-		D_ERROR(DF_UUID": failed to destroy pool group: %d\n",
-			DP_UUID(pool->sp_uuid), rc);
+	ABT_cond_free(&pool->sp_fetch_hdls_done_cond);
 err_cond:
 	ABT_cond_free(&pool->sp_fetch_hdls_cond);
 err_mutex:
