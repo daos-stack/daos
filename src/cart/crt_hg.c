@@ -828,6 +828,11 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		D_GOTO(decref, hg_ret = HG_SUCCESS);
 	}
 
+	if (rpc_priv->crp_fail_hlc) {
+		crt_hg_reply_error_send(rpc_priv, -DER_HLC_SYNC);
+		D_GOTO(decref, hg_ret = HG_SUCCESS);
+	}
+
 	if (!is_coll_req)
 		rc = crt_rpc_common_hdlr(rpc_priv);
 	else
@@ -1040,6 +1045,10 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 				}
 			}
 		}
+
+		/* HLC is checked during unpacking of the response */
+		if (rpc_priv->crp_fail_hlc)
+			rc = -DER_HLC_SYNC;
 	}
 
 	crt_cbinfo.cci_rpc = rpc_pub;

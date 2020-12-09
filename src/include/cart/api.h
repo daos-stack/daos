@@ -458,8 +458,7 @@ crt_hlc_get(void);
  *
  * \param[in] msg              remote HLC timestamp
  * \param[out] hlc_out         HLC timestamp
- * \param[out] clock_drift     Optional returned clock drift. Only
- *                             populated if -DER_HLC_SYNC is returned
+ * \param[out] offset          Returned observed clock offset.
  *
  * \return                     DER_SUCCESS on success or error
  *                             on failure
@@ -467,7 +466,7 @@ crt_hlc_get(void);
  *                             physical clock
  */
 int
-crt_hlc_get_msg(uint64_t msg, uint64_t *hlc_out, uint64_t *clock_drift);
+crt_hlc_get_msg(uint64_t msg, uint64_t *hlc_out, uint64_t *offset);
 
 /**
  * Return the second timestamp of hlc.
