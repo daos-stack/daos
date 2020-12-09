@@ -10,7 +10,7 @@
 
 Name:          daos
 Version:       1.1.2
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -54,7 +54,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: raft-devel = 0.7.0
+BuildRequires: raft-devel = 0.7.1
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -411,6 +411,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Fri Dec 04 2020 Li Wei <wei.g.li@intel.com> 1.1.2-3
+- Require raft-devel 0.7.1 that fixes recent Coverity issues
+
 * Wed Dec 02 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.2-2
 - define scons_args to be BUILD_TYPE=<release|dev>
 - the scons default is BUILD_TYPE=release
