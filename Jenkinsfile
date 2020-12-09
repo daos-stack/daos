@@ -14,6 +14,10 @@
 // I.e. for testing library changes
 @Library(value="pipeline-lib@fewer_tests") _
 
+boolean is_master_build() {
+    return env.BRANCH_NAME == 'master'
+}
+
 boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
         return true
@@ -297,7 +301,7 @@ def getuid() {
 // in faster time-to-result for PRs.
 
 String get_priority() {
-    if (env.BRANCH_NAME == 'master') {
+    if (is_master_build()) {
         string p = '4'
     } else {
         string p = ''
@@ -1251,7 +1255,7 @@ pipeline {
                 stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
-                        expression { ! skip_ftest('leap15', env.BRANCH_NAME == 'master') }
+                        expression { ! skip_ftest('leap15', !is_master_build()) }
                     }
                     agent {
                         label 'ci_vm9'

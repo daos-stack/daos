@@ -54,7 +54,7 @@ class PunchTest(TestWithServers):
         """
         The most basic test of the dkey punch function.
 
-        :avocado: tags=all,object,pr,small,dkeypunch
+        :avocado: tags=all,object,pre,small,dkeypunch
         """
 
         try:
