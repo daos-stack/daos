@@ -606,7 +606,7 @@ block other transactions. Deadlocks are, therefore, not a concern.
 
 If an entity keeps getting reads with increasing epochs, writes to this entity
 may keep being rejected due to the entity's ever-increasing read timestamps.
-Expoential backoffs with randomizations (see d_backoff_seq) have been
+Exponential backoffs with randomizations (see d_backoff_seq) have been
 introduced during daos_tx_restart calls. These are effective for dfs_move
 workloads, where readers also write.
 
