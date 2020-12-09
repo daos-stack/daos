@@ -183,9 +183,9 @@ open_retry:
 			goto open_retry;
 		}
 
-		memset(&oid, 0, sizeof(oid));
-		oid.id_shard = obj_shard->do_shard;
-		oid.id_pub   = obj->cob_md.omd_id;
+		oid.id_shard  = obj_shard->do_shard;
+		oid.id_pub    = obj->cob_md.omd_id;
+		oid.id_pad_32 = 0;
 		/* NB: obj open is a local operation, so it is ok to call
 		 * it in sync mode, at least for now.
 		 */
@@ -792,7 +792,7 @@ obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr)
 			return;
 		if (iod->iod_recxs != NULL)
 			D_FREE(iod->iod_recxs);
-		daos_sgl_fini(reasb_req->orr_sgls + i, false);
+		d_sgl_fini(reasb_req->orr_sgls + i, false);
 		obj_io_desc_fini(reasb_req->orr_oiods + i);
 		obj_ec_recxs_fini(&reasb_req->orr_recxs[i]);
 		obj_ec_seg_sorter_fini(&reasb_req->orr_sorters[i]);
@@ -1312,8 +1312,10 @@ dc_obj_fetch_md(daos_obj_id_t oid, struct daos_obj_md *md)
 	/* For predefined object classes, do nothing at here. But for those
 	 * customized classes, we need to fetch for the remote OI table.
 	 */
-	memset(md, 0, sizeof(*md));
-	md->omd_id = oid;
+	md->omd_id      = oid;
+	md->omd_ver     = 0;
+	md->omd_padding = 0;
+	md->omd_loff    = 0;
 	return 0;
 }
 
@@ -2708,7 +2710,7 @@ shard_list_task_fini(tse_task_t *task, void *arg)
 	shard_arg->la_recxs = NULL;
 	shard_arg->la_kds = NULL;
 	if (shard_arg->la_sgl != NULL && shard_arg->la_sgl != obj_arg->sgl)
-		daos_sgl_fini(shard_arg->la_sgl, false);
+		d_sgl_fini(shard_arg->la_sgl, false);
 
 	return 0;
 }
@@ -3111,8 +3113,9 @@ obj_shard_comp_cb(struct shard_auxi_args *shard_auxi,
 		    !obj_auxi->spec_group && !obj_auxi->to_leader) {
 			int new_tgt;
 
-			/* Check if there are other replicas avaible to fulfill the
-			 * request */
+			/* Check if there are other replicas available to
+			 * fulfill the request
+			 */
 			obj_auxi_add_failed_tgt(obj_auxi, shard_auxi->target);
 			new_tgt = obj_shard_find_replica(obj_auxi->obj,
 						 shard_auxi->target,
@@ -4963,9 +4966,12 @@ dc_obj_query_key(tse_task_t *api_task)
 	uuid_t			coh_uuid;
 	uuid_t			cont_uuid;
 	int			shard_first;
-	unsigned int		replicas;
+	unsigned int		replicas, step;
+	unsigned int		query_nr = 0, tgt_nr = 0;
 	unsigned int		map_ver = 0;
 	uint64_t		dkey_hash;
+	bool			is_ec_obj;
+	bool			ec_query_data_tgt = false;
 	struct dtx_epoch	epoch;
 	struct dtx_id		dti;
 	int			i = 0;
@@ -5062,30 +5068,58 @@ dc_obj_query_key(tse_task_t *api_task)
 	D_ASSERT(!obj_auxi->args_initialized);
 	D_ASSERT(d_list_empty(head));
 
-	/* In each redundancy group, the QUERY RPC only needs to be sent
-	 * to one replica: i += replicas
-	 */
-	for (i = 0; i < obj->cob_shards_nr; i += replicas) {
+	step = replicas;
+	is_ec_obj = obj_is_ec(obj);
+	for (i = 0; i < obj->cob_shards_nr; i += step) {
 		tse_task_t			*task;
 		struct shard_query_key_args	*args;
+		struct daos_oclass_attr		*oca;
 		int				 shard;
 
 		if (api_args->flags & DAOS_GET_DKEY) {
+			/* for EC obj, will query from all data shards if
+			 * obj_grp_leader_get failed (no parity available).
+			 */
+			if (ec_query_data_tgt) {
+				shard = i;
+				query_nr++;
+				D_ASSERT(query_nr <= tgt_nr);
+				if (query_nr == tgt_nr) {
+					i -= (tgt_nr - 1);
+					D_ASSERT(i >= 0 && (i % replicas == 0));
+					step = replicas;
+					ec_query_data_tgt = false;
+				}
+				goto shard_task_create;
+			}
 			/* Send to leader replica directly for reducing
 			 * retry because some potential 'prepared' DTX.
 			 */
 			shard = obj_grp_leader_get(obj, i, map_ver);
 			if (shard < 0) {
-				rc = shard;
-				D_ERROR(DF_OID" no valid shard, rc "DF_RC".\n",
-					DP_OID(obj->cob_md.omd_id),
-					DP_RC(rc));
-				D_GOTO(out_task, rc);
+				if (!is_ec_obj) {
+					rc = shard;
+					D_ERROR(DF_OID" no valid shard, rc "
+						DF_RC".\n",
+						DP_OID(obj->cob_md.omd_id),
+						DP_RC(rc));
+					D_GOTO(out_task, rc);
+				}
+				oca = obj_get_oca(obj, true);
+				D_ASSERT(oca != NULL);
+				D_ASSERT(shard_first == 0 &&
+					 (i % replicas == 0));
+				shard = i;
+				tgt_nr = obj_ec_data_tgt_nr(oca);
+				query_nr = 1;
+				step = 1;
+				ec_query_data_tgt = true;
 			}
 		} else {
 			shard = shard_first + i;
 		}
 
+shard_task_create:
 		rc = tse_task_create(shard_query_key_task, sched, NULL, &task);
 		if (rc != 0)
 			D_GOTO(out_task, rc);

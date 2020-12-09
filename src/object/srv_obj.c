@@ -446,7 +446,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		}
 	next:
 		if (sgls == NULL)
-			daos_sgl_fini(sgl, false);
+			d_sgl_fini(sgl, false);
 		if (rc)
 			break;
 	}
@@ -479,7 +479,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		bio_sgl_convert(fbsgl, &fsgl, false);
 		fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
 		*fbuffer += 0x2;
-		daos_sgl_fini(&fsgl, false);
+		d_sgl_fini(&fsgl, false);
 		ds_pool_put(pool);
 	}
 	return rc;
@@ -635,8 +635,8 @@ obj_echo_rw(crt_rpc_t *rpc, daos_iod_t *split_iods, uint64_t *split_offs)
 
 	/* Let's check if tls already have enough buffer */
 	if (p_sgl->sg_nr < iod->iod_nr) {
-		daos_sgl_fini(p_sgl, true);
-		rc = daos_sgl_init(p_sgl, iod->iod_nr);
+		d_sgl_fini(p_sgl, true);
+		rc = d_sgl_init(p_sgl, iod->iod_nr);
 		if (rc)
 			D_GOTO(out, rc);
 
@@ -1959,7 +1959,8 @@ again:
 	if (orw->orw_iod_array.oia_oiods != NULL && split_req == NULL) {
 		rc = obj_ec_rw_req_split(orw->orw_oid, &orw->orw_iod_array,
 					 orw->orw_nr, orw->orw_start_shard,
-					 NULL, 0, orw->orw_shard_tgts.ca_count,
+					 orw->orw_tgt_max, NULL, 0,
+					 orw->orw_shard_tgts.ca_count,
 					 orw->orw_shard_tgts.ca_arrays,
 					 &split_req);
 		if (rc != 0) {
@@ -2090,20 +2091,11 @@ obj_enum_complete(crt_rpc_t *rpc, int status, int map_version,
 	if (rc != 0)
 		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 
-	if (oeo->oeo_kds.ca_arrays != NULL)
-		D_FREE(oeo->oeo_kds.ca_arrays);
-
-	if (oeo->oeo_sgl.sg_iovs != NULL)
-		daos_sgl_fini(&oeo->oeo_sgl, true);
-
-	if (oeo->oeo_eprs.ca_arrays != NULL)
-		D_FREE(oeo->oeo_eprs.ca_arrays);
-
-	if (oeo->oeo_recxs.ca_arrays != NULL)
-		D_FREE(oeo->oeo_recxs.ca_arrays);
-
-	if (oeo->oeo_csum_iov.iov_buf != NULL)
-		D_FREE(oeo->oeo_csum_iov.iov_buf);
+	d_sgl_fini(&oeo->oeo_sgl, true);
+	D_FREE(oeo->oeo_kds.ca_arrays);
+	D_FREE(oeo->oeo_eprs.ca_arrays);
+	D_FREE(oeo->oeo_recxs.ca_arrays);
+	D_FREE(oeo->oeo_csum_iov.iov_buf);
 }
 
 static int
@@ -2320,7 +2312,7 @@ obj_enum_reply_bulk(crt_rpc_t *rpc)
 
 	/* Free oeo_sgl here to avoid rpc reply the data inline */
 	if (oei->oei_bulk)
-		daos_sgl_fini(&oeo->oeo_sgl, true);
+		d_sgl_fini(&oeo->oeo_sgl, true);
 
 	return rc;
 }
@@ -3047,7 +3039,7 @@ obj_verify_bio_csum(daos_obj_id_t oid, daos_iod_t *iods,
 						     &iod_csums[i], NULL, 0,
 						     NULL);
 
-		daos_sgl_fini(&sgl, false);
+		d_sgl_fini(&sgl, false);
 
 		if (rc != 0) {
 			if (iod->iod_type == DAOS_IOD_SINGLE) {
@@ -3645,7 +3637,7 @@ ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
 			continue;
 
 		rc = obj_ec_rw_req_split(dcsr->dcsr_oid, &dcu->dcu_iod_array,
-					 dcsr->dcsr_nr, dcu->dcu_start_shard,
+					 dcsr->dcsr_nr, dcu->dcu_start_shard, 0,
 					 dcu->dcu_ec_tgts, dcsr->dcsr_ec_tgt_nr,
 					 tgt_cnt, tgts, &dcu->dcu_ec_split_req);
 		if (rc != 0) {

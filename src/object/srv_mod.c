@@ -105,8 +105,7 @@ obj_tls_fini(const struct dss_thread_local_storage *dtls,
 				   mpt_list)
 		migrate_pool_tls_destroy(pool_tls);
 
-	if (tls->ot_echo_sgl.sg_iovs != NULL)
-		daos_sgl_fini(&tls->ot_echo_sgl, true);
+	d_sgl_fini(&tls->ot_echo_sgl, true);
 
 	D_FREE(tls);
 }

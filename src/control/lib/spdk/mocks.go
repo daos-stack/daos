@@ -39,7 +39,7 @@ type MockEnvImpl struct {
 }
 
 // InitSPDKEnv initializes the SPDK environment.
-func (e *MockEnvImpl) InitSPDKEnv(log logging.Logger, opts EnvOptions) error {
+func (e *MockEnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 	if e.Cfg.InitErr == nil {
 		log.Debugf("mock spdk init go opts: %+v", opts)
 	}
@@ -47,7 +47,7 @@ func (e *MockEnvImpl) InitSPDKEnv(log logging.Logger, opts EnvOptions) error {
 }
 
 // FiniSPDKEnv finalizes the SPDK environment.
-func (e *MockEnvImpl) FiniSPDKEnv(log logging.Logger, opts EnvOptions) {
+func (e *MockEnvImpl) FiniSPDKEnv(log logging.Logger, opts *EnvOptions) {
 }
 
 // MockNvmeCfg controls the behavior of the MockNvmeImpl.

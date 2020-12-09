@@ -264,6 +264,8 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 					srv.ready.SetFalse()
 				}
 
+				t.Logf("VMD disabled: %v", cs.bdev.IsVMDDisabled())
+
 				// runs discovery for nvme & scm
 				err := cs.Setup()
 				common.CmpErr(t, tc.expSetupErr, err)
@@ -832,6 +834,8 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				newSrv.setDrpcClient(newMockDrpcClient(cfg))
 				newSrv._superblock.Rank = system.NewRankPtr(uint32(i + 1))
 			}
+
+			t.Logf("VMD disabled: %v", cs.bdev.IsVMDDisabled())
 
 			// runs discovery for nvme & scm
 			if err := cs.Setup(); err != nil {
@@ -1486,6 +1490,8 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 
 			instances := cs.harness.Instances()
 			common.AssertEqual(t, len(tc.sMounts), len(instances), name)
+
+			t.Logf("VMD disabled: %v", cs.bdev.IsVMDDisabled())
 
 			// runs discovery for nvme & scm
 			if err := cs.Setup(); err != nil {

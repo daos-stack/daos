@@ -115,13 +115,17 @@ int d_fault_inject_fini(void);
 
 /**
  * Start injecting faults.
+ *
+ * \return                   DER_SUCCESS on success, -DER_NOSYS if not supported
  */
-void d_fault_inject_enable(void);
+int d_fault_inject_enable(void);
 
 /**
  * Stop injecting faults.
+ *
+ * \return                   DER_SUCCESS on success, -DER_NOSYS if not supported
  */
-void d_fault_inject_disable(void);
+int d_fault_inject_disable(void);
 
 bool d_fault_inject_is_enabled(void);
 

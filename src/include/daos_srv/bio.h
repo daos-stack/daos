@@ -232,26 +232,33 @@ uint16_t bio_iov2media(const struct bio_iov *biov)
 static inline int
 bio_sgl_init(struct bio_sglist *sgl, unsigned int nr)
 {
-	memset(sgl, 0, sizeof(*sgl));
-
+	sgl->bs_nr_out = 0;
 	sgl->bs_nr = nr;
+
+	if (nr == 0) {
+		sgl->bs_iovs = NULL;
+		return 0;
+	}
+
 	D_ALLOC_ARRAY(sgl->bs_iovs, nr);
+
 	return sgl->bs_iovs == NULL ? -DER_NOMEM : 0;
 }
 
 static inline void
 bio_sgl_fini(struct bio_sglist *sgl)
 {
-	if (sgl->bs_iovs == NULL)
+	if (sgl == NULL || sgl->bs_iovs == NULL)
 		return;
 
 	D_FREE(sgl->bs_iovs);
-	memset(sgl, 0, sizeof(*sgl));
+	sgl->bs_nr_out = 0;
+	sgl->bs_nr = 0;
 }
 
 /*
  * Convert bio_sglist into d_sg_list_t, caller is responsible to
- * call daos_sgl_fini(sgl, false) to free iovs.
+ * call d_sgl_fini(sgl, false) to free iovs.
  */
 static inline int
 bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl, bool deduped_skip)
@@ -261,7 +268,7 @@ bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl, bool deduped_skip)
 	D_ASSERT(sgl != NULL);
 	D_ASSERT(bsgl != NULL);
 
-	rc = daos_sgl_init(sgl, bsgl->bs_nr_out);
+	rc = d_sgl_init(sgl, bsgl->bs_nr_out);
 	if (rc != 0)
 		return rc;
 
@@ -686,4 +693,20 @@ bool bio_need_nvme_poll(struct bio_xs_context *xs);
  */
 int bio_replace_dev(struct bio_xs_context *xs, uuid_t old_dev_id,
 		    uuid_t new_dev_id);
+
+/*
+ * Set the LED on a VMD device to new state.
+ *
+ * \param xs            [IN]    xstream context
+ * \param devid		[IN]	UUID of the VMD device
+ * \param led_state	[IN]	State to set the LED to
+ *				(ie identify, off, fault/on)
+ * \param reset		[IN]	Reset flag indicates that the led_state
+ * 				will be determined by the saved state in
+ * 				bio_bdev (bb_led_state)
+ *
+ * \return                      Zero on success, negative value on error
+ */
+int bio_set_led_state(struct bio_xs_context *xs, uuid_t devid,
+		      const char *led_state, bool reset);
 #endif /* __BIO_API_H__ */
