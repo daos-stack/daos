@@ -24,7 +24,8 @@
 from __future__ import print_function
 
 from apricot import TestWithServers
-from pydaos.raw import DaosApiError, c_uuid_to_str
+from pydaos.raw import c_uuid_to_str
+from command_utils_base import CommandFailure
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 import ctypes
@@ -86,13 +87,16 @@ class EvictTests(TestWithServers):
             "Pool UUID: %s\n Pool handle: %s\n Server group: %s\n",
             self.pool.uuid, self.pool.pool.handle.value, self.pool.name)
 
-        if test_param == "BAD_SERVER_NAME":
-            # Attempt to evict pool with invalid server group name
-            # set the server group name directly
-            self.pool.pool.group = ctypes.create_string_buffer(test_param)
-            self.log.info(
-                "Evicting pool with invalid Server Group Name: %s", test_param)
-        elif test_param == "invalid_uuid":
+        # Commented out due to DAOS-5545
+        #if test_param == "BAD_SERVER_NAME":
+        #    # Attempt to evict pool with invalid server group name
+        #    # set the server group name directly
+        #    self.pool.pool.group = ctypes.create_string_buffer(test_param)
+        #    self.log.info(
+        #        "Evicting pool with invalid Server Group Name: %s", test_param)
+        #elif test_param == "invalid_uuid":
+        # Remove following line once the previous is uncommented.
+        if test_param == "invalid_uuid":
             # Attempt to evict pool with invalid UUID
             bogus_uuid = self.pool.uuid
             # in case uuid4() generates pool.uuid
@@ -109,11 +113,14 @@ class EvictTests(TestWithServers):
             # call daos evict api directly
             self.pool.dmg.pool_evict(pool=self.pool.pool.get_uuid_str())
         # exception is expected
-        except DaosApiError as result:
-            if test_param == "BAD_SERVER_NAME":
-                err = "-1003"
-            else:
-                err = "-1005"
+        except CommandFailure as result:
+            # Commented out due to DAOS-5545
+            #if test_param == "BAD_SERVER_NAME":
+            #    err = "-1003"
+            #else:
+            #    err = "-1005"
+            # Remove following line once the previous is uncommented.
+            err = "-1005"
             status = err in str(result)
             if status:
                 self.log.info(
@@ -125,12 +132,15 @@ class EvictTests(TestWithServers):
                     test_param, str(result))
             # Restore the valid server group name or uuid and verify that
             # pool still exists and the handle is still valid.
-            if "BAD_SERVER_NAME" in test_param:
-                self.pool.pool.group = ctypes.create_string_buffer(
-                    self.server_group)
-            else:
-                self.pool.pool.set_uuid_str(self.pool.uuid)
+            # Commented out due to DAOS-5545
+            #if "BAD_SERVER_NAME" in test_param:
+            #    self.pool.pool.group = ctypes.create_string_buffer(
+            #        self.server_group)
+            #else:
+            #    self.pool.pool.set_uuid_str(self.pool.uuid)
 
+            # Remove following line once the previous is uncommented.
+            self.pool.pool.set_uuid_str(self.pool.uuid)
             self.log.info("Check if pool handle still exist")
             if int(self.pool.pool.handle.value) == 0:
                 self.log.error(
@@ -146,11 +156,14 @@ class EvictTests(TestWithServers):
             " - evict from pool with %s", test_param)
 
         # restore the valid group name and UUID,
-        if "BAD_SERVER_NAME" in test_param:
-            self.pool.pool.group = ctypes.create_string_buffer(
-                self.server_group)
-        else:
-            self.pool.pool.set_uuid_str(self.pool.uuid)
+        # Commented out due to DAOS-5545
+        #if "BAD_SERVER_NAME" in test_param:
+        #    self.pool.pool.group = ctypes.create_string_buffer(
+        #        self.server_group)
+        #else:
+        #    self.pool.pool.set_uuid_str(self.pool.uuid)
+        # Remove following line once the previous is uncommented.
+        self.pool.pool.set_uuid_str(self.pool.uuid)
         # check if pool handle still exists
         if int(self.pool.pool.handle.value) == 0:
             self.log.error(
@@ -211,7 +224,7 @@ class EvictTests(TestWithServers):
                 pool[-1].uuid)
             # Evict the last pool in the list
             pool[-1].dmg.pool_evict(pool=pool[-1].pool.get_uuid_str())
-        except DaosApiError as result:
+        except CommandFailure as result:
             self.fail(
                 "Detected exception while evicting a client {}".format(
                     str(result)))
@@ -233,7 +246,7 @@ class EvictTests(TestWithServers):
             try:
                 # Call daos api directly to avoid connecting to pool
                 pool_info = pool[count].pool.pool_query()
-            except DaosApiError as error:
+            except CommandFailure as error:
                 # expected error for evicted pool
                 if count == len(tlist) - 1 and "-1002" in str(error):
                     self.log.info(
@@ -260,15 +273,16 @@ class EvictTests(TestWithServers):
                             count+1, pool[count].uuid, c_uuid_to_str(
                                 pool_info.pi_uuid)))
 
-    def test_evict_bad_server_name(self):
-        """
-        Test evicting a pool using an invalid server group name.
+    # Commented out due to DAOS-5545
+    #def test_evict_bad_server_name(self):
+    #    """
+    #    Test evicting a pool using an invalid server group name.
 
-        :avocado: tags=all,pool,pr,full_regression,small,poolevict
-        :avocado: tags=poolevict_bad_server_name,DAOS_5610
-        """
-        test_param = self.params.get("server_name", '/run/badparams/*')
-        self.assertTrue(self.evict_badparam(test_param))
+    #    :avocado: tags=all,pool,pr,full_regression,small,poolevict
+    #    :avocado: tags=poolevict_bad_server_name,DAOS_5610
+    #    """
+    #    test_param = self.params.get("server_name", '/run/badparams/*')
+    #    self.assertTrue(self.evict_badparam(test_param))
 
     def test_evict_bad_uuid(self):
         """
