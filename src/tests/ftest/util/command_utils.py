@@ -212,8 +212,8 @@ class ExecutableCommand(CommandWithParameters):
                 if signal_list:
                     start = time.time()
                     while time.time() - start < 5:
-                        time.sleep(1)
-                        ret = self._process._popen._poll()
+                        time.sleep(0.01)
+                        ret = self._process._popen.poll()
                         if ret:
                             break
                     elapsed = time.time() - start
