@@ -213,7 +213,7 @@ class ExecutableCommand(CommandWithParameters):
                 if signal_list:
                     start = time.time()
                     try:
-                        self._process.wait(timeout=5)
+                        self._process._popen.wait(timeout=5)
                         elapsed = time.time() - start
                         print('Waited {:.2f}, saved {:.2f}'.format(elapsed,
                                                                    5 - elapsed))
