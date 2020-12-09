@@ -227,7 +227,6 @@ struct d_tm_nodeList_t *add_metrics_manually(void)
 	 * Create some metrics manually, and keep track of the pointers by
 	 * adding them to a d_tm_nodeList_t for later usage.
 	 */
-
 	snprintf(path, sizeof(path), "%s/manually added/counter 1", __FILE__);
 	rc = d_tm_add_metric(&counter1, path, D_TM_COUNTER,
 			     "A manually added counter",
