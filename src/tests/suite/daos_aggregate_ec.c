@@ -38,6 +38,7 @@
 #include <daos/event.h>
 #include "../../object/obj_ec.h"
 
+#define LAYER_COORD
 enum {
 	EC_FULL_STRIPE,
 	EC_FULL_CELL,
