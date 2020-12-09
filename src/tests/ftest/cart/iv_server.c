@@ -669,7 +669,6 @@ iv_pre_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	    crt_generic_cb_t cb_func, void *cb_arg)
 {
 	DBG_ENTRY();
-
 	/* Test break case:			      */
 	/*  Version change on server while it handles a  */
 	/*  rpc request from another server.	     */
