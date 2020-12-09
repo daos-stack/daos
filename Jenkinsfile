@@ -12,7 +12,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@fewer_tests") _
 
 boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
@@ -337,11 +337,11 @@ boolean skip_build_on_centos7_gcc() {
     return skip_stage('build-centos7-gcc')
 }
 
-boolean skip_ftest(String distro) {
+boolean skip_ftest(String distro, boolean def_val = false) {
     return distro == 'ubuntu20' ||
            skip_stage('func-test') ||
            skip_stage('func-test-vm') ||
-           skip_stage('func-test-' + distro)
+           skip_stage('func-test-' + distro, def_val)
 }
 
 boolean skip_test_rpms_centos7() {
@@ -1251,7 +1251,7 @@ pipeline {
                 stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
-                        expression { ! skip_ftest('leap15') }
+                        expression { ! skip_ftest('leap15', env.BRANCH_NAME == 'master') }
                     }
                     agent {
                         label 'ci_vm9'
