@@ -2530,8 +2530,6 @@ run_pm_tests(const char *cfg)
 	if (DAOS_ON_VALGRIND)
 		buf_size = 100;
 
-	printf("DAOS_ON_VALGRIND: %d, buf_size=%d\n", DAOS_ON_VALGRIND, buf_size);
-
 	rc = cmocka_run_group_tests_name(test_name, punch_model_tests_all,
 					 setup_io, teardown_io);
 

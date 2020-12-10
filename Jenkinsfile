@@ -1159,7 +1159,7 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
-                        unitTest timeout_time: 60,
+                        unitTest timeout_time: 30,
                                  ignore_failure: true,
                                  inst_repos: pr_repos(),
                                  inst_rpms: unit_packages()

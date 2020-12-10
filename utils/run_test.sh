@@ -37,10 +37,7 @@ run_test()
     echo "Running $* with log file: ${D_LOG_FILE}"
 
     memcheck_log="${b}-${log_num}"
-    echo "memcheck log is: ${memcheck_log}"
-    echo "valgrind cmd is: ${VALGRIND_CMD}"
     VALGRIND_CMD_SPECIFIC="${VALGRIND_CMD/replace/$memcheck_log}"
-    echo "valgrind cmd is: ${VALGRIND_CMD_SPECIFIC}"
 
     # We use flock as a way of locking /mnt/daos so multiple runs can't hit it
     #     at the same time.
@@ -149,10 +146,6 @@ if [ -d "/mnt/daos" ]; then
     run_test src/vos/tests/evt_ctl.sh pmem
     unset USE_VALGRIND
     unset VALGRIND_SUPP
-
-    # Tests that shall not run under Valgrind 
-    export USE_VALGRIND=""
-
 
     # Reporting
     if [ $failed -eq 0 ]; then

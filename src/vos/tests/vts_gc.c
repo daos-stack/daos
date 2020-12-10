@@ -48,8 +48,8 @@ struct gc_test_args {
 
 static struct gc_test_args	gc_args;
 
-static const int cont_nr	= 4; //2
-static const int obj_per_cont	= 64; //8
+static const int cont_nr	= 4;
+static const int obj_per_cont	= 64;
 static const int dkey_per_obj	= 64;
 static const int akey_per_dkey	= 16;
 static const int recx_size	= 4096;
