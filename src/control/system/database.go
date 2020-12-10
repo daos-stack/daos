@@ -189,9 +189,10 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) (*Database, error) {
 			log: log,
 
 			Members: &MemberDatabase{
-				Ranks: make(MemberRankMap),
-				Uuids: make(MemberUuidMap),
-				Addrs: make(MemberAddrMap),
+				Ranks:        make(MemberRankMap),
+				Uuids:        make(MemberUuidMap),
+				Addrs:        make(MemberAddrMap),
+				FaultDomains: NewFaultDomainTree(),
 			},
 			Pools: &PoolDatabase{
 				Ranks:  make(PoolRankMap),

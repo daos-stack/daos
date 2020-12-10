@@ -284,8 +284,8 @@ def launch_exclude_reintegrate(self, pool, name):
     """
     status = False
     params = {}
+    rank = None
     if name == "EXCLUDE":
-
         exclude_servers = len(self.hostlist_servers) - 1
         # Exclude target : random two targets  (target idx : 0-7)
         n = random.randint(0, 6)
@@ -315,6 +315,63 @@ def launch_exclude_reintegrate(self, pool, name):
     params = {"name": name,
               "status": status,
               "vars": {"rank": rank, "tgt_idx": tgt_idx}}
+    if not status:
+        self.log.error("<<< %s failed - check logs for failure data>>>", name)
+    self.dmg_command.system_query()
+    with H_LOCK:
+        self.harasser_job_done(params)
+    self.log.info(
+        "<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
+
+
+def launch_server_stop_start(self, pools, name):
+    """Launch dmg server stop/start.
+
+    Args:
+        pool (list): list of TestPool obj
+        name (str): name of dmg subcommand
+    """
+    status = False
+    params = {}
+    rank = None
+    if name == "SVR_STOP":
+        exclude_servers = len(self.hostlist_servers) - 1
+        # Exclude one rank : other than rank 0 and 1.
+        rank = random.randint(2, exclude_servers)
+        # init the status dictionary
+        params = {"name": name,
+                  "status": status,
+                  "vars": {"rank": rank}}
+        self.log.info("<<<PASS %s: %s - stop server: rank %s at %s >>>\n",
+                      self.loop, name, rank, time.ctime())
+        status = True
+        for pool in pools:
+            drain_status = pool.drain(rank)
+            status &= drain_status
+            if not drain_status:
+                self.log.error("<<<PASS %s: %s failed due to drain pool %s >>>",
+                               self.loop, name, pool.uuid)
+        # Shutdown the server
+        if status:
+            self.dmg_command.system_stop(ranks=rank)
+
+    elif name == "SVR_REINTEGRATE":
+        if self.harasser_results["SVR_STOP"]:
+            rank = self.harasser_args["SVR_STOP"]["rank"]
+            self.log.info("<<<PASS %s: %s started on rank %s at %s>>>\n",
+                          self.loop, name, rank, time.ctime())
+            self.dmg_command.system_start(ranks=rank)
+            status = True
+            for pool in pools:
+                reintegrate_status = pool.reintegrate(rank, None)
+                status &= reintegrate_status
+        else:
+            self.log.error("<<<PASS %s: %s failed due to SVR_STOP failure >>>",
+                           self.loop, name)
+            status = False
+    params = {"name": name,
+              "status": status,
+              "vars": {"rank": rank}}
     if not status:
         self.log.error("<<< %s failed - check logs for failure data>>>", name)
     self.dmg_command.system_query()
@@ -455,7 +512,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
     commands = []
     ior_params = "/run/" + job_spec + "/*"
     mpi_module = self.params.get(
-        "mpi_module", "/run/", default="mpi/mpich-x86_64")
+        "mpi_module", "/run/*", default="mpi/mpich-x86_64")
     # IOR job specs with a list of parameters; update each value
     api_list = self.params.get("api", ior_params + "*")
     tsize_list = self.params.get("transfer_size", ior_params + "*")

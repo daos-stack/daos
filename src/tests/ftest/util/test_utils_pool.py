@@ -766,8 +766,8 @@ class TestPool(TestDaosApiBase):
 
         Only supported with the dmg control method.
         Args:
-            rank (str): daos server rank to exclude
-            tgt_idx (string): str of targets to exclude on ranks ex: "1,2"
+            rank (str): daos server rank to reintegrate
+            tgt_idx (string): str of targets to reintegrate on ranks ex: "1,2"
 
         Returns:
             bool: True if the rank was reintegrated into the pool; False if the
@@ -776,6 +776,32 @@ class TestPool(TestDaosApiBase):
         """
         status = False
         self.dmg.pool_reintegrate(self.uuid, rank, tgt_idx)
+        self.wait_for_rebuild(False)
+        # display rebuild status
+        self.set_query_data()
+        self.log.info("Pool %s query data: %s\n", self.uuid, self.query_data)
+        rebuild_status = self.query_data["rebuild"]["status"]
+        self.log.info("Pool %s rebuild status:%s\n", self.uuid, rebuild_status)
+        if rebuild_status == "done":
+            status = True
+        return status
+
+    @fail_on(CommandFailure)
+    def drain(self, rank, tgt_idx=None):
+        """Use dmg to drain the rank and targets from this pool.
+
+        Only supported with the dmg control method.
+        Args:
+            rank (str): daos server rank to drain
+            tgt_idx (string): str of targets to drain on ranks ex: "1,2"
+
+        Returns:
+            bool: True if the rank was drained from the pool; False if the
+            reintegrate failed
+
+        """
+        status = False
+        self.dmg.pool_drain(self.uuid, rank, tgt_idx)
         self.wait_for_rebuild(False)
         # display rebuild status
         self.set_query_data()
