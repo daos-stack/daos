@@ -64,6 +64,7 @@ unset OFI_INTERFACE
 # At Oct2018 Longmond F2F it was decided that per-server logs are preferred
 # But now we need to collect them!  Avoid using 'client_daos.log' due to
 # conflicts with the daos_test log renaming.
+# shellcheck disable=SC2153
 export D_LOG_FILE="$TEST_TAG_DIR/daos.log"
 
 mkdir -p ~/.config/avocado/
@@ -101,10 +102,11 @@ for loc in /usr/lib/python2*/site-packages/ \
         exit 1
     fi
 done
+PATCH_DIR="$PREFIX"/lib/daos/TESTING/ftest
 # https://github.com/avocado-framework/avocado/pull/4345
 if ! grep "self.job.result_proxy.notify_progress(False)" \
           "$pydir"/avocado/core/test.py; then
-    if ! cat < "$PREFIX"/lib/daos/TESTING/ftest/avocado-job-result_proxy-reference-fix.patch | \
+    if ! cat < "$PATCH_DIR"/avocado-job-result_proxy-reference-fix.patch | \
       sudo patch -p1 -d "$pydir"; then
         echo "Failed to apply avocado PR-4345 patch"
         exit 1
@@ -113,7 +115,7 @@ fi
 # https://github.com/avocado-framework/avocado/pull/2908 fixed in
 # https://github.com/avocado-framework/avocado/pull/3076/
 if ! grep TIMEOUT_TEARDOWN "$pydir"/avocado/core/runner.py; then
-    if ! cat < "$PREFIX"/lib/daos/TESTING/ftest/avocado-teardown-timeout.patch | \
+    if ! cat < "$PATCH_DIR"/avocado-teardown-timeout.patch | \
       sudo patch -p1 -d "$pydir"; then
         echo "Failed to apply avocado PR-3076 patch"
         exit 1
@@ -122,8 +124,9 @@ fi
 # https://github.com/avocado-framework/avocado/pull/3154
 if ! grep "def phase(self)" \
     "$pydir"/avocado/core/test.py; then
-    if ! filterdiff -p1 -x selftests/* < "$PREFIX"/lib/daos/TESTING/ftest/avocado-report-test-phases.patch | \
-      sed -e '/selftests\/.*/d' |                                                            \
+    if ! filterdiff -p1 -x selftests/* <                \
+        "$PATCH_DIR"/avocado-report-test-phases.patch | \
+      sed -e '/selftests\/.*/d' |                       \
       sudo patch -p1 -d "$pydir"; then
         echo "Failed to apply avocado PR-3154 patch"
         exit 1
@@ -177,6 +180,7 @@ else
     process_cores=""
 fi
 # now run it!
+# shellcheck disable=SC2086
 if ! ./launch.py -cris"${process_cores}"a -th "${LOGS_THRESHOLD}" \
                  -ts "${TEST_NODES}" ${NVME_ARG} "${TEST_TAG_ARR[*]}"; then
     rc=${PIPESTATUS[0]}

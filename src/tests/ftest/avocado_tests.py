@@ -34,7 +34,7 @@ class ApricotTests(Test):
 
     :avocado: recursive
     """
-    
+
     def __init__(self, *args, **kwargs):
         """Initialize a Test object."""
         super(ApricotTests, self).__init__(*args, **kwargs)
@@ -70,7 +70,8 @@ class ApricotTests(Test):
     def test_teardown_timeout_timed_out(self):
         """Test the PoC tearDown() timeout patch
 
-        :avocado: tags=avocado_tests,avocado_test_teardown_timeout,avocado_test_teardown_timeout_timed_out
+        :avocado: tags=avocado_tests,avocado_test_teardown_timeout
+        :avocado: tags=avocado_test_teardown_timeout_timed_out
         """
         time.sleep(10)
 

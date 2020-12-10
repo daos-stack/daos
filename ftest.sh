@@ -64,14 +64,16 @@ fi
 # Log size threshold
 LOGS_THRESHOLD="1G"
 
+SCRIPT_LOC="$PREFIX"/lib/daos/TESTING/ftest/scripts
+
 # For nodes that are only rebooted between CI nodes left over mounts
 # need to be cleaned up.
 pre_clean () {
     i=5
     while [ $i -gt 0 ]; do
         if clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh \
-              -S -w "$(IFS=','; echo "${nodes[*]}")"                       \
-              "$(sed -e '1,/^$/d' "$PREFIX"/lib/daos/TESTING/ftest/scripts/pre_clean_nodes.sh)"; then
+                 -S -w "$(IFS=','; echo "${nodes[*]}")"                    \
+                 "$(sed -e '1,/^$/d' "$SCRIPT_LOC"/pre_clean_nodes.sh)"; then
             break
         fi
         ((i-=1)) || true
@@ -84,7 +86,7 @@ cleanup() {
         if clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh \
              -S -w "$(IFS=','; echo "${nodes[*]}")"                        \
              "DAOS_BASE=$DAOS_BASE
-             $(sed -e '1,/^$/d' "$PREFIX"/lib/daos/TESTING/ftest/scripts/cleanup_nodes.sh)"; then
+             $(sed -e '1,/^$/d' "$SCRIPT_LOC"/cleanup_nodes.sh)"; then
             break
         fi
         ((i-=1)) || true
@@ -116,14 +118,15 @@ CLUSH_ARGS=($CLUSH_ARGS)
 
 DAOS_BASE=${SL_PREFIX%/install}
 if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
-    -w "$(IFS=','; echo "${nodes[*]}")" "FIRST_NODE=${nodes[0]}
-                                         TEST_RPMS=$TEST_RPMS
-                                         DAOS_BASE=$DAOS_BASE
-                                         SL_PREFIX=$SL_PREFIX
-                                         TEST_TAG_DIR=$TEST_TAG_DIR
-                                         JENKINS_URL=$JENKINS_URL
-                                         NFS_SERVER=$NFS_SERVER
-                                         $(sed -e '1,/^$/d' "$PREFIX"/lib/daos/TESTING/ftest/scripts/setup_nodes.sh)"; then
+    -w "$(IFS=','; echo "${nodes[*]}")"                                 \
+    "FIRST_NODE=${nodes[0]}
+     TEST_RPMS=$TEST_RPMS
+     DAOS_BASE=$DAOS_BASE
+     SL_PREFIX=$SL_PREFIX
+     TEST_TAG_DIR=$TEST_TAG_DIR
+     JENKINS_URL=$JENKINS_URL
+     NFS_SERVER=$NFS_SERVER
+     $(sed -e '1,/^$/d' "$SCRIPT_LOC"/setup_nodes.sh)"; then
     echo "Cluster setup (i.e. provisioning) failed"
     exit 1
 fi
@@ -134,7 +137,7 @@ args+=" $*"
 
 # shellcheck disable=SC2029
 # shellcheck disable=SC2086
-if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}"             \
+if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" \
     "FIRST_NODE=${nodes[0]}
      TEST_RPMS=$TEST_RPMS
      DAOS_TEST_SHARED_DIR=${DAOS_TEST_SHARED_DIR:-$PWD/install/tmp}
@@ -146,7 +149,7 @@ if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}"             \
      TEST_NODES=$TEST_NODES
      NVME_ARG=\"$NVME_ARG\"
      LOGS_THRESHOLD=$LOGS_THRESHOLD
-     $(sed -e '1,/^$/d' "$PREFIX"/lib/daos/TESTING/ftest/scripts/main.sh)"; then
+     $(sed -e '1,/^$/d' "$SCRIPT_LOC"/main.sh)"; then
     rc=${PIPESTATUS[0]}
     if ${SETUP_ONLY:-false}; then
         exit "$rc"

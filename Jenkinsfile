@@ -510,7 +510,18 @@ pipeline {
                     steps {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
-                                   ignored_files: "src/control/vendor/*:src/include/daos/*.pb-c.h:src/common/*.pb-c.[ch]:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]:src/security/*.pb-c.[ch]:*.crt:*.pem:*_test.go:src/cart/_structures_from_macros_.h"
+                                   ignored_files: "src/control/vendor/*:" +
+                                                  "src/include/daos/*.pb-c.h:" +
+                                                  "src/common/*.pb-c.[ch]:" +
+                                                  "src/mgmt/*.pb-c.[ch]:" +
+                                                  "src/iosrv/*.pb-c.[ch]:" +
+                                                  "src/security/*.pb-c.[ch]:" +
+                                                  "*.crt:" +
+                                                  "*.pem:" +
+                                                  "*_test.go:" +
+                                                  "src/cart/_structures_from_macros_.h:" +
+                                                  "src/tests/ftest/*.patch:" +
+                                                  "src/tests/ftest/large_stdout.txt"
                     }
                     post {
                         always {
