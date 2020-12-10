@@ -47,7 +47,7 @@ typedef enum {
 	DAOS_OPC_INVALID	= -1,
 
 	/** Management APIs */
-	DAOS_OPC_POOL_EVICT = 0,
+	DAOS_OPC_POOL_EVICT = 2,
 	DAOS_OPC_SET_PARAMS,
 	DAOS_OPC_MGMT_GET_BS_STATE,
 
