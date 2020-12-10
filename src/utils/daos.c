@@ -1328,8 +1328,9 @@ do { \
 	fprintf(stream, "\n" \
 	" copy to and from POSIX filesystem\n" \
 	" filesystem copy options (copy):\n" \
-	"	--src={daos | posix}:{pool/cont | path}" \
-	"	--dst={daos | posix}:{pool/cont | path}\n"); \
+	"	--src=<type>:<pool/cont | path>\n" \
+	"	--dst=<type>:<pool/cont | path>\n" \
+	"	\t supported types are daos, posix\n"); \
 	fprintf(stream, "\n"); \
 } while (0)
 
@@ -1393,12 +1394,9 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		} else if (strcmp(argv[3], "copy") == 0) {
 			fprintf(stream,
 			" filesystem copy options (copy):\n"
-			"	--src-pool=UUID    src pool UUID\n"
-			"	--dst-pool=UUID    dst pool UUID\n"
-			"	--src-cont=UUID    src cont UUID\n"
-			"	--dst-cont=UUID    dst cont UUID\n"
-			"	--src-path=PATH    POSIX or DFS source path\n"
-			"	--dst-path=PATH    POSIX or DFS destination path\n");
+			"--src=<type>:<pool/cont | path>\n"
+			"--dst=<type>:<pool/cont | path>\n"
+                        "supported types are daos, posix\n");
 		}
 	} else if (strcmp(argv[2], "pool") == 0) {
 		fprintf(stream, "\n"
