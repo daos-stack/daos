@@ -24,7 +24,7 @@
 from __future__ import print_function
 
 from apricot import TestWithServers
-from pydaos.raw import c_uuid_to_str
+from pydaos.raw import DaosApiError, c_uuid_to_str
 from command_utils_base import CommandFailure
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
@@ -118,9 +118,9 @@ class EvictTests(TestWithServers):
             #if test_param == "BAD_SERVER_NAME":
             #    err = "-1003"
             #else:
-            #    err = "-1005"
+            #    err = "1"
             # Remove following line once the previous is uncommented.
-            err = "-1005"
+            err = "1"
             status = err in str(result)
             if status:
                 self.log.info(
@@ -246,7 +246,7 @@ class EvictTests(TestWithServers):
             try:
                 # Call daos api directly to avoid connecting to pool
                 pool_info = pool[count].pool.pool_query()
-            except CommandFailure as error:
+            except DaosApiError as error:
                 # expected error for evicted pool
                 if count == len(tlist) - 1 and "-1002" in str(error):
                     self.log.info(
