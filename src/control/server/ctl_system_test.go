@@ -40,8 +40,6 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-const defaultAP = "192.168.1.1:10001"
-
 func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 	for name, tc := range map[string]struct {
 		members        system.Members

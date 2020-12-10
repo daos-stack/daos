@@ -434,6 +434,8 @@ enum daos_io_flags {
 	DIOF_CHECK_EXISTENCE	= 0x10,
 	/* The RPC will be sent to specified redundancy group. */
 	DIOF_TO_SPEC_GROUP	= 0x20,
+	/* For data migration. */
+	DIOF_FOR_MIGRATION	= 0x40,
 };
 
 /**
