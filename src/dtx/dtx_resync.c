@@ -459,7 +459,7 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 			ABT_mutex_unlock(cont->sc_mutex);
 			goto out;
 		}
-		D_DEBUG(DB_TRACE, "Waiting for resync of "DF_UUID"\n",
+		D_DEBUG(DB_REBUILD, "Waiting for resync of "DF_UUID"\n",
 			DP_UUID(co_uuid));
 		ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
 		resynced = true;
@@ -483,7 +483,7 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 	D_INIT_LIST_HEAD(&dra.tables.drh_list);
 	dra.tables.drh_count = 0;
 
-	D_DEBUG(DB_TRACE, "resync DTX scan "DF_UUID"/"DF_UUID" start.\n",
+	D_DEBUG(DB_REBUILD, "resync DTX scan "DF_UUID"/"DF_UUID" start.\n",
 		DP_UUID(po_uuid), DP_UUID(co_uuid));
 
 	rc = ds_cont_iter(po_hdl, co_uuid, dtx_iter_cb, &dra, VOS_ITER_DTX);
@@ -498,7 +498,7 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 	if (rc >= 0)
 		rc = rc1;
 
-	D_DEBUG(DB_TRACE, "resync DTX scan "DF_UUID"/"DF_UUID" stop: rc = %d\n",
+	D_DEBUG(DB_REBUILD, "resync DTX scan "DF_UUID"/"DF_UUID" stop: %d\n",
 		DP_UUID(po_uuid), DP_UUID(co_uuid), rc);
 
 	ABT_mutex_lock(cont->sc_mutex);
@@ -566,7 +566,7 @@ dtx_resync_one(void *data)
 
 	ds_pool_child_put(child);
 out:
-	D_DEBUG(DB_TRACE, DF_UUID" iterate pool done: rc %d\n",
+	D_DEBUG(DB_REBUILD, DF_UUID" iterate pool done: rc %d\n",
 		DP_UUID(arg->pool_uuid), rc);
 
 	return rc;
@@ -582,12 +582,12 @@ dtx_resync_ult(void *data)
 	pool = ds_pool_lookup(arg->pool_uuid);
 	D_ASSERT(pool != NULL);
 	if (pool->sp_dtx_resync_version >= arg->version) {
-		D_DEBUG(DB_MD, DF_UUID" ignore dtx resync version %u/%u\n",
+		D_DEBUG(DB_REBUILD, DF_UUID" ignore dtx resync version %u/%u\n",
 			DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,
 			arg->version);
 		D_GOTO(out_put, rc);
 	}
-	D_DEBUG(DB_MD, DF_UUID" update dtx resync version %u->%u\n",
+	D_DEBUG(DB_REBUILD, DF_UUID" update dtx resync version %u->%u\n",
 		DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,
 		arg->version);
 
