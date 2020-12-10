@@ -464,7 +464,7 @@ static int issue_monitor_request(struct dc_pool *pool, int request_type)
 		D_GOTO(out, 0);
 	}
 
-	uuid_unparse(pool->dp_pool,pool_uuid);
+	uuid_unparse(pool->dp_pool, pool_uuid);
 	uuid_unparse(pool->dp_pool_hdl, pool_hdl_uuid);
 	req.pooluuid = pool_uuid;
 	req.poolhandleuuid = pool_hdl_uuid;

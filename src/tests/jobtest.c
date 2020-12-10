@@ -38,23 +38,24 @@
 
 static char *progname;
 
-void print_usage()
+void print_usage(void)
 {
-	fprintf(stderr, "Usage: %s -p pool_str [-s nsecs] [-x] \
-		[-h handles_per_pool]\n", progname);
+	fprintf(stderr, "Usage: %s -p pool_str [-s nsecs] [-x] "
+			"[-h handles_per_pool]\n", progname);
 }
 
 void cleanup_handles(uuid_t *pool_uuids, int num_pools,
-			daos_handle_t **pool_handles, int handles_per_pool)
+		      daos_handle_t **pool_handles, int handles_per_pool)
 {
 	int i, rc;
 
 	for (i = 0; i < num_pools; i++) {
 		int idx;
+
 		if (uuid_is_null(pool_uuids[i])) {
 			continue;
 		}
-		for ( idx = 0; idx < handles_per_pool; idx++ ) {
+		for (idx = 0; idx < handles_per_pool; idx++) {
 			if (daos_handle_is_inval(pool_handles[i][idx])) {
 				continue;
 			}
@@ -67,8 +68,8 @@ void cleanup_handles(uuid_t *pool_uuids, int num_pools,
 				pool = dc_hdl2pool(pool_handles[i][idx]);
 				uuid_unparse_lower(pool->dp_pool, pool_str);
 				uuid_unparse_lower(pool->dp_pool, hdl_str);
-				printf("disconnect handle %s from pool %s \
-					failed\n", hdl_str, pool_str);
+				printf("disconnect handle %s from pool %s "
+					"failed\n", hdl_str, pool_str);
 			}
 		}
 		free(pool_handles[i]);
@@ -92,7 +93,7 @@ int parse_pool_handles(char *hndl_str, uuid_t **handles)
 	idx = strchr(hndl_str, ',');
 	while (idx != NULL) {
 		hdl_count++;
-		idx = strchr(idx+1, ',');
+		idx = strchr(idx + 1, ',');
 	}
 
 	hndls = calloc(hdl_count, sizeof(uuid_t));
@@ -103,7 +104,7 @@ int parse_pool_handles(char *hndl_str, uuid_t **handles)
 
 	/* Parse the UUIDS into their structures */
 	pool_str = strtok(hndl_str, delim);
-	while(pool_str != NULL) {
+	while (pool_str != NULL) {
 		if (uuid_parse(pool_str, hndls[i]) != 0) {
 			printf("Invalid pool uuid: %s\n", pool_str);
 			rc = -1;
@@ -130,7 +131,7 @@ main(int argc, char **argv)
 	int		abnormal_exit = 0; /* whether to kill the process*/
 	int		handles_per_pool = 5; /* Number of pool connections*/
 	int		well_behaved = 0; /* Whether to disconnect at the end*/
-	char 		*pool_str = NULL;;
+	char		*pool_str = NULL;
 	uuid_t		*pool_uuids = NULL;
 	daos_handle_t	**pool_handles = NULL;
 
@@ -195,12 +196,14 @@ main(int argc, char **argv)
 	/* Make our connections */
 	for (i = 0; i < num_pools; i++) {
 		int j;
+
 		for (j = 0; j < handles_per_pool; j++) {
 			rc = daos_pool_connect(pool_uuids[i], NULL, NULL,
-						DAOS_PC_RW, &pool_handles[i][j],
-						NULL, NULL);
+					       DAOS_PC_RW, &pool_handles[i][j],
+					       NULL, NULL);
 			if (rc != 0) {
 				char		uuid_str[64];
+
 				uuid_unparse(pool_uuids[i], uuid_str);
 				printf("Unable to connect to %s rc: %d",
 					uuid_str, rc);
