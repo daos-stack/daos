@@ -75,6 +75,7 @@ var methodAuthorizations = map[string]Component{
 	"/mgmt.MgmtSvc/PingRanks":         ComponentServer,
 	"/mgmt.MgmtSvc/ResetFormatRanks":  ComponentServer,
 	"/mgmt.MgmtSvc/StartRanks":        ComponentServer,
+	"/mgmt.MgmtSvc/PoolHandleCleanup": ComponentAgent,
 }
 
 // HasAccess check if the given component has access to method given in FullMethod

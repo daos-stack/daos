@@ -110,4 +110,6 @@ service MgmtSvc {
 	rpc StartRanks(RanksReq) returns (RanksResp) {}
 	// Change the owner of a DAOS container
 	rpc ContSetOwner(ContSetOwnerReq) returns (ContSetOwnerResp) {}
+	// Notify the control plane of handles to cleanup on process failure
+	rpc PoolHandleCleanup(PoolHandleCleanupReq) returns (PoolHandleCleanupResp) {}
 }

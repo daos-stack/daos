@@ -122,3 +122,16 @@ message PoolMonitorReq {
 	string poolHandleUUID = 2; // Pool Handle UUID for the connection
 	string jobid = 3;	// Job ID to associate instance with.
 }
+
+message HandleList {
+	string poolUUID = 1; // Pool UUID for the list of handles
+	repeated string poolHandles = 2; // List of handles to free
+}
+
+message PoolHandleCleanupReq {
+	repeated HandleList handles = 1; // One or more sets of handles to free
+}
+
+message PoolHandleCleanupResp {
+	int32 status = 1;
+}

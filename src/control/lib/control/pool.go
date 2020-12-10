@@ -681,3 +681,63 @@ func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReint
 
 	return nil
 }
+
+type (
+	// PoolHandleCleanupReq contains the parameters for a pool cleanup request.
+	PoolHandleCleanupReq struct {
+		msRequest
+		unaryRequest
+		Handles map[string]map[string]bool //This format may seem awkward but it makes it possible to pass it directly from the process monitor
+	}
+)
+
+// genPoolHandleCleanupRequest takes a *PoolCleanupRequest and generates a valid protobuf
+// request, filling in any missing fields with reasonable defaults.
+func genPoolHandleCleanupRequest(in *PoolHandleCleanupReq) (out *mgmtpb.PoolHandleCleanupReq, err error) {
+	if in.Handles == nil {
+		return nil, errors.Errorf("Cleanup request issued with no handles specified.")
+	}
+
+	pools := make([]*mgmtpb.HandleList, len(in.Handles))
+
+	for poolUUID, element := range in.Handles {
+		handles := new(mgmtpb.HandleList)
+		handles.PoolUUID = poolUUID
+		list := make([]string, len(element))
+		for poolHandleUUID, _ := range element {
+			list = append(list, poolHandleUUID)
+		}
+		handles.PoolHandles = list
+		pools = append(pools, handles)
+	}
+
+	req := &mgmtpb.PoolHandleCleanupReq{
+		Handles: pools,
+	}
+	return req, nil
+}
+
+// PoolHandleCleanup performs a pool cleanup operation on a DAOS Management Server instance.
+func PoolHandleCleanup(ctx context.Context, rpcClient UnaryInvoker, req *PoolHandleCleanupReq) error {
+	pbReq, err := genPoolHandleCleanupRequest(req)
+	if err != nil {
+		return errors.Wrap(err, "failed to generate PoolCleanup request")
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolHandleCleanup(ctx, pbReq)
+	})
+
+	rpcClient.Debugf("Cleanup DAOS pool handle request: %+v\n", pbReq)
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return errors.Wrap(err, "pool handle cleanup failed")
+	}
+	rpcClient.Debugf("Cleanup DAOS pool handle response: %+v\n", msResp)
+
+	return nil
+}

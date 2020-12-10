@@ -31,6 +31,7 @@ import (
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -124,20 +125,22 @@ func (p *procInfo) monitorProcess(ctx context.Context) {
 // monitor and disconnect processes. Once created it is started by passing a
 // context into the startMonitoring call.
 type procMon struct {
-	log      logging.Logger
-	procs    map[int32]*procInfo
-	request  chan *procMonRequest
-	response chan *procMonResponse
+	log        logging.Logger
+	procs      map[int32]*procInfo
+	request    chan *procMonRequest
+	response   chan *procMonResponse
+	ctlInvoker control.Invoker
 }
 
 // NewProcMon creates a new process monitor struct setting initializing the
 // internal process map and the request channel.
-func NewProcMon(logger logging.Logger) *procMon {
+func NewProcMon(logger logging.Logger, ctlInvoker control.Invoker) *procMon {
 	return &procMon{
-		log:      logger,
-		procs:    make(map[int32]*procInfo),
-		request:  make(chan *procMonRequest),
-		response: make(chan *procMonResponse),
+		log:        logger,
+		procs:      make(map[int32]*procInfo),
+		request:    make(chan *procMonRequest),
+		response:   make(chan *procMonResponse),
+		ctlInvoker: ctlInvoker,
 	}
 }
 
@@ -222,7 +225,7 @@ func (p *procMon) handlePoolDisconnect(request *procMonRequest) {
 
 }
 
-func (p *procMon) cleanupLeakedHandles(info *procInfo) {
+func (p *procMon) cleanupLeakedHandles(ctx context.Context, info *procInfo) {
 	if len(info.handles) == 0 {
 		p.log.Debugf("No leaked pool handles to clean up for pid: %d", info.pid)
 		return
@@ -233,21 +236,24 @@ func (p *procMon) cleanupLeakedHandles(info *procInfo) {
 		for poolHandleUUID, _ := range element {
 			p.log.Debugf("\t%s\n", poolHandleUUID)
 		}
-		// We should construct the data structure for the gRPC call here.
 	}
-	// This is where we should make a call to the control plane with the
-	// combined set of all poolUUID and their associated poolHandleUUIDs
+	err := control.PoolHandleCleanup(ctx, p.ctlInvoker, &control.PoolHandleCleanupReq{
+		Handles: info.handles,
+	})
+	if err != nil {
+		p.log.Debugf("PoolHandleCleanup failed:%s", err)
+	}
 
 	delete(p.procs, info.pid)
 }
 
-func (p *procMon) handleProcessDisconnect(request *procMonRequest) {
+func (p *procMon) handleProcessDisconnect(ctx context.Context, request *procMonRequest) {
 	info, found := p.procs[request.pid]
 
 	p.log.Debugf("Received request to disconnect pid:%d\n", request.pid)
 	if found {
 		info.cancelCtx()
-		p.cleanupLeakedHandles(info)
+		p.cleanupLeakedHandles(ctx, info)
 		p.log.Debugf("Process %d has disconnected", info.pid)
 	}
 }
@@ -264,7 +270,7 @@ func (p *procMon) handleRequests(ctx context.Context) {
 			case drpc.MethodPoolDisconnect:
 				p.handlePoolDisconnect(request)
 			case drpc.MethodDisconnect:
-				p.handleProcessDisconnect(request)
+				p.handleProcessDisconnect(ctx, request)
 			default:
 				p.log.Errorf("Received request with invalid action type %s", request.action)
 			}
@@ -273,7 +279,7 @@ func (p *procMon) handleRequests(ctx context.Context) {
 			info, found := p.procs[resp.pid]
 
 			if found {
-				p.cleanupLeakedHandles(info)
+				p.cleanupLeakedHandles(ctx, info)
 			}
 		}
 	}

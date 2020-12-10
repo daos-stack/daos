@@ -746,3 +746,14 @@ func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*m
 
 	return resp, nil
 }
+
+// PoolHandleCleanup forwards a gRPC request to the DAOS IO server to request
+// that the open handles associated with the given pools be cleaned up and
+// released
+func (svc *mgmtSvc) PoolHandleCleanup(ctx context.Context, req *mgmtpb.PoolHandleCleanupReq) (*mgmtpb.PoolHandleCleanupResp, error) {
+	svc.log.Debugf("MgmtSvc.PoolHandleCleanup dispatch, req:%v\n", req)
+	resp := new(mgmtpb.PoolHandleCleanupResp)
+	resp.Status = 0
+	svc.log.Debugf("MgmtSvc.PoolHandleCleanup dispatch, req:%v\n", resp)
+	return resp, nil
+}
