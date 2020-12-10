@@ -529,9 +529,13 @@ check passes, an update, or punch operation.
 
 Every transaction gets an epoch. Single-operation transactions and conditional
 updates get their epochs from the redundancy group servers they access,
-snapshot read transactions get their epoch from the snapshot records and other
-transactions get their epochs from the initiating clients' HLC. A transaction
-performs all operations using its epoch.
+snapshot read transactions get their epoch from the snapshot records and every
+other transaction gets its epoch from the HLC of the first server it accesses.
+(Earlier implementations use client HLCs to choose epochs in the last case. To
+relax the clock synchronization requirement for clients, later implementations
+have moved to use server HLCs to choose epochs, while introducing client HLC
+Trackers that track the highest server HLC timestamps clients have heard of.) A
+transaction performs all operations using its epoch.
 
 The MVCC rules ensure that transactions execute as if they are serialized in
 their epoch order while complying with external consistency, as long as the
@@ -622,8 +626,10 @@ such edges together, causing a contradiction that a reading transaction cannot
 block other transactions. Deadlocks are, therefore, not a concern.
 
 If an entity keeps getting reads with increasing epochs, writes to this entity
-may keep being rejected due to the entity's ever-increasing read timestamps. A
-solution to starvation problems like this is a work in progress.
+may keep being rejected due to the entity's ever-increasing read timestamps.
+Exponential backoffs with randomizations (see d_backoff_seq) have been
+introduced during daos_tx_restart calls. These are effective for dfs_move
+workloads, where readers also write.
 
 <a id="825"></a>
 ### Punch propagation
