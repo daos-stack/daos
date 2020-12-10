@@ -45,7 +45,7 @@ void print_usage(void)
 }
 
 void cleanup_handles(uuid_t *pool_uuids, int num_pools,
-		      daos_handle_t **pool_handles, int handles_per_pool)
+		     daos_handle_t **pool_handles, int handles_per_pool)
 {
 	int i, rc;
 
@@ -206,13 +206,12 @@ main(int argc, char **argv)
 
 				uuid_unparse(pool_uuids[i], uuid_str);
 				printf("Unable to connect to %s rc: %d",
-					uuid_str, rc);
-				/* Force wellbehaved cleanup since we're
+				       uuid_str, rc);
+				/* Force well behaved cleanup since we're
 				 * erroring out
 				 */
 				well_behaved = 1;
 				goto cleanup;
-
 			}
 		}
 	}
