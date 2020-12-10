@@ -254,7 +254,7 @@ struct d_tm_nodeList_t *add_metrics_manually(void)
 		return NULL;
 	}
 
-	d_tm_add_node(counter2, &node_list);
+	rc = d_tm_add_node(counter2, &node_list);
 	if (rc != D_TM_SUCCESS) {
 		d_tm_list_free(node_list);
 		printf("d_tm_add_metric failed, rc = %d\n", rc);
