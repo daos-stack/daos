@@ -50,6 +50,12 @@ fill_recxs(daos_handle_t ih, vos_iter_entry_t *key_ent,
 		return 1;
 	}
 
+	if (arg->eprs_len >= arg->eprs_cap) {
+		D_DEBUG(DB_IO, "eprs_len %d eprs_cap %d\n",
+			arg->eprs_len, arg->eprs_cap);
+		return 1;
+	}
+
 	arg->eprs[arg->eprs_len].epr_lo = key_ent->ie_epoch;
 	arg->eprs[arg->eprs_len].epr_hi = DAOS_EPOCH_MAX;
 	arg->eprs_len++;
