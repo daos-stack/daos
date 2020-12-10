@@ -240,10 +240,13 @@ is the same between each component.  Depending on your situation, you will need
 to either update the DAOS Agent or the libdaos.so to the newer version in order
 to maintain compatibility with each other.
 
-When DER_HLC_SYNC is received, it means that the sender and receiver clocks
-are out of sync with each other for more than 1 second.  In order to correct this
-situation run OS-supplied clock synchronization service like NTP or manually
-correct clocks.
+When DER_HLC_SYNC is received, it means that sender and receiver HLC timestamps
+are off by more than epsilon value (1 second by default).
+Maximum epsilon offset can be changed using crt_hlc_epsilon_set(uint64_t epsilon)
+API.
+
+In order to correct this situation run OS-supplied clock synchronization service
+like NTP or manually correct clocks.
 
 ## Bug Report
 
