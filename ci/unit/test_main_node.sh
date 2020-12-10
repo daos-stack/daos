@@ -42,6 +42,8 @@ else
     export CMOCKA_XML_FILE="${DAOS_BASE}/test_results/%g_${WITH_VALGRIND}.xml"
 fi
 
+export DAOS_BASE
+
 cd "$DAOS_BASE"
 if ${NLT:-false}; then
     mkdir -p vm_test
