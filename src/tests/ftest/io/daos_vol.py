@@ -44,7 +44,7 @@ class DaosVol(VolTestBase):
             self.cancelForTicket("DAOS-6076")
         if testname == "h5_partest_t_bigio":
             self.cancelForTicket("DAOS-5496")
-        if testname == "h5vl_test_parallel ":
+        if testname == "h5vl_test_parallel":
             self.cancelForTicket("DAOS-5647")
         super(DaosVol, self).setUp()
 
