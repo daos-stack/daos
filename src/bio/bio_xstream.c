@@ -1716,6 +1716,29 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 	nvme_glb.bd_scan_age = now;
 }
 
+void
+bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
+{
+	struct bio_bdev         *d_bdev;
+	static uint64_t          led_event_period = NVME_MONITOR_PERIOD;
+
+	/* Scan all devices present in bio_bdev list */
+	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
+		if (d_bdev->bb_led_start_time != 0) {
+			/*
+			 * TODO: Make NVME_LED_EVENT_PERIOD configurable from
+			 * command line
+			 */
+			if (d_bdev->bb_led_start_time + led_event_period >= now)
+				continue;
+
+			if (bio_set_led_state(ctxt, d_bdev->bb_uuid, NULL,
+					      true/*reset*/) != 0)
+				D_ERROR("Failed resetting LED state\n");
+		}
+	}
+}
+
 /*
  * Execute the messages on msg ring, call all registered pollers.
  *
@@ -1728,7 +1751,6 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 int
 bio_nvme_poll(struct bio_xs_context *ctxt)
 {
-
 	uint64_t now = d_timeus_secdiff(0);
 	int rc;
 
@@ -1757,8 +1779,10 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 	    is_bbs_owner(ctxt, ctxt->bxc_blobstore))
 		bio_bs_monitor(ctxt, now);
 
-	if (is_init_xstream(ctxt))
+	if (is_init_xstream(ctxt)) {
 		scan_bio_bdevs(ctxt, now);
+		bio_led_event_monitor(ctxt, now);
+	}
 
 	return rc;
 }

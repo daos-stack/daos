@@ -844,8 +844,14 @@ class DmgCommand(DmgCommandBase):
         self.log.info("system_query data: %s", str(data))
         return data
 
-    def system_start(self):
+    def system_start(self, ranks=None):
         """Start the system.
+
+        Args:
+            force (bool, optional): whether to force the stop. Defaults to
+                False.
+            ranks (str, optional): comma separated ranks to stop. Defaults to
+                None.
 
         Raises:
             CommandFailure: if the dmg system start command fails.
@@ -854,7 +860,7 @@ class DmgCommand(DmgCommandBase):
             dict: a dictionary of host ranks and their unique states.
 
         """
-        self._get_result(("system", "start"))
+        self._get_result(("system", "start"), ranks=ranks)
 
         # Populate a dictionary with host set keys for each unique state
         data = {}

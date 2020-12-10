@@ -58,10 +58,6 @@ class CartNoPmixOneNodeTest(Test):
                          "CRT_CTX_SHARE_ADDR": ofi_share_addr,
                          "CRT_CTX_NUM": ofi_ctx_num}
 
-    def tearDown(self):
-        """ Test tear down """
-        print("Run TearDown\n")
-
     def test_cart_no_pmix(self):
         """
         Test CaRT NoPmix

@@ -100,8 +100,11 @@ soak_harassers:
         - fio_harasser
     harasserlist:
         - snapshot
-        - exclude
-        - reintegrate
+        #- exclude
+        #- reintegrate
+        - server_stop
+        - server_reintegrate
+    harasser_to: 30
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -154,9 +157,6 @@ dfuse:
 hdf5_vol:
     plugin_path: "/usr/lib64/mpich/lib"
 rebuild:
-    to: 30
     ranks_to_kill:
         - 2
     svcl: 1
-exclude_reintegrate:
-    to: 30

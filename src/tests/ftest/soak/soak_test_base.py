@@ -35,7 +35,7 @@ from agent_utils import include_local_host
 from soak_utils import DDHHMMSS_format, add_pools, get_remote_logs, \
     launch_rebuild, launch_snapshot, launch_exclude_reintegrate, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
-    build_job_script, SoakTestError
+    build_job_script, SoakTestError, launch_server_stop_start
 
 
 class SoakTestBase(TestWithServers):
@@ -70,6 +70,7 @@ class SoakTestBase(TestWithServers):
         self.dfuse = []
         self.harasser_args = None
         self.harasser_loop_time = None
+        self.all_failed_harassers = None
 
     def setUp(self):
         """Define test setup to be done."""
@@ -145,6 +146,8 @@ class SoakTestBase(TestWithServers):
         if self.all_failed_jobs:
             errors.append("SOAK FAILED: The following jobs failed {} ".format(
                 " ,".join(str(j_id) for j_id in self.all_failed_jobs)))
+        if self.all_failed_harassers:
+            errors.extend(self.all_failed_harassers)
         # Check if any dfuse mount points need to be cleaned
         if self.dfuse:
             try:
@@ -157,13 +160,6 @@ class SoakTestBase(TestWithServers):
             self.hostlist_clients = [socket.gethostname().split('.', 1)[0]]
         return errors
 
-    def tearDown(self):
-        """Define tearDown and clear any left over jobs in squeue."""
-        # Perform any test-specific tear down steps and collect any
-        # reported errors
-        self.log.info("<<tearDown Started>> at %s", time.ctime())
-        super(SoakTestBase, self).tearDown()
-
     def launch_harasser(self, harasser, pool):
         """Launch any harasser tests if defined in yaml.
 
@@ -171,15 +167,21 @@ class SoakTestBase(TestWithServers):
             harasser (str): harasser to launch
             pool (list): list of TestPool obj
 
+        Returns:
+            status_msg(str): pass/fail status message
+
         """
+        # Init the status message
+        status_msg = None
         job = None
+        count = 0
         # Launch harasser
         self.log.info("\n<<<Launch harasser %s>>>\n", harasser)
         if harasser == "rebuild":
             method = launch_rebuild
             ranks = self.params.get(
                 "ranks_to_kill", "/run/" + harasser + "/*")
-            param_list = (self, ranks, pool)
+            param_list = (self, ranks, pool[1])
             name = "REBUILD"
         elif harasser == "snapshot":
             method = launch_snapshot
@@ -188,12 +190,19 @@ class SoakTestBase(TestWithServers):
         elif harasser == "exclude":
             method = launch_exclude_reintegrate
             name = "EXCLUDE"
-            param_list = (self, pool, name)
+            param_list = (self, pool[1], name)
         elif harasser == "reintegrate":
             method = launch_exclude_reintegrate
             name = "REINTEGRATE"
+            param_list = (self, pool[1], name)
+        elif harasser == "server_stop":
+            method = launch_server_stop_start
+            name = "SVR_STOP"
             param_list = (self, pool, name)
-
+        elif harasser == "server_reintegrate":
+            method = launch_server_stop_start
+            name = "SVR_REINTEGRATE"
+            param_list = (self, pool, name)
         else:
             raise SoakTestError(
                 "<<FAILED: Harasser {} is not supported. ".format(
@@ -202,38 +211,26 @@ class SoakTestBase(TestWithServers):
         self.harasser_args[name] = {}
         job = threading.Thread(
             target=method, args=param_list, name=name)
-
+        job.daemon = True
         # start harasser
         job.start()
-        return job
-
-    def harasser_completion(self, job, name):
-        """Complete harasser jobs.
-
-        Args:
-            job (Thread): Thread obj running harasser
-            name(str): harasser to complete
-
-        Returns:
-            bool: status
-
-        """
-        status = True
-        timeout = self.params.get("to", "/run/" + name + "/*", 30)
+        timeout = self.params.get("harasser_to", "/run/soak_harassers/*", 30)
+        # Wait for harasser job to join
         job.join(timeout)
-        if job.is_alive():
+        while job.is_alive() and count < 3:
+            count += 1
             self.log.error(
-                "<< HARASSER is alive %s FAILED to join>> ", job.name)
+                "<< ERROR: harasser %s is alive, failed to join: attempt %s >>",
+                job.name, count)
+        if count > 0:
             raise SoakTestError(
-                "<<FAILED: Harasser {} has failed. ".format(name))
+                "<<FAILED: Harasser {} has been terminated. ".format(name))
         # Check if the completed job passed
         if not self.harasser_results[name.upper()]:
-            self.log.error("<< HARASSER %s FAILED in pass %s at %s>> ",
-                           name, self.loop, time.ctime())
-            status &= False
-        # run harasser once per pass
-
-        return status
+            status_msg = "<< HARASSER {} FAILED in pass {} at {}>> ".format(
+                name, self.loop, time.ctime())
+            self.log.error(status_msg)
+        return status_msg
 
     def harasser_job_done(self, args):
         """Call this function when a job is done.
@@ -345,6 +342,7 @@ class SoakTestBase(TestWithServers):
         self.log.info(
             "<<Job Completion - %s >> at %s", self.test_name, time.ctime())
         harasser_interval = 0
+        failed_harasser_msg = None
         harasser_timer = time.time()
         # loop time exists after the first pass; no harassers in the first pass
         if self.harasser_loop_time and self.harassers:
@@ -370,14 +368,11 @@ class SoakTestBase(TestWithServers):
                             time.time() > harasser_timer + harasser_interval):
                         harasser = self.harassers.pop(0)
                         harasser_timer += harasser_interval
-                        harasser_job = self.launch_harasser(
-                            harasser, self.pool[1])
-                        # Check harasser job completion
-                        if harasser_job:
-                            self.harasser_completion(harasser_job, harasser)
-
+                        failed_harasser_msg = self.launch_harasser(
+                            harasser, self.pool)
                 time.sleep(5)
-
+            if failed_harasser_msg is not None:
+                self.all_failed_harassers.append(failed_harasser_msg)
             # check for JobStatus = COMPLETED or CANCELLED (i.e. TEST TO)
             for job, result in self.soak_results.items():
                 if result in ["COMPLETED", "CANCELLED"]:
@@ -469,6 +464,7 @@ class SoakTestBase(TestWithServers):
         self.harasser_args = {}
         run_harasser = False
         self.all_failed_jobs = []
+        self.all_failed_harassers = []
         test_to = self.params.get("test_timeout", test_param + "*")
         self.job_timeout = self.params.get("job_timeout", test_param + "*")
         self.test_name = self.params.get("name", test_param + "*")
