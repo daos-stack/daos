@@ -146,15 +146,10 @@ class OSAOnlineReintegration(OSAUtils):
             output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                    rank, t_string)
             self.log.info(output)
+            self.is_rebuild_done(3)
+            self.assert_on_rebuild_failure()
 
-            fail_count = 0
-            while fail_count <= 20:
-                pver_exclude = self.get_pool_version()
-                time.sleep(3)
-                fail_count += 1
-                if pver_exclude > (pver_begin + len(target_list)):
-                    break
-
+            pver_exclude = self.get_pool_version()
             self.log.info("Pool Version after exclude %s", pver_exclude)
             # Check pool version incremented after pool exclude
             self.assertTrue(pver_exclude > (pver_begin + len(target_list)),
@@ -163,17 +158,10 @@ class OSAOnlineReintegration(OSAUtils):
                                                        rank,
                                                        t_string)
             self.log.info(output)
-
-            fail_count = 0
-            while fail_count <= 20:
-                pver_reint = self.get_pool_version()
-                time.sleep(3)
-                fail_count += 1
-                if pver_reint > (pver_exclude + 1):
-                    break
-
+            self.is_rebuild_done(3)
             self.assert_on_rebuild_failure()
 
+            pver_reint = self.get_pool_version()
             self.log.info("Pool Version after reintegrate %d", pver_reint)
             # Check pool version incremented after pool reintegrate
             self.assertTrue(pver_reint > (pver_exclude + 1),

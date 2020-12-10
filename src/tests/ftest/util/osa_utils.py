@@ -23,6 +23,7 @@
 """
 import ctypes
 import uuid
+import time
 
 from avocado import fail_on
 from ior_test_base import IorTestBase
@@ -78,13 +79,34 @@ class OSAUtils(IorTestBase):
         return data["rebuild"]["status"]
 
     @fail_on(CommandFailure)
+    def is_rebuild_done(self, time_interval):
+        """Rebuild is completed/done.
+        Args:
+            time_interval: Wait interval between checks
+        Returns:
+            False: If rebuild_status not "done" or "completed".
+            True: If rebuild status is "done" or "completed".
+        """
+        status = False
+        fail_count = 0
+        while fail_count <= 20:
+            rebuild_status = self.get_rebuild_status()
+            time.sleep(time_interval)
+            fail_count += 1
+            if (rebuild_status == "done" or
+               rebuild_status == "completed"):
+                status = True
+                break
+        return status
+
+    @fail_on(CommandFailure)
     def assert_on_rebuild_failure(self):
         """If the rebuild is not successful,
         raise assert.
         """
         rebuild_status = self.get_rebuild_status()
         self.log.info("Rebuild Status: %s", rebuild_status)
-        rebuild_failed_string = ["failed", "scanning", "aborted"]
+        rebuild_failed_string = ["failed", "scanning", "aborted", "busy"]
         self.assertTrue(rebuild_status not in rebuild_failed_string,
                         "Rebuild failed")
 
