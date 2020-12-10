@@ -74,6 +74,7 @@ message PoolEvictReq {
 	string uuid = 1; // uuid of pool to evict
 	string sys = 2; // DAOS system identifier
 	repeated uint32 svc_ranks = 3; // List of pool service ranks
+	repeated string handles = 4; // Optional list of handles to evict
 }
 
 // PoolEvictResp returns resultant state of evict operation.

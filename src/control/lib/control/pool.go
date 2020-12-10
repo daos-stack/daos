@@ -292,6 +292,7 @@ type PoolEvictReq struct {
 	unaryRequest
 	UUID string
 	Sys  string
+	Handles []string
 }
 
 // PoolEvict performs a pool connection evict operation on a DAOS Management Server instance.
@@ -309,6 +310,7 @@ func PoolEvict(ctx context.Context, rpcClient UnaryInvoker, req *PoolEvictReq) e
 		return mgmtpb.NewMgmtSvcClient(conn).PoolEvict(ctx, &mgmtpb.PoolEvictReq{
 			Uuid: req.UUID,
 			Sys:  req.Sys,
+			Handles: req.Handles,
 		})
 	})
 

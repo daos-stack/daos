@@ -1450,7 +1450,7 @@ const ProtobufCMessageDescriptor mgmt__set_rank_req__descriptor =
   (ProtobufCMessageInit) mgmt__set_rank_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_monitor_req__field_descriptors[3] =
+static const ProtobufCFieldDescriptor mgmt__pool_monitor_req__field_descriptors[4] =
 {
   {
     "poolUUID",
@@ -1488,16 +1488,29 @@ static const ProtobufCFieldDescriptor mgmt__pool_monitor_req__field_descriptors[
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "sys",
+    4,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolMonitorReq, sys),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_monitor_req__field_indices_by_name[] = {
   2,   /* field[2] = jobid */
   1,   /* field[1] = poolHandleUUID */
   0,   /* field[0] = poolUUID */
+  3,   /* field[3] = sys */
 };
 static const ProtobufCIntRange mgmt__pool_monitor_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 3 }
+  { 0, 4 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_monitor_req__descriptor =
 {
@@ -1507,7 +1520,7 @@ const ProtobufCMessageDescriptor mgmt__pool_monitor_req__descriptor =
   "Mgmt__PoolMonitorReq",
   "mgmt",
   sizeof(Mgmt__PoolMonitorReq),
-  3,
+  4,
   mgmt__pool_monitor_req__field_descriptors,
   mgmt__pool_monitor_req__field_indices_by_name,
   1,  mgmt__pool_monitor_req__number_ranges,
