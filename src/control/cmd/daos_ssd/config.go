@@ -24,7 +24,7 @@
 package main
 
 import (
-	"github.com/daos-stack/daos/src/control/server"
+	"github.com/daos-stack/daos/src/control/server/config"
 )
 
 type cfgLoader interface {
@@ -39,7 +39,7 @@ type cliOverrider interface {
 
 type cfgCmd struct {
 	cfgPath string
-	config  *server.Configuration
+	config  *config.Server
 }
 
 func (c *cfgCmd) setPath(cp string) {
@@ -61,7 +61,7 @@ func (c *cfgCmd) loadConfig() error {
 		return nil
 	}
 
-	c.config = server.NewConfiguration()
+	c.config = config.DefaultServer()
 	if err := c.config.SetPath(c.cfgPath); err != nil {
 		return err
 	}

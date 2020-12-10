@@ -28,7 +28,7 @@ import (
 	"strings"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/server"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/pkg/errors"
@@ -41,7 +41,7 @@ type formatSSDCmd struct {
 	Force    bool     `short:"f" long:"force" description:"Do not prompt for confirmation; just format"`
 }
 
-func cfgBdevs(cfg *server.Configuration) (bdevList []string) {
+func cfgBdevs(cfg *config.Server) (bdevList []string) {
 	for _, srv := range cfg.Servers {
 		bdevList = append(bdevList, srv.Storage.Bdev.DeviceList...)
 	}
