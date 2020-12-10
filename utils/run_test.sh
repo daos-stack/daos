@@ -55,7 +55,7 @@ run_test()
 
     ((log_num += 1))
 
-    FILES="${DAOS_BASE}/test_results/*.xml"
+    FILES="${DAOS_BASE}"/test_results/*.xml
     for f in $FILES
     do
         if [ -f "$f" ]; then
@@ -86,7 +86,7 @@ if [ -d "/mnt/daos" ]; then
     fi
 
     echo "Running Cmocka tests"
-    mkdir -p "${DAOS_BASE}/test_results/xml"
+    mkdir -p "${DAOS_BASE}"/test_results/xml
 
     VALGRIND_CMD=""
     if [ -z "$RUN_TEST_VALGRIND" ]; then
