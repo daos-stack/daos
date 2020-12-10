@@ -197,7 +197,7 @@ cont_child_gather_oids(struct ds_cont_child *coc, uuid_t coh_uuid,
 	memset(&ip, 0, sizeof(ip));
 	ip.ip_epr.epr_lo = epoch;
 	ip.ip_epr.epr_hi = epoch;
-	ip.ip_flags	 = VOS_IT_FOR_REBUILD;	/* XXX */
+	ip.ip_flags	 = VOS_IT_FOR_MIGRATION;	/* XXX */
 	ip.ip_hdl	 = coc->sc_hdl;
 
 	rc = vos_iterate(&ip, VOS_ITER_OBJ, false, &anchors,

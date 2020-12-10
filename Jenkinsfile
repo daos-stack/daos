@@ -287,6 +287,25 @@ def getuid() {
     return cached_uid
 }
 
+// Default priority is 3, lower is better.
+// The parameter for a job is set using the script/Jenkinsfile from the
+// previous build of that job, so the first build of any PR will always
+// run at default because Jenkins sees it as a new job, but subsequent
+// ones will use the value from here.
+// The advantage therefore is not to change the priority of PRs, but to
+// change the master branch itself to run at lower priority, resulting
+// in faster time-to-result for PRs.
+
+String get_priority() {
+    if (env.BRANCH_NAME == 'master') {
+        string p = '4'
+    } else {
+        string p = ''
+    }
+    echo "Build priority set to " + p == '' ? 'default' : p
+    return p
+}
+
 String rpm_test_version() {
     return cachedCommitPragma(pragma: 'RPM-test-version')
 }
@@ -448,10 +467,13 @@ pipeline {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
         ansiColor('xterm')
+        buildDiscarder(logRotator(artifactDaysToKeepStr: '600'))
     }
 
     parameters {
-        string(name: 'BuildPriority', defaultValue: '', description: 'Priority of the build.  DO NOT USE WITHOUT PERMISSION.')
+        string(name: 'BuildPriority',
+               defaultValue: get_priority(),
+               description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
     }
 
     stages {

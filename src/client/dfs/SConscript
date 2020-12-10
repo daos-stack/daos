@@ -20,7 +20,7 @@ def configure_lustre(denv):
             gotversion = True
     if gotversion is True:
         print("Building with Lustre bindings.")
-        conf.env.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
+        denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
     else:
         print("Not building with Lustre bindings.")
     return conf.Finish()
@@ -31,7 +31,7 @@ def scons():
 
     denv = env.Clone()
 
-    denv = configure_lustre(denv)
+    configure_lustre(denv)
 
     denv.AppendUnique(CPPDEFINES=['-DFUSE_USE_VERSION=35'])
 
