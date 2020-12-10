@@ -148,10 +148,11 @@ type LookupAddrFn func(string) ([]string, error)
 type SystemNotifyReq struct {
 	unaryRequest
 	msRequest
-	lookupAddrFn LookupAddrFn
-	ControlAddr  *net.TCPAddr
-	Event        *events.RASEvent
-	Sequence     uint64
+	//lookupAddrFn LookupAddrFn
+	ControlAddr *net.TCPAddr
+	Event       events.Event
+	Sequence    uint64
+	Client      UnaryInvoker
 }
 
 // MarshalJSON packs SystemNotifyResp struct into a JSON message.
@@ -178,18 +179,18 @@ func (req *SystemNotifyReq) ToClusterEventReq() (*mgmtpb.ClusterEventReq, error)
 		return nil, errors.New("nil control address in request")
 	}
 
-	pbRASEvent := new(mgmtpb.RASEvent)
-	if err := convert.Types(req.Event, pbRASEvent); err != nil {
-		return nil, errors.Wrap(err, "convert system notify to cluster event request")
+	pbRASEvent, err := req.Event.ToProto()
+	if err != nil {
+		return nil, errors.Wrap(err, "convert event to proto")
 	}
 
-	if req.lookupAddrFn == nil {
-		req.lookupAddrFn = net.LookupAddr
-	}
-	names, err := req.lookupAddrFn(req.ControlAddr.String())
-	if err == nil && len(names) != 0 {
-		pbRASEvent.Hostname = names[0]
-	}
+	//	if req.lookupAddrFn == nil {
+	//		req.lookupAddrFn = net.LookupAddr
+	//	}
+	//	names, err := req.lookupAddrFn(req.ControlAddr.String())
+	//	if err == nil && len(names) != 0 {
+	//		pbRASEvent.Hostname = names[0]
+	//	}
 
 	return &mgmtpb.ClusterEventReq{
 		Sequence: req.Sequence,
@@ -199,22 +200,33 @@ func (req *SystemNotifyReq) ToClusterEventReq() (*mgmtpb.ClusterEventReq, error)
 	}, nil
 }
 
+func (req *SystemNotifyReq) OnEvent(ctx context.Context, evt events.Event) {
+	req.Sequence++
+	req.Event = evt
+
+	req.Client.Debugf("forwarding %s (seq: %d) event to MS", evt.GetType(), req.Sequence)
+
+	if _, err := SystemNotify(ctx, req); err != nil {
+		req.Client.Debugf("failed to forward event to MS: %s", err)
+	}
+}
+
 // SystemNotifyResp contains the request response.
 type SystemNotifyResp struct{}
 
 // SystemNotify will attempt to notify the DAOS system of a cluster event.
-func SystemNotify(ctx context.Context, rpcClient UnaryInvoker, req *SystemNotifyReq) (*SystemNotifyResp, error) {
+func SystemNotify(ctx context.Context, req *SystemNotifyReq) (*SystemNotifyResp, error) {
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
 	if req.Event == nil {
 		return nil, errors.New("nil event in request")
 	}
-	if rpcClient == nil {
+	if req.Client == nil {
 		return nil, errors.New("nil rpc client")
 	}
 
-	rpcClient.Debugf("DAOS system notify request: %+v, event: %+v", req, req.Event)
+	req.Client.Debugf("DAOS system notify request: %+v, event: %+v", req, req.Event)
 	pbReq, err := req.ToClusterEventReq()
 	if err != nil {
 		return nil, err
@@ -222,9 +234,9 @@ func SystemNotify(ctx context.Context, rpcClient UnaryInvoker, req *SystemNotify
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).ClusterEvent(ctx, pbReq)
 	})
-	rpcClient.Debugf("DAOS cluster event request: %+v", pbReq)
+	req.Client.Debugf("DAOS cluster event request: %+v", pbReq)
 
-	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	ur, err := req.Client.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
 	}

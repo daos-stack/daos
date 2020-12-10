@@ -27,55 +27,83 @@ import (
 	"time"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/pkg/errors"
 )
 
-//// RankExit event indicates a termination of a rank process.
-//var RankExit rankExit
-//
-//// RankExitPayload is the data for when a DAOS rank exits.
-//type RankExitPayload struct {
-//	*RASEvent
-//	InstanceIdx uint32
-//	ExitErr     error
-//}
-//
-//type rankExit struct {
-//	handlers []interface{ Handle(RankExitPayload) }
-//}
-//
-//// Register adds an event handler for this event
-//func (re *rankExit) Register(handler interface{ Handle(RankExitPayload) }) {
-//	re.handlers = append(re.handlers, handler)
-//}
-//
-//// Trigger sends out an event with the payload
-//func (re rankExit) Trigger(payload RankExitPayload) {
-//	for _, handler := range re.handlers {
-//		go handler.Handle(payload)
-//	}
-//}
+// RankExit is a custom event type that implements the Event interface.
+type RankExit struct {
+	RAS         *RASEvent
+	InstanceIdx uint32
+	ExitErr     error
+}
 
-// NewRankExitPayload creates a specific RankExit event payload populated
-// with RAS info.
-//
-// Hostname should be populated by caller.
-func NewRankExitEvent(instanceIdx uint32, rank uint32, exitErr error) *RASEvent {
+// GetType implements the method on the interface to return event type.
+func (evt *RankExit) GetType() RASTypeID { return evt.RAS.Type }
+
+// FromProto unpacks protobuf RAS event into this RankExit instance, extracting
+// ExtendedInfo variant into custom event specific fields.
+func (evt *RankExit) FromProto(pbEvt *mgmtpb.RASEvent) error {
+	evt.RAS = &RASEvent{
+		Name:      pbEvt.Name,
+		Timestamp: pbEvt.Timestamp,
+		Msg:       pbEvt.Msg,
+		Hostname:  pbEvt.Hostname,
+		Rank:      pbEvt.Rank,
+		ID:        RASID(pbEvt.Id),
+		Severity:  RASSeverityID(pbEvt.Severity),
+		Type:      RASTypeID(pbEvt.Type),
+	}
+
+	pbInfo := pbEvt.GetRankState()
+	if pbInfo == nil {
+		return errors.Errorf("unexpected extended info type received, "+
+			"want RankState, got %T", pbEvt)
+	}
+	if pbInfo.GetErrored() {
+		evt.ExitErr = common.ExitStatus(pbInfo.GetError())
+	}
+	evt.InstanceIdx = pbInfo.Instance
+
+	return nil
+}
+
+// ToProto packs this RankExit instance into a protobuf RAS event, encoding
+// custom event specific fields into the equivalent ExtendedInfo oneof variant.
+func (evt *RankExit) ToProto() (*mgmtpb.RASEvent, error) {
+	pbEvt := new(mgmtpb.RASEvent)
+	if err := convert.Types(evt.RAS, pbEvt); err != nil {
+		return nil, errors.Wrapf(err, "converting %T->%T", evt.RAS, pbEvt)
+	}
+
+	info := &mgmtpb.RankStateInfo{}
+	if evt.ExitErr != nil {
+		info.Errored = true
+		info.Error = evt.ExitErr.Error()
+	}
+	info.Instance = evt.InstanceIdx
+	pbEvt.ExtendedInfo = &mgmtpb.RASEvent_RankState{RankState: info}
+
+	return pbEvt, nil
+}
+
+// NewRankExitEvent creates a specific RankExit event from given inputs.
+func NewRankExitEvent(hostname string, instanceIdx uint32, rank uint32, exitErr common.ExitStatus) Event {
 	evt := &RASEvent{
 		Name:      RASRankExit.String(),
 		Timestamp: common.FormatTime(time.Now()),
 		Msg:       RASRankExit.Desc(),
 		ID:        RASRankExit,
+		Hostname:  hostname,
 		Rank:      rank,
 		Type:      RASTypeRankStateChange,
-		Severity:  RASSeverityInfo,
+		Severity:  RASSeverityError,
 	}
 
-	if exitErr != nil {
-		evt.Severity = RASSeverityError
+	return &RankExit{
+		RAS:         evt,
+		InstanceIdx: instanceIdx,
+		ExitErr:     exitErr,
 	}
-	// TODO: change function to generate RankExitPayload which when
-	// converted will populate EventInfo proto field with relevant oneof for
-	// specific payload including the exit error and instance index.
-
-	return evt
 }

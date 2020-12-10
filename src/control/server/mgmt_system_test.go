@@ -25,7 +25,6 @@ package server
 
 import (
 	"context"
-	"math"
 	"net"
 	"os"
 	"sync"
@@ -40,7 +39,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
@@ -119,14 +117,15 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
-	rasEventRankExit := events.NewRankExitEvent(0, 0, nil)
+	eventRankExit := events.NewRankExitEvent("foo", 0, 0, common.NormalExit)
 
 	for name, tc := range map[string]struct {
-		nilReq   bool
-		zeroSeq  bool
-		rasEvent *events.RASEvent
-		expResp  *mgmtpb.ClusterEventResp
-		expErr   error
+		nilReq        bool
+		zeroSeq       bool
+		event         events.Event
+		expResp       *mgmtpb.ClusterEventResp
+		expDispatched []events.Event
+		expErr        error
 	}{
 		"nil request": {
 			nilReq: true,
@@ -137,15 +136,16 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			expErr:  errors.New("invalid sequence"),
 		},
 		"successful notification": {
-			rasEvent: rasEventRankExit,
+			event: eventRankExit,
 			expResp: &mgmtpb.ClusterEventResp{
 				Sequence: 1,
 			},
+			expDispatched: []events.Event{eventRankExit},
 		},
-		"unknown event type": {
-			rasEvent: &events.RASEvent{ID: math.MaxUint32},
-			expErr:   errors.New("unknown event ID"),
-		},
+		//		"unknown event type": {
+		//			event: &events.RASEvent{ID: math.MaxUint32},
+		//			expErr:   errors.New("unknown event ID"),
+		//		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -155,6 +155,11 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			db, cleanup := system.TestDatabase(t, log)
 			defer cleanup()
 			mgmtSvc.sysdb = db
+
+			var dispatched []events.Event
+			mgmtSvc.dispatchEvent = func(evt events.Event) {
+				dispatched = append(dispatched, evt)
+			}
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -175,15 +180,15 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			case tc.zeroSeq:
 				pbReq = &mgmtpb.ClusterEventReq{Sequence: 0}
 			default:
-				rasEventPB := new(mgmtpb.RASEvent)
-				if err := convert.Types(tc.rasEvent, rasEventPB); err != nil {
+				eventPB, err := tc.event.ToProto()
+				if err != nil {
 					t.Fatal(err)
 				}
 
 				pbReq = &mgmtpb.ClusterEventReq{
 					Sequence: 1,
 					Event: &mgmtpb.ClusterEventReq_Ras{
-						Ras: rasEventPB,
+						Ras: eventPB,
 					},
 				}
 			}
@@ -197,6 +202,8 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
+
+			common.AssertEqual(t, tc.expDispatched, dispatched, "unexpected events dispatched")
 		})
 	}
 }

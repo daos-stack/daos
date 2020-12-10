@@ -40,6 +40,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/events"
@@ -229,24 +230,17 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	eventPubSub := events.NewPubSub(log)
 	defer eventPubSub.Close()
 
-	// Dispatcher for incoming forwarded events.
-	mgmtSvc.dispatchEvent = func(evt *events.RASEvent) {
+	// Forward received events to management service by default.
+	fwdEventReq := &control.SystemNotifyReq{
+		ControlAddr: controlAddr,
+	}
+	fwdEventReq.SetHostList(cfg.AccessPoints)
+	eventPubSub.Subscribe(ctx, events.RASTypeRankStateChange, fwdEventReq)
+
+	// Create event dispatcher for received forwarded events.
+	mgmtSvc.dispatchEvent = func(evt events.Event) {
 		eventPubSub.Publish(evt)
 	}
-
-	// Until we become MS leader, forward published events.
-	var seq uint64
-	forwardEventFn := func(evt *events.RASEvent) {
-		seq++
-		req := &control.SystemNotifyReq{Event: evt, Sequence: seq}
-		req.ControlAddr = controlAddr
-		req.SetHostList(cfg.AccessPoints)
-
-		if _, err := control.SystemNotify(ctx, rpcClient, req); err != nil {
-			log.Errorf("forward event to MS: %s", err)
-		}
-	}
-	eventPubSub.Subscribe(events.RASTypeRankStateChange, forwardEventFn)
 
 	var netDevClass uint32
 
@@ -308,10 +302,16 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 			return err
 		}
 		// Register callback to publish I/O Server process exit events.
-		srv.OnInstanceExit(func(ctx context.Context, rank system.Rank, exitErr error) error {
-			eventPubSub.Publish(events.NewRankExitEvent(srv.Index(), rank.Uint32(), exitErr))
-			return nil
-		})
+		srv.OnInstanceExit(
+			func(ctx context.Context, rank system.Rank, exitErr error) error {
+				exitStatus, ok := exitErr.(common.ExitStatus)
+				if !ok {
+					return errors.Errorf("expected exit status, got %T", exitErr)
+				}
+				eventPubSub.Publish(events.NewRankExitEvent(hostname(),
+					srv.Index(), rank.Uint32(), exitStatus))
+				return nil
+			})
 
 		if idx == 0 {
 			netDevClass, err = cfg.GetDeviceClassFn(srvCfg.Fabric.Interface)
@@ -422,7 +422,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		// On gaining leadership, stop forwarding MS events.
 		eventPubSub.Reset()
 		// Handle rank state change notifications.
-		eventPubSub.Subscribe(events.RASTypeRankStateChange, membership.ProcessEvent)
+		eventPubSub.Subscribe(ctx, events.RASTypeRankStateChange, membership)
 
 		return nil
 	})
@@ -431,9 +431,8 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 
 		// On losing leadership, stop handling MS events.
 		eventPubSub.Reset()
-		seq = 0
 		// Forward events to new MS leader.
-		eventPubSub.Subscribe(events.RASTypeRankStateChange, forwardEventFn)
+		eventPubSub.Subscribe(ctx, events.RASTypeRankStateChange, fwdEventReq)
 
 		return nil
 	})

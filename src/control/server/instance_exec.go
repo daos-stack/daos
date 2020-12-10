@@ -30,6 +30,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/common"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
@@ -132,7 +133,7 @@ func (srv *IOServerInstance) finishStartup(ctx context.Context, ready *srvpb.Not
 func (srv *IOServerInstance) exit(ctx context.Context, exitErr error) {
 	srvIdx := srv.Index()
 
-	srv.log.Infof("instance %d exited: %s", srvIdx, ioserver.GetExitStatus(exitErr))
+	srv.log.Infof("instance %d exited: %s", srvIdx, common.GetExitStatus(exitErr))
 
 	rank, err := srv.GetRank()
 	if err != nil {

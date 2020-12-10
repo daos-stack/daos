@@ -24,25 +24,34 @@
 package events
 
 import (
+	"context"
 	"sync"
 
 	"github.com/daos-stack/daos/src/control/logging"
 )
+
+// Handler any object that implements the Handler interface can be registered to
+// receive events.
+type Handler interface {
+	// OnEvent will receive an event to be processed and a context for
+	// cancellation. Implementation must return when context is done.
+	OnEvent(context.Context, Event)
+}
 
 // PubSub stores subscriptions to event topics and handlers to be called on
 // receipt of events pertaining to a particular topic.
 type PubSub struct {
 	sync.RWMutex
 	log      logging.Logger
-	streams  map[RASTypeID]chan *RASEvent
-	handlers map[RASTypeID][]func(*RASEvent)
+	streams  map[RASTypeID]chan Event
+	handlers map[RASTypeID][]Handler
 	closed   bool
 }
 
 // Publish passes an event to the stream (channel) dedicated to the event's
 // topic (type).
-func (ps *PubSub) Publish(event *RASEvent) {
-	topic := event.Type
+func (ps *PubSub) Publish(event Event) {
+	topic := event.GetType()
 	ps.log.Debugf("publishing @%s: %+v", topic, event)
 
 	ps.RLock()
@@ -61,13 +70,12 @@ func (ps *PubSub) Publish(event *RASEvent) {
 	ps.streams[topic] <- event
 }
 
-func (ps *PubSub) startProcessing(topic RASTypeID) {
+func (ps *PubSub) startProcessing(ctx context.Context, topic RASTypeID) {
 	ps.log.Debug("start event processing loop")
 	for evt := range ps.streams[topic] {
 		ps.RLock()
-		for idx, handler := range ps.handlers[topic] {
-			ps.log.Debugf("handler %d got %s", idx, evt.ID)
-			handler(evt)
+		for _, handler := range ps.handlers[topic] {
+			go handler.OnEvent(ctx, evt)
 		}
 		ps.RUnlock()
 	}
@@ -75,19 +83,27 @@ func (ps *PubSub) startProcessing(topic RASTypeID) {
 }
 
 // Subscribe adds a handler function to the list of handlers subscribed to a
-// given topic (event type). Start processing events of the given topic if not
-// already started.
-func (ps *PubSub) Subscribe(topic RASTypeID, handler func(*RASEvent)) {
+// given topic (event type), then begin processing events of the given topic
+// if not already started.
+//
+// Context is supplied to provide cancellation of event processor goroutines
+// started for each handler in startProcessing function.
+//
+// On Close(), each of the event stream channels will be closed and
+// startProcessing will exit, there is an expectation that the supplied context
+// should be cancelled (in the calling function) when the Close() or Reset()
+// methods are called and vice versa.
+func (ps *PubSub) Subscribe(ctx context.Context, topic RASTypeID, handler Handler) {
 	ps.Lock()
 
 	if _, exists := ps.streams[topic]; !exists {
-		ps.streams[topic] = make(chan *RASEvent, 1)
+		ps.streams[topic] = make(chan Event, 1)
 	}
 	ps.handlers[topic] = append(ps.handlers[topic], handler)
 
 	ps.Unlock()
 
-	go ps.startProcessing(topic)
+	go ps.startProcessing(ctx, topic)
 }
 
 func (ps *PubSub) _close() {
@@ -116,8 +132,8 @@ func (ps *PubSub) Reset() {
 	defer ps.Unlock()
 
 	ps._close()
-	ps.streams = make(map[RASTypeID]chan *RASEvent)
-	ps.handlers = make(map[RASTypeID][]func(*RASEvent))
+	ps.streams = make(map[RASTypeID]chan Event)
+	ps.handlers = make(map[RASTypeID][]Handler)
 	ps.closed = false
 }
 
@@ -125,7 +141,7 @@ func (ps *PubSub) Reset() {
 func NewPubSub(log logging.Logger) *PubSub {
 	return &PubSub{
 		log:      log,
-		streams:  make(map[RASTypeID]chan *RASEvent),
-		handlers: make(map[RASTypeID][]func(*RASEvent)),
+		streams:  make(map[RASTypeID]chan Event),
+		handlers: make(map[RASTypeID][]Handler),
 	}
 }
