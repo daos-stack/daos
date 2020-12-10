@@ -26,6 +26,10 @@ fi
 if ls /tmp/dnt*.log > /dev/null; then
   mv /tmp/dnt*.log "$vm_log_dir"/
 fi
+
+#SCHAN15 - remove this for landing
+echo DoDoDo
+
 # servers can sometimes take a while to stop when the test is done
 x=0
 while [ "$x" -lt 10 ] &&
