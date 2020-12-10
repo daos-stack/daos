@@ -28,37 +28,27 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/common"
 )
 
-func TestEvents_ConvertRASEvent(t *testing.T) {
-	rasEvent := &RASEvent{
-		Name:      "some name",
-		Timestamp: "some date",
-		Msg:       "some message",
-		Hostname:  "some hostname",
-		Rank:      1,
-		ID:        RASRankNoResp,
-		Severity:  RASSeverityInfo,
-		Type:      RASTypeInfoOnly,
-	}
+func TestEvents_ConvertRankExit(t *testing.T) {
+	event := NewRankExitEvent("foo", 1, 1, common.ExitStatus("test"))
 
-	pbRASEvent := new(mgmtpb.RASEvent)
-	if err := convert.Types(rasEvent, pbRASEvent); err != nil {
+	pbEvent, err := event.ToProto()
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	t.Logf("proto ras event: %+v", pbRASEvent)
+	t.Logf("proto event: %+v (%T)", pbEvent, pbEvent)
 
-	returnedRASEvent := new(RASEvent)
-	if err := convert.Types(pbRASEvent, returnedRASEvent); err != nil {
+	returnedEvent := new(RankExit)
+	if err := returnedEvent.FromProto(pbEvent); err != nil {
 		t.Fatal(err)
 	}
 
-	t.Logf("native ras event: %+v", returnedRASEvent)
+	t.Logf("native event: %v", returnedEvent)
 
-	if diff := cmp.Diff(rasEvent, returnedRASEvent); diff != "" {
+	if diff := cmp.Diff(event, returnedEvent); diff != "" {
 		t.Fatalf("unexpected event (-want, +got):\n%s\n", diff)
 	}
 }

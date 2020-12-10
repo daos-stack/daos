@@ -442,11 +442,11 @@ func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *mgmtpb.ClusterEventRe
 			req.GetEvent())
 	}
 
-	rasEvent := new(events.RASEvent)
-	if err := convert.Types(rasEventPB, rasEvent); err != nil {
-		return nil, errors.Wrap(err, "convert proto to ras event")
+	event, err := events.NewFromProto(rasEventPB)
+	if err != nil {
+		return nil, err
 	}
-	svc.dispatchEvent(rasEvent)
+	svc.dispatchEvent(event)
 
 	resp := &mgmtpb.ClusterEventResp{Sequence: req.Sequence}
 	svc.log.Debugf("MgmtSvc.ClusterEvent dispatch, resp:%#v\n", resp)

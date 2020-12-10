@@ -24,6 +24,7 @@
 package system
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -718,35 +719,24 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int, resolveFn resolveFnSi
 	return rs, missHS, nil
 }
 
-func (m *Membership) onEvent(evt *events.RASEvent) {
-	m.log.Debugf("processing RAS event %q from rank %d on host %q", evt.Msg, evt.Rank,
-		evt.Hostname)
-
-	if evt.ID != events.RASRankExit {
-		m.log.Errorf("%s event unsupported, want %s", evt.ID, events.RASRankExit)
+// OnEvent handles events on channel and updates member states accordingly.
+func (m *Membership) OnEvent(_ context.Context, evt events.Event) {
+	rankEvt, ok := evt.(*events.RankExit)
+	if !ok {
+		m.log.Errorf("%v event unsupported, want RankExit", evt)
 	}
 
+	m.log.Debugf("processing RAS event %q from rank %d on host %q", rankEvt.RAS.Msg,
+		rankEvt.RAS.Rank, rankEvt.RAS.Hostname)
+
 	if err := m.UpdateMemberStates(MemberResults{
-		NewMemberResult(Rank(evt.Rank), errors.New(evt.Msg), MemberStateErrored),
+		NewMemberResult(Rank(rankEvt.RAS.Rank), errors.New(rankEvt.RAS.Msg),
+			MemberStateErrored),
 	}, true); err != nil {
 		m.log.Errorf("updating member states: %s", err)
 	}
-	member, _ := m.Get(Rank(evt.Rank))
-	m.log.Debugf("successfully updated rank %d to %+v", evt.Rank, member)
-}
-
-// ProcessEvent handles events on channel and updates member states
-// accordingly.
-func (m *Membership) ProcessEvent(evt *events.RASEvent) {
-	switch {
-	case evt == nil:
-		m.log.Error("attempt to process nil ras event")
-	case evt.Type != events.RASTypeRankStateChange:
-		m.log.Errorf("expecting event type %s, got %s",
-			events.RASTypeRankStateChange, evt.Type)
-	default:
-		m.onEvent(evt)
-	}
+	member, _ := m.Get(Rank(rankEvt.RAS.Rank))
+	m.log.Debugf("updated rank %d to %+v", rankEvt.RAS.Rank, member)
 }
 
 // NewMembership returns a reference to a new DAOS system membership.

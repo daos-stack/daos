@@ -328,6 +328,51 @@ void   mgmt__leader_query_resp__free_unpacked
   assert(message->base.descriptor == &mgmt__leader_query_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   mgmt__rank_state_info__init
+                     (Mgmt__RankStateInfo         *message)
+{
+  static const Mgmt__RankStateInfo init_value = MGMT__RANK_STATE_INFO__INIT;
+  *message = init_value;
+}
+size_t mgmt__rank_state_info__get_packed_size
+                     (const Mgmt__RankStateInfo *message)
+{
+  assert(message->base.descriptor == &mgmt__rank_state_info__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__rank_state_info__pack
+                     (const Mgmt__RankStateInfo *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__rank_state_info__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__rank_state_info__pack_to_buffer
+                     (const Mgmt__RankStateInfo *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__rank_state_info__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__RankStateInfo *
+       mgmt__rank_state_info__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__RankStateInfo *)
+     protobuf_c_message_unpack (&mgmt__rank_state_info__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__rank_state_info__free_unpacked
+                     (Mgmt__RankStateInfo *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__rank_state_info__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 void   mgmt__rasevent__init
                      (Mgmt__RASEvent         *message)
 {
@@ -1195,6 +1240,70 @@ const ProtobufCMessageDescriptor mgmt__leader_query_resp__descriptor =
   (ProtobufCMessageInit) mgmt__leader_query_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
+static const ProtobufCFieldDescriptor mgmt__rank_state_info__field_descriptors[3] =
+{
+  {
+    "instance",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__RankStateInfo, instance),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "errored",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__RankStateInfo, errored),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "error",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__RankStateInfo, error),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__rank_state_info__field_indices_by_name[] = {
+  2,   /* field[2] = error */
+  1,   /* field[1] = errored */
+  0,   /* field[0] = instance */
+};
+static const ProtobufCIntRange mgmt__rank_state_info__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 3 }
+};
+const ProtobufCMessageDescriptor mgmt__rank_state_info__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.RankStateInfo",
+  "RankStateInfo",
+  "Mgmt__RankStateInfo",
+  "mgmt",
+  sizeof(Mgmt__RankStateInfo),
+  3,
+  mgmt__rank_state_info__field_descriptors,
+  mgmt__rank_state_info__field_indices_by_name,
+  1,  mgmt__rank_state_info__number_ranges,
+  (ProtobufCMessageInit) mgmt__rank_state_info__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
 static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[9] =
 {
   {
@@ -1294,25 +1403,25 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[9] =
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "data",
+    "rank_state",
     9,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BYTES,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, data),
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Mgmt__RASEvent, extended_info_case),
+    offsetof(Mgmt__RASEvent, rank_state),
+    &mgmt__rank_state_info__descriptor,
     NULL,
-    NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
 static const unsigned mgmt__rasevent__field_indices_by_name[] = {
-  8,   /* field[8] = data */
   7,   /* field[7] = hostname */
   4,   /* field[4] = id */
   3,   /* field[3] = msg */
   0,   /* field[0] = name */
   6,   /* field[6] = rank */
+  8,   /* field[8] = rank_state */
   2,   /* field[2] = severity */
   1,   /* field[1] = timestamp */
   5,   /* field[5] = type */

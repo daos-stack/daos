@@ -69,7 +69,7 @@ type mgmtSvc struct {
 	harness          *IOServerHarness
 	membership       *system.Membership // if MS leader, system membership list
 	sysdb            *system.Database
-	dispatchEvent    func(*events.RASEvent)
+	dispatchEvent    func(events.Event)
 	clientNetworkCfg *config.ClientNetworkCfg
 	joinReqs         joinReqChan
 }

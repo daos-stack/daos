@@ -30,7 +30,29 @@ import "C"
 
 import (
 	"encoding/json"
+
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/pkg/errors"
 )
+
+// Event all custom event types must implement this interface.
+//
+// To/From Proto methods allow conversion regardless of underlying type.
+type Event interface {
+	GetType() RASTypeID
+	ToProto() (*mgmtpb.RASEvent, error)
+	FromProto(*mgmtpb.RASEvent) error
+}
+
+func NewFromProto(pbEvent *mgmtpb.RASEvent) (Event, error) {
+	switch RASID(pbEvent.Id) {
+	case RASRankExit:
+		rankExit := new(RankExit)
+		return Event(rankExit), rankExit.FromProto(pbEvent)
+	default:
+		return nil, errors.Errorf("unsupported event ID: %d", pbEvent.Id)
+	}
+}
 
 // RASID describes a given RAS event.
 type RASID uint32
@@ -99,7 +121,6 @@ type RASEvent struct {
 	Timestamp string `json:"timestamp"`
 	Msg       string `json:"msg"`
 	Hostname  string `json:"hostname"`
-	Data      []byte `json:"data"`
 	Rank      uint32 `json:"rank"`
 	ID        RASID
 	Severity  RASSeverityID
@@ -108,8 +129,6 @@ type RASEvent struct {
 
 // MarshalJSON marshals RASEvent to JSON.
 func (evt *RASEvent) MarshalJSON() ([]byte, error) {
-	// use a type alias to leverage the default marshal for
-	// most fields
 	type toJSON RASEvent
 	return json.Marshal(&struct {
 		ID       uint32
@@ -126,12 +145,6 @@ func (evt *RASEvent) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON unmarshals RASEvent from JSON.
 func (evt *RASEvent) UnmarshalJSON(data []byte) error {
-	if string(data) == "null" {
-		return nil
-	}
-
-	// use a type alias to leverage the default unmarshal for
-	// most fields
 	type fromJSON RASEvent
 	from := &struct {
 		ID       uint32
@@ -140,10 +153,6 @@ func (evt *RASEvent) UnmarshalJSON(data []byte) error {
 		*fromJSON
 	}{
 		fromJSON: (*fromJSON)(evt),
-	}
-
-	if err := json.Unmarshal(data, from); err != nil {
-		return err
 	}
 
 	evt.ID = RASID(from.ID)

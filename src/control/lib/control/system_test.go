@@ -1070,13 +1070,12 @@ func TestControl_SystemReformat(t *testing.T) {
 }
 
 func TestControl_SystemNotify(t *testing.T) {
-	rasEventRankExit := events.NewRankExitEvent(0, 0, nil)
+	rasEventRankExit := events.NewRankExitEvent("foo", 0, 0, common.NormalExit)
 
 	for name, tc := range map[string]struct {
 		req     *SystemNotifyReq
 		uErr    error
 		uResp   *UnaryResponse
-		lookErr error
 		expResp *SystemNotifyResp
 		expErr  error
 	}{
@@ -1121,21 +1120,14 @@ func TestControl_SystemNotify(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			mi := NewMockInvoker(log, &MockInvokerConfig{
-				UnaryError:    tc.uErr,
-				UnaryResponse: tc.uResp,
-			})
-
-			mockLookupAddrFn := func(addr string) ([]string, error) {
-				return map[string][]string{
-					"192.168.0.1": {"foo.bar.com"},
-				}[addr], tc.lookErr
-			}
 			if tc.req != nil {
-				tc.req.lookupAddrFn = mockLookupAddrFn
+				tc.req.Client = NewMockInvoker(log, &MockInvokerConfig{
+					UnaryError:    tc.uErr,
+					UnaryResponse: tc.uResp,
+				})
 			}
 
-			gotResp, gotErr := SystemNotify(context.TODO(), mi, tc.req)
+			gotResp, gotErr := SystemNotify(context.TODO(), tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
