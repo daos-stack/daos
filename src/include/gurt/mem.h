@@ -33,6 +33,8 @@ extern "C" {
 
 #ifdef __AVX2__
 
+#include <immintrin.h>
+
 inline __attribute__((always_inline)) int
 d_cmp16(const void *src_1, const void *src_2)
 {
