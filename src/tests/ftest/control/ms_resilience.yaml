@@ -7,10 +7,13 @@ hosts:
     - server-C
     - server-D
     - server-E
-  test_clients:
-    - client-F
+    - server-F
+    - server-G
+    - server-H
 timeout: 150
 pool:
   mode: 146
   scm_size: 1073741824
   control_method: dmg
+dmg:
+    json: True

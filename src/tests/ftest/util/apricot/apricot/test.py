@@ -613,11 +613,11 @@ class TestWithServers(TestWithoutServers):
         """
         self.log.info("--- CONFIGURING %s MANAGER ---", name.upper())
         if access_list is None:
-            access_list = self.hostlist_servers
+            # Only use the first host in the access list
+            access_list = self.hostlist_servers[:1]
         # Calling get_params() will set the test-specific log names
         manager.get_params(self)
-        # Only use the first host in the access list
-        manager.set_config_value("access_points", access_list[:1])
+        manager.set_config_value("access_points", access_list)
         manager.manager.assign_environment(
             EnvironmentVariables({"PATH": None}), True)
         manager.hosts = (hosts, self.workdir, slots)

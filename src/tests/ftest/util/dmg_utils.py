@@ -909,14 +909,31 @@ class DmgCommand(DmgCommandBase):
         """
         self._get_result(("system", "leader-query"))
 
-        # Current Leader: 10.7.1.10:10001
-        #    Replica Set: 10.7.1.10:10001, 10.7.1.68:10001, 10.7.1.9:10001
         data = {}
-        match = re.findall(
-            r"(?:Current Leader|Replica Set):\s+([0-9.:, ]+)",
-            self.result.stdout)
-        data["leader"] = match[0]
-        data["replicas"] = match[-1].split(", ")
+        if self.json.value:
+            # {
+            #   "response": {
+            #     "CurrentLeader": "10.7.1.10:10001",
+            #     "Replicas": [
+            #       "10.7.1.10:10001",
+            #       "10.7.1.68:10001",
+            #       "10.7.1.10:10001"
+            #     ]
+            #   },
+            #   "error": null,
+            #   "status": 0
+            # }
+            output = json.loads(self.result.stdout)
+            data["leader"] = output["response"]["CurrentLeader"]
+            data["replicas"] = output["response"]["Replicas"]
+        else:
+            # Current Leader: 10.7.1.10:10001
+            #    Replica Set: 10.7.1.10:10001, 10.7.1.68:10001, 10.7.1.9:10001
+            match = re.findall(
+                r"(?:Current Leader|Replica Set):\s+([0-9.:, ]+)",
+                self.result.stdout)
+            data["leader"] = match[0]
+            data["replicas"] = match[-1].split(", ")
 
         return data
 
