@@ -155,13 +155,6 @@ class SoakTestBase(TestWithServers):
             self.hostlist_clients = [socket.gethostname().split('.', 1)[0]]
         return errors
 
-    def tearDown(self):
-        """Define tearDown and clear any left over jobs in squeue."""
-        # Perform any test-specific tear down steps and collect any
-        # reported errors
-        self.log.info("<<tearDown Started>> at %s", time.ctime())
-        super(SoakTestBase, self).tearDown()
-
     def job_setup(self, job, pool):
         """Create the cmdline needed to launch job.
 
