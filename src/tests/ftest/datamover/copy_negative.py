@@ -115,12 +115,6 @@ class CopyNegativeTest(DataMoverTestBase):
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
-        self.set_src_location("DAOS_UUID", "/", pool1.uuid, container1)
-        self.run_datamover(
-            test_desc="copy_bad_params (source pool but no source svcl)",
-            expected_rc=1,
-            expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
-
         # Bad parameter: required arguments.
         # These tests use the same valid source parameters,
         # but varying invalid destination parameters.
@@ -129,44 +123,6 @@ class CopyNegativeTest(DataMoverTestBase):
         self.set_dst_location("DAOS_UUID", "/", None, container1)
         self.run_datamover(
             test_desc="copy_bad_params (dest cont but no dest pool)",
-            expected_rc=1,
-            expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
-
-        self.set_dst_location("DAOS_UUID", "/", pool1.uuid, container1)
-        self.run_datamover(
-            test_desc="copy_bad_params (dest pool but no dest svcl)",
-            expected_rc=1,
-            expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
-
-        # Bad parameter: required arguments.
-        # These tests use missing prefix/UNS parameters.
-        self.set_dst_location("POSIX", self.posix_test_file)
-        self.set_src_location("DAOS_UNS", self.daos_test_file,
-                              None, container1)
-        self.run_datamover(
-            test_desc="copy_bad_params (source prefix but no svcl)",
-            expected_rc=1,
-            expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
-
-        self.set_dst_location("POSIX", self.posix_test_paths[0])
-        self.set_src_location("DAOS_UNS", "/", None, container1)
-        self.run_datamover(
-            test_desc="copy_bad_params (source UNS but no svcl)",
-            expected_rc=1,
-            expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
-
-        self.set_src_location("POSIX", self.posix_test_file)
-        self.set_dst_location("DAOS_UNS", self.daos_test_file,
-                              None, container1)
-        self.run_datamover(
-            test_desc="copy_bad_params (dest prefix but no svcl)",
-            expected_rc=1,
-            expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
-
-        self.set_src_location("POSIX", self.posix_test_paths[0])
-        self.set_dst_location("DAOS_UNS", "/", None, container1)
-        self.run_datamover(
-            test_desc="copy_bad_params (dest UNS but no svcl)",
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 

@@ -48,10 +48,6 @@ class DataMoverCommand(ExecutableCommand):
         self.daos_src_cont = FormattedParameter("--daos-src-cont {}")
         # DAOS destination container
         self.daos_dst_cont = FormattedParameter("--daos-dst-cont {}")
-        # Source service level
-        self.daos_src_svcl = FormattedParameter("--daos-src-svcl {}")
-        # Destination service level
-        self.daos_dst_svcl = FormattedParameter("--daos-dst-svcl {}")
         # DAOS prefix for unified namespace path
         self.daos_prefix = FormattedParameter("--daos-prefix {}")
         # read source list from file
@@ -103,22 +99,10 @@ class DataMoverCommand(ExecutableCommand):
         if src_pool:
             self.daos_src_pool.update(src_pool.uuid,
                                       "daos_src_pool" if display else None)
-            # setting src service level
-            src_svcl = ":".join(
-                [str(item) for item in [
-                    int(src_pool.pool.svc.rl_ranks[index])
-                    for index in range(src_pool.pool.svc.rl_nr)]])
-            self.daos_src_svcl.update(src_svcl, "src_svcl" if display else None)
 
         if dst_pool:
             self.daos_dst_pool.update(dst_pool.uuid,
                                       "daos_dst_pool" if display else None)
-            # setting destination service level
-            dst_svcl = ":".join(
-                [str(item) for item in [
-                    int(dst_pool.pool.svc.rl_ranks[index])
-                    for index in range(dst_pool.pool.svc.rl_nr)]])
-            self.daos_dst_svcl.update(dst_svcl, "dst_svcl" if display else None)
 
         if src_cont:
             self.daos_src_cont.update(src_cont.uuid,
