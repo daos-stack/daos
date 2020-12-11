@@ -297,7 +297,8 @@ def getuid() {
 // in faster time-to-result for PRs.
 
 String get_priority() {
-    if (env.BRANCH_NAME == 'master') {
+    if (env.BRANCH_NAME == 'master' ||
+        env.BRANCH_NAME == 'PR-4065') {
         string p = '2'
     } else {
         string p = ''
@@ -453,6 +454,7 @@ pipeline {
 
     triggers {
         cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0,12 * * *\n' : '' +
+             env.BRANCH_NAME == 'PR-4065' ? 'TZ=America/Toronto\n0 0,12 * * *\n' : '' +
              env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
     }
 
