@@ -38,7 +38,6 @@ run_test()
     echo "Running $* with log file: ${D_LOG_FILE}"
 
     export TNAME="${b}-${log_num}"
-    echo "$TNAME"
 
     # We use flock as a way of locking /mnt/daos so multiple runs can't hit it
     #     at the same time.
