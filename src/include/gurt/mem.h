@@ -33,6 +33,7 @@ extern "C" {
 
 #ifdef __AVX2__
 
+#include <stdint.h>
 #include <immintrin.h>
 
 inline __attribute__((always_inline)) int
