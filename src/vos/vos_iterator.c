@@ -747,7 +747,8 @@ next:
 				break;
 
 			if (!vos_dtx_hit_inprogress()) {
-				set_reprobe(type, acts, anchors, param->ip_flags);
+				set_reprobe(type, acts, anchors,
+					    param->ip_flags);
 				acts = 0;
 			}
 
