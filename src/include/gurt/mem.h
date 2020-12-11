@@ -36,6 +36,13 @@ extern "C" {
 #include <stdint.h>
 #include <immintrin.h>
 
+/** Hack to get it working, define d_cmp16 as memcmp */
+inline __attribute__((always_inline)) int
+d_cmp16(const void *src1, const void *src2)
+{
+	return memcmp(src1, src2, sizeof(uint16_t));
+}
+
 inline __attribute__((always_inline)) int
 d_cmp32(const void *src_1, const void *src_2)
 {
