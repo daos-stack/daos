@@ -55,66 +55,6 @@ dc_cp(tse_task_t *task, void *data)
 }
 
 int
-dc_mgmt_svc_rip(tse_task_t *task)
-{
-	daos_svc_rip_t		*args;
-	struct cp_arg		 cp_arg;
-	crt_endpoint_t		 svr_ep;
-	crt_rpc_t		*rpc = NULL;
-	crt_opcode_t		 opc;
-	struct mgmt_svc_rip_in	*rip_in;
-	int			 rc;
-
-	args = dc_task_get_args(task);
-	rc = dc_mgmt_sys_attach(args->grp, &cp_arg.sys);
-	if (rc != 0) {
-		D_ERROR("failed to attach to grp %s, rc "DF_RC".\n",
-			args->grp, DP_RC(rc));
-		rc = -DER_INVAL;
-		goto out_task;
-	}
-
-	svr_ep.ep_grp = cp_arg.sys->sy_group;
-	svr_ep.ep_rank = args->rank;
-	svr_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
-	opc = DAOS_RPC_OPCODE(MGMT_SVC_RIP, DAOS_MGMT_MODULE,
-			      DAOS_MGMT_VERSION);
-	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc);
-	if (rc != 0) {
-		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: "DF_RC".\n",
-			DP_RC(rc));
-		D_GOTO(err_grp, rc);
-	}
-
-	D_ASSERT(rpc != NULL);
-	rip_in = crt_req_get(rpc);
-	D_ASSERT(rip_in != NULL);
-
-	/** fill in request buffer */
-	rip_in->rip_flags = args->force;
-
-	crt_req_addref(rpc);
-	cp_arg.rpc = rpc;
-
-	rc = tse_task_register_comp_cb(task, dc_cp, &cp_arg, sizeof(cp_arg));
-	if (rc != 0)
-		D_GOTO(err_rpc, rc);
-
-	D_DEBUG(DB_MGMT, "killing rank %u\n", args->rank);
-
-	/** send the request */
-	return daos_rpc_send(rpc, task);
-
-err_rpc:
-	crt_req_decref(rpc);
-err_grp:
-	dc_mgmt_sys_detach(cp_arg.sys);
-out_task:
-	tse_task_complete(task, rc);
-	return rc;
-}
-
-int
 dc_mgmt_profile(char *path, int avg, bool start)
 {
 	struct dc_mgmt_sys	*sys;
