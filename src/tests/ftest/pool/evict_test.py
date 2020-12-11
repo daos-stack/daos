@@ -110,7 +110,7 @@ class EvictTests(TestWithServers):
         else:
             self.fail("Invalid yaml parameters - check \"params\" values")
         try:
-            # call daos evict api directly
+            # call dmg pool_evict directly
             self.pool.dmg.pool_evict(pool=self.pool.pool.get_uuid_str())
         # exception is expected
         except CommandFailure as result:
@@ -152,7 +152,7 @@ class EvictTests(TestWithServers):
         # restore the valid server group name and check if valid pool
         # still exists
         self.log.info(
-            "DAOS api exception did not occur"
+            "Command exception did not occur"
             " - evict from pool with %s", test_param)
 
         # restore the valid group name and UUID,
