@@ -710,6 +710,9 @@ func (db *Database) FindMembersByAddr(addr *net.TCPAddr) ([]*Member, error) {
 
 // FaultDomainTree returns the tree of fault domains of joined members.
 func (db *Database) FaultDomainTree() *FaultDomainTree {
+	db.data.RLock()
+	defer db.data.RUnlock()
+
 	return db.data.Members.FaultDomains
 }
 
