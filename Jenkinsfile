@@ -12,7 +12,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value="pipeline-lib@your_branch") _
+@Library(value="trusted-pipeline-lib@bmurrell/changeset.comment()") _
 
 boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
@@ -297,7 +297,8 @@ def getuid() {
 // in faster time-to-result for PRs.
 
 String get_priority() {
-    if (env.BRANCH_NAME == 'master') {
+    if (env.BRANCH_NAME == 'master' ||
+        env.BRANCH_NAME == 'PR-4101') {
         string p = '2'
     } else {
         string p = ''
@@ -360,6 +361,7 @@ boolean skip_ftest_hw(String size) {
            skip_stage('func-test') ||
            skip_stage('func-hw-test') ||
            skip_stage('func-hw-test-' + size) ||
+           (env.BRANCH_NAME == 'PR-4101' && ! startedByTimer()) ||
            (env.BRANCH_NAME == 'master' && ! startedByTimer())
 }
 
@@ -453,6 +455,7 @@ pipeline {
 
     triggers {
         cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0,12 * * *\n' : '' +
+             env.BRANCH_NAME == 'PR-4101' ? 'TZ=America/Toronto\n0 0,12,2 * * *\n' : '' +
              env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
     }
 
