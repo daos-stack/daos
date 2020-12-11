@@ -33,7 +33,7 @@ errors are documented in the table below.
 |DER_EVICTED|1032|Rank has been evicted
 |DER_DOS|1034|Denial of service
 |DER_BAD_TARGET|1035|Incorrect target for the RPC
-|DER_HLC_SYNC|1037|HLC Synchronization error
+|DER_HLC_SYNC|1037|HLC synchronization error
 |DER_IO|2001|Generic I/O error
 |DER_ENOENT|2003|Entry not found
 |DER_NOTYPE|2004|Unknown object type
@@ -241,12 +241,10 @@ to either update the DAOS Agent or the libdaos.so to the newer version in order
 to maintain compatibility with each other.
 
 When DER_HLC_SYNC is received, it means that sender and receiver HLC timestamps
-are off by more than epsilon value (1 second by default).
-Maximum epsilon offset can be changed using crt_hlc_epsilon_set(uint64_t epsilon)
-API.
+are off by more than maximum allowed system clock offset (1 second by default).
 
-In order to correct this situation run OS-supplied clock synchronization service
-like NTP or manually correct clocks.
+In order to correct this situation synchronize all server clocks to the same
+reference time, using services like NTP.
 
 ## Bug Report
 
