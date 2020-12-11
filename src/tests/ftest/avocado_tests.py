@@ -73,6 +73,7 @@ class ApricotTests(Test):
         :avocado: tags=avocado_tests,avocado_test_teardown_timeout
         :avocado: tags=avocado_test_teardown_timeout_timed_out
         """
+        self.log.debug("Sleeping for 10 seconds")
         time.sleep(10)
 
 
@@ -81,4 +82,5 @@ class ApricotTests(Test):
 
         :avocado: tags=avocado_tests,avocado_test_teardown_timeout
         """
+        self.log.debug("Sleeping for 1 second")
         time.sleep(1)

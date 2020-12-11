@@ -64,8 +64,6 @@ fi
 # Log size threshold
 LOGS_THRESHOLD="1G"
 
-SCRIPT_LOC="$PREFIX"/lib/daos/TESTING/ftest/scripts
-
 # For nodes that are only rebooted between CI nodes left over mounts
 # need to be cleaned up.
 pre_clean () {
@@ -104,6 +102,8 @@ else
     PREFIX=install
     . .build_vars.sh
 fi
+
+SCRIPT_LOC="$PREFIX"/lib/daos/TESTING/ftest/scripts
 
 if ${TEARDOWN_ONLY:-false}; then
     cleanup
