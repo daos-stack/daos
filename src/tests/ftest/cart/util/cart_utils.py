@@ -356,7 +356,7 @@ class CartUtils():
 
         try:
             with open(os.devnull, 'w') as devnull:
-                subprocess.check_call(['sh', '-l', '-c', 'module -V'],
+                subprocess.check_call(['/usr/bin/sh', '-l', '-c', 'module -V'],
                                       stdout=devnull,
                                       stderr=devnull)
         except subprocess.CalledProcessError:
