@@ -61,7 +61,7 @@ class ManagementServiceResilience(TestWithServers):
 
         if not ignore_status:
             self.log.info("Pool UUID %s on server group: %s",
-                        self.pool.uuid, self.server_group)
+                          self.pool.uuid, self.server_group)
             # Verify that the pool persisted.
             pool_data = self.dmg.pool_list()
             if pool_data and self.pool.uuid in pool_data:
@@ -174,10 +174,10 @@ class ManagementServiceResilience(TestWithServers):
 
         The raft protocol guarantees 2N+1 resiliency, where N is the number of
         nodes that can fail while leaving the cluster in a state where it can
-        continue to make progess. i.e. N=1, a minimum of 3 nodes is needed in
+        continue to make progress. i.e. N=1, a minimum of 3 nodes is needed in
         the cluster and it will tolerate 1 node failure.
 
-        N = [1, 2, 3] servers as access_points where, N = failure tolerance,
+        N = [1, 2] servers as access_points where, N = failure tolerance,
         resilience_num = minimum amount of MS replicas to achieve resiliency.
 
         :avocado: tags=all,hw,large,full_regression,control,ms_resilience
