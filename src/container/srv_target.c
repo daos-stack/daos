@@ -63,7 +63,8 @@
 #define DAOS_AGG_THRESHOLD	(DTX_COMMIT_THRESHOLD_AGE + 10) /* seconds */
 
 static inline int
-cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
+cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr,
+		   daos_epoch_t hae, bool is_current)
 {
 	int	rc;
 
@@ -75,15 +76,17 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	if (dss_ult_exiting(cont->sc_agg_req))
 		return 1;
 	rc = ds_obj_ec_aggregate(cont, epr, dss_ult_yield,
-				 (void *)cont->sc_agg_req);
+				 (void *)cont->sc_agg_req, is_current);
 	if (rc)
 		D_ERROR("EC aggregation returned: "DF_RC"\n", DP_RC(rc));
 
 	if (dss_ult_exiting(cont->sc_agg_req))
 		return 1;
-
-	rc = vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc, dss_ult_yield,
-			   (void *)cont->sc_agg_req);
+	if (cont->sc_ec_agg_eph_boundry > hae && is_current) {
+		epr->epr_hi = cont->sc_ec_agg_eph_boundry;
+		rc = vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc,
+				   dss_ult_yield, (void *)cont->sc_agg_req);
+	}
 
 	/* Wake up GC ULT */
 	sched_req_wakeup(cont->sc_pool->spc_gc_req);
@@ -340,7 +343,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 			tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
 
-		rc = cont_aggregate_epr(cont, &epoch_range);
+		rc = cont_aggregate_epr(cont, &epoch_range, 0ULL, false);
 		if (rc)
 			D_GOTO(free, rc);
 		epoch_range.epr_lo = epoch_range.epr_hi + 1;
@@ -355,7 +358,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
 
-	rc = cont_aggregate_epr(cont, &epoch_range);
+	rc = cont_aggregate_epr(cont, &epoch_range, cinfo.ci_hae, true);
 out:
 	if (rc == 0 && epoch_min == 0)
 		cont->sc_aggregation_full_scan_hlc = hlc;
