@@ -41,7 +41,7 @@ type procMonRequest struct {
 	action drpc.MgmtMethod
 	// The UUID of the pool if action is poolconnect/disconnect
 	poolUUID string
-	// The UUID of the pool handle returned from pool connect if action is poolconnect/disconnect
+	// The UUID of the pool handle associated with this request
 	poolHandleUUID string
 }
 
@@ -141,20 +141,20 @@ func NewProcMon(logger logging.Logger) *procMon {
 	}
 }
 
-func (p *procMon) RegisterPool(ctx context.Context, Pid int32, poolReq *mgmtpb.PoolMonitorReq) {
+func (p *procMon) RegisterPoolHandle(ctx context.Context, Pid int32, poolReq *mgmtpb.PoolMonitorReq) {
 	req := &procMonRequest{
 		pid:            Pid,
-		action:         drpc.MethodPoolConnect,
+		action:         drpc.MethodMonitorPoolConnect,
 		poolUUID:       poolReq.PoolUUID,
 		poolHandleUUID: poolReq.PoolHandleUUID,
 	}
 	p.submitRequest(ctx, req)
 }
 
-func (p *procMon) DisconnectPool(ctx context.Context, Pid int32, poolReq *mgmtpb.PoolMonitorReq) {
+func (p *procMon) DisconnectPoolHandle(ctx context.Context, Pid int32, poolReq *mgmtpb.PoolMonitorReq) {
 	req := &procMonRequest{
 		pid:            Pid,
-		action:         drpc.MethodPoolDisconnect,
+		action:         drpc.MethodMonitorPoolDisconnect,
 		poolUUID:       poolReq.PoolUUID,
 		poolHandleUUID: poolReq.PoolHandleUUID,
 	}
@@ -222,15 +222,18 @@ func (p *procMon) handlePoolDisconnect(request *procMonRequest) {
 
 }
 
+// A process will leak handles when it either dies illegally or exits without
+// calling daos_pool_disconnect on the handles it has open. This will be called
+// if we detect a process terminating without disconnect, or if during
+// disconnect we still have a list of open pool handles for the process.
 func (p *procMon) cleanupLeakedHandles(info *procInfo) {
 	if len(info.handles) == 0 {
-		p.log.Debugf("No leaked pool handles to clean up for pid: %d", info.pid)
 		return
 	}
 
 	for poolUUID, element := range info.handles {
 		p.log.Debugf("Cleaning up %d leaked handles from Pool UUID: %s\n", len(element), poolUUID)
-		for poolHandleUUID, _ := range element {
+		for poolHandleUUID := range element {
 			p.log.Debugf("\t%s\n", poolHandleUUID)
 		}
 		// We should construct the data structure for the gRPC call here.
@@ -248,7 +251,6 @@ func (p *procMon) handleProcessDisconnect(request *procMonRequest) {
 	if found {
 		info.cancelCtx()
 		p.cleanupLeakedHandles(info)
-		p.log.Debugf("Process %d has disconnected", info.pid)
 	}
 }
 
@@ -259,14 +261,14 @@ func (p *procMon) handleRequests(ctx context.Context) {
 			return
 		case request := <-p.request:
 			switch request.action {
-			case drpc.MethodPoolConnect:
+			case drpc.MethodMonitorPoolConnect:
 				p.handlePoolConnect(ctx, request)
-			case drpc.MethodPoolDisconnect:
+			case drpc.MethodMonitorPoolDisconnect:
 				p.handlePoolDisconnect(request)
 			case drpc.MethodDisconnect:
 				p.handleProcessDisconnect(request)
 			default:
-				p.log.Errorf("Received request with invalid action type %s", request.action)
+				p.log.Debugf("Received request with invalid action type %s", request.action)
 			}
 		case resp := <-p.response:
 			p.log.Debugf("Received response from Process %d, terminated with %s", resp.pid, resp.err)

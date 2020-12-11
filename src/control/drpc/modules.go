@@ -236,10 +236,10 @@ const (
 	MethodContSetOwner MgmtMethod = C.DRPC_METHOD_MGMT_CONT_SET_OWNER
 	// MethodGroupUpdate defines a method for updating the group map
 	MethodGroupUpdate MgmtMethod = C.DRPC_METHOD_MGMT_GROUP_UPDATE
-	// MethodPoolConnect defines a method to indicate a successful pool connect call
-	MethodPoolConnect MgmtMethod = C.DRPC_METHOD_MGMT_POOL_CONNECT
-	// MethodPoolDisconnect defines a method to indicate a successful pool disconnect call
-	MethodPoolDisconnect MgmtMethod = C.DRPC_METHOD_MGMT_POOL_DISCONNECT
+	// MethodMonitorPoolConnect defines a method to indicate a successful pool connect call
+	MethodMonitorPoolConnect MgmtMethod = C.DRPC_METHOD_MGMT_MON_POOL_CONNECT
+	// MethodMonitorPoolDisconnect defines a method to indicate a successful pool disconnect call
+	MethodMonitorPoolDisconnect MgmtMethod = C.DRPC_METHOD_MGMT_MON_POOL_DISCONNECT
 	// MethodDisconnect defines a method for signaling a clean client shutdown
 	MethodDisconnect MgmtMethod = C.DRPC_METHOD_MGMT_DISCONNECT
 	// MethodIdentifyStorage is a ModuleMgmt method

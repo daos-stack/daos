@@ -422,7 +422,7 @@ pool_connect_cp(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
-	rc = dc_mgmt_pool_connect(pool);
+	rc = dc_mgmt_monitor_pool_connect(pool);
 	if (rc != 0) {
 		D_ERROR("failed to register pool connect with agent: "DF_RC"\n",
 			DP_RC(rc));
@@ -628,10 +628,10 @@ pool_disconnect_cp(tse_task_t *task, void *data)
 
 	pl_map_disconnect(pool->dp_pool);
 
-	rc = dc_mgmt_pool_disconnect(pool);
+	rc = dc_mgmt_monitor_pool_disconnect(pool);
 	if (rc != 0) {
-		/* Its not fatal if we dont notify the agent of the disconnect
-		 * however it isn't idea. It will try to send the control plane
+		/* It's not fatal if we don't notify the agent of the disconnect
+		 * however it isn't ideal. It will try to send the control plane
 		 * a clean up rpc on process termination however it will be noop
 		 * on the server side.
 		 */

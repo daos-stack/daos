@@ -54,18 +54,7 @@ type mgmtModule struct {
 	monitor    *procMon
 }
 
-func isManagementMethod(method drpc.Method) bool {
-	return method == drpc.MethodGetAttachInfo ||
-		method == drpc.MethodDisconnect ||
-		method == drpc.MethodPoolConnect ||
-		method == drpc.MethodPoolDisconnect
-}
-
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
-	if !isManagementMethod(method) {
-		return nil, drpc.UnknownMethodFailure()
-	}
-
 	uc, ok := session.Conn.(*net.UnixConn)
 	if !ok {
 		return nil, errors.Errorf("session.Conn type conversion failed")
@@ -88,15 +77,17 @@ func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req
 	switch method {
 	case drpc.MethodGetAttachInfo:
 		return mod.handleGetAttachInfo(ctx, req, cred.Pid)
-	case drpc.MethodPoolConnect:
-		return mod.handlePoolConnect(ctx, req, cred.Pid)
-	case drpc.MethodPoolDisconnect:
-		return mod.handlePoolDisconnect(ctx, req, cred.Pid)
+	case drpc.MethodMonitorPoolConnect:
+		return nil, mod.handlePoolConnect(ctx, req, cred.Pid)
+	case drpc.MethodMonitorPoolDisconnect:
+		return nil, mod.handlePoolDisconnect(ctx, req, cred.Pid)
 	case drpc.MethodDisconnect:
 		// There isn't anything we can do here if this fails so just
 		// call the disconnect handler and return success.
 		mod.handleDisconnect(ctx, cred.Pid)
 		return nil, nil
+	default:
+		return nil, drpc.UnknownMethodFailure()
 	}
 
 	return nil, drpc.UnknownMethodFailure()
@@ -194,22 +185,22 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 	return cacheResp, err
 }
 
-func (mod *mgmtModule) handlePoolConnect(ctx context.Context, reqb []byte, pid int32) ([]byte, error) {
+func (mod *mgmtModule) handlePoolConnect(ctx context.Context, reqb []byte, pid int32) error {
 	pbReq := new(mgmtpb.PoolMonitorReq)
 	if err := proto.Unmarshal(reqb, pbReq); err != nil {
-		return nil, drpc.UnmarshalingPayloadFailure()
+		return drpc.UnmarshalingPayloadFailure()
 	}
-	mod.monitor.RegisterPool(ctx, pid, pbReq)
-	return nil, nil
+	mod.monitor.RegisterPoolHandle(ctx, pid, pbReq)
+	return nil
 }
 
-func (mod *mgmtModule) handlePoolDisconnect(ctx context.Context, reqb []byte, pid int32) ([]byte, error) {
+func (mod *mgmtModule) handlePoolDisconnect(ctx context.Context, reqb []byte, pid int32) error {
 	pbReq := new(mgmtpb.PoolMonitorReq)
 	if err := proto.Unmarshal(reqb, pbReq); err != nil {
-		return nil, drpc.UnmarshalingPayloadFailure()
+		return drpc.UnmarshalingPayloadFailure()
 	}
-	mod.monitor.DisconnectPool(ctx, pid, pbReq)
-	return nil, nil
+	mod.monitor.DisconnectPoolHandle(ctx, pid, pbReq)
+	return nil
 }
 
 // handleDisconnect crafts a new request for the process monitor to inform the

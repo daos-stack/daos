@@ -50,22 +50,22 @@ void cleanup_handles(uuid_t *pool_uuids, int num_pools,
 	int i, rc;
 
 	for (i = 0; i < num_pools; i++) {
-		int idx;
+		int j;
 
 		if (uuid_is_null(pool_uuids[i])) {
 			continue;
 		}
-		for (idx = 0; idx < handles_per_pool; idx++) {
-			if (daos_handle_is_inval(pool_handles[i][idx])) {
+		for (j = 0; j < handles_per_pool; j++) {
+			if (daos_handle_is_inval(pool_handles[i][j])) {
 				continue;
 			}
-			rc = daos_pool_disconnect(pool_handles[i][idx], NULL);
+			rc = daos_pool_disconnect(pool_handles[i][j], NULL);
 			if (rc) {
 				struct dc_pool	*pool;
 				char		pool_str[64];
 				char		hdl_str[64];
 
-				pool = dc_hdl2pool(pool_handles[i][idx]);
+				pool = dc_hdl2pool(pool_handles[i][j]);
 				uuid_unparse_lower(pool->dp_pool, pool_str);
 				uuid_unparse_lower(pool->dp_pool, hdl_str);
 				printf("disconnect handle %s from pool %s "
@@ -86,7 +86,9 @@ int parse_pool_handles(char *hndl_str, uuid_t **handles)
 {
 	char		*idx, *pool_str;
 	const char	delim[2] = ",";
-	int		hdl_count = 1 /* we have at least 1 */, i = 0, rc;
+	int		hdl_count = 1 /* we have at least 1 */;
+	int		i = 0;
+	int		rc;
 	uuid_t		*hndls = NULL;
 
 	/* Figure out how many handles are in the string */

@@ -270,7 +270,7 @@ daos_fini(void)
 	dc_pool_fini();
 	dc_mgmt_fini();
 
-	rc = dc_mgmt_disconnect();
+	rc = dc_mgmt_monitor_disconnect();
 	if (rc != 0) {
 		D_ERROR("failed to disconnect some resources may leak, " DF_RC "\n",
 			DP_RC(rc));
