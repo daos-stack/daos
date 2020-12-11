@@ -24,7 +24,6 @@
  * This file shows an example of using the telemetry API to consume metrics
  */
 
-#include "gurt/common.h"
 #include "gurt/telemetry_common.h"
 #include "gurt/telemetry_consumer.h"
 
@@ -37,10 +36,11 @@
  * it out.
  */
 void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
-		  int filter, bool show_meta, int iteration)
+		  int filter, bool show_meta)
 {
 	struct d_tm_nodeList_t	*nodelist = NULL;
 	struct d_tm_nodeList_t	*head = NULL;
+	struct d_tm_node_t	*node = NULL;
 	struct timespec		tms;
 	uint64_t		val;
 	time_t			clk;
@@ -49,25 +49,28 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 	char			*name;
 	int			rc;
 
-	printf("\niteration: %d - %s/\n", iteration, dirname);
-	rc = d_tm_list(&nodelist, shmem_root, dirname, filter);
+	node = root;
+	if (dirname != NULL) {
+		if (strncmp(dirname, "/", D_TM_MAX_NAME_LEN) != 0) {
+			node = d_tm_find_metric(shmem_root, dirname);
+			if (node == NULL) {
+				printf("Cannot find directory or metric: %s\n",
+				       dirname);
+				return;
+			}
+		}
+	}
 
-	if (rc == D_TM_SUCCESS)
-		head = nodelist;
+	rc = d_tm_list(&nodelist, shmem_root, node, filter);
+	if (rc != D_TM_SUCCESS) {
+		printf("d_tm_list failure: rc = %d", rc);
+		return;
+	}
+	head = nodelist;
 
-	printf("There are %"PRIu64" objects in the unfiltered list\n",
-	       d_tm_get_num_objects(shmem_root, dirname,
-				    D_TM_DIRECTORY | D_TM_COUNTER |
-				    D_TM_TIMESTAMP |
-				    D_TM_TIMER_SNAPSHOT |
-				    D_TM_DURATION | D_TM_GAUGE));
-
-	printf("There are %"PRIu64" objects in the filtered list\n",
-	       d_tm_get_num_objects(shmem_root, dirname,
-				    D_TM_COUNTER | D_TM_TIMESTAMP));
-
-	printf("There are %"PRIu64" metrics in the tree\n",
-	       d_tm_count_metrics(shmem_root, root));
+	printf("\nThere are %" PRIu64 " metrics in the directory %s\n",
+	       d_tm_count_metrics(shmem_root, node, filter),
+	       dirname ? dirname : "/");
 
 	while (nodelist) {
 		name = d_tm_conv_ptr(shmem_root, nodelist->dtnl_node->dtn_name);
@@ -76,7 +79,7 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 
 		switch (nodelist->dtnl_node->dtn_type) {
 		case D_TM_DIRECTORY:
-			fprintf(stdout, "%-20s\n", name);
+			fprintf(stdout, "Directory: %-20s\n", name);
 			break;
 		case D_TM_COUNTER:
 			rc = d_tm_get_counter(&val, shmem_root,
@@ -158,7 +161,7 @@ main(int argc, char **argv)
 	struct d_tm_node_t	*root = NULL;
 	uint64_t		*shmem_root = NULL;
 	char			dirname[D_TM_MAX_NAME_LEN] = {0};
-	bool			show_meta;
+	bool			show_meta = false;
 	int			simulated_rank = 0;
 	int			iteration = 0;
 	int			filter;
@@ -180,26 +183,27 @@ main(int argc, char **argv)
 	       "0x%" PRIx64 "\n", simulated_rank, (uint64_t)shmem_root);
 
 	root = d_tm_get_root(shmem_root);
+
 	while (1) {
+		printf("\niteration: %d\n", iteration);
+		printf("Full directory tree from root node:\n");
 		d_tm_print_my_children(shmem_root, root, 0, stdout);
 
 		sprintf(dirname, "src/gurt/examples/telem_producer_example.c"
 			"/main");
-		filter = (D_TM_DIRECTORY | D_TM_COUNTER | D_TM_TIMESTAMP |
-			  D_TM_TIMER_SNAPSHOT | D_TM_DURATION | D_TM_GAUGE);
+		filter = (D_TM_COUNTER | D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT |
+			  D_TM_DURATION | D_TM_GAUGE);
 		show_meta = false;
-		read_metrics(shmem_root, root, dirname, filter, show_meta,
-			     iteration);
+		read_metrics(shmem_root, root, dirname, filter, show_meta);
 
 		filter = D_TM_COUNTER;
 		show_meta = true;
 		sprintf(dirname, "src/gurt/examples/telem_producer_example.c"
 			"/manually added");
-		read_metrics(shmem_root, root, dirname, filter, show_meta,
-			     iteration);
-
+		read_metrics(shmem_root, root, dirname, filter, show_meta);
 		iteration++;
 		sleep(1);
+		printf("\n\n");
 	}
 
 	return 0;

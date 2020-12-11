@@ -28,7 +28,6 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include "wrap_cmocka.h"
-#include "gurt/common.h"
 #include "gurt/telemetry_common.h"
 #include "gurt/telemetry_producer.h"
 
@@ -91,7 +90,6 @@ test_gauge(void **state)
 					  "gauge", NULL);
 		assert(rc == D_TM_SUCCESS);
 	}
-
 }
 
 static void

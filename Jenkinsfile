@@ -151,6 +151,7 @@ String unit_packages() {
                            'spdk-devel libfabric-devel '+
                            'pmix numactl-devel ' +
                            'libipmctl-devel ' +
+                           'libyaml-devel ' +
                            'python36-tabulate numactl'
         if (need_qb) {
             // TODO: these should be gotten from the Requires: of RPM

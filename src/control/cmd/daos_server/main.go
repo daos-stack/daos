@@ -58,6 +58,7 @@ type mainOpts struct {
 	Storage storageCmd `command:"storage" description:"Perform tasks related to locally-attached storage"`
 	Start   startCmd   `command:"start" description:"Start daos_server"`
 	Network networkCmd `command:"network" description:"Perform network device scan based on fabric provider"`
+	Telem   telemCmd   `command:"telem" description:"Perform telemetry scan of the local I/O Server ranks"`
 	Version versionCmd `command:"version" description:"Print daos_server version"`
 }
 
