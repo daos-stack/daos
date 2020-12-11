@@ -65,12 +65,18 @@ uint64_t crt_hlc_get(void)
 	return ret;
 }
 
-int crt_hlc_get_msg(uint64_t msg, uint64_t *hlc_out)
+int crt_hlc_get_msg(uint64_t msg, uint64_t *hlc_out, uint64_t *offset)
 {
 	uint64_t pt = crt_hlc_localtime_get();
 	uint64_t hlc, ret, ml = msg & ~CRT_HLC_MASK;
+	uint64_t off;
 
-	if (ml > pt && ml - pt > crt_hlc_epsilon)
+	off = ml > pt ? ml - pt : 0;
+
+	if (offset != NULL)
+		*offset = off;
+
+	if (off > crt_hlc_epsilon)
 		return -DER_HLC_SYNC;
 
 	do {

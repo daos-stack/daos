@@ -1,11 +1,7 @@
 # Software Installation
 
-DAOS runs on both Intel x86_64 and ARM64 platforms,
- and has been successfully tested
-on CentOS 7, OpenSUSE Leap 15.1, and Ubuntu 20.04 distributions.
-
-The majority of testing has been performed on Centos 7.7 and SLES 15,
-with Centos being used in the majority of the test cycles.
+Please check the [support matrix](https://daos-stack.github.io/release/support_matrix)
+to select the appropriate software combination.
 
 ## Software Dependencies
 
@@ -176,8 +172,8 @@ On Mac, please make sure that the Docker settings under
 To build the Docker image directly from GitHub, run the following command:
 
 ```bash
-$ curl -L https://raw.githubusercontent.com/daos-stack/daos/master/utils/docker/Dockerfile.centos.7 | \
-        docker build --no-cache -t daos -
+$ docker build https://github.com/daos-stack/daos.git#master:utils/docker \
+        -f Dockerfile.centos.7 -t daos
 ```
 
 This creates a CentOS 7 image, fetches the latest DAOS version from GitHub,
@@ -189,8 +185,8 @@ Once the image created, one can start a container that will eventually run
 the DAOS service:
 
 ```bash
-$ docker run -it -d --privileged --name server \
-        -v /dev/hugepages:/dev/hugepages \
+$ docker run -it -d --privileged --cap-add=ALL --name server \
+        -v /dev/hugepages:/dev/hugepages -v /dev/hugepages-1G:/dev/hugepages-1G \
         daos
 ```
 
@@ -210,9 +206,9 @@ $ docker build -t daos -f utils/docker/Dockerfile.centos.7 --build-arg NOBUILD=1
 Then create a container that can access the local DAOS source tree:
 
 ```bash
-$ docker run -it -d --privileged --name server \
+$ docker run -it -d --privileged --cap-add=ALL --name server \
         -v ${daospath}:/home/daos/daos:Z \
-        -v /dev/hugepages:/dev/hugepages \
+        -v /dev/hugepages:/dev/hugepages -v /dev/hugepages-1G:/dev/hugepages-1G \
         daos
 ```
 
@@ -224,7 +220,7 @@ Then execute the following command to build and install DAOS in the
 container:
 
 ```bash
-$ docker exec server scons --build-deps=yes install PREFIX=/usr
+$ docker exec server scons --build-deps=yes install PREFIX=/usr/local
 ```
 
 ### Simple Docker Setup
@@ -237,7 +233,6 @@ uses 4GB of DRAM to emulate persistent memory and 16GB of bulk storage under
 The DAOS service can be started in the docker container as follows:
 
 ```bash
-$ docker exec server mkdir /var/run/daos_server
 $ docker exec server daos_server start \
         -o /home/daos/daos/utils/config/examples/daos_server_local.yml
 ```

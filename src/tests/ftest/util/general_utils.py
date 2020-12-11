@@ -176,8 +176,13 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
                 "Verify env values are defined as strings: {}".format(env)])
 
     except process.CmdError as error:
-        # Command failed or possibly timed out
-        msg = "Error occurred running '{}': {}".format(command, error)
+        # Report if the command timed out or failed
+        if error.result.interrupted:
+            msg = "Timeout detected running '{}' with a {}s timeout".format(
+                command, timeout)
+        else:
+            msg = "Error occurred running '{}': {}".format(
+                command, error.result)
 
     if msg is not None:
         print(msg)
@@ -495,7 +500,11 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60):
             "sudo pkill {}".format(pattern),
             "sleep 5",
             "if pgrep --list-full {}".format(pattern),
+            "then pkill --signal ABRT {}".format(pattern),
+            "sleep 1",
+            "if pgrep --list-full {}".format(pattern),
             "then pkill --signal KILL {}".format(pattern),
+            "fi",
             "fi",
             "fi",
             "exit $rc",
