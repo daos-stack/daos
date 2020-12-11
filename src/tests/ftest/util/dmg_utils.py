@@ -441,7 +441,7 @@ class DmgCommand(DmgCommandBase):
         #   - NVMe:
         #     Total size: <L>
         #     Free: <M>, min:<N>, max:<O>, mean:<P>
-        #   Rebuild <Q>, <R> objs, <S> recs
+        #   Rebuild <Q>, <R>, <S>
         #
         # This yields the following tuple of tuples when run through the regex:
         #   0: (<A>, <B>, <C>, <D>, <E>, '', '', '', '', '', '', '', '', '')
@@ -474,8 +474,8 @@ class DmgCommand(DmgCommandBase):
         #       },
         #       "rebuild": {
         #           "status": <Q>,
-        #           "objects": <R>,
-        #           "records": <S>
+        #           "status2": <R>,
+        #           "status3": <S>
         #       }
         #   }
         #
@@ -486,7 +486,7 @@ class DmgCommand(DmgCommandBase):
             r"\s*(\d+)|(?:(?:SCM:|NVMe:)\s+Total\s+size:\s+([0-9.]+\s+[A-Z]+)"
             r"\s+Free:\s+([0-9.]+\s+[A-Z]+),\smin:([0-9.]+\s+[A-Z]+),"
             r"\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"
-            r"|Rebuild\s+(\w+),\s+([0-9]+)\s+objs,\s+([0-9]+)\s+recs)",
+            r"|Rebuild\s+(\w+),\s+(.*),\s+(.*))",
             self.result.stdout)
         if match:
             # Mapping of the pool data entries to the match[0] indices
@@ -511,7 +511,7 @@ class DmgCommand(DmgCommandBase):
                 1: {"target_count": 5},
                 2: space_map,
                 3: space_map,
-                4: {"status": 11, "objects": 12, "records": 13}
+                4: {"status": 11, "status2": 12, "status3": 13}
             }
             for index_1, match_list in enumerate(match):
                 if index_1 not in map_values:
@@ -844,8 +844,14 @@ class DmgCommand(DmgCommandBase):
         self.log.info("system_query data: %s", str(data))
         return data
 
-    def system_start(self):
+    def system_start(self, ranks=None):
         """Start the system.
+
+        Args:
+            force (bool, optional): whether to force the stop. Defaults to
+                False.
+            ranks (str, optional): comma separated ranks to stop. Defaults to
+                None.
 
         Raises:
             CommandFailure: if the dmg system start command fails.
@@ -854,7 +860,7 @@ class DmgCommand(DmgCommandBase):
             dict: a dictionary of host ranks and their unique states.
 
         """
-        self._get_result(("system", "start"))
+        self._get_result(("system", "start"), ranks=ranks)
 
         # Populate a dictionary with host set keys for each unique state
         data = {}
