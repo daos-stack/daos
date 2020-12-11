@@ -15,28 +15,12 @@
 #  Note: Uses .build_vars.sh to find daos artifacts
 #  Note: New tests should return non-zero if there are any
 #    failures.
+set -x
 
 #check for existence of /mnt/daos first:
 failed=0
 failures=()
 log_num=0
-
-# this can be removed once we are no longer using the old CI system
-if ${OLD_CI:-true}; then
-lock_test()
-{
-    (
-        # clean up all files except the lock
-        flock 9
-        find /mnt/daos -maxdepth 1 -mindepth 1 \! -name jenkins.lock -print0 | \
-             xargs -0r rm -vrf
-        eval "${VALGRIND_CMD}" "$@" 2>&1 | grep -v "SUCCESS! NO TEST FAILURE"
-        exit "${PIPESTATUS[0]}"
-    ) 9>/mnt/daos/jenkins.lock
-}
-
-lock_test="lock_test"
-fi
 
 run_test()
 {
@@ -53,6 +37,9 @@ run_test()
     export D_LOG_FILE="/tmp/daos_${b}-${log_num}.log"
     echo "Running $* with log file: ${D_LOG_FILE}"
 
+    export TNAME="${b}-${log_num}"
+    echo "$TNAME"
+
     # We use flock as a way of locking /mnt/daos so multiple runs can't hit it
     #     at the same time.
     # We use grep to filter out any potential "SUCCESS! NO TEST FAILURES"
@@ -61,10 +48,12 @@ run_test()
     #    before deciding this. Also, we intentionally leave off the last 'S'
     #    in that error message so that we don't guarantee printing that in
     #    every run's output, thereby making all tests here always pass.
-    if ! time $lock_test "$@"; then
-        echo "Test $* failed with exit status ${PIPESTATUS[0]}."
-        ((failed = failed + 1))
-        failures+=("$*")
+    time eval "${VALGRIND_CMD} $@"
+    retcode=$?
+    if [ "${retcode}" -ne 0 ]; then
+	echo "Test $* failed with exit status ${retcode}."
+	((failed = failed + 1))
+	failures+=("$*")
     fi
 
     ((log_num += 1))
@@ -82,7 +71,7 @@ if [ -d "/mnt/daos" ]; then
     echo "Running Cmocka tests"
     VALGRIND_CMD=""
     if [ -z "$RUN_TEST_VALGRIND" ]; then
-        # Tests that do not run valgrind
+        # Tests that do not run with Valgrind
         run_test src/client/storage_estimator/common/tests/storage_estimator.sh
         run_test src/rdb/raft_tests/raft_tests.py
         go_spdk_ctests="${SL_PREFIX}/bin/nvme_control_ctests"
@@ -92,12 +81,18 @@ if [ -d "/mnt/daos" ]; then
             echo "$go_spdk_ctests missing, SPDK_SRC not available when built?"
         fi
         run_test src/control/run_go_tests.sh
+        run_test "${SL_PREFIX}/bin/vos_tests" -A 500
+        export DAOS_IO_BYPASS=pm
+        run_test "${SL_PREFIX}/bin/vos_tests" -A 50
+        export DAOS_IO_BYPASS=pm_snap
+        run_test "${SL_PREFIX}/bin/vos_tests" -A 50
+        unset DAOS_IO_BYPASS
     else
         if [ "$RUN_TEST_VALGRIND" = "memcheck" ]; then
             [ -z "$VALGRIND_SUPP" ] &&
                 VALGRIND_SUPP="$(pwd)/utils/test_memcheck.supp"
-            VALGRIND_XML_PATH="test_results/unit-test-%p.memcheck.xml"
-            VALGRIND_CMD="valgrind --leak-check=full --show-reachable=yes \
+            VALGRIND_XML_PATH="test_results/unit-test-%q{TNAME}.memcheck.xml"
+            export VALGRIND_CMD="valgrind --leak-check=full --show-reachable=yes \
                                    --error-limit=no \
                                    --suppressions=${VALGRIND_SUPP} \
                                    --xml=yes --xml-file=${VALGRIND_XML_PATH}"
@@ -113,13 +108,7 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_consumer"
     run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_hlc"
     run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_swim"
-    run_test "${SL_PREFIX}/bin/vos_tests" -A 500
     run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
-    export DAOS_IO_BYPASS=pm
-    run_test "${SL_PREFIX}/bin/vos_tests" -A 50
-    export DAOS_IO_BYPASS=pm_snap
-    run_test "${SL_PREFIX}/bin/vos_tests" -A 50
-    unset DAOS_IO_BYPASS
     run_test "${SL_BUILD_DIR}/src/common/tests/umem_test"
     run_test "${SL_BUILD_DIR}/src/common/tests/sched"
     run_test "${SL_BUILD_DIR}/src/common/tests/drpc_tests"
@@ -139,7 +128,7 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_listener_tests"
     run_test "${SL_BUILD_DIR}/src/mgmt/tests/srv_drpc_tests"
 
-    # Scripts launching tests
+    # Tests launched by scripts
     export USE_VALGRIND=${RUN_TEST_VALGRIND}
     export VALGRIND_SUPP=${VALGRIND_SUPP}
     unset VALGRIND_CMD
