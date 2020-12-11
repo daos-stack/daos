@@ -52,14 +52,5 @@ else
 
     if [ "$WITH_VALGRIND" == 'memcheck' ]; then
 	mv test_results/unit-test-*.memcheck.xml .
-	# Debugging
-	ls test_results || true
-	ls unit-test-*.memcheck.xml
-	ls unit-test-*.memcheck.xml | wc
-	for i in $(ls unit-test-*.memcheck.xml); do
-	    echo ">> $i";
-	    kind="$(grep "<kind>" "$i" || true)"
-	    echo $kind;
-	done
     fi
 fi

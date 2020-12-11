@@ -15,6 +15,7 @@
 #  Note: Uses .build_vars.sh to find daos artifacts
 #  Note: New tests should return non-zero if there are any
 #    failures.
+set -x
 
 #check for existence of /mnt/daos first:
 failed=0
@@ -36,8 +37,8 @@ run_test()
     export D_LOG_FILE="/tmp/daos_${b}-${log_num}.log"
     echo "Running $* with log file: ${D_LOG_FILE}"
 
-    memcheck_log="${b}-${log_num}"
-    VALGRIND_CMD_SPECIFIC="${VALGRIND_CMD/replace/$memcheck_log}"
+    export TNAME="${b}-${log_num}"
+    echo "$TNAME"
 
     # We use flock as a way of locking /mnt/daos so multiple runs can't hit it
     #     at the same time.
@@ -47,7 +48,7 @@ run_test()
     #    before deciding this. Also, we intentionally leave off the last 'S'
     #    in that error message so that we don't guarantee printing that in
     #    every run's output, thereby making all tests here always pass.
-    time eval "${VALGRIND_CMD_SPECIFIC} $@"
+    time eval "${VALGRIND_CMD} $@"
     retcode=$?
     if [ "${retcode}" -ne 0 ]; then
 	echo "Test $* failed with exit status ${retcode}."
@@ -70,7 +71,7 @@ if [ -d "/mnt/daos" ]; then
     echo "Running Cmocka tests"
     VALGRIND_CMD=""
     if [ -z "$RUN_TEST_VALGRIND" ]; then
-        # Tests that do not run valgrind
+        # Tests that do not run with Valgrind
         run_test src/client/storage_estimator/common/tests/storage_estimator.sh
         run_test src/rdb/raft_tests/raft_tests.py
         go_spdk_ctests="${SL_PREFIX}/bin/nvme_control_ctests"
@@ -80,7 +81,6 @@ if [ -d "/mnt/daos" ]; then
             echo "$go_spdk_ctests missing, SPDK_SRC not available when built?"
         fi
         run_test src/control/run_go_tests.sh
-	# Debug - do not run with valgrind to reduce time
         run_test "${SL_PREFIX}/bin/vos_tests" -A 500
         export DAOS_IO_BYPASS=pm
         run_test "${SL_PREFIX}/bin/vos_tests" -A 50
@@ -91,7 +91,7 @@ if [ -d "/mnt/daos" ]; then
         if [ "$RUN_TEST_VALGRIND" = "memcheck" ]; then
             [ -z "$VALGRIND_SUPP" ] &&
                 VALGRIND_SUPP="$(pwd)/utils/test_memcheck.supp"
-            VALGRIND_XML_PATH="test_results/unit-test-replace.memcheck.xml"
+            VALGRIND_XML_PATH="test_results/unit-test-%q{TNAME}.memcheck.xml"
             export VALGRIND_CMD="valgrind --leak-check=full --show-reachable=yes \
                                    --error-limit=no \
                                    --suppressions=${VALGRIND_SUPP} \
