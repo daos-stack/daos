@@ -24,6 +24,8 @@
 
 #include <daos/rpc.h>
 #include <daos/event.h>
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 static void
 daos_rpc_cb(const struct crt_cb_info *cb_info)
@@ -34,30 +36,55 @@ daos_rpc_cb(const struct crt_cb_info *cb_info)
 	if (cb_info->cci_rc == -DER_TIMEDOUT)
 		/** TODO */
 		;
-
+// joel for task end .. timing info maybe?
 	tse_task_complete(task, rc);
 }
 
 int
 daos_rpc_complete(crt_rpc_t *rpc, tse_task_t *task)
 {
-	struct crt_cb_info cbinfo;
-
+	static struct d_tm_node_t	*rpc_complete;
+	struct crt_cb_info		cbinfo;
+	int				rc;
+// joel
 	cbinfo.cci_arg = task;
 	cbinfo.cci_rc  = 0;
 	daos_rpc_cb(&cbinfo);
 	crt_req_decref(rpc);
+
+	rc = d_tm_increment_counter(&rpc_complete, "daos/rpc", "complete",
+				    NULL);
+	if (rc != D_TM_SUCCESS) {
+		printf("d_tm_increment_counter failed, rc = %d\n", rc);
+		rc = 0;
+	}
+
 	return 0;
 }
 
 int
 daos_rpc_send(crt_rpc_t *rpc, tse_task_t *task)
 {
-	int rc;
-
+	static struct d_tm_node_t	*rpc_send;
+	char				buf[16];
+	int				rc;
+// joel
 	rc = crt_req_send(rpc, daos_rpc_cb, task);
 	if (rc != 0) {
 		/** task will be completed in CB above */
+		rc = 0;
+	}
+
+	rc = d_tm_increment_counter(&rpc_send, "daos/rpc/send", "total", NULL);
+	if (rc != D_TM_SUCCESS) {
+		printf("d_tm_increment_counter failed, rc = %d\n", rc);
+		rc = 0;
+	}
+
+	snprintf(buf, sizeof(buf), "0x%x", rpc->cr_opc);
+	rc = d_tm_increment_counter(NULL, "daos/rpc/send/opcode", buf, "count", NULL);
+	if (rc != D_TM_SUCCESS) {
+		printf("d_tm_increment_counter failed, rc = %d\n", rc);
 		rc = 0;
 	}
 
@@ -99,7 +126,7 @@ daos_rpc_send_wait(crt_rpc_t *rpc)
 {
 	struct daos_rpc_status status = { 0 };
 	int rc;
-
+// joel interesting because of possible timing information
 	rc = crt_req_send(rpc, daos_rpc_wait_cb, &status);
 	if (rc != 0)
 		return rc;

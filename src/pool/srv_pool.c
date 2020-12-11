@@ -51,6 +51,8 @@
 #include "rpc.h"
 #include "srv_internal.h"
 #include "srv_layout.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 /* Pool service */
 struct pool_svc {
@@ -665,7 +667,7 @@ rechoose:
 			DP_UUID(pool_uuid), DP_RC(rc));
 		D_GOTO(out_rpc, rc);
 	}
-
+// joel
 	rc = daos_rank_list_copy(svc_addrs, ranks);
 	D_ASSERTF(rc == 0, "daos_rank_list_copy: "DF_RC"\n", DP_RC(rc));
 out_rpc:
@@ -1630,7 +1632,7 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	rc = pool_svc_lookup(in->pri_op.pi_uuid, &svc);
 	if (rc != 0)
 		D_GOTO(out, rc);
-
+// joel
 	/*
 	 * Simply serialize this whole RPC with rsvc_step_{up,down}_cb() and
 	 * ds_rsvc_stop().
@@ -1794,7 +1796,7 @@ transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
 	ABT_eventual		eventual;
 	int		       *status;
 	int			rc;
-
+//joel
 	if (map_version != pool_map_get_version(svc->ps_pool->sp_map)) {
 		D_ERROR(DF_UUID": found different cached and persistent pool "
 			"map versions: cached=%u persistent=%u\n",
@@ -1883,7 +1885,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	struct daos_prop_entry	       *owner_entry;
 	struct daos_prop_entry	       *owner_grp_entry;
 	uint64_t			sec_capas = 0;
-
+// joel
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, DP_UUID(in->pci_op.pi_hdl));
 
@@ -2193,7 +2195,7 @@ ds_pool_disconnect_handler(crt_rpc_t *rpc)
 	d_iov_t			value;
 	struct pool_hdl			hdl;
 	int				rc;
-
+// joel
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(pdi->pdi_op.pi_uuid), rpc, DP_UUID(pdi->pdi_op.pi_hdl));
 

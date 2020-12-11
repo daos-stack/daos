@@ -26,6 +26,8 @@
 #define D_LOGFAC	DD_FAC(rpc)
 
 #include "crt_internal.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 #define CRT_CTL_MAX_LOG_MSG_SIZE 256
 
@@ -1175,7 +1177,7 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 			D_GOTO(out, rc = -DER_INVAL);
 		}
 	}
-
+// joel
 	RPC_TRACE(DB_TRACE, rpc_priv, "submitted.\n");
 
 	rc = crt_context_req_track(rpc_priv);

@@ -33,6 +33,8 @@
 #include <daos/checksum.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 static inline struct dc_obj_layout *
 obj_shard2layout(struct dc_obj_shard *shard)
@@ -1029,7 +1031,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 
 	if (daos_io_bypass & IOBP_CLI_RPC) {
 		rc = daos_rpc_complete(req, task);
-	} else {
+	} else { // joel
 		rc = daos_rpc_send(req, task);
 		if (rc != 0) {
 			D_ERROR("update/fetch rpc failed rc "DF_RC"\n",
