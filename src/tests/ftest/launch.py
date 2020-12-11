@@ -1153,11 +1153,13 @@ def rename_logs(avocado_logs_dir, test_file):
         avocado_logs_dir (str): avocado job-results directory
         test_file (str): the test python file
     """
-    test_name = get_test_category(test_file)
+    #test_name = get_test_category(test_file)
     test_logs_lnk = os.path.join(avocado_logs_dir, "latest")
     test_logs_dir = os.path.realpath(test_logs_lnk)
-    new_test_logs_dir = "{}-{}".format(test_logs_dir, test_name)
+    #new_test_logs_dir = "{}-{}".format(test_logs_dir, test_name)
+    new_test_logs_dir = os.path.join(avocado_logs_dir, test_file)
     try:
+        os.makedirs(new_test_logs_dir)
         os.rename(test_logs_dir, new_test_logs_dir)
         os.remove(test_logs_lnk)
         os.symlink(new_test_logs_dir, test_logs_lnk)
