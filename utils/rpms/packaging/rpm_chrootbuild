@@ -44,4 +44,18 @@ else
     echo "Unable to update /etc/mock/$CHROOT_NAME.cfg."
     echo "You need to make sure it has the needed repos in it yourself."
 fi
-eval mock -r "$CHROOT_NAME" $MOCK_OPTIONS $RPM_BUILD_OPTIONS "$TARGET"
+
+echo mock -r "$CHROOT_NAME" $MOCK_OPTIONS --init
+eval mock -r "$CHROOT_NAME" $MOCK_OPTIONS --init
+
+echo mock -r "$CHROOT_NAME" $MOCK_OPTIONS --install bash
+eval mock -r "$CHROOT_NAME" $MOCK_OPTIONS --install bash
+#mock -r "$CHROOT_NAME" $MOCK_OPTIONS --install lz4-devel
+#mock -r "$CHROOT_NAME" $MOCK_OPTIONS --install mercury-devel
+#mock -r "$CHROOT_NAME" $MOCK_OPTIONS --debug-config
+#echo mock -r "$CHROOT_NAME" $MOCK_OPTIONS $RPM_BUILD_OPTIONS --installdeps "$TARGET"
+#eval mock -r "$CHROOT_NAME" $MOCK_OPTIONS $RPM_BUILD_OPTIONS --installdeps "$TARGET"
+echo mock -r "$CHROOT_NAME" $MOCK_OPTIONS $RPM_BUILD_OPTIONS --no-clean "$TARGET"
+eval mock -r "$CHROOT_NAME" $MOCK_OPTIONS $RPM_BUILD_OPTIONS --no-clean "$TARGET
+"
+#eval mock -r "$CHROOT_NAME" $MOCK_OPTIONS $RPM_BUILD_OPTIONS "$TARGET"

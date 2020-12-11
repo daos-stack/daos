@@ -4,9 +4,12 @@
 %if (0%{?suse_version} >= 1500)
 # until we get an updated mercury build on 15.2
 %global mercury_version 2.0.0~rc1-1.suse.lp151
+# Until we get maven dependencies on el7/el8
+#%%global java_packages 1
 %else
 %global mercury_version 2.0.0~rc1-1%{?dist}
 %endif
+%global java_packages 1
 
 Name:          daos
 Version:       1.1.2.1
@@ -64,6 +67,17 @@ BuildRequires: valgrind-devel
 BuildRequires: systemd
 BuildRequires: python-devel
 BuildRequires: python-distro
+
+# Currently maven packages do not build on el7/el8
+%if (0%{?java_packages} >= 1)
+BuildRequires: maven-local
+BuildRequires: mvn(com.google.protobuf:protobuf-java)
+%if (0%{?suse_version} >= 1315)
+BuildRequires: mvn(org.codehaus.mojo:native-maven-plugin)
+BuildRequires: mvn(org.apache.logging.log4j:log4j-slf4j-impl)
+BuildRequires: mvn(org.apache.logging.log4j:log4j-core)
+%endif
+%endif
 %if (0%{?rhel} >= 7)
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
@@ -97,9 +111,12 @@ BuildRequires: libcurl4
 # have choice for libpsm_infinipath.so.1()(64bit) needed by libfabric1: libpsm2-compat libpsm_infinipath1
 # have choice for libpsm_infinipath.so.1()(64bit) needed by openmpi-libs: libpsm2-compat libpsm_infinipath1
 BuildRequires: libpsm_infinipath1
-%endif # 0%{?is_opensuse}
-%endif # (0%{?suse_version} >= 1315)
-%endif # (0%{?rhel} >= 7)
+      # 0%%{?is_opensuse}
+%endif
+    # (0%%{?suse_version} >= 1315)
+%endif
+  # (0%%{?rhel} >= 7)
+%endif
 %if (0%{?suse_version} >= 1500)
 Requires: libpmem1 >= 1.8, libpmemobj1 >= 1.8
 %else
@@ -204,12 +221,76 @@ Summary: The DAOS development libraries and headers
 %description devel
 This is the package needed to build software with the DAOS library.
 
+%if (0%{?java_packages} >= 1)
+%package java
+Requires: java-headless
+Summary: The DAOS Java API interface
+
+%description java
+This is the package needed for the Java API to the DAOS library.
+%endif
+
 %prep
 %autosetup
+
+# maven dependencies not yet available for el7/el8
+%if (0%{?java_packages} >= 1)
+pushd ./src/client/java
+%mvn_config properties/skipITs "true"
+%mvn_config properties/daos.install.path %{?buildroot}
+
+# pom_remove_plugin -r not working for el7
+%pom_remove_plugin :maven-antrun-plugin daos-java
+%pom_remove_plugin :maven-assembly-plugin
+%pom_remove_plugin :maven-assembly-plugin distribution
+%pom_remove_plugin :maven-checkstyle-plugin
+%pom_remove_plugin :maven-checkstyle-plugin hadoop-daos
+%pom_remove_plugin :maven-checkstyle-plugin daos-java
+%pom_remove_plugin :maven-clean-plugin
+%pom_remove_plugin :maven-compiler-plugin
+%pom_remove_plugin :maven-dependency-plugin
+%pom_remove_plugin :maven-deploy-plugin
+%pom_remove_plugin :maven-enforcer-plugin
+%pom_remove_plugin :maven-failsafe-plugin
+%pom_remove_plugin :maven-failsafe-plugin hadoop-daos
+%pom_remove_plugin :maven-failsafe-plugin daos-java
+%pom_remove_plugin :maven-gpg-plugin
+%pom_remove_plugin :maven-install-plugin
+%pom_remove_plugin :maven-invoker-plugin
+%pom_remove_plugin :maven-jar-plugin
+%pom_remove_plugin :maven-jar-plugin hadoop-daos
+%pom_remove_plugin :maven-javadoc-plugin
+#%%pom_remove_plugin :maven-plugin-plugin
+%pom_remove_plugin :maven-project-info-reports-plugin
+%pom_remove_plugin :maven-release-plugin
+%pom_remove_plugin :maven-remote-resources-plugin
+%pom_remove_plugin :maven-resources-plugin
+%pom_remove_plugin :maven-scm-plugin
+%pom_remove_plugin :maven-scm-publish-plugin
+%pom_remove_plugin :maven-shade-plugin
+%pom_remove_plugin :maven-shade-plugin hadoop-daos
+%pom_remove_plugin :maven-shade-plugin daos-java
+%pom_remove_plugin :maven-site-plugin
+%pom_remove_plugin :maven-source-plugin
+%pom_remove_plugin :maven-plugin-plugin
+%pom_remove_plugin :maven-surefire-plugin
+%pom_remove_plugin :maven-surefire-plugin daos-java
+%pom_remove_plugin :maven-surefire-plugin hadoop-daos
+%pom_remove_plugin :maven-surefire-report-plugin
+%pom_remove_plugin :native-maven-plugin daos-java
+popd
+%endif
 
 %build
 
 %define conf_dir %{_sysconfdir}/daos
+
+# maven dependencies not yet available for el7/el8
+%if (0%{?java_packages} >= 1)
+pushd ./src/client/java
+%mvn_build
+popd
+%endif
 
 scons %{?_smp_mflags}      \
       --config=force       \
@@ -220,6 +301,14 @@ scons %{?_smp_mflags}      \
      %{?scons_args}
 
 %install
+
+# maven dependencies not yet available for el7/el8
+%if (0%{?java_packages} >= 1)
+pushd ./src/client/java
+%mvn_install
+popd
+%endif
+
 scons %{?_smp_mflags}                 \
       --config=force                  \
       --no-rpath                      \
@@ -410,7 +499,19 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/libdaos.so
 %{_libdir}/*.a
 
+%if (0%{?java_packages} >= 1)
+%files java -f .mfiles
+${_prefix}/lib64/java/daos-java/src/main/*
+${_prefix}/lib64/java/daos-java/src/java/*
+${_prefix}/lib64/java/distribution/src/assembly/*
+${_prefix}/lib64/java/hadoop-daos/*
+${_prefix}/lib64/java/
+%endif
+
 %changelog
+* Fri Dec 11 2020 John E. Malmberg <john.e.malmberg@intel.com> 1.1.2.1-2
+- Add Java API package to DAOS
+
 * Wed Dec 09 2020 Johann Lombardi <johann.lombardi@intel.com> 1.1.2.1-1
 - Version bump up to 1.1.2.1
 
@@ -551,7 +652,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 * Thu Mar 26 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-7
 - Add systemd scriptlets for managing daos_server/daos_admin services
 
-* Thu Mar 26 2020 Alexander Oganeozv <alexander.a.oganezov@intel.com> - 1.1.0-6
+* Thu Mar 26 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> - 1.1.0-6
 - Update ofi to 62f6c937601776dac8a1f97c8bb1b1a6acfbc3c0
 
 * Tue Mar 24 2020 Jeffrey V. Olivier <jeffrey.v.olivier@intel.com> - 1.1.0-5
