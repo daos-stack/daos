@@ -64,7 +64,7 @@ class DaosAgentCommand(YamlCommand):
         """
         super(DaosAgentCommand, self).__init__(
             "/run/agent_config/*", "daos_agent", path, yaml_cfg, timeout)
-        self.pattern = "Listening on "
+        self.pattern = "listening on "
 
         # If specified use the configuration file from the YamlParameters object
         default_yaml_file = None
