@@ -89,12 +89,12 @@ class OSAUtils(IorTestBase):
         """
         status = False
         fail_count = 0
+        completion_flag = ["done", "completed"]
         while fail_count <= 20:
             rebuild_status = self.get_rebuild_status()
             time.sleep(time_interval)
             fail_count += 1
-            if (rebuild_status == "done" or
-               rebuild_status == "completed"):
+            if rebuild_status in completion_flag:
                 status = True
                 break
         return status
