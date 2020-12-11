@@ -210,7 +210,11 @@ class ExecutableCommand(CommandWithParameters):
                     self._command, str(state))
                 self._process.send_signal(signal_to_send)
                 if signal_list:
-                    time.sleep(5)
+                    start = time.time()
+                    while self._process._popen.poll() is None and time.time() - start < 5:
+                        time.sleep(0.01)
+                    elapsed = time.time() - start
+                    self.log.info('Waited %.2f, saved %.2f', elapsed, 5 - elapsed)
 
             if not signal_list:
                 if state and (len(state) > 1 or state[0] not in ("D", "Z")):
