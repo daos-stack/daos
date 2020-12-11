@@ -141,7 +141,7 @@ func (sr *syncRaft) withReadLock(fn func(raftService) error) error {
 
 func (cfg *DatabaseConfig) stringReplicas(excludeAddr *net.TCPAddr) (replicas []string) {
 	for _, r := range cfg.Replicas {
-		if common.CmpTcpAddr(r, excludeAddr) {
+		if common.CmpTCPAddr(r, excludeAddr) {
 			continue
 		}
 		replicas = append(replicas, r.String())
@@ -189,13 +189,15 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) (*Database, error) {
 			log: log,
 
 			Members: &MemberDatabase{
-				Ranks: make(MemberRankMap),
-				Uuids: make(MemberUuidMap),
-				Addrs: make(MemberAddrMap),
+				Ranks:        make(MemberRankMap),
+				Uuids:        make(MemberUuidMap),
+				Addrs:        make(MemberAddrMap),
+				FaultDomains: NewFaultDomainTree(),
 			},
 			Pools: &PoolDatabase{
-				Ranks: make(PoolRankMap),
-				Uuids: make(PoolUuidMap),
+				Ranks:  make(PoolRankMap),
+				Uuids:  make(PoolUuidMap),
+				Labels: make(PoolLabelMap),
 			},
 			SchemaVersion: CurrentSchemaVersion,
 		},
@@ -215,7 +217,7 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) (*Database, error) {
 // a known replica address.
 func (db *Database) isReplica(ctrlAddr *net.TCPAddr) bool {
 	for _, candidate := range db.cfg.Replicas {
-		if common.CmpTcpAddr(ctrlAddr, candidate) {
+		if common.CmpTCPAddr(ctrlAddr, candidate) {
 			return true
 		}
 	}
@@ -271,7 +273,7 @@ func (db *Database) IsBootstrap() bool {
 	}
 	// Only the first replica should bootstrap. All the others
 	// should be added as voters.
-	return common.CmpTcpAddr(db.cfg.Replicas[0], db.getReplica())
+	return common.CmpTCPAddr(db.cfg.Replicas[0], db.getReplica())
 }
 
 // CheckReplica returns an error if the node is not a replica.
@@ -447,7 +449,7 @@ func newGroupMap(version uint32) *GroupMap {
 
 // GroupMap returns the latest system group map.
 func (db *Database) GroupMap() (*GroupMap, error) {
-	if err := db.CheckLeader(); err != nil {
+	if err := db.CheckReplica(); err != nil {
 		return nil, err
 	}
 	db.data.RLock()
@@ -462,7 +464,7 @@ func (db *Database) GroupMap() (*GroupMap, error) {
 
 // ReplicaRanks returns the set of ranks associated with MS replicas.
 func (db *Database) ReplicaRanks() (*GroupMap, error) {
-	if err := db.CheckLeader(); err != nil {
+	if err := db.CheckReplica(); err != nil {
 		return nil, err
 	}
 	db.data.RLock()
@@ -478,9 +480,17 @@ func (db *Database) ReplicaRanks() (*GroupMap, error) {
 	return gm, nil
 }
 
+// copyMember makes a copy of the supplied Member pointer
+// for safe use outside of the database.
+func copyMember(in *Member) *Member {
+	out := new(Member)
+	*out = *in
+	return out
+}
+
 // AllMembers returns a copy of the system membership.
 func (db *Database) AllMembers() ([]*Member, error) {
-	if err := db.CheckLeader(); err != nil {
+	if err := db.CheckReplica(); err != nil {
 		return nil, err
 	}
 	db.data.RLock()
@@ -492,8 +502,7 @@ func (db *Database) AllMembers() ([]*Member, error) {
 	dbCopy := make([]*Member, len(db.data.Members.Uuids))
 	copyIdx := 0
 	for _, dbRec := range db.data.Members.Uuids {
-		dbCopy[copyIdx] = new(Member)
-		*dbCopy[copyIdx] = *dbRec
+		dbCopy[copyIdx] = copyMember(dbRec)
 		copyIdx++
 	}
 	return dbCopy, nil
@@ -503,6 +512,10 @@ func (db *Database) AllMembers() ([]*Member, error) {
 // supplied list of MemberStates. Note that the returned list is
 // non-deterministic, so callers should sort the results if that is
 // important.
+//
+// NB: If the returned members will be used outside of the database,
+// they should be copied using the copyMember() helper in order to
+// allow them to be safely modified.
 func (db *Database) filterMembers(desiredStates ...MemberState) (result []*Member) {
 	// NB: Must be done under a lock!
 
@@ -532,7 +545,7 @@ func (db *Database) filterMembers(desiredStates ...MemberState) (result []*Membe
 
 // MemberRanks returns a slice of all the ranks in the membership.
 func (db *Database) MemberRanks(desiredStates ...MemberState) ([]Rank, error) {
-	if err := db.CheckLeader(); err != nil {
+	if err := db.CheckReplica(); err != nil {
 		return nil, err
 	}
 	db.data.RLock()
@@ -550,7 +563,7 @@ func (db *Database) MemberRanks(desiredStates ...MemberState) ([]Rank, error) {
 
 // MemberCount returns the number of members in the system.
 func (db *Database) MemberCount(desiredStates ...MemberState) (int, error) {
-	if err := db.CheckLeader(); err != nil {
+	if err := db.CheckReplica(); err != nil {
 		return -1, err
 	}
 	db.data.RLock()
@@ -561,7 +574,7 @@ func (db *Database) MemberCount(desiredStates ...MemberState) (int, error) {
 
 // CurMapVersion returns the current system map version.
 func (db *Database) CurMapVersion() (uint32, error) {
-	if err := db.CheckLeader(); err != nil {
+	if err := db.CheckReplica(); err != nil {
 		return 0, err
 	}
 	db.data.RLock()
@@ -606,7 +619,7 @@ func (db *Database) AddMember(newMember *Member) error {
 
 	// If the new member is hosted by a MS replica other than this one,
 	// add it as a voter.
-	if !common.CmpTcpAddr(db.getReplica(), newMember.Addr) {
+	if !common.CmpTCPAddr(db.getReplica(), newMember.Addr) {
 		if db.isReplica(newMember.Addr) {
 			repAddr := newMember.Addr
 			rsi := raft.ServerID(repAddr.String())
@@ -645,14 +658,14 @@ func (db *Database) UpdateMember(m *Member) error {
 // FindMemberByRank searches the member database by rank. If no
 // member is found, an error is returned.
 func (db *Database) FindMemberByRank(rank Rank) (*Member, error) {
-	if err := db.CheckLeader(); err != nil {
+	if err := db.CheckReplica(); err != nil {
 		return nil, err
 	}
 	db.data.RLock()
 	defer db.data.RUnlock()
 
 	if m, found := db.data.Members.Ranks[rank]; found {
-		return m, nil
+		return copyMember(m), nil
 	}
 
 	return nil, &ErrMemberNotFound{byRank: &rank}
@@ -661,14 +674,14 @@ func (db *Database) FindMemberByRank(rank Rank) (*Member, error) {
 // FindMemberByUUID searches the member database by UUID. If no
 // member is found, an error is returned.
 func (db *Database) FindMemberByUUID(uuid uuid.UUID) (*Member, error) {
-	if err := db.CheckLeader(); err != nil {
+	if err := db.CheckReplica(); err != nil {
 		return nil, err
 	}
 	db.data.RLock()
 	defer db.data.RUnlock()
 
 	if m, found := db.data.Members.Uuids[uuid]; found {
-		return m, nil
+		return copyMember(m), nil
 	}
 
 	return nil, &ErrMemberNotFound{byUUID: &uuid}
@@ -678,23 +691,35 @@ func (db *Database) FindMemberByUUID(uuid uuid.UUID) (*Member, error) {
 // members are found, an error is returned. This search may return multiple
 // members, as a given address may be associated with more than one rank.
 func (db *Database) FindMembersByAddr(addr *net.TCPAddr) ([]*Member, error) {
-	if err := db.CheckLeader(); err != nil {
+	if err := db.CheckReplica(); err != nil {
 		return nil, err
 	}
 	db.data.RLock()
 	defer db.data.RUnlock()
 
-	if m, found := db.data.Members.Addrs[addr.String()]; found {
-		return m, nil
+	var copies []*Member
+	if members, found := db.data.Members.Addrs[addr.String()]; found {
+		for _, m := range members {
+			copies = append(copies, copyMember(m))
+		}
+		return copies, nil
 	}
 
 	return nil, &ErrMemberNotFound{byAddr: addr}
 }
 
+// copyPoolService makes a copy of the supplied PoolService pointer
+// for safe use outside of the database.
+func copyPoolService(in *PoolService) *PoolService {
+	out := new(PoolService)
+	*out = *in
+	return out
+}
+
 // PoolServiceList returns a list of pool services registered
 // with the system.
 func (db *Database) PoolServiceList() ([]*PoolService, error) {
-	if err := db.CheckLeader(); err != nil {
+	if err := db.CheckReplica(); err != nil {
 		return nil, err
 	}
 	db.data.RLock()
@@ -705,9 +730,8 @@ func (db *Database) PoolServiceList() ([]*PoolService, error) {
 	// elsewhere.
 	dbCopy := make([]*PoolService, len(db.data.Pools.Uuids))
 	copyIdx := 0
-	for _, dbRec := range db.data.Pools.Uuids {
-		dbCopy[copyIdx] = new(PoolService)
-		*dbCopy[copyIdx] = *dbRec
+	for _, ps := range db.data.Pools.Uuids {
+		dbCopy[copyIdx] = copyPoolService(ps)
 		copyIdx++
 	}
 	return dbCopy, nil
@@ -716,17 +740,33 @@ func (db *Database) PoolServiceList() ([]*PoolService, error) {
 // FindPoolServiceByUUID searches the pool database by UUID. If no
 // pool service is found, an error is returned.
 func (db *Database) FindPoolServiceByUUID(uuid uuid.UUID) (*PoolService, error) {
-	if err := db.CheckLeader(); err != nil {
+	if err := db.CheckReplica(); err != nil {
 		return nil, err
 	}
 	db.data.RLock()
 	defer db.data.RUnlock()
 
 	if p, found := db.data.Pools.Uuids[uuid]; found {
-		return p, nil
+		return copyPoolService(p), nil
 	}
 
 	return nil, &ErrPoolNotFound{byUUID: &uuid}
+}
+
+// FindPoolServiceByLabel searches the pool database by Label. If no
+// pool service is found, an error is returned.
+func (db *Database) FindPoolServiceByLabel(label string) (*PoolService, error) {
+	if err := db.CheckReplica(); err != nil {
+		return nil, err
+	}
+	db.data.RLock()
+	defer db.data.RUnlock()
+
+	if p, found := db.data.Pools.Labels[label]; found {
+		return copyPoolService(p), nil
+	}
+
+	return nil, &ErrPoolNotFound{byLabel: &label}
 }
 
 // AddPoolService creates an entry for a new pool service in the pool database.

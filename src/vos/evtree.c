@@ -1449,8 +1449,10 @@ evt_node_weight_diff(struct evt_context *tcx, struct evt_node *nd,
 	struct evt_weight  wt_org;
 	struct evt_weight  wt_new;
 
-	memset(&wt_org, 0, sizeof(wt_org));
-	memset(&wt_new, 0, sizeof(wt_new));
+	wt_org.wt_major = 0;
+	wt_org.wt_minor = 0;
+	wt_new.wt_major = 0;
+	wt_new.wt_minor = 0;
 
 	evt_mbr_read(&rtmp, nd);
 	tcx->tc_ops->po_rect_weight(tcx, &rtmp, &wt_org);
@@ -2114,6 +2116,128 @@ evt_entry_fill(struct evt_context *tcx, struct evt_node *node, unsigned int at,
 	}
 }
 
+struct evt_data_loss_item {
+	d_list_t		edli_link;
+	struct evt_rect		edli_rect;
+};
+
+static struct evt_data_loss_item *
+evt_data_loss_add(d_list_t *head, struct evt_rect *rect)
+{
+	struct evt_data_loss_item	*edli;
+
+	D_ALLOC_PTR(edli);
+	if (edli != NULL) {
+		edli->edli_rect = *rect;
+		d_list_add(&edli->edli_link, head);
+	}
+
+	return edli;
+}
+
+static int
+evt_data_loss_check(d_list_t *head, struct evt_entry_array *ent_array)
+{
+	struct evt_data_loss_item	*edli;
+	struct evt_data_loss_item	*tmp;
+	struct evt_list_entry		*entry;
+	int				 i;
+
+	d_list_for_each_entry_safe(edli, tmp, head, edli_link) {
+		bool	visible = true;
+
+		d_list_del(&edli->edli_link);
+
+		for (i = 0; i < ent_array->ea_ent_nr; i++) {
+			entry = &ent_array->ea_ents[i];
+
+			/* edli is newer */
+			if (edli->edli_rect.rc_epc > entry->le_ent.en_epoch)
+				continue;
+
+			/* non-overlap */
+			if (edli->edli_rect.rc_ex.ex_lo >
+			    entry->le_ent.en_ext.ex_hi ||
+			    edli->edli_rect.rc_ex.ex_hi <
+			    entry->le_ent.en_ext.ex_lo)
+				continue;
+
+			/* edli is totally covered by entry */
+			if (edli->edli_rect.rc_ex.ex_lo >=
+			    entry->le_ent.en_ext.ex_lo &&
+			    edli->edli_rect.rc_ex.ex_hi <=
+			    entry->le_ent.en_ext.ex_lo) {
+				visible = false;
+				break;
+			}
+
+			/* edli totally covers entry */
+			if (edli->edli_rect.rc_ex.ex_lo <=
+			    entry->le_ent.en_ext.ex_lo &&
+			    edli->edli_rect.rc_ex.ex_hi >=
+			    entry->le_ent.en_ext.ex_lo) {
+				/* cur low part */
+				if (edli->edli_rect.rc_ex.ex_lo ==
+				    entry->le_ent.en_ext.ex_lo) {
+					edli->edli_rect.rc_ex.ex_lo =
+						entry->le_ent.en_ext.ex_hi + 1;
+					continue;
+				}
+
+				/* cut high part */
+				if (edli->edli_rect.rc_ex.ex_hi ==
+				    entry->le_ent.en_ext.ex_hi) {
+					edli->edli_rect.rc_ex.ex_hi =
+						entry->le_ent.en_ext.ex_lo - 1;
+					continue;
+				}
+
+				tmp = evt_data_loss_add(head, &edli->edli_rect);
+				if (tmp == NULL) {
+					D_FREE(edli);
+					return -DER_NOMEM;
+				}
+
+				/* split edli */
+				tmp->edli_rect.rc_ex.ex_lo =
+					entry->le_ent.en_ext.ex_hi + 1;
+				tmp->edli_rect.rc_ex.ex_hi =
+					edli->edli_rect.rc_ex.ex_hi;
+				edli->edli_rect.rc_ex.ex_hi =
+					entry->le_ent.en_ext.ex_lo - 1;
+				continue;
+			}
+
+			/* edli low part overlap with entry */
+			if (edli->edli_rect.rc_ex.ex_lo <=
+			    entry->le_ent.en_ext.ex_hi &&
+			    edli->edli_rect.rc_ex.ex_hi >
+			    entry->le_ent.en_ext.ex_hi) {
+				edli->edli_rect.rc_ex.ex_lo =
+					entry->le_ent.en_ext.ex_hi + 1;
+				continue;
+			}
+
+			/* edli high part overlap with entry */
+			if (edli->edli_rect.rc_ex.ex_hi >=
+			    entry->le_ent.en_ext.ex_lo &&
+			    edli->edli_rect.rc_ex.ex_lo <
+			    entry->le_ent.en_ext.ex_lo) {
+				edli->edli_rect.rc_ex.ex_hi =
+					entry->le_ent.en_ext.ex_lo - 1;
+				continue;
+			}
+		}
+
+		D_FREE(edli);
+
+		if (visible)
+			return -DER_DATA_LOSS;
+	}
+
+	return 0;
+}
+
 /**
  * See the description in evt_priv.h
  */
@@ -2123,16 +2247,20 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 		   const struct evt_rect *rect,
 		   struct evt_entry_array *ent_array)
 {
-	umem_off_t	nd_off;
-	int		level;
-	int		at;
-	int		i;
-	int		rc = 0;
+	struct evt_data_loss_item	*edli;
+	d_list_t			 data_loss_list;
+	umem_off_t			 nd_off;
+	int				 level;
+	int				 at;
+	int				 i;
+	int				 rc = 0;
 
 	V_TRACE(DB_TRACE, "Searching rectangle "DF_RECT" opc=%d\n",
 		DP_RECT(rect), find_opc);
 	if (tcx->tc_root->tr_depth == 0)
 		return 0; /* empty tree */
+
+	D_INIT_LIST_HEAD(&data_loss_list);
 
 	evt_tcx_reset_trace(tcx);
 	ent_array->ea_inob = tcx->tc_inob;
@@ -2266,6 +2394,13 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				if (rc < 0)
 					D_GOTO(out, rc);
 			case EVT_FIND_ALL:
+				if (rc == -DER_DATA_LOSS) {
+					if (evt_data_loss_add(&data_loss_list,
+							      &rtmp) == NULL)
+						D_GOTO(out, rc = -DER_NOMEM);
+
+					continue;
+				}
 				break;
 			}
 
@@ -2318,8 +2453,16 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 		}
 	}
 out:
+	if (rc == 0 && !d_list_empty(&data_loss_list))
+		rc = evt_data_loss_check(&data_loss_list, ent_array);
+
 	if (rc != 0)
 		evt_ent_array_fini(ent_array);
+
+	while ((edli = d_list_pop_entry(&data_loss_list,
+					struct evt_data_loss_item,
+					edli_link)) != NULL)
+		D_FREE(edli);
 
 	return rc;
 }
@@ -2755,7 +2898,6 @@ static int
 evt_common_rect_weight(struct evt_context *tcx, const struct evt_rect *rect,
 		       struct evt_weight *weight)
 {
-	memset(weight, 0, sizeof(*weight));
 	weight->wt_major = rect->rc_ex.ex_hi - rect->rc_ex.ex_lo;
 	weight->wt_minor = 0; /* Disable minor weight in favor of distance */
 
@@ -3266,7 +3408,7 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 {
 	struct evt_context	*tcx;
 	struct evt_entry	*entry;
-	struct evt_entry_array	 ent_array;
+	struct evt_entry_array	 ent_array = { 0 };
 	struct evt_filter	 filter = {0};
 	int			 rc;
 	struct evt_rect		 rect;
@@ -3288,12 +3430,11 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 				&filter, &rect, &ent_array);
 	if (rc != 0) {
 		D_ERROR("ent_array_fill failed: "DF_RC"\n", DP_RC(rc));
-		evt_ent_array_fini(&ent_array);
-		return rc;
+		goto done;
 	}
 
 	if (ent_array.ea_ent_nr == 0)
-		return 0;
+		D_GOTO(done, rc = 0);
 
 	evt_ent_array_for_each(entry, &ent_array) {
 		if (entry->en_visibility & EVT_PARTIAL) {
@@ -3307,7 +3448,7 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 
 	rc = evt_tx_begin(tcx);
 	if (rc != 0)
-		return rc;
+		goto done;
 
 	evt_ent_array_for_each(entry, &ent_array) {
 		struct evt_rect	to_delete;
@@ -3391,8 +3532,6 @@ evt_entry_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 	if (tcx->tc_root->tr_csum_len == 0)
 		return;
 
-	memset(&entry->en_csum, 0, sizeof(entry->en_csum));
-
 	/**
 	 * Fill these in even if is a hole. Aggregation depends on these
 	 * being set to always know checksums is enabled
@@ -3400,8 +3539,14 @@ evt_entry_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 	entry->en_csum.cs_type = tcx->tc_root->tr_csum_type;
 	entry->en_csum.cs_len = tcx->tc_root->tr_csum_len;
 	entry->en_csum.cs_chunksize = tcx->tc_root->tr_csum_chunk_size;
-	if (bio_addr_is_hole(&desc->dc_ex_addr))
+
+	if (bio_addr_is_hole(&desc->dc_ex_addr)) {
+		entry->en_csum.cs_nr = 0;
+		entry->en_csum.cs_buf_len = 0;
+		entry->en_csum.cs_csum = NULL;
 		return;
+	}
+
 	D_DEBUG(DB_TRACE, "Filling entry csum from evt_desc");
 	csum_count = evt_csum_count(tcx, &entry->en_ext);
 	entry->en_csum.cs_nr = csum_count;

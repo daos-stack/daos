@@ -126,12 +126,18 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 		ci_set_null(rbund.rb_csum);
 
 		rc = dbtree_iter_fetch(ih, &kiov, &riov, anchor);
+		if (vos_dtx_continue_detect(rc))
+			goto next;
+
 		if (rc != 0)
 			break;
 
 		rc = check_key(query, rbund.rb_krec);
 		if (rc == 0)
 			break;
+
+		if (vos_dtx_continue_detect(rc))
+			continue;
 
 		if (rc != -DER_NONEXIST)
 			break;
@@ -140,6 +146,7 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 		query->qt_epr = epr;
 		query->qt_punch = punch;
 
+next:
 		if (query->qt_flags & VOS_GET_MAX)
 			rc = dbtree_iter_prev(ih);
 		else
@@ -151,7 +158,7 @@ out:
 	if (rc == 0)
 		rc = fini_rc;
 
-	return rc;
+	return vos_dtx_hit_inprogress() ? -DER_INPROGRESS : rc;
 }
 
 static int
@@ -417,8 +424,10 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		goto out;
 	}
 
-	if (obj->obj_ilog_info.ii_uncertain_create)
-		return -DER_TX_RESTART;
+	if (obj->obj_ilog_info.ii_uncertain_create) {
+		rc = -DER_TX_RESTART;
+		goto out;
+	}
 
 	D_ASSERT(obj != NULL);
 	/* only integer keys supported */

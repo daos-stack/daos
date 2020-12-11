@@ -315,8 +315,6 @@ static void
 pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
 		 struct pl_map_init_attr *mia)
 {
-	memset(mia, 0, sizeof(*mia));
-
 	switch (type) {
 	default:
 		D_ASSERTF(0, "Unknown placemet map type: %d.\n", type);
@@ -329,9 +327,8 @@ pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
 		break;
 	case PL_TYPE_JUMP_MAP:
 		mia->ia_type            = PL_TYPE_JUMP_MAP;
-		mia->ia_jump_map.domain  = DSR_JUMP_MAP_DOMAIN;
+		mia->ia_jump_map.domain = DSR_JUMP_MAP_DOMAIN;
 	}
-
 }
 
 struct pl_map *
@@ -571,9 +568,10 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 		 * a parity node) as leader.
 		 */
 		shard = pl_get_shard(data, idx);
-		while (shard->po_rebuilding) {
+		while (shard->po_rebuilding || shard->po_shard == -1 ||
+		       shard->po_target == -1) {
 			idx--;
-			if (++fail_cnt > oc_attr->u.ec.e_p)
+			if (++fail_cnt >= oc_attr->u.ec.e_p)
 				return -DER_IO;
 			shard = pl_get_shard(data, idx);
 		}

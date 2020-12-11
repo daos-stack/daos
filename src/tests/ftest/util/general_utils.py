@@ -25,11 +25,8 @@ from __future__ import print_function
 from logging import getLogger
 import os
 import re
-import json
 import random
 import string
-from pathlib import Path
-from errno import ENOENT
 from getpass import getuser
 from importlib import import_module
 
@@ -179,8 +176,13 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
                 "Verify env values are defined as strings: {}".format(env)])
 
     except process.CmdError as error:
-        # Command failed or possibly timed out
-        msg = "Error occurred running '{}': {}".format(command, error)
+        # Report if the command timed out or failed
+        if error.result.interrupted:
+            msg = "Timeout detected running '{}' with a {}s timeout".format(
+                command, timeout)
+        else:
+            msg = "Error occurred running '{}': {}".format(
+                command, error.result)
 
     if msg is not None:
         print(msg)
@@ -364,32 +366,6 @@ def check_file_exists(hosts, filename, user=None, directory=False):
     return len(missing_file) == 0, missing_file
 
 
-def get_file_path(bin_name, dir_path=""):
-    """
-    Find the binary path name in daos_m and return the list of path.
-
-    args:
-        bin_name: bin file to be.
-        dir_path: Directory location on top of daos_m to find the
-                  bin.
-    return:
-        list: list of the paths for bin_name file
-    Raises:
-        OSError: If failed to find the bin_name file
-    """
-    with open('../../.build_vars.json') as json_file:
-        build_paths = json.load(json_file)
-    basepath = os.path.normpath(build_paths['PREFIX'] + "/../{0}"
-                                .format(dir_path))
-
-    file_path = list(Path(basepath).glob('**/{0}'.format(bin_name)))
-    if not file_path:
-        raise OSError(ENOENT, "File {0} not found inside {1} Directory"
-                      .format(bin_name, basepath))
-
-    return file_path
-
-
 def process_host_list(hoststr):
     """
     Convert a slurm style host string into a list of individual hosts.
@@ -524,7 +500,11 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60):
             "sudo pkill {}".format(pattern),
             "sleep 5",
             "if pgrep --list-full {}".format(pattern),
+            "then pkill --signal ABRT {}".format(pattern),
+            "sleep 1",
+            "if pgrep --list-full {}".format(pattern),
             "then pkill --signal KILL {}".format(pattern),
+            "fi",
             "fi",
             "fi",
             "exit $rc",

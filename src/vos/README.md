@@ -23,8 +23,11 @@ This document contains the following sections:
     - <a href="#724">Internal Data Structures</a>
 - <a href="#73">Key Array Stores</a>
 - <a href="#82">Conditional Update and MVCC</a>
-    - <a href="#821">Read Timestamps</a>
-    - <a href="#822">MVCC Rules</a>
+    - <a href="#821">VOS Timestamp Cache</a>
+    - <a href="#822">Read Timestamps</a>
+    - <a href="#823">Write Timestamps</a>
+    - <a href="#824">MVCC Rules</a>
+    - <a href="#825">Punch Propagation</a>
 - <a href="#74">Epoch Based Operations</a>
     - <a href="#741">VOS Discard</a>
     - <a href="#742">VOS Aggregate</a>
@@ -429,7 +432,7 @@ For deleting nodes from an EV-Tree, the same approach as search can be used to l
 Once deleted, to coalesce multiple leaf-nodes that have less than order/2 entries, reinsertion is done.
 EV-tree reinserts are done (instead of merging leaf-nodes as in B+ trees) because on deletion of leaf node/slots, the size of bounding boxes changes, and it is important to make sure the rectangles are organized into minimum bounding boxes without unnecessary overlaps.
 In VOS, delete is required only during aggregation and discard operations.
-These operations are discussed in a following section (<a hfer="#74">Epoch Based Operations</a>).
+These operations are discussed in a following section (<a href="#74">Epoch Based Operations</a>).
 
 <a id="82"></a>
 ## Conditional Update and MVCC
@@ -445,28 +448,77 @@ following operations are supported:
 These operations provide atomic operations enabling certain use cases that
 require such.  Conditional operations are implemented using a combination of
 existence checks and read timestamps.   The read timestamps enable limited
-MVCC to prevent read/write races and provide atomicity guarantees.
+MVCC to prevent read/write races and provide serializability guarantees.
 
-<a id="821"></a>
-### Read Timestamps
+<a id="821"><a>
+### VOS Timestamp Cache
 
-VOS tracks multiple read timestamps for containers, objects, dkeys, and akeys
-for the express purpose of supporting conditional operations and
-distributed transactions from individual clients.  These timestamps are
-allocated from a flat array, partitioned by type, using an LRU algorithm
-for each type (container, object, dkey, akey, and negative entries for
-each).   For example, when a key is accessed, it is looked up by the stored
-index.  If it's still in cache, the timestamps are used.   If it isn't
-in cache, or upon creation, it is pulled into cache by evicting the LRU
-entry for the type.   This provides an O(1) lookup for timestamps
-associated with each entity.  Two read timestamps for each entity: 1. A low
-timestamp (entity.low) indicating that _all_ nodes in the subtree rooted at the
-entity have been read at entity.low and 2. A high timestamp (entity.high)
-indicating that _at least_ one node in the subtree rooted at the entity has
-been read at entity.high. For any leaf node (i.e., akey), low == high; for any
-non-leaf node, low <= high.
+VOS maintains an in-memory cache of read and write timestamps in order to
+enforce MVCC semantics.  The timestamp cache itself consists of two parts:
+
+1. Negative entry cache. A global array per target for each type of entity
+including objects, dkeys, and akeys.  The index at each level is determined by
+the combination of the index of the parent entity, or 0 in the case of
+containers, and the hash of the entity in question.   If two different keys map
+to the same index, they share timestamp entries.   This will result in some
+false conflicts but does not affect correctness so long as progress can be made.
+The purpose of this array is to store timestamps for entries that do not exist
+in the VOS tree.   Once an entry is created, it will use the mechanism described
+in #2 below.  Note that multiple pools in the same target use this shared
+cache so it is also possible for false conflicts across pools before an
+entity exists.  These entries are initialized at startup using the global
+time of the starting server.   This ensures that any updates at an earlier
+time are forced to restart to ensure we maintain automicity since timestamp
+data is lost when a server goes down.
+2. Positive entry cache. An LRU cache per target for existing containers,
+objects, dkeys, and akeys.  One LRU array is used for each level such that
+containers, objects, dkeys, and akeys only conflict with cache entries of the
+same type.  Some accuracy is lost when existing items are evicted from the cache
+as the values will be merged with the corresponding negative entry described in
+#1 above until such time as the entry is brought back into cache.   The index of
+the cached entry is stored in the VOS tree though it is only valid at runtime.
+On server restarts, the LRU cache is initialized from the global time when the
+restart occurs and all entries are automatically invalidated.  When a new entry
+is brought into the LRU, it is initialized using the corresponding negative
+entry.  The index of the LRU entry is stored in the VOS tree providing O(1)
+lookup on subsequent accesses.
 
 <a id="822"></a>
+### Read Timestamps
+
+Each entry in the timestamp cache contains two read timestamps in order to
+provide serializability guarantees for DAOS operations.  These timestamps are
+
+1. A low timestamp (entity.low) indicating that _all_ nodes in the subtree
+rooted at the entity have been read at entity.low
+2. A high timestamp (entity.high) indicating that _at least_ one node in the
+subtree rooted at the entity has been read at entity.high.
+
+For any leaf node (i.e., akey), low == high; for any non-leaf node, low <= high.
+
+The usage of these timestamps is described <a href="#824">below</a>
+
+<a id="823"></a>
+### Write Timestamps
+
+In order to detect epoch uncertainty violations, VOS also maintains a pair of
+write timestamps for each container, object, dkey, and akey. Logically,
+the timestamps represent the latest two updates to either the entity itself
+or to an entity in a subtree. At least two timestamps are required to avoid
+assuming uncertainty if there are any later updates.  The figure
+<a href="#8a">below</a> shows the need for at least two timestamps.  With a
+single timestamp only, the first, second, and third cases would be
+indistinguishable and would be rejected as uncertain.  The most accurate write
+timestamp is used in all cases.  For instance, if the access is an array fetch,
+we will check for conflicting extents in the absence of an uncertain punch of
+the corresponding key or object.
+
+<a id="8a"></a>
+<b>Scenarios illustrating utility of write timestamp cache</b>
+
+![../../doc/graph/uncertainty.png](../../doc/graph/uncertainty.png "Scenarios illustrating utility of write timestamp cache")
+
+<a id="824"></a>
 ### MVCC Rules
 
 Every DAOS I/O operation belongs to a transaction. If a user does not associate
@@ -477,9 +529,13 @@ check passes, an update, or punch operation.
 
 Every transaction gets an epoch. Single-operation transactions and conditional
 updates get their epochs from the redundancy group servers they access,
-snapshot read transactions get their epoch from the snapshot records and other
-transactions get their epochs from the initiating clients' HLC. A transaction
-performs all operations using its epoch.
+snapshot read transactions get their epoch from the snapshot records and every
+other transaction gets its epoch from the HLC of the first server it accesses.
+(Earlier implementations use client HLCs to choose epochs in the last case. To
+relax the clock synchronization requirement for clients, later implementations
+have moved to use server HLCs to choose epochs, while introducing client HLC
+Trackers that track the highest server HLC timestamps clients have heard of.) A
+transaction performs all operations using its epoch.
 
 The MVCC rules ensure that transactions execute as if they are serialized in
 their epoch order while complying with external consistency, as long as the
@@ -570,8 +626,23 @@ such edges together, causing a contradiction that a reading transaction cannot
 block other transactions. Deadlocks are, therefore, not a concern.
 
 If an entity keeps getting reads with increasing epochs, writes to this entity
-may keep being rejected due to the entity's ever-increasing read timestamps. A
-solution to starvation problems like this is a work in progress.
+may keep being rejected due to the entity's ever-increasing read timestamps.
+Exponential backoffs with randomizations (see d_backoff_seq) have been
+introduced during daos_tx_restart calls. These are effective for dfs_move
+workloads, where readers also write.
+
+<a id="825"></a>
+### Punch propagation
+
+Since conditional operations rely on an emptiness semantic, VOS read
+operations, particularly listing can be very expensive because they would
+require potentially reading the subtree to see if the entity is empty or not.
+In order to alieviate this problem, VOS instead does punch propagation.
+On a punch operation, the parent tree is read to see if the punch
+causes it to be empty.  If it does, the parent tree is punched as well.
+Propagation presently stops at the dkey level, meaning the object will
+not be punched. Punch propagation only applies when punching keys, not
+values.
 
 <a id="74"></a>
 

@@ -40,9 +40,9 @@ crt_hdlr_ctl_fi_toggle(crt_rpc_t *rpc_req)
 	out_args = crt_reply_get(rpc_req);
 
 	if (in_args->op)
-		d_fault_inject_enable();
+		rc = d_fault_inject_enable();
 	else
-		d_fault_inject_disable();
+		rc = d_fault_inject_disable();
 
 	out_args->rc = rc;
 	rc = crt_reply_send(rpc_req);
@@ -1445,6 +1445,10 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
 	self_rank = crt_gdata.cg_grp->gg_primary_grp->gp_self;
+
+	/* If RPC failed HLC epsilon delta check return an error */
+	if (rpc_priv->crp_fail_hlc)
+		D_GOTO(out, rc = -DER_HLC_SYNC);
 
 	if (self_rank == CRT_NO_RANK)
 		skip_check = true;
