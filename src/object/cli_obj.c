@@ -3109,7 +3109,9 @@ obj_shard_comp_cb(struct shard_auxi_args *shard_auxi,
 		if (ret != -DER_REC2BIG && !obj_retry_error(ret) &&
 		    !obj_is_modification_opc(obj_auxi->opc) &&
 		    !obj_auxi->is_ec_obj && !obj_auxi->spec_shard &&
-		    !obj_auxi->spec_group && !obj_auxi->to_leader) {
+		    !obj_auxi->spec_group && !obj_auxi->to_leader &&
+		    ret != -DER_TX_RESTART &&
+		    !DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY)) {
 			int new_tgt;
 
 			/* Check if there are other replicas available to
@@ -3561,6 +3563,10 @@ obj_comp_cb(tse_task_t *task, void *data)
 	if (!obj_auxi->io_retry && task->dt_result == 0 &&
 	    obj_auxi->reasb_req.orr_size_fetch)
 		obj_size_fetch_cb(obj, obj_auxi);
+
+	if (task->dt_result == -DER_INPROGRESS &&
+	    DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY))
+		obj_auxi->io_retry = 0;
 
 	if (pm_stale || obj_auxi->io_retry)
 		obj_retry_cb(task, obj, obj_auxi, pm_stale);

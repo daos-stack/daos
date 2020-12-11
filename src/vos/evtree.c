@@ -2401,6 +2401,12 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 
 					continue;
 				}
+
+				/* Stop when read hit -DER_INPROGRESS. */
+				if (rc == -DER_INPROGRESS &&
+				    intent == DAOS_INTENT_DEFAULT)
+					goto out;
+
 				break;
 			}
 
