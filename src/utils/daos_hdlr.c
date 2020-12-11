@@ -1921,12 +1921,12 @@ cont_rollback_hdlr(struct cmd_args_s *ap)
 int
 cont_list_objs_hdlr(struct cmd_args_s *ap)
 {
-	static const int OID_ARR_SIZE	= 8;
-	daos_obj_id_t oids[OID_ARR_SIZE];
-	daos_handle_t oit;
-	daos_anchor_t anchor;
-	uint32_t oids_nr;
-	int rc, rc2 = 0, i;
+	static const int	OID_ARR_SIZE = 8;
+	daos_obj_id_t		oids[OID_ARR_SIZE];
+	daos_handle_t		oit;
+	daos_anchor_t		anchor = {0};
+	uint32_t		oids_nr;
+	int			rc, rc2 = 0, i;
 
 	/* create a snapshot */
 	rc = cont_create_snap_hdlr(ap);
@@ -1936,16 +1936,18 @@ cont_list_objs_hdlr(struct cmd_args_s *ap)
 	/* open OIT */
 	rc = daos_oit_open(ap->cont, ap->epc, &oit, NULL);
 	if (rc != 0) {
-		fprintf(stderr, "open of container's OIT failed: %d\n", rc);
+		fprintf(stderr, "open of container's OIT failed: "DF_RC"\n",
+			DP_RC(rc));
 		goto out_snap;
 	}
 
-	memset(&anchor, 0, sizeof(anchor));
 	while (!daos_anchor_is_eof(&anchor)) {
 		oids_nr = OID_ARR_SIZE;
 		rc = daos_oit_list(oit, oids, &oids_nr, &anchor, NULL);
 		if (rc != 0) {
-			fprintf(stderr, "object IDs enumeration failed: %d\n", rc);
+			fprintf(stderr,
+				"object IDs enumeration failed: "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(out_close, rc);
 		}
 
