@@ -56,6 +56,12 @@ dc_cp(tse_task_t *task, void *data)
 }
 
 int
+dc_dummy(tse_task_t *task)
+{
+	return -DER_NOSYS;
+}
+
+int
 dc_mgmt_profile(char *path, int avg, bool start)
 {
 	struct dc_mgmt_sys	*sys;
