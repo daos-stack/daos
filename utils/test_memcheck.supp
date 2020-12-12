@@ -754,3 +754,20 @@
    fun:_cmocka_run_group_tests
    fun:main
 }
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:malloc
+   fun:vmem_alloc
+   fun:utest_alloc
+   fun:bio_alloc_init
+   fun:bio_strdup
+   fun:ts_add_rect
+   fun:ts_cmd_run
+   fun:ts_group
+   obj:/usr/lib64/libcmocka.so.0.7.0
+   fun:_cmocka_run_group_tests
+   fun:run_cmd_line_test
+   fun:main
+}
