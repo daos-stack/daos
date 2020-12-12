@@ -47,7 +47,7 @@ class EcDisabledRebuild(ErasureCodeIor):
                   EC object type class for small and large transfer sizes.
                   kill single server, verify all IOR read data and verified.
 
-        :avocado: tags=all,pr,hw,large,full_regression,ec,ec_disabled_rebuild
+        :avocado: tags=all,hw,large,full_regression,ec,ec_disabled_rebuild
         """
         #Disabled pool Rebuild
         self.pool.set_property("self_heal", "exclude")
