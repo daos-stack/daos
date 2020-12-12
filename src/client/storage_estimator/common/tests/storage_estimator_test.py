@@ -34,45 +34,42 @@ class VosValueTestCase(unittest.TestCase):
     def test_invalid_parameters(self):
         with pytest.raises(ValueError) as err:
             value = VosValue()
-        self.assertIn("size parameter is required", str(err.value), "#Error")
+        assert "size parameter is required" in str(err.value)
 
         with pytest.raises(TypeError) as err:
             value = VosValue(size="rubbish")
-        self.assertIn("size parameter must be of type int", str(err.value),
-                      "#Error")
+        assert "size parameter must be of type int" in str(err.value)
 
         with pytest.raises(TypeError) as err:
             value = VosValue(size=5, count="rubbish")
-        self.assertIn("count parameter must be of type int", str(err.value),
-                      "#Error")
+        assert "count parameter must be of type int" in str(err.value)
 
         with pytest.raises(TypeError) as err:
             value = VosValue(
                 size=5, count=10, aligned="rubbish")
-        self.assertIn("aligned parameter must be of type", str(err.value),
-                      "#Error")
+        assert "aligned parameter must be of type" in str(err.value)
 
     def test_default_parameters(self):
         value = VosValue(size=10)
         want = {"size": 10, "count": 1, "aligned": "Yes"}
         got = value.dump()
-        self.assertEqual(want, got, "#Error")
+        assert want == got
 
     def test_constructor(self):
         value = VosValue(size=10, aligned="Yes")
         want = {"size": 10, "count": 1, "aligned": "Yes"}
         got = value.dump()
-        self.assertEqual(want, got, "#Error")
+        assert want == got
 
         value = VosValue(size=10, aligned="No")
         want = {"size": 10, "count": 1, "aligned": "No"}
         got = value.dump()
-        self.assertEqual(want, got, "#Error")
+        assert want == got
 
         value = VosValue(size=10, count=20, aligned="No")
         want = {"size": 10, "count": 20, "aligned": "No"}
         got = value.dump()
-        self.assertEqual(want, got, "#Error")
+        assert want == got
 
 
 @pytest.fixture(scope="class")
@@ -216,36 +213,31 @@ class AKeyTestCase(unittest.TestCase):
     def test_invalid_parameters(self):
         with pytest.raises(ValueError) as err:
             akey = AKey()
-        self.assertIn("value_type parameter is required", str(err.value),
-                      "#Error")
+        assert "value_type parameter is required" in str(err.value)
 
         with pytest.raises(TypeError) as err:
             akey = AKey(value_type="rubbish")
-        self.assertIn("value_type parameter must be of type", str(err.value),
-                      "#Error")
+        assert "value_type parameter must be of type" in str(err.value)
 
         with pytest.raises(TypeError) as err:
             akey = AKey(
                 value_type="single_value", count="rubbish")
-        self.assertIn("count parameter must be of type int", str(err.value),
-                      "#Error")
+        assert "count parameter must be of type int" in str(err.value)
 
         with pytest.raises(TypeError) as err:
             akey = AKey(
                 value_type="single_value", key_type="rubbish")
-        self.assertIn("key_type parameter must be of type", str(err.value),
-                      "#Error")
+        assert "key_type parameter must be of type" in str(err.value)
 
         with pytest.raises(TypeError) as err:
             akey = AKey(
                 value_type="single_value", overhead="rubbish")
-        self.assertIn("overhead parameter must be of type", str(err.value),
-                      "#Error")
+        assert "overhead parameter must be of type" in str(err.value)
 
         with pytest.raises(TypeError) as err:
             akey = AKey(
                 value_type="single_value", values=["rubbish"])
-        self.assertIn("must be of type", str(err.value), "#Error")
+        assert "must be of type" in str(err.value)
 
     def test_constructor(self):
         values = self.test_data.create_values()
@@ -255,7 +247,7 @@ class AKeyTestCase(unittest.TestCase):
             value_type="single_value",
             values=values)
         want = self.test_data.create_default_akey()
-        self.assertEqual(want, akey.dump(), "#Error")
+        assert want == akey.dump()
 
         akey = AKey(
             key="A-key 1",
@@ -264,7 +256,7 @@ class AKeyTestCase(unittest.TestCase):
             values=values)
         want = self.test_data.create_default_akey(
             key="A-key 1", key_type="hashed", value_type="single_value")
-        self.assertEqual(want, akey.dump(), "#Error")
+        assert want == akey.dump()
 
         akey = AKey(
             key_type="integer",
@@ -272,7 +264,7 @@ class AKeyTestCase(unittest.TestCase):
             values=values)
         want = self.test_data.create_default_akey(
             key_type="integer", value_type="single_value")
-        self.assertEqual(want, akey.dump(), "#Error")
+        assert want == akey.dump()
 
         akey = AKey(
             key_type="integer",
@@ -281,7 +273,7 @@ class AKeyTestCase(unittest.TestCase):
             values=values)
         want = self.test_data.create_default_akey(
             key_type="integer", value_type="single_value", count=20)
-        self.assertEqual(want, akey.dump(), "#Error")
+        assert want == akey.dump()
 
         akey = AKey(
             key_type="integer",
@@ -290,7 +282,7 @@ class AKeyTestCase(unittest.TestCase):
             values=values)
         want = self.test_data.create_default_akey(
             key_type="integer", value_type="single_value", overhead="user")
-        self.assertEqual(want, akey.dump(), "#Error")
+        assert want == akey.dump()
 
         akey = AKey(
             key_type="integer",
@@ -299,7 +291,7 @@ class AKeyTestCase(unittest.TestCase):
             values=values)
         want = self.test_data.create_default_akey(
             key_type="integer", value_type="single_value", overhead="meta")
-        self.assertEqual(want, akey.dump(), "#Error")
+        assert want == akey.dump()
 
         akey = AKey(
             key="A-key 1",
@@ -308,7 +300,7 @@ class AKeyTestCase(unittest.TestCase):
             values=values)
         want = self.test_data.create_default_akey(
             key="A-key 1", value_type="array", overhead="user")
-        self.assertEqual(want, akey.dump(), "#Error")
+        assert want == akey.dump()
 
         akey = AKey(
             key="A-key 1",
@@ -317,7 +309,7 @@ class AKeyTestCase(unittest.TestCase):
             values=values)
         want = self.test_data.create_default_akey(
             key="A-key 1", value_type="array", overhead="meta")
-        self.assertEqual(want, akey.dump(), "#Error")
+        assert want == akey.dump()
 
         akey = AKey(
             key="A-key 1",
@@ -325,21 +317,20 @@ class AKeyTestCase(unittest.TestCase):
             values=values)
         want = self.test_data.create_default_akey(
             key="A-key 1", key_type=None, value_type="array")
-        self.assertEqual(want, akey.dump(), "#Error")
+        assert want == akey.dump()
 
     def test_add_value(self):
         with pytest.raises(VosValueError) as err:
             akey = AKey(
                 key="A-key 1", value_type="single_value")
             akey.dump()
-        self.assertIn("list of values must not be empty", str(err.value),
-                      "#Error")
+        assert "list of values must not be empty" in str(err.value)
 
         with pytest.raises(TypeError) as err:
             akey = AKey(
                 key="A-key 1", value_type="single_value")
             akey.add_value("rubbish")
-        self.assertIn("must be of type", str(err.value), "#Error")
+        assert "must be of type" in str(err.value)
 
         akey = AKey(key="A-key 1", value_type="single_value")
         value = VosValue(size=10, aligned="Yes")
@@ -347,7 +338,7 @@ class AKeyTestCase(unittest.TestCase):
         value = VosValue(size=20, aligned="No")
         akey.add_value(value)
         want = self.test_data.create_default_akey()
-        self.assertEqual(want, akey.dump(), "#Error")
+        assert want == akey.dump()
 
 
 @pytest.mark.usefixtures("vos_test_data")
@@ -355,24 +346,20 @@ class DKeyTestCase(unittest.TestCase):
     def test_invalid_parameters(self):
         with pytest.raises(TypeError) as err:
             akey = DKey(count="rubbish")
-        self.assertIn("count parameter must be of type int", str(err.value),
-                      "#Error")
+        assert "count parameter must be of type int" in str(err.value)
 
         with pytest.raises(TypeError) as err:
             akey = DKey(key_type="rubbish")
-        self.assertIn("key_type parameter must be of type", str(err.value),
-                      "#Error")
+        assert "key_type parameter must be of type" in str(err.value)
 
         with pytest.raises(TypeError) as err:
             akey = DKey(overhead="rubbish")
-        self.assertIn("overhead parameter must be of type", str(err.value),
-                      "#Error")
+        assert "overhead parameter must be of type" in str(err.value)
 
         with pytest.raises(VosValueError) as err:
             dkey = DKey()
             akey = dkey.dump()
-        self.assertIn("list of akeys must not be empty", str(err.value),
-                      "#Error")
+        assert "list of akeys must not be empty" in str(err.value)
 
     def test_constructor(self):
         akey1 = AKey(
@@ -387,19 +374,18 @@ class DKeyTestCase(unittest.TestCase):
         dkey = DKey(key="D-key 1", akeys=[akey1, akey2])
         want = self.test_data.create_default_dkey()
 
-        self.assertEqual(want, dkey.dump(), "#Error")
+        assert want == dkey.dump()
 
     def test_add_value(self):
         with pytest.raises(VosValueError) as err:
             dkey = DKey(key="D-key 1")
             dkey.dump()
-        self.assertIn("list of akeys must not be empty", str(err.value),
-                      "#Error")
+        assert "list of akeys must not be empty" in str(err.value)
 
         with pytest.raises(TypeError) as err:
             dkey = DKey(key="D-key 1")
             dkey.add_value("rubbish")
-        self.assertIn("must be of type", str(err.value), "#Error")
+        assert "must be of type" in str(err.value)
 
         dkey = DKey(key="D-key 1")
         akey = AKey(
@@ -415,7 +401,7 @@ class DKeyTestCase(unittest.TestCase):
 
         want = self.test_data.create_default_dkey()
 
-        self.assertEqual(want, dkey.dump(), "#Error")
+        assert want == dkey.dump()
 
 
 @pytest.mark.usefixtures("vos_test_data")
@@ -435,36 +421,34 @@ class ObjectTestCase(unittest.TestCase):
     def test_invalid_parameters(self):
         with pytest.raises(TypeError) as err:
             akey = VosObject(count="rubbish")
-        self.assertIn("count parameter must be of type int", str(err.value),
-                      "#Error")
+        assert "count parameter must be of type int" in str(err.value)
 
         with pytest.raises(TypeError) as err:
             akey = VosObject(count=10, dkeys=["rubbish"])
-        self.assertIn("must be of type", str(err.value), "#Error")
+        assert "must be of type" in str(err.value)
 
     def test_constructor(self):
         vos_object = VosObject(
             count=100, dkeys=[self.dkey1, self.dkey2])
         want = self.test_data.create_default_object(count=100)
-        self.assertEqual(want, vos_object.dump(), "#Error")
+        assert want == vos_object.dump()
 
     def test_add_value(self):
         with pytest.raises(VosValueError) as err:
             dkey = VosObject()
             dkey.dump()
-        self.assertIn("list of dkeys must not be empty", str(err.value),
-                      "#Error")
+        assert "list of dkeys must not be empty" in str(err.value)
 
         with pytest.raises(TypeError) as err:
             dkey = VosObject()
             dkey.add_value("rubbish")
-        self.assertIn("must be of type", str(err.value), "#Error")
+        assert "must be of type" in str(err.value)
 
         vos_object = VosObject(count=200)
         vos_object.add_value(self.dkey2)
         vos_object.add_value(self.dkey1)
         want = self.test_data.create_default_object(count=200)
-        self.assertEqual(want, vos_object.dump(), "#Error")
+        assert want == vos_object.dump()
 
 
 @pytest.mark.usefixtures("vos_test_data")
@@ -489,42 +473,39 @@ class ContainerTestCase(unittest.TestCase):
     def test_invalid_parameters(self):
         with pytest.raises(TypeError) as err:
             container = Container(count="rubbish")
-        self.assertIn("count parameter must be of type int", str(err.value),
-                      "#Error")
+        assert "count parameter must be of type int" in str(err.value)
 
         with pytest.raises(TypeError) as err:
             container = Container(csum_size="rubbish")
-        self.assertIn("csum_size parameter must be of type int",
-                      str(err.value), "#Error")
+        assert "csum_size parameter must be of type int" in str(err.value)
 
         with pytest.raises(TypeError) as err:
             container = Container(csum_gran="rubbish")
-        self.assertIn("csum_gran parameter must be of type int",
-                      str(err.value), "#Error")
+        assert "csum_gran parameter must be of type int" in str(err.value)
 
         with pytest.raises(TypeError) as err:
             container = Container(objects=["rubbish"])
-        self.assertIn("must be of type", str(err.value), "#Error")
+        assert "must be of type" in str(err.value)
 
     def test_constructor(self):
         container = Container(
             objects=[self.vos_object1, self.vos_object2])
         want = self.test_data.create_default_container()
-        self.assertEqual(want, container.dump(), "#Error")
+        assert want == container.dump()
 
         container = Container(
             count=300, csum_size=400, csum_gran=500, objects=[
                 self.vos_object1, self.vos_object2])
         want = self.test_data.create_default_container(
             count=300, csum_size=400, csum_gran=500)
-        self.assertEqual(want, container.dump(), "#Error")
+        assert want == container.dump()
 
     def test_add_value(self):
         container = Container()
         container.add_value(self.vos_object1)
         container.add_value(self.vos_object2)
         want = self.test_data.create_default_container()
-        self.assertEqual(want, container.dump(), "#Error")
+        assert want == container.dump()
 
 
 @pytest.mark.usefixtures("vos_test_data")
@@ -555,17 +536,15 @@ class ContainersTestCase(unittest.TestCase):
         with pytest.raises(VosValueError) as err:
             containers = Containers()
             containers.dump()
-        self.assertIn("list of containers must not be empty", str(err.value),
-                      "#Error")
+        assert "list of containers must not be empty" in str(err.value)
 
         with pytest.raises(TypeError) as err:
             container = Containers(num_shards="rubbish")
-        self.assertIn("num_shards parameter must be of type int",
-                      str(err.value), "#Error")
+        assert "num_shards parameter must be of type int" in str(err.value)
 
         with pytest.raises(TypeError) as err:
             container = Containers(containers=["rubbish"])
-        self.assertIn("must be of type", str(err.value), "#Error")
+        assert "must be of type" in str(err.value)
 
     def test_constructor(self):
         containers = Containers(
@@ -580,19 +559,18 @@ class ContainersTestCase(unittest.TestCase):
             "containers": [
                 raw_container1,
                 raw_container2]}
-        self.assertEqual(want, containers.dump(), "#Error")
+        assert want == containers.dump()
 
     def test_add_value(self):
         with pytest.raises(TypeError) as err:
             containers = Containers()
             containers.add_value("rubbish")
-        self.assertIn("must be of type", str(err.value), "#Error")
+        assert "must be of type" in str(err.value)
 
         with pytest.raises(TypeError) as err:
             containers = Containers()
             containers.set_num_shards("rubbish")
-        self.assertIn("num_shards parameter must be of type int",
-                      str(err.value), "#Error")
+        assert "num_shards parameter must be of type int" in str(err.value)
 
         containers = Containers()
         containers.add_value(self.vos_container1)
@@ -607,7 +585,7 @@ class ContainersTestCase(unittest.TestCase):
             "containers": [
                 raw_container1,
                 raw_container2]}
-        self.assertEqual(want, containers.dump(), "#Error")
+        assert want == containers.dump()
 
 
 @pytest.mark.usefixtures("vos_test_data")
@@ -690,7 +668,7 @@ class FSTestCase(unittest.TestCase):
 
         want = self._process_stats(gold_container)
 
-        self.assertEqual(got, want, "#Error")
+        assert got == want
 
 
 if __name__ == "__main__":
