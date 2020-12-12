@@ -1432,7 +1432,7 @@ obj_ec_singv_req_reasb(daos_obj_id_t oid, daos_iod_t *iod, d_sg_list_t *sgl,
 
 	ec_recx_array->oer_k = oca->u.ec.e_k;
 	ec_recx_array->oer_p = oca->u.ec.e_p;
-	if (obj_ec_singv_one_tgt(iod, sgl, oca)) {
+	if (obj_ec_singv_one_tgt(iod->iod_size, sgl, oca)) {
 		/* small singv stores on one target and replicates to all
 		 * parity targets.
 		 */
@@ -2556,7 +2556,8 @@ obj_ec_recov_data(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 		for (j = 0; j < recx_nr; j++) {
 			if (singv) {
 				stripe_nr = 1;
-				if (obj_ec_singv_one_tgt(iod, sgl, oca))
+				if (obj_ec_singv_one_tgt(iod->iod_size,
+							 sgl, oca))
 					continue;
 			} else {
 				recx_ep = &stripe_list->re_items[j];
