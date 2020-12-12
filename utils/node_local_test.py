@@ -316,7 +316,7 @@ class DaosServer():
         control_log_file = tempfile.NamedTemporaryFile(prefix='dnt_control_',
                                                        suffix='.log',
                                                        delete=False)
-        scyaml = yaml.load(scfd)
+        scyaml = yaml.safe_load(scfd)
         scyaml['servers'][0]['log_file'] = self._log_file
         if self.conf.args.server_debug:
             scyaml['servers'][0]['log_mask'] = self.conf.args.server_debug
