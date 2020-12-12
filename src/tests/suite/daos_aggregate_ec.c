@@ -340,8 +340,6 @@ verify_1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 			assert_int_equal(rc, 0);
 			/* verify no remaining replicas on parity tgt */
 			assert_int_equal(ctx->fetch_iom.iom_nr_out, 0);
-			//D_PRINT("ctx->fetch_iom.iom_nr_out: %u\n",
-			//	ctx->fetch_iom.iom_nr_out);
 			task = NULL;
 			memset(&ctx->fetch_iom, 0, sizeof(daos_iom_t));
 			ctx->fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
