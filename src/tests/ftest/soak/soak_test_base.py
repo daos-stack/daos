@@ -35,7 +35,7 @@ from agent_utils import include_local_host
 from soak_utils import DDHHMMSS_format, add_pools, get_remote_logs, \
     launch_rebuild, launch_snapshot, launch_exclude_reintegrate, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
-    build_job_script, SoakTestError, launch_server_stop_start
+    build_job_script, SoakTestError, launch_server_stop_start, get_harassers
 
 
 class SoakTestBase(TestWithServers):
@@ -195,11 +195,11 @@ class SoakTestBase(TestWithServers):
             method = launch_exclude_reintegrate
             name = "REINTEGRATE"
             param_list = (self, pool[1], name)
-        elif harasser == "server_stop":
+        elif harasser == "server-stop":
             method = launch_server_stop_start
             name = "SVR_STOP"
             param_list = (self, pool, name)
-        elif harasser == "server_reintegrate":
+        elif harasser == "server-reintegrate":
             method = launch_server_stop_start
             name = "SVR_REINTEGRATE"
             param_list = (self, pool, name)
@@ -470,12 +470,13 @@ class SoakTestBase(TestWithServers):
         self.test_name = self.params.get("name", test_param + "*")
         self.nodesperjob = self.params.get("nodesperjob", test_param + "*")
         self.taskspernode = self.params.get("taskspernode", test_param + "*")
-        self.harassers = self.params.get("harasserlist", test_param + "*")
+        harassers = self.params.get("harasserlist", test_param + "*")
         job_list = self.params.get("joblist", test_param + "*")
         rank = self.params.get("rank", "/run/container_reserved/*")
         obj_class = self.params.get("oclass", "/run/container_reserved/*")
-        if self.harassers:
-            harasserlist = self.harassers[:]
+        if harassers:
+            harasserlist = get_harassers(harassers)
+            self.harassers = harasserlist[:]
             run_harasser = True
             self.log.info("<<< Initial harrasser list = %s", " ".join(
                 [harasser for harasser in self.harassers]))

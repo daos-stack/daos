@@ -142,16 +142,21 @@ def get_remote_logs(self):
             "from clients>>: {}".format(self.hostlist_clients))
 
 
-def is_harasser(self, harasser):
-    """Check if harasser is defined in yaml.
+def get_harassers(harassers):
+    """Create a valid harasserlist from the yaml job harassers.
 
     Args:
-        harasser (str): harasser to check if enabled
+        harassers (list): harasser jobs from yaml.
 
-    Returns: bool
+    Returns:
+        harasserlist (list): Ordered list of harassers to execute
+                             per pass of soak
 
     """
-    return self.harassers and harasser in self.harassers
+    harasserlist = []
+    for harasser in harassers:
+        harasserlist.extend(harasser.split("_"))
+    return harasserlist
 
 
 def launch_rebuild(self, ranks, pool):
@@ -524,6 +529,9 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
         for b_size in bsize_list:
             for t_size in tsize_list:
                 for o_type in oclass_list:
+                    # DAOS-6095
+                    if api == "HDF5-VOL" and t_size == "4k":
+                        t_size = "1m"
                     ior_cmd = IorCommand()
                     ior_cmd.namespace = ior_params
                     ior_cmd.get_params(self)
