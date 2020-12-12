@@ -128,7 +128,7 @@ func (cmd *jsonOutputCmd) outputJSON(out io.Writer, in interface{}) error {
 }
 
 func versionString() string {
-	return fmt.Sprintf("daos_agent (v%s)", build.DaosVersion)
+	return fmt.Sprintf("%s v%s", build.AgentName, build.DaosVersion)
 }
 
 type versionCmd struct{}
