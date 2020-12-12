@@ -46,6 +46,7 @@ from collections import OrderedDict
 import bz2
 import os
 import re
+import unittest
 
 class InvalidPid(Exception):
     """Exception to be raised when invalid pid is requested"""

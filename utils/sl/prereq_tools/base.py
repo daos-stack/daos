@@ -27,6 +27,8 @@
 # pylint: disable=bare-except
 # pylint: disable=exec-used
 # pylint: disable=too-many-statements
+# pylint: disable=too-many-lines
+# pylint: disable=unused-argument
 from __future__ import absolute_import, division, print_function
 import os
 import traceback
@@ -308,7 +310,6 @@ def default_libpath():
             return ['lib/' + archpath]
     except Exception:
         print('default_libpath, Exception: subprocess.Popen dpkg-architecture')
-        pass
     return []
 
 class GitRepoRetriever():
@@ -665,7 +666,6 @@ class PreReqComponent():
 
         except Exception:
             print('PreReqComponent init, Exception: if self.__dry_run')
-            pass
         self.__prebuilt_path = {}
         self.__src_path = {}
 
@@ -695,7 +695,6 @@ class PreReqComponent():
                 os.makedirs(self.prereq_prefix)
         except:
             print('PreReqComponent init, Exception: if self.__dry_run')
-            pass
 
         self.setup_parallel_build()
 
