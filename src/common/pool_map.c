@@ -141,16 +141,6 @@ static struct pool_comp_type_dict comp_type_dict[] = {
 		.td_name	= "node",
 	},
 	{
-		.td_type	= PO_COMP_TP_BOARD,
-		.td_abbr	= 'b',
-		.td_name	= "board",
-	},
-	{
-		.td_type	= PO_COMP_TP_BLADE,
-		.td_abbr	= 'l',
-		.td_name	= "blade",
-	},
-	{
 		.td_type	= PO_COMP_TP_RACK,
 		.td_abbr	= 'r',
 		.td_name	= "rack",
@@ -781,7 +771,6 @@ pool_tree_free(struct pool_domain *tree)
 static bool
 pool_tree_sane(struct pool_domain *tree, uint32_t version)
 {
-	struct pool_domain	*parent = NULL;
 	struct pool_target	*targets = tree[0].do_targets;
 	struct pool_comp_cntr	 cntr;
 	int			 dom_nr;
@@ -798,18 +787,6 @@ pool_tree_sane(struct pool_domain *tree, uint32_t version)
 	     tree = tree[0].do_children) {
 		struct pool_domain *prev = &tree[0];
 		int		    child_nr = 0;
-
-		if (parent != NULL &&
-		    parent->do_comp.co_type >= tree[0].do_comp.co_type) {
-			D_DEBUG(DB_MGMT,
-				"Type of parent domain %d(%s) should be "
-				"smaller than child domain %d(%s)\n",
-				parent->do_comp.co_type,
-				pool_domain_name(parent),
-				tree[0].do_comp.co_type,
-				pool_domain_name(&tree[0]));
-			return false;
-		}
 
 		for (i = 0; i < dom_nr; i++) {
 			if (tree[i].do_comp.co_ver > version) {
@@ -867,7 +844,6 @@ pool_tree_sane(struct pool_domain *tree, uint32_t version)
 
 			prev = &tree[i];
 		}
-		parent = &tree[0];
 		dom_nr = child_nr;
 	}
 
@@ -1367,7 +1343,7 @@ uuid_compare_cb(const void *a, const void *b)
 int
 gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 		int map_version, int ndomains, int nnodes, int ntargets,
-		const int32_t *domains, uuid_t target_uuids[],
+		const struct pool_component *domains, uuid_t target_uuids[],
 		const d_rank_list_t *target_addrs, uuid_t **uuids_out,
 		uint32_t dss_tgt_nr)
 {
@@ -1402,16 +1378,16 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 		new_status = PO_COMP_ST_UPIN;
 		num_comps = 0;
 	}
-	/* fill racks */
+	/* fill user-defined fault domains */
 	for (i = 0; i < ndomains; i++) {
-		map_comp.co_type = PO_COMP_TP_RACK;	/* TODO */
+		map_comp.co_type = domains[i].co_type;
 		map_comp.co_status = new_status;
 		map_comp.co_index = i + num_comps;
-		map_comp.co_id = i + num_comps;
+		map_comp.co_id = domains[i].co_id;
 		map_comp.co_rank = 0;
 		map_comp.co_ver = map_version;
 		map_comp.co_fseq = 1;
-		map_comp.co_nr = domains[i];
+		map_comp.co_nr = domains[i].co_nr;
 
 		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
 		if (rc != 0)

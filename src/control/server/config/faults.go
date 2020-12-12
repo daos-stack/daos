@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -96,6 +96,11 @@ var (
 		code.ServerConfigFaultCallbackEmpty,
 		"fault domain callback executed but did not generate output",
 		"specify a valid fault domain callback script ('fault_cb' parameter) and restart the control server",
+	)
+	FaultConfigTooManyLayersInFaultDomain = serverConfigFault(
+		code.ServerConfigFaultDomainTooManyLayers,
+		"only a single fault domain layer below the root is supported",
+		"update either the fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
 	)
 )
 

@@ -628,9 +628,10 @@ getObjectClasses(daos_oclass_id_t **oclass_id_pp)
 int
 extend_test_pool_map(struct pool_map *map,
 		     uint32_t nnodes, uuid_t target_uuids[],
-		d_rank_list_t *rank_list, uint32_t ndomains,
-		int32_t *domains, bool *updated_p, uint32_t *map_version_p,
-		uint32_t dss_tgt_nr)
+		     d_rank_list_t *rank_list, uint32_t ndomains,
+		     struct pool_component *domains, bool *updated_p,
+		     uint32_t *map_version_p,
+		     uint32_t dss_tgt_nr)
 {
 	struct pool_buf	*map_buf;
 	uint32_t	map_version;

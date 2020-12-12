@@ -458,7 +458,18 @@ add_object_class(daos_oclass_id_t cid)
 	int			num_new_spares;
 	int			rc, i;
 	uuid_t target_uuids[NUM_TO_EXTEND] = {"e0ab4def", "60fcd487"};
-	int32_t domains[NUM_TO_EXTEND] = {1, 1};
+	struct pool_component	domains[NUM_TO_EXTEND] = {
+		{
+			.co_type = PO_COMP_TP_RACK,
+			.co_id = 1234,
+			.co_nr = 1,
+		},
+		{
+			.co_type = PO_COMP_TP_RACK,
+			.co_id = 5678,
+			.co_nr = 1,
+		}
+	};
 
 	if (is_max_class_obj(cid))
 		return;

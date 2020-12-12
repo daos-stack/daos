@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -70,8 +70,12 @@ func getFaultDomain(cfg *config.Server) (*system.FaultDomain, error) {
 
 func newFaultDomainFromConfig(domainStr string) (*system.FaultDomain, error) {
 	fd, err := system.NewFaultDomainFromString(domainStr)
-	if err != nil {
+	if err != nil || fd.NumLevels() == 0 {
 		return nil, config.FaultConfigFaultDomainInvalid
+	}
+	// TODO DAOS-6353: remove when multiple layers supported
+	if fd.NumLevels() != 1 {
+		return nil, config.FaultConfigTooManyLayersInFaultDomain
 	}
 	return fd, nil
 }
