@@ -1,0 +1,16 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+timeout: 120
+server_config:
+  name: daos_server
+  port: 10001
+pool:
+  name: daos_server
+  control_method: dmg
+  mode: 511
+  scm_size: 1G
+  svcn: 1
+dmg:
+   json: True
