@@ -46,7 +46,6 @@ from collections import OrderedDict
 import bz2
 import os
 import re
-import unittest
 
 class InvalidPid(Exception):
     """Exception to be raised when invalid pid is requested"""
@@ -633,8 +632,7 @@ class LogIter():
             self._iter_index += 1
 
             if self._pid and self._iter_index > self._iter_last_index:
-                self.assertEqual(self._iter_count,
-                                 self._iter_pid['line_count'], "#Error")
+                assert self._iter_count == self._iter_pid['line_count']
                 raise StopIteration
 
             line = self.__lnext()
