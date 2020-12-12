@@ -31,7 +31,9 @@ extern "C" {
  * @{
  */
 
-#ifdef __AVX2__
+#if 0
+// Currently broken, need to be fixed
+//#ifdef __AVX2__
 
 #include <immintrin.h>
 
