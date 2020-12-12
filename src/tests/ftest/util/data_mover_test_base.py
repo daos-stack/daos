@@ -29,7 +29,7 @@ from ior_test_base import IorTestBase
 from data_mover_utils import DataMover
 from os.path import join
 import uuid
-
+import unittest
 
 class DataMoverTestBase(IorTestBase):
     # pylint: disable=too-many-ancestors
@@ -251,7 +251,7 @@ class DataMoverTestBase(IorTestBase):
                 which ignores other container attributes
             display (bool, optional): print updated params. Defaults to True.
         """
-        assert src_or_dst in ["src", "dst"]
+        self.assertIn(src_or_dst, ["src", "dst"], "#Error")
         param_type = self.validate_param_type(param_type)
 
         # Get refs to either src or dst

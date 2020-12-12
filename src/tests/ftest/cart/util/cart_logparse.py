@@ -632,7 +632,8 @@ class LogIter():
             self._iter_index += 1
 
             if self._pid and self._iter_index > self._iter_last_index:
-                assert self._iter_count == self._iter_pid['line_count']
+                self.assertEqual(self._iter_count,
+                                 self._iter_pid['line_count'], "#Error")
                 raise StopIteration
 
             line = self.__lnext()

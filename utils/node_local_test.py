@@ -17,6 +17,7 @@ import argparse
 import subprocess
 import tempfile
 import pickle
+import unittest
 
 from collections import OrderedDict
 
@@ -316,7 +317,7 @@ class DaosServer():
         control_log_file = tempfile.NamedTemporaryFile(prefix='dnt_control_',
                                                        suffix='.log',
                                                        delete=False)
-        scyaml = yaml.load(scfd)
+        scyaml = yaml.safe_load(scfd)
         scyaml['servers'][0]['log_file'] = self._log_file
         if self.conf.args.server_debug:
             scyaml['servers'][0]['log_mask'] = self.conf.args.server_debug
@@ -506,7 +507,7 @@ def il_cmd(dfuse, cmd, check_read=True, check_write=True):
                  log_file.name,
                  check_read=check_read,
                  check_write=check_write)
-        assert ret.returncode == 0
+        self.assertEqual(ret.returncode, 0, "#Error")
     except NLTestNoFunction as error:
         print("ERROR: command '{}' did not log via {}".format(' '.join(cmd),
                                                               error.function))
@@ -744,7 +745,7 @@ def assert_file_size_fd(fd, size):
     """Verify the file size is as expected"""
     my_stat = os.fstat(fd)
     print('Checking file size is {} {}'.format(size, my_stat.st_size))
-    assert my_stat.st_size == size
+    self.assertEqual(my_stat.st_size, size, "#Error")
 
 def assert_file_size(ofd, size):
     """Verify the file size is as expected"""
@@ -848,13 +849,13 @@ def show_cont(conf, pool):
     """Create a container and return a container list"""
     cmd = ['container', 'create', '--pool', pool]
     rc = run_daos_cmd(conf, cmd)
-    assert rc.returncode == 0
+    self.assertEqual(rc.returncode, 0, "#Error")
     print('rc is {}'.format(rc))
 
     cmd = ['pool', 'list-containers', '--pool', pool]
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
-    assert rc.returncode == 0
+    self.assertEqual(rc.returncode, 0, "#Error")
     return rc.stdout.decode('utf-8').strip()
 
 def make_pool(daos):
@@ -868,7 +869,7 @@ def make_pool(daos):
                        '{}M'.format(size)])
 
     print(rc)
-    assert rc.returncode == 0
+    self.assertEqual(rc.returncode, 0, "#Error")
 
     return get_pool_list()
 
@@ -881,7 +882,7 @@ def run_tests(dfuse):
     rc = subprocess.run(['dd', 'if=/dev/zero', 'bs=16k', 'count=64',
                          'of={}'.format(os.path.join(path, 'dd_file'))])
     print(rc)
-    assert rc.returncode == 0
+    self.assertEqual(rc.returncode, 0, "#Error")
     ofd = open(fname, 'w')
     ofd.write('hello')
     print(os.fstat(ofd.fileno()))
@@ -900,14 +901,14 @@ def run_tests(dfuse):
     print(os.fstat(ofd.fileno()))
     ofd.close()
     ret = il_cmd(dfuse, ['cat', fname], check_write=False)
-    assert ret.returncode == 0
+    self.assertEqual(ret.returncode, 0, "#Error")
     ofd = os.open(fname, os.O_TRUNC)
     assert_file_size_fd(ofd, 0)
     os.close(ofd)
     symlink_name = os.path.join(path, 'symlink_src')
     symlink_dest = 'missing_dest'
     os.symlink(symlink_dest, symlink_name)
-    assert symlink_dest == os.readlink(symlink_name)
+    self.assertEqual(symlink_dest, os.readlink(symlink_name), "#Error")
 
 def stat_and_check(dfuse, pre_stat):
     """Check that dfuse started"""
@@ -1006,7 +1007,7 @@ def create_and_read_via_il(dfuse, path):
     print(os.fstat(ofd.fileno()))
     ofd.close()
     ret = il_cmd(dfuse, ['cat', fname], check_write=False)
-    assert ret.returncode == 0
+    self.assertEqual(ret.returncode, 0, "#Error")
 
 def run_container_query(conf, path):
     """Query a path to extract container information"""
@@ -1015,7 +1016,7 @@ def run_container_query(conf, path):
 
     rc = run_daos_cmd(conf, cmd)
 
-    assert rc.returncode == 0
+    self.assertEqual(rc.returncode, 0, "#Error")
 
     print(rc)
     output = rc.stdout.decode('utf-8')
@@ -1047,7 +1048,7 @@ def run_duns_overlay_test(server, conf):
                              uns_dir])
 
     print('rc is {}'.format(rc))
-    assert rc.returncode == 0
+    self.assertEqual(rc.returncode, 0, "#Error")
 
     dfuse = DFuse(server, conf, path=uns_dir)
 
@@ -1181,7 +1182,7 @@ def run_dfuse(server, conf):
     uns_stat = os.stat(uns_path)
     print(direct_stat)
     print(uns_stat)
-    assert uns_stat.st_ino == direct_stat.st_ino
+    self.assertEqual(uns_stat.st_ino, direct_stat.st_ino, "#Error")
 
     fatal_errors.add_result(dfuse.stop())
     print('Trying UNS with previous cont')
@@ -1196,7 +1197,7 @@ def run_dfuse(server, conf):
     uns_stat = os.stat(uns_path)
     print(direct_stat)
     print(uns_stat)
-    assert uns_stat.st_ino == direct_stat.st_ino
+    self.assertEqual(uns_stat.st_ino, direct_stat.st_ino, "#Error")
     fatal_errors.add_result(dfuse.stop())
 
     if fatal_errors.errors:
@@ -1242,24 +1243,24 @@ def run_il_test(server, conf):
     fd.close()
     # Copy it across containers.
     ret = il_cmd(dfuse, ['cp', f, dirs[-1]])
-    assert ret.returncode == 0
+    self.assertEqual(ret.returncode, 0, "#Error")
 
     # Copy it within the container.
     child_dir = os.path.join(dirs[0], 'new_dir')
     os.mkdir(child_dir)
     il_cmd(dfuse, ['cp', f, child_dir])
-    assert ret.returncode == 0
+    self.assertEqual(ret.returncode, 0, "#Error")
 
     # Copy something into a container
     ret = il_cmd(dfuse, ['cp', '/bin/bash', dirs[-1]], check_read=False)
-    assert ret.returncode == 0
+    self.assertEqual(ret.returncode, 0, "#Error")
     # Read it from within a container
     # TODO: change this to something else, md5sum uses fread which isn't
     # intercepted.
     ret = il_cmd(dfuse,
                  ['md5sum', os.path.join(dirs[-1], 'bash')],
                  check_read=False, check_write=False)
-    assert ret.returncode == 0
+    self.assertEqual(ret.returncode, 0, "#Error")
     ret = il_cmd(dfuse, ['dd',
                          'if={}'.format(os.path.join(dirs[-1], 'bash')),
                          'of={}'.format(os.path.join(dirs[-1], 'bash_copy')),
@@ -1268,7 +1269,7 @@ def run_il_test(server, conf):
                          'bs=128k'])
 
     print(ret)
-    assert ret.returncode == 0
+    self.assertEqual(ret.returncode, 0, "#Error")
 
     for my_dir in dirs:
         create_and_read_via_il(dfuse, my_dir)

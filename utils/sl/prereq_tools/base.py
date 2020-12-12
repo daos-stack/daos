@@ -307,6 +307,7 @@ def default_libpath():
             archpath = stdo.decode().strip()
             return ['lib/' + archpath]
     except Exception:
+        print('default_libpath, Exception: subprocess.Popen dpkg-architecture')
         pass
     return []
 
@@ -663,6 +664,7 @@ class PreReqComponent():
                 os.makedirs(self.__build_dir)
 
         except Exception:
+            print('PreReqComponent init, Exception: if self.__dry_run')
             pass
         self.__prebuilt_path = {}
         self.__src_path = {}
@@ -692,6 +694,7 @@ class PreReqComponent():
             else:
                 os.makedirs(self.prereq_prefix)
         except:
+            print('PreReqComponent init, Exception: if self.__dry_run')
             pass
 
         self.setup_parallel_build()
@@ -1562,8 +1565,8 @@ class _Component():
         if self.__dry_run:
             print('Would empty %s' % path)
         else:
-            os.system("rm -rf %s" % path)
-            os.mkdir(path)
+            subprocess.call(["rm", "-rf", path])
+            subprocess.call(["mkdir", path])
 
     def _has_changes(self):
         """check for changes"""
