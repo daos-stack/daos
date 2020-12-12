@@ -49,7 +49,8 @@ class EcOnlineRebuild(ErasureCodeIor):
                   kill single server, while IOR Write phase is in progress,
                   verify all IOR write finish.Read and verify data.
 
-        :avocado: tags=all,hw,large,full_regression,ec,ec_online_rebuild
+        :avocado: tags=all,hw,large,ib2,full_regression
+        :avocado: tags=ec,ec_online_rebuild
         """
         # Kill last server rank
         self.rank_to_kill = self.server_count - 1
