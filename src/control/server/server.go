@@ -231,7 +231,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	defer eventPubSub.Close()
 
 	// Forward received events to management service by default.
-	fwdEventReq := &control.SystemNotifyReq{ControlAddr: controlAddr}
+	fwdEventReq := &control.SystemNotifyReq{ControlAddr: controlAddr, Client: rpcClient}
 	fwdEventReq.SetHostList(cfg.AccessPoints)
 	eventPubSub.Subscribe(ctx, events.RASTypeRankStateChange, fwdEventReq)
 
