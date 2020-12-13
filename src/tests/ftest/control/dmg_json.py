@@ -42,26 +42,26 @@ class DmgJson(TestWithServers):
         super(DmgJson, self).__init__(*args, **kwargs)
         self.dmg = None
 
-    def valid_uuid(self, uuid):
-        """Verify pool uuid is a valid UUID4.
-
-        Args:
-            uuid (String): DAOS pool UUID
-
-        Returns:
-            Boolean: True indicates valid uuid, false invalid.
-
-        """
-        regex = '[a-f0-9]{8}-?[a-f0-9]{4}-?4[a-f0-9]{3}'\
-            '-?[89ab][a-f0-9]{3}-?[a-f0-9]{12}'
-        return bool(re.match(regex, uuid))
+    # def valid_uuid(self, uuid):
+    #    """Verify pool uuid is a valid UUID4.
+    #
+    #    Args:
+    #        uuid (String): DAOS pool UUID
+    #
+    #    Returns:
+    #        Boolean: True indicates valid uuid, false invalid.
+    #
+    #    """
+    #    regex = '[a-f0-9]{8}-?[a-f0-9]{4}-?4[a-f0-9]{3}'\
+    #        '-?[89ab][a-f0-9]{3}-?[a-f0-9]{12}'
+    #    return bool(re.match(regex, uuid))
 
     def test_dmg_json(self):
         """Test ID: DAOS-4908.
 
         Test Description: TODO
 
-        :avocado: tags=all,small,hw,pr,dmg,dmg-json
+        :avocado: tags=all,pr,hw,small,dmg,dmg_json
 
         """
         # Get parameters from yaml file
