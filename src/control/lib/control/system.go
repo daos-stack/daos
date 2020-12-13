@@ -141,14 +141,10 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 	return resp, convertMSResponse(ur, resp)
 }
 
-// LookupAddrFn is an alias for net.LookupAddr signature.
-type LookupAddrFn func(string) ([]string, error)
-
 // SystemNotifyReq contains the inputs for the system notify request.
 type SystemNotifyReq struct {
 	unaryRequest
 	msRequest
-	//lookupAddrFn LookupAddrFn
 	ControlAddr *net.TCPAddr
 	Event       events.Event
 	Sequence    uint64
@@ -184,28 +180,18 @@ func (req *SystemNotifyReq) ToClusterEventReq() (*mgmtpb.ClusterEventReq, error)
 		return nil, errors.Wrap(err, "convert event to proto")
 	}
 
-	//	if req.lookupAddrFn == nil {
-	//		req.lookupAddrFn = net.LookupAddr
-	//	}
-	//	names, err := req.lookupAddrFn(req.ControlAddr.String())
-	//	if err == nil && len(names) != 0 {
-	//		pbRASEvent.Hostname = names[0]
-	//	}
-
 	return &mgmtpb.ClusterEventReq{
 		Sequence: req.Sequence,
-		Event: &mgmtpb.ClusterEventReq_Ras{
-			Ras: pbRASEvent,
-		},
+		Event:    &mgmtpb.ClusterEventReq_Ras{Ras: pbRASEvent},
 	}, nil
 }
 
+// OnEvent implements the events.Handler interface.
 func (req *SystemNotifyReq) OnEvent(ctx context.Context, evt events.Event) {
-	req.Sequence++
-	req.Event = evt
-
 	req.Client.Debugf("forwarding %s (seq: %d) event to MS", evt.GetType(), req.Sequence)
 
+	req.Sequence++
+	req.Event = evt
 	if _, err := SystemNotify(ctx, req); err != nil {
 		req.Client.Debugf("failed to forward event to MS: %s", err)
 	}

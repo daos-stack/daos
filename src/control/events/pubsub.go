@@ -71,15 +71,16 @@ func (ps *PubSub) Publish(event Event) {
 }
 
 func (ps *PubSub) startProcessing(ctx context.Context, topic RASTypeID) {
-	ps.log.Debug("start event processing loop")
+	ps.log.Debugf("start event processing loop for topic %s", topic)
 	for evt := range ps.streams[topic] {
 		ps.RLock()
-		for _, handler := range ps.handlers[topic] {
-			go handler.OnEvent(ctx, evt)
+		for idx, handler := range ps.handlers[topic] {
+			ps.log.Debugf("calling event handler %d", idx)
+			handler.OnEvent(ctx, evt)
 		}
 		ps.RUnlock()
 	}
-	ps.log.Debug("finish event processing loop")
+	ps.log.Debugf("finish event processing loop for topic %s", topic)
 }
 
 // Subscribe adds a handler function to the list of handlers subscribed to a
@@ -95,12 +96,11 @@ func (ps *PubSub) startProcessing(ctx context.Context, topic RASTypeID) {
 // methods are called and vice versa.
 func (ps *PubSub) Subscribe(ctx context.Context, topic RASTypeID, handler Handler) {
 	ps.Lock()
-
+	ps.log.Debugf("registering handler for topic %s", topic)
 	if _, exists := ps.streams[topic]; !exists {
 		ps.streams[topic] = make(chan Event, 1)
 	}
 	ps.handlers[topic] = append(ps.handlers[topic], handler)
-
 	ps.Unlock()
 
 	go ps.startProcessing(ctx, topic)
