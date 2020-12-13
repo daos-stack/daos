@@ -75,7 +75,7 @@ func (ps *PubSub) startProcessing(ctx context.Context, topic RASTypeID) {
 	for evt := range ps.streams[topic] {
 		ps.RLock()
 		for _, handler := range ps.handlers[topic] {
-			handler.OnEvent(ctx, evt)
+			go handler.OnEvent(ctx, evt)
 		}
 		ps.RUnlock()
 	}
