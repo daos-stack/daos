@@ -74,8 +74,7 @@ func (ps *PubSub) startProcessing(ctx context.Context, topic RASTypeID) {
 	ps.log.Debugf("start event processing loop for topic %s", topic)
 	for evt := range ps.streams[topic] {
 		ps.RLock()
-		for idx, handler := range ps.handlers[topic] {
-			ps.log.Debugf("calling event handler %d", idx)
+		for _, handler := range ps.handlers[topic] {
 			handler.OnEvent(ctx, evt)
 		}
 		ps.RUnlock()
@@ -96,7 +95,6 @@ func (ps *PubSub) startProcessing(ctx context.Context, topic RASTypeID) {
 // methods are called and vice versa.
 func (ps *PubSub) Subscribe(ctx context.Context, topic RASTypeID, handler Handler) {
 	ps.Lock()
-	ps.log.Debugf("registering handler for topic %s", topic)
 	if _, exists := ps.streams[topic]; !exists {
 		ps.streams[topic] = make(chan Event, 1)
 	}
@@ -118,7 +116,6 @@ func (ps *PubSub) _close() {
 // Close terminates all streams by closing relevant channels which in turn
 // finishes the event processing loops listening on event streams.
 func (ps *PubSub) Close() {
-	ps.log.Debug("closing")
 	ps.Lock()
 	defer ps.Unlock()
 
@@ -127,7 +124,6 @@ func (ps *PubSub) Close() {
 
 // Reset clears and reinitializes streams and handlers.
 func (ps *PubSub) Reset() {
-	ps.log.Debug("resetting")
 	ps.Lock()
 	defer ps.Unlock()
 
