@@ -189,7 +189,9 @@ struct crt_rpc_priv {
 				/* RPC is tracked by the context */
 				crp_ctx_tracked:1,
 				/* 1 if RPC is successfully put on the wire */
-				crp_on_wire:1;
+				crp_on_wire:1,
+				/* 1 if RPC fails HLC epsilon check */
+				crp_fail_hlc:1;
 	uint32_t		crp_refcount;
 	struct crt_opc_info	*crp_opc_info;
 	/* corpc info, only valid when (crp_coll == 1) */

@@ -9,8 +9,8 @@
 %endif
 
 Name:          daos
-Version:       1.1.2
-Release:       3%{?relval}%{?dist}
+Version:       1.1.2.1
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -411,6 +411,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Wed Dec 09 2020 Johann Lombardi <johann.lombardi@intel.com> 1.1.2.1-1
+- Version bump up to 1.1.2.1
+
 * Fri Dec 04 2020 Li Wei <wei.g.li@intel.com> 1.1.2-3
 - Require raft-devel 0.7.1 that fixes recent Coverity issues
 
