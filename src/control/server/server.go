@@ -304,12 +304,12 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		// Register callback to publish I/O Server process exit events.
 		srv.OnInstanceExit(
 			func(ctx context.Context, rank system.Rank, exitErr error) error {
-				exitStatus, ok := exitErr.(common.ExitStatus)
-				if !ok {
-					return errors.Errorf("expected exit status, got %T", exitErr)
+				if exitErr == nil {
+					return errors.New("expected non-nil exit error")
 				}
-				eventPubSub.Publish(events.NewRankExitEvent(hostname(),
-					srv.Index(), rank.Uint32(), exitStatus))
+				eventPubSub.Publish(events.NewRankExitEvent(hostname(), srv.Index(),
+					rank.Uint32(), common.ExitStatus(exitErr.Error())))
+
 				return nil
 			})
 
