@@ -4,6 +4,7 @@
 
 # pylint: disable=too-many-lines
 # pylint: disable=too-few-public-methods
+# pylint: disable=protected-access
 
 import os
 import sys
@@ -1459,7 +1460,8 @@ def test_alloc_fail(server, wf, conf):
 def main():
     """Main entry point"""
 
-    parser = argparse.ArgumentParser(description='Run DAOS client on local node')
+    parser = argparse.ArgumentParser(
+        description='Run DAOS client on local node')
     parser.add_argument('--output-file', default='nlt-errors.json')
     parser.add_argument('--server-debug', default=None)
     parser.add_argument('--memcheck', default='some',
