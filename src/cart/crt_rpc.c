@@ -1467,6 +1467,10 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 
 	self_rank = crt_gdata.cg_grp->gg_primary_grp->gp_self;
 
+	/* If RPC failed HLC epsilon delta check return an error */
+	if (rpc_priv->crp_fail_hlc)
+		D_GOTO(out, rc = -DER_HLC_SYNC);
+
 	if (self_rank == CRT_NO_RANK)
 		skip_check = true;
 

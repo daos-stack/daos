@@ -32,6 +32,7 @@ import (
 	"math/rand"
 	"net"
 	"sort"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -370,19 +371,15 @@ func TestSystem_Database_BadApply(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			db0, cleanup0 := TestDatabase(t, log, nil)
-			defer cleanup0()
-
-			defer func() {
-				if r := recover(); r == nil {
-					t.Fatal("expected panic in Apply()")
-				}
-			}()
-
+			db := MockDatabase(t, log)
 			rl := &raft.Log{
 				Data: tc.payload,
 			}
-			(*fsm)(db0).Apply(rl)
+			(*fsm)(db).Apply(rl)
+
+			if !strings.Contains(buf.String(), "SHUTDOWN") {
+				t.Fatal("expected an emergency shutdown, but didn't see one")
+			}
 		})
 	}
 }
@@ -507,11 +504,7 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			db, cleanup := TestDatabase(t, log, &net.TCPAddr{
-				IP:   net.IPv4(127, 0, 0, 1),
-				Port: 8888,
-			})
-			defer cleanup()
+			db := MockDatabase(t, log)
 
 			// setup initial member DB
 			for _, initMember := range tc.startingMembers {

@@ -753,19 +753,23 @@ skip_led_str:
 		D_GOTO(free_traddr, rc = -DER_INVAL);
 	}
 
-	if (!reset)
-		D_DEBUG(DB_MGMT, "Setting VMD device:%s LED state to %s(%d)\n",
-			b_info.bdi_traddr, led_state, new_led_state);
-	else
-		D_DEBUG(DB_MGMT, "Resetting VMD device:%s LED state to %d\n",
-			b_info.bdi_traddr, bio_dev->bb_led_state);
-
 	/* First check the current state of the VMD LED */
 	rc = spdk_vmd_get_led_state(pci_device, &current_led_state);
 	if (rc) {
 		D_ERROR("Failed to get the VMD LED state\n");
 		D_GOTO(free_traddr, rc = -DER_INVAL);
 	}
+
+	/* If the current state of a device is FAULTY we do not want to reset */
+	if (current_led_state == SPDK_VMD_LED_STATE_FAULT)
+		D_GOTO(state_set, rc);
+
+	if (!reset)
+		D_DEBUG(DB_MGMT, "Setting VMD device:%s LED state to %s(%d)\n",
+			b_info.bdi_traddr, led_state, new_led_state);
+	else
+		D_DEBUG(DB_MGMT, "Resetting VMD device:%s LED state to %d\n",
+			b_info.bdi_traddr, bio_dev->bb_led_state);
 
 	/* Save the current state in bio_bdev, will be restored by init xs */
 	if (!reset)
