@@ -43,9 +43,6 @@ struct cmd_args_s *autotest_ap;
 /** How many concurrent I/O in flight */
 #define MAX_INFLIGHT 16
 
-/** To convert UUID to string */
-char uuid_str[UUID_STR_SIZE];
-
 /** Step timing  */
 clock_t	start;
 clock_t	end;
@@ -174,14 +171,13 @@ ccreate(void)
 
 	/** Create container */
 	uuid_generate(cuuid);
-	uuid_unparse(cuuid, uuid_str);
 	rc = daos_cont_create(poh, cuuid, NULL, NULL);
 	if (rc) {
 		step_fail(d_errdesc(rc));
 		return -1;
 	}
 
-	step_success("uuid = %s", uuid_str);
+	step_success("uuid = "DF_UUIDF, DP_UUID(cuuid));
 	return 0;
 }
 
