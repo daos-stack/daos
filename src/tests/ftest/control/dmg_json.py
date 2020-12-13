@@ -61,7 +61,7 @@ class DmgJson(TestWithServers):
 
         Test Description: TODO
 
-        :avocado: tags=all,small,hw,pr,full_regression,dmg,dmg_json
+        :avocado: tags=all,small,hw,pr,dmg,dmg-json
 
         """
         # Get parameters from yaml file
