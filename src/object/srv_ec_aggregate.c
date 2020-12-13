@@ -2210,6 +2210,7 @@ ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
 			 agg_iterate_pre_cb, agg_iterate_post_cb,
 			 &agg_param, NULL);
+
 	if (rc == 0 && is_current)
 		cont->sc_ec_agg_eph = epr->epr_hi;
 
