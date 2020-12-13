@@ -132,7 +132,6 @@ ior_faults:
         - 'RP_2G1'
     dfs_dir_oclass:
         - 'RP_2G1'
-    dfs_destroy: True
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"
     disable_direct_io: True

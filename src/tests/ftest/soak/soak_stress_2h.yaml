@@ -119,4 +119,3 @@ ior_stress:
         - '64k'
     dfs_oclass:
         - "SX"
-    dfs_destroy: True

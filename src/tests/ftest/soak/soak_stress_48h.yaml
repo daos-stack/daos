@@ -124,7 +124,6 @@ ior_stress:
         - 'SX'
     dfs_dir_oclass:
         - 'SX'
-    dfs_destroy: True
 fio_stress:
   names:
     - global
