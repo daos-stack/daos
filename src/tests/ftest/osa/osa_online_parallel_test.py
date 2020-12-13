@@ -27,6 +27,7 @@ import threading
 import copy
 
 from itertools import product
+from apricot import skipForTicket
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
 from command_utils import CommandFailure
@@ -219,6 +220,7 @@ class OSAOnlineParallelTest(OSAUtils):
                                 "Pool Version Error:  at the end")
                 pool[val].destroy()
 
+    @skipForTicket("DAOS-6309")
     def test_osa_online_parallel_test(self):
         """
         JIRA ID: DAOS-4752
