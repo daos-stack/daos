@@ -418,7 +418,8 @@ class DaosServer():
         # When parsing the server logs do not report on memory leaks
         # yet, as if it fails then lots of memory won't be freed and
         # it's not helpful at this stage to report that.
-        # TODO: Remove this block when daos_server shutdown works.
+        # TODO:                              # pylint: disable=fixme
+        #       Remove this block when daos_server shutdown works.
         parent_pid = self._sp.pid
         procs = []
         for proc_id in os.listdir('/proc/'):
@@ -466,7 +467,8 @@ class DaosServer():
         # Show errors from server logs bug suppress memory leaks as the server
         # often segfaults at shutdown.
         if os.path.exists(self._log_file):
-            # TODO: Enable memleak checking when server shutdown works.
+            # TODO:                                    # pylint: disable=fixme
+            #       Enable memleak checking when server shutdown works.
             log_test(self.conf, self._log_file, show_memleaks=False)
         self.running = False
         return ret
@@ -1211,8 +1213,9 @@ def run_il_test(server, conf):
 
     pools = get_pool_list()
 
-    # TODO: This doesn't work with two pools, partly related to
-    # DAOS-5109 but there may be other issues.
+    # TODO:                             # pylint: disable=fixme
+    #       This doesn't work with two pools, partly related to
+    #       DAOS-5109 but there may be other issues.
     while len(pools) < 1:
         pools = make_pool(server)
 
@@ -1255,8 +1258,9 @@ def run_il_test(server, conf):
     ret = il_cmd(dfuse, ['cp', '/bin/bash', dirs[-1]], check_read=False)
     assert ret.returncode == 0
     # Read it from within a container
-    # TODO: change this to something else, md5sum uses fread which isn't
-    # intercepted.
+    # TODO:                                      # pylint: disable=fixme
+    #       change this to something else, md5sum uses fread which isn't
+    #       intercepted.
     ret = il_cmd(dfuse,
                  ['md5sum', os.path.join(dirs[-1], 'bash')],
                  check_read=False, check_write=False)
