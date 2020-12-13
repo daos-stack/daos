@@ -1486,7 +1486,6 @@ class _Component():
                     os.makedirs(self.build_path)
             except:
                 print('except on configure, if self.__dry_run')
-                pass     # nosec
 
     def set_environment(self, env, needed_libs):
         """Modify the specified construction environment to build with
