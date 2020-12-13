@@ -844,6 +844,38 @@ class DmgCommand(DmgCommandBase):
         self.log.info("system_query data: %s", str(data))
         return data
 
+    def system_leader_query(self):
+        """Query system to display leader information.
+
+        Args:
+            None
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information
+
+        Raises:
+            CommandFailure: If the dmg system leader-query command fails
+
+        """
+        return self._get_result(("system", "leader-query"))
+
+    def system_list_pools(self):
+        """List all system pools.
+
+        Args:
+            None
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information
+
+        Raises:
+            CommandFailure: if the dmg system list-pools command fails
+
+        """
+        return self._get_result(("system", "list-pools"))
+
     def system_start(self):
         """Start the system.
 
