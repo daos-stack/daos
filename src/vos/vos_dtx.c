@@ -917,7 +917,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 	*dae_p = dae;
 
 out:
-	D_CDEBUG(rc != 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_TRACE,
+	D_CDEBUG(rc != 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_IO,
 		 "Commit the DTX "DF_DTI": rc = "DF_RC"\n",
 		 DP_DTI(dti), DP_RC(rc));
 	if (rc != 0) {
