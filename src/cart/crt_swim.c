@@ -33,7 +33,7 @@
 #define CRT_OPC_SWIM_VERSION	0
 #define CRT_SWIM_FAIL_BASE	((CRT_OPC_SWIM_PROTO >> 16) | \
 				 (CRT_OPC_SWIM_VERSION << 4))
-#define CRT_SWIM_FAIL_DROP_RPC	(CRT_SWIM_FAIL_BASE | 0x1)
+#define CRT_SWIM_FAIL_DROP_RPC	(CRT_SWIM_FAIL_BASE | 0x1)	/* id: 65025 */
 
 /**
  * use this macro to determine if a fault should be injected at
