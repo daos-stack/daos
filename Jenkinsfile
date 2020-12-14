@@ -456,6 +456,7 @@ void foo() {
         for (changeSetList in currentBuild.changeSets) {
             for (changeSet in changeSetList) {
                 println("-------------\n" + changeSet.msg)
+                println(changeSet.comment)
             }
         }
     } else {
