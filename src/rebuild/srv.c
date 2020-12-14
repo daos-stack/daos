@@ -1974,7 +1974,7 @@ out:
 
 		ds_pool_put(pool);
 	}
-	daos_prop_entries_free(&prop);
+	daos_prop_fini(&prop);
 
 	return rc;
 }

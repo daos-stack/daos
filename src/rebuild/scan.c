@@ -97,7 +97,7 @@ rebuild_obj_fill_buf(daos_handle_t ih, d_iov_t *key_iov,
 		arg->count, arg->tgt_id);
 
 	/* re-probe the dbtree after delete */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_REBUILD, NULL,
+	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_MIGRATION, NULL,
 			       NULL);
 	if (rc == -DER_NONEXIST)
 		return 1;
@@ -118,7 +118,7 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 	/* re-init the send argument to fill the object buffer */
 	arg->count = 0;
 	arg->tgt_id = -1;
-	rc = dbtree_iterate(root->root_hdl, DAOS_INTENT_REBUILD, false,
+	rc = dbtree_iterate(root->root_hdl, DAOS_INTENT_MIGRATION, false,
 			    rebuild_obj_fill_buf, arg);
 	if (rc < 0 || arg->count == 0) {
 		D_DEBUG(DB_REBUILD, "Can not get objects: "DF_RC"\n",
@@ -180,7 +180,7 @@ rebuild_cont_send_cb(daos_handle_t ih, d_iov_t *key_iov,
 	}
 
 	/* Some one might insert new record to the tree let's reprobe */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, DAOS_INTENT_REBUILD, key_iov,
+	rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, DAOS_INTENT_MIGRATION, key_iov,
 			       NULL);
 	if (rc) {
 		D_ERROR("dbtree_iter_probe failed: "DF_RC"\n", DP_RC(rc));
@@ -194,7 +194,7 @@ rebuild_cont_send_cb(daos_handle_t ih, d_iov_t *key_iov,
 	}
 
 	/* re-probe the dbtree after delete */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_REBUILD, NULL,
+	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_MIGRATION, NULL,
 			       NULL);
 	if (rc == -DER_NONEXIST)
 		return 1;
@@ -241,7 +241,8 @@ rebuild_objects_send_ult(void *data)
 		}
 
 		/* walk through the rebuild tree and send the rebuild objects */
-		rc = dbtree_iterate(tls->rebuild_tree_hdl, DAOS_INTENT_REBUILD,
+		rc = dbtree_iterate(tls->rebuild_tree_hdl,
+				    DAOS_INTENT_MIGRATION,
 				    false, rebuild_cont_send_cb, &arg);
 		if (rc < 0) {
 			D_ERROR("dbtree iterate failed: rc "DF_RC"\n",
@@ -608,7 +609,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	param.ip_hdl = coh;
 	param.ip_epr.epr_lo = 0;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
-	param.ip_flags = VOS_IT_FOR_REBUILD;
+	param.ip_flags = VOS_IT_FOR_MIGRATION;
 	uuid_copy(arg->co_uuid, entry->ie_couuid);
 	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor,
 			 rebuild_obj_scan_cb, NULL, arg, NULL);
@@ -676,7 +677,7 @@ rebuild_scanner(void *data)
 		D_GOTO(out, rc = -DER_NONEXIST);
 
 	param.ip_hdl = child->spc_hdl;
-	param.ip_flags = VOS_IT_FOR_REBUILD;
+	param.ip_flags = VOS_IT_FOR_MIGRATION;
 	arg.rpt = rpt;
 	arg.yield_freq = DEFAULT_YIELD_FREQ;
 	if (!rebuild_status_match(rpt, PO_COMP_ST_UP)) {

@@ -979,6 +979,28 @@ If DAOS Agent failed to start check the logs with:
 $ sudo journalctl --unit daos_agent.service
 ```
 
+#### Disable Agent Cache (Optional)
+
+In certain circumstances (e.g. for DAOS development or system evaluation), it
+may be desirable to disable the DAOS Agent's caching mechanism in order to avoid
+stale system information being retained across reformats of a system. The DAOS
+Agent normally caches a map of rank->fabric URI lookups as well as client network
+configuration data in order to reduce the number of management RPCs required to
+start an application. When this information becomes stale, the Agent must be
+restarted in order to repopulate the cache with new information. Alternatively,
+the caching mechanism may be disabled, with the tradeoff that each application
+launch will invoke management RPCs in order to obtain system connection information.
+
+To disable the DAOS Agent caching mechanism, set the following environment variable before
+starting the daos_agent process:
+
+`DAOS_AGENT_DISABLE_CACHE=true`
+
+If running from systemd, add the following to the daos_agent service file in the `[Service]`
+section before reloading systemd and restarting the daos_agent service:
+
+`Environment=DAOS_AGENT_DISABLE_CACHE=true`
+
 ## System Validation
 
 To validate that the DAOS system is properly installed, the `daos_test`
