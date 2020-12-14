@@ -454,7 +454,7 @@ void foo() {
         for (changeSetList in currentBuild.changeSets) {
             for (changeSet in changeSetList) {
                 if (changeSet.msg.contains('[ci-skip]')) {
-                    println("-------------\m" + changeSet.msg)
+                    println("-------------\n" + changeSet.msg)
                 }
             }
         }
