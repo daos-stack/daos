@@ -172,6 +172,21 @@ dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 }
 
 int
+dsc_obj_update(daos_handle_t oh, uint64_t flags, daos_key_t *dkey,
+	       unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls)
+{
+	tse_task_t	*task;
+	int		rc;
+
+	rc = dc_obj_update_task_create(oh, DAOS_TX_NONE, flags, dkey, nr, iods,
+				       sgls, NULL, dsc_scheduler(), &task);
+	if (rc)
+		return rc;
+
+	return dsc_task_run(task, dsc_obj_retry_cb, &oh, sizeof(oh), true);
+}
+
+int
 dsc_obj_list_obj(daos_handle_t oh, daos_epoch_range_t *epr, daos_key_t *dkey,
 		 daos_key_t *akey, daos_size_t *size, uint32_t *nr,
 		 daos_key_desc_t *kds, d_sg_list_t *sgl, daos_anchor_t *anchor,

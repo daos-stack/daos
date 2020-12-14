@@ -357,7 +357,7 @@ static int
 pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 {
 	struct daos_prop_entry	*entry;
-	d_iov_t		 value;
+	d_iov_t			 value;
 	int			 i;
 	int			 rc = 0;
 
@@ -368,6 +368,12 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 		entry = &prop->dpp_entries[i];
 		switch (entry->dpe_type) {
 		case DAOS_PROP_PO_LABEL:
+			if (entry->dpe_str == NULL ||
+			    strlen(entry->dpe_str) == 0) {
+				entry = daos_prop_entry_get(&pool_prop_default,
+							    entry->dpe_type);
+				D_ASSERT(entry != NULL);
+			}
 			d_iov_set(&value, entry->dpe_str,
 				     strlen(entry->dpe_str));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_label,
@@ -955,7 +961,7 @@ out:
 	if (rc)
 		D_ERROR("pool "DF_UUID" event %d failed: rc %d\n",
 			DP_UUID(svc->ps_uuid), src, rc);
-	daos_prop_entries_free(&prop);
+	daos_prop_fini(&prop);
 }
 
 static void
@@ -4212,7 +4218,7 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 out:
 	if (pool)
 		ds_pool_put(pool);
-	daos_prop_entries_free(&prop);
+	daos_prop_fini(&prop);
 	pool_target_id_list_free(&target_list);
 	return rc;
 }
@@ -4314,7 +4320,7 @@ pool_extend_internal(uuid_t pool_uuid, struct rsvc_hint *hint,
 	struct pool_svc		*svc;
 	struct rdb_tx		tx;
 	bool			updated = false;
-	struct pool_target_id_list tgts;
+	struct pool_target_id_list tgts = { 0 };
 	int rc;
 
 	rc = pool_svc_lookup_leader(pool_uuid, &svc, hint);
@@ -4962,6 +4968,42 @@ out:
 	crt_reply_send(rpc);
 }
 
+int
+ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
+			 uint32_t version)
+{
+	struct pl_map		*map;
+	struct pl_obj_layout	*layout;
+	struct daos_obj_md	 md = { 0 };
+	int			 rc = 0;
+
+	map = pl_map_find(pool->sp_uuid, oid->id_pub);
+	if (map == NULL) {
+		D_WARN("Failed to find pool map tp select leader for "
+		       DF_UOID" version = %d\n", DP_UOID(*oid), version);
+		return -DER_INVAL;
+	}
+
+	md.omd_id = oid->id_pub;
+	md.omd_ver = version;
+	rc = pl_obj_place(map, &md, NULL, &layout);
+	if (rc != 0)
+		goto out;
+
+	rc = pl_select_leader(oid->id_pub, oid->id_shard / layout->ol_grp_size,
+			      layout->ol_grp_size, true,
+			      pl_obj_get_shard, layout);
+	pl_obj_layout_free(layout);
+	if (rc < 0)
+		D_WARN("Failed to select leader for "DF_UOID
+		       "version = %d: rc = %d\n",
+		       DP_UOID(*oid), version, rc);
+
+out:
+	pl_map_decref(map);
+	return rc;
+}
+
 /**
  * Check whether the leader replica of the given object resides
  * on current server or not.
@@ -4978,59 +5020,31 @@ int
 ds_pool_check_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 			 uint32_t version)
 {
-	struct pl_map		*map;
-	struct pl_obj_layout	*layout = NULL;
 	struct pool_target	*target;
-	struct daos_obj_md	 md = { 0 };
-	int			 leader;
 	d_rank_t		 myrank;
-	int			 rc = 0;
+	int			 leader;
+	int			 rc;
 
-	map = pl_map_find(pool->sp_uuid, oid->id_pub);
-	if (map == NULL) {
-		D_WARN("Failed to find pool map tp select leader for "
-		       DF_UOID" version = %d\n", DP_UOID(*oid), version);
-		return -DER_INVAL;
-	}
-
-	md.omd_id = oid->id_pub;
-	md.omd_ver = version;
-	rc = pl_obj_place(map, &md, NULL, &layout);
-	if (rc != 0)
-		goto out;
-
-	leader = pl_select_leader(oid->id_pub,
-				  oid->id_shard / layout->ol_grp_size,
-				  layout->ol_grp_size, true,
-				  pl_obj_get_shard, layout);
-	if (leader < 0) {
-		D_WARN("Failed to select leader for "DF_UOID
-		       "version = %d: rc = %d\n",
-		       DP_UOID(*oid), version, leader);
-		D_GOTO(out, rc = leader);
-	}
+	leader = ds_pool_elect_dtx_leader(pool, oid, version);
+	if (leader < 0)
+		return leader;
 
 	D_DEBUG(DB_TRACE, "get new leader tgt id %d\n", leader);
 	rc = pool_map_find_target(pool->sp_map, leader, &target);
 	if (rc < 0)
-		goto out;
+		return rc;
 
 	if (rc != 1)
-		D_GOTO(out, rc = -DER_INVAL);
+		return -DER_INVAL;
 
 	rc = crt_group_rank(NULL, &myrank);
 	if (rc < 0)
-		goto out;
+		return rc;
 
 	if (myrank != target->ta_comp.co_rank)
 		rc = 0;
 	else
 		rc = 1;
-
-out:
-	if (layout != NULL)
-		pl_obj_layout_free(layout);
-	pl_map_decref(map);
 
 	return rc;
 }

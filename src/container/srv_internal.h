@@ -67,6 +67,21 @@ dsm_tls_get()
  *
  * Identified by a number unique within the pool.
  */
+
+struct ec_eph {
+	d_rank_t	rank;
+	daos_epoch_t	eph;
+};
+
+/* container EC aggregation epoch control descriptor, which is only on leader */
+struct cont_ec_agg {
+	uuid_t			ea_cont_uuid;
+	daos_epoch_t		ea_current_eph;
+	int			ea_servers_num;
+	struct ec_eph		*ea_server_ephs;
+	d_list_t		ea_list;
+};
+
 struct cont_svc {
 	uuid_t			cs_pool_uuid;
 	uint64_t		cs_id;
@@ -76,6 +91,10 @@ struct cont_svc {
 	rdb_path_t		cs_conts;	/* container KVS */
 	rdb_path_t		cs_hdls;	/* container handle KVS */
 	struct ds_pool	       *cs_pool;
+
+	/* Manage the EC aggregation epoch */
+	struct sched_request	*cs_ec_leader_ephs_req;
+	d_list_t		cs_ec_agg_list; /* link cont_ec_agg */
 };
 
 /* Container descriptor */
@@ -126,12 +145,18 @@ struct cont_iv_prop {
 	struct daos_acl	cip_acl;
 };
 
+struct cont_iv_agg_eph {
+	daos_epoch_t	eph;
+	d_rank_t	rank;
+};
+
 struct cont_iv_entry {
 	uuid_t	cont_uuid;
 	union {
 		struct cont_iv_snapshot iv_snap;
 		struct cont_iv_capa	iv_capa;
 		struct cont_iv_prop	iv_prop;
+		struct cont_iv_agg_eph	iv_agg_eph;
 	};
 };
 
@@ -171,6 +196,8 @@ int ds_cont_acl_delete(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 int ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid,
 		     daos_prop_t **prop_out);
 
+int ds_cont_leader_update_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
+				  d_rank_t rank, daos_epoch_t eph);
 /*
  * srv_epoch.c
  */
@@ -230,6 +257,8 @@ int ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 				 uint64_t *snapshots, int snap_count);
 int ds_cont_tgt_snapshots_refresh(uuid_t pool_uuid, uuid_t cont_uuid);
 int ds_cont_tgt_close(uuid_t cont_hdl_uuid);
+int ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
+				daos_epoch_t eph);
 /**
  * oid_iv.c
  */
@@ -251,4 +280,10 @@ int cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop);
 int cont_iv_snapshots_refresh(void *ns, uuid_t cont_uuid);
 int cont_iv_snapshots_update(void *ns, uuid_t cont_uuid,
 			     uint64_t *snapshots, int snap_count);
+
+int cont_child_gather_oids(struct ds_cont_child *cont, uuid_t coh_uuid,
+			   daos_epoch_t epoch);
+
+int cont_iv_ec_agg_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t eph);
+int cont_iv_ec_agg_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t eph);
 #endif /* __CONTAINER_SRV_INTERNAL_H__ */

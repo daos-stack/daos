@@ -953,6 +953,9 @@ btr_check_availability(struct btr_context *tcx, struct btr_check_alb *alb)
 	if (rc == -DER_INPROGRESS) /* Unceration */
 		return PROBE_RC_INPROGRESS;
 
+	if (rc == -DER_DATA_LOSS)
+		return rc;
+
 	if (rc < 0) /* Failure */
 		return PROBE_RC_ERR;
 
@@ -1336,7 +1339,7 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	int			 at;
 	int			 rc;
 	int			 cmp;
-	int			 level;
+	int			 level = -1;
 	int			 saved = -1;
 	bool			 next_level;
 	struct btr_node		*nd;
@@ -1350,7 +1353,6 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 		goto out;
 	}
 
-	level = -1;
 	memset(&tcx->tc_traces[0], 0,
 	       sizeof(tcx->tc_traces[0]) * BTR_TRACE_MAX);
 
@@ -1588,8 +1590,11 @@ again:
 	rc = PROBE_RC_OK;
  out:
 	tcx->tc_probe_rc = rc;
+	if (rc == -DER_DATA_LOSS)
+		rc = PROBE_RC_ERR;
+
 	if (rc == PROBE_RC_ERR)
-		D_ERROR("Failed to probe\n");
+		D_ERROR("Failed to probe: rc = %d\n", tcx->tc_probe_rc);
 	else if (level >= 0)
 		btr_trace_debug(tcx, &tcx->tc_trace[level], "\n");
 
@@ -1756,14 +1761,21 @@ dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 		return -DER_NO_HDL;
 
 	rc = btr_probe_key(tcx, opc, intent, key);
-	if (rc == PROBE_RC_INPROGRESS) {
+	switch (rc) {
+	case PROBE_RC_INPROGRESS:
 		D_DEBUG(DB_TRACE, "Target is in some uncommitted DTX.\n");
 		return -DER_INPROGRESS;
-	}
-	if (rc == PROBE_RC_NONE || rc == PROBE_RC_ERR) {
-		D_DEBUG(DB_TRACE, "Cannot find key\n");
+	case PROBE_RC_NONE:
+		D_DEBUG(DB_TRACE, "Key does not exist.\n");
 		return -DER_NONEXIST;
+	case PROBE_RC_ERR:
+		D_DEBUG(DB_TRACE, "Cannot find key: %d\n", tcx->tc_probe_rc);
+		return tcx->tc_probe_rc == -DER_DATA_LOSS ?
+			tcx->tc_probe_rc : -DER_NONEXIST;
+	default:
+		break;
 	}
+
 	rec = btr_trace2rec(tcx, tcx->tc_depth - 1);
 
 	return btr_rec_fetch(tcx, rec, key_out, val_out);
@@ -1917,6 +1929,9 @@ btr_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	case PROBE_RC_INPROGRESS:
 		D_DEBUG(DB_TRACE, "The target is in some uncommitted DTX.");
 		return -DER_INPROGRESS;
+	case -DER_DATA_LOSS:
+		D_DEBUG(DB_TRACE, "Upsert hit some corrupted transaction.\n");
+		return rc;
 	}
 
 	tcx->tc_probe_rc = PROBE_RC_UNKNOWN; /* path changed */
@@ -2801,6 +2816,11 @@ dbtree_delete(daos_handle_t toh, dbtree_probe_opc_t opc, d_iov_t *key,
 		return -DER_INPROGRESS;
 	}
 
+	if (rc == -DER_DATA_LOSS) {
+		D_DEBUG(DB_TRACE, "Delete hit some corrupted transaction.\n");
+		return rc;
+	}
+
 	if (rc != PROBE_RC_OK) {
 		D_DEBUG(DB_TRACE, "Cannot find key\n");
 		return -DER_NONEXIST;
@@ -3503,9 +3523,15 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent,
 		return -DER_INPROGRESS;
 	}
 
-	if (rc == PROBE_RC_NONE || rc == PROBE_RC_ERR) {
+	if (rc == PROBE_RC_NONE) {
 		itr->it_state = BTR_ITR_FINI;
 		return -DER_NONEXIST;
+	}
+
+	if (rc == PROBE_RC_ERR) {
+		itr->it_state = BTR_ITR_FINI;
+		return tcx->tc_probe_rc == -DER_DATA_LOSS ?
+			tcx->tc_probe_rc : -DER_NONEXIST;
 	}
 
 	itr->it_state = BTR_ITR_READY;
@@ -3606,7 +3632,8 @@ again:
 	case PROBE_RC_ERR:
 	default:
 		itr->it_state = BTR_ITR_FINI;
-		return -DER_INVAL;
+		return tcx->tc_probe_rc == -DER_DATA_LOSS ?
+			tcx->tc_probe_rc : -DER_INVAL;
 	}
 }
 

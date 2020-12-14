@@ -59,9 +59,9 @@ func SplitPort(addrPattern string, defaultPort int) (string, string, error) {
 	return host, port, err
 }
 
-// CmpTcpAddr compares two *net.TCPAddr instances and returns
+// CmpTCPAddr compares two *net.TCPAddr instances and returns
 // true if they are equivalent, false otherwise.
-func CmpTcpAddr(a, b *net.TCPAddr) bool {
+func CmpTCPAddr(a, b *net.TCPAddr) bool {
 	if a == nil && b == nil {
 		return true
 	}

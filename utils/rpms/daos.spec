@@ -1,7 +1,6 @@
 %define daoshome %{_exec_prefix}/lib/%{name}
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
-
 %if (0%{?suse_version} >= 1500)
 # until we get an updated mercury build on 15.2
 %global mercury_version 2.0.0~rc1-1.suse.lp151
@@ -10,7 +9,7 @@
 %endif
 
 Name:          daos
-Version:       1.1.2
+Version:       1.1.2.1
 Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
@@ -19,7 +18,7 @@ URL:           https//github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
 
 BuildRequires: scons >= 2.4
-BuildRequires: libfabric-devel
+BuildRequires: libfabric-devel >= 1.11.0
 BuildRequires: boost-devel
 BuildRequires: mercury-devel = %{mercury_version}
 BuildRequires: openpa-devel
@@ -55,7 +54,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: raft-devel = 0.7.0
+BuildRequires: raft-devel = 0.7.1
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -140,7 +139,7 @@ Requires: hwloc
 Requires: mercury = %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
-Requires: libfabric >= 1.8.0
+Requires: libfabric >= 1.11.0
 %{?systemd_requires}
 Obsoletes: cart
 
@@ -151,7 +150,7 @@ This is the package needed to run a DAOS server
 Summary: The DAOS client
 Requires: %{name} = %{version}-%{release}
 Requires: mercury = %{mercury_version}
-Requires: libfabric >= 1.8.0
+Requires: libfabric >= 1.11.0
 Requires: fuse3 >= 3.4.2
 Obsoletes: cart
 %if (0%{?suse_version} >= 1500)
@@ -217,7 +216,8 @@ scons %{?_smp_mflags}      \
       --no-rpath           \
       USE_INSTALLED=all    \
       CONF_DIR=%{conf_dir} \
-      PREFIX=%{?buildroot}
+      PREFIX=%{?buildroot} \
+     %{?scons_args}
 
 %install
 scons %{?_smp_mflags}                 \
@@ -228,7 +228,9 @@ scons %{?_smp_mflags}                 \
       %{?buildroot}%{conf_dir}        \
       USE_INSTALLED=all               \
       CONF_DIR=%{conf_dir}            \
-      PREFIX=%{_prefix}
+      PREFIX=%{_prefix}               \
+      %{?scons_args}
+
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
@@ -398,6 +400,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_bindir}/daos_run_io_conf
 %{_bindir}/crt_launch
 %{_prefix}/etc/fault-inject-cart.yaml
+%{_bindir}/fault_status
 # For avocado tests
 %{_prefix}/lib/daos/.build_vars.json
 %{_prefix}/lib/daos/.build_vars.sh
@@ -408,6 +411,17 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Wed Dec 09 2020 Johann Lombardi <johann.lombardi@intel.com> 1.1.2.1-1
+- Version bump up to 1.1.2.1
+
+* Fri Dec 04 2020 Li Wei <wei.g.li@intel.com> 1.1.2-3
+- Require raft-devel 0.7.1 that fixes recent Coverity issues
+
+* Wed Dec 02 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.2-2
+- define scons_args to be BUILD_TYPE=<release|dev>
+- the scons default is BUILD_TYPE=release
+- BUILD_TYPE=release will disable fault injection in build
+
 * Tue Dec 01 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.2-1
 - Version bump up to 1.1.2
 
