@@ -24,6 +24,7 @@
 import time
 import random
 from osa_utils import OSAUtils
+from apricot import skipForTicket
 from test_utils_pool import TestPool
 
 
@@ -110,6 +111,7 @@ class OSAOfflineDrain(OSAUtils):
         if data:
             self.verify_single_object()
 
+    @skipForTicket("DAOS-6107")
     def test_osa_offline_drain(self):
         """
         JIRA ID: DAOS-4750

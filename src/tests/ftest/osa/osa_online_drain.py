@@ -26,6 +26,7 @@ import random
 import threading
 
 from itertools import product
+from apricot import skipForTicket
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
 from osa_utils import OSAUtils
@@ -141,6 +142,7 @@ class OSAOnlineDrain(OSAUtils):
             self.pool.display_pool_daos_space(display_string)
             pool[val].destroy()
 
+    @skipForTicket("DAOS-6206")
     def test_osa_online_drain(self):
         """Test ID: DAOS-4750
         Test Description: Validate Online drain
