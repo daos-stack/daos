@@ -123,9 +123,9 @@ RUN echo -e "<settings>\n\
 RUN mkdir /mnt/daos
 RUN chown daos.daos /mnt/daos || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown daos /mnt/daos; chgrp daos /mnt/daos; ls -ld /mnt/daos; }
 RUN mkdir /var/run/daos_server
-RUN chown daos.daos /var/run/daos_server
+RUN chown daos.daos /var/run/daos_server || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown daos /var/run/daos_server; chgrp daos /var/run/daos_server; ls -ld /var/run/daos_server; }
 RUN mkdir /var/run/daos_agent
-RUN chown daos.daos /var/run/daos_agent
+RUN chown daos.daos /var/run/daos_agent || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown daos /var/run/daos_agent; chgrp daos /var/run/daos_agent; ls -ld /var/run/daos_agent; }
 
 # Dependencies
 # Packages for NVML exist in CentOS, but are

@@ -46,10 +46,6 @@ class GroupTest(TestWithoutServers):
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
 
-    def tearDown(self):
-        """ Test tear down """
-        print("Run TearDown\n")
-
     def test_group(self):
         """
         Test CaRT NoPmix Launcher

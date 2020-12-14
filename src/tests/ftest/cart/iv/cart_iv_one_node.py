@@ -109,10 +109,6 @@ class CartIvOneNodeTest(TestWithoutServers):
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
 
-    def tearDown(self):
-        """ Test tear down """
-        print("Run TearDown\n")
-
     def _verify_action(self, action):
         """verify the action"""
         if (('operation' not in action) or

@@ -46,10 +46,6 @@ class CartCoRpcOneNodeTest(TestWithoutServers):
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
 
-    def tearDown(self):
-        """ Test teardown """
-        print("Run TearDown\n")
-
     def test_cart_ghost_rank_rpc(self):
         """
         Test ghost rank RPC

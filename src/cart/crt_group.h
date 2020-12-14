@@ -405,4 +405,7 @@ crt_grp_id_identical(crt_group_id_t grp_id_1, crt_group_id_t grp_id_2);
 int crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank);
 int crt_grp_psr_reload(struct crt_grp_priv *grp_priv);
 
+int
+grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank);
+
 #endif /* __CRT_GROUP_H__ */

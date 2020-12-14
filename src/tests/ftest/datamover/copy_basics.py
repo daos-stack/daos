@@ -25,9 +25,10 @@ from data_mover_test_base import DataMoverTestBase
 from os.path import join, sep
 from apricot import skipForTicket
 
+
 class CopyBasicsTest(DataMoverTestBase):
     # pylint: disable=too-many-ancestors
-    """Test class for basic Datamover validation
+    """Test class for basic Datamover validation.
 
     Test Class Description:
         Tests basic functionality of the datamover utility.
@@ -36,10 +37,6 @@ class CopyBasicsTest(DataMoverTestBase):
             Copying between pools.
     :avocado: recursive
     """
-
-    def __init__(self, *args, **kwargs):
-        """Initialize a CopyBasicsTest object."""
-        super(CopyBasicsTest, self).__init__(*args, **kwargs)
 
     def setUp(self):
         """Set up each test case."""
@@ -55,25 +52,12 @@ class CopyBasicsTest(DataMoverTestBase):
             "test_file", "/run/ior/copy_basics/*")
 
         # Setup the directory structures
-        self.posix_test_path1 = join(self.workdir, "posix_test") + sep
-        self.posix_test_path2 = join(self.workdir, "posix_test2") + sep
+        self.posix_test_paths.append(join(self.workdir, "posix_test") + sep)
+        self.posix_test_paths.append(join(self.workdir, "posix_test2") + sep)
 
         # Create the directories
-        cmd = "mkdir -p '{}' '{}'".format(
-            self.posix_test_path1,
-            self.posix_test_path2)
+        cmd = "mkdir -p {}".format(self.get_posix_test_path_string())
         self.execute_cmd(cmd)
-
-    def tearDown(self):
-        """Tear down each test case."""
-        # Remove the created directories
-        cmd = "rm -rf '{}' '{}'".format(
-            self.posix_test_path1,
-            self.posix_test_path2)
-        self.execute_cmd(cmd)
-
-        # Stop the servers and agents
-        super(CopyBasicsTest, self).tearDown()
 
     def test_copy_types(self):
         """
@@ -103,7 +87,6 @@ class CopyBasicsTest(DataMoverTestBase):
         :avocado: tags=copy_basics,copy_types
         """
         # Start dfuse to hold all pools/containers
-        self.dfuse_hosts = self.agent_managers[0].hosts
         self.start_dfuse(self.dfuse_hosts)
 
         # Create 2 pools
@@ -120,12 +103,12 @@ class CopyBasicsTest(DataMoverTestBase):
 
         # Create each source location
         p1_c1 = ["/", pool1, container1]
-        posix1 = [self.posix_test_path1, None, None]
+        posix1 = [self.posix_test_paths[0], None, None]
 
         # Create each destination location
         p1_c2 = ["/", pool1, container2]
         p2_c3 = ["/", pool2, container3]
-        posix2 = [self.posix_test_path2, None, None]
+        posix2 = [self.posix_test_paths[1], None, None]
 
         # Create the source files
         self.write_location("DAOS_UUID", *p1_c1)
@@ -344,11 +327,11 @@ class CopyBasicsTest(DataMoverTestBase):
             self.read_verify_location(*dst)
 
     def write_location(self, param_type, path, pool=None, cont=None):
-        """Writes the test data using ior """
+        """Write the test data using ior."""
         self.set_ior_location_and_run(param_type, path, pool, cont,
                                       self.test_file, self.flags_write)
 
     def read_verify_location(self, param_type, path, pool=None, cont=None):
-        """ Read verifies the test data using ior """
+        """Read and verify the test data using ior."""
         self.set_ior_location_and_run(param_type, path, pool, cont,
                                       self.test_file, self.flags_read)
