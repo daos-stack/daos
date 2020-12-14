@@ -799,9 +799,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		D_GOTO(out_free, rc = RC_NO_HELP);
 	}
 
-	if (ap->c_op != -1 &&
-	    (ap->c_op == CONT_LIST_OBJS ||
-	     ap->c_op == CONT_STAT)) {
+	if (ap->c_op != -1 && ap->c_op == CONT_STAT) {
 		fprintf(stderr,
 			"container %s not yet implemented\n", cmdname);
 		D_GOTO(out_free, rc = RC_NO_HELP);
@@ -1034,10 +1032,8 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	case CONT_DESTROY:
 		rc = cont_destroy_hdlr(ap);
 		break;
-
-	/* TODO: implement the following ops */
 	case CONT_LIST_OBJS:
-		/* rc = cont_list_objs_hdlr(ap); */
+		rc = cont_list_objs_hdlr(ap);
 		break;
 	case CONT_QUERY:
 		rc = cont_query_hdlr(ap);
