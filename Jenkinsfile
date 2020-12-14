@@ -12,7 +12,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value="pipeline-lib@your_branch") _
+@Library(value="trusted-lpipeline-lib@bmurrell/changeset.comment()") _
 
 boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
@@ -498,7 +498,7 @@ pipeline {
         stage('Cancel Previous Builds') {
             when { changeRequest() }
             steps {
-                foo()
+                println(getCommitComment())
                 cancelPreviousBuilds()
             }
         }
