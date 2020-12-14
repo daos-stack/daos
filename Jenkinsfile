@@ -454,7 +454,7 @@ pipeline {
 
     triggers {
         cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0,12 * * *\n' : '' +
-             env.BRANCH_NAME == 'PR-4065' ? 'TZ=America/Toronto\n0 0,12 * * *\n' : '' +
+             env.BRANCH_NAME == 'PR-4065' ? 'TZ=America/Toronto\n0 0,12,16 * * *\n' : '' +
              env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
     }
 
