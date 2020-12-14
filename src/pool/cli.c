@@ -1525,6 +1525,12 @@ struct pool_evict_state {
 };
 
 int
+dc_pool_dummy(tse_task_t *task)
+{
+	return -DER_NOSYS;
+}
+
+int
 dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver)
 {
 	struct dc_pool *pool;
