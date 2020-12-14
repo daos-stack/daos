@@ -45,6 +45,7 @@ type Event interface {
 	FromProto(*mgmtpb.RASEvent) error
 }
 
+// NewFromProto creates an Event from given protobuf RASEvent message.
 func NewFromProto(pbEvent *mgmtpb.RASEvent) (Event, error) {
 	switch RASID(pbEvent.Id) {
 	case RASRankExit:
