@@ -1929,7 +1929,7 @@ cont_list_objs_hdlr(struct cmd_args_s *ap)
 	int			rc, i;
 
 	/* create a snapshot with OIT */
-	rc = cont_create_snap_hdlr_opt(ap->cont, &ap->epc, NULL,
+	rc = daos_cont_create_snap_opt(ap->cont, &ap->epc, NULL,
 				       DAOS_SNAP_OPT_CR | DAOS_SNAP_OPT_OIT,
 				       NULL);
 	if (rc != 0)
