@@ -5,6 +5,7 @@ dist: focal
 branches:
   only:
     - master
+    - release/*
 
 env:
  jobs:
