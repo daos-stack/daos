@@ -450,6 +450,8 @@ String quick_build_deps(String distro) {
 }
 
 void foo() {
+    println("checking currentBuild.changeSets")
+
     if (currentBuild.changeSets != null) {
         for (changeSetList in currentBuild.changeSets) {
             for (changeSet in changeSetList) {
