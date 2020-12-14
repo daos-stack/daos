@@ -300,7 +300,7 @@ class CartUtils():
 
         srv_rtn = self.launch_cmd_bg(cartobj, srvcmd)
 
-        # Certain test servers (e.g., SWIM) need time to start before 
+        # Certain test servers (e.g., for SWIM testing) need time to start before 
         # the clients start
         self.print("Sleeping for 10. Waiting for CaRT servers to initialize.")
         time.sleep(10)
