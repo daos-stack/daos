@@ -89,8 +89,8 @@ class PoolDestroyWithIO(IorTestBase):
         # if False, wait for rebuild to complete.
         self.pool.wait_for_rebuild(True, interval=1)
         self.pool.set_query_data()
-        rebuild_status = self.query_data["rebuild"]["status"]
-        self.log.info("Pool %s rebuild status:%s\n", self.uuid, rebuild_status)
+        rebuild_status = self.pool.query_data["rebuild"]["status"]
+        self.log.info("Pool %s rebuild status:%s\n", self.pool.uuid, rebuild_status)
 
         if rebuild_status == 'busy':
             # destroy pool during rebuild
