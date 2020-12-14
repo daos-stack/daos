@@ -26,7 +26,6 @@ import random
 import threading
 
 from itertools import product
-from apricot import skipForTicket
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
 from osa_utils import OSAUtils
@@ -134,7 +133,7 @@ class OSAOnlineDrain(OSAUtils):
                             "Pool Version Error:  After drain")
             # Wait to finish the threads
             for thrd in threads:
-                thrd.join(timeout=240)
+                thrd.join(timeout=20)
 
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
@@ -142,7 +141,6 @@ class OSAOnlineDrain(OSAUtils):
             self.pool.display_pool_daos_space(display_string)
             pool[val].destroy()
 
-    @skipForTicket("DAOS-6206")
     def test_osa_online_drain(self):
         """Test ID: DAOS-4750
         Test Description: Validate Online drain

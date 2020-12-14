@@ -157,7 +157,7 @@ class OSAOnlineExtend(OSAUtils):
                             "Pool Version Error:  After extend")
             # Wait to finish the threads
             for thrd in threads:
-                thrd.join(timeout=240)
+                thrd.join(timeout=20)
 
         # Check data consistency for IOR in future
         # Presently, we are running daos_racer in parallel
