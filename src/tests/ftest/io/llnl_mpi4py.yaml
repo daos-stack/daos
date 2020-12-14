@@ -6,7 +6,7 @@ hosts:
         - boro-C
         - boro-D
         - boro-E
-timeout: 300
+timeout: 180
 server_config:
     name: daos_server
 pool:

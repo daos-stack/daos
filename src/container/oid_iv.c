@@ -245,7 +245,7 @@ oid_iv_ent_init(struct ds_iv_key *iv_key, void *data, struct ds_iv_entry *entry)
 	struct oid_iv_key	*key, *ent_key;
 	int			rc;
 
-	rc = daos_sgl_init(&entry->iv_value, 1);
+	rc = d_sgl_init(&entry->iv_value, 1);
 	if (rc)
 		return rc;
 
@@ -254,7 +254,11 @@ oid_iv_ent_init(struct ds_iv_key *iv_key, void *data, struct ds_iv_entry *entry)
 		return -DER_NOMEM;
 
 	/* create the entry mutex */
-	ABT_mutex_create(&oid_entry->lock);
+	rc = ABT_mutex_create(&oid_entry->lock);
+	if (rc != ABT_SUCCESS) {
+		D_FREE(oid_entry);
+		return dss_abterr2der(rc);
+	}
 
 	/** init the entry key */
 	entry->iv_key.class_id = iv_key->class_id;
@@ -279,7 +283,7 @@ oid_iv_ent_destroy(d_sg_list_t *sgl)
 
 	entry = sgl->sg_iovs[0].iov_buf;
 	ABT_mutex_free(&entry->lock);
-	daos_sgl_fini(sgl, true);
+	d_sgl_fini(sgl, true);
 
 	return 0;
 }
@@ -289,7 +293,7 @@ oid_iv_alloc(struct ds_iv_entry *entry, d_sg_list_t *sgl)
 {
 	int rc;
 
-	rc = daos_sgl_init(sgl, 1);
+	rc = d_sgl_init(sgl, 1);
 	if (rc)
 		return rc;
 
@@ -301,7 +305,7 @@ oid_iv_alloc(struct ds_iv_entry *entry, d_sg_list_t *sgl)
 
 free:
 	if (rc)
-		daos_sgl_fini(sgl, true);
+		d_sgl_fini(sgl, true);
 	return rc;
 }
 

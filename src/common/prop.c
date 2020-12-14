@@ -86,13 +86,12 @@ daos_prop_entry_free_value(struct daos_prop_entry *entry)
 }
 
 void
-daos_prop_entries_free(daos_prop_t *prop)
+daos_prop_fini(daos_prop_t *prop)
 {
-	int i;
+	int	i;
 
-	if (prop == NULL || prop->dpp_nr == 0 ||
-	    prop->dpp_entries == NULL)
-		return;
+	if (!prop->dpp_entries)
+		goto out;
 
 	for (i = 0; i < prop->dpp_nr; i++) {
 		struct daos_prop_entry *entry;
@@ -102,16 +101,18 @@ daos_prop_entries_free(daos_prop_t *prop)
 	}
 
 	D_FREE(prop->dpp_entries);
+	prop->dpp_entries = NULL;
+out:
+	prop->dpp_nr = 0;
 }
 
 void
 daos_prop_free(daos_prop_t *prop)
 {
-	if (prop == NULL)
-		return;
-
-	daos_prop_entries_free(prop);
-	D_FREE_PTR(prop);
+	if (prop) {
+		daos_prop_fini(prop);
+		D_FREE_PTR(prop);
+	}
 }
 
 daos_prop_t *
@@ -402,15 +403,11 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			val = prop->dpp_entries[i].dpe_val;
 			if (val != DAOS_PROP_CO_COMPRESS_OFF &&
 			    val != DAOS_PROP_CO_COMPRESS_LZ4 &&
-			    val != DAOS_PROP_CO_COMPRESS_GZIP1 &&
-			    val != DAOS_PROP_CO_COMPRESS_GZIP2 &&
-			    val != DAOS_PROP_CO_COMPRESS_GZIP3 &&
-			    val != DAOS_PROP_CO_COMPRESS_GZIP4 &&
-			    val != DAOS_PROP_CO_COMPRESS_GZIP5 &&
-			    val != DAOS_PROP_CO_COMPRESS_GZIP6 &&
-			    val != DAOS_PROP_CO_COMPRESS_GZIP7 &&
-			    val != DAOS_PROP_CO_COMPRESS_GZIP8 &&
-			    val != DAOS_PROP_CO_COMPRESS_GZIP9) {
+			    val != DAOS_PROP_CO_COMPRESS_DEFLATE &&
+			    val != DAOS_PROP_CO_COMPRESS_DEFLATE1 &&
+			    val != DAOS_PROP_CO_COMPRESS_DEFLATE2 &&
+			    val != DAOS_PROP_CO_COMPRESS_DEFLATE3 &&
+			    val != DAOS_PROP_CO_COMPRESS_DEFLATE4) {
 				D_ERROR("invalid compression parameter "
 					DF_U64".\n", val);
 				return false;

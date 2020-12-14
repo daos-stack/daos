@@ -6,7 +6,7 @@ hosts:
     - server-B
 server_config:
    name: daos_server
-timeout: 240
+timeout: 60
 pool:
     name: daos_server
     scm_size: 1073741824

@@ -232,17 +232,28 @@ ds_cont_svc_fini(struct cont_svc **svcp)
 	*svcp = NULL;
 }
 
+static int cont_svc_ec_agg_leader_start(struct cont_svc *svc);
+static void cont_svc_ec_agg_leader_stop(struct cont_svc *svc);
+
 void
 ds_cont_svc_step_up(struct cont_svc *svc)
 {
+	int rc;
+
 	D_ASSERT(svc->cs_pool == NULL);
 	svc->cs_pool = ds_pool_lookup(svc->cs_pool_uuid);
 	D_ASSERT(svc->cs_pool != NULL);
+
+	rc = cont_svc_ec_agg_leader_start(svc);
+	if (rc != 0)
+		D_ERROR(DF_UUID" start ec agg leader failed: %d\n",
+			DP_UUID(svc->cs_pool_uuid), rc);
 }
 
 void
 ds_cont_svc_step_down(struct cont_svc *svc)
 {
+	cont_svc_ec_agg_leader_stop(svc);
 	D_ASSERT(svc->cs_pool != NULL);
 	ds_pool_put(svc->cs_pool);
 	svc->cs_pool = NULL;
@@ -960,6 +971,292 @@ out:
 	return rc;
 }
 
+struct cont_ec_agg *
+cont_ec_agg_lookup(struct cont_svc *cont_svc, uuid_t cont_uuid)
+{
+	struct cont_ec_agg *ec_agg;
+
+	d_list_for_each_entry(ec_agg, &cont_svc->cs_ec_agg_list, ea_list) {
+		if (uuid_compare(ec_agg->ea_cont_uuid, cont_uuid) == 0)
+			return ec_agg;
+	}
+	return NULL;
+}
+
+static int
+cont_ec_agg_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
+		  struct cont_ec_agg **ec_aggp)
+{
+	struct cont_ec_agg	*ec_agg = NULL;
+	struct pool_domain	*doms;
+	int			node_nr;
+	int			rc = 0;
+	int			i;
+
+	D_ALLOC_PTR(ec_agg);
+	if (ec_agg == NULL)
+		return -DER_NOMEM;
+
+	D_ASSERT(cont_svc->cs_pool->sp_map != NULL);
+	node_nr = pool_map_find_nodes(cont_svc->cs_pool->sp_map,
+				      PO_COMP_ID_ALL, &doms);
+	if (node_nr < 0)
+		D_GOTO(out, rc = node_nr);
+
+	D_ALLOC_ARRAY(ec_agg->ea_server_ephs, node_nr);
+	if (ec_agg->ea_server_ephs == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	uuid_copy(ec_agg->ea_cont_uuid, cont_uuid);
+	ec_agg->ea_servers_num = node_nr;
+	ec_agg->ea_current_eph = 0;
+	for (i = 0; i < node_nr; i++) {
+		ec_agg->ea_server_ephs[i].rank = doms[i].do_comp.co_rank;
+		ec_agg->ea_server_ephs[i].eph = 0;
+	}
+	d_list_add(&ec_agg->ea_list, &cont_svc->cs_ec_agg_list);
+	*ec_aggp = ec_agg;
+out:
+	if (rc) {
+		if (ec_agg && ec_agg->ea_server_ephs)
+			D_FREE(ec_agg->ea_server_ephs);
+		if (ec_agg)
+			D_FREE(ec_agg);
+	}
+
+	return rc;
+}
+
+static void
+cont_ec_agg_destroy(struct cont_ec_agg *ec_agg)
+{
+	d_list_del(&ec_agg->ea_list);
+	if (ec_agg->ea_server_ephs)
+		D_FREE(ec_agg->ea_server_ephs);
+	D_FREE(ec_agg);
+}
+
+/**
+ * Update the epoch (by rank) on the leader of container service, which
+ * will be called by IV update on the leader.
+ */
+int
+ds_cont_leader_update_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
+			      d_rank_t rank, daos_epoch_t eph)
+{
+	struct cont_svc		*svc;
+	struct cont_ec_agg	*ec_agg;
+	int			rc;
+	bool			retried = false;
+	int			i;
+
+	rc = cont_svc_lookup_leader(pool_uuid, 0 /* id */, &svc,
+				    NULL /* hint */);
+	if (rc != 0)
+		return rc;
+
+retry:
+	ec_agg = cont_ec_agg_lookup(svc, cont_uuid);
+	if (ec_agg == NULL) {
+		rc = cont_ec_agg_alloc(svc, cont_uuid, &ec_agg);
+		if (rc)
+			D_GOTO(out_put, rc);
+	}
+
+	for (i = 0; i < ec_agg->ea_servers_num; i++) {
+		if (ec_agg->ea_server_ephs[i].rank == rank) {
+			if (ec_agg->ea_server_ephs[i].eph < eph)
+				ec_agg->ea_server_ephs[i].eph = eph;
+			break;
+		}
+	}
+
+	if (i == ec_agg->ea_servers_num) {
+		if (!retried) {
+			D_DEBUG(DB_MD, "rank %u eph "DF_U64" retry for"
+				DF_CONT"\n", rank, eph,
+				DP_CONT(pool_uuid, cont_uuid));
+			retried = true;
+			cont_ec_agg_destroy(ec_agg);
+			goto retry;
+		} else {
+			D_WARN("rank %u eph "DF_U64" does not exist for "
+			       DF_CONT"\n", rank, eph,
+			       DP_CONT(pool_uuid, cont_uuid));
+		}
+	} else {
+		D_DEBUG(DB_MD, DF_CONT" update eph rank %u eph "DF_U64"\n",
+			DP_CONT(pool_uuid, cont_uuid), rank, eph);
+	}
+
+out_put:
+	cont_svc_put_leader(svc);
+	return 0;
+}
+
+struct refresh_vos_agg_eph_arg {
+	uuid_t	pool_uuid;
+	uuid_t  cont_uuid;
+	daos_epoch_t min_eph;
+};
+
+int
+cont_refresh_vos_agg_eph_one(void *data)
+{
+	struct refresh_vos_agg_eph_arg *arg = data;
+	struct ds_cont_child	*cont_child;
+	int			rc;
+
+	rc = ds_cont_child_lookup(arg->pool_uuid, arg->cont_uuid, &cont_child);
+	if (rc)
+		return rc;
+
+	D_DEBUG(DB_MD, DF_CONT": update aggregation max eph "DF_U64"\n",
+		DP_CONT(arg->pool_uuid, arg->cont_uuid), arg->min_eph);
+	cont_child->sc_ec_agg_eph_boundry = arg->min_eph;
+	ds_cont_child_put(cont_child);
+	return rc;
+}
+
+int
+ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
+			    daos_epoch_t eph)
+{
+	struct refresh_vos_agg_eph_arg	arg;
+	int				rc;
+
+	uuid_copy(arg.pool_uuid, pool_uuid);
+	uuid_copy(arg.cont_uuid, cont_uuid);
+	arg.min_eph = eph;
+
+	rc = dss_task_collective(cont_refresh_vos_agg_eph_one, &arg, 0,
+				 DSS_ULT_IO);
+	return rc;
+}
+
+#define EC_AGG_EPH_INTV	 (10ULL * 1000)	/* seconds interval to check*/
+static void
+cont_agg_eph_leader_ult(void *arg)
+{
+	struct cont_svc		*svc = arg;
+	struct ds_pool		*pool = svc->cs_pool;
+	struct cont_ec_agg	*ec_agg;
+	struct cont_ec_agg	*tmp;
+	int			rc = 0;
+
+	while (!dss_ult_exiting(svc->cs_ec_leader_ephs_req)) {
+		d_rank_list_t		fail_ranks = { 0 };
+
+		rc = map_ranks_init(pool->sp_map, MAP_RANKS_DOWN,
+				    &fail_ranks);
+		if (rc) {
+			D_ERROR(DF_UUID": ranks init failed: %d\n",
+				DP_UUID(pool->sp_uuid), rc);
+			goto yield;
+		}
+
+		d_list_for_each_entry(ec_agg, &svc->cs_ec_agg_list,
+				      ea_list) {
+			daos_epoch_t min_eph = DAOS_EPOCH_MAX;
+			int	     i;
+
+			for (i = 0; i < ec_agg->ea_servers_num; i++) {
+				d_rank_t rank = ec_agg->ea_server_ephs[i].rank;
+
+				if (d_rank_in_rank_list(&fail_ranks, rank)) {
+					D_DEBUG(DB_MD, DF_CONT" skip %u\n",
+						DP_CONT(svc->cs_pool_uuid,
+							ec_agg->ea_cont_uuid),
+						rank);
+					continue;
+				}
+
+				if (ec_agg->ea_server_ephs[i].eph < min_eph)
+					min_eph = ec_agg->ea_server_ephs[i].eph;
+			}
+
+			D_ASSERTF(min_eph >= ec_agg->ea_current_eph, DF_U64" < "
+				  DF_U64"\n", min_eph, ec_agg->ea_current_eph);
+			if (min_eph == ec_agg->ea_current_eph)
+				continue;
+
+			D_DEBUG(DB_MD, DF_CONT" sync "DF_U64"\n",
+				DP_CONT(svc->cs_pool_uuid,
+					ec_agg->ea_cont_uuid), min_eph);
+			rc = cont_iv_ec_agg_eph_refresh(pool->sp_iv_ns,
+						ec_agg->ea_cont_uuid, min_eph);
+			if (rc) {
+				D_ERROR(DF_CONT": refresh failed: %d\n",
+					DP_CONT(svc->cs_pool_uuid,
+						ec_agg->ea_cont_uuid), rc);
+				continue;
+			}
+			ec_agg->ea_current_eph = min_eph;
+		}
+
+		map_ranks_fini(&fail_ranks);
+
+		if (dss_ult_exiting(svc->cs_ec_leader_ephs_req))
+			break;
+yield:
+		sched_req_sleep(svc->cs_ec_leader_ephs_req, EC_AGG_EPH_INTV);
+	}
+
+	D_DEBUG(DF_DSMS, DF_UUID": stop eph ult: rc %d\n",
+		DP_UUID(svc->cs_pool_uuid), rc);
+
+	d_list_for_each_entry_safe(ec_agg, tmp, &svc->cs_ec_agg_list, ea_list)
+		cont_ec_agg_destroy(ec_agg);
+
+}
+
+static int
+cont_svc_ec_agg_leader_start(struct cont_svc *svc)
+{
+	struct sched_req_attr	attr;
+	ABT_thread		ec_eph_leader_ult = ABT_THREAD_NULL;
+	int			rc;
+
+	D_INIT_LIST_HEAD(&svc->cs_ec_agg_list);
+
+	rc = dss_ult_create(cont_agg_eph_leader_ult, svc, DSS_ULT_POOL_SRV,
+			    0, 0, &ec_eph_leader_ult);
+	if (rc) {
+		D_ERROR(DF_UUID" Failed to create aggregation ULT. %d\n",
+			DP_UUID(svc->cs_pool_uuid), rc);
+		return rc;
+	}
+
+	D_ASSERT(ec_eph_leader_ult != ABT_THREAD_NULL);
+	sched_req_attr_init(&attr, SCHED_REQ_GC, &svc->cs_pool_uuid);
+	svc->cs_ec_leader_ephs_req = sched_req_get(&attr, ec_eph_leader_ult);
+	if (svc->cs_ec_leader_ephs_req == NULL) {
+		D_ERROR(DF_UUID"Failed to get req for ec eph query ULT\n",
+			DP_UUID(svc->cs_pool_uuid));
+		ABT_thread_join(ec_eph_leader_ult);
+		return -DER_NOMEM;
+	}
+
+	return rc;
+}
+
+static void
+cont_svc_ec_agg_leader_stop(struct cont_svc *svc)
+{
+	D_DEBUG(DB_MD, DF_UUID" wait for ec agg leader stop\n",
+		DP_UUID(svc->cs_pool_uuid));
+
+	if (svc->cs_ec_leader_ephs_req == NULL)
+		return;
+
+	D_DEBUG(DB_MD, DF_UUID" Stopping EC query ULT\n",
+		DP_UUID(svc->cs_pool_uuid));
+
+	sched_req_wait(svc->cs_ec_leader_ephs_req, true);
+	sched_req_put(svc->cs_ec_leader_ephs_req);
+	svc->cs_ec_leader_ephs_req = NULL;
+}
+
 int
 cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
 	    struct cont **cont)
@@ -1060,6 +1357,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	int			rc;
 	struct ownership	owner;
 	struct daos_acl		*acl;
+	bool			cont_hdl_opened = false;
 	uint64_t		sec_capas = 0;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID" flags="
@@ -1147,8 +1445,10 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
 		D_GOTO(out, rc);
 	}
+	cont_hdl_opened = true;
 
-	/* TODO: Rollback cont_iv_capability_update() on errors from now on. */
+	if (DAOS_FAIL_CHECK(DAOS_CONT_OPEN_FAIL))
+		D_GOTO(out, rc = -DER_IO);
 
 	uuid_copy(chdl.ch_pool_hdl, pool_hdl->sph_uuid);
 	uuid_copy(chdl.ch_cont, cont->c_uuid);
@@ -1181,52 +1481,39 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	out->coo_prop = prop;
 
 out:
+	if (rc != 0 && cont_hdl_opened)
+		cont_iv_capability_invalidate(pool_hdl->sph_pool->sp_iv_ns,
+					      in->coi_op.ci_hdl,
+					      CRT_IV_SYNC_EAGER);
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coi_op.ci_uuid), rpc,
 		rc);
 	return rc;
 }
 
-/* TODO: Use bulk bcast to support large recs[]. */
 static int
-cont_close_bcast(crt_context_t ctx, struct cont_svc *svc,
-		 struct cont_tgt_close_rec recs[], int nrecs)
+cont_close_recs(crt_context_t ctx, struct cont_svc *svc,
+		struct cont_tgt_close_rec recs[], int nrecs)
 {
-	struct cont_tgt_close_in       *in;
-	struct cont_tgt_close_out      *out;
-	crt_rpc_t		       *rpc;
-	int				rc;
+	int	i;
+	int	rc = 0;
 
-	D_DEBUG(DF_DSMS, DF_CONT": bcasting: recs[0].hdl="DF_UUID
+	D_DEBUG(DF_DSMS, DF_CONT": closing: recs[0].hdl="DF_UUID
 		" recs[0].hce="DF_U64" nrecs=%d\n",
 		DP_CONT(svc->cs_pool_uuid, NULL), DP_UUID(recs[0].tcr_hdl),
 		recs[0].tcr_hce, nrecs);
 
-	rc = ds_cont_bcast_create(ctx, svc, CONT_TGT_CLOSE, &rpc);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	in = crt_req_get(rpc);
-	in->tci_recs.ca_arrays = recs;
-	in->tci_recs.ca_count = nrecs;
-	uuid_copy(in->tci_pool_uuid, svc->cs_pool_uuid);
-
-	rc = dss_rpc_send(rpc);
-	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_CONT_CLOSE_FAIL_CORPC))
-		rc = -DER_TIMEDOUT;
-	if (rc != 0)
-		D_GOTO(out_rpc, rc);
-
-	out = crt_reply_get(rpc);
-	rc = out->tco_rc;
-	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to close %d targets\n",
-			DP_CONT(svc->cs_pool_uuid, NULL), rc);
-		rc = -DER_IO;
+	/* update container capa to IV */
+	for (i = 0; i < nrecs; i++) {
+		rc = cont_iv_capability_invalidate(
+				svc->cs_pool->sp_iv_ns,
+				recs[i].tcr_hdl, CRT_IV_SYNC_EAGER);
+		if (rc)
+			D_GOTO(out, rc);
 	}
 
-out_rpc:
-	crt_req_decref(rpc);
+	if (DAOS_FAIL_CHECK(DAOS_CONT_CLOSE_FAIL_CORPC))
+		rc = -DER_TIMEDOUT;
 out:
 	D_DEBUG(DF_DSMS, DF_CONT": bcasted: hdls[0]="DF_UUID" nhdls=%d: %d\n",
 		DP_CONT(svc->cs_pool_uuid, NULL), DP_UUID(recs[0].tcr_hdl),
@@ -1283,7 +1570,7 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 		" recs[0].hce="DF_U64"\n", DP_CONT(svc->cs_pool_uuid, NULL),
 		nrecs, DP_UUID(recs[0].tcr_hdl), recs[0].tcr_hce);
 
-	rc = cont_close_bcast(ctx, svc, recs, nrecs);
+	rc = cont_close_recs(ctx, svc, recs, nrecs);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -1358,7 +1645,7 @@ cont_close(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		DP_CONT(cont->c_svc->cs_pool_uuid, in->cci_op.ci_uuid),
 		DP_UUID(rec.tcr_hdl), rec.tcr_hce);
 
-	rc = cont_close_bcast(rpc->cr_ctx, cont->c_svc, &rec, 1 /* nrecs */);
+	rc = cont_close_recs(rpc->cr_ctx, cont->c_svc, &rec, 1 /* nrecs */);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -2023,7 +2310,6 @@ ds_cont_acl_update(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		if (rc != 0) {
 			D_ERROR(DF_UUID": failed to add/update ACEs\n",
 				DP_UUID(cont->c_uuid));
-			daos_acl_free(acl);
 			D_GOTO(out_acl, rc);
 		}
 

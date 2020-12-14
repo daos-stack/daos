@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package scm
 
 import (
@@ -55,11 +56,11 @@ const (
 
 	ramFsType = fsTypeTmpfs
 
-	MsgScmRebootRequired    = "A reboot is required to process new memory allocation goals."
-	MsgScmNoModules         = "no scm modules to prepare"
-	MsgScmNotInited         = "scm storage could not be accessed"
-	MsgScmClassNotSupported = "operation unsupported on scm class"
-	MsgIpmctlDiscoverFail   = "ipmctl module discovery"
+	MsgRebootRequired     = "A reboot is required to process new SCM memory allocation goals."
+	MsgNoModules          = "no SCM modules to prepare"
+	MsgNotInited          = "SCM storage could not be accessed"
+	MsgClassNotSupported  = "operation unsupported on SCM class"
+	MsgIpmctlDiscoverFail = "ipmctl module discovery"
 )
 
 type (
@@ -143,8 +144,8 @@ type (
 		Discover() (storage.ScmModules, error)
 		Prep(storage.ScmState) (bool, storage.ScmNamespaces, error)
 		PrepReset(storage.ScmState) (bool, error)
-		GetState() (storage.ScmState, error)
-		GetNamespaces() (storage.ScmNamespaces, error)
+		GetPmemState() (storage.ScmState, error)
+		GetPmemNamespaces() (storage.ScmNamespaces, error)
 		GetFirmwareStatus(deviceUID string) (*storage.ScmFirmwareInfo, error)
 		UpdateFirmware(deviceUID string, firmwarePath string) error
 	}
@@ -157,6 +158,7 @@ type (
 		system.UnmountProvider
 		Mkfs(fsType, device string, force bool) error
 		Getfs(device string) (string, error)
+		GetfsUsage(string) (uint64, uint64, error)
 	}
 
 	defaultSystemProvider struct {
@@ -202,7 +204,7 @@ func CreateFormatRequest(scmCfg storage.ScmConfig, reformat bool) (*FormatReques
 			Device: scmCfg.DeviceList[0],
 		}
 	default:
-		return nil, errors.New(MsgScmClassNotSupported)
+		return nil, errors.New(MsgClassNotSupported)
 	}
 
 	return &req, nil
@@ -382,7 +384,7 @@ func (p *Provider) currentState() storage.ScmState {
 }
 
 func (p *Provider) updateState() (state storage.ScmState, err error) {
-	state, err = p.backend.GetState()
+	state, err = p.backend.GetPmemState()
 	if err != nil {
 		return
 	}
@@ -394,8 +396,8 @@ func (p *Provider) updateState() (state storage.ScmState, err error) {
 	return
 }
 
-// GetState returns the current state of DCPM namespaces, if available.
-func (p *Provider) GetState() (storage.ScmState, error) {
+// GetPmemState returns the current state of DCPM namespaces, if available.
+func (p *Provider) GetPmemState() (storage.ScmState, error) {
 	if !p.isInitialized() {
 		if _, err := p.Scan(ScanRequest{}); err != nil {
 			return p.lastState, err
@@ -452,12 +454,12 @@ func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 		return p.createScanResponse(), nil
 	}
 
-	namespaces, err := p.backend.GetNamespaces()
+	namespaces, err := p.backend.GetPmemNamespaces()
 	if err != nil {
 		return p.createScanResponse(), err
 	}
 
-	state, err := p.backend.GetState()
+	state, err := p.backend.GetPmemState()
 	if err != nil {
 		return nil, err
 	}
@@ -809,4 +811,18 @@ func (p *Provider) unmount(target string, flags int) (*MountResponse, error) {
 // is mounted.
 func (p *Provider) IsMounted(target string) (bool, error) {
 	return p.sys.IsMounted(target)
+}
+
+// GetfsUsage returns space utilisation info for a mount point.
+func (p *Provider) GetfsUsage(target string) (*storage.ScmMountPoint, error) {
+	total, avail, err := p.sys.GetfsUsage(target)
+	if err != nil {
+		return nil, err
+	}
+
+	return &storage.ScmMountPoint{
+		Path:       target,
+		TotalBytes: total,
+		AvailBytes: avail,
+	}, nil
 }

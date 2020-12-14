@@ -3,7 +3,7 @@
 hosts:
   test_servers:
     - server-A
-timeout: 180
+timeout: 110
 server_config:
   name: daos_server
 self_test:

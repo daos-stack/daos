@@ -49,7 +49,9 @@ static void *progress(void *arg)
 	int	*status = (int *)arg;
 	int	 rc;
 
-	crt_context_create(&crt_ctx);
+	rc = crt_context_create(&crt_ctx);
+	D_ASSERTF(rc == 0, "crt_context_create() failed; rc=%d\n", rc);
+
 	__sync_fetch_and_add(status, 1);
 
 	do {

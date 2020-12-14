@@ -25,12 +25,10 @@
 import os
 import sys
 import daos_build
-
 # pylint: disable=no-name-in-module
 # pylint: disable=import-error
+# pylint: disable=ungrouped-imports
 import SCons.Action
-# pylint: enable=import-error
-# pylint: enable=no-name-in-module
 
 HEADERS = ['api.h', 'iv.h', 'types.h', 'swim.h']
 
@@ -139,9 +137,6 @@ def scons():
             Exit(2)
 
     Export('env', 'prereqs')
-
-    # generate targets in specific build dir to avoid polluting the source code
-    SConscript('test/SConscript')
 
     env.Install('$PREFIX/etc', ['utils/memcheck-cart.supp',
                                 'utils/fault-inject-cart.yaml'])

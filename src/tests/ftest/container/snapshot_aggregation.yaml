@@ -1,0 +1,36 @@
+timeout: 360
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+  test_clients:
+    - client-C
+    - client-D
+    - client-E
+    - client-F
+    - client-G
+    - client-H
+server_config:
+    name: daos_server
+    servers:
+        bdev_class: nvme
+        bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+        scm_class: dcpm
+        scm_list: ["/dev/pmem0"]
+pool:
+  control_method: dmg
+  scm_size: 80G
+  nvme_size: 100G
+  target_list: [0, 1]
+container:
+  control_method: daos
+  type: POSIX
+ior:
+  flags: "-w -k"
+  api: DFS
+  block_size: 8G
+  transfer_size: 1M
+  repetitions: 1
+  test_file: "/test_file"
+  daos_oclass: SX
+  signature: 123

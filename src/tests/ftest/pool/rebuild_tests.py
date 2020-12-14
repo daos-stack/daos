@@ -45,8 +45,7 @@ class RebuildTests(TestWithServers):
         pools = []
         containers = []
         for index in range(pool_quantity):
-            pools.append(TestPool(self.context, self.log,
-                                  dmg_command=self.get_dmg_command()))
+            pools.append(TestPool(self.context, self.get_dmg_command()))
             pools[index].get_params(self)
             containers.append(TestContainer(pools[index]))
             containers[index].get_params(self)
@@ -130,7 +129,7 @@ class RebuildTests(TestWithServers):
                 "Data verification error after rebuild")
         self.log.info("Test Passed")
 
-    @skipForTicket("DAOS-5611")
+    @skipForTicket("DAOS-5804")
     def test_simple_rebuild(self):
         """JIRA ID: DAOS-XXXX Rebuild-001.
 
@@ -144,7 +143,7 @@ class RebuildTests(TestWithServers):
         """
         self.run_rebuild_test(1)
 
-    @skipForTicket("DAOS-5611")
+    @skipForTicket("DAOS-5804")
     def test_multipool_rebuild(self):
         """JIRA ID: DAOS-XXXX (Rebuild-002).
 

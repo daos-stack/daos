@@ -26,10 +26,10 @@ package server
 import (
 	"context"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -38,11 +38,12 @@ import (
 	"github.com/pkg/errors"
 
 	. "github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/proto"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/lib/control"
+
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -56,115 +57,7 @@ const (
 	maxIOServers       = 2
 )
 
-func TestServer_HarnessGetMSLeaderInstance(t *testing.T) {
-	defaultApList := []string{"1.2.3.4:5", "6.7.8.9:10"}
-	defaultCtrlList := []string{"6.3.1.2:5", "1.2.3.4:5"}
-	for name, tc := range map[string]struct {
-		instanceCount int
-		hasSuperblock bool
-		apList        []string
-		ctrlAddrs     []string
-		expError      error
-	}{
-		"zero instances": {
-			apList:   defaultApList,
-			expError: errors.New("harness has no managed instances"),
-		},
-		"empty AP list": {
-			instanceCount: 2,
-			apList:        nil,
-			ctrlAddrs:     defaultApList,
-			expError:      errors.New("no access points defined"),
-		},
-		"not MS leader": {
-			instanceCount: 1,
-			apList:        defaultApList,
-			ctrlAddrs:     []string{"4.3.2.1:10"},
-			expError:      errors.New("not an access point"),
-		},
-		"is MS leader, but no superblock": {
-			instanceCount: 2,
-			apList:        defaultApList,
-			ctrlAddrs:     defaultCtrlList,
-			expError:      errors.New("not an access point"),
-		},
-		"is MS leader": {
-			instanceCount: 2,
-			hasSuperblock: true,
-			apList:        defaultApList,
-			ctrlAddrs:     defaultCtrlList,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)
-
-			// ugh, this isn't ideal
-			oldGetAddrFn := getInterfaceAddrs
-			defer func() {
-				getInterfaceAddrs = oldGetAddrFn
-			}()
-			getInterfaceAddrs = func() ([]net.Addr, error) {
-				addrs := make([]net.Addr, len(tc.ctrlAddrs))
-				var err error
-				for i, ca := range tc.ctrlAddrs {
-					addrs[i], err = net.ResolveTCPAddr("tcp", ca)
-					if err != nil {
-						return nil, err
-					}
-				}
-				return addrs, nil
-			}
-
-			h := NewIOServerHarness(log)
-			for i := 0; i < tc.instanceCount; i++ {
-				cfg := ioserver.NewConfig().
-					WithRank(uint32(i)).
-					WithSystemName(t.Name()).
-					WithScmClass("ram").
-					WithScmMountPoint(strconv.Itoa(i))
-				r := ioserver.NewRunner(log, cfg)
-
-				m := newMgmtSvcClient(
-					context.Background(), log, mgmtSvcClientCfg{
-						ControlAddr:  &net.TCPAddr{},
-						AccessPoints: tc.apList,
-					},
-				)
-
-				isAP := func(ca string) bool {
-					for _, ap := range tc.apList {
-						if ca == ap {
-							return true
-						}
-					}
-					return false
-				}
-				srv := NewIOServerInstance(log, nil, nil, m, r)
-				if tc.hasSuperblock {
-					srv.setSuperblock(&Superblock{
-						MS: isAP(tc.ctrlAddrs[i]),
-					})
-				}
-				if err := h.AddInstance(srv); err != nil {
-					t.Fatal(err)
-				}
-			}
-			h.started.SetTrue()
-
-			_, err := h.getMSLeaderInstance()
-			CmpErr(t, tc.expError, err)
-		})
-	}
-}
-
 func TestServer_Harness_Start(t *testing.T) {
-	defaultAddrStr := "127.0.0.1:10001"
-	defaultAddr, err := net.ResolveTCPAddr("tcp", defaultAddrStr)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	for name, tc := range map[string]struct {
 		trc              *ioserver.TestRunnerConfig
 		isAP             bool                     // is first instance an AP/MS replica/bootstrap
@@ -177,7 +70,7 @@ func TestServer_Harness_Start(t *testing.T) {
 		expDrpcCalls     map[uint32][]drpc.Method // method ids called for each instance.Index()
 		expGrpcCalls     map[uint32][]string      // string repr of call for each instance.Index()
 		expRanks         map[uint32]system.Rank   // ranks to have been set during Start()
-		expMembers       system.Members           // members to have been registered during Stop()
+		expMembers       system.Members           // members to have been registered during Start()
 		expIoErrs        map[uint32]error         // errors expected from instances
 	}{
 		"normal startup/shutdown": {
@@ -237,43 +130,6 @@ func TestServer_Harness_Start(t *testing.T) {
 			expRanks: map[uint32]system.Rank{
 				0: system.Rank(1),
 				1: system.Rank(2),
-			},
-		},
-		"normal startup/shutdown with MS bootstrap": {
-			trc: &ioserver.TestRunnerConfig{
-				ErrChanCb: func() error {
-					time.Sleep(testLongTimeout)
-					return errors.New("ending")
-				},
-			},
-			isAP: true,
-			instanceUuids: map[int]string{
-				0: MockUUID(0),
-				1: MockUUID(1),
-			},
-			expStartCount: maxIOServers,
-			expDrpcCalls: map[uint32][]drpc.Method{
-				0: {
-					drpc.MethodSetRank,
-					drpc.MethodCreateMS,
-					drpc.MethodStartMS,
-					drpc.MethodSetUp,
-				},
-				1: {
-					drpc.MethodSetRank,
-					drpc.MethodSetUp,
-				},
-			},
-			expGrpcCalls: map[uint32][]string{
-				0: {"Join 0"}, // bootstrap instance will be pre-allocated rank 0
-				1: {fmt.Sprintf("Join %d", system.NilRank)},
-			},
-			expRanks: map[uint32]system.Rank{
-				0: system.Rank(0),
-				1: system.Rank(1),
-			},
-			expMembers: system.Members{ // bootstrap member is added on start
-				system.NewMember(system.Rank(0), "", defaultAddr, system.MemberStateJoined),
 			},
 		},
 		"fails to start": {
@@ -354,14 +210,15 @@ func TestServer_Harness_Start(t *testing.T) {
 					WithScmRamdiskSize(1).
 					WithScmMountPoint(filepath.Join(testDir, strconv.Itoa(i)))
 			}
-			config := NewConfiguration().
+			config := config.DefaultServer().
 				WithServers(srvCfgs...).
 				WithSocketDir(testDir).
 				WithTransportConfig(&security.TransportConfig{AllowInsecure: true})
 
+			joinMu := sync.Mutex{}
+			joinRequests := make(map[uint32][]string)
 			var instanceStarts uint32
 			harness := NewIOServerHarness(log)
-			mockMSClients := make(map[int]*proto.MockMgmtSvcClient)
 			for i, srvCfg := range config.Servers {
 				if err := os.MkdirAll(srvCfg.Storage.SCM.MountPoint, 0777); err != nil {
 					t.Fatal(err)
@@ -384,26 +241,18 @@ func TestServer_Harness_Start(t *testing.T) {
 				}
 				scmProvider := scm.NewMockProvider(log, nil, &scm.MockSysConfig{IsMountedBool: true})
 
-				msClientCfg := mgmtSvcClientCfg{
-					ControlAddr:  &net.TCPAddr{},
-					AccessPoints: []string{defaultAddrStr},
+				idx := uint32(i)
+				joinFn := func(_ context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
+					// appease the race detector
+					joinMu.Lock()
+					defer joinMu.Unlock()
+					joinRequests[idx] = []string{fmt.Sprintf("Join %d", req.Rank)}
+					return &control.SystemJoinResp{
+						Rank: system.Rank(idx),
+					}, nil
 				}
-				msClient := newMgmtSvcClient(context.TODO(), log, msClientCfg)
-				// create mock that implements MgmtSvcClient
-				mockMSClient := proto.NewMockMgmtSvcClient(
-					proto.MockMgmtSvcClientConfig{})
-				// store for checking calls later
-				mockMSClients[i] = mockMSClient.(*proto.MockMgmtSvcClient)
-				mockConnectFn := func(ctx context.Context, ap string,
-					tc *security.TransportConfig,
-					fn func(context.Context, mgmtpb.MgmtSvcClient) error) error {
 
-					return fn(ctx, mockMSClient)
-				}
-				// inject fn that uses the mock client to be used on connect
-				msClient.connectFn = mockConnectFn
-
-				srv := NewIOServerInstance(log, bdevProvider, scmProvider, msClient, runner)
+				srv := NewIOServerInstance(log, bdevProvider, scmProvider, joinFn, runner)
 				var isAP bool
 				if tc.isAP && i == 0 { // first instance will be AP & bootstrap MS
 					isAP = true
@@ -421,8 +270,7 @@ func TestServer_Harness_Start(t *testing.T) {
 					rank = new(system.Rank)
 				}
 				srv.setSuperblock(&Superblock{
-					MS: isAP, UUID: uuid, Rank: rank, CreateMS: isAP,
-					BootstrapMS: isAP, ValidRank: isValid,
+					UUID: uuid, Rank: rank, ValidRank: isValid,
 				})
 
 				if err := harness.AddInstance(srv); err != nil {
@@ -447,10 +295,11 @@ func TestServer_Harness_Start(t *testing.T) {
 
 			// start harness async and signal completion
 			var gotErr error
-			membership := system.NewMembership(log)
+			membership := system.MockMembership(t, log)
+			sysdb := system.MockDatabase(t, log)
 			done := make(chan struct{})
 			go func(ctxIn context.Context) {
-				gotErr = harness.Start(ctxIn, membership, config)
+				gotErr = harness.Start(ctxIn, sysdb, config)
 				close(done)
 			}(ctx)
 
@@ -548,6 +397,8 @@ func TestServer_Harness_Start(t *testing.T) {
 				}
 			}
 
+			joinMu.Lock()
+			defer joinMu.Unlock()
 			// verify expected RPCs were made, ranks allocated and
 			// members added to membership
 			for _, srv := range instances {
@@ -555,12 +406,11 @@ func TestServer_Harness_Start(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				gotDrpcCalls := dc.(*mockDrpcClient).Calls
+				gotDrpcCalls := dc.(*mockDrpcClient).CalledMethods()
 				AssertEqual(t, tc.expDrpcCalls[srv.Index()], gotDrpcCalls,
 					fmt.Sprintf("%s: unexpected dRPCs for instance %d", name, srv.Index()))
 
-				gotGrpcCalls := mockMSClients[int(srv.Index())].Calls
-				if diff := cmp.Diff(tc.expGrpcCalls[srv.Index()], gotGrpcCalls); diff != "" {
+				if diff := cmp.Diff(tc.expGrpcCalls[srv.Index()], joinRequests[srv.Index()]); diff != "" {
 					t.Fatalf("unexpected gRPCs for instance %d (-want, +got):\n%s\n",
 						srv.Index(), diff)
 				}
@@ -582,4 +432,21 @@ func TestServer_Harness_Start(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestServer_Harness_WithFaultDomain(t *testing.T) {
+	harness := &IOServerHarness{}
+	fd, err := system.NewFaultDomainFromString("/one/two")
+	if err != nil {
+		t.Fatalf("couldn't create fault domain: %s", err)
+	}
+
+	updatedHarness := harness.WithFaultDomain(fd)
+
+	// Updated to include the fault domain
+	if diff := cmp.Diff(harness.faultDomain, fd); diff != "" {
+		t.Fatalf("unexpected results (-want, +got):\n%s\n", diff)
+	}
+	// updatedHarness is the same as harness
+	AssertEqual(t, updatedHarness, harness, "not the same structure")
 }

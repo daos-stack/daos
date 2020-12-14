@@ -472,6 +472,11 @@ int d_log_getmasks(char *buf, int discard, int len, int unterm);
  */
 void d_log_add_cache(int *cache, int nr);
 
+/**
+ * Fsync log files.
+ */
+void d_log_sync(void);
+
 #if defined(__cplusplus)
 }
 #endif

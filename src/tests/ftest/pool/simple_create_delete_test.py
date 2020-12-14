@@ -74,8 +74,7 @@ class SimpleCreateDeleteTest(TestWithServers):
                 break
 
         try:
-            self.pool = TestPool(
-                self.context, dmg_command=self.get_dmg_command())
+            self.pool = TestPool(self.context, self.get_dmg_command())
             self.pool.get_params(self)
             self.pool.uid = uid
             self.pool.gid = gid

@@ -241,7 +241,8 @@ struct vos_dtx_act_ent {
 	int				 dae_rec_cap;
 	unsigned int			 dae_committable:1,
 					 dae_committed:1,
-					 dae_aborted:1;
+					 dae_aborted:1,
+					 dae_maybe_shared:1;
 };
 
 extern struct vos_tls	*standalone_tls;
@@ -278,6 +279,7 @@ do {						\
 #define DAE_EPOCH(dae)		((dae)->dae_base.dae_epoch)
 #define DAE_LID(dae)		((dae)->dae_base.dae_lid)
 #define DAE_FLAGS(dae)		((dae)->dae_base.dae_flags)
+#define DAE_MBS_FLAGS(dae)	((dae)->dae_base.dae_mbs_flags)
 #define DAE_REC_INLINE(dae)	((dae)->dae_base.dae_rec_inline)
 #define DAE_REC_CNT(dae)	((dae)->dae_base.dae_rec_cnt)
 #define DAE_VER(dae)		((dae)->dae_base.dae_ver)
@@ -784,12 +786,14 @@ struct vos_iterator {
 	struct vos_iter_ops	*it_ops;
 	struct vos_iterator	*it_parent; /* parent iterator */
 	struct vos_ts_set	*it_ts_set;
+	daos_epoch_t		 it_bound;
 	vos_iter_type_t		 it_type;
 	enum vos_iter_state	 it_state;
 	uint32_t		 it_ref_cnt;
 	uint32_t		 it_from_parent:1,
 				 it_for_purge:1,
-				 it_for_rebuild:1;
+				 it_for_migration:1,
+				 it_ignore_uncommitted:1;
 };
 
 /* Auxiliary structure for passing information between parent and nested
@@ -813,6 +817,8 @@ struct vos_iter_info {
 	/* Reference to vos object, set in iop_tree_prepare. */
 	struct vos_object	*ii_obj;
 	d_iov_t			*ii_akey; /* conditional akey */
+	/** address range (RECX); rx_nr == 0 means entire range (0:~0ULL) */
+	daos_recx_t              ii_recx;
 	daos_epoch_range_t	 ii_epr;
 	/** highest epoch where parent obj/key was punched */
 	struct vos_punch_record	 ii_punched;
@@ -899,6 +905,8 @@ struct vos_obj_iter {
 	daos_key_t		 it_akey;
 	/* reference on the object */
 	struct vos_object	*it_obj;
+	/** condition of the iterator: extent range */
+	daos_recx_t              it_recx;
 };
 
 static inline struct vos_obj_iter *
@@ -977,9 +985,9 @@ void
 key_tree_release(daos_handle_t toh, bool is_array);
 int
 key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
-	       d_iov_t *key_iov, d_iov_t *val_iov, uint64_t flags,
-	       struct vos_ts_set *ts_set, struct vos_ilog_info *parent,
-	       struct vos_ilog_info *info);
+	       daos_epoch_t bound, d_iov_t *key_iov, d_iov_t *val_iov,
+	       uint64_t flags, struct vos_ts_set *ts_set,
+	       struct vos_ilog_info *parent, struct vos_ilog_info *info);
 
 /* vos_io.c */
 daos_size_t
@@ -1036,8 +1044,10 @@ vos_iter_intent(struct vos_iterator *iter)
 {
 	if (iter->it_for_purge)
 		return DAOS_INTENT_PURGE;
-	if (iter->it_for_rebuild)
-		return DAOS_INTENT_REBUILD;
+	if (iter->it_for_migration)
+		return DAOS_INTENT_MIGRATION;
+	if (iter->it_ignore_uncommitted)
+		return DAOS_INTENT_IGNORE_NONCOMMITTED;
 	return DAOS_INTENT_DEFAULT;
 }
 
@@ -1089,6 +1099,30 @@ oi_iter_aggregate(daos_handle_t ih, bool discard);
  */
 int
 vos_obj_iter_aggregate(daos_handle_t ih, bool discard);
+
+/** Internal bit for initializing iterator from open tree handle */
+#define VOS_IT_KEY_TREE	(1 << 31)
+/** Ensure there is no overlap with public iterator flags (defined in
+ *  src/include/daos_srv/vos_types.h).
+ */
+D_CASSERT((VOS_IT_KEY_TREE & VOS_IT_MASK) == 0);
+
+/** Internal vos iterator API for iterating through keys using an
+ *  open tree handle to initialize the iterator
+ *
+ *  \param obj[IN]			VOS object
+ *  \param toh[IN]			Open key tree handle
+ *  \param type[IN]			Iterator type (VOS_ITER_AKEY/DKEY only)
+ *  \param epr[IN]			Valid epoch range for iteration
+ *  \param ignore_inprogress[IN]	Fail if there are uncommitted entries
+ *  \param cb[IN]			Callback for key
+ *  \param arg[IN]			argument to pass to callback
+ *  \param dth[IN]			dtx handle
+ */
+int
+vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
+		const daos_epoch_range_t *epr, bool ignore_inprogress,
+		vos_iter_cb_t cb, void *arg, struct dtx_handle *dth);
 
 /** Start epoch of vos */
 extern daos_epoch_t	vos_start_epoch;
@@ -1149,6 +1183,63 @@ vos_epc_punched(daos_epoch_t epc, uint16_t minor_epc,
 
 	return false;
 }
+
+static inline bool
+vos_dtx_hit_inprogress(void)
+{
+	struct dtx_handle	*dth = vos_dth_get();
+
+	return dth != NULL && dth->dth_share_tbd_count > 0;
+}
+
+static inline bool
+vos_dtx_continue_detect(int rc)
+{
+	struct dtx_handle	*dth = vos_dth_get();
+
+	/* Continue to detect other potential in-prepared DTX. */
+	return rc == -DER_INPROGRESS && dth != NULL &&
+		dth->dth_share_tbd_count > 0 &&
+		dth->dth_share_tbd_count < DTX_DETECT_MAX;
+}
+
+static inline bool
+vos_has_uncertainty(struct vos_ts_set *ts_set,
+		    const struct vos_ilog_info *info, daos_epoch_t epoch,
+		    daos_epoch_t bound)
+{
+	if (info->ii_uncertain_create)
+		return true;
+
+	return vos_ts_wcheck(ts_set, epoch, bound);
+}
+
+/** For dealing with common routines between punch and update where akeys are
+ *  passed in different structures
+ */
+struct vos_akey_data {
+	union {
+		/** If ad_is_iod is true, array of iods is used for akeys */
+		daos_iod_t	*ad_iods;
+		/** If ad_is_iod is false, it's an array of akeys */
+		daos_key_t	*ad_keys;
+	};
+	/** True if the the field above is an iod array */
+	bool		 ad_is_iod;
+};
+
+/** Add any missing timestamps to the read set when an operation fails due to
+ *  -DER_NONEXST.   This allows for fewer false conflicts on negative
+ *  entries.
+ *
+ *  \param[in]	ts_set	The timestamp set
+ *  \param[in]	dkey	Pointer to the dkey or NULL
+ *  \param[in]	akey_nr	Number of akeys (or 0 if no akeys)
+ *  \param[in]	ad	The actual akeys (either an array of akeys or iods)
+ */
+void
+vos_ts_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int akey_nr,
+		   struct vos_akey_data *ad);
 
 
 #endif /* __VOS_INTERNAL_H__ */

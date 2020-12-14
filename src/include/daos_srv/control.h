@@ -16,13 +16,13 @@
  * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
  * The Government's rights to use, modify, reproduce, release, perform, display,
  * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B620873.
+ * provided in Contract No. 8F-30005.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
 /*
- * Types to share between data and control planes.
+ * Primitives to share between data and control planes.
  */
 
 #ifndef __CONTROL_H__
@@ -30,6 +30,47 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <assert.h>
+
+enum {
+	/* Device is plugged */
+	NVME_DEV_FL_PLUGGED	= 0x1,
+	/* Device is used by DAOS (present in SMD) */
+	NVME_DEV_FL_INUSE	= 0x2,
+	/* Device is marked as FAULTY */
+	NVME_DEV_FL_FAULTY	= 0x4,
+};
+
+enum bio_dev_state {
+	/* fully functional and in-use */
+	BIO_DEV_NORMAL	= 0,
+	/* evicted device */
+	BIO_DEV_FAULTY,
+	/* unplugged device */
+	BIO_DEV_OUT,
+	/* new device not currently in-use */
+	BIO_DEV_NEW,
+};
+
+/*
+ * Convert device state to human-readable string
+ *
+ * \param [IN]  state   Device state
+ *
+ * \return              Static string representing enum value
+ */
+static inline char *
+bio_dev_state_enum_to_str(enum bio_dev_state state)
+{
+	switch (state) {
+	case BIO_DEV_NORMAL: return "NORMAL";
+	case BIO_DEV_FAULTY: return "EVICTED";
+	case BIO_DEV_OUT:    return "UNPLUGGED";
+	case BIO_DEV_NEW:    return "NEW";
+	}
+
+	return "Undefined state";
+}
 
 #define HEALTH_STAT_STR_LEN 128
 
@@ -38,11 +79,14 @@
  * bio_bs_monitor(). Used to determine faulty device status.
  * Also retrieved on request via go-spdk bindings from the control-plane.
  */
-struct nvme_health_stats {
+struct nvme_stats {
+	uint64_t	 timestamp;
+	/* Device identifiers */
 	char		 model[HEALTH_STAT_STR_LEN];
 	char		 serial[HEALTH_STAT_STR_LEN];
-	uint64_t	 timestamp;
-	uint64_t	 err_count; /* error log page */
+	/* Device space utilization */
+	uint64_t	 total_bytes;
+	uint64_t	 avail_bytes;
 	/* Device health details */
 	uint32_t	 warn_temp_time;
 	uint32_t	 crit_temp_time;
@@ -65,4 +109,16 @@ struct nvme_health_stats {
 	bool		 read_only_warn;
 	bool		 volatile_mem_warn; /*volatile memory backup*/
 };
-#endif /* __CONTROL_H__ */
+
+/**
+ * Parse input string and output ASCII as required by the NVMe spec.
+ *
+ * \param[out] dst	pre-allocated destination string buffer
+ * \param[in]  dst_sz	destination buffer size
+ * \param[in]  src	source buffer containing char array
+ * \param[in]  src_sz	source buffer size
+ *
+ * \return		Zero on success, negative value on error
+ */
+int copy_ascii(char *dst, size_t dst_sz, const void *src, size_t src_sz);
+#endif /* __CONTROL_H_ */

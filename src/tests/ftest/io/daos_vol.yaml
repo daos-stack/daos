@@ -4,6 +4,7 @@ hosts:
     test_clients:
         - client-B
 timeout: 1800
+job_manager_timeout: 1700
 server_config:
     name: daos_server
     servers:
@@ -24,11 +25,13 @@ dfuse:
   mount_dir: "/tmp/daos_dfuse"
 mpi: !mux
     mpich:
-        mpi_type: mpich
+        job_manager_class_name: Mpirun
+        job_manager_mpi_type: mpich
         plugin_path: /usr/lib64/mpich/lib
         daos_vol_repo: /usr/lib64/hdf5_vol_daos/mpich/tests
     openmpi:
-        mpi_type: openmpi
+        job_manager_class_name: Orterun
+        job_manager_mpi_type: openmpi
         plugin_path: /usr/lib64/openmpi3/lib
         daos_vol_repo: /usr/lib64/hdf5_vol_daos/openmpi3/tests
 daos_vol_tests:  !mux

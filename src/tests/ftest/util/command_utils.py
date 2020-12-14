@@ -22,7 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from logging import getLogger
-from importlib import import_module
 import re
 import time
 import signal
@@ -34,7 +33,7 @@ from command_utils_base import \
     CommandFailure, BasicParameter, ObjectWithParameters, \
     CommandWithParameters, YamlParameters, EnvironmentVariables, LogParameter
 from general_utils import check_file_exists, stop_processes, get_log_file, \
-    run_command, DaosTestError
+    run_command, DaosTestError, get_job_manager_class
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -211,7 +210,11 @@ class ExecutableCommand(CommandWithParameters):
                     self._command, str(state))
                 self._process.send_signal(signal_to_send)
                 if signal_list:
-                    time.sleep(5)
+                    start = time.time()
+                    while self._process._popen.poll() is None and time.time() - start < 5:
+                        time.sleep(0.01)
+                    elapsed = time.time() - start
+                    self.log.info('Waited %.2f, saved %.2f', elapsed, 5 - elapsed)
 
             if not signal_list:
                 if state and (len(state) > 1 or state[0] not in ("D", "Z")):
@@ -555,7 +558,7 @@ class SubProcessCommand(CommandWithSubCommand):
     Example commands: daos_agent, daos_server
     """
 
-    def __init__(self, namespace, command, path="", timeout=60):
+    def __init__(self, namespace, command, path="", timeout=10):
         """Create a SubProcessCommand object.
 
         Args:
@@ -564,7 +567,7 @@ class SubProcessCommand(CommandWithSubCommand):
             path (str, optional): path to location of command binary file.
                 Defaults to "".
             timeout (int, optional): number of seconds to wait for patterns to
-                appear in the subprocess output. Defaults to 60 seconds.
+                appear in the subprocess output. Defaults to 10 seconds.
         """
         super(SubProcessCommand, self).__init__(namespace, command, path, True)
 
@@ -629,17 +632,28 @@ class SubProcessCommand(CommandWithSubCommand):
                 timed_out = time.time() - start > self.pattern_timeout.value
 
             # Summarize results
-            msg = "{}/{} '{}' messages detected in {}/{} seconds".format(
-                detected, self.pattern_count, self.pattern,
+            msg = "{}/{} '{}' messages detected in".format(
+                detected, self.pattern_count, self.pattern)
+            runtime = "{}/{} seconds".format(
                 time.time() - start, self.pattern_timeout.value)
 
             if not complete:
                 # Report the error / timeout
-                self.log.info(
-                    "%s detected - %s:\n%s",
-                    "Time out" if timed_out else "Error",
-                    msg,
-                    sub_process.get_stdout())
+                reason = "ERROR detected"
+                details = ""
+                if timed_out:
+                    reason = "TIMEOUT detected, exceeded {} seconds".format(
+                        self.pattern_timeout.value)
+                    runtime = "{} seconds".format(time.time() - start)
+                if not self.verbose:
+                    # Include the stdout if verbose is not enabled
+                    details = ":\n{}".format(sub_process.get_stdout())
+                self.log.info("%s - %s %s%s", reason, msg, runtime, details)
+                if timed_out:
+                    self.log.debug(
+                        "If needed the %s second timeout can be adjusted via "
+                        "the 'pattern_timeout' test yaml parameter under %s",
+                        self.pattern_timeout.value, self.namespace)
 
                 # Stop the timed out process
                 if timed_out:
@@ -647,7 +661,8 @@ class SubProcessCommand(CommandWithSubCommand):
             else:
                 # Report the successful start
                 self.log.info(
-                    "%s subprocess startup detected - %s", self._command, msg)
+                    "%s subprocess startup detected - %s %s",
+                    self._command, msg, runtime)
 
         return complete
 
@@ -658,7 +673,7 @@ class YamlCommand(SubProcessCommand):
     Example commands: daos_agent, daos_server, dmg
     """
 
-    def __init__(self, namespace, command, path="", yaml_cfg=None, timeout=60):
+    def __init__(self, namespace, command, path="", yaml_cfg=None, timeout=10):
         """Create a YamlCommand command object.
 
         Args:
@@ -669,7 +684,7 @@ class YamlCommand(SubProcessCommand):
             path (str, optional): path to location of daos command binary.
                 Defaults to ""
             timeout (int, optional): number of seconds to wait for patterns to
-                appear in the subprocess output. Defaults to 60 seconds.
+                appear in the subprocess output. Defaults to 10 seconds.
         """
         super(YamlCommand, self).__init__(namespace, command, path, timeout)
 
@@ -801,13 +816,7 @@ class SubprocessManager(object):
         self.log = getLogger(__name__)
 
         # Define the JobManager class used to manage the command as a subprocess
-        try:
-            manager_module = import_module("job_manager_utils")
-            manager_class = getattr(manager_module, manager)
-        except (ImportError, AttributeError) as error:
-            raise CommandFailure(
-                "Invalid '{}' job manager class: {}".format(manager, error))
-        self.manager = manager_class(command, subprocess=True)
+        self.manager = get_job_manager_class(manager, command, True)
 
         # Define the list of hosts that will execute the daos command
         self._hosts = []

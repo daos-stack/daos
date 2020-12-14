@@ -71,7 +71,14 @@ struct dcs_layout {
 	/** targets number */
 	uint32_t	cs_nr;
 	/** even distribution flag */
-	uint32_t	cs_even_dist:1;
+	uint32_t	cs_even_dist:1,
+	/**
+	 * Align flag, used only for single value fetch that parity buffer's
+	 * location possibly not immediately following data buffer (to align
+	 * with cell size to avoid data movement in data recovery). For update
+	 * the data immediately followed by parity (this flag is zero).
+	 */
+			cs_cell_align:1;
 };
 
 struct daos_csummer {
@@ -436,8 +443,8 @@ ci2csum(struct dcs_csum_info ci);
 
 #define	DF_CI_BUF "%"PRIu64
 #define	DP_CI_BUF(buf, len) ci_buf2uint64(buf, len)
-#define	DF_CI "{nr: %d, len: %d, first_csum: %lu}"
-#define	DP_CI(ci) (ci).cs_nr, (ci).cs_len, ci2csum(ci)
+#define	DF_CI "{nr: %d, len: %d, first_csum: %lu, csum_buf_len: %d}"
+#define	DP_CI(ci) (ci).cs_nr, (ci).cs_len, ci2csum(ci), (ci).cs_buf_len
 
 /**
  * return the number of bytes needed to serialize a dcs_csum_info into a

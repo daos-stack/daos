@@ -93,6 +93,7 @@ daos_cont_csum_prop_is_enabled(uint16_t val)
 {
 	if (val != DAOS_PROP_CO_CSUM_CRC16 &&
 	    val != DAOS_PROP_CO_CSUM_CRC32 &&
+	    val != DAOS_PROP_CO_CSUM_ADLER32 &&
 	    val != DAOS_PROP_CO_CSUM_CRC64 &&
 	    val != DAOS_PROP_CO_CSUM_SHA1 &&
 	    val != DAOS_PROP_CO_CSUM_SHA256 &&
@@ -133,15 +134,11 @@ bool
 daos_cont_compress_prop_is_enabled(uint16_t val)
 {
 	if (val != DAOS_PROP_CO_COMPRESS_LZ4 &&
-	    val != DAOS_PROP_CO_COMPRESS_GZIP1 &&
-	    val != DAOS_PROP_CO_COMPRESS_GZIP2 &&
-	    val != DAOS_PROP_CO_COMPRESS_GZIP3 &&
-	    val != DAOS_PROP_CO_COMPRESS_GZIP4 &&
-	    val != DAOS_PROP_CO_COMPRESS_GZIP5 &&
-	    val != DAOS_PROP_CO_COMPRESS_GZIP6 &&
-	    val != DAOS_PROP_CO_COMPRESS_GZIP7 &&
-	    val != DAOS_PROP_CO_COMPRESS_GZIP8 &&
-	    val != DAOS_PROP_CO_COMPRESS_GZIP9)
+	    val != DAOS_PROP_CO_COMPRESS_DEFLATE &&
+	    val != DAOS_PROP_CO_COMPRESS_DEFLATE1 &&
+	    val != DAOS_PROP_CO_COMPRESS_DEFLATE2 &&
+	    val != DAOS_PROP_CO_COMPRESS_DEFLATE3 &&
+	    val != DAOS_PROP_CO_COMPRESS_DEFLATE4)
 		return false;
 	return true;
 }

@@ -44,6 +44,11 @@ extern "C" {
 /** Maximum file size */
 #define DFS_MAX_FSIZE		(~0ULL)
 
+/** Maximum xattr name */
+#define DFS_MAX_XATTR_NAME	255
+/** Maximum xattr value */
+#define DFS_MAX_XATTR_LEN	65536
+
 /** File/Directory/Symlink object handle struct */
 typedef struct dfs_obj dfs_obj_t;
 /** DFS mount handle struct */
@@ -237,7 +242,8 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
  *			lookup/release the root object.
  * \param[in]	name	Link name of the object to create/open.
  * \param[in]	mode	mode_t (permissions + type).
- * \param[in]	flags	Access flags (O_RDONLY, O_RDWR, O_EXCL, O_CREAT).
+ * \param[in]	flags	Access flags (handles: O_RDONLY, O_RDWR, O_EXCL,
+ *			O_CREAT, O_TRUNC).
  * \param[in]	cid	DAOS object class id (pass 0 for default MAX_RW).
  *			Valid on create only; ignored otherwise.
  * \param[in]	chunk_size

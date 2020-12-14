@@ -84,7 +84,7 @@ func TestControl_NetworkScan(t *testing.T) {
 				},
 			},
 			expResp: &NetworkScanResp{
-				HostErrorsResp: mockHostErrorsResp(t, &mockHostError{"host1", "remote failed"}),
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "remote failed"}),
 			},
 		},
 		"bad host addr": {

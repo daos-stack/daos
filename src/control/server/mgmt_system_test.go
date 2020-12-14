@@ -37,10 +37,10 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/peer"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
@@ -49,7 +49,6 @@ import (
 
 const (
 	// test aliases for member states
-	msJoined     = uint32(MemberStateJoined)
 	msReady      = uint32(MemberStateReady)
 	msWaitFormat = uint32(MemberStateAwaitFormat)
 	msStopped    = uint32(MemberStateStopped)
@@ -57,13 +56,9 @@ const (
 )
 
 func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
-	missingSB := newTestMgmtSvc(nil)
-	missingSB.harness.instances[0]._superblock = nil
-	missingAPs := newTestMgmtSvc(nil)
-	missingAPs.harness.instances[0].msClient.cfg.AccessPoints = nil
+	localhost := common.LocalhostCtrlAddr()
 
 	for name, tc := range map[string]struct {
-		mgmtSvc *mgmtSvc
 		req     *mgmtpb.LeaderQueryReq
 		expResp *mgmtpb.LeaderQueryResp
 		expErr  error
@@ -77,26 +72,11 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 			},
 			expErr: errors.New("wrong system"),
 		},
-		"no i/o servers": {
-			mgmtSvc: newMgmtSvc(NewIOServerHarness(nil), nil, nil),
-			req:     &mgmtpb.LeaderQueryReq{},
-			expErr:  errors.New("no I/O servers"),
-		},
-		"missing superblock": {
-			mgmtSvc: missingSB,
-			req:     &mgmtpb.LeaderQueryReq{},
-			expErr:  errors.New("no I/O superblock"),
-		},
-		"fail to get current leader address": {
-			mgmtSvc: missingAPs,
-			req:     &mgmtpb.LeaderQueryReq{},
-			expErr:  errors.New("current leader address"),
-		},
 		"successful query": {
-			req: &mgmtpb.LeaderQueryReq{},
+			req: &mgmtpb.LeaderQueryReq{System: build.DefaultSystemName},
 			expResp: &mgmtpb.LeaderQueryResp{
-				CurrentLeader: "localhost",
-				Replicas:      []string{"localhost"},
+				CurrentLeader: localhost.String(),
+				Replicas:      []string{localhost.String()},
 			},
 		},
 	} {
@@ -104,11 +84,25 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			if tc.mgmtSvc == nil {
-				tc.mgmtSvc = newTestMgmtSvc(log)
+			mgmtSvc := newTestMgmtSvc(t, log)
+			db, cleanup := system.TestDatabase(t, log)
+			defer cleanup()
+			mgmtSvc.sysdb = db
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if err := db.Start(ctx); err != nil {
+				t.Fatal(err)
 			}
 
-			gotResp, gotErr := tc.mgmtSvc.LeaderQuery(context.TODO(), tc.req)
+			// wait for the bootstrap to finish
+			for {
+				if leader, _, _ := db.LeaderQuery(); leader != "" {
+					break
+				}
+			}
+
+			gotResp, gotErr := mgmtSvc.LeaderQuery(context.TODO(), tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -128,10 +122,7 @@ func checkUnorderedRankResults(t *testing.T, expResults, gotResults []*mgmtpb.Ra
 	t.Helper()
 
 	isMsgField := func(path cmp.Path) bool {
-		if path.Last().String() == ".Msg" {
-			return true
-		}
-		return false
+		return path.Last().String() == ".Msg"
 	}
 	opts := append(common.DefaultCmpOpts(),
 		cmp.FilterPath(isMsgField, cmp.Ignore()))
@@ -175,7 +166,8 @@ func TestServer_MgmtSvc_PrepShutdownRanks(t *testing.T) {
 		"missing superblock": {
 			req:       &mgmtpb.RanksReq{Ranks: "0-3"},
 			missingSB: true,
-			expErr:    errors.New("nil superblock"),
+			// no results as rank cannot be read from superblock
+			expResults: []*mgmtpb.RanksResp_RankResult{},
 		},
 		"instances stopped": {
 			req:              &mgmtpb.RanksReq{Ranks: "0-3"},
@@ -353,7 +345,8 @@ func TestServer_MgmtSvc_StopRanks(t *testing.T) {
 		"missing superblock": {
 			req:       &mgmtpb.RanksReq{Ranks: "0-3"},
 			missingSB: true,
-			expErr:    errors.New("nil superblock"),
+			// no results as rank cannot be read from superblock
+			expResults: []*mgmtpb.RanksResp_RankResult{},
 		},
 		"missing ranks": {
 			req:        &mgmtpb.RanksReq{Ranks: "0,3"},
@@ -458,10 +451,7 @@ func TestServer_MgmtSvc_StopRanks(t *testing.T) {
 			// RankResult.Msg generation is tested in
 			// TestServer_MgmtSvc_DrespToRankResult unit tests
 			isMsgField := func(path cmp.Path) bool {
-				if path.Last().String() == ".Msg" {
-					return true
-				}
-				return false
+				return path.Last().String() == ".Msg"
 			}
 			opts := append(common.DefaultCmpOpts(),
 				cmp.FilterPath(isMsgField, cmp.Ignore()))
@@ -516,7 +506,8 @@ func TestServer_MgmtSvc_PingRanks(t *testing.T) {
 		"missing superblock": {
 			req:       &mgmtpb.RanksReq{Ranks: "0-3"},
 			missingSB: true,
-			expErr:    errors.New("nil superblock"),
+			// no results as rank can't be read from superblock
+			expResults: []*mgmtpb.RanksResp_RankResult{},
 		},
 		"instances stopped": {
 			req:              &mgmtpb.RanksReq{Ranks: "0-3"},
@@ -526,8 +517,16 @@ func TestServer_MgmtSvc_PingRanks(t *testing.T) {
 				{Rank: 2, State: msStopped},
 			},
 		},
+		"instances started": {
+			req: &mgmtpb.RanksReq{Ranks: "0-3"},
+			expResults: []*mgmtpb.RanksResp_RankResult{
+				{Rank: 1, State: msReady},
+				{Rank: 2, State: msReady},
+			},
+		},
 		"dRPC resp fails": {
-			req:     &mgmtpb.RanksReq{Ranks: "0-3"},
+			// force flag in request triggers dRPC ping
+			req:     &mgmtpb.RanksReq{Ranks: "0-3", Force: true},
 			drpcRet: errors.New("call failed"),
 			drpcResps: []proto.Message{
 				&mgmtpb.DaosResp{Status: 0},
@@ -539,15 +538,17 @@ func TestServer_MgmtSvc_PingRanks(t *testing.T) {
 			},
 		},
 		"dRPC resp junk": {
-			req:      &mgmtpb.RanksReq{Ranks: "0-3"},
+			// force flag in request triggers dRPC ping
+			req:      &mgmtpb.RanksReq{Ranks: "0-3", Force: true},
 			junkResp: true,
 			expResults: []*mgmtpb.RanksResp_RankResult{
 				{Rank: 1, State: msErrored, Errored: true},
 				{Rank: 2, State: msErrored, Errored: true},
 			},
 		},
-		"ping timeout": { // dRPC req-resp duration > rankReqTimeout
-			req:           &mgmtpb.RanksReq{Ranks: "0-3"},
+		"dRPC ping timeout": { // dRPC req-resp duration > rankReqTimeout
+			// force flag in request triggers dRPC ping
+			req:           &mgmtpb.RanksReq{Ranks: "0-3", Force: true},
 			responseDelay: 200 * time.Millisecond,
 			drpcResps: []proto.Message{
 				&mgmtpb.DaosResp{Status: 0},
@@ -558,8 +559,9 @@ func TestServer_MgmtSvc_PingRanks(t *testing.T) {
 				{Rank: 2, State: uint32(MemberStateUnresponsive)},
 			},
 		},
-		"context timeout": { // dRPC req-resp duration > parent context Timeout
-			req:           &mgmtpb.RanksReq{Ranks: "0-3"},
+		"dRPC context timeout": { // dRPC req-resp duration > parent context Timeout
+			// force flag in request triggers dRPC ping
+			req:           &mgmtpb.RanksReq{Ranks: "0-3", Force: true},
 			responseDelay: 40 * time.Millisecond,
 			ctxTimeout:    10 * time.Millisecond,
 			drpcResps: []proto.Message{
@@ -571,8 +573,9 @@ func TestServer_MgmtSvc_PingRanks(t *testing.T) {
 				{Rank: 2, State: uint32(MemberStateUnresponsive)},
 			},
 		},
-		"context cancel": { // dRPC req-resp duration > when parent context is canceled
-			req:           &mgmtpb.RanksReq{Ranks: "0-3"},
+		"dRPC context cancel": { // dRPC req-resp duration > when parent context is canceled
+			// force flag in request triggers dRPC ping
+			req:           &mgmtpb.RanksReq{Ranks: "0-3", Force: true},
 			responseDelay: 40 * time.Millisecond,
 			ctxCancel:     10 * time.Millisecond,
 			drpcResps: []proto.Message{
@@ -581,8 +584,9 @@ func TestServer_MgmtSvc_PingRanks(t *testing.T) {
 			},
 			expErr: errors.New("nil result"), // parent ctx cancel
 		},
-		"unsuccessful call": {
-			req: &mgmtpb.RanksReq{Ranks: "0-3"},
+		"dRPC unsuccessful call": {
+			// force flag in request triggers dRPC ping
+			req: &mgmtpb.RanksReq{Ranks: "0-3", Force: true},
 			drpcResps: []proto.Message{
 				&mgmtpb.DaosResp{Status: -1},
 				&mgmtpb.DaosResp{Status: -1},
@@ -592,8 +596,9 @@ func TestServer_MgmtSvc_PingRanks(t *testing.T) {
 				{Rank: 2, State: msErrored, Errored: true},
 			},
 		},
-		"successful call": {
-			req: &mgmtpb.RanksReq{Ranks: "0-3"},
+		"dRPC successful call": {
+			// force flag in request triggers dRPC ping
+			req: &mgmtpb.RanksReq{Ranks: "0-3", Force: true},
 			drpcResps: []proto.Message{
 				&mgmtpb.DaosResp{Status: 0},
 				&mgmtpb.DaosResp{Status: 0},
@@ -603,8 +608,9 @@ func TestServer_MgmtSvc_PingRanks(t *testing.T) {
 				{Rank: 2, State: msReady},
 			},
 		},
-		"filtered ranks": {
-			req: &mgmtpb.RanksReq{Ranks: "0-1,3"},
+		"dRPC filtered ranks": {
+			// force flag in request triggers dRPC ping
+			req: &mgmtpb.RanksReq{Ranks: "0-1,3", Force: true},
 			drpcResps: []proto.Message{
 				&mgmtpb.DaosResp{Status: 0},
 				&mgmtpb.DaosResp{Status: 0},
@@ -702,7 +708,8 @@ func TestServer_MgmtSvc_ResetFormatRanks(t *testing.T) {
 		"missing superblock": {
 			req:       &mgmtpb.RanksReq{Ranks: "0-3"},
 			missingSB: true,
-			expErr:    errors.New("nil superblock"),
+			// no results as rank can't be read from superblock
+			expResults: []*mgmtpb.RanksResp_RankResult{},
 		},
 		"missing ranks": {
 			req:        &mgmtpb.RanksReq{Ranks: "0,3"},
@@ -803,10 +810,7 @@ func TestServer_MgmtSvc_ResetFormatRanks(t *testing.T) {
 			// RankResult.Msg generation is tested in
 			// TestServer_MgmtSvc_DrespToRankResult unit tests
 			isMsgField := func(path cmp.Path) bool {
-				if path.Last().String() == ".Msg" {
-					return true
-				}
-				return false
+				return path.Last().String() == ".Msg"
 			}
 			opts := append(common.DefaultCmpOpts(),
 				cmp.FilterPath(isMsgField, cmp.Ignore()))
@@ -840,7 +844,8 @@ func TestServer_MgmtSvc_StartRanks(t *testing.T) {
 		"missing superblock": {
 			req:       &mgmtpb.RanksReq{Ranks: "0-3"},
 			missingSB: true,
-			expErr:    errors.New("nil superblock"),
+			// no results as rank cannot be read from superblock
+			expResults: []*mgmtpb.RanksResp_RankResult{},
 		},
 		"missing ranks": {
 			req:        &mgmtpb.RanksReq{Ranks: "0,3"},
@@ -914,7 +919,10 @@ func TestServer_MgmtSvc_StartRanks(t *testing.T) {
 
 					// set instance runner started and ready
 					ch := make(chan error, 1)
-					s.runner.Start(context.TODO(), ch)
+					if err := s.runner.Start(context.TODO(), ch); err != nil {
+						t.Logf("failed to start runner: %s", err)
+						return
+					}
 					<-ch
 					s.ready.SetTrue()
 				}(srv, tc.startFails)
@@ -936,10 +944,7 @@ func TestServer_MgmtSvc_StartRanks(t *testing.T) {
 			// RankResult.Msg generation is tested in
 			// TestServer_MgmtSvc_DrespToRankResult unit tests
 			isMsgField := func(path cmp.Path) bool {
-				if path.Last().String() == ".Msg" {
-					return true
-				}
-				return false
+				return path.Last().String() == ".Msg"
 			}
 			opts := append(common.DefaultCmpOpts(),
 				cmp.FilterPath(isMsgField, cmp.Ignore()))
@@ -998,53 +1003,6 @@ func TestServer_MgmtSvc_getPeerListenAddr(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expAddr, gotAddr); diff != "" {
 				t.Fatalf("unexpected address (-want, +got)\n%s\n", diff)
-			}
-		})
-	}
-}
-
-func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
-	for name, tc := range map[string]struct {
-		mgmtSvc          *mgmtSvc
-		clientNetworkCfg *ClientNetworkCfg
-		req              *mgmtpb.GetAttachInfoReq
-		expResp          *mgmtpb.GetAttachInfoResp
-	}{
-		"Server uses verbs + Infiniband": {
-			clientNetworkCfg: &ClientNetworkCfg{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: netdetect.Infiniband},
-			req:              &mgmtpb.GetAttachInfoReq{},
-			expResp:          &mgmtpb.GetAttachInfoResp{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: netdetect.Infiniband},
-		},
-		"Server uses sockets + Ethernet": {
-			clientNetworkCfg: &ClientNetworkCfg{Provider: "ofi+sockets", CrtCtxShareAddr: 0, CrtTimeout: 5, NetDevClass: netdetect.Ether},
-			req:              &mgmtpb.GetAttachInfoReq{},
-			expResp:          &mgmtpb.GetAttachInfoResp{Provider: "ofi+sockets", CrtCtxShareAddr: 0, CrtTimeout: 5, NetDevClass: netdetect.Ether},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-			harness := NewIOServerHarness(log)
-			srv := newTestIOServer(log, true)
-
-			if err := harness.AddInstance(srv); err != nil {
-				t.Fatal(err)
-			}
-			srv.setDrpcClient(newMockDrpcClient(nil))
-			harness.started.SetTrue()
-
-			cfg := new(mockDrpcClientConfig)
-			rb, _ := proto.Marshal(&mgmtpb.GetAttachInfoResp{})
-			cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, nil)
-			srv.setDrpcClient(newMockDrpcClient(cfg))
-			tc.mgmtSvc = newMgmtSvc(harness, nil, tc.clientNetworkCfg)
-			gotResp, gotErr := tc.mgmtSvc.GetAttachInfo(context.TODO(), tc.req)
-			if gotErr != nil {
-				t.Fatalf("unexpected error: %+v\n", gotErr)
-			}
-
-			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
-				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
 	}

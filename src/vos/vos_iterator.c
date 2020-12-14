@@ -140,6 +140,7 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
 	}
 
 	info.ii_epc_expr = param->ip_epc_expr;
+	info.ii_recx = param->ip_recx;
 	info.ii_flags = param->ip_flags;
 	info.ii_akey = &param->ip_akey;
 
@@ -169,6 +170,7 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 {
 	struct vos_iter_dict	*dict;
 	struct vos_iterator	*iter;
+	struct dtx_handle	*old = NULL;
 	struct vos_ts_set	*ts_set = NULL;
 	int			 rc;
 	int			 rlevel;
@@ -236,17 +238,16 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 	if (rc != 0)
 		goto out;
 
+	old = vos_dth_get();
+	vos_dth_set(dth);
 
 	D_DEBUG(DB_TRACE, "Preparing standalone iterator of type %s\n",
 		dict->id_name);
 	rc = dict->id_ops->iop_prepare(type, param, &iter, ts_set);
+	vos_dth_set(old);
 	if (rc != 0) {
-		if (rc == -DER_NONEXIST)
-			D_DEBUG(DB_TRACE, "No %s to iterate: "DF_RC"\n",
-				dict->id_name, DP_RC(rc));
-		else
-			D_ERROR("Failed to prepare %s iterator: "DF_RC"\n",
-				dict->id_name, DP_RC(rc));
+		VOS_TX_LOG_FAIL(rc, "Could not prepare iterator for %s: "DF_RC
+				"\n", dict->id_name, DP_RC(rc));
 
 		goto out;
 	}
@@ -262,8 +263,12 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 
 	*ih = vos_iter2hdl(iter);
 out:
-	if (rc == -DER_NONEXIST && dtx_is_valid_handle(dth))
-		vos_ts_set_update(ts_set, dth->dth_epoch);
+	if (rc == -DER_NONEXIST && dtx_is_valid_handle(dth)) {
+		if (vos_ts_wcheck(ts_set, dth->dth_epoch, dth->dth_epoch_bound))
+			rc = -DER_TX_RESTART;
+		else
+			vos_ts_set_update(ts_set, dth->dth_epoch);
+	}
 	if (rc != 0)
 		vos_ts_set_free(ts_set);
 	return rc;
@@ -285,16 +290,22 @@ iter_decref(struct vos_iterator *iter)
 	return iter->it_ops->iop_finish(iter);
 }
 
-void
-vos_iter_ts_set_update(daos_handle_t ih, daos_epoch_t read_time)
+static int
+vos_iter_ts_set_update(daos_handle_t ih, daos_epoch_t read_time, int rc)
 {
 	struct vos_iterator	*iter;
 
 	if (daos_handle_is_inval(ih))
-		return;
+		return rc;
 
 	iter = vos_hdl2iter(ih);
+
+	if (vos_ts_wcheck(iter->it_ts_set, read_time, iter->it_bound))
+		return -DER_TX_RESTART;
+
 	vos_ts_set_update(iter->it_ts_set, read_time);
+
+	return rc;
 }
 
 int
@@ -477,25 +488,21 @@ reset_anchors(vos_iter_type_t type, struct vos_iter_anchors *anchors)
 {
 	switch (type) {
 	case VOS_ITER_DKEY:
-		D_ASSERT(daos_anchor_is_eof(&anchors->ia_dkey));
 		daos_anchor_set_zero(&anchors->ia_dkey);
 		daos_anchor_set_zero(&anchors->ia_akey);
 		daos_anchor_set_zero(&anchors->ia_ev);
 		daos_anchor_set_zero(&anchors->ia_sv);
 		break;
 	case VOS_ITER_AKEY:
-		D_ASSERT(daos_anchor_is_eof(&anchors->ia_akey));
 		daos_anchor_set_zero(&anchors->ia_akey);
 		daos_anchor_set_zero(&anchors->ia_ev);
 		daos_anchor_set_zero(&anchors->ia_sv);
 		break;
 	case VOS_ITER_RECX:
-		D_ASSERT(daos_anchor_is_eof(&anchors->ia_ev));
 		daos_anchor_set_zero(&anchors->ia_ev);
 		daos_anchor_set_zero(&anchors->ia_sv);
 		break;
 	case VOS_ITER_SINGLE:
-		D_ASSERT(daos_anchor_is_eof(&anchors->ia_sv));
 		daos_anchor_set_zero(&anchors->ia_sv);
 		break;
 	default:
@@ -587,12 +594,16 @@ need_reprobe(vos_iter_type_t type, struct vos_iter_anchors *anchors)
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
  * cb(\a arg) for each entry.
  */
-int
-vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
-	    struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
-	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth)
+static int
+vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
+		     bool recursive, bool ignore_inprogress,
+		     struct vos_iter_anchors *anchors,
+		     vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb, void *arg,
+		     struct dtx_handle *dth)
 {
 	daos_anchor_t		*anchor, *probe_anchor = NULL;
+	struct dtx_handle	*old = NULL;
+	struct vos_iterator	*iter;
 	vos_iter_entry_t	iter_ent = {0};
 	daos_epoch_t		read_time = 0;
 	daos_handle_t		ih;
@@ -602,9 +613,12 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 
 	D_ASSERT(type >= VOS_ITER_COUUID && type <= VOS_ITER_RECX);
 	D_ASSERT(anchors != NULL);
-	D_ASSERT(pre_cb || post_cb);
+	D_ASSERT(pre_cb || post_cb || vos_dtx_hit_inprogress());
 
 	anchor = type2anchor(type, anchors);
+
+	old = vos_dth_get();
+	vos_dth_set(dth);
 
 	rc = vos_iter_prepare(type, param, &ih, dth);
 	if (rc != 0) {
@@ -612,12 +626,17 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 			daos_anchor_set_eof(anchor);
 			rc = 0;
 		} else {
-			D_ERROR("failed to prepare iterator (type=%d): "
-				""DF_RC"\n", type, DP_RC(rc));
+			VOS_TX_LOG_FAIL(rc, "failed to prepare iterator "
+					"(type=%d): "DF_RC"\n", type,
+					DP_RC(rc));
 		}
 
+		vos_dth_set(old);
 		return rc;
 	}
+
+	iter = vos_hdl2iter(ih);
+	iter->it_ignore_uncommitted = ignore_inprogress ? 1 : 0;
 	read_time = dtx_is_valid_handle(dth) ? dth->dth_epoch : 0 /* unused */;
 probe:
 	if (!daos_anchor_is_zero(anchor))
@@ -639,6 +658,12 @@ probe:
 	while (1) {
 		rc = vos_iter_fetch(ih, &iter_ent, anchor);
 		if (rc != 0) {
+			if (vos_dtx_continue_detect(rc)) {
+				pre_cb = NULL;
+				post_cb = NULL;
+				goto next;
+			}
+
 			VOS_TX_TRACE_FAIL(rc, "Failed to fetch iterator "
 					  "(type=%d): "DF_RC"\n", type,
 					  DP_RC(rc));
@@ -688,8 +713,14 @@ probe:
 			rc = vos_iterate(&child_param, iter_ent.ie_child_type,
 					 recursive, anchors, pre_cb, post_cb,
 					 arg, dth);
-			if (rc != 0)
-				D_GOTO(out, rc);
+			if (rc != 0) {
+				if (vos_dtx_continue_detect(rc)) {
+					pre_cb = NULL;
+					post_cb = NULL;
+				} else {
+					D_GOTO(out, rc);
+				}
+			}
 
 			reset_anchors(iter_ent.ie_child_type, anchors);
 		}
@@ -704,12 +735,14 @@ probe:
 
 		}
 
-		if (need_reprobe(type, anchors)) {
+		if (need_reprobe(type, anchors) &&
+		    !vos_dtx_hit_inprogress()) {
 			D_ASSERT(!daos_anchor_is_zero(anchor) &&
 				 !daos_anchor_is_eof(anchor));
 			goto probe;
 		}
 
+next:
 		rc = vos_iter_next(ih);
 		if (rc) {
 			VOS_TX_TRACE_FAIL(rc,
@@ -719,17 +752,64 @@ probe:
 		}
 	}
 
+	if (vos_dtx_hit_inprogress())
+		goto out;
+
 	if (rc == -DER_NONEXIST) {
 		daos_anchor_set_eof(anchor);
 		rc = 0;
 	}
 out:
+	if (vos_dtx_hit_inprogress())
+		rc = -DER_INPROGRESS;
+
 	if (rc >= 0)
-		vos_iter_ts_set_update(ih, read_time);
+		rc = vos_iter_ts_set_update(ih, read_time, rc);
 
 	VOS_TX_LOG_FAIL(rc, "abort iteration type:%d, "DF_RC"\n", type,
 			DP_RC(rc));
 
 	vos_iter_finish(ih);
+	vos_dth_set(old);
 	return rc;
+}
+
+/**
+ * Iterate a VOS key tree based on an open tree handle.
+ */
+int
+vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
+		const daos_epoch_range_t *epr, bool ignore_inprogress,
+		vos_iter_cb_t cb, void *arg, struct dtx_handle *dth)
+{
+	vos_iter_param_t	 param = {0};
+	struct vos_iter_anchors	 anchors = {0};
+
+	D_ASSERT(type == VOS_ITER_DKEY || type == VOS_ITER_AKEY);
+	D_ASSERT(!daos_handle_is_inval(toh));
+
+	param.ip_hdl = toh;
+	param.ip_epr = *epr;
+	/** hijack a couple of internal fields to pass information */
+	param.ip_flags = VOS_IT_KEY_TREE;
+	param.ip_dkey.iov_buf = obj;
+
+
+	return vos_iterate_internal(&param, type, false, ignore_inprogress,
+				    &anchors, cb, NULL, arg, dth);
+}
+
+/**
+ * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
+ * cb(\a arg) for each entry.
+ */
+int
+vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
+	    struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
+	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth)
+{
+	D_ASSERT((param->ip_flags & VOS_IT_KEY_TREE) == 0);
+
+	return vos_iterate_internal(param, type, recursive, false, anchors,
+				    pre_cb, post_cb, arg, dth);
 }

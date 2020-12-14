@@ -26,6 +26,7 @@ import os
 
 from command_utils import ExecutableCommand
 from command_utils_base import FormattedParameter, EnvironmentVariables
+from command_utils_base import CommandFailure
 from env_modules import load_mpi
 from general_utils import pcmd
 from write_host_file import write_host_file
@@ -172,7 +173,9 @@ class Orterun(JobManager):
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
-        load_mpi("openmpi")
+        if not load_mpi("openmpi"):
+            raise CommandFailure("Failed to load openmpi")
+
         path = os.path.dirname(find_executable("orterun"))
         super(Orterun, self).__init__(
             "/run/orterun/*", "orterun", job, path, subprocess)
@@ -183,6 +186,7 @@ class Orterun(JobManager):
             "btl": "tcp,self",
             "oob": "tcp",
             "pml": "ob1",
+            "btl_tcp_if_include": "eth0",
         }
 
         self.hostfile = FormattedParameter("--hostfile {}", None)
@@ -262,7 +266,9 @@ class Orterun(JobManager):
             CommandFailure: if there is an error running the command
 
         """
-        load_mpi("openmpi")
+        if not load_mpi("openmpi"):
+            raise CommandFailure("Failed to load openmpi")
+
         return super(Orterun, self).run()
 
 
@@ -277,7 +283,9 @@ class Mpirun(JobManager):
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
-        load_mpi(mpitype)
+        if not load_mpi(mpitype):
+            raise CommandFailure("Failed to load {}".format(mpitype))
+
         path = os.path.dirname(find_executable("mpirun"))
         super(Mpirun, self).__init__(
             "/run/mpirun", "mpirun", job, path, subprocess)
@@ -290,6 +298,7 @@ class Mpirun(JobManager):
                 "btl": "tcp,self",
                 "oob": "tcp",
                 "pml": "ob1",
+                "btl_tcp_if_include": "eth0",
             }
 
         self.hostfile = FormattedParameter("-hostfile {}", None)
@@ -356,7 +365,9 @@ class Mpirun(JobManager):
             CommandFailure: if there is an error running the command
 
         """
-        load_mpi(self.mpitype)
+        if not load_mpi(self.mpitype):
+            raise CommandFailure("Failed to load {}".format(self.mpitype))
+
         return super(Mpirun, self).run()
 
 

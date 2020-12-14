@@ -21,12 +21,12 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-import os
 import traceback
 import ctypes
 
 from apricot import TestWithServers
-from pydaos.raw import DaosPool, DaosApiError, RankList
+from pydaos.raw import DaosApiError
+from test_utils_pool import TestPool
 
 
 class BadEvictTest(TestWithServers):
@@ -47,27 +47,10 @@ class BadEvictTest(TestWithServers):
 
         :avocado: tags=all,pool,full_regression,tiny,badevict
         """
-        # parameters used in pool create
-        createmode = self.params.get("mode", '/run/evicttests/createmode/')
-        createsetid = self.params.get("setname", '/run/evicttests/createset/')
-        createsize = self.params.get("size", '/run/evicttests/createsize/')
-
-        createuid = os.geteuid()
-        creategid = os.getegid()
-
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
         # expected result of the test
         expected_for_param = []
-
-        svclist = self.params.get("ranklist", '/run/evicttests/svrlist/*/')
-        svc = svclist[0]
-        expected_for_param.append(svclist[1])
-
-        setlist = self.params.get("setname",
-                                  '/run/evicttests/connectsetnames/*/')
-        evictset = setlist[0]
-        expected_for_param.append(setlist[1])
 
         uuidlist = self.params.get("uuid", '/run/evicttests/UUID/*/')
         excludeuuid = uuidlist[0]
@@ -82,43 +65,30 @@ class BadEvictTest(TestWithServers):
                 break
 
         saveduuid = None
-        savedgroup = None
-        savedsvc = None
         pool = None
 
         try:
             # initialize a python pool object then create the underlying
             # daos storage
-            pool = DaosPool(self.context)
-            pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None)
-
-            # trash the the pool service rank list
-            if not svc == 'VALID':
-                savedsvc = pool.svc
-                rl_ranks = ctypes.POINTER(ctypes.c_uint)()
-                pool.svc = RankList(rl_ranks, 1)
-
-            # trash the pool group value
-            savedgroup = pool.group
-            if evictset is None:
-                pool.group = None
-            else:
-                pool.set_group(evictset)
+            pool = TestPool(self.context, self.get_dmg_command())
+            pool.get_params(self)
+            pool.create()
 
             # trash the UUID value in various ways
             if excludeuuid is None:
                 saveduuid = (ctypes.c_ubyte * 16)(0)
                 for item in range(0, len(saveduuid)):
-                    saveduuid[item] = pool.uuid[item]
-                pool.uuid[0:] = [0 for item in range(0, len(pool.uuid))]
+                    saveduuid[item] = pool.pool.uuid[item]
+                pool.pool.uuid[0:] = \
+                    [0 for item in range(0, len(pool.pool.uuid))]
             elif excludeuuid == 'JUNK':
                 saveduuid = (ctypes.c_ubyte * 16)(0)
                 for item in range(0, len(saveduuid)):
-                    saveduuid[item] = pool.uuid[item]
-                pool.uuid[4] = 244
+                    saveduuid[item] = pool.pool.uuid[item]
+                pool.pool.uuid[4] = 244
 
-            pool.evict()
+            # evict the pool
+            pool.pool.evict()
 
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
@@ -132,10 +102,6 @@ class BadEvictTest(TestWithServers):
             if pool is not None:
                 # if the test trashed some pool parameter, put it back the
                 # way it was
-                pool.group = savedgroup
                 if saveduuid is not None:
-                    for item in range(0, len(saveduuid)):
-                        pool.uuid[item] = saveduuid[item]
-                if savedsvc is not None:
-                    pool.svc = savedsvc
-                pool.destroy(0)
+                    pool.pool.uuid = saveduuid
+                pool.destroy()

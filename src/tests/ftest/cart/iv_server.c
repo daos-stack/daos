@@ -42,7 +42,6 @@
 
 #define MY_IVNS_ID 0xABCD
 
-
 static d_rank_t g_my_rank;
 static uint32_t g_group_size;
 
@@ -92,7 +91,6 @@ static pthread_t g_progress_thread;
 static pthread_mutex_t g_key_lock = PTHREAD_MUTEX_INITIALIZER;
 #define LOCK_KEYS() D_MUTEX_LOCK(&g_key_lock)
 #define UNLOCK_KEYS() D_MUTEX_UNLOCK(&g_key_lock)
-
 
 /* handler for RPC_SHUTDOWN */
 int
@@ -523,7 +521,6 @@ iv_on_refresh(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	else
 		rc = -DER_IVCB_FORWARD;
 
-
 	LOCK_KEYS();
 	d_list_for_each_entry(entry, &g_kv_pair_head, link) {
 
@@ -570,7 +567,6 @@ iv_on_hash(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, d_rank_t *root)
 	return 0;
 }
 
-
 static int
 iv_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	  crt_iv_ver_t iv_ver, crt_iv_perm_t permission,
@@ -609,8 +605,7 @@ iv_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *user_priv)
 	assert(user_priv == &g_test_user_priv);
 
 	/* Frees the IOV buf also */
-	if (iv_value != NULL)
-		d_sgl_fini(iv_value, true);
+	d_sgl_fini(iv_value, true);
 
 	dump_all_keys("ON_PUTVALUE");
 	DBG_EXIT();
@@ -624,7 +619,6 @@ iv_pre_common(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 {
 	cb_func(cb_arg);
 }
-
 
 struct crt_iv_ops g_ivc_ops = {
 	.ivo_pre_fetch = iv_pre_common,
@@ -692,7 +686,6 @@ iv_destroy_cb(crt_iv_namespace_t ivns, void *arg)
 
 	D_DEBUG(DB_TRACE, "ivns %p was destroyed, arg %p\n", ivns, arg);
 }
-
 
 static void
 deinit_iv(void) {
@@ -813,7 +806,6 @@ fetch_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	/* TODO: fetch test only supports one sglist buffer! */
 	assert(iv_value->sg_nr == 1);
 	assert(iv_value->sg_iovs[0].iov_buf != NULL);
-
 
 	bulk_hdl = NULL;
 	LOCK_KEYS();
@@ -1090,7 +1082,6 @@ show_usage(char *app_name)
 	printf("Verbose numbers are 0,1,2\n\n");
 }
 
-
 int main(int argc, char **argv)
 {
 	char		*arg_verbose = NULL;
@@ -1194,7 +1185,7 @@ int main(int argc, char **argv)
 
 	if (g_my_rank == 0) {
 		rc = crt_group_config_save(grp, true);
-		assert(rc == 0);
+		D_ASSERTF(rc == 0, "crt_group_config_save failed %d\n", rc);
 	}
 
 	pthread_join(g_progress_thread, NULL);

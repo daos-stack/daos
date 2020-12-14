@@ -21,8 +21,8 @@ DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-gnu-zero-variadic-macro-arguments',
                  '-Wno-tautological-constant-out-of-range-compare',
                  '-Wno-unused-command-line-argument',
-                 '-Wframe-larger-than=4096',
-                 ' -mavx2']
+                 '-Wframe-larger-than=4096']
+#                 '-mavx2']
 
 # Compiler flags to prevent optimizing out security checks
 DESIRED_FLAGS.extend(['-fno-strict-overflow', '-fno-delete-null-pointer-checks',
@@ -149,6 +149,9 @@ def set_defaults(env):
         #could refine this but for now, just assume these warnings are ok
         env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)
 
+    if env.get('BUILD_TYPE') != 'release':
+        env.Append(CCFLAGS=['-DFAULT_INJECTION=1'])
+
 def preload_prereqs(prereqs):
     """Preload prereqs specific to platform"""
 
@@ -156,7 +159,7 @@ def preload_prereqs(prereqs):
     prereqs.define('readline', libs=['readline', 'history'],
                    package='readline')
     reqs = ['argobots', 'pmdk', 'cmocka', 'ofi', 'hwloc', 'mercury', 'boost',
-            'uuid', 'crypto', 'fuse', 'protobufc', 'json-c']
+            'uuid', 'crypto', 'fuse', 'protobufc', 'json-c', 'lz4']
     if not is_platform_arm():
         reqs.extend(['spdk', 'isal', 'isal_crypto'])
     prereqs.load_definitions(prebuild=reqs)

@@ -422,8 +422,8 @@ attr_list_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
 		if (i_args->iov_index == i_args->iov_count) {
 			void *ptr;
 
-			D_REALLOC(ptr, i_args->iovs,
-				  i_args->iov_count * 2 * sizeof(d_iov_t));
+			D_REALLOC_ARRAY(ptr, i_args->iovs,
+					i_args->iov_count * 2);
 			/*
 			 * TODO: Fail or continue transferring
 			 *	 iteratively using available memory?

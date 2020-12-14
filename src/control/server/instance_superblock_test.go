@@ -24,7 +24,6 @@
 package server
 
 import (
-	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -33,7 +32,6 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
-	"golang.org/x/net/context"
 )
 
 func TestServer_Instance_createSuperblock(t *testing.T) {
@@ -43,8 +41,6 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 	testDir, cleanup := CreateTestDir(t)
 	defer cleanup()
 
-	defaultApList := []string{"1.2.3.4:5"}
-	ctrlAddrs := []string{"1.2.3.4:5", "6.7.8.9:10"}
 	h := NewIOServerHarness(log)
 	for idx, mnt := range []string{"one", "two"} {
 		if err := os.MkdirAll(filepath.Join(testDir, mnt), 0777); err != nil {
@@ -57,42 +53,15 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 			WithScmRamdiskSize(1).
 			WithScmMountPoint(mnt)
 		r := ioserver.NewRunner(log, cfg)
-		ctrlAddr, err := net.ResolveTCPAddr("tcp", ctrlAddrs[idx])
-		if err != nil {
-			t.Fatal(err)
-		}
-		ms := newMgmtSvcClient(
-			context.Background(), log, mgmtSvcClientCfg{
-				ControlAddr:  ctrlAddr,
-				AccessPoints: defaultApList,
-			},
-		)
 		msc := &scm.MockSysConfig{
 			IsMountedBool: true,
 		}
 		mp := scm.NewMockProvider(log, nil, msc)
-		srv := NewIOServerInstance(log, nil, mp, ms, r)
+		srv := NewIOServerInstance(log, nil, mp, nil, r)
 		srv.fsRoot = testDir
 		if err := h.AddInstance(srv); err != nil {
 			t.Fatal(err)
 		}
-	}
-
-	// ugh, this isn't ideal
-	oldGetAddrFn := getInterfaceAddrs
-	defer func() {
-		getInterfaceAddrs = oldGetAddrFn
-	}()
-	getInterfaceAddrs = func() ([]net.Addr, error) {
-		addrs := make([]net.Addr, len(ctrlAddrs))
-		var err error
-		for i, ca := range ctrlAddrs {
-			addrs[i], err = net.ResolveTCPAddr("tcp", ca)
-			if err != nil {
-				return nil, err
-			}
-		}
-		return addrs, nil
 	}
 
 	for _, instance := range h.Instances() {

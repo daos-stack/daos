@@ -6,16 +6,18 @@ hosts:
     - server-D
     - server-E
     - server-F
+    - server-G
   test_clients:
-    - client-G
-timeout: 1800
+    - client-H
+timeout: 10800
 server_config:
     name: daos_server
     servers:
+        log_mask: "ERR"
         bdev_class: nvme
         bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
 daos_racer:
-  runtime: 600
-  clush_timeout: 1500
+  runtime: 7200
+  clush_timeout: 10080

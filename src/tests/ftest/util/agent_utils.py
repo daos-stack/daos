@@ -52,7 +52,7 @@ def include_local_host(hosts):
 class DaosAgentCommand(YamlCommand):
     """Defines an object representing a daos_agent command."""
 
-    def __init__(self, path="", yaml_cfg=None, timeout=30):
+    def __init__(self, path="", yaml_cfg=None, timeout=15):
         """Create a daos_agent command object.
 
         Args:
@@ -64,7 +64,7 @@ class DaosAgentCommand(YamlCommand):
         """
         super(DaosAgentCommand, self).__init__(
             "/run/agent_config/*", "daos_agent", path, yaml_cfg, timeout)
-        self.pattern = "Listening on "
+        self.pattern = "listening on "
 
         # If specified use the configuration file from the YamlParameters object
         default_yaml_file = None

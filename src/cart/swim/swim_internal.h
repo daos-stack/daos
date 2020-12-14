@@ -65,11 +65,9 @@ extern "C" {
 #endif
 
 /** SWIM protocol parameter defaults */
-#define SWIM_PROTOCOL_PERIOD_LEN 2400	/* milliseconds, should NOT be less
-					 * than 3 * SWIM_PING_TIMEOUT
-					 */
-#define SWIM_SUSPECT_TIMEOUT	3 * SWIM_PROTOCOL_PERIOD_LEN
-#define SWIM_PING_TIMEOUT	800	/* milliseconds */
+#define SWIM_PROTOCOL_PERIOD_LEN 1000	/* milliseconds */
+#define SWIM_SUSPECT_TIMEOUT	(8 * SWIM_PROTOCOL_PERIOD_LEN)
+#define SWIM_PING_TIMEOUT	900	/* milliseconds */
 #define SWIM_SUBGROUP_SIZE	2
 #define SWIM_PIGGYBACK_ENTRIES	8	/**< count of piggybacked entries */
 #define SWIM_PIGGYBACK_TX_COUNT	50	/**< count of transfers each entry

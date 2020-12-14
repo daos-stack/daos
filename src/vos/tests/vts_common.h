@@ -41,6 +41,16 @@
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
 #endif
 
+#if FAULT_INJECTION
+#define FAULT_INJECTION_REQUIRED() do { } while (0)
+#else
+#define FAULT_INJECTION_REQUIRED() \
+	do { \
+		print_message("Fault injection required for test, skipping...\n"); \
+		skip();\
+	} while (0)
+#endif /* FAULT_INJECTION */
+
 #define VPOOL_16M	(16ULL << 20)
 #define VPOOL_1G	(1ULL << 30)
 #define VPOOL_2G	(2ULL << 30)
@@ -135,14 +145,19 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	      uint64_t dkey_hash, struct dtx_handle **dthp);
 static inline void
 vts_dtx_begin_ex(const daos_unit_oid_t *oid, daos_handle_t coh,
-		 daos_epoch_t epoch, uint64_t dkey_hash, uint32_t nmods,
-		 struct dtx_handle **dthp)
+		 daos_epoch_t epoch, daos_epoch_t epoch_bound,
+		 uint64_t dkey_hash, uint32_t nmods, struct dtx_handle **dthp)
 {
 	struct dtx_handle	*dth;
 
 	vts_dtx_begin(oid, coh, epoch, dkey_hash, dthp);
 
 	dth = *dthp;
+
+	if (epoch_bound <= epoch)
+		dth->dth_epoch_bound = epoch;
+	else
+		dth->dth_epoch_bound = epoch_bound;
 
 	dth->dth_modification_cnt = nmods;
 

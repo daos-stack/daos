@@ -164,7 +164,7 @@ enum daos_cont_props {
 	DAOS_PROP_CO_ACL,
 	/**
 	 * Determine whether inline compression is enabled
-	 * Value: DAOS_PROP_CO_COMPRESS_OFF/LZ4/GZIP[1-9]
+	 * Value: DAOS_PROP_CO_COMPRESS_OFF/LZ4/DEFLATE[1-4]
 	 * Default: DAOS_PROP_CO_COMPRESS_OFF
 	 */
 	DAOS_PROP_CO_COMPRESS,
@@ -225,7 +225,8 @@ enum {
 	DAOS_PROP_CO_CSUM_CRC64,
 	DAOS_PROP_CO_CSUM_SHA1,
 	DAOS_PROP_CO_CSUM_SHA256,
-	DAOS_PROP_CO_CSUM_SHA512
+	DAOS_PROP_CO_CSUM_SHA512,
+	DAOS_PROP_CO_CSUM_ADLER32
 };
 
 /** container checksum server verify */
@@ -245,15 +246,11 @@ enum {
 enum {
 	DAOS_PROP_CO_COMPRESS_OFF,
 	DAOS_PROP_CO_COMPRESS_LZ4,
-	DAOS_PROP_CO_COMPRESS_GZIP1,
-	DAOS_PROP_CO_COMPRESS_GZIP2,
-	DAOS_PROP_CO_COMPRESS_GZIP3,
-	DAOS_PROP_CO_COMPRESS_GZIP4,
-	DAOS_PROP_CO_COMPRESS_GZIP5,
-	DAOS_PROP_CO_COMPRESS_GZIP6, /** gzip default */
-	DAOS_PROP_CO_COMPRESS_GZIP7,
-	DAOS_PROP_CO_COMPRESS_GZIP8,
-	DAOS_PROP_CO_COMPRESS_GZIP9,
+	DAOS_PROP_CO_COMPRESS_DEFLATE, /** deflate default */
+	DAOS_PROP_CO_COMPRESS_DEFLATE1,
+	DAOS_PROP_CO_COMPRESS_DEFLATE2,
+	DAOS_PROP_CO_COMPRESS_DEFLATE3,
+	DAOS_PROP_CO_COMPRESS_DEFLATE4,
 };
 
 /** container encryption type */
@@ -329,11 +326,11 @@ daos_prop_alloc(uint32_t entries_nr);
  * \param[in]	prop	property entries to be freed.
  */
 void
-daos_prop_entries_free(daos_prop_t *prop);
+daos_prop_fini(daos_prop_t *prop);
 
 
 /**
- * Free the DAOS properties.
+ * Free the DAOS properties and the \a prop.
  *
  * \param[in]	prop	properties to be freed.
  */

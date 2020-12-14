@@ -105,7 +105,7 @@ enum vos_gc_type {
 #define POOL_DF_MAGIC				0x5ca1ab1e
 
 #define POOL_DF_VER_1				1
-#define POOL_DF_VERSION				11
+#define POOL_DF_VERSION				12
 
 /**
  * Durable format for VOS pool
@@ -189,7 +189,9 @@ struct vos_dtx_act_ent_df {
 	/** The allocated local id for the DTX entry */
 	uint32_t			dae_lid;
 	/** DTX flags, see enum dtx_entry_flags. */
-	uint32_t			dae_flags;
+	uint16_t			dae_flags;
+	/** DTX flags, see enum dtx_mbs_flags. */
+	uint16_t			dae_mbs_flags;
 	/** The inlined dtx records. */
 	umem_off_t			dae_rec_inline[DTX_INLINE_REC_CNT];
 	/** The DTX records count, including inline case. */

@@ -86,6 +86,13 @@ def check(reqs, name, built_str, installed_str=""):
         return installed_str
     return built_str
 
+def ofi_config(config):
+    """Check ofi version"""
+    code = """#include <rdma/fabric.h>
+_Static_assert(FI_MAJOR_VERSION == 1 && FI_MINOR_VERSION >= 11,
+               "libfabric must be >= 1.11");"""
+    return config.TryCompile(code, ".c")
+
 def define_mercury(reqs):
     """mercury definitions"""
     libs = ['rt']
@@ -124,6 +131,7 @@ def define_mercury(reqs):
                 retriever=retriever,
                 commands=['./autogen.sh',
                           './configure --prefix=$OFI_PREFIX ' +
+                          '--disable-efa ' +
                           OFI_DEBUG +
                           exclude(reqs, 'psm2',
                                   '--enable-psm2' +
@@ -137,6 +145,7 @@ def define_mercury(reqs):
                           'make install'],
                 libs=['fabric'],
                 requires=exclude(reqs, 'psm2', ['psm2'], []),
+                config_cb=ofi_config,
                 headers=['rdma/fabric.h'],
                 package='libfabric-devel' if inst(reqs, 'ofi') else None,
                 patch_rpath=['lib'])
@@ -189,6 +198,8 @@ def define_mercury(reqs):
 
 def define_common(reqs):
     """common system component definitions"""
+    reqs.define('lz4', headers=['lz4.h'], package='lz4-devel')
+
     reqs.define('valgrind_devel', headers=['valgrind/valgrind.h'],
                 package='valgrind-devel')
 

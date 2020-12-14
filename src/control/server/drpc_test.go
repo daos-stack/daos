@@ -300,7 +300,7 @@ func TestServer_DrpcRetryCancel(t *testing.T) {
 		shouldCancel bool
 		expErr       error
 	}{
-		"wrapped request": {
+		"retries exceed deadline": {
 			req: &retryableDrpcReq{
 				Message:    &mgmtpb.PoolDestroyReq{},
 				RetryAfter: 1 * time.Microsecond,
@@ -330,24 +330,6 @@ func TestServer_DrpcRetryCancel(t *testing.T) {
 			timeout:      1 * time.Second,
 			shouldCancel: true,
 			expErr:       context.Canceled,
-		},
-		"pool create retries on -DER_TIMEDOUT": {
-			req: &mgmtpb.PoolCreateReq{},
-			resp: &mgmtpb.PoolCreateResp{
-				Status: int32(drpc.DaosTimedOut),
-			},
-			method:  drpc.MethodPoolCreate,
-			timeout: defaultRetryAfter * 2,
-			expErr:  context.DeadlineExceeded,
-		},
-		"pool create retries on -DER_GRPVER": {
-			req: &mgmtpb.PoolCreateReq{},
-			resp: &mgmtpb.PoolCreateResp{
-				Status: int32(drpc.DaosGroupVersionMismatch),
-			},
-			method:  drpc.MethodPoolCreate,
-			timeout: defaultRetryAfter * 2,
-			expErr:  context.DeadlineExceeded,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

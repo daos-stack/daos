@@ -108,7 +108,7 @@ enum {
 };
 
 /** Number of bits reserved in IO flags bitmap for conditional checks.  */
-#define IO_FLAGS_COND_BITS	7
+#define IO_FLAGS_COND_BITS	8
 
 enum {
 	/* Conditional Op: Punch key if it exists, fail otherwise */
@@ -125,6 +125,11 @@ enum {
 	DAOS_COND_AKEY_UPDATE	= (1 << 5),
 	/* Conditional Op: Fetch akey if it exists, fail otherwise */
 	DAOS_COND_AKEY_FETCH	= (1 << 6),
+	/* Inidication of per akey conditional ops.  If set, the global
+	 * flag should not have any akey conditional ops specified. The
+	 * per akey flags will be read from the iod_flags field.
+	 */
+	DAOS_COND_PER_AKEY	= (1 << 7),
 	/** Mask for convenience */
 	DAOS_COND_MASK		= ((1 << IO_FLAGS_COND_BITS) - 1),
 };
@@ -226,11 +231,15 @@ typedef struct {
 	daos_iod_type_t		iod_type;
 	/** Size of the single value or the record size of the array */
 	daos_size_t		iod_size;
+	/** Per akey conditional. If DAOS_COND_PER_AKEY not set, this is
+	 *  ignored.
+	 */
+	uint64_t		iod_flags;
 	/*
 	 * Number of entries in the \a iod_recxs for arrays,
 	 * should be 1 if single value.
 	 */
-	unsigned int		iod_nr;
+	uint32_t		iod_nr;
 	/*
 	 * Array of extents, where each extent defines the index of the first
 	 * record in the extent and the number of records to access. If the
@@ -239,6 +248,22 @@ typedef struct {
 	daos_recx_t		*iod_recxs;
 } daos_iod_t;
 
+/**
+ * I/O map flags -
+ * DAOS_IOMF_DETAIL	zero means only need to know the iom_recx_hi/lo.
+ *			1 means need to retrieve detailed iom_recxs array, in
+ *			that case user can either -
+ *			1) provides allocated iom_recxs buffer (iom_nr indicates
+ *			   #elements allocated), if returned iom_nr_out is
+ *			   greater than iom_nr, iom_recxs will still be
+ *			   populated, but it will be a truncated list).
+ *			2) provides NULL iod_recxs and zero iom_nr, in that case
+ *			   DAOS will internally allocated needed buffer for
+ *			   iom_recxs array (#elements is iom_nr, and equals
+ *			   iom_nr_out). User is responsible for free the
+ *			   iom_recxs buffer after using.
+ */
+#define DAOS_IOMF_DETAIL		(0x1U)
 /**
  * A I/O map represents the physical extent mapping inside an array for a
  * given range of indices.
@@ -249,14 +274,15 @@ typedef struct {
 	/**
 	 * Number of elements allocated in iom_recxs.
 	 */
-	unsigned int		 iom_nr;
+	uint32_t		 iom_nr;
 	/**
 	 * Number of extents in the mapping. If iom_nr_out is greater than
 	 * iom_nr, iom_recxs will still be populated, but it will be a
 	 * truncated list.
 	 * 1 for SV.
 	 */
-	unsigned int		 iom_nr_out;
+	uint32_t		 iom_nr_out;
+	uint32_t		 iom_flags;
 	/** Size of the single value or the record size */
 	daos_size_t		 iom_size;
 	/**
@@ -323,7 +349,7 @@ typedef struct {
  * \param[in]	cid	Class Identifier
  * \param[in]	args	Reserved.
  */
-static inline int
+static inline void
 daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
 		     daos_oclass_id_t cid, uint32_t args)
 {
@@ -344,8 +370,6 @@ daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
 	hdr |= ((uint64_t)ofeats << OID_FMT_FEAT_SHIFT);
 	hdr |= ((uint64_t)cid << OID_FMT_CLASS_SHIFT);
 	oid->hi |= hdr;
-
-	return 0;
 }
 
 /**
@@ -873,6 +897,63 @@ daos_obj_anchor_split(daos_handle_t oh, uint32_t *nr, daos_anchor_t *anchors);
  */
 int
 daos_obj_anchor_set(daos_handle_t oh, uint32_t index, daos_anchor_t *anchor);
+
+/**
+ * Open Object Index Table (OIT) of an container
+ *
+ * \param[in]	coh	Container open handle.
+ * \param[in]	epoch	epoch of a snapshot
+ * \param[out]	oh	Returned OIT open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_INVAL	Invalid parameter
+ */
+int
+daos_oit_open(daos_handle_t coh, daos_epoch_t epoch,
+	      daos_handle_t *oh, daos_event_t *ev);
+
+/**
+ * Close an opened Object Index Table (OIT).
+ *
+ * \param[in]	oh	OIT open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ */
+int
+daos_oit_close(daos_handle_t oh, daos_event_t *ev);
+
+/**
+ * Enumerate object IDs snapshotted by the Object Index Table (OIT)
+ *
+ * \param[in]	oh	OIT open handle.
+ * \param[out]	oids	Returned OIDs
+ * \param[out]	oids_nr	Number of returned OIDs
+ * \param[in,out]
+ *		anchor	Hash anchor for the next call, it should be set to
+ *			zeroes for the first call, it should not be changed
+ *			by caller between calls.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ */
+int
+daos_oit_list(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
+	      daos_anchor_t *anchor, daos_event_t *ev);
 
 #if defined(__cplusplus)
 }

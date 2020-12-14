@@ -118,6 +118,7 @@ opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
 	int			rc;
 	size_t			count = opts->num_pci_addr;
 	struct spdk_pci_addr   *tmp = *list;
+	struct spdk_pci_addr   *new;
 
 	rc = is_addr_in_whitelist(traddr, *list, count);
 	if (rc < 0) {
@@ -127,13 +128,11 @@ opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
 		return 0;
 	}
 
-	tmp = realloc(tmp, sizeof(struct spdk_pci_addr) * (count + 1));
-	if (tmp == NULL) {
-		D_ERROR("realloc error\n");
+	D_REALLOC_ARRAY(new, tmp, count + 1);
+	if (new == NULL)
 		return -DER_NOMEM;
-	}
 
-	*list = tmp;
+	*list = new;
 	if (spdk_pci_addr_parse(*list + count, traddr) < 0) {
 		D_ERROR("Invalid address %s\n", traddr);
 		return -DER_INVAL;
@@ -243,8 +242,6 @@ populate_whitelist(struct spdk_env_opts *opts)
 		return -DER_NOMEM;
 
 	for (i = 0; i < DAOS_NVME_MAX_CTRLRS; i++) {
-		memset(trid, 0, sizeof(struct spdk_nvme_transport_id));
-
 		val = spdk_conf_section_get_nmval(sp, "TransportID", i, 0);
 		if (val == NULL) {
 			break;
@@ -288,6 +285,9 @@ populate_whitelist(struct spdk_env_opts *opts)
 			rc = -DER_INVAL;
 			break;
 		}
+
+		/* Clear it for the next loop */
+		memset(trid, 0, sizeof(*trid));
 	}
 
 	D_FREE(trid);
@@ -378,12 +378,6 @@ bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
 	int		rc, fd;
 	uint64_t	size_mb = DAOS_DMA_CHUNK_MB;
 
-	rc = smd_init(storage_path);
-	if (rc != 0) {
-		D_ERROR("Initialize SMD store failed. "DF_RC"\n", DP_RC(rc));
-		return rc;
-	}
-
 	nvme_glb.bd_xstream_cnt = 0;
 	nvme_glb.bd_init_thread = NULL;
 	D_INIT_LIST_HEAD(&nvme_glb.bd_bdevs);
@@ -408,6 +402,12 @@ bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
 		return 0;
 	}
 	close(fd);
+
+	rc = smd_init(storage_path);
+	if (rc != 0) {
+		D_ERROR("Initialize SMD store failed. "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
 
 	nvme_glb.bd_nvme_conf = spdk_conf_allocate();
 	if (nvme_glb.bd_nvme_conf == NULL) {
@@ -513,7 +513,13 @@ is_server_started(void)
 	return nvme_glb.bd_started;
 }
 
-static inline bool
+inline d_list_t *
+bio_bdev_list(void)
+{
+	return &nvme_glb.bd_bdevs;
+}
+
+inline bool
 is_init_xstream(struct bio_xs_context *ctxt)
 {
 	D_ASSERT(ctxt != NULL);
@@ -537,8 +543,9 @@ struct common_cp_arg {
 static void
 common_prep_arg(struct common_cp_arg *arg)
 {
-	memset(arg, 0, sizeof(*arg));
 	arg->cca_inflights = 1;
+	arg->cca_rc = 0;
+	arg->cca_bs = NULL;
 }
 
 static void
@@ -662,7 +669,7 @@ load_blobstore(struct bio_xs_context *ctxt, char *bdev_name, uuid_t *bs_uuid,
 	return cp_arg.cca_bs;
 }
 
-static int
+int
 unload_blobstore(struct bio_xs_context *ctxt, struct spdk_blob_store *bs)
 {
 	struct common_cp_arg cp_arg;
@@ -690,10 +697,11 @@ free_bio_blobstore(struct bio_blobstore *bb)
 	D_FREE(bb);
 }
 
-static void
+void
 destroy_bio_bdev(struct bio_bdev *d_bdev)
 {
 	D_ASSERT(d_list_empty(&d_bdev->bb_link));
+	D_ASSERT(!d_bdev->bb_replacing);
 
 	if (d_bdev->bb_desc != NULL) {
 		spdk_bdev_close(d_bdev->bb_desc);
@@ -711,7 +719,7 @@ destroy_bio_bdev(struct bio_bdev *d_bdev)
 	D_FREE(d_bdev);
 }
 
-static struct bio_bdev *
+struct bio_bdev *
 lookup_dev_by_id(uuid_t dev_id)
 {
 	struct bio_bdev	*d_bdev;
@@ -749,8 +757,14 @@ bio_release_bdev(void *arg)
 	if (d_bdev->bb_desc == NULL)
 		return;
 
-	spdk_bdev_close(d_bdev->bb_desc);
-	d_bdev->bb_desc = NULL;
+	/*
+	 * It could be called from faulty device teardown procedure, where
+	 * the device is still plugged.
+	 */
+	if (d_bdev->bb_removed) {
+		spdk_bdev_close(d_bdev->bb_desc);
+		d_bdev->bb_desc = NULL;
+	}
 }
 
 static void
@@ -771,12 +785,14 @@ teardown_bio_bdev(void *arg)
 		rc = bio_bs_state_set(bbs, BIO_BS_STATE_TEARDOWN);
 		D_ASSERT(rc == 0);
 		break;
+	case BIO_BS_STATE_OUT:
+		bio_release_bdev(d_bdev);
+		/* fallthrough */
 	case BIO_BS_STATE_FAULTY:
 	case BIO_BS_STATE_TEARDOWN:
-	case BIO_BS_STATE_OUT:
 		D_DEBUG(DB_MGMT, "Device "DF_UUID"(%s) is already in "
-			"%d state\n", d_bdev->bb_uuid, d_bdev->bb_name,
-			bbs->bb_state);
+			"%s state\n", DP_UUID(d_bdev->bb_uuid),
+			d_bdev->bb_name, bio_state_enum_to_str(bbs->bb_state));
 		break;
 	default:
 		D_ERROR("Invalid BS state %d\n", bbs->bb_state);
@@ -791,14 +807,11 @@ bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 	struct bio_bdev		*d_bdev = event_ctx;
 	struct bio_blobstore	*bbs;
 
-	if (d_bdev == NULL)
+	if (d_bdev == NULL || type != SPDK_BDEV_EVENT_REMOVE)
 		return;
 
 	D_DEBUG(DB_MGMT, "Got SPDK event(%d) for dev %s\n", type,
 		spdk_bdev_get_name(bdev));
-
-	if (type != SPDK_BDEV_EVENT_REMOVE)
-		return;
 
 	if (!is_server_started()) {
 		D_INFO("Skip device remove cb on server start/shutdown\n");
@@ -819,7 +832,7 @@ bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 
 	bbs = d_bdev->bb_blobstore;
 	/* A new device isn't used by DAOS yet */
-	if (bbs == NULL) {
+	if (bbs == NULL && !d_bdev->bb_replacing) {
 		D_DEBUG(DB_MGMT, "Removed device "DF_UUID"(%s)\n",
 			DP_UUID(d_bdev->bb_uuid), d_bdev->bb_name);
 
@@ -828,20 +841,29 @@ bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 		return;
 	}
 
-	spdk_thread_send_msg(owner_thread(bbs), teardown_bio_bdev, d_bdev);
+	if (bbs != NULL)
+		spdk_thread_send_msg(owner_thread(bbs), teardown_bio_bdev,
+				     d_bdev);
 }
 
-static void
+void
 replace_bio_bdev(struct bio_bdev *old_dev, struct bio_bdev *new_dev)
 {
-	old_dev->bb_removed = new_dev->bb_removed;
+	D_ASSERT(old_dev->bb_blobstore != NULL);
 
-	old_dev->bb_desc = new_dev->bb_desc;
-	new_dev->bb_desc = NULL;
+	new_dev->bb_blobstore = old_dev->bb_blobstore;
+	new_dev->bb_blobstore->bb_dev = new_dev;
+	old_dev->bb_blobstore = NULL;
 
-	D_FREE(old_dev->bb_name);
-	old_dev->bb_name = new_dev->bb_name;
-	new_dev->bb_name = NULL;
+	new_dev->bb_tgt_cnt = old_dev->bb_tgt_cnt;
+	old_dev->bb_tgt_cnt = 0;
+
+	if (old_dev->bb_removed) {
+		d_list_del_init(&old_dev->bb_link);
+		destroy_bio_bdev(old_dev);
+	} else {
+		old_dev->bb_faulty = true;
+	}
 }
 
 /*
@@ -941,6 +963,7 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 		goto error;
 	}
 
+	uuid_copy(d_bdev->bb_uuid, bs_uuid);
 	/* Verify if any duplicated device ID */
 	old_dev = lookup_dev_by_id(bs_uuid);
 	if (old_dev != NULL) {
@@ -957,14 +980,16 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 		if (old_dev->bb_desc != NULL) {
 			D_INFO("Device "DF_UUID"(%s) isn't torndown\n",
 			       DP_UUID(old_dev->bb_uuid), old_dev->bb_name);
+			destroy_bio_bdev(d_bdev);
 		} else {
+			D_ASSERT(old_dev->bb_removed);
 			replace_bio_bdev(old_dev, d_bdev);
+			d_list_add(&d_bdev->bb_link, &nvme_glb.bd_bdevs);
 			/* Inform caller to trigger device setup */
 			D_ASSERT(dev_out != NULL);
-			*dev_out = old_dev;
+			*dev_out = d_bdev;
 		}
 
-		destroy_bio_bdev(d_bdev);
 		return 0;
 	}
 
@@ -995,7 +1020,6 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 	D_DEBUG(DB_MGMT, "Initial target count for "DF_UUID" set at %d\n",
 		DP_UUID(bs_uuid), d_bdev->bb_tgt_cnt);
 
-	uuid_copy(d_bdev->bb_uuid, bs_uuid);
 	d_list_add(&d_bdev->bb_link, &nvme_glb.bd_bdevs);
 
 	return 0;
@@ -1559,7 +1583,7 @@ bio_nvme_ctl(unsigned int cmd, void *arg)
 	return rc;
 }
 
-static void
+void
 setup_bio_bdev(void *arg)
 {
 	struct smd_dev_info	*dev_info;
@@ -1626,6 +1650,9 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 
 		D_INFO("Detected hot plugged device %s\n",
 		       spdk_bdev_get_name(bdev));
+		/* Print a console message */
+		D_PRINT("Detected hot plugged device %s\n",
+			spdk_bdev_get_name(bdev));
 
 		scan_period = 0;
 
@@ -1663,7 +1690,7 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 
 		bbs = d_bdev->bb_blobstore;
 		/* Device not used by DAOS */
-		if (bbs == NULL) {
+		if (bbs == NULL && !d_bdev->bb_replacing) {
 			D_DEBUG(DB_MGMT, "Removed device "DF_UUID"(%s)\n",
 				DP_UUID(d_bdev->bb_uuid), d_bdev->bb_name);
 			d_list_del_init(&d_bdev->bb_link);
@@ -1676,8 +1703,9 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 			continue;
 
 		scan_period = 0;
-		spdk_thread_send_msg(owner_thread(bbs), teardown_bio_bdev,
-				     d_bdev);
+		if (bbs != NULL)
+			spdk_thread_send_msg(owner_thread(bbs),
+					     teardown_bio_bdev, d_bdev);
 	}
 
 	if (scan_period == 0)
@@ -1686,6 +1714,29 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 		scan_period = NVME_MONITOR_PERIOD;
 
 	nvme_glb.bd_scan_age = now;
+}
+
+void
+bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
+{
+	struct bio_bdev         *d_bdev;
+	static uint64_t          led_event_period = NVME_MONITOR_PERIOD;
+
+	/* Scan all devices present in bio_bdev list */
+	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
+		if (d_bdev->bb_led_start_time != 0) {
+			/*
+			 * TODO: Make NVME_LED_EVENT_PERIOD configurable from
+			 * command line
+			 */
+			if (d_bdev->bb_led_start_time + led_event_period >= now)
+				continue;
+
+			if (bio_set_led_state(ctxt, d_bdev->bb_uuid, NULL,
+					      true/*reset*/) != 0)
+				D_ERROR("Failed resetting LED state\n");
+		}
+	}
 }
 
 /*
@@ -1700,7 +1751,6 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 int
 bio_nvme_poll(struct bio_xs_context *ctxt)
 {
-
 	uint64_t now = d_timeus_secdiff(0);
 	int rc;
 
@@ -1729,8 +1779,10 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 	    is_bbs_owner(ctxt, ctxt->bxc_blobstore))
 		bio_bs_monitor(ctxt, now);
 
-	if (is_init_xstream(ctxt))
+	if (is_init_xstream(ctxt)) {
 		scan_bio_bdevs(ctxt, now);
+		bio_led_event_monitor(ctxt, now);
+	}
 
 	return rc;
 }

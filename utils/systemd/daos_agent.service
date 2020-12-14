@@ -5,12 +5,14 @@ After=network-online.target
 
 [Service]
 Type=simple
+User=daos_agent
 RuntimeDirectory=daos_agent
 RuntimeDirectoryMode=0755
 ExecStart=/usr/bin/daos_agent
 StandardOutput=journal
 StandardError=journal
 Restart=always
+LimitCORE=infinity
 
 [Install]
 WantedBy = multi-user.target

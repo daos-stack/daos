@@ -23,15 +23,13 @@
 """
 from __future__ import print_function
 from logging import getLogger
-
 import os
 import re
-import json
 import random
 import string
-from pathlib import Path
-from errno import ENOENT
 from getpass import getuser
+from importlib import import_module
+
 from avocado.utils import process
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
@@ -41,35 +39,70 @@ class DaosTestError(Exception):
     """DAOS API exception class."""
 
 
-def human_to_bytes(h_size):
-    """Convert human readable size values to respective byte value.
+def human_to_bytes(size):
+    """Convert a human readable size value to respective byte value.
 
     Args:
-        h_size (str): human readable size value to be converted.
+        size (str): human readable size value to be converted.
+
+    Raises:
+        DaosTestError: when an invalid human readable size value is provided
 
     Returns:
         int: value translated to bytes.
 
     """
-    units = {"b": 1,
-             "kb": (2**10),
-             "k": (2**10),
-             "mb": (2**20),
-             "m": (2**20),
-             "gb": (2**30),
-             "g": (2**30)}
-    pattern = r"([0-9.]+|[a-zA-Z]+)"
-    val, unit = re.findall(pattern, h_size)
+    conversion_sizes = ("", "k", "m", "g", "t", "p", "e")
+    conversion = {
+        1000: ["{}b".format(item) for item in conversion_sizes],
+        1024: ["{}ib".format(item) for item in conversion_sizes],
+    }
+    match = re.findall(r"([0-9.]+)\s*([a-zA-Z]+|)", size)
+    try:
+        multiplier = 1
+        if match[0][1]:
+            multiplier = -1
+            unit = match[0][1].lower()
+            for item in conversion:
+                if unit in conversion[item]:
+                    multiplier = item ** conversion[item].index(unit)
+                    break
+            if multiplier == -1:
+                raise DaosTestError(
+                    "Invalid unit detected, not in {}: {}".format(
+                        conversion[1000] + conversion[1024][1:], unit))
+        value = float(match[0][0]) * multiplier
+    except IndexError:
+        raise DaosTestError(
+            "Invalid human readable size format: {}".format(size))
+    return int(value) if value.is_integer() else value
 
-    # Check if float or int and then convert
-    val = float(val) if "." in val else int(val)
-    if unit.lower() in units:
-        val = val * units[unit.lower()]
-    else:
-        print("Unit not found! Provide a valid unit i.e: b,k,kb,m,mb,g,gb")
-        val = -1
 
-    return val
+def bytes_to_human(size, digits=2, binary=True):
+    """Convert a byte value to the largest (> 1.0) human readable size.
+
+    Args:
+        size (int): byte size value to be converted.
+        digits (int, optional): number of digits used to round the converted
+            value. Defaults to 2.
+        binary (bool, optional): convert to binary (True) or decimal (False)
+            units. Defaults to True.
+
+    Returns:
+        str: value translated to a human readable size.
+
+    """
+    units = 1024 if binary else 1000
+    conversion = ["B", "KB", "MB", "GB", "TB", "PB", "EB"]
+    index = 0
+    value = [size if isinstance(size, (int, float)) else 0, conversion.pop(0)]
+    while value[0] > units and conversion:
+        index += 1
+        value[0] = float(size) / (units ** index)
+        value[1] = conversion.pop(0)
+        if units == 1024 and len(value[1]) > 1:
+            value[1] = "{}i{}".format(*value[1])
+    return "".join([str(round(value[0], digits)), value[1]])
 
 
 def run_command(command, timeout=60, verbose=True, raise_exception=True,
@@ -143,8 +176,13 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
                 "Verify env values are defined as strings: {}".format(env)])
 
     except process.CmdError as error:
-        # Command failed or possibly timed out
-        msg = "Error occurred running '{}': {}".format(command, error)
+        # Report if the command timed out or failed
+        if error.result.interrupted:
+            msg = "Timeout detected running '{}' with a {}s timeout".format(
+                command, timeout)
+        else:
+            msg = "Error occurred running '{}': {}".format(
+                command, error.result)
 
     if msg is not None:
         print(msg)
@@ -193,7 +231,7 @@ def get_host_data(hosts, command, text, error, timeout=None):
     DATA_ERROR = "[ERROR]"
 
     # Create a list of NodeSets with the same return code
-    data = {code: hosts for code, hosts in task.iter_retcodes()}
+    data = {code: host_list for code, host_list in task.iter_retcodes()}
 
     # Multiple return codes or a single non-zero return code
     # indicate at least one error obtaining the data
@@ -224,8 +262,8 @@ def get_host_data(hosts, command, text, error, timeout=None):
         host_data = {NodeSet.fromlist(hosts): DATA_ERROR}
 
     else:
-        for output, hosts in task.iter_buffers(data[0]):
-            host_data[NodeSet.fromlist(hosts)] = str(output)
+        for output, host_list in task.iter_buffers(data[0]):
+            host_data[NodeSet.fromlist(host_list)] = str(output)
 
     return host_data
 
@@ -238,7 +276,7 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
         command (str): the command to run in parallel
         verbose (bool, optional): display command output. Defaults to True.
         timeout (int, optional): command timeout in seconds. Defaults to None.
-        expect_rc (int, optional): exepcted return code. Defaults to 0.
+        expect_rc (int, optional): expected return code. Defaults to 0.
 
     Returns:
         dict: a dictionary of return codes keys and accompanying NodeSet
@@ -328,32 +366,6 @@ def check_file_exists(hosts, filename, user=None, directory=False):
     return len(missing_file) == 0, missing_file
 
 
-def get_file_path(bin_name, dir_path=""):
-    """
-    Find the binary path name in daos_m and return the list of path.
-
-    args:
-        bin_name: bin file to be.
-        dir_path: Directory location on top of daos_m to find the
-                  bin.
-    return:
-        list: list of the paths for bin_name file
-    Raises:
-        OSError: If failed to find the bin_name file
-    """
-    with open('../../.build_vars.json') as json_file:
-        build_paths = json.load(json_file)
-    basepath = os.path.normpath(build_paths['PREFIX'] + "/../{0}"
-                                .format(dir_path))
-
-    file_path = list(Path(basepath).glob('**/{0}'.format(bin_name)))
-    if not file_path:
-        raise OSError(ENOENT, "File {0} not found inside {1} Directory"
-                      .format(bin_name, basepath))
-
-    return file_path
-
-
 def process_host_list(hoststr):
     """
     Convert a slurm style host string into a list of individual hosts.
@@ -361,7 +373,7 @@ def process_host_list(hoststr):
     e.g. server-[26-27] becomes a list with entries server-26, server-27
 
     This works for every thing that has come up so far but I don't know what
-    all slurmfinds acceptable so it might not parse everything possible.
+    all slurm finds acceptable so it might not parse everything possible.
     """
     # 1st split into cluster name and range of hosts
     split_loc = hoststr.index('-')
@@ -488,7 +500,11 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60):
             "sudo pkill {}".format(pattern),
             "sleep 5",
             "if pgrep --list-full {}".format(pattern),
+            "then pkill --signal ABRT {}".format(pattern),
+            "sleep 1",
+            "if pgrep --list-full {}".format(pattern),
             "then pkill --signal KILL {}".format(pattern),
+            "fi",
             "fi",
             "fi",
             "exit $rc",
@@ -497,12 +513,12 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60):
     return result
 
 
-def get_partition_hosts(partition):
-    """Get a list of hosts in the specified slurm partition.
+def get_partition_hosts(partition, reservation=None):
+    """Get a list of hosts in the specified slurm partition and reservation.
 
     Args:
         partition (str): name of the partition
-
+        reservation (str): name of reservation
     Returns:
         list: list of hosts in the specified partition
 
@@ -529,6 +545,34 @@ def get_partition_hosts(partition):
                 log.warning(
                     "Unable to obtain hosts from the %s slurm partition "
                     "output: %s", partition, output)
+                hosts = []
+            if hosts and reservation is not None:
+                # Get the list of hosts from the reservation information
+                cmd = "scontrol show reservation {}".format(reservation)
+                try:
+                    result = process.run(cmd, timeout=10)
+                except process.CmdError as error:
+                    log.warning(
+                        "Unable to obtain hosts from the %s slurm "
+                        "reservation: %s", reservation, error)
+                    result = None
+                    hosts = []
+                if result:
+                    # Get the list of hosts from the reservation information
+                    output = result.stdout
+                    try:
+                        reservation_hosts = list(
+                            NodeSet(re.findall(r"\sNodes=(\S+)", output)[0]))
+                    except (NodeSetParseError, IndexError):
+                        log.warning(
+                            "Unable to obtain hosts from the %s slurm "
+                            "reservation output: %s", reservation, output)
+                        reservation_hosts = []
+                    is_subset = set(reservation_hosts).issubset(set(hosts))
+                    if reservation_hosts and is_subset:
+                        hosts = reservation_hosts
+                    else:
+                        hosts = []
     return hosts
 
 
@@ -548,50 +592,86 @@ def get_log_file(name):
 
 
 def check_uuid_format(uuid):
-    """Checks a correct UUID format.
+    """Check for a correct UUID format.
 
     Args:
         uuid (str): Pool or Container UUID.
 
     Returns:
         bool: status of valid or invalid uuid
+
     """
     pattern = re.compile("([0-9a-fA-F-]+)")
     return bool(len(uuid) == 36 and pattern.match(uuid))
 
 
+def get_numeric_list(numeric_range):
+    """Convert a string of numeric ranges into an expanded list of integers.
+
+    Example: "0-3,7,9-13,15" -> [0, 1, 2, 3, 7, 9, 10, 11, 12, 13, 15]
+
+    Args:
+        numeric_range (str): the string of numbers and/or ranges of numbers to
+            convert
+
+    Raises:
+        AttributeError: if the syntax of the numeric_range argument is invalid
+
+    Returns:
+        list: an expanded list of integers
+
+    """
+    numeric_list = []
+    try:
+        for item in numeric_range.split(","):
+            if "-" in item:
+                range_args = [int(val) for val in item.split("-")]
+                range_args[-1] += 1
+                numeric_list.extend([int(val) for val in range(*range_args)])
+            else:
+                numeric_list.append(int(item))
+    except (AttributeError, ValueError, TypeError):
+        raise AttributeError(
+            "Invalid 'numeric_range' argument - must be a string containing "
+            "only numbers, dashes (-), and/or commas (,): {}".format(
+                numeric_range))
+
+    return numeric_list
+
+
 def get_remote_file_size(host, file_name):
     """Obtain remote file size.
 
-      Args:
+    Args:
         file_name (str): name of remote file
 
-      Returns:
-        integer value of file size
-    """
+    Returns:
+        int: file size
 
+    """
     cmd = "ssh" " {}@{}" " stat -c%s {}".format(
         getuser(), host, file_name)
     result = run_command(cmd)
 
     return int(result.stdout)
 
+
 def error_count(error, hostlist, log_file):
-    """
-    Function to count any specific ERROR in client log. This function also
-    return other ERROR count from same log file.
+    """Count the number of specific ERRORs found in the log file.
+
+    This function also returns a count of the other ERRORs from same log file.
 
     Args:
         error (str): DAOS error to look for in .log file. for example -1007
         hostlist (list): System list to looks for an error.
         log_file (str): Log file name (server/client log).
 
-    return:
-        daos_error_count (int): requested error count
-        other_error_count (int): Other error count
+    Returns:
+        tuple: a tuple of the count of errors matching the specified error type
+            and the count of other errors (int, int)
 
     """
-    #Get the Client side Error from client_log file.
+    # Get the Client side Error from client_log file.
     output = []
     requested_error_count = 0
     other_error_count = 0
@@ -608,3 +688,55 @@ def error_count(error, hostlist, log_file):
                 other_error_count += 1
 
     return requested_error_count, other_error_count
+
+
+def get_module_class(name, module):
+    """Get the class object in the specified module by its name.
+
+    Args:
+        name (str): class name to obtain
+        module (str): module name in which to find the class name
+
+    Raises:
+        DaosTestError: if the class name is not found in the module
+
+    Returns:
+        object: class matching the name in the specified module
+
+    """
+    try:
+        name_module = import_module(module)
+        name_class = getattr(name_module, name)
+    except (ImportError, AttributeError) as error:
+        raise DaosTestError(
+            "Invalid '{}' class name for {}: {}".format(name, module, error))
+    return name_class
+
+
+def get_job_manager_class(name, job=None, subprocess=False, mpi="openmpi"):
+    """Get the job manager class that matches the specified name.
+
+    Enables assigning a JobManager class from the test's yaml settings.
+
+    Args:
+        name (str): JobManager-based class name
+        job (ExecutableCommand, optional): command object to manage. Defaults
+            to None.
+        subprocess (bool, optional): whether the command is run as a
+            subprocess. Defaults to False.
+        mpi (str, optional): MPI type to use with the Mpirun class only.
+            Defaults to "openmpi".
+
+    Raises:
+        DaosTestError: if an invalid JobManager class name is specified.
+
+    Returns:
+        JobManager: a JobManager class, e.g. Orterun, Mpirun, Srun, etc.
+
+    """
+    manager_class = get_module_class(name, "job_manager_utils")
+    if name == "Mpirun":
+        manager = manager_class(job, subprocess=subprocess, mpitype=mpi)
+    else:
+        manager = manager_class(job, subprocess=subprocess)
+    return manager

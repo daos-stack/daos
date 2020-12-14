@@ -55,21 +55,34 @@ void
 vos_dtx_rsrvd_fini(struct dtx_handle *dth);
 
 /**
+ * Generate DTX entry for the given DTX.
+ *
+ * \param dth		[IN]	The dtx handle
+ * \param persistent	[IN]	Save the DTX entry in persistent storage if set.
+ */
+int
+vos_dtx_pin(struct dtx_handle *dth, bool persistent);
+
+/**
  * Check the specified DTX's status, and related epoch, pool map version
  * information if required.
  *
  * \param coh		[IN]	Container open handle.
- * \param xid		[IN]	Pointer to the DTX identifier.
+ * \param dti		[IN]	Pointer to the DTX identifier.
  * \param epoch		[IN,OUT] Pointer to current epoch, if it is zero and
  *				 if the DTX exists, then the DTX's epoch will
  *				 be saved in it.
  * \param pm_ver	[OUT]	Hold the DTX's pool map version.
+ * \param mbs		[OUT	Pointer to the DTX participants information.]
  * \param for_resent	[IN]	The check is for check resent or not.
  *
  * \return		DTX_ST_PREPARED	means that the DTX has been 'prepared',
  *					so the local modification has been done
  *					on related replica(s).
  *			DTX_ST_COMMITTED means the DTX has been committed.
+ *			DTX_ST_COMMITTABLE means that the DTX is committable,
+ *					   but not real committed.
+ *			DTX_ST_CORRUPTED means the DTX entry is corrupted.
  *			-DER_MISMATCH	means that the DTX has ever been
  *					processed with different epoch.
  *			-DER_AGAIN means DTX re-index is in processing, not sure
@@ -79,7 +92,7 @@ vos_dtx_rsrvd_fini(struct dtx_handle *dth);
  */
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, bool for_resent);
+	      uint32_t *pm_ver, struct dtx_memberships **mbs, bool for_resent);
 
 /**
  * Commit the specified DTXs.
@@ -442,7 +455,7 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	Object ID
  * \param epoch	[IN]	Epoch for the fetch.
- * \param flags	[IN]	Fetch flags
+ * \param flags	[IN]	VOS flags
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
  * \param iods	[IN/OUT]
@@ -628,16 +641,14 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
  * \param oid	[IN]	Object ID
  * \param epoch	[IN]	Epoch for the fetch. Ignored if a DTX handle
  *			is provided.
- * \param cond_flags [IN]
- *			conditional flags
  * \param dkey	[IN]	Distribution key.
  * \param nr	[IN]	Number of I/O descriptors in \a ios.
  * \param iods	[IN/OUT]
  *			Array of I/O descriptors. The returned record
  *			sizes are also restored in this parameter.
- * \param fetch_flags [IN]
- *			VOS fetch flags, VOS_OF_FETCH_SIZE_ONLY or
- *			VOS_OF_FETCH_RECX_LIST.
+ * \param vos_flags [IN]
+ *			VOS fetch flags, VOS cond flags, VOS_OF_FETCH_SIZE_ONLY
+ *			or VOS_OF_FETCH_RECX_LIST.
  * \param shadows [IN]	Optional shadow recx/epoch lists, one for each iod.
  *			data of extents covered by these should not be returned
  *			by fetch function. Only used for EC obj degraded fetch.
@@ -649,7 +660,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
 int
 vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		daos_key_t *dkey, unsigned int nr,
-		daos_iod_t *iods, uint32_t fetch_flags,
+		daos_iod_t *iods, uint32_t vos_flags,
 		struct daos_recx_ep_list *shadows, daos_handle_t *ioh,
 		struct dtx_handle *dth);
 

@@ -755,7 +755,6 @@ aggregate_done:
 		/* Corresponding ADDREF done before crt_req_send() */
 		RPC_DECREF(parent_rpc_priv);
 	}
-	return;
 }
 
 int
@@ -777,6 +776,9 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 
 	opc_info = rpc_priv->crp_opc_info;
 	co_ops = opc_info->coi_co_ops;
+
+	if (rpc_priv->crp_fail_hlc)
+		D_GOTO(forward_done, rc = -DER_HLC_SYNC);
 
 	/* Invoke pre-forward callback first if it is registered */
 	if (co_ops && co_ops->co_pre_forward) {
@@ -897,8 +899,13 @@ forward_done:
 	if (co_info->co_child_num == 0 && co_info->co_root_excluded)
 		crt_corpc_complete(rpc_priv);
 
-	if (co_info->co_root_excluded == 1)
+	if (co_info->co_root_excluded == 1) {
+		if (co_info->co_grp_priv->gp_self == co_info->co_root) {
+			/* don't return error for root */
+			rc = 0;
+		}
 		D_GOTO(out, rc);
+	}
 
 	/* invoke RPC handler on local node */
 	rc = crt_rpc_common_hdlr(rpc_priv);

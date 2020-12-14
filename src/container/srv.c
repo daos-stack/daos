@@ -71,11 +71,6 @@ static struct crt_corpc_ops ds_cont_tgt_destroy_co_ops = {
 	.co_pre_forward = NULL,
 };
 
-static struct crt_corpc_ops ds_cont_tgt_close_co_ops = {
-	.co_aggregate   = ds_cont_tgt_close_aggregator,
-	.co_pre_forward = NULL,
-};
-
 static struct crt_corpc_ops ds_cont_tgt_query_co_ops = {
 	.co_aggregate   = ds_cont_tgt_query_aggregator,
 	.co_pre_forward = NULL,

@@ -80,7 +80,7 @@ def scons():
     Import('denv')
 
     libraries = ['daos_common', 'daos', 'dfs', 'daos_tests', 'gurt', 'cart']
-    libraries += ['uuid', 'dfs', 'cmocka', 'pthread']
+    libraries += ['uuid', 'dfs', 'cmocka', 'pthread', 'isal']
 
     denv.AppendUnique(LIBPATH=["$BUILD_DIR/src/client/dfs"])
 
@@ -95,8 +95,24 @@ def scons():
 
     newenv = configure_cmocka(denv.Clone())
 
-    test = daos_build.program(newenv, 'daos_test', Glob('*.c'), LIBS=libraries)
-    denv.Install('$PREFIX/bin/', test)
+    c_files = Split("""daos_array.c daos_base_tx.c daos_capa.c daos_checksum.c
+                    daos_container.c daos_dedup.c daos_degraded.c
+                    daos_dist_tx.c daos_drain_simple.c daos_epoch.c
+                    daos_epoch_io.c daos_epoch_recovery.c daos_kv.c
+                    daos_md_replication.c daos_mgmt.c daos_nvme_recovery.c
+                    daos_obj_array.c daos_obj.c daos_oid_alloc.c daos_pool.c
+                    daos_rebuild.c daos_rebuild_common.c daos_rebuild_ec.c
+                    daos_rebuild_simple.c daos_test.c daos_test_common.c
+                    daos_verify_consistency.c daos_aggregate_ec.c
+		    daos_degrade_ec.c""")
+    daostest = daos_build.program(newenv, 'daos_test', c_files, LIBS=libraries)
+
+    c_files = Split("""daos_test_common.c dfs_unit_test.c dfs_par_test.c
+                    dfs_test.c""")
+    dfstest = daos_build.program(newenv, 'dfs_test', c_files, LIBS=libraries)
+
+    denv.Install('$PREFIX/bin/', daostest)
+    denv.Install('$PREFIX/bin/', dfstest)
     denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_1'))
     denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_2'))
     denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_3'))

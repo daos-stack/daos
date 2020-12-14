@@ -57,28 +57,61 @@ func fixBrackets(stringRanks string, remove bool) string {
 	return stringRanks
 }
 
+// MustCreateRankSet is like CreateRankSet but will panic on error.
+func MustCreateRankSet(stringRanks string) *RankSet {
+	rs, err := CreateRankSet(stringRanks)
+	if err != nil {
+		panic(err)
+	}
+	return rs
+}
+
 // CreateRankSet creates a new HostList with ranks rather than hostnames from the
 // supplied string representation.
 func CreateRankSet(stringRanks string) (*RankSet, error) {
-	rs := RankSet{}
-
-	if len(stringRanks) > 0 {
-		stringRanks = fixBrackets(stringRanks, false)
-
-		// add enclosing brackets to input so CreateSet works without hostnames
-		hs, err := hostlist.CreateNumericSet(stringRanks)
-		if err != nil {
-			return nil, err
-		}
-		// copying locks ok because original hs is discarded
-		rs.HostSet = *hs
+	rs := &RankSet{
+		HostSet: *hostlist.MustCreateSet(""),
 	}
 
-	return &rs, nil
+	if len(stringRanks) < 1 {
+		return rs, nil
+	}
+
+	stringRanks = fixBrackets(stringRanks, false)
+
+	// add enclosing brackets to input so CreateSet works without hostnames
+	hs, err := hostlist.CreateNumericSet(stringRanks)
+	if err != nil {
+		return nil, err
+	}
+	rs.HostSet.ReplaceSet(hs)
+
+	return rs, nil
+}
+
+// RankSetFromRanks returns a RankSet created from the supplied Rank slice.
+func RankSetFromRanks(ranks RankList) *RankSet {
+	rs := &RankSet{
+		HostSet: *hostlist.MustCreateSet(""),
+	}
+
+	if len(ranks) < 1 {
+		return rs
+	}
+
+	sr := fixBrackets(ranks.String(), false)
+	hs, err := hostlist.CreateNumericSet(sr)
+	if err != nil {
+		// Any error with numeric ranks is going to be something bad.
+		panic(err)
+	}
+	rs.HostSet.ReplaceSet(hs)
+
+	return rs
 }
 
 // Add adds rank to an existing RankSet.
-func (rs *RankSet) Add(rank Rank) error {
+func (rs *RankSet) Add(rank Rank) {
 	rs.RLock()
 	defer rs.RUnlock()
 
@@ -91,12 +124,20 @@ func (rs *RankSet) Add(rank Rank) error {
 
 	newHS, err := hostlist.CreateNumericSet(fixBrackets(stringRanks, false))
 	if err != nil {
-		return err
+		// if we trip this, something is seriously wrong
+		panic(fmt.Sprintf("internal error: %s", err))
 	}
 
-	rs.HostSet = *newHS
+	rs.HostSet.ReplaceSet(newHS)
+}
 
-	return nil
+// ReplaceSet replaces the contents of this set with the supplied RankSet.
+func (rs *RankSet) ReplaceSet(other *RankSet) {
+	if other == nil {
+		return
+	}
+
+	rs.HostSet.ReplaceSet(&other.HostSet)
 }
 
 func (rs *RankSet) String() string {
@@ -106,11 +147,12 @@ func (rs *RankSet) String() string {
 // Ranks returns a slice of Rank from a RankSet.
 func (rs *RankSet) Ranks() []Rank {
 	var ranks []uint32
-	// error can be safely ignored because DerangedString format is
-	// deterministic
-	common.ParseNumberList(
+	if err := common.ParseNumberList(
 		fixBrackets(rs.HostSet.DerangedString(), true),
-		&ranks)
+		&ranks); err != nil {
+		// if we trip this, something is seriously wrong
+		panic(fmt.Sprintf("internal error: %s", err))
+	}
 
 	return RanksFromUint32(ranks)
 }

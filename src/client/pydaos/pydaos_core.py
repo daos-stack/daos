@@ -112,7 +112,7 @@ class Cont(object):
     __str__
         print pool and container UUIDs
     """
-    def __init__(self, puuid=None, cuuid=None, path=None, svc='0'):
+    def __init__(self, puuid=None, cuuid=None, path=None):
         self._dc = DaosClient()
         self.coh = None
         if path is None and (puuid is None or cuuid is None):
@@ -121,21 +121,22 @@ class Cont(object):
         if path != None:
             self.puuid = None
             self.cuuid = None
-            (ret, poh, coh) = pydaos_shim.cont_open_by_path(DAOS_MAGIC, path,
-                                                            svc, 0)
+            (ret, poh, coh) = pydaos_shim.cont_open_by_path(DAOS_MAGIC, path, 0)
         else:
             self.puuid = uuid.UUID(puuid)
             self.cuuid = uuid.UUID(cuuid)
             (ret, poh, coh) = pydaos_shim.cont_open(DAOS_MAGIC, str(puuid),
-                                                    str(cuuid), svc, 0)
+                                                    str(cuuid), 0)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to access container", ret)
         self.poh = poh
         self.coh = coh
+        self._root_kv = None
 
     def __del__(self):
         if not self.coh:
             return
+        self._root_kv = None
         ret = pydaos_shim.cont_close(DAOS_MAGIC, self.poh, self.coh)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to close container", ret)
@@ -159,11 +160,15 @@ class Cont(object):
 
     def rootkv(self, cid=ObjClassID.OC_SX):
         """Open the container root key-value store."""
+
+        if self._root_kv:
+            return self._root_kv
         (ret, hi, lo) = pydaos_shim.obj_idroot(DAOS_MAGIC, cid.value)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to generate root object identifier", ret)
         oid = ObjID(hi, lo)
-        return KVObj(self.coh, oid, self)
+        self._root_kv = KVObj(self.coh, oid, self)
+        return self._root_kv
 
     def get_kv_by_name(self, name, root=None, create=False):
         """Return KV by name.
@@ -198,7 +203,7 @@ class _Obj(object):
     def __init__(self, coh, oid, cont):
         self._dc = DaosClient()
         self.oid = oid
-        # Set self.oh to Null here so it's defined in __dell__ if there's
+        # Set self.oh to None here so it's defined in __del__ if there's
         # a problem with the kv_open() call.
         self.oh = None
         # keep container around until all objects are gone

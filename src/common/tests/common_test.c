@@ -111,6 +111,7 @@ int main(int argc, char *argv[])
 	}
 	misc_tests_run();
 	daos_checksum_tests_run();
+	daos_compress_tests_run();
 
 	return 0;
 }

@@ -1,0 +1,13 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+
+defaultENV:
+  #!filter-only : /run/tests/no_pmix_multi_ctx
+  CRT_PHY_ADDR_STR: "ofi+sockets"
+  OFI_INTERFACE: "eth0"
+  CRT_CTX_NUM: "8"
+  CRT_CTX_SHARE_ADDR: "0"
+tests: !mux
+  no_pmix_multi_ctx:
+    name: no_pmix_multi_ctx
+    tst_bin: ../tests/no_pmix_multi_ctx

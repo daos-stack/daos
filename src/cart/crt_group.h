@@ -92,9 +92,6 @@ struct crt_grp_priv {
 	 */
 	struct crt_swim_membs	 gp_membs_swim;
 
-	/* CaRT context only for sending sub-grp create/destroy RPCs */
-	crt_context_t		 gp_ctx;
-
 	/* size (number of membs) of group */
 	uint32_t		 gp_size;
 	/*
@@ -261,7 +258,7 @@ int crt_grp_detach(crt_group_t *attached_grp);
 void crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 		      d_rank_t rank, uint32_t tag, crt_phy_addr_t *base_addr,
 		      hg_addr_t *hg_addr);
-int crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
+int crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv,
 			  d_rank_t rank, uint32_t tag, const char *uri);
 int crt_grp_lc_addr_insert(struct crt_grp_priv *grp_priv,
 			   struct crt_context *ctx_idx,
@@ -405,9 +402,10 @@ crt_rank_present(crt_group_t *grp, d_rank_t rank)
 
 bool
 crt_grp_id_identical(crt_group_id_t grp_id_1, crt_group_id_t grp_id_2);
-int crt_grp_lc_uri_insert_all(crt_group_t *grp, d_rank_t rank, int tag,
-			const char *uri);
 int crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank);
 int crt_grp_psr_reload(struct crt_grp_priv *grp_priv);
+
+int
+grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank);
 
 #endif /* __CRT_GROUP_H__ */

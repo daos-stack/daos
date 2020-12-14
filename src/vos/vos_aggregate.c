@@ -488,7 +488,7 @@ prepare_segments(struct agg_merge_window *mw)
 	D_ASSERT(mw->mw_phy_cnt > 0);
 	seg_max = MAX((mw->mw_lgc_cnt + mw->mw_phy_cnt), 200);
 	if (io->ic_seg_max < seg_max) {
-		D_REALLOC(lgc_seg, io->ic_segs, seg_max * sizeof(*lgc_seg));
+		D_REALLOC_ARRAY(lgc_seg, io->ic_segs, seg_max);
 		if (lgc_seg == NULL)
 			return -DER_NOMEM;
 
@@ -537,11 +537,13 @@ prepare_segments(struct agg_merge_window *mw)
 
 		lgc_seg->ls_idx_end = i;
 		ent_in->ei_rect.rc_ex.ex_hi = ext.ex_hi;
-		/* Merge to highest epoch */
-		if (ent_in->ei_rect.rc_epc < phy_ent->pe_rect.rc_epc)
+		/* Merge to lowest epoch */
+		if (ent_in->ei_rect.rc_epc == 0 ||
+		    ent_in->ei_rect.rc_epc > phy_ent->pe_rect.rc_epc)
 			ent_in->ei_rect.rc_epc = phy_ent->pe_rect.rc_epc;
-		/* Merge to highest pool map version */
-		if (ent_in->ei_ver < phy_ent->pe_ver)
+		/* Merge to lowest pool map version */
+		if (ent_in->ei_ver == 0 ||
+		    ent_in->ei_ver > phy_ent->pe_ver)
 			ent_in->ei_ver = phy_ent->pe_ver;
 		ent_in->ei_rect.rc_minor_epc = VOS_MINOR_EPC_MAX;
 	}
@@ -702,8 +704,7 @@ csum_append_added_segs(struct bio_sglist *bsgl, unsigned int added_segs)
 	void		*buffer;
 	unsigned int	 i, add_idx = bsgl->bs_nr;
 
-	D_REALLOC(buffer, bsgl->bs_iovs,
-		  (bsgl->bs_nr + added_segs) * sizeof(struct bio_iov));
+	D_REALLOC_ARRAY(buffer, bsgl->bs_iovs, bsgl->bs_nr + added_segs);
 	if (buffer == NULL)
 		return -DER_NOMEM;
 	bsgl->bs_iovs = buffer;
@@ -860,12 +861,10 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		void *buffer;
 
 		/* An array of recalc structs (one per output segment). */
-		D_REALLOC(buffer, io->ic_csum_recalcs,
-			  seg_count * sizeof(struct csum_recalc));
-		if (buffer == NULL) {
-			rc = -DER_NOMEM;
-			goto out;
-		}
+		D_REALLOC_ARRAY(buffer, io->ic_csum_recalcs, seg_count);
+		if (buffer == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
 		io->ic_csum_recalcs = buffer;
 		io->ic_csum_recalc_cnt = seg_count;
 	}
@@ -1425,8 +1424,7 @@ enqueue_lgc_ent(struct agg_merge_window *mw, struct evt_extent *lgc_ext,
 	if (cnt == max) {
 		unsigned int new_max = max ? max * 2 : 10;
 
-		D_REALLOC(lgc_ent, mw->mw_lgc_ents,
-			  new_max * sizeof(*lgc_ent));
+		D_REALLOC_ARRAY(lgc_ent, mw->mw_lgc_ents, new_max);
 		if (lgc_ent == NULL)
 			return -DER_NOMEM;
 

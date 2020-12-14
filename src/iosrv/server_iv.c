@@ -242,7 +242,7 @@ iv_entry_free(struct ds_iv_entry *entry)
 		    class->iv_class_ops->ivc_ent_destroy)
 			class->iv_class_ops->ivc_ent_destroy(&entry->iv_value);
 		else
-			daos_sgl_fini(&entry->iv_value, true);
+			d_sgl_fini(&entry->iv_value, true);
 	}
 
 	D_FREE(entry);
@@ -592,8 +592,7 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 	D_ASSERT(entry != NULL);
 
 	/* Let's deal with iv_value first */
-	if (iv_value != NULL)
-		daos_sgl_fini((d_sg_list_t *)iv_value, false);
+	d_sgl_fini(iv_value, false);
 
 	rc = entry->iv_class->iv_class_ops->ivc_ent_put(entry,
 							priv_entry->priv);
@@ -697,6 +696,7 @@ iv_ns_create_internal(unsigned int ns_id, uuid_t pool_uuid,
 		      d_rank_t master_rank, struct ds_iv_ns **pns)
 {
 	struct ds_iv_ns	*ns;
+	int rc;
 
 	ns = ds_iv_ns_lookup(ns_id);
 	if (ns)
@@ -710,7 +710,11 @@ iv_ns_create_internal(unsigned int ns_id, uuid_t pool_uuid,
 	D_INIT_LIST_HEAD(&ns->iv_entry_list);
 	ns->iv_ns_id = ns_id;
 	ns->iv_master_rank = master_rank;
-	ABT_mutex_create(&ns->iv_lock);
+	rc = ABT_mutex_create(&ns->iv_lock);
+	if (rc != ABT_SUCCESS) {
+		D_FREE_PTR(ns);
+		return dss_abterr2der(rc);
+	}
 	d_list_add(&ns->iv_ns_link, &ds_iv_ns_list);
 	*pns = ns;
 
@@ -778,11 +782,8 @@ void
 ds_iv_init()
 {
 	D_INIT_LIST_HEAD(&ds_iv_ns_list);
-	/* Let's set the topo to 32 to avoid cart IV failover,
-	 * which is not supported yet. XXX
-	 */
-	ds_iv_ns_tree_topo = crt_tree_topo(CRT_TREE_KNOMIAL, 32);
 	D_INIT_LIST_HEAD(&ds_iv_class_list);
+	ds_iv_ns_tree_topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
 }
 
 void
@@ -831,11 +832,7 @@ ds_iv_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	struct iv_cb_info	*cb_info = cb_arg;
 	int			ret = 0;
 
-	/* FIXME: Temporarily ignore certain IV errors. See DAOS-3545. */
-	if (rc == -DER_UNREACH || rc == -DER_TIMEDOUT)
-		cb_info->result = 0;
-	else
-		cb_info->result = rc;
+	cb_info->result = rc;
 
 	if (cb_info->opc == IV_FETCH && cb_info->value && rc == 0) {
 		struct ds_iv_entry	*entry;
@@ -957,7 +954,7 @@ sync_comp_cb(void *arg, int rc)
 		}
 	}
 
-	daos_sgl_fini(&cb_arg->iv_value, true);
+	d_sgl_fini(&cb_arg->iv_value, true);
 	D_FREE(cb_arg);
 	return rc;
 }

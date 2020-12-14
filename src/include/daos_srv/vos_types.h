@@ -38,7 +38,12 @@ struct dtx_rsrvd_uint {
 };
 
 enum dtx_cos_flags {
-	DCF_SHARED	= (1 << 0),
+	DCF_SHARED		= (1 << 0),
+	/* Some DTX (such as for the distributed transaction across multiple
+	 * RDGs, or for EC object modification) need to be committed via DTX
+	 * RPC instead of piggyback via other dispatched update/punch RPC.
+	 */
+	DCF_EXP_CMT		= (1 << 1),
 };
 
 struct dtx_cos_key {
@@ -58,6 +63,8 @@ enum dtx_entry_flags {
 	 * object modification via standalone update/punch.
 	 */
 	DTE_BLOCK		= (1 << 2),
+	/* The DTX is corrupted, some participant RDG(s) may be lost. */
+	DTE_CORRUPTED		= (1 << 3),
 };
 
 struct dtx_entry {
@@ -220,8 +227,8 @@ enum {
 	VOS_OF_COND_AKEY_UPDATE		= DAOS_COND_AKEY_UPDATE,
 	/** Conditional Op: Fetch akey if it exists, fail otherwise */
 	VOS_OF_COND_AKEY_FETCH		= DAOS_COND_AKEY_FETCH,
-	/** replay punch (underwrite) */
-	VOS_OF_REPLAY_PC		= (1 << 7),
+	/** Indicates akey conditions are specified in iod_flags */
+	VOS_OF_COND_PER_AKEY		= DAOS_COND_PER_AKEY,
 	/* critical update - skip checks on SCM system/held space */
 	VOS_OF_CRIT			= (1 << 8),
 	/** Instead of update or punch of extents, remove all extents
@@ -233,9 +240,13 @@ enum {
 	/* query recx list */
 	VOS_OF_FETCH_RECX_LIST		= (1 << 11),
 	/* only set read TS */
-	VOS_OF_FETCH_SET_TS_ONLY		= (1 << 12),
+	VOS_OF_FETCH_SET_TS_ONLY	= (1 << 12),
 	/* check the target (obj/dkey/akey) existence */
 	VOS_OF_FETCH_CHECK_EXISTENCE	= (1 << 13),
+	/** Set when propagating a punch that results in empty subtree */
+	VOS_OF_PUNCH_PROPAGATE		= (1 << 14),
+	/** replay punch (underwrite) */
+	VOS_OF_REPLAY_PC		= (1 << 15),
 };
 
 /** Mask for any conditionals passed to to the fetch */
@@ -259,6 +270,7 @@ enum {
 	(VOS_OF_COND_DKEY_UPDATE | VOS_OF_COND_AKEY_UPDATE)
 
 D_CASSERT((VOS_OF_REPLAY_PC & DAOS_COND_MASK) == 0);
+D_CASSERT((VOS_OF_PUNCH_PROPAGATE & DAOS_COND_MASK) == 0);
 
 /** vos definitions that match daos_obj_key_query flags */
 enum {
@@ -272,8 +284,14 @@ enum {
 	VOS_GET_AKEY		= DAOS_GET_AKEY,
 	/** retrieve the idx of array value */
 	VOS_GET_RECX		= DAOS_GET_RECX,
+	/**
+	 * Internal flag to indicate retrieve the idx of EC array value,
+	 * in that case need to retrieve both normal space and parity space
+	 * (parity space with DAOS_EC_PARITY_BIT in the recx index).
+	 */
+	VOS_GET_RECX_EC		= (1 << 5),
 	/** Internal flag to indicate timestamps are used */
-	VOS_USE_TIMESTAMPS	= (1 << 5),
+	VOS_USE_TIMESTAMPS	= (1 << 6),
 };
 
 D_CASSERT((VOS_USE_TIMESTAMPS & (VOS_GET_MAX | VOS_GET_MIN | VOS_GET_DKEY |
@@ -295,10 +313,12 @@ enum {
 	VOS_IT_RECX_REVERSE	= (1 << 3),
 	/** The iterator is for purge operation */
 	VOS_IT_FOR_PURGE	= (1 << 4),
-	/** The iterator is for rebuild scan */
-	VOS_IT_FOR_REBUILD	= (1 << 5),
+	/** The iterator is for data migration scan */
+	VOS_IT_FOR_MIGRATION	= (1 << 5),
 	/** Iterate only show punched records in interval */
 	VOS_IT_PUNCHED		= (1 << 6),
+	/** Mask for all flags */
+	VOS_IT_MASK		= (1 << 7) - 1,
 };
 
 /**
@@ -319,6 +339,8 @@ typedef struct {
 	daos_key_t		ip_dkey;
 	/** attribute key (VOS_ITER_DKEY/RECX/SINGLE, standalone only) */
 	daos_key_t		ip_akey;
+	/** address range (RECX); ip_recx.rx_nr == 0 means entire range */
+	daos_recx_t             ip_recx;
 	/** epoch validity range for the iterator (standalone only) */
 	daos_epoch_range_t	ip_epr;
 	/** epoch logic expression for the iterator. */
@@ -387,8 +409,10 @@ typedef struct {
 			daos_unit_oid_t		ie_dtx_oid;
 			/** The pool map version when handling DTX on server. */
 			uint32_t		ie_dtx_ver;
-			/* The dkey hash for DTX iteration. */
+			/* The DTX entry flags, see dtx_entry_flags. */
 			uint16_t		ie_dtx_flags;
+			/* DTX mbs flags, see dtx_mbs_flags. */
+			uint16_t		ie_dtx_mbs_flags;
 			/** DTX tgt count. */
 			uint32_t		ie_dtx_tgt_cnt;
 			/** DTX modified group count. */

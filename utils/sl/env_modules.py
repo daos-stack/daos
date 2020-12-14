@@ -24,6 +24,7 @@ import os
 import sys
 import subprocess
 import errno
+import distro
 from subprocess import PIPE, Popen
 from distutils.spawn import find_executable
 
@@ -163,12 +164,22 @@ class _env_module(): # pylint: disable=invalid-name
 
 def load_mpi(mpi):
     """global function to load MPI into os.environ"""
+    # On Ubuntu, MPI stacks use alternatives and need root to change their
+    # pointer, so just verify that the desired MPI is loaded
+    if distro.id() == "ubuntu":
+        try:
+            proc = Popen(['update-alternatives', '--query', 'mpi'], stdout=PIPE)
+        except OSError as error:
+            print("Error running update-alternatives")
+            if error.errno == errno.ENOENT:
+                return False
+        for line in proc.stdout.readlines():
+            if line.startswith(b"Value:"):
+                if line[line.rfind(b".")+1:-1].decode() == mpi:
+                    return True
+                return False
+        return False
+
     if _env_module.env_module_init is None:
         _env_module.env_module_init = _env_module()
     return _env_module.env_module_init.load_mpi(mpi)
-
-def list_mpis(mpi):
-    """global function to return list of MPIs"""
-    if _env_module.env_module_init is None:
-        _env_module.env_module_init = _env_module()
-    return _env_module._mpi_map[mpi]

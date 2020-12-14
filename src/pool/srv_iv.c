@@ -67,7 +67,7 @@ pool_iv_value_alloc_internal(struct ds_iv_key *key, d_sg_list_t *sgl)
 	int		rc;
 
 	D_ASSERT(buf_size > 0);
-	rc = daos_sgl_init(sgl, 1);
+	rc = d_sgl_init(sgl, 1);
 	if (rc)
 		return rc;
 
@@ -85,7 +85,7 @@ pool_iv_value_alloc_internal(struct ds_iv_key *key, d_sg_list_t *sgl)
 	}
 free:
 	if (rc)
-		daos_sgl_fini(sgl, true);
+		d_sgl_fini(sgl, true);
 
 	return rc;
 }
@@ -415,7 +415,7 @@ pool_iv_ent_put(struct ds_iv_entry *entry, void **priv)
 static int
 pool_iv_ent_destroy(d_sg_list_t *sgl)
 {
-	daos_sgl_fini(sgl, true);
+	d_sgl_fini(sgl, true);
 	return 0;
 }
 
@@ -552,15 +552,11 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		return -DER_NONEXIST;
 
 	rc = crt_group_rank(pool->sp_group, &rank);
-	if (rc) {
-		ds_pool_put(pool);
-		return rc;
-	}
+	if (rc)
+		D_GOTO(out_put, rc);
 
-	if (rank != entry->ns->iv_master_rank) {
-		ds_pool_put(pool);
-		return -DER_IVCB_FORWARD;
-	}
+	if (rank != entry->ns->iv_master_rank)
+		D_GOTO(out_put, rc = -DER_IVCB_FORWARD);
 
 	D_DEBUG(DB_TRACE, DF_UUID "rank %d master rank %d\n",
 		DP_UUID(entry->ns->iv_pool_uuid), rank,
@@ -569,7 +565,7 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	/* Update pool map version or pool map */
 	if (entry->iv_class->iv_class_id == IV_POOL_MAP) {
 		int dst_len = entry->iv_value.sg_iovs[0].iov_buf_len -
-			      sizeof(struct pool_iv_entry) +
+			      sizeof(struct pool_iv_map) +
 			      sizeof(struct pool_buf);
 		int src_len = pool_buf_size(
 			src_iv->piv_map.piv_pool_buf.pb_nr);
@@ -579,23 +575,24 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			&src_iv->piv_map.piv_pool_buf : NULL,
 			src_iv->piv_map.piv_pool_map_ver);
 		if (rc)
-			return rc;
+			D_GOTO(out_put, rc);
 
 		/* realloc the pool iv buffer if the size is not enough */
 		if (dst_len < src_len) {
-			int new_alloc_size = src_len + sizeof(*src_iv) -
+			int new_alloc_size = src_len +
+					     sizeof(struct pool_iv_map) -
 					     sizeof(struct pool_buf);
 
 			rc = daos_sgl_buf_extend(&entry->iv_value, 0,
 						 new_alloc_size);
 			if (rc)
-				return rc;
+				D_GOTO(out_put, rc);
 		}
-
-	} else if (entry->iv_class->iv_class_id == IV_POOL_PROP)
+	} else if (entry->iv_class->iv_class_id == IV_POOL_PROP) {
 		rc = ds_pool_tgt_prop_update(pool, &src_iv->piv_prop);
-
-	ds_pool_put(pool);
+		if (rc)
+			D_GOTO(out_put, rc);
+	}
 
 retry:
 	rc = pool_iv_ent_copy(key, &entry->iv_value, src);
@@ -605,11 +602,16 @@ retry:
 		rc = pool_iv_conns_resize(&entry->iv_value,
 					  pik->pik_entry_size);
 		if (rc == 0) {
+			D_DEBUG(DB_MD, DF_UUID" retry by %u\n",
+				DP_UUID(entry->ns->iv_pool_uuid),
+				pik->pik_entry_size);
 			retried = true;
 			goto retry;
 		}
 	}
 
+out_put:
+	ds_pool_put(pool);
 	return rc;
 }
 
@@ -961,6 +963,9 @@ ds_pool_iv_conn_hdl_fetch(struct ds_pool *pool, uuid_t key_uuid,
 	struct pool_iv_key	*pool_key;
 	int			rc;
 
+	if (conn_iov == NULL)
+		return -DER_INVAL;
+
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = conn_iov;
@@ -1167,6 +1172,9 @@ ds_pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop)
 
 	/* Serialize the prop */
 	prop_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_LIST);
+	if (prop_entry == NULL)
+		D_GOTO(out, rc = -DER_NONEXIST);
+
 	svc_list = prop_entry->dpe_val_ptr;
 
 	size = pool_iv_prop_ent_size(DAOS_ACL_MAX_ACE_LEN, svc_list->rl_nr);
@@ -1182,6 +1190,63 @@ ds_pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop)
 	if (rc)
 		D_ERROR("pool_iv_update failed "DF_RC"\n", DP_RC(rc));
 out:
+	return rc;
+}
+
+/* parameter for fetching service rank list */
+struct pool_svc_iv_args {
+	struct ds_pool	*ia_pool;
+	d_rank_list_t	*ia_svc;
+};
+
+static int
+cont_pool_svc_ult(void *args)
+{
+	struct pool_svc_iv_args	*iv_args = args;
+	struct daos_prop_entry	*entry;
+	daos_prop_t		 prop;
+	int			 rc;
+
+	memset(&prop, 0, sizeof(prop));
+	rc = ds_pool_iv_prop_fetch(iv_args->ia_pool, &prop);
+	if (rc)
+		return rc;
+
+	entry = daos_prop_entry_get(&prop, DAOS_PROP_PO_SVC_LIST);
+	D_ASSERT(entry != NULL);
+
+	rc = d_rank_list_dup(&iv_args->ia_svc, entry->dpe_val_ptr);
+	if (rc)
+		D_GOTO(out, rc);
+out:
+	daos_prop_fini(&prop);
+	return rc;
+}
+
+int
+ds_pool_iv_svc_fetch(struct ds_pool *pool, d_rank_list_t **svc_p)
+{
+	struct pool_svc_iv_args	 ia;
+	int			 rc;
+
+	ia.ia_pool = pool;
+	ia.ia_svc  = NULL;
+
+	if (dss_get_module_info()->dmi_xs_id == 0) {
+		/* OK to fetch it from xstream-0 */
+		rc = cont_pool_svc_ult(&ia);
+		if (rc)
+			D_GOTO(failed, rc);
+	} else {
+		/* create a ULT and schedule it on xstream-0 */
+		rc = dss_ult_execute(cont_pool_svc_ult, &ia, NULL, NULL,
+				     DSS_ULT_POOL_SRV, 0, 0);
+		if (rc)
+			D_GOTO(failed, rc);
+	}
+	*svc_p = ia.ia_svc;
+	return 0;
+failed:
 	return rc;
 }
 

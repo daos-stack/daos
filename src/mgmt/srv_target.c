@@ -800,7 +800,12 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	rc = d_hash_rec_insert(&pooltgts->dpt_creates_ht, ptrec->dptr_uuid,
 			       sizeof(uuid_t), &ptrec->dptr_hlink, true);
 	ABT_mutex_unlock(pooltgts->dpt_mutex);
-	if (rc) {
+	if (rc == -DER_EXIST) {
+		D_ERROR(DF_UUID": already creating or cleaning up\n",
+			DP_UUID(tc_in->tc_pool_uuid));
+		rc = -DER_AGAIN;
+		goto out_rec;
+	} else if (rc) {
 		D_ERROR(DF_UUID": failed insert dpt_creates_ht: "DF_RC"\n",
 			DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));
 		goto out_rec;
@@ -1010,9 +1015,12 @@ ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc)
 	D_ASSERT(in != NULL);
 
 	rc = dss_parameters_set(in->tps_key_id, in->tps_value);
-	if (rc == 0 && in->tps_key_id == DMG_KEY_FAIL_LOC)
+	if (rc == 0 && in->tps_key_id == DMG_KEY_FAIL_LOC) {
+		D_DEBUG(DB_MGMT, "Set param DMG_KEY_FAIL_VALUE=%"PRIu64"\n",
+			in->tps_value_extra);
 		rc = dss_parameters_set(DMG_KEY_FAIL_VALUE,
 					in->tps_value_extra);
+	}
 	if (rc)
 		D_ERROR("Set parameter failed key_id %d: rc %d\n",
 			 in->tps_key_id, rc);

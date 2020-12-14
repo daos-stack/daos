@@ -87,7 +87,9 @@ class ZeroConfigTest(TestWithServers):
             bool: status of whether correct device was used.
 
         """
-        cmd = "head -50 {}".format(log_file)
+	# anticipate log switch
+        cmd = "if [ -f {0}.old ]; then head -50 {0}.old; else head -50 {0};" \
+              "fi".format(log_file)
         err = "Error getting log data."
         pattern = r"Using\s+client\s+provided\s+OFI_INTERFACE:\s+{}".format(dev)
 
@@ -143,6 +145,7 @@ class ZeroConfigTest(TestWithServers):
         # Add FI_LOG_LEVEL to get more info on device issues
         racer_env = daos_racer.get_environment(self.server_managers[0], logf)
         racer_env["FI_LOG_LEVEL"] = "info"
+        racer_env["D_LOG_MASK"] = "INFO,object=ERR,placement=ERR"
         daos_racer.set_environment(racer_env)
 
         # Run client

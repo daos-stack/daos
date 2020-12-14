@@ -1,4 +1,4 @@
-/**
+/*
  * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,10 +21,12 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
+ * \file
+ *
  * rdb: RPCs
  */
 
-#define D_LOGFAC	DD_FAC(rdb)
+#define D_LOGFAC DD_FAC(rdb)
 
 #include <daos_srv/rdb.h>
 
@@ -33,38 +35,17 @@
 #include "rdb_internal.h"
 
 static int
-crt_proc_msg_requestvote_t(crt_proc_t proc, msg_requestvote_t *p)
-{
-	int rc;
-
-	rc = crt_proc_int32_t(proc, &p->term);
-	if (rc != 0)
-		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &p->candidate_id);
-	if (rc != 0)
-		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &p->last_log_idx);
-	if (rc != 0)
-		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &p->last_log_term);
-	if (rc != 0)
-		return -DER_HG;
-
-	return 0;
-}
-
-static int
 crt_proc_msg_requestvote_response_t(crt_proc_t proc,
 				    msg_requestvote_response_t *p)
 {
 	int rc;
 
-	rc = crt_proc_int32_t(proc, &p->term);
-	if (rc != 0)
-		return -DER_HG;
+	rc = crt_proc_int64_t(proc, &p->term);
+	if (unlikely(rc))
+		return rc;
 	rc = crt_proc_int32_t(proc, &p->vote_granted);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	return 0;
 }
@@ -76,39 +57,41 @@ crt_proc_msg_entry_t(crt_proc_t proc, msg_entry_t *p)
 	int		rc;
 
 	rc = crt_proc_get_op(proc, &proc_op);
-	if (rc != 0)
-		return -DER_HG;
-	rc = crt_proc_uint32_t(proc, &p->term);
-	if (rc != 0)
-		return -DER_HG;
-	rc = crt_proc_uint32_t(proc, &p->id);
-	if (rc != 0)
-		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &p->type);
-	if (rc != 0)
-		return -DER_HG;
-	rc = crt_proc_uint32_t(proc, &p->data.len);
-	if (rc != 0)
-		return -DER_HG;
-	if (proc_op == CRT_PROC_DECODE) {
-		if (p->data.len > 0) {
-			D_ALLOC(p->data.buf, p->data.len);
-			if (p->data.buf == NULL)
-				return -DER_NOMEM;
-		} else {
-			p->data.buf = NULL;
-		}
-	}
-	if (p->data.len > 0) {
-		rc = crt_proc_memcpy(proc, p->data.buf, p->data.len);
-		if (rc != 0) {
-			if (proc_op == CRT_PROC_DECODE)
-				D_FREE(p->data.buf);
-			return -DER_HG;
-		}
-	}
-	if (proc_op == CRT_PROC_FREE && p->data.buf != NULL)
+	if (unlikely(rc))
+		return rc;
+
+	if (proc_op == CRT_PROC_FREE) {
 		D_FREE(p->data.buf);
+		return 0;
+	}
+
+	rc = crt_proc_int64_t(proc, &p->term);
+	if (unlikely(rc))
+		return rc;
+	rc = crt_proc_int32_t(proc, &p->id);
+	if (unlikely(rc))
+		return rc;
+	rc = crt_proc_int32_t(proc, &p->type);
+	if (unlikely(rc))
+		return rc;
+	rc = crt_proc_uint32_t(proc, &p->data.len);
+	if (unlikely(rc))
+		return rc;
+
+	if (p->data.len == 0)
+		return 0;
+
+	if (proc_op == CRT_PROC_DECODE) {
+		D_ALLOC(p->data.buf, p->data.len);
+		if (p->data.buf == NULL)
+			return -DER_NOMEM;
+	}
+	rc = crt_proc_memcpy(proc, p->data.buf, p->data.len);
+	if (unlikely(rc)) {
+		if (proc_op == CRT_PROC_DECODE)
+			D_FREE(p->data.buf);
+		return rc;
+	}
 
 	return 0;
 }
@@ -121,64 +104,43 @@ crt_proc_msg_appendentries_t(crt_proc_t proc, msg_appendentries_t *p)
 	int		rc;
 
 	rc = crt_proc_get_op(proc, &proc_op);
-	if (rc != 0)
-		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &p->term);
-	if (rc != 0)
-		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &p->prev_log_idx);
-	if (rc != 0)
-		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &p->prev_log_term);
-	if (rc != 0)
-		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &p->leader_commit);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_int64_t(proc, &p->term);
+	if (unlikely(rc))
+		return rc;
+	rc = crt_proc_int64_t(proc, &p->prev_log_idx);
+	if (unlikely(rc))
+		return rc;
+	rc = crt_proc_int64_t(proc, &p->prev_log_term);
+	if (unlikely(rc))
+		return rc;
+	rc = crt_proc_int64_t(proc, &p->leader_commit);
+	if (unlikely(rc))
+		return rc;
 	rc = crt_proc_int32_t(proc, &p->n_entries);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
+
+	if (p->n_entries == 0 && proc_op != CRT_PROC_FREE)
+		return 0;
+
 	if (proc_op == CRT_PROC_DECODE) {
-		if (p->n_entries > 0) {
-			D_ALLOC_ARRAY(p->entries, p->n_entries);
-			if (p->entries == NULL)
-				return -DER_NOMEM;
-		} else {
-			p->entries = NULL;
-		}
+		D_ALLOC_ARRAY(p->entries, p->n_entries);
+		if (p->entries == NULL)
+			return -DER_NOMEM;
 	}
 	for (i = 0; i < p->n_entries; i++) {
 		rc = crt_proc_msg_entry_t(proc, &p->entries[i]);
-		if (rc != 0) {
+		if (unlikely(rc)) {
 			if (proc_op == CRT_PROC_DECODE)
 				D_FREE(p->entries);
-			return -DER_HG;
+			return rc;
 		}
 	}
-	if (proc_op == CRT_PROC_FREE && p->entries != NULL)
+	if (proc_op == CRT_PROC_FREE)
 		D_FREE(p->entries);
-
-	return 0;
-}
-
-static int
-crt_proc_msg_appendentries_response_t(crt_proc_t proc,
-				      msg_appendentries_response_t *p)
-{
-	int rc;
-
-	rc = crt_proc_int32_t(proc, &p->term);
-	if (rc != 0)
-		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &p->success);
-	if (rc != 0)
-		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &p->current_idx);
-	if (rc != 0)
-		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &p->first_idx);
-	if (rc != 0)
-		return -DER_HG;
 
 	return 0;
 }
@@ -188,15 +150,15 @@ crt_proc_msg_installsnapshot_t(crt_proc_t proc, msg_installsnapshot_t *p)
 {
 	int rc;
 
-	rc = crt_proc_int32_t(proc, &p->term);
-	if (rc != 0)
-		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &p->last_idx);
-	if (rc != 0)
-		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &p->last_term);
-	if (rc != 0)
-		return -DER_HG;
+	rc = crt_proc_int64_t(proc, &p->term);
+	if (unlikely(rc))
+		return rc;
+	rc = crt_proc_int64_t(proc, &p->last_idx);
+	if (unlikely(rc))
+		return rc;
+	rc = crt_proc_int64_t(proc, &p->last_term);
+	if (unlikely(rc))
+		return rc;
 
 	return 0;
 }
@@ -207,51 +169,15 @@ crt_proc_msg_installsnapshot_response_t(crt_proc_t proc,
 {
 	int rc;
 
-	rc = crt_proc_int32_t(proc, &p->term);
-	if (rc != 0)
-		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &p->last_idx);
-	if (rc != 0)
-		return -DER_HG;
+	rc = crt_proc_int64_t(proc, &p->term);
+	if (unlikely(rc))
+		return rc;
+	rc = crt_proc_int64_t(proc, &p->last_idx);
+	if (unlikely(rc))
+		return rc;
 	rc = crt_proc_int32_t(proc, &p->complete);
-	if (rc != 0)
-		return -DER_HG;
-
-	return 0;
-}
-
-static int
-crt_proc_daos_anchor_t(crt_proc_t proc, daos_anchor_t *p)
-{
-	int rc;
-
-	rc = crt_proc_uint16_t(proc, &p->da_type);
-	if (rc != 0)
-		return -DER_HG;
-	rc = crt_proc_uint16_t(proc, &p->da_shard);
-	if (rc != 0)
-		return -DER_HG;
-	rc = crt_proc_uint32_t(proc, &p->da_flags);
-	if (rc != 0)
-		return -DER_HG;
-	rc = crt_proc_memcpy(proc, &p->da_buf, sizeof(p->da_buf));
-	if (rc != 0)
-		return -DER_HG;
-
-	return 0;
-}
-
-static int
-crt_proc_struct_rdb_anchor(crt_proc_t proc, struct rdb_anchor *p)
-{
-	int rc;
-
-	rc = crt_proc_daos_anchor_t(proc, &p->da_object);
-	if (rc != 0)
-		return -DER_HG;
-	rc = crt_proc_daos_anchor_t(proc, &p->da_akey);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	return 0;
 }

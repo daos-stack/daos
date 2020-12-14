@@ -207,7 +207,6 @@ unpack_hex_string_inplace(char *str, size_t *len)
 	return 0;
 }
 
-
 /**
  * Print the result of a fetch as valid JSON
  *

@@ -59,21 +59,21 @@ struct pl_map_ops {
 				  uint32_t rebuild_ver,
 				  uint32_t *tgt_rank,
 				  uint32_t *shard_id,
-				  unsigned int array_size, int myrank);
+				  unsigned int array_size);
 	int (*o_obj_find_reint)(struct pl_map *map,
 				  struct daos_obj_md *md,
 				  struct daos_obj_shard_md *shard_md,
 				  uint32_t reint_ver,
 				  uint32_t *tgt_rank,
 				  uint32_t *shard_id,
-				  unsigned int array_size, int myrank);
+				  unsigned int array_size);
 	int (*o_obj_find_addition)(struct pl_map *map,
 				   struct daos_obj_md *md,
 				  struct daos_obj_shard_md *shard_md,
 				  uint32_t reint_ver,
 				  uint32_t *tgt_rank,
 				  uint32_t *shard_id,
-				  unsigned int array_size, int myrank);
+				  unsigned int array_size);
 
 };
 
@@ -124,7 +124,7 @@ int
 remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 		struct daos_obj_shard_md *shard_md, uint32_t rebuild_ver,
 		uint32_t *tgt_id, uint32_t *shard_idx,
-		unsigned int array_size, int myrank, int *idx,
+		unsigned int array_size, int *idx,
 		struct pl_obj_layout *layout, d_list_t *remap_list,
 		bool fill_addition);
 

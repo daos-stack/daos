@@ -52,7 +52,6 @@ enum {
 	RPC_SHUTDOWN
 } rpc_id_t;
 
-
 #define CRT_ISEQ_RPC_SET_ERR_CODE/* input fields */		\
 	((int)			(err_code)	CRT_VAR)	\
 	((uint32_t)		(pad1)		CRT_VAR)
@@ -71,7 +70,6 @@ enum {
 
 #define CRT_OSEQ_CORPC_TEST \
 	((uint64_t)		(field)			CRT_VAR)
-
 
 RPC_DECLARE(RPC_SET_ERR_CODE);
 RPC_DECLARE(RPC_SHUTDOWN);
@@ -112,7 +110,6 @@ corpc_aggregate(crt_rpc_t *src, crt_rpc_t *result, void *priv)
 	struct CORPC_TEST_out	*output_src;
 	struct CORPC_TEST_out	*output_result;
 
-
 	output_src = crt_reply_get(src);
 	output_result = crt_reply_get(result);
 
@@ -151,7 +148,6 @@ struct crt_proto_format my_proto_fmt = {
 	.cpf_prf = &my_proto_rpc_fmt[0],
 	.cpf_base = MY_BASE,
 };
-
 
 struct corpc_wait_info {
 	sem_t	sem;
@@ -264,7 +260,6 @@ set_error(crt_context_t ctx, crt_group_t *grp,
 
 	tc_sem_timedwait(&wait_info.sem, 10, __LINE__);
 }
-
 
 int main(int argc, char **argv)
 {

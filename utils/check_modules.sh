@@ -43,6 +43,7 @@ if [ ! -d "utils/sl" ];then
 fi
 # Set PYTHONPATH for source files not installed files
 PYTHONPATH=$PWD/utils:$PWD/src/tests/ftest/util/
+PYTHONPATH=$PYTHONPATH:$PWD/src/tests/ftest/cart/util/
 PYTHONPATH=$PYTHONPATH:$PWD/src/tests/ftest/util/apricot/
 PYTHONPATH=$PYTHONPATH:$PWD/src/client/
 export PYTHONPATH
