@@ -45,7 +45,9 @@ type PubSub struct {
 	log      logging.Logger
 	streams  map[RASTypeID]chan Event
 	handlers map[RASTypeID][]Handler
-	closed   bool
+	// TODO: filter events on publish
+	// filter IDMask
+	closed bool
 }
 
 // Publish passes an event to the stream (channel) dedicated to the event's
@@ -66,6 +68,13 @@ func (ps *PubSub) Publish(event Event) {
 		ps.log.Debugf("no handlers registered to topic %s", topic)
 		return
 	}
+
+	// TODO: filter events matching mask, requires introspection unless we
+	// implement GetID() on the event interface
+	//	if event.GetID()&ps.IDMask {
+	//		ps.log.Debugf("event ID %s filtered out by mask %s", event.GetID(),
+	//			ps.IDMask)
+	//	}
 
 	ps.streams[topic] <- event
 }

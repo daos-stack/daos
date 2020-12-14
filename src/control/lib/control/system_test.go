@@ -1093,24 +1093,21 @@ func TestControl_SystemNotify(t *testing.T) {
 		},
 		"local failure": {
 			req: &SystemNotifyReq{
-				Event:       rasEventRankExit,
-				ControlAddr: common.MockHostAddr(),
+				Event: rasEventRankExit,
 			},
 			uErr:   errors.New("local failed"),
 			expErr: errors.New("local failed"),
 		},
 		"remote failure": {
 			req: &SystemNotifyReq{
-				Event:       rasEventRankExit,
-				ControlAddr: common.MockHostAddr(),
+				Event: rasEventRankExit,
 			},
 			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
 			expErr: errors.New("remote failed"),
 		},
 		"empty response": {
 			req: &SystemNotifyReq{
-				Event:       rasEventRankExit,
-				ControlAddr: common.MockHostAddr(),
+				Event: rasEventRankExit,
 			},
 			uResp:   MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.ClusterEventResp{}),
 			expResp: &SystemNotifyResp{},
@@ -1120,14 +1117,12 @@ func TestControl_SystemNotify(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			if tc.req != nil {
-				tc.req.Client = NewMockInvoker(log, &MockInvokerConfig{
-					UnaryError:    tc.uErr,
-					UnaryResponse: tc.uResp,
-				})
-			}
+			rpcClient = NewMockInvoker(log, &MockInvokerConfig{
+				UnaryError:    tc.uErr,
+				UnaryResponse: tc.uResp,
+			})
 
-			gotResp, gotErr := SystemNotify(context.TODO(), tc.req)
+			gotResp, gotErr := SystemNotify(context.TODO(), rpcClient, tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

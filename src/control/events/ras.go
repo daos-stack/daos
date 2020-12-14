@@ -31,8 +31,9 @@ import "C"
 import (
 	"encoding/json"
 
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/pkg/errors"
+
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 // Event all custom event types must implement this interface.

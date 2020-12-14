@@ -231,9 +231,8 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	defer eventPubSub.Close()
 
 	// Forward received events to management service by default.
-	fwdEventReq := &control.SystemNotifyReq{ControlAddr: controlAddr, Client: rpcClient}
-	fwdEventReq.SetHostList(cfg.AccessPoints)
-	eventPubSub.Subscribe(ctx, events.RASTypeRankStateChange, fwdEventReq)
+	eventForwarder := control.NewEventForwarder(rpcClient, cfg.AccessPoints)
+	eventPubSub.Subscribe(ctx, events.RASTypeRankStateChange, eventForwarder)
 
 	// Create event dispatcher for received forwarded events.
 	mgmtSvc.dispatchEvent = func(evt events.Event) {
@@ -430,7 +429,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		// On losing leadership, stop handling MS events.
 		eventPubSub.Reset()
 		// Forward events to new MS leader.
-		eventPubSub.Subscribe(ctx, events.RASTypeRankStateChange, fwdEventReq)
+		eventPubSub.Subscribe(ctx, events.RASTypeRankStateChange, eventForwarder)
 
 		return nil
 	})

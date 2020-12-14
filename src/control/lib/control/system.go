@@ -145,24 +145,8 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 type SystemNotifyReq struct {
 	unaryRequest
 	msRequest
-	ControlAddr *net.TCPAddr
-	Event       events.Event
-	Sequence    uint64
-	Client      UnaryInvoker
-}
-
-// MarshalJSON packs SystemNotifyResp struct into a JSON message.
-func (req *SystemNotifyReq) MarshalJSON() ([]byte, error) {
-	// use a type alias to leverage the default marshal for
-	// most fields
-	type toJSON SystemNotifyReq
-	return json.Marshal(&struct {
-		Addr string
-		*toJSON
-	}{
-		Addr:   req.ControlAddr.String(),
-		toJSON: (*toJSON)(req),
-	})
+	Event    events.Event
+	Sequence uint64
 }
 
 // ToClusterEventReq converts the system notify request to a cluster events
@@ -170,9 +154,6 @@ func (req *SystemNotifyReq) MarshalJSON() ([]byte, error) {
 func (req *SystemNotifyReq) ToClusterEventReq() (*mgmtpb.ClusterEventReq, error) {
 	if req.Event == nil {
 		return nil, errors.New("nil event in request")
-	}
-	if req.ControlAddr == nil {
-		return nil, errors.New("nil control address in request")
 	}
 
 	pbRASEvent, err := req.Event.ToProto()
@@ -186,33 +167,22 @@ func (req *SystemNotifyReq) ToClusterEventReq() (*mgmtpb.ClusterEventReq, error)
 	}, nil
 }
 
-// OnEvent implements the events.Handler interface.
-func (req *SystemNotifyReq) OnEvent(ctx context.Context, evt events.Event) {
-	req.Client.Debugf("forwarding %s (seq: %d) event to MS", evt.GetType(), req.Sequence)
-
-	req.Sequence++
-	req.Event = evt
-	if _, err := SystemNotify(ctx, req); err != nil {
-		req.Client.Debugf("failed to forward event to MS: %s", err)
-	}
-}
-
 // SystemNotifyResp contains the request response.
 type SystemNotifyResp struct{}
 
 // SystemNotify will attempt to notify the DAOS system of a cluster event.
-func SystemNotify(ctx context.Context, req *SystemNotifyReq) (*SystemNotifyResp, error) {
+func SystemNotify(ctx context.Context, rpcClient UnaryInvoker, req *SystemNotifyReq) (*SystemNotifyResp, error) {
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
 	if req.Event == nil {
 		return nil, errors.New("nil event in request")
 	}
-	if req.Client == nil {
+	if rpcClient == nil {
 		return nil, errors.New("nil rpc client")
 	}
 
-	req.Client.Debugf("DAOS system notify request: %+v, event: %+v", req, req.Event)
+	rpcClient.Debugf("DAOS system notify request: %+v, event: %+v", req, req.Event)
 	pbReq, err := req.ToClusterEventReq()
 	if err != nil {
 		return nil, err
@@ -220,15 +190,44 @@ func SystemNotify(ctx context.Context, req *SystemNotifyReq) (*SystemNotifyResp,
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).ClusterEvent(ctx, pbReq)
 	})
-	req.Client.Debugf("DAOS cluster event request: %+v", pbReq)
+	rpcClient.Debugf("DAOS cluster event request: %+v", pbReq)
 
-	ur, err := req.Client.InvokeUnaryRPC(ctx, req)
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := new(SystemNotifyResp)
 	return resp, convertMSResponse(ur, resp)
+}
+
+type EventForwarder struct {
+	seq       uint64
+	client    UnaryInvoker
+	accessPts []string
+}
+
+// OnEvent implements the events.Handler interface.
+func (fwdr *EventForwarder) OnEvent(ctx context.Context, evt events.Event) {
+	fwdr.client.Debugf("forwarding %s (seq: %d) event to MS", evt.GetType(), fwdr.seq)
+
+	req := &SystemNotifyReq{
+		Sequence: fwdr.seq,
+		Event:    evt,
+	}
+	req.SetHostList(fwdr.accessPts)
+
+	if _, err := SystemNotify(ctx, fwdr.client, req); err != nil {
+		fwdr.client.Debugf("failed to forward event to MS: %s", err)
+	}
+}
+
+// NewEventForwarder returns an initialized EventForwarder.
+func NewEventForwarder(rpcClient UnaryInvoker, accessPts []string) *EventForwarder {
+	return &EventForwarder{
+		client:    rpcClient,
+		accessPts: accessPts,
+	}
 }
 
 // SystemQueryReq contains the inputs for the system query request.
