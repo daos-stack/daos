@@ -2,6 +2,11 @@ arch: amd64
 os: linux
 dist: focal
 
+branches:
+  only:
+    - master
+    - /^jvolivie\/.*/
+
 env:
  jobs:
   - DOCKER_IMAGE=ubuntu.20.04
