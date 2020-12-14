@@ -69,7 +69,7 @@ class DmgJson(TestWithServers):
     # create
         # Creates a pools to use for subsequent dmg commands to use
         pool_create_data = dmg.pool_create(
-            scm_size=scm_size_expected, targets=ranks_expected)
+            scm_size=scm_size_expected, target_list=ranks_expected)
         self.log.info("\npool_create_json_out:\n%s\n", pool_create_data)
 
         # if dmg.result.exit_status != 0:
