@@ -449,6 +449,19 @@ String quick_build_deps(String distro) {
               returnStdout: true)
 }
 
+void foo() {
+    if (currentBuild.changeSets != null) {
+        for (changeSetList in currentBuild.changeSets) {
+            for (changeSet in changeSetList) {
+                if (changeSet.msg.contains('[ci-skip]')) {
+                    println("-------------\m" + changeSet.msg)
+                }
+            }
+        }
+    } else {
+        println("currentBuild.changeSets was null")
+    }
+}
 pipeline {
     agent { label 'lightweight' }
 
@@ -484,6 +497,7 @@ pipeline {
         stage('Cancel Previous Builds') {
             when { changeRequest() }
             steps {
+                foo()
                 cancelPreviousBuilds()
             }
         }
