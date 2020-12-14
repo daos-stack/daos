@@ -593,6 +593,8 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	struct crt_uri_lookup_in	*ul_in;
 	struct crt_grp_priv		*grp_priv;
 	crt_rpc_t			*lookup_rpc;
+	d_rank_list_t			*membs;
+	bool				found;
 	int				rc = 0;
 
 	chained_rpc_priv = cb_info->cci_arg;
@@ -661,6 +663,25 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 		D_GOTO(out, rc);
 	}
 
+	/* After a URI lookup, check if membership list has this rank.
+	 * If not - we discovered a new rank and need to populate it in membs
+	 * list of the group.
+	 */
+	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
+	membs = grp_priv_get_membs(grp_priv);
+	found = d_rank_list_find(membs, ul_in->ul_rank, NULL);
+
+	if (!found) {
+		rc = grp_add_to_membs_list(grp_priv, ul_in->ul_rank);
+		if (rc != 0) {
+			D_ERROR("Failed to add %d to group\n", ul_in->ul_rank);
+			D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
+			D_GOTO(out, rc);
+		}
+	}
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
+
+	/* issue the original RPC */
 	rc = crt_req_send_internal(chained_rpc_priv);
 
 retry:
