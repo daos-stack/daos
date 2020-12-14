@@ -1,3 +1,4 @@
+dist: focal
 sudo: required
 
 env:
