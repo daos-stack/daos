@@ -77,7 +77,8 @@ test_run(d_rank_t my_rank)
   // Register event callback after CaRT has initialized
 	if (test_g.t_register_swim_callback) {
 		// Give server time to load, so that swim callback can register
-		sleep(10);
+		// This wreaks havoc -- on semaphores, timings
+		// sleep(10);
 
 		crt_register_event_cb(swim_crt_event_cb, &a);
 	}
