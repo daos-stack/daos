@@ -1926,10 +1926,12 @@ cont_list_objs_hdlr(struct cmd_args_s *ap)
 	daos_handle_t		oit;
 	daos_anchor_t		anchor = {0};
 	uint32_t		oids_nr;
-	int			rc, rc2 = 0, i;
+	int			rc, i;
 
-	/* create a snapshot */
-	rc = cont_create_snap_hdlr(ap);
+	/* create a snapshot with OIT */
+	rc = cont_create_snap_hdlr_opt(ap->cont, &ap->epc, NULL,
+				       DAOS_SNAP_OPT_CR | DAOS_SNAP_OPT_OIT,
+				       NULL);
 	if (rc != 0)
 		goto out;
 
@@ -1960,7 +1962,7 @@ out_close:
 out_snap:
 	cont_destroy_snap_hdlr(ap);
 out:
-	return rc ? rc : rc2;
+	return rc;
 }
 
 int
