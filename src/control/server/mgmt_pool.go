@@ -71,7 +71,23 @@ func (svc *mgmtSvc) getPoolServiceRanks(uuidStr string) ([]uint32, error) {
 		return nil, drpc.DaosTryAgain
 	}
 
-	return system.RanksToUint32(ps.Replicas), nil
+	readyRanks := make([]system.Rank, 0, len(ps.Replicas))
+	for _, r := range ps.Replicas {
+		m, err := svc.sysdb.FindMemberByRank(r)
+		if err != nil {
+			return nil, err
+		}
+		if m.State()&system.AvailableMemberFilter == 0 {
+			continue
+		}
+		readyRanks = append(readyRanks, r)
+	}
+
+	if len(readyRanks) == 0 {
+		return nil, errors.Errorf("unable to find any available service ranks for pool %s", uuid)
+	}
+
+	return system.RanksToUint32(readyRanks), nil
 }
 
 // calculateCreateStorage determines the amount of SCM/NVMe storage to
@@ -132,13 +148,15 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, err
 	}
 
-	allRanks, err := svc.sysdb.MemberRanks()
+	allRanks, err := svc.sysdb.MemberRanks(system.AvailableMemberFilter)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(req.GetRanks()) > 0 {
-		// If the request supplies a specific rank list, use it.
+		// If the request supplies a specific rank list, use it. Note that
+		// the rank list may include downed ranks, in which case the create
+		// will fail with an error.
 		reqRanks := system.RanksFromUint32(req.GetRanks())
 		// Create a RankSet to sort/dedupe the ranks.
 		reqRanks = system.RankSetFromRanks(reqRanks).Ranks()
@@ -152,7 +170,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 
 		req.Ranks = system.RanksToUint32(reqRanks)
 	} else {
-		// Otherwise, create the pool across all ranks in the system.
+		// Otherwise, create the pool across all available ranks in the system.
 		req.Ranks = system.RanksToUint32(allRanks)
 	}
 
@@ -211,6 +229,9 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, errors.Wrap(err, "unmarshal PoolCreate response")
 	}
 
+	// let the caller know how many ranks were used
+	resp.Numranks = uint32(len(req.Ranks))
+
 	if resp.GetStatus() != 0 {
 		if err := svc.sysdb.RemovePoolService(ps.PoolUUID); err != nil {
 			return nil, err
@@ -225,6 +246,39 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	}
 
 	svc.log.Debugf("MgmtSvc.PoolCreate dispatch resp:%+v\n", resp)
+
+	return resp, nil
+}
+
+// PoolResolveID implements a handler for resolving a user-friendly Pool ID into
+// a UUID.
+func (svc *mgmtSvc) PoolResolveID(ctx context.Context, req *mgmtpb.PoolResolveIDReq) (*mgmtpb.PoolResolveIDResp, error) {
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+	svc.log.Debugf("MgmtSvc.PoolResolveID dispatch, req:%+v", req)
+
+	if req.HumanID == "" {
+		return nil, errors.New("empty request")
+	}
+
+	resp := new(mgmtpb.PoolResolveIDResp)
+	type lookupFn func(string) (*system.PoolService, error)
+	// Cycle through a list of lookup functions, returning the first one
+	// that succeeds in finding the pool, or an error if no pool is found.
+	for _, lookup := range []lookupFn{svc.sysdb.FindPoolServiceByLabel} {
+		ps, err := lookup(req.HumanID)
+		if err == nil {
+			resp.Uuid = ps.PoolUUID.String()
+			break
+		}
+	}
+
+	if resp.Uuid == "" {
+		return nil, errors.Errorf("unable to find pool service with human-friendly id %q", req.HumanID)
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolResolveID dispatch, resp:%+v", resp)
 
 	return resp, nil
 }
@@ -446,10 +500,9 @@ func resolvePoolPropVal(req *mgmtpb.PoolSetPropReq) (*mgmtpb.PoolSetPropReq, err
 		default:
 			return nil, errors.Errorf("unhandled reclaim type %q", recType)
 		}
-	// label not supported yet
-	/*case "label":
-	newReq.SetPropertyNumber(drpc.PoolPropertyLabel)
-	newReq.SetValueString(req.GetStrval())*/
+	case "label":
+		newReq.SetPropertyNumber(drpc.PoolPropertyLabel)
+		newReq.SetValueString(req.GetStrval())
 	case "space_rb":
 		newReq.SetPropertyNumber(drpc.PoolPropertyReservedSpace)
 
@@ -482,8 +535,12 @@ func resolvePoolPropVal(req *mgmtpb.PoolSetPropReq) (*mgmtpb.PoolSetPropReq, err
 }
 
 // PoolSetProp forwards a request to the I/O server to set a pool property.
-func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq) (*mgmtpb.PoolSetPropResp, error) {
+func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq) (resp *mgmtpb.PoolSetPropResp, err error) {
 	svc.log.Debugf("MgmtSvc.PoolSetProp dispatch, req:%+v", req)
+
+	if err := svc.sysdb.CheckLeader(); err != nil {
+		return nil, err
+	}
 
 	newReq, err := resolvePoolPropVal(req)
 	if err != nil {
@@ -492,13 +549,58 @@ func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq)
 
 	svc.log.Debugf("MgmtSvc.PoolSetProp dispatch, req (converted):%+v", newReq)
 
+	// Label is a special case, in that we need to ensure that it's unique
+	// and also to update the pool service entry.
+	if newReq.GetNumber() == drpc.PoolPropertyLabel {
+		uuidStr := newReq.GetUuid()
+		label := newReq.GetStrval()
+
+		uuid, err := uuid.Parse(uuidStr)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse request uuid %q", uuidStr)
+		}
+		ps, err := svc.sysdb.FindPoolServiceByUUID(uuid)
+		if err != nil {
+			return nil, err
+		}
+
+		if label != "" {
+			// If we're setting a label, first check to see
+			// if a pool has already had the label applied.
+			found, err := svc.sysdb.FindPoolServiceByLabel(label)
+			if found != nil && found.PoolUUID != ps.PoolUUID {
+				// If we find a pool with this label but the
+				// UUID differs, then we should fail the request.
+				return nil, FaultPoolDuplicateLabel(label)
+			}
+			if err != nil && !system.IsPoolNotFound(err) {
+				// If the query failed, then we should fail
+				// the request.
+				return nil, err
+			}
+			// Otherwise, allow the label to be set again on the same
+			// pool for idempotency.
+		}
+
+		defer func() {
+			if ps == nil || err != nil {
+				return
+			}
+
+			// Persist the label update in the MS DB if the
+			// dRPC call succeeded.
+			ps.PoolLabel = label
+			err = svc.sysdb.UpdatePoolService(ps)
+		}()
+	}
+
 	var dresp *drpc.Response
 	dresp, err = svc.makePoolServiceCall(ctx, drpc.MethodPoolSetProp, newReq)
 	if err != nil {
 		return nil, err
 	}
 
-	resp := &mgmtpb.PoolSetPropResp{}
+	resp = &mgmtpb.PoolSetPropResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal PoolSetProp response")
 	}

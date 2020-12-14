@@ -144,8 +144,8 @@ type (
 		Discover() (storage.ScmModules, error)
 		Prep(storage.ScmState) (bool, storage.ScmNamespaces, error)
 		PrepReset(storage.ScmState) (bool, error)
-		GetState() (storage.ScmState, error)
-		GetNamespaces() (storage.ScmNamespaces, error)
+		GetPmemState() (storage.ScmState, error)
+		GetPmemNamespaces() (storage.ScmNamespaces, error)
 		GetFirmwareStatus(deviceUID string) (*storage.ScmFirmwareInfo, error)
 		UpdateFirmware(deviceUID string, firmwarePath string) error
 	}
@@ -384,7 +384,7 @@ func (p *Provider) currentState() storage.ScmState {
 }
 
 func (p *Provider) updateState() (state storage.ScmState, err error) {
-	state, err = p.backend.GetState()
+	state, err = p.backend.GetPmemState()
 	if err != nil {
 		return
 	}
@@ -396,8 +396,8 @@ func (p *Provider) updateState() (state storage.ScmState, err error) {
 	return
 }
 
-// GetState returns the current state of DCPM namespaces, if available.
-func (p *Provider) GetState() (storage.ScmState, error) {
+// GetPmemState returns the current state of DCPM namespaces, if available.
+func (p *Provider) GetPmemState() (storage.ScmState, error) {
 	if !p.isInitialized() {
 		if _, err := p.Scan(ScanRequest{}); err != nil {
 			return p.lastState, err
@@ -454,12 +454,12 @@ func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 		return p.createScanResponse(), nil
 	}
 
-	namespaces, err := p.backend.GetNamespaces()
+	namespaces, err := p.backend.GetPmemNamespaces()
 	if err != nil {
 		return p.createScanResponse(), err
 	}
 
-	state, err := p.backend.GetState()
+	state, err := p.backend.GetPmemState()
 	if err != nil {
 		return nil, err
 	}

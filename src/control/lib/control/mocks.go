@@ -50,16 +50,18 @@ type (
 	// MockInvokerConfig defines the configured responses
 	// for a MockInvoker.
 	MockInvokerConfig struct {
-		UnaryError    error
-		UnaryResponse *UnaryResponse
-		HostResponses HostResponseChan
+		UnaryError       error
+		UnaryResponse    *UnaryResponse
+		UnaryResponseSet []*UnaryResponse
+		HostResponses    HostResponseChan
 	}
 
 	// MockInvoker implements the Invoker interface in order
 	// to enable unit testing of API functions.
 	MockInvoker struct {
-		log debugLogger
-		cfg MockInvokerConfig
+		log         debugLogger
+		cfg         MockInvokerConfig
+		invokeCount int
 	}
 )
 
@@ -86,26 +88,48 @@ func (mi *MockInvoker) Debugf(fmtStr string, args ...interface{}) {
 	mi.log.Debugf(fmtStr, args...)
 }
 
-func (mi *MockInvoker) InvokeUnaryRPC(_ context.Context, uReq UnaryRequest) (*UnaryResponse, error) {
-	if mi.cfg.UnaryResponse != nil || mi.cfg.UnaryError != nil {
-		return mi.cfg.UnaryResponse, mi.cfg.UnaryError
-	}
-
-	// If the config didn't define a response, just dummy one up for
-	// tests that don't care.
-	return &UnaryResponse{
-		fromMS: uReq.isMSRequest(),
-		Responses: []*HostResponse{
-			{
-				Addr:    "dummy",
-				Message: &MockMessage{},
-			},
-		},
-	}, nil
+func (mi *MockInvoker) InvokeUnaryRPC(ctx context.Context, uReq UnaryRequest) (*UnaryResponse, error) {
+	return invokeUnaryRPC(ctx, mi.log, mi, uReq)
 }
 
-func (mi *MockInvoker) InvokeUnaryRPCAsync(_ context.Context, _ UnaryRequest) (HostResponseChan, error) {
-	return mi.cfg.HostResponses, mi.cfg.UnaryError
+func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryRequest) (HostResponseChan, error) {
+	if mi.cfg.HostResponses != nil || mi.cfg.UnaryError != nil {
+		return mi.cfg.HostResponses, mi.cfg.UnaryError
+	}
+
+	responses := make(HostResponseChan)
+
+	ur := mi.cfg.UnaryResponse
+	if len(mi.cfg.UnaryResponseSet) > mi.invokeCount {
+		ur = mi.cfg.UnaryResponseSet[mi.invokeCount]
+	}
+	if ur == nil {
+		// If the config didn't define a response, just dummy one up for
+		// tests that don't care.
+		ur = &UnaryResponse{
+			fromMS: uReq.isMSRequest(),
+			Responses: []*HostResponse{
+				{
+					Addr:    "dummy",
+					Message: &MockMessage{},
+				},
+			},
+		}
+	}
+
+	mi.invokeCount++
+	go func() {
+		for _, hr := range ur.Responses {
+			select {
+			case <-ctx.Done():
+				return
+			case responses <- hr:
+			}
+		}
+		close(responses)
+	}()
+
+	return responses, nil
 }
 
 func (mi *MockInvoker) SetConfig(_ *Config) {}
@@ -252,7 +276,7 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 	switch variant {
 	case "withSpaceUsage":
 		snss := make(storage.ScmNamespaces, 0)
-		for _, i := range []int{1, 2} {
+		for _, i := range []int{0, 1} {
 			sm := storage.MockScmMountPoint(int32(i))
 			sns := storage.MockScmNamespace(int32(i))
 			sns.Mount = sm
@@ -268,6 +292,7 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 			sd.AvailBytes = uint64((humanize.TByte/4)*3) * uint64(i) // 25% used
 			nc := storage.MockNvmeController(int32(i))
 			nc.SmdDevices = append(nc.SmdDevices, sd)
+			nc.SocketID = int32(i % 2)
 			ncs = append(ncs, nc)
 		}
 		if err := convert.Types(ncs, &ssr.Nvme.Ctrlrs); err != nil {
@@ -275,11 +300,38 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		}
 	case "withNamespace":
 		scmNamespaces := storage.ScmNamespaces{
-			storage.MockScmNamespace(),
+			storage.MockScmNamespace(0),
 		}
 		if err := convert.Types(scmNamespaces, &ssr.Scm.Namespaces); err != nil {
 			t.Fatal(err)
 		}
+	case "withNamespaces":
+		scmNamespaces := storage.ScmNamespaces{
+			storage.MockScmNamespace(1), // verify out of order works
+			storage.MockScmNamespace(0),
+		}
+		if err := convert.Types(scmNamespaces, &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+	case "withNamespacesNumaZero":
+		ns1 := storage.MockScmNamespace(1)
+		ns1.NumaNode = 0
+		scmNamespaces := storage.ScmNamespaces{
+			ns1,
+			storage.MockScmNamespace(0),
+		}
+		if err := convert.Types(scmNamespaces, &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+	case "withSingleSSD":
+		scmNamespaces := storage.ScmNamespaces{
+			storage.MockScmNamespace(0),
+			storage.MockScmNamespace(1),
+		}
+		if err := convert.Types(scmNamespaces, &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+		ssr.Nvme.Ctrlrs[0].Socketid = 0
 	case "noNVME":
 		ssr.Nvme.Ctrlrs = nil
 	case "noSCM":

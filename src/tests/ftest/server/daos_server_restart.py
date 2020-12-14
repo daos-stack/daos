@@ -77,8 +77,7 @@ class DaosServerTest(TestWithServers):
 
     def get_pool_list(self):
         """method to get the pool list contents"""
-        pool_list = self.get_dmg_command().get_output("pool_list")
-        pool_list.sort(key=lambda p: p[0])
+        pool_list = sorted(self.get_dmg_command().pool_list())
         self.log.info("get_pool-list: %s", pool_list)
         return pool_list
 
@@ -104,10 +103,9 @@ class DaosServerTest(TestWithServers):
             dmg = self.get_dmg_command()
             result = dmg.pool_create(scm_size)
             uuid = result['uuid']
-            svc = result['svc']
             daos_cmd = DaosCommand(self.bin)
             for _ in range(container_per_pool):
-                result = daos_cmd.container_create(pool=uuid, svc=svc)
+                result = daos_cmd.container_create(pool=uuid)
                 self.log.info("container create status: %s", result)
 
     def test_daos_server_reformat(self):

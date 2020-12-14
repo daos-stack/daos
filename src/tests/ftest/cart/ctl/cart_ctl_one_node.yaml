@@ -8,12 +8,7 @@ defaultENV:
   CRT_PHY_ADDR_STR: "ofi+sockets"
   OFI_INTERFACE: "eth0"
   test_servers_CRT_CTX_NUM: "16"
-  test_clients_1_CRT_CTX_NUM: "16"
-  test_clients_2_CRT_CTX_NUM: "16"
-  test_clients_3_CRT_CTX_NUM: "16"
-  test_clients_4_CRT_CTX_NUM: "16"
-  test_clients_5_CRT_CTX_NUM: "16"
-  test_clients_6_CRT_CTX_NUM: "16"
+  test_clients_CRT_CTX_NUM: "16"
 env_CRT_CTX_SHARE_ADDR: !mux
   sep:
     env: sep
@@ -26,54 +21,31 @@ hosts: !mux
     config: one_node
     test_servers:
       - boro-A
-    test_clients_1:
+    test_clients:
       - boro-A
-    test_clients_2:
-      - boro-A
-    test_clients_3:
-      - boro-A
-    test_clients_4:
-      - boro-A
-    test_clients_5:
-      - boro-A
-    test_clients_6:
-      - boro-A
+timeout: 600
 tests: !mux
   ctl:
     name: ctl_basic
     test_servers_bin: crt_launch
-    test_servers_arg: "-e ../tests/test_group_np_srv --name server_grp"
+    test_servers_arg: "-e ../tests/test_group_np_srv --name server_grp_ctl_one_node"
     test_servers_env: ""
     test_servers_ppn: "1"
 
-    test_clients_1_bin: cart_ctl
-    test_clients_1_arg: "get_uri_cache --group-name server_grp --rank 0"
-    test_clients_1_env: ""
-    test_clients_1_ppn: "1"
-
-    test_clients_2_bin: cart_ctl
-    test_clients_2_arg: "list_ctx --group-name server_grp --rank 0"
-    test_clients_2_env: ""
-    test_clients_2_ppn: "1"
-
-    test_clients_3_bin: cart_ctl
-    test_clients_3_arg: "enable_fi --group-name server_grp --rank 0"
-    test_clients_3_env: ""
-    test_clients_3_ppn: "1"
-
-    test_clients_4_bin: cart_ctl
-    test_clients_4_arg: "set_fi_attr --attr 1911,5,0,1,100 --group-name \
-               server_grp --rank 0"
-    test_clients_4_env: ""
-    test_clients_4_ppn: "1"
-
-    test_clients_5_bin: cart_ctl
-    test_clients_5_arg: "disable_fi --group-name server_grp --rank 0"
-    test_clients_5_env: ""
-    test_clients_5_ppn: "1"
-
-    test_clients_6_bin: ../tests/test_group_np_cli
-    test_clients_6_arg: "--name client-group --attach_to server_grp --shut_only \
-              tmp"
-    test_clients_6_env: ""
-    test_clients_6_ppn: "1"
+    test_clients_env: ""
+    test_clients_ppn: "1"
+    test_clients_bin:
+      - cart_ctl
+      - cart_ctl
+      - cart_ctl
+      - cart_ctl
+      - cart_ctl
+      - ../tests/test_group_np_cli
+    test_clients_arg:
+      - "get_uri_cache --group-name server_grp_ctl_one_node --rank 0"
+      - "list_ctx --group-name server_grp_ctl_one_node --rank 0"
+      - "enable_fi --group-name server_grp_ctl_one_node --rank 0"
+      - "set_fi_attr --attr 1911,5,0,1,100 --group-name \
+         server_grp_ctl_one_node --rank 0"
+      - "disable_fi --group-name server_grp_ctl_one_node --rank 0"
+      - "--name client-group --attach_to server_grp_ctl_one_node --shut_only"

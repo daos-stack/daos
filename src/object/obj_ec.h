@@ -63,10 +63,10 @@ struct obj_shard_iod {
 	uint32_t		 siod_tgt_idx;
 	/** start index in extend array in daos_iod_t */
 	uint32_t		 siod_idx;
-	/** number of extends in extend array in daos_iod_t */
-	uint32_t		 siod_nr;
 	/** the byte offset of this shard's data to the sgl/bulk */
 	uint64_t		 siod_off;
+	/** number of extends in extend array in daos_iod_t */
+	uint32_t		 siod_nr;
 };
 
 struct obj_iod_array {
@@ -361,7 +361,8 @@ obj_ec_singv_cell_bytes(uint64_t rec_gsize, struct daos_oclass_attr *oca)
 /** Query local record size and needed padding for evenly distributed singv */
 static inline void
 obj_ec_singv_local_sz(uint64_t rec_gsize, struct daos_oclass_attr *oca,
-		      uint32_t tgt_idx, struct obj_ec_singv_local *loc)
+		      uint32_t tgt_idx, struct obj_ec_singv_local *loc,
+		      bool update)
 {
 	uint32_t	data_tgt_nr = obj_ec_data_tgt_nr(oca);
 	uint64_t	cell_size;
@@ -369,7 +370,15 @@ obj_ec_singv_local_sz(uint64_t rec_gsize, struct daos_oclass_attr *oca,
 	D_ASSERT(tgt_idx < obj_ec_tgt_nr(oca));
 
 	cell_size = obj_ec_singv_cell_bytes(rec_gsize, oca);
-	if (tgt_idx >= data_tgt_nr)
+	/* For update, the parity buffer is immediately following data buffer,
+	 * to avoid insert extra sgl segment (for last data shard's padding).
+	 * For fetch, fetching from parity shard is only for EC recovery, in
+	 * that case it allocates enough buffer (obj_ec_singv_stripe_buf_size)
+	 * and to simplify data recovery (avoid data movement for the case that
+	 * last data shard with padding bytes) the parity data's offset in fetch
+	 * buffer is aligned to cell size boundary.
+	 */
+	if (tgt_idx >= data_tgt_nr && update)
 		loc->esl_off = rec_gsize + (tgt_idx - data_tgt_nr) * cell_size;
 	else
 		loc->esl_off = tgt_idx * cell_size;
@@ -425,9 +434,10 @@ static inline void
 obj_io_desc_fini(struct obj_io_desc *oiod)
 {
 	if (oiod != NULL) {
-		if (oiod->oiod_siods != NULL)
-			D_FREE(oiod->oiod_siods);
-		memset(oiod, 0, sizeof(*oiod));
+		oiod->oiod_nr = 0;
+		oiod->oiod_tgt_idx = 0;
+		oiod->oiod_flags = 0;
+		D_FREE(oiod->oiod_siods);
 	}
 }
 
@@ -657,7 +667,7 @@ int obj_ec_get_degrade(struct obj_reasb_req *reasb_req, uint16_t fail_tgt_idx,
 struct obj_rw_in;
 int obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 			uint32_t iod_nr, uint32_t start_shard,
-			void *tgt_map, uint32_t map_size,
+			uint32_t max_shard, void *tgt_map, uint32_t map_size,
 			uint32_t tgt_nr, struct daos_shard_tgt *tgts,
 			struct obj_ec_split_req **split_req);
 void obj_ec_split_req_fini(struct obj_ec_split_req *req);

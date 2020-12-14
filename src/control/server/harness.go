@@ -34,6 +34,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -97,7 +98,7 @@ func (h *IOServerHarness) FilterInstancesByRankSet(ranks string) ([]*IOServerIns
 	for _, i := range h.instances {
 		r, err := i.GetRank()
 		if err != nil {
-			return nil, errors.WithMessage(err, "filtering instances by rank")
+			continue // no rank to check against
 		}
 		if r.InList(rankList) {
 			out = append(out, i)
@@ -170,7 +171,7 @@ func (h *IOServerHarness) getMSLeaderInstance() (*IOServerInstance, error) {
 // configured instances' processing loops.
 //
 // Run until harness is shutdown.
-func (h *IOServerHarness) Start(ctx context.Context, membership *system.Membership, db *system.Database, cfg *Configuration) error {
+func (h *IOServerHarness) Start(ctx context.Context, membership *system.Membership, db *system.Database, cfg *config.Server) error {
 	if h.isStarted() {
 		return errors.New("can't start: harness already started")
 	}
@@ -205,26 +206,6 @@ func (h *IOServerHarness) Start(ctx context.Context, membership *system.Membersh
 	h.log.Debug("shutting down harness")
 
 	return ctx.Err()
-}
-
-type mgmtInfo struct {
-	isReplica       bool
-	shouldBootstrap bool
-}
-
-func getMgmtInfo(srv *IOServerInstance) (*mgmtInfo, error) {
-	// Determine if an I/O server needs to createMS or bootstrapMS.
-	var err error
-	mi := &mgmtInfo{}
-	mi.isReplica, mi.shouldBootstrap, err = checkMgmtSvcReplica(
-		srv.msClient.cfg.ControlAddr,
-		srv.msClient.cfg.AccessPoints,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return mi, nil
 }
 
 // readyRanks returns rank assignment of configured harness instances that are

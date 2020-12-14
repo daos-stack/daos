@@ -304,8 +304,8 @@ daos_obj_id_parse(const char *oid_str, daos_obj_id_t *oid)
 }
 
 /* supported properties names are "label", "cksum" ("off" or <type> in
- * crc[16,32,64], sha1), "cksum_size", "srv_cksum" (cksum on server,
- * "on"/"off"), "red_factor" (redundancy factor, rf[0-4]).
+ * crc[16,32,64], adler32, sha1, sha256 or sha512), "cksum_size", "srv_cksum"
+ * (cksum on server, "on"/"off"), "red_factor" (redundancy factor, rf[0-4]).
  */
 static int
 daos_parse_property(char *name, char *value, daos_prop_t *props)
@@ -329,7 +329,8 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 		if (csum_type < 0) {
 			fprintf(stderr,
 				"currently supported checksum types are "
-				"'off, crc[16,32,64], sha[1,256,512]'\n");
+				"'off, crc[16,32,64], adler32, "
+				"sha[1,256,512]'\n");
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_CSUM;
@@ -810,7 +811,9 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		D_GOTO(out_free, rc = RC_NO_HELP);
 	}
 
-	/* Verify pool svc provided */
+	/* Verify pool svc argument. If not provided pass NULL list to libdaos,
+	 * and client will query management service for rank list.
+	 */
 	ARGS_VERIFY_MDSRV(ap, out_free, rc = RC_PRINT_HELP);
 
 	D_FREE(cmdname);
@@ -1327,12 +1330,12 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"				dedup_th, compression, encryption\n"
 			"			   label value can be any string\n"
 			"			   cksum supported values are off, crc[16,32,64],\n"
-			"						      sha[1,256,512]\n"
+			"						      adler32, sha[1,256,512]\n"
 			"			   cksum_size can be any size < 4GiB\n"
 			"			   srv_cksum values can be on, off\n"
 			"			   dedup (preview) values can be off, memcmp or hash\n"
 			"			   dedup_th (preview) can be any size between 4KiB and 64KiB\n"
-			"			   compression (preview) values can be lz4, gzip, gzip[1-9]\n"
+			"			   compression (preview) values can be lz4, deflate, deflate[1-4]\n"
 			"			   encrypton (preview) values can be aes-xts[128,256],\n"
 			"							     aes-cbc[128,192,256],\n"
 			"							     aes-gcm[128,256]\n"

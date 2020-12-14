@@ -230,6 +230,9 @@ pool_init(struct dts_context *tsc)
 	} else if (tsc->tsc_mpi_rank == 0) { /* DAOS mode and rank zero */
 		d_rank_list_t	*svc = &tsc->tsc_svc;
 
+		if (tsc->tsc_dmg_conf)
+			dmg_config_file = tsc->tsc_dmg_conf;
+
 		rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(),
 				     NULL, NULL,
 				     tsc->tsc_scm_size, tsc->tsc_nvme_size,
@@ -237,7 +240,7 @@ pool_init(struct dts_context *tsc)
 		if (rc)
 			goto bcast;
 
-		rc = daos_pool_connect(tsc->tsc_pool_uuid, NULL, svc,
+		rc = daos_pool_connect(tsc->tsc_pool_uuid, NULL, NULL /* svc */,
 				       DAOS_PC_EX, &poh, NULL, NULL);
 		if (rc)
 			goto bcast;

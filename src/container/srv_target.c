@@ -45,6 +45,7 @@
 #include <daos_srv/pool.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/iv.h>
+#include <daos_srv/srv_obj_ec.h>
 #include "rpc.h"
 #include "srv_internal.h"
 #include <daos/cont_props.h>
@@ -74,8 +75,17 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	if (dss_ult_exiting(cont->sc_agg_req))
 		return 1;
 
+	rc = ds_obj_ec_aggregate(cont, epr, dss_ult_yield,
+				 (void *)cont->sc_agg_req);
+	if (rc)
+		D_ERROR("EC aggregation returned: "DF_RC"\n", DP_RC(rc));
+
+	if (dss_ult_exiting(cont->sc_agg_req))
+		return 1;
+
 	rc = vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc, dss_ult_yield,
 			   (void *)cont->sc_agg_req);
+
 	/* Wake up GC ULT */
 	sched_req_wakeup(cont->sc_pool->spc_gc_req);
 	return rc;
@@ -1740,6 +1750,9 @@ ds_cont_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 struct cont_snap_args {
 	uuid_t		 pool_uuid;
 	uuid_t		 cont_uuid;
+	uuid_t		 coh_uuid;
+	uint64_t	 snap_epoch;
+	uint64_t	 snap_opts;
 	int		 snap_count;
 	uint64_t	*snapshots;
 };
@@ -1853,6 +1866,14 @@ cont_snap_notify_one(void *vin)
 	rc = ds_cont_child_lookup(args->pool_uuid, args->cont_uuid, &cont);
 	if (rc != 0)
 		return rc;
+
+	if (args->snap_opts & DAOS_SNAP_OPT_OIT) {
+		rc = cont_child_gather_oids(cont, args->coh_uuid,
+					    args->snap_epoch);
+		if (rc)
+			return rc;
+	}
+
 	cont->sc_aggregation_max = crt_hlc_get();
 	ds_cont_child_put(cont);
 	return rc;
@@ -1870,6 +1891,10 @@ ds_cont_tgt_snapshot_notify_handler(crt_rpc_t *rpc)
 
 	uuid_copy(args.pool_uuid, in->tsi_pool_uuid);
 	uuid_copy(args.cont_uuid, in->tsi_cont_uuid);
+	uuid_copy(args.coh_uuid, in->tsi_coh_uuid);
+	args.snap_epoch = in->tsi_epoch;
+	args.snap_opts = in->tsi_opts;
+
 	out->tso_rc = dss_thread_collective(cont_snap_notify_one, &args, 0,
 					    DSS_ULT_IO);
 	if (out->tso_rc != 0)

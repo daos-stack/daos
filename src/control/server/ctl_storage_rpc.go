@@ -159,10 +159,15 @@ func (c *ControlService) scanInstanceBdevs(ctx context.Context) (*bdev.ScanRespo
 	instances := c.harness.Instances()
 
 	for _, srv := range instances {
-		// only retrieve results for devices listed in server config
-		bdevReq := bdev.ScanRequest{
-			DeviceList: c.instanceStorage[srv.Index()].Bdev.GetNvmeDevs(),
+		nvmeDevs := c.instanceStorage[srv.Index()].Bdev.GetNvmeDevs()
+
+		if len(nvmeDevs) == 0 {
+			continue
 		}
+
+		// only retrieve results for devices listed in server config
+		bdevReq := bdev.ScanRequest{DeviceList: nvmeDevs}
+
 		c.log.Debugf("instance %d storage scan: only show bdev devices in config %v",
 			srv.Index(), bdevReq.DeviceList)
 
@@ -204,6 +209,15 @@ func (c *ControlService) scanInstanceBdevs(ctx context.Context) (*bdev.ScanRespo
 	return &bdev.ScanResponse{Controllers: ctrlrs}, nil
 }
 
+// stripNvmeDetails removes all controller details leaving only PCI address and
+// NUMA node/socket ID. Useful when scanning only device topology.
+func stripNvmeDetails(pbc *ctlpb.NvmeController) {
+	pbc.Serial = ""
+	pbc.Model = ""
+	pbc.Fwrev = ""
+	pbc.Namespaces = nil
+}
+
 // newScanBdevResp populates protobuf NVMe scan response with controller info
 // including health statistics or metadata if requested.
 func newScanNvmeResp(req *ctlpb.ScanNvmeReq, inResp *bdev.ScanResponse, inErr error) (*ctlpb.ScanNvmeResp, error) {
@@ -222,11 +236,14 @@ func newScanNvmeResp(req *ctlpb.ScanNvmeReq, inResp *bdev.ScanResponse, inErr er
 
 	// trim unwanted fields so responses can be coalesced from hash map
 	for _, pbc := range pbCtrlrs {
-		if !req.Health {
+		if !req.GetHealth() {
 			pbc.Healthstats = nil
 		}
-		if !req.Meta {
+		if !req.GetMeta() {
 			pbc.Smddevices = nil
+		}
+		if req.GetBasic() {
+			stripNvmeDetails(pbc)
 		}
 	}
 

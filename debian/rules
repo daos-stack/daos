@@ -17,7 +17,8 @@ endif
 
 SCONS = scons -j $(NUMJOBS)
 DEB_SCONS_OPTIONS := --config=force --no-rpath USE_INSTALLED=all \
-                     CONF_DIR=$(sysconfdir)/daos PREFIX=$(prefix)
+                     CONF_DIR=$(sysconfdir)/daos PREFIX=$(prefix) \
+                     $(SCONS_ARGS)
 
 export GOCACHE := $(CURDIR)/.gocache
 

@@ -220,10 +220,6 @@ func (svc *mgmtSvc) join(ctx context.Context, req *batchJoinRequest) *batchJoinR
 	} else {
 		svc.log.Debugf("updated system member: rank %d, uri %s, %s->%s",
 			member.Rank, member.FabricURI, joinResponse.PrevState, member.State())
-		if joinResponse.PrevState == member.State() {
-			svc.log.Errorf("unexpected same state in rank %d update (%s->%s)",
-				member.Rank, joinResponse.PrevState, member.State())
-		}
 	}
 
 	resp := &batchJoinResponse{
@@ -324,9 +320,13 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.JoinResp, error) {
 	svc.log.Debugf("MgmtSvc.Join dispatch, req:%#v\n", req)
 
+	if err := svc.sysdb.CheckLeader(); err != nil {
+		return nil, err
+	}
+
 	replyAddr, err := getPeerListenAddr(ctx, req.GetAddr())
 	if err != nil {
-		return nil, errors.WithMessage(err, "combining peer addr with listener port")
+		return nil, errors.Wrapf(err, "failed to parse %q into a peer control address", req.GetAddr())
 	}
 
 	bjr := &batchJoinRequest{
@@ -365,7 +365,7 @@ func (svc *mgmtSvc) drpcOnLocalRanks(parent context.Context, req *mgmtpb.RanksRe
 
 	instances, err := svc.harness.FilterInstancesByRankSet(req.GetRanks())
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "sending request over dRPC to local ranks")
 	}
 
 	inflight := 0
@@ -382,7 +382,7 @@ func (svc *mgmtSvc) drpcOnLocalRanks(parent context.Context, req *mgmtpb.RanksRe
 		result := <-ch
 		inflight--
 		if result == nil {
-			return nil, errors.New("nil result")
+			return nil, errors.New("sending request over dRPC to local ranks: nil result")
 		}
 		results = append(results, result)
 	}
@@ -407,7 +407,7 @@ func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq)
 
 	results, err := svc.drpcOnLocalRanks(ctx, req, drpc.MethodPrepShutdown)
 	if err != nil {
-		return nil, errors.Wrap(err, "sending request over dRPC to local ranks")
+		return nil, err
 	}
 
 	resp := &mgmtpb.RanksResp{}
@@ -501,12 +501,40 @@ func (svc *mgmtSvc) StopRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 	return resp, nil
 }
 
+func (svc *mgmtSvc) queryLocalRanks(ctx context.Context, req *mgmtpb.RanksReq) ([]*system.MemberResult, error) {
+	if req.Force {
+		return svc.drpcOnLocalRanks(ctx, req, drpc.MethodPingRank)
+	}
+
+	instances, err := svc.harness.FilterInstancesByRankSet(req.GetRanks())
+	if err != nil {
+		return nil, err
+	}
+
+	results := make(system.MemberResults, 0, len(instances))
+	for _, srv := range instances {
+		rank, err := srv.GetRank()
+		if err != nil {
+			// shouldn't happen, instances already filtered by ranks
+			return nil, err
+		}
+		results = append(results, &system.MemberResult{
+			Rank: rank, State: srv.LocalState(),
+		})
+	}
+
+	return results, nil
+}
+
 // PingRanks implements the method defined for the Management Service.
 //
-// Query data-plane all instances (DAOS system members) managed by harness to verify
-// responsiveness.
+// Query data-plane ranks (DAOS system members) managed by harness to verify
+// responsiveness. If force flag is set in request, perform invasive ping by
+// sending request over dRPC to be handled by rank process. If forced flag
+// is not set in request then perform non-invasive ping by retrieving rank
+// instance state (AwaitFormat/Stopped/Starting/Started) from harness.
 //
-// Iterate over local instances, issuing async Ping dRPCs and record results.
+// Iterate over local instances, ping and record results.
 func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
 	if req == nil {
 		return nil, errors.New("nil request")
@@ -514,11 +542,12 @@ func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 	if len(req.GetRanks()) == 0 {
 		return nil, errors.New("no ranks specified in request")
 	}
+
 	svc.log.Debugf("MgmtSvc.PingRanks dispatch, req:%+v\n", *req)
 
-	results, err := svc.drpcOnLocalRanks(ctx, req, drpc.MethodPingRank)
+	results, err := svc.queryLocalRanks(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "sending request over dRPC to local ranks")
+		return nil, err
 	}
 
 	resp := &mgmtpb.RanksResp{}
@@ -663,28 +692,23 @@ func (svc *mgmtSvc) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq)
 		return nil, errors.New("nil request")
 	}
 
-	if len(svc.harness.instances) == 0 {
-		return nil, errors.New("no I/O servers configured; can't determine leader")
-	}
+	svc.log.Debugf("MgmtSvc.LeaderQuery dispatch, req:%+v\n", req)
 
-	instance := svc.harness.instances[0]
-	sb := instance.getSuperblock()
-	if sb == nil {
-		return nil, errors.New("no I/O superblock found; can't determine leader")
-	}
-
-	if req.System != sb.System {
+	if req.System != svc.sysdb.SystemName() {
 		return nil, errors.Errorf("received leader query for wrong system (local: %q, req: %q)",
-			sb.System, req.System)
+			svc.sysdb.SystemName(), req.System)
 	}
 
-	leaderAddr, err := instance.msClient.LeaderAddress()
+	leaderAddr, replicas, err := svc.sysdb.LeaderQuery()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to determine current leader address")
+		return nil, err
 	}
 
-	return &mgmtpb.LeaderQueryResp{
+	resp := &mgmtpb.LeaderQueryResp{
 		CurrentLeader: leaderAddr,
-		Replicas:      instance.msClient.cfg.AccessPoints,
-	}, nil
+		Replicas:      replicas,
+	}
+
+	svc.log.Debugf("MgmtSvc.LeaderQuery dispatch, resp:%+v\n", resp)
+	return resp, nil
 }

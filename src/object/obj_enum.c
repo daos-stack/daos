@@ -85,7 +85,7 @@ is_sgl_full(struct dss_enum_arg *arg, daos_size_t size)
 	while (arg->sgl_idx < sgl->sg_nr) {
 		d_iov_t *iovs = sgl->sg_iovs;
 
-		if (iovs[arg->sgl_idx].iov_len + size >=
+		if (iovs[arg->sgl_idx].iov_len + size >
 		    iovs[arg->sgl_idx].iov_buf_len) {
 			D_DEBUG(DB_IO, "current %dth iov buf is full"
 				" iov_len %zd size "DF_U64" buf_len %zd\n",
@@ -558,7 +558,8 @@ unpack_csum(d_iov_t *csum_iov, struct dcs_iod_csums *iod_csums)
 /* Parse recxs in <*data, len> and append them to iod and sgl. */
 static int
 unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_epoch_t *eph,
-	     d_sg_list_t *sgl, daos_key_desc_t *kds, void *data,
+	     daos_epoch_t *min_eph, d_sg_list_t *sgl,
+	     daos_key_desc_t *kds, void *data,
 	     d_iov_t *csum_iov, struct dcs_iod_csums *iod_csums,
 	     unsigned int type)
 {
@@ -614,6 +615,9 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_epoch_t *eph,
 	if (*eph < rec->rec_epr.epr_lo)
 		*eph = rec->rec_epr.epr_lo;
 
+	if (*min_eph == 0 || rec->rec_epr.epr_lo < *min_eph)
+		*min_eph = rec->rec_epr.epr_lo;
+
 	iod->iod_recxs[iod->iod_nr] = rec->rec_recx;
 	iod->iod_nr++;
 	iod->iod_size = rec->rec_size;
@@ -668,7 +672,7 @@ dss_enum_unpack_io_init(struct dss_enum_unpack_io *io, daos_unit_oid_t oid,
 			daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
 			int *recxs_caps, d_sg_list_t *sgls,
 			daos_epoch_t *akey_ephs, daos_epoch_t *rec_ephs,
-			int iods_cap)
+			daos_epoch_t *rec_min_ephs, int iods_cap)
 {
 	memset(io, 0, sizeof(*io));
 
@@ -702,24 +706,14 @@ dss_enum_unpack_io_init(struct dss_enum_unpack_io *io, daos_unit_oid_t oid,
 		memset(rec_ephs, 0, sizeof(*rec_ephs) * iods_cap);
 		io->ui_rec_punch_ephs = rec_ephs;
 	}
-}
 
-static void
-clear_iod(daos_iod_t *iod, d_sg_list_t *sgl, int *recxs_cap)
-{
-	daos_iov_free(&iod->iod_name);
-	if (iod->iod_recxs != NULL)
-		D_FREE(iod->iod_recxs);
-	memset(iod, 0, sizeof(*iod));
-
-	if (sgl != NULL) {
-		if (sgl->sg_iovs != NULL)
-			D_FREE(sgl->sg_iovs);
-		memset(sgl, 0, sizeof(*sgl));
+	if (rec_min_ephs != NULL) {
+		memset(rec_min_ephs, 0, sizeof(*rec_min_ephs) * iods_cap);
+		io->ui_rec_min_ephs = rec_min_ephs;
 	}
 
-	*recxs_cap = 0;
 }
+
 static void
 clear_iod_csum(struct dcs_iod_csums *iod_csum)
 {
@@ -729,8 +723,7 @@ clear_iod_csum(struct dcs_iod_csums *iod_csum)
 		return;
 
 	for (i = 0; i < iod_csum->ic_nr; i++)
-		if (iod_csum->ic_data[i].cs_csum != NULL)
-			D_FREE(iod_csum->ic_data->cs_csum);
+		D_FREE(iod_csum->ic_data[i].cs_csum);
 
 	D_FREE(iod_csum->ic_data);
 }
@@ -746,20 +739,23 @@ dss_enum_unpack_io_clear(struct dss_enum_unpack_io *io)
 	int i;
 
 	for (i = 0; i <= io->ui_iods_top; i++) {
-		d_sg_list_t *sgl = NULL;
-
 		if (io->ui_sgls != NULL)
-			sgl = &io->ui_sgls[i];
-		clear_iod_csum(io_iod_csums(io, i));
-		clear_iod(&io->ui_iods[i], sgl, &io->ui_recxs_caps[i]);
-	}
+			d_sgl_fini(&io->ui_sgls[i], false);
 
-	if (io->ui_akey_punch_ephs)
+		clear_iod_csum(io_iod_csums(io, i));
+
+		daos_iov_free(&io->ui_iods[i].iod_name);
+		D_FREE(io->ui_iods[i].iod_recxs);
+	}
+	memset(io->ui_iods, 0, sizeof(*io->ui_iods) * io->ui_iods_cap);
+	memset(io->ui_recxs_caps, 0,
+	       sizeof(*io->ui_recxs_caps) * io->ui_iods_cap);
+	if (io->ui_akey_punch_ephs != NULL)
 		memset(io->ui_akey_punch_ephs, 0,
-		       sizeof(daos_epoch_t) * io->ui_iods_cap);
-	if (io->ui_rec_punch_ephs)
+		       sizeof(*io->ui_akey_punch_ephs) * io->ui_iods_cap);
+	if (io->ui_rec_punch_ephs != NULL)
 		memset(io->ui_rec_punch_ephs, 0,
-		       sizeof(daos_epoch_t) * io->ui_iods_cap);
+		       sizeof(*io->ui_rec_punch_ephs) * io->ui_iods_cap);
 	io->ui_dkey_punch_eph = 0;
 	io->ui_iods_top = -1;
 	io->ui_version = 0;
@@ -787,13 +783,18 @@ clear_top_iod(struct dss_enum_unpack_io *io)
 		return;
 
 	if (io->ui_iods[idx].iod_nr == 0) {
-		d_sg_list_t *sgl = NULL;
-
 		D_DEBUG(DB_IO, "iod without recxs: %d\n", idx);
+
 		if (io->ui_sgls != NULL)
-			sgl = &io->ui_sgls[idx];
+			d_sgl_fini(&io->ui_sgls[idx], false);
+
 		clear_iod_csum(io_iod_csums(io, idx));
-		clear_iod(&io->ui_iods[idx], sgl, &io->ui_recxs_caps[idx]);
+
+		daos_iov_free(&io->ui_iods[idx].iod_name);
+		D_FREE(io->ui_iods[idx].iod_recxs);
+		memset(&io->ui_iods[idx], 0, sizeof(*io->ui_iods));
+
+		io->ui_recxs_caps[idx] = 0;
 		io->ui_iods_top--;
 	}
 }
@@ -867,8 +868,8 @@ static int
 next_iod(struct dss_enum_unpack_io *io, dss_enum_unpack_cb_t cb, void *cb_arg,
 	 d_iov_t *new_iod_name)
 {
-	int idx;
-	int rc = 0;
+	int	idx;
+	int	rc = 0;
 
 	D_ASSERTF(io->ui_iods_cap > 0, "%d > 0\n", io->ui_iods_cap);
 
@@ -882,7 +883,7 @@ next_iod(struct dss_enum_unpack_io *io, dss_enum_unpack_cb_t cb, void *cb_arg,
 		return complete_io_init_iod(io, cb, cb_arg, new_iod_name);
 
 	io->ui_iods_top++;
-
+	io->ui_rec_min_ephs[io->ui_iods_top] = 0;
 	/* Init the iod_name of the new IOD */
 	if (new_iod_name == NULL && idx != -1)
 		new_iod_name = &io->ui_iods[idx].iod_name;
@@ -948,8 +949,8 @@ enum_unpack_key(daos_key_desc_t *kds, char *key_data,
 		return rc;
 	}
 
-	D_DEBUG(DB_IO, "process akey %d %s\n",
-		(int)key.iov_len, (char *)key.iov_buf);
+	D_DEBUG(DB_IO, "process akey " DF_KEY "\n",
+		DP_KEY(&key));
 
 	if (io->ui_iods_top == -1 ||
 	    !daos_key_match(&io->ui_iods[io->ui_iods_top].iod_name, &key))
@@ -1050,6 +1051,7 @@ enum_unpack_recxs(daos_key_desc_t *kds, void *data,
 	top = io->ui_iods_top;
 	rc = unpack_recxs(&io->ui_iods[top], &io->ui_recxs_caps[top],
 			  &io->ui_rec_punch_ephs[top],
+			  &io->ui_rec_min_ephs[top],
 			  io->ui_sgls == NULL ?  NULL : &io->ui_sgls[top],
 			  kds, ptr, csum_iov, &io->ui_iods_csums[top], type);
 free:
@@ -1227,6 +1229,7 @@ dss_enum_unpack(daos_unit_oid_t oid, daos_key_desc_t *kds, int kds_num,
 	d_sg_list_t			sgls[DSS_ENUM_UNPACK_MAX_IODS];
 	daos_epoch_t			ephs[DSS_ENUM_UNPACK_MAX_IODS];
 	daos_epoch_t			rec_ephs[DSS_ENUM_UNPACK_MAX_IODS];
+	daos_epoch_t			rec_min_ephs[DSS_ENUM_UNPACK_MAX_IODS];
 	d_iov_t				csum_iov = { 0 };
 	struct io_unpack_arg		unpack_arg;
 	int				rc = 0;
@@ -1234,7 +1237,8 @@ dss_enum_unpack(daos_unit_oid_t oid, daos_key_desc_t *kds, int kds_num,
 	D_ASSERT(kds_num > 0);
 	D_ASSERT(kds != NULL);
 	dss_enum_unpack_io_init(&io, oid, iods, iods_csums, recxs_caps, sgls,
-				ephs, rec_ephs, DSS_ENUM_UNPACK_MAX_IODS);
+				ephs, rec_ephs, rec_min_ephs,
+				DSS_ENUM_UNPACK_MAX_IODS);
 
 	if (csum)
 		csum_iov = *csum;

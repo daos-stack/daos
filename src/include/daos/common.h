@@ -202,6 +202,15 @@ daos_getntime_coarse(void)
 	return (tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec); /* nano seconds */
 }
 
+static inline uint64_t
+daos_getutime(void)
+{
+	struct timespec tv;
+
+	d_gettime(&tv);
+	return d_time2us(tv);
+}
+
 static inline int daos_gettime_coarse(uint64_t *time)
 {
 	struct timespec	now;
@@ -234,8 +243,6 @@ int daos_array_find(void *array, unsigned int len, uint64_t key,
 		    daos_sort_ops_t *ops);
 void daos_array_shuffle(void *arr, unsigned int len, daos_sort_ops_t *ops);
 
-int  daos_sgl_init(d_sg_list_t *sgl, unsigned int nr);
-void daos_sgl_fini(d_sg_list_t *sgl, bool free_iovs);
 int daos_sgls_copy_ptr(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
 		       int src_nr);
 int daos_sgls_copy_data_out(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
@@ -245,6 +252,7 @@ int daos_sgls_copy_all(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
 int daos_sgl_copy_data_out(d_sg_list_t *dst, d_sg_list_t *src);
 int daos_sgl_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
 int daos_sgl_alloc_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
+int daos_sgl_merge(d_sg_list_t *dst, d_sg_list_t *src);
 daos_size_t daos_sgl_data_len(d_sg_list_t *sgl);
 daos_size_t daos_sgl_buf_size(d_sg_list_t *sgl);
 daos_size_t daos_sgls_buf_size(d_sg_list_t *sgls, int nr);
@@ -450,6 +458,7 @@ daos_errno2der(int err)
 	case EPROTO:		return -DER_PROTO;
 	case EINVAL:		return -DER_INVAL;
 	case ENOTDIR:		return -DER_NOTDIR;
+	case EIO:		return -DER_IO;
 	case EFAULT:
 	case ENXIO:
 	case ENODEV:
@@ -499,6 +508,7 @@ daos_der2errno(int err)
 	case -DER_BADPATH:
 	case -DER_NOTDIR:	return ENOTDIR;
 	case -DER_STALE:	return ESTALE;
+	case -DER_TX_RESTART:	return ERESTART;
 	default:		return EIO;
 	}
 };
@@ -656,6 +666,8 @@ enum {
 #define DAOS_VC_LOST_REPLICA		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x43)
 
 #define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
+#define DAOS_NVME_WRITE_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x51)
+#define DAOS_NVME_READ_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x52)
 
 #define DAOS_POOL_CREATE_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x60)
 #define DAOS_POOL_DESTROY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x61)
@@ -674,6 +686,8 @@ enum {
 #define DAOS_FAIL_LOST_REQ		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x72)
 
 #define DAOS_SHARD_OBJ_RW_DROP_REPLY (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x80)
+#define DAOS_OBJ_FETCH_DATA_LOST	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x81)
+#define DAOS_OBJ_TRY_SPECIAL_SHARD	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x82)
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 
@@ -748,8 +762,10 @@ int crt_proc_struct_daos_acl(crt_proc_t proc, struct daos_acl **data);
 
 bool daos_prop_valid(daos_prop_t *prop, bool pool, bool input);
 daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool);
-struct daos_prop_entry *daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
 int daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply);
+void daos_prop_fini(daos_prop_t *prop);
+
+struct daos_prop_entry *daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
 int daos_prop_entry_copy(struct daos_prop_entry *entry,
 			 struct daos_prop_entry *entry_dup);
 daos_recx_t *daos_recx_alloc(uint32_t nr);

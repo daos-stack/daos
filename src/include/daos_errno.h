@@ -149,7 +149,28 @@ extern "C" {
 	       Incorrect target for the RPC)				\
 	/** Group versioning mismatch */				\
 	ACTION(DER_GRPVER,		(DER_ERR_GURT_BASE + 36),	\
-	       Group versioning mismatch)
+	       Group versioning mismatch)				\
+	/** HLC synchronization error */				\
+	ACTION(DER_HLC_SYNC,		(DER_ERR_GURT_BASE + 37),	\
+	       HLC synchronization error)				\
+	/** No shared memory available */				\
+	ACTION(DER_NO_SHMEM,		(DER_ERR_GURT_BASE + 38),	\
+	       Not enough shared memory free)				\
+	/** Failed to add metric */					\
+	ACTION(DER_ADD_METRIC_FAILED,   (DER_ERR_GURT_BASE + 39),	\
+	       Failed to add the specified metric)			\
+	/** Duration start/end mismatch */				\
+	ACTION(DER_DURATION_MISMATCH,   (DER_ERR_GURT_BASE + 40),	\
+	       Duration end not paired with duration start)		\
+	/** Operation not permitted on metric type*/			\
+	ACTION(DER_OP_NOT_PERMITTED,    (DER_ERR_GURT_BASE + 41),	\
+	       Operation not permitted for metric type provided)	\
+	/** Metric path name exceeds permitted length*/			\
+	ACTION(DER_EXCEEDS_PATH_LEN,    (DER_ERR_GURT_BASE + 42),	\
+	       Path name exceeds permitted length)			\
+	/** Metric was not found.*/					\
+	ACTION(DER_METRIC_NOT_FOUND,    (DER_ERR_GURT_BASE + 43),	\
+	       Read failed because metric not found)
 	/** TODO: add more error numbers */
 
 #define D_FOREACH_DAOS_ERR(ACTION)					\
@@ -239,7 +260,10 @@ extern "C" {
 	       TX is not committed)					\
 	/** Agent is incompatible with libdaos */			\
 	ACTION(DER_AGENT_INCOMPAT,	(DER_ERR_DAOS_BASE + 29),	\
-	       Agent is incompatible with libdaos)
+	       Agent is incompatible with libdaos)			\
+	/** Multiple shards locate on the same target */		\
+	ACTION(DER_SHARDS_OVERLAP,	(DER_ERR_DAOS_BASE + 30),	\
+	       Shards overlap)
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
