@@ -1,8 +1,9 @@
+arch: amd64
+os: linux
 dist: focal
-sudo: required
 
 env:
- matrix:
+ jobs:
   - DOCKER_IMAGE=ubuntu.20.04
   - DOCKER_IMAGE=centos.7
 
