@@ -2102,6 +2102,8 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 		return EINVAL;
 	if (path == NULL || strnlen(path, PATH_MAX) > PATH_MAX - 1)
 		return EINVAL;
+	if (path[0] != '/')
+		return EINVAL;
 
 	/** if we added a prefix, check and skip over it */
 	if (dfs->prefix) {

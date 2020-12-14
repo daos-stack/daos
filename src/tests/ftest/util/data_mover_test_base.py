@@ -30,6 +30,7 @@ from data_mover_utils import DataMover
 from os.path import join
 import uuid
 
+
 class DataMoverTestBase(IorTestBase):
     # pylint: disable=too-many-ancestors
     """Base DataMover test class.
@@ -44,6 +45,9 @@ class DataMoverTestBase(IorTestBase):
     :avocado: recursive
     """
 
+    # The valid parameter types for setting param locations.
+    PARAM_TYPES = ("POSIX", "DAOS_UUID", "DAOS_UNS")
+
     def __init__(self, *args, **kwargs):
         """Initialize a DataMoverTestBase object."""
         super(DataMoverTestBase, self).__init__(*args, **kwargs)
@@ -53,8 +57,7 @@ class DataMoverTestBase(IorTestBase):
         self.containers = []
         self.uuids = []
         self._gen_daos_path_v = 0
-        self.posix_path = join(self.workdir, "posix_test")
-        self._new_posix_dir_v = 0
+        self.dfuse_hosts = None
 
     def setUp(self):
         """Set up each test case."""
@@ -68,21 +71,49 @@ class DataMoverTestBase(IorTestBase):
         self.dm_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/datamover/processes/*')
 
-    def tearDown(self):
-        """Tear down each test case."""
-        # Remove the created posix test path
-        cmd = "rm -rf '{}'".format(self.posix_path)
-        self.execute_cmd(cmd)
+        # List of test paths to create and remove
+        self.posix_test_paths = []
 
-        # Stop the servers and agents
-        super(DataMoverTestBase, self).tearDown()
+    def pre_tear_down(self):
+        """Tear down steps to run before tearDown().
 
-    # The valid parameter types for setting param locations.
-    PARAM_TYPES = ("POSIX", "DAOS_UUID", "DAOS_UNS")
+        Returns:
+            list: a list of error strings to report at the end of tearDown().
+
+        """
+        error_list = []
+        # Remove the created directories
+        if self.posix_test_paths:
+            command = "rm -rf {}".format(self.get_posix_test_path_string())
+            try:
+                self._execute_command(command)
+            except CommandFailure as error:
+                error_list.append(
+                    "Error removing created directories: {}".format(error))
+        return error_list
+
+    def get_posix_test_path_list(self):
+        """Get a list of quoted posix test path strings.
+
+        Returns:
+            list: a list of quoted posix test path strings
+
+        """
+        return ["'{}'".format(item) for item in self.posix_test_paths]
+
+    def get_posix_test_path_string(self):
+        """Get a string of all of the quoted posix test path strings.
+
+        Returns:
+            str: a string of all of the quoted posix test path strings
+
+        """
+        return " ".join(self.get_posix_test_path_list())
 
     def validate_param_type(self, param_type):
-        """Validates the param_type, converts to upper-case,
-           handles shorthand types.
+        """Validates the param_type.
+
+        It converts param_types to upper-case and handles shorthand types.
 
         Args:
             param_type (str): The param_type to be validated.
@@ -97,12 +128,13 @@ class DataMoverTestBase(IorTestBase):
             return _type
         self.fail("Invalid param_type: {}".format(_type))
 
-
     def create_pool(self):
         """Create a TestPool object.
 
         Returns:
-            The TestPool"""
+            TestPool: the created pool
+
+        """
         # Get the pool params
         pool = TestPool(
             self.context, dmg_command=self.get_dmg_command())
@@ -143,6 +175,7 @@ class DataMoverTestBase(IorTestBase):
             <dfuse.mount_dir>/[pool_uuid]/[cont_uuid]/<dir_name>
             dfuse_uns_pool and dfuse_uns_cont should only be supplied
             when dfuse was not started for a specific pool/container.
+
         """
         # Get container params
         container = TestContainer(
@@ -168,7 +201,7 @@ class DataMoverTestBase(IorTestBase):
         return container
 
     def gen_uuid(self):
-        """Generate a unique uuid"""
+        """Generate a unique uuid."""
         new_uuid = str(uuid.uuid4())
         while new_uuid in self.uuids:
             new_uuid = str(uuid.uuid4())
@@ -188,34 +221,22 @@ class DataMoverTestBase(IorTestBase):
             return join(prefix, daos_dir)
         return join("/", daos_dir)
 
-    def new_posix_dir(self):
-        """Creates and returns a new, unique, POSIX path"""
-        dir_name = "dir{}".format(str(self._new_posix_dir_v))
-        path = join(self.posix_path, dir_name)
-        self._new_posix_dir_v += 1
-
-        # Create the directory
-        cmd = "mkdir -p '{}'".format(path)
-        self.execute_cmd(cmd)
-
-        return path
-
     @staticmethod
     def svcl_from_pool(pool):
-        """ Get the string svc for a pool """
+        """Get the string svc for a pool."""
         return ":".join(map(str, pool.svc_ranks))
 
     def set_src_location(self, *args, **kwargs):
-        """Shorthand for set_location("src", ...)"""
+        """Shorthand for set_location("src", ...)."""
         self.set_location("src", *args, **kwargs)
 
     def set_dst_location(self, *args, **kwargs):
-        """Shorthand for set_location("dst", ...)"""
+        """Shorthand for set_location("dst", ...)."""
         self.set_location("dst", *args, **kwargs)
 
     def set_location(self, src_or_dst, param_type, path,
                      pool=None, cont=None, display=True):
-        """Sets the src or dst params based on the location.
+        """Set the src or dst params based on the location.
 
         Args:
             src_or_dst (str): set params for src or dst
@@ -299,7 +320,7 @@ class DataMoverTestBase(IorTestBase):
 
     def set_ior_location(self, param_type, path, pool=None, cont=None,
                          path_suffix=None, display=True):
-        """Sets the ior params based on the location.
+        """Set the ior params based on the location.
 
         Args:
             param_type (str): how to interpret the location
@@ -349,8 +370,7 @@ class DataMoverTestBase(IorTestBase):
 
     def set_ior_location_and_run(self, param_type, path, pool=None, cont=None,
                                  path_suffix=None, flags=None, display=True):
-        """Sets the ior params based on the location
-           and runs ior with some flags.
+        """Set the ior params based on the location and run ior with some flags.
 
         Args:
             param_type: see set_ior_location
@@ -371,7 +391,8 @@ class DataMoverTestBase(IorTestBase):
                       expected_rc=0, expected_output=None,
                       processes=None):
         """Run the DataMover command.
-           Currently, this only uses "dcp".
+
+        Currently, this only uses "dcp".
 
         Args:
             test_desc (str, optional): description to print before running
@@ -382,6 +403,7 @@ class DataMoverTestBase(IorTestBase):
 
         Returns:
             The result "run" object
+
         """
         if not processes:
             processes = self.processes
@@ -419,29 +441,3 @@ class DataMoverTestBase(IorTestBase):
                 self.fail("Expected {}: {}".format(s, test_desc))
 
         return result
-
-    def execute_cmd_list(self, cmd_list):
-        """
-        Executes a list of commands.
-        Appends a newline to the end of each command for readability.
-
-        Args:
-            cmd_list (list): A list of strings of commands
-        """
-        cmd = "; \\\n".join(cmd_list)
-        self.execute_cmd(cmd)
-
-    def run_diff(self, path1, path2, dereference=False):
-        """
-        Runs diff on two files/directories.
-
-        Args:
-            path1 (str): The first file/directory
-            path2 (str): The second file/directory
-            dereference (bool, optional): Whether or not diff should dereference
-                symlinks. Defaults to False.
-        """
-        cmd = "diff -r "
-        if not dereference:
-            cmd += "--no-dereference "
-        self.execute_cmd(cmd + str(path1) + " " + str(path2))
