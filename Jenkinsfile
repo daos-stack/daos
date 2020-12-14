@@ -453,8 +453,11 @@ void foo() {
     println("checking currentBuild.changeSets")
 
     if (currentBuild.changeSets != null) {
+        println("currentBuild.changeSets != null")
         for (changeSetList in currentBuild.changeSets) {
+            println("changeSetList")
             for (changeSet in changeSetList) {
+                println("changeSet")
                 if (changeSet.msg.contains('[ci-skip]')) {
                     println("-------------\n" + changeSet.msg)
                 }
