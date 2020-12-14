@@ -540,10 +540,9 @@ class TestWithServers(TestWithoutServers):
         if isinstance(server_groups, dict):
             for group, hosts in server_groups.items():
                 servers = hosts["servers"]
+                access_list = None
                 if "access_list" in hosts and hosts["access_list"]:
                     access_list = hosts["access_list"]
-                else:
-                    access_list = servers
 
                 transport = DaosServerTransportCredentials(self.workdir)
                 # Use the unique agent group name to create a unique yaml file
@@ -656,7 +655,7 @@ class TestWithServers(TestWithoutServers):
         self.log.info("--- CONFIGURING %s MANAGER ---", name.upper())
         if access_list is None:
             # Only use the first host in the access list
-            access_list = self.hostlist_servers[:1]
+            access_list = hosts[:1]
         # Calling get_params() will set the test-specific log names
         manager.get_params(self)
         manager.set_config_value("access_points", access_list)
