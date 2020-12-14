@@ -24,6 +24,7 @@
 from data_mover_test_base import DataMoverTestBase
 from os.path import join, sep
 
+
 class CopyNegativeTest(DataMoverTestBase):
     # pylint: disable=too-many-ancestors
     """Test class for Datamover negative testing.
@@ -43,10 +44,6 @@ class CopyNegativeTest(DataMoverTestBase):
     MFU_ERR_DAOS = "MFU_ERR(-4000)"
     MFU_ERR_DAOS_INVAL_ARG = "MFU_ERR(-4001)"
 
-    def __init__(self, *args, **kwargs):
-        """Initialize a CopyNegativeTest object."""
-        super(CopyNegativeTest, self).__init__(*args, **kwargs)
-
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
@@ -63,25 +60,14 @@ class CopyNegativeTest(DataMoverTestBase):
             "test_file", "/run/ior/copy_negative/*")
 
         # Setup the directory structures
-        self.posix_test_path = join(self.workdir, "posix_test") + sep
-        self.posix_test_file = join(self.posix_test_path, self.test_file)
+        self.posix_test_paths.append(join(self.workdir, "posix_test") + sep)
+        self.posix_test_file = join(self.posix_test_paths[0], self.test_file)
         self.daos_test_path = "/"
         self.daos_test_file = join(self.daos_test_path, self.test_file)
 
         # Create the directories
-        cmd = "mkdir -p '{}'".format(
-            self.posix_test_path)
+        cmd = "mkdir -p {}".format(self.get_posix_test_path_string())
         self.execute_cmd(cmd)
-
-    def tearDown(self):
-        """Tear down each test case."""
-        # Remove the created directories
-        cmd = "rm -r '{}'".format(
-            self.posix_test_path)
-        self.execute_cmd(cmd)
-
-        # Stop the servers and agents
-        super(CopyNegativeTest, self).tearDown()
 
     def test_copy_bad_params(self):
         """Jira ID: DAOS-5515
@@ -115,7 +101,7 @@ class CopyNegativeTest(DataMoverTestBase):
         # Bad parameter: required arguments.
         # These tests use the same valid destination parameters,
         # but varying invalid source parameters.
-        self.set_dst_location("POSIX", self.posix_test_path)
+        self.set_dst_location("POSIX", self.posix_test_paths[0])
 
         self.set_src_location("DAOS_UUID", "/", None, container1)
         self.run_datamover(
@@ -138,7 +124,7 @@ class CopyNegativeTest(DataMoverTestBase):
         # Bad parameter: required arguments.
         # These tests use the same valid source parameters,
         # but varying invalid destination parameters.
-        self.set_src_location("POSIX", self.posix_test_path)
+        self.set_src_location("POSIX", self.posix_test_paths[0])
 
         self.set_dst_location("DAOS_UUID", "/", None, container1)
         self.run_datamover(
@@ -162,7 +148,7 @@ class CopyNegativeTest(DataMoverTestBase):
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
-        self.set_dst_location("POSIX", self.posix_test_path)
+        self.set_dst_location("POSIX", self.posix_test_paths[0])
         self.set_src_location("DAOS_UNS", "/", None, container1)
         self.run_datamover(
             test_desc="copy_bad_params (source UNS but no svcl)",
@@ -177,7 +163,7 @@ class CopyNegativeTest(DataMoverTestBase):
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
-        self.set_src_location("POSIX", self.posix_test_path)
+        self.set_src_location("POSIX", self.posix_test_paths[0])
         self.set_dst_location("DAOS_UNS", "/", None, container1)
         self.run_datamover(
             test_desc="copy_bad_params (dest UNS but no svcl)",
@@ -216,7 +202,7 @@ class CopyNegativeTest(DataMoverTestBase):
 
         # (3) Bad parameter: daos-prefix is invalid.
         # These tests use invalid prefixes.
-        self.set_dst_location("POSIX", self.posix_test_path)
+        self.set_dst_location("POSIX", self.posix_test_paths[0])
         self.set_src_location("DAOS_UNS", "/", pool1, container1)
         self.dm_cmd.daos_prefix.update("/fake/prefix")
         self.dm_cmd.src_path.update("/fake/prefix/dir")
@@ -225,7 +211,7 @@ class CopyNegativeTest(DataMoverTestBase):
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
-        self.set_src_location("POSIX", self.posix_test_path)
+        self.set_src_location("POSIX", self.posix_test_paths[0])
         self.set_dst_location("DAOS_UNS", "/", pool1, container1)
         self.dm_cmd.daos_prefix.update("/fake/prefix")
         self.dm_cmd.dest_path.update("/fake/prefix/dir")
@@ -234,7 +220,7 @@ class CopyNegativeTest(DataMoverTestBase):
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
-        self.set_dst_location("POSIX", self.posix_test_path)
+        self.set_dst_location("POSIX", self.posix_test_paths[0])
         self.set_src_location("DAOS_UNS", "/temp", pool1, container1)
         self.dm_cmd.src_path.update("/fake/fake/fake")
         self.run_datamover(
@@ -242,7 +228,7 @@ class CopyNegativeTest(DataMoverTestBase):
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
-        self.set_dst_location("POSIX", self.posix_test_path)
+        self.set_dst_location("POSIX", self.posix_test_paths[0])
         self.set_src_location("DAOS_UNS", "/temp", pool1, container1)
         src_path = "/fake/fake" + str(self.dm_cmd.daos_prefix.value)
         self.dm_cmd.src_path.update(src_path)
@@ -251,7 +237,7 @@ class CopyNegativeTest(DataMoverTestBase):
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
-        self.set_src_location("POSIX", self.posix_test_path)
+        self.set_src_location("POSIX", self.posix_test_paths[0])
         self.set_dst_location("DAOS_UNS", "/temp", pool1, container1)
         dst_path = "/fake/fake" + str(self.dm_cmd.daos_prefix.value)
         self.dm_cmd.dest_path.update(dst_path)
@@ -261,16 +247,16 @@ class CopyNegativeTest(DataMoverTestBase):
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
         self.set_dst_location("DAOS_UUID", "/", pool1, container1)
-        self.set_src_location("POSIX", self.posix_test_path)
-        self.dm_cmd.daos_prefix.update(self.posix_test_path)
+        self.set_src_location("POSIX", self.posix_test_paths[0])
+        self.dm_cmd.daos_prefix.update(self.posix_test_paths[0])
         self.run_datamover(
             test_desc="copy_bad_params (prefix is on POSIX src)",
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
         self.set_src_location("DAOS_UUID", "/", pool1, container1)
-        self.set_dst_location("POSIX", self.posix_test_path)
-        self.dm_cmd.daos_prefix.update(self.posix_test_path)
+        self.set_dst_location("POSIX", self.posix_test_paths[0])
+        self.dm_cmd.daos_prefix.update(self.posix_test_paths[0])
         self.run_datamover(
             test_desc="copy_bad_params (prefix is on POSIX dst)",
             expected_rc=1,
@@ -278,7 +264,7 @@ class CopyNegativeTest(DataMoverTestBase):
 
         # (4) Bad parameter: UUID, UNS, or POSIX path does not exist.
         # These tests use parameters that do not exist. """
-        self.set_dst_location("POSIX", self.posix_test_path)
+        self.set_dst_location("POSIX", self.posix_test_paths[0])
         self.set_src_location("DAOS_UUID", "/", pool1, container1)
         self.dm_cmd.daos_src_pool.update(str(self.gen_uuid()))
         self.run_datamover(
@@ -286,7 +272,7 @@ class CopyNegativeTest(DataMoverTestBase):
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS)
 
-        self.set_dst_location("POSIX", self.posix_test_path)
+        self.set_dst_location("POSIX", self.posix_test_paths[0])
         self.set_src_location("DAOS_UUID", "/", pool1, container1)
         self.dm_cmd.daos_src_cont.update(str(self.gen_uuid()))
         self.run_datamover(
@@ -294,7 +280,7 @@ class CopyNegativeTest(DataMoverTestBase):
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS)
 
-        self.set_src_location("POSIX", self.posix_test_path)
+        self.set_src_location("POSIX", self.posix_test_paths[0])
         self.set_dst_location("DAOS_UUID", "/", pool1, container1)
         self.dm_cmd.daos_dst_pool.update(str(self.gen_uuid()))
         self.run_datamover(
@@ -302,14 +288,14 @@ class CopyNegativeTest(DataMoverTestBase):
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS)
 
-        self.set_dst_location("POSIX", self.posix_test_path)
+        self.set_dst_location("POSIX", self.posix_test_paths[0])
         self.set_src_location("DAOS_UUID", "/fake/fake", pool1, container1)
         self.run_datamover(
             test_desc="copy_bad_params (src cont path does not exist)",
             expected_rc=1,
             expected_output=self.MFU_ERR_INVAL_ARG)
 
-        self.set_src_location("POSIX", self.posix_test_path)
+        self.set_src_location("POSIX", self.posix_test_paths[0])
         self.set_dst_location("DAOS_UUID", "/fake/fake", pool1, container1)
         self.run_datamover(
             test_desc="copy_bad_params (dst cont path does not exist)",
@@ -349,7 +335,7 @@ class CopyNegativeTest(DataMoverTestBase):
 
         self.set_src_location("DAOS_UUID", "/", pool1, container1)
         # Use a really long filename
-        dst_path = join(self.posix_test_path, "d"*300)
+        dst_path = join(self.posix_test_paths[0], "d"*300)
         self.set_dst_location("POSIX", dst_path)
         self.run_datamover(
             test_desc="copy_error_check (filename is too long)",
@@ -360,7 +346,7 @@ class CopyNegativeTest(DataMoverTestBase):
         self.ior_cmd.block_size.update(self.block_size_large)
         self.set_ior_location_and_run("POSIX", self.posix_test_file,
                                       flags=self.flags_write)
-        self.set_src_location("POSIX", self.posix_test_path)
+        self.set_src_location("POSIX", self.posix_test_paths[0])
         self.set_dst_location("DAOS_UUID", "/", pool1, container1)
         self.run_datamover(
             test_desc="copy_error_check (dst pool out of space)",

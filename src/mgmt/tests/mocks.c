@@ -476,3 +476,9 @@ ds_mgmt_dev_replace(uuid_t old_uuid, uuid_t new_uuid,
 {
 	return 0;
 }
+
+int
+ds_mgmt_dev_identify(uuid_t uuid, Mgmt__DevIdentifyResp *resp)
+{
+	return 0;
+}

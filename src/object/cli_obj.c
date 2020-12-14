@@ -815,6 +815,7 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 
 	if (epoch != NULL)
 		reasb_req->orr_epoch = *epoch;
+	reasb_req->orr_size_set = 0;
 	if (obj_auxi->req_reasbed && !reasb_req->orr_size_fetch) {
 		D_DEBUG(DB_TRACE, DF_OID" req reassembled (retry case).\n",
 			DP_OID(oid));
@@ -842,7 +843,6 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 	rc = obj_ec_req_reasb(args->iods, args->sgls, oid, oca, reasb_req,
 			      args->nr, obj_auxi->opc == DAOS_OBJ_RPC_UPDATE);
 	if (rc == 0) {
-		obj_auxi->flags |= ORF_DTX_SYNC;
 		obj_auxi->flags |= ORF_EC;
 		obj_auxi->req_reasbed = true;
 		if (reasb_req->orr_iods != NULL)
@@ -4017,8 +4017,11 @@ dc_obj_fetch_task(tse_task_t *task)
 	if (obj_auxi->ec_wait_recov)
 		goto out_task;
 
+	if (args->extra_flags & DIOF_FOR_MIGRATION)
+		obj_auxi->flags |= ORF_FOR_MIGRATION;
+
 	if (args->extra_flags & DIOF_CHECK_EXISTENCE) {
-		obj_auxi->flags |= DRF_CHECK_EXISTENCE;
+		obj_auxi->flags |= ORF_CHECK_EXISTENCE;
 	} else {
 		rc = obj_rw_req_reassemb(obj, args, &epoch, obj_auxi);
 		if (rc != 0) {
@@ -4783,9 +4786,10 @@ dc_obj_punch(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 		goto out_task;
 	}
 
-	if (daos_oclass_is_ec(obj->cob_md.omd_id, NULL) ||
-	    DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
+	if (DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
 		obj_auxi->flags |= ORF_DTX_SYNC;
+	if (daos_oclass_is_ec(obj->cob_md.omd_id, NULL))
+		obj_auxi->flags |= ORF_EC;
 
 	D_DEBUG(DB_IO, "punch "DF_OID" dkey %llu\n",
 		DP_OID(obj->cob_md.omd_id), (unsigned long long)dkey_hash);
@@ -4966,9 +4970,12 @@ dc_obj_query_key(tse_task_t *api_task)
 	uuid_t			coh_uuid;
 	uuid_t			cont_uuid;
 	int			shard_first;
-	unsigned int		replicas;
+	unsigned int		replicas, step;
+	unsigned int		query_nr = 0, tgt_nr = 0;
 	unsigned int		map_ver = 0;
 	uint64_t		dkey_hash;
+	bool			is_ec_obj;
+	bool			ec_query_data_tgt = false;
 	struct dtx_epoch	epoch;
 	struct dtx_id		dti;
 	int			i = 0;
@@ -5065,30 +5072,58 @@ dc_obj_query_key(tse_task_t *api_task)
 	D_ASSERT(!obj_auxi->args_initialized);
 	D_ASSERT(d_list_empty(head));
 
-	/* In each redundancy group, the QUERY RPC only needs to be sent
-	 * to one replica: i += replicas
-	 */
-	for (i = 0; i < obj->cob_shards_nr; i += replicas) {
+	step = replicas;
+	is_ec_obj = obj_is_ec(obj);
+	for (i = 0; i < obj->cob_shards_nr; i += step) {
 		tse_task_t			*task;
 		struct shard_query_key_args	*args;
+		struct daos_oclass_attr		*oca;
 		int				 shard;
 
 		if (api_args->flags & DAOS_GET_DKEY) {
+			/* for EC obj, will query from all data shards if
+			 * obj_grp_leader_get failed (no parity available).
+			 */
+			if (ec_query_data_tgt) {
+				shard = i;
+				query_nr++;
+				D_ASSERT(query_nr <= tgt_nr);
+				if (query_nr == tgt_nr) {
+					i -= (tgt_nr - 1);
+					D_ASSERT(i >= 0 && (i % replicas == 0));
+					step = replicas;
+					ec_query_data_tgt = false;
+				}
+				goto shard_task_create;
+			}
 			/* Send to leader replica directly for reducing
 			 * retry because some potential 'prepared' DTX.
 			 */
 			shard = obj_grp_leader_get(obj, i, map_ver);
 			if (shard < 0) {
-				rc = shard;
-				D_ERROR(DF_OID" no valid shard, rc "DF_RC".\n",
-					DP_OID(obj->cob_md.omd_id),
-					DP_RC(rc));
-				D_GOTO(out_task, rc);
+				if (!is_ec_obj) {
+					rc = shard;
+					D_ERROR(DF_OID" no valid shard, rc "
+						DF_RC".\n",
+						DP_OID(obj->cob_md.omd_id),
+						DP_RC(rc));
+					D_GOTO(out_task, rc);
+				}
+				oca = obj_get_oca(obj, true);
+				D_ASSERT(oca != NULL);
+				D_ASSERT(shard_first == 0 &&
+					 (i % replicas == 0));
+				shard = i;
+				tgt_nr = obj_ec_data_tgt_nr(oca);
+				query_nr = 1;
+				step = 1;
+				ec_query_data_tgt = true;
 			}
 		} else {
 			shard = shard_first + i;
 		}
 
+shard_task_create:
 		rc = tse_task_create(shard_query_key_task, sched, NULL, &task);
 		if (rc != 0)
 			D_GOTO(out_task, rc);

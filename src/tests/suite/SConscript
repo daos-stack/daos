@@ -102,14 +102,14 @@ def scons():
                     daos_md_replication.c daos_mgmt.c daos_nvme_recovery.c
                     daos_obj_array.c daos_obj.c daos_oid_alloc.c daos_pool.c
                     daos_rebuild.c daos_rebuild_common.c daos_rebuild_ec.c
-                    daos_rebuild_simple.c daos_test.c daos_test_common.c
-                    daos_verify_consistency.c daos_aggregate_ec.c
-		    daos_degrade_ec.c""")
-    daostest = daos_build.program(newenv, 'daos_test', c_files, LIBS=libraries)
+                    daos_rebuild_simple.c daos_test.c daos_verify_consistency.c
+                    daos_aggregate_ec.c daos_degrade_ec.c""")
+    daostest = daos_build.program(newenv, 'daos_test', c_files + daos_test_tgt,
+                                  LIBS=libraries)
 
-    c_files = Split("""daos_test_common.c dfs_unit_test.c dfs_par_test.c
-                    dfs_test.c""")
-    dfstest = daos_build.program(newenv, 'dfs_test', c_files, LIBS=libraries)
+    c_files = Split("""dfs_unit_test.c dfs_par_test.c dfs_test.c""")
+    dfstest = daos_build.program(newenv, 'dfs_test', c_files + daos_test_tgt,
+                                 LIBS=libraries)
 
     denv.Install('$PREFIX/bin/', daostest)
     denv.Install('$PREFIX/bin/', dfstest)
