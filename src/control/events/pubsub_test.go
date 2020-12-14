@@ -27,15 +27,23 @@ import (
 	"context"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+func newTally(expCount int) *tally {
+	return &tally{
+		expectedRx: expCount,
+		finished:   make(chan struct{}),
+	}
+}
+
 type tally struct {
 	sync.Mutex
-	rx []string
+	finished   chan struct{}
+	expectedRx int
+	rx         []string
 }
 
 func (tly *tally) OnEvent(_ context.Context, evt Event) {
@@ -43,6 +51,9 @@ func (tly *tally) OnEvent(_ context.Context, evt Event) {
 	defer tly.Unlock()
 
 	tly.rx = append(tly.rx, evt.GetType().String())
+	if len(tly.rx) == tly.expectedRx {
+		close(tly.finished)
+	}
 }
 
 func (tly *tally) getRx() []string {
@@ -58,29 +69,29 @@ func TestEvents_PubSub_Basic(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
+	ctx := context.Background()
 
-	ps := NewPubSub(log)
+	ps := NewPubSub(ctx, log)
 	defer ps.Close()
 
-	tly1 := &tally{}
-	tly2 := &tally{}
+	tly1 := newTally(2)
+	tly2 := newTally(2)
 
-	ps.Subscribe(ctx, RASTypeRankStateChange, tly1)
-	ps.Subscribe(ctx, RASTypeRankStateChange, tly2)
+	ps.Subscribe(RASTypeRankStateChange, tly1)
+	ps.Subscribe(RASTypeRankStateChange, tly2)
 
 	ps.Publish(evt1)
 	ps.Publish(evt1)
 
-	<-ctx.Done()
+	<-tly1.finished
+	<-tly2.finished
 
 	common.AssertStringsEqual(t, []string{
 		RASTypeRankStateChange.String(), RASTypeRankStateChange.String(),
-	}, tly1.getRx(), "unexpected slice of received events")
+	}, tly1.getRx(), "tly1 unexpected slice of received events")
 	common.AssertStringsEqual(t, []string{
 		RASTypeRankStateChange.String(), RASTypeRankStateChange.String(),
-	}, tly2.getRx(), "unexpected slice of received events")
+	}, tly2.getRx(), "tly2 unexpected slice of received events")
 }
 
 func TestEvents_PubSub_Reset(t *testing.T) {
@@ -89,20 +100,20 @@ func TestEvents_PubSub_Reset(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	tly1 := &tally{}
-	tly2 := &tally{}
+	tly1 := newTally(2)
+	tly2 := newTally(2)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
+	ctx := context.Background()
 
-	ps := NewPubSub(log)
+	ps := NewPubSub(ctx, log)
 
-	ps.Subscribe(ctx, RASTypeRankStateChange, tly1)
+	ps.Subscribe(RASTypeRankStateChange, tly1)
 
 	ps.Publish(evt1)
 	ps.Publish(evt1)
 
-	<-ctx.Done()
+	<-tly1.finished
+
 	ps.Reset()
 
 	common.AssertStringsEqual(t, []string{
@@ -110,18 +121,15 @@ func TestEvents_PubSub_Reset(t *testing.T) {
 	}, tly1.getRx(), "unexpected slice of received events")
 	common.AssertEqual(t, 0, len(tly2.getRx()), "unexpected number of received events")
 
-	tly1.rx = make([]string, 0)
-	tly2.rx = make([]string, 0)
+	tly1 = newTally(2)
+	tly2 = newTally(2)
 
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel2()
-
-	ps.Subscribe(ctx, RASTypeRankStateChange, tly2)
+	ps.Subscribe(RASTypeRankStateChange, tly2)
 
 	ps.Publish(evt1)
 	ps.Publish(evt1)
 
-	<-ctx2.Done()
+	<-tly2.finished
 	ps.Close()
 
 	common.AssertStringsEqual(t, []string{

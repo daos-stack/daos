@@ -227,13 +227,13 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 
 	// Init management RPC subsystem.
 	mgmtSvc := newMgmtSvc(harness, membership, sysdb)
-	eventPubSub := events.NewPubSub(log)
+	eventPubSub := events.NewPubSub(ctx, log)
 	defer eventPubSub.Close()
 
 	// Forward received events to management service by default.
 	fwdEventReq := &control.SystemNotifyReq{ControlAddr: controlAddr, Client: rpcClient}
 	fwdEventReq.SetHostList(cfg.AccessPoints)
-	eventPubSub.Subscribe(ctx, events.RASTypeRankStateChange, fwdEventReq)
+	eventPubSub.Subscribe(events.RASTypeRankStateChange, fwdEventReq)
 
 	// Create event dispatcher for received forwarded events.
 	mgmtSvc.dispatchEvent = func(evt events.Event) {
@@ -420,7 +420,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		// On gaining leadership, stop forwarding MS events.
 		eventPubSub.Reset()
 		// Handle rank state change notifications.
-		eventPubSub.Subscribe(ctx, events.RASTypeRankStateChange, membership)
+		eventPubSub.Subscribe(events.RASTypeRankStateChange, membership)
 
 		return nil
 	})
@@ -430,7 +430,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		// On losing leadership, stop handling MS events.
 		eventPubSub.Reset()
 		// Forward events to new MS leader.
-		eventPubSub.Subscribe(ctx, events.RASTypeRankStateChange, fwdEventReq)
+		eventPubSub.Subscribe(events.RASTypeRankStateChange, fwdEventReq)
 
 		return nil
 	})
