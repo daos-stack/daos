@@ -2376,7 +2376,7 @@ restart:
 	switch (mode & S_IFMT) {
 	case S_IFREG:
 		rc = open_file(dfs, th, parent, flags, cid, chunk_size, &entry,
-			       stbuf ? &file_size: NULL, len, obj);
+			       stbuf ? &file_size : NULL, len, obj);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open file (%d)\n", rc);
 			D_GOTO(out, rc);

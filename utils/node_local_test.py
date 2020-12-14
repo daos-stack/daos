@@ -1009,7 +1009,7 @@ def dfuse_wrapper(server, conf):
 
     pool = pools[0]
 
-    container = create_cont(conf, pool, ctype='POSIX')[0]
+    container = create_cont(conf, pool, posix=True)[0]
     dfuse = DFuse(server, conf, pool=pool, container=container)
     dfuse.start()
     readdir_test(dfuse, 0)
@@ -1448,6 +1448,8 @@ def run_in_fg(server, conf):
         if containers:
             break
 
+    assert pool
+
     if not containers:
         containers = create_cont(conf, pool, posix=True)
 
@@ -1617,7 +1619,11 @@ def check_readdir_perf(server, conf):
         # Test with caching enabled.  Check the file directory, and do it twice
         # without restarting, to see the effect of populating the cache, and
         # reading from the cache.
-        dfuse = DFuse(server, conf, pool=pool, container=container, caching=True)
+        dfuse = DFuse(server,
+                      conf,
+                      pool=pool,
+                      container=container,
+                      caching=True)
         dfuse.start()
         start = time.time()
         subprocess.run(['/bin/ls', '-t', file_dir], stdout=subprocess.PIPE)

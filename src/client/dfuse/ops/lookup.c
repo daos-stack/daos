@@ -393,7 +393,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
 	dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid,
-			&ie->ie_stat.st_ino);
+			    &ie->ie_stat.st_ino);
 
 	if (S_ISFIFO(ie->ie_stat.st_mode)) {
 		rc = check_for_uns_ep(fs_handle, ie);

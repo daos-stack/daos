@@ -601,13 +601,8 @@ duns_set_fuse_acl(int dfd, daos_handle_t coh)
 	uid = geteuid();
 
 	if (uid == stbuf.st_uid) {
-#if 1
-		/* For debugging */
-		D_ERROR("Same user, returning\n");
-#else
 		D_DEBUG(DB_TRACE, "Same user, returning\n");
 		return 0;
-#endif
 	}
 
 	D_ALLOC(buf, PW_BUF_SIZE);
@@ -618,6 +613,7 @@ duns_set_fuse_acl(int dfd, daos_handle_t coh)
 	rc = getpwuid_r(stbuf.st_uid, &pwd, buf, PW_BUF_SIZE, &pwdp);
 	if (rc == -1 || pwdp == NULL) {
 		int err = errno;
+
 		D_ERROR("getpwuid() failed, (%s)\n", strerror(rc));
 		D_GOTO(out_buf, rc = err);
 	}
@@ -641,7 +637,8 @@ duns_set_fuse_acl(int dfd, daos_handle_t coh)
 
 	rc = daos_cont_update_acl(coh, acl, NULL);
 	if (rc) {
-		D_ERROR("Failed to apply ACL, " DF_RC "\n", DP_RC(rc));
+		D_ERROR("daos_cont_update_acl() failed, " DF_RC "\n",
+			DP_RC(rc));
 	}
 
 	daos_acl_free(acl);
@@ -806,7 +803,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			dfs_attr.da_chunk_size = attrp->da_chunk_size;
 			dfs_attr.da_props = attrp->da_props;
 			rc = dfs_cont_create(poh, attrp->da_cuuid, &dfs_attr,
-					backend_dfuse ? &coh : NULL, NULL);
+					     backend_dfuse ? &coh : NULL, NULL);
 			if (rc == DER_SUCCESS && backend_dfuse) {
 				rc = duns_set_fuse_acl(dfd, coh);
 

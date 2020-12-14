@@ -85,7 +85,7 @@ dfuse_cb_mknod_safe(fuse_req_t req, struct dfuse_inode_entry *parent,
 	int rc;
 
 	if ((ctx->uid != parent->ie_stat.st_uid) ||
-		ctx->gid != parent->ie_stat.st_gid)
+	    ctx->gid != parent->ie_stat.st_gid)
 		D_GOTO(out, rc = ENOTSUP);
 
 	dfuse_cb_mknod(req, parent, name, mode);
