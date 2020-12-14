@@ -76,7 +76,7 @@ func TestUtils_SplitPort(t *testing.T) {
 	}
 }
 
-func TestCommon_CmpTcpAddr(t *testing.T) {
+func TestCommon_CmpTCPAddr(t *testing.T) {
 	testA := &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)}
 	testB := &net.TCPAddr{IP: net.IPv4(127, 0, 0, 2)}
 	testC := &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 1}
@@ -119,7 +119,7 @@ func TestCommon_CmpTcpAddr(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if diff := cmp.Diff(tc.expRes, CmpTcpAddr(tc.a, tc.b)); diff != "" {
+			if diff := cmp.Diff(tc.expRes, CmpTCPAddr(tc.a, tc.b)); diff != "" {
 				t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 			}
 		})

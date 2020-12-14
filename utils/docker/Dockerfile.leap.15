@@ -41,29 +41,45 @@
 
 # Pull base image
 FROM opensuse/leap:15.2
-MAINTAINER <daos@daos.groups.io>
+LABEL maintainer="daos@daos.groups.io"
 
 # Build arguments can be set via --build-arg
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
 
+# Use our own repo cache
+ARG REPO_URL=""
+ARG REPO_GROUP_LEAP15=""
+RUN if [ -n "${REPO_GROUP_LEAP15}" ]; then                             \
+        rm -f /etc/zypp/repos.d/*.repo;                                \
+        zypper --non-interactive ar                                    \
+                ${REPO_URL}${REPO_GROUP_LEAP15} daos-stack-group-repo; \
+        zypper --non-interactive mr --gpgcheck-allow-unsigned-repo     \
+               daos-stack-group-repo;                                  \
+    fi
+
+# Make sure repos are up to date
+RUN zypper --non-interactive --no-gpg-checks --gpg-auto-import-keys refresh
+
+# Allow packages to change vendors
+RUN echo "solver.allowVendorChange = true" >> /etc/zypp/zypp.conf
+
 # Update distribution
 # It's better to put the zypper update in the same "cache layer" as the
 # zypper install command so that the database is updated if/when the
 # installed packages list below is updated
-RUN zypper --non-interactive --no-gpg-checks refresh; \
-    zypper --non-interactive update; \
-    zypper --non-interactive install                                  \
-           boost-devel clang cmake cunit-devel curl doxygen flex      \
-           gcc gcc-c++ git graphviz gzip                              \
-           libaio-devel libcmocka-devel libevent-devel libiscsi-devel \
-           libltdl7 libnuma-devel libopenssl-devel libtool            \
-           libuuid-devel libyaml-devel                                \
-           make man meson nasm ninja pandoc patch python2-pip         \
-           readline-devel sg3_utils which yasm                        \
-           python-devel python3-devel valgrind-devel hwloc-devel      \
-           openmpi3-devel man fuse3-devel patchelf scons lua-lmod     \
-           libjson-c-devel liblz4-devel python3-distro
+RUN zypper --non-interactive update;                                         \
+    zypper --non-interactive install                                         \
+           boost-devel clang cmake cunit-devel curl doxygen flex             \
+           gcc gcc-c++ git graphviz gzip                                     \
+           libaio-devel libcmocka-devel libevent-devel libiscsi-devel        \
+           libltdl7 libnuma-devel libopenssl-devel libtool                   \
+           libuuid-devel libyaml-devel                                       \
+           make man meson nasm ninja pandoc patch python2-pip                \
+           readline-devel sg3_utils which yasm                               \
+           python-devel python3-devel valgrind-devel hwloc-devel             \
+           openmpi3-devel man fuse3-devel patchelf scons lua-lmod            \
+           libjson-c-devel liblz4-devel python3-distro curl
 # Monkey-patch MODULEPATH
 RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then        \
         sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/' /etc/profile.d/lmod.sh; \
@@ -71,10 +87,17 @@ RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then      
 RUN update-ca-certificates
 RUN zypper --non-interactive install --allow-unsigned-rpm lua-lmod
 
-RUN zypper --non-interactive addrepo \
-    https://download.opensuse.org/repositories/devel:languages:go/openSUSE_Leap_15.1/devel:languages:go.repo; \
-    zypper --non-interactive --gpg-auto-import-keys refresh; \
-    zypper --non-interactive install -y ipmctl-devel go go-race
+RUN if [ -z "${REPO_GROUP_LEAP15}" ]; then                                                                                        \
+        zypper --non-interactive addrepo                                                                                          \
+        https://download.opensuse.org/repositories/devel:languages:go/openSUSE_Leap_15.1/devel:languages:go.repo;                 \
+        zypper --non-interactive --gpg-auto-import-keys refresh;                                                                  \
+    else                                                                                                                          \
+         # Need the GPG key for the GO language repo (part of the group repo above)                                               \
+         rpm --import "${REPO_URL}${REPO_GROUP_LEAP15%/*}/opensuse-15.2-devel-languages-go-x86_64-proxy/repodata/repomd.xml.key"; \
+    fi
+# We actually only need go 1.12 or higher, but SUSE's 1.12 package is actually 1.11
+# https://bugzilla.opensuse.org/show_bug.cgi?id=1178985
+RUN zypper --non-interactive install -y ipmctl-devel go1.14 go1.14-race
 
 # Add DAOS user
 ENV USER daos
@@ -99,6 +122,10 @@ RUN echo -e "<settings>\n\
 # Create directory for DAOS backend storage
 RUN mkdir /mnt/daos
 RUN chown daos.daos /mnt/daos || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown daos /mnt/daos; chgrp daos /mnt/daos; ls -ld /mnt/daos; }
+RUN mkdir /var/run/daos_server
+RUN chown daos.daos /var/run/daos_server || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown daos /var/run/daos_server; chgrp daos /var/run/daos_server; ls -ld /var/run/daos_server; }
+RUN mkdir /var/run/daos_agent
+RUN chown daos.daos /var/run/daos_agent || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown daos /var/run/daos_agent; chgrp daos /var/run/daos_agent; ls -ld /var/run/daos_agent; }
 
 # Dependencies
 # Packages for NVML exist in CentOS, but are
@@ -107,11 +134,9 @@ ARG JENKINS_URL=""
 ARG QUICKBUILD=false
 ARG QUICKBUILD_DEPS=""
 ARG REPOS=""
-ARG REPO_URL=""
 ARG REPO_LOCAL_LEAP15=""
-ARG REPO_GROUP_LEAP15=""
-RUN if $QUICKBUILD; then                                                                                 \
-        for REPO_LEAP15 in $REPO_LOCAL_LEAP15 $REPO_GROUP_LEAP15; do                                             \
+RUN if $QUICKBUILD; then                                                                                         \
+        for REPO_LEAP15 in $REPO_LOCAL_LEAP15; do                                                                \
             MY_REPO="${REPO_URL}${REPO_LEAP15}";                                                                 \
             MY_NAME="${MY_REPO#*//}";                                                                            \
             MY_NAME="${MY_NAME//\//_}";                                                                          \
@@ -134,12 +159,12 @@ RUN if $QUICKBUILD; then                                                        
                    $repo:$branch:$build_number;                                                                  \
         done;                                                                                                    \
         echo "Installing: $QUICKBUILD_DEPS";                                                                     \
-        echo "solver.allowVendorChange = true" >> /etc/zypp/zypp.conf;                                           \
         echo "$QUICKBUILD_DEPS" | tr '\n' '\0' | xargs -0 zypper --non-interactive install;                      \
     fi
 
 # force an upgrade to get any newly built RPMs
 ARG CACHEBUST=1
+RUN zypper --non-interactive update
 
 # Switch to new user
 #USER $USER
@@ -153,11 +178,12 @@ RUN if [ "x$NOBUILD" = "x" ] ; then git clone https://github.com/daos-stack/daos
 WORKDIR /home/$USER/daos
 
 # Build DAOS & dependencies
-RUN if [ "x$NOBUILD" = "x" ] ; then git submodule init && git submodule update; fi
-RUN if [ "x$NOBUILD" = "x" ] ; then scons --build-deps=yes install PREFIX=/usr; fi
+RUN if [ "x$NOBUILD" = "x" ] ; then \
+    git submodule init && git submodule update; fi
+RUN if [ "x$NOBUILD" = "x" ] ; then \
+    scons --build-deps=yes install PREFIX=/usr/local; fi
 
 # Set environment variables
-ENV LD_LIBRARY_PATH=/usr/lib:$LD_LIBRARY_PATH
-ENV CRT_PHY_ADDR_STR="ofi+sockets"
-ENV OFI_INTERFACE=eth0
+ENV LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib64:$LD_LIBRARY_PATH
+ENV PATH=/usr/local/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1

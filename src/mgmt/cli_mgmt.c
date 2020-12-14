@@ -39,14 +39,10 @@
 #include "svc.pb-c.h"
 #include "rpc.h"
 #include <errno.h>
+#include <stdlib.h>
 
-struct cp_arg {
-	struct dc_mgmt_sys	*sys;
-	crt_rpc_t		*rpc;
-};
-
-static int
-cp(tse_task_t *task, void *data)
+int
+dc_cp(tse_task_t *task, void *data)
 {
 	struct cp_arg	*arg = data;
 	int		 rc = task->dt_result;
@@ -101,78 +97,11 @@ dc_mgmt_svc_rip(tse_task_t *task)
 	crt_req_addref(rpc);
 	cp_arg.rpc = rpc;
 
-	rc = tse_task_register_comp_cb(task, cp, &cp_arg, sizeof(cp_arg));
+	rc = tse_task_register_comp_cb(task, dc_cp, &cp_arg, sizeof(cp_arg));
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
 	D_DEBUG(DB_MGMT, "killing rank %u\n", args->rank);
-
-	/** send the request */
-	return daos_rpc_send(rpc, task);
-
-err_rpc:
-	crt_req_decref(rpc);
-err_grp:
-	dc_mgmt_sys_detach(cp_arg.sys);
-out_task:
-	tse_task_complete(task, rc);
-	return rc;
-}
-
-int
-dc_mgmt_set_params(tse_task_t *task)
-{
-	daos_set_params_t		*args;
-	struct cp_arg			cp_arg;
-	struct mgmt_params_set_in	*in;
-	crt_endpoint_t			ep;
-	crt_rpc_t			*rpc = NULL;
-	crt_opcode_t			opc;
-	int				rc;
-
-	args = dc_task_get_args(task);
-	rc = dc_mgmt_sys_attach(args->grp, &cp_arg.sys);
-	if (rc != 0) {
-		D_ERROR("failed to attach to grp %s, rc "DF_RC".\n", args->grp,
-			DP_RC(rc));
-		rc = -DER_INVAL;
-		goto out_task;
-	}
-
-	ep.ep_grp = cp_arg.sys->sy_group;
-	/* if rank == -1 means it will set params on all servers, which we will
-	 * send it to 0 temporarily.
-	 */
-	ep.ep_rank = args->rank == -1 ? 0 : args->rank;
-	ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
-	opc = DAOS_RPC_OPCODE(MGMT_PARAMS_SET, DAOS_MGMT_MODULE,
-			      DAOS_MGMT_VERSION);
-	rc = crt_req_create(daos_task2ctx(task), &ep, opc, &rpc);
-	if (rc != 0) {
-		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: "DF_RC".\n",
-			DP_RC(rc));
-		D_GOTO(err_grp, rc);
-	}
-
-	D_ASSERT(rpc != NULL);
-	in = crt_req_get(rpc);
-	D_ASSERT(in != NULL);
-
-	/** fill in request buffer */
-	in->ps_rank = args->rank;
-	in->ps_key_id = args->key_id;
-	in->ps_value = args->value;
-	in->ps_value_extra = args->value_extra;
-
-	crt_req_addref(rpc);
-	cp_arg.rpc = rpc;
-
-	rc = tse_task_register_comp_cb(task, cp, &cp_arg, sizeof(cp_arg));
-	if (rc != 0)
-		D_GOTO(err_rpc, rc);
-
-	D_DEBUG(DB_MGMT, "set parameter %d/%u/"DF_U64".\n", args->rank,
-		 args->key_id, args->value);
 
 	/** send the request */
 	return daos_rpc_send(rpc, task);
@@ -224,45 +153,6 @@ err_grp:
 	D_DEBUG(DB_MGMT, "mgmt profile: rc "DF_RC"\n", DP_RC(rc));
 	dc_mgmt_sys_detach(sys);
 	return rc;
-}
-
-int
-dc_mgmt_add_mark(const char *mark)
-{
-	struct dc_mgmt_sys	*sys;
-	struct mgmt_mark_in	*in;
-	crt_endpoint_t		ep;
-	crt_rpc_t		*rpc = NULL;
-	crt_opcode_t		opc;
-	int			rc;
-
-	rc = dc_mgmt_sys_attach(NULL, &sys);
-	if (rc != 0) {
-		D_ERROR("failed to attach to grp rc "DF_RC"\n", DP_RC(rc));
-		return -DER_INVAL;
-	}
-
-	ep.ep_grp = sys->sy_group;
-	ep.ep_rank = 0;
-	ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
-	opc = DAOS_RPC_OPCODE(MGMT_MARK, DAOS_MGMT_MODULE,
-			      DAOS_MGMT_VERSION);
-	rc = crt_req_create(daos_get_crt_ctx(), &ep, opc, &rpc);
-	if (rc != 0) {
-		D_ERROR("crt_req_create failed, rc: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(err_grp, rc);
-	}
-
-	D_ASSERT(rpc != NULL);
-	in = crt_req_get(rpc);
-	in->m_mark = (char *)mark;
-	/** send the request */
-	rc = daos_rpc_send_wait(rpc);
-err_grp:
-	D_DEBUG(DB_MGMT, "mgmt mark: rc "DF_RC"\n", DP_RC(rc));
-	dc_mgmt_sys_detach(sys);
-	return rc;
-
 }
 
 struct dc_mgmt_psr {
@@ -385,6 +275,8 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 			rc = -DER_NOMEM;
 			break;
 		}
+		D_DEBUG(DB_MGMT, "GetAttachInfo psrs[%d]: rank=%u, uri=%s\n",
+			i, p[i].rank, p[i].uri);
 	}
 	if (rc != 0) {
 		for (; i >= 0; i--) {
@@ -960,52 +852,84 @@ dc_mgmt_get_pool_svc_ranks(struct dc_mgmt_sys *sys, const uuid_t puuid,
 	struct mgmt_pool_get_svcranks_in       *rpc_in;
 	struct mgmt_pool_get_svcranks_out      *rpc_out;
 	crt_opcode_t				opc;
-	int					rc;
+	int					i;
+	int					idx;
+	crt_context_t				ctx;
+	bool					success = false;
+	int					rc = 0;
 
-	/* TODO: when MS supports multiple replicas search for leader */
-	srv_ep.ep_grp = sys->sy_group;
-	srv_ep.ep_rank = sys->sy_psrs[0].rank;
-	srv_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
+	/* NB: sy_psrs[] may have multiple entries even for single MS replica,
+	 * since there may be multiple ioservers there. Some of which may have
+	 * been stopped or faulted. May need to contact multiple ioservers.
+	 * Assumed: any MS replica ioserver can be contacted, even non-leaders.
+	 */
+	D_ASSERT(sys->sy_npsrs > 0);
+	idx = rand() % sys->sy_npsrs;
+	ctx = daos_get_crt_ctx();
 	opc = DAOS_RPC_OPCODE(MGMT_POOL_GET_SVCRANKS, DAOS_MGMT_MODULE,
 			      DAOS_MGMT_VERSION);
+	srv_ep.ep_grp = sys->sy_group;
+	srv_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
+	for (i = 0 ; i < sys->sy_npsrs; i++) {
+		srv_ep.ep_rank = sys->sy_psrs[idx].rank;
+		rpc = NULL;
+		rc = crt_req_create(ctx, &srv_ep, opc, &rpc);
+		if (rc != 0) {
+			D_ERROR(DF_UUID ": crt_req_create() failed, "
+				DF_RC "\n", DP_UUID(puuid), DP_RC(rc));
+			idx = (idx + 1) % sys->sy_npsrs;
+			continue;
+		}
 
-	rc = crt_req_create(daos_get_crt_ctx(), &srv_ep, opc, &rpc);
-	if (rc != 0) {
-		D_ERROR(DF_UUID ": crt_req_create() failed, "DF_RC "\n",
-			DP_UUID(puuid), DP_RC(rc));
-		return rc;
+		rpc_in = NULL;
+		rpc_in = crt_req_get(rpc);
+		D_ASSERT(rpc_in != NULL);
+		uuid_copy(rpc_in->gsr_puuid, puuid);
+
+		D_DEBUG(DB_MGMT, DF_UUID ": ask rank %u for PS replicas list\n",
+			DP_UUID(puuid), srv_ep.ep_rank);
+		crt_req_addref(rpc);
+		rc = daos_rpc_send_wait(rpc);
+		if (rc != 0) {
+			D_DEBUG(DB_MGMT, DF_UUID ": daos_rpc_send_wait() failed"
+				", " DF_RC "\n", DP_UUID(puuid), DP_RC(rc));
+			crt_req_decref(rpc);
+			idx = (idx + 1) % sys->sy_npsrs;
+			continue;
+		}
+		success = true;
+		break;
 	}
 
-	rpc_in = crt_req_get(rpc);
-	D_ASSERT(rpc_in != NULL);
-	uuid_copy(rpc_in->gsr_puuid, puuid);
-
-	crt_req_addref(rpc);
-	rc = daos_rpc_send_wait(rpc);
-	if (rc != 0) {
-		D_ERROR(DF_UUID ": daos_rpc_send_wait() failed, "DF_RC "\n",
-			DP_UUID(puuid), DP_RC(rc));
-		goto decref;
+	if (!success) {
+		D_ERROR(DF_UUID ": failed to get PS replicas list from %d "
+			"servers, " DF_RC "\n", DP_UUID(puuid), sys->sy_npsrs,
+			DP_RC(rc));
+		return rc;
 	}
 
 	rpc_out = crt_reply_get(rpc);
 	D_ASSERT(rpc_out != NULL);
 	rc = rpc_out->gsr_rc;
 	if (rc != 0) {
-		D_ERROR(DF_UUID ": MGMT_POOL_GET_SVCRANKS rpc failed, "
-			DF_RC "\n", DP_UUID(puuid), DP_RC(rc));
+		D_ERROR(DF_UUID ": MGMT_POOL_GET_SVCRANKS rpc failed to all %d "
+			"ranks, " DF_RC "\n", DP_UUID(puuid), sys->sy_npsrs,
+			DP_RC(rc));
 		goto decref;
 	}
 
+	D_DEBUG(DB_MGMT, DF_UUID ": rank %u returned PS replicas list\n",
+		DP_UUID(puuid), srv_ep.ep_rank);
 	rc = d_rank_list_dup(svcranksp, rpc_out->gsr_ranks);
 	if (rc != 0)
-		D_ERROR(DF_UUID ": d_rank_list_dup() failed, "DF_RC "\n",
+		D_ERROR(DF_UUID ": d_rank_list_dup() failed, " DF_RC "\n",
 			DP_UUID(puuid), DP_RC(rc));
 
 decref:
 	crt_req_decref(rpc);
 	return rc;
 }
+
 /**
  * Initialize management interface
  */
