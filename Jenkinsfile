@@ -359,7 +359,8 @@ boolean skip_ftest_hw(String size) {
     return env.DAOS_STACK_CI_HARDWARE_SKIP == 'true' ||
            skip_stage('func-test') ||
            skip_stage('func-hw-test') ||
-           skip_stage('func-hw-test-' + size)
+           skip_stage('func-hw-test-' + size) ||
+           (env.BRANCH_NAME == 'master' && ! startedByTimer())
 }
 
 boolean skip_bandit_check() {
