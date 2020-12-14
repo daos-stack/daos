@@ -37,6 +37,10 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
                        libsafec-dev libipmctl-dev ndctl ipmctl golang-go
 
+# libunwind for Argobots
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+                       libunwind libunwind-devel
+
 # hack the default shell to bash instead of dash
 RUN rm /bin/sh && ln -s bash /bin/sh
 

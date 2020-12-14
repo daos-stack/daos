@@ -99,6 +99,9 @@ RUN if [ -z "${REPO_GROUP_LEAP15}" ]; then                                      
 # https://bugzilla.opensuse.org/show_bug.cgi?id=1178985
 RUN zypper --non-interactive install -y ipmctl-devel go1.14 go1.14-race
 
+# libunwind for Argobots
+RUN zypper --non-interactive install libunwind libunwind-devel
+
 # Add DAOS user
 ENV USER daos
 ENV PASSWD daos

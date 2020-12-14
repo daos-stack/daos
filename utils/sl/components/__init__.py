@@ -287,7 +287,8 @@ def define_components(reqs):
                 commands=['git clean -dxf ',
                           './autogen.sh',
                           './configure --prefix=$ARGOBOTS_PREFIX CC=gcc'
-                          ' --enable-valgrind',
+                          ' --enable-valgrind'
+			  ' --with-libunwind=/usr/lib64 --enable-stack-unwind',
                           'make $JOBS_OPT',
                           'make $JOBS_OPT install'],
                 requires=['valgrind_devel'],
