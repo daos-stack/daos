@@ -98,7 +98,7 @@ func (h *IOServerHarness) FilterInstancesByRankSet(ranks string) ([]*IOServerIns
 	for _, i := range h.instances {
 		r, err := i.GetRank()
 		if err != nil {
-			return nil, errors.WithMessage(err, "filtering instances by rank")
+			continue // no rank to check against
 		}
 		if r.InList(rankList) {
 			out = append(out, i)
@@ -171,7 +171,7 @@ func (h *IOServerHarness) getMSLeaderInstance() (*IOServerInstance, error) {
 // configured instances' processing loops.
 //
 // Run until harness is shutdown.
-func (h *IOServerHarness) Start(ctx context.Context, membership *system.Membership, db *system.Database, cfg *config.Server) error {
+func (h *IOServerHarness) Start(ctx context.Context, db *system.Database, cfg *config.Server) error {
 	if h.isStarted() {
 		return errors.New("can't start: harness already started")
 	}
@@ -198,7 +198,7 @@ func (h *IOServerHarness) Start(ctx context.Context, membership *system.Membersh
 
 	for _, srv := range h.Instances() {
 		// start first time then relinquish control to instance
-		go srv.Run(ctx, membership, cfg)
+		go srv.Run(ctx, cfg.RecreateSuperblocks)
 		srv.startLoop <- true
 	}
 

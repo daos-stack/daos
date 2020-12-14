@@ -30,6 +30,22 @@ boolean doc_only_change() {
     return rc == 1
 }
 
+boolean release_candidate() {
+    return !sh(label: "Determine if building (a PR of) an RC",
+              script: "git diff-index --name-only HEAD^ | grep -q TAG && " +
+                      "grep -i '[0-9]rc[0-9]' TAG",
+              returnStatus: true)
+}
+
+def scons_faults_args() {
+    // The default build will have BUILD_TYPE=dev; fault injection enabled
+    if ((cachedCommitPragma(pragma: 'faults-enabled', def_val: 'true') == 'true') && !release_candidate()) {
+        return "BUILD_TYPE=dev"
+    } else {
+        return "BUILD_TYPE=release"
+    }
+}
+
 def skip_stage(String stage, boolean def_val = false) {
     String value = 'false'
     if (def_val) {
@@ -228,7 +244,7 @@ String functional_packages(String distro) {
                   "hdf5-vol-daos-openmpi3-tests-daos-0 " +
                   "MACSio-mpich2-daos-0 " +
                   "MACSio-openmpi3-daos-0 " +
-                  "mpifileutils-mpich-daos-0"
+                  "mpifileutils-mpich-daos-0 "
     if (distro == "leap15") {
         if (quickbuild()) {
             pkgs += " spdk-tools"
@@ -269,6 +285,25 @@ def getuid() {
                         script: "id -u",
                         returnStdout: true).trim()
     return cached_uid
+}
+
+// Default priority is 3, lower is better.
+// The parameter for a job is set using the script/Jenkinsfile from the
+// previous build of that job, so the first build of any PR will always
+// run at default because Jenkins sees it as a new job, but subsequent
+// ones will use the value from here.
+// The advantage therefore is not to change the priority of PRs, but to
+// change the master branch itself to run at lower priority, resulting
+// in faster time-to-result for PRs.
+
+String get_priority() {
+    if (env.BRANCH_NAME == 'master') {
+        string p = '4'
+    } else {
+        string p = ''
+    }
+    echo "Build priority set to " + p == '' ? 'default' : p
+    return p
 }
 
 String rpm_test_version() {
@@ -322,6 +357,7 @@ boolean skip_scan_rpms_centos7() {
 
 boolean skip_ftest_hw(String size) {
     return env.DAOS_STACK_CI_HARDWARE_SKIP == 'true' ||
+           skip_stage('func-test') ||
            skip_stage('func-hw-test') ||
            skip_stage('func-hw-test-' + size)
 }
@@ -402,7 +438,7 @@ String quick_build_deps(String distro) {
     } else {
         error("Unknown distro: ${distro} in quick_build_deps()")
     }
-    return sh(label:'Get Quickbuild dependencies',
+    return sh(label: 'Get Quickbuild dependencies',
               script: "rpmspec -q " +
                       "--srpm " +
                       rpmspec_args + ' ' +
@@ -424,12 +460,20 @@ pipeline {
         SSH_KEY_ARGS = "-ici_key"
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
+        SCONS_FAULTS_ARGS = scons_faults_args()
     }
 
     options {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
         ansiColor('xterm')
+        buildDiscarder(logRotator(artifactDaysToKeepStr: '400'))
+    }
+
+    parameters {
+        string(name: 'BuildPriority',
+               defaultValue: get_priority(),
+               description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
     }
 
     stages {
@@ -655,7 +699,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   stash_files: 'ci/test_files_to_stash.txt'
+                                   stash_files: 'ci/test_files_to_stash.txt',
+                                   scons_args: scons_faults_args()
                     }
                     post {
                         always {
@@ -699,7 +744,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   stash_files: 'ci/test_files_to_stash.txt'
+                                   stash_files: 'ci/test_files_to_stash.txt',
+                                   scons_args: scons_faults_args()
                     }
                     post {
                         always {
@@ -824,7 +870,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: scons_faults_args()
                     }
                     post {
                         always {
@@ -863,7 +910,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: scons_faults_args()
                     }
                     post {
                         always {
@@ -902,7 +950,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: scons_faults_args()
                     }
                     post {
                         always {
@@ -941,7 +990,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   stash_files: 'ci/test_files_to_stash.txt'
+                                   stash_files: 'ci/test_files_to_stash.txt',
+                                   scons_args: scons_faults_args()
                     }
                     post {
                         always {
@@ -980,7 +1030,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: scons_faults_args()
                     }
                     post {
                         always {
@@ -1020,7 +1071,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: scons_faults_args()
                     }
                     post {
                         always {

@@ -480,7 +480,14 @@ class DaosServer():
         return subprocess.run(exe_cmd, stdout=subprocess.PIPE)
 
 def il_cmd(dfuse, cmd, check_read=True, check_write=True):
-    """Run a command under the interception library"""
+    """Run a command under the interception library
+
+    Do not run valgrind here, not because it's not useful
+    but the options needed are different.  Valgrind handles
+    linking differently so some memory is wrongly lost that
+    would be freed in the _fini() function, and a lot of
+    commands do not free all memory anyway.
+    """
     my_env = get_base_env()
     prefix = 'dnt_dfuse_il_{}_'.format(get_inc_id())
     log_file = tempfile.NamedTemporaryFile(prefix=prefix,
@@ -493,13 +500,13 @@ def il_cmd(dfuse, cmd, check_read=True, check_write=True):
     ret = subprocess.run(cmd, env=my_env)
     print('Logged il to {}'.format(log_file.name))
     print(ret)
-    assert ret.returncode == 0
 
     try:
         log_test(dfuse.conf,
                  log_file.name,
                  check_read=check_read,
                  check_write=check_write)
+        assert ret.returncode == 0
     except NLTestNoFunction as error:
         print("ERROR: command '{}' did not log via {}".format(' '.join(cmd),
                                                               error.function))
@@ -757,7 +764,11 @@ def import_daos(server, conf):
                                  pydir,
                                  'site-packages'))
 
-    os.environ["DAOS_AGENT_DRPC_DIR"] = server.agent_dir
+    os.environ['DD_MASK'] = 'all'
+    os.environ['DD_SUBSYS'] = 'all'
+    os.environ['D_LOG_MASK'] = 'DEBUG'
+    os.environ['FI_UNIVERSE_SIZE'] = '128'
+    os.environ['DAOS_AGENT_DRPC_DIR'] = server.agent_dir
 
     daos = __import__('pydaos')
     return daos
@@ -1229,9 +1240,8 @@ def run_il_test(server, conf):
     fd = open(f, 'w')
     fd.write('Hello')
     fd.close()
-    # Copy it across containers.  This will read via IL but not write
-    # as only one container is supported concurrently
-    ret = il_cmd(dfuse, ['cp', f, dirs[-1]], check_write=False)
+    # Copy it across containers.
+    ret = il_cmd(dfuse, ['cp', f, dirs[-1]])
     assert ret.returncode == 0
 
     # Copy it within the container.
@@ -1297,6 +1307,11 @@ def run_in_fg(server, conf):
 def test_pydaos_kv(server, conf):
     """Test the KV interface"""
 
+    pydaos_log_file = tempfile.NamedTemporaryFile(prefix='dnt_pydaos_',
+                                                  suffix='.log',
+                                                  delete=False)
+
+    os.environ['D_LOG_FILE'] = pydaos_log_file.name
     daos = import_daos(server, conf)
 
     pools = get_pool_list()
@@ -1353,6 +1368,10 @@ def test_pydaos_kv(server, conf):
     kv = None
     print('Closing container and opening new one')
     kv = container.get_kv_by_name('my_test_kv')
+    kv = None
+    container = None
+    daos._cleanup()
+    log_test(conf, pydaos_log_file.name)
 
 def test_alloc_fail(server, wf, conf):
     """run 'daos' client binary with fault injection
@@ -1434,10 +1453,6 @@ def test_alloc_fail(server, wf, conf):
         # through Jenkins.
         # if rc.returncode not in (1, 255):
         #   break
-
-    # Check that some errors were injected.  At the time of writing we get about
-    # 900, so round down a bit and check for that.
-    assert fid > 500
 
     return fatal_errors
 

@@ -25,6 +25,10 @@ typedef struct _Mgmt__SmdPoolResp Mgmt__SmdPoolResp;
 typedef struct _Mgmt__SmdPoolResp__Pool Mgmt__SmdPoolResp__Pool;
 typedef struct _Mgmt__DevStateReq Mgmt__DevStateReq;
 typedef struct _Mgmt__DevStateResp Mgmt__DevStateResp;
+typedef struct _Mgmt__DevReplaceReq Mgmt__DevReplaceReq;
+typedef struct _Mgmt__DevReplaceResp Mgmt__DevReplaceResp;
+typedef struct _Mgmt__DevIdentifyReq Mgmt__DevIdentifyReq;
+typedef struct _Mgmt__DevIdentifyResp Mgmt__DevIdentifyResp;
 typedef struct _Mgmt__SmdQueryReq Mgmt__SmdQueryReq;
 typedef struct _Mgmt__SmdQueryResp Mgmt__SmdQueryResp;
 typedef struct _Mgmt__SmdQueryResp__Device Mgmt__SmdQueryResp__Device;
@@ -137,13 +141,17 @@ struct  _Mgmt__SmdDevResp__Device
   size_t n_tgt_ids;
   int32_t *tgt_ids;
   /*
-   * NORMAL or FAULTY
+   * BIO device state
    */
   char *state;
+  /*
+   * Transport address of blobstore
+   */
+  char *traddr;
 };
 #define MGMT__SMD_DEV_RESP__DEVICE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__smd_dev_resp__device__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL, (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, 0,NULL, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 struct  _Mgmt__SmdDevResp
@@ -227,12 +235,88 @@ struct  _Mgmt__DevStateResp
    */
   char *dev_uuid;
   /*
-   *NORMAL or FAULTY
+   * Transport address of blobstore
    */
   char *dev_state;
 };
 #define MGMT__DEV_STATE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__dev_state_resp__descriptor) \
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+
+
+struct  _Mgmt__DevReplaceReq
+{
+  ProtobufCMessage base;
+  /*
+   * UUID of old (hot-removed) blobstore/device
+   */
+  char *old_dev_uuid;
+  /*
+   * UUID of new (hot-plugged) blobstore/device
+   */
+  char *new_dev_uuid;
+  /*
+   * Skip device reintegration if set
+   */
+  protobuf_c_boolean noreint;
+};
+#define MGMT__DEV_REPLACE_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__dev_replace_req__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0 }
+
+
+struct  _Mgmt__DevReplaceResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+  /*
+   * UUID of new (hot-plugged) blobstore/device
+   */
+  char *new_dev_uuid;
+  /*
+   * BIO device state
+   */
+  char *dev_state;
+};
+#define MGMT__DEV_REPLACE_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__dev_replace_resp__descriptor) \
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+
+
+struct  _Mgmt__DevIdentifyReq
+{
+  ProtobufCMessage base;
+  /*
+   * UUID of VMD uuid
+   */
+  char *dev_uuid;
+};
+#define MGMT__DEV_IDENTIFY_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__dev_identify_req__descriptor) \
+    , (char *)protobuf_c_empty_string }
+
+
+struct  _Mgmt__DevIdentifyResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+  /*
+   * UUID of VMD uuid
+   */
+  char *dev_uuid;
+  /*
+   * VMD LED state
+   */
+  char *led_state;
+};
+#define MGMT__DEV_IDENTIFY_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__dev_identify_resp__descriptor) \
     , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
@@ -267,10 +351,22 @@ struct  _Mgmt__SmdQueryReq
    * response should only include information about this VOS target
    */
   char *target;
+  /*
+   * UUID of new device to replace storage with
+   */
+  char *replaceuuid;
+  /*
+   * specify if device reint is needed (used for replace cmd)
+   */
+  protobuf_c_boolean noreint;
+  /*
+   * set the VMD LED state to quickly blink
+   */
+  protobuf_c_boolean identify;
 };
 #define MGMT__SMD_QUERY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__smd_query_req__descriptor) \
-    , 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string }
+    , 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0 }
 
 
 struct  _Mgmt__SmdQueryResp__Device
@@ -286,9 +382,13 @@ struct  _Mgmt__SmdQueryResp__Device
   size_t n_tgt_ids;
   int32_t *tgt_ids;
   /*
-   * NORMAL or FAULTY
+   * BIO device state
    */
   char *state;
+  /*
+   * Transport address of blobstore
+   */
+  char *traddr;
   /*
    * optional BIO health
    */
@@ -296,7 +396,7 @@ struct  _Mgmt__SmdQueryResp__Device
 };
 #define MGMT__SMD_QUERY_RESP__DEVICE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__smd_query_resp__device__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL, (char *)protobuf_c_empty_string, NULL }
+    , (char *)protobuf_c_empty_string, 0,NULL, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, NULL }
 
 
 struct  _Mgmt__SmdQueryResp__Pool
@@ -521,6 +621,82 @@ Mgmt__DevStateResp *
 void   mgmt__dev_state_resp__free_unpacked
                      (Mgmt__DevStateResp *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__DevReplaceReq methods */
+void   mgmt__dev_replace_req__init
+                     (Mgmt__DevReplaceReq         *message);
+size_t mgmt__dev_replace_req__get_packed_size
+                     (const Mgmt__DevReplaceReq   *message);
+size_t mgmt__dev_replace_req__pack
+                     (const Mgmt__DevReplaceReq   *message,
+                      uint8_t             *out);
+size_t mgmt__dev_replace_req__pack_to_buffer
+                     (const Mgmt__DevReplaceReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__DevReplaceReq *
+       mgmt__dev_replace_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__dev_replace_req__free_unpacked
+                     (Mgmt__DevReplaceReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__DevReplaceResp methods */
+void   mgmt__dev_replace_resp__init
+                     (Mgmt__DevReplaceResp         *message);
+size_t mgmt__dev_replace_resp__get_packed_size
+                     (const Mgmt__DevReplaceResp   *message);
+size_t mgmt__dev_replace_resp__pack
+                     (const Mgmt__DevReplaceResp   *message,
+                      uint8_t             *out);
+size_t mgmt__dev_replace_resp__pack_to_buffer
+                     (const Mgmt__DevReplaceResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__DevReplaceResp *
+       mgmt__dev_replace_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__dev_replace_resp__free_unpacked
+                     (Mgmt__DevReplaceResp *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__DevIdentifyReq methods */
+void   mgmt__dev_identify_req__init
+                     (Mgmt__DevIdentifyReq         *message);
+size_t mgmt__dev_identify_req__get_packed_size
+                     (const Mgmt__DevIdentifyReq   *message);
+size_t mgmt__dev_identify_req__pack
+                     (const Mgmt__DevIdentifyReq   *message,
+                      uint8_t             *out);
+size_t mgmt__dev_identify_req__pack_to_buffer
+                     (const Mgmt__DevIdentifyReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__DevIdentifyReq *
+       mgmt__dev_identify_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__dev_identify_req__free_unpacked
+                     (Mgmt__DevIdentifyReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__DevIdentifyResp methods */
+void   mgmt__dev_identify_resp__init
+                     (Mgmt__DevIdentifyResp         *message);
+size_t mgmt__dev_identify_resp__get_packed_size
+                     (const Mgmt__DevIdentifyResp   *message);
+size_t mgmt__dev_identify_resp__pack
+                     (const Mgmt__DevIdentifyResp   *message,
+                      uint8_t             *out);
+size_t mgmt__dev_identify_resp__pack_to_buffer
+                     (const Mgmt__DevIdentifyResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__DevIdentifyResp *
+       mgmt__dev_identify_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__dev_identify_resp__free_unpacked
+                     (Mgmt__DevIdentifyResp *message,
+                      ProtobufCAllocator *allocator);
 /* Mgmt__SmdQueryReq methods */
 void   mgmt__smd_query_req__init
                      (Mgmt__SmdQueryReq         *message);
@@ -600,6 +776,18 @@ typedef void (*Mgmt__DevStateReq_Closure)
 typedef void (*Mgmt__DevStateResp_Closure)
                  (const Mgmt__DevStateResp *message,
                   void *closure_data);
+typedef void (*Mgmt__DevReplaceReq_Closure)
+                 (const Mgmt__DevReplaceReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__DevReplaceResp_Closure)
+                 (const Mgmt__DevReplaceResp *message,
+                  void *closure_data);
+typedef void (*Mgmt__DevIdentifyReq_Closure)
+                 (const Mgmt__DevIdentifyReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__DevIdentifyResp_Closure)
+                 (const Mgmt__DevIdentifyResp *message,
+                  void *closure_data);
 typedef void (*Mgmt__SmdQueryReq_Closure)
                  (const Mgmt__SmdQueryReq *message,
                   void *closure_data);
@@ -631,6 +819,10 @@ extern const ProtobufCMessageDescriptor mgmt__smd_pool_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__smd_pool_resp__pool__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__dev_state_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__dev_state_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__dev_replace_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__dev_replace_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__dev_identify_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__dev_identify_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__smd_query_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__smd_query_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__smd_query_resp__device__descriptor;

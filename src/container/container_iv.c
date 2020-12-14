@@ -55,7 +55,7 @@ cont_iv_snap_alloc_internal(d_sg_list_t *sgl)
 	int			entry_size;
 	int			rc;
 
-	rc = daos_sgl_init(sgl, 1);
+	rc = d_sgl_init(sgl, 1);
 	if (rc)
 		return rc;
 
@@ -68,7 +68,7 @@ cont_iv_snap_alloc_internal(d_sg_list_t *sgl)
 	d_iov_set(&sgl->sg_iovs[0], entry, entry_size);
 out:
 	if (rc)
-		daos_sgl_fini(sgl, true);
+		d_sgl_fini(sgl, true);
 
 	return rc;
 }
@@ -86,7 +86,7 @@ cont_iv_prop_alloc_internal(d_sg_list_t *sgl)
 	int			entry_size;
 	int			rc;
 
-	rc = daos_sgl_init(sgl, 1);
+	rc = d_sgl_init(sgl, 1);
 	if (rc)
 		return rc;
 
@@ -98,7 +98,7 @@ cont_iv_prop_alloc_internal(d_sg_list_t *sgl)
 	d_iov_set(&sgl->sg_iovs[0], entry, entry_size);
 out:
 	if (rc)
-		daos_sgl_fini(sgl, true);
+		d_sgl_fini(sgl, true);
 
 	return rc;
 }
@@ -121,7 +121,7 @@ cont_iv_ent_init(struct ds_iv_key *iv_key, void *data,
 	entry->iv_key.class_id = iv_key->class_id;
 	entry->iv_key.rank = iv_key->rank;
 
-	rc = daos_sgl_init(&entry->iv_value, 1);
+	rc = d_sgl_init(&entry->iv_value, 1);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -133,7 +133,7 @@ cont_iv_ent_init(struct ds_iv_key *iv_key, void *data,
 out:
 	if (rc != 0) {
 		dbtree_destroy(root_hdl, NULL);
-		daos_sgl_fini(&entry->iv_value, true);
+		d_sgl_fini(&entry->iv_value, true);
 	}
 
 	return rc;
@@ -199,7 +199,7 @@ cont_iv_ent_destroy(d_sg_list_t *sgl)
 		dbtree_destroy(*root_hdl, NULL);
 	}
 
-	daos_sgl_fini(sgl, true);
+	d_sgl_fini(sgl, true);
 
 	return 0;
 }
@@ -470,18 +470,56 @@ cont_iv_capa_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	return rc;
 }
 
+/* Update the EC agg epoch all servers to the leader */
+static int
+cont_iv_ent_agg_eph_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
+			   d_sg_list_t *src)
+{
+	struct cont_iv_key	*civ_key = key2priv(key);
+	struct cont_iv_entry	*civ_ent = src->sg_iovs[0].iov_buf;
+	d_rank_t		rank;
+	int			rc;
+
+	rc = crt_group_rank(NULL, &rank);
+	if (rc)
+		return rc;
+
+	if (rank != entry->ns->iv_master_rank)
+		return -DER_IVCB_FORWARD;
+
+	rc = ds_cont_leader_update_agg_eph(entry->ns->iv_pool_uuid,
+					   civ_key->cont_uuid,
+					   civ_ent->iv_agg_eph.rank,
+					   civ_ent->iv_agg_eph.eph);
+	return rc;
+}
+
+/* Each server refresh the VOS aggregation epoch gotten from the leader */
+static int
+cont_iv_ent_agg_eph_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
+			    d_sg_list_t *src)
+{
+	struct cont_iv_entry	*civ_ent = src->sg_iovs[0].iov_buf;
+	struct cont_iv_key	*civ_key = key2priv(key);
+	int			rc;
+
+	rc = ds_cont_tgt_refresh_agg_eph(entry->ns->iv_pool_uuid,
+					 civ_key->cont_uuid,
+					 civ_ent->iv_agg_eph.eph);
+	return rc;
+}
+
 static int
 cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		   d_sg_list_t *src, void **priv)
 {
 	daos_handle_t		root_hdl;
 	struct cont_iv_key	*civ_key = key2priv(key);
-	d_iov_t		key_iov;
-	d_iov_t		val_iov;
+	d_iov_t			key_iov;
+	d_iov_t			val_iov;
 	int			rc;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
-	/* If src == NULL, it is invalidate */
 	if (src != NULL) {
 		if (entry->iv_class->iv_class_id == IV_CONT_CAPA) {
 			rc = cont_iv_capa_ent_update(entry, key, src, priv);
@@ -497,12 +535,23 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 						civ_ent->iv_snap.snap_cnt);
 			if (rc)
 				return rc;
+		} else if (entry->iv_class->iv_class_id ==
+						IV_CONT_AGG_EPOCH_REPORT) {
+			rc = cont_iv_ent_agg_eph_update(entry, key, src);
+			if (rc)
+				return rc;
+		} else if (entry->iv_class->iv_class_id ==
+						IV_CONT_AGG_EPOCH_BOUNDRY) {
+			rc = cont_iv_ent_agg_eph_refresh(entry, key, src);
+			if (rc)
+				return rc;
 		}
 	}
 
 	memcpy(&root_hdl, entry->iv_value.sg_iovs[0].iov_buf, sizeof(root_hdl));
 	d_iov_set(&key_iov, civ_key, sizeof(*civ_key));
 	if (src == NULL) {
+		/* If src == NULL, it is invalidate */
 		if (entry->iv_class->iv_class_id == IV_CONT_CAPA &&
 		    !uuid_is_null(civ_key->cont_uuid)) {
 			rc = ds_cont_tgt_close(civ_key->cont_uuid);
@@ -542,18 +591,18 @@ cont_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 }
 
 static int
-cont_iv_capa_alloc_internal(d_sg_list_t *sgl)
+cont_iv_ent_alloc_internal(d_sg_list_t *sgl)
 {
 	struct cont_iv_entry	*entry;
 	int			rc;
 
-	rc = daos_sgl_init(sgl, 1);
+	rc = d_sgl_init(sgl, 1);
 	if (rc)
 		return rc;
 
 	D_ALLOC_PTR(entry);
 	if (!entry) {
-		daos_sgl_fini(sgl, true);
+		d_sgl_fini(sgl, true);
 		return -DER_NOMEM;
 	}
 
@@ -570,7 +619,9 @@ cont_iv_value_alloc(struct ds_iv_entry *entry, d_sg_list_t *sgl)
 	case IV_CONT_SNAP:
 		return cont_iv_snap_alloc_internal(sgl);
 	case IV_CONT_CAPA:
-		return cont_iv_capa_alloc_internal(sgl);
+	case IV_CONT_AGG_EPOCH_REPORT:
+	case IV_CONT_AGG_EPOCH_BOUNDRY:
+		return cont_iv_ent_alloc_internal(sgl);
 	case IV_CONT_PROP:
 		return cont_iv_prop_alloc_internal(sgl);
 	default:
@@ -894,6 +945,46 @@ out_eventual:
 }
 
 int
+cont_iv_ec_agg_eph_update_internal(void *ns, uuid_t cont_uuid,
+				   daos_epoch_t eph, unsigned int shortcut,
+				   unsigned int sync_mode,
+				   uint32_t op)
+{
+	struct cont_iv_entry	iv_entry = { 0 };
+	int			rc;
+
+	/* Only happens on xstream 0 */
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	iv_entry.iv_agg_eph.eph = eph;
+	uuid_copy(iv_entry.cont_uuid, cont_uuid);
+	rc = crt_group_rank(NULL, &iv_entry.iv_agg_eph.rank);
+	if (rc)
+		return rc;
+
+	rc = cont_iv_update(ns, op, cont_uuid, &iv_entry,
+			    sizeof(struct cont_iv_entry), shortcut,
+			    sync_mode, false /* retry */);
+	return rc;
+}
+
+int
+cont_iv_ec_agg_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t eph)
+{
+	return cont_iv_ec_agg_eph_update_internal(ns, cont_uuid, eph,
+						  CRT_IV_SHORTCUT_TO_ROOT,
+						  CRT_IV_SYNC_NONE,
+						  IV_CONT_AGG_EPOCH_REPORT);
+}
+
+int
+cont_iv_ec_agg_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t eph)
+{
+	return cont_iv_ec_agg_eph_update_internal(ns, cont_uuid, eph,
+						  0, CRT_IV_SYNC_LAZY,
+						  IV_CONT_AGG_EPOCH_BOUNDRY);
+}
+
+int
 cont_iv_capability_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			  uint64_t flags, uint64_t sec_capas)
 {
@@ -1150,7 +1241,7 @@ cont_iv_prop_fetch(struct ds_iv_ns *ns, uuid_t cont_uuid,
 	arg.prop = cont_prop;
 	arg.eventual = eventual;
 	rc = dss_ult_create(cont_iv_prop_fetch_ult, &arg,
-			    DSS_ULT_POOL_SRV, 0, 0, NULL);
+			    DSS_ULT_POOL_SRV, 0, DSS_DEEP_STACK_SZ, NULL);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -1200,36 +1291,46 @@ ds_cont_find_hdl(uuid_t po_uuid, uuid_t coh_uuid, struct ds_cont_hdl **coh_p)
 }
 
 int
-ds_cont_iv_init(void)
-{
-	int rc;
-
-	rc = ds_iv_class_register(IV_CONT_CAPA, &iv_cache_ops, &cont_iv_ops);
-	if (rc)
-		return rc;
-
-	rc = ds_iv_class_register(IV_CONT_SNAP, &iv_cache_ops, &cont_iv_ops);
-	if (rc) {
-		ds_iv_class_unregister(IV_CONT_SNAP);
-		return rc;
-	}
-
-	rc = ds_iv_class_register(IV_CONT_PROP, &iv_cache_ops, &cont_iv_ops);
-	if (rc) {
-		ds_iv_class_unregister(IV_CONT_CAPA);
-		ds_iv_class_unregister(IV_CONT_SNAP);
-		return rc;
-	}
-
-	return rc;
-}
-
-int
 ds_cont_iv_fini(void)
 {
 	ds_iv_class_unregister(IV_CONT_SNAP);
 	ds_iv_class_unregister(IV_CONT_CAPA);
 	ds_iv_class_unregister(IV_CONT_PROP);
-
+	ds_iv_class_unregister(IV_CONT_AGG_EPOCH_REPORT);
+	ds_iv_class_unregister(IV_CONT_AGG_EPOCH_BOUNDRY);
 	return 0;
 }
+
+int
+ds_cont_iv_init(void)
+{
+	int rc;
+
+	rc = ds_iv_class_register(IV_CONT_SNAP, &iv_cache_ops, &cont_iv_ops);
+	if (rc)
+		D_GOTO(out, rc);
+
+	rc = ds_iv_class_register(IV_CONT_CAPA, &iv_cache_ops, &cont_iv_ops);
+	if (rc)
+		D_GOTO(out, rc);
+
+	rc = ds_iv_class_register(IV_CONT_PROP, &iv_cache_ops, &cont_iv_ops);
+	if (rc)
+		D_GOTO(out, rc);
+
+	rc = ds_iv_class_register(IV_CONT_AGG_EPOCH_REPORT, &iv_cache_ops,
+				  &cont_iv_ops);
+	if (rc)
+		D_GOTO(out, rc);
+
+	rc = ds_iv_class_register(IV_CONT_AGG_EPOCH_BOUNDRY, &iv_cache_ops,
+				  &cont_iv_ops);
+	if (rc)
+		D_GOTO(out, rc);
+out:
+	if (rc)
+		ds_cont_iv_fini();
+
+	return rc;
+}
+

@@ -160,7 +160,10 @@ struct crt_rpc_priv {
 	struct crt_hg_hdl	*crp_hdl_reuse; /* reused hg_hdl */
 	crt_phy_addr_t		crp_tgt_uri; /* target uri address */
 	crt_rpc_t		*crp_ul_req; /* uri lookup request */
+
 	uint32_t		crp_ul_retry; /* uri lookup retry counter */
+
+	int			crp_ul_idx; /* index last tried */
 
 	struct crt_grp_priv	*crp_grp_priv; /* group private pointer */
 	/*
@@ -186,7 +189,9 @@ struct crt_rpc_priv {
 				/* RPC is tracked by the context */
 				crp_ctx_tracked:1,
 				/* 1 if RPC is successfully put on the wire */
-				crp_on_wire:1;
+				crp_on_wire:1,
+				/* 1 if RPC fails HLC epsilon check */
+				crp_fail_hlc:1;
 	uint32_t		crp_refcount;
 	struct crt_opc_info	*crp_opc_info;
 	/* corpc info, only valid when (crp_coll == 1) */

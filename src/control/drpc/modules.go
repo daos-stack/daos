@@ -224,6 +224,8 @@ const (
 	MethodDevStateQuery MgmtMethod = C.DRPC_METHOD_MGMT_DEV_STATE_QUERY
 	// MethodSetFaultyState is a ModuleMgmt method
 	MethodSetFaultyState MgmtMethod = C.DRPC_METHOD_MGMT_DEV_SET_FAULTY
+	// MethodReplaceStorage is a ModuleMgmt method
+	MethodReplaceStorage MgmtMethod = C.DRPC_METHOD_MGMT_DEV_REPLACE
 	// MethodListContainers is a ModuleMgmt method
 	MethodListContainers MgmtMethod = C.DRPC_METHOD_MGMT_LIST_CONTAINERS
 	// MethodPoolQuery defines a method for querying a pool
@@ -236,6 +238,8 @@ const (
 	MethodGroupUpdate MgmtMethod = C.DRPC_METHOD_MGMT_GROUP_UPDATE
 	// MethodDisconnect defines a method for signaling a clean client shutdown
 	MethodDisconnect MgmtMethod = C.DRPC_METHOD_MGMT_DISCONNECT
+	// MethodIdentifyStorage is a ModuleMgmt method
+	MethodIdentifyStorage MgmtMethod = C.DRPC_METHOD_MGMT_DEV_IDENTIFY
 )
 
 type srvMethod int32

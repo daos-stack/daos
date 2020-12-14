@@ -44,7 +44,7 @@ class DaosServerCommand(YamlCommand):
     FORMAT_PATTERN = "(SCM format required)(?!;)"
     REFORMAT_PATTERN = "Metadata format required"
 
-    def __init__(self, path="", yaml_cfg=None, timeout=20):
+    def __init__(self, path="", yaml_cfg=None, timeout=30):
         """Create a daos_server command object.
 
         Args:
@@ -52,7 +52,7 @@ class DaosServerCommand(YamlCommand):
             yaml_cfg (YamlParameters, optional): yaml configuration parameters.
                 Defaults to None.
             timeout (int, optional): number of seconds to wait for patterns to
-                appear in the subprocess output. Defaults to 20 seconds.
+                appear in the subprocess output. Defaults to 30 seconds.
         """
         super(DaosServerCommand, self).__init__(
             "/run/daos_server/*", "daos_server", path, yaml_cfg, timeout)
@@ -488,10 +488,21 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed(
                 "Failed to start servers before format: {}".format(error))
 
-    def detect_io_server_start(self):
-        """Detect when all the daos_io_servers have started."""
+    def detect_io_server_start(self, host_qty=None):
+        """Detect when all the daos_io_servers have started.
+
+        Args:
+            host_qty (int): number of servers expected to have been started.
+
+        Raises:
+            ServerFailed: if there was an error starting the servers after
+                formatting.
+
+        """
+        if host_qty is None:
+            hosts_qty = len(self._hosts)
         self.log.info("<SERVER> Waiting for the daos_io_servers to start")
-        self.manager.job.update_pattern("normal", len(self._hosts))
+        self.manager.job.update_pattern("normal", hosts_qty)
         if not self.manager.job.check_subprocess_status(self.manager.process):
             self.kill()
             raise ServerFailed("Failed to start servers after format")

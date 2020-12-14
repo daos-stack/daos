@@ -11,7 +11,7 @@ hosts:
     - client-F
     - client-G
     - client-H
-timeout: 300
+timeout: 450
 pool:
   scm_size: 8G
 server_config:
@@ -22,7 +22,7 @@ server_config:
       pinned_numa_node: 0
       nr_xs_helpers: 1
       fabric_iface: ib0
-      fabric_iface_port: 31416
+      fabric_iface_port: 31317
       log_file: daos_server0.log
       bdev_class: nvme
       bdev_list: ["0000:81:00.0"]
@@ -54,7 +54,7 @@ daos_tests:
       daos_test: u
       num_clients: 1
       test_name: DFS unit tests
-      test_timeout: 100
+      test_timeout: 250
     test_p:
       daos_test: p
       num_clients: 32

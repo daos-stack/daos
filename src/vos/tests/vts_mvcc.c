@@ -43,6 +43,8 @@
 struct tx_helper {
 	/** Current transaction handle */
 	struct dtx_handle	*th_dth;
+	/** Save the XID to cleanup related TX. */
+	struct dtx_id		 th_saved_xid;
 	/** Number of total ops in current tx */
 	uint32_t		 th_nr_ops;
 	/** Number of write ops in current tx */
@@ -262,6 +264,10 @@ stop_tx(daos_handle_t coh, struct tx_helper *txh, bool success, bool write)
 			if (success && !txh->th_skip_commit) {
 				err = vos_dtx_commit(coh, &xid, 1, NULL);
 				assert(err >= 0);
+			} else {
+				if (!success)
+					txh->th_skip_commit = false;
+				daos_dti_copy(&txh->th_saved_xid, &xid);
 			}
 		}
 	}
@@ -1017,11 +1023,9 @@ static struct op operations[] = {
 	{"listd",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	listd_f},
 	{"lista",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	lista_f},
 	{"listr",	T_R,	L_A,	L_NIL,	R_R,	W_NIL,	listr_f},
-	/* Check existence */
 	{"checkexisto",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	checkexisto_f},
 	{"checkexistd",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	checkexistd_f},
 	{"checkexista",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	checkexista_f},
-	/* VOS Query key */
 	{"querymaxd",	T_R,	L_O,	L_NIL,	R_NE,	W_NIL,	querymaxd_f},
 	{"querymaxa",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymaxa_f},
 	{"querymaxr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymaxr_f},
@@ -1059,7 +1063,14 @@ static struct op operations[] = {
 	{"punchd_dne",	T_RW,	L_D,	L_D,	R_NE,	W_E,	punchd_dne_f},
 	{"puncha_ane",	T_RW,	L_A,	L_A,	R_NE,	W_E,	puncha_ane_f},
 
-	/* Writes */
+	/*
+	 * Writes
+	 *
+	 * Note that due to punch propagation, regular punches actually involve
+	 * one or more reads. These reads can only be determined at run time.
+	 * We are not verifying their side effects right now---failures caused
+	 * by them are simply ignored.
+	 */
 	{"update",	T_W,	L_NIL,	L_A,	R_NIL,	W_NE,	update_f},
 	{"puncho",	T_W,	L_NIL,	L_O,	R_NIL,	W_E,	puncho_f},
 	{"punchd",	T_W,	L_NIL,	L_D,	R_NIL,	W_E,	punchd_f},
@@ -1068,6 +1079,14 @@ static struct op operations[] = {
 	/* Terminator */
 	{NULL,		0,	0,	0,	0,	0,	NULL}
 };
+
+static bool
+is_punch(struct op *op)
+{
+	char prefix[] = "punch";
+
+	return (strncmp(op->o_name, prefix, strlen(prefix)) == 0);
+}
 
 /*
  * An excluded conflicting_rw case
@@ -1176,8 +1195,8 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 		goto out;
 	}
 
-	print_message("CASE %d.%d: %s, %s(%s, "DF_U64"), %s(%s, "DF_U64"), "
-		      "%s TX [%d]\n", i, j, empty ? "empty" : "nonemtpy",
+	print_message("CASE %d.%d: %s, %s(%s, "DF_X64"), %s(%s, "DF_X64"), "
+		      "%s TX [%d]\n", i, j, empty ? "empty" : "nonempty",
 		      r->o_name, rp, re, w->o_name, wp, we,
 		      same_tx ? "same" : "diff", mvcc_arg->i);
 
@@ -1204,20 +1223,20 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 		char	pp[L_COUNT + 1] = "coda";
 
 		memcpy(pp, rp, strlen(rp));
-		print_message("  update(%s, "DF_U64") before %s(%s, "
-			      DF_U64"): ", pp, re - 1, r->o_name, rp, re);
+		print_message("  update(%s, "DF_X64") before %s(%s, "
+			      DF_X64"): ", pp, re - 1, r->o_name, rp, re);
 		rc = update_f(arg, NULL /* txh */, pp, re - 1);
-		print_message("%d\n", rc);
+		print_message("%s\n", d_errstr(rc));
 		if (rc != 0) {
 			nfailed++;
 			goto out;
 		}
 	}
 
-	print_message("  %s(%s, "DF_U64") (expect %d): ",
-		      r->o_name, rp, re, expected_rrc);
+	print_message("  %s(%s, "DF_X64") (expect %s): ",
+		      r->o_name, rp, re, d_errstr(expected_rrc));
 	rc = r->o_func(arg, rtx, rp, re);
-	print_message("%d\n", rc);
+	print_message("%s\n", d_errstr(rc));
 	if (rc != expected_rrc) {
 		nfailed++;
 		goto out;
@@ -1248,18 +1267,18 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 		else if (w->o_rtype == R_NE && e)
 			expected_wrc = -DER_NONEXIST;
 	}
-	print_message("  %s(%s, "DF_U64") (expect %d): ",
-		      w->o_name, wp, we, expected_wrc);
+	print_message("  %s(%s, "DF_X64") (expect %s): ",
+		      w->o_name, wp, we, d_errstr(expected_wrc));
 	rc = w->o_func(arg, wtx, wp, we);
-	print_message("%d\n", rc);
+	print_message("%s\n", d_errstr(rc));
 	if (rc != expected_wrc)
 		nfailed++;
 
 out:
 	if (nfailed > 0)
-		print_message("FAILED: CASE %d.%d: %s, %s(%s, "DF_U64
-			      "), %s(%s, "DF_U64"), %s TX [%d]\n", i, j,
-			      empty ? "empty" : "nonemtpy", r->o_name, rp, re,
+		print_message("FAILED: CASE %d.%d: %s, %s(%s, "DF_X64
+			      "), %s(%s, "DF_X64"), %s TX [%d]\n", i, j,
+			      empty ? "empty" : "nonempty", r->o_name, rp, re,
 			      w->o_name, wp, we, same_tx ? "same" : "diff",
 			      mvcc_arg->i);
 	return nfailed;
@@ -1379,7 +1398,7 @@ conflicting_rw(void **state)
 
 /* Return the number of failures observed. */
 static int
-uncertainty_check_exec_one(struct io_test_args *arg, int i, int j,
+uncertainty_check_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 			   struct op *w, char *wp, daos_epoch_t we,
 			   struct op *a, char *ap, daos_epoch_t ae,
 			   daos_epoch_t bound, bool commit, int *skipped)
@@ -1389,20 +1408,38 @@ uncertainty_check_exec_one(struct io_test_args *arg, int i, int j,
 	struct tx_helper	 txh2 = {0};
 	struct tx_helper	*wtx = &txh1;
 	struct tx_helper	*atx = &txh2;
-	int			 expected_arc;
+	int			 expected_arc = 0;
 	int			 nfailed = 0;
 	int			 rc;
 
 #define DF_CASE								\
-	"CASE %d.%d: %s(%s, "DF_U64"), %s, %s(%s, "DF_U64") with bound "\
-	DF_U64" [%d]"
-#define DP_CASE(i, j, w, wp, we, commit, a, ap, ae, bound, argi)	\
-	i, j, w->o_name, wp, we, commit ? "commit" : "do not commit",	\
-	a->o_name, ap, ae, bound, argi
+	"CASE %d.%d: %s, %s(%s, "DF_X64"), %s, %s(%s, "DF_X64		\
+	") with bound "DF_X64" [%d]"
+#define DP_CASE(i, j, empty, w, wp, we, commit, a, ap, ae, bound, argi)	\
+	i, j, empty ? "empty" : "nonempty", w->o_name, wp, we,		\
+	commit ? "commit" : "do not commit", a->o_name, ap, ae, bound,	\
+	argi
 
 	print_message(DF_CASE"\n",
-		      DP_CASE(i, j, w, wp, we, commit, a, ap, ae, bound,
+		      DP_CASE(i, j, empty, w, wp, we, commit, a, ap, ae, bound,
 			      mvcc_arg->i));
+
+	/* If requested, prepare the data that will be overwritten by w. */
+	if (!empty) {
+		char		pp[L_COUNT + 1] = "coda";
+		daos_epoch_t	pe = ae - 1;
+
+		D_ASSERT(strlen(wp) <= sizeof(pp) - 1);
+		memcpy(pp, wp, strlen(wp));
+		print_message("  update(%s, "DF_U64") (expect DER_SUCCESS): ",
+			      pp, pe);
+		rc = update_f(arg, NULL /* txh */, pp, pe);
+		print_message("%s\n", d_errstr(rc));
+		if (rc != 0) {
+			nfailed++;
+			goto out;
+		}
+	}
 
 	wtx->th_nr_ops = 1;
 	wtx->th_op_seq = 1;
@@ -1416,35 +1453,68 @@ uncertainty_check_exec_one(struct io_test_args *arg, int i, int j,
 	atx->th_epoch_bound = bound;
 
 	/* Perform w. */
-	print_message("  %s(%s, "DF_U64") (expect 0): ", w->o_name, wp, we);
+	print_message("  %s(%s, "DF_X64") (expect DER_SUCCESS): ", w->o_name,
+		      wp, we);
 	rc = w->o_func(arg, wtx, wp, we);
-	print_message("%d\n", rc);
+	print_message("%s\n", d_errstr(rc));
 	if (rc != 0) {
 		nfailed++;
 		goto out;
 	}
 
-	/* Perform a. */
+	/*
+	 * Perform a. If is_punch(w), a may be rejected due to w's read
+	 * timestamp record.
+	 */
 	if (we <= bound) {
 		expected_arc = -DER_TX_RESTART;
 	} else {
-		if ((is_r(a) || is_rw(a)) && a->o_rtype == R_NE)
-			expected_arc = -DER_NONEXIST;
-		else
-			expected_arc = 0;
+		if ((is_r(a) || is_rw(a))) {
+			if (a->o_rtype == R_NE && empty)
+				expected_arc = -DER_NONEXIST;
+			else if (a->o_rtype == R_E && !empty)
+				expected_arc = -DER_EXIST;
+		}
 	}
-	print_message("  %s(%s, "DF_U64") (expect %d): ",
-		      a->o_name, ap, ae, expected_arc);
+	if (is_punch(w) && we > bound)
+		print_message("  %s(%s, "DF_X64
+			      ") (expect %s or DER_TX_RESTART): ", a->o_name,
+			      ap, ae, d_errstr(expected_arc));
+	else
+		print_message("  %s(%s, "DF_X64") (expect %s): ",
+			      a->o_name, ap, ae, d_errstr(expected_arc));
 	rc = a->o_func(arg, atx, ap, ae);
-	print_message("%d\n", rc);
-	if (rc != expected_arc)
+	print_message("%s\n", d_errstr(rc));
+	if (rc != expected_arc) {
+		if (is_punch(w) && we > bound && rc == -DER_TX_RESTART)
+			goto out;
 		nfailed++;
+	}
 
 out:
 	if (nfailed > 0)
 		print_message("FAILED: "DF_CASE"\n",
-			      DP_CASE(i, j, w, wp, we, commit, a, ap, ae, bound,
-				      mvcc_arg->i));
+			      DP_CASE(i, j, empty, w, wp, we, commit, a, ap, ae,
+				      bound, mvcc_arg->i));
+
+	if (!daos_is_zero_dti(&wtx->th_saved_xid)) {
+		if (wtx->th_skip_commit)
+			vos_dtx_commit(arg->ctx.tc_co_hdl, &wtx->th_saved_xid,
+				       1, NULL);
+		else
+			vos_dtx_abort(arg->ctx.tc_co_hdl, DAOS_EPOCH_MAX,
+				      &wtx->th_saved_xid, 1);
+	}
+
+	if (!daos_is_zero_dti(&atx->th_saved_xid)) {
+		if (atx->th_skip_commit)
+			vos_dtx_commit(arg->ctx.tc_co_hdl, &atx->th_saved_xid,
+				       1, NULL);
+		else
+			vos_dtx_abort(arg->ctx.tc_co_hdl, DAOS_EPOCH_MAX,
+				      &atx->th_saved_xid, 1);
+	}
+
 #undef DP_CASE
 #undef DF_CASE
 	return nfailed;
@@ -1462,7 +1532,9 @@ uncertainty_check_exec(struct io_test_args *arg, int i, struct op *w,
 	char		 wp[L_COUNT + 1];	/* w path */
 	char		 ap[L_COUNT + 1];	/* a path */
 	char		*path_template = "coda";
+	bool		 emptiness[] = {true, false};
 	int		 j = 0;
+	int		 k;
 	int		 nfailed = 0;
 
 	/* Set overlapping paths. */
@@ -1470,47 +1542,57 @@ uncertainty_check_exec(struct io_test_args *arg, int i, struct op *w,
 	set_path(a, path_template, ap);
 	D_ASSERTF(overlap(wp, ap), "overlap(\"%s\", \"%s\")", wp, ap);
 
-	/* Write at the uncertainty upper bound, commit, then do operation a. */
-	bound = mvcc_arg->epoch + 10;
-	we = bound;
-	ae = mvcc_arg->epoch;
-	nfailed += uncertainty_check_exec_one(arg, i, j, w, wp, we, a, ap, ae,
-					      bound, true /* commit */,
-					      skipped);
-	(*cases)++;
-	j++;
-	mvcc_arg->i++;
-	mvcc_arg->epoch += 100;
+	for (k = 0; k < ARRAY_SIZE(emptiness); k++) {
+		bool empty = emptiness[k];
 
-	/*
-	 * Write at the uncertainty upper bound, do not commit, then do
-	 * operation a.
-	 */
-	bound = mvcc_arg->epoch + 10;
-	we = bound;
-	ae = mvcc_arg->epoch;
-	nfailed += uncertainty_check_exec_one(arg, i, j, w, wp, we, a, ap, ae,
-					      bound, false /* commit */,
-					      skipped);
-	(*cases)++;
-	j++;
-	mvcc_arg->i++;
-	mvcc_arg->epoch += 100;
+		/*
+		 * Write at the uncertainty upper bound, commit, then do
+		 * operation a.
+		 */
+		bound = mvcc_arg->epoch + 10;
+		we = bound;
+		ae = mvcc_arg->epoch;
+		nfailed += uncertainty_check_exec_one(arg, i, j, empty, w, wp,
+						      we, a, ap, ae, bound,
+						      true /* commit */,
+						      skipped);
+		(*cases)++;
+		j++;
+		mvcc_arg->i++;
+		mvcc_arg->epoch += 100;
 
-	/*
-	 * Write above the uncertainty upper bound, commit, then do operation
-	 * a.
-	 */
-	bound = mvcc_arg->epoch + 10;
-	we = bound + 1;
-	ae = mvcc_arg->epoch;
-	nfailed += uncertainty_check_exec_one(arg, i, j, w, wp, we, a, ap, ae,
-					      bound, true /* commit */,
-					      skipped);
-	(*cases)++;
-	j++;
-	mvcc_arg->i++;
-	mvcc_arg->epoch += 100;
+		/*
+		 * Write at the uncertainty upper bound, do not commit, then do
+		 * operation a.
+		 */
+		bound = mvcc_arg->epoch + 10;
+		we = bound;
+		ae = mvcc_arg->epoch;
+		nfailed += uncertainty_check_exec_one(arg, i, j, empty, w, wp,
+						      we, a, ap, ae, bound,
+						      false /* commit */,
+						      skipped);
+		(*cases)++;
+		j++;
+		mvcc_arg->i++;
+		mvcc_arg->epoch += 100;
+
+		/*
+		 * Write above the uncertainty upper bound, commit, then do
+		 * operation a.
+		 */
+		bound = mvcc_arg->epoch + 10;
+		we = bound + 1;
+		ae = mvcc_arg->epoch;
+		nfailed += uncertainty_check_exec_one(arg, i, j, empty, w, wp,
+						      we, a, ap, ae, bound,
+						      true /* commit */,
+						      skipped);
+		(*cases)++;
+		j++;
+		mvcc_arg->i++;
+		mvcc_arg->epoch += 100;
+	}
 
 	return nfailed;
 }
@@ -1543,14 +1625,13 @@ uncertainty_check(void **state)
 
 			nfailed += uncertainty_check_exec(arg, i, w, a, &ntot,
 							  &nskipped);
-			/* TODO: Enable once vos is ready. */
-			nfailed = 0;
 			assert_true(!mvcc_arg->fail_fast || nfailed == 0);
 			i++;
 		}
 	}
 
-	print_message("total tests: %d, skipped %d\n", ntot, nskipped);
+	print_message("total tests: %d, failed %d, skipped %d\n", ntot,
+		      nfailed, nskipped);
 
 	if (nfailed > 0)
 		fail_msg("%d failed cases", nfailed);

@@ -40,8 +40,6 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-const defaultAP = "192.168.1.1:10001"
-
 func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 	for name, tc := range map[string]struct {
 		members        system.Members
@@ -480,32 +478,38 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 					Rank: 0, Addr: common.MockHostAddr(1).String(),
 					Uuid:  common.MockUUID(0),
 					State: uint32(system.MemberStateErrored), Info: "couldn't ping",
+					FaultDomain: "/",
 				},
 				{
 					Rank: 1, Addr: common.MockHostAddr(1).String(),
 					Uuid: common.MockUUID(1),
 					// transition to "ready" illegal
-					State: uint32(system.MemberStateStopping),
+					State:       uint32(system.MemberStateStopping),
+					FaultDomain: "/",
 				},
 				{
 					Rank: 2, Addr: common.MockHostAddr(2).String(),
-					Uuid:  common.MockUUID(2),
-					State: uint32(system.MemberStateUnresponsive),
+					Uuid:        common.MockUUID(2),
+					State:       uint32(system.MemberStateUnresponsive),
+					FaultDomain: "/",
 				},
 				{
 					Rank: 3, Addr: common.MockHostAddr(2).String(),
-					Uuid:  common.MockUUID(3),
-					State: uint32(system.MemberStateJoined),
+					Uuid:        common.MockUUID(3),
+					State:       uint32(system.MemberStateJoined),
+					FaultDomain: "/",
 				},
 				{
 					Rank: 4, Addr: common.MockHostAddr(3).String(),
-					Uuid:  common.MockUUID(4),
-					State: uint32(system.MemberStateStarting),
+					Uuid:        common.MockUUID(4),
+					State:       uint32(system.MemberStateStarting),
+					FaultDomain: "/",
 				},
 				{
 					Rank: 5, Addr: common.MockHostAddr(3).String(),
-					Uuid:  common.MockUUID(5),
-					State: uint32(system.MemberStateStopped),
+					Uuid:        common.MockUUID(5),
+					State:       uint32(system.MemberStateStopped),
+					FaultDomain: "/",
 				},
 			},
 			expRanks: "0-5",
@@ -547,16 +551,19 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 					Rank: 0, Addr: common.MockHostAddr(1).String(),
 					Uuid:  common.MockUUID(0),
 					State: uint32(system.MemberStateErrored), Info: "couldn't ping",
+					FaultDomain: "/",
 				},
 				{
 					Rank: 2, Addr: common.MockHostAddr(2).String(),
-					Uuid:  common.MockUUID(2),
-					State: uint32(system.MemberStateUnresponsive),
+					Uuid:        common.MockUUID(2),
+					State:       uint32(system.MemberStateUnresponsive),
+					FaultDomain: "/",
 				},
 				{
 					Rank: 3, Addr: common.MockHostAddr(2).String(),
-					Uuid:  common.MockUUID(3),
-					State: uint32(system.MemberStateJoined),
+					Uuid:        common.MockUUID(3),
+					State:       uint32(system.MemberStateJoined),
+					FaultDomain: "/",
 				},
 			},
 			expRanks:       "0-5",
@@ -598,23 +605,27 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 			expMembers: []*ctlpb.SystemMember{
 				{
 					Rank: 2, Addr: common.MockHostAddr(2).String(),
-					Uuid:  common.MockUUID(2),
-					State: uint32(system.MemberStateUnresponsive),
+					Uuid:        common.MockUUID(2),
+					State:       uint32(system.MemberStateUnresponsive),
+					FaultDomain: "/",
 				},
 				{
 					Rank: 3, Addr: common.MockHostAddr(2).String(),
-					Uuid:  common.MockUUID(3),
-					State: uint32(system.MemberStateJoined),
+					Uuid:        common.MockUUID(3),
+					State:       uint32(system.MemberStateJoined),
+					FaultDomain: "/",
 				},
 				{
 					Rank: 4, Addr: common.MockHostAddr(3).String(),
 					Uuid:  common.MockUUID(4),
 					State: uint32(system.MemberStateErrored), Info: "couldn't ping",
+					FaultDomain: "/",
 				},
 				{
 					Rank: 5, Addr: common.MockHostAddr(3).String(),
-					Uuid:  common.MockUUID(5),
-					State: uint32(system.MemberStateStopping),
+					Uuid:        common.MockUUID(5),
+					State:       uint32(system.MemberStateStopping),
+					FaultDomain: "/",
 				},
 			},
 			expRanks:       "2-5",

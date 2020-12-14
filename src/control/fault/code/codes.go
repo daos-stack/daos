@@ -117,6 +117,7 @@ const (
 	ServerPoolScmTooSmall
 	ServerPoolNvmeTooSmall
 	ServerPoolInvalidRanks
+	ServerPoolDuplicateLabel
 	ServerInsufficientFreeHugePages
 	ServerHarnessNotStarted
 	ServerDataPlaneNotStarted
@@ -130,6 +131,7 @@ const (
 	ServerNoConfigPath
 	ServerConfigBadControlPort
 	ServerConfigBadAccessPoints
+	ServerConfigEvenAccessPoints
 	ServerConfigBadProvider
 	ServerConfigNoServers
 	ServerConfigDuplicateFabric

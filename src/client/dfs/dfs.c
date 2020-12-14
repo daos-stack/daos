@@ -231,6 +231,38 @@ oid_cp(daos_obj_id_t *dst, daos_obj_id_t src)
 	dst->lo = src.lo;
 }
 
+static inline int
+check_tx(daos_handle_t th, int rc)
+{
+	/** if we are not using a DTX, no restart is possible */
+	if (daos_handle_is_valid(th)) {
+		int ret;
+
+		if (rc == ERESTART) {
+			/** restart the TX handle */
+			rc = daos_tx_restart(th, NULL);
+			if (rc) {
+				/** restart failed, so just fail */
+				D_ERROR("daos_tx_restart() failed (%d)\n", rc);
+				rc = daos_der2errno(rc);
+			} else {
+				/** restart succeeded, so return restart code */
+				return ERESTART;
+			}
+		}
+
+		/** on success or non-restart errors, close the handle */
+		ret = daos_tx_close(th,  NULL);
+		if (ret) {
+			D_ERROR("daos_tx_close() failed (%d)\n", ret);
+			if (rc == 0)
+				rc = daos_der2errno(ret);
+		}
+	}
+
+	return rc;
+}
+
 #define MAX_OID_HI ((1UL << 32) - 1)
 
 /*
@@ -1478,7 +1510,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 
 	rc = daos_obj_open(coh, super_oid, DAOS_OO_RO, &dfs->super_oh, NULL);
 	if (rc) {
-		D_ERROR("daos_obj_open() Failed (%d)\n", rc);
+		D_ERROR("daos_obj_open() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 	}
 
@@ -1494,7 +1526,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 	obj_mode = get_daos_obj_mode(flags);
 	rc = daos_obj_open(coh, dfs->root.oid, obj_mode, &dfs->root.oh, NULL);
 	if (rc) {
-		D_ERROR("daos_obj_open() Failed (%d)\n", rc);
+		D_ERROR("daos_obj_open() failed, " DF_RC "\n", DP_RC(rc));
 		daos_obj_close(dfs->super_oh, NULL);
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 	}
@@ -1756,32 +1788,20 @@ restart:
 
 	if (dfs->use_dtx) {
 		rc = daos_tx_commit(th, NULL);
-		if (rc == -DER_TX_RESTART) {
-			rc = daos_tx_restart(th, NULL);
-			if (rc) {
-				D_ERROR("daos_tx_restart() failed (%d)\n", rc);
-				D_GOTO(out, rc = daos_der2errno(rc));
-			}
-			goto restart;
-		} else if (rc) {
-			D_ERROR("daos_tx_commit() failed (%d)\n", rc);
+		if (rc) {
+			if (rc != -DER_TX_RESTART)
+				D_ERROR("daos_tx_commit() failed (%d)\n", rc);
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 	}
 
 	if (oid)
 		oid_cp(oid, entry.oid);
-out:
-	if (daos_handle_is_valid(th)) {
-		int ret;
 
-		ret = daos_tx_close(th,  NULL);
-		if (ret) {
-			D_ERROR("daos_tx_close() failed (%d)\n", ret);
-			if (rc == 0)
-				rc = daos_der2errno(ret);
-		}
-	}
+out:
+	rc = check_tx(th, rc);
+	if (rc == ERESTART)
+		goto restart;
 	return rc;
 }
 
@@ -2346,15 +2366,9 @@ restart:
 
 	if (dfs->use_dtx) {
 		rc = daos_tx_commit(th, NULL);
-		if (rc == -DER_TX_RESTART) {
-			rc = daos_tx_restart(th, NULL);
-			if (rc) {
-				D_ERROR("daos_tx_restart() failed (%d)\n", rc);
-				D_GOTO(out, rc = daos_der2errno(rc));
-			}
-			goto restart;
-		} else if (rc) {
-			D_ERROR("daos_tx_commit() failed (%d)\n", rc);
+		if (rc) {
+			if (rc != -DER_TX_RESTART)
+				D_ERROR("daos_tx_commit() failed (%d)\n", rc);
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 	}
@@ -2362,18 +2376,9 @@ restart:
 	*_obj = obj;
 
 out:
-	if (daos_handle_is_valid(th)) {
-		int ret;
-
-		ret = daos_tx_close(th,  NULL);
-		if (ret) {
-			D_ERROR("daos_tx_close() failed (%d)\n", ret);
-			if (rc == 0) {
-				*_obj = NULL;
-				rc = daos_der2errno(ret);
-			}
-		}
-	}
+	rc = check_tx(th, rc);
+	if (rc == ERESTART)
+		goto restart;
 
 	if (rc != 0)
 		D_FREE(obj);
@@ -2603,7 +2608,8 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 				       daos_mode, 1, obj_glob->chunk_size,
 				       &obj->oh, NULL);
 	if (rc) {
-		D_ERROR("daos_array_open_with_attr() failed (%d)\n", rc);
+		D_ERROR("daos_array_open_with_attr() failed, " DF_RC "\n",
+			DP_RC(rc));
 		D_FREE(obj);
 		return daos_der2errno(rc);
 	}
@@ -2631,7 +2637,7 @@ dfs_release(dfs_obj_t *obj)
 		D_ASSERT(0);
 
 	if (rc) {
-		D_ERROR("daos_obj_close() Failed (%d)\n", rc);
+		D_ERROR("daos_obj_close() failed, " DF_RC "\n", DP_RC(rc));
 		return daos_der2errno(rc);
 	}
 
@@ -2758,7 +2764,8 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 
 		rc = daos_array_read(obj->oh, DAOS_TX_NONE, &iod, sgl, NULL);
 		if (rc) {
-			D_ERROR("daos_array_read() failed (%d)\n", rc);
+			D_ERROR("daos_array_read() failed, " DF_RC "\n",
+				DP_RC(rc));
 			return daos_der2errno(rc);
 		}
 
@@ -3617,30 +3624,18 @@ restart:
 
 	if (dfs->use_dtx) {
 		rc = daos_tx_commit(th, NULL);
-		if (rc == -DER_TX_RESTART) {
-			rc = daos_tx_restart(th, NULL);
-			if (rc) {
-				D_ERROR("daos_tx_restart() failed (%d)\n", rc);
-				D_GOTO(out, rc = daos_der2errno(rc));
-			}
-			goto restart;
-		} else if (rc) {
-			D_ERROR("daos_tx_commit() failed (%d)\n", rc);
+		if (rc) {
+			if (rc != -DER_TX_RESTART)
+				D_ERROR("daos_tx_commit() failed (%d)\n", rc);
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 	}
 
 out:
-	if (daos_handle_is_valid(th)) {
-		int ret;
+	rc = check_tx(th, rc);
+	if (rc == ERESTART)
+		goto restart;
 
-		ret = daos_tx_close(th,  NULL);
-		if (ret) {
-			D_ERROR("daos_tx_close() failed (%d)\n", ret);
-			if (rc == 0)
-				rc = daos_der2errno(ret);
-		}
-	}
 	if (entry.value) {
 		D_ASSERT(S_ISLNK(entry.mode));
 		D_FREE(entry.value);
@@ -3744,30 +3739,18 @@ restart:
 
 	if (dfs->use_dtx) {
 		rc = daos_tx_commit(th, NULL);
-		if (rc == -DER_TX_RESTART) {
-			rc = daos_tx_restart(th, NULL);
-			if (rc) {
-				D_ERROR("daos_tx_restart() failed (%d)\n", rc);
-				D_GOTO(out, rc = daos_der2errno(rc));
-			}
-			goto restart;
-		} else if (rc) {
-			D_ERROR("daos_tx_commit() failed (%d)\n", rc);
+		if (rc) {
+			if (rc != -DER_TX_RESTART)
+				D_ERROR("daos_tx_commit() failed (%d)\n", rc);
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 	}
 
 out:
-	if (daos_handle_is_valid(th)) {
-		int ret;
+	rc = check_tx(th, rc);
+	if (rc == ERESTART)
+		goto restart;
 
-		ret = daos_tx_close(th,  NULL);
-		if (ret) {
-			D_ERROR("daos_tx_close() failed (%d)\n", ret);
-			if (rc == 0)
-				rc = daos_der2errno(ret);
-		}
-	}
 	if (entry1.value) {
 		D_ASSERT(S_ISLNK(entry1.mode));
 		D_FREE(entry1.value);

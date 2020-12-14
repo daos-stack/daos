@@ -48,11 +48,11 @@ enum dtx_grp_flags {
 };
 
 enum dtx_mbs_flags {
-	/* The targets that are modified by the distributed transaction
-	 * are in the same single redundancy group.
+	/* The targets modified via the DTX belong to replicated object
+	 * within single redundancy group.
 	 */
-	DMF_MODIFY_SRDG			= (1 << 0),
-	/* The MDS contains the leader information, used for distributed
+	DMF_SRDG_REP			= (1 << 0),
+	/* The MBS contains the leader information, used for distributed
 	 * transaction. For stand-alone modification, leader information
 	 * is not stored inside MBS as optimization.
 	 */
@@ -137,8 +137,12 @@ struct dtx_memberships {
 	/* see dtx_mbs_flags. */
 	uint16_t			dm_flags;
 
-	/* For alignment. */
-	uint16_t			dm_padding;
+	union {
+		/* DTX entry flags during DTX recovery. */
+		uint16_t		dm_dte_flags;
+		/* For alignment. */
+		uint16_t		dm_padding;
+	};
 
 	/* The first 'sizeof(struct dtx_daos_target) * dm_tgt_cnt' is the
 	 * dtx_daos_target array. The subsequent are modification groups.
@@ -192,7 +196,7 @@ enum daos_ops_intent {
 	DAOS_INTENT_PURGE		= 1, /* purge/aggregation */
 	DAOS_INTENT_UPDATE		= 2, /* write/insert */
 	DAOS_INTENT_PUNCH		= 3, /* punch/delete */
-	DAOS_INTENT_REBUILD		= 4, /* for rebuild related scan */
+	DAOS_INTENT_MIGRATION		= 4, /* for migration related scan */
 	DAOS_INTENT_CHECK		= 5, /* check aborted or not */
 	DAOS_INTENT_KILL		= 6, /* delete object/key */
 	DAOS_INTENT_COS			= 7, /* add something into CoS cache. */
