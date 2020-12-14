@@ -632,19 +632,39 @@ class DmgCommand(DmgCommandBase):
 
         """
         self._get_result(("pool", "list"))
-
-        # Populate a dictionary with svc replicas for each pool UUID key listed
-        # Sample dmg pool list output:
-        #    Pool UUID                            Svc Replicas
-        #    ---------                            ------------
-        #    43bf2fe8-cb92-46ec-b9e9-9b056725092a 0
-        #    98736dfe-cb92-12cd-de45-9b09875092cd 1
         data = {}
-        match = re.findall(
-            r"(?:([0-9a-fA-F][0-9a-fA-F-]+)\s+([0-9][0-9,-]*))",
-            self.result.stdout)
-        for info in match:
-            data[info[0]] = get_numeric_list(info[1])
+        if self.json.value:
+            # {
+            #     "response": {
+            #         "Status": 0,
+            #         "Pools": [
+            #             {
+            #                 "UUID": "fc98d70e",
+            #                 "Svcreps": [
+            #                     0
+            #                 ]
+            #             }
+            #         ]
+            #     },
+            #     "error": null,
+            #     "status": 0
+            # }
+            output = json.loads(self.result.stdout)
+            for item in output["response"]["Pools"]:
+                data[item["UUID"]] = ",".join(str(svc)
+                                              for svc in item["Svcreps"])
+        else:
+            # Populate a dictionary with svc replicas for each pool UUID key listed
+            # Sample dmg pool list output:
+            #    Pool UUID                            Svc Replicas
+            #    ---------                            ------------
+            #    43bf2fe8-cb92-46ec-b9e9-9b056725092a 0
+            #    98736dfe-cb92-12cd-de45-9b09875092cd 1
+            match = re.findall(
+                r"(?:([0-9a-fA-F][0-9a-fA-F-]+)\s+([0-9][0-9,-]*))",
+                self.result.stdout)
+            for info in match:
+                data[info[0]] = get_numeric_list(info[1])
         return data
 
     def pool_set_prop(self, pool, name, value):
