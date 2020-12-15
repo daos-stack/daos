@@ -701,21 +701,16 @@ class YamlCommand(SubProcessCommand):
         if isinstance(self.yaml, YamlParameters):
             self.yaml.get_params(test)
 
-    def create_yaml_file(self, yaml_data=None):
+    def create_yaml_file(self):
         """Create the yaml file with the current yaml file parameters.
 
         This should be called before running the daos command and after all the
         yaml file parameters have been defined.  Any updates to the yaml file
         parameter definitions would require calling this method before calling
         the daos command in order for them to have any effect.
-
-        Args:
-            yaml_data (dict, optional): dictionary cotaining yaml data in the
-                form of a daos yaml configuration file.
-
         """
         if isinstance(self.yaml, YamlParameters):
-            self.yaml.create_yaml(yaml_data)
+            self.yaml.create_yaml()
 
     def set_config_value(self, name, value):
         """Set the yaml configuration parameter value.

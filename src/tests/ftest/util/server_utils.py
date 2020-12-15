@@ -27,7 +27,8 @@ import socket
 import time
 
 from command_utils_base import \
-    CommandFailure, FormattedParameter, YamlParameters, CommandWithParameters
+    CommandFailure, FormattedParameter, YamlParameters, CommandWithParameters, \
+    BasicParameter
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human
 from dmg_utils import DmgCommand
@@ -82,6 +83,12 @@ class DaosServerCommand(YamlCommand):
         # Include the daos_io_server command launched by the daos_server
         # command.
         self._exe_names.append("daos_io_server")
+
+        # Discover mode
+        self.discover_mode = BasicParameter(False, False)
+        self.discover_pmem = BasicParameter(None)
+        self.discover_nvme = BasicParameter(None)
+        self.discover_net = BasicParameter(None)
 
     def get_sub_command_class(self):
         # pylint: disable=redefined-variable-type
@@ -332,21 +339,19 @@ class DaosServerManager(SubprocessManager):
         # Get the values for the dmg parameters
         self.dmg.get_params(test)
 
-    def prepare(self, storage=True, config_data=None):
+    def prepare(self, storage=True):
         """Prepare to start daos_server.
 
         Args:
             storage (bool, optional): whether or not to prepare dcpm/nvme
                 storage. Defaults to True.
-            config_data (dict, optional): dictionary cotaining config yaml data
-                in the form of a daos yaml configuration file.
         """
         self.log.info(
             "<SERVER> Preparing to start daos_server on %s with %s",
             self._hosts, self.manager.command)
 
         # Create the daos_server yaml file
-        self.manager.job.create_yaml_file(config_data)
+        self.manager.job.create_yaml_file()
 
         # Copy certificates
         self.manager.job.copy_certificates(
@@ -581,6 +586,9 @@ class DaosServerManager(SubprocessManager):
         # Prepare the servers
         self.prepare()
 
+        if self.manager.job.discover_mode:
+            self.discover()
+
         # Start the servers and wait for them to be ready for storage format
         self.detect_start_mode("format")
 
@@ -596,8 +604,64 @@ class DaosServerManager(SubprocessManager):
 
         return True
 
+    def discover(self):
+        """Start the server through the job manager."""
+        # Create the empty file
+        original_config = self.manager.job.yaml.filename
+        config_file = ".".join([original_config, "discovery"])
+        pcmd(self.hostlist_servers, "touch {}".format(config_file))
+        self.manager.job.config.value = config_file
+
+        # Start the servers and wait for them to be ready for storage format
+        self.detect_start_mode("discover")
+
+        yaml_data = self.dmg.config_generate(
+            self.get_config_value("access_points"),
+            self.manager.job.discover_pmem,
+            self.manager.job.discover_nvme,
+            self.manager.job.discover_net)
+
+        messages = self.stop_server_processes()
+        if messages:
+            raise ServerFailed(
+                "Failed to stop servers:\n  {}".format("\n  ".join(messages)))
+
+        self.log.info("<SERVER> Writing generated config yaml")
+        self.manager.job.yaml.filename = original_config
+        self.manger.job.yaml.write_yaml(yaml_data)
+        self.manager.job.config.value = self.manager.job.yaml.filename
+
     def stop(self):
-        """Stop the server through the runner."""
+        """Stop the server through the runner.
+
+        Raises:
+            ServerFailed: if something went wrong stopping servers.
+
+        """
+        messages = self.stop_server_processes()
+
+        if self.manager.job.using_nvme:
+            # Reset the storage
+            try:
+                self.reset_storage()
+            except ServerFailed as error:
+                messages.append(str(error))
+
+            # Make sure the mount directory belongs to non-root user
+            self.set_scm_mount_ownership()
+
+        # Report any errors after all stop actions have been attempted
+        if messages:
+            raise ServerFailed(
+                "Failed to stop servers:\n  {}".format("\n  ".join(messages)))
+
+    def stop_server_processes(self):
+        """Stop server processes.
+
+        Returns:
+            list: error messages occurred when stopping server processes.
+
+        """
         self.log.info(
             "<SERVER> Stopping server %s command", self.manager.command)
 
@@ -615,20 +679,7 @@ class DaosServerManager(SubprocessManager):
         # Kill any leftover processes that may not have been stopped correctly
         self.kill()
 
-        if self.manager.job.using_nvme:
-            # Reset the storage
-            try:
-                self.reset_storage()
-            except ServerFailed as error:
-                messages.append(str(error))
-
-            # Make sure the mount directory belongs to non-root user
-            self.set_scm_mount_ownership()
-
-        # Report any errors after all stop actions have been attempted
-        if messages:
-            raise ServerFailed(
-                "Failed to stop servers:\n  {}".format("\n  ".join(messages)))
+        return messages
 
     def get_environment_value(self, name):
         """Get the server config value associated with the env variable name.

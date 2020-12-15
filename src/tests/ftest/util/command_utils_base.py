@@ -410,19 +410,26 @@ class YamlParameters(ObjectWithParameters):
 
         return yaml_data if self.title is None else {self.title: yaml_data}
 
-    def create_yaml(self, yaml_data=None):
+    def create_yaml(self):
         """Create a yaml file from the parameter values.
-
-        Args:
-            yaml_data (dict): dictionary cotaining yaml data in the form of a
-                daos yaml configuration file.
 
         Raises:
             CommandFailure: if there is an error creating the yaml file
 
         """
-        if yaml_data is None:
-            yaml_data = self.get_yaml_data()
+        yaml_data = self.get_yaml_data()
+        self.write_yaml(yaml_data)
+
+    def write_yaml(self, yaml_data):
+        """Write yaml to file from provided yaml data.
+
+        Args:
+            yaml_data (str): dictionary containing yaml file values.
+
+        Raises:
+            CommandFailure: if there is an error creating the yaml file
+
+        """
         self.log.info("Writing yaml configuration file %s", self.filename)
         try:
             with open(self.filename, 'w') as write_file:
