@@ -364,7 +364,7 @@ boolean skip_ftest_hw(String size) {
 
 boolean skip_bandit_check() {
     return cachedCommitPragma(pragma: 'Skip-python-bandit',
-                              def_val: 'true') == 'true'
+                              def_val: 'false') == 'true'
 }
 
 boolean skip_build_on_centos7_bullseye() {
