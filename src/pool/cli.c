@@ -1527,7 +1527,7 @@ struct pool_evict_state {
 int
 dc_pool_deprecated(tse_task_t *task)
 {
-	D_ERROR("Function not implemented "DF_RC"\n", DP_RC(-DER_NOSYS));
+	D_ERROR("This API is deprecated "DF_RC"\n", DP_RC(-DER_NOSYS));
 	tse_task_complete(task, -DER_NOSYS);
 	return -DER_NOSYS;
 }
