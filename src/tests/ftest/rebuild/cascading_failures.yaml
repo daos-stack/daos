@@ -12,7 +12,7 @@ timeout: 360
 server_config:
   name: daos_server
   servers:
-    targets: 1
+    targets: 1 #8, after fixed of DAOS-2799
 pool:
   mode: 511
   name: daos_server
