@@ -369,7 +369,6 @@ verify_1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 	assert_int_equal(rc, 0);
 }
 
-#ifdef LAYER_COORD
 static void
 test_half_stripe(struct ec_agg_test_ctx *ctx)
 {
@@ -534,7 +533,6 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 	rc = daos_obj_close(ctx->oh, NULL);
 	assert_int_equal(rc, 0);
 }
-#endif
 
 static void
 test_partial_stripe(struct ec_agg_test_ctx *ctx)
@@ -597,15 +595,11 @@ test_all_ec_agg(void **statep)
 
 	setup_ec_agg_tests(statep, &ctx);
 	test_filled_stripe(&ctx);
-#ifdef LAYER_COORD
 	test_half_stripe(&ctx);
-#endif
 	test_partial_stripe(&ctx);
 	sleep(40);
 	verify_1p(&ctx, DAOS_OC_EC_K2P1_L32K, 2);
-#ifdef LAYER_COORD
 	verify_2p(&ctx, DAOS_OC_EC_K2P2_L32K);
-#endif
 	verify_1p(&ctx, DAOS_OC_EC_K4P1_L32K, 4);
 	cleanup_ec_agg_tests(&ctx);
 }
