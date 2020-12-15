@@ -22,14 +22,19 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import ctypes
+import uuid
+import time
+
 from avocado import fail_on
-from apricot import TestWithServers
+from ior_test_base import IorTestBase
 from command_utils import CommandFailure
+from ior_utils import IorCommand
+from job_manager_utils import Mpirun
+from mpio_utils import MpioUtils
 from pydaos.raw import (DaosContainer, IORequest,
                         DaosObj, DaosApiError)
 
-
-class OSAUtils(TestWithServers):
+class OSAUtils(IorTestBase):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
@@ -44,9 +49,12 @@ class OSAUtils(TestWithServers):
         self.obj = None
         self.ioreq = None
         self.dmg_command = self.get_dmg_command()
-        self.no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')[0]
-        self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')[0]
-        self.record_length = self.params.get("length", '/run/record/*')[0]
+        self.no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*',
+                                           default=[0])[0]
+        self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*',
+                                           default=[0])[0]
+        self.record_length = self.params.get("length", '/run/record/*',
+                                             default=[0])[0]
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):
@@ -58,6 +66,49 @@ class OSAUtils(TestWithServers):
         """
         data = self.dmg_command.pool_query(self.pool.uuid)
         return int(data["leader"])
+
+    @fail_on(CommandFailure)
+    def get_rebuild_status(self):
+        """Get the rebuild status.
+
+        Returns:
+            str: reuild status
+
+        """
+        data = self.dmg_command.pool_query(self.pool.uuid)
+        return data["rebuild"]["status"]
+
+    @fail_on(CommandFailure)
+    def is_rebuild_done(self, time_interval):
+        """Rebuild is completed/done.
+        Args:
+            time_interval: Wait interval between checks
+        Returns:
+            False: If rebuild_status not "done" or "completed".
+            True: If rebuild status is "done" or "completed".
+        """
+        status = False
+        fail_count = 0
+        completion_flag = ["done", "completed"]
+        while fail_count <= 20:
+            rebuild_status = self.get_rebuild_status()
+            time.sleep(time_interval)
+            fail_count += 1
+            if rebuild_status in completion_flag:
+                status = True
+                break
+        return status
+
+    @fail_on(CommandFailure)
+    def assert_on_rebuild_failure(self):
+        """If the rebuild is not successful,
+        raise assert.
+        """
+        rebuild_status = self.get_rebuild_status()
+        self.log.info("Rebuild Status: %s", rebuild_status)
+        rebuild_failed_string = ["failed", "scanning", "aborted", "busy"]
+        self.assertTrue(rebuild_status not in rebuild_failed_string,
+                        "Rebuild failed")
 
     @fail_on(CommandFailure)
     def get_pool_version(self):
@@ -129,3 +180,51 @@ class OSAUtils(TestWithServers):
                                       "akey {0}".format(akey)))
         self.obj.close()
         self.container.close()
+
+    def ior_thread(self, pool, oclass, api, test, flags, results):
+        """Start threads and wait until all threads are finished.
+
+        Args:
+            pool (object): pool handle
+            oclass (str): IOR object class
+            api (str): IOR api
+            test (list): IOR test sequence
+            flags (str): IOR flags
+            results (queue): queue for returning thread results
+
+        """
+        container_info = {}
+        mpio_util = MpioUtils()
+        if mpio_util.mpich_installed(self.hostlist_clients) is False:
+            self.fail("Exiting Test : Mpich not installed on :"
+                      " {}".format(self.hostfile_clients[0]))
+        self.pool = pool
+        # Define the arguments for the ior_runner_thread method
+        ior_cmd = IorCommand()
+        ior_cmd.get_params(self)
+        ior_cmd.set_daos_params(self.server_group, self.pool)
+        ior_cmd.dfs_oclass.update(oclass)
+        ior_cmd.api.update(api)
+        ior_cmd.transfer_size.update(test[2])
+        ior_cmd.block_size.update(test[3])
+        ior_cmd.flags.update(flags)
+
+        container_info["{}{}{}"
+                       .format(oclass,
+                               api,
+                               test[2])] = str(uuid.uuid4())
+
+        # Define the job manager for the IOR command
+        self.job_manager = Mpirun(ior_cmd, mpitype="mpich")
+        key = "".join([oclass, api, str(test[2])])
+        self.job_manager.job.dfs_cont.update(container_info[key])
+        env = ior_cmd.get_default_env(str(self.job_manager))
+        self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
+        self.job_manager.assign_processes(self.processes)
+        self.job_manager.assign_environment(env, True)
+
+        # run IOR Command
+        try:
+            self.job_manager.run()
+        except CommandFailure as _error:
+            results.put("FAIL")
