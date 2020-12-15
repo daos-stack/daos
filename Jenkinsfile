@@ -166,6 +166,7 @@ String unit_packages() {
 commit_pragma_cache = [:]
 def cachedCommitPragma(Map config) {
 
+    println("called cachedCommitPragma(${config['pragma']}")
     if (commit_pragma_cache[config['pragma']]) {
         return commit_pragma_cache[config['pragma']]
     }
