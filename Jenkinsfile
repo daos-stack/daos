@@ -166,7 +166,6 @@ String unit_packages() {
 commit_pragma_cache = [:]
 def cachedCommitPragma(Map config) {
 
-    println("called cachedCommitPragma(${config['pragma']}")
     if (commit_pragma_cache[config['pragma']]) {
         return commit_pragma_cache[config['pragma']]
     }
@@ -450,20 +449,6 @@ String quick_build_deps(String distro) {
               returnStdout: true)
 }
 
-void foo() {
-    println("checking currentBuild.changeSets")
-
-    if (currentBuild.changeSets != null) {
-        for (changeSetList in currentBuild.changeSets) {
-            for (changeSet in changeSetList) {
-                println("-------------\n" + changeSet.msg)
-                println(changeSet.comment)
-            }
-        }
-    } else {
-        println("currentBuild.changeSets was null")
-    }
-}
 pipeline {
     agent { label 'lightweight' }
 
@@ -499,7 +484,6 @@ pipeline {
         stage('Cancel Previous Builds') {
             when { changeRequest() }
             steps {
-                println(getCommitComment())
                 cancelPreviousBuilds()
             }
         }
