@@ -190,10 +190,10 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 
 	D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
 
-	/* Search the currently connect dfp list, if one matches then use that
-	 * and drop the locally allocated one.  If there is no match then
-	 * properly initialize the local one ready for use.
+	/* Search the currently connect dfp list, if one matches then use that,
+	 * otherwise allocate a new one.
 	 */
+
 	d_list_for_each_entry(dfpi, &fs_handle->dpi_info->di_dfp_list,
 			      dfp_list) {
 		DFUSE_TRA_DEBUG(ie, "Checking dfp %p", dfpi);
@@ -289,8 +289,6 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		dfs->dfs_dfp = dfp;
 	}
 
-	ie->ie_stat.st_ino = dfs->dfs_ino;
-
 	rc = dfs_release(ie->ie_obj);
 	if (rc) {
 		DFUSE_TRA_ERROR(dfs, "dfs_release() failed: (%s)",
@@ -299,19 +297,21 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	}
 
 	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj,
-			NULL, NULL);
+			NULL, &ie->ie_stat);
 	if (rc) {
 		DFUSE_TRA_ERROR(dfs, "dfs_lookup() failed: (%s)",
 				strerror(rc));
 		D_GOTO(out_umount, ret = rc);
 	}
 
+	ie->ie_stat.st_ino = dfs->dfs_ino;
+
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
 	ie->ie_dfs = dfs;
 
-	DFUSE_TRA_INFO(dfs, "UNS entry point activated, root %lu",
-		       dfs->dfs_ino);
+	DFUSE_TRA_DEBUG(dfs, "UNS entry point activated, root %lu",
+			dfs->dfs_ino);
 
 	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 	return 0;
