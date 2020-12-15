@@ -3104,7 +3104,6 @@ out:
 int
 dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 {
-	uid_t			euid;
 	daos_handle_t		oh;
 	daos_handle_t		th = DAOS_TX_NONE;
 	bool			exists;

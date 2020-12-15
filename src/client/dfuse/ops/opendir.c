@@ -49,6 +49,7 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie,
 	fi->fh = (uint64_t)oh;
 
 #if 0
+	/* These are fuse version dependant so need compile-time checking */
 	if (ie->ie_dfs->dfs_attr_timeout)
 		fi->flags = FOPEN_KEEP_CACHE | FOPEN_CACHE_DIR;
 #endif

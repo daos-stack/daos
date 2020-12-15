@@ -72,6 +72,9 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 			if (rc != 0)
 				D_GOTO(err, 0);
 
+			attr->st_uid = entry.uid;
+			attr->st_gid = entry.gid;
+
 			D_GOTO(reply, 0);
 		}
 
