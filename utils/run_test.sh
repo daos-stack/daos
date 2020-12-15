@@ -47,7 +47,7 @@ run_test()
     #    before deciding this. Also, we intentionally leave off the last 'S'
     #    in that error message so that we don't guarantee printing that in
     #    every run's output, thereby making all tests here always pass.
-    time eval "${VALGRIND_CMD} $@"
+    time eval "${VALGRIND_CMD}" "$@"
     retcode=$?
     if [ "${retcode}" -ne 0 ]; then
 	echo "Test $* failed with exit status ${retcode}."
@@ -91,10 +91,12 @@ if [ -d "/mnt/daos" ]; then
             [ -z "$VALGRIND_SUPP" ] &&
                 VALGRIND_SUPP="$(pwd)/utils/test_memcheck.supp"
             VALGRIND_XML_PATH="test_results/unit-test-%q{TNAME}.memcheck.xml"
-            export VALGRIND_CMD="valgrind --leak-check=full --show-reachable=yes \
-                                   --error-limit=no \
-                                   --suppressions=${VALGRIND_SUPP} \
-                                   --xml=yes --xml-file=${VALGRIND_XML_PATH}"
+            export VALGRIND_CMD="valgrind --leak-check=full \
+		    			  --show-reachable=yes \
+                                          --error-limit=no \
+                                          --suppressions=${VALGRIND_SUPP} \
+                                          --xml=yes \
+					  --xml-file=${VALGRIND_XML_PATH}"
         else
             VALGRIND_SUPP=""
         fi
