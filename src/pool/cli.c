@@ -1525,14 +1525,6 @@ struct pool_evict_state {
 };
 
 int
-dc_pool_deprecated(tse_task_t *task)
-{
-	D_ERROR("This API is deprecated "DF_RC"\n", DP_RC(-DER_NOSYS));
-	tse_task_complete(task, -DER_NOSYS);
-	return -DER_NOSYS;
-}
-
-int
 dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver)
 {
 	struct dc_pool *pool;
@@ -2127,12 +2119,6 @@ out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to del pool attributes: "DF_RC"\n", DP_RC(rc));
 	return rc;
-}
-
-int
-dc_pool_extend(tse_task_t *task)
-{
-	return -DER_NOSYS;
 }
 
 struct pool_svc_stop_arg {
