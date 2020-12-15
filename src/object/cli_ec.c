@@ -2194,7 +2194,16 @@ obj_ec_recov_task_init(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 		stripe_list = &stripe_lists[i];
 		if (!reasb_req->orr_singv_only && stripe_list->re_nr == 0)
 			continue;
+
 		iod = &iods[i];
+		if (iod->iod_size == 0) {
+			/* If IOD size has be reset to 0 in the initial try,
+			 * let's reset it to the original iod_size to
+			 * satisfy the iod/sgl valid check in recover task.
+			 */
+			iod->iod_size = reasb_req->orr_uiods[i].iod_size;
+		}
+
 		if (iod->iod_type == DAOS_IOD_SINGLE) {
 			buf_sz = daos_sgl_buf_size(&reasb_req->orr_usgls[i]);
 			buf_sz = max(iod->iod_size, buf_sz);
@@ -2795,8 +2804,12 @@ obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard,
 		}
 	}
 
-	if (total == 0)
+	if (total == 0) {
+		D_FREE(*recxs_p);
+		*recxs_p = NULL;
+		*iod_nr = 0;
 		return 0;
+	}
 
 	D_ALLOC_ARRAY(tgt_recxs, total);
 	if (tgt_recxs == NULL)
