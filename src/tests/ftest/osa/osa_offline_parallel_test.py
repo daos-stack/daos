@@ -26,8 +26,9 @@ import random
 import threading
 import copy
 from osa_utils import OSAUtils
-from test_utils_pool import TestPool
 from apricot import skipForTicket
+from test_utils_pool import TestPool
+from command_utils import CommandFailure
 
 try:
     # python 3.x
@@ -164,6 +165,9 @@ class OSAOfflineParallelTest(OSAUtils):
                 fail_count += 1
                 if pver_end > 23:
                     break
+
+            self.assert_on_rebuild_failure()
+
             self.log.info("Pool Version at the End %s", pver_end)
             self.assertTrue(pver_end == 25,
                             "Pool Version Error:  at the end")
@@ -177,7 +181,8 @@ class OSAOfflineParallelTest(OSAUtils):
 
         Test Description: Runs multiple OSA commands in parallel.
 
-        :avocado: tags=all,pr,hw,large,osa,osa_parallel,offline_parallel
+        :avocado: tags=all,pr,hw,medium,ib2
+        :avocado: tags=osa,osa_parallel,offline_parallel
         """
         # Run the parallel offline test.
         self.run_offline_parallel_test(1, True)

@@ -324,9 +324,10 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 	}
 
 	req := &mgmtpb.PoolCreateReq{
-		Uuid:      common.MockUUID(),
-		Scmbytes:  100 * humanize.GiByte,
-		Nvmebytes: 10 * humanize.TByte,
+		Uuid:         common.MockUUID(),
+		Scmbytes:     100 * humanize.GiByte,
+		Nvmebytes:    10 * humanize.TByte,
+		FaultDomains: mgmtSvc.sysdb.FaultDomainTree().ToProto(),
 	}
 	wantReq := new(mgmtpb.PoolCreateReq)
 	*wantReq = *req
