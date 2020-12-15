@@ -3,7 +3,7 @@
    Memcheck:Leak
    match-leak-kinds:possible
    fun:calloc
-   fun:array_alloc_one
+   fun:lrua_array_alloc_one
    fun:lrua_array_alloc
    fun:vos_ts_table_alloc
    fun:alloc_ts_cache
@@ -294,6 +294,7 @@
    fun:do_alloc
    ...
    fun:protobuf_c_message_unpack
+   ...
    fun:expect_drpc_list_cont_resp_with_containers
    ...
    fun:_cmocka_run_group_tests
@@ -350,6 +351,7 @@
    Memcheck:Leak
    match-leak-kinds:definite
    fun:malloc
+   ...
    fun:utest_alloc
    fun:bio_alloc_init
    fun:bio_strdup
@@ -403,9 +405,9 @@
    fun:calloc
    fun:vea_hint_load
    fun:ut_interleaved_ops
-   obj:/usr/lib64/libcmocka.so.*
+   obj:/usr/lib64/libcmocka.so*
    fun:_cmocka_run_group_tests
-   fun:(below main)
+   ...
 }
 {
    <insert_a_suppression_name_here>
@@ -504,48 +506,11 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Leak
-   match-leak-kinds:possible
-   fun:calloc
-   fun:lrua_array_alloc_one
-   fun:lrua_array_alloc
-   fun:vos_ts_table_alloc
-   fun:alloc_ts_cache
-   fun:ts_test_init
-   obj:/usr/lib64/libcmocka.so.*
-   fun:_cmocka_run_group_tests
-   fun:run_ts_tests
-   fun:run_all_tests
-   fun:main
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds:definite
+   ...
    fun:calloc
    fun:vea_reserve
-   fun:ut_inval_params_tx_publish
-   obj:/usr/lib64/libcmocka.so.0.7.0
-   fun:_cmocka_run_group_tests
-   fun:main
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds:indirect
-   fun:malloc
-   fun:do_alloc
-   fun:parse_required_member
-   fun:parse_optional_member
-   fun:parse_member
-   fun:protobuf_c_message_unpack
-   fun:parse_required_member
-   fun:parse_repeated_member
-   fun:parse_member
-   fun:protobuf_c_message_unpack
-   fun:mgmt__list_cont_resp__unpack
-   fun:expect_drpc_list_cont_resp_with_containers
-   fun:test_drpc_pool_list_cont_with_containers
-   obj:/usr/lib64/libcmocka.so.0.7.0
+   fun:ut_*
+   obj:/usr/lib64/libcmocka.so*
    fun:_cmocka_run_group_tests
    fun:main
 }
@@ -560,38 +525,10 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Leak
-   match-leak-kinds:possible
-   fun:calloc
-   obj:/usr/lib64/libibverbs.so.1.5.22.1
-   obj:/usr/lib64/libibverbs.so.1.5.22.1
-   fun:ibv_get_device_list
-   fun:vrb_init_info
-   fun:fi_verbs_ini
-   fun:fi_ini
-   fun:fi_getinfo@@FABRIC_1.3
-   fun:na_ofi_getinfo
-   fun:na_ofi_check_protocol
-   fun:NA_Initialize_opt
-   fun:hg_core_init
-   fun:HG_Core_init_opt
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds:definite
-   fun:calloc
-   fun:vea_reserve
-   fun:ut_inval_params_cancel
-   obj:/usr/lib64/libcmocka.so.0.7.0
-   fun:_cmocka_run_group_tests
-   fun:main
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
    match-leak-kinds:indirect
    fun:malloc
    fun:do_alloc
+   ...
    fun:protobuf_c_message_unpack
    fun:parse_required_member
    fun:parse_repeated_member
@@ -600,7 +537,7 @@
    fun:mgmt__list_cont_resp__unpack
    fun:expect_drpc_list_cont_resp_with_containers
    fun:test_drpc_pool_list_cont_with_containers
-   obj:/usr/lib64/libcmocka.so.0.7.0
+   obj:/usr/lib64/libcmocka.so*
    fun:_cmocka_run_group_tests
    fun:main
 }
@@ -613,161 +550,21 @@
    fun:protobuf_c_message_unpack
    fun:mgmt__list_cont_resp__unpack
    fun:expect_drpc_list_cont_resp_with_containers
-   fun:test_drpc_pool_list_cont_no_containers
-   obj:/usr/lib64/libcmocka.so.0.7.0
+   ...
+   obj:/usr/lib64/libcmocka.so*
    fun:_cmocka_run_group_tests
    fun:main
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Leak
-   match-leak-kinds:indirect
+   ...
    fun:calloc
-   fun:vea_reserve
-   fun:ut_fragmentation
-   obj:/usr/lib64/libcmocka.so.0.7.0
-   fun:_cmocka_run_group_tests
-   fun:main
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds:reachable
-   fun:calloc
-   fun:_dlerror_run
-   fun:dlopen@@GLIBC_2.2.5
+   ...
    fun:fi_ini
-   fun:fi_getinfo@@FABRIC_1.3
+   fun:fi_getinfo@@FABRIC_*
    fun:na_ofi_getinfo
    fun:na_ofi_check_protocol
    fun:NA_Initialize_opt
-   fun:hg_core_init
-   fun:HG_Core_init_opt
-   fun:HG_Init_opt
-   fun:crt_hg_class_init
-   fun:crt_hg_ctx_init
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds:definite
-   fun:malloc
-   fun:do_alloc
-   fun:protobuf_c_message_unpack
-   fun:mgmt__list_cont_resp__unpack
-   fun:expect_drpc_list_cont_resp_with_containers
-   fun:test_drpc_pool_list_cont_with_containers
-   obj:/usr/lib64/libcmocka.so.0.7.0
-   fun:_cmocka_run_group_tests
-   fun:main
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds:definite
-   fun:calloc
-   fun:vea_reserve
-   fun:ut_free_invalid_space
-   obj:/usr/lib64/libcmocka.so.0.7.0
-   fun:_cmocka_run_group_tests
-   fun:main
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds:indirect
-   fun:calloc
-   obj:/usr/lib64/libibverbs.so.1.5.22.1
-   fun:_verbs_init_and_alloc_context
-   obj:/usr/lib64/libmlx4.so.1.0.22.1
-   fun:verbs_open_device
-   fun:vrb_init_info
-   fun:fi_verbs_ini
-   fun:fi_ini
-   fun:fi_getinfo@@FABRIC_1.3
-   fun:na_ofi_getinfo
-   fun:na_ofi_check_protocol
-   fun:NA_Initialize_opt
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds:definite
-   fun:calloc
-   fun:vea_reserve
-   fun:ut_fragmentation
-   obj:/usr/lib64/libcmocka.so.0.7.0
-   fun:_cmocka_run_group_tests
-   fun:main
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds:definite
-   fun:calloc
-   fun:_verbs_init_and_alloc_context
-   obj:/usr/lib64/libmlx4.so.1.0.22.1
-   fun:verbs_open_device
-   fun:vrb_init_info
-   fun:fi_verbs_ini
-   fun:fi_ini
-   fun:fi_getinfo@@FABRIC_1.3
-   fun:na_ofi_getinfo
-   fun:na_ofi_check_protocol
-   fun:NA_Initialize_opt
-   fun:hg_core_init
-   fun:HG_Core_init_opt
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds:definite
-   fun:calloc
-   fun:vea_hint_load
-   fun:ut_interleaved_ops
-   obj:/usr/lib64/libcmocka.so.0.7.0
-   fun:_cmocka_run_group_tests
-   fun:main
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds:indirect
-   fun:malloc
-   fun:do_alloc
-   fun:protobuf_c_message_unpack
-   fun:mgmt__list_cont_resp__unpack
-   fun:expect_drpc_list_cont_resp_with_containers
-   fun:test_drpc_pool_list_cont_with_containers
-   obj:/usr/lib64/libcmocka.so.0.7.0
-   fun:_cmocka_run_group_tests
-   fun:main
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds:definite
-   fun:calloc
-   fun:vea_reserve
-   fun:ut_reserve_special
-   obj:/usr/lib64/libcmocka.so.0.7.0
-   fun:_cmocka_run_group_tests
-   fun:main
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds: definite
-   fun:malloc
-   fun:vmem_alloc
-   fun:utest_alloc
-   fun:bio_alloc_init
-   fun:bio_strdup
-   fun:ts_add_rect
-   fun:ts_cmd_run
-   fun:ts_group
-   obj:/usr/lib64/libcmocka.so.0.7.0
-   fun:_cmocka_run_group_tests
-   fun:run_cmd_line_test
-   fun:main
+   ...
 }

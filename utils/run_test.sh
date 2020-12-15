@@ -15,7 +15,6 @@
 #  Note: Uses .build_vars.sh to find daos artifacts
 #  Note: New tests should return non-zero if there are any
 #    failures.
-set -x
 
 #check for existence of /mnt/daos first:
 failed=0
@@ -39,8 +38,6 @@ run_test()
 
     export TNAME="${b}-${log_num}"
 
-    # We use flock as a way of locking /mnt/daos so multiple runs can't hit it
-    #     at the same time.
     # We use grep to filter out any potential "SUCCESS! NO TEST FAILURES"
     #    messages as daos_post_build.sh will look for this and mark the tests
     #    as passed, which we don't want as we need to check all of the tests
