@@ -113,59 +113,52 @@ class ManagementServiceResilience(TestWithServers):
         self.start_servers(server_groups)
         return access_list
 
-    def verify_resiliency(self):
+    def verify_resiliency(self, N):
         """Verify 2N+1 resiliency up to N = 2"""
+        access_list = self.launch_servers((2 * N) + 1)
+        leader = self.verify_leader(access_list)
 
-        for N in [1, 2]:
-            access_list = self.launch_servers((2 * N) + 1)
-            leader = self.verify_leader(access_list)
+        # Shutdown the servers that is the leader in the MS
+        stop_processes([leader], "daos_server")
 
-            # Shutdown the servers that is the leader in the MS
-            stop_processes([leader], "daos_server")
+        # Remove the server that was stopped from the access_list
+        access_list = [x for x in access_list if x != leader]
+        self.dmg.hostlist = access_list[0]
 
-            # Remove the server that was stopped from the access_list
-            access_list = [x for x in access_list if x != leader]
-            self.dmg.hostlist = access_list[0]
+        # Verify that the MS is still accessible
+        # Let's try to make an update by creating a pool on the group
+        self.verify_leader(access_list)
+        self.update_and_verify(ignore_status=False)
 
-            # Verify that the MS is still accessible
-            # Let's try to make an update by creating a pool on the group
-            self.verify_leader(access_list)
-            self.update_and_verify(ignore_status=False)
-
-            self.tearDown()
-
-    def verify_lost_resiliency(self):
+    def verify_lost_resiliency(self, N):
         """Test that even with 2N+1 resiliency lost, reads still work."""
-        for N in [1, 2]:
-            access_list = self.launch_servers((2 * N) + 1)
-            leader = self.verify_leader(access_list)
+        access_list = self.launch_servers((2 * N) + 1)
+        leader = self.verify_leader(access_list)
 
-            # Shutdown N + 1 access_list hosts, including the MS leader
-            kill_list = random.sample(access_list, N)
-            kill_list.append(leader)
-            stop_processes(kill_list, "daos_server")
+        # Shutdown N + 1 access_list hosts, including the MS leader
+        kill_list = random.sample(access_list, N)
+        kill_list.append(leader)
+        stop_processes(kill_list, "daos_server")
 
-            # Remove the servers that was stopped from the access_list
-            access_list = [x for x in access_list if x not in kill_list]
-            self.dmg.hostlist = access_list[0]
+        # Remove the servers that was stopped from the access_list
+        access_list = [x for x in access_list if x not in kill_list]
+        self.dmg.hostlist = access_list[0]
 
-            # Verify that the MS is still accessible for reading
-            self.verify_leader(access_list)
+        # Verify that the MS is still accessible for reading
+        self.verify_leader(access_list)
 
-            # Let's try to make an update by creating a pool that should fail.
-            self.update_and_verify(ignore_status=True)
+        # Let's try to make an update by creating a pool that should fail.
+        self.update_and_verify(ignore_status=True)
 
-            # Restore one of the killed MS replicas
-            self.server_managers[-1].hosts = (
-                leader, self.workdir, self.hostfile_servers_slots)
-            self.start_server_managers()
+        # Restore one of the killed MS replicas
+        self.server_managers[-1].hosts = (
+            leader, self.workdir, self.hostfile_servers_slots)
+        self.start_server_managers()
 
-            # Check that we can make an update by creating a pool
-            self.update_and_verify(ignore_status=False)
+        # Check that we can make an update by creating a pool
+        self.update_and_verify(ignore_status=False)
 
-            self.tearDown()
-
-    def test_ms_resilience(self):
+    def test_ms_resilience_1(self):
         """
         JIRA ID: DAOS-3798
 
@@ -181,9 +174,72 @@ class ManagementServiceResilience(TestWithServers):
         resilience_num = minimum amount of MS replicas to achieve resiliency.
 
         :avocado: tags=all,hw,large,full_regression,control,ms_resilience
+        :avocado: tags=ms_resilience_N_1
         """
-        # Run first test case
-        self.verify_resiliency()
+        # Run test cases
+        self.verify_resiliency(1)
 
-        # Run second test case
-        self.verify_lost_resiliency()
+    def test_ms_resilience_2(self):
+        """
+        JIRA ID: DAOS-3798
+
+        Test Description:
+            Test management service is accessible after instances are removed.
+
+        The raft protocol guarantees 2N+1 resiliency, where N is the number of
+        nodes that can fail while leaving the cluster in a state where it can
+        continue to make progress. i.e. N=1, a minimum of 3 nodes is needed in
+        the cluster and it will tolerate 1 node failure.
+
+        N = [1, 2] servers as access_points where, N = failure tolerance,
+        resilience_num = minimum amount of MS replicas to achieve resiliency.
+
+        :avocado: tags=all,hw,large,full_regression,control,ms_resilience
+        :avocado: tags=ms_resilience_N_2
+        """
+        # Run test cases
+        self.verify_resiliency(2)
+
+    def test_ms_resilience_3(self):
+        """
+        JIRA ID: DAOS-3798
+
+        Test Description:
+            Test management service is accessible for reading with resiliency
+            lost.
+
+        The raft protocol guarantees 2N+1 resiliency, where N is the number of
+        nodes that can fail while leaving the cluster in a state where it can
+        continue to make progress. i.e. N=1, a minimum of 3 nodes is needed in
+        the cluster and it will tolerate 1 node failure.
+
+        N = [1, 2] servers as access_points where, N = failure tolerance,
+        resilience_num = minimum amount of MS replicas to achieve resiliency.
+
+        :avocado: tags=all,hw,large,full_regression,control,ms_resilience
+        :avocado: tags=ms_lost_resilience_N_1
+        """
+        # Run test case
+        self.verify_lost_resiliency(1)
+
+    def test_ms_resilience_4(self):
+        """
+        JIRA ID: DAOS-3798
+
+        Test Description:
+            Test management service is accessible for reading with resiliency
+            lost.
+
+        The raft protocol guarantees 2N+1 resiliency, where N is the number of
+        nodes that can fail while leaving the cluster in a state where it can
+        continue to make progress. i.e. N=1, a minimum of 3 nodes is needed in
+        the cluster and it will tolerate 1 node failure.
+
+        N = [1, 2] servers as access_points where, N = failure tolerance,
+        resilience_num = minimum amount of MS replicas to achieve resiliency.
+
+        :avocado: tags=all,hw,large,full_regression,control,ms_resilience
+        :avocado: tags=ms_lost_resilience_N_2
+        """
+        # Run test case
+        self.verify_lost_resiliency(2)
