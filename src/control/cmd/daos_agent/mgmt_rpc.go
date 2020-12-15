@@ -77,14 +77,14 @@ func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req
 	switch method {
 	case drpc.MethodGetAttachInfo:
 		return mod.handleGetAttachInfo(ctx, req, cred.Pid)
-	case drpc.MethodMonitorPoolConnect:
-		return nil, mod.handlePoolConnect(ctx, req, cred.Pid)
-	case drpc.MethodMonitorPoolDisconnect:
-		return nil, mod.handlePoolDisconnect(ctx, req, cred.Pid)
-	case drpc.MethodDisconnect:
+	case drpc.MethodNotifyPoolConnect:
+		return nil, mod.handleNotifyPoolConnect(ctx, req, cred.Pid)
+	case drpc.MethodNotifyPoolDisconnect:
+		return nil, mod.handleNotifyPoolDisconnect(ctx, req, cred.Pid)
+	case drpc.MethodNotifyExit:
 		// There isn't anything we can do here if this fails so just
 		// call the disconnect handler and return success.
-		mod.handleDisconnect(ctx, cred.Pid)
+		mod.handleNotifyExit(ctx, cred.Pid)
 		return nil, nil
 	default:
 		return nil, drpc.UnknownMethodFailure()
@@ -185,28 +185,28 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 	return cacheResp, err
 }
 
-func (mod *mgmtModule) handlePoolConnect(ctx context.Context, reqb []byte, pid int32) error {
+func (mod *mgmtModule) handleNotifyPoolConnect(ctx context.Context, reqb []byte, pid int32) error {
 	pbReq := new(mgmtpb.PoolMonitorReq)
 	if err := proto.Unmarshal(reqb, pbReq); err != nil {
 		return drpc.UnmarshalingPayloadFailure()
 	}
-	mod.monitor.RegisterPoolHandle(ctx, pid, pbReq)
+	mod.monitor.AddPoolHandle(ctx, pid, pbReq)
 	return nil
 }
 
-func (mod *mgmtModule) handlePoolDisconnect(ctx context.Context, reqb []byte, pid int32) error {
+func (mod *mgmtModule) handleNotifyPoolDisconnect(ctx context.Context, reqb []byte, pid int32) error {
 	pbReq := new(mgmtpb.PoolMonitorReq)
 	if err := proto.Unmarshal(reqb, pbReq); err != nil {
 		return drpc.UnmarshalingPayloadFailure()
 	}
-	mod.monitor.DisconnectPoolHandle(ctx, pid, pbReq)
+	mod.monitor.RemovePoolHandle(ctx, pid, pbReq)
 	return nil
 }
 
-// handleDisconnect crafts a new request for the process monitor to inform the
+// handleNotifyExit crafts a new request for the process monitor to inform the
 // monitor that a process is exiting. Even though the process is terminating
 // cleanly disconnect will inform the control plane of any outstanding handles
 // that the process held open.
-func (mod *mgmtModule) handleDisconnect(ctx context.Context, pid int32) {
-	mod.monitor.DisconnectProcess(ctx, pid)
+func (mod *mgmtModule) handleNotifyExit(ctx context.Context, pid int32) {
+	mod.monitor.NotifyExit(ctx, pid)
 }

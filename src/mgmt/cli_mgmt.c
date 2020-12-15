@@ -512,23 +512,24 @@ out:
  * Send an upcall to the agent to notify it of a pool disconnect.
  */
 int
-dc_mgmt_monitor_pool_disconnect(struct dc_pool *pool) {
-	return send_monitor_request(pool, DRPC_METHOD_MGMT_MON_POOL_DISCONNECT);
+dc_mgmt_notify_pool_disconnect(struct dc_pool *pool) {
+	return send_monitor_request(pool,
+				    DRPC_METHOD_MGMT_NOTIFY_POOL_DISCONNECT);
 }
 
 /*
  * Send an upcall to the agent to notify it of a successful pool connect.
  */
 int
-dc_mgmt_monitor_pool_connect(struct dc_pool *pool) {
-	return send_monitor_request(pool, DRPC_METHOD_MGMT_MON_POOL_CONNECT);
+dc_mgmt_notify_pool_connect(struct dc_pool *pool) {
+	return send_monitor_request(pool, DRPC_METHOD_MGMT_NOTIFY_POOL_CONNECT);
 }
 
 /*
  * Send an upcall to the agent to notify it of a clean process shutdown.
  */
 int
-dc_mgmt_monitor_disconnect(void)
+dc_mgmt_notify_exit(void)
 {
 	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
 	struct drpc		 *ctx;
@@ -548,7 +549,7 @@ dc_mgmt_monitor_disconnect(void)
 	}
 
 	rc = drpc_call_create(ctx, DRPC_MODULE_MGMT,
-			      DRPC_METHOD_MGMT_DISCONNECT, &dreq);
+			      DRPC_METHOD_MGMT_NOTIFY_EXIT, &dreq);
 	if (rc != 0)
 		goto out_ctx;
 

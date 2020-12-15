@@ -57,7 +57,7 @@ type procInfo struct {
 	pid       int32
 	cancelCtx func()
 	response  chan *procMonResponse
-	handles   map[string]map[string]bool
+	handles   map[string]map[string]struct{}
 }
 
 func getProcPidInode(pid int32) (uint64, error) {
@@ -141,30 +141,30 @@ func NewProcMon(logger logging.Logger) *procMon {
 	}
 }
 
-func (p *procMon) RegisterPoolHandle(ctx context.Context, Pid int32, poolReq *mgmtpb.PoolMonitorReq) {
+func (p *procMon) AddPoolHandle(ctx context.Context, Pid int32, poolReq *mgmtpb.PoolMonitorReq) {
 	req := &procMonRequest{
 		pid:            Pid,
-		action:         drpc.MethodMonitorPoolConnect,
+		action:         drpc.MethodNotifyPoolConnect,
 		poolUUID:       poolReq.PoolUUID,
 		poolHandleUUID: poolReq.PoolHandleUUID,
 	}
 	p.submitRequest(ctx, req)
 }
 
-func (p *procMon) DisconnectPoolHandle(ctx context.Context, Pid int32, poolReq *mgmtpb.PoolMonitorReq) {
+func (p *procMon) RemovePoolHandle(ctx context.Context, Pid int32, poolReq *mgmtpb.PoolMonitorReq) {
 	req := &procMonRequest{
 		pid:            Pid,
-		action:         drpc.MethodMonitorPoolDisconnect,
+		action:         drpc.MethodNotifyPoolDisconnect,
 		poolUUID:       poolReq.PoolUUID,
 		poolHandleUUID: poolReq.PoolHandleUUID,
 	}
 	p.submitRequest(ctx, req)
 }
 
-func (p *procMon) DisconnectProcess(ctx context.Context, Pid int32) {
+func (p *procMon) NotifyExit(ctx context.Context, Pid int32) {
 	req := &procMonRequest{
 		pid:    Pid,
-		action: drpc.MethodDisconnect,
+		action: drpc.MethodNotifyExit,
 	}
 	p.submitRequest(ctx, req)
 }
@@ -176,7 +176,7 @@ func (p *procMon) submitRequest(ctx context.Context, request *procMonRequest) {
 	}
 }
 
-func (p *procMon) handlePoolConnect(ctx context.Context, request *procMonRequest) {
+func (p *procMon) handleNotifyPoolConnect(ctx context.Context, request *procMonRequest) {
 	p.log.Debugf("Received request to connect pool:%s with handle %s, for pid:%d", request.poolUUID, request.poolHandleUUID, request.pid)
 
 	info, found := p.procs[request.pid]
@@ -188,7 +188,7 @@ func (p *procMon) handlePoolConnect(ctx context.Context, request *procMonRequest
 			pid:       request.pid,
 			cancelCtx: cancel,
 			response:  p.response,
-			handles:   make(map[string]map[string]bool),
+			handles:   make(map[string]map[string]struct{}),
 		}
 
 		p.procs[request.pid] = info
@@ -197,13 +197,13 @@ func (p *procMon) handlePoolConnect(ctx context.Context, request *procMonRequest
 
 	_, found = info.handles[request.poolUUID]
 	if !found {
-		info.handles[request.poolUUID] = make(map[string]bool)
+		info.handles[request.poolUUID] = make(map[string]struct{})
 	}
-	info.handles[request.poolUUID][request.poolHandleUUID] = true
+	info.handles[request.poolUUID][request.poolHandleUUID] = struct{}{}
 
 }
 
-func (p *procMon) handlePoolDisconnect(request *procMonRequest) {
+func (p *procMon) handleNotifyPoolDisconnect(request *procMonRequest) {
 	p.log.Debugf("Received request to disconnect pool:%s with handle %s, for pid:%d", request.poolUUID, request.poolHandleUUID, request.pid)
 
 	info, found := p.procs[request.pid]
@@ -213,10 +213,16 @@ func (p *procMon) handlePoolDisconnect(request *procMonRequest) {
 		return
 	}
 
-	if info.handles[request.poolUUID][request.poolHandleUUID] {
+	_, found = info.handles[request.poolUUID][request.poolHandleUUID]
+
+	if found {
 		delete(info.handles[request.poolUUID], request.poolHandleUUID)
 		if len(info.handles[request.poolUUID]) == 0 {
 			delete(info.handles, request.poolUUID)
+		}
+		if len(info.handles) == 0 {
+			info.cancelCtx()
+			delete(p.procs, info.pid)
 		}
 	}
 
@@ -244,10 +250,10 @@ func (p *procMon) cleanupLeakedHandles(info *procInfo) {
 	delete(p.procs, info.pid)
 }
 
-func (p *procMon) handleProcessDisconnect(request *procMonRequest) {
+func (p *procMon) handleNotifyExit(request *procMonRequest) {
 	info, found := p.procs[request.pid]
 
-	p.log.Debugf("Received request to disconnect pid:%d\n", request.pid)
+	p.log.Debugf("Received request to exit pid:%d\n", request.pid)
 	if found {
 		info.cancelCtx()
 		p.cleanupLeakedHandles(info)
@@ -261,12 +267,12 @@ func (p *procMon) handleRequests(ctx context.Context) {
 			return
 		case request := <-p.request:
 			switch request.action {
-			case drpc.MethodMonitorPoolConnect:
-				p.handlePoolConnect(ctx, request)
-			case drpc.MethodMonitorPoolDisconnect:
-				p.handlePoolDisconnect(request)
-			case drpc.MethodDisconnect:
-				p.handleProcessDisconnect(request)
+			case drpc.MethodNotifyPoolConnect:
+				p.handleNotifyPoolConnect(ctx, request)
+			case drpc.MethodNotifyPoolDisconnect:
+				p.handleNotifyPoolDisconnect(request)
+			case drpc.MethodNotifyExit:
+				p.handleNotifyExit(request)
 			default:
 				p.log.Debugf("Received request with invalid action type %s", request.action)
 			}
