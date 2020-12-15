@@ -73,8 +73,10 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	 * on ds_cont_child purging.
 	 */
 	D_ASSERT(cont->sc_agg_req != NULL);
+
 	if (dss_ult_exiting(cont->sc_agg_req))
 		return 1;
+
 	rc = ds_obj_ec_aggregate(cont, epr, dss_ult_yield,
 				 (void *)cont->sc_agg_req, is_current);
 	if (rc) {
