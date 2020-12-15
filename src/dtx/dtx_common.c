@@ -158,6 +158,10 @@ dtx_batched_commit(void *arg)
 		if (d_list_empty(&dmi->dmi_dtx_batched_list))
 			goto check;
 
+		if (DAOS_FAIL_CHECK(DAOS_DTX_NO_BATCHED_CMT) ||
+		    DAOS_FAIL_CHECK(DAOS_DTX_NO_COMMITTABLE))
+			goto check;
+
 		dbca = d_list_entry(dmi->dmi_dtx_batched_list.next,
 				    struct dtx_batched_commit_args, dbca_link);
 		cont = dbca->dbca_cont;
@@ -260,6 +264,7 @@ dtx_shares_init(struct dtx_handle *dth)
 	D_INIT_LIST_HEAD(&dth->dth_share_act_list);
 	D_INIT_LIST_HEAD(&dth->dth_share_tbd_list);
 	dth->dth_share_tbd_count = 0;
+	dth->dth_share_tbd_scanned = 0;
 	dth->dth_shares_inited = 1;
 }
 
@@ -287,6 +292,7 @@ dtx_shares_fini(struct dtx_handle *dth)
 		D_FREE(dsp);
 
 	dth->dth_share_tbd_count = 0;
+	dth->dth_share_tbd_scanned = 0;
 }
 
 int
@@ -733,6 +739,15 @@ again:
 		size_t			 size;
 		uint32_t		 flags;
 
+		if (DAOS_FAIL_CHECK(DAOS_DTX_SKIP_PREPARE))
+			D_GOTO(abort, result = 0);
+
+		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_ABORT))
+			D_GOTO(abort, result = -DER_IO);
+
+		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_COMMIT))
+			dth->dth_sync = 1;
+
 		/* For synchronous DTX, do not add it into CoS cache, otherwise,
 		 * we may have no way to remove it from the cache.
 		 */
@@ -769,7 +784,7 @@ again:
 		rc = dtx_add_cos(cont, dte, &dth->dth_leader_oid,
 				 dth->dth_dkey_hash, dth->dth_epoch, flags);
 		dtx_entry_put(dte);
-		if (rc == 0)
+		if (rc == 0 && !DAOS_FAIL_CHECK(DAOS_DTX_NO_COMMITTABLE))
 			vos_dtx_mark_committable(dth);
 	}
 
@@ -1148,7 +1163,9 @@ dtx_leader_exec_ops_ult(void *arg)
 
 		sub->dss_result = 0;
 
-		if (sub->dss_tgt.st_rank == DAOS_TGT_IGNORE) {
+		if (sub->dss_tgt.st_rank == DAOS_TGT_IGNORE ||
+		    (i == daos_fail_value_get() &&
+		     DAOS_FAIL_CHECK(DAOS_DTX_SKIP_PREPARE))) {
 			int ret;
 
 			ret = ABT_future_set(future, dlh);
