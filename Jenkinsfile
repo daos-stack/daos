@@ -358,6 +358,7 @@ boolean skip_scan_rpms_centos7() {
 
 boolean skip_ftest_hw(String size) {
     println("Branch: ${env.BRANCH_NAME}, startedByTimer(): " + startedByTimer())
+    println("Skipping HW: " + (env.BRANCH_NAME == 'PR-4101' && ! startedByTimer()))
     return env.DAOS_STACK_CI_HARDWARE_SKIP == 'true' ||
            skip_stage('func-test') ||
            skip_stage('func-hw-test') ||
@@ -487,6 +488,7 @@ pipeline {
             when { changeRequest() }
             steps {
                 println("Branch: ${env.BRANCH_NAME}, startedByTimer(): " + startedByTimer())
+                println("Skipping HW: " + (env.BRANCH_NAME == 'PR-4101' && ! startedByTimer()))
                 println("Priority: " + get_priority())
                 cancelPreviousBuilds()
             }
