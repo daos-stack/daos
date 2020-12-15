@@ -609,7 +609,7 @@ class DaosServerManager(SubprocessManager):
         # Create the empty file
         original_config = self.manager.job.yaml.filename
         config_file = ".".join([original_config, "discovery"])
-        pcmd(self.hostlist_servers, "touch {}".format(config_file))
+        pcmd(self._hosts, "touch {}".format(config_file))
         self.manager.job.config.value = config_file
 
         # Start the servers and wait for them to be ready for storage format
