@@ -62,5 +62,24 @@ dfuse_cb_symlink(fuse_req_t req, const char *link,
 	return;
 err:
 	D_FREE(ie);
-	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+	DFUSE_REPLY_ERR_RAW(parent, req, rc);
+}
+
+void
+dfuse_cb_symlink_safe(fuse_req_t req, const char *link,
+		      struct dfuse_inode_entry *parent,
+		      const char *name)
+{
+	const struct fuse_ctx *ctx = fuse_req_ctx(req);
+	int rc;
+
+	if ((ctx->uid != parent->ie_stat.st_uid) ||
+	    ctx->gid != parent->ie_stat.st_gid)
+		D_GOTO(out, rc = ENOTSUP);
+
+	dfuse_cb_symlink(req, link, parent, name);
+	return;
+
+out:
+	DFUSE_REPLY_ERR_RAW(parent, req, rc);
 }

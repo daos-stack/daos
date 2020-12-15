@@ -631,10 +631,8 @@ duns_set_fuse_acl(int dfd, daos_handle_t coh)
 	}
 
 	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
-	ace->dae_allow_perms = DAOS_ACL_PERM_READ |		\
-		DAOS_ACL_PERM_WRITE |				\
-		DAOS_ACL_PERM_GET_PROP |			\
-		DAOS_ACL_PERM_GET_ACL;
+	ace->dae_allow_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE |
+		DAOS_ACL_PERM_GET_PROP | DAOS_ACL_PERM_GET_ACL;
 
 	acl = daos_acl_create(&ace, 1);
 	if (acl == NULL)

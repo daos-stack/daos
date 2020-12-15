@@ -766,7 +766,6 @@ fopen:
 		return daos_der2errno(rc);
 	}
 
-
 	if (flags & O_TRUNC) {
 		rc = daos_array_set_size(file->oh, th, 0, NULL);
 		if (rc) {
