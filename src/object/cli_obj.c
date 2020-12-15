@@ -104,7 +104,7 @@ struct obj_auxi_args {
 					 ec_in_recov:1,
 					 new_shard_tasks:1,
 					 reset_param:1;
-	/* request flags. currently only: ORF_RESEND, ORF_CSUM_REPORT */
+	/* request flags. currently only: ORF_RESEND */
 	uint32_t			 flags;
 	uint32_t			 specified_shard;
 	struct obj_req_tgts		 req_tgts;
@@ -3112,7 +3112,9 @@ obj_shard_comp_cb(struct shard_auxi_args *shard_auxi,
 		if (ret != -DER_REC2BIG && !obj_retry_error(ret) &&
 		    !obj_is_modification_opc(obj_auxi->opc) &&
 		    !obj_auxi->is_ec_obj && !obj_auxi->spec_shard &&
-		    !obj_auxi->spec_group && !obj_auxi->to_leader) {
+		    !obj_auxi->spec_group && !obj_auxi->to_leader &&
+		    ret != -DER_TX_RESTART &&
+		    !DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY)) {
 			int new_tgt;
 
 			/* Check if there are other replicas available to
@@ -3542,14 +3544,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 			if (!obj_auxi->spec_shard && !obj_auxi->spec_group &&
 			    !obj_auxi->no_retry && !obj_auxi->ec_wait_recov &&
 			     obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
-				if (!obj_auxi->csum_retry &&
-				    !obj_auxi->csum_report) {
-					obj_auxi->csum_report = 1;
-				} else if (obj_auxi->csum_report) {
-					obj_auxi->flags &= ~ORF_CSUM_REPORT;
-					obj_auxi->csum_report = 0;
-					obj_auxi->csum_retry = 1;
-				}
+				obj_auxi->csum_retry = 1;
 			} else {
 				/* not retrying updates yet */
 				obj_auxi->io_retry = 0;
@@ -3564,6 +3559,10 @@ obj_comp_cb(tse_task_t *task, void *data)
 	if (!obj_auxi->io_retry && task->dt_result == 0 &&
 	    obj_auxi->reasb_req.orr_size_fetch)
 		obj_size_fetch_cb(obj, obj_auxi);
+
+	if (task->dt_result == -DER_INPROGRESS &&
+	    DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY))
+		obj_auxi->io_retry = 0;
 
 	if (pm_stale || obj_auxi->io_retry)
 		obj_retry_cb(task, obj, obj_auxi, pm_stale);
@@ -4057,19 +4056,7 @@ dc_obj_fetch_task(tse_task_t *task)
 		obj_auxi->to_leader = (args->extra_flags & DIOF_TO_LEADER) != 0;
 	}
 
-	/* for CSUM error, build a bitmap with only the next target set,
-	 * based current obj->auxi.req_tgt.ort_shart_tgts[0].st_shard.
-	 * (increment shard mod rdg-size, set appropriate bit).
-	 */
-	if (obj_auxi->csum_report) {
-		obj_auxi->flags |= ORF_CSUM_REPORT;
-		D_ASSERT(!obj_auxi->csum_retry);
-		/* the spec_shard case will not cause csum_report, so just
-		 * reuse it to make sure the csum_report send to correct tgt.
-		 */
-		shard = obj_auxi->req_tgts.ort_shard_tgts[0].st_shard;
-		obj_auxi->spec_shard = 1;
-	} else if (obj_auxi->csum_retry && !obj_auxi->is_ec_obj) {
+	if (obj_auxi->csum_retry && !obj_auxi->is_ec_obj) {
 		rc = obj_retry_csum_err(obj, obj_auxi, dkey_hash, map_ver,
 					&csum_bitmap);
 		if (rc)
@@ -4088,8 +4075,6 @@ dc_obj_fetch_task(tse_task_t *task)
 			      obj_auxi->spec_shard, obj_auxi);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
-	if (obj_auxi->csum_report)
-		obj_auxi->spec_shard = 0;
 
 	rc = obj_csum_fetch(obj, args, obj_auxi);
 	if (rc != 0) {

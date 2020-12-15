@@ -187,7 +187,8 @@ ioreq_iod_simple_set(struct ioreq *req, daos_size_t *iod_size, bool lookup,
 		iod[i].iod_type = req->iod_type;
 		iod[i].iod_size = iod_size[i];
 		if (req->iod_type == DAOS_IOD_ARRAY) {
-			iod[i].iod_recxs[0].rx_idx = idx[i] + i * SEGMENT_SIZE;
+			iod[i].iod_recxs[0].rx_idx = idx[i] +
+				(req->arg->idx_no_jump ? 0 : i * SEGMENT_SIZE);
 			iod[i].iod_recxs[0].rx_nr = rx_nr[i];
 		}
 		iod[i].iod_nr = 1;
@@ -443,15 +444,21 @@ lookup_internal(daos_key_t *dkey, int nr, d_sg_list_t *sgls,
 		daos_iod_t *iods, daos_handle_t th, struct ioreq *req,
 		bool empty)
 {
+	uint64_t api_flags;
 	bool ev_flag;
 	int rc;
 
+	if (empty)
+		api_flags = DAOS_COND_DKEY_FETCH | DAOS_COND_AKEY_FETCH;
+	else
+		api_flags = 0;
+
 	/** execute fetch operation */
-	rc = daos_obj_fetch(req->oh, th, 0, dkey, nr, iods, sgls,
+	rc = daos_obj_fetch(req->oh, th, api_flags, dkey, nr, iods, sgls,
 			    NULL, req->arg->async ? &req->ev : NULL);
 	if (!req->arg->async) {
 		req->result = rc;
-		if (rc != -DER_INPROGRESS)
+		if (rc != -DER_INPROGRESS && !req->arg->not_check_result)
 			assert_int_equal(rc, req->arg->expect_result);
 		return;
 	}
@@ -461,7 +468,7 @@ lookup_internal(daos_key_t *dkey, int nr, d_sg_list_t *sgls,
 	assert_int_equal(rc, 0);
 	assert_int_equal(ev_flag, true);
 	req->result = req->ev.ev_error;
-	if (req->ev.ev_error != -DER_INPROGRESS)
+	if (req->ev.ev_error != -DER_INPROGRESS && !req->arg->not_check_result)
 		assert_int_equal(req->ev.ev_error, req->arg->expect_result);
 }
 
