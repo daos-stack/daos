@@ -65,7 +65,6 @@ if sys.version_info < (3, 0):
 # pylint: enable=import-error
 else:
     import configparser as ConfigParser
-from general_utils import run_command
 
 class DownloadFailure(Exception):
     """Exception raised when source can't be downloaded
@@ -289,7 +288,7 @@ class Runner():
                 print('RUN: %s' % command)
 ##DH--                if subprocess.call(command, shell=True,
 ##DH--                                   env=self.env['ENV']) != 0:
-                if run_command(command, env=self.env['ENV']) != 0:
+                if subprocess.call(command.split(), env=self.env['ENV']) != 0:
                     retval = False
                     break
         if subdir:
