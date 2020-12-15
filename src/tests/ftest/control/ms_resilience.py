@@ -40,14 +40,13 @@ class ManagementServiceResilience(TestWithServers):
         """Inititialize a ManagementServiceResilience object."""
         super(ManagementServiceResilience, self).__init__(*args, **kwargs)
         self.setup_start_servers = False
-        self.dmg = self.get_dmg_command()
 
     def update_and_verify(self, ignore_status=False):
         """Create a pool on the server group
 
         Args:
-            ignore_status (bool): Whether to raise an exception when pool create
-                fails.
+            ignore_status (bool): If False, raise an exception when pool create
+                fails, otherwise don't raise an exception. Defaults to False.
         """
         self.add_pool(create=False)
         self.pool.name.value = self.server_group
@@ -123,7 +122,7 @@ class ManagementServiceResilience(TestWithServers):
 
         # Remove the server that was stopped from the access_list
         access_list = [x for x in access_list if x != leader]
-        self.dmg.hostlist = access_list[0]
+        self.server_managers[-1].dmg.hostlist = access_list[0]
 
         # Verify that the MS is still accessible
         # Let's try to make an update by creating a pool on the group
@@ -142,7 +141,7 @@ class ManagementServiceResilience(TestWithServers):
 
         # Remove the servers that was stopped from the access_list
         access_list = [x for x in access_list if x not in kill_list]
-        self.dmg.hostlist = access_list[0]
+        self.server_managers[-1].dmg.hostlist = access_list[0]
 
         # Verify that the MS is still accessible for reading
         self.verify_leader(access_list)
