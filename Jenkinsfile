@@ -12,7 +12,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-@Library(value="trusted-pipeline-lib@bmurrell/changeset.comment()") _
+//@Library(value="trusted-pipeline-lib@bmurrell/changeset.comment()") _
 
 boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
