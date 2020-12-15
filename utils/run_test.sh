@@ -81,7 +81,6 @@ if [ -d "/mnt/daos" ]; then
             echo "$go_spdk_ctests missing, SPDK_SRC not available when built?"
         fi
         run_test src/control/run_go_tests.sh
-        run_test "${SL_PREFIX}/bin/vos_tests" -A 500
         export DAOS_IO_BYPASS=pm
         run_test "${SL_PREFIX}/bin/vos_tests" -A 50
         export DAOS_IO_BYPASS=pm_snap
@@ -108,6 +107,7 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_consumer"
     run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_hlc"
     run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_swim"
+    run_test "${SL_PREFIX}/bin/vos_tests" -A 500
     run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
     run_test "${SL_BUILD_DIR}/src/common/tests/umem_test"
     run_test "${SL_BUILD_DIR}/src/common/tests/sched"
