@@ -56,8 +56,10 @@ dc_cp(tse_task_t *task, void *data)
 }
 
 int
-dc_dummy(tse_task_t *task)
+dc_deprecated(tse_task_t *task)
 {
+	D_ERROR("This API is deprecated "DF_RC"\n", DP_RC(-DER_NOSYS));
+	tse_task_complete(task, -DER_NOSYS);
 	return -DER_NOSYS;
 }
 
