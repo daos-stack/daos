@@ -308,8 +308,8 @@ pool_attribute(void **state)
 	WAIT_ON_ASYNC(arg, ev);
 	print_message("Verifying All Names..\n");
 	assert_int_equal(total_size, (name_sizes[0] + name_sizes[1]));
-	assert_string_equal(out_buf, names[0]);
-	assert_string_equal(out_buf + name_sizes[0], names[1]);
+	assert_string_equal(out_buf, names[1]);
+	assert_string_equal(out_buf + name_sizes[1], names[0]);
 
 	print_message("getting pool attributes %ssynchronously ...\n",
 		      arg->async ? "a" : "");

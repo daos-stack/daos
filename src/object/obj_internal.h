@@ -176,7 +176,9 @@ struct obj_reasb_req {
 	/* only for single-value IO flag */
 					 orr_singv_only:1,
 	/* the flag of IOM re-allocable (used for EC IOM merge) */
-					 orr_iom_realloc:1;
+					 orr_iom_realloc:1,
+	/* iod_size is set by IO reply */
+					 orr_size_set:1;
 };
 
 static inline void

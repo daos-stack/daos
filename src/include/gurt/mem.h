@@ -20,7 +20,7 @@
 extern "C" {
 #endif
 
-#include <string.h>
+#include <gurt/common.h>
 
 /**
  * \file
@@ -32,6 +32,40 @@ extern "C" {
  */
 
 #ifdef __AVX2__
+
+#include <immintrin.h>
+
+inline __attribute__((always_inline)) int
+d_cmp16(const void *src_1, const void *src_2)
+{
+	__m128i xmm0, xmm1, xmm2;
+
+	xmm0 = _mm_lddqu_si128((const __m128i *)src_1);
+	xmm1 = _mm_lddqu_si128((const __m128i *)src_2);
+
+	xmm2 = _mm_xor_si128(xmm0, xmm1);
+
+	if (unlikely(!_mm_testz_si128(xmm2, xmm2))) {
+		__m128i idx = _mm_setr_epi8(15, 14, 13, 12, 11, 10, 9, 8, 7, 6,
+					    5, 4, 3, 2, 1, 0);
+		/*
+		 * Reverse byte order
+		 */
+		xmm0 = _mm_shuffle_epi8(xmm0, idx);
+		xmm1 = _mm_shuffle_epi8(xmm1, idx);
+
+		/*
+		 * Compare unsigned bytes with instructions for signed bytes
+		 */
+		xmm0 = _mm_xor_si128(xmm0, _mm_set1_epi8(0x80));
+		xmm1 = _mm_xor_si128(xmm1, _mm_set1_epi8(0x80));
+
+		return _mm_movemask_epi8(xmm0 > xmm1) -
+		       _mm_movemask_epi8(xmm1 > xmm0);
+	}
+
+	return 0;
+}
 
 inline __attribute__((always_inline)) int
 d_cmp32(const void *src_1, const void *src_2)
