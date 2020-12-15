@@ -31,13 +31,11 @@
 #define CONFIGINI_H_
 
 #include <stdio.h>
+#include <stdbool.h>
 
 
 // FIXME: Remove cpluspus macros
 #ifndef __cplusplus
-
-// FIXME: Can we manage without this line?
-typedef unsigned char bool;
 #undef  false
 #define false 	0
 #undef  true

@@ -27,6 +27,7 @@ import daos_build
 
 SELF_TEST = 'self_test.c'
 LIB_CONFIG_INI = 'src/configini.c'
+LIB_CONFIG_CNF = '../etc/config.cnf'
 
 # Function to filter out gcc flags from this compilation env
 def remove_certain_gcc_flags(str): 
@@ -44,6 +45,7 @@ def scons():
 
     tenv = env.Clone()
 
+    tenv.AppendUnique(CPPPATH=['#/src/utils/self_test/src'])
     tenv.AppendUnique(CPPPATH=['#/src/cart', '#/src/tests/ftest/cart'])
     tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm'])
     prereqs.require(tenv, 'mercury')
@@ -64,6 +66,7 @@ def scons():
     self_test = daos_build.program(self_test_tenv, [SELF_TEST, LIB_CONFIG_INI])
     self_test_tenv.Requires(self_test, [cart_lib, gurt_lib])
     self_test_tenv.Install(os.path.join("$PREFIX", 'bin'), self_test)
+    self_test_tenv.Install(os.path.join("$PREFIX", 'etc'), LIB_CONFIG_CNF)
 
 if __name__ == "SCons.Script":
     scons()
