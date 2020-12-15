@@ -357,6 +357,7 @@ boolean skip_scan_rpms_centos7() {
 }
 
 boolean skip_ftest_hw(String size) {
+    println("Branch: ${env.BRANCH_NAME}, startedByTimer(): " + startedByTimer())
     return env.DAOS_STACK_CI_HARDWARE_SKIP == 'true' ||
            skip_stage('func-test') ||
            skip_stage('func-hw-test') ||
@@ -455,7 +456,7 @@ pipeline {
 
     triggers {
         cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0,12 * * *\n' : '' +
-             env.BRANCH_NAME == 'PR-4101' ? 'TZ=America/Toronto\n0 0,12,2 * * *\n' : '' +
+             env.BRANCH_NAME == 'PR-4101' ? 'TZ=America/Toronto\n0 0,12,4 * * *\n' : '' +
              env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
     }
 
@@ -485,6 +486,8 @@ pipeline {
         stage('Cancel Previous Builds') {
             when { changeRequest() }
             steps {
+                println("Branch: ${env.BRANCH_NAME}, startedByTimer(): " + startedByTimer())
+                println("Priority: " + get_priority())
                 cancelPreviousBuilds()
             }
         }
