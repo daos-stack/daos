@@ -66,6 +66,11 @@ ie_set_uid(struct dfuse_inode_entry *ie, fuse_req_t req)
 
 	rc = dfs_setxattr(ie->ie_dfs->dfs_ns, ie->ie_obj, DFUSE_XID_XATTR_NAME,
 			  &entry, sizeof(entry), 0);
+
+	if (rc == 0) {
+		ie->ie_stat.st_uid = entry.uid;
+		ie->ie_stat.st_gid = entry.gid;
+	}
 	return rc;
 }
 
