@@ -62,7 +62,7 @@ class ManagementServiceResilience(TestWithServers):
             self.log.info("Pool UUID %s on server group: %s",
                           self.pool.uuid, self.server_group)
             # Verify that the pool persisted.
-            pool_data = self.dmg.pool_list()
+            pool_data = self.server_managers[-1].dmg.pool_list()
             if pool_data and self.pool.uuid in pool_data:
                 self.log.info("Found pool in system.")
             else:
@@ -80,7 +80,7 @@ class ManagementServiceResilience(TestWithServers):
                 access_list, the test will fail.
 
         """
-        l_addr = self.dmg.system_leader_query()["leader"]
+        l_addr = self.server_managers[-1].dmg.system_leader_query()["leader"]
         l_hostname, _, _ = socket.gethostbyaddr(l_addr.split(":")[0])
         l_hostname = l_hostname.split(".")[0]
 
