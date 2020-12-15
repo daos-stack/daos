@@ -40,6 +40,7 @@ import (
 //
 // To/From Proto methods allow conversion regardless of underlying type.
 type Event interface {
+	GetID() RASID
 	GetType() RASTypeID
 	ToProto() (*mgmtpb.RASEvent, error)
 	FromProto(*mgmtpb.RASEvent) error

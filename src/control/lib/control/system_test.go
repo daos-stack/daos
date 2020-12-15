@@ -1117,7 +1117,7 @@ func TestControl_SystemNotify(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			rpcClient = NewMockInvoker(log, &MockInvokerConfig{
+			rpcClient := NewMockInvoker(log, &MockInvokerConfig{
 				UnaryError:    tc.uErr,
 				UnaryResponse: tc.uResp,
 			})

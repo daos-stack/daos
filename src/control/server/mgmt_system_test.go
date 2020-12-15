@@ -157,8 +157,8 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			mgmtSvc.sysdb = db
 
 			var dispatched []events.Event
-			mgmtSvc.dispatchEvent = func(evt events.Event) {
-				dispatched = append(dispatched, evt)
+			mgmtSvc.dispatchEvents = func(evt ...events.Event) {
+				dispatched = append(dispatched, evt...)
 			}
 
 			ctx, cancel := context.WithCancel(context.Background())

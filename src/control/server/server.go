@@ -234,9 +234,16 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	eventForwarder := control.NewEventForwarder(rpcClient, cfg.AccessPoints)
 	eventPubSub.Subscribe(events.RASTypeRankStateChange, eventForwarder)
 
-	// Create event dispatcher for received forwarded events.
-	mgmtSvc.dispatchEvent = func(evt events.Event) {
-		eventPubSub.Publish(evt)
+	mgmtSvc.dispatchEvents = func(events ...events.Event) {
+		for _, event := range events {
+			eventPubSub.Publish(event)
+		}
+	}
+	mgmtSvc.disableEvents = func(ids ...events.RASID) {
+		eventPubSub.AddToMask(ids...)
+	}
+	mgmtSvc.enableEvents = func(ids ...events.RASID) {
+		eventPubSub.RemoveFromMask(ids...)
 	}
 
 	var netDevClass uint32

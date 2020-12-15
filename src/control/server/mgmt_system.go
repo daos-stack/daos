@@ -185,6 +185,9 @@ func (svc *mgmtSvc) StopRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 	}
 	svc.log.Debugf("MgmtSvc.StopRanks dispatch, req:%+v\n", *req)
 
+	svc.disableEvents(events.RASRankExit)
+	defer svc.enableEvents(events.RASRankExit)
+
 	signal := syscall.SIGINT
 	if req.Force {
 		signal = syscall.SIGKILL
@@ -446,7 +449,7 @@ func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *mgmtpb.ClusterEventRe
 	if err != nil {
 		return nil, err
 	}
-	svc.dispatchEvent(event)
+	svc.dispatchEvents(event)
 
 	resp := &mgmtpb.ClusterEventResp{Sequence: req.Sequence}
 	svc.log.Debugf("MgmtSvc.ClusterEvent dispatch, resp:%#v\n", resp)

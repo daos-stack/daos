@@ -40,6 +40,9 @@ type RankExit struct {
 	ExitErr     error
 }
 
+// GetID implements the method on the interface to return event ID.
+func (evt *RankExit) GetID() RASID { return evt.RAS.ID }
+
 // GetType implements the method on the interface to return event type.
 func (evt *RankExit) GetType() RASTypeID { return evt.RAS.Type }
 

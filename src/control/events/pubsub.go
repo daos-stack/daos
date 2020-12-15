@@ -51,8 +51,23 @@ type PubSub struct {
 	subscribers chan *eventSubscriber
 	events      chan Event
 	handlers    map[RASTypeID][]Handler
-	// TODO: filter events on publish
-	// filter IDMask
+	eventMask   uint32
+}
+
+// AddToMask adds event IDs to the filter mask preventing those event IDs from
+// being published.
+func (ps *PubSub) AddToMask(ids ...RASID) {
+	for _, id := range ids {
+		ps.eventMask = ps.eventMask | uint32(id)
+	}
+}
+
+// RemoveFromMask removes event IDs from the filter mask enabling those event IDs
+// to be published.
+func (ps *PubSub) RemoveFromMask(ids ...RASID) {
+	for _, id := range ids {
+		ps.eventMask = ps.eventMask &^ uint32(id)
+	}
 }
 
 // Publish passes an event to the stream (channel) dedicated to the event's
@@ -61,12 +76,12 @@ func (ps *PubSub) Publish(event Event) {
 	topic := event.GetType()
 	ps.log.Debugf("publishing @%s: %+v", topic, event)
 
-	// TODO: filter events matching mask, requires introspection unless we
-	// implement GetID() on the event interface
-	//	if event.GetID()&ps.IDMask {
-	//		ps.log.Debugf("event ID %s filtered out by mask %s", event.GetID(),
-	//			ps.IDMask)
-	//	}
+	// filter out events matching mask
+	if uint32(event.GetID())&ps.eventMask != 0 {
+		ps.log.Debugf("event ID %s filtered out by mask %s", event.GetID(),
+			ps.eventMask)
+		return
+	}
 
 	ps.events <- event
 }
@@ -99,7 +114,8 @@ func (ps *PubSub) eventLoop(ctx context.Context) {
 			// reset the list of handlers
 			ps.handlers = make(map[RASTypeID][]Handler)
 		case newSub := <-ps.subscribers:
-			ps.handlers[newSub.topic] = append(ps.handlers[newSub.topic], newSub.handler)
+			ps.handlers[newSub.topic] = append(ps.handlers[newSub.topic],
+				newSub.handler)
 		case event := <-ps.events:
 			for _, hdlr := range ps.handlers[event.GetType()] {
 				go hdlr.OnEvent(ctx, event)
