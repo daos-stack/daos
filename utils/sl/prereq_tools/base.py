@@ -285,9 +285,8 @@ class Runner():
                 retval = True
             else:
                 print('RUN: %s' % command)
-##DH--                if subprocess.call(command, shell=True,
-##DH--                                   env=self.env['ENV']) != 0:
-                if run_command(command, env=self.env['ENV']) != 0:
+                if subprocess.call(command, shell=True,       # nosec
+                                   env=self.env['ENV']) != 0:
                     retval = False
                     break
         if subdir:
