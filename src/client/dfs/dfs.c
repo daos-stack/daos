@@ -3141,11 +3141,6 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 		oh = parent->oh;
 	}
 
-	euid = geteuid();
-	/** only root or owner can change mode */
-	if (euid != 0 && dfs->uid != euid)
-		return EPERM;
-
 	/** sticky bit, set-user-id and set-group-id, not supported yet */
 	if (mode & S_ISVTX || mode & S_ISGID || mode & S_ISUID) {
 		D_ERROR("setuid, setgid, & sticky bit are not supported.\n");
@@ -3215,7 +3210,6 @@ int
 dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 {
 	daos_handle_t		th = DAOS_TX_NONE;
-	uid_t			euid;
 	daos_key_t		dkey;
 	daos_handle_t		oh;
 	d_sg_list_t		sgl;
@@ -3233,11 +3227,6 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	if (dfs->amode != O_RDWR)
 		return EPERM;
 	if ((obj->flags & O_ACCMODE) == O_RDONLY)
-		return EPERM;
-
-	euid = geteuid();
-	/** only root or owner can change mode */
-	if (euid != 0 && dfs->uid != euid)
 		return EPERM;
 
 	/** Open parent object and fetch entry of obj from it */
