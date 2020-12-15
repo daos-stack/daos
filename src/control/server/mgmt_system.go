@@ -185,9 +185,6 @@ func (svc *mgmtSvc) StopRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 	}
 	svc.log.Debugf("MgmtSvc.StopRanks dispatch, req:%+v\n", *req)
 
-	svc.disableEvents(events.RASRankExit)
-	defer svc.enableEvents(events.RASRankExit)
-
 	signal := syscall.SIGINT
 	if req.Force {
 		signal = syscall.SIGKILL
@@ -197,9 +194,10 @@ func (svc *mgmtSvc) StopRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 	if err != nil {
 		return nil, err
 	}
-	// TODO: ignore rank exit events whilst performing controlled shutdown
-	//svc.publishExcludeEvents(RankExitEvent)
-	//defer svc.publishIncludeEvents(RankExitEvent)
+
+	// don't publish rank exit events whilst performing controlled shutdown
+	svc.disableEvents(events.RASRankExit)
+	defer svc.enableEvents(events.RASRankExit)
 
 	for _, srv := range instances {
 		if !srv.isStarted() {

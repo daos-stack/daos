@@ -172,13 +172,14 @@ type SystemNotifyResp struct{}
 
 // SystemNotify will attempt to notify the DAOS system of a cluster event.
 func SystemNotify(ctx context.Context, rpcClient UnaryInvoker, req *SystemNotifyReq) (*SystemNotifyResp, error) {
-	if req == nil {
+	switch {
+	case req == nil:
 		return nil, errors.New("nil request")
-	}
-	if req.Event == nil {
+	case req.Event == nil:
 		return nil, errors.New("nil event in request")
-	}
-	if rpcClient == nil {
+	case req.Sequence == 0:
+		return nil, errors.New("invalid sequence number in request")
+	case rpcClient == nil:
 		return nil, errors.New("nil rpc client")
 	}
 
@@ -201,6 +202,8 @@ func SystemNotify(ctx context.Context, rpcClient UnaryInvoker, req *SystemNotify
 	return resp, convertMSResponse(ur, resp)
 }
 
+// EventForwarder implements the events.Handler interface, increments sequence
+// number for each event forwarded and distributes requests to MS access points.
 type EventForwarder struct {
 	seq       uint64
 	client    UnaryInvoker
@@ -209,7 +212,16 @@ type EventForwarder struct {
 
 // OnEvent implements the events.Handler interface.
 func (fwdr *EventForwarder) OnEvent(ctx context.Context, evt events.Event) {
-	fwdr.client.Debugf("forwarding %s (seq: %d) event to MS", evt.GetType(), fwdr.seq)
+	switch {
+	case evt == nil:
+		fwdr.client.Debug("skip event forwarding, nil event")
+		return
+	case len(fwdr.accessPts) == 0:
+		fwdr.client.Debug("skip event forwarding, missing access points")
+		return
+	}
+	fwdr.seq++
+	fwdr.client.Debugf("forwarding %s event to MS (seq: %d)", evt.GetID(), fwdr.seq)
 
 	req := &SystemNotifyReq{
 		Sequence: fwdr.seq,

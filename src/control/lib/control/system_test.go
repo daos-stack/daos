@@ -1087,27 +1087,30 @@ func TestControl_SystemNotify(t *testing.T) {
 			req:    &SystemNotifyReq{},
 			expErr: errors.New("nil event in request"),
 		},
-		"nil control address": {
+		"zero sequence number": {
 			req:    &SystemNotifyReq{Event: rasEventRankExit},
-			expErr: errors.New("nil control address in request"),
+			expErr: errors.New("invalid sequence"),
 		},
 		"local failure": {
 			req: &SystemNotifyReq{
-				Event: rasEventRankExit,
+				Event:    rasEventRankExit,
+				Sequence: 1,
 			},
 			uErr:   errors.New("local failed"),
 			expErr: errors.New("local failed"),
 		},
 		"remote failure": {
 			req: &SystemNotifyReq{
-				Event: rasEventRankExit,
+				Event:    rasEventRankExit,
+				Sequence: 1,
 			},
 			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
 			expErr: errors.New("remote failed"),
 		},
 		"empty response": {
 			req: &SystemNotifyReq{
-				Event: rasEventRankExit,
+				Event:    rasEventRankExit,
+				Sequence: 1,
 			},
 			uResp:   MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.ClusterEventResp{}),
 			expResp: &SystemNotifyResp{},
@@ -1131,6 +1134,45 @@ func TestControl_SystemNotify(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp, gotResp, defResCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestControl_EventForwarder(t *testing.T) {
+	rasEventRankExit := events.NewRankExitEvent("foo", 0, 0, common.NormalExit)
+
+	for name, tc := range map[string]struct {
+		aps            []string
+		event          events.Event
+		nilClient      bool
+		expInvokeCount int
+		expErr         error
+	}{
+		"nil event": {
+			event: new(events.RankExit),
+		},
+		"missing access points": {
+			event: rasEventRankExit,
+		},
+		"successful forward": {
+			event:          rasEventRankExit,
+			aps:            []string{"192.168.1.1"},
+			expInvokeCount: 1,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mi := NewMockInvoker(log, &MockInvokerConfig{})
+			if tc.nilClient {
+				mi = nil
+			}
+
+			ef := NewEventForwarder(mi, tc.aps)
+			ef.OnEvent(context.TODO(), tc.event)
+
+			common.AssertEqual(t, tc.expInvokeCount, mi.invokeCount, "unexpected number of rpc calls")
 		})
 	}
 }

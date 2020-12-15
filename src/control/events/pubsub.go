@@ -37,7 +37,7 @@ type Handler interface {
 	OnEvent(context.Context, Event)
 }
 
-type eventSubscriber struct {
+type subscriber struct {
 	topic   RASTypeID
 	handler Handler
 }
@@ -46,12 +46,12 @@ type eventSubscriber struct {
 // receipt of events pertaining to a particular topic.
 type PubSub struct {
 	log         logging.Logger
-	shutdown    context.CancelFunc
-	reset       chan struct{}
-	subscribers chan *eventSubscriber
 	events      chan Event
-	handlers    map[RASTypeID][]Handler
 	eventMask   uint32
+	subscribers chan *subscriber
+	handlers    map[RASTypeID][]Handler
+	reset       chan struct{}
+	shutdown    context.CancelFunc
 }
 
 // AddToMask adds event IDs to the filter mask preventing those event IDs from
@@ -70,48 +70,41 @@ func (ps *PubSub) RemoveFromMask(ids ...RASID) {
 	}
 }
 
-// Publish passes an event to the stream (channel) dedicated to the event's
-// topic (type).
+// Publish passes an event to the event channel to be processed by subscribers.
+// Ignore masked events.
 func (ps *PubSub) Publish(event Event) {
-	topic := event.GetType()
-	ps.log.Debugf("publishing @%s: %+v", topic, event)
-
-	// filter out events matching mask
-	if uint32(event.GetID())&ps.eventMask != 0 {
-		ps.log.Debugf("event ID %s filtered out by mask %s", event.GetID(),
-			ps.eventMask)
+	id := uint32(event.GetID())
+	if id&ps.eventMask != 0 {
+		ps.log.Debugf("event %s ignored by filter", event.GetID())
 		return
 	}
+
+	topic := event.GetType()
+	ps.log.Debugf("publishing @%s: %+v", topic, event)
 
 	ps.events <- event
 }
 
-// Subscribe adds a handler function to the list of handlers subscribed to a
-// given topic (event type), then begin processing events of the given topic
-// if not already started.
-//
-// Context is supplied to provide cancellation of event processor goroutines
-// started for each handler in startProcessing function.
-//
-// On Close(), each of the event stream channels will be closed and
-// startProcessing will exit, there is an expectation that the supplied context
-// should be cancelled (in the calling function) when the Close() or Reset()
-// methods are called and vice versa.
+// Subscribe adds a handler to the list of handlers subscribed to a given topic
+// (event type).
 func (ps *PubSub) Subscribe(topic RASTypeID, handler Handler) {
-	ps.subscribers <- &eventSubscriber{
+	ps.subscribers <- &subscriber{
 		topic:   topic,
 		handler: handler,
 	}
 }
 
+// eventLoop takes a lockless approach trading a little performance for
+// simplicity. Select on one of cancellation/reset/additional subscriber/new
+// event.
 func (ps *PubSub) eventLoop(ctx context.Context) {
+	ps.log.Debug("starting event loop")
 	for {
 		select {
 		case <-ctx.Done():
-			ps.log.Debug("shutting down eventLoop")
+			ps.log.Debug("stopping event loop")
 			return
 		case <-ps.reset:
-			// reset the list of handlers
 			ps.handlers = make(map[RASTypeID][]Handler)
 		case newSub := <-ps.subscribers:
 			ps.handlers[newSub.topic] = append(ps.handlers[newSub.topic],
@@ -124,15 +117,15 @@ func (ps *PubSub) eventLoop(ctx context.Context) {
 	}
 }
 
-// Close terminates all streams by closing relevant channels which in turn
-// finishes the event processing loops listening on event streams.
+// Close terminates event loop by calling shutdown to cancel context.
 func (ps *PubSub) Close() {
 	ps.log.Debug("called Close()")
 	ps.shutdown()
 }
 
-// Reset clears and reinitializes streams and handlers.
+// Reset clears registered handlers by sending reset.
 func (ps *PubSub) Reset() {
+	ps.log.Debug("called Reset()")
 	ps.reset <- struct{}{}
 }
 
@@ -141,7 +134,7 @@ func NewPubSub(parent context.Context, log logging.Logger) *PubSub {
 	ps := &PubSub{
 		log:         log,
 		reset:       make(chan struct{}),
-		subscribers: make(chan *eventSubscriber),
+		subscribers: make(chan *subscriber),
 		events:      make(chan Event),
 		handlers:    make(map[RASTypeID][]Handler),
 	}

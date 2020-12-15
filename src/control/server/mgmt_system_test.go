@@ -142,10 +142,6 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			},
 			expDispatched: []events.Event{eventRankExit},
 		},
-		//		"unknown event type": {
-		//			event: &events.RASEvent{ID: math.MaxUint32},
-		//			expErr:   errors.New("unknown event ID"),
-		//		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -535,6 +531,10 @@ func TestServer_MgmtSvc_StopRanks(t *testing.T) {
 			}
 			svc.harness.rankReqTimeout = 50 * time.Millisecond
 
+			// TODO: test rank exit event inhibit
+			svc.disableEvents = func(...events.RASID) {}
+			svc.enableEvents = func(...events.RASID) {}
+
 			gotResp, gotErr := svc.StopRanks(ctx, tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
@@ -558,8 +558,7 @@ func TestServer_MgmtSvc_StopRanks(t *testing.T) {
 				numSignalsSent++
 				return true
 			})
-			common.AssertEqual(t, len(tc.expSignalsSent), numSignalsSent,
-				"number of signals sent")
+			common.AssertEqual(t, len(tc.expSignalsSent), numSignalsSent, "number of signals sent")
 
 			for expKey, expValue := range tc.expSignalsSent {
 				value, found := signalsSent.Load(expKey)
