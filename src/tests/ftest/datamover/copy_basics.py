@@ -237,7 +237,7 @@ class CopyBasicsTest(DataMoverTestBase):
     def test_copy_subsets(self):
         """
         Test Description:
-            DAOS-5512: Verify ability to copy container subsets
+            DAOS-5512: Verify ability to copy container subsets.
         Use Cases:
             Create pool1.
             Create POSIX cont1 in pool1.
