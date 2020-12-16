@@ -31,7 +31,8 @@
 #include <daos_srv/pool.h>
 #include <daos_srv/container.h>
 
-#define DTX_DETECT_MAX	4
+#define DTX_REFRESH_MAX		4
+#define DTX_DETECT_SCAN_MAX	(1 << 10)
 
 struct dtx_share_peer {
 	d_list_t		dsp_link;
@@ -129,6 +130,7 @@ struct dtx_handle {
 	d_list_t			 dth_share_act_list;
 	d_list_t			 dth_share_tbd_list;
 	int				 dth_share_tbd_count;
+	int				 dth_share_tbd_scanned;
 };
 
 /* Each sub transaction handle to manage each sub thandle */
@@ -176,12 +178,10 @@ enum dtx_status {
 	DTX_ST_PREPARED		= 1,
 	/** The DTX has been committed. */
 	DTX_ST_COMMITTED	= 2,
-	/** The DTX is committable, but not committed. */
-	DTX_ST_COMMITTABLE	= 3,
 	/** The DTX is corrupted, some participant RDG(s) may be lost. */
-	DTX_ST_CORRUPTED	= 4,
-	/** The DTX is in-resync, not sure its status. */
-	DTX_ST_UNCERTAIN	= 5,
+	DTX_ST_CORRUPTED	= 3,
+	/** The DTX is committable, but not committed, non-persistent status. */
+	DTX_ST_COMMITTABLE	= 4,
 };
 
 enum dtx_flags {
