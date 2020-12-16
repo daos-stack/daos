@@ -1700,6 +1700,10 @@ migrate_enum_unpack_cb(struct dss_enum_unpack_io *io, void *data)
 							    &iod->iod_nr);
 				if (rc)
 					return rc;
+
+				/* No data needs to be migrate. */
+				if (iod->iod_nr == 0)
+					continue;
 				/* NB: data epoch can not be larger than
 				 * parity epoch, otherwise it will cause
 				 * issue in degraded fetch, since it will

@@ -5,7 +5,10 @@ import platform
 import subprocess
 import time
 import errno
+import SCons.Warnings
 from SCons.Script import BUILD_TARGETS
+
+SCons.Warnings.warningAsException()
 
 try:
     input = raw_input # pylint: disable=redefined-builtin
