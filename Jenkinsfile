@@ -234,7 +234,7 @@ String functional_packages() {
 String functional_packages(String distro) {
     String daos_pkgs = get_daos_packages(distro)
     String pkgs = " openmpi3 hwloc ndctl fio " +
-                  "ior-hpc-daos-0 " +
+                  "patchutils ior-hpc-daos-0 " +
                   "romio-tests-cart-4-daos-0 " +
                   "testmpio-cart-4-daos-0 " +
                   "mpi4py-tests-cart-4-daos-0 " +
@@ -285,6 +285,25 @@ def getuid() {
                         script: "id -u",
                         returnStdout: true).trim()
     return cached_uid
+}
+
+// Default priority is 3, lower is better.
+// The parameter for a job is set using the script/Jenkinsfile from the
+// previous build of that job, so the first build of any PR will always
+// run at default because Jenkins sees it as a new job, but subsequent
+// ones will use the value from here.
+// The advantage therefore is not to change the priority of PRs, but to
+// change the master branch itself to run at lower priority, resulting
+// in faster time-to-result for PRs.
+
+String get_priority() {
+    if (env.BRANCH_NAME == 'master') {
+        string p = '4'
+    } else {
+        string p = ''
+    }
+    echo "Build priority set to " + p == '' ? 'default' : p
+    return p
 }
 
 String rpm_test_version() {
@@ -375,6 +394,10 @@ boolean skip_build_on_ubuntu_clang() {
 
 }
 
+boolean skip_build_on_leap15_gcc() {
+    return skip_stage('build-leap15-gcc')
+}
+
 boolean skip_build_on_leap15_icc() {
     return target_branch == 'weekly-testing' ||
            skip_stage('build-leap15-icc') ||
@@ -386,6 +409,7 @@ boolean skip_unit_testing_stage() {
             (skip_stage('build') &&
              rpm_test_version() == '') ||
             doc_only_change() ||
+            skip_build_on_centos7_gcc() ||
             skip_stage('unit-tests')
 }
 
@@ -448,10 +472,13 @@ pipeline {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
         ansiColor('xterm')
+        buildDiscarder(logRotator(artifactDaysToKeepStr: '400'))
     }
 
     parameters {
-        string(name: 'BuildPriority', defaultValue: '', description: 'Priority of the build.  DO NOT USE WITHOUT PERMISSION.')
+        string(name: 'BuildPriority',
+               defaultValue: get_priority(),
+               description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
     }
 
     stages {
@@ -484,7 +511,18 @@ pipeline {
                     steps {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
-                                   ignored_files: "src/control/vendor/*:src/include/daos/*.pb-c.h:src/common/*.pb-c.[ch]:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]:src/security/*.pb-c.[ch]:*.crt:*.pem:*_test.go:src/cart/_structures_from_macros_.h"
+                                   ignored_files: "src/control/vendor/*:" +
+                                                  "src/include/daos/*.pb-c.h:" +
+                                                  "src/common/*.pb-c.[ch]:" +
+                                                  "src/mgmt/*.pb-c.[ch]:" +
+                                                  "src/iosrv/*.pb-c.[ch]:" +
+                                                  "src/security/*.pb-c.[ch]:" +
+                                                  "*.crt:" +
+                                                  "*.pem:" +
+                                                  "*_test.go:" +
+                                                  "src/cart/_structures_from_macros_.h:" +
+                                                  "src/tests/ftest/*.patch:" +
+                                                  "src/tests/ftest/large_stdout.txt"
                     }
                     post {
                         always {
@@ -954,6 +992,10 @@ pipeline {
                     }
                 }
                 stage('Build on Leap 15') {
+                    when {
+                        beforeAgent true
+                        expression { ! skip_build_on_leap15_gcc() }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.leap.15'

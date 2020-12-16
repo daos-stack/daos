@@ -425,6 +425,8 @@ enum daos_io_flags {
 	DIOF_CHECK_EXISTENCE	= 0x10,
 	/* The RPC will be sent to specified redundancy group. */
 	DIOF_TO_SPEC_GROUP	= 0x20,
+	/* For data migration. */
+	DIOF_FOR_MIGRATION	= 0x40,
 };
 
 /**
@@ -483,8 +485,7 @@ struct daos_recx_ep_list {
 static inline void
 daos_recx_ep_free(struct daos_recx_ep_list *list)
 {
-	if (list->re_items != NULL)
-		D_FREE(list->re_items);
+	D_FREE(list->re_items);
 	list->re_nr = 0;
 	list->re_total = 0;
 }

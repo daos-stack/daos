@@ -23,20 +23,16 @@
 """
 import time
 import random
-import uuid
 import threading
 import copy
 
 from itertools import product
-from avocado import fail_on
-from apricot import TestWithServers, skipForTicket
+from apricot import skipForTicket
 from test_utils_pool import TestPool
-from ior_utils import IorCommand
-from job_manager_utils import Mpirun
 from write_host_file import write_host_file
 from command_utils import CommandFailure
-from mpio_utils import MpioUtils
 from daos_racer_utils import DaosRacerCommand
+from osa_utils import OSAUtils
 
 try:
     # python 3.x
@@ -46,7 +42,7 @@ except ImportError:
     import Queue as queue
 
 
-class OSAOnlineParallelTest(TestWithServers):
+class OSAOnlineParallelTest(OSAUtils):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
@@ -59,9 +55,6 @@ class OSAOnlineParallelTest(TestWithServers):
         """Set up for test case."""
         super(OSAOnlineParallelTest, self).setUp()
         self.dmg_command = self.get_dmg_command()
-        self.no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')
-        self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')
-        self.record_length = self.params.get("length", '/run/record/*')
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
         self.ior_test_sequence = self.params.get("ior_test_sequence",
@@ -76,17 +69,6 @@ class OSAOnlineParallelTest(TestWithServers):
         self.ds_racer_queue = queue.Queue()
         self.daos_racer = None
 
-    @fail_on(CommandFailure)
-    def get_pool_version(self):
-        """Get the pool version.
-
-        Returns:
-            int: pool_version_value
-
-        """
-        data = self.dmg_command.pool_query(self.pool.uuid)
-        return int(data["version"])
-
     def daos_racer_thread(self, results):
         """Start the daos_racer thread.
         """
@@ -97,56 +79,6 @@ class OSAOnlineParallelTest(TestWithServers):
             self.daos_racer.get_environment(self.server_managers[0]))
         self.daos_racer.run()
         results.put("Daos Racer Started")
-
-    def ior_thread(self, pool, oclass, api, test, flags, results):
-        """Start threads and wait until all threads are finished.
-        Args:
-            pool (object): pool handle
-            oclass (str): IOR object class
-            api (str): IOR api
-            test (list): IOR test sequence
-            flags (str): IOR flags
-            results (queue): queue for returning thread results
-
-        Returns:
-            None
-        """
-        processes = self.params.get("slots", "/run/ior/clientslots/*")
-        container_info = {}
-        mpio_util = MpioUtils()
-        if mpio_util.mpich_installed(self.hostlist_clients) is False:
-            self.fail("Exiting Test : Mpich not installed on :"
-                      " {}".format(self.hostfile_clients[0]))
-        self.pool = pool
-        # Define the arguments for the ior_runner_thread method
-        ior_cmd = IorCommand()
-        ior_cmd.get_params(self)
-        ior_cmd.set_daos_params(self.server_group, self.pool)
-        ior_cmd.dfs_oclass.update(oclass)
-        ior_cmd.api.update(api)
-        ior_cmd.transfer_size.update(test[2])
-        ior_cmd.block_size.update(test[3])
-        ior_cmd.flags.update(flags)
-
-        container_info["{}{}{}"
-                       .format(oclass,
-                               api,
-                               test[2])] = str(uuid.uuid4())
-
-        # Define the job manager for the IOR command
-        manager = Mpirun(ior_cmd, mpitype="mpich")
-        key = "".join([oclass, api, str(test[2])])
-        manager.job.dfs_cont.update(container_info[key])
-        env = ior_cmd.get_default_env(str(manager))
-        manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-        manager.assign_processes(processes)
-        manager.assign_environment(env, True)
-
-        # run IOR Command
-        try:
-            manager.run()
-        except CommandFailure as _error:
-            results.put("FAIL")
 
     def dmg_thread(self, action, action_args, results):
         """Generate different dmg command related to OSA.
@@ -177,7 +109,7 @@ class OSAOnlineParallelTest(TestWithServers):
         # elif action == "extend":
         #    dmg.pool_extend(puuid, (rank + 2))
 
-    def run_online_parallel_test(self, num_pool):
+    def run_online_parallel_test(self, num_pool, racer=False):
         """Run multiple OSA commands / IO in parallel.
             Args:
             num_pool (int) : total pools to create for testing purposes.
@@ -200,11 +132,12 @@ class OSAOnlineParallelTest(TestWithServers):
         rank = 2
 
         # Start the daos_racer thread
-        kwargs = {"results": self.ds_racer_queue}
-        daos_racer_thread = threading.Thread(target=self.daos_racer_thread,
-                                             kwargs=kwargs)
-        daos_racer_thread.start()
-        time.sleep(30)
+        if racer is True:
+            kwargs = {"results": self.ds_racer_queue}
+            daos_racer_thread = threading.Thread(target=self.daos_racer_thread,
+                                                 kwargs=kwargs)
+            daos_racer_thread.start()
+            time.sleep(30)
 
         for val in range(0, num_pool):
             pool[val] = TestPool(self.context,
@@ -224,12 +157,11 @@ class OSAOnlineParallelTest(TestWithServers):
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
-
+            threads = []
             for oclass, api, test, flags in product(self.ior_dfs_oclass,
                                                     self.ior_apis,
                                                     self.ior_test_sequence,
                                                     self.ior_flags):
-                threads = []
                 # Action dictionary with OSA dmg command parameters
                 action_args = {
                     "drain": {"pool": self.pool.uuid, "rank": rank,
@@ -262,41 +194,40 @@ class OSAOnlineParallelTest(TestWithServers):
                 for thrd in threads:
                     self.log.info("Thread : %s", thrd)
                     thrd.start()
-                    time.sleep(3)
+                    time.sleep(2)
 
                 # Wait to finish the threads
                 for thrd in threads:
-                    thrd.join()
+                    thrd.join(timeout=20)
 
             # Check data consistency for IOR in future
             # Presently, we are running daos_racer in parallel
             # to IOR and checking the data consistency only
             # for the daos_racer objects after exclude
             # and reintegration.
-            daos_racer_thread.join()
+            if racer is True:
+                daos_racer_thread.join()
 
             for val in range(0, num_pool):
                 display_string = "Pool{} space at the End".format(val)
                 pool[val].display_pool_daos_space(display_string)
-                fail_count = 0
-                while fail_count <= 20:
-                    pver_end = self.get_pool_version()
-                    time.sleep(10)
-                    fail_count += 1
-                    if pver_end > 23:
-                        break
+                self.is_rebuild_done(3)
+                self.assert_on_rebuild_failure()
+
+                pver_end = self.get_pool_version()
                 self.log.info("Pool Version at the End %s", pver_end)
                 self.assertTrue(pver_end == 25,
                                 "Pool Version Error:  at the end")
                 pool[val].destroy()
 
-    @skipForTicket("DAOS-5877")
+    @skipForTicket("DAOS-6107")
     def test_osa_online_parallel_test(self):
         """
         JIRA ID: DAOS-4752
 
         Test Description: Runs multiple OSA commands/IO in parallel
 
-        :avocado: tags=all,pr,hw,large,osa,osa_parallel,online_parallel
+        :avocado: tags=all,pr,hw,medium,ib2,osa
+        :avocado: tags=osa_parallel,online_parallel
         """
         self.run_online_parallel_test(1)

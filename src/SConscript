@@ -13,7 +13,7 @@ HEADERS_GURT = ['dlog.h', 'debug.h', 'common.h', 'hash.h', 'list.h',
                 'types.h', 'atomic.h', 'mem.h', 'dtm.h']
 
 # Keep versioned libs for now to avoid any conflict with 1.0
-CART_VERSION = "4.8.0"
+CART_VERSION = "4.9.0"
 
 def scons():
     """Execute build"""

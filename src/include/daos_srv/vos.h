@@ -55,30 +55,34 @@ void
 vos_dtx_rsrvd_fini(struct dtx_handle *dth);
 
 /**
- * Generate DTX entry for the given DTX. It is usually used for read
- * only TX or on the server that only contains read sub operations.
+ * Generate DTX entry for the given DTX.
  *
- * \param dth	[IN]	The dtx handle
+ * \param dth		[IN]	The dtx handle
+ * \param persistent	[IN]	Save the DTX entry in persistent storage if set.
  */
 int
-vos_dtx_pin(struct dtx_handle *dth);
+vos_dtx_pin(struct dtx_handle *dth, bool persistent);
 
 /**
  * Check the specified DTX's status, and related epoch, pool map version
  * information if required.
  *
  * \param coh		[IN]	Container open handle.
- * \param xid		[IN]	Pointer to the DTX identifier.
+ * \param dti		[IN]	Pointer to the DTX identifier.
  * \param epoch		[IN,OUT] Pointer to current epoch, if it is zero and
  *				 if the DTX exists, then the DTX's epoch will
  *				 be saved in it.
  * \param pm_ver	[OUT]	Hold the DTX's pool map version.
+ * \param mbs		[OUT	Pointer to the DTX participants information.]
  * \param for_resent	[IN]	The check is for check resent or not.
  *
  * \return		DTX_ST_PREPARED	means that the DTX has been 'prepared',
  *					so the local modification has been done
  *					on related replica(s).
  *			DTX_ST_COMMITTED means the DTX has been committed.
+ *			DTX_ST_COMMITTABLE means that the DTX is committable,
+ *					   but not real committed.
+ *			DTX_ST_CORRUPTED means the DTX entry is corrupted.
  *			-DER_MISMATCH	means that the DTX has ever been
  *					processed with different epoch.
  *			-DER_AGAIN means DTX re-index is in processing, not sure
@@ -88,7 +92,7 @@ vos_dtx_pin(struct dtx_handle *dth);
  */
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, bool for_resent);
+	      uint32_t *pm_ver, struct dtx_memberships **mbs, bool for_resent);
 
 /**
  * Commit the specified DTXs.
@@ -197,6 +201,16 @@ vos_dtx_cmt_reindex(daos_handle_t coh, void *hint);
  */
 void
 vos_dtx_cleanup(struct dtx_handle *dth);
+
+/**
+ * Reset DTX related cached information in VOS.
+ *
+ * \param coh	[IN]	Container open handle.
+ *
+ * \return	Zero on success, negative value if error.
+ */
+int
+vos_dtx_cache_reset(daos_handle_t coh);
 
 /**
  * Initialize the environment for a VOS instance
