@@ -1599,7 +1599,7 @@ cont_destroy_hdlr(struct cmd_args_s *ap)
 }
 
 static int
-parse_filename_dfs(const char* path, char** _obj_name, char** _cont_name)
+parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name)
 {
 	char	*f1		= NULL;
 	char	*f2		= NULL;
@@ -1894,7 +1894,7 @@ opendir_dfs(struct file_dfs *file_dfs, const char *dir)
 static DIR*
 file_opendir(struct file_dfs *file_dfs, const char *dir)
 {
-	DIR* dirp = NULL;
+	DIR *dirp = NULL;
 
 	if (file_dfs->type == POSIX) {
 		dirp = opendir(dir);
@@ -1942,7 +1942,7 @@ ret:
 static struct dirent*
 file_readdir(struct file_dfs *file_dfs, DIR *dirp)
 {
-	struct dirent* entry = NULL;
+	struct dirent *entry = NULL;
 
 	if (file_dfs->type == POSIX) {
 		entry = readdir(dirp);
@@ -2524,7 +2524,7 @@ out:
 	return rc;
 }
 
-static int fs_copy_parse_uuids(char* str,
+static int fs_copy_parse_uuids(char *str,
 			       char **str_ptr,
 			       uuid_t *p_uuid,
 			       uuid_t *c_uuid,
