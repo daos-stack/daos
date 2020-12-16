@@ -265,7 +265,7 @@ def get_base_env():
     env['FI_UNIVERSE_SIZE'] = '128'
     return env
 
-DEFAULT_AGENT_DIR='/var/run/daos_agent'
+DEFAULT_AGENT_DIR = '/var/run/daos_agent'
 
 class DaosServer():
     """Manage a DAOS server instance"""
@@ -619,8 +619,8 @@ class DFuse():
         self.container = container
         self.conf = conf
         self.multi_user = multi_user
-        # Detect the number of cores and do something sensible, if there are more
-        # than 32 on the node then use 12, otherwise use the whole node.
+        # Detect the number of cores and do something sensible, if there are
+        # more than 32 on the node then use 12, otherwise use the whole node.
         num_cores = len(os.sched_getaffinity(0))
         if num_cores > 32:
             self.cores = 12
