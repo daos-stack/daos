@@ -21,4 +21,5 @@
 
 __all__ = ['Script',
            'Variables',
-           'Subst']
+           'Subst',
+           'Warnings']

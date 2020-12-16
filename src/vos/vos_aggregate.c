@@ -537,11 +537,13 @@ prepare_segments(struct agg_merge_window *mw)
 
 		lgc_seg->ls_idx_end = i;
 		ent_in->ei_rect.rc_ex.ex_hi = ext.ex_hi;
-		/* Merge to highest epoch */
-		if (ent_in->ei_rect.rc_epc < phy_ent->pe_rect.rc_epc)
+		/* Merge to lowest epoch */
+		if (ent_in->ei_rect.rc_epc == 0 ||
+		    ent_in->ei_rect.rc_epc > phy_ent->pe_rect.rc_epc)
 			ent_in->ei_rect.rc_epc = phy_ent->pe_rect.rc_epc;
-		/* Merge to highest pool map version */
-		if (ent_in->ei_ver < phy_ent->pe_ver)
+		/* Merge to lowest pool map version */
+		if (ent_in->ei_ver == 0 ||
+		    ent_in->ei_ver > phy_ent->pe_ver)
 			ent_in->ei_ver = phy_ent->pe_ver;
 		ent_in->ei_rect.rc_minor_epc = VOS_MINOR_EPC_MAX;
 	}
