@@ -58,21 +58,15 @@ daos_tests:
   num_clients:
     num_clients: 1
   Tests: !mux
-# Skip for ticket DAOS-6311
-# Temporary using comments to skip
-# WIP to refactor so subtest can be skipped
-# using skipForTicket
-#    test_d:
-#      daos_test: d
-#      test_name: DAOS degraded-mode tests
-#      test_timeout: 450
-#      scalable_endpoint: True
-#
-# Skip for ticket DAOS-6205
-#    test_m:
-#      daos_test: m
-#      test_name: Management tests
-#      test_timeout: 110
+    test_d:
+      daos_test: d
+      test_name: DAOS degraded-mode tests
+      test_timeout: 450
+      scalable_endpoint: True
+    test_m:
+      daos_test: m
+      test_name: Management tests
+      test_timeout: 110
     test_p:
       daos_test: p
       test_name: Pool tests
