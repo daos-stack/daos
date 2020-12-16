@@ -151,15 +151,17 @@ enum obj_rpc_flags {
 	 */
 	ORF_ENUM_WITHOUT_EPR	= (1 << 8),
 	/* CPD RPC leader */
-	DRF_CPD_LEADER		= (1 << 9),
+	ORF_CPD_LEADER		= (1 << 9),
 	/* Bulk data transfer for CPD RPC. */
-	DRF_CPD_BULK		= (1 << 10),
+	ORF_CPD_BULK		= (1 << 10),
 	/* Contain EC split req, only used on CPD leader locally. */
-	DRF_HAS_EC_SPLIT	= (1 << 11),
+	ORF_HAS_EC_SPLIT	= (1 << 11),
 	/* Checking the existence of the object/key. */
-	DRF_CHECK_EXISTENCE	= (1 << 12),
+	ORF_CHECK_EXISTENCE	= (1 << 12),
 	/** Include the map details on fetch (daos_iom_t::iom_recxs) */
 	ORF_CREATE_MAP_DETAIL	= (1 << 13),
+	/* For data migration. */
+	ORF_FOR_MIGRATION	= (1 << 14),
 };
 
 /* common for update/fetch */
@@ -513,7 +515,6 @@ obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 		return -DER_TIMEDOUT;
 
 	opcode = DAOS_RPC_OPCODE(opc, DAOS_OBJ_MODULE, DAOS_OBJ_VERSION);
-	/* call daos_rpc_tag to get the target tag/context idx */
 	tgt_ep->ep_tag = daos_rpc_tag(DAOS_REQ_IO, tgt_ep->ep_tag);
 
 	return crt_req_create(crt_ctx, tgt_ep, opcode, req);

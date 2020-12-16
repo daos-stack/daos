@@ -1508,6 +1508,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
                 print(
                     "Unable to determine executable name from: '{}'\nNot "
                     "creating stacktrace".format(exe_type))
+                print("core magic reports: {}".format(exe_type))
             print("Removing {}".format(corefile_fqpn))
             os.unlink(corefile_fqpn)
 
