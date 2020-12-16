@@ -27,6 +27,14 @@ package mgmt;
 // Management Service Protobuf Definitions related to interactions between
 // DAOS control server and DAOS pools.
 
+// FaultDomain represents a node in a tree of fault domains. A list of them
+// is sufficient to reconstruct the tree.
+message FaultDomain {
+	string domain = 1; // full domain string
+	uint32 id = 2; // numeric ID
+	repeated uint32 children = 3; // IDs of children
+}
+
 // PoolCreateReq supplies new pool parameters.
 message PoolCreateReq {
 	uint64 scmbytes = 1; // SCM size in bytes
@@ -38,13 +46,14 @@ message PoolCreateReq {
 	string uuid = 7; // UUID for new pool, generated on the client
 	string sys = 8; // DAOS system identifier
 	repeated string acl = 9; // Access Control Entries in short string format
+	repeated FaultDomain faultDomains = 10; // Fault domains in system
 }
 
 // PoolCreateResp returns created pool uuid and ranks.
 message PoolCreateResp {
 	int32 status = 1; // DAOS error code
 	repeated uint32 svcreps = 2; // pool service replica ranks
-	int32 numranks = 3; // number of target ranks used
+	uint32 numranks = 3; // number of target ranks used
 }
 
 // PoolDestroyReq supplies pool identifier and force flag.
@@ -105,6 +114,7 @@ message PoolExtendReq {
 	repeated uint32 svc_ranks = 3; // List of pool service ranks
 	uint64 scmbytes = 4; // SCM size in bytes
 	uint64 nvmebytes = 5; // NVMe size in bytes
+	repeated FaultDomain faultDomains = 6; // fault domains in system
 }
 
 // PoolExtendResp returns resultant state of Extend operation.
@@ -138,6 +148,17 @@ message ListPoolsResp {
 	}
 	int32 status = 1; // DAOS error code
 	repeated Pool pools = 2; // pools list
+}
+
+// PoolResolveIDReq contains the parameters to resolve a user-friendly pool ID
+// to a UUID for use in API requests.
+message PoolResolveIDReq {
+	string humanID = 1; // Unique pool identifier
+}
+
+// PoolResolveIDResp returns the pool UUID resolved from the request parameters.
+message PoolResolveIDResp {
+	string uuid = 1; // Pool UUID to be used for API requests
 }
 
 // ListContainers

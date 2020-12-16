@@ -15,6 +15,7 @@ PROTOBUF_C__BEGIN_DECLS
 #endif
 
 
+typedef struct _Mgmt__FaultDomain Mgmt__FaultDomain;
 typedef struct _Mgmt__PoolCreateReq Mgmt__PoolCreateReq;
 typedef struct _Mgmt__PoolCreateResp Mgmt__PoolCreateResp;
 typedef struct _Mgmt__PoolDestroyReq Mgmt__PoolDestroyReq;
@@ -32,6 +33,8 @@ typedef struct _Mgmt__PoolReintegrateResp Mgmt__PoolReintegrateResp;
 typedef struct _Mgmt__ListPoolsReq Mgmt__ListPoolsReq;
 typedef struct _Mgmt__ListPoolsResp Mgmt__ListPoolsResp;
 typedef struct _Mgmt__ListPoolsResp__Pool Mgmt__ListPoolsResp__Pool;
+typedef struct _Mgmt__PoolResolveIDReq Mgmt__PoolResolveIDReq;
+typedef struct _Mgmt__PoolResolveIDResp Mgmt__PoolResolveIDResp;
 typedef struct _Mgmt__ListContReq Mgmt__ListContReq;
 typedef struct _Mgmt__ListContResp Mgmt__ListContResp;
 typedef struct _Mgmt__ListContResp__Cont Mgmt__ListContResp__Cont;
@@ -53,6 +56,32 @@ typedef enum _Mgmt__PoolRebuildStatus__State {
 } Mgmt__PoolRebuildStatus__State;
 
 /* --- messages --- */
+
+/*
+ * FaultDomain represents a node in a tree of fault domains. A list of them
+ * is sufficient to reconstruct the tree.
+ */
+struct  _Mgmt__FaultDomain
+{
+  ProtobufCMessage base;
+  /*
+   * full domain string
+   */
+  char *domain;
+  /*
+   * numeric ID
+   */
+  uint32_t id;
+  /*
+   * IDs of children
+   */
+  size_t n_children;
+  uint32_t *children;
+};
+#define MGMT__FAULT_DOMAIN__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__fault_domain__descriptor) \
+    , (char *)protobuf_c_empty_string, 0, 0,NULL }
+
 
 /*
  * PoolCreateReq supplies new pool parameters.
@@ -98,10 +127,15 @@ struct  _Mgmt__PoolCreateReq
    */
   size_t n_acl;
   char **acl;
+  /*
+   * Fault domains in system
+   */
+  size_t n_faultdomains;
+  Mgmt__FaultDomain **faultdomains;
 };
 #define MGMT__POOL_CREATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_req__descriptor) \
-    , 0, 0, 0,NULL, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
+    , 0, 0, 0,NULL, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL }
 
 
 /*
@@ -122,7 +156,7 @@ struct  _Mgmt__PoolCreateResp
   /*
    * number of target ranks used
    */
-  int32_t numranks;
+  uint32_t numranks;
 };
 #define MGMT__POOL_CREATE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_resp__descriptor) \
@@ -335,10 +369,15 @@ struct  _Mgmt__PoolExtendReq
    * NVMe size in bytes
    */
   uint64_t nvmebytes;
+  /*
+   * fault domains in system
+   */
+  size_t n_faultdomains;
+  Mgmt__FaultDomain **faultdomains;
 };
 #define MGMT__POOL_EXTEND_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0, 0 }
+    , (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0, 0, 0,NULL }
 
 
 /*
@@ -456,6 +495,39 @@ struct  _Mgmt__ListPoolsResp
 #define MGMT__LIST_POOLS_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_pools_resp__descriptor) \
     , 0, 0,NULL }
+
+
+/*
+ * PoolResolveIDReq contains the parameters to resolve a user-friendly pool ID
+ * to a UUID for use in API requests.
+ */
+struct  _Mgmt__PoolResolveIDReq
+{
+  ProtobufCMessage base;
+  /*
+   * Unique pool identifier
+   */
+  char *humanid;
+};
+#define MGMT__POOL_RESOLVE_IDREQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_resolve_idreq__descriptor) \
+    , (char *)protobuf_c_empty_string }
+
+
+/*
+ * PoolResolveIDResp returns the pool UUID resolved from the request parameters.
+ */
+struct  _Mgmt__PoolResolveIDResp
+{
+  ProtobufCMessage base;
+  /*
+   * Pool UUID to be used for API requests
+   */
+  char *uuid;
+};
+#define MGMT__POOL_RESOLVE_IDRESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_resolve_idresp__descriptor) \
+    , (char *)protobuf_c_empty_string }
 
 
 /*
@@ -731,6 +803,25 @@ struct  _Mgmt__PoolSetPropResp
     , 0, MGMT__POOL_SET_PROP_RESP__PROPERTY__NOT_SET, {0}, MGMT__POOL_SET_PROP_RESP__VALUE__NOT_SET, {0} }
 
 
+/* Mgmt__FaultDomain methods */
+void   mgmt__fault_domain__init
+                     (Mgmt__FaultDomain         *message);
+size_t mgmt__fault_domain__get_packed_size
+                     (const Mgmt__FaultDomain   *message);
+size_t mgmt__fault_domain__pack
+                     (const Mgmt__FaultDomain   *message,
+                      uint8_t             *out);
+size_t mgmt__fault_domain__pack_to_buffer
+                     (const Mgmt__FaultDomain   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__FaultDomain *
+       mgmt__fault_domain__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__fault_domain__free_unpacked
+                     (Mgmt__FaultDomain *message,
+                      ProtobufCAllocator *allocator);
 /* Mgmt__PoolCreateReq methods */
 void   mgmt__pool_create_req__init
                      (Mgmt__PoolCreateReq         *message);
@@ -1038,6 +1129,44 @@ Mgmt__ListPoolsResp *
 void   mgmt__list_pools_resp__free_unpacked
                      (Mgmt__ListPoolsResp *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__PoolResolveIDReq methods */
+void   mgmt__pool_resolve_idreq__init
+                     (Mgmt__PoolResolveIDReq         *message);
+size_t mgmt__pool_resolve_idreq__get_packed_size
+                     (const Mgmt__PoolResolveIDReq   *message);
+size_t mgmt__pool_resolve_idreq__pack
+                     (const Mgmt__PoolResolveIDReq   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_resolve_idreq__pack_to_buffer
+                     (const Mgmt__PoolResolveIDReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolResolveIDReq *
+       mgmt__pool_resolve_idreq__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_resolve_idreq__free_unpacked
+                     (Mgmt__PoolResolveIDReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__PoolResolveIDResp methods */
+void   mgmt__pool_resolve_idresp__init
+                     (Mgmt__PoolResolveIDResp         *message);
+size_t mgmt__pool_resolve_idresp__get_packed_size
+                     (const Mgmt__PoolResolveIDResp   *message);
+size_t mgmt__pool_resolve_idresp__pack
+                     (const Mgmt__PoolResolveIDResp   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_resolve_idresp__pack_to_buffer
+                     (const Mgmt__PoolResolveIDResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolResolveIDResp *
+       mgmt__pool_resolve_idresp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_resolve_idresp__free_unpacked
+                     (Mgmt__PoolResolveIDResp *message,
+                      ProtobufCAllocator *allocator);
 /* Mgmt__ListContReq methods */
 void   mgmt__list_cont_req__init
                      (Mgmt__ListContReq         *message);
@@ -1195,6 +1324,9 @@ void   mgmt__pool_set_prop_resp__free_unpacked
                       ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
+typedef void (*Mgmt__FaultDomain_Closure)
+                 (const Mgmt__FaultDomain *message,
+                  void *closure_data);
 typedef void (*Mgmt__PoolCreateReq_Closure)
                  (const Mgmt__PoolCreateReq *message,
                   void *closure_data);
@@ -1246,6 +1378,12 @@ typedef void (*Mgmt__ListPoolsResp__Pool_Closure)
 typedef void (*Mgmt__ListPoolsResp_Closure)
                  (const Mgmt__ListPoolsResp *message,
                   void *closure_data);
+typedef void (*Mgmt__PoolResolveIDReq_Closure)
+                 (const Mgmt__PoolResolveIDReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__PoolResolveIDResp_Closure)
+                 (const Mgmt__PoolResolveIDResp *message,
+                  void *closure_data);
 typedef void (*Mgmt__ListContReq_Closure)
                  (const Mgmt__ListContReq *message,
                   void *closure_data);
@@ -1279,6 +1417,7 @@ typedef void (*Mgmt__PoolSetPropResp_Closure)
 
 /* --- descriptors --- */
 
+extern const ProtobufCMessageDescriptor mgmt__fault_domain__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_create_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_create_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_destroy_req__descriptor;
@@ -1296,6 +1435,8 @@ extern const ProtobufCMessageDescriptor mgmt__pool_reintegrate_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__list_pools_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__list_pools_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__list_pools_resp__pool__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_resolve_idreq__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_resolve_idresp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__list_cont_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__list_cont_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__list_cont_resp__cont__descriptor;

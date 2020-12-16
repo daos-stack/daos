@@ -109,6 +109,8 @@ if [ -d "/mnt/daos" ]; then
     # Tests
     run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/test_linkage"
     run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt"
+    run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_producer"
+    run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_consumer"
     run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_hlc"
     run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_swim"
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500

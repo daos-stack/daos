@@ -64,11 +64,11 @@ vc_set_fail_loc(test_arg_t *arg, uint64_t fail_loc, int total, int cur)
 	if (cur == total) {
 		MPI_Barrier(MPI_COMM_WORLD);
 		if (arg->myrank == 0)
-			daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+			daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 					     0, 0, NULL);
 	} else {
 		if (arg->myrank == 0)
-			daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+			daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 					     fail_loc, 0, NULL);
 		MPI_Barrier(MPI_COMM_WORLD);
 	}
@@ -219,6 +219,8 @@ vc_4(void **state)
 	struct ioreq	 req;
 	int		 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("verify with different rec\n");
 
 	if (!test_runable(arg, dts_vc_replica_cnt))
@@ -283,6 +285,9 @@ vc_test_lost_data(void **state, int type)
 static void
 vc_5(void **state)
 {
+
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("verify with lost rec\n");
 	vc_test_lost_data(state, VTLT_REC);
 }
@@ -290,6 +295,9 @@ vc_5(void **state)
 static void
 vc_6(void **state)
 {
+
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("verify with lost akey\n");
 	vc_test_lost_data(state, VTLT_AKEY);
 }
@@ -297,6 +305,9 @@ vc_6(void **state)
 static void
 vc_7(void **state)
 {
+
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("verify with lost dkey\n");
 	vc_test_lost_data(state, VTLT_DKEY);
 }
@@ -309,6 +320,8 @@ vc_8(void **state)
 	struct ioreq	 req;
 	int		 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("verify with lost replica\n");
 
 	if (!test_runable(arg, dts_vc_replica_cnt))
@@ -320,8 +333,9 @@ vc_8(void **state)
 	vc_gen_modifications(arg, &req, oid, 7, 7, 7, 0, 0, 0);
 
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-				     DAOS_VC_LOST_REPLICA, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_VC_LOST_REPLICA | DAOS_FAIL_ALWAYS,
+				      0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	rc = vc_obj_verify(arg, oid);
@@ -329,7 +343,7 @@ vc_8(void **state)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				     0, 0, NULL);
 
 	ioreq_fini(&req);
@@ -342,6 +356,8 @@ vc_9(void **state)
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 	int		 rc;
+
+	FAULT_INJECTION_REQUIRED();
 
 	print_message("verify with different dkey\n");
 

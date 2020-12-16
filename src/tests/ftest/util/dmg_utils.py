@@ -64,14 +64,15 @@ class DmgCommand(DmgCommandBase):
             r"[-]+\s+([a-z0-9-]+)\s+[-]+|(?:UUID:([a-z0-9-]+)\s+Rank:([0-9]+)"
             r"\s+Targets:\[([0-9 ]+)\])(?:\s+Blobs:\[([0-9 ]+)\]\s+?$)",
         "storage_query_list_devices":
-            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+.*\s+|(?:UUID:([a-z0-9-]+)\s+"
-            r"Targets:\[([0-9 ]+)\]\s+Rank:([0-9]+)\s+State:([A-Z]+))",
+            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+.*\s+|UUID:([a-f0-90-]{36}).*"
+            r"TrAddr:([a-z0-9:.]+)]\s+Targets:\[([0-9 ]+).*Rank:([0-9]+)"
+            r"\s+State:([A-Z]+)",
         "storage_query_device_health":
-            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+.*\s+UUID:([a-z0-9-]+)\s+Targets:"
-            r"\[([0-9 ]+)\]\s+Rank:([0-9]+)\s+State:(\w+)\s+.*\s+|(?:Temp.*|"
-            r"Cont.*Busy Time|Pow.*Cycles|Pow.*Duration|Unsafe.*|Media.*|"
-            r"Read.*|Write.*|Unmap.*|Checksum.*|Err.*Entries|Avail.*|"
-            r"Dev.*Reli.*|Vola.*):\s*([A-Za-z0-9]+)",
+            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+.*\s+|UUID:([a-f0-90-]{36}).*"
+            r"TrAddr:([a-z0-9:.]+)]\s+Targets:\[([0-9 ]+).*Rank:([0-9]+)\s+"
+            r"State:([A-Z]+)|(?:Timestamp|Temp.*|Cont.*Busy Time|Pow.*Cycles"
+            r"|Pow.*Duration|Unsafe.*|Media.*|Read.*|Write.*|Unmap.*|Checksum"
+            r".*|Err.*Entries|Avail.*|Dev.*Reli.*|Vola.*):\s*([A-Za-z0-9 :]+)",
         "storage_query_target_health":
             r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+|Devices\s+|UUID:([a-z0-9-]+)\s+"
             r"Targets:\[([0-9 ]+)\]\s+Rank:(\d+)\s+State:(\w+)|"
@@ -485,7 +486,8 @@ class DmgCommand(DmgCommandBase):
             r"\s*(\d+)|(?:(?:SCM:|NVMe:)\s+Total\s+size:\s+([0-9.]+\s+[A-Z]+)"
             r"\s+Free:\s+([0-9.]+\s+[A-Z]+),\smin:([0-9.]+\s+[A-Z]+),"
             r"\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"
-            r"|Rebuild\s+(\w+),\s+([0-9]+)\s+objs,\s+([0-9]+)\s+recs)",
+            r"|Rebuild\s+(\w+),\s+(?:rc=)?(\d+)(?:\s+\w+)?,"
+            r"\s+(?:status=-)?(\d+)(?:\s+\w+)?)",
             self.result.stdout)
         if match:
             # Mapping of the pool data entries to the match[0] indices

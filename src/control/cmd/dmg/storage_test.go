@@ -210,6 +210,15 @@ func TestStorageCommands(t *testing.T) {
 			"StorageReplaceNvme",
 			errors.New("the required flag `--new-uuid' was not specified"),
 		},
+		{
+			"Identify a device",
+			"storage identify vmd --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			printRequest(t, &control.SmdQueryReq{
+				UUID:     "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+				Identify: true,
+			}),
+			nil,
+		},
 	})
 }
 

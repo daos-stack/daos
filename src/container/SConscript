@@ -16,7 +16,8 @@ def scons():
                                  ['srv.c', 'srv_container.c', 'srv_epoch.c',
                                   'srv_target.c', 'srv_layout.c', 'oid_iv.c',
                                   'container_iv.c', 'srv_csum_recalc.c',
-                                  'srv_cli.c', common], install_off="../..")
+                                  'srv_cli.c', 'srv_oi_table.c', common],
+                                 install_off="../..")
     denv.Install('$PREFIX/lib64/daos_srv', ds_cont)
 
     # dc_cont: Container Client

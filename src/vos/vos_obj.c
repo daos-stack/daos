@@ -58,6 +58,7 @@ static int
 tree_is_empty(struct vos_object *obj, daos_handle_t toh,
 	      const daos_epoch_range_t *epr, vos_iter_type_t type)
 {
+	struct dtx_handle	*dth = vos_dth_get();
 	bool			 empty = true;
 	int			 rc;
 
@@ -65,7 +66,7 @@ tree_is_empty(struct vos_object *obj, daos_handle_t toh,
 	 *  when there are no committed entries
 	 */
 	rc = vos_iterate_key(obj, toh, type, epr, true, empty_tree_check,
-			     &empty, NULL);
+			     &empty, dth);
 
 	if (rc < 0)
 		return rc;
@@ -78,7 +79,7 @@ tree_is_empty(struct vos_object *obj, daos_handle_t toh,
 	 *  are, this will return -DER_INPROGRESS.
 	 */
 	rc = vos_iterate_key(obj, toh, type, epr, false, empty_tree_check,
-			     &empty, NULL);
+			     &empty, dth);
 
 	if (rc < 0)
 		return rc;
@@ -280,6 +281,21 @@ failed:
 	return rc;
 }
 
+/** If the object/key doesn't exist, we should augment the set with any missing
+ *  entries
+ */
+static void
+vos_punch_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int akey_nr,
+		      daos_key_t *akeys)
+{
+	struct vos_akey_data	ad;
+
+	ad.ad_is_iod = false;
+	ad.ad_keys = akeys;
+
+	vos_ts_add_missing(ts_set, dkey, akey_nr, &ad);
+}
+
 /**
  * Punch an object, or punch a dkey, or punch an array of akeys.
  */
@@ -298,6 +314,9 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	daos_epoch_t		 bound;
 	int			 rc = 0;
 	uint64_t		 cflags = 0;
+
+	if (oid.id_shard % 3 == 1 && DAOS_FAIL_CHECK(DAOS_DTX_FAIL_IO))
+		return -DER_IO;
 
 	if (dtx_is_valid_handle(dth)) {
 		epr.epr_hi = dth->dth_epoch;
@@ -400,6 +419,7 @@ reset:
 		if (vos_ts_wcheck(ts_set, epr.epr_hi, bound)) {
 			rc = -DER_TX_RESTART;
 		} else {
+			vos_punch_add_missing(ts_set, dkey, akey_nr, akeys);
 			vos_ts_set_update(ts_set, epr.epr_hi);
 			if (rc == 0)
 				vos_ts_set_wupdate(ts_set, epr.epr_hi);
@@ -1121,8 +1141,8 @@ done:
 		options |= EVT_ITER_REVERSE;
 	if (oiter->it_flags & VOS_IT_FOR_PURGE)
 		options |= EVT_ITER_FOR_PURGE;
-	if (oiter->it_flags & VOS_IT_FOR_REBUILD)
-		options |= EVT_ITER_FOR_REBUILD;
+	if (oiter->it_flags & VOS_IT_FOR_MIGRATION)
+		options |= EVT_ITER_FOR_MIGRATION;
 	return options;
 }
 
@@ -1302,8 +1322,8 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	oiter->it_recx = param->ip_recx;
 	if (param->ip_flags & VOS_IT_FOR_PURGE)
 		oiter->it_iter.it_for_purge = 1;
-	if (param->ip_flags & VOS_IT_FOR_REBUILD)
-		oiter->it_iter.it_for_rebuild = 1;
+	if (param->ip_flags & VOS_IT_FOR_MIGRATION)
+		oiter->it_iter.it_for_migration = 1;
 	if (param->ip_flags == VOS_IT_KEY_TREE) {
 		/** Prepare the iterator from an already open tree handle.   See
 		 *  vos_iterate_key
@@ -1494,8 +1514,8 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		oiter->it_obj = obj;
 	if (info->ii_flags & VOS_IT_FOR_PURGE)
 		oiter->it_iter.it_for_purge = 1;
-	if (info->ii_flags & VOS_IT_FOR_REBUILD)
-		oiter->it_iter.it_for_rebuild = 1;
+	if (info->ii_flags & VOS_IT_FOR_MIGRATION)
+		oiter->it_iter.it_for_migration = 1;
 
 	switch (type) {
 	default:

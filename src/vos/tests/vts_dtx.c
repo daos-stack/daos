@@ -78,6 +78,8 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_solo = 0;
 	dth->dth_modify_shared = 0;
 	dth->dth_active = 0;
+	dth->dth_dist = 0;
+	dth->dth_for_migration = 0;
 
 	dth->dth_dti_cos_count = 0;
 	dth->dth_dti_cos = NULL;
@@ -92,6 +94,13 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 
 	dth->dth_dkey_hash = dkey_hash;
 
+	D_INIT_LIST_HEAD(&dth->dth_share_cmt_list);
+	D_INIT_LIST_HEAD(&dth->dth_share_act_list);
+	D_INIT_LIST_HEAD(&dth->dth_share_tbd_list);
+	dth->dth_share_tbd_count = 0;
+	dth->dth_share_tbd_scanned = 0;
+	dth->dth_shares_inited = 1;
+
 	vos_dtx_rsrvd_init(dth);
 
 	*dthp = dth;
@@ -100,6 +109,28 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 void
 vts_dtx_end(struct dtx_handle *dth)
 {
+	struct dtx_share_peer	*dsp;
+
+	if (dth->dth_shares_inited) {
+		while ((dsp = d_list_pop_entry(&dth->dth_share_cmt_list,
+					       struct dtx_share_peer,
+					       dsp_link)) != NULL)
+			D_FREE(dsp);
+
+		while ((dsp = d_list_pop_entry(&dth->dth_share_act_list,
+					       struct dtx_share_peer,
+					       dsp_link)) != NULL)
+			D_FREE(dsp);
+
+		while ((dsp = d_list_pop_entry(&dth->dth_share_tbd_list,
+					       struct dtx_share_peer,
+					       dsp_link)) != NULL)
+			D_FREE(dsp);
+
+		dth->dth_share_tbd_count = 0;
+		dth->dth_share_tbd_scanned = 0;
+	}
+
 	vos_dtx_rsrvd_fini(dth);
 	D_FREE(dth->dth_dte.dte_mbs);
 	D_FREE_PTR(dth);
@@ -579,6 +610,8 @@ dtx_16(void **state)
 	char				 fetch_buf[UPDATE_BUF_SIZE];
 	int				 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	vts_dtx_prep_update(args, &val_iov, &dkey_iov, &dkey, dkey_buf,
 			    &akey, akey_buf, &iod, &sgl, &rex, update_buf,
 			    UPDATE_BUF_SIZE, UPDATE_REC_SIZE, &dkey_hash,
@@ -802,7 +835,7 @@ dtx_18(void **state)
 
 	for (i = 0; i < 10; i++) {
 		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i],
-				   NULL, NULL, false);
+				   NULL, NULL, NULL, false);
 		assert_int_equal(rc, DTX_ST_COMMITTED);
 	}
 
@@ -814,7 +847,7 @@ dtx_18(void **state)
 
 	for (i = 0; i < 10; i++) {
 		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i],
-				   NULL, NULL, false);
+				   NULL, NULL, NULL, false);
 		assert_int_equal(rc, -DER_NONEXIST);
 	}
 

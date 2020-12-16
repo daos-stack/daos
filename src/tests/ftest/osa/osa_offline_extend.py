@@ -52,11 +52,9 @@ class OSAOfflineExtend(OSAUtils):
         # Create a pool
         pool = {}
         pool_uuid = []
-        total_servers = len(self.hostlist_servers)
 
-        # Extend a rank (or server)
-        # rank index starts from zero
-        rank = total_servers
+        # Extend a ranks 4 and 5
+        rank = [4, 5]
 
         for val in range(0, num_pool):
             pool[val] = TestPool(self.context, dmg_command=self.dmg_command)
@@ -99,6 +97,8 @@ class OSAOfflineExtend(OSAUtils):
                 if pver_extend > pver_begin:
                     break
 
+            self.assert_on_rebuild_failure()
+
             pver_extend = self.get_pool_version()
             self.log.info("Pool Version after extend %d", pver_extend)
             # Check pool version incremented after pool extend
@@ -118,7 +118,8 @@ class OSAOfflineExtend(OSAUtils):
 
         Test Description: Validate Offline Extend
 
-        :avocado: tags=all,pr,hw,large,osa,osa_extend,offline_extend
+        :avocado: tags=all,pr,hw,medium,ib2
+        :avocado: tags=osa,osa_extend,offline_extend
         """
         # Perform extend testing with 1 pool
         self.run_offline_extend_test(1, True)

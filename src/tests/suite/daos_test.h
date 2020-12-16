@@ -57,10 +57,21 @@
 	} while  (0)
 #endif
 
+#if FAULT_INJECTION
+#define FAULT_INJECTION_REQUIRED() do { } while (0)
+#else
+#define FAULT_INJECTION_REQUIRED() \
+	do { \
+		print_message("Fault injection required for test, skipping...\n"); \
+		skip();\
+	} while (0)
+#endif /* FAULT_INJECTION */
+
 #include <mpi.h>
 #include <daos/debug.h>
 #include <daos/common.h>
 #include <daos/mgmt.h>
+#include <daos/sys_debug.h>
 #include <daos/tests_lib.h>
 #include <daos.h>
 
@@ -144,7 +155,9 @@ typedef struct {
 	uint64_t		fail_loc;
 	uint64_t		fail_num;
 	uint64_t		fail_value;
-	bool			overlap;
+	uint32_t		overlap:1,
+				not_check_result:1,
+				idx_no_jump:1;
 	int			expect_result;
 	daos_size_t		size;
 	int			nr;
@@ -261,7 +274,7 @@ async_enable(void **state)
 {
 	test_arg_t	*arg = *state;
 
-	arg->overlap = false;
+	arg->overlap = 0;
 	arg->async   = true;
 	return 0;
 }
@@ -271,7 +284,7 @@ async_disable(void **state)
 {
 	test_arg_t	*arg = *state;
 
-	arg->overlap = false;
+	arg->overlap = 0;
 	arg->async   = false;
 	return 0;
 }
@@ -282,7 +295,7 @@ async_overlap(void **state)
 {
 	test_arg_t	*arg = *state;
 
-	arg->overlap = true;
+	arg->overlap = 1;
 	arg->async   = true;
 	return 0;
 }
@@ -309,7 +322,7 @@ enum {
 	HANDLE_CO
 };
 
-int run_daos_mgmt_test(int rank, int size);
+int run_daos_mgmt_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_pool_test(int rank, int size);
 int run_daos_cont_test(int rank, int size);
 int run_daos_capa_test(int rank, int size);

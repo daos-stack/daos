@@ -278,6 +278,7 @@ def run_command(cmd):
                 " ".join(cmd), stdout))
     return stdout
 
+
 def get_output(cmd, check=True):
     """Get the output of given command executed on this host.
 
@@ -495,19 +496,28 @@ def get_test_list(tags):
     """
     test_tags = []
     test_list = []
+    # Check if fault injection is enabled ( 0 return status)
+    faults_disabled = time_command(["fault_status"])
     for tag in tags:
         if ".py" in tag:
             # Assume '.py' indicates a test and just add it to the list
             test_list.append(tag)
+            fault_filter = "--filter-by-tags=-faults"
+            if faults_disabled and fault_filter not in test_tags:
+                test_tags.append(fault_filter)
         else:
             # Otherwise it is assumed that this is a tag
-            test_tags.extend(["--filter-by-tags", str(tag)])
+            if faults_disabled:
+                tag = ",".join((tag, "-faults"))
+            test_tags.append("--filter-by-tags={}".format(tag))
 
     # Update the list of tests with any test that match the specified tags.
     # Exclude any specified tests that do not match the specified tags.  If no
     # tags and no specific tests have been specified then all of the functional
     # tests will be added.
     if test_tags or not test_list:
+        if not test_list:
+            test_list = ["./"]
         command = ["avocado", "list", "--paginator=off"]
         for test_tag in test_tags:
             command.append(str(test_tag))
@@ -578,7 +588,7 @@ def get_nvme_replacement(args):
         exit(1)
 
     # Get a list of NVMe devices from each specified server host
-    host_list = args.test_servers.split(",")
+    host_list = list(args.test_servers)
     command_list = [
         "/sbin/lspci -D", "grep 'Non-Volatile memory controller:'"]
     if ":" in args.nvme:
@@ -661,10 +671,16 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
         yaml_keys = list(YAML_KEYS.keys())
         yaml_find = find_values(yaml_data, yaml_keys)
 
-        # Generate a list
-        new_values = {
-            key: getattr(args, value).split(",") if getattr(args, value) else []
-            for key, value in YAML_KEYS.items()}
+        # Generate a list of values that can be used as replacements
+        new_values = {}
+        for key, value in YAML_KEYS.items():
+            args_value = getattr(args, value)
+            if isinstance(args_value, NodeSet):
+                new_values[key] = list(args_value)
+            elif args_value:
+                new_values[key] = args_value.split(",")
+            else:
+                new_values[key] = []
 
         # Assign replacement values for the test yaml entries to be replaced
         display(args, "Detecting replacements for {} in {}".format(
@@ -788,12 +804,10 @@ def run_tests(test_files, tag_filter, args):
     return_code = 0
 
     # Determine the location of the avocado logs for archiving or renaming
-    avocado_logs_dir = None
-    if args.archive or args.rename:
-        data = get_output(["avocado", "config"]).strip()
-        avocado_logs_dir = re.findall(r"datadir\.paths\.logs_dir\s+(.*)", data)
-        avocado_logs_dir = os.path.expanduser(avocado_logs_dir[0])
-        print("Avocado logs stored in {}".format(avocado_logs_dir))
+    data = get_output(["avocado", "config"]).strip()
+    avocado_logs_dir = re.findall(r"datadir\.paths\.logs_dir\s+(.*)", data)
+    avocado_logs_dir = os.path.expanduser(avocado_logs_dir[0])
+    print("Avocado logs stored in {}".format(avocado_logs_dir))
 
     # Create the base avocado run command
     command_list = [
@@ -1277,7 +1291,7 @@ def resolve_debuginfo(pkg):
         pkg (str): a package name
 
     Returns:
-        str: the debuginfo package name
+        dict: dictionary of debug package information
 
     """
     import yum      # pylint: disable=import-error,import-outside-toplevel
@@ -1300,8 +1314,7 @@ def resolve_debuginfo(pkg):
             print("Package {} not installed, "
                   "skipping debuginfo".format(pkg))
             return None
-        else:
-            raise
+        raise
 
     return {'name': debug_pkg,
             'version': pkg_data['version'],
@@ -1495,6 +1508,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
                 print(
                     "Unable to determine executable name from: '{}'\nNot "
                     "creating stacktrace".format(exe_type))
+                print("core magic reports: {}".format(exe_type))
             print("Removing {}".format(corefile_fqpn))
             os.unlink(corefile_fqpn)
 
@@ -1650,6 +1664,10 @@ def main():
         help="verbose output")
     args = parser.parse_args()
     print("Arguments: {}".format(args))
+
+    # Convert host specifications into NodeSets
+    args.test_servers = NodeSet(args.test_servers)
+    args.test_clients = NodeSet(args.test_clients)
 
     # Setup the user environment
     set_test_environment(args)
