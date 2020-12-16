@@ -69,11 +69,11 @@ class _env_module(): # pylint: disable=invalid-name
 
         if sys.version_info[0] > 2:
             ns = {}
-            exec(stdout.decode(), ns) # pylint: disable=exec-used
+            exec(stdout.decode(), ns) # pylint: disable=exec-used  # nosec
 
             return ns['_mlstatus'], stderr.decode()
         else:
-            exec(stdout.decode()) # pylint: disable=exec-used
+            exec(stdout.decode()) # pylint: disable=exec-used  # nosec
 
             return _mlstatus, stderr.decode() # pylint: disable=undefined-variable
 
@@ -168,7 +168,8 @@ def load_mpi(mpi):
     # pointer, so just verify that the desired MPI is loaded
     if distro.id() == "ubuntu":
         try:
-            proc = Popen(['update-alternatives', '--query', 'mpi'], stdout=PIPE)
+            proc = Popen(['/usr/sbin/update-alternatives', '--query', 'mpi'],
+                         stdout=PIPE)
         except OSError as error:
             print("Error running update-alternatives")
             if error.errno == errno.ENOENT:

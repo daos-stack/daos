@@ -86,8 +86,9 @@ def update_rpm_version(version, tag):
         if line == "%changelog\n":
             try:
                 packager = subprocess.Popen(
-                    'rpmdev-packager', stdout=subprocess.PIPE).communicate(
-                    )[0].strip().decode('UTF-8')
+                    'rpmdev-packager',     # nosec
+                    stdout=subprocess.PIPE).communicate(
+                        )[0].strip().decode('UTF-8')
             except OSError:
                 print("You need to have the rpmdev-packager tool (from the "
                       "rpmdevtools RPM on EL7) in order to make releases.\n\n"

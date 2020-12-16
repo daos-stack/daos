@@ -34,42 +34,42 @@ class VosValueTestCase(unittest.TestCase):
     def test_invalid_parameters(self):
         with pytest.raises(ValueError) as err:
             value = VosValue()
-        assert "size parameter is required" in str(err.value)
+        assert "size parameter is required" in str(err.value) # nosec
 
         with pytest.raises(TypeError) as err:
             value = VosValue(size="rubbish")
-        assert "size parameter must be of type int" in str(err.value)
+        assert "size parameter must be of type int" in str(err.value) # nosec
 
         with pytest.raises(TypeError) as err:
             value = VosValue(size=5, count="rubbish")
-        assert "count parameter must be of type int" in str(err.value)
+        assert "count parameter must be of type int" in str(err.value) # nosec
 
         with pytest.raises(TypeError) as err:
             value = VosValue(
                 size=5, count=10, aligned="rubbish")
-        assert "aligned parameter must be of type" in str(err.value)
+        assert "aligned parameter must be of type" in str(err.value) # nosec
 
     def test_default_parameters(self):
         value = VosValue(size=10)
         want = {"size": 10, "count": 1, "aligned": "Yes"}
         got = value.dump()
-        assert want == got
+         assert want == got # nosec
 
     def test_constructor(self):
         value = VosValue(size=10, aligned="Yes")
         want = {"size": 10, "count": 1, "aligned": "Yes"}
         got = value.dump()
-        assert want == got
+         assert want == got # nosec
 
         value = VosValue(size=10, aligned="No")
         want = {"size": 10, "count": 1, "aligned": "No"}
         got = value.dump()
-        assert want == got
+         assert want == got # nosec
 
         value = VosValue(size=10, count=20, aligned="No")
         want = {"size": 10, "count": 20, "aligned": "No"}
         got = value.dump()
-        assert want == got
+         assert want == got # nosec
 
 
 @pytest.fixture(scope="class")
@@ -213,31 +213,31 @@ class AKeyTestCase(unittest.TestCase):
     def test_invalid_parameters(self):
         with pytest.raises(ValueError) as err:
             akey = AKey()
-        assert "value_type parameter is required" in str(err.value)
+        assert "value_type parameter is required" in str(err.value) # nosec
 
         with pytest.raises(TypeError) as err:
             akey = AKey(value_type="rubbish")
-        assert "value_type parameter must be of type" in str(err.value)
+        assert "value_type parameter must be of type" in str(err.value) # nosec
 
         with pytest.raises(TypeError) as err:
             akey = AKey(
                 value_type="single_value", count="rubbish")
-        assert "count parameter must be of type int" in str(err.value)
+        assert "count parameter must be of type int" in str(err.value) # nosec
 
         with pytest.raises(TypeError) as err:
             akey = AKey(
                 value_type="single_value", key_type="rubbish")
-        assert "key_type parameter must be of type" in str(err.value)
+        assert "key_type parameter must be of type" in str(err.value) # nosec
 
         with pytest.raises(TypeError) as err:
             akey = AKey(
                 value_type="single_value", overhead="rubbish")
-        assert "overhead parameter must be of type" in str(err.value)
+        assert "overhead parameter must be of type" in str(err.value) # nosec
 
         with pytest.raises(TypeError) as err:
             akey = AKey(
                 value_type="single_value", values=["rubbish"])
-        assert "must be of type" in str(err.value)
+        assert "must be of type" in str(err.value) # nosec
 
     def test_constructor(self):
         values = self.test_data.create_values()
@@ -247,7 +247,7 @@ class AKeyTestCase(unittest.TestCase):
             value_type="single_value",
             values=values)
         want = self.test_data.create_default_akey()
-        assert want == akey.dump()
+        assert want == akey.dump() # nosec
 
         akey = AKey(
             key="A-key 1",
@@ -256,7 +256,7 @@ class AKeyTestCase(unittest.TestCase):
             values=values)
         want = self.test_data.create_default_akey(
             key="A-key 1", key_type="hashed", value_type="single_value")
-        assert want == akey.dump()
+        assert want == akey.dump() # nosec
 
         akey = AKey(
             key_type="integer",
@@ -264,7 +264,7 @@ class AKeyTestCase(unittest.TestCase):
             values=values)
         want = self.test_data.create_default_akey(
             key_type="integer", value_type="single_value")
-        assert want == akey.dump()
+        assert want == akey.dump() # nosec
 
         akey = AKey(
             key_type="integer",
@@ -273,7 +273,7 @@ class AKeyTestCase(unittest.TestCase):
             values=values)
         want = self.test_data.create_default_akey(
             key_type="integer", value_type="single_value", count=20)
-        assert want == akey.dump()
+        assert want == akey.dump() # nosec
 
         akey = AKey(
             key_type="integer",
@@ -282,7 +282,7 @@ class AKeyTestCase(unittest.TestCase):
             values=values)
         want = self.test_data.create_default_akey(
             key_type="integer", value_type="single_value", overhead="user")
-        assert want == akey.dump()
+        assert want == akey.dump() # nosec
 
         akey = AKey(
             key_type="integer",
@@ -291,7 +291,7 @@ class AKeyTestCase(unittest.TestCase):
             values=values)
         want = self.test_data.create_default_akey(
             key_type="integer", value_type="single_value", overhead="meta")
-        assert want == akey.dump()
+        assert want == akey.dump() # nosec
 
         akey = AKey(
             key="A-key 1",
@@ -300,7 +300,7 @@ class AKeyTestCase(unittest.TestCase):
             values=values)
         want = self.test_data.create_default_akey(
             key="A-key 1", value_type="array", overhead="user")
-        assert want == akey.dump()
+        assert want == akey.dump() # nosec
 
         akey = AKey(
             key="A-key 1",
@@ -309,7 +309,7 @@ class AKeyTestCase(unittest.TestCase):
             values=values)
         want = self.test_data.create_default_akey(
             key="A-key 1", value_type="array", overhead="meta")
-        assert want == akey.dump()
+        assert want == akey.dump() # nosec
 
         akey = AKey(
             key="A-key 1",
@@ -317,20 +317,20 @@ class AKeyTestCase(unittest.TestCase):
             values=values)
         want = self.test_data.create_default_akey(
             key="A-key 1", key_type=None, value_type="array")
-        assert want == akey.dump()
+        assert want == akey.dump() # nosec
 
     def test_add_value(self):
         with pytest.raises(VosValueError) as err:
             akey = AKey(
                 key="A-key 1", value_type="single_value")
             akey.dump()
-        assert "list of values must not be empty" in str(err.value)
+        assert "list of values must not be empty" in str(err.value) # nosec
 
         with pytest.raises(TypeError) as err:
             akey = AKey(
                 key="A-key 1", value_type="single_value")
             akey.add_value("rubbish")
-        assert "must be of type" in str(err.value)
+        assert "must be of type" in str(err.value) # nosec
 
         akey = AKey(key="A-key 1", value_type="single_value")
         value = VosValue(size=10, aligned="Yes")
@@ -338,7 +338,7 @@ class AKeyTestCase(unittest.TestCase):
         value = VosValue(size=20, aligned="No")
         akey.add_value(value)
         want = self.test_data.create_default_akey()
-        assert want == akey.dump()
+        assert want == akey.dump() # nosec
 
 
 @pytest.mark.usefixtures("vos_test_data")
@@ -346,20 +346,20 @@ class DKeyTestCase(unittest.TestCase):
     def test_invalid_parameters(self):
         with pytest.raises(TypeError) as err:
             akey = DKey(count="rubbish")
-        assert "count parameter must be of type int" in str(err.value)
+        assert "count parameter must be of type int" in str(err.value) # nosec
 
         with pytest.raises(TypeError) as err:
             akey = DKey(key_type="rubbish")
-        assert "key_type parameter must be of type" in str(err.value)
+        assert "key_type parameter must be of type" in str(err.value) # nosec
 
         with pytest.raises(TypeError) as err:
             akey = DKey(overhead="rubbish")
-        assert "overhead parameter must be of type" in str(err.value)
+        assert "overhead parameter must be of type" in str(err.value) # nosec
 
         with pytest.raises(VosValueError) as err:
             dkey = DKey()
             akey = dkey.dump()
-        assert "list of akeys must not be empty" in str(err.value)
+        assert "list of akeys must not be empty" in str(err.value) # nosec
 
     def test_constructor(self):
         akey1 = AKey(
@@ -374,18 +374,18 @@ class DKeyTestCase(unittest.TestCase):
         dkey = DKey(key="D-key 1", akeys=[akey1, akey2])
         want = self.test_data.create_default_dkey()
 
-        assert want == dkey.dump()
+        assert want == dkey.dump() # nosec
 
     def test_add_value(self):
         with pytest.raises(VosValueError) as err:
             dkey = DKey(key="D-key 1")
             dkey.dump()
-        assert "list of akeys must not be empty" in str(err.value)
+        assert "list of akeys must not be empty" in str(err.value) # nosec
 
         with pytest.raises(TypeError) as err:
             dkey = DKey(key="D-key 1")
             dkey.add_value("rubbish")
-        assert "must be of type" in str(err.value)
+        assert "must be of type" in str(err.value) # nosec
 
         dkey = DKey(key="D-key 1")
         akey = AKey(
@@ -401,7 +401,7 @@ class DKeyTestCase(unittest.TestCase):
 
         want = self.test_data.create_default_dkey()
 
-        assert want == dkey.dump()
+        assert want == dkey.dump() # nosec
 
 
 @pytest.mark.usefixtures("vos_test_data")
@@ -421,34 +421,34 @@ class ObjectTestCase(unittest.TestCase):
     def test_invalid_parameters(self):
         with pytest.raises(TypeError) as err:
             akey = VosObject(count="rubbish")
-        assert "count parameter must be of type int" in str(err.value)
+        assert "count parameter must be of type int" in str(err.value) # nosec
 
         with pytest.raises(TypeError) as err:
             akey = VosObject(count=10, dkeys=["rubbish"])
-        assert "must be of type" in str(err.value)
+        assert "must be of type" in str(err.value) # nosec
 
     def test_constructor(self):
         vos_object = VosObject(
             count=100, dkeys=[self.dkey1, self.dkey2])
         want = self.test_data.create_default_object(count=100)
-        assert want == vos_object.dump()
+        assert want == vos_object.dump() # nosec
 
     def test_add_value(self):
         with pytest.raises(VosValueError) as err:
             dkey = VosObject()
             dkey.dump()
-        assert "list of dkeys must not be empty" in str(err.value)
+        assert "list of dkeys must not be empty" in str(err.value) # nosec
 
         with pytest.raises(TypeError) as err:
             dkey = VosObject()
             dkey.add_value("rubbish")
-        assert "must be of type" in str(err.value)
+        assert "must be of type" in str(err.value) # nosec
 
         vos_object = VosObject(count=200)
         vos_object.add_value(self.dkey2)
         vos_object.add_value(self.dkey1)
         want = self.test_data.create_default_object(count=200)
-        assert want == vos_object.dump()
+        assert want == vos_object.dump() # nosec
 
 
 @pytest.mark.usefixtures("vos_test_data")
@@ -473,39 +473,41 @@ class ContainerTestCase(unittest.TestCase):
     def test_invalid_parameters(self):
         with pytest.raises(TypeError) as err:
             container = Container(count="rubbish")
-        assert "count parameter must be of type int" in str(err.value)
+        assert "count parameter must be of type int" in str(err.value) # nosec
 
         with pytest.raises(TypeError) as err:
             container = Container(csum_size="rubbish")
-        assert "csum_size parameter must be of type int" in str(err.value)
+        # pylint: disable=line-too-long
+        assert "csum_size parameter must be of type int" in str(err.value) # nosec
 
         with pytest.raises(TypeError) as err:
             container = Container(csum_gran="rubbish")
-        assert "csum_gran parameter must be of type int" in str(err.value)
+        assert "csum_gran parameter must be of type int" in str(err.value) # nosec
+        # pylint: enable=line-too-longg
 
         with pytest.raises(TypeError) as err:
             container = Container(objects=["rubbish"])
-        assert "must be of type" in str(err.value)
+        assert "must be of type" in str(err.value) # nosec
 
     def test_constructor(self):
         container = Container(
             objects=[self.vos_object1, self.vos_object2])
         want = self.test_data.create_default_container()
-        assert want == container.dump()
+        assert want == container.dump() # nosec
 
         container = Container(
             count=300, csum_size=400, csum_gran=500, objects=[
                 self.vos_object1, self.vos_object2])
         want = self.test_data.create_default_container(
             count=300, csum_size=400, csum_gran=500)
-        assert want == container.dump()
+        assert want == container.dump() # nosec
 
     def test_add_value(self):
         container = Container()
         container.add_value(self.vos_object1)
         container.add_value(self.vos_object2)
         want = self.test_data.create_default_container()
-        assert want == container.dump()
+        assert want == container.dump() # nosec
 
 
 @pytest.mark.usefixtures("vos_test_data")
@@ -536,15 +538,17 @@ class ContainersTestCase(unittest.TestCase):
         with pytest.raises(VosValueError) as err:
             containers = Containers()
             containers.dump()
-        assert "list of containers must not be empty" in str(err.value)
+        assert "list of containers must not be empty" in str(err.value) # nosec
 
         with pytest.raises(TypeError) as err:
             container = Containers(num_shards="rubbish")
-        assert "num_shards parameter must be of type int" in str(err.value)
+        # pylint: disable=line-too-long
+        assert "num_shards parameter must be of type int" in str(err.value) # nosec
+        # pylint: enable=line-too-long
 
         with pytest.raises(TypeError) as err:
             container = Containers(containers=["rubbish"])
-        assert "must be of type" in str(err.value)
+        assert "must be of type" in str(err.value) # nosec
 
     def test_constructor(self):
         containers = Containers(
@@ -559,18 +563,20 @@ class ContainersTestCase(unittest.TestCase):
             "containers": [
                 raw_container1,
                 raw_container2]}
-        assert want == containers.dump()
+        assert want == containers.dump() # nosec
 
     def test_add_value(self):
         with pytest.raises(TypeError) as err:
             containers = Containers()
             containers.add_value("rubbish")
-        assert "must be of type" in str(err.value)
+        assert "must be of type" in str(err.value) # nosec
 
         with pytest.raises(TypeError) as err:
             containers = Containers()
             containers.set_num_shards("rubbish")
-        assert "num_shards parameter must be of type int" in str(err.value)
+        # pylint: disable=line-too-long
+        assert "num_shards parameter must be of type int" in str(err.value) # nosec
+        # pylint: enable=line-too-long
 
         containers = Containers()
         containers.add_value(self.vos_container1)
@@ -585,7 +591,7 @@ class ContainersTestCase(unittest.TestCase):
             "containers": [
                 raw_container1,
                 raw_container2]}
-        assert want == containers.dump()
+        assert want == containers.dump() # nosec
 
 
 @pytest.mark.usefixtures("vos_test_data")
@@ -668,7 +674,7 @@ class FSTestCase(unittest.TestCase):
 
         want = self._process_stats(gold_container)
 
-        assert got == want
+        assert got == want # nosec
 
 
 if __name__ == "__main__":
