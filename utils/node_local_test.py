@@ -265,6 +265,8 @@ def get_base_env():
     env['FI_UNIVERSE_SIZE'] = '128'
     return env
 
+DEFAULT_AGENT_DIR='/var/run/daos_agent'
+
 class DaosServer():
     """Manage a DAOS server instance"""
 
@@ -290,7 +292,10 @@ class DaosServer():
         if os.path.exists(self._log_file):
             os.unlink(self._log_file)
 
-        self.agent_dir = tempfile.mkdtemp(prefix='dnt_agent_')
+        if os.access(DEFAULT_AGENT_DIR, os.W_OK):
+            self.agent_dir = DEFAULT_AGENT_DIR
+        else:
+            self.agent_dir = tempfile.mkdtemp(prefix='dnt_agent_')
 
         self._yaml_file = None
         self._io_server_dir = None
@@ -476,7 +481,8 @@ class DaosServer():
             # TODO: Enable memleak checking when server shutdown works.
             log_test(self.conf, self._log_file, show_memleaks=False)
         self.running = False
-        os.rmdir(self.agent_dir)
+        if self.agent_dir != DEFAULT_AGENT_DIR:
+            os.rmdir(self.agent_dir)
         return ret
 
     def run_dmg(self, cmd):
@@ -613,7 +619,13 @@ class DFuse():
         self.container = container
         self.conf = conf
         self.multi_user = multi_user
-        self.cores = None
+        # Detect the number of cores and do something sensible, if there are more
+        # than 32 on the node then use 12, otherwise use the whole node.
+        num_cores = len(os.sched_getaffinity(0))
+        if num_cores > 32:
+            self.cores = 12
+        else:
+            self.cores = None
         self._daos = daos
         self.caching = caching
         self._sp = None
@@ -1443,10 +1455,15 @@ def run_in_fg(server, conf):
 
     # Load the first available container, but skip over any which are not
     # suitable.
-    for pool in pools:
+    pool = None
+    if conf.args.pool:
+        pool = conf.args.pool
         containers = get_conts(conf, pool, posix=True)
-        if containers:
-            break
+    else:
+        for pool in pools:
+            containers = get_conts(conf, pool, posix=True)
+            if containers:
+                break
 
     assert pool
 
@@ -1454,6 +1471,7 @@ def run_in_fg(server, conf):
         containers = create_cont(conf, pool, posix=True)
 
     container = containers[0]
+    print('Pool is {}'.format(pool))
     print('Container is {}'.format(container))
 
     dfuse = DFuse(server, conf, pool=pool, container=container, multi_user=True)
@@ -1790,7 +1808,7 @@ def test_alloc_fail(server, wf, conf):
             if not stderr.endswith("Out of memory (-1009)") and \
                'error parsing command line arguments' not in stderr and \
                stdout != expected_stdout:
-                print(container)
+                print(stdout)
                 print(expected_stdout)
                 wf.add(rc.fi_loc,
                        'NORMAL', "Incorrect stderr '{}'".format(stderr),
@@ -1817,6 +1835,7 @@ def main():
     parser.add_argument('--output-file', default='nlt-errors.json')
     parser.add_argument('--server-debug', default=None)
     parser.add_argument('--dfuse-debug', default=None)
+    parser.add_argument('--pool', default=None)
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
     parser.add_argument('--perf-check', action='store_true')
