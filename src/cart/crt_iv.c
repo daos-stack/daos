@@ -1700,12 +1700,9 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 		return -DER_INVAL;
 	}
 
-	/* Get local version for latter comparison.  */
-	/* MUST obtain before getting root rank      */
+	/* Get local version and associated root rank for latter comparison. */
 	D_RWLOCK_RDLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	grp_ver_entry = ivns_internal->cii_grp_priv->gp_membs_ver;
-
-	/* Get iv_key root rank */
 	rc = iv_ops->ivo_on_hash(ivns_internal, iv_key, &root_rank);
 	D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	if (rc != 0) {
@@ -2336,7 +2333,7 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 
 	local_bulk = CRT_BULK_NULL;
 	if (iv_value != NULL) {
-		D_INFO("Create Bulk\n");
+		D_DEBUG("Create Bulk\n");
 		rc = crt_bulk_create(ivns_internal->cii_ctx, iv_value,
 				CRT_BULK_RO, &local_bulk);
 		if (rc != 0) {
@@ -2395,7 +2392,7 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 		if (iv_sync_cb->isc_iv_key.iov_buf == NULL) {
 			/* Avoid checkpatch warning */
 			D_GOTO(exit, rc = -DER_NOMEM);
-			}
+		}
 
 		memcpy(iv_sync_cb->isc_iv_key.iov_buf, iv_key->iov_buf,
 			iv_key->iov_buf_len);
@@ -3577,10 +3574,9 @@ crt_iv_get_nchildren(crt_iv_namespace_t ivns, uint32_t class_id,
 		ivns_internal->cii_gns.gn_tree_topo, root_rank, self_rank,
 		nchildren);
 	if (rc != 0)
-		D_ERROR("crt_tree_get_nchildren(grp %s, root %d self %d)",
+		D_ERROR("grp %s, root %d self %d failed rc=%d.\n",
 			ivns_internal->cii_grp_priv->gp_pub.cg_grpid,
-			root_rank, self_rank);
-		D_ERROR("failed, rc=%d.\n", rc);
+			root_rank, self_rank,rc);
 
 exit:
 	/* addref done in crt_ivns_internal_get() */
