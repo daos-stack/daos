@@ -15,7 +15,6 @@
 #  Note: Uses .build_vars.sh to find daos artifacts
 #  Note: New tests should return non-zero if there are any
 #    failures.
-set -x
 
 #check for existence of /mnt/daos first:
 failed=0
@@ -38,7 +37,6 @@ run_test()
     echo "Running $* with log file: ${D_LOG_FILE}"
 
     export TNAME="${b}-${log_num}"
-    echo "$TNAME"
 
     # We use flock as a way of locking /mnt/daos so multiple runs can't hit it
     #     at the same time.
@@ -48,7 +46,7 @@ run_test()
     #    before deciding this. Also, we intentionally leave off the last 'S'
     #    in that error message so that we don't guarantee printing that in
     #    every run's output, thereby making all tests here always pass.
-    time eval "${VALGRIND_CMD} $@"
+    time eval "${VALGRIND_CMD}" "$@"
     retcode=$?
     if [ "${retcode}" -ne 0 ]; then
 	echo "Test $* failed with exit status ${retcode}."
