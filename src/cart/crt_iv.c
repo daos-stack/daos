@@ -2357,6 +2357,7 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 
 	D_ALLOC_PTR(iv_sync_cb);
 	if (iv_sync_cb == NULL) {
+		/* Avoid checkpatch warning */
 		D_GOTO(exit, rc = -DER_NOMEM);
 	}
 
@@ -3574,7 +3575,7 @@ crt_iv_get_nchildren(crt_iv_namespace_t ivns, uint32_t class_id,
 	if (rc != 0)
 		D_ERROR("grp %s, root %d self %d failed rc=%d.\n",
 			ivns_internal->cii_grp_priv->gp_pub.cg_grpid,
-			root_rank, self_rank,rc);
+			root_rank, self_rank, rc);
 
 exit:
 	/* addref done in crt_ivns_internal_get() */
