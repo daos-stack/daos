@@ -38,8 +38,6 @@ run_test()
 
     export TNAME="${b}-${log_num}"
 
-    # We use flock as a way of locking /mnt/daos so multiple runs can't hit it
-    #     at the same time.
     # We use grep to filter out any potential "SUCCESS! NO TEST FAILURES"
     #    messages as daos_post_build.sh will look for this and mark the tests
     #    as passed, which we don't want as we need to check all of the tests
@@ -89,10 +87,13 @@ if [ -d "/mnt/daos" ]; then
             [ -z "$VALGRIND_SUPP" ] &&
                 VALGRIND_SUPP="$(pwd)/utils/test_memcheck.supp"
             VALGRIND_XML_PATH="test_results/unit-test-%q{TNAME}.memcheck.xml"
-            export VALGRIND_CMD="valgrind --leak-check=full --show-reachable=yes \
-                                   --error-limit=no \
-                                   --suppressions=${VALGRIND_SUPP} \
-                                   --xml=yes --xml-file=${VALGRIND_XML_PATH}"
+            export VALGRIND_CMD="valgrind --leak-check=full \
+                                          --show-reachable=yes \
+                                          --error-limit=no \
+                                          --suppressions=${VALGRIND_SUPP} \
+                                          --error-exitcode=42 \
+                                          --xml=yes \
+                                          --xml-file=${VALGRIND_XML_PATH}"
         else
             VALGRIND_SUPP=""
         fi

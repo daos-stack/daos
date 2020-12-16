@@ -2597,7 +2597,6 @@ run_pm_tests(const char *cfg)
 	dts_create_config(test_name, "VOS Universal Punch Model tests %s", cfg);
 	if (DAOS_ON_VALGRIND)
 		buf_size = 100;
-	printf("marj DAOS_ON_VALGRIND=%d\n", DAOS_ON_VALGRIND);
 
 	rc = cmocka_run_group_tests_name(test_name, punch_model_tests_all,
 					 setup_io, teardown_io);
