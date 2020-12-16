@@ -67,7 +67,7 @@ class DataMoverTestBase(IorTestBase):
         self.dfuse_hosts = self.agent_managers[0].hosts
 
         # Get the parameters for DataMover
-        self.dm_cmd = DataMover(self.hostlist_clients)
+        self.dm_cmd = DataMover(self.hostlist_clients, self.tmp)
         self.dm_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/datamover/processes/*')
 

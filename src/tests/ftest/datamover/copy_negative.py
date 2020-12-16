@@ -23,6 +23,7 @@
 '''
 from data_mover_test_base import DataMoverTestBase
 from os.path import join, sep
+from apricot import skipForTicket
 
 
 class CopyNegativeTest(DataMoverTestBase):
@@ -69,6 +70,7 @@ class CopyNegativeTest(DataMoverTestBase):
         cmd = "mkdir -p {}".format(self.get_posix_test_path_string())
         self.execute_cmd(cmd)
 
+    @skipForTicket("DAOS-6355")
     def test_copy_bad_params(self):
         """Jira ID: DAOS-5515
         Test Description:
