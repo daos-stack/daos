@@ -226,7 +226,12 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 			 */
 			if (l_shard->po_shard != -1) {
 				D_ASSERT(f_shard->fs_tgt_id != -1);
-				D_ASSERT(*idx < array_size);
+				if (*idx >= array_size)
+					/*
+					 * Not enough space for this layout in
+					 * the buffer provided by the caller
+					 */
+					return -DER_REC2BIG;
 				tgt_id[*idx] = f_shard->fs_tgt_id;
 				shard_idx[*idx] = l_shard->po_shard;
 				(*idx)++;
