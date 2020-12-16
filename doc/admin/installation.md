@@ -8,9 +8,6 @@ to select the appropriate software combination.
 DAOS requires a C99-capable compiler, a Go compiler, and the scons build tool.
 Moreover, the DAOS stack leverages the following open source projects:
 
--   [*CaRT*](https://github.com/daos-stack/cart) for high-performance
-    communication leveraging advanced network capabilities.
-
 -   [*gRPC*](https://grpc.io/) provides a secured out-of-band channel for
     DAOS administration.
 
@@ -19,13 +16,9 @@ Moreover, the DAOS stack leverages the following open source projects:
 
 -   [*SPDK*](http://spdk.io/) for userspace NVMe device access and management.
 
--   [*FIO*](https://github.com/axboe/fio) for flexible testing of Linux I/O
-    subsystems, specifically enabling validation of userspace NVMe device
-    performance through fio-spdk plugin.
-
--   [*ISA-L*](https://github.com/01org/isa-l) for checksum and erasure code
--   [*ISA-L_Crypto*](https://github.com/01org/isa-l_crypto) for checksum
-    computation.
+-   [*ISA-L*](https://github.com/01org/isa-l) and
+    [*ISA-L_Crypto*](https://github.com/01org/isa-l_crypto) for checksum and
+    erasure code
 
 -   [*Argobots*](https://github.com/pmodels/argobots) for thread management.
 
@@ -40,30 +33,36 @@ dependencies automatically.
 
 ## Distribution Packages
 
-DAOS RPM packaging is currently available, and DEB packaging is under development and will be available in a future DAOS release. Integration with the [Spack](https://spack.io/) package manager is also
+DAOS RPM packaging is currently available, and DEB packaging is under
+development and will be available in a future DAOS release.
+Integration with the [Spack](https://spack.io/) package manager is also
 under consideration.
 
 ### Installing DAOS from RPMs
 
 DAOS RPMs are available from the Intel&copy; Registration Center.
-Clicking the [Intel&copy; Registration Center](https://registrationcenter.intel.com/forms/?productid=3412) link will take you to the registration center, where you will create an account. After creating an account, the following files can be downloaded:
+Clicking the [Intel&copy; Registration Center](https://registrationcenter.intel.com/forms/?productid=3412)
+link will take you to the registration center, where you will create an account.
+After creating an account, the following files can be downloaded:
 
 - daos_debug.tar - _debuginfo_ packages
 - daos_packages.tar - client and server main packages
 - daos_source.tar - source RPMs
 
-**Recommended steps after download:**
+Recommended steps after download:
 
-	sudo tar -C / -xf daos_packages.tar
-	sudo cp /opt/intel/daos_rpms/packages/daos_packages.repo /etc/yum.repos.d
-	rm /opt/intel/daos_rpms/packages/libabt*
-	(cd /opt/intel/daos_rpms/packages/ && createrepo .)
-	sudo yum install epel-release
-	sudo yum install daos-server
-	sudo yum install daos-client
+```bash
+$ sudo tar -C / -xf daos_packages.tar
+$ sudo cp /opt/intel/daos_rpms/packages/daos_packages.repo /etc/yum.repos.d
+$ rm /opt/intel/daos_rpms/packages/libabt*
+  (cd /opt/intel/daos_rpms/packages/ && createrepo .)
+$ sudo yum install epel-release
+$ sudo yum install daos-server
+$ sudo yum install daos-client
+```
 
-**Note:** *Only daos-client OR daos-server needs to be specified on the yum command line.*
-
+!!! note
+    Only daos-client OR daos-server needs to be specified on the yum command line.
 
 ## DAOS from Scratch
 
@@ -81,10 +80,10 @@ packages usually available on all the Linux distributions. Moreover, a Go
 version of at least 1.10 is required.
 
 An exhaustive list of packages for each supported Linux distribution is
-maintained in the Docker files:
+maintained in the Docker files (please click on the link):
 
--    [CentOS](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.centos.7#L53-L76)
--    [OpenSUSE](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.leap.15#L16-L42)
+-    [CentOS](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.centos.7#L53-L79)
+-    [OpenSUSE](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.leap.15#L71-L100)
 -    [Ubuntu](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.ubuntu.20.04#L21-L39)
 
 The command lines to install the required packages can be extracted from
@@ -92,9 +91,9 @@ the Docker files by removing the "RUN" command, which is specific to Docker.
 Check the [utils/docker](https://github.com/daos-stack/daos/tree/master/utils/docker)
 directory for different Linux distribution versions.
 
-Some DAOS tests use MPI.   The DAOS build process
-uses the environment modules package to detect the presence of MPI.  If none
-is found, the build will skip building those tests.
+Some DAOS tests use MPI. The DAOS build process uses the environment modules
+package to detect the presence of MPI. If none is found, the build will skip
+building those tests.
 
 ### DAOS Source Code
 
@@ -123,7 +122,8 @@ $ scons --config=force install
 ```
 
 If you are a developer of DAOS, we recommend following the instructions in the
-[DAOS for Development](https://daos-stack.github.io/dev/development/#building-daos-for-development) section.
+[DAOS for Development](https://daos-stack.github.io/dev/development/#building-daos-for-development)
+section.
 
 Otherwise, the missing dependencies can be built automatically by invoking scons
 with the following parameters:
@@ -185,13 +185,22 @@ Once the image created, one can start a container that will eventually run
 the DAOS service:
 
 ```bash
-$ docker run -it -d --privileged --cap-add=ALL --name server \
-        -v /dev/hugepages:/dev/hugepages -v /dev/hugepages-1G:/dev/hugepages-1G \
-        daos
+$ docker run -it -d --privileged --cap-add=ALL --name server -v /dev:/dev daos
 ```
 
-If Docker is being run on a non-Linux system (e.g., OSX), the export of /dev/hugepages
-should be removed since it is not supported.
+!!! note
+    Please make sure that the uio_pci_generic module is loaded.
+
+!!! note
+    If you want to be more selective with the devices that are exported to the
+    container, individual devices should be listed and exported as volume via
+    the -v option. In this case, the hugepages devices should also be added
+    to the command line via -v /dev/hugepages:/dev/hugepages and
+    -v /dev/hugepages-1G:/dev/hugepages-1G
+
+!!! warning
+    If Docker is being run on a non-Linux system (e.g., OSX), -v /dev:/dev
+    should be removed from the command line.
 
 ### Building from a Local Tree
 
@@ -207,14 +216,12 @@ Then create a container that can access the local DAOS source tree:
 
 ```bash
 $ docker run -it -d --privileged --cap-add=ALL --name server \
-        -v ${daospath}:/home/daos/daos:Z \
-        -v /dev/hugepages:/dev/hugepages -v /dev/hugepages-1G:/dev/hugepages-1G \
-        daos
+        -v ${daospath}:/home/daos/daos:Z -v /dev:/dev daos
 ```
 
 ${daospath} should be replaced with the full path to your DAOS source tree.
-As mentioned above, the export of /dev/hugepages should be removed if the
-host is not a Linux system.
+Regarding the /dev export as volume, the same comments as in the previous
+section apply.
 
 Then execute the following command to build and install DAOS in the
 container:
@@ -246,9 +253,6 @@ $ docker exec server dmg -i storage format
 
 Upon successful completion of the format, the storage engine is started, and pools
 can be created using the daos admin tool (see next section).
-
-!!! note
-    Please make sure that the uio_pci_generic module is loaded.
 
 For more advanced configurations involving SCM, SSD or a real fabric, please
 refer to the next section.

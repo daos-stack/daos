@@ -147,7 +147,13 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch,
 
 	obj_reply_set_status(rpc, status);
 	obj_reply_map_version_set(rpc, ioc->ioc_map_ver);
-	orwo->orw_epoch = epoch;
+	if (DAOS_FAIL_CHECK(DAOS_DTX_START_EPOCH)) {
+		/* Return an stale epoch for test. */
+		orwo->orw_epoch = dss_get_start_epoch() -
+				  crt_hlc_epsilon_get() * 3;
+	} else {
+		orwo->orw_epoch = epoch;
+	}
 
 	D_DEBUG(DB_IO, "rpc %p opc %d send reply, pmv %d, epoch "DF_U64
 		", status %d\n", rpc, opc_get(rpc->cr_opc),
@@ -2013,7 +2019,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 		if (orw->orw_flags & ORF_CSUM_REPORT) {
 			obj_log_csum_err();
-			D_GOTO(out, rc = -DER_CSUM);
+			D_GOTO(out, rc = 0);
 		}
 
 		if (DAOS_FAIL_CHECK(DAOS_OBJ_FETCH_DATA_LOST))
