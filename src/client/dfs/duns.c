@@ -607,6 +607,8 @@ duns_set_fuse_acl(int dfd, daos_handle_t coh)
 
 	printf("Setting ACL for new container\n");
 
+	/* TODO: Use daos_acl_uid_to_principal() here */
+
 	D_ALLOC(buf, PW_BUF_SIZE);
 	if (buf == NULL)
 		return ENOMEM;
