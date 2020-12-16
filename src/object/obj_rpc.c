@@ -38,50 +38,20 @@ crt_proc_daos_key_desc_t(crt_proc_t proc, daos_key_desc_t *key)
 	int rc;
 
 	rc = crt_proc_uint64_t(proc, &key->kd_key_len);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint32_t(proc, &key->kd_val_type);
-	if (rc != 0)
-		return -DER_HG;
-
-	return 0;
-}
-
-static int
-crt_proc_daos_obj_id_t(crt_proc_t proc, daos_obj_id_t *doi)
-{
-	int rc;
-
-	rc = crt_proc_uint64_t(proc, &doi->lo);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint64_t(proc, &doi->hi);
-	if (rc != 0)
-		return -DER_HG;
-
-	return 0;
-}
-
-static int
-crt_proc_daos_unit_oid_t(crt_proc_t proc, daos_unit_oid_t *doi)
-{
-	int rc;
-
-	rc = crt_proc_daos_obj_id_t(proc, &doi->id_pub);
-	if (rc != 0)
+	if (unlikely(rc))
 		return rc;
 
-	rc = crt_proc_uint32_t(proc, &doi->id_shard);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint32_t(proc, &doi->id_pad_32);
-	if (rc != 0)
-		return -DER_HG;
+	rc = crt_proc_uint32_t(proc, &key->kd_val_type);
+	if (unlikely(rc))
+		return rc;
 
 	return 0;
+}
+
+static inline int
+crt_proc_daos_unit_oid_t(crt_proc_t proc, daos_unit_oid_t *p)
+{
+	return crt_proc_memcpy(proc, p, sizeof(*p));
 }
 
 static int
@@ -90,12 +60,12 @@ crt_proc_daos_recx_t(crt_proc_t proc, daos_recx_t *recx)
 	int rc;
 
 	rc = crt_proc_uint64_t(proc, &recx->rx_idx);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	rc = crt_proc_uint64_t(proc, &recx->rx_nr);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	return 0;
 }
@@ -106,28 +76,13 @@ crt_proc_daos_epoch_range_t(crt_proc_t proc, daos_epoch_range_t *erange)
 	int rc;
 
 	rc = crt_proc_uint64_t(proc, &erange->epr_lo);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	rc = crt_proc_uint64_t(proc, &erange->epr_hi);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
-	return 0;
-}
-
-
-static int
-crt_proc_struct_obj_shard_iod(crt_proc_t proc, struct obj_shard_iod *siod)
-{
-	if (crt_proc_uint32_t(proc, &siod->siod_tgt_idx) != 0)
-		return -DER_HG;
-	if (crt_proc_uint32_t(proc, &siod->siod_idx) != 0)
-		return -DER_HG;
-	if (crt_proc_uint32_t(proc, &siod->siod_nr) != 0)
-		return -DER_HG;
-	if (crt_proc_uint64_t(proc, &siod->siod_off) != 0)
-		return -DER_HG;
 	return 0;
 }
 
@@ -135,39 +90,53 @@ static int
 crt_proc_struct_obj_io_desc(crt_proc_t proc, struct obj_io_desc *oiod)
 {
 	crt_proc_op_t	proc_op;
-	uint32_t	i;
 	int		rc;
 
-	rc = crt_proc_uint16_t(proc, &oiod->oiod_nr);
-	if (rc)
-		return -DER_HG;
-	rc = crt_proc_uint16_t(proc, &oiod->oiod_tgt_idx);
-	if (rc)
-		return -DER_HG;
-	rc = crt_proc_uint32_t(proc, &oiod->oiod_flags);
-	if (rc)
-		return -DER_HG;
-
 	rc = crt_proc_get_op(proc, &proc_op);
-	if (rc != 0)
-		return -DER_HG;
-	if (proc_op == CRT_PROC_DECODE && oiod->oiod_nr > 0) {
-		rc = obj_io_desc_init(oiod, oiod->oiod_nr, oiod->oiod_flags);
-		if (rc)
-			return rc;
-	}
+	if (unlikely(rc))
+		return rc;
 
-	for (i = 0; oiod->oiod_siods != NULL && i < oiod->oiod_nr; i++) {
-		rc = crt_proc_struct_obj_shard_iod(proc, &oiod->oiod_siods[i]);
-		if (rc != 0) {
-			if (proc_op == CRT_PROC_DECODE)
-				obj_io_desc_fini(oiod);
-			return -DER_HG;
-		}
-	}
-
-	if (proc_op == CRT_PROC_FREE && oiod->oiod_siods != NULL)
+	if (FREEING(proc_op)) {
 		obj_io_desc_fini(oiod);
+		return 0;
+	}
+
+	rc = crt_proc_uint16_t(proc, &oiod->oiod_nr);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint16_t(proc, &oiod->oiod_tgt_idx);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint32_t(proc, &oiod->oiod_flags);
+	if (unlikely(rc))
+		return rc;
+
+	if (oiod->oiod_nr == 0)
+		return rc;
+
+	switch (proc_op) {
+	case CRT_PROC_DECODE:
+		rc = obj_io_desc_init(oiod, oiod->oiod_nr, oiod->oiod_flags);
+		if (unlikely(rc))
+			return rc;
+		/* fall through to fill oiod_siods */
+	case CRT_PROC_ENCODE:
+		if (oiod->oiod_siods != NULL) { /* !(flags & OBJ_SIOD_SINGV) */
+			rc = crt_proc_memcpy(proc, oiod->oiod_siods,
+					     oiod->oiod_nr *
+					     sizeof(*oiod->oiod_siods));
+			if (unlikely(rc)) {
+				if (DECODING(proc_op))
+					obj_io_desc_fini(oiod);
+				return rc;
+			}
+		}
+		break;
+	default:
+		return -DER_INVAL;
+	}
 
 	return 0;
 }
@@ -178,34 +147,29 @@ crt_proc_daos_iod_and_csum(crt_proc_t proc, crt_proc_op_t proc_op,
 			   daos_iod_t *iod, struct dcs_iod_csums *iod_csum,
 			   struct obj_io_desc *oiod)
 {
-	uint32_t	i, start, nr;
+	uint32_t	start, nr;
 	bool		proc_one = false;
 	bool		singv = false;
 	uint32_t	existing_flags = 0;
 	int		rc;
 
-	if (proc == NULL || iod == NULL) {
-		D_ERROR("Invalid parameter, proc: %p, data: %p.\n", proc, iod);
-		return -DER_INVAL;
-	}
-
 	rc = crt_proc_d_iov_t(proc, &iod->iod_name);
-	if (rc != 0)
+	if (unlikely(rc))
 		return rc;
 
 	rc = crt_proc_memcpy(proc, &iod->iod_type, sizeof(iod->iod_type));
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	rc = crt_proc_uint64_t(proc, &iod->iod_size);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	rc = crt_proc_uint64_t(proc, &iod->iod_flags);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
-	if (proc_op == CRT_PROC_ENCODE && oiod != NULL &&
+	if (ENCODING(proc_op) && oiod != NULL &&
 	    (oiod->oiod_flags & OBJ_SIOD_PROC_ONE) != 0) {
 		proc_one = true;
 		if (oiod->oiod_siods != NULL) {
@@ -230,8 +194,8 @@ crt_proc_daos_iod_and_csum(crt_proc_t proc, crt_proc_op_t proc_op,
 		rc = crt_proc_uint32_t(proc, &iod->iod_nr);
 		nr = iod->iod_nr;
 	}
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 #if 0
 	if (iod->iod_nr == 0 && iod->iod_type != DAOS_IOD_ARRAY) {
@@ -249,30 +213,31 @@ crt_proc_daos_iod_and_csum(crt_proc_t proc, crt_proc_op_t proc_op,
 		return 0;
 #endif
 
-	if (proc_op == CRT_PROC_ENCODE || proc_op == CRT_PROC_FREE) {
+	if (ENCODING(proc_op) || FREEING(proc_op)) {
 		if (iod->iod_type == DAOS_IOD_ARRAY && iod->iod_recxs != NULL)
 			existing_flags |= IOD_REC_EXIST;
 	}
 
 	rc = crt_proc_uint32_t(proc, &existing_flags);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
-	if (proc_op == CRT_PROC_DECODE) {
+	if (DECODING(proc_op)) {
 		if (existing_flags & IOD_REC_EXIST) {
 			D_ALLOC_ARRAY(iod->iod_recxs, nr);
 			if (iod->iod_recxs == NULL)
-				D_GOTO(free, rc = -DER_NOMEM);
+				D_GOTO(out_free, rc = -DER_NOMEM);
 		}
 	}
 
 	if (existing_flags & IOD_REC_EXIST) {
 		D_ASSERT(iod->iod_recxs != NULL || nr == 0);
-		for (i = start; i < start + nr; i++) {
-			rc = crt_proc_daos_recx_t(proc, &iod->iod_recxs[i]);
-			if (rc != 0) {
-				if (proc_op == CRT_PROC_DECODE)
-					D_GOTO(free, rc);
+		if (nr > 0) {
+			rc = crt_proc_memcpy(proc, &iod->iod_recxs[start],
+					     nr * sizeof(*iod->iod_recxs));
+			if (unlikely(rc)) {
+				if (DECODING(proc_op))
+					D_GOTO(out_free, rc);
 				return rc;
 			}
 		}
@@ -281,25 +246,25 @@ crt_proc_daos_iod_and_csum(crt_proc_t proc, crt_proc_op_t proc_op,
 	if (iod_csum) {
 		rc = crt_proc_struct_dcs_iod_csums_adv(proc, proc_op, iod_csum,
 						       singv, start, nr);
-		if (rc != 0) {
-			if (proc_op == CRT_PROC_DECODE)
-				D_GOTO(free, rc);
+		if (unlikely(rc)) {
+			if (DECODING(proc_op))
+				D_GOTO(out_free, rc);
 			return rc;
 		}
 	}
 
 	if (oiod != NULL && !proc_one) {
 		rc = crt_proc_struct_obj_io_desc(proc, oiod);
-		if (rc != 0) {
-			if (proc_op == CRT_PROC_DECODE)
-				D_GOTO(free, rc);
+		if (unlikely(rc)) {
+			if (DECODING(proc_op))
+				D_GOTO(out_free, rc);
 			return rc;
 		}
 	}
 
-	if (proc_op == CRT_PROC_FREE) {
-free:
-		if ((existing_flags & IOD_REC_EXIST) && iod->iod_recxs != NULL)
+	if (FREEING(proc_op)) {
+out_free:
+		if (existing_flags & IOD_REC_EXIST)
 			D_FREE(iod->iod_recxs);
 	}
 
@@ -308,65 +273,65 @@ free:
 
 static int crt_proc_daos_iom_t(crt_proc_t proc, daos_iom_t *map)
 {
-	crt_proc_op_t		 proc_op;
-	uint32_t		 iom_nr = 0;
-	int			 i, rc;
+	crt_proc_op_t	proc_op;
+	uint32_t	iom_nr = 0;
+	int		rc;
 
 	rc = crt_proc_get_op(proc, &proc_op);
-	if (rc)
+	if (unlikely(rc))
 		return rc;
 
+	if (FREEING(proc_op)) {
+		D_FREE(map->iom_recxs);
+		return 0;
+	}
+
 	rc = crt_proc_memcpy(proc, &map->iom_type, sizeof(map->iom_type));
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	rc = crt_proc_uint64_t(proc, &map->iom_size);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	rc = crt_proc_daos_recx_t(proc, &map->iom_recx_lo);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	rc = crt_proc_daos_recx_t(proc, &map->iom_recx_hi);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
-	if (ENCODING(proc_op)) {
+	if (ENCODING(proc_op) && (map->iom_flags & DAOS_IOMF_DETAIL))
 		iom_nr = map->iom_nr;
-		if ((map->iom_flags & DAOS_IOMF_DETAIL) == 0)
-			iom_nr = 0;
-	}
 
 	rc = crt_proc_uint32_t(proc, &iom_nr);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
-	if (DECODING(proc_op) && iom_nr > 0) {
+	if (iom_nr == 0)
+		return 0;
+
+	switch (proc_op) {
+	case CRT_PROC_DECODE:
 		map->iom_nr = iom_nr;
 		map->iom_nr_out = iom_nr;
-		D_ALLOC_ARRAY(map->iom_recxs, map->iom_nr);
+		D_ALLOC_ARRAY(map->iom_recxs, iom_nr);
 		if (map->iom_recxs == NULL)
 			return -DER_NOMEM;
-		for (i = 0; i < map->iom_nr; i++) {
-			rc = crt_proc_daos_recx_t(proc, &map->iom_recxs[i]);
-			if (rc != 0) {
+		/* fall through to fill iom_recxs */
+	case CRT_PROC_ENCODE:
+		rc = crt_proc_memcpy(proc, map->iom_recxs,
+				     iom_nr * sizeof(*map->iom_recxs));
+		if (unlikely(rc)) {
+			if (DECODING(proc_op))
 				D_FREE(map->iom_recxs);
-				return -DER_HG;
-			}
+			return rc;
 		}
+		break;
+	default:
+		return -DER_INVAL;
 	}
-
-	if (ENCODING(proc_op) && iom_nr > 0) {
-		for (i = 0; i < iom_nr; i++) {
-			rc = crt_proc_daos_recx_t(proc, &map->iom_recxs[i]);
-			if (rc != 0)
-				return -DER_HG;
-		}
-	}
-
-	if (FREEING(proc_op))
-		D_FREE(map->iom_recxs);
 
 	return 0;
 }
@@ -376,20 +341,25 @@ crt_proc_struct_daos_recx_ep_list(crt_proc_t proc,
 				  struct daos_recx_ep_list *list)
 {
 	crt_proc_op_t	proc_op;
-	int		i;
+	unsigned int	i;
 	int		rc;
 
 	rc = crt_proc_get_op(proc, &proc_op);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
+
+	if (FREEING(proc_op)) {
+		daos_recx_ep_free(list);
+		return 0;
+	}
 
 	rc = crt_proc_uint32_t(proc, &list->re_nr);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	rc = crt_proc_bool(proc, &list->re_ep_valid);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	if (list->re_nr == 0)
 		return 0;
@@ -400,35 +370,24 @@ crt_proc_struct_daos_recx_ep_list(crt_proc_t proc,
 		if (list->re_items == NULL)
 			return -DER_NOMEM;
 		list->re_total = list->re_nr;
+		/* fall through to fill re_items */
 	case CRT_PROC_ENCODE:
-		for (i = 0; i < list->re_nr; i++) {
-			rc = crt_proc_daos_recx_t(proc,
-						  &list->re_items[i].re_recx);
-			if (rc != 0)
-				return -DER_HG;
+		rc = crt_proc_memcpy(proc, list->re_items,
+				     list->re_nr * sizeof(*list->re_items));
+		if (unlikely(rc && DECODING(proc_op))) {
+			daos_recx_ep_free(list);
+			return rc;
+		}
 
-			if (list->re_ep_valid) {
-				rc = crt_proc_daos_epoch_t(proc,
-						&list->re_items[i].re_ep);
-				if (rc != 0)
-					return -DER_HG;
-			}
-			rc = crt_proc_uint32_t(proc,
-					&list->re_items[i].re_rec_size);
-			if (rc != 0)
-				return -DER_HG;
-
-			rc = crt_proc_uint8_t(proc, &list->re_items[i].re_type);
-			if (rc != 0)
-				return -DER_HG;
+		if (!list->re_ep_valid && DECODING(proc_op)) {
+			for (i = 0; i < list->re_nr; i++)
+				list->re_items[i].re_ep = 0;
 		}
 		break;
-	default: /* CRT_PROC_FREE */
-		daos_recx_ep_free(list);
-		break;
+	default:
+		return -DER_INVAL;
 	}
-
-	return 0;
+	return rc;
 }
 
 static int
@@ -444,46 +403,61 @@ crt_proc_struct_obj_iod_array(crt_proc_t proc, struct obj_iod_array *iod_array)
 	int			 i, rc;
 
 	rc = crt_proc_get_op(proc, &proc_op);
-	if (rc)
+	if (unlikely(rc))
 		return rc;
 
-	if (proc_op == CRT_PROC_ENCODE && iod_array->oia_oiods != NULL &&
+	if (ENCODING(proc_op) && iod_array->oia_oiods != NULL &&
 	    (iod_array->oia_oiods[0].oiod_flags & OBJ_SIOD_PROC_ONE) != 0) {
 		proc_one = true;
 		iod_array->oia_oiod_nr = 0;
 	}
 
-	if (crt_proc_uint32_t(proc, &iod_array->oia_iod_nr) != 0)
-		return -DER_HG;
-	if (crt_proc_uint32_t(proc, &iod_array->oia_oiod_nr) != 0)
-		return -DER_HG;
+	rc = crt_proc_uint32_t(proc, &iod_array->oia_iod_nr);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint32_t(proc, &iod_array->oia_oiod_nr);
+	if (unlikely(rc))
+		return rc;
+
 	if (iod_array->oia_iod_nr == 0)
 		return 0;
 
 	D_ASSERT(iod_array->oia_oiod_nr == iod_array->oia_iod_nr ||
 		 iod_array->oia_oiod_nr == 0);
 
-	if (proc_op == CRT_PROC_ENCODE) {
+	if (ENCODING(proc_op)) {
 		off_nr = iod_array->oia_offs != NULL ?
 			 iod_array->oia_iod_nr : 0;
-		if (crt_proc_uint32_t(proc, &off_nr) != 0)
-			return -DER_HG;
+		rc = crt_proc_uint32_t(proc, &off_nr);
+		if (unlikely(rc))
+			return rc;
+
 		with_iod_csums = iod_array->oia_iod_csums != NULL ? 1 : 0;
-		if (crt_proc_uint8_t(proc, &with_iod_csums) != 0)
-			return -DER_HG;
+		rc = crt_proc_uint8_t(proc, &with_iod_csums);
+		if (unlikely(rc))
+			return rc;
+
 		D_ASSERT(iod_array->oia_offs != NULL || off_nr == 0);
-		for (i = 0; i < off_nr; i++) {
-			if (crt_proc_uint64_t(proc, &iod_array->oia_offs[i]))
-				return -DER_HG;
+		if (off_nr != 0) {
+			rc = crt_proc_memcpy(proc, iod_array->oia_offs,
+					     off_nr *
+					     sizeof(*iod_array->oia_offs));
+			if (unlikely(rc))
+				return rc;
 		}
-	} else if (proc_op == CRT_PROC_DECODE) {
-		if (crt_proc_uint32_t(proc, &off_nr) != 0)
-			return -DER_HG;
-		if (crt_proc_uint8_t(proc, &with_iod_csums) != 0)
-			return -DER_HG;
+	} else if (DECODING(proc_op)) {
+		rc = crt_proc_uint32_t(proc, &off_nr);
+		if (unlikely(rc))
+			return rc;
+
+		rc = crt_proc_uint8_t(proc, &with_iod_csums);
+		if (unlikely(rc))
+			return rc;
+
 		iod_size = roundup(sizeof(daos_iod_t) * iod_array->oia_iod_nr,
 				   8);
-		off_size = sizeof(uint64_t) * off_nr;
+		off_size = sizeof(*iod_array->oia_offs) * off_nr;
 		if (with_iod_csums)
 			csum_size = roundup(sizeof(struct dcs_iod_csums) *
 					    iod_array->oia_iod_nr, 8);
@@ -499,10 +473,12 @@ crt_proc_struct_obj_iod_array(crt_proc_t proc, struct obj_iod_array *iod_array)
 		iod_array->oia_iods = buf;
 		if (off_nr != 0) {
 			iod_array->oia_offs = buf + iod_size;
-			for (i = 0; i < off_nr; i++) {
-				if (crt_proc_uint64_t(proc,
-					&iod_array->oia_offs[i]))
-					return -DER_HG;
+			rc = crt_proc_memcpy(proc, iod_array->oia_offs,
+					     off_nr *
+					     sizeof(*iod_array->oia_offs));
+			if (unlikely(rc)) {
+				D_FREE(iod_array->oia_iods);
+				return rc;
 			}
 		} else {
 			iod_array->oia_offs = NULL;
@@ -537,220 +513,77 @@ crt_proc_struct_obj_iod_array(crt_proc_t proc, struct obj_iod_array *iod_array)
 						&iod_array->oia_iods[i],
 						iod_csum,
 						oiod);
-		if (rc)
-			break;
+		if (unlikely(rc)) {
+			D_FREE(iod_array->oia_iods);
+			return rc;
+		}
 	}
 
-	if (proc_op == CRT_PROC_FREE) {
+	if (FREEING(proc_op))
 		D_FREE(iod_array->oia_iods);
-		return 0;
-	}
 
 	return rc;
 }
 
 static int
-crt_proc_daos_anchor_t(crt_proc_t proc, daos_anchor_t *anchor)
-{
-	if (crt_proc_uint16_t(proc, &anchor->da_type) != 0)
-		return -DER_HG;
-
-	if (crt_proc_uint16_t(proc, &anchor->da_shard) != 0)
-		return -DER_HG;
-
-	if (crt_proc_uint32_t(proc, &anchor->da_flags) != 0)
-		return -DER_HG;
-
-	if (crt_proc_uint64_t(proc, &anchor->da_sub_anchors) != 0)
-		return -DER_HG;
-
-	if (crt_proc_raw(proc, anchor->da_buf, sizeof(anchor->da_buf)) != 0)
-		return -DER_HG;
-
-	return 0;
-}
-
-static int
-crt_proc_d_sg_list_t(crt_proc_t proc, d_sg_list_t *sgl)
+crt_proc_d_sg_list_t(crt_proc_t proc, d_sg_list_t *p)
 {
 	crt_proc_op_t	proc_op;
 	int		i;
 	int		rc;
 
-	rc = crt_proc_uint32_t(proc, &sgl->sg_nr);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint32_t(proc, &sgl->sg_nr_out);
-	if (rc != 0)
-		return -DER_HG;
-
 	rc = crt_proc_get_op(proc, &proc_op);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
-	if (proc_op == CRT_PROC_DECODE && sgl->sg_nr > 0) {
-		D_ALLOC_ARRAY(sgl->sg_iovs, sgl->sg_nr);
-		if (sgl->sg_iovs == NULL)
+	if (FREEING(proc_op)) {
+		/* NB: don't need free in crt_proc_d_iov_t() */
+		D_FREE(p->sg_iovs);
+		return 0;
+	}
+
+	rc = crt_proc_uint32_t(proc, &p->sg_nr);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint32_t(proc, &p->sg_nr_out);
+	if (unlikely(rc))
+		return rc;
+
+	if (p->sg_nr == 0)
+		return 0;
+
+	switch (proc_op) {
+	case CRT_PROC_DECODE:
+		D_ALLOC_ARRAY(p->sg_iovs, p->sg_nr);
+		if (p->sg_iovs == NULL)
 			return -DER_NOMEM;
-	}
-
-	for (i = 0; i < sgl->sg_nr; i++) {
-		rc = crt_proc_d_iov_t(proc, &sgl->sg_iovs[i]);
-		if (rc != 0) {
-			if (proc_op == CRT_PROC_DECODE)
-				D_FREE(sgl->sg_iovs);
-			return -DER_HG;
+		/* fall through to fill sg_iovs */
+	case CRT_PROC_ENCODE:
+		for (i = 0; i < p->sg_nr; i++) {
+			rc = crt_proc_d_iov_t(proc, &p->sg_iovs[i]);
+			if (unlikely(rc)) {
+				if (DECODING(proc_op))
+					D_FREE(p->sg_iovs);
+				return rc;
+			}
 		}
+		break;
+	default:
+		return -DER_INVAL;
 	}
-
-	if (proc_op == CRT_PROC_FREE && sgl->sg_iovs != NULL)
-		D_FREE(sgl->sg_iovs);
 
 	return rc;
 }
 
 static int
-crt_proc_struct_daos_shard_tgt(crt_proc_t proc, struct daos_shard_tgt *st)
+crt_proc_struct_daos_shard_tgt(crt_proc_t proc, struct daos_shard_tgt *p)
 {
-	int rc;
-
-	rc = crt_proc_uint32_t(proc, &st->st_rank);
-	if (rc != 0)
-		return -DER_HG;
-	rc = crt_proc_uint32_t(proc, &st->st_shard);
-	if (rc != 0)
-		return -DER_HG;
-	rc = crt_proc_uint32_t(proc, &st->st_tgt_id);
-	if (rc != 0)
-		return -DER_HG;
-	rc = crt_proc_uint16_t(proc, &st->st_tgt_idx);
-	if (rc != 0)
-		return -DER_HG;
 	/* st_ec_tgt need not pack */
-
-	return 0;
+	return crt_proc_memcpy(proc, p, sizeof(*p) - sizeof(p->st_ec_tgt));
 }
 
 /* For compounded RPC. */
-static int
-crt_proc_struct_dtx_epoch(crt_proc_t proc, struct dtx_epoch *epoch)
-{
-	int	rc;
-
-	rc = crt_proc_uint64_t(proc, &epoch->oe_value);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint64_t(proc, &epoch->oe_first);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint32_t(proc, &epoch->oe_flags);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint32_t(proc, &epoch->oe_rpc_flags);
-	if (rc != 0)
-		return -DER_HG;
-
-	return 0;
-}
-
-static int
-crt_proc_struct_dtx_daos_target(crt_proc_t proc, struct dtx_daos_target *ddt)
-{
-	int	rc;
-
-	rc = crt_proc_uint32_t(proc, &ddt->ddt_id);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint32_t(proc, &ddt->ddt_flags);
-	if (rc != 0)
-		return -DER_HG;
-
-	return 0;
-}
-
-static int
-crt_proc_struct_dtx_redundancy_group(crt_proc_t proc,
-				     struct dtx_redundancy_group *drg)
-{
-	int	rc;
-	int	i;
-
-	rc = crt_proc_uint32_t(proc, &drg->drg_tgt_cnt);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint16_t(proc, &drg->drg_redundancy);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint16_t(proc, &drg->drg_flags);
-	if (rc != 0)
-		return -DER_HG;
-
-	for (i = 0; i < drg->drg_tgt_cnt; i++) {
-		rc = crt_proc_uint32_t(proc, &drg->drg_ids[i]);
-		if (rc != 0)
-			return -DER_HG;
-	}
-
-	return sizeof(*drg) + sizeof(drg->drg_ids[0]) * drg->drg_tgt_cnt;
-}
-
-static int
-crt_proc_struct_dtx_memberships(crt_proc_t proc, struct dtx_memberships *mbs)
-{
-	struct dtx_redundancy_group	*drg;
-	int				 rc;
-	int				 i;
-
-	rc = crt_proc_uint32_t(proc, &mbs->dm_tgt_cnt);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint32_t(proc, &mbs->dm_grp_cnt);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint32_t(proc, &mbs->dm_data_size);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint16_t(proc, &mbs->dm_flags);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint16_t(proc, &mbs->dm_padding);
-	if (rc != 0)
-		return -DER_HG;
-
-	for (i = 0; i < mbs->dm_tgt_cnt; i++) {
-		rc = crt_proc_struct_dtx_daos_target(proc, &mbs->dm_tgts[i]);
-		if (rc != 0)
-			return rc;
-	}
-
-	/* We do not need the group information if all the targets are
-	 * in the same redundancy group.
-	 */
-	if (mbs->dm_grp_cnt == 1)
-		return 0;
-
-	drg = (struct dtx_redundancy_group *)mbs->dm_data;
-	rc = sizeof(mbs->dm_tgts[0]) * mbs->dm_tgt_cnt;
-	for (i = 0; i < mbs->dm_grp_cnt; i++) {
-		drg = (struct dtx_redundancy_group *)((char *)drg + rc);
-		rc = crt_proc_struct_dtx_redundancy_group(proc, drg);
-		if (rc < 0)
-			return rc;
-	}
-
-	return 0;
-}
 
 static int
 crt_proc_struct_daos_cpd_sub_head(crt_proc_t proc,
@@ -761,56 +594,50 @@ crt_proc_struct_daos_cpd_sub_head(crt_proc_t proc,
 	int		rc;
 
 	rc = crt_proc_get_op(proc, &proc_op);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
-	if (proc_op == CRT_PROC_FREE) {
+	if (FREEING(proc_op)) {
 		D_FREE(dcsh->dcsh_mbs);
 		return 0;
 	}
 
 	rc = crt_proc_struct_dtx_id(proc, &dcsh->dcsh_xid);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	rc = crt_proc_daos_unit_oid_t(proc, &dcsh->dcsh_leader_oid);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
-	rc = crt_proc_struct_dtx_epoch(proc, &dcsh->dcsh_epoch);
-	if (rc != 0)
-		return -DER_HG;
+	rc = crt_proc_memcpy(proc, &dcsh->dcsh_epoch, sizeof(dcsh->dcsh_epoch));
+	if (unlikely(rc))
+		return rc;
 
-	if (proc_op == CRT_PROC_DECODE) {
-		struct dtx_memberships	*mbs;
+	if (ENCODING(proc_op))
+		/* Pack the size of dcsh->dcsh_mbs to help decode case. */
+		size = sizeof(*dcsh->dcsh_mbs) + dcsh->dcsh_mbs->dm_data_size;
 
-		rc = crt_proc_uint32_t(proc, &size);
-		if (rc != 0)
-			return -DER_HG;
+	rc = crt_proc_uint32_t(proc, &size);
+	if (unlikely(rc))
+		return rc;
 
-		D_ALLOC(mbs, size);
-		if (mbs == NULL)
+	D_ASSERT(size != 0);
+
+	if (DECODING(proc_op)) {
+		D_ALLOC(dcsh->dcsh_mbs, size);
+		if (dcsh->dcsh_mbs == NULL)
 			return -DER_NOMEM;
-
-		rc = crt_proc_struct_dtx_memberships(proc, mbs);
-		if (rc != 0) {
-			D_FREE(mbs);
-			return -DER_HG;
-		}
-
-		dcsh->dcsh_mbs = mbs;
-		return 0;
 	}
 
-	D_ASSERT(proc_op == CRT_PROC_ENCODE);
+	rc = crt_proc_memcpy(proc, dcsh->dcsh_mbs, size);
+	if (unlikely(rc)) {
+		if (DECODING(proc_op))
+			D_FREE(dcsh->dcsh_mbs);
+		return rc;
+	}
 
-	/* Pack the size of dcsh->dcsh_mbs to help decode case. */
-	size = sizeof(*dcsh->dcsh_mbs) + dcsh->dcsh_mbs->dm_data_size;
-	rc = crt_proc_uint32_t(proc, &size);
-	if (rc != 0)
-		return -DER_HG;
-
-	return crt_proc_struct_dtx_memberships(proc, dcsh->dcsh_mbs);
+	return 0;
 }
 
 static int
@@ -818,54 +645,57 @@ crt_proc_daos_iod_t(crt_proc_t proc, daos_iod_t *iod)
 {
 	crt_proc_op_t	proc_op;
 	int		rc;
-	int		i;
-
-	rc = crt_proc_daos_key_t(proc, &iod->iod_name);
-	if (rc != 0)
-		return -DER_HG;
 
 	rc = crt_proc_get_op(proc, &proc_op);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
-	if (proc_op == CRT_PROC_FREE) {
+	if (FREEING(proc_op)) {
+		/* NB: don't need free in crt_proc_d_iov_t() */
 		D_FREE(iod->iod_recxs);
 		return 0;
 	}
 
+	rc = crt_proc_daos_key_t(proc, &iod->iod_name);
+	if (unlikely(rc))
+		return rc;
+
 	rc = crt_proc_memcpy(proc, &iod->iod_type, sizeof(iod->iod_type));
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	rc = crt_proc_uint64_t(proc, &iod->iod_size);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	rc = crt_proc_uint64_t(proc, &iod->iod_flags);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	rc = crt_proc_uint32_t(proc, &iod->iod_nr);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	if (iod->iod_nr == 0)
 		return 0;
 
-	if (proc_op == CRT_PROC_DECODE) {
+	switch (proc_op) {
+	case CRT_PROC_DECODE:
 		D_ALLOC_ARRAY(iod->iod_recxs, iod->iod_nr);
 		if (iod->iod_recxs == NULL)
 			return -DER_NOMEM;
-	}
-
-	for (i = 0; i < iod->iod_nr; i++) {
-		rc = crt_proc_daos_recx_t(proc, &iod->iod_recxs[i]);
-		if (rc != 0) {
-			if (proc_op == CRT_PROC_DECODE)
+		/* fall through to fill iod_recxs */
+	case CRT_PROC_ENCODE:
+		rc = crt_proc_memcpy(proc, iod->iod_recxs,
+				     iod->iod_nr * sizeof(*iod->iod_recxs));
+		if (unlikely(rc)) {
+			if (DECODING(proc_op))
 				D_FREE(iod->iod_recxs);
-
-			return -DER_HG;
+			return rc;
 		}
+		break;
+	default:
+		return -DER_INVAL;
 	}
 
 	return 0;
@@ -880,24 +710,24 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc,
 	int		i;
 
 	rc = crt_proc_get_op(proc, &proc_op);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	rc = crt_proc_uint16_t(proc, &dcsr->dcsr_opc);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	rc = crt_proc_uint16_t(proc, &dcsr->dcsr_ec_tgt_nr);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	rc = crt_proc_uint32_t(proc, &dcsr->dcsr_nr);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	if (with_oid) {
 		rc = crt_proc_daos_unit_oid_t(proc, &dcsr->dcsr_oid);
-	} else if (proc_op == CRT_PROC_ENCODE) {
+	} else if (ENCODING(proc_op)) {
 		daos_unit_oid_t		 oid;
 
 		daos_dc_obj2id(dcsr->dcsr_obj, &oid.id_pub);
@@ -906,26 +736,26 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc,
 		 */
 		rc = crt_proc_daos_unit_oid_t(proc, &oid);
 	}
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	rc = crt_proc_daos_key_t(proc, &dcsr->dcsr_dkey);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	rc = crt_proc_uint64_t(proc, &dcsr->dcsr_dkey_hash);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	rc = crt_proc_uint64_t(proc, &dcsr->dcsr_api_flags);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	switch (dcsr->dcsr_opc) {
 	case DCSO_UPDATE: {
 		struct daos_cpd_update	*dcu = &dcsr->dcsr_update;
 
-		if (proc_op == CRT_PROC_DECODE) {
+		if (DECODING(proc_op)) {
 			if (dcsr->dcsr_ec_tgt_nr != 0) {
 				D_ALLOC_ARRAY(dcu->dcu_ec_tgts,
 					      dcsr->dcsr_ec_tgt_nr);
@@ -937,38 +767,34 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc,
 		}
 
 		rc = crt_proc_struct_dcs_csum_info(proc, &dcu->dcu_dkey_csum);
-		if (rc != 0)
-			D_GOTO(out, rc = -DER_HG);
+		if (unlikely(rc))
+			D_GOTO(out, rc);
 
-		for (i = 0; i < dcsr->dcsr_ec_tgt_nr; i++) {
-			rc = crt_proc_uint32_t(proc,
-					&dcu->dcu_ec_tgts[i].dcet_shard_idx);
-			if (rc != 0)
-				D_GOTO(out, rc = -DER_HG);
-
-			rc = crt_proc_uint32_t(proc,
-					&dcu->dcu_ec_tgts[i].dcet_tgt_id);
-			if (rc != 0)
-				D_GOTO(out, rc = -DER_HG);
+		if (dcsr->dcsr_ec_tgt_nr > 0) {
+			rc = crt_proc_memcpy(proc, dcu->dcu_ec_tgts,
+					     dcsr->dcsr_ec_tgt_nr *
+					     sizeof(*dcu->dcu_ec_tgts));
+			if (unlikely(rc))
+				D_GOTO(out, rc);
 		}
 
 		rc = crt_proc_struct_obj_iod_array(proc, &dcu->dcu_iod_array);
-		if (rc != 0)
-			D_GOTO(out, rc = -DER_HG);
+		if (unlikely(rc))
+			D_GOTO(out, rc);
 
 		rc = crt_proc_uint32_t(proc, &dcu->dcu_start_shard);
-		if (rc != 0)
-			D_GOTO(out, rc = -DER_HG);
+		if (unlikely(rc))
+			D_GOTO(out, rc);
 
 		rc = crt_proc_uint32_t(proc, &dcu->dcu_flags);
-		if (rc != 0)
-			D_GOTO(out, rc = -DER_HG);
+		if (unlikely(rc))
+			D_GOTO(out, rc);
 
 		if (dcsr->dcsr_nr == 0)
 			D_GOTO(out, rc = 0);
 
-		if (dcu->dcu_flags & DRF_CPD_BULK) {
-			if (proc_op == CRT_PROC_DECODE) {
+		if (dcu->dcu_flags & ORF_CPD_BULK) {
+			if (DECODING(proc_op)) {
 				D_ALLOC_ARRAY(dcu->dcu_bulks, dcsr->dcsr_nr);
 				if (dcu->dcu_bulks == NULL)
 					D_GOTO(out, rc = -DER_NOMEM);
@@ -977,11 +803,11 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc,
 			for (i = 0; i < dcsr->dcsr_nr; i++) {
 				rc = crt_proc_crt_bulk_t(proc,
 							 &dcu->dcu_bulks[i]);
-				if (rc != 0)
-					D_GOTO(out, rc = -DER_HG);
+				if (unlikely(rc))
+					D_GOTO(out, rc);
 			}
 		} else {
-			if (proc_op == CRT_PROC_DECODE) {
+			if (DECODING(proc_op)) {
 				D_ALLOC_ARRAY(dcu->dcu_sgls, dcsr->dcsr_nr);
 				if (dcu->dcu_sgls == NULL)
 					D_GOTO(out, rc = -DER_NOMEM);
@@ -990,8 +816,8 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc,
 			for (i = 0; i < dcsr->dcsr_nr; i++) {
 				rc = crt_proc_d_sg_list_t(proc,
 							  &dcu->dcu_sgls[i]);
-				if (rc != 0)
-					D_GOTO(out, rc = -DER_HG);
+				if (unlikely(rc))
+					D_GOTO(out, rc);
 			}
 		}
 
@@ -1005,7 +831,7 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc,
 		if (dcsr->dcsr_nr == 0)
 			D_GOTO(out, rc = 0);
 
-		if (proc_op == CRT_PROC_DECODE) {
+		if (DECODING(proc_op)) {
 			D_ALLOC_ARRAY(dcp->dcp_akeys, dcsr->dcsr_nr);
 			if (dcp->dcp_akeys == NULL)
 				return -DER_NOMEM;
@@ -1013,8 +839,8 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc,
 
 		for (i = 0; i < dcsr->dcsr_nr; i++) {
 			rc = crt_proc_daos_key_t(proc, &dcp->dcp_akeys[i]);
-			if (rc != 0)
-				D_GOTO(out, rc = -DER_HG);
+			if (unlikely(rc))
+				D_GOTO(out, rc);
 		}
 
 		break;
@@ -1025,7 +851,7 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc,
 		if (dcsr->dcsr_nr == 0)
 			D_GOTO(out, rc = 0);
 
-		if (proc_op == CRT_PROC_DECODE) {
+		if (DECODING(proc_op)) {
 			D_ALLOC_ARRAY(dcr->dcr_iods, dcsr->dcsr_nr);
 			if (dcr->dcr_iods == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
@@ -1033,8 +859,8 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc,
 
 		for (i = 0; i < dcsr->dcsr_nr; i++) {
 			rc = crt_proc_daos_iod_t(proc, &dcr->dcr_iods[i]);
-			if (rc != 0)
-				D_GOTO(out, rc = -DER_HG);
+			if (unlikely(rc))
+				D_GOTO(out, rc);
 		}
 
 		break;
@@ -1044,8 +870,7 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc,
 	}
 
 out:
-	if ((proc_op == CRT_PROC_ENCODE) ||
-	    (proc_op == CRT_PROC_DECODE && rc == 0))
+	if (ENCODING(proc_op) || (DECODING(proc_op) && rc == 0))
 		return rc;
 
 	switch (dcsr->dcsr_opc) {
@@ -1067,64 +892,51 @@ out:
 }
 
 static int
-crt_proc_struct_daos_cpd_req_idx(crt_proc_t proc,
-				 struct daos_cpd_req_idx *dcri)
-{
-	int	rc;
-
-	rc = crt_proc_uint32_t(proc, &dcri->dcri_shard_idx);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint32_t(proc, &dcri->dcri_req_idx);
-	if (rc != 0)
-		return -DER_HG;
-
-	return 0;
-}
-
-static int
 crt_proc_struct_daos_cpd_disp_ent(crt_proc_t proc,
 				  struct daos_cpd_disp_ent *dcde)
 {
 	crt_proc_op_t	proc_op;
 	uint32_t	count;
 	int		rc;
-	int		i;
-
-	rc = crt_proc_uint32_t(proc, &dcde->dcde_read_cnt);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint32_t(proc, &dcde->dcde_write_cnt);
-	if (rc != 0)
-		return -DER_HG;
 
 	rc = crt_proc_get_op(proc, &proc_op);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
-	if (proc_op == CRT_PROC_FREE) {
+	if (FREEING(proc_op)) {
 		D_FREE(dcde->dcde_reqs);
 		return 0;
 	}
 
+	rc = crt_proc_uint32_t(proc, &dcde->dcde_read_cnt);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint32_t(proc, &dcde->dcde_write_cnt);
+	if (unlikely(rc))
+		return rc;
+
 	count = dcde->dcde_read_cnt + dcde->dcde_write_cnt;
-	if (proc_op == CRT_PROC_DECODE) {
+	if (count == 0)
+		return 0;
+
+	switch (proc_op) {
+	case CRT_PROC_DECODE:
 		D_ALLOC_ARRAY(dcde->dcde_reqs, count);
 		if (dcde->dcde_reqs == NULL)
 			return -DER_NOMEM;
-	}
-
-	for (i = 0; i < count; i++) {
-		rc = crt_proc_struct_daos_cpd_req_idx(proc,
-						      &dcde->dcde_reqs[i]);
-		if (rc != 0) {
-			if (proc_op == CRT_PROC_DECODE)
+		/* fall through to fill dcde_reqs */
+	case CRT_PROC_ENCODE:
+		rc = crt_proc_memcpy(proc, dcde->dcde_reqs,
+				     count * sizeof(*dcde->dcde_reqs));
+		if (unlikely(rc)) {
+			if (DECODING(proc_op))
 				D_FREE(dcde->dcde_reqs);
-
-			return -DER_HG;
+			return rc;
 		}
+		break;
+	default:
+		return -DER_INVAL;
 	}
 
 	return 0;
@@ -1137,23 +949,23 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, struct daos_cpd_sg *dcs)
 	int		rc;
 	int		i;
 
+	rc = crt_proc_get_op(proc, &proc_op);
+	if (unlikely(rc))
+		return rc;
+
 	rc = crt_proc_uint32_t(proc, &dcs->dcs_type);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	rc = crt_proc_uint32_t(proc, &dcs->dcs_nr);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_get_op(proc, &proc_op);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		return rc;
 
 	switch (dcs->dcs_type) {
 	case DCST_HEAD: {
 		struct daos_cpd_sub_head	*dcsh;
 
-		if (proc_op == CRT_PROC_DECODE) {
+		if (DECODING(proc_op)) {
 			D_ALLOC_ARRAY(dcsh, dcs->dcs_nr);
 			if (dcsh == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
@@ -1165,8 +977,8 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, struct daos_cpd_sg *dcs)
 
 		for (i = 0; i < dcs->dcs_nr; i++) {
 			rc = crt_proc_struct_daos_cpd_sub_head(proc, &dcsh[i]);
-			if (rc != 0)
-				D_GOTO(out, rc = -DER_HG);
+			if (unlikely(rc))
+				D_GOTO(out, rc);
 		}
 
 		break;
@@ -1176,7 +988,7 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, struct daos_cpd_sg *dcs)
 		struct daos_cpd_sub_req		*dcsr;
 		bool				 with_oid;
 
-		if (proc_op == CRT_PROC_DECODE) {
+		if (DECODING(proc_op)) {
 			D_ALLOC_ARRAY(dcsr, dcs->dcs_nr);
 			if (dcsr == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
@@ -1194,8 +1006,8 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, struct daos_cpd_sg *dcs)
 		for (i = 0; i < dcs->dcs_nr; i++) {
 			rc = crt_proc_struct_daos_cpd_sub_req(proc, &dcsr[i],
 							      with_oid);
-			if (rc != 0)
-				D_GOTO(out, rc = -DER_HG);
+			if (unlikely(rc))
+				D_GOTO(out, rc);
 		}
 
 		break;
@@ -1203,7 +1015,7 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, struct daos_cpd_sg *dcs)
 	case DCST_DISP: {
 		struct daos_cpd_disp_ent	*dcde;
 
-		if (proc_op == CRT_PROC_DECODE) {
+		if (DECODING(proc_op)) {
 			D_ALLOC_ARRAY(dcde, dcs->dcs_nr);
 			if (dcde == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
@@ -1215,8 +1027,8 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, struct daos_cpd_sg *dcs)
 
 		for (i = 0; i < dcs->dcs_nr; i++) {
 			rc = crt_proc_struct_daos_cpd_disp_ent(proc, &dcde[i]);
-			if (rc != 0)
-				D_GOTO(out, rc = -DER_HG);
+			if (unlikely(rc))
+				D_GOTO(out, rc);
 		}
 
 		break;
@@ -1224,7 +1036,7 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, struct daos_cpd_sg *dcs)
 	case DCST_TGT: {
 		struct daos_shard_tgt		*dst;
 
-		if (proc_op == CRT_PROC_DECODE) {
+		if (DECODING(proc_op)) {
 			D_ALLOC_ARRAY(dst, dcs->dcs_nr);
 			if (dst == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
@@ -1236,8 +1048,8 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, struct daos_cpd_sg *dcs)
 
 		for (i = 0; i < dcs->dcs_nr; i++) {
 			rc = crt_proc_struct_daos_shard_tgt(proc, &dst[i]);
-			if (rc != 0)
-				D_GOTO(out, rc = -DER_HG);
+			if (unlikely(rc))
+				D_GOTO(out, rc);
 		}
 
 		break;
@@ -1255,8 +1067,7 @@ out:
 	 *	is not special for CPD related proc interfaces, instead, it is
 	 *	general issue for the whole CRT proc mechanism.
 	 */
-	if ((proc_op == CRT_PROC_FREE) ||
-	    (proc_op == CRT_PROC_DECODE && rc != 0))
+	if (FREEING(proc_op) || (DECODING(proc_op) && rc != 0))
 		D_FREE(dcs->dcs_buf);
 
 	return rc;
@@ -1269,7 +1080,6 @@ CRT_RPC_DEFINE(obj_query_key, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY)
 CRT_RPC_DEFINE(obj_sync, DAOS_ISEQ_OBJ_SYNC, DAOS_OSEQ_OBJ_SYNC)
 CRT_RPC_DEFINE(obj_migrate, DAOS_ISEQ_OBJ_MIGRATE, DAOS_OSEQ_OBJ_MIGRATE)
 CRT_RPC_DEFINE(obj_cpd, DAOS_ISEQ_OBJ_CPD, DAOS_OSEQ_OBJ_CPD)
-
 
 /* Define for cont_rpcs[] array population below.
  * See OBJ_PROTO_*_RPC_LIST macro definition

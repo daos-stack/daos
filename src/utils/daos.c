@@ -16,7 +16,7 @@
  * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
  * The Government's rights to use, modify, reproduce, release, perform, display,
  * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
+ * provided in Contract No. 8F-30005.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
@@ -123,6 +123,8 @@ pool_op_parse(const char *str)
 		return POOL_LIST_CONTAINERS;
 	else if (strcmp(str, "list-cont") == 0)
 		return POOL_LIST_CONTAINERS;
+	else if (strcmp(str, "ls") == 0)
+		return POOL_LIST_CONTAINERS;
 	else if (strcmp(str, "query") == 0)
 		return POOL_QUERY;
 	else if (strcmp(str, "stat") == 0)
@@ -137,6 +139,8 @@ pool_op_parse(const char *str)
 		return POOL_DEL_ATTR;
 	else if (strcmp(str, "list-attrs") == 0)
 		return POOL_LIST_ATTRS;
+	else if (strcmp(str, "autotest") == 0)
+		return POOL_AUTOTEST;
 	return -1;
 }
 
@@ -826,9 +830,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		D_GOTO(out_free, rc = RC_NO_HELP);
 	}
 
-	if (ap->c_op != -1 &&
-	    (ap->c_op == CONT_LIST_OBJS ||
-	     ap->c_op == CONT_STAT)) {
+	if (ap->c_op != -1 && ap->c_op == CONT_STAT) {
 		fprintf(stderr,
 			"container %s not yet implemented\n", cmdname);
 		D_GOTO(out_free, rc = RC_NO_HELP);
@@ -924,6 +926,9 @@ pool_op_hdlr(struct cmd_args_s *ap)
 		break;
 	case POOL_DEL_ATTR:
 		rc = pool_del_attr_hdlr(ap);
+		break;
+	case POOL_AUTOTEST:
+		rc = pool_autotest_hdlr(ap);
 		break;
 	default:
 		break;
@@ -1058,10 +1063,8 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	case CONT_DESTROY:
 		rc = cont_destroy_hdlr(ap);
 		break;
-
-	/* TODO: implement the following ops */
 	case CONT_LIST_OBJS:
-		/* rc = cont_list_objs_hdlr(ap); */
+		rc = cont_list_objs_hdlr(ap);
 		break;
 	case CONT_QUERY:
 		rc = cont_query_hdlr(ap);
@@ -1317,12 +1320,14 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		"pool commands:\n"
 		"	  list-containers  list all containers in pool\n"
 		"	  list-cont\n"
+		"	  ls\n"
 		"	  query            query a pool\n"
 		"	  stat             get pool statistics\n"
 		"	  list-attrs       list pool user-defined attributes\n"
 		"	  get-attr         get pool user-defined attribute\n"
 		"	  set-attr         set pool user-defined attribute\n"
-		"	  del-attr         del pool user-defined attribute\n");
+		"	  del-attr         del pool user-defined attribute\n"
+		"	  autotest         verify setup with smoke tests\n");
 
 		fprintf(stream,
 		"pool options:\n"

@@ -50,16 +50,18 @@ type (
 	// MockInvokerConfig defines the configured responses
 	// for a MockInvoker.
 	MockInvokerConfig struct {
-		UnaryError    error
-		UnaryResponse *UnaryResponse
-		HostResponses HostResponseChan
+		UnaryError       error
+		UnaryResponse    *UnaryResponse
+		UnaryResponseSet []*UnaryResponse
+		HostResponses    HostResponseChan
 	}
 
 	// MockInvoker implements the Invoker interface in order
 	// to enable unit testing of API functions.
 	MockInvoker struct {
-		log debugLogger
-		cfg MockInvokerConfig
+		log         debugLogger
+		cfg         MockInvokerConfig
+		invokeCount int
 	}
 )
 
@@ -86,26 +88,48 @@ func (mi *MockInvoker) Debugf(fmtStr string, args ...interface{}) {
 	mi.log.Debugf(fmtStr, args...)
 }
 
-func (mi *MockInvoker) InvokeUnaryRPC(_ context.Context, uReq UnaryRequest) (*UnaryResponse, error) {
-	if mi.cfg.UnaryResponse != nil || mi.cfg.UnaryError != nil {
-		return mi.cfg.UnaryResponse, mi.cfg.UnaryError
-	}
-
-	// If the config didn't define a response, just dummy one up for
-	// tests that don't care.
-	return &UnaryResponse{
-		fromMS: uReq.isMSRequest(),
-		Responses: []*HostResponse{
-			{
-				Addr:    "dummy",
-				Message: &MockMessage{},
-			},
-		},
-	}, nil
+func (mi *MockInvoker) InvokeUnaryRPC(ctx context.Context, uReq UnaryRequest) (*UnaryResponse, error) {
+	return invokeUnaryRPC(ctx, mi.log, mi, uReq)
 }
 
-func (mi *MockInvoker) InvokeUnaryRPCAsync(_ context.Context, _ UnaryRequest) (HostResponseChan, error) {
-	return mi.cfg.HostResponses, mi.cfg.UnaryError
+func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryRequest) (HostResponseChan, error) {
+	if mi.cfg.HostResponses != nil || mi.cfg.UnaryError != nil {
+		return mi.cfg.HostResponses, mi.cfg.UnaryError
+	}
+
+	responses := make(HostResponseChan)
+
+	ur := mi.cfg.UnaryResponse
+	if len(mi.cfg.UnaryResponseSet) > mi.invokeCount {
+		ur = mi.cfg.UnaryResponseSet[mi.invokeCount]
+	}
+	if ur == nil {
+		// If the config didn't define a response, just dummy one up for
+		// tests that don't care.
+		ur = &UnaryResponse{
+			fromMS: uReq.isMSRequest(),
+			Responses: []*HostResponse{
+				{
+					Addr:    "dummy",
+					Message: &MockMessage{},
+				},
+			},
+		}
+	}
+
+	mi.invokeCount++
+	go func() {
+		for _, hr := range ur.Responses {
+			select {
+			case <-ctx.Done():
+				return
+			case responses <- hr:
+			}
+		}
+		close(responses)
+	}()
+
+	return responses, nil
 }
 
 func (mi *MockInvoker) SetConfig(_ *Config) {}

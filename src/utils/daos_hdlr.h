@@ -16,7 +16,7 @@
  * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
  * The Government's rights to use, modify, reproduce, release, perform, display,
  * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
+ * provided in Contract No. B620873.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
@@ -52,7 +52,8 @@ enum pool_op {
 	POOL_SET_ATTR,
 	POOL_GET_ATTR,
 	POOL_LIST_ATTRS,
-	POOL_DEL_ATTR
+	POOL_DEL_ATTR,
+	POOL_AUTOTEST,
 };
 
 enum obj_op {
@@ -185,8 +186,8 @@ int pool_set_attr_hdlr(struct cmd_args_s *ap);
 int pool_del_attr_hdlr(struct cmd_args_s *ap);
 int pool_get_attr_hdlr(struct cmd_args_s *ap);
 int pool_list_attrs_hdlr(struct cmd_args_s *ap);
+int pool_autotest_hdlr(struct cmd_args_s *ap);
 /* TODO: implement these pool op functions
- * int pool_list_cont_hdlr(struct cmd_args_s *ap);
  * int pool_stat_hdlr(struct cmd_args_s *ap);
  */
 
@@ -211,14 +212,13 @@ int cont_update_acl_hdlr(struct cmd_args_s *ap);
 int cont_delete_acl_hdlr(struct cmd_args_s *ap);
 int cont_set_owner_hdlr(struct cmd_args_s *ap);
 int cont_rollback_hdlr(struct cmd_args_s *ap);
+int cont_list_objs_hdlr(struct cmd_args_s *ap);
 
 /* TODO implement the following container op functions
  * all with signatures similar to this:
  * int cont_FN_hdlr(struct cmd_args_s *ap)
  *
- * cont_list_objs_hdlr()
  * int cont_stat_hdlr()
- * int cont_del_attr_hdlr()
  * int cont_rollback_hdlr()
  */
 

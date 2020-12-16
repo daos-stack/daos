@@ -46,10 +46,11 @@ import (
 var defaultMessage = &MockMessage{}
 
 type testRequest struct {
+	retryableRequest
 	rpcFn    unaryRPC
 	toMS     bool
 	HostList []string
-	Timeout  time.Duration
+	Deadline time.Time
 }
 
 func (tr *testRequest) isMSRequest() bool {
@@ -64,8 +65,12 @@ func (tr *testRequest) getHostList() []string {
 	return tr.HostList
 }
 
-func (tr *testRequest) getTimeout() time.Duration {
-	return tr.Timeout
+func (tr *testRequest) SetTimeout(to time.Duration) {
+	tr.Deadline = time.Now().Add(to)
+}
+
+func (tr *testRequest) getDeadline() time.Time {
+	return tr.Deadline
 }
 
 func (tr *testRequest) getRPC() unaryRPC {
@@ -88,14 +93,15 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 	clientCfg.TransportConfig.AllowInsecure = true
 
 	for name, tc := range map[string]struct {
+		timeout    time.Duration
 		withCancel *ctxCancel
 		req        *testRequest
 		expErr     error
 		expResp    []*HostResponse
 	}{
 		"request timeout": {
+			timeout: 1 * time.Nanosecond,
 			req: &testRequest{
-				Timeout: 1 * time.Nanosecond,
 				rpcFn: func(_ context.Context, _ *grpc.ClientConn) (proto.Message, error) {
 					time.Sleep(1 * time.Microsecond)
 					return defaultMessage, nil
@@ -157,6 +163,9 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 			}
 			ctx, cancel := context.WithCancel(outerCtx)
 			defer cancel() // always clean up after test
+			if tc.timeout != 0 {
+				tc.req.SetTimeout(tc.timeout)
+			}
 
 			respChan, gotErr := client.InvokeUnaryRPCAsync(ctx, tc.req)
 			if tc.withCancel != nil {
@@ -218,27 +227,21 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
+		timeout    time.Duration
 		withCancel *ctxCancel
 		req        *testRequest
 		expErr     error
 		expResp    *UnaryResponse
 	}{
 		"request timeout": {
+			timeout: 1 * time.Nanosecond,
 			req: &testRequest{
-				Timeout: 1 * time.Nanosecond,
 				rpcFn: func(_ context.Context, _ *grpc.ClientConn) (proto.Message, error) {
 					time.Sleep(1 * time.Microsecond)
 					return defaultMessage, nil
 				},
 			},
-			expResp: &UnaryResponse{
-				Responses: []*HostResponse{
-					{
-						Addr:  clientCfg.HostList[0],
-						Error: context.DeadlineExceeded,
-					},
-				},
-			},
+			expErr: context.DeadlineExceeded,
 		},
 		"parent context canceled": {
 			withCancel: func() *ctxCancel {
@@ -275,6 +278,9 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 		},
 		"multiple hosts in MS request, first fails": {
 			req: &testRequest{
+				retryableRequest: retryableRequest{
+					retryTestFn: func(_ error, _ uint) bool { return false },
+				},
 				HostList: []string{"127.0.0.1:1", "127.0.0.1:2"},
 				toMS:     true,
 				rpcFn: fnGen(func(callCount *int) (proto.Message, error) {
@@ -377,6 +383,9 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 					time.Sleep(1 * time.Millisecond)
 					tc.withCancel.cancel()
 				}()
+			}
+			if tc.timeout != 0 {
+				tc.req.SetTimeout(tc.timeout)
 			}
 			gotResp, gotErr := client.InvokeUnaryRPC(ctx, tc.req)
 

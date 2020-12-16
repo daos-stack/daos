@@ -24,12 +24,14 @@
 package system
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 func TestSystem_NewFaultDomain(t *testing.T) {
@@ -614,6 +616,68 @@ func TestSystem_FaultDomain_MustCreateChild(t *testing.T) {
 				t.Fatalf("(-want, +got): %s", diff)
 			}
 		})
+	}
+}
+
+func testFaultDomains(num int) []*FaultDomain {
+	emptyFD := MustCreateFaultDomain()
+	fdList := []*FaultDomain{emptyFD}
+	for i := 0; i < num/2; i++ {
+		rack := emptyFD.MustCreateChild(fmt.Sprintf("rack%d", i))
+		fdList = append(fdList, rack)
+	}
+
+	for j := 0; j < num/2; j++ {
+		fdList = append(fdList, emptyFD.MustCreateChild(fmt.Sprintf("pdu%d", j)))
+	}
+	return fdList
+}
+
+func TestSystem_FaultDomain_Uint64(t *testing.T) {
+	// The main thing we care about with these int values is that they
+	// don't (often) collide.
+
+	fdList := testFaultDomains(5000)
+
+	collisions := 0
+	fdInts := make(map[uint64][]string)
+	for _, fd := range fdList {
+		key := fd.Uint64()
+		matching, exists := fdInts[key]
+		if exists {
+			t.Logf("collision(s) for domain %s: %s", fd, matching)
+			collisions++
+		}
+		matching = append(matching, fd.String())
+		fdInts[key] = matching
+	}
+
+	if collisions > 0 {
+		t.Errorf("Collisions: %d", collisions)
+	}
+}
+
+func TestSystem_FaultDomain_Uint32(t *testing.T) {
+	// The main thing we care about with these int values is that they
+	// don't (often) collide.
+
+	fdList := testFaultDomains(5000)
+
+	collisions := 0
+	fdInts := make(map[uint32][]string)
+	for _, fd := range fdList {
+		key := fd.Uint32()
+		matching, exists := fdInts[key]
+		if exists {
+			t.Logf("collision(s) for domain %s: %s", fd, matching)
+			collisions++
+		}
+		matching = append(matching, fd.String())
+		fdInts[key] = matching
+	}
+
+	if collisions > 0 {
+		t.Errorf("Collisions: %d", collisions)
 	}
 }
 
@@ -1381,6 +1445,112 @@ func TestSystem_FaultDomainTree_String(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			common.AssertEqual(t, tc.tree.String(), tc.expResult, "")
+		})
+	}
+}
+
+func TestSystem_FaultDomainTree_ToProto(t *testing.T) {
+	getExpID := func(domain string) uint32 {
+		return MustCreateFaultDomainFromString(domain).Uint32()
+	}
+
+	for name, tc := range map[string]struct {
+		tree      *FaultDomainTree
+		expResult []*mgmtpb.FaultDomain
+	}{
+		"nil": {},
+		"root only": {
+			tree: NewFaultDomainTree(),
+			expResult: []*mgmtpb.FaultDomain{
+				{
+					Domain: "/",
+					Id:     getExpID("/"),
+				},
+			},
+		},
+		"single branch": {
+			tree: NewFaultDomainTree(
+				MustCreateFaultDomain("one", "two", "three"),
+			),
+			expResult: []*mgmtpb.FaultDomain{
+				{
+					Domain:   "/",
+					Id:       getExpID("/"),
+					Children: []uint32{getExpID("/one")},
+				},
+				{
+					Domain:   "/one",
+					Id:       getExpID("/one"),
+					Children: []uint32{getExpID("/one/two")},
+				},
+				{
+					Domain:   "/one/two",
+					Id:       getExpID("/one/two"),
+					Children: []uint32{getExpID("/one/two/three")},
+				},
+				{
+					Domain: "/one/two/three",
+					Id:     getExpID("/one/two/three"),
+				},
+			},
+		},
+		"multi branch": {
+			tree: NewFaultDomainTree(
+				MustCreateFaultDomainFromString("/rack0/pdu0"),
+				MustCreateFaultDomainFromString("/rack0/pdu1"),
+				MustCreateFaultDomainFromString("/rack1/pdu2"),
+				MustCreateFaultDomainFromString("/rack1/pdu3"),
+			),
+			expResult: []*mgmtpb.FaultDomain{
+				{
+					Domain: "/",
+					Id:     getExpID("/"),
+					Children: []uint32{
+						getExpID("/rack0"),
+						getExpID("/rack1"),
+					},
+				},
+				{
+					Domain: "/rack0",
+					Id:     getExpID("/rack0"),
+					Children: []uint32{
+						getExpID("/rack0/pdu0"),
+						getExpID("/rack0/pdu1"),
+					},
+				},
+				{
+					Domain: "/rack1",
+					Id:     getExpID("/rack1"),
+					Children: []uint32{
+						getExpID("/rack1/pdu2"),
+						getExpID("/rack1/pdu3"),
+					},
+				},
+				{
+					Domain: "/rack0/pdu0",
+					Id:     getExpID("/rack0/pdu0"),
+				},
+				{
+					Domain: "/rack0/pdu1",
+					Id:     getExpID("/rack0/pdu1"),
+				},
+				{
+					Domain: "/rack1/pdu2",
+					Id:     getExpID("/rack1/pdu2"),
+				},
+				{
+					Domain: "/rack1/pdu3",
+					Id:     getExpID("/rack1/pdu3"),
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result := tc.tree.ToProto()
+
+			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+				t.Fatalf("(-want, +got): %s", diff)
+			}
 		})
 	}
 }
