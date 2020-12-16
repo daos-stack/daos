@@ -226,9 +226,6 @@ oid_allocator_checker(void **state)
 	int		i;
 	int		rc, rc_reduce;
 
-	/* skipped until bug DAOS-5999 is fixed */
-	skip();
-
 	srand(time(NULL));
 	reconnect(arg);
 
