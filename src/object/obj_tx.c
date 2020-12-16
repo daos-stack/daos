@@ -380,7 +380,7 @@ dc_tx_cleanup_one(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr)
 
 		csummer = dc_cont_hdl2csummer(tx->tx_coh);
 
-		if (dcu->dcu_flags & DRF_CPD_BULK) {
+		if (dcu->dcu_flags & ORF_CPD_BULK) {
 			for (i = 0; i < dcsr->dcsr_nr; i++) {
 				if (dcu->dcu_bulks[i] != CRT_BULK_NULL)
 					crt_bulk_free(dcu->dcu_bulks[i]);
@@ -1040,7 +1040,7 @@ tx_bulk_prepare(struct daos_cpd_sub_req *dcsr, tse_task_t *task)
 	rc = obj_bulk_prep(dcsr->dcsr_sgls, dcsr->dcsr_nr, true,
 			   CRT_BULK_RO, task, &dcu->dcu_bulks);
 	if (rc == 0)
-		dcu->dcu_flags |= ORF_BULK_BIND | DRF_CPD_BULK;
+		dcu->dcu_flags |= ORF_BULK_BIND | ORF_CPD_BULK;
 
 	return rc;
 }
@@ -1608,8 +1608,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		if (grp_idx < 0)
 			D_GOTO(out, rc = grp_idx);
 
-		i = pl_select_leader(obj->cob_md.omd_id,
-				     grp_idx * obj->cob_grp_size,
+		i = pl_select_leader(obj->cob_md.omd_id, grp_idx,
 				     obj->cob_grp_size, false,
 				     obj_get_shard, obj);
 		if (i < 0)
@@ -1618,7 +1617,27 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		leader_oid.id_pub = obj->cob_md.omd_id;
 		leader_oid.id_shard = i;
 		leader_dtrg_idx = obj_get_shard(obj, i)->po_target;
-		mbs->dm_flags |= DMF_MODIFY_SRDG;
+		if (!daos_oclass_is_ec(obj->cob_md.omd_id, NULL))
+			mbs->dm_flags |= DMF_SRDG_REP;
+
+		/* If there is only one redundancy group to be modified,
+		 * then such redundancy group information should already
+		 * has been at the head position in the dtr_list.
+		 */
+	}
+
+	if (DAOS_FAIL_CHECK(DAOS_DTX_SPEC_LEADER)) {
+		i = dc_tx_leftmost_req(tx, true);
+		dcsr = &tx->tx_req_cache[i];
+		obj = dcsr->dcsr_obj;
+
+		leader_oid.id_pub = obj->cob_md.omd_id;
+		/* Use the shard 0 as the leader for test. The test program
+		 * will guarantee that at least one sub-modification happen
+		 * on the object shard 0.
+		 */
+		leader_oid.id_shard = 0;
+		leader_dtrg_idx = obj_get_shard(obj, 0)->po_target;
 	}
 
 	dcsh->dcsh_xid = tx->tx_id;
@@ -1790,7 +1809,7 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 
 	uuid_copy(oci->oci_pool_uuid, tx->tx_pool->dp_pool);
 	oci->oci_map_ver = tx->tx_pm_ver;
-	oci->oci_flags = DRF_CPD_LEADER | (tx->tx_set_resend ? ORF_RESEND : 0);
+	oci->oci_flags = ORF_CPD_LEADER | (tx->tx_set_resend ? ORF_RESEND : 0);
 
 	oci->oci_sub_heads.ca_arrays = &tx->tx_head;
 	oci->oci_sub_heads.ca_count = 1;

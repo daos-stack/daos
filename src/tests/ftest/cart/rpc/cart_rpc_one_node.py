@@ -47,10 +47,6 @@ class CartRpcOneNodeTest(Test):
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
 
-    def tearDown(self):
-        """ Test tear down """
-        print("Run TearDown\n")
-
     def test_cart_rpc(self):
         """
         Test CaRT RPC

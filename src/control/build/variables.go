@@ -34,6 +34,8 @@ var (
 	DataPlaneName = "DAOS I/O Server"
 	// ManagementServiceName defines a consistent name for the Management Service.
 	ManagementServiceName = "DAOS Management Service"
+	// AgentName defines a consistent name for the compute node agent.
+	AgentName = "DAOS Agent"
 
 	// DefaultControlPort defines the default control plane listener port.
 	DefaultControlPort = 10001

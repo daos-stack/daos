@@ -299,7 +299,7 @@ func TestServer_Harness_Start(t *testing.T) {
 			sysdb := system.MockDatabase(t, log)
 			done := make(chan struct{})
 			go func(ctxIn context.Context) {
-				gotErr = harness.Start(ctxIn, membership, sysdb, config)
+				gotErr = harness.Start(ctxIn, sysdb, config)
 				close(done)
 			}(ctx)
 

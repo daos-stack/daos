@@ -30,6 +30,20 @@
 #include <daos/checksum.h>
 #include <daos/dtx.h>
 
+int
+daos_sgl_init(d_sg_list_t *sgl, unsigned int nr)
+{
+	D_ASSERTF(0, "This function is deprecated.  Use d_sgl_init\n");
+	return 0;
+}
+
+int
+daos_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
+{
+	D_ASSERTF(0, "This function is deprecated.  Use d_sgl_fini\n");
+	return 0;
+}
+
 static int
 daos_sgls_copy_internal(d_sg_list_t *dst_sgl, uint32_t dst_nr,
 			d_sg_list_t *src_sgl, uint32_t src_nr,
@@ -143,6 +157,44 @@ int
 daos_sgl_alloc_copy_data(d_sg_list_t *dst, d_sg_list_t *src)
 {
 	return daos_sgls_copy_internal(dst, 1, src, 1, true, false, true);
+}
+
+int
+daos_sgl_merge(d_sg_list_t *dst, d_sg_list_t *src)
+{
+	d_iov_t *new_iovs = NULL;
+	int total;
+	int i;
+	int rc = 0;
+
+	D_ASSERT(dst != NULL);
+	D_ASSERT(src != NULL);
+
+	if (src->sg_nr == 0)
+		return 0;
+
+	total = dst->sg_nr + src->sg_nr;
+	D_REALLOC_ARRAY(new_iovs, dst->sg_iovs, total);
+	if (new_iovs == NULL)
+		return -DER_NOMEM;
+
+	for (i = dst->sg_nr; i < total; i++) {
+		int idx = i - dst->sg_nr;
+
+		D_ALLOC(new_iovs[i].iov_buf, src->sg_iovs[idx].iov_buf_len);
+		if (new_iovs[i].iov_buf == NULL)
+			D_GOTO(free, rc = -DER_NOMEM);
+
+		memcpy(new_iovs[i].iov_buf, src->sg_iovs[idx].iov_buf,
+		       src->sg_iovs[idx].iov_len);
+		new_iovs[i].iov_len = src->sg_iovs[idx].iov_len;
+		new_iovs[i].iov_buf_len = src->sg_iovs[idx].iov_buf_len;
+	}
+
+free:
+	dst->sg_iovs = new_iovs;
+	dst->sg_nr = i;
+	return rc;
 }
 
 daos_size_t
