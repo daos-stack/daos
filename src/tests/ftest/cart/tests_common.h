@@ -204,13 +204,6 @@ tc_wait_for_ranks(crt_context_t ctx, crt_group_t *grp, d_rank_list_t *rank_list,
 
 	D_ASSERTF(opts.is_initialized == true, "tc_test_init not called.\n");
 
-	/* This is needed until hg cancel is fully working.
-	 * RPCs in wait_for_ranks are expected to fail
-	 * and needs to be canceled correctly.
-	 * It should be removed when hg cancel is fixed - HG PR #284
-	 */
-	sleep(2);
-
 	rc = d_gettime(&t1);
 	D_ASSERTF(rc == 0, "d_gettime() failed; rc=%d\n", rc);
 

@@ -1,14 +1,18 @@
-sudo: required
+arch: amd64
+os: linux
+dist: focal
+
+branches:
+  only:
+    - master
+    - /^release\/.*/
 
 env:
- matrix:
+ jobs:
   - DOCKER_IMAGE=ubuntu.20.04
   - DOCKER_IMAGE=centos.7
 
 language: c
-
-language: java
-jdk: openjdk8
 
 services:
  - docker
@@ -21,9 +25,9 @@ before_install:
 
 script:
  - docker build -f utils/docker/Dockerfile.$DOCKER_IMAGE -t daos/$DOCKER_IMAGE --build-arg NOBUILD=1 --build-arg UID=$UID .
- - docker run -v $PWD:/home/daos/daos:z daos/$DOCKER_IMAGE /bin/bash -c "scons --build-deps=yes install"
+ - docker run -v $PWD:/home/daos/daos:z daos/$DOCKER_IMAGE /bin/bash -c "scons --build-deps=yes -j 4 install BUILD_TYPE=dev"
  - if [ $TRAVIS_TEST_RESULT == "0" ]; then
-        docker run -v $PWD:/home/daos/daos:z daos/$DOCKER_IMAGE /bin/bash -c "cd src/client/java && mvn clean install -DskipITs -Ddaos.install.path=/home/daos/daos/install";
+        docker run -v $PWD:/home/daos/daos:z daos/$DOCKER_IMAGE /bin/bash -c "cd src/client/java && mvn clean install -T 1C -DskipITs -Ddaos.install.path=/home/daos/daos/install";
    else
         echo "ignore Java build due to DAOS build exit code, $TRAVIS_TEST_RESULT";
    fi

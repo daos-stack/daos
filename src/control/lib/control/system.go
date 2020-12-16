@@ -27,6 +27,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 
 	"github.com/dustin/go-humanize/english"
 	"github.com/golang/protobuf/proto"
@@ -51,7 +52,7 @@ type sysResponse struct {
 	AbsentHosts hostlist.HostSet
 }
 
-func (sr *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
+func (resp *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
 	ahs, err := hostlist.CreateSet(inHosts)
 	if err != nil {
 		return err
@@ -60,46 +61,74 @@ func (sr *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
 	if err != nil {
 		return err
 	}
-	sr.AbsentHosts.ReplaceSet(ahs)
-	sr.AbsentRanks.ReplaceSet(ars)
+	resp.AbsentHosts.ReplaceSet(ahs)
+	resp.AbsentRanks.ReplaceSet(ars)
 
 	return nil
 }
 
-func (sr *sysResponse) DisplayAbsentHostsRanks() string {
+func (resp *sysResponse) DisplayAbsentHostsRanks() string {
 	switch {
-	case sr.AbsentHosts.Count() > 0:
+	case resp.AbsentHosts.Count() > 0:
 		return fmt.Sprintf("\nUnknown %s: %s",
-			english.Plural(sr.AbsentHosts.Count(), "host", "hosts"),
-			sr.AbsentHosts.String())
-	case sr.AbsentRanks.Count() > 0:
+			english.Plural(resp.AbsentHosts.Count(), "host", "hosts"),
+			resp.AbsentHosts.String())
+	case resp.AbsentRanks.Count() > 0:
 		return fmt.Sprintf("\nUnknown %s: %s",
-			english.Plural(sr.AbsentRanks.Count(), "rank", "ranks"),
-			sr.AbsentRanks.String())
+			english.Plural(resp.AbsentRanks.Count(), "rank", "ranks"),
+			resp.AbsentRanks.String())
 	default:
 		return ""
 	}
 }
 
 // SystemJoinReq contains the inputs for the system join request.
+// TODO: Unify this with system.JoinRequest
 type SystemJoinReq struct {
 	unaryRequest
 	msRequest
+	ControlAddr *net.TCPAddr
+	UUID        string
+	Rank        system.Rank
+	URI         string
+	NumContexts uint32              `json:"Nctxs"`
+	FaultDomain *system.FaultDomain `json:"SrvFaultDomain"`
+	InstanceIdx uint32              `json:"Idx"`
+}
+
+func (req *SystemJoinReq) MarshalJSON() ([]byte, error) {
+	// use a type alias to leverage the default marshal for
+	// most fields
+	type toJSON SystemJoinReq
+	return json.Marshal(&struct {
+		Addr           string
+		SrvFaultDomain string
+		*toJSON
+	}{
+		Addr:           req.ControlAddr.String(),
+		SrvFaultDomain: req.FaultDomain.String(),
+		toJSON:         (*toJSON)(req),
+	})
 }
 
 // SystemJoinResp contains the request response.
 type SystemJoinResp struct {
-	Results system.MemberResults // resulting from harness starts
+	Rank      system.Rank
+	State     system.MemberState
+	LocalJoin bool
 }
 
 // SystemJoin will attempt to join a new member to the DAOS system.
-//
-// TODO: replace the method in mgmt_client.go with this one
 func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq) (*SystemJoinResp, error) {
+	pbReq := new(mgmtpb.JoinReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, err
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).Join(ctx, &mgmtpb.JoinReq{})
+		return mgmtpb.NewMgmtSvcClient(conn).Join(ctx, pbReq)
 	})
-	rpcClient.Debugf("DAOS system join request: %s", req)
+	rpcClient.Debugf("DAOS system join request: %+v", pbReq)
+	rpcClient.Debugf("DAOS system join req hosts: %+v", req.HostList)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {

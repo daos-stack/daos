@@ -26,10 +26,16 @@ package system
 import (
 	"encoding/json"
 	"io"
+	"path/filepath"
 	"time"
 
+	transport "github.com/Jille/raft-grpc-transport"
 	"github.com/hashicorp/raft"
+	boltdb "github.com/hashicorp/raft-boltdb"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc"
+
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // This file contains the "guts" of the new MS database. The basic theory
@@ -53,6 +59,8 @@ const (
 	// raftTimeout sets an upper limit for how long an Apply
 	// operation may take (TODO: tuning required?).
 	raftTimeout = 1 * time.Second
+
+	sysDBFile = "daos_system.db"
 )
 
 type (
@@ -82,6 +90,152 @@ func (ro raftOp) String() string {
 		"updateMember",
 		"removeMember",
 	}[ro]
+}
+
+// ResignLeadership causes this instance to give up its raft
+// leadership state. No-op if there is only one replica configured.
+func (db *Database) ResignLeadership(cause error) error {
+	if cause == nil {
+		cause = errors.New("unknown error")
+	}
+	db.log.Errorf("resigning leadership (%s)", cause)
+	if err := db.raft.withReadLock(func(svc raftService) error {
+		return svc.LeadershipTransfer().Error()
+	}); err != nil {
+		return errors.Wrap(err, cause.Error())
+	}
+	return cause
+}
+
+// ShutdownRaft signals that the raft implementation should shut down
+// and release any resources it is holding. Blocks until the shutdown
+// is complete.
+func (db *Database) ShutdownRaft() error {
+	db.log.Debug("shutting down raft instance")
+	return db.raft.withReadLock(func(svc raftService) error {
+		return svc.Shutdown().Error()
+	})
+}
+
+// configureRaft sets up the raft service in preparation for starting it.
+func (db *Database) configureRaft() error {
+	if db.raftTransport == nil {
+		return errors.New("no raft transport configured")
+	}
+
+	rc := raft.DefaultConfig()
+	rc.Logger = newHcLogger(db.log)
+	rc.SnapshotThreshold = 16 // arbitrarily low to exercise snapshots
+	//rc.SnapshotInterval = 5 * time.Second
+	rc.HeartbeatTimeout = 250 * time.Millisecond
+	rc.ElectionTimeout = 250 * time.Millisecond
+	rc.LeaderLeaseTimeout = 125 * time.Millisecond
+	rc.LocalID = raft.ServerID(db.serverAddress())
+	rc.NotifyCh = db.raftLeaderNotifyCh
+
+	snaps, err := raft.NewFileSnapshotStoreWithLogger(db.cfg.RaftDir, 2, rc.Logger)
+	if err != nil {
+		return err
+	}
+
+	sysDBPath := filepath.Join(db.cfg.RaftDir, sysDBFile)
+	boltDB, err := boltdb.NewBoltStore(sysDBPath)
+	if err != nil {
+		return err
+	}
+
+	r, err := raft.NewRaft(rc, (*fsm)(db), boltDB, boltDB, snaps, db.raftTransport)
+	if err != nil {
+		return err
+	}
+	db.raft.setSvc(r)
+
+	return nil
+}
+
+// startRaft is responsible for configuring and starting the raft service
+// on this node. If shouldBootstrap is true, then the service will be started
+// in a special bootstrap mode that does not require a quorum.
+func (db *Database) startRaft(shouldBootstrap bool) error {
+	db.log.Debugf("isBootstrap: %t, shouldBootstrap: %t", db.IsBootstrap(), shouldBootstrap)
+
+	if db.IsBootstrap() && shouldBootstrap {
+		// Rank 0 is reserved for the first instance on the bootstrap server.
+		db.data.NextRank = 1
+
+		db.log.Debugf("bootstrapping MS on %s", db.replicaAddr)
+		bsc := raft.Configuration{
+			Servers: []raft.Server{
+				{
+					Suffrage: raft.Voter,
+					ID:       raft.ServerID(db.getReplica().String()),
+					Address:  raft.ServerAddress(db.getReplica().String()),
+				},
+			},
+		}
+		if err := db.raft.withReadLock(func(svc raftService) error {
+			if f := svc.BootstrapCluster(bsc); f.Error() != nil {
+				return errors.Wrapf(f.Error(), "failed to bootstrap raft instance on %s", db.getReplica())
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// loggingTransport is used to wrap a raft.Transport with methods that
+// log the action and arguments. Used for debugging while the feature is
+// being developed.
+type loggingTransport struct {
+	raft.Transport
+	log logging.Logger
+}
+
+/*
+func (dt *loggingTransport) AppendEntriesPipeline(id raft.ServerID, target raft.ServerAddress) (raft.AppendPipeline, error) {
+	dt.log.Debugf("ApppendEntriesPipeline(%s, %s)", id, target)
+	return dt.Transport.AppendEntriesPipeline(id, target)
+}
+
+func (dt *loggingTransport) AppendEntries(id raft.ServerID, target raft.ServerAddress, args *raft.AppendEntriesRequest, resp *raft.AppendEntriesResponse) error {
+	dt.log.Debugf("ApppendEntries(%s, %s) req: %+v", id, target, args)
+	return dt.Transport.AppendEntries(id, target, args, resp)
+}
+*/
+
+func (dt *loggingTransport) RequestVote(id raft.ServerID, target raft.ServerAddress, args *raft.RequestVoteRequest, resp *raft.RequestVoteResponse) error {
+	dt.log.Debugf("RequestVote(%s, %s) req: %+v", id, target, args)
+	return dt.Transport.RequestVote(id, target, args, resp)
+}
+
+func (dt *loggingTransport) InstallSnapshot(id raft.ServerID, target raft.ServerAddress, args *raft.InstallSnapshotRequest, resp *raft.InstallSnapshotResponse, data io.Reader) error {
+	dt.log.Debugf("InstallSnapshot(%s, %s) req: %+v", id, target, args)
+	return dt.Transport.InstallSnapshot(id, target, args, resp, data)
+}
+
+func (dt *loggingTransport) TimeoutNow(id raft.ServerID, target raft.ServerAddress, args *raft.TimeoutNowRequest, resp *raft.TimeoutNowResponse) error {
+	dt.log.Debugf("TimeoutNow(%s, %s) req: %+v", id, target, args)
+	return dt.Transport.TimeoutNow(id, target, args, resp)
+}
+
+// ConfigureTransport sets up a grpc implementation of a raft transport
+// and registers it with the supplied grpc Server.
+func (db *Database) ConfigureTransport(srv *grpc.Server, dialOpts ...grpc.DialOption) {
+	tm := transport.New(db.serverAddress(), dialOpts)
+	tm.Register(srv)
+	db.raftTransport = &loggingTransport{
+		Transport: tm.Transport(),
+		log:       db.log,
+	}
+}
+
+// serverAddress returns a raft.ServerAddress representation of
+// the db's replica address.
+func (db *Database) serverAddress() raft.ServerAddress {
+	return raft.ServerAddress(db.getReplica().String())
 }
 
 // createRaftUpdate serializes the inner payload and then wraps
@@ -120,43 +274,50 @@ func (db *Database) submitPoolUpdate(op raftOp, ps *PoolService) error {
 
 // submitRaftUpdate submits the serialized operation to the raft service.
 func (db *Database) submitRaftUpdate(data []byte) error {
-	return db.raft.Apply(data, raftTimeout).Error()
+	return db.raft.withReadLock(func(svc raftService) error {
+		return svc.Apply(data, raftTimeout).Error()
+	})
 }
 
 // Everything above here happens on the current leader.
-//
+// ----------------------------------------------------
 // Everything below here happens on N replicas.
 
 // NB: This type alias allows us to use a Database object as a raft.FSM.
 type fsm Database
 
+// EmergencyShutdown is called when a FSM Apply fails or in some other
+// situation where the only safe response is to immediately shut down
+// the raft instance and prevent it from participating in the cluster.
+// After a shutdown, the control plane server must be restarted in order
+// to bring this node back into the raft cluster.
+func (f *fsm) EmergencyShutdown(err error) {
+	f.log.Errorf("EMERGENCY RAFT SHUTDOWN due to %s", err)
+	_ = f.raft.withReadLock(func(svc raftService) error {
+		// Call .Error() on the future returned from
+		// raft.Shutdown() in order to block on completion.
+		// The error returned from this future is always nil.
+		return svc.Shutdown().Error()
+	})
+}
+
 // Apply is called after the log entry has been committed. This is the
 // only place that direct modification of the data should occur.
-//
-// NB: Per Hashicorp (https://github.com/hashicorp/raft/issues/307),
-// the only reasonable response to an Apply() failure is to panic,
-// because the Raft algorithm does not specify a recovery mechanism
-// for this scenario.
-//
-// TODO: This approach feels too heavy-handed, given that the control
-// plane is responsible for more than just hosting the raft service.
-// It's not clear how we can meaningfully handle errors though, and it
-// seems risky to allow a replica to continue in an indeterminite state.
-// For the moment, let's just use the nuclear option on the theory that
-// these are "can't happen" errors, e.g. ENOMEM or corrupt snapshot.
 func (f *fsm) Apply(l *raft.Log) interface{} {
 	c := new(raftUpdate)
 	if err := json.Unmarshal(l.Data, c); err != nil {
-		panic(errors.Wrapf(err, "failed to unmarshal %+v", l.Data))
+		f.EmergencyShutdown(errors.Wrapf(err, "failed to unmarshal %+v", l.Data))
+		return nil
 	}
 
 	switch c.Op {
 	case raftOpAddMember, raftOpUpdateMember, raftOpRemoveMember:
-		f.data.applyMemberUpdate(c.Op, c.Data)
+		f.data.applyMemberUpdate(c.Op, c.Data, f.EmergencyShutdown)
 	case raftOpAddPoolService, raftOpUpdatePoolService, raftOpRemovePoolService:
-		f.data.applyPoolUpdate(c.Op, c.Data)
+		f.data.applyPoolUpdate(c.Op, c.Data, f.EmergencyShutdown)
 	default:
-		panic(errors.Errorf("unhandled Apply operation: %d", c.Op))
+		f.EmergencyShutdown(errors.Errorf("unhandled Apply operation: %d", c.Op))
+		return nil
 	}
 
 	return nil
@@ -164,10 +325,11 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 
 // applyMemberUpdate is responsible for applying the membership update
 // operation to the database.
-func (d *dbData) applyMemberUpdate(op raftOp, data []byte) {
+func (d *dbData) applyMemberUpdate(op raftOp, data []byte, panicFn func(error)) {
 	m := new(memberUpdate)
 	if err := json.Unmarshal(data, m); err != nil {
-		panic(errors.Wrap(err, "failed to decode member update"))
+		panicFn(errors.Wrap(err, "failed to decode member update"))
+		return
 	}
 
 	d.Lock()
@@ -177,16 +339,12 @@ func (d *dbData) applyMemberUpdate(op raftOp, data []byte) {
 	case raftOpAddMember:
 		d.Members.addMember(m.Member)
 	case raftOpUpdateMember:
-		cur, found := d.Members.Uuids[m.Member.UUID]
-		if !found {
-			panic(errors.Errorf("member update for unknown member %+v", m))
-		}
-		cur.state = m.Member.state
-		cur.Info = m.Member.Info
+		d.Members.updateMember(m.Member)
 	case raftOpRemoveMember:
 		d.Members.removeMember(m.Member)
 	default:
-		panic(errors.Errorf("unhandled Member Apply operation: %d", op))
+		panicFn(errors.Errorf("unhandled Member Apply operation: %d", op))
+		return
 	}
 
 	if m.NextRank {
@@ -197,10 +355,11 @@ func (d *dbData) applyMemberUpdate(op raftOp, data []byte) {
 
 // applyPoolUpdate is responsible for applying the pool service update
 // operation to the database.
-func (d *dbData) applyPoolUpdate(op raftOp, data []byte) {
+func (d *dbData) applyPoolUpdate(op raftOp, data []byte, panicFn func(error)) {
 	ps := new(PoolService)
 	if err := json.Unmarshal(data, ps); err != nil {
-		panic(errors.Wrap(err, "failed to decode pool service update"))
+		panicFn(errors.Wrap(err, "failed to decode pool service update"))
+		return
 	}
 
 	d.Lock()
@@ -212,14 +371,15 @@ func (d *dbData) applyPoolUpdate(op raftOp, data []byte) {
 	case raftOpUpdatePoolService:
 		cur, found := d.Pools.Uuids[ps.PoolUUID]
 		if !found {
-			panic(errors.Errorf("pool service update for unknown pool %+v", ps))
+			panicFn(errors.Errorf("pool service update for unknown pool %+v", ps))
+			return
 		}
-		cur.State = ps.State
-		cur.Replicas = ps.Replicas
+		d.Pools.updateService(cur, ps)
 	case raftOpRemovePoolService:
 		d.Pools.removeService(ps)
 	default:
-		panic(errors.Errorf("unhandled Pool Service Apply operation: %d", op))
+		panicFn(errors.Errorf("unhandled Pool Service Apply operation: %d", op))
+		return
 	}
 
 	d.MapVersion++
@@ -244,21 +404,21 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 
 // Restore is called to force the FSM to read in a snapshot, discarding any previous state.
 func (f *fsm) Restore(rc io.ReadCloser) error {
-	data := NewDatabase(nil, nil).data
-	if err := json.NewDecoder(rc).Decode(data); err != nil {
+	db, _ := NewDatabase(nil, nil)
+	if err := json.NewDecoder(rc).Decode(db.data); err != nil {
 		return err
 	}
 
-	if data.SchemaVersion != CurrentSchemaVersion {
+	if db.data.SchemaVersion != CurrentSchemaVersion {
 		return errors.Errorf("restored schema version %d != %d",
-			data.SchemaVersion, CurrentSchemaVersion)
+			db.data.SchemaVersion, CurrentSchemaVersion)
 	}
 
-	f.data.Members = data.Members
-	f.data.Pools = data.Pools
-	f.data.NextRank = data.NextRank
-	f.data.MapVersion = data.MapVersion
-	f.log.Debugf("db snapshot loaded (map version %d)", data.MapVersion)
+	f.data.Members = db.data.Members
+	f.data.Pools = db.data.Pools
+	f.data.NextRank = db.data.NextRank
+	f.data.MapVersion = db.data.MapVersion
+	f.log.Debugf("db snapshot loaded (map version %d)", db.data.MapVersion)
 	return nil
 }
 

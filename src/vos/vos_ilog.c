@@ -146,9 +146,10 @@ vos_ilog_punch_covered(const struct ilog_entry *entry,
 
 static int
 vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
-	       const struct vos_punch_record *punch) {
+	       daos_epoch_t bound, const struct vos_punch_record *punch) {
 	struct ilog_entry	*entry;
 	struct vos_punch_record	*any_punch = &info->ii_prior_any_punch;
+	daos_epoch_t		 entry_epc;
 
 	D_ASSERT(punch->pr_epc <= epoch);
 
@@ -169,10 +170,20 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 			break;
 		}
 
-		if (entry->ie_id.id_epoch > epoch) {
-			if (ilog_has_punch(entry) &&
-			    entry->ie_status == ILOG_COMMITTED)
-				info->ii_next_punch = entry->ie_id.id_epoch;
+		entry_epc = entry->ie_id.id_epoch;
+		if (entry_epc > epoch) {
+			if (ilog_has_punch(entry)) {
+				/** Entry is punched within uncertainty range,
+				 * so restart the transaction.
+				 */
+				if (entry_epc <= bound)
+					return -DER_TX_RESTART;
+
+				if (entry->ie_status == ILOG_COMMITTED)
+					info->ii_next_punch = entry_epc;
+			} else if (entry_epc <= bound) {
+				info->ii_uncertain_create = entry_epc;
+			}
 			continue;
 		}
 
@@ -240,7 +251,7 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 
 int
 vos_ilog_fetch_(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
-		struct ilog_df *ilog, daos_epoch_t epoch,
+		struct ilog_df *ilog, daos_epoch_t epoch, daos_epoch_t bound,
 		const struct vos_punch_record *punched,
 		const struct vos_ilog_info *parent, struct vos_ilog_info *info)
 {
@@ -262,6 +273,7 @@ init:
 	info->ii_uncommitted = 0;
 	info->ii_create = 0;
 	info->ii_next_punch = 0;
+	info->ii_uncertain_create = 0;
 	info->ii_empty = true;
 	info->ii_prior_punch.pr_epc = 0;
 	info->ii_prior_punch.pr_minor_epc = 0;
@@ -275,7 +287,7 @@ init:
 	}
 
 	if (rc == 0)
-		rc = vos_parse_ilog(info, epoch, &punch);
+		rc = vos_parse_ilog(info, epoch, bound, &punch);
 
 	return rc;
 }
@@ -331,7 +343,7 @@ vos_ilog_update_check(struct vos_ilog_info *info, const daos_epoch_range_t *epr)
 }
 
 int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
-		     const daos_epoch_range_t *epr,
+		     const daos_epoch_range_t *epr, daos_epoch_t bound,
 		     struct vos_ilog_info *parent, struct vos_ilog_info *info,
 		     uint32_t cond, struct vos_ts_set *ts_set)
 {
@@ -354,20 +366,20 @@ int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 
 	/** Do a fetch first.  The log may already exist */
 	rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont),
-			    DAOS_INTENT_UPDATE, ilog, epr->epr_hi,
+			    DAOS_INTENT_UPDATE, ilog, epr->epr_hi, bound,
 			    0, parent, info);
+	if (rc == -DER_TX_RESTART)
+		goto done;
 	/** For now, if the state isn't settled, just retry with later
 	 *  timestamp.   The state should get settled quickly when there
 	 *  is conditional update and sharing.
 	 */
 	if (cond == VOS_ILOG_COND_UPDATE && info->ii_uncommitted != 0)
-		return -DER_INPROGRESS;
+		D_GOTO(done, rc = -DER_INPROGRESS);
 	if (rc == -DER_NONEXIST)
 		goto update;
 	if (rc != 0) {
-		D_ERROR("Could not update ilog %p at "DF_X64": "DF_RC"\n",
-			ilog, epr->epr_hi, DP_RC(rc));
-		return rc;
+		goto done;
 	}
 
 	rc = vos_ilog_update_check(info, &max_epr);
@@ -381,8 +393,11 @@ int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 		return rc;
 	}
 update:
-	if (rc == -DER_NONEXIST && cond == VOS_ILOG_COND_UPDATE)
+	if (rc == -DER_NONEXIST && cond == VOS_ILOG_COND_UPDATE) {
+		if (info->ii_uncertain_create)
+			return -DER_TX_RESTART;
 		return -DER_NONEXIST;
+	}
 
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
 	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, &loh);
@@ -398,8 +413,9 @@ update:
 
 	if (rc == -DER_ALREADY) /* operation had no effect */
 		rc = 0;
-	VOS_TX_LOG_FAIL(rc, "Could not update incarnation log: "DF_RC"\n",
-			DP_RC(rc));
+done:
+	VOS_TX_LOG_FAIL(rc, "Could not update ilog %p at "DF_X64": "DF_RC"\n",
+			ilog, epr->epr_hi, DP_RC(rc));
 
 	/* No need to refetch the log.  The only field that is used by update
 	 * is prior_any_punch.   This field will not be changed by ilog_update
@@ -411,9 +427,9 @@ update:
 
 int
 vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
-		const daos_epoch_range_t *epr, struct vos_ilog_info *parent,
-		struct vos_ilog_info *info, struct vos_ts_set *ts_set,
-		bool leaf, bool replay)
+		const daos_epoch_range_t *epr, daos_epoch_t bound,
+		struct vos_ilog_info *parent, struct vos_ilog_info *info,
+		struct vos_ts_set *ts_set, bool leaf, bool replay)
 {
 	struct dtx_handle	*dth = vos_dth_get();
 	daos_epoch_range_t	 max_epr = *epr;
@@ -421,16 +437,6 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 	daos_handle_t		 loh;
 	int			 rc;
 	uint16_t		 minor_epc = VOS_MINOR_EPC_MAX;
-
-	if (ts_set == NULL ||
-	    (ts_set->ts_flags & VOS_OF_COND_PUNCH) == 0) {
-		if (leaf)
-			goto punch_log;
-		return 0;
-	}
-
-	/** If we get here, we need to check if the entry exists */
-	D_ASSERT(ts_set->ts_flags & VOS_OF_COND_PUNCH);
 
 	if (parent != NULL) {
 		D_ASSERT(parent->ii_prior_any_punch.pr_epc >=
@@ -445,14 +451,28 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 
 	/** Do a fetch first.  The log may already exist */
 	rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont),
-			    DAOS_INTENT_PUNCH, ilog, epr->epr_hi,
+			    DAOS_INTENT_PUNCH, ilog, epr->epr_hi, bound,
 			    0, parent, info);
+
+	if (rc == -DER_TX_RESTART || info->ii_uncertain_create)
+		return -DER_TX_RESTART;
+
+	if (ts_set == NULL ||
+	    (ts_set->ts_flags & VOS_OF_COND_PUNCH) == 0) {
+		if (leaf)
+			goto punch_log;
+		return 0;
+	}
+
+	/** If we get here, we need to check if the entry exists */
+	D_ASSERT(ts_set->ts_flags & VOS_OF_COND_PUNCH);
 	/** For now, if the state isn't settled, just retry with later
 	 *  timestamp.   The state should get settled quickly when there
 	 *  is conditional update and sharing.
 	 */
 	if (info->ii_uncommitted != 0)
 		return -DER_INPROGRESS;
+
 	if (rc == -DER_NONEXIST)
 		return -DER_NONEXIST;
 	if (rc != 0) {
@@ -520,7 +540,7 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 	if (rc != 0)
 		return rc;
 
-	return vos_ilog_fetch(umm, coh, DAOS_INTENT_PURGE, ilog, epr->epr_hi,
+	return vos_ilog_fetch(umm, coh, DAOS_INTENT_PURGE, ilog, epr->epr_hi, 0,
 			      &punch_rec, NULL, info);
 }
 

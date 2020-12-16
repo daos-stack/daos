@@ -254,14 +254,14 @@ def set_test_environment(args):
             print("  {}: {}".format(key, os.environ[key]))
 
 
-def get_output(cmd, check=True):
+def run_command(cmd):
     """Get the output of given command executed on this host.
 
     Args:
         cmd (list): command from which to obtain the output
-        check (bool, optional): whether to raise an exception and exit the
-            program if the exit status of the command is non-zero. Defaults
-            to True.
+
+    Raises:
+        RuntimeError: if the command fails
 
     Returns:
         str: command output
@@ -272,11 +272,32 @@ def get_output(cmd, check=True):
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     stdout, _ = process.communicate()
     retcode = process.poll()
-    if check and retcode:
-        print(
+    if retcode:
+        raise RuntimeError(
             "Error executing '{}':\n\tOutput:\n{}".format(
                 " ".join(cmd), stdout))
-        exit(1)
+    return stdout
+
+
+def get_output(cmd, check=True):
+    """Get the output of given command executed on this host.
+
+    Args:
+        cmd (list): command from which to obtain the output
+        check (bool, optional): whether to emit an error and exit the
+            program if the exit status of the command is non-zero. Defaults
+            to True.
+
+    Returns:
+        str: command output
+    """
+    try:
+        stdout = run_command(cmd)
+    except RuntimeError as error:
+        if check:
+            print(error)
+            exit(1)
+        stdout = str(error)
     return stdout
 
 
@@ -475,19 +496,28 @@ def get_test_list(tags):
     """
     test_tags = []
     test_list = []
+    # Check if fault injection is enabled ( 0 return status)
+    faults_disabled = time_command(["fault_status"])
     for tag in tags:
         if ".py" in tag:
             # Assume '.py' indicates a test and just add it to the list
             test_list.append(tag)
+            fault_filter = "--filter-by-tags=-faults"
+            if faults_disabled and fault_filter not in test_tags:
+                test_tags.append(fault_filter)
         else:
             # Otherwise it is assumed that this is a tag
-            test_tags.extend(["--filter-by-tags", str(tag)])
+            if faults_disabled:
+                tag = ",".join((tag, "-faults"))
+            test_tags.append("--filter-by-tags={}".format(tag))
 
     # Update the list of tests with any test that match the specified tags.
     # Exclude any specified tests that do not match the specified tags.  If no
     # tags and no specific tests have been specified then all of the functional
     # tests will be added.
     if test_tags or not test_list:
+        if not test_list:
+            test_list = ["./"]
         command = ["avocado", "list", "--paginator=off"]
         for test_tag in test_tags:
             command.append(str(test_tag))
@@ -558,7 +588,7 @@ def get_nvme_replacement(args):
         exit(1)
 
     # Get a list of NVMe devices from each specified server host
-    host_list = args.test_servers.split(",")
+    host_list = list(args.test_servers)
     command_list = [
         "/sbin/lspci -D", "grep 'Non-Volatile memory controller:'"]
     if ":" in args.nvme:
@@ -641,10 +671,16 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
         yaml_keys = list(YAML_KEYS.keys())
         yaml_find = find_values(yaml_data, yaml_keys)
 
-        # Generate a list
-        new_values = {
-            key: getattr(args, value).split(",") if getattr(args, value) else []
-            for key, value in YAML_KEYS.items()}
+        # Generate a list of values that can be used as replacements
+        new_values = {}
+        for key, value in YAML_KEYS.items():
+            args_value = getattr(args, value)
+            if isinstance(args_value, NodeSet):
+                new_values[key] = list(args_value)
+            elif args_value:
+                new_values[key] = args_value.split(",")
+            else:
+                new_values[key] = []
 
         # Assign replacement values for the test yaml entries to be replaced
         display(args, "Detecting replacements for {} in {}".format(
@@ -768,12 +804,10 @@ def run_tests(test_files, tag_filter, args):
     return_code = 0
 
     # Determine the location of the avocado logs for archiving or renaming
-    avocado_logs_dir = None
-    if args.archive or args.rename:
-        data = get_output(["avocado", "config"]).strip()
-        avocado_logs_dir = re.findall(r"datadir\.paths\.logs_dir\s+(.*)", data)
-        avocado_logs_dir = os.path.expanduser(avocado_logs_dir[0])
-        print("Avocado logs stored in {}".format(avocado_logs_dir))
+    data = get_output(["avocado", "config"]).strip()
+    avocado_logs_dir = re.findall(r"datadir\.paths\.logs_dir\s+(.*)", data)
+    avocado_logs_dir = os.path.expanduser(avocado_logs_dir[0])
+    print("Avocado logs stored in {}".format(avocado_logs_dir))
 
     # Create the base avocado run command
     command_list = [
@@ -848,7 +882,9 @@ def run_tests(test_files, tag_filter, args):
 
             # Optionally process core files
             if args.process_cores:
-                process_the_cores(avocado_logs_dir, test_file["yaml"], args)
+                if not process_the_cores(avocado_logs_dir, test_file["yaml"],
+                                         args):
+                    return_code |= 256
 
     return return_code
 
@@ -1255,7 +1291,7 @@ def resolve_debuginfo(pkg):
         pkg (str): a package name
 
     Returns:
-        str: the debuginfo package name
+        dict: dictionary of debug package information
 
     """
     import yum      # pylint: disable=import-error,import-outside-toplevel
@@ -1278,8 +1314,7 @@ def resolve_debuginfo(pkg):
             print("Package {} not installed, "
                   "skipping debuginfo".format(pkg))
             return None
-        else:
-            raise
+        raise
 
     return {'name': debug_pkg,
             'version': pkg_data['version'],
@@ -1342,8 +1377,23 @@ def install_debuginfos():
 
     cmds.append(cmd)
 
+    retry = False
     for cmd in cmds:
-        print(get_output(cmd))
+        try:
+            print(run_command(cmd))
+        except RuntimeError as error:
+            # got an error, so abort this list of commands and re-run
+            # it with a yum clean, makecache first
+            print(error)
+            retry = True
+            break
+    if retry:
+        print("Going to refresh caches and try again")
+        cmd_prefix = ["sudo", "yum", "--enablerepo=*debug*"]
+        cmds.insert(0, cmd_prefix + ["clean", "all"])
+        cmds.insert(1, cmd_prefix + ["makecache"])
+        for cmd in cmds:
+            print(run_command(cmd))
 
 
 def process_the_cores(avocado_logs_dir, test_yaml, args):
@@ -1353,6 +1403,10 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         avocado_logs_dir ([type]): [description]
         test_yaml (str): yaml file containing host names
         args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        bool: True if everything was done as expected, False if there were
+              any issues processing core files
     """
     import fnmatch  # pylint: disable=import-outside-toplevel
 
@@ -1395,9 +1449,16 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
     cores = os.listdir(daos_cores_dir)
 
     if not cores:
-        return
+        return True
 
-    install_debuginfos()
+    try:
+        install_debuginfos()
+    except RuntimeError as error:
+        print(error)
+        print("Removing core files to avoid archiving them")
+        for corefile in cores:
+            os.remove(corefile)
+        return False
 
     def run_gdb(pattern):
         """Run a gdb command on all corefiles matching a pattern.
@@ -1447,10 +1508,13 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
                 print(
                     "Unable to determine executable name from: '{}'\nNot "
                     "creating stacktrace".format(exe_type))
+                print("core magic reports: {}".format(exe_type))
             print("Removing {}".format(corefile_fqpn))
             os.unlink(corefile_fqpn)
 
     run_gdb('core.*[0-9]')
+
+    return True
 
 
 def get_test_category(test_file):
@@ -1601,6 +1665,10 @@ def main():
     args = parser.parse_args()
     print("Arguments: {}".format(args))
 
+    # Convert host specifications into NodeSets
+    args.test_servers = NodeSet(args.test_servers)
+    args.test_clients = NodeSet(args.test_clients)
+
     # Setup the user environment
     set_test_environment(args)
 
@@ -1659,9 +1727,12 @@ def main():
             ret_code = 1
         if status & 64 == 64:
             print("ERROR: Failed to create a junit xml test error file!")
-            ret_code = 1
         if status & 128 == 128:
             print("ERROR: Failed to clean logs in preparation for test run!")
+            ret_code = 1
+        if status & 256 == 256:
+            print("ERROR: Detected one or more tests with failure to create "
+                  "stack traces from core files!")
             ret_code = 1
     exit(ret_code)
 

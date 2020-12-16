@@ -68,7 +68,6 @@ class CreateContainterACLTest(ContSecurityTestBase):
             self.fail("    An expected container could not be created")
 
         cont_acl = self.get_container_acl_list(self.pool_uuid,
-                                               self.pool_svc,
                                                self.container_uuid)
         if not self.compare_acl_lists(cont_acl, expected_acl):
             self.fail("    ACL permissions mismatch:\n\t \
@@ -99,7 +98,6 @@ class CreateContainterACLTest(ContSecurityTestBase):
             self.fail("    An expected container could not be created")
 
         cont_acl = self.get_container_acl_list(self.pool_uuid,
-                                               self.pool_svc,
                                                self.container_uuid,
                                                True)
         if not self.compare_acl_lists(cont_acl, expected_acl):

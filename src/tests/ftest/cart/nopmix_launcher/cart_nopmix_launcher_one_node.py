@@ -49,11 +49,6 @@ class CartNoPmixLauncherOneNodeTest(Test):
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
 
-    def tearDown(self):
-        """ Test tear down """
-        print("Run TearDown\n")
-
-    @skipForTicket("DAOS-5524")
     def test_cart_no_pmix_launcher(self):
         """
         Test CaRT NoPmix Launcher

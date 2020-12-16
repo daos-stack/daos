@@ -98,9 +98,22 @@ struct bio_bdev {
 	struct bio_blobstore	*bb_blobstore;
 	/* count of target(VOS xstream) per device */
 	int			 bb_tgt_cnt;
+	/*
+	 * If a VMD LED event takes place, the original LED state and start
+	 * time will be saved in order to restore the LED to its original
+	 * state after allotted time.
+	 */
+	int			 bb_led_state;
+	uint64_t		 bb_led_start_time;
 	bool			 bb_removed;
 	bool			 bb_replacing;
 	bool			 bb_trigger_reint;
+	/*
+	 * If a faulty device is replaced but still plugged, we'll keep
+	 * the 'faulty' information here, so that we know this device was
+	 * marked as faulty (at least before next server restart).
+	 */
+	bool			 bb_faulty;
 };
 
 /*
@@ -278,6 +291,7 @@ void bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 struct spdk_thread *init_thread(void);
 void bio_release_bdev(void *arg);
 bool is_server_started(void);
+d_list_t *bio_bdev_list(void);
 struct spdk_blob_store *
 load_blobstore(struct bio_xs_context *ctxt, char *bdev_name, uuid_t *bs_uuid,
 	       bool create, bool async,
@@ -311,5 +325,8 @@ int bio_blob_open(struct bio_io_context *ctxt, bool async);
 /* bio_recovery.c */
 int bio_bs_state_transit(struct bio_blobstore *bbs);
 int bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state);
+
+/* bio_device.c */
+void bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now);
 
 #endif /* __BIO_INTERNAL_H__ */

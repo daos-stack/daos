@@ -93,6 +93,7 @@ daos_cont_csum_prop_is_enabled(uint16_t val)
 {
 	if (val != DAOS_PROP_CO_CSUM_CRC16 &&
 	    val != DAOS_PROP_CO_CSUM_CRC32 &&
+	    val != DAOS_PROP_CO_CSUM_ADLER32 &&
 	    val != DAOS_PROP_CO_CSUM_CRC64 &&
 	    val != DAOS_PROP_CO_CSUM_SHA1 &&
 	    val != DAOS_PROP_CO_CSUM_SHA256 &&

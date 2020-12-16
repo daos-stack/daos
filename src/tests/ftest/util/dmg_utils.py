@@ -29,8 +29,8 @@ from pwd import getpwuid
 import re
 import json
 
-from command_utils_base import CommandFailure
 from dmg_utils_base import DmgCommandBase
+from general_utils import get_numeric_list
 
 
 class DmgCommand(DmgCommandBase):
@@ -60,20 +60,19 @@ class DmgCommand(DmgCommandBase):
         "network_scan":
             r"[-]+(?:\n|\n\r)([a-z0-9-]+)(?:\n|\n\r)[-]+|NUMA\s+"
             r"Socket\s+(\d+)|(ofi\+[a-z0-9;_]+)\s+([a-z0-9, ]+)",
-        "pool_list":
-            r"(?:([0-9a-fA-F-]+) +([0-9,]+))",
         "storage_query_list_pools":
             r"[-]+\s+([a-z0-9-]+)\s+[-]+|(?:UUID:([a-z0-9-]+)\s+Rank:([0-9]+)"
             r"\s+Targets:\[([0-9 ]+)\])(?:\s+Blobs:\[([0-9 ]+)\]\s+?$)",
         "storage_query_list_devices":
-            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+.*\s+|(?:UUID:([a-z0-9-]+)\s+"
-            r"Targets:\[([0-9 ]+)\]\s+Rank:([0-9]+)\s+State:([A-Z]+))",
+            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+.*\s+|UUID:([a-f0-90-]{36}).*"
+            r"TrAddr:([a-z0-9:.]+)]\s+Targets:\[([0-9 ]+).*Rank:([0-9]+)"
+            r"\s+State:([A-Z]+)",
         "storage_query_device_health":
-            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+.*\s+UUID:([a-z0-9-]+)\s+Targets:"
-            r"\[([0-9 ]+)\]\s+Rank:([0-9]+)\s+State:(\w+)\s+.*\s+|(?:Temp.*|"
-            r"Cont.*Busy Time|Pow.*Cycles|Pow.*Duration|Unsafe.*|Media.*|"
-            r"Read.*|Write.*|Unmap.*|Checksum.*|Err.*Entries|Avail.*|"
-            r"Dev.*Reli.*|Vola.*):\s*([A-Za-z0-9]+)",
+            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+.*\s+|UUID:([a-f0-90-]{36}).*"
+            r"TrAddr:([a-z0-9:.]+)]\s+Targets:\[([0-9 ]+).*Rank:([0-9]+)\s+"
+            r"State:([A-Z]+)|(?:Timestamp|Temp.*|Cont.*Busy Time|Pow.*Cycles"
+            r"|Pow.*Duration|Unsafe.*|Media.*|Read.*|Write.*|Unmap.*|Checksum"
+            r".*|Err.*Entries|Avail.*|Dev.*Reli.*|Vola.*):\s*([A-Za-z0-9 :]+)",
         "storage_query_target_health":
             r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+|Devices\s+|UUID:([a-z0-9-]+)\s+"
             r"Targets:\[([0-9 ]+)\]\s+Rank:(\d+)\s+State:(\w+)|"
@@ -84,12 +83,6 @@ class DmgCommand(DmgCommandBase):
         "storage_set_faulty":
             r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+|Devices\s+|(?:UUID:[a-z0-9-]+\s+"
             r"Targets:\[[0-9 ]+\]\s+Rank:\d+\s+State:(\w+))",
-        "system_query":
-            r"(\d\s+([0-9a-fA-F-]+)\s+([0-9.]+)\s+[A-Za-z]+)",
-        "system_start":
-            r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)\s+([A-Za-z]+)",
-        "system_stop":
-            r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)\s+([A-Za-z]+)",
     }
 
     def network_scan(self, provider=None, all_devs=False):
@@ -125,85 +118,68 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg storage scan command fails.
 
         """
-        self.result = self._get_result(("storage", "scan"), verbose=verbose)
-
-        # Sample dmg storage scan verbose output. Don't delete this sample
-        # because it helps to develop and debug the regex.
-        """
-        --------
-        wolf-130
-        --------
-        SCM Namespace Socket ID Capacity
-        ------------- --------- --------
-        pmem0         0         3.2 TB
-        pmem1         0         3.2 TB
-
-        NVMe PCI     Model                FW Revision Socket ID Capacity
-        --------     -----                ----------- --------- --------
-        0000:5e:00.0 INTEL SSDPE2KE016T8  VDV10170    0         1.6 TB
-        0000:5f:00.0 INTEL SSDPE2KE016T8  VDV10170    0         1.6 TB
-        0000:81:00.0 INTEL SSDPED1K750GA  E2010475    1         750 GB
-        0000:da:00.0 INTEL SSDPED1K750GA  E2010475    1         750 GB
-        """
-
-        # Sample dmg storage scan output. Don't delete this sample because it
-        # helps to develop and debug the regex.
-        """
-         Hosts    SCM Total             NVMe Total
-        -----    ---------             ----------
-        wolf-130 6.4 TB (2 namespaces) 4.7 TB (4 controllers)
-        """
+        self._get_result(("storage", "scan"), verbose=verbose)
 
         data = {}
-
         if verbose:
-            vals = re.findall(
-                r"--------\n([a-z0-9-]+)\n--------|"
-                r"\n([a-z0-9_]+)[ ]+([\d]+)[ ]+([\d.]+) ([A-Z]+)|"
-                r"([a-f0-9]+:[a-f0-9]+:[a-f0-9]+.[a-f0-9]+)[ ]+"
-                r"(\S+)[ ]+(\S+)[ ]+(\S+)[ ]+(\d+)[ ]+([\d.]+)"
-                r"[ ]+([A-Z]+)[ ]*\n", self.result.stdout)
+            # Sample dmg storage scan verbose output. Don't delete this sample
+            # because it helps to develop and debug the regex.
+            """
+            --------
+            wolf-130
+            --------
+            SCM Namespace Socket ID Capacity
+            ------------- --------- --------
+            pmem0         0         3.2 TB
+            pmem1         0         3.2 TB
 
-            data = {}
-            host = vals[0][0]
-            data[host] = {}
-            data[host]["scm"] = {}
-            i = 1
-            while i < len(vals):
-                if vals[i][1] == "":
-                    break
-                pmem_name = vals[i][1]
-                socket_id = vals[i][2]
-                capacity = "{} {}".format(vals[i][3], vals[i][4])
-                data[host]["scm"][pmem_name] = {}
-                data[host]["scm"][pmem_name]["socket"] = socket_id
-                data[host]["scm"][pmem_name]["capacity"] = capacity
-                i += 1
-
-            data[host]["nvme"] = {}
-            while i < len(vals):
-                pci_addr = vals[i][5]
-                model = "{} {}".format(vals[i][6], vals[i][7])
-                fw_revision = vals[i][8]
-                socket_id = vals[i][9]
-                capacity = "{} {}".format(vals[i][10], vals[i][11])
-                data[host]["nvme"][pci_addr] = {}
-                data[host]["nvme"][pci_addr]["model"] = model
-                data[host]["nvme"][pci_addr]["fw_revision"] = fw_revision
-                data[host]["nvme"][pci_addr]["socket"] = socket_id
-                data[host]["nvme"][pci_addr]["capacity"] = capacity
-                i += 1
-
+            NVMe PCI     Model                FW Revision Socket ID Capacity
+            --------     -----                ----------- --------- --------
+            0000:5e:00.0 INTEL SSDPE2KE016T8  VDV10170    0         1.6 TB
+            0000:5f:00.0 INTEL SSDPE2KE016T8  VDV10170    0         1.6 TB
+            0000:81:00.0 INTEL SSDPED1K750GA  E2010475    1         750 GB
+            0000:da:00.0 INTEL SSDPED1K750GA  E2010475    1         750 GB
+            """
+            match = re.findall(
+                r"(?:([a-zA-Z0-9]+-[0-9]+)|"
+                r"(?:([0-9a-fA-F:.]+)\s+([a-zA-Z0-9 ]+)\s+"
+                r"([a-zA-Z0-9]+)\s+(\d+)\s+([0-9\.]+\s+[A-Z]+))|"
+                r"(?:([a-zA-Z0-9]+)\s+(\d+)\s+([0-9\.]+\s+[A-Z]+)))",
+                self.result.stdout)
+            host = ""
+            for item in match:
+                if item[0]:
+                    host = item[0]
+                    data[host] = {"scm": {}, "nvme": {}}
+                elif item[1]:
+                    data[host]["nvme"][item[1]] = {
+                        "model": item[2],
+                        "fw": item[3],
+                        "socket": item[4],
+                        "capacity": item[5],
+                    }
+                elif item[6]:
+                    data[host]["scm"][item[6]] = {
+                        "socket": item[7],
+                        "capacity": item[8],
+                    }
         else:
-            vals = re.findall(
+            # Sample dmg storage scan non-verbose output. Don't delete this
+            # sample because it helps to develop and debug the regex.
+            """
+            Hosts    SCM Total             NVMe Total
+            -----    ---------             ----------
+            wolf-130 6.4 TB (2 namespaces) 4.7 TB (4 controllers)
+            """
+            values = re.findall(
                 r"([a-z0-9-\[\]]+)\s+([\d.]+)\s+([A-Z]+)\s+"
                 r"\(([\w\s]+)\)\s+([\d.]+)\s+([A-Z]+)\s+\(([\w\s]+)",
                 self.result.stdout)
             self.log.info("--- Non-verbose output parse result ---")
-            self.log.info(vals)
+            self.log.info(values)
 
             data = {}
-            for row in vals:
+            for row in values:
                 host = row[0]
                 data[host] = {
                     "scm": {"capacity": None, "details": None},
@@ -213,9 +189,10 @@ class DmgCommand(DmgCommandBase):
                 data[host]["nvme"]["capacity"] = " ".join(row[4:6])
                 data[host]["nvme"]["details"] = row[6]
 
+        self.log.info("storage_scan data: %s", str(data))
         return data
 
-    def storage_format(self, reformat=False, timeout=30):
+    def storage_format(self, reformat=False, timeout=30, verbose=False):
         """Get the result of the dmg storage format command.
 
         Args:
@@ -225,6 +202,8 @@ class DmgCommand(DmgCommandBase):
                 formattable.
             timeout: seconds after which the format is considered a failure and
                 times out.
+            verbose (bool): show results of each SCM & NVMe device format
+                operation.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -236,9 +215,10 @@ class DmgCommand(DmgCommandBase):
         """
         saved_timeout = self.timeout
         self.timeout = timeout
-        result = self._get_result(("storage", "format"), reformat=reformat)
+        self._get_result(
+            ("storage", "format"), reformat=reformat, verbose=verbose)
         self.timeout = saved_timeout
-        return result
+        return self.result
 
     def storage_prepare(self, user=None, hugepages="4096", nvme=False,
                         scm=False, reset=False, force=True):
@@ -506,7 +486,8 @@ class DmgCommand(DmgCommandBase):
             r"\s*(\d+)|(?:(?:SCM:|NVMe:)\s+Total\s+size:\s+([0-9.]+\s+[A-Z]+)"
             r"\s+Free:\s+([0-9.]+\s+[A-Z]+),\smin:([0-9.]+\s+[A-Z]+),"
             r"\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"
-            r"|Rebuild\s+(\w+),\s+([0-9]+)\s+objs,\s+([0-9]+)\s+recs)",
+            r"|Rebuild\s+(\w+),\s+(?:rc=)?(\d+)(?:\s+\w+)?,"
+            r"\s+(?:status=-)?(\d+)(?:\s+\w+)?)",
             self.result.stdout)
         if match:
             # Mapping of the pool data entries to the match[0] indices
@@ -644,15 +625,28 @@ class DmgCommand(DmgCommandBase):
     def pool_list(self):
         """List pools.
 
-        Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
-
         Raises:
-            CommandFailure: if the dmg pool delete-acl command fails.
+            CommandFailure: if the dmg pool pool list command fails.
+
+        Returns:
+            dict: a dictionary of pool UUID keys and svc replica values
 
         """
-        return self._get_result(("pool", "list"))
+        self._get_result(("pool", "list"))
+
+        # Populate a dictionary with svc replicas for each pool UUID key listed
+        # Sample dmg pool list output:
+        #    Pool UUID                            Svc Replicas
+        #    ---------                            ------------
+        #    43bf2fe8-cb92-46ec-b9e9-9b056725092a 0
+        #    98736dfe-cb92-12cd-de45-9b09875092cd 1
+        data = {}
+        match = re.findall(
+            r"(?:([0-9a-fA-F][0-9a-fA-F-]+)\s+([0-9][0-9,-]*))",
+            self.result.stdout)
+        for info in match:
+            data[info[0]] = get_numeric_list(info[1])
+        return data
 
     def pool_set_prop(self, pool, name, value):
         """Set property for a given Pool.
@@ -694,7 +688,7 @@ class DmgCommand(DmgCommandBase):
             ("pool", "exclude"), pool=pool, rank=rank, tgt_idx=tgt_idx)
 
     def pool_extend(self, pool, ranks, scm_size, nvme_size):
-        """Extend the daos_server pool
+        """Extend the daos_server pool.
 
         Args:
             pool (str): Pool uuid.
@@ -781,29 +775,97 @@ class DmgCommand(DmgCommandBase):
                 Defaults to None, which means report all available ranks.
             verbose (bool): To obtain detailed query report
 
-        Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
-
         Raises:
             CommandFailure: if the dmg system query command fails.
 
+        Returns:
+            dict: a dictionary of host ranks and their unique states.
+
         """
-        return self._get_result(
-            ("system", "query"), ranks=ranks, verbose=verbose)
+        self._get_result(("system", "query"), ranks=ranks, verbose=verbose)
+
+        data = {}
+        if re.findall(r"Rank \d+", self.result.stdout):
+            # Process the unique single rank system query output, e.g.
+            #   Rank 1
+            #   ------
+            #   address : 10.8.1.11:10001
+            #   uuid    : d7a69a41-59a2-4dec-a620-a52217851285
+            #   status  : Joined
+            #   reason  :
+            match = re.findall(
+                r"(?:Rank|address\s+:|uuid\s+:|status\s+:|reason\s+:)\s+(.*)",
+                self.result.stdout)
+            if match:
+                data[int(match[0])] = {
+                    "address": match[1].strip(),
+                    "uuid": match[2].strip(),
+                    "state": match[3].strip(),
+                    "reason": match[4].strip(),
+                }
+        elif verbose:
+            # Process the verbose multiple rank system query output, e.g.
+            #   Rank UUID                                 Control Address State
+            #   ---- ----                                 --------------- -----
+            #   0    385af2f9-1863-406c-ae94-bffdcd02f379 10.8.1.10:10001 Joined
+            #   1    d7a69a41-59a2-4dec-a620-a52217851285 10.8.1.11:10001 Joined
+            #   Rank UUID   Control Address  Fault Domain  State  Reason
+            #   ---- ----   ---------------  ------------  -----  ------
+            #   0    <uuid> <address>        <domain>      Joined system stop
+            #   1    <uuid> <address>        <domain>      Joined system stop
+            #
+            #       Where the above placeholders have values similar to:
+            #           <uuid>    = 0c21d700-0e2b-46fb-be49-1fca490ce5b0
+            #           <address> = 10.8.1.142:10001
+            #           <domain>  = /wolf-142.wolf.hpdd.intel.com
+            #
+            match = re.findall(
+                r"(\d+)\s+([0-9a-f-]+)\s+([0-9.:]+)\s+([/A-Za-z0-9-_.]+)"
+                r"\s+([A-Za-z]+)(.*)",
+                self.result.stdout)
+            for info in match:
+                data[int(info[0])] = {
+                    "uuid": info[1],
+                    "address": info[2],
+                    "domain": info[3],
+                    "state": info[4],
+                    "reason": info[5].strip(),
+                }
+        else:
+            # Process the non-verbose multiple rank system query output, e.g.
+            #   Rank  State
+            #   ----  -----
+            #   [0-1] Joined
+            match = re.findall(
+                r"(?:\[*([0-9-,]+)\]*)\s+([A-Za-z]+)", self.result.stdout)
+            for info in match:
+                for rank in get_numeric_list(info[0]):
+                    data[rank] = {"state": info[1]}
+
+        self.log.info("system_query data: %s", str(data))
+        return data
 
     def system_start(self):
         """Start the system.
 
-        Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
-
         Raises:
             CommandFailure: if the dmg system start command fails.
 
+        Returns:
+            dict: a dictionary of host ranks and their unique states.
+
         """
-        return self._get_result(("system", "start"))
+        self._get_result(("system", "start"))
+
+        # Populate a dictionary with host set keys for each unique state
+        data = {}
+        match = re.findall(
+            r"(?:\[*([0-9-,]+)\]*)\s+([A-Za-z]+)\s+(.*)",
+            self.result.stdout)
+        for info in match:
+            for rank in get_numeric_list(info[0]):
+                data[rank] = info[1].strip()
+        return data
 
     def system_stop(self, force=False, ranks=None):
         """Stop the system.
@@ -814,15 +876,27 @@ class DmgCommand(DmgCommandBase):
             ranks (str, optional): comma separated ranks to stop. Defaults to
                 None.
 
-        Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
-
         Raises:
             CommandFailure: if the dmg system stop command fails.
 
+        Returns:
+            dict: a dictionary of host ranks and their unique states.
+
         """
-        return self._get_result(("system", "stop"), force=force, ranks=ranks)
+        self._get_result(("system", "stop"), force=force, ranks=ranks)
+
+        # Populate a dictionary with host set keys for each unique state, ex:
+        #   Rank Operation Result
+        #   ---- --------- ------
+        #   0    stop      want Stopped, got Ready
+        data = {}
+        match = re.findall(
+            r"(?:\[*([0-9-,]+)\]*)\s+([A-Za-z]+)\s+(.*)",
+            self.result.stdout)
+        for info in match:
+            for rank in get_numeric_list(info[0]):
+                data[rank] = info[1].strip()
+        return data
 
     def pool_evict(self, pool, sys=None):
         """Evict a pool.
@@ -838,66 +912,41 @@ class DmgCommand(DmgCommandBase):
 
         Raises:
             CommandFailure: if the dmg pool evict command fails.
+
         """
         return self._get_result(("pool", "evict"), pool=pool, sys=sys)
 
 
-def check_system_query_status(stdout_str):
+def check_system_query_status(data):
     """Check if any server crashed.
 
     Args:
-        stdout_str (list): list obtained from 'dmg system query -v'
+        data (dict): dictionary of system query data obtained from
+            DmgCommand.system_query()
 
     Returns:
         bool: True if no server crashed, False otherwise.
 
     """
-    check = True
-    rank_info = []
+    failed_states = ("Unknown", "Evicted", "Errored", "Unresponsive")
     failed_rank_list = []
-    # iterate to obtain failed rank list
-    for i, _ in enumerate(stdout_str):
-        rank_info.append(stdout_str[i][0])
-        print("rank_info: \n{}".format(rank_info))
-        for items in rank_info:
-            item = items.split()
-            if item[3] in ["Unknown", "Evicted", "Errored", "Unresponsive"]:
-                failed_rank_list.append(items)
-    # if failed rank list is not empty display the failed ranks
-    # and return False
+
+    # Check the state of each rank.
+    for rank in data:
+        rank_info = [
+            "{}: {}".format(key, data[rank][key])
+            for key in sorted(data[rank].keys())
+        ]
+        print("Rank {} info:\n  {}".format(rank, "\n  ".join(rank_info)))
+        if "state" in data[rank] and data[rank]["state"] in failed_states:
+            failed_rank_list.append(rank)
+
+    # Display the details of any failed ranks
     if failed_rank_list:
-        for failed_list in failed_rank_list:
-            print("failed_list: {}\n".format(failed_list))
-            out = failed_list.split()
-            print("Rank {} failed with state '{}'".format(out[0], out[3]))
-        check = False
-    return check
+        for rank in failed_rank_list:
+            print(
+                "Rank {} failed with state '{}'".format(
+                    rank, data[rank]["state"]))
 
-
-# ************************************************************************
-# *** External usage should be replaced by DmgCommand.storage_format() ***
-# ************************************************************************
-def storage_format(path, hosts, insecure=True):
-    """Execute format command through dmg tool to servers provided.
-
-    Args:
-        path (str): path to tool's binary
-        hosts (list): list of servers to run format on.
-        insecure (bool): toggle insecure mode
-
-    Returns:
-        Avocado CmdResult object that contains exit status, stdout information.
-
-    """
-    # Create and setup the command
-    dmg = DmgCommand(path)
-    dmg.insecure.value = insecure
-    dmg.hostlist.value = hosts
-
-    try:
-        result = dmg.storage_format()
-    except CommandFailure as details:
-        print("<dmg> command failed: {}".format(details))
-        return None
-
-    return result
+    # Return True if no ranks failed
+    return not bool(failed_rank_list)

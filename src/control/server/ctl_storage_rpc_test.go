@@ -26,7 +26,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,6 +45,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
@@ -78,8 +78,8 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 				},
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:     storage.ScmModules{storage.MockScmModule()},
-				GetNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+				DiscoverRes:         storage.ScmModules{storage.MockScmModule()},
+				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
 			expResp: StorageScanResp{
 				Nvme: &ScanNvmeResp{
@@ -117,8 +117,8 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 				ScanErr: errors.New("spdk scan failed"),
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:     storage.ScmModules{storage.MockScmModule()},
-				GetNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+				DiscoverRes:         storage.ScmModules{storage.MockScmModule()},
+				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
 			expResp: StorageScanResp{
 				Nvme: &ScanNvmeResp{
@@ -247,7 +247,7 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			emptyCfg := emptyMockConfig(t)
+			emptyCfg := config.DefaultServer()
 			ioCfg := ioserver.NewConfig().
 				WithBdevClass("nvme").
 				WithBdevDeviceList(storage.MockNvmeController().PciAddr)
@@ -255,14 +255,16 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 			if tc.multiIO {
 				ioCfgs = append(ioCfgs, ioCfg)
 			}
-			defaultWithNvme := newDefaultConfiguration(nil).WithServers(ioCfgs...)
+			defaultWithNvme := config.DefaultServer().WithServers(ioCfgs...)
 
 			// test for both empty and default config cases
-			for _, config := range []*Configuration{defaultWithNvme, emptyCfg} {
+			for _, config := range []*config.Server{defaultWithNvme, emptyCfg} {
 				cs := mockControlService(t, log, config, tc.bmbc, tc.smbc, nil)
 				for _, srv := range cs.harness.instances {
 					srv.ready.SetFalse()
 				}
+
+				t.Logf("VMD disabled: %v", cs.bdev.IsVMDDisabled())
 
 				// runs discovery for nvme & scm
 				err := cs.Setup()
@@ -391,7 +393,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 		bmbc      *bdev.MockBackendConfig
 		smbc      *scm.MockBackendConfig
 		smsc      *scm.MockSysConfig
-		cfg       *Configuration
+		cfg       *config.Server
 		scanTwice bool
 		junkResp  bool
 		drpcResps map[int][]*mockDrpcResponse
@@ -461,7 +463,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 					},
 				},
 			},
-			cfg: newDefaultConfiguration(nil).WithServers(
+			cfg: config.DefaultServer().WithServers(
 				ioserver.NewConfig().
 					WithBdevClass("nvme").
 					WithBdevDeviceList(storage.MockNvmeController(1).PciAddr),
@@ -511,7 +513,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 					},
 				},
 			},
-			cfg: newDefaultConfiguration(nil).WithServers(
+			cfg: config.DefaultServer().WithServers(
 				ioserver.NewConfig().
 					WithBdevClass("nvme").
 					WithBdevDeviceList(storage.MockNvmeController(1).PciAddr),
@@ -562,7 +564,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 					},
 				},
 			},
-			cfg: newDefaultConfiguration(nil).WithServers(
+			cfg: config.DefaultServer().WithServers(
 				ioserver.NewConfig().
 					WithBdevClass("nvme").
 					WithBdevDeviceList(storage.MockNvmeController(1).PciAddr),
@@ -629,7 +631,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 					},
 				},
 			},
-			cfg: newDefaultConfiguration(nil).WithServers(
+			cfg: config.DefaultServer().WithServers(
 				ioserver.NewConfig().
 					WithBdevClass("nvme").
 					WithBdevDeviceList(storage.MockNvmeController(1).PciAddr),
@@ -744,14 +746,14 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 		},
 		"scan scm with space utilization": {
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:     storage.ScmModules{storage.MockScmModule()},
-				GetNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+				DiscoverRes:         storage.ScmModules{storage.MockScmModule()},
+				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
 			smsc: &scm.MockSysConfig{
 				GetfsUsageTotal: mockPbScmMount.TotalBytes,
 				GetfsUsageAvail: mockPbScmMount.AvailBytes,
 			},
-			cfg: newDefaultConfiguration(nil).WithServers(
+			cfg: config.DefaultServer().WithServers(
 				ioserver.NewConfig().
 					WithScmMountPoint(mockPbScmMount.Path).
 					WithScmClass(storage.ScmClassDCPM.String()).
@@ -771,14 +773,14 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 		},
 		"scan scm with pmem not in instance device list": {
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:     storage.ScmModules{storage.MockScmModule()},
-				GetNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+				DiscoverRes:         storage.ScmModules{storage.MockScmModule()},
+				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
 			smsc: &scm.MockSysConfig{
 				GetfsUsageTotal: mockPbScmMount.TotalBytes,
 				GetfsUsageAvail: mockPbScmMount.AvailBytes,
 			},
-			cfg: newDefaultConfiguration(nil).WithServers(
+			cfg: config.DefaultServer().WithServers(
 				ioserver.NewConfig().
 					WithScmMountPoint(mockPbScmMount.Path).
 					WithScmClass(storage.ScmClassDCPM.String()).
@@ -802,7 +804,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			if tc.cfg == nil {
-				tc.cfg = newDefaultConfiguration(nil).WithServers(
+				tc.cfg = config.DefaultServer().WithServers(
 					ioserver.NewConfig().
 						WithBdevClass("nvme").
 						WithBdevDeviceList(storage.MockNvmeController().PciAddr),
@@ -832,6 +834,8 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				newSrv.setDrpcClient(newMockDrpcClient(cfg))
 				newSrv._superblock.Rank = system.NewRankPtr(uint32(i + 1))
 			}
+
+			t.Logf("VMD disabled: %v", cs.bdev.IsVMDDisabled())
 
 			// runs discovery for nvme & scm
 			if err := cs.Setup(); err != nil {
@@ -979,7 +983,7 @@ func TestServer_CtlSvc_StoragePrepare(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			config := newDefaultConfiguration(nil)
+			config := config.DefaultServer()
 			cs := mockControlService(t, log, config, tc.bmbc, tc.smbc, nil)
 			_ = new(StoragePrepareResp)
 
@@ -1004,11 +1008,6 @@ func TestServer_CtlSvc_StoragePrepare(t *testing.T) {
 func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 	mockNvmeController0 := storage.MockNvmeController(0)
 	mockNvmeController1 := storage.MockNvmeController(1)
-	defaultAddrStr := "127.0.0.1:10001"
-	defaultAddr, err := net.ResolveTCPAddr("tcp", defaultAddrStr)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	for name, tc := range map[string]struct {
 		scmMounted       bool // if scmMounted we emulate ext4 fs is mounted
@@ -1424,7 +1423,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			defer cleanup()
 
 			if tc.expResp == nil {
-				t.Log("expResp test case parameter required")
+				t.Fatal("expResp test case parameter required")
 			}
 			common.AssertEqual(t, len(tc.sMounts), len(tc.expResp.Mrets), name)
 			for i := range tc.sMounts {
@@ -1442,7 +1441,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				}
 			}
 
-			config := newDefaultConfiguration(newMockExt(tc.isRoot))
+			config := config.DefaultServer()
 
 			// validate test parameters
 			if len(tc.sDevs) > 0 {
@@ -1492,6 +1491,8 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			instances := cs.harness.Instances()
 			common.AssertEqual(t, len(tc.sMounts), len(instances), name)
 
+			t.Logf("VMD disabled: %v", cs.bdev.IsVMDDisabled())
+
 			// runs discovery for nvme & scm
 			if err := cs.Setup(); err != nil {
 				t.Fatal(err.Error() + name)
@@ -1505,12 +1506,6 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				if err := os.MkdirAll(root, 0777); err != nil {
 					t.Fatal(err)
 				}
-
-				msClientCfg := mgmtSvcClientCfg{
-					ControlAddr:  defaultAddr,
-					AccessPoints: []string{defaultAddrStr},
-				}
-				srv.msClient = newMgmtSvcClient(context.TODO(), log, msClientCfg)
 
 				// if the instance is expected to have a valid superblock, create one
 				if tc.superblockExists {

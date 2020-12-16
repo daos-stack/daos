@@ -127,6 +127,12 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_DEV_SET_FAULTY:
 		ds_mgmt_drpc_dev_set_faulty(drpc_req, drpc_resp);
 		break;
+	case DRPC_METHOD_MGMT_DEV_REPLACE:
+		ds_mgmt_drpc_dev_replace(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_DEV_IDENTIFY:
+		ds_mgmt_drpc_dev_identify(drpc_req, drpc_resp);
+		break;
 	case DRPC_METHOD_MGMT_POOL_GET_ACL:
 		ds_mgmt_drpc_pool_get_acl(drpc_req, drpc_resp);
 		break;

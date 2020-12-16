@@ -39,6 +39,7 @@
 struct open_query {
 	struct vos_object	*qt_obj;
 	struct vos_ts_set	*qt_ts_set;
+	daos_epoch_t		 qt_bound;
 	daos_epoch_range_t	 qt_epr;
 	struct vos_punch_record	 qt_punch;
 	struct vos_ilog_info	 qt_info;
@@ -61,10 +62,14 @@ check_key(struct open_query *query, struct vos_krec_df *krec)
 	rc = vos_ilog_fetch(vos_obj2umm(query->qt_obj),
 			    vos_cont2hdl(query->qt_obj->obj_cont),
 			    DAOS_INTENT_DEFAULT, &krec->kr_ilog,
-			    epr.epr_hi, &query->qt_punch, NULL,
+			    epr.epr_hi, query->qt_bound, &query->qt_punch, NULL,
 			    &query->qt_info);
 	if (rc != 0)
 		return rc;
+
+	if (vos_has_uncertainty(query->qt_ts_set, &query->qt_info, epr.epr_hi,
+				query->qt_bound))
+		return -DER_TX_RESTART;
 
 	rc = vos_ilog_check(&query->qt_info, &query->qt_epr, &epr, true);
 	if (rc != 0)
@@ -121,12 +126,18 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 		ci_set_null(rbund.rb_csum);
 
 		rc = dbtree_iter_fetch(ih, &kiov, &riov, anchor);
+		if (vos_dtx_continue_detect(rc))
+			goto next;
+
 		if (rc != 0)
 			break;
 
 		rc = check_key(query, rbund.rb_krec);
 		if (rc == 0)
 			break;
+
+		if (vos_dtx_continue_detect(rc))
+			continue;
 
 		if (rc != -DER_NONEXIST)
 			break;
@@ -135,6 +146,7 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 		query->qt_epr = epr;
 		query->qt_punch = punch;
 
+next:
 		if (query->qt_flags & VOS_GET_MAX)
 			rc = dbtree_iter_prev(ih);
 		else
@@ -146,7 +158,7 @@ out:
 	if (rc == 0)
 		rc = fini_rc;
 
-	return rc;
+	return vos_dtx_hit_inprogress() ? -DER_INPROGRESS : rc;
 }
 
 static int
@@ -185,8 +197,9 @@ query_recx(struct open_query *query, daos_recx_t *recx)
 		filter.fr_ex.ex_hi = ~(uint64_t)0;
 	filter.fr_punch_epc = query->qt_punch.pr_epc;
 	filter.fr_punch_minor_epc = query->qt_punch.pr_minor_epc;
-	filter.fr_epr = query->qt_epr;
-
+	filter.fr_epr.epr_hi = query->qt_bound;
+	filter.fr_epr.epr_lo = query->qt_epr.epr_lo;
+	filter.fr_epoch = query->qt_epr.epr_hi;
 
 re_iter:
 	rc = evt_iter_prepare(toh, opc, &filter, &ih);
@@ -312,13 +325,7 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 }
 
 #define LOG_RC(rc, ...)					\
-	do {						\
-		D_ASSERT(rc != 0);			\
-		if (rc == -DER_NONEXIST)		\
-			D_DEBUG(DB_IO, __VA_ARGS__);	\
-		else					\
-			D_ERROR(__VA_ARGS__);		\
-	} while (0)
+	VOS_TX_LOG_FAIL(rc, __VA_ARGS__)
 
 int
 vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
@@ -328,6 +335,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	struct vos_container	*cont;
 	struct vos_object	*obj = NULL;
 	struct open_query	 query;
+	daos_epoch_t		 bound;
 	daos_epoch_range_t	 dkey_epr;
 	struct vos_punch_record	 dkey_punch;
 	daos_anchor_t		 dkey_anchor;
@@ -341,6 +349,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	int			 nr_akeys = 0;
 
 	obj_epr.epr_hi = dtx_is_valid_handle(dth) ? dth->dth_epoch : epoch;
+	bound = dtx_is_valid_handle(dth) ? dth->dth_epoch_bound : epoch;
 
 	if ((flags & VOS_GET_MAX) && (flags & VOS_GET_MIN)) {
 		D_ERROR("Ambiguous query.  Please select either VOS_GET_MAX"
@@ -406,11 +415,17 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 
 	vos_ts_set_add(query.qt_ts_set, cont->vc_ts_idx, NULL, 0);
 
+	query.qt_bound = MAX(obj_epr.epr_hi, bound);
 	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid,
-			  &obj_epr, true, DAOS_INTENT_DEFAULT, true, &obj,
-			  query.qt_ts_set);
+			  &obj_epr, query.qt_bound, VOS_OBJ_VISIBLE,
+			  DAOS_INTENT_DEFAULT, &obj, query.qt_ts_set);
 	if (rc != 0) {
 		LOG_RC(rc, "Could not hold object: %s\n", d_errstr(rc));
+		goto out;
+	}
+
+	if (obj->obj_ilog_info.ii_uncertain_create) {
+		rc = -DER_TX_RESTART;
 		goto out;
 	}
 
@@ -518,6 +533,11 @@ out:
 		vos_obj_release(vos_obj_cache_current(), obj, false);
 
 	vos_dth_set(NULL);
+	if (rc == 0 || rc == -DER_NONEXIST) {
+		if (vos_ts_wcheck(query.qt_ts_set, obj_epr.epr_hi,
+				  query.qt_bound))
+			rc = -DER_TX_RESTART;
+	}
 
 	if (rc == 0 || rc == -DER_NONEXIST)
 		vos_ts_set_update(query.qt_ts_set, obj_epr.epr_hi);

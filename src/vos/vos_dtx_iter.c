@@ -141,9 +141,9 @@ dtx_iter_next(struct vos_iterator *iter)
 		D_ASSERT(rec_iov.iov_len == sizeof(struct vos_dtx_act_ent));
 		dae = (struct vos_dtx_act_ent *)rec_iov.iov_buf;
 
-		/* Skip committable, committed, or aborted ones. */
+		/* Only return prepared ones. */
 		if (!dae->dae_committable && !dae->dae_committed &&
-		    !dae->dae_aborted)
+		    !dae->dae_aborted && dae->dae_dbd != NULL)
 			break;
 	}
 
@@ -177,6 +177,7 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	it_entry->ie_dtx_oid = DAE_OID(dae);
 	it_entry->ie_dtx_ver = DAE_VER(dae);
 	it_entry->ie_dtx_flags = DAE_FLAGS(dae);
+	it_entry->ie_dtx_mbs_flags = DAE_MBS_FLAGS(dae);
 	it_entry->ie_dtx_tgt_cnt = DAE_TGT_CNT(dae);
 	it_entry->ie_dtx_grp_cnt = DAE_GRP_CNT(dae);
 	it_entry->ie_dtx_mbs_dsize = DAE_MBS_DSIZE(dae);

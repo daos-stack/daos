@@ -1,3 +1,33 @@
+daos (1.1.2.1-1) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Version bump up to 1.1.2.1
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Wed, 09 Dec 2020 19:30:00 +0100
+
+daos (1.1.2-3) unstable; urgency=medium
+  [ Li Wei ]
+  * Require raft-devel 0.7.1 that fixes recent Coverity issues
+
+ -- Li Wei <wei.g.li@intel.com>  Fri, 04 Dec 2020 14:30:00 +0800
+
+daos (1.1.2-1) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Version bump up to 1.1.2
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Tue, 01 Dec 2020 07:41:30 -0400
+
+daos (1.1.1-8) unstable; urgency=medium
+  [ Li Wei ]
+  * Require raft-devel 0.7.0 that changes log indices and terms to 63-bit
+
+ -- Li Wei <wei.g.li@intel.com>  Tue, 17 Nov 2020 09:44:00 +0800
+
+daos (1.1.1-6) unstable; urgency=medium
+  [ Mohamad Chaarawi ]
+  * Add dfs_test
+
+ -- Mohamad Chaarawi <mohamad.chaarawi@intel.com>  Mon, 16 Nov 2020 13:29:11 -0400
+
 daos (1.1.1-5) unstable; urgency=medium
   [ Jonathan Martinez Montes ]
   * Restore obj_ctl utility

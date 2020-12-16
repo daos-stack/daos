@@ -45,7 +45,7 @@
 /* unused object class to identify VOS (storage only) test mode */
 #define DAOS_OC_RAW	(0xBEE)
 #define RANK_ZERO	(0)
-#define TEST_VAL_SIZE	(3)
+#define TEST_VAL_SIZE	(4) /* Should be changed with updating NB places */
 
 enum ts_op_type {
 	TS_DO_UPDATE = 0,
@@ -124,8 +124,7 @@ ts_abt_init(void)
 		return 0;
 	}
 
-	rc = ABT_xstream_get_affinity(abt_xstream, 0, NULL,
-				      &num_cpus);
+	rc = ABT_xstream_get_affinity(abt_xstream, 0, NULL, &num_cpus);
 	if (rc != ABT_SUCCESS) {
 		fprintf(stderr, "get num_cpus: %d\n", rc);
 		fprintf(stderr, "No CPU affinity for this test.\n");
@@ -250,8 +249,10 @@ vos_update_or_fetch_ult(void *arg)
 	struct vos_ult_arg *ult_arg = arg;
 
 	ult_arg->status = _vos_update_or_fetch(ult_arg->obj_idx,
-				ult_arg->op_type, ult_arg->cred,
-				ult_arg->epoch, ult_arg->duration);
+					       ult_arg->op_type,
+					       ult_arg->cred,
+					       ult_arg->epoch,
+					       ult_arg->duration);
 }
 
 static int
@@ -319,7 +320,8 @@ set_value_buffer(char *buffer, int idx)
 	/* Sets a pattern of Aa, Bb, ..., Yy, Zz, Aa, ... */
 	buffer[0] = 'A' + idx % 26;
 	buffer[1] = 'a' + idx % 26;
-	buffer[TEST_VAL_SIZE - 1] = 0;
+	/* NB: Assume TEST_VAL_SIZE == 4 */
+	*((uint16_t *)&buffer[2]) = 0;
 }
 
 static int
@@ -332,6 +334,7 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	daos_iod_t	     *iod;
 	d_sg_list_t	     *sgl;
 	daos_recx_t	     *recx;
+	size_t		      len;
 	int		      vsize = ts_ctx.tsc_cred_vsize;
 	int		      rc = 0;
 
@@ -346,32 +349,30 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	sgl  = &cred->tc_sgl;
 	recx = &cred->tc_recx;
 
-	memset(iod, 0, sizeof(*iod));
-	memset(sgl, 0, sizeof(*sgl));
-	memset(recx, 0, sizeof(*recx));
-
 	/* setup dkey */
-	memcpy(cred->tc_dbuf, dkey, DTS_KEY_LEN);
-	d_iov_set(&cred->tc_dkey, cred->tc_dbuf,
-			strlen(cred->tc_dbuf));
+	len = min(strlen(dkey), DTS_KEY_LEN);
+	memcpy(cred->tc_dbuf, dkey, len);
+	d_iov_set(&cred->tc_dkey, cred->tc_dbuf, len);
 
 	/* setup I/O descriptor */
-	memcpy(cred->tc_abuf, akey, DTS_KEY_LEN);
-	d_iov_set(&iod->iod_name, cred->tc_abuf,
-			strlen(cred->tc_abuf));
-	iod->iod_size = vsize;
-	recx->rx_nr  = 1;
+	len = min(strlen(akey), DTS_KEY_LEN);
+	memcpy(cred->tc_abuf, akey, len);
+	d_iov_set(&iod->iod_name, cred->tc_abuf, len);
 	if (ts_single) {
 		iod->iod_type = DAOS_IOD_SINGLE;
+		iod->iod_size = vsize;
+		recx->rx_nr   = 1;
+		recx->rx_idx  = 0;
 	} else {
 		iod->iod_type = DAOS_IOD_ARRAY;
 		iod->iod_size = 1;
-		recx->rx_nr  = vsize;
-		recx->rx_idx = ts_overwrite ? 0 : indices[idx] * vsize;
+		recx->rx_nr   = vsize;
+		recx->rx_idx  = ts_overwrite ? 0 : indices[idx] * vsize;
 	}
 
 	iod->iod_nr    = 1;
 	iod->iod_recxs = recx;
+	iod->iod_flags = 0;
 
 	if (op_type == TS_DO_UPDATE) {
 		/* initialize value buffer and setup sgl */
@@ -384,6 +385,7 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	d_iov_set(&cred->tc_val, cred->tc_vbuf, vsize);
 	sgl->sg_iovs = &cred->tc_val;
 	sgl->sg_nr = 1;
+	sgl->sg_nr_out = 0;
 
 	if (ts_mode == TS_MODE_VOS)
 		rc = vos_update_or_fetch(obj_idx, op_type, cred, *epoch,
@@ -406,7 +408,8 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 		(*epoch)++;
 
 	if (verify_buff != NULL)
-		memcpy(verify_buff, cred->tc_vbuf, TEST_VAL_SIZE);
+		/* NB: Assume TEST_VAL_SIZE == 4 */
+		*((uint32_t *)verify_buff) = *((uint32_t *)cred->tc_vbuf);
 
 	return rc;
 }
@@ -462,8 +465,9 @@ ts_io_prep(void)
 				return -1;
 			}
 		} else {
-			memset(&ts_uoids[i], 0, sizeof(*ts_uoids));
 			ts_uoids[i].id_pub = ts_oids[i];
+			ts_uoids[i].id_shard = 0;
+			ts_uoids[i].id_pad_32 = 0;
 		}
 	}
 
@@ -506,12 +510,12 @@ objects_update(double *duration, d_rank_t rank)
 static int
 dkey_verify(char *dkey, daos_epoch_t *epoch)
 {
+	char		 akey[DTS_KEY_LEN];
+	uint64_t	*indices;
+	uint32_t	 ground_truth;	/* NB: Assume TEST_VAL_SIZE == 4 */
+	uint32_t	 test_string;	/* NB: Assume TEST_VAL_SIZE == 4 */
 	int		 i;
 	int		 j;
-	uint64_t	*indices;
-	char		 ground_truth[TEST_VAL_SIZE];
-	char		 test_string[TEST_VAL_SIZE];
-	char		 akey[DTS_KEY_LEN];
 	int		 rc = 0;
 
 	indices = dts_rand_iarr_alloc_set(ts_recx_p_akey, 0, ts_shuffle);
@@ -519,18 +523,19 @@ dkey_verify(char *dkey, daos_epoch_t *epoch)
 	dts_key_gen(akey, DTS_KEY_LEN, "walker");
 
 	for (i = 0; i < ts_recx_p_akey; i++) {
-		set_value_buffer(ground_truth, i);
+		set_value_buffer((char *)&ground_truth, i);
 		for (j = 0; j < ts_obj_p_cont; j++) {
 			rc = akey_update_or_fetch(j, TS_DO_FETCH, dkey, akey,
 						  epoch, indices, i,
-						  test_string, NULL);
+						  (char *)&test_string, NULL);
 			if (rc)
 				goto failed;
-			if (memcmp(test_string, ground_truth, TEST_VAL_SIZE)
-			    != 0) {
+			/* NB: Assume TEST_VAL_SIZE == 4 */
+			if (test_string != ground_truth) {
 				D_PRINT("MISMATCH! ground_truth=%s, "
 					"test_string=%s\n",
-					ground_truth, test_string);
+					(char *)&ground_truth,
+					(char *)&test_string);
 				rc = -1;
 				goto failed;
 			}
@@ -568,12 +573,12 @@ objects_verify(void)
 }
 
 static int
-objects_verify_close(void)
+objects_verify_close(bool verify)
 {
 	int i;
 	int rc = 0;
 
-	if (ts_verify_fetch) {
+	if (verify) {
 		if (ts_single || ts_overwrite) {
 			fprintf(stdout, "Verification is unsupported\n");
 		} else {
@@ -746,7 +751,7 @@ ts_prep_fetch(void)
 static int
 ts_post_verify(void)
 {
-	return objects_verify_close();
+	return objects_verify_close(ts_verify_fetch);
 }
 
 static int
@@ -774,6 +779,54 @@ ts_update_fetch_perf(double *duration)
 }
 
 static int
+ts_oit_post(void)
+{
+	static const int OID_ARR_SIZE	= 8;
+	daos_obj_id_t	oids[OID_ARR_SIZE];
+	daos_anchor_t	anchor;
+	daos_handle_t	toh;
+	daos_epoch_t	epoch;
+	uint32_t	oids_nr;
+	int		total;
+	int		i;
+	int		rc;
+
+	objects_verify_close(false);
+
+	if (ts_mode != TS_MODE_DAOS)
+		return 0; /* cannot support */
+
+	rc = daos_cont_create_snap_opt(ts_ctx.tsc_coh, &epoch, NULL,
+				       DAOS_SNAP_OPT_CR | DAOS_SNAP_OPT_OIT,
+				       NULL);
+	if (rc)
+		fprintf(stderr, "failed to create snapshot\n");
+
+	rc = daos_oit_open(ts_ctx.tsc_coh, epoch, &toh, NULL);
+	D_ASSERT(rc == 0);
+
+	memset(&anchor, 0, sizeof(anchor));
+	for (total = 0; true; ) {
+		oids_nr = OID_ARR_SIZE;
+		rc = daos_oit_list(toh, oids, &oids_nr, &anchor, NULL);
+		D_ASSERTF(rc == 0, "%d\n", rc);
+
+		D_PRINT("returned %d oids\n", oids_nr);
+		for (i = 0; i < oids_nr; i++) {
+			D_PRINT("oid[%d] ="DF_OID"\n", total, DP_OID(oids[i]));
+			total++;
+		}
+		if (daos_anchor_is_eof(&anchor)) {
+			D_PRINT("done\n");
+			break;
+		}
+	}
+	rc = daos_oit_close(toh, NULL);
+	D_ASSERT(rc == 0);
+	return rc;
+}
+
+static int
 ts_exclude_server(d_rank_t rank)
 {
 	struct d_tgt_list	targets;
@@ -784,7 +837,7 @@ ts_exclude_server(d_rank_t rank)
 	targets.tl_nr = 1;
 	targets.tl_ranks = &rank;
 	targets.tl_tgts = &tgt;
-	rc = daos_pool_tgt_exclude(ts_ctx.tsc_pool_uuid, NULL, &ts_ctx.tsc_svc,
+	rc = daos_pool_tgt_exclude(ts_ctx.tsc_pool_uuid, NULL, NULL /* svc */,
 				   &targets, NULL);
 
 	return rc;
@@ -801,7 +854,7 @@ ts_reint_server(d_rank_t rank)
 	targets.tl_nr = 1;
 	targets.tl_ranks = &rank;
 	targets.tl_tgts = &tgt;
-	rc = daos_pool_reint_tgt(ts_ctx.tsc_pool_uuid, NULL, &ts_ctx.tsc_svc,
+	rc = daos_pool_reint_tgt(ts_ctx.tsc_pool_uuid, NULL, NULL /* svc */,
 				 &targets, NULL);
 	return rc;
 }
@@ -841,11 +894,11 @@ ts_rebuild_perf(double *duration)
 		return rc;
 
 	if (ts_rebuild_only_iteration)
-		daos_mgmt_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
+		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
 				     DAOS_REBUILD_NO_REBUILD,
 				     0, NULL);
 	else if (ts_rebuild_no_update)
-		daos_mgmt_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
+		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
 				     DAOS_REBUILD_NO_UPDATE,
 				     0, NULL);
 
@@ -857,7 +910,7 @@ ts_rebuild_perf(double *duration)
 
 	rc = ts_reint_server(RANK_ZERO);
 
-	daos_mgmt_set_params(NULL, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+	daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 
 	return rc;
 }
@@ -1036,6 +1089,7 @@ static struct option ts_ops[] = {
 	{ "pool_nvme",	required_argument,	NULL,	'N' },
 	{ "type",	required_argument,	NULL,	'T' },
 	{ "credits",	required_argument,	NULL,	'C' },
+	{ "oit",	no_argument,		NULL,	'O' },
 	{ "obj",	required_argument,	NULL,	'o' },
 	{ "dkey",	required_argument,	NULL,	'd' },
 	{ "akey",	required_argument,	NULL,	'a' },
@@ -1046,6 +1100,7 @@ static struct option ts_ops[] = {
 	{ "overwrite",	no_argument,		NULL,	't' },
 	{ "nest_iter",	no_argument,		NULL,	'n' },
 	{ "file",	required_argument,	NULL,	'f' },
+	{ "dmg_conf",	required_argument,	NULL,	'g' },
 	{ "help",	no_argument,		NULL,	'h' },
 	{ "verify",	no_argument,		NULL,	'v' },
 	{ "wait",	no_argument,		NULL,	'w' },
@@ -1131,9 +1186,12 @@ static int (*perf_tests[TEST_SIZE])(double *duration);
 static int (*perf_tests_prep[TEST_SIZE])(void);
 static int (*perf_tests_post[TEST_SIZE])(void);
 
+static char *perf_conf;
+
 char	*perf_tests_name[] = {
 	"update",
 	"fetch",
+	"oit",
 	"iterate",
 	"rebuild",
 	"update and fetch"
@@ -1144,7 +1202,7 @@ main(int argc, char **argv)
 {
 	struct timeval	tv;
 	daos_size_t	scm_size = (2ULL << 30); /* default pool SCM size */
-	daos_size_t	nvme_size = (8ULL << 30); /* default pool NVMe size */
+	daos_size_t	nvme_size = (16ULL << 30); /* default pool NVMe size */
 	int		credits   = -1;	/* sync mode */
 	int		vsize	   = 32;	/* default value size */
 	int		ec_vsize = 0;
@@ -1163,7 +1221,7 @@ main(int argc, char **argv)
 
 	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
 	while ((rc = getopt_long(argc, argv,
-				 "P:N:T:C:c:o:d:a:r:nASG:s:ztf:hUFRBvIiuwxp",
+				 "P:N:T:C:c:o:d:a:r:nASg:G:s:ztf:hUFORBvIiuwxp",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -1259,6 +1317,9 @@ main(int argc, char **argv)
 		case 'S':
 			ts_shuffle = true;
 			break;
+		case 'g':
+			perf_conf = optarg;
+			break;
 		case 'G':
 			seed = atoi(optarg);
 			break;
@@ -1278,7 +1339,12 @@ main(int argc, char **argv)
 			ts_zero_copy = true;
 			break;
 		case 'f':
-			strncpy(ts_pmem_file, optarg, PATH_MAX - 1);
+			if (strnlen(optarg, PATH_MAX) >= (PATH_MAX - 5)) {
+				fprintf(stderr, "filename size must be < %d\n",
+					PATH_MAX - 5);
+				return -1;
+			}
+			strncpy(ts_pmem_file, optarg, PATH_MAX - 5);
 			break;
 		case 'U':
 			perf_tests_prep[UPDATE_TEST] = ts_io_prep;
@@ -1293,6 +1359,11 @@ main(int argc, char **argv)
 		case 'R':
 			perf_tests_prep[REBUILD_TEST] = ts_io_prep;
 			perf_tests[REBUILD_TEST] = ts_rebuild_perf;
+			break;
+		case 'O':
+			perf_tests_prep[UPDATE_TEST] = ts_io_prep;
+			perf_tests[UPDATE_TEST] = ts_write_perf;
+			perf_tests_post[UPDATE_TEST] = ts_oit_post;
 			break;
 		case 'i':
 			ts_rebuild_only_iteration = true;
@@ -1398,10 +1469,25 @@ main(int argc, char **argv)
 	}
 
 	if (ts_mode == TS_MODE_VOS) {
+		if (ts_ctx.tsc_mpi_size > 1 &&
+		    (access("/etc/daos_nvme.conf", F_OK) != -1)) {
+			fprintf(stderr,
+				"no support: multi-proc vos_perf with NVMe\n");
+			return -1;
+		}
 		ts_ctx.tsc_cred_nr = -1; /* VOS can only support sync mode */
-		if (strlen(ts_pmem_file) == 0)
-			strcpy(ts_pmem_file, "/mnt/daos/vos_perf.pmem");
+		if (strlen(ts_pmem_file) == 0) {
+			snprintf(ts_pmem_file, sizeof(ts_pmem_file),
+				 "/mnt/daos/vos_perf%d.pmem",
+				 ts_ctx.tsc_mpi_rank);
+		} else {
+			char id[16];
 
+
+			snprintf(id, sizeof(id), "%d", ts_ctx.tsc_mpi_rank);
+			strncat(ts_pmem_file, id,
+				(sizeof(ts_pmem_file) - strlen(ts_pmem_file)));
+		}
 		ts_ctx.tsc_pmem_file = ts_pmem_file;
 		if (ts_in_ult) {
 			rc = ts_abt_init();
@@ -1439,6 +1525,7 @@ main(int argc, char **argv)
 	ts_ctx.tsc_cred_vsize	= vsize;
 	ts_ctx.tsc_scm_size	= scm_size;
 	ts_ctx.tsc_nvme_size	= nvme_size;
+	ts_ctx.tsc_dmg_conf	= perf_conf;
 
 	if (ts_ctx.tsc_mpi_rank == 0) {
 		fprintf(stdout,

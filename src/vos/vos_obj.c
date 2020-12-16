@@ -151,9 +151,9 @@ vos_propagate_check(struct vos_object *obj, daos_handle_t toh,
  * @} vos_tree_helper
  */
 static int
-key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
-	  daos_key_t *dkey, unsigned int akey_nr, daos_key_t *akeys,
-	  uint64_t flags, struct vos_ts_set *ts_set)
+key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
+	  uint32_t pm_ver, daos_key_t *dkey, unsigned int akey_nr,
+	  daos_key_t *akeys, uint64_t flags, struct vos_ts_set *ts_set)
 {
 	struct vos_krec_df	*krec;
 	struct vos_rec_bundle	 rbund;
@@ -163,21 +163,19 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 	struct vos_ilog_info	 akey_info = {0};
 	daos_epoch_range_t	 epr = {0, epoch};
 	d_iov_t			 riov;
-	daos_handle_t		 toh;
+	daos_handle_t		 toh = DAOS_HDL_INVAL;
 	int			 i;
 	int			 rc;
 
-	if (flags & VOS_OF_COND_PUNCH) {
-		vos_ilog_fetch_init(&obj_info);
-		vos_ilog_fetch_init(&dkey_info);
-		vos_ilog_fetch_init(&akey_info);
-	}
+	vos_ilog_fetch_init(&obj_info);
+	vos_ilog_fetch_init(&dkey_info);
+	vos_ilog_fetch_init(&akey_info);
 	rc = obj_tree_init(obj);
 	if (rc)
 		D_GOTO(out, rc);
 
-	rc = vos_ilog_punch(obj->obj_cont, &obj->obj_df->vo_ilog, &epr, NULL,
-			    &obj_info, ts_set, false, false);
+	rc = vos_ilog_punch(obj->obj_cont, &obj->obj_df->vo_ilog, &epr, bound,
+			    NULL, &obj_info, ts_set, false, false);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -199,7 +197,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 		D_GOTO(out, rc);
 	}
 
-	rc = vos_ilog_punch(obj->obj_cont, &krec->kr_ilog, &epr,
+	rc = vos_ilog_punch(obj->obj_cont, &krec->kr_ilog, &epr, bound,
 			    &obj_info, &dkey_info, ts_set, false,
 			    false);
 	if (rc)
@@ -213,14 +211,14 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 	rbund.rb_tclass	= VOS_BTR_AKEY;
 	for (i = 0; i < akey_nr; i++) {
 		rbund.rb_iov = &akeys[i];
-		rc = key_tree_punch(obj, toh, epoch, &akeys[i], &riov,
+		rc = key_tree_punch(obj, toh, epoch, bound, &akeys[i], &riov,
 				    flags, ts_set, &dkey_info,
 				    &akey_info);
 		if (rc != 0) {
 			VOS_TX_LOG_FAIL(rc, "Failed to punch akey: rc="
 					DF_RC"\n", DP_RC(rc));
 			break;
-	}
+		}
 	}
 
 	if (rc == 0 && (flags & VOS_OF_REPLAY_PC) == 0) {
@@ -228,8 +226,6 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 		rc = vos_propagate_check(obj, toh, ts_set, &epr,
 					 VOS_ITER_AKEY);
 	}
-
-	key_tree_release(toh, 0);
 
 	if (rc != 1)
 		goto out;
@@ -239,7 +235,7 @@ punch_dkey:
 	rbund.rb_iov = dkey;
 	rbund.rb_tclass	= VOS_BTR_DKEY;
 
-	rc = key_tree_punch(obj, obj->obj_toh, epoch, dkey, &riov,
+	rc = key_tree_punch(obj, obj->obj_toh, epoch, bound, dkey, &riov,
 			    flags, ts_set, &obj_info, &dkey_info);
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -250,18 +246,19 @@ punch_dkey:
 					 &epr, VOS_ITER_DKEY);
 	}
  out:
-	if (flags & VOS_OF_COND_PUNCH) {
-		vos_ilog_fetch_finish(&obj_info);
-		vos_ilog_fetch_finish(&dkey_info);
-		vos_ilog_fetch_finish(&akey_info);
-	}
+	vos_ilog_fetch_finish(&obj_info);
+	vos_ilog_fetch_finish(&dkey_info);
+	vos_ilog_fetch_finish(&akey_info);
+
+	if (!daos_handle_is_inval(toh))
+		key_tree_release(toh, 0);
 
 	return rc;
 }
 
 static int
 obj_punch(daos_handle_t coh, struct vos_object *obj, daos_epoch_t epoch,
-	  uint64_t flags, struct vos_ts_set *ts_set)
+	  daos_epoch_t bound, uint64_t flags, struct vos_ts_set *ts_set)
 {
 	struct daos_lru_cache	*occ  = vos_obj_cache_current();
 	struct vos_container	*cont;
@@ -270,8 +267,8 @@ obj_punch(daos_handle_t coh, struct vos_object *obj, daos_epoch_t epoch,
 
 	vos_ilog_fetch_init(&info);
 	cont = vos_hdl2cont(coh);
-	rc = vos_oi_punch(cont, obj->obj_id, epoch, flags, obj->obj_df, &info,
-			  ts_set);
+	rc = vos_oi_punch(cont, obj->obj_id, epoch, bound, flags, obj->obj_df,
+			  &info, ts_set);
 	if (rc)
 		D_GOTO(failed, rc);
 
@@ -282,6 +279,21 @@ obj_punch(daos_handle_t coh, struct vos_object *obj, daos_epoch_t epoch,
 failed:
 	vos_ilog_fetch_finish(&info);
 	return rc;
+}
+
+/** If the object/key doesn't exist, we should augment the set with any missing
+ *  entries
+ */
+static void
+vos_punch_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int akey_nr,
+		      daos_key_t *akeys)
+{
+	struct vos_akey_data	ad;
+
+	ad.ad_is_iod = false;
+	ad.ad_keys = akeys;
+
+	vos_ts_add_missing(ts_set, dkey, akey_nr, &ad);
 }
 
 /**
@@ -297,14 +309,22 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	struct vos_container	*cont;
 	struct vos_object	*obj = NULL;
 	bool			 punch_obj = false;
+	uint64_t		 hold_flags;
 	daos_epoch_range_t	 epr = { 0 };
+	daos_epoch_t		 bound;
 	int			 rc = 0;
 	uint64_t		 cflags = 0;
 
-	if (dtx_is_valid_handle(dth))
+	if (oid.id_shard % 3 == 1 && DAOS_FAIL_CHECK(DAOS_DTX_FAIL_IO))
+		return -DER_IO;
+
+	if (dtx_is_valid_handle(dth)) {
 		epr.epr_hi = dth->dth_epoch;
-	else
+		bound = MAX(dth->dth_epoch_bound, dth->dth_epoch);
+	} else {
 		epr.epr_hi = epoch;
+		bound = epoch;
+	}
 
 	D_DEBUG(DB_IO, "Punch "DF_UOID", epoch "DF_U64"\n",
 		DP_UOID(oid), epr.epr_hi);
@@ -356,13 +376,14 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 			D_FREE(daes);
 	}
 
+	hold_flags = (flags & VOS_OF_COND_PUNCH) ? 0 : VOS_OBJ_CREATE;
+	hold_flags |= VOS_OBJ_VISIBLE;
 	/* NB: punch always generate a new incarnation of the object */
 	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid, &epr,
-			  (flags & VOS_OF_COND_PUNCH) ? true : false,
-			  DAOS_INTENT_PUNCH, true, &obj, ts_set);
+			  bound, hold_flags, DAOS_INTENT_PUNCH, &obj, ts_set);
 	if (rc == 0) {
 		if (dkey) { /* key punch */
-			rc = key_punch(obj, epr.epr_hi, pm_ver, dkey,
+			rc = key_punch(obj, epr.epr_hi, bound, pm_ver, dkey,
 				       akey_nr, akeys, flags, ts_set);
 
 			if (rc > 0)
@@ -372,7 +393,8 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		}
 
 		if (punch_obj)
-			rc = obj_punch(coh, obj, epr.epr_hi, flags, ts_set);
+			rc = obj_punch(coh, obj, epr.epr_hi, bound, flags,
+				       ts_set);
 	}
 abort:
 	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);
@@ -393,8 +415,16 @@ reset:
 	if (rc == 0)
 		vos_ts_set_upgrade(ts_set);
 
-	if (rc == -DER_NONEXIST || rc == 0)
-		vos_ts_set_update(ts_set, epr.epr_hi);
+	if (rc == -DER_NONEXIST || rc == 0) {
+		if (vos_ts_wcheck(ts_set, epr.epr_hi, bound)) {
+			rc = -DER_TX_RESTART;
+		} else {
+			vos_punch_add_missing(ts_set, dkey, akey_nr, akeys);
+			vos_ts_set_update(ts_set, epr.epr_hi);
+			if (rc == 0)
+				vos_ts_set_wupdate(ts_set, epr.epr_hi);
+		}
+	}
 
 	vos_ts_set_free(ts_set);
 
@@ -411,8 +441,8 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 	daos_epoch_range_t	 epr = {0, DAOS_EPOCH_MAX};
 	int			 rc;
 
-	rc = vos_obj_hold(occ, cont, oid, &epr, true, DAOS_INTENT_KILL, true,
-			  &obj, NULL);
+	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_VISIBLE,
+			  DAOS_INTENT_KILL, &obj, NULL);
 	if (rc == -DER_NONEXIST)
 		return 0;
 
@@ -443,7 +473,7 @@ out:
 static int
 key_iter_ilog_check(struct vos_krec_df *krec, struct vos_obj_iter *oiter,
 		    vos_iter_type_t type, daos_epoch_range_t *epr,
-		    bool check_existence)
+		    bool check_existence, struct vos_ts_set *ts_set)
 {
 	struct umem_instance	*umm;
 	int			 rc;
@@ -451,11 +481,15 @@ key_iter_ilog_check(struct vos_krec_df *krec, struct vos_obj_iter *oiter,
 	umm = vos_obj2umm(oiter->it_obj);
 	rc = vos_ilog_fetch(umm, vos_cont2hdl(oiter->it_obj->obj_cont),
 			    vos_iter_intent(&oiter->it_iter), &krec->kr_ilog,
-			    oiter->it_epr.epr_hi, &oiter->it_punched,
-			    NULL, &oiter->it_ilog_info);
+			    oiter->it_epr.epr_hi, oiter->it_iter.it_bound,
+			    &oiter->it_punched, NULL, &oiter->it_ilog_info);
 
 	if (rc != 0)
 		goto out;
+
+	if (vos_has_uncertainty(ts_set, &oiter->it_ilog_info,
+				oiter->it_epr.epr_hi, oiter->it_iter.it_bound))
+		D_GOTO(out, rc = -DER_TX_RESTART);
 
 	rc = vos_ilog_check(&oiter->it_ilog_info, &oiter->it_epr, epr,
 			    (oiter->it_flags & VOS_IT_PUNCHED) == 0);
@@ -489,7 +523,7 @@ key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type,
 	}
 
 	/* Update the lower bound for nested iterator */
-	rc = key_iter_ilog_check(krec, oiter, key_type, epr, true);
+	rc = key_iter_ilog_check(krec, oiter, key_type, epr, true, ts_set);
 	if (rc != 0)
 		goto fail;
 
@@ -563,7 +597,7 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	krec = rbund.rb_krec;
 
 	rc = key_iter_ilog_check(krec, oiter, oiter->it_iter.it_type, &epr,
-				 check_existence);
+				 check_existence, NULL);
 	if (rc == -DER_NONEXIST)
 		return IT_OPC_NEXT;
 	if (rc != 0)
@@ -604,7 +638,7 @@ key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
 	info->ii_epr = oiter->it_epr;
 	info->ii_punched = oiter->it_punched;
 	/* Update the lower bound for nested iterator */
-	rc = key_iter_ilog_check(krec, oiter, type, &info->ii_epr, false);
+	rc = key_iter_ilog_check(krec, oiter, type, &info->ii_epr, false, NULL);
 	if (rc != 0)
 		return rc;
 
@@ -1107,8 +1141,8 @@ done:
 		options |= EVT_ITER_REVERSE;
 	if (oiter->it_flags & VOS_IT_FOR_PURGE)
 		options |= EVT_ITER_FOR_PURGE;
-	if (oiter->it_flags & VOS_IT_FOR_REBUILD)
-		options |= EVT_ITER_FOR_REBUILD;
+	if (oiter->it_flags & VOS_IT_FOR_MIGRATION)
+		options |= EVT_ITER_FOR_MIGRATION;
 	return options;
 }
 
@@ -1154,7 +1188,9 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 		D_GOTO(failed, rc);
 
 	recx2filter(&filter, &oiter->it_recx);
-	filter.fr_epr = oiter->it_epr;
+	filter.fr_epr.epr_lo = oiter->it_epr.epr_lo;
+	filter.fr_epr.epr_hi = oiter->it_iter.it_bound;
+	filter.fr_epoch = oiter->it_epr.epr_hi;
 	filter.fr_punch_epc = oiter->it_punched.pr_epc;
 	filter.fr_punch_minor_epc = oiter->it_punched.pr_minor_epc;
 	options = recx_get_flags(oiter);
@@ -1266,22 +1302,28 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 {
 	struct vos_obj_iter	*oiter;
 	struct vos_container	*cont;
+	struct dtx_handle	*dth = vos_dth_get();
+	daos_epoch_t		 bound;
 	int			 rc;
 
 	D_ALLOC_PTR(oiter);
 	if (oiter == NULL)
 		return -DER_NOMEM;
 
+	bound = dtx_is_valid_handle(dth) ? dth->dth_epoch_bound :
+		param->ip_epr.epr_hi;
+	oiter->it_iter.it_bound = MAX(bound, param->ip_epr.epr_hi);
 	vos_ilog_fetch_init(&oiter->it_ilog_info);
 	oiter->it_iter.it_type = type;
 	oiter->it_epr = param->ip_epr;
 	oiter->it_epc_expr = param->ip_epc_expr;
+
 	oiter->it_flags = param->ip_flags;
 	oiter->it_recx = param->ip_recx;
 	if (param->ip_flags & VOS_IT_FOR_PURGE)
 		oiter->it_iter.it_for_purge = 1;
-	if (param->ip_flags & VOS_IT_FOR_REBUILD)
-		oiter->it_iter.it_for_rebuild = 1;
+	if (param->ip_flags & VOS_IT_FOR_MIGRATION)
+		oiter->it_iter.it_for_migration = 1;
 	if (param->ip_flags == VOS_IT_KEY_TREE) {
 		/** Prepare the iterator from an already open tree handle.   See
 		 *  vos_iterate_key
@@ -1301,11 +1343,11 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	 * system should guarantee this will never happen.
 	 */
 	rc = vos_obj_hold(vos_obj_cache_current(), cont,
-			  param->ip_oid, &oiter->it_epr, true,
-			  vos_iter_intent(&oiter->it_iter),
-			  (oiter->it_flags & VOS_IT_PUNCHED) == 0,
+			  param->ip_oid, &oiter->it_epr,
+			  oiter->it_iter.it_bound,
+			  (oiter->it_flags & VOS_IT_PUNCHED) ? 0 :
+			  VOS_OBJ_VISIBLE, vos_iter_intent(&oiter->it_iter),
 			  &oiter->it_obj, ts_set);
-
 	if (rc != 0) {
 		VOS_TX_LOG_FAIL(rc, "Could not hold object to iterate: "DF_RC
 				"\n", DP_RC(rc));
@@ -1400,16 +1442,16 @@ vos_obj_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 static int
 nested_dkey_iter_init(struct vos_obj_iter *oiter, struct vos_iter_info *info)
 {
-	int	rc;
+	int		rc;
 
 	/* XXX the condition epoch ranges could cover multiple versions of
 	 * the object/key if it's punched more than once. However, rebuild
 	 * system should guarantee this will never happen.
 	 */
 	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(info->ii_hdl),
-			  info->ii_oid, &info->ii_epr, true,
-			  vos_iter_intent(&oiter->it_iter),
-			  (oiter->it_flags & VOS_IT_PUNCHED) == 0,
+			  info->ii_oid, &info->ii_epr, oiter->it_iter.it_bound,
+			  (oiter->it_flags & VOS_IT_PUNCHED) ? 0 :
+			  VOS_OBJ_VISIBLE, vos_iter_intent(&oiter->it_iter),
 			  &oiter->it_obj, NULL);
 
 	D_ASSERTF(rc != -DER_NONEXIST,
@@ -1448,6 +1490,8 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 {
 	struct vos_object	*obj = info->ii_obj;
 	struct vos_obj_iter	*oiter;
+	struct dtx_handle	*dth = vos_dth_get();
+	daos_epoch_t		 bound;
 	struct evt_desc_cbs	 cbs;
 	struct evt_filter	 filter = {0};
 	daos_handle_t		 toh;
@@ -1459,6 +1503,9 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		return -DER_NOMEM;
 
 	vos_ilog_fetch_init(&oiter->it_ilog_info);
+	bound = dtx_is_valid_handle(dth) ? dth->dth_epoch_bound :
+		info->ii_epr.epr_hi;
+	oiter->it_iter.it_bound = MAX(bound, info->ii_epr.epr_hi);
 	oiter->it_epr = info->ii_epr;
 	oiter->it_punched = info->ii_punched;
 	oiter->it_epc_expr = info->ii_epc_expr;
@@ -1467,8 +1514,8 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		oiter->it_obj = obj;
 	if (info->ii_flags & VOS_IT_FOR_PURGE)
 		oiter->it_iter.it_for_purge = 1;
-	if (info->ii_flags & VOS_IT_FOR_REBUILD)
-		oiter->it_iter.it_for_rebuild = 1;
+	if (info->ii_flags & VOS_IT_FOR_MIGRATION)
+		oiter->it_iter.it_for_migration = 1;
 
 	switch (type) {
 	default:
@@ -1505,7 +1552,9 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 			goto failed;
 		}
 		recx2filter(&filter, &info->ii_recx);
-		filter.fr_epr = oiter->it_epr;
+		filter.fr_epr.epr_lo = oiter->it_epr.epr_lo;
+		filter.fr_epr.epr_hi = oiter->it_iter.it_bound;
+		filter.fr_epoch = oiter->it_epr.epr_hi;
 		filter.fr_punch_epc = oiter->it_punched.pr_epc;
 		filter.fr_punch_minor_epc = oiter->it_punched.pr_minor_epc;
 		options = recx_get_flags(oiter);
@@ -1744,7 +1793,6 @@ exit:
 		return 1;
 
 	return rc;
-
 }
 
 static int

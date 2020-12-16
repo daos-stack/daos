@@ -935,6 +935,84 @@ out:
 	return rc;
 }
 
+static int
+just_complete_body_fn(tse_task_t *task)
+{
+	D_ASSERT(task != NULL);
+	tse_task_complete(task, 0);
+	return 0;
+}
+
+static int
+sched_test_8()
+{
+	tse_sched_t	sched;
+	tse_task_t	*task;
+	uint64_t	delay = 5 * 1e6 /* 5 s */;
+	uint64_t	scheduled_pre;
+	uint64_t	scheduled_post;
+	bool		completed;
+	int		rc;
+
+	TSE_TEST_ENTRY("8", "Delayed scheduling");
+
+	print_message("Init scheduler\n");
+	rc = tse_sched_init(&sched, NULL, 0);
+	if (rc != 0) {
+		print_error("Failed to init scheduler: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	print_message("Create task\n");
+	rc = tse_task_create(just_complete_body_fn, &sched, NULL, &task);
+	if (rc != 0) {
+		print_error("Failed to init task: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	print_message("Schedule task with a delay\n");
+	scheduled_pre = daos_getutime();
+	rc = tse_task_schedule_with_delay(task, false, delay);
+	scheduled_post = daos_getutime();
+	if (rc != 0) {
+		print_error("Failed to insert task in scheduler: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	print_message("Progress scheduler immediately\n");
+	tse_sched_progress(&sched);
+
+	print_message("Check that task has not been executed yet\n");
+	completed = tse_sched_check_complete(&sched);
+	if (daos_getutime() - scheduled_pre >= delay) {
+		print_message("Test unexpectedly slow; skip this check\n");
+	} else if (completed) {
+		print_error("Scheduler should have in-flight tasks\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	print_message("Wait out the delay\n");
+	while (daos_getutime() - scheduled_post < delay)
+		sleep(1);
+
+	print_message("Progress scheduler again\n");
+	tse_sched_progress(&sched);
+
+	print_message("Check that task has been executed\n");
+	completed = tse_sched_check_complete(&sched);
+	if (!completed) {
+		print_error("Scheduler should have completed task\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	print_message("Complete scheduler\n");
+	tse_sched_complete(&sched, 0, false);
+
+out:
+	TSE_TEST_EXIT(rc);
+	return rc;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -984,6 +1062,12 @@ main(int argc, char **argv)
 	rc = sched_test_7();
 	if (rc != 0) {
 		print_error("SCHED TEST 7 failed: %d\n", rc);
+		test_fail++;
+	}
+
+	rc = sched_test_8();
+	if (rc != 0) {
+		print_error("SCHED TEST 8 failed: %d\n", rc);
 		test_fail++;
 	}
 

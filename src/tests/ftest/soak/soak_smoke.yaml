@@ -20,6 +20,7 @@ setup:
 server_config:
     name: daos_server
     provider: ofi+sockets
+    nr_hugepages: 8192
     control_log_mask: INFO
     control_log_file: daos_control0.log
     servers:
@@ -135,7 +136,7 @@ fio_smoke:
       - global
       - test
   global:
-    directory: "/tmp/daos_dfuse"
+    directory: "/tmp/daos_dfuse/"
     ioengine: 'libaio'
     thread: 1
     group_reporting: 1
@@ -153,7 +154,7 @@ fio_smoke:
         - 'rw'
         - 'randrw'
 dfuse:
-    mount_dir: "/tmp/daos_dfuse"
+    mount_dir: "/tmp/daos_dfuse/"
     disable_direct_io: True
 hdf5_vol:
     plugin_path: "/usr/lib64/mpich/lib"

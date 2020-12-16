@@ -73,6 +73,7 @@ message NvmeController {
 		uint32 rank = 4;		// DAOS I/O server using controller
 		uint64 total_bytes = 5;		// blobstore clusters total bytes
 		uint64 avail_bytes = 6;		// blobstore clusters available bytes
+		string tr_addr = 7;		// transport address of the blobstore
 	}
 
 	string model = 1;	// model name
@@ -104,7 +105,8 @@ message PrepareNvmeResp {
 
 message ScanNvmeReq {
 	bool Health = 1; // Retrieve NVMe device health statistics
-	bool Meta = 2; // Retrieve metadata relating to NVMe device.
+	bool Meta = 2; // Retrieve metadata relating to NVMe device
+	bool Basic = 3; // Strip NVMe device details to only basic
 }
 
 message ScanNvmeResp {

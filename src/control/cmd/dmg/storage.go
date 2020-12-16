@@ -43,11 +43,13 @@ const (
 
 // storageCmd is the struct representing the top-level storage subcommand.
 type storageCmd struct {
-	Prepare storagePrepareCmd `command:"prepare" alias:"p" description:"Prepare SCM and NVMe storage attached to remote servers."`
-	Scan    storageScanCmd    `command:"scan" alias:"s" description:"Scan SCM and NVMe storage attached to remote servers."`
-	Format  storageFormatCmd  `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
-	Query   storageQueryCmd   `command:"query" alias:"q" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
-	Set     setFaultyCmd      `command:"set" alias:"s" description:"Manually set the device state."`
+	Prepare  storagePrepareCmd  `command:"prepare" alias:"p" description:"Prepare SCM and NVMe storage attached to remote servers."`
+	Scan     storageScanCmd     `command:"scan" alias:"s" description:"Scan SCM and NVMe storage attached to remote servers."`
+	Format   storageFormatCmd   `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
+	Query    storageQueryCmd    `command:"query" alias:"q" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
+	Set      setFaultyCmd       `command:"set" alias:"s" description:"Manually set the device state."`
+	Replace  storageReplaceCmd  `command:"replace" alias:"r" description:"Replace a storage device that has been hot-removed with a new device."`
+	Identify storageIdentifyCmd `command:"identify" alias:"i" description:"Blink the status LED on a given VMD device for visual SSD identification."`
 }
 
 // storagePrepareCmd is the struct representing the prep storage subcommand.
@@ -210,7 +212,7 @@ func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context) (bool, er
 		if err != nil {
 			// If the AP hasn't been started, it will respond as if it
 			// is not a replica.
-			if system.IsNotReplica(err) {
+			if system.IsNotReplica(err) || system.IsUnavailable(err) {
 				return false, nil
 			}
 			return false, errors.Wrap(err, "System-Query command failed")
@@ -334,6 +336,63 @@ func (cmd *nvmeSetFaultyCmd) Execute(_ []string) error {
 	req := &control.SmdQueryReq{
 		UUID:      cmd.UUID,
 		SetFaulty: true,
+	}
+	return cmd.makeRequest(ctx, req)
+}
+
+// storageReplaceCmd is the struct representing the replace storage subcommand
+type storageReplaceCmd struct {
+	NVMe nvmeReplaceCmd `command:"nvme" alias:"n" description:"Replace an evicted/FAULTY NVMe SSD with another device."`
+}
+
+// nvmeReplaceCmd is the struct representing the replace nvme storage subcommand
+type nvmeReplaceCmd struct {
+	smdQueryCmd
+	OldDevUUID string `long:"old-uuid" description:"Device UUID of hot-removed SSD" required:"1"`
+	NewDevUUID string `long:"new-uuid" description:"Device UUID of new device" required:"1"`
+	NoReint    bool   `long:"no-reint" description:"Bypass reintegration of device and just bring back online."`
+}
+
+// Execute is run when storageReplaceCmd activates
+// Replace a hot-removed device with a newly plugged device, or reuse a FAULTY device
+func (cmd *nvmeReplaceCmd) Execute(_ []string) error {
+	if cmd.OldDevUUID == cmd.NewDevUUID {
+		cmd.log.Info("WARNING: Attempting to reuse a previously set FAULTY device!")
+	}
+
+	// TODO: Implement no-reint flag option
+	if cmd.NoReint {
+		cmd.log.Info("NoReint is not currently implemented")
+	}
+
+	ctx := context.Background()
+	req := &control.SmdQueryReq{
+		UUID:        cmd.OldDevUUID,
+		ReplaceUUID: cmd.NewDevUUID,
+		NoReint:     cmd.NoReint,
+	}
+	return cmd.makeRequest(ctx, req)
+}
+
+// storageIdentifyCmd is the struct representing the identify storage subcommand.
+type storageIdentifyCmd struct {
+	VMD vmdIdentifyCmd `command:"vmd" alias:"n" description:"Quickly blink the status LED on a VMD NVMe SSD for device identification."`
+}
+
+// vmdIdentifyCmd is the struct representing the identify vmd storage subcommand.
+type vmdIdentifyCmd struct {
+	smdQueryCmd
+	UUID string `long:"uuid" description:"Device UUID of the VMD device to identify" required:"1"`
+}
+
+// Execute is run when vmdIdentifyCmd activates.
+//
+// Runs SPDK VMD API commands to set the LED state on the VMD to "IDENTIFY"
+func (cmd *vmdIdentifyCmd) Execute(_ []string) error {
+	ctx := context.Background()
+	req := &control.SmdQueryReq{
+		UUID:     cmd.UUID,
+		Identify: true,
 	}
 	return cmd.makeRequest(ctx, req)
 }

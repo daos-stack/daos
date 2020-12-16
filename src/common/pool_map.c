@@ -681,7 +681,6 @@ pool_tree_count(struct pool_domain *tree, struct pool_comp_cntr *cntr)
 {
 	unsigned int	dom_nr;
 
-	memset(cntr, 0, sizeof(*cntr));
 	if (tree[0].do_children != NULL) {
 		dom_nr = tree[0].do_children - tree;
 	} else {
@@ -691,6 +690,8 @@ pool_tree_count(struct pool_domain *tree, struct pool_comp_cntr *cntr)
 
 	cntr->cc_top_doms = dom_nr;
 	cntr->cc_domains  = dom_nr;
+	cntr->cc_targets  = 0;
+	cntr->cc_layers   = 0;
 
 	for (; tree != NULL; tree = tree[0].do_children, cntr->cc_layers++) {
 		int      child_nr;
@@ -1479,6 +1480,8 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 	}
 	if (uuids_out)
 		*uuids_out = uuids;
+	else
+		D_FREE(uuids);
 
 	*map_buf_out = map_buf;
 	return 0;
@@ -2181,9 +2184,12 @@ pool_map_find_tgts_by_state(struct pool_map *map,
 {
 	struct find_tgts_param param;
 
-	memset(&param, 0, sizeof(param));
-	param.ftp_chk_status = 1;
+	param.ftp_max_fseq = 0;
+	param.ftp_min_fseq = 0;
 	param.ftp_status = match_states;
+	param.ftp_chk_max_fseq = 0;
+	param.ftp_chk_min_fseq = 0;
+	param.ftp_chk_status = 1;
 
 	return pool_map_find_tgts(map, &param, &fseq_sort_ops, tgt_pp, tgt_cnt);
 }

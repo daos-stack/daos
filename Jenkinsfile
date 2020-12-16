@@ -30,6 +30,22 @@ boolean doc_only_change() {
     return rc == 1
 }
 
+boolean release_candidate() {
+    return !sh(label: "Determine if building (a PR of) an RC",
+              script: "git diff-index --name-only HEAD^ | grep -q TAG && " +
+                      "grep -i '[0-9]rc[0-9]' TAG",
+              returnStatus: true)
+}
+
+def scons_faults_args() {
+    // The default build will have BUILD_TYPE=dev; fault injection enabled
+    if ((cachedCommitPragma(pragma: 'faults-enabled', def_val: 'true') == 'true') && !release_candidate()) {
+        return "BUILD_TYPE=dev"
+    } else {
+        return "BUILD_TYPE=release"
+    }
+}
+
 def skip_stage(String stage, boolean def_val = false) {
     String value = 'false'
     if (def_val) {
@@ -135,7 +151,7 @@ String unit_packages() {
                            'spdk-devel libfabric-devel '+
                            'pmix numactl-devel ' +
                            'libipmctl-devel ' +
-                           'python36-tabulate '
+                           'python36-tabulate numactl'
         if (need_qb) {
             // TODO: these should be gotten from the Requires: of RPM
             packages += " spdk-tools mercury-2.0.0~rc1" +
@@ -218,7 +234,7 @@ String functional_packages() {
 String functional_packages(String distro) {
     String daos_pkgs = get_daos_packages(distro)
     String pkgs = " openmpi3 hwloc ndctl fio " +
-                  "ior-hpc-daos-0 " +
+                  "patchutils ior-hpc-daos-0 " +
                   "romio-tests-cart-4-daos-0 " +
                   "testmpio-cart-4-daos-0 " +
                   "mpi4py-tests-cart-4-daos-0 " +
@@ -228,7 +244,7 @@ String functional_packages(String distro) {
                   "hdf5-vol-daos-openmpi3-tests-daos-0 " +
                   "MACSio-mpich2-daos-0 " +
                   "MACSio-openmpi3-daos-0 " +
-                  "mpifileutils-mpich-daos-0"
+                  "mpifileutils-mpich-daos-0 "
     if (distro == "leap15") {
         if (quickbuild()) {
             pkgs += " spdk-tools"
@@ -269,6 +285,25 @@ def getuid() {
                         script: "id -u",
                         returnStdout: true).trim()
     return cached_uid
+}
+
+// Default priority is 3, lower is better.
+// The parameter for a job is set using the script/Jenkinsfile from the
+// previous build of that job, so the first build of any PR will always
+// run at default because Jenkins sees it as a new job, but subsequent
+// ones will use the value from here.
+// The advantage therefore is not to change the priority of PRs, but to
+// change the master branch itself to run at lower priority, resulting
+// in faster time-to-result for PRs.
+
+String get_priority() {
+    if (env.BRANCH_NAME == 'master') {
+        string p = '4'
+    } else {
+        string p = ''
+    }
+    echo "Build priority set to " + p == '' ? 'default' : p
+    return p
 }
 
 String rpm_test_version() {
@@ -322,6 +357,7 @@ boolean skip_scan_rpms_centos7() {
 
 boolean skip_ftest_hw(String size) {
     return env.DAOS_STACK_CI_HARDWARE_SKIP == 'true' ||
+           skip_stage('func-test') ||
            skip_stage('func-hw-test') ||
            skip_stage('func-hw-test-' + size)
 }
@@ -358,10 +394,23 @@ boolean skip_build_on_ubuntu_clang() {
 
 }
 
+boolean skip_build_on_leap15_gcc() {
+    return skip_stage('build-leap15-gcc')
+}
+
 boolean skip_build_on_leap15_icc() {
     return target_branch == 'weekly-testing' ||
            skip_stage('build-leap15-icc') ||
            quickbuild()
+}
+
+boolean skip_unit_testing_stage() {
+    return  env.NO_CI_TESTING == 'true' ||
+            (skip_stage('build') &&
+             rpm_test_version() == '') ||
+            doc_only_change() ||
+            skip_build_on_centos7_gcc() ||
+            skip_stage('unit-tests')
 }
 
 boolean skip_testing_stage() {
@@ -394,7 +443,7 @@ String quick_build_deps(String distro) {
     } else {
         error("Unknown distro: ${distro} in quick_build_deps()")
     }
-    return sh(label:'Get Quickbuild dependencies',
+    return sh(label: 'Get Quickbuild dependencies',
               script: "rpmspec -q " +
                       "--srpm " +
                       rpmspec_args + ' ' +
@@ -416,12 +465,20 @@ pipeline {
         SSH_KEY_ARGS = "-ici_key"
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
+        SCONS_FAULTS_ARGS = scons_faults_args()
     }
 
     options {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
         ansiColor('xterm')
+        buildDiscarder(logRotator(artifactDaysToKeepStr: '400'))
+    }
+
+    parameters {
+        string(name: 'BuildPriority',
+               defaultValue: get_priority(),
+               description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
     }
 
     stages {
@@ -454,7 +511,18 @@ pipeline {
                     steps {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
-                                   ignored_files: "src/control/vendor/*:src/include/daos/*.pb-c.h:src/common/*.pb-c.[ch]:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]:src/security/*.pb-c.[ch]:*.crt:*.pem:*_test.go:src/cart/_structures_from_macros_.h"
+                                   ignored_files: "src/control/vendor/*:" +
+                                                  "src/include/daos/*.pb-c.h:" +
+                                                  "src/common/*.pb-c.[ch]:" +
+                                                  "src/mgmt/*.pb-c.[ch]:" +
+                                                  "src/iosrv/*.pb-c.[ch]:" +
+                                                  "src/security/*.pb-c.[ch]:" +
+                                                  "*.crt:" +
+                                                  "*.pem:" +
+                                                  "*_test.go:" +
+                                                  "src/cart/_structures_from_macros_.h:" +
+                                                  "src/tests/ftest/*.patch:" +
+                                                  "src/tests/ftest/large_stdout.txt"
                     }
                     post {
                         always {
@@ -647,7 +715,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   stash_files: 'ci/test_files_to_stash.txt'
+                                   stash_files: 'ci/test_files_to_stash.txt',
+                                   scons_args: scons_faults_args()
                     }
                     post {
                         always {
@@ -691,7 +760,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   stash_files: 'ci/test_files_to_stash.txt'
+                                   stash_files: 'ci/test_files_to_stash.txt',
+                                   scons_args: scons_faults_args()
                     }
                     post {
                         always {
@@ -816,7 +886,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: scons_faults_args()
                     }
                     post {
                         always {
@@ -855,7 +926,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: scons_faults_args()
                     }
                     post {
                         always {
@@ -894,7 +966,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: scons_faults_args()
                     }
                     post {
                         always {
@@ -919,6 +992,10 @@ pipeline {
                     }
                 }
                 stage('Build on Leap 15') {
+                    when {
+                        beforeAgent true
+                        expression { ! skip_build_on_leap15_gcc() }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.leap.15'
@@ -933,7 +1010,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   stash_files: 'ci/test_files_to_stash.txt'
+                                   stash_files: 'ci/test_files_to_stash.txt',
+                                   scons_args: scons_faults_args()
                     }
                     post {
                         always {
@@ -972,7 +1050,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: scons_faults_args()
                     }
                     post {
                         always {
@@ -1012,7 +1091,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: scons_faults_args()
                     }
                     post {
                         always {
@@ -1041,7 +1121,7 @@ pipeline {
         stage('Unit Tests') {
             when {
                 beforeAgent true
-                expression { ! skip_testing_stage() }
+                expression { ! skip_unit_testing_stage() }
             }
             parallel {
                 stage('Unit Test') {
@@ -1053,15 +1133,35 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
-                        unitTest timeout_time: 60,
+                        unitTest timeout_time: 30,
                                  inst_repos: pr_repos(),
                                  inst_rpms: unit_packages()
                     }
                     post {
                       always {
-                            unitTestPost artifacts: ['unit_test_logs/*',
-                                                     'unit_vm_test/**'],
-                                         valgrind_stash: 'centos7-gcc-unit-valg'
+                            unitTestPost artifacts: ['unit_test_logs/*'],
+                                         record_issues: false
+                        }
+                    }
+                }
+                stage('NLT') {
+                    when {
+                      beforeAgent true
+                      expression { ! skip_stage('nlt') }
+                    }
+                    agent {
+                        label 'ci_hdwr1'
+                    }
+                    steps {
+                        unitTest timeout_time: 20,
+                                 inst_repos: pr_repos(),
+                                 inst_rpms: unit_packages()
+                    }
+                    post {
+                      always {
+                            unitTestPost artifacts: ['nlt_logs/*'],
+                                         testResults: 'None',
+                                         valgrind_stash: 'centos7-gcc-nlt-memcheck'
                         }
                     }
                 }
@@ -1100,20 +1200,15 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
-                        unitTest timeout_time: 60,
+                        unitTest timeout_time: 30,
                                  ignore_failure: true,
                                  inst_repos: pr_repos(),
                                  inst_rpms: unit_packages()
                     }
                     post {
                         always {
-                            // This is only set while dealing with issues
-                            // caused by code coverage instrumentation affecting
-                            // test results, and while code coverage is being
-                            // added.
-                            unitTestPost ignore_failure: true,
-                                         artifacts: ['unit_test_memcheck_logs.tar.gz',
-                                                     'unit_memcheck_vm_test/**'],
+                            unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
+                                                     'unit_test_memcheck_logs/*.log'],
                                          valgrind_stash: 'centos7-gcc-unit-memcheck'
                         }
                     }
@@ -1341,7 +1436,7 @@ pipeline {
     } // stages
     post {
         always {
-            valgrindReportPublish valgrind_stashes: ['centos7-gcc-unit-valg',
+            valgrindReportPublish valgrind_stashes: ['centos7-gcc-nlt-memcheck',
                                                      'centos7-gcc-unit-memcheck']
         }
         unsuccessful {

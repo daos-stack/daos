@@ -34,7 +34,16 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 )
 
-var ErrEmptyGroupMap = errors.New("empty GroupMap")
+var (
+	ErrEmptyGroupMap = errors.New("empty GroupMap")
+	ErrRaftUnavail   = errors.New("raft service unavailable (not started yet?)")
+)
+
+// IsUnavailable returns a boolean indicating whether or not the
+// supplied error corresponds to some unavailability state.
+func IsUnavailable(err error) bool {
+	return strings.Contains(errors.Cause(err).Error(), ErrRaftUnavail.Error())
+}
 
 // ErrNotReplica indicates that a request was made to a control plane
 // instance that is not a designated Management Service replica.
@@ -121,8 +130,9 @@ func IsMemberNotFound(err error) bool {
 // ErrPoolNotFound indicates a failure to find a pool service with the
 // given search criterion.
 type ErrPoolNotFound struct {
-	byRank *Rank
-	byUUID *uuid.UUID
+	byRank  *Rank
+	byUUID  *uuid.UUID
+	byLabel *string
 }
 
 func (err *ErrPoolNotFound) Error() string {
@@ -131,6 +141,8 @@ func (err *ErrPoolNotFound) Error() string {
 		return fmt.Sprintf("unable to find pool service with rank %d", *err.byRank)
 	case err.byUUID != nil:
 		return fmt.Sprintf("unable to find pool service with uuid %s", *err.byUUID)
+	case err.byLabel != nil:
+		return fmt.Sprintf("unable to find pool service with label %q", *err.byLabel)
 	default:
 		return "unable to find pool service"
 	}

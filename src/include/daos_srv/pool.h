@@ -56,6 +56,11 @@ struct ds_pool {
 	ABT_cond		sp_fetch_hdls_cond;
 	ABT_cond		sp_fetch_hdls_done_cond;
 	struct ds_iv_ns	       *sp_iv_ns;
+
+	/* structure related to EC aggregate epoch query */
+	d_list_t		sp_ec_ephs_list;
+	struct sched_request	*sp_ec_ephs_req;
+
 	uint32_t		sp_dtx_resync_version;
 	/* Special pool/container handle uuid, which are
 	 * created on the pool leader step up, and propagated
@@ -104,6 +109,7 @@ struct ds_pool_child {
 	struct ds_pool		*spc_pool;
 	uuid_t			spc_uuid;	/* pool UUID */
 	struct sched_request	*spc_gc_req;	/* Track GC ULT */
+	struct sched_request	*spc_scrubbing_req; /* Track scrubbing ULT*/
 	d_list_t		spc_cont_list;
 
 	/* The current maxim rebuild epoch, (0 if there is no rebuild), so
@@ -203,14 +209,17 @@ int ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		       uint32_t map_ver);
 int ds_pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop);
 int ds_pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop);
+int ds_pool_iv_svc_fetch(struct ds_pool *pool, d_rank_list_t **svc_p);
 
 int ds_pool_iv_srv_hdl_fetch(struct ds_pool *pool, uuid_t *pool_hdl_uuid,
 			     uuid_t *cont_hdl_uuid);
 
 int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
 
-int ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid,
-			 uint32_t version);
+int ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
+			     uint32_t version);
+int ds_pool_check_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
+			     uint32_t version);
 
 int
 ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc);

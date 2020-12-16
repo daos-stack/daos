@@ -29,7 +29,7 @@ Build-Depends: debhelper (>= 10),
                libboost-dev,
                libspdk-dev,
                libipmctl-dev,
-               libraft-dev,
+               libraft-dev (= 0.7.1-1378.g2f76d6b),
                python3-tabulate,
                liblz4-dev
 Standards-Version: 4.1.2
@@ -129,7 +129,8 @@ Package: daos-server
 Section: net
 Architecture: any
 Multi-Arch: same
-Depends: ${shlibs:Depends}, ${misc:Depends}, openmpi-bin
+Depends: ${shlibs:Depends}, ${misc:Depends}, openmpi-bin,
+         ipmctl (>02.00.00.3816)
 Description: The Distributed Asynchronous Object Storage (DAOS) is an open-source
  software-defined object store designed from the ground up for
  massively distributed Non Volatile Memory (NVM). DAOS takes advantage

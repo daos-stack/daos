@@ -23,18 +23,13 @@
 """
 import time
 import random
-import uuid
 import threading
 
 from itertools import product
-from avocado import fail_on
-from apricot import TestWithServers
+from apricot import skipForTicket
 from test_utils_pool import TestPool
-from ior_utils import IorCommand
-from job_manager_utils import Mpirun
 from write_host_file import write_host_file
-from command_utils import CommandFailure
-from mpio_utils import MpioUtils
+from osa_utils import OSAUtils
 
 try:
     # python 3.x
@@ -44,7 +39,7 @@ except ImportError:
     import Queue as queue
 
 
-class OSAOnlineDrain(TestWithServers):
+class OSAOnlineDrain(OSAUtils):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
@@ -68,74 +63,6 @@ class OSAOnlineDrain(TestWithServers):
         self.pool = None
         self.out_queue = queue.Queue()
 
-    @fail_on(CommandFailure)
-    def get_pool_leader(self):
-        """Get the pool leader.
-
-        Returns:
-            int: pool leader value
-
-        """
-        data = self.dmg_command.pool_query(self.pool.uuid)
-        return int(data["leader"])
-
-    @fail_on(CommandFailure)
-    def get_pool_version(self):
-        """Get the pool version.
-
-        Returns:
-            int: pool_version_value
-
-        """
-        data = self.dmg_command.pool_query(self.pool.uuid)
-        return int(data["version"])
-
-    def ior_thread(self, pool, oclass, api, test, flags, results):
-        """Start threads and wait until all threads are finished.
-        Args:
-            pool (object): pool handle
-            oclass (str): IOR object class
-            API (str): IOR API
-            test (list): IOR test sequence
-            flags (str): IOR flags
-            results (queue): queue for returning thread results
-        """
-        processes = self.params.get("slots", "/run/ior/clientslots/*")
-        container_info = {}
-        mpio_util = MpioUtils()
-        if mpio_util.mpich_installed(self.hostlist_clients) is False:
-            self.fail("Exiting Test: Mpich not installed")
-        self.pool = pool
-        # Define the arguments for the ior_runner_thread method
-        ior_cmd = IorCommand()
-        ior_cmd.get_params(self)
-        ior_cmd.set_daos_params(self.server_group, self.pool)
-        ior_cmd.dfs_oclass.update(oclass)
-        ior_cmd.api.update(api)
-        ior_cmd.transfer_size.update(test[2])
-        ior_cmd.block_size.update(test[3])
-        ior_cmd.flags.update(flags)
-
-        container_info["{}{}{}"
-                       .format(oclass,
-                               api,
-                               test[2])] = str(uuid.uuid4())
-
-        # Define the job manager for the IOR command
-        self.job_manager = Mpirun(ior_cmd, mpitype="mpich")
-        key = "".join([oclass, api, str(test[2])])
-        self.job_manager.job.dfs_cont.update(container_info[key])
-        env = ior_cmd.get_default_env(str(self.job_manager))
-        self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-        self.job_manager.assign_processes(processes)
-        self.job_manager.assign_environment(env, True)
-
-        # run IOR Command
-        try:
-            self.job_manager.run()
-        except CommandFailure as _error:
-            results.put("FAIL")
-
     def run_online_drain_test(self, num_pool):
         """Run the Online drain without data.
             Args:
@@ -146,7 +73,7 @@ class OSAOnlineDrain(TestWithServers):
         pool = {}
         pool_uuid = []
         target_list = []
-        drain_servers = len(self.hostlist_servers) - 1
+        drain_servers = (len(self.hostlist_servers) * 2) - 1
 
         # Exclude target : random two targets  (target idx : 0-7)
         n = random.randint(0, 6)
@@ -170,11 +97,11 @@ class OSAOnlineDrain(TestWithServers):
 
         # Drain the pool_uuid, rank and targets
         for val in range(0, num_pool):
+            threads = []
             for oclass, api, test, flags in product(self.ior_dfs_oclass,
                                                     self.ior_apis,
                                                     self.ior_test_sequence,
                                                     self.ior_flags):
-                threads = []
                 for thrd in range(0, num_jobs):
                     # Add a thread for these IOR arguments
                     threads.append(threading.Thread(target=self.ior_thread,
@@ -189,7 +116,7 @@ class OSAOnlineDrain(TestWithServers):
                 for thrd in threads:
                     self.log.info("Thread : %s", thrd)
                     thrd.start()
-                    time.sleep(5)
+                    time.sleep(1)
             self.pool = pool[val]
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
@@ -197,22 +124,17 @@ class OSAOnlineDrain(TestWithServers):
             output = self.dmg_command.pool_drain(self.pool.uuid,
                                                  rank, t_string)
             self.log.info(output)
+            self.is_rebuild_done(3)
+            self.assert_on_rebuild_failure()
 
-            fail_count = 0
-            while fail_count <= 20:
-                pver_drain = self.get_pool_version()
-                time.sleep(10)
-                fail_count += 1
-                if pver_drain > pver_begin + 1:
-                    break
-
+            pver_drain = self.get_pool_version()
             self.log.info("Pool Version after drain %s", pver_drain)
             # Check pool version incremented after pool exclude
             self.assertTrue(pver_drain > pver_begin,
                             "Pool Version Error:  After drain")
             # Wait to finish the threads
             for thrd in threads:
-                thrd.join()
+                thrd.join(timeout=20)
 
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
@@ -220,11 +142,13 @@ class OSAOnlineDrain(TestWithServers):
             self.pool.display_pool_daos_space(display_string)
             pool[val].destroy()
 
+    @skipForTicket("DAOS-6206")
     def test_osa_online_drain(self):
         """Test ID: DAOS-4750
         Test Description: Validate Online drain
 
-        :avocado: tags=all,pr,hw,large,osa,osa_drain,online_drain,DAOS_5610
+        :avocado: tags=all,pr,hw,medium,ib2,osa,osa_drain
+        :avocado: tags=online_drain,DAOS_5610
         """
         # Perform drain testing with 1 to 2 pools
         for pool_num in range(1, 3):

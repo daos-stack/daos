@@ -97,7 +97,7 @@ rebuild_obj_fill_buf(daos_handle_t ih, d_iov_t *key_iov,
 		arg->count, arg->tgt_id);
 
 	/* re-probe the dbtree after delete */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_REBUILD, NULL,
+	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_MIGRATION, NULL,
 			       NULL);
 	if (rc == -DER_NONEXIST)
 		return 1;
@@ -118,7 +118,7 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 	/* re-init the send argument to fill the object buffer */
 	arg->count = 0;
 	arg->tgt_id = -1;
-	rc = dbtree_iterate(root->root_hdl, DAOS_INTENT_REBUILD, false,
+	rc = dbtree_iterate(root->root_hdl, DAOS_INTENT_MIGRATION, false,
 			    rebuild_obj_fill_buf, arg);
 	if (rc < 0 || arg->count == 0) {
 		D_DEBUG(DB_REBUILD, "Can not get objects: "DF_RC"\n",
@@ -180,7 +180,7 @@ rebuild_cont_send_cb(daos_handle_t ih, d_iov_t *key_iov,
 	}
 
 	/* Some one might insert new record to the tree let's reprobe */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, DAOS_INTENT_REBUILD, key_iov,
+	rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, DAOS_INTENT_MIGRATION, key_iov,
 			       NULL);
 	if (rc) {
 		D_ERROR("dbtree_iter_probe failed: "DF_RC"\n", DP_RC(rc));
@@ -194,7 +194,7 @@ rebuild_cont_send_cb(daos_handle_t ih, d_iov_t *key_iov,
 	}
 
 	/* re-probe the dbtree after delete */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_REBUILD, NULL,
+	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_MIGRATION, NULL,
 			       NULL);
 	if (rc == -DER_NONEXIST)
 		return 1;
@@ -241,7 +241,8 @@ rebuild_objects_send_ult(void *data)
 		}
 
 		/* walk through the rebuild tree and send the rebuild objects */
-		rc = dbtree_iterate(tls->rebuild_tree_hdl, DAOS_INTENT_REBUILD,
+		rc = dbtree_iterate(tls->rebuild_tree_hdl,
+				    DAOS_INTENT_MIGRATION,
 				    false, rebuild_cont_send_cb, &arg);
 		if (rc < 0) {
 			D_ERROR("dbtree iterate failed: rc "DF_RC"\n",
@@ -311,12 +312,157 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
 }
 
 #define LOCAL_ARRAY_SIZE	128
+#define NUM_SHARDS_STEP_INCREASE	10
 /* The structure for scan per xstream */
 struct rebuild_scan_arg {
 	struct rebuild_tgt_pool_tracker *rpt;
 	uuid_t				co_uuid;
 	uint32_t			yield_freq;
 };
+
+/**
+ * Invoke placement to find the object shards that need rebuilding
+ *
+ * This is an optimized function - it first tries to use the provided stack
+ * arrays to avoid allocating buffers to fill.
+ *
+ * It's possible that placement might return -DER_REC2BIG, in which case a
+ * larger buffer will be allocated and the request repeated until it succeeds.
+ *
+ * \param[in]	tgt_stack_array		stack buffer of size LOCAL_ARRAY_SIZE
+ *					to use if it is big enough
+ * \param[in]	shard_stack_array	stack buffer of size LOCAL_ARRAY_SIZE
+ *					to use if it is big enough
+ * \param[out]	tgts			filled remap list, caller must free if
+ *					it does not point to tgt_stack_array
+ * \param[out]	shards			filled remap list, caller must free if
+ *					it does not point to shard_stack_array
+ * \param[in]	map			placement map
+ * \param[in]	md			object metadata
+ * \param[in]	num_rebuild_tgts	the number of targets being rebuilt now
+ * \param[in]	rebuild_op		the rebuild operation
+ * \param[in]	rebuild_ver		the rebuild version
+ * \param[in]	myrank			this system's rank
+ * \param[out]	rebuild_nr		number of filled entries in tgts and
+ *					shards that need remapping
+ *
+ * \retval	0	Success
+ * \retval	< 0	-DER_* error. Will not return -DER_REC2BIG
+ */
+static int
+find_rebuild_shards(unsigned int *tgt_stack_array,
+		    unsigned int *shard_stack_array,
+		    unsigned int **tgts, unsigned int **shards,
+		    struct pl_map *map, struct daos_obj_md *md,
+		    uint32_t num_rebuild_tgts,
+		    daos_rebuild_opc_t rebuild_op,
+		    uint32_t rebuild_ver,
+		    d_rank_t myrank,
+		    int *rebuild_nr)
+{
+	uint32_t max_shards;
+	int rc = 0;
+
+	/*
+	 * Compute the starting buffer space allocated for remapped shards.
+	 * Use the larger of num_rebuild_tgts or LOCAL_ARRAY_SIZE
+	 * There is no point in using anything less than LOCAL_ARRAY_SIZE since
+	 * it was already allocated (on the stack)
+	 */
+	max_shards = num_rebuild_tgts > LOCAL_ARRAY_SIZE ? num_rebuild_tgts :
+							   LOCAL_ARRAY_SIZE;
+
+	/* Default to using the provided stack arrays */
+	*tgts = tgt_stack_array;
+	*shards = shard_stack_array;
+
+	do {
+		if (rc == -DER_REC2BIG) {
+			/*
+			 * The last attempt failed because there was not enough
+			 * room for all the remapped shards.
+			 *
+			 * Need to allocate more space and try again
+			 */
+
+			/*
+			 * Free any non-stack buffers that were allocated
+			 * on the last attempt
+			 */
+			if (*tgts != tgt_stack_array && *tgts != NULL)
+				D_FREE(*tgts);
+			if (*shards != shard_stack_array && *shards != NULL)
+				D_FREE(*shards);
+
+			/* Increase by the step size */
+			max_shards += NUM_SHARDS_STEP_INCREASE;
+
+			D_DEBUG(DB_REBUILD, "Got REC2BIG, increasing rebuild "
+					    "array size by %u to %u",
+					    NUM_SHARDS_STEP_INCREASE,
+					    max_shards);
+		}
+
+		/*
+		 * If the amount of space is too big for the stack arrays,
+		 * allocate some space
+		 */
+		if (max_shards > LOCAL_ARRAY_SIZE) {
+			D_DEBUG(DB_REBUILD, "Insufficient stack buffer to find "
+					    "rebuild shards, allocating %u\n",
+				max_shards);
+			D_ALLOC_ARRAY(*tgts, max_shards);
+			D_ALLOC_ARRAY(*shards, max_shards);
+			if (*tgts == NULL || *shards == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
+
+		if (rebuild_op == RB_OP_FAIL) {
+			rc = pl_obj_find_rebuild(map, md, NULL,
+						 rebuild_ver,
+						 *tgts, *shards,
+						 max_shards);
+		} else if (rebuild_op == RB_OP_DRAIN) {
+			rc = pl_obj_find_rebuild(map, md, NULL,
+						 rebuild_ver,
+						 *tgts, *shards,
+						 max_shards);
+		} else if (rebuild_op == RB_OP_REINT) {
+			rc = pl_obj_find_reint(map, md, NULL,
+					       rebuild_ver,
+					       *tgts, *shards,
+					       max_shards);
+		} else if (rebuild_op == RB_OP_EXTEND) {
+			rc = pl_obj_find_addition(map, md, NULL,
+						  rebuild_ver,
+						  *tgts, *shards,
+						  max_shards);
+		} else {
+			D_ASSERT(rebuild_op == RB_OP_FAIL ||
+				 rebuild_op == RB_OP_DRAIN ||
+				 rebuild_op == RB_OP_REINT ||
+				 rebuild_op == RB_OP_EXTEND);
+		}
+	} while (rc == -DER_REC2BIG); /* Retry and increase space on -REC2BIG */
+
+	if (rc > 0)  {
+		/* Successfully filled the rebuild lists */
+		*rebuild_nr = rc;
+		rc = 0;
+		D_ASSERT(*rebuild_nr < max_shards);
+	}
+
+out:
+	if (rc != 0) {
+		/* Failed - clean up arrays if they were allocated */
+		if (*tgts != tgt_stack_array && *tgts != NULL)
+			D_FREE(*tgts);
+		if (*shards != shard_stack_array && *shards != NULL)
+			D_FREE(*shards);
+	}
+
+	return rc;
+}
 
 static int
 rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
@@ -360,36 +506,27 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	dc_obj_fetch_md(oid.id_pub, &md);
 	crt_group_rank(rpt->rt_pool->sp_group, &myrank);
 	md.omd_ver = rpt->rt_rebuild_ver;
-	if (rpt->rt_tgts_num > LOCAL_ARRAY_SIZE) {
-		D_ALLOC_ARRAY(tgts, rpt->rt_tgts_num);
-		D_ALLOC_ARRAY(shards, rpt->rt_tgts_num);
-		if (tgts == NULL || shards == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-	} else {
-		tgts = tgt_array;
-		shards = shard_array;
-	}
 
-	if (rpt->rt_rebuild_op == RB_OP_FAIL) {
-		rebuild_nr = pl_obj_find_rebuild(map, &md, NULL,
-						 rpt->rt_rebuild_ver,
-						 tgts, shards,
-						 rpt->rt_tgts_num, myrank);
-	} else if (rpt->rt_rebuild_op == RB_OP_DRAIN) {
-		rebuild_nr = pl_obj_find_rebuild(map, &md, NULL,
-						 rpt->rt_rebuild_ver,
-						 tgts, shards,
-						 rpt->rt_tgts_num, -1);
-	} else if (rpt->rt_rebuild_op == RB_OP_REINT) {
-		rebuild_nr = pl_obj_find_reint(map, &md, NULL,
-					       rpt->rt_rebuild_ver,
-					       tgts, shards,
-					       rpt->rt_tgts_num, myrank);
-	} else if (rpt->rt_rebuild_op == RB_OP_EXTEND) {
-		rebuild_nr = pl_obj_find_addition(map, &md, NULL,
-						  rpt->rt_rebuild_ver,
-						  tgts, shards,
-						  rpt->rt_tgts_num, myrank);
+	if (rpt->rt_rebuild_op == RB_OP_FAIL ||
+	    rpt->rt_rebuild_op == RB_OP_DRAIN ||
+	    rpt->rt_rebuild_op == RB_OP_REINT ||
+	    rpt->rt_rebuild_op == RB_OP_EXTEND) {
+		/*
+		 * Use the appropriate placement algorithm to compute which
+		 * shards need to be sent to which targets
+		 */
+		rc = find_rebuild_shards(tgt_array, shard_array, &tgts, &shards,
+					 map, &md, rpt->rt_tgts_num,
+					 rpt->rt_rebuild_op,
+					 rpt->rt_rebuild_ver,
+					 myrank,
+					 &rebuild_nr);
+		if (rc != 0) {
+			D_ERROR("Failed to find rebuild shards for object "
+				DF_UOID": "DF_RC,
+				DP_UOID(oid), DP_RC(rc));
+			D_GOTO(out, rc);
+		}
 	} else {
 		D_ASSERT(rpt->rt_rebuild_op == RB_OP_FAIL ||
 			 rpt->rt_rebuild_op == RB_OP_DRAIN ||
@@ -399,7 +536,6 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	if (rebuild_nr <= 0) /* No need rebuild */
 		D_GOTO(out, rc = rebuild_nr);
 
-	D_ASSERT(rebuild_nr <= rpt->rt_tgts_num);
 	for (i = 0; i < rebuild_nr; i++) {
 		struct pool_target *target;
 
@@ -473,7 +609,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	param.ip_hdl = coh;
 	param.ip_epr.epr_lo = 0;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
-	param.ip_flags = VOS_IT_FOR_REBUILD;
+	param.ip_flags = VOS_IT_FOR_MIGRATION;
 	uuid_copy(arg->co_uuid, entry->ie_couuid);
 	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor,
 			 rebuild_obj_scan_cb, NULL, arg, NULL);
@@ -541,7 +677,7 @@ rebuild_scanner(void *data)
 		D_GOTO(out, rc = -DER_NONEXIST);
 
 	param.ip_hdl = child->spc_hdl;
-	param.ip_flags = VOS_IT_FOR_REBUILD;
+	param.ip_flags = VOS_IT_FOR_MIGRATION;
 	arg.rpt = rpt;
 	arg.yield_freq = DEFAULT_YIELD_FREQ;
 	if (!rebuild_status_match(rpt, PO_COMP_ST_UP)) {

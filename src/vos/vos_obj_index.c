@@ -294,8 +294,9 @@ skip_log:
  */
 int
 vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
-	     daos_epoch_t epoch, uint64_t flags, struct vos_obj_df *obj,
-	     struct vos_ilog_info *info, struct vos_ts_set *ts_set)
+	     daos_epoch_t epoch, daos_epoch_t bound, uint64_t flags,
+	     struct vos_obj_df *obj, struct vos_ilog_info *info,
+	     struct vos_ts_set *ts_set)
 {
 	daos_epoch_range_t	 epr = {0, epoch};
 	int			 rc = 0;
@@ -303,7 +304,7 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	D_DEBUG(DB_TRACE, "Punch obj "DF_UOID", epoch="DF_U64".\n",
 		DP_UOID(oid), epoch);
 
-	rc = vos_ilog_punch(cont, &obj->vo_ilog, &epr, NULL,
+	rc = vos_ilog_punch(cont, &obj->vo_ilog, &epr, bound, NULL,
 			    info, ts_set, true,
 			    (flags & VOS_OF_REPLAY_PC) != 0);
 
@@ -389,14 +390,16 @@ oi_iter_ilog_check(struct vos_obj_df *obj, struct vos_oi_iter *oiter,
 	umm = vos_cont2umm(oiter->oit_cont);
 	rc = vos_ilog_fetch(umm, vos_cont2hdl(oiter->oit_cont),
 			    vos_iter_intent(&oiter->oit_iter), &obj->vo_ilog,
-			    oiter->oit_epr.epr_hi, 0, NULL,
-			    &oiter->oit_ilog_info);
+			    oiter->oit_epr.epr_hi, oiter->oit_iter.it_bound,
+			    NULL, NULL, &oiter->oit_ilog_info);
 	if (rc != 0)
 		goto out;
 
+	if (oiter->oit_ilog_info.ii_uncertain_create)
+		D_GOTO(out, rc = -DER_TX_RESTART);
+
 	rc = vos_ilog_check(&oiter->oit_ilog_info, &oiter->oit_epr, epr,
 			    (oiter->oit_flags & VOS_IT_PUNCHED) == 0);
-
 out:
 	D_ASSERTF(check_existence || rc != -DER_NONEXIST,
 		  "Probe is required before fetch\n");
@@ -448,6 +451,7 @@ oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 {
 	struct vos_oi_iter	*oiter = NULL;
 	struct vos_container	*cont = NULL;
+	struct dtx_handle	*dth = vos_dth_get();
 	int			rc = 0;
 
 	if (type != VOS_ITER_OBJ) {
@@ -471,13 +475,18 @@ oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	oiter->oit_iter.it_type = type;
 	oiter->oit_epr  = param->ip_epr;
 	oiter->oit_cont = cont;
+	if (dtx_is_valid_handle(dth))
+		oiter->oit_iter.it_bound = MAX(dth->dth_epoch,
+					       dth->dth_epoch_bound);
+	else
+		oiter->oit_iter.it_bound = param->ip_epr.epr_hi;
 	vos_cont_addref(cont);
 
 	oiter->oit_flags = param->ip_flags;
 	if (param->ip_flags & VOS_IT_FOR_PURGE)
 		oiter->oit_iter.it_for_purge = 1;
-	if (param->ip_flags & VOS_IT_FOR_REBUILD)
-		oiter->oit_iter.it_for_rebuild = 1;
+	if (param->ip_flags & VOS_IT_FOR_MIGRATION)
+		oiter->oit_iter.it_for_migration = 1;
 
 	rc = dbtree_iter_prepare(cont->vc_btr_hdl, 0, &oiter->oit_hdl);
 	if (rc)
@@ -539,8 +548,7 @@ oi_iter_match_probe(struct vos_iterator *iter)
 	if (rc == -DER_NONEXIST) /* Non-existence isn't a failure */
 		return rc;
 
-	D_CDEBUG(rc == -DER_INPROGRESS, DB_TRACE, DLOG_ERR,
-		 "iterator %s failed, rc="DF_RC"\n", str, DP_RC(rc));
+	VOS_TX_LOG_FAIL(rc, "iterator %s failed, rc="DF_RC"\n", str, DP_RC(rc));
 
 	return rc;
 }

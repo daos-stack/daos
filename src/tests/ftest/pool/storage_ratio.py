@@ -25,6 +25,7 @@ from apricot import TestWithServers
 from test_utils_pool import TestPool
 from avocado.core.exceptions import TestFail
 
+
 class StorageRatio(TestWithServers):
     """Storage Ratio test cases.
 
@@ -33,6 +34,7 @@ class StorageRatio(TestWithServers):
 
     :avocado: recursive
     """
+
     def test_storage_ratio(self):
         """Jira ID: DAOS-2332.
 

@@ -25,7 +25,7 @@
  * Mocks for DAOS mgmt unit tests
  */
 
-#include "../srv.pb-c.h"
+#include "../svc.pb-c.h"
 #include "../srv_internal.h"
 #include "mocks.h"
 
@@ -466,6 +466,19 @@ ds_mgmt_dev_state_query(uuid_t uuid, Mgmt__DevStateResp *resp)
 
 int
 ds_mgmt_dev_set_faulty(uuid_t uuid, Mgmt__DevStateResp *resp)
+{
+	return 0;
+}
+
+int
+ds_mgmt_dev_replace(uuid_t old_uuid, uuid_t new_uuid,
+		    Mgmt__DevReplaceResp *resp)
+{
+	return 0;
+}
+
+int
+ds_mgmt_dev_identify(uuid_t uuid, Mgmt__DevIdentifyResp *resp)
 {
 	return 0;
 }

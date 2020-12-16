@@ -92,10 +92,14 @@ class DaosPool(object):
         c_info.pi_bits = ctypes.c_ulong(-1)
         func = self.context.get_function('connect-pool')
 
+        # phasing out the pool service rank list argument
+        # libdaos will query MS for up-to-date replica list
+        no_svcl = daos_cref.RankList(None, 0)
+
         # the callback function is optional, if not supplied then run the
         # create synchronously, if its there then run it in a thread
         if cb_func is None:
-            ret = func(self.uuid, self.group, ctypes.byref(self.svc), c_flags,
+            ret = func(self.uuid, self.group, ctypes.byref(no_svcl), c_flags,
                        ctypes.byref(self.handle), ctypes.byref(c_info), None)
 
             if ret != 0:
@@ -106,7 +110,7 @@ class DaosPool(object):
                 self.connected = 1
         else:
             event = daos_cref.DaosEvent()
-            params = [self.uuid, self.group, ctypes.byref(self.svc), c_flags,
+            params = [self.uuid, self.group, ctypes.byref(no_svcl), c_flags,
                       ctypes.byref(self.handle), ctypes.byref(c_info), event]
             thread = threading.Thread(target=daos_cref.AsyncWorker1,
                                       args=(func,
@@ -191,19 +195,20 @@ class DaosPool(object):
         c_tgts = ctypes.pointer(
             daos_cref.DTgtList(tl_ranks, ctypes.pointer(tl_tgts), tl_nr))
 
-        if self.svc is None:
-            c_svc = None
-        else:
-            c_svc = ctypes.pointer(self.svc)
         func = self.context.get_function('exclude-target')
+
+        # phasing out the pool service rank list argument
+        no_svcl = daos_cref.RankList(None, 0)
+
         if cb_func is None:
-            ret = func(self.uuid, self.group, c_svc, c_tgts, None)
+            ret = func(self.uuid, self.group, ctypes.byref(no_svcl), c_tgts,
+                       None)
             if ret != 0:
                 raise DaosApiError("Pool exclude returned non-zero. RC: {0}"
                                    .format(ret))
         else:
             event = daos_cref.DaosEvent()
-            params = [self.uuid, self.group, c_svc,
+            params = [self.uuid, self.group, ctypes.byref(no_svcl),
                       ctypes.byref(c_tgts), event]
             thread = threading.Thread(target=daos_cref.AsyncWorker1,
                                       args=(func,
@@ -221,14 +226,17 @@ class DaosPool(object):
         """Evict all connections to a pool."""
         func = self.context.get_function('evict-client')
 
+        # phasing out the pool service rank list argument
+        no_svcl = daos_cref.RankList(None, 0)
+
         if cb_func is None:
-            ret = func(self.uuid, self.group, ctypes.byref(self.svc), None)
+            ret = func(self.uuid, self.group, ctypes.byref(no_svcl), None)
             if ret != 0:
                 raise DaosApiError("Pool evict returned non-zero. "
                                    "RC: {0}".format(ret))
         else:
             event = daos_cref.DaosEvent()
-            params = [self.uuid, self.group, ctypes.byref(self.svc), event]
+            params = [self.uuid, self.group, ctypes.byref(no_svcl), event]
             thread = threading.Thread(target=daos_cref.AsyncWorker1,
                                       args=(func,
                                             params,
@@ -254,15 +262,18 @@ class DaosPool(object):
             daos_cref.DTgtList(tl_ranks, ctypes.pointer(tl_tgts), tl_nr))
         func = self.context.get_function("reint-target")
 
+        # phasing out the pool service rank list argument
+        no_svcl = daos_cref.RankList(None, 0)
+
         if cb_func is None:
-            ret = func(self.uuid, self.group, ctypes.byref(self.svc),
+            ret = func(self.uuid, self.group, ctypes.byref(no_svcl),
                        ctypes.byref(c_tgts), None)
             if ret != 0:
                 raise DaosApiError("Pool tgt_reint returned non-zero. RC: {0}"
                                    .format(ret))
         else:
             event = daos_cref.DaosEvent()
-            params = [self.uuid, self.group, ctypes.byref(self.svc),
+            params = [self.uuid, self.group, ctypes.byref(no_svcl),
                       ctypes.byref(c_tgts), event]
             thread = threading.Thread(target=daos_cref.AsyncWorker1,
                                       args=(func,
@@ -288,16 +299,19 @@ class DaosPool(object):
         c_tgts = ctypes.pointer(
             daos_cref.DTgtList(tl_ranks, ctypes.pointer(tl_tgts), tl_nr))
 
+        # phasing out the pool service rank list argument
+        no_svcl = daos_cref.RankList(None, 0)
+
         func = self.context.get_function('kill-target')
         if cb_func is None:
-            ret = func(self.uuid, self.group, ctypes.byref(self.svc),
+            ret = func(self.uuid, self.group, ctypes.byref(no_svcl),
                        ctypes.byref(c_tgts), None)
             if ret != 0:
                 raise DaosApiError(
                     "Pool exclude_out returned non-zero. RC: {0}".format(ret))
         else:
             event = daos_cref.DaosEvent()
-            params = [self.uuid, self.group, ctypes.byref(self.svc),
+            params = [self.uuid, self.group, ctypes.byref(no_svcl),
                       ctypes.byref(c_tgts), event]
             thread = threading.Thread(target=daos_cref.AsyncWorker1,
                                       args=(func,

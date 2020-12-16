@@ -38,7 +38,12 @@ struct dtx_rsrvd_uint {
 };
 
 enum dtx_cos_flags {
-	DCF_SHARED	= (1 << 0),
+	DCF_SHARED		= (1 << 0),
+	/* Some DTX (such as for the distributed transaction across multiple
+	 * RDGs, or for EC object modification) need to be committed via DTX
+	 * RPC instead of piggyback via other dispatched update/punch RPC.
+	 */
+	DCF_EXP_CMT		= (1 << 1),
 };
 
 struct dtx_cos_key {
@@ -58,6 +63,8 @@ enum dtx_entry_flags {
 	 * object modification via standalone update/punch.
 	 */
 	DTE_BLOCK		= (1 << 2),
+	/* The DTX is corrupted, some participant RDG(s) may be lost. */
+	DTE_CORRUPTED		= (1 << 3),
 };
 
 struct dtx_entry {
@@ -306,8 +313,8 @@ enum {
 	VOS_IT_RECX_REVERSE	= (1 << 3),
 	/** The iterator is for purge operation */
 	VOS_IT_FOR_PURGE	= (1 << 4),
-	/** The iterator is for rebuild scan */
-	VOS_IT_FOR_REBUILD	= (1 << 5),
+	/** The iterator is for data migration scan */
+	VOS_IT_FOR_MIGRATION	= (1 << 5),
 	/** Iterate only show punched records in interval */
 	VOS_IT_PUNCHED		= (1 << 6),
 	/** Mask for all flags */
@@ -402,8 +409,10 @@ typedef struct {
 			daos_unit_oid_t		ie_dtx_oid;
 			/** The pool map version when handling DTX on server. */
 			uint32_t		ie_dtx_ver;
-			/* The dkey hash for DTX iteration. */
+			/* The DTX entry flags, see dtx_entry_flags. */
 			uint16_t		ie_dtx_flags;
+			/* DTX mbs flags, see dtx_mbs_flags. */
+			uint16_t		ie_dtx_mbs_flags;
 			/** DTX tgt count. */
 			uint32_t		ie_dtx_tgt_cnt;
 			/** DTX modified group count. */

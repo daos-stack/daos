@@ -461,9 +461,13 @@ abt_fini(void)
 static int
 server_init(int argc, char *argv[])
 {
+	uint64_t	bound;
+	int64_t		diff;
 	unsigned int	ctx_nr;
 	char		hostname[256] = { 0 };
 	int		rc;
+
+	bound = crt_hlc_epsilon_get_bound(crt_hlc_get());
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
@@ -488,14 +492,6 @@ server_init(int argc, char *argv[])
 		goto exit_abt_init;
 
 	D_INFO("Module interface successfully initialized\n");
-	/* load modules.  Split load an init so first call to dlopen
-	 * is from the ioserver to avoid DAOS-4557
-	 */
-	rc = modules_load();
-	if (rc)
-		/* Some modules may have been loaded successfully. */
-		D_GOTO(exit_mod_loaded, rc);
-	D_INFO("Module %s successfully loaded\n", modules);
 
 	/* initialize the network layer */
 	ctx_nr = dss_ctx_nr_get();
@@ -507,6 +503,15 @@ server_init(int argc, char *argv[])
 	D_INFO("Network successfully initialized\n");
 
 	ds_iv_init();
+
+	/* load modules. Split load and init so first call to dlopen()
+	 * is from the ioserver to avoid DAOS-4557
+	 */
+	rc = modules_load();
+	if (rc)
+		/* Some modules may have been loaded successfully. */
+		D_GOTO(exit_mod_loaded, rc);
+	D_INFO("Module %s successfully loaded\n", modules);
 
 	/* init modules */
 	rc = dss_module_init_all(&dss_mod_facs);
@@ -565,6 +570,30 @@ server_init(int argc, char *argv[])
 	}
 
 	server_init_state_wait(DSS_INIT_STATE_SET_UP);
+
+	diff = bound - crt_hlc_get();
+	if (diff > 0) {
+		struct timespec		tv;
+
+		tv.tv_sec = diff / NSEC_PER_SEC;
+		tv.tv_nsec = diff % NSEC_PER_SEC;
+
+		/* XXX: If the server restart so quickly as to all related
+		 *	things are handled within HLC epsilon, then it is
+		 *	possible that current local HLC after restart may
+		 *	be older than some HLC that was generated before
+		 *	server restart because of the clock drift between
+		 *	servers. So here, we control the server (re)start
+		 *	process to guarantee that the restart time window
+		 *	will be longer than the HLC epsilon, then new HLC
+		 *	generated after server restart will not rollback.
+		 */
+		D_INFO("nanosleep %lu:%lu before open external service.\n",
+		       tv.tv_sec, tv.tv_nsec);
+		nanosleep(&tv, NULL);
+	}
+
+	dss_set_start_epoch();
 
 	rc = dss_module_setup_all();
 	if (rc != 0)
@@ -728,7 +757,7 @@ parse(int argc, char **argv)
 			       "instead.\n");
 		case 't':
 			nr = strtoul(optarg, &end, 10);
-			if (end == optarg || nr == ULONG_MAX) {
+			if ((end == optarg) || (nr == ULONG_MAX)) {
 				rc = -DER_INVAL;
 				break;
 			}
@@ -736,7 +765,7 @@ parse(int argc, char **argv)
 			break;
 		case 'x':
 			nr = strtoul(optarg, &end, 10);
-			if (end == optarg || nr == ULONG_MAX) {
+			if ((end == optarg) || (nr == ULONG_MAX)) {
 				rc = -DER_INVAL;
 				break;
 			}
@@ -744,7 +773,7 @@ parse(int argc, char **argv)
 			break;
 		case 'f':
 			nr = strtoul(optarg, &end, 10);
-			if (end == optarg || nr == ULONG_MAX) {
+			if ((end == optarg) || (nr == ULONG_MAX)) {
 				rc = -DER_INVAL;
 				break;
 			}
@@ -777,7 +806,7 @@ parse(int argc, char **argv)
 			break;
 		case 'r':
 			nr = strtoul(optarg, &end, 10);
-			if (end == optarg || nr == ULONG_MAX) {
+			if ((end == optarg) || (nr == ULONG_MAX)) {
 				rc = -DER_INVAL;
 				break;
 			}

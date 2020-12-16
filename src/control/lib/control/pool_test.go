@@ -34,6 +34,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -252,17 +253,58 @@ func TestControl_PoolCreate(t *testing.T) {
 			},
 			expErr: errors.New("remote failed"),
 		},
+		"non-retryable failure": {
+			req: &PoolCreateReq{},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", drpc.DaosIOError, nil),
+				},
+			},
+			expErr: drpc.DaosIOError,
+		},
+		"create -DER_TIMEDOUT is retried": {
+			req: &PoolCreateReq{},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", drpc.DaosTimedOut, nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolCreateResp{}),
+				},
+			},
+			expResp: &PoolCreateResp{},
+		},
+		"create -DER_GRPVER is retried": {
+			req: &PoolCreateReq{},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", drpc.DaosGroupVersionMismatch, nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolCreateResp{}),
+				},
+			},
+			expResp: &PoolCreateResp{},
+		},
+		"create -DER_AGAIN is retried": {
+			req: &PoolCreateReq{},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", drpc.DaosTryAgain, nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolCreateResp{}),
+				},
+			},
+			expResp: &PoolCreateResp{},
+		},
 		"success": {
 			req: &PoolCreateReq{},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolCreateResp{
-						Svcreps: []uint32{0, 1, 2},
+						Svcreps:  []uint32{0, 1, 2},
+						Numranks: 32,
 					},
 				),
 			},
 			expResp: &PoolCreateResp{
-				SvcReps: []uint32{0, 1, 2},
+				SvcReps:  []uint32{0, 1, 2},
+				NumRanks: 32,
 			},
 		},
 	} {

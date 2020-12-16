@@ -31,10 +31,14 @@ message NetworkScanReq {
 
 message NetworkScanResp {
   repeated FabricInterface interfaces = 1;
+  int32 numacount = 2;
+  int32 corespernuma = 3; // physical cores per numa node
 }
 
 message FabricInterface {
   string provider = 1;
   string device = 2;
   uint32 numanode = 3;
+  uint32 priority = 4;
+  uint32 netdevclass = 5;
 }

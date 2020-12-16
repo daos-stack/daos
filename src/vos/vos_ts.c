@@ -42,9 +42,9 @@ static const uint32_t type_counts[] = {
 	D_FOREACH_TS_TYPE(DEFINE_TS_COUNT)
 };
 
-#define OBJ_MISS_SIZE (1 << 9)
-#define DKEY_MISS_SIZE (1 << 5)
-#define AKEY_MISS_SIZE (1 << 4)
+#define OBJ_MISS_SIZE (1 << 16)
+#define DKEY_MISS_SIZE (1 << 16)
+#define AKEY_MISS_SIZE (1 << 16)
 
 #define TS_TRACE(action, entry, idx, type)				\
 	D_DEBUG(DB_TRACE, "%s %s at idx %d(%p), read.hi="DF_U64		\
@@ -52,38 +52,26 @@ static const uint32_t type_counts[] = {
 		(entry)->te_record_ptr, (entry)->te_ts.tp_ts_rh,	\
 		(entry)->te_ts.tp_ts_rl)
 
-/** This probably needs more thought */
+/** The entry is being evicted either because there is no space in the cache or
+ *  the item it represents has been removed.  In either case, update the
+ *  corresponding negative entry.
+ */
 static bool
 ts_update_on_evict(struct vos_ts_table *ts_table, struct vos_ts_entry *entry)
 {
-	struct vos_ts_entry	*parent = NULL;
-	struct vos_ts_entry	*other = NULL;
-	struct vos_ts_info	*info = entry->te_info;
-	struct vos_ts_info	*parent_info;
-	struct vos_ts_info	*neg_info = NULL;
-	uint32_t		*idx;
+	struct vos_wts_cache	*wcache;
+	struct vos_wts_cache	*dest;
 
 	if (entry->te_record_ptr == NULL)
 		return false;
 
-	if (entry->te_parent_ptr != NULL) {
-		if (info->ti_type & 1) { /* negative entry */
-			parent_info = info - 1;
-		} else {
-			parent_info = info - VOS_TS_PER_LEVEL;
-			neg_info = info - 1;
-		}
-		lrua_lookup(parent_info->ti_array, entry->te_parent_ptr,
-			    &parent);
-		if (neg_info == NULL) {
-			other = parent;
-		} else if (parent != NULL) {
-			idx = &parent->te_miss_idx[entry->te_hash_idx];
-			lrua_lookup(neg_info->ti_array, idx, &other);
-		}
-	}
+	wcache = &entry->te_w_cache;
 
-	if (other == NULL) {
+	if (entry->te_negative == NULL) {
+		/* No negative entry.  This is likely the container level, so
+		 * just update the global entries
+		 */
+		dest = &ts_table->tt_w_cache;
 		if (entry->te_ts.tp_ts_rl > ts_table->tt_ts_rl) {
 			vos_ts_copy(&ts_table->tt_ts_rl, &ts_table->tt_tx_rl,
 				    entry->te_ts.tp_ts_rl,
@@ -94,43 +82,25 @@ ts_update_on_evict(struct vos_ts_table *ts_table, struct vos_ts_entry *entry)
 				    entry->te_ts.tp_ts_rh,
 				    &entry->te_ts.tp_tx_rh);
 		}
-		return true;
+		goto update_w_cache;
 	}
 
-	vos_ts_rl_update(other, entry->te_ts.tp_ts_rl, &entry->te_ts.tp_tx_rl);
-	vos_ts_rh_update(other, entry->te_ts.tp_ts_rh, &entry->te_ts.tp_tx_rh);
+	dest = &entry->te_negative->te_w_cache;
+	vos_ts_rl_update(entry->te_negative, entry->te_ts.tp_ts_rl,
+			 &entry->te_ts.tp_tx_rl);
+	vos_ts_rh_update(entry->te_negative, entry->te_ts.tp_ts_rh,
+			 &entry->te_ts.tp_tx_rh);
+update_w_cache:
+	vos_ts_update_wcache(dest, wcache->wc_ts_w[0]);
+	vos_ts_update_wcache(dest, wcache->wc_ts_w[1]);
 
 	return true;
 }
-
-static inline void
-evict_children(struct vos_ts_info *info, struct vos_ts_entry *entry)
-{
-	int			 i;
-	uint32_t		*idx;
-	uint32_t		 cache_num;
-
-	info = entry->te_info;
-
-	if ((info->ti_type == VOS_TS_TYPE_AKEY) || (info->ti_type & 1) != 0)
-		return;
-
-	cache_num = info->ti_cache_mask + 1;
-	info++;
-	for (i = 0; i < cache_num; i++) {
-		/* Also evict the children, if present */
-		idx = &entry->te_miss_idx[i];
-		lrua_evict(info->ti_array, idx);
-	}
-}
-
 
 static void evict_entry(void *payload, uint32_t idx, void *arg)
 {
 	struct vos_ts_info	*info = arg;
 	struct vos_ts_entry	*entry = payload;
-
-	evict_children(info, entry);
 
 	if (ts_update_on_evict(info->ti_table, entry)) {
 		TS_TRACE("Evicted", entry, idx, info->ti_type);
@@ -142,16 +112,8 @@ static void init_entry(void *payload, uint32_t idx, void *arg)
 {
 	struct vos_ts_info	*info = arg;
 	struct vos_ts_entry	*entry = payload;
-	uint32_t		 count;
 
 	entry->te_info = info;
-	if (info->ti_misses) {
-		D_ASSERT((info->ti_type & 1) == 0 &&
-			 info->ti_type != VOS_TS_TYPE_AKEY &&
-			 info->ti_cache_mask != 0);
-		count = info->ti_cache_mask + 1;
-		entry->te_miss_idx = &info->ti_misses[idx * count];
-	}
 }
 
 static const struct lru_callbacks lru_cbs = {
@@ -162,12 +124,14 @@ static const struct lru_callbacks lru_cbs = {
 int
 vos_ts_table_alloc(struct vos_ts_table **ts_tablep)
 {
+	struct vos_ts_entry	*entry;
 	struct vos_ts_table	*ts_table;
 	struct vos_ts_info	*info;
+	struct vos_ts_entry	*miss_cursor;
 	int			 rc;
 	uint32_t		 i;
+	int			 j;
 	uint32_t		 miss_size;
-	uint32_t		*miss_cursor;
 
 	*ts_tablep = NULL;
 
@@ -176,9 +140,7 @@ vos_ts_table_alloc(struct vos_ts_table **ts_tablep)
 		return -DER_NOMEM;
 
 	D_ALLOC_ARRAY(ts_table->tt_misses,
-		      (type_counts[VOS_TS_TYPE_CONT] * OBJ_MISS_SIZE) +
-		      (type_counts[VOS_TS_TYPE_OBJ] * DKEY_MISS_SIZE) +
-		      (type_counts[VOS_TS_TYPE_DKEY] * AKEY_MISS_SIZE));
+		      OBJ_MISS_SIZE + DKEY_MISS_SIZE + AKEY_MISS_SIZE);
 	if (ts_table->tt_misses == NULL) {
 		rc = -DER_NOMEM;
 		goto free_table;
@@ -196,16 +158,16 @@ vos_ts_table_alloc(struct vos_ts_table **ts_tablep)
 		info->ti_count = type_counts[i];
 		info->ti_table = ts_table;
 		switch (i) {
-		case VOS_TS_TYPE_CONT:
+		case VOS_TS_TYPE_OBJ:
 			miss_size = OBJ_MISS_SIZE;
 			break;
-		case VOS_TS_TYPE_OBJ:
+		case VOS_TS_TYPE_DKEY:
 			miss_size = DKEY_MISS_SIZE;
 			break;
-		case VOS_TS_TYPE_DKEY:
+		case VOS_TS_TYPE_AKEY:
 			miss_size = AKEY_MISS_SIZE;
 			break;
-		case VOS_TS_TYPE_AKEY:
+		case VOS_TS_TYPE_CONT:
 		default:
 			miss_size = 0;
 			break;
@@ -213,7 +175,24 @@ vos_ts_table_alloc(struct vos_ts_table **ts_tablep)
 		if (miss_size) {
 			info->ti_cache_mask = miss_size - 1;
 			info->ti_misses = miss_cursor;
-			miss_cursor += info->ti_count * miss_size;
+			miss_cursor += miss_size;
+			/* Negative entries are global.  Each object/key chain
+			 * will hash to an index.   There will be some false
+			 * sharing but it should be fairly minimal.  Start each
+			 * negative entry with global settings.
+			 */
+			for (j = 0; j < miss_size; j++) {
+				entry = &info->ti_misses[j];
+				entry->te_info = info;
+				vos_ts_copy(&entry->te_ts.tp_ts_rl,
+					    &entry->te_ts.tp_tx_rl,
+					    ts_table->tt_ts_rl,
+					    &ts_table->tt_tx_rl);
+				vos_ts_copy(&entry->te_ts.tp_ts_rh,
+					    &entry->te_ts.tp_tx_rh,
+					    ts_table->tt_ts_rh,
+					    &ts_table->tt_tx_rh);
+			}
 		}
 
 		rc = lrua_array_alloc(&info->ti_array, info->ti_count, 1,
@@ -253,62 +232,42 @@ vos_ts_table_free(struct vos_ts_table **ts_tablep)
 }
 
 void
-vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *parent,
-		 struct vos_ts_entry **entryp, uint32_t *idx, uint32_t hash_idx,
-		 uint32_t type)
+vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry **entryp,
+		 uint32_t *idx, uint32_t hash_idx, uint32_t type)
 {
-	struct vos_ts_entry	*ts_source = NULL;
 	struct vos_ts_entry	*entry;
+	struct vos_ts_entry	*neg_entry = NULL;
 	struct vos_ts_info	*info = &ts_table->tt_type_info[type];
-	uint32_t		*neg_idx;
 	int			 rc;
 
 	rc = lrua_alloc(ts_table->tt_type_info[type].ti_array, idx, &entry);
 	D_ASSERT(rc == 0); /** autoeviction and no allocation */
 
-	if (parent == NULL) {
+	if (info->ti_cache_mask)
+		neg_entry = &info->ti_misses[hash_idx];
+
+	entry->te_negative = neg_entry;
+
+	if (neg_entry == NULL) {
 		/** Use global timestamps for the type to initialize it */
 		vos_ts_copy(&entry->te_ts.tp_ts_rl, &entry->te_ts.tp_tx_rl,
 			    ts_table->tt_ts_rl, &ts_table->tt_tx_rl);
 		vos_ts_copy(&entry->te_ts.tp_ts_rh, &entry->te_ts.tp_tx_rh,
 			    ts_table->tt_ts_rh, &ts_table->tt_tx_rh);
-		entry->te_parent_ptr = NULL;
+		entry->te_w_cache = ts_table->tt_w_cache;
 	} else {
-		entry->te_parent_ptr = parent->te_record_ptr;
-		if ((type & 1) == 0) { /* positive entry */
-			neg_idx = &parent->te_miss_idx[hash_idx];
-			lrua_lookup(parent->te_info->ti_array, neg_idx,
-				    &ts_source);
-		}
-		if (ts_source == NULL)
-			ts_source = parent;
-
-		if ((type & 1) != 0) {
-			/* This is a new negative entry. The low timestamp of
-			 * the parent should cover this case so copy it to
-			 * both timestamps.
-			 */
-			vos_ts_copy(&entry->te_ts.tp_ts_rh,
-				    &entry->te_ts.tp_tx_rh,
-				    ts_source->te_ts.tp_ts_rl,
-				    &ts_source->te_ts.tp_tx_rl);
-		} else {
-			/** It is either copying from a negative entry
-			 * or its parent was evicted so copy both timestamps
-			 */
-			vos_ts_copy(&entry->te_ts.tp_ts_rh,
-				    &entry->te_ts.tp_tx_rh,
-				    ts_source->te_ts.tp_ts_rh,
-				    &ts_source->te_ts.tp_tx_rh);
-		}
-		/** Low timestamp is always copied as is */
-		vos_ts_copy(&entry->te_ts.tp_ts_rl, &entry->te_ts.tp_tx_rl,
-			    ts_source->te_ts.tp_ts_rl,
-			    &ts_source->te_ts.tp_tx_rl);
+		vos_ts_copy(&entry->te_ts.tp_ts_rh,
+			    &entry->te_ts.tp_tx_rh,
+			    neg_entry->te_ts.tp_ts_rh,
+			    &neg_entry->te_ts.tp_tx_rh);
+		vos_ts_copy(&entry->te_ts.tp_ts_rl,
+			    &entry->te_ts.tp_tx_rl,
+			    neg_entry->te_ts.tp_ts_rl,
+			    &neg_entry->te_ts.tp_tx_rl);
+		entry->te_w_cache = neg_entry->te_w_cache;
 	}
 
 	/** Set the lower bounds for the entry */
-	entry->te_hash_idx = hash_idx;
 	entry->te_record_ptr = idx;
 	TS_TRACE("Allocated", entry, *idx, type);
 
@@ -327,11 +286,13 @@ vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 	uint64_t	cond_mask = VOS_COND_FETCH_MASK | VOS_COND_UPDATE_MASK |
 		VOS_OF_COND_PER_AKEY;
 
+	vos_kh_clear();
+
 	*ts_set = NULL;
 	if (tx_id == NULL && (flags & cond_mask) == 0)
 		return 0;
 
-	size = VOS_TS_TYPE_AKEY / VOS_TS_PER_LEVEL + akey_nr;
+	size = VOS_TS_TYPE_AKEY + akey_nr;
 	array_size = size * sizeof((*ts_set)->ts_entries[0]);
 
 	D_ALLOC(*ts_set, sizeof(**ts_set) + array_size);
@@ -355,12 +316,10 @@ vos_ts_set_upgrade(struct vos_ts_set *ts_set)
 {
 	struct vos_ts_set_entry	*set_entry;
 	struct vos_ts_entry	*entry;
-	struct vos_ts_entry	*parent;
 	struct vos_ts_table	*ts_table;
 	struct vos_ts_info	*info;
 	uint32_t		 hash_idx;
 	int			 i;
-	int			 parent_idx;
 
 	if (!vos_ts_in_tx(ts_set))
 		return;
@@ -370,20 +329,18 @@ vos_ts_set_upgrade(struct vos_ts_set *ts_set)
 	for (i = 0; i < ts_set->ts_init_count; i++) {
 		set_entry = &ts_set->ts_entries[i];
 		entry = set_entry->se_entry;
+		info = entry->te_info;
+
 		D_ASSERT(entry != NULL);
-		if ((entry->te_info->ti_type & 1) == 0)
+		if (entry->te_negative != NULL || info->ti_misses == NULL)
 			continue;
 
 		D_ASSERT(i != 0); /** no negative lookup on container */
 		D_ASSERT(set_entry->se_create_idx != NULL);
 
-		parent_idx = MIN(2, i - 1);
-		parent = ts_set->ts_entries[parent_idx].se_entry;
-		info = parent->te_info;
-		hash_idx = set_entry->se_hash & info->ti_cache_mask;
-		vos_ts_evict_lru(ts_table, parent, &entry,
-				 set_entry->se_create_idx, hash_idx,
-				 info->ti_type + VOS_TS_PER_LEVEL);
+		hash_idx = entry - info->ti_misses;
+		vos_ts_evict_lru(ts_table, &entry, set_entry->se_create_idx,
+				 hash_idx, info->ti_type);
 		set_entry->se_entry = entry;
 	}
 }

@@ -184,6 +184,41 @@ func TestStorageCommands(t *testing.T) {
 			"",
 			errors.New("Unknown command"),
 		},
+		{
+			"Reuse a FAULTY device",
+			"storage replace nvme --old-uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d --new-uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			printRequest(t, &control.SmdQueryReq{
+				UUID:        "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+				ReplaceUUID: "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+				NoReint:     false,
+			}),
+			nil,
+		},
+		{
+			"Replace an evicted device with a new device",
+			"storage replace nvme --old-uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d --new-uuid 2ccb8afb-5d32-454e-86e3-762ec5dca7be",
+			printRequest(t, &control.SmdQueryReq{
+				UUID:        "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+				ReplaceUUID: "2ccb8afb-5d32-454e-86e3-762ec5dca7be",
+				NoReint:     false,
+			}),
+			nil,
+		},
+		{
+			"Try to replace a device without a new device UUID specified",
+			"storage replace nvme --old-uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			"StorageReplaceNvme",
+			errors.New("the required flag `--new-uuid' was not specified"),
+		},
+		{
+			"Identify a device",
+			"storage identify vmd --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			printRequest(t, &control.SmdQueryReq{
+				UUID:     "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+				Identify: true,
+			}),
+			nil,
+		},
 	})
 }
 

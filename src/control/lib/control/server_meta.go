@@ -65,6 +65,9 @@ type (
 		UUID             string // UUID of pool or device for single result
 		Rank             system.Rank
 		Target           string
+		ReplaceUUID      string // UUID of new device to replace storage
+		NoReint          bool   // for device replacement
+		Identify         bool   // for VMD LED device identification
 	}
 
 	// SmdQueryResp represents the results of performing
@@ -137,7 +140,12 @@ func SmdQuery(ctx context.Context, rpcClient UnaryInvoker, req *SmdQueryReq) (*S
 	}
 	if req.UUID != "" {
 		if err := checkUUID(req.UUID); err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "bad device UUID")
+		}
+	}
+	if req.ReplaceUUID != "" {
+		if err := checkUUID(req.ReplaceUUID); err != nil {
+			return nil, errors.Wrap(err, "bad new device UUID for replacement")
 		}
 	}
 

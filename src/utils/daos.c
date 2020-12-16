@@ -16,7 +16,7 @@
  * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
  * The Government's rights to use, modify, reproduce, release, perform, display,
  * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
+ * provided in Contract No. 8F-30005.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
@@ -110,6 +110,8 @@ pool_op_parse(const char *str)
 		return POOL_LIST_CONTAINERS;
 	else if (strcmp(str, "list-cont") == 0)
 		return POOL_LIST_CONTAINERS;
+	else if (strcmp(str, "ls") == 0)
+		return POOL_LIST_CONTAINERS;
 	else if (strcmp(str, "query") == 0)
 		return POOL_QUERY;
 	else if (strcmp(str, "stat") == 0)
@@ -124,6 +126,8 @@ pool_op_parse(const char *str)
 		return POOL_DEL_ATTR;
 	else if (strcmp(str, "list-attrs") == 0)
 		return POOL_LIST_ATTRS;
+	else if (strcmp(str, "autotest") == 0)
+		return POOL_AUTOTEST;
 	return -1;
 }
 
@@ -304,8 +308,8 @@ daos_obj_id_parse(const char *oid_str, daos_obj_id_t *oid)
 }
 
 /* supported properties names are "label", "cksum" ("off" or <type> in
- * crc[16,32,64], sha1), "cksum_size", "srv_cksum" (cksum on server,
- * "on"/"off"), "red_factor" (redundancy factor, rf[0-4]).
+ * crc[16,32,64], adler32, sha1, sha256 or sha512), "cksum_size", "srv_cksum"
+ * (cksum on server, "on"/"off"), "red_factor" (redundancy factor, rf[0-4]).
  */
 static int
 daos_parse_property(char *name, char *value, daos_prop_t *props)
@@ -329,7 +333,8 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 		if (csum_type < 0) {
 			fprintf(stderr,
 				"currently supported checksum types are "
-				"'off, crc[16,32,64], sha[1,256,512]'\n");
+				"'off, crc[16,32,64], adler32, "
+				"sha[1,256,512]'\n");
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_CSUM;
@@ -794,9 +799,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		D_GOTO(out_free, rc = RC_NO_HELP);
 	}
 
-	if (ap->c_op != -1 &&
-	    (ap->c_op == CONT_LIST_OBJS ||
-	     ap->c_op == CONT_STAT)) {
+	if (ap->c_op != -1 && ap->c_op == CONT_STAT) {
 		fprintf(stderr,
 			"container %s not yet implemented\n", cmdname);
 		D_GOTO(out_free, rc = RC_NO_HELP);
@@ -810,7 +813,9 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		D_GOTO(out_free, rc = RC_NO_HELP);
 	}
 
-	/* Verify pool svc provided */
+	/* Verify pool svc argument. If not provided pass NULL list to libdaos,
+	 * and client will query management service for rank list.
+	 */
 	ARGS_VERIFY_MDSRV(ap, out_free, rc = RC_PRINT_HELP);
 
 	D_FREE(cmdname);
@@ -890,6 +895,9 @@ pool_op_hdlr(struct cmd_args_s *ap)
 		break;
 	case POOL_DEL_ATTR:
 		rc = pool_del_attr_hdlr(ap);
+		break;
+	case POOL_AUTOTEST:
+		rc = pool_autotest_hdlr(ap);
 		break;
 	default:
 		break;
@@ -1024,10 +1032,8 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	case CONT_DESTROY:
 		rc = cont_destroy_hdlr(ap);
 		break;
-
-	/* TODO: implement the following ops */
 	case CONT_LIST_OBJS:
-		/* rc = cont_list_objs_hdlr(ap); */
+		rc = cont_list_objs_hdlr(ap);
 		break;
 	case CONT_QUERY:
 		rc = cont_query_hdlr(ap);
@@ -1283,12 +1289,14 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		"pool commands:\n"
 		"	  list-containers  list all containers in pool\n"
 		"	  list-cont\n"
+		"	  ls\n"
 		"	  query            query a pool\n"
 		"	  stat             get pool statistics\n"
 		"	  list-attrs       list pool user-defined attributes\n"
 		"	  get-attr         get pool user-defined attribute\n"
 		"	  set-attr         set pool user-defined attribute\n"
-		"	  del-attr         del pool user-defined attribute\n");
+		"	  del-attr         del pool user-defined attribute\n"
+		"	  autotest         verify setup with smoke tests\n");
 
 		fprintf(stream,
 		"pool options:\n"
@@ -1327,12 +1335,12 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"				dedup_th, compression, encryption\n"
 			"			   label value can be any string\n"
 			"			   cksum supported values are off, crc[16,32,64],\n"
-			"						      sha[1,256,512]\n"
+			"						      adler32, sha[1,256,512]\n"
 			"			   cksum_size can be any size < 4GiB\n"
 			"			   srv_cksum values can be on, off\n"
 			"			   dedup (preview) values can be off, memcmp or hash\n"
 			"			   dedup_th (preview) can be any size between 4KiB and 64KiB\n"
-			"			   compression (preview) values can be lz4, gzip, gzip[1-9]\n"
+			"			   compression (preview) values can be lz4, deflate, deflate[1-4]\n"
 			"			   encrypton (preview) values can be aes-xts[128,256],\n"
 			"							     aes-cbc[128,192,256],\n"
 			"							     aes-gcm[128,256]\n"

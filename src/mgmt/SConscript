@@ -11,7 +11,7 @@ def scons():
 
     prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
 
-    pb = denv.SharedObject(['acl.pb-c.c', 'pool.pb-c.c', 'srv.pb-c.c',
+    pb = denv.SharedObject(['acl.pb-c.c', 'pool.pb-c.c', 'svc.pb-c.c',
                             'storage_query.pb-c.c', 'cont.pb-c.c'])
     common = denv.SharedObject(['rpc.c']) + pb
     # Management server module
@@ -24,7 +24,8 @@ def scons():
     denv.Install('$PREFIX/lib64/daos_srv', mgmt_srv)
 
     # Management client library
-    dc_mgmt_tgts = common + denv.SharedObject(['cli_mgmt.c', 'cli_query.c'])
+    dc_mgmt_tgts = common + denv.SharedObject(['cli_mgmt.c', 'cli_query.c',
+                                               'cli_debug.c'])
     Export('dc_mgmt_tgts')
 
     SConscript('tests/SConscript', exports=['denv', 'pb'])
