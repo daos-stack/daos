@@ -175,7 +175,9 @@ class EvictTests(TestWithServers):
         The handle is removed.
         The test verifies that the other two pools were not affected
         by the evict
-        :avocado: tags=all,pool,pr,daily_regression,full_regression,small,poolevict
+        :avocado: tags=all,pr,daily_regression,full_regression
+        :avocado: tags=small
+        :avocado: tags=pool,poolevict
         :avocado: tags=DAOS_5610
         """
         pool = []
