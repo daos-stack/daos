@@ -1,0 +1,83 @@
+hosts:
+  servers: !mux
+    4_server:
+      test_servers:
+        - server-A
+        - server-B
+    6_server:
+      test_servers:
+        - server-A
+        - server-B
+        - server-C
+    10_server:
+      test_servers:
+        - server-A
+        - server-B
+        - server-C
+        - server-D
+        - server-E
+  test_clients:
+    - client-A
+    - client-B
+    - client-C
+timeout: 900
+server_config:
+  servers_per_host: 2
+  name: daos_server
+  servers:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31416
+      log_file: daos_server0.log
+      bdev_class: nvme
+      bdev_list: ["aaaa:aa:aa.a"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem0"]
+      scm_mount: /mnt/daos0
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31517
+      log_file: daos_server1.log
+      bdev_class: nvme
+      bdev_list: ["bbbb:bb:bb.b"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem1"]
+      scm_mount: /mnt/daos1
+pool:
+    mode: 146
+    name: daos_server
+    scm_size: 500G
+    nvme_size: 500G
+    control_method: dmg
+container:
+    type: POSIX
+    control_method: daos
+    properties: rf:4
+ior:
+  api: "DFS"
+  client_processes:
+   np: 48
+  dfs_destroy: False
+  iorflags:
+   flags: "-w -W -F -k -G 1 -vv"
+   read_flags: "-r -R -F -k -G 1 -vv"
+  test_file: /testFile
+  repetitions: 1
+  chunk_block_transfer_sizes:
+   # [ChunkSize, BlocksSize, TransferSize]
+   - [32M, 128M, 8M]       #Full Striped
+   #- [32M, 128M, 2K]       #Patrtial Striped
+  objectclass:
+   dfs_oclass:
+    #- [EC_Object_Class, Minimum number of servers]
+    - ["EC_2P1G1", 4]
+    - ["EC_2P2G1", 4]
+    - ["DAOS_OC_EC_K2P2_L32K", 4]
+    - ["EC_4P1G1", 6]
+    - ["EC_4P2G1", 6]
+    - ["DAOS_OC_EC_K4P2_L32K", 6]
+    - ["EC_8P2G1", 10]

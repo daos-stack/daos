@@ -75,10 +75,11 @@ daos_tests:
       daos_test: r
       test_name: rebuild tests 17
       args: -s3 -u subtests="17"
-    test_r_18:
-      daos_test: r
-      test_name: rebuild tests 18
-      args: -s3 -u subtests="18"
+# Skipped for DAOS-6247
+#    test_r_18:
+#      daos_test: r
+#      test_name: rebuild tests 18
+#      args: -s3 -u subtests="18"
     test_r_19:
       daos_test: r
       test_name: rebuild tests 19
@@ -107,10 +108,11 @@ daos_tests:
       daos_test: r
       test_name: rebuild tests 25
       args: -s3 -u subtests="25"
-    test_r_26:
-      daos_test: r
-      test_name: rebuild tests 26
-      args: -s3 -u subtests="26"
+#Skipped for DAOS-5852
+#    test_r_26:
+#      daos_test: r
+#      test_name: rebuild tests 26
+#      args: -s3 -u subtests="26"
     test_r_27:
       daos_test: r
       test_name: rebuild tests 27

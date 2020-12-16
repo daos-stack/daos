@@ -400,7 +400,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	}()
 	defer grpcServer.Stop()
 
-	log.Infof("%s (pid %d) listening on %s", build.ControlPlaneName, os.Getpid(), controlAddr)
+	log.Infof("%s v%s (pid %d) listening on %s", build.ControlPlaneName, build.DaosVersion, os.Getpid(), controlAddr)
 
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
@@ -413,5 +413,5 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		shutdown()
 	}()
 
-	return errors.Wrapf(harness.Start(ctx, membership, sysdb, cfg), "%s exited with error", build.DataPlaneName)
+	return errors.Wrapf(harness.Start(ctx, sysdb, cfg), "%s exited with error", build.DataPlaneName)
 }

@@ -202,20 +202,6 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			},
 			expErr: errors.New("unmarshal"),
 		},
-		"retries exceed context deadline": {
-			targetCount: 8,
-			req: &mgmtpb.PoolCreateReq{
-				Uuid:      common.MockUUID(0),
-				Scmbytes:  100 * humanize.GiByte,
-				Nvmebytes: 10 * humanize.TByte,
-			},
-			setupMockDrpc: func(svc *mgmtSvc, err error) {
-				setupMockDrpcClient(svc, &mgmtpb.PoolCreateResp{
-					Status: int32(drpc.DaosGroupVersionMismatch),
-				}, nil)
-			},
-			expErr: context.DeadlineExceeded,
-		},
 		"successful creation": {
 			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
@@ -338,9 +324,10 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 	}
 
 	req := &mgmtpb.PoolCreateReq{
-		Uuid:      common.MockUUID(),
-		Scmbytes:  100 * humanize.GiByte,
-		Nvmebytes: 10 * humanize.TByte,
+		Uuid:         common.MockUUID(),
+		Scmbytes:     100 * humanize.GiByte,
+		Nvmebytes:    10 * humanize.TByte,
+		FaultDomains: mgmtSvc.sysdb.FaultDomainTree().ToProto(),
 	}
 	wantReq := new(mgmtpb.PoolCreateReq)
 	*wantReq = *req

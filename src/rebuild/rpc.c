@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,39 +32,9 @@
 #include "rpc.h"
 
 static int
-crt_proc_daos_obj_id_t(crt_proc_t proc, daos_obj_id_t *p)
-{
-	int rc;
-
-	rc = crt_proc_uint64_t(proc, &p->lo);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint64_t(proc, &p->hi);
-	if (rc != 0)
-		return -DER_HG;
-
-	return 0;
-}
-
-static int
 crt_proc_daos_unit_oid_t(crt_proc_t proc, daos_unit_oid_t *p)
 {
-	int rc;
-
-	rc = crt_proc_daos_obj_id_t(proc, &p->id_pub);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint32_t(proc, &p->id_shard);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint32_t(proc, &p->id_pad_32);
-	if (rc != 0)
-		return -DER_HG;
-
-	return 0;
+	return crt_proc_memcpy(proc, p, sizeof(*p));
 }
 
 CRT_RPC_DEFINE(rebuild_scan, DAOS_ISEQ_REBUILD_SCAN, DAOS_OSEQ_REBUILD_SCAN)
