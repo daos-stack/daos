@@ -2331,7 +2331,7 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 
 	local_bulk = CRT_BULK_NULL;
 	if (iv_value != NULL) {
-		D_DEBUG("Create Bulk\n");
+		D_DEBUG(DB_TRACE, "Create Bulk\n");
 		rc = crt_bulk_create(ivns_internal->cii_ctx, iv_value,
 				CRT_BULK_RO, &local_bulk);
 		if (rc != 0) {
