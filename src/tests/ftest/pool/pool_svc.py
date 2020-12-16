@@ -25,6 +25,7 @@ from __future__ import print_function
 import traceback
 
 from apricot import TestWithServers
+from pydaos.raw import DaosServer
 from test_utils_pool import TestPool
 from avocado.core.exceptions import TestFail
 
@@ -92,7 +93,8 @@ class PoolSvc(TestWithServers):
                     self.pool.connect()
                     self.pool.disconnect()
                     # kill another server which is not a leader and exclude it
-                    self.pool.start_rebuild([3], self.test_log)
+                    server = DaosServer(self.context, self.server_group, 3)
+                    server.kill(1)
                     self.pool.exclude([3], self.d_log)
                     # perform pool connect
                     self.pool.connect()

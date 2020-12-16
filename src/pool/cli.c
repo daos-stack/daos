@@ -2121,6 +2121,12 @@ out:
 	return rc;
 }
 
+int
+dc_pool_extend(tse_task_t *task)
+{
+	return -DER_NOSYS;
+}
+
 struct pool_svc_stop_arg {
 	struct dc_pool	       *dsa_pool;
 	crt_rpc_t	       *rpc;
