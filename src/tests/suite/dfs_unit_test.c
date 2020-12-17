@@ -310,6 +310,8 @@ dfs_test_syml_follow(void **state)
 	char			*name_sym_to_file = "sym_to_file";
 	char			*name_sym_to_dir = "sym_to_dir";
 	char			*name_sym_to_sym = "sym_to_sym";
+	char			*name_sym_to_self = "sym_to_self";
+	char			*path_sym_to_self = "/sym_to_self";
 	int			rc;
 
 	if (arg->myrank != 0)
@@ -355,6 +357,25 @@ dfs_test_syml_follow(void **state)
 	assert_int_equal(rc, 0);
 
 	dfs_test_syml_follow_hlpr(name_sym_to_sym, S_IFREG);
+
+	/** Create /sym_to_self -> sym_to_self */
+	rc = dfs_open(dfs_mt, NULL, name_sym_to_self, S_IFLNK,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, name_sym_to_self, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	/* Lookup on link with a loop should return ELOOP */
+	rc = dfs_lookup(dfs_mt, path_sym_to_self, O_RDWR, &obj, NULL, NULL);
+	print_message("dfs_test_syml_follow_eloop(\"%s\") = %d\n",
+		      path_sym_to_self, rc);
+	assert_int_equal(rc, ELOOP);
+
+	rc = dfs_lookup_rel(dfs_mt, NULL, name_sym_to_self, O_RDWR, &obj,
+			    NULL, NULL);
+	print_message("dfs_test_syml_follow_eloop_rel(\"%s\") = %d\n",
+		      name_sym_to_self, rc);
+	assert_int_equal(rc, ELOOP);
 }
 
 static int

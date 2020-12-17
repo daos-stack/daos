@@ -88,6 +88,9 @@
 #define SB_HI		0
 #define ROOT_HI		1
 
+/** Max recursion depth for symlinks */
+#define DFS_MAX_RECURSION 40
+
 typedef uint64_t dfs_magic_t;
 typedef uint16_t dfs_sb_ver_t;
 typedef uint16_t dfs_layout_ver_t;
@@ -1822,8 +1825,8 @@ lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags,
 	int			rc;
 	bool			parent_fully_valid;
 
-	/* Arbitrarily stop recursion after 40 levels */
-	if (depth >= 40)
+	/* Arbitrarily stop to avoid infinite recursion */
+	if (depth >= DFS_MAX_RECURSION)
 		return ELOOP;
 
 	/* Only paths from root can be absolute */
