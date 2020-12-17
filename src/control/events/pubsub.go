@@ -47,40 +47,58 @@ type subscriber struct {
 type PubSub struct {
 	log         logging.Logger
 	events      chan Event
-	eventMask   uint32
 	subscribers chan *subscriber
 	handlers    map[RASTypeID][]Handler
+	disabledIDs map[RASID]struct{}
 	reset       chan struct{}
 	shutdown    context.CancelFunc
 }
 
-// DisableEventIDs adds event IDs to the filter mask preventing those event IDs from
+// NewPubSub returns a reference to a newly initialized PubSub struct.
+func NewPubSub(parent context.Context, log logging.Logger) *PubSub {
+	ps := &PubSub{
+		log:         log,
+		events:      make(chan Event),
+		subscribers: make(chan *subscriber),
+		handlers:    make(map[RASTypeID][]Handler),
+		disabledIDs: make(map[RASID]struct{}),
+		reset:       make(chan struct{}),
+	}
+
+	ctx, cancel := context.WithCancel(parent)
+	ps.shutdown = cancel
+	go ps.eventLoop(ctx)
+
+	return ps
+}
+
+// DisableEventIDs adds event IDs to the filter preventing those event IDs from
 // being published.
 func (ps *PubSub) DisableEventIDs(ids ...RASID) {
 	for _, id := range ids {
-		ps.eventMask = ps.eventMask | uint32(id)
+		ps.disabledIDs[id] = struct{}{}
 	}
 }
 
-// EnableEventIDs removes event IDs from the filter mask enabling those event IDs
+// EnableEventIDs removes event IDs from the filter enabling those event IDs
 // to be published.
 func (ps *PubSub) EnableEventIDs(ids ...RASID) {
 	for _, id := range ids {
-		ps.eventMask = ps.eventMask &^ uint32(id)
+		if _, exists := ps.disabledIDs[id]; exists {
+			delete(ps.disabledIDs, id)
+		}
 	}
 }
 
 // Publish passes an event to the event channel to be processed by subscribers.
-// Ignore masked events.
+// Ignore disabled events.
 func (ps *PubSub) Publish(event Event) {
-	id := uint32(event.GetID())
-	if id&ps.eventMask != 0 {
+	if _, exists := ps.disabledIDs[event.GetID()]; exists {
 		ps.log.Debugf("event %s ignored by filter", event.GetID())
 		return
 	}
 
-	topic := event.GetType()
-	ps.log.Debugf("publishing @%s: %+v", topic, event)
+	ps.log.Debugf("publishing @%s: %+v", event.GetType(), event)
 
 	ps.events <- event
 }
@@ -126,21 +144,4 @@ func (ps *PubSub) Close() {
 func (ps *PubSub) Reset() {
 	ps.log.Debug("called Reset()")
 	ps.reset <- struct{}{}
-}
-
-// NewPubSub returns a reference to a newly initialized PubSub struct.
-func NewPubSub(parent context.Context, log logging.Logger) *PubSub {
-	ps := &PubSub{
-		log:         log,
-		reset:       make(chan struct{}),
-		subscribers: make(chan *subscriber),
-		events:      make(chan Event),
-		handlers:    make(map[RASTypeID][]Handler),
-	}
-
-	ctx, cancel := context.WithCancel(parent)
-	ps.shutdown = cancel
-	go ps.eventLoop(ctx)
-
-	return ps
 }

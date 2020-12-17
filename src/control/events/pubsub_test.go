@@ -27,6 +27,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -136,4 +137,37 @@ func TestEvents_PubSub_Reset(t *testing.T) {
 		RASTypeRankStateChange.String(), RASTypeRankStateChange.String(),
 	}, tly2.getRx(), "unexpected slice of received events")
 	common.AssertEqual(t, 0, len(tly1.getRx()), "unexpected number of received events")
+}
+
+func TestEvents_PubSub_DisableEvent(t *testing.T) {
+	evt1 := NewRankExitEvent("foo", 1, 1, common.ExitStatus("test"))
+
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	tly1 := newTally(2)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	ps := NewPubSub(context.Background(), log)
+	defer ps.Close()
+
+	ps.Subscribe(RASTypeRankStateChange, tly1)
+
+	ps.DisableEventIDs(evt1.GetID())
+
+	ps.Publish(evt1)
+	ps.Publish(evt1)
+
+	<-ctx.Done()
+	common.AssertEqual(t, 0, len(tly1.getRx()), "unexpected number of received events")
+
+	ps.EnableEventIDs(evt1.GetID())
+
+	ps.Publish(evt1)
+	ps.Publish(evt1)
+
+	<-tly1.finished
+	common.AssertEqual(t, 2, len(tly1.getRx()), "unexpected number of received events")
 }
