@@ -111,19 +111,10 @@ class EvictTests(TestWithServers):
             self.pool.dmg.pool_evict(pool=self.pool.pool.get_uuid_str())
         # exception is expected
         except CommandFailure as result:
-            if test_param == "BAD_SERVER_NAME":
-                err = "-1003"
-            else:
-                err = "1"
-            status = err in str(result)
-            if status:
-                self.log.info(
-                    "Expected exception - invalid param %s\n %s\n",
-                    test_param, str(result))
-            else:
-                self.log.info(
-                    "Unexpected exception - invalid param %s\n %s\n",
-                    test_param, str(result))
+            status = True
+            self.log.info("Expected exception - invalid param %s\n %s\n",
+                          test_param, str(result))
+
             # Restore the valid server group name or uuid and verify that
             # pool still exists and the handle is still valid.
             if "BAD_SERVER_NAME" in test_param:
