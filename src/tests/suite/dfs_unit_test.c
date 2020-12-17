@@ -293,6 +293,11 @@ dfs_test_syml_follow_hlpr(const char *name, mode_t mode)
 	rc = dfs_release(obj);
 	assert_int_equal(rc, 0);
 	assert_int_equal(actual_mode & S_IFMT, mode & S_IFMT);
+
+	/** Default access should follow the link */
+	rc = dfs_access(dfs_mt, NULL, name, R_OK | W_OK);
+	print_message("dfs_test_syml_follow_access(\"%s\") = %d\n", name, rc);
+	assert_int_equal(rc, 0);
 }
 
 static void
