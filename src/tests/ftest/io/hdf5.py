@@ -79,7 +79,7 @@ class Hdf5(MpiioTests):
                 test_dense_attr
                 test_partial_no_selection_coll_md_read
 
-        :avocado: tags=all,pr,hw,small,mpio,llnlmpi4pyhdf5,hdf5
+        :avocado: tags=all,daily_regression,hw,small,mpio,llnlmpi4pyhdf5,hdf5
         """
         test_repo = self.params.get("hdf5", '/run/test_repo/')
         self.run_test(test_repo, "hdf5")
