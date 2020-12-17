@@ -54,7 +54,7 @@ class PunchTest(TestWithServers):
         """
         The most basic test of the dkey punch function.
 
-        :avocado: tags=all,object,pr,small,dkeypunch
+        :avocado: tags=all,object,daily_regression,small,dkeypunch
         """
 
         try:
@@ -109,7 +109,7 @@ class PunchTest(TestWithServers):
         """
         The most basic test of the akey punch function.
 
-        :avocado: tags=all,object,pr,small,akeypunch
+        :avocado: tags=all,object,daily_regression,small,akeypunch
         """
 
         try:
@@ -163,7 +163,7 @@ class PunchTest(TestWithServers):
         The most basic test of the object punch function.  Really similar
         to above except the whole object is deleted.
 
-        :avocado: tags=all,object,pr,small,objpunch
+        :avocado: tags=all,object,daily_regression,small,objpunch
         """
 
         try:
