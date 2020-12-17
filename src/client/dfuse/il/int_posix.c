@@ -109,7 +109,7 @@ ioil_shrink(struct ioil_cont *cont)
 			D_ERROR("dfs_umount() failed, %d\n", rc);
 	}
 
-	if (!daos_handle_is_inval(cont->ioc_coh)) {
+	if (daos_handle_is_valid(cont->ioc_coh)) {
 		rc = daos_cont_close(cont->ioc_coh, NULL);
 		if (rc != 0)
 			D_ERROR("daos_cont_close() failed, " DF_RC "\n",
@@ -123,10 +123,12 @@ ioil_shrink(struct ioil_cont *cont)
 	if (!d_list_empty(&pool->iop_container_head))
 		return;
 
-	rc = daos_pool_disconnect(pool->iop_poh, NULL);
-	if (rc != 0)
-		D_ERROR("daos_pool_disconnect() failed, " DF_RC "\n",
-			DP_RC(rc));
+	if (daos_handle_is_valid(pool->iop_poh)) {
+		rc = daos_pool_disconnect(pool->iop_poh, NULL);
+		if (rc != 0)
+			D_ERROR("daos_pool_disconnect() failed, " DF_RC "\n",
+				DP_RC(rc));
+	}
 
 	d_list_del(&pool->iop_pools);
 	D_FREE(pool);
