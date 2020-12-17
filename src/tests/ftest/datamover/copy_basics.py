@@ -83,7 +83,7 @@ class CopyBasicsTest(DataMoverTestBase):
             Copy all data from POSIX to cont2 (UUIDs).
             Copy all data from POSIX to cont2 (UNS).
             Copy all data from POSIX FS to a different POSIX FS.
-        :avocado: tags=all,datamover,pr
+        :avocado: tags=all,datamover,daily_regression
         :avocado: tags=copy_basics,copy_types
         """
         # Start dfuse to hold all pools/containers
@@ -209,7 +209,7 @@ class CopyBasicsTest(DataMoverTestBase):
             Create a single 1K file in cont1 using ior.
             Copy all data from cont1 to pool1, with a new cont UUID.
             Copy all data from cont1 to pool2, with a new cont UUID.
-        :avocado: tags=all,datamover,pr
+        :avocado: tags=all,datamover,daily_regression
         :avocado: tags=copy_basics,copy_auto_create_dest
         """
         # Create pools and src container
@@ -250,7 +250,7 @@ class CopyBasicsTest(DataMoverTestBase):
             Copy depth 2 to a new directory of depth 1, using UUIDS.
             Copy depth 2 to a new directory of depth 2, using UUIDS.
             Repeat, but with UNS paths.
-        :avocado: tags=all,datamover,pr
+        :avocado: tags=all,datamover,daily_regression
         :avocado: tags=copy_basics,copy_subsets
         """
         # Start dfuse to hold all pools/containers
