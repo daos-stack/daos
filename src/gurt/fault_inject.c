@@ -230,7 +230,7 @@ int
 d_fault_attr_err_code(uint32_t fault_id)
 {
 	struct d_fault_attr_t	*fault_attr;
-	uint32_t		 err_code;
+	int32_t			 err_code;
 
 	fault_attr = d_fault_attr_lookup(fault_id);
 	if (fault_attr == NULL) {
@@ -242,7 +242,7 @@ d_fault_attr_err_code(uint32_t fault_id)
 	err_code = fault_attr->fa_err_code;
 	D_SPIN_UNLOCK(&fault_attr->fa_lock);
 
-	return (int) err_code;
+	return err_code;
 }
 
 static int
@@ -323,8 +323,9 @@ one_fault_attr_parse(yaml_parser_t *parser)
 			attr.fa_max_faults = val;
 			D_DEBUG(DB_ALL, "max_faults: %lu\n", val);
 		} else if (!strcmp(key_str, err_code)) {
-			attr.fa_err_code = val;
-			D_DEBUG(DB_ALL, "err_code: %lu\n", val);
+			attr.fa_err_code = strtol(val_str, NULL, 0);
+			D_DEBUG(DB_ALL, "err_code: " DF_RC "\n",
+				DP_RC(attr.fa_err_code));
 		} else if (!strcmp(key_str, argument)) {
 			D_STRNDUP(attr.fa_argument, val_str,
 				  FI_CONFIG_ARG_STR_MAX_LEN);
