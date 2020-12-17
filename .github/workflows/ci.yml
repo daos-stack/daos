@@ -17,6 +17,7 @@ jobs:
       env:
         DOCKER_IMAGE: ${{ github.repository }}:${{ github.sha }}
       run: |
-        docker build --file utils/docker/Dockerfile.${{ matrix.distro }} -t ${DOCKER_IMAGE} --build-arg NOBUILD=1 --build-arg UID=$UID . &&
-        docker run -v $PWD:/home/daos/daos:z $DOCKER_IMAGE /bin/bash -c "scons --build-deps=yes install" ||
+        docker build -f utils/docker/Dockerfile.${{ matrix.distro }} -t daos/$DOCKER_IMAGE --build-arg NOBUILD=1 --build-arg UID=$UID . &&
+        docker run -v $PWD:/home/daos/daos:z daos/$DOCKER_IMAGE /bin/bash -c "scons --build-deps=yes -j 4 install BUILD_TYPE=dev" &&
+        docker run -v $PWD:/home/daos/daos:z daos/$DOCKER_IMAGE /bin/bash -c "cd src/client/java && mvn clean install -T 1C -DskipITs -Ddaos.install.path=/home/daos/daos/install" ||
         (echo -e "\e[31m[${GITHUB_WORKFLOW}] failed to build\e[m" && exit 1)
