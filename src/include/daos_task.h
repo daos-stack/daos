@@ -47,8 +47,8 @@ typedef enum {
 	DAOS_OPC_INVALID	= -1,
 
 	/** Management APIs */
-	DAOS_OPC_SVC_RIP = 0,
-	DAOS_OPC_POOL_EXTEND,
+	/* Starting at 0 will break Application Binary Interface backward
+	 * compatibility */
 	DAOS_OPC_SET_PARAMS = 3,
 	DAOS_OPC_MGMT_GET_BS_STATE,
 
@@ -138,16 +138,6 @@ typedef enum {
 	DAOS_OPC_MAX
 } daos_opc_t;
 
-/** svc rip params */
-typedef struct {
-	/** Process set name of the DAOS servers managing the pool */
-	const char		*grp;
-	/** rank to kill */
-	d_rank_t		rank;
-	/** Abrupt shutdown, no cleanup */
-	bool			force;
-} daos_svc_rip_t;
-
 /** mgmt set params */
 typedef struct {
 	/** Process set name of the DAOS servers managing the pool */
@@ -197,18 +187,6 @@ typedef struct {
 	/** Force destruction even if there are active connections */
 	int			force;
 } daos_pool_destroy_t;
-
-/** pool extend args */
-typedef struct {
-	/** UUID of the pool to extend. */
-	uuid_t			uuid;
-	/** Process set name of the DAOS servers managing the pool. */
-	const char		*grp;
-	/**  Optional, only extend the pool to included targets. */
-	d_rank_list_t		*tgts;
-	/** Optional, buffer to store faulty targets on failure. */
-	d_rank_list_t		*failed;
-} daos_pool_extend_t;
 
 /** pool connect args */
 typedef struct {
