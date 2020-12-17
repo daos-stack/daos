@@ -257,9 +257,6 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 		D_GOTO(out_err, rc = ENOTSUP);
 	}
 
-	if (!S_ISREG(oh->doh_ie->ie_stat.st_mode))
-		D_GOTO(out_err, rc = ENOTTY);
-
 	if (cmd == DFUSE_IOCTL_IL) {
 		if (out_bufsz < sizeof(struct dfuse_il_reply))
 			D_GOTO(out_err, rc = EIO);
@@ -267,6 +264,9 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 		handle_il_ioctl(oh, req);
 		return;
 	}
+
+	if (!S_ISREG(oh->doh_ie->ie_stat.st_mode))
+		D_GOTO(out_err, rc = ENOTTY);
 
 	/* The dfs handles are OK to pass across security domains because you
 	 * need the correct container handle to be able to use them.

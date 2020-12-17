@@ -385,7 +385,7 @@ ioil_fetch_cont_handles(int fd, struct ioil_cont *cont)
 	if (rc != 0) {
 		int err = errno;
 
-		if (err == EPERM)
+		if (err == EPERM || err == ENOTTY)
 			DFUSE_LOG_DEBUG("ioctl call on %d failed %d %s", fd,
 					err, strerror(err));
 		else
@@ -632,6 +632,9 @@ open_cont:
 			DFUSE_LOG_DEBUG("ioil_open_cont_handles() failed");
 			D_GOTO(shrink, 0);
 		}
+	} else if (rc == ENOTTY) {
+		DFUSE_LOG_DEBUG("ioil_fetch_cont_handles() failed, %d", rc);
+		D_GOTO(shrink, 0);
 	} else if (rc != 0) {
 		D_ERROR("ioil_fetch_cont_handles() failed, %d\n", rc);
 		D_GOTO(shrink, 0);
