@@ -915,6 +915,13 @@ rebuild_task_destroy(struct rebuild_task *task)
 
 /** Try merge the tasks to the current task.
  *
+ * This will only merge tasks that are for sequential/contiguous version
+ * operations on the pool map. It is important that the operations are processed
+ * in the correct order to maintain data correctness. This means that even if
+ * some failure recovery operations are queued already, if there was a
+ * reintegration scheduled for after that, new failures will need to be queued
+ * after the reintegration to maintain data correctness.
+ *
  * return 1 means the rebuild targets were successfully merged to existing task.
  * return 0 means these targets can not merge.
  * Other return value indicates an error.
@@ -926,13 +933,39 @@ rebuild_try_merge_tgts(const uuid_t pool_uuid, uint32_t map_ver,
 {
 	struct rebuild_task *task;
 	struct rebuild_task *found = NULL;
-	int		    rc;
+	int rc;
+	uint32_t highest_queued_map_ver = -1;
 
-	d_list_for_each_entry(task, &rebuild_gst.rg_queue_list,
-			      dst_list) {
-		/* Only merge tasks that match both pool AND operation */
+	/* Loop over the queued tasks, looking for existing queued tasks for
+	 * this pool that match the UUID.
+	 *
+	 * For all such matching tasks, find the highest queued map_ver
+	 */
+	d_list_for_each_entry(task, &rebuild_gst.rg_queue_list, dst_list) {
+		if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0) {
+			/* This task is for the same UUID */
+			if (highest_queued_map_ver < task->dst_map_ver) {
+				highest_queued_map_ver = task->dst_map_ver;
+			}
+		}
+	}
+
+	/* Loop over the queued tasks again, looking for one that matches this
+	 * pool AND this operation AND is the highest found version.
+	 *
+	 * This will be safe to merge to - because there are no other operation
+	 * types that were queued after that (they would have a higher version).
+	 *
+	 * A task with a lower map version than the highest found will not be
+	 * safe to merge to, even if it's the same type, because this will cause
+	 * rebuild to essentially skip the intermediary different-type step
+	 * because the rebuild version is set to the task map version after
+	 * rebuild is complete.
+	 */
+	d_list_for_each_entry(task, &rebuild_gst.rg_queue_list, dst_list) {
 		if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0
-		    && task->dst_rebuild_op == rebuild_op) {
+		    && task->dst_rebuild_op == rebuild_op
+		    && task->dst_map_ver == highest_queued_map_ver) {
 			found = task;
 			break;
 		}
@@ -1383,63 +1416,6 @@ rebuild_print_list_update(const char *const str, const uuid_t uuid,
 	D_PRINT("\n");
 }
 
-/* Here we want to schedule this new rebuild task by placing it on the
- * queue. However, the ordering is important - tasks will be consumed
- * by iterating the queue and running the first available one for each
- * pool. So what we do here is iterate through the queue, and insert
- * this task before the first other found task for the same pool that
- * should run with lower priority. By doing this, the list will always
- * be sorted
- */
-static void
-rebuild_schedule_insert_task(struct rebuild_task *new_task)
-{
-	struct rebuild_task	*task_tmp;
-	struct rebuild_task	*iter;
-	struct rebuild_task	*insert_before = NULL;
-	struct rebuild_task	*insert_after = NULL;
-
-
-	d_list_for_each_entry_safe(iter, task_tmp,
-				   &rebuild_gst.rg_queue_list, dst_list) {
-		if (uuid_compare(iter->dst_pool_uuid,
-				 new_task->dst_pool_uuid) == 0) {
-			/* This is the same pool - but is it higher priority? */
-			if (new_task->dst_rebuild_op < iter->dst_rebuild_op) {
-				/* Yes, this is higher priority. Make note of
-				 * the task we need to insert this in front of
-				 * and stop looping
-				 */
-				insert_before = iter;
-				break;
-			}
-		}
-		insert_after = iter;
-	}
-
-	if (insert_before != NULL)
-		/* Found something lower priority that this needs to be
-		 * inserted before
-		 */
-		if (insert_after == NULL)
-			/* This new element needs to become head of the list */
-			d_list_add(&new_task->dst_list,
-				   &rebuild_gst.rg_queue_list);
-		else
-			/* This element needs to be inserted between two
-			 * existing elements
-			 */
-			__gurt_list_add(&new_task->dst_list,
-					&insert_after->dst_list,
-					&insert_before->dst_list);
-	else
-		/* Did not find a lower priority task on the list.
-		 * Just insert this new task at the end
-		 */
-		d_list_add_tail(&new_task->dst_list,
-				&rebuild_gst.rg_queue_list);
-}
-
 /**
  * Print out all of the currently queued rebuild tasks
  */
@@ -1510,9 +1486,6 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 	rc = pool_target_id_list_merge(&task->dst_tgts, tgts);
 	if (rc)
 		D_GOTO(free, rc);
-
-	/* Insert this new task into the queue at an appropriate location */
-	rebuild_schedule_insert_task(task);
 
 	/* Print out the current queue to the debug log */
 	rebuild_debug_print_queue();

@@ -36,15 +36,12 @@
 /**
  * Enum values to indicate the rebuild operation that should be applied to the
  * associated targets
- *
- * These are ordered such that a lower value means this operation is higher
- * priority
  */
 typedef enum {
-	RB_OP_FAIL = 0,
-	RB_OP_DRAIN = 1,
-	RB_OP_REINT = 2,
-	RB_OP_EXTEND = 3
+	RB_OP_FAIL,
+	RB_OP_DRAIN,
+	RB_OP_REINT,
+	RB_OP_EXTEND,
 } daos_rebuild_opc_t;
 
 #define RB_OP_STR(rb_op) ((rb_op) == RB_OP_FAIL ? "RB_OP_FAIL" : \
