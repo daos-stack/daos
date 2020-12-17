@@ -2354,7 +2354,7 @@ grp_regen_linear_list(struct crt_grp_priv *grp_priv)
  * Function should only be called once per rank, even if multiple
  * tags are added with corresponding URIs
  */
-static int
+int
 grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 {
 	d_rank_list_t	*membs;
