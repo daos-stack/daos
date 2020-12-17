@@ -61,7 +61,7 @@ class CartNoPmixOneNodeTest(TestWithoutServers):
         """
         Test CaRT NoPmix
 
-        :avocado: tags=all,cart,pr,no_pmix,one_node
+        :avocado: tags=all,cart,pr,daily_regression,no_pmix,one_node
         """
 
         cmd = self.params.get("tst_bin", '/run/tests/*/')

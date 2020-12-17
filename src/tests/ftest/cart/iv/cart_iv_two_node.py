@@ -218,7 +218,7 @@ class CartIvTwoNodeTest(TestWithoutServers):
         """
         Test CaRT IV
 
-        :avocado: tags=all,cart,pr,iv,two_node
+        :avocado: tags=all,cart,pr,daily_regression,iv,two_node
         """
 
         srvcmd = self.utils.build_cmd(self, self.env, "test_servers")

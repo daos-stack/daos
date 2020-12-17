@@ -175,7 +175,10 @@ class EvictTests(TestWithServers):
         The handle is removed.
         The test verifies that the other two pools were not affected
         by the evict
-        :avocado: tags=all,pool,pr,full_regression,small,poolevict,DAOS_5610
+        :avocado: tags=all,pr,daily_regression,full_regression
+        :avocado: tags=small
+        :avocado: tags=pool,poolevict
+        :avocado: tags=DAOS_5610
         """
         pool = []
         container = []
@@ -264,7 +267,8 @@ class EvictTests(TestWithServers):
         """
         Test evicting a pool using an invalid server group name.
 
-        :avocado: tags=all,pool,pr,full_regression,small,poolevict
+        :avocado: tags=all,pool,pr,daily_regression,full_regression,small
+        :avocado: tags=poolevict
         :avocado: tags=poolevict_bad_server_name,DAOS_5610
         """
         test_param = self.params.get("server_name", '/run/badparams/*')
@@ -274,7 +278,8 @@ class EvictTests(TestWithServers):
         """
         Test evicting a pool using an invalid uuid.
 
-        :avocado: tags=all,pool,pr,full_regression,small,poolevict
+        :avocado: tags=all,pool,pr,daily_regression,full_regression,small
+        :avocado: tags=poolevict
         :avocado: tags=poolevict_bad_uuid,DAOS_5610
         """
         test_param = self.params.get("uuid", '/run/badparams/*')

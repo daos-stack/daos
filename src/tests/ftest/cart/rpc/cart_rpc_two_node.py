@@ -50,7 +50,7 @@ class CartRpcTwoNodeTest(TestWithoutServers):
         """
         Test CaRT RPC
 
-        :avocado: tags=all,cart,pr,rpc,two_node
+        :avocado: tags=all,cart,pr,daily_regression,rpc,two_node
         """
         srvcmd = self.utils.build_cmd(self, self.env, "test_servers")
         clicmd = self.utils.build_cmd(self, self.env, "test_clients")

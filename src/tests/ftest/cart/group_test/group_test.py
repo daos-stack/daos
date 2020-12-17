@@ -50,7 +50,7 @@ class GroupTest(TestWithoutServers):
         """
         Test CaRT NoPmix Launcher
 
-        :avocado: tags=all,cart,pr,group_test,one_node
+        :avocado: tags=all,cart,pr,daily_regression,group_test,one_node
         """
 
         srv_cmd = self.utils.build_cmd(self, self.env, "test_servers")

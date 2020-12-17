@@ -50,7 +50,7 @@ class CartSelfThreeNodeTest(TestWithoutServers):
         """
         Test CaRT Self Test
 
-        :avocado: tags=all,cart,pr,selftest,three_node
+        :avocado: tags=all,cart,pr,daily_regression,selftest,three_node
         """
 
         srvcmd = self.utils.build_cmd(self, self.env, "test_servers")
