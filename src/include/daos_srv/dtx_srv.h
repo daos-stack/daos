@@ -288,7 +288,7 @@ dtx_entry_put(struct dtx_entry *dte)
 }
 
 static inline bool
-dtx_is_valid_handle(struct dtx_handle *dth)
+dtx_is_valid_handle(const struct dtx_handle *dth)
 {
 	return dth != NULL && !daos_is_zero_dti(&dth->dth_xid);
 }

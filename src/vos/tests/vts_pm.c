@@ -1270,7 +1270,7 @@ cond_test(void **state)
 		       -DER_NONEXIST, sgl, "foo");
 	/** Non conditional update should fail due to later read */
 	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 3, "a", "b",
-		       0, -DER_TX_RESTART, sgl, "foo");
+		       VOS_OF_COND_DKEY_INSERT, -DER_TX_RESTART, sgl, "foo");
 	/** Conditional insert should succeed */
 	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a", "b",
 		       VOS_OF_COND_DKEY_INSERT, 0, sgl,
@@ -1321,13 +1321,14 @@ cond_test(void **state)
 		      "nonexist", VOS_OF_COND_AKEY_FETCH, -DER_NONEXIST,
 		      sgl, "xxx", 'x');
 	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "a",
-		       "nonexist", 0, -DER_TX_RESTART, sgl,
-		       "foo");
+		       "nonexist", VOS_OF_COND_AKEY_INSERT, -DER_TX_RESTART,
+		       sgl, "foo");
 	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, true, "nonexist",
 		      "a", VOS_OF_COND_DKEY_FETCH,
 		      -DER_NONEXIST, sgl, "xxx", 'x');
 	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "nonexist",
-		       "a", 0, -DER_TX_RESTART, sgl, "foo");
+		       "a", VOS_OF_COND_DKEY_INSERT, -DER_TX_RESTART, sgl,
+		       "foo");
 	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "nonexist",
 		       "a", 0, 0, sgl, "foo");
 	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, true, "nonexist",
@@ -2386,8 +2387,10 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 	d_iov_set(&sgl[0].sg_iovs[0], (void *)first, rex[0].rx_nr);
 	d_iov_set(&sgl[1].sg_iovs[0], (void *)second, rex[1].rx_nr);
 	epoch++;
-	if (with_dtx)
+	if (with_dtx) {
 		vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch, 0, &dth);
+		dth->dth_dist = 1;
+	}
 
 	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid, epoch, 0,
 			       DAOS_COND_PER_AKEY, &dkey, 2, iod, NULL, sgl,
@@ -2413,8 +2416,10 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 
 	/** Try again, condition on akey 2 should fail */
 	epoch++;
-	if (with_dtx)
+	if (with_dtx) {
 		vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch, 0, &dth);
+		dth->dth_dist = 1;
+	}
 	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid, epoch, 0,
 			       DAOS_COND_PER_AKEY, &dkey, 2, iod, NULL, sgl,
 			       dth);
@@ -2426,6 +2431,7 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 	epoch++;
 	if (with_dtx) {
 		vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch, 0, &dth);
+		dth->dth_dist = 1;
 		xid = dth->dth_xid;
 	}
 	iod[1].iod_flags = DAOS_COND_AKEY_INSERT;
@@ -2443,6 +2449,7 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 	epoch++;
 	if (with_dtx) {
 		vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch, 0, &dth);
+		dth->dth_dist = 1;
 		xid = dth->dth_xid;
 	}
 	iod[1].iod_flags = DAOS_COND_AKEY_UPDATE;
@@ -2458,8 +2465,10 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 
 	/** Conditional insert should fail */
 	epoch++;
-	if (with_dtx)
+	if (with_dtx) {
 		vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch, 0, &dth);
+		dth->dth_dist = 1;
+	}
 	iod[1].iod_flags = DAOS_COND_AKEY_INSERT;
 	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid, epoch, 0,
 			       DAOS_COND_PER_AKEY, &dkey, 2, iod, NULL, sgl,
@@ -2469,8 +2478,10 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 		vts_dtx_end(dth);
 
 	epoch++;
-	if (with_dtx)
+	if (with_dtx) {
 		vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch, 0, &dth);
+		dth->dth_dist = 1;
+	}
 	memset(buf1, 0, sizeof(buf1));
 	memset(buf2, 0, sizeof(buf2));
 	iod[1].iod_flags = DAOS_COND_AKEY_FETCH;
@@ -2488,6 +2499,7 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 	epoch++;
 	if (with_dtx) {
 		vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch, 0, &dth);
+		dth->dth_dist = 1;
 		xid = dth->dth_xid;
 	}
 	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch, 0, 0, &dkey,
@@ -2500,8 +2512,10 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 	}
 
 	epoch++;
-	if (with_dtx)
+	if (with_dtx) {
 		vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch, 0, &dth);
+		dth->dth_dist = 1;
+	}
 	memset(buf1, 'x', sizeof(buf1));
 	memset(buf2, 'x', sizeof(buf2));
 	iod[1].iod_flags = DAOS_COND_AKEY_FETCH;
@@ -2516,8 +2530,10 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 		vts_dtx_end(dth);
 
 	epoch++;
-	if (with_dtx)
+	if (with_dtx) {
 		vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch, 0, &dth);
+		dth->dth_dist = 1;
+	}
 	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
 	vts_key_gen(&akey1_buf[0], arg->akey_size, false, arg);
 	vts_key_gen(&akey2_buf[0], arg->akey_size, false, arg);

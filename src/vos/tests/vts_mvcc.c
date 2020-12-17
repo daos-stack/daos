@@ -236,6 +236,7 @@ start_tx(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (dth == NULL) {
 		vts_dtx_begin_ex(&oid, coh, epoch, txh->th_epoch_bound, 0,
 				 txh->th_nr_mods, &dth);
+		dth->dth_dist = 1;
 		txh->th_dth = dth;
 	}
 

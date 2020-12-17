@@ -2310,6 +2310,7 @@ io_query_key(void **state)
 	/* Only execute the transactional tests when rollback is available */
 
 	vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch++, 0, &dth);
+	dth->dth_dist = 1;
 
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid, DAOS_GET_DKEY |
 			       DAOS_GET_MAX, 0 /* Ignored epoch */, &dkey_read,
@@ -2321,12 +2322,14 @@ io_query_key(void **state)
 
 	/* Now punch the object at earlier epoch */
 	vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch - 3, 0, &dth);
+	dth->dth_dist = 1;
 	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, 0 /* ignored epoch */, 0, 0,
 			   NULL, 0, NULL, dth);
 	assert_int_equal(rc, -DER_TX_RESTART);
 	vts_dtx_end(dth);
 
 	vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch + 1, 0, &dth);
+	dth->dth_dist = 1;
 	/* Now punch the object */
 	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch++, 0, 0, NULL, 0,
 			   NULL, dth);
