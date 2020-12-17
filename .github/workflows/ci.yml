@@ -4,9 +4,12 @@ on: [push]
 
 jobs:
   build:
+
     name: Build
     runs-on: ubuntu-latest
     strategy:
+      fail-fast:
+         false
       matrix:
         distro: [centos.7, leap.15, ubuntu.20.04]
     steps:
