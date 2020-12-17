@@ -855,6 +855,10 @@ open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
 	if (!exists)
 		return ENOENT;
 
+	/* Check that the opened object is a directory, this might be because
+	 * it's a FIFO which is expected, or because the type has been changed
+	 * from another client since it was created.
+	 */
 	if ((S_ISDIR(dir->mode) && !S_ISDIR(entry->mode)))
 		return ENOTDIR;
 
@@ -1988,7 +1992,7 @@ dfs_lookup_loop:
 			break;
 		}
 
-		if (!S_ISDIR(entry.mode)) {
+		if (!S_ISDIR(entry.mode) && (!S_ISFIFO(entry.mode))) {
 			D_ERROR("Invalid entry type in path.\n");
 			D_GOTO(err_obj, rc = EINVAL);
 		}
