@@ -44,9 +44,8 @@ run_test()
     #    before deciding this. Also, we intentionally leave off the last 'S'
     #    in that error message so that we don't guarantee printing that in
     #    every run's output, thereby making all tests here always pass.
-    time eval "${VALGRIND_CMD}" "$@"
-    retcode=$?
-    if [ "${retcode}" -ne 0 ]; then
+    if ! time eval "${VALGRIND_CMD}" "$@"; then
+        retcode=${PIPESTATUS[0]}
 	echo "Test $* failed with exit status ${retcode}."
 	((failed = failed + 1))
 	failures+=("$*")
