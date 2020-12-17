@@ -63,7 +63,7 @@ class SCMConfigTest(TestWithServers):
         Test Description: Verify that an attempt to configure devices that have
         already been configured and are in use by DAOS is handled.
 
-        :avocado: tags=all,small,pr,hw,scm_in_use,basic
+        :avocado: tags=all,small,pr,daily_regression,hw,scm_in_use,basic
         """
         # Create pool and container
         self.prepare_pool()

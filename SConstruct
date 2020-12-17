@@ -5,7 +5,10 @@ import platform
 import subprocess
 import time
 import errno
+import SCons.Warnings
 from SCons.Script import BUILD_TARGETS
+
+SCons.Warnings.warningAsException()
 
 try:
     input = raw_input # pylint: disable=redefined-builtin
@@ -21,8 +24,8 @@ DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-gnu-zero-variadic-macro-arguments',
                  '-Wno-tautological-constant-out-of-range-compare',
                  '-Wno-unused-command-line-argument',
-                 '-Wframe-larger-than=4096',
-                 ' -mavx2']
+                 '-Wframe-larger-than=4096']
+#                 '-mavx2']
 
 # Compiler flags to prevent optimizing out security checks
 DESIRED_FLAGS.extend(['-fno-strict-overflow', '-fno-delete-null-pointer-checks',

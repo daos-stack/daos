@@ -23,22 +23,19 @@
 '''
 from data_mover_test_base import DataMoverTestBase
 from os.path import join, sep
-from apricot import skipForTicket
 
 
 class CopyProcsTest(DataMoverTestBase):
     # pylint: disable=too-many-ancestors
     """Test class for Datamover multiple processes.
+
     Test Class Description:
         Tests multi-process (rank) copying of the datamover utility.
         Tests the following cases:
             Copying with varying numbers of processes (ranks).
+
     :avocado: recursive
     """
-
-    def __init__(self, *args, **kwargs):
-        """Initialize a CopyBasicsTest object."""
-        super(CopyProcsTest, self).__init__(*args, **kwargs)
 
     def setUp(self):
         """Set up each test case."""
@@ -54,30 +51,16 @@ class CopyProcsTest(DataMoverTestBase):
             "flags_read", "/run/ior/copy_procs/*")
 
         # Setup the directory structures
-        self.posix_test_path = join(self.workdir, "posix_test") + sep
-        self.posix_test_path2 = join(self.workdir, "posix_test2") + sep
-        self.posix_test_file = join(self.posix_test_path, self.test_file)
-        self.posix_test_file2 = join(self.posix_test_path2, self.test_file)
+        self.posix_test_paths.append(join(self.workdir, "posix_test") + sep)
+        self.posix_test_paths.append(join(self.workdir, "posix_test2") + sep)
+        self.posix_test_file = join(self.posix_test_paths[0], self.test_file)
+        self.posix_test_file2 = join(self.posix_test_paths[1], self.test_file)
         self.daos_test_file = join("/", self.test_file)
 
         # Create the directories
-        cmd = "mkdir -p '{}' '{}'".format(
-            self.posix_test_path,
-            self.posix_test_path2)
+        cmd = "mkdir -p {}".format(self.get_posix_test_path_string())
         self.execute_cmd(cmd)
 
-    def tearDown(self):
-        """Tear down each test case."""
-        # Remove the created directories
-        cmd = "rm -rf '{}' '{}'".format(
-            self.posix_test_path,
-            self.posix_test_path2)
-        self.execute_cmd(cmd)
-
-        # Stop the servers and agents
-        super(CopyProcsTest, self).tearDown()
-
-    @skipForTicket("DAOS-6194")
     def test_copy_procs(self):
         """
         Test Description:
@@ -86,7 +69,7 @@ class CopyProcsTest(DataMoverTestBase):
             Create pool.
             Crate POSIX container1 and container2 in pool.
             Create a single 100M file in container1 using ior.
-        :avocado: tags=all,datamover,pr
+        :avocado: tags=all,datamover,daily_regression,hw
         :avocado: tags=copy_procs
         """
         # Create pool and containers
@@ -108,7 +91,7 @@ class CopyProcsTest(DataMoverTestBase):
         # DAOS -> POSIX
         # Run with varying number of processes
         self.set_src_location("DAOS_UUID", "/", pool1, container1)
-        self.set_dst_location("POSIX", self.posix_test_path2)
+        self.set_dst_location("POSIX", self.posix_test_paths[1])
         for num_procs in procs_list:
             test_desc = "copy_procs (DAOS->POSIX with {} procs)".format(
                 num_procs)
@@ -120,7 +103,7 @@ class CopyProcsTest(DataMoverTestBase):
 
         # POSIX -> DAOS
         # Run with varying number of processes
-        self.set_src_location("POSIX", self.posix_test_path)
+        self.set_src_location("POSIX", self.posix_test_paths[0])
         self.set_dst_location("DAOS_UUID", "/", pool1, container2)
         for num_procs in procs_list:
             test_desc = "copy_procs (POSIX->DAOS with {} processes)".format(

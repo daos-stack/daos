@@ -141,6 +141,29 @@ dfs_test_cond(void **state)
 		print_error("Failed concurrent rename\n");
 	assert_int_equal(rc, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
+
+	/* Verify TX consistency semantics. */
+	if (op_rc == 0 && arg->myrank == 0) {
+		/* New name entry should have been removed. */
+		rc = dfs_open(dfs_mt, NULL, filename,
+			      S_IFREG | S_IWUSR | S_IRUSR, O_RDONLY,
+			      0, 0, NULL, &file);
+		if (rc != ENOENT)
+			print_error("Open old name %s after rename got %d\n",
+				    filename, rc);
+		assert_int_equal(rc, ENOENT);
+		dfs_release(file);
+
+		/* New name entry should have been created. */
+		rc = dfs_open(dfs_mt, NULL, newfilename,
+			      S_IFREG | S_IWUSR | S_IRUSR, O_RDONLY,
+			      0, 0, NULL, &file);
+		if (rc != 0)
+			print_error("Open new name %s after rename got %d\n",
+				    newfilename, rc);
+		assert_int_equal(rc, 0);
+		dfs_release(file);
+	}
 }
 
 #define NUM_SEGS 10

@@ -39,7 +39,7 @@ class CartRpcTwoNodeTest(Test):
     """
     Runs basic CaRT RPC tests
 
-    :avocado: tags=all,cart,pr,rpc,two_node
+    :avocado: tags=all,cart,pr,daily_regression,rpc,two_node
     """
     def setUp(self):
         """ Test setup """
@@ -47,15 +47,11 @@ class CartRpcTwoNodeTest(Test):
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
 
-    def tearDown(self):
-        """ Test tear down """
-        print("Run TearDown\n")
-
     def test_cart_rpc(self):
         """
         Test CaRT RPC
 
-        :avocado: tags=all,cart,pr,rpc,two_node
+        :avocado: tags=all,cart,pr,daily_regression,rpc,two_node
         """
         srvcmd = self.utils.build_cmd(self, self.env, "test_servers")
         clicmd = self.utils.build_cmd(self, self.env, "test_clients")

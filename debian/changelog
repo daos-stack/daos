@@ -1,8 +1,15 @@
-daos (1.1.2-4) unstable; urgency=medium
+
+daos (1.1.2.1-2) unstable; urgency=medium
   [ Ashley Pittman ]
   * Combine memcheck suppressions files
 
- -- Ashley Pittman <ashley.m.pittman@intel.com>  Tue, 8 Dec 2020 13:33:21 -0000
+ -- Ashley Pittman <ashley.m.pittman@intel.com>  Tue, 15 Dec 2020 13:33:21 -0000
+
+daos (1.1.2.1-1) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Version bump up to 1.1.2.1
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Wed, 09 Dec 2020 19:30:00 +0100
 
 daos (1.1.2-3) unstable; urgency=medium
   [ Li Wei ]
@@ -10,7 +17,6 @@ daos (1.1.2-3) unstable; urgency=medium
 
  -- Li Wei <wei.g.li@intel.com>  Fri, 04 Dec 2020 14:30:00 +0800
 
->>>>>>> master
 daos (1.1.2-1) unstable; urgency=medium
   [ Brian J. Murrell ]
   * Version bump up to 1.1.2

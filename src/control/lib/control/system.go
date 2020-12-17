@@ -52,7 +52,7 @@ type sysResponse struct {
 	AbsentHosts hostlist.HostSet
 }
 
-func (sr *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
+func (resp *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
 	ahs, err := hostlist.CreateSet(inHosts)
 	if err != nil {
 		return err
@@ -61,29 +61,29 @@ func (sr *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
 	if err != nil {
 		return err
 	}
-	sr.AbsentHosts.ReplaceSet(ahs)
-	sr.AbsentRanks.ReplaceSet(ars)
+	resp.AbsentHosts.ReplaceSet(ahs)
+	resp.AbsentRanks.ReplaceSet(ars)
 
 	return nil
 }
 
-func (sr *sysResponse) DisplayAbsentHostsRanks() string {
+func (resp *sysResponse) DisplayAbsentHostsRanks() string {
 	switch {
-	case sr.AbsentHosts.Count() > 0:
+	case resp.AbsentHosts.Count() > 0:
 		return fmt.Sprintf("\nUnknown %s: %s",
-			english.Plural(sr.AbsentHosts.Count(), "host", "hosts"),
-			sr.AbsentHosts.String())
-	case sr.AbsentRanks.Count() > 0:
+			english.Plural(resp.AbsentHosts.Count(), "host", "hosts"),
+			resp.AbsentHosts.String())
+	case resp.AbsentRanks.Count() > 0:
 		return fmt.Sprintf("\nUnknown %s: %s",
-			english.Plural(sr.AbsentRanks.Count(), "rank", "ranks"),
-			sr.AbsentRanks.String())
+			english.Plural(resp.AbsentRanks.Count(), "rank", "ranks"),
+			resp.AbsentRanks.String())
 	default:
 		return ""
 	}
 }
 
-// TODO: Unify this with system.JoinRequest
 // SystemJoinReq contains the inputs for the system join request.
+// TODO: Unify this with system.JoinRequest
 type SystemJoinReq struct {
 	unaryRequest
 	msRequest
@@ -96,7 +96,7 @@ type SystemJoinReq struct {
 	InstanceIdx uint32              `json:"Idx"`
 }
 
-func (sjr *SystemJoinReq) MarshalJSON() ([]byte, error) {
+func (req *SystemJoinReq) MarshalJSON() ([]byte, error) {
 	// use a type alias to leverage the default marshal for
 	// most fields
 	type toJSON SystemJoinReq
@@ -105,9 +105,9 @@ func (sjr *SystemJoinReq) MarshalJSON() ([]byte, error) {
 		SrvFaultDomain string
 		*toJSON
 	}{
-		Addr:           sjr.ControlAddr.String(),
-		SrvFaultDomain: sjr.FaultDomain.String(),
-		toJSON:         (*toJSON)(sjr),
+		Addr:           req.ControlAddr.String(),
+		SrvFaultDomain: req.FaultDomain.String(),
+		toJSON:         (*toJSON)(req),
 	})
 }
 

@@ -39,7 +39,7 @@ class CartCoRpcTwoNodeTest(Test):
     """
     Runs basic CaRT CoRPC tests
 
-    :avocado: tags=all,cart,pr,corpc,two_node
+    :avocado: tags=all,cart,pr,daily_regression,corpc,two_node
     """
     def setUp(self):
         """ Test setup """
@@ -47,15 +47,11 @@ class CartCoRpcTwoNodeTest(Test):
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
 
-    def tearDown(self):
-        """ Test tear down """
-        print("Run TearDown\n")
-
     def test_cart_corpc(self):
         """
         Test CaRT CoRPC
 
-        :avocado: tags=all,cart,pr,corpc,two_node
+        :avocado: tags=all,cart,pr,daily_regression,corpc,two_node
         """
 
         cmd = self.utils.build_cmd(self, self.env, "test_servers")
