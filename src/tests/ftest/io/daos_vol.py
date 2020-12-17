@@ -24,29 +24,21 @@ portions thereof marked with this legend must also reproduce the markings.
 from vol_test_base import VolTestBase
 
 
-# pylint: disable=too-many-ancestors
 class DaosVol(VolTestBase):
+    # pylint: disable=too-many-ancestors,too-few-public-methods
     """Runs HDF5 test suites with daos vol connector.
 
     :avocado: recursive
     """
 
-    def setUp(self):
-        """Set up each test case."""
-        # Cancel h5_test_testhdf5 with MPICH
-        mpi_type = self.params.get("job_manager_mpi_type")
-        testname = self.params.get("testname")
-        if testname == "h5_partest_t_shapesame":
-            self.cancelForTicket("DAOS-5831")
-        if testname == "h5_test_testhdf5":
-            self.cancelForTicket("DAOS-5469")
-        if testname == "h5_partest_testphdf5":
-            self.cancelForTicket("DAOS-6076")
-        if testname == "h5_partest_t_bigio":
-            self.cancelForTicket("DAOS-5496")
-        if testname == "h5vl_test_parallel":
-            self.cancelForTicket("DAOS-5647")
-        super(DaosVol, self).setUp()
+    # Test variants that should be skipped
+    CANCEL_FOR_TICKET = (
+        ("DAOS-5831", "testname", "h5_partest_t_shapesame"),
+        ("DAOS-5469", "testname", "h5_test_testhdf5"),
+        ("DAOS-6076", "testname", "h5_partest_testphdf5"),
+        ("DAOS-5496", "testname", "h5_partest_t_bigio"),
+        ("DAOS-5647", "testname", "h5vl_test_parallel"),
+    )
 
     def test_daos_vol(self):
         """Jira ID: DAOS-3656.
