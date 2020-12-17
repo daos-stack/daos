@@ -486,7 +486,8 @@ class DmgCommand(DmgCommandBase):
             r"\s*(\d+)|(?:(?:SCM:|NVMe:)\s+Total\s+size:\s+([0-9.]+\s+[A-Z]+)"
             r"\s+Free:\s+([0-9.]+\s+[A-Z]+),\smin:([0-9.]+\s+[A-Z]+),"
             r"\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"
-            r"|Rebuild\s+(\w+),\s+(.*),\s+(.*))",
+            r"|Rebuild\s+(\w+),\s+(?:rc=)?(\d+)(?:\s+\w+)?,"
+            r"\s+(?:status=-)?(\d+)(?:\s+\w+)?)",
             self.result.stdout)
         if match:
             # Mapping of the pool data entries to the match[0] indices
