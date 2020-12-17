@@ -780,10 +780,7 @@ def import_daos(server, conf):
 
 def run_daos_cmd(conf,
                  cmd,
-                 valgrind=True,
-                 fi_file=None,
-                 fi_valgrind=False,
-                 prefix=True):
+                 valgrind=True):
     """Run a DAOS command
 
     Run a command, returning what subprocess.run() would.
@@ -798,26 +795,13 @@ def run_daos_cmd(conf,
     if conf.args.memcheck == 'no':
         valgrind = False
 
-    if fi_file:
-        # Turn off Valgrind for the fault injection testing unless it's
-        # specifically requested (typically if a fault injection results
-        # in a SEGV/assert), and then if it is turned on then just check
-        # memory access, not memory leaks.
-        vh.use_valgrind = fi_valgrind
-        vh.full_check = False
-
     if not valgrind:
         vh.use_valgrind = False
 
     cmd_env = get_base_env()
 
     exec_cmd = vh.get_cmd_prefix()
-    if prefix:
-        exec_cmd.append(os.path.join(conf['PREFIX'], 'bin', 'daos'))
-    else:
-        cmd_env['LD_PRELOAD'] = os.path.join(conf['PREFIX'],
-                                             'lib64', 'libioil.so')
-
+    exec_cmd.append(os.path.join(conf['PREFIX'], 'bin', 'daos'))
     exec_cmd.extend(cmd)
 
     prefix = 'dnt_cmd_{}_'.format(get_inc_id())
@@ -825,8 +809,6 @@ def run_daos_cmd(conf,
                                            suffix='.log',
                                            delete=False)
 
-    if fi_file:
-        cmd_env['D_FI_CONFIG'] = fi_file
     cmd_env['D_LOG_FILE'] = log_file.name
     cmd_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
 
@@ -835,29 +817,21 @@ def run_daos_cmd(conf,
                         stderr=subprocess.PIPE,
                         env=cmd_env)
 
-    if rc.stderr != '':
+    if rc.stderr != b'':
         print('Stderr from command')
         print(rc.stderr.decode('utf-8').strip())
 
     show_memleaks = True
-    skip_fi = False
 
-    if fi_file:
-        skip_fi = True
-
-    fi_signal = None
     # A negative return code means the process exited with a signal so do not
     # check for memory leaks in this case as it adds noise, right when it's
     # least wanted.
     if rc.returncode < 0:
         show_memleaks = False
-        fi_signal = -rc.returncode
 
     rc.fi_loc = log_test(conf,
                          log_file.name,
-                         show_memleaks=show_memleaks,
-                         skip_fi=skip_fi,
-                         fi_signal=fi_signal)
+                         show_memleaks=show_memleaks)
     vh.convert_xml()
     return rc
 
@@ -1390,6 +1364,113 @@ def test_pydaos_kv(server, conf):
     daos._cleanup()
     log_test(conf, pydaos_log_file.name)
 
+class AllocFailTestRun():
+    """Class to run a fault injection command"""
+    def __init__(self, aft, cmd, env):
+
+        # The subprocess handle
+        self._sp = None
+        # The valgrind handle
+        self.vh = None
+        # The return from subprocess.poll
+        self.ret = None
+
+        self.cmd = cmd
+        self.env = env
+        self.aft = aft
+        self._fi_file = None
+        self.returncode = None
+
+        prefix = 'dnt_fi_check_{}_'.format(get_inc_id())
+        self.log_file = tempfile.NamedTemporaryFile(prefix=prefix,
+                                                    suffix='.log',
+                                                    delete=False).name
+        self.env['D_LOG_FILE'] = self.log_file
+
+    def __str__(self):
+        res =  "Fault injection test of '{}'\n".format(' '.join(self.cmd))
+        if self.returncode is None:
+            res += 'Process not completed'
+        else:
+            res += 'Returncode was {}'.format(self.returncode)
+        return res
+
+    def start(self, loc):
+
+        fc = {}
+        fc['fault_config'] = [{'id': 0,
+                               'probability_x': 1,
+                               'probability_y': 1,
+                               'interval': loc,
+                               'max_faults': 1}]
+
+        self._fi_file = tempfile.NamedTemporaryFile(prefix='fi_',
+                                                    suffix='.yaml')
+
+        self._fi_file.write(yaml.dump(fc, encoding='utf=8'))
+        self._fi_file.flush()
+
+        self.env['D_FI_CONFIG'] = self._fi_file.name
+
+        self._sp = subprocess.Popen(self.cmd,
+                                    env = self.env,
+                                    stdin=subprocess.PIPE,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE)
+
+    def poll(self):
+        if self.returncode is not None:
+            return self
+
+        rc = self._sp.poll()
+        if rc is None:
+            return None
+        self.post(rc)
+        return self
+
+    def post(self, rc):
+        """Called once, after running"""
+
+        self.returncode = rc
+        self.stdout = self._sp.stdout.read()
+        self.stderr = self._sp.stderr.read()
+
+        if self.stderr != b'':
+            print('Stderr from command')
+            print(self.stderr.decode('utf-8').strip())
+
+        show_memleaks = True
+
+        fi_signal = None
+        # A negative return code means the process exited with a signal so do not
+        # check for memory leaks in this case as it adds noise, right when it's
+        # least wanted.
+        if rc < 0:
+            show_memleaks = False
+            fi_signal = -rc
+
+        self.fi_loc = log_test(self.aft.conf,
+                               self.log_file,
+                               show_memleaks=show_memleaks,
+                               skip_fi=True,
+                               fi_signal=fi_signal)
+        if self.vh:
+            self.vh.convert_xml()
+
+        if not self.aft.check_stderr:
+            return
+
+        stderr = self.stderr.decode('utf-8')
+        stdout = self.stdout.decode('utf-8')
+        if not stderr.endswith("Out of memory (-1009)") and \
+           'error parsing command line arguments' not in stderr and \
+           stdout != self.aft.expected_stdout:
+            print(self.aft.expected_stdout)
+            print(stdout)
+            self.aft.conf.wf.add(self.fi_loc,
+                                 'NORMAL', "Incorrect stderr '{}'".format(stderr),
+                                 mtype='Out of memory not reported correctly via stderr')
+
 class AllocFailTest():
     """Class to describe fault injection command"""
 
@@ -1399,13 +1480,50 @@ class AllocFailTest():
         self.prefix = True
         self.check_stderr = False
         self.expected_stdout = ''
+        self.use_il = False
 
-    def run(self, **kwargs):
-        """Run the actual test"""
-        return run_daos_cmd(self.conf,
-                            self.cmd,
-                            prefix=self.prefix,
-                            **kwargs)
+    def run_fi_cmd(self,
+                   loc,
+                   valgrind=False):
+        """Run a DAOS command
+
+        Run a command, returning what subprocess.run() would.
+
+        Enable logging, and valgrind for the command.
+
+        if prefix is set to False do not run a DAOS command, but instead run what's
+        provided, however run it under the IL.
+        """
+        vh = ValgrindHelper()
+
+        # Turn off Valgrind for the fault injection testing unless it's
+        # specifically requested (typically if a fault injection results
+        # in a SEGV/assert), and then if it is turned on then just check
+        # memory access, not memory leaks.
+        vh.use_valgrind = valgrind
+        vh.full_check = False
+
+        cmd_env = get_base_env()
+
+        exec_cmd = vh.get_cmd_prefix()
+
+        if self.use_il:
+            cmd_env['LD_PRELOAD'] = os.path.join(self.conf['PREFIX'],
+                                                 'lib64', 'libioil.so')
+
+        exec_cmd.extend(self.cmd)
+
+        cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
+
+        aftf = AllocFailTestRun(self, exec_cmd, cmd_env)
+        aftf.vh = vh
+
+        aftf.start(loc)
+
+        while aftf.poll() == None:
+            pass
+
+        return aftf
 
 def run_fi_test(test_cmd, wf):
     """Run a command with fault injection enabled.
@@ -1430,38 +1548,14 @@ def run_fi_test(test_cmd, wf):
     while True:
         print()
 
-        fc = {}
-        fc['fault_config'] = [{'id': 0,
-                               'probability_x': 1,
-                               'probability_y': 1,
-                               'interval': fid,
-                               'max_faults': 1}]
-
-        fi_file = tempfile.NamedTemporaryFile(prefix='fi_',
-                                              suffix='.yaml')
-
-        fi_file.write(yaml.dump(fc, encoding='utf=8'))
-        fi_file.flush()
-
         try:
-            rc = test_cmd.run(fi_file=fi_file.name)
+            rc = test_cmd.run_fi_cmd(fid)
             if rc.returncode < 0:
                 print(rc)
                 print('Rerunning test under valgrind, fid={}'.format(fid))
-                rc = test_cmd.run(fi_file=fi_file.name, fi_valgrind=True)
+                rc = test_cmd.run_fi_cmd(fid, valgrind=True)
                 fatal_errors = True
 
-            stdout = rc.stdout.decode('utf-8').strip()
-            stderr = rc.stderr.decode('utf-8').strip()
-            if test_cmd.check_stderr and \
-               not stderr.endswith("Out of memory (-1009)") and \
-               'error parsing command line arguments' not in stderr and \
-               stdout != test_cmd.expected_stdout:
-                print(test_cmd.expected_stdout)
-                print(stdout)
-                wf.add(rc.fi_loc,
-                       'NORMAL', "Incorrect stderr '{}'".format(stderr),
-                       mtype='Out of memory not reported correctly via stderr')
         except NLTestNoFi:
 
             print('Fault injection did not trigger, returning')
@@ -1502,7 +1596,7 @@ def test_alloc_fail_cat(server, wf, conf):
     cmd = ['cat', target_file]
 
     test_cmd = AllocFailTest(conf, cmd)
-    test_cmd.prefix = False
+    test_cmd.use_il = True
 
     rc = run_fi_test(test_cmd, wf)
     dfuse.stop()
@@ -1518,7 +1612,11 @@ def test_alloc_fail(server, wf, conf):
 
     pool = pools[0]
 
-    cmd = ['pool', 'list-containers', '--pool', pool]
+    cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos'),
+           'pool',
+           'list-containers',
+           '--pool',
+           pool]
     test_cmd = AllocFailTest(conf, cmd)
 
     # Create at least one container, and record what the output should be when
