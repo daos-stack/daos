@@ -26,6 +26,8 @@
 #define D_LOGFAC	DD_FAC(hg)
 
 #include "crt_internal.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 /*
  * na_dict table should be in the same order of enum crt_na_type, the last one
@@ -712,6 +714,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	bool			 is_coll_req = false;
 	int			 rc = 0;
 	struct crt_rpc_priv	 rpc_tmp = {0};
+	char			 buf[16];
 
 	hg_info = HG_Get_info(hg_hdl);
 	if (hg_info == NULL) {
@@ -750,6 +753,9 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	 * Set the opcode in the temp RPC so that it can be correctly logged.
 	 */
 	rpc_tmp.crp_pub.cr_opc = opc;
+
+	snprintf(buf, sizeof(buf), "0x%x", opc);
+	d_tm_increment_counter(NULL, "RPC/stats/opcode", buf, "total", NULL);
 
 	opc_info = crt_opc_lookup(crt_gdata.cg_opc_map, opc, CRT_UNLOCK);
 	if (opc_info == NULL) {

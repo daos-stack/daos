@@ -26,6 +26,8 @@
 #define D_LOGFAC	DD_FAC(rpc)
 
 #include "crt_internal.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 static void crt_epi_destroy(struct crt_ep_inflight *epi);
 
@@ -284,6 +286,8 @@ crt_context_register_rpc_task(crt_context_t ctx, crt_rpc_task_t process_cb,
 void
 crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 {
+	static struct d_tm_node_t	*rpc_timeouts;
+
 	D_ASSERT(rpc_priv != NULL);
 
 	if (rc == -DER_CANCELED)
@@ -294,6 +298,11 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 		rpc_priv->crp_state = RPC_STATE_FWD_UNREACH;
 	else
 		rpc_priv->crp_state = RPC_STATE_COMPLETED;
+
+	if (rc == -DER_TIMEDOUT) {
+		d_tm_increment_counter(&rpc_timeouts, "RPC", "timeouts",
+					    NULL);
+	}
 
 	if (rpc_priv->crp_complete_cb != NULL) {
 		struct crt_cb_info	cbinfo;
@@ -336,6 +345,7 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 	int			 flags, force, wait;
 	uint64_t		 ts_start, ts_now;
 	int			 rc = 0;
+	static struct d_tm_node_t	*wait_queue_gauge;
 
 	D_ASSERT(rlink != NULL);
 	D_ASSERT(arg != NULL);
@@ -377,6 +387,9 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 		D_ASSERT(rpc_priv->crp_state == RPC_STATE_QUEUED);
 		d_list_del_init(&rpc_priv->crp_epi_link);
 		epi->epi_req_wait_num--;
+		d_tm_set_gauge(&wait_queue_gauge, epi->epi_req_wait_num,
+			       "RPC/queue_stats", "wait_depth",
+			       NULL);
 		crt_rpc_complete(rpc_priv, -DER_CANCELED);
 	}
 
@@ -841,7 +854,9 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	d_rank_t		 ep_rank;
 	int			 rc = 0;
 	struct crt_grp_priv	*grp_priv;
-
+	static struct d_tm_node_t	*request_counter;
+	static struct d_tm_node_t	*abort_counter;
+	static struct d_tm_node_t	*wait_queue_gauge;
 
 	D_ASSERT(crt_ctx != NULL);
 
@@ -869,10 +884,18 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 		epi->epi_ep.ep_rank = ep_rank;
 		epi->epi_ctx = crt_ctx;
 		D_INIT_LIST_HEAD(&epi->epi_req_q);
-		epi->epi_req_num = 0;
+		epi->epi_req_num = 0; // could initialize counters here....
+
+		d_tm_set_gauge(&abort_counter, 0, "RPC/queue_stats", "aborts",
+			       NULL);
+
 		epi->epi_reply_num = 0;
 		D_INIT_LIST_HEAD(&epi->epi_req_waitq);
 		epi->epi_req_wait_num = 0;
+
+		d_tm_set_gauge(&wait_queue_gauge, 0, "RPC/queue_stats",
+			       "wait_depth", NULL);
+
 		/* epi_ref init as 1 to avoid other thread delete it but here
 		 * still need to access it, decref before exit this routine. */
 		epi->epi_ref = 1;
@@ -917,6 +940,9 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 		epi->epi_req_wait_num++;
 		rpc_priv->crp_state = RPC_STATE_QUEUED;
 		rc = CRT_REQ_TRACK_IN_WAITQ;
+
+		d_tm_set_gauge(&wait_queue_gauge, epi->epi_req_wait_num, NULL);
+
 	} else {
 		D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 		rc = crt_req_timeout_track(rpc_priv);
@@ -926,6 +952,10 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 					&epi->epi_req_q);
 			epi->epi_req_num++;
 			rc = CRT_REQ_TRACK_IN_INFLIGHQ;
+
+			d_tm_increment_counter(&request_counter,
+					       "RPC/queue_stats", "requests",
+					       NULL);
 		} else {
 			RPC_ERROR(rpc_priv,
 				"crt_req_timeout_track failed, rc: %d.\n", rc);
@@ -961,6 +991,11 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 	d_list_t		 submit_list;
 	struct crt_rpc_priv	*tmp_rpc;
 	int			 rc;
+	static struct d_tm_node_t	*request_counter;
+	static struct d_tm_node_t	*abort_counter;
+	static struct d_tm_node_t	*wait_queue_gauge;
+	static struct d_tm_node_t	*reply_counter;
+	static struct d_tm_node_t	*inflight_queue_gauge;
 
 	D_ASSERT(crt_ctx != NULL);
 
@@ -996,10 +1031,15 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 
 	/* remove from inflight queue */
 	d_list_del_init(&rpc_priv->crp_epi_link);
-	if (rpc_priv->crp_state == RPC_STATE_COMPLETED)
+	if (rpc_priv->crp_state == RPC_STATE_COMPLETED) {
 		epi->epi_reply_num++;
-	else /* RPC_CANCELED or RPC_INITED or RPC_TIMEOUT */
+		d_tm_increment_counter(&reply_counter, "RPC/queue_stats",
+				       "replies", NULL);
+	} else { /* RPC_CANCELED or RPC_INITED or RPC_TIMEOUT */
 		epi->epi_req_num--;
+		d_tm_increment_counter(&abort_counter, "RPC/queue_stats",
+				       "aborts", NULL);
+	}
 	D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
 
 	if (!crt_req_timedout(rpc_priv)) {
@@ -1021,6 +1061,8 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 
 	/* process waitq */
 	inflight = epi->epi_req_num - epi->epi_reply_num;
+	d_tm_set_gauge(&inflight_queue_gauge, inflight, "RPC/queue_stats",
+		       "inflight_depth", NULL);
 	D_ASSERT(inflight >= 0 && inflight <= crt_gdata.cg_credit_ep_ctx);
 	credits = crt_gdata.cg_credit_ep_ctx - inflight;
 	while (credits > 0 && !d_list_empty(&epi->epi_req_waitq)) {
@@ -1040,10 +1082,14 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 		/* remove from waitq and add to in-flight queue */
 		d_list_move_tail(&tmp_rpc->crp_epi_link, &epi->epi_req_q);
 		epi->epi_req_wait_num--;
+		d_tm_set_gauge(&wait_queue_gauge, epi->epi_req_wait_num,
+			       "RPC/queue_stats", "wait_depth", NULL);
 		D_ASSERT(epi->epi_req_wait_num >= 0);
 		epi->epi_req_num++;
 		D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
 
+		d_tm_increment_counter(&request_counter, "RPC/queue_stats",
+				       "requests", NULL);
 		/* add to resend list */
 		d_list_add_tail(&tmp_rpc->crp_tmp_link, &submit_list);
 		credits--;

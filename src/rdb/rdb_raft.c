@@ -50,6 +50,8 @@
 #include <daos_srv/vos.h>
 #include "rdb_internal.h"
 #include "rdb_layout.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 static int rdb_raft_create_lc(daos_handle_t pool, daos_handle_t mc,
 			      d_iov_t *key, uint64_t base,
@@ -2634,6 +2636,10 @@ rdb_requestvote_handler(crt_rpc_t *rpc)
 	struct rdb_raft_state		state;
 	d_rank_t			srcrank;
 	int				rc;
+	static struct d_tm_node_t	*requestvote_requests;
+
+	d_tm_increment_counter(&requestvote_requests, "RPC/rdb/requestvote",
+			       "requests", NULL);
 
 	rc = crt_req_src_rank_get(rpc, &srcrank);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
@@ -2681,6 +2687,10 @@ rdb_appendentries_handler(crt_rpc_t *rpc)
 	struct rdb_raft_state		state;
 	d_rank_t			srcrank;
 	int				rc;
+	static struct d_tm_node_t	*appendentries_requests;
+
+	d_tm_increment_counter(&appendentries_requests, "RPC/rdb/appendentries",
+			       "requests", NULL);
 
 	rc = crt_req_src_rank_get(rpc, &srcrank);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
@@ -2727,6 +2737,10 @@ rdb_installsnapshot_handler(crt_rpc_t *rpc)
 	struct rdb_raft_state		state;
 	d_rank_t			srcrank;
 	int				rc;
+	static struct d_tm_node_t	*installsnapshot_requests;
+
+	d_tm_increment_counter(&installsnapshot_requests,
+			       "RPC/rdb/installsnapshot", "requests", NULL);
 
 	rc = crt_req_src_rank_get(rpc, &srcrank);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));

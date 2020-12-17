@@ -29,6 +29,8 @@
 #define D_LOGFAC DD_FAC(vos)
 
 #include "vos_internal.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 #define DEFINE_TS_STR(type, desc, count)	desc,
 
@@ -101,9 +103,12 @@ static void evict_entry(void *payload, uint32_t idx, void *arg)
 {
 	struct vos_ts_info	*info = arg;
 	struct vos_ts_entry	*entry = payload;
+	static struct d_tm_node_t	*vos_evictions;
 
 	if (ts_update_on_evict(info->ti_table, entry)) {
 		TS_TRACE("Evicted", entry, idx, info->ti_type);
+		d_tm_increment_counter(&vos_evictions, "vos", "evictions",
+				       NULL);
 		entry->te_record_ptr = NULL;
 	}
 }

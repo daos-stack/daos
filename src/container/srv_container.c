@@ -41,6 +41,8 @@
 #include "rpc.h"
 #include "srv_internal.h"
 #include "srv_layout.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 static int
 cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
@@ -2818,6 +2820,9 @@ ds_cont_op_handler(crt_rpc_t *rpc)
 	daos_prop_t	       *prop = NULL;
 	struct cont_svc	       *svc;
 	int			rc;
+	static struct d_tm_node_t	*op_requests;
+
+	d_tm_increment_counter(&op_requests, "RPC/cont/op", "requests", NULL);
 
 	pool_hdl = ds_pool_hdl_lookup(in->ci_pool_hdl);
 	if (pool_hdl == NULL)
@@ -3029,6 +3034,10 @@ ds_cont_set_prop_handler(crt_rpc_t *rpc)
 	uuid_t				 pool_uuid;
 	uuid_t				 cont_uuid;
 	struct cont			*cont;
+	static struct d_tm_node_t	*set_prop_requests;
+
+	d_tm_increment_counter(&set_prop_requests, "RPC/cont/set_prop",
+			       "requests", NULL);
 
 	/* Client RPCs go through the regular flow with pool/cont handles */
 	if (daos_rpc_from_client(rpc)) {

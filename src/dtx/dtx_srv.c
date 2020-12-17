@@ -32,6 +32,8 @@
 #include <daos_srv/vos.h>
 #include <daos_srv/dtx_srv.h>
 #include "dtx_internal.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 #define DTX_YIELD_CYCLE		(DTX_THRESHOLD_COUNT >> 3)
 
@@ -49,6 +51,9 @@ dtx_handler(crt_rpc_t *rpc)
 	int			 i = 0;
 	int			 rc1 = 0;
 	int			 rc;
+	static struct d_tm_node_t	*dtx_requests;
+
+	d_tm_increment_counter(&dtx_requests, "RPC/dtx", "requests", NULL);
 
 	rc = ds_cont_child_lookup(din->di_po_uuid, din->di_co_uuid, &cont);
 	if (rc != 0) {

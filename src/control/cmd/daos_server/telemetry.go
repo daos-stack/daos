@@ -35,8 +35,9 @@ type telemCmd struct {
 type telemScanCmd struct {
 	cfgCmd
 	logCmd
-	Rank int    `short:"r" long:"rank" description:"Use this rank for telemetry data"`
-	Path string `short:"p" long:"path" description:"Scan telemetry from this path"`
+	Rank int       `short:"r" long:"rank" description:"Use this rank for telemetry data"`
+	Path string    `short:"p" long:"path" description:"Scan telemetry from this path"`
+	Iterations int `short:"i" long:"iter" description:"Number of iterations to print before exiting"`
 }
 
 type telemListCmd struct {
@@ -53,7 +54,7 @@ type telemListCmd struct {
 }
 
 func (cmd *telemScanCmd) Execute(args []string) error {
-	telemetry.ShowDirectoryTree(cmd.Rank, cmd.Path)
+	telemetry.ShowDirectoryTree(cmd.Rank, cmd.Path, cmd.Iterations)
 	return nil
 }
 

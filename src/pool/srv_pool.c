@@ -667,7 +667,7 @@ rechoose:
 			DP_UUID(pool_uuid), DP_RC(rc));
 		D_GOTO(out_rpc, rc);
 	}
-// joel
+
 	rc = daos_rank_list_copy(svc_addrs, ranks);
 	D_ASSERTF(rc == 0, "daos_rank_list_copy: "DF_RC"\n", DP_RC(rc));
 out_rpc:
@@ -1618,9 +1618,17 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	struct rdb_kvs_attr	attr;
 	daos_prop_t	       *prop_dup = NULL;
 	int			rc;
+	static struct d_tm_node_t	*pool_create_requests;
+	static struct d_tm_node_t	*pool_create_duration;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
 		DP_UUID(in->pri_op.pi_uuid), rpc);
+
+	d_tm_increment_counter(&pool_create_requests, "RPC/pool/create",
+			       "requests", NULL);
+
+	d_tm_mark_duration_start(&pool_create_duration, D_TM_CLOCK_REALTIME,
+				 "RPC/pool/create", "duration", NULL);
 
 	if (in->pri_ntgts != in->pri_tgt_uuids.ca_count ||
 	    in->pri_ntgts != in->pri_tgt_ranks->rl_nr)
@@ -1632,7 +1640,7 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	rc = pool_svc_lookup(in->pri_op.pi_uuid, &svc);
 	if (rc != 0)
 		D_GOTO(out, rc);
-// joel
+
 	/*
 	 * Simply serialize this whole RPC with rsvc_step_{up,down}_cb() and
 	 * ds_rsvc_stop().
@@ -1737,6 +1745,7 @@ out:
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
 		DP_UUID(in->pri_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
+	d_tm_mark_duration_end(&pool_create_duration, NULL);
 }
 
 static int
@@ -1796,7 +1805,7 @@ transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
 	ABT_eventual		eventual;
 	int		       *status;
 	int			rc;
-//joel
+
 	if (map_version != pool_map_get_version(svc->ps_pool->sp_map)) {
 		D_ERROR(DF_UUID": found different cached and persistent pool "
 			"map versions: cached=%u persistent=%u\n",
@@ -1885,9 +1894,13 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	struct daos_prop_entry	       *owner_entry;
 	struct daos_prop_entry	       *owner_grp_entry;
 	uint64_t			sec_capas = 0;
-// joel
+	static struct d_tm_node_t	*pool_connect_requests;
+
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, DP_UUID(in->pci_op.pi_hdl));
+
+	d_tm_increment_counter(&pool_connect_requests, "RPC/pool/connect",
+			       "requests", NULL);
 
 	rc = pool_svc_lookup_leader(in->pci_op.pi_uuid, &svc,
 				    &out->pco_op.po_hint);
@@ -2195,9 +2208,13 @@ ds_pool_disconnect_handler(crt_rpc_t *rpc)
 	d_iov_t			value;
 	struct pool_hdl			hdl;
 	int				rc;
-// joel
+	static struct d_tm_node_t	*pool_disconnect_requests;
+
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(pdi->pdi_op.pi_uuid), rpc, DP_UUID(pdi->pdi_op.pi_hdl));
+
+	d_tm_increment_counter(&pool_disconnect_requests, "RPC/pool/disconnect",
+			       "requests", NULL);
 
 	rc = pool_svc_lookup_leader(pdi->pdi_op.pi_uuid, &svc,
 				    &pdo->pdo_op.po_hint);
@@ -2484,9 +2501,13 @@ ds_pool_list_cont_handler(crt_rpc_t *rpc)
 	d_iov_t				 value;
 	struct pool_hdl			 hdl;
 	int				 rc;
+	static struct d_tm_node_t	*pool_list_container_requests;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->plci_op.pi_uuid), rpc, DP_UUID(in->plci_op.pi_hdl));
+
+	d_tm_increment_counter(&pool_list_container_requests,
+			       "RPC/pool/list_cont", "requests", NULL);
 
 	rc = pool_svc_lookup_leader(in->plci_op.pi_uuid, &svc,
 				    &out->plco_op.po_hint);
@@ -2578,9 +2599,13 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	d_iov_t			value;
 	struct pool_hdl		hdl;
 	int			rc;
+	static struct d_tm_node_t	*pool_query_requests;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pqi_op.pi_uuid), rpc, DP_UUID(in->pqi_op.pi_hdl));
+
+	d_tm_increment_counter(&pool_query_requests, "RPC/pool/query",
+			       "requests", NULL);
 
 	rc = pool_svc_lookup_leader(in->pqi_op.pi_uuid, &svc,
 				    &out->pqo_op.po_hint);
@@ -2761,9 +2786,13 @@ ds_pool_query_info_handler(crt_rpc_t *rpc)
 	struct pool_target		*target = NULL;
 	int				 tgt_state;
 	int				 rc;
+	static struct d_tm_node_t	*pool_query_info_requests;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pqii_op.pi_uuid), rpc, DP_UUID(in->pqii_op.pi_hdl));
+
+	d_tm_increment_counter(&pool_query_info_requests, "RPC/pool/query_info",
+			       "requests", NULL);
 
 	rc = pool_svc_lookup_leader(in->pqii_op.pi_uuid, &svc,
 				    &out->pqio_op.po_hint);
@@ -2961,9 +2990,13 @@ ds_pool_prop_get_handler(crt_rpc_t *rpc)
 	struct rdb_tx			tx;
 	int				rc;
 	daos_prop_t			*prop = NULL;
+	static struct d_tm_node_t	*pool_prop_get_requests;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
 		DP_UUID(in->pgi_op.pi_uuid), rpc);
+
+	d_tm_increment_counter(&pool_prop_get_requests, "RPC/pool/prop/get",
+			       "requests", NULL);
 
 	rc = pool_svc_lookup_leader(in->pgi_op.pi_uuid, &svc,
 				    &out->pgo_op.po_hint);
@@ -3246,9 +3279,13 @@ ds_pool_prop_set_handler(crt_rpc_t *rpc)
 	struct rdb_tx			tx;
 	daos_prop_t			*prop = NULL;
 	int				rc;
+	static struct d_tm_node_t	*pool_prop_set_requests;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
 		DP_UUID(in->psi_op.pi_uuid), rpc);
+
+	d_tm_increment_counter(&pool_prop_set_requests, "RPC/pool/prop/set",
+			       "requests", NULL);
 
 	rc = pool_svc_lookup_leader(in->psi_op.pi_uuid, &svc,
 				    &out->pso_op.po_hint);
@@ -3419,9 +3456,13 @@ ds_pool_acl_update_handler(crt_rpc_t *rpc)
 	int				rc;
 	daos_prop_t			*prop = NULL;
 	struct daos_prop_entry		*entry = NULL;
+	static struct d_tm_node_t	*pool_acl_update_requests;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
 		DP_UUID(in->pui_op.pi_uuid), rpc);
+
+	d_tm_increment_counter(&pool_acl_update_requests, "RPC/pool/acl/update",
+			       "requests", NULL);
 
 	rc = pool_svc_lookup_leader(in->pui_op.pi_uuid, &svc,
 				    &out->puo_op.po_hint);
@@ -3568,9 +3609,13 @@ ds_pool_acl_delete_handler(crt_rpc_t *rpc)
 	int				rc;
 	daos_prop_t			*prop = NULL;
 	struct daos_prop_entry		*entry;
+	static struct d_tm_node_t	*pool_acl_update_delete_requests;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
 		DP_UUID(in->pdi_op.pi_uuid), rpc);
+
+	d_tm_increment_counter(&pool_acl_update_delete_requests,
+			       "RPC/pool/acl/delete", "requests", NULL);
 
 	rc = pool_svc_lookup_leader(in->pdi_op.pi_uuid, &svc,
 				    &out->pdo_op.po_hint);
@@ -4383,6 +4428,10 @@ ds_pool_extend_handler(crt_rpc_t *rpc)
 	uint32_t		ndomains;
 	int32_t			*domains;
 	int rc;
+	static struct d_tm_node_t	*pool_extend_requests;
+
+	d_tm_increment_counter(&pool_extend_requests, "RPC/pool/extend",
+			       "requests", NULL);
 
 	uuid_copy(pool_uuid, in->pei_op.pi_uuid);
 	target_uuids = in->pei_tgt_uuids.ca_arrays;
@@ -4409,6 +4458,10 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 	struct pool_target_addr_list	list = { 0 };
 	struct pool_target_addr_list	out_list = { 0 };
 	int				rc;
+	static struct d_tm_node_t	*pool_update_requests;
+
+	d_tm_increment_counter(&pool_update_requests, "RPC/pool/update",
+			       "requests", NULL);
 
 	if (in->pti_addr_list.ca_arrays == NULL ||
 	    in->pti_addr_list.ca_count == 0)
@@ -4547,6 +4600,10 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 	size_t			hdl_uuids_size;
 	int			n_hdl_uuids;
 	int			rc;
+	static struct d_tm_node_t	*pool_evict_requests;
+
+	d_tm_increment_counter(&pool_evict_requests, "RPC/pool/evict",
+			       "requests", NULL);
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
 		DP_UUID(in->pvi_op.pi_uuid), rpc);
@@ -4706,6 +4763,10 @@ ds_pool_svc_stop_handler(crt_rpc_t *rpc)
 	struct pool_svc_stop_out       *out = crt_reply_get(rpc);
 	d_iov_t			id;
 	int				rc;
+	static struct d_tm_node_t	*pool_svc_stop_requests;
+
+	d_tm_increment_counter(&pool_svc_stop_requests, "RPC/pool/svc_stop",
+			       "requests", NULL);
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
 		DP_UUID(in->psi_op.pi_uuid), rpc);
@@ -4789,6 +4850,10 @@ ds_pool_attr_set_handler(crt_rpc_t *rpc)
 	struct pool_svc		 *svc;
 	struct rdb_tx		  tx;
 	int			  rc;
+	static struct d_tm_node_t	*pool_attr_set_requests;
+
+	d_tm_increment_counter(&pool_attr_set_requests, "RPC/pool/attr/set",
+			       "requests", NULL);
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pasi_op.pi_uuid), rpc, DP_UUID(in->pasi_op.pi_hdl));
@@ -4830,6 +4895,10 @@ ds_pool_attr_del_handler(crt_rpc_t *rpc)
 	struct pool_svc		 *svc;
 	struct rdb_tx		  tx;
 	int			  rc;
+	static struct d_tm_node_t	*pool_attr_del_requests;
+
+	d_tm_increment_counter(&pool_attr_del_requests, "RPC/pool/attr/del",
+			       "requests", NULL);
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->padi_op.pi_uuid), rpc, DP_UUID(in->padi_op.pi_hdl));
@@ -4871,6 +4940,10 @@ ds_pool_attr_get_handler(crt_rpc_t *rpc)
 	struct pool_svc		 *svc;
 	struct rdb_tx		  tx;
 	int			  rc;
+	static struct d_tm_node_t	*pool_attr_get_requests;
+
+	d_tm_increment_counter(&pool_attr_get_requests, "RPC/pool/attr/get",
+			       "requests", NULL);
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pagi_op.pi_uuid), rpc, DP_UUID(in->pagi_op.pi_hdl));
@@ -4907,6 +4980,10 @@ ds_pool_attr_list_handler(crt_rpc_t *rpc)
 	struct pool_svc			*svc;
 	struct rdb_tx			 tx;
 	int				 rc;
+	static struct d_tm_node_t	*pool_attr_list_requests;
+
+	d_tm_increment_counter(&pool_attr_list_requests, "RPC/pool/attr/list",
+			       "requests", NULL);
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pali_op.pi_uuid), rpc, DP_UUID(in->pali_op.pi_hdl));
@@ -4943,6 +5020,10 @@ ds_pool_replicas_update_handler(crt_rpc_t *rpc)
 	d_rank_list_t			*ranks;
 	d_iov_t				 id;
 	int				 rc;
+	static struct d_tm_node_t	*pool_replicas_update_requests;
+
+	d_tm_increment_counter(&pool_replicas_update_requests,
+			       "RPC/pool/replicas/update", "requests", NULL);
 
 	rc = daos_rank_list_dup(&ranks, in->pmi_targets);
 	if (rc != 0)

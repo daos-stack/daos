@@ -25,6 +25,8 @@
 
 #include "swim_internal.h"
 #include <assert.h>
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 static uint64_t swim_prot_period_len;
 static uint64_t swim_suspect_timeout;
@@ -681,6 +683,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 	swim_id_t id_target, id_sendto;
 	bool send_updates = false;
 	int rc;
+	static struct d_tm_node_t	*swim_indirect_pings;
 
 	/* validate input parameters */
 	if (ctx == NULL) {
@@ -782,6 +785,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 			 * protocol tick ever successfully acked a indirect
 			 * ping request
 			 */
+
 			ctx->sc_iping_deadline += net_glitch_delay;
 			if (now > ctx->sc_iping_deadline) {
 				/* no response from indirect pings,
@@ -802,6 +806,9 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 			 * kick off a set of indirect pings to a subgroup of
 			 * group members
 			 */
+			d_tm_increment_counter(&swim_indirect_pings, "SWIM",
+					       "indirect_pings", NULL);
+
 			item = TAILQ_FIRST(&ctx->sc_subgroup);
 			if (item == NULL) {
 				rc = swim_subgroup_init(ctx);

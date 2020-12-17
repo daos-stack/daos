@@ -36,8 +36,6 @@
 
 #include "crt_internal.h"
 #include "cart/iv.h"
-#include <gurt/telemetry_common.h>
-#include <gurt/telemetry_producer.h>
 
 #define IV_DBG(key, msg, ...) \
 	D_DEBUG(DB_TRACE, "[key=%p] " msg, (key)->iov_buf, ##__VA_ARGS__)
@@ -1131,8 +1129,6 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 	struct ivf_key_in_progress	*entry;
 	int				rc = 0;
 	struct crt_iv_ops		*iv_ops;
-	static struct d_tm_node_t	*ivf_rpc_issue;
-	char				buf[16];
 
 	ivns_internal = cb_info->ifc_ivns_internal;
 
@@ -1140,13 +1136,6 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 	D_ASSERT(iv_ops != NULL);
 
 	IV_DBG(iv_key, "rpc to be issued to rank=%d\n", dest_node);
-
-//joel
-	snprintf(buf, sizeof(buf), "%d", dest_node);
-	rc = d_tm_increment_counter(&ivf_rpc_issue, "cart/rpc/rank", buf,
-				    "issue", NULL);
-	if (rc != D_TM_SUCCESS)
-		printf("d_tm_increment_counter failed, rc = %d\n", rc);
 
 	/* Check if RPC for this key has already been submitted */
 	D_MUTEX_LOCK(&ivns_internal->cii_lock);
@@ -1502,7 +1491,7 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 	 * in ivo_pre_fetch() case, and change handler function.
 	 */
 	IVNS_ADDREF(ivns_internal);
-// joel
+
 	if (iv_ops->ivo_pre_fetch != NULL) {
 		D_DEBUG(DB_TRACE, "Executing ivo_pre_fetch\n");
 		iv_ops->ivo_pre_fetch(ivns_internal,
@@ -2577,33 +2566,22 @@ exit:
 static void
 handle_response_internal(void *arg)
 {
-	static struct d_tm_node_t	*fetch;
-	static struct d_tm_node_t	*sync;
-	static struct d_tm_node_t	*update;
-	static struct d_tm_node_t	*wrong_opc;
-	const struct crt_cb_info	*cb_info = arg;
-	crt_rpc_t			*rpc = cb_info->cci_rpc;
-	int				rc;
+	const struct crt_cb_info *cb_info = arg;
+	crt_rpc_t		 *rpc = cb_info->cci_rpc;
 
 	switch (rpc->cr_opc) {
 	case CRT_OPC_IV_FETCH:
 		handle_ivfetch_response(cb_info);
-		rc = d_tm_increment_counter(&fetch, "cart/IV/fetch", NULL);
 		break;
 	case CRT_OPC_IV_SYNC:
 		handle_ivsync_response(cb_info);
-		rc = d_tm_increment_counter(&sync, "cart/IV/sync", NULL);
 		break;
 	case CRT_OPC_IV_UPDATE:
 		handle_ivupdate_response(cb_info);
-		rc = d_tm_increment_counter(&update, "cart/IV/update", NULL);
 		break;
 	default:
 		D_ERROR("wrong opc %#x\n", rpc->cr_opc);
-		rc = d_tm_increment_counter(&wrong_opc, "cart/IV/wrong", NULL);
 	}
-	if (rc != D_TM_SUCCESS)
-		printf("d_tm_increment_counter failed, rc = %d\n", rc);
 }
 
 static void

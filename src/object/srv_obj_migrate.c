@@ -39,6 +39,8 @@
 #include <daos_srv/dtx_srv.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 /* This needs to be here to avoid pulling in all of srv_internal.h */
 int ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid);
@@ -2522,6 +2524,10 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 	struct ds_pool		*pool = NULL;
 	unsigned int		i;
 	int			rc;
+	static struct d_tm_node_t	*migrate_requests;
+
+	d_tm_increment_counter(&migrate_requests, "RPC/obj/migrate", "requests",
+			       NULL);
 
 	migrate_in = crt_req_get(rpc);
 	oids = migrate_in->om_oids.ca_arrays;

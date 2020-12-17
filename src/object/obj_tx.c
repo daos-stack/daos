@@ -2683,15 +2683,12 @@ dc_tx_attach(daos_handle_t th, enum obj_rpc_opc opc, tse_task_t *task)
 	rc = dc_tx_check(th, obj_is_modification_opc(opc) ? true : false, &tx);
 	if (rc != 0)
 		return rc;
-// joel
+
 	switch (opc) {
 	case DAOS_OBJ_RPC_UPDATE: {
 		daos_obj_update_t	*up = dc_task_get_args(task);
 
-		rc = d_tm_increment_counter(&update, "daos/rpc/update/count",
-					    NULL);
-		if (rc != D_TM_SUCCESS)
-			printf("d_tm_increment_counter failed, rc = %d\n", rc);
+		d_tm_increment_counter(&update, "daos/rpc/update/count", NULL);
 
 		if (up->flags & (DAOS_COND_DKEY_INSERT |
 				 DAOS_COND_DKEY_UPDATE |
@@ -2711,10 +2708,7 @@ dc_tx_attach(daos_handle_t th, enum obj_rpc_opc opc, tse_task_t *task)
 	case DAOS_OBJ_RPC_PUNCH: {
 		daos_obj_punch_t	*pu = dc_task_get_args(task);
 
-		rc = d_tm_increment_counter(&punch, "daos/rpc/punch/count",
-					    NULL);
-		if (rc != D_TM_SUCCESS)
-			printf("d_tm_increment_counter failed, rc = %d\n", rc);
+		d_tm_increment_counter(&punch, "daos/rpc/punch/count", NULL);
 
 		D_ASSERTF(!(pu->flags & DAOS_COND_MASK),
 			  "Unexpected cond flag %lx for punch obj\n",
@@ -2726,10 +2720,8 @@ dc_tx_attach(daos_handle_t th, enum obj_rpc_opc opc, tse_task_t *task)
 	case DAOS_OBJ_RPC_PUNCH_DKEYS: {
 		daos_obj_punch_t	*pu = dc_task_get_args(task);
 
-		rc = d_tm_increment_counter(&punch_dkey,
-					    "daos/rpc/punch_dkey/count", NULL);
-		if (rc != D_TM_SUCCESS)
-			printf("d_tm_increment_counter failed, rc = %d\n", rc);
+		d_tm_increment_counter(&punch_dkey, "daos/rpc/punch_dkey/count",
+				       NULL);
 
 		if (pu->flags & DAOS_COND_PUNCH) {
 			D_MUTEX_UNLOCK(&tx->tx_lock);
@@ -2745,10 +2737,8 @@ dc_tx_attach(daos_handle_t th, enum obj_rpc_opc opc, tse_task_t *task)
 	case DAOS_OBJ_RPC_PUNCH_AKEYS: {
 		daos_obj_punch_t	*pu = dc_task_get_args(task);
 
-		rc = d_tm_increment_counter(&punch_akey,
-					    "daos/rpc/punch_akey/count", NULL);
-		if (rc != D_TM_SUCCESS)
-			printf("d_tm_increment_counter failed, rc = %d\n", rc);
+		d_tm_increment_counter(&punch_akey, "daos/rpc/punch_akey/count",
+				       NULL);
 
 		if (pu->flags & DAOS_COND_PUNCH) {
 			D_MUTEX_UNLOCK(&tx->tx_lock);
@@ -2765,10 +2755,7 @@ dc_tx_attach(daos_handle_t th, enum obj_rpc_opc opc, tse_task_t *task)
 	case DAOS_OBJ_RPC_FETCH: {
 		daos_obj_fetch_t	*fe = dc_task_get_args(task);
 
-		rc = d_tm_increment_counter(&fetch, "daos/rpc/fetch/count",
-					    NULL);
-		if (rc != D_TM_SUCCESS)
-			printf("d_tm_increment_counter failed, rc = %d\n", rc);
+		d_tm_increment_counter(&fetch, "daos/rpc/fetch/count", NULL);
 
 		rc = dc_tx_add_read(tx, opc, fe->oh, fe->flags, fe->dkey,
 				    fe->nr, fe->nr != 1 ? fe->iods :
@@ -2780,11 +2767,8 @@ dc_tx_attach(daos_handle_t th, enum obj_rpc_opc opc, tse_task_t *task)
 		daos_key_t		*dkey;
 		uint32_t		 nr;
 
-		rc = d_tm_increment_counter(&query_key,
-					    "daos/rpc/query_key/count",
-					    NULL);
-		if (rc != D_TM_SUCCESS)
-			printf("d_tm_increment_counter failed, rc = %d\n", rc);
+		d_tm_increment_counter(&query_key, "daos/rpc/query_key/count",
+				       NULL);
 
 		if (qu->flags & DAOS_GET_DKEY) {
 			dkey = NULL;
@@ -2803,11 +2787,9 @@ dc_tx_attach(daos_handle_t th, enum obj_rpc_opc opc, tse_task_t *task)
 	case DAOS_OBJ_RECX_RPC_ENUMERATE: {
 		daos_obj_list_recx_t	*lr = dc_task_get_args(task);
 
-		rc = d_tm_increment_counter(&recx_rpc_enumerate,
-					    "daos/rpc/recx_rpc_enumerate/count",
-					    NULL);
-		if (rc != D_TM_SUCCESS)
-			printf("d_tm_increment_counter failed, rc = %d\n", rc);
+		d_tm_increment_counter(&recx_rpc_enumerate,
+				       "daos/rpc/recx_rpc_enumerate/count",
+				       NULL);
 
 		rc = dc_tx_add_read(tx, opc, lr->oh, 0, lr->dkey, 1, lr->akey);
 		break;
@@ -2815,11 +2797,9 @@ dc_tx_attach(daos_handle_t th, enum obj_rpc_opc opc, tse_task_t *task)
 	case DAOS_OBJ_AKEY_RPC_ENUMERATE: {
 		daos_obj_list_akey_t	*la = dc_task_get_args(task);
 
-		rc = d_tm_increment_counter(&akey_rpc_enumerate,
-					    "daos/rpc/akey_rpc_enumerate/count",
-					    NULL);
-		if (rc != D_TM_SUCCESS)
-			printf("d_tm_increment_counter failed, rc = %d\n", rc);
+		d_tm_increment_counter(&akey_rpc_enumerate,
+				       "daos/rpc/akey_rpc_enumerate/count",
+				       NULL);
 
 		rc = dc_tx_add_read(tx, opc, la->oh, 0, la->dkey, 0, NULL);
 		break;
@@ -2827,11 +2807,9 @@ dc_tx_attach(daos_handle_t th, enum obj_rpc_opc opc, tse_task_t *task)
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE: {
 		daos_obj_list_dkey_t	*ld = dc_task_get_args(task);
 
-		rc = d_tm_increment_counter(&dkey_rpc_enumerate,
-					    "daos/rpc/dkey_rpc_enumerate/count",
-					    NULL);
-		if (rc != D_TM_SUCCESS)
-			printf("d_tm_increment_counter failed, rc = %d\n", rc);
+		d_tm_increment_counter(&dkey_rpc_enumerate,
+				       "daos/rpc/dkey_rpc_enumerate/count",
+				       NULL);
 
 		rc = dc_tx_add_read(tx, opc, ld->oh, 0, NULL, 0, NULL);
 		break;

@@ -50,6 +50,8 @@
 #include "srv_internal.h"
 #include <daos/cont_props.h>
 #include <daos/dedup.h>
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 /* Per VOS container aggregation ULT ***************************************/
 
@@ -225,11 +227,16 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 	int			snapshots_nr;
 	int			tgt_id = dss_get_module_info()->dmi_tgt_id;
 	int			i, rc;
+	static struct d_tm_node_t	*ts;
+	static struct d_tm_node_t	*duration;
+
 
 	/* Check if it's ok to start aggregation in every 2 seconds */
 	*msecs = 2ULL * 1000;
 	if (!cont_aggregate_runnable(cont))
 		return 0;
+
+	d_tm_record_timestamp(&ts, "cont", "aggregate", "last executed", NULL);
 
 	/*
 	 * Query the 'Highest Aggregated Epoch', the HAE will be bumped
@@ -335,6 +342,9 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		tgt_id, epoch_min, hlc);
 
+	d_tm_mark_duration_start(&duration, D_TM_CLOCK_REALTIME, "cont",
+				 "aggregate", "duration", NULL);
+
 	for ( ; i < snapshots_nr && snapshots[i] < epoch_max; ++i) {
 		epoch_range.epr_hi = snapshots[i];
 		D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating {%lu -> %lu}\n",
@@ -357,6 +367,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 		tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
 
 	rc = cont_aggregate_epr(cont, &epoch_range);
+
 out:
 	if (rc == 0 && epoch_min == 0)
 		cont->sc_aggregation_full_scan_hlc = hlc;
@@ -366,7 +377,7 @@ out:
 free:
 	if (snapshots != NULL)
 		D_FREE(snapshots);
-
+	d_tm_mark_duration_end(&duration, NULL);
 	return rc;
 }
 
@@ -1113,6 +1124,10 @@ ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 	struct cont_tgt_destroy_in     *in = crt_req_get(rpc);
 	struct cont_tgt_destroy_out    *out = crt_reply_get(rpc);
 	int				rc = 0;
+	static struct d_tm_node_t	*tgt_destroy_requests;
+
+	d_tm_increment_counter(&tgt_destroy_requests, "RPC/cont/tgt/destroy",
+			       "requests", NULL);
 
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc);
@@ -1710,6 +1725,10 @@ ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 	struct dss_coll_ops		coll_ops;
 	struct dss_coll_args		coll_args = { 0 };
 	struct xstream_cont_query	pack_args;
+	static struct d_tm_node_t	*tgt_query_requests;
+
+	d_tm_increment_counter(&tgt_query_requests, "RPC/cont/tgt/query",
+			       "requests", NULL);
 
 	out->tqo_hae			= DAOS_EPOCH_MAX;
 
@@ -1889,6 +1908,11 @@ ds_cont_tgt_snapshot_notify_handler(crt_rpc_t *rpc)
 	struct cont_tgt_snapshot_notify_in	*in	= crt_req_get(rpc);
 	struct cont_tgt_snapshot_notify_out	*out	= crt_reply_get(rpc);
 	struct cont_snap_args			 args	= { 0 };
+	static struct d_tm_node_t		*tgt_snapshot_notify_requests;
+
+	d_tm_increment_counter(&tgt_snapshot_notify_requests,
+			       "RPC/cont/tgt/snapshot_notify", "requests",
+			       NULL);
 
 	D_DEBUG(DB_EPC, DF_CONT": handling rpc %p\n",
 		DP_CONT(in->tsi_pool_uuid, in->tsi_cont_uuid), rpc);
@@ -1933,6 +1957,11 @@ ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
 	struct cont_tgt_epoch_aggregate_in	*in  = crt_req_get(rpc);
 	struct cont_tgt_epoch_aggregate_out	*out = crt_reply_get(rpc);
 	int					 rc;
+	static struct d_tm_node_t		*tgt_epoch_aggregate_requests;
+
+	d_tm_increment_counter(&tgt_epoch_aggregate_requests,
+			       "RPC/cont/tgt/epoch_aggregate", "requests",
+			       NULL);
 
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: epr (%p) [#"DF_U64"]\n",
 		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rpc,
@@ -2099,6 +2128,10 @@ ds_cont_oid_alloc_handler(crt_rpc_t *rpc)
 	struct ds_pool_hdl	*pool_hdl;
 	crt_opcode_t		opc = opc_get(rpc->cr_opc);
 	int			rc;
+	static struct d_tm_node_t	*oid_alloc_requests;
+
+	d_tm_increment_counter(&oid_alloc_requests, "RPC/cont/oid/alloc",
+			       "requests", NULL);
 
 	pool_hdl = ds_pool_hdl_lookup(in->ci_pool_hdl);
 	if (pool_hdl == NULL)

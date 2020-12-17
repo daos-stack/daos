@@ -52,6 +52,8 @@
 #include <daos_srv/rebuild.h>
 #include "rpc.h"
 #include "srv_internal.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 /* ds_pool_child **************************************************************/
 
@@ -1106,6 +1108,10 @@ ds_pool_tgt_disconnect_handler(crt_rpc_t *rpc)
 	uuid_t			       *hdl_uuids = in->tdi_hdls.ca_arrays;
 	int				i;
 	int				rc = 0;
+	static struct d_tm_node_t	*tgt_disconnect_requests;
+
+	d_tm_increment_counter(&tgt_disconnect_requests,
+			       "RPC/pool/tgt/disconnect", "requests", NULL);
 
 	if (in->tdi_hdls.ca_count == 0)
 		D_GOTO(out, rc = 0);
@@ -1301,6 +1307,10 @@ ds_pool_tgt_query_handler(crt_rpc_t *rpc)
 	struct pool_tgt_query_out	*out = crt_reply_get(rpc);
 	struct ds_pool			*pool;
 	int				 rc;
+	static struct d_tm_node_t	*tgt_query_requests;
+
+	d_tm_increment_counter(&tgt_query_requests, "RPC/pool/tgt/query",
+			       "requests", NULL);
 
 	pool = ds_pool_lookup(in->tqi_op.pi_uuid);
 	if (pool == NULL) {

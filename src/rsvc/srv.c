@@ -32,6 +32,8 @@
 #include <daos_srv/daos_server.h>
 #include <daos_srv/rsvc.h>
 #include "rpc.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 static struct ds_rsvc_class *rsvc_classes[DS_RSVC_CLASS_COUNT];
 
@@ -1177,6 +1179,10 @@ ds_rsvc_start_handler(crt_rpc_t *rpc)
 	bool			 create = in->sai_flags & RDB_AF_CREATE;
 	bool			 bootstrap = in->sai_flags & RDB_AF_BOOTSTRAP;
 	int			 rc;
+	static struct d_tm_node_t	*start_requests;
+
+	d_tm_increment_counter(&start_requests, "RPC/rsvc/start", "requests",
+			       NULL);
 
 	if (bootstrap && in->sai_ranks == NULL) {
 		rc = -DER_PROTO;
@@ -1280,6 +1286,10 @@ ds_rsvc_stop_handler(crt_rpc_t *rpc)
 	struct rsvc_stop_in	*in = crt_req_get(rpc);
 	struct rsvc_stop_out	*out = crt_reply_get(rpc);
 	int			 rc = 0;
+	static struct d_tm_node_t	*stop_requests;
+
+	d_tm_increment_counter(&stop_requests, "RPC/rsvc/stop", "requests",
+			       NULL);
 
 	rc = ds_rsvc_stop(in->soi_class, &in->soi_svc_id,
 			  in->soi_flags & RDB_OF_DESTROY);

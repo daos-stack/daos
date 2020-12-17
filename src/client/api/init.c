@@ -42,6 +42,8 @@
 #include <daos/job.h>
 #include "task_internal.h"
 #include <pthread.h>
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 /** protect against concurrent daos_init/fini calls */
 static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -212,9 +214,23 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_co, rc);
 
+
+	// Initializing for the client just to play with it
+	// There's an open question how we want the API functions to behave
+	// in the shared client/server code if the client doesn't initialized
+	// the API.  They currently will fail, and generate errors.  Might need
+	// to quiet the errors completely to avoid log spam.  Or somehow
+	// conditionally compile the metrics for the server, if possible.
+	rc = d_tm_init((int)getpid(), D_TM_SHARED_MEMORY_SIZE);
+	if (rc != 0) {
+		printf("Failed to initialize client telemetry and metrics\n");
+		goto out_tm;
+	}
+
 	module_initialized++;
 	D_GOTO(unlock, rc = 0);
-
+out_tm:
+	d_tm_fini();
 out_co:
 	dc_cont_fini();
 out_pool:

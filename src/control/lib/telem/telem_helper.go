@@ -293,7 +293,7 @@ func ReadMetrics(shmemRoot *C.uint64_t, counterMap map[C.d_tm_node_p]Counter, ga
 // Display a telemetry tree starting from the given directory for the given rank.
 // If no directory is specified, the tree starts at the root.  The data is only
 // printed.  It is not stored anywhere for later use.
-func ShowDirectoryTree(rank int, dirname string) error {
+func ShowDirectoryTree(rank int, dirname string, iterations int) error {
 	shmemRoot, root, err := InitTelemetry(rank)
 	if err != nil {
 		fmt.Printf("Failed to init telemetry for rank: %d\n", rank)
@@ -311,9 +311,17 @@ func ShowDirectoryTree(rank int, dirname string) error {
 	}
 
 	filter := C.D_TM_COUNTER | C.D_TM_TIMESTAMP | C.D_TM_TIMER_SNAPSHOT | C.D_TM_DURATION | C.D_TM_GAUGE
-	numMetrics := CountMetrics(shmemRoot, node, filter)
-	fmt.Printf("There are %d metrics found in the tree.\n", numMetrics)
-	PrintMyChildren(shmemRoot, node, 0, C.stdout)
+	if iterations <= 1 {
+		iterations = 1
+	}
+
+	for i := 0; i < iterations; i++ {
+		numMetrics := CountMetrics(shmemRoot, node, filter)
+		fmt.Printf("There are %d metrics found in the tree.\n", numMetrics)
+		fmt.Printf("\nIteration %d/%d\n", i+1, iterations)
+		PrintMyChildren(shmemRoot, node, 0, C.stdout)
+		time.Sleep(time.Second)
+	}
 	return nil
 }
 

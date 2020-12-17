@@ -28,6 +28,8 @@
 #include <daos_errno.h>
 #include <daos_srv/vos.h>
 #include "srv_internal.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 struct sched_req_info {
 	d_list_t		sri_req_list;
@@ -595,6 +597,12 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 	uint64_t		 scm_left;
 	struct pressure_ratio	*pr;
 	int			 orig_pressure, rc;
+	static struct d_tm_node_t	*scm_free;
+	static struct d_tm_node_t	*scm_system;
+	static struct d_tm_node_t	*scm_total;
+	static struct d_tm_node_t	*nvme_free;
+	static struct d_tm_node_t	*nvme_system;
+	static struct d_tm_node_t	*nvme_total;
 
 	D_ASSERT(spi->spi_space_ts <= info->si_cur_ts);
 	/* Use cached space presure info */
@@ -640,6 +648,22 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 
 		spi->spi_pressure_ts = info->si_cur_ts;
 	}
+
+//	The SCM and NVME metrics are based on the pool_id.
+//	One way to store the metrics for each pool, is to use the pool ID string
+//	in the metric name itself.  For the demo, I avoided using the pool ID
+//	because of the visual clutter from the number of pools created.
+//	d_tm_set_gauge(&scm_total, SCM_TOTAL(&vps), "IO/pool", DP_UUID(spi->spi_pool_id), "scm", "total", NULL);
+//	d_tm_set_gauge(&scm_system, SCM_SYS(&vps), "IO/pool", DP_UUID(spi->spi_pool_id), "scm", "system", NULL);
+//	d_tm_set_gauge(&scm_free, SCM_FREE(&vps), "IO/pool", DP_UUID(spi->spi_pool_id), "scm", "free", NULL);
+
+	d_tm_set_gauge(&scm_total, SCM_TOTAL(&vps), "IO/scm", "total", NULL);
+	d_tm_set_gauge(&scm_system, SCM_SYS(&vps), "IO/scm", "system", NULL);
+	d_tm_set_gauge(&scm_free, SCM_FREE(&vps), "IO/scm", "free", NULL);
+	d_tm_set_gauge(&nvme_total, NVME_TOTAL(&vps), "IO/nvme", "total", NULL);
+	d_tm_set_gauge(&nvme_system, NVME_SYS(&vps), "IO/nvme", "system", NULL);
+	d_tm_set_gauge(&nvme_free, NVME_FREE(&vps), "IO/nvme", "free", NULL);
+
 out:
 	return spi->spi_space_pressure;
 }
@@ -779,7 +803,6 @@ process_pool_cb(d_list_t *rlink, void *arg)
 	mig_max	= pool2req_cnt(spi, SCHED_REQ_MIGRATE);
 
 	press = check_space_pressure(dx, spi);
-
 	if (press == SCHED_SPACE_PRESS_NONE) {
 		/* Throttle GC & aggregation */
 		if (io_max && gc_max && gc_thr)
@@ -1101,13 +1124,44 @@ sched_req_get(struct sched_req_attr *attr, ABT_thread ult)
 	struct dss_xstream	*dx = dss_current_xstream();
 	struct sched_request	*req;
 	int			 rc;
-
+/*
+	static struct d_tm_node_t	*gc_counter;
+	static struct d_tm_node_t	*update_counter;
+	static struct d_tm_node_t	*fetch_counter;
+	static struct d_tm_node_t	*scrub_counter;
+	static struct d_tm_node_t	*migrate_counter;
+*/
 	D_ASSERT(attr->sra_type == SCHED_REQ_GC ||
 		 attr->sra_type == SCHED_REQ_UPDATE ||
 		 attr->sra_type == SCHED_REQ_FETCH ||
 		 attr->sra_type == SCHED_REQ_SCRUB ||
 		 attr->sra_type == SCHED_REQ_MIGRATE);
-
+/*
+	switch(attr->sra_type) {
+	case SCHED_REQ_GC:
+		d_tm_increment_counter(&gc_counter, "scheduler/stats/req",
+				       "gc", NULL);
+		break;
+	case SCHED_REQ_UPDATE:
+		d_tm_increment_counter(&update_counter, "scheduler/stats/req",
+				       "update", NULL);
+		break;
+	case SCHED_REQ_FETCH:
+		d_tm_increment_counter(&fetch_counter, "scheduler/stats/req",
+				       "fetch", NULL);
+		break;
+	case SCHED_REQ_SCRUB:
+		d_tm_increment_counter(&scrub_counter, "scheduler/stats/req",
+				       "scrub", NULL);
+		break;
+	case SCHED_REQ_MIGRATE:
+		d_tm_increment_counter(&migrate_counter, "scheduler/stats/req",
+				       "migrate", NULL);
+		break;
+	default:
+		break;
+	}
+*/
 	if (ult == ABT_THREAD_NULL) {
 		ABT_thread	self;
 
@@ -1187,7 +1241,7 @@ sched_dump_data(struct sched_data *data)
 	struct sched_cycle	*cycle = &data->sd_cycle;
 
 	D_PRINT("XS(%d): comm:%d main:%d. age_net:%u, age_nvme:%u, "
-		"new_cycle:%d cycle_started:%d total_ults:%u [%u, %u, %u]\n",
+		"new_cycle:%d cycle_started:%d total_ults:%u [%u, %u, %u]\n\n\n",
 		dx->dx_xs_id, dx->dx_comm, dx->dx_main_xs, cycle->sc_age_net,
 		cycle->sc_age_nvme, cycle->sc_new_cycle,
 		cycle->sc_cycle_started, cycle->sc_ults_tot,

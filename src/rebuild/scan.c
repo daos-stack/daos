@@ -43,6 +43,8 @@
 #include <daos_srv/dtx_srv.h>
 #include "rpc.h"
 #include "rebuild_internal.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 #define REBUILD_SEND_LIMIT	512
 struct rebuild_send_arg {
@@ -621,6 +623,10 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	struct rebuild_pool_tls		*tls = NULL;
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
 	int				 rc;
+	static struct d_tm_node_t	*scan_requests;
+
+	d_tm_increment_counter(&scan_requests, "RPC/rebuild/tgt/scan",
+			       "requests", NULL);
 
 	rsi = crt_req_get(rpc);
 	D_ASSERT(rsi != NULL);

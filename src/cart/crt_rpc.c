@@ -636,7 +636,6 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	 * request directly to the rank:tag=0 server
 	 */
 	char *fill_uri = NULL;
-
 	if (ul_in->ul_tag != ul_out->ul_tag) {
 		if (crt_provider_is_contig_ep(ctx->provider) == false) {
 			rc = crt_issue_uri_lookup(lookup_rpc->cr_ctx,
@@ -708,18 +707,29 @@ crt_client_get_contact_rank(crt_context_t crt_ctx, crt_group_t *grp,
 	char			*cached_uri = NULL;
 	struct crt_context	*ctx;
 	d_rank_list_t		*membs;
+	static struct d_tm_node_t	*uri_lookup_requests;
+	static struct d_tm_node_t	*uri_lookup_cache_hit;
+	static struct d_tm_node_t	*uri_lookup_cache_miss;
 
 	grp_priv = crt_grp_pub2priv(grp);
 	ctx = crt_ctx;
+
+	d_tm_increment_counter(&uri_lookup_requests, "RPC/uri/lookup",
+			       "requests", NULL);
 
 	/* If query_rank:tag=0 is in cache, use it as contact destination */
 	if (query_tag != 0) {
 		crt_grp_lc_lookup(grp_priv, ctx->cc_idx,
 				  query_rank, 0, &cached_uri, NULL);
 		if (cached_uri != NULL) {
+			d_tm_increment_counter(&uri_lookup_cache_hit,
+					       "RPC/uri/lookup", "cache_hit",
+					       NULL);
 			*ret_idx = -1;
 			D_GOTO(out, contact_rank = query_rank);
 		}
+		d_tm_increment_counter(&uri_lookup_cache_miss, "RPC/uri/lookup",
+				       "cache_miss", NULL);
 	}
 
 	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
@@ -750,10 +760,14 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 	crt_group_t	*grp;
 	int		ret_idx;
 	int		rc;
+	static struct d_tm_node_t	*uri_lookup_requests;
 
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
 	ctx = rpc_priv->crp_pub.cr_ctx;
 	grp = tgt_ep->ep_grp;
+
+	d_tm_increment_counter(&uri_lookup_requests, "RPC/uri/lookup",
+			       "requests", NULL);
 
 	/* Client handling */
 	if (!crt_is_service()) {
@@ -1177,7 +1191,7 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 			D_GOTO(out, rc = -DER_INVAL);
 		}
 	}
-// joel
+
 	RPC_TRACE(DB_TRACE, rpc_priv, "submitted.\n");
 
 	rc = crt_context_req_track(rpc_priv);

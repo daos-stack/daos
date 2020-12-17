@@ -46,6 +46,8 @@
 #include "daos_srv/srv_csum.h"
 #include "obj_rpc.h"
 #include "obj_internal.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 static inline bool
 obj_dtx_need_refresh(struct dtx_handle *dth, int rc)
@@ -1270,6 +1272,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	struct bio_sglist		*bsgls_dup = NULL; /* dedup verify */
 	daos_iod_t			*iods_dup = NULL; /* for EC deg fetch */
 	int				err, rc = 0;
+	static struct d_tm_node_t	*fetch_requests;
+	static struct d_tm_node_t	*update_requests;
 
 	D_TIME_START(time_start, OBJ_PF_UPDATE_LOCAL);
 
@@ -1305,6 +1309,10 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 
 	/* Prepare IO descriptor */
 	if (obj_rpc_is_update(rpc)) {
+
+		d_tm_increment_counter(&update_requests,
+				       "RPC/obj/update", "requests", NULL);
+
 		obj_singv_ec_rw_filter(&orw->orw_oid, iods, offs,
 				       orw->orw_epoch, orw->orw_flags,
 				       orw->orw_start_shard,
@@ -1455,6 +1463,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 
 	if (obj_rpc_is_fetch(rpc) && !spec_fetch &&
 	    daos_csummer_initialized(ioc->ioc_coc->sc_csummer)) {
+		d_tm_increment_counter(&fetch_requests,
+				       "RPC/obj/fetch", "requests", NULL);
 		rc = obj_fetch_csum_init(ioc->ioc_coc, orw, orwo);
 		if (rc) {
 			D_ERROR(DF_UOID" fetch csum init failed: %d.\n",
@@ -1787,6 +1797,10 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	uint32_t			 opc = opc_get(rpc->cr_opc);
 	struct dtx_epoch		 epoch;
 	int				 rc;
+	static struct d_tm_node_t	*tgt_update_requests;
+
+	d_tm_increment_counter(&tgt_update_requests, "RPC/obj/target_update",
+			       "requests", NULL);
 
 	D_ASSERT(orw != NULL);
 	D_ASSERT(orwo != NULL);
@@ -1982,6 +1996,9 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	uint32_t			version;
 	struct dtx_epoch		epoch = {0};
 	int				rc;
+	static struct d_tm_node_t	*rw_requests;
+
+	d_tm_increment_counter(&rw_requests, "RPC/obj/rw", "requests", NULL);
 
 	D_ASSERT(orw != NULL);
 	D_ASSERT(orwo != NULL);
@@ -2553,6 +2570,10 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	daos_epoch_t		epoch = 0;
 	int			opc = opc_get(rpc->cr_opc);
 	int			rc = 0;
+	static struct d_tm_node_t	*enum_requests;
+
+	d_tm_increment_counter(&enum_requests, "RPC/obj/enum", "requests",
+			       NULL);
 
 	oei = crt_req_get(rpc);
 	D_ASSERT(oei != NULL);
@@ -2737,6 +2758,10 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	uint32_t			 tgt_cnt;
 	struct dtx_epoch		 epoch;
 	int				 rc;
+	static struct d_tm_node_t	*tgt_punch_requests;
+
+	d_tm_increment_counter(&tgt_punch_requests, "RPC/obj/tgt_punch",
+			       "requests", NULL);
 
 	opi = crt_req_get(rpc);
 	D_ASSERT(opi != NULL);
@@ -2906,6 +2931,10 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	uint32_t			version;
 	struct dtx_epoch		epoch;
 	int				rc;
+	static struct d_tm_node_t	*punch_requests;
+
+	d_tm_increment_counter(&punch_requests, "RPC/obj/punch", "requests",
+			       NULL);
 
 	opi = crt_req_get(rpc);
 	D_ASSERT(opi != NULL);
@@ -3081,6 +3110,10 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	daos_recx_t			*query_recx;
 	int				 retry = 0;
 	int				 rc;
+	static struct d_tm_node_t	*query_key_requests;
+
+	d_tm_increment_counter(&query_key_requests, "RPC/obj/query_key",
+			       "requests", NULL);
 
 	okqi = crt_req_get(rpc);
 	D_ASSERT(okqi != NULL);
@@ -3190,6 +3223,10 @@ ds_obj_sync_handler(crt_rpc_t *rpc)
 	struct obj_io_context	 ioc;
 	daos_epoch_t		 epoch = crt_hlc_get();
 	int			 rc;
+	static struct d_tm_node_t	*sync_requests;
+
+	d_tm_increment_counter(&sync_requests, "RPC/obj/sync", "requests",
+			       NULL);
 
 	osi = crt_req_get(rpc);
 	D_ASSERT(osi != NULL);
@@ -4077,6 +4114,9 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 	int			 rc = 0;
 	int			 i;
 	bool			 leader;
+	static struct d_tm_node_t	*cpd_requests;
+
+	d_tm_increment_counter(&cpd_requests, "RPC/obj/cpd", "requests", NULL);
 
 	D_ASSERT(oci != NULL);
 
