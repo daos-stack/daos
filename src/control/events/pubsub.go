@@ -54,17 +54,17 @@ type PubSub struct {
 	shutdown    context.CancelFunc
 }
 
-// AddToMask adds event IDs to the filter mask preventing those event IDs from
+// DisableEventIDs adds event IDs to the filter mask preventing those event IDs from
 // being published.
-func (ps *PubSub) AddToMask(ids ...RASID) {
+func (ps *PubSub) DisableEventIDs(ids ...RASID) {
 	for _, id := range ids {
 		ps.eventMask = ps.eventMask | uint32(id)
 	}
 }
 
-// RemoveFromMask removes event IDs from the filter mask enabling those event IDs
+// EnableEventIDs removes event IDs from the filter mask enabling those event IDs
 // to be published.
-func (ps *PubSub) RemoveFromMask(ids ...RASID) {
+func (ps *PubSub) EnableEventIDs(ids ...RASID) {
 	for _, id := range ids {
 		ps.eventMask = ps.eventMask &^ uint32(id)
 	}
@@ -98,7 +98,6 @@ func (ps *PubSub) Subscribe(topic RASTypeID, handler Handler) {
 // simplicity. Select on one of cancellation/reset/additional subscriber/new
 // event.
 func (ps *PubSub) eventLoop(ctx context.Context) {
-	ps.log.Debug("starting event loop")
 	for {
 		select {
 		case <-ctx.Done():

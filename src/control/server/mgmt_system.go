@@ -196,13 +196,15 @@ func (svc *mgmtSvc) StopRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 	}
 
 	// don't publish rank exit events whilst performing controlled shutdown
-	svc.disableEvents(events.RASRankExit)
-	defer svc.enableEvents(events.RASRankExit)
+	svc.events.DisableEventIDs(events.RASRankExit)
+	defer svc.events.EnableEventIDs(events.RASRankExit)
 
 	for _, srv := range instances {
+		svc.log.Debugf("%d: check started", srv.Index())
 		if !srv.isStarted() {
 			continue
 		}
+		svc.log.Debugf("%d: call Stop()", srv.Index())
 		if err := srv.Stop(signal); err != nil {
 			return nil, errors.Wrapf(err, "sending %s", signal)
 		}
@@ -447,7 +449,7 @@ func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *mgmtpb.ClusterEventRe
 	if err != nil {
 		return nil, err
 	}
-	svc.dispatchEvents(event)
+	svc.events.Publish(event)
 
 	resp := &mgmtpb.ClusterEventResp{Sequence: req.Sequence}
 	svc.log.Debugf("MgmtSvc.ClusterEvent dispatch, resp:%#v\n", resp)

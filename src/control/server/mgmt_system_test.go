@@ -116,6 +116,16 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 	}
 }
 
+type eventsDispatched struct {
+	rx     []events.Event
+	cancel context.CancelFunc
+}
+
+func (d *eventsDispatched) OnEvent(ctx context.Context, e events.Event) {
+	d.rx = append(d.rx, e)
+	d.cancel()
+}
+
 func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 	eventRankExit := events.NewRankExitEvent("foo", 0, 0, common.NormalExit)
 
@@ -148,27 +158,15 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			mgmtSvc := newTestMgmtSvc(t, log)
-			db, cleanup := system.TestDatabase(t, log)
-			defer cleanup()
-			mgmtSvc.sysdb = db
-
-			var dispatched []events.Event
-			mgmtSvc.dispatchEvents = func(evt ...events.Event) {
-				dispatched = append(dispatched, evt...)
-			}
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			if err := db.Start(ctx); err != nil {
-				t.Fatal(err)
-			}
 
-			// wait for the bootstrap to finish
-			for {
-				if db.IsLeader() {
-					break
-				}
-			}
+			ps := events.NewPubSub(ctx, log)
+			mgmtSvc.events = ps
+
+			dispatched := &eventsDispatched{cancel: cancel}
+			mgmtSvc.events.Subscribe(events.RASTypeRankStateChange, dispatched)
 
 			var pbReq *mgmtpb.ClusterEventReq
 			switch {
@@ -195,11 +193,14 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 				return
 			}
 
+			<-ctx.Done()
+
 			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 
-			common.AssertEqual(t, tc.expDispatched, dispatched, "unexpected events dispatched")
+			common.AssertEqual(t, tc.expDispatched, dispatched.rx,
+				"unexpected events dispatched")
 		})
 	}
 }
@@ -450,7 +451,7 @@ func TestServer_MgmtSvc_StopRanks(t *testing.T) {
 		},
 		"context timeout": { // near-immediate parent context Timeout
 			req:        &mgmtpb.RanksReq{Ranks: "0-3"},
-			ctxTimeout: time.Nanosecond,
+			ctxTimeout: time.Millisecond,
 			expErr:     context.DeadlineExceeded, // parent ctx timeout
 		},
 		"instances started": { // unsuccessful result for kill
@@ -469,7 +470,7 @@ func TestServer_MgmtSvc_StopRanks(t *testing.T) {
 				{Rank: 2, State: msReady, Errored: true},
 			},
 		},
-		"instances stopped": { // successful result for kill
+		"instances already stopped": { // successful result for kill
 			req:              &mgmtpb.RanksReq{Ranks: "0-3"},
 			instancesStopped: true,
 			expResults: []*mgmtpb.RanksResp_RankResult{
@@ -484,7 +485,7 @@ func TestServer_MgmtSvc_StopRanks(t *testing.T) {
 				{Rank: 1, State: msReady, Errored: true},
 			},
 		},
-		"single instance stopped": {
+		"single instance already stopped": {
 			req:              &mgmtpb.RanksReq{Ranks: "1"},
 			instancesStopped: true,
 			expResults: []*mgmtpb.RanksResp_RankResult{
@@ -503,6 +504,22 @@ func TestServer_MgmtSvc_StopRanks(t *testing.T) {
 			}
 
 			svc := newTestMgmtSvcMulti(t, log, tc.ioserverCount, tc.setupAP)
+
+			if tc.ctxTimeout == 0 {
+				tc.ctxTimeout = 500 * time.Millisecond
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), tc.ctxTimeout)
+			defer cancel()
+
+			svc.harness.rankReqTimeout = 50 * time.Millisecond
+
+			ps := events.NewPubSub(ctx, log)
+			defer ps.Close()
+			svc.events = ps
+
+			dispatched := &eventsDispatched{cancel: cancel}
+			svc.events.Subscribe(events.RASTypeRankStateChange, dispatched)
+
 			for i, srv := range svc.harness.instances {
 				if tc.missingSB {
 					srv._superblock = nil
@@ -514,32 +531,36 @@ func TestServer_MgmtSvc_StopRanks(t *testing.T) {
 					trc.Running.SetTrue()
 					srv.ready.SetTrue()
 				}
-				trc.SignalCb = func(idx uint32, sig os.Signal) { signalsSent.Store(idx, sig) }
+				trc.SignalCb = func(idx uint32, sig os.Signal) {
+					signalsSent.Store(idx, sig)
+					// simulate process exit which will call
+					// onInstanceExit handlers.
+					svc.harness.instances[idx].exit(context.TODO(),
+						common.NormalExit)
+				}
 				trc.SignalErr = tc.signalErr
 				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
 				srv.setIndex(uint32(i))
 
 				srv._superblock.Rank = new(Rank)
 				*srv._superblock.Rank = Rank(i + 1)
-			}
 
-			ctx := context.Background()
-			if tc.ctxTimeout != 0 {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithTimeout(ctx, tc.ctxTimeout)
-				defer cancel()
+				srv.OnInstanceExit(
+					func(_ context.Context, _ system.Rank, _ error) error {
+						svc.events.Publish(events.NewRankExitEvent("foo",
+							0, 0, common.NormalExit))
+						return nil
+					})
 			}
-			svc.harness.rankReqTimeout = 50 * time.Millisecond
-
-			// TODO: test rank exit event inhibit
-			svc.disableEvents = func(...events.RASID) {}
-			svc.enableEvents = func(...events.RASID) {}
 
 			gotResp, gotErr := svc.StopRanks(ctx, tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
+
+			<-ctx.Done()
+			common.AssertEqual(t, 0, len(dispatched.rx), "number of events published")
 
 			// RankResult.Msg generation is tested in
 			// TestServer_MgmtSvc_DrespToRankResult unit tests

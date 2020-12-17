@@ -149,9 +149,9 @@ type SystemNotifyReq struct {
 	Sequence uint64
 }
 
-// ToClusterEventReq converts the system notify request to a cluster events
+// toClusterEventReq converts the system notify request to a cluster events
 // request. Resolve control address to a hostname if possible.
-func (req *SystemNotifyReq) ToClusterEventReq() (*mgmtpb.ClusterEventReq, error) {
+func (req *SystemNotifyReq) toClusterEventReq() (*mgmtpb.ClusterEventReq, error) {
 	if req.Event == nil {
 		return nil, errors.New("nil event in request")
 	}
@@ -175,7 +175,7 @@ func SystemNotify(ctx context.Context, rpcClient UnaryInvoker, req *SystemNotify
 	switch {
 	case req == nil:
 		return nil, errors.New("nil request")
-	case req.Event == nil:
+	case common.InterfaceIsNil(req.Event):
 		return nil, errors.New("nil event in request")
 	case req.Sequence == 0:
 		return nil, errors.New("invalid sequence number in request")
@@ -184,7 +184,7 @@ func SystemNotify(ctx context.Context, rpcClient UnaryInvoker, req *SystemNotify
 	}
 
 	rpcClient.Debugf("DAOS system notify request: %+v, event: %+v", req, req.Event)
-	pbReq, err := req.ToClusterEventReq()
+	pbReq, err := req.toClusterEventReq()
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +213,7 @@ type EventForwarder struct {
 // OnEvent implements the events.Handler interface.
 func (fwdr *EventForwarder) OnEvent(ctx context.Context, evt events.Event) {
 	switch {
-	case evt == nil:
+	case common.InterfaceIsNil(evt):
 		fwdr.client.Debug("skip event forwarding, nil event")
 		return
 	case len(fwdr.accessPts) == 0:

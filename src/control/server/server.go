@@ -40,7 +40,6 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/events"
@@ -225,26 +224,16 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		control.WithConfig(cliCfg),
 		control.WithClientLogger(log))
 
-	// Init management RPC subsystem.
-	mgmtSvc := newMgmtSvc(harness, membership, sysdb)
+	// Create event distributor.
 	eventPubSub := events.NewPubSub(ctx, log)
 	defer eventPubSub.Close()
+
+	// Init management RPC subsystem.
+	mgmtSvc := newMgmtSvc(harness, membership, sysdb, eventPubSub)
 
 	// Forward received events to management service by default.
 	eventForwarder := control.NewEventForwarder(rpcClient, cfg.AccessPoints)
 	eventPubSub.Subscribe(events.RASTypeRankStateChange, eventForwarder)
-
-	mgmtSvc.dispatchEvents = func(events ...events.Event) {
-		for _, event := range events {
-			eventPubSub.Publish(event)
-		}
-	}
-	mgmtSvc.disableEvents = func(ids ...events.RASID) {
-		eventPubSub.AddToMask(ids...)
-	}
-	mgmtSvc.enableEvents = func(ids ...events.RASID) {
-		eventPubSub.RemoveFromMask(ids...)
-	}
 
 	var netDevClass uint32
 
@@ -306,16 +295,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 			return err
 		}
 		// Register callback to publish I/O Server process exit events.
-		srv.OnInstanceExit(
-			func(ctx context.Context, rank system.Rank, exitErr error) error {
-				if exitErr == nil {
-					return errors.New("expected non-nil exit error")
-				}
-				eventPubSub.Publish(events.NewRankExitEvent(hostname(), srv.Index(),
-					rank.Uint32(), common.ExitStatus(exitErr.Error())))
-
-				return nil
-			})
+		srv.OnInstanceExit(publishInstanceExitFn(eventPubSub.Publish, hostname(), srv.Index()))
 
 		if idx == 0 {
 			netDevClass, err = cfg.GetDeviceClassFn(srvCfg.Fabric.Interface)

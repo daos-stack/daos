@@ -69,19 +69,18 @@ type mgmtSvc struct {
 	harness          *IOServerHarness
 	membership       *system.Membership // if MS leader, system membership list
 	sysdb            *system.Database
-	dispatchEvents   func(...events.Event)
-	disableEvents    func(...events.RASID)
-	enableEvents     func(...events.RASID)
+	events           *events.PubSub
 	clientNetworkCfg *config.ClientNetworkCfg
 	joinReqs         joinReqChan
 }
 
-func newMgmtSvc(h *IOServerHarness, m *system.Membership, s *system.Database) *mgmtSvc {
+func newMgmtSvc(h *IOServerHarness, m *system.Membership, s *system.Database, p *events.PubSub) *mgmtSvc {
 	return &mgmtSvc{
 		log:              h.log,
 		harness:          h,
 		membership:       m,
 		sysdb:            s,
+		events:           p,
 		clientNetworkCfg: new(config.ClientNetworkCfg),
 		joinReqs:         make(joinReqChan),
 	}
