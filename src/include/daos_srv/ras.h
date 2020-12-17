@@ -33,7 +33,7 @@
 #define RAS_TYPE_UNKNOWN_STR "Unknown RAS event type"
 
 enum ras_event_id {
-	RAS_RANK_EXIT	= 0,
+	RAS_RANK_EXIT	= 1,
 	RAS_RANK_NO_RESP,
 };
 
@@ -64,7 +64,7 @@ ras_event_id_enum_to_msg(enum ras_event_id id)
 }
 
 enum ras_event_sev {
-	RAS_SEV_FATAL	= 0,
+	RAS_SEV_FATAL	= 1,
 	RAS_SEV_WARN,
 	RAS_SEV_ERROR,
 	RAS_SEV_INFO,
@@ -88,7 +88,9 @@ ras_event_sev_enum_to_name(enum ras_event_sev severity)
 }
 
 enum ras_event_type {
-	RAS_TYPE_RANK_STATE_CHANGE	= 0,
+	/* ANY is a special case to match all types */
+	RAS_TYPE_ANY	= 0,
+	RAS_TYPE_RANK_STATE_CHANGE,
 	RAS_TYPE_INFO_ONLY,
 };
 

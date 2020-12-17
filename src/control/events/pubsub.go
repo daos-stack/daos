@@ -105,6 +105,8 @@ func (ps *PubSub) Publish(event Event) {
 
 // Subscribe adds a handler to the list of handlers subscribed to a given topic
 // (event type).
+//
+// The special case "RASTypeAny" topic will handle all received events.
 func (ps *PubSub) Subscribe(topic RASTypeID, handler Handler) {
 	ps.subscribers <- &subscriber{
 		topic:   topic,
@@ -127,6 +129,9 @@ func (ps *PubSub) eventLoop(ctx context.Context) {
 			ps.handlers[newSub.topic] = append(ps.handlers[newSub.topic],
 				newSub.handler)
 		case event := <-ps.events:
+			for _, hdlr := range ps.handlers[RASTypeAny] {
+				go hdlr.OnEvent(ctx, event)
+			}
 			for _, hdlr := range ps.handlers[event.GetType()] {
 				go hdlr.OnEvent(ctx, event)
 			}

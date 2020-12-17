@@ -171,3 +171,36 @@ func TestEvents_PubSub_DisableEvent(t *testing.T) {
 	<-tly1.finished
 	common.AssertEqual(t, 2, len(tly1.getRx()), "unexpected number of received events")
 }
+
+// TODO: update subscribe any topic test to use events of different types when
+// more events exist.
+func TestEvents_PubSub_SubscribeAnyTopic(t *testing.T) {
+	evt1 := NewRankExitEvent("foo", 1, 1, common.ExitStatus("test"))
+
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	ctx := context.Background()
+
+	ps := NewPubSub(ctx, log)
+	defer ps.Close()
+
+	tly1 := newTally(2)
+	tly2 := newTally(2)
+
+	ps.Subscribe(RASTypeAny, tly1)
+	ps.Subscribe(RASTypeRankStateChange, tly2)
+
+	ps.Publish(evt1)
+	ps.Publish(evt1)
+
+	<-tly1.finished
+	<-tly2.finished
+
+	common.AssertStringsEqual(t, []string{
+		RASTypeRankStateChange.String(), RASTypeRankStateChange.String(),
+	}, tly1.getRx(), "tly1 unexpected slice of received events")
+	common.AssertStringsEqual(t, []string{
+		RASTypeRankStateChange.String(), RASTypeRankStateChange.String(),
+	}, tly2.getRx(), "tly2 unexpected slice of received events")
+}

@@ -105,6 +105,7 @@ type RASTypeID uint32
 
 // RASTypeID constant definitions.
 const (
+	RASTypeAny             RASTypeID = C.RAS_TYPE_ANY
 	RASTypeRankStateChange RASTypeID = C.RAS_TYPE_RANK_STATE_CHANGE
 	RASTypeInfoOnly        RASTypeID = C.RAS_TYPE_INFO_ONLY
 )

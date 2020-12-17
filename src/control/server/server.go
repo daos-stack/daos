@@ -233,7 +233,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 
 	// Forward received events to management service by default.
 	eventForwarder := control.NewEventForwarder(rpcClient, cfg.AccessPoints)
-	eventPubSub.Subscribe(events.RASTypeRankStateChange, eventForwarder)
+	eventPubSub.Subscribe(events.RASTypeAny, eventForwarder)
 
 	var netDevClass uint32
 
@@ -403,9 +403,9 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		log.Infof("MS leader running on %s", hostname())
 		mgmtSvc.startJoinLoop(ctx)
 
-		// On gaining leadership, stop forwarding MS events.
+		// Stop forwarding events to MS and instead start handling
+		// received forwarded (and local) events.
 		eventPubSub.Reset()
-		// Handle rank state change notifications.
 		eventPubSub.Subscribe(events.RASTypeRankStateChange, membership)
 
 		return nil
@@ -413,10 +413,10 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	sysdb.OnLeadershipLost(func() error {
 		log.Infof("MS leader no longer running on %s", hostname())
 
-		// On losing leadership, stop handling MS events.
+		// Stop handling received forwarded (in addition to local)
+		// events and start forwarding events to the new MS leader.
 		eventPubSub.Reset()
-		// Forward events to new MS leader.
-		eventPubSub.Subscribe(events.RASTypeRankStateChange, eventForwarder)
+		eventPubSub.Subscribe(events.RASTypeAny, eventForwarder)
 
 		return nil
 	})
