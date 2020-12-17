@@ -364,10 +364,11 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		goto reset;
 
 	/* Commit the CoS DTXs via the PUNCH PMDK transaction. */
-	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0) {
+	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 &&
+	    !dth->dth_cos_done) {
 		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);
 		if (daes == NULL)
-			D_GOTO(abort, rc = -DER_NOMEM);
+			D_GOTO(reset, rc = -DER_NOMEM);
 
 		rc = vos_dtx_commit_internal(cont, dth->dth_dti_cos,
 					     dth->dth_dti_cos_count,
@@ -385,7 +386,6 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		if (dkey) { /* key punch */
 			rc = key_punch(obj, epr.epr_hi, bound, pm_ver, dkey,
 				       akey_nr, akeys, flags, ts_set);
-
 			if (rc > 0)
 				punch_obj = true;
 		} else {
@@ -395,22 +395,14 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		if (punch_obj)
 			rc = obj_punch(coh, obj, epr.epr_hi, bound, flags,
 				       ts_set);
+		if (obj != NULL)
+			vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
 	}
-abort:
-	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);
 
-	if (obj != NULL)
-		vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
 reset:
 	if (rc != 0)
 		D_DEBUG(DB_IO, "Failed to punch object "DF_UOID": rc = %d\n",
 			DP_UOID(oid), rc);
-	else if (daes != NULL)
-		vos_dtx_post_handle(cont, daes, dth->dth_dti_cos_count, false);
-
-	D_FREE(daes);
-
-	vos_dth_set(NULL);
 
 	if (rc == 0)
 		vos_ts_set_upgrade(ts_set);
@@ -426,7 +418,15 @@ reset:
 		}
 	}
 
+	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);
+	if (rc == 0 && daes != NULL) {
+		vos_dtx_post_handle(cont, daes, dth->dth_dti_cos_count, false);
+		dth->dth_cos_done = 1;
+	}
+
+	D_FREE(daes);
 	vos_ts_set_free(ts_set);
+	vos_dth_set(NULL);
 
 	return rc;
 }
