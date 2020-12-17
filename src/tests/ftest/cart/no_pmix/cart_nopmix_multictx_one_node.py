@@ -40,7 +40,7 @@ class CartNoPmixOneNodeTest(Test):
     """
     Runs basic CaRT no_pmix tests
 
-    :avocado: tags=all,cart,pr,no_pmix,one_node
+    :avocado: tags=all,cart,pr,daily_regression,no_pmix,one_node
     """
     def setUp(self):
         """ Test setup """
@@ -62,7 +62,7 @@ class CartNoPmixOneNodeTest(Test):
         """
         Test CaRT NoPmix
 
-        :avocado: tags=all,cart,pr,no_pmix,one_node
+        :avocado: tags=all,cart,pr,daily_regression,no_pmix,one_node
         """
 
         cmd = self.params.get("tst_bin", '/run/tests/*/')
