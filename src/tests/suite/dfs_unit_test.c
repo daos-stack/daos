@@ -130,7 +130,7 @@ dfs_test_lookup(void **state)
 	char			*filename_dir1 = "dir1";
 	char			*path_dir1 = "/dir1";
 	char			*filename_dir2 = "dir2";
-	char			*path_dir2 = "/dir1//dir2";
+	char			*path_dir2 = "/dir1/dir2";
 	char			*filename_sym1 = "sym1";
 	char			*path_sym1 = "/sym1";
 	char			*filename_sym2 = "sym2";
@@ -154,7 +154,7 @@ dfs_test_lookup(void **state)
 
 	/** Create /sym1 -> dir1 */
 	rc = dfs_open(dfs_mt, NULL, filename_sym1, create_mode | S_IFLNK,
-			create_flags, 0, 0, filename_dir1, &obj);
+		      create_flags, 0, 0, filename_dir1, &obj);
 	assert_int_equal(rc, 0);
 	rc = dfs_release(obj);
 	assert_int_equal(rc, 0);
@@ -164,7 +164,7 @@ dfs_test_lookup(void **state)
 
 	/** Create /dir1 */
 	rc = dfs_open(dfs_mt, NULL, filename_dir1, create_mode | S_IFDIR,
-		create_flags, 0, 0, NULL, &dir);
+		      create_flags, 0, 0, NULL, &dir);
 	assert_int_equal(rc, 0);
 
 	dfs_test_lookup_hlpr(path_dir1, S_IFDIR);
@@ -172,7 +172,7 @@ dfs_test_lookup(void **state)
 
 	/** Create /dir1/dir2 */
 	rc = dfs_open(dfs_mt, dir, filename_dir2, create_mode | S_IFDIR,
-			create_flags, 0, 0, NULL, &obj);
+		      create_flags, 0, 0, NULL, &obj);
 	assert_int_equal(rc, 0);
 	rc = dfs_release(obj);
 	assert_int_equal(rc, 0);
@@ -182,7 +182,7 @@ dfs_test_lookup(void **state)
 
 	/** Create /dir1/file2 */
 	rc = dfs_open(dfs_mt, dir, filename_file2, create_mode | S_IFREG,
-			create_flags, 0, 0, NULL, &obj);
+		      create_flags, 0, 0, NULL, &obj);
 	assert_int_equal(rc, 0);
 	rc = dfs_release(obj);
 	assert_int_equal(rc, 0);
@@ -256,7 +256,7 @@ dfs_test_syml_follow_hlpr(const char *name, mode_t mode)
 	strncpy(path, "/", 2);
 	strncat(path, name, 62);
 
-	// O_NOFOLLOW should open the link itself
+	/** O_NOFOLLOW should open the link itself */
 	rc = dfs_lookup(dfs_mt, path, O_RDWR | O_NOFOLLOW, &obj,
 			&actual_mode, NULL);
 	print_message("dfs_test_syml_follow(\"%s\", O_NOFOLLOW) = %d\n",
@@ -266,7 +266,7 @@ dfs_test_syml_follow_hlpr(const char *name, mode_t mode)
 	assert_int_equal(rc, 0);
 	assert_true(S_ISLNK(actual_mode));
 
-	// O_NOFOLLOW should open the link itself
+	/** O_NOFOLLOW should open the link itself */
 	rc = dfs_lookup_rel(dfs_mt, NULL, name, O_RDWR | O_NOFOLLOW, &obj,
 			    &actual_mode, NULL);
 	print_message("dfs_test_syml_follow_rel(\"%s\", O_NOFOLLOW) = %d\n",
@@ -276,7 +276,7 @@ dfs_test_syml_follow_hlpr(const char *name, mode_t mode)
 	assert_int_equal(rc, 0);
 	assert_true(S_ISLNK(actual_mode));
 
-	// Default should follow the link
+	/** Default should follow the link */
 	rc = dfs_lookup(dfs_mt, path, O_RDWR, &obj,
 			&actual_mode, NULL);
 	print_message("dfs_test_syml_follow(\"%s\") = %d\n", path, rc);
@@ -285,7 +285,7 @@ dfs_test_syml_follow_hlpr(const char *name, mode_t mode)
 	assert_int_equal(rc, 0);
 	assert_int_equal(actual_mode & S_IFMT, mode & S_IFMT);
 
-	// Default should follow the link
+	/** Default should follow the link */
 	rc = dfs_lookup_rel(dfs_mt, NULL, name, O_RDWR, &obj,
 			    &actual_mode, NULL);
 	print_message("dfs_test_syml_follow_rel(\"%s\") = %d\n", name, rc);
@@ -328,14 +328,14 @@ dfs_test_syml_follow(void **state)
 
 	/** Create /dir */
 	rc = dfs_open(dfs_mt, NULL, name_dir, S_IFDIR | S_IWUSR | S_IRUSR,
-			O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &obj);
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &obj);
 	assert_int_equal(rc, 0);
 	rc = dfs_release(obj);
 	assert_int_equal(rc, 0);
 
 	/** Create /sym_to_dir -> dir */
 	rc = dfs_open(dfs_mt, NULL, name_sym_to_dir, S_IFLNK,
-			O_RDWR | O_CREAT | O_EXCL, 0, 0, name_dir, &obj);
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, name_dir, &obj);
 	assert_int_equal(rc, 0);
 	rc = dfs_release(obj);
 	assert_int_equal(rc, 0);
