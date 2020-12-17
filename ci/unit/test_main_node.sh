@@ -48,7 +48,13 @@ if ${NLT:-false}; then
     mkdir -p vm_test
     ./utils/node_local_test.py --output-file=vm_test/nlt-errors.json all
 else
-    IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" utils/run_test.sh
+    IS_CI=true OLD_CI=false RUN_TEST_FILTER=eq_tests RUN_TEST_VALGRIND="$WITH_VALGRIND" utils/run_test.sh
+
+    ls test_results || true
+    for i in $(ls test_results/*.supp.memcheck.xml); do
+	    echo "marj >> $i"
+	    cat "test_results/$i"
+    done 
 
     if [ "$WITH_VALGRIND" == 'memcheck' ]; then
 	mv test_results/unit-test-*.memcheck.xml .
