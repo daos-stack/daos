@@ -663,7 +663,7 @@ d_should_fail(struct d_fault_attr_t *fault_attr)
 	}
 
 	if (fault_attr->fa_max_faults != 0 &&
-		fault_attr->fa_max_faults <= fault_attr->fa_num_faults) {
+	    fault_attr->fa_max_faults <= fault_attr->fa_num_faults) {
 		rc = false;
 		goto out;
 	}
