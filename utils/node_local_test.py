@@ -397,6 +397,7 @@ class DaosServer():
 
         # Use dmg to block until the server is ready to respond to requests.
         start = time.time()
+        time.sleep(5)
         while True:
             time.sleep(0.5)
             rc = self.run_dmg(['system', 'query'])
@@ -857,7 +858,7 @@ def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False):
                         stderr=subprocess.PIPE,
                         env=cmd_env)
 
-    if rc.stderr != '':
+    if rc.stderr != b'':
         print('Stderr from command')
         print(rc.stderr.decode('utf-8').strip())
 
@@ -1474,7 +1475,11 @@ def run_in_fg(server, conf):
     print('Pool is {}'.format(pool))
     print('Container is {}'.format(container))
 
-    dfuse = DFuse(server, conf, pool=pool, container=container, multi_user=True)
+    dfuse = DFuse(server,
+                  conf,
+                  pool=pool,
+                  container=container,
+                  multi_user=conf.args.multi_user)
     dfuse.start()
     t_dir = dfuse.dir
     print('Running at {}'.format(t_dir))
@@ -1835,6 +1840,7 @@ def main():
     parser.add_argument('--output-file', default='nlt-errors.json')
     parser.add_argument('--server-debug', default=None)
     parser.add_argument('--dfuse-debug', default=None)
+    parser.add_argument('--multi-user', action='store_true')
     parser.add_argument('--pool', default=None)
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
