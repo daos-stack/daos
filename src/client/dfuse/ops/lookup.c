@@ -413,6 +413,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+	dfs_release(ie->ie_obj);
 free:
 	D_FREE(ie);
 }
