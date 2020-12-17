@@ -26,9 +26,9 @@
  */
 #define D_LOGFAC	DD_FAC(hg)
 
+#include "crt_internal.h"
 #include <gurt/mem.h>
 
-#include "crt_internal.h"
 
 #define CRT_PROC_NULL (NULL)
 #define CRT_PROC_TYPE_FUNC(type)				\

@@ -183,7 +183,8 @@ class NvmeObject(TestWithServers):
             Verify the objects are being created and the data is not
             corrupted.
 
-        :avocado: tags=all,pr,hw,large,nvme_object_single_pool,nvme_object
+        :avocado: tags=all,daily_regression,hw,large,nvme_object_single_pool
+        :avocado: tags=nvme_object
         :avocado: tags=DAOS_5610
         """
         # perform multiple object writes to a single pool

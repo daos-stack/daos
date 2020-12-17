@@ -161,7 +161,7 @@ class Snapshot(TestWithServers):
                 (6)Verify snap_list bad parameter behavior.
 
         Use Cases: Combinations with minimum 1 client and 1 server.
-        :avocado: tags=all,small,smoke,pr,snap,snapshot_negative,
+        :avocado: tags=all,small,smoke,daily_regression,snap,snapshot_negative,
         :avocado: tags=snapshotcreate_negative
         """
 

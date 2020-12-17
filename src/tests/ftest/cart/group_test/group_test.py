@@ -39,7 +39,7 @@ class GroupTest(Test):
     """
     Runs GroupTests for primary and secondary resizeable groups
 
-    :avocado: tags=all,cart,pr,group_test,one_node,no_pmix
+    :avocado: tags=all,cart,pr,daily_regression,group_test,one_node,no_pmix
     """
     def setUp(self):
         """ Test setup """
@@ -51,7 +51,7 @@ class GroupTest(Test):
         """
         Test CaRT NoPmix Launcher
 
-        :avocado: tags=all,cart,pr,group_test,one_node
+        :avocado: tags=all,cart,pr,daily_regression,group_test,one_node
         """
 
         srv_cmd = self.utils.build_cmd(self, self.env, "test_servers")
