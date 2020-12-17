@@ -24,8 +24,10 @@
 package system
 
 import (
+	"context"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -34,6 +36,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -759,6 +762,68 @@ func TestSystem_Membership_Join(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestSystem_Membership_OnEvent(t *testing.T) {
+	members := Members{
+		MockMember(t, 0, MemberStateJoined),
+		MockMember(t, 1, MemberStateJoined),
+		MockMember(t, 2, MemberStateStopped),
+		MockMember(t, 3, MemberStateEvicted),
+	}
+
+	for name, tc := range map[string]struct {
+		members    Members
+		event      events.Event
+		expMembers Members
+	}{
+		"nil event": {
+			members:    members,
+			event:      nil,
+			expMembers: members,
+		},
+		"event on unrecognised rank": {
+			members:    members,
+			event:      events.NewRankExitEvent("foo", 0, 4, common.NormalExit),
+			expMembers: members,
+		},
+		"state updated on unscheduled exit": {
+			members: members,
+			event:   events.NewRankExitEvent("foo", 0, 1, common.NormalExit),
+			expMembers: Members{
+				MockMember(t, 0, MemberStateJoined),
+				MockMember(t, 1, MemberStateErrored).WithInfo(
+					errors.Wrap(common.NormalExit, events.RASRankExit.Desc()).Error()),
+				MockMember(t, 2, MemberStateStopped),
+				MockMember(t, 3, MemberStateEvicted),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			ms := populateMembership(t, log, tc.members...)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			defer cancel()
+
+			ps := events.NewPubSub(ctx, log)
+			defer ps.Close()
+
+			ps.Subscribe(events.RASTypeRankStateChange, ms)
+
+			ps.Publish(tc.event)
+
+			<-ctx.Done()
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(Member{}),
+			}
+			if diff := cmp.Diff(tc.expMembers, ms.Members(nil), cmpOpts...); diff != "" {
+				t.Errorf("unexpected membership (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

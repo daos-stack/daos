@@ -121,23 +121,23 @@ func (typ RASTypeID) Uint32() uint32 {
 
 // RASEvent describes details of a specific RAS event.
 type RASEvent struct {
-	Name      string `json:"name"`
-	Timestamp string `json:"timestamp"`
-	Msg       string `json:"msg"`
-	Hostname  string `json:"hostname"`
-	Rank      uint32 `json:"rank"`
-	ID        RASID
-	Severity  RASSeverityID
-	Type      RASTypeID
+	Name      string        `json:"name"`
+	Timestamp string        `json:"timestamp"`
+	Msg       string        `json:"msg"`
+	Hostname  string        `json:"hostname"`
+	Rank      uint32        `json:"rank"`
+	ID        RASID         `json:"id"`
+	Severity  RASSeverityID `json:"severity"`
+	Type      RASTypeID     `json:"type"`
 }
 
 // MarshalJSON marshals RASEvent to JSON.
 func (evt *RASEvent) MarshalJSON() ([]byte, error) {
 	type toJSON RASEvent
 	return json.Marshal(&struct {
-		ID       uint32
-		Severity uint32
-		Type     uint32
+		ID       uint32 `json:"id"`
+		Severity uint32 `json:"severity"`
+		Type     uint32 `json:"type"`
 		*toJSON
 	}{
 		ID:       evt.ID.Uint32(),
@@ -151,9 +151,9 @@ func (evt *RASEvent) MarshalJSON() ([]byte, error) {
 func (evt *RASEvent) UnmarshalJSON(data []byte) error {
 	type fromJSON RASEvent
 	from := &struct {
-		ID       uint32
-		Severity uint32
-		Type     uint32
+		ID       uint32 `json:"id"`
+		Severity uint32 `json:"severity"`
+		Type     uint32 `json:"type"`
 		*fromJSON
 	}{
 		fromJSON: (*fromJSON)(evt),

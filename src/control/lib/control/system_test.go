@@ -1138,7 +1138,7 @@ func TestControl_SystemNotify(t *testing.T) {
 	}
 }
 
-func TestControl_EventForwarder(t *testing.T) {
+func TestControl_EventForwarder_OnEvent(t *testing.T) {
 	rasEventRankExit := events.NewRankExitEvent("foo", 0, 0, common.NormalExit)
 
 	for name, tc := range map[string]struct {
@@ -1149,7 +1149,7 @@ func TestControl_EventForwarder(t *testing.T) {
 		expErr         error
 	}{
 		"nil event": {
-			event: new(events.RankExit),
+			event: nil,
 		},
 		"missing access points": {
 			event: rasEventRankExit,
@@ -1172,7 +1172,8 @@ func TestControl_EventForwarder(t *testing.T) {
 			ef := NewEventForwarder(mi, tc.aps)
 			ef.OnEvent(context.TODO(), tc.event)
 
-			common.AssertEqual(t, tc.expInvokeCount, mi.invokeCount, "unexpected number of rpc calls")
+			common.AssertEqual(t, tc.expInvokeCount, mi.invokeCount,
+				"unexpected number of rpc calls")
 		})
 	}
 }
