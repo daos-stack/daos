@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        distro: [centos.7, leap.15.1, leap.42.3, ubuntu.18.04]
+        distro: [centos.7, leap.15.2, ubuntu.18.04]
     steps:
     - uses: actions/checkout@v1
       with:
