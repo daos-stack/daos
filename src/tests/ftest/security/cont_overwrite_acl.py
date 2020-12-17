@@ -58,7 +58,8 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
             expected with invalid inputs in command line and within ACL file
             provided.
 
-        :avocado: tags=all,pr,security,container_acl,cont_overwrite_acl_inputs
+        :avocado: tags=all,daily_regression,security,container_acl
+        :avocado: tags=cont_overwrite_acl_inputs
         """
         # Get list of invalid ACL principal values
         invalid_acl_filename = self.params.get("invalid_acl_filename", "/run/*")
@@ -93,7 +94,8 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
             expected with invalid inputs in command line and within ACL file
             provided.
 
-        :avocado: tags=all,pr,security,container_acl,cont_overwrite_acl_file
+        :avocado: tags=all,daily_regression,security,container_acl
+        :avocado: tags=cont_overwrite_acl_file
         """
         invalid_file_content = self.params.get(
             "invalid_acl_file_content", "/run/*")
@@ -128,7 +130,8 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container overwrite command performs as
             expected with valid ACL file provided.
 
-        :avocado: tags=all,pr,security,container_acl,cont_overwrite_acl_file
+        :avocado: tags=all,daily_regression,security,container_acl
+        :avocado: tags=cont_overwrite_acl_file
         """
         valid_file_acl = self.params.get("valid_acl_file", "/run/*")
         path_to_file = os.path.join(self.tmp, self.acl_filename)
@@ -154,7 +157,8 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container overwrite command fails with
             no permission -1001 when user doesn't have the right permissions.
 
-        :avocado: tags=all,pr,security,container_acl,cont_overwrite_acl_noperms
+        :avocado: tags=all,daily_regression,security,container_acl
+        :avocado: tags=cont_overwrite_acl_noperms
         """
         valid_file_content = self.params.get("valid_acl_file", "/run/*")
         path_to_file = os.path.join(self.tmp, self.acl_filename)

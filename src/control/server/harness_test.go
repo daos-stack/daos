@@ -295,8 +295,7 @@ func TestServer_Harness_Start(t *testing.T) {
 
 			// start harness async and signal completion
 			var gotErr error
-			membership := system.MockMembership(t, log)
-			sysdb := system.MockDatabase(t, log)
+			membership, sysdb := system.MockMembership(t, log, mockTCPResolver)
 			done := make(chan struct{})
 			go func(ctxIn context.Context) {
 				gotErr = harness.Start(ctxIn, sysdb, config)
