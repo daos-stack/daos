@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -467,7 +467,6 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 				},
 				testMembers[2],
 			},
-
 			expFDTree: NewFaultDomainTree(
 				testMembers[0].RankFaultDomain(),
 				testMembers[1].RankFaultDomain(),
@@ -555,7 +554,7 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 				t.Fatalf("expected %d members, got %d", len(tc.expMembers), len(db.data.Members.Uuids))
 			}
 
-			if diff := cmp.Diff(tc.expFDTree, db.data.Members.FaultDomains); diff != "" {
+			if diff := cmp.Diff(tc.expFDTree, db.data.Members.FaultDomains, ignoreFaultDomainIDOption()); diff != "" {
 				t.Fatalf("wrong FaultDomainTree in DB (-want, +got):\n%s\n", diff)
 			}
 		})
