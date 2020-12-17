@@ -180,7 +180,7 @@ alloc_ie:
 	ie->ie_stat.st_ino = dfs->dfs_root;
 	dfs->dfs_ops = &dfuse_dfs_ops;
 
-	dfuse_reply_entry(fs_handle, ie, NULL, req);
+	dfuse_reply_entry(fs_handle, ie, NULL, true, req);
 	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 	return;
 
@@ -202,8 +202,12 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 }
 
 void
-dfuse_cont_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
+dfuse_cont_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
 		 const char *name, mode_t mode)
 {
+	if (!S_ISDIR(mode)) {
+		DFUSE_REPLY_ERR_RAW(parent, req, ENOTSUP);
+		return;
+	}
 	dfuse_cont_open(req, parent, name, true);
 }

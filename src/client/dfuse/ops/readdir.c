@@ -69,10 +69,7 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 	if (rc)
 		D_GOTO(out, rc);
 
-	rc = dfuse_compute_inode(udata->inode->ie_dfs, &oid,
-				 &stbuf.st_ino);
-	if (rc)
-		D_GOTO(out, rc);
+	dfuse_compute_inode(udata->inode->ie_dfs, &oid, &stbuf.st_ino);
 
 	/*
 	 * If we are still within the fuse size limit (less than 4k - we have

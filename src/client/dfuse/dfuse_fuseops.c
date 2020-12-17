@@ -279,10 +279,11 @@ df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 
 	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!parent_inode->ie_dfs->dfs_ops->mkdir)
+	if (!parent_inode->ie_dfs->dfs_ops->mknod)
 		D_GOTO(decref, rc = ENOTSUP);
 
-	parent_inode->ie_dfs->dfs_ops->mkdir(req, parent_inode,	name, mode);
+	parent_inode->ie_dfs->dfs_ops->mknod(req, parent_inode, name,
+					     mode | S_IFDIR);
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	return;
@@ -656,14 +657,13 @@ dfuse_fuse_destroy(void *userdata)
 /* dfuse ops that are used for accessing dfs mounts */
 struct dfuse_inode_ops dfuse_dfs_ops = {
 	.lookup		= dfuse_cb_lookup,
-	.mkdir		= dfuse_cb_mkdir,
+	.mknod		= dfuse_cb_mknod,
 	.opendir	= dfuse_cb_opendir,
 	.releasedir	= dfuse_cb_releasedir,
 	.getattr	= dfuse_cb_getattr,
 	.unlink		= dfuse_cb_unlink,
 	.readdir	= dfuse_cb_readdir,
 	.create		= dfuse_cb_create,
-	.mknod		= dfuse_cb_mknod,
 	.rename		= dfuse_cb_rename,
 	.symlink	= dfuse_cb_symlink,
 	.setxattr	= dfuse_cb_setxattr,
@@ -676,7 +676,7 @@ struct dfuse_inode_ops dfuse_dfs_ops = {
 
 struct dfuse_inode_ops dfuse_cont_ops = {
 	.lookup		= dfuse_cont_lookup,
-	.mkdir		= dfuse_cont_mkdir,
+	.mknod		= dfuse_cont_mknod,
 	.statfs		= dfuse_cb_statfs,
 };
 

@@ -38,7 +38,7 @@ dfuse_forget_one(struct dfuse_projection_info *fs_handle,
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
-		DFUSE_TRA_WARNING(fs_handle, "Unable to find ref for %lu %lu",
+		DFUSE_TRA_WARNING(fs_handle, "Unable to find ref for %#lx %lu",
 				  ino, nlookup);
 		return;
 	}

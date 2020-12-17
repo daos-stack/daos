@@ -125,14 +125,12 @@ struct dfuse_inode_ops {
 	void (*create)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name, mode_t mode,
 		       struct fuse_file_info *fi);
-	void (*mknod)(fuse_req_t req, struct dfuse_inode_entry *parent,
-		      const char *name, mode_t mode);
 	void (*getattr)(fuse_req_t req, struct dfuse_inode_entry *inode);
 	void (*setattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			struct stat *attr, int to_set);
 	void (*lookup)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name);
-	void (*mkdir)(fuse_req_t req, struct dfuse_inode_entry *parent,
+	void (*mknod)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		      const char *name, mode_t mode);
 	void (*opendir)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			struct fuse_file_info *fi);
@@ -286,6 +284,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define LOG_MODES(HANDLE, INPUT) do {					\
 		int _flag = (INPUT) & S_IFMT;				\
 		LOG_MODE((HANDLE), _flag, S_IFREG);			\
+		LOG_MODE((HANDLE), _flag, S_IFDIR);			\
 		LOG_MODE((HANDLE), _flag, S_IFIFO);			\
 		LOG_MODE((HANDLE), _flag, S_ISUID);			\
 		LOG_MODE((HANDLE), _flag, S_ISGID);			\
@@ -309,7 +308,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					"Invalid call to fuse_reply_err: 0"); \
 			__err = EIO;					\
 		}							\
-		if (__err == ENOTSUP || __err == EIO || __err == EINVAL) \
+		if (__err == EIO || __err == EINVAL) \
 			DFUSE_TRA_WARNING(desc, "Returning %d '%s'",	\
 					  __err, strerror(__err));	\
 		else							\
@@ -336,7 +335,8 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define DFUSE_REPLY_ATTR(ie, req, attr)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(ie, "Returning attr mode %#o dir:%d",	\
+		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o dir:%d", \
+				(attr)->st_ino,				\
 				(attr)->st_mode,			\
 				S_ISDIR(((attr)->st_mode)));		\
 		__rc = fuse_reply_attr(req, attr,			\
@@ -536,7 +536,7 @@ struct dfuse_inode_entry {
  * different parts of the inode, then or in the inode number of the root
  * of this dfs object, to avoid conflicts across containers.
  */
-static inline int
+static inline void
 dfuse_compute_inode(struct dfuse_dfs *dfs,
 		    daos_obj_id_t *oid,
 		    ino_t *_ino)
@@ -546,7 +546,6 @@ dfuse_compute_inode(struct dfuse_dfs *dfs,
 	hi = (oid->hi & (-1ULL >> 32)) | (dfs->dfs_root << 48);
 
 	*_ino = hi ^ (oid->lo << 32);
-	return 0;
 };
 
 /* dfuse_inode.c */
@@ -581,7 +580,7 @@ void
 dfuse_cb_readlink(fuse_req_t, fuse_ino_t);
 
 void
-dfuse_cb_mkdir(fuse_req_t, struct dfuse_inode_entry *,
+dfuse_cb_mknod(fuse_req_t, struct dfuse_inode_entry *,
 	       const char *, mode_t);
 
 void
@@ -595,10 +594,6 @@ dfuse_cb_releasedir(fuse_req_t, struct dfuse_inode_entry *,
 void
 dfuse_cb_create(fuse_req_t, struct dfuse_inode_entry *,
 		const char *, mode_t, struct fuse_file_info *);
-
-void
-dfuse_cb_mknod(fuse_req_t, struct dfuse_inode_entry *,
-	       const char *, mode_t);
 
 void
 dfuse_cb_open(fuse_req_t, fuse_ino_t, struct fuse_file_info *);
@@ -662,6 +657,7 @@ void
 dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct dfuse_inode_entry *inode,
 		  struct fuse_file_info *fi_out,
+		  bool is_new,
 		  fuse_req_t req);
 
 /* dfuse_cont.c */
@@ -670,7 +666,7 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		  const char *name);
 
 void
-dfuse_cont_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
+dfuse_cont_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
 		 const char *name, mode_t mode);
 
 /* dfuse_pool.c */

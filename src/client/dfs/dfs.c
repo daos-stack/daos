@@ -847,6 +847,11 @@ open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
 	if (!exists)
 		return ENOENT;
 
+	/* Check that the opened object is a directory, this might be because
+	 * it's a FIFO which is expected, or because the type has been changed
+	 * from another client since it was created.
+	 */
+
 	if ((S_ISDIR(dir->mode) && !S_ISDIR(entry.mode)))
 		return ENOTDIR;
 
@@ -1973,12 +1978,12 @@ dfs_lookup_loop:
 			break;
 		}
 
-		if (!S_ISDIR(entry.mode)) {
+		if (!S_ISDIR(entry.mode) && (!S_ISFIFO(entry.mode))) {
 			D_ERROR("Invalid entry type in path.\n");
 			D_GOTO(err_obj, rc = EINVAL);
 		}
 
-		/* open the directory object */
+		/* open the directory/fifo object */
 		rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &obj->oh,
 				   NULL);
 		if (rc) {
@@ -3059,7 +3064,6 @@ out:
 int
 dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 {
-	uid_t			euid;
 	daos_handle_t		oh;
 	daos_handle_t		th = DAOS_TX_NONE;
 	bool			exists;
@@ -3095,11 +3099,6 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 			return rc;
 		oh = parent->oh;
 	}
-
-	euid = geteuid();
-	/** only root or owner can change mode */
-	if (euid != 0 && dfs->uid != euid)
-		return EPERM;
 
 	/** sticky bit, set-user-id and set-group-id, not supported yet */
 	if (mode & S_ISVTX || mode & S_ISGID || mode & S_ISUID) {
@@ -3170,7 +3169,6 @@ int
 dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 {
 	daos_handle_t		th = DAOS_TX_NONE;
-	uid_t			euid;
 	daos_key_t		dkey;
 	daos_handle_t		oh;
 	d_sg_list_t		sgl;
@@ -3188,11 +3186,6 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	if (dfs->amode != O_RDWR)
 		return EPERM;
 	if ((obj->flags & O_ACCMODE) == O_RDONLY)
-		return EPERM;
-
-	euid = geteuid();
-	/** only root or owner can change mode */
-	if (euid != 0 && dfs->uid != euid)
 		return EPERM;
 
 	/** Open parent object and fetch entry of obj from it */
