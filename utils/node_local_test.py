@@ -286,7 +286,8 @@ class DaosServer():
         if os.path.exists(self._log_file):
             os.unlink(self._log_file)
 
-        self.agent_dir = tempfile.mkdtemp(prefix='dnt_agent_')
+        self._agent_dir = tempfile.TemporaryDirectory(prefix='dnt_agent_')
+        self.agent_dir = self._agent_dir.name
 
         self._yaml_file = None
         self._io_server_dir = None
@@ -467,7 +468,6 @@ class DaosServer():
             # TODO: Enable memleak checking when server shutdown works.
             log_test(self.conf, self._log_file, show_memleaks=False)
         self.running = False
-        os.rmdir(self.agent_dir)
         return ret
 
     def run_dmg(self, cmd):
