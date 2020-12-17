@@ -138,17 +138,17 @@ args+=" $*"
 # shellcheck disable=SC2029
 # shellcheck disable=SC2086
 if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" \
-    "FIRST_NODE=${nodes[0]}
-     TEST_RPMS=$TEST_RPMS
-     DAOS_TEST_SHARED_DIR=${DAOS_TEST_SHARED_DIR:-$PWD/install/tmp}
-     DAOS_BASE=$DAOS_BASE
-     TEST_TAG_DIR=$TEST_TAG_DIR
-     PREFIX=$PREFIX
-     SETUP_ONLY=${SETUP_ONLY:-false}
+    "FIRST_NODE=\"${nodes[0]}\"
+     TEST_RPMS=\"$TEST_RPMS\"
+     DAOS_TEST_SHARED_DIR=\"${DAOS_TEST_SHARED_DIR:-$PWD/install/tmp}\"
+     DAOS_BASE=\"$DAOS_BASE\"
+     TEST_TAG_DIR=\"$TEST_TAG_DIR\"
+     PREFIX=\"$PREFIX\"
+     SETUP_ONLY=\"${SETUP_ONLY:-false}\"
      TEST_TAG_ARG=\"$TEST_TAG_ARG\"
-     TEST_NODES=$TEST_NODES
+     TEST_NODES=\"$TEST_NODES\"
      NVME_ARG=\"$NVME_ARG\"
-     LOGS_THRESHOLD=$LOGS_THRESHOLD
+     LOGS_THRESHOLD=\"$LOGS_THRESHOLD\"
      $(sed -e '1,/^$/d' "$SCRIPT_LOC"/main.sh)"; then
     rc=${PIPESTATUS[0]}
     if ${SETUP_ONLY:-false}; then
