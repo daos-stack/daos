@@ -1457,7 +1457,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         print(error)
         print("Removing core files to avoid archiving them")
         for corefile in cores:
-            os.remove(corefile)
+            os.remove(os.path.join(daos_cores_dir, corefile))
         return False
 
     def run_gdb(pattern):
