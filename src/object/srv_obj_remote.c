@@ -481,7 +481,7 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 	uuid_copy(oci->oci_co_uuid, oci_parent->oci_co_uuid);
 	oci->oci_map_ver = oci_parent->oci_map_ver;
 	oci->oci_flags = (oci_parent->oci_flags | exec_arg->flags) &
-			~(DRF_HAS_EC_SPLIT | DRF_CPD_LEADER);
+			~(ORF_HAS_EC_SPLIT | ORF_CPD_LEADER);
 
 	oci->oci_disp_tgts.ca_arrays = NULL;
 	oci->oci_disp_tgts.ca_count = 0;
@@ -502,7 +502,7 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 		D_GOTO(out, rc = -DER_INVAL);
 
 	count = dcde_parent->dcde_read_cnt + dcde_parent->dcde_write_cnt;
-	if (count < total || exec_arg->flags & DRF_HAS_EC_SPLIT) {
+	if (count < total || exec_arg->flags & ORF_HAS_EC_SPLIT) {
 		rc = ds_obj_cpd_clone_reqs(dlh, shard_tgt, dcde_parent,
 					   dcsr_parent, total, &dcde, &dcsr);
 		if (rc != 0)

@@ -193,6 +193,7 @@ struct dss_xstream;
 bool dss_xstream_exiting(struct dss_xstream *dxs);
 bool dss_xstream_is_busy(void);
 daos_epoch_t dss_get_start_epoch(void);
+void dss_set_start_epoch(void);
 
 struct dss_module_info {
 	crt_context_t		dmi_ctx;
@@ -443,6 +444,11 @@ struct dss_module {
  * DSS_TGT_SELF indicates scheduling ULT on caller's self XS.
  */
 #define DSS_TGT_SELF	(-1)
+
+/**
+ * Stack size used for ULTs with deep stack
+ */
+#define DSS_DEEP_STACK_SZ	65536
 
 /** ULT types to determine on which XS to schedule the ULT */
 enum dss_ult_type {

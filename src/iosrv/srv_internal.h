@@ -123,7 +123,6 @@ void dss_dump_ABT_state(void);
 void dss_xstreams_open_barrier(void);
 struct dss_xstream *dss_get_xstream(int stream_id);
 int dss_xstream_cnt(void);
-void dss_set_start_epoch(void);
 
 /* sched.c */
 void dss_sched_fini(struct dss_xstream *dx);
