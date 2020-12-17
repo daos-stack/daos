@@ -36,8 +36,6 @@ class DaosCoreTest(DaosCoreBase):
         test_name = self.params.get("test_name")
         if test_name == "DAOS degraded-mode tests":
             self.cancelForTicket("DAOS-6311")
-        if test_name == "Management tests":
-            self.cancelForTicket("DAOS-6205")
 
     def test_subtest(self):
         """Run daos_test tests/subtests.
