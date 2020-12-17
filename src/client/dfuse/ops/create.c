@@ -56,7 +56,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	}
 
 	/* Check that only the flag for a regular file is specified */
-	if (!S_ISREG(obj->mode)) {
+	if (!S_ISREG(mode)) {
 		DFUSE_TRA_INFO(parent,
 			       "unsupported mode requested 0%o",
 			       mode);
