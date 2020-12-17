@@ -70,6 +70,24 @@ class EvictTests(TestWithServers):
         # Return connected pool
         return pool
 
+    def pool_handle_exist(self, test_param):
+        """
+        Check if pool handle still exists
+
+        Args:
+            test_param (str): either invalid UUID or bad server name
+
+        Returns:
+            True or False, depending if the handle exists or not
+        """
+        status = True
+        if int(self.pool.pool.handle.value) == 0:
+            self.log.error(
+                "Pool handle was removed when doing an evict with %s",
+                test_param)
+            status &= False
+        return status
+
     def evict_badparam(self, test_param):
         """Connect to pool, connect and try to evict with a bad param.
 
@@ -111,25 +129,20 @@ class EvictTests(TestWithServers):
             self.pool.dmg.pool_evict(pool=self.pool.pool.get_uuid_str())
         # exception is expected
         except CommandFailure as result:
-            status = True
             self.log.info("Expected exception - invalid param %s\n %s\n",
                           test_param, str(result))
 
-            # Restore the valid server group name or uuid and verify that
-            # pool still exists and the handle is still valid.
+            # verify that pool still exists and the handle is still valid.
+            self.log.info("Check if pool handle still exist")
+            return self.pool_handle_exist(test_param)
+        finally:
+            # Restore the valid server group name or uuid
             if "BAD_SERVER_NAME" in test_param:
                 self.pool.pool.group = ctypes.create_string_buffer(
                     self.server_group)
             else:
                 self.pool.pool.set_uuid_str(self.pool.uuid)
 
-            self.log.info("Check if pool handle still exist")
-            if int(self.pool.pool.handle.value) == 0:
-                self.log.error(
-                    "Pool handle was removed when evicting pool with %s",
-                    test_param)
-                status &= False
-            return status
         # if here then pool-evict did not raise an exception as expected
         # restore the valid server group name and check if valid pool
         # still exists
@@ -137,16 +150,9 @@ class EvictTests(TestWithServers):
             "Command exception did not occur"
             " - evict from pool with %s", test_param)
 
-        # restore the valid group name and UUID,
-        if "BAD_SERVER_NAME" in test_param:
-            self.pool.pool.group = ctypes.create_string_buffer(
-                self.server_group)
-        else:
-            self.pool.pool.set_uuid_str(self.pool.uuid)
         # check if pool handle still exists
-        if int(self.pool.pool.handle.value) == 0:
-            self.log.error(
-                "Pool handle was removed when doing an evict with bad param")
+        self.pool_handle_exist(test_param)
+
         # Commented out due to DAOS-3836.
         #if self.pool.check_files(self.hostlist_servers):
         #    self.log.error("Valid pool files were not detected on server after"
