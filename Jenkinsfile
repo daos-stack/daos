@@ -235,7 +235,7 @@ String functional_packages() {
 String functional_packages(String distro) {
     String daos_pkgs = get_daos_packages(distro)
     String pkgs = " openmpi3 hwloc ndctl fio " +
-                  "ior-hpc-daos-0 " +
+                  "patchutils ior-hpc-daos-0 " +
                   "romio-tests-cart-4-daos-0 " +
                   "testmpio-cart-4-daos-0 " +
                   "mpi4py-tests-cart-4-daos-0 " +
@@ -299,7 +299,7 @@ def getuid() {
 
 String get_priority() {
     if (env.BRANCH_NAME == 'master') {
-        string p = '4'
+        string p = '2'
     } else {
         string p = ''
     }
@@ -360,7 +360,8 @@ boolean skip_ftest_hw(String size) {
     return env.DAOS_STACK_CI_HARDWARE_SKIP == 'true' ||
            skip_stage('func-test') ||
            skip_stage('func-hw-test') ||
-           skip_stage('func-hw-test-' + size)
+           skip_stage('func-hw-test-' + size) ||
+           (env.BRANCH_NAME == 'master' && ! startedByTimer())
 }
 
 boolean skip_bandit_check() {
@@ -395,6 +396,10 @@ boolean skip_build_on_ubuntu_clang() {
 
 }
 
+boolean skip_build_on_leap15_gcc() {
+    return skip_stage('build-leap15-gcc')
+}
+
 boolean skip_build_on_leap15_icc() {
     return target_branch == 'weekly-testing' ||
            skip_stage('build-leap15-icc') ||
@@ -406,6 +411,7 @@ boolean skip_unit_testing_stage() {
             (skip_stage('build') &&
              rpm_test_version() == '') ||
             doc_only_change() ||
+            skip_build_on_centos7_gcc() ||
             skip_stage('unit-tests')
 }
 
@@ -452,7 +458,8 @@ pipeline {
     agent { label 'lightweight' }
 
     triggers {
-        cron(env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
+        cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0,12 * * *\n' : '' +
+             env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
     }
 
     environment {
@@ -468,7 +475,7 @@ pipeline {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
         ansiColor('xterm')
-        buildDiscarder(logRotator(artifactDaysToKeepStr: '600'))
+        buildDiscarder(logRotator(artifactDaysToKeepStr: '400'))
     }
 
     parameters {
@@ -507,7 +514,18 @@ pipeline {
                     steps {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
-                                   ignored_files: "src/control/vendor/*:src/include/daos/*.pb-c.h:src/common/*.pb-c.[ch]:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]:src/security/*.pb-c.[ch]:*.crt:*.pem:*_test.go:src/cart/_structures_from_macros_.h"
+                                   ignored_files: "src/control/vendor/*:" +
+                                                  "src/include/daos/*.pb-c.h:" +
+                                                  "src/common/*.pb-c.[ch]:" +
+                                                  "src/mgmt/*.pb-c.[ch]:" +
+                                                  "src/iosrv/*.pb-c.[ch]:" +
+                                                  "src/security/*.pb-c.[ch]:" +
+                                                  "*.crt:" +
+                                                  "*.pem:" +
+                                                  "*_test.go:" +
+                                                  "src/cart/_structures_from_macros_.h:" +
+                                                  "src/tests/ftest/*.patch:" +
+                                                  "src/tests/ftest/large_stdout.txt"
                     }
                     post {
                         always {
@@ -977,6 +995,10 @@ pipeline {
                     }
                 }
                 stage('Build on Leap 15') {
+                    when {
+                        beforeAgent true
+                        expression { ! skip_build_on_leap15_gcc() }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.leap.15'

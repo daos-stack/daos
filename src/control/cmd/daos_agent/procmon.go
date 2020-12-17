@@ -180,6 +180,7 @@ func (p *procMon) handleProcessDisconnect(request *procMonRequest) {
 	p.log.Debugf("Received request to disconnect pid:%d\n", request.pid)
 	if !found {
 		p.log.Errorf("Attempted to disconnect process %d but process is missing", request.pid)
+		return
 	}
 
 	info.cancelCtx()

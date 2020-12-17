@@ -163,6 +163,7 @@ RUN if $QUICKBUILD; then                                                        
     fi
 
 # force an upgrade to get any newly built RPMs
+RUN zypper addlock fuse fuse-libs fuse-devel libraft0 raft-devel mercury mercury-devel
 ARG CACHEBUST=1
 RUN zypper --non-interactive update
 

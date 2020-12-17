@@ -98,6 +98,7 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	D_INIT_LIST_HEAD(&dth->dth_share_act_list);
 	D_INIT_LIST_HEAD(&dth->dth_share_tbd_list);
 	dth->dth_share_tbd_count = 0;
+	dth->dth_share_tbd_scanned = 0;
 	dth->dth_shares_inited = 1;
 
 	vos_dtx_rsrvd_init(dth);
@@ -127,6 +128,7 @@ vts_dtx_end(struct dtx_handle *dth)
 			D_FREE(dsp);
 
 		dth->dth_share_tbd_count = 0;
+		dth->dth_share_tbd_scanned = 0;
 	}
 
 	vos_dtx_rsrvd_fini(dth);

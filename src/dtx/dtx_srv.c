@@ -44,8 +44,8 @@ dtx_handler(crt_rpc_t *rpc)
 	struct dtx_out		*dout = crt_reply_get(rpc);
 	struct ds_cont_child	*cont = NULL;
 	struct dtx_id		*dtis;
-	struct dtx_memberships	*mbs[DTX_DETECT_MAX] = { 0 };
-	uint32_t		 vers[DTX_DETECT_MAX] = { 0 };
+	struct dtx_memberships	*mbs[DTX_REFRESH_MAX] = { 0 };
+	uint32_t		 vers[DTX_REFRESH_MAX] = { 0 };
 	uint32_t		 opc = opc_get(rpc->cr_opc);
 	int			 count = DTX_YIELD_CYCLE;
 	int			 i = 0;
@@ -66,6 +66,9 @@ dtx_handler(crt_rpc_t *rpc)
 
 	switch (opc) {
 	case DTX_COMMIT:
+		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_COMMIT))
+			break;
+
 		while (i < din->di_dtx_array.ca_count) {
 			if (i + count > din->di_dtx_array.ca_count)
 				count = din->di_dtx_array.ca_count - i;
@@ -79,6 +82,9 @@ dtx_handler(crt_rpc_t *rpc)
 		}
 		break;
 	case DTX_ABORT:
+		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_ABORT))
+			break;
+
 		while (i < din->di_dtx_array.ca_count) {
 			if (i + count > din->di_dtx_array.ca_count)
 				count = din->di_dtx_array.ca_count - i;
@@ -106,7 +112,7 @@ dtx_handler(crt_rpc_t *rpc)
 		if (count == 0)
 			D_GOTO(out, rc = 0);
 
-		if (count > DTX_DETECT_MAX)
+		if (count > DTX_REFRESH_MAX)
 			D_GOTO(out, rc = -DER_PROTO);
 
 		D_ALLOC(dout->do_sub_rets.ca_arrays, sizeof(int32_t) * count);
@@ -124,7 +130,7 @@ dtx_handler(crt_rpc_t *rpc)
 			/* The DTX status may be changes by DTX resync soon. */
 			if (*ptr == DTX_ST_PREPARED &&
 			    vers[i] < cont->sc_dtx_resync_ver)
-				*ptr = DTX_ST_UNCERTAIN;
+				*ptr = -DER_INPROGRESS;
 			if (mbs[i] != NULL)
 				rc1++;
 		}
@@ -147,8 +153,8 @@ out:
 			DP_RC(rc));
 
 	if (opc == DTX_REFRESH && rc1 > 0) {
-		struct dtx_entry	 dtes[DTX_DETECT_MAX] = { 0 };
-		struct dtx_entry	*pdte[DTX_DETECT_MAX] = { 0 };
+		struct dtx_entry	 dtes[DTX_REFRESH_MAX] = { 0 };
+		struct dtx_entry	*pdte[DTX_REFRESH_MAX] = { 0 };
 		int			 j;
 
 		for (i = 0, j = 0; i < count; i++) {
