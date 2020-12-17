@@ -65,7 +65,6 @@
 
 #define D_LOGFAC	DD_FAC(object)
 
-
 #include <stddef.h>
 #include <stdio.h>
 #include <daos/common.h>
@@ -1915,8 +1914,9 @@ agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	return 0;
 }
 
-/* Handles akeys returned by the per-object nested iteratior.
-*/
+/* Handles akeys returned by the iteratior.
+ *
+ */
 static int
 agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	 struct ec_agg_entry *agg_entry, unsigned int *acts)
@@ -2013,7 +2013,7 @@ agg_reset_entry(struct ec_agg_entry *agg_entry,
 }
 
 /* Iterator pre-callback for objects. Determines if object is subject
- * to aggregation. Skips objects that are not EC, or not led by
+ * to aggregation. Skips objects that are not EC, or are not led by
  * this target.
  */
 static int
