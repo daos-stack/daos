@@ -476,7 +476,7 @@ class TestPool(TestDaosApiBase):
             self.set_query_data()
             self.log.info(
                 "Pool %s query data: %s\n", self.uuid, self.query_data)
-            status = self.query_data["rebuild"]["status"] != "busy"
+            status = self.query_data["rebuild"]["status"] == "done"
         elif self.control_method.value == self.USE_DMG:
             self.log.error("Error: Undefined dmg command")
         else:

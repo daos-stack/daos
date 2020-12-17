@@ -35,12 +35,8 @@ import slurm_utils
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 from ClusterShell.NodeSet import NodeSet
-import threading
 from avocado.core.exceptions import TestFail
 from pydaos.raw import DaosSnapshot, DaosApiError
-
-
-H_LOCK = threading.Lock()
 
 
 def DDHHMMSS_format(seconds):
@@ -159,7 +155,7 @@ def get_harassers(harassers):
     return harasserlist
 
 
-def launch_rebuild(self, ranks, pool):
+def launch_rebuild(self, ranks, pool, name, results, args):
     """Launch the rebuild process.
 
     Args:
@@ -169,9 +165,10 @@ def launch_rebuild(self, ranks, pool):
         pool (obj): TestPool obj
 
     """
+    params = {"name": name, "status": False}
     self.log.info("<<Launch Rebuild>> at %s", time.ctime())
     status = True
-
+    params = {"name": name, "status": status, "vars": {}}
     # Kill the server
     try:
         pool.start_rebuild(ranks, self.d_log)
@@ -196,12 +193,17 @@ def launch_rebuild(self, ranks, pool):
             self.log.error(
                 "Rebuild failed waiting to finish", exc_info=error)
             status &= False
-        params = {"name": "REBUILD", "status": status}
-    with H_LOCK:
-        self.harasser_job_done(params)
+        params = {"name": name, "status": status, "vars": {}}
+    self.harasser_job_done(params)
+    results.put(self.harasser_results)
+    args.put(self.harasser_args)
+    self.log.info("Harasser results: %s", self.harasser_results)
+    self.log.info("Harasser args: %s", self.harasser_args)
+    self.log.info(
+        "<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
 
 
-def launch_snapshot(self, pool):
+def launch_snapshot(self, pool, name, results, args):
     """Create a basic snapshot of the reserved pool.
 
     Args:
@@ -211,7 +213,7 @@ def launch_snapshot(self, pool):
 
     """
     self.log.info(
-        "<<<PASS %s: snapshot started at %s>>>", self.loop, time.ctime())
+        "<<<PASS %s: %s started at %s>>>", self.loop, name, time.ctime())
     status = True
     # Create container
     container = TestContainer(pool)
@@ -238,7 +240,7 @@ def launch_snapshot(self, pool):
         self.log.error("Snapshot failed", exc_info=error)
         status &= False
     if status:
-        self.log.info("Snapshot Created")
+        self.log.info("Sanpshot Created")
         # write more data to object
         data_pattern2 = get_random_string(500)
         datasize2 = len(data_pattern2) + 1
@@ -272,20 +274,25 @@ def launch_snapshot(self, pool):
     # cleanup
     container.close()
     container.destroy()
+    params = {"name": name, "status": status, "vars": {}}
+    self.harasser_job_done(params)
+    results.put(self.harasser_results)
+    args.put(self.harasser_args)
+    self.log.info("Harasser results: %s", self.harasser_results)
+    self.log.info("Harasser args: %s", self.harasser_args)
     self.log.info(
-        "<<<PASS %s: snapshot completed at %s>>>", self.loop, time.ctime())
-    params = {"name": "SNAPSHOT", "status": status, "vars": {}}
-    with H_LOCK:
-        self.harasser_job_done(params)
+        "<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
 
 
-def launch_exclude_reintegrate(self, pool, name):
+def launch_exclude_reintegrate(self, pool, name, results, args):
     """Launch the dmg cmd to exclude a rank in a pool.
 
     Args:
         self (obj): soak obj
         pool (list): list of TestPool obj
         name (str): name of dmg subcommand
+        results (queue): multiprocessing queue
+        args (queue): multiprocessing queue
     """
     status = False
     params = {}
@@ -311,7 +318,6 @@ def launch_exclude_reintegrate(self, pool, name):
             tgt_idx = self.harasser_args["EXCLUDE"]["tgt_idx"]
             self.log.info("<<<PASS %s: %s started on rank %s at %s>>>\n",
                           self.loop, name, rank, time.ctime())
-
             status = pool.reintegrate(rank, tgt_idx)
         else:
             self.log.error("<<<PASS %s: %s failed due to EXCLUDE failure >>>",
@@ -323,13 +329,16 @@ def launch_exclude_reintegrate(self, pool, name):
     if not status:
         self.log.error("<<< %s failed - check logs for failure data>>>", name)
     self.dmg_command.system_query()
-    with H_LOCK:
-        self.harasser_job_done(params)
+    self.harasser_job_done(params)
+    results.put(self.harasser_results)
+    args.put(self.harasser_args)
+    self.log.info("Harasser results: %s", self.harasser_results)
+    self.log.info("Harasser args: %s", self.harasser_args)
     self.log.info(
         "<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
 
 
-def launch_server_stop_start(self, pools, name):
+def launch_server_stop_start(self, pools, name, results, args):
     """Launch dmg server stop/start.
 
     Args:
@@ -380,8 +389,11 @@ def launch_server_stop_start(self, pools, name):
     if not status:
         self.log.error("<<< %s failed - check logs for failure data>>>", name)
     self.dmg_command.system_query()
-    with H_LOCK:
-        self.harasser_job_done(params)
+    self.harasser_job_done(params)
+    results.put(self.harasser_results)
+    args.put(self.harasser_args)
+    self.log.info("Harasser results: %s", self.harasser_results)
+    self.log.info("Harasser args: %s", self.harasser_args)
     self.log.info(
         "<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
 
@@ -529,6 +541,8 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
         for b_size in bsize_list:
             for t_size in tsize_list:
                 for o_type in oclass_list:
+                    if api in ["HDF5-VOL", "HDF5", "POSIX"] and ppn > 16:
+                        ppn = 16
                     # DAOS-6095
                     if api == "HDF5-VOL" and t_size == "4k":
                         t_size = "1m"
@@ -675,11 +689,9 @@ def build_job_script(self, commands, job, ppn, nodesperjob):
             cmd = [cmd]
         output = os.path.join(
             self.test_log_dir, self.test_name + "_" + job + "_" +
-            log_name + "_" + str(ppn * nodesperjob) + "_%N_" + "%j_")
-        error = os.path.join(
-            self.test_log_dir, self.test_name + "_" + job + "_" +
-            log_name + "_" +
-            str(ppn * nodesperjob) + "_%N_" + "%j_" + "ERROR_")
+            log_name + "_" + str(ppn * nodesperjob) + "_" + str(nodesperjob) +
+            "_" + str(ppn) + "_%N_" + "%j_")
+        error = os.path.join(str(output) + "ERROR_")
         sbatch = {
             "time": str(self.job_timeout) + ":00",
             "exclude": NodeSet.fromlist(self.exclude_slurm_nodes),

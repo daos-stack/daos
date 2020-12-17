@@ -848,8 +848,6 @@ class DmgCommand(DmgCommandBase):
         """Start the system.
 
         Args:
-            force (bool, optional): whether to force the stop. Defaults to
-                False.
             ranks (str, optional): comma separated ranks to stop. Defaults to
                 None.
 

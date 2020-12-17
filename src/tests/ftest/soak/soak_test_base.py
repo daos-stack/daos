@@ -24,7 +24,7 @@ portions thereof marked with this legend must also reproduce the markings.
 
 import os
 import time
-import threading
+import multiprocessing
 from apricot import TestWithServers
 from general_utils import run_command, DaosTestError, get_log_file
 import slurm_utils
@@ -111,7 +111,7 @@ class SoakTestBase(TestWithServers):
             if host_server in self.hostlist_clients:
                 self.hostlist_clients.remove(host_server)
                 self.exclude_slurm_nodes.append(host_server)
-        # Include test node for log cleanup; remove from client list
+        Include test node for log cleanup; remove from client list
         local_host_list = include_local_host(None)
         self.exclude_slurm_nodes.extend(local_host_list)
         if local_host_list[0] in self.hostlist_clients:
@@ -174,58 +174,59 @@ class SoakTestBase(TestWithServers):
         # Init the status message
         status_msg = None
         job = None
-        count = 0
+        results = multiprocessing.Queue()
+        args = multiprocessing.Queue()
         # Launch harasser
         self.log.info("\n<<<Launch harasser %s>>>\n", harasser)
         if harasser == "rebuild":
             method = launch_rebuild
             ranks = self.params.get(
                 "ranks_to_kill", "/run/" + harasser + "/*")
-            param_list = (self, ranks, pool[1])
             name = "REBUILD"
+            params = (self, ranks, pool[1], name, results, args)
         elif harasser == "snapshot":
             method = launch_snapshot
-            param_list = (self, self.pool[0])
             name = "SNAPSHOT"
+            params = (self, self.pool[0], name, results, args)
         elif harasser == "exclude":
             method = launch_exclude_reintegrate
             name = "EXCLUDE"
-            param_list = (self, pool[1], name)
+            params = (self, pool[1], name, results, args)
         elif harasser == "reintegrate":
             method = launch_exclude_reintegrate
             name = "REINTEGRATE"
-            param_list = (self, pool[1], name)
+            params = (self, pool[1], name, results, args)
         elif harasser == "server-stop":
             method = launch_server_stop_start
             name = "SVR_STOP"
-            param_list = (self, pool, name)
+            params = (self, pool, name, results, args)
         elif harasser == "server-reintegrate":
             method = launch_server_stop_start
             name = "SVR_REINTEGRATE"
-            param_list = (self, pool, name)
+            params = (self, pool, name, results, args)
         else:
             raise SoakTestError(
                 "<<FAILED: Harasser {} is not supported. ".format(
                     harasser))
-        self.harasser_results[name] = False
-        self.harasser_args[name] = {}
-        job = threading.Thread(
-            target=method, args=param_list, name=name)
-        job.daemon = True
+
+        job = multiprocessing.Process(target=method, args=params, name=name)
         # start harasser
         job.start()
         timeout = self.params.get("harasser_to", "/run/soak_harassers/*", 30)
         # Wait for harasser job to join
         job.join(timeout)
-        while job.is_alive() and count < 3:
-            count += 1
+        if job.is_alive():
             self.log.error(
-                "<< ERROR: harasser %s is alive, failed to join: attempt %s >>",
-                job.name, count)
-        if count > 0:
-            raise SoakTestError(
-                "<<FAILED: Harasser {} has been terminated. ".format(name))
+                "<< ERROR: harasser %s is alive, failed to join>>", job.name)
+            job.terminate()
+            status_msg = "<<FAILED: Harasser {} has been terminated.".format(
+                name)
+            return status_msg
+        self.harasser_results = results.get()
+        self.harasser_args = args.get()
         # Check if the completed job passed
+        self.log.info("Harasser results: %s", self.harasser_results)
+        self.log.info("Harasser args: %s", self.harasser_args)
         if not self.harasser_results[name.upper()]:
             status_msg = "<< HARASSER {} FAILED in pass {} at {}>> ".format(
                 name, self.loop, time.ctime())
