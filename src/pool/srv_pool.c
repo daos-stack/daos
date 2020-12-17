@@ -4566,10 +4566,19 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 
 	ABT_rwlock_wrlock(svc->ps_lock);
 
-	rc = find_hdls_to_evict(&tx, svc, &hdl_uuids, &hdl_uuids_size,
-				&n_hdl_uuids);
-	if (rc != 0)
-		D_GOTO(out_lock, rc);
+	/*
+	 * If a subset of handles is specified use them instead of iterating
+	 * through all handles for the pool uuid
+	 */
+	if (in->pvi_hdls.ca_arrays) {
+		hdl_uuids = in->pvi_hdls.ca_arrays;
+		n_hdl_uuids = in->pvi_hdls.ca_count;
+	} else {
+		rc = find_hdls_to_evict(&tx, svc, &hdl_uuids, &hdl_uuids_size,
+					&n_hdl_uuids);
+		if (rc != 0)
+			D_GOTO(out_lock, rc);
+	}
 
 	if (n_hdl_uuids > 0) {
 		/* If pool destroy but not forcibly, error: the pool is busy */
@@ -4606,7 +4615,10 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 	rc = rdb_tx_commit(&tx);
 	/* No need to set out->pvo_op.po_map_version. */
 out_free:
-	D_FREE(hdl_uuids);
+	/* We only need to free hdl_uuids we called find_hdls_to_evict */
+	if (!in->pvi_hdls.ca_arrays) {
+		D_FREE(hdl_uuids);
+	}
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
@@ -4621,11 +4633,13 @@ out:
 }
 
 /**
- * Send a CaRT message to the pool svc during pool destroy to test and
- * (if applicable based on force option) evict all open handles on a pool.
+ * Send a CaRT message to the pool svc to test and
+ * (if applicable based on destoy and force option) evict all open handles
+ * on a pool.
  *
  * \param[in]	pool_uuid	UUID of the pool
  * \param[in]	ranks		Pool service replicas
+ * \param[in]	destroy		If true the evict request is a destroy request
  * \param[in]	force		If true request all handles be forcibly evicted
  *
  * \return	0		Success
@@ -4633,7 +4647,9 @@ out:
  *
  */
 int
-ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks, uint32_t force)
+ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks,
+			uuid_t *handles, size_t n_handles,
+			uint32_t destroy, uint32_t force)
 {
 	int			 rc;
 	struct rsvc_client	 client;
@@ -4670,11 +4686,13 @@ rechoose:
 	in = crt_req_get(rpc);
 	uuid_copy(in->pvi_op.pi_uuid, pool_uuid);
 	uuid_clear(in->pvi_op.pi_hdl);
+	in->pvi_hdls.ca_arrays = handles;
+	in->pvi_hdls.ca_count = n_handles;
 
 	/* Pool destroy (force=false): assert no open handles / do not evict.
 	 * Pool destroy (force=true): evict any/all open handles on the pool.
 	 */
-	in->pvi_pool_destroy = 1;
+	in->pvi_pool_destroy = destroy;
 	in->pvi_pool_destroy_force = force;
 
 	rc = dss_rpc_send(rpc);

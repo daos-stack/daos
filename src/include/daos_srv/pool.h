@@ -248,7 +248,8 @@ int ds_pool_svc_list_cont(uuid_t uuid, d_rank_list_t *ranks,
 			  uint64_t *ncontainers);
 
 int ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks,
-			    uint32_t force);
+			    uuid_t *handles, size_t n_handles,
+			    uint32_t destroy, uint32_t force);
 void
 ds_pool_disable_evict(void);
 void
