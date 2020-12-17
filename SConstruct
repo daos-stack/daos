@@ -9,6 +9,8 @@ import SCons.Warnings
 from SCons.Script import BUILD_TARGETS
 
 SCons.Warnings.warningAsException()
+# pylint: disable=undefined-variable
+# pylint: disable=unused-variable
 
 try:
     input = raw_input # pylint: disable=redefined-builtin
