@@ -2806,7 +2806,6 @@ obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard,
 
 	if (total == 0) {
 		D_FREE(*recxs_p);
-		*recxs_p = NULL;
 		*iod_nr = 0;
 		return 0;
 	}
