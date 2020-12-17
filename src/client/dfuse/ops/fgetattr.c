@@ -42,14 +42,14 @@ dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie)
 		stat.st_gid = ie->ie_stat.st_gid;
 	}
 
-	/* Copy the inode number from the inode struct, to avoid having to
-	 * recompute it each time.
-	 */
-
 	if (S_ISFIFO(stat.st_mode)) {
 		stat.st_mode &= ~S_IFIFO;
 		stat.st_mode |= S_IFDIR;
 	}
+
+	/* Copy the inode number from the inode struct, to avoid having to
+	 * recompute it each time.
+	 */
 
 	stat.st_ino = ie->ie_stat.st_ino;
 	DFUSE_REPLY_ATTR(ie, req, &stat);
