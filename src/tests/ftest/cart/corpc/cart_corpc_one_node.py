@@ -39,7 +39,7 @@ class CartCoRpcOneNodeTest(Test):
     """
     Runs basic CaRT CoRPC tests
 
-    :avocado: tags=all,cart,pr,corpc,one_node
+    :avocado: tags=all,cart,pr,daily_regression,corpc,one_node
     """
     def setUp(self):
         """ Test setup """
@@ -51,7 +51,7 @@ class CartCoRpcOneNodeTest(Test):
         """
         Test CaRT CoRPC
 
-        :avocado: tags=all,cart,pr,corpc,one_node
+        :avocado: tags=all,cart,pr,daily_regression,corpc,one_node
         """
 
         cmd = self.utils.build_cmd(self, self.env, "test_servers")

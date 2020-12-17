@@ -25,7 +25,6 @@ from __future__ import print_function
 import traceback
 
 from apricot import TestWithServers
-from pydaos.raw import DaosServer
 from test_utils_pool import TestPool
 from avocado.core.exceptions import TestFail
 
@@ -43,7 +42,7 @@ class PoolSvc(TestWithServers):
         """
         Test svc arg during pool create.
 
-        :avocado: tags=all,pool,pr,medium,svc,DAOS_5610
+        :avocado: tags=all,pool,daily_regression,medium,svc,DAOS_5610
         """
         # parameter used in pool create
         createsvc = self.params.get("svc", '/run/createtests/createsvc/*/')
@@ -93,8 +92,7 @@ class PoolSvc(TestWithServers):
                     self.pool.connect()
                     self.pool.disconnect()
                     # kill another server which is not a leader and exclude it
-                    server = DaosServer(self.context, self.server_group, 3)
-                    server.kill(1)
+                    self.pool.start_rebuild([3], self.test_log)
                     self.pool.exclude([3], self.d_log)
                     # perform pool connect
                     self.pool.connect()

@@ -23,7 +23,6 @@
 '''
 from data_mover_test_base import DataMoverTestBase
 from os.path import join, sep
-from apricot import skipForTicket
 
 
 class CopyProcsTest(DataMoverTestBase):
@@ -62,7 +61,6 @@ class CopyProcsTest(DataMoverTestBase):
         cmd = "mkdir -p {}".format(self.get_posix_test_path_string())
         self.execute_cmd(cmd)
 
-    @skipForTicket("DAOS-6194")
     def test_copy_procs(self):
         """
         Test Description:
@@ -71,7 +69,7 @@ class CopyProcsTest(DataMoverTestBase):
             Create pool.
             Crate POSIX container1 and container2 in pool.
             Create a single 100M file in container1 using ior.
-        :avocado: tags=all,datamover,pr
+        :avocado: tags=all,datamover,daily_regression,hw
         :avocado: tags=copy_procs
         """
         # Create pool and containers

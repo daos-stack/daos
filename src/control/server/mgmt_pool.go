@@ -174,6 +174,9 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		req.Ranks = system.RanksToUint32(allRanks)
 	}
 
+	// IO server needs the fault domain tree for placement purposes
+	req.FaultDomains = svc.sysdb.FaultDomainTree().ToProto()
+
 	ps = &system.PoolService{
 		PoolUUID: uuid,
 		State:    system.PoolServiceStateCreating,
@@ -220,6 +223,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		}
 	}()
 
+	svc.log.Debugf("MgmtSvc.PoolCreate forwarding modified req:%+v\n", req)
 	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolCreate, req)
 	if err != nil {
 		return nil, err
@@ -417,7 +421,13 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
+
 	svc.log.Debugf("MgmtSvc.PoolExtend dispatch, req:%+v\n", req)
+
+	// the IO server needs the domain tree for placement purposes
+	req.FaultDomains = svc.sysdb.FaultDomainTree().ToProto()
+
+	svc.log.Debugf("MgmtSvc.PoolExtend forwarding modified req:%+v\n", req)
 
 	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolExtend, req)
 	if err != nil {

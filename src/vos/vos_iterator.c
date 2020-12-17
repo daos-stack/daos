@@ -591,6 +591,21 @@ need_reprobe(vos_iter_type_t type, struct vos_iter_anchors *anchors)
 	return reprobe;
 }
 
+static int
+vos_iter_detect_dtx_cb(daos_handle_t ih, vos_iter_entry_t *entry,
+		       vos_iter_type_t type, vos_iter_param_t *param,
+		       void *cb_arg, unsigned int *acts)
+{
+	struct dtx_handle	*dth = vos_dth_get();
+
+	D_ASSERT(dth != NULL);
+
+	if (++(dth->dth_share_tbd_scanned) >= DTX_DETECT_SCAN_MAX)
+		return -DER_INPROGRESS;
+
+	return 0;
+}
+
 /**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
  * cb(\a arg) for each entry.
@@ -614,7 +629,7 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 
 	D_ASSERT(type >= VOS_ITER_COUUID && type <= VOS_ITER_RECX);
 	D_ASSERT(anchors != NULL);
-	D_ASSERT(pre_cb || post_cb || vos_dtx_hit_inprogress());
+	D_ASSERT(pre_cb || post_cb);
 
 	anchor = type2anchor(type, anchors);
 
@@ -661,7 +676,7 @@ probe:
 		if (rc != 0) {
 			if (vos_dtx_continue_detect(rc)) {
 				pre_cb = NULL;
-				post_cb = NULL;
+				post_cb = vos_iter_detect_dtx_cb;
 				goto next;
 			}
 
@@ -717,7 +732,7 @@ probe:
 			if (rc != 0) {
 				if (vos_dtx_continue_detect(rc)) {
 					pre_cb = NULL;
-					post_cb = NULL;
+					post_cb = vos_iter_detect_dtx_cb;
 				} else {
 					D_GOTO(out, rc);
 				}
@@ -726,24 +741,26 @@ probe:
 			reset_anchors(iter_ent.ie_child_type, anchors);
 		}
 
+next:
 		if (post_cb) {
 			rc = post_cb(ih, &iter_ent, type, param, arg, &acts);
 			if (rc != 0)
 				break;
 
-			set_reprobe(type, acts, anchors, param->ip_flags);
-			acts = 0;
+			if (!vos_dtx_hit_inprogress()) {
+				set_reprobe(type, acts, anchors,
+					    param->ip_flags);
+				acts = 0;
+			}
 
 		}
 
-		if (need_reprobe(type, anchors) &&
-		    !vos_dtx_hit_inprogress()) {
+		if (need_reprobe(type, anchors)) {
 			D_ASSERT(!daos_anchor_is_zero(anchor) &&
 				 !daos_anchor_is_eof(anchor));
 			goto probe;
 		}
 
-next:
 		rc = vos_iter_next(ih);
 		if (rc) {
 			VOS_TX_TRACE_FAIL(rc,
@@ -752,9 +769,6 @@ next:
 			break;
 		}
 	}
-
-	if (vos_dtx_hit_inprogress())
-		goto out;
 
 	if (rc == -DER_NONEXIST) {
 		daos_anchor_set_eof(anchor);

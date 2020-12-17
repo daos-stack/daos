@@ -227,7 +227,7 @@ If the user does not have Delete permission on the pool, they will only be able
 to delete containers for which they have been explicitly granted Delete
 permission in the container's ACL.
 
-!!! note:
+!!! note
     In DAOS version 1.0, permissions are set on the _pool_ level and all containers
     in the pool inherit the permissions of the pool. Starting with DAOS version 1.2,
     pool and container permissions are controlled individually.
