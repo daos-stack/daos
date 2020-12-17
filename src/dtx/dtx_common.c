@@ -117,26 +117,7 @@ dtx_flush_on_deregister(struct dss_module_info *dmi,
 	int			 rc;
 
 	D_ASSERT(dbca->dbca_deregistering != NULL);
-	do {
-		struct dtx_entry	**dtes = NULL;
 
-		rc = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT,
-					   NULL, DAOS_EPOCH_MAX, &dtes);
-		if (rc <= 0)
-			break;
-
-		rc = dtx_commit(cont, dtes, rc, true);
-		dtx_free_committable(dtes);
-	} while (rc >= 0);
-
-	if (rc < 0)
-		D_ERROR(DF_UUID": Fail to flush CoS cache: rc = %d\n",
-			DP_UUID(cont->sc_uuid), rc);
-
-	/*
-	 * dtx_batched_commit_deregister() set force flush and wait for
-	 * flush done, then free the dbca.
-	 */
 	d_list_del_init(&dbca->dbca_link);
 	rc = ABT_future_set(dbca->dbca_deregistering, NULL);
 	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed for DTX "
@@ -303,6 +284,7 @@ dtx_handle_reinit(struct dtx_handle *dth)
 	dth->dth_touched_leader_oid = 0;
 	dth->dth_local_tx_started = 0;
 	dth->dth_local_retry = 0;
+	dth->dth_cos_done = 0;
 
 	dth->dth_ent = NULL;
 
@@ -344,6 +326,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_refs = 1;
 	dth->dth_mbs = mbs;
 
+	dth->dth_cos_done = 0;
 	dth->dth_resent = 0;
 	dth->dth_solo = solo ? 1 : 0;
 	dth->dth_modify_shared = 0;
@@ -654,7 +637,6 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	struct dtx_handle		*dth = &dlh->dlh_handle;
 	struct dtx_entry		*dte;
 	daos_epoch_t			 epoch = dth->dth_epoch;
-	int				 saved = result;
 	int				 rc = 0;
 
 	D_ASSERT(cont != NULL);
@@ -784,8 +766,13 @@ again:
 		rc = dtx_add_cos(cont, dte, &dth->dth_leader_oid,
 				 dth->dth_dkey_hash, dth->dth_epoch, flags);
 		dtx_entry_put(dte);
-		if (rc == 0 && !DAOS_FAIL_CHECK(DAOS_DTX_NO_COMMITTABLE))
-			vos_dtx_mark_committable(dth);
+		if (rc == 0) {
+			if (!DAOS_FAIL_CHECK(DAOS_DTX_NO_COMMITTABLE))
+				vos_dtx_mark_committable(dth);
+		} else {
+			dth->dth_sync = 1;
+			goto sync;
+		}
 	}
 
 	if (rc == -DER_TX_RESTART) {
@@ -854,7 +841,7 @@ out:
 	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
 
 	/* Local modification is done, then need to handle CoS cache. */
-	if (saved >= 0) {
+	if (dth->dth_cos_done) {
 		int	i;
 
 		for (i = 0; i < dth->dth_dti_cos_count; i++)
@@ -920,7 +907,7 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 		return result;
 
 	if (result < 0) {
-		if (dth->dth_dti_cos_count > 0) {
+		if (dth->dth_dti_cos_count > 0 && !dth->dth_cos_done) {
 			int	rc;
 
 			/* XXX: For non-leader replica, even if we fail to
@@ -937,6 +924,8 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 			if (rc < 0)
 				D_ERROR(DF_UUID": Fail to DTX CoS commit: %d\n",
 					DP_UUID(cont->sc_uuid), rc);
+			else
+				dth->dth_cos_done = 1;
 		}
 	}
 
@@ -965,6 +954,7 @@ dtx_batched_commit_register(struct ds_cont_child *cont)
 	int				 rc;
 
 	D_ASSERT(cont != NULL);
+	cont->sc_closing = 0;
 
 	head = &dss_get_module_info()->dmi_dtx_batched_list;
 	d_list_for_each_entry(dbca, head, dbca_link) {
@@ -1015,6 +1005,7 @@ dtx_batched_commit_deregister(struct ds_cont_child *cont)
 
 	D_ASSERT(cont != NULL);
 	D_ASSERT(cont->sc_open == 0);
+	cont->sc_closing = 1;
 
 	head = &dss_get_module_info()->dmi_dtx_batched_list;
 	d_list_for_each_entry(dbca, head, dbca_link) {
@@ -1255,7 +1246,7 @@ dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 {
 	int	rc = 0;
 
-	while (1) {
+	while (!cont->sc_closing) {
 		struct dtx_entry	**dtes = NULL;
 
 		rc = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT, oid,
@@ -1276,7 +1267,7 @@ dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 		}
 	}
 
-	if (rc == 0 && oid != NULL)
+	if (rc == 0 && oid != NULL && !cont->sc_closing)
 		rc = vos_dtx_mark_sync(cont->sc_hdl, *oid, epoch);
 
 	return rc;
