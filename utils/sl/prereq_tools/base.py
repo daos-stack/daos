@@ -27,6 +27,8 @@
 # pylint: disable=bare-except
 # pylint: disable=exec-used
 # pylint: disable=too-many-statements
+# pylint: disable=too-many-lines
+# pylint: disable=unused-argument
 from __future__ import absolute_import, division, print_function
 import os
 import traceback
@@ -301,14 +303,14 @@ def default_libpath():
         return []
     try:
         pipe = subprocess.Popen(['dpkg-architecture',       # nosec
-                                '-qDEB_HOST_MULTIARCH'],
+                                 '-qDEB_HOST_MULTIARCH'],
                                 stdout=subprocess.PIPE, stderr=DEVNULL)
         (stdo, _) = pipe.communicate()
         if pipe.returncode == 0:
             archpath = stdo.decode().strip()
             return ['lib/' + archpath]
     except Exception:
-       print('default_libpath, Exception: subprocess.Popen dpkg-architecture')
+        print('default_libpath, Exception: subprocess.Popen dpkg-architecture')
     return []
 
 class GitRepoRetriever():
@@ -693,7 +695,7 @@ class PreReqComponent():
             else:
                 os.makedirs(self.prereq_prefix)
         except:
-           print('PreReqComponent init, Exception: if self.__dry_run')
+            print('PreReqComponent init, Exception: if self.__dry_run')
         self.setup_parallel_build()
 
         self.config_file = config_file

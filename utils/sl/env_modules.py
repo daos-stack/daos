@@ -67,16 +67,17 @@ class _env_module(): # pylint: disable=invalid-name
 
         stdout, stderr = proc.communicate()
 
+        # pylint: disable=exec-used
         if sys.version_info[0] > 2:
             ns = {}
-            exec(stdout.decode(), ns) # pylint: disable=exec-used  # nosec
+            exec(stdout.decode(), ns) # nosec
 
             return ns['_mlstatus'], stderr.decode()
         else:
-            exec(stdout.decode()) # pylint: disable=exec-used  # nosec
+            exec(stdout.decode()) # nosec
 
             return _mlstatus, stderr.decode() # pylint: disable=undefined-variable
-
+        # pylint: enable=exec-used
 
     def _init_mpi_module(self):
         """init mpi module function"""
