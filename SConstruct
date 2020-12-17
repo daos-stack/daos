@@ -85,7 +85,8 @@ def update_rpm_version(version, tag):
                              format(release)
         if line == "%changelog\n":
             try:
-                packager = subprocess.Popen('rpmdev-packager',     # nosec
+                packager = subprocess.Popen(
+                    'rpmdev-packager',         # nosec
                     stdout=subprocess.PIPE).communicate(
                         )[0].strip().decode('UTF-8')
             except OSError:
