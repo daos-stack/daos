@@ -49,6 +49,10 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 		if (!ie->ie_dfs->dfs_multi_user)
 			D_GOTO(err, rc = ENOTSUP);
 
+		/* Set defaults based on current file ownership */
+		entry.uid = ie->ie_stat.st_uid;
+		entry.gid = ie->ie_stat.st_gid;
+
 		if (!set_both) {
 			rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj,
 					  DFUSE_XID_XATTR_NAME, &entry, &size);
