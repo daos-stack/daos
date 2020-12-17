@@ -53,7 +53,7 @@ else
     ls test_results || true
     for i in $(ls test_results/*.supp.memcheck.xml); do
 	    echo "marj >> $i"
-	    cat "test_results/$i"
+	    cat "$i"
     done 
 
     if [ "$WITH_VALGRIND" == 'memcheck' ]; then
