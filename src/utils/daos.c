@@ -45,7 +45,6 @@
 #include <daos/rpc.h>
 #include <daos/debug.h>
 #include <daos/object.h>
-#include <sys/stat.h>
 
 #include "daos_types.h"
 #include "daos_api.h"
@@ -551,8 +550,8 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"attr",	required_argument,	NULL,	'a'},
 		{"value",	required_argument,	NULL,	'v'},
 		{"path",	required_argument,	NULL,	'd'},
-		{"src",		required_argument,	NULL,	'U'},
-		{"dst",		required_argument,	NULL,	'I'},
+		{"src",		required_argument,	NULL,	'S'},
+		{"dst",		required_argument,	NULL,	'D'},
 		{"type",	required_argument,	NULL,	't'},
 		{"oclass",	required_argument,	NULL,	'o'},
 		{"chunk_size",	required_argument,	NULL,	'z'},
@@ -656,34 +655,6 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			}
 			break;
-
-		case 'S':
-			if (uuid_parse(optarg, ap->src_p_uuid) != 0) {
-				fprintf(stderr, "failed to parse src pool UUID: %s\n", optarg);
-				D_GOTO(out_free, rc = RC_NO_HELP);
-			}
-			break;
-		case 'D':
-			if (uuid_parse(optarg, ap->dst_p_uuid) != 0) {
-				fprintf(stderr, "failed to parse dst pool UUID: %s\n",
-					optarg);
-				D_GOTO(out_free, rc = RC_NO_HELP);
-			}
-			break;
-		case 'C':
-			if (uuid_parse(optarg, ap->src_c_uuid) != 0) {
-				fprintf(stderr, "failed to parse src cont UUID: %s\n",
-					optarg);
-				D_GOTO(out_free, rc = RC_NO_HELP);
-			}
-			break;
-		case 'T':
-			if (uuid_parse(optarg, ap->dst_c_uuid) != 0) {
-				fprintf(stderr, "failed to parse dst cont UUID: %s\n",
-					optarg);
-				D_GOTO(out_free, rc = RC_NO_HELP);
-			}
-			break;
 		case 'm':
 			D_STRNDUP(ap->mdsrv_str, optarg, strlen(optarg));
 			if (ap->mdsrv_str == NULL)
@@ -716,12 +687,12 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			if (ap->path == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
-		case 'U':
+		case 'S':
 			D_STRNDUP(ap->src, optarg, strlen(optarg));
 			if (ap->src == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
-		case 'I':
+		case 'D':
 			D_STRNDUP(ap->dst, optarg, strlen(optarg));
 			if (ap->dst == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
@@ -871,13 +842,6 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"object %s not yet implemented\n", cmdname);
 		D_GOTO(out_free, rc = RC_NO_HELP);
 	}
-
-	/* Verify pool svc argument. If not provided pass NULL list to libdaos,
-	 * and client will query management service for rank list.
-	 */
-        if (ap->fs_op != FS_COPY) {
-		ARGS_VERIFY_MDSRV(ap, out_free, rc = RC_PRINT_HELP);
-        }
 
 	D_FREE(cmdname);
 	return 0;
@@ -1320,14 +1284,14 @@ do { \
 	fprintf(stream, "use 'daos help RESOURCE' for resource specifics\n"); \
 } while (0)
 
-#define ALL_FS_CMDS_HELP() \
+#define FS_COPY_CMDS_HELP() \
 do { \
 	fprintf(stream, "\n" \
 	" copy to and from POSIX filesystem\n" \
 	" filesystem copy options (copy):\n" \
-	"	--src=<type>:<pool/cont | path>\n" \
-	"	--dst=<type>:<pool/cont | path>\n" \
-	"	\t supported types are daos, posix\n"); \
+	"	--src=<daos>:<pool/cont> | <path>\n" \
+	"	--dst=<daos>:<pool/cont> | <path>\n" \
+	"	\t type is daos, only specified if pool/cont used, not with path \n"); \
 	fprintf(stream, "\n"); \
 } while (0)
 
@@ -1386,14 +1350,8 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	if (argc <= 2) {
 		FIRST_LEVEL_HELP();
 	} else if (strcmp(argv[2], "filesystem") == 0 || strcmp(argv[2], "fs") == 0) {
-		if (argc == 3) {
-			ALL_FS_CMDS_HELP();
-		} else if (strcmp(argv[3], "copy") == 0) {
-			fprintf(stream,
-			" filesystem copy options (copy):\n"
-			"--src=<type>:<pool/cont | path>\n"
-			"--dst=<type>:<pool/cont | path>\n"
-                        "supported types are daos, posix\n");
+		if (strcmp(argv[3], "copy") == 0) {
+			FS_COPY_CMDS_HELP();
 		}
 	} else if (strcmp(argv[2], "pool") == 0) {
 		fprintf(stream, "\n"

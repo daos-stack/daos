@@ -66,25 +66,6 @@ enum obj_op {
 	OBJ_DUMP
 };
 
-#define NUM_DIRENTS 24
-#define MAX_FILENAME 256
-
-struct dfs_daos_t {
-	dfs_obj_t* dir;
-	struct dirent ents[NUM_DIRENTS];
-	daos_anchor_t anchor;
-	uint32_t num_ents;
-};
-
-typedef struct file_dfs_t {
-	enum {POSIX, DAOS} type;
-	int                  fd;
-	/* DAOS specific variables for I/O */
-	daos_off_t offset;
-	dfs_obj_t* obj;
-	dfs_t* dfs;
-} file_dfs_t;
-
 /* cmd_args_s: consolidated result of parsing command-line arguments
  * for pool, cont, obj commands, much of which is common.
  */
@@ -96,15 +77,9 @@ struct cmd_args_s {
 	enum fs_op		fs_op;		/* filesystem sub-command */
 	char			*sysname;	/* --sys-name or --sys */
 	uuid_t			p_uuid;		/* --pool */
-	uuid_t			src_p_uuid;	/* --src_pool */
-	uuid_t			dst_p_uuid;	/* --dst_pool */
-	uuid_t			src_c_uuid;	/* --src_cont */
-	uuid_t			dst_c_uuid;	/* --dst_cont */
 	daos_handle_t		pool;
-	daos_handle_t		dst_pool;
 	uuid_t			c_uuid;		/* --cont */
 	daos_handle_t		cont;
-	daos_handle_t		dst_cont;
 	char			*mdsrv_str;	/* --svc */
 	d_rank_list_t		*mdsrv;
 	int			force;		/* --force */
