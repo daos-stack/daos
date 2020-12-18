@@ -117,10 +117,10 @@ class DaosAggregationBasic(IorTestBase):
         # Enable the aggregation
         self.pool.set_property("reclaim", "time")
         # wait 90 seconds for files to get old enough for aggregation +
-        # 90 seconds for aggregation to start and finish
+        # 30 seconds for aggregation to start and finish
         self.log.info("Waiting for 120 seconds for aggregation to start \
             and finish")
-        time.sleep(180)
+        time.sleep(120)
         free_space_after_aggregate = self.get_free_space(storage_index)
         self.log.info(
             "Free space after aggregation = %s", free_space_after_aggregate)

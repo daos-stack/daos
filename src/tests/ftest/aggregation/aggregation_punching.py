@@ -97,7 +97,7 @@ class AggregationPunching(MdtestBase):
 
         # For the given mdtest configuration, the aggregation should
         # be done in less than 150 seconds.
-        while counter < 6:
+        while counter < 5:
             pool_info = self.pool.pool.pool_query()
             final_free_space =\
                 pool_info.pi_space.ps_space.s_free[storage_index]
