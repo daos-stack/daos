@@ -29,8 +29,7 @@ from test_utils_base import TestDaosApiBase
 
 from avocado import fail_on
 from command_utils import BasicParameter, CommandFailure
-from pydaos.raw import (DaosApiError, DaosServer, DaosPool, c_uuid_to_str,
-                        daos_cref)
+from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
 from general_utils import (check_pool_files, DaosTestError, run_command,
                            convert_list)
 from env_modules import load_mpi
@@ -509,14 +508,7 @@ class TestPool(TestDaosApiBase):
         self.log.info(msg)
         daos_log.info(msg)
 
-        if self.control_method.value == self.USE_API:
-            # Stop desired ranks using kill
-            for rank in ranks:
-                server = DaosServer(self.context, self.name.value, rank)
-                self._call_method(server.kill, {"force": 1})
-            return True
-
-        elif self.control_method.value == self.USE_DMG and self.dmg:
+        if self.control_method.value == self.USE_DMG and self.dmg:
             # Stop desired ranks using dmg
             self.dmg.system_stop(ranks=convert_list(value=ranks))
             return True
@@ -526,7 +518,7 @@ class TestPool(TestDaosApiBase):
 
         else:
             self.log.error(
-                "Error: Undefined control_method: %s",
+                "Error: Unsupported control_method: %s",
                 self.control_method.value)
 
         return False

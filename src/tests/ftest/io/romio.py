@@ -36,7 +36,7 @@ class Romio(MpiioTests):
         Test ID: DAOS-1994
         Run Romio test provided in mpich package
         Testing various I/O functions provided in romio test suite
-        :avocado: tags=all,mpiio,pr,small,romio
+        :avocado: tags=all,mpiio,pr,daily_regression,small,romio
         """
         # setting romio parameters
         test_repo = self.params.get("romio_repo", '/run/romio/')

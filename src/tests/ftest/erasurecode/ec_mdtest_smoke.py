@@ -38,7 +38,7 @@ class ErasureCodeMdtest(MdtestBase):
         Use Cases:
             Create the pool and run EC object class till 8P2.
 
-        :avocado: tags=all,pr,hw,large,ec,ec_smoke,ec_mdtest
+        :avocado: tags=all,pr,daily_regression,hw,large,ec,ec_smoke,ec_mdtest
         """
         mdtest_flags = self.params.get("flags", "/run/mdtest/*")
         self.mdtest_cmd.flags.update(mdtest_flags)

@@ -299,7 +299,7 @@ def getuid() {
 
 String get_priority() {
     if (env.BRANCH_NAME == 'master') {
-        string p = '4'
+        string p = '2'
     } else {
         string p = ''
     }
@@ -360,7 +360,8 @@ boolean skip_ftest_hw(String size) {
     return env.DAOS_STACK_CI_HARDWARE_SKIP == 'true' ||
            skip_stage('func-test') ||
            skip_stage('func-hw-test') ||
-           skip_stage('func-hw-test-' + size)
+           skip_stage('func-hw-test-' + size) ||
+           (env.BRANCH_NAME == 'master' && ! startedByTimer())
 }
 
 boolean skip_bandit_check() {
@@ -457,7 +458,8 @@ pipeline {
     agent { label 'lightweight' }
 
     triggers {
-        cron(env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
+        cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0,12 * * *\n' : '' +
+             env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
     }
 
     environment {
