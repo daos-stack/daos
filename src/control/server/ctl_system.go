@@ -24,7 +24,6 @@
 package server
 
 import (
-	"net"
 	"strings"
 	"time"
 
@@ -73,9 +72,7 @@ func (svc *ControlService) resolveRanks(hosts, ranks string) (hitRS, missRS *sys
 	case hasHosts && hasRanks:
 		err = errors.New("ranklist and hostlist cannot both be set in request")
 	case hasHosts:
-		if hitRS, missHS, err = svc.membership.CheckHosts(hosts, svc.srvCfg.ControlPort,
-			net.ResolveTCPAddr); err != nil {
-
+		if hitRS, missHS, err = svc.membership.CheckHosts(hosts, svc.srvCfg.ControlPort); err != nil {
 			return
 		}
 		svc.log.Debugf("resolveRanks(): req hosts %s, hit ranks %s, miss hosts %s",

@@ -29,8 +29,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/daos-stack/daos/src/control/build"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/lib/hostlist"
 )
 
 // HasPort checks if addr specifies a port. This only works with IPv4
@@ -107,4 +109,38 @@ func LocalhostCtrlAddr() *net.TCPAddr {
 		IP:   net.IPv4(127, 0, 0, 1),
 		Port: build.DefaultControlPort,
 	}
+}
+
+// ParseHostList validates and deduplicates the given list of host
+// strings. Any hosts missing a port will have one added according
+// to the defaultPort parameter.
+func ParseHostList(in []string, defaultPort int) (out []string, err error) {
+	if len(in) == 0 {
+		return
+	}
+
+	var set *hostlist.HostSet
+	set, err = hostlist.CreateSet(strings.Join(in, ","))
+	if err != nil {
+		return nil, err
+	}
+	out = strings.Split(set.DerangedString(), ",")
+
+	for i, host := range out {
+		hostPort := strings.Split(host, ":")
+		switch len(hostPort) {
+		case 1:
+			out[i] = fmt.Sprintf("%s:%d", host, defaultPort)
+		case 2:
+			_, err = strconv.Atoi(hostPort[1])
+		default:
+			err = errors.New("host should conform to hostname[:port]")
+		}
+
+		if err != nil {
+			return nil, errors.Wrapf(err, "invalid host %q", host)
+		}
+	}
+
+	return
 }

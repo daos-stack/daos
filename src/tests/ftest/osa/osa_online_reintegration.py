@@ -191,7 +191,7 @@ class OSAOnlineReintegration(OSAUtils):
 
         Test Description: Validate Online Reintegration
 
-        :avocado: tags=all,pr,hw,medium,ib2,osa
+        :avocado: tags=all,pr,daily_regression,hw,medium,ib2,osa
         :avocado: tags=online_reintegration,DAOS_5610
         """
         # Perform reintegration testing with 1 pool.
