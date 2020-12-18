@@ -112,7 +112,7 @@ $ git clone --recurse-submodules https://github.com/daos-stack/daos.git
 ```
 
 This command clones the DAOS git repository (path referred as ${daospath}
-below) and initilizes all the submodules automatically.
+below) and initializes all the submodules automatically.
 
 ### Building DAOS & Dependencies
 
