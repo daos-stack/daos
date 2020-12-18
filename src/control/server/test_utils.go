@@ -24,11 +24,13 @@
 package server
 
 import (
+	"net"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
@@ -188,6 +190,15 @@ func newTestIOServer(log logging.Logger, isAP bool, ioCfg ...*ioserver.Config) *
 	return srv
 }
 
+// mockTCPResolver returns successful resolve results for any input.
+func mockTCPResolver(netString string, address string) (*net.TCPAddr, error) {
+	if netString != "tcp" {
+		return nil, errors.Errorf("unexpected network type in test: %s, want 'tcp'", netString)
+	}
+
+	return &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001}, nil
+}
+
 // newTestMgmtSvc creates a mgmtSvc that contains an IOServerInstance
 // properly set up as an MS.
 func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
@@ -199,8 +210,8 @@ func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
 	}
 	harness.started.SetTrue()
 
-	db := system.MockDatabase(t, log)
-	return newMgmtSvc(harness, system.NewMembership(log, db), db)
+	ms, db := system.MockMembership(t, log, mockTCPResolver)
+	return newMgmtSvc(harness, ms, db)
 }
 
 // newTestMgmtSvcMulti creates a mgmtSvc that contains the requested

@@ -80,7 +80,7 @@ struct d_fault_attr_t {
 	/**
 	 * the error code to inject. Can be retrieved by d_fault_attr_err_code()
 	 */
-	uint32_t		fa_err_code;
+	int32_t			fa_err_code;
 	/**
 	 * state for nrand48. this allows each injection point has its own
 	 * independent random number sequence.

@@ -45,7 +45,7 @@ class AggregationPunching(MdtestBase):
             Create a POSIX container and run mdtest
             Enable the aggregation run and verify the space is reclaimed.
 
-        :avocado: tags=all,pr,hw,medium,ib2,aggregation,mdtest
+        :avocado: tags=all,pr,daily_regression,hw,medium,ib2,aggregation,mdtest
         :avocado: tags=aggregatepunching
         """
 
