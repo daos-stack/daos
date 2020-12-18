@@ -317,9 +317,10 @@ class DaosServer():
         control_log_file = tempfile.NamedTemporaryFile(prefix='dnt_control_',
                                                        suffix='.log',
                                                        delete=False)
-        scyaml = yaml.load(scfd)
+        scyaml = yaml.safe_load(scfd)
         scyaml['servers'][0]['log_file'] = self._log_file
         if self.conf.args.server_debug:
+            scyaml['control_log_mask'] = 'ERROR'
             scyaml['servers'][0]['log_mask'] = self.conf.args.server_debug
         scyaml['control_log_file'] = control_log_file.name
 
@@ -551,7 +552,7 @@ class ValgrindHelper():
         if self.full_check:
             cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
         else:
-            cmd.extend(['--leak-check=no'])
+            cmd.append('--leak-check=no')
 
         s_arg = '--suppressions='
         cmd.extend(['{}{}'.format(s_arg,
@@ -597,7 +598,13 @@ class DFuse():
         self.valgrind_file = None
         self.container = container
         self.conf = conf
-        self.cores = None
+        # Detect the number of cores and do something sensible, if there are
+        # more than 32 on the node then use 12, otherwise use the whole node.
+        num_cores = len(os.sched_getaffinity(0))
+        if num_cores > 32:
+            self.cores = 12
+        else:
+            self.cores = None
         self._daos = daos
         self.use_valgrind = True
         self._sp = None
@@ -798,11 +805,11 @@ def run_daos_cmd(conf,
     if not valgrind:
         vh.use_valgrind = False
 
-    cmd_env = get_base_env()
-
     exec_cmd = vh.get_cmd_prefix()
     exec_cmd.append(os.path.join(conf['PREFIX'], 'bin', 'daos'))
     exec_cmd.extend(cmd)
+
+    cmd_env = get_base_env()
 
     prefix = 'dnt_cmd_{}_'.format(get_inc_id())
     log_file = tempfile.NamedTemporaryFile(prefix=prefix,
@@ -939,17 +946,19 @@ def setup_log_test(conf):
 def log_test(conf,
              filename,
              show_memleaks=True,
+             quiet=False,
              skip_fi=False,
              fi_signal=None,
              check_read=False,
              check_write=False):
     """Run the log checker on filename, logging to stdout"""
 
-    print('Running log_test on {}'.format(filename))
+    if not quiet:
+        print('Running log_test on {}'.format(filename))
 
     log_iter = lp.LogIter(filename)
 
-    lto = lt.LogTest(log_iter)
+    lto = lt.LogTest(log_iter, quiet=quiet)
 
     lto.hide_fi_calls = skip_fi
 
@@ -1364,9 +1373,29 @@ def test_pydaos_kv(server, conf):
     daos._cleanup()
     log_test(conf, pydaos_log_file.name)
 
+# Fault injection testing.
+#
+# This runs two different commands under fault injection, although it allows
+# for more to be added.  The command is defined, then run in a loop with
+# different locations (loc) enabled, essentialy failing each call to
+# D_ALLOC() in turn.  This iterates for all memory allocations in the command
+# which is around 1300 each command so this takes a while.
+#
+# In order to improve response times the different locations are run in
+# parallel, although the results are processed in order.
+#
+# Each location is checked for memory leaks according to the log file
+# (D_ALLOC/D_FREE not matching), that it didn't crash and some checks are run
+# on stdout/stderr as well.
+#
+# If a particular loc caused the command to exit with a signal then that
+# location is re-run at the end under valgrind to get better diagnostics.
+#
+
 class AllocFailTestRun():
-    """Class to run a fault injection command"""
-    def __init__(self, aft, cmd, env):
+    """Class to run a fault injection command with a single fault"""
+
+    def __init__(self, aft, cmd, env, loc):
 
         # The subprocess handle
         self._sp = None
@@ -1380,6 +1409,11 @@ class AllocFailTestRun():
         self.aft = aft
         self._fi_file = None
         self.returncode = None
+        self.stdout = None
+        self.stderr = None
+        self.fi_loc = None
+        self.fault_injected = None
+        self.loc = loc
 
         prefix = 'dnt_fi_check_{}_'.format(get_inc_id())
         self.log_file = tempfile.NamedTemporaryFile(prefix=prefix,
@@ -1388,20 +1422,23 @@ class AllocFailTestRun():
         self.env['D_LOG_FILE'] = self.log_file
 
     def __str__(self):
-        res =  "Fault injection test of '{}'\n".format(' '.join(self.cmd))
+        res = "Fault injection test of '{}'\n".format(' '.join(self.cmd))
+        res += 'Fault injection location {}\n'.format(self.loc)
+        if self.vh:
+            res += 'Valgrind enabled for this test'
         if self.returncode is None:
             res += 'Process not completed'
         else:
             res += 'Returncode was {}'.format(self.returncode)
         return res
 
-    def start(self, loc):
-
+    def start(self):
+        """Start the command"""
         fc = {}
         fc['fault_config'] = [{'id': 0,
                                'probability_x': 1,
                                'probability_y': 1,
-                               'interval': loc,
+                               'interval': self.loc,
                                'max_faults': 1}]
 
         self._fi_file = tempfile.NamedTemporaryFile(prefix='fi_',
@@ -1412,24 +1449,41 @@ class AllocFailTestRun():
 
         self.env['D_FI_CONFIG'] = self._fi_file.name
 
-        self._sp = subprocess.Popen(self.cmd,
-                                    env = self.env,
+        if self.vh:
+            exec_cmd = self.vh.get_cmd_prefix()
+            exec_cmd.extend(self.cmd)
+        else:
+            exec_cmd = self.cmd
+
+        self._sp = subprocess.Popen(exec_cmd,
+                                    env=self.env,
                                     stdin=subprocess.PIPE,
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE)
 
-    def poll(self):
+    def has_finished(self):
+        """Check if the command has completed"""
         if self.returncode is not None:
-            return self
+            return True
 
         rc = self._sp.poll()
         if rc is None:
-            return None
-        self.post(rc)
-        return self
+            return False
+        self._post(rc)
+        return True
 
-    def post(self, rc):
-        """Called once, after running"""
+    def wait(self):
+        """Wait for the command to complete"""
+        if self.returncode is not None:
+            return
+
+        self._post(self._sp.wait())
+
+    def _post(self, rc):
+        """Helper function, called once after command is complete.
+
+        This is where all the checks are performed.
+        """
 
         self.returncode = rc
         self.stdout = self._sp.stdout.read()
@@ -1442,33 +1496,44 @@ class AllocFailTestRun():
         show_memleaks = True
 
         fi_signal = None
-        # A negative return code means the process exited with a signal so do not
-        # check for memory leaks in this case as it adds noise, right when it's
-        # least wanted.
+        # A negative return code means the process exited with a signal so do
+        # not check for memory leaks in this case as it adds noise, right when
+        # it's least wanted.
         if rc < 0:
             show_memleaks = False
             fi_signal = -rc
 
-        self.fi_loc = log_test(self.aft.conf,
-                               self.log_file,
-                               show_memleaks=show_memleaks,
-                               skip_fi=True,
-                               fi_signal=fi_signal)
+        try:
+            self.fi_loc = log_test(self.aft.conf,
+                                   self.log_file,
+                                   show_memleaks=show_memleaks,
+                                   quiet=True,
+                                   skip_fi=True,
+                                   fi_signal=fi_signal)
+            self.fault_injected = True
+        except NLTestNoFi:
+            self.fault_injected = False
         if self.vh:
             self.vh.convert_xml()
 
+        if not self.fault_injected:
+            return
         if not self.aft.check_stderr:
             return
 
-        stderr = self.stderr.decode('utf-8')
-        stdout = self.stdout.decode('utf-8')
+        stderr = self.stderr.decode('utf-8').rstrip()
+        stdout = self.stdout.decode('utf-8').rstrip()
         if not stderr.endswith("Out of memory (-1009)") and \
            'error parsing command line arguments' not in stderr and \
            stdout != self.aft.expected_stdout:
-            print(self.aft.expected_stdout)
-            print(stdout)
+            if stdout != '':
+                print(self.aft.expected_stdout)
+                print()
+                print(stdout)
+                print()
             self.aft.conf.wf.add(self.fi_loc,
-                                 'NORMAL', "Incorrect stderr '{}'".format(stderr),
+                                 'NORMAL',
+                                 "Incorrect stderr '{}'".format(stderr),
                                  mtype='Out of memory not reported correctly via stderr')
 
 class AllocFailTest():
@@ -1482,89 +1547,80 @@ class AllocFailTest():
         self.expected_stdout = ''
         self.use_il = False
 
-    def run_fi_cmd(self,
+    def launch(self):
+        """Run all tests for this command"""
+
+        num_cores = len(os.sched_getaffinity(0))
+
+        if num_cores < 20:
+            max_child = 1
+        else:
+            max_child = num_cores
+
+        active = []
+        fid = 1
+        max_count = 0
+        finished = False
+
+        # List of fids to re-run under valgrind.
+        to_rerun = []
+
+        fatal_errors = False
+
+        while not finished:
+            if len(active) < max_child and not finished:
+                active.append(self._run_fi_cmd(fid))
+                fid += 1
+
+                if len(active) > max_count:
+                    max_count = len(active)
+
+            # Now complete as many as have finished.
+            while active and active[0].has_finished():
+                ret = active.pop(0)
+                print(ret)
+                if ret.returncode < 0:
+                    fatal_errors = True
+                    to_rerun.append(ret.loc)
+
+                if not ret.fault_injected:
+                    print('Fault injection did not trigger, stopping')
+                    finished = True
+
+        print('Completed, fid {}'.format(fid))
+        print('Max in flight {}'.format(max_count))
+
+        for fid in to_rerun:
+            rerun = self._run_fi_cmd(fid, valgrind=True)
+            print(rerun)
+            rerun.wait()
+
+        return fatal_errors
+
+    def _run_fi_cmd(self,
                    loc,
                    valgrind=False):
-        """Run a DAOS command
-
-        Run a command, returning what subprocess.run() would.
-
-        Enable logging, and valgrind for the command.
-
-        if prefix is set to False do not run a DAOS command, but instead run what's
-        provided, however run it under the IL.
+        """Run the test with FI enabled
         """
-        vh = ValgrindHelper()
-
-        # Turn off Valgrind for the fault injection testing unless it's
-        # specifically requested (typically if a fault injection results
-        # in a SEGV/assert), and then if it is turned on then just check
-        # memory access, not memory leaks.
-        vh.use_valgrind = valgrind
-        vh.full_check = False
 
         cmd_env = get_base_env()
-
-        exec_cmd = vh.get_cmd_prefix()
 
         if self.use_il:
             cmd_env['LD_PRELOAD'] = os.path.join(self.conf['PREFIX'],
                                                  'lib64', 'libioil.so')
 
-        exec_cmd.extend(self.cmd)
-
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
 
-        aftf = AllocFailTestRun(self, exec_cmd, cmd_env)
-        aftf.vh = vh
+        aftf = AllocFailTestRun(self, self.cmd, cmd_env, loc)
+        if valgrind:
+            aftf.vh = ValgrindHelper()
+            # Turn off leak checking in this case, as we're just interested in
+            # why it crashed.
+            aftf.vh.full_check = False
 
-        aftf.start(loc)
-
-        while aftf.poll() == None:
-            pass
+        aftf.start()
 
         return aftf
-
-def run_fi_test(test_cmd, wf):
-    """Run a command with fault injection enabled.
-
-    Enable the fault injection for the command, injecting
-    allocation failures at different locations.  Keep going until
-    the client runs with no faults injected (about 800 iterations).
-
-    Disable valgrind for this test as it takes a long time to run
-    with valgrind enabled, use purely the log analysis to find issues.
-
-    Ignore new error messages containing the numeric value of -DER_NOMEM
-    but warn on all other warnings generated.
-    """
-
-    # The first fail location causes deadlock with the interception library,
-    # and opening the fault injecton file.
-    fid = 1
-
-    fatal_errors = False
-
-    while True:
-        print()
-
-        try:
-            rc = test_cmd.run_fi_cmd(fid)
-            if rc.returncode < 0:
-                print(rc)
-                print('Rerunning test under valgrind, fid={}'.format(fid))
-                rc = test_cmd.run_fi_cmd(fid, valgrind=True)
-                fatal_errors = True
-
-        except NLTestNoFi:
-
-            print('Fault injection did not trigger, returning')
-            break
-
-        print(rc)
-        fid += 1
-
-    return fatal_errors
 
 def test_alloc_fail_cat(server, wf, conf):
     """Run the Interception library with fault injection
@@ -1598,9 +1654,9 @@ def test_alloc_fail_cat(server, wf, conf):
     test_cmd = AllocFailTest(conf, cmd)
     test_cmd.use_il = True
 
-    rc = run_fi_test(test_cmd, wf)
+    rc = test_cmd.launch()
     dfuse.stop()
-    return rc;
+    return rc
 
 def test_alloc_fail(server, wf, conf):
     """run 'daos' client binary with fault injection"""
@@ -1624,7 +1680,7 @@ def test_alloc_fail(server, wf, conf):
     test_cmd.expected_stdout = show_cont(conf, pool)
     test_cmd.check_stderr = True
 
-    return run_fi_test(test_cmd, wf)
+    return test_cmd.launch()
 
 def main():
     """Main entry point"""

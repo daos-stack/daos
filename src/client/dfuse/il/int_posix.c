@@ -101,7 +101,7 @@ static void
 ioil_shrink_pool(struct ioil_pool *pool)
 {
 
-	if (!daos_handle_is_inval(pool->iop_poh)) {
+	if (daos_handle_is_valid(pool->iop_poh)) {
 		int rc;
 
 		rc = daos_pool_disconnect(pool->iop_poh, NULL);
@@ -134,7 +134,7 @@ ioil_shrink(struct ioil_cont *cont)
 		cont->ioc_dfs = NULL;
 	}
 
-	if (!daos_handle_is_inval(cont->ioc_coh)) {
+	if (daos_handle_is_valid(cont->ioc_coh)) {
 		rc = daos_cont_close(cont->ioc_coh, NULL);
 		if (rc != 0) {
 			D_ERROR("daos_cont_close() failed, " DF_RC "\n",
@@ -624,8 +624,11 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 
 	/* Allocate data for pool */
 	D_ALLOC_PTR(pool);
+#if 0
+	/* TODO: See how this is reported and remove */
 	if (pool == NULL)
 		D_GOTO(err, 0);
+#endif
 
 	pool_alloc = true;
 	uuid_copy(pool->iop_uuid, il_reply.fir_pool);
