@@ -1360,7 +1360,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		FIRST_LEVEL_HELP();
 	} else if (strcmp(argv[2], "filesystem") == 0 || strcmp(argv[2], "fs") == 0) {
 		if (argc == 3 || strcmp(argv[3], "copy") == 0) {
-			ALL_FS_CMDS_HELP();
+			FS_COPY_CMDS_HELP();
 		}
 	} else if (strcmp(argv[2], "pool") == 0) {
 		fprintf(stream, "\n"
