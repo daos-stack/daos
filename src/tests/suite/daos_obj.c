@@ -706,6 +706,7 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	/* Disabled Pool Aggrgation */
 	rc = set_pool_reclaim_strategy(state, aggr_disabled);
 	assert_int_equal(rc, 0);
+	sleep(60);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
@@ -921,9 +922,10 @@ io_rewritten_array_with_mixed_size(void **state)
 	assert_non_null(fbuf);
 	memset(fbuf, 0, size);
 
-	/* Disabled Pool Aggrgation */
+	/* Disabled Pool Aggregation */
 	rc = set_pool_reclaim_strategy(state, aggr_disabled);
 	assert_int_equal(rc, 0);
+	sleep(60);
 
 	/* Get the pool info at the beginning */
 	rc = pool_storage_info(state, &pinfo);
