@@ -2002,7 +2002,7 @@ vos_dtx_post_handle(struct vos_container *cont, struct vos_dtx_act_ent **daes,
 			 * DRAM until server restart.
 			 */
 			D_WARN("Cannot remove DTX "DF_DTI" from active table: "
-			       DF_RC"\n",DP_DTI(&DAE_XID(daes[i])), DP_RC(rc));
+			       DF_RC"\n", DP_DTI(&DAE_XID(daes[i])), DP_RC(rc));
 
 			if (abort)
 				daes[i]->dae_aborted = 1;

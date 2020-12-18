@@ -2108,18 +2108,10 @@ abort:
 		}
 	}
 
-	if (err == 0)
-		vos_ts_set_upgrade(ioc->ic_ts_set);
-
-	if (err == -DER_NONEXIST || err == -DER_EXIST || err == 0) {
-		vos_ts_set_update(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
-		if (err == 0)
-			vos_ts_set_wupdate(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
-	}
-
 	err = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm,
 			 &ioc->ic_blk_exts, tx_started, err);
 	if (err == 0) {
+		vos_ts_set_upgrade(ioc->ic_ts_set);
 		if (daes != NULL) {
 			vos_dtx_post_handle(ioc->ic_cont, daes,
 					    dth->dth_dti_cos_count, false);
@@ -2127,9 +2119,16 @@ abort:
 		}
 		vos_dedup_process(vos_cont2pool(ioc->ic_cont),
 				  &ioc->ic_dedup_entries, false);
-	} else {
-		update_cancel(ioc);
 	}
+
+	if (err == -DER_NONEXIST || err == -DER_EXIST || err == 0) {
+		vos_ts_set_update(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
+		if (err == 0)
+			vos_ts_set_wupdate(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
+	}
+
+	if (err != 0)
+		update_cancel(ioc);
 
 	VOS_TIME_END(time, VOS_UPDATE_END);
 	vos_space_unhold(vos_cont2pool(ioc->ic_cont), &ioc->ic_space_held[0]);

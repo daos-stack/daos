@@ -404,24 +404,26 @@ reset:
 		D_DEBUG(DB_IO, "Failed to punch object "DF_UOID": rc = %d\n",
 			DP_UOID(oid), rc);
 
-	if (rc == 0)
-		vos_ts_set_upgrade(ts_set);
+	if ((rc == -DER_NONEXIST || rc == 0) &&
+	    vos_ts_wcheck(ts_set, epr.epr_hi, bound))
+		rc = -DER_TX_RESTART;
 
-	if (rc == -DER_NONEXIST || rc == 0) {
-		if (vos_ts_wcheck(ts_set, epr.epr_hi, bound)) {
-			rc = -DER_TX_RESTART;
-		} else {
-			vos_punch_add_missing(ts_set, dkey, akey_nr, akeys);
-			vos_ts_set_update(ts_set, epr.epr_hi);
-			if (rc == 0)
-				vos_ts_set_wupdate(ts_set, epr.epr_hi);
+	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);
+
+	if (rc == 0) {
+		vos_ts_set_upgrade(ts_set);
+		if (daes != NULL) {
+			vos_dtx_post_handle(cont, daes, dth->dth_dti_cos_count,
+					    false);
+			dth->dth_cos_done = 1;
 		}
 	}
 
-	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);
-	if (rc == 0 && daes != NULL) {
-		vos_dtx_post_handle(cont, daes, dth->dth_dti_cos_count, false);
-		dth->dth_cos_done = 1;
+	if (rc == -DER_NONEXIST || rc == 0) {
+		vos_punch_add_missing(ts_set, dkey, akey_nr, akeys);
+		vos_ts_set_update(ts_set, epr.epr_hi);
+		if (rc == 0)
+			vos_ts_set_wupdate(ts_set, epr.epr_hi);
 	}
 
 	D_FREE(daes);
