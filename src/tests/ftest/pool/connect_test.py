@@ -40,7 +40,7 @@ class ConnectTest(TestWithServers):
     def test_connect(self):
         """Test connecting to a pool.
 
-        :avocado: tags=all,pool,smoke,pr,small,poolconnect
+        :avocado: tags=all,pool,smoke,daily_regression,small,poolconnect
         """
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
