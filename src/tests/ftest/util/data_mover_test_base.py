@@ -224,6 +224,8 @@ class DataMoverTestBase(IorTestBase):
     @staticmethod
     def svcl_from_pool(pool):
         """Get the string svc for a pool."""
+        if not hasattr(pool, "svc_ranks"):
+            return None
         return ":".join(map(str, pool.svc_ranks))
 
     def set_src_location(self, *args, **kwargs):
