@@ -45,7 +45,7 @@ class RebuildNoCap(TestWithServers):
         Use Cases:
             Verify pool query.
 
-        :avocado: tags=all,medium,pr,pool,rebuild,nocap
+        :avocado: tags=all,medium,daily_regression,pool,rebuild,nocap
         """
         # Get the test params
         self.pool = TestPool(self.context, self.get_dmg_command())

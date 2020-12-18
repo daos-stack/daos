@@ -147,7 +147,7 @@ class OSAOnlineDrain(OSAUtils):
         """Test ID: DAOS-4750
         Test Description: Validate Online drain
 
-        :avocado: tags=all,pr,hw,medium,ib2,osa,osa_drain
+        :avocado: tags=all,pr,daily_regression,hw,medium,ib2,osa,osa_drain
         :avocado: tags=online_drain,DAOS_5610
         """
         # Perform drain testing with 1 to 2 pools
