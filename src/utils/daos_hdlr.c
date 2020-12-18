@@ -1744,7 +1744,7 @@ open_dfs(struct file_dfs *file_dfs, char *file, int flags, mode_t mode)
 	rc = dfs_lookup(file_dfs->dfs, dir_name, O_RDWR, &parent, NULL, NULL);
 	if (parent == NULL) {
 		fprintf(stderr, "dfs_lookup %s failed with error %d\n", dir_name, rc);
-		D_GOTO(out, rc = 1);
+		D_GOTO(out, rc = EINVAL);
 	}
 	rc = dfs_open(file_dfs->dfs, parent, name, mode | S_IFREG,
 		flags, 0, 0, NULL, &(file_dfs->obj));
@@ -1798,7 +1798,7 @@ file_open(struct file_dfs *file_dfs, char *file, int flags, ...)
 			fprintf(stderr, "file_open failed on %s: %d\n", file, rc);
 		}
 	} else {
-		rc = 1;
+		rc = EINVAL;
 		fprintf(stderr, "File type not known: %s type=%d\n",
 			file, file_dfs->type);
 	}
@@ -1817,7 +1817,7 @@ mkdir_dfs(struct file_dfs *file_dfs, const char *path, mode_t *mode)
 	parse_filename_dfs(path, &name, &dname);
 	if (dname == NULL || name == NULL) {
 		fprintf(stderr, "parsing filename failed, %s\n", dname);
-		D_GOTO(out, rc = 1);
+		D_GOTO(out, rc = EINVAL);
 	}
 	/* if the "/" path is given to DAOS the dfs_mkdir fails with
 	 * INVALID argument, so skip creation of that in DAOS since
@@ -1828,7 +1828,7 @@ mkdir_dfs(struct file_dfs *file_dfs, const char *path, mode_t *mode)
 		rc = dfs_lookup(file_dfs->dfs, dname, O_RDWR, &parent, NULL, NULL);
 		if (parent == NULL) {
 			fprintf(stderr, "dfs_lookup %s failed \n", dname);
-			D_GOTO(out, rc = 1);
+			D_GOTO(out, rc = EINVAL);
 		}
 		rc = dfs_mkdir(file_dfs->dfs, parent, name, *mode, 0);
 		if (rc != 0) {	
@@ -1872,7 +1872,7 @@ file_mkdir(struct file_dfs *file_dfs, const char *dir, mode_t *mode)
 			D_GOTO(out, rc);
 		}
 	} else {
-		rc = 1;
+		rc = EINVAL;
 		fprintf(stderr, "File type not known: %s type=%d\n",
 			dir, file_dfs->type);
 	}
@@ -2070,7 +2070,7 @@ file_read(struct file_dfs *file_dfs, char *file,
 	} else if (file_dfs->type == DAOS) {
 		got_size = read_dfs(file_dfs, file, buf, size);
 	} else {
-		got_size = 1;
+		got_size = -1;
 		fprintf(stderr, "File type not known: %s type=%d\n",
 			file, file_dfs->type);
 	}
@@ -2086,8 +2086,7 @@ closedir_dfs(DIR *_dirp)
 	if (rc) {
 		fprintf(stderr, "dfs_release failed (%d %s)\n",
 			rc, strerror(rc));
-		errno = rc;
-		rc = 1;
+		rc = EINVAL;
 	}
 	free(dirp);
 	return rc;
@@ -2109,7 +2108,7 @@ file_closedir(struct file_dfs *file_dfs, DIR *dirp)
 		/* dfs returns positive error code already */
 		rc = closedir_dfs(dirp);
 	} else {
-		rc = 1;
+		rc = EINVAL;
 		fprintf(stderr, "File type not known, type=%d\n", file_dfs->type);
 	}
 	return rc;
@@ -2146,7 +2145,7 @@ file_close(struct file_dfs *file_dfs, const char *file)
 		if (rc == 0)
 			file_dfs->obj = NULL;
 	} else {
-		rc = 1;
+		rc = EINVAL;
 		fprintf(stderr, "File type not known, file=%s, type=%d\n",
 			file, file_dfs->type);
 	}
@@ -2169,7 +2168,7 @@ chmod_dfs(struct file_dfs *file_dfs, const char *file, mode_t mode)
 	if (parent == NULL) {
 		fprintf(stderr, "dfs_lookup %s failed \n", dir_name);
 		errno = rc;
-		rc = 1;
+		rc = EINVAL;
 	} else {
 		rc = dfs_chmod(file_dfs->dfs, parent, name, mode);
 		if (rc) {
@@ -2210,7 +2209,7 @@ file_chmod(struct file_dfs *file_dfs, const char *path, mode_t mode)
 		rc = chmod_dfs(file_dfs, path, mode);
 		return rc;
 	} else {
-		rc = 1;
+		rc = EINVAL;
 		fprintf(stderr, "File type not known=%s, type=%d",
 			path, file_dfs->type);
 	}
@@ -2267,7 +2266,7 @@ fs_copy(struct file_dfs *src_file_dfs,
 
 		path_length = snprintf(filename, MAX_FILENAME, "%s/%s", dir_name, d_name);
 		if (path_length >= MAX_FILENAME) {
-			rc = 1;
+			rc = ENAMETOOLONG;
 			fprintf(stderr, "Path length is too long.\n");
 			D_GOTO(out, rc);
 		}
@@ -2284,7 +2283,7 @@ fs_copy(struct file_dfs *src_file_dfs,
 		path_length = snprintf(dst_filename, MAX_FILENAME, "%s/%s",
 				       fs_dst_prefix, filename + dfs_prefix_len);
 		if (path_length >= MAX_FILENAME) {
-			rc = 1;
+			rc = ENAMETOOLONG;
 			fprintf(stderr, "Path length is too long.\n");
 			D_GOTO(out, rc);
 		}
@@ -2295,12 +2294,10 @@ fs_copy(struct file_dfs *src_file_dfs,
 			mode_t tmp_mode_file = S_IRUSR | S_IWUSR;
 			rc = file_open(src_file_dfs, filename, src_flags, tmp_mode_file);
 			if (rc != 0) {
-				rc = 1;
 				D_GOTO(out, rc);
 			}
 			rc = file_open(dst_file_dfs, dst_filename, dst_flags, tmp_mode_file);
 			if (rc != 0) {
-				rc = 1;
 				D_GOTO(out, rc);
 			}
 
@@ -2322,14 +2319,14 @@ fs_copy(struct file_dfs *src_file_dfs,
 								    buf, left_to_read);
 				if (bytes_read < 0) {
 					fprintf(stderr, "read failed on %s\n", filename);
-					D_GOTO(out, rc = 1);
+					D_GOTO(out, rc = EIO);
 				}
 				size_t bytes_to_write = (size_t) bytes_read;
 				ssize_t bytes_written;
 				bytes_written = file_write(dst_file_dfs, dst_filename, buf, bytes_to_write);
 				if (bytes_written < 0) {
 					fprintf(stderr, "error writing bytes\n");
-					D_GOTO(out, rc = 1);
+					D_GOTO(out, rc = EIO);
 				}
 
 				total_bytes += bytes_read;
@@ -2363,13 +2360,13 @@ fs_copy(struct file_dfs *src_file_dfs,
 				char dpath[MAX_FILENAME];
 				path_length = snprintf(path, MAX_FILENAME, "%s", filename);
 				if (path_length >= MAX_FILENAME) {
-					rc = 1;
+					rc = ENAMETOOLONG;
 					fprintf(stderr, "Path length is too long on source.\n");
 					D_GOTO(out, rc);
 				}
 				path_length = snprintf(dpath, MAX_FILENAME, "%s", dst_filename);
 				if (path_length >= MAX_FILENAME) {
-					rc = 1;
+					rc = ENAMETOOLONG;
 					fprintf(stderr, "Path length is too long on destination.\n");
 					D_GOTO(out, rc);
 				}
@@ -2579,7 +2576,7 @@ static int fs_copy_parse_uuids(char *str,
 		}
 	} else {
 		fprintf(stderr, "failed to parse uuid or path\n");
-		D_GOTO(out, rc = 1);
+		D_GOTO(out, rc = EINVAL);
 	}	
 out:
 	return rc;
@@ -2626,7 +2623,7 @@ fs_copy_parse(char *src,
 		if (strncmp(src, "/", 1) == 0) {
 			fprintf(stderr, "cannot parse daos src type format, please use: \n" \
 					"\t--src=daos://<pool/cont>\n");
-			D_GOTO(out, rc = 1);
+			D_GOTO(out, rc = EINVAL);
 		}
 	} else {
 		src_type = "path";
@@ -2638,7 +2635,7 @@ fs_copy_parse(char *src,
 		if (strncmp(dst, "/", 1) == 0) {
 			fprintf(stderr, "cannot parse daos dst type format, please use: \n" \
 					"\t--dst=daos://<pool/cont>\n");
-			D_GOTO(out, rc = 1);
+			D_GOTO(out, rc = EINVAL);
 		}
 	} else {
 		dst_type = "path";
@@ -2681,7 +2678,7 @@ fs_copy_parse(char *src,
 		fprintf(stderr, "cannot parse src format, please use: \n" \
 				"--src=<daos>://<pool/cont> | <path>\n" \
 				"\ttype is daos, only specified if pool/cont used\n");
-		D_GOTO(out, rc = 1);
+		D_GOTO(out, rc = EINVAL);
 	}
 
 	/* check for dst DAOS pool/cont or UNS path */ 
@@ -2721,7 +2718,7 @@ fs_copy_parse(char *src,
 		fprintf(stderr, "cannot parse dst format, please use: \n" \
 				"--dst=daos://<pool/cont> | <path>\n" \
 				"\ttype is daos, only specified if pool/cont used\n");
-		D_GOTO(out, rc = 1);
+		D_GOTO(out, rc = EINVAL);
 	}
 out:
 	return rc;
@@ -2781,7 +2778,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		int path_length = snprintf(dst_dir, MAX_FILENAME, "%s/%s",
 				       dst_str, src_str + src_str_len);
 		if (path_length >= MAX_FILENAME) {
-			rc = 1;
+			rc = ENAMETOOLONG;
 			fprintf(stderr, "Path length is too long.\n");
 			D_GOTO(out_disconnect, rc);
 		}
@@ -2811,7 +2808,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		int path_length = snprintf(dst_dir, MAX_FILENAME, "%s/%s",
 				       dst_str, src_str + src_str_len);
 		if (path_length >= MAX_FILENAME) {
-			rc = 1;
+			rc = ENAMETOOLONG;
 			fprintf(stderr, "Path length is too long.\n");
 			D_GOTO(out_disconnect, rc);
 		}
@@ -2825,7 +2822,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	/* TODO: handle POSIX->POSIX case here */
 	} else {
 		fprintf(stderr, "Regular POSIX to POSIX copies are not supported\n");
-		D_GOTO(out_disconnect, rc = 1);
+		D_GOTO(out_disconnect, rc = EINVAL);
 	}
 
 	if (dst_file_dfs.type == DAOS) {
