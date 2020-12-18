@@ -205,7 +205,7 @@ class NvmePoolExtend(TestWithServers):
                 time.sleep(25)
                 self.log.info("Pool Version at the beginning %s", pver_begin)
                 output = self.dmg_command.pool_extend(self.pool.uuid,
-                                                      "6, 7", scm_pool_size,
+                                                      "6,7", scm_pool_size,
                                                       nvme_pool_size)
                 self.log.info(output)
                 fail_count = 0
@@ -227,12 +227,13 @@ class NvmePoolExtend(TestWithServers):
                 display_string = "Pool{} space at the End".format(val)
                 self.pool = pool[val]
                 self.pool.display_pool_daos_space(display_string)
-                pool[val].destroy()
+                #pool[val].destroy()
 
                 # Stop the extra node servers (rank 6 and 7)
                 output = self.dmg_command.system_stop(self.pool.uuid,
-                                                      "6, 7")
+                                                      "6,7")
                 self.log.info(output)
+            pool[val].destroy()
 
     def test_nvme_pool_extend(self):
         """Test ID: DAOS-2086
