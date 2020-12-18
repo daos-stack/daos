@@ -1377,7 +1377,7 @@ def test_pydaos_kv(server, conf):
 #
 # This runs two different commands under fault injection, although it allows
 # for more to be added.  The command is defined, then run in a loop with
-# different locations (loc) enabled, essentialy failing each call to
+# different locations (loc) enabled, essentially failing each call to
 # D_ALLOC() in turn.  This iterates for all memory allocations in the command
 # which is around 1300 each command so this takes a while.
 #
@@ -1555,7 +1555,7 @@ class AllocFailTest():
         if num_cores < 20:
             max_child = 1
         else:
-            max_child = num_cores
+            max_child = int(num_cores / 4 * 3)
 
         active = []
         fid = 1
@@ -1569,7 +1569,7 @@ class AllocFailTest():
 
         while not finished:
             if len(active) < max_child and not finished:
-                active.append(self._run_fi_cmd(fid))
+                active.append(self._run_cmd(fid))
                 fid += 1
 
                 if len(active) > max_count:
@@ -1591,15 +1591,15 @@ class AllocFailTest():
         print('Max in flight {}'.format(max_count))
 
         for fid in to_rerun:
-            rerun = self._run_fi_cmd(fid, valgrind=True)
+            rerun = self._run_cmd(fid, valgrind=True)
             print(rerun)
             rerun.wait()
 
         return fatal_errors
 
-    def _run_fi_cmd(self,
-                   loc,
-                   valgrind=False):
+    def _run_cmd(self,
+                 loc,
+                 valgrind=False):
         """Run the test with FI enabled
         """
 
@@ -1622,7 +1622,7 @@ class AllocFailTest():
 
         return aftf
 
-def test_alloc_fail_cat(server, wf, conf):
+def test_alloc_fail_cat(server, conf):
     """Run the Interception library with fault injection
 
     Start dfuse for this test, and do not do output checking on the command
@@ -1658,7 +1658,7 @@ def test_alloc_fail_cat(server, wf, conf):
     dfuse.stop()
     return rc
 
-def test_alloc_fail(server, wf, conf):
+def test_alloc_fail(server, conf):
     """run 'daos' client binary with fault injection"""
 
     pools = get_pool_list()
@@ -1716,15 +1716,15 @@ def main():
     elif args.mode == 'overlay':
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
     elif args.mode == 'fi':
-        fatal_errors.add_result(test_alloc_fail_cat(server, wf, conf))
-        fatal_errors.add_result(test_alloc_fail(server, wf, conf))
+        fatal_errors.add_result(test_alloc_fail_cat(server, conf))
+        fatal_errors.add_result(test_alloc_fail(server, conf))
     elif args.mode == 'all':
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
         test_pydaos_kv(server, conf)
-        fatal_errors.add_result(test_alloc_fail_cat(server, wf, conf))
-        fatal_errors.add_result(test_alloc_fail(server, wf, conf))
+        fatal_errors.add_result(test_alloc_fail_cat(server, conf))
+        fatal_errors.add_result(test_alloc_fail(server, conf))
     else:
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
