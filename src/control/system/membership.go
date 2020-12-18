@@ -51,6 +51,15 @@ type Membership struct {
 	resolveTCP resolveTCPFn
 }
 
+// NewMembership returns a reference to a new DAOS system membership.
+func NewMembership(log logging.Logger, db *Database) *Membership {
+	return &Membership{
+		db:         db,
+		log:        log,
+		resolveTCP: net.ResolveTCPAddr,
+	}
+}
+
 // WithTCPResolver adds a resolveTCPFn to the membership structure.
 func (m *Membership) WithTCPResolver(resolver resolveTCPFn) *Membership {
 	m.resolveTCP = resolver
@@ -133,6 +142,7 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 
 		resp.PrevState = curMember.state
 		curMember.state = MemberStateJoined
+		curMember.Info = ""
 		curMember.Addr = req.ControlAddr
 		curMember.FabricURI = req.FabricURI
 		curMember.FabricContexts = req.FabricContexts
@@ -439,29 +449,37 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int) (*RankSet, *hostlist.
 
 // OnEvent handles events on channel and updates member states accordingly.
 func (m *Membership) OnEvent(_ context.Context, evt events.Event) {
-	rankEvt, ok := evt.(*events.RankExit)
-	if !ok {
-		m.log.Errorf("%v event unsupported, want RankExit", evt)
+	if common.InterfaceIsNil(evt) {
+		m.log.Error("nil event")
+		return
 	}
 
-	m.log.Debugf("processing RAS event %q from rank %d on host %q", rankEvt.RAS.Msg,
-		rankEvt.RAS.Rank, rankEvt.RAS.Hostname)
+	switch rankEvt := evt.(type) {
+	case *events.RankExit:
+		if rankEvt == nil {
+			m.log.Errorf("nil RankExit event received")
+			return
+		}
+		m.log.Debugf("processing RAS event %q from rank %d on host %q",
+			rankEvt.RAS.Msg, rankEvt.RAS.Rank, rankEvt.RAS.Hostname)
 
-	if err := m.UpdateMemberStates(MemberResults{
-		NewMemberResult(Rank(rankEvt.RAS.Rank), errors.New(rankEvt.RAS.Msg),
-			MemberStateErrored),
-	}, true); err != nil {
-		m.log.Errorf("updating member states: %s", err)
-	}
-	member, _ := m.Get(Rank(rankEvt.RAS.Rank))
-	m.log.Debugf("updated rank %d to %+v", rankEvt.RAS.Rank, member)
-}
+		// TODO: sanity check that the correct member is being updated by
+		// performing lookup on provided hostname and matching returned
+		// addresses with the member address with matching rank.
 
-// NewMembership returns a reference to a new DAOS system membership.
-func NewMembership(log logging.Logger, db *Database) *Membership {
-	return &Membership{
-		db:         db,
-		log:        log,
-		resolveTCP: net.ResolveTCPAddr,
+		if err := m.UpdateMemberStates(MemberResults{
+			NewMemberResult(Rank(rankEvt.RAS.Rank),
+				errors.Wrap(rankEvt.ExitErr, rankEvt.RAS.Msg),
+				MemberStateErrored),
+		}, true); err != nil {
+			m.log.Errorf("updating member states: %s", err)
+			return
+		}
+
+		member, _ := m.Get(Rank(rankEvt.RAS.Rank))
+		m.log.Debugf("updated rank %d to %+v (%s)", rankEvt.RAS.Rank, member, member.Info)
+	default:
+		m.log.Errorf("%v event unsupported", evt)
+		return
 	}
 }

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,14 +26,14 @@ package events
 import (
 	"context"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-// Handler any object that implements the Handler interface can be registered to
-// receive events.
+// Handler defines an interface to be implemented by event receivers.
 type Handler interface {
-	// OnEvent will receive an event to be processed and a context for
-	// cancellation. Implementation must return when context is done.
+	// OnEvent takes an event to be processed and a context,
+	// implementation must return on context.Done().
 	OnEvent(context.Context, Event)
 }
 
@@ -93,6 +93,11 @@ func (ps *PubSub) EnableEventIDs(ids ...RASID) {
 // Publish passes an event to the event channel to be processed by subscribers.
 // Ignore disabled events.
 func (ps *PubSub) Publish(event Event) {
+	if common.InterfaceIsNil(event) {
+		ps.log.Error("nil event")
+		return
+	}
+
 	if _, exists := ps.disabledIDs[event.GetID()]; exists {
 		ps.log.Debugf("event %s ignored by filter", event.GetID())
 		return

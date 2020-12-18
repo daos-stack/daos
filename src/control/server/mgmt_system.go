@@ -421,23 +421,16 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 // from control-plane instances attempting to notify the MS of a cluster event
 // in the DAOS system.
 //
-// On receipt of the cluster event request, process any encapsulated RAS event
-// messages (handling of other types to be supported in the future).
-//
-// Necessary state updates for the rank involved in the event will be
-// registered in the system membership.
+// On receipt of the request publish extracted event to make it available to
+// locally subscribed consumers to act upon.
 func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *mgmtpb.ClusterEventReq) (*mgmtpb.ClusterEventResp, error) {
-	if req == nil {
-		return nil, errors.New("nil request")
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
 	}
 	if req.Sequence < 1 {
 		return nil, errors.New("invalid sequence number in request")
 	}
 	svc.log.Debugf("MgmtSvc.ClusterEvent dispatch, req:%#v\n", req)
-
-	if err := svc.sysdb.CheckLeader(); err != nil {
-		return nil, err
-	}
 
 	rasEventPB := req.GetRas()
 	if rasEventPB == nil {
