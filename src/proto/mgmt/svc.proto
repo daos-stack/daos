@@ -114,7 +114,6 @@ message ClusterEventResp {
 message GetAttachInfoReq {
 	string sys = 1;		// System name. For daos_agent only.
 	bool allRanks = 2;      // Return PSRs for all ranks, not just the MS replicas.
-	string jobid = 3;	// Job ID to associate instance with.
 }
 
 message GetAttachInfoResp {
@@ -153,3 +152,8 @@ message SetRankReq {
 
 // SetRankResp is identical to DaosResp.
 
+message PoolMonitorReq {
+	string poolUUID = 1;	// Pool UUID associated with the Pool Handle
+	string poolHandleUUID = 2; // Pool Handle UUID for the connection
+	string jobid = 3;	// Job ID to associate instance with.
+}
