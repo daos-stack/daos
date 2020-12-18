@@ -44,7 +44,7 @@ class InfoTests(TestWithServers):
         Use Cases:
             Verify pool query.
 
-        :avocado: tags=all,tiny,pr,pool,smoke,infotest
+        :avocado: tags=all,tiny,daily_regression,pool,smoke,infotest
         """
         # Get the test params
         self.pool = TestPool(self.context, self.get_dmg_command())
