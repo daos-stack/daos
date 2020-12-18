@@ -155,7 +155,9 @@ typedef struct {
 	uint64_t		fail_loc;
 	uint64_t		fail_num;
 	uint64_t		fail_value;
-	bool			overlap;
+	uint32_t		overlap:1,
+				not_check_result:1,
+				idx_no_jump:1;
 	int			expect_result;
 	daos_size_t		size;
 	int			nr;
@@ -272,7 +274,7 @@ async_enable(void **state)
 {
 	test_arg_t	*arg = *state;
 
-	arg->overlap = false;
+	arg->overlap = 0;
 	arg->async   = true;
 	return 0;
 }
@@ -282,7 +284,7 @@ async_disable(void **state)
 {
 	test_arg_t	*arg = *state;
 
-	arg->overlap = false;
+	arg->overlap = 0;
 	arg->async   = false;
 	return 0;
 }
@@ -293,7 +295,7 @@ async_overlap(void **state)
 {
 	test_arg_t	*arg = *state;
 
-	arg->overlap = true;
+	arg->overlap = 1;
 	arg->async   = true;
 	return 0;
 }

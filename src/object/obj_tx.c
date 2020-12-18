@@ -1626,6 +1626,20 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		 */
 	}
 
+	if (DAOS_FAIL_CHECK(DAOS_DTX_SPEC_LEADER)) {
+		i = dc_tx_leftmost_req(tx, true);
+		dcsr = &tx->tx_req_cache[i];
+		obj = dcsr->dcsr_obj;
+
+		leader_oid.id_pub = obj->cob_md.omd_id;
+		/* Use the shard 0 as the leader for test. The test program
+		 * will guarantee that at least one sub-modification happen
+		 * on the object shard 0.
+		 */
+		leader_oid.id_shard = 0;
+		leader_dtrg_idx = obj_get_shard(obj, 0)->po_target;
+	}
+
 	dcsh->dcsh_xid = tx->tx_id;
 	dcsh->dcsh_leader_oid = leader_oid;
 	dcsh->dcsh_epoch = tx->tx_epoch;

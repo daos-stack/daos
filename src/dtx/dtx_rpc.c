@@ -183,10 +183,6 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 			/* The DTX entry is corrupted. */
 			D_FREE(dsp);
 			D_GOTO(out, rc = -DER_DATA_LOSS);
-		case DTX_ST_UNCERTAIN:
-			/* The DTX is in resync, ask client to retry. */
-			D_FREE(dsp);
-			D_GOTO(out, rc = -DER_INPROGRESS);
 		case -DER_NONEXIST:
 			/* The leader does not have related DTX info,
 			 * we may miss related DTX abort request, so
