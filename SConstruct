@@ -87,8 +87,11 @@ def update_rpm_version(version, tag):
             spec[line_num] = "Release:       {}%{{?relval}}%{{?dist}}\n".\
                              format(release)
         if line == "%changelog\n":
+            rpmdevpackager = find_executable('rpmdev-packager')
+            if not rpmdevpackager:
+                print("No rpmdev-packager found in path.")
+                return False
             try:
-                rpmdevpackager = find_executable('rpmdev-packager')
                 packager = subprocess.Popen(
                     rpmdevpackager, stdout=subprocess.PIPE).communicate(
                     )[0].strip().decode('UTF-8')

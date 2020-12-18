@@ -168,8 +168,12 @@ def load_mpi(mpi):
     # On Ubuntu, MPI stacks use alternatives and need root to change their
     # pointer, so just verify that the desired MPI is loaded
     if distro.id() == "ubuntu":
+        updatealternatives = find_executable('update-alternatives')
+        if not updatealternatives:
+            print("No update-alternatives found in path.")
+            return False
         try:
-            proc = Popen(['/usr/sbin/update-alternatives', '--query', 'mpi'],
+            proc = Popen([updatealternatives, '--query', 'mpi'],
                          stdout=PIPE)
         except OSError as error:
             print("Error running update-alternatives")
