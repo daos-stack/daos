@@ -25,6 +25,7 @@ portions thereof marked with this legend must also reproduce the markings.
 import os
 import time
 import multiprocessing
+import threading
 from apricot import TestWithServers
 from general_utils import run_command, DaosTestError, get_log_file
 import slurm_utils
@@ -183,33 +184,38 @@ class SoakTestBase(TestWithServers):
             ranks = self.params.get(
                 "ranks_to_kill", "/run/" + harasser + "/*")
             name = "REBUILD"
-            params = (self, ranks, pool[1], name, results, args)
+            params = (self, ranks, pool[1], name)
+            job = threading.Thread(target=method, args=params, name=name)
         elif harasser == "snapshot":
             method = launch_snapshot
             name = "SNAPSHOT"
-            params = (self, self.pool[0], name, results, args)
+            params = (self, self.pool[0], name)
+            job = threading.Thread(target=method, args=params, name=name)
         elif harasser == "exclude":
             method = launch_exclude_reintegrate
             name = "EXCLUDE"
             params = (self, pool[1], name, results, args)
+            job = multiprocessing.Process(target=method, args=params, name=name)
         elif harasser == "reintegrate":
             method = launch_exclude_reintegrate
             name = "REINTEGRATE"
             params = (self, pool[1], name, results, args)
+            job = multiprocessing.Process(target=method, args=params, name=name)
         elif harasser == "server-stop":
             method = launch_server_stop_start
             name = "SVR_STOP"
             params = (self, pool, name, results, args)
+            job = multiprocessing.Process(target=method, args=params, name=name)
         elif harasser == "server-reintegrate":
             method = launch_server_stop_start
             name = "SVR_REINTEGRATE"
             params = (self, pool, name, results, args)
+            job = multiprocessing.Process(target=method, args=params, name=name)
         else:
             raise SoakTestError(
                 "<<FAILED: Harasser {} is not supported. ".format(
                     harasser))
 
-        job = multiprocessing.Process(target=method, args=params, name=name)
         # start harasser
         job.start()
         timeout = self.params.get("harasser_to", "/run/soak_harassers/*", 30)
@@ -218,12 +224,14 @@ class SoakTestBase(TestWithServers):
         if job.is_alive():
             self.log.error(
                 "<< ERROR: harasser %s is alive, failed to join>>", job.name)
-            job.terminate()
-            status_msg = "<<FAILED: Harasser {} has been terminated.".format(
-                name)
-            return status_msg
-        self.harasser_results = results.get()
-        self.harasser_args = args.get()
+            if name not in ["REBUILD", "SNAPSHOT"]:
+                job.terminate()
+                status_msg = "<<FAILED: {} has been terminated.".format(name)
+            raise SoakTestError(
+                "<<FAILED: Soak failed while running {} . ".format(name))
+        if name not in ["REBUILD", "SNAPSHOT"]:
+            self.harasser_results = results.get()
+            self.harasser_args = args.get()
         # Check if the completed job passed
         self.log.info("Harasser results: %s", self.harasser_results)
         self.log.info("Harasser args: %s", self.harasser_args)

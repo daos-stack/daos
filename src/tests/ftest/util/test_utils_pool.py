@@ -22,7 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import os
-from time import sleep
+from time import sleep, time
 import ctypes
 
 from test_utils_base import TestDaosApiBase
@@ -67,6 +67,7 @@ class TestPool(TestDaosApiBase):
         self.nvme_size = BasicParameter(None)
         self.prop_name = BasicParameter(None)       # name of property to be set
         self.prop_value = BasicParameter(None)      # value of property
+        self.rebuild_timeout = BasicParameter(None)
 
         self.pool = None
         self.uuid = None
@@ -122,7 +123,7 @@ class TestPool(TestDaosApiBase):
                 "Error: control method {} not supported for create()".format(
                     self.control_method.value))
 
-        elif self.control_method.value == self.USE_DMG and self.dmg:
+        if self.control_method.value == self.USE_DMG and self.dmg:
             # Create a pool with the dmg command and store its CmdResult
             self._log_method("dmg.pool_create", kwargs)
             data = self.dmg.pool_create(**kwargs)
@@ -492,16 +493,33 @@ class TestPool(TestDaosApiBase):
             to_start (bool): whether to wait for rebuild to start or end
             interval (int): number of seconds to wait in between rebuild
                 completion checks
+
+        Raises:
+            TimeoutError:  if rebuild time is specified and exceeded while
+                waiting for rebuild to start or end
+
         """
         self.log.info(
-            "Waiting for rebuild to %s ...",
-            "start" if to_start else "complete")
+            "Waiting for rebuild to %s%s ...",
+            "start" if to_start else "complete",
+            " with a {} second timeout".format(self.rebuild_timeout.value)
+            if self.rebuild_timeout.value is not None else "")
+
+        start = time()
         while self.rebuild_complete() == to_start:
             self.log.info(
                 "  Rebuild %s ...",
                 "has not yet started" if to_start else "in progress")
             self.set_query_data()
+            if self.rebuild_timeout.value is not None:
+                if time() - start > self.rebuild_timeout.value:
+                    raise TimeoutError(
+                        "TIMEOUT detected after {} seconds while for waiting "
+                        "for rebuild to {}".format(
+                            self.rebuild_timeout.value,
+                            "start" if to_start else "complete"))
             sleep(interval)
+
         self.log.info(
             "Rebuild %s detected", "start" if to_start else "completion")
 
@@ -516,9 +534,10 @@ class TestPool(TestDaosApiBase):
 
         Returns:
             bool: True if the server ranks have been killed/stopped and the
-            ranks have been excluded from the pool; False otherwise.
+                ranks have been excluded from the pool; False otherwise.
 
         """
+        status = False
         msg = "Killing DAOS ranks {} from server group {}".format(
             ranks, self.name.value)
         self.log.info(msg)
@@ -529,12 +548,12 @@ class TestPool(TestDaosApiBase):
             for rank in ranks:
                 server = DaosServer(self.context, self.name.value, rank)
                 self._call_method(server.kill, {"force": 1})
-            return True
+            status = True
 
         elif self.control_method.value == self.USE_DMG and self.dmg:
             # Stop desired ranks using dmg
             self.dmg.system_stop(ranks=convert_list(value=ranks))
-            return True
+            status = True
 
         elif self.control_method.value == self.USE_DMG:
             self.log.error("Error: Undefined dmg command")
@@ -544,7 +563,7 @@ class TestPool(TestDaosApiBase):
                 "Error: Undefined control_method: %s",
                 self.control_method.value)
 
-        return False
+        return status
 
     @fail_on(DaosApiError)
     def exclude(self, ranks, daos_log=None, tgt_idx=None):
@@ -572,7 +591,12 @@ class TestPool(TestDaosApiBase):
 
         elif self.control_method.value == self.USE_DMG and self.dmg:
             self.dmg.pool_exclude(self.uuid, ranks, tgt_idx)
-            self.wait_for_rebuild(False)
+            try:
+                self.wait_for_rebuild(False)
+            except TimeoutError as error:
+                self.log.error(str(error))
+                return status
+
             # display rebuild status
             self.set_query_data()
             rebuild_status = self.query_data["rebuild"]["status"]
@@ -611,11 +635,6 @@ class TestPool(TestDaosApiBase):
 
         """
         self.log.info("Writing %s bytes to pool %s", size, self.uuid)
-        #env = {
-        #    "DAOS_POOL": self.uuid,
-        #    "DAOS_SVCL": "1",
-        #    "PYTHONPATH": os.getenv("PYTHONPATH", "")
-        #}
         env = {
             "DAOS_POOL": self.uuid,
             "PYTHONPATH": os.getenv("PYTHONPATH", "")

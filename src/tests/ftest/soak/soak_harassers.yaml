@@ -50,6 +50,7 @@ pool_jobs:
     nvme_size: 200GB
     svcn: 1
     control_method: dmg
+    rebuild_timeout: 60
 pool_reserved:
     mode: 511
     name: daos_server
@@ -61,6 +62,7 @@ container:
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
     oclass: RP_2G1
     control_method: daos
+    daos_timeout: 30
 container_reserved:
     oclass: OC_RP_2G1
     akey_size: 5

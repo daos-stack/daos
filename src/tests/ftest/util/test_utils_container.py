@@ -284,6 +284,7 @@ class TestContainer(TestDaosApiBase):
         self.oclass = BasicParameter(None)
         self.chunk_size = BasicParameter(None)
         self.properties = BasicParameter(None)
+        self.daos_timeout = BasicParameter(None)
 
         self.container = None
         self.uuid = None
@@ -302,6 +303,24 @@ class TestContainer(TestDaosApiBase):
         if self.container is not None and self.uuid is not None:
             return str(self.uuid)
         return super(TestContainer, self).__str__()
+
+    def get_params(self, test):
+        """Get values for all of the command params from the yaml file.
+
+        Sets each BasicParameter object's value to the yaml key that matches
+        the assigned name of the BasicParameter object in this class. For
+        example, the self.block_size.value will be set to the value in the yaml
+        file with the key 'block_size'.
+
+        If no key matches are found in the yaml file the BasicParameter object
+        will be set to its default value.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        super(TestContainer, self).get_params(test)
+        if self.daos:
+            self.daos.timeout = self.daos_timeout.value
 
     @fail_on(DaosApiError)
     def create(self, uuid=None, con_in=None, acl_file=None):
@@ -374,7 +393,7 @@ class TestContainer(TestDaosApiBase):
 
     @fail_on(DaosApiError)
     def create_snap(self, snap_name=None, epoch=None):
-        """Create Snapshot using daos utility
+        """Create Snapshot using daos utility.
 
         Args:
             snap_name (str, optional): Snapshot name. Defaults to None.
@@ -384,10 +403,10 @@ class TestContainer(TestDaosApiBase):
         if self.control_method.value == self.USE_DAOS and self.daos:
             # create snapshot using daos utility
             kwargs = {
-                "pool" : self.pool.uuid,
-                "cont" : self.uuid,
-                "snap_name" : snap_name,
-                "epoch" : epoch,
+                "pool": self.pool.uuid,
+                "cont": self.uuid,
+                "snap_name": snap_name,
+                "epoch": epoch,
                 "sys_name": self.pool.name.value
             }
             self._log_method("daos.container_create_snap", kwargs)
@@ -405,7 +424,7 @@ class TestContainer(TestDaosApiBase):
 
     @fail_on(DaosApiError)
     def destroy_snap(self, snap_name=None, epc=None, epcrange=None):
-        """Destroy Snapshot using daos utility
+        """Destroy Snapshot using daos utility.
 
         Args:
             snap_name (str, optional): Snapshot name
@@ -420,10 +439,10 @@ class TestContainer(TestDaosApiBase):
         if self.control_method.value == self.USE_DAOS and self.daos:
             # destroy snapshot using daos utility
             kwargs = {
-                "pool" : self.pool.uuid,
-                "cont" : self.uuid,
-                "snap_name" : snap_name,
-                "epc" : epc,
+                "pool": self.pool.uuid,
+                "cont": self.uuid,
+                "snap_name": snap_name,
+                "epc": epc,
                 "epcrange": epcrange,
                 "sys_name": self.pool.name.value,
             }

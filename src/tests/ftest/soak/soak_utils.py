@@ -25,6 +25,7 @@ portions thereof marked with this legend must also reproduce the markings.
 import os
 import time
 import random
+import threading
 from ior_utils import IorCommand
 from fio_utils import FioCommand
 from dfuse_utils import Dfuse
@@ -37,6 +38,9 @@ from test_utils_container import TestContainer
 from ClusterShell.NodeSet import NodeSet
 from avocado.core.exceptions import TestFail
 from pydaos.raw import DaosSnapshot, DaosApiError
+
+
+H_LOCK = threading.Lock()
 
 
 def DDHHMMSS_format(seconds):
@@ -155,7 +159,7 @@ def get_harassers(harassers):
     return harasserlist
 
 
-def launch_rebuild(self, ranks, pool, name, results, args):
+def launch_rebuild(self, ranks, pool, name):
     """Launch the rebuild process.
 
     Args:
@@ -165,7 +169,6 @@ def launch_rebuild(self, ranks, pool, name, results, args):
         pool (obj): TestPool obj
 
     """
-    params = {"name": name, "status": False}
     self.log.info("<<Launch Rebuild>> at %s", time.ctime())
     status = True
     params = {"name": name, "status": status, "vars": {}}
@@ -193,23 +196,21 @@ def launch_rebuild(self, ranks, pool, name, results, args):
             self.log.error(
                 "Rebuild failed waiting to finish", exc_info=error)
             status &= False
-        params = {"name": name, "status": status, "vars": {}}
-    self.harasser_job_done(params)
-    results.put(self.harasser_results)
-    args.put(self.harasser_args)
-    self.log.info("Harasser results: %s", self.harasser_results)
-    self.log.info("Harasser args: %s", self.harasser_args)
+    params = {"name": name, "status": status, "vars": {}}
+    with H_LOCK:
+        self.harasser_job_done(params)
     self.log.info(
         "<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
 
 
-def launch_snapshot(self, pool, name, results, args):
+def launch_snapshot(self, pool, name):
     """Create a basic snapshot of the reserved pool.
 
     Args:
 
         self (obj): soak obj
         pool (obj): TestPool obj
+        name (str): harasser
 
     """
     self.log.info(
@@ -275,11 +276,8 @@ def launch_snapshot(self, pool, name, results, args):
     container.close()
     container.destroy()
     params = {"name": name, "status": status, "vars": {}}
-    self.harasser_job_done(params)
-    results.put(self.harasser_results)
-    args.put(self.harasser_args)
-    self.log.info("Harasser results: %s", self.harasser_results)
-    self.log.info("Harasser args: %s", self.harasser_args)
+    with H_LOCK:
+        self.harasser_job_done(params)
     self.log.info(
         "<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
 
@@ -544,7 +542,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                     if api in ["HDF5-VOL", "HDF5", "POSIX"] and ppn > 16:
                         ppn = 16
                     # DAOS-6095
-                    if api == "HDF5-VOL" and t_size == "4k":
+                    if api in ["HDF5-VOL", "HDF5"] and t_size == "4k":
                         t_size = "1m"
                     ior_cmd = IorCommand()
                     ior_cmd.namespace = ior_params
