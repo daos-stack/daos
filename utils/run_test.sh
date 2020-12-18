@@ -45,10 +45,10 @@ run_test()
     #    in that error message so that we don't guarantee printing that in
     #    every run's output, thereby making all tests here always pass.
     if ! time eval "${VALGRIND_CMD}" "$@"; then
-	retcode=${PIPESTATUS[0]}
-	echo "Test $* failed with exit status ${retcode}."
-	((failed = failed + 1))
-	failures+=("$*")
+        retcode=${PIPESTATUS[0]}
+        echo "Test $* failed with exit status ${retcode}."
+        ((failed = failed + 1))
+        failures+=("$*")
     fi
 
     ((log_num += 1))
