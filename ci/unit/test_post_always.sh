@@ -13,9 +13,6 @@ else
   exit 1
 fi
 
-rm -rf run_test.sh nlt_logs covc_vm_test covc_test_logs unit_test_logs \
-       unit_memcheck_vm_test unit_test_memcheck_logs
-
 DAOS_BASE="${SL_PREFIX%/install*}"
 NODE="${NODELIST%%,*}"
 
@@ -25,20 +22,34 @@ mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
 # shellcheck disable=SC2029
 ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \
-  "STAGE_NAME='$STAGE_NAME'         \
-   DAOS_BASE=$DAOS_BASE             \
+  "DAOS_BASE=$DAOS_BASE             \
    $(cat "$mydir/test_post_always_node.sh")"
 
-use_rsync=0
+dnt_logs=false
 case $STAGE_NAME in
+    *Bullseye*)
+	test_log_dir="covc_test_logs/"
+	;;
+    *memcheck*)
+	test_log_dir="unit_test_memcheck_logs/"
+	;;
+    *Unit*)
+	test_log_dir="unit_test_logs/"
+	;;
     *NLT*)
-	use_rsync=1
+	test_log_dir="nlt_logs/"
+	dnt_logs=true
 	;;
 esac
 
-if [ $use_rsync -eq 1 ]
+rm -rf $test_log_dir
+mkdir $test_log_dir
+
+if $dnt_logs
 then
-    rsync -av -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":/tmp/dnt*.log nlt_logs/
+    rsync -av -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":/tmp/dnt*.log $test_log_dir
+else
+    rsync -av -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":/tmp/daos*.log $test_log_dir
 fi
 
 # Note that we are taking advantage of the NFS mount here and if that
