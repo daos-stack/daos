@@ -44,12 +44,11 @@ run_test()
     #    before deciding this. Also, we intentionally leave off the last 'S'
     #    in that error message so that we don't guarantee printing that in
     #    every run's output, thereby making all tests here always pass.
-    time eval "${VALGRIND_CMD}" "$@"
-    retcode=$?
-    if [ "${retcode}" -ne 0 ]; then
-	echo "Test $* failed with exit status ${retcode}."
-	((failed = failed + 1))
-	failures+=("$*")
+    if ! time eval "${VALGRIND_CMD}" "$@"; then
+        retcode=${PIPESTATUS[0]}
+        echo "Test $* failed with exit status ${retcode}."
+        ((failed = failed + 1))
+        failures+=("$*")
     fi
 
     ((log_num += 1))
@@ -92,8 +91,8 @@ if [ -d "/mnt/daos" ]; then
                                           --error-limit=no \
                                           --suppressions=${VALGRIND_SUPP} \
                                           --error-exitcode=42 \
-                                          --xml=yes \
-                                          --xml-file=${VALGRIND_XML_PATH}"
+					  --xml=yes \
+					  --xml-file=${VALGRIND_XML_PATH}"
         else
             VALGRIND_SUPP=""
         fi
