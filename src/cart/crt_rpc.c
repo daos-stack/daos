@@ -221,6 +221,8 @@ char
 	}
 }
 
+#undef X
+
 /* CRT RPC related APIs or internal functions */
 int
 crt_internal_rpc_register(void)
