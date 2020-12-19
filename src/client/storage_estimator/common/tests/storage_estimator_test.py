@@ -483,7 +483,7 @@ class ContainerTestCase(unittest.TestCase):
         with pytest.raises(TypeError) as err:
             container = Container(csum_gran="rubbish")
         assert "csum_gran parameter must be of type int" in str(err.value) # nosec
-        # pylint: enable=line-too-longg
+        # pylint: enable=line-too-long
 
         with pytest.raises(TypeError) as err:
             container = Container(objects=["rubbish"])
