@@ -97,20 +97,22 @@ building those tests.
 
 ### DAOS Source Code
 
-To check out the DAOS source code, run the following command:
+The DAOS repository is hosted on [GitHub](https://github.com/daos-stack/daos).
+
+To checkout the latest stable version, simply run:
 
 ```bash
-$ git clone https://github.com/daos-stack/daos.git
+git clone --recurse-submodules -b v1.0.1 https://github.com/daos-stack/daos.git
+```
+
+For the current development version, then run:
+
+```bash
+$ git clone --recurse-submodules https://github.com/daos-stack/daos.git
 ```
 
 This command clones the DAOS git repository (path referred as ${daospath}
-below). Then initialize the submodules with:
-
-```bash
-$ cd ${daospath}
-$ git submodule init
-$ git submodule update
-```
+below) and initializes all the submodules automatically.
 
 ### Building DAOS & Dependencies
 
@@ -180,6 +182,8 @@ This creates a CentOS 7 image, fetches the latest DAOS version from GitHub,
 builds it, and installs it in the image.
 For Ubuntu and other Linux distributions, replace Dockerfile.centos.7 with
 Dockerfile.ubuntu.20.04 and the appropriate version of interest.
+`master` should be replaced by the relevant release tag (e.g. v1.0.1) to
+build a stable version.
 
 Once the image created, one can start a container that will eventually run
 the DAOS service:
@@ -187,9 +191,6 @@ the DAOS service:
 ```bash
 $ docker run -it -d --privileged --cap-add=ALL --name server -v /dev:/dev daos
 ```
-
-!!! note
-    Please make sure that the uio_pci_generic module is loaded.
 
 !!! note
     If you want to be more selective with the devices that are exported to the
@@ -227,7 +228,7 @@ Then execute the following command to build and install DAOS in the
 container:
 
 ```bash
-$ docker exec server scons --build-deps=yes install PREFIX=/usr/local
+$ docker exec server scons --build-deps=yes install PREFIX=/opt/daos
 ```
 
 ### Simple Docker Setup
@@ -243,6 +244,9 @@ The DAOS service can be started in the docker container as follows:
 $ docker exec server daos_server start \
         -o /home/daos/daos/utils/config/examples/daos_server_local.yml
 ```
+
+!!! note
+    Please make sure that the uio_pci_generic module is loaded on the host.
 
 Once started, the DAOS server waits for the administrator to format the system.
 This can be triggered in a different shell, using the following command:
