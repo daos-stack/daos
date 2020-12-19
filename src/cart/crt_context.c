@@ -815,7 +815,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 					    crp_tmp_link))) {
 		RPC_ERROR(rpc_priv,
 			  "ctx_id %d, (status: %#x) timed out (%d seconds), "
-			  "target %d: %d\n",
+			  "target (%d:%d)\n",
 			  crt_ctx->cc_idx,
 			  rpc_priv->crp_state,
 			  rpc_priv->crp_timeout_sec,

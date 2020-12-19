@@ -214,10 +214,10 @@ char
 *crt_opc_to_str(crt_opcode_t opc)
 {
 	switch (opc) {
-		CRT_INTERNAL_RPCS_LIST
-		CRT_FI_RPCS_LIST
-		default:
-			return "External rpc";
+	CRT_INTERNAL_RPCS_LIST
+	CRT_FI_RPCS_LIST
+	default:
+		return "External rpc";
 	}
 }
 
