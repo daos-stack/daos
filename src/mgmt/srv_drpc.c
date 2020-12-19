@@ -468,7 +468,7 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			d_rank_list_free(svc_ranks);
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
-		for(i = 0; i < req->n_handles; i++) {
+		for (i = 0; i < req->n_handles; i++) {
 			rc = uuid_parse(req->handles[i], handles[i]);
 			if (rc != 0) {
 				D_ERROR("Unable to parse handle UUID %s: "
