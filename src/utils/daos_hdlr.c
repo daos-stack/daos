@@ -2928,12 +2928,11 @@ out:
 */
 static int
 dm_parse_path(struct file_dfs *file, char *path, size_t path_len,
-	      uuid_t *p_uuid, uuid_t *c_uuid, bool daos_no_prefix)
+	      uuid_t *p_uuid, uuid_t *c_uuid)
 {
 	struct duns_attr_t	dattr = {0};
 	int			rc = 0;
 
-	dattr.da_no_prefix = daos_no_prefix;
 	rc = duns_resolve_path(path, &dattr);
 	if (rc == 0) {
 		uuid_copy(*p_uuid, dattr.da_puuid);
@@ -2946,7 +2945,7 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len,
 	/* no prefix option is only for DAOS->DAOS (cont clone),
 	 * so this is an error
 	 */
-	} else if (strncmp(path, "daos://", 7) == 0 || daos_no_prefix) {
+	} else if (strncmp(path, "daos://", 7) == 0) {
 		/* Error, since we expect a DAOS path */
 		D_GOTO(out, rc = 1);
 	} else {
@@ -2983,7 +2982,6 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	char			*dst_dir = NULL;
 	mode_t			tmp_mode_dir = S_IRWXU;
 	bool			is_posix_copy = true;
-	bool			daos_no_prefix = false;
 
 	set_dm_args_default(&ca);
 	file_set_defaults_dfs(&src_file_dfs);
@@ -2996,7 +2994,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	rc = dm_parse_path(&src_file_dfs, src_str, src_str_len,
-			   &ca.src_p_uuid, &ca.src_c_uuid, daos_no_prefix);
+			   &ca.src_p_uuid, &ca.src_c_uuid);
 	if (rc != 0) {
 		fprintf(stderr, "failed to parse source path: %d\n", rc);
 		D_GOTO(out, rc = daos_errno2der(rc));
@@ -3010,7 +3008,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	rc = dm_parse_path(&dst_file_dfs, dst_str, dst_str_len,
-			   &ca.dst_p_uuid, &ca.dst_c_uuid, daos_no_prefix);
+			   &ca.dst_p_uuid, &ca.dst_c_uuid);
 	if (rc != 0) {
 		fprintf(stderr, "failed to parse destination path: %d\n", rc);
 		D_GOTO(out, rc);
@@ -3478,7 +3476,6 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 	size_t			src_str_len = 0;
 	size_t			dst_str_len = 0;
 	daos_epoch_range_t	epr;
-	bool			daos_no_prefix = true;
 	int			uuid_len = 128;
 
 	set_dm_args_default(&ca);
@@ -3492,7 +3489,7 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	rc = dm_parse_path(&src_cp_type, src_str, src_str_len,
-			   &ca.src_p_uuid, &ca.src_c_uuid, daos_no_prefix);
+			   &ca.src_p_uuid, &ca.src_c_uuid);
 	if (rc != 0) {
 		fprintf(stderr, "failed to parse source path: %d\n", rc);
 		D_GOTO(out, rc = daos_errno2der(rc));
@@ -3505,7 +3502,7 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	rc = dm_parse_path(&dst_cp_type, dst_str, dst_str_len,
-			   &ca.dst_p_uuid, &ca.dst_c_uuid, daos_no_prefix);
+			   &ca.dst_p_uuid, &ca.dst_c_uuid);
 	/* parse pool uuid if this fails, since it is not in form that
 	 * can be parsed by duns_resolve_path (i.e. dst=/$pool)
 	 */
