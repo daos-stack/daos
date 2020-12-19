@@ -233,6 +233,9 @@ enum {
 #define SMALL_POOL_SIZE		(1ULL << 30)	/* 1GB */
 #define DEFAULT_POOL_SIZE	(4ULL << 30)	/* 4GB */
 
+#define REBUILD_SUBTEST_POOL_SIZE (1ULL << 30)
+#define REBUILD_SMALL_POOL_SIZE (1ULL << 28)
+
 #define WAIT_ON_ASYNC_ERR(arg, ev, err)			\
 	do {						\
 		int _rc;				\
@@ -405,6 +408,8 @@ run_daos_sub_tests_only(char *test_name, const struct CMUnitTest *tests,
 void rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr);
 void rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 			 bool discard);
+void dfs_ec_rebuild_io(void **state, int *shards, int shards_nr);
+
 void rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 				int failed_tgt, bool kill);
 void rebuild_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill);
@@ -446,6 +451,7 @@ int wait_and_verify_blobstore_state(uuid_t bs_uuid, char *expected_state,
 				    const char *group);
 int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 				   char *expected_state);
+void save_group_state(void **state);
 
 enum op_type {
 	PARTIAL_UPDATE	=	1,
