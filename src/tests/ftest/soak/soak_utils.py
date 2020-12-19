@@ -30,7 +30,7 @@ from ior_utils import IorCommand
 from fio_utils import FioCommand
 from dfuse_utils import Dfuse
 from job_manager_utils import Srun
-from command_utils_base import BasicParameter
+from command_utils_base import BasicParameter, CommandFailure
 from general_utils import get_random_string, run_command, DaosTestError
 import slurm_utils
 from test_utils_pool import TestPool
@@ -159,48 +159,32 @@ def get_harassers(harassers):
     return harasserlist
 
 
-def launch_rebuild(self, ranks, pool, name):
-    """Launch the rebuild process.
+def wait_for_pool_rebuild(self, pool, name):
+    """Launch the rebuild process with system.
 
     Args:
 
         self (obj): soak obj
-        ranks (list): Server ranks to kill
-        pool (obj): TestPool obj
+        pools (obj): TestPool obj
+        name (str): name of soak harasser
 
     """
-    self.log.info("<<Launch Rebuild>> at %s", time.ctime())
-    status = True
-    params = {"name": name, "status": status, "vars": {}}
-    # Kill the server
-    try:
-        pool.start_rebuild(ranks, self.d_log)
-    except (RuntimeError, TestFail, DaosApiError) as error:
-        self.log.error("Rebuild failed to start", exc_info=error)
-        status &= False
-
-    if status:
-        # Wait for rebuild to start
-        try:
-            pool.wait_for_rebuild(True)
-        except (RuntimeError, TestFail, DaosApiError) as error:
-            self.log.error(
-                "Rebuild failed waiting to start", exc_info=error)
-            status &= False
-
-    if status:
-        # Wait for rebuild to complete
-        try:
-            pool.wait_for_rebuild(False)
-        except (RuntimeError, TestFail, DaosApiError) as error:
-            self.log.error(
-                "Rebuild failed waiting to finish", exc_info=error)
-            status &= False
-    params = {"name": name, "status": status, "vars": {}}
-    with H_LOCK:
-        self.harasser_job_done(params)
+    rebuild_status = False
     self.log.info(
-        "<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
+        "<<Wait for %s rebuild on %s>> at %s", name, pool.uuid, time.ctime())
+
+    try:
+        pool.wait_for_rebuild(False)
+        rebuild_status = True
+    except DaosTestError as error:
+        self.log.error(
+            "<<<FAILED:{} rebuild timed out".format(name), exc_info=error)
+        rebuild_status = False
+    except TestFail as error1:
+        self.log.error("<<<FAILED:{} rebuild failed due to test issue".format(
+            name), exc_info=error1)
+
+    return rebuild_status
 
 
 def launch_snapshot(self, pool, name):
@@ -287,7 +271,7 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
 
     Args:
         self (obj): soak obj
-        pool (list): list of TestPool obj
+        pool (obj): TestPool obj
         name (str): name of dmg subcommand
         results (queue): multiprocessing queue
         args (queue): multiprocessing queue
@@ -309,7 +293,16 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
                   "vars": {"rank": rank, "tgt_idx": tgt_idx}}
         self.log.info("<<<PASS %s: %s started on rank %s at %s >>>\n",
                       self.loop, name, rank, time.ctime())
-        status = pool.exclude(rank, tgt_idx=tgt_idx)
+        try:
+            pool.exclude(rank, tgt_idx=tgt_idx)
+            status = True
+        except CommandFailure as error:
+            self.log.error(
+                "<<<FAILED:dmg pool exclude failed", exc_info=error)
+            status = False
+        if status:
+            status = wait_for_pool_rebuild(self, pool, name)
+
     elif name == "REINTEGRATE":
         if self.harasser_results["EXCLUDE"]:
             rank = self.harasser_args["EXCLUDE"]["rank"]
@@ -317,6 +310,15 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
             self.log.info("<<<PASS %s: %s started on rank %s at %s>>>\n",
                           self.loop, name, rank, time.ctime())
             status = pool.reintegrate(rank, tgt_idx)
+            try:
+                pool.reintegrate(rank, tgt_idx)
+                status = True
+            except CommandFailure as error:
+                self.log.error(
+                    "<<<FAILED:dmg pool reintegrate failed", exc_info=error)
+                status = False
+            if status:
+                status = wait_for_pool_rebuild(self, pool, name)
         else:
             self.log.error("<<<PASS %s: %s failed due to EXCLUDE failure >>>",
                            self.loop, name)
@@ -340,12 +342,17 @@ def launch_server_stop_start(self, pools, name, results, args):
     """Launch dmg server stop/start.
 
     Args:
-        pool (list): list of TestPool obj
+        self (obj): soak obj
+        pools (list): list of TestPool obj
         name (str): name of dmg subcommand
+        results (queue): multiprocessing queue
+        args (queue): multiprocessing queue
+
     """
-    status = False
+    status = True
     params = {}
     rank = None
+    drain = self.params.get("enable_drain", "/run/soak_harassers/*", False)
     if name == "SVR_STOP":
         exclude_servers = len(self.hostlist_servers) - 1
         # Exclude one rank : other than rank 0 and 1.
@@ -356,27 +363,65 @@ def launch_server_stop_start(self, pools, name, results, args):
                   "vars": {"rank": rank}}
         self.log.info("<<<PASS %s: %s - stop server: rank %s at %s >>>\n",
                       self.loop, name, rank, time.ctime())
-        status = True
-        for pool in pools:
-            drain_status = pool.drain(rank)
-            status &= drain_status
-            if not drain_status:
-                self.log.error("<<<PASS %s: %s failed due to drain pool %s >>>",
-                               self.loop, name, pool.uuid)
-        # Shutdown the server
+        # drain pools
+        drain_status = True
+        if drain:
+            for pool in pools:
+                try:
+                    pool.drain(rank)
+                except CommandFailure as error:
+                    self.log.error(
+                        "<<<FAILED:dmg pool {} drain failed".format(
+                            pool.uuid), exc_info=error)
+                    status = False
+                drain_status &= status
+            if drain_status:
+                for pool in pools:
+                    drain_status &= wait_for_pool_rebuild(self, pool, name)
+                status = drain_status
+            else:
+                status = False
+
         if status:
-            self.dmg_command.system_stop(ranks=rank)
+            # Shutdown the server
+            try:
+                self.dmg_command.system_stop(ranks=rank)
+            except CommandFailure as error:
+                self.log.error(
+                    "<<<FAILED:dmg system stop failed", exc_info=error)
+                status = False
 
     elif name == "SVR_REINTEGRATE":
         if self.harasser_results["SVR_STOP"]:
             rank = self.harasser_args["SVR_STOP"]["rank"]
             self.log.info("<<<PASS %s: %s started on rank %s at %s>>>\n",
                           self.loop, name, rank, time.ctime())
-            self.dmg_command.system_start(ranks=rank)
-            status = True
+            try:
+                self.dmg_command.system_start(ranks=rank)
+                status = True
+            except CommandFailure as error:
+                self.log.error(
+                    "<<<FAILED:dmg system start failed", exc_info=error)
+                status = False
+            # reintegrate ranks
+            reintegrate_status = True
             for pool in pools:
-                reintegrate_status = pool.reintegrate(rank, None)
-                status &= reintegrate_status
+                try:
+                    pool.reintegrate(rank)
+                    status = True
+                except CommandFailure as error:
+                    self.log.error(
+                        "<<<FAILED:dmg pool {} reintegrate failed".format(
+                            pool.uuid), exc_info=error)
+                    status = False
+                reintegrate_status &= status
+            if reintegrate_status:
+                for pool in pools:
+                    reintegrate_status &= wait_for_pool_rebuild(
+                        self, pool, name)
+                status = reintegrate_status
+            else:
+                status = False
         else:
             self.log.error("<<<PASS %s: %s failed due to SVR_STOP failure >>>",
                            self.loop, name)

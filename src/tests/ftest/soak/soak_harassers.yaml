@@ -94,7 +94,7 @@ soak_harassers:
     # maximum timeout for a single job in test in minutes
     job_timeout: 30
     nodesperjob:
-        - 2
+        - -1
     taskspernode:
         - 16
     joblist:
@@ -105,6 +105,7 @@ soak_harassers:
         - exclude_reintegrate
         - server-stop_server-reintegrate
     harasser_to: 30
+    enable_drain: False
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -156,7 +157,5 @@ dfuse:
     disable_direct_io: True
 hdf5_vol:
     plugin_path: "/usr/lib64/mpich/lib"
-rebuild:
-    ranks_to_kill:
-        - 2
-    svcl: 1
+
+

@@ -29,8 +29,7 @@ from test_utils_base import TestDaosApiBase
 
 from avocado import fail_on
 from command_utils import BasicParameter, CommandFailure
-from pydaos.raw import (DaosApiError, DaosServer, DaosPool, c_uuid_to_str,
-                        daos_cref)
+from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
 from general_utils import (check_pool_files, DaosTestError, run_command,
                            convert_list)
 from env_modules import load_mpi
@@ -513,7 +512,7 @@ class TestPool(TestDaosApiBase):
             self.set_query_data()
             if self.rebuild_timeout.value is not None:
                 if time() - start > self.rebuild_timeout.value:
-                    raise TimeoutError(
+                    raise DaosTestError(
                         "TIMEOUT detected after {} seconds while for waiting "
                         "for rebuild to {}".format(
                             self.rebuild_timeout.value,
@@ -543,14 +542,7 @@ class TestPool(TestDaosApiBase):
         self.log.info(msg)
         daos_log.info(msg)
 
-        if self.control_method.value == self.USE_API:
-            # Stop desired ranks using kill
-            for rank in ranks:
-                server = DaosServer(self.context, self.name.value, rank)
-                self._call_method(server.kill, {"force": 1})
-            status = True
-
-        elif self.control_method.value == self.USE_DMG and self.dmg:
+        if self.control_method.value == self.USE_DMG and self.dmg:
             # Stop desired ranks using dmg
             self.dmg.system_stop(ranks=convert_list(value=ranks))
             status = True
@@ -560,12 +552,13 @@ class TestPool(TestDaosApiBase):
 
         else:
             self.log.error(
-                "Error: Undefined control_method: %s",
+                "Error: Unsupported control_method: %s",
                 self.control_method.value)
 
         return status
 
     @fail_on(DaosApiError)
+    @fail_on(CommandFailure)
     def exclude(self, ranks, daos_log=None, tgt_idx=None):
         """Manually exclude a rank from this pool.
 
@@ -591,19 +584,8 @@ class TestPool(TestDaosApiBase):
 
         elif self.control_method.value == self.USE_DMG and self.dmg:
             self.dmg.pool_exclude(self.uuid, ranks, tgt_idx)
-            try:
-                self.wait_for_rebuild(False)
-            except TimeoutError as error:
-                self.log.error(str(error))
-                return status
+            status = True
 
-            # display rebuild status
-            self.set_query_data()
-            rebuild_status = self.query_data["rebuild"]["status"]
-            self.log.info(
-                "Pool %s rebuild status:%s\n", self.uuid, rebuild_status)
-            if rebuild_status == "done":
-                status = True
         return status
 
     def check_files(self, hosts):
@@ -795,14 +777,8 @@ class TestPool(TestDaosApiBase):
         """
         status = False
         self.dmg.pool_reintegrate(self.uuid, rank, tgt_idx)
-        self.wait_for_rebuild(False)
-        # display rebuild status
-        self.set_query_data()
-        self.log.info("Pool %s query data: %s\n", self.uuid, self.query_data)
-        rebuild_status = self.query_data["rebuild"]["status"]
-        self.log.info("Pool %s rebuild status:%s\n", self.uuid, rebuild_status)
-        if rebuild_status == "done":
-            status = True
+        status = True
+
         return status
 
     @fail_on(CommandFailure)
@@ -820,13 +796,8 @@ class TestPool(TestDaosApiBase):
 
         """
         status = False
+
         self.dmg.pool_drain(self.uuid, rank, tgt_idx)
-        self.wait_for_rebuild(False)
-        # display rebuild status
-        self.set_query_data()
-        self.log.info("Pool %s query data: %s\n", self.uuid, self.query_data)
-        rebuild_status = self.query_data["rebuild"]["status"]
-        self.log.info("Pool %s rebuild status:%s\n", self.uuid, rebuild_status)
-        if rebuild_status == "done":
-            status = True
+        status = True
+
         return status

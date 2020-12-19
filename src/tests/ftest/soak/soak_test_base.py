@@ -34,7 +34,7 @@ from getpass import getuser
 import socket
 from agent_utils import include_local_host
 from soak_utils import DDHHMMSS_format, add_pools, get_remote_logs, \
-    launch_rebuild, launch_snapshot, launch_exclude_reintegrate, \
+    launch_snapshot, launch_exclude_reintegrate, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
     build_job_script, SoakTestError, launch_server_stop_start, get_harassers
 
@@ -179,14 +179,7 @@ class SoakTestBase(TestWithServers):
         args = multiprocessing.Queue()
         # Launch harasser
         self.log.info("\n<<<Launch harasser %s>>>\n", harasser)
-        if harasser == "rebuild":
-            method = launch_rebuild
-            ranks = self.params.get(
-                "ranks_to_kill", "/run/" + harasser + "/*")
-            name = "REBUILD"
-            params = (self, ranks, pool[1], name)
-            job = threading.Thread(target=method, args=params, name=name)
-        elif harasser == "snapshot":
+        if harasser == "snapshot":
             method = launch_snapshot
             name = "SNAPSHOT"
             params = (self, self.pool[0], name)
