@@ -208,6 +208,19 @@ static struct crt_proto_rpc_format crt_fi_rpcs[] = {
 
 #undef X
 
+#define X(a, b, c, d, e) case a: return #a;
+
+char
+*crt_opc_to_str(crt_opcode_t opc)
+{
+	switch (opc) {
+		CRT_INTERNAL_RPCS_LIST
+		CRT_FI_RPCS_LIST
+		default:
+			return "External rpc";
+	}
+}
+
 /* CRT RPC related APIs or internal functions */
 int
 crt_internal_rpc_register(void)

@@ -662,4 +662,6 @@ int crt_iv_sync_corpc_pre_forward(crt_rpc_t *rpc, void *arg);
 int
 crt_proto_register_internal(struct crt_proto_format *crf);
 
+char *crt_opc_to_str(crt_opcode_t opc);
+
 #endif /* __CRT_RPC_H__ */
