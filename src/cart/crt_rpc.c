@@ -210,6 +210,7 @@ static struct crt_proto_rpc_format crt_fi_rpcs[] = {
 
 #define X(a, b, c, d, e) case a: return #a;
 
+/* Helper function to convert internally registered RPC opc to str */
 char
 *crt_opc_to_str(crt_opcode_t opc)
 {

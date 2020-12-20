@@ -634,15 +634,17 @@ crt_set_timeout(struct crt_rpc_priv *rpc_priv)
 
 	D_ASSERT(rpc_priv != NULL);
 
-	timeout_sec = rpc_priv->crp_timeout_sec > 0 ?
-		      rpc_priv->crp_timeout_sec : crt_gdata.cg_timeout;
+	if (rpc_priv->crp_timeout_sec == 0)
+		rpc_priv->crp_timeout_sec = crt_gdata.cg_timeout;
 
-	sec_diff = d_timeus_secdiff(timeout_sec);
+	sec_diff = d_timeus_secdiff(rpc_priv->crp_timeout_sec);
 	rpc_priv->crp_timeout_ts = sec_diff;
 
 	return sec_diff;
 }
 
+/* Convert opcode to string. Only returns string for internal RPCs */
+char *crt_opc_to_str(crt_opcode_t opc);
 
 /* crt_corpc.c */
 int crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv);
@@ -661,7 +663,5 @@ int crt_iv_sync_corpc_pre_forward(crt_rpc_t *rpc, void *arg);
 /* crt_register.c */
 int
 crt_proto_register_internal(struct crt_proto_format *crf);
-
-char *crt_opc_to_str(crt_opcode_t opc);
 
 #endif /* __CRT_RPC_H__ */
