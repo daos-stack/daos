@@ -29,6 +29,7 @@ typedef struct _Mgmt__GetAttachInfoResp__Psr Mgmt__GetAttachInfoResp__Psr;
 typedef struct _Mgmt__PrepShutdownReq Mgmt__PrepShutdownReq;
 typedef struct _Mgmt__PingRankReq Mgmt__PingRankReq;
 typedef struct _Mgmt__SetRankReq Mgmt__SetRankReq;
+typedef struct _Mgmt__PoolMonitorReq Mgmt__PoolMonitorReq;
 
 
 /* --- enums --- */
@@ -198,14 +199,10 @@ struct  _Mgmt__GetAttachInfoReq
    * Return PSRs for all ranks, not just the MS replicas.
    */
   protobuf_c_boolean allranks;
-  /*
-   * Job ID to associate instance with.
-   */
-  char *jobid;
 };
 #define MGMT__GET_ATTACH_INFO_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, 0 }
 
 
 struct  _Mgmt__GetAttachInfoResp__Psr
@@ -302,6 +299,27 @@ struct  _Mgmt__SetRankReq
 #define MGMT__SET_RANK_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__set_rank_req__descriptor) \
     , 0 }
+
+
+struct  _Mgmt__PoolMonitorReq
+{
+  ProtobufCMessage base;
+  /*
+   * Pool UUID associated with the Pool Handle
+   */
+  char *pooluuid;
+  /*
+   * Pool Handle UUID for the connection
+   */
+  char *poolhandleuuid;
+  /*
+   * Job ID to associate instance with.
+   */
+  char *jobid;
+};
+#define MGMT__POOL_MONITOR_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_monitor_req__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 /* Mgmt__DaosResp methods */
@@ -538,6 +556,25 @@ Mgmt__SetRankReq *
 void   mgmt__set_rank_req__free_unpacked
                      (Mgmt__SetRankReq *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__PoolMonitorReq methods */
+void   mgmt__pool_monitor_req__init
+                     (Mgmt__PoolMonitorReq         *message);
+size_t mgmt__pool_monitor_req__get_packed_size
+                     (const Mgmt__PoolMonitorReq   *message);
+size_t mgmt__pool_monitor_req__pack
+                     (const Mgmt__PoolMonitorReq   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_monitor_req__pack_to_buffer
+                     (const Mgmt__PoolMonitorReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolMonitorReq *
+       mgmt__pool_monitor_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_monitor_req__free_unpacked
+                     (Mgmt__PoolMonitorReq *message,
+                      ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
 typedef void (*Mgmt__DaosResp_Closure)
@@ -582,6 +619,9 @@ typedef void (*Mgmt__PingRankReq_Closure)
 typedef void (*Mgmt__SetRankReq_Closure)
                  (const Mgmt__SetRankReq *message,
                   void *closure_data);
+typedef void (*Mgmt__PoolMonitorReq_Closure)
+                 (const Mgmt__PoolMonitorReq *message,
+                  void *closure_data);
 
 /* --- services --- */
 
@@ -603,6 +643,7 @@ extern const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__psr__descrip
 extern const ProtobufCMessageDescriptor mgmt__prep_shutdown_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__ping_rank_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__set_rank_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_monitor_req__descriptor;
 
 PROTOBUF_C__END_DECLS
 
