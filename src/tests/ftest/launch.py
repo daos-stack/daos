@@ -1423,33 +1423,36 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
     # test host if the copy is successful.  Attempt all of the commands and
     # report status at the end of the loop.  Include a listing of the file
     # related to any failed command.
-    commands = [
-        "set -eu",
-        "rc=0",
-        "copied=()",
-        "for file in /var/tmp/core.*",
-        "do if [ -e $file ]",
-        "then if [ ! -s $file ]",
-        "then ((rc++))",
-        "ls -al $file",
-        "else if sudo chmod 644 $file && "
-        "scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
-            this_host, daos_cores_dir),
-        "then copied+=($file)",
-        "if ! sudo rm -fr $file",
-        "then ((rc++))",
-        "ls -al $file",
-        "fi",
-        "else ((rc++))",
-        "ls -al $file",
-        "fi",
-        "fi",
-        "fi",
-        "done",
-        "echo Copied ${copied[@]:-no files}",
-        "exit $rc",
-    ]
-    if not spawn_commands(host_list, "; ".join(commands), timeout=1800):
+    script = '''
+#!/usr/bin/bash
+set -eu
+rc=0
+copied=()
+for file in /var/tmp/core.*; do
+    if [ -e $file ]; then
+        if [ ! -s $file ]; then
+            ((rc++))
+            ls -al $file
+        else
+            if sudo chmod 644 $file && \
+                    scp $file {}:{}/$(basename $file)-$(hostname -s); then
+                copied+=($file)
+                if ! sudo rm -fr $file; then
+                    ((rc++))
+                    ls -al $file
+                fi
+            else
+                ((rc++))
+                ls -al $file
+            fi
+        fi
+    fi
+done
+echo Copied ${{copied[@]:-no files}}
+exit $rc
+'''.format(this_host, daos_cores_dir)
+
+    if not spawn_commands(host_list, script, timeout=1800):
         # we might have still gotten some core files, so don't return here
         # but save a False return status for later
         return_status = False
