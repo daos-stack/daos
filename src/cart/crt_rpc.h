@@ -629,7 +629,6 @@ crt_req_timedout(struct crt_rpc_priv *rpc_priv)
 static inline uint64_t
 crt_set_timeout(struct crt_rpc_priv *rpc_priv)
 {
-	uint32_t	timeout_sec;
 	uint64_t	sec_diff;
 
 	D_ASSERT(rpc_priv != NULL);
