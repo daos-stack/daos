@@ -416,6 +416,9 @@ agg_overlap(unsigned int estart, unsigned int elen, unsigned int cell,
 	return false;
 }
 
+/* Counts the number of full and partial cells covered by the submitted extent.
+ * If cell is partially covered by a prior cell, function does not increment
+ * partial-cover count for the cell.
 static unsigned int
 agg_count_cells(uint8_t *fcbit_map, uint8_t *tbit_map, unsigned int estart,
 		unsigned int elen, unsigned int k, unsigned int len,
