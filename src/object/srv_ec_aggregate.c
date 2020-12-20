@@ -2217,5 +2217,4 @@ out:
 	agg_sgl_fini(&agg_param.ap_agg_entry.ae_sgl);
 	dsc_pool_close(ph);
 	return rc;
-
 }
