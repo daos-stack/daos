@@ -1,0 +1,12 @@
+[test_1]
+group-name="selftest_srv_grp"
+master-endpoint="0:0"
+endpoint="1:0"
+message-sizes="b1048576" 
+max-inflight-rpcs="16"
+repetitions="100"
+t =1
+n=1
+p=1
+
+

@@ -74,9 +74,29 @@ static const char * const crt_st_msg_type_str[] = { "EMPTY",
 #define SELF_TEST_MAX_NUM_ENDPOINTS (UINT32_MAX)
 
 /* Global shutdown flag, used to terminate the progress thread */
-static int g_shutdown_flag;
+static int		g_shutdown_flag;
+const int		g_default_rep_count = 10000;
+static bool		g_randomize_endpoints;
 
-static bool g_randomize_endpoints;
+char			*g_dest_name = NULL;
+struct st_endpoint	*g_endpts = NULL;
+struct st_endpoint	*g_ms_endpts = NULL;
+uint32_t		 g_num_endpts = 0;
+uint32_t		 g_num_ms_endpts = 0;
+
+char			*g_msg_sizes_str;
+int			 g_rep_count;
+int			 g_max_inflight;
+int16_t			 g_buf_alignment =
+				CRT_ST_BUF_ALIGN_DEFAULT;
+int			 g_output_megabits = 0;
+char			*g_attach_info_path = NULL;
+
+const int		g_default_max_inflight = 1000;
+bool			 alloc_g_dest_name = true;
+bool			 alloc_g_msg_sizes_str = false;
+bool			 alloc_g_attach_info_path = true;
+
 
 static void *progress_fn(void *arg)
 {
@@ -821,6 +841,7 @@ static int run_self_test(struct st_size_params all_params[],
 	/* will send TEST_START RPC to self, so listen for incoming requests */
 	if (ms_endpts_in == NULL)
 		listen = true;
+
 	/* Initialize CART */
 	ret = self_test_init(dest_name, &crt_ctx, &srv_grp, &tid,
 			     attach_info_path, listen /* run as server */);
@@ -1054,6 +1075,24 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 {
 	/* TODO --randomize-endpoints */
 	/* TODO --verbose */
+	printf("File input is read first, with other command line parameters\n"
+	       "over riding that specified in the file\n\n");
+	printf("Usage: %s --file-name <file_name> --config <test> --display\n"
+	       "\n"
+	       "  --file-name <file_name>\n"
+	       "      Short version: -f\n"
+	       "      The name of file with list of parameters and arguments\n"
+	       "\n"
+	       "  --config <test_group>\n"
+	       "      Short version: -c\n"
+	       "      Name of group to obtain information\n"
+	       "\n"
+	       "  --display\n"
+	       "      Short version: -d\n"
+	       "      Display the configuration file setup\n\n",
+	       prog_name
+	);
+
 	printf("Usage: %s --group-name <name> --endpoint <ranks:tags> [optional arguments]\n"
 	       "\n"
 	       "Required Arguments\n"
@@ -1064,7 +1103,7 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "  --endpoint <ranks:tags>\n"
 	       "      Short version: -e\n"
 	       "      Describes an endpoint (or range of endpoints) to connect to\n"
-	       "        Note: Can be specified multiple times\n"
+	       "	Note: Can be specified multiple times\n"
 	       "\n"
 	       "      ranks and tags are comma-separated lists to connect to\n"
 	       "        Supports both ranges and lists - for example, \"1-5,3,8\"\n"
@@ -1085,6 +1124,10 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "        for more information\n"
 	       "\n"
 	       "Optional Arguments\n"
+	       "  --help\n"
+	       "      Short version: -h\n"
+	       "      Display this usage output\n"
+	       "\n"
 	       "  --message-sizes <(a b),(c d),...>\n"
 	       "      Short version: -s\n"
 	       "      List of size tuples (in bytes) to use for the self test.\n"
@@ -1684,48 +1727,187 @@ int parse_message_sizes_string(const char *pch,
  ******************************
  */
 
-
 /*
- * Read Config file
+ * Read Config file and interpret;
  */
-static void Test1()
+#define STRING_MAX_SIZE 256
+static int config_file_setup(char *file_name, char *section_name, int display)
 {
 	Config *cfg = NULL;
+	int ret = 0;
+	ConfigRet config_ret;
+	char string[STRING_MAX_SIZE];
+	int len;
 
-	ENTER_TEST_FUNC;
-
-	if (ConfigReadFile(CONFIGREADFILE, &cfg) != CONFIG_OK) {
-		LOG_ERR("ConfigOpenFile failed for %s", CONFIGREADFILE);
-		return;
+	/* Read and parse configuration file */
+	config_ret = ConfigReadFile(file_name, &cfg);
+	if (config_ret != CONFIG_OK) {
+		LOG_ERR("ConfigOpenFile failed for %s", file_name);
+		return 0;
 	}
 
-	ConfigPrintSettings(cfg, stdout);
-	ConfigPrint(cfg, stdout);
+	if (display) {
+		printf("Configuration file %s\n", file_name);
+        	ConfigPrint(cfg, stdout);
+	}
 
+	/* Parse of configuration file */
+	/********/
+	config_ret=ConfigReadString(cfg, section_name, "help",
+				    &string[0], STRING_MAX_SIZE, (char *)NULL);
+	if (config_ret == CONFIG_OK) {
+		/* Avoid checkpatch warning */
+		ret = -1;
+		goto cleanup;
+	}
+
+	/********/
+	config_ret=ConfigReadString(cfg, section_name, "display",
+				    &string[0], STRING_MAX_SIZE, (char *)NULL);
+	if (config_ret == CONFIG_OK) {
+		printf("Configuration file %s\n", file_name);
+        	ConfigPrint(cfg, stdout);
+	}
+
+	/********/
+	config_ret=ConfigReadString(cfg, section_name, "group-name",
+				   &string[0], STRING_MAX_SIZE, (char *)NULL);
+	if (config_ret == CONFIG_OK) {
+		len = strlen(string) + 1;
+		g_dest_name = (char *)malloc(len);
+		if (g_dest_name == NULL) {
+			D_GOTO(cleanup, ret = -DER_NOMEM);
+		}
+		memcpy(g_dest_name, string, len);
+	}
+
+	/********/
+	config_ret=ConfigReadString(cfg, section_name, "master-endpoint",
+				   &string[0], STRING_MAX_SIZE, (char *)NULL);
+	if (config_ret == CONFIG_OK) {
+		 parse_endpoint_string(&string[0], &g_ms_endpts,
+				       &g_num_ms_endpts);
+	}
+
+	/********/
+	config_ret=ConfigReadString(cfg, section_name, "endpoint",
+				   &string[0], STRING_MAX_SIZE, (char *)NULL);
+	if (config_ret == CONFIG_OK) {
+		parse_endpoint_string(&string[0], &g_endpts, &g_num_endpts);
+	}
+
+	/********/
+	config_ret=ConfigReadString(cfg, section_name, "message-sizes",
+				   &string[0], STRING_MAX_SIZE, (char *)NULL);
+	if (config_ret == CONFIG_OK) {
+		len = strlen(string) + 1;
+		g_msg_sizes_str = (char *)malloc(len);
+		if (g_dest_name == NULL) {
+			D_GOTO(cleanup, ret = -DER_NOMEM);
+		}
+		alloc_g_msg_sizes_str = true;
+		memcpy(g_msg_sizes_str, string, len);
+	}
+
+	/********/
+	config_ret=ConfigReadString(cfg, section_name,
+				    "repetitions-per-size",
+				    &string[0], STRING_MAX_SIZE, (char *)NULL);
+	if (config_ret == CONFIG_OK) {
+		ret = sscanf(&string[0], "%d", &g_rep_count);
+		if (ret != 1) {
+			g_rep_count = g_default_rep_count;
+			printf("Warning: Invalid repetitions-per-size\n"
+			       "  Using default value %d instead\n",
+			       g_rep_count);
+		}
+	}
+
+	/********/
+	config_ret=ConfigReadString(cfg, section_name,
+				    "max-inflight-rpcs",
+				    &string[0], STRING_MAX_SIZE, (char *)NULL);
+	if (config_ret == CONFIG_OK) {
+		ret = sscanf(&string[0], "%d", &g_max_inflight);
+		if (ret != 1) {
+			g_max_inflight = g_default_max_inflight;
+			printf("Warning: Invalid max-inflight-rpcs\n"
+			"  Using default value %d instead\n",
+			g_max_inflight);
+		}
+
+	}
+
+	/********/
+	config_ret=ConfigReadString(cfg, section_name, "align",
+				    &string[0], STRING_MAX_SIZE, (char *)NULL);
+	if (config_ret == CONFIG_OK) {
+		ret = sscanf(optarg, "%" SCNd16, &g_buf_alignment);
+		if (ret != 1 || g_buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
+			g_buf_alignment > CRT_ST_BUF_ALIGN_MAX) {
+			printf("Warning: Invalid align value %d;"
+			       " Expected value in range [%d:%d]\n",
+			       g_buf_alignment, CRT_ST_BUF_ALIGN_MIN,
+			       CRT_ST_BUF_ALIGN_MAX);
+			g_buf_alignment = CRT_ST_BUF_ALIGN_DEFAULT;
+		}
+	}
+
+	/********/
+	config_ret=ConfigReadString(cfg, section_name, "MBits",
+				    &string[0], STRING_MAX_SIZE, (char *)NULL);
+	if (config_ret == CONFIG_OK) {
+		/* Avoid checkpatch warning */
+		g_output_megabits = 1;
+	}
+
+	/********/
+	config_ret=ConfigReadString(cfg, section_name, "singleton",
+				    &string[0], STRING_MAX_SIZE, (char *)NULL);
+
+
+	/********/
+	config_ret=ConfigReadString(cfg, section_name, "randomize-endpoints",
+				    &string[0], STRING_MAX_SIZE, (char *)NULL);
+	if (config_ret == CONFIG_OK) {
+		/* Avoid checkpatch warning */
+		g_randomize_endpoints = true;
+	}
+
+	/********/
+	config_ret=ConfigReadString(cfg, section_name, "path",
+				    &string[0], STRING_MAX_SIZE, (char *)NULL);
+	if (config_ret == CONFIG_OK) {
+		len = strlen(string) + 1;
+		g_attach_info_path = (char *)malloc(len);
+		if (g_attach_info_path == NULL) {
+			D_GOTO(cleanup, ret = -DER_NOMEM);
+		}
+		memcpy(g_attach_info_path, string, len);
+	}
+
+	/********/
+	config_ret=ConfigReadString(cfg, section_name, "nopmix",
+				    &string[0], STRING_MAX_SIZE, (char *)NULL);
+
+	/* Free up structure and return */
+cleanup:
 	ConfigFree(cfg);
+	return ret;
 }
+
+
 
 int main(int argc, char *argv[])
 {
-
-  D_ERROR("");
-
-  // DEBUGGING
-  // FIXME: Remove this line
-  Test1();
-
 	/* Default parameters */
-	char				 default_msg_sizes_str[] =
-		 "b200000,b200000 0,0 b200000,b200000 i1000,i1000 b200000,"
-		 "i1000,i1000 0,0 i1000,0";
-	const int			 default_rep_count = 10000;
-	const int			 default_max_inflight = 1000;
+	char				default_msg_sizes_str[] =
+		"b200000,b200000 0,0 b200000,b200000 i1000,i1000 b200000,"
+		"i1000,i1000 0,0 i1000,0";
 
-	char				*dest_name = NULL;
+	char				*file_name = NULL;
+	char				*section_name;
 	const char			 tuple_tokens[] = "(),";
-	char				*msg_sizes_str = default_msg_sizes_str;
-	int				 rep_count = default_rep_count;
-	int				 max_inflight = default_max_inflight;
 	struct st_size_params		*all_params = NULL;
 	char				*sizes_ptr = NULL;
 	char				*pch = NULL;
@@ -1734,112 +1916,157 @@ int main(int argc, char *argv[])
 	int				 c;
 	int				 j;
 	int				 ret = 0;
-	struct st_endpoint		*endpts = NULL;
-	struct st_endpoint		*ms_endpts = NULL;
-	uint32_t			 num_endpts = 0;
-	uint32_t			 num_ms_endpts = 0;
-	int				 output_megabits = 0;
-	int				 output_megabits_dummy_change = 0;
-	int16_t				 buf_alignment =
-		CRT_ST_BUF_ALIGN_DEFAULT;
-	char				*attach_info_path = NULL;
+	int				 dump = 0;
 
-  // Remove this to disable gcc warning
-  ret = output_megabits_dummy_change;
+	static struct option long_options[] = {
+		{"file-name", required_argument, 0, 'f'},
+		{"config", required_argument, 0, 'c'},
+		{"display", no_argument, 0, 'd'},
+
+		{"group-name", required_argument, 0, 'g'},
+		{"master-endpoint", required_argument, 0, 'm'},
+		{"endpoint", required_argument, 0, 'e'},
+		{"message-sizes", required_argument, 0, 's'},
+		{"repetitions-per-size", required_argument, 0, 'r'},
+		{"max-inflight-rpcs", required_argument, 0, 'i'},
+		{"align", required_argument, 0, 'a'},
+		{"Mbits", no_argument, 0, 'b'},
+		{"singleton", no_argument, 0, 't'},
+		{"randomize-endpoints", no_argument, 0, 'q'},
+		{"path", required_argument, 0, 'p'},
+		{"nopmix", no_argument, 0, 'n'},
+		{"help", no_argument, 0, 'h'},
+		{0, 0, 0, 0}
+	};
+	extern int			optind;
+
+	g_msg_sizes_str = default_msg_sizes_str;
+	g_rep_count = g_default_rep_count;
+	g_max_inflight = g_default_max_inflight;
 
 	ret = d_log_init();
 	if (ret != 0) {
 		fprintf(stderr, "crt_log_init() failed. rc: %d\n", ret);
 		return ret;
 	}
-	/********************* Parse user arguments *********************/
-	while (1) {
-		static struct option long_options[] = {
-			{"group-name", required_argument, 0, 'g'},
-			{"master-endpoint", required_argument, 0, 'm'},
-			{"endpoint", required_argument, 0, 'e'},
-			{"message-sizes", required_argument, 0, 's'},
-			{"repetitions-per-size", required_argument, 0, 'r'},
-			{"max-inflight-rpcs", required_argument, 0, 'i'},
-			{"align", required_argument, 0, 'a'},
-			{"Mbits", no_argument, 0, 'b'},
-			{"singleton", no_argument, 0, 't'},
-			{"randomize-endpoints", no_argument, 0, 'q'},
-			{"path", required_argument, 0, 'p'},
-			{"nopmix", no_argument, 0, 'n'},
-			{"config", required_argument, 0, 'c'},
-			{0, 0, 0, 0}
-		};
 
-		c = getopt_long(argc, argv, "g:m:e:s:r:i:a:btnqp:",
+	/****************** First Parse user file arguments *************/
+	/* File specified via -f file argument */
+	while (1) {
+		c = getopt_long(argc, argv, "f:c:d",
 				long_options, NULL);
+		/* break out of while loop */
 		if (c == -1)
 			break;
 
 		switch (c) {
+		case 'f':
+			printf(" file name %s\n", optarg);
+			file_name = optarg;
+			break;
+		case 'c':
+			section_name = optarg;
+			break;
+		case 'd':
+			dump = 1;
+			break;
+		default:
+			break;
+		}
+	}
+	if (file_name != NULL) {
+		ret = config_file_setup(file_name, section_name, dump);
+		if (ret == 0) {
+			print_usage(argv[0], default_msg_sizes_str,
+			    	g_default_rep_count,
+			    	g_default_max_inflight);
+			D_GOTO(cleanup, ret = -DER_INVAL);
+		}
+	}
+
+	/**************** Second Parse of user arguments ***************/
+	/*
+	* Overwrite default and/or file input arguments
+	* Restart the scaning.
+	*/
+	optind = 1;
+	while (1) {
+		c = getopt_long(argc, argv, "hg:m:e:s:r:i:a:btnqp",
+				long_options, NULL);
+		/* Break out of while loop */
+		if (c == -1)
+			break;
+
+		switch (c) {
+		/* 2 parameters for file specification */
+		case 'f':
+		case 'c':
+		case 'd':
+			break;
+
+		/* Non file parameters. May be used to overide file. */
 		case 'g':
-			dest_name = optarg;
+			if (g_dest_name != NULL) {
+				free(g_dest_name);
+				alloc_g_dest_name = false;
+			}
+			g_dest_name = optarg;
 			break;
 		case 'm':
-			parse_endpoint_string(optarg, &ms_endpts,
-					      &num_ms_endpts);
+			parse_endpoint_string(optarg, &g_ms_endpts,
+					      &g_num_ms_endpts);
 			break;
 		case 'e':
-			parse_endpoint_string(optarg, &endpts, &num_endpts);
+			parse_endpoint_string(optarg, &g_endpts, &g_num_endpts);
 			break;
 		case 's':
-			msg_sizes_str = optarg;
+			if (alloc_g_msg_sizes_str == true) {
+				free(g_msg_sizes_str);
+				alloc_g_msg_sizes_str = false;
+			}
+			g_msg_sizes_str = optarg;
 			break;
 		case 'r':
-			ret = sscanf(optarg, "%d", &rep_count);
+			ret = sscanf(optarg, "%d", &g_rep_count);
 			if (ret != 1) {
-				rep_count = default_rep_count;
+				g_rep_count = g_default_rep_count;
 				printf("Warning: Invalid repetitions-per-size\n"
 				       "  Using default value %d instead\n",
-				       rep_count);
+				       g_rep_count);
 			}
 			break;
 		case 'i':
-			ret = sscanf(optarg, "%d", &max_inflight);
+			ret = sscanf(optarg, "%d", &g_max_inflight);
 			if (ret != 1) {
-				max_inflight = default_max_inflight;
+				g_max_inflight = g_default_max_inflight;
 				printf("Warning: Invalid max-inflight-rpcs\n"
 				       "  Using default value %d instead\n",
-				       max_inflight);
+				       g_max_inflight);
 			}
 			break;
 		case 'a':
-			ret = sscanf(optarg, "%" SCNd16, &buf_alignment);
-			if (ret != 1 || buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
-			    buf_alignment > CRT_ST_BUF_ALIGN_MAX) {
+			ret = sscanf(optarg, "%" SCNd16, &g_buf_alignment);
+			if (ret != 1 || g_buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
+			    g_buf_alignment > CRT_ST_BUF_ALIGN_MAX) {
 				printf("Warning: Invalid align value %d;"
 				       " Expected value in range [%d:%d]\n",
-				       buf_alignment, CRT_ST_BUF_ALIGN_MIN,
+				       g_buf_alignment, CRT_ST_BUF_ALIGN_MIN,
 				       CRT_ST_BUF_ALIGN_MAX);
-				buf_alignment = CRT_ST_BUF_ALIGN_DEFAULT;
-			}
-			break;
-		case 'c':
-      /* read in and parse --config file option, and wire up to 
-       * the command line options
-       */
-			ret = sscanf(optarg, "%" SCNd16, &buf_alignment);
-			if (ret != 1 || buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
-			    buf_alignment > CRT_ST_BUF_ALIGN_MAX) {
-				printf("Warning: Invalid align value %d;"
-				       " Expected value in range [%d:%d]\n",
-				       buf_alignment, CRT_ST_BUF_ALIGN_MIN,
-				       CRT_ST_BUF_ALIGN_MAX);
-				buf_alignment = CRT_ST_BUF_ALIGN_DEFAULT;
+				g_buf_alignment = CRT_ST_BUF_ALIGN_DEFAULT;
 			}
 			break;
 		case 'b':
-			output_megabits = 1;
+			g_output_megabits = 1;
 			break;
 		case 't':
+printf(" Case t\n");
 			break;
 		case 'p':
-			attach_info_path = optarg;
+			if (g_attach_info_path != NULL) {
+				free(g_attach_info_path);
+				alloc_g_attach_info_path = false;
+			}
+			g_attach_info_path = optarg;
 			break;
 		case 'q':
 			g_randomize_endpoints = true;
@@ -1847,10 +2074,11 @@ int main(int argc, char *argv[])
 		case 'n':
 			break;
 		case '?':
+		case 'h':
 		default:
 			print_usage(argv[0], default_msg_sizes_str,
-				    default_rep_count,
-				    default_max_inflight);
+				    g_default_rep_count,
+				    g_default_max_inflight);
 			D_GOTO(cleanup, ret = -DER_INVAL);
 		}
 	}
@@ -1858,14 +2086,14 @@ int main(int argc, char *argv[])
 	/******************** Parse message sizes argument ********************/
 
 	/* repeat rep_count for each endpoint */
-	rep_count = rep_count * num_endpts;
+	g_rep_count = g_rep_count * g_num_endpts;
 
 	/*
 	 * Count the number of tuple tokens (',') in the user-specified string
 	 * This gives an upper limit on the number of arguments the user passed
 	 */
 	num_tokens = 0;
-	sizes_ptr = msg_sizes_str;
+	sizes_ptr = g_msg_sizes_str;
 	while (1) {
 		const char *token_ptr = tuple_tokens;
 
@@ -1894,7 +2122,7 @@ int main(int argc, char *argv[])
 
 	/* Iterate over the user's message sizes and parse / validate them */
 	num_msg_sizes = 0;
-	pch = strtok(msg_sizes_str, tuple_tokens);
+	pch = strtok(g_msg_sizes_str, tuple_tokens);
 	while (pch != NULL) {
 		D_ASSERTF(num_msg_sizes <= num_tokens, "Token counting err\n");
 
@@ -1929,27 +2157,28 @@ int main(int argc, char *argv[])
 	}
 
 	/******************** Validate arguments ********************/
-	if (dest_name == NULL || crt_validate_grpid(dest_name) != 0) {
+	if (g_dest_name == NULL || crt_validate_grpid(g_dest_name) != 0) {
 		printf("--group-name argument not specified or is invalid\n");
 		D_GOTO(cleanup, ret = -DER_INVAL);
 	}
-	if (ms_endpts == NULL)
+	if (g_ms_endpts == NULL)
 		printf("Warning: No --master-endpoint specified; using this"
 		       " command line application as the master endpoint\n");
-	if (endpts == NULL || num_endpts == 0) {
+	if (g_endpts == NULL || g_num_endpts == 0) {
 		printf("No endpoints specified\n");
 		D_GOTO(cleanup, ret = -DER_INVAL);
 	}
-	if ((rep_count <= 0) || (rep_count > SELF_TEST_MAX_REPETITIONS)) {
+	if ((g_rep_count <= 0) || (g_rep_count > SELF_TEST_MAX_REPETITIONS)) {
 		printf("Invalid --repetitions-per-size argument\n"
 		       "  Expected value in range (0:%d], got %d\n",
-		       SELF_TEST_MAX_REPETITIONS, rep_count);
+		       SELF_TEST_MAX_REPETITIONS, g_rep_count);
 		D_GOTO(cleanup, ret = -DER_INVAL);
 	}
-	if ((max_inflight <= 0) || (max_inflight > SELF_TEST_MAX_INFLIGHT)) {
+	if ((g_max_inflight <= 0) ||
+	    (g_max_inflight > SELF_TEST_MAX_INFLIGHT)) {
 		printf("Invalid --max-inflight-rpcs argument\n"
 		       "  Expected value in range (0:%d], got %d\n",
-		       SELF_TEST_MAX_INFLIGHT, max_inflight);
+		       SELF_TEST_MAX_INFLIGHT, g_max_inflight);
 		D_GOTO(cleanup, ret = -DER_INVAL);
 	}
 
@@ -1957,13 +2186,14 @@ int main(int argc, char *argv[])
 	 * No reason to have max_inflight bigger than the total number of RPCs
 	 * each session
 	 */
-	max_inflight = max_inflight > rep_count ? rep_count : max_inflight;
+	g_max_inflight = g_max_inflight > g_rep_count ?
+			 g_rep_count : g_max_inflight;
 
 	/********************* Print out parameters *********************/
 	printf("Self Test Parameters:\n"
 	       "  Group name to test against: %s\n"
-	       "  # endpoints:                %u\n"
-	       "  Message sizes:              [", dest_name, num_endpts);
+	       "  # endpoints:	%u\n"
+	       "  Message sizes: [", g_dest_name, g_num_endpts);
 	for (j = 0; j < num_msg_sizes; j++) {
 		if (j > 0)
 			printf(", ");
@@ -1973,22 +2203,32 @@ int main(int argc, char *argv[])
 		       crt_st_msg_type_str[all_params[j].reply_type]);
 	}
 	printf("]\n");
-	if (buf_alignment == CRT_ST_BUF_ALIGN_DEFAULT)
+	if (g_buf_alignment == CRT_ST_BUF_ALIGN_DEFAULT)
 		printf("  Buffer addresses end with:  <Default>\n");
 	else
-		printf("  Buffer addresses end with:  %d\n", buf_alignment);
+		printf("  Buffer addresses end with:  %d\n", g_buf_alignment);
 	printf("  Repetitions per size:       %d\n"
 	       "  Max inflight RPCs:          %d\n\n",
-	       rep_count, max_inflight);
+	       g_rep_count, g_max_inflight);
 
 	/********************* Run the self test *********************/
-	ret = run_self_test(all_params, num_msg_sizes, rep_count,
-			    max_inflight, dest_name, ms_endpts,
-			    num_ms_endpts, endpts, num_endpts,
-			    output_megabits, buf_alignment, attach_info_path);
+	ret = run_self_test(all_params, num_msg_sizes, g_rep_count,
+			    g_max_inflight, g_dest_name, g_ms_endpts,
+			    g_num_ms_endpts, g_endpts, g_num_endpts,
+			    g_output_megabits, g_buf_alignment,
+			    g_attach_info_path);
 
 	/********************* Clean up *********************/
 cleanup:
+	if (alloc_g_dest_name && (g_dest_name != NULL)) {
+		free (g_dest_name);
+	}
+	if (alloc_g_msg_sizes_str && (g_msg_sizes_str!= NULL)) {
+		free (g_msg_sizes_str);
+	}
+	if (alloc_g_attach_info_path && (g_attach_info_path != NULL)) {
+		free (g_attach_info_path);
+	}
 	if (all_params != NULL)
 		D_FREE(all_params);
 	d_log_fini();
