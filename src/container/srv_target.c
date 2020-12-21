@@ -1579,8 +1579,8 @@ ds_cont_tgt_force_close(uuid_t cont_uuid)
 {
 	int rc;
 
-	D_DEBUG(DF_DSMS, DF_CONT": Force closing all handles for container "
-		DF_UUID"\n", DP_CONT(NULL, NULL), cont_uuid);
+	D_DEBUG(DF_DSMS, "Force closing all handles for container "
+		DF_UUID"\n", DP_UUID(cont_uuid));
 
 	rc = dss_thread_collective(cont_close_all, &cont_uuid, 0, DSS_ULT_IO);
 	if (rc != 0)
