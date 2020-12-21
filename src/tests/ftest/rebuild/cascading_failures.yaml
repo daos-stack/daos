@@ -12,8 +12,7 @@ timeout: 360
 server_config:
   name: daos_server
   servers:
-#   skipForTicket DAOS-2799
-#   targets: 8
+#   skipForTicket DAOS-2799, with targets: 8
     targets: 1
 pool:
   mode: 511
