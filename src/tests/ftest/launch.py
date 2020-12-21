@@ -1410,6 +1410,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
     """
     import fnmatch  # pylint: disable=import-outside-toplevel
 
+    return_status = True
     this_host = socket.gethostname().split(".")[0]
     host_list = get_hosts_from_yaml(test_yaml, args)
     daos_cores_dir = os.path.join(avocado_logs_dir, "latest", "stacktraces")
@@ -1428,7 +1429,10 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         "copied=()",
         "for file in /var/tmp/core.*",
         "do if [ -e $file ]",
-        "then if sudo chmod 644 $file && "
+        "then if [ ! -s $file ]",
+        "then ((rc++))",
+        "ls -al $file",
+        "else if sudo chmod 644 $file && "
         "scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
             this_host, daos_cores_dir),
         "then copied+=($file)",
@@ -1440,11 +1444,15 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         "ls -al $file",
         "fi",
         "fi",
+        "fi",
         "done",
         "echo Copied ${copied[@]:-no files}",
         "exit $rc",
     ]
-    spawn_commands(host_list, "; ".join(commands), timeout=1800)
+    if not spawn_commands(host_list, "; ".join(commands), timeout=1800):
+        # we might have still gotten some core files, so don't return here
+        # but save a False return status for later
+        return_status = False
 
     cores = os.listdir(daos_cores_dir)
 
@@ -1460,61 +1468,53 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
             os.remove(os.path.join(daos_cores_dir, corefile))
         return False
 
-    def run_gdb(pattern):
-        """Run a gdb command on all corefiles matching a pattern.
+    # here because it's installed in install_debuginfos()
+    import magic    # pylint: disable=import-outside-toplevel,import-error
 
-        Args:
-            pattern (str): the fnmatch/glob pattern of core files to
-                           run gdb on
-        """
-        import magic    # pylint: disable=import-error
-
-        for corefile in cores:
-            if not fnmatch.fnmatch(corefile, pattern):
-                continue
-            corefile_fqpn = os.path.join(daos_cores_dir, corefile)
-            exe_magic = magic.open(magic.NONE)
-            exe_magic.load()
-            exe_type = exe_magic.file(corefile_fqpn)
-            exe_name_end = 0
-            if exe_type:
-                exe_name_start = exe_type.find("execfn: '") + 9
-                if exe_name_start > 8:
-                    exe_name_end = exe_type.find("', platform:")
-                else:
-                    exe_name_start = exe_type.find("from '") + 6
-                    if exe_name_start > 5:
-                        exe_name_end = exe_type[exe_name_start:].find(" ") + \
-                                    exe_name_start
-            if exe_name_end:
-                exe_name = exe_type[exe_name_start:exe_name_end]
-                cmd = [
-                    "gdb", "-cd={}".format(daos_cores_dir),
-                    "-ex", "set pagination off",
-                    "-ex", "thread apply all bt full",
-                    "-ex", "detach",
-                    "-ex", "quit",
-                    exe_name, corefile
-                ]
-                stack_trace_file = os.path.join(
-                    daos_cores_dir, "{}.stacktrace".format(corefile))
-                try:
-                    with open(stack_trace_file, "w") as stack_trace:
-                        stack_trace.writelines(get_output(cmd))
-                except IOError as error:
-                    print(
-                        "Error writing {}: {}".format(stack_trace_file, error))
+    for corefile in cores:
+        if not fnmatch.fnmatch(corefile, 'core.*[0-9]'):
+            continue
+        corefile_fqpn = os.path.join(daos_cores_dir, corefile)
+        exe_magic = magic.open(magic.NONE)
+        exe_magic.load()
+        exe_type = exe_magic.file(corefile_fqpn)
+        exe_name_end = 0
+        if exe_type:
+            exe_name_start = exe_type.find("execfn: '") + 9
+            if exe_name_start > 8:
+                exe_name_end = exe_type.find("', platform:")
             else:
+                exe_name_start = exe_type.find("from '") + 6
+                if exe_name_start > 5:
+                    exe_name_end = exe_type[exe_name_start:].find(" ") + \
+                                exe_name_start
+        if exe_name_end:
+            exe_name = exe_type[exe_name_start:exe_name_end]
+            cmd = [
+                "gdb", "-cd={}".format(daos_cores_dir),
+                "-ex", "set pagination off",
+                "-ex", "thread apply all bt full",
+                "-ex", "detach",
+                "-ex", "quit",
+                exe_name, corefile
+            ]
+            stack_trace_file = os.path.join(
+                daos_cores_dir, "{}.stacktrace".format(corefile))
+            try:
+                with open(stack_trace_file, "w") as stack_trace:
+                    stack_trace.writelines(get_output(cmd))
+            except IOError as error:
                 print(
-                    "Unable to determine executable name from: '{}'\nNot "
-                    "creating stacktrace".format(exe_type))
-                print("core magic reports: {}".format(exe_type))
-            print("Removing {}".format(corefile_fqpn))
-            os.unlink(corefile_fqpn)
+                    "Error writing {}: {}".format(stack_trace_file, error))
+        else:
+            print(
+                "Unable to determine executable name from: '{}'\nNot "
+                "creating stacktrace".format(exe_type))
+            print("core magic reports: {}".format(exe_type))
+        print("Removing {}".format(corefile_fqpn))
+        os.unlink(corefile_fqpn)
 
-    run_gdb('core.*[0-9]')
-
-    return True
+    return return_status
 
 
 def get_test_category(test_file):

@@ -406,8 +406,9 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
  * changes have been made.
  */
 int
-ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
-			int opc, bool evict_rank)
+ds_pool_map_tgts_update(struct pool_map *map,
+			struct pool_target_id_list *tgts, int opc,
+			bool evict_rank, uint32_t *tgt_map_ver)
 {
 	uint32_t	version;
 	int		i;
@@ -416,6 +417,9 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 	D_ASSERT(tgts != NULL);
 
 	version = pool_map_get_version(map);
+	if (tgt_map_ver != NULL)
+		*tgt_map_ver = version;
+
 	for (i = 0; i < tgts->pti_number; i++) {
 		struct pool_target	*target = NULL;
 		struct pool_domain	*dom = NULL;
@@ -440,6 +444,9 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 		if (rc != 0)
 			return rc;
 
+		if (tgt_map_ver != NULL && *tgt_map_ver < version)
+			*tgt_map_ver = version;
+
 		if (evict_rank &&
 		    !(dom->do_comp.co_status & (PO_COMP_ST_DOWN |
 						PO_COMP_ST_DOWNOUT)) &&
@@ -457,6 +464,13 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 			version++;
 		}
 	}
+
+	/* If no target is being changed, let's reset the tgt_map_ver to 0,
+	 * so related ULT like rebuild/reintegrate/drain will not be scheduled.
+	 */
+	if (tgt_map_ver != NULL && *tgt_map_ver == pool_map_get_version(map))
+		*tgt_map_ver = 0;
+
 	/* Set the version only if actual changes have been made. */
 	if (version > pool_map_get_version(map)) {
 		D_DEBUG(DF_DSMS, "generating map %p version %u:\n",
