@@ -214,11 +214,14 @@ static struct crt_proto_rpc_format crt_fi_rpcs[] = {
 char
 *crt_opc_to_str(crt_opcode_t opc)
 {
+	if (crt_opc_is_swim(opc))
+		return "SWIM";
+
 	switch (opc) {
 	CRT_INTERNAL_RPCS_LIST
 	CRT_FI_RPCS_LIST
 	default:
-		return "External rpc";
+		return "DAOS";
 	}
 }
 
