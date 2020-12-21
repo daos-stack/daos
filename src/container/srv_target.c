@@ -605,7 +605,7 @@ cont_child_free_ref(struct daos_llink *llink)
 	struct ds_cont_child *cont = cont_child_obj(llink);
 
 	D_ASSERT(cont->sc_pool != NULL);
-	D_ASSERT(!daos_handle_is_inval(cont->sc_hdl));
+	D_ASSERT(daos_handle_is_valid(cont->sc_hdl));
 
 	D_DEBUG(DF_DSMS, DF_CONT": freeing\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
@@ -1412,7 +1412,7 @@ err_cont:
 		cont_child_put(tls->dt_cont_cache, hdl->sch_cont);
 	}
 
-	if (!daos_handle_is_inval(poh)) {
+	if (daos_handle_is_valid(poh)) {
 		D_DEBUG(DF_DSMS, DF_CONT": destroying new vos container\n",
 			DP_CONT(pool_uuid, cont_uuid));
 		D_ASSERT(hdl->sch_cont != NULL);

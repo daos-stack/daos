@@ -96,7 +96,7 @@ dtx_free_dbca(struct dtx_batched_commit_args *dbca)
 {
 	struct ds_cont_child	*cont = dbca->dbca_cont;
 
-	if (!daos_handle_is_inval(cont->sc_dtx_cos_hdl)) {
+	if (daos_handle_is_valid(cont->sc_dtx_cos_hdl)) {
 		dbtree_destroy(cont->sc_dtx_cos_hdl, NULL);
 		cont->sc_dtx_cos_hdl = DAOS_HDL_INVAL;
 	}

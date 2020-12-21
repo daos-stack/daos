@@ -2613,9 +2613,9 @@ vos_dtx_cache_reset(daos_handle_t coh)
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
-	if (!daos_handle_is_inval(cont->vc_dtx_active_hdl))
+	if (daos_handle_is_valid(cont->vc_dtx_active_hdl))
 		dbtree_destroy(cont->vc_dtx_active_hdl, NULL);
-	if (!daos_handle_is_inval(cont->vc_dtx_committed_hdl))
+	if (daos_handle_is_valid(cont->vc_dtx_committed_hdl))
 		dbtree_destroy(cont->vc_dtx_committed_hdl, NULL);
 
 	if (cont->vc_dtx_array)
