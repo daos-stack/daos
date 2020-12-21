@@ -253,7 +253,6 @@ agg_clear_extents(struct ec_agg_entry *entry)
 	entry->ae_cur_stripe.as_offset = 0U;
 	/* Account for carry over. */
 	if (ptail) {
-		D_ASSERT(entry->ae_cur_stripe.as_extent_cnt == 1);
 		entry->ae_cur_stripe.as_stripenum++;
 	} else {
 		D_ASSERT(entry->ae_cur_stripe.as_extent_cnt == 0);
@@ -2219,7 +2218,8 @@ out:
 	daos_prop_free(agg_param.ap_prop);
 	ABT_eventual_free(&agg_param.ap_pool_info.api_eventual);
 	agg_sgl_fini(&agg_param.ap_agg_entry.ae_sgl);
-	dsc_pool_close(ph);
+	if (!daos_handle_is_inval(ph))
+		dsc_pool_close(ph);
 	return rc;
 
 }
