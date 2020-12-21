@@ -1144,7 +1144,7 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		aps            []string
-		event          events.Event
+		event          *events.RASEvent
 		nilClient      bool
 		expInvokeCount int
 		expErr         error

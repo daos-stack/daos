@@ -777,7 +777,7 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		members    Members
-		event      events.Event
+		event      *events.RASEvent
 		expMembers Members
 	}{
 		"nil event": {
@@ -796,7 +796,7 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 			expMembers: Members{
 				MockMember(t, 0, MemberStateJoined),
 				MockMember(t, 1, MemberStateErrored).WithInfo(
-					errors.Wrap(common.NormalExit, events.RASRankExit.Desc()).Error()),
+					errors.Wrap(common.NormalExit, "DAOS rank exited unexpectedly").Error()),
 				MockMember(t, 2, MemberStateStopped),
 				MockMember(t, 3, MemberStateEvicted),
 			},
@@ -814,7 +814,7 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 			ps := events.NewPubSub(ctx, log)
 			defer ps.Close()
 
-			ps.Subscribe(events.RASTypeRankStateChange, ms)
+			ps.Subscribe(events.RASTypeStateChange, ms)
 
 			ps.Publish(tc.event)
 

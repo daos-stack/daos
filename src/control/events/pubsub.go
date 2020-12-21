@@ -26,15 +26,19 @@ package events
 import (
 	"context"
 
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
+
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 // Handler defines an interface to be implemented by event receivers.
 type Handler interface {
 	// OnEvent takes an event to be processed and a context,
 	// implementation must return on context.Done().
-	OnEvent(context.Context, Event)
+	OnEvent(context.Context, *RASEvent)
 }
 
 type subscriber struct {
@@ -46,7 +50,7 @@ type subscriber struct {
 // receipt of events pertaining to a particular topic.
 type PubSub struct {
 	log         logging.Logger
-	events      chan Event
+	events      chan *RASEvent
 	subscribers chan *subscriber
 	handlers    map[RASTypeID][]Handler
 	disabledIDs map[RASID]struct{}
@@ -58,7 +62,7 @@ type PubSub struct {
 func NewPubSub(parent context.Context, log logging.Logger) *PubSub {
 	ps := &PubSub{
 		log:         log,
-		events:      make(chan Event),
+		events:      make(chan *RASEvent),
 		subscribers: make(chan *subscriber),
 		handlers:    make(map[RASTypeID][]Handler),
 		disabledIDs: make(map[RASID]struct{}),
@@ -92,18 +96,18 @@ func (ps *PubSub) EnableEventIDs(ids ...RASID) {
 
 // Publish passes an event to the event channel to be processed by subscribers.
 // Ignore disabled events.
-func (ps *PubSub) Publish(event Event) {
+func (ps *PubSub) Publish(event *RASEvent) {
 	if common.InterfaceIsNil(event) {
 		ps.log.Error("nil event")
 		return
 	}
 
-	if _, exists := ps.disabledIDs[event.GetID()]; exists {
-		ps.log.Debugf("event %s ignored by filter", event.GetID())
+	if _, exists := ps.disabledIDs[event.ID]; exists {
+		ps.log.Debugf("event %s ignored by filter", event.ID)
 		return
 	}
 
-	ps.log.Debugf("publishing @%s: %+v", event.GetType(), event)
+	ps.log.Debugf("publishing @%s: %s", event.Type, event.ID)
 
 	ps.events <- event
 }
@@ -137,7 +141,7 @@ func (ps *PubSub) eventLoop(ctx context.Context) {
 			for _, hdlr := range ps.handlers[RASTypeAny] {
 				go hdlr.OnEvent(ctx, event)
 			}
-			for _, hdlr := range ps.handlers[event.GetType()] {
+			for _, hdlr := range ps.handlers[event.Type] {
 				go hdlr.OnEvent(ctx, event)
 			}
 		}
@@ -154,4 +158,27 @@ func (ps *PubSub) Close() {
 func (ps *PubSub) Reset() {
 	ps.log.Debug("called Reset()")
 	ps.reset <- struct{}{}
+}
+
+// HandleClusterEvent extracts event field from protobuf request message and
+// converts to concrete event type that implements the Event interface.
+// The Event is then published to make available to locally subscribed consumers
+// to act upon.
+func (ps *PubSub) HandleClusterEvent(req *mgmtpb.ClusterEventReq) (*mgmtpb.ClusterEventResp, error) {
+	switch {
+	case req.Sequence < 0:
+		ps.log.Debug("no sequence number in ClusterEventReq")
+	case req == nil:
+		return nil, errors.New("nil ClusterEventReq")
+	case req.Event == nil:
+		return nil, errors.New("nil Event in ClusterEventReq")
+	}
+
+	event, err := NewFromProto(req.Event)
+	if err != nil {
+		return nil, err
+	}
+	ps.Publish(event)
+
+	return &mgmtpb.ClusterEventResp{Sequence: req.Sequence}, nil
 }

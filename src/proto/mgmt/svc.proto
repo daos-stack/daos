@@ -79,41 +79,6 @@ message LeaderQueryResp {
 	repeated string replicas = 2;
 }
 
-// RankStateInfo defines extended fields for rank state change related events.
-message RankStateInfo {
-	uint32 instance = 1;	// Control-plane harness instance index.
-	bool errored = 2;	// Rank in error state.
-	string error = 3;	// Message associated with error.
-}
-
-// RASEvent describes a RAS event in the DAOS system.
-message RASEvent {
-	string name = 1;	// Unique identifier, 64-char.
-	string timestamp = 2;	// Fully qualified timestamp (us) incl timezone.
-	uint32 severity = 3;	// Event severity.
-	string msg = 4;		// Human readable message describing event.
-	uint32 id = 5;		// Unique numeric event identifier.
-	uint32 type = 6;	// Event type.
-	uint32 rank = 7; 	// (optional) DAOS rank involved in event.
-	string hostname = 8;	// (optional) Hostname of node involved in event.
-	oneof extended_info {	// (optional) Instance specific info.
-		RankStateInfo rank_state = 9;
-	}
-}
-
-// ClusterEventReq wraps an event subtype e.g. RASEvent.
-message ClusterEventReq {
-	uint64 sequence = 1;	// Sequence identifier for cluster events.
-	oneof event {
-		RASEvent ras = 2;
-	}
-}
-
-// ClusterEventResp acknowledges receipt of an event notification.
-message ClusterEventResp {
-	uint64 sequence = 1;	// Sequence identifier for cluster events.
-}
-
 message GetAttachInfoReq {
 	string sys = 1;		// System name. For daos_agent only.
 	bool allRanks = 2;      // Return PSRs for all ranks, not just the MS replicas.

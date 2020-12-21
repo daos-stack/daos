@@ -31,8 +31,8 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 )
 
-func TestEvents_ConvertRankExit(t *testing.T) {
-	event := NewRankExitEvent("foo", 1, 1, common.ExitStatus("test"))
+func TestEvents_ConvertPoolSvcReplicasUpdate(t *testing.T) {
+	event := NewPoolSvcReplicasUpdateEvent("foo", 1, common.MockUUID(), []uint32{0, 1}, 1)
 
 	pbEvent, err := event.ToProto()
 	if err != nil {

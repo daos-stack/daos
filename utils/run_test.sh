@@ -121,6 +121,7 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_BUILD_DIR}/src/common/tests/acl_principal_tests"
     run_test "${SL_BUILD_DIR}/src/common/tests/acl_real_tests"
     run_test "${SL_BUILD_DIR}/src/common/tests/prop_tests"
+    run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_client_tests"
     run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_progress_tests"
     run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_handler_tests"
     run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_listener_tests"

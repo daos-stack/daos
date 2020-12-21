@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,88 +26,67 @@ package events
 import (
 	"time"
 
-	"github.com/pkg/errors"
-
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
-// RankExit is a custom event type that implements the Event interface.
-type RankExit struct {
-	RAS         *RASEvent
-	InstanceIdx uint32
-	ExitErr     error
+// RankStateInfo describes details of a rank's state.
+type RankStateInfo struct {
+	InstanceIdx uint32 `json:"instance_idx"`
+	ExitErr     error  `json:"-"`
 }
 
-// GetID implements the method on the interface to return event ID.
-func (evt *RankExit) GetID() RASID { return evt.RAS.ID }
+func (rsi *RankStateInfo) isExtendedInfo() {}
 
-// GetType implements the method on the interface to return event type.
-func (evt *RankExit) GetType() RASTypeID { return evt.RAS.Type }
-
-// FromProto unpacks protobuf RAS event into this RankExit instance, extracting
-// ExtendedInfo variant into custom event specific fields.
-func (evt *RankExit) FromProto(pbEvt *mgmtpb.RASEvent) error {
-	evt.RAS = &RASEvent{
-		Name:      pbEvt.Name,
-		Timestamp: pbEvt.Timestamp,
-		Msg:       pbEvt.Msg,
-		Hostname:  pbEvt.Hostname,
-		Rank:      pbEvt.Rank,
-		ID:        RASID(pbEvt.Id),
-		Severity:  RASSeverityID(pbEvt.Severity),
-		Type:      RASTypeID(pbEvt.Type),
+// GetRankStateInfo returns extended info if of type RankStateInfo.
+func (evt *RASEvent) GetRankStateInfo() *RankStateInfo {
+	if ei, ok := evt.ExtendedInfo.(*RankStateInfo); ok {
+		return ei
 	}
-
-	pbInfo := pbEvt.GetRankState()
-	if pbInfo == nil {
-		return errors.Errorf("unexpected extended info type received, "+
-			"want RankState, got %T", pbEvt)
-	}
-	if pbInfo.GetErrored() {
-		evt.ExitErr = common.ExitStatus(pbInfo.GetError())
-	}
-	evt.InstanceIdx = pbInfo.Instance
 
 	return nil
 }
 
-// ToProto packs this RankExit instance into a protobuf RAS event, encoding
-// custom event specific fields into the equivalent ExtendedInfo oneof variant.
-func (evt *RankExit) ToProto() (*mgmtpb.RASEvent, error) {
-	pbEvt := new(mgmtpb.RASEvent)
-	if err := convert.Types(evt.RAS, pbEvt); err != nil {
-		return nil, errors.Wrapf(err, "converting %T->%T", evt.RAS, pbEvt)
+// RankStateInfoFromProto converts event info from proto to native format.
+func RankStateInfoFromProto(pbInfo *mgmtpb.RASEvent_RankStateInfo) (*RankStateInfo, error) {
+	rsi := &RankStateInfo{
+		InstanceIdx: pbInfo.RankStateInfo.GetInstance(),
+	}
+	if pbInfo.RankStateInfo.GetErrored() {
+		rsi.ExitErr = common.ExitStatus(pbInfo.RankStateInfo.GetError())
 	}
 
-	info := &mgmtpb.RankStateInfo{}
-	if evt.ExitErr != nil {
-		info.Errored = true
-		info.Error = evt.ExitErr.Error()
-	}
-	info.Instance = evt.InstanceIdx
-	pbEvt.ExtendedInfo = &mgmtpb.RASEvent_RankState{RankState: info}
+	return rsi, nil
+}
 
-	return pbEvt, nil
+// RankStateInfoToProto converts event info from native to proto format.
+func RankStateInfoToProto(rsi *RankStateInfo) (*mgmtpb.RASEvent_RankStateInfo, error) {
+	pbInfo := &mgmtpb.RASEvent_RankStateInfo{
+		RankStateInfo: &mgmtpb.RASEvent_RankStateEventInfo{
+			Instance: rsi.InstanceIdx,
+		},
+	}
+	if rsi.ExitErr != nil {
+		pbInfo.RankStateInfo.Errored = true
+		pbInfo.RankStateInfo.Error = rsi.ExitErr.Error()
+	}
+
+	return pbInfo, nil
 }
 
 // NewRankExitEvent creates a specific RankExit event from given inputs.
-func NewRankExitEvent(hostname string, instanceIdx uint32, rank uint32, exitErr common.ExitStatus) Event {
-	evt := &RASEvent{
-		Name:      RASRankExit.String(),
+func NewRankExitEvent(hostname string, instanceIdx uint32, rank uint32, exitErr common.ExitStatus) *RASEvent {
+	return &RASEvent{
 		Timestamp: common.FormatTime(time.Now()),
-		Msg:       RASRankExit.Desc(),
-		ID:        RASRankExit,
+		Msg:       "DAOS rank exited unexpectedly",
+		ID:        RASRankDown,
 		Hostname:  hostname,
 		Rank:      rank,
-		Type:      RASTypeRankStateChange,
+		Type:      RASTypeStateChange,
 		Severity:  RASSeverityError,
-	}
-
-	return &RankExit{
-		RAS:         evt,
-		InstanceIdx: instanceIdx,
-		ExitErr:     exitErr,
+		ExtendedInfo: &RankStateInfo{
+			InstanceIdx: instanceIdx,
+			ExitErr:     exitErr,
+		},
 	}
 }

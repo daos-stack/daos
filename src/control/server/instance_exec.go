@@ -135,7 +135,7 @@ func (srv *IOServerInstance) finishStartup(ctx context.Context, ready *srvpb.Not
 
 // publishInstanceExitFn returns onInstanceExitFn which will publish an exit
 // event using the provided publish function.
-func publishInstanceExitFn(publishFn func(events.Event), hostname string, srvIdx uint32) onInstanceExitFn {
+func publishInstanceExitFn(publishFn func(*events.RASEvent), hostname string, srvIdx uint32) onInstanceExitFn {
 	return func(_ context.Context, rank system.Rank, exitErr error) error {
 		if exitErr == nil {
 			return errors.New("expected non-nil exit error")

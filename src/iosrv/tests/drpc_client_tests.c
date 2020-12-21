@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@
 
 #include "../drpc_internal.h"
 #include "../srv.pb-c.h"
+#include "../event.pb-c.h"
 #include "../srv_internal.h"
 #include <daos/test_mocks.h>
 #include <daos/test_utils.h>
@@ -89,6 +90,7 @@ drpc_client_test_teardown(void **state)
 static void
 test_drpc_init_connect_fails(void **state)
 {
+	skip(); /* DAOS-6436 */
 	connect_return = -1;
 
 	assert_int_equal(drpc_init(), -DER_NOMEM);
@@ -108,6 +110,7 @@ test_drpc_init_crt_get_uri_fails(void **state)
 static void
 test_drpc_init_sendmsg_fails(void **state)
 {
+	skip(); /* DAOS-6436 */
 	sendmsg_return = -1;
 	errno = EPERM;
 
@@ -225,7 +228,7 @@ test_drpc_verify_notify_bio_error(void **state)
 	/* Message was sent */
 	assert_non_null(sendmsg_msg_ptr);
 
-	assert_int_equal(notify_bio_error(MET_WRITE, 0), 0);
+	assert_int_equal(ds_notify_bio_error(MET_WRITE, 0), 0);
 	verify_notify_bio_error();
 
 	/* Now let's shut things down... */
@@ -235,6 +238,128 @@ test_drpc_verify_notify_bio_error(void **state)
 	assert_int_equal(close_call_count, 1);
 }
 
+static void
+verify_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc_reps)
+{
+	Drpc__Call		*call;
+	Mgmt__ClusterEventReq	*req;
+	d_rank_list_t		*reps;
+	uuid_t			 puuid;
+	int			 reps_match;
+
+	call = drpc__call__unpack(NULL, sendmsg_msg_iov_len,
+				  sendmsg_msg_content);
+	assert_non_null(call);
+	assert_int_equal(call->module, DRPC_MODULE_MGMT);
+	assert_int_equal(call->method, DRPC_METHOD_MGMT_CLUSTER_EVENT);
+
+	/* Verify payload contents */
+	req = mgmt__cluster_event_req__unpack(NULL, call->body.len,
+					      call->body.data);
+	assert_non_null(req);
+	assert_int_equal(uuid_parse(req->event->pool_uuid, puuid), 0);
+	assert_int_equal(uuid_compare(puuid, pool_uuid), 0);
+	assert_int_equal(req->event->pool_svc_info->n_svc_reps,
+			 svc_reps->rl_nr);
+	reps = uint32_array_to_rank_list(req->event->pool_svc_info->svc_reps,
+					 svc_reps->rl_nr);
+	reps_match = daos_rank_list_identical(svc_reps, reps);
+	d_rank_list_free(reps);
+	assert_true(reps_match);
+
+	/* Cleanup */
+	mgmt__cluster_event_req__free_unpacked(req, NULL);
+	drpc__call__free_unpacked(call, NULL);
+}
+
+static void
+test_drpc_verify_notify_pool_svc_update(void **state)
+{
+	uuid_t		 pool_uuid;
+	uint32_t	 svc_reps[4] = {0, 1, 2, 3};
+	d_rank_list_t	*svc_ranks;
+
+	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
+
+	assert_int_equal(drpc_init(), 0);
+
+	assert_int_equal(uuid_parse("11111111-1111-1111-1111-111111111111",
+				    pool_uuid), 0);
+
+	svc_ranks = uint32_array_to_rank_list(svc_reps, 4);
+	assert_non_null(svc_ranks);
+
+	assert_int_equal(ds_notify_pool_svc_update(pool_uuid, svc_ranks), 0);
+	verify_notify_pool_svc_update(pool_uuid, svc_ranks);
+
+	drpc_fini();
+}
+
+static void
+verify_notify_ras_event(ras_event_t id, ras_type_t type, ras_sev_t sev,
+			char *hid, d_rank_t *rank, char *jid, uuid_t *puuid,
+			uuid_t *cuuid, daos_obj_id_t *oid, char *cop,
+			char *msg, char *data)
+{
+	Drpc__Call		*call;
+	Mgmt__ClusterEventReq	*req;
+	uuid_t			 req_puuid, req_cuuid;
+
+	call = drpc__call__unpack(NULL, sendmsg_msg_iov_len,
+				  sendmsg_msg_content);
+	assert_non_null(call);
+	assert_int_equal(call->module, DRPC_MODULE_MGMT);
+	assert_int_equal(call->method, DRPC_METHOD_MGMT_CLUSTER_EVENT);
+
+	/* Verify payload contents */
+	req = mgmt__cluster_event_req__unpack(NULL, call->body.len,
+					      call->body.data);
+	assert_non_null(req);
+	assert_int_equal(uuid_parse(req->event->pool_uuid, req_puuid), 0);
+	assert_int_equal(uuid_compare(req_puuid, *puuid), 0);
+	assert_int_equal(uuid_parse(req->event->cont_uuid, req_cuuid), 0);
+	assert_int_equal(uuid_compare(req_cuuid, *cuuid), 0);
+
+	/* Cleanup */
+	mgmt__cluster_event_req__free_unpacked(req, NULL);
+	drpc__call__free_unpacked(call, NULL);
+}
+
+static void
+test_drpc_verify_notify_ras_event(void **state)
+{
+	uuid_t		puuid, cuuid;
+	d_rank_t	rank = 1;
+	daos_obj_id_t	oid = { .hi = 1, .lo = 1 };
+
+	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
+
+	assert_int_equal(drpc_init(), 0);
+
+	assert_int_equal(uuid_parse("11111111-1111-1111-1111-111111111111",
+				    puuid), 0);
+	assert_int_equal(uuid_parse("22222222-2222-2222-2222-222222222222",
+				    cuuid), 0);
+
+	ds_notify_ras_event(RAS_RANK_NO_RESPONSE, RAS_TYPE_INFO, RAS_SEV_WARN,
+			    "exhwid", &rank, "exjobid", &puuid, &cuuid, &oid,
+			    "exctlop", "Example message for no response",
+			    "{\"people\":[\"bill\",\"steve\",\"bob\"]}");
+	verify_notify_ras_event(RAS_RANK_NO_RESPONSE, RAS_TYPE_INFO,
+				RAS_SEV_WARN, "exhwid", &rank, "exjobid",
+				&puuid, &cuuid, &oid, "exctlop",
+				"Example message for no response",
+				"{\"people\":[\"bill\",\"steve\",\"bob\"]}");
+
+	drpc_fini();
+}
+
+/* TODO DAOS-6436:
+ * static void
+ * test_drpc_verify_notify_ras_min_viable(void **state)
+ * static void
+ * test_drpc_verify_notify_ras_incomplete(void **state)
+*/
 
 /* Convenience macros for unit tests */
 #define UTEST(x)	cmocka_unit_test_setup_teardown(x,	\
@@ -251,6 +376,8 @@ main(void)
 		UTEST(test_drpc_init_fini),
 		UTEST(test_drpc_init_bad_response),
 		UTEST(test_drpc_verify_notify_bio_error),
+		UTEST(test_drpc_verify_notify_pool_svc_update),
+		UTEST(test_drpc_verify_notify_ras_event),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);

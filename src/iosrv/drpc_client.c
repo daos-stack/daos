@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -95,7 +95,7 @@ out:
 
 /* Notify daos_server that there has been a I/O error. */
 int
-notify_bio_error(int media_err_type, int tgt_id)
+ds_notify_bio_error(int media_err_type, int tgt_id)
 {
 	Srv__BioErrorReq	 bioerr_req = SRV__BIO_ERROR_REQ__INIT;
 	Drpc__Call		*dreq;
@@ -105,7 +105,7 @@ notify_bio_error(int media_err_type, int tgt_id)
 	int			 rc;
 
 	if (dss_drpc_ctx == NULL) {
-		D_ERROR("DRPC not connected\n");
+		D_ERROR("dRPC not connected\n");
 		return -DER_INVAL;
 	}
 
@@ -159,7 +159,7 @@ out_dreq:
 }
 
 int
-get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
+ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 {
 	Srv__GetPoolSvcReq	gps_req = SRV__GET_POOL_SVC_REQ__INIT;
 	Srv__GetPoolSvcResp	*gps_resp = NULL;
@@ -171,7 +171,7 @@ get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 	int			 rc;
 
 	if (dss_drpc_ctx == NULL) {
-		D_ERROR("DRPC not connected\n");
+		D_ERROR("dRPC not connected\n");
 		return -DER_UNINIT;
 	}
 
@@ -207,8 +207,7 @@ get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 	if (dresp->status != DRPC__STATUS__SUCCESS) {
 		D_ERROR("received erroneous dRPC response: %d\n",
 			dresp->status);
-		rc = -DER_IO;
-		goto out_dresp;
+		D_GOTO(out_dresp, rc = -DER_IO);
 	}
 
 	gps_resp = srv__get_pool_svc_resp__unpack(
@@ -247,8 +246,8 @@ out:
 int
 drpc_init(void)
 {
-	char   *path;
-	int	rc;
+	char	*path;
+	int	 rc;
 
 	D_ASPRINTF(path, "%s/%s", dss_socket_dir, "daos_server.sock");
 	if (path == NULL) {

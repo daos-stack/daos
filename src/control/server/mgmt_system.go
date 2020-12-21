@@ -45,39 +45,6 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-// ClusterEvent management service gRPC handler receives ClusterEvent requests
-// from control-plane instances attempting to notify the MS of a cluster event
-// in the DAOS system.
-//
-// On receipt of the request publish extracted event to make it available to
-// locally subscribed consumers to act upon.
-func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *mgmtpb.ClusterEventReq) (*mgmtpb.ClusterEventResp, error) {
-	if err := svc.checkLeaderRequest(req); err != nil {
-		return nil, err
-	}
-	if req.Sequence < 1 {
-		return nil, errors.New("invalid sequence number in request")
-	}
-	svc.log.Debugf("MgmtSvc.ClusterEvent dispatch, req:%#v\n", req)
-
-	rasEventPB := req.GetRas()
-	if rasEventPB == nil {
-		return nil, errors.Errorf("unexpected event type received, want RAS got %T",
-			req.GetEvent())
-	}
-
-	event, err := events.NewFromProto(rasEventPB)
-	if err != nil {
-		return nil, err
-	}
-	svc.events.Publish(event)
-
-	resp := &mgmtpb.ClusterEventResp{Sequence: req.Sequence}
-	svc.log.Debugf("MgmtSvc.ClusterEvent dispatch, resp:%#v\n", resp)
-
-	return resp, nil
-}
-
 // GetAttachInfo handles a request to retrieve a map of ranks to fabric URIs, in addition
 // to client network autoconfiguration hints.
 //
@@ -257,6 +224,10 @@ func (svc *mgmtSvc) join(ctx context.Context, req *batchJoinRequest) *batchJoinR
 			joinErr: errors.Wrapf(err, "invalid server fault domain %q", req.GetSrvFaultDomain()),
 		}
 	}
+
+	// don't publish rank exit events whilst performing controlled shutdown
+	svc.events.DisableEventIDs(events.RASRankDown)
+	defer svc.events.EnableEventIDs(events.RASRankDown)
 
 	joinResponse, err := svc.membership.Join(&system.JoinRequest{
 		Rank:           system.Rank(req.Rank),
@@ -725,9 +696,6 @@ func (svc *mgmtSvc) SystemResetFormat(ctx context.Context, pbReq *mgmtpb.SystemR
 		Hosts:  pbReq.GetHosts(),
 		Ranks:  pbReq.GetRanks(),
 	}, false)
-	if err != nil {
-		return nil, err
-	}
 
 	pbResp := &mgmtpb.SystemResetFormatResp{
 		Absentranks: fanResp.AbsentRanks.String(),
@@ -743,4 +711,20 @@ func (svc *mgmtSvc) SystemResetFormat(ctx context.Context, pbReq *mgmtpb.SystemR
 	svc.log.Debugf("Responding to SystemResetFormat RPC: %+v", pbResp)
 
 	return pbResp, nil
+}
+
+// ClusterEvent management service gRPC handler receives ClusterEvent requests
+// from control-plane instances attempting to notify the MS of a cluster event
+// in the DAOS system (this handler should only get called on the MS leader).
+func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *mgmtpb.ClusterEventReq) (*mgmtpb.ClusterEventResp, error) {
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+
+	resp, err := svc.events.HandleClusterEvent(req)
+	if err != nil {
+		return nil, errors.Wrapf(err, "handle cluster event %+v", req)
+	}
+
+	return resp, nil
 }

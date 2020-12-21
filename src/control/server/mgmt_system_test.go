@@ -104,11 +104,11 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 }
 
 type eventsDispatched struct {
-	rx     []events.Event
+	rx     []*events.RASEvent
 	cancel context.CancelFunc
 }
 
-func (d *eventsDispatched) OnEvent(ctx context.Context, e events.Event) {
+func (d *eventsDispatched) OnEvent(ctx context.Context, e *events.RASEvent) {
 	d.rx = append(d.rx, e)
 	d.cancel()
 }
@@ -119,25 +119,21 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 	for name, tc := range map[string]struct {
 		nilReq        bool
 		zeroSeq       bool
-		event         events.Event
+		event         *events.RASEvent
 		expResp       *mgmtpb.ClusterEventResp
-		expDispatched []events.Event
+		expDispatched []*events.RASEvent
 		expErr        error
 	}{
 		"nil request": {
 			nilReq: true,
 			expErr: errors.New("nil request"),
 		},
-		"invalid sequence number": {
-			zeroSeq: true,
-			expErr:  errors.New("invalid sequence"),
-		},
 		"successful notification": {
 			event: eventRankExit,
 			expResp: &mgmtpb.ClusterEventResp{
 				Sequence: 1,
 			},
-			expDispatched: []events.Event{eventRankExit},
+			expDispatched: []*events.RASEvent{eventRankExit},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -153,7 +149,7 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			mgmtSvc.events = ps
 
 			dispatched := &eventsDispatched{cancel: cancel}
-			mgmtSvc.events.Subscribe(events.RASTypeRankStateChange, dispatched)
+			mgmtSvc.events.Subscribe(events.RASTypeStateChange, dispatched)
 
 			var pbReq *mgmtpb.ClusterEventReq
 			switch {
@@ -168,9 +164,7 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 
 				pbReq = &mgmtpb.ClusterEventReq{
 					Sequence: 1,
-					Event: &mgmtpb.ClusterEventReq_Ras{
-						Ras: eventPB,
-					},
+					Event:    eventPB,
 				}
 			}
 
@@ -792,7 +786,16 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 
 			svc := newTestMgmtSvc(t, log)
 			svc.membership = svc.membership.WithTCPResolver(mockResolver)
-			//cs.srvCfg = config.DefaultServer().WithControlPort(10001)
+
+			ctx, cancel := context.WithTimeout(context.Background(), tc.ctxTimeout)
+			defer cancel()
+
+			ps := events.NewPubSub(ctx, log)
+			defer ps.Close()
+			svc.events = ps
+
+			dispatched := &eventsDispatched{cancel: cancel}
+			svc.events.Subscribe(events.RASTypeStateChange, dispatched)
 
 			for _, m := range defaultMembers {
 				if _, err := svc.membership.Add(m); err != nil {

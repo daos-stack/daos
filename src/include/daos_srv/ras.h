@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,53 +25,72 @@
  * RAS event definitions to the used in either data or control planes.
  */
 
-#ifndef __RAS_H__
-#define __RAS_H__
+#ifndef __DAOS_RAS_H__
+#define __DAOS_RAS_H__
 
-#define RAS_ID_UNKNOWN_STR "Unknown RAS event"
-#define RAS_SEV_UNKNOWN_STR "Unknown RAS event severity"
-#define RAS_TYPE_UNKNOWN_STR "Unknown RAS event type"
+#define DAOS_RAS_STR_FIELD_SIZE 128
+#define DAOS_RAS_ID_FIELD_SIZE 64
 
-enum ras_event_id {
-	RAS_RANK_EXIT	= 1,
-	RAS_RANK_NO_RESP,
-};
+/**
+ * For each RAS event, define the following:
+ * - Enum symbol to use in the code to identify the RAS event
+ *   No external visibility.
+ * - 64-char string identifier raised as part of the event
+ *   The identifier just be prefixed by component_
+ *   Carried over with the RAS event.
+ */
+#define RAS_EVENT_LIST						\
+	X(RAS_RANK_UP,		"engine_status_up")		\
+	X(RAS_RANK_DOWN,	"engine_status_down")		\
+	X(RAS_RANK_NO_RESPONSE,	"engine_status_no_response")	\
+	X(RAS_POOL_REPS_UPDATE,	"pool_replicas_updated")
 
+/** Define RAS event enum */
+typedef enum {
+#define X(a, b) a,
+	RAS_EVENT_LIST
+#undef X
+} ras_event_t;
+
+/** Extract RAS event ID (= 64-char string) from enum */
 static inline char *
-ras_event_id_enum_to_name(enum ras_event_id id)
-{
-	switch (id) {
-	case RAS_RANK_EXIT:
-		return "daos_rank_exited";
-	case RAS_RANK_NO_RESP:
-		return "daos_rank_no_response";
-	}
-
-	return RAS_ID_UNKNOWN_STR;
+ras_event2str(ras_event_t ras) {
+#define X(a, b) case a: return b;
+	switch (ras) {
+		RAS_EVENT_LIST
+	};
+	return "unknown_unknown";
+#undef X
 }
 
-static inline char *
-ras_event_id_enum_to_msg(enum ras_event_id id)
-{
-	switch (id) {
-	case RAS_RANK_EXIT:
-		return "DAOS rank exited";
-	case RAS_RANK_NO_RESP:
-		return "DAOS rank unresponsive";
-	}
+typedef enum {
+	/* ANY is a special case to match all types */
+	RAS_TYPE_ANY	= 0,
+	RAS_TYPE_STATE_CHANGE,
+	RAS_TYPE_INFO,
+} ras_type_t;
 
-	return RAS_ID_UNKNOWN_STR;
+static inline char *
+ras_type2str(ras_type_t type)
+{
+	switch (type) {
+	case RAS_TYPE_STATE_CHANGE:
+		return "STATE_CHANGE";
+	case RAS_TYPE_INFO:
+	default:
+		return "INFO";
+	}
 }
 
-enum ras_event_sev {
+typedef enum {
 	RAS_SEV_FATAL	= 1,
 	RAS_SEV_WARN,
 	RAS_SEV_ERROR,
 	RAS_SEV_INFO,
-};
+} ras_sev_t;
 
 static inline char *
-ras_event_sev_enum_to_name(enum ras_event_sev severity)
+ras_sev2str(ras_sev_t severity)
 {
 	switch (severity) {
 	case RAS_SEV_FATAL:
@@ -81,29 +100,9 @@ ras_event_sev_enum_to_name(enum ras_event_sev severity)
 	case RAS_SEV_ERROR:
 		return "ERROR";
 	case RAS_SEV_INFO:
+	default:
 		return "INFO";
 	}
-
-	return RAS_SEV_UNKNOWN_STR;
 }
 
-enum ras_event_type {
-	/* ANY is a special case to match all types */
-	RAS_TYPE_ANY	= 0,
-	RAS_TYPE_RANK_STATE_CHANGE,
-	RAS_TYPE_INFO_ONLY,
-};
-
-static inline char *
-ras_event_type_enum_to_name(enum ras_event_type type)
-{
-	switch (type) {
-	case RAS_TYPE_RANK_STATE_CHANGE:
-		return "RANK_STATE_CHANGE";
-	case RAS_TYPE_INFO_ONLY:
-		return "INFO_ONLY";
-	}
-
-	return RAS_TYPE_UNKNOWN_STR;
-}
-#endif /* __RAS_H_ */
+#endif /* __DAOS_RAS_H_ */

@@ -173,11 +173,11 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 type SystemNotifyReq struct {
 	unaryRequest
 	msRequest
-	Event    events.Event
+	Event    *events.RASEvent
 	Sequence uint64
 }
 
-// toClusterEventReq converts the system notify request to a cluster events
+// toClusterEventReq converts the system notify request to a cluster event
 // request. Resolve control address to a hostname if possible.
 func (req *SystemNotifyReq) toClusterEventReq() (*mgmtpb.ClusterEventReq, error) {
 	if req.Event == nil {
@@ -189,10 +189,7 @@ func (req *SystemNotifyReq) toClusterEventReq() (*mgmtpb.ClusterEventReq, error)
 		return nil, errors.Wrap(err, "convert event to proto")
 	}
 
-	return &mgmtpb.ClusterEventReq{
-		Sequence: req.Sequence,
-		Event:    &mgmtpb.ClusterEventReq_Ras{Ras: pbRASEvent},
-	}, nil
+	return &mgmtpb.ClusterEventReq{Sequence: req.Sequence, Event: pbRASEvent}, nil
 }
 
 // SystemNotifyResp contains the request response.
@@ -211,10 +208,9 @@ func SystemNotify(ctx context.Context, rpcClient UnaryInvoker, req *SystemNotify
 		return nil, errors.New("nil rpc client")
 	}
 
-	rpcClient.Debugf("DAOS system notify request: %+v, event: %+v", req, req.Event)
 	pbReq, err := req.toClusterEventReq()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "decoding system notify request")
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).ClusterEvent(ctx, pbReq)
@@ -239,9 +235,9 @@ type EventForwarder struct {
 }
 
 // OnEvent implements the events.Handler interface.
-func (fwdr *EventForwarder) OnEvent(ctx context.Context, evt events.Event) {
+func (fwdr *EventForwarder) OnEvent(ctx context.Context, evt *events.RASEvent) {
 	switch {
-	case common.InterfaceIsNil(evt):
+	case evt == nil:
 		fwdr.client.Debug("skip event forwarding, nil event")
 		return
 	case len(fwdr.accessPts) == 0:
@@ -249,7 +245,7 @@ func (fwdr *EventForwarder) OnEvent(ctx context.Context, evt events.Event) {
 		return
 	}
 	fwdr.seq++
-	fwdr.client.Debugf("forwarding %s event to MS (seq: %d)", evt.GetID(), fwdr.seq)
+	fwdr.client.Debugf("forwarding %s event to MS (seq: %d)", evt.ID, fwdr.seq)
 
 	req := &SystemNotifyReq{
 		Sequence: fwdr.seq,
