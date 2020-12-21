@@ -62,8 +62,9 @@ type RASID uint32
 
 // RASID constant definitions.
 const (
-	RASRankExit   RASID = C.RAS_RANK_EXIT
-	RASRankNoResp RASID = C.RAS_RANK_NO_RESP
+	RASRankExit          RASID = C.RAS_RANK_EXIT
+	RASRankNoResp        RASID = C.RAS_RANK_NO_RESP
+	RASPoolSvcRankUpdate RASID = C.RAS_POOL_SVC_RANK_UPDATE
 )
 
 func (id RASID) String() string {
@@ -108,6 +109,7 @@ const (
 	RASTypeAny             RASTypeID = C.RAS_TYPE_ANY
 	RASTypeRankStateChange RASTypeID = C.RAS_TYPE_RANK_STATE_CHANGE
 	RASTypeInfoOnly        RASTypeID = C.RAS_TYPE_INFO_ONLY
+	RASTypePoolSvcChange   RASTypeID = C.RAS_TYPE_POOL_SVC_CHANGE
 )
 
 func (typ RASTypeID) String() string {

@@ -469,7 +469,7 @@ func (m *Membership) OnEvent(_ context.Context, evt events.Event) {
 
 		if err := m.UpdateMemberStates(MemberResults{
 			NewMemberResult(Rank(rankEvt.RAS.Rank),
-				errors.Wrap(rankEvt.ExitErr, rankEvt.RAS.Msg),
+				errors.Wrap(rankEvt.ExtendedInfo.ExitErr, rankEvt.RAS.Msg),
 				MemberStateErrored),
 		}, true); err != nil {
 			m.log.Errorf("updating member states: %s", err)

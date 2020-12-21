@@ -141,10 +141,6 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			nilReq: true,
 			expErr: errors.New("nil request"),
 		},
-		"invalid sequence number": {
-			zeroSeq: true,
-			expErr:  errors.New("invalid sequence"),
-		},
 		"successful notification": {
 			event: eventRankExit,
 			expResp: &mgmtpb.ClusterEventResp{

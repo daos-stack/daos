@@ -35,6 +35,7 @@
 enum ras_event_id {
 	RAS_RANK_EXIT	= 1,
 	RAS_RANK_NO_RESP,
+	RAS_POOL_SVC_RANK_UPDATE,
 };
 
 static inline char *
@@ -45,6 +46,8 @@ ras_event_id_enum_to_name(enum ras_event_id id)
 		return "daos_rank_exited";
 	case RAS_RANK_NO_RESP:
 		return "daos_rank_no_response";
+	case RAS_POOL_SVC_RANK_UPDATE:
+		return "daos_pool_svc_rank_update";
 	}
 
 	return RAS_ID_UNKNOWN_STR;
@@ -58,6 +61,8 @@ ras_event_id_enum_to_msg(enum ras_event_id id)
 		return "DAOS rank exited";
 	case RAS_RANK_NO_RESP:
 		return "DAOS rank unresponsive";
+	case RAS_POOL_SVC_RANK_UPDATE:
+		return "DAOS pool service rank list updated";
 	}
 
 	return RAS_ID_UNKNOWN_STR;
@@ -92,6 +97,7 @@ enum ras_event_type {
 	RAS_TYPE_ANY	= 0,
 	RAS_TYPE_RANK_STATE_CHANGE,
 	RAS_TYPE_INFO_ONLY,
+	RAS_TYPE_POOL_SVC_CHANGE,
 };
 
 static inline char *
@@ -102,6 +108,8 @@ ras_event_type_enum_to_name(enum ras_event_type type)
 		return "RANK_STATE_CHANGE";
 	case RAS_TYPE_INFO_ONLY:
 		return "INFO_ONLY";
+	case RAS_TYPE_POOL_SVC_CHANGE:
+		return "POOL_SVC_CHANGE";
 	}
 
 	return RAS_TYPE_UNKNOWN_STR;

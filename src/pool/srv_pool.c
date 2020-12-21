@@ -3755,6 +3755,9 @@ replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
 				DP_UUID(svc->ps_uuid));
 		d_rank_list_free(tmp_replicas);
 	}
+
+	// TODO: send event to control-plane over dRPC to indicate change in
+	//       pool service replica list.
 	d_rank_list_free(replicas);
 out:
 	return rc;
