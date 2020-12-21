@@ -155,6 +155,7 @@ func (m MgmtMethod) String() string {
 		MethodPoolQuery:       "PoolQuery",
 		MethodPoolSetProp:     "PoolSetProp",
 		MethodListPools:       "ListPools",
+		MethodClusterEvent:    "ClusterEvent",
 	}[m]; ok {
 		return s
 	}
@@ -214,6 +215,8 @@ const (
 	MethodPoolGetACL MgmtMethod = C.DRPC_METHOD_MGMT_POOL_GET_ACL
 	// MethodListPools is a ModuleMgmt method
 	MethodListPools MgmtMethod = C.DRPC_METHOD_MGMT_LIST_POOLS
+	// MethodClusterEvent is a ModuleMgmt method
+	MethodClusterEvent MgmtMethod = C.DRPC_METHOD_MGMT_CLUSTER_EVENT
 	// MethodPoolOverwriteACL is a ModuleMgmt method
 	MethodPoolOverwriteACL MgmtMethod = C.DRPC_METHOD_MGMT_POOL_OVERWRITE_ACL
 	// MethodPoolUpdateACL is a ModuleMgmt method

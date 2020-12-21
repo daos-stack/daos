@@ -28,23 +28,56 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
 // mgmtModule represents the daos_server mgmt dRPC module. It sends dRPCs to
 // the daos_io_server iosrv module (src/iosrv).
-type mgmtModule struct{}
+type mgmtModule struct {
+	log    logging.Logger
+	events *events.PubSub
+}
+
+// newMgmtModule creates a new management module with an events PubSub
+// reference.
+func newMgmtModule(log logging.Logger, events *events.PubSub) *mgmtModule {
+	return &mgmtModule{
+		log:    log,
+		events: events,
+	}
+}
 
 // HandleCall is the handler for calls to the mgmtModule
-func (m *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
-	return nil, drpc.UnknownMethodFailure()
+func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
+	switch method {
+	case drpc.MethodClusterEvent:
+		return mod.handleClusterEvent(req)
+	default:
+		return nil, drpc.UnknownMethodFailure()
+	}
+}
+
+func (mod *mgmtModule) handleClusterEvent(reqb []byte) ([]byte, error) {
+	req := new(mgmtpb.ClusterEventReq)
+	if err := proto.Unmarshal(reqb, req); err != nil {
+		return nil, drpc.UnmarshalingPayloadFailure()
+	}
+
+	resp, err := mod.events.HandleClusterEvent(req)
+	if err != nil {
+		return nil, errors.Wrapf(err, "handle cluster event %+v", req)
+	}
+
+	return proto.Marshal(resp)
 }
 
 // ID will return Mgmt module ID
-func (m *mgmtModule) ID() drpc.ModuleID {
+func (mod *mgmtModule) ID() drpc.ModuleID {
 	return drpc.ModuleMgmt
 }
 
@@ -54,6 +87,16 @@ type srvModule struct {
 	log    logging.Logger
 	sysdb  *system.Database
 	iosrvs []*IOServerInstance
+}
+
+// newSrvModule creates a new srv module references to the system database and
+// resident IOServerInstances.
+func newSrvModule(log logging.Logger, sysdb *system.Database, iosrvs []*IOServerInstance) *srvModule {
+	return &srvModule{
+		log:    log,
+		sysdb:  sysdb,
+		iosrvs: iosrvs,
+	}
 }
 
 // HandleCall is the handler for calls to the srvModule.

@@ -419,7 +419,7 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 
 // ClusterEvent management service gRPC handler receives ClusterEvent requests
 // from control-plane instances attempting to notify the MS of a cluster event
-// in the DAOS system.
+// in the DAOS system (this handler should only get called on the MS leader).
 //
 // On receipt of the request publish extracted event to make it available to
 // locally subscribed consumers to act upon.
@@ -427,24 +427,14 @@ func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *mgmtpb.ClusterEventRe
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
-	if req.Sequence < 1 {
-		return nil, errors.New("invalid sequence number in request")
-	}
+
 	svc.log.Debugf("MgmtSvc.ClusterEvent dispatch, req:%#v\n", req)
 
-	rasEventPB := req.GetRas()
-	if rasEventPB == nil {
-		return nil, errors.Errorf("unexpected event type received, want RAS got %T",
-			req.GetEvent())
-	}
-
-	event, err := events.NewFromProto(rasEventPB)
+	resp, err := svc.events.HandleClusterEvent(req)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "handle cluster event %+v", req)
 	}
-	svc.events.Publish(event)
 
-	resp := &mgmtpb.ClusterEventResp{Sequence: req.Sequence}
 	svc.log.Debugf("MgmtSvc.ClusterEvent dispatch, resp:%#v\n", resp)
 
 	return resp, nil

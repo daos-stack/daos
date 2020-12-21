@@ -26,8 +26,12 @@ package events
 import (
 	"context"
 
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
+
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 // Handler defines an interface to be implemented by event receivers.
@@ -103,7 +107,7 @@ func (ps *PubSub) Publish(event Event) {
 		return
 	}
 
-	ps.log.Debugf("publishing @%s: %+v", event.GetType(), event)
+	ps.log.Debugf("publishing @%s: %s", event.GetType(), event.GetID())
 
 	ps.events <- event
 }
@@ -154,4 +158,28 @@ func (ps *PubSub) Close() {
 func (ps *PubSub) Reset() {
 	ps.log.Debug("called Reset()")
 	ps.reset <- struct{}{}
+}
+
+// HandleClusterEvent extracts event from protobuf request and publishes to make
+// available to locally subscribed consumers to act upon.
+func (ps *PubSub) HandleClusterEvent(req *mgmtpb.ClusterEventReq) (*mgmtpb.ClusterEventResp, error) {
+	if req.Sequence < 1 {
+		ps.log.Debug("no sequence number in ClusterEventReq")
+	}
+
+	rasPB := req.GetRas()
+	if rasPB == nil {
+		return nil, errors.Errorf("unexpected event type received, want RAS got %T",
+			req.GetEvent())
+	}
+
+	ps.log.Debugf("proto format ras event received: %+v", rasPB)
+
+	event, err := NewFromProto(rasPB)
+	if err != nil {
+		return nil, err
+	}
+	ps.Publish(event)
+
+	return &mgmtpb.ClusterEventResp{Sequence: req.Sequence}, nil
 }
