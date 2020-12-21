@@ -416,10 +416,6 @@ agg_overlap(unsigned int estart, unsigned int elen, unsigned int cell,
 	return false;
 }
 
-/* Counts the number of full and partial cells covered by the submitted extent.
- * If cell is partially covered by a prior cell, function does not increment
- * partial-cover count for the cell.
- */
 static unsigned int
 agg_count_cells(uint8_t *fcbit_map, uint8_t *tbit_map, unsigned int estart,
 		unsigned int elen, unsigned int k, unsigned int len,
@@ -2146,7 +2142,8 @@ out:
  */
 int
 ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr,
-		    bool (*yield_func)(void *arg), void *yield_arg)
+		    bool (*yield_func)(void *arg), void *yield_arg,
+		    bool is_current)
 {
 	vos_iter_param_t	 iter_param = { 0 };
 	struct vos_iter_anchors  anchors = { 0 };
@@ -2214,6 +2211,9 @@ ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 			 agg_iterate_pre_cb, agg_iterate_post_cb,
 			 &agg_param, NULL);
 
+	if (rc == 0 && is_current)
+		cont->sc_ec_agg_eph = epr->epr_hi;
+
 	dsc_cont_close(ph, agg_param.ap_pool_info.api_cont_hdl);
 out:
 	daos_prop_free(agg_param.ap_prop);
@@ -2221,4 +2221,5 @@ out:
 	agg_sgl_fini(&agg_param.ap_agg_entry.ae_sgl);
 	dsc_pool_close(ph);
 	return rc;
+
 }

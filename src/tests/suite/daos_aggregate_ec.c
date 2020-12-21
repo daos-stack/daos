@@ -30,6 +30,7 @@
  */
 #define D_LOGFAC	DD_FAC(tests)
 
+#define LAYER_COORD 1
 #include <isa-l.h>
 #include "daos_test.h"
 #include <daos/pool.h>
