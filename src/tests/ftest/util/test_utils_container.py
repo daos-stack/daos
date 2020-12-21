@@ -27,7 +27,7 @@ from time import time
 from test_utils_base import TestDaosApiBase
 
 from avocado import fail_on
-from command_utils_base import BasicParameter
+from command_utils_base import BasicParameter, CommandFailure
 from pydaos.raw import (DaosApiError, DaosContainer, DaosInputParams,
                         c_uuid_to_str, str_to_c_uuid)
 from general_utils import get_random_string, DaosTestError
@@ -323,6 +323,7 @@ class TestContainer(TestDaosApiBase):
             self.daos.timeout = self.daos_timeout.value
 
     @fail_on(DaosApiError)
+    @fail_on(CommandFailure)
     def create(self, uuid=None, con_in=None, acl_file=None):
         """Create a container.
 
@@ -392,6 +393,7 @@ class TestContainer(TestDaosApiBase):
         self.log.info("  Container created with uuid %s", self.uuid)
 
     @fail_on(DaosApiError)
+    @fail_on(CommandFailure)
     def create_snap(self, snap_name=None, epoch=None):
         """Create Snapshot using daos utility.
 
@@ -423,6 +425,7 @@ class TestContainer(TestDaosApiBase):
         self.epoch = data["epoch"]
 
     @fail_on(DaosApiError)
+    @fail_on(CommandFailure)
     def destroy_snap(self, snap_name=None, epc=None, epcrange=None):
         """Destroy Snapshot using daos utility.
 
@@ -510,6 +513,7 @@ class TestContainer(TestDaosApiBase):
         return False
 
     @fail_on(DaosApiError)
+    @fail_on(CommandFailure)
     def destroy(self, force=1):
         """Destroy the container.
 
