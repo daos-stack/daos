@@ -624,11 +624,8 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 
 	/* Allocate data for pool */
 	D_ALLOC_PTR(pool);
-#if 0
-	/* TODO: See how this is reported and remove */
 	if (pool == NULL)
 		D_GOTO(err, 0);
-#endif
 
 	pool_alloc = true;
 	uuid_copy(pool->iop_uuid, il_reply.fir_pool);
