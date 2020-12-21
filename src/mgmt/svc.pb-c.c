@@ -559,6 +559,51 @@ void   mgmt__set_rank_req__free_unpacked
   assert(message->base.descriptor == &mgmt__set_rank_req__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   mgmt__pool_monitor_req__init
+                     (Mgmt__PoolMonitorReq         *message)
+{
+  static const Mgmt__PoolMonitorReq init_value = MGMT__POOL_MONITOR_REQ__INIT;
+  *message = init_value;
+}
+size_t mgmt__pool_monitor_req__get_packed_size
+                     (const Mgmt__PoolMonitorReq *message)
+{
+  assert(message->base.descriptor == &mgmt__pool_monitor_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__pool_monitor_req__pack
+                     (const Mgmt__PoolMonitorReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__pool_monitor_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__pool_monitor_req__pack_to_buffer
+                     (const Mgmt__PoolMonitorReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__pool_monitor_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__PoolMonitorReq *
+       mgmt__pool_monitor_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__PoolMonitorReq *)
+     protobuf_c_message_unpack (&mgmt__pool_monitor_req__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__pool_monitor_req__free_unpacked
+                     (Mgmt__PoolMonitorReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__pool_monitor_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 static const ProtobufCFieldDescriptor mgmt__daos_resp__field_descriptors[1] =
 {
   {
@@ -1060,7 +1105,7 @@ const ProtobufCMessageDescriptor mgmt__leader_query_resp__descriptor =
   (ProtobufCMessageInit) mgmt__leader_query_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__get_attach_info_req__field_descriptors[3] =
+static const ProtobufCFieldDescriptor mgmt__get_attach_info_req__field_descriptors[2] =
 {
   {
     "sys",
@@ -1086,28 +1131,15 @@ static const ProtobufCFieldDescriptor mgmt__get_attach_info_req__field_descripto
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
-  {
-    "jobid",
-    3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__GetAttachInfoReq, jobid),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
 };
 static const unsigned mgmt__get_attach_info_req__field_indices_by_name[] = {
   1,   /* field[1] = allRanks */
-  2,   /* field[2] = jobid */
   0,   /* field[0] = sys */
 };
 static const ProtobufCIntRange mgmt__get_attach_info_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 3 }
+  { 0, 2 }
 };
 const ProtobufCMessageDescriptor mgmt__get_attach_info_req__descriptor =
 {
@@ -1117,7 +1149,7 @@ const ProtobufCMessageDescriptor mgmt__get_attach_info_req__descriptor =
   "Mgmt__GetAttachInfoReq",
   "mgmt",
   sizeof(Mgmt__GetAttachInfoReq),
-  3,
+  2,
   mgmt__get_attach_info_req__field_descriptors,
   mgmt__get_attach_info_req__field_indices_by_name,
   1,  mgmt__get_attach_info_req__number_ranges,
@@ -1416,5 +1448,69 @@ const ProtobufCMessageDescriptor mgmt__set_rank_req__descriptor =
   mgmt__set_rank_req__field_indices_by_name,
   1,  mgmt__set_rank_req__number_ranges,
   (ProtobufCMessageInit) mgmt__set_rank_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__pool_monitor_req__field_descriptors[3] =
+{
+  {
+    "poolUUID",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolMonitorReq, pooluuid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "poolHandleUUID",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolMonitorReq, poolhandleuuid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "jobid",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolMonitorReq, jobid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__pool_monitor_req__field_indices_by_name[] = {
+  2,   /* field[2] = jobid */
+  1,   /* field[1] = poolHandleUUID */
+  0,   /* field[0] = poolUUID */
+};
+static const ProtobufCIntRange mgmt__pool_monitor_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 3 }
+};
+const ProtobufCMessageDescriptor mgmt__pool_monitor_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.PoolMonitorReq",
+  "PoolMonitorReq",
+  "Mgmt__PoolMonitorReq",
+  "mgmt",
+  sizeof(Mgmt__PoolMonitorReq),
+  3,
+  mgmt__pool_monitor_req__field_descriptors,
+  mgmt__pool_monitor_req__field_indices_by_name,
+  1,  mgmt__pool_monitor_req__number_ranges,
+  (ProtobufCMessageInit) mgmt__pool_monitor_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
