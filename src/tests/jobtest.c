@@ -200,9 +200,8 @@ main(int argc, char **argv)
 		int j;
 
 		for (j = 0; j < handles_per_pool; j++) {
-			rc = daos_pool_connect(pool_uuids[i], NULL, NULL,
-					       DAOS_PC_RW, &pool_handles[i][j],
-					       NULL, NULL);
+			rc = daos_pool_connect(pool_uuids[i], NULL, DAOS_PC_RW,
+					       &pool_handles[i][j], NULL, NULL);
 			if (rc != 0) {
 				char		uuid_str[64];
 
