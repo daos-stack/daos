@@ -28,7 +28,7 @@
 /** max length of argument string in the yaml config file */
 #define FI_CONFIG_ARG_STR_MAX_LEN 4096
 
-/* (1 << D_FA_TABLE_BITS) is the number of buckets of fa hash table */
+/* (1 << D_FA_TABLE_BITS) is the nuber of buckets of fa hash table */
 #define D_FA_TABLE_BITS		(13)
 
 #include <gurt/common.h>
