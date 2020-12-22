@@ -83,7 +83,8 @@ class FindCmd(DfuseTestBase):
                 challenger_dirs = _setup_challenger(
                     cont_count, challenger_path)
                 challenger_dir_trees = self._crate_dir_trees(
-                    challenger_dirs, height, subdirs_per_node, files_per_node, needles)
+                    challenger_dirs, height, subdirs_per_node, files_per_node,
+                    needles)
                 challenger_stats = self._run_commands(
                     challenger_path, samples, challenger_dir_trees, needles)
 
