@@ -202,6 +202,7 @@ tc_wait_for_ranks(crt_context_t ctx, crt_group_t *grp, d_rank_list_t *rank_list,
 	int				i = 0;
 	int				rc = 0;
 
+
 	D_ASSERTF(opts.is_initialized == true, "tc_test_init not called.\n");
 
 	rc = d_gettime(&t1);
@@ -240,6 +241,7 @@ tc_wait_for_ranks(crt_context_t ctx, crt_group_t *grp, d_rank_list_t *rank_list,
 			ws.rc = rc;
 
 		while (ws.rc != 0 && time_s < total_timeout) {
+
 			rc = crt_req_create(ctx, &server_ep,
 					    CRT_OPC_CTL_LS, &rpc);
 			D_ASSERTF(rc == 0,

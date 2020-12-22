@@ -31,6 +31,12 @@
 #define TEST_GROUP_BASE          0x010000000
 #define TEST_GROUP_VER           0
 
+#include <regex.h>
+
+struct t_swim_status {
+  int rank;
+  char swim_status[8];
+};
 
 struct test_t {
 	char			*t_local_group_name;
@@ -40,14 +46,9 @@ struct test_t {
 	bool			 t_save_cfg;
 	bool			 t_use_cfg;
 	bool			 t_register_swim_callback;
-
-  // {"shutdown_rank", required_argument, 0, 't'},
-  // {"verify_swim_status", required_argument, 0, 'v'},
-  // {"get_swim_status", required_argument, 0, 'g'},
 	int 			 t_shutdown_rank;
 	bool 			 t_get_swim_status;
 	struct t_swim_status t_verify_swim_status;
-
 	char			*t_cfg_path;
 	uint32_t		 t_hold_time;
 	unsigned int		 t_srv_ctx_num;
@@ -78,6 +79,17 @@ CRT_RPC_DECLARE(test_ping_check,
 		CRT_ISEQ_TEST_PING_CHECK, CRT_OSEQ_TEST_PING_CHECK)
 CRT_RPC_DEFINE(test_ping_check,
 		CRT_ISEQ_TEST_PING_CHECK, CRT_OSEQ_TEST_PING_CHECK)
+
+#define CRT_ISEQ_TEST_SWIM_STATUS /* input fields */		 \
+	((uint32_t)		(rank)			CRT_VAR)
+
+#define CRT_OSEQ_TEST_SWIM_STATUS /* output fields */		 \
+	((int32_t)		(status)			CRT_VAR)
+
+CRT_RPC_DECLARE(test_swim_status,
+		CRT_ISEQ_TEST_SWIM_STATUS, CRT_OSEQ_TEST_SWIM_STATUS)
+CRT_RPC_DEFINE(test_swim_status,
+		CRT_ISEQ_TEST_SWIM_STATUS, CRT_OSEQ_TEST_SWIM_STATUS)
 
 static void
 test_checkin_handler(crt_rpc_t *rpc_req)
@@ -114,6 +126,33 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 
 	DBG_PRINT("tier1 test_srver sent checkin reply, ret: %d, \
 		   room_no: %d.\n", e_reply->ret, e_reply->room_no);
+}
+
+static void
+test_swim_status_handler(crt_rpc_t *rpc_req)
+{
+	struct test_swim_status_in	*e_req;
+	struct test_swim_status_out	*e_reply;
+	int				 rc = 0;
+
+	/* CaRT internally already allocated the input/output buffer */
+	e_req = crt_req_get(rpc_req);
+	D_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
+
+	DBG_PRINT("tier1 test_server recv'd swim_status, opc: %#x.\n",
+		   rpc_req->cr_opc);
+  DBG_PRINT("tier1 checkin input - rank: %d.\n", e_req->rank);
+  //DBG_PRINT("tier1 checkin input - rank: %d.\n", 123);
+
+	e_reply = crt_reply_get(rpc_req);
+	D_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
+		  e_reply);
+
+	rc = crt_reply_send(rpc_req);
+	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
+
+	DBG_PRINT("tier1 test_srver sent swim_status reply, status: %d.\n", e_reply->status);
+	//DBG_PRINT("tier1 test_srver sent swim_status reply, status: %d.\n", 789);
 }
 
 static void
@@ -155,19 +194,26 @@ client_cb_common(const struct crt_cb_info *cb_info)
 	struct test_ping_check_in	*rpc_req_input;
 	struct test_ping_check_out	*rpc_req_output;
 
+	// crt_context_t		cr_ctx; /**< CRT context of the RPC */
+	// crt_endpoint_t		cr_ep; /**< endpoint ID */
+	// crt_opcode_t		cr_opc; /**< opcode of the RPC */
+
 	rpc_req = cb_info->cci_rpc;
 
-	if (cb_info->cci_arg != NULL)
+	if (cb_info->cci_arg != NULL) {
 		*(int *) cb_info->cci_arg = 1;
+  }
 
 	switch (cb_info->cci_rpc->cr_opc) {
 	case TEST_OPC_CHECKIN:
 		rpc_req_input = crt_req_get(rpc_req);
-		if (rpc_req_input == NULL)
+		if (rpc_req_input == NULL) {
 			return;
+    }
 		rpc_req_output = crt_reply_get(rpc_req);
-		if (rpc_req_output == NULL)
+		if (rpc_req_output == NULL) {
 			return;
+    }
 		if (cb_info->cci_rc != 0) {
 			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
 				rpc_req->cr_opc, cb_info->cci_rc);
@@ -183,10 +229,12 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		D_ASSERT(rpc_req_output->bool_val == true);
 		break;
 	case TEST_OPC_SHUTDOWN:
+		DBG_PRINT("Received TEST_OPC_SHUTDOWN.\n");
 		g_shutdown = 1;
 		sem_post(&test_g.t_token_to_proceed);
 		break;
 	default:
+		DBG_PRINT("Received TEST_OPC_SHUTDOWN.\n");
 		break;
 	}
 }
@@ -220,6 +268,11 @@ static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group1[] = {
 		.prf_req_fmt	= &CQF_crt_test_ping_delay,
 		.prf_hdlr	= test_ping_delay_handler,
 		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_test_swim_status,
+		.prf_hdlr	= test_swim_status_handler,
+		.prf_co_ops	= NULL,
 	}
 };
 
@@ -241,6 +294,11 @@ static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group2[] = {
 		.prf_flags	= CRT_RPC_FEAT_NO_REPLY,
 		.prf_req_fmt	= NULL,
 		.prf_hdlr	= test_shutdown_handler,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_test_swim_status,
+		.prf_hdlr	= test_swim_status_handler,
 		.prf_co_ops	= NULL,
 	}
 };
@@ -265,6 +323,7 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 	server_ep.ep_grp = remote_group;
 	server_ep.ep_rank = rank;
 	server_ep.ep_tag = tag;
+
 	rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
 			    TEST_OPC_CHECKIN, &rpc_req);
 	D_ASSERTF(rc == 0 && rpc_req != NULL, "crt_req_create() failed,"
@@ -396,7 +455,7 @@ test_parse_args(int argc, char **argv)
   // Default to a non-existent, invalid rank
 	test_g.t_shutdown_rank = -1;
 	test_g.t_get_swim_status = false;
-	test_g.t_verify_swim_status = (struct t_swim_status){ 1, "a" };
+	test_g.t_verify_swim_status = (struct t_swim_status){ -1, "a" };
 
 	while (1) {
 		rc = getopt_long(argc, argv, "n:a:c:h:u:r:", long_options,
@@ -449,16 +508,23 @@ test_parse_args(int argc, char **argv)
 			break;
 		case 'v':
 			test_g.t_verify_swim_status = parse_verify_swim_status_arg(optarg);
+      DBG_PRINT("EAM trace, test_g.t_verify_swim_status.rank: %d.\n", test_g.t_verify_swim_status.rank);
+      DBG_PRINT("EAM trace, test_g.t_verify_swim_status.swim_status: %s.\n", test_g.t_verify_swim_status.swim_status);
 			break;
 		case 'g':
 			test_g.t_get_swim_status = true;
 			break;
 		case '?':
 			return 1;
+
 		default:
 			return 1;
 		}
 	}
+
+	DBG_PRINT("EAM trace, test_g.t_shutdown_rank: %d.\n", test_g.t_shutdown_rank);
+	DBG_PRINT("EAM trace, test_g.t_register_swim_callback: %d.\n", test_g.t_register_swim_callback);
+
 	if (optind < argc) {
 		fprintf(stderr, "non-option argv elements encountered");
 		return 1;
@@ -466,4 +532,5 @@ test_parse_args(int argc, char **argv)
 
 	return 0;
 }
+
 #endif

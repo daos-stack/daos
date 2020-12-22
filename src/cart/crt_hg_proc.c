@@ -129,6 +129,7 @@ CRT_PROC_TYPE_FUNC(uint32_t)
 CRT_PROC_TYPE_FUNC(int64_t)
 CRT_PROC_TYPE_FUNC(uint64_t)
 CRT_PROC_TYPE_FUNC(bool)
+CRT_PROC_TYPE_FUNC(char)
 
 int
 crt_proc_crt_bulk_t(crt_proc_t proc, crt_bulk_t *bulk_hdl)

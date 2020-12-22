@@ -311,6 +311,8 @@ class CartUtils():
             cartobj.fail("Server did not launch, return code %s" \
                        % procrtn)
 
+        print('DEBUG log: line 313, clicmd = ', clicmd)
+
         cli_rtn = self.launch_test(cartobj, clicmd, srv_rtn)
 
         srv_rtn = self.stop_process(srv_rtn)

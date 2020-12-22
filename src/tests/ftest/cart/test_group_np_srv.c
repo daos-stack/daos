@@ -39,6 +39,7 @@ typedef void
 (*crt_event_cb) (d_rank_t rank, enum crt_event_source src,
    enum crt_event_type type, void *arg);
 
+bool rank_to_shutdown_got_CRT_EVT_DEAD = false;
 
 // Callback to process a SWIM message
 static void
@@ -50,13 +51,6 @@ swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 			"crt_event_source = %d, "
 			"crt_event_type = %d\n",
 			 rank, src, type);
-
-		// Rank 2 has been killed, so we expect it to be CRT_EVT_DEAD
-		if (rank != test_g.t_rank_to_shutdown) {
-			D_ASSERTF(type != CRT_EVT_DEAD,
-				"SWIM protocol is expected to notify CRT_EVT_DEAD for rank %d, but not other ranks.\n", test_g.t_rank_to_shutdown);
-		}
-
 		return;
 }
 
@@ -114,19 +108,43 @@ test_run(d_rank_t my_rank)
 		DBG_PRINT("Group config file saved\n");
 	}
 
-	if (test_g.t_hold)
+
+    D_ERROR("EAM trace");
+
+	if (test_g.t_hold) {
 		sleep(test_g.t_hold_time);
+	}
+
+
+    D_ERROR("EAM trace");
+
+	// For SWIM testing, stay alive for a few moments while the SWIM event
+	// propogates
+	// if ((test_g.t_register_swim_callback) &&
+	// 		(my_rank != test_g.t_rank_to_shutdown)) {
+	// 	DBG_PRINT("Sleeping for 10 seconds while the SWIM event propagates.\n");
+	// 	sleep(10);
+	// }
 
 	for (i = 0; i < test_g.t_srv_ctx_num; i++) {
+
+    D_ERROR("EAM trace");
+
 		rc = pthread_join(test_g.t_tid[i], NULL);
 		if (rc != 0)
 			fprintf(stderr, "pthread_join failed. rc: %d\n", rc);
 		D_DEBUG(DB_TEST, "joined progress thread.\n");
 	}
 
+
+    D_ERROR("EAM trace");
+
 	DBG_PRINT("Exiting server\n");
 	rc = sem_destroy(&test_g.t_token_to_proceed);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
+
+
+    D_ERROR("EAM trace");
 
 	if (my_rank == 0) {
 		rc = crt_group_config_remove(NULL);
@@ -160,7 +178,7 @@ int main(int argc, char **argv)
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	tc_test_init(my_rank, 20, true, true);
 
-	DBG_PRINT("STARTING SERVER\n");
+	DBG_PRINT("STARTING SERVER, rank: %d\n", my_rank);
 	test_run(my_rank);
 
 	return rc;

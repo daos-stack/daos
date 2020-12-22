@@ -86,6 +86,18 @@ CRT_RPC_DECLARE(test_ping_check,
 CRT_RPC_DEFINE(test_ping_check,
 		CRT_ISEQ_TEST_PING_CHECK, CRT_OSEQ_TEST_PING_CHECK)
 
+// SWIM status -- rank: [0..99999], status: {A : 0, D : 1, S}
+#define CRT_ISEQ_TEST_SWIM_STATUS /* input fields */		 \
+	((uint32_t)		(rank)			CRT_VAR)
+
+#define CRT_OSEQ_TEST_SWIM_STATUS /* output fields */		 \
+	((int32_t)		(status)			CRT_VAR)
+
+CRT_RPC_DECLARE(test_swim_status,
+		CRT_ISEQ_TEST_SWIM_STATUS, CRT_OSEQ_TEST_SWIM_STATUS)
+CRT_RPC_DEFINE(test_swim_status,
+		CRT_ISEQ_TEST_SWIM_STATUS, CRT_OSEQ_TEST_SWIM_STATUS)
+
 static inline void
 test_sem_timedwait(sem_t *sem, int sec, int line_number)
 {
@@ -204,6 +216,25 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		sem_post(&test_g.t_token_to_proceed);
 		D_ASSERT(rpc_req_output->bool_val == true);
 		break;
+	case TEST_OPC_SWIM_STATUS:
+		rpc_req_input = crt_req_get(rpc_req);
+		if (rpc_req_input == NULL)
+			return;
+		rpc_req_output = crt_reply_get(rpc_req);
+		if (rpc_req_output == NULL)
+			return;
+		if (cb_info->cci_rc != 0) {
+			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
+				rpc_req->cr_opc, cb_info->cci_rc);
+			D_FREE(rpc_req_input->name);
+			break;
+		}
+		printf("%s swim status result - status: %d.\n",
+		       rpc_req_input->rank, rpc_req_output->status);
+		D_FREE(rpc_req_input->rank);
+		sem_post(&test_g.t_token_to_proceed);
+		D_ASSERT(rpc_req_output->status == 1);
+		break;
 	case TEST_OPC_SHUTDOWN:
 		test_g.t_complete = 1;
 		sem_post(&test_g.t_token_to_proceed);
@@ -252,6 +283,8 @@ void test_shutdown_handler(crt_rpc_t *rpc_req)
 {
 	printf("tier1 test_srver received shutdown request, opc: %#x.\n",
 	       rpc_req->cr_opc);
+
+  DBG_PRINT("EAM trace, line 256, test_g.t_my_rank: %d\n", test_g.t_my_rank);
 
 	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
 	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");

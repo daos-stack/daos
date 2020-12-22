@@ -30,6 +30,14 @@ static uint64_t swim_prot_period_len;
 static uint64_t swim_suspect_timeout;
 static uint64_t swim_ping_timeout;
 
+void swim_member_state_print(struct swim_member_state s) {
+	D_DEBUG(DB_TRACE,
+    "EAM trace, swim_member_state = sms_incarnation = %u, sms_status = %d, sms_delay = %u.\n",
+        (unsigned int)s.sms_incarnation,
+        (unsigned int)s.sms_status,
+        (unsigned int)s.sms_delay);
+}
+
 static inline uint64_t
 swim_prot_period_len_default(void)
 {
@@ -964,6 +972,14 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 			/* if we get an update that we are dead,
 			 * just shut down
 			 */
+
+      // SWIM_ERROR("EAM trace: line 967, upds[i].smu_id = %d.\n", (int)(upds[i].smu_id));
+      // SWIM_ERROR("EAM trace: line 967, self_id = %d.\n", (int)self_id);
+      // SWIM_ERROR("EAM trace: line 969, SWIM_STATUS_CHARS[ upds[i].smu_state.sms_status] = %c.\n", (SWIM_STATUS_CHARS[ upds[i].smu_state.sms_status]));
+      // SWIM_ERROR("EAM trace: line 970, upds[i].smu_state = %s\n", "");
+
+      swim_member_state_print(upds[i].smu_state);
+
 			if (upds[i].smu_id == self_id) {
 				swim_ctx_unlock(ctx);
 				SWIM_ERROR("%lu: self confirmed DEAD received "

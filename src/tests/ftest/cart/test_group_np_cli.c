@@ -51,6 +51,20 @@ send_rpc_shutdown(crt_endpoint_t server_ep, crt_rpc_t* rpc_req) {
   return rc;
 }
 
+int
+send_rpc_swim_check(crt_endpoint_t server_ep, crt_rpc_t* rpc_req) {
+  int rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
+          TEST_OPC_SWIM_STATUS, &rpc_req);
+  D_ASSERTF(rc == 0 && rpc_req != NULL,
+      "crt_req_create() failed. "
+      "rc: %d, rpc_req: %p\n", rc, rpc_req);
+  rc = crt_req_send(rpc_req, client_cb_common, NULL);
+  D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
+
+  tc_sem_timedwait(&test_g.t_token_to_proceed, 61, __LINE__);
+  return rc;
+}
+
 
 void
 test_run(void)
@@ -115,10 +129,21 @@ test_run(void)
 
   // Shutdown one particular rank
 	if (test_g.t_shutdown_rank > 1) {
+    DBG_PRINT("EAM trace\n");
     server_ep.ep_rank = test_g.t_shutdown_rank;
     send_rpc_shutdown(server_ep, rpc_req);
     return;
+  } else if (test_g.t_verify_swim_status.rank >= 0) {
+    DBG_PRINT("EAM trace\n");
+    // Get swim status from all ranks
+    for (i = 0; i < rank_list->rl_nr; i++) {
+      rank = rank_list->rl_ranks[i];
+      server_ep.ep_rank = rank;
+      send_rpc_swim_check(server_ep, rpc_req);
+    }
+    return;
   } else {
+    DBG_PRINT("EAM trace\n");
 
     // Shutdown all ranks
     for (i = 0; i < rank_list->rl_nr; i++) {
@@ -127,7 +152,6 @@ test_run(void)
       send_rpc_shutdown(server_ep, rpc_req);
     }
   }
-
 	d_rank_list_free(rank_list);
 	rank_list = NULL;
 
