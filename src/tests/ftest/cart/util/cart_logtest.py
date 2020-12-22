@@ -642,10 +642,8 @@ class LogTest():
         p_trace = trace_lines * 1.0 / total_lines * 100
 
         if not self.quiet:
-            print("Pid {}, {} lines total, {} trace ({:.2f}%)".format(pid,
-                                                                      total_lines,
-                                                                      trace_lines,
-                                                                      p_trace))
+            print("Pid {}, {} lines total, {} trace ({:.2f}%)".format(
+                pid, total_lines, trace_lines, p_trace))
 
         if memsize.has_data():
             print("Memsize: {}".format(memsize))
