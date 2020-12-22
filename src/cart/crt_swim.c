@@ -161,10 +161,10 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 		rpc_req->cr_opc, rpc_swim_input->upds.ca_count,
 		self_id, from_id);
 
+	rpc_priv = container_of(rpc_req, struct crt_rpc_priv, crp_pub);
+
 	if (self_id == SWIM_ID_INVALID)
 		D_GOTO(out, rc = -DER_UNINIT);
-
-	rpc_priv = container_of(rpc_req, struct crt_rpc_priv, crp_pub);
 	/*
 	 * crt_hg_unpack_header may have failed to synchronize the HLC with
 	 * this request.
