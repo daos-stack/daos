@@ -423,6 +423,9 @@ class DaosServer():
                     if line.startswith('status'):
                         if 'Stopped' in line:
                             ready = True
+                        if 'Stopping' in line:
+                            ready = True
+
             if ready:
                 break
             if time.time() - start > 20:
@@ -478,15 +481,11 @@ class DaosServer():
             except ProcessLookupError:
                 pass
 
-        # Workaround for DAOS-5648
-        if ret == 2:
-            ret = 0
-
         # Show errors from server logs bug suppress memory leaks as the server
         # often segfaults at shutdown.
         if os.path.exists(self._log_file):
             # TODO: Enable memleak checking when server shutdown works.
-            log_test(self.conf, self._log_file, show_memleaks=True)
+            log_test(self.conf, self._log_file, show_memleaks=False)
         self.running = False
         return ret
 
