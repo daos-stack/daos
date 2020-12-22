@@ -59,7 +59,6 @@ except ImportError:
     DEVNULL = open(os.devnull, "wb")
 import tarfile
 import copy
-import shlex
 from distutils.spawn import find_executable
 if sys.version_info < (3, 0):
 # pylint: disable=import-error
@@ -288,7 +287,7 @@ class Runner():
                 retval = True
             else:
                 print('RUN: %s' % command)
-                if subprocess.call(shlex.split(command.strip()),
+                if subprocess.call(command, shell=True,       #nosec
                                    env=self.env['ENV']) != 0:
                     retval = False
                     break
