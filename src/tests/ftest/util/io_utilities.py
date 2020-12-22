@@ -130,7 +130,7 @@ class DirTree(object):
             os.close(fd)
 
         # create nested directories
-        for i in range(self._subdirs_per_node):
+        for _ in range(self._subdirs_per_node):
             new_path = tempfile.mkdtemp(dir=current_path)
             self._create_dir_tree(new_path, current_height - 1)
 

@@ -57,32 +57,35 @@ class FindCmd(DfuseTestBase):
         cont_count = self.params.get("cont_count", '/run/container/*')
         dfs_path = self.params.get("dfs_path", '/run/find_cmd/*')
         samples = self.params.get("samples", '/run/find_cmd/*')
-        self.height = self.params.get("height", '/run/find_cmd/*')
-        self.subdirs_per_node = self.params.get(
+        height = self.params.get("height", '/run/find_cmd/*')
+        subdirs_per_node = self.params.get(
             "subdirs_per_node", '/run/find_cmd/*')
-        self.files_per_node = self.params.get(
-            "files_per_node", '/run/find_cmd/*')
-        self.needles = self.params.get("needles", '/run/find_cmd/*')
+        files_per_node = self.params.get("files_per_node", '/run/find_cmd/*')
+        needles = self.params.get("needles", '/run/find_cmd/*')
         challenger = self.params.get("challenger_path", '/run/find_cmd/*')
         challenger_path = ""
 
-        self.dfuses = list()
-        self.containers = list()
+        dfuses = list()
+        containers = list()
 
         self.add_pool(connect=False)
 
         try:
-            mount_dirs = self._setup_containers(dfs_path, cont_count)
-            daos_dir_trees = self._crate_dir_trees(mount_dirs)
-            daos_stats = self._run_commands(dfs_path, samples, daos_dir_trees)
+            mount_dirs = self._setup_containers(
+                dfs_path, cont_count, dfuses, containers)
+            daos_dir_trees = self._crate_dir_trees(
+                mount_dirs, height, subdirs_per_node, files_per_node, needles)
+            daos_stats = self._run_commands(
+                dfs_path, samples, daos_dir_trees, needles)
 
             if challenger:
                 challenger_path = tempfile.mkdtemp(dir=challenger)
                 challenger_dirs = _setup_challenger(
                     cont_count, challenger_path)
-                challenger_dir_trees = self._crate_dir_trees(challenger_dirs)
+                challenger_dir_trees = self._crate_dir_trees(
+                    challenger_dirs, height, subdirs_per_node, files_per_node, needles)
                 challenger_stats = self._run_commands(
-                    challenger_path, samples, challenger_dir_trees)
+                    challenger_path, samples, challenger_dir_trees, needles)
 
         except CommandFailure as error:
             self.log.error("FindCmd Test Failed: %s", str(error))
@@ -91,8 +94,8 @@ class FindCmd(DfuseTestBase):
             self.log.error("FindCmd Test Failed: %s", str(error))
             raise
         finally:
-            self._teardown_dfuse(self.dfuses)
-            self.destroy_containers(self.containers)
+            self._teardown_dfuse(dfuses)
+            self.destroy_containers(containers)
             self.pool.destroy()
 
             if challenger and challenger_path:
@@ -120,7 +123,7 @@ class FindCmd(DfuseTestBase):
             self.log.info(
                 "DAOS is equal or faster running '%s' tag", tag)
 
-    def _run_commands(self, test_path, samples, dir_trees):
+    def _run_commands(self, test_path, samples, dir_trees, needles):
 
         profiler = general_utils.SimpleProfiler()
         profiler.set_logger(self.log.info)
@@ -135,7 +138,7 @@ class FindCmd(DfuseTestBase):
                 "all_files",
                 u"find {0} -name *.needle".format(test_path))
 
-            number = random.randrange(self.needles - 1)
+            number = random.randrange(needles - 1)
             file_name = "*_{:05d}.needle".format(number)
             profiler.run(self._run_cmd, "same_suffix",
                          u"find {0} -name {1}".format(test_path, file_name))
@@ -147,7 +150,7 @@ class FindCmd(DfuseTestBase):
 
         return profiler
 
-    def _setup_containers(self, dfs_path, cont_count):
+    def _setup_containers(self, dfs_path, cont_count, dfuses, containers):
         mount_dirs = []
         for count in range(cont_count):
             self.add_container(self.pool)
@@ -158,13 +161,19 @@ class FindCmd(DfuseTestBase):
                 self.pool, self.container)
             self.start_dfuse(
                 self.hostlist_clients, self.pool, self.container, mount_dir)
-            self.dfuses.append(self.dfuse)
-            self.containers.append(self.container)
+            dfuses.append(self.dfuse)
+            containers.append(self.container)
             mount_dirs.append(mount_dir)
 
         return mount_dirs
 
-    def _crate_dir_trees(self, paths):
+    def _crate_dir_trees(
+            self,
+            paths,
+            height,
+            subdirs_per_node,
+            files_per_node,
+            needles):
         dir_trees = []
 
         profiler = general_utils.SimpleProfiler()
@@ -174,10 +183,10 @@ class FindCmd(DfuseTestBase):
             self.log.info("Populating: %s", path)
             dir_tree = DirTree(
                 path,
-                self.height,
-                self.subdirs_per_node,
-                self.files_per_node)
-            dir_tree.set_number_of_needles(self.needles)
+                height,
+                subdirs_per_node,
+                files_per_node)
+            dir_tree.set_number_of_needles(needles)
             tree_path = profiler.run(dir_tree.create, "create_dirtree")
             dir_trees.append(dir_tree)
             self.log.info("Dir tree created at: %s", tree_path)
