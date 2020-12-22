@@ -32,6 +32,7 @@
  * - Use hash table for list of keys in progress
  * - Support of endian-agnostic ivns_internal
  **/
+
 #define D_LOGFAC	DD_FAC(iv)
 
 #include "crt_internal.h"
