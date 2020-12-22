@@ -40,7 +40,14 @@ struct test_t {
 	bool			 t_save_cfg;
 	bool			 t_use_cfg;
 	bool			 t_register_swim_callback;
-	int 			 t_rank_to_shutdown;
+
+  // {"shutdown_rank", required_argument, 0, 't'},
+  // {"verify_swim_status", required_argument, 0, 'v'},
+  // {"get_swim_status", required_argument, 0, 'g'},
+	int 			 t_shutdown_rank;
+	bool 			 t_get_swim_status;
+	struct t_swim_status t_verify_swim_status;
+
 	char			*t_cfg_path;
 	uint32_t		 t_hold_time;
 	unsigned int		 t_srv_ctx_num;
@@ -290,6 +297,76 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 }
 
+struct t_swim_status
+parse_verify_swim_status_arg (char * source)
+{
+  char * regexString = "([0-9]+)[ ]*=[ ]*(a|d|alive|dead)";
+
+  struct t_swim_status ss = {-1, '\0'};
+
+  size_t maxMatches = 2;
+  size_t maxGroups = 3;
+  
+  regex_t regexCompiled;
+  regmatch_t groupArray[maxGroups];
+  unsigned int m;
+  char * cursor;
+
+  if (regcomp(&regexCompiled, regexString, REG_EXTENDED|REG_ICASE)) {
+    printf("Could not compile regular expression.\n");
+    return ss;
+  };
+
+  m = 0;
+  cursor = source;
+
+  for (m = 0; m < maxMatches; m ++) {
+
+      if (regexec(&regexCompiled, cursor, maxGroups, groupArray, 0)) {
+        break;  // No more matches
+      }
+
+      unsigned int g = 0;
+      unsigned int offset = 0;
+
+      for (g = 0; g < maxGroups; g++) {
+
+          if (groupArray[g].rm_so == (size_t)-1) {
+            break;  // No more groups
+          }
+
+          if (g == 0) {
+            offset = groupArray[g].rm_eo;
+          }
+
+          char cursorCopy[strlen(cursor) + 1];
+          strcpy(cursorCopy, cursor);
+          cursorCopy[groupArray[g].rm_eo] = 0;
+          printf("Match %u, Group %u: [%2u-%2u]: %s\n",
+               m,
+               g,
+               groupArray[g].rm_so,
+               groupArray[g].rm_eo,
+               cursorCopy + groupArray[g].rm_so);
+
+          if (g == 1) {
+            ss.rank = atoi(cursorCopy + groupArray[g].rm_so);
+          }
+          if (g == 2) {
+            strcpy(ss.swim_status, cursorCopy + groupArray[g].rm_so);
+          }
+      }
+      cursor += offset;
+  }
+
+  printf("EAM trace, ss.rank = %d\n", ss.rank);
+  printf("EAM trace, ss.swim_status = %s\n", ss.swim_status);
+
+  regfree(&regexCompiled);
+
+  return ss;
+}
+
 int
 test_parse_args(int argc, char **argv)
 {
@@ -304,14 +381,22 @@ test_parse_args(int argc, char **argv)
 		{"shut_only", no_argument, &test_g.t_shut_only, 1},
 		{"cfg_path", required_argument, 0, 's'},
 		{"use_cfg", required_argument, 0, 'u'},
-		{"register_swim_callback", required_argument, 0, 'r'},
-		{"rank_to_shutdown", required_argument, 0, 'd'},
+		{"register_swim_callback", required_argument, 0, 'w'},
+		{"shutdown_rank", required_argument, 0, 't'},
+		{"verify_swim_status", required_argument, 0, 'v'},
+		{"get_swim_status", no_argument, 0, 'g'},
 		{0, 0, 0, 0}
 	};
 
 	test_g.t_use_cfg = true;
 	test_g.t_register_swim_callback = false;
-	test_g.t_rank_to_shutdown = 2;
+
+  // Options set for SWIM testing
+
+  // Default to a non-existent, invalid rank
+	test_g.t_shutdown_rank = -1;
+	test_g.t_get_swim_status = false;
+	test_g.t_verify_swim_status = (struct t_swim_status){ 1, "a" };
 
 	while (1) {
 		rc = getopt_long(argc, argv, "n:a:c:h:u:r:", long_options,
@@ -349,11 +434,8 @@ test_parse_args(int argc, char **argv)
 			test_g.t_hold = 1;
 			test_g.t_hold_time = atoi(optarg);
 			break;
-		case 'r':
+		case 'w':
 			test_g.t_register_swim_callback = atoi(optarg);
-			break;
-		case 'd':
-			test_g.t_rank_to_shutdown = atoi(optarg);
 			break;
 		case 's':
 			test_g.t_save_cfg = true;
@@ -361,6 +443,15 @@ test_parse_args(int argc, char **argv)
 			break;
 		case 'u':
 			test_g.t_use_cfg = atoi(optarg);
+			break;
+		case 't':
+			test_g.t_shutdown_rank = atoi(optarg);
+			break;
+		case 'v':
+			test_g.t_verify_swim_status = parse_verify_swim_status_arg(optarg);
+			break;
+		case 'g':
+			test_g.t_get_swim_status = true;
 			break;
 		case '?':
 			return 1;

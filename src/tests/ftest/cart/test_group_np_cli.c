@@ -35,6 +35,23 @@
 #include "test_group_rpc.h"
 #include "test_group_np_common.h"
 
+
+int
+send_rpc_shutdown(crt_endpoint_t server_ep, crt_rpc_t* rpc_req) {
+  int rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
+          CRT_PROTO_OPC(TEST_GROUP_BASE,
+          TEST_GROUP_VER, 1), &rpc_req);
+  D_ASSERTF(rc == 0 && rpc_req != NULL,
+      "crt_req_create() failed. "
+      "rc: %d, rpc_req: %p\n", rc, rpc_req);
+  rc = crt_req_send(rpc_req, client_cb_common, NULL);
+  D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
+
+  tc_sem_timedwait(&test_g.t_token_to_proceed, 61, __LINE__);
+  return rc;
+}
+
+
 void
 test_run(void)
 {
@@ -94,52 +111,22 @@ test_run(void)
 	if (test_g.t_hold)
 		sleep(test_g.t_hold_time);
 
-  /////////////////////////////////////////////////////////////////////////////////////
-  // If this is a swim test (we're registering the swim callback), kill specified ranks
-	if (test_g.t_register_swim_callback) {
+  server_ep.ep_grp = grp;
 
-    server_ep.ep_grp = grp;
-    server_ep.ep_rank = test_g.t_rank_to_shutdown;
-    rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
-            CRT_PROTO_OPC(TEST_GROUP_BASE,
-            TEST_GROUP_VER, 1), &rpc_req);
-    D_ASSERTF(rc == 0 && rpc_req != NULL,
-        "crt_req_create() failed. "
-        "rc: %d, rpc_req: %p\n", rc, rpc_req);
-    rc = crt_req_send(rpc_req, client_cb_common, NULL);
-    D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
+  // Shutdown one particular rank
+	if (test_g.t_shutdown_rank > 1) {
+    server_ep.ep_rank = test_g.t_shutdown_rank;
+    send_rpc_shutdown(server_ep, rpc_req);
+    return;
+  } else {
 
-    tc_sem_timedwait(&test_g.t_token_to_proceed, 61, __LINE__);
-
-    // Wait for SWIM _DEAD status to propagate.
-    sleep(10);
-  }
-  /////////////////////////////////////////////////////////////////////////////////////
-
-	for (i = 0; i < rank_list->rl_nr; i++) {
-
-		rank = rank_list->rl_ranks[i];
-
-    // For swim testing, this rank has already been shut down
-    if ((test_g.t_register_swim_callback) &&
-        (rank == test_g.t_rank_to_shutdown)) {
-      continue;
+    // Shutdown all ranks
+    for (i = 0; i < rank_list->rl_nr; i++) {
+      rank = rank_list->rl_ranks[i];
+      server_ep.ep_rank = rank;
+      send_rpc_shutdown(server_ep, rpc_req);
     }
-
-		server_ep.ep_grp = grp;
-		server_ep.ep_rank = rank;
-		rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
-				    CRT_PROTO_OPC(TEST_GROUP_BASE,
-				    TEST_GROUP_VER, 1), &rpc_req);
-		D_ASSERTF(rc == 0 && rpc_req != NULL,
-			  "crt_req_create() failed. "
-			  "rc: %d, rpc_req: %p\n", rc, rpc_req);
-		rc = crt_req_send(rpc_req, client_cb_common, NULL);
-		D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
-
-		tc_sem_timedwait(&test_g.t_token_to_proceed, 61, __LINE__);
-	}
-
+  }
 
 	d_rank_list_free(rank_list);
 	rank_list = NULL;

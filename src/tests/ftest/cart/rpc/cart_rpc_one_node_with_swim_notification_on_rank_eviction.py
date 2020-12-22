@@ -58,10 +58,27 @@ class CartRpcOneNodeTest(Test):
         :avocado: tags=all,cart,pr,rpc,one_node,swim_rank_eviction
         """
         srvcmd = self.utils.build_cmd(self, self.env, "test_servers")
-        clicmd = self.utils.build_cmd(self, self.env, "test_clients")
 
-        self.utils.launch_srv_cli_test(self, srvcmd, clicmd)
-        self.utils.log_check(self)
+        # self.utils.launch_srv_cli_test(self, srvcmd, clicmd)
+        # self.utils.log_check(self)
+
+        try:
+            srv_rtn = self.utils.launch_cmd_bg(self, srvcmd)
+        # pylint: disable=broad-except
+        except Exception as e:
+            self.utils.print("Exception in launching server : {}".format(e))
+            self.fail("Test failed.\n")
+
+        # Verify the server is still running.
+        if not self.utils.check_process(srv_rtn):
+            procrtn = self.utils.stop_process(srv_rtn)
+            self.fail("Server did not launch, return code %s" \
+                       % procrtn)
+
+        for index in range(3):
+            clicmd = self.utils.build_cmd(
+                self, self.env, "test_clients", index=index)
+            self.utils.launch_test(self, clicmd, srv_rtn)
 
 if __name__ == "__main__":
     main()
