@@ -136,7 +136,7 @@ class PoolAttributeTest(TestWithServers):
 
         Test description: Test basic pool attribute tests (sync).
 
-        :avocado: tags=all,pool,pr,tiny,sync_poolattribute
+        :avocado: tags=all,pool,daily_regression,tiny,sync_poolattribute
         """
         expected_for_param = []
         name = self.params.get("name", '/run/attrtests/name_handles/*/')

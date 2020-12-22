@@ -238,6 +238,12 @@ func (sm *Member) WithFaultDomain(fd *FaultDomain) *Member {
 	return sm
 }
 
+// RankFaultDomain generates the fault domain representing this Member rank.
+func (sm *Member) RankFaultDomain() *FaultDomain {
+	rankDomain := fmt.Sprintf("rank%d", uint32(sm.Rank))
+	return sm.FaultDomain.MustCreateChild(rankDomain) // "rankX" string can't fail
+}
+
 // NewMember returns a reference to a new member struct.
 func NewMember(rank Rank, uuidStr, uri string, addr *net.TCPAddr, state MemberState) *Member {
 	// FIXME: Either require a valid uuid.UUID to be supplied
@@ -326,11 +332,22 @@ func (smr MemberResults) HasErrors() bool {
 	return false
 }
 
+// resolveTCPFn is a type alias for the net.ResolveTCPAddr function signature.
+type resolveTCPFn func(string, string) (*net.TCPAddr, error)
+
 // Membership tracks details of system members.
 type Membership struct {
 	sync.RWMutex
-	log logging.Logger
-	db  *Database
+	log        logging.Logger
+	db         *Database
+	resolveTCP resolveTCPFn
+}
+
+// WithTCPResolver adds a resolveTCPFn to the membership structure.
+func (m *Membership) WithTCPResolver(resolver resolveTCPFn) *Membership {
+	m.resolveTCP = resolver
+
+	return m
 }
 
 func (m *Membership) addMember(member *Member) error {
@@ -657,12 +674,11 @@ func (m *Membership) CheckRanks(ranks string) (hit, miss *RankSet, err error) {
 	return
 }
 
-type resolveFnSig func(string, string) (*net.TCPAddr, error)
-
 // CheckHosts returns set of all ranks on any of the hosts in provided host set
 // string and another slice of all hosts from input hostset string that are
-// missing from the membership.
-func (m *Membership) CheckHosts(hosts string, ctlPort int, resolveFn resolveFnSig) (*RankSet, *hostlist.HostSet, error) {
+// missing from the membership. Host addresses are resolved before looking up
+// resident ranks to verify destination server is still available.
+func (m *Membership) CheckHosts(hosts string, ctlPort int) (*RankSet, *hostlist.HostSet, error) {
 	m.RLock()
 	defer m.RUnlock()
 
@@ -686,7 +702,7 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int, resolveFn resolveFnSi
 			host = net.JoinHostPort(host, strconv.Itoa(ctlPort))
 		}
 
-		tcpAddr, resolveErr := resolveFn("tcp", host)
+		tcpAddr, resolveErr := m.resolveTCP("tcp", host)
 		if resolveErr != nil {
 			m.log.Debugf("host addr %q didn't resolve: %s", host, resolveErr)
 			if _, err := missHS.Insert(origHostString); err != nil {
@@ -713,5 +729,9 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int, resolveFn resolveFnSi
 
 // NewMembership returns a reference to a new DAOS system membership.
 func NewMembership(log logging.Logger, db *Database) *Membership {
-	return &Membership{db: db, log: log}
+	return &Membership{
+		db:         db,
+		log:        log,
+		resolveTCP: net.ResolveTCPAddr,
+	}
 }

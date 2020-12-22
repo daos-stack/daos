@@ -62,6 +62,7 @@ nav:
         - 'Spark and Hadoop': 'user/spark.md'
     - Releases:
         - 'Release Notes': 'release/releaseNote_v1_0.md'
+        - 'Support Matrix': 'release/matrix.md'
     - Developer Zone:
         - 'Dev Environment': 'dev/development.md'
         - 'Contributing': 'dev/contributing.md'

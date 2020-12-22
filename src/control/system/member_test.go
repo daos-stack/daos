@@ -115,6 +115,52 @@ func TestSystem_Member_MarshalUnmarshalJSON(t *testing.T) {
 	}
 }
 
+func TestSystem_Member_RankFaultDomain(t *testing.T) {
+	for name, tc := range map[string]struct {
+		rank        Rank
+		faultDomain *FaultDomain
+		expResult   *FaultDomain
+	}{
+		"nil fault domain": {
+			expResult: MustCreateFaultDomain("rank0"),
+		},
+		"empty fault domain": {
+			rank:        Rank(2),
+			faultDomain: MustCreateFaultDomain(),
+			expResult:   MustCreateFaultDomain("rank2"),
+		},
+		"existing fault domain": {
+			rank:        Rank(1),
+			faultDomain: MustCreateFaultDomain("one", "two"),
+			expResult:   MustCreateFaultDomain("one", "two", "rank1"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := NewMember(tc.rank, uuid.New().String(), "dontcare", &net.TCPAddr{}, MemberStateJoined).
+				WithFaultDomain(tc.faultDomain)
+
+			result := m.RankFaultDomain()
+
+			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func populateMembership(t *testing.T, log logging.Logger, members ...*Member) *Membership {
+	t.Helper()
+
+	ms, _ := MockMembership(t, log, mockResolveFn)
+	for _, m := range members {
+		if _, err := ms.Add(m); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	return ms
+}
+
 func TestSystem_Membership_Get(t *testing.T) {
 	for name, tc := range map[string]struct {
 		memberToAdd *Member
@@ -139,11 +185,7 @@ func TestSystem_Membership_Get(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			ms := NewMembership(log, MockDatabase(t, log))
-
-			if _, err := ms.Add(tc.memberToAdd); err != nil {
-				t.Fatal(err)
-			}
+			ms := populateMembership(t, log, tc.memberToAdd)
 
 			m, err := ms.Get(tc.rankToGet)
 			CmpErr(t, tc.expErr, err)
@@ -200,8 +242,7 @@ func TestSystem_Membership_AddRemove(t *testing.T) {
 
 			var count int
 			var err error
-			ms := NewMembership(log, MockDatabase(t, log))
-
+			ms, _ := MockMembership(t, log, mockResolveFn)
 			for i, m := range tc.membersToAdd {
 				count, err = ms.Add(m)
 				CmpErr(t, tc.expAddErrs[i], err)
@@ -272,8 +313,7 @@ func TestSystem_Membership_AddOrReplace(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			ms := NewMembership(log, MockDatabase(t, log))
-
+			ms, _ := MockMembership(t, log, mockResolveFn)
 			for _, m := range tc.membersToAddOrReplace {
 				if err := ms.AddOrReplace(m); err != nil {
 					t.Fatal(err)
@@ -371,13 +411,7 @@ func TestSystem_Membership_HostRanks(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			ms := NewMembership(log, MockDatabase(t, log))
-
-			for _, m := range tc.members {
-				if _, err := ms.Add(m); err != nil {
-					t.Fatal(err)
-				}
-			}
+			ms := populateMembership(t, log, tc.members...)
 
 			rankSet, err := CreateRankSet(tc.ranks)
 			if err != nil {
@@ -451,13 +485,7 @@ func TestSystem_Membership_CheckRanklist(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			ms := NewMembership(log, MockDatabase(t, log))
-
-			for _, m := range tc.members {
-				if _, err := ms.Add(m); err != nil {
-					t.Fatal(err)
-				}
-			}
+			ms := populateMembership(t, log, tc.members...)
 
 			hit, miss, err := ms.CheckRanks(tc.inRanklist)
 			CmpErr(t, tc.expErr, err)
@@ -600,15 +628,9 @@ func TestSystem_Membership_CheckHostlist(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			ms := NewMembership(log, MockDatabase(t, log))
+			ms := populateMembership(t, log, tc.members...)
 
-			for _, m := range tc.members {
-				if _, err := ms.Add(m); err != nil {
-					t.Fatal(err)
-				}
-			}
-
-			rankSet, missingHostSet, err := ms.CheckHosts(tc.inHosts, 10001, mockResolveFn)
+			rankSet, missingHostSet, err := ms.CheckHosts(tc.inHosts, 10001)
 			CmpErr(t, tc.expErr, err)
 			if err != nil {
 				return
@@ -752,13 +774,7 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			ms := NewMembership(log, MockDatabase(t, log))
-
-			for _, m := range tc.members {
-				if _, err := ms.Add(m); err != nil {
-					t.Fatal(err)
-				}
-			}
+			ms := populateMembership(t, log, tc.members...)
 
 			// members should be updated with result state
 			err := ms.UpdateMemberStates(tc.results, !tc.ignoreErrs)
@@ -860,14 +876,13 @@ func TestSystem_Membership_Join(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			db := MockDatabase(t, log)
-			ms := NewMembership(log, db)
+			ms, _ := MockMembership(t, log, mockResolveFn)
 			curMember.Rank = NilRank
 			if err := ms.addMember(curMember); err != nil {
 				t.Fatal(err)
 			}
 			if tc.notLeader {
-				_ = db.ShutdownRaft()
+				_ = ms.db.ShutdownRaft()
 			}
 
 			gotResp, gotErr := ms.Join(tc.req)

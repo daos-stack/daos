@@ -112,6 +112,15 @@ struct ds_cont_child {
 	uint32_t		 sc_open;
 
 	uint64_t		 sc_dtx_committable_count;
+
+	/* The global minimum EC aggregation epoch, which will be upper
+	 * limit for VOS aggregation, i.e. EC object VOS aggregation can
+	 * not cross this limit. For simplification purpose, all objects
+	 * VOS aggregation will use this boundary. We will optimize it later.
+	 */
+	uint64_t		sc_ec_agg_eph_boundry;
+	/* The current EC aggregate epoch for this xstream */
+	uint64_t		sc_ec_agg_eph;
 	/* The objects with committable DTXs in DRAM. */
 	daos_handle_t		 sc_dtx_cos_hdl;
 	/* The DTX COS-btree. */
@@ -246,4 +255,6 @@ int dsc_cont_open(daos_handle_t poh, uuid_t cont_uuid, uuid_t cont_hdl_uuid,
 		  unsigned int flags, daos_handle_t *coh);
 int dsc_cont_close(daos_handle_t poh, daos_handle_t coh);
 
+
+void ds_cont_tgt_ec_eph_query_ult(void *data);
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

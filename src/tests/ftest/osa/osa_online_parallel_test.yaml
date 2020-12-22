@@ -3,18 +3,42 @@ hosts:
     - server-A
     - server-B
     - server-C
-    - server-D
   test_clients:
-    - client-E
+    - client-D
 timeout: 1110
+job_manager_timeout: 300
 server_config:
   name: daos_server
+  servers_per_host: 2
   servers:
-    bdev_class: nvme
-    bdev_list: ["0000:81:00.0"]
-    scm_class: dcpm
-    scm_list: ["/dev/pmem0"]
-    scm_mount: /mnt/daos0
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31416
+      log_file: daos_server0.log
+      bdev_class: nvme
+      bdev_list: ["0000:81:00.0"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem0"]
+      scm_mount: /mnt/daos0
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,md,rebuild
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31516
+      log_file: daos_server1.log
+      bdev_class: nvme
+      bdev_list: ["0000:da:00.0"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem1"]
+      scm_mount: /mnt/daos1
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,md,rebuild
 pool:
   mode: 146
   name: daos_server
@@ -23,13 +47,14 @@ pool:
   svcn: 4
   control_method: dmg
 container:
-    type: POSIX
-    control_method: daos
-    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+  type: POSIX
+  control_method: daos
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+  oclass: RP_2G1
 ior:
   no_parallel_job: 10
-  clientslots:
-    slots: 2
+  client_processes:
+    np: 2
   test_file: /testFile
   repetitions: 1
   dfs_destroy: False
