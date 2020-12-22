@@ -210,7 +210,11 @@ class ExecutableCommand(CommandWithParameters):
                     self._command, str(state))
                 self._process.send_signal(signal_to_send)
                 if signal_list:
-                    time.sleep(5)
+                    start = time.time()
+                    while self._process._popen.poll() is None and time.time() - start < 5:
+                        time.sleep(0.01)
+                    elapsed = time.time() - start
+                    self.log.info('Waited %.2f, saved %.2f', elapsed, 5 - elapsed)
 
             if not signal_list:
                 if state and (len(state) > 1 or state[0] not in ("D", "Z")):
@@ -628,17 +632,28 @@ class SubProcessCommand(CommandWithSubCommand):
                 timed_out = time.time() - start > self.pattern_timeout.value
 
             # Summarize results
-            msg = "{}/{} '{}' messages detected in {}/{} seconds".format(
-                detected, self.pattern_count, self.pattern,
+            msg = "{}/{} '{}' messages detected in".format(
+                detected, self.pattern_count, self.pattern)
+            runtime = "{}/{} seconds".format(
                 time.time() - start, self.pattern_timeout.value)
 
             if not complete:
                 # Report the error / timeout
-                self.log.info(
-                    "%s detected - %s:\n%s",
-                    "Time out" if timed_out else "Error",
-                    msg,
-                    sub_process.get_stdout())
+                reason = "ERROR detected"
+                details = ""
+                if timed_out:
+                    reason = "TIMEOUT detected, exceeded {} seconds".format(
+                        self.pattern_timeout.value)
+                    runtime = "{} seconds".format(time.time() - start)
+                if not self.verbose:
+                    # Include the stdout if verbose is not enabled
+                    details = ":\n{}".format(sub_process.get_stdout())
+                self.log.info("%s - %s %s%s", reason, msg, runtime, details)
+                if timed_out:
+                    self.log.debug(
+                        "If needed the %s second timeout can be adjusted via "
+                        "the 'pattern_timeout' test yaml parameter under %s",
+                        self.pattern_timeout.value, self.namespace)
 
                 # Stop the timed out process
                 if timed_out:
@@ -646,7 +661,8 @@ class SubProcessCommand(CommandWithSubCommand):
             else:
                 # Report the successful start
                 self.log.info(
-                    "%s subprocess startup detected - %s", self._command, msg)
+                    "%s subprocess startup detected - %s %s",
+                    self._command, msg, runtime)
 
         return complete
 

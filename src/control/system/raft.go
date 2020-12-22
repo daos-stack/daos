@@ -286,33 +286,38 @@ func (db *Database) submitRaftUpdate(data []byte) error {
 // NB: This type alias allows us to use a Database object as a raft.FSM.
 type fsm Database
 
+// EmergencyShutdown is called when a FSM Apply fails or in some other
+// situation where the only safe response is to immediately shut down
+// the raft instance and prevent it from participating in the cluster.
+// After a shutdown, the control plane server must be restarted in order
+// to bring this node back into the raft cluster.
+func (f *fsm) EmergencyShutdown(err error) {
+	f.log.Errorf("EMERGENCY RAFT SHUTDOWN due to %s", err)
+	_ = f.raft.withReadLock(func(svc raftService) error {
+		// Call .Error() on the future returned from
+		// raft.Shutdown() in order to block on completion.
+		// The error returned from this future is always nil.
+		return svc.Shutdown().Error()
+	})
+}
+
 // Apply is called after the log entry has been committed. This is the
 // only place that direct modification of the data should occur.
-//
-// NB: Per Hashicorp (https://github.com/hashicorp/raft/issues/307),
-// the only reasonable response to an Apply() failure is to panic,
-// because the Raft algorithm does not specify a recovery mechanism
-// for this scenario.
-//
-// TODO: This approach feels too heavy-handed, given that the control
-// plane is responsible for more than just hosting the raft service.
-// It's not clear how we can meaningfully handle errors though, and it
-// seems risky to allow a replica to continue in an indeterminite state.
-// For the moment, let's just use the nuclear option on the theory that
-// these are "can't happen" errors, e.g. ENOMEM or corrupt snapshot.
 func (f *fsm) Apply(l *raft.Log) interface{} {
 	c := new(raftUpdate)
 	if err := json.Unmarshal(l.Data, c); err != nil {
-		panic(errors.Wrapf(err, "failed to unmarshal %+v", l.Data))
+		f.EmergencyShutdown(errors.Wrapf(err, "failed to unmarshal %+v", l.Data))
+		return nil
 	}
 
 	switch c.Op {
 	case raftOpAddMember, raftOpUpdateMember, raftOpRemoveMember:
-		f.data.applyMemberUpdate(c.Op, c.Data)
+		f.data.applyMemberUpdate(c.Op, c.Data, f.EmergencyShutdown)
 	case raftOpAddPoolService, raftOpUpdatePoolService, raftOpRemovePoolService:
-		f.data.applyPoolUpdate(c.Op, c.Data)
+		f.data.applyPoolUpdate(c.Op, c.Data, f.EmergencyShutdown)
 	default:
-		panic(errors.Errorf("unhandled Apply operation: %d", c.Op))
+		f.EmergencyShutdown(errors.Errorf("unhandled Apply operation: %d", c.Op))
+		return nil
 	}
 
 	return nil
@@ -320,10 +325,11 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 
 // applyMemberUpdate is responsible for applying the membership update
 // operation to the database.
-func (d *dbData) applyMemberUpdate(op raftOp, data []byte) {
+func (d *dbData) applyMemberUpdate(op raftOp, data []byte, panicFn func(error)) {
 	m := new(memberUpdate)
 	if err := json.Unmarshal(data, m); err != nil {
-		panic(errors.Wrap(err, "failed to decode member update"))
+		panicFn(errors.Wrap(err, "failed to decode member update"))
+		return
 	}
 
 	d.Lock()
@@ -337,7 +343,8 @@ func (d *dbData) applyMemberUpdate(op raftOp, data []byte) {
 	case raftOpRemoveMember:
 		d.Members.removeMember(m.Member)
 	default:
-		panic(errors.Errorf("unhandled Member Apply operation: %d", op))
+		panicFn(errors.Errorf("unhandled Member Apply operation: %d", op))
+		return
 	}
 
 	if m.NextRank {
@@ -348,10 +355,11 @@ func (d *dbData) applyMemberUpdate(op raftOp, data []byte) {
 
 // applyPoolUpdate is responsible for applying the pool service update
 // operation to the database.
-func (d *dbData) applyPoolUpdate(op raftOp, data []byte) {
+func (d *dbData) applyPoolUpdate(op raftOp, data []byte, panicFn func(error)) {
 	ps := new(PoolService)
 	if err := json.Unmarshal(data, ps); err != nil {
-		panic(errors.Wrap(err, "failed to decode pool service update"))
+		panicFn(errors.Wrap(err, "failed to decode pool service update"))
+		return
 	}
 
 	d.Lock()
@@ -363,13 +371,15 @@ func (d *dbData) applyPoolUpdate(op raftOp, data []byte) {
 	case raftOpUpdatePoolService:
 		cur, found := d.Pools.Uuids[ps.PoolUUID]
 		if !found {
-			panic(errors.Errorf("pool service update for unknown pool %+v", ps))
+			panicFn(errors.Errorf("pool service update for unknown pool %+v", ps))
+			return
 		}
 		d.Pools.updateService(cur, ps)
 	case raftOpRemovePoolService:
 		d.Pools.removeService(ps)
 	default:
-		panic(errors.Errorf("unhandled Pool Service Apply operation: %d", op))
+		panicFn(errors.Errorf("unhandled Pool Service Apply operation: %d", op))
+		return
 	}
 
 	d.MapVersion++

@@ -21,7 +21,7 @@ def scons():
     # Can remove this when pmdk is not needed on client
     denv.AppendUnique(LIBPATH=["../client/dfs"])
 
-    daos_extra_files = denv.Object('daos_hdlr.c')
+    daos_extra_files = denv.Object(['daos_hdlr.c', 'daos_autotest.c'])
 
     daos = daos_build.program(denv, 'daos',
                               ['daos.c', daos_extra_files], LIBS=libs)

@@ -41,7 +41,7 @@ class CartNoPmixLauncherOneNodeTest(Test):
     """
     Runs basic CaRT no_pmix_launcher tests
 
-    :avocado: tags=all,cart,pr,no_pmix_launcher,one_node
+    :avocado: tags=all,cart,pr,daily_regression,no_pmix_launcher,one_node
     """
     def setUp(self):
         """ Test setup """
@@ -49,15 +49,11 @@ class CartNoPmixLauncherOneNodeTest(Test):
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
 
-    def tearDown(self):
-        """ Test tear down """
-        print("Run TearDown\n")
-
     def test_cart_no_pmix_launcher(self):
         """
         Test CaRT NoPmix Launcher
 
-        :avocado: tags=all,cart,pr,no_pmix_launcher,one_node
+        :avocado: tags=all,cart,pr,daily_regression,no_pmix_launcher,one_node
         """
 
         cli_bin = self.params.get("test_clients_bin", '/run/tests/*/')

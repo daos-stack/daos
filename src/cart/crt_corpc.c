@@ -777,6 +777,9 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 	opc_info = rpc_priv->crp_opc_info;
 	co_ops = opc_info->coi_co_ops;
 
+	if (rpc_priv->crp_fail_hlc)
+		D_GOTO(forward_done, rc = -DER_HLC_SYNC);
+
 	/* Invoke pre-forward callback first if it is registered */
 	if (co_ops && co_ops->co_pre_forward) {
 		rc = co_ops->co_pre_forward(&rpc_priv->crp_pub,

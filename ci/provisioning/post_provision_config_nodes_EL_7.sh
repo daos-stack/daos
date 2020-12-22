@@ -110,5 +110,21 @@ enabled=0
 EOF
 
     # now make sure everything is fully up-to-date
-    time yum -y upgrade --exclude fuse,mercury,daos,daos-\*
+    tries=3
+    while [ $tries -gt 0 ]; do
+        if time timeout 20m yum -y upgrade \
+                                --exclude fuse,mercury,daos,daos-\*; then
+            # updated, leave with success
+            exit 0
+        fi
+        if [ "${PIPESTATUS[0]}" = "124" ]; then
+            # timed out, try again
+            (( "$tries"-- ))
+            continue
+        fi
+        # yum failed for something other than timeout
+        exit 1
+    done
+    # failed after 3 tries
+    exit 1
 }

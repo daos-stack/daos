@@ -51,7 +51,7 @@ class OSAOfflineReintegration(OSAUtils):
         pool = {}
         pool_uuid = []
         target_list = []
-        exclude_servers = len(self.hostlist_servers) - 1
+        exclude_servers = (len(self.hostlist_servers) * 2) - 1
 
         # Exclude target : random two targets (target idx : 0-7)
         n = random.randint(0, 6)
@@ -112,6 +112,8 @@ class OSAOfflineReintegration(OSAUtils):
                 if pver_reint > (pver_exclude + 1):
                     break
 
+            self.assert_on_rebuild_failure()
+
             pver_reint = self.get_pool_version()
             self.log.info("Pool Version after reintegrate %d", pver_reint)
             # Check pool version incremented after pool reintegrate
@@ -130,7 +132,8 @@ class OSAOfflineReintegration(OSAUtils):
         """Test ID: DAOS-4749
         Test Description: Validate Offline Reintegration
 
-        :avocado: tags=all,pr,hw,large,osa,offline_reintegration
+        :avocado: tags=all,daily_regression,hw,medium,ib2
+        :avocado: tags=osa,offline_reintegration
         """
         # Perform reintegration testing with 1 to 3 pools
         for x in range(1, 4):
