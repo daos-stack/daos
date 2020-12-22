@@ -57,17 +57,17 @@ class FindCmd(DfuseTestBase):
         cont_count = self.params.get("cont_count", '/run/container/*')
         dfs_path = self.params.get("dfs_path", '/run/find_cmd/*')
         samples = self.params.get("samples", '/run/find_cmd/*')
-        self._height = self.params.get("height", '/run/find_cmd/*')
-        self._subdirs_per_node = self.params.get(
+        self.height = self.params.get("height", '/run/find_cmd/*')
+        self.subdirs_per_node = self.params.get(
             "subdirs_per_node", '/run/find_cmd/*')
-        self._files_per_node = self.params.get(
+        self.files_per_node = self.params.get(
             "files_per_node", '/run/find_cmd/*')
-        self._needles = self.params.get("needles", '/run/find_cmd/*')
+        self.needles = self.params.get("needles", '/run/find_cmd/*')
         challenger = self.params.get("challenger_path", '/run/find_cmd/*')
         challenger_path = ""
 
-        self._dfuses = list()
-        self._containers = list()
+        self.dfuses = list()
+        self.containers = list()
 
         self.add_pool(connect=False)
 
@@ -78,7 +78,7 @@ class FindCmd(DfuseTestBase):
 
             if challenger:
                 challenger_path = tempfile.mkdtemp(dir=challenger)
-                challenger_dirs = self._setup_challenger(
+                challenger_dirs = _setup_challenger(
                     cont_count, challenger_path)
                 challenger_dir_trees = self._crate_dir_trees(challenger_dirs)
                 challenger_stats = self._run_commands(
@@ -91,8 +91,8 @@ class FindCmd(DfuseTestBase):
             self.log.error("FindCmd Test Failed: %s", str(error))
             raise
         finally:
-            self._teardown_dfuse(self._dfuses)
-            self.destroy_containers(self._containers)
+            self._teardown_dfuse(self.dfuses)
+            self.destroy_containers(self.containers)
             self.pool.destroy()
 
             if challenger and challenger_path:
@@ -115,27 +115,27 @@ class FindCmd(DfuseTestBase):
 
         if daos_max_time >= challenger_max_time:
             self.log.warning(
-                "Impossible, DAOS is slower running '{0}' tag".format(tag))
+                "Impossible, DAOS is slower running '%s' tag", tag)
         else:
             self.log.info(
-                "DAOS is equal or faster running '{0}' tag".format(tag))
+                "DAOS is equal or faster running '%s' tag", tag)
 
     def _run_commands(self, test_path, samples, dir_trees):
 
         profiler = general_utils.SimpleProfiler()
         profiler.set_logger(self.log.info)
 
-        self.log.info("Sampling path: {0}".format(test_path))
+        self.log.info("Sampling path: %s", test_path)
 
         for i in range(samples):
             self.log.info(
-                "Running sample number {0} of {1}".format(i + 1, samples))
+                "Running sample number %d of %d", i + 1, samples)
             profiler.run(
                 self._run_cmd,
                 "all_files",
                 u"find {0} -name *.needle".format(test_path))
 
-            number = random.randrange(self._needles - 1)
+            number = random.randrange(self.needles - 1)
             file_name = "*_{:05d}.needle".format(number)
             profiler.run(self._run_cmd, "same_suffix",
                          u"find {0} -name {1}".format(test_path, file_name))
@@ -154,25 +154,15 @@ class FindCmd(DfuseTestBase):
             cont_dir = "{}_daos_dfuse_{}".format(self.pool.uuid, count)
             mount_dir = os.path.join(dfs_path, cont_dir)
             self.log.info(
-                "Creating container Pool UUID: {0} Con UUID: {1}".format(
-                    self.pool, self.container))
+                "Creating container Pool UUID: %s Con UUID: %s",
+                self.pool, self.container)
             self.start_dfuse(
                 self.hostlist_clients, self.pool, self.container, mount_dir)
-            self._dfuses.append(self.dfuse)
-            self._containers.append(self.container)
+            self.dfuses.append(self.dfuse)
+            self.containers.append(self.container)
             mount_dirs.append(mount_dir)
 
         return mount_dirs
-
-    def _setup_challenger(self, dirs, challenger_path):
-        challenger_dirs = []
-
-        for dir in range(dirs):
-            prefix = "dir_{}_".format(dir)
-            tdir = tempfile.mkdtemp(dir=challenger_path, prefix=prefix)
-            challenger_dirs.append(tdir)
-
-        return challenger_dirs
 
     def _crate_dir_trees(self, paths):
         dir_trees = []
@@ -181,22 +171,22 @@ class FindCmd(DfuseTestBase):
         profiler.set_logger(self.log.info)
 
         for path in paths:
-            self.log.info("Populating: {0}".format(path))
+            self.log.info("Populating: %s", path)
             dir_tree = DirTree(
                 path,
-                self._height,
-                self._subdirs_per_node,
-                self._files_per_node)
-            dir_tree.set_number_of_needles(self._needles)
+                self.height,
+                self.subdirs_per_node,
+                self.files_per_node)
+            dir_tree.set_number_of_needles(self.needles)
             tree_path = profiler.run(dir_tree.create, "create_dirtree")
             dir_trees.append(dir_tree)
-            self.log.info("Dir tree created at: {0}".format(tree_path))
+            self.log.info("Dir tree created at: %s", tree_path)
 
         profiler.print_stats()
         max_time, min_time, avg_time = profiler.get_stat("create_dirtree")
         self.log.info(
-            "Max: {0} Min: {1}: Avg: {2} ".format(
-                max_time, min_time, avg_time))
+            "Max: %s Min: %s: Avg: %s", str(max_time), str(min_time),
+            str(avg_time))
 
         return dir_trees
 
@@ -204,7 +194,7 @@ class FindCmd(DfuseTestBase):
         ret_code = general_utils.pcmd(self.hostlist_clients, cmd, timeout=180)
         if 0 not in ret_code:
             error_hosts = NodeSet(
-                ",".join([str(node_set) for code, node_set in ret_code.items() if code != 0]))
+                ",".join([str(v) for k, v in ret_code.items() if k != 0]))
             raise CommandFailure(
                 "Error running '{}' on the following hosts: {}".format(
                     cmd, error_hosts))
@@ -213,3 +203,14 @@ class FindCmd(DfuseTestBase):
         for dfuse in dfuses:
             dfuse.stop()
         self.dfuse = None
+
+
+def _setup_challenger(directories, challenger_path):
+    challenger_dirs = []
+
+    for directory in range(directories):
+        prefix = "dir_{}_".format(directory)
+        tdir = tempfile.mkdtemp(dir=challenger_path, prefix=prefix)
+        challenger_dirs.append(tdir)
+
+    return challenger_dirs

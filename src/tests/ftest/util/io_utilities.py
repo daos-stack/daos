@@ -125,7 +125,7 @@ class DirTree(object):
         self._create_needle(current_path, current_height)
 
         # create files
-        for i in range(self._files_per_node):
+        for _ in range(self._files_per_node):
             fd, _ = tempfile.mkstemp(dir=current_path, suffix=".file")
             os.close(fd)
 
@@ -138,10 +138,10 @@ class DirTree(object):
         if self._needles_count <= 0:
             return
 
-        for i in range(self._needles_count):
+        for _ in range(self._needles_count):
             new_path = os.path.dirname(random.choice(self._needles_paths))
             suffix = "_{:05d}.needle".format(self._needles_count)
-            fd, file_name = tempfile.mkstemp(dir=new_path, suffix=suffix)
+            fd, _ = tempfile.mkstemp(dir=new_path, suffix=suffix)
             os.close(fd)
 
     def _create_needle(self, current_path, current_height):

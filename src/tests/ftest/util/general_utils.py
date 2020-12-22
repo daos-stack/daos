@@ -28,8 +28,6 @@ import re
 import random
 import string
 import time
-from pathlib import Path
-from errno import ENOENT
 from getpass import getuser
 from importlib import import_module
 
@@ -77,7 +75,7 @@ class SimpleProfiler(object):
         elapsed_time = end_time - start_time
         self._log(
             "Execution time: {0}".format(
-                self._pretty_time(elapsed_time)))
+                _pretty_time(elapsed_time)))
 
         if tag not in self._stats:
             self._stats[tag] = [0, []]
@@ -100,7 +98,7 @@ class SimpleProfiler(object):
         """
         data = self._stats.get(tag, [0, []])
 
-        return self._calculate_metrics(data)
+        return _calculate_metrics(data)
 
     def set_logger(self, fn):
         """
@@ -116,35 +114,24 @@ class SimpleProfiler(object):
     def print_stats(self):
         """
         Prints all the stats collected so far. If the logger has not been set,
-        the stats will be printed by using the build-in print function.
+        the stats will be printed by using the built-in print function.
         """
         self._pmsg("{0:20} {1:5} {2:10} {3:10} {4:10}".format(
             "Function Tag", "Hits", "Max", "Min", "Average"))
 
         for fname, data in self._stats.items():
-            max_time, min_time, avg_time = self._calculate_metrics(data)
+            max_time, min_time, avg_time = _calculate_metrics(data)
             self._pmsg(
                 "{0:20} {1:5} {2:10} {3:10} {4:10}".format(
                     fname,
                     data[0],
-                    self._pretty_time(max_time),
-                    self._pretty_time(min_time),
-                    self._pretty_time(avg_time)))
+                    _pretty_time(max_time),
+                    _pretty_time(min_time),
+                    _pretty_time(avg_time)))
 
     def _log(self, msg):
         if self._logger:
             self._logger(msg)
-
-    def _calculate_metrics(self, data):
-        max_time = max(data[1])
-        min_time = min(data[1])
-
-        if len(data[1]):
-            avg_time = sum(data[1]) / len(data[1])
-        else:
-            avg_time = 0
-
-        return max_time, min_time, avg_time
 
     def _pmsg(self, msg):
         if self._logger:
@@ -152,8 +139,21 @@ class SimpleProfiler(object):
         else:
             print(msg)
 
-    def _pretty_time(self, ftime):
-        return time.strftime("%H:%M:%S", time.gmtime(ftime))
+
+def _pretty_time(ftime):
+    return time.strftime("%H:%M:%S", time.gmtime(ftime))
+
+
+def _calculate_metrics(data):
+    max_time = max(data[1])
+    min_time = min(data[1])
+
+    if len(data[1]):
+        avg_time = sum(data[1]) / len(data[1])
+    else:
+        avg_time = 0
+
+    return max_time, min_time, avg_time
 
 
 def human_to_bytes(size):
