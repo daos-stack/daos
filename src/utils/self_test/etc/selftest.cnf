@@ -1,12 +1,16 @@
 [test_1]
-group-name="selftest_srv_grp"
-master-endpoint="0:0"
-endpoint="1:0"
-message-sizes="b1048576" 
-max-inflight-rpcs="16"
-repetitions="100"
-t =1
-n=1
-p=1
-
+#help=1
+display=1
+group-name=selftest_srv_grp
+master-endpoint=0:0
+endpoint=1:0
+message-sizes=b1048576 
+max-inflight-rpcs=16
+repetitions=100
+singleton =1
+nopmix=1
+path=.
+align=16
+Mbits=0
+randomize-endpoints=0
 

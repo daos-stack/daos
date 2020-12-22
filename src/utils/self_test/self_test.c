@@ -1768,7 +1768,6 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 		printf("Configuration file %s\n", file_name);
         	ConfigPrint(cfg, stdout);
 	}
-
 	/********/
 	config_ret=ConfigReadString(cfg, section_name, "group-name",
 				   &string[0], STRING_MAX_SIZE, (char *)NULL);
@@ -1842,9 +1841,9 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 	config_ret=ConfigReadString(cfg, section_name, "align",
 				    &string[0], STRING_MAX_SIZE, (char *)NULL);
 	if (config_ret == CONFIG_OK) {
-		ret = sscanf(optarg, "%" SCNd16, &g_buf_alignment);
+		ret = sscanf(string, "%" SCNd16, &g_buf_alignment);
 		if (ret != 1 || g_buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
-			g_buf_alignment > CRT_ST_BUF_ALIGN_MAX) {
+		    g_buf_alignment > CRT_ST_BUF_ALIGN_MAX) {
 			printf("Warning: Invalid align value %d;"
 			       " Expected value in range [%d:%d]\n",
 			       g_buf_alignment, CRT_ST_BUF_ALIGN_MIN,
@@ -1895,8 +1894,6 @@ cleanup:
 	ConfigFree(cfg);
 	return ret;
 }
-
-
 
 int main(int argc, char *argv[])
 {
@@ -1953,7 +1950,7 @@ int main(int argc, char *argv[])
 	/****************** First Parse user file arguments *************/
 	/* File specified via -f file argument */
 	while (1) {
-		c = getopt_long(argc, argv, "f:c:d",
+		c = getopt_long(argc, argv, "hf:c:dg:m:e:s:r:i:a:btnqp:",
 				long_options, NULL);
 		/* break out of while loop */
 		if (c == -1)
@@ -1970,6 +1967,11 @@ int main(int argc, char *argv[])
 		case 'd':
 			dump = 1;
 			break;
+		case 'h':
+			print_usage(argv[0], default_msg_sizes_str,
+				    g_default_rep_count,
+				    g_default_max_inflight);
+			D_GOTO(cleanup, ret = -DER_INVAL);
 		default:
 			break;
 		}
@@ -1978,8 +1980,8 @@ int main(int argc, char *argv[])
 		ret = config_file_setup(file_name, section_name, dump);
 		if (ret == 0) {
 			print_usage(argv[0], default_msg_sizes_str,
-			    	g_default_rep_count,
-			    	g_default_max_inflight);
+				    g_default_rep_count,
+				    g_default_max_inflight);
 			D_GOTO(cleanup, ret = -DER_INVAL);
 		}
 	}
@@ -1991,7 +1993,7 @@ int main(int argc, char *argv[])
 	*/
 	optind = 1;
 	while (1) {
-		c = getopt_long(argc, argv, "hg:m:e:s:r:i:a:btnqp",
+		c = getopt_long(argc, argv, "hf:c:dg:m:e:s:r:i:a:btnqp:",
 				long_options, NULL);
 		/* Break out of while loop */
 		if (c == -1)
@@ -2008,8 +2010,8 @@ int main(int argc, char *argv[])
 		case 'g':
 			if (g_dest_name != NULL) {
 				free(g_dest_name);
-				alloc_g_dest_name = false;
 			}
+			alloc_g_dest_name = false;
 			g_dest_name = optarg;
 			break;
 		case 'm':
@@ -2022,8 +2024,8 @@ int main(int argc, char *argv[])
 		case 's':
 			if (alloc_g_msg_sizes_str == true) {
 				free(g_msg_sizes_str);
-				alloc_g_msg_sizes_str = false;
 			}
+			alloc_g_msg_sizes_str = false;
 			g_msg_sizes_str = optarg;
 			break;
 		case 'r':
@@ -2046,7 +2048,8 @@ int main(int argc, char *argv[])
 			break;
 		case 'a':
 			ret = sscanf(optarg, "%" SCNd16, &g_buf_alignment);
-			if (ret != 1 || g_buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
+			if (ret != 1 || 
+			    g_buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
 			    g_buf_alignment > CRT_ST_BUF_ALIGN_MAX) {
 				printf("Warning: Invalid align value %d;"
 				       " Expected value in range [%d:%d]\n",
@@ -2059,13 +2062,12 @@ int main(int argc, char *argv[])
 			g_output_megabits = 1;
 			break;
 		case 't':
-printf(" Case t\n");
 			break;
 		case 'p':
 			if (g_attach_info_path != NULL) {
 				free(g_attach_info_path);
-				alloc_g_attach_info_path = false;
 			}
+			alloc_g_attach_info_path = false;
 			g_attach_info_path = optarg;
 			break;
 		case 'q':
@@ -2073,8 +2075,8 @@ printf(" Case t\n");
 			break;
 		case 'n':
 			break;
-		case '?':
 		case 'h':
+		case '?':
 		default:
 			print_usage(argv[0], default_msg_sizes_str,
 				    g_default_rep_count,
@@ -2229,6 +2231,7 @@ cleanup:
 	if (alloc_g_attach_info_path && (g_attach_info_path != NULL)) {
 		free (g_attach_info_path);
 	}
+
 	if (all_params != NULL)
 		D_FREE(all_params);
 	d_log_fini();
