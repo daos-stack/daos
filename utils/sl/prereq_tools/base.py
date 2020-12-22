@@ -59,6 +59,7 @@ except ImportError:
     DEVNULL = open(os.devnull, "wb")
 import tarfile
 import copy
+from distutils.spawn import find_executable
 if sys.version_info < (3, 0):
 # pylint: disable=import-error
     import ConfigParser
@@ -286,7 +287,7 @@ class Runner():
                 retval = True
             else:
                 print('RUN: %s' % command)
-                if subprocess.call(command, shell=True,    # nosec
+                if subprocess.call(command.strip().split(' '),
                                    env=self.env['ENV']) != 0:
                     retval = False
                     break
@@ -301,9 +302,12 @@ def default_libpath():
     """On debian systems, the default library path can be queried"""
     if not os.path.isfile('/etc/debian_version'):
         return []
+    dpkgarchitecture = find_executable('dpkg-architecture')
+    if not dpkgarchitecture:
+        print('No dpkg-architecture found in path.')
+        return []
     try:
-        pipe = subprocess.Popen(['dpkg-architecture',       # nosec
-                                 '-qDEB_HOST_MULTIARCH'],
+        pipe = subprocess.Popen([dpkgarchitecture, '-qDEB_HOST_MULTIARCH'],
                                 stdout=subprocess.PIPE, stderr=DEVNULL)
         (stdo, _) = pipe.communicate()
         if pipe.returncode == 0:
