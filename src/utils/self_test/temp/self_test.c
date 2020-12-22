@@ -33,6 +33,8 @@
 #include "configini.h"
 #include "daos_errno.h"
 
+//#include "./src/utils/self_test/src/configini.h"
+
 #define CRT_SELF_TEST_AUTO_BULK_THRESH		(1 << 20)
 #define CRT_SELF_TEST_GROUP_NAME		("crt_self_test")
 
@@ -61,7 +63,7 @@ struct st_master_endpt {
 };
 
 static const char * const crt_st_msg_type_str[] = { "EMPTY",
-						     "IOV",
+						    "IOV",
 						    "BULK_PUT",
 						    "BULK_GET" };
 
@@ -76,29 +78,29 @@ static int		g_shutdown_flag;
 const int		g_default_rep_count = 10000;
 static bool		g_randomize_endpoints;
 
-char			*g_dest_name;
-struct st_endpoint	*g_endpts;
-struct st_endpoint	*g_ms_endpts;
-uint32_t		 g_num_endpts;
-uint32_t		 g_num_ms_endpts;
+char			*g_dest_name = NULL;
+struct st_endpoint	*g_endpts = NULL;
+struct st_endpoint	*g_ms_endpts = NULL;
+uint32_t		 g_num_endpts = 0;
+uint32_t		 g_num_ms_endpts = 0;
 
 char			*g_msg_sizes_str;
 int			 g_rep_count;
 int			 g_max_inflight;
 int16_t			 g_buf_alignment =
 				CRT_ST_BUF_ALIGN_DEFAULT;
-int			 g_output_megabits;
-char			*g_attach_info_path;
+int			 g_output_megabits = 0;
+char			*g_attach_info_path = NULL;
 
-const int		 g_default_max_inflight = 1000;
+const int		g_default_max_inflight = 1000;
 bool			 alloc_g_dest_name = true;
-bool			 alloc_g_msg_sizes_str;
+bool			 alloc_g_msg_sizes_str = false;
 bool			 alloc_g_attach_info_path = true;
 
 
 static void *progress_fn(void *arg)
 {
-	int		ret;
+	int		 ret;
 	crt_context_t	*crt_ctx = NULL;
 
 	crt_ctx = (crt_context_t *)arg;
@@ -797,7 +799,6 @@ randomize_endpts(struct st_endpoint *endpts, uint32_t num_endpts)
 
 	printf("New order:\n");
 	for (i = 0; i < num_endpts; i++) {
-		/* Avoid checkpatch warning */
 		printf("%d:%d ", endpts[i].rank, endpts[i].tag);
 	}
 	printf("\n");
@@ -984,7 +985,6 @@ static int run_self_test(struct st_size_params all_params[],
 	}
 
 	if (g_randomize_endpoints) {
-		/* Avoid checkpatch warning */
 		randomize_endpts(endpts, num_endpts);
 	}
 
@@ -1093,8 +1093,7 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       prog_name
 	);
 
-	printf("Usage: %s --group-name <name> --endpoint"
-	       " <ranks:tags> [optional arguments]\n"
+	printf("Usage: %s --group-name <name> --endpoint <ranks:tags> [optional arguments]\n"
 	       "\n"
 	       "Required Arguments\n"
 	       "  --group-name <group_name>\n"
@@ -1103,7 +1102,7 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "\n"
 	       "  --endpoint <ranks:tags>\n"
 	       "      Short version: -e\n"
-	       "      Describes an endpoint (or range of endpoints)to connect to\n"
+	       "      Describes an endpoint (or range of endpoints) to connect to\n"
 	       "	Note: Can be specified multiple times\n"
 	       "\n"
 	       "      ranks and tags are comma-separated lists to connect to\n"
@@ -1121,7 +1120,7 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "          2:1\n"
 	       "\n"
 	       "        By default, self-test will send test messages to these\n"
-	       "        endpoints in the order listed above.See --randomize-endpoints\n"
+	       "        endpoints in the order listed above. See --randomize-endpoints\n"
 	       "        for more information\n"
 	       "\n"
 	       "Optional Arguments\n"
@@ -1705,9 +1704,9 @@ int parse_message_sizes_string(const char *pch,
  *********************************
  */
 
+
 #define LOG_ERR(fmt, ...)	\
-	fprintf(stderr, "[ERROR] <%s:%d> : " fmt "\n",\
-		__func__, __LINE__, __VA_ARGS__)
+	fprintf(stderr, "[ERROR] <%s:%d> : " fmt "\n", __FUNCTION__, __LINE__, __VA_ARGS__)
 
 #define LOG_INFO(fmt, ...)	\
 	fprintf(stderr, "[INFO] : " fmt "\n", __VA_ARGS__)
@@ -1716,10 +1715,10 @@ int parse_message_sizes_string(const char *pch,
 #define CONFIGREADFILE		"../etc/config.cnf"
 #define CONFIGSAVEFILE		"../etc/new-config.cnf"
 
-#define ENTER_TEST_FUNC							\
-	do {								\
-		LOG_INFO("%s", "\n-----------------------------------------");\
-		LOG_INFO("<TEST: %s>\n", __FUNCTION__);			\
+#define ENTER_TEST_FUNC														\
+	do {																	\
+		LOG_INFO("%s", "\n-----------------------------------------------");\
+		LOG_INFO("<TEST: %s>\n", __FUNCTION__);								\
 	} while (0)
 
 /*
@@ -1749,12 +1748,12 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 
 	if (display) {
 		printf("Configuration file %s\n", file_name);
-		ConfigPrint(cfg, stdout);
+        	ConfigPrint(cfg, stdout);
 	}
 
 	/* Parse of configuration file */
 	/********/
-	config_ret = ConfigReadString(cfg, section_name, "help",
+	config_ret=ConfigReadString(cfg, section_name, "help",
 				    &string[0], STRING_MAX_SIZE, (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		/* Avoid checkpatch warning */
@@ -1763,44 +1762,45 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 	}
 
 	/********/
-	config_ret = ConfigReadString(cfg, section_name, "display",
+	config_ret=ConfigReadString(cfg, section_name, "display",
 				    &string[0], STRING_MAX_SIZE, (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		printf("Configuration file %s\n", file_name);
-		ConfigPrint(cfg, stdout);
+        	ConfigPrint(cfg, stdout);
 	}
+printf(" sab 1\n");
 	/********/
-	config_ret = ConfigReadString(cfg, section_name, "group-name",
+	config_ret=ConfigReadString(cfg, section_name, "group-name",
 				   &string[0], STRING_MAX_SIZE, (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		len = strlen(string) + 1;
 		g_dest_name = (char *)malloc(len);
 		if (g_dest_name == NULL) {
-			/* Avoid checkpatch warning */
 			D_GOTO(cleanup, ret = -DER_NOMEM);
 		}
 		memcpy(g_dest_name, string, len);
 	}
 
+printf(" sab 2\n");
 	/********/
-	config_ret = ConfigReadString(cfg, section_name, "master-endpoint",
+	config_ret=ConfigReadString(cfg, section_name, "master-endpoint",
 				   &string[0], STRING_MAX_SIZE, (char *)NULL);
 	if (config_ret == CONFIG_OK) {
-		/* Avoid checkpatch warning */
-		parse_endpoint_string(&string[0], &g_ms_endpts,
-				      &g_num_ms_endpts);
+		 parse_endpoint_string(&string[0], &g_ms_endpts,
+				       &g_num_ms_endpts);
 	}
 
+printf(" sab 3\n");
 	/********/
-	config_ret = ConfigReadString(cfg, section_name, "endpoint",
+	config_ret=ConfigReadString(cfg, section_name, "endpoint",
 				   &string[0], STRING_MAX_SIZE, (char *)NULL);
 	if (config_ret == CONFIG_OK) {
-		/* Avoid checkpatch warning */
 		parse_endpoint_string(&string[0], &g_endpts, &g_num_endpts);
 	}
 
+printf(" sab 4\n");
 	/********/
-	config_ret = ConfigReadString(cfg, section_name, "message-sizes",
+	config_ret=ConfigReadString(cfg, section_name, "message-sizes",
 				   &string[0], STRING_MAX_SIZE, (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		len = strlen(string) + 1;
@@ -1812,8 +1812,9 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 		memcpy(g_msg_sizes_str, string, len);
 	}
 
+printf(" sab 5\n");
 	/********/
-	config_ret = ConfigReadString(cfg, section_name,
+	config_ret=ConfigReadString(cfg, section_name,
 				    "repetitions-per-size",
 				    &string[0], STRING_MAX_SIZE, (char *)NULL);
 	if (config_ret == CONFIG_OK) {
@@ -1826,8 +1827,9 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 		}
 	}
 
+printf(" sab 6\n");
 	/********/
-	config_ret = ConfigReadString(cfg, section_name,
+	config_ret=ConfigReadString(cfg, section_name,
 				    "max-inflight-rpcs",
 				    &string[0], STRING_MAX_SIZE, (char *)NULL);
 	if (config_ret == CONFIG_OK) {
@@ -1841,10 +1843,13 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 
 	}
 
+printf(" sab 7\n");
 	/********/
-	config_ret = ConfigReadString(cfg, section_name, "align",
+	config_ret=ConfigReadString(cfg, section_name, "align",
 				    &string[0], STRING_MAX_SIZE, (char *)NULL);
+
 	if (config_ret == CONFIG_OK) {
+printf(" align: string %s\n", string);
 		ret = sscanf(string, "%" SCNd16, &g_buf_alignment);
 		if (ret != 1 || g_buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
 		    g_buf_alignment > CRT_ST_BUF_ALIGN_MAX) {
@@ -1856,8 +1861,9 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 		}
 	}
 
+printf(" sab 8\n");
 	/********/
-	config_ret = ConfigReadString(cfg, section_name, "MBits",
+	config_ret=ConfigReadString(cfg, section_name, "MBits",
 				    &string[0], STRING_MAX_SIZE, (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		/* Avoid checkpatch warning */
@@ -1865,37 +1871,40 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 	}
 
 	/********/
-	config_ret = ConfigReadString(cfg, section_name, "singleton",
+	config_ret=ConfigReadString(cfg, section_name, "singleton",
 				    &string[0], STRING_MAX_SIZE, (char *)NULL);
 
 
+printf(" sab 9\n");
 	/********/
-	config_ret = ConfigReadString(cfg, section_name, "randomize-endpoints",
+	config_ret=ConfigReadString(cfg, section_name, "randomize-endpoints",
 				    &string[0], STRING_MAX_SIZE, (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		/* Avoid checkpatch warning */
 		g_randomize_endpoints = true;
 	}
 
+printf(" sab 10\n");
 	/********/
-	config_ret = ConfigReadString(cfg, section_name, "path",
+	config_ret=ConfigReadString(cfg, section_name, "path",
 				    &string[0], STRING_MAX_SIZE, (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		len = strlen(string) + 1;
 		g_attach_info_path = (char *)malloc(len);
 		if (g_attach_info_path == NULL) {
-			/* Avoid checkpatch warning */
 			D_GOTO(cleanup, ret = -DER_NOMEM);
 		}
 		memcpy(g_attach_info_path, string, len);
 	}
 
+printf(" sab 11\n");
 	/********/
-	config_ret = ConfigReadString(cfg, section_name, "nopmix",
+	config_ret=ConfigReadString(cfg, section_name, "nopmix",
 				    &string[0], STRING_MAX_SIZE, (char *)NULL);
 
 	/* Free up structure and return */
 cleanup:
+printf(" sab 12\n");
 	ConfigFree(cfg);
 	return ret;
 }
@@ -1952,6 +1961,7 @@ int main(int argc, char *argv[])
 		return ret;
 	}
 
+printf("\n  ************* New Parser *********\n\n");
 	/****************** First Parse user file arguments *************/
 	/* File specified via -f file argument */
 	while (1) {
@@ -1991,6 +2001,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
+printf("\n  ************* Old Parser *********\n\n");
 	/**************** Second Parse of user arguments ***************/
 	/*
 	* Overwrite default and/or file input arguments
@@ -2014,7 +2025,6 @@ int main(int argc, char *argv[])
 		/* Non file parameters. May be used to overide file. */
 		case 'g':
 			if (g_dest_name != NULL) {
-				/* Avoid checkpatch warning */
 				free(g_dest_name);
 			}
 			alloc_g_dest_name = false;
@@ -2029,7 +2039,6 @@ int main(int argc, char *argv[])
 			break;
 		case 's':
 			if (alloc_g_msg_sizes_str == true) {
-				/* Avoid checkpatch warning */
 				free(g_msg_sizes_str);
 			}
 			alloc_g_msg_sizes_str = false;
@@ -2055,7 +2064,7 @@ int main(int argc, char *argv[])
 			break;
 		case 'a':
 			ret = sscanf(optarg, "%" SCNd16, &g_buf_alignment);
-			if (ret != 1 ||
+			if (ret != 1 || 
 			    g_buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
 			    g_buf_alignment > CRT_ST_BUF_ALIGN_MAX) {
 				printf("Warning: Invalid align value %d;"
@@ -2072,7 +2081,6 @@ int main(int argc, char *argv[])
 			break;
 		case 'p':
 			if (g_attach_info_path != NULL) {
-				/* Avoid checkpatch warning */
 				free(g_attach_info_path);
 			}
 			alloc_g_attach_info_path = false;
@@ -2093,6 +2101,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
+printf(" DONE: align %d\n", g_buf_alignment);
 	/******************** Parse message sizes argument ********************/
 
 	/* repeat rep_count for each endpoint */
@@ -2231,16 +2240,16 @@ int main(int argc, char *argv[])
 	/********************* Clean up *********************/
 cleanup:
 	if (alloc_g_dest_name && (g_dest_name != NULL)) {
-		/* Avoid checkpatch warning */
-		free(g_dest_name);
+printf("dname: frre the memory\n");
+		free (g_dest_name);
 	}
-	if (alloc_g_msg_sizes_str && (g_msg_sizes_str != NULL)) {
-		/* Avoid checkpatch warning */
-		free(g_msg_sizes_str);
+	if (alloc_g_msg_sizes_str && (g_msg_sizes_str!= NULL)) {
+printf("size: frre the memory\n");
+		free (g_msg_sizes_str);
 	}
 	if (alloc_g_attach_info_path && (g_attach_info_path != NULL)) {
-		/* Avoid checkpatch warning */
-		free(g_attach_info_path);
+printf("path: frre the memory\n");
+		free (g_attach_info_path);
 	}
 
 	if (all_params != NULL)
