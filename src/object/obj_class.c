@@ -277,6 +277,19 @@ static struct daos_obj_class daos_obj_classes[] = {
 		},
 	},
 	{
+		.oc_name	= "OBJ_ID_TABLE",
+		.oc_id		= DAOS_OC_OIT,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			/* XXX use 1 replica and 1 groop for simplicity,
+			 * it should be more scalable
+			 */
+			.ca_grp_nr		= 1,
+			.ca_rp_nr		= 1,
+		},
+	},
+	{
 		.oc_name	= "EC_2P1G1",
 		.oc_id		= OC_EC_2P1G1,
 		{

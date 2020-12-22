@@ -40,7 +40,7 @@ class CartNoPmixOneNodeTest(Test):
     """
     Runs basic CaRT no_pmix tests
 
-    :avocado: tags=all,cart,pr,no_pmix,one_node
+    :avocado: tags=all,cart,pr,daily_regression,no_pmix,one_node
     """
     def setUp(self):
         """ Test setup """
@@ -58,15 +58,11 @@ class CartNoPmixOneNodeTest(Test):
                          "CRT_CTX_SHARE_ADDR": ofi_share_addr,
                          "CRT_CTX_NUM": ofi_ctx_num}
 
-    def tearDown(self):
-        """ Test tear down """
-        print("Run TearDown\n")
-
     def test_cart_no_pmix(self):
         """
         Test CaRT NoPmix
 
-        :avocado: tags=all,cart,pr,no_pmix,one_node
+        :avocado: tags=all,cart,pr,daily_regression,no_pmix,one_node
         """
 
         cmd = self.params.get("tst_bin", '/run/tests/*/')

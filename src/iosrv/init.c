@@ -492,14 +492,6 @@ server_init(int argc, char *argv[])
 		goto exit_abt_init;
 
 	D_INFO("Module interface successfully initialized\n");
-	/* load modules.  Split load an init so first call to dlopen
-	 * is from the ioserver to avoid DAOS-4557
-	 */
-	rc = modules_load();
-	if (rc)
-		/* Some modules may have been loaded successfully. */
-		D_GOTO(exit_mod_loaded, rc);
-	D_INFO("Module %s successfully loaded\n", modules);
 
 	/* initialize the network layer */
 	ctx_nr = dss_ctx_nr_get();
@@ -511,6 +503,15 @@ server_init(int argc, char *argv[])
 	D_INFO("Network successfully initialized\n");
 
 	ds_iv_init();
+
+	/* load modules. Split load and init so first call to dlopen()
+	 * is from the ioserver to avoid DAOS-4557
+	 */
+	rc = modules_load();
+	if (rc)
+		/* Some modules may have been loaded successfully. */
+		D_GOTO(exit_mod_loaded, rc);
+	D_INFO("Module %s successfully loaded\n", modules);
 
 	/* init modules */
 	rc = dss_module_init_all(&dss_mod_facs);
@@ -756,7 +757,7 @@ parse(int argc, char **argv)
 			       "instead.\n");
 		case 't':
 			nr = strtoul(optarg, &end, 10);
-			if (end == optarg || nr == ULONG_MAX) {
+			if ((end == optarg) || (nr == ULONG_MAX)) {
 				rc = -DER_INVAL;
 				break;
 			}
@@ -764,7 +765,7 @@ parse(int argc, char **argv)
 			break;
 		case 'x':
 			nr = strtoul(optarg, &end, 10);
-			if (end == optarg || nr == ULONG_MAX) {
+			if ((end == optarg) || (nr == ULONG_MAX)) {
 				rc = -DER_INVAL;
 				break;
 			}
@@ -772,7 +773,7 @@ parse(int argc, char **argv)
 			break;
 		case 'f':
 			nr = strtoul(optarg, &end, 10);
-			if (end == optarg || nr == ULONG_MAX) {
+			if ((end == optarg) || (nr == ULONG_MAX)) {
 				rc = -DER_INVAL;
 				break;
 			}
@@ -805,7 +806,7 @@ parse(int argc, char **argv)
 			break;
 		case 'r':
 			nr = strtoul(optarg, &end, 10);
-			if (end == optarg || nr == ULONG_MAX) {
+			if ((end == optarg) || (nr == ULONG_MAX)) {
 				rc = -DER_INVAL;
 				break;
 			}

@@ -202,20 +202,6 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			},
 			expErr: errors.New("unmarshal"),
 		},
-		"retries exceed context deadline": {
-			targetCount: 8,
-			req: &mgmtpb.PoolCreateReq{
-				Uuid:      common.MockUUID(0),
-				Scmbytes:  100 * humanize.GiByte,
-				Nvmebytes: 10 * humanize.TByte,
-			},
-			setupMockDrpc: func(svc *mgmtSvc, err error) {
-				setupMockDrpcClient(svc, &mgmtpb.PoolCreateResp{
-					Status: int32(drpc.DaosGroupVersionMismatch),
-				}, nil)
-			},
-			expErr: context.DeadlineExceeded,
-		},
 		"successful creation": {
 			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
@@ -286,7 +272,8 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				}
 				harness.started.SetTrue()
 
-				tc.mgmtSvc = newMgmtSvc(harness, system.MockMembership(t, log), system.MockDatabase(t, log))
+				ms, db := system.MockMembership(t, log, mockTCPResolver)
+				tc.mgmtSvc = newMgmtSvc(harness, ms, db)
 			}
 			tc.mgmtSvc.log = log
 
@@ -338,9 +325,10 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 	}
 
 	req := &mgmtpb.PoolCreateReq{
-		Uuid:      common.MockUUID(),
-		Scmbytes:  100 * humanize.GiByte,
-		Nvmebytes: 10 * humanize.TByte,
+		Uuid:         common.MockUUID(),
+		Scmbytes:     100 * humanize.GiByte,
+		Nvmebytes:    10 * humanize.TByte,
+		FaultDomains: mgmtSvc.sysdb.FaultDomainTree().ToProto(),
 	}
 	wantReq := new(mgmtpb.PoolCreateReq)
 	*wantReq = *req
@@ -1129,23 +1117,152 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 	}
 }
 
+func TestServer_MgmtSvc_PoolResolveID(t *testing.T) {
+	defaultLabel := "test-pool"
+
+	for name, tc := range map[string]struct {
+		req     *mgmtpb.PoolResolveIDReq
+		expResp *mgmtpb.PoolResolveIDResp
+		expErr  error
+	}{
+		"nil request": {
+			expErr: errors.New("nil request"),
+		},
+		"empty request": {
+			req:    &mgmtpb.PoolResolveIDReq{},
+			expErr: errors.New("empty request"),
+		},
+		"invalid label lookup": {
+			req: &mgmtpb.PoolResolveIDReq{
+				HumanID: "nope-bad-not-gonna-work",
+			},
+			expErr: errors.New("unable to find pool service"),
+		},
+		"valid label lookup": {
+			req: &mgmtpb.PoolResolveIDReq{
+				HumanID: defaultLabel,
+			},
+			expResp: &mgmtpb.PoolResolveIDResp{
+				Uuid: mockUUID,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			ms := newTestMgmtSvc(t, log)
+			addTestPools(t, ms.sysdb, mockUUID)
+			ps, err := ms.sysdb.FindPoolServiceByUUID(uuid.MustParse(mockUUID))
+			if err != nil {
+				t.Fatal(err)
+			}
+			ps.PoolLabel = defaultLabel
+			if err := ms.sysdb.UpdatePoolService(ps); err != nil {
+				t.Fatal(err)
+			}
+
+			gotResp, gotErr := ms.PoolResolveID(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func propWithName(r *mgmtpb.PoolSetPropReq, n string) *mgmtpb.PoolSetPropReq {
+	r.SetPropertyName(n)
+	return r
+}
+func propWithNumber(r *mgmtpb.PoolSetPropReq, n uint32) *mgmtpb.PoolSetPropReq {
+	r.SetPropertyNumber(n)
+	return r
+}
+
+func propWithStrVal(r *mgmtpb.PoolSetPropReq, v string) *mgmtpb.PoolSetPropReq {
+	r.SetValueString(v)
+	return r
+}
+func propWithNumVal(r *mgmtpb.PoolSetPropReq, v uint64) *mgmtpb.PoolSetPropReq {
+	r.SetValueNumber(v)
+	return r
+}
+
+func TestServer_MgmtSvc_PoolSetProp_Label(t *testing.T) {
+	defaultLabel := "test-label"
+
+	for name, tc := range map[string]struct {
+		poolUUID string
+		label    string
+		expErr   error
+	}{
+		"labels must be unique": {
+			poolUUID: common.MockUUID(3),
+			label:    defaultLabel,
+			expErr:   FaultPoolDuplicateLabel(defaultLabel),
+		},
+		"success": {
+			label: "unique-label",
+		},
+		"pool label application should be idempotent": {
+			poolUUID: mockUUID,
+			label:    defaultLabel,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			ms := newTestMgmtSvc(t, log)
+			setupMockDrpcClient(ms, &mgmtpb.PoolSetPropResp{
+				Property: &mgmtpb.PoolSetPropResp_Number{
+					Number: drpc.PoolPropertyLabel,
+				},
+				Value: &mgmtpb.PoolSetPropResp_Strval{
+					Strval: tc.label,
+				}}, nil)
+			addTestPools(t, ms.sysdb, mockUUID)
+			if tc.poolUUID != "" && tc.poolUUID != mockUUID {
+				addTestPools(t, ms.sysdb, tc.poolUUID)
+			}
+			ps, err := ms.sysdb.FindPoolServiceByUUID(uuid.MustParse(mockUUID))
+			if err != nil {
+				t.Fatal(err)
+			}
+			ps.PoolLabel = defaultLabel
+			if err := ms.sysdb.UpdatePoolService(ps); err != nil {
+				t.Fatal(err)
+			}
+
+			req := propWithStrVal(propWithName(new(mgmtpb.PoolSetPropReq), "label"), tc.label)
+			req.Uuid = tc.poolUUID
+			if req.Uuid == "" {
+				req.Uuid = mockUUID
+			}
+			_, gotErr := ms.PoolSetProp(context.TODO(), req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			found, err := ms.sysdb.FindPoolServiceByLabel(tc.label)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if found.PoolUUID != ps.PoolUUID {
+				t.Fatalf("after labeling, found pool UUID doesn't match original: %s != %s", found.PoolUUID, ps.PoolUUID)
+			}
+		})
+	}
+}
+
 func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
-	withName := func(r *mgmtpb.PoolSetPropReq, n string) *mgmtpb.PoolSetPropReq {
-		r.SetPropertyName(n)
-		return r
-	}
-	withNumber := func(r *mgmtpb.PoolSetPropReq, n uint32) *mgmtpb.PoolSetPropReq {
-		r.SetPropertyNumber(n)
-		return r
-	}
-	withStrVal := func(r *mgmtpb.PoolSetPropReq, v string) *mgmtpb.PoolSetPropReq {
-		r.SetValueString(v)
-		return r
-	}
-	withNumVal := func(r *mgmtpb.PoolSetPropReq, v uint64) *mgmtpb.PoolSetPropReq {
-		r.SetValueNumber(v)
-		return r
-	}
 	lastCall := func(svc *mgmtSvc) *drpc.Call {
 		mi, _ := svc.harness.getMSLeaderInstance()
 		if mi == nil || mi._drpcClient == nil {
@@ -1163,7 +1280,7 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 		expErr        error
 	}{
 		"garbage resp": {
-			req: withStrVal(withName(new(mgmtpb.PoolSetPropReq), "reclaim"), "disabled"),
+			req: propWithStrVal(propWithName(new(mgmtpb.PoolSetPropReq), "reclaim"), "disabled"),
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
 				// dRPC call returns junk in the message body
 				badBytes := makeBadBytes(42)
@@ -1173,11 +1290,11 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 			expErr: errors.New("unmarshal"),
 		},
 		"unhandled property": {
-			req:    withName(new(mgmtpb.PoolSetPropReq), "unknown"),
+			req:    propWithName(new(mgmtpb.PoolSetPropReq), "unknown"),
 			expErr: errors.New("unhandled pool property"),
 		},
 		"response property mismatch": {
-			req: withStrVal(withName(new(mgmtpb.PoolSetPropReq), "reclaim"), "disabled"),
+			req: propWithStrVal(propWithName(new(mgmtpb.PoolSetPropReq), "reclaim"), "disabled"),
 			drpcResp: &mgmtpb.PoolSetPropResp{
 				Property: &mgmtpb.PoolSetPropResp_Number{
 					Number: 4242424242,
@@ -1186,7 +1303,7 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 			expErr: errors.New("Response number doesn't match"),
 		},
 		"response value mismatch": {
-			req: withStrVal(withName(new(mgmtpb.PoolSetPropReq), "reclaim"), "disabled"),
+			req: propWithStrVal(propWithName(new(mgmtpb.PoolSetPropReq), "reclaim"), "disabled"),
 			drpcResp: &mgmtpb.PoolSetPropResp{
 				Property: &mgmtpb.PoolSetPropResp_Number{
 					Number: drpc.PoolPropertySpaceReclaim,
@@ -1198,13 +1315,13 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 			expErr: errors.New("Response value doesn't match"),
 		},
 		"reclaim-unknown": {
-			req:    withStrVal(withName(new(mgmtpb.PoolSetPropReq), "reclaim"), "unknown"),
+			req:    propWithStrVal(propWithName(new(mgmtpb.PoolSetPropReq), "reclaim"), "unknown"),
 			expErr: errors.New("unhandled reclaim type"),
 		},
 		"reclaim-disabled": {
-			req: withStrVal(withName(new(mgmtpb.PoolSetPropReq), "reclaim"), "disabled"),
-			expReq: withNumVal(
-				withNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertySpaceReclaim),
+			req: propWithStrVal(propWithName(new(mgmtpb.PoolSetPropReq), "reclaim"), "disabled"),
+			expReq: propWithNumVal(
+				propWithNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertySpaceReclaim),
 				drpc.PoolSpaceReclaimDisabled,
 			),
 			drpcResp: &mgmtpb.PoolSetPropResp{
@@ -1225,9 +1342,9 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 			},
 		},
 		"reclaim-lazy": {
-			req: withStrVal(withName(new(mgmtpb.PoolSetPropReq), "reclaim"), "lazy"),
-			expReq: withNumVal(
-				withNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertySpaceReclaim),
+			req: propWithStrVal(propWithName(new(mgmtpb.PoolSetPropReq), "reclaim"), "lazy"),
+			expReq: propWithNumVal(
+				propWithNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertySpaceReclaim),
 				drpc.PoolSpaceReclaimLazy,
 			),
 			drpcResp: &mgmtpb.PoolSetPropResp{
@@ -1248,9 +1365,9 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 			},
 		},
 		"reclaim-time": {
-			req: withStrVal(withName(new(mgmtpb.PoolSetPropReq), "reclaim"), "time"),
-			expReq: withNumVal(
-				withNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertySpaceReclaim),
+			req: propWithStrVal(propWithName(new(mgmtpb.PoolSetPropReq), "reclaim"), "time"),
+			expReq: propWithNumVal(
+				propWithNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertySpaceReclaim),
 				drpc.PoolSpaceReclaimTime,
 			),
 			drpcResp: &mgmtpb.PoolSetPropResp{
@@ -1270,11 +1387,10 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 				},
 			},
 		},
-		// label not supported yet (needs a MS map for label -> UUID)
-		/*"label": {
-			req: withStrVal(withName(new(mgmtpb.PoolSetPropReq), "label"), "foo"),
-			expReq: withStrVal(
-				withNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertyLabel),
+		"label": {
+			req: propWithStrVal(propWithName(new(mgmtpb.PoolSetPropReq), "label"), "foo"),
+			expReq: propWithStrVal(
+				propWithNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertyLabel),
 				"foo",
 			),
 			drpcResp: &mgmtpb.PoolSetPropResp{
@@ -1295,9 +1411,9 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 			},
 		},
 		"empty label is valid": {
-			req: withStrVal(withName(new(mgmtpb.PoolSetPropReq), "label"), ""),
-			expReq: withStrVal(
-				withNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertyLabel),
+			req: propWithStrVal(propWithName(new(mgmtpb.PoolSetPropReq), "label"), ""),
+			expReq: propWithStrVal(
+				propWithNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertyLabel),
 				"",
 			),
 			drpcResp: &mgmtpb.PoolSetPropResp{
@@ -1316,20 +1432,21 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 					Strval: "",
 				},
 			},
-		},*/
+		},
+
 		"space_rb > 100": {
-			req:    withNumVal(withName(new(mgmtpb.PoolSetPropReq), "space_rb"), 101),
+			req:    propWithNumVal(propWithName(new(mgmtpb.PoolSetPropReq), "space_rb"), 101),
 			expErr: errors.New("invalid space_rb value"),
 		},
 		"space_rb 5%": {
 			// if the input was interpreted as a string, we should reject it
-			req:    withStrVal(withName(new(mgmtpb.PoolSetPropReq), "space_rb"), "5%"),
+			req:    propWithStrVal(propWithName(new(mgmtpb.PoolSetPropReq), "space_rb"), "5%"),
 			expErr: errors.New("invalid space_rb value"),
 		},
 		"space_rb": {
-			req: withNumVal(withName(new(mgmtpb.PoolSetPropReq), "space_rb"), 42),
-			expReq: withNumVal(
-				withNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertyReservedSpace),
+			req: propWithNumVal(propWithName(new(mgmtpb.PoolSetPropReq), "space_rb"), 42),
+			expReq: propWithNumVal(
+				propWithNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertyReservedSpace),
 				42,
 			),
 			drpcResp: &mgmtpb.PoolSetPropResp{
@@ -1350,13 +1467,13 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 			},
 		},
 		"self_heal-unknown": {
-			req:    withStrVal(withName(new(mgmtpb.PoolSetPropReq), "self_heal"), "unknown"),
+			req:    propWithStrVal(propWithName(new(mgmtpb.PoolSetPropReq), "self_heal"), "unknown"),
 			expErr: errors.New("unhandled self_heal type"),
 		},
 		"self_heal-exclude": {
-			req: withStrVal(withName(new(mgmtpb.PoolSetPropReq), "self_heal"), "exclude"),
-			expReq: withNumVal(
-				withNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertySelfHealing),
+			req: propWithStrVal(propWithName(new(mgmtpb.PoolSetPropReq), "self_heal"), "exclude"),
+			expReq: propWithNumVal(
+				propWithNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertySelfHealing),
 				drpc.PoolSelfHealingAutoExclude,
 			),
 			drpcResp: &mgmtpb.PoolSetPropResp{
@@ -1377,9 +1494,9 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 			},
 		},
 		"self_heal-rebuild": {
-			req: withStrVal(withName(new(mgmtpb.PoolSetPropReq), "self_heal"), "rebuild"),
-			expReq: withNumVal(
-				withNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertySelfHealing),
+			req: propWithStrVal(propWithName(new(mgmtpb.PoolSetPropReq), "self_heal"), "rebuild"),
+			expReq: propWithNumVal(
+				propWithNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertySelfHealing),
 				drpc.PoolSelfHealingAutoRebuild,
 			),
 			drpcResp: &mgmtpb.PoolSetPropResp{

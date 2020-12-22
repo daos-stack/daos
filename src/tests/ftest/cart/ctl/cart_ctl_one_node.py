@@ -39,7 +39,7 @@ class CartCtlOneNodeTest(Test):
     """
     Runs basic CaRT ctl tests
 
-    :avocado: tags=all,cart,pr,ctl,one_node
+    :avocado: tags=all,cart,pr,daily_regression,ctl,one_node
     """
     def setUp(self):
         """ Test setup """
@@ -47,15 +47,11 @@ class CartCtlOneNodeTest(Test):
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
 
-    def tearDown(self):
-        """ Test tear down """
-        print("Run TearDown\n")
-
     def test_cart_ctl(self):
         """
         Test CaRT ctl
 
-        :avocado: tags=all,cart,pr,ctl,one_node
+        :avocado: tags=all,cart,pr,daily_regression,ctl,one_node
         """
 
         srvcmd = self.utils.build_cmd(self, self.env, "test_servers")
