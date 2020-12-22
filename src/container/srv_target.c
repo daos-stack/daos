@@ -403,6 +403,7 @@ cont_aggregate_ult(void *arg)
 			/* Sleep 2 seconds when last aggregation failed */
 			msecs = 2ULL * 1000;
 		}
+		msecs = 2ULL * 1000;
 
 		if (dss_ult_exiting(cont->sc_agg_req))
 			break;
