@@ -7,9 +7,6 @@ hosts:
 timeout: 2700
 server_config:
   name: daos_server
-  servers:
-    scm_class: dcpm
-    scm_list: ["/dev/pmem0"]
 pool:
   mode: 146
   name: daos_server
