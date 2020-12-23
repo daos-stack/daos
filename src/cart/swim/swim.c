@@ -964,7 +964,6 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 			/* if we get an update that we are dead,
 			 * just shut down
 			 */
-
 			if (upds[i].smu_id == self_id) {
 				swim_ctx_unlock(ctx);
 				SWIM_ERROR("%lu: self confirmed DEAD received "

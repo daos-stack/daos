@@ -131,7 +131,6 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 static void
 test_swim_status_handler(crt_rpc_t *rpc_req)
 {
-  DBG_PRINT("EAM trace, test_swim_status_handler\n");
 	struct test_swim_status_in	*e_req;
 	struct test_swim_status_out	*e_reply;
 	int				 rc = 0;
@@ -139,24 +138,19 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 	/* CaRT internally already allocated the input/output buffer */
 	e_req = crt_req_get(rpc_req);
 	D_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
-  DBG_PRINT("EAM trace, test_swim_status_handler\n");
 
 	DBG_PRINT("tier1 test_server recv'd swim_status, opc: %#x.\n",
 		   rpc_req->cr_opc);
   DBG_PRINT("tier1 swim_status input - rank: %d.\n", e_req->rank);
 
-  DBG_PRINT("EAM trace, test_swim_status_handler\n");
 	e_reply = crt_reply_get(rpc_req);
 	D_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
 		  e_reply);
-  DBG_PRINT("EAM trace, test_swim_status_handler\n");
 
 	rc = crt_reply_send(rpc_req);
-  DBG_PRINT("EAM trace, test_swim_status_handler\n");
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 
 	DBG_PRINT("tier1 test_srver sent swim_status reply, status: %d.\n", e_reply->status);
-  DBG_PRINT("EAM trace, test_swim_status_handler\n");
 }
 
 static void
