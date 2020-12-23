@@ -381,18 +381,25 @@ class DaosServer():
         self.conf.agent_dir = self.agent_dir
         self.running = True
 
-        # Use dmg to block until the server is ready to respond to requests.
+        # Configure the storage.  DAOS wants to mount /mnt/daos itself if not
+        # already mounted, so let it do that.
+        # This code supports three modes of operation:
+        # /mnt/daos is not mounted.  It will be mounted and formatted.
+        # /mnt/daos is mounted but empty.  It will be remounted and formatted
+        # /mnt/daos exists and has data in.  It will be used as is.
         start = time.time()
 
+        cmd = ['storage', 'format']
         while True:
             time.sleep(0.5)
-            rc = self.run_dmg(['storage', 'format'])
+            rc = self.run_dmg(cmd)
             ready = False
             if rc.returncode == 1:
                 for line in rc.stdout.decode('utf-8').splitlines():
                     if 'format storage of running instance' in line:
                         ready = True
-
+                    if 'format request for already-formatted storage and reformat not specified' in line:
+                        cmd = ['storage', 'format', '--reformat']
             if ready:
                 break
             if time.time() - start > 20:
@@ -400,6 +407,7 @@ class DaosServer():
 
         print('Format completion in {:.2f} seconds'.format(time.time() - start))
 
+        # How wait until the system is up, basically the format to happen.
         while True:
             time.sleep(0.5)
             rc = self.run_dmg(['system', 'query'])
