@@ -462,6 +462,306 @@ func (m *LeaderQueryResp) GetReplicas() []string {
 	return nil
 }
 
+// RankStateInfo defines extended fields for rank state change related events.
+type RankStateInfo struct {
+	Instance             uint32   `protobuf:"varint,1,opt,name=instance,proto3" json:"instance,omitempty"`
+	Errored              bool     `protobuf:"varint,2,opt,name=errored,proto3" json:"errored,omitempty"`
+	Error                string   `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *RankStateInfo) Reset()         { *m = RankStateInfo{} }
+func (m *RankStateInfo) String() string { return proto.CompactTextString(m) }
+func (*RankStateInfo) ProtoMessage()    {}
+func (*RankStateInfo) Descriptor() ([]byte, []int) {
+	return fileDescriptor_e5747b2e02f0c537, []int{7}
+}
+
+func (m *RankStateInfo) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_RankStateInfo.Unmarshal(m, b)
+}
+func (m *RankStateInfo) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_RankStateInfo.Marshal(b, m, deterministic)
+}
+func (m *RankStateInfo) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RankStateInfo.Merge(m, src)
+}
+func (m *RankStateInfo) XXX_Size() int {
+	return xxx_messageInfo_RankStateInfo.Size(m)
+}
+func (m *RankStateInfo) XXX_DiscardUnknown() {
+	xxx_messageInfo_RankStateInfo.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_RankStateInfo proto.InternalMessageInfo
+
+func (m *RankStateInfo) GetInstance() uint32 {
+	if m != nil {
+		return m.Instance
+	}
+	return 0
+}
+
+func (m *RankStateInfo) GetErrored() bool {
+	if m != nil {
+		return m.Errored
+	}
+	return false
+}
+
+func (m *RankStateInfo) GetError() string {
+	if m != nil {
+		return m.Error
+	}
+	return ""
+}
+
+// RASEvent describes a RAS event in the DAOS system.
+type RASEvent struct {
+	Name      string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Timestamp string `protobuf:"bytes,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Severity  uint32 `protobuf:"varint,3,opt,name=severity,proto3" json:"severity,omitempty"`
+	Msg       string `protobuf:"bytes,4,opt,name=msg,proto3" json:"msg,omitempty"`
+	Id        uint32 `protobuf:"varint,5,opt,name=id,proto3" json:"id,omitempty"`
+	Type      uint32 `protobuf:"varint,6,opt,name=type,proto3" json:"type,omitempty"`
+	Rank      uint32 `protobuf:"varint,7,opt,name=rank,proto3" json:"rank,omitempty"`
+	Hostname  string `protobuf:"bytes,8,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	// Types that are valid to be assigned to ExtendedInfo:
+	//	*RASEvent_RankState
+	ExtendedInfo         isRASEvent_ExtendedInfo `protobuf_oneof:"extended_info"`
+	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
+	XXX_unrecognized     []byte                  `json:"-"`
+	XXX_sizecache        int32                   `json:"-"`
+}
+
+func (m *RASEvent) Reset()         { *m = RASEvent{} }
+func (m *RASEvent) String() string { return proto.CompactTextString(m) }
+func (*RASEvent) ProtoMessage()    {}
+func (*RASEvent) Descriptor() ([]byte, []int) {
+	return fileDescriptor_e5747b2e02f0c537, []int{8}
+}
+
+func (m *RASEvent) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_RASEvent.Unmarshal(m, b)
+}
+func (m *RASEvent) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_RASEvent.Marshal(b, m, deterministic)
+}
+func (m *RASEvent) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RASEvent.Merge(m, src)
+}
+func (m *RASEvent) XXX_Size() int {
+	return xxx_messageInfo_RASEvent.Size(m)
+}
+func (m *RASEvent) XXX_DiscardUnknown() {
+	xxx_messageInfo_RASEvent.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_RASEvent proto.InternalMessageInfo
+
+func (m *RASEvent) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *RASEvent) GetTimestamp() string {
+	if m != nil {
+		return m.Timestamp
+	}
+	return ""
+}
+
+func (m *RASEvent) GetSeverity() uint32 {
+	if m != nil {
+		return m.Severity
+	}
+	return 0
+}
+
+func (m *RASEvent) GetMsg() string {
+	if m != nil {
+		return m.Msg
+	}
+	return ""
+}
+
+func (m *RASEvent) GetId() uint32 {
+	if m != nil {
+		return m.Id
+	}
+	return 0
+}
+
+func (m *RASEvent) GetType() uint32 {
+	if m != nil {
+		return m.Type
+	}
+	return 0
+}
+
+func (m *RASEvent) GetRank() uint32 {
+	if m != nil {
+		return m.Rank
+	}
+	return 0
+}
+
+func (m *RASEvent) GetHostname() string {
+	if m != nil {
+		return m.Hostname
+	}
+	return ""
+}
+
+type isRASEvent_ExtendedInfo interface {
+	isRASEvent_ExtendedInfo()
+}
+
+type RASEvent_RankState struct {
+	RankState *RankStateInfo `protobuf:"bytes,9,opt,name=rank_state,json=rankState,proto3,oneof"`
+}
+
+func (*RASEvent_RankState) isRASEvent_ExtendedInfo() {}
+
+func (m *RASEvent) GetExtendedInfo() isRASEvent_ExtendedInfo {
+	if m != nil {
+		return m.ExtendedInfo
+	}
+	return nil
+}
+
+func (m *RASEvent) GetRankState() *RankStateInfo {
+	if x, ok := m.GetExtendedInfo().(*RASEvent_RankState); ok {
+		return x.RankState
+	}
+	return nil
+}
+
+// XXX_OneofWrappers is for the internal use of the proto package.
+func (*RASEvent) XXX_OneofWrappers() []interface{} {
+	return []interface{}{
+		(*RASEvent_RankState)(nil),
+	}
+}
+
+// ClusterEventReq wraps an event subtype e.g. RASEvent.
+type ClusterEventReq struct {
+	Sequence uint64 `protobuf:"varint,1,opt,name=sequence,proto3" json:"sequence,omitempty"`
+	// Types that are valid to be assigned to Event:
+	//	*ClusterEventReq_Ras
+	Event                isClusterEventReq_Event `protobuf_oneof:"event"`
+	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
+	XXX_unrecognized     []byte                  `json:"-"`
+	XXX_sizecache        int32                   `json:"-"`
+}
+
+func (m *ClusterEventReq) Reset()         { *m = ClusterEventReq{} }
+func (m *ClusterEventReq) String() string { return proto.CompactTextString(m) }
+func (*ClusterEventReq) ProtoMessage()    {}
+func (*ClusterEventReq) Descriptor() ([]byte, []int) {
+	return fileDescriptor_e5747b2e02f0c537, []int{9}
+}
+
+func (m *ClusterEventReq) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ClusterEventReq.Unmarshal(m, b)
+}
+func (m *ClusterEventReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ClusterEventReq.Marshal(b, m, deterministic)
+}
+func (m *ClusterEventReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ClusterEventReq.Merge(m, src)
+}
+func (m *ClusterEventReq) XXX_Size() int {
+	return xxx_messageInfo_ClusterEventReq.Size(m)
+}
+func (m *ClusterEventReq) XXX_DiscardUnknown() {
+	xxx_messageInfo_ClusterEventReq.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ClusterEventReq proto.InternalMessageInfo
+
+func (m *ClusterEventReq) GetSequence() uint64 {
+	if m != nil {
+		return m.Sequence
+	}
+	return 0
+}
+
+type isClusterEventReq_Event interface {
+	isClusterEventReq_Event()
+}
+
+type ClusterEventReq_Ras struct {
+	Ras *RASEvent `protobuf:"bytes,2,opt,name=ras,proto3,oneof"`
+}
+
+func (*ClusterEventReq_Ras) isClusterEventReq_Event() {}
+
+func (m *ClusterEventReq) GetEvent() isClusterEventReq_Event {
+	if m != nil {
+		return m.Event
+	}
+	return nil
+}
+
+func (m *ClusterEventReq) GetRas() *RASEvent {
+	if x, ok := m.GetEvent().(*ClusterEventReq_Ras); ok {
+		return x.Ras
+	}
+	return nil
+}
+
+// XXX_OneofWrappers is for the internal use of the proto package.
+func (*ClusterEventReq) XXX_OneofWrappers() []interface{} {
+	return []interface{}{
+		(*ClusterEventReq_Ras)(nil),
+	}
+}
+
+// ClusterEventResp acknowledges receipt of an event notification.
+type ClusterEventResp struct {
+	Sequence             uint64   `protobuf:"varint,1,opt,name=sequence,proto3" json:"sequence,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *ClusterEventResp) Reset()         { *m = ClusterEventResp{} }
+func (m *ClusterEventResp) String() string { return proto.CompactTextString(m) }
+func (*ClusterEventResp) ProtoMessage()    {}
+func (*ClusterEventResp) Descriptor() ([]byte, []int) {
+	return fileDescriptor_e5747b2e02f0c537, []int{10}
+}
+
+func (m *ClusterEventResp) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ClusterEventResp.Unmarshal(m, b)
+}
+func (m *ClusterEventResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ClusterEventResp.Marshal(b, m, deterministic)
+}
+func (m *ClusterEventResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ClusterEventResp.Merge(m, src)
+}
+func (m *ClusterEventResp) XXX_Size() int {
+	return xxx_messageInfo_ClusterEventResp.Size(m)
+}
+func (m *ClusterEventResp) XXX_DiscardUnknown() {
+	xxx_messageInfo_ClusterEventResp.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ClusterEventResp proto.InternalMessageInfo
+
+func (m *ClusterEventResp) GetSequence() uint64 {
+	if m != nil {
+		return m.Sequence
+	}
+	return 0
+}
+
 type GetAttachInfoReq struct {
 	Sys                  string   `protobuf:"bytes,1,opt,name=sys,proto3" json:"sys,omitempty"`
 	AllRanks             bool     `protobuf:"varint,2,opt,name=allRanks,proto3" json:"allRanks,omitempty"`
@@ -474,7 +774,7 @@ func (m *GetAttachInfoReq) Reset()         { *m = GetAttachInfoReq{} }
 func (m *GetAttachInfoReq) String() string { return proto.CompactTextString(m) }
 func (*GetAttachInfoReq) ProtoMessage()    {}
 func (*GetAttachInfoReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_e5747b2e02f0c537, []int{7}
+	return fileDescriptor_e5747b2e02f0c537, []int{11}
 }
 
 func (m *GetAttachInfoReq) XXX_Unmarshal(b []byte) error {
@@ -529,7 +829,7 @@ func (m *GetAttachInfoResp) Reset()         { *m = GetAttachInfoResp{} }
 func (m *GetAttachInfoResp) String() string { return proto.CompactTextString(m) }
 func (*GetAttachInfoResp) ProtoMessage()    {}
 func (*GetAttachInfoResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_e5747b2e02f0c537, []int{8}
+	return fileDescriptor_e5747b2e02f0c537, []int{12}
 }
 
 func (m *GetAttachInfoResp) XXX_Unmarshal(b []byte) error {
@@ -618,7 +918,7 @@ func (m *GetAttachInfoResp_Psr) Reset()         { *m = GetAttachInfoResp_Psr{} }
 func (m *GetAttachInfoResp_Psr) String() string { return proto.CompactTextString(m) }
 func (*GetAttachInfoResp_Psr) ProtoMessage()    {}
 func (*GetAttachInfoResp_Psr) Descriptor() ([]byte, []int) {
-	return fileDescriptor_e5747b2e02f0c537, []int{8, 0}
+	return fileDescriptor_e5747b2e02f0c537, []int{12, 0}
 }
 
 func (m *GetAttachInfoResp_Psr) XXX_Unmarshal(b []byte) error {
@@ -664,7 +964,7 @@ func (m *PrepShutdownReq) Reset()         { *m = PrepShutdownReq{} }
 func (m *PrepShutdownReq) String() string { return proto.CompactTextString(m) }
 func (*PrepShutdownReq) ProtoMessage()    {}
 func (*PrepShutdownReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_e5747b2e02f0c537, []int{9}
+	return fileDescriptor_e5747b2e02f0c537, []int{13}
 }
 
 func (m *PrepShutdownReq) XXX_Unmarshal(b []byte) error {
@@ -703,7 +1003,7 @@ func (m *PingRankReq) Reset()         { *m = PingRankReq{} }
 func (m *PingRankReq) String() string { return proto.CompactTextString(m) }
 func (*PingRankReq) ProtoMessage()    {}
 func (*PingRankReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_e5747b2e02f0c537, []int{10}
+	return fileDescriptor_e5747b2e02f0c537, []int{14}
 }
 
 func (m *PingRankReq) XXX_Unmarshal(b []byte) error {
@@ -742,7 +1042,7 @@ func (m *SetRankReq) Reset()         { *m = SetRankReq{} }
 func (m *SetRankReq) String() string { return proto.CompactTextString(m) }
 func (*SetRankReq) ProtoMessage()    {}
 func (*SetRankReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_e5747b2e02f0c537, []int{11}
+	return fileDescriptor_e5747b2e02f0c537, []int{15}
 }
 
 func (m *SetRankReq) XXX_Unmarshal(b []byte) error {
@@ -784,7 +1084,7 @@ func (m *PoolMonitorReq) Reset()         { *m = PoolMonitorReq{} }
 func (m *PoolMonitorReq) String() string { return proto.CompactTextString(m) }
 func (*PoolMonitorReq) ProtoMessage()    {}
 func (*PoolMonitorReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_e5747b2e02f0c537, []int{12}
+	return fileDescriptor_e5747b2e02f0c537, []int{16}
 }
 
 func (m *PoolMonitorReq) XXX_Unmarshal(b []byte) error {
@@ -843,6 +1143,10 @@ func init() {
 	proto.RegisterType((*JoinResp)(nil), "mgmt.JoinResp")
 	proto.RegisterType((*LeaderQueryReq)(nil), "mgmt.LeaderQueryReq")
 	proto.RegisterType((*LeaderQueryResp)(nil), "mgmt.LeaderQueryResp")
+	proto.RegisterType((*RankStateInfo)(nil), "mgmt.RankStateInfo")
+	proto.RegisterType((*RASEvent)(nil), "mgmt.RASEvent")
+	proto.RegisterType((*ClusterEventReq)(nil), "mgmt.ClusterEventReq")
+	proto.RegisterType((*ClusterEventResp)(nil), "mgmt.ClusterEventResp")
 	proto.RegisterType((*GetAttachInfoReq)(nil), "mgmt.GetAttachInfoReq")
 	proto.RegisterType((*GetAttachInfoResp)(nil), "mgmt.GetAttachInfoResp")
 	proto.RegisterType((*GetAttachInfoResp_Psr)(nil), "mgmt.GetAttachInfoResp.Psr")

@@ -23,6 +23,10 @@ typedef struct _Mgmt__JoinReq Mgmt__JoinReq;
 typedef struct _Mgmt__JoinResp Mgmt__JoinResp;
 typedef struct _Mgmt__LeaderQueryReq Mgmt__LeaderQueryReq;
 typedef struct _Mgmt__LeaderQueryResp Mgmt__LeaderQueryResp;
+typedef struct _Mgmt__RankStateInfo Mgmt__RankStateInfo;
+typedef struct _Mgmt__RASEvent Mgmt__RASEvent;
+typedef struct _Mgmt__ClusterEventReq Mgmt__ClusterEventReq;
+typedef struct _Mgmt__ClusterEventResp Mgmt__ClusterEventResp;
 typedef struct _Mgmt__GetAttachInfoReq Mgmt__GetAttachInfoReq;
 typedef struct _Mgmt__GetAttachInfoResp Mgmt__GetAttachInfoResp;
 typedef struct _Mgmt__GetAttachInfoResp__Psr Mgmt__GetAttachInfoResp__Psr;
@@ -101,7 +105,7 @@ struct  _Mgmt__JoinReq
 {
   ProtobufCMessage base;
   /*
-   * Servee UUID.
+   * Server UUID.
    */
   char *uuid;
   /*
@@ -186,6 +190,126 @@ struct  _Mgmt__LeaderQueryResp
 #define MGMT__LEADER_QUERY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__leader_query_resp__descriptor) \
     , (char *)protobuf_c_empty_string, 0,NULL }
+
+
+/*
+ * RankStateInfo defines extended fields for rank state change related events.
+ */
+struct  _Mgmt__RankStateInfo
+{
+  ProtobufCMessage base;
+  /*
+   * Control-plane harness instance index.
+   */
+  uint32_t instance;
+  /*
+   * Rank in error state.
+   */
+  protobuf_c_boolean errored;
+  /*
+   * Message associated with error.
+   */
+  char *error;
+};
+#define MGMT__RANK_STATE_INFO__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__rank_state_info__descriptor) \
+    , 0, 0, (char *)protobuf_c_empty_string }
+
+
+typedef enum {
+  MGMT__RASEVENT__EXTENDED_INFO__NOT_SET = 0,
+  MGMT__RASEVENT__EXTENDED_INFO_RANK_STATE = 9
+    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__RASEVENT__EXTENDED_INFO)
+} Mgmt__RASEvent__ExtendedInfoCase;
+
+/*
+ * RASEvent describes a RAS event in the DAOS system.
+ */
+struct  _Mgmt__RASEvent
+{
+  ProtobufCMessage base;
+  /*
+   * Unique identifier, 64-char.
+   */
+  char *name;
+  /*
+   * Fully qualified timestamp (us) incl timezone.
+   */
+  char *timestamp;
+  /*
+   * Event severity.
+   */
+  uint32_t severity;
+  /*
+   * Human readable message describing event.
+   */
+  char *msg;
+  /*
+   * Unique numeric event identifier.
+   */
+  uint32_t id;
+  /*
+   * Event type.
+   */
+  uint32_t type;
+  /*
+   * (optional) DAOS rank involved in event.
+   */
+  uint32_t rank;
+  /*
+   * (optional) Hostname of node involved in event.
+   */
+  char *hostname;
+  Mgmt__RASEvent__ExtendedInfoCase extended_info_case;
+  union {
+    Mgmt__RankStateInfo *rank_state;
+  };
+};
+#define MGMT__RASEVENT__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__rasevent__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, 0, 0, (char *)protobuf_c_empty_string, MGMT__RASEVENT__EXTENDED_INFO__NOT_SET, {0} }
+
+
+typedef enum {
+  MGMT__CLUSTER_EVENT_REQ__EVENT__NOT_SET = 0,
+  MGMT__CLUSTER_EVENT_REQ__EVENT_RAS = 2
+    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__CLUSTER_EVENT_REQ__EVENT)
+} Mgmt__ClusterEventReq__EventCase;
+
+/*
+ * ClusterEventReq wraps an event subtype e.g. RASEvent.
+ */
+struct  _Mgmt__ClusterEventReq
+{
+  ProtobufCMessage base;
+  /*
+   * Sequence identifier for cluster events.
+   */
+  uint64_t sequence;
+  Mgmt__ClusterEventReq__EventCase event_case;
+  union {
+    Mgmt__RASEvent *ras;
+  };
+};
+#define MGMT__CLUSTER_EVENT_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__cluster_event_req__descriptor) \
+    , 0, MGMT__CLUSTER_EVENT_REQ__EVENT__NOT_SET, {0} }
+
+
+/*
+ * ClusterEventResp acknowledges receipt of an event notification.
+ */
+struct  _Mgmt__ClusterEventResp
+{
+  ProtobufCMessage base;
+  /*
+   * Sequence identifier for cluster events.
+   */
+  uint64_t sequence;
+};
+#define MGMT__CLUSTER_EVENT_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__cluster_event_resp__descriptor) \
+    , 0 }
 
 
 struct  _Mgmt__GetAttachInfoReq
@@ -462,6 +586,82 @@ Mgmt__LeaderQueryResp *
 void   mgmt__leader_query_resp__free_unpacked
                      (Mgmt__LeaderQueryResp *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__RankStateInfo methods */
+void   mgmt__rank_state_info__init
+                     (Mgmt__RankStateInfo         *message);
+size_t mgmt__rank_state_info__get_packed_size
+                     (const Mgmt__RankStateInfo   *message);
+size_t mgmt__rank_state_info__pack
+                     (const Mgmt__RankStateInfo   *message,
+                      uint8_t             *out);
+size_t mgmt__rank_state_info__pack_to_buffer
+                     (const Mgmt__RankStateInfo   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__RankStateInfo *
+       mgmt__rank_state_info__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__rank_state_info__free_unpacked
+                     (Mgmt__RankStateInfo *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__RASEvent methods */
+void   mgmt__rasevent__init
+                     (Mgmt__RASEvent         *message);
+size_t mgmt__rasevent__get_packed_size
+                     (const Mgmt__RASEvent   *message);
+size_t mgmt__rasevent__pack
+                     (const Mgmt__RASEvent   *message,
+                      uint8_t             *out);
+size_t mgmt__rasevent__pack_to_buffer
+                     (const Mgmt__RASEvent   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__RASEvent *
+       mgmt__rasevent__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__rasevent__free_unpacked
+                     (Mgmt__RASEvent *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__ClusterEventReq methods */
+void   mgmt__cluster_event_req__init
+                     (Mgmt__ClusterEventReq         *message);
+size_t mgmt__cluster_event_req__get_packed_size
+                     (const Mgmt__ClusterEventReq   *message);
+size_t mgmt__cluster_event_req__pack
+                     (const Mgmt__ClusterEventReq   *message,
+                      uint8_t             *out);
+size_t mgmt__cluster_event_req__pack_to_buffer
+                     (const Mgmt__ClusterEventReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__ClusterEventReq *
+       mgmt__cluster_event_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__cluster_event_req__free_unpacked
+                     (Mgmt__ClusterEventReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__ClusterEventResp methods */
+void   mgmt__cluster_event_resp__init
+                     (Mgmt__ClusterEventResp         *message);
+size_t mgmt__cluster_event_resp__get_packed_size
+                     (const Mgmt__ClusterEventResp   *message);
+size_t mgmt__cluster_event_resp__pack
+                     (const Mgmt__ClusterEventResp   *message,
+                      uint8_t             *out);
+size_t mgmt__cluster_event_resp__pack_to_buffer
+                     (const Mgmt__ClusterEventResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__ClusterEventResp *
+       mgmt__cluster_event_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__cluster_event_resp__free_unpacked
+                     (Mgmt__ClusterEventResp *message,
+                      ProtobufCAllocator *allocator);
 /* Mgmt__GetAttachInfoReq methods */
 void   mgmt__get_attach_info_req__init
                      (Mgmt__GetAttachInfoReq         *message);
@@ -605,6 +805,18 @@ typedef void (*Mgmt__LeaderQueryReq_Closure)
 typedef void (*Mgmt__LeaderQueryResp_Closure)
                  (const Mgmt__LeaderQueryResp *message,
                   void *closure_data);
+typedef void (*Mgmt__RankStateInfo_Closure)
+                 (const Mgmt__RankStateInfo *message,
+                  void *closure_data);
+typedef void (*Mgmt__RASEvent_Closure)
+                 (const Mgmt__RASEvent *message,
+                  void *closure_data);
+typedef void (*Mgmt__ClusterEventReq_Closure)
+                 (const Mgmt__ClusterEventReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__ClusterEventResp_Closure)
+                 (const Mgmt__ClusterEventResp *message,
+                  void *closure_data);
 typedef void (*Mgmt__GetAttachInfoReq_Closure)
                  (const Mgmt__GetAttachInfoReq *message,
                   void *closure_data);
@@ -641,6 +853,10 @@ extern const ProtobufCMessageDescriptor mgmt__join_resp__descriptor;
 extern const ProtobufCEnumDescriptor    mgmt__join_resp__state__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__leader_query_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__leader_query_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__rank_state_info__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__rasevent__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__cluster_event_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__cluster_event_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__get_attach_info_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__psr__descriptor;
