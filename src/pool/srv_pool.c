@@ -884,8 +884,13 @@ pool_evict_rank_ult(void *data)
 
 	rc = ds_pool_evict_rank(arg->svc->ps_uuid, arg->rank);
 
-	D_DEBUG(DB_MGMT, DF_UUID" evict rank %u : rc %d\n",
-		DP_UUID(arg->svc->ps_uuid), arg->rank, rc);
+	if (rc)
+		D_DEBUG(DB_MGMT, DF_UUID" evict rank %u : rc %d\n",
+			DP_UUID(arg->svc->ps_uuid), arg->rank, rc);
+	else
+		d_ras_raise_pool("pool_rank_eviction", RAS_TYPE_STATE_CHANGE,
+				 RAS_SEV_INFO, arg->rank, arg->svc->ps_uuid,
+				 NULL, "", "");
 
 	pool_svc_put(arg->svc);
 	D_FREE_PTR(arg);
