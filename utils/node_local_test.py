@@ -358,8 +358,7 @@ class DaosServer():
                                                 server_env['PATH'])
 
         cmd = [daos_server, '--config={}'.format(self._yaml_file.name),
-               'start', '-t' '4', '--insecure', '-d', self.agent_dir,
-               '--recreate-superblocks']
+               'start', '-t' '4', '--insecure', '-d', self.agent_dir]
 
         server_env['DAOS_DISABLE_REQ_FWD'] = '1'
         self._sp = subprocess.Popen(cmd, env=server_env)
@@ -384,6 +383,23 @@ class DaosServer():
 
         # Use dmg to block until the server is ready to respond to requests.
         start = time.time()
+
+        while True:
+            time.sleep(0.5)
+            rc = self.run_dmg(['storage', 'format'])
+            ready = False
+            if rc.returncode == 1:
+                for line in rc.stdout.decode('utf-8').splitlines():
+                    if 'format storage of running instance' in line:
+                        ready = True
+
+            if ready:
+                break
+            if time.time() - start > 20:
+                raise Exception("Failed to format")
+
+        print('Format completion in {:.2f} seconds'.format(time.time() - start))
+
         while True:
             time.sleep(0.5)
             rc = self.run_dmg(['system', 'query'])
@@ -391,7 +407,7 @@ class DaosServer():
             if rc.returncode == 0:
                 for line in rc.stdout.decode('utf-8').splitlines():
                     if line.startswith('status'):
-                        if 'Ready' in line or 'Joined' in line:
+                        if 'Joined' in line:
                             ready = True
 
             if ready:
@@ -410,13 +426,12 @@ class DaosServer():
         if not self._sp:
             return
         rc = self.run_dmg(['system', 'stop'])
-        print(rc)
+        assert rc.returncode == 0
 
         start = time.time()
         while True:
             time.sleep(0.5)
             rc = self.run_dmg(['system', 'query'])
-            print(rc)
             ready = False
             if rc.returncode == 0:
                 for line in rc.stdout.decode('utf-8').splitlines():
@@ -496,7 +511,9 @@ class DaosServer():
         exe_cmd.append('--insecure')
         exe_cmd.extend(cmd)
 
-        return subprocess.run(exe_cmd, stdout=subprocess.PIPE)
+        return subprocess.run(exe_cmd,
+                              stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE)
 
 def il_cmd(dfuse, cmd, check_read=True, check_write=True):
     """Run a command under the interception library
