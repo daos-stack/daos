@@ -7,6 +7,7 @@ set -uex
 # JENKINS-52781 tar function is breaking symlinks
 
 rm -rf unit_memcheck_vm_test unit_test_memcheck_logs unit-test*.memcheck.xml
+rm -rf unit_test_memcheck_logs.tar.gz
 rm -rf nlt_logs unit_test_logs
 rm -rf test_results
 mkdir test_results

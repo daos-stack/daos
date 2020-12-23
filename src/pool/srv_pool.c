@@ -3763,9 +3763,9 @@ out:
 /* Callers are responsible for d_rank_list_free(*replicasp). */
 static int
 ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
-			unsigned int opc, uint32_t *map_version_p,
-			struct rsvc_hint *hint, bool *p_updated,
-			bool evict_rank)
+			unsigned int opc, struct rsvc_hint *hint,
+			bool *p_updated, bool evict_rank,
+			uint32_t *map_version_p, uint32_t *tgt_map_ver)
 {
 	struct pool_svc	       *svc;
 	struct rdb_tx		tx;
@@ -3795,8 +3795,7 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	 * before and after. If the version hasn't changed, we are done.
 	 */
 	map_version_before = pool_map_get_version(map);
-	rc = ds_pool_map_tgts_update(map, tgts, opc, evict_rank);
-
+	rc = ds_pool_map_tgts_update(map, tgts, opc, evict_rank, tgt_map_ver);
 	if (rc != 0)
 		D_GOTO(out_map, rc);
 
@@ -4136,21 +4135,21 @@ int
 ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
 	return ds_pool_update_internal(pool_uuid, list, POOL_EXCLUDE_OUT,
-				       NULL, NULL, NULL, false);
+				       NULL, NULL, false, NULL, NULL);
 }
 
 int
 ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
 	return ds_pool_update_internal(pool_uuid, list, POOL_EXCLUDE,
-				       NULL, NULL, NULL, false);
+				       NULL, NULL, false, NULL, NULL);
 }
 
 int
 ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
 	return ds_pool_update_internal(pool_uuid, list, POOL_ADD_IN,
-				       NULL, NULL, NULL, false);
+				       NULL, NULL, false, NULL, NULL);
 }
 
 /*
@@ -4168,6 +4167,7 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 	struct pool_target_id_list	target_list = { 0 };
 	struct ds_pool			*pool = NULL;
 	daos_prop_t			prop = { 0 };
+	uint32_t			tgt_map_ver = 0;
 	struct daos_prop_entry		*entry;
 	bool				updated;
 	int				rc;
@@ -4179,8 +4179,9 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 		D_GOTO(out, rc);
 
 	/* Update target by target id */
-	rc = ds_pool_update_internal(pool_uuid, &target_list, opc, map_version,
-				     hint, &updated, evict_rank);
+	rc = ds_pool_update_internal(pool_uuid, &target_list, opc, hint,
+				     &updated, evict_rank, map_version,
+				     &tgt_map_ver);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -4224,10 +4225,15 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 		D_GOTO(out, rc);
 	}
 
-	rc = ds_rebuild_schedule(pool_uuid, *map_version, &target_list, op);
-	if (rc != 0) {
-		D_ERROR("rebuild fails rc: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc);
+	D_DEBUG(DF_DSMS, "map ver %u/%u\n", map_version ? *map_version : -1,
+		tgt_map_ver);
+	if (tgt_map_ver != 0) {
+		rc = ds_rebuild_schedule(pool_uuid, tgt_map_ver, &target_list,
+					 op);
+		if (rc != 0) {
+			D_ERROR("rebuild fails rc: "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out, rc);
+		}
 	}
 
 out:
