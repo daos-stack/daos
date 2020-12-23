@@ -31,6 +31,7 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #define LAYER_COORD 1
+
 #include <isa-l.h>
 #include "daos_test.h"
 #include <daos/pool.h>
@@ -602,7 +603,7 @@ test_all_ec_agg(void **statep)
 	test_half_stripe(&ctx);
 #endif
 	test_partial_stripe(&ctx);
-	sleep(40);
+	sleep(60);
 	verify_1p(&ctx, DAOS_OC_EC_K2P1_L32K, 2);
 #ifdef LAYER_COORD
 	verify_2p(&ctx, DAOS_OC_EC_K2P2_L32K);
