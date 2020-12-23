@@ -10,10 +10,10 @@ $ make clean installdir=<DIR> install
 
 
 $ make test
-    
+
     Run tests
 
 
 $ make doc
-	
+
 	Generate doxygen based documentation.
