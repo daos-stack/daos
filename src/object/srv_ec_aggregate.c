@@ -2111,7 +2111,8 @@ agg_iv_ult(void *arg)
 		goto out;
 	}
 
-	D_ALLOC_PTR(agg_param->ap_prop);
+
+	agg_param->ap_prop = daos_prop_alloc(0);
 	if (agg_param->ap_prop == NULL) {
 		D_ERROR("Property allocation failed\n");
 		rc = -DER_NOMEM;
