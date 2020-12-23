@@ -1429,8 +1429,8 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         "copied=()",
         "for file in /var/tmp/core.*",
         "do if [ -e $file ]",
-        "then if [ ! -s $file ]; then",
-        "((rc++))",
+        "then if [ ! -s $file ]",
+        "then ((rc++))",
         "ls -al $file",
         "else if sudo chmod 644 $file && "
         "scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
@@ -1469,7 +1469,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         return False
 
     # here because it's installed in install_debuginfos()
-    import magic    # pylint: disable=import-outside-toplevel
+    import magic    # pylint: disable=import-outside-toplevel,import-error
 
     for corefile in cores:
         if not fnmatch.fnmatch(corefile, 'core.*[0-9]'):
