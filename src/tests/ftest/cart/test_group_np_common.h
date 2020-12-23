@@ -232,7 +232,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		sem_post(&test_g.t_token_to_proceed);
 		break;
 	default:
-		DBG_PRINT("Received TEST_OPC_SHUTDOWN.\n");
+		DBG_PRINT("Received unregistered opcode.\n");
 		break;
 	}
 }
@@ -262,14 +262,14 @@ static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group1[] = {
 		.prf_hdlr	= test_shutdown_handler,
 		.prf_co_ops	= NULL,
 	}, {
-		.prf_flags	= CRT_RPC_FEAT_NO_TIMEOUT,
-		.prf_req_fmt	= &CQF_crt_test_ping_delay,
-		.prf_hdlr	= test_ping_delay_handler,
-		.prf_co_ops	= NULL,
-	}, {
 		.prf_flags	= 0,
 		.prf_req_fmt	= &CQF_test_swim_status,
 		.prf_hdlr	= test_swim_status_handler,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= CRT_RPC_FEAT_NO_TIMEOUT,
+		.prf_req_fmt	= &CQF_crt_test_ping_delay,
+		.prf_hdlr	= test_ping_delay_handler,
 		.prf_co_ops	= NULL,
 	}
 };
