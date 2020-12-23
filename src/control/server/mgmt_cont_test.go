@@ -32,6 +32,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -58,8 +59,9 @@ func TestListCont_NoMS(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	db := system.MockDatabase(t, log)
-	svc := newMgmtSvc(NewIOServerHarness(log), system.NewMembership(log, db), db)
+	ms, db := system.MockMembership(t, log, mockTCPResolver)
+	svc := newMgmtSvc(NewIOServerHarness(log), ms, db,
+		events.NewPubSub(context.Background(), log))
 
 	resp, err := svc.ListContainers(context.TODO(), newTestListContReq())
 
@@ -168,8 +170,9 @@ func TestContSetOwner_NoMS(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	db := system.MockDatabase(t, log)
-	svc := newMgmtSvc(NewIOServerHarness(log), system.NewMembership(log, db), db)
+	ms, db := system.MockMembership(t, log, mockTCPResolver)
+	svc := newMgmtSvc(NewIOServerHarness(log), ms, db,
+		events.NewPubSub(context.Background(), log))
 
 	resp, err := svc.ContSetOwner(context.TODO(), newTestContSetOwnerReq())
 
