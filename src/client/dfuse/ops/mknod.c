@@ -44,7 +44,8 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
 	DFUSE_TRA_DEBUG(ie, "file '%s' mode 0%o", name, mode);
 
 	rc = dfs_open(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
-		      mode, O_CREAT | O_EXCL, O_RDWR, 0, NULL, &ie->ie_obj);
+		      mode, O_CREAT | O_EXCL | O_RDWR,
+		      0, 0, NULL, &ie->ie_obj);
 	if (rc) {
 		DFUSE_TRA_DEBUG(parent, "dfs_open() failed %d", rc);
 		D_GOTO(err, rc);
