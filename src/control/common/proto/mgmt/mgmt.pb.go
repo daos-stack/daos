@@ -24,224 +24,47 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
-// Generic request indicating which ranks to operate on.
-// Used in gRPC fanout to operate on hosts with multiple ranks.
-type RanksReq struct {
-	Force                bool     `protobuf:"varint,3,opt,name=force,proto3" json:"force,omitempty"`
-	Ranks                string   `protobuf:"bytes,4,opt,name=ranks,proto3" json:"ranks,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
-}
-
-func (m *RanksReq) Reset()         { *m = RanksReq{} }
-func (m *RanksReq) String() string { return proto.CompactTextString(m) }
-func (*RanksReq) ProtoMessage()    {}
-func (*RanksReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_24cf82780fd24e73, []int{0}
-}
-
-func (m *RanksReq) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_RanksReq.Unmarshal(m, b)
-}
-func (m *RanksReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_RanksReq.Marshal(b, m, deterministic)
-}
-func (m *RanksReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_RanksReq.Merge(m, src)
-}
-func (m *RanksReq) XXX_Size() int {
-	return xxx_messageInfo_RanksReq.Size(m)
-}
-func (m *RanksReq) XXX_DiscardUnknown() {
-	xxx_messageInfo_RanksReq.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_RanksReq proto.InternalMessageInfo
-
-func (m *RanksReq) GetForce() bool {
-	if m != nil {
-		return m.Force
-	}
-	return false
-}
-
-func (m *RanksReq) GetRanks() string {
-	if m != nil {
-		return m.Ranks
-	}
-	return ""
-}
-
-// Generic response containing DER result from multiple ranks.
-// Used in gRPC fanout to operate on hosts with multiple ranks.
-type RanksResp struct {
-	Results              []*RanksResp_RankResult `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
-	XXX_unrecognized     []byte                  `json:"-"`
-	XXX_sizecache        int32                   `json:"-"`
-}
-
-func (m *RanksResp) Reset()         { *m = RanksResp{} }
-func (m *RanksResp) String() string { return proto.CompactTextString(m) }
-func (*RanksResp) ProtoMessage()    {}
-func (*RanksResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_24cf82780fd24e73, []int{1}
-}
-
-func (m *RanksResp) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_RanksResp.Unmarshal(m, b)
-}
-func (m *RanksResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_RanksResp.Marshal(b, m, deterministic)
-}
-func (m *RanksResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_RanksResp.Merge(m, src)
-}
-func (m *RanksResp) XXX_Size() int {
-	return xxx_messageInfo_RanksResp.Size(m)
-}
-func (m *RanksResp) XXX_DiscardUnknown() {
-	xxx_messageInfo_RanksResp.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_RanksResp proto.InternalMessageInfo
-
-func (m *RanksResp) GetResults() []*RanksResp_RankResult {
-	if m != nil {
-		return m.Results
-	}
-	return nil
-}
-
-// Identical to ctl.system.RankResult proto message.
-type RanksResp_RankResult struct {
-	Rank                 uint32   `protobuf:"varint,1,opt,name=rank,proto3" json:"rank,omitempty"`
-	Action               string   `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
-	Errored              bool     `protobuf:"varint,3,opt,name=errored,proto3" json:"errored,omitempty"`
-	Msg                  string   `protobuf:"bytes,4,opt,name=msg,proto3" json:"msg,omitempty"`
-	State                uint32   `protobuf:"varint,5,opt,name=state,proto3" json:"state,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
-}
-
-func (m *RanksResp_RankResult) Reset()         { *m = RanksResp_RankResult{} }
-func (m *RanksResp_RankResult) String() string { return proto.CompactTextString(m) }
-func (*RanksResp_RankResult) ProtoMessage()    {}
-func (*RanksResp_RankResult) Descriptor() ([]byte, []int) {
-	return fileDescriptor_24cf82780fd24e73, []int{1, 0}
-}
-
-func (m *RanksResp_RankResult) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_RanksResp_RankResult.Unmarshal(m, b)
-}
-func (m *RanksResp_RankResult) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_RanksResp_RankResult.Marshal(b, m, deterministic)
-}
-func (m *RanksResp_RankResult) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_RanksResp_RankResult.Merge(m, src)
-}
-func (m *RanksResp_RankResult) XXX_Size() int {
-	return xxx_messageInfo_RanksResp_RankResult.Size(m)
-}
-func (m *RanksResp_RankResult) XXX_DiscardUnknown() {
-	xxx_messageInfo_RanksResp_RankResult.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_RanksResp_RankResult proto.InternalMessageInfo
-
-func (m *RanksResp_RankResult) GetRank() uint32 {
-	if m != nil {
-		return m.Rank
-	}
-	return 0
-}
-
-func (m *RanksResp_RankResult) GetAction() string {
-	if m != nil {
-		return m.Action
-	}
-	return ""
-}
-
-func (m *RanksResp_RankResult) GetErrored() bool {
-	if m != nil {
-		return m.Errored
-	}
-	return false
-}
-
-func (m *RanksResp_RankResult) GetMsg() string {
-	if m != nil {
-		return m.Msg
-	}
-	return ""
-}
-
-func (m *RanksResp_RankResult) GetState() uint32 {
-	if m != nil {
-		return m.State
-	}
-	return 0
-}
-
-func init() {
-	proto.RegisterType((*RanksReq)(nil), "mgmt.RanksReq")
-	proto.RegisterType((*RanksResp)(nil), "mgmt.RanksResp")
-	proto.RegisterType((*RanksResp_RankResult)(nil), "mgmt.RanksResp.RankResult")
-}
-
 func init() {
 	proto.RegisterFile("mgmt.proto", fileDescriptor_24cf82780fd24e73)
 }
 
 var fileDescriptor_24cf82780fd24e73 = []byte{
-	// 698 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x95, 0xdb, 0x4e, 0x1b, 0x3d,
-	0x10, 0xc7, 0xbf, 0x7c, 0x84, 0x43, 0x06, 0xc2, 0xc1, 0x01, 0xba, 0xcd, 0x55, 0xc4, 0x4d, 0x73,
-	0x45, 0x25, 0xa0, 0x54, 0x95, 0x2a, 0x55, 0x25, 0x49, 0x5b, 0x2a, 0x10, 0xe9, 0x46, 0xbd, 0xae,
-	0xb6, 0xbb, 0x43, 0x58, 0x35, 0xb1, 0x37, 0xf6, 0x24, 0x40, 0xdf, 0xa4, 0x0f, 0xd3, 0x77, 0xab,
-	0x7c, 0xd8, 0x8d, 0x13, 0x82, 0x04, 0x77, 0x9e, 0x9f, 0xff, 0xff, 0x99, 0xd9, 0xb1, 0xe3, 0x00,
-	0x0c, 0xfb, 0x43, 0x3a, 0xcc, 0xa4, 0x20, 0xc1, 0xca, 0x7a, 0x5d, 0x87, 0x4c, 0x88, 0x81, 0x25,
-	0x75, 0x88, 0x05, 0x77, 0xbb, 0xf5, 0x8a, 0x9a, 0xc4, 0x6e, 0x59, 0x53, 0x24, 0x64, 0xd4, 0xc7,
-	0x1f, 0xa3, 0x31, 0xca, 0xfb, 0x7c, 0x3f, 0x8a, 0x9d, 0xed, 0xe0, 0x14, 0xd6, 0xc2, 0x88, 0xff,
-	0x52, 0x21, 0x8e, 0xd8, 0x2e, 0x2c, 0x5f, 0x0b, 0x19, 0x63, 0xb0, 0xd4, 0x28, 0x35, 0xd7, 0x42,
-	0x1b, 0x68, 0x2a, 0xb5, 0x22, 0x28, 0x37, 0x4a, 0xcd, 0x4a, 0x68, 0x83, 0x83, 0xbf, 0x25, 0xa8,
-	0x38, 0xa3, 0xca, 0xd8, 0x09, 0xac, 0x4a, 0x54, 0xe3, 0x01, 0xa9, 0xa0, 0xd4, 0x58, 0x6a, 0xae,
-	0x1f, 0xd5, 0x0f, 0x4d, 0xb3, 0x85, 0xc2, 0xac, 0x42, 0x23, 0x09, 0x73, 0x69, 0xfd, 0x37, 0xc0,
-	0x14, 0x33, 0x06, 0x65, 0x9d, 0x3a, 0x28, 0x35, 0x4a, 0xcd, 0x6a, 0x68, 0xd6, 0x6c, 0x1f, 0x56,
-	0xa2, 0x98, 0x52, 0xc1, 0x83, 0xff, 0x4d, 0x71, 0x17, 0xb1, 0x00, 0x56, 0x51, 0x4a, 0x21, 0x31,
-	0x71, 0xbd, 0xe6, 0x21, 0xdb, 0x86, 0xa5, 0xa1, 0xea, 0xbb, 0x5e, 0xf5, 0x52, 0xf7, 0xaf, 0x28,
-	0x22, 0x0c, 0x96, 0x4d, 0x62, 0x1b, 0x1c, 0xfd, 0xd9, 0x80, 0xd5, 0xcb, 0xfe, 0x90, 0x7a, 0x93,
-	0x98, 0xbd, 0x82, 0xf2, 0x57, 0x91, 0x72, 0x56, 0xb5, 0x4d, 0xeb, 0x75, 0x88, 0xa3, 0xfa, 0xa6,
-	0x1f, 0xaa, 0xec, 0xe0, 0x3f, 0xf6, 0x01, 0x36, 0x5a, 0x83, 0xb1, 0x22, 0x94, 0x9d, 0x09, 0x72,
-	0x62, 0x7b, 0x56, 0xe1, 0x33, 0x6d, 0xdc, 0x5f, 0x84, 0x4d, 0x82, 0xf7, 0xb0, 0x7e, 0x81, 0x51,
-	0x82, 0xf2, 0x9b, 0x3e, 0x0d, 0xb6, 0x6b, 0x85, 0x1e, 0xd2, 0xf6, 0xbd, 0x05, 0xd4, 0xb8, 0xdf,
-	0x01, 0x74, 0x85, 0x18, 0xb4, 0x24, 0x46, 0x84, 0xac, 0x66, 0x65, 0x53, 0xa2, 0xbd, 0xbb, 0x0f,
-	0xa1, 0xb1, 0x9e, 0x41, 0x55, 0xb3, 0x10, 0x95, 0x18, 0x4c, 0xf0, 0xbc, 0xcd, 0xf6, 0xa7, 0xc2,
-	0x02, 0xea, 0x04, 0x2f, 0x16, 0xf2, 0xbc, 0x79, 0x8d, 0xdb, 0xa8, 0x48, 0x8a, 0xa2, 0x79, 0x0f,
-	0x79, 0xcd, 0xcf, 0x50, 0xe3, 0x3e, 0x85, 0x8a, 0x86, 0x9d, 0x49, 0x1a, 0x13, 0x63, 0x53, 0x95,
-	0x01, 0xda, 0x59, 0x7b, 0xc0, 0xfc, 0xaa, 0x9d, 0xbb, 0x78, 0x30, 0x4e, 0xd0, 0xaf, 0xea, 0xd0,
-	0x5c, 0xd5, 0x82, 0xfa, 0x55, 0xdb, 0x32, 0x4a, 0xb9, 0x5f, 0xd5, 0x80, 0xb9, 0xaa, 0x8e, 0xf9,
-	0xa3, 0xee, 0xdc, 0x11, 0xf2, 0xc4, 0x1f, 0xb5, 0x25, 0x73, 0xa3, 0xce, 0xa1, 0xb1, 0x7e, 0x81,
-	0x2d, 0x3b, 0xbd, 0x94, 0x13, 0xf6, 0xa5, 0x3e, 0xaa, 0xc0, 0x1f, 0x6a, 0x81, 0x75, 0x92, 0x97,
-	0x8f, 0xec, 0xf8, 0xcd, 0xdb, 0xbb, 0xe2, 0x35, 0x5f, 0xdc, 0x94, 0xda, 0x03, 0xe6, 0x8f, 0xac,
-	0x87, 0xd4, 0x95, 0x22, 0xf3, 0x47, 0xe6, 0xd0, 0xdc, 0xc8, 0x0a, 0x6a, 0xdc, 0x87, 0xf6, 0xd3,
-	0x3f, 0x23, 0x7d, 0x6c, 0x5d, 0xb0, 0x2d, 0x2b, 0xb3, 0x91, 0xf6, 0xb9, 0x1f, 0x89, 0x89, 0x8c,
-	0xfe, 0x2d, 0x6c, 0x6b, 0xfd, 0xd5, 0x04, 0xe5, 0xad, 0x4c, 0x09, 0xb5, 0xcb, 0x35, 0x7b, 0x29,
-	0x92, 0xf4, 0xfa, 0xfe, 0x31, 0xe3, 0x89, 0xbd, 0x93, 0xdf, 0xb3, 0x24, 0x7a, 0xbe, 0xab, 0x8d,
-	0x03, 0x9c, 0x71, 0x15, 0x60, 0xa1, 0xeb, 0x0c, 0xaa, 0xfa, 0x13, 0x88, 0xa2, 0xf8, 0xe6, 0x9c,
-	0x5f, 0x8b, 0xfc, 0xfe, 0xcf, 0x40, 0xef, 0xfe, 0xcf, 0xf1, 0xfc, 0x38, 0x2e, 0x52, 0x45, 0xba,
-	0xba, 0xca, 0xab, 0x16, 0xc0, 0x3b, 0x0e, 0x8f, 0x19, 0xdf, 0x31, 0xac, 0xf5, 0x86, 0x89, 0x3d,
-	0xc5, 0x1d, 0x2b, 0xc9, 0x63, 0xed, 0x62, 0xf3, 0xc8, 0x5d, 0xc0, 0x4d, 0x9d, 0xa7, 0x25, 0x38,
-	0x45, 0x29, 0x47, 0xa9, 0x72, 0x6b, 0x4e, 0x3d, 0xeb, 0x14, 0xb9, 0x3e, 0x77, 0xba, 0x12, 0xb3,
-	0xde, 0xcd, 0x98, 0x12, 0x71, 0xcb, 0xcd, 0x1b, 0xcc, 0x36, 0x67, 0x1e, 0xe4, 0x51, 0x7d, 0x6b,
-	0xee, 0x81, 0x36, 0x07, 0x5f, 0xe9, 0x91, 0xc8, 0x9e, 0xa3, 0xef, 0xa6, 0xbc, 0xff, 0x64, 0xfd,
-	0x1b, 0xd8, 0x0e, 0x51, 0x21, 0x7d, 0x12, 0x72, 0x18, 0xd1, 0x93, 0x6d, 0xaf, 0x01, 0x7a, 0x14,
-	0xc9, 0xa7, 0x1b, 0xf4, 0x2b, 0x2d, 0x38, 0xf5, 0x90, 0xae, 0x6e, 0x39, 0xca, 0xe2, 0x95, 0xf6,
-	0x98, 0xff, 0x4a, 0xcf, 0x60, 0x9d, 0xe0, 0xe7, 0x8a, 0xf9, 0x6b, 0x3c, 0xfe, 0x17, 0x00, 0x00,
-	0xff, 0xff, 0x83, 0x0d, 0x13, 0x86, 0x71, 0x07, 0x00, 0x00,
+	// 548 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x94, 0x51, 0x6f, 0xd3, 0x30,
+	0x10, 0xc7, 0x79, 0x98, 0x40, 0xf3, 0xd6, 0x8d, 0xb9, 0xdb, 0x80, 0xf2, 0xc6, 0x0b, 0x6f, 0x7d,
+	0x00, 0x04, 0x42, 0x42, 0x42, 0xac, 0x2d, 0x30, 0xd4, 0xb1, 0xd1, 0x88, 0x0f, 0x10, 0xd2, 0x5b,
+	0x89, 0x94, 0xda, 0xc1, 0xbe, 0x66, 0xeb, 0x67, 0xe6, 0x4b, 0xa0, 0xb3, 0x63, 0xe7, 0x92, 0xb6,
+	0x0f, 0xbc, 0xc5, 0x3f, 0xff, 0xff, 0xbe, 0xf3, 0xe5, 0x7c, 0x42, 0x2c, 0x17, 0x4b, 0x1c, 0x96,
+	0x46, 0xa3, 0x96, 0x7b, 0xf4, 0x3d, 0x10, 0xa5, 0xd6, 0x85, 0x27, 0x03, 0x91, 0x69, 0x55, 0xef,
+	0x0e, 0xf6, 0x6d, 0x95, 0x85, 0xcf, 0x34, 0x0b, 0x8a, 0x43, 0xbb, 0xb6, 0x08, 0x4b, 0xbf, 0x7a,
+	0xf5, 0xf7, 0x40, 0x3c, 0xba, 0x5a, 0x2c, 0x31, 0xa9, 0x32, 0xf9, 0x52, 0xec, 0x7d, 0xd3, 0xb9,
+	0x92, 0xbd, 0xa1, 0x0b, 0x41, 0xdf, 0x33, 0xf8, 0x33, 0x38, 0xe2, 0x4b, 0x5b, 0xbe, 0x78, 0x20,
+	0x3f, 0x8a, 0xc3, 0x51, 0xb1, 0xb2, 0x08, 0x66, 0x52, 0x81, 0x42, 0x79, 0xe6, 0x15, 0x9c, 0x91,
+	0xf1, 0x7c, 0x1b, 0x76, 0x07, 0x7c, 0x10, 0x07, 0x53, 0x48, 0xe7, 0x60, 0x7e, 0xac, 0xc0, 0xac,
+	0xe5, 0xa9, 0x17, 0x32, 0x44, 0xf6, 0xb3, 0x2d, 0xd4, 0xb9, 0xdf, 0x0b, 0x71, 0xa3, 0x75, 0x31,
+	0x32, 0x90, 0x22, 0xc8, 0xbe, 0x97, 0x35, 0x84, 0xbc, 0xa7, 0x9b, 0xd0, 0x59, 0x2f, 0x44, 0x8f,
+	0xd8, 0x0c, 0xac, 0x2e, 0x2a, 0xb8, 0x1c, 0xcb, 0xf3, 0x46, 0x18, 0x21, 0x1d, 0xf0, 0x64, 0x2b,
+	0x0f, 0xc9, 0x13, 0x1e, 0x83, 0x45, 0xa3, 0x63, 0xf2, 0x0c, 0xb1, 0xe4, 0x5b, 0xd4, 0xb9, 0xdf,
+	0x8a, 0x7d, 0x82, 0x93, 0x2a, 0xcf, 0x50, 0xca, 0x46, 0xe5, 0x00, 0x39, 0xfb, 0x1b, 0x8c, 0x47,
+	0x9d, 0xdc, 0x67, 0xc5, 0x6a, 0x0e, 0x3c, 0x6a, 0x8d, 0x3a, 0x51, 0x23, 0xe5, 0x51, 0xc7, 0x26,
+	0xcd, 0x15, 0x8f, 0xea, 0x40, 0x27, 0x6a, 0xcd, 0x78, 0xa9, 0x27, 0xf7, 0x08, 0x6a, 0xce, 0x4b,
+	0xed, 0x49, 0xa7, 0xd4, 0x01, 0x3a, 0xeb, 0x57, 0x71, 0xec, 0xab, 0x97, 0x2b, 0x84, 0x85, 0xa1,
+	0x5f, 0xf5, 0x94, 0x17, 0x35, 0x62, 0x3a, 0xe4, 0xd9, 0x8e, 0x1d, 0x9e, 0xbc, 0xef, 0x15, 0x96,
+	0x7c, 0xec, 0x94, 0xfe, 0x06, 0xe3, 0x25, 0x4b, 0x00, 0x6f, 0x8c, 0x2e, 0x79, 0xc9, 0x6a, 0xd4,
+	0x29, 0x59, 0xa4, 0xce, 0x3d, 0xf4, 0x57, 0xff, 0x02, 0xf8, 0x69, 0x34, 0x95, 0xc7, 0x5e, 0xe6,
+	0x57, 0xe4, 0xab, 0x1f, 0x89, 0x5b, 0x39, 0xfd, 0x3b, 0xf1, 0x98, 0xf4, 0xd7, 0x15, 0x98, 0x3b,
+	0x93, 0x23, 0x90, 0xab, 0x4e, 0xf6, 0x4a, 0xcf, 0xf3, 0xdb, 0xf5, 0x2e, 0xe3, 0x1b, 0xdf, 0x93,
+	0x3f, 0xcb, 0x79, 0xfa, 0xff, 0xae, 0x31, 0x14, 0xd0, 0x72, 0x45, 0xb0, 0xd5, 0x75, 0x21, 0x7a,
+	0x74, 0x05, 0xc4, 0x34, 0xfb, 0x7d, 0xa9, 0x6e, 0x75, 0xe8, 0xff, 0x16, 0x64, 0xfd, 0xdf, 0xe1,
+	0xe1, 0x77, 0x4c, 0x73, 0x8b, 0x14, 0xdd, 0x86, 0xa8, 0x11, 0xb0, 0xdf, 0xc1, 0x58, 0xdd, 0x4b,
+	0x47, 0x84, 0x46, 0x5a, 0x61, 0x9a, 0x2b, 0x30, 0x56, 0x9e, 0x34, 0x42, 0xa2, 0xe4, 0x95, 0x5d,
+	0x14, 0x07, 0x8e, 0x56, 0x98, 0x00, 0x5e, 0xdf, 0x29, 0x30, 0x71, 0xe0, 0x30, 0xc6, 0x07, 0x4e,
+	0x0b, 0x87, 0x56, 0x48, 0xdc, 0xd8, 0x6b, 0x0d, 0x1c, 0x86, 0x58, 0x2b, 0xb4, 0x68, 0x78, 0x05,
+	0x1e, 0x26, 0xa8, 0xcb, 0xf0, 0x0a, 0x1a, 0xc2, 0x5e, 0x01, 0x87, 0xce, 0xfa, 0x5d, 0x9c, 0x78,
+	0x36, 0x03, 0x0b, 0xf8, 0x59, 0x9b, 0x65, 0x8a, 0x72, 0xc0, 0xc5, 0x6c, 0x83, 0x0e, 0x7a, 0xbe,
+	0x73, 0xaf, 0x7d, 0x91, 0x04, 0x53, 0x83, 0xb2, 0x13, 0x36, 0x35, 0xb8, 0x71, 0x91, 0x9a, 0x92,
+	0xfb, 0xd7, 0x43, 0x37, 0xf4, 0x5f, 0xff, 0x0b, 0x00, 0x00, 0xff, 0xff, 0x5f, 0x54, 0x34, 0x81,
+	0x44, 0x06, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -295,22 +118,18 @@ type MgmtSvcClient interface {
 	GetAttachInfo(ctx context.Context, in *GetAttachInfoReq, opts ...grpc.CallOption) (*GetAttachInfoResp, error)
 	// List all pools in a DAOS system: basic info: UUIDs, service ranks.
 	ListPools(ctx context.Context, in *ListPoolsReq, opts ...grpc.CallOption) (*ListPoolsResp, error)
-	// Query the per-server metadata
-	SmdQuery(ctx context.Context, in *SmdQueryReq, opts ...grpc.CallOption) (*SmdQueryResp, error)
 	// List all containers in a pool
 	ListContainers(ctx context.Context, in *ListContReq, opts ...grpc.CallOption) (*ListContResp, error)
-	// Prepare DAOS IO servers on a host for controlled shutdown. (gRPC fanout)
-	PrepShutdownRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
-	// Stop DAOS IO servers on a host. (gRPC fanout)
-	StopRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
-	// Ping DAOS IO servers on a host. (gRPC fanout)
-	PingRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
-	// ResetFormat DAOS IO servers on a host. (gRPC fanout)
-	ResetFormatRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
-	// Start DAOS IO servers on a host. (gRPC fanout)
-	StartRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
 	// Change the owner of a DAOS container
 	ContSetOwner(ctx context.Context, in *ContSetOwnerReq, opts ...grpc.CallOption) (*ContSetOwnerResp, error)
+	// Query DAOS system status
+	SystemQuery(ctx context.Context, in *SystemQueryReq, opts ...grpc.CallOption) (*SystemQueryResp, error)
+	// Stop DAOS system (shutdown data-plane instances)
+	SystemStop(ctx context.Context, in *SystemStopReq, opts ...grpc.CallOption) (*SystemStopResp, error)
+	// ResetFormat DAOS system (restart data-plane instances)
+	SystemResetFormat(ctx context.Context, in *SystemResetFormatReq, opts ...grpc.CallOption) (*SystemResetFormatResp, error)
+	// Start DAOS system (restart data-plane instances)
+	SystemStart(ctx context.Context, in *SystemStartReq, opts ...grpc.CallOption) (*SystemStartResp, error)
 }
 
 type mgmtSvcClient struct {
@@ -492,15 +311,6 @@ func (c *mgmtSvcClient) ListPools(ctx context.Context, in *ListPoolsReq, opts ..
 	return out, nil
 }
 
-func (c *mgmtSvcClient) SmdQuery(ctx context.Context, in *SmdQueryReq, opts ...grpc.CallOption) (*SmdQueryResp, error) {
-	out := new(SmdQueryResp)
-	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/SmdQuery", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *mgmtSvcClient) ListContainers(ctx context.Context, in *ListContReq, opts ...grpc.CallOption) (*ListContResp, error) {
 	out := new(ListContResp)
 	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/ListContainers", in, out, opts...)
@@ -510,54 +320,45 @@ func (c *mgmtSvcClient) ListContainers(ctx context.Context, in *ListContReq, opt
 	return out, nil
 }
 
-func (c *mgmtSvcClient) PrepShutdownRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error) {
-	out := new(RanksResp)
-	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/PrepShutdownRanks", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *mgmtSvcClient) StopRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error) {
-	out := new(RanksResp)
-	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/StopRanks", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *mgmtSvcClient) PingRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error) {
-	out := new(RanksResp)
-	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/PingRanks", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *mgmtSvcClient) ResetFormatRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error) {
-	out := new(RanksResp)
-	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/ResetFormatRanks", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *mgmtSvcClient) StartRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error) {
-	out := new(RanksResp)
-	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/StartRanks", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *mgmtSvcClient) ContSetOwner(ctx context.Context, in *ContSetOwnerReq, opts ...grpc.CallOption) (*ContSetOwnerResp, error) {
 	out := new(ContSetOwnerResp)
 	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/ContSetOwner", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) SystemQuery(ctx context.Context, in *SystemQueryReq, opts ...grpc.CallOption) (*SystemQueryResp, error) {
+	out := new(SystemQueryResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/SystemQuery", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) SystemStop(ctx context.Context, in *SystemStopReq, opts ...grpc.CallOption) (*SystemStopResp, error) {
+	out := new(SystemStopResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/SystemStop", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) SystemResetFormat(ctx context.Context, in *SystemResetFormatReq, opts ...grpc.CallOption) (*SystemResetFormatResp, error) {
+	out := new(SystemResetFormatResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/SystemResetFormat", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) SystemStart(ctx context.Context, in *SystemStartReq, opts ...grpc.CallOption) (*SystemStartResp, error) {
+	out := new(SystemStartResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/SystemStart", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -605,22 +406,18 @@ type MgmtSvcServer interface {
 	GetAttachInfo(context.Context, *GetAttachInfoReq) (*GetAttachInfoResp, error)
 	// List all pools in a DAOS system: basic info: UUIDs, service ranks.
 	ListPools(context.Context, *ListPoolsReq) (*ListPoolsResp, error)
-	// Query the per-server metadata
-	SmdQuery(context.Context, *SmdQueryReq) (*SmdQueryResp, error)
 	// List all containers in a pool
 	ListContainers(context.Context, *ListContReq) (*ListContResp, error)
-	// Prepare DAOS IO servers on a host for controlled shutdown. (gRPC fanout)
-	PrepShutdownRanks(context.Context, *RanksReq) (*RanksResp, error)
-	// Stop DAOS IO servers on a host. (gRPC fanout)
-	StopRanks(context.Context, *RanksReq) (*RanksResp, error)
-	// Ping DAOS IO servers on a host. (gRPC fanout)
-	PingRanks(context.Context, *RanksReq) (*RanksResp, error)
-	// ResetFormat DAOS IO servers on a host. (gRPC fanout)
-	ResetFormatRanks(context.Context, *RanksReq) (*RanksResp, error)
-	// Start DAOS IO servers on a host. (gRPC fanout)
-	StartRanks(context.Context, *RanksReq) (*RanksResp, error)
 	// Change the owner of a DAOS container
 	ContSetOwner(context.Context, *ContSetOwnerReq) (*ContSetOwnerResp, error)
+	// Query DAOS system status
+	SystemQuery(context.Context, *SystemQueryReq) (*SystemQueryResp, error)
+	// Stop DAOS system (shutdown data-plane instances)
+	SystemStop(context.Context, *SystemStopReq) (*SystemStopResp, error)
+	// ResetFormat DAOS system (restart data-plane instances)
+	SystemResetFormat(context.Context, *SystemResetFormatReq) (*SystemResetFormatResp, error)
+	// Start DAOS system (restart data-plane instances)
+	SystemStart(context.Context, *SystemStartReq) (*SystemStartResp, error)
 }
 
 // UnimplementedMgmtSvcServer can be embedded to have forward compatible implementations.
@@ -684,29 +481,23 @@ func (*UnimplementedMgmtSvcServer) GetAttachInfo(ctx context.Context, req *GetAt
 func (*UnimplementedMgmtSvcServer) ListPools(ctx context.Context, req *ListPoolsReq) (*ListPoolsResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListPools not implemented")
 }
-func (*UnimplementedMgmtSvcServer) SmdQuery(ctx context.Context, req *SmdQueryReq) (*SmdQueryResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SmdQuery not implemented")
-}
 func (*UnimplementedMgmtSvcServer) ListContainers(ctx context.Context, req *ListContReq) (*ListContResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListContainers not implemented")
 }
-func (*UnimplementedMgmtSvcServer) PrepShutdownRanks(ctx context.Context, req *RanksReq) (*RanksResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PrepShutdownRanks not implemented")
-}
-func (*UnimplementedMgmtSvcServer) StopRanks(ctx context.Context, req *RanksReq) (*RanksResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method StopRanks not implemented")
-}
-func (*UnimplementedMgmtSvcServer) PingRanks(ctx context.Context, req *RanksReq) (*RanksResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PingRanks not implemented")
-}
-func (*UnimplementedMgmtSvcServer) ResetFormatRanks(ctx context.Context, req *RanksReq) (*RanksResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ResetFormatRanks not implemented")
-}
-func (*UnimplementedMgmtSvcServer) StartRanks(ctx context.Context, req *RanksReq) (*RanksResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method StartRanks not implemented")
-}
 func (*UnimplementedMgmtSvcServer) ContSetOwner(ctx context.Context, req *ContSetOwnerReq) (*ContSetOwnerResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ContSetOwner not implemented")
+}
+func (*UnimplementedMgmtSvcServer) SystemQuery(ctx context.Context, req *SystemQueryReq) (*SystemQueryResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SystemQuery not implemented")
+}
+func (*UnimplementedMgmtSvcServer) SystemStop(ctx context.Context, req *SystemStopReq) (*SystemStopResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SystemStop not implemented")
+}
+func (*UnimplementedMgmtSvcServer) SystemResetFormat(ctx context.Context, req *SystemResetFormatReq) (*SystemResetFormatResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SystemResetFormat not implemented")
+}
+func (*UnimplementedMgmtSvcServer) SystemStart(ctx context.Context, req *SystemStartReq) (*SystemStartResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SystemStart not implemented")
 }
 
 func RegisterMgmtSvcServer(s *grpc.Server, srv MgmtSvcServer) {
@@ -1055,24 +846,6 @@ func _MgmtSvc_ListPools_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
-func _MgmtSvc_SmdQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SmdQueryReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MgmtSvcServer).SmdQuery(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/mgmt.MgmtSvc/SmdQuery",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MgmtSvcServer).SmdQuery(ctx, req.(*SmdQueryReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _MgmtSvc_ListContainers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListContReq)
 	if err := dec(in); err != nil {
@@ -1091,96 +864,6 @@ func _MgmtSvc_ListContainers_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
-func _MgmtSvc_PrepShutdownRanks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RanksReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MgmtSvcServer).PrepShutdownRanks(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/mgmt.MgmtSvc/PrepShutdownRanks",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MgmtSvcServer).PrepShutdownRanks(ctx, req.(*RanksReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _MgmtSvc_StopRanks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RanksReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MgmtSvcServer).StopRanks(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/mgmt.MgmtSvc/StopRanks",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MgmtSvcServer).StopRanks(ctx, req.(*RanksReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _MgmtSvc_PingRanks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RanksReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MgmtSvcServer).PingRanks(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/mgmt.MgmtSvc/PingRanks",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MgmtSvcServer).PingRanks(ctx, req.(*RanksReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _MgmtSvc_ResetFormatRanks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RanksReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MgmtSvcServer).ResetFormatRanks(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/mgmt.MgmtSvc/ResetFormatRanks",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MgmtSvcServer).ResetFormatRanks(ctx, req.(*RanksReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _MgmtSvc_StartRanks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RanksReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MgmtSvcServer).StartRanks(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/mgmt.MgmtSvc/StartRanks",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MgmtSvcServer).StartRanks(ctx, req.(*RanksReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _MgmtSvc_ContSetOwner_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ContSetOwnerReq)
 	if err := dec(in); err != nil {
@@ -1195,6 +878,78 @@ func _MgmtSvc_ContSetOwner_Handler(srv interface{}, ctx context.Context, dec fun
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MgmtSvcServer).ContSetOwner(ctx, req.(*ContSetOwnerReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_SystemQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SystemQueryReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).SystemQuery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/SystemQuery",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).SystemQuery(ctx, req.(*SystemQueryReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_SystemStop_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SystemStopReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).SystemStop(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/SystemStop",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).SystemStop(ctx, req.(*SystemStopReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_SystemResetFormat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SystemResetFormatReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).SystemResetFormat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/SystemResetFormat",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).SystemResetFormat(ctx, req.(*SystemResetFormatReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_SystemStart_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SystemStartReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).SystemStart(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/SystemStart",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).SystemStart(ctx, req.(*SystemStartReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1280,36 +1035,28 @@ var _MgmtSvc_serviceDesc = grpc.ServiceDesc{
 			Handler:    _MgmtSvc_ListPools_Handler,
 		},
 		{
-			MethodName: "SmdQuery",
-			Handler:    _MgmtSvc_SmdQuery_Handler,
-		},
-		{
 			MethodName: "ListContainers",
 			Handler:    _MgmtSvc_ListContainers_Handler,
 		},
 		{
-			MethodName: "PrepShutdownRanks",
-			Handler:    _MgmtSvc_PrepShutdownRanks_Handler,
-		},
-		{
-			MethodName: "StopRanks",
-			Handler:    _MgmtSvc_StopRanks_Handler,
-		},
-		{
-			MethodName: "PingRanks",
-			Handler:    _MgmtSvc_PingRanks_Handler,
-		},
-		{
-			MethodName: "ResetFormatRanks",
-			Handler:    _MgmtSvc_ResetFormatRanks_Handler,
-		},
-		{
-			MethodName: "StartRanks",
-			Handler:    _MgmtSvc_StartRanks_Handler,
-		},
-		{
 			MethodName: "ContSetOwner",
 			Handler:    _MgmtSvc_ContSetOwner_Handler,
+		},
+		{
+			MethodName: "SystemQuery",
+			Handler:    _MgmtSvc_SystemQuery_Handler,
+		},
+		{
+			MethodName: "SystemStop",
+			Handler:    _MgmtSvc_SystemStop_Handler,
+		},
+		{
+			MethodName: "SystemResetFormat",
+			Handler:    _MgmtSvc_SystemResetFormat_Handler,
+		},
+		{
+			MethodName: "SystemStart",
+			Handler:    _MgmtSvc_SystemStart_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

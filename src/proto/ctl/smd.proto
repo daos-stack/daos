@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,9 +22,9 @@
 //
 
 syntax = "proto3";
-package mgmt;
+package ctl;
 
-// Management Service Protobuf Definitions related to interactions between
+// Control Service Protobuf Definitions related to interactions between
 // DAOS control server and DAOS Blob I/O (BIO) module and Per-Server Metadata
 // (SMD).
 
