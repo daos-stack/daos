@@ -78,6 +78,7 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/ctl.MgmtCtl/FirmwareQuery":      {ComponentAdmin},
 		"/ctl.MgmtCtl/FirmwareUpdate":     {ComponentAdmin},
 		"/mgmt.MgmtSvc/Join":              {ComponentServer},
+		"/mgmt.MgmtSvc/ClusterEvent":      {ComponentServer},
 		"/mgmt.MgmtSvc/LeaderQuery":       {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolCreate":        {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolDestroy":       {ComponentAdmin},
