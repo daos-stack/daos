@@ -24,5 +24,3 @@ find_cmd:
   subdirs_per_node: 6
   files_per_node: 10
   needles: 100
-  dfs_path: /tmp/dfs_test
-#  challenger_path: /mnt/lustre

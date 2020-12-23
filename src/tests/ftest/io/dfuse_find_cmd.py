@@ -64,6 +64,7 @@ class FindCmd(DfuseTestBase):
         needles = self.params.get("needles", '/run/find_cmd/*')
         challenger = self.params.get("challenger_path", '/run/find_cmd/*')
         challenger_path = ""
+        temp_dfs_path = ""
 
         dfuses = list()
         containers = list()
@@ -71,6 +72,11 @@ class FindCmd(DfuseTestBase):
         self.add_pool(connect=False)
 
         try:
+            if not dfs_path:
+                temp_dfs_path = tempfile.mkdtemp(
+                    dir="/tmp", prefix="dfs_test_")
+                dfs_path = temp_dfs_path
+
             mount_dirs = self._setup_containers(
                 dfs_path, cont_count, dfuses, containers)
             daos_dir_trees = self._crate_dir_trees(
@@ -101,6 +107,9 @@ class FindCmd(DfuseTestBase):
 
             if challenger and challenger_path:
                 shutil.rmtree(challenger_path, ignore_errors=True)
+
+            if temp_dfs_path:
+                shutil.rmtree(temp_dfs_path, ignore_errors=True)
 
         self.log.info("DAOS Stats")
         daos_stats.print_stats()
