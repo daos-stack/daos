@@ -284,8 +284,6 @@ void test_shutdown_handler(crt_rpc_t *rpc_req)
 	printf("tier1 test_srver received shutdown request, opc: %#x.\n",
 	       rpc_req->cr_opc);
 
-  DBG_PRINT("EAM trace, line 256, test_g.t_my_rank: %d\n", test_g.t_my_rank);
-
 	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
 	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
 

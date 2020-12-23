@@ -65,7 +65,6 @@ send_rpc_swim_check(crt_endpoint_t server_ep, crt_rpc_t* rpc_req) {
   return rc;
 }
 
-
 void
 test_run(void)
 {
@@ -129,12 +128,10 @@ test_run(void)
 
   // Shutdown one particular rank
 	if (test_g.t_shutdown_rank > 1) {
-    DBG_PRINT("EAM trace\n");
     server_ep.ep_rank = test_g.t_shutdown_rank;
     send_rpc_shutdown(server_ep, rpc_req);
     return;
   } else if (test_g.t_verify_swim_status.rank >= 0) {
-    DBG_PRINT("EAM trace\n");
     // Get swim status from all ranks
     for (i = 0; i < rank_list->rl_nr; i++) {
       rank = rank_list->rl_ranks[i];
@@ -143,7 +140,6 @@ test_run(void)
     }
     return;
   } else {
-    DBG_PRINT("EAM trace\n");
 
     // Shutdown all ranks
     for (i = 0; i < rank_list->rl_nr; i++) {

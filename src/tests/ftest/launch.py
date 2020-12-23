@@ -874,8 +874,7 @@ def run_tests(test_files, tag_filter, args):
                     avocado_logs_dir, test_file, args)
 
                 # Compress any log file that haven't been remotely compressed.
-                # EAM DEBUG
-                # compress_log_files(avocado_logs_dir, args)
+                compress_log_files(avocado_logs_dir, args)
 
             # Optionally rename the test results directory for this test
             if args.rename:

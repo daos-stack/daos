@@ -108,27 +108,12 @@ test_run(d_rank_t my_rank)
 		DBG_PRINT("Group config file saved\n");
 	}
 
-
-    D_ERROR("EAM trace");
-
 	if (test_g.t_hold) {
 		sleep(test_g.t_hold_time);
 	}
 
 
-    D_ERROR("EAM trace");
-
-	// For SWIM testing, stay alive for a few moments while the SWIM event
-	// propogates
-	// if ((test_g.t_register_swim_callback) &&
-	// 		(my_rank != test_g.t_rank_to_shutdown)) {
-	// 	DBG_PRINT("Sleeping for 10 seconds while the SWIM event propagates.\n");
-	// 	sleep(10);
-	// }
-
 	for (i = 0; i < test_g.t_srv_ctx_num; i++) {
-
-    D_ERROR("EAM trace");
 
 		rc = pthread_join(test_g.t_tid[i], NULL);
 		if (rc != 0)
@@ -136,15 +121,9 @@ test_run(d_rank_t my_rank)
 		D_DEBUG(DB_TEST, "joined progress thread.\n");
 	}
 
-
-    D_ERROR("EAM trace");
-
 	DBG_PRINT("Exiting server\n");
 	rc = sem_destroy(&test_g.t_token_to_proceed);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
-
-
-    D_ERROR("EAM trace");
 
 	if (my_rank == 0) {
 		rc = crt_group_config_remove(NULL);
