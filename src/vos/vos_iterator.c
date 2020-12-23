@@ -630,6 +630,10 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 	D_ASSERT(anchors != NULL);
 	D_ASSERT(pre_cb || post_cb);
 
+	/* Recursive iteration from container level isn't supported */
+	if (type == VOS_ITER_COUUID && recursive)
+		return -DER_NOSYS;
+
 	anchor = type2anchor(type, anchors);
 
 	old = vos_dth_get();
@@ -687,13 +691,16 @@ probe:
 
 		skipped = false;
 		if (pre_cb) {
+			acts = 0;
 			rc = pre_cb(ih, &iter_ent, type, param, arg, &acts);
 			if (rc != 0)
 				break;
 
 			set_reprobe(type, acts, anchors, param->ip_flags);
 			skipped = (acts & VOS_ITER_CB_SKIP);
-			acts = 0;
+
+			if (acts & VOS_ITER_CB_ABORT)
+				break;
 
 			if (need_reprobe(type, anchors)) {
 				D_ASSERT(!daos_anchor_is_zero(anchor) &&
@@ -742,16 +749,15 @@ probe:
 
 next:
 		if (post_cb) {
+			acts = 0;
 			rc = post_cb(ih, &iter_ent, type, param, arg, &acts);
 			if (rc != 0)
 				break;
 
-			if (!vos_dtx_hit_inprogress()) {
-				set_reprobe(type, acts, anchors,
-					    param->ip_flags);
-				acts = 0;
-			}
+			set_reprobe(type, acts, anchors, param->ip_flags);
 
+			if (acts & VOS_ITER_CB_ABORT)
+				break;
 		}
 
 		if (need_reprobe(type, anchors)) {
