@@ -25,6 +25,7 @@
 from __future__ import print_function
 
 import sys
+import time
 
 from avocado       import Test
 from avocado       import main
@@ -79,6 +80,9 @@ class CartRpcOneNodeTest(Test):
             clicmd = self.utils.build_cmd(
                 self, self.env, "test_clients", index=index)
             self.utils.launch_test(self, clicmd, srv_rtn)
+
+            # Wait for servers to propagate SWIM status
+            time.sleep(10)
 
 if __name__ == "__main__":
     main()
