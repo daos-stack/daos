@@ -86,18 +86,6 @@ CRT_RPC_DECLARE(test_ping_check,
 CRT_RPC_DEFINE(test_ping_check,
 		CRT_ISEQ_TEST_PING_CHECK, CRT_OSEQ_TEST_PING_CHECK)
 
-// SWIM status -- rank: [0..99999], status: {A : 0, D : 1, S}
-#define CRT_ISEQ_TEST_SWIM_STATUS /* input fields */		 \
-	((uint32_t)		(rank)			CRT_VAR)
-
-#define CRT_OSEQ_TEST_SWIM_STATUS /* output fields */		 \
-	((int32_t)		(status)			CRT_VAR)
-
-CRT_RPC_DECLARE(test_swim_status,
-		CRT_ISEQ_TEST_SWIM_STATUS, CRT_OSEQ_TEST_SWIM_STATUS)
-CRT_RPC_DEFINE(test_swim_status,
-		CRT_ISEQ_TEST_SWIM_STATUS, CRT_OSEQ_TEST_SWIM_STATUS)
-
 static inline void
 test_sem_timedwait(sem_t *sem, int sec, int line_number)
 {
