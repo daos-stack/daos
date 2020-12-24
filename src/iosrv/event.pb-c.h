@@ -78,8 +78,8 @@ struct  _Mgmt__PoolSvcEventInfo
 
 typedef enum {
   MGMT__RASEVENT__EXTENDED_INFO__NOT_SET = 0,
-  MGMT__RASEVENT__EXTENDED_INFO_RANK_STATE_INFO = 9,
-  MGMT__RASEVENT__EXTENDED_INFO_POOL_SVC_INFO = 10
+  MGMT__RASEVENT__EXTENDED_INFO_RANK_STATE_INFO = 8,
+  MGMT__RASEVENT__EXTENDED_INFO_POOL_SVC_INFO = 9
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__RASEVENT__EXTENDED_INFO)
 } Mgmt__RASEvent__ExtendedInfoCase;
 
@@ -92,7 +92,7 @@ struct  _Mgmt__RASEvent
   /*
    * Unique identifier, 64-char.
    */
-  char *name;
+  char *id;
   /*
    * Fully qualified timestamp (us) incl timezone.
    */
@@ -105,10 +105,6 @@ struct  _Mgmt__RASEvent
    * Human readable message describing event.
    */
   char *msg;
-  /*
-   * Unique numeric event identifier.
-   */
-  uint32_t id;
   /*
    * Event type.
    */
@@ -129,7 +125,7 @@ struct  _Mgmt__RASEvent
 };
 #define MGMT__RASEVENT__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__rasevent__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, 0, 0, (char *)protobuf_c_empty_string, MGMT__RASEVENT__EXTENDED_INFO__NOT_SET, {0} }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, 0, (char *)protobuf_c_empty_string, MGMT__RASEVENT__EXTENDED_INFO__NOT_SET, {0} }
 
 
 typedef enum {

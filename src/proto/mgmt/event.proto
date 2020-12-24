@@ -43,17 +43,16 @@ message PoolSvcEventInfo {
 
 // RASEvent describes a RAS event in the DAOS system.
 message RASEvent {
-	string name = 1;	// Unique identifier, 64-char.
+	string id = 1;		// Unique identifier, 64-char.
 	string timestamp = 2;	// Fully qualified timestamp (us) incl timezone.
 	uint32 severity = 3;	// Event severity.
 	string msg = 4;		// Human readable message describing event.
-	uint32 id = 5;		// Unique numeric event identifier.
-	uint32 type = 6;	// Event type.
-	uint32 rank = 7; 	// (optional) DAOS rank involved in event.
-	string hostname = 8;	// (optional) Hostname of node involved in event.
+	uint32 type = 5;	// Event type.
+	uint32 rank = 6; 	// (optional) DAOS rank involved in event.
+	string hostname = 7;	// (optional) Hostname of node involved in event.
 	oneof extended_info {	// (optional) Instance specific info.
-		RankStateEventInfo rank_state_info = 9;
-		PoolSvcEventInfo pool_svc_info = 10;
+		RankStateEventInfo rank_state_info = 8;
+		PoolSvcEventInfo pool_svc_info = 9;
 	}
 }
 

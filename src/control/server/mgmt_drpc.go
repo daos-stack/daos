@@ -68,14 +68,10 @@ func (mod *mgmtModule) handleClusterEvent(reqb []byte) ([]byte, error) {
 		return nil, drpc.UnmarshalingPayloadFailure()
 	}
 
-	mod.log.Debugf("handling ClusterEventReq: %+v", req)
-
 	resp, err := mod.events.HandleClusterEvent(req)
 	if err != nil {
 		return nil, errors.Wrapf(err, "handle cluster event %+v", req)
 	}
-
-	mod.log.Debugf("ClusterEventResp: %+v", resp)
 
 	return proto.Marshal(resp)
 }

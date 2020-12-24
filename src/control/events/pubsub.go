@@ -107,7 +107,7 @@ func (ps *PubSub) Publish(event Event) {
 		return
 	}
 
-	ps.log.Debugf("publishing @%s: %+v", event.GetType(), event)
+	ps.log.Debugf("publishing @%s: %s", event.GetType(), event.GetID())
 
 	ps.events <- event
 }
@@ -172,6 +172,8 @@ func (ps *PubSub) HandleClusterEvent(req *mgmtpb.ClusterEventReq) (*mgmtpb.Clust
 		return nil, errors.Errorf("unexpected event type received, want RAS got %T",
 			req.GetEvent())
 	}
+
+	ps.log.Debugf("proto format ras event received: %+v", rasPB)
 
 	event, err := NewFromProto(rasPB)
 	if err != nil {

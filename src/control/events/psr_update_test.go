@@ -31,8 +31,8 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 )
 
-func TestEvents_ConvertPoolSvcRankUpdate(t *testing.T) {
-	event := NewPoolSvcRankUpdateEvent("foo", 1, common.MockUUID(), []uint32{0, 1}, 1)
+func TestEvents_ConvertPoolSvcRanksUpdate(t *testing.T) {
+	event := NewPoolSvcRanksUpdateEvent("foo", 1, common.MockUUID(), []uint32{0, 1}, 1)
 
 	pbEvent, err := event.ToProto()
 	if err != nil {
@@ -41,7 +41,7 @@ func TestEvents_ConvertPoolSvcRankUpdate(t *testing.T) {
 
 	t.Logf("proto event: %+v (%T)", pbEvent, pbEvent)
 
-	returnedEvent := new(PoolSvcRankUpdate)
+	returnedEvent := new(PoolSvcRanksUpdate)
 	if err := returnedEvent.FromProto(pbEvent); err != nil {
 		t.Fatal(err)
 	}

@@ -52,34 +52,28 @@ func NewFromProto(pbEvent *mgmtpb.RASEvent) (Event, error) {
 	case RASRankExit:
 		rankExit := new(RankExit)
 		return Event(rankExit), rankExit.FromProto(pbEvent)
+	case RASPoolSvcRanksUpdate:
+		ranksUpdate := new(PoolSvcRanksUpdate)
+		return Event(ranksUpdate), ranksUpdate.FromProto(pbEvent)
 	default:
-		return nil, errors.Errorf("unsupported event ID: %d", pbEvent.Id)
+		return nil, errors.Errorf("unsupported event ID: %s", pbEvent.Id)
 	}
 }
 
 // RASID describes a given RAS event.
-type RASID uint32
-
-// RASID constant definitions.
-const (
-	RASRankExit          RASID = C.RAS_RANK_EXIT
-	RASRankNoResp        RASID = C.RAS_RANK_NO_RESP
-	RASPoolSvcRankUpdate RASID = C.RAS_POOL_SVC_RANK_UPDATE
-)
+type RASID string
 
 func (id RASID) String() string {
-	return C.GoString(C.ras_event_id_enum_to_name(uint32(id)))
+	return string(id)
 }
 
-// Desc returns a description of the event.
-func (id RASID) Desc() string {
-	return C.GoString(C.ras_event_id_enum_to_msg(uint32(id)))
-}
-
-// Uint32 returns uint32 representation of event ID.
-func (id RASID) Uint32() uint32 {
-	return uint32(id)
-}
+// RASID constant definitions matching those used when creating events either in
+// the control or data (iosrv) planes.
+const (
+	RASRankExit           RASID = "rank_exit"
+	RASRankNoResp         RASID = "rank_no_response"
+	RASPoolSvcRanksUpdate RASID = "pool_svc_ranks_update"
+)
 
 // RASSeverityID describes the severity of a given RAS event.
 type RASSeverityID uint32
@@ -93,7 +87,7 @@ const (
 )
 
 func (sev RASSeverityID) String() string {
-	return C.GoString(C.ras_event_sev_enum_to_name(uint32(sev)))
+	return C.GoString(C.ras_event_sev2str(uint32(sev)))
 }
 
 // Uint32 returns uint32 representation of event severity.
@@ -106,14 +100,13 @@ type RASTypeID uint32
 
 // RASTypeID constant definitions.
 const (
-	RASTypeAny             RASTypeID = C.RAS_TYPE_ANY
-	RASTypeRankStateChange RASTypeID = C.RAS_TYPE_RANK_STATE_CHANGE
-	RASTypeInfoOnly        RASTypeID = C.RAS_TYPE_INFO_ONLY
-	RASTypePoolSvcChange   RASTypeID = C.RAS_TYPE_POOL_SVC_CHANGE
+	RASTypeAny         RASTypeID = C.RAS_TYPE_ANY
+	RASTypeStateChange RASTypeID = C.RAS_TYPE_STATE_CHANGE
+	RASTypeInfoOnly    RASTypeID = C.RAS_TYPE_INFO
 )
 
 func (typ RASTypeID) String() string {
-	return C.GoString(C.ras_event_type_enum_to_name(uint32(typ)))
+	return C.GoString(C.ras_event_type2str(uint32(typ)))
 }
 
 // Uint32 returns uint32 representation of event type.
@@ -123,7 +116,6 @@ func (typ RASTypeID) Uint32() uint32 {
 
 // RASEvent describes details of a specific RAS event.
 type RASEvent struct {
-	Name      string        `json:"name"`
 	Timestamp string        `json:"timestamp"`
 	Msg       string        `json:"msg"`
 	Hostname  string        `json:"hostname"`
@@ -137,12 +129,12 @@ type RASEvent struct {
 func (evt *RASEvent) MarshalJSON() ([]byte, error) {
 	type toJSON RASEvent
 	return json.Marshal(&struct {
-		ID       uint32 `json:"id"`
+		ID       string `json:"id"`
 		Severity uint32 `json:"severity"`
 		Type     uint32 `json:"type"`
 		*toJSON
 	}{
-		ID:       evt.ID.Uint32(),
+		ID:       evt.ID.String(),
 		Severity: evt.Severity.Uint32(),
 		Type:     evt.Type.Uint32(),
 		toJSON:   (*toJSON)(evt),
@@ -153,7 +145,7 @@ func (evt *RASEvent) MarshalJSON() ([]byte, error) {
 func (evt *RASEvent) UnmarshalJSON(data []byte) error {
 	type fromJSON RASEvent
 	from := &struct {
-		ID       uint32 `json:"id"`
+		ID       string `json:"id"`
 		Severity uint32 `json:"severity"`
 		Type     uint32 `json:"type"`
 		*fromJSON

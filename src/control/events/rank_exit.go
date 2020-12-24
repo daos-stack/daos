@@ -55,7 +55,6 @@ func (evt *RankExit) GetType() RASTypeID { return evt.RAS.Type }
 // ExtendedInfo variant into custom event specific fields.
 func (evt *RankExit) FromProto(pbEvt *mgmtpb.RASEvent) error {
 	evt.RAS = &RASEvent{
-		Name:      pbEvt.Name,
 		Timestamp: pbEvt.Timestamp,
 		Msg:       pbEvt.Msg,
 		Hostname:  pbEvt.Hostname,
@@ -107,13 +106,12 @@ func (evt *RankExit) ToProto() (*mgmtpb.RASEvent, error) {
 // NewRankExitEvent creates a specific RankExit event from given inputs.
 func NewRankExitEvent(hostname string, instanceIdx uint32, rank uint32, exitErr common.ExitStatus) Event {
 	evt := &RASEvent{
-		Name:      RASRankExit.String(),
 		Timestamp: common.FormatTime(time.Now()),
-		Msg:       RASRankExit.Desc(),
+		Msg:       "DAOS rank exited unexpectedly",
 		ID:        RASRankExit,
 		Hostname:  hostname,
 		Rank:      rank,
-		Type:      RASTypeRankStateChange,
+		Type:      RASTypeStateChange,
 		Severity:  RASSeverityError,
 	}
 

@@ -25,48 +25,14 @@
  * RAS event definitions to the used in either data or control planes.
  */
 
-#ifndef __RAS_H__
-#define __RAS_H__
+#ifndef __DAOS_RAS_H__
+#define __DAOS_RAS_H__
 
-#define RAS_ID_UNKNOWN_STR "Unknown RAS event"
-#define RAS_SEV_UNKNOWN_STR "Unknown RAS event severity"
-#define RAS_TYPE_UNKNOWN_STR "Unknown RAS event type"
+#include <daos/common.h>
+#include <daos_types.h>
+#include <sys/utsname.h>
 
-enum ras_event_id {
-	RAS_RANK_EXIT	= 1,
-	RAS_RANK_NO_RESP,
-	RAS_POOL_SVC_RANK_UPDATE,
-};
-
-static inline char *
-ras_event_id_enum_to_name(enum ras_event_id id)
-{
-	switch (id) {
-	case RAS_RANK_EXIT:
-		return "daos_rank_exited";
-	case RAS_RANK_NO_RESP:
-		return "daos_rank_no_response";
-	case RAS_POOL_SVC_RANK_UPDATE:
-		return "daos_pool_svc_rank_update";
-	}
-
-	return RAS_ID_UNKNOWN_STR;
-}
-
-static inline char *
-ras_event_id_enum_to_msg(enum ras_event_id id)
-{
-	switch (id) {
-	case RAS_RANK_EXIT:
-		return "DAOS rank exited";
-	case RAS_RANK_NO_RESP:
-		return "DAOS rank unresponsive";
-	case RAS_POOL_SVC_RANK_UPDATE:
-		return "DAOS pool service rank list updated";
-	}
-
-	return RAS_ID_UNKNOWN_STR;
-}
+#define DAOS_RAS_EVENT_STR_MAX_LEN 64
 
 enum ras_event_sev {
 	RAS_SEV_FATAL	= 1,
@@ -76,7 +42,7 @@ enum ras_event_sev {
 };
 
 static inline char *
-ras_event_sev_enum_to_name(enum ras_event_sev severity)
+ras_event_sev2str(enum ras_event_sev severity)
 {
 	switch (severity) {
 	case RAS_SEV_FATAL:
@@ -86,32 +52,110 @@ ras_event_sev_enum_to_name(enum ras_event_sev severity)
 	case RAS_SEV_ERROR:
 		return "ERROR";
 	case RAS_SEV_INFO:
+	default:
 		return "INFO";
 	}
-
-	return RAS_SEV_UNKNOWN_STR;
 }
 
 enum ras_event_type {
 	/* ANY is a special case to match all types */
 	RAS_TYPE_ANY	= 0,
-	RAS_TYPE_RANK_STATE_CHANGE,
-	RAS_TYPE_INFO_ONLY,
-	RAS_TYPE_POOL_SVC_CHANGE,
+	RAS_TYPE_STATE_CHANGE,
+	RAS_TYPE_INFO,
 };
 
 static inline char *
-ras_event_type_enum_to_name(enum ras_event_type type)
+ras_event_type2str(enum ras_event_type type)
 {
 	switch (type) {
-	case RAS_TYPE_RANK_STATE_CHANGE:
-		return "RANK_STATE_CHANGE";
-	case RAS_TYPE_INFO_ONLY:
-		return "INFO_ONLY";
-	case RAS_TYPE_POOL_SVC_CHANGE:
-		return "POOL_SVC_CHANGE";
+	case RAS_TYPE_STATE_CHANGE:
+		return "STATE_CHANGE";
+	case RAS_TYPE_INFO:
+	default:
+		return "INFO";
+	}
+}
+
+/**
+ * RAS event should be both printed to debug log and sent to the control
+ * plane.
+ * XXX: only print to stdout for now
+ */
+static inline void
+d_ras_raise(const char *id, enum ras_event_type type, enum ras_event_sev sev,
+	    char *hid, d_rank_t rank, char *jid, uuid_t puuid, uuid_t cuuid,
+	    daos_obj_id_t *oid, const char *cop, const char *msg,
+	    const char *data, ...)
+{
+	struct timeval	tv;
+	struct tm	*tm;
+	struct utsname	uts;
+	va_list		ap;
+
+	printf("&&& RAS EVENT id: [%s]", id);
+
+	/** print timestamp */
+	(void)gettimeofday(&tv, 0);
+	tm = localtime(&tv.tv_sec);
+	if (tm) {
+		printf(" ts: [%04d/%02d/%02d-%02d:%02d:%02d.%02ld]",
+		       tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
+		       tm->tm_hour, tm->tm_min, tm->tm_sec,
+		       (long int) tv.tv_usec / 10000);
 	}
 
-	return RAS_TYPE_UNKNOWN_STR;
+	/** XXX: nodename should be fetched only once and not on every call */
+	(void) uname(&uts);
+	printf(" host: [%s]", uts.nodename);
+
+	printf(" type: [%s] sev: [%s]", ras_event_type2str(type),
+	       ras_event_sev2str(sev));
+
+	if (hid)
+		printf(" hwid: [%s]", hid);
+
+	if (rank)
+		printf(" rank: [%u]", rank);
+
+	if (jid)
+		printf(" jobid: [%s]", jid);
+
+	if (!uuid_is_null(puuid))
+		printf(" puuid: ["DF_UUIDF"]", DP_UUID(puuid));
+
+	if (!uuid_is_null(cuuid))
+		printf(" cuuid: ["DF_UUIDF"]", DP_UUID(cuuid));
+
+	if (oid)
+		printf(" oid: ["DF_OID"]", DP_OID(*oid));
+
+	if (cop)
+		printf(" control_op: [%s]", cop);
+
+	/** print msg */
+	printf(" msg: [%s]", msg);
+
+	/** print data blob */
+	printf(" data: [");
+	va_start(ap, data);
+	vprintf(data, ap);
+	va_end(ap);
+	printf("]\n");
 }
-#endif /* __RAS_H_ */
+
+static inline void
+d_ras_raise_pool(const char *id, enum ras_event_type type,
+		 enum ras_event_sev sev, d_rank_t rank, uuid_t puuid,
+		 const char *cop, const char *msg, const char *data, ...)
+{
+	uuid_t	uuid;
+	va_list	ap;
+
+	uuid_clear(uuid);
+
+	va_start(ap, data);
+	d_ras_raise(id, type, sev, NULL, rank, NULL, puuid, NULL, NULL,
+		    NULL, msg, data, ap);
+	va_end(ap);
+}
+#endif /* __DAOS_RAS_H_ */
