@@ -2105,12 +2105,8 @@ agg_iv_ult(void *arg)
 	rc = ds_pool_iv_srv_hdl_fetch(agg_param->ap_pool_info.api_pool,
 				      &agg_param->ap_pool_info.api_poh_uuid,
 				      &agg_param->ap_pool_info.api_coh_uuid);
-	if (rc) {
-		D_ERROR("ds_pool_iv_srv_hdl_fetch failed: "DF_RC"\n",
-			DP_RC(rc));
+	if (rc)
 		goto out;
-	}
-
 
 	agg_param->ap_prop = daos_prop_alloc(0);
 	if (agg_param->ap_prop == NULL) {
