@@ -201,12 +201,11 @@ static void
 client_cb_common(const struct crt_cb_info *cb_info)
 {
 	crt_rpc_t			*rpc_req;
-	struct test_ping_check_in	*rpc_req_input;
-	struct test_ping_check_out	*rpc_req_output;
+	struct test_ping_check_in	*test_ping_rpc_req_input;
+	struct test_ping_check_out	*test_ping_rpc_req_output;
 
-	// crt_context_t		cr_ctx; /**< CRT context of the RPC */
-	// crt_endpoint_t		cr_ep; /**< endpoint ID */
-	// crt_opcode_t		cr_opc; /**< opcode of the RPC */
+	struct test_swim_status_in	*swim_status_rpc_req_input;
+	struct test_swim_status_out *swim_status_rpc_req_output;
 
 	rpc_req = cb_info->cci_rpc;
 
@@ -216,27 +215,48 @@ client_cb_common(const struct crt_cb_info *cb_info)
 
 	switch (cb_info->cci_rpc->cr_opc) {
 	case TEST_OPC_CHECKIN:
-		rpc_req_input = crt_req_get(rpc_req);
-		if (rpc_req_input == NULL) {
+		test_ping_rpc_req_input = crt_req_get(rpc_req);
+		if (test_ping_rpc_req_input == NULL) {
 			return;
     }
-		rpc_req_output = crt_reply_get(rpc_req);
-		if (rpc_req_output == NULL) {
+		test_ping_rpc_req_output = crt_reply_get(rpc_req);
+		if (test_ping_rpc_req_output == NULL) {
 			return;
     }
 		if (cb_info->cci_rc != 0) {
 			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
 				rpc_req->cr_opc, cb_info->cci_rc);
-			D_FREE(rpc_req_input->name);
+			D_FREE(test_ping_rpc_req_input->name);
 			break;
 		}
 		DBG_PRINT("%s checkin result - ret: %d, room_no: %d, "
 		       "bool_val %d.\n",
-		       rpc_req_input->name, rpc_req_output->ret,
-		       rpc_req_output->room_no, rpc_req_output->bool_val);
-		D_FREE(rpc_req_input->name);
+		       test_ping_rpc_req_input->name, test_ping_rpc_req_output->ret,
+		       test_ping_rpc_req_output->room_no, test_ping_rpc_req_output->bool_val);
+		D_FREE(test_ping_rpc_req_input->name);
 		sem_post(&test_g.t_token_to_proceed);
-		D_ASSERT(rpc_req_output->bool_val == true);
+		D_ASSERT(test_ping_rpc_req_output->bool_val == true);
+		break;
+	case TEST_OPC_SWIM_STATUS:
+		swim_status_rpc_req_input = crt_req_get(rpc_req);
+		if (swim_status_rpc_req_input == NULL) {
+			return;
+    }
+		swim_status_rpc_req_output = crt_reply_get(rpc_req);
+		if (swim_status_rpc_req_output == NULL) {
+			return;
+    }
+		if (cb_info->cci_rc != 0) {
+			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
+				rpc_req->cr_opc, cb_info->cci_rc);
+			break;
+		}
+		DBG_PRINT("swim_status result - rank: %d, exp_status: %d, "
+		       "result: %d.\n",
+		       swim_status_rpc_req_input->rank, swim_status_rpc_req_input->exp_status,
+           swim_status_rpc_req_output->bool_val);
+		sem_post(&test_g.t_token_to_proceed);
+		D_ASSERT(swim_status_rpc_req_output->bool_val == true);
 		break;
 	case TEST_OPC_SHUTDOWN:
 		DBG_PRINT("Received TEST_OPC_SHUTDOWN.\n");
