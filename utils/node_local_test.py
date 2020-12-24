@@ -1514,7 +1514,7 @@ class AllocFailTestRun():
             self.fault_injected = True
         except NLTestNoFi:
             # If a fault wasn't injected then check output is as expected.
-            # It's not possible to log these as warnings, becuase there is
+            # It's not possible to log these as warnings, because there is
             # no src line to log them against, so simply assert.
             assert self.returncode == 0
             assert self.stderr == b''
@@ -1532,14 +1532,14 @@ class AllocFailTestRun():
             if self.stdout != self.aft.expected_stdout:
                 self.aft.conf.wf.add(self.fi_loc,
                                      'NORMAL',
-                                     "Incorrect stdout '{}'".format(stderr),
+                                     "Incorrect stdout '{}'".format(self.stdout),
                                      mtype='Out of memory caused zero exit code with incorrect output')
 
         stderr = self.stderr.decode('utf-8').rstrip()
         if not stderr.endswith("Out of memory (-1009)") and \
            'error parsing command line arguments' not in stderr and \
            self.stdout != self.aft.expected_stdout:
-            if stdout != '':
+            if self.stdout != b'':
                 print(self.aft.expected_stdout)
                 print()
                 print(self.stdout)
