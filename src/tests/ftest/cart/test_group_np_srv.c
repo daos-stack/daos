@@ -39,18 +39,40 @@ typedef void
 (*crt_event_cb) (d_rank_t rank, enum crt_event_source src,
    enum crt_event_type type, void *arg);
 
-bool rank_to_shutdown_got_CRT_EVT_DEAD = false;
-
 // Callback to process a SWIM message
 static void
 swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
        enum crt_event_type type, void *arg)
 {
+
+		// Example output for SWIM CRT_EVT_DEAD on rank #2:
+		// rank = 2, crt_event_source = 1, crt_event_type = 1
+
+		/* enum crt_event_type {
+		 * 	CRT_EVT_ALIVE,
+		 * 	CRT_EVT_DEAD,
+		 * };
+		 * enum crt_event_source {
+		 * 	CRT_EVS_UNKNOWN,
+		 * 	CRT_EVS_SWIM,
+		 * };
+		 */
+
 		DBG_PRINT("Cart callback event: "
 			"rank = %d, "
 			"crt_event_source = %d, "
 			"crt_event_type = %d\n",
 			 rank, src, type);
+
+		if (src == 1) {
+			swim_status_by_rank[rank] = type;
+		}
+
+		int i = 0;
+		for (i = 0; i < 10; i++) {
+			DBG_PRINT("Cart swim callback event: swim_status_by_rank[%d] = %d\n", i, swim_status_by_rank[i]);
+		}
+
 		return;
 }
 

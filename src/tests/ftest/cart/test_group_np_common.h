@@ -130,6 +130,9 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 		   room_no: %d.\n", e_reply->ret, e_reply->room_no);
 }
 
+// Keep a table of whether each rank is alive (0) or dead (1)
+static int swim_status_by_rank[256];
+
 static void
 test_swim_status_handler(crt_rpc_t *rpc_req)
 {
@@ -143,7 +146,13 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 
 	DBG_PRINT("tier1 test_server recv'd swim_status, opc: %#x.\n",
 		   rpc_req->cr_opc);
-  DBG_PRINT("tier1 swim_status input - rank: %d.\n", e_req->rank);
+  DBG_PRINT("tier1 swim_status input - rank: %d, exp_status: %d.\n",
+       e_req->rank, e_req->exp_status);
+
+	D_ASSERTF(swim_status_by_rank[e_req->rank] == e_req->exp_status,
+       "Unexpected SWIM status.\n");
+	DBG_PRINT("Rank [%d] is in SWIM state [%d], as expected.\n",
+       e_req->rank, e_req->exp_status);
 
 	e_reply = crt_reply_get(rpc_req);
 	D_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
@@ -152,7 +161,8 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 
-	DBG_PRINT("tier1 test_srver sent swim_status reply, status: %d.\n", e_reply->status);
+	DBG_PRINT("tier1 test_srver sent swim_status reply, e_reply->bool_val: %d.\n",
+      e_reply->bool_val);
 }
 
 static void
@@ -412,7 +422,23 @@ parse_verify_swim_status_arg (char * source)
             ss.rank = atoi(cursorCopy + groupArray[g].rm_so);
           }
           if (g == 2) {
-            strcpy(ss.swim_status, cursorCopy + groupArray[g].rm_so);
+
+            char exp_status[8];
+            strcpy(exp_status, cursorCopy + groupArray[g].rm_so);
+
+            /* "d(ead)?"=1, a(live)?=0 as specified in crt_event_type:
+             *
+             * src/include/cart/api.h
+             * enum crt_event_type {
+             *    CRT_EVT_ALIVE,
+             *    CRT_EVT_DEAD,
+             * };
+             */
+            ss.swim_status = 0;
+            if (tolower(exp_status[0]) == 'd') {
+              ss.swim_status = 1;
+            }
+
           }
       }
       cursor += offset;
@@ -452,7 +478,11 @@ test_parse_args(int argc, char **argv)
   // Default to a non-existent, invalid rank
 	test_g.t_shutdown_rank = -1;
 	test_g.t_get_swim_status = false;
-	test_g.t_verify_swim_status = (struct t_swim_status){ -1, "a" };
+
+  // Default value: non-existent rank with status "alive"
+	test_g.t_verify_swim_status = (struct t_swim_status){ -1, 0 };
+
+  struct t_swim_status vss;
 
 	while (1) {
 		rc = getopt_long(argc, argv, "n:a:c:h:u:r:", long_options,
@@ -504,7 +534,11 @@ test_parse_args(int argc, char **argv)
 			test_g.t_shutdown_rank = atoi(optarg);
 			break;
 		case 'v':
-			test_g.t_verify_swim_status = parse_verify_swim_status_arg(optarg);
+
+      vss = parse_verify_swim_status_arg(optarg);
+      test_g.t_verify_swim_status.rank = vss.rank;
+      test_g.t_verify_swim_status.swim_status = vss.swim_status;
+
 			break;
 		case 'g':
 			test_g.t_get_swim_status = true;
