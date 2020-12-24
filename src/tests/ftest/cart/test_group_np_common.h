@@ -32,10 +32,11 @@
 #define TEST_GROUP_VER           0
 
 #include <regex.h>
+#include <ctype.h>
 
 struct t_swim_status {
   int rank;
-  char swim_status[8];
+  int swim_status;
 };
 
 struct test_t {
@@ -81,10 +82,11 @@ CRT_RPC_DEFINE(test_ping_check,
 		CRT_ISEQ_TEST_PING_CHECK, CRT_OSEQ_TEST_PING_CHECK)
 
 #define CRT_ISEQ_TEST_SWIM_STATUS /* input fields */		 \
-	((uint32_t)		(rank)			CRT_VAR)
+	((uint32_t)		(rank)			CRT_VAR) \
+	((uint32_t)		(exp_status)			CRT_VAR)
 
 #define CRT_OSEQ_TEST_SWIM_STATUS /* output fields */		 \
-	((int32_t)		(status)			CRT_VAR)
+	((uint32_t)		(bool_val)			CRT_VAR)
 
 CRT_RPC_DECLARE(test_swim_status,
 		CRT_ISEQ_TEST_SWIM_STATUS, CRT_OSEQ_TEST_SWIM_STATUS)
