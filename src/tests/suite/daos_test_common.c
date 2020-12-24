@@ -843,7 +843,7 @@ daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 	int		rc;
 
 	/* build and invoke dmg cmd */
-	dts_create_config(dmg_cmd, "dmg pool %s -i --pool=%s --rank=%d",
+	dts_create_config(dmg_cmd, "dmg pool %s -i --pool=" DF_UUIDF " --rank=%d",
 			  sub_cmd, DP_UUID(pool_uuid), rank);
 
 	if (tgt_idx != -1)

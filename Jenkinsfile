@@ -151,7 +151,8 @@ String unit_packages() {
                            'spdk-devel libfabric-devel '+
                            'pmix numactl-devel ' +
                            'libipmctl-devel python36-pyxattr ' +
-                           'python36-tabulate numactl'
+                           'python36-tabulate numactl ' +
+                           'valgrind-devel'
         if (need_qb) {
             // TODO: these should be gotten from the Requires: of RPM
             packages += " spdk-tools mercury-2.0.0~rc1" +
