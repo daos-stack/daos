@@ -30,6 +30,7 @@
 #include <assert.h>
 #include <getopt.h>
 #include <semaphore.h>
+#include <ctype.h>
 
 #include "tests_common.h"
 #include "test_group_rpc.h"
@@ -53,12 +54,25 @@ send_rpc_shutdown(crt_endpoint_t server_ep, crt_rpc_t* rpc_req) {
 
 int
 send_rpc_swim_check(crt_endpoint_t server_ep, crt_rpc_t* rpc_req) {
+
+	struct test_swim_status_in	*rpc_req_input;
+	//struct test_swim_status_out	*rpc_req_output;
+
   int rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
           CRT_PROTO_OPC(TEST_GROUP_BASE,
           TEST_GROUP_VER, 2), &rpc_req);
   D_ASSERTF(rc == 0 && rpc_req != NULL,
       "crt_req_create() failed. "
       "rc: %d, rpc_req: %p\n", rc, rpc_req);
+
+	rpc_req_input = crt_req_get(rpc_req);
+	D_ASSERTF(rpc_req_input != NULL, "crt_req_get() failed."
+			" rpc_req_input: %p\n", rpc_req_input);
+
+  // Set rank and expected swim status based on CLI options
+	rpc_req_input->rank = test_g.t_verify_swim_status.rank;
+	rpc_req_input->exp_status = test_g.t_verify_swim_status.swim_status;
+
   rc = crt_req_send(rpc_req, client_cb_common, NULL);
   D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
