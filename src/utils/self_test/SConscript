@@ -58,10 +58,14 @@ def scons():
     #self_test = daos_build.program(tenv, SELF_TEST)
 
     self_test_tenv = tenv.Clone()
+    print "CCFags is:", self_test_tenv['CCFLAGS']
     new_CCFLAGS = filter(remove_certain_gcc_flags, self_test_tenv['CCFLAGS'])
     self_test_tenv['CCFLAGS'] = new_CCFLAGS
+    self_test_tenv.AppendUnique(CCFLAGS=['-Dfoobar'])
+    print "NEW CCFags is:", self_test_tenv['CCFLAGS']
 
-    self_test = daos_build.program(self_test_tenv, [SELF_TEST, LIB_CONFIG_INI])
+    #self_test = daos_build.program(self_test_tenv, [SELF_TEST, LIB_CONFIG_INI])
+    self_test = daos_build.program(self_test_tenv, [LIB_CONFIG_INI, SELF_TEST])
     self_test_tenv.Requires(self_test, [cart_lib, gurt_lib])
     self_test_tenv.Install(os.path.join("$PREFIX", 'bin'), self_test)
     self_test_tenv.Install(os.path.join("$PREFIX", 'etc'), LIB_CONFIG_CNF)
