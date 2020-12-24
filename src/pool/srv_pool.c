@@ -3219,9 +3219,10 @@ rechoose:
 	rc = out->pto_op.po_rc;
 	if (rc != 0) {
 		D_ERROR(DF_UUID": Failed to set targets to %s state: "DF_RC"\n",
+			DP_UUID(pool_uuid),
 			state == PO_COMP_ST_DOWN ? "DOWN" :
 			state == PO_COMP_ST_UP ? "UP" : "UNKNOWN",
-			DP_UUID(pool_uuid), DP_RC(rc));
+			DP_RC(rc));
 		D_GOTO(out_rpc, rc);
 	}
 
