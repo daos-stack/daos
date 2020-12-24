@@ -1435,19 +1435,20 @@ class AllocFailTestRun():
     def start(self):
         """Start the command"""
         fc = {}
-        fc['fault_config'] = [{'id': 0,
-                               'probability_x': 1,
-                               'probability_y': 1,
-                               'interval': self.loc,
-                               'max_faults': 1}]
+        if self.loc:
+            fc['fault_config'] = [{'id': 0,
+                                   'probability_x': 1,
+                                   'probability_y': 1,
+                                   'interval': self.loc,
+                                   'max_faults': 1}]
 
-        self._fi_file = tempfile.NamedTemporaryFile(prefix='fi_',
-                                                    suffix='.yaml')
+            self._fi_file = tempfile.NamedTemporaryFile(prefix='fi_',
+                                                        suffix='.yaml')
 
-        self._fi_file.write(yaml.dump(fc, encoding='utf=8'))
-        self._fi_file.flush()
+            self._fi_file.write(yaml.dump(fc, encoding='utf=8'))
+            self._fi_file.flush()
 
-        self.env['D_FI_CONFIG'] = self._fi_file.name
+            self.env['D_FI_CONFIG'] = self._fi_file.name
 
         if self.vh:
             exec_cmd = self.vh.get_cmd_prefix()
@@ -1512,24 +1513,36 @@ class AllocFailTestRun():
                                    fi_signal=fi_signal)
             self.fault_injected = True
         except NLTestNoFi:
+            # If a fault wasn't injected then check output is as expected.
+            # It's not possible to log these as warnings, becuase there is
+            # no src line to log them against, so simply assert.
+            assert self.returncode == 0
+            assert self.stderr == b''
+            if self.aft.expected_stdout is not None:
+                assert self.stdout == self.aft.expected_stdout
             self.fault_injected = False
         if self.vh:
             self.vh.convert_xml()
-
         if not self.fault_injected:
             return
         if not self.aft.check_stderr:
             return
 
+        if self.returncode == 0:
+            if self.stdout != self.aft.expected_stdout:
+                self.aft.conf.wf.add(self.fi_loc,
+                                     'NORMAL',
+                                     "Incorrect stdout '{}'".format(stderr),
+                                     mtype='Out of memory caused zero exit code with incorrect output')
+
         stderr = self.stderr.decode('utf-8').rstrip()
-        stdout = self.stdout.decode('utf-8').rstrip()
         if not stderr.endswith("Out of memory (-1009)") and \
            'error parsing command line arguments' not in stderr and \
-           stdout != self.aft.expected_stdout:
+           self.stdout != self.aft.expected_stdout:
             if stdout != '':
                 print(self.aft.expected_stdout)
                 print()
-                print(stdout)
+                print(self.stdout)
                 print()
             self.aft.conf.wf.add(self.fi_loc,
                                  'NORMAL',
@@ -1544,11 +1557,24 @@ class AllocFailTest():
         self.cmd = cmd
         self.prefix = True
         self.check_stderr = False
-        self.expected_stdout = ''
+        self.expected_stdout = None
         self.use_il = False
 
     def launch(self):
         """Run all tests for this command"""
+
+        def _prep(self):
+            rc = self._run_cmd(None)
+            rc.wait()
+            self.expected_stdout = rc.stdout
+            assert not rc.fault_injected
+
+        # Prep what the expected stdout is by running once without faults
+        # enabled.
+        _prep(self)
+
+        print('Expected stdout is')
+        print(self.expected_stdout)
 
         num_cores = len(os.sched_getaffinity(0))
 
@@ -1677,7 +1703,7 @@ def test_alloc_fail(server, conf):
 
     # Create at least one container, and record what the output should be when
     # the command works.
-    test_cmd.expected_stdout = show_cont(conf, pool)
+    show_cont(conf, pool)
     test_cmd.check_stderr = True
 
     return test_cmd.launch()
