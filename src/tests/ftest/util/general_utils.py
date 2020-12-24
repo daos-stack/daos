@@ -737,6 +737,110 @@ def get_job_manager_class(name, job=None, subprocess=False, mpi="openmpi"):
     manager_class = get_module_class(name, "job_manager_utils")
     if name == "Mpirun":
         manager = manager_class(job, subprocess=subprocess, mpitype=mpi)
+    elif name == "Systemctl":
+        manager = manager_class(job)
     else:
         manager = manager_class(job, subprocess=subprocess)
     return manager
+
+
+def convert_string(item):
+    """Convert the object into a string.
+
+    If the object is a list, tuple, NodeSet, etc. return a comma-separated
+    string of the values.
+
+    Returns:
+        str: item to convert into a string
+
+    """
+    if isinstance(item, (list, tuple)):
+        item = convert_list(item)
+    elif not isinstance(item, str):
+        item = str(item)
+    return item
+
+
+def create_directory(hosts, directory, timeout=10, verbose=True,
+                     raise_exception=True):
+    """Create the specified directory on the specified hosts.
+
+    Args:
+        hosts (list): hosts on which to create the directory
+        directory (str): the directory to create
+        timeout (int, optional): command timeout. Defaults to 10 seconds.
+        verbose (bool, optional): whether to log the command run and
+            stdout/stderr. Defaults to True.
+        raise_exception (bool, optional): whether to raise an exception if the
+            command returns a non-zero exit status. Defaults to True.
+
+    Raises:
+        DaosTestError: if there is an error running the command
+
+    Returns:
+        CmdResult: an avocado.utils.process CmdResult object containing the
+            result of the command execution.  A CmdResult object has the
+            following properties:
+                command         - command string
+                exit_status     - exit_status of the command
+                stdout          - the stdout
+                stderr          - the stderr
+                duration        - command execution time
+                interrupted     - whether the command completed within timeout
+                pid             - command's pid
+
+    """
+    hosts = convert_string(hosts)
+    return run_command(
+        "clush -S -v -w {} /usr/bin/mkdir -p {}".format(hosts, directory),
+        timeout=timeout, verbose=verbose, raise_exception=raise_exception)
+
+
+def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
+                     verbose=True, raise_exception=True, sudo=False):
+    """Copy the source to the destination on each of the specified hosts.
+
+    Optionally (by default) ensure the destination directory exists on each of
+    the specified hosts prior to copying the source.
+
+    Args:
+        hosts (list): hosts on which to copy the source
+        source (str): the file to copy to the hosts
+        destination (str): the host location in which to copy the source
+        mkdir (bool, optional): whether or not to ensure the destination
+            directory exists on hosts prior to copying the source. Defaults to
+            True.
+        timeout (int, optional): command timeout. Defaults to 60 seconds.
+        verbose (bool, optional): whether to log the command run and
+            stdout/stderr. Defaults to True.
+        raise_exception (bool, optional): whether to raise an exception if the
+            command returns a non-zero exit status. Defaults to True.
+        sudo (bool, optional): whether to run the command via sudo. Defaults to
+            False.
+
+    Raises:
+        DaosTestError: if there is an error running the command
+
+    Returns:
+        CmdResult: an avocado.utils.process CmdResult object containing the
+            result of the command execution.  A CmdResult object has the
+            following properties:
+                command         - command string
+                exit_status     - exit_status of the command
+                stdout          - the stdout
+                stderr          - the stderr
+                duration        - command execution time
+                interrupted     - whether the command completed within timeout
+                pid             - command's pid
+
+    """
+    result = None
+    hosts = convert_string(hosts)
+    if mkdir:
+        result = create_directory(hosts, os.path.dirname(destination))
+    if result is None or result.exit_status == 0:
+        result = run_command(
+            "{}clush -S -v -w {} --copy {} --dest {}".format(
+                "sudo " if sudo else "", hosts, source, destination),
+            timeout=timeout, verbose=verbose, raise_exception=raise_exception)
+    return result

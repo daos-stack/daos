@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+# pylint: disable=too-many-lines
 from logging import getLogger
 import re
 import time
@@ -33,7 +34,8 @@ from command_utils_base import \
     CommandFailure, BasicParameter, ObjectWithParameters, \
     CommandWithParameters, YamlParameters, EnvironmentVariables, LogParameter
 from general_utils import check_file_exists, stop_processes, get_log_file, \
-    run_command, DaosTestError, get_job_manager_class
+    run_command, DaosTestError, get_job_manager_class, create_directory, \
+    distribute_files
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -211,10 +213,13 @@ class ExecutableCommand(CommandWithParameters):
                 self._process.send_signal(signal_to_send)
                 if signal_list:
                     start = time.time()
-                    while self._process._popen.poll() is None and time.time() - start < 5:
+                    elapsed = 0
+                    # pylint: disable=protected-access
+                    while self._process._popen.poll() is None and elapsed < 5:
                         time.sleep(0.01)
-                    elapsed = time.time() - start
-                    self.log.info('Waited %.2f, saved %.2f', elapsed, 5 - elapsed)
+                        elapsed = time.time() - start
+                    self.log.info(
+                        "Waited %.2f, saved %.2f", elapsed, 5 - elapsed)
 
             if not signal_list:
                 if state and (len(state) > 1 or state[0] not in ("D", "Z")):
@@ -691,6 +696,22 @@ class YamlCommand(SubProcessCommand):
         # Command configuration yaml file
         self.yaml = yaml_cfg
 
+        # Optional attribute used to define a location where the configuration
+        # file data will be written prior to copying the file to the hosts using
+        # the assigned filename
+        self.temporary_file = None
+        self.temporary_file_hosts = None
+
+    @property
+    def service_name(self):
+        """Get the systemctl service name for this command.
+
+        Returns:
+            str: systemctl service name
+
+        """
+        return ".".join((self._command, "service"))
+
     def get_params(self, test):
         """Get values for the daos command and its yaml config file.
 
@@ -708,9 +729,16 @@ class YamlCommand(SubProcessCommand):
         yaml file parameters have been defined.  Any updates to the yaml file
         parameter definitions would require calling this method before calling
         the daos command in order for them to have any effect.
+
+        Raises:
+            CommandFailure: if there is an error copying the configuration file.
+                Can only be raised if the self.temporary_file and
+                self.temporary_file_hosts attributes are defined.
+
         """
         if isinstance(self.yaml, YamlParameters):
-            self.yaml.create_yaml()
+            self.yaml.create_yaml(self.temporary_file)
+            self.copy_configuration()
 
     def set_config_value(self, name, value):
         """Set the yaml configuration parameter value.
@@ -772,33 +800,58 @@ class YamlCommand(SubProcessCommand):
             source (str): source of the certificate files.
             hosts (list): list of the destination hosts.
         """
+        names = set()
         yaml = self.yaml
         while isinstance(yaml, YamlParameters):
             if hasattr(yaml, "get_certificate_data"):
+                self.log.debug("Copying certificates for %s:", self._command)
                 data = yaml.get_certificate_data(
                     yaml.get_attribute_names(LogParameter))
                 for name in data:
-                    run_command(
-                        "clush -S -v -w {} /usr/bin/mkdir -p {}".format(
-                            ",".join(hosts), name),
-                        verbose=False)
+                    create_directory(
+                        hosts, name, verbose=False, raise_exception=False)
                     for file_name in data[name]:
                         src_file = os.path.join(source, file_name)
                         dst_file = os.path.join(name, file_name)
-                        result = run_command(
-                            "clush -S -v -w {} --copy {} --dest {}".format(
-                                ",".join(hosts), src_file, dst_file),
-                            raise_exception=False, verbose=False)
+                        self.log.debug("  %s -> %s", src_file, dst_file)
+                        result = distribute_files(
+                            hosts, src_file, dst_file, mkdir=False,
+                            verbose=False, raise_exception=False)
                         if result.exit_status != 0:
                             self.log.info(
-                                "WARNING: failure copying '%s' to '%s' on %s",
-                                src_file, dst_file, hosts)
-
-                    # debug to list copy of cert files
-                    run_command(
-                        "clush -S -v -w {} /usr/bin/ls -la {}".format(
-                            ",".join(hosts), name))
+                                "    WARNING: %s copy failed on %s",
+                                dst_file, hosts)
+                    names.add(name)
             yaml = yaml.other_params
+
+        # debug to list copy of cert files
+        self.log.debug("Copied certificates for %s:", self._command)
+        result = run_command(
+            "clush -S -v -w {} /usr/bin/ls -la {}".format(
+                ",".join(hosts), " ".join(names)), verbose=False)
+        for line in result.stdout.splitlines():
+            self.log.debug("  %s", line)
+
+    def copy_configuration(self):
+        """Copy the yaml configuration file to the hosts.
+
+        If defined self.temporary_file is copied to each self.hosts using the
+        path/file specified by the YamlParameters.filename.
+
+        Raises:
+            CommandFailure: if there is an error copying the configuration file
+
+        """
+        if isinstance(self.yaml, YamlParameters):
+            if self.temporary_file and self.temporary_file_hosts:
+                try:
+                    distribute_files(
+                        self.temporary_file_hosts, self.temporary_file,
+                        self.yaml.filename, verbose=False)
+                except DaosTestError as error:
+                    raise CommandFailure(
+                        "ERROR: Copying yaml configuration file to {}: "
+                        "{}".format(self.temporary_file_hosts, error))
 
 
 class SubprocessManager(object):
@@ -883,6 +936,7 @@ class SubprocessManager(object):
 
         """
         # Create the yaml file for the daos command
+        self.manager.job.temporary_file_hosts = self._hosts
         self.manager.job.create_yaml_file()
 
         # Start the daos command
@@ -970,3 +1024,15 @@ class SubprocessManager(object):
 
         """
         return self.get_config_value("socket_dir")
+
+
+class SystemctlCommand(ExecutableCommand):
+    # pylint: disable=too-few-public-methods
+    """Defines an object representing the systemctl command."""
+
+    def __init__(self):
+        """Create a SystemctlCommand object."""
+        super(SystemctlCommand, self).__init__("/run/systemctl/*", "systemctl")
+
+        self.unit_command = BasicParameter(None)
+        self.service = BasicParameter(None)

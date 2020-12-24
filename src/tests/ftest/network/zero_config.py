@@ -190,8 +190,7 @@ class ZeroConfigTest(TestWithServers):
         exp_iface = random.choice(dev_info.keys())
 
         # Configure the daos server
-        config_file = self.get_config_file(self.server_group, "server")
-        self.add_server_manager(config_file)
+        self.add_server_manager()
         self.configure_manager(
             "server",
             self.server_managers[0],

@@ -41,6 +41,8 @@ from xml.dom import minidom
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
+from util.general_utils import stop_processes
+
 try:
     # For python versions >= 3.2
     from tempfile import TemporaryDirectory
@@ -290,6 +292,7 @@ def get_output(cmd, check=True):
 
     Returns:
         str: command output
+
     """
     try:
         stdout = run_command(cmd)
@@ -863,6 +866,7 @@ def run_tests(test_files, tag_filter, args):
             test_command_list.extend([
                 "--mux-yaml", test_file["yaml"], "--", test_file["py"]])
             return_code |= time_command(test_command_list)
+            return_code |= stop_daos_processes(test_file["py"], args)
 
             # Optionally store all of the server and client config files
             # and archive remote logs and report big log files, if any.
@@ -1407,6 +1411,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
     Returns:
         bool: True if everything was done as expected, False if there were
               any issues processing core files
+
     """
     import fnmatch  # pylint: disable=import-outside-toplevel
 
@@ -1530,6 +1535,26 @@ def get_test_category(test_file):
     file_parts = os.path.split(test_file)
     return "-".join(
         [os.path.splitext(os.path.basename(part))[0] for part in file_parts])
+
+
+def stop_daos_processes(test_file, args):
+    """Stop any daos processes running on the hosts running servers.
+
+    Args:
+        test_file (str): the test python file
+        args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        int: status code: 0 = success, 512 = failure
+
+    """
+    status = 0
+    host_list = list(args.test_servers)
+    print("Stopping daos servers after running '{}'".format(test_file))
+    result = stop_processes(host_list, "daos_server|daos_io_server", False)
+    if 0 not in result or len(result) > 1:
+        status = 512
+    return status
 
 
 def main():

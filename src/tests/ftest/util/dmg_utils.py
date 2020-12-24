@@ -486,8 +486,7 @@ class DmgCommand(DmgCommandBase):
             r"\s*(\d+)|(?:(?:SCM:|NVMe:)\s+Total\s+size:\s+([0-9.]+\s+[A-Z]+)"
             r"\s+Free:\s+([0-9.]+\s+[A-Z]+),\smin:([0-9.]+\s+[A-Z]+),"
             r"\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"
-            r"|Rebuild\s+(\w+),\s+(?:rc=)?(\d+)(?:\s+\w+)?,"
-            r"\s+(?:status=-)?(\d+)(?:\s+\w+)?)",
+            r"|Rebuild\s+(\w+),\s+([0-9]+)\s+objs,\s+([0-9]+)\s+recs)",
             self.result.stdout)
         if match:
             # Mapping of the pool data entries to the match[0] indices
@@ -789,19 +788,23 @@ class DmgCommand(DmgCommandBase):
             # Process the unique single rank system query output, e.g.
             #   Rank 1
             #   ------
-            #   address : 10.8.1.11:10001
-            #   uuid    : d7a69a41-59a2-4dec-a620-a52217851285
-            #   status  : Joined
-            #   reason  :
+            #   address      : 10.8.1.68:10001
+            #   uuid         : bcc5b010-1ffa-4525-96a9-11f1904374d6
+            #   fault domain : /wolf-68.wolf.hpdd.intel.com
+            #   status       : Joined
+            #   reason       :
             match = re.findall(
-                r"(?:Rank|address\s+:|uuid\s+:|status\s+:|reason\s+:)\s+(.*)",
+                r"(?:Rank|address\s+:|uuid\s+:|domain\s+:|status\s+:|"
+                r"reason\s+:)\s+(.*)",
                 self.result.stdout)
             if match:
+                print("--- match: {}".format(match))
                 data[int(match[0])] = {
                     "address": match[1].strip(),
                     "uuid": match[2].strip(),
-                    "state": match[3].strip(),
-                    "reason": match[4].strip(),
+                    "domain": match[3].strip(),
+                    "state": match[4].strip(),
+                    "reason": match[5].strip(),
                 }
         elif verbose:
             # Process the verbose multiple rank system query output, e.g.

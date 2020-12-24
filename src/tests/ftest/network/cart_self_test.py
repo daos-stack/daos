@@ -75,8 +75,7 @@ class CartSelfTest(TestWithServers):
         share_addr = self.params.get("share_addr", "/run/test_params/*")
 
         # Configure the daos server
-        config_file = self.get_config_file(self.server_group, "server")
-        self.add_server_manager(config_file)
+        self.add_server_manager()
         self.configure_manager(
             "server",
             self.server_managers[-1],

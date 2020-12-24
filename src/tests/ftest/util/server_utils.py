@@ -27,10 +27,14 @@ import socket
 import time
 
 from command_utils_base import \
-    CommandFailure, FormattedParameter, YamlParameters, CommandWithParameters
+    CommandFailure, FormattedParameter, YamlParameters, CommandWithParameters, \
+    CommonConfig
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human
 from dmg_utils import DmgCommand
+from server_utils_params import \
+    DaosServerTransportCredentials, DaosServerYamlParameters
+from dmg_utils_params import DmgTransportCredentials, DmgYamlParameters
 
 
 class ServerFailed(Exception):
@@ -43,6 +47,8 @@ class DaosServerCommand(YamlCommand):
     NORMAL_PATTERN = "DAOS I/O server.*started"
     FORMAT_PATTERN = "(SCM format required)(?!;)"
     REFORMAT_PATTERN = "Metadata format required"
+
+    DEFAULT_CONFIG_FILE = os.path.join(os.sep, "etc", "daos", "daos_server.yml")
 
     def __init__(self, path="", yaml_cfg=None, timeout=30):
         """Create a daos_server command object.
@@ -297,23 +303,87 @@ class DaosServerManager(SubprocessManager):
         "OFI_PORT": "fabric_iface_port",
     }
 
-    def __init__(self, server_command, manager="Orterun", dmg_cfg=None):
+    def __init__(self, group, cert_dir, bin_dir,
+                 svr_config_file, dmg_config_file,
+                 svr_config_temp=None, dmg_config_temp=None,
+                 manager="Orterun"):
         """Initialize a DaosServerManager object.
 
         Args:
-            server_command (ServerCommand): server command object
+            group (str): [description]
+            certificate_dir (str): [description]
+            binary_dir (str): [description]
+            svr_config_file (str): [description]
+            dmg_config_file (str): [description]
+            svr_config_temp (str, optional): [description]. Defaults to None.
+            dmg_config_temp (str, optional): [description]. Defaults to None.
             manager (str, optional): the name of the JobManager class used to
                 manage the YamlCommand defined through the "job" attribute.
                 Defaults to "OpenMpi".
-            dmg_cfg (DmgYamlParameters, optional): The dmg configuration
-                file parameters used to connect to this group of servers.
         """
+        server_command = self.get_job(
+            group, cert_dir, bin_dir, svr_config_file, svr_config_temp)
         super(DaosServerManager, self).__init__(server_command, manager)
         self.manager.job.sub_command_override = "start"
 
         # Dmg command to access this group of servers which will be configured
         # to access the daos_servers when they are started
-        self.dmg = DmgCommand(self.manager.job.command_path, dmg_cfg)
+        self.dmg = self.get_dmg(
+            group, cert_dir, bin_dir, dmg_config_file, dmg_config_temp)
+
+    @staticmethod
+    def get_job(group, cert_dir, bin_dir, config_file, config_temp=None):
+        """Get the daos_server command object to manage.
+
+        Args:
+            test (str): test name
+            group (str): daos_server group name
+            cert_dir (str): directory in which to copy certificates
+            bin_dir (str): location of the daos_server executable
+            config_file (str): configuration file name and path
+            config_temp (str, optional): file name and path to use to generate
+                the configuration file locally and then copy it to all the hosts
+                using the config_file specification. Defaults to None, which
+                creates and utilizes the file specified by config_file.
+
+        Returns:
+            DaosServerCommand: the daos_server command object
+
+        """
+        transport_config = DaosServerTransportCredentials(cert_dir)
+        common_config = CommonConfig(group, transport_config)
+        config = DaosServerYamlParameters(config_file, common_config)
+        command = DaosServerCommand(bin_dir, config)
+        if config_temp:
+            # Setup the DaosServerCommand to write the config file data to the
+            # temporary file and then copy the file to all the hosts using the
+            # assigned filename
+            command.yaml.temporary_file = config_temp
+        return command
+
+    @staticmethod
+    def get_dmg(group, cert_dir, bin_dir, config_file, config_temp=None):
+        """Get a dmg command object.
+
+        Args:
+            group (str): daos_server group name
+            cert_dir (str): directory in which to copy certificates
+            bin_dir (str): location of the dmg executable
+            work_dir (str): writable location in which to create the config file
+
+        Returns:
+            DmgCommand: the dmg command object
+
+        """
+        transport_config = DmgTransportCredentials(cert_dir)
+        config = DmgYamlParameters(config_file, group, transport_config)
+        command = DmgCommand(bin_dir, config)
+        if config_temp:
+            # Setup the DaosServerCommand to write the config file data to the
+            # temporary file and then copy the file to all the hosts using the
+            # assigned filename
+            command.yaml.temporary_file = config_temp
+        return command
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -328,11 +398,17 @@ class DaosServerManager(SubprocessManager):
         # Get the values for the dmg parameters
         self.dmg.get_params(test)
 
+    def prepare_dmg_certificates(self):
+        """Set up dmg certificates."""
+        local_host = socket.gethostname().split('.', 1)[0]
+        self.dmg.copy_certificates(
+            get_log_file("daosCA/certs"), local_host.split())
+
     def prepare(self, storage=True):
         """Prepare to start daos_server.
 
         Args:
-            storage (bool, optional): whether or not to prepare dspm/nvme
+            storage (bool, optional): whether or not to prepare dcpm/nvme
                 storage. Defaults to True.
         """
         self.log.info(
@@ -340,14 +416,13 @@ class DaosServerManager(SubprocessManager):
             self._hosts, self.manager.command)
 
         # Create the daos_server yaml file
+        self.manager.job.temporary_file_hosts = self._hosts
         self.manager.job.create_yaml_file()
 
         # Copy certificates
         self.manager.job.copy_certificates(
             get_log_file("daosCA/certs"), self._hosts)
-        local_host = socket.gethostname().split('.', 1)[0]
-        self.dmg.copy_certificates(
-            get_log_file("daosCA/certs"), local_host.split())
+        self.prepare_dmg_certificates()
 
         # Prepare dmg for running storage format on all server hosts
         self.dmg.hostlist = self._hosts
@@ -389,20 +464,20 @@ class DaosServerManager(SubprocessManager):
         Args:
             verbose (bool, optional): display clean commands. Defaults to True.
         """
-        clean_cmds = []
+        clean_commands = []
         for server_params in self.manager.job.yaml.server_params:
             scm_mount = server_params.get_value("scm_mount")
             self.log.info("Cleaning up the %s directory.", str(scm_mount))
 
             # Remove the superblocks
             cmd = "sudo rm -fr {}/*".format(scm_mount)
-            if cmd not in clean_cmds:
-                clean_cmds.append(cmd)
+            if cmd not in clean_commands:
+                clean_commands.append(cmd)
 
             # Dismount the scm mount point
             cmd = "while sudo umount {}; do continue; done".format(scm_mount)
-            if cmd not in clean_cmds:
-                clean_cmds.append(cmd)
+            if cmd not in clean_commands:
+                clean_commands.append(cmd)
 
             if self.manager.job.using_dcpm:
                 scm_list = server_params.get_value("scm_list")
@@ -423,10 +498,10 @@ class DaosServerManager(SubprocessManager):
                         "done"
                     ]
                     cmd = "; ".join(cmd_list)
-                    if cmd not in clean_cmds:
-                        clean_cmds.append(cmd)
+                    if cmd not in clean_commands:
+                        clean_commands.append(cmd)
 
-        pcmd(self._hosts, "; ".join(clean_cmds), verbose)
+        pcmd(self._hosts, "; ".join(clean_commands), verbose)
 
     def prepare_storage(self, user, using_dcpm=None, using_nvme=None):
         """Prepare the server storage.
