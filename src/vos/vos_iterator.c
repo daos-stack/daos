@@ -754,7 +754,9 @@ next:
 			if (rc != 0)
 				break;
 
-			set_reprobe(type, acts, anchors, param->ip_flags);
+			if (!vos_dtx_hit_inprogress())
+				set_reprobe(type, acts, anchors,
+					    param->ip_flags);
 
 			if (acts & VOS_ITER_CB_ABORT)
 				break;
