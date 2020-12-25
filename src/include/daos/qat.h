@@ -58,6 +58,20 @@ qat_dc_compress(CpaInstanceHandle *dcInstHandle,
 		size_t *produced,
 		enum QAT_COMPRESS_DIR dir);
 
+int qat_dc_compress_async(
+		CpaInstanceHandle *dcInstHandle,
+		CpaDcSessionHandle *sessionHdl,
+		uint8_t *src,
+		size_t srcLen,
+		uint8_t *dst,
+		size_t dstLen,
+		enum QAT_COMPRESS_DIR dir,
+		dc_callback_fn user_cb_fn,
+		void *user_cb_data);
+
+int
+qat_dc_poll_response(CpaInstanceHandle *dcInstHandle);
+
 int
 qat_dc_destroy(CpaInstanceHandle *dcInstHandle,
 	       CpaDcSessionHandle *sessionHdl,
