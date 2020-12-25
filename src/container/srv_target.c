@@ -82,9 +82,8 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	if (rc) {
 		if (rc == -DER_NOTLEADER)
 			return -DER_SHUTDOWN;
-		else
-			D_ERROR("EC aggregation returned: "DF_RC"\n",
-				DP_RC(rc));
+		D_ERROR("EC aggregation returned: "DF_RC"\n",
+			DP_RC(rc));
 	}
 
 	if (dss_ult_exiting(cont->sc_agg_req))

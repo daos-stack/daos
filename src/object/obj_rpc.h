@@ -583,7 +583,8 @@ obj_is_modification_opc(uint32_t opc)
 		opc == DAOS_OBJ_RPC_TGT_PUNCH_DKEYS ||
 		opc == DAOS_OBJ_RPC_PUNCH_AKEYS ||
 		opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS ||
-		opc == DAOS_OBJ_RPC_EC_AGGREGATE;
+		opc == DAOS_OBJ_RPC_EC_AGGREGATE ||
+		opc == DAOS_OBJ_RPC_EC_REPLICATE;
 }
 
 static inline bool
