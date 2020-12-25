@@ -60,9 +60,6 @@ class CartRpcOneNodeTest(Test):
         """
         srvcmd = self.utils.build_cmd(self, self.env, "test_servers")
 
-        # self.utils.launch_srv_cli_test(self, srvcmd, clicmd)
-        # self.utils.log_check(self)
-
         try:
             srv_rtn = self.utils.launch_cmd_bg(self, srvcmd)
         # pylint: disable=broad-except
@@ -76,7 +73,8 @@ class CartRpcOneNodeTest(Test):
             self.fail("Server did not launch, return code %s" \
                        % procrtn)
 
-        for index in range(3):
+        cli_arg = self.params.get("test_clients_arg", '/run/tests/*/')
+        for index in range(len(cli_arg)):
             clicmd = self.utils.build_cmd(
                 self, self.env, "test_clients", index=index)
             self.utils.launch_test(self, clicmd, srv_rtn)

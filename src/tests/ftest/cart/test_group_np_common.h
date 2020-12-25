@@ -44,11 +44,15 @@ struct test_t {
 	char			*t_remote_group_name;
 	int			 t_hold;
 	int			 t_shut_only;
+	int			 t_init_only;
+	int			 t_skip_init;
+	int			 t_skip_shutdown;
 	bool			 t_save_cfg;
 	bool			 t_use_cfg;
 	bool			 t_register_swim_callback;
 	int 			 t_shutdown_rank;
-	bool 			 t_get_swim_status;
+	int  			 t_get_swim_status;
+	int  			 t_delete_rank_from_ranklist;
 	struct t_swim_status t_verify_swim_status;
 	char			*t_cfg_path;
 	uint32_t		 t_hold_time;
@@ -155,7 +159,10 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
        e_req->rank, e_req->exp_status);
 
 	e_reply = crt_reply_get(rpc_req);
-	D_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
+
+  // If we got past the previous assert, then we've succeeded
+	e_reply->bool_val = true;
+  D_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
 		  e_reply);
 
 	rc = crt_reply_send(rpc_req);
@@ -431,7 +438,9 @@ parse_verify_swim_status_arg (char * source)
           char cursorCopy[strlen(cursor) + 1];
           strcpy(cursorCopy, cursor);
           cursorCopy[groupArray[g].rm_eo] = 0;
-          printf("Match %u, Group %u: [%2u-%2u]: %s\n",
+          D_DEBUG(DB_TEST,
+               "parse_verify_swim_status_arg, match %u, " 
+               "group %u: [%2u-%2u]: %s\n",
                m,
                g,
                groupArray[g].rm_so,
@@ -481,6 +490,10 @@ test_parse_args(int argc, char **argv)
 		{"hold", no_argument, &test_g.t_hold, 1},
 		{"srv_ctx_num", required_argument, 0, 'c'},
 		{"shut_only", no_argument, &test_g.t_shut_only, 1},
+		{"init_only", no_argument, &test_g.t_init_only, 1},
+		{"skip_init", no_argument, &test_g.t_skip_init, 1},
+		{"skip_shutdown", no_argument, &test_g.t_skip_shutdown, 1},
+		{"delete_rank_from_ranklist", required_argument, 0, 'd'},
 		{"cfg_path", required_argument, 0, 's'},
 		{"use_cfg", required_argument, 0, 'u'},
 		{"register_swim_callback", required_argument, 0, 'w'},
@@ -497,6 +510,7 @@ test_parse_args(int argc, char **argv)
 
   // Default to a non-existent, invalid rank
 	test_g.t_shutdown_rank = -1;
+	test_g.t_delete_rank_from_ranklist = -1;
 	test_g.t_get_swim_status = false;
 
   // Default value: non-existent rank with status "alive"
@@ -562,6 +576,9 @@ test_parse_args(int argc, char **argv)
 			break;
 		case 'g':
 			test_g.t_get_swim_status = true;
+			break;
+		case 'd':
+			test_g.t_delete_rank_from_ranklist = atoi(optarg);
 			break;
 		case '?':
 			return 1;

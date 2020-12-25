@@ -37,7 +37,7 @@
 #include "test_group_np_common.h"
 
 
-int
+void
 send_rpc_shutdown(crt_endpoint_t server_ep, crt_rpc_t* rpc_req) {
   int rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
           CRT_PROTO_OPC(TEST_GROUP_BASE,
@@ -49,10 +49,9 @@ send_rpc_shutdown(crt_endpoint_t server_ep, crt_rpc_t* rpc_req) {
   D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
   tc_sem_timedwait(&test_g.t_token_to_proceed, 61, __LINE__);
-  return rc;
 }
 
-int
+void
 send_rpc_swim_check(crt_endpoint_t server_ep, crt_rpc_t* rpc_req) {
 
 	struct test_swim_status_in	*rpc_req_input;
@@ -77,7 +76,6 @@ send_rpc_swim_check(crt_endpoint_t server_ep, crt_rpc_t* rpc_req) {
   D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
   tc_sem_timedwait(&test_g.t_token_to_proceed, 61, __LINE__);
-  return rc;
 }
 
 void
@@ -92,29 +90,46 @@ test_run(void)
 	int			 i;
 	int			 rc = 0;
 
-	if (test_g.t_save_cfg) {
-		rc = crt_group_config_path_set(test_g.t_cfg_path);
-		D_ASSERTF(rc == 0, "crt_group_config_path_set failed %d\n", rc);
-	}
+  if (test_g.t_skip_init) {
+    DBG_PRINT("Skipping init stage.\n");
 
-	tc_cli_start_basic(test_g.t_local_group_name,
-			   test_g.t_remote_group_name,
-			   &grp, &rank_list, &test_g.t_crt_ctx[0],
-			   &test_g.t_tid[0], test_g.t_srv_ctx_num,
-			   test_g.t_use_cfg, NULL);
+  } else if (!test_g.t_skip_init) {
 
-	rc = sem_init(&test_g.t_token_to_proceed, 0, 0);
-	D_ASSERTF(rc == 0, "sem_init() failed.\n");
+    if (test_g.t_save_cfg) {
+      rc = crt_group_config_path_set(test_g.t_cfg_path);
+      D_ASSERTF(rc == 0, "crt_group_config_path_set failed %d\n", rc);
+    }
 
-	/* register RPCs */
-	rc = crt_proto_register(&my_proto_fmt_test_group2);
-	D_ASSERTF(rc == 0, "crt_proto_register() failed. rc: %d\n",
-			rc);
+    tc_cli_start_basic(test_g.t_local_group_name,
+           test_g.t_remote_group_name,
+           &grp, &rank_list, &test_g.t_crt_ctx[0],
+           &test_g.t_tid[0], test_g.t_srv_ctx_num,
+           test_g.t_use_cfg, NULL);
 
-	rc = tc_wait_for_ranks(test_g.t_crt_ctx[0], grp, rank_list,
-			    test_g.t_srv_ctx_num - 1, test_g.t_srv_ctx_num,
-			    5, 150);
-	D_ASSERTF(rc == 0, "wait_for_ranks() failed; rc=%d\n", rc);
+    rc = sem_init(&test_g.t_token_to_proceed, 0, 0);
+    D_ASSERTF(rc == 0, "sem_init() failed.\n");
+
+    /* register RPCs */
+    rc = crt_proto_register(&my_proto_fmt_test_group2);
+    D_ASSERTF(rc == 0, "crt_proto_register() failed. rc: %d\n",
+        rc);
+
+    // In case we've shut down a rank (e.g., from swim testing), remove it from
+    // the rank_list to avoid erroneously attempting to contact it.
+    if (test_g.t_delete_rank_from_ranklist > -1) {
+      d_rank_list_del(rank_list, test_g.t_delete_rank_from_ranklist);
+    }
+
+    rc = tc_wait_for_ranks(test_g.t_crt_ctx[0], grp, rank_list,
+            test_g.t_srv_ctx_num - 1, test_g.t_srv_ctx_num,
+            5, 150);
+    D_ASSERTF(rc == 0, "wait_for_ranks() failed; rc=%d\n", rc);
+  }
+
+  if (test_g.t_init_only) {
+    DBG_PRINT("Init only.  Returning now.\n");
+    return;
+  }
 
 	test_g.t_fault_attr_1000 = d_fault_attr_lookup(1000);
 	test_g.t_fault_attr_5000 = d_fault_attr_lookup(5000);
@@ -142,19 +157,20 @@ test_run(void)
   server_ep.ep_grp = grp;
 
   // Shutdown one particular rank
-	if (test_g.t_shutdown_rank > 1) {
+	if (test_g.t_shutdown_rank > -1) {
     server_ep.ep_rank = test_g.t_shutdown_rank;
     send_rpc_shutdown(server_ep, rpc_req);
-    return;
   } else if (test_g.t_verify_swim_status.rank >= 0) {
-    // Get swim status from all ranks
+
+    // Check swim status on all (remaining) ranks
     for (i = 0; i < rank_list->rl_nr; i++) {
       rank = rank_list->rl_ranks[i];
       server_ep.ep_rank = rank;
       send_rpc_swim_check(server_ep, rpc_req);
     }
-    return;
-  } else {
+  } else if (test_g.t_skip_shutdown) {
+    DBG_PRINT("Skipping shutdown stage.\n");
+  } else if (! test_g.t_skip_shutdown) {
 
     // Shutdown all ranks
     for (i = 0; i < rank_list->rl_nr; i++) {

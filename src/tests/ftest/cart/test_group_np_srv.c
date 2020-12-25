@@ -46,7 +46,7 @@ swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 {
 
 		// Example output for SWIM CRT_EVT_DEAD on rank #2:
-		// rank = 2, crt_event_source = 1, crt_event_type = 1
+		//   rank = 2, crt_event_source = 1, crt_event_type = 1
 
 		/* enum crt_event_type {
 		 * 	CRT_EVT_ALIVE,
@@ -58,7 +58,7 @@ swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		 * };
 		 */
 
-		DBG_PRINT("Cart callback event: "
+		D_DEBUG(DB_TEST, "Cart callback event: "
 			"rank = %d, "
 			"crt_event_source = %d, "
 			"crt_event_type = %d\n",
@@ -66,11 +66,6 @@ swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 
 		if (src == 1) {
 			swim_status_by_rank[rank] = type;
-		}
-
-		int i = 0;
-		for (i = 0; i < 10; i++) {
-			DBG_PRINT("Cart swim callback event: swim_status_by_rank[%d] = %d\n", i, swim_status_by_rank[i]);
 		}
 
 		return;
@@ -92,10 +87,6 @@ test_run(d_rank_t my_rank)
 
   // Register event callback after CaRT has initialized
 	if (test_g.t_register_swim_callback) {
-		// Give server time to load, so that swim callback can register
-		// This wreaks havoc -- on semaphores, timings
-		// sleep(10);
-
 		crt_register_event_cb(swim_crt_event_cb, &a);
 	}
 
