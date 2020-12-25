@@ -2351,9 +2351,9 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 				ec_eph->ce_last_eph = ec_eph->ce_eph;
 				ec_eph->ce_eph = 0;
 			} else {
-				D_ERROR(DF_CONT": Update min epoch: %d\n",
-					DP_CONT(pool->sp_uuid,
-						ec_eph->ce_cont_uuid), rc);
+				D_INFO(DF_CONT": Update min epoch: %d\n",
+				       DP_CONT(pool->sp_uuid,
+					       ec_eph->ce_cont_uuid), rc);
 			}
 		}
 yield:
