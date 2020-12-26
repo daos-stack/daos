@@ -193,6 +193,7 @@ public class DaosFileSystem extends FileSystem {
     if (info != null) {
       LOG.info("initializing from uns path, " + name);
       uns = true;
+      unsPrefix = info.getPrefix();
       initializeFromUns(name, conf, info);
     } else {
       LOG.info("initializing from config file, " + name);
@@ -245,21 +246,16 @@ public class DaosFileSystem extends FileSystem {
     File file = new File(path);
     DunsInfo info = null;
     while (info == null && file != null) {
-      if (file.exists()) {
-        try {
-          info = DaosUns.getAccessInfo(file.getAbsolutePath(), Constants.UNS_ATTR_NAME_HADOOP,
-            io.daos.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT, false);
-          if (info != null) {
-            break;
-          }
-        } catch (DaosIOException e) {
-          // ignoring error
+      try {
+        info = DaosUns.getAccessInfo(file.getAbsolutePath(), Constants.UNS_ATTR_NAME_HADOOP,
+          io.daos.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT, false);
+        if (info != null) {
+          break;
         }
+      } catch (DaosIOException e) {
+        // ignoring error
       }
       file = file.getParentFile();
-    }
-    if (info != null) {
-      unsPrefix = file.getAbsolutePath();
     }
     return info;
   }
@@ -326,7 +322,7 @@ public class DaosFileSystem extends FileSystem {
         }
       }
     }
-    // TODO: adjust logic after DAOS added more info to the ext attribute
+    // TODO: other info, like svc, will be moved to agent. then change accordingly.
     conf.set(Constants.DAOS_POOL_UUID, poolId);
     conf.set(Constants.DAOS_CONTAINER_UUID, contId);
   }

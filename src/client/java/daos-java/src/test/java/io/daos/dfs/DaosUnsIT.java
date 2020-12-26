@@ -99,6 +99,34 @@ public class DaosUnsIT {
   }
 
   @Test
+  public void testResolveDirectPathWithUuidsNoPrefix() throws Exception {
+    String path = "/" + poolUuid + "/" + contUuid + "/abc/1234";
+    DunsAttribute attribute = DaosUns.resolvePath(path);
+    Assert.assertEquals(poolUuid, attribute.getPuuid());
+    Assert.assertEquals(contUuid, attribute.getCuuid());
+    Assert.assertEquals("/abc/1234", attribute.getRelPath());
+    System.out.println(attribute.getLayoutType());
+  }
+
+  @Test
+  public void testResolveDirectPathWithUuidsHasPrefix() throws Exception {
+    String path = "daos://" + poolUuid + "/" + contUuid + "/abc/123";
+    DunsAttribute attribute = DaosUns.resolvePath(path);
+    Assert.assertEquals(poolUuid, attribute.getPuuid());
+    Assert.assertEquals(contUuid, attribute.getCuuid());
+    Assert.assertEquals("/abc/123", attribute.getRelPath());
+  }
+
+  @Test
+  public void testResolveDirectPathWithUuidsRootPath() throws Exception {
+    String path = "daos://" + poolUuid + "/" + contUuid;
+    DunsAttribute attribute = DaosUns.resolvePath(path);
+    Assert.assertEquals(poolUuid, attribute.getPuuid());
+    Assert.assertEquals(contUuid, attribute.getCuuid());
+    Assert.assertEquals("", attribute.getRelPath());
+  }
+
+  @Test
   public void testCreateSimplePath() throws Exception {
     createPath((String) null);
   }
