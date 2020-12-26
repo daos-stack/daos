@@ -1506,7 +1506,10 @@ Java_io_daos_dfs_DaosFsClient_dunsResolvePath(JNIEnv *env, jclass clientClass,
 	void *buf = NULL;
 	jbyteArray barray = NULL;
 	jbyte *bytes = NULL;
+	const char *prefix = "daos://";
 
+    bool has_prefix = strncmp(prefix, path, strlen(prefix)) == 0;
+    attr.da_no_prefix = !has_prefix;
 	int rc = duns_resolve_path(path, &attr);
 
 	if (rc) {
@@ -1541,6 +1544,7 @@ Java_io_daos_dfs_DaosFsClient_dunsResolvePath(JNIEnv *env, jclass clientClass,
 	attribute.object_type = object_type;
 	attribute.chunk_size = attr.da_chunk_size;
 	attribute.on_lustre = attr.da_on_lustre;
+	attribute.rel_path = attr.da_rel_path;
 	/* copy back in binary */
 	len = uns__duns_attribute__get_packed_size(&attribute);
 	buf = malloc(len);
@@ -1557,7 +1561,9 @@ out:
 	if (buf != NULL) {
 		free(buf);
 	}
-
+	if (attr.da_rel_path) {
+	    free(attr.da_rel_path);
+	}
 	return barray;
 }
 

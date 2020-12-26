@@ -46,7 +46,8 @@ public class DaosPool extends Shareable implements Closeable {
     this.uuid = poolUuid;
   }
 
-  protected static DaosPool getInstance(String poolUuid, String serverGroup, String ranks, int flags) throws IOException {
+  protected static DaosPool getInstance(String poolUuid, String serverGroup, String ranks, int flags)
+      throws IOException {
     DaosPool dp = poolMap.get(poolUuid);
     if (dp == null) {
       dp = new DaosPool(poolUuid);
