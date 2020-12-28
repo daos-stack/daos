@@ -651,7 +651,10 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 	}
 
 	iter = vos_hdl2iter(ih);
-	iter->it_ignore_uncommitted = ignore_inprogress ? 1 : 0;
+	if (ignore_inprogress || (dth != NULL && dth->dth_ignore_uncommitted))
+		iter->it_ignore_uncommitted = 1;
+	else
+		iter->it_ignore_uncommitted = 0;
 	read_time = dtx_is_valid_handle(dth) ? dth->dth_epoch : 0 /* unused */;
 probe:
 	if (!daos_anchor_is_zero(anchor))
