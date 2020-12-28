@@ -1,30 +1,30 @@
 /*
-	libconfigini - an ini formatted configuration parser library
-	Copyright (C) 2013-present Taner YILMAZ <taner44@gmail.com>
+ *	libconfigini - an ini formatted configuration parser library
+ *	Copyright (C) 2013-present Taner YILMAZ <taner44@gmail.com>
 
-	Redistribution and use in source and binary forms, with or without
-	modification, are permitted provided that the following conditions
-	are met:
-	 1. Redistributions of source code must retain the above copyright
-		notice, this list of conditions and the following disclaimer.
-	 2. Redistributions in binary form must reproduce the above copyright
-		notice, this list of conditions and the following disclaimer in the
-		documentation and/or other materials provided with the distribution.
-	 3. Neither the name of copyright holders nor the names of its
-		contributors may be used to endorse or promote products derived
-		from this software without specific prior written permission.
-
-	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-	"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
-	TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
-	PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL COPYRIGHT HOLDERS OR CONTRIBUTORS
-	BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-	CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-	SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-	INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-	CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-	ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-	POSSIBILITY OF SUCH DAMAGE.
+ *	Redistribution and use in source and binary forms, with or without
+ *	modification, are permitted provided that the following conditions
+ *	are met:
+ *	 1. Redistributions of source code must retain the above copyright
+ *		notice, this list of conditions and the following disclaimer.
+ *	 2. Redistributions in binary form must reproduce the above copyright
+ *		notice, this list of conditions and the following disclaimer
+ *		in the documentation and/or other materials provided with the
+ *		distribution.
+ *	 3. Neither the name of copyright holders nor the names of its
+ *		contributors may be used to endorse or promote products derived
+ *		from this software without specific prior written permission.
+ *	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *	"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *	LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ *	A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL COPYRIGHT
+ *	HOLDERS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ *	SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ *	LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ *	DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ *	THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ *	(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ *	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include <stdio.h>
@@ -49,8 +49,7 @@
 /**
  * \brief Configuration key-value
  */
-typedef struct ConfigKeyValue
-{
+typedef struct ConfigKeyValue {
 	char *key;
 	char *value;
 	TAILQ_ENTRY(ConfigKeyValue) next;
@@ -59,19 +58,18 @@ typedef struct ConfigKeyValue
 /**
  * \brief Configuration section
  */
-typedef struct ConfigSection
-{
+typedef struct ConfigSection {
 	char *name;
 	int numofkv;
 	TAILQ_HEAD(, ConfigKeyValue) kv_list;
 	TAILQ_ENTRY(ConfigSection) next;
+
 } ConfigSection;
 
 /**
  * \brief Configuration handle
  */
-struct Config
-{
+struct Config {
 	char *comment_chars;
 	char keyval_sep;
 	char *true_str;
@@ -79,10 +77,8 @@ struct Config
 	int  initnum;
 	int  numofsect;
 	TAILQ_HEAD(, ConfigSection) sect_list;
+
 };
-
-
-
 
 static int StrSafeCopy(char *dst, const char *src, int size)
 {
@@ -92,7 +88,8 @@ static int StrSafeCopy(char *dst, const char *src, int size)
 
 	if (n != 0 && --n != 0) {
 		do {
-			if ((*d++ = *s++) == 0)
+			*d++ = *s++;
+			if (*d++  == 0)
 				break;
 		} while (--n != 0);
 	}
@@ -109,36 +106,38 @@ static int StrSafeCopy(char *dst, const char *src, int size)
 
 static bool StrIsTypeOfTrue(const char *s)
 {
-	if ( !strcasecmp(s, "true") || !strcasecmp(s, "yes") || !strcasecmp(s, "1") )
+	if (!strcasecmp(s, "true") || !strcasecmp(s, "yes") ||
+	    !strcasecmp(s, "1"))
 		return true;
 	return false;
 }
 
 static bool StrIsTypeOfFalse(const char *s)
 {
-	if ( !strcasecmp(s, "false") || !strcasecmp(s, "no") || !strcasecmp(s, "0") )
+	if (!strcasecmp(s, "false") || !strcasecmp(s, "no") ||
+	    !strcasecmp(s, "0"))
 		return true;
 	return false;
 }
 
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
+/*
+ * //////////////////////////////////////////////////////////
+ * //////////////////////////////////////////////////////////
+ * //////////////////////////////////////////////////////////
+ */
 
 const char *ConfigRetToString(ConfigRet ret)
 {
-	switch(ret) {
-		case CONFIG_OK:                return "OK";
-		case CONFIG_ERR_FILE:          return "File IO error";
-		case CONFIG_ERR_NO_SECTION:    return "No section";
-		case CONFIG_ERR_NO_KEY:        return "No key";
-		case CONFIG_ERR_MEMALLOC:      return "Memory allocation failed";
-		case CONFIG_ERR_INVALID_PARAM: return "Invalid parameter";
-		case CONFIG_ERR_INVALID_VALUE: return "Invalid value";
-		case CONFIG_ERR_PARSING:       return "Parse error";
-		default:                       return NULL;
+	switch (ret) {
+	case CONFIG_OK:                return "OK";
+	case CONFIG_ERR_FILE:          return "File IO error";
+	case CONFIG_ERR_NO_SECTION:    return "No section";
+	case CONFIG_ERR_NO_KEY:        return "No key";
+	case CONFIG_ERR_MEMALLOC:      return "Memory allocation failed";
+	case CONFIG_ERR_INVALID_PARAM: return "Invalid parameter";
+	case CONFIG_ERR_INVALID_VALUE: return "Invalid value";
+	case CONFIG_ERR_PARSING:       return "Parse error";
+	default:                       return NULL;
 	}
 }
 
@@ -157,7 +156,8 @@ ConfigRet ConfigSetCommentCharset(Config *cfg, const char *comment_ch)
 	if (!cfg || !comment_ch)
 		return CONFIG_ERR_INVALID_PARAM;
 
-	if ((p = strdup(comment_ch)) == NULL)
+	p = strdup(comment_ch);
+	if (p == NULL)
 		return CONFIG_ERR_MEMALLOC;
 
 	if (cfg->comment_chars)
@@ -189,24 +189,30 @@ ConfigRet ConfigSetKeyValSepChar(Config *cfg, char ch)
  * \brief              ConfigSetCommentCharset() sets comment characters
  *
  * \param cfg          config handle
- * \param true_str     string value of boolean true (must be one of these: "true", "yes", "1")
- * \param false_str    string value of boolean false (must be one of these: "false", "no", "0")
+ * \param true_str     string value of boolean true (must be one of these:
+ *                     "true", "yes", "1")
+ *
+ * \param false_str    string value of boolean false (must be one of these:
+ *                     "false", "no", "0")
  *
  * \return             Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigSetBoolString(Config *cfg, const char *true_str, const char *false_str)
+ConfigRet ConfigSetBoolString(Config *cfg, const char *true_str,
+			      const char *false_str)
 {
 	char *t, *f;
 
-	if ( !cfg ||
-		 !true_str || !*true_str || !StrIsTypeOfTrue(true_str) ||
-		 !false_str || !*false_str || !StrIsTypeOfFalse(false_str) )
+	if (!cfg ||
+	    !true_str || !*true_str || !StrIsTypeOfTrue(true_str) ||
+	    !false_str || !*false_str || !StrIsTypeOfFalse(false_str))
 		return CONFIG_ERR_INVALID_PARAM;
 
-	if ((t = strdup(true_str)) == NULL)
+	t = strdup(true_str);
+	if (t == NULL)
 		return CONFIG_ERR_MEMALLOC;
 
-	if ((f = strdup(false_str)) == NULL) {
+	f = strdup(false_str);
+	if (f == NULL) {
 		free(t);
 		return CONFIG_ERR_MEMALLOC;
 	}
@@ -222,11 +228,11 @@ ConfigRet ConfigSetBoolString(Config *cfg, const char *true_str, const char *fal
 	return CONFIG_OK;
 }
 
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
+/*
+ * /////////////////////////////////////////////////////////////////////
+ * /////////////////////////////////////////////////////////////////////
+ * /////////////////////////////////////////////////////////////////////
+ */
 
 /**
  * \brief              ConfigGetSection() gets the requested section
@@ -237,14 +243,16 @@ ConfigRet ConfigSetBoolString(Config *cfg, const char *true_str, const char *fal
  *
  * \return             Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-static ConfigRet ConfigGetSection(const Config *cfg, const char *section, ConfigSection **sect)
+static ConfigRet ConfigGetSection(const Config *cfg, const char *section,
+				  ConfigSection **sect)
 {
 	if (!cfg || !sect)
 		return CONFIG_ERR_INVALID_PARAM;
 
 	TAILQ_FOREACH(*sect, &cfg->sect_list, next) {
-		if ( (section && (*sect)->name && !strcmp((*sect)->name, section)) ||
-			 (!section && !(*sect)->name) ) {
+		if ((section && (*sect)->name &&
+		     !strcmp((*sect)->name, section)) ||
+		     (!section && !(*sect)->name)) {
 			return CONFIG_OK;
 		}
 	}
@@ -264,7 +272,8 @@ bool ConfigHasSection(const Config *cfg, const char *section)
 {
 	ConfigSection *sect = NULL;
 
-	return ( (ConfigGetSection(cfg, section, &sect) == CONFIG_OK) ? true : false );
+	return ((ConfigGetSection(cfg, section, &sect) == CONFIG_OK) ?
+		 true : false);
 }
 
 /**
@@ -277,8 +286,8 @@ bool ConfigHasSection(const Config *cfg, const char *section)
  *
  * \return             Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-static ConfigRet ConfigGetKeyValue(const Config *cfg, ConfigSection *sect, const char *key,
-		ConfigKeyValue **kv)
+static ConfigRet ConfigGetKeyValue(const Config *cfg, ConfigSection *sect,
+				   const char *key, ConfigKeyValue **kv)
 {
 	if (!sect || !key || !kv)
 		return CONFIG_ERR_INVALID_PARAM;
@@ -303,7 +312,8 @@ int ConfigGetSectionCount(const Config *cfg)
 	if (!cfg)
 		return -1;
 
-	return (TAILQ_FIRST(&cfg->sect_list)->numofkv > 0 ? cfg->numofsect : cfg->numofsect - 1);
+	return (TAILQ_FIRST(&cfg->sect_list)->numofkv > 0 ?
+		cfg->numofsect : cfg->numofsect - 1);
 }
 
 /**
@@ -327,17 +337,18 @@ int ConfigGetKeyCount(const Config *cfg, const char *section)
 	return sect->numofkv;
 }
 
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
+/*
+ * /////////////////////////////////////////////////////////////////////
+ * /////////////////////////////////////////////////////////////////////
+ * /////////////////////////////////////////////////////////////////////
+ */
 
 /**
- * \brief              ConfigReadString() reads a string value from the cfg.
- *                     If any error occurs default value is copied to 'value' buffer and
- *                     returns reason. If key is optional and does not exists in config,
- *                     the 'value' is default value and return is CONFIG_ERR_NO_KEY
+ * \brief	ConfigReadString() reads a string value from the cfg.
+ *		If any error occurs default value is copied to 'value' buffer
+ *		and returns reason. If key is optional and does not exists in,
+ *		config the 'value' is default value and return is
+ *		CONFIG_ERR_NO_KEY
  *
  * \param cfg          config handle
  * \param section      section to search in
@@ -348,8 +359,9 @@ int ConfigGetKeyCount(const Config *cfg, const char *section)
  *
  * \return             Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigReadString(const Config *cfg, const char *section, const char *key,
-		char *value, int size, const char *dfl_value)
+ConfigRet ConfigReadString(const Config *cfg, const char *section,
+			   const char *key,
+			   char *value, int size, const char *dfl_value)
 {
 	ConfigSection  *sect = NULL;
 	ConfigKeyValue *kv   = NULL;
@@ -360,8 +372,14 @@ ConfigRet ConfigReadString(const Config *cfg, const char *section, const char *k
 
 	*value = '\0';
 
-	if ( ((ret = ConfigGetSection(cfg, section, &sect)) != CONFIG_OK) ||
-		 ((ret = ConfigGetKeyValue(cfg, sect, key, &kv)) != CONFIG_OK) ) {
+	ret = ConfigGetSection(cfg, section, &sect);
+	if (ret != CONFIG_OK) {
+		if (dfl_value)
+			StrSafeCopy(value, dfl_value, size);
+		return ret;
+	}
+	ret = ConfigGetKeyValue(cfg, sect, key, &kv);
+	if (ret != CONFIG_OK) {
 		if (dfl_value)
 			StrSafeCopy(value, dfl_value, size);
 		return ret;
@@ -374,9 +392,10 @@ ConfigRet ConfigReadString(const Config *cfg, const char *section, const char *k
 
 /**
  * \brief              ConfigReadInt() reads an integer value from the cfg.
- *                     If any error occurs default value is copied to 'value' buffer and
- *                     returns reason. If key is optional and does not exists in config,
- *                     the 'value' is default value and return is CONFIG_ERR_NO_KEY
+ *                     If any error occurs default value is copied to 'value'
+ *                     buffer and returns reason. If key is optional and does
+ *                     not exists in config, the 'value' is default value and
+ *                     return is CONFIG_ERR_NO_KEY
  *
  * \param cfg          config handle
  * \param section      section to search in
@@ -386,8 +405,9 @@ ConfigRet ConfigReadString(const Config *cfg, const char *section, const char *k
  *
  * \return             Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigReadInt(const Config *cfg, const char *section, const char *key,
-		int *value, int dfl_value)
+ConfigRet ConfigReadInt(const Config *cfg, const char *section,
+			const char *key,
+			int *value, int dfl_value)
 {
 	ConfigSection  *sect = NULL;
 	ConfigKeyValue *kv   = NULL;
@@ -399,8 +419,14 @@ ConfigRet ConfigReadInt(const Config *cfg, const char *section, const char *key,
 
 	*value = dfl_value;
 
-	if ( ((ret = ConfigGetSection(cfg, section, &sect)) != CONFIG_OK) ||
-		 ((ret = ConfigGetKeyValue(cfg, sect, key, &kv)) != CONFIG_OK) ) {
+	ret = ConfigGetSection(cfg, section, &sect);
+	if (ret != CONFIG_OK) {
+		/* Avoid checkpatch warning */
+		return ret;
+	}
+	ret = ConfigGetKeyValue(cfg, sect, key, &kv);
+	if (ret != CONFIG_OK) {
+		/* Avoid checkpatch warning */
 		return ret;
 	}
 
@@ -412,10 +438,11 @@ ConfigRet ConfigReadInt(const Config *cfg, const char *section, const char *key,
 }
 
 /**
- * \brief              ConfigReadUnsignedInt() reads an unsigned integer value from the cfg.
- *                     If any error occurs default value is copied to 'value' buffer and
- *                     returns reason. If key is optional and does not exists in config,
- *                     the 'value' is default value and return is CONFIG_ERR_NO_KEY
+ * \brief              ConfigReadUnsignedInt() reads an unsigned integer value
+ *                     from the cfg.If any error occurs default value is
+ *                     copied to 'value' buffer and returns reason. If key is
+ *                     optional and does not exists in config, the 'value' is
+ *                     default value and return is CONFIG_ERR_NO_KEY
  *
  * \param cfg          config handle
  * \param section      section to search in
@@ -425,8 +452,9 @@ ConfigRet ConfigReadInt(const Config *cfg, const char *section, const char *key,
  *
  * \return             Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigReadUnsignedInt(const Config *cfg, const char *section, const char *key,
-		unsigned int *value, unsigned int dfl_value)
+ConfigRet ConfigReadUnsignedInt(const Config *cfg, const char *section,
+				const char *key, unsigned int *value,
+				unsigned int dfl_value)
 {
 	ConfigSection  *sect = NULL;
 	ConfigKeyValue *kv   = NULL;
@@ -438,8 +466,15 @@ ConfigRet ConfigReadUnsignedInt(const Config *cfg, const char *section, const ch
 
 	*value = dfl_value;
 
-	if ( ((ret = ConfigGetSection(cfg, section, &sect)) != CONFIG_OK) ||
-		 ((ret = ConfigGetKeyValue(cfg, sect, key, &kv)) != CONFIG_OK) ) {
+	ret = ConfigGetSection(cfg, section, &sect);
+	if (ret != CONFIG_OK) {
+		/* Avoid checkpatch warning */
+		return ret;
+	}
+
+	ret = ConfigGetKeyValue(cfg, sect, key, &kv);
+	if (ret != CONFIG_OK) {
+		/* Avoid checkpatch warning */
 		return ret;
 	}
 
@@ -452,9 +487,10 @@ ConfigRet ConfigReadUnsignedInt(const Config *cfg, const char *section, const ch
 
 /**
  * \brief              ConfigReadFloat() reads a float value from the cfg.
- *                     If any error occurs default value is copied to 'value' buffer and
- *                     returns reason. If key is optional and does not exists in config,
- *                     the 'value' is default value and return is CONFIG_ERR_NO_KEY
+ *                     If any error occurs default value is copied to 'value'
+ *                     buffer and returns reason. If key is optional and does
+ *                     not exists in config, the 'value' is default value and
+ *                     return is CONFIG_ERR_NO_KEY
  *
  * \param cfg          config handle
  * \param section      section to search in
@@ -464,8 +500,9 @@ ConfigRet ConfigReadUnsignedInt(const Config *cfg, const char *section, const ch
  *
  * \return             Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigReadFloat(const Config *cfg, const char *section, const char *key,
-		float *value, float dfl_value)
+ConfigRet ConfigReadFloat(const Config *cfg, const char *section,
+			  const char *key,
+			  float *value, float dfl_value)
 {
 	ConfigSection  *sect = NULL;
 	ConfigKeyValue *kv   = NULL;
@@ -477,8 +514,15 @@ ConfigRet ConfigReadFloat(const Config *cfg, const char *section, const char *ke
 
 	*value = dfl_value;
 
-	if ( ((ret = ConfigGetSection(cfg, section, &sect)) != CONFIG_OK) ||
-		 ((ret = ConfigGetKeyValue(cfg, sect, key, &kv)) != CONFIG_OK) ) {
+	ret = ConfigGetSection(cfg, section, &sect);
+	if (ret != CONFIG_OK){
+		/* Avoid checkpatch warning */
+		return ret;
+	}
+
+	ret = ConfigGetKeyValue(cfg, sect, key, &kv);
+	if (ret != CONFIG_OK) {
+		/* Avoid checkpatch warning */
 		return ret;
 	}
 
@@ -491,9 +535,10 @@ ConfigRet ConfigReadFloat(const Config *cfg, const char *section, const char *ke
 
 /**
  * \brief              ConfigReadDouble() reads a double value from the cfg.
- *                     If any error occurs default value is copied to 'value' buffer and
- *                     returns reason. If key is optional and does not exists in config,
- *                     the 'value' is default value and return is CONFIG_ERR_NO_KEY
+ *                     If any error occurs default value is copied to 'value'
+ *                     buffer and returns reason. If key is optional and does
+ *                     not exists in config, the 'value' is default value and
+ *                     return is CONFIG_ERR_NO_KEY
  *
  * \param cfg          config handle
  * \param section      section to search in
@@ -503,8 +548,9 @@ ConfigRet ConfigReadFloat(const Config *cfg, const char *section, const char *ke
  *
  * \return             Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigReadDouble(const Config *cfg, const char *section, const char *key,
-		double *value, double dfl_value)
+ConfigRet ConfigReadDouble(const Config *cfg, const char *section,
+			   const char *key,
+			   double *value, double dfl_value)
 {
 	ConfigSection  *sect = NULL;
 	ConfigKeyValue *kv   = NULL;
@@ -516,8 +562,15 @@ ConfigRet ConfigReadDouble(const Config *cfg, const char *section, const char *k
 
 	*value = dfl_value;
 
-	if ( ((ret = ConfigGetSection(cfg, section, &sect)) != CONFIG_OK) ||
-		 ((ret = ConfigGetKeyValue(cfg, sect, key, &kv)) != CONFIG_OK) ) {
+	ret = ConfigGetSection(cfg, section, &sect);
+	if (ret != CONFIG_OK) {
+		/* Avoid checkpatch warning */
+		return ret;
+	}
+
+	ret = ConfigGetKeyValue(cfg, sect, key, &kv);
+	if (ret != CONFIG_OK) {
+		/* Avoid checkpatch warning */
 		return ret;
 	}
 
@@ -530,9 +583,10 @@ ConfigRet ConfigReadDouble(const Config *cfg, const char *section, const char *k
 
 /**
  * \brief              ConfigReadBool() reads a boolean value from the cfg.
- *                     If any error occurs default value is copied to 'value' buffer and
- *                     returns reason. If key is optional and does not exists in config,
- *                     the 'value' is default value and return is CONFIG_ERR_NO_KEY
+ *                     If any error occurs default value is copied to 'value'
+ *                     buffer and returns reason. If key is optional and does
+ *                     not exists in config, the 'value' is default value and
+ *                     return is CONFIG_ERR_NO_KEY
  *
  * \param cfg          config handle
  * \param section      section to search in
@@ -542,8 +596,9 @@ ConfigRet ConfigReadDouble(const Config *cfg, const char *section, const char *k
  *
  * \return             Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigReadBool(const Config *cfg, const char *section, const char *key,
-		bool *value, bool dfl_value)
+ConfigRet ConfigReadBool(const Config *cfg, const char *section,
+			 const char *key,
+			 bool *value, bool dfl_value)
 {
 	ConfigSection  *sect = NULL;
 	ConfigKeyValue *kv   = NULL;
@@ -554,8 +609,15 @@ ConfigRet ConfigReadBool(const Config *cfg, const char *section, const char *key
 
 	*value = dfl_value;
 
-	if ( ((ret = ConfigGetSection(cfg, section, &sect)) != CONFIG_OK) ||
-		 ((ret = ConfigGetKeyValue(cfg, sect, key, &kv)) != CONFIG_OK) ) {
+	ret = ConfigGetSection(cfg, section, &sect);
+	if (ret != CONFIG_OK) {
+		/* Avoid checkpatch warning */
+		return ret;
+	}
+
+	ret = ConfigGetKeyValue(cfg, sect, key, &kv);
+	if (ret != CONFIG_OK) {
+		/* Avoid checkpatch warning */
 		return ret;
 	}
 
@@ -568,11 +630,11 @@ ConfigRet ConfigReadBool(const Config *cfg, const char *section, const char *key
 
 	return CONFIG_OK;
 }
-
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////////////
+/*
+ * /////////////////////////////////////////////////////////////////////
+ * /////////////////////////////////////////////////////////////////////
+ * /////////////////////////////////////////////////////////////////////
+*/
 
 
 /**
@@ -584,7 +646,8 @@ ConfigRet ConfigReadBool(const Config *cfg, const char *section, const char *key
  *
  * \return             Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-static ConfigRet ConfigAddSection(Config *cfg, const char *section, ConfigSection **sect)
+static ConfigRet ConfigAddSection(Config *cfg, const char *section,
+				  ConfigSection **sect)
 {
 	ConfigSection *_sect = NULL;
 	ConfigRet      ret   = CONFIG_OK;
@@ -595,7 +658,8 @@ static ConfigRet ConfigAddSection(Config *cfg, const char *section, ConfigSectio
 	if (!sect)
 		sect = &_sect;
 
-	if ((ret = ConfigGetSection(cfg, section, sect)) != CONFIG_ERR_NO_SECTION)
+	ret = ConfigGetSection(cfg, section, sect);
+	if (ret  != CONFIG_ERR_NO_SECTION)
 		return ret;
 
 	*sect = calloc(1, sizeof(ConfigSection));
@@ -603,7 +667,8 @@ static ConfigRet ConfigAddSection(Config *cfg, const char *section, ConfigSectio
 		return CONFIG_ERR_MEMALLOC;
 
 	if (section) {
-		if (((*sect)->name = strdup(section)) == NULL) {
+		(*sect)->name = strdup(section);
+		if ((*sect)->name == NULL) {
 			free(*sect);
 			return CONFIG_ERR_MEMALLOC;
 		}
@@ -617,7 +682,8 @@ static ConfigRet ConfigAddSection(Config *cfg, const char *section, ConfigSectio
 }
 
 /**
- * \brief              ConfigAddString() adds the key with string value to the cfg
+ * \brief              ConfigAddString() adds the key with string value to
+ *                     the cfg
  *
  * \param cfg          config handle
  * \param section      section to add in
@@ -626,7 +692,8 @@ static ConfigRet ConfigAddSection(Config *cfg, const char *section, ConfigSectio
  *
  * \return             Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigAddString(Config *cfg, const char *section, const char *key, const char *value)
+ConfigRet ConfigAddString(Config *cfg, const char *section, const char *key,
+			  const char *value)
 {
 	ConfigSection  *sect = NULL;
 	ConfigKeyValue *kv   = NULL;
@@ -637,36 +704,43 @@ ConfigRet ConfigAddString(Config *cfg, const char *section, const char *key, con
 	if (!cfg || !key || !value)
 		return CONFIG_ERR_INVALID_PARAM;
 
-	if ((ret = ConfigAddSection(cfg, section, &sect)) != CONFIG_OK)
+	ret = ConfigAddSection(cfg, section, &sect);
+	if (ret != CONFIG_OK)
 		return ret;
 
-	switch (ret = ConfigGetKeyValue(cfg, sect, key, &kv)) {
-		case CONFIG_OK:
-			if (kv->value) {
-				free(kv->value);
-				kv->value = NULL;
-			}
-			break;
+	ret = ConfigGetKeyValue(cfg, sect, key, &kv);
+	switch (ret) {
+	case CONFIG_OK:
+		if (kv->value) {
+			free(kv->value);
+			kv->value = NULL;
+		}
+		break;
 
-		case CONFIG_ERR_NO_KEY:
-			if ((kv = calloc(1, sizeof(ConfigKeyValue))) == NULL)
-				return CONFIG_ERR_MEMALLOC;
-			if ((kv->key = strdup(key)) == NULL) {
-				free(kv);
-				return CONFIG_ERR_MEMALLOC;
-			}
-			TAILQ_INSERT_TAIL(&sect->kv_list, kv, next);
-			++(sect->numofkv);
-			break;
+	case CONFIG_ERR_NO_KEY:
+		kv = calloc(1, sizeof(ConfigKeyValue));
+		if (kv == NULL)
+			return CONFIG_ERR_MEMALLOC;
+		kv->key = strdup(key);
+		if (kv->key == NULL) {
+			free(kv);
+			return CONFIG_ERR_MEMALLOC;
+		}
+		TAILQ_INSERT_TAIL(&sect->kv_list, kv, next);
+		++(sect->numofkv);
+		break;
 
-		default:
-			return ret;
+	default:
+		return ret;
 	}
 
 	for (p = value; *p && isspace(*p); ++p)
 		;
-	for (q = p; *q && (*q != '\r') && (*q != '\n') && !strchr(cfg->comment_chars, *q); ++q)
-		;
+	for (q = p;
+	     *q && (*q != '\r') && (*q != '\n') &&
+	     !strchr(cfg->comment_chars, *q);
+	     ++q){
+		};
 	while (*q && (q > p) && isspace(*(q - 1)))
 		--q;
 
@@ -694,7 +768,8 @@ ConfigRet ConfigAddString(Config *cfg, const char *section, const char *key, con
  *
  * \return             Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigAddInt(Config *cfg, const char *section, const char *key, int value)
+ConfigRet ConfigAddInt(Config *cfg, const char *section, const char *key,
+		       int value)
 {
 	char buf[64];
 
@@ -704,7 +779,8 @@ ConfigRet ConfigAddInt(Config *cfg, const char *section, const char *key, int va
 }
 
 /**
- * \brief              ConfigAddUnsignedInt() adds the key with unsigned integer value to the cfg
+ * \brief              ConfigAddUnsignedInt() adds the key with unsigned
+ *                     integer value to the cfg
  *
  * \param cfg          config handle
  * \param section      section to add in
@@ -713,7 +789,8 @@ ConfigRet ConfigAddInt(Config *cfg, const char *section, const char *key, int va
  *
  * \return             Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigAddUnsignedInt(Config *cfg, const char *section, const char *key, unsigned int value)
+ConfigRet ConfigAddUnsignedInt(Config *cfg, const char *section,
+			       const char *key, unsigned int value)
 {
 	char buf[64];
 
@@ -732,7 +809,8 @@ ConfigRet ConfigAddUnsignedInt(Config *cfg, const char *section, const char *key
  *
  * \return             Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigAddFloat(Config * cfg, const char *section, const char *key, float value)
+ConfigRet ConfigAddFloat(Config *cfg, const char *section,
+			 const char *key, float value)
 {
 	char buf[64];
 
@@ -742,7 +820,8 @@ ConfigRet ConfigAddFloat(Config * cfg, const char *section, const char *key, flo
 }
 
 /**
- * \brief              ConfigAddDouble() adds the key with double value to the cfg
+ * \brief              ConfigAddDouble() adds the key with double value
+ *                     to the cfg
  *
  * \param cfg          config handle
  * \param section      section to add in
@@ -751,17 +830,18 @@ ConfigRet ConfigAddFloat(Config * cfg, const char *section, const char *key, flo
  *
  * \return             Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigAddDouble(Config *cfg, const char *section, const char *key, double value)
+ConfigRet ConfigAddDouble(Config *cfg, const char *section, const char *key,
+			  double value)
 {
 	char buf[64];
 
 	snprintf(buf, sizeof(buf), "%f", value);
-
 	return ConfigAddString(cfg, section, key, buf);
 }
 
 /**
- * \brief              ConfigAddBool() adds the key with blooean value to the cfg
+ * \brief              ConfigAddBool() adds the key with blooean value to
+ *                     the cfg
  *
  * \param cfg          config handle
  * \param section      section to add in
@@ -770,16 +850,18 @@ ConfigRet ConfigAddDouble(Config *cfg, const char *section, const char *key, dou
  *
  * \return             Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigAddBool(Config * cfg, const char *section, const char *key, bool value)
+ConfigRet ConfigAddBool(Config *cfg, const char *section, const char *key,
+			bool value)
 {
-	return ConfigAddString(cfg, section, key, value ? cfg->true_str : cfg->false_str);
+	return ConfigAddString(cfg, section, key, value ?
+			       cfg->true_str : cfg->false_str);
 }
 
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
+/*
+ * /////////////////////////////////////////////////////////////////////
+ * /////////////////////////////////////////////////////////////////////
+ * /////////////////////////////////////////////////////////////////////
+*/
 
 static void _ConfigRemoveKey(ConfigSection *sect, ConfigKeyValue *kv)
 {
@@ -794,7 +876,8 @@ static void _ConfigRemoveKey(ConfigSection *sect, ConfigKeyValue *kv)
 }
 
 /**
- * \brief              ConfigRemoveKey() removes the key which exists under section from the cfg
+ * \brief              ConfigRemoveKey() removes the key which exists under
+ *                     section from the cfg
  *
  * \param cfg          config handle
  * \param section      section to seach in
@@ -811,8 +894,10 @@ ConfigRet ConfigRemoveKey(Config *cfg, const char *section, const char *key)
 	if (!cfg || !key)
 		return CONFIG_ERR_INVALID_PARAM;
 
-	if ((ret = ConfigGetSection(cfg, section, &sect)) == CONFIG_OK) {
-		if ((ret = ConfigGetKeyValue(cfg, sect, key, &kv)) == CONFIG_OK)
+	ret = ConfigGetSection(cfg, section, &sect);
+	if (ret == CONFIG_OK) {
+		ret = ConfigGetKeyValue(cfg, sect, key, &kv);
+		if (ret == CONFIG_OK)
 			_ConfigRemoveKey(sect, kv);
 	}
 
@@ -854,7 +939,8 @@ ConfigRet ConfigRemoveSection(Config *cfg, const char *section)
 	if (!cfg)
 		return CONFIG_ERR_INVALID_PARAM;
 
-	if ((ret = ConfigGetSection(cfg, section, &sect)) == CONFIG_OK)
+	ret = ConfigGetSection(cfg, section, &sect);
+	if (ret == CONFIG_OK)
 		_ConfigRemoveSection(cfg, sect);
 
 	return ret;
@@ -904,21 +990,24 @@ void ConfigFree(Config *cfg)
 		return;
 
 	TAILQ_FOREACH_SAFE(sect, &cfg->sect_list, next, t_sect) {
-		_ConfigRemoveSection(cfg, sect);
+			   _ConfigRemoveSection(cfg, sect);
 	}
 
-	if (cfg->comment_chars) free(cfg->comment_chars);
-	if (cfg->true_str)      free(cfg->true_str);
-	if (cfg->false_str)     free(cfg->false_str);
+	if (cfg->comment_chars)
+		free(cfg->comment_chars);
+	if (cfg->true_str)
+		free(cfg->true_str);
+	if (cfg->false_str)
+		free(cfg->false_str);
 
 	free(cfg);
 }
 
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
+/*
+ * /////////////////////////////////////////////////////////////////////
+ * /////////////////////////////////////////////////////////////////////
+ * /////////////////////////////////////////////////////////////////////
+*/
 
 /**
  * \brief              Gets section name on the buffer p
@@ -950,8 +1039,9 @@ static ConfigRet GetSectName(Config *cfg, char *p, char **section)
 		++p;
 
 	for (q = p;
-		 *q && (*q != '\r') && (*q != '\n') && (*q != ']') && !strchr(cfg->comment_chars, *q);
-		 ++q)
+	     *q && (*q != '\r') && (*q != '\n') &&
+	     (*q != ']') && !strchr(cfg->comment_chars, *q);
+	     ++q)
 		;
 
 	if (*q != ']')
@@ -1003,9 +1093,10 @@ static ConfigRet GetKeyVal(Config *cfg, char *p, char **key, char **val)
 		++p;
 
 	for (q = p;
-		 *q && (*q != '\r') && (*q != '\n') && (*q != cfg->keyval_sep) && !strchr(cfg->comment_chars, *q);
-		 ++q)
-		;
+	     *q && (*q != '\r') && (*q != '\n') &&
+	     (*q != cfg->keyval_sep) && !strchr(cfg->comment_chars, *q);
+	     ++q){
+		};
 
 	if (*q != cfg->keyval_sep)
 		return CONFIG_ERR_PARSING;
@@ -1026,8 +1117,9 @@ static ConfigRet GetKeyVal(Config *cfg, char *p, char **key, char **val)
 		++v;
 
 	for (q = v;
-		 *q && (*q != '\r') && (*q != '\n') && !strchr(cfg->comment_chars, *q);
-		 ++q)
+	     *q && (*q != '\r') && (*q != '\n') &&
+	     !strchr(cfg->comment_chars, *q);
+	     ++q)
 		;
 
 	while (*q && (q > v) && isspace(*(q - 1)))
@@ -1043,11 +1135,13 @@ static ConfigRet GetKeyVal(Config *cfg, char *p, char **key, char **val)
 }
 
 /**
- * \brief              ConfigRead() reads the stream and populates the entire content to cfg handle
+ * \brief              ConfigRead() reads the stream and populates the
+ *                     entire content to cfg handle
  *
  * \param fp           FILE handle to read
  * \param cfg          pointer to config handle.
- *                     If not NULL a handle created with ConfigNew() must be given.
+ *                     If not NULL a handle created with ConfigNew() must
+ *                     be given.
  *                     If cfg is NULL a new one is created and saved to cfg.
  *
  * \return             Returns CONFIG_RET_OK as success, otherwise is an error.
@@ -1064,7 +1158,7 @@ ConfigRet ConfigRead(FILE *fp, Config **cfg)
 	bool           newcfg  = false;
 	ConfigRet      ret     = CONFIG_OK;
 
-	if ( !fp || !cfg || (*cfg && ((*cfg)->initnum != CONFIG_INIT_MAGIC)) )
+	if (!fp || !cfg || (*cfg && ((*cfg)->initnum != CONFIG_INIT_MAGIC)))
 		return CONFIG_ERR_INVALID_PARAM;
 
 	if (*cfg == NULL) {
@@ -1073,8 +1167,7 @@ ConfigRet ConfigRead(FILE *fp, Config **cfg)
 			return CONFIG_ERR_MEMALLOC;
 		*cfg = _cfg;
 		newcfg = true;
-	}
-	else
+	} else
 		_cfg = *cfg;
 
 	while (!feof(fp)) {
@@ -1087,17 +1180,20 @@ ConfigRet ConfigRead(FILE *fp, Config **cfg)
 			continue;
 
 		if (*p == '[') {
-			if ((ret = GetSectName(_cfg, p, &section)) != CONFIG_OK)
+			ret = GetSectName(_cfg, p, &section);
+			if (ret != CONFIG_OK)
 				goto error;
 
-			if ((ret = ConfigAddSection(_cfg, section, &sect)) != CONFIG_OK)
+			ret = ConfigAddSection(_cfg, section, &sect);
+			if (ret != CONFIG_OK)
 				goto error;
-		}
-		else {
-			if ((ret = GetKeyVal(_cfg, p, &key, &val)) != CONFIG_OK)
+		} else {
+			ret = GetKeyVal(_cfg, p, &key, &val);
+			if (ret != CONFIG_OK)
 				goto error;
 
-			if ((ret = ConfigAddString(_cfg, sect->name, key, val)) != CONFIG_OK)
+			ret = ConfigAddString(_cfg, sect->name, key, val);
+			if (ret != CONFIG_OK)
 				goto error;
 		}
 	}
@@ -1114,12 +1210,13 @@ error:
 }
 
 /**
- * \brief              ConfigReadFile() opens and reads the file and populates the
- *                     entire content to cfg handle
+ * \brief              ConfigReadFile() opens and reads the file and populates
+ *                     the entire content to cfg handle
  *
  * \param filename     name of file to open and load
  * \param cfg          pointer to config handle.
- *                     If not NULL a handle created with ConfigNew() must be given.
+ *                     If not NULL a handle created with ConfigNew() must
+ *                     be given.
  *                     If cfg is NULL a new one is created and saved to cfg.
  *
  * \return             Returns CONFIG_RET_OK as success, otherwise is an error.
@@ -1129,10 +1226,12 @@ ConfigRet ConfigReadFile(const char *filename, Config **cfg)
 	FILE      *fp  = NULL;
 	ConfigRet  ret = CONFIG_OK;
 
-	if ( !filename || !cfg || (*cfg && ((*cfg)->initnum != CONFIG_INIT_MAGIC)) )
+	if (!filename || !cfg ||
+	    (*cfg && ((*cfg)->initnum != CONFIG_INIT_MAGIC)))
 		return CONFIG_ERR_INVALID_PARAM;
 
-	if ((fp = fopen(filename, "r")) == NULL)
+	fp = fopen(filename, "r");
+	if (fp == NULL)
 		return CONFIG_ERR_FILE;
 
 	ret = ConfigRead(fp, cfg);
@@ -1172,7 +1271,8 @@ ConfigRet ConfigPrint(const Config *cfg, FILE *stream)
 }
 
 /**
- * \brief              ConfigPrintToFile() prints (saves) all cfg content to the file
+ * \brief              ConfigPrintToFile() prints (saves) all cfg content
+ *                     to the file
  *
  * \param cfg          config handle
  * \param filename     filename to save in
@@ -1187,7 +1287,8 @@ ConfigRet ConfigPrintToFile(const Config *cfg, char *filename)
 	if (!cfg || !filename)
 		return CONFIG_ERR_INVALID_PARAM;
 
-	if ((fp = fopen(filename, "wb")) == NULL)
+	fp = fopen(filename, "wb");
+	if (fp == NULL)
 		return CONFIG_ERR_FILE;
 
 	ret = ConfigPrint(cfg, fp);
@@ -1211,10 +1312,11 @@ ConfigRet ConfigPrintSettings(const Config *cfg, FILE *stream)
 		return CONFIG_ERR_INVALID_PARAM;
 
 	fprintf(stream, "\n");
-	fprintf(stream, "Configuration settings: \n");
+	fprintf(stream, "Configuration settings:\n");
 	fprintf(stream, "   Comment characters : %s\n", cfg->comment_chars);
 	fprintf(stream, "   Key-Value seperator: %c\n", cfg->keyval_sep);
-	fprintf(stream, "   True-False strings : %s-%s\n", cfg->true_str, cfg->false_str);
+	fprintf(stream, "   True-False strings : %s-%s\n", cfg->true_str,
+		cfg->false_str);
 	fprintf(stream, "\n");
 
 	return CONFIG_OK;

@@ -95,7 +95,6 @@ bool			 alloc_g_dest_name = true;
 bool			 alloc_g_msg_sizes_str;
 bool			 alloc_g_attach_info_path = true;
 
-
 static void *progress_fn(void *arg)
 {
 	int		ret;
@@ -348,7 +347,6 @@ static void print_fail_counts(struct st_latency *latencies,
 
 		local_rep++;
 	}
-
 }
 
 static void print_results(struct st_latency *latencies,
@@ -384,7 +382,6 @@ static void print_results(struct st_latency *latencies,
 		printf("\tRPC Bandwidth (MB/sec): %.2f\n",
 		       bandwidth / (1024.0F * 1024.0F));
 	printf("\tRPC Throughput (RPCs/sec): %.0f\n", throughput);
-
 
 	/* Figure out how many repetitions were errors */
 	num_failed = 0;
@@ -520,7 +517,6 @@ static void print_results(struct st_latency *latencies,
 	} while (local_rep < test_params->rep_count);
 
 	printf("\n");
-
 }
 
 static int test_msg_size(crt_context_t crt_ctx,
@@ -530,7 +526,6 @@ static int test_msg_size(crt_context_t crt_ctx,
 			 struct st_latency **latencies,
 			 crt_bulk_t *latencies_bulk_hdl, int output_megabits)
 {
-
 	int				 ret;
 	int				 done;
 	uint32_t			 failed_count;
@@ -618,9 +613,7 @@ static int test_msg_size(crt_context_t crt_ctx,
 		} else {
 			ms_endpts[m_idx].test_failed = 0;
 			ms_endpts[m_idx].test_completed = 0;
-
 		}
-
 
 	/* Check to make sure that at least one 1:many session was started */
 	if (failed_count >= num_ms_endpts) {
@@ -967,7 +960,7 @@ static int run_self_test(struct st_size_params all_params[],
 		if (latencies[m_idx] == NULL)
 			D_GOTO(cleanup, ret = -DER_NOMEM);
 		d_iov_set(&latencies_iov[m_idx], latencies[m_idx],
-			    rep_count * sizeof(**latencies));
+			  rep_count * sizeof(**latencies));
 		latencies_sg_list[m_idx].sg_iovs =
 			&latencies_iov[m_idx];
 		latencies_sg_list[m_idx].sg_nr = 1;
@@ -993,7 +986,7 @@ static int run_self_test(struct st_size_params all_params[],
 
 		/* Set test parameters to send to the test node */
 		d_iov_set(&test_params.endpts, endpts,
-			    num_endpts * sizeof(*endpts));
+			  num_endpts * sizeof(*endpts));
 		test_params.rep_count = rep_count;
 		test_params.max_inflight = max_inflight;
 		test_params.send_size = all_params[size_idx].send_size;
@@ -1273,8 +1266,8 @@ static int st_validate_range_str(const char *str)
 	const char *start = str;
 
 	while (*str != '\0') {
-		if ((*str < '0' || *str > '9')
-		    && (*str != '-') && (*str != ',')) {
+		if ((*str < '0' || *str > '9') &&
+		    (*str != '-') && (*str != ',')) {
 			return -DER_INVAL;
 		}
 
@@ -1323,8 +1316,7 @@ static void st_parse_range_str(char *const str, char *const validated_str,
 				 * If anything goes wrong, skip over this
 				 * comma-separated range/value.
 				 */
-				if (sscanf(pch_sub, "%u", &val[hyphen_count])
-				    != 1) {
+				if (sscanf(pch_sub, "%u", &val[hyphen_count]) != 1) {
 					val_valid[0] = 0;
 					val_valid[1] = 0;
 					break;
@@ -1400,10 +1392,10 @@ int parse_endpoint_string(char *const opt_arg,
 	}
 
 	/* Validate the input strings */
-	if (token_ptrs[ST_ENDPT_RANK_IDX] == NULL
-	    || token_ptrs[ST_ENDPT_TAG_IDX] == NULL
-	    || *token_ptrs[ST_ENDPT_RANK_IDX] == '\0'
-	    || *token_ptrs[ST_ENDPT_TAG_IDX] == '\0') {
+	if (token_ptrs[ST_ENDPT_RANK_IDX] == NULL ||
+	    token_ptrs[ST_ENDPT_TAG_IDX] == NULL ||
+	    *token_ptrs[ST_ENDPT_RANK_IDX] == '\0' ||
+	    *token_ptrs[ST_ENDPT_TAG_IDX] == '\0') {
 		printf("endpoint must contain non-empty rank:tag\n");
 		return -DER_INVAL;
 	}
@@ -1712,14 +1704,13 @@ int parse_message_sizes_string(const char *pch,
 #define LOG_INFO(fmt, ...)	\
 	fprintf(stderr, "[INFO] : " fmt "\n", __VA_ARGS__)
 
-
 #define CONFIGREADFILE		"../etc/config.cnf"
 #define CONFIGSAVEFILE		"../etc/new-config.cnf"
 
 #define ENTER_TEST_FUNC							\
 	do {								\
 		LOG_INFO("%s", "\n-----------------------------------------");\
-		LOG_INFO("<TEST: %s>\n", __FUNCTION__);			\
+		LOG_INFO("<TEST: %s>\n", __func__);			\
 	} while (0)
 
 /*
@@ -1755,7 +1746,8 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 	/* Parse of configuration file */
 	/********/
 	config_ret = ConfigReadString(cfg, section_name, "help",
-				    &string[0], STRING_MAX_SIZE, (char *)NULL);
+				      &string[0], STRING_MAX_SIZE,
+				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		/* Avoid checkpatch warning */
 		ret = -1;
@@ -1764,7 +1756,8 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 
 	/********/
 	config_ret = ConfigReadString(cfg, section_name, "display",
-				    &string[0], STRING_MAX_SIZE, (char *)NULL);
+				      &string[0], STRING_MAX_SIZE,
+				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		printf("Configuration file %s\n", file_name);
 		ConfigPrint(cfg, stdout);
@@ -1784,7 +1777,8 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 
 	/********/
 	config_ret = ConfigReadString(cfg, section_name, "master-endpoint",
-				   &string[0], STRING_MAX_SIZE, (char *)NULL);
+				      &string[0], STRING_MAX_SIZE,
+				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		/* Avoid checkpatch warning */
 		parse_endpoint_string(&string[0], &g_ms_endpts,
@@ -1793,7 +1787,8 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 
 	/********/
 	config_ret = ConfigReadString(cfg, section_name, "endpoint",
-				   &string[0], STRING_MAX_SIZE, (char *)NULL);
+				      &string[0], STRING_MAX_SIZE,
+				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		/* Avoid checkpatch warning */
 		parse_endpoint_string(&string[0], &g_endpts, &g_num_endpts);
@@ -1806,6 +1801,7 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 		len = strlen(string) + 1;
 		g_msg_sizes_str = (char *)malloc(len);
 		if (g_dest_name == NULL) {
+			/* Avoid checkpatch warning */
 			D_GOTO(cleanup, ret = -DER_NOMEM);
 		}
 		alloc_g_msg_sizes_str = true;
@@ -1814,8 +1810,9 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 
 	/********/
 	config_ret = ConfigReadString(cfg, section_name,
-				    "repetitions-per-size",
-				    &string[0], STRING_MAX_SIZE, (char *)NULL);
+				      "repetitions-per-size",
+				      &string[0], STRING_MAX_SIZE,
+				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		ret = sscanf(&string[0], "%d", &g_rep_count);
 		if (ret != 1) {
@@ -1828,8 +1825,9 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 
 	/********/
 	config_ret = ConfigReadString(cfg, section_name,
-				    "max-inflight-rpcs",
-				    &string[0], STRING_MAX_SIZE, (char *)NULL);
+				      "max-inflight-rpcs",
+				      &string[0], STRING_MAX_SIZE,
+				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		ret = sscanf(&string[0], "%d", &g_max_inflight);
 		if (ret != 1) {
@@ -1838,12 +1836,12 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 			"  Using default value %d instead\n",
 			g_max_inflight);
 		}
-
 	}
 
 	/********/
 	config_ret = ConfigReadString(cfg, section_name, "align",
-				    &string[0], STRING_MAX_SIZE, (char *)NULL);
+				      &string[0], STRING_MAX_SIZE,
+				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		ret = sscanf(string, "%" SCNd16, &g_buf_alignment);
 		if (ret != 1 || g_buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
@@ -1858,7 +1856,8 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 
 	/********/
 	config_ret = ConfigReadString(cfg, section_name, "MBits",
-				    &string[0], STRING_MAX_SIZE, (char *)NULL);
+				      &string[0], STRING_MAX_SIZE,
+				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		/* Avoid checkpatch warning */
 		g_output_megabits = 1;
@@ -1866,8 +1865,8 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 
 	/********/
 	config_ret = ConfigReadString(cfg, section_name, "singleton",
-				    &string[0], STRING_MAX_SIZE, (char *)NULL);
-
+				      &string[0], STRING_MAX_SIZE,
+				      (char *)NULL);
 
 	/********/
 	config_ret = ConfigReadString(cfg, section_name, "randomize-endpoints",
@@ -1879,7 +1878,8 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 
 	/********/
 	config_ret = ConfigReadString(cfg, section_name, "path",
-				    &string[0], STRING_MAX_SIZE, (char *)NULL);
+				      &string[0], STRING_MAX_SIZE,
+				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		len = strlen(string) + 1;
 		g_attach_info_path = (char *)malloc(len);
@@ -1892,7 +1892,8 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 
 	/********/
 	config_ret = ConfigReadString(cfg, section_name, "nopmix",
-				    &string[0], STRING_MAX_SIZE, (char *)NULL);
+				      &string[0], STRING_MAX_SIZE,
+				      (char *)NULL);
 
 	/* Free up structure and return */
 cleanup:
