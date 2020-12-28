@@ -223,7 +223,9 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                      'auth_cred_to_iov': ('packed'),
                      'd_sgl_init': ('sgl->sg_iovs'),
                      'daos_csummer_alloc_iods_csums': ('buf'),
-                     'get_pool_svc_ranks': ('req')}
+                     'get_pool_svc_ranks': ('req'),
+                     'send_monitor_Request': ('reqb'),
+                     'ds_mgmt_drpc_pool_evict': ('body')}
 # pylint: enable=line-too-long
 
 mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
