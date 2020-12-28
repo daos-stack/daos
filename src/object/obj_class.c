@@ -562,7 +562,7 @@ obj_ec_codec_fini(void)
 		return;
 
 	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
-		if (oc->oc_attr.ca_resil == DAOS_RES_EC)
+		if (DAOS_OC_IS_EC(&oc->oc_attr))
 			ocnr++;
 	}
 	D_ASSERTF(oc_ec_codec_nr == ocnr,
@@ -598,7 +598,7 @@ obj_ec_codec_init()
 
 	ocnr = 0;
 	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
-		if (oc->oc_attr.ca_resil == DAOS_RES_EC)
+		if (DAOS_OC_IS_EC(&oc->oc_attr))
 			ocnr++;
 	}
 	if (ocnr == 0)
@@ -611,7 +611,7 @@ obj_ec_codec_init()
 
 	i = 0;
 	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
-		if (oc->oc_attr.ca_resil != DAOS_RES_EC)
+		if (!DAOS_OC_IS_EC(&oc->oc_attr))
 			continue;
 
 		oc_ec_codecs[i].ec_oc_id = oc->oc_id;
