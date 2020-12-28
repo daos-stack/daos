@@ -73,8 +73,7 @@ class FindCmd(DfuseTestBase):
 
         try:
             if not dfs_path:
-                temp_dfs_path = tempfile.mkdtemp(
-                    dir="/tmp", prefix="dfs_test_")
+                temp_dfs_path = tempfile.mkdtemp(prefix="dfs_test_")
                 dfs_path = temp_dfs_path
 
             mount_dirs = self._setup_containers(
