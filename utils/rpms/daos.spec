@@ -325,6 +325,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_prefix}/etc/memcheck-daos-client.supp
 %{_bindir}/cart_ctl
 %{_bindir}/self_test
+%{_prefix}/etc/selftest.cnf
 %{_bindir}/dmg
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
