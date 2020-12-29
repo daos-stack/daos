@@ -40,10 +40,11 @@ public class DaosInputStreamTest {
     new DaosInputStream(file, null, ByteBuffer.allocate(10), 10);
   }
 
-  @Test(expected = IllegalArgumentException.class)
-  public void testNewDaosInputStreamIllegalSize() throws Exception {
+  @Test
+  public void testNewDaosInputStreamWithBiggerPreloadSize() throws Exception {
     DaosFile file = mock(DaosFile.class);
-    new DaosInputStream(file, null, ByteBuffer.allocateDirect(10), 20);
+    DaosInputStream is = new DaosInputStream(file, null, ByteBuffer.allocateDirect(25), 20);
+    Assert.assertEquals(20, is.getReadSize());
   }
 
   @Test(expected = IllegalArgumentException.class)
@@ -71,16 +72,16 @@ public class DaosInputStreamTest {
     Assert.assertEquals(0, len);
   }
 
-  private void readFromDaosOnce(int bufferCap, int preloadSize, int requestLen, long readLen) throws Exception {
+  private void readFromDaosOnce(int bufferCap, int readSize, int requestLen, long readLen) throws Exception {
     DaosFile file = mock(DaosFile.class);
     FileSystem.Statistics stats = mock(FileSystem.Statistics.class);
-    long actualReadLen = requestLen < preloadSize ? preloadSize : requestLen;
+    long actualReadLen = requestLen < readSize ? readSize : requestLen;
     when(file.read(any(ByteBuffer.class), anyLong(), anyLong(), eq(actualReadLen))).thenReturn(actualReadLen);
     when(file.length()).thenReturn(200L);
 
     ByteBuffer buffer = ByteBuffer.allocateDirect(bufferCap);
     ByteBuffer sbuffer = spy(buffer);
-    DaosInputStream is = new DaosInputStream(file, stats, sbuffer, preloadSize);
+    DaosInputStream is = new DaosInputStream(file, stats, sbuffer, readSize);
     byte[] buf = new byte[requestLen];
     int len = is.read(buf, 0, requestLen);
 
@@ -91,24 +92,24 @@ public class DaosInputStreamTest {
 
     Assert.assertEquals(0, offSetCap.getValue().intValue());
 
-    Assert.assertEquals(requestLen < preloadSize ? preloadSize : requestLen, is.getBuffer().limit());
+    Assert.assertEquals(requestLen < readSize ? readSize : requestLen, is.getBuffer().limit());
     Assert.assertEquals(requestLen, len);
     Assert.assertEquals(requestLen, is.getBuffer().position());
     Assert.assertEquals(requestLen, is.getPos());
   }
 
   @Test
-  public void testReadFromDaosLessThanPreload() throws Exception {
+  public void testReadFromDaosLessThanReadSize() throws Exception {
     readFromDaosOnce(100, 50, 20, 20);
   }
 
   @Test
-  public void testReadFromDaosEqualToPreload() throws Exception {
+  public void testReadFromDaosEqualToReadSize() throws Exception {
     readFromDaosOnce(100, 50, 50, 50);
   }
 
   @Test
-  public void testReadFromDaosGreaterThanPreload() throws Exception {
+  public void testReadFromDaosGreaterThanReadSize() throws Exception {
     readFromDaosOnce(100, 50, 80, 80);
   }
 
@@ -458,12 +459,9 @@ public class DaosInputStreamTest {
     doReturn((long) data.length).when(file).length();
 
     boolean[] trueFalse = new boolean[]{true, false};
-
     for (int j = 0; j < 2; j++) {
-      boolean bufferedReadEnabled = trueFalse[j];
-      int preloadSize = bufferedReadEnabled ? bufferSize : 0;
-      DaosInputStream input = new DaosInputStream(file, stats, internalBuffer, preloadSize);
-      int readSize = 9;
+      int readSize = trueFalse[j] ? bufferSize : 5;
+      DaosInputStream input = new DaosInputStream(file, stats, internalBuffer, readSize);
       byte[] answer = new byte[readSize];
       input.read(answer, 0, readSize);
       byte[] expect = new byte[readSize];
@@ -472,11 +470,10 @@ public class DaosInputStreamTest {
       }
       Assert.assertArrayEquals(expect, answer);
 
-      boolean shouldThemEqual = bufferedReadEnabled;
       for (int i = readSize; i < data.length && i < internalBuffer.limit(); i++) {
         // If enabled buffered read, the internal buffer of DataInputStream should be fully filled
         // Otherwise, DaosInputStream's internal buffer is not filled for non-target part
-        Assert.assertEquals(shouldThemEqual, (internalBuffer.get(i) == data[i]));
+        Assert.assertEquals(trueFalse[j], (internalBuffer.get(i) == data[i]));
       }
     }
   }
