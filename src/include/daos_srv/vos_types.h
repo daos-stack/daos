@@ -439,9 +439,14 @@ typedef int (*vos_iter_cb_t)(daos_handle_t ih, vos_iter_entry_t *entry,
  * Actions performed in iteration callback
  */
 enum {
-	VOS_ITER_CB_YIELD	= (1UL << 0),	/* Yield */
-	VOS_ITER_CB_DELETE	= (1UL << 1),	/* Delete entry */
-	VOS_ITER_CB_SKIP	= (1UL << 2),	/* Skip entry */
+	/** Yield */
+	VOS_ITER_CB_YIELD	= (1UL << 0),
+	/** Delete entry */
+	VOS_ITER_CB_DELETE	= (1UL << 1),
+	/** Skip entry, don't iterate into next level for current entry */
+	VOS_ITER_CB_SKIP	= (1UL << 2),
+	/** Abort current level iteration */
+	VOS_ITER_CB_ABORT	= (1UL << 3),
 };
 
 /**
