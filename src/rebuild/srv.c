@@ -913,6 +913,46 @@ rebuild_task_destroy(struct rebuild_task *task)
 	D_FREE(task);
 }
 
+/**
+ * Print out all of the currently queued rebuild tasks
+ */
+static void
+rebuild_debug_print_queue()
+{
+	struct rebuild_task *task_tmp;
+	struct rebuild_task *task;
+	/* Uninitialized stack buffer to write target list into */
+	char tgts_buf[512];
+	int i;
+	/* Position in stack buffer where str data should be written next */
+	size_t tgts_pos = 0;
+
+	D_DEBUG(DB_REBUILD, "Current rebuild queue:\n");
+
+	d_list_for_each_entry_safe(task, task_tmp,
+				   &rebuild_gst.rg_queue_list, dst_list) {
+
+		for (i = 0; i < task->dst_tgts.pti_number; i++) {
+			if (tgts_pos > sizeof(tgts_buf) - 10) {
+				/* In case all the targets won't fit */
+				tgts_pos += snprintf(&tgts_buf[tgts_pos],
+						     sizeof(tgts_buf) -
+						     tgts_pos, "...");
+				break;
+			}
+			tgts_pos += snprintf(&tgts_buf[tgts_pos],
+					     sizeof(tgts_buf) - tgts_pos,
+					     "%u ",
+					     task->dst_tgts.pti_ids[i].pti_id);
+		}
+
+		D_DEBUG(DB_REBUILD, "  " DF_UUID " op=%s ver=%u tgts=%s\n",
+			DP_UUID(task->dst_pool_uuid),
+			RB_OP_STR(task->dst_rebuild_op),
+			task->dst_map_ver, tgts_buf);
+	}
+}
+
 /** Try merge the tasks to the current task.
  *
  * This will only merge tasks that are for sequential/contiguous version
@@ -992,6 +1032,9 @@ rebuild_try_merge_tgts(const uuid_t pool_uuid, uint32_t map_ver,
 	D_PRINT("Rebuild [queued] ("DF_UUID" ver=%u) id %u op=%s\n",
 		DP_UUID(pool_uuid), map_ver, tgts->pti_ids[0].pti_id,
 		RB_OP_STR(rebuild_op));
+
+	/* Print out the current queue to the debug log */
+	rebuild_debug_print_queue();
 
 	return 1;
 }
@@ -1417,46 +1460,6 @@ rebuild_print_list_update(const char *const str, const uuid_t uuid,
 }
 
 /**
- * Print out all of the currently queued rebuild tasks
- */
-static void
-rebuild_debug_print_queue()
-{
-	struct rebuild_task *task_tmp;
-	struct rebuild_task *task;
-	/* Uninitialized stack buffer to write target list into */
-	char tgts_buf[512];
-	int i;
-	/* Position in stack buffer where str data should be written next */
-	size_t tgts_pos = 0;
-
-	D_DEBUG(DB_REBUILD, "Current rebuild queue:\n");
-
-	d_list_for_each_entry_safe(task, task_tmp,
-				   &rebuild_gst.rg_queue_list, dst_list) {
-
-		for (i = 0; i < task->dst_tgts.pti_number; i++) {
-			if (tgts_pos > sizeof(tgts_buf) - 10) {
-				/* In case all the targets won't fit */
-				tgts_pos += snprintf(&tgts_buf[tgts_pos],
-						     sizeof(tgts_buf) -
-						     tgts_pos, "...");
-				break;
-			}
-			tgts_pos += snprintf(&tgts_buf[tgts_pos],
-					     sizeof(tgts_buf) - tgts_pos,
-					     "%u ",
-					     task->dst_tgts.pti_ids[i].pti_id);
-		}
-
-		D_DEBUG(DB_REBUILD, "  " DF_UUID " op=%s ver=%u tgts=%s\n",
-			DP_UUID(task->dst_pool_uuid),
-			RB_OP_STR(task->dst_rebuild_op),
-			task->dst_map_ver, tgts_buf);
-	}
-}
-
-/**
  * Add rebuild task to the rebuild list and another ULT will rebuild the
  * pool.
  */
@@ -1487,11 +1490,12 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 	if (rc)
 		D_GOTO(free, rc);
 
-	/* Print out the current queue to the debug log */
-	rebuild_debug_print_queue();
-
 	rebuild_print_list_update("Rebuild queued",
 				  uuid, map_ver, rebuild_op, tgts);
+	d_list_add_tail(&task->dst_list, &rebuild_gst.rg_queue_list);
+
+	/* Print out the current queue to the debug log */
+	rebuild_debug_print_queue();
 
 	D_DEBUG(DB_REBUILD, "rebuild queue "DF_UUID" ver=%u, op=%s",
 		DP_UUID(uuid), map_ver, RB_OP_STR(rebuild_op));
