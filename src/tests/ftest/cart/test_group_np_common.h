@@ -77,6 +77,12 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 	struct test_ping_check_out	*e_reply;
 	int				 rc = 0;
 
+  /////////////////////////////////////////////////////////
+  // Sleep here, so that client has time to crt_ep_abort()!
+  sleep(20);
+	DBG_PRINT("sleeping while client issues crt_ep_abort().\n");
+  /////////////////////////////////////////////////////////
+
 	/* CaRT internally already allocated the input/output buffer */
 	e_req = crt_req_get(rpc_req);
 	D_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
@@ -286,6 +292,13 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 
 	rc = crt_req_send(rpc_req, client_cb_common, NULL);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
+
+  /////////////////////////////////////////////////////////////////
+  // Abort RPC
+  rc = crt_ep_abort(&server_ep);
+  D_ASSERTF(rc == 0, "crt_ep_abort() failed. rc: %d\n", rc);
+  DBG_PRINT("crt_ep_abort called.\n");
+  /////////////////////////////////////////////////////////////////
 }
 
 int
