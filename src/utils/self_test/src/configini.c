@@ -1153,7 +1153,7 @@ ConfigRet ConfigRead(FILE *fp, Config **cfg)
 	char          *section = NULL;
 	char          *key     = NULL;
 	char          *val     = NULL;
-	char           buf[4196];
+	char           buf[3*1024];
 	Config        *_cfg    = NULL;
 	bool           newcfg  = false;
 	ConfigRet      ret     = CONFIG_OK;
