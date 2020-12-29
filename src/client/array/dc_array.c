@@ -758,7 +758,7 @@ dc_array_open(tse_task_t *task)
 	rc = daos_task_create(DAOS_OPC_OBJ_OPEN, tse_task2sched(task),
 			      0, NULL, &open_task);
 	if (rc != 0) {
-		D_ERROR("Failed to open object_open task " DF_RC "\n",
+		D_ERROR("Failed to open object_open task "DF_RC"\n",
 			DP_RC(rc));
 		D_GOTO(err_ptask, rc);
 	}
@@ -774,7 +774,7 @@ dc_array_open(tse_task_t *task)
 		/** The upper task completes when the open task completes */
 		rc = tse_task_register_deps(task, 1, &open_task);
 		if (rc != 0) {
-			D_ERROR("Failed to register dependency " DF_RC "\n",
+			D_ERROR("Failed to register dependency "DF_RC"\n",
 				DP_RC(rc));
 			D_GOTO(err_put1, rc);
 		}
@@ -782,7 +782,7 @@ dc_array_open(tse_task_t *task)
 		rc = tse_task_register_comp_cb(task, open_handle_cb, &args,
 					       sizeof(args));
 		if (rc != 0) {
-			D_ERROR("Failed to register completion cb " DF_RC "\n",
+			D_ERROR("Failed to register completion cb "DF_RC"\n",
 				DP_RC(rc));
 			D_GOTO(err_put1, rc);
 		}
@@ -876,7 +876,7 @@ dc_array_close(tse_task_t *task)
 	rc = daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
 			      0, NULL, &close_task);
 	if (rc != 0) {
-		D_ERROR("Failed to create object_close task " DF_RC "\n",
+		D_ERROR("Failed to create object_close task "DF_RC"\n",
 			DP_RC(rc));
 		D_GOTO(err_put1, rc);
 	}
@@ -886,7 +886,7 @@ dc_array_close(tse_task_t *task)
 	/** The upper task completes when the close task completes */
 	rc = tse_task_register_deps(task, 1, &close_task);
 	if (rc != 0) {
-		D_ERROR("Failed to register dependency " DF_RC "\n",
+		D_ERROR("Failed to register dependency "DF_RC"\n",
 			DP_RC(rc));
 		D_GOTO(err_put2, rc);
 	}
@@ -895,7 +895,7 @@ dc_array_close(tse_task_t *task)
 	rc = tse_task_register_cbs(task, NULL, NULL, 0, free_handle_cb,
 				   &array, sizeof(array));
 	if (rc != 0) {
-		D_ERROR("Failed to register completion cb " DF_RC "\n",
+		D_ERROR("Failed to register completion cb "DF_RC"\n",
 			DP_RC(rc));
 		D_GOTO(err_put2, rc);
 	}
@@ -1250,7 +1250,7 @@ set_short_read_cb(tse_task_t *task, void *data)
 	int			rc = task->dt_result;
 
 	if (rc != 0) {
-		D_ERROR("Failed to get array size " DF_RC "\n", DP_RC(rc));
+		D_ERROR("Failed to get array size "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -1301,7 +1301,7 @@ check_short_read_cb(tse_task_t *task, void *data)
 	int			rc = task->dt_result;
 
 	if (rc != 0) {
-		D_ERROR("Array Read Failed " DF_RC "\n", DP_RC(rc));
+		D_ERROR("Array Read Failed "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -1695,7 +1695,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			rc = create_sgl(user_sgl, array->cell_size,
 					dkey_records, &cur_off, &cur_i, sgl);
 			if (rc != 0) {
-				D_ERROR("Failed to create sgl " DF_RC "\n",
+				D_ERROR("Failed to create sgl "DF_RC"\n",
 					DP_RC(rc));
 				D_GOTO(err_stask, rc);
 			}
@@ -1711,7 +1711,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 					      tse_task2sched(task),
 					      0, NULL, &io_task);
 			if (rc != 0) {
-				D_ERROR("Fetch dkey " DF_U64 " failed " DF_RC "\n",
+				D_ERROR("Fetch dkey "DF_U64" failed "DF_RC"\n",
 					params->dkey_val, DP_RC(rc));
 				D_GOTO(err_iotask, rc);
 			}
