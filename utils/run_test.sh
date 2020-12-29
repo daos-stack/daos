@@ -55,7 +55,7 @@ run_test()
 
     ((log_num += 1))
 
-    FILES=${DAOS_BASE}/test_results/*.xml
+    FILES="${DAOS_BASE}/test_results/*.xml"
     for f in $FILES
     do
         if [ -f "$f" ]; then
@@ -73,7 +73,7 @@ run_test()
             fi
         fi
     done
-    mv ${DAOS_BASE}/test_results/*.xml ${DAOS_BASE}/test_results/xml
+    mv "${DAOS_BASE}"/test_results/*.xml "${DAOS_BASE}"/test_results/xml
 }
 
 if [ -d "/mnt/daos" ]; then
@@ -86,24 +86,25 @@ if [ -d "/mnt/daos" ]; then
     fi
 
     echo "Running Cmocka tests"
-    mkdir -p ${DAOS_BASE}/test_results/xml
+    mkdir -p "${DAOS_BASE}/test_results/xml"
 
     VALGRIND_CMD=""
     if [ -z "$RUN_TEST_VALGRIND" ]; then
-        # Tests that do not run with Valgrind
-        COMP="UT_client"
+        # Tests that do not run valgrind
+        COMP="UTEST_client"
         run_test src/client/storage_estimator/common/tests/storage_estimator.sh
-        COMP="UT_rdb"
+        COMP="UTEST_rdb"
         run_test src/rdb/raft_tests/raft_tests.py
         go_spdk_ctests="${SL_PREFIX}/bin/nvme_control_ctests"
         if test -f "$go_spdk_ctests"; then
-            COMP="UT_control"
+            COMP="UTEST_control"
             run_test "$go_spdk_ctests"
         else
             echo "$go_spdk_ctests missing, SPDK_SRC not available when built?"
         fi
-        COMP="UT_control"
+        COMP="UTEST_control"
         run_test src/control/run_go_tests.sh
+        COMP="UTEST_vos"
         export DAOS_IO_BYPASS=pm
         run_test "${SL_PREFIX}/bin/vos_tests" -A 50
         export DAOS_IO_BYPASS=pm_snap
@@ -128,27 +129,27 @@ if [ -d "/mnt/daos" ]; then
     fi
 
     # Tests
-    COMP="UT_cart"
+    COMP="UTEST_cart"
     run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/test_linkage"
     run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_hlc"
     run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_swim"
 
-    COMP="UT_gurt"
+    COMP="UTEST_gurt"
     run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt"
     run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_producer"
     run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_consumer"
 
-    COMP="UT_vos"
+    COMP="UTEST_vos"
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
     run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
 
-    COMP="UT_vea"
+    COMP="UTEST_vea"
     run_test "${SL_PREFIX}/bin/vea_ut"
 
-    COMP="UT_bio"
+    COMP="UTEST_bio"
     run_test "${SL_BUILD_DIR}/src/bio/smd/tests/smd_ut"
 
-    COMP="UT_common"
+    COMP="UTEST_common"
     run_test "${SL_BUILD_DIR}/src/common/tests/umem_test"
     run_test "${SL_BUILD_DIR}/src/common/tests/sched"
     run_test "${SL_BUILD_DIR}/src/common/tests/drpc_tests"
@@ -159,19 +160,19 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_BUILD_DIR}/src/common/tests/acl_real_tests"
     run_test "${SL_BUILD_DIR}/src/common/tests/prop_tests"
 
-    COMP="UT_client"
+    COMP="UTEST_client"
     run_test "${SL_BUILD_DIR}/src/client/api/tests/eq_tests"
 
-    COMP="UT_security"
+    COMP="UTEST_security"
     run_test "${SL_BUILD_DIR}/src/security/tests/cli_security_tests"
     run_test "${SL_BUILD_DIR}/src/security/tests/srv_acl_tests"
 
-    COMP="UT_iosrv"
+    COMP="UTEST_iosrv"
     run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_progress_tests"
     run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_handler_tests"
     run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_listener_tests"
 
-    COMP="UT_mgmt"
+    COMP="UTEST_mgmt"
     run_test "${SL_BUILD_DIR}/src/mgmt/tests/srv_drpc_tests"
     run_test "${SL_PREFIX}/bin/daos_perf" -T vos -R '"U;p F;p V"' -o 5 -d 5 \
              -a 5 -n 10
@@ -182,7 +183,7 @@ if [ -d "/mnt/daos" ]; then
     export USE_VALGRIND=${RUN_TEST_VALGRIND}
     export VALGRIND_SUPP=${VALGRIND_SUPP}
     unset VALGRIND_CMD
-    COMP="UT_common"
+    COMP="UTEST_common"
     run_test src/common/tests/btree.sh ukey -s 20000
     run_test src/common/tests/btree.sh direct -s 20000
     run_test src/common/tests/btree.sh -s 20000
@@ -194,14 +195,14 @@ if [ -d "/mnt/daos" ]; then
     run_test src/common/tests/btree.sh dyn perf -s 20000
     run_test src/common/tests/btree.sh dyn perf ukey -s 20000
 
-    COMP="UT_vos"
+    COMP="UTEST_vos"
     run_test src/vos/tests/evt_ctl.sh
     run_test src/vos/tests/evt_ctl.sh pmem
     unset USE_VALGRIND
     unset VALGRIND_SUPP
 
-    mv ${DAOS_BASE}/test_results/xml/*.xml ${DAOS_BASE}/test_results
-    rm -rf ${DAOS_BASE}/test_results/xml
+    mv "${DAOS_BASE}"/test_results/xml/*.xml "${DAOS_BASE}"/test_results
+    rm -rf "${DAOS_BASE}"/test_results/xml
 
     # Reporting
     if [ $failed -eq 0 ]; then
