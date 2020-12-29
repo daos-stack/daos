@@ -1909,7 +1909,7 @@ int main(int argc, char *argv[])
 		"i1000,i1000 0,0 i1000,0";
 
 	char				*file_name = NULL;
-	char				*section_name;
+	char				*section_name = NULL;
 	const char			 tuple_tokens[] = "(),";
 	struct st_size_params		*all_params = NULL;
 	char				*sizes_ptr = NULL;
