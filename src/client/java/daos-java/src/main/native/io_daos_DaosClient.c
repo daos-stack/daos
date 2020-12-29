@@ -42,9 +42,10 @@
  * \return	copied pool handle in long
  */
 JNIEXPORT jlong JNICALL
-Java_io_daos_DaosClient_daosOpenPool(JNIEnv * env,
-				   jclass clientClass, jstring poolId, jstring serverGroup,
-				   jstring ranks, jint flags)
+Java_io_daos_DaosClient_daosOpenPool(JNIEnv *env,
+				     jclass clientClass, jstring poolId,
+				     jstring serverGroup,
+				     jstring ranks, jint flags)
 {
 	const char *pool_str = (*env)->GetStringUTFChars(env, poolId, 0);
 	const char *server_group = (*env)->GetStringUTFChars(env, serverGroup,
@@ -70,7 +71,7 @@ Java_io_daos_DaosClient_daosOpenPool(JNIEnv * env,
 
 		rc = daos_pool_connect(pool_uuid, server_group, svcl,
 				       flags,
-			               &poh /* returned pool handle */,
+				       &poh /* returned pool handle */,
 				       NULL /* returned pool info */,
 				       NULL /* event */);
 
@@ -131,8 +132,8 @@ Java_io_daos_DaosClient_daosClosePool(JNIEnv *env,
  */
 JNIEXPORT jlong JNICALL
 Java_io_daos_DaosClient_daosOpenCont(JNIEnv *env,
-				   jclass clientClass, jlong poolHandle, jstring contUuid,
-				   jint mode)
+				     jclass clientClass, jlong poolHandle,
+				     jstring contUuid, jint mode)
 {
 	daos_handle_t poh;
 	daos_cont_info_t co_info;
@@ -168,7 +169,7 @@ Java_io_daos_DaosClient_daosOpenCont(JNIEnv *env,
  */
 JNIEXPORT void JNICALL
 Java_io_daos_DaosClient_daosCloseContainer(JNIEnv *env,
-					 jclass clientClass, jlong contHandle)
+					   jclass clientClass, jlong contHandle)
 {
 	daos_handle_t coh;
 

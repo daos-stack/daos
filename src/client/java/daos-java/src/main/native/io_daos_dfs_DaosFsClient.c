@@ -1515,7 +1515,7 @@ Java_io_daos_dfs_DaosFsClient_dunsResolvePath(JNIEnv *env, jclass clientClass,
 	const char *prefix = "daos://";
 	bool has_prefix = strncmp(prefix, path, strlen(prefix)) == 0;
 	int rc;
-	
+
 	attr.da_no_prefix = !has_prefix;
 	rc = duns_resolve_path(path, &attr);
 	if (rc) {
