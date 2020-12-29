@@ -92,7 +92,7 @@ static uint8_t KEY_LIST_CODE_REACH_LIMIT = (uint8_t)4;
  */
 int
 throw_exception_base(JNIEnv *env, char *msg, int error_code,
-		int release_msg, int posix_error);
+		     int release_msg, int posix_error);
 
 /**
  * throw Java exception with dynamically constructed message for posix error.

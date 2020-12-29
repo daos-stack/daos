@@ -42,9 +42,9 @@
  * \return	copied pool handle in long
  */
 JNIEXPORT jlong JNICALL
-Java_io_daos_DaosClient_daosOpenPool(JNIEnv *env,
-		jclass clientClass, jstring poolId, jstring serverGroup,
-		jstring ranks, jint flags)
+Java_io_daos_DaosClient_daosOpenPool(JNIEnv * env,
+				   jclass clientClass, jstring poolId, jstring serverGroup,
+				   jstring ranks, jint flags)
 {
 	const char *pool_str = (*env)->GetStringUTFChars(env, poolId, 0);
 	const char *server_group = (*env)->GetStringUTFChars(env, serverGroup,
@@ -69,10 +69,10 @@ Java_io_daos_DaosClient_daosOpenPool(JNIEnv *env,
 		int rc;
 
 		rc = daos_pool_connect(pool_uuid, server_group, svcl,
-					flags,
-			&poh /* returned pool handle */,
-			NULL /* returned pool info */,
-			NULL /* event */);
+				       flags,
+			               &poh /* returned pool handle */,
+				       NULL /* returned pool info */,
+				       NULL /* event */);
 
 		if (rc) {
 			char *tmp = "Failed to connect to pool (%s)";
@@ -105,7 +105,7 @@ Java_io_daos_DaosClient_daosOpenPool(JNIEnv *env,
  */
 JNIEXPORT void JNICALL
 Java_io_daos_DaosClient_daosClosePool(JNIEnv *env,
-		jclass clientClass, jlong poolHandle)
+				      jclass clientClass, jlong poolHandle)
 {
 	daos_handle_t poh;
 
@@ -131,8 +131,8 @@ Java_io_daos_DaosClient_daosClosePool(JNIEnv *env,
  */
 JNIEXPORT jlong JNICALL
 Java_io_daos_DaosClient_daosOpenCont(JNIEnv *env,
-		jclass clientClass, jlong poolHandle, jstring contUuid,
-		jint mode)
+				   jclass clientClass, jlong poolHandle, jstring contUuid,
+				   jint mode)
 {
 	daos_handle_t poh;
 	daos_cont_info_t co_info;
@@ -168,7 +168,7 @@ Java_io_daos_DaosClient_daosOpenCont(JNIEnv *env,
  */
 JNIEXPORT void JNICALL
 Java_io_daos_DaosClient_daosCloseContainer(JNIEnv *env,
-		jclass clientClass, jlong contHandle)
+					 jclass clientClass, jlong contHandle)
 {
 	daos_handle_t coh;
 
@@ -189,7 +189,7 @@ Java_io_daos_DaosClient_daosCloseContainer(JNIEnv *env,
  */
 JNIEXPORT void JNICALL
 Java_io_daos_DaosClient_daosFinalize(JNIEnv *env,
-		jclass clientClass)
+				     jclass clientClass)
 {
 	int rc = daos_eq_lib_fini();
 
