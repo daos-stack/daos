@@ -4567,10 +4567,19 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 
 	ABT_rwlock_wrlock(svc->ps_lock);
 
-	rc = find_hdls_to_evict(&tx, svc, &hdl_uuids, &hdl_uuids_size,
-				&n_hdl_uuids, &in->pvi_hdls);
-	if (rc != 0)
-		D_GOTO(out_lock, rc);
+	/*
+	 * If a subset of handles is specified use them instead of iterating
+	 * through all handles for the pool uuid
+	 */
+	if (in->pvi_hdls.ca_arrays) {
+		hdl_uuids = in->pvi_hdls.ca_arrays;
+		n_hdl_uuids = in->pvi_hdls.ca_count;
+	} else {
+		rc = find_hdls_to_evict(&tx, svc, &hdl_uuids, &hdl_uuids_size,
+					&n_hdl_uuids);
+		if (rc != 0)
+			D_GOTO(out_lock, rc);
+	}
 
 	if (n_hdl_uuids > 0) {
 		/* If pool destroy but not forcibly, error: the pool is busy */
@@ -4607,7 +4616,10 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 	rc = rdb_tx_commit(&tx);
 	/* No need to set out->pvo_op.po_map_version. */
 out_free:
-	D_FREE(hdl_uuids);
+	/* We only need to free hdl_uuids we called find_hdls_to_evict */
+	if (!in->pvi_hdls.ca_arrays) {
+		D_FREE(hdl_uuids);
+	}
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
