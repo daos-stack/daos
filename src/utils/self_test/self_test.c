@@ -1740,7 +1740,7 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 
 	if (display) {
 		printf("Configuration file %s\n", file_name);
-		ConfigPrint(cfg, stdout);
+		ConfigPrintSection(cfg, stdout, section_name);
 	}
 
 	/* Parse of configuration file */
@@ -1760,7 +1760,7 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		printf("Configuration file %s\n", file_name);
-		ConfigPrint(cfg, stdout);
+		ConfigPrintSection(cfg, stdout, section_name);
 	}
 	/********/
 	config_ret = ConfigReadString(cfg, section_name, "group-name",
@@ -1977,7 +1977,7 @@ int main(int argc, char *argv[])
 			print_usage(argv[0], default_msg_sizes_str,
 				    g_default_rep_count,
 				    g_default_max_inflight);
-			D_GOTO(cleanup, ret = -DER_INVAL);
+			D_GOTO(cleanup, ret = 0);
 		default:
 			break;
 		}
@@ -2090,7 +2090,10 @@ int main(int argc, char *argv[])
 			print_usage(argv[0], default_msg_sizes_str,
 				    g_default_rep_count,
 				    g_default_max_inflight);
-			D_GOTO(cleanup, ret = -DER_INVAL);
+			if (c == 'h')
+				D_GOTO(cleanup, ret = 0);
+			else 
+				D_GOTO(cleanup, ret = -DER_INVAL);
 		}
 	}
 
