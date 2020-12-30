@@ -454,32 +454,62 @@ func (m *Membership) OnEvent(_ context.Context, evt events.Event) {
 		return
 	}
 
-	switch rankEvt := evt.(type) {
+	switch e := evt.(type) {
 	case *events.RankExit:
-		if rankEvt == nil {
-			m.log.Errorf("nil RankExit event received")
+		if e == nil {
+			m.log.Error("nil RankExit event received")
 			return
 		}
 		m.log.Debugf("processing RAS event %q from rank %d on host %q",
-			rankEvt.RAS.Msg, rankEvt.RAS.Rank, rankEvt.RAS.Hostname)
+			e.RAS.Msg, e.RAS.Rank, e.RAS.Hostname)
 
 		// TODO: sanity check that the correct member is being updated by
 		// performing lookup on provided hostname and matching returned
 		// addresses with the member address with matching rank.
 
 		if err := m.UpdateMemberStates(MemberResults{
-			NewMemberResult(Rank(rankEvt.RAS.Rank),
-				errors.Wrap(rankEvt.ExtendedInfo.ExitErr, rankEvt.RAS.Msg),
+			NewMemberResult(Rank(e.RAS.Rank),
+				errors.Wrap(e.ExtendedInfo.ExitErr, e.RAS.Msg),
 				MemberStateErrored),
 		}, true); err != nil {
 			m.log.Errorf("updating member states: %s", err)
 			return
 		}
 
-		member, _ := m.Get(Rank(rankEvt.RAS.Rank))
-		m.log.Debugf("updated rank %d to %+v (%s)", rankEvt.RAS.Rank, member, member.Info)
+		member, _ := m.Get(Rank(e.RAS.Rank))
+		m.log.Debugf("update rank %d to %+v (%s)", e.RAS.Rank, member,
+			member.Info)
+	case *events.PoolSvcRanksUpdate:
+		if e == nil {
+			m.log.Error("nil PoolSvcRanksUpdate event received")
+			return
+		}
+		m.log.Debugf("processing RAS event %q on pool %s on host %q",
+			e.RAS.Msg, e.ExtendedInfo.PoolUUID, e.RAS.Hostname)
+
+		uuid, err := uuid.Parse(e.ExtendedInfo.PoolUUID)
+		if err != nil {
+			m.log.Errorf("failed to parse pool UUID %q: %s",
+				e.ExtendedInfo.PoolUUID, err)
+			return
+		}
+
+		ps, err := m.db.FindPoolServiceByUUID(uuid)
+		if err != nil {
+			m.log.Errorf("failed to find pool with UUID %q: %s",
+				e.ExtendedInfo.PoolUUID, err)
+			return
+		}
+
+		m.log.Debugf("update pool %s (state=%s) svc ranks %v->%v",
+			ps.PoolUUID, ps.State, ps.Replicas, e.ExtendedInfo.SvcRanks)
+
+		ps.Replicas = RanksFromUint32(e.ExtendedInfo.SvcRanks)
+
+		if err := m.db.UpdatePoolService(ps); err != nil {
+			m.log.Errorf("failed to apply pool service update: %s", err)
+		}
 	default:
-		m.log.Errorf("%v event unsupported", evt)
-		return
+		m.log.Errorf("%s event unsupported", evt.GetID())
 	}
 }
