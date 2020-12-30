@@ -68,6 +68,7 @@ class DirTree(object):
         self._tree_path = ""
         self._needles_count = 0
         self._needles_paths = []
+        self._logger = None
 
     def create(self):
         """
@@ -78,7 +79,20 @@ class DirTree(object):
             return
 
         try:
+            if os.path.isdir("/tmp"):
+                self._log("/tmp OK")
+            else:
+                self._log("/tmp Error")
+            if os.path.isdir(self._root):
+                self._log("{0} OK".format(self._root))
+            else:
+                self._log("{0} Error".format(self._root))
             self._tree_path = tempfile.mkdtemp(dir=self._root)
+            if os.path.isdir(self._tree_path):
+                self._log("{0} OK".format(self._tree_path))
+            else:
+                self._log("{0} Error".format(self._tree_path))
+            self._log("Directory-tree root: {0}".format(self._tree_path))
             self._create_dir_tree(self._tree_path, self._height)
             self._created_remaining_needles()
         except Exception as err:
@@ -117,6 +131,20 @@ class DirTree(object):
         needle_path = random.choice(self._needles_paths)
         needle_name = os.path.basename(needle_path)
         return needle_name, needle_path
+
+    def set_logger(self, fn):
+        """
+        Set the function that will be used to print log messages.
+        If this value is not set, it will work silently.
+
+        Parameters:
+            fn (function): Function to be used for logging.
+        """
+        self._logger = fn
+
+    def _log(self, msg):
+        if self._logger:
+            self._logger(msg)
 
     def _create_dir_tree(self, current_path, current_height):
         if current_height <= 0:

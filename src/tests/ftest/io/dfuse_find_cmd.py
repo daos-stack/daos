@@ -173,7 +173,7 @@ class FindCmd(DfuseTestBase):
                 self.hostlist_clients, self.pool, self.container, mount_dir)
             dfuses.append(self.dfuse)
             containers.append(self.container)
-            mount_dirs.append(mount_dir)
+            mount_dirs.append(self.dfuse.mount_dir.value)
 
         return mount_dirs
 
@@ -196,6 +196,7 @@ class FindCmd(DfuseTestBase):
                 height,
                 subdirs_per_node,
                 files_per_node)
+            dir_tree.set_logger(self.log.info)
             dir_tree.set_number_of_needles(needles)
             tree_path = profiler.run(dir_tree.create, "create_dirtree")
             dir_trees.append(dir_tree)
