@@ -921,8 +921,11 @@ rebuild_debug_print_queue()
 {
 	struct rebuild_task *task_tmp;
 	struct rebuild_task *task;
-	/* Uninitialized stack buffer to write target list into */
-	char tgts_buf[512];
+	/* Uninitialized stack buffer to write target list into
+	 * This only accumulates the targets in a single task, so it doesn't
+	 * need to be very big. 200 bytes is enough for ~30 5-digit target ids
+	 */
+	char tgts_buf[200];
 	int i;
 	/* Position in stack buffer where str data should be written next */
 	size_t tgts_pos = 0;
@@ -934,7 +937,11 @@ rebuild_debug_print_queue()
 
 		for (i = 0; i < task->dst_tgts.pti_number; i++) {
 			if (tgts_pos > sizeof(tgts_buf) - 10) {
-				/* In case all the targets won't fit */
+				/* Stop a bit before we get to the end of the
+				 * buffer to avoid printing a large target id
+				 * that gets cut off. Instead just add an
+				 * indication there was more data not printed
+				 */
 				tgts_pos += snprintf(&tgts_buf[tgts_pos],
 						     sizeof(tgts_buf) -
 						     tgts_pos, "...");
@@ -972,61 +979,56 @@ rebuild_try_merge_tgts(const uuid_t pool_uuid, uint32_t map_ver,
 		       struct pool_target_id_list *tgts)
 {
 	struct rebuild_task *task;
-	struct rebuild_task *found = NULL;
+	struct rebuild_task *merge_task = NULL;
 	int rc;
-	uint32_t highest_queued_map_ver = -1;
 
-	/* Loop over the queued tasks, looking for existing queued tasks for
-	 * this pool that match the UUID.
+	/* Loop over all queued tasks, and evaluate whether this task can safely
+	 * join to the queued task.
 	 *
-	 * For all such matching tasks, find the highest queued map_ver
+	 * Specifically, a task isn't safe to merge to if another operation of
+	 * a different type (with higher pool map version) has been scheduled
+	 * after a potential merge target. Merging would cause rebuild to
+	 * essentially skip the intermediary different-type step because the
+	 * rebuild version is set to the task map version after rebuild is
+	 * complete.
 	 */
 	d_list_for_each_entry(task, &rebuild_gst.rg_queue_list, dst_list) {
-		if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0) {
-			/* This task is for the same UUID */
-			if (highest_queued_map_ver < task->dst_map_ver) {
-				highest_queued_map_ver = task->dst_map_ver;
-			}
-		}
+		if (uuid_compare(task->dst_pool_uuid, pool_uuid) != 0)
+			/* This task isn't for this pool - don't consider it */
+			continue;
+		else if (task->dst_rebuild_op != rebuild_op)
+			/* Found a different operation. If we had found a task
+			 * to merge to before this, clear it, as that is no
+			 * longer safe since this later operation exists
+			 */
+			merge_task = NULL;
+		else
+			/* Found a task to merge to. Don't break here - continue
+			 * looping to discover if other tasks would make merging
+			 * to this task unsafe
+			 */
+			merge_task = task;
 	}
 
-	/* Loop over the queued tasks again, looking for one that matches this
-	 * pool AND this operation AND is the highest found version.
-	 *
-	 * This will be safe to merge to - because there are no other operation
-	 * types that were queued after that (they would have a higher version).
-	 *
-	 * A task with a lower map version than the highest found will not be
-	 * safe to merge to, even if it's the same type, because this will cause
-	 * rebuild to essentially skip the intermediary different-type step
-	 * because the rebuild version is set to the task map version after
-	 * rebuild is complete.
-	 */
-	d_list_for_each_entry(task, &rebuild_gst.rg_queue_list, dst_list) {
-		if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0
-		    && task->dst_rebuild_op == rebuild_op
-		    && task->dst_map_ver == highest_queued_map_ver) {
-			found = task;
-			break;
-		}
-	}
-
-	if (found == NULL)
+	if (merge_task == NULL)
+		/* Did not find a suitable target. Caller will handle appending
+		 * this task to the queue
+		 */
 		return 0;
 
 	D_DEBUG(DB_REBUILD, "("DF_UUID" ver=%u) id %u merge to task %p op=%s\n",
 		DP_UUID(pool_uuid), map_ver,
-		tgts->pti_ids[0].pti_id, task, RB_OP_STR(rebuild_op));
+		tgts->pti_ids[0].pti_id, merge_task, RB_OP_STR(rebuild_op));
 
 	/* Merge the failed ranks to existing rebuild task */
-	rc = pool_target_id_list_merge(&task->dst_tgts, tgts);
+	rc = pool_target_id_list_merge(&merge_task->dst_tgts, tgts);
 	if (rc)
 		return rc;
 
-	if (task->dst_map_ver < map_ver) {
+	if (merge_task->dst_map_ver < map_ver) {
 		D_DEBUG(DB_REBUILD, "rebuild task ver %u --> %u\n",
-			found->dst_map_ver, map_ver);
-		found->dst_map_ver = map_ver;
+			merge_task->dst_map_ver, map_ver);
+		merge_task->dst_map_ver = map_ver;
 	}
 
 	D_PRINT("Rebuild [queued] ("DF_UUID" ver=%u) id %u op=%s\n",
