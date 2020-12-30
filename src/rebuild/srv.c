@@ -443,8 +443,7 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 
 	/* let's check scanning status on every thread*/
 	ABT_mutex_lock(rpt->rt_lock);
-	rc = dss_thread_collective(dss_rebuild_check_one, &arg, 0,
-				   DSS_ULT_REBUILD);
+	rc = dss_thread_collective(dss_rebuild_check_one, &arg, 0);
 	if (rc) {
 		ABT_mutex_unlock(rpt->rt_lock);
 		D_GOTO(out, rc);
@@ -1234,8 +1233,7 @@ rebuild_ults(void *arg)
 				continue;
 
 			rc = dss_ult_create(rebuild_task_ult, task,
-					    DSS_ULT_REBUILD, DSS_TGT_SELF,
-					    0, NULL);
+					    DSS_XS_SELF, 0, 0, NULL);
 			if (rc == 0) {
 				rebuild_gst.rg_inflight++;
 				/* TODO: This needs to be expanded to select the
@@ -1424,8 +1422,8 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 		D_DEBUG(DB_REBUILD, "rebuild ult "DF_UUID" ver=%u, op=%s",
 			DP_UUID(uuid), map_ver, RB_OP_STR(rebuild_op));
 		rebuild_gst.rg_rebuild_running = 1;
-		rc = dss_ult_create(rebuild_ults, NULL, DSS_ULT_REBUILD,
-				    DSS_TGT_SELF, 0, NULL);
+		rc = dss_ult_create(rebuild_ults, NULL, DSS_XS_SELF,
+				    0, 0, NULL);
 		if (rc) {
 			ABT_cond_free(&rebuild_gst.rg_stop_cond);
 			rebuild_gst.rg_rebuild_running = 0;
@@ -1608,7 +1606,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 		rebuild_pool_tls_destroy(pool_tls);
 
 	/* close the rebuild pool/container on all main XS */
-	rc = dss_task_collective(rebuild_fini_one, rpt, 0, DSS_ULT_REBUILD);
+	rc = dss_task_collective(rebuild_fini_one, rpt, 0);
 
 	rpt_put(rpt);
 	/* No one should access rpt after rebuild_fini_one.
@@ -1978,7 +1976,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	rpt->rt_rebuild_fence = crt_hlc_get();
-	rc = dss_task_collective(rebuild_prepare_one, rpt, 0, DSS_ULT_REBUILD);
+	rc = dss_task_collective(rebuild_prepare_one, rpt, 0);
 	if (rc) {
 		rpt->rt_rebuild_fence = 0;
 		rebuild_pool_tls_destroy(pool_tls);

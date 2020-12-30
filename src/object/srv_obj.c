@@ -4164,8 +4164,8 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 		dcas[i].dca_future = future;
 		dcas[i].dca_idx = i;
 
-		rc = dss_ult_create(ds_obj_dtx_leader_ult, &dcas[i], DSS_ULT_IO,
-				    DSS_TGT_SELF, 0, NULL);
+		rc = dss_ult_create(ds_obj_dtx_leader_ult, &dcas[i],
+				    DSS_XS_SELF, 0, 0, NULL);
 		if (rc != 0) {
 			struct daos_cpd_sub_head	*dcsh;
 
