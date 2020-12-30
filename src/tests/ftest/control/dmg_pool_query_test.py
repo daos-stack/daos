@@ -66,7 +66,8 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         the system. Provided a valid pool UUID, verify the output received from
         pool query command.
 
-        :avocado: tags=all,small,pr,hw,dmg,pool_query,basic,poolquerybasic
+        :avocado: tags=all,small,daily_regression,hw,dmg,pool_query,basic
+        :avocado: tags=poolquerybasic
         """
         self.log.info("==>   Verify dmg output against expected output:")
         dmg_info = self.get_pool_query_info(self.uuid)
@@ -128,7 +129,8 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         the system. Verify the inputs that can be provided to 'query --pool'
         argument of the dmg pool subcommand.
 
-        :avocado: tags=all,small,pr,hw,dmg,pool_query,basic,poolqueryinputs
+        :avocado: tags=all,small,daily_regression,hw,dmg,pool_query,basic
+        :avocado: tags=poolqueryinputs
         """
         # Get test UUIDs
         errors_list = []
@@ -167,7 +169,8 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         Test Description: Test that pool query command will properly and
         accurately show the size changes once there is content in the pool.
 
-        :avocado: tags=all,small,pr,hw,dmg,pool_query,basic,poolquerywrite
+        :avocado: tags=all,small,daily_regression,hw,dmg,pool_query,basic
+        :avocado: tags=poolquerywrite
         """
         # Store original pool info
         out_b = self.get_pool_query_info(self.uuid)

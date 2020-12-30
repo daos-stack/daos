@@ -241,7 +241,7 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 		}
 
 		var err error
-		if cfg.AccessPoints, err = control.ParseHostList(cfg.AccessPoints, cfg.ControlPort); err != nil {
+		if cfg.AccessPoints, err = common.ParseHostList(cfg.AccessPoints, cfg.ControlPort); err != nil {
 			return errors.Wrap(err, "Failed to parse config access_points")
 		}
 

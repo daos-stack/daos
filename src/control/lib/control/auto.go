@@ -145,7 +145,7 @@ func getCPUParams(log logging.Logger, bdevLists [][]string, coresPerNuma int) ([
 }
 
 // ConfigGenerate attempts to automatically detect hardware and generate a DAOS
-// server config file for a set of hosts with homogenous hardware setup.
+// server config file for a set of hosts with homogeneous hardware setup.
 //
 // Returns API response and error.
 func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerateResp, error) {

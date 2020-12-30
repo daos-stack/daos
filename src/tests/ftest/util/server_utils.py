@@ -464,7 +464,8 @@ class DaosServerManager(SubprocessManager):
             cmd.sub_command_class.sub_command_class.nvme_only.value = True
 
         if using_nvme:
-            cmd.sub_command_class.sub_command_class.hugepages.value = 4096
+            hugepages = self.get_config_value("nr_hugepages")
+            cmd.sub_command_class.sub_command_class.hugepages.value = hugepages
 
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
         result = pcmd(self._hosts, str(cmd), timeout=40)

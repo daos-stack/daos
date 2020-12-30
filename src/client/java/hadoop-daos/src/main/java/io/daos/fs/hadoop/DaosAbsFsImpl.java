@@ -41,7 +41,7 @@ public class DaosAbsFsImpl extends DelegateToFileSystem {
 
   public DaosAbsFsImpl(URI theUri, Configuration conf)
           throws IOException, URISyntaxException {
-    super(theUri, new DaosFileSystem(), conf, Constants.DAOS_SCHEMA, true);
+    super(theUri, new DaosFileSystem(), conf, Constants.DAOS_SCHEMA, false);
   }
 
   /**

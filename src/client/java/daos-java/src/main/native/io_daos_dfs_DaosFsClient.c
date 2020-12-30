@@ -1247,6 +1247,9 @@ set_user_group_name(JNIEnv *env, char *buffer, struct stat *stat)
 
 	if (uentry != NULL) {
 		len = strlen(uentry->pw_name);
+		if (len > 32) {
+			len = 32;
+		}
 		cpyfield(env, buffer, &len, 4, 4);
 		memcpy(buffer+4, uentry->pw_name, len);
 		inc += len;
@@ -1256,6 +1259,9 @@ set_user_group_name(JNIEnv *env, char *buffer, struct stat *stat)
 	}
 	if (gentry != NULL) {
 		len = strlen(gentry->gr_name);
+		if (len > 32) {
+			len = 32;
+		}
 		cpyfield(env, buffer+inc, &len, 4, 4);
 		memcpy(buffer+inc+4, gentry->gr_name, len);
 	} else {

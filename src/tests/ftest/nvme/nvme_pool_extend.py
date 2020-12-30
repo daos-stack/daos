@@ -52,7 +52,7 @@ class NvmePoolExtend(TestWithServers):
     - Create a pool
     - Run IOR with write mode
     - Start a new server and extend the pool
-    - Verfy IOR written data after extending the pool.
+    - Verify IOR written data after extending the pool.
 
     :avocado: recursive
     """

@@ -1044,10 +1044,10 @@ vos_iter_intent(struct vos_iterator *iter)
 {
 	if (iter->it_for_purge)
 		return DAOS_INTENT_PURGE;
-	if (iter->it_for_migration)
-		return DAOS_INTENT_MIGRATION;
 	if (iter->it_ignore_uncommitted)
 		return DAOS_INTENT_IGNORE_NONCOMMITTED;
+	if (iter->it_for_migration)
+		return DAOS_INTENT_MIGRATION;
 	return DAOS_INTENT_DEFAULT;
 }
 
@@ -1200,7 +1200,8 @@ vos_dtx_continue_detect(int rc)
 	/* Continue to detect other potential in-prepared DTX. */
 	return rc == -DER_INPROGRESS && dth != NULL &&
 		dth->dth_share_tbd_count > 0 &&
-		dth->dth_share_tbd_count < DTX_DETECT_MAX;
+		dth->dth_share_tbd_count < DTX_REFRESH_MAX &&
+		dth->dth_share_tbd_scanned < DTX_DETECT_SCAN_MAX;
 }
 
 static inline bool
