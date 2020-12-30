@@ -1185,6 +1185,24 @@ vos_dtx_append(struct dtx_handle *dth, umem_off_t record, uint32_t type)
 	return 0;
 }
 
+inline unsigned int
+vos_dtx_ent_state(uint32_t entry)
+{
+	switch (entry) {
+	case DTX_LID_COMMITTED:
+		return DTX_ENT_COMMITTED;
+	case DTX_LID_ABORTED:
+		return DTX_ENT_ABORTED;
+	default:
+		return DTX_ENT_UNCOMMITTED;
+	}
+}
+
+/*
+ * Since no entries should be hidden from 'purge' (aggregation, discard,
+ * remove) operations, ALB_UNAVAILABLE should never be returned for the
+ * DAOS_INTENT_PURGE.
+ */
 int
 vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 			   daos_epoch_t epoch, uint32_t intent, uint32_t type)
@@ -1227,7 +1245,7 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	/* Aborted */
 	if (dtx_is_aborted(entry))
 		return intent == DAOS_INTENT_PURGE ?
-			ALB_AVAILABLE_DIRTY : ALB_UNAVAILABLE;
+			ALB_AVAILABLE_ABORTED : ALB_UNAVAILABLE;
 
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
@@ -1239,16 +1257,8 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	if (found && dtx_is_valid_handle(dth) && dae == dth->dth_ent)
 		return ALB_AVAILABLE_CLEAN;
 
-	if (intent == DAOS_INTENT_PURGE) {
-		/* XXX: For the corrupted DTX entry, we need some special
-		 *	tools (TBD) to recover or handle it. So NOT purge
-		 *	it via general VOS aggregation.
-		 */
-		if (found && DAE_FLAGS(dae) & DTE_CORRUPTED)
-			return ALB_UNAVAILABLE;
-
+	if (intent == DAOS_INTENT_PURGE)
 		return ALB_AVAILABLE_DIRTY;
-	}
 
 	if (!found) {
 		/** If we move to not marking entries explicitly, this

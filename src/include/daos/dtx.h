@@ -208,9 +208,34 @@ enum daos_dtx_alb {
 	ALB_UNAVAILABLE		= 0,
 	/* available, no (or not care) pending modification */
 	ALB_AVAILABLE_CLEAN	= 1,
-	/* available but with dirty modification or garbage */
+	/* available but with dirty modification */
 	ALB_AVAILABLE_DIRTY	= 2,
+	/* available, aborted or garbage */
+	ALB_AVAILABLE_ABORTED	= 3,
 };
+
+enum dtx_entry_state {
+	DTX_ENT_COMMITTED	= 0,
+	DTX_ENT_UNCOMMITTED,
+	DTX_ENT_ABORTED,
+};
+
+static inline unsigned int
+dtx_alb2state(int alb)
+{
+	switch (alb) {
+	case ALB_UNAVAILABLE:
+	case ALB_AVAILABLE_DIRTY:
+		return DTX_ENT_UNCOMMITTED;
+	case ALB_AVAILABLE_CLEAN:
+		return DTX_ENT_COMMITTED;
+	case ALB_AVAILABLE_ABORTED:
+		return DTX_ENT_ABORTED;
+	default:
+		D_ASSERTF(0, "Invalid alb:%d\n", alb);
+		return DTX_ENT_UNCOMMITTED;
+	}
+}
 
 enum daos_tx_flags {
 	DTF_RETRY_COMMIT	= 1, /* TX commit will be retry. */

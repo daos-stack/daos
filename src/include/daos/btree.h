@@ -536,8 +536,6 @@ int dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
 		      uint32_t intent, d_iov_t *key, daos_anchor_t *anchor);
 int dbtree_iter_next(daos_handle_t ih);
 int dbtree_iter_prev(daos_handle_t ih);
-int dbtree_iter_next_with_intent(daos_handle_t ih, uint32_t intent);
-int dbtree_iter_prev_with_intent(daos_handle_t ih, uint32_t intent);
 int dbtree_iter_fetch(daos_handle_t ih, d_iov_t *key,
 		      d_iov_t *val, daos_anchor_t *anchor);
 int dbtree_iter_delete(daos_handle_t ih, void *args);
