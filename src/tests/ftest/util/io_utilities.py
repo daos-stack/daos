@@ -66,6 +66,7 @@ class DirTree(object):
         self._height = height
         self._files_per_node = files_per_node
         self._tree_path = ""
+        self._needles_prefix = ""
         self._needles_count = 0
         self._needles_paths = []
         self._logger = None
@@ -87,7 +88,9 @@ class DirTree(object):
                 self._log("{0} OK".format(self._root))
             else:
                 self._log("{0} : Error".format(self._root))
+
             self._tree_path = tempfile.mkdtemp(dir=self._root)
+
             if os.path.isdir(self._tree_path):
                 self._log("{0} : OK".format(self._tree_path))
             else:
@@ -117,6 +120,12 @@ class DirTree(object):
         the directory-tree. These files will have the ".needle" suffix.
         """
         self._needles_count = num
+
+    def set_needles_prefix(self, prefix):
+        """
+        Set the needle prefix name. The file name will begin with that prefix.
+        """
+        self._needles_prefix = prefix
 
     def get_probe(self):
         """
@@ -166,10 +175,11 @@ class DirTree(object):
         if self._needles_count <= 0:
             return
 
-        for _ in range(self._needles_count):
+        for i in range(self._needles_count):
             new_path = os.path.dirname(random.choice(self._needles_paths))
-            suffix = "_{:05d}.needle".format(self._needles_count)
-            fd, _ = tempfile.mkstemp(dir=new_path, suffix=suffix)
+            suffix = "_{:05d}.needle".format(i)
+            fd, _ = tempfile.mkstemp(
+                dir=new_path, prefix=self._needles_prefix, suffix=suffix)
             os.close(fd)
 
     def _create_needle(self, current_path, current_height):
@@ -181,7 +191,8 @@ class DirTree(object):
 
         self._needles_count -= 1
         suffix = "_{:05d}.needle".format(self._needles_count)
-        fd, file_name = tempfile.mkstemp(dir=current_path, suffix=suffix)
+        fd, file_name = tempfile.mkstemp(
+            dir=current_path, prefix=self._needles_prefix, suffix=suffix)
         os.close(fd)
 
         self._needles_paths.append(file_name)
