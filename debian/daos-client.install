@@ -1,6 +1,7 @@
 usr/etc/memcheck-daos-client.supp
 usr/bin/cart_ctl
 usr/bin/self_test
+usr/etc/selftest.cnf
 usr/bin/dmg
 usr/bin/daos_agent
 usr/bin/dfuse
