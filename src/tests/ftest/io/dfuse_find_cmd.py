@@ -22,10 +22,8 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import os
-import shutil
 import sys
 import string
-import tempfile
 import random
 import general_utils
 
@@ -80,7 +78,7 @@ class FindCmd(DfuseTestBase):
             challenger_path = _generate_temp_path_name(
                 challenger_path, "test_")
 
-        def run_test(test_root, dir_tree_paths):
+        def _run_test(test_root, dir_tree_paths):
 
             self._crate_dir_trees(
                 dir_tree_paths,
@@ -98,12 +96,12 @@ class FindCmd(DfuseTestBase):
             mount_dirs = self._setup_containers(
                 dfs_path, cont_count, dfuses, containers)
 
-            daos_stats = run_test(dfs_path, mount_dirs)
+            daos_stats = _run_test(dfs_path, mount_dirs)
 
             if challenger_path:
                 challenger_dirs = self._setup_challenger(
                     challenger_path, cont_count)
-                challenger_stats = run_test(challenger_path, challenger_dirs)
+                challenger_stats = _run_test(challenger_path, challenger_dirs)
 
         except CommandFailure as error:
             self.log.error("FindCmd Test Failed: %s", str(error))
@@ -148,7 +146,7 @@ class FindCmd(DfuseTestBase):
         profiler = general_utils.SimpleProfiler()
         profiler.set_logger(self.log.info)
 
-        def search_needles(file_name, sample_tag, expected_res):
+        def _search_needles(file_name, sample_tag, expected_res):
             self.log.info("Searching pattern: %s", file_name)
             self.log.info("Number of expecting results: %d", expected_res)
             cmd = u"find {0} -name {1} | wc -l | grep {2}".format(test_path,
@@ -167,13 +165,13 @@ class FindCmd(DfuseTestBase):
             prefix = random.randrange(contaiers - 1)
             sufix = random.randrange(needles - 1)
             file_name = "t{:05d}_*_{:05d}.needle".format(prefix, sufix)
-            search_needles(file_name, "unique_file", 1)
+            _search_needles(file_name, "unique_file", 1)
 
             number = random.randrange(needles - 1)
             file_name = "*_{:05d}.needle".format(number)
-            search_needles(file_name, "same_suffix", contaiers)
+            _search_needles(file_name, "same_suffix", contaiers)
 
-            search_needles("*.needle", "all_files", contaiers * needles)
+            _search_needles("*.needle", "all_files", contaiers * needles)
 
         return profiler
 
@@ -250,7 +248,7 @@ def _generate_temp_path_name(root, prefix):
     return os.path.join(root, "{}{}".format(prefix, random_name))
 
 
-def main():
+def _populate_dir_tree():
     path = sys.argv[1]
     height = int(sys.argv[2])
     subdirs_per_node = int(sys.argv[3])
@@ -272,4 +270,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    _populate_dir_tree()
