@@ -4573,6 +4573,10 @@ validate_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc,  uuid_t **hdl_uu
 			uuid_copy(valid_list[n_valid_list], hdl_list[i]);
 			n_valid_list++;
 		} else if (rc == -DER_NONEXIST) {
+			D_DEBUG(DF_DSMS, "Skipping invalid handle" DF_UUID "\n",
+				DP_UUID(hdl_list[i]));
+			/* Reset RC incase we're the last entry */
+			rc = 0;
 			continue;
 		} else {
 			D_FREE(valid_list);
