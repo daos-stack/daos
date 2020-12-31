@@ -209,7 +209,7 @@ class FindCmd(DfuseTestBase):
             count += 1
             remote_args = "{} {} {} {} {} {}".format(
                 path, height, subdirs, files_per_node, needles, prefix)
-            dir_tree_cmd = "PYTHONPATH={} {} {}".format(
+            dir_tree_cmd = "PYTHONPATH={} python {} {}".format(
                 remote_pythonpath, os.path.abspath(__file__), remote_args)
             self._run_cmd(u"{0}".format(dir_tree_cmd))
 

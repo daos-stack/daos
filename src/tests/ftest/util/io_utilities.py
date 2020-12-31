@@ -161,9 +161,9 @@ class DirTree(object):
         if self._needles_count <= 0:
             return
 
-        for i in range(self._needles_count):
+        for count in range(self._needles_count):
             new_path = os.path.dirname(random.choice(self._needles_paths))
-            suffix = "_{:05d}.needle".format(i)
+            suffix = "_{:05d}.needle".format(count)
             fd, _ = tempfile.mkstemp(
                 dir=new_path, prefix=self._needles_prefix, suffix=suffix)
             os.close(fd)
