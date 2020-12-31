@@ -158,6 +158,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		if (rpc_req_input == NULL)
 			return;
 		rpc_req_output = crt_reply_get(rpc_req);
+    if (rpc_req_output == NULL)
 			return;
 		if (cb_info->cci_rc != 0) {
 
