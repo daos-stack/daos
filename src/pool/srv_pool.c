@@ -4545,8 +4545,9 @@ find_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc, uuid_t **hdl_uuids,
  * Callers are responsible for freeing *hdl_uuids if this function returns zero.
  */
 static int
-validate_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc,  uuid_t **hdl_uuids,
-		       int *n_hdl_uuids, uuid_t *hdl_list, int n_hdl_list) {
+validate_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc,
+		       uuid_t **hdl_uuids, int *n_hdl_uuids, uuid_t *hdl_list,
+		       int n_hdl_list) {
 	uuid_t		*valid_list;
 	int		n_valid_list = 0;
 	int		i;
@@ -4559,7 +4560,7 @@ validate_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc,  uuid_t **hdl_uu
 		return -DER_INVAL;
 	}
 
-	/* Asume the entire list is valid */
+	/* Assume the entire list is valid */
 	D_ALLOC(valid_list, sizeof(uuid_t) * n_hdl_list);
 	if (valid_list == NULL)
 		return -DER_NOMEM;
@@ -4575,7 +4576,7 @@ validate_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc,  uuid_t **hdl_uu
 		} else if (rc == -DER_NONEXIST) {
 			D_DEBUG(DF_DSMS, "Skipping invalid handle" DF_UUID "\n",
 				DP_UUID(hdl_list[i]));
-			/* Reset RC incase we're the last entry */
+			/* Reset RC in case we're the last entry */
 			rc = 0;
 			continue;
 		} else {
