@@ -115,10 +115,8 @@ bool ConfigHasSection(const Config *cfg, const char *sect);
 ConfigRet ConfigRemoveSection(Config *cfg, const char *sect);
 ConfigRet ConfigRemoveKey(Config *cfg, const char *sect, const char *key);
 
-
 #ifdef __cplusplus
 }
 #endif
-
 
 #endif /* CONFIGINI_H_ */

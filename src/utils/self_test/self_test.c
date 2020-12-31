@@ -209,7 +209,7 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 
 	d_rank_list_free(rank_list);
 
-	ret = crt_rank_self_set(max_rank+1);
+	ret = crt_rank_self_set(max_rank + 1);
 	if (ret != 0) {
 		D_ERROR("crt_rank_self_set failed; ret = %d\n", ret);
 		return ret;
@@ -447,7 +447,7 @@ static void print_results(struct st_latency *latencies,
 	       latencies[num_failed].val / 1000,
 	       latencies[num_failed + num_passed / 4].val / 1000,
 	       latencies[num_failed + num_passed / 2].val / 1000,
-	       latencies[num_failed + num_passed*3/4].val / 1000,
+	       latencies[num_failed + num_passed * 3/4].val / 1000,
 	       latencies[test_params->rep_count - 1].val / 1000,
 	       latency_avg / 1000, latency_std_dev / 1000);
 
@@ -1316,7 +1316,8 @@ static void st_parse_range_str(char *const str, char *const validated_str,
 				 * If anything goes wrong, skip over this
 				 * comma-separated range/value.
 				 */
-				if (sscanf(pch_sub, "%u", &val[hyphen_count]) != 1) {
+				if (sscanf(pch_sub, "%u",
+				           &val[hyphen_count]) != 1) {
 					val_valid[0] = 0;
 					val_valid[1] = 0;
 					break;
@@ -1541,7 +1542,6 @@ cleanup:
 		D_FREE(tag_valid_str);
 
 	return ret;
-
 }
 
 /**
@@ -1764,7 +1764,8 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 	}
 	/********/
 	config_ret = ConfigReadString(cfg, section_name, "group-name",
-				   &string[0], STRING_MAX_SIZE, (char *)NULL);
+				      &string[0], STRING_MAX_SIZE,
+				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		len = strlen(string) + 1;
 		g_dest_name = (char *)malloc(len);
@@ -1796,7 +1797,8 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 
 	/********/
 	config_ret = ConfigReadString(cfg, section_name, "message-sizes",
-				   &string[0], STRING_MAX_SIZE, (char *)NULL);
+				      &string[0], STRING_MAX_SIZE,
+				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		len = strlen(string) + 1;
 		g_msg_sizes_str = (char *)malloc(len);
@@ -1870,7 +1872,8 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 
 	/********/
 	config_ret = ConfigReadString(cfg, section_name, "randomize-endpoints",
-				    &string[0], STRING_MAX_SIZE, (char *)NULL);
+				      &string[0], STRING_MAX_SIZE,
+				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		/* Avoid checkpatch warning */
 		g_randomize_endpoints = true;
@@ -1978,6 +1981,7 @@ int main(int argc, char *argv[])
 				    g_default_rep_count,
 				    g_default_max_inflight);
 			D_GOTO(cleanup, ret = 0);
+			break;
 		default:
 			break;
 		}
@@ -1995,7 +1999,7 @@ int main(int argc, char *argv[])
 	/**************** Second Parse of user arguments ***************/
 	/*
 	* Overwrite default and/or file input arguments
-	* Restart the scaning.
+	* Restart the scanning.
 	*/
 	optind = 1;
 	while (1) {
@@ -2012,7 +2016,7 @@ int main(int argc, char *argv[])
 		case 'd':
 			break;
 
-		/* Non file parameters. May be used to overide file. */
+		/* Non file parameters. May be used to override file. */
 		case 'g':
 			if (g_dest_name != NULL) {
 				/* Avoid checkpatch warning */
@@ -2092,7 +2096,7 @@ int main(int argc, char *argv[])
 				    g_default_max_inflight);
 			if (c == 'h')
 				D_GOTO(cleanup, ret = 0);
-			else 
+			else
 				D_GOTO(cleanup, ret = -DER_INVAL);
 		}
 	}

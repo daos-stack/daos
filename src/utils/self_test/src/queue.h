@@ -355,7 +355,6 @@ struct {							\
 		(head2)->stqh_last = &STAILQ_FIRST(head2);	\
 } while (0)
 
-
 /*
  * List declarations.
  */
@@ -384,7 +383,6 @@ struct {							\
 	     &LIST_FIRST((head)))				\
 		panic("Bad list head %p first->prev != head", (head));\
 } while (0)
-
 
 #define QMD_LIST_CHECK_NEXT(elm, field) do {			\
 	if (LIST_NEXT((elm), field) != NULL &&			\
@@ -623,7 +621,6 @@ struct {							\
 	(listelm)->field.tqe_prev = &TAILQ_NEXT((elm), field);	\
 	QMD_TRACE_ELEM(&(elm)->field);				\
 } while (0)
-
 
 #define TAILQ_INSERT_HEAD(head, elm, field) do {		\
 	QMD_TAILQ_CHECK_HEAD(head, field);			\

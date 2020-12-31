@@ -37,14 +37,12 @@
 #include "configini.h"
 #include "queue.h"
 
-
 #define COMMENT_CHARS	"#"    /* default comment chars */
 #define KEYVAL_SEP	'='    /* default key-val seperator character */
 #define STR_TRUE	"1"    /* default string valu of true */
 #define STR_FALSE	"0"    /* default string valu of false */
 
 #define CONFIG_INIT_MAGIC    0x12F0ED1
-
 
 /**
  * \brief Configuration key-value
@@ -244,7 +242,7 @@ static ConfigRet ConfigGetSection(const Config *cfg, const char *section,
 
 	TAILQ_FOREACH(*sect, &cfg->sect_list, next) {
 		if ((section && (*sect)->name &&
-		    !strcmp((*sect)->name, section)) ||
+		     !strcmp((*sect)->name, section)) ||
 		    (!section && !(*sect)->name)) {
 			return CONFIG_OK;
 		}
@@ -411,7 +409,7 @@ ConfigRet ConfigReadInt(const Config *cfg, const char *section,
 		return ret;
 	}
 
-	*value = (int) strtol(kv->value, &p, 10);
+	*value = (int)strtol(kv->value, &p, 10);
 	if (*p || (errno == ERANGE))
 		return CONFIG_ERR_INVALID_VALUE;
 
@@ -689,7 +687,7 @@ ConfigRet ConfigAddString(Config *cfg, const char *section, const char *key,
 	while (*q && (q > p) && isspace(*(q - 1)))
 		--q;
 
-	kv->value = (char *) malloc(q - p + 1);
+	kv->value = (char *)malloc(q - p + 1);
 	if (kv->value == NULL) {
 		TAILQ_REMOVE(&sect->kv_list, kv, next);
 		--(sect->numofkv);
@@ -941,7 +939,7 @@ void ConfigFree(Config *cfg)
 	if (cfg->true_str)
 		free(cfg->true_str);
 	if (cfg->false_str)
-		free(cfg->false_str); 
+		free(cfg->false_str);
 	free(cfg);
 }
 
@@ -1032,7 +1030,7 @@ static ConfigRet GetKeyVal(Config *cfg, char *p, char **key, char **val)
 
 	/* get key */
 	while (*p && isspace(*p))
-	       ++p;
+		++p;
 
 	for (q = p;
 	     *q && (*q != '\r') && (*q != '\n') &&
@@ -1095,7 +1093,7 @@ ConfigRet ConfigRead(FILE *fp, Config **cfg)
 	char	  *section = NULL;
 	char	  *key     = NULL;
 	char	  *val     = NULL;
-	char	   buf[3*1024];
+	char	   buf[3 * 1024];
 	Config	*_cfg    = NULL;
 	bool	   newcfg  = false;
 	ConfigRet      ret     = CONFIG_OK;
@@ -1126,7 +1124,8 @@ ConfigRet ConfigRead(FILE *fp, Config **cfg)
 			if ((ret = GetSectName(_cfg, p, &section)) != CONFIG_OK)
 				goto error;
 
-			if ((ret = ConfigAddSection(_cfg, section, &sect)) != CONFIG_OK)
+			if ((ret = ConfigAddSection(_cfg, section, &sect)) !=
+			     CONFIG_OK)
 				goto error;
 		} else {
 			if ((ret = GetKeyVal(_cfg, p, &key, &val)) != CONFIG_OK)
@@ -1165,7 +1164,8 @@ ConfigRet ConfigReadFile(const char *filename, Config **cfg)
 	FILE      *fp  = NULL;
 	ConfigRet  ret = CONFIG_OK;
 
-	if (!filename || !cfg || (*cfg && ((*cfg)->initnum != CONFIG_INIT_MAGIC)))
+	if (!filename || !cfg ||
+	    (*cfg && ((*cfg)->initnum != CONFIG_INIT_MAGIC)))
 		return CONFIG_ERR_INVALID_PARAM;
 
 	if ((fp = fopen(filename, "r")) == NULL)
@@ -1223,10 +1223,11 @@ ConfigRet ConfigPrintSection(const Config *cfg, FILE *stream, char *section)
 
 	if (!cfg || !stream)
 		return CONFIG_ERR_INVALID_PARAM;
+
 	TAILQ_FOREACH(sect, &cfg->sect_list, next) {
-		if ((( section == NULL) && (sect->name == NULL)) ||
-                    ((sect->name != NULL) && (section != NULL) 
-		     && strcmp(sect->name,section) == 0)) {
+		if (((section == NULL) && (sect->name == NULL)) ||
+                    ((sect->name != NULL) && (section != NULL) &&
+		     strcmp(sect->name, section) == 0)) {
 			if (sect->name)
 				fprintf(stream, "[%s]\n", sect->name);
 
@@ -1284,7 +1285,7 @@ ConfigRet ConfigPrintSettings(const Config *cfg, FILE *stream)
 	fprintf(stream, "Configuration settings:\n");
 	fprintf(stream, "   Comment characters : %s\n", cfg->comment_chars);
 	fprintf(stream, "   Key-Value seperator: %c\n", cfg->keyval_sep);
-	fprintf(stream, "   True-False strings : %s-%s\n", 
+	fprintf(stream, "   True-False strings : %s-%s\n",
 		cfg->true_str, cfg->false_str);
 	fprintf(stream, "\n");
 
