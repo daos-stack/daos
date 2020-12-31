@@ -4541,6 +4541,52 @@ find_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc, uuid_t **hdl_uuids,
 	return 0;
 }
 
+/*
+ * Callers are responsible for freeing *hdl_uuids if this function returns zero.
+ */
+static int
+validate_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc,  uuid_t **hdl_uuids,
+		       int *n_hdl_uuids, uuid_t *hdl_list, int n_hdl_list) {
+	uuid_t		*valid_list;
+	int		n_valid_list = 0;
+	int		i;
+	int		rc = 0;
+	d_iov_t		key;
+	d_iov_t		value;
+	struct pool_hdl	hdl;
+
+	if (hdl_list == NULL || n_hdl_list == 0) {
+		return -DER_INVAL;
+	}
+
+	/* Asume the entire list is valid */
+	D_ALLOC(valid_list, sizeof(uuid_t) * n_hdl_list);
+	if (valid_list == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < n_hdl_list; i++) {
+		d_iov_set(&key, hdl_list[i], sizeof(uuid_t));
+		d_iov_set(&value, &hdl, sizeof(hdl));
+		rc = rdb_tx_lookup(tx, &svc->ps_handles, &key, &value);
+
+		if (rc == 0) {
+			uuid_copy(valid_list[n_valid_list], hdl_list[i]);
+			n_valid_list++;
+		} else if (rc == -DER_NONEXIST) {
+			continue;
+		} else {
+			D_FREE(valid_list);
+			D_GOTO(out, rc);
+		}
+	}
+
+	*hdl_uuids = valid_list;
+	*n_hdl_uuids = n_valid_list;
+
+out:
+	return rc;
+}
+
 void
 ds_pool_evict_handler(crt_rpc_t *rpc)
 {
@@ -4548,9 +4594,9 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 	struct pool_evict_out  *out = crt_reply_get(rpc);
 	struct pool_svc	       *svc;
 	struct rdb_tx		tx;
-	uuid_t		       *hdl_uuids;
+	uuid_t		       *hdl_uuids = NULL;
 	size_t			hdl_uuids_size;
-	int			n_hdl_uuids;
+	int			n_hdl_uuids = 0;
 	int			rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
@@ -4572,14 +4618,16 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 	 * through all handles for the pool uuid
 	 */
 	if (in->pvi_hdls.ca_arrays) {
-		hdl_uuids = in->pvi_hdls.ca_arrays;
-		n_hdl_uuids = in->pvi_hdls.ca_count;
+		rc = validate_hdls_to_evict(&tx, svc, &hdl_uuids, &n_hdl_uuids,
+					    in->pvi_hdls.ca_arrays,
+					    in->pvi_hdls.ca_count);
 	} else {
 		rc = find_hdls_to_evict(&tx, svc, &hdl_uuids, &hdl_uuids_size,
 					&n_hdl_uuids);
-		if (rc != 0)
-			D_GOTO(out_lock, rc);
 	}
+
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
 
 	if (n_hdl_uuids > 0) {
 		/* If pool destroy but not forcibly, error: the pool is busy */
@@ -4616,10 +4664,7 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 	rc = rdb_tx_commit(&tx);
 	/* No need to set out->pvo_op.po_map_version. */
 out_free:
-	/* We only need to free hdl_uuids we called find_hdls_to_evict */
-	if (!in->pvi_hdls.ca_arrays) {
-		D_FREE(hdl_uuids);
-	}
+	D_FREE(hdl_uuids);
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
