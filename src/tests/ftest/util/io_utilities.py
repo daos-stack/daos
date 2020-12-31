@@ -80,21 +80,7 @@ class DirTree(object):
             return
 
         try:
-            if os.path.isdir("/tmp"):
-                self._log("/tmp : OK")
-            else:
-                self._log("/tmp : Error")
-            if os.path.isdir(self._root):
-                self._log("{0} OK".format(self._root))
-            else:
-                self._log("{0} : Error".format(self._root))
-
             self._tree_path = tempfile.mkdtemp(dir=self._root)
-
-            if os.path.isdir(self._tree_path):
-                self._log("{0} : OK".format(self._tree_path))
-            else:
-                self._log("{0} : Error".format(self._tree_path))
             self._log("Directory-tree root: {0}".format(self._tree_path))
             self._create_dir_tree(self._tree_path, self._height)
             self._created_remaining_needles()
