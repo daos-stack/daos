@@ -37,7 +37,7 @@ message RankStateEventInfo {
 // PoolSvcEventInfo defines extended fields for pool service change events.
 message PoolSvcEventInfo {
 	string pool_uuid = 1;		// Pool UUID.
-	repeated uint32 svc_ranks = 2;	// Pool service replica ranks.
+	repeated uint32 svc_reps = 2;	// Pool service replica ranks.
 	int32 raft_leader_term = 3;	// Raft leadership term.
 }
 

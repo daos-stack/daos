@@ -214,7 +214,7 @@ out:
 }
 
 int
-ds_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
+ds_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc)
 {
 	Mgmt__RASEvent		 evt = MGMT__RASEVENT__INIT;
 	Mgmt__PoolSvcEventInfo	 info = MGMT__POOL_SVC_EVENT_INFO__INIT;
@@ -228,10 +228,7 @@ ds_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
 		return -DER_UNINIT;
 	}
 
-	if (pool_uuid == NULL) {
-		D_ERROR("invalid pool UUID\n");
-		return -DER_INVAL;
-	}
+	D_ASSERT(pool_uuid != NULL);
 
 	D_ALLOC(info.pool_uuid, DAOS_UUID_STR_SIZE);
 	if (info.pool_uuid == NULL) {
@@ -239,6 +236,14 @@ ds_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
 		return -DER_NOMEM;
 	}
 	uuid_unparse_lower(pool_uuid, info.pool_uuid);
+
+	D_ASSERT(svc != NULL && svc->rl_nr > 0);
+
+	rc = rank_list_to_uint32_array(svc, &info.svc_reps, &info.n_svc_reps);
+	if (rc != 0) {
+		D_ERROR("failed to convert svc replicas to proto\n");
+		goto out_uuid;
+	}
 
 	evt.extended_info_case = MGMT__RASEVENT__EXTENDED_INFO_POOL_SVC_INFO;
 	evt.pool_svc_info = &info;
@@ -254,7 +259,7 @@ ds_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
 		D_ALLOC(evt.timestamp, DAOS_RAS_EVENT_STR_MAX_LEN);
 		if (evt.timestamp == NULL) {
 			D_ERROR("failed to allocate timestamp\n");
-			D_GOTO(out_uuid, rc = -DER_NOMEM);
+			D_GOTO(out_svcreps, rc = -DER_NOMEM);
 		}
 		snprintf(evt.timestamp, DAOS_RAS_EVENT_STR_MAX_LEN-1,
 			 "%04d/%02d/%02d-%02d:%02d:%02d.%02ld",
@@ -285,6 +290,8 @@ ds_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
 	D_FREE(evt.hostname);
 out_timestamp:
 	D_FREE(evt.timestamp);
+out_svcreps:
+	D_FREE(info.svc_reps);
 out_uuid:
 	D_FREE(info.pool_uuid);
 
@@ -379,9 +386,11 @@ out:
 int
 drpc_init(void)
 {
-	char   *path;
-	int	rc;
-	uuid_t	pool_uuid;
+	char		*path;
+	int		 rc;
+	uuid_t		 pool_uuid;
+	uint32_t	 svc_reps[4] = {0, 1, 2, 3};
+	d_rank_list_t	*svc_ranks;
 
 	D_ASPRINTF(path, "%s/%s", dss_socket_dir, "daos_server.sock");
 	if (path == NULL) {
@@ -407,7 +416,11 @@ drpc_init(void)
 		D_GOTO(out_path, rc = -DER_INVAL);
 	}
 
-	rc = ds_notify_pool_svc_update(pool_uuid, NULL);
+	svc_ranks = uint32_array_to_rank_list(svc_reps, 4);
+	if (svc_ranks == NULL)
+		D_GOTO(out_path, rc = -DER_NOMEM);
+
+	rc = ds_notify_pool_svc_update(pool_uuid, svc_ranks);
 	if (rc != 0) {
 		drpc_close(dss_drpc_ctx);
 		dss_drpc_ctx = NULL;

@@ -484,8 +484,8 @@ func (m *Membership) OnEvent(_ context.Context, evt events.Event) {
 			m.log.Error("nil PoolSvcRanksUpdate event received")
 			return
 		}
-		m.log.Debugf("processing RAS event %q on pool %s on host %q",
-			e.RAS.Msg, e.ExtendedInfo.PoolUUID, e.RAS.Hostname)
+		m.log.Debugf("processing RAS event %q with info %+v on host %q",
+			e.RAS.Msg, e.ExtendedInfo, e.RAS.Hostname)
 
 		uuid, err := uuid.Parse(e.ExtendedInfo.PoolUUID)
 		if err != nil {

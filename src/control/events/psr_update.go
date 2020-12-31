@@ -36,7 +36,7 @@ import (
 // PoolSvcInfo describes details of a pool service.
 type PoolSvcInfo struct {
 	PoolUUID       string   `json:"pool_uuid"`
-	SvcRanks       []uint32 `json:"svc_ranks"`
+	SvcRanks       []uint32 `json:"svc_reps"`
 	RaftLeaderTerm int32    `json:"raft_leader_term"`
 }
 

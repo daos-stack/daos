@@ -64,8 +64,8 @@ struct  _Mgmt__PoolSvcEventInfo
   /*
    * Pool service replica ranks.
    */
-  size_t n_svc_ranks;
-  uint32_t *svc_ranks;
+  size_t n_svc_reps;
+  uint32_t *svc_reps;
   /*
    * Raft leadership term.
    */
