@@ -37,6 +37,7 @@ struct test_t {
 	char			*t_remote_group_name;
 	int			 t_hold;
 	int			 t_shut_only;
+	int			 t_issue_crt_ep_abort;
 	bool			 t_save_cfg;
 	bool			 t_use_cfg;
 	char			*t_cfg_path;
@@ -76,12 +77,6 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 	struct test_ping_check_in	*e_req;
 	struct test_ping_check_out	*e_reply;
 	int				 rc = 0;
-
-  /////////////////////////////////////////////////////////
-  // Sleep here, so that client has time to crt_ep_abort()!
-  sleep(20);
-	DBG_PRINT("sleeping while client issues crt_ep_abort().\n");
-  /////////////////////////////////////////////////////////
 
 	/* CaRT internally already allocated the input/output buffer */
 	e_req = crt_req_get(rpc_req);
@@ -163,13 +158,21 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		if (rpc_req_input == NULL)
 			return;
 		rpc_req_output = crt_reply_get(rpc_req);
-		if (rpc_req_output == NULL)
 			return;
 		if (cb_info->cci_rc != 0) {
-			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
-				rpc_req->cr_opc, cb_info->cci_rc);
-			D_FREE(rpc_req_input->name);
-			break;
+
+      if (&test_g.t_issue_crt_ep_abort) {
+        DBG_PRINT("rpc (opc: %#x) failed (as expected), rc: %d.\n",
+          rpc_req->cr_opc, cb_info->cci_rc);
+        D_FREE(rpc_req_input->name);
+        sem_post(&test_g.t_token_to_proceed);
+        break;
+      } else  {
+        D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
+          rpc_req->cr_opc, cb_info->cci_rc);
+        D_FREE(rpc_req_input->name);
+      }
+      break;
 		}
 		DBG_PRINT("%s checkin result - ret: %d, room_no: %d, "
 		       "bool_val %d.\n",
@@ -293,11 +296,12 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 	rc = crt_req_send(rpc_req, client_cb_common, NULL);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
-  /////////////////////////////////////////////////////////////////
-  // Abort RPC
-  rc = crt_ep_abort(&server_ep);
-  D_ASSERTF(rc == 0, "crt_ep_abort() failed. rc: %d\n", rc);
-  DBG_PRINT("crt_ep_abort called.\n");
+  // If we're testing crt_ep_abort(), abort the previous RPC
+  if (&test_g.t_issue_crt_ep_abort) {
+    rc = crt_ep_abort(&server_ep);
+    D_ASSERTF(rc == 0, "crt_ep_abort() failed. rc: %d\n", rc);
+    DBG_PRINT("crt_ep_abort called, rc = %d.\n", rc);
+  }
   /////////////////////////////////////////////////////////////////
 }
 
@@ -315,6 +319,7 @@ test_parse_args(int argc, char **argv)
 		{"shut_only", no_argument, &test_g.t_shut_only, 1},
 		{"cfg_path", required_argument, 0, 's'},
 		{"use_cfg", required_argument, 0, 'u'},
+		{"issue_crt_ep_abort", no_argument, &test_g.t_issue_crt_ep_abort, 1},
 		{0, 0, 0, 0}
 	};
 
