@@ -246,33 +246,6 @@ public class DaosFileSystemTest {
   }
 
   @Test
-  public void testBufferedReadConfigurationKey() throws Exception {
-    PowerMockito.mockStatic(DaosFsClient.class);
-    DaosFsClient.DaosFsClientBuilder builder = mock(DaosFsClient.DaosFsClientBuilder.class);
-    DaosFsClient client = mock(DaosFsClient.class);
-    Configuration conf = new Configuration();
-
-    PowerMockito.whenNew(DaosFsClient.DaosFsClientBuilder.class).withNoArguments().thenReturn(builder);
-    when(builder.poolId(anyString())).thenReturn(builder);
-    when(builder.containerId(anyString())).thenReturn(builder);
-    when(builder.ranks(anyString())).thenReturn(builder);
-    when(builder.build()).thenReturn(client);
-    conf.set(Constants.DAOS_POOL_UUID, "123");
-    conf.set(Constants.DAOS_CONTAINER_UUID, "123");
-    conf.set(Constants.DAOS_POOL_SVC, "0");
-
-    DaosFileSystem fs = new DaosFileSystem();
-    fs.initialize(URI.create("daos://1234:56"), conf);
-    Assert.assertTrue(fs.isPreloadEnabled());
-    fs.close();
-    // if not set, should be default
-    conf.setInt(Constants.DAOS_PRELOAD_SIZE, 0);
-    fs.initialize(URI.create("daos://1234:56"), conf);
-    Assert.assertFalse(fs.isPreloadEnabled());
-    fs.close();
-  }
-
-  @Test
   public void testLoadingConfig() throws Exception {
     Configuration cfg = new Configuration(false);
     cfg.addResource("daos-site.xml");

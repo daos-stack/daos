@@ -56,6 +56,14 @@ enum {
 	DTS_INIT_CREDITS,	/* I/O credits have been initialized */
 };
 
+static void
+credit_return(struct dts_context *tsc, struct dts_io_credit *cred)
+{
+	tsc->tsc_credits[tsc->tsc_cred_avail] = cred;
+	tsc->tsc_cred_inuse--;
+	tsc->tsc_cred_avail++;
+}
+
 /**
  * examines if there is available credit freed by completed I/O, it will wait
  * until all credits are freed if @drain is true.
@@ -86,11 +94,8 @@ credit_poll(struct dts_context *tsc, bool drain)
 				fprintf(stderr, "failed op: %d\n", err);
 				return err;
 			}
-			tsc->tsc_credits[tsc->tsc_cred_avail] =
-			   container_of(evs[i], struct dts_io_credit, tc_ev);
-
-			tsc->tsc_cred_inuse--;
-			tsc->tsc_cred_avail++;
+			credit_return(tsc, container_of(evs[i],
+				      struct dts_io_credit, tc_ev));
 		}
 
 		if (tsc->tsc_cred_avail == 0)
@@ -131,6 +136,14 @@ int
 dts_credit_drain(struct dts_context *tsc)
 {
 	return credit_poll(tsc, true);
+}
+
+void
+dts_credit_return(struct dts_context *tsc, struct dts_io_credit *cred)
+{
+	if (tsc->tsc_cred_avail >= 0)
+		credit_return(tsc, cred);
+	/* else: nothinbg to return for sync mode */
 }
 
 static int

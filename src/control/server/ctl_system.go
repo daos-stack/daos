@@ -172,53 +172,45 @@ func (svc *ControlService) rpcFanout(parent context.Context, fanReq fanoutReques
 
 // SystemQuery implements the method defined for the Management Service.
 //
-// Return status of system members specified in request rank list (or all
+// Retrieve the state of DAOS ranks in the system by returning details stored in
+// the system membership. Request details for ranks provided in list (or all
 // members if request rank list is empty).
-//
-// Request harnesses to ping their instances (system members) to determine IO
-// Server process responsiveness. Update membership appropriately.
-//
-// Ping performed through SystemQuery is non-invasive and does not interrogate
-// ranks directly over dRPC (see mgmt_system.go:PingRanks for details).
 //
 // This control service method is triggered from the control API method of the
 // same name in lib/control/system.go and returns results from all selected
 // ranks.
-func (svc *ControlService) SystemQuery(ctx context.Context, pbReq *ctlpb.SystemQueryReq) (*ctlpb.SystemQueryResp, error) {
+func (svc *ControlService) SystemQuery(ctx context.Context, req *ctlpb.SystemQueryReq) (*ctlpb.SystemQueryResp, error) {
 	svc.log.Debug("Received SystemQuery RPC")
 
-	if pbReq == nil {
-		return nil, errors.Errorf("nil %T request", pbReq)
+	if req == nil {
+		return nil, errors.Errorf("nil %T request", req)
 	}
 
 	if err := svc.sysdb.CheckLeader(); err != nil {
 		return nil, err
 	}
 
-	fanResp, rankSet, err := svc.rpcFanout(ctx, fanoutRequest{
-		Method: control.PingRanks,
-		Hosts:  pbReq.GetHosts(),
-		Ranks:  pbReq.GetRanks(),
-		Force:  false, // ping harness only, not over drpc
-	}, true) // update membership on ping rank failures
+	hitRanks, missRanks, missHosts, err := svc.resolveRanks(req.Hosts, req.Ranks)
 	if err != nil {
 		return nil, err
 	}
-	pbResp := &ctlpb.SystemQueryResp{
-		Absentranks: fanResp.AbsentRanks.String(),
-		Absenthosts: fanResp.AbsentHosts.String(),
+
+	resp := &ctlpb.SystemQueryResp{
+		Absentranks: missRanks.String(),
+		Absenthosts: missHosts.String(),
+	}
+	if hitRanks.Count() == 0 {
+		return resp, nil
 	}
 
-	if rankSet.Count() > 0 {
-		members := svc.membership.Members(rankSet)
-		if err := convert.Types(members, &pbResp.Members); err != nil {
-			return nil, err
-		}
+	members := svc.membership.Members(hitRanks)
+	if err := convert.Types(members, &resp.Members); err != nil {
+		return nil, err
 	}
 
-	svc.log.Debugf("Responding to SystemQuery RPC: %+v", pbResp)
+	svc.log.Debugf("Responding to SystemQuery RPC: %+v", resp)
 
-	return pbResp, nil
+	return resp, nil
 }
 
 func populateStopResp(fanResp *fanoutResponse, pbResp *ctlpb.SystemStopResp, action string) error {
