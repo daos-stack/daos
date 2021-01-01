@@ -38,6 +38,7 @@ struct test_t {
 	int			 t_hold;
 	int			 t_shut_only;
 	int			 t_issue_crt_ep_abort;
+	int			 t_num_checkins_to_send;
 	bool			 t_save_cfg;
 	bool			 t_use_cfg;
 	char			*t_cfg_path;
@@ -160,7 +161,8 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		rpc_req_output = crt_reply_get(rpc_req);
 		if (rpc_req_output == NULL)
 			return;
-    if (&test_g.t_issue_crt_ep_abort) {
+
+    if (test_g.t_issue_crt_ep_abort) {
       D_ASSERT(cb_info->cci_rc == -DER_CANCELED);
       DBG_PRINT("rpc (opc: %#x) failed (as expected), rc: %d.\n",
         rpc_req->cr_opc, cb_info->cci_rc);
@@ -296,7 +298,7 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
   // If we're testing crt_ep_abort(), abort the previous RPC
-  if (&test_g.t_issue_crt_ep_abort) {
+  if (test_g.t_issue_crt_ep_abort) {
     rc = crt_ep_abort(&server_ep);
     D_ASSERTF(rc == 0, "crt_ep_abort() failed. rc: %d\n", rc);
     DBG_PRINT("crt_ep_abort called, rc = %d.\n", rc);
@@ -318,13 +320,15 @@ test_parse_args(int argc, char **argv)
 		{"cfg_path", required_argument, 0, 's'},
 		{"use_cfg", required_argument, 0, 'u'},
 		{"issue_crt_ep_abort", no_argument, &test_g.t_issue_crt_ep_abort, 1},
+		{"num_checkins_to_send", required_argument, 0, 'm'},
 		{0, 0, 0, 0}
 	};
 
 	test_g.t_use_cfg = true;
+	test_g.t_num_checkins_to_send = 1;
 
 	while (1) {
-		rc = getopt_long(argc, argv, "n:a:c:h:u:", long_options,
+		rc = getopt_long(argc, argv, "n:a:c:h:u:m:", long_options,
 				 &option_index);
 
 		if (rc == -1)
@@ -366,12 +370,16 @@ test_parse_args(int argc, char **argv)
 		case 'u':
 			test_g.t_use_cfg = atoi(optarg);
 			break;
+		case 'm':
+			test_g.t_num_checkins_to_send = atoi(optarg);
+			break;
 		case '?':
 			return 1;
 		default:
 			return 1;
 		}
 	}
+
 	if (optind < argc) {
 		fprintf(stderr, "non-option argv elements encountered");
 		return 1;
