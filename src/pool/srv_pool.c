@@ -3730,7 +3730,6 @@ replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
 	int		 rc, i;
 	d_rank_t	*r;
 
-	D_DEBUG(DB_MGMT, DF_UUID": replacing failed replicas\n", DP_UUID(svc->ps_uuid));
 	D_DEBUG(DB_MD, DF_UUID": replacing failed replicas\n", DP_UUID(svc->ps_uuid));
 
 	rc = rdb_get_ranks(svc->ps_rsvc.s_db, &replicas);
@@ -3740,6 +3739,8 @@ replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
 		D_DEBUG(DB_MGMT, DF_UUID": orig replica: [%d]\n",
 			DP_UUID(svc->ps_uuid), *r);
 	}
+	D_DEBUG(DB_MGMT, DF_UUID": replacing failed replicas, norig: %d\n", DP_UUID(svc->ps_uuid), replicas->rl_nr);
+	D_DEBUG(DB_MD, DF_UUID": replacing failed replicas, norig: %d\n", DP_UUID(svc->ps_uuid), replicas->rl_nr);
 	rc = ds_pool_check_failed_replicas(map, replicas, &failed_ranks,
 					   &replace_ranks);
 	if (rc != 0) {
@@ -3747,6 +3748,10 @@ replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
 			""DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
+	D_DEBUG(DB_MGMT, DF_UUID": replacing failed replicas, nfailed: %d\n", DP_UUID(svc->ps_uuid), failed_ranks.rl_nr);
+	D_DEBUG(DB_MD, DF_UUID": replacing failed replicas, nfailed: %d\n", DP_UUID(svc->ps_uuid), failed_ranks.rl_nr);
+	D_DEBUG(DB_MGMT, DF_UUID": replacing failed replicas, nreplace: %d\n", DP_UUID(svc->ps_uuid), replace_ranks.rl_nr);
+	D_DEBUG(DB_MD, DF_UUID": replacing failed replicas, nreplace: %d\n", DP_UUID(svc->ps_uuid), replace_ranks.rl_nr);
 	for (i = 0, r = failed_ranks.rl_ranks; i < failed_ranks.rl_nr; i++, r++) {
 		D_DEBUG(DB_MGMT, DF_UUID": failed replica: [%d]\n",
 			DP_UUID(svc->ps_uuid), *r);
@@ -3766,6 +3771,8 @@ replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
 	if (rdb_get_ranks(svc->ps_rsvc.s_db, &tmp_replicas) == 0) {
 		daos_rank_list_sort(replicas);
 		daos_rank_list_sort(tmp_replicas);
+		D_DEBUG(DB_MGMT, DF_UUID": replacing failed replicas, ntmp: %d\n", DP_UUID(svc->ps_uuid), tmp_replicas->rl_nr);
+		D_DEBUG(DB_MD, DF_UUID": replacing failed replicas, ntmp: %d\n", DP_UUID(svc->ps_uuid), tmp_replicas->rl_nr);
 		for (i = 0, r = tmp_replicas->rl_ranks; i < tmp_replicas->rl_nr; i++, r++) {
 			D_DEBUG(DB_MGMT, DF_UUID": tmp replica: [%d]\n",
 				DP_UUID(svc->ps_uuid), *r);
