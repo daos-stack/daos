@@ -23,7 +23,7 @@ container:
   cont_count: 5
 find_cmd:
   samples: 3
-  height: 5
+  height: 3
   subdirs_per_node: 6
   files_per_node: 10
   needles: 100
