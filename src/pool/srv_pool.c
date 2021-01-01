@@ -3730,26 +3730,28 @@ replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
 	int		 rc, i;
 	d_rank_t	*r;
 
+	D_DEBUG(DB_MGMT, DF_UUID": replacing failed replicas\n",
+		DP_UUID(svc->ps_uuid));
 	rc = rdb_get_ranks(svc->ps_rsvc.s_db, &replicas);
 	if (rc != 0)
 		D_GOTO(out, rc);
 	for (i = 0, r = replicas->rl_ranks; i < replicas->rl_nr; i++, r++) {
-		D_DEBUG(DB_MD, DF_UUID": orig replica: [%d]\n",
+		D_DEBUG(DB_MGMT, DF_UUID": orig replica: [%d]\n",
 			DP_UUID(svc->ps_uuid), *r);
 	}
 	rc = ds_pool_check_failed_replicas(map, replicas, &failed_ranks,
 					   &replace_ranks);
 	if (rc != 0) {
-		D_DEBUG(DB_MD, DF_UUID": cannot replace failed replicas: "
+		D_DEBUG(DB_MGMT, DF_UUID": cannot replace failed replicas: "
 			""DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 	for (i = 0, r = failed_ranks.rl_ranks; i < failed_ranks.rl_nr; i++, r++) {
-		D_DEBUG(DB_MD, DF_UUID": failed replica: [%d]\n",
+		D_DEBUG(DB_MGMT, DF_UUID": failed replica: [%d]\n",
 			DP_UUID(svc->ps_uuid), *r);
 	}
 	for (i = 0, r = replace_ranks.rl_ranks; i < replace_ranks.rl_nr; i++, r++) {
-		D_DEBUG(DB_MD, DF_UUID": replace replica: [%d]\n",
+		D_DEBUG(DB_MGMT, DF_UUID": replace replica: [%d]\n",
 			DP_UUID(svc->ps_uuid), *r);
 	}
 	if (replace_ranks.rl_nr > 0)
@@ -3764,11 +3766,11 @@ replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
 		daos_rank_list_sort(replicas);
 		daos_rank_list_sort(tmp_replicas);
 		for (i = 0, r = tmp_replicas->rl_ranks; i < tmp_replicas->rl_nr; i++, r++) {
-			D_DEBUG(DB_MD, DF_UUID": tmp replica: [%d]\n",
+			D_DEBUG(DB_MGMT, DF_UUID": tmp replica: [%d]\n",
 				DP_UUID(svc->ps_uuid), *r);
 		}
 		if (!daos_rank_list_identical(replicas, tmp_replicas))
-			D_DEBUG(DB_MD, DF_UUID": failed to update replicas\n",
+			D_DEBUG(DB_MGMT, DF_UUID": failed to update replicas\n",
 				DP_UUID(svc->ps_uuid));
 		d_rank_list_free(tmp_replicas);
 	}

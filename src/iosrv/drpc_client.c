@@ -388,9 +388,6 @@ drpc_init(void)
 {
 	char		*path;
 	int		 rc;
-	uuid_t		 pool_uuid;
-	uint32_t	 svc_reps[4] = {0, 1, 2, 3};
-	d_rank_list_t	*svc_ranks;
 
 	D_ASPRINTF(path, "%s/%s", dss_socket_dir, "daos_server.sock");
 	if (path == NULL) {
@@ -407,23 +404,6 @@ drpc_init(void)
 		drpc_close(dss_drpc_ctx);
 		dss_drpc_ctx = NULL;
 		D_GOTO(out_path, rc);
-	}
-
-	rc = uuid_parse("11111111-1111-1111-1111-111111111111", pool_uuid);
-	if (rc != 0) {
-		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", pool_uuid,
-			DP_RC(rc));
-		D_GOTO(out_path, rc = -DER_INVAL);
-	}
-
-	svc_ranks = uint32_array_to_rank_list(svc_reps, 4);
-	if (svc_ranks == NULL)
-		D_GOTO(out_path, rc = -DER_NOMEM);
-
-	rc = ds_notify_pool_svc_update(pool_uuid, svc_ranks);
-	if (rc != 0) {
-		drpc_close(dss_drpc_ctx);
-		dss_drpc_ctx = NULL;
 	}
 
 out_path:
