@@ -47,17 +47,46 @@ class CartRpcOneNodeCrtEpAbortTest(Test):
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
 
+    def tearDown(self):
+        """ Test tear down """
+        print("Run TearDown\n")
+
     def test_cart_rpc(self):
         """
         Test CaRT RPC
 
         :avocado: tags=all,cart,pr,daily_regression,test_crt_ep_abort
         """
-        srvcmd = self.utils.build_cmd(self, self.env, "test_servers")
-        clicmd = self.utils.build_cmd(self, self.env, "test_clients")
 
-        self.utils.launch_srv_cli_test(self, srvcmd, clicmd)
-        self.utils.log_check(self)
+        # Careful: lengths of test_ppn, test_servers, etc. must match
+        #
+        # We happen to have three tests here which vary on ppn and client_args, e.g.,
+        #   -np 1 ... --issue_crt_ep_abort 0 --num_checkins_to_send 1
+        #   -np 1 ... --issue_crt_ep_abort 0 --num_checkins_to_send 3
+        #   -np 3 ... --issue_crt_ep_abort 2 --num_checkins_to_send 1
+      
+        num_tests = self.params.get("test_servers_ppn", '/run/tests/*/')
+        for index in range(len(num_tests)):
+          srvcmd = self.utils.build_cmd(self, self.env, "test_servers", index=index)
+
+          print('DEBUG log: line 71, srvcmd  = ', srvcmd )
+
+          try:
+              srv_rtn = self.utils.launch_cmd_bg(self, srvcmd)
+          # pylint: disable=broad-except
+          except Exception as e:
+              self.utils.print("Exception in launching server : {}".format(e))
+              self.fail("Test failed.\n")
+
+          # Verify the server is still running.
+          if not self.utils.check_process(srv_rtn):
+              procrtn = self.utils.stop_process(srv_rtn)
+              self.fail("Server did not launch, return code %s" \
+                         % procrtn)
+
+          clicmd = self.utils.build_cmd(
+              self, self.env, "test_clients", index=index)
+          self.utils.launch_test(self, clicmd, srv_rtn)
 
 if __name__ == "__main__":
     main()
