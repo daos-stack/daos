@@ -3730,8 +3730,9 @@ replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
 	int		 rc, i;
 	d_rank_t	*r;
 
-	D_DEBUG(DB_MGMT, DF_UUID": replacing failed replicas\n",
-		DP_UUID(svc->ps_uuid));
+	D_DEBUG(DB_MGMT, DF_UUID": replacing failed replicas\n", DP_UUID(svc->ps_uuid));
+	D_DEBUG(DB_MD, DF_UUID": replacing failed replicas\n", DP_UUID(svc->ps_uuid));
+
 	rc = rdb_get_ranks(svc->ps_rsvc.s_db, &replicas);
 	if (rc != 0)
 		D_GOTO(out, rc);
