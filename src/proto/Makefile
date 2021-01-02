@@ -24,6 +24,7 @@ DAOS_ROOT ?= $(shell git rev-parse --show-toplevel)
 
 C_HEADER_FILES = include/daos/drpc.pb-c.h\
 		 iosrv/srv.pb-c.h\
+		 iosrv/event.pb-c.h\
 		 mgmt/acl.pb-c.h\
 		 mgmt/cont.pb-c.h\
 		 mgmt/pool.pb-c.h\
@@ -33,6 +34,7 @@ C_HEADER_FILES = include/daos/drpc.pb-c.h\
 		 tests/drpc/drpc_test.pb-c.h
 C_SOURCE_FILES = common/drpc.pb-c.c\
 		 iosrv/srv.pb-c.c\
+		 iosrv/event.pb-c.c\
 		 mgmt/acl.pb-c.c\
 		 mgmt/cont.pb-c.c\
 		 mgmt/pool.pb-c.c\
@@ -45,6 +47,7 @@ GO_CONTROL_FILES = common/proto/mgmt/acl.pb.go\
 		   common/proto/mgmt/mgmt.pb.go\
 		   common/proto/mgmt/pool.pb.go\
 		   common/proto/mgmt/svc.pb.go\
+		   common/proto/mgmt/event.pb.go\
 		   common/proto/mgmt/storage_query.pb.go\
 		   common/proto/ctl/storage.pb.go\
 		   common/proto/ctl/common.pb.go\
@@ -52,8 +55,8 @@ GO_CONTROL_FILES = common/proto/mgmt/acl.pb.go\
 		   common/proto/ctl/storage_scm.pb.go\
 		   common/proto/ctl/system.pb.go\
 		   common/proto/ctl/control.pb.go\
- 		   common/proto/ctl/network.pb.go\
- 		   common/proto/ctl/firmware.pb.go\
+		   common/proto/ctl/network.pb.go\
+		   common/proto/ctl/firmware.pb.go\
 		   common/proto/srv/srv.pb.go\
 		   drpc/drpc.pb.go\
 		   security/auth/auth.pb.go\
@@ -127,6 +130,12 @@ $(DAOS_ROOT)/src/%.pb-c.h: $(PROTO_SOURCE_DIR)/%.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
 
 $(DAOS_ROOT)/src/%.pb-c.c: $(PROTO_SOURCE_DIR)/%.proto
+	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
+
+$(DAOS_ROOT)/src/iosrv/event.pb-c.h: $(PROTO_SOURCE_DIR)/mgmt/event.proto
+	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
+
+$(DAOS_ROOT)/src/iosrv/event.pb-c.c: $(PROTO_SOURCE_DIR)/mgmt/event.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
 
 $(DAOS_ROOT)/src/iosrv/%.pb-c.h: $(PROTO_SOURCE_DIR)/srv/%.proto
