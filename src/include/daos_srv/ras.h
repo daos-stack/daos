@@ -25,43 +25,10 @@
  * RAS event definitions to the used in either data or control planes.
  */
 
-#ifndef __RAS_H__
-#define __RAS_H__
+#ifndef __DAOS_RAS_H__
+#define __DAOS_RAS_H__
 
-#define RAS_ID_UNKNOWN_STR "Unknown RAS event"
-#define RAS_SEV_UNKNOWN_STR "Unknown RAS event severity"
-#define RAS_TYPE_UNKNOWN_STR "Unknown RAS event type"
-
-enum ras_event_id {
-	RAS_RANK_EXIT	= 1,
-	RAS_RANK_NO_RESP,
-};
-
-static inline char *
-ras_event_id_enum_to_name(enum ras_event_id id)
-{
-	switch (id) {
-	case RAS_RANK_EXIT:
-		return "daos_rank_exited";
-	case RAS_RANK_NO_RESP:
-		return "daos_rank_no_response";
-	}
-
-	return RAS_ID_UNKNOWN_STR;
-}
-
-static inline char *
-ras_event_id_enum_to_msg(enum ras_event_id id)
-{
-	switch (id) {
-	case RAS_RANK_EXIT:
-		return "DAOS rank exited";
-	case RAS_RANK_NO_RESP:
-		return "DAOS rank unresponsive";
-	}
-
-	return RAS_ID_UNKNOWN_STR;
-}
+#define DAOS_RAS_EVENT_STR_MAX_LEN 64
 
 enum ras_event_sev {
 	RAS_SEV_FATAL	= 1,
@@ -71,7 +38,7 @@ enum ras_event_sev {
 };
 
 static inline char *
-ras_event_sev_enum_to_name(enum ras_event_sev severity)
+ras_event_sev2str(enum ras_event_sev severity)
 {
 	switch (severity) {
 	case RAS_SEV_FATAL:
@@ -81,29 +48,27 @@ ras_event_sev_enum_to_name(enum ras_event_sev severity)
 	case RAS_SEV_ERROR:
 		return "ERROR";
 	case RAS_SEV_INFO:
+	default:
 		return "INFO";
 	}
-
-	return RAS_SEV_UNKNOWN_STR;
 }
 
 enum ras_event_type {
 	/* ANY is a special case to match all types */
 	RAS_TYPE_ANY	= 0,
-	RAS_TYPE_RANK_STATE_CHANGE,
-	RAS_TYPE_INFO_ONLY,
+	RAS_TYPE_STATE_CHANGE,
+	RAS_TYPE_INFO,
 };
 
 static inline char *
-ras_event_type_enum_to_name(enum ras_event_type type)
+ras_event_type2str(enum ras_event_type type)
 {
 	switch (type) {
-	case RAS_TYPE_RANK_STATE_CHANGE:
-		return "RANK_STATE_CHANGE";
-	case RAS_TYPE_INFO_ONLY:
-		return "INFO_ONLY";
+	case RAS_TYPE_STATE_CHANGE:
+		return "STATE_CHANGE";
+	case RAS_TYPE_INFO:
+	default:
+		return "INFO";
 	}
-
-	return RAS_TYPE_UNKNOWN_STR;
 }
-#endif /* __RAS_H_ */
+#endif /* __DAOS_RAS_H_ */

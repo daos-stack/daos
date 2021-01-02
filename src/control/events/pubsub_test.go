@@ -78,8 +78,8 @@ func TestEvents_PubSub_Basic(t *testing.T) {
 	tly1 := newTally(2)
 	tly2 := newTally(2)
 
-	ps.Subscribe(RASTypeRankStateChange, tly1)
-	ps.Subscribe(RASTypeRankStateChange, tly2)
+	ps.Subscribe(RASTypeStateChange, tly1)
+	ps.Subscribe(RASTypeStateChange, tly2)
 
 	ps.Publish(evt1)
 	ps.Publish(evt1)
@@ -88,10 +88,10 @@ func TestEvents_PubSub_Basic(t *testing.T) {
 	<-tly2.finished
 
 	common.AssertStringsEqual(t, []string{
-		RASTypeRankStateChange.String(), RASTypeRankStateChange.String(),
+		RASTypeStateChange.String(), RASTypeStateChange.String(),
 	}, tly1.getRx(), "tly1 unexpected slice of received events")
 	common.AssertStringsEqual(t, []string{
-		RASTypeRankStateChange.String(), RASTypeRankStateChange.String(),
+		RASTypeStateChange.String(), RASTypeStateChange.String(),
 	}, tly2.getRx(), "tly2 unexpected slice of received events")
 }
 
@@ -108,7 +108,7 @@ func TestEvents_PubSub_Reset(t *testing.T) {
 
 	ps := NewPubSub(ctx, log)
 
-	ps.Subscribe(RASTypeRankStateChange, tly1)
+	ps.Subscribe(RASTypeStateChange, tly1)
 
 	ps.Publish(evt1)
 	ps.Publish(evt1)
@@ -118,14 +118,14 @@ func TestEvents_PubSub_Reset(t *testing.T) {
 	ps.Reset()
 
 	common.AssertStringsEqual(t, []string{
-		RASTypeRankStateChange.String(), RASTypeRankStateChange.String(),
+		RASTypeStateChange.String(), RASTypeStateChange.String(),
 	}, tly1.getRx(), "unexpected slice of received events")
 	common.AssertEqual(t, 0, len(tly2.getRx()), "unexpected number of received events")
 
 	tly1 = newTally(2)
 	tly2 = newTally(2)
 
-	ps.Subscribe(RASTypeRankStateChange, tly2)
+	ps.Subscribe(RASTypeStateChange, tly2)
 
 	ps.Publish(evt1)
 	ps.Publish(evt1)
@@ -134,7 +134,7 @@ func TestEvents_PubSub_Reset(t *testing.T) {
 	ps.Close()
 
 	common.AssertStringsEqual(t, []string{
-		RASTypeRankStateChange.String(), RASTypeRankStateChange.String(),
+		RASTypeStateChange.String(), RASTypeStateChange.String(),
 	}, tly2.getRx(), "unexpected slice of received events")
 	common.AssertEqual(t, 0, len(tly1.getRx()), "unexpected number of received events")
 }
@@ -153,7 +153,7 @@ func TestEvents_PubSub_DisableEvent(t *testing.T) {
 	ps := NewPubSub(context.Background(), log)
 	defer ps.Close()
 
-	ps.Subscribe(RASTypeRankStateChange, tly1)
+	ps.Subscribe(RASTypeStateChange, tly1)
 
 	ps.DisableEventIDs(evt1.GetID())
 
@@ -189,7 +189,7 @@ func TestEvents_PubSub_SubscribeAnyTopic(t *testing.T) {
 	tly2 := newTally(2)
 
 	ps.Subscribe(RASTypeAny, tly1)
-	ps.Subscribe(RASTypeRankStateChange, tly2)
+	ps.Subscribe(RASTypeStateChange, tly2)
 
 	ps.Publish(evt1)
 	ps.Publish(evt1)
@@ -198,9 +198,9 @@ func TestEvents_PubSub_SubscribeAnyTopic(t *testing.T) {
 	<-tly2.finished
 
 	common.AssertStringsEqual(t, []string{
-		RASTypeRankStateChange.String(), RASTypeRankStateChange.String(),
+		RASTypeStateChange.String(), RASTypeStateChange.String(),
 	}, tly1.getRx(), "tly1 unexpected slice of received events")
 	common.AssertStringsEqual(t, []string{
-		RASTypeRankStateChange.String(), RASTypeRankStateChange.String(),
+		RASTypeStateChange.String(), RASTypeStateChange.String(),
 	}, tly2.getRx(), "tly2 unexpected slice of received events")
 }

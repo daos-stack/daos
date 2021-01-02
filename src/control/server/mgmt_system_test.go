@@ -141,10 +141,6 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			nilReq: true,
 			expErr: errors.New("nil request"),
 		},
-		"invalid sequence number": {
-			zeroSeq: true,
-			expErr:  errors.New("invalid sequence"),
-		},
 		"successful notification": {
 			event: eventRankExit,
 			expResp: &mgmtpb.ClusterEventResp{
@@ -166,7 +162,7 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			mgmtSvc.events = ps
 
 			dispatched := &eventsDispatched{cancel: cancel}
-			mgmtSvc.events.Subscribe(events.RASTypeRankStateChange, dispatched)
+			mgmtSvc.events.Subscribe(events.RASTypeStateChange, dispatched)
 
 			var pbReq *mgmtpb.ClusterEventReq
 			switch {
@@ -518,7 +514,7 @@ func TestServer_MgmtSvc_StopRanks(t *testing.T) {
 			svc.events = ps
 
 			dispatched := &eventsDispatched{cancel: cancel}
-			svc.events.Subscribe(events.RASTypeRankStateChange, dispatched)
+			svc.events.Subscribe(events.RASTypeStateChange, dispatched)
 
 			for i, srv := range svc.harness.instances {
 				if tc.missingSB {
