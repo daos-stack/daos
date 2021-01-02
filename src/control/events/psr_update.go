@@ -33,27 +33,28 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
-// RankStateInfo describes details of a rank's state.
-type RankStateInfo struct {
-	InstanceIdx uint32 `json:"instance_idx"`
-	ExitErr     error  `json:"-"`
+// PoolSvcInfo describes details of a pool service.
+type PoolSvcInfo struct {
+	PoolUUID       string   `json:"pool_uuid"`
+	SvcRanks       []uint32 `json:"svc_reps"`
+	RaftLeaderTerm int32    `json:"raft_leader_term"`
 }
 
-// RankExit is a custom event type that implements the Event interface.
-type RankExit struct {
+// PoolSvcRanksUpdate is a custom event type that implements the Event interface.
+type PoolSvcRanksUpdate struct {
 	RAS          *RASEvent
-	ExtendedInfo *RankStateInfo
+	ExtendedInfo *PoolSvcInfo
 }
 
 // GetID implements the method on the interface to return event ID.
-func (evt *RankExit) GetID() RASID { return evt.RAS.ID }
+func (evt *PoolSvcRanksUpdate) GetID() RASID { return evt.RAS.ID }
 
 // GetType implements the method on the interface to return event type.
-func (evt *RankExit) GetType() RASTypeID { return evt.RAS.Type }
+func (evt *PoolSvcRanksUpdate) GetType() RASTypeID { return evt.RAS.Type }
 
-// FromProto unpacks protobuf RAS event into this RankExit instance, extracting
-// ExtendedInfo variant into custom event specific fields.
-func (evt *RankExit) FromProto(pbEvt *mgmtpb.RASEvent) error {
+// FromProto unpacks protobuf RAS event into this PoolSvcRanksUpdate instance,
+// extracting ExtendedInfo variant into custom event specific fields.
+func (evt *PoolSvcRanksUpdate) FromProto(pbEvt *mgmtpb.RASEvent) error {
 	evt.RAS = &RASEvent{
 		Timestamp: pbEvt.Timestamp,
 		Msg:       pbEvt.Msg,
@@ -64,62 +65,58 @@ func (evt *RankExit) FromProto(pbEvt *mgmtpb.RASEvent) error {
 		Type:      RASTypeID(pbEvt.Type),
 	}
 
-	pbInfo := pbEvt.GetRankStateInfo()
+	pbInfo := pbEvt.GetPoolSvcInfo()
 	if pbInfo == nil {
 		return errors.Errorf("unexpected oneof, want %T got %T",
-			&mgmtpb.RASEvent_RankStateInfo{}, pbInfo)
+			&mgmtpb.RASEvent_PoolSvcInfo{}, pbInfo)
 	}
 
-	evt.ExtendedInfo = &RankStateInfo{
-		InstanceIdx: pbInfo.GetInstance(),
-	}
-	if pbInfo.GetErrored() {
-		evt.ExtendedInfo.ExitErr = common.ExitStatus(pbInfo.GetError())
+	evt.ExtendedInfo = new(PoolSvcInfo)
+	if err := convert.Types(pbInfo, evt.ExtendedInfo); err != nil {
+		return errors.Wrapf(err, "converting %T->%T", pbInfo, evt.ExtendedInfo)
 	}
 
 	return nil
 }
 
-// ToProto packs this RankExit instance into a protobuf RAS event, encoding
+// ToProto packs this PoolSvcRanksUpdate instance into a protobuf RAS event, encoding
 // custom event specific fields into the equivalent ExtendedInfo oneof variant.
-func (evt *RankExit) ToProto() (*mgmtpb.RASEvent, error) {
+func (evt *PoolSvcRanksUpdate) ToProto() (*mgmtpb.RASEvent, error) {
 	pbEvt := new(mgmtpb.RASEvent)
 	if err := convert.Types(evt.RAS, pbEvt); err != nil {
 		return nil, errors.Wrapf(err, "converting %T->%T", evt.RAS, pbEvt)
 	}
 
-	pbInfo := &mgmtpb.RankStateEventInfo{
-		Instance: evt.ExtendedInfo.InstanceIdx,
-	}
-	if evt.ExtendedInfo.ExitErr != nil {
-		pbInfo.Errored = true
-		pbInfo.Error = evt.ExtendedInfo.ExitErr.Error()
+	pbInfo := new(mgmtpb.PoolSvcEventInfo)
+	if err := convert.Types(evt.ExtendedInfo, pbInfo); err != nil {
+		return nil, errors.Wrapf(err, "converting %T->%T", evt.ExtendedInfo, pbInfo)
 	}
 
-	pbEvt.ExtendedInfo = &mgmtpb.RASEvent_RankStateInfo{
-		RankStateInfo: pbInfo,
+	pbEvt.ExtendedInfo = &mgmtpb.RASEvent_PoolSvcInfo{
+		PoolSvcInfo: pbInfo,
 	}
 
 	return pbEvt, nil
 }
 
-// NewRankExitEvent creates a specific RankExit event from given inputs.
-func NewRankExitEvent(hostname string, instanceIdx uint32, rank uint32, exitErr common.ExitStatus) Event {
+// NewPoolSvcRanksUpdateEvent creates a specific PoolSvcRanksUpdate event from given inputs.
+func NewPoolSvcRanksUpdateEvent(hostname string, rank uint32, poolUUID string, svcRanks []uint32, leaderTerm int32) Event {
 	evt := &RASEvent{
 		Timestamp: common.FormatTime(time.Now()),
-		Msg:       "DAOS rank exited unexpectedly",
-		ID:        RASRankExit,
+		Msg:       "DAOS pool service replica rank list updated",
+		ID:        RASPoolSvcRanksUpdate,
 		Hostname:  hostname,
 		Rank:      rank,
 		Type:      RASTypeStateChange,
 		Severity:  RASSeverityError,
 	}
 
-	return &RankExit{
+	return &PoolSvcRanksUpdate{
 		RAS: evt,
-		ExtendedInfo: &RankStateInfo{
-			InstanceIdx: instanceIdx,
-			ExitErr:     exitErr,
+		ExtendedInfo: &PoolSvcInfo{
+			PoolUUID:       poolUUID,
+			SvcRanks:       svcRanks,
+			RaftLeaderTerm: leaderTerm,
 		},
 	}
 }
