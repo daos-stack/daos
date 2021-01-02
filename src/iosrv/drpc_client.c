@@ -31,7 +31,9 @@
 #include <daos/drpc.h>
 #include <daos/drpc_modules.h>
 #include <daos_srv/daos_server.h>
+#include <daos_srv/ras.h>
 #include "srv.pb-c.h"
+#include "event.pb-c.h"
 #include "srv_internal.h"
 #include "drpc_internal.h"
 
@@ -158,6 +160,164 @@ out_dreq:
 	return rc;
 }
 
+static int
+populate_ras_details(const char *id, uint32_t sev, type, const char *msg,
+		     Mgmt__RASEvent *evt)
+{
+	evt->id = id;
+	evt->severity = sev;
+	evt->type = type;
+	evt->msg = msg;
+
+	(void)gettimeofday(&tv, 0);
+	tm = localtime(&tv.tv_sec);
+	if (tm) {
+		D_ALLOC(evt->timestamp, DAOS_RAS_EVENT_STR_MAX_LEN);
+		if (evt->timestamp == NULL) {
+			D_ERROR("failed to allocate timestamp\n");
+			return -DER_NOMEM;
+		}
+		snprintf(evt->timestamp, DAOS_RAS_EVENT_STR_MAX_LEN - 1,
+			 "%04d/%02d/%02d-%02d:%02d:%02d.%02ld",
+			 tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
+			 tm->tm_hour, tm->tm_min, tm->tm_sec,
+			 (long int)tv.tv_usec / 10000);
+	}
+
+	/** XXX: nodename should be fetched only once and not on every call */
+	D_ALLOC(evt->hostname, DAOS_RAS_EVENT_STR_MAX_LEN);
+	if (evt->hostname == NULL) {
+		D_ERROR("failed to allocate hostname\n");
+		D_FREE(evt->timestamp);
+		return -DER_NOMEM;
+	}
+	(void)uname(&uts);
+	D_STRNDUP(evt->hostname, uts.nodename, DAOS_RAS_EVENT_STR_MAX_LEN - 1);
+
+	/* TODO: add rank id to event */
+
+	D_DEBUG(DB_MGMT, "&&& RAS EVENT id: [%s] ts: [%s] host: [%s] sev: [%s]"
+		" type: [%s] puuid: ["DF_UUID"] msg: [%s]",
+		evt->id, evt->timestamp, evt->hostname,
+		ras_event_sev2str(evt->severity), ras_event_type2str(evt->type),
+		DP_UUID(evt->pool_svc_info->pool_uuid), evt->msg);
+
+	return 0;
+}
+
+static void
+free_ras_details(Mgmt__RASEvent *evt)
+{
+	D_FREE(evt->hostname);
+	D_FREE(evt->timestamp);
+}
+
+static int
+notify_ras_event(Mgmt__RASEvent *evt)
+{
+	Mgmt__ClusterEventReq	 req = MGMT__CLUSTER_EVENT_REQ__INIT;
+	uint8_t			*reqb;
+	size_t			 reqb_size;
+	Drpc__Call		*dreq;
+	Drpc__Response		*dresp;
+	int			 rc;
+
+	if (evt == NULL) {
+		D_ERROR("invalid RAS event\n");
+		return -DER_INVAL;
+	}
+
+	req.event_case = MGMT__CLUSTER_EVENT_REQ__EVENT_RAS;
+	req.ras = evt;
+
+	reqb_size = mgmt__cluster_event_req__get_packed_size(&req);
+	D_ALLOC(reqb, reqb_size);
+	if (reqb == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	mgmt__cluster_event_req__pack(&req, reqb);
+	rc = drpc_call_create(dss_drpc_ctx, DRPC_MODULE_MGMT,
+			      DRPC_METHOD_MGMT_CLUSTER_EVENT, &dreq);
+	if (rc != 0) {
+		D_FREE(reqb);
+		goto out;
+	}
+
+	dreq->body.len = reqb_size;
+	dreq->body.data = reqb;
+
+	rc = drpc_call(dss_drpc_ctx, R_SYNC, dreq, &dresp);
+	if (rc != 0)
+		goto out_dreq;
+	if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("received erroneous dRPC response: %d\n",
+			dresp->status);
+		rc = -DER_IO;
+	}
+
+	drpc_response_free(dresp);
+out_dreq:
+	/* This also frees reqb via dreq->body.data. */
+	drpc_call_free(dreq);
+out:
+	return rc;
+}
+
+int
+ds_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc)
+{
+	Mgmt__RASEvent		 evt = MGMT__RASEVENT__INIT;
+	Mgmt__PoolSvcEventInfo	 info = MGMT__POOL_SVC_EVENT_INFO__INIT;
+	struct timeval		 tv;
+	5struct tm		*tm;
+	struct utsname		 uts;
+	int			 rc;
+
+	if (dss_drpc_ctx == NULL) {
+		D_ERROR("DRPC not connected\n");
+		return -DER_UNINIT;
+	}
+
+	D_ASSERT(pool_uuid != NULL);
+
+	D_ALLOC(info.pool_uuid, DAOS_UUID_STR_SIZE);
+	if (info.pool_uuid == NULL) {
+		D_ERROR("failed to allocate pool uuid\n");
+		return -DER_NOMEM;
+	}
+	uuid_unparse_lower(pool_uuid, info.pool_uuid);
+
+	D_ASSERT(svc != NULL && svc->rl_nr > 0);
+
+	rc = rank_list_to_uint32_array(svc, &info.svc_reps, &info.n_svc_reps);
+	if (rc != 0) {
+		D_ERROR("failed to convert svc replicas to proto\n");
+		goto out_uuid;
+	}
+
+	evt.extended_info_case = MGMT__RASEVENT__EXTENDED_INFO_POOL_SVC_INFO;
+	evt.pool_svc_info = &info;
+
+	rc = populate_ras_details("pool_svc_ranks_update",
+		(uint32_t)RAS_SEV_INFO, (uint32_t)RAS_TYPE_STATE_CHANGE,
+		"List of pool service replica ranks has been updated.",
+		&evt)
+	if (rc != 0) {
+		D_ERROR("failed to populate generic ras event details\n");
+		goto out_svcreps;
+	}
+
+	rc = notify_ras_event(&evt);
+
+	free_ras_details(&evt);
+out_svcreps:
+	D_FREE(info.svc_reps);
+out_uuid:
+	D_FREE(info.pool_uuid);
+
+	return rc;
+}
+
 int
 get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 {
@@ -207,8 +367,7 @@ get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 	if (dresp->status != DRPC__STATUS__SUCCESS) {
 		D_ERROR("received erroneous dRPC response: %d\n",
 			dresp->status);
-		rc = -DER_IO;
-		goto out_dresp;
+		D_GOTO(out_dresp, rc = -DER_IO);
 	}
 
 	gps_resp = srv__get_pool_svc_resp__unpack(
@@ -247,8 +406,8 @@ out:
 int
 drpc_init(void)
 {
-	char   *path;
-	int	rc;
+	char	*path;
+	int	 rc;
 
 	D_ASPRINTF(path, "%s/%s", dss_socket_dir, "daos_server.sock");
 	if (path == NULL) {
