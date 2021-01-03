@@ -20,7 +20,7 @@ package io.daos.fs.hadoop;
 
 import io.daos.dfs.DaosFsClient;
 import io.daos.dfs.DaosUns;
-import io.daos.dfs.DaosUtils;
+import io.daos.DaosUtils;
 import io.daos.dfs.DunsInfo;
 import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.conf.Configuration;
@@ -47,7 +47,7 @@ import static org.mockito.Mockito.*;
 @RunWith(PowerMockRunner.class)
 @PowerMockIgnore("javax.management.*")
 @PrepareForTest({DaosFsClient.DaosFsClientBuilder.class, DaosFileSystem.class, DaosUns.class})
-@SuppressStaticInitializationFor("io.daos.dfs.DaosFsClient")
+@SuppressStaticInitializationFor({"io.daos.dfs.DaosFsClient", "io.daos.DaosClient"})
 public class DaosFileSystemTest {
 
   private static AtomicInteger unsId = new AtomicInteger(1);
@@ -82,10 +82,11 @@ public class DaosFileSystemTest {
     fs3.close();
 
     String path = "/file/abc";
-    DunsInfo info = new DunsInfo("123", "56", "POSIX", Constants.DAOS_POOL_SVC + "=0");
+    DunsInfo info = new DunsInfo("123", "56", "POSIX", Constants.DAOS_POOL_SVC + "=0",
+        path);
     PowerMockito.mockStatic(DaosUns.class);
     when(DaosUns.getAccessInfo(anyString(), eq(Constants.UNS_ATTR_NAME_HADOOP),
-        eq(io.daos.dfs.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT), eq(false))).thenReturn(info);
+        eq(io.daos.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT), eq(false))).thenReturn(info);
     URI uri = URI.create("daos://" + unsId.getAndIncrement() + path);
     FileSystem unsFs = FileSystem.get(uri, cfg);
     unsFs.close();
@@ -124,10 +125,10 @@ public class DaosFileSystemTest {
     sb.append(Constants.DAOS_POOL_FLAGS).append("=").append("4").append(":");
     sb.append(Constants.DAOS_READ_BUFFER_SIZE).append("=").append("4194304").append(":");
     DunsInfo info = new DunsInfo("123", "56", "POSIX",
-        sb.toString());
+        sb.toString(), path);
     PowerMockito.mockStatic(DaosUns.class);
     when(DaosUns.getAccessInfo(anyString(), eq(Constants.UNS_ATTR_NAME_HADOOP),
-        eq(io.daos.dfs.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT), eq(false))).thenReturn(info);
+        eq(io.daos.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT), eq(false))).thenReturn(info);
     URI uri = URI.create("daos://" + unsId.getAndIncrement() + path);
     FileSystem unsFs = FileSystem.get(uri, cfg);
     unsFs.close();

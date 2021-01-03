@@ -33,6 +33,7 @@ import java.util.Set;
 
 import com.google.common.collect.Lists;
 
+import io.daos.*;
 import io.daos.dfs.*;
 
 import org.apache.commons.lang.StringEscapeUtils;
@@ -67,7 +68,7 @@ import org.slf4j.LoggerFactory;
  * <tbody>
  * <tr>
  *   <td>{@value io.daos.fs.hadoop.Constants#DAOS_SERVER_GROUP}</td>
- *   <td>{@value io.daos.dfs.Constants#POOL_DEFAULT_SERVER_GROUP}</td>
+ *   <td>{@value io.daos.Constants#POOL_DEFAULT_SERVER_GROUP}</td>
  *   <td></td>
  *   <td>false</td>
  *   <td>daos server group name</td>
@@ -81,11 +82,11 @@ import org.slf4j.LoggerFactory;
  * </tr>
  * <tr>
  *   <td>{@value io.daos.fs.hadoop.Constants#DAOS_POOL_FLAGS}</td>
- *   <td>{@value io.daos.dfs.Constants#ACCESS_FLAG_POOL_READWRITE}</td>
+ *   <td>{@value io.daos.Constants#ACCESS_FLAG_POOL_READWRITE}</td>
  *   <td>
- *       {@value io.daos.dfs.Constants#ACCESS_FLAG_POOL_READONLY},
- *       {@value io.daos.dfs.Constants#ACCESS_FLAG_POOL_READWRITE},
- *       {@value io.daos.dfs.Constants#ACCESS_FLAG_POOL_EXECUTE}
+ *       {@value io.daos.Constants#ACCESS_FLAG_POOL_READONLY},
+ *       {@value io.daos.Constants#ACCESS_FLAG_POOL_READWRITE},
+ *       {@value io.daos.Constants#ACCESS_FLAG_POOL_EXECUTE}
  *   </td>
  *   <td>false</td>
  *   <td>pool access flags</td>
@@ -169,8 +170,8 @@ public class DaosFileSystem extends FileSystem {
   private String workPath;
 
   static {
-    if (ShutdownHookManager.removeHook(DaosFsClient.FINALIZER)) {
-      org.apache.hadoop.util.ShutdownHookManager.get().addShutdownHook(DaosFsClient.FINALIZER, 0);
+    if (ShutdownHookManager.removeHook(DaosClient.FINALIZER)) {
+      org.apache.hadoop.util.ShutdownHookManager.get().addShutdownHook(DaosClient.FINALIZER, 0);
       if (LOG.isDebugEnabled()) {
         LOG.debug("daos finalizer relocated to hadoop ShutdownHookManager");
       }
@@ -192,6 +193,7 @@ public class DaosFileSystem extends FileSystem {
     if (info != null) {
       LOG.info("initializing from uns path, " + name);
       uns = true;
+      unsPrefix = info.getPrefix();
       initializeFromUns(name, conf, info);
     } else {
       LOG.info("initializing from config file, " + name);
@@ -244,21 +246,16 @@ public class DaosFileSystem extends FileSystem {
     File file = new File(path);
     DunsInfo info = null;
     while (info == null && file != null) {
-      if (file.exists()) {
-        try {
-          info = DaosUns.getAccessInfo(file.getAbsolutePath(), Constants.UNS_ATTR_NAME_HADOOP,
-            io.daos.dfs.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT, false);
-          if (info != null) {
-            break;
-          }
-        } catch (DaosIOException e) {
-          // ignoring error
+      try {
+        info = DaosUns.getAccessInfo(file.getAbsolutePath(), Constants.UNS_ATTR_NAME_HADOOP,
+          io.daos.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT, false);
+        if (info != null) {
+          break;
         }
+      } catch (DaosIOException e) {
+        // ignoring error
       }
       file = file.getParentFile();
-    }
-    if (info != null) {
-      unsPrefix = file.getAbsolutePath();
     }
     return info;
   }
@@ -325,7 +322,7 @@ public class DaosFileSystem extends FileSystem {
         }
       }
     }
-    // TODO: adjust logic after DAOS added more info to the ext attribute
+    // TODO: other info, like svc, will be moved to agent. then change accordingly.
     conf.set(Constants.DAOS_POOL_UUID, poolId);
     conf.set(Constants.DAOS_CONTAINER_UUID, contId);
   }
@@ -924,7 +921,7 @@ public class DaosFileSystem extends FileSystem {
     }
     super.close();
     if (daos != null) {
-      daos.disconnect();
+      daos.close();
     }
   }
 }

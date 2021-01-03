@@ -21,44 +21,25 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-package io.daos.dfs.uns;
+package io.daos;
 
-public interface PropertiesOrBuilder extends
-    // @@protoc_insertion_point(interface_extends:uns.Properties)
-    com.google.protobuf.MessageOrBuilder {
+/**
+ * error code to message.
+ */
+public class ErrorCode {
+  private final int code;
+  private final String msg;
 
-  /**
-   * <code>uint32 reserved = 1;</code>
-   *
-   * @return The reserved.
-   */
-  int getReserved();
+  public ErrorCode(int code, String msg) {
+    this.code = code;
+    this.msg = msg;
+  }
 
-  /**
-   * <code>repeated .uns.Entry entries = 2;</code>
-   */
-  java.util.List<io.daos.dfs.uns.Entry>
-      getEntriesList();
+  public int getCode() {
+    return code;
+  }
 
-  /**
-   * <code>repeated .uns.Entry entries = 2;</code>
-   */
-  io.daos.dfs.uns.Entry getEntries(int index);
-
-  /**
-   * <code>repeated .uns.Entry entries = 2;</code>
-   */
-  int getEntriesCount();
-
-  /**
-   * <code>repeated .uns.Entry entries = 2;</code>
-   */
-  java.util.List<? extends io.daos.dfs.uns.EntryOrBuilder>
-      getEntriesOrBuilderList();
-
-  /**
-   * <code>repeated .uns.Entry entries = 2;</code>
-   */
-  io.daos.dfs.uns.EntryOrBuilder getEntriesOrBuilder(
-      int index);
+  public String getMsg() {
+    return msg;
+  }
 }
