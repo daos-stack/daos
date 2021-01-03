@@ -161,8 +161,8 @@ out_dreq:
 }
 
 static int
-populate_ras_details(const char *id, uint32_t sev, type, const char *msg,
-		     Mgmt__RASEvent *evt)
+init_ras(const char *id, uint32_t sev, type, const char *msg,
+	 Mgmt__RASEvent *evt)
 {
 	evt->id = id;
 	evt->severity = sev;
@@ -206,7 +206,7 @@ populate_ras_details(const char *id, uint32_t sev, type, const char *msg,
 }
 
 static void
-free_ras_details(Mgmt__RASEvent *evt)
+free_ras(Mgmt__RASEvent *evt)
 {
 	D_FREE(evt->hostname);
 	D_FREE(evt->timestamp);
@@ -269,7 +269,7 @@ ds_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc)
 	Mgmt__RASEvent		 evt = MGMT__RASEVENT__INIT;
 	Mgmt__PoolSvcEventInfo	 info = MGMT__POOL_SVC_EVENT_INFO__INIT;
 	struct timeval		 tv;
-	5struct tm		*tm;
+	struct tm		*tm;
 	struct utsname		 uts;
 	int			 rc;
 
@@ -298,10 +298,10 @@ ds_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc)
 	evt.extended_info_case = MGMT__RASEVENT__EXTENDED_INFO_POOL_SVC_INFO;
 	evt.pool_svc_info = &info;
 
-	rc = populate_ras_details("pool_svc_ranks_update",
-		(uint32_t)RAS_SEV_INFO, (uint32_t)RAS_TYPE_STATE_CHANGE,
-		"List of pool service replica ranks has been updated.",
-		&evt)
+	rc = init_ras("pool_svc_ranks_update", (uint32_t)RAS_SEV_INFO,
+		      (uint32_t)RAS_TYPE_STATE_CHANGE,
+		      "List of pool service replica ranks has been updated.",
+		      &evt)
 	if (rc != 0) {
 		D_ERROR("failed to populate generic ras event details\n");
 		goto out_svcreps;
@@ -309,7 +309,7 @@ ds_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc)
 
 	rc = notify_ras_event(&evt);
 
-	free_ras_details(&evt);
+	free_ras(&evt);
 out_svcreps:
 	D_FREE(info.svc_reps);
 out_uuid:

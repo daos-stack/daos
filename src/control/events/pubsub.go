@@ -160,8 +160,10 @@ func (ps *PubSub) Reset() {
 	ps.reset <- struct{}{}
 }
 
-// HandleClusterEvent extracts event from protobuf request and publishes to make
-// available to locally subscribed consumers to act upon.
+// HandleClusterEvent extracts event field from protobuf request message and
+// converts to concrete event type that implements the Event interface.
+// The Event is then published to make available to locally subscribed consumers
+// to act upon.
 func (ps *PubSub) HandleClusterEvent(req *mgmtpb.ClusterEventReq) (*mgmtpb.ClusterEventResp, error) {
 	if req.Sequence < 1 {
 		ps.log.Debug("no sequence number in ClusterEventReq")

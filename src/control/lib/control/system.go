@@ -183,10 +183,9 @@ func SystemNotify(ctx context.Context, rpcClient UnaryInvoker, req *SystemNotify
 		return nil, errors.New("nil rpc client")
 	}
 
-	rpcClient.Debugf("DAOS system notify request: %+v, event: %+v", req, req.Event)
 	pbReq, err := req.toClusterEventReq()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "decoding system notify request")
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).ClusterEvent(ctx, pbReq)
