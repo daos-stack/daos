@@ -1095,9 +1095,9 @@ public class DaosObjectIT {
     try {
       object.open();
       object.punch();
-      IOSimpleDataDesc desc = object.createSimpleDataDesc(5, 3, 100,
+      IOSimpleDataDesc desc = object.createSimpleDesc(5, 3, 100,
           null);
-      IOSimpleDataDesc fetchDesc = object.createSimpleDataDesc(5, 3, 100,
+      IOSimpleDataDesc fetchDesc = object.createSimpleDesc(5, 3, 100,
           null);
       fetchDesc.setUpdateOrFetch(false);
       try {
@@ -1244,9 +1244,9 @@ public class DaosObjectIT {
     int bufLen = 8000;
     int reduces = 20;
     int maps = 10;
-    IOSimpleDataDesc desc = object.createSimpleDataDesc(4, 1, bufLen,
+    IOSimpleDataDesc desc = object.createSimpleDesc(4, 1, bufLen,
         null);
-    IOSimpleDataDesc fetchDesc = object.createSimpleDataDesc(4, 1, bufLen,
+    IOSimpleDataDesc fetchDesc = object.createSimpleDesc(4, 1, bufLen,
         null);
     fetchDesc.setUpdateOrFetch(false);
     try {
@@ -1314,10 +1314,13 @@ public class DaosObjectIT {
     int maps = 1000;
 //    IOSimpleDataDesc desc = object.createSimpleDataDesc(4, 1, bufLen,
 //        null);
+
     byte[] data = generateDataArray(bufLen);
-    DaosEventQueue dq = DaosEventQueue.getInstance(128, 4, 1, bufLen);
+    DaosEventQueue dq = DaosEventQueue.getInstance(128);
     for (int i = 0; i < dq.getNbrOfEvents(); i++) {
       DaosEventQueue.Event e = dq.getEvent(i);
+      IOSimpleDataDesc desc = object.createSimpleDesc(4, 1, bufLen, dq);
+      desc.setEvent(e);
       IOSimpleDataDesc.SimpleEntry entry = e.getDesc().getEntry(0);
       ByteBuf buf = entry.reuseBuffer();
       buf.writeBytes(data);
@@ -1336,11 +1339,12 @@ public class DaosObjectIT {
       for (int i = 0; i < reduces; i++) {
         for (int j = 0; j < maps; j++) {
           compList.clear();
-          e = dq.acquireEventBlock(true, 1000, compList);
+          e = dq.acquireEventBlocking(true, 1000, compList);
           for (IOSimpleDataDesc d : compList) {
             Assert.assertTrue(d.isSucceeded());
           }
-          desc = e.reuseDesc();
+          desc = e.getDesc();
+          desc.reuse();
           desc.setDkey(String.valueOf(i));
           entry = desc.getEntry(0);
           buf = entry.reuseBuffer();
@@ -1362,11 +1366,12 @@ public class DaosObjectIT {
         for (int j = 0; j < maps; j++) {
 //          System.out.println(i + "-" +j);
           compList.clear();
-          e = dq.acquireEventBlock(false, 1000, compList);
+          e = dq.acquireEventBlocking(false, 1000, compList);
           for (IOSimpleDataDesc d : compList) {
             Assert.assertEquals(bufLen, d.getEntry(0).getActualSize());
           }
-          desc = e.reuseDesc();
+          desc = e.getDesc();
+          desc.reuse();
           desc.setDkey(String.valueOf(i));
           entry = desc.getEntry(0);
           entry.setEntryForFetch(String.valueOf(j), 0, bufLen);
@@ -1388,7 +1393,6 @@ public class DaosObjectIT {
       throw e;
     } finally {
       System.out.println(1);
-      DaosEventQueue.destroyAll();
       System.out.println(2);
       if (object.isOpen()) {
         object.punch();

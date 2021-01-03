@@ -220,7 +220,7 @@ public class ReusableDescMain {
       throw new IOException("offset + nbrOfDkeys should not exceed reduces. " + (nbrOfDkeys + offset) + " > " + reduces);
     }
 
-    IODataDesc desc = object.createReusableDesc(20, 20, 1, akeyValLen,
+    IODataDesc desc = object.createReusableDesc(20, 1, akeyValLen,
         IODataDesc.IodType.ARRAY, 1, true);
     populate(desc.getEntry(0).getDataBuffer());
     long start = System.nanoTime();

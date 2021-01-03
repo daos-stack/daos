@@ -135,11 +135,11 @@ public class IOSimpleDataDesc {
     totalDescBufferLen = tmpLen;
     this.descBuffer = BufferAllocator.objBufWithNativeOrder(totalDescBufferLen);
     prepareNativeDesc();
-    if (!async) {
+    if (!async) { // need native strut to hold async result
       // native desc handle written to the start of descBuffer in native code.
       DaosObjClient.allocateSimpleDesc(descBuffer.memoryAddress(), false);
       checkNativeDesc();
-    } // group allocate native desc otherwise
+    }
     this.updateOrFetch = true; // default to update
   }
 

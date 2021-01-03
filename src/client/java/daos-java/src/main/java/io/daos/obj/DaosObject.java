@@ -592,7 +592,7 @@ public class DaosObject {
    * per-thread {@link DaosEventQueue} instance
    * @return IOSimpleDataDesc instance
    */
-  public IOSimpleDataDesc createUnBoundSimpleDesc(int maxKeyStrLen, int nbrOfEntries, int entryBufLen,
+  public IOSimpleDataDesc createSimpleDesc(int maxKeyStrLen, int nbrOfEntries, int entryBufLen,
                                                 DaosEventQueue eq) {
     return new IOSimpleDataDesc(maxKeyStrLen, nbrOfEntries, entryBufLen, eq == null ? 0L : eq.getEqWrapperHdl());
   }

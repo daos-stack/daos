@@ -23,10 +23,7 @@
 
 package io.daos.obj;
 
-import io.daos.DaosClient;
-import io.daos.DaosIOException;
-import io.daos.DaosObjectType;
-import io.daos.ForceCloseable;
+import io.daos.*;
 import org.apache.commons.lang.ObjectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,7 +37,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * {@link DaosObject} should be create from this client for calling DAOS object APIs indirectly.
  * It registers itself to shutdown manager in {@link DaosClient} to release resources in case of abnormal shutdown.
  */
-public class DaosObjClient extends SharableClient implements ForceCloseable {
+public class DaosObjClient extends ShareableClient implements ForceCloseable {
 
   private long contPtr;
 
@@ -187,6 +184,12 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    */
   native byte[] queryObjectAttribute(long objectPtr) throws DaosIOException;
 
+  /**
+   * allocate native simple desc struct.
+   *
+   * @param memoryAddress
+   * @param async
+   */
   native static void allocateSimpleDesc(long memoryAddress, boolean async);
 
   native static long allocateSimDescGroup(long memoryAddress, int nbrOfEvents);

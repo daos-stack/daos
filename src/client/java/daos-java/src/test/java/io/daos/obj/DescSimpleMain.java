@@ -146,9 +146,11 @@ public class DescSimpleMain {
     }
 
     byte[] data = generateDataArray(akeyValLen);
-    DaosEventQueue dq = DaosEventQueue.getInstance(128, 4, 1, akeyValLen);
+    DaosEventQueue dq = DaosEventQueue.getInstance(128);
     for (int i = 0; i < dq.getNbrOfEvents(); i++) {
       DaosEventQueue.Event e = dq.getEvent(i);
+      IOSimpleDataDesc desc = object.createSimpleDesc(4, 1, akeyValLen, dq);
+      desc.setEvent(e);
       IOSimpleDataDesc.SimpleEntry entry = e.getDesc().getEntry(0);
       ByteBuf buf = entry.reuseBuffer();
       buf.writeBytes(data);
@@ -163,13 +165,14 @@ public class DescSimpleMain {
       for (int i = offset; i < end; i++) {
         for (int j = 0; j < maps; j++) {
           compList.clear();
-          e = dq.acquireEventBlock(true, 1000, compList);
+          e = dq.acquireEventBlocking(true, 1000, compList);
           for (IOSimpleDataDesc d : compList) {
             if (!d.isSucceeded()) {
               throw new IOException("failed " + d);
             }
           }
-          desc = e.reuseDesc();
+          desc = e.getDesc();
+          desc.reuse();
           desc.setDkey(String.valueOf(i));
           entry = desc.getEntry(0);
           buf = entry.reuseBuffer();
@@ -313,7 +316,12 @@ public class DescSimpleMain {
     int nbrOfEntries = sizeLimit/akeyValLen;
     int idx = 0;
     List<IOSimpleDataDesc> compList = new LinkedList<>();
-    DaosEventQueue dq = DaosEventQueue.getInstance(128, 4, nbrOfEntries, akeyValLen);
+    DaosEventQueue dq = DaosEventQueue.getInstance(128);
+    for (int i = 0; i < dq.getNbrOfEvents(); i++) {
+      DaosEventQueue.Event e = dq.getEvent(i);
+      IOSimpleDataDesc desc = object.createSimpleDesc(4, nbrOfEntries, akeyValLen, dq);
+      desc.setEvent(e);
+    }
 //    IODataDesc.Entry entry = desc.getEntry(0);
     DaosEventQueue.Event e;
     IOSimpleDataDesc desc = null;
@@ -324,13 +332,14 @@ public class DescSimpleMain {
           if (idx == 0) {
             // acquire and check
             compList.clear();
-            e = dq.acquireEventBlock(false, 1000, compList);
+            e = dq.acquireEventBlocking(false, 1000, compList);
             for (IOSimpleDataDesc d : compList) {
               for (int k = 0; k < d.getNbrOfAkeysToRequest(); k++) {
                 totalRead += d.getEntry(k).getActualSize();
               }
             }
-            desc = e.reuseDesc();
+            desc = e.getDesc();
+            desc.reuse();
             desc.setDkey(String.valueOf(i));
           }
           desc.getEntry(idx++).setEntryForFetch(String.valueOf(j), 0, akeyValLen);

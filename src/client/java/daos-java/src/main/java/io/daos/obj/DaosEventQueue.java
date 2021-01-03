@@ -300,14 +300,6 @@ public class DaosEventQueue {
     return nbr;
   }
 
-  private void completeDesc(IOSimpleDataDesc desc) {
-    if (desc.isUpdateOrFetch()) {
-      desc.succeed();
-    } else {
-      desc.parseResult();
-    }
-  }
-
   public int getNbrOfAcquired() {
     return nbrOfAcquired;
   }
@@ -325,7 +317,14 @@ public class DaosEventQueue {
     released = true;
   }
 
-  protected void releaseMore() {}
+  protected void releaseMore() {
+    for (Event e : events) {
+      IOSimpleDataDesc desc = e.getDesc();
+      if (desc != null) {
+        desc.release();
+      }
+    }
+  }
 
   /**
    * destroy all event queues. It's should be called when JVM is shutting down.
