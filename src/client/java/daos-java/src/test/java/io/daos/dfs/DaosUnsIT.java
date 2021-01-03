@@ -1,5 +1,7 @@
 package io.daos.dfs;
 
+import io.daos.DaosIOException;
+import io.daos.DaosTestBase;
 import io.daos.dfs.uns.*;
 import org.junit.*;
 
@@ -19,8 +21,8 @@ public class DaosUnsIT {
 
   @BeforeClass
   public static void setup() {
-    poolUuid = System.getProperty("pool_id", DaosFsClientTestBase.DEFAULT_POOL_ID);
-    contUuid = System.getProperty("cont_id", DaosFsClientTestBase.DEFAULT_CONT_ID);
+    poolUuid = System.getProperty("pool_id", DaosTestBase.DEFAULT_POOL_ID);
+    contUuid = System.getProperty("cont_id", DaosTestBase.DEFAULT_CONT_ID);
   }
 
   @Before
@@ -94,6 +96,34 @@ public class DaosUnsIT {
 
   private String createPath(Map<PropType, DaosUns.PropValue> propMap) throws Exception {
     return createPath(null, null, propMap);
+  }
+
+  @Test
+  public void testResolveDirectPathWithUuidsNoPrefix() throws Exception {
+    String path = "/" + poolUuid + "/" + contUuid + "/abc/1234";
+    DunsAttribute attribute = DaosUns.resolvePath(path);
+    Assert.assertEquals(poolUuid, attribute.getPuuid());
+    Assert.assertEquals(contUuid, attribute.getCuuid());
+    Assert.assertEquals("/abc/1234", attribute.getRelPath());
+    System.out.println(attribute.getLayoutType());
+  }
+
+  @Test
+  public void testResolveDirectPathWithUuidsHasPrefix() throws Exception {
+    String path = "daos://" + poolUuid + "/" + contUuid + "/abc/123";
+    DunsAttribute attribute = DaosUns.resolvePath(path);
+    Assert.assertEquals(poolUuid, attribute.getPuuid());
+    Assert.assertEquals(contUuid, attribute.getCuuid());
+    Assert.assertEquals("/abc/123", attribute.getRelPath());
+  }
+
+  @Test
+  public void testResolveDirectPathWithUuidsRootPath() throws Exception {
+    String path = "daos://" + poolUuid + "/" + contUuid;
+    DunsAttribute attribute = DaosUns.resolvePath(path);
+    Assert.assertEquals(poolUuid, attribute.getPuuid());
+    Assert.assertEquals(contUuid, attribute.getCuuid());
+    Assert.assertEquals("", attribute.getRelPath());
   }
 
   @Test
@@ -280,20 +310,18 @@ public class DaosUnsIT {
   public void testParseAttribute() throws Exception {
     String attrFmt = "DAOS.%s://%36s/%36s";
     String type = "POSIX";
-    String attr = String.format(attrFmt, type, DaosFsClientTestBase.DEFAULT_POOL_ID,
-        DaosFsClientTestBase.DEFAULT_CONT_ID);
+    String attr = String.format(attrFmt, type, poolUuid, contUuid);
     DunsAttribute attribute = DaosUns.parseAttribute(attr);
     Assert.assertEquals(Layout.POSIX, attribute.getLayoutType());
-    Assert.assertEquals(DaosFsClientTestBase.DEFAULT_POOL_ID, attribute.getPuuid());
-    Assert.assertEquals(DaosFsClientTestBase.DEFAULT_CONT_ID, attribute.getCuuid());
+    Assert.assertEquals(poolUuid, attribute.getPuuid());
+    Assert.assertEquals(contUuid, attribute.getCuuid());
 
     type = "HDF5";
-    attr = String.format(attrFmt, type, DaosFsClientTestBase.DEFAULT_POOL_ID,
-        DaosFsClientTestBase.DEFAULT_CONT_ID);
+    attr = String.format(attrFmt, type, poolUuid, contUuid);
     attribute = DaosUns.parseAttribute(attr);
     Assert.assertEquals(Layout.HDF5, attribute.getLayoutType());
-    Assert.assertEquals(DaosFsClientTestBase.DEFAULT_POOL_ID, attribute.getPuuid());
-    Assert.assertEquals(DaosFsClientTestBase.DEFAULT_CONT_ID, attribute.getCuuid());
+    Assert.assertEquals(poolUuid, attribute.getPuuid());
+    Assert.assertEquals(contUuid, attribute.getCuuid());
   }
 
   @Test
