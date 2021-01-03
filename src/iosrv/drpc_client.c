@@ -32,6 +32,7 @@
 #include <daos/drpc_modules.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/ras.h>
+#include <sys/utsname.h>
 #include "srv.pb-c.h"
 #include "event.pb-c.h"
 #include "srv_internal.h"
@@ -161,9 +162,13 @@ out_dreq:
 }
 
 static int
-init_ras(const char *id, uint32_t sev, type, const char *msg,
+init_ras(char *id, uint32_t sev, uint32_t type, char *msg,
 	 Mgmt__RASEvent *evt)
 {
+	struct timeval	 tv;
+	struct tm	*tm;
+	struct utsname	 uts;
+
 	evt->id = id;
 	evt->severity = sev;
 	evt->type = type;
@@ -268,9 +273,6 @@ ds_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc)
 {
 	Mgmt__RASEvent		 evt = MGMT__RASEVENT__INIT;
 	Mgmt__PoolSvcEventInfo	 info = MGMT__POOL_SVC_EVENT_INFO__INIT;
-	struct timeval		 tv;
-	struct tm		*tm;
-	struct utsname		 uts;
 	int			 rc;
 
 	if (dss_drpc_ctx == NULL) {
@@ -301,7 +303,7 @@ ds_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc)
 	rc = init_ras("pool_svc_ranks_update", (uint32_t)RAS_SEV_INFO,
 		      (uint32_t)RAS_TYPE_STATE_CHANGE,
 		      "List of pool service replica ranks has been updated.",
-		      &evt)
+		      &evt);
 	if (rc != 0) {
 		D_ERROR("failed to populate generic ras event details\n");
 		goto out_svcreps;
