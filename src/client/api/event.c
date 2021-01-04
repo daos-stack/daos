@@ -612,22 +612,31 @@ daos_eq_create(daos_handle_t *eqh)
 {
 	struct daos_eq_private	*eqx;
 	struct daos_eq		*eq;
+	crt_context_t		eq_ctx;
 	int			rc = 0;
 
 	/** not thread-safe, but best effort */
 	if (eq_ref == 0)
 		return -DER_UNINIT;
 
+	rc = crt_context_create(&eq_ctx);
+	if (rc != 0) {
+		D_ERROR("failed to create CART context: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
 	eq = daos_eq_alloc();
-	if (eq == NULL)
+	if (eq == NULL) {
+		crt_context_destroy(eq_ctx, 1);
 		return -DER_NOMEM;
+	}
 
 	eqx = daos_eq2eqx(eq);
 	daos_eq_insert(eqx);
-	eqx->eqx_ctx = daos_eq_ctx;
+	eqx->eqx_ctx = eq_ctx;
 	daos_eq_handle(eqx, eqh);
 
-	rc = tse_sched_init(&eqx->eqx_sched, NULL, daos_eq_ctx);
+	rc = tse_sched_init(&eqx->eqx_sched, NULL, eq_ctx);
 
 	daos_eq_putref(eqx);
 	return rc;
@@ -870,11 +879,7 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 
 	D_MUTEX_UNLOCK(&eqx->eqx_lock);
 
-	/*
-	 * Since we are sharing the same cart context with all EQs, we need to
-	 * flush the tasks for this EQ, which unfortunately means flushing for
-	 * all EQs.
-	 */
+	/** Flush the tasks for this EQ */
 	if (eqx->eqx_ctx != NULL) {
 		rc = crt_context_flush(eqx->eqx_ctx, 0);
 		if (rc != 0) {
@@ -901,7 +906,9 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 	}
 
 	tse_sched_complete(&eqx->eqx_sched, rc, true);
+	crt_context_destroy(eqx->eqx_ctx, (flags & DAOS_EQ_DESTROY_FORCE));
 	eqx->eqx_ctx = NULL;
+
 out:
 	D_MUTEX_UNLOCK(&eqx->eqx_lock);
 	if (rc == 0)
