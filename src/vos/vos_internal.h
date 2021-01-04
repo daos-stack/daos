@@ -307,6 +307,11 @@ struct vos_dtx_cmt_ent {
 #define DCE_OID(dce)		((dce)->dce_base.dce_oid)
 #define DCE_DKEY_HASH(dce)	((dce)->dce_base.dce_dkey_hash)
 #define DCE_OID_OFF(dce)	((dce)->dce_base.dce_oid_off)
+/*
+ * If there are multiple objects (indicated via DCE_OID_OFF()) are modified
+ * via current DTX, then the dkey hash in the committed DTX entry is useless.
+ * Under such case, re-use it as the count of modified objects.
+ */
 #define DCE_OID_CNT(dce)	DCE_DKEY_HASH(dce)
 
 /* in-memory structures standalone instance */

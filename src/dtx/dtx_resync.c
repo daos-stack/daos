@@ -421,25 +421,25 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 		return 0;
 
 	if (dra->resync_all) {
-		/* Open container case:
-		 * DTX leader: handle the DTX that happened before DTX resync.
-		 * non-leader: handle the DTX with old version.
-		 */
+		/* For open container. */
 		if (ent->ie_dtx_flags & DTE_LEADER) {
+			/* Leader: handle the DTX that happened before current
+			 * DTX resync.
+			 */
 			if (ent->ie_epoch < dra->epoch)
 				return 0;
 		} else {
+			/* Non-leader: handle the DTX with old version. */
 			if (ent->ie_dtx_ver >= dra->version)
 				return 0;
 		}
 	} else {
-		/* Pool map refresh case:
-		 * DTX leader: do nothing.
-		 * non-leader: handle the DTX with old version.
-		 */
+		/* For pool map refresh. */
+		/* Leader: do nothing. */
 		if (ent->ie_dtx_flags & DTE_LEADER)
 			return 0;
 
+		/* Non-leader: handle the DTX with old version. */
 		if (ent->ie_dtx_ver >= dra->version)
 			return 0;
 	}
