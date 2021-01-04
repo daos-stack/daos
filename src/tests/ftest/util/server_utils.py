@@ -331,6 +331,19 @@ class DaosServerManager(SubprocessManager):
         self.dmg = self.get_dmg(
             group, cert_dir, bin_dir, dmg_config_file, dmg_config_temp)
 
+    def servers_per_host(self):
+        """Get a dictionary of number of servers running per host name.
+
+        Returns:
+            dict: a dictionary of hostname keys with integer values representing
+                the number of servers configured to run on that host
+
+        """
+        servers_per_host = self.get_config_value("servers_per_host")
+        if servers_per_host is None:
+            servers_per_host = 1
+        return {host: servers_per_host for host in self._hosts}
+
     @staticmethod
     def get_job(group, cert_dir, bin_dir, config_file, config_temp=None):
         """Get the daos_server command object to manage.
