@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-package io.daos.dfs;
+package io.daos;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
