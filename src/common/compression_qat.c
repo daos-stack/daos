@@ -110,6 +110,44 @@ deflate_decompress(void *daos_dc_ctx, uint8_t *src, size_t src_len,
 		dst, dst_len, produced, DIR_DECOMPRESS);
 }
 
+static int
+deflate_compress_async(void *daos_dc_ctx, uint8_t *src, size_t src_len,
+		       uint8_t *dst, size_t dst_len,
+		       dc_callback_fn cb_fn, void *cb_data)
+{
+	struct deflate_ctx *ctx = daos_dc_ctx;
+
+	return qat_dc_compress_async(
+		&ctx->dc_inst_hdl,
+		&ctx->session_hdl,
+		src, src_len,
+		dst, dst_len, DIR_COMPRESS,
+		cb_fn, cb_data);
+}
+
+static int
+deflate_decompress_async(void *daos_dc_ctx, uint8_t *src, size_t src_len,
+			 uint8_t *dst, size_t dst_len,
+			 dc_callback_fn cb_fn, void *cb_data)
+{
+	struct deflate_ctx *ctx = daos_dc_ctx;
+
+	return qat_dc_compress_async(
+		&ctx->dc_inst_hdl,
+		&ctx->session_hdl,
+		src, src_len,
+		dst, dst_len, DIR_DECOMPRESS,
+		cb_fn, cb_data);
+}
+
+static int
+deflate_poll_response(void *daos_dc_ctx)
+{
+	struct deflate_ctx *ctx = daos_dc_ctx;
+
+	return qat_dc_poll_response(&ctx->dc_inst_hdl);
+}
+
 static void
 deflate_destroy(void *daos_dc_ctx)
 {
@@ -134,6 +172,9 @@ struct compress_ft qat_deflate_algo = {
 	.cf_init = deflate_init,
 	.cf_compress = deflate_compress,
 	.cf_decompress = deflate_decompress,
+	.cf_compress_async = deflate_compress_async,
+	.cf_decompress_async = deflate_decompress_async,
+	.cf_poll_response = deflate_poll_response,
 	.cf_destroy = deflate_destroy,
 	.cf_available = is_available,
 	.cf_level = 1,
@@ -145,6 +186,9 @@ struct compress_ft qat_deflate1_algo = {
 	.cf_init = deflate_init,
 	.cf_compress = deflate_compress,
 	.cf_decompress = deflate_decompress,
+	.cf_compress_async = deflate_compress_async,
+	.cf_decompress_async = deflate_decompress_async,
+	.cf_poll_response = deflate_poll_response,
 	.cf_destroy = deflate_destroy,
 	.cf_available = is_available,
 	.cf_level = 1,
@@ -156,6 +200,9 @@ struct compress_ft qat_deflate2_algo = {
 	.cf_init = deflate_init,
 	.cf_compress = deflate_compress,
 	.cf_decompress = deflate_decompress,
+	.cf_compress_async = deflate_compress_async,
+	.cf_decompress_async = deflate_decompress_async,
+	.cf_poll_response = deflate_poll_response,
 	.cf_destroy = deflate_destroy,
 	.cf_available = is_available,
 	.cf_level = 2,
@@ -167,6 +214,9 @@ struct compress_ft qat_deflate3_algo = {
 	.cf_init = deflate_init,
 	.cf_compress = deflate_compress,
 	.cf_decompress = deflate_decompress,
+	.cf_compress_async = deflate_compress_async,
+	.cf_decompress_async = deflate_decompress_async,
+	.cf_poll_response = deflate_poll_response,
 	.cf_destroy = deflate_destroy,
 	.cf_available = is_available,
 	.cf_level = 3,
@@ -178,6 +228,9 @@ struct compress_ft qat_deflate4_algo = {
 	.cf_init = deflate_init,
 	.cf_compress = deflate_compress,
 	.cf_decompress = deflate_decompress,
+	.cf_compress_async = deflate_compress_async,
+	.cf_decompress_async = deflate_decompress_async,
+	.cf_poll_response = deflate_poll_response,
 	.cf_destroy = deflate_destroy,
 	.cf_available = is_available,
 	.cf_level = 4,

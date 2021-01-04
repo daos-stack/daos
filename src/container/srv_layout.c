@@ -81,7 +81,7 @@ struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 		.dpe_val	= DAOS_PROP_CO_CSUM_SV_OFF,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_REDUN_FAC,
-		.dpe_val	= DAOS_PROP_CO_REDUN_RF1,
+		.dpe_val	= DAOS_PROP_CO_REDUN_RF0,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_REDUN_LVL,
 		.dpe_val	= DAOS_PROP_CO_REDUN_RACK,

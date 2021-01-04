@@ -811,9 +811,10 @@ update_targets_ult(void *arg)
 		rc = dsc_pool_tgt_exclude(uta->uta_pool_id, NULL /* grp */,
 					  &svc, &tgt_list);
 	if (rc)
-		D_ERROR(DF_UUID": %s targets failed. %d\n",
+		D_ERROR(DF_UUID": %s targets failed. " DF_RC "\n",
+			DP_UUID(uta->uta_pool_id),
 			uta->uta_reint ? "Reint" : "Exclude",
-			DP_UUID(uta->uta_pool_id), rc);
+			DP_RC(rc));
 
 	free_update_targets_arg(uta);
 }
@@ -876,8 +877,8 @@ nvme_reaction(int *tgt_ids, int tgt_cnt, bool reint)
 			 * to transit BIO BS state to now.
 			 */
 			D_DEBUG(DB_MGMT, DF_UUID": Targets are all in %s\n",
-				reint ? "UP/UPIN" : "DOWN/DOWNOUT",
-				DP_UUID(pool_info->spi_id));
+				DP_UUID(pool_info->spi_id),
+				reint ? "UP/UPIN" : "DOWN/DOWNOUT");
 			break;
 		case 1:
 			/*
@@ -885,8 +886,8 @@ nvme_reaction(int *tgt_ids, int tgt_cnt, bool reint)
 			 * need to send exclude/reint RPC.
 			 */
 			D_DEBUG(DB_MGMT, DF_UUID": Trigger targets %s.\n",
-				reint ? "reint" : "exclude",
-				DP_UUID(pool_info->spi_id));
+				DP_UUID(pool_info->spi_id),
+				reint ? "reint" : "exclude");
 			rc = update_pool_targets(pool_info->spi_id, tgt_ids,
 						 tgt_cnt, reint, pl_rank);
 			if (rc == 0)

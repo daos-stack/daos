@@ -1867,7 +1867,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	epoch.oe_first = orw->orw_epoch_first;
 	epoch.oe_flags = orf_to_dtx_epoch_flags(orw->orw_flags);
 
-	rc = dtx_begin(ioc.ioc_coc, &orw->orw_dti, &epoch, 1,
+	rc = dtx_begin(ioc.ioc_coc->sc_hdl, &orw->orw_dti, &epoch, 1,
 		       orw->orw_map_ver, &orw->orw_oid,
 		       orw->orw_dti_cos.ca_arrays,
 		       orw->orw_dti_cos.ca_count,
@@ -2033,7 +2033,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 			dtx_flags = DTX_FOR_MIGRATION;
 
 re_fetch:
-		rc = dtx_begin(ioc.ioc_coc, &orw->orw_dti, &epoch, 0,
+		rc = dtx_begin(ioc.ioc_coc->sc_hdl, &orw->orw_dti, &epoch, 0,
 			       orw->orw_map_ver, &orw->orw_oid,
 			       NULL, 0, dtx_flags, NULL, &dth);
 		if (rc != 0)
@@ -2158,8 +2158,8 @@ again:
 	if (flags & ORF_RESEND)
 		dtx_flags |= DTX_RESEND;
 
-	rc = dtx_leader_begin(ioc.ioc_coc, &orw->orw_dti, &epoch, 1, version,
-			      &orw->orw_oid, dti_cos, dti_cos_cnt,
+	rc = dtx_leader_begin(ioc.ioc_coc->sc_hdl, &orw->orw_dti, &epoch, 1,
+			      version, &orw->orw_oid, dti_cos, dti_cos_cnt,
 			      tgts, tgt_cnt, dtx_flags, mbs, &dlh);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for update "DF_RC".\n",
@@ -2425,8 +2425,9 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		flags = DTX_FOR_MIGRATION;
 
 again:
-	rc = dtx_begin(ioc->ioc_coc, &oei->oei_dti, &epoch, 0, oei->oei_map_ver,
-		       &oei->oei_oid, NULL, 0, flags, NULL, &dth);
+	rc = dtx_begin(ioc->ioc_coc->sc_hdl, &oei->oei_dti, &epoch, 0,
+		       oei->oei_map_ver, &oei->oei_oid, NULL, 0, flags,
+		       NULL, &dth);
 	if (rc != 0)
 		goto failed;
 
@@ -2790,7 +2791,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	epoch.oe_flags = orf_to_dtx_epoch_flags(opi->opi_flags);
 
 	/* Start the local transaction */
-	rc = dtx_begin(ioc.ioc_coc, &opi->opi_dti, &epoch, 1,
+	rc = dtx_begin(ioc.ioc_coc->sc_hdl, &opi->opi_dti, &epoch, 1,
 		       opi->opi_map_ver, &opi->opi_oid,
 		       opi->opi_dti_cos.ca_arrays,
 		       opi->opi_dti_cos.ca_count,
@@ -3019,8 +3020,8 @@ again:
 	if (flags & ORF_RESEND)
 		dtx_flags |= DTX_RESEND;
 
-	rc = dtx_leader_begin(ioc.ioc_coc, &opi->opi_dti, &epoch, 1, version,
-			      &opi->opi_oid, dti_cos, dti_cos_cnt,
+	rc = dtx_leader_begin(ioc.ioc_coc->sc_hdl, &opi->opi_dti, &epoch, 1,
+			      version, &opi->opi_oid, dti_cos, dti_cos_cnt,
 			      tgts, tgt_cnt, dtx_flags, mbs, &dlh);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for punch "DF_RC".\n",
@@ -3120,7 +3121,7 @@ again:
 	epoch.oe_first = okqi->okqi_epoch_first;
 	epoch.oe_flags = orf_to_dtx_epoch_flags(okqi->okqi_flags);
 
-	rc = dtx_begin(ioc.ioc_coc, &okqi->okqi_dti, &epoch, 0,
+	rc = dtx_begin(ioc.ioc_coc->sc_hdl, &okqi->okqi_dti, &epoch, 0,
 		       okqi->okqi_map_ver, &okqi->okqi_oid, NULL, 0, 0, NULL,
 		       &dth);
 	if (rc != 0)
@@ -3784,7 +3785,7 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 	if (oci->oci_flags & ORF_DTX_SYNC)
 		dtx_flags |= DTX_SYNC;
 
-	rc = dtx_begin(ioc->ioc_coc, &dcsh->dcsh_xid, &dcsh->dcsh_epoch,
+	rc = dtx_begin(ioc->ioc_coc->sc_hdl, &dcsh->dcsh_xid, &dcsh->dcsh_epoch,
 		       dcde->dcde_write_cnt, oci->oci_map_ver,
 		       &dcsh->dcsh_leader_oid, NULL, 0, dtx_flags,
 		       dcsh->dcsh_mbs, &dth);
@@ -4025,7 +4026,7 @@ ds_obj_dtx_leader_ult(void *arg)
 	if (flags & ORF_RESEND)
 		dtx_flags |= DTX_RESEND;
 
-	rc = dtx_leader_begin(dca->dca_ioc->ioc_coc, &dcsh->dcsh_xid,
+	rc = dtx_leader_begin(dca->dca_ioc->ioc_coc->sc_hdl, &dcsh->dcsh_xid,
 			      &dcsh->dcsh_epoch, dcde->dcde_write_cnt,
 			      oci->oci_map_ver, &dcsh->dcsh_leader_oid,
 			      NULL, 0, tgts, tgt_cnt - 1, dtx_flags,
