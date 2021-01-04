@@ -625,9 +625,6 @@ sys_attach(const char *name, struct dc_mgmt_sys **sysp)
 	struct dc_mgmt_sys     *sys;
 	int			rc = 0;
 
-	if (name == NULL)
-		name = DAOS_DEFAULT_SYS_NAME;
-
 	D_MUTEX_LOCK(&systems_lock);
 
 	sys = lookup_sys(name);

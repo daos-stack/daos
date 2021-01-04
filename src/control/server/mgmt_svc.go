@@ -111,8 +111,8 @@ func (svc *mgmtSvc) checkReplicaRequest(req proto.Message) error {
 // to client network autoconfiguration hints.
 //
 // The default use case, where req.AllRanks is false, is for libdaos clients to obtain
-// the client network autoconfiguration hints. If req.AllRanks is true, all ranks' fabric
-// URIs are also given the client.
+// the client network autoconfiguration hints, and the set of ranks associated with MS
+// replicas. If req.AllRanks is true, all ranks' fabric URIs are also given the client.
 func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
 	if err := svc.checkReplicaRequest(req); err != nil {
 		return nil, err
