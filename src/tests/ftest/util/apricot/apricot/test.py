@@ -85,6 +85,14 @@ class Test(avocadoTest):
     :avocado: recursive
     """
 
+    # Skipping Test Variants:
+    #   If this is populated with a (<ticket>, <param_name>, <param_value>)
+    #   tuple, then setUp() will check each test variant to see if the
+    #   <param_name> has been assigned <param_value>.  When this is the case the
+    #   test variant will be skipped/cancelled for <ticket> before anything else
+    #   in setUp() is executed.
+    CANCEL_FOR_TICKET = ()
+
     def __init__(self, *args, **kwargs):
         """Initialize a Test object."""
         super(Test, self).__init__(*args, **kwargs)
@@ -144,8 +152,37 @@ class Test(avocadoTest):
 
     def setUp(self):
         """Set up each test case."""
+        self.check_variant_skip()
         self.log.info("*** SETUP running on %s ***", str(detect()))
         super(Test, self).setUp()
+
+    def check_variant_skip(self):
+        """Determine if this test variant should be skipped.
+
+        If self.CANCEL_FOR_TICKET is populated, check each item in the list to
+        determine if this test variant should be skipped (cancelled).  Each item
+        should be a tuple whose:
+            - first entry is the ticket defining the test variant skip reason
+            - next two entries define:
+                - the test yaml parameter name to read
+                - the test yaml parameter value used to trigger the skip
+        If multiple sets of test yaml names/values are specified they must all
+        match in order for the test variant to be skipped.
+        """
+        for data in (list(item) for item in self.CANCEL_FOR_TICKET):
+            ticket = data.pop(0)
+            skip_variant = len(data) > 1
+            while data and skip_variant:
+                try:
+                    param_name = data.pop(0)
+                    param_value = data.pop(0)
+                    skip_variant = self.params.get(param_name) == param_value
+                except IndexError:
+                    self.fail(
+                        "Invalid CANCEL_FOR_TICKET format: {}".format(
+                            self.CANCEL_FOR_TICKET))
+            if skip_variant:
+                self.cancelForTicket(ticket)
 
     # pylint: disable=invalid-name
     def cancelForTicket(self, ticket):
@@ -722,17 +759,15 @@ class TestWithServers(TestWithoutServers):
                 status = False
 
             # Verify that the expected number of ranks reported information
-            expected = [host for host in manager.hosts]
+            expected = manager.servers_per_host()
             for rank in sorted(data):
                 # Verify this host's system query information is expected
                 domain = data[rank]["domain"].split(".")
                 host = domain[0].replace("/", "")
-                try:
-                    expected.remove(host)
-                except ValueError as error:
+                if host not in expected:
                     self.log.info(
-                        "  Unexpected host found in 'dmg system query': "
-                        "'%s' - %s", host, error)
+                        "  Unexpected host '%s' found in 'dmg system query' - "
+                        "expected hosts: %s", host, ", ".join(expected.keys()))
                     status = False
                     continue
 
@@ -746,6 +781,14 @@ class TestWithServers(TestWithoutServers):
                         "  ERROR: Server rank %s not running (%s) on %s",
                         rank, data[rank]["state"], host)
                     status = False
+
+                # Decrement the number of servers per host for each server found
+                # and when all servers per host have been found remove the host.
+                expected[host] -= 1
+                if expected[host] == 0:
+                    self.log.info(
+                        "    All expected servers for %s detected", host)
+                    expected.pop(host)
 
             # Verify all expected hosts were found by 'dmg system query'
             if expected and data:

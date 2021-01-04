@@ -604,7 +604,7 @@ class Systemctl(JobManager):
         """
         self.log.info(
             "Gathering %s log data on %s from %s%s",
-            self.unit, str(hosts), since,
+            self.job.service.value, str(hosts), since,
             " ".join(("", "to", until)) if until else "")
 
         # Setup the journalctl command to capture all unit activity from the
@@ -612,7 +612,7 @@ class Systemctl(JobManager):
         #   --output=json?
         command = [
             "journalctl",
-            "--unit={}".format(self.unit),
+            "--unit={}".format(self.job.service.value),
             "--since={}".format(since),
         ]
         if until:
@@ -632,12 +632,12 @@ class Systemctl(JobManager):
         if timed_out:
             status = False
         if not status:
-            self.log.info("  Errors detected running \"{}\":", command)
+            self.log.info("  Errors detected running \"%s\":", command)
 
         # List any hosts that timed out
         if timed_out:
             self.log.info(
-                "    {}: timeout detected after %s seconds",
+                "    %s: timeout detected after %s seconds",
                 str(NodeSet.fromlist(timed_out)), timeout)
 
         # Display/return the command output
@@ -670,7 +670,7 @@ class Systemctl(JobManager):
         if not status:
             raise CommandFailure(
                 "Error(s) detected gathering {} log data on {}".format(
-                    self.unit, NodeSet.fromlist(hosts)))
+                    self.job.service.value, NodeSet.fromlist(hosts)))
 
         # Return the successful command output per set of hosts
         return log_data

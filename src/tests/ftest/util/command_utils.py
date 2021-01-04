@@ -1032,7 +1032,23 @@ class SystemctlCommand(ExecutableCommand):
 
     def __init__(self):
         """Create a SystemctlCommand object."""
-        super(SystemctlCommand, self).__init__("/run/systemctl/*", "systemctl")
+        super(SystemctlCommand, self).__init__(
+            "/run/systemctl/*", "systemctl", subprocess=False)
 
         self.unit_command = BasicParameter(None)
         self.service = BasicParameter(None)
+
+    def get_str_param_names(self):
+        """Get a sorted list of the names of the command attributes.
+
+        Ensure the correct order of the attributes for the systemctl command,
+        e.g.:
+            systemctl <unit_command> <service>
+
+        Returns:
+            list: a list of class attribute names used to define parameters
+                for the command.
+
+        """
+        return list(
+            reversed(super(SystemctlCommand, self).get_str_param_names()))
