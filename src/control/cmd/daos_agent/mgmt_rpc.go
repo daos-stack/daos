@@ -55,10 +55,6 @@ type mgmtModule struct {
 }
 
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
-	if method != drpc.MethodGetAttachInfo && method != drpc.MethodDisconnect {
-		return nil, drpc.UnknownMethodFailure()
-	}
-
 	uc, ok := session.Conn.(*net.UnixConn)
 	if !ok {
 		return nil, errors.Errorf("session.Conn type conversion failed")
@@ -81,11 +77,17 @@ func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req
 	switch method {
 	case drpc.MethodGetAttachInfo:
 		return mod.handleGetAttachInfo(ctx, req, cred.Pid)
-	case drpc.MethodDisconnect:
+	case drpc.MethodNotifyPoolConnect:
+		return nil, mod.handleNotifyPoolConnect(ctx, req, cred.Pid)
+	case drpc.MethodNotifyPoolDisconnect:
+		return nil, mod.handleNotifyPoolDisconnect(ctx, req, cred.Pid)
+	case drpc.MethodNotifyExit:
 		// There isn't anything we can do here if this fails so just
 		// call the disconnect handler and return success.
-		mod.handleDisconnect(ctx, cred.Pid)
+		mod.handleNotifyExit(ctx, cred.Pid)
 		return nil, nil
+	default:
+		return nil, drpc.UnknownMethodFailure()
 	}
 
 	return nil, drpc.UnknownMethodFailure()
@@ -121,7 +123,6 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 	// caching is enabled, there's data in the info cache and the agent can quickly return
 	// a response without the overhead of a mutex.
 	if mod.aiCache.isCached() {
-		mod.monitor.RegisterProcess(ctx, pid)
 		return mod.aiCache.getResponse(numaNode)
 	}
 
@@ -133,7 +134,6 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 	// If another thread succeeded in initializing the cache while this thread waited
 	// to get the mutex, return the cached response instead of initializing the cache again.
 	if mod.aiCache.isCached() {
-		mod.monitor.RegisterProcess(ctx, pid)
 		return mod.aiCache.getResponse(numaNode)
 	}
 
@@ -190,15 +190,31 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 	// unmarshalled responses (more computation work for daos_agent) or
 	// two variants of marshalled responses.
 
-	mod.monitor.RegisterProcess(ctx, pid)
-
 	return cacheResp, err
 }
 
-// handleDisconnect crafts a new request for the process monitor to inform the
+func (mod *mgmtModule) handleNotifyPoolConnect(ctx context.Context, reqb []byte, pid int32) error {
+	pbReq := new(mgmtpb.PoolMonitorReq)
+	if err := proto.Unmarshal(reqb, pbReq); err != nil {
+		return drpc.UnmarshalingPayloadFailure()
+	}
+	mod.monitor.AddPoolHandle(ctx, pid, pbReq)
+	return nil
+}
+
+func (mod *mgmtModule) handleNotifyPoolDisconnect(ctx context.Context, reqb []byte, pid int32) error {
+	pbReq := new(mgmtpb.PoolMonitorReq)
+	if err := proto.Unmarshal(reqb, pbReq); err != nil {
+		return drpc.UnmarshalingPayloadFailure()
+	}
+	mod.monitor.RemovePoolHandle(ctx, pid, pbReq)
+	return nil
+}
+
+// handleNotifyExit crafts a new request for the process monitor to inform the
 // monitor that a process is exiting. Even though the process is terminating
 // cleanly disconnect will inform the control plane of any outstanding handles
 // that the process held open.
-func (mod *mgmtModule) handleDisconnect(ctx context.Context, pid int32) {
-	mod.monitor.UnregisterProcess(ctx, pid)
+func (mod *mgmtModule) handleNotifyExit(ctx context.Context, pid int32) {
+	mod.monitor.NotifyExit(ctx, pid)
 }

@@ -92,7 +92,7 @@ class CSumErrorLog(DaosCoreBase):
         Test ID: DAOS-3927
         Test Description: Write Avocado Test to verify single data after
                           pool/container disconnect/reconnect.
-        :avocado: tags=all,pr,hw,medium,ib2,csum_error_log,faults
+        :avocado: tags=all,daily_regression,hw,medium,ib2,csum_error_log,faults
         """
         dev_id = self.get_nvme_device_id()
         self.log.info("%s", dev_id)

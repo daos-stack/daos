@@ -41,7 +41,7 @@ class DaosControlConfigTest(TestWithServers):
         Test Description: Test dmg tool executes with variant positive and
         negative inputs to its configuration file.
 
-        :avocado: tags=all,small,control,pr,control_start,basic
+        :avocado: tags=all,small,control,daily_regression,control_start,basic
         """
         # Get the input to verify
         c_val = self.params.get("config_val", "/run/control_config_val/*/")

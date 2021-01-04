@@ -249,7 +249,7 @@ type JoinReq struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Uuid           string `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`                     // Servee UUID.
+	Uuid           string `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`                     // Server UUID.
 	Rank           uint32 `protobuf:"varint,2,opt,name=rank,proto3" json:"rank,omitempty"`                    // Server rank desired, if not -1.
 	Uri            string `protobuf:"bytes,3,opt,name=uri,proto3" json:"uri,omitempty"`                       // Server CaRT base URI (i.e., for context 0).
 	Nctxs          uint32 `protobuf:"varint,4,opt,name=nctxs,proto3" json:"nctxs,omitempty"`                  // Server CaRT context count.
@@ -520,6 +520,324 @@ func (x *LeaderQueryResp) GetReplicas() []string {
 	return nil
 }
 
+// RankStateInfo defines extended fields for rank state change related events.
+type RankStateInfo struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Instance uint32 `protobuf:"varint,1,opt,name=instance,proto3" json:"instance,omitempty"` // Control-plane harness instance index.
+	Errored  bool   `protobuf:"varint,2,opt,name=errored,proto3" json:"errored,omitempty"`   // Rank in error state.
+	Error    string `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`        // Message associated with error.
+}
+
+func (x *RankStateInfo) Reset() {
+	*x = RankStateInfo{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_svc_proto_msgTypes[7]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RankStateInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RankStateInfo) ProtoMessage() {}
+
+func (x *RankStateInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_svc_proto_msgTypes[7]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RankStateInfo.ProtoReflect.Descriptor instead.
+func (*RankStateInfo) Descriptor() ([]byte, []int) {
+	return file_svc_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *RankStateInfo) GetInstance() uint32 {
+	if x != nil {
+		return x.Instance
+	}
+	return 0
+}
+
+func (x *RankStateInfo) GetErrored() bool {
+	if x != nil {
+		return x.Errored
+	}
+	return false
+}
+
+func (x *RankStateInfo) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+// RASEvent describes a RAS event in the DAOS system.
+type RASEvent struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Name      string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`           // Unique identifier, 64-char.
+	Timestamp string `protobuf:"bytes,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"` // Fully qualified timestamp (us) incl timezone.
+	Severity  uint32 `protobuf:"varint,3,opt,name=severity,proto3" json:"severity,omitempty"`  // Event severity.
+	Msg       string `protobuf:"bytes,4,opt,name=msg,proto3" json:"msg,omitempty"`             // Human readable message describing event.
+	Id        uint32 `protobuf:"varint,5,opt,name=id,proto3" json:"id,omitempty"`              // Unique numeric event identifier.
+	Type      uint32 `protobuf:"varint,6,opt,name=type,proto3" json:"type,omitempty"`          // Event type.
+	Rank      uint32 `protobuf:"varint,7,opt,name=rank,proto3" json:"rank,omitempty"`          // (optional) DAOS rank involved in event.
+	Hostname  string `protobuf:"bytes,8,opt,name=hostname,proto3" json:"hostname,omitempty"`   // (optional) Hostname of node involved in event.
+	// Types that are assignable to ExtendedInfo:
+	//	*RASEvent_RankState
+	ExtendedInfo isRASEvent_ExtendedInfo `protobuf_oneof:"extended_info"`
+}
+
+func (x *RASEvent) Reset() {
+	*x = RASEvent{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_svc_proto_msgTypes[8]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RASEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RASEvent) ProtoMessage() {}
+
+func (x *RASEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_svc_proto_msgTypes[8]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RASEvent.ProtoReflect.Descriptor instead.
+func (*RASEvent) Descriptor() ([]byte, []int) {
+	return file_svc_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *RASEvent) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *RASEvent) GetTimestamp() string {
+	if x != nil {
+		return x.Timestamp
+	}
+	return ""
+}
+
+func (x *RASEvent) GetSeverity() uint32 {
+	if x != nil {
+		return x.Severity
+	}
+	return 0
+}
+
+func (x *RASEvent) GetMsg() string {
+	if x != nil {
+		return x.Msg
+	}
+	return ""
+}
+
+func (x *RASEvent) GetId() uint32 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *RASEvent) GetType() uint32 {
+	if x != nil {
+		return x.Type
+	}
+	return 0
+}
+
+func (x *RASEvent) GetRank() uint32 {
+	if x != nil {
+		return x.Rank
+	}
+	return 0
+}
+
+func (x *RASEvent) GetHostname() string {
+	if x != nil {
+		return x.Hostname
+	}
+	return ""
+}
+
+func (m *RASEvent) GetExtendedInfo() isRASEvent_ExtendedInfo {
+	if m != nil {
+		return m.ExtendedInfo
+	}
+	return nil
+}
+
+func (x *RASEvent) GetRankState() *RankStateInfo {
+	if x, ok := x.GetExtendedInfo().(*RASEvent_RankState); ok {
+		return x.RankState
+	}
+	return nil
+}
+
+type isRASEvent_ExtendedInfo interface {
+	isRASEvent_ExtendedInfo()
+}
+
+type RASEvent_RankState struct {
+	RankState *RankStateInfo `protobuf:"bytes,9,opt,name=rank_state,json=rankState,proto3,oneof"`
+}
+
+func (*RASEvent_RankState) isRASEvent_ExtendedInfo() {}
+
+// ClusterEventReq wraps an event subtype e.g. RASEvent.
+type ClusterEventReq struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Sequence uint64 `protobuf:"varint,1,opt,name=sequence,proto3" json:"sequence,omitempty"` // Sequence identifier for cluster events.
+	// Types that are assignable to Event:
+	//	*ClusterEventReq_Ras
+	Event isClusterEventReq_Event `protobuf_oneof:"event"`
+}
+
+func (x *ClusterEventReq) Reset() {
+	*x = ClusterEventReq{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_svc_proto_msgTypes[9]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ClusterEventReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClusterEventReq) ProtoMessage() {}
+
+func (x *ClusterEventReq) ProtoReflect() protoreflect.Message {
+	mi := &file_svc_proto_msgTypes[9]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClusterEventReq.ProtoReflect.Descriptor instead.
+func (*ClusterEventReq) Descriptor() ([]byte, []int) {
+	return file_svc_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ClusterEventReq) GetSequence() uint64 {
+	if x != nil {
+		return x.Sequence
+	}
+	return 0
+}
+
+func (m *ClusterEventReq) GetEvent() isClusterEventReq_Event {
+	if m != nil {
+		return m.Event
+	}
+	return nil
+}
+
+func (x *ClusterEventReq) GetRas() *RASEvent {
+	if x, ok := x.GetEvent().(*ClusterEventReq_Ras); ok {
+		return x.Ras
+	}
+	return nil
+}
+
+type isClusterEventReq_Event interface {
+	isClusterEventReq_Event()
+}
+
+type ClusterEventReq_Ras struct {
+	Ras *RASEvent `protobuf:"bytes,2,opt,name=ras,proto3,oneof"`
+}
+
+func (*ClusterEventReq_Ras) isClusterEventReq_Event() {}
+
+// ClusterEventResp acknowledges receipt of an event notification.
+type ClusterEventResp struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Sequence uint64 `protobuf:"varint,1,opt,name=sequence,proto3" json:"sequence,omitempty"` // Sequence identifier for cluster events.
+}
+
+func (x *ClusterEventResp) Reset() {
+	*x = ClusterEventResp{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_svc_proto_msgTypes[10]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ClusterEventResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClusterEventResp) ProtoMessage() {}
+
+func (x *ClusterEventResp) ProtoReflect() protoreflect.Message {
+	mi := &file_svc_proto_msgTypes[10]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClusterEventResp.ProtoReflect.Descriptor instead.
+func (*ClusterEventResp) Descriptor() ([]byte, []int) {
+	return file_svc_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ClusterEventResp) GetSequence() uint64 {
+	if x != nil {
+		return x.Sequence
+	}
+	return 0
+}
+
 type GetAttachInfoReq struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -527,13 +845,12 @@ type GetAttachInfoReq struct {
 
 	Sys      string `protobuf:"bytes,1,opt,name=sys,proto3" json:"sys,omitempty"`                            // System name. For daos_agent only.
 	AllRanks bool   `protobuf:"varint,2,opt,name=all_ranks,json=allRanks,proto3" json:"all_ranks,omitempty"` // Return Rank URIs for all ranks.
-	Jobid    string `protobuf:"bytes,3,opt,name=jobid,proto3" json:"jobid,omitempty"`                        // Job ID to associate instance with.
 }
 
 func (x *GetAttachInfoReq) Reset() {
 	*x = GetAttachInfoReq{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_svc_proto_msgTypes[7]
+		mi := &file_svc_proto_msgTypes[11]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -546,7 +863,7 @@ func (x *GetAttachInfoReq) String() string {
 func (*GetAttachInfoReq) ProtoMessage() {}
 
 func (x *GetAttachInfoReq) ProtoReflect() protoreflect.Message {
-	mi := &file_svc_proto_msgTypes[7]
+	mi := &file_svc_proto_msgTypes[11]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -559,7 +876,7 @@ func (x *GetAttachInfoReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAttachInfoReq.ProtoReflect.Descriptor instead.
 func (*GetAttachInfoReq) Descriptor() ([]byte, []int) {
-	return file_svc_proto_rawDescGZIP(), []int{7}
+	return file_svc_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *GetAttachInfoReq) GetSys() string {
@@ -574,13 +891,6 @@ func (x *GetAttachInfoReq) GetAllRanks() bool {
 		return x.AllRanks
 	}
 	return false
-}
-
-func (x *GetAttachInfoReq) GetJobid() string {
-	if x != nil {
-		return x.Jobid
-	}
-	return ""
 }
 
 type GetAttachInfoResp struct {
@@ -605,7 +915,7 @@ type GetAttachInfoResp struct {
 func (x *GetAttachInfoResp) Reset() {
 	*x = GetAttachInfoResp{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_svc_proto_msgTypes[8]
+		mi := &file_svc_proto_msgTypes[12]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -618,7 +928,7 @@ func (x *GetAttachInfoResp) String() string {
 func (*GetAttachInfoResp) ProtoMessage() {}
 
 func (x *GetAttachInfoResp) ProtoReflect() protoreflect.Message {
-	mi := &file_svc_proto_msgTypes[8]
+	mi := &file_svc_proto_msgTypes[12]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -631,7 +941,7 @@ func (x *GetAttachInfoResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAttachInfoResp.ProtoReflect.Descriptor instead.
 func (*GetAttachInfoResp) Descriptor() ([]byte, []int) {
-	return file_svc_proto_rawDescGZIP(), []int{8}
+	return file_svc_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *GetAttachInfoResp) GetStatus() int32 {
@@ -708,7 +1018,7 @@ type PrepShutdownReq struct {
 func (x *PrepShutdownReq) Reset() {
 	*x = PrepShutdownReq{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_svc_proto_msgTypes[9]
+		mi := &file_svc_proto_msgTypes[13]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -721,7 +1031,7 @@ func (x *PrepShutdownReq) String() string {
 func (*PrepShutdownReq) ProtoMessage() {}
 
 func (x *PrepShutdownReq) ProtoReflect() protoreflect.Message {
-	mi := &file_svc_proto_msgTypes[9]
+	mi := &file_svc_proto_msgTypes[13]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -734,7 +1044,7 @@ func (x *PrepShutdownReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrepShutdownReq.ProtoReflect.Descriptor instead.
 func (*PrepShutdownReq) Descriptor() ([]byte, []int) {
-	return file_svc_proto_rawDescGZIP(), []int{9}
+	return file_svc_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *PrepShutdownReq) GetRank() uint32 {
@@ -755,7 +1065,7 @@ type PingRankReq struct {
 func (x *PingRankReq) Reset() {
 	*x = PingRankReq{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_svc_proto_msgTypes[10]
+		mi := &file_svc_proto_msgTypes[14]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -768,7 +1078,7 @@ func (x *PingRankReq) String() string {
 func (*PingRankReq) ProtoMessage() {}
 
 func (x *PingRankReq) ProtoReflect() protoreflect.Message {
-	mi := &file_svc_proto_msgTypes[10]
+	mi := &file_svc_proto_msgTypes[14]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -781,7 +1091,7 @@ func (x *PingRankReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingRankReq.ProtoReflect.Descriptor instead.
 func (*PingRankReq) Descriptor() ([]byte, []int) {
-	return file_svc_proto_rawDescGZIP(), []int{10}
+	return file_svc_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *PingRankReq) GetRank() uint32 {
@@ -802,7 +1112,7 @@ type SetRankReq struct {
 func (x *SetRankReq) Reset() {
 	*x = SetRankReq{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_svc_proto_msgTypes[11]
+		mi := &file_svc_proto_msgTypes[15]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -815,7 +1125,7 @@ func (x *SetRankReq) String() string {
 func (*SetRankReq) ProtoMessage() {}
 
 func (x *SetRankReq) ProtoReflect() protoreflect.Message {
-	mi := &file_svc_proto_msgTypes[11]
+	mi := &file_svc_proto_msgTypes[15]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -828,7 +1138,7 @@ func (x *SetRankReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetRankReq.ProtoReflect.Descriptor instead.
 func (*SetRankReq) Descriptor() ([]byte, []int) {
-	return file_svc_proto_rawDescGZIP(), []int{11}
+	return file_svc_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *SetRankReq) GetRank() uint32 {
@@ -836,6 +1146,69 @@ func (x *SetRankReq) GetRank() uint32 {
 		return x.Rank
 	}
 	return 0
+}
+
+type PoolMonitorReq struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	PoolUUID       string `protobuf:"bytes,1,opt,name=poolUUID,proto3" json:"poolUUID,omitempty"`             // Pool UUID associated with the Pool Handle
+	PoolHandleUUID string `protobuf:"bytes,2,opt,name=poolHandleUUID,proto3" json:"poolHandleUUID,omitempty"` // Pool Handle UUID for the connection
+	Jobid          string `protobuf:"bytes,3,opt,name=jobid,proto3" json:"jobid,omitempty"`                   // Job ID to associate instance with.
+}
+
+func (x *PoolMonitorReq) Reset() {
+	*x = PoolMonitorReq{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_svc_proto_msgTypes[16]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *PoolMonitorReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PoolMonitorReq) ProtoMessage() {}
+
+func (x *PoolMonitorReq) ProtoReflect() protoreflect.Message {
+	mi := &file_svc_proto_msgTypes[16]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PoolMonitorReq.ProtoReflect.Descriptor instead.
+func (*PoolMonitorReq) Descriptor() ([]byte, []int) {
+	return file_svc_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *PoolMonitorReq) GetPoolUUID() string {
+	if x != nil {
+		return x.PoolUUID
+	}
+	return ""
+}
+
+func (x *PoolMonitorReq) GetPoolHandleUUID() string {
+	if x != nil {
+		return x.PoolHandleUUID
+	}
+	return ""
+}
+
+func (x *PoolMonitorReq) GetJobid() string {
+	if x != nil {
+		return x.Jobid
+	}
+	return ""
 }
 
 type GroupUpdateReq_Server struct {
@@ -850,7 +1223,7 @@ type GroupUpdateReq_Server struct {
 func (x *GroupUpdateReq_Server) Reset() {
 	*x = GroupUpdateReq_Server{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_svc_proto_msgTypes[12]
+		mi := &file_svc_proto_msgTypes[17]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -863,7 +1236,7 @@ func (x *GroupUpdateReq_Server) String() string {
 func (*GroupUpdateReq_Server) ProtoMessage() {}
 
 func (x *GroupUpdateReq_Server) ProtoReflect() protoreflect.Message {
-	mi := &file_svc_proto_msgTypes[12]
+	mi := &file_svc_proto_msgTypes[17]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -905,7 +1278,7 @@ type GetAttachInfoResp_RankUri struct {
 func (x *GetAttachInfoResp_RankUri) Reset() {
 	*x = GetAttachInfoResp_RankUri{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_svc_proto_msgTypes[13]
+		mi := &file_svc_proto_msgTypes[18]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -918,7 +1291,7 @@ func (x *GetAttachInfoResp_RankUri) String() string {
 func (*GetAttachInfoResp_RankUri) ProtoMessage() {}
 
 func (x *GetAttachInfoResp_RankUri) ProtoReflect() protoreflect.Message {
-	mi := &file_svc_proto_msgTypes[13]
+	mi := &file_svc_proto_msgTypes[18]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -931,7 +1304,7 @@ func (x *GetAttachInfoResp_RankUri) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAttachInfoResp_RankUri.ProtoReflect.Descriptor instead.
 func (*GetAttachInfoResp_RankUri) Descriptor() ([]byte, []int) {
-	return file_svc_proto_rawDescGZIP(), []int{8, 0}
+	return file_svc_proto_rawDescGZIP(), []int{12, 0}
 }
 
 func (x *GetAttachInfoResp_RankUri) GetRank() uint32 {
@@ -997,43 +1370,80 @@ var file_svc_proto_rawDesc = []byte{
 	0x65, 0x72, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0d, 0x63, 0x75, 0x72, 0x72, 0x65, 0x6e,
 	0x74, 0x4c, 0x65, 0x61, 0x64, 0x65, 0x72, 0x12, 0x1a, 0x0a, 0x08, 0x72, 0x65, 0x70, 0x6c, 0x69,
 	0x63, 0x61, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x09, 0x52, 0x08, 0x72, 0x65, 0x70, 0x6c, 0x69,
-	0x63, 0x61, 0x73, 0x22, 0x57, 0x0a, 0x10, 0x47, 0x65, 0x74, 0x41, 0x74, 0x74, 0x61, 0x63, 0x68,
-	0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65, 0x71, 0x12, 0x10, 0x0a, 0x03, 0x73, 0x79, 0x73, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x73, 0x79, 0x73, 0x12, 0x1b, 0x0a, 0x09, 0x61, 0x6c, 0x6c,
-	0x5f, 0x72, 0x61, 0x6e, 0x6b, 0x73, 0x18, 0x02, 0x20, 0x01, 0x28, 0x08, 0x52, 0x08, 0x61, 0x6c,
-	0x6c, 0x52, 0x61, 0x6e, 0x6b, 0x73, 0x12, 0x14, 0x0a, 0x05, 0x6a, 0x6f, 0x62, 0x69, 0x64, 0x18,
-	0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x6a, 0x6f, 0x62, 0x69, 0x64, 0x22, 0xf9, 0x02, 0x0a,
-	0x11, 0x47, 0x65, 0x74, 0x41, 0x74, 0x74, 0x61, 0x63, 0x68, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65,
-	0x73, 0x70, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x05, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x3c, 0x0a, 0x09, 0x72, 0x61,
-	0x6e, 0x6b, 0x5f, 0x75, 0x72, 0x69, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x1f, 0x2e,
-	0x6d, 0x67, 0x6d, 0x74, 0x2e, 0x47, 0x65, 0x74, 0x41, 0x74, 0x74, 0x61, 0x63, 0x68, 0x49, 0x6e,
-	0x66, 0x6f, 0x52, 0x65, 0x73, 0x70, 0x2e, 0x52, 0x61, 0x6e, 0x6b, 0x55, 0x72, 0x69, 0x52, 0x08,
-	0x72, 0x61, 0x6e, 0x6b, 0x55, 0x72, 0x69, 0x73, 0x12, 0x1a, 0x0a, 0x08, 0x70, 0x72, 0x6f, 0x76,
-	0x69, 0x64, 0x65, 0x72, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x70, 0x72, 0x6f, 0x76,
-	0x69, 0x64, 0x65, 0x72, 0x12, 0x1c, 0x0a, 0x09, 0x69, 0x6e, 0x74, 0x65, 0x72, 0x66, 0x61, 0x63,
-	0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x69, 0x6e, 0x74, 0x65, 0x72, 0x66, 0x61,
-	0x63, 0x65, 0x12, 0x16, 0x0a, 0x06, 0x64, 0x6f, 0x6d, 0x61, 0x69, 0x6e, 0x18, 0x05, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x06, 0x64, 0x6f, 0x6d, 0x61, 0x69, 0x6e, 0x12, 0x2b, 0x0a, 0x12, 0x63, 0x72,
-	0x74, 0x5f, 0x63, 0x74, 0x78, 0x5f, 0x73, 0x68, 0x61, 0x72, 0x65, 0x5f, 0x61, 0x64, 0x64, 0x72,
-	0x18, 0x06, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x0f, 0x63, 0x72, 0x74, 0x43, 0x74, 0x78, 0x53, 0x68,
-	0x61, 0x72, 0x65, 0x41, 0x64, 0x64, 0x72, 0x12, 0x1f, 0x0a, 0x0b, 0x63, 0x72, 0x74, 0x5f, 0x74,
-	0x69, 0x6d, 0x65, 0x6f, 0x75, 0x74, 0x18, 0x07, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x0a, 0x63, 0x72,
-	0x74, 0x54, 0x69, 0x6d, 0x65, 0x6f, 0x75, 0x74, 0x12, 0x22, 0x0a, 0x0d, 0x6e, 0x65, 0x74, 0x5f,
-	0x64, 0x65, 0x76, 0x5f, 0x63, 0x6c, 0x61, 0x73, 0x73, 0x18, 0x08, 0x20, 0x01, 0x28, 0x0d, 0x52,
-	0x0b, 0x6e, 0x65, 0x74, 0x44, 0x65, 0x76, 0x43, 0x6c, 0x61, 0x73, 0x73, 0x12, 0x19, 0x0a, 0x08,
-	0x6d, 0x73, 0x5f, 0x72, 0x61, 0x6e, 0x6b, 0x73, 0x18, 0x09, 0x20, 0x03, 0x28, 0x0d, 0x52, 0x07,
-	0x6d, 0x73, 0x52, 0x61, 0x6e, 0x6b, 0x73, 0x1a, 0x2f, 0x0a, 0x07, 0x52, 0x61, 0x6e, 0x6b, 0x55,
-	0x72, 0x69, 0x12, 0x12, 0x0a, 0x04, 0x72, 0x61, 0x6e, 0x6b, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0d,
-	0x52, 0x04, 0x72, 0x61, 0x6e, 0x6b, 0x12, 0x10, 0x0a, 0x03, 0x75, 0x72, 0x69, 0x18, 0x02, 0x20,
-	0x01, 0x28, 0x09, 0x52, 0x03, 0x75, 0x72, 0x69, 0x22, 0x25, 0x0a, 0x0f, 0x50, 0x72, 0x65, 0x70,
-	0x53, 0x68, 0x75, 0x74, 0x64, 0x6f, 0x77, 0x6e, 0x52, 0x65, 0x71, 0x12, 0x12, 0x0a, 0x04, 0x72,
+	0x63, 0x61, 0x73, 0x22, 0x5b, 0x0a, 0x0d, 0x52, 0x61, 0x6e, 0x6b, 0x53, 0x74, 0x61, 0x74, 0x65,
+	0x49, 0x6e, 0x66, 0x6f, 0x12, 0x1a, 0x0a, 0x08, 0x69, 0x6e, 0x73, 0x74, 0x61, 0x6e, 0x63, 0x65,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x08, 0x69, 0x6e, 0x73, 0x74, 0x61, 0x6e, 0x63, 0x65,
+	0x12, 0x18, 0x0a, 0x07, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x65, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x08, 0x52, 0x07, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x65, 0x64, 0x12, 0x14, 0x0a, 0x05, 0x65, 0x72,
+	0x72, 0x6f, 0x72, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72,
+	0x22, 0x85, 0x02, 0x0a, 0x08, 0x52, 0x41, 0x53, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12, 0x12, 0x0a,
+	0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d,
+	0x65, 0x12, 0x1c, 0x0a, 0x09, 0x74, 0x69, 0x6d, 0x65, 0x73, 0x74, 0x61, 0x6d, 0x70, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x74, 0x69, 0x6d, 0x65, 0x73, 0x74, 0x61, 0x6d, 0x70, 0x12,
+	0x1a, 0x0a, 0x08, 0x73, 0x65, 0x76, 0x65, 0x72, 0x69, 0x74, 0x79, 0x18, 0x03, 0x20, 0x01, 0x28,
+	0x0d, 0x52, 0x08, 0x73, 0x65, 0x76, 0x65, 0x72, 0x69, 0x74, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6d,
+	0x73, 0x67, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6d, 0x73, 0x67, 0x12, 0x0e, 0x0a,
+	0x02, 0x69, 0x64, 0x18, 0x05, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x02, 0x69, 0x64, 0x12, 0x12, 0x0a,
+	0x04, 0x74, 0x79, 0x70, 0x65, 0x18, 0x06, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x04, 0x74, 0x79, 0x70,
+	0x65, 0x12, 0x12, 0x0a, 0x04, 0x72, 0x61, 0x6e, 0x6b, 0x18, 0x07, 0x20, 0x01, 0x28, 0x0d, 0x52,
+	0x04, 0x72, 0x61, 0x6e, 0x6b, 0x12, 0x1a, 0x0a, 0x08, 0x68, 0x6f, 0x73, 0x74, 0x6e, 0x61, 0x6d,
+	0x65, 0x18, 0x08, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x68, 0x6f, 0x73, 0x74, 0x6e, 0x61, 0x6d,
+	0x65, 0x12, 0x34, 0x0a, 0x0a, 0x72, 0x61, 0x6e, 0x6b, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x65, 0x18,
+	0x09, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x13, 0x2e, 0x6d, 0x67, 0x6d, 0x74, 0x2e, 0x52, 0x61, 0x6e,
+	0x6b, 0x53, 0x74, 0x61, 0x74, 0x65, 0x49, 0x6e, 0x66, 0x6f, 0x48, 0x00, 0x52, 0x09, 0x72, 0x61,
+	0x6e, 0x6b, 0x53, 0x74, 0x61, 0x74, 0x65, 0x42, 0x0f, 0x0a, 0x0d, 0x65, 0x78, 0x74, 0x65, 0x6e,
+	0x64, 0x65, 0x64, 0x5f, 0x69, 0x6e, 0x66, 0x6f, 0x22, 0x5a, 0x0a, 0x0f, 0x43, 0x6c, 0x75, 0x73,
+	0x74, 0x65, 0x72, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x52, 0x65, 0x71, 0x12, 0x1a, 0x0a, 0x08, 0x73,
+	0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x08, 0x73,
+	0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x12, 0x22, 0x0a, 0x03, 0x72, 0x61, 0x73, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x0b, 0x32, 0x0e, 0x2e, 0x6d, 0x67, 0x6d, 0x74, 0x2e, 0x52, 0x41, 0x53, 0x45,
+	0x76, 0x65, 0x6e, 0x74, 0x48, 0x00, 0x52, 0x03, 0x72, 0x61, 0x73, 0x42, 0x07, 0x0a, 0x05, 0x65,
+	0x76, 0x65, 0x6e, 0x74, 0x22, 0x2e, 0x0a, 0x10, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x45,
+	0x76, 0x65, 0x6e, 0x74, 0x52, 0x65, 0x73, 0x70, 0x12, 0x1a, 0x0a, 0x08, 0x73, 0x65, 0x71, 0x75,
+	0x65, 0x6e, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x08, 0x73, 0x65, 0x71, 0x75,
+	0x65, 0x6e, 0x63, 0x65, 0x22, 0x41, 0x0a, 0x10, 0x47, 0x65, 0x74, 0x41, 0x74, 0x74, 0x61, 0x63,
+	0x68, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65, 0x71, 0x12, 0x10, 0x0a, 0x03, 0x73, 0x79, 0x73, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x73, 0x79, 0x73, 0x12, 0x1b, 0x0a, 0x09, 0x61, 0x6c,
+	0x6c, 0x5f, 0x72, 0x61, 0x6e, 0x6b, 0x73, 0x18, 0x02, 0x20, 0x01, 0x28, 0x08, 0x52, 0x08, 0x61,
+	0x6c, 0x6c, 0x52, 0x61, 0x6e, 0x6b, 0x73, 0x22, 0xf9, 0x02, 0x0a, 0x11, 0x47, 0x65, 0x74, 0x41,
+	0x74, 0x74, 0x61, 0x63, 0x68, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65, 0x73, 0x70, 0x12, 0x16, 0x0a,
+	0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x05, 0x52, 0x06, 0x73,
+	0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x3c, 0x0a, 0x09, 0x72, 0x61, 0x6e, 0x6b, 0x5f, 0x75, 0x72,
+	0x69, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x1f, 0x2e, 0x6d, 0x67, 0x6d, 0x74, 0x2e,
+	0x47, 0x65, 0x74, 0x41, 0x74, 0x74, 0x61, 0x63, 0x68, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65, 0x73,
+	0x70, 0x2e, 0x52, 0x61, 0x6e, 0x6b, 0x55, 0x72, 0x69, 0x52, 0x08, 0x72, 0x61, 0x6e, 0x6b, 0x55,
+	0x72, 0x69, 0x73, 0x12, 0x1a, 0x0a, 0x08, 0x70, 0x72, 0x6f, 0x76, 0x69, 0x64, 0x65, 0x72, 0x18,
+	0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x70, 0x72, 0x6f, 0x76, 0x69, 0x64, 0x65, 0x72, 0x12,
+	0x1c, 0x0a, 0x09, 0x69, 0x6e, 0x74, 0x65, 0x72, 0x66, 0x61, 0x63, 0x65, 0x18, 0x04, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x09, 0x69, 0x6e, 0x74, 0x65, 0x72, 0x66, 0x61, 0x63, 0x65, 0x12, 0x16, 0x0a,
+	0x06, 0x64, 0x6f, 0x6d, 0x61, 0x69, 0x6e, 0x18, 0x05, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x64,
+	0x6f, 0x6d, 0x61, 0x69, 0x6e, 0x12, 0x2b, 0x0a, 0x12, 0x63, 0x72, 0x74, 0x5f, 0x63, 0x74, 0x78,
+	0x5f, 0x73, 0x68, 0x61, 0x72, 0x65, 0x5f, 0x61, 0x64, 0x64, 0x72, 0x18, 0x06, 0x20, 0x01, 0x28,
+	0x0d, 0x52, 0x0f, 0x63, 0x72, 0x74, 0x43, 0x74, 0x78, 0x53, 0x68, 0x61, 0x72, 0x65, 0x41, 0x64,
+	0x64, 0x72, 0x12, 0x1f, 0x0a, 0x0b, 0x63, 0x72, 0x74, 0x5f, 0x74, 0x69, 0x6d, 0x65, 0x6f, 0x75,
+	0x74, 0x18, 0x07, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x0a, 0x63, 0x72, 0x74, 0x54, 0x69, 0x6d, 0x65,
+	0x6f, 0x75, 0x74, 0x12, 0x22, 0x0a, 0x0d, 0x6e, 0x65, 0x74, 0x5f, 0x64, 0x65, 0x76, 0x5f, 0x63,
+	0x6c, 0x61, 0x73, 0x73, 0x18, 0x08, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x0b, 0x6e, 0x65, 0x74, 0x44,
+	0x65, 0x76, 0x43, 0x6c, 0x61, 0x73, 0x73, 0x12, 0x19, 0x0a, 0x08, 0x6d, 0x73, 0x5f, 0x72, 0x61,
+	0x6e, 0x6b, 0x73, 0x18, 0x09, 0x20, 0x03, 0x28, 0x0d, 0x52, 0x07, 0x6d, 0x73, 0x52, 0x61, 0x6e,
+	0x6b, 0x73, 0x1a, 0x2f, 0x0a, 0x07, 0x52, 0x61, 0x6e, 0x6b, 0x55, 0x72, 0x69, 0x12, 0x12, 0x0a,
+	0x04, 0x72, 0x61, 0x6e, 0x6b, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x04, 0x72, 0x61, 0x6e,
+	0x6b, 0x12, 0x10, 0x0a, 0x03, 0x75, 0x72, 0x69, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03,
+	0x75, 0x72, 0x69, 0x22, 0x25, 0x0a, 0x0f, 0x50, 0x72, 0x65, 0x70, 0x53, 0x68, 0x75, 0x74, 0x64,
+	0x6f, 0x77, 0x6e, 0x52, 0x65, 0x71, 0x12, 0x12, 0x0a, 0x04, 0x72, 0x61, 0x6e, 0x6b, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x0d, 0x52, 0x04, 0x72, 0x61, 0x6e, 0x6b, 0x22, 0x21, 0x0a, 0x0b, 0x50, 0x69,
+	0x6e, 0x67, 0x52, 0x61, 0x6e, 0x6b, 0x52, 0x65, 0x71, 0x12, 0x12, 0x0a, 0x04, 0x72, 0x61, 0x6e,
+	0x6b, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x04, 0x72, 0x61, 0x6e, 0x6b, 0x22, 0x20, 0x0a,
+	0x0a, 0x53, 0x65, 0x74, 0x52, 0x61, 0x6e, 0x6b, 0x52, 0x65, 0x71, 0x12, 0x12, 0x0a, 0x04, 0x72,
 	0x61, 0x6e, 0x6b, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x04, 0x72, 0x61, 0x6e, 0x6b, 0x22,
-	0x21, 0x0a, 0x0b, 0x50, 0x69, 0x6e, 0x67, 0x52, 0x61, 0x6e, 0x6b, 0x52, 0x65, 0x71, 0x12, 0x12,
-	0x0a, 0x04, 0x72, 0x61, 0x6e, 0x6b, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x04, 0x72, 0x61,
-	0x6e, 0x6b, 0x22, 0x20, 0x0a, 0x0a, 0x53, 0x65, 0x74, 0x52, 0x61, 0x6e, 0x6b, 0x52, 0x65, 0x71,
-	0x12, 0x12, 0x0a, 0x04, 0x72, 0x61, 0x6e, 0x6b, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x04,
-	0x72, 0x61, 0x6e, 0x6b, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x6a, 0x0a, 0x0e, 0x50, 0x6f, 0x6f, 0x6c, 0x4d, 0x6f, 0x6e, 0x69, 0x74, 0x6f, 0x72, 0x52, 0x65,
+	0x71, 0x12, 0x1a, 0x0a, 0x08, 0x70, 0x6f, 0x6f, 0x6c, 0x55, 0x55, 0x49, 0x44, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x08, 0x70, 0x6f, 0x6f, 0x6c, 0x55, 0x55, 0x49, 0x44, 0x12, 0x26, 0x0a,
+	0x0e, 0x70, 0x6f, 0x6f, 0x6c, 0x48, 0x61, 0x6e, 0x64, 0x6c, 0x65, 0x55, 0x55, 0x49, 0x44, 0x18,
+	0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0e, 0x70, 0x6f, 0x6f, 0x6c, 0x48, 0x61, 0x6e, 0x64, 0x6c,
+	0x65, 0x55, 0x55, 0x49, 0x44, 0x12, 0x14, 0x0a, 0x05, 0x6a, 0x6f, 0x62, 0x69, 0x64, 0x18, 0x03,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x6a, 0x6f, 0x62, 0x69, 0x64, 0x62, 0x06, 0x70, 0x72, 0x6f,
+	0x74, 0x6f, 0x33,
 }
 
 var (
@@ -1049,7 +1459,7 @@ func file_svc_proto_rawDescGZIP() []byte {
 }
 
 var file_svc_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_svc_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_svc_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_svc_proto_goTypes = []interface{}{
 	(JoinResp_State)(0),               // 0: mgmt.JoinResp.State
 	(*DaosResp)(nil),                  // 1: mgmt.DaosResp
@@ -1059,23 +1469,30 @@ var file_svc_proto_goTypes = []interface{}{
 	(*JoinResp)(nil),                  // 5: mgmt.JoinResp
 	(*LeaderQueryReq)(nil),            // 6: mgmt.LeaderQueryReq
 	(*LeaderQueryResp)(nil),           // 7: mgmt.LeaderQueryResp
-	(*GetAttachInfoReq)(nil),          // 8: mgmt.GetAttachInfoReq
-	(*GetAttachInfoResp)(nil),         // 9: mgmt.GetAttachInfoResp
-	(*PrepShutdownReq)(nil),           // 10: mgmt.PrepShutdownReq
-	(*PingRankReq)(nil),               // 11: mgmt.PingRankReq
-	(*SetRankReq)(nil),                // 12: mgmt.SetRankReq
-	(*GroupUpdateReq_Server)(nil),     // 13: mgmt.GroupUpdateReq.Server
-	(*GetAttachInfoResp_RankUri)(nil), // 14: mgmt.GetAttachInfoResp.RankUri
+	(*RankStateInfo)(nil),             // 8: mgmt.RankStateInfo
+	(*RASEvent)(nil),                  // 9: mgmt.RASEvent
+	(*ClusterEventReq)(nil),           // 10: mgmt.ClusterEventReq
+	(*ClusterEventResp)(nil),          // 11: mgmt.ClusterEventResp
+	(*GetAttachInfoReq)(nil),          // 12: mgmt.GetAttachInfoReq
+	(*GetAttachInfoResp)(nil),         // 13: mgmt.GetAttachInfoResp
+	(*PrepShutdownReq)(nil),           // 14: mgmt.PrepShutdownReq
+	(*PingRankReq)(nil),               // 15: mgmt.PingRankReq
+	(*SetRankReq)(nil),                // 16: mgmt.SetRankReq
+	(*PoolMonitorReq)(nil),            // 17: mgmt.PoolMonitorReq
+	(*GroupUpdateReq_Server)(nil),     // 18: mgmt.GroupUpdateReq.Server
+	(*GetAttachInfoResp_RankUri)(nil), // 19: mgmt.GetAttachInfoResp.RankUri
 }
 var file_svc_proto_depIdxs = []int32{
-	13, // 0: mgmt.GroupUpdateReq.servers:type_name -> mgmt.GroupUpdateReq.Server
+	18, // 0: mgmt.GroupUpdateReq.servers:type_name -> mgmt.GroupUpdateReq.Server
 	0,  // 1: mgmt.JoinResp.state:type_name -> mgmt.JoinResp.State
-	14, // 2: mgmt.GetAttachInfoResp.rank_uris:type_name -> mgmt.GetAttachInfoResp.RankUri
-	3,  // [3:3] is the sub-list for method output_type
-	3,  // [3:3] is the sub-list for method input_type
-	3,  // [3:3] is the sub-list for extension type_name
-	3,  // [3:3] is the sub-list for extension extendee
-	0,  // [0:3] is the sub-list for field type_name
+	8,  // 2: mgmt.RASEvent.rank_state:type_name -> mgmt.RankStateInfo
+	9,  // 3: mgmt.ClusterEventReq.ras:type_name -> mgmt.RASEvent
+	19, // 4: mgmt.GetAttachInfoResp.rank_uris:type_name -> mgmt.GetAttachInfoResp.RankUri
+	5,  // [5:5] is the sub-list for method output_type
+	5,  // [5:5] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_svc_proto_init() }
@@ -1169,7 +1586,7 @@ func file_svc_proto_init() {
 			}
 		}
 		file_svc_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetAttachInfoReq); i {
+			switch v := v.(*RankStateInfo); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1181,7 +1598,7 @@ func file_svc_proto_init() {
 			}
 		}
 		file_svc_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetAttachInfoResp); i {
+			switch v := v.(*RASEvent); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1193,7 +1610,7 @@ func file_svc_proto_init() {
 			}
 		}
 		file_svc_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PrepShutdownReq); i {
+			switch v := v.(*ClusterEventReq); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1205,7 +1622,7 @@ func file_svc_proto_init() {
 			}
 		}
 		file_svc_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PingRankReq); i {
+			switch v := v.(*ClusterEventResp); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1217,7 +1634,7 @@ func file_svc_proto_init() {
 			}
 		}
 		file_svc_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetRankReq); i {
+			switch v := v.(*GetAttachInfoReq); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1229,7 +1646,7 @@ func file_svc_proto_init() {
 			}
 		}
 		file_svc_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GroupUpdateReq_Server); i {
+			switch v := v.(*GetAttachInfoResp); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1241,6 +1658,66 @@ func file_svc_proto_init() {
 			}
 		}
 		file_svc_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PrepShutdownReq); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_svc_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PingRankReq); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_svc_proto_msgTypes[15].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SetRankReq); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_svc_proto_msgTypes[16].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PoolMonitorReq); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_svc_proto_msgTypes[17].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*GroupUpdateReq_Server); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_svc_proto_msgTypes[18].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*GetAttachInfoResp_RankUri); i {
 			case 0:
 				return &v.state
@@ -1253,13 +1730,19 @@ func file_svc_proto_init() {
 			}
 		}
 	}
+	file_svc_proto_msgTypes[8].OneofWrappers = []interface{}{
+		(*RASEvent_RankState)(nil),
+	}
+	file_svc_proto_msgTypes[9].OneofWrappers = []interface{}{
+		(*ClusterEventReq_Ras)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_svc_proto_rawDesc,
 			NumEnums:      1,
-			NumMessages:   14,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
