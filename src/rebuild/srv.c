@@ -120,7 +120,7 @@ rebuild_pool_tls_destroy(struct rebuild_pool_tls *tls)
 {
 	D_DEBUG(DB_REBUILD, "TLS destroy for "DF_UUID" ver %d\n",
 		DP_UUID(tls->rebuild_pool_uuid), tls->rebuild_pool_ver);
-	if (!daos_handle_is_inval(tls->rebuild_tree_hdl))
+	if (daos_handle_is_valid(tls->rebuild_tree_hdl))
 		obj_tree_destroy(tls->rebuild_tree_hdl);
 	d_list_del(&tls->rebuild_pool_list);
 	D_FREE(tls);
@@ -851,11 +851,11 @@ rpt_destroy(struct rebuild_tgt_pool_tracker *rpt)
 {
 	D_ASSERT(rpt->rt_refcount == 0);
 	D_ASSERT(d_list_empty(&rpt->rt_list));
-	if (!daos_handle_is_inval(rpt->rt_tobe_rb_root_hdl)) {
+	if (daos_handle_is_valid(rpt->rt_tobe_rb_root_hdl)) {
 		dbtree_destroy(rpt->rt_tobe_rb_root_hdl, NULL);
 		rpt->rt_tobe_rb_root_hdl = DAOS_HDL_INVAL;
 	}
-	if (!daos_handle_is_inval(rpt->rt_rebuilt_root_hdl)) {
+	if (daos_handle_is_valid(rpt->rt_rebuilt_root_hdl)) {
 		rebuilt_btr_destroy(rpt->rt_rebuilt_root_hdl);
 		rpt->rt_rebuilt_root_hdl = DAOS_HDL_INVAL;
 	}
@@ -1538,7 +1538,7 @@ rebuild_fini_one(void *arg)
 	if (pool_tls == NULL)
 		return 0;
 
-	if (!daos_handle_is_inval(pool_tls->rebuild_pool_hdl)) {
+	if (daos_handle_is_valid(pool_tls->rebuild_pool_hdl)) {
 		D_DEBUG(DB_REBUILD, "close container/pool "
 			DF_UUID"/"DF_UUID"\n",
 			DP_UUID(rpt->rt_coh_uuid), DP_UUID(rpt->rt_poh_uuid));
