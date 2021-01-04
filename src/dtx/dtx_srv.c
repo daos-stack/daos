@@ -42,10 +42,12 @@ dtx_handler(crt_rpc_t *rpc)
 	struct dtx_out		*dout = crt_reply_get(rpc);
 	struct ds_cont_child	*cont = NULL;
 	struct dtx_id		*dtis;
+	struct dtx_memberships	*mbs[DTX_REFRESH_MAX] = { 0 };
+	uint32_t		 vers[DTX_REFRESH_MAX] = { 0 };
 	uint32_t		 opc = opc_get(rpc->cr_opc);
 	int			 count = DTX_YIELD_CYCLE;
 	int			 i = 0;
-	int			 rc1;
+	int			 rc1 = 0;
 	int			 rc;
 
 	rc = ds_cont_child_lookup(din->di_po_uuid, din->di_co_uuid, &cont);
@@ -59,6 +61,9 @@ dtx_handler(crt_rpc_t *rpc)
 
 	switch (opc) {
 	case DTX_COMMIT:
+		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_COMMIT))
+			break;
+
 		while (i < din->di_dtx_array.ca_count) {
 			if (i + count > din->di_dtx_array.ca_count)
 				count = din->di_dtx_array.ca_count - i;
@@ -72,6 +77,9 @@ dtx_handler(crt_rpc_t *rpc)
 		}
 		break;
 	case DTX_ABORT:
+		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_ABORT))
+			break;
+
 		while (i < din->di_dtx_array.ca_count) {
 			if (i + count > din->di_dtx_array.ca_count)
 				count = din->di_dtx_array.ca_count - i;
@@ -92,7 +100,35 @@ dtx_handler(crt_rpc_t *rpc)
 		else
 			rc = vos_dtx_check(cont->sc_hdl,
 					   din->di_dtx_array.ca_arrays,
-					   NULL, NULL, false);
+					   NULL, NULL, NULL, false);
+		break;
+	case DTX_REFRESH:
+		count = din->di_dtx_array.ca_count;
+		if (count == 0)
+			D_GOTO(out, rc = 0);
+
+		if (count > DTX_REFRESH_MAX)
+			D_GOTO(out, rc = -DER_PROTO);
+
+		D_ALLOC(dout->do_sub_rets.ca_arrays, sizeof(int32_t) * count);
+		if (dout->do_sub_rets.ca_arrays == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		dout->do_sub_rets.ca_count = count;
+
+		for (i = 0, rc1 = 0; i < count; i++) {
+			int	*ptr = (int *)dout->do_sub_rets.ca_arrays + i;
+
+			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
+			*ptr = vos_dtx_check(cont->sc_hdl, dtis, NULL, &vers[i],
+					     &mbs[i], false);
+			/* The DTX status may be changes by DTX resync soon. */
+			if (*ptr == DTX_ST_PREPARED &&
+			    vers[i] < cont->sc_dtx_resync_ver)
+				*ptr = -DER_INPROGRESS;
+			if (mbs[i] != NULL)
+				rc1++;
+		}
 		break;
 	default:
 		rc = -DER_INVAL;
@@ -110,6 +146,40 @@ out:
 	if (rc != 0)
 		D_ERROR("send reply failed for DTX rpc %u: rc = "DF_RC"\n", opc,
 			DP_RC(rc));
+
+	if (opc == DTX_REFRESH && rc1 > 0) {
+		struct dtx_entry	 dtes[DTX_REFRESH_MAX] = { 0 };
+		struct dtx_entry	*pdte[DTX_REFRESH_MAX] = { 0 };
+		int			 j;
+
+		for (i = 0, j = 0; i < count; i++) {
+			if (mbs[i] == NULL)
+				continue;
+
+			daos_dti_copy(&dtes[j].dte_xid,
+				      (struct dtx_id *)
+				      din->di_dtx_array.ca_arrays + i);
+			dtes[j].dte_ver = vers[i];
+			dtes[j].dte_refs = 1;
+			dtes[j].dte_mbs = mbs[i];
+
+			pdte[j] = &dtes[j];
+			j++;
+		}
+
+		D_ASSERT(j == rc1);
+
+		/* Commit the DTX after replied the original refresh request to
+		 * avoid further query the same DTX.
+		 */
+		dtx_commit(cont, pdte, j, true);
+
+		for (i = 0; i < j; i++)
+			D_FREE(pdte[i]->dte_mbs);
+	}
+
+	D_FREE(dout->do_sub_rets.ca_arrays);
+	dout->do_sub_rets.ca_count = 0;
 
 	if (cont != NULL)
 		ds_cont_child_put(cont);

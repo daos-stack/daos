@@ -241,7 +241,8 @@ struct vos_dtx_act_ent {
 	int				 dae_rec_cap;
 	unsigned int			 dae_committable:1,
 					 dae_committed:1,
-					 dae_aborted:1;
+					 dae_aborted:1,
+					 dae_maybe_shared:1;
 };
 
 extern struct vos_tls	*standalone_tls;
@@ -791,7 +792,7 @@ struct vos_iterator {
 	uint32_t		 it_ref_cnt;
 	uint32_t		 it_from_parent:1,
 				 it_for_purge:1,
-				 it_for_rebuild:1,
+				 it_for_migration:1,
 				 it_ignore_uncommitted:1;
 };
 
@@ -1043,10 +1044,10 @@ vos_iter_intent(struct vos_iterator *iter)
 {
 	if (iter->it_for_purge)
 		return DAOS_INTENT_PURGE;
-	if (iter->it_for_rebuild)
-		return DAOS_INTENT_REBUILD;
 	if (iter->it_ignore_uncommitted)
 		return DAOS_INTENT_IGNORE_NONCOMMITTED;
+	if (iter->it_for_migration)
+		return DAOS_INTENT_MIGRATION;
 	return DAOS_INTENT_DEFAULT;
 }
 
@@ -1181,6 +1182,26 @@ vos_epc_punched(daos_epoch_t epc, uint16_t minor_epc,
 		return true;
 
 	return false;
+}
+
+static inline bool
+vos_dtx_hit_inprogress(void)
+{
+	struct dtx_handle	*dth = vos_dth_get();
+
+	return dth != NULL && dth->dth_share_tbd_count > 0;
+}
+
+static inline bool
+vos_dtx_continue_detect(int rc)
+{
+	struct dtx_handle	*dth = vos_dth_get();
+
+	/* Continue to detect other potential in-prepared DTX. */
+	return rc == -DER_INPROGRESS && dth != NULL &&
+		dth->dth_share_tbd_count > 0 &&
+		dth->dth_share_tbd_count < DTX_REFRESH_MAX &&
+		dth->dth_share_tbd_scanned < DTX_DETECT_SCAN_MAX;
 }
 
 static inline bool

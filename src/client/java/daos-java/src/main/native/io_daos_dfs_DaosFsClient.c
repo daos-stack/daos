@@ -38,328 +38,6 @@
 #include <grp.h>
 #include "DunsAttribute.pb-c.h"
 
-static jclass daos_io_exception_class;
-
-static jmethodID new_exception_msg;
-static jmethodID new_exception_cause;
-static jmethodID new_exception_msg_code_msg;
-static jmethodID new_exception_msg_code_cause;
-
-static int ERROR_PATH_LEN = 256;
-static int ERROR_NOT_EXIST = 2;
-static int ERROR_LOOKUP_MAX_RETRIES = 100;
-
-/**
- * This function is called when JVM load native library through
- * System.loadLibrary or System.load methods.
- *
- * \param[in]	vm		denote a Java VM
- * \param[in]	reserved	reserved for future
- *
- * \return	JNI_VERSION expected by JVM on success return.
- * 		JNI_ERR or non-zeor rc code of daos_init() for any error. In
- * 		this case, JVM throws JNI error.
- */
-jint
-JNI_OnLoad(JavaVM *vm, void *reserved)
-{
-	JNIEnv *env;
-
-	if ((*vm)->GetEnv(vm, (void **)&env, JNI_VERSION) != JNI_OK) {
-		return JNI_ERR;
-	}
-
-	jclass local_class = (*env)->FindClass(env,
-			"io/daos/dfs/DaosIOException");
-
-	daos_io_exception_class = (*env)->NewGlobalRef(env, local_class);
-	jmethodID m1 = (*env)->GetMethodID(env, daos_io_exception_class,
-			"<init>",
-			"(Ljava/lang/String;)V");
-
-	new_exception_msg = (jmethodID)(*env)->NewGlobalRef(env, (jobject)m1);
-	if(new_exception_msg == NULL){
-		printf("failed to get constructor msg\n");
-		return JNI_ERR;
-	}
-	jmethodID m2 = (*env)->GetMethodID(env, daos_io_exception_class,
-			"<init>",
-			"(Ljava/lang/Throwable;)V");
-
-	new_exception_cause = (jmethodID)(*env)->NewGlobalRef(env,
-							(jobject)m2);
-	if(new_exception_cause == NULL){
-		printf("failed to get constructor cause\n");
-		return JNI_ERR;
-	}
-	jmethodID m3 = (*env)->GetMethodID(env, daos_io_exception_class,
-			"<init>",
-			"(Ljava/lang/String;ILjava/lang/String;)V");
-
-	new_exception_msg_code_msg = (jmethodID)(*env)->NewGlobalRef(env,
-							(jobject)m3);
-	if(new_exception_msg_code_msg == NULL){
-		printf("failed to get constructor msg, code and daos msg\n");
-		return JNI_ERR;
-	}
-	jmethodID m4 = (*env)->GetMethodID(env, daos_io_exception_class,
-			"<init>",
-			"(Ljava/lang/String;ILjava/lang/Throwable;)V");
-
-	new_exception_msg_code_cause = (jmethodID)(*env)->NewGlobalRef(env,
-							(jobject)m4);
-	if(new_exception_msg_code_cause == NULL){
-		printf("failed to get constructor msg, code and cause\n");
-		return JNI_ERR;
-	}
-
-	int rc = daos_init();
-
-	if (rc) {
-		printf("daos_init() failed with rc = %d\n", rc);
-		printf("error msg: %s\n", d_errstr(rc));
-		return rc;
-	}
-	return JNI_VERSION;
-}
-
-/**
- * utility function to throw Java exception.
- *
- * \param[in]	env		JNI environment
- * \param[in]	msg		error message provided by caller
- * \param[in]	error_code	non-zero return code of DFS function or
- * 				customized error code
- * \param[in]	release_msg	is \a msg needed to be released, (0 or 1)
- * \param[in]	posix_error	is \a error_code posix error,
- * 				1 for true, 0 for false
- *
- * \return	return code of Throw function of \a env
- */
-static int
-throw_exception_base(JNIEnv *env, char *msg, int error_code,
-			int release_msg, int posix_error)
-{
-	const char *daos_msg;
-	jstring jmsg = (*env)->NewStringUTF(env, strdup(msg));
-
-	if (error_code > CUSTOM_ERROR_CODE_BASE) {
-		const char *temp = posix_error ?
-				strerror(error_code) : d_errstr(error_code);
-
-		daos_msg = temp;
-	} else {
-		daos_msg = NULL;
-	}
-	jobject obj = (*env)->NewObject(env, daos_io_exception_class,
-			new_exception_msg_code_msg, jmsg, error_code,
-			daos_msg == NULL ?
-				NULL : (*env)->NewStringUTF(env, daos_msg));
-
-	if (release_msg) {
-		free(msg);
-	}
-	return (*env)->Throw(env, obj);
-}
-
-/**
- * throw Java exception with dynamically constructed message for posix error.
- *
- * \param[in]	env		JNI environment
- * \param[in]	msg		error message provided by caller
- * \param[in]	error_code	non-zero return code of DFS function
- *
- * \return	return code of throw_exception_base
- */
-static int
-throw_exception(JNIEnv *env, char *msg, int error_code)
-{
-	return throw_exception_base(env, msg, error_code, 1, 1);
-}
-
-/**
- * throw Java exception with constant message for posix error.
- *
- * \param[in]	env		JNI environment
- * \param[in]	msg		error message provided by caller
- * \param[in]	error_code	non-zero return code of DFS function
- *
- * \return	return code of throw_exception_base
- */
-static int
-throw_exception_const_msg(JNIEnv *env, char *msg, int error_code)
-{
-	return throw_exception_base(env, msg, error_code, 0, 1);
-}
-
-/**
- * JNI method to open pool with given \a poolId.
- *
- * \param[in]	env		JNI environment
- * \param[in]	clientClass	class of DaosFsClient
- * \param[in]	poolId		pool UUID
- * \param[in]	serverGroup	server group name
- * \param[in]	ranks		ranks separated by ':'
- *
- * \return	copied pool handle in long
- */
-JNIEXPORT jlong JNICALL
-Java_io_daos_dfs_DaosFsClient_daosOpenPool(JNIEnv *env,
-		jclass clientClass, jstring poolId, jstring serverGroup,
-		jstring ranks, jint flags)
-{
-	const char *pool_str = (*env)->GetStringUTFChars(env, poolId, 0);
-	const char *server_group = (*env)->GetStringUTFChars(env, serverGroup,
-								0);
-	const char *svc_ranks = (*env)->GetStringUTFChars(env, ranks, 0);
-	uuid_t pool_uuid;
-	uuid_parse(pool_str, pool_uuid);
-	d_rank_list_t *svcl = daos_rank_list_parse(svc_ranks, ":");
-	jlong ret;
-
-	if (svcl == NULL) {
-		char *tmp = "Invalid pool service rank list (%s) when open " \
-				"pool (%s)";
-		char *msg = (char *)malloc(strlen(tmp) + strlen(svc_ranks) +
-				strlen(pool_str));
-
-		sprintf(msg, tmp, ranks, pool_str);
-		throw_exception(env, msg, CUSTOM_ERR2);
-		ret = -1;
-	} else {
-		daos_handle_t poh;
-		int rc;
-		rc = daos_pool_connect(pool_uuid, server_group, svcl,
-			flags,
-			&poh /* returned pool handle */,
-			NULL /* returned pool info */,
-			NULL /* event */);
-
-		if (rc) {
-			char *tmp = "Failed to connect to pool (%s)";
-			char *msg = (char *)malloc(strlen(tmp) +
-					strlen(pool_str));
-
-			sprintf(msg, tmp, pool_str);
-			throw_exception_base(env, msg, rc, 1, 0);
-			ret = -1;
-		} else {
-			memcpy(&ret, &poh, sizeof(poh));
-		}
-	}
-	(*env)->ReleaseStringUTFChars(env, poolId, pool_str);
-	if (serverGroup != NULL) {
-		(*env)->ReleaseStringUTFChars(env, serverGroup, server_group);
-	}
-	if (ranks != NULL) {
-		(*env)->ReleaseStringUTFChars(env, ranks, svc_ranks);
-	}
-	return ret;
-}
-
-/**
- * JNI method to close pool denoted by \a poolHandle.
- *
- * \param[in]	env		JNI environment
- * \param[in]	clientClass	class of DaosFsClient
- * \param[in]	poolHandle	pool handle
- */
-JNIEXPORT void JNICALL
-Java_io_daos_dfs_DaosFsClient_daosClosePool(JNIEnv *env,
-		jclass clientClass, jlong poolHandle)
-{
-	daos_handle_t poh;
-
-	memcpy(&poh, &poolHandle, sizeof(poh));
-	int rc = daos_pool_disconnect(poh, NULL);
-
-	if (rc) {
-		printf("Failed to close pool rc: %d\n", rc);
-		printf("error msg: %s\n", d_errstr(rc));
-	}
-}
-
-JNIEXPORT void JNICALL
-Java_io_daos_dfs_DaosFsClient_dfsSetPrefix(JNIEnv *env,
-		jobject clientObj, jlong dfsPtr, jstring prefixStr)
-{
-	dfs_t *dfs = *(dfs_t **)&dfsPtr;
-	const char *prefix = (*env)->GetStringUTFChars(env, prefixStr, NULL);
-	int rc = dfs_set_prefix(dfs, prefix);
-
-	if (rc) {
-		char *tmp = "Failed to set prefix (%s)";
-		char *msg = (char *)malloc(strlen(tmp) + strlen(prefix));
-
-		sprintf(msg, tmp, prefix);
-		throw_exception_base(env, msg, rc, 1, 0);
-	}
-	(*env)->ReleaseStringUTFChars(env, prefixStr, prefix);
-}
-
-/**
- * JNI method to open container with given \a contUuid.
- *
- * \param[in]	env		JNI environment
- * \param[in]	clientClass	class of DaosFsClient
- * \param[in]	poolHandle	pool handle
- * \param[in]	contUuid	container UUID
- * \param[in]	mode		container mode
- *
- * \return	copied container handle in long
- */
-JNIEXPORT jlong JNICALL
-Java_io_daos_dfs_DaosFsClient_daosOpenCont(JNIEnv *env,
-		jclass clientClass, jlong poolHandle, jstring contUuid,
-		jint mode)
-{
-	daos_handle_t poh;
-	daos_cont_info_t co_info;
-	const char *cont_str = (*env)->GetStringUTFChars(env, contUuid, NULL);
-	uuid_t cont_uuid;
-	uuid_parse(cont_str, cont_uuid);
-	daos_handle_t coh;
-	jlong ret = -1;
-
-	memcpy(&poh, &poolHandle, sizeof(poh));
-	int rc = daos_cont_open(poh, cont_uuid, mode, &coh, &co_info, NULL);
-
-	if (rc) {
-		char *tmp = "Failed to open container (id: %s)";
-		char *msg = (char *)malloc(strlen(tmp) + strlen(cont_str));
-
-		sprintf(msg, tmp, cont_str);
-		throw_exception_base(env, msg, rc, 1, 0);
-		ret = -1;
-	} else {
-		memcpy(&ret, &coh, sizeof(coh));
-	}
-	(*env)->ReleaseStringUTFChars(env, contUuid, cont_str);
-	return ret;
-}
-
-/**
- * JNI method to close container denoted by \a contHandle.
- *
- * \param[in]	env		JNI environment
- * \param[in]	clientClass	class of DaosFsClient
- * \param[in]	contHandle	container handle
- */
-JNIEXPORT void JNICALL
-Java_io_daos_dfs_DaosFsClient_daosCloseContainer(JNIEnv *env,
-		jclass clientClass, jlong contHandle)
-{
-	daos_handle_t coh;
-
-	memcpy(&coh, &contHandle, sizeof(coh));
-	int rc = daos_cont_close(coh, NULL);
-
-	if(rc){
-		printf("Failed to close container rc: %d\n", rc);
-		printf("error msg: %s\n", d_errstr(rc));
-	}
-}
-
 /**
  * JNI method to mount FS on given pool and container.
  *
@@ -461,24 +139,6 @@ Java_io_daos_dfs_DaosFsClient_dfsUnmountFsOnRoot(JNIEnv *env,
 	if (rc) {
 		printf("Failed to unmount fs on root container rc: %d\n", rc);
 		printf("error msg: %s\n", strerror(rc));
-	}
-}
-
-/**
- * JNI method to finalize DAOS.
- *
- * \param[in]	env		JNI environment
- * \param[in]	clientClass	class of DaosFsClient
- */
-JNIEXPORT void JNICALL
-Java_io_daos_dfs_DaosFsClient_daosFinalize(JNIEnv *env,
-		jclass clientClass)
-{
-	int rc = daos_fini();
-
-	if (rc) {
-		printf("Failed to finalize daos rc: %d\n", rc);
-		printf("error msg: %s\n", d_errstr(rc));
 	}
 }
 
@@ -619,7 +279,8 @@ out:
  *
  * \return	0 for success, non-zero for failure
  */
-static int mkdirs(dfs_t *dfs, const char *path, int mode,
+static int
+mkdirs(dfs_t *dfs, const char *path, int mode,
 		unsigned char recursive,
 		dfs_obj_t **handle, char *msg)
 {
@@ -706,12 +367,12 @@ Java_io_daos_dfs_DaosFsClient_mkdir(JNIEnv *env, jobject client,
 	dfs_obj_t *parent_handle = NULL;
 	mode_t parent_mode;
 	char *parentError = NULL;
+	int rc = 0;
 
 	dirs = strdup(path_str);
 	parent_dir = dirname(dirs);
 	bases = strdup(path_str);
 	base = basename(bases);
-	int rc = 0;
 
 	if ((strlen(parent_dir) > 0) &&
 			(strcmp(parent_dir, "/") != 0)) {
@@ -793,6 +454,15 @@ Java_io_daos_dfs_DaosFsClient_createNewFile(JNIEnv *env,
 	dfs_obj_t *file = NULL;
 	dfs_obj_t *parent = NULL;
 	mode_t tmp_mode;
+
+	if (!type_id) {
+		char *tmp = "unsupported object class, %s";
+		char *msg = (char *)malloc(strlen(tmp) + strlen(object_type));
+
+		sprintf(msg, tmp, object_type);
+		throw_exception(env, msg, CUSTOM_ERR6);
+		goto out;
+	}
 	int rc = dfs_lookup(dfs, parent_path, O_RDWR, &parent, &tmp_mode, NULL);
 
 	if (rc) {
@@ -1247,6 +917,9 @@ set_user_group_name(JNIEnv *env, char *buffer, struct stat *stat)
 
 	if (uentry != NULL) {
 		len = strlen(uentry->pw_name);
+		if (len > 32) {
+			len = 32;
+		}
 		cpyfield(env, buffer, &len, 4, 4);
 		memcpy(buffer+4, uentry->pw_name, len);
 		inc += len;
@@ -1256,6 +929,9 @@ set_user_group_name(JNIEnv *env, char *buffer, struct stat *stat)
 	}
 	if (gentry != NULL) {
 		len = strlen(gentry->gr_name);
+		if (len > 32) {
+			len = 32;
+		}
 		cpyfield(env, buffer+inc, &len, 4, 4);
 		memcpy(buffer+inc+4, gentry->gr_name, len);
 	} else {
@@ -1836,9 +1512,12 @@ Java_io_daos_dfs_DaosFsClient_dunsResolvePath(JNIEnv *env, jclass clientClass,
 	void *buf = NULL;
 	jbyteArray barray = NULL;
 	jbyte *bytes = NULL;
+	const char *prefix = "daos://";
+	bool has_prefix = strncmp(prefix, path, strlen(prefix)) == 0;
+	int rc;
 
-	int rc = duns_resolve_path(path, &attr);
-
+	attr.da_no_prefix = !has_prefix;
+	rc = duns_resolve_path(path, &attr);
 	if (rc) {
 		char *tmp = "Failed to resolve UNS path, %s";
 		char *msg;
@@ -1871,6 +1550,7 @@ Java_io_daos_dfs_DaosFsClient_dunsResolvePath(JNIEnv *env, jclass clientClass,
 	attribute.object_type = object_type;
 	attribute.chunk_size = attr.da_chunk_size;
 	attribute.on_lustre = attr.da_on_lustre;
+	attribute.rel_path = attr.da_rel_path;
 	/* copy back in binary */
 	len = uns__duns_attribute__get_packed_size(&attribute);
 	buf = malloc(len);
@@ -1887,7 +1567,9 @@ out:
 	if (buf != NULL) {
 		free(buf);
 	}
-
+	if (attr.da_rel_path) {
+		free(attr.da_rel_path);
+	}
 	return barray;
 }
 
@@ -2094,27 +1776,4 @@ out:
 	}
 
 	return barray;
-}
-
-/**
- * This function is called when JVM unload native library.
- *
- * \param[in]	vm		Java vm
- * \param[in]	reserved	reserved for future
- */
-void
-JNI_OnUnload(JavaVM* vm, void *reserved)
-{
-	JNIEnv *env;
-
-	if ((*vm)->GetEnv(vm, (void **)&env, JNI_VERSION) != JNI_OK) {
-		return;
-	}
-	(*env)->DeleteGlobalRef(env, daos_io_exception_class);
-	(*env)->DeleteGlobalRef(env, (jobject)new_exception_msg);
-	(*env)->DeleteGlobalRef(env, (jobject)new_exception_cause);
-	(*env)->DeleteGlobalRef(env, (jobject)new_exception_msg_code_msg);
-	(*env)->DeleteGlobalRef(env, (jobject)new_exception_msg_code_cause);
-
-	daos_fini();
 }

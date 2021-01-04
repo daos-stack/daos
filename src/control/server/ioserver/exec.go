@@ -37,40 +37,14 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-const (
-	ioServerBin = "daos_io_server"
+const ioServerBin = "daos_io_server"
 
-	// NormalExit indicates that the process exited without error
-	NormalExit ExitStatus = "process exited with 0"
-)
-
-type (
-	// ExitStatus implements the error interface and is
-	// used to indicate special IOserver exit conditions.
-	ExitStatus string
-
-	// Runner starts and manages an instance of a DAOS I/O Server
-	Runner struct {
-		Config  *Config
-		log     logging.Logger
-		running atm.Bool
-		cmd     *exec.Cmd
-	}
-)
-
-func (es ExitStatus) Error() string {
-	return string(es)
-}
-
-// GetExitStatus ensure that a monitored subcommand always returns
-// an error of some sort when it exits so that we can respond
-// appropriately.
-func GetExitStatus(err error) error {
-	if err != nil {
-		return err
-	}
-
-	return NormalExit
+// Runner starts and manages an instance of a DAOS I/O Server
+type Runner struct {
+	Config  *Config
+	log     logging.Logger
+	running atm.Bool
+	cmd     *exec.Cmd
 }
 
 // NewRunner returns a configured ioserver.Runner
@@ -117,7 +91,7 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 	r.log.Infof("Starting I/O server instance %d: %s", r.Config.Index, binPath)
 
 	if err := cmd.Start(); err != nil {
-		return errors.Wrapf(GetExitStatus(err),
+		return errors.Wrapf(common.GetExitStatus(err),
 			"%s (instance %d) failed to start", binPath, r.Config.Index)
 	}
 	r.cmd = cmd
@@ -125,7 +99,7 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 	r.running.SetTrue()
 	defer r.running.SetFalse()
 
-	return errors.Wrapf(GetExitStatus(cmd.Wait()),
+	return errors.Wrapf(common.GetExitStatus(cmd.Wait()),
 		"%s (instance %d) exited", binPath, r.Config.Index)
 }
 

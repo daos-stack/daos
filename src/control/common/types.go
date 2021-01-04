@@ -97,3 +97,24 @@ func InterfaceIsNil(i interface{}) bool {
 	}
 	return reflect.ValueOf(i).IsNil()
 }
+
+// NormalExit indicates that the process exited without error.
+const NormalExit ExitStatus = "process exited with 0"
+
+// ExitStatus implements the error interface and is used to indicate external
+// process exit conditions.
+type ExitStatus string
+
+func (es ExitStatus) Error() string {
+	return string(es)
+}
+
+// GetExitStatus ensures that a monitored process always returns an error of
+// some sort when it exits so that we can respond appropriately.
+func GetExitStatus(err error) error {
+	if err != nil {
+		return err
+	}
+
+	return NormalExit
+}

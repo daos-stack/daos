@@ -38,6 +38,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
@@ -272,7 +273,9 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				}
 				harness.started.SetTrue()
 
-				tc.mgmtSvc = newMgmtSvc(harness, system.MockMembership(t, log), system.MockDatabase(t, log))
+				ms, db := system.MockMembership(t, log, mockTCPResolver)
+				tc.mgmtSvc = newMgmtSvc(harness, ms, db,
+					events.NewPubSub(context.Background(), log))
 			}
 			tc.mgmtSvc.log = log
 
@@ -324,9 +327,10 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 	}
 
 	req := &mgmtpb.PoolCreateReq{
-		Uuid:      common.MockUUID(),
-		Scmbytes:  100 * humanize.GiByte,
-		Nvmebytes: 10 * humanize.TByte,
+		Uuid:         common.MockUUID(),
+		Scmbytes:     100 * humanize.GiByte,
+		Nvmebytes:    10 * humanize.TByte,
+		FaultDomains: mgmtSvc.sysdb.FaultDomainTree().ToProto(),
 	}
 	wantReq := new(mgmtpb.PoolCreateReq)
 	*wantReq = *req
