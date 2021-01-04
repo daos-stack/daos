@@ -52,8 +52,8 @@ func NewFromProto(pbEvent *mgmtpb.RASEvent) (Event, error) {
 	case RASRankExit:
 		rankExit := new(RankExit)
 		return Event(rankExit), rankExit.FromProto(pbEvent)
-	case RASPoolSvcRanksUpdate:
-		ranksUpdate := new(PoolSvcRanksUpdate)
+	case RASPoolSvcReplicasUpdate:
+		ranksUpdate := new(PoolSvcReplicasUpdate)
 		return Event(ranksUpdate), ranksUpdate.FromProto(pbEvent)
 	default:
 		return nil, errors.Errorf("unsupported event ID: %s", pbEvent.Id)
@@ -70,9 +70,9 @@ func (id RASID) String() string {
 // RASID constant definitions matching those used when creating events either in
 // the control or data (iosrv) planes.
 const (
-	RASRankExit           RASID = "rank_exit"
-	RASRankNoResp         RASID = "rank_no_response"
-	RASPoolSvcRanksUpdate RASID = "pool_svc_ranks_update"
+	RASRankExit              RASID = "rank_exit"
+	RASRankNoResp            RASID = "rank_no_response"
+	RASPoolSvcReplicasUpdate RASID = "pool_svc_replicas_update"
 )
 
 // RASSeverityID describes the severity of a given RAS event.

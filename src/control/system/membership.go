@@ -479,9 +479,9 @@ func (m *Membership) OnEvent(_ context.Context, evt events.Event) {
 		member, _ := m.Get(Rank(e.RAS.Rank))
 		m.log.Debugf("update rank %d to %+v (%s)", e.RAS.Rank, member,
 			member.Info)
-	case *events.PoolSvcRanksUpdate:
+	case *events.PoolSvcReplicasUpdate:
 		if e == nil {
-			m.log.Error("nil PoolSvcRanksUpdate event received")
+			m.log.Error("nil PoolSvcReplicasUpdate event received")
 			return
 		}
 		m.log.Debugf("processing RAS event %q with info %+v on host %q",
@@ -502,9 +502,9 @@ func (m *Membership) OnEvent(_ context.Context, evt events.Event) {
 		}
 
 		m.log.Debugf("update pool %s (state=%s) svc ranks %v->%v",
-			ps.PoolUUID, ps.State, ps.Replicas, e.ExtendedInfo.SvcRanks)
+			ps.PoolUUID, ps.State, ps.Replicas, e.ExtendedInfo.SvcReplicas)
 
-		ps.Replicas = RanksFromUint32(e.ExtendedInfo.SvcRanks)
+		ps.Replicas = RanksFromUint32(e.ExtendedInfo.SvcReplicas)
 
 		if err := m.db.UpdatePoolService(ps); err != nil {
 			m.log.Errorf("failed to apply pool service update: %s", err)

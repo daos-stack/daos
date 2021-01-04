@@ -36,25 +36,25 @@ import (
 // PoolSvcInfo describes details of a pool service.
 type PoolSvcInfo struct {
 	PoolUUID       string   `json:"pool_uuid"`
-	SvcRanks       []uint32 `json:"svc_reps"`
+	SvcReplicas    []uint32 `json:"svc_reps"`
 	RaftLeaderTerm int32    `json:"raft_leader_term"`
 }
 
-// PoolSvcRanksUpdate is a custom event type that implements the Event interface.
-type PoolSvcRanksUpdate struct {
+// PoolSvcReplicasUpdate is a custom event type that implements the Event interface.
+type PoolSvcReplicasUpdate struct {
 	RAS          *RASEvent
 	ExtendedInfo *PoolSvcInfo
 }
 
 // GetID implements the method on the interface to return event ID.
-func (evt *PoolSvcRanksUpdate) GetID() RASID { return evt.RAS.ID }
+func (evt *PoolSvcReplicasUpdate) GetID() RASID { return evt.RAS.ID }
 
 // GetType implements the method on the interface to return event type.
-func (evt *PoolSvcRanksUpdate) GetType() RASTypeID { return evt.RAS.Type }
+func (evt *PoolSvcReplicasUpdate) GetType() RASTypeID { return evt.RAS.Type }
 
-// FromProto unpacks protobuf RAS event into this PoolSvcRanksUpdate instance,
+// FromProto unpacks protobuf RAS event into this PoolSvcReplicasUpdate instance,
 // extracting ExtendedInfo variant into custom event specific fields.
-func (evt *PoolSvcRanksUpdate) FromProto(pbEvt *mgmtpb.RASEvent) error {
+func (evt *PoolSvcReplicasUpdate) FromProto(pbEvt *mgmtpb.RASEvent) error {
 	evt.RAS = &RASEvent{
 		Timestamp: pbEvt.Timestamp,
 		Msg:       pbEvt.Msg,
@@ -79,9 +79,9 @@ func (evt *PoolSvcRanksUpdate) FromProto(pbEvt *mgmtpb.RASEvent) error {
 	return nil
 }
 
-// ToProto packs this PoolSvcRanksUpdate instance into a protobuf RAS event, encoding
+// ToProto packs this PoolSvcReplicasUpdate instance into a protobuf RAS event, encoding
 // custom event specific fields into the equivalent ExtendedInfo oneof variant.
-func (evt *PoolSvcRanksUpdate) ToProto() (*mgmtpb.RASEvent, error) {
+func (evt *PoolSvcReplicasUpdate) ToProto() (*mgmtpb.RASEvent, error) {
 	pbEvt := new(mgmtpb.RASEvent)
 	if err := convert.Types(evt.RAS, pbEvt); err != nil {
 		return nil, errors.Wrapf(err, "converting %T->%T", evt.RAS, pbEvt)
@@ -99,23 +99,23 @@ func (evt *PoolSvcRanksUpdate) ToProto() (*mgmtpb.RASEvent, error) {
 	return pbEvt, nil
 }
 
-// NewPoolSvcRanksUpdateEvent creates a specific PoolSvcRanksUpdate event from given inputs.
-func NewPoolSvcRanksUpdateEvent(hostname string, rank uint32, poolUUID string, svcRanks []uint32, leaderTerm int32) Event {
+// NewPoolSvcReplicasUpdateEvent creates a specific PoolSvcReplicasUpdate event from given inputs.
+func NewPoolSvcReplicasUpdateEvent(hostname string, rank uint32, poolUUID string, svcReplicas []uint32, leaderTerm int32) Event {
 	evt := &RASEvent{
 		Timestamp: common.FormatTime(time.Now()),
 		Msg:       "DAOS pool service replica rank list updated",
-		ID:        RASPoolSvcRanksUpdate,
+		ID:        RASPoolSvcReplicasUpdate,
 		Hostname:  hostname,
 		Rank:      rank,
 		Type:      RASTypeStateChange,
 		Severity:  RASSeverityError,
 	}
 
-	return &PoolSvcRanksUpdate{
+	return &PoolSvcReplicasUpdate{
 		RAS: evt,
 		ExtendedInfo: &PoolSvcInfo{
 			PoolUUID:       poolUUID,
-			SvcRanks:       svcRanks,
+			SvcReplicas:    svcReplicas,
 			RaftLeaderTerm: leaderTerm,
 		},
 	}

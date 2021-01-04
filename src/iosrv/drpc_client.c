@@ -300,7 +300,7 @@ ds_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc)
 	evt.extended_info_case = MGMT__RASEVENT__EXTENDED_INFO_POOL_SVC_INFO;
 	evt.pool_svc_info = &info;
 
-	rc = init_ras("pool_svc_ranks_update", (uint32_t)RAS_SEV_INFO,
+	rc = init_ras("pool_svc_replicas_update", (uint32_t)RAS_SEV_INFO,
 		      (uint32_t)RAS_TYPE_STATE_CHANGE,
 		      "List of pool service replica ranks has been updated.",
 		      &evt);

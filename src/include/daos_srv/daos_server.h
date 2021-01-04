@@ -858,7 +858,7 @@ notify_bio_error(int media_err_type, int tgt_id);
 int
 get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
 int
-ds_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc_ranks);
+ds_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc);
 
 bool is_container_from_srv(uuid_t pool_uuid, uuid_t coh_uuid);
 bool is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid);
