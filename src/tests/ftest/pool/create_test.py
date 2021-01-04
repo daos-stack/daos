@@ -191,7 +191,6 @@ class PoolCreateTests(PoolTestBase):
             "should succeed."
         )
 
-    @skipForTicket("DAOS-6174")
     def test_create_no_space_loop(self):
         """JIRA ID: DAOS-3728.
 

@@ -1,5 +1,6 @@
 package io.daos.dfs;
 
+import io.daos.DaosTestBase;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -13,8 +14,8 @@ public class DaosFsClientIT {
 
   @BeforeClass
   public static void setup() throws Exception {
-    poolId = System.getProperty("pool_id", DaosFsClientTestBase.DEFAULT_POOL_ID);
-    contId = System.getProperty("cont_id", DaosFsClientTestBase.DEFAULT_CONT_ID);
+    poolId = DaosTestBase.getPoolId();
+    contId = DaosTestBase.getContId();
   }
 
   @Test
@@ -27,7 +28,7 @@ public class DaosFsClientIT {
       Assert.assertTrue(client != null);
     } finally {
       if (client != null) {
-        client.disconnect();
+        client.close();
       }
     }
   }
@@ -42,7 +43,7 @@ public class DaosFsClientIT {
       Assert.assertTrue(client != null);
     } finally {
       if (client != null) {
-        client.disconnect();
+        client.close();
       }
     }
   }
@@ -71,7 +72,7 @@ public class DaosFsClientIT {
       thread.join();
       Assert.assertEquals(client, client2[0]);
     } finally {
-      client.disconnect();
+      client.close();
     }
   }
 
@@ -86,7 +87,7 @@ public class DaosFsClientIT {
       client.delete("/ddddddd/zyx", true);
     } finally {
       if (client != null) {
-        client.disconnect();
+        client.close();
       }
     }
   }
@@ -103,7 +104,7 @@ public class DaosFsClientIT {
       client.mkdir("/mkdirs/1", true);
     } finally {
       if (client != null) {
-        client.disconnect();
+        client.close();
       }
     }
   }
@@ -120,7 +121,7 @@ public class DaosFsClientIT {
       client.mkdir("/mkdir/1", false);
     } finally {
       if (client != null) {
-        client.disconnect();
+        client.close();
       }
     }
   }
@@ -136,7 +137,7 @@ public class DaosFsClientIT {
       client.move(0, fileName, 0, "destFile");
     } finally {
       if (client != null) {
-        client.disconnect();
+        client.close();
       }
     }
   }
@@ -152,7 +153,7 @@ public class DaosFsClientIT {
       client.move(0, fileName, 0, "/destFile");
     } finally {
       if (client != null) {
-        client.disconnect();
+        client.close();
       }
     }
   }
@@ -178,55 +179,7 @@ public class DaosFsClientIT {
       Assert.assertTrue(client.getFile(destDir, destFileName).exists());
     } finally {
       if (client != null) {
-        client.disconnect();
-      }
-    }
-  }
-
-  @Test
-  public void testFsClientReferenceOne() throws Exception {
-    DaosFsClient.DaosFsClientBuilder builder = new DaosFsClient.DaosFsClientBuilder();
-    builder.poolId(poolId).containerId(contId);
-    DaosFsClient client = null;
-    try {
-      client = builder.build();
-      Assert.assertEquals(1, client.getRefCnt());
-    } finally {
-      if (client != null) {
-        client.disconnect();
-        Assert.assertEquals(0, client.getRefCnt());
-      }
-    }
-    Exception ee = null;
-    try {
-      client.incrementRef();
-    } catch (Exception e) {
-      ee = e;
-    }
-    Assert.assertTrue(ee instanceof IllegalStateException);
-  }
-
-  @Test
-  public void testFsClientReferenceMore() throws Exception {
-    DaosFsClient.DaosFsClientBuilder builder = new DaosFsClient.DaosFsClientBuilder();
-    builder.poolId(poolId).containerId(contId);
-    DaosFsClient client = null;
-    int cnt = 0;
-    try {
-      client = builder.build();
-      cnt = client.getRefCnt();
-      builder.build();
-      Assert.assertEquals(cnt + 1, client.getRefCnt());
-      client.disconnect();
-      client.incrementRef();
-      Assert.assertEquals(cnt + 1, client.getRefCnt());
-      client.decrementRef();
-    } catch (Exception e) {
-      e.printStackTrace();
-    } finally {
-      if (client != null) {
-        client.disconnect();
-        Assert.assertEquals(cnt - 1, client.getRefCnt());
+        client.close();
       }
     }
   }
