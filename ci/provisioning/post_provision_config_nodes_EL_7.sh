@@ -18,6 +18,29 @@ disable_gpg_check() {
     yum-config-manager --save --setopt="$(url_to_repo "$REPO")".gpgcheck=0
 }
 
+timeout_yum() {
+    local timeout="$1"
+    shift
+
+    # now make sure everything is fully up-to-date
+    local tries=3
+    while [ $tries -gt 0 ]; do
+        if time timeout "$timeout" yum -y "$@"; then
+            # succeeded, return with success
+            return 0
+        fi
+        if [ "${PIPESTATUS[0]}" = "124" ]; then
+            # timed out, try again
+            (( tries-- ))
+            continue
+        fi
+        # yum failed for something other than timeout
+        return 1
+    done
+
+    return 1
+}
+
 post_provision_config_nodes() {
 
     # Reserve port ranges 31416-31516 for DAOS and CART servers
@@ -80,10 +103,10 @@ post_provision_config_nodes() {
     done
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
-    yum -y install redhat-lsb-core
+    timeout_yum 5m install redhat-lsb-core
     # shellcheck disable=SC2086
     if [ -n "$INST_RPMS" ] &&
-       ! yum -y $yum_repo_args install $INST_RPMS; then
+       ! timeout_yum 5m $yum_repo_args install $INST_RPMS; then
         rc=${PIPESTATUS[0]}
         for file in /etc/yum.repos.d/*.repo; do
             echo "---- $file ----"
@@ -109,6 +132,10 @@ gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-Debug-7
 enabled=0
 EOF
 
-    # now make sure everything is fully up-to-date
-    time yum -y upgrade --exclude fuse,mercury,daos,daos-\*
+    if ! timeout_yum 20m upgrade \
+                     --exclude fuse,mercury,daos,daos-\*; then
+        exit 1
+    fi
+
+    exit 0
 }

@@ -86,6 +86,10 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	rc = vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc, dss_ult_yield,
 			   (void *)cont->sc_agg_req);
 
+	/* Suppress csum error and continue on other epoch ranges */
+	if (rc == -DER_CSUM)
+		rc = 0;
+
 	/* Wake up GC ULT */
 	sched_req_wakeup(cont->sc_pool->spc_gc_req);
 	return rc;
@@ -1579,8 +1583,8 @@ ds_cont_tgt_force_close(uuid_t cont_uuid)
 {
 	int rc;
 
-	D_DEBUG(DF_DSMS, DF_CONT": Force closing all handles for container "
-		DF_UUID"\n", DP_CONT(NULL, NULL), cont_uuid);
+	D_DEBUG(DF_DSMS, "Force closing all handles for container "
+		DF_UUID"\n", DP_UUID(cont_uuid));
 
 	rc = dss_thread_collective(cont_close_all, &cont_uuid, 0, DSS_ULT_IO);
 	if (rc != 0)
