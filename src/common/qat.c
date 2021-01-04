@@ -38,12 +38,25 @@
 #define MAX_INSTANCES 32
 
 /* Max buffer size is used for intermediate buffer allocation, */
-/* it is NOT hardware limitation */
+/* it is NOT hardware limitation, which is used only when the */
+/* caller doesn't specify a value */
 #define MAX_BUF_SIZE 65536
+
+struct callback_data {
+	CpaDcRqResults *dcResults;
+	CpaBufferList *pBufferListSrc;
+	CpaBufferList *pBufferListDst;
+	uint8_t *dst;
+	size_t dstLen;
+	dc_callback_fn user_cb_fn;
+	void *user_cb_data;
+};
+
+static int inst_num;
 
 /** Memory */
 static inline CpaStatus
-Mem_Alloc_Contig(void **ppMemAddr,
+mem_alloc_contig(void **ppMemAddr,
 		 Cpa32U sizeBytes,
 		 Cpa32U alignment)
 {
@@ -55,7 +68,7 @@ Mem_Alloc_Contig(void **ppMemAddr,
 }
 
 static inline void
-Mem_Free_Contig(void **ppMemAddr)
+mem_free_contig(void **ppMemAddr)
 {
 	if (*ppMemAddr != NULL) {
 		qaeMemFreeNUMA(ppMemAddr);
@@ -63,33 +76,15 @@ Mem_Free_Contig(void **ppMemAddr)
 	}
 }
 
-static inline CpaStatus
-OS_SLEEP(Cpa32U ms)
-{
-	int ret = 0;
-	struct timespec resTime, remTime;
-
-	resTime.tv_sec = ms / 1000;
-	resTime.tv_nsec = (ms % 1000) * 1000000;
-	do {
-		ret = nanosleep(&resTime, &remTime);
-		resTime = remTime;
-	} while ((ret != 0) && (errno == EINTR));
-
-	if (ret != 0)
-		return CPA_STATUS_FAIL;
-	else
-		return CPA_STATUS_SUCCESS;
-}
-
 static inline CpaPhysicalAddr
-virtToPhys(void *virtAddr)
+virt_to_phys(void *virtAddr)
 {
 	return (CpaPhysicalAddr)qaeVirtToPhysNUMA(virtAddr);
 }
 
+/** Get Compression Instance */
 static void
-getDcInstance(CpaInstanceHandle *pDcInstHandle)
+get_dc_instance(CpaInstanceHandle *pDcInstHandle)
 {
 	CpaInstanceHandle dcInstHandles[MAX_INSTANCES];
 	Cpa16U numInstances = 0;
@@ -103,16 +98,74 @@ getDcInstance(CpaInstanceHandle *pDcInstHandle)
 
 	if ((status == CPA_STATUS_SUCCESS) && (numInstances > 0)) {
 		status = cpaDcGetInstances(numInstances, dcInstHandles);
+		inst_num = (inst_num + 1) % numInstances;
 		if (status == CPA_STATUS_SUCCESS)
-			*pDcInstHandle = dcInstHandles[0];
+			*pDcInstHandle = dcInstHandles[inst_num];
 	}
 }
 
+/** Define user callback function for post processing */
 static void
-dcCallback(void *pCallbackTag, CpaStatus status)
+user_callback(void *user_cb_data, int produced, int status)
 {
-	if (pCallbackTag != NULL)
-		*(Cpa32U *)pCallbackTag = 1;
+	int *cb_data = (int *)user_cb_data;
+
+	if (status == DC_STATUS_OK)
+		*cb_data = produced;
+	else
+		*cb_data = status;
+}
+
+/** Define callback function triggered by QAT driver */
+static void
+dc_callback(void *pCallbackTag, CpaStatus status)
+{
+	int dc_status = DC_STATUS_OK;
+	int produced = 0;
+	dc_callback_fn user_cb_fn;
+	void *user_cb_data;
+
+	if (pCallbackTag != NULL) {
+		struct callback_data *cb_data =
+				(struct callback_data *)pCallbackTag;
+		user_cb_fn = cb_data->user_cb_fn;
+		user_cb_data = cb_data->user_cb_data;
+		produced = cb_data->dcResults->produced;
+		if (status == CPA_DC_OK &&
+		    produced > 0 &&
+		    produced <= cb_data->dstLen) {
+			/* Copy output from pinned-mem to virtual-mem */
+			memcpy(cb_data->dst,
+			       cb_data->pBufferListDst->pBuffers->pData,
+			       produced);
+		} else {
+			produced = 0;
+			if (status == CPA_DC_OVERFLOW)
+				dc_status = DC_STATUS_OVERFLOW;
+			else
+				dc_status = DC_STATUS_ERR;
+		}
+
+		/** Free memory */
+		mem_free_contig(
+			(void *)&cb_data->pBufferListSrc->pPrivateMetaData);
+		mem_free_contig(
+			(void *)&cb_data->pBufferListSrc->pPrivateMetaData);
+		mem_free_contig(
+			(void *)&cb_data->pBufferListSrc->pBuffers->pData);
+		mem_free_contig(
+			(void *)&cb_data->pBufferListDst->pPrivateMetaData);
+		mem_free_contig(
+			(void *)&cb_data->pBufferListDst->pBuffers->pData);
+		D_FREE(cb_data->pBufferListSrc);
+		D_FREE(cb_data->pBufferListDst);
+		D_FREE(cb_data->dcResults);
+		D_FREE(cb_data);
+
+		/** Now trigger user-defined callback function */
+		if (user_cb_fn)
+			(user_cb_fn)(user_cb_data, produced, dc_status);
+	}
 }
 
 /** Common Functions */
@@ -127,8 +180,13 @@ qat_dc_is_available()
 
 	cpaDcGetNumInstances(&numInstances);
 	icp_sal_userStop();
-
 	return (numInstances > 0);
+}
+
+int
+qat_dc_poll_response(CpaInstanceHandle *dcInstHandle)
+{
+	return icp_sal_DcPollInstance(*dcInstHandle, 0);
 }
 
 /** Compression Functions */
@@ -164,7 +222,7 @@ qat_dc_init(CpaInstanceHandle *dcInstHandle,
 		return DC_STATUS_ERR;
 	}
 
-	getDcInstance(dcInstHandle);
+	get_dc_instance(dcInstHandle);
 	if (*dcInstHandle == NULL) {
 		D_ERROR("QAT: No DC instance\n");
 		qaeMemDestroy();
@@ -180,7 +238,7 @@ qat_dc_init(CpaInstanceHandle *dcInstHandle,
 			numInterBuffLists);
 
 	if (status == CPA_STATUS_SUCCESS && *numInterBuffLists != 0)
-		status = Mem_Alloc_Contig(
+		status = mem_alloc_contig(
 			(void *)&interBufs,
 			*numInterBuffLists * sizeof(CpaBufferList *),
 			1);
@@ -191,17 +249,17 @@ qat_dc_init(CpaInstanceHandle *dcInstHandle,
 
 	for (i = 0; i < *numInterBuffLists; i++) {
 		if (status == CPA_STATUS_SUCCESS)
-			status = Mem_Alloc_Contig(
+			status = mem_alloc_contig(
 				(void *)&interBufs[i],
 				sizeof(CpaBufferList), 1);
 
 		if (status == CPA_STATUS_SUCCESS)
-			status = Mem_Alloc_Contig(
+			status = mem_alloc_contig(
 			(void *)(&interBufs[i]->pPrivateMetaData),
 			buffMetaSize, 1);
 
 		if (status == CPA_STATUS_SUCCESS)
-			status = Mem_Alloc_Contig(
+			status = mem_alloc_contig(
 				(void *)&interBufs[i]->pBuffers,
 				sizeof(CpaFlatBuffer), 1);
 
@@ -209,7 +267,7 @@ qat_dc_init(CpaInstanceHandle *dcInstHandle,
 			/* Implementation requires an intermediate */
 			/* buffer approximately twice the size of */
 			/* the output buffer */
-			status = Mem_Alloc_Contig(
+			status = mem_alloc_contig(
 				(void *)&interBufs[i]->pBuffers->pData,
 				2 * maxBufferSize, 1);
 			interBufs[i]->numBuffers = 1;
@@ -219,7 +277,8 @@ qat_dc_init(CpaInstanceHandle *dcInstHandle,
 	}
 
 	if (status == CPA_STATUS_SUCCESS)
-		status = cpaDcSetAddressTranslation(*dcInstHandle, virtToPhys);
+		status = cpaDcSetAddressTranslation(*dcInstHandle,
+						    virt_to_phys);
 
 	if (status == CPA_STATUS_SUCCESS)
 		status = cpaDcStartInstance(
@@ -239,7 +298,7 @@ qat_dc_init(CpaInstanceHandle *dcInstHandle,
 	}
 
 	if (status == CPA_STATUS_SUCCESS)
-		status = Mem_Alloc_Contig((void *)sessionHdl, sess_size, 1);
+		status = mem_alloc_contig((void *)sessionHdl, sess_size, 1);
 
 	/* Initialize the Stateless session */
 	if (status == CPA_STATUS_SUCCESS) {
@@ -248,7 +307,7 @@ qat_dc_init(CpaInstanceHandle *dcInstHandle,
 			*sessionHdl,
 			&sd,
 			NULL,
-			dcCallback);
+			dc_callback);
 	}
 
 	*bufferInterArrayPtr = interBufs;
@@ -262,14 +321,16 @@ qat_dc_init(CpaInstanceHandle *dcInstHandle,
 }
 
 int
-qat_dc_compress(CpaInstanceHandle *dcInstHandle,
+qat_dc_compress_async(
+		CpaInstanceHandle *dcInstHandle,
 		CpaDcSessionHandle *sessionHdl,
 		uint8_t *src,
 		size_t srcLen,
 		uint8_t *dst,
 		size_t dstLen,
-		size_t *produced,
-		enum QAT_COMPRESS_DIR dir)
+		enum QAT_COMPRESS_DIR dir,
+		dc_callback_fn user_cb_fn,
+		void *user_cb_data)
 {
 	CpaStatus status = CPA_STATUS_SUCCESS;
 	Cpa8U *pBufferMetaSrc = NULL;
@@ -280,13 +341,22 @@ qat_dc_compress(CpaInstanceHandle *dcInstHandle,
 	CpaFlatBuffer *pFlatBuffer = NULL;
 	Cpa8U *pSrcBuffer = NULL;
 	Cpa8U *pDstBuffer = NULL;
-	CpaDcRqResults dcResults;
+	CpaDcRqResults *dcResults;
 	CpaDcOpData opData = {};
 	Cpa32U numBuffers = 1;
-	Cpa32U complete = 0;
+	struct callback_data *cb_data;
+
+	D_ALLOC(cb_data, sizeof(struct callback_data));
+	D_ALLOC(dcResults, sizeof(CpaDcRqResults));
+
+	cb_data->dcResults = dcResults;
+	cb_data->dst = dst;
+	cb_data->dstLen = dstLen;
+	cb_data->user_cb_fn = user_cb_fn;
+	cb_data->user_cb_data = user_cb_data;
+
 	Cpa32U bufferListMemSize =
 		sizeof(CpaBufferList) + (numBuffers * sizeof(CpaFlatBuffer));
-	int rc = DC_STATUS_ERR;
 
 	opData.compressAndVerify = CPA_TRUE;
 
@@ -297,7 +367,7 @@ qat_dc_compress(CpaInstanceHandle *dcInstHandle,
 
 	/* Allocate source buffer */
 	if (status == CPA_STATUS_SUCCESS)
-		status = Mem_Alloc_Contig(
+		status = mem_alloc_contig(
 				(void *)&pBufferMetaSrc, bufferMetaSize, 1);
 
 
@@ -306,11 +376,11 @@ qat_dc_compress(CpaInstanceHandle *dcInstHandle,
 		status = pBufferListSrc ? CPA_STATUS_SUCCESS : CPA_STATUS_FAIL;
 	}
 	if (status == CPA_STATUS_SUCCESS)
-		status = Mem_Alloc_Contig((void *)&pSrcBuffer, srcLen, 1);
+		status = mem_alloc_contig((void *)&pSrcBuffer, srcLen, 1);
 
 	/* Allocate destination buffer the same size as source buffer */
 	if (status == CPA_STATUS_SUCCESS)
-		status = Mem_Alloc_Contig(
+		status = mem_alloc_contig(
 				(void *)&pBufferMetaDst, bufferMetaSize, 1);
 
 	if (status == CPA_STATUS_SUCCESS) {
@@ -318,7 +388,10 @@ qat_dc_compress(CpaInstanceHandle *dcInstHandle,
 		status = pBufferListDst ? CPA_STATUS_SUCCESS : CPA_STATUS_FAIL;
 	}
 	if (status == CPA_STATUS_SUCCESS)
-		status = Mem_Alloc_Contig((void *)&pDstBuffer, dstLen, 1);
+		status = mem_alloc_contig((void *)&pDstBuffer, dstLen, 1);
+
+	cb_data->pBufferListSrc = pBufferListSrc;
+	cb_data->pBufferListDst = pBufferListDst;
 
 	if (status == CPA_STATUS_SUCCESS) {
 		/* Copy source into buffer */
@@ -345,7 +418,7 @@ qat_dc_compress(CpaInstanceHandle *dcInstHandle,
 		pFlatBuffer->pData = pDstBuffer;
 
 		do {
-			/** keep trying to send the request until success */
+			/** Keep trying to send the request until success */
 			if (dir == DIR_COMPRESS)
 				status = cpaDcCompressData2(
 					*dcInstHandle,
@@ -353,8 +426,8 @@ qat_dc_compress(CpaInstanceHandle *dcInstHandle,
 					pBufferListSrc,
 					pBufferListDst,
 					&opData,
-					&dcResults,
-					(void *)&complete);
+					dcResults,
+					(void *)cb_data);
 			else
 				status = cpaDcDecompressData2(
 					*dcInstHandle,
@@ -362,38 +435,48 @@ qat_dc_compress(CpaInstanceHandle *dcInstHandle,
 					pBufferListSrc,
 					pBufferListDst,
 					&opData,
-					&dcResults,
-					(void *)&complete);
+					dcResults,
+					(void *)cb_data);
+			icp_sal_DcPollInstance(*dcInstHandle, 0);
 		} while (status == CPA_STATUS_RETRY);
-
-		if (status == CPA_STATUS_SUCCESS) {
-			/** wait until the completion of the operation */
-			do {
-				icp_sal_DcPollInstance(*dcInstHandle, 0);
-
-				/** Sleep and poll */
-				OS_SLEEP(10);
-			} while (!complete);
-
-			if (dcResults.status == CPA_DC_OK &&
-			    dcResults.produced <= dstLen) {
-				/** Copy the output to dst buffer */
-				memcpy(dst, pDstBuffer, dcResults.produced);
-				*produced = dcResults.produced;
-				rc = DC_STATUS_OK;
-			} else if (dcResults.status == CPA_DC_OVERFLOW)
-				rc = DC_STATUS_OVERFLOW;
-		}
 	}
 
-	Mem_Free_Contig((void *)&pBufferMetaSrc);
-	Mem_Free_Contig((void *)&pSrcBuffer);
-	Mem_Free_Contig((void *)&pBufferMetaDst);
-	Mem_Free_Contig((void *)&pDstBuffer);
-	D_FREE(pBufferListSrc);
-	D_FREE(pBufferListDst);
+	if (status == CPA_STATUS_SUCCESS)
+		return DC_STATUS_OK;
+	return DC_STATUS_ERR;
+}
 
-	return rc;
+int
+qat_dc_compress(CpaInstanceHandle *dcInstHandle,
+		CpaDcSessionHandle *sessionHdl,
+		uint8_t *src,
+		size_t srcLen,
+		uint8_t *dst,
+		size_t dstLen,
+		size_t *produced,
+		enum QAT_COMPRESS_DIR dir)
+{
+	int user_cb_data = 0;
+	CpaStatus status = CPA_STATUS_SUCCESS;
+
+	status = qat_dc_compress_async(dcInstHandle, sessionHdl,
+				       src, srcLen, dst, dstLen, dir,
+				       user_callback, (void *)&user_cb_data);
+
+	if (status == DC_STATUS_OK) {
+		/** wait until the completion of the operation */
+		do {
+			icp_sal_DcPollInstance(*dcInstHandle, 0);
+		} while (user_cb_data == 0);
+
+		if (user_cb_data > 0) {
+			*produced = user_cb_data;
+			return DC_STATUS_OK;
+		}
+		return user_cb_data;
+	}
+
+	return status;
 }
 
 int
@@ -409,20 +492,20 @@ qat_dc_destroy(CpaInstanceHandle *dcInstHandle,
 	cpaDcStopInstance(*dcInstHandle);
 
 	/* Free session Context */
-	Mem_Free_Contig((void *)sessionHdl);
+	mem_free_contig((void *)sessionHdl);
 
 	/* Free intermediate buffers */
 	if (interBufs != NULL) {
 		for (i = 0; i < numInterBuffLists; i++) {
-			Mem_Free_Contig((void *)
+			mem_free_contig((void *)
 					&interBufs[i]->pBuffers->pData);
-			Mem_Free_Contig((void *)
+			mem_free_contig((void *)
 					&interBufs[i]->pBuffers);
-			Mem_Free_Contig((void *)
+			mem_free_contig((void *)
 					&interBufs[i]->pPrivateMetaData);
-			Mem_Free_Contig((void *)&interBufs[i]);
+			mem_free_contig((void *)&interBufs[i]);
 		}
-		Mem_Free_Contig((void *)&interBufs);
+		mem_free_contig((void *)&interBufs);
 	}
 
 	icp_sal_userStop();
