@@ -28,6 +28,7 @@
 
 #include "../drpc_internal.h"
 #include "../srv.pb-c.h"
+#include "../event.pb-c.h"
 #include "../srv_internal.h"
 #include <daos/test_mocks.h>
 #include <daos/test_utils.h>
@@ -235,6 +236,63 @@ test_drpc_verify_notify_bio_error(void **state)
 	assert_int_equal(close_call_count, 1);
 }
 
+static void
+verify_notify_pool_svc_update(void)
+{
+	Drpc__Call		*call;
+	Mgmt__ClusterEventReq	*req;
+
+	call = drpc__call__unpack(NULL, sendmsg_msg_iov_len,
+				  sendmsg_msg_content);
+	assert_non_null(call);
+	assert_int_equal(call->module, DRPC_MODULE_MGMT);
+	assert_int_equal(call->method, DRPC_METHOD_MGMT_CLUSTER_EVENT);
+
+	/* Verify payload contents */
+	req = mgmt__cluster_event_req__unpack(NULL, call->body.len,
+					      call->body.data);
+	assert_non_null(req);
+
+	/* Cleanup */
+	mgmt__cluster_event_req__free_unpacked(req, NULL);
+	drpc__call__free_unpacked(call, NULL);
+}
+
+static void
+test_drpc_verify_notify_pool_svc_update(void **state)
+{
+	uuid_t		 pool_uuid;
+	uint32_t	 svc_reps[4] = {0, 1, 2, 3};
+	d_rank_list_t	*svc_ranks;
+
+	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
+
+	assert_int_equal(drpc_init(), 0);
+
+	/* drpc connection created */
+	assert_int_equal(connect_sockfd, socket_return);
+
+	/* socket was left open */
+	assert_int_equal(close_call_count, 0);
+
+	/* Message was sent */
+	assert_non_null(sendmsg_msg_ptr);
+
+	assert_int_equal(uuid_parse("11111111-1111-1111-1111-111111111111",
+			 pool_uuid), 0);
+
+	svc_ranks = uint32_array_to_rank_list(svc_reps, 4);
+	assert_non_null(svc_ranks);
+
+	assert_int_equal(ds_notify_pool_svc_update(pool_uuid, svc_ranks));
+	verify_notify_pool_svc_update(pool_uuid, svc_ranks);
+
+	/* Now let's shut things down... */
+	drpc_fini();
+
+	/* socket was closed */
+	assert_int_equal(close_call_count, 1);
+}
 
 /* Convenience macros for unit tests */
 #define UTEST(x)	cmocka_unit_test_setup_teardown(x,	\
@@ -251,6 +309,7 @@ main(void)
 		UTEST(test_drpc_init_fini),
 		UTEST(test_drpc_init_bad_response),
 		UTEST(test_drpc_verify_notify_bio_error),
+		UTEST(test_drpc_verify_notify_pool_svc_update),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);
