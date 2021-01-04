@@ -60,7 +60,7 @@ class MultipleCreatesTest(TestWithServers):
         """
         Test issuing a single  pool create commands at once.
 
-        :avocado: tags=all,weekly_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=small
         :avocado: tags=pool,smoke,createone
         """
