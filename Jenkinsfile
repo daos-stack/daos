@@ -520,9 +520,10 @@ pipeline {
                                                   "src/mgmt/*.pb-c.[ch]:" +
                                                   "src/iosrv/*.pb-c.[ch]:" +
                                                   "src/security/*.pb-c.[ch]:" +
-						  "src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:" +
-						  "src/client/java/daos-java/src/main/native/*.pb-c.[ch]:" +
-						  "src/client/java/daos-java/src/main/native/include/*.pb-c.[ch]:" +
+                                                  "src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:" +
+                                                  "src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:" +
+                                                  "src/client/java/daos-java/src/main/native/*.pb-c.[ch]:" +
+                                                  "src/client/java/daos-java/src/main/native/include/*.pb-c.[ch]:" +
                                                   "*.crt:" +
                                                   "*.pem:" +
                                                   "*_test.go:" +
