@@ -111,7 +111,7 @@ obj_rw_complete(crt_rpc_t *rpc, unsigned int map_version,
 	struct obj_rw_in	*orwi = crt_req_get(rpc);
 	int			 rc;
 
-	if (!daos_handle_is_inval(ioh)) {
+	if (daos_handle_is_valid(ioh)) {
 		bool update = obj_rpc_is_update(rpc);
 
 		if (update) {
@@ -340,7 +340,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 			struct bio_sglist *bsgl;
 			bool deduped_skip = true;
 
-			D_ASSERT(!daos_handle_is_inval(ioh));
+			D_ASSERT(daos_handle_is_valid(ioh));
 			bsgl = vos_iod_sgl_at(ioh, i);
 			if (bsgls_dup) {	/* dedup verify case */
 				rc = vos_dedup_dup_bsgl(ioh, bsgl,
@@ -1056,7 +1056,7 @@ obj_dedup_verify(daos_handle_t ioh, struct bio_sglist *bsgls_dup, int sgl_nr)
 	struct bio_sglist	*bsgl, *bsgl_dup;
 	int			 i, j, rc;
 
-	D_ASSERT(!daos_handle_is_inval(ioh));
+	D_ASSERT(daos_handle_is_valid(ioh));
 	D_ASSERT(bsgls_dup != NULL);
 
 	for (i = 0; i < sgl_nr; i++) {
