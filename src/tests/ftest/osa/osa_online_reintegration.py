@@ -27,6 +27,7 @@ import threading
 
 from itertools import product
 from test_utils_pool import TestPool
+from apricot import skipForTicket
 from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
@@ -208,7 +209,8 @@ class OSAOnlineReintegration(OSAUtils):
 
         Test Description: Validate Online Reintegration with server stop
 
-        :avocado: tags=all,pr,hw,large,osa,online_reintegration,DAOS_5610
+        :avocado: tags=all,pr,daily_regression,hw,medium,ib2,osa
+        :avocado: tags=online_reintegration,DAOS_5610
         """
         # Perform reintegration testing with 1 pool.
         self.run_online_reintegration_test(1, server_boot=True)
