@@ -148,7 +148,19 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		resp.MsRanks = append(resp.MsRanks, rank.Uint32())
 	}
 
-	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, resp:%+v\n", *resp)
+	// For resp.RankUris may be large, we make a resp copy with a limited
+	// number of rank URIs, to avoid flooding the debug log.
+	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, resp:%+v len(RankUris):%d\n",
+		*func(r *mgmtpb.GetAttachInfoResp) *mgmtpb.GetAttachInfoResp {
+			max := 1
+			if len(r.RankUris) <= max {
+				return r
+			}
+			s := *r
+			s.RankUris = s.RankUris[0:max]
+			return &s
+		}(resp), len(resp.RankUris))
+
 	return resp, nil
 }
 

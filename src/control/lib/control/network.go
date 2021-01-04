@@ -26,7 +26,6 @@ package control
 import (
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/mitchellh/hashstructure"
@@ -241,22 +240,14 @@ type (
 
 func (gair *GetAttachInfoResp) String() string {
 	// gair.ServiceRanks may contain thousands of elements. Print a few
-	// at most to avoid flooding logs.
-	nRankURIs := len(gair.ServiceRanks)
-	if nRankURIs > 4 {
-		nRankURIs = 4
-	}
-	rankURIs := make([]string, nRankURIs)
-	for i, rankURI := range gair.ServiceRanks[:nRankURIs] {
-		rankURIs[i] = fmt.Sprintf("%d:%s", rankURI.Rank, rankURI.Uri)
-	}
+	// (just one!) at most to avoid flooding logs.
+	rankURI := fmt.Sprintf("%d:%s", gair.ServiceRanks[0].Rank, gair.ServiceRanks[0].Uri)
 
 	// Condensed format for debugging...
 	return fmt.Sprintf("p=%s i=%s d=%s a=%d t=%d c=%d, rus(%d)=%s, mss=%v",
 		gair.Provider, gair.Interface, gair.Domain,
 		gair.CrtCtxShareAddr, gair.CrtTimeout, gair.NetDevClass,
-		len(gair.ServiceRanks), strings.Join(rankURIs, ","),
-		gair.MSRanks,
+		len(gair.ServiceRanks), rankURI, gair.MSRanks,
 	)
 }
 
