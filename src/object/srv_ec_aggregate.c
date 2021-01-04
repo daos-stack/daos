@@ -453,21 +453,20 @@ agg_get_obj_handle(struct ec_agg_entry *entry)
 	struct ec_agg_param	*agg_param;
 	unsigned int		 k = entry->ae_oca->u.ec.e_k;
 	int			 i, j, rc = 0;
-	bool			 opened = false;
 
+	if (daos_handle_is_valid(entry->ae_obj_hdl))
+		return rc;
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
-	if (daos_handle_is_inval(entry->ae_obj_hdl)) {
-		rc = dsc_obj_open(agg_param->ap_pool_info.api_cont_hdl,
-				  entry->ae_oid.id_pub, DAOS_OO_RW,
-				  &entry->ae_obj_hdl);
-		if (!rc)
-			opened = true;
-	}
-	if (opened) {
+	rc = dsc_obj_open(agg_param->ap_pool_info.api_cont_hdl,
+			  entry->ae_oid.id_pub, DAOS_OO_RW,
+			  &entry->ae_obj_hdl);
+	if (rc == 0) {
 		d_rank_t myrank;
 
 		crt_group_rank(NULL, &myrank);
-		dc_obj_layout_get(entry->ae_obj_hdl, &layout);
+		rc = dc_obj_layout_get(entry->ae_obj_hdl, &layout);
+		if (rc)
+			goto out;
 		for (i = 0; i < layout->ol_nr; i++)
 			for (j = 0; j < layout->ol_shards[i]->os_replica_nr;
 			     j++) {
@@ -485,6 +484,7 @@ agg_get_obj_handle(struct ec_agg_entry *entry)
 			}
 		daos_obj_layout_free(layout);
 	}
+out:
 	return rc;
 }
 
@@ -531,6 +531,7 @@ agg_fetch_odata_cells(struct ec_agg_entry *entry, uint8_t *bit_map,
 
 	rc = agg_get_obj_handle(entry);
 	if (rc) {
+		(entry->ae_sgl.sg_iovs)++;
 		D_ERROR("Failed to open object: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
@@ -1995,7 +1996,7 @@ agg_reset_entry(struct ec_agg_entry *agg_entry,
 	agg_entry->ae_oca		= oca;
 	agg_entry->ae_codec		= NULL;
 	agg_entry->ae_rsize		= 0UL;
-	if (!daos_handle_is_inval(agg_entry->ae_obj_hdl)) {
+	if (daos_handle_is_valid(agg_entry->ae_obj_hdl)) {
 		dsc_obj_close(agg_entry->ae_obj_hdl);
 		agg_entry->ae_obj_hdl = DAOS_HDL_INVAL;
 	}
@@ -2206,6 +2207,8 @@ ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
 			 agg_iterate_pre_cb, agg_iterate_post_cb,
 			 &agg_param, NULL);
+	if (daos_handle_is_valid(agg_param.ap_agg_entry.ae_obj_hdl))
+		dsc_obj_close(agg_param.ap_agg_entry.ae_obj_hdl);
 
 	if (rc == 0 && is_current)
 		cont->sc_ec_agg_eph = epr->epr_hi;
