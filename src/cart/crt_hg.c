@@ -783,6 +783,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	}
 
 	rpc_priv->crp_opc_info = opc_info;
+	rpc_priv->crp_fail_hlc = rpc_tmp.crp_fail_hlc;
 	rpc_pub->cr_opc = rpc_tmp.crp_pub.cr_opc;
 	rpc_pub->cr_ep.ep_rank = rpc_priv->crp_req_hdr.cch_dst_rank;
 	rpc_pub->cr_ep.ep_tag = rpc_priv->crp_req_hdr.cch_dst_tag;
@@ -824,6 +825,11 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	if (opc_info->coi_rpc_cb == NULL) {
 		D_ERROR("NULL crp_hg_hdl, opc: %#x.\n", opc);
 		crt_hg_reply_error_send(rpc_priv, -DER_UNREG);
+		D_GOTO(decref, hg_ret = HG_SUCCESS);
+	}
+
+	if (rpc_priv->crp_fail_hlc) {
+		crt_hg_reply_error_send(rpc_priv, -DER_HLC_SYNC);
 		D_GOTO(decref, hg_ret = HG_SUCCESS);
 	}
 
@@ -1039,6 +1045,10 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 				}
 			}
 		}
+
+		/* HLC is checked during unpacking of the response */
+		if (rpc_priv->crp_fail_hlc)
+			rc = -DER_HLC_SYNC;
 	}
 
 	crt_cbinfo.cci_rpc = rpc_pub;

@@ -10,12 +10,46 @@ errors are documented in the table below.
 |DER_NO_PERM|1001|No permission
 |DER_NO_HDL|1002|Invalid handle
 |DER_INVAL|1003|Invalid parameters
+|DER_EXIST|1004|Entity already exists
+|DER_NONEXIST|1005|The specified entity does not exist
+|DER_UNREACH|1006|Unreachable node
 |DER_NOSPACE|1007|No space left on storage target
+|DER_ALREADY|1008|Operation already performed
+|DER_NOMEM|1009|Out of memory
 |DER_NOSYS|1010|Function not implemented
+|DER_TIMEDOUT|1011|Time out
+|DER_BUSY|1012|Device or resource busy
+|DER_AGAIN|1013|Try again
+|DER_PROTO|1014|Incompatible protocol
+|DER_UNINIT|1015|Device or resource not initialized
+|DER_TRUNC|1016|Buffer too short
+|DER_OVERFLOW|1017|Data too long for defined data type or buffer size
+|DER_CANCELED|1018|Operation canceled
+|DER_OOG|1019|Out of group or member list
+|DER_HG|1020|Transport layer mercury error
+|DER_MISC|1025|Miscellaneous error
+|DER_BADPATH|1026|Bad path name
+|DER_NOTDIR|1027|Not a directory
+|DER_EVICTED|1032|Rank has been evicted
+|DER_DOS|1034|Denial of service
+|DER_BAD_TARGET|1035|Incorrect target for the RPC
+|DER_HLC_SYNC|1037|HLC synchronization error
 |DER_IO|2001|Generic I/O error
 |DER_ENOENT|2003|Entry not found
+|DER_NOTYPE|2004|Unknown object type
+|DER_NOSCHEMA|2005|Unknown object schema
 |DER_KEY2BIG|2012|Key is too large
+|DER_REC2BIG|2013|Record is too large
 |DER_IO_INVAL|2014|IO buffers can't match object extents
+|DER_EQ_BUSY|2015|Event queue is busy
+|DER_SHUTDOWN|2017|Service should shut down
+|DER_INPROGRESS|2018|Operation now in progress
+|DER_NOTREPLICA|2020|Not a service replica
+|DER_CSUM|2021|Checksum error
+|DER_REC_SIZE|2024|Record size error
+|DER_TX_RESTART|2025|Transaction should restart
+|DER_DATA_LOSS|2026|Data lost or not recoverable
+|DER_TX_BUSY|2028|TX is not committed
 |DER_AGENT_INCOMPAT|2029|Agent is incompatible with libdaos
 
 When an operation fails, DAOS returns a negative DER error. For a full
@@ -205,6 +239,12 @@ Server must be built from compatible sources so that the GetAttachInfo protocol
 is the same between each component.  Depending on your situation, you will need
 to either update the DAOS Agent or the libdaos.so to the newer version in order
 to maintain compatibility with each other.
+
+When DER_HLC_SYNC is received, it means that sender and receiver HLC timestamps
+are off by more than maximum allowed system clock offset (1 second by default).
+
+In order to correct this situation synchronize all server clocks to the same
+reference time, using services like NTP.
 
 ## Bug Report
 

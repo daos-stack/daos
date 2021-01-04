@@ -49,7 +49,7 @@ class DaosServerConfigTest(TestWithServers):
         Test Description: Test daos_server start/stops properly.
         on the system.
 
-        :avocado: tags=all,small,control,pr,server_start,basic
+        :avocado: tags=all,small,control,daily_regression,server_start,basic
         """
         # Setup the servers
         self.add_server_manager()
