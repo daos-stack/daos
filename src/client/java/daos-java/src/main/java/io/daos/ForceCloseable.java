@@ -21,19 +21,22 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-package io.daos.dfs;
+package io.daos;
 
-import java.nio.ByteBuffer;
+import java.io.Closeable;
+import java.io.IOException;
 
 /**
- * Entry point for getting buffer.
- *
- * <p>
- * TODO: buffer cache logic to be implemented
+ * A interface extended from {@link Closeable} to add one more method {@link #forceClose()}.
+ * When it's called, resource cleanup or disconnection should be done immediately no matter
+ * what circumstance it is. It's usually called at JVM shutdown.
  */
-public class BufferAllocator {
+public interface ForceCloseable extends Closeable {
 
-  public static ByteBuffer directBuffer(int size) {
-    return ByteBuffer.allocateDirect(size);
-  }
+  /**
+   * close at any circumstance.
+   *
+   * @throws IOException
+   */
+  void forceClose() throws IOException;
 }
