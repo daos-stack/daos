@@ -47,7 +47,7 @@ type startCmd struct {
 }
 
 func (cmd *startCmd) Execute(_ []string) error {
-	cmd.log.Infof("Starting %s:", versionString())
+	cmd.log.Debugf("Starting %s (pid %d)", versionString(), os.Getpid())
 	startedAt := time.Now()
 
 	ctx, shutdown := context.WithCancel(context.Background())
@@ -100,7 +100,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 	}
 
 	cmd.log.Debugf("startup complete in %s", time.Since(startedAt))
-	cmd.log.Infof("Listening on %s", sockPath)
+	cmd.log.Infof("%s (pid %d) listening on %s", versionString(), os.Getpid(), sockPath)
 
 	// Setup signal handlers so we can block till we get SIGINT or SIGTERM
 	signals := make(chan os.Signal)
@@ -113,12 +113,14 @@ func (cmd *startCmd) Execute(_ []string) error {
 	// SIGPIPE is caught and logged to avoid killing the agent.
 	// The syntax looks odd but <- Channel means wait on any input on the
 	// channel.
+	var shutdownRcvd time.Time
 	go func() {
 		sig := <-signals
 		switch sig {
 		case syscall.SIGPIPE:
 			cmd.log.Infof("Signal received.  Caught non-fatal %s; continuing", sig)
 		default:
+			shutdownRcvd = time.Now()
 			cmd.log.Infof("Signal received.  Caught %s; shutting down", sig)
 			close(finish)
 		}
@@ -126,5 +128,6 @@ func (cmd *startCmd) Execute(_ []string) error {
 	<-finish
 	drpcServer.Shutdown()
 
+	cmd.log.Debugf("shutdown complete in %s", time.Since(shutdownRcvd))
 	return nil
 }

@@ -598,12 +598,13 @@ test_fetch_array(void **state)
 		cleanup_data(&ctx);
 
 		/** 6. Replicated (complicated data) object with corruption */
-		client_corrupt_on_fetch();
+		daos_fail_loc_set(DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS);
 		setup_multiple_extent_data(&ctx);
 		rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 				     &ctx.update_iod, &ctx.update_sgl, NULL);
 		assert_int_equal(rc, 0);
 
+		client_corrupt_on_fetch();
 		rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 				    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
 		assert_int_equal(rc, 0);

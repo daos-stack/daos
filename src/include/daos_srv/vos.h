@@ -203,6 +203,16 @@ void
 vos_dtx_cleanup(struct dtx_handle *dth);
 
 /**
+ * Reset DTX related cached information in VOS.
+ *
+ * \param coh	[IN]	Container open handle.
+ *
+ * \return	Zero on success, negative value if error.
+ */
+int
+vos_dtx_cache_reset(daos_handle_t coh);
+
+/**
  * Initialize the environment for a VOS instance
  * Must be called once before starting a VOS instance
  *
