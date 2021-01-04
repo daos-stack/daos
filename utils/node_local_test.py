@@ -14,6 +14,7 @@ import json
 import signal
 import stat
 import argparse
+import functools
 import subprocess
 import tempfile
 import pickle
@@ -640,11 +641,7 @@ class DFuse():
         self._daos = daos
         self._sp = None
 
-        prefix = 'dnt_dfuse_{}_'.format(get_inc_id())
-        log_file = tempfile.NamedTemporaryFile(prefix=prefix,
-                                               suffix='.log',
-                                               delete=False)
-        self.log_file = log_file.name
+        self.log_file = None
 
         self.valgrind = None
         if not os.path.exists(self.dir):
@@ -660,6 +657,15 @@ class DFuse():
         pre_inode = os.stat(self.dir).st_ino
 
         my_env = get_base_env()
+
+        if v_hint is None:
+            v_hint = get_inc_id()
+
+        prefix = 'dnt_dfuse_{}_'.format(v_hint)
+        log_file = tempfile.NamedTemporaryFile(prefix=prefix,
+                                               suffix='.log',
+                                               delete=False)
+        self.log_file = log_file.name
 
         my_env['D_LOG_FILE'] = self.log_file
         my_env['DAOS_AGENT_DRPC_DIR'] = self._daos.agent_dir
@@ -884,6 +890,29 @@ def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False):
     vh.convert_xml()
     return rc
 
+def get_conts(conf, pool, posix=True):
+    """Return a list of all container"""
+
+    cmd = ['pool', 'list-containers', '--pool', pool]
+    rc = run_daos_cmd(conf, cmd)
+    print('rc is {}'.format(rc))
+    if rc.returncode != 0:
+        return []
+
+    containers = rc.stdout.decode('utf-8').splitlines()
+
+    matched = []
+    for container in sorted(containers):
+        cmd = ['container', 'get-prop', '--pool', pool, '--cont', container]
+        rc = run_daos_cmd(conf, cmd)
+        for line in rc.stdout.decode('utf-8').splitlines():
+            (key, value) = line.split(':', maxsplit=1)
+            if key == 'layout type':
+                if not posix or value.strip() == 'POSIX (1)':
+                    matched.append(container)
+                    return matched
+    return matched
+
 def show_cont(conf, pool):
     """Create a container and return a container list"""
     cmd = ['container', 'create', '--pool', pool]
@@ -911,6 +940,122 @@ def make_pool(daos):
     assert rc.returncode == 0
 
     return get_pool_list()
+
+def needs_dfuse(method):
+    """Decorator function for starting dfuse under posix_tests class"""
+    @functools.wraps(method)
+    def _helper(self):
+        self.dfuse = DFuse(self.server,
+                           self.conf,
+                           pool=self.pool,
+                           container=self.container)
+        self.dfuse.start(v_hint=method.__name__)
+        rc = method(self)
+        if self.dfuse.stop():
+            self.fatal_errors = True
+        return rc
+    return _helper
+
+
+class posix_tests():
+    """Class for adding standalone unit tests"""
+
+    def __init__(self, server, conf, pool=None, container=None):
+        self.server = server
+        self.conf = conf
+        self.pool = pool
+        self.container = container
+        self.dfuse = None
+        self.fatal_errors = False
+
+    def fail(self):
+        """Mark a test method as failed"""
+        raise NLTestFail
+
+    @needs_dfuse
+    def test_open_replaced(self):
+        """Test that fstat works on file clobbered by rename"""
+        fname = os.path.join(self.dfuse.dir, 'unlinked')
+        newfile = os.path.join(self.dfuse.dir, 'unlinked2')
+        ofd = open(fname, 'w')
+        nfd = open(newfile, 'w')
+        nfd.write('hello')
+        nfd.close()
+        print(os.fstat(ofd.fileno()))
+        os.rename(newfile, fname)
+        # This should fail, because the file has been deleted.
+        try:
+            print(os.fstat(ofd.fileno()))
+            self.fail()
+        except FileNotFoundError:
+            print('Failed to fstat() renamed file')
+        ofd.close()
+
+    @needs_dfuse
+    def test_open_rename(self):
+        """Check that fstat() on renamed files works as expected"""
+        fname = os.path.join(self.dfuse.dir, 'unlinked')
+        newfile = os.path.join(self.dfuse.dir, 'unlinked2')
+        ofd = open(fname, 'w')
+        pre = os.fstat(ofd.fileno())
+        print(pre)
+        os.rename(fname, newfile)
+        try:
+            post = os.fstat(ofd.fileno())
+            print(post)
+            self.fail()
+        except FileNotFoundError:
+            print('Failed to fstat() renamed file')
+        os.stat(newfile)
+        post = os.fstat(ofd.fileno())
+        print(post)
+        assert pre.st_ino == post.st_ino
+        ofd.close()
+
+    @needs_dfuse
+    def test_open_unlinked(self):
+        """Test that fstat works on unlinked file"""
+        fname = os.path.join(self.dfuse.dir, 'unlinked')
+        ofd = open(fname, 'w')
+        print(os.fstat(ofd.fileno()))
+        os.unlink(fname)
+        try:
+            print(os.fstat(ofd.fileno()))
+            self.fail()
+        except FileNotFoundError:
+            print('Failed to fstat() renamed file')
+        ofd.close()
+
+def run_posix_tests(server, conf, test=None):
+    """Run one or all posix tests"""
+
+    pools = get_pool_list()
+    while len(pools) < 1:
+        pools = make_pool(server)
+
+    # TODO: Update this to new container code once it's landed.
+    container = get_conts(conf, pools[0])
+
+    pt = posix_tests(server, conf, pool=pools[0], container=container[0])
+    if test:
+        obj = getattr(pt, 'test_{}'.format(test))
+        rc = obj()
+        print('rc from {} is {}'.format(test, rc))
+    else:
+
+        for fn in sorted(dir(pt)):
+            if not fn.startswith('test'):
+                continue
+            obj = getattr(pt, fn)
+            if not callable(obj):
+                continue
+
+            print('Calling {}'.format(fn))
+            rc = obj()
+            print('rc from {} is {}'.format(fn, rc))
+
+    # TODO: Remove container
+    return pt.fatal_errors
 
 def run_tests(dfuse):
     """Run some tests"""
@@ -1512,8 +1657,21 @@ def main():
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
     parser.add_argument('--dtx', action='store_true')
+    parser.add_argument('--test', help="Use '--test list' for list")
     parser.add_argument('mode', nargs='?')
     args = parser.parse_args()
+
+    if args.mode and args.test:
+        print('Cannot use mode and test')
+        sys.exit(1)
+
+    if args.test == 'list':
+        tests = []
+        for fn in dir(posix_tests):
+            if fn.startswith('test'):
+                tests.append(fn[5:])
+        print('Tests are: {}'.format(','.join(sorted(tests))))
+        return
 
     conf = load_conf()
 
@@ -1542,11 +1700,18 @@ def main():
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
+        fatal_errors.add_result(run_posix_tests(server, conf))
         test_pydaos_kv(server, conf)
         fatal_errors.add_result(test_alloc_fail(server, wf, conf))
+    elif args.test:
+        if args.test == 'all':
+            fatal_errors.add_result(run_posix_tests(server, conf))
+        else:
+            fatal_errors.add_result(run_posix_tests(server, conf, args.test))
     else:
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
+        fatal_errors.add_result(run_posix_tests(server, conf))
 
     if server.stop() != 0:
         fatal_errors.fail()

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -533,7 +533,7 @@ get_num_entries(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
 
 static int
 entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
-	   size_t len, struct stat *stbuf)
+	   size_t len, struct dfs_obj *obj, struct stat *stbuf)
 {
 	struct dfs_entry	entry = {0};
 	bool			exists;
@@ -548,6 +548,9 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 		return rc;
 
 	if (!exists)
+		return ENOENT;
+
+	if (obj && (obj->oid.hi != entry.oid.hi || obj->oid.lo != entry.oid.lo))
 		return ENOENT;
 
 	switch (entry.mode & S_IFMT) {
@@ -2942,7 +2945,7 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 		oh = parent->oh;
 	}
 
-	return entry_stat(dfs, DAOS_TX_NONE, oh, name, len, stbuf);
+	return entry_stat(dfs, DAOS_TX_NONE, oh, name, len, NULL, stbuf);
 }
 
 int
@@ -2963,7 +2966,7 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 
 
 	rc = entry_stat(dfs, DAOS_TX_NONE, oh, obj->name, strlen(obj->name),
-			stbuf);
+			obj, stbuf);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -3254,7 +3257,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	}
 
 out_stat:
-	rc = entry_stat(dfs, th, oh, obj->name, strlen(obj->name), stbuf);
+	rc = entry_stat(dfs, th, oh, obj->name, strlen(obj->name), obj, stbuf);
 
 out_obj:
 	daos_obj_close(oh, NULL);
