@@ -1212,7 +1212,7 @@ daos_event_priv_wait()
 	/* Wait on the event to complete */
 	while (evx->evx_status != DAOS_EVS_READY) {
 		rc = crt_progress_cond(evx->evx_ctx, DAOS_EQ_WAIT,
-                                 ev_progress_cb, &epa);
+			ev_progress_cb, &epa);
 
 		if (rc == 0)
 			rc = ev_thpriv.ev_error;
