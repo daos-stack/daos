@@ -766,7 +766,7 @@ class DaosObj(object):
             del self.tgt_rank_list[:]
             for i in range(0, shards):
                 self.tgt_rank_list.append(
-                    obj_layout_ptr[0].ol_shards[0][0].os_ranks[i])
+                    obj_layout_ptr[0].ol_shards[0][0].os_shard_data[i].sd_rank)
         else:
             raise DaosApiError("get_layout returned. RC: {0}".format(ret))
 

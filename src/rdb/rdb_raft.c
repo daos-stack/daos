@@ -2558,20 +2558,21 @@ rdb_raft_resign(struct rdb *db, uint64_t term)
 	struct rdb_raft_state	state;
 	int			rc;
 
-	ABT_mutex_lock(db->d_raft_mutex);
-	if (term != raft_get_current_term(db->d_raft) ||
-	    !raft_is_leader(db->d_raft)) {
+	if (db) {
+		ABT_mutex_lock(db->d_raft_mutex);
+		if (term != raft_get_current_term(db->d_raft) ||
+		    !raft_is_leader(db->d_raft)) {
+			ABT_mutex_unlock(db->d_raft_mutex);
+			return;
+		}
+		D_DEBUG(DB_MD, DF_DB": resigning from term "DF_U64"\n",
+			DP_DB(db), term);
+		rdb_raft_save_state(db, &state);
+		raft_become_follower(db->d_raft);
+		rc = rdb_raft_check_state(db, &state, 0 /* raft_rc */);
 		ABT_mutex_unlock(db->d_raft_mutex);
-		return;
+		D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	}
-
-	D_DEBUG(DB_MD, DF_DB": resigning from term "DF_U64"\n", DP_DB(db),
-		term);
-	rdb_raft_save_state(db, &state);
-	raft_become_follower(db->d_raft);
-	rc = rdb_raft_check_state(db, &state, 0 /* raft_rc */);
-	ABT_mutex_unlock(db->d_raft_mutex);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 }
 
 /* Call new election (campaign to be leader) by a follower */
