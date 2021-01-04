@@ -86,6 +86,10 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	rc = vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc, dss_ult_yield,
 			   (void *)cont->sc_agg_req);
 
+	/* Suppress csum error and continue on other epoch ranges */
+	if (rc == -DER_CSUM)
+		rc = 0;
+
 	/* Wake up GC ULT */
 	sched_req_wakeup(cont->sc_pool->spc_gc_req);
 	return rc;

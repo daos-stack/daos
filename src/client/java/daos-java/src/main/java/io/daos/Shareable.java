@@ -21,25 +21,48 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-package io.daos.dfs;
+package io.daos;
 
-/**
- * error code to message.
- */
-public class ErrorCode {
-  private final int code;
-  private final String msg;
+public abstract class Shareable {
 
-  public ErrorCode(int code, String msg) {
-    this.code = code;
-    this.msg = msg;
+  private volatile boolean inited;
+
+  private int refCnt;
+
+  protected boolean isInited() {
+    return inited;
   }
 
-  public int getCode() {
-    return code;
+  protected void setInited(boolean inited) {
+    this.inited = inited;
   }
 
-  public String getMsg() {
-    return msg;
+  /**
+   * increase reference count by one.
+   *
+   * @throws IllegalStateException if this client is disconnected.
+   */
+  protected synchronized void incrementRef() {
+    if (!inited) {
+      throw new IllegalStateException("DaosFsClient is not initialized or disconnected.");
+    }
+    refCnt++;
   }
+
+  /**
+   * decrease reference count by one.
+   */
+  protected synchronized void decrementRef() {
+    refCnt--;
+  }
+
+  /**
+   * get reference count.
+   *
+   * @return reference count
+   */
+  public synchronized int getRefCnt() {
+    return refCnt;
+  }
+
 }
