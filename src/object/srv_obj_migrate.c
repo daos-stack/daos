@@ -727,10 +727,6 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 
 		rc = mrone_obj_fetch(mrone, oh, sgls, &csum_iov_fetch);
 
-//		rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
-//				   mrone->mo_iod_num, mrone->mo_iods, sgls,
-//				   NULL, DIOF_TO_LEADER | DIOF_FOR_MIGRATION,
-//				   NULL, &csum_iov_fetch);
 		if (rc) {
 			D_ERROR("mrone_obj_fetch %d\n", rc);
 			return rc;
