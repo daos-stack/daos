@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -581,7 +581,8 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 
 	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
 			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL,
-			   DIOF_TO_LEADER | DIOF_FOR_MIGRATION, NULL, csum_iov_fetch);
+			   DIOF_TO_LEADER | DIOF_FOR_MIGRATION, NULL,
+			   csum_iov_fetch);
 
 	if (rc != 0)
 		return rc;
@@ -719,12 +720,19 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 		mrone->mo_epoch, fetch ? "yes":"no");
 
 	if (fetch) {
-		rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
-				   mrone->mo_iod_num, mrone->mo_iods, sgls,
-				   NULL, DIOF_TO_LEADER | DIOF_FOR_MIGRATION,
-				   NULL, &csum_iov_fetch);
+
+		rc = daos_iov_alloc(&csum_iov_fetch, CSUM_BUF_SIZE, false);
+		if (rc != 0)
+			D_GOTO(out, rc);
+
+		rc = mrone_obj_fetch(mrone, oh, sgls, &csum_iov_fetch);
+
+//		rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
+//				   mrone->mo_iod_num, mrone->mo_iods, sgls,
+//				   NULL, DIOF_TO_LEADER | DIOF_FOR_MIGRATION,
+//				   NULL, &csum_iov_fetch);
 		if (rc) {
-			D_ERROR("dsc_obj_fetch %d\n", rc);
+			D_ERROR("mrone_obj_fetch %d\n", rc);
 			return rc;
 		}
 
