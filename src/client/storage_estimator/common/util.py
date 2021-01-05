@@ -131,112 +131,169 @@ class CommonBase(object):
         return number
 
 
-class ProcessBase(CommonBase):
+class ObjectClass(CommonBase):
     def __init__(self, args):
-        super(ProcessBase, self).__init__()
-        self._args = args
+        super(ObjectClass, self).__init__()
+        self._dir_oclass = self._update_oclass(args, 'dir_oclass', 'S1')
+        self._file_oclass = self._update_oclass(args, 'file_oclass', 'SX')
         self.set_verbose(args.verbose)
-        self._meta = self._get_vos_meta(args)
-        self._process_block_values()
-        self._process_checksum()
 
-    def get_io_size(self):
-        return self._io_size
+    def print_pretty_status(self):
+        self._debug(
+            '{0:<13}{1:<10}{2:<10}{3:<9}{4:<9}{5:<11}'.format(
+                'FS Object',
+                'OClass',
+                '# Targets',
+                '# Stripe',
+                '# Parity',
+                '# Replicas'))
+        self._get_pretty_status('File', self._file_oclass)
+        self._get_pretty_status('Directory', self._dir_oclass)
 
-    def get_chunk_size(self):
-        return self._chunk_size
+    def validate_number_of_shards(self, num_shards):
+        min_shards = self._get_min_shards_required(self._dir_oclass)
+        if num_shards < min_shards:
+            return min_shards
 
-    def _parse_num_value(self, key_value, default_value):
-        op = vars(self._args)
-        value = op.get(key_value, default_value)
-        value = self._from_human(value)
-        self._check_positive_number(value)
+        min_shards = self._get_min_shards_required(self._file_oclass)
+        if num_shards < min_shards:
+            return min_shards
+
+        return 0
+
+    def validate_chunk_size(self, chunk_size):
+        if self.get_dir_parity():
+            if chunk_size % self.get_dir_stripe():
+                return True
+
+        if self.get_file_parity():
+            if chunk_size % self.get_file_stripe():
+                return True
+
+        return False
+
+    def is_ec_enabled(self):
+        if self.get_dir_parity():
+            return True
+        if self.get_file_parity():
+            return True
+        return False
+
+    def get_dir_targets(self):
+        return self._get_oclass_parameter(
+            self._dir_oclass, 'number_of_targets')
+
+    def get_dir_stripe(self):
+        return self._get_oclass_parameter(
+            self._dir_oclass, 'number_of_stripe_cells')
+
+    def get_dir_parity(self):
+        return self._get_oclass_parameter(
+            self._dir_oclass, 'number_of_parity_cells')
+
+    def get_dir_replicas(self):
+        return self._get_oclass_parameter(
+            self._dir_oclass, 'number_of_replicas')
+
+    def get_file_targets(self):
+        return self._get_oclass_parameter(
+            self._file_oclass, 'number_of_targets')
+
+    def get_file_stripe(self):
+        return self._get_oclass_parameter(
+            self._file_oclass, 'number_of_stripe_cells')
+
+    def get_file_parity(self):
+        return self._get_oclass_parameter(
+            self._file_oclass, 'number_of_parity_cells')
+
+    def get_file_replicas(self):
+        return self._get_oclass_parameter(
+            self._file_oclass, 'number_of_replicas')
+
+    def get_supported_oclass(self):
+        return self._get_oclass_definitions().keys()
+
+    def _get_min_shards_required(self, oclass_type):
+        parity = self._get_oclass_parameter(
+            oclass_type, 'number_of_parity_cells')
+        stripe = self._get_oclass_parameter(
+            oclass_type, 'number_of_stripe_cells')
+        targets = self._get_oclass_parameter(oclass_type, 'number_of_targets')
+        replicas = self._get_oclass_parameter(
+            oclass_type, 'number_of_replicas')
+
+        return max(stripe + parity, targets, replicas)
+
+    def _get_pretty_status(self, label, oclass_type):
+        targets = self._get_oclass_parameter(oclass_type, 'number_of_targets')
+
+        if targets == 0:
+            targets = 'all'
+
+        cells = self._get_oclass_parameter(
+            oclass_type, 'number_of_stripe_cells')
+        parity = self._get_oclass_parameter(
+            oclass_type, 'number_of_parity_cells')
+        replicas = self._get_oclass_parameter(
+            oclass_type, 'number_of_replicas')
+
+        self._debug('{0:<13}{1:<10}{2:<10}{3:<9}{4:<9}{5:<11}'.format(
+            label, oclass_type, targets, cells, parity, replicas))
+
+    def _update_oclass(self, args, key_value, default_value):
+        op = vars(args)
+
+        value = op.get(key_value)
+
+        supported_oclasses = self._get_oclass_definitions()
+
+        if value not in supported_oclasses:
+            raise ValueError(
+                'unknown object class "{0}", the supported objects are {1}:'.format(
+                    value, self.get_supported_oclass()))
+
         return value
 
-    def _process_scm_cutoff(self):
-        scm_cutoff = self._meta.get('scm_cutoff')
+    def _get_oclass_parameter(self, oclass_type, parameter_id):
+        ec_parameters = {
+            'number_of_targets': 0,
+            'number_of_stripe_cells': 1,
+            'number_of_parity_cells': 2,
+            'number_of_replicas': 3
+        }
+        return self._get_oclass_definitions(
+        )[oclass_type][ec_parameters[parameter_id]]
 
-        if 'scm_cutoff' in self._args and self._args.scm_cutoff:
-            scm_cutoff = self._parse_num_value('scm_cutoff', '4KiB')
-            self._meta['scm_cutoff'] = scm_cutoff
+    def _get_oclass_definitions(self):
+        return {
+            # S1 : shards=1, S2 means shards=2, ...
+            # SX : spreading across all targets within the pool
+            'S1': (1, 1, 0, 1),
+            'S2': (2, 1, 0, 1),
+            'S4': (4, 1, 0, 1),
+            'S8': (8, 1, 0, 1),
+            'SX': (0, 1, 0, 1),
+            # 2-way replicated object, it spreads across all targets within the
+            # pool
+            'RP_2GX': (0, 1, 0, 2),
+            # 3-way replicated object, it spreads across all targets within the
+            # pool
+            'RP_3GX': (0, 1, 0, 3),
+            # 8+2 Erasure Coded object, it spreads across all targets within
+            # the pool
+            'EC_8P2GX': (0, 8, 2, 1),
+            # 16+2 Erasure Coded object, it spreads across all targets within
+            # the pool
+            'EC_16P2GX': (0, 16, 2, 1)
+        }
 
-        return scm_cutoff
 
-    def _process_checksum(self):
-        self._csum_size = 0
-
-        csummers = self._meta.get('csummers')
-
-        if 'checksum' in self._args and self._args.checksum:
-            csum_name = self._args.checksum
-
-            if csum_name not in csummers:
-                raise ValueError(
-                    'unknown checksum algorithm: "{0}"'. format(csum_name))
-
-            csum_size = csummers[csum_name]
-            self._debug(
-                'using checksum "{0}" algorithm of size {1} bytes'.format(
-                    csum_name, csum_size))
-            self._csum_size = csum_size
-
-    def _process_block_values(self):
-        scm_cutoff = self._process_scm_cutoff()
-        io_size = self._parse_num_value('io_size', '128KiB')
-        chunk_size = self._parse_num_value('chunk_size', '1MiB')
-        self._debug('using scm_cutoff of {0} bytes'.format(scm_cutoff))
-        if io_size % scm_cutoff:
-            raise ValueError('io_size must be multiple of scm_cutoff')
-        self._debug('using io_size of {0} bytes'.format(io_size))
-        if chunk_size % io_size:
-            raise ValueError('chunk_size must be multiple of io_size')
-        self._debug('using chunk_size of {0} bytes'.format(chunk_size))
-        self._scm_cutoff = scm_cutoff
-        self._io_size = io_size
-        self._chunk_size = chunk_size
-
-    def _set_num_shards(self, args):
-        if 'num_shards' in args:
-            self._check_positive_number(args.num_shards)
-            self._num_shards = args.num_shards
-        else:
-            self._num_shards = 0
-
-    def _print_destination_file(self, file_name):
-        file_name = os.path.normpath(file_name)
-        self._debug('Output file: {0}'.format(file_name))
-
-    def _get_yaml_from_dfs(self, fse, use_average=False):
-        dfs_sb = get_dfs_sb_obj()
-
-        if use_average:
-            dfs = fse.get_dfs_average()
-        else:
-            dfs = fse.get_dfs()
-
-        container = dfs.get_container()
-        container.add_value(dfs_sb)
-        container.set_csum_size(self._csum_size)
-        container.set_csum_gran(self._chunk_size)
-        containers = Containers()
-        containers.add_value(container)
-        containers.set_num_shards(self._args.num_shards)
-
-        return containers.dump()
-
-    def _dump_yaml(self, yaml_str):
-        return yaml.safe_dump(yaml_str, default_flow_style=False)
-
-    def _load_yaml_from_file(self, file_name):
-        self._debug('loading yaml file {0}'.format(file_name))
-        try:
-            data = yaml.safe_load(open(file_name, 'r'))
-        except OSError as err:
-            raise Exception(
-                'Failed to open file {0} {1}'.format(
-                    file_name, err))
-
-        return data
+class Common(CommonBase):
+    def __init__(self, args):
+        self._args = args
+        self.set_verbose(args.verbose)
+        self._meta = self._get_vos_meta()
 
     def _create_file(self, file_name, buf):
         try:
@@ -255,13 +312,40 @@ class ProcessBase(CommonBase):
                 'Failed to open file {0} {1}'.format(
                     file_name, err))
 
+    def _get_vos_meta(self):
+        self._meta_str = self._create_vos_meta()
+
+        return yaml.safe_load(self._meta_str)
+
+    def _create_vos_meta(self):
+        vos_size = VOS_SIZE()
+        meta_str = vos_size.get_vos_size_str(self._args.alloc_overhead)
+
+        return meta_str
+
+    def _print_destination_file(self, file_name):
+        file_name = os.path.normpath(file_name)
+        self._debug('Output file: {0}'.format(file_name))
+
+    def _dump_yaml(self, yaml_str):
+        return yaml.safe_dump(yaml_str, default_flow_style=False)
+
+    def _load_yaml_from_file(self, file_name):
+        self._debug('loading yaml file {0}'.format(file_name))
+        try:
+            data = yaml.safe_load(open(file_name, 'r'))
+        except OSError as err:
+            raise Exception(
+                'Failed to open file {0} {1}'.format(
+                    file_name, err))
+
+        return data
+
     def _process_yaml(self, config_yaml):
         num_shards = config_yaml.get('num_shards', 1)
         self._debug('using {0} vos pools'.format(num_shards))
 
         overheads = MetaOverhead(self._args, num_shards, self._meta)
-
-        overheads.set_scm_cutoff(self._scm_cutoff)
 
         if 'containers' not in config_yaml:
             raise Exception(
@@ -280,44 +364,115 @@ class ProcessBase(CommonBase):
         self._debug('')
         overheads.print_report()
 
-    def _create_vos_meta(self):
-        vos_size = VOS_SIZE()
-        meta_str = vos_size.get_vos_size_str(self._args.alloc_overhead)
 
-        return meta_str
+class ProcessBase(Common):
+    def __init__(self, args):
+        super(ProcessBase, self).__init__(args)
+        self._oclass = ObjectClass(args)
+        self._process_block_values()
+        self._process_checksum()
+        self._num_shards = self._get_num_shards(args)
+        self._meta = self._update_vos_meta(args)
 
-    def _get_vos_meta(self, args):
-        self._meta_str = self._create_vos_meta()
-        if 'meta' in args and args.meta:
-            meta_yaml = self._load_yaml_from_file(args.meta)
+    def get_io_size(self):
+        return self._io_size
+
+    def get_chunk_size(self):
+        return self._chunk_size
+
+    def _update_vos_meta(self, args):
+        if args.meta:
+            return self._load_yaml_from_file(args.meta)
+
+        return self._meta
+
+    def _get_num_shards(self, args):
+        num_shards = args.num_shards
+        shards_required = self._oclass.validate_number_of_shards(num_shards)
+        if shards_required > 0:
+            raise ValueError(
+                'Insufficient shards. Wanted {0} given {1}'.format(
+                    shards_required, num_shards))
+
+        return num_shards
+
+    def _parse_num_value(self, key_value, default_value):
+        op = vars(self._args)
+        value = op.get(key_value, default_value)
+        value = self._from_human(value)
+        self._check_positive_number(value)
+        return value
+
+    def _process_scm_cutoff(self):
+        scm_cutoff = self._meta.get('scm_cutoff')
+
+        if self._args.scm_cutoff:
+            scm_cutoff = self._parse_num_value('scm_cutoff', '4KiB')
+            self._meta['scm_cutoff'] = scm_cutoff
+
+        return scm_cutoff
+
+    def _process_checksum(self):
+        self._csum_size = 0
+
+        csummers = self._meta.get('csummers')
+
+        if self._args.checksum:
+            csum_name = self._args.checksum
+
+            if csum_name not in csummers:
+                raise ValueError(
+                    'unknown checksum algorithm: "{0}", the supported checksum algorithms are: {1}'. format(
+                        csum_name, csummers.keys()))
+
+            csum_size = csummers[csum_name]
+            self._debug(
+                'using checksum "{0}" algorithm of size {1} bytes'.format(
+                    csum_name, csum_size))
+            self._csum_size = csum_size
+
+    def _process_block_values(self):
+        scm_cutoff = self._process_scm_cutoff()
+        io_size = self._parse_num_value('io_size', '128KiB')
+        chunk_size = self._parse_num_value('chunk_size', '1MiB')
+        self._debug('using scm_cutoff of {0} bytes'.format(scm_cutoff))
+
+        if io_size % scm_cutoff:
+            raise ValueError('io_size must be multiple of scm_cutoff')
+
+        self._debug('using io_size of {0} bytes'.format(io_size))
+
+        if chunk_size % io_size:
+            raise ValueError('chunk_size must be multiple of io_size')
+
+        if self._oclass.validate_chunk_size(chunk_size):
+            raise ValueError(
+                'chunk_size must be multiple of number of stripes')
+
+        self._debug('using chunk_size of {0} bytes'.format(chunk_size))
+        self._scm_cutoff = scm_cutoff
+        self._io_size = io_size
+        self._chunk_size = chunk_size
+        self._oclass.print_pretty_status()
+
+    def _get_yaml_from_dfs(self, fse, use_average=False):
+        dfs_sb = get_dfs_sb_obj()
+
+        if use_average:
+            dfs = fse.get_dfs_average()
         else:
-            meta_yaml = yaml.safe_load(self._meta_str)
+            dfs = fse.get_dfs()
 
-        return meta_yaml
+        container = dfs.get_container()
+        container.add_value(dfs_sb)
+        container.set_csum_size(self._csum_size)
+        container.set_csum_gran(self._chunk_size)
 
-    def _process_stats(self, container):
-        stats = {
-            'objects': 0,
-            'dkeys': 0,
-            'akeys': 0,
-            'values': 0,
-            'dkey_size': 0,
-            'akey_size': 0,
-            'value_size': 0}
+        containers = Containers()
+        containers.add_value(container)
+        containers.set_num_shards(self._num_shards)
 
-        for object in container['objects']:
-            stats['objects'] += 1
-            for dkey in object['dkeys']:
-                stats['dkey_size'] += dkey.get('size', 0)
-                stats['dkeys'] += 1
-                for akey in dkey['akeys']:
-                    stats['akey_size'] += akey.get('size', 0)
-                    stats['akeys'] += 1
-                    for value in akey['values']:
-                        stats['value_size'] += value.get('size', 0)
-                        stats['values'] += 1
-
-        return stats
+        return containers.dump()
 
     def _print_summary(self, config_yaml):
         flat_container = {}

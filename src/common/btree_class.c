@@ -158,7 +158,7 @@ destroy_tree(daos_handle_t tree, d_iov_t *key)
 		umem_class_init(&attr.ba_uma, &umm);
 
 		rc_tmp = umem_tx_begin(&umm, NULL);
-		if (rc_tmp != 0 && !daos_handle_is_inval(hdl_tmp)) {
+		if (rc_tmp != 0 && daos_handle_is_valid(hdl_tmp)) {
 			dbtree_close(hdl_tmp);
 			return rc_tmp;
 		}
@@ -169,7 +169,7 @@ destroy_tree(daos_handle_t tree, d_iov_t *key)
 			rc_tmp = dbtree_delete(tree, BTR_PROBE_EQ, key, NULL);
 		}
 
-		if (!daos_handle_is_inval(hdl_tmp))
+		if (daos_handle_is_valid(hdl_tmp))
 			dbtree_close(hdl_tmp);
 
 		if (rc_tmp != 0)

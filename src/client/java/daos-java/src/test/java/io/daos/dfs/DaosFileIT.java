@@ -1,6 +1,7 @@
 package io.daos.dfs;
 
 import com.sun.security.auth.module.UnixSystem;
+import io.daos.*;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -21,8 +22,8 @@ public class DaosFileIT {
 
   @BeforeClass
   public static void setup() throws Exception {
-    poolId = System.getProperty("pool_id", DaosFsClientTestBase.DEFAULT_POOL_ID);
-    contId = System.getProperty("cont_id", DaosFsClientTestBase.DEFAULT_CONT_ID);
+    poolId = DaosTestBase.getPoolId();
+    contId = DaosTestBase.getContId();
 
     client = DaosFsClientTestBase.prepareFs(poolId, contId);
   }
@@ -334,7 +335,7 @@ public class DaosFileIT {
   @AfterClass
   public static void teardown() throws Exception {
     if (client != null) {
-      client.disconnect();
+      client.close();
     }
   }
 }

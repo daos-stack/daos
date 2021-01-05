@@ -26,10 +26,7 @@ from __future__ import print_function
 
 import sys
 
-from apricot import skipForTicket
-
-from avocado       import Test
-from avocado       import main
+from apricot       import TestWithoutServers
 
 sys.path.append('./util')
 
@@ -37,11 +34,11 @@ sys.path.append('./util')
 # pylint: disable=wrong-import-position
 from cart_utils import CartUtils
 
-class CartNoPmixLauncherOneNodeTest(Test):
+class CartNoPmixLauncherOneNodeTest(TestWithoutServers):
     """
     Runs basic CaRT no_pmix_launcher tests
 
-    :avocado: tags=all,cart,pr,daily_regression,no_pmix_launcher,one_node
+    :avocado: recursive
     """
     def setUp(self):
         """ Test setup """

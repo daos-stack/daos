@@ -96,7 +96,7 @@ dtx_free_dbca(struct dtx_batched_commit_args *dbca)
 {
 	struct ds_cont_child	*cont = dbca->dbca_cont;
 
-	if (!daos_handle_is_inval(cont->sc_dtx_cos_hdl)) {
+	if (daos_handle_is_valid(cont->sc_dtx_cos_hdl)) {
 		dbtree_destroy(cont->sc_dtx_cos_hdl, NULL);
 		cont->sc_dtx_cos_hdl = DAOS_HDL_INVAL;
 	}
@@ -325,7 +325,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 		daos_unit_oid_t *leader_oid, struct dtx_id *dti_cos,
 		int dti_cos_cnt, struct dtx_memberships *mbs, bool leader,
 		bool solo, bool sync, bool dist, bool migration,
-		struct dtx_handle *dth)
+		bool ignore_uncommitted, struct dtx_handle *dth)
 {
 	if (sub_modification_cnt > DTX_SUB_MOD_MAX) {
 		D_ERROR("Too many modifications in a single transaction:"
@@ -353,6 +353,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_local_retry = 0;
 	dth->dth_dist = dist ? 1 : 0;
 	dth->dth_for_migration = migration ? 1 : 0;
+	dth->dth_ignore_uncommitted = ignore_uncommitted ? 1 : 0;
 
 	dth->dth_dti_cos = dti_cos;
 	dth->dth_dti_cos_count = dti_cos_cnt;
@@ -545,7 +546,7 @@ out:
 /**
  * Prepare the leader DTX handle in DRAM.
  *
- * \param cont		[IN]	Pointer to the container.
+ * \param coh		[IN]	Container handle.
  * \param dti		[IN]	The DTX identifier.
  * \param epoch		[IN]	Epoch for the DTX.
  * \param sub_modification_cnt
@@ -563,7 +564,7 @@ out:
  * \return			Zero on success, negative value if error.
  */
 int
-dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
+dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 		 struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
 		 uint32_t pm_ver, daos_unit_oid_t *leader_oid,
 		 struct dtx_id *dti_cos, int dti_cos_cnt,
@@ -587,12 +588,13 @@ dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 		dlh->dlh_sub_cnt = tgt_cnt;
 	}
 
-	rc = dtx_handle_init(dti, cont->sc_hdl, epoch, sub_modification_cnt,
-			     pm_ver, leader_oid, dti_cos, dti_cos_cnt, mbs,
-			     true, (flags & DTX_SOLO) ? true : false,
+	rc = dtx_handle_init(dti, coh, epoch, sub_modification_cnt, pm_ver,
+			     leader_oid, dti_cos, dti_cos_cnt, mbs, true,
+			     (flags & DTX_SOLO) ? true : false,
 			     (flags & DTX_SYNC) ? true : false,
 			     (flags & DTX_DIST) ? true : false,
-			     (flags & DTX_FOR_MIGRATION) ? true : false, dth);
+			     (flags & DTX_FOR_MIGRATION) ? true : false,
+			     false, dth);
 
 	/* XXX: For non-solo DTX, the leader and non-leader will make each own
 	 *	local modification in parallel. If the non-leader goes so fast
@@ -871,7 +873,7 @@ out:
 /**
  * Prepare the DTX handle in DRAM.
  *
- * \param cont		[IN]	Pointer to the container.
+ * \param coh		[IN]	Container handle.
  * \param dti		[IN]	The DTX identifier.
  * \param epoch		[IN]	Epoch for the DTX.
  * \param sub_modification_cnt
@@ -887,7 +889,7 @@ out:
  * \return			Zero on success, negative value if error.
  */
 int
-dtx_begin(struct ds_cont_child *cont, struct dtx_id *dti,
+dtx_begin(daos_handle_t coh, struct dtx_id *dti,
 	  struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
 	  uint32_t pm_ver, daos_unit_oid_t *leader_oid,
 	  struct dtx_id *dti_cos, int dti_cos_cnt, uint32_t flags,
@@ -895,11 +897,13 @@ dtx_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 {
 	int	rc;
 
-	rc = dtx_handle_init(dti, cont->sc_hdl, epoch, sub_modification_cnt,
+	rc = dtx_handle_init(dti, coh, epoch, sub_modification_cnt,
 			     pm_ver, leader_oid, dti_cos, dti_cos_cnt, mbs,
 			     false, false, false,
 			     (flags & DTX_DIST) ? true : false,
-			     (flags & DTX_FOR_MIGRATION) ? true : false, dth);
+			     (flags & DTX_FOR_MIGRATION) ? true : false,
+			     (flags & DTX_IGNORE_UNCOMMITTED) ? true : false,
+			     dth);
 
 	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, "
 		"dti_cos_cnt %d, flags %x: "DF_RC"\n",

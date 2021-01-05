@@ -183,7 +183,7 @@ tree_cache_create_internal(daos_handle_t toh, unsigned int tree_class,
 	*rootp = val_iov.iov_buf;
 	D_ASSERT(*rootp != NULL);
 out:
-	if (rc < 0 && !daos_handle_is_inval(root.root_hdl))
+	if (rc < 0 && daos_handle_is_valid(root.root_hdl))
 		dbtree_destroy(root.root_hdl, NULL);
 	return rc;
 }
@@ -310,9 +310,9 @@ migrate_pool_tls_destroy(struct migrate_pool_tls *tls)
 					     true /* force */);
 	if (tls->mpt_done_eventual)
 		ABT_eventual_free(&tls->mpt_done_eventual);
-	if (!daos_handle_is_inval(tls->mpt_root_hdl))
+	if (daos_handle_is_valid(tls->mpt_root_hdl))
 		obj_tree_destroy(tls->mpt_root_hdl);
-	if (!daos_handle_is_inval(tls->mpt_migrated_root_hdl))
+	if (daos_handle_is_valid(tls->mpt_migrated_root_hdl))
 		obj_tree_destroy(tls->mpt_migrated_root_hdl);
 	d_list_del(&tls->mpt_list);
 	D_FREE(tls);
