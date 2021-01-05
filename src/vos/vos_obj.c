@@ -250,7 +250,7 @@ punch_dkey:
 	vos_ilog_fetch_finish(&dkey_info);
 	vos_ilog_fetch_finish(&akey_info);
 
-	if (!daos_handle_is_inval(toh))
+	if (daos_handle_is_valid(toh))
 		key_tree_release(toh, 0);
 
 	return rc;

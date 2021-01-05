@@ -182,7 +182,7 @@ fi
 # now run it!
 # shellcheck disable=SC2086
 if ! ./launch.py -cris"${process_cores}"a -th "${LOGS_THRESHOLD}" \
-                 -ts "${TEST_NODES}" ${NVME_ARG} "${TEST_TAG_ARR[*]}"; then
+                 -ts "${TEST_NODES}" ${NVME_ARG} ${TEST_TAG_ARR[*]}; then
     rc=${PIPESTATUS[0]}
 else
     rc=0

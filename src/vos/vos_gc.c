@@ -911,7 +911,7 @@ vos_gc_pool_run(daos_handle_t poh, int credits,
 	struct vos_pool	*pool = vos_hdl2pool(poh);
 	int		 rc, total = 0;
 
-	D_ASSERT(!daos_handle_is_inval(poh));
+	D_ASSERT(daos_handle_is_valid(poh));
 	if (!gc_have_pool(pool))
 		return 0; /* nothing to reclaim for this pool */
 
@@ -958,7 +958,7 @@ vos_gc_pool_run(daos_handle_t poh, int credits,
 inline bool
 vos_gc_pool_idle(daos_handle_t poh)
 {
-	D_ASSERT(!daos_handle_is_inval(poh));
+	D_ASSERT(daos_handle_is_valid(poh));
 	return !gc_have_pool(vos_hdl2pool(poh));
 }
 
