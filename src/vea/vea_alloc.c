@@ -86,7 +86,7 @@ reserve_hint(struct vea_space_info *vsi, uint32_t blk_cnt,
 	d_iov_set(&key, &vfe.vfe_blk_off, sizeof(vfe.vfe_blk_off));
 	d_iov_set(&val, NULL, 0);
 
-	D_ASSERT(!daos_handle_is_inval(vsi->vsi_free_btr));
+	D_ASSERT(daos_handle_is_valid(vsi->vsi_free_btr));
 	rc = dbtree_fetch(vsi->vsi_free_btr, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT,
 			  &key, NULL, &val);
 	if (rc)
@@ -361,7 +361,7 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 	D_ASSERT(vfe->vfe_blk_cnt > 0);
 
 	btr_hdl = vsi->vsi_md_free_btr;
-	D_ASSERT(!daos_handle_is_inval(btr_hdl));
+	D_ASSERT(daos_handle_is_valid(btr_hdl));
 
 	D_DEBUG(DB_IO, "Persistent alloc ["DF_U64", %u]\n",
 		vfe->vfe_blk_off, vfe->vfe_blk_cnt);

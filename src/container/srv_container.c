@@ -48,26 +48,6 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 
 /** Container Property knowledge */
 
-/** Get the redundancy factor from a containers properites. */
-uint32_t
-daos_cont_prop2redunfac(daos_prop_t *props)
-{
-	struct daos_prop_entry *prop =
-		daos_prop_entry_get(props, DAOS_PROP_CO_REDUN_FAC);
-
-	return prop == NULL ? DAOS_PROP_CO_REDUN_RF1 : (uint32_t)prop->dpe_val;
-}
-
-/** Get the redundancy level from a containers properites. */
-uint32_t
-daos_cont_prop2redunlvl(daos_prop_t *props)
-{
-	struct daos_prop_entry *prop =
-		daos_prop_entry_get(props, DAOS_PROP_CO_REDUN_LVL);
-
-	return prop == NULL ? DAOS_PROP_CO_REDUN_NODE : (uint32_t)prop->dpe_val;
-}
-
 /**
  * This function verifies that the container meets it's redundancy requirements
  * based on the current pool map. The redundancy requirement is measured
@@ -85,11 +65,11 @@ daos_cont_prop2redunlvl(daos_prop_t *props)
 static int
 cont_verify_redun_req(struct pool_map *pmap, daos_prop_t *props)
 {
-	uint32_t num_failed;
-	uint32_t num_allowed_failures;
-	int rc = 0;
-	int redun_fac = daos_cont_prop2redunfac(props);
-	int redun_lvl = daos_cont_prop2redunlvl(props);
+	int		num_failed;
+	int		num_allowed_failures;
+	int		redun_fac = daos_cont_prop2redunfac(props);
+	int		redun_lvl = daos_cont_prop2redunlvl(props);
+	int		rc = 0;
 
 	switch (redun_lvl) {
 	case DAOS_PROP_CO_REDUN_RACK:
@@ -112,25 +92,9 @@ cont_verify_redun_req(struct pool_map *pmap, daos_prop_t *props)
 	 * before pool_open fails and an error is reported.
 	 */
 	num_failed = rc;
-	switch (redun_fac) {
-	case DAOS_PROP_CO_REDUN_RF0:
-		num_allowed_failures = 0;
-		break;
-	case DAOS_PROP_CO_REDUN_RF1:
-		num_allowed_failures = 1;
-		break;
-	case DAOS_PROP_CO_REDUN_RF2:
-		num_allowed_failures = 2;
-		break;
-	case DAOS_PROP_CO_REDUN_RF3:
-		num_allowed_failures = 3;
-		break;
-	case DAOS_PROP_CO_REDUN_RF4:
-		num_allowed_failures = 4;
-		break;
-	default:
-		return -DER_INVAL;
-	}
+	num_allowed_failures = daos_cont_rf2allowedfailures(redun_fac);
+	if (num_allowed_failures < 0)
+		return num_allowed_failures;
 
 	if (num_allowed_failures >= num_failed)
 		return 0;

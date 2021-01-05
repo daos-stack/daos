@@ -23,45 +23,7 @@
 
 package control
 
-import (
-	"fmt"
-	"strconv"
-	"strings"
-
-	"github.com/pkg/errors"
-
-	"github.com/daos-stack/daos/src/control/lib/hostlist"
-)
-
-// ParseHostList validates and deduplicates the given list of host
-// strings. Any hosts missing a port will have one added according
-// to the defaultPort parameter.
-func ParseHostList(in []string, defaultPort int) (out []string, err error) {
-	var set *hostlist.HostSet
-	set, err = hostlist.CreateSet(strings.Join(in, ","))
-	if err != nil {
-		return nil, err
-	}
-	out = strings.Split(set.DerangedString(), ",")
-
-	for i, host := range out {
-		hostPort := strings.Split(host, ":")
-		switch len(hostPort) {
-		case 1:
-			out[i] = fmt.Sprintf("%s:%d", host, defaultPort)
-		case 2:
-			_, err = strconv.Atoi(hostPort[1])
-		default:
-			err = errors.New("host should conform to hostname[:port]")
-		}
-
-		if err != nil {
-			return nil, errors.Wrapf(err, "invalid host %q", host)
-		}
-	}
-
-	return
-}
+import "github.com/daos-stack/daos/src/control/common"
 
 // getRequestHosts returns a list of control plane addresses for
 // the request. The logic for determining the list is as follows:
@@ -93,7 +55,7 @@ func getRequestHosts(cfg *Config, req targetChooser) (hosts []string, err error)
 		return nil, FaultConfigBadControlPort
 	}
 
-	hosts, err = ParseHostList(hosts, cfg.ControlPort)
+	hosts, err = common.ParseHostList(hosts, cfg.ControlPort)
 	if err != nil {
 		return nil, err
 	}

@@ -52,4 +52,7 @@ struct dts_io_credit *dts_credit_take(struct dts_context *tsc);
  */
 int dts_credit_drain(struct dts_context *tsc);
 
+/** return an unused credit */
+void dts_credit_return(struct dts_context *tsc, struct dts_io_credit *cred);
+
 #endif /* __DTS_COMMON_H__ */
