@@ -214,17 +214,17 @@ close:
 static void
 smd_store_close(void)
 {
-	if (!daos_handle_is_inval(smd_store.ss_dev_hdl)) {
+	if (daos_handle_is_valid(smd_store.ss_dev_hdl)) {
 		dbtree_close(smd_store.ss_dev_hdl);
 		smd_store.ss_dev_hdl = DAOS_HDL_INVAL;
 	}
 
-	if (!daos_handle_is_inval(smd_store.ss_pool_hdl)) {
+	if (daos_handle_is_valid(smd_store.ss_pool_hdl)) {
 		dbtree_close(smd_store.ss_pool_hdl);
 		smd_store.ss_pool_hdl = DAOS_HDL_INVAL;
 	}
 
-	if (!daos_handle_is_inval(smd_store.ss_tgt_hdl)) {
+	if (daos_handle_is_valid(smd_store.ss_tgt_hdl)) {
 		dbtree_close(smd_store.ss_tgt_hdl);
 		smd_store.ss_tgt_hdl = DAOS_HDL_INVAL;
 	}

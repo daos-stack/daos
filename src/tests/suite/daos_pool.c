@@ -939,7 +939,7 @@ list_containers_test(void **state)
 
 	/***** Test: retrieve number of containers in pool *****/
 	nconts = nconts_orig = 0xDEF0; /* Junk value (e.g., uninitialized) */
-	assert_false(daos_handle_is_inval(lcarg->tpool.poh));
+	assert_true(daos_handle_is_valid(lcarg->tpool.poh));
 	rc = daos_pool_list_cont(lcarg->tpool.poh, &nconts, NULL /* conts */,
 			NULL /* ev */);
 	print_message("daos_pool_list_cont returned rc=%d\n", rc);

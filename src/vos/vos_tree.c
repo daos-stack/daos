@@ -1209,7 +1209,7 @@ obj_tree_init(struct vos_object *obj)
 	struct vos_btr_attr *ta	= &vos_btr_attrs[0];
 	int		     rc;
 
-	if (!daos_handle_is_inval(obj->obj_toh))
+	if (daos_handle_is_valid(obj->obj_toh))
 		return 0;
 
 	D_ASSERT(obj->obj_df);
@@ -1250,7 +1250,7 @@ obj_tree_fini(struct vos_object *obj)
 	int	rc = 0;
 
 	/* NB: tree is created inplace, so don't need to destroy */
-	if (!daos_handle_is_inval(obj->obj_toh)) {
+	if (daos_handle_is_valid(obj->obj_toh)) {
 		D_ASSERT(obj->obj_df);
 		rc = dbtree_close(obj->obj_toh);
 		obj->obj_toh = DAOS_HDL_INVAL;
