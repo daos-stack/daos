@@ -48,9 +48,9 @@ class FindCmd(DfuseTestBase):
             containers using dfuse and link them together such that they form
             a tree with a common root directory. Then, run the find(1) command
             to locate specific files in various parts of the tree. If the
-            parameter challenger_path is provided. The test will run on the
-            path provided and compare the performance of the provided file
-            system against DAOS File System.
+            parameter challenger_path is provided, the test will run on it
+            and compare the performance of the provided file system against
+            DAOS File System.
 
         :avocado: tags=all,hw,daosio,medium,ib2,full_regression,findcmd
         """
@@ -71,16 +71,16 @@ class FindCmd(DfuseTestBase):
         self.add_pool(connect=False)
 
         if not dfs_path:
-            temp_dfs_path = _generate_temp_path_name("/tmp", "dfs_test_")
+            temp_dfs_path = self._generate_temp_path_name("/tmp", "dfs_test_")
             dfs_path = temp_dfs_path
 
         if challenger_path:
-            challenger_path = _generate_temp_path_name(
+            challenger_path = self._generate_temp_path_name(
                 challenger_path, "test_")
 
         def _run_test(test_root, dir_tree_paths):
 
-            self._create_dir_trees(
+            self._create_dir_forest(
                 dir_tree_paths,
                 height,
                 subdirs_per_node,
@@ -132,17 +132,27 @@ class FindCmd(DfuseTestBase):
             self._compare_results(daos_stats, challenger_stats, "unique_file")
 
     def _compare_results(self, daos_stats, challenger_stats, tag):
+        """
+        Compare the stats of DAOS and the challenger. If the challenger is
+        faster than DAOS, the test fails.
+        """
         daos_max_time, _, _ = daos_stats.get_stat(tag)
         challenger_max_time, _, _ = challenger_stats.get_stat(tag)
 
         if daos_max_time >= challenger_max_time:
-            self.log.warning(
+            self.log.error(
                 "Impossible, DAOS is slower running '%s' tag", tag)
+            self.fail("Test was expected to pass but it failed")
         else:
             self.log.info(
                 "DAOS is equal or faster running '%s' tag", tag)
 
     def _run_test(self, test_path, samples, containers, needles):
+        """
+        Perform the actual test, run find(1) to locate the needle files in
+        the directory forest. If the number of files located does not match
+        the number of expected files. The test fails.
+        """
         profiler = general_utils.SimpleProfiler()
         profiler.set_logger(self.log.info)
 
@@ -176,6 +186,10 @@ class FindCmd(DfuseTestBase):
         return profiler
 
     def _setup_containers(self, dfs_path, cont_count, dfuses, containers):
+        """
+        Setup as many containers as the test requested. Return the paths where
+        the containers were mounted.
+        """
         mount_dirs = []
         for count in range(cont_count):
             self.add_container(self.pool)
@@ -192,13 +206,14 @@ class FindCmd(DfuseTestBase):
 
         return mount_dirs
 
-    def _create_dir_trees(
+    def _create_dir_forest(
             self,
             paths,
             height,
             subdirs,
             files_per_node,
             needles):
+        """Create a directory tree on each path listed in the paths variable"""
 
         remote_pythonpath = ":".join(sys.path)
 
@@ -223,11 +238,16 @@ class FindCmd(DfuseTestBase):
                     cmd, error_hosts))
 
     def _teardown_dfuse(self, dfuses):
+        """Unmount all the containers that were created for the test"""
         for dfuse in dfuses:
             dfuse.stop()
         self.dfuse = None
 
     def _setup_challenger(self, test_path, directories):
+        """
+        Create the paths where the directory trees of the challenger will be
+        created.
+        """
         challenger_dirs = []
 
         self.log.info("Challenger test root %s", test_path)
@@ -240,15 +260,21 @@ class FindCmd(DfuseTestBase):
 
         return challenger_dirs
 
+    @classmethod
+    def _generate_temp_path_name(self, root, prefix):
+        """
+        Creates path that can be used to create temporary files or directories.
+        The return value is concatenation of root and a random string prefixed
+        with the prefix value.
+        """
+        letters = string.ascii_lowercase + string.digits
+        random_name = "".join(random.choice(letters) for _ in range(8))
 
-def _generate_temp_path_name(root, prefix):
-    letters = string.ascii_lowercase + string.digits
-    random_name = "".join(random.choice(letters) for _ in range(8))
-
-    return os.path.join(root, "{}{}".format(prefix, random_name))
+        return os.path.join(root, "{}{}".format(prefix, random_name))
 
 
 def _populate_dir_tree():
+    """Wrapper function to create a directory tree and its needle files"""
     path = sys.argv[1]
     height = int(sys.argv[2])
     subdirs_per_node = int(sys.argv[3])

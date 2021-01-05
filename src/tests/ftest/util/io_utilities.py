@@ -146,10 +146,14 @@ class DirTree(object):
         self._logger = fn
 
     def _log(self, msg):
+        """If logger function is set, print log messages"""
         if self._logger:
             self._logger(msg)
 
     def _create_dir_tree(self, current_path, current_height):
+        """
+        Create the actual directory tree using depth-first search approach.
+        """
         if current_height <= 0:
             return
 
@@ -166,6 +170,11 @@ class DirTree(object):
             self._create_dir_tree(new_path, current_height - 1)
 
     def _created_remaining_needles(self):
+        """
+        If the number of needle files requested is bigger than the number of
+        directories at the bottom of the directory tree. Create the remaining
+        needle files at random directories at the bottom of the tree.
+        """
         if self._needles_count <= 0:
             return
 
@@ -177,6 +186,7 @@ class DirTree(object):
             os.close(fd)
 
     def _create_needle(self, current_path, current_height):
+        """If we reach the bottom of the tree, create a *.needle file"""
         if current_height != 1:
             return
 

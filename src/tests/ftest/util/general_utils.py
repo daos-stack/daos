@@ -75,7 +75,7 @@ class SimpleProfiler(object):
         elapsed_time = end_time - start_time
         self._log(
             "Execution time: {0}".format(
-                _pretty_time(elapsed_time)))
+                self._pretty_time(elapsed_time)))
 
         if tag not in self._stats:
             self._stats[tag] = [0, []]
@@ -98,7 +98,7 @@ class SimpleProfiler(object):
         """
         data = self._stats.get(tag, [0, []])
 
-        return _calculate_metrics(data)
+        return self._calculate_metrics(data[1])
 
     def set_logger(self, fn):
         """
@@ -120,40 +120,49 @@ class SimpleProfiler(object):
             "Function Tag", "Hits", "Max", "Min", "Average"))
 
         for fname, data in self._stats.items():
-            max_time, min_time, avg_time = _calculate_metrics(data)
+            max_time, min_time, avg_time = self._calculate_metrics(data[1])
             self._pmsg(
                 "{0:20} {1:5} {2:10} {3:10} {4:10}".format(
                     fname,
                     data[0],
-                    _pretty_time(max_time),
-                    _pretty_time(min_time),
-                    _pretty_time(avg_time)))
+                    self._pretty_time(max_time),
+                    self._pretty_time(min_time),
+                    self._pretty_time(avg_time)))
 
     def _log(self, msg):
+        """If logger function is set, print log messages"""
         if self._logger:
             self._logger(msg)
 
     def _pmsg(self, msg):
+        """
+        Print messages using the logger. If it has not been set, print
+        messages using python print() function.
+        """
         if self._logger:
             self._log(msg)
         else:
             print(msg)
 
+    @classmethod
+    def _pretty_time(self, ftime):
+        """Convert to pretty time string"""
+        return time.strftime("%H:%M:%S", time.gmtime(ftime))
 
-def _pretty_time(ftime):
-    return time.strftime("%H:%M:%S", time.gmtime(ftime))
+    @classmethod
+    def _calculate_metrics(self, data):
+        """
+        Calculate the maximum, minimum and average values of a given list.
+        """
+        max_time = max(data)
+        min_time = min(data)
 
+        if len(data):
+            avg_time = sum(data) / len(data)
+        else:
+            avg_time = 0
 
-def _calculate_metrics(data):
-    max_time = max(data[1])
-    min_time = min(data[1])
-
-    if len(data[1]):
-        avg_time = sum(data[1]) / len(data[1])
-    else:
-        avg_time = 0
-
-    return max_time, min_time, avg_time
+        return max_time, min_time, avg_time
 
 
 def human_to_bytes(size):
