@@ -401,12 +401,12 @@ class DaosServer():
         # /mnt/daos is mounted but empty.  It will be remounted and formatted
         # /mnt/daos exists and has data in.  It will be used as is.
         start = time.time()
-        time.sleep(5)
 
         cmd = ['storage', 'format']
         while True:
             time.sleep(0.5)
             rc = self.run_dmg(cmd)
+            print(rc)
             ready = False
             if rc.returncode == 1:
                 for line in rc.stdout.decode('utf-8').splitlines():
@@ -416,7 +416,7 @@ class DaosServer():
                         cmd = ['storage', 'format', '--reformat']
             if ready:
                 break
-            if time.time() - start > 20:
+            if time.time() - start > 30:
                 raise Exception("Failed to format")
 
         print('Format completion in {:.2f} seconds'.format(time.time() - start))
