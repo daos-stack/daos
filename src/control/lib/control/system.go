@@ -145,7 +145,7 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 type SystemNotifyReq struct {
 	unaryRequest
 	msRequest
-	Event    events.Event
+	Event    *events.RASEvent
 	Sequence uint64
 }
 
@@ -210,9 +210,9 @@ type EventForwarder struct {
 }
 
 // OnEvent implements the events.Handler interface.
-func (fwdr *EventForwarder) OnEvent(ctx context.Context, evt events.Event) {
+func (fwdr *EventForwarder) OnEvent(ctx context.Context, evt *events.RASEvent) {
 	switch {
-	case common.InterfaceIsNil(evt):
+	case evt == nil:
 		fwdr.client.Debug("skip event forwarding, nil event")
 		return
 	case len(fwdr.accessPts) == 0:

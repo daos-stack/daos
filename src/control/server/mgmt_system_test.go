@@ -117,11 +117,11 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 }
 
 type eventsDispatched struct {
-	rx     []events.Event
+	rx     []*events.RASEvent
 	cancel context.CancelFunc
 }
 
-func (d *eventsDispatched) OnEvent(ctx context.Context, e events.Event) {
+func (d *eventsDispatched) OnEvent(ctx context.Context, e *events.RASEvent) {
 	d.rx = append(d.rx, e)
 	d.cancel()
 }
@@ -132,9 +132,9 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 	for name, tc := range map[string]struct {
 		nilReq        bool
 		zeroSeq       bool
-		event         events.Event
+		event         *events.RASEvent
 		expResp       *mgmtpb.ClusterEventResp
-		expDispatched []events.Event
+		expDispatched []*events.RASEvent
 		expErr        error
 	}{
 		"nil request": {
@@ -146,7 +146,7 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			expResp: &mgmtpb.ClusterEventResp{
 				Sequence: 1,
 			},
-			expDispatched: []events.Event{eventRankExit},
+			expDispatched: []*events.RASEvent{eventRankExit},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

@@ -777,7 +777,7 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		members    Members
-		event      events.Event
+		event      *events.RASEvent
 		expMembers Members
 	}{
 		"nil event": {

@@ -47,7 +47,7 @@ type tally struct {
 	rx         []string
 }
 
-func (tly *tally) OnEvent(_ context.Context, evt Event) {
+func (tly *tally) OnEvent(_ context.Context, evt *RASEvent) {
 	tly.Lock()
 	defer tly.Unlock()
 

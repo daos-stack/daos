@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,28 +33,23 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
-// Event all custom event types must implement this interface.
-//
-// To/From Proto methods allow conversion regardless of underlying type.
-type Event interface {
-	GetID() RASID
-	GetType() RASTypeID
-	ToProto() (*mgmtpb.RASEvent, error)
-	FromProto(*mgmtpb.RASEvent) error
+// RASExtendedInfo provides extended information for an event.
+type RASExtendedInfo interface {
+	isExtendedInfo()
 }
 
 // NewFromProto creates an Event from given protobuf RASEvent message.
-func NewFromProto(pbEvent *mgmtpb.RASEvent) (Event, error) {
+func NewFromProto(pbEvent *mgmtpb.RASEvent) (*RASEvent, error) {
+	evt := new(RASEvent)
+
 	switch RASID(pbEvent.Id) {
-	case RASRankExit:
-		rankExit := new(RankExit)
-		return Event(rankExit), rankExit.FromProto(pbEvent)
-	case RASPoolSvcReplicasUpdate:
-		ranksUpdate := new(PoolSvcReplicasUpdate)
-		return Event(ranksUpdate), ranksUpdate.FromProto(pbEvent)
+	case RASRankExit, RASPoolSvcReplicasUpdate:
+		return evt, evt.FromProto(pbEvent)
 	default:
 		return nil, errors.Errorf("unsupported event ID: %s", pbEvent.Id)
 	}
@@ -70,9 +65,9 @@ func (id RASID) String() string {
 // RASID constant definitions matching those used when creating events either in
 // the control or data (iosrv) planes.
 const (
-	RASRankExit              RASID = "rank_exit"
-	RASRankNoResp            RASID = "rank_no_response"
-	RASPoolSvcReplicasUpdate RASID = "pool_svc_replicas_update"
+	RASRankExit              RASID = C.RAS_RANK_EXIT
+	RASRankNoResp            RASID = C.RAS_RANK_NO_RESP
+	RASPoolSvcReplicasUpdate RASID = C.RAS_POOL_SVC_REPS_UPDATE
 )
 
 // RASSeverityID describes the severity of a given RAS event.
@@ -116,13 +111,14 @@ func (typ RASTypeID) Uint32() uint32 {
 
 // RASEvent describes details of a specific RAS event.
 type RASEvent struct {
-	Timestamp string        `json:"timestamp"`
-	Msg       string        `json:"msg"`
-	Hostname  string        `json:"hostname"`
-	Rank      uint32        `json:"rank"`
-	ID        RASID         `json:"id"`
-	Severity  RASSeverityID `json:"severity"`
-	Type      RASTypeID     `json:"type"`
+	Timestamp    string          `json:"timestamp"`
+	Msg          string          `json:"msg"`
+	Hostname     string          `json:"hostname"`
+	Rank         uint32          `json:"rank"`
+	ID           RASID           `json:"id"`
+	Severity     RASSeverityID   `json:"severity"`
+	Type         RASTypeID       `json:"type"`
+	ExtendedInfo RASExtendedInfo `json:"extended_info"`
 }
 
 // MarshalJSON marshals RASEvent to JSON.
@@ -158,4 +154,54 @@ func (evt *RASEvent) UnmarshalJSON(data []byte) error {
 	evt.Type = RASTypeID(from.Type)
 
 	return nil
+}
+
+func (evt *RASEvent) GetID() RASID {
+	return evt.ID
+}
+
+func (evt *RASEvent) GetType() RASTypeID {
+	return evt.Type
+}
+
+func (evt *RASEvent) ToProto() (*mgmtpb.RASEvent, error) {
+	pbEvt := new(mgmtpb.RASEvent)
+	if err := convert.Types(evt, pbEvt); err != nil {
+		return nil, errors.Wrapf(err, "converting %T->%T", evt, pbEvt)
+	}
+
+	if common.InterfaceIsNil(evt.ExtendedInfo) {
+		return pbEvt, nil
+	}
+
+	var err error
+	switch ei := evt.ExtendedInfo.(type) {
+	case *RankStateInfo:
+		pbEvt.ExtendedInfo, err = RankStateInfoToProto(ei)
+	case *PoolSvcInfo:
+		pbEvt.ExtendedInfo, err = PoolSvcInfoToProto(ei)
+	}
+
+	return pbEvt, err
+}
+
+func (evt *RASEvent) FromProto(pbEvt *mgmtpb.RASEvent) (err error) {
+	*evt = RASEvent{
+		Timestamp: pbEvt.Timestamp,
+		Msg:       pbEvt.Msg,
+		Hostname:  pbEvt.Hostname,
+		Rank:      pbEvt.Rank,
+		ID:        RASID(pbEvt.Id),
+		Severity:  RASSeverityID(pbEvt.Severity),
+		Type:      RASTypeID(pbEvt.Type),
+	}
+
+	switch ei := pbEvt.GetExtendedInfo().(type) {
+	case *mgmtpb.RASEvent_RankStateInfo:
+		evt.ExtendedInfo, err = RankStateInfoFromProto(ei)
+	case *mgmtpb.RASEvent_PoolSvcInfo:
+		evt.ExtendedInfo, err = PoolSvcInfoFromProto(ei)
+	}
+
+	return
 }

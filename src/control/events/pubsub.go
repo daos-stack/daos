@@ -38,7 +38,7 @@ import (
 type Handler interface {
 	// OnEvent takes an event to be processed and a context,
 	// implementation must return on context.Done().
-	OnEvent(context.Context, Event)
+	OnEvent(context.Context, *RASEvent)
 }
 
 type subscriber struct {
@@ -50,7 +50,7 @@ type subscriber struct {
 // receipt of events pertaining to a particular topic.
 type PubSub struct {
 	log         logging.Logger
-	events      chan Event
+	events      chan *RASEvent
 	subscribers chan *subscriber
 	handlers    map[RASTypeID][]Handler
 	disabledIDs map[RASID]struct{}
@@ -62,7 +62,7 @@ type PubSub struct {
 func NewPubSub(parent context.Context, log logging.Logger) *PubSub {
 	ps := &PubSub{
 		log:         log,
-		events:      make(chan Event),
+		events:      make(chan *RASEvent),
 		subscribers: make(chan *subscriber),
 		handlers:    make(map[RASTypeID][]Handler),
 		disabledIDs: make(map[RASID]struct{}),
@@ -96,7 +96,7 @@ func (ps *PubSub) EnableEventIDs(ids ...RASID) {
 
 // Publish passes an event to the event channel to be processed by subscribers.
 // Ignore disabled events.
-func (ps *PubSub) Publish(event Event) {
+func (ps *PubSub) Publish(event *RASEvent) {
 	if common.InterfaceIsNil(event) {
 		ps.log.Error("nil event")
 		return

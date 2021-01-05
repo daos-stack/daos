@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -448,36 +448,32 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int) (*RankSet, *hostlist.
 }
 
 // OnEvent handles events on channel and updates member states accordingly.
-func (m *Membership) OnEvent(_ context.Context, evt events.Event) {
-	if common.InterfaceIsNil(evt) {
-		m.log.Error("nil event")
-		return
-	}
-
-	switch e := evt.(type) {
-	case *events.RankExit:
-		if e == nil {
-			m.log.Error("nil RankExit event received")
+func (m *Membership) OnEvent(_ context.Context, evt *events.RASEvent) {
+	switch evt.ID {
+	case events.RASRankExit:
+		ei := evt.GetRankStateInfo()
+		if ei == nil {
+			m.log.Error("no extended info in RankExit event received")
 			return
 		}
 		m.log.Debugf("processing RAS event %q from rank %d on host %q",
-			e.RAS.Msg, e.RAS.Rank, e.RAS.Hostname)
+			evt.Msg, evt.Rank, evt.Hostname)
 
 		// TODO: sanity check that the correct member is being updated by
 		// performing lookup on provided hostname and matching returned
 		// addresses with the member address with matching rank.
 
 		if err := m.UpdateMemberStates(MemberResults{
-			NewMemberResult(Rank(e.RAS.Rank),
-				errors.Wrap(e.ExtendedInfo.ExitErr, e.RAS.Msg),
+			NewMemberResult(Rank(evt.Rank),
+				errors.Wrap(ei.ExitErr, evt.Msg),
 				MemberStateErrored),
 		}, true); err != nil {
 			m.log.Errorf("updating member states: %s", err)
 			return
 		}
 
-		member, _ := m.Get(Rank(e.RAS.Rank))
-		m.log.Debugf("update rank %d to %+v (%s)", e.RAS.Rank, member,
+		member, _ := m.Get(Rank(evt.Rank))
+		m.log.Debugf("update rank %d to %+v (%s)", evt.Rank, member,
 			member.Info)
 	}
 }

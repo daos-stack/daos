@@ -838,39 +838,35 @@ func (db *Database) UpdatePoolService(ps *PoolService) error {
 }
 
 // OnEvent handles events and updates system database accordingly.
-func (db *Database) OnEvent(_ context.Context, evt events.Event) {
-	if common.InterfaceIsNil(evt) {
-		db.log.Error("nil event")
-		return
-	}
-
-	switch e := evt.(type) {
-	case *events.PoolSvcReplicasUpdate:
-		if e == nil {
-			db.log.Error("nil PoolSvcReplicasUpdate event received")
+func (db *Database) OnEvent(_ context.Context, evt *events.RASEvent) {
+	switch evt.ID {
+	case events.RASPoolSvcReplicasUpdate:
+		ei := evt.GetPoolSvcInfo()
+		if ei == nil {
+			db.log.Error("no extended info in PoolSvcReplicasUpdate event received")
 			return
 		}
 		db.log.Debugf("processing RAS event %q with info %+v on host %q",
-			e.RAS.Msg, e.ExtendedInfo, e.RAS.Hostname)
+			evt.Msg, ei, evt.Hostname)
 
-		uuid, err := uuid.Parse(e.ExtendedInfo.PoolUUID)
+		uuid, err := uuid.Parse(ei.PoolUUID)
 		if err != nil {
 			db.log.Errorf("failed to parse pool UUID %q: %s",
-				e.ExtendedInfo.PoolUUID, err)
+				ei.PoolUUID, err)
 			return
 		}
 
 		ps, err := db.FindPoolServiceByUUID(uuid)
 		if err != nil {
 			db.log.Errorf("failed to find pool with UUID %q: %s",
-				e.ExtendedInfo.PoolUUID, err)
+				ei.PoolUUID, err)
 			return
 		}
 
 		db.log.Debugf("update pool %s (state=%s) svc ranks %v->%v",
-			ps.PoolUUID, ps.State, ps.Replicas, e.ExtendedInfo.SvcReplicas)
+			ps.PoolUUID, ps.State, ps.Replicas, ei.SvcReplicas)
 
-		ps.Replicas = RanksFromUint32(e.ExtendedInfo.SvcReplicas)
+		ps.Replicas = RanksFromUint32(ei.SvcReplicas)
 
 		if err := db.UpdatePoolService(ps); err != nil {
 			db.log.Errorf("failed to apply pool service update: %s", err)

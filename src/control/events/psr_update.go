@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,8 +26,6 @@ package events
 import (
 	"time"
 
-	"github.com/pkg/errors"
-
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -40,68 +38,34 @@ type PoolSvcInfo struct {
 	RaftLeaderTerm uint64   `json:"version"`
 }
 
-// PoolSvcReplicasUpdate is a custom event type that implements the Event interface.
-type PoolSvcReplicasUpdate struct {
-	RAS          *RASEvent
-	ExtendedInfo *PoolSvcInfo
-}
+func (psi *PoolSvcInfo) isExtendedInfo() {}
 
-// GetID implements the method on the interface to return event ID.
-func (evt *PoolSvcReplicasUpdate) GetID() RASID { return evt.RAS.ID }
-
-// GetType implements the method on the interface to return event type.
-func (evt *PoolSvcReplicasUpdate) GetType() RASTypeID { return evt.RAS.Type }
-
-// FromProto unpacks protobuf RAS event into this PoolSvcReplicasUpdate instance,
-// extracting ExtendedInfo variant into custom event specific fields.
-func (evt *PoolSvcReplicasUpdate) FromProto(pbEvt *mgmtpb.RASEvent) error {
-	evt.RAS = &RASEvent{
-		Timestamp: pbEvt.Timestamp,
-		Msg:       pbEvt.Msg,
-		Hostname:  pbEvt.Hostname,
-		Rank:      pbEvt.Rank,
-		ID:        RASID(pbEvt.Id),
-		Severity:  RASSeverityID(pbEvt.Severity),
-		Type:      RASTypeID(pbEvt.Type),
-	}
-
-	pbInfo := pbEvt.GetPoolSvcInfo()
-	if pbInfo == nil {
-		return errors.Errorf("unexpected oneof, want %T got %T",
-			&mgmtpb.RASEvent_PoolSvcInfo{}, pbInfo)
-	}
-
-	evt.ExtendedInfo = new(PoolSvcInfo)
-	if err := convert.Types(pbInfo, evt.ExtendedInfo); err != nil {
-		return errors.Wrapf(err, "converting %T->%T", pbInfo, evt.ExtendedInfo)
+// GetPoolSvcInfo returns extended info if of type PoolSvcInfo.
+func (evt *RASEvent) GetPoolSvcInfo() *PoolSvcInfo {
+	if ei, ok := evt.ExtendedInfo.(*PoolSvcInfo); ok {
+		return ei
 	}
 
 	return nil
 }
 
-// ToProto packs this PoolSvcReplicasUpdate instance into a protobuf RAS event, encoding
-// custom event specific fields into the equivalent ExtendedInfo oneof variant.
-func (evt *PoolSvcReplicasUpdate) ToProto() (*mgmtpb.RASEvent, error) {
-	pbEvt := new(mgmtpb.RASEvent)
-	if err := convert.Types(evt.RAS, pbEvt); err != nil {
-		return nil, errors.Wrapf(err, "converting %T->%T", evt.RAS, pbEvt)
-	}
+// PoolSvcInfoFromProto converts event info from proto to native format.
+func PoolSvcInfoFromProto(pbInfo *mgmtpb.RASEvent_PoolSvcInfo) (*PoolSvcInfo, error) {
+	psi := new(PoolSvcInfo)
 
-	pbInfo := new(mgmtpb.PoolSvcEventInfo)
-	if err := convert.Types(evt.ExtendedInfo, pbInfo); err != nil {
-		return nil, errors.Wrapf(err, "converting %T->%T", evt.ExtendedInfo, pbInfo)
-	}
-
-	pbEvt.ExtendedInfo = &mgmtpb.RASEvent_PoolSvcInfo{
-		PoolSvcInfo: pbInfo,
-	}
-
-	return pbEvt, nil
+	return psi, convert.Types(pbInfo.PoolSvcInfo, psi)
 }
 
-// NewPoolSvcReplicasUpdateEvent creates a specific PoolSvcReplicasUpdate event from given inputs.
-func NewPoolSvcReplicasUpdateEvent(hostname string, rank uint32, poolUUID string, svcReplicas []uint32, leaderTerm uint64) Event {
-	evt := &RASEvent{
+// PoolSvcInfoToProto converts event info from native to proto format.
+func PoolSvcInfoToProto(psi *PoolSvcInfo) (*mgmtpb.RASEvent_PoolSvcInfo, error) {
+	pbInfo := &mgmtpb.RASEvent_PoolSvcInfo{PoolSvcInfo: &mgmtpb.PoolSvcEventInfo{}}
+
+	return pbInfo, convert.Types(psi, pbInfo.PoolSvcInfo)
+}
+
+// NewPoolSvcRanksUpdateEvent creates a specific PoolSvcRanksUpdate event from given inputs.
+func NewPoolSvcReplicasUpdateEvent(hostname string, rank uint32, poolUUID string, svcReplicas []uint32, leaderTerm uint64) *RASEvent {
+	return &RASEvent{
 		Timestamp: common.FormatTime(time.Now()),
 		Msg:       "DAOS pool service replica rank list updated",
 		ID:        RASPoolSvcReplicasUpdate,
@@ -109,10 +73,6 @@ func NewPoolSvcReplicasUpdateEvent(hostname string, rank uint32, poolUUID string
 		Rank:      rank,
 		Type:      RASTypeStateChange,
 		Severity:  RASSeverityError,
-	}
-
-	return &PoolSvcReplicasUpdate{
-		RAS: evt,
 		ExtendedInfo: &PoolSvcInfo{
 			PoolUUID:       poolUUID,
 			SvcReplicas:    svcReplicas,

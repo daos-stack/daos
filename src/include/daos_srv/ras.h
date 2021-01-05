@@ -30,6 +30,10 @@
 
 #define DAOS_RAS_EVENT_STR_MAX_LEN 64
 
+#define RAS_RANK_EXIT "rank_exit"
+#define RAS_RANK_NO_RESP "rank_no_response"
+#define RAS_POOL_SVC_REPS_UPDATE "pool_svc_replicas_update"
+
 enum ras_event_sev {
 	RAS_SEV_FATAL	= 1,
 	RAS_SEV_WARN,
