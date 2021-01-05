@@ -38,6 +38,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
@@ -273,7 +274,8 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				harness.started.SetTrue()
 
 				ms, db := system.MockMembership(t, log, mockTCPResolver)
-				tc.mgmtSvc = newMgmtSvc(harness, ms, db)
+				tc.mgmtSvc = newMgmtSvc(harness, ms, db,
+					events.NewPubSub(context.Background(), log))
 			}
 			tc.mgmtSvc.log = log
 

@@ -111,7 +111,7 @@ obj_rw_complete(crt_rpc_t *rpc, unsigned int map_version,
 	struct obj_rw_in	*orwi = crt_req_get(rpc);
 	int			 rc;
 
-	if (!daos_handle_is_inval(ioh)) {
+	if (daos_handle_is_valid(ioh)) {
 		bool update = obj_rpc_is_update(rpc);
 
 		if (update) {
@@ -340,7 +340,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 			struct bio_sglist *bsgl;
 			bool deduped_skip = true;
 
-			D_ASSERT(!daos_handle_is_inval(ioh));
+			D_ASSERT(daos_handle_is_valid(ioh));
 			bsgl = vos_iod_sgl_at(ioh, i);
 			if (bsgls_dup) {	/* dedup verify case */
 				rc = vos_dedup_dup_bsgl(ioh, bsgl,
@@ -1056,7 +1056,7 @@ obj_dedup_verify(daos_handle_t ioh, struct bio_sglist *bsgls_dup, int sgl_nr)
 	struct bio_sglist	*bsgl, *bsgl_dup;
 	int			 i, j, rc;
 
-	D_ASSERT(!daos_handle_is_inval(ioh));
+	D_ASSERT(daos_handle_is_valid(ioh));
 	D_ASSERT(bsgls_dup != NULL);
 
 	for (i = 0; i < sgl_nr; i++) {
@@ -1867,7 +1867,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	epoch.oe_first = orw->orw_epoch_first;
 	epoch.oe_flags = orf_to_dtx_epoch_flags(orw->orw_flags);
 
-	rc = dtx_begin(ioc.ioc_coc, &orw->orw_dti, &epoch, 1,
+	rc = dtx_begin(ioc.ioc_coc->sc_hdl, &orw->orw_dti, &epoch, 1,
 		       orw->orw_map_ver, &orw->orw_oid,
 		       orw->orw_dti_cos.ca_arrays,
 		       orw->orw_dti_cos.ca_count,
@@ -2033,7 +2033,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 			dtx_flags = DTX_FOR_MIGRATION;
 
 re_fetch:
-		rc = dtx_begin(ioc.ioc_coc, &orw->orw_dti, &epoch, 0,
+		rc = dtx_begin(ioc.ioc_coc->sc_hdl, &orw->orw_dti, &epoch, 0,
 			       orw->orw_map_ver, &orw->orw_oid,
 			       NULL, 0, dtx_flags, NULL, &dth);
 		if (rc != 0)
@@ -2155,8 +2155,8 @@ again:
 	 * the RPC to other replicas.
 	 */
 
-	rc = dtx_leader_begin(ioc.ioc_coc, &orw->orw_dti, &epoch, 1, version,
-			      &orw->orw_oid, dti_cos, dti_cos_cnt,
+	rc = dtx_leader_begin(ioc.ioc_coc->sc_hdl, &orw->orw_dti, &epoch, 1,
+			      version, &orw->orw_oid, dti_cos, dti_cos_cnt,
 			      tgts, tgt_cnt, dtx_flags, mbs, &dlh);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for update "DF_RC".\n",
@@ -2425,8 +2425,9 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		flags = DTX_FOR_MIGRATION;
 
 again:
-	rc = dtx_begin(ioc->ioc_coc, &oei->oei_dti, &epoch, 0, oei->oei_map_ver,
-		       &oei->oei_oid, NULL, 0, flags, NULL, &dth);
+	rc = dtx_begin(ioc->ioc_coc->sc_hdl, &oei->oei_dti, &epoch, 0,
+		       oei->oei_map_ver, &oei->oei_oid, NULL, 0, flags,
+		       NULL, &dth);
 	if (rc != 0)
 		goto failed;
 
@@ -2790,7 +2791,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	epoch.oe_flags = orf_to_dtx_epoch_flags(opi->opi_flags);
 
 	/* Start the local transaction */
-	rc = dtx_begin(ioc.ioc_coc, &opi->opi_dti, &epoch, 1,
+	rc = dtx_begin(ioc.ioc_coc->sc_hdl, &opi->opi_dti, &epoch, 1,
 		       opi->opi_map_ver, &opi->opi_oid,
 		       opi->opi_dti_cos.ca_arrays,
 		       opi->opi_dti_cos.ca_count,
@@ -3016,8 +3017,8 @@ again:
 	 * the RPC to other replicas.
 	 */
 
-	rc = dtx_leader_begin(ioc.ioc_coc, &opi->opi_dti, &epoch, 1, version,
-			      &opi->opi_oid, dti_cos, dti_cos_cnt,
+	rc = dtx_leader_begin(ioc.ioc_coc->sc_hdl, &opi->opi_dti, &epoch, 1,
+			      version, &opi->opi_oid, dti_cos, dti_cos_cnt,
 			      tgts, tgt_cnt, dtx_flags, mbs, &dlh);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for punch "DF_RC".\n",
@@ -3120,7 +3121,7 @@ again:
 	epoch.oe_first = okqi->okqi_epoch_first;
 	epoch.oe_flags = orf_to_dtx_epoch_flags(okqi->okqi_flags);
 
-	rc = dtx_begin(ioc.ioc_coc, &okqi->okqi_dti, &epoch, 0,
+	rc = dtx_begin(ioc.ioc_coc->sc_hdl, &okqi->okqi_dti, &epoch, 0,
 		       okqi->okqi_map_ver, &okqi->okqi_oid, NULL, 0, 0, NULL,
 		       &dth);
 	if (rc != 0)
@@ -3784,7 +3785,7 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 	if (oci->oci_flags & ORF_DTX_SYNC)
 		dtx_flags |= DTX_SYNC;
 
-	rc = dtx_begin(ioc->ioc_coc, &dcsh->dcsh_xid, &dcsh->dcsh_epoch,
+	rc = dtx_begin(ioc->ioc_coc->sc_hdl, &dcsh->dcsh_xid, &dcsh->dcsh_epoch,
 		       dcde->dcde_write_cnt, oci->oci_map_ver,
 		       &dcsh->dcsh_leader_oid, NULL, 0, dtx_flags,
 		       dcsh->dcsh_mbs, &dth);
@@ -4023,7 +4024,7 @@ ds_obj_dtx_leader_ult(void *arg)
 	if (tgt_cnt <= 1 && dcde->dcde_write_cnt <= 1)
 		dtx_flags |= DTX_SOLO;
 
-	rc = dtx_leader_begin(dca->dca_ioc->ioc_coc, &dcsh->dcsh_xid,
+	rc = dtx_leader_begin(dca->dca_ioc->ioc_coc->sc_hdl, &dcsh->dcsh_xid,
 			      &dcsh->dcsh_epoch, dcde->dcde_write_cnt,
 			      oci->oci_map_ver, &dcsh->dcsh_leader_oid,
 			      NULL, 0, tgts, tgt_cnt - 1, dtx_flags,

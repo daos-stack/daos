@@ -73,7 +73,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			rb, _ := proto.Marshal(&mgmtpb.GetAttachInfoResp{})
 			cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, nil)
 			srv.setDrpcClient(newMockDrpcClient(cfg))
-			tc.mgmtSvc = newMgmtSvc(harness, nil, system.MockDatabase(t, log))
+			tc.mgmtSvc = newMgmtSvc(harness, nil, system.MockDatabase(t, log), nil)
 			tc.mgmtSvc.clientNetworkCfg = tc.clientNetworkCfg
 			gotResp, gotErr := tc.mgmtSvc.GetAttachInfo(context.TODO(), tc.req)
 			if gotErr != nil {

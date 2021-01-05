@@ -28,6 +28,7 @@ import java.nio.ByteBuffer;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
+import io.daos.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -167,7 +168,7 @@ public class DaosFile {
     }
     // parse path to get parent and name.
     // dfs lookup parent and then dfs open
-    objId = client.createNewFile(dfsPtr, parentPath, name, mode, accessFlags, objectType.name(), chunkSize,
+    objId = client.createNewFile(dfsPtr, parentPath, name, mode, accessFlags, objectType.nameWithoutOc(), chunkSize,
             createParent);
     createCleaner();
   }
