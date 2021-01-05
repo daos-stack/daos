@@ -1746,7 +1746,7 @@ obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard,
 	struct daos_oclass_attr	*oca;
 	uint64_t		 stripe_rec_nr, cell_rec_nr, rx_idx;
 
-	oca = obj_get_oca(cb_args->obj, false);
+	oca = obj_get_oca(cb_args->obj);
 	if (oca == NULL || !DAOS_OC_IS_EC(oca)) {
 		*result_recx = *reply_recx;
 		return;

@@ -296,7 +296,7 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
-	D_ASSERT(!daos_handle_is_inval(tls->rebuild_tree_hdl));
+	D_ASSERT(daos_handle_is_valid(tls->rebuild_tree_hdl));
 
 	tls->rebuild_pool_obj_count++;
 	val.eph = epoch;
@@ -590,6 +590,10 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	vos_iter_param_t		param = { 0 };
 	struct vos_iter_anchors		anchor = { 0 };
 	daos_handle_t			coh;
+	struct dtx_handle		dth = { 0 };
+	struct dtx_id			dti = { 0 };
+	struct dtx_epoch		epoch = { 0 };
+	daos_unit_oid_t			oid = { 0 };
 	int				rc;
 
 	if (uuid_compare(arg->co_uuid, entry->ie_couuid) == 0) {
@@ -605,6 +609,10 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return rc;
 	}
 
+	epoch.oe_value = rpt->rt_stable_epoch;
+	rc = dtx_begin(coh, &dti, &epoch, 0, rpt->rt_rebuild_ver,
+		       &oid, NULL, 0, DTX_IGNORE_UNCOMMITTED, NULL, &dth);
+	D_ASSERT(rc == 0);
 	memset(&param, 0, sizeof(param));
 	param.ip_hdl = coh;
 	param.ip_epr.epr_lo = 0;
@@ -612,7 +620,8 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	param.ip_flags = VOS_IT_FOR_MIGRATION;
 	uuid_copy(arg->co_uuid, entry->ie_couuid);
 	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor,
-			 rebuild_obj_scan_cb, NULL, arg, NULL);
+			 rebuild_obj_scan_cb, NULL, arg, &dth);
+	dtx_end(&dth, NULL, rc);
 	vos_cont_close(coh);
 
 	*acts |= VOS_ITER_CB_YIELD;
