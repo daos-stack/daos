@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2558,6 +2558,10 @@ rdb_raft_resign(struct rdb *db, uint64_t term)
 	struct rdb_raft_state	state;
 	int			rc;
 
+	if (db == NULL) {
+		D_ERROR("db cannot be NULL\n");
+		return;
+	}
 	ABT_mutex_lock(db->d_raft_mutex);
 	if (term != raft_get_current_term(db->d_raft) ||
 	    !raft_is_leader(db->d_raft)) {

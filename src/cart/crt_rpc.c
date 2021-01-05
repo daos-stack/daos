@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -205,6 +205,25 @@ static struct crt_proto_rpc_format crt_internal_rpcs[] = {
 static struct crt_proto_rpc_format crt_fi_rpcs[] = {
 	CRT_FI_RPCS_LIST
 };
+
+#undef X
+
+#define X(a, b, c, d, e) case a: return #a;
+
+/* Helper function to convert internally registered RPC opc to str */
+char
+*crt_opc_to_str(crt_opcode_t opc)
+{
+	if (crt_opc_is_swim(opc))
+		return "SWIM";
+
+	switch (opc) {
+	CRT_INTERNAL_RPCS_LIST
+	CRT_FI_RPCS_LIST
+	default:
+		return "DAOS";
+	}
+}
 
 #undef X
 

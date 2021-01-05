@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -629,20 +629,21 @@ crt_req_timedout(struct crt_rpc_priv *rpc_priv)
 static inline uint64_t
 crt_set_timeout(struct crt_rpc_priv *rpc_priv)
 {
-	uint32_t	timeout_sec;
 	uint64_t	sec_diff;
 
 	D_ASSERT(rpc_priv != NULL);
 
-	timeout_sec = rpc_priv->crp_timeout_sec > 0 ?
-		      rpc_priv->crp_timeout_sec : crt_gdata.cg_timeout;
+	if (rpc_priv->crp_timeout_sec == 0)
+		rpc_priv->crp_timeout_sec = crt_gdata.cg_timeout;
 
-	sec_diff = d_timeus_secdiff(timeout_sec);
+	sec_diff = d_timeus_secdiff(rpc_priv->crp_timeout_sec);
 	rpc_priv->crp_timeout_ts = sec_diff;
 
 	return sec_diff;
 }
 
+/* Convert opcode to string. Only returns string for internal RPCs */
+char *crt_opc_to_str(crt_opcode_t opc);
 
 /* crt_corpc.c */
 int crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv);
