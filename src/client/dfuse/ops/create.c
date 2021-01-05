@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,15 +77,15 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 			mode);
 
 	rc = dfs_open2(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
-		       mode, fi->flags, 0, 0, NULL, &ie->ie_stat, &ie->ie_obj);
+		       mode, fi->flags, 0, 0, NULL, &ie->ie_stat, &oh->doh_obj);
 	if (rc) {
 		DFUSE_TRA_DEBUG(parent, "dfs_open() failed %d", rc);
 		D_GOTO(err, rc);
 	}
 
 	/** duplicate the file handle for the fuse handle */
-	rc = dfs_dup(parent->ie_dfs->dfs_ns, ie->ie_obj, fi->flags,
-		     &oh->doh_obj);
+	rc = dfs_dup(parent->ie_dfs->dfs_ns, oh->doh_obj, O_RDWR,
+		     &ie->ie_obj);
 	if (rc) {
 		DFUSE_TRA_DEBUG(parent, "dfs_dup() failed %d", rc);
 		D_GOTO(release1, rc);
@@ -125,7 +125,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	return;
 release1:
-	dfs_release(ie->ie_obj);
+	dfs_release(oh->doh_obj);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	D_FREE(oh);

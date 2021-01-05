@@ -1488,6 +1488,8 @@ cont_query_hdlr(struct cmd_args_s *ap)
 	printf("Latest Persistent Snapshot: %i\n",
 		(int)cont_info.ci_lsnapshot);
 	printf("Highest Aggregated Epoch: "DF_U64"\n", cont_info.ci_hae);
+	printf("Container redundancy factor: %d\n", cont_info.ci_redun_fac);
+
 	/* TODO: list snapshot epoch numbers, including ~80 column wrap. */
 
 	if (ap->oid.hi || ap->oid.lo) {

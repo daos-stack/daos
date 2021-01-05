@@ -1011,6 +1011,28 @@ def run_tests(dfuse):
     symlink_dest = 'missing_dest'
     os.symlink(symlink_dest, symlink_name)
     assert symlink_dest == os.readlink(symlink_name)
+
+    # Note that this doesn't test dfs because fuse will do a
+    # lookup to check if the file exists rather than just trying
+    # to create it.
+    fname = os.path.join(dfuse.dir, 'test_file4')
+    fd = os.open(fname, os.O_CREAT | os.O_EXCL)
+    os.close(fd)
+    try:
+        fd = os.open(fname, os.O_CREAT | os.O_EXCL)
+        os.close(fd)
+        assert False
+    except OSError as e:
+        assert e.errno == errno.EEXIST
+    os.unlink(fname)
+
+    # DAOS-6238
+    fname = os.path.join(path, 'test_file5')
+    ofd = os.open(fname, os.O_CREAT | os.O_RDONLY | os.O_EXCL)
+    assert_file_size_fd(ofd, 0)
+    os.close(ofd)
+    os.chmod(fname, stat.S_IRUSR)
+
     readdir_test(dfuse, 10)
 
 def dfuse_wrapper(server, conf):
@@ -1059,20 +1081,6 @@ def readdir_test(dfuse, count, test_all=False):
     print(files)
     print(len(files))
     assert len(files) == count
-
-    # Note that this doesn't test dfs because fuse will do a
-    # lookup to check if the file exists rather than just trying
-    # to create it.
-    fname = os.path.join(dfuse.dir, 'test_file4')
-    fd = os.open(fname, os.O_CREAT | os.O_EXCL)
-    os.close(fd)
-    try:
-        fd = os.open(fname, os.O_CREAT | os.O_EXCL)
-        os.close(fd)
-        assert False
-    except OSError as e:
-        assert e.errno == errno.EEXIST
-    os.unlink(fname)
 
 def stat_and_check(dfuse, pre_stat):
     """Check that dfuse started"""
