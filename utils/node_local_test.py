@@ -552,15 +552,11 @@ class ValgrindHelper():
         else:
             cmd.extend(['--leak-check=no'])
 
-        s_arg = '--suppressions='
-        cmd.extend(['{}{}'.format(s_arg,
-                                  os.path.join('src',
-                                               'cart',
-                                               'utils',
-                                               'memcheck-cart.supp')),
-                    '{}{}'.format(s_arg,
-                                  os.path.join('utils',
-                                               'memcheck-daos-client.supp'))])
+        cmd.append('--suppressions={}'.format(
+            os.path.join('src',
+                         'cart',
+                         'utils',
+                         'memcheck-cart.supp')))
 
         cmd.append('--error-exitcode=42')
 
