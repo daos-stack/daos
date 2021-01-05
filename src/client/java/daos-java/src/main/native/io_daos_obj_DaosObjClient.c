@@ -32,7 +32,7 @@ static inline void
 parse_object_id(char *buffer, daos_obj_id_t *oid)
 {
 	memcpy(&oid->hi, buffer, 8);
-	memcpy(&oid->lo, buffer+8, 8);
+	memcpy(&oid->lo, buffer + 8, 8);
 }
 
 JNIEXPORT void JNICALL
@@ -58,7 +58,7 @@ Java_io_daos_obj_DaosObjClient_encodeObjectId(JNIEnv *env, jclass clientClass,
 	parse_object_id(buffer, &oid);
 	daos_obj_generate_id(&oid, feats, type, args);
 	memcpy(buffer, &oid.hi, 8);
-	memcpy(buffer+8, &oid.lo, 8);
+	memcpy(buffer + 8, &oid.lo, 8);
 
 out:
 	(*env)->ReleaseStringUTFChars(env, objectClass, oclass_name);
@@ -167,7 +167,7 @@ Java_io_daos_obj_DaosObjClient_punchObjectAkeys(JNIEnv *env,
 {
 	daos_handle_t oh;
 	daos_key_t *keys = (daos_key_t *)calloc(nbrOfAkeys + 1,
-									sizeof(daos_key_t));
+				sizeof(daos_key_t));
 	daos_key_t *dkey = &keys[0];
 	char *buffer = (char *)bufferAddress;
 	uint16_t len;
@@ -271,7 +271,8 @@ decode_initial(data_desc_t *desc, char *desc_buffer)
 		/* sgl */
 		memcpy(&address, desc_buffer, 8);
 		desc_buffer += 8;
-		d_iov_set(&desc->iovs[i], address, nbr_of_record * desc->record_size);
+		d_iov_set(&desc->iovs[i], address,
+			nbr_of_record * desc->record_size);
 		desc->sgls[i].sg_iovs = &desc->iovs[i];
 		desc->sgls[i].sg_nr = 1;
 		desc->sgls[i].sg_nr_out = 0;
@@ -611,8 +612,8 @@ decode_simple(JNIEnv *env, jlong descBufAddress,
 
 	desc = *(data_desc_simple_t **)&address;
 	if (async) {
-		/* skip address, maxKeyLen, nbrOfEntries,
-		 eventqueue address */
+		/* skip address, maxKeyLen, nbrOfEntries, */
+		/* eventqueue address */
 		desc_buffer += 20;
 		memcpy(&value16, desc_buffer, 2);
 		desc_buffer += 2;
@@ -793,8 +794,8 @@ Java_io_daos_obj_DaosObjClient_updateObjectSimple(
 		}
 	}
 	rc = daos_obj_update(oh, DAOS_TX_NONE, flags, &desc->dkey,
-			desc->nbrOfRequests, desc->iods,
-			desc->sgls, async ? desc->event : NULL);
+				desc->nbrOfRequests, desc->iods,
+				desc->sgls, async ? desc->event : NULL);
 	if (rc) {
 		char *msg = "Failed to update DAOS object";
 
@@ -943,7 +944,6 @@ list_keys(jlong objectHandle, char *desc_buffer_head,
 		for (i = idx - nbr; i < idx; i++) {
 			copy_kd(desc_buffer, &kds[i]);
 			desc_buffer += 12; /* 12 = key desc len */
-			/* key_buffer_idx += (kds[i].kd_key_len + kds[i].kd_csum_len); */
 			key_buffer_idx += kds[i].kd_key_len;
 		}
 		if (remaining <= 0) {
