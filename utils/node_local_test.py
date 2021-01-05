@@ -909,6 +909,13 @@ def run_tests(dfuse):
     os.symlink(symlink_dest, symlink_name)
     assert symlink_dest == os.readlink(symlink_name)
 
+    # DAOS-6238
+    fname = os.path.join(path, 'test_file4')
+    ofd = os.open(fname, os.O_CREAT | os.O_RDONLY | os.O_EXCL)
+    assert_file_size_fd(ofd, 0)
+    os.close(ofd)
+    os.chmod(fname, stat.S_IRUSR)
+
 def stat_and_check(dfuse, pre_stat):
     """Check that dfuse started"""
     post_stat = os.stat(dfuse.dir)
