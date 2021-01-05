@@ -37,7 +37,8 @@ parse_object_id(char *buffer, daos_obj_id_t *oid)
 
 JNIEXPORT void JNICALL
 Java_io_daos_obj_DaosObjClient_encodeObjectId(JNIEnv *env, jclass clientClass,
-		jlong oidBufferAddress, jint feats, jstring objectClass, jint args)
+		jlong oidBufferAddress, jint feats,
+		jstring objectClass, jint args)
 {
 	daos_obj_id_t oid;
 	uint16_t type;
@@ -123,11 +124,13 @@ Java_io_daos_obj_DaosObjClient_punchObject(JNIEnv *env, jobject clientObject,
 
 JNIEXPORT void JNICALL
 Java_io_daos_obj_DaosObjClient_punchObjectDkeys(JNIEnv *env,
-		jobject clientObject, jlong objectHandle, jlong flags, jint nbrOfDkeys,
+		jobject clientObject, jlong objectHandle,
+		jlong flags, jint nbrOfDkeys,
 		jlong bufferAddress, jint dataLen)
 {
 	daos_handle_t oh;
-	daos_key_t *dkeys = (daos_key_t *)calloc(nbrOfDkeys, sizeof(daos_key_t));
+	daos_key_t *dkeys = (daos_key_t *)calloc(nbrOfDkeys,
+		sizeof(daos_key_t));
 	char *buffer = (char *)bufferAddress;
 	uint16_t len;
 	int i;
@@ -158,7 +161,8 @@ out:
 
 JNIEXPORT void JNICALL
 Java_io_daos_obj_DaosObjClient_punchObjectAkeys(JNIEnv *env,
-		jobject clientObject, jlong objectHandle, jlong flags, jint nbrOfAkeys,
+		jobject clientObject, jlong objectHandle,
+		jlong flags, jint nbrOfAkeys,
 		jlong bufferAddress, jint dataLen)
 {
 	daos_handle_t oh;
@@ -178,7 +182,7 @@ Java_io_daos_obj_DaosObjClient_punchObjectAkeys(JNIEnv *env,
 		buffer += len;
 	}
 	rc = daos_obj_punch_akeys(oh, DAOS_TX_NONE, flags, dkey,
-						(unsigned int)nbrOfAkeys, &keys[1], NULL);
+			(unsigned int)nbrOfAkeys, &keys[1], NULL);
 
 	if (rc) {
 		char *msg = "Failed to punch DAOS object akeys";
@@ -210,17 +214,21 @@ Java_io_daos_obj_DaosObjClient_queryObjectAttribute(JNIEnv *env,
 
 		throw_exception_const_msg_object(env, msg, rc);
 	}
-	// TODO: convert and serialize attribute
+	/* TODO: convert and serialize attribute */
 	return NULL;
 }
 
 static inline void
 decode_initial(data_desc_t *desc, char *desc_buffer)
 {
-	desc->iods = (daos_iod_t *)calloc(desc->nbrOfAkeys, sizeof(daos_iod_t));
-	desc->sgls = (d_sg_list_t *)calloc(desc->nbrOfAkeys, sizeof(d_sg_list_t));
-	desc->recxs = (daos_recx_t *)calloc(desc->nbrOfAkeys, sizeof(daos_recx_t));
-	desc->iovs = (d_iov_t *)calloc(desc->nbrOfAkeys, sizeof(d_iov_t));
+	desc->iods = (daos_iod_t *)calloc(desc->nbrOfAkeys,
+		sizeof(daos_iod_t));
+	desc->sgls = (d_sg_list_t *)calloc(desc->nbrOfAkeys,
+		sizeof(d_sg_list_t));
+	desc->recxs = (daos_recx_t *)calloc(desc->nbrOfAkeys,
+		sizeof(daos_recx_t));
+	desc->iovs = (d_iov_t *)calloc(desc->nbrOfAkeys,
+		sizeof(d_iov_t));
 	daos_iod_t *iod;
 	uint16_t len;
 	uint16_t pad;
@@ -230,8 +238,8 @@ decode_initial(data_desc_t *desc, char *desc_buffer)
 	int i;
 
 	for (i = 0; i < desc->nbrOfAkeys; i++) {
-		// iod
-		// akey
+		/* iod */
+		/* akey */
 		iod = &desc->iods[i];
 		memcpy(&len, desc_buffer, 2);
 		desc_buffer += 2;
@@ -247,11 +255,11 @@ decode_initial(data_desc_t *desc, char *desc_buffer)
 		iod->iod_size = (uint64_t)desc->record_size;
 		iod->iod_nr = 1;
 		if (iod->iod_type == DAOS_IOD_ARRAY) {
-			// offset
+			/* offset */
 			memcpy(&value, desc_buffer, 4);
 			desc->recxs[i].rx_idx = (uint64_t)value;
 			desc_buffer += 4;
-			// length
+			/* length */
 			memcpy(&nbr_of_record, desc_buffer, 4);
 			desc->recxs[i].rx_nr = (uint64_t)nbr_of_record;
 			desc_buffer += 4;
@@ -260,7 +268,7 @@ decode_initial(data_desc_t *desc, char *desc_buffer)
 			nbr_of_record = 1;
 		}
 
-		// sgl
+		/* sgl */
 		memcpy(&address, desc_buffer, 8);
 		desc_buffer += 8;
 		d_iov_set(&desc->iovs[i], address, nbr_of_record * desc->record_size);
@@ -283,8 +291,8 @@ decode_reused(data_desc_t *desc, char *desc_buffer,
 	int i;
 
 	for (i = 0; i < actual_nbr_of_keys; i++) {
-		// iod
-		// akey
+		/* iod */
+		/* akey */
 		iod = &desc->iods[i];
 		memcpy(&len, desc_buffer, 2);
 		desc_buffer += 2;
@@ -295,18 +303,18 @@ decode_reused(data_desc_t *desc, char *desc_buffer,
 			desc_buffer += pad;
 		}
 		if (desc->iod_type == DAOS_IOD_ARRAY) {
-			// offset
+			/* offset */
 			memcpy(&value, desc_buffer, 4);
 			desc->recxs[i].rx_idx = (uint64_t)value;
 			desc_buffer += 4;
-			// length
+			/* length */
 			memcpy(&nbr_of_record, desc_buffer, 4);
 			desc->recxs[i].rx_nr = (uint64_t)nbr_of_record;
 			desc_buffer += 4;
 		} else {
 			nbr_of_record = 1;
 		}
-		// sgl
+		/* sgl */
 		desc_buffer += 8;
 		desc->iovs[i].iov_len = nbr_of_record * desc->record_size;
 		desc->iovs[i].iov_buf_len = desc->iovs[i].iov_len;
@@ -315,8 +323,8 @@ decode_reused(data_desc_t *desc, char *desc_buffer,
 }
 
 JNIEXPORT void JNICALL
-Java_io_daos_obj_DaosObjClient_releaseDesc
-		(JNIEnv *env, jclass clientClass, jlong descPtr)
+Java_io_daos_obj_DaosObjClient_releaseDesc(JNIEnv *env, jclass clientClass,
+		jlong descPtr)
 {
 	data_desc_t *desc = *(data_desc_t **)&descPtr;
 
