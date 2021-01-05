@@ -32,7 +32,9 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -76,7 +78,7 @@ func TestControl_StartRanks(t *testing.T) {
 				{
 					Addr: "host1",
 					Message: &mgmtpb.SystemStartResp{
-						Results: []*mgmtpb.RankResult{
+						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Action: "start",
 								State: uint32(system.MemberStateReady),
@@ -91,7 +93,7 @@ func TestControl_StartRanks(t *testing.T) {
 				{
 					Addr: "host2",
 					Message: &mgmtpb.SystemStartResp{
-						Results: []*mgmtpb.RankResult{
+						Results: []*sharedpb.RankResult{
 							{
 								Rank: 2, Action: "start",
 								State: uint32(system.MemberStateReady),
@@ -177,8 +179,8 @@ func TestControl_PrepShutdownRanks(t *testing.T) {
 			uResps: []*HostResponse{
 				{
 					Addr: "host1",
-					Message: &mgmtpb.SystemStartResp{
-						Results: []*mgmtpb.RankResult{
+					Message: &mgmtpb.SystemStopResp{
+						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Action: "prep shutdown",
 								State: uint32(system.MemberStateStopping),
@@ -192,8 +194,8 @@ func TestControl_PrepShutdownRanks(t *testing.T) {
 				},
 				{
 					Addr: "host2",
-					Message: &mgmtpb.SystemStartResp{
-						Results: []*mgmtpb.RankResult{
+					Message: &mgmtpb.SystemStopResp{
+						Results: []*sharedpb.RankResult{
 							{
 								Rank: 2, Action: "prep shutdown",
 								State: uint32(system.MemberStateStopping),
@@ -279,8 +281,8 @@ func TestControl_StopRanks(t *testing.T) {
 			uResps: []*HostResponse{
 				{
 					Addr: "host1",
-					Message: &mgmtpb.SystemStartResp{
-						Results: []*mgmtpb.RankResult{
+					Message: &mgmtpb.SystemStopResp{
+						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Action: "stop",
 								State: uint32(system.MemberStateStopped),
@@ -294,8 +296,8 @@ func TestControl_StopRanks(t *testing.T) {
 				},
 				{
 					Addr: "host2",
-					Message: &mgmtpb.SystemStartResp{
-						Results: []*mgmtpb.RankResult{
+					Message: &mgmtpb.SystemStopResp{
+						Results: []*sharedpb.RankResult{
 							{
 								Rank: 2, Action: "stop",
 								State: uint32(system.MemberStateStopped),
@@ -372,7 +374,7 @@ func TestControl_PingRanks(t *testing.T) {
 			uResps: []*HostResponse{
 				{
 					Addr:    "host1",
-					Message: &mgmtpb.SystemStartResp{},
+					Message: &ctlpb.RanksResp{},
 				},
 			},
 			expResp: &RanksResp{},
@@ -381,8 +383,8 @@ func TestControl_PingRanks(t *testing.T) {
 			uResps: []*HostResponse{
 				{
 					Addr: "host1",
-					Message: &mgmtpb.SystemStartResp{
-						Results: []*mgmtpb.RankResult{
+					Message: &ctlpb.RanksResp{
+						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Action: "ping",
 								State: uint32(system.MemberStateReady),
@@ -396,8 +398,8 @@ func TestControl_PingRanks(t *testing.T) {
 				},
 				{
 					Addr: "host2",
-					Message: &mgmtpb.SystemStartResp{
-						Results: []*mgmtpb.RankResult{
+					Message: &ctlpb.RanksResp{
+						Results: []*sharedpb.RankResult{
 							{
 								Rank: 2, Action: "ping",
 								State: uint32(system.MemberStateReady),
@@ -728,7 +730,7 @@ func TestControl_SystemStart(t *testing.T) {
 			req: new(SystemStartReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil,
 				&mgmtpb.SystemStartResp{
-					Results: []*mgmtpb.RankResult{
+					Results: []*sharedpb.RankResult{
 						{
 							Rank:  1,
 							State: uint32(MemberStateReady),
@@ -841,7 +843,7 @@ func TestControl_SystemStop(t *testing.T) {
 			req: new(SystemStopReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil,
 				&mgmtpb.SystemStopResp{
-					Results: []*mgmtpb.RankResult{
+					Results: []*sharedpb.RankResult{
 						{
 							Rank:  1,
 							State: uint32(MemberStateReady),
@@ -926,7 +928,7 @@ func TestControl_SystemReformat(t *testing.T) {
 			req: new(SystemResetFormatReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil,
 				&mgmtpb.SystemResetFormatResp{
-					Results: []*mgmtpb.RankResult{},
+					Results: []*sharedpb.RankResult{},
 				},
 			),
 			// indicates SystemReformat internally proceeded to invoke StorageFormat RPCs
@@ -937,7 +939,7 @@ func TestControl_SystemReformat(t *testing.T) {
 			req: new(SystemResetFormatReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil,
 				&mgmtpb.SystemResetFormatResp{
-					Results: []*mgmtpb.RankResult{
+					Results: []*sharedpb.RankResult{
 						{
 							Rank: 1, Action: "reset format",
 							State: uint32(MemberStateAwaitFormat),
@@ -959,7 +961,7 @@ func TestControl_SystemReformat(t *testing.T) {
 			req: new(SystemResetFormatReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil,
 				&mgmtpb.SystemResetFormatResp{
-					Results: []*mgmtpb.RankResult{
+					Results: []*sharedpb.RankResult{
 						{
 							Rank: 1, Action: "reset format",
 							State:   uint32(MemberStateStopped),
@@ -986,7 +988,7 @@ func TestControl_SystemReformat(t *testing.T) {
 			req: new(SystemResetFormatReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil,
 				&mgmtpb.SystemResetFormatResp{
-					Results: []*mgmtpb.RankResult{
+					Results: []*sharedpb.RankResult{
 						{
 							Rank: 1, Action: "reset format",
 							State:   uint32(MemberStateStopped),

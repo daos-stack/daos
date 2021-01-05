@@ -24,6 +24,10 @@
 syntax = "proto3";
 package mgmt;
 
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/mgmt";
+
+import "shared/ranks.proto";
+
 // Management Service Protobuf Definitions related to interactions between
 // DAOS control server and DAOS system.
 
@@ -39,17 +43,6 @@ message SystemMember {
 	string faultDomain = 6;
 }
 
-// RankResult is a generic result for a system operation on a rank.
-// Identical to mgmt.proto RanksResp_RankResult.
-message RankResult {
-	uint32 rank = 1;
-	string action = 2;
-	bool errored = 3;
-	string msg = 4;
-	uint32 state = 5;
-	string addr = 6;
-}
-
 // SystemStopReq supplies system shutdown parameters.
 message SystemStopReq {
 	string sys = 1; // DAOS system name
@@ -63,7 +56,7 @@ message SystemStopReq {
 // SystemStopResp returns status of shutdown attempt and results
 // of attempts to stop system members.
 message SystemStopResp {
-	repeated RankResult results = 1;
+	repeated shared.RankResult results = 1;
 	string absentranks = 2; // rankset missing from membership
 	string absenthosts = 3; // hostset missing from membership
 }
@@ -78,7 +71,7 @@ message SystemResetFormatReq {
 // SystemResetFormatResp returns status of reset format attempt and results
 // of attempts to reset format of system members.
 message SystemResetFormatResp {
-	repeated RankResult results = 1;
+	repeated shared.RankResult results = 1;
 	string absentranks = 2; // rankset missing from membership
 	string absenthosts = 3; // hostset missing from membership
 }
@@ -93,7 +86,7 @@ message SystemStartReq {
 // SystemStartResp returns status of restart attempt and results
 // of attempts to start system members.
 message SystemStartResp {
-	repeated RankResult results = 1;
+	repeated shared.RankResult results = 1;
 	string absentranks = 2; // rankset missing from membership
 	string absenthosts = 3; // hostset missing from membership
 }

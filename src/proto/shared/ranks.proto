@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,43 +22,15 @@
 //
 
 syntax = "proto3";
-package ctl;
+package shared;
 
-option go_package = "github.com/daos-stack/daos/src/control/common/proto/ctl";
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/shared";
 
-import "ctl/storage_nvme.proto";
-import "ctl/storage_scm.proto";
-
-// Management Service Protobuf Definitions related to interactions between
-// DAOS control server and locally attached storage.
-
-message StoragePrepareReq {
-	PrepareNvmeReq nvme = 1;
-	PrepareScmReq scm = 2;
-}
-
-message StoragePrepareResp {
-	PrepareNvmeResp nvme = 1;
-	PrepareScmResp scm = 2;
-}
-
-message StorageScanReq {
-	ScanNvmeReq nvme = 1;
-	ScanScmReq scm = 2;
-}
-
-message StorageScanResp {
-	ScanNvmeResp nvme = 1;
-	ScanScmResp scm = 2;
-}
-
-message StorageFormatReq {
-	FormatNvmeReq nvme = 1;
-	FormatScmReq scm = 2;
-	bool reformat = 3;
-}
-
-message StorageFormatResp {
-	repeated NvmeControllerResult crets = 1;	// One per controller format attempt
-	repeated ScmMountResult mrets = 2;		// One per scm format and mount attempt
+message RankResult {
+	uint32 rank = 1;
+	string action = 2;
+	bool errored = 3;
+	string msg = 4;
+	uint32 state = 5;
+	string addr = 6;
 }

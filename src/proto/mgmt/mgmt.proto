@@ -24,11 +24,13 @@
 syntax = "proto3";
 package mgmt;
 
-import "pool.proto";
-import "cont.proto";
-import "svc.proto";
-import "acl.proto"; // ACL-related requests
-import "system.proto";
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/mgmt";
+
+import "mgmt/pool.proto";
+import "mgmt/cont.proto";
+import "mgmt/svc.proto";
+import "mgmt/acl.proto"; // ACL-related requests
+import "mgmt/system.proto";
 
 // Management Service is replicated on a small number of servers in the system,
 // these requests will be processed on a host that is a member of the management

@@ -56,10 +56,13 @@ GO_CONTROL_FILES = common/proto/mgmt/acl.pb.go\
  		   common/proto/ctl/network.pb.go\
  		   common/proto/ctl/firmware.pb.go\
 		   common/proto/srv/srv.pb.go\
+		   common/proto/shared/ranks.pb.go\
 		   drpc/drpc.pb.go\
 		   security/auth/auth.pb.go\
 		   cmd/drpc_test/hello/drpc_test.pb.go
+CTRL_SOURCE_ROOT = $(DAOS_ROOT)/src/control
 PROTO_SOURCE_DIR = $(DAOS_ROOT)/src/proto
+uniq = $(if $1,$(firstword $1) $(call uniq,$(filter-out $(firstword $1),$1)))
 
 all: proto-go proto-c
 
@@ -92,26 +95,27 @@ $(PROTOC_GEN_GO): $(PROTOC)
 	git checkout $(PROTOC_GEN_GO_TAG) &&\
 	go install $(PROTOC_GEN_GO_IMP)
 
-GO_TARGETS = $(addprefix $(DAOS_ROOT)/src/control/,$(GO_CONTROL_FILES))
+GO_TARGETS = $(addprefix $(CTRL_SOURCE_ROOT)/,$(GO_CONTROL_FILES))
+GO_PKG_DIRS = $(call uniq,$(dir $(GO_TARGETS)))
 
-proto-go: $(PROTOC_GEN_GO) $(GO_TARGETS)
+proto-go: $(PROTOC_GEN_GO) $(GO_PKG_DIRS) $(GO_TARGETS)
 
-$(DAOS_ROOT)/src/control/common/proto/%.pb.go: $(PROTO_SOURCE_DIR)/%.proto
-	protoc -I $(dir $<) --go_out=plugins=grpc:$(dir $@) $(notdir $<)
+$(GO_PKG_DIRS):
+	mkdir -p $@
+
+$(CTRL_SOURCE_ROOT)/common/proto/%.pb.go: $(PROTO_SOURCE_DIR)/%.proto
+	protoc -I $(PROTO_SOURCE_DIR) --go_out=plugins=grpc:$(shell dirname $(dir $@)) --go_opt=paths=source_relative $<
 
 # Some of these don't follow a regular pattern, so define
 # one-off recipes for them.
-$(DAOS_ROOT)/src/control/drpc/%.pb.go: $(PROTO_SOURCE_DIR)/%.proto
-	protoc -I $(dir $<) --go_out=plugins=grpc:$(dir $@) $(notdir $<)
+$(CTRL_SOURCE_ROOT)/drpc/%.pb.go: $(PROTO_SOURCE_DIR)/%.proto
+	protoc -I $(dir $<) --go_out=plugins=grpc:$(dir $@) --go_opt=paths=source_relative $<
 
-$(DAOS_ROOT)/src/control/security/acl/%.pb.go: $(PROTO_SOURCE_DIR)/security/%.proto
-	protoc -I $(dir $<) --go_out=plugins=grpc:$(dir $@) $(notdir $<)
+$(CTRL_SOURCE_ROOT)/security/auth/%.pb.go: $(PROTO_SOURCE_DIR)/security/%.proto
+	protoc -I $(dir $<) --go_out=plugins=grpc:$(dir $@) --go_opt=paths=source_relative $<
 
-$(DAOS_ROOT)/src/control/security/auth/%.pb.go: $(PROTO_SOURCE_DIR)/security/%.proto
-	protoc -I $(dir $<) --go_out=plugins=grpc:$(dir $@) $(notdir $<)
-
-$(DAOS_ROOT)/src/control/cmd/drpc_test/hello/%.pb.go: $(PROTO_SOURCE_DIR)/test/%.proto
-	protoc -I $(dir $<) --go_out=plugins=grpc:$(dir $@) $(notdir $<)
+$(CTRL_SOURCE_ROOT)/cmd/drpc_test/hello/%.pb.go: $(PROTO_SOURCE_DIR)/test/%.proto
+	protoc -I $(dir $<) --go_out=plugins=grpc:$(dir $@) --go_opt=paths=source_relative $<
 
 PROTOC_GEN_C := $(shell which protoc-gen-c 2>/dev/null)
 ifeq ($(PROTOC_GEN_C),)

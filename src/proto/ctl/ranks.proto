@@ -24,6 +24,10 @@
 syntax = "proto3";
 package ctl;
 
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/ctl";
+
+import "shared/ranks.proto";
+
 // Generic request indicating which ranks to operate on.
 // Used in gRPC fanout to operate on hosts with multiple ranks.
 message RanksReq {
@@ -34,14 +38,6 @@ message RanksReq {
 // Generic response containing DER result from multiple ranks.
 // Used in gRPC fanout to operate on hosts with multiple ranks.
 message RanksResp {
-	// Identical to ctl.system.RankResult proto message.
-	message RankResult {
-		uint32 rank = 1;
-		string action = 2;
-		bool errored = 3;
-		string msg = 4;
-		uint32 state = 5;
-		string addr = 6;
-	}
-	repeated RankResult results = 1;
+	repeated shared.RankResult results = 1;
 }
+

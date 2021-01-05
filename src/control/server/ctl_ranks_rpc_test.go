@@ -38,6 +38,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -57,7 +58,7 @@ const (
 // checkUnorderedRankResults fails if results slices contain any differing results,
 // regardless of order. Ignore result "Msg" field as RankResult.Msg generation
 // is tested separately in TestServer_CtlSvc_DrespToRankResult unit tests.
-func checkUnorderedRankResults(t *testing.T, expResults, gotResults []*ctlpb.RanksResp_RankResult) {
+func checkUnorderedRankResults(t *testing.T, expResults, gotResults []*sharedpb.RankResult) {
 	t.Helper()
 
 	isMsgField := func(path cmp.Path) bool {
@@ -92,7 +93,7 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 		responseDelay    time.Duration
 		ctxTimeout       time.Duration
 		ctxCancel        time.Duration
-		expResults       []*ctlpb.RanksResp_RankResult
+		expResults       []*sharedpb.RankResult
 		expErr           error
 	}{
 		"nil request": {
@@ -106,12 +107,12 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 			req:       &ctlpb.RanksReq{Ranks: "0-3"},
 			missingSB: true,
 			// no results as rank cannot be read from superblock
-			expResults: []*ctlpb.RanksResp_RankResult{},
+			expResults: []*sharedpb.RankResult{},
 		},
 		"instances stopped": {
 			req:              &ctlpb.RanksReq{Ranks: "0-3"},
 			instancesStopped: true,
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msStopped},
 				{Rank: 2, State: msStopped},
 			},
@@ -123,7 +124,7 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 				&mgmtpb.DaosResp{Status: 0},
 			},
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msErrored, Errored: true},
 				{Rank: 2, State: msErrored, Errored: true},
 			},
@@ -131,7 +132,7 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 		"dRPC resp junk": {
 			req:      &ctlpb.RanksReq{Ranks: "0-3"},
 			junkResp: true,
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msErrored, Errored: true},
 				{Rank: 2, State: msErrored, Errored: true},
 			},
@@ -143,7 +144,7 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 				&mgmtpb.DaosResp{Status: 0},
 			},
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: uint32(system.MemberStateUnresponsive)},
 				{Rank: 2, State: uint32(system.MemberStateUnresponsive)},
 			},
@@ -156,7 +157,7 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 				&mgmtpb.DaosResp{Status: 0},
 			},
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: uint32(system.MemberStateUnresponsive)},
 				{Rank: 2, State: uint32(system.MemberStateUnresponsive)},
 			},
@@ -177,7 +178,7 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: -1},
 				&mgmtpb.DaosResp{Status: -1},
 			},
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msErrored, Errored: true},
 				{Rank: 2, State: msErrored, Errored: true},
 			},
@@ -188,7 +189,7 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 				&mgmtpb.DaosResp{Status: 0},
 			},
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: uint32(system.MemberStateStopping)},
 				{Rank: 2, State: uint32(system.MemberStateStopping)},
 			},
@@ -274,7 +275,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 		signalErr        error
 		ctxTimeout       time.Duration
 		expSignalsSent   map[uint32]os.Signal
-		expResults       []*ctlpb.RanksResp_RankResult
+		expResults       []*sharedpb.RankResult
 		expErr           error
 	}{
 		"nil request": {
@@ -288,11 +289,11 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			req:       &ctlpb.RanksReq{Ranks: "0-3"},
 			missingSB: true,
 			// no results as rank cannot be read from superblock
-			expResults: []*ctlpb.RanksResp_RankResult{},
+			expResults: []*sharedpb.RankResult{},
 		},
 		"missing ranks": {
 			req:        &ctlpb.RanksReq{Ranks: "0,3"},
-			expResults: []*ctlpb.RanksResp_RankResult{},
+			expResults: []*sharedpb.RankResult{},
 		},
 		"kill signal send error": {
 			req: &ctlpb.RanksReq{
@@ -309,7 +310,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 		"instances started": { // unsuccessful result for kill
 			req:            &ctlpb.RanksReq{Ranks: "0-3"},
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGINT, 1: syscall.SIGINT},
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msReady, Errored: true},
 				{Rank: 2, State: msReady, Errored: true},
 			},
@@ -317,7 +318,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 		"force stop instances started": { // unsuccessful result for kill
 			req:            &ctlpb.RanksReq{Ranks: "0-3", Force: true},
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGKILL, 1: syscall.SIGKILL},
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msReady, Errored: true},
 				{Rank: 2, State: msReady, Errored: true},
 			},
@@ -325,7 +326,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 		"instances already stopped": { // successful result for kill
 			req:              &ctlpb.RanksReq{Ranks: "0-3"},
 			instancesStopped: true,
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msStopped},
 				{Rank: 2, State: msStopped},
 			},
@@ -333,14 +334,14 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 		"force stop single instance started": {
 			req:            &ctlpb.RanksReq{Ranks: "1", Force: true},
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGKILL},
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msReady, Errored: true},
 			},
 		},
 		"single instance already stopped": {
 			req:              &ctlpb.RanksReq{Ranks: "1"},
 			instancesStopped: true,
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msStopped},
 			},
 		},
@@ -462,7 +463,7 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 		responseDelay    time.Duration
 		ctxTimeout       time.Duration
 		ctxCancel        time.Duration
-		expResults       []*ctlpb.RanksResp_RankResult
+		expResults       []*sharedpb.RankResult
 		expErr           error
 	}{
 		"nil request": {
@@ -476,19 +477,19 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 			req:       &ctlpb.RanksReq{Ranks: "0-3"},
 			missingSB: true,
 			// no results as rank can't be read from superblock
-			expResults: []*ctlpb.RanksResp_RankResult{},
+			expResults: []*sharedpb.RankResult{},
 		},
 		"instances stopped": {
 			req:              &ctlpb.RanksReq{Ranks: "0-3"},
 			instancesStopped: true,
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msStopped},
 				{Rank: 2, State: msStopped},
 			},
 		},
 		"instances started": {
 			req: &ctlpb.RanksReq{Ranks: "0-3"},
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msReady},
 				{Rank: 2, State: msReady},
 			},
@@ -501,7 +502,7 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 				&mgmtpb.DaosResp{Status: 0},
 			},
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msErrored, Errored: true},
 				{Rank: 2, State: msErrored, Errored: true},
 			},
@@ -510,7 +511,7 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 			// force flag in request triggers dRPC ping
 			req:      &ctlpb.RanksReq{Ranks: "0-3", Force: true},
 			junkResp: true,
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msErrored, Errored: true},
 				{Rank: 2, State: msErrored, Errored: true},
 			},
@@ -523,7 +524,7 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 				&mgmtpb.DaosResp{Status: 0},
 			},
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: uint32(system.MemberStateUnresponsive)},
 				{Rank: 2, State: uint32(system.MemberStateUnresponsive)},
 			},
@@ -537,7 +538,7 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 				&mgmtpb.DaosResp{Status: 0},
 			},
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: uint32(system.MemberStateUnresponsive)},
 				{Rank: 2, State: uint32(system.MemberStateUnresponsive)},
 			},
@@ -560,7 +561,7 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: -1},
 				&mgmtpb.DaosResp{Status: -1},
 			},
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msErrored, Errored: true},
 				{Rank: 2, State: msErrored, Errored: true},
 			},
@@ -572,7 +573,7 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 				&mgmtpb.DaosResp{Status: 0},
 			},
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msReady},
 				{Rank: 2, State: msReady},
 			},
@@ -584,7 +585,7 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 				&mgmtpb.DaosResp{Status: 0},
 			},
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msReady},
 			},
 		},
@@ -668,7 +669,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 		startFails       bool
 		req              *ctlpb.RanksReq
 		ctxTimeout       time.Duration
-		expResults       []*ctlpb.RanksResp_RankResult
+		expResults       []*sharedpb.RankResult
 		expErr           error
 	}{
 		"nil request": {
@@ -682,11 +683,11 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 			req:       &ctlpb.RanksReq{Ranks: "0-3"},
 			missingSB: true,
 			// no results as rank can't be read from superblock
-			expResults: []*ctlpb.RanksResp_RankResult{},
+			expResults: []*sharedpb.RankResult{},
 		},
 		"missing ranks": {
 			req:        &ctlpb.RanksReq{Ranks: "0,3"},
-			expResults: []*ctlpb.RanksResp_RankResult{},
+			expResults: []*sharedpb.RankResult{},
 		},
 		"context timeout": { // near-immediate parent context Timeout
 			req:        &ctlpb.RanksReq{Ranks: "0-3"},
@@ -700,7 +701,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 		},
 		"instances reach wait format": {
 			req: &ctlpb.RanksReq{Ranks: "0-3"},
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msWaitFormat},
 				{Rank: 2, State: msWaitFormat},
 			},
@@ -708,7 +709,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 		"instances stay stopped": {
 			req:        &ctlpb.RanksReq{Ranks: "0-3"},
 			startFails: true,
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msStopped, Errored: true},
 				{Rank: 2, State: msStopped, Errored: true},
 			},
@@ -809,7 +810,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 		startFails       bool
 		req              *ctlpb.RanksReq
 		ctxTimeout       time.Duration
-		expResults       []*ctlpb.RanksResp_RankResult
+		expResults       []*sharedpb.RankResult
 		expErr           error
 	}{
 		"nil request": {
@@ -823,11 +824,11 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 			req:       &ctlpb.RanksReq{Ranks: "0-3"},
 			missingSB: true,
 			// no results as rank cannot be read from superblock
-			expResults: []*ctlpb.RanksResp_RankResult{},
+			expResults: []*sharedpb.RankResult{},
 		},
 		"missing ranks": {
 			req:        &ctlpb.RanksReq{Ranks: "0,3"},
-			expResults: []*ctlpb.RanksResp_RankResult{},
+			expResults: []*sharedpb.RankResult{},
 		},
 		"context timeout": { // near-immediate parent context Timeout
 			req:        &ctlpb.RanksReq{Ranks: "0-3"},
@@ -836,7 +837,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 		},
 		"instances already started": {
 			req: &ctlpb.RanksReq{Ranks: "0-3"},
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msReady},
 				{Rank: 2, State: msReady},
 			},
@@ -844,7 +845,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 		"instances get started": {
 			req:              &ctlpb.RanksReq{Ranks: "0-3"},
 			instancesStopped: true,
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msReady},
 				{Rank: 2, State: msReady},
 			},
@@ -853,7 +854,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 			req:              &ctlpb.RanksReq{Ranks: "0-3"},
 			instancesStopped: true,
 			startFails:       true,
-			expResults: []*ctlpb.RanksResp_RankResult{
+			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msStopped, Errored: true},
 				{Rank: 2, State: msStopped, Errored: true},
 			},

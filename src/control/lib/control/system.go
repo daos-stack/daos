@@ -39,6 +39,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/system"
@@ -662,18 +663,13 @@ type RanksResp struct {
 // addHostResponse is responsible for validating the given HostResponse
 // and adding its results to the RanksResp.
 func (srr *RanksResp) addHostResponse(hr *HostResponse) (err error) {
-	var memberResults system.MemberResults
-
-	switch pbResp := hr.Message.(type) {
-	case interface{ GetResults() []*mgmtpb.RankResult }:
-		err = convert.Types(pbResp.GetResults(), &memberResults)
-	case interface {
-		GetResults() []*ctlpb.RanksResp_RankResult
-	}:
-		err = convert.Types(pbResp.GetResults(), &memberResults)
+	pbResp, ok := hr.Message.(interface{ GetResults() []*sharedpb.RankResult })
+	if !ok {
+		return errors.Errorf("unable to unpack message: %+v", hr.Message)
 	}
 
-	if err != nil {
+	memberResults := make(system.MemberResults, 0)
+	if err := convert.Types(pbResp.GetResults(), &memberResults); err != nil {
 		if srr.HostErrors == nil {
 			srr.HostErrors = make(HostErrorsMap)
 		}
