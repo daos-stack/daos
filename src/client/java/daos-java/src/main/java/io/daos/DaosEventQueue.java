@@ -21,11 +21,9 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-package io.daos.obj;
+package io.daos;
 
-import io.daos.BufferAllocator;
-import io.daos.DaosClient;
-import io.daos.TimedOutException;
+import io.daos.obj.IOSimpleDataDesc;
 import io.netty.buffer.ByteBuf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -167,12 +165,12 @@ public class DaosEventQueue {
    * @param maxWaitMs
    * max wait time in millisecond
    * @param completedList
-   * a list to hold {@link IOSimpleDataDesc}s associated with completed events.
+   * a list to hold {@link Attachment}s associated with completed events.
    * null means you want to ignore them.
    * @return event
    * @throws IOException
    */
-  public Event acquireEventBlocking(boolean updateOrFetch, int maxWaitMs, List<IOSimpleDataDesc> completedList)
+  public Event acquireEventBlocking(boolean updateOrFetch, int maxWaitMs, List<Attachment> completedList)
       throws IOException {
     Event e = acquireEvent(updateOrFetch);
     if (e != null) { // for most of cases
@@ -223,11 +221,11 @@ public class DaosEventQueue {
    * @param maxWaitMs
    * max wait time in millisecond
    * @param completedList
-   * a list to hold {@link IOSimpleDataDesc}s associated with completed events.
+   * a list to hold {@link Attachment}s associated with completed events.
    * null means you want to ignore them.
    * @throws IOException
    */
-  public void waitForCompletion(int maxWaitMs, List<IOSimpleDataDesc> completedList)
+  public void waitForCompletion(int maxWaitMs, List<Attachment> completedList)
       throws IOException {
     long start = System.currentTimeMillis();
     int timeout = 0;
@@ -273,13 +271,13 @@ public class DaosEventQueue {
   /**
    * poll completed event. The completed events are put back immediately.
    *
-   * @param completedDescList
-   * if it's not null, descs of completed events are added to this list.
+   * @param completedList
+   * if it's not null, attachments of completed events are added to this list.
    * @param timeOutMs
    * @return number of events completed
    * @throws IOException
    */
-  public int pollCompleted(List<IOSimpleDataDesc> completedDescList, int timeOutMs) throws IOException {
+  public int pollCompleted(List<Attachment> completedList, int timeOutMs) throws IOException {
     DaosClient.pollCompleted(eqWrapperHdl, completed.memoryAddress(),
       nbrOfEvents, timeOutMs < 0 ? DEFAULT_POLL_TIMEOUT_MS : timeOutMs);
     completed.readerIndex(0);
@@ -287,9 +285,9 @@ public class DaosEventQueue {
     Event event;
     for (int i = 0; i < nbr; i++) {
       event = events[completed.readShort()];
-      IOSimpleDataDesc desc = event.complete();
-      if (completedDescList != null) {
-        completedDescList.add(desc);
+      Attachment attachment = event.complete();
+      if (completedList != null) {
+        completedList.add(attachment);
       }
     }
     nbrOfAcquired -= nbr;
@@ -319,9 +317,9 @@ public class DaosEventQueue {
 
   protected void releaseMore() {
     for (Event e : events) {
-      IOSimpleDataDesc desc = e.getDesc();
-      if (desc != null) {
-        desc.release();
+      Attachment attachment = e.getAttachment();
+      if (attachment != null) {
+        attachment.release();
       }
     }
   }
@@ -340,12 +338,17 @@ public class DaosEventQueue {
     EQ_MAP.clear();
   }
 
+  /**
+   * Java representer of DAOS event associated to a event queue identified by
+   * <code>eqHandle</code>.
+   * A {@link Attachment} can be associate to event as a outcome of asynchronous call.
+   */
   public class Event {
     private final short id;
     private final long eqHandle;
 
     protected boolean available;
-    protected IOSimpleDataDesc desc;
+    protected Attachment attachment;
 
     protected Event(short id) {
       this.eqHandle = eqWrapperHdl;
@@ -357,32 +360,60 @@ public class DaosEventQueue {
       return id;
     }
 
-    public IOSimpleDataDesc getDesc() {
-      return desc;
+    public Attachment getAttachment() {
+      return attachment;
     }
 
     public long getEqHandle() {
       return eqHandle;
     }
 
-    public void setDesc(IOSimpleDataDesc desc) {
-      this.desc = desc;
+    public Attachment setAttachment(Attachment attachment) {
+      Attachment pa = this.attachment;
+      this.attachment = attachment;
+      return pa;
     }
 
     protected void putBack() {
       available = true;
-      desc = null;
+      if (attachment != null && !attachment.alwaysBoundToEvt()) {
+        attachment = null;
+      }
     }
 
-    public IOSimpleDataDesc complete() {
-      if (desc.isUpdateOrFetch()) {
-        desc.succeed();
-      } else {
-        desc.parseResult();
+    public Attachment complete() {
+      Attachment ret = attachment;
+      if (attachment != null) {
+        attachment.ready();
       }
-      IOSimpleDataDesc d = desc;
       putBack();
-      return d;
+      return ret;
     }
   }
+
+  public interface Attachment {
+    /**
+     * reuse attachment.
+     */
+    void reuse();
+
+    /**
+     * it's should be called before attachment being consumed by user.
+     */
+    void ready();
+
+    /**
+     * indicate if we need to disassociate this attachment from event when event is put back.
+     * true for no, false for yes.
+     *
+     * @return true or false
+     */
+    boolean alwaysBoundToEvt();
+
+    /**
+     * release resources if any.
+     */
+    void release();
+  }
+
 }

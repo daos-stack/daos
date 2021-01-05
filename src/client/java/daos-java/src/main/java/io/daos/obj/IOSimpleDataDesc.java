@@ -25,6 +25,7 @@ package io.daos.obj;
 
 import io.daos.BufferAllocator;
 import io.daos.Constants;
+import io.daos.DaosEventQueue;
 import io.netty.buffer.ByteBuf;
 
 import java.io.IOException;
@@ -49,7 +50,7 @@ import java.io.UnsupportedEncodingException;
  *   See {@link SimpleEntry#release(boolean)}.
  * </p>
  */
-public class IOSimpleDataDesc {
+public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
 
   private String dkey;
 
@@ -135,11 +136,11 @@ public class IOSimpleDataDesc {
     totalDescBufferLen = tmpLen;
     this.descBuffer = BufferAllocator.objBufWithNativeOrder(totalDescBufferLen);
     prepareNativeDesc();
-    if (!async) { // need native strut to hold async result
+    if (!async) {
       // native desc handle written to the start of descBuffer in native code.
       DaosObjClient.allocateSimpleDesc(descBuffer.memoryAddress(), false);
       checkNativeDesc();
-    }
+    } // group managed native desc for asynchronous desc
     this.updateOrFetch = true; // default to update
   }
 
@@ -159,7 +160,7 @@ public class IOSimpleDataDesc {
 
   public void setEvent(DaosEventQueue.Event event) {
     this.event = event;
-    event.setDesc(this);
+    event.setAttachment(this);
   }
 
   public void setUpdateOrFetch(boolean updateOrFetch) {
@@ -248,6 +249,9 @@ public class IOSimpleDataDesc {
     if (nbrOfAkeysToRequest == 0) {
       throw new IllegalArgumentException("at least one of entries should have data");
     }
+    if (resultParsed) {
+      throw new IllegalStateException("reuse() method is not called");
+    }
     descBuffer.readerIndex(0);
     descBuffer.writerIndex(12);
     if (async) { // assuming same event queue
@@ -298,19 +302,6 @@ public class IOSimpleDataDesc {
       descBuffer.writeShort(dkey.charAt(i));
     }
     descBuffer.writerIndex(pos + maxKenLen);
-  }
-
-  public void reuse() {
-    this.resultParsed = false;
-    this.nbrOfAkeysToRequest = 0;
-    this.totalRequestSize = 0;
-    this.dkeyChanged = false;
-    this.retCode = Integer.MAX_VALUE;
-    for (SimpleEntry e : akeyEntries) {
-      e.actualSize = 0;
-      e.reused = false;
-      e.akeyChanged = false;
-    }
   }
 
   /**
@@ -402,10 +393,42 @@ public class IOSimpleDataDesc {
   }
 
   /**
+   * should be called before setting keys and entries except it's first time use.
+   */
+  @Override
+  public void reuse() {
+    this.resultParsed = false;
+    this.nbrOfAkeysToRequest = 0;
+    this.totalRequestSize = 0;
+    this.dkeyChanged = false;
+    this.retCode = Integer.MAX_VALUE;
+    for (SimpleEntry e : akeyEntries) {
+      e.actualSize = 0;
+      e.reused = false;
+      e.akeyChanged = false;
+    }
+  }
+
+  @Override
+  public void ready() {
+    if (isUpdateOrFetch()) {
+      succeed();
+    } else {
+      parseResult();
+    }
+  }
+
+  @Override
+  public boolean alwaysBoundToEvt() {
+    return async;
+  }
+
+  /**
    * release all buffers created from this object and its entry objects. Be noted, the fetch data buffers are
    * released too if this desc is for fetch. If you don't want release them too early, please call
    * {@link #release(boolean)} with false as parameter.
    */
+  @Override
   public void release() {
     release(true);
   }
@@ -425,7 +448,7 @@ public class IOSimpleDataDesc {
         if (hasNativeDec(nativeDescPtr)) {
           DaosObjClient.releaseDescSimple(nativeDescPtr);
         }
-      }
+      } // otherwise, native desc will be released in SimpleDataDescGrp
       this.descBuffer.release();
       this.released = true;
     }

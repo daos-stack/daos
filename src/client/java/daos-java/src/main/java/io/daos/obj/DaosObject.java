@@ -26,6 +26,7 @@ package io.daos.obj;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.daos.BufferAllocator;
 import io.daos.Constants;
+import io.daos.DaosEventQueue;
 import io.daos.DaosIOException;
 import io.daos.obj.attr.DaosObjectAttribute;
 import io.netty.buffer.ByteBuf;
@@ -554,7 +555,7 @@ public class DaosObject {
    * @return {@link IODataDesc}
    * @throws IOException
    */
-  public IODataDesc createDataDescForUpdate(String dkey, IODataDesc.IodType iodType, int recordSize)
+  public static IODataDesc createDataDescForUpdate(String dkey, IODataDesc.IodType iodType, int recordSize)
       throws IOException {
     IODataDesc desc = new IODataDesc(dkey, iodType, recordSize, true);
     return desc;
@@ -573,14 +574,16 @@ public class DaosObject {
    * @return {@link IODataDesc}
    * @throws IOException
    */
-  public IODataDesc createDataDescForFetch(String dkey, IODataDesc.IodType iodType, int recordSize)
+  public static IODataDesc createDataDescForFetch(String dkey, IODataDesc.IodType iodType, int recordSize)
       throws IOException {
     IODataDesc desc = new IODataDesc(dkey, iodType, recordSize, false);
     return desc;
   }
 
   /**
-   * create reusable unbound {@link IOSimpleDataDesc} object.
+   * create reusable {@link IOSimpleDataDesc} object.
+   * It's for asynchronous description if <code>eq</code> is not null.
+   * Otherwise, it's for synchronous description.
    *
    * @param maxKeyStrLen
    * max key string length
@@ -592,9 +595,15 @@ public class DaosObject {
    * per-thread {@link DaosEventQueue} instance
    * @return IOSimpleDataDesc instance
    */
-  public IOSimpleDataDesc createSimpleDesc(int maxKeyStrLen, int nbrOfEntries, int entryBufLen,
+  public static IOSimpleDataDesc createSimpleDesc(int maxKeyStrLen, int nbrOfEntries, int entryBufLen,
                                                 DaosEventQueue eq) {
     return new IOSimpleDataDesc(maxKeyStrLen, nbrOfEntries, entryBufLen, eq == null ? 0L : eq.getEqWrapperHdl());
+  }
+
+  public static SimpleDataDescGrp createSimpleDataDescGrp(int nbrOfDescs, int maxKeyStrLen,
+                                                          int nbrOfEntries, int entryBufLen,
+                                                          DaosEventQueue eq) {
+    return new SimpleDataDescGrp(nbrOfDescs, maxKeyStrLen, nbrOfEntries, entryBufLen, eq);
   }
 
   /**

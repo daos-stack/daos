@@ -1,6 +1,7 @@
 package io.daos.obj;
 
 import io.daos.DaosClient;
+import io.daos.DaosEventQueue;
 import io.netty.buffer.ByteBuf;
 
 import java.io.*;
@@ -142,16 +143,19 @@ public class DescSimpleMain {
     }
     int end = nbrOfDkeys + offset;
     if (end > reduces) {
-      throw new IOException("offset + nbrOfDkeys should not exceed reduces. " + (nbrOfDkeys + offset) + " > " + reduces);
+      throw new IOException("offset + nbrOfDkeys should not exceed reduces. " +
+          (nbrOfDkeys + offset) + " > " + reduces);
     }
 
     byte[] data = generateDataArray(akeyValLen);
     DaosEventQueue dq = DaosEventQueue.getInstance(128);
+    SimpleDataDescGrp grp = object.createSimpleDataDescGrp(128, 4, 1,
+        akeyValLen, dq);
+    List<IOSimpleDataDesc> descList = grp.getDescList();
     for (int i = 0; i < dq.getNbrOfEvents(); i++) {
       DaosEventQueue.Event e = dq.getEvent(i);
-      IOSimpleDataDesc desc = object.createSimpleDesc(4, 1, akeyValLen, dq);
-      desc.setEvent(e);
-      IOSimpleDataDesc.SimpleEntry entry = e.getDesc().getEntry(0);
+      descList.get(i).setEvent(e);
+      IOSimpleDataDesc.SimpleEntry entry = descList.get(i).getEntry(0);
       ByteBuf buf = entry.reuseBuffer();
       buf.writeBytes(data);
     }
@@ -159,19 +163,19 @@ public class DescSimpleMain {
     IOSimpleDataDesc desc;
     IOSimpleDataDesc.SimpleEntry entry;
     ByteBuf buf;
-    List<IOSimpleDataDesc> compList = new LinkedList<>();
+    List<DaosEventQueue.Attachment> compList = new LinkedList<>();
     long start = System.nanoTime();
     try {
       for (int i = offset; i < end; i++) {
         for (int j = 0; j < maps; j++) {
           compList.clear();
           e = dq.acquireEventBlocking(true, 1000, compList);
-          for (IOSimpleDataDesc d : compList) {
-            if (!d.isSucceeded()) {
+          for (DaosEventQueue.Attachment d : compList) {
+            if (!((IOSimpleDataDesc)d).isSucceeded()) {
               throw new IOException("failed " + d);
             }
           }
-          desc = e.getDesc();
+          desc = (IOSimpleDataDesc) e.getAttachment();
           desc.reuse();
           desc.setDkey(String.valueOf(i));
           entry = desc.getEntry(0);
@@ -183,8 +187,8 @@ public class DescSimpleMain {
       }
       compList.clear();
       dq.waitForCompletion(10000, compList);
-      for (IOSimpleDataDesc d : compList) {
-        if (!d.isSucceeded()) {
+      for (DaosEventQueue.Attachment d : compList) {
+        if (!((IOSimpleDataDesc)d).isSucceeded()) {
           throw new IOException("failed " + d);
         }
       }
@@ -315,11 +319,14 @@ public class DescSimpleMain {
     }
     int nbrOfEntries = sizeLimit/akeyValLen;
     int idx = 0;
-    List<IOSimpleDataDesc> compList = new LinkedList<>();
+    List<DaosEventQueue.Attachment> compList = new LinkedList<>();
     DaosEventQueue dq = DaosEventQueue.getInstance(128);
+    SimpleDataDescGrp grp = object.createSimpleDataDescGrp(128, 4, 1,
+        akeyValLen, dq);
+    List<IOSimpleDataDesc> descList = grp.getDescList();
     for (int i = 0; i < dq.getNbrOfEvents(); i++) {
       DaosEventQueue.Event e = dq.getEvent(i);
-      IOSimpleDataDesc desc = object.createSimpleDesc(4, nbrOfEntries, akeyValLen, dq);
+      IOSimpleDataDesc desc = descList.get(i);
       desc.setEvent(e);
     }
 //    IODataDesc.Entry entry = desc.getEntry(0);
@@ -333,12 +340,13 @@ public class DescSimpleMain {
             // acquire and check
             compList.clear();
             e = dq.acquireEventBlocking(false, 1000, compList);
-            for (IOSimpleDataDesc d : compList) {
-              for (int k = 0; k < d.getNbrOfAkeysToRequest(); k++) {
-                totalRead += d.getEntry(k).getActualSize();
+            for (DaosEventQueue.Attachment d : compList) {
+              desc = (IOSimpleDataDesc) d;
+              for (int k = 0; k < desc.getNbrOfAkeysToRequest(); k++) {
+                totalRead += desc.getEntry(k).getActualSize();
               }
             }
-            desc = e.getDesc();
+            desc = (IOSimpleDataDesc) e.getAttachment();
             desc.reuse();
             desc.setDkey(String.valueOf(i));
           }
@@ -357,9 +365,10 @@ public class DescSimpleMain {
       }
       compList.clear();
       dq.waitForCompletion(10000, compList);
-      for (IOSimpleDataDesc d : compList) {
-        for (int k = 0; k < d.getNbrOfAkeysToRequest(); k++) {
-          totalRead += d.getEntry(k).getActualSize();
+      for (DaosEventQueue.Attachment d : compList) {
+        desc = (IOSimpleDataDesc) d;
+        for (int k = 0; k < desc.getNbrOfAkeysToRequest(); k++) {
+          totalRead += desc.getEntry(k).getActualSize();
         }
       }
       float seconds = ((float)(System.nanoTime()-start))/1000000000;

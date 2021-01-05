@@ -1,10 +1,8 @@
 package io.daos.obj;
 
-import io.daos.BufferAllocator;
-import io.daos.Constants;
-import io.daos.DaosIOException;
-import io.daos.DaosTestBase;
+import io.daos.*;
 import io.netty.buffer.ByteBuf;
+import net.bytebuddy.agent.Attacher;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -1317,11 +1315,12 @@ public class DaosObjectIT {
 
     byte[] data = generateDataArray(bufLen);
     DaosEventQueue dq = DaosEventQueue.getInstance(128);
+    SimpleDataDescGrp grp = object.createSimpleDataDescGrp(128, 4, 1, bufLen, dq);
+    List<IOSimpleDataDesc> descList = grp.getDescList();
     for (int i = 0; i < dq.getNbrOfEvents(); i++) {
       DaosEventQueue.Event e = dq.getEvent(i);
-      IOSimpleDataDesc desc = object.createSimpleDesc(4, 1, bufLen, dq);
-      desc.setEvent(e);
-      IOSimpleDataDesc.SimpleEntry entry = e.getDesc().getEntry(0);
+      descList.get(i).setEvent(e);
+      IOSimpleDataDesc.SimpleEntry entry = descList.get(i).getEntry(0);
       ByteBuf buf = entry.reuseBuffer();
       buf.writeBytes(data);
     }
@@ -1332,7 +1331,7 @@ public class DaosObjectIT {
       // write
       DaosEventQueue.Event e;
 
-      List<IOSimpleDataDesc> compList = new LinkedList<>();
+      List<DaosEventQueue.Attachment> compList = new LinkedList<>();
       IOSimpleDataDesc.SimpleEntry entry;
       ByteBuf buf;
       long start = System.nanoTime();
@@ -1340,10 +1339,10 @@ public class DaosObjectIT {
         for (int j = 0; j < maps; j++) {
           compList.clear();
           e = dq.acquireEventBlocking(true, 1000, compList);
-          for (IOSimpleDataDesc d : compList) {
-            Assert.assertTrue(d.isSucceeded());
+          for (DaosEventQueue.Attachment d : compList) {
+            Assert.assertTrue(((IOSimpleDataDesc)d).isSucceeded());
           }
-          desc = e.getDesc();
+          desc = (IOSimpleDataDesc) e.getAttachment();
           desc.reuse();
           desc.setDkey(String.valueOf(i));
           entry = desc.getEntry(0);
@@ -1355,22 +1354,23 @@ public class DaosObjectIT {
       }
       compList.clear();
       dq.waitForCompletion(5000, compList);
-      for (IOSimpleDataDesc d : compList) {
-        Assert.assertTrue(d.isSucceeded());
+      for (DaosEventQueue.Attachment d : compList) {
+        Assert.assertTrue(((IOSimpleDataDesc)d).isSucceeded());
       }
       System.out.println((System.nanoTime() - start) / 1000000);
       System.out.println("written");
       // fetch
+      descList.forEach(d -> d.setUpdateOrFetch(false));
       start = System.nanoTime();
       for (int i = 0; i < reduces; i++) {
         for (int j = 0; j < maps; j++) {
 //          System.out.println(i + "-" +j);
           compList.clear();
           e = dq.acquireEventBlocking(false, 1000, compList);
-          for (IOSimpleDataDesc d : compList) {
-            Assert.assertEquals(bufLen, d.getEntry(0).getActualSize());
+          for (DaosEventQueue.Attachment d : compList) {
+            Assert.assertEquals(bufLen, ((IOSimpleDataDesc)d).getEntry(0).getActualSize());
           }
-          desc = e.getDesc();
+          desc = (IOSimpleDataDesc) e.getAttachment();
           desc.reuse();
           desc.setDkey(String.valueOf(i));
           entry = desc.getEntry(0);
@@ -1383,9 +1383,9 @@ public class DaosObjectIT {
 //      System.out.println("waiting");
       compList.clear();
       dq.waitForCompletion(5000, compList);
-      for (IOSimpleDataDesc d : compList) {
-        Assert.assertTrue(d.isSucceeded());
-        Assert.assertEquals(bufLen, d.getEntry(0).getActualSize());
+      for (DaosEventQueue.Attachment d : compList) {
+        Assert.assertTrue(((IOSimpleDataDesc)d).isSucceeded());
+        Assert.assertEquals(bufLen, ((IOSimpleDataDesc)d).getEntry(0).getActualSize());
 //        System.out.println("fetch completed");
       }
       System.out.println((System.nanoTime() - start) / 1000000);
@@ -1398,6 +1398,7 @@ public class DaosObjectIT {
         object.punch();
       }
       object.close();
+      grp.release();
       DaosEventQueue.destroyAll();
     }
   }

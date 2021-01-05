@@ -188,12 +188,29 @@ public class DaosObjClient extends ShareableClient implements ForceCloseable {
    * allocate native simple desc struct.
    *
    * @param memoryAddress
+   * memory address of desc buffer.
    * @param async
+   * true or false
    */
   native static void allocateSimpleDesc(long memoryAddress, boolean async);
 
-  native static long allocateSimDescGroup(long memoryAddress, int nbrOfEvents);
+  /**
+   * allocate <code>nbrOfDescs</code> native descs in a group.
+   *
+   * @param memoryAddress
+   * memory address of direct buffer to hold handle of native descs.
+   * @param nbrOfDescs
+   * number of descriptions to allocate.
+   * @return handler of desc group
+   */
+  native static long allocateSimDescGroup(long memoryAddress, int nbrOfDescs);
 
+  /**
+   * release description group allocated by {@link #allocateSimDescGroup(long, int)}.
+   *
+   * @param descGrpHdl
+   * handle of desc group
+   */
   native static void releaseSimDescGroup(long descGrpHdl);
 
   /**
