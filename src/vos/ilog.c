@@ -678,7 +678,7 @@ ilog_root_migrate(struct ilog_context *lctx, const struct ilog_id *id_in)
 	rc = ilog_ptr_set(lctx, root, &tmp);
 
 done:
-	if (!daos_handle_is_inval(toh))
+	if (daos_handle_is_valid(toh))
 		dbtree_close(toh);
 
 	return rc;
@@ -959,7 +959,7 @@ insert:
 	}
 
 done:
-	if (!daos_handle_is_inval(toh))
+	if (daos_handle_is_valid(toh))
 		dbtree_close(toh);
 
 	return rc;
@@ -1231,7 +1231,7 @@ reset:
 	lctx->ic_in_txn = false;
 	lctx->ic_ver_inc = false;
 
-	if (!daos_handle_is_inval(priv->ip_ih)) {
+	if (daos_handle_is_valid(priv->ip_ih)) {
 		dbtree_iter_finish(priv->ip_ih);
 		priv->ip_ih = DAOS_HDL_INVAL;
 	}
@@ -1444,7 +1444,7 @@ ilog_fetch_finish(struct ilog_entries *entries)
 	if (priv->ip_alloc_size)
 		D_FREE(entries->ie_entries);
 
-	if (!daos_handle_is_inval(priv->ip_ih))
+	if (daos_handle_is_valid(priv->ip_ih))
 		dbtree_iter_finish(priv->ip_ih);
 }
 
@@ -1689,7 +1689,7 @@ collapse:
 
 	empty = ilog_empty(root);
 done:
-	if (!daos_handle_is_inval(toh))
+	if (daos_handle_is_valid(toh))
 		dbtree_close(toh);
 
 	rc = ilog_tx_end(lctx, rc);
