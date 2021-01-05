@@ -1,68 +1,71 @@
 [help]
 help=1
 
-
 [align_4k_inFlight_16_size_1M_B]
+display=1
 group-name=selftest_srv_grp
-master-endpoint=0:0
-endpoint=1:0
+master-endpoint=0-1:0
+endpoint=0-1:0
 message-sizes=b1048576
 max-inflight-rpcs=16
 repetitions-per-size=100
-singleton =1
 nopmix=1
-path=.
 # align to 4k page
 align=12
 Mbits=0
 randomize-endpoints=0
+#singleton =1
+#path=.
 
 [align_1k_inFlight_1_size_1M_B]
+display=1
 group-name=selftest_srv_grp
-master-endpoint=0:0
-endpoint=1:0
+master-endpoint=0-1:0
+endpoint=0-1:0
 message-sizes=b1048576
 max-inflight-rpcs=1
 repetitions-per-size=100
-singleton =1
 nopmix=1
-path=.
 # align to 1k page
 align=10
 Mbits=0
 randomize-endpoints=0
+#singleton =1
+#path=.
+
 
 [align_1k_inFlight_4_size_1M_B]
 display=1
 group-name=selftest_srv_grp
-master-endpoint=0:0
-endpoint=1:0
+master-endpoint=0-1:0
+endpoint=0-1:0
 message-sizes=b1048576
 max-inflight-rpcs=4
 repetitions-per-size=100
-singleton =1
 nopmix=1
-path=.
 # align to 1k page
 align=10
 Mbits=0
 randomize-endpoints=0
+#singleton =1
+#path=.
 
-# align to 1k page
+
 [align_1k_inFlight_16_size_1M_B]
 display=1
 group-name=selftest_srv_grp
-master-endpoint=0:0
-endpoint=1:0
+master-endpoint=0-1:0
+endpoint=0-1:0
 message-sizes=b1048576
 max-inflight-rpcs=16
 repetitions-per-size=100
-singleton =1
 nopmix=1
-path=.
 # align to 1k page
 align=10
 Mbits=0
 randomize-endpoints=0
+#singleton =1
+#path=.
+
 
 

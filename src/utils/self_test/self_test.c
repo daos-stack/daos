@@ -1727,9 +1727,11 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 {
 	Config *cfg = NULL;
 	int ret = 0;
+	int sret;
 	ConfigRet config_ret;
 	char string[STRING_MAX_SIZE];
 	int len;
+	int temp;
 
 	/* Read and parse configuration file */
 	config_ret = ConfigReadFile(file_name, &cfg);
@@ -1750,7 +1752,7 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		/* Avoid checkpatch warning */
-		ret = -1;
+		ret = 1;
 		goto cleanup;
 	}
 
@@ -1802,7 +1804,7 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 	if (config_ret == CONFIG_OK) {
 		len = strlen(string) + 1;
 		g_msg_sizes_str = (char *)malloc(len);
-		if (g_dest_name == NULL) {
+		if (g_msg_sizes_str == NULL) {
 			/* Avoid checkpatch warning */
 			D_GOTO(cleanup, ret = -DER_NOMEM);
 		}
@@ -1816,8 +1818,8 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 				      &string[0], STRING_MAX_SIZE,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
-		ret = sscanf(&string[0], "%d", &g_rep_count);
-		if (ret != 1) {
+		sret = sscanf(&string[0], "%d", &g_rep_count);
+		if (sret != 1) {
 			g_rep_count = g_default_rep_count;
 			printf("Warning: Invalid repetitions-per-size\n"
 			       "  Using default value %d instead\n",
@@ -1831,8 +1833,8 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 				      &string[0], STRING_MAX_SIZE,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
-		ret = sscanf(&string[0], "%d", &g_max_inflight);
-		if (ret != 1) {
+		sret = sscanf(&string[0], "%d", &g_max_inflight);
+		if (sret != 1) {
 			g_max_inflight = g_default_max_inflight;
 			printf("Warning: Invalid max-inflight-rpcs\n"
 			"  Using default value %d instead\n",
@@ -1845,8 +1847,8 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 				      &string[0], STRING_MAX_SIZE,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
-		ret = sscanf(string, "%" SCNd16, &g_buf_alignment);
-		if (ret != 1 || g_buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
+		sret = sscanf(string, "%" SCNd16, &g_buf_alignment);
+		if (sret != 1 || g_buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
 		    g_buf_alignment > CRT_ST_BUF_ALIGN_MAX) {
 			printf("Warning: Invalid align value %d;"
 			       " Expected value in range [%d:%d]\n",
@@ -1861,8 +1863,11 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 				      &string[0], STRING_MAX_SIZE,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
-		/* Avoid checkpatch warning */
-		g_output_megabits = 1;
+		sret = sscanf(&string[0], "%d", &temp);
+		if (temp == 0)
+			g_output_megabits = 0;
+		else
+			g_output_megabits = 1;
 	}
 
 	/********/
@@ -1875,8 +1880,11 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 				      &string[0], STRING_MAX_SIZE,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
-		/* Avoid checkpatch warning */
-		g_randomize_endpoints = true;
+		sret = sscanf(&string[0], "%d", &temp);
+		if (temp == 0)
+			g_randomize_endpoints = false;
+		else
+			g_randomize_endpoints = true;
 	}
 
 	/********/
@@ -1988,11 +1996,14 @@ int main(int argc, char *argv[])
 	}
 	if (file_name != NULL) {
 		ret = config_file_setup(file_name, section_name, dump);
-		if (ret == 0) {
+		if (ret == 1) {
 			print_usage(argv[0], default_msg_sizes_str,
 				    g_default_rep_count,
 				    g_default_max_inflight);
-			D_GOTO(cleanup, ret = -DER_INVAL);
+			D_GOTO(cleanup, ret = 0);
+		} 
+		if (ret < 0) {
+			goto cleanup;
 		}
 	}
 
@@ -2104,7 +2115,7 @@ int main(int argc, char *argv[])
 	/******************** Parse message sizes argument ********************/
 
 	/* repeat rep_count for each endpoint */
-	g_rep_count = g_rep_count * g_num_endpts;
+	/* g_rep_count = g_rep_count * g_num_endpts; */
 
 	/*
 	 * Count the number of tuple tokens (',') in the user-specified string

@@ -13,40 +13,115 @@ env_CRT_CTX_SHARE_ADDR: !mux
   sep:
     env: sep
     CRT_CTX_SHARE_ADDR: "1"
-  no_sep:
-    env: no_sep
-    CRT_CTX_SHARE_ADDR: "0"
+#  no_sep:
+#    env: no_sep
+#    CRT_CTX_SHARE_ADDR: "0"
 hosts: !mux
   hosts_1:
     config: three_node
     test_servers:
-      - boro-A
-      - boro-B
+      - wolf-55
+      - wolf-56
     test_clients:
-      - boro-C
+      - wolf-55 
 timeout: 600
 tests: !mux
-  self_np:
+###### 4KB aligned, 1MB Bulk transfer, 16 RPC in flight #####
+
+  self_file_1:
     name: self_test_np
-    test_servers_bin: crt_launch
-    test_servers_arg: "-e ../tests/test_group_np_srv --name selftest_srv_grp"
+    test_servers_bin: /home/sbolli1x/daos/install/bin/crt_launch
+    test_servers_arg: "-e /home/sbolli1x/daos/install/lib/daos/TESTING/tests/test_group_np_srv --name selftest_srv_grp"
     test_servers_env: ""
     test_servers_ppn: "1"
 
     test_clients_env: ""
     test_clients_ppn: 1
     test_clients_bin:
-      - self_test
-      - self_test
-      - ../tests/test_group_np_cli
+      - /home/sbolli1x/daos/install/bin/self_test
+      - /home/sbolli1x/daos/install/bin/self_test
+      - /home/sbolli1x/daos/install/lib/daos/TESTING/tests/test_group_np_cli
+    test_clients_arg:
+      - " -f /home/sbolli1x/daos/install/etc/selftest.cnf -c align_4k_inFlight_16_size_1M_B"
+      - " -f /home/sbolli1x/daos/install/etc/selftest.cnf -c align_4k_inFlight_16_size_1M_B"
+      - "--name client-group --attach_to selftest_srv_grp --shut_only"
+
+###### 1KB aligned, 1MB Bulk transfer, 1 RPC in flight #####
+  self_file_2:
+    name: self_test_np
+    test_servers_bin: /home/sbolli1x/daos/install/bin/crt_launch
+    test_servers_arg: "-e /home/sbolli1x/daos/install/lib/daos/TESTING/tests/test_group_np_srv --name selftest_srv_grp"
+    test_servers_env: ""
+    test_servers_ppn: "1"
+
+    test_clients_env: ""
+    test_clients_ppn: 1
+    test_clients_bin:
+      - /home/sbolli1x/daos/install/bin/self_test
+      - /home/sbolli1x/daos/install/bin/self_test
+      - /home/sbolli1x/daos/install/lib/daos/TESTING/tests/test_group_np_cli
+    test_clients_arg:
+      - " -f /home/sbolli1x/daos/install/etc/selftest.cnf -c align_1k_inFlight_1_size_1M_B"
+      - " -f /home/sbolli1x/daos/install/etc/selftest.cnf -c align_1k_inFlight_1_size_1M_B"
+      - "--name client-group --attach_to selftest_srv_grp --shut_only"
+
+
+###### 1KB aligned, 1MB Bulk transfer, 4 RPC in flight #####
+  self_file_3:
+    name: self_test_np
+    test_servers_bin: /home/sbolli1x/daos/install/bin/crt_launch
+    test_servers_arg: "-e /home/sbolli1x/daos/install/lib/daos/TESTING/tests/test_group_np_srv --name selftest_srv_grp"
+    test_servers_env: ""
+    test_servers_ppn: "1"
+
+    test_clients_env: ""
+    test_clients_ppn: 1
+    test_clients_bin:
+      - /home/sbolli1x/daos/install/bin/self_test
+      - /home/sbolli1x/daos/install/bin/self_test
+      - /home/sbolli1x/daos/install/lib/daos/TESTING/tests/test_group_np_cli
+    test_clients_arg:
+      - " -f /home/sbolli1x/daos/install/etc/selftest.cnf -c align_1k_inFlight_4_size_1M_B"
+      - " -f /home/sbolli1x/daos/install/etc/selftest.cnf -c align_1k_inFlight_4_size_1M_B"
+      - "--name client-group --attach_to selftest_srv_grp --shut_only"
+
+
+###### 1KB aligned, 1MB Bulk transfer, 16 RPC in flight #####
+  self_file_4:
+    name: self_test_np
+    test_servers_bin: /home/sbolli1x/daos/install/bin/crt_launch
+    test_servers_arg: "-e /home/sbolli1x/daos/install/lib/daos/TESTING/tests/test_group_np_srv --name selftest_srv_grp"
+    test_servers_env: ""
+    test_servers_ppn: "1"
+
+    test_clients_env: ""
+    test_clients_ppn: 1
+    test_clients_bin:
+      - /home/sbolli1x/daos/install/bin/self_test
+      - /home/sbolli1x/daos/install/bin/self_test
+      - /home/sbolli1x/daos/install/lib/daos/TESTING/tests/test_group_np_cli
+    test_clients_arg:
+      - " -f /home/sbolli1x/daos/install/etc/selftest.cnf -c align_1k_inFlight_16_size_1M_B"
+      - " -f /home/sbolli1x/daos/install/etc/selftest.cnf -c align_1k_inFlight_16_size_1M_B"
+      - "--name client-group --attach_to selftest_srv_grp --shut_only"
+
+###### Command line input, Multiple sizes with bulk and IVO  #####
+  self_cmdline:
+    name: self_test_np
+    test_servers_bin: /home/sbolli1x/daos/install/bin/crt_launch
+    test_servers_arg: "-e /home/sbolli1x/daos/install/lib/daos/TESTING/tests/test_group_np_srv --name selftest_srv_grp"
+    test_servers_env: ""
+    test_servers_ppn: "1"
+
+    test_clients_env: ""
+    test_clients_ppn: 1
+    test_clients_bin:
+      - /home/sbolli1x/daos/install/bin/self_test
+      - /home/sbolli1x/daos/install/bin/self_test
+      - /home/sbolli1x/daos/install/lib/daos/TESTING/tests/test_group_np_cli
     test_clients_arg:
       - "--group-name selftest_srv_grp --endpoint 0-1:0 --message-sizes \"b2000,b2000 0,0 b2000,b2000 i1000,i1000 b2000,i1000,i1000 0,0 i1000,1,0\" --max-inflight-rpcs 16 --repetitions 100 -t -n"
       - "--group-name selftest_srv_grp --endpoint 0-1:0 --master-endpoint 0-1:0 --message-sizes \"b2000,b2000 0,0 b2000,b2000 i1000,i1000 b2000,i1000,i1000 0,0 i1000,1,0\" --max-inflight-rpcs 16 --repetitions 100 -t -n"
-      - "-f install/etc/selftest.cnf -c help"
-      - "-f install/etc/selftest.cnf -c align_4k_inFlight_16_size_1M_B"
-      - "-f install/etc/selftest.cnf -c align_1k_inFlight_1_size_1M_B"
-      - "-f install/etc/selftest.cnf -c align_1k_inFlight_4_size_1M_B"
-      - "-f install/etc/selftest.cnf -c align_1k_inFlight_16_size_1M_B"
       - "--name client-group --attach_to selftest_srv_grp --shut_only"
 
 
