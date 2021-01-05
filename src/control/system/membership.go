@@ -479,37 +479,5 @@ func (m *Membership) OnEvent(_ context.Context, evt events.Event) {
 		member, _ := m.Get(Rank(e.RAS.Rank))
 		m.log.Debugf("update rank %d to %+v (%s)", e.RAS.Rank, member,
 			member.Info)
-	case *events.PoolSvcReplicasUpdate:
-		if e == nil {
-			m.log.Error("nil PoolSvcReplicasUpdate event received")
-			return
-		}
-		m.log.Debugf("processing RAS event %q with info %+v on host %q",
-			e.RAS.Msg, e.ExtendedInfo, e.RAS.Hostname)
-
-		uuid, err := uuid.Parse(e.ExtendedInfo.PoolUUID)
-		if err != nil {
-			m.log.Errorf("failed to parse pool UUID %q: %s",
-				e.ExtendedInfo.PoolUUID, err)
-			return
-		}
-
-		ps, err := m.db.FindPoolServiceByUUID(uuid)
-		if err != nil {
-			m.log.Errorf("failed to find pool with UUID %q: %s",
-				e.ExtendedInfo.PoolUUID, err)
-			return
-		}
-
-		m.log.Debugf("update pool %s (state=%s) svc ranks %v->%v",
-			ps.PoolUUID, ps.State, ps.Replicas, e.ExtendedInfo.SvcReplicas)
-
-		ps.Replicas = RanksFromUint32(e.ExtendedInfo.SvcReplicas)
-
-		if err := m.db.UpdatePoolService(ps); err != nil {
-			m.log.Errorf("failed to apply pool service update: %s", err)
-		}
-	default:
-		m.log.Errorf("%s event unsupported", evt.GetID())
 	}
 }

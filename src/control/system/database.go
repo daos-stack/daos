@@ -37,6 +37,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -834,4 +835,45 @@ func (db *Database) UpdatePoolService(ps *PoolService) error {
 	}
 
 	return nil
+}
+
+// OnEvent handles events and updates system database accordingly.
+func (db *Database) OnEvent(_ context.Context, evt events.Event) {
+	if common.InterfaceIsNil(evt) {
+		db.log.Error("nil event")
+		return
+	}
+
+	switch e := evt.(type) {
+	case *events.PoolSvcReplicasUpdate:
+		if e == nil {
+			db.log.Error("nil PoolSvcReplicasUpdate event received")
+			return
+		}
+		db.log.Debugf("processing RAS event %q with info %+v on host %q",
+			e.RAS.Msg, e.ExtendedInfo, e.RAS.Hostname)
+
+		uuid, err := uuid.Parse(e.ExtendedInfo.PoolUUID)
+		if err != nil {
+			db.log.Errorf("failed to parse pool UUID %q: %s",
+				e.ExtendedInfo.PoolUUID, err)
+			return
+		}
+
+		ps, err := db.FindPoolServiceByUUID(uuid)
+		if err != nil {
+			db.log.Errorf("failed to find pool with UUID %q: %s",
+				e.ExtendedInfo.PoolUUID, err)
+			return
+		}
+
+		db.log.Debugf("update pool %s (state=%s) svc ranks %v->%v",
+			ps.PoolUUID, ps.State, ps.Replicas, e.ExtendedInfo.SvcReplicas)
+
+		ps.Replicas = RanksFromUint32(e.ExtendedInfo.SvcReplicas)
+
+		if err := db.UpdatePoolService(ps); err != nil {
+			db.log.Errorf("failed to apply pool service update: %s", err)
+		}
+	}
 }
