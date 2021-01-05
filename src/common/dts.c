@@ -178,7 +178,7 @@ credits_init(struct dts_context *tsc)
 			return -1;
 		}
 
-		if (!daos_handle_is_inval(tsc->tsc_eqh)) {
+		if (daos_handle_is_valid(tsc->tsc_eqh)) {
 			rc = daos_event_init(&cred->tc_ev, tsc->tsc_eqh, NULL);
 			D_ASSERTF(!rc, "rc="DF_RC"\n", DP_RC(rc));
 			cred->tc_evp = &cred->tc_ev;
@@ -196,13 +196,13 @@ credits_fini(struct dts_context *tsc)
 	D_ASSERT(!tsc->tsc_cred_inuse);
 
 	for (i = 0; i < tsc->tsc_cred_nr; i++) {
-		if (!daos_handle_is_inval(tsc->tsc_eqh))
+		if (daos_handle_is_valid(tsc->tsc_eqh))
 			daos_event_fini(&tsc->tsc_cred_buf[i].tc_ev);
 
 		D_FREE(tsc->tsc_cred_buf[i].tc_vbuf);
 	}
 
-	if (!daos_handle_is_inval(tsc->tsc_eqh))
+	if (daos_handle_is_valid(tsc->tsc_eqh))
 		daos_eq_destroy(tsc->tsc_eqh, DAOS_EQ_DESTROY_FORCE);
 }
 
@@ -358,7 +358,7 @@ cont_fini(struct dts_context *tsc)
 bool
 dts_is_async(struct dts_context *tsc)
 {
-	return !daos_handle_is_inval(tsc->tsc_eqh);
+	return daos_handle_is_valid(tsc->tsc_eqh);
 }
 
 /* see comments in daos/dts.h */
