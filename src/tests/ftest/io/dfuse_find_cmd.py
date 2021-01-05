@@ -261,7 +261,7 @@ class FindCmd(DfuseTestBase):
         return challenger_dirs
 
     @classmethod
-    def _generate_temp_path_name(self, root, prefix):
+    def _generate_temp_path_name(cls, root, prefix):
         """
         Creates path that can be used to create temporary files or directories.
         The return value is concatenation of root and a random string prefixed

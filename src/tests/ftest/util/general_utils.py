@@ -145,12 +145,12 @@ class SimpleProfiler(object):
             print(msg)
 
     @classmethod
-    def _pretty_time(self, ftime):
+    def _pretty_time(cls, ftime):
         """Convert to pretty time string"""
         return time.strftime("%H:%M:%S", time.gmtime(ftime))
 
     @classmethod
-    def _calculate_metrics(self, data):
+    def _calculate_metrics(cls, data):
         """
         Calculate the maximum, minimum and average values of a given list.
         """
