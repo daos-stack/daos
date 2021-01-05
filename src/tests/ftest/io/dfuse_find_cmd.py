@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2021 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -80,7 +80,7 @@ class FindCmd(DfuseTestBase):
 
         def _run_test(test_root, dir_tree_paths):
 
-            self._crate_dir_trees(
+            self._create_dir_trees(
                 dir_tree_paths,
                 height,
                 subdirs_per_node,
@@ -142,7 +142,7 @@ class FindCmd(DfuseTestBase):
             self.log.info(
                 "DAOS is equal or faster running '%s' tag", tag)
 
-    def _run_test(self, test_path, samples, contaiers, needles):
+    def _run_test(self, test_path, samples, containers, needles):
         profiler = general_utils.SimpleProfiler()
         profiler.set_logger(self.log.info)
 
@@ -162,16 +162,16 @@ class FindCmd(DfuseTestBase):
             self.log.info(
                 "Running sample number %d of %d", i + 1, samples)
 
-            prefix = random.randrange(contaiers - 1)
-            sufix = random.randrange(needles - 1)
-            file_name = "t{:05d}_*_{:05d}.needle".format(prefix, sufix)
+            prefix = random.randrange(containers - 1)
+            suffix = random.randrange(needles - 1)
+            file_name = "t{:05d}_*_{:05d}.needle".format(prefix, suffix)
             _search_needles(file_name, "unique_file", 1)
 
             number = random.randrange(needles - 1)
             file_name = "*_{:05d}.needle".format(number)
-            _search_needles(file_name, "same_suffix", contaiers)
+            _search_needles(file_name, "same_suffix", containers)
 
-            _search_needles("*.needle", "all_files", contaiers * needles)
+            _search_needles("*.needle", "all_files", containers * needles)
 
         return profiler
 
@@ -192,7 +192,7 @@ class FindCmd(DfuseTestBase):
 
         return mount_dirs
 
-    def _crate_dir_trees(
+    def _create_dir_trees(
             self,
             paths,
             height,

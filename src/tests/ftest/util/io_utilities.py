@@ -46,10 +46,18 @@ class DirTree(object):
     Examples:
 
     tree = DirTree("/mnt", height=7, subdirs_per_node=4, files_per_node=5)
-    tree.create() # it will create 21844 directories and 27315 files
+    tree.create()
+
+    It will create:
+    1 + 4 + 16 + 64 + 256 + 1024 + 4096 + 16384 = 21845 directories
+    5 + 20 + 80 + 320 + 1280 + 5120 + 20480 = 27305 files
 
     tree = DirTree("/mnt", height=2, subdirs_per_node=3, files_per_node=5)
-    tree.create() # it will create 12 directories and 30 files
+    tree.create()
+
+    It will create:
+    1 + 3 + 9 = 13 directories
+    5 + 15 = 20 files
     """
 
     def __init__(self, root, height=1, subdirs_per_node=1, files_per_node=1):
@@ -73,7 +81,7 @@ class DirTree(object):
 
     def create(self):
         """
-        Poputate the directory-tree. This method must be called before using
+        Populate the directory-tree. This method must be called before using
         the other methods.
         """
         if self._tree_path:
