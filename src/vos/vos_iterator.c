@@ -198,7 +198,7 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 		return -DER_NOSYS;
 	}
 
-	if (!daos_handle_is_inval(param->ip_ih)) {
+	if (daos_handle_is_valid(param->ip_ih)) {
 		D_DEBUG(DB_TRACE, "Preparing nested iterator of type %s\n",
 			dict->id_name);
 		/** Nested operations are only used internally so there
@@ -811,7 +811,7 @@ vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
 	struct vos_iter_anchors	 anchors = {0};
 
 	D_ASSERT(type == VOS_ITER_DKEY || type == VOS_ITER_AKEY);
-	D_ASSERT(!daos_handle_is_inval(toh));
+	D_ASSERT(daos_handle_is_valid(toh));
 
 	param.ip_hdl = toh;
 	param.ip_epr = *epr;
