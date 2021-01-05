@@ -125,7 +125,8 @@ class DaosCommand(DaosCommandBase):
             cont=cont, path=path, type=cont_type, oclass=oclass,
             chunk_size=chunk_size, properties=properties, acl_file=acl_file)
 
-    def container_destroy(self, pool, cont, force=None, sys_name=None):
+    def container_destroy(
+            self, pool=None, cont=None, force=None, sys_name=None, path=None):
         """Destroy a container.
 
         Args:
@@ -146,7 +147,7 @@ class DaosCommand(DaosCommandBase):
         """
         return self._get_result(
             ("container", "destroy"), pool=pool, sys_name=sys_name,
-            cont=cont, force=force)
+            cont=cont, force=force, path=path)
 
     def container_get_acl(self, pool, cont,
                           verbose=False, outfile=None):

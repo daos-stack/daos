@@ -174,6 +174,9 @@ class IorTestBase(DfuseTestBase):
                            fail_on_warning=fail_on_warning)
 
         if stop_dfuse:
+            if plugin_path:
+                self.daos_cmd = DaosCommand(self.bin)
+                self.daos_cmd.container_destroy(path=test_file)
             self.stop_dfuse()
 
         return out
