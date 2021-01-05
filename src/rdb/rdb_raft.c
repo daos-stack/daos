@@ -767,7 +767,7 @@ rdb_raft_cb_recv_installsnapshot(raft_server_t *raft, void *arg,
 	out = container_of(resp, struct rdb_installsnapshot_out, iso_msg);
 
 	/* Is there an existing SLC? */
-	if (!daos_handle_is_inval(*slc)) {
+	if (daos_handle_is_valid(*slc)) {
 		bool destroy = false;
 
 		/* As msg->term == currentTerm and currentTerm >= dlr_term... */
@@ -2288,7 +2288,7 @@ lc:
 err_lc:
 	vos_cont_close(db->d_lc);
 err_slc:
-	if (!daos_handle_is_inval(db->d_slc))
+	if (daos_handle_is_valid(db->d_slc))
 		vos_cont_close(db->d_slc);
 err:
 	return rc;
@@ -2298,7 +2298,7 @@ static void
 rdb_raft_unload_lc(struct rdb *db)
 {
 	rdb_raft_unload_snapshot(db);
-	if (!daos_handle_is_inval(db->d_slc))
+	if (daos_handle_is_valid(db->d_slc))
 		vos_cont_close(db->d_slc);
 	vos_cont_close(db->d_lc);
 }

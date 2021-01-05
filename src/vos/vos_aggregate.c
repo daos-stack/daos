@@ -145,7 +145,8 @@ struct vos_agg_param {
 	daos_unit_oid_t		ap_oid;		/* current object ID */
 	daos_key_t		ap_dkey;	/* current dkey */
 	daos_key_t		ap_akey;	/* current akey */
-	unsigned int		ap_discard:1;
+	unsigned int		ap_discard:1,
+				ap_csum_err:1;
 	struct umem_instance	*ap_umm;
 	bool			(*ap_yield_func)(void *arg);
 	void			*ap_yield_arg;
@@ -980,9 +981,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		rc = csum_recalc(io, &bsgl, &sgl, ent_in, io->ic_csum_recalcs,
 				 seg_count, seg_size);
 		if (rc) {
-			if (rc == -DER_CSUM)
-				D_ERROR("CSUM verify error: "DF_RC"\n",
-					DP_RC(rc));
+			D_ERROR("CSUM verify error: "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
 	}
@@ -1768,6 +1767,15 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		break;
 	case VOS_ITER_RECX:
 		rc = vos_agg_ev(ih, entry, agg_param, acts);
+		if (rc == -DER_CSUM) {
+			/* Abort current evtree aggregation only */
+			D_DEBUG(DB_EPC, "Abort evtree aggregation "DF_RC"\n",
+				DP_RC(rc));
+
+			*acts |= VOS_ITER_CB_ABORT;
+			agg_param->ap_csum_err = true;
+			rc = 0;
+		}
 		break;
 	default:
 		D_ASSERTF(false, "Invalid iter type\n");
@@ -1971,6 +1979,10 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	if (rc != 0) {
 		close_merge_window(&agg_param.ap_window, rc);
 		goto exit;
+	} else if (agg_param.ap_csum_err) {
+		rc = -DER_CSUM;	/* Inform caller the csum error */
+		close_merge_window(&agg_param.ap_window, rc);
+		/* HAE needs be updated for csum error case */
 	}
 
 	/*

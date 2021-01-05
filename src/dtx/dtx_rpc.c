@@ -648,7 +648,7 @@ out:
 
 	D_FREE(dti);
 
-	if (!daos_handle_is_inval(tree_hdl))
+	if (daos_handle_is_valid(tree_hdl))
 		dbtree_destroy(tree_hdl, NULL);
 
 	D_ASSERT(d_list_empty(&head));
@@ -708,7 +708,7 @@ out:
 
 	D_FREE(dti);
 
-	if (!daos_handle_is_inval(tree_hdl))
+	if (daos_handle_is_valid(tree_hdl))
 		dbtree_destroy(tree_hdl, NULL);
 
 	D_ASSERT(d_list_empty(&head));
