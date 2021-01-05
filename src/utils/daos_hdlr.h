@@ -88,8 +88,8 @@ struct cmd_args_s {
 
 	/* Container unified namespace (path) related */
 	char			*path;		/* --path cont namespace */
-	char			*src;		/* --src path for filesystem copy */
-	char			*dst;		/* --dst path for filesystem copy */
+	char			*src;		/* --src path for fs copy */
+	char			*dst;		/* --dst path for fs copy */
 	daos_cont_layout_t	type;		/* --type cont type */
 	daos_oclass_id_t	oclass;		/* --oclass object class */
 	daos_size_t		chunk_size;	/* --chunk_size of cont objs */

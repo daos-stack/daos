@@ -974,7 +974,8 @@ fs_op_hdlr(struct cmd_args_s *ap)
 	switch (op) {
 	case FS_COPY:
 		if (ap->src == NULL || ap->dst == NULL) {
-			fprintf(stderr, "a source and destination path must be provided\n");
+			fprintf(stderr, "a source and destination path
+				must be provided\n");
 		} else {
 			rc = fs_copy_hdlr(ap);
 			assert(rc == 0);
@@ -983,7 +984,7 @@ fs_op_hdlr(struct cmd_args_s *ap)
 	default:
 		break;
 	}
-	return rc; 
+	return rc;
 }
 
 static int
@@ -1291,7 +1292,7 @@ do { \
 	" filesystem copy options (copy):\n" \
 	"	--src=daos://<pool/cont> | <path>\n" \
 	"	--dst=daos://<pool/cont> | <path>\n" \
-	"	\t type is daos, only specified if pool/cont used, not with path \n"); \
+	"	\t type is daos, only specified if pool/cont used\n"); \
 	fprintf(stream, "\n"); \
 } while (0)
 
@@ -1301,7 +1302,7 @@ do { \
 	"container (cont) commands:\n" \
 	"	  copy		copy to/from POSIX filesystem\n"); \
 	fprintf(stream, "\n"); \
-	fprintf(stream, "use 'daos help fs|filesystem COMMAND' for command specific options\n"); \
+	fprintf(stream, "use 'daos help fs|filesystem COMMAND' for options\n"); \
 } while (0)
 
 #define ALL_CONT_CMDS_HELP() \
@@ -1358,7 +1359,8 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 
 	if (argc <= 2) {
 		FIRST_LEVEL_HELP();
-	} else if (strcmp(argv[2], "filesystem") == 0 || strcmp(argv[2], "fs") == 0) {
+	} else if (strcmp(argv[2], "filesystem") == 0 ||
+			strcmp(argv[2], "fs") == 0) {
 		if (argc == 3 || strcmp(argv[3], "copy") == 0) {
 			FS_COPY_CMDS_HELP();
 		}
