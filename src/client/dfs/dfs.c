@@ -1123,7 +1123,11 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 		D_GOTO(err_destroy, rc = daos_der2errno(rc));
 	}
 
-	if (attr) {
+	if (attr == NULL) {
+		dattr.da_mode = DFS_BALANCED;
+		dattr.da_chunk_size = DFS_DEFAULT_CHUNK_SIZE;
+		dattr.da_oclass_id = DFS_DEFAULT_OBJ_CLASS;
+	} else {
 		/** check non default chunk size */
 		if (attr->da_chunk_size != 0)
 			dattr.da_chunk_size = attr->da_chunk_size;
