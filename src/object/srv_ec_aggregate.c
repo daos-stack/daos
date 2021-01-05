@@ -1794,6 +1794,8 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 		}
 		agg_entry->ae_cur_stripe.as_stripenum = this_stripenum;
 	}
+	if (entry->ie_csum.cs_type)
+		return 1;
 
 	/* Add the extent to the entry, for the current stripe */
 	D_ALLOC_PTR(extent);
@@ -1801,8 +1803,6 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 		rc = -DER_NOMEM;
 		goto out;
 	}
-	if (entry->ie_csum.cs_type)
-		return 1;
 
 	extent->ae_recx = entry->ie_recx;
 	extent->ae_orig_recx = entry->ie_orig_recx;
