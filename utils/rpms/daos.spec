@@ -10,7 +10,7 @@
 
 Name:          daos
 Version:       1.1.2.1
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -412,7 +412,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %changelog
 
 * Tue Jan 05 2021 Kenneth Cain <kenneth.c.cain@intel.com> 1.1.2.1-3
-- Version bump for API major version bump libdaos.so.1 (1.0.0)
+- Version bump for API major version libdaos.so.1 (1.0.0)
 
 * Tue Dec 15 2020 Ashley Pittman <ashley.m.pittman@intel.com> 1.1.2.1-2
 - Combine the two memcheck suppressions files.
