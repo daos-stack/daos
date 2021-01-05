@@ -8,8 +8,8 @@ then
   if [ "$var" = "SL_PREFIX" ]
   then
     echo "${daos_install_path}"
-  else # SL_PROTOBUFC_PREFIX, default to dev
-    echo "${daos_install_path}/prereq/dev/protobufc/"
+  else # SL_PROTOBUFC_PREFIX, default to release
+    echo "${daos_install_path}/prereq/release/protobufc/"
   fi
 else
   source "${build_vars}"
