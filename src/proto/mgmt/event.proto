@@ -38,7 +38,7 @@ message RankStateEventInfo {
 message PoolSvcEventInfo {
 	string pool_uuid = 1;		// Pool UUID.
 	repeated uint32 svc_reps = 2;	// Pool service replica ranks.
-	int32 raft_leader_term = 3;	// Raft leadership term.
+	uint64 version = 3;		// Raft leadership term.
 }
 
 // RASEvent describes a RAS event in the DAOS system.

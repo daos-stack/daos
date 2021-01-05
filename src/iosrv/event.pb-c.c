@@ -323,12 +323,12 @@ static const ProtobufCFieldDescriptor mgmt__pool_svc_event_info__field_descripto
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "raft_leader_term",
+    "version",
     3,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT32,
+    PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolSvcEventInfo, raft_leader_term),
+    offsetof(Mgmt__PoolSvcEventInfo, version),
     NULL,
     NULL,
     0,             /* flags */
@@ -337,8 +337,8 @@ static const ProtobufCFieldDescriptor mgmt__pool_svc_event_info__field_descripto
 };
 static const unsigned mgmt__pool_svc_event_info__field_indices_by_name[] = {
   0,   /* field[0] = pool_uuid */
-  2,   /* field[2] = raft_leader_term */
   1,   /* field[1] = svc_reps */
+  2,   /* field[2] = version */
 };
 static const ProtobufCIntRange mgmt__pool_svc_event_info__number_ranges[1 + 1] =
 {

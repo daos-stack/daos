@@ -69,7 +69,7 @@ struct  _Mgmt__PoolSvcEventInfo
   /*
    * Raft leadership term.
    */
-  int32_t raft_leader_term;
+  uint64_t version;
 };
 #define MGMT__POOL_SVC_EVENT_INFO__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_svc_event_info__descriptor) \

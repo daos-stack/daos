@@ -37,7 +37,7 @@ import (
 type PoolSvcInfo struct {
 	PoolUUID       string   `json:"pool_uuid"`
 	SvcReplicas    []uint32 `json:"svc_reps"`
-	RaftLeaderTerm int32    `json:"raft_leader_term"`
+	RaftLeaderTerm uint64   `json:"version"`
 }
 
 // PoolSvcReplicasUpdate is a custom event type that implements the Event interface.
@@ -100,7 +100,7 @@ func (evt *PoolSvcReplicasUpdate) ToProto() (*mgmtpb.RASEvent, error) {
 }
 
 // NewPoolSvcReplicasUpdateEvent creates a specific PoolSvcReplicasUpdate event from given inputs.
-func NewPoolSvcReplicasUpdateEvent(hostname string, rank uint32, poolUUID string, svcReplicas []uint32, leaderTerm int32) Event {
+func NewPoolSvcReplicasUpdateEvent(hostname string, rank uint32, poolUUID string, svcReplicas []uint32, leaderTerm uint64) Event {
 	evt := &RASEvent{
 		Timestamp: common.FormatTime(time.Now()),
 		Msg:       "DAOS pool service replica rank list updated",
