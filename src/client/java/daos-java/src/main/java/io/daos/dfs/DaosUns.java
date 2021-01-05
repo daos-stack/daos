@@ -31,6 +31,7 @@ import java.util.Map;
 
 import com.google.protobuf.TextFormat;
 
+import io.daos.*;
 import io.daos.dfs.uns.*;
 
 import org.apache.commons.lang.ObjectUtils;
@@ -100,8 +101,8 @@ public class DaosUns {
     byte[] bytes = attribute.toByteArray();
     ByteBuffer buffer = BufferAllocator.directBuffer(bytes.length);
     buffer.put(bytes);
-    poolHandle = DaosFsClient.daosOpenPool(builder.poolUuid, builder.serverGroup,
-      builder.ranks, builder.poolFlags);
+    poolHandle = DaosClient.daosOpenPool(builder.poolUuid, builder.serverGroup,
+        builder.ranks, builder.poolFlags);
     try {
       String cuuid = DaosFsClient.dunsCreatePath(poolHandle, builder.path,
           ((DirectBuffer) buffer).address(), bytes.length);
@@ -110,7 +111,7 @@ public class DaosUns {
       return cuuid;
     } finally {
       if (poolHandle != 0) {
-        DaosFsClient.daosClosePool(poolHandle);
+        DaosClient.daosClosePool(poolHandle);
       }
     }
   }
@@ -150,11 +151,11 @@ public class DaosUns {
     }
     if (attrName.length() > Constants.UNS_ATTR_NAME_MAX_LEN) {
       throw new IllegalArgumentException("attribute name " + attrName + ", length should not exceed " +
-        Constants.UNS_ATTR_NAME_MAX_LEN);
+          Constants.UNS_ATTR_NAME_MAX_LEN);
     }
     if (value != null && value.length() > Constants.UNS_ATTR_VALUE_MAX_LEN) {
       throw new IllegalArgumentException("attribute value length should not exceed " +
-        Constants.UNS_ATTR_VALUE_MAX_LEN);
+          Constants.UNS_ATTR_VALUE_MAX_LEN);
     }
     DaosFsClient.dunsSetAppInfo(path, attrName, value);
   }
@@ -178,11 +179,11 @@ public class DaosUns {
     }
     if (attrName.length() > Constants.UNS_ATTR_NAME_MAX_LEN) {
       throw new IllegalArgumentException("attribute name " + attrName + ", length should not exceed " +
-        Constants.UNS_ATTR_NAME_MAX_LEN);
+          Constants.UNS_ATTR_NAME_MAX_LEN);
     }
     if (maxValueLen > Constants.UNS_ATTR_VALUE_MAX_LEN) {
       throw new IllegalArgumentException("maximum value length should not exceed " +
-        Constants.UNS_ATTR_VALUE_MAX_LEN);
+          Constants.UNS_ATTR_VALUE_MAX_LEN);
     }
     return DaosFsClient.dunsGetAppInfo(path, attrName, maxValueLen);
   }
@@ -196,14 +197,14 @@ public class DaosUns {
   public void destroyPath() throws IOException {
     long poolHandle = 0;
 
-    poolHandle = DaosFsClient.daosOpenPool(builder.poolUuid, builder.serverGroup,
-      builder.ranks, builder.poolFlags);
+    poolHandle = DaosClient.daosOpenPool(builder.poolUuid, builder.serverGroup,
+        builder.ranks, builder.poolFlags);
     try {
       DaosFsClient.dunsDestroyPath(poolHandle, builder.path);
       log.info("UNS path {} destroyed");
     } finally {
       if (poolHandle != 0) {
-        DaosFsClient.daosClosePool(poolHandle);
+        DaosClient.daosClosePool(poolHandle);
       }
     }
   }
@@ -226,15 +227,15 @@ public class DaosUns {
    * Some info gets from DAOS extended attribute.
    * The Rest gets from app extended attributes if any.
    *
-   * @param path            OS FS path
+   * @param path            OS FS path or path prefixed with the UUIDs
    * @param appInfoAttrName app-specific attribute name
    * @return information hold in {@link DunsInfo}
    * @throws IOException
    * {@link DaosIOException}
    */
   public static DunsInfo getAccessInfo(String path, String appInfoAttrName) throws IOException {
-    return getAccessInfo(path, appInfoAttrName, io.daos.dfs.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT,
-      false);
+    return getAccessInfo(path, appInfoAttrName, Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT,
+        false);
   }
 
   /**
@@ -243,7 +244,7 @@ public class DaosUns {
    * The Rest gets from app extended attributes. A exception will be thrown if user expect app info and no
    * info gets.
    *
-   * @param path            OS FS path
+   * @param path            OS FS path or path prefixed with the UUIDs
    * @param appInfoAttrName app-specific attribute name
    * @param maxValueLen     maximum value length
    * @param expectAppInfo   expect app info? true for throwing exception if no value gets, false for ignoring quietly.
@@ -260,17 +261,25 @@ public class DaosUns {
     String poolId = attribute.getPuuid();
     String contId = attribute.getCuuid();
     Layout layout = attribute.getLayoutType();
-
+    String prefix = path;
     String value = null;
-    try {
-      value = DaosUns.getAppInfo(path, appInfoAttrName,
-        maxValueLen);
-    } catch (DaosIOException e) {
-      if (expectAppInfo) {
-        throw e;
+    String idPrefix = "/" + poolId + "/" + contId;
+    if (path.startsWith(idPrefix)) {
+      prefix = idPrefix;
+      if (layout == Layout.UNKNOWN) {
+        layout = Layout.POSIX; // default to posix
+      }
+    } else {
+      try {
+        value = DaosUns.getAppInfo(path, appInfoAttrName,
+            maxValueLen);
+      } catch (DaosIOException e) {
+        if (expectAppInfo) {
+          throw e;
+        }
       }
     }
-    return new DunsInfo(poolId, contId, layout.name(), value);
+    return new DunsInfo(poolId, contId, layout.name(), value, prefix);
   }
 
   protected DunsAttribute getAttribute() {
@@ -496,7 +505,7 @@ public class DaosUns {
         builder.setCuuid(contUuid);
       }
       builder.setLayoutType(layout);
-      builder.setObjectType(objectType.name());
+      builder.setObjectType(objectType.nameWithoutOc());
       builder.setChunkSize(chunkSize);
       builder.setOnLustre(onLustre);
       buildProperties(builder);
@@ -612,7 +621,7 @@ public class DaosUns {
     }
     if (args.length < 1) {
       throw new IllegalArgumentException("need one of commands" +
-        " [create|resolve|destroy|parse|util]\n" + getUsage());
+          " [create|resolve|destroy|parse|util]\n" + getUsage());
     }
     switch (args[0]) {
       case "create":

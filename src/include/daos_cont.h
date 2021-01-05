@@ -62,6 +62,8 @@ typedef struct {
 	uuid_t			ci_uuid;
 	/** Epoch of latest persistent snapshot */
 	daos_epoch_t		ci_lsnapshot;
+	/** Redundancy factor */
+	uint32_t		ci_redun_fac;
 	/** Number of snapshots */
 	uint32_t		ci_nsnapshots;
 	/** Epochs of returns snapshots */
