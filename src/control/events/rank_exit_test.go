@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,12 +41,12 @@ func TestEvents_ConvertRankExit(t *testing.T) {
 
 	t.Logf("proto event: %+v (%T)", pbEvent, pbEvent)
 
-	returnedEvent := new(RankExit)
+	returnedEvent := new(RASEvent)
 	if err := returnedEvent.FromProto(pbEvent); err != nil {
 		t.Fatal(err)
 	}
 
-	t.Logf("native event: %+v, %+v", returnedEvent.RAS, returnedEvent.ExtendedInfo)
+	t.Logf("native event: %+v, %+v", returnedEvent, returnedEvent.ExtendedInfo)
 
 	if diff := cmp.Diff(event, returnedEvent); diff != "" {
 		t.Fatalf("unexpected event (-want, +got):\n%s\n", diff)
