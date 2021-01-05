@@ -1,11 +1,11 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,31 +21,23 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#include <stddef.h>
-#include <getopt.h>
-#include <setjmp.h> /** For cmocka.h */
+#include <daos.h>
+#include "place_obj_common.h"
 #include <stdarg.h>
 #include <stddef.h>
+#include <setjmp.h>
 #include <cmocka.h>
-#include <gurt/debug.h>
-#include "common_test.h"
+#include <getopt.h>
+#include <daos/tests_lib.h>
 
-static void
-print_usage(char *name)
-{
-	print_message(
-		"\n\nCOMMON TESTS\n==========================\n");
-	print_message("%s -e|--exclude <TESTS>\n", name);
-	print_message("%s -f|--filter <TESTS>\n", name);
-	print_message("%s -h|--help\n", name);
-}
 
-const char *s_opts = "he:f:";
+const char *s_opts = "he:f:v";
 static int idx;
 static struct option l_opts[] = {
 	{"exclude", required_argument, NULL, 'e'},
 	{"filter",  required_argument, NULL, 'f'},
-	{"help",    no_argument,       NULL, 'h'}
+	{"help",    no_argument,       NULL, 'h'},
+	{"verbose", no_argument,       NULL, 'v'},
 };
 
 static bool
@@ -70,21 +62,39 @@ show_help(int argc, char *argv[])
 	return result;
 }
 
+static void
+print_usage(char *name)
+{
+	print_message(
+		"\n\nCOMMON TESTS\n==========================\n");
+	print_message("%s -e|--exclude <TESTS>\n", name);
+	print_message("%s -f|--filter <TESTS>\n", name);
+	print_message("%s -h|--help\n", name);
+	print_message("%s -v|--verbose\n", name);
+}
+
+int placement_tests_run(bool verbose);
+
 int main(int argc, char *argv[])
 {
 	int	opt;
 	char	filter[1024];
+	bool	verbose = false;
+
+	assert_success(daos_debug_init(DAOS_LOG_DEFAULT));
 
 	if (show_help(argc, argv)) {
 		print_usage(argv[0]);
 		return 0;
 	}
 
-	while ((opt = getopt_long(argc, argv, s_opts, l_opts, &idx)) !=
-	       -1) {
+	while ((opt = getopt_long(argc, argv, s_opts, l_opts, &idx)) != -1) {
 		switch (opt) {
 		case 'h':
 			/** already handled */
+			break;
+		case 'v':
+			verbose = true;
 			break;
 		case 'e':
 #if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
@@ -92,7 +102,6 @@ int main(int argc, char *argv[])
 #else
 			D_PRINT("filter not enabled");
 #endif
-
 			break;
 		case 'f':
 #if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
@@ -110,10 +119,9 @@ int main(int argc, char *argv[])
 			break;
 		}
 	}
-	misc_tests_run();
-	daos_checksum_tests_run();
-	daos_compress_tests_run();
+	placement_tests_run(verbose);
+
+	daos_debug_fini();
 
 	return 0;
 }
-

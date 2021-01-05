@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,6 +106,16 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil		= DAOS_RES_REPL,
 			.ca_grp_nr		= 2,
+			.ca_rp_nr		= 2,
+		},
+	},
+	{
+		.oc_name	= "RP_2G4",
+		.oc_id		= OC_RP_2G4,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 4,
 			.ca_rp_nr		= 2,
 		},
 	},
