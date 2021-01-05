@@ -26,8 +26,7 @@ from __future__ import print_function
 
 import sys
 
-from avocado  import Test
-from avocado  import main
+from apricot  import TestWithoutServers
 
 sys.path.append('./util')
 
@@ -35,11 +34,11 @@ sys.path.append('./util')
 # pylint: disable=wrong-import-position
 from cart_utils import CartUtils
 
-class CartSelfThreeNodeTest(Test):
+class CartSelfThreeNodeTest(TestWithoutServers):
     """
     Runs basic CaRT self test
 
-    :avocado: tags=all,cart,pr,selftest,three_node
+    :avocado: recursive
     """
     def setUp(self):
         """ Test setup """
@@ -47,15 +46,11 @@ class CartSelfThreeNodeTest(Test):
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
 
-    def tearDown(self):
-        """ Test tear down """
-        print("Run TearDown\n")
-
     def test_cart_selftest(self):
         """
         Test CaRT Self Test
 
-        :avocado: tags=all,cart,pr,selftest,three_node
+        :avocado: tags=all,cart,pr,daily_regression,selftest,three_node
         """
 
         srvcmd = self.utils.build_cmd(self, self.env, "test_servers")

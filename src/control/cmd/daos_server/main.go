@@ -64,7 +64,7 @@ type mainOpts struct {
 type versionCmd struct{}
 
 func (cmd *versionCmd) Execute(_ []string) error {
-	fmt.Printf("daos_server version %s\n", build.DaosVersion)
+	fmt.Printf("%s v%s\n", build.ControlPlaneName, build.DaosVersion)
 	os.Exit(0)
 	return nil
 }

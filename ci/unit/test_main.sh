@@ -7,6 +7,7 @@ set -uex
 # JENKINS-52781 tar function is breaking symlinks
 
 rm -rf unit_memcheck_vm_test unit_test_memcheck_logs unit-test*.memcheck.xml
+rm -rf unit_test_memcheck_logs.tar.gz
 rm -rf nlt_logs unit_test_logs
 rm -rf test_results
 mkdir test_results
@@ -45,11 +46,11 @@ NODE=${NODELIST%%,*}
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
 # shellcheck disable=SC2029
-ssh "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$DAOS_BASE      \
-                                     HOSTNAME=$HOSTNAME        \
-                                     HOSTPWD=$PWD              \
-                                     SL_PREFIX=$SL_PREFIX      \
-                                     WITH_VALGRIND=$WITH_VALGRIND \
-                                     NLT=$NLT                  \
-                                     BULLSEYE=$BULLSEYE        \
-                                     $(cat "$mydir/test_main_node.sh")"
+ssh -tt "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$DAOS_BASE      \
+                                         HOSTNAME=$HOSTNAME        \
+                                         HOSTPWD=$PWD              \
+                                         SL_PREFIX=$SL_PREFIX      \
+                                         WITH_VALGRIND=$WITH_VALGRIND \
+                                         NLT=$NLT                  \
+                                         BULLSEYE=$BULLSEYE        \
+                                         $(cat "$mydir/test_main_node.sh")"

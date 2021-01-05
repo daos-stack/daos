@@ -187,8 +187,8 @@ CRT_RPC_DECLARE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
 
 #define DAOS_OSEQ_POOL_CONNECT	/* output fields */		 \
 	((struct pool_op_out)	(pco_op)		CRT_VAR) \
-	((struct daos_pool_space) (pco_space)		CRT_VAR) \
-	((struct daos_rebuild_status) (pco_rebuild_st)	CRT_VAR) \
+	((struct daos_pool_space) (pco_space)		CRT_RAW) \
+	((struct daos_rebuild_status) (pco_rebuild_st)	CRT_RAW) \
 	/* only set on -DER_TRUNC */				 \
 	((uint32_t)		(pco_map_buf_size)	CRT_VAR)
 
@@ -211,8 +211,8 @@ CRT_RPC_DECLARE(pool_disconnect, DAOS_ISEQ_POOL_DISCONNECT,
 #define DAOS_OSEQ_POOL_QUERY	/* output fields */		 \
 	((struct pool_op_out)	(pqo_op)		CRT_VAR) \
 	((daos_prop_t)		(pqo_prop)		CRT_PTR) \
-	((struct daos_pool_space) (pqo_space)		CRT_VAR) \
-	((struct daos_rebuild_status) (pqo_rebuild_st)	CRT_VAR) \
+	((struct daos_pool_space) (pqo_space)		CRT_RAW) \
+	((struct daos_rebuild_status) (pqo_rebuild_st)	CRT_RAW) \
 	/* only set on -DER_TRUNC */				 \
 	((uint32_t)		(pqo_map_buf_size)	CRT_VAR)
 
@@ -361,7 +361,7 @@ CRT_RPC_DECLARE(pool_tgt_disconnect, DAOS_ISEQ_POOL_TGT_DISCONNECT,
 	((struct pool_op_in)	(tqi_op)		CRT_VAR)
 
 #define DAOS_OSEQ_POOL_TGT_QUERY	/* output fields */	 \
-	((struct daos_pool_space) (tqo_space)		CRT_VAR) \
+	((struct daos_pool_space) (tqo_space)		CRT_RAW) \
 	((uint32_t)		(tqo_rc)		CRT_VAR)
 
 CRT_RPC_DECLARE(pool_tgt_query, DAOS_ISEQ_POOL_TGT_QUERY,

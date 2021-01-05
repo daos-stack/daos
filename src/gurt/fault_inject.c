@@ -35,7 +35,15 @@
 #include <gurt/hash.h>
 #include "fi.h"
 
+/**
+ * global switch for fault injection. zero globally turns off fault injection,
+ * non-zero turns on fault injection
+ */
+unsigned int			d_fault_inject;
+unsigned int			d_fault_config_file;
 struct d_fault_attr_t *d_fault_attr_mem;
+
+#if FAULT_INJECTION
 
 static struct d_fault_attr *
 fa_link2ptr(d_list_t *rlink)
@@ -222,7 +230,7 @@ int
 d_fault_attr_err_code(uint32_t fault_id)
 {
 	struct d_fault_attr_t	*fault_attr;
-	uint32_t		 err_code;
+	int32_t			 err_code;
 
 	fault_attr = d_fault_attr_lookup(fault_id);
 	if (fault_attr == NULL) {
@@ -234,7 +242,7 @@ d_fault_attr_err_code(uint32_t fault_id)
 	err_code = fault_attr->fa_err_code;
 	D_SPIN_UNLOCK(&fault_attr->fa_lock);
 
-	return (int) err_code;
+	return err_code;
 }
 
 static int
@@ -315,8 +323,9 @@ one_fault_attr_parse(yaml_parser_t *parser)
 			attr.fa_max_faults = val;
 			D_DEBUG(DB_ALL, "max_faults: %lu\n", val);
 		} else if (!strcmp(key_str, err_code)) {
-			attr.fa_err_code = val;
-			D_DEBUG(DB_ALL, "err_code: %lu\n", val);
+			attr.fa_err_code = strtol(val_str, NULL, 0);
+			D_DEBUG(DB_ALL, "err_code: " DF_RC "\n",
+				DP_RC(attr.fa_err_code));
 		} else if (!strcmp(key_str, argument)) {
 			D_STRNDUP(attr.fa_argument, val_str,
 				  FI_CONFIG_ARG_STR_MAX_LEN);
@@ -587,21 +596,23 @@ d_fault_inject_fini()
 }
 
 
-void
+int
 d_fault_inject_enable(void)
 {
 	if (!d_fault_config_file) {
 		D_ERROR("No fault config file.\n");
-		return;
+		return -DER_NOSYS;
 	}
 
 	d_fault_inject = 1;
+	return 0;
 }
 
-void
+int
 d_fault_inject_disable(void)
 {
 	d_fault_inject = 0;
+	return 0;
 }
 
 bool
@@ -670,4 +681,59 @@ out:
 	D_SPIN_UNLOCK(&fault_attr->fa_lock);
 	return rc;
 };
+#else /* FAULT_INJECT */
+int d_fault_inject_init(void)
+{
+	D_WARN("Fault Injection not initialized feature not included in build");
+	return -DER_NOSYS;
+}
 
+int d_fault_inject_fini(void)
+{
+	D_WARN("Fault Injection not finalized feature not included in build");
+	return -DER_NOSYS;
+}
+
+int d_fault_inject_enable(void)
+{
+	D_WARN("Fault Injection not enabled feature not included in build");
+	return -DER_NOSYS;
+}
+
+int d_fault_inject_disable(void)
+{
+	D_WARN("Fault Injection not disabled feature not included in build");
+	return -DER_NOSYS;
+}
+
+bool
+d_fault_inject_is_enabled(void)
+{
+	return false;
+}
+
+bool
+d_should_fail(struct d_fault_attr_t *fault_attr)
+{
+	return false;
+}
+
+int
+d_fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in)
+{
+	D_WARN("Fault Injection attr not set feature not included in build");
+	return 0;
+}
+
+struct d_fault_attr_t *
+d_fault_attr_lookup(uint32_t fault_id)
+{
+	return NULL;
+}
+
+int
+d_fault_attr_err_code(uint32_t fault_id)
+{
+	return 0;
+}
+#endif /* FAULT_INJECT */

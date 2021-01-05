@@ -13,7 +13,7 @@ def scons():
             'daos_test', 'data', 'io', 'network', 'nvme',
             'object', 'osa', 'pool', 'rebuild', 'security',
             'server', 'soak', 'unittest', 'erasurecode',
-            'datamover']
+            'datamover', 'scripts']
 
     for sub_dir in dirs:
         env.Install(os.path.join(ftest_install_dir, sub_dir),
