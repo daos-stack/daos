@@ -285,6 +285,7 @@ class IorTestBase(DfuseTestBase):
                     report_warning("IOR command issued warnings.\n")
             return out
         except CommandFailure as error:
+            self.stop_dfuse()
             self.log.error("IOR Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
         finally:
@@ -304,6 +305,7 @@ class IorTestBase(DfuseTestBase):
             out = self.job_manager.stop()
             return out
         except CommandFailure as error:
+            self.stop_dfuse()
             self.log.error("IOR stop Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
         finally:
@@ -395,6 +397,7 @@ class IorTestBase(DfuseTestBase):
             results[job_num] = IorCommand.get_ior_metrics(out)
             self.lock.release()
         except CommandFailure as error:
+            self.stop_dfuse()
             self.log.error("IOR Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
         finally:
