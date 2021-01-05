@@ -20,7 +20,6 @@ package io.daos.fs.hadoop;
 
 import io.daos.dfs.DaosFile;
 import io.daos.dfs.DaosFsClient;
-import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 
@@ -81,11 +80,11 @@ public class DaosFSFactory {
     return null;
   }
 
-  public static String getPoolUuid() {
+  public static String getPooluuid() {
     return pooluuid;
   }
 
-  public static String getContUuid() {
+  public static String getContuuid() {
     return contuuid;
   }
 }
