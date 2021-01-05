@@ -974,8 +974,8 @@ fs_op_hdlr(struct cmd_args_s *ap)
 	switch (op) {
 	case FS_COPY:
 		if (ap->src == NULL || ap->dst == NULL) {
-			fprintf(stderr, "a source and destination path
-				must be provided\n");
+			fprintf(stderr, "a source and destination path "
+				"must be provided\n");
 		} else {
 			rc = fs_copy_hdlr(ap);
 			assert(rc == 0);
@@ -1302,7 +1302,8 @@ do { \
 	"container (cont) commands:\n" \
 	"	  copy		copy to/from POSIX filesystem\n"); \
 	fprintf(stream, "\n"); \
-	fprintf(stream, "use 'daos help fs|filesystem COMMAND' for options\n"); \
+	fprintf(stream, "use 'daos help fs|filesystem COMMAND' " \
+	"		for options\n"); \
 } while (0)
 
 #define ALL_CONT_CMDS_HELP() \
