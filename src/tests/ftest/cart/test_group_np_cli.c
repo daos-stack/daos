@@ -84,7 +84,7 @@ test_run(void)
 			}
 		}
 
-		for (i = ; i < rank_list->rl_nr; i++) {
+		for (i = 0; i < rank_list->rl_nr; i++) {
 			for (tag = 0; tag < test_g.t_srv_ctx_num; tag++) {
 				tc_sem_timedwait(&test_g.t_token_to_proceed, 61,
 						 __LINE__);
