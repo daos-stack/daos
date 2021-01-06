@@ -2849,7 +2849,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc);
 	}
 	rc = fs_copy_connect(&src_file_dfs, &dst_file_dfs, &fa,
-			   ap->sysname, &src_cont_info, &dst_cont_info,
+			     ap->sysname, &src_cont_info, &dst_cont_info,
 			   &src_dattr, &dst_dattr);
 	if (rc != 0) {
 		fprintf(stderr, "fs copy failed to connect: %d\n", rc);
