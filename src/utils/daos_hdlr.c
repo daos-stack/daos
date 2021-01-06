@@ -1700,7 +1700,7 @@ write_dfs(struct file_dfs *file_dfs, char *file, void *buf, ssize_t size)
 	sgl.sg_nr_out = 1;
 	d_iov_set(&iov, buf, size);
 	rc = dfs_write(file_dfs->dfs, file_dfs->obj, &sgl,
-			file_dfs->offset, NULL);
+		file_dfs->offset, NULL);
 	if (rc) {
 		fprintf(stderr, "dfs_write %s failed (%d %s)\n",
 			file, rc, strerror(rc));
@@ -1710,7 +1710,7 @@ write_dfs(struct file_dfs *file_dfs, char *file, void *buf, ssize_t size)
 	}
 	file_dfs->offset += (daos_off_t)size;
 out:
-	return (ssize_t) size;
+	return (ssize_t)size;
 }
 
 static ssize_t
@@ -1753,7 +1753,7 @@ open_dfs(struct file_dfs *file_dfs, char *file, int flags, mode_t mode)
 		D_GOTO(out, rc = EINVAL);
 	}
 	rc = dfs_open(file_dfs->dfs, parent, name, mode | S_IFREG,
-		flags, 0, 0, NULL, &(file_dfs->obj));
+			flags, 0, 0, NULL, &(file_dfs->obj));
 	if (rc != 0) {
 		fprintf(stderr, "dfs_open %s failed (%d)\n", name, rc);
 	}
@@ -1940,7 +1940,7 @@ readdir_dfs(struct file_dfs *file_dfs, DIR *_dirp)
 	dirp->num_ents = NUM_DIRENTS;
 	while (!daos_anchor_is_eof(&dirp->anchor)) {
 		rc = dfs_readdir(file_dfs->dfs, dirp->dir,
-				&dirp->anchor, &dirp->num_ents,
+				 &dirp->anchor, &dirp->num_ents,
 				dirp->ents);
 		if (rc) {
 			fprintf(stderr, "dfs_readdir failed (%d %s)\n",
@@ -2075,7 +2075,7 @@ out:
 
 static ssize_t
 file_read(struct file_dfs *file_dfs, char *file,
-		void *buf, size_t size)
+ void *buf, size_t size)
 {
 	ssize_t got_size = 0;
 
@@ -2283,7 +2283,7 @@ fs_copy(struct file_dfs *src_file_dfs,
 		int path_length = 0;
 
 		path_length = snprintf(filename, MAX_FILENAME, "%s/%s",
-					dir_name, d_name);
+				dir_name, d_name);
 		if (path_length >= MAX_FILENAME) {
 			rc = ENAMETOOLONG;
 			fprintf(stderr, "Path length is too long.\n");
@@ -2699,7 +2699,7 @@ fs_copy_parse(char *src,
 		 */
 		if (strncmp(src, "/", 1) == 0) {
 			fprintf(stderr, "cannot parse daos src type "
-				"format, please use: \n"
+				"format, please use:\n"
 				"\t--src=daos://<pool/cont>\n");
 			D_GOTO(out, rc = EINVAL);
 		}
@@ -2712,7 +2712,7 @@ fs_copy_parse(char *src,
 		dst += 7;
 		if (strncmp(dst, "/", 1) == 0) {
 			fprintf(stderr, "cannot parse daos dst type format, "
-				"please use: \n"
+				"please use:\n"
 				"\t--dst=daos://<pool/cont>\n");
 			D_GOTO(out, rc = EINVAL);
 		}
@@ -2720,7 +2720,7 @@ fs_copy_parse(char *src,
 		dst_type = "path";
 	}
 
-	/* check for src DAOS pool/cont or UNS path */ 
+	/* check for src DAOS pool/cont or UNS path */
 	if (strcmp(src_type, "daos") == 0) {
 		/* check if this copy is from root of DFS cont */
 		*src_str = strdup("/");
@@ -2744,13 +2744,13 @@ fs_copy_parse(char *src,
 		}
 		*src_str_len = strlen(*src_str);
 	} else if (strcmp(src_type, "path") == 0) {
-	        rc = duns_resolve_path(src, src_dattr);
+		rc = duns_resolve_path(src, src_dattr);
 		if (rc != 0) {
 			/* fs_copy will later check this is a valid src path
 			 * with stat
 			 */
-		  	*src_str = strdup(src);
-		    	src_file_dfs->type = POSIX;
+			*src_str = strdup(src);
+			src_file_dfs->type = POSIX;
 			rc = 0;
 		} else {
 			*src_str = strdup("/");
@@ -2758,7 +2758,7 @@ fs_copy_parse(char *src,
 			uuid_copy(fa->src_c_uuid, (*src_dattr).da_cuuid);
 		}
 	} else {
-		fprintf(stderr, "cannot parse src format, please use: \n"
+		fprintf(stderr, "cannot parse src format, please use:\n"
 				"--src=<daos>://<pool/cont> | <path>\n"
 				"\ttype is daos, only specified if pool/cont "
 				"used\n");
@@ -2790,11 +2790,11 @@ fs_copy_parse(char *src,
 		}
 		*dst_str_len = strlen(*dst_str);
 	} else if (strcmp(dst_type, "path") == 0) {
-	        rc = duns_resolve_path(dst, dst_dattr);
+		rc = duns_resolve_path(dst, dst_dattr);
 		if (rc != 0) {
 			/* fs_copy will later check this is a valid dst
 			 * path with stat
- 			*/
+			*/
 			*dst_str = strdup(dst);
 			dst_file_dfs->type = POSIX;
 			rc = 0;
@@ -2804,7 +2804,7 @@ fs_copy_parse(char *src,
 			uuid_copy(fa->dst_c_uuid, (*dst_dattr).da_cuuid);
 		}
 	} else {
-		fprintf(stderr, "cannot parse dst format, please use: \n"
+		fprintf(stderr, "cannot parse dst format, please use:\n"
 				"--dst=daos://<pool/cont> | <path>\n"
 				"\ttype is daos, only specified if "
 				"pool/cont used\n");
@@ -2900,7 +2900,8 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		mode_t tmp_mode_dir = S_IRWXU;
 		/* construct destination directory in DAOS, this needs
 		 * to strip the dirname and only use the basename that is
-		 * specified in the dst argument */
+		 * specified in the dst argument
+		 */
 		char dst_dir[MAX_FILENAME];
 		int path_length = snprintf(dst_dir, MAX_FILENAME, "%s/%s",
 				       dst_str, src_str + src_str_len);
@@ -2939,7 +2940,7 @@ out:
 	if (src_file_dfs.type == DAOS) {
 		if (src_str != NULL)
 			free(src_str);
-	} 
+	}
 	if (dst_file_dfs.type == DAOS) {
 		if (dst_str != NULL)
 			free(dst_str);
