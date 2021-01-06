@@ -281,4 +281,4 @@ class ConfigGenerate(TestWithServers):
         try:
             self.run_test(10, 10, "infiniband")
         except CommandFailure as error:
-            self.log.info("Expected failure: {}".format(error))
+            self.log.info("Expected failure: %s", error)

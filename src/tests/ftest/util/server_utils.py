@@ -630,7 +630,7 @@ class DaosServerManager(SubprocessManager):
 
         self.log.info("<SERVER> Writing generated config yaml")
         self.manager.job.yaml.filename = original_config
-        self.manger.job.yaml.write_yaml(self.generated_yaml)
+        self.manager.job.yaml.write_yaml(self.generated_yaml)
         self.manager.job.config.value = self.manager.job.yaml.filename
 
     def stop(self):
