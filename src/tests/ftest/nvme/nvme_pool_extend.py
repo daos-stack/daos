@@ -22,18 +22,13 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import time
-import uuid
 import threading
 
 from itertools import product
 from avocado import fail_on
-from apricot import TestWithServers
 from test_utils_pool import TestPool
-from ior_utils import IorCommand
-from job_manager_utils import Mpirun
 from write_host_file import write_host_file
 from command_utils import CommandFailure
-from mpio_utils import MpioUtils
 from osa_utils import OSAUtils
 
 try:
@@ -179,13 +174,14 @@ class NvmePoolExtend(OSAUtils):
                 display_string = "Pool{} space at the End".format(val)
                 self.pool = pool[val]
                 self.pool.display_pool_daos_space(display_string)
-                #pool[val].destroy()
 
                 # Stop the extra node servers (rank 6 and 7)
                 output = self.dmg_command.system_stop(self.pool.uuid,
                                                       "6,7")
                 self.log.info(output)
-            pool[val].destroy()
+                self.is_rebuild_done(3)
+                self.assert_on_rebuild_failure()
+        pool[val].destroy()
 
     def test_nvme_pool_extend(self):
         """Test ID: DAOS-2086
