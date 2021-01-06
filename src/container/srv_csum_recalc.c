@@ -295,19 +295,19 @@ void
 ds_csum_recalc(void *args)
 {
 	struct csum_recalc_args	*cs_args = (struct csum_recalc_args *) args;
-	struct dss_module_info  *info;
+	struct dss_module_info *info;
 
 	C_TRACE("Checksum Aggregation\n");
+
+	info = dss_get_module_info();
+	D_ASSERT(info != NULL);
+	cs_args->cra_bio_ctxt = info->dmi_nvme_ctxt;
+	cs_args->cra_tgt_id = info->dmi_tgt_id;
+
 	ABT_eventual_create(0, &cs_args->csum_eventual);
 	dss_ult_create(ds_csum_agg_recalc, args,
-		       DSS_ULT_CHECKSUM, DSS_TGT_SELF, 0, NULL);
+		       DSS_XS_OFFLOAD, cs_args->cra_tgt_id, 0, NULL);
 	ABT_eventual_wait(cs_args->csum_eventual, NULL);
-	if (cs_args->cra_rc == -DER_CSUM) {
-		info = dss_get_module_info();
-
-		cs_args->cra_bio_ctxt = info->dmi_nvme_ctxt;
-		cs_args->cra_tgt_id = info->dmi_tgt_id;
-	}
 	ABT_eventual_free(&cs_args->csum_eventual);
 }
 #endif
