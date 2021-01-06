@@ -531,7 +531,7 @@ agg_fetch_odata_cells(struct ec_agg_entry *entry, uint8_t *bit_map,
 
 	rc = agg_get_obj_handle(entry);
 	if (rc) {
-		(entry->ae_sgl.sg_iovs)++;
+		(entry->ae_sgl.sg_iovs)--;
 		D_ERROR("Failed to open object: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
