@@ -400,7 +400,7 @@ ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 
 	/* Evict active pool connections if they exist*/
 	rc = ds_pool_svc_check_evict(pool_uuid, svc_ranks, handles, n_handles,
-				     false, true);
+				     false, false);
 	if (rc != 0) {
 		D_ERROR("Failed to evict pool handles"DF_UUID" rc: %d\n",
 			DP_UUID(pool_uuid), rc);
