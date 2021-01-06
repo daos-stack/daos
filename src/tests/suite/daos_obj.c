@@ -712,7 +712,7 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	 * effect immediately, this may not be the case.
 	 * So adding delay so that ULTs finish the round of aggregation.
 	 */
-        sleep(10);
+	sleep(10);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
