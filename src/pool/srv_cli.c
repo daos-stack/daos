@@ -58,7 +58,7 @@ dsc_pool_open(uuid_t pool_uuid, uuid_t poh_uuid, unsigned int flags,
 	struct dc_pool	*pool;
 	int		rc = 0;
 
-	if (!daos_handle_is_inval(*ph)) {
+	if (daos_handle_is_valid(*ph)) {
 		pool = dc_hdl2pool(*ph);
 		if (pool != NULL)
 			D_GOTO(out, rc = 0);
