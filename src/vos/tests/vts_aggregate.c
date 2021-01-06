@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1729,6 +1729,9 @@ fill_cont(struct io_test_args *arg, daos_unit_oid_t oid, char *dkey,
 	daos_recx_t	 recx;
 	uint64_t	 idx_max, nr_max;
 
+	if (DAOS_ON_VALGRIND)
+		size_max = (1UL << 14);
+
 	D_ALLOC(buf_u, size_max);
 	assert_non_null(buf_u);
 
@@ -1783,7 +1786,10 @@ aggregate_14(void **state)
 	fill_size = NVME_FREE(vps) ? : SCM_FREE(vps);
 	assert_true(fill_size > 0);
 
-	if (slow_test) {
+	if (DAOS_ON_VALGRIND) {
+		fill_size = min(fill_size, 1ULL << 18);
+		repeat_cnt = 2;
+	} else if (slow_test) {
 		fill_size = min(fill_size, VPOOL_2G);
 		repeat_cnt = 5;
 	} else {

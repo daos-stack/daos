@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,6 +54,9 @@ static const int dkey_per_obj	= 64;
 static const int akey_per_dkey	= 16;
 static const int recx_size	= 4096;
 static const int singv_size	= 16;
+
+static int rt_obj_per_cont = obj_per_cont;
+static int rt_dkey_per_obj = dkey_per_obj;
 
 static struct vos_gc_stat	gc_stat;
 
@@ -171,7 +174,7 @@ gc_obj_prepare(struct gc_test_args *args, daos_handle_t coh,
 	d_iov_set(&cred->tc_dkey, cred->tc_dbuf, DTS_KEY_LEN);
 	d_iov_set(&iod->iod_name, cred->tc_abuf, DTS_KEY_LEN);
 
-	for (i = 0; i < obj_per_cont; i++) {
+	for (i = 0; i < rt_obj_per_cont; i++) {
 		daos_unit_oid_t	oid;
 
 		gc_add_stat(STAT_OBJ);
@@ -179,7 +182,7 @@ gc_obj_prepare(struct gc_test_args *args, daos_handle_t coh,
 		if (oids)
 			oids[i] = oid;
 
-		for (j = 0; j < dkey_per_obj; j++) {
+		for (j = 0; j < rt_dkey_per_obj; j++) {
 			gc_add_stat(STAT_DKEY);
 			dts_key_gen(cred->tc_dbuf, DTS_KEY_LEN, NULL);
 
@@ -255,7 +258,7 @@ gc_obj_run(struct gc_test_args *args)
 	int		 i;
 	int		 rc;
 
-	D_ALLOC_ARRAY(oids, obj_per_cont);
+	D_ALLOC_ARRAY(oids, rt_obj_per_cont);
 	if (!oids) {
 		print_error("failed to allocate oids\n");
 		return -DER_NOMEM;
@@ -267,7 +270,7 @@ gc_obj_run(struct gc_test_args *args)
 
 	gc_print_stat();
 
-	for (i = 0; i < obj_per_cont; i++) {
+	for (i = 0; i < rt_obj_per_cont; i++) {
 		rc = vos_obj_delete(args->gc_ctx.tsc_coh, oids[i]);
 		if (rc) {
 			print_error("failed to delete objects: %s\n",
@@ -433,6 +436,11 @@ int
 run_gc_tests(const char *cfg)
 {
 	char	test_name[DTS_CFG_MAX];
+
+	if (DAOS_ON_VALGRIND) {
+		rt_obj_per_cont = 2;
+		rt_dkey_per_obj = 3;
+	}
 
 	dts_create_config(test_name, "Garbage collector %s", cfg);
 	return cmocka_run_group_tests_name(test_name,
