@@ -91,7 +91,8 @@ class Test(avocadoTest):
     #   tuple, then setUp() will check each test variant to see if the
     #   <param_name> has been assigned <param_value>.  When this is the case the
     #   test variant will be skipped/cancelled for <ticket> before anything else
-    #   in setUp() is executed.
+    #   in setUp() is executed.  If the <param_name> is "test_method_name" then
+    #   <param_value> is compared to the name of the test method.
     CANCEL_FOR_TICKET = ()
 
     def __init__(self, *args, **kwargs):
@@ -165,7 +166,7 @@ class Test(avocadoTest):
         should be a tuple whose:
             - first entry is the ticket defining the test variant skip reason
             - next two entries define:
-                - the test yaml parameter name to read
+                - the test yaml parameter name to read / test method name
                 - the test yaml parameter value used to trigger the skip
         If multiple sets of test yaml names/values are specified they must all
         match in order for the test variant to be skipped.
@@ -175,9 +176,12 @@ class Test(avocadoTest):
             skip_variant = len(data) > 1
             while data and skip_variant:
                 try:
-                    param_name = data.pop(0)
-                    param_value = data.pop(0)
-                    skip_variant = self.params.get(param_name) == param_value
+                    name = data.pop(0)
+                    value = data.pop(0)
+                    if name == "test_method_name":
+                        skip_variant &= self.get_test_name() == value
+                    else:
+                        skip_variant &= self.params.get(name) == value
                 except IndexError:
                     self.fail(
                         "Invalid CANCEL_FOR_TICKET format: {}".format(
