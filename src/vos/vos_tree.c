@@ -315,28 +315,15 @@ static void
 ktr_key_encode(struct btr_instance *tins, d_iov_t *key,
 	       daos_anchor_t *anchor)
 {
-	if (key) {
-		struct vos_embedded_key *embedded =
-			(struct vos_embedded_key *)anchor->da_buf;
-		D_ASSERT(key->iov_len <= sizeof(embedded->ek_key));
-
-		memcpy(embedded->ek_key, key->iov_buf, key->iov_len);
-		/** Pointers will have to be set on decode. */
-		embedded->ek_kiov.iov_len = key->iov_len;
-		embedded->ek_kiov.iov_buf_len = sizeof(embedded->ek_key);
-	}
+	if (key)
+		embedded_key_encode(key, anchor);
 }
 
 static void
 ktr_key_decode(struct btr_instance *tins, d_iov_t *key,
 	       daos_anchor_t *anchor)
 {
-	struct vos_embedded_key *embedded =
-		(struct vos_embedded_key *) anchor->da_buf;
-
-	/* Fix the pointer first */
-	embedded->ek_kiov.iov_buf = &embedded->ek_key[0];
-	*key = embedded->ek_kiov;
+	embedded_key_decode(key, anchor);
 }
 
 /** create a new key-record, or install an externally allocated key-record */
