@@ -28,7 +28,7 @@ import threading
 
 from itertools import product
 from avocado import fail_on
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from test_utils_pool import TestPool
 from ior_utils import IorCommand
 from job_manager_utils import Mpirun
@@ -249,7 +249,6 @@ class NvmePoolExclude(TestWithServers):
             self.pool.display_pool_daos_space(display_string)
             pool[val].destroy()
 
-    @skipForTicket("DAOS-6108")
     def test_nvme_pool_excluded(self):
         """Test ID: DAOS-2086
         Test Description: This method is called from
