@@ -2406,7 +2406,7 @@ fs_copy(struct file_dfs *src_file_dfs,
 					D_GOTO(out, rc);
 				}
 				path_length = snprintf(dpath, MAX_FILENAME,
-							"%s", dst_filename);
+						       "%s", dst_filename);
 				if (path_length >= MAX_FILENAME) {
 					rc = ENAMETOOLONG;
 					fprintf(stderr, "Path length is too "
