@@ -45,6 +45,12 @@ func IsUnavailable(err error) bool {
 	return strings.Contains(errors.Cause(err).Error(), ErrRaftUnavail.Error())
 }
 
+// IsEmptyGroupMap returns a boolean indicating whether or not the
+// supplied error corresponds to an empty system group map.
+func IsEmptyGroupMap(err error) bool {
+	return strings.Contains(errors.Cause(err).Error(), ErrEmptyGroupMap.Error())
+}
+
 // ErrNotReplica indicates that a request was made to a control plane
 // instance that is not a designated Management Service replica.
 type ErrNotReplica struct {

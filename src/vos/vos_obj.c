@@ -250,7 +250,7 @@ punch_dkey:
 	vos_ilog_fetch_finish(&dkey_info);
 	vos_ilog_fetch_finish(&akey_info);
 
-	if (!daos_handle_is_inval(toh))
+	if (daos_handle_is_valid(toh))
 		key_tree_release(toh, 0);
 
 	return rc;
@@ -315,6 +315,9 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	int			 rc = 0;
 	uint64_t		 cflags = 0;
 
+	if (oid.id_shard % 3 == 1 && DAOS_FAIL_CHECK(DAOS_DTX_FAIL_IO))
+		return -DER_IO;
+
 	if (dtx_is_valid_handle(dth)) {
 		epr.epr_hi = dth->dth_epoch;
 		bound = MAX(dth->dth_epoch_bound, dth->dth_epoch);
@@ -346,9 +349,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	}
 
-	rc = vos_ts_set_allocate(&ts_set, flags, cflags, akey_nr,
-				 dtx_is_valid_handle(dth) ?
-				 &dth->dth_xid : NULL);
+	rc = vos_ts_set_allocate(&ts_set, flags, cflags, akey_nr, dth);
 	if (rc != 0)
 		goto reset;
 

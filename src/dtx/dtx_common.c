@@ -96,7 +96,7 @@ dtx_free_dbca(struct dtx_batched_commit_args *dbca)
 {
 	struct ds_cont_child	*cont = dbca->dbca_cont;
 
-	if (!daos_handle_is_inval(cont->sc_dtx_cos_hdl)) {
+	if (daos_handle_is_valid(cont->sc_dtx_cos_hdl)) {
 		dbtree_destroy(cont->sc_dtx_cos_hdl, NULL);
 		cont->sc_dtx_cos_hdl = DAOS_HDL_INVAL;
 	}
@@ -158,6 +158,10 @@ dtx_batched_commit(void *arg)
 		if (d_list_empty(&dmi->dmi_dtx_batched_list))
 			goto check;
 
+		if (DAOS_FAIL_CHECK(DAOS_DTX_NO_BATCHED_CMT) ||
+		    DAOS_FAIL_CHECK(DAOS_DTX_NO_COMMITTABLE))
+			goto check;
+
 		dbca = d_list_entry(dmi->dmi_dtx_batched_list.next,
 				    struct dtx_batched_commit_args, dbca_link);
 		cont = dbca->dbca_cont;
@@ -203,8 +207,8 @@ dtx_batched_commit(void *arg)
 				DTX_AGG_THRESHOLD_AGE_UPPER))) {
 			ds_cont_child_get(cont);
 			cont->sc_dtx_aggregating = 1;
-			rc = dss_ult_create(dtx_aggregate, cont, DSS_ULT_GC,
-					    DSS_TGT_SELF, 0, NULL);
+			rc = dss_ult_create(dtx_aggregate, cont, DSS_XS_SELF,
+					    0, 0, NULL);
 			if (rc != 0) {
 				cont->sc_dtx_aggregating = 0;
 				ds_cont_child_put(cont);
@@ -260,6 +264,7 @@ dtx_shares_init(struct dtx_handle *dth)
 	D_INIT_LIST_HEAD(&dth->dth_share_act_list);
 	D_INIT_LIST_HEAD(&dth->dth_share_tbd_list);
 	dth->dth_share_tbd_count = 0;
+	dth->dth_share_tbd_scanned = 0;
 	dth->dth_shares_inited = 1;
 }
 
@@ -287,6 +292,7 @@ dtx_shares_fini(struct dtx_handle *dth)
 		D_FREE(dsp);
 
 	dth->dth_share_tbd_count = 0;
+	dth->dth_share_tbd_scanned = 0;
 }
 
 int
@@ -319,7 +325,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 		daos_unit_oid_t *leader_oid, struct dtx_id *dti_cos,
 		int dti_cos_cnt, struct dtx_memberships *mbs, bool leader,
 		bool solo, bool sync, bool dist, bool migration,
-		struct dtx_handle *dth)
+		bool ignore_uncommitted, struct dtx_handle *dth)
 {
 	if (sub_modification_cnt > DTX_SUB_MOD_MAX) {
 		D_ERROR("Too many modifications in a single transaction:"
@@ -347,6 +353,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_local_retry = 0;
 	dth->dth_dist = dist ? 1 : 0;
 	dth->dth_for_migration = migration ? 1 : 0;
+	dth->dth_ignore_uncommitted = ignore_uncommitted ? 1 : 0;
 
 	dth->dth_dti_cos = dti_cos;
 	dth->dth_dti_cos_count = dti_cos_cnt;
@@ -539,7 +546,7 @@ out:
 /**
  * Prepare the leader DTX handle in DRAM.
  *
- * \param cont		[IN]	Pointer to the container.
+ * \param coh		[IN]	Container handle.
  * \param dti		[IN]	The DTX identifier.
  * \param epoch		[IN]	Epoch for the DTX.
  * \param sub_modification_cnt
@@ -557,7 +564,7 @@ out:
  * \return			Zero on success, negative value if error.
  */
 int
-dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
+dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 		 struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
 		 uint32_t pm_ver, daos_unit_oid_t *leader_oid,
 		 struct dtx_id *dti_cos, int dti_cos_cnt,
@@ -581,12 +588,13 @@ dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 		dlh->dlh_sub_cnt = tgt_cnt;
 	}
 
-	rc = dtx_handle_init(dti, cont->sc_hdl, epoch, sub_modification_cnt,
-			     pm_ver, leader_oid, dti_cos, dti_cos_cnt, mbs,
-			     true, (flags & DTX_SOLO) ? true : false,
+	rc = dtx_handle_init(dti, coh, epoch, sub_modification_cnt, pm_ver,
+			     leader_oid, dti_cos, dti_cos_cnt, mbs, true,
+			     (flags & DTX_SOLO) ? true : false,
 			     (flags & DTX_SYNC) ? true : false,
 			     (flags & DTX_DIST) ? true : false,
-			     (flags & DTX_FOR_MIGRATION) ? true : false, dth);
+			     (flags & DTX_FOR_MIGRATION) ? true : false,
+			     false, dth);
 
 	/* XXX: For non-solo DTX, the leader and non-leader will make each own
 	 *	local modification in parallel. If the non-leader goes so fast
@@ -733,6 +741,15 @@ again:
 		size_t			 size;
 		uint32_t		 flags;
 
+		if (DAOS_FAIL_CHECK(DAOS_DTX_SKIP_PREPARE))
+			D_GOTO(abort, result = 0);
+
+		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_ABORT))
+			D_GOTO(abort, result = -DER_IO);
+
+		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_COMMIT))
+			dth->dth_sync = 1;
+
 		/* For synchronous DTX, do not add it into CoS cache, otherwise,
 		 * we may have no way to remove it from the cache.
 		 */
@@ -769,7 +786,7 @@ again:
 		rc = dtx_add_cos(cont, dte, &dth->dth_leader_oid,
 				 dth->dth_dkey_hash, dth->dth_epoch, flags);
 		dtx_entry_put(dte);
-		if (rc == 0)
+		if (rc == 0 && !DAOS_FAIL_CHECK(DAOS_DTX_NO_COMMITTABLE))
 			vos_dtx_mark_committable(dth);
 	}
 
@@ -856,7 +873,7 @@ out:
 /**
  * Prepare the DTX handle in DRAM.
  *
- * \param cont		[IN]	Pointer to the container.
+ * \param coh		[IN]	Container handle.
  * \param dti		[IN]	The DTX identifier.
  * \param epoch		[IN]	Epoch for the DTX.
  * \param sub_modification_cnt
@@ -872,7 +889,7 @@ out:
  * \return			Zero on success, negative value if error.
  */
 int
-dtx_begin(struct ds_cont_child *cont, struct dtx_id *dti,
+dtx_begin(daos_handle_t coh, struct dtx_id *dti,
 	  struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
 	  uint32_t pm_ver, daos_unit_oid_t *leader_oid,
 	  struct dtx_id *dti_cos, int dti_cos_cnt, uint32_t flags,
@@ -880,11 +897,13 @@ dtx_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 {
 	int	rc;
 
-	rc = dtx_handle_init(dti, cont->sc_hdl, epoch, sub_modification_cnt,
+	rc = dtx_handle_init(dti, coh, epoch, sub_modification_cnt,
 			     pm_ver, leader_oid, dti_cos, dti_cos_cnt, mbs,
 			     false, false, false,
 			     (flags & DTX_DIST) ? true : false,
-			     (flags & DTX_FOR_MIGRATION) ? true : false, dth);
+			     (flags & DTX_FOR_MIGRATION) ? true : false,
+			     (flags & DTX_IGNORE_UNCOMMITTED) ? true : false,
+			     dth);
 
 	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, "
 		"dti_cos_cnt %d, flags %x: "DF_RC"\n",
@@ -1148,7 +1167,9 @@ dtx_leader_exec_ops_ult(void *arg)
 
 		sub->dss_result = 0;
 
-		if (sub->dss_tgt.st_rank == DAOS_TGT_IGNORE) {
+		if (sub->dss_tgt.st_rank == DAOS_TGT_IGNORE ||
+		    (i == daos_fail_value_get() &&
+		     DAOS_FAIL_CHECK(DAOS_DTX_SKIP_PREPARE))) {
 			int ret;
 
 			ret = ABT_future_set(future, dlh);
@@ -1215,7 +1236,7 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 	 * targets for now.
 	 */
 	dlh->dlh_result = 0;
-	rc = dss_ult_create(dtx_leader_exec_ops_ult, ult_arg, DSS_ULT_IOFW,
+	rc = dss_ult_create(dtx_leader_exec_ops_ult, ult_arg, DSS_XS_IOFW,
 			    dss_get_module_info()->dmi_tgt_id,
 			    DSS_DEEP_STACK_SZ, NULL);
 	if (rc != 0) {

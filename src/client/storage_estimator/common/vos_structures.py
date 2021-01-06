@@ -209,8 +209,14 @@ class DKey(VosKey):
 
 
 class VosObject(VosItems):
-    def __init__(self, count=1, dkeys=[]):
+    def __init__(self, count=1, dkeys=[], targets=0):
         super(VosObject, self).__init__(count, dkeys, "dkeys", DKey)
+        self.set_num_of_targets(targets)
+
+    def set_num_of_targets(self, targets):
+        if not isinstance(targets, int):
+            raise TypeError("targets parameter must be of type int")
+        self._payload["targets"] = targets
 
 
 class Container(VosItems):

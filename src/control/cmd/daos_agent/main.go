@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -241,7 +241,7 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 		}
 
 		var err error
-		if cfg.AccessPoints, err = control.ParseHostList(cfg.AccessPoints, cfg.ControlPort); err != nil {
+		if cfg.AccessPoints, err = common.ParseHostList(cfg.AccessPoints, cfg.ControlPort); err != nil {
 			return errors.Wrap(err, "Failed to parse config access_points")
 		}
 
@@ -281,6 +281,10 @@ func main() {
 	)
 
 	if err := parseOpts(os.Args[1:], &opts, ctlInvoker, log); err != nil {
+		if fe, ok := errors.Cause(err).(*flags.Error); ok && fe.Type == flags.ErrHelp {
+			log.Info(fe.Error())
+			os.Exit(0)
+		}
 		exitWithError(log, err)
 	}
 }

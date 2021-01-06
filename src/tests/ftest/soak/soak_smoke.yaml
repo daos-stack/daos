@@ -20,6 +20,7 @@ setup:
 server_config:
     name: daos_server
     provider: ofi+sockets
+    nr_hugepages: 8192
     control_log_mask: INFO
     control_log_file: daos_control0.log
     servers:

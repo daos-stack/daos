@@ -561,3 +561,33 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 		})
 	}
 }
+
+func TestSystem_Database_FaultDomainTree(t *testing.T) {
+	for name, tc := range map[string]struct {
+		fdTree *FaultDomainTree
+	}{
+		"nil": {},
+		"actual tree": {
+			fdTree: NewFaultDomainTree(
+				MustCreateFaultDomain("one", "two", "three"),
+				MustCreateFaultDomain("one", "two", "four"),
+				MustCreateFaultDomain("five", "six", "seven"),
+				MustCreateFaultDomain("five", "eight", "nine"),
+			),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			db := MockDatabase(t, log)
+			db.data.Members.FaultDomains = tc.fdTree
+
+			result := db.FaultDomainTree()
+
+			if diff := cmp.Diff(tc.fdTree, result); diff != "" {
+				t.Fatalf("(-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}

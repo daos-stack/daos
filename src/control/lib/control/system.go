@@ -28,6 +28,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/dustin/go-humanize/english"
 	"github.com/golang/protobuf/proto"
@@ -38,8 +39,20 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/system"
+)
+
+const (
+	// SystemJoinTimeout defines the overall amount of time a system join attempt
+	// can take. It should be an extremely generous value, in order to
+	// accommodate (re)joins during leadership upheaval and other scenarios
+	// that are expected to eventually resolve.
+	SystemJoinTimeout = 1 * time.Hour // effectively "forever", just keep retrying
+	// SystemJoinRetryTimeout defines the amount of time a retry attempt can take. It
+	// should be set low in order to ensure that individual join attempts retry quickly.
+	SystemJoinRetryTimeout = 10 * time.Second
 )
 
 type sysRequest struct {
@@ -87,6 +100,7 @@ func (resp *sysResponse) DisplayAbsentHostsRanks() string {
 type SystemJoinReq struct {
 	unaryRequest
 	msRequest
+	retryableRequest
 	ControlAddr *net.TCPAddr
 	UUID        string
 	Rank        system.Rank
@@ -96,6 +110,7 @@ type SystemJoinReq struct {
 	InstanceIdx uint32              `json:"Idx"`
 }
 
+// MarshalJSON packs SystemJoinResp struct into a JSON message.
 func (req *SystemJoinReq) MarshalJSON() ([]byte, error) {
 	// use a type alias to leverage the default marshal for
 	// most fields
@@ -127,8 +142,16 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).Join(ctx, pbReq)
 	})
+	req.SetTimeout(SystemJoinTimeout)
+	req.retryTimeout = SystemJoinRetryTimeout
+	req.retryTestFn = func(err error, _ uint) bool {
+		switch {
+		case IsConnectionError(err), system.IsUnavailable(err):
+			return true
+		}
+		return false
+	}
 	rpcClient.Debugf("DAOS system join request: %+v", pbReq)
-	rpcClient.Debugf("DAOS system join req hosts: %+v", req.HostList)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
@@ -136,7 +159,114 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 	}
 
 	resp := new(SystemJoinResp)
+	if err := convertMSResponse(ur, resp); err != nil {
+		rpcClient.Debugf("DAOS system join failed: %s", err)
+		return nil, err
+	}
+
+	rpcClient.Debugf("DAOS system join response: %+v", resp)
+	return resp, nil
+}
+
+// SystemNotifyReq contains the inputs for the system notify request.
+type SystemNotifyReq struct {
+	unaryRequest
+	msRequest
+	Event    events.Event
+	Sequence uint64
+}
+
+// toClusterEventReq converts the system notify request to a cluster events
+// request. Resolve control address to a hostname if possible.
+func (req *SystemNotifyReq) toClusterEventReq() (*mgmtpb.ClusterEventReq, error) {
+	if req.Event == nil {
+		return nil, errors.New("nil event in request")
+	}
+
+	pbRASEvent, err := req.Event.ToProto()
+	if err != nil {
+		return nil, errors.Wrap(err, "convert event to proto")
+	}
+
+	return &mgmtpb.ClusterEventReq{
+		Sequence: req.Sequence,
+		Event:    &mgmtpb.ClusterEventReq_Ras{Ras: pbRASEvent},
+	}, nil
+}
+
+// SystemNotifyResp contains the request response.
+type SystemNotifyResp struct{}
+
+// SystemNotify will attempt to notify the DAOS system of a cluster event.
+func SystemNotify(ctx context.Context, rpcClient UnaryInvoker, req *SystemNotifyReq) (*SystemNotifyResp, error) {
+	switch {
+	case req == nil:
+		return nil, errors.New("nil request")
+	case common.InterfaceIsNil(req.Event):
+		return nil, errors.New("nil event in request")
+	case req.Sequence == 0:
+		return nil, errors.New("invalid sequence number in request")
+	case rpcClient == nil:
+		return nil, errors.New("nil rpc client")
+	}
+
+	rpcClient.Debugf("DAOS system notify request: %+v, event: %+v", req, req.Event)
+	pbReq, err := req.toClusterEventReq()
+	if err != nil {
+		return nil, err
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).ClusterEvent(ctx, pbReq)
+	})
+	rpcClient.Debugf("DAOS cluster event request: %+v", pbReq)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(SystemNotifyResp)
 	return resp, convertMSResponse(ur, resp)
+}
+
+// EventForwarder implements the events.Handler interface, increments sequence
+// number for each event forwarded and distributes requests to MS access points.
+type EventForwarder struct {
+	seq       uint64
+	client    UnaryInvoker
+	accessPts []string
+}
+
+// OnEvent implements the events.Handler interface.
+func (fwdr *EventForwarder) OnEvent(ctx context.Context, evt events.Event) {
+	switch {
+	case common.InterfaceIsNil(evt):
+		fwdr.client.Debug("skip event forwarding, nil event")
+		return
+	case len(fwdr.accessPts) == 0:
+		fwdr.client.Debug("skip event forwarding, missing access points")
+		return
+	}
+	fwdr.seq++
+	fwdr.client.Debugf("forwarding %s event to MS (seq: %d)", evt.GetID(), fwdr.seq)
+
+	req := &SystemNotifyReq{
+		Sequence: fwdr.seq,
+		Event:    evt,
+	}
+	req.SetHostList(fwdr.accessPts)
+
+	if _, err := SystemNotify(ctx, fwdr.client, req); err != nil {
+		fwdr.client.Debugf("failed to forward event to MS: %s", err)
+	}
+}
+
+// NewEventForwarder returns an initialized EventForwarder.
+func NewEventForwarder(rpcClient UnaryInvoker, accessPts []string) *EventForwarder {
+	return &EventForwarder{
+		client:    rpcClient,
+		accessPts: accessPts,
+	}
 }
 
 // SystemQueryReq contains the inputs for the system query request.

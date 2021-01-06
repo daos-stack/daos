@@ -5,7 +5,10 @@ import platform
 import subprocess
 import time
 import errno
+import SCons.Warnings
 from SCons.Script import BUILD_TARGETS
+
+SCons.Warnings.warningAsException()
 
 try:
     input = raw_input # pylint: disable=redefined-builtin
@@ -412,7 +415,6 @@ def scons(): # pylint: disable=too-many-locals
     env.Install("$PREFIX/lib64/daos", "API_VERSION")
 
     env.Install('$PREFIX/etc/bash_completion.d', ['utils/completion/daos.bash'])
-    env.Install('$PREFIX/etc', ['utils/memcheck-daos-client.supp'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
                 ['utils/sl/env_modules.py'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/',

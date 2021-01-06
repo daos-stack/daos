@@ -138,7 +138,7 @@ class DestroyTests(TestWithServers):
     def test_destroy_single(self):
         """Test destroying a pool created on a single server.
 
-        :avocado: tags=all,medium,pr
+        :avocado: tags=all,medium,pr,daily_regression
         :avocado: tags=pool,destroy,destroysingle
         """
         hostlist_servers = self.hostlist_servers[:1]
@@ -150,7 +150,7 @@ class DestroyTests(TestWithServers):
     def test_destroy_multi(self):
         """Test destroying a pool created on two servers.
 
-        :avocado: tags=all,medium,pr
+        :avocado: tags=all,medium,pr,daily_regression
         :avocado: tags=pool,destroy,destroymutli
         """
         hostlist_servers = self.hostlist_servers[:2]
@@ -327,7 +327,7 @@ class DestroyTests(TestWithServers):
         Test destroying a pool that has a connected client with force == false.
         Should fail.
 
-        :avocado: tags=all,medium,pr
+        :avocado: tags=all,medium,pr,daily_regression
         :avocado: tags=pool,destroy,destroyconnected
         """
         hostlist_servers = self.hostlist_servers[:1]
@@ -377,7 +377,7 @@ class DestroyTests(TestWithServers):
         Test destroying a pool that has a connected client with force == true.
         Should pass.
 
-        :avocado: tags=all,medium,pr
+        :avocado: tags=all,medium,pr,daily_regression
         :avocado: tags=pool,destroy,forcedestroyconnected
         """
         hostlist_servers = self.hostlist_servers[:1]
@@ -416,7 +416,7 @@ class DestroyTests(TestWithServers):
         Test destroy and recreate one right after the other multiple times
         Should fail.
 
-        :avocado: tags=all,medium,pr
+        :avocado: tags=all,medium,pr,daily_regression
         :avocado: tags=pool,destroy,destroywithdata
         """
         hostlist_servers = self.hostlist_servers[:1]

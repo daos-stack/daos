@@ -34,8 +34,7 @@ import codecs
 import subprocess
 import shlex
 
-from avocado  import Test
-from avocado  import main
+from apricot  import TestWithoutServers
 
 sys.path.append('./util')
 
@@ -91,11 +90,11 @@ def _check_key(key_rank, key_idx, received_key_hex):
 
     return (rank == key_rank) and (idx == key_idx)
 
-class CartIvTwoNodeTest(Test):
+class CartIvTwoNodeTest(TestWithoutServers):
     """
     Runs basic CaRT tests on one-node
 
-    :avocado: tags=all,cart,pr,iv,two_node
+    :avocado: recursive
     """
     def setUp(self):
         """ Test setup """
@@ -219,7 +218,7 @@ class CartIvTwoNodeTest(Test):
         """
         Test CaRT IV
 
-        :avocado: tags=all,cart,pr,iv,two_node
+        :avocado: tags=all,cart,pr,daily_regression,iv,two_node
         """
 
         srvcmd = self.utils.build_cmd(self, self.env, "test_servers")

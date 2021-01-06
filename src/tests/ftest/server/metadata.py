@@ -135,7 +135,7 @@ class ObjectMetadata(TestWithServers):
         Use Cases:
             ?
 
-        :avocado: tags=all,metadata,pr,large,metadatafindsvc,hw
+        :avocado: tags=all,metadata,daily_regression,large,metadatafindsvc,hw
         """
         # Connect to pool with svc argument being a valid rank,
         # but one that is not a pool service replica. Rank 0 is convenient.
