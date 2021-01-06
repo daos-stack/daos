@@ -1078,11 +1078,16 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "\n"
 	       "  --config <test_group>\n"
 	       "      Short version: -c\n"
-	       "      Name of group to obtain information\n"
+	       "      Name of sector/group to obtain information\n"
 	       "\n"
-	       "  --display\n"
+	       "  --display <value>\n"
 	       "      Short version: -d\n"
-	       "      Display the configuration file setup\n\n",
+	       "      Display the configuration file setup\n\n"
+	       "        '0' - no display shown\n"
+	       "        '1' - show info on specified sector/group\n"
+	       "        '2' - show all sector/group headings\n"
+	       "        '3' - show all info for all sector/group specified in file\n"
+	       "\n",
 	       prog_name
 	);
 
@@ -1742,7 +1747,17 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 
 	if (display) {
 		printf("Configuration file %s\n", file_name);
-		ConfigPrintSection(cfg, stdout, section_name);
+		sret = sscanf(&string[0], "%d", &temp);
+		if (temp == 1) {
+			/* Avoid checkpatch warning */
+			ConfigPrintSection(cfg, stdout, section_name);
+		} else if (temp == 2) {
+			/* Avoid checkpatch warning */
+			ConfigPrintSectionNames(cfg, stdout);
+		} else if (temp != 0) {
+			/* Avoid checkpatch warning */
+			ConfigPrint(cfg, stdout);
+		}
 	}
 
 	/* Parse of configuration file */
@@ -1762,8 +1777,19 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		printf("Configuration file %s\n", file_name);
-		ConfigPrintSection(cfg, stdout, section_name);
+		sret = sscanf(&string[0], "%d", &temp);
+		if (temp == 1) {
+			/* Avoid checkpatch warning */
+			ConfigPrintSection(cfg, stdout, section_name);
+		} else if (temp == 2) {
+			/* Avoid checkpatch warning */
+			ConfigPrintSectionNames(cfg, stdout);
+		} else if (temp != 0) {
+			/* Avoid checkpatch warning */
+			ConfigPrint(cfg, stdout);
+		}
 	}
+
 	/********/
 	config_ret = ConfigReadString(cfg, section_name, "group-name",
 				      &string[0], STRING_MAX_SIZE,
@@ -1935,7 +1961,7 @@ int main(int argc, char *argv[])
 	static struct option long_options[] = {
 		{"file-name", required_argument, 0, 'f'},
 		{"config", required_argument, 0, 'c'},
-		{"display", no_argument, 0, 'd'},
+		{"display", required_argument, 0, 'd'},
 
 		{"group-name", required_argument, 0, 'g'},
 		{"master-endpoint", required_argument, 0, 'm'},
@@ -1967,7 +1993,7 @@ int main(int argc, char *argv[])
 	/****************** First Parse user file arguments *************/
 	/* File specified via -f file argument */
 	while (1) {
-		c = getopt_long(argc, argv, "hf:c:dg:m:e:s:r:i:a:btnqp:",
+		c = getopt_long(argc, argv, "hf:c:d:g:m:e:s:r:i:a:btnqp:",
 				long_options, NULL);
 		/* break out of while loop */
 		if (c == -1)
@@ -2001,7 +2027,7 @@ int main(int argc, char *argv[])
 				    g_default_rep_count,
 				    g_default_max_inflight);
 			D_GOTO(cleanup, ret = 0);
-		} 
+		}
 		if (ret < 0) {
 			goto cleanup;
 		}
@@ -2014,7 +2040,7 @@ int main(int argc, char *argv[])
 	*/
 	optind = 1;
 	while (1) {
-		c = getopt_long(argc, argv, "hf:c:dg:m:e:s:r:i:a:btnqp:",
+		c = getopt_long(argc, argv, "hf:c:d:g:m:e:s:r:i:a:btnqp:",
 				long_options, NULL);
 		/* Break out of while loop */
 		if (c == -1)

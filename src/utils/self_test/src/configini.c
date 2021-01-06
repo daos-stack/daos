@@ -1131,7 +1131,8 @@ ConfigRet ConfigRead(FILE *fp, Config **cfg)
 			if ((ret = GetKeyVal(_cfg, p, &key, &val)) != CONFIG_OK)
 				goto error;
 
-			if ((ret = ConfigAddString(_cfg, sect->name, key, val)) != CONFIG_OK)
+			if ((ret = ConfigAddString(_cfg, sect->name, key, val))
+			     != CONFIG_OK)
 				goto error;
 		}
 	}
@@ -1181,10 +1182,10 @@ ConfigRet ConfigReadFile(const char *filename, Config **cfg)
 /**
  * \brief	      ConfigPrint() prints all cfg content to the stream
  *
- * \param cfg	  config handle
- * \param stream       stream to print
+ * \param cfg	      config handle
+ * \param stream      stream to print
  *
- * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
+ * \return	      Returns CONFIG_RET_OK as success, otherwise is an error.
  */
 ConfigRet ConfigPrint(const Config *cfg, FILE *stream)
 {
@@ -1199,7 +1200,7 @@ ConfigRet ConfigPrint(const Config *cfg, FILE *stream)
 			fprintf(stream, "[%s]\n", sect->name);
 
 		TAILQ_FOREACH(kv, &sect->kv_list, next)
-			fprintf(stream, "%s=%s\n", kv->key, kv->value);
+			fprintf(stream, "  %s=%s\n", kv->key, kv->value);
 
 		fprintf(stream, "\n");
 	}
@@ -1211,10 +1212,11 @@ ConfigRet ConfigPrint(const Config *cfg, FILE *stream)
  * \brief	      ConfigPrintSection() prints the cfg content to of a
  *                    specified section to the stream
  *
- * \param cfg	  config handle
- * \param stream       stream to print
+ * \param cfg	      config handle
+ * \param stream      stream to print
+ * \param section     section name to print
  *
- * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
+ * \return	      Returns CONFIG_RET_OK as success, otherwise is an error.
  */
 ConfigRet ConfigPrintSection(const Config *cfg, FILE *stream, char *section)
 {
@@ -1226,27 +1228,53 @@ ConfigRet ConfigPrintSection(const Config *cfg, FILE *stream, char *section)
 
 	TAILQ_FOREACH(sect, &cfg->sect_list, next) {
 		if (((section == NULL) && (sect->name == NULL)) ||
-                    ((sect->name != NULL) && (section != NULL) &&
+		    ((sect->name != NULL) && (section != NULL) &&
 		     strcmp(sect->name, section) == 0)) {
 			if (sect->name)
 				fprintf(stream, "[%s]\n", sect->name);
 
 			TAILQ_FOREACH(kv, &sect->kv_list, next)
-				fprintf(stream, "%s=%s\n", kv->key, kv->value);
-
+				fprintf(stream, "  %s=%s\n",
+					kv->key, kv->value);
 			fprintf(stream, "\n");
 		}
 	}
-
 	return CONFIG_OK;
 }
 
 /**
- * \brief	      ConfigPrintToFile() prints (saves) all cfg content to
+ * \brief	      ConfigPrintSectionNames() prints the section names of
+ *                    a cfg content to of a specified section to the stream
+ *
+ * \param cfg	      config handle
+ * \param stream      stream to print
+ *
+ * \return	      Returns CONFIG_RET_OK as success, otherwise is an error.
+ */
+ConfigRet ConfigPrintSectionNames(const Config *cfg, FILE *stream)
+{
+	ConfigSection  *sect = NULL;
+
+	if (!cfg || !stream)
+		return CONFIG_ERR_INVALID_PARAM;
+
+	printf("Section Headers:\n");
+	TAILQ_FOREACH(sect, &cfg->sect_list, next) {
+		if (sect->name)
+			fprintf(stream, "  [%s]\n", sect->name);
+	}
+	fprintf(stream, "\n");
+
+	return CONFIG_OK;
+}
+
+
+/**
+ * \brief	     ConfigPrintToFile() prints (saves) all cfg content to
  *		     the file
  *
- * \param cfg	  config handle
- * \param filename     filename to save in
+ * \param cfg	     config handle
+ * \param filename   filename to save in
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
@@ -1269,10 +1297,10 @@ ConfigRet ConfigPrintToFile(const Config *cfg, char *filename)
 }
 
 /**
- * \brief	      ConfigPrintSettings() prints settings to the stream
+ * \brief	     ConfigPrintSettings() prints settings to the stream
  *
- * \param cfg	      config handle
- * \param stream      stream to print
+ * \param cfg	     config handle
+ * \param stream     stream to print
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */

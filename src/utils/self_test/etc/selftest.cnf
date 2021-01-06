@@ -1,3 +1,8 @@
+# Warning.
+# "path" When executing from CI, then path should not be defined.
+#        However, when executing not in CI, they user may not have access
+#        to directory to store temporary file so it should be defined.
+
 [help]
 help=1
 

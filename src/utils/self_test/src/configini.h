@@ -75,6 +75,7 @@ ConfigRet ConfigRead(FILE *fp, Config **cfg);
 ConfigRet ConfigReadFile(const char *filename, Config **cfg);
 ConfigRet ConfigPrint(const Config *cfg, FILE *stream);
 ConfigRet ConfigPrintSection(const Config *cfg, FILE *stream, char *);
+ConfigRet ConfigPrintSectionNames(const Config *cfg, FILE *stream);
 ConfigRet ConfigPrintToFile(const Config *cfg, char *filename);
 ConfigRet ConfigPrintSettings(const Config *cfg, FILE *stream);
 
