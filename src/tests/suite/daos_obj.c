@@ -706,7 +706,7 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	/* Disabled Pool Aggrgation */
 	rc = set_pool_reclaim_strategy(state, aggr_disabled);
 	assert_int_equal(rc, 0);
-        /**
+	/**
 	 * set_pool_reclaim_strategy() to disable aggregation
 	 * assumes all aggregation ULTs on all servers taking
 	 * effect immediately, this may not be the case.
