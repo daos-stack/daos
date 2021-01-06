@@ -116,7 +116,10 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 
 	mod.log.Debugf("GetAttachInfo req from client: %+v", pbReq)
 
-	if pbReq.Sys != mod.sys {
+	// Check the system name. Due to the special daos_init-dc_mgmt_net_cfg
+	// case, where the system name is not available, we let an empty
+	// system name indicates such, and hence skip the check.
+	if pbReq.Sys != "" && pbReq.Sys != mod.sys {
 		return nil, errors.Errorf("unknown system name %s", pbReq.Sys)
 	}
 

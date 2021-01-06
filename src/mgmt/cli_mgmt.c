@@ -322,9 +322,6 @@ int dc_mgmt_net_cfg(const char *name)
 	struct dc_mgmt_sys_info info;
 	Mgmt__GetAttachInfoResp *resp;
 
-	if (name == NULL)
-		name = DAOS_DEFAULT_SYS_NAME;
-
 	/* Query the agent for the CaRT network configuration parameters */
 	rc = get_attach_info(name, false /* all_ranks */, &info, &resp);
 	if (rc != 0)
