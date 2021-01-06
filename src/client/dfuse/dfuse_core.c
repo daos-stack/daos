@@ -434,7 +434,7 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 			       refs, handles);
 	}
 
-	rc = daos_eq_destroy(fs_handle->dpi_eq, DAOS_EQ_DESTROY_FORCE);
+	rc = daos_eq_destroy(fs_handle->dpi_eq, 0);
 	if (rc) {
 		DFUSE_TRA_WARNING(fs_handle, "Failed to destroy EQ");
 		rcp = EINVAL;
