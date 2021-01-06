@@ -1519,7 +1519,11 @@ def check_readdir_perf(server, conf):
         # Test with caching enabled.  Check the file directory, and do it twice
         # without restarting, to see the effect of populating the cache, and
         # reading from the cache.
-        dfuse = DFuse(server, conf, pool=pool, container=container, caching=True)
+        dfuse = DFuse(server,
+                      conf,
+                      pool=pool,
+                      container=container,
+                      caching=True)
         dfuse.start()
         start = time.time()
         subprocess.run(['/bin/ls', '-t', file_dir], stdout=subprocess.PIPE)
