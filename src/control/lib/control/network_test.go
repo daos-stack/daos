@@ -321,7 +321,7 @@ func TestControl_GetAttachInfo(t *testing.T) {
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", system.ErrEmptyGroupMap, nil),
 					MockMSResponse("host1", nil, &mgmtpb.GetAttachInfoResp{
-						Psrs: []*mgmtpb.GetAttachInfoResp_Psr{
+						RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 							{
 								Rank: 42,
 								Uri:  "foo://bar",

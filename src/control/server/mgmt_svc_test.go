@@ -53,18 +53,25 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				CrtCtxShareAddr: 1,
 				CrtTimeout:      10, NetDevClass: netdetect.Infiniband,
 			},
-			req: &mgmtpb.GetAttachInfoReq{},
+			req: &mgmtpb.GetAttachInfoReq{
+				AllRanks: true,
+			},
 			expResp: &mgmtpb.GetAttachInfoResp{
 				Provider:        "ofi+verbs",
 				CrtCtxShareAddr: 1,
 				CrtTimeout:      10,
 				NetDevClass:     netdetect.Infiniband,
-				Psrs: []*mgmtpb.GetAttachInfoResp_Psr{
+				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
 						Rank: msReplica.Rank.Uint32(),
 						Uri:  msReplica.FabricURI,
 					},
+					{
+						Rank: nonReplica.Rank.Uint32(),
+						Uri:  nonReplica.FabricURI,
+					},
 				},
+				MsRanks: []uint32{0},
 			},
 		},
 		"Server uses sockets + Ethernet": {
@@ -74,18 +81,25 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				CrtTimeout:      5,
 				NetDevClass:     netdetect.Ether,
 			},
-			req: &mgmtpb.GetAttachInfoReq{},
+			req: &mgmtpb.GetAttachInfoReq{
+				AllRanks: true,
+			},
 			expResp: &mgmtpb.GetAttachInfoResp{
 				Provider:        "ofi+sockets",
 				CrtCtxShareAddr: 0,
 				CrtTimeout:      5,
 				NetDevClass:     netdetect.Ether,
-				Psrs: []*mgmtpb.GetAttachInfoResp_Psr{
+				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
 						Rank: msReplica.Rank.Uint32(),
 						Uri:  msReplica.FabricURI,
 					},
+					{
+						Rank: nonReplica.Rank.Uint32(),
+						Uri:  nonReplica.FabricURI,
+					},
 				},
+				MsRanks: []uint32{0},
 			},
 		},
 	} {
