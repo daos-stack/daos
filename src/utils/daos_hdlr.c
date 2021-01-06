@@ -2075,7 +2075,7 @@ out:
 
 static ssize_t
 file_read(struct file_dfs *file_dfs, char *file,
- void *buf, size_t size)
+	  void *buf, size_t size)
 {
 	ssize_t got_size = 0;
 
