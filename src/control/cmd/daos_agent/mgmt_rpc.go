@@ -109,6 +109,17 @@ func (mod *mgmtModule) ID() drpc.ModuleID {
 // The use of cached data may be disabled by exporting
 // "DAOS_AGENT_DISABLE_CACHE=true" in the environment running the daos_agent.
 func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid int32) ([]byte, error) {
+	pbReq := new(mgmtpb.GetAttachInfoReq)
+	if err := proto.Unmarshal(reqb, pbReq); err != nil {
+		return nil, drpc.UnmarshalingPayloadFailure()
+	}
+
+	mod.log.Debugf("GetAttachInfo req from client: %+v", pbReq)
+
+	if pbReq.Sys != mod.sys {
+		return nil, errors.Errorf("unknown system name %s", pbReq.Sys)
+	}
+
 	var err error
 	numaNode := mod.aiCache.defaultNumaNode
 
@@ -135,17 +146,6 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 	// to get the mutex, return the cached response instead of initializing the cache again.
 	if mod.aiCache.isCached() {
 		return mod.aiCache.getResponse(numaNode)
-	}
-
-	pbReq := new(mgmtpb.GetAttachInfoReq)
-	if err := proto.Unmarshal(reqb, pbReq); err != nil {
-		return nil, drpc.UnmarshalingPayloadFailure()
-	}
-
-	mod.log.Debugf("GetAttachInfo req from client: %+v", pbReq)
-
-	if pbReq.Sys != mod.sys {
-		return nil, errors.Errorf("unknown system name %s", pbReq.Sys)
 	}
 
 	// Ask the MS for _all_ info, regardless of pbReq.AllRanks, so that the
