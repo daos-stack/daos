@@ -2299,9 +2299,9 @@ fs_copy(struct file_dfs *src_file_dfs,
 				d_name, strerror(errno));
 			D_GOTO(out, rc);
 		}
-				
+
 		path_length = snprintf(dst_filename, MAX_FILENAME,
-					"%s/%s", fs_dst_prefix,
+				       "%s/%s", fs_dst_prefix,
 					filename + dfs_prefix_len);
 
 		if (path_length >= MAX_FILENAME) {
@@ -2316,12 +2316,12 @@ fs_copy(struct file_dfs *src_file_dfs,
 			mode_t tmp_mode_file = S_IRUSR | S_IWUSR;
 
 			rc = file_open(src_file_dfs, filename, src_flags,
-					tmp_mode_file);
+				       tmp_mode_file);
 			if (rc != 0) {
 				D_GOTO(out, rc);
 			}
 			rc = file_open(dst_file_dfs, dst_filename, dst_flags,
-					tmp_mode_file);
+				       tmp_mode_file);
 			if (rc != 0) {
 				D_GOTO(out, rc);
 			}
@@ -2329,7 +2329,7 @@ fs_copy(struct file_dfs *src_file_dfs,
 			/* read from source file, then write to dest file */
 			uint64_t file_length = st.st_size;
 			uint64_t total_bytes = 0;
-			uint64_t buf_size = 64*1024*1024;
+			uint64_t buf_size = 64 * 1024 * 1024;
 			void *buf;
 
 			D_ALLOC(buf, buf_size * sizeof(char));
@@ -2340,7 +2340,7 @@ fs_copy(struct file_dfs *src_file_dfs,
 				uint64_t bytes_left = file_length - total_bytes;
 
 				if (bytes_left < buf_size) {
-					left_to_read = (size_t) bytes_left;
+					left_to_read = (size_t)bytes_left;
 				}
 				ssize_t bytes_read = file_read(src_file_dfs,
 								filename, buf,
@@ -2350,11 +2350,11 @@ fs_copy(struct file_dfs *src_file_dfs,
 						filename);
 					D_GOTO(out, rc = EIO);
 				}
-				size_t bytes_to_write = (size_t) bytes_read;
+				size_t bytes_to_write = (size_t)bytes_read;
 				ssize_t bytes_written;
 
 				bytes_written = file_write(dst_file_dfs,
-							dst_filename,
+							   dst_filename,
 							buf, bytes_to_write);
 				if (bytes_written < 0) {
 					fprintf(stderr,
@@ -2367,7 +2367,7 @@ fs_copy(struct file_dfs *src_file_dfs,
 			if (buf != NULL)
 				D_FREE(buf);
 
-			/* reset offests if there is another file to copy */
+			/* reset offsets if there is another file to copy */
 			src_file_dfs->offset = 0;
 			dst_file_dfs->offset = 0;
 
@@ -2393,12 +2393,12 @@ fs_copy(struct file_dfs *src_file_dfs,
 			 * or src_dirs's parent.
 			 */
 			if ((strcmp(d_name, "..") != 0) &&
-				(strcmp(d_name, ".") != 0)) {
+			    (strcmp(d_name, ".") != 0)) {
 				char path[MAX_FILENAME];
 				char dpath[MAX_FILENAME];
 
 				path_length = snprintf(path, MAX_FILENAME, "%s",
-							filename);
+						       filename);
 				if (path_length >= MAX_FILENAME) {
 					rc = ENAMETOOLONG;
 					fprintf(stderr, "Path length is too "
@@ -2406,7 +2406,7 @@ fs_copy(struct file_dfs *src_file_dfs,
 					D_GOTO(out, rc);
 				}
 				path_length = snprintf(dpath, MAX_FILENAME,
-							"%s", dst_filename);
+						       "%s", dst_filename);
 				if (path_length >= MAX_FILENAME) {
 					rc = ENAMETOOLONG;
 					fprintf(stderr, "Path length is too "
@@ -2428,7 +2428,7 @@ fs_copy(struct file_dfs *src_file_dfs,
 				 * with the new path.
 				 */
 				rc = fs_copy(src_file_dfs, dst_file_dfs, path,
-						dfs_prefix_len, fs_dst_prefix);
+					     dfs_prefix_len, fs_dst_prefix);
 				if (rc != 0) {
 					fprintf(stderr, "filesystem copy "
 						"failed, %d.\n", rc);
