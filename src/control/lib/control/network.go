@@ -38,6 +38,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // HostFabricInterface describes a host fabric interface.
@@ -213,6 +214,7 @@ type (
 	GetAttachInfoReq struct {
 		unaryRequest
 		msRequest
+		retryableRequest
 		System   string
 		AllRanks bool
 	}
@@ -261,6 +263,10 @@ func GetAttachInfo(ctx context.Context, rpcClient UnaryInvoker, req *GetAttachIn
 			AllRanks: req.AllRanks,
 		})
 	})
+	req.retryTestFn = func(err error, _ uint) bool {
+		// If the MS hasn't added any members yet, retry the request.
+		return system.IsEmptyGroupMap(err)
+	}
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
