@@ -391,11 +391,11 @@ vos_agg_sv(daos_handle_t ih, vos_iter_entry_t *entry,
 	    agg_param->ap_max_epoch == entry->ie_epoch) {
 
 		switch (entry->ie_dtx_state) {
-		case DTX_ENT_COMMITTED:
+		case DTX_ST_COMMITTED:
 			/* Highest epoch is committed, keep it. */
 			agg_param->ap_max_epoch = entry->ie_epoch;
 			break;
-		case DTX_ENT_UNCOMMITTED:
+		case DTX_ST_PREPARED:
 			/*
 			 * Highest epoch is uncommitted, skip it and continue
 			 * checking on next lower epoch.
@@ -403,7 +403,7 @@ vos_agg_sv(daos_handle_t ih, vos_iter_entry_t *entry,
 			D_DEBUG(DB_EPC, "Skip uncommitted at epoch:"DF_X64"\n",
 				entry->ie_epoch);
 			break;
-		case DTX_ENT_ABORTED:
+		case DTX_ST_ABORTED:
 			/*
 			 * Highest epoch is aborted, delete it and continue
 			 * checking on next lower epoch.
@@ -1587,9 +1587,9 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 	D_ASSERT(ext1_covers_ext2(&phy_ext, &lgc_ext));
 
 	switch (entry->ie_dtx_state) {
-	case DTX_ENT_COMMITTED:
+	case DTX_ST_COMMITTED:
 		break;
-	case DTX_ENT_ABORTED:
+	case DTX_ST_ABORTED:
 		/*
 		 * Delete the aborted entry, and inform iterator to abort
 		 * current evtree aggregation.
@@ -1604,7 +1604,7 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 		if (rc)
 			return rc;
 		return -DER_TX_BUSY;
-	case DTX_ENT_UNCOMMITTED:
+	case DTX_ST_PREPARED:
 		/*
 		 * Keep uncommitted entry, and inform iterator to abort
 		 * current evtree aggregation.

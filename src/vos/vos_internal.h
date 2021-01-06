@@ -432,11 +432,21 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
  *
  * \param entry		[IN]	DTX local id
  *
- * \return		DTX_ENT_COMMITTED, DTX_ENT_UNCOMMITTED or
- *			DTX_ENT_ABORTED.
+ * \return		DTX_ST_COMMITTED, DTX_ST_PREPARED or
+ *			DTX_ST_ABORTED.
  */
-unsigned int
-vos_dtx_ent_state(uint32_t entry);
+static inline unsigned int
+vos_dtx_ent_state(uint32_t entry)
+{
+	switch (entry) {
+	case DTX_LID_COMMITTED:
+		return DTX_ST_COMMITTED;
+	case DTX_LID_ABORTED:
+		return DTX_ST_ABORTED;
+	default:
+		return DTX_ST_PREPARED;
+	}
+}
 
 /**
  * Register the record (to be modified) to the DTX entry.

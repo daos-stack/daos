@@ -1185,19 +1185,6 @@ vos_dtx_append(struct dtx_handle *dth, umem_off_t record, uint32_t type)
 	return 0;
 }
 
-inline unsigned int
-vos_dtx_ent_state(uint32_t entry)
-{
-	switch (entry) {
-	case DTX_LID_COMMITTED:
-		return DTX_ENT_COMMITTED;
-	case DTX_LID_ABORTED:
-		return DTX_ENT_ABORTED;
-	default:
-		return DTX_ENT_UNCOMMITTED;
-	}
-}
-
 /*
  * Since no entries should be hidden from 'purge' (aggregation, discard,
  * remove) operations, ALB_UNAVAILABLE should never be returned for the

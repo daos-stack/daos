@@ -203,6 +203,22 @@ enum daos_ops_intent {
 	DAOS_INTENT_IGNORE_NONCOMMITTED	= 8, /* ignore non-committed DTX. */
 };
 
+/**
+ * DAOS two-phase commit transaction status.
+ */
+enum dtx_status {
+	/** Local participant has done the modification. */
+	DTX_ST_PREPARED		= 1,
+	/** The DTX has been committed. */
+	DTX_ST_COMMITTED	= 2,
+	/** The DTX is corrupted, some participant RDG(s) may be lost. */
+	DTX_ST_CORRUPTED	= 3,
+	/** The DTX is committable, but not committed, non-persistent status. */
+	DTX_ST_COMMITTABLE	= 4,
+	/** The DTX is aborted. */
+	DTX_ST_ABORTED		= 5,
+};
+
 enum daos_dtx_alb {
 	/* unavailable case */
 	ALB_UNAVAILABLE		= 0,
@@ -214,26 +230,20 @@ enum daos_dtx_alb {
 	ALB_AVAILABLE_ABORTED	= 3,
 };
 
-enum dtx_entry_state {
-	DTX_ENT_COMMITTED	= 0,
-	DTX_ENT_UNCOMMITTED,
-	DTX_ENT_ABORTED,
-};
-
 static inline unsigned int
 dtx_alb2state(int alb)
 {
 	switch (alb) {
 	case ALB_UNAVAILABLE:
 	case ALB_AVAILABLE_DIRTY:
-		return DTX_ENT_UNCOMMITTED;
+		return DTX_ST_PREPARED;
 	case ALB_AVAILABLE_CLEAN:
-		return DTX_ENT_COMMITTED;
+		return DTX_ST_COMMITTED;
 	case ALB_AVAILABLE_ABORTED:
-		return DTX_ENT_ABORTED;
+		return DTX_ST_ABORTED;
 	default:
 		D_ASSERTF(0, "Invalid alb:%d\n", alb);
-		return DTX_ENT_UNCOMMITTED;
+		return DTX_ST_PREPARED;
 	}
 }
 
