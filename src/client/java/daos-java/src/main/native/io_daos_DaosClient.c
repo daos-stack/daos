@@ -202,6 +202,8 @@ Java_io_daos_DaosClient_createEventQueue(JNIEnv *env, jclass clientClass,
 			sizeof(event_queue_wrapper_t));
 	eq->events = (daos_event_t **)malloc(
 		nbrOfEvents * sizeof(daos_event_t *));
+	eq->polled_events = (daos_event_t **)malloc(
+        nbrOfEvents * sizeof(daos_event_t *));
 	eq->nbrOfEvents = nbrOfEvents;
 	eq->eqhdl = eqhdl;
 	for (i = 0; i < nbrOfEvents; i++) {
@@ -233,6 +235,7 @@ fail:
 				free(eq->events[i]);
 			}
 		}
+		free(eq->polled_events);
 		free(eq->events);
 		free(eq);
 	}
@@ -248,10 +251,9 @@ Java_io_daos_DaosClient_pollCompleted(JNIEnv *env, jclass clientClass,
 	char *buffer = (char *)memAddress;
 	uint16_t idx;
 	int i;
-	struct daos_event **eps = (struct daos_event **)malloc(
-			sizeof(struct daos_event *) * nbrOfEvents);
+
 	int rc = daos_eq_poll(eq->eqhdl, 1, timeoutMs * 1000, nbrOfEvents,
-				eps);
+				eq->polled_events);
 
 	if (rc < 0) {
 		char *tmp = "Failed to poll completed events, max events: %d";
@@ -259,21 +261,17 @@ Java_io_daos_DaosClient_pollCompleted(JNIEnv *env, jclass clientClass,
 
 		sprintf(msg, tmp, nbrOfEvents);
 		throw_exception_base(env, msg, rc, 1, 0);
-		goto fail;
+		return;
 	}
 	idx = rc;
 	memcpy(buffer, &idx, 2);
 	buffer += 2;
 	for (i = 0; i < rc; i++) {
-		idx = eps[i]->ev_debug;
+		idx = eq->polled_events[i]->ev_debug;
 		memcpy(buffer, &idx, 2);
 		buffer += 2;
 	}
 	return;
-fail:
-	if (eps) {
-		free(eps);
-	}
 }
 
 JNIEXPORT void JNICALL
@@ -285,10 +283,8 @@ Java_io_daos_DaosClient_destroyEventQueue(JNIEnv *env, jclass clientClass,
 	int rc;
 	int count = 0;
 	daos_event_t *ev;
-	struct daos_event **eps = (struct daos_event **)malloc(
-		sizeof(struct daos_event *) * eq->nbrOfEvents);
 
-	while (daos_eq_poll(eq->eqhdl, 1, 1000, eq->nbrOfEvents, eps)) {
+	while (daos_eq_poll(eq->eqhdl, 1, 1000, eq->nbrOfEvents, eq->polled_events)) {
 		count++;
 		if (count > 4) {
 			break;
@@ -308,7 +304,7 @@ Java_io_daos_DaosClient_destroyEventQueue(JNIEnv *env, jclass clientClass,
 
 				sprintf(msg, tmp, i);
 				throw_exception_base(env, msg, rc, 1, 0);
-				goto fin;
+				return;
 			}
 		}
 	}
@@ -318,7 +314,7 @@ Java_io_daos_DaosClient_destroyEventQueue(JNIEnv *env, jclass clientClass,
 			char *tmp = "Failed to destroy EQ.";
 
 			throw_exception_const_msg_object(env, tmp, rc);
-			goto fin;
+			return;
 		}
 	}
 	if (eq->events) {
@@ -330,12 +326,11 @@ Java_io_daos_DaosClient_destroyEventQueue(JNIEnv *env, jclass clientClass,
 		}
 		free(eq->events);
 	}
+	if (eq->polled_events) {
+	    free(eq->polled_events);
+	}
 	if (eq) {
 		free(eq);
-	}
-fin:
-	if (eps) {
-		free(eps);
 	}
 }
 

@@ -56,7 +56,7 @@ public class DaosInputStream extends FSInputStream {
   private final int bufferCapacity;
   private final int readSize;
 
-  private ByteBuffer buffer;
+  private final DaosFileSource source;
 
   private byte[] singleByte = new byte[]{0};
 
@@ -84,32 +84,30 @@ public class DaosInputStream extends FSInputStream {
    */
   protected DaosInputStream(DaosFile daosFile,
                          FileSystem.Statistics stats,
-                         int bufferCap, int readSize) throws IOException {
+                         int bufferCap, int readSize, boolean async) throws IOException {
     this.daosFile = daosFile;
     this.stats = stats;
     this.bufferCapacity = readSize > bufferCap ? readSize : bufferCap;
     this.readSize = readSize;
-    this.buffer = ByteBuffer.allocateDirect(bufferCapacity);
-    this.buffer.limit(0);
+    this.source = async ? new DaosFileSourceAsync(bufferCapacity) : new DaosFileSourceSync(bufferCapacity);
     this.fileLen = daosFile.length();
   }
 
   protected DaosInputStream(DaosFile daosFile,
                             FileSystem.Statistics stats,
-                            ByteBuffer buffer, int readSize) throws IOException {
+                            ByteBuffer buffer, int readSize, boolean async) throws IOException {
     if (!(buffer instanceof DirectBuffer)) {
       throw new IllegalArgumentException("Buffer must be instance of DirectBuffer. " + buffer.getClass().getName());
     }
     this.daosFile = daosFile;
     this.stats = stats;
-    this.buffer = buffer;
+    this.source = async ? new DaosFileSourceAsync(buffer) : new DaosFileSourceSync(buffer);
     this.bufferCapacity = buffer.capacity();
     if (bufferCapacity < readSize) {
       throw new IllegalArgumentException("buffer capacity " + bufferCapacity +
         " should be bigger than readSize " + readSize);
     }
     this.readSize = readSize;
-    this.buffer.limit(0);
     this.fileLen = daosFile.length();
   }
 
@@ -220,15 +218,15 @@ public class DaosInputStream extends FSInputStream {
 
     // check buffer overlay
     long start = lastFilePos;
-    long end = lastFilePos + buffer.limit();
+    long end = lastFilePos + source.limit();
     // Copy requested data from internal buffer to result array if possible
     if (nextReadPos >= start && nextReadPos < end) {
-      buffer.position((int) (nextReadPos - start));
+      source.position((int) (nextReadPos - start));
       int remaining = (int) (end - nextReadPos);
 
       // Want to read len bytes, and there is remaining bytes left in buffer, pick the smaller one
       actualLen = Math.min(remaining, len);
-      buffer.get(buf, off, actualLen);
+      source.get(buf, off, actualLen);
       nextReadPos += actualLen;
       off += actualLen;
       len -= actualLen;
@@ -248,7 +246,7 @@ public class DaosInputStream extends FSInputStream {
       }
       // If we read 3 bytes but need 1, put 1; if we read 1 byte but need 3, put 1
       int lengthToPutInBuffer = Math.min(len, actualLen);
-      buffer.get(buf, off, lengthToPutInBuffer);
+      source.get(buf, off, lengthToPutInBuffer);
       numBytes += lengthToPutInBuffer;
       nextReadPos += lengthToPutInBuffer;
       off += lengthToPutInBuffer;
@@ -264,7 +262,7 @@ public class DaosInputStream extends FSInputStream {
     if (LOG.isDebugEnabled()) {
       LOG.debug("DaosInputStream : read from daos ,filePos = {}", this.nextReadPos);
     }
-    buffer.clear();
+    source.clear();
 
     length = Math.min(length, bufferCapacity);
     length = Math.max(length, readSize);
@@ -274,9 +272,8 @@ public class DaosInputStream extends FSInputStream {
       currentTime = System.currentTimeMillis();
     }
 
-    int actualLen = (int)this.daosFile.read(this.buffer, 0, this.nextReadPos, length);
+    int actualLen = source.read(this.nextReadPos, length);
     lastFilePos = nextReadPos;
-    buffer.limit(actualLen);
     stats.incrementReadOps(1);
     this.stats.incrementBytesRead(actualLen);
     if (LOG.isDebugEnabled()) {
@@ -298,11 +295,7 @@ public class DaosInputStream extends FSInputStream {
     }
     this.closed = true;
     this.daosFile.release();
-
-    if (this.buffer != null) {
-      ((sun.nio.ch.DirectBuffer) this.buffer).cleaner().clean();
-      this.buffer = null;
-    }
+    source.close();
     super.close();
   }
 
@@ -319,8 +312,8 @@ public class DaosInputStream extends FSInputStream {
     return (int) remaining;
   }
 
-  public ByteBuffer getBuffer() {
-    return buffer;
+  public DaosFileSource getBuffer() {
+    return source;
   }
 
   public int getReadSize() {

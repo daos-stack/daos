@@ -389,7 +389,16 @@ public class DaosFile {
               buffer.capacity(), bufferOffset, len));
     }
     return client.dfsRead(dfsPtr, objId, ((DirectBuffer) buffer).address() + bufferOffset,
-            fileOffset, len, 0);
+            fileOffset, len);
+  }
+
+  public void readAsync(IODfsDesc desc) throws IOException {
+    open(true);
+    desc.encode();
+    if (log.isDebugEnabled()) {
+      log.debug("read file with description: " + desc);
+    }
+    client.dfsReadAsync(dfsPtr, objId, desc.getDescBuffer().memoryAddress());
   }
 
   /**
@@ -413,7 +422,16 @@ public class DaosFile {
               buffer.capacity(), bufferOffset, len));
     }
     return client.dfsWrite(dfsPtr, objId, ((DirectBuffer) buffer).address() + bufferOffset,
-            fileOffset, len, 0);
+            fileOffset, len);
+  }
+
+  public void writeAsync(IODfsDesc desc) throws IOException {
+    open(true);
+    desc.encode();
+    if (log.isDebugEnabled()) {
+      log.debug("write file with description: " + desc);
+    }
+    client.dfsWriteAsync(dfsPtr, objId, desc.getDescBuffer().memoryAddress());
   }
 
   /**

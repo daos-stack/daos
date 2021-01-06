@@ -45,6 +45,7 @@ typedef struct {
     int nbrOfEvents;
     daos_handle_t eqhdl;
     daos_event_t **events;
+    daos_event_t **polled_events;
 } event_queue_wrapper_t;
 
 typedef struct {

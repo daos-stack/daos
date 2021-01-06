@@ -39,19 +39,19 @@ import sun.nio.ch.DirectBuffer;
  * The output stream for Daos system.
  */
 public class DaosOutputStream extends OutputStream {
-  private static final Logger LOG = LoggerFactory.getLogger(DaosOutputStream.class);
 
-  private ByteBuffer buffer;
   private long fileOffset;
   private boolean closed;
   private String path;
-  private final DaosFile daosFile;
+  private final DaosFileSource source;
   private final FileSystem.Statistics stats;
+
+  private static final Logger LOG = LoggerFactory.getLogger(DaosOutputStream.class);
 
   public DaosOutputStream(DaosFile daosFile,
                           String path,
-                          final int writeBufferSize, FileSystem.Statistics stats) {
-    this(daosFile, path, ByteBuffer.allocateDirect(writeBufferSize), stats);
+                          final int writeBufferSize, FileSystem.Statistics stats, boolean async) {
+    this(daosFile, path, ByteBuffer.allocateDirect(writeBufferSize), stats, async);
   }
 
   /**
@@ -67,11 +67,11 @@ public class DaosOutputStream extends OutputStream {
    */
   public DaosOutputStream(DaosFile daosFile,
                           String path,
-                          ByteBuffer buffer, FileSystem.Statistics stats) {
+                          ByteBuffer buffer, FileSystem.Statistics stats, boolean async) {
     this.path = path;
-    this.daosFile = daosFile;
     this.closed = false;
-    this.buffer = buffer;
+    this.source = async ? new DaosFileSourceAsync(daosFile, buffer) :
+        new DaosFileSourceSync(daosFile, buffer);
     this.stats = stats;
     if (!(buffer instanceof DirectBuffer)) {
       throw new IllegalArgumentException("need instance of direct buffer, but " + buffer.getClass().getName());
@@ -87,10 +87,7 @@ public class DaosOutputStream extends OutputStream {
       LOG.debug("DaosOutputStream : write single byte into daos");
     }
     checkNotClose();
-    this.buffer.put((byte) b);
-    if (!this.buffer.hasRemaining()) {
-      daosWrite();
-    }
+    source.write(b);
   }
 
   @Override
@@ -110,45 +107,7 @@ public class DaosOutputStream extends OutputStream {
               " : request length = " + len + ", with offset = " + off + ", buffer capacity =" + (buf.length - off));
     }
 
-    if (this.buffer.remaining() >= len) {
-      this.buffer.put(buf, off, len);
-      if (!this.buffer.hasRemaining()) {
-        daosWrite();
-      }
-      return;
-    }
-    while (len > 0) {
-      int length = Math.min(len, this.buffer.remaining());
-      this.buffer.put(buf, off, length);
-      if (!this.buffer.hasRemaining()) {
-        daosWrite();
-      }
-      len -= length;
-      off += length;
-    }
-  }
-
-  /**
-   * write data in cache buffer to DAOS.
-   */
-  private synchronized void daosWrite() throws IOException {
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("DaosOutputStream : Write into this.path == " + this.path);
-    }
-    long currentTime = 0;
-    if (LOG.isDebugEnabled()) {
-      currentTime = System.currentTimeMillis();
-    }
-    long writeSize = this.daosFile.write(
-            this.buffer, 0, this.fileOffset,
-            this.buffer.position());
-    stats.incrementWriteOps(1);
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("DaosOutputStream : writing by daos_api spend time is : " +
-              (System.currentTimeMillis() - currentTime) + " ; writing data size : " + writeSize + ".");
-    }
-    this.fileOffset += writeSize;
-    this.buffer.clear();
+    source.write(buf, off, len);
   }
 
   @Override
@@ -159,16 +118,8 @@ public class DaosOutputStream extends OutputStream {
     if (closed) {
       return;
     }
-    if (this.buffer.position() > 0) {
-      daosWrite();
-    }
-    if (this.daosFile != null) {
-      this.daosFile.release();
-    }
-    if (this.buffer != null) {
-      ((sun.nio.ch.DirectBuffer) this.buffer).cleaner().clean();
-      this.buffer = null;
-    }
+    source.flush();
+    source.close();
     super.close();
     this.closed = true;
   }
@@ -180,9 +131,7 @@ public class DaosOutputStream extends OutputStream {
     }
     checkNotClose();
 
-    if (this.buffer.position() > 0) {
-      daosWrite();
-    }
+    source.flush();
     super.flush();
   }
 

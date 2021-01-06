@@ -269,17 +269,34 @@ public class DaosEventQueue {
   }
 
   /**
-   * poll completed event. The completed events are put back immediately.
+   * poll completed events. The completed events are put back immediately.
    *
    * @param completedList
    * if it's not null, attachments of completed events are added to this list.
    * @param timeOutMs
+   * timeout in millisecond
    * @return number of events completed
    * @throws IOException
    */
   public int pollCompleted(List<Attachment> completedList, int timeOutMs) throws IOException {
+    return pollCompleted(completedList, nbrOfEvents, timeOutMs);
+  }
+
+  /**
+   * poll expected number of completed events. The completed events are put back immediately.
+   *
+   * @param completedList
+   * if it's not null, attachments of completed events are added to this list.
+   * @param expNbrOfRet
+   * expected number of completed event
+   * @param timeOutMs
+   * timeout in millisecond
+   * @return number of events completed
+   * @throws IOException
+   */
+  public int pollCompleted(List<Attachment> completedList, int expNbrOfRet, int timeOutMs) throws IOException {
     DaosClient.pollCompleted(eqWrapperHdl, completed.memoryAddress(),
-      nbrOfEvents, timeOutMs < 0 ? DEFAULT_POLL_TIMEOUT_MS : timeOutMs);
+        expNbrOfRet, timeOutMs < 0 ? DEFAULT_POLL_TIMEOUT_MS : timeOutMs);
     completed.readerIndex(0);
     int nbr = completed.readShort();
     Event event;

@@ -649,14 +649,14 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
    * file offset
    * @param len
    * length in byte to read from file
-   * @param eventNo
-   * event no.
    * @return number of bytes actual read
    * @throws IOException
    * {@link DaosIOException}
    */
-  native long dfsRead(long dfsPtr, long objId, long bufferAddress, long offset, long len, int eventNo)
+  native long dfsRead(long dfsPtr, long objId, long bufferAddress, long offset, long len)
       throws IOException;
+
+  native void dfsReadAsync(long dfsPtr, long objId, long memoryAddress) throws IOException;
 
   /**
    * write data from buffer to file.
@@ -671,14 +671,13 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
    * file offset
    * @param len
    * length in byte to write to file
-   * @param eventNo
-   * event no.
    * @return number of bytes actual written
    * @throws IOException
    * {@link DaosIOException}
    */
-  native long dfsWrite(long dfsPtr, long objId, long bufferAddress, long offset, long len,
-                       int eventNo) throws IOException;
+  native long dfsWrite(long dfsPtr, long objId, long bufferAddress, long offset, long len) throws IOException;
+
+  native void dfsWriteAsync(long dfsPtr, long objId, long memoryAddress) throws IOException;
 
   /**
    * read children.
