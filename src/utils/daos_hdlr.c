@@ -2581,7 +2581,7 @@ file_set_defaults_dfs(struct file_dfs *file_dfs)
 
 static int
 fs_copy_disconnect(struct fs_copy_args *fa,
-		struct file_dfs *src_file_dfs,
+		   struct file_dfs *src_file_dfs,
 		struct file_dfs *dst_file_dfs)
 {
 	int rc = 0;
