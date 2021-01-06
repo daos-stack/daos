@@ -2771,7 +2771,7 @@ fs_copy_parse(char *src,
 		*dst_str = strdup("/");
 		*dst_dfs_path = strdup(dst);
 		rc = fs_copy_parse_uuids(dst, &dst_saveptr,
-					 &(fa->dst_p_uuid), &(fa->dst_c_uuid),
+					 &fa->dst_p_uuid, &fa->dst_c_uuid,
 					 &dst_pool, &dst_cont);
 		if (rc != 0 || (dst_pool == NULL || dst_cont == NULL)) {
 			fprintf(stderr, "failed to parse destination DAOS "
