@@ -2340,7 +2340,7 @@ fs_copy(struct file_dfs *src_file_dfs,
 				uint64_t bytes_left = file_length - total_bytes;
 
 				if (bytes_left < buf_size) {
-					left_to_read = (size_t) bytes_left;
+					left_to_read = (size_t)bytes_left;
 				}
 				ssize_t bytes_read = file_read(src_file_dfs,
 								filename, buf,
