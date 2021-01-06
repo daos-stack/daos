@@ -21,7 +21,8 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-// This file defines the messages used by gRPC to communicate events.
+// This file defines RAS event related protobuf messages communicated over dRPC
+// and gRPC.
 // TODO: find a way to sensibly share definitions in duplicate file srv/event.
 
 syntax = "proto3";
@@ -43,30 +44,37 @@ message PoolSvcEventInfo {
 
 // RASEvent describes a RAS event in the DAOS system.
 message RASEvent {
-	string id = 1;		// Unique identifier, 64-char.
-	string timestamp = 2;	// Fully qualified timestamp (us) incl timezone.
-	uint32 severity = 3;	// Event severity.
-	string msg = 4;		// Human readable message describing event.
-	uint32 type = 5;	// Event type.
-	uint32 rank = 6; 	// (optional) DAOS rank involved in event.
+	string id = 2;		// Unique event identifier, 64-char.
+	string timestamp = 3;	// Fully qualified timestamp (us) incl timezone.
+	uint32 severity = 4;	// Event severity.
+	string msg = 5;		// Human readable message describing event.
+	uint32 type = 6;	// Event type.
 	string hostname = 7;	// (optional) Hostname of node involved in event.
-	oneof extended_info {	// (optional) Instance specific info.
-		RankStateEventInfo rank_state_info = 8;
-		PoolSvcEventInfo pool_svc_info = 9;
+	uint32 rank = 8;	// (optional) DAOS rank involved in event.
+	string hid = 9;		// (optional) Hardware component involved in event.
+	string pid = 10;	// (optional) Process involved in event.
+	string tid = 11;	// (optional) Thread involved in event.
+	string jobid = 12;	// (optional) Job involved in event.
+	string puuid = 13;	// (optional) Pool UUID involved in event.
+	string cuuid = 14;	// (optional) Container UUID involved in event.
+	string oid = 15;	// (optional) Object involved in event.
+	string cop = 16;	// (optional) Recommended automatic action.
+	oneof extended_info {	// Data specific to a given event ID.
+		string str_info = 17;	// Opaque data blob.
+		RankStateEventInfo rank_state_info = 18;
+		PoolSvcEventInfo pool_svc_info = 19;
 	}
 }
 
-// ClusterEventReq contains event details, request sequence and extended info.
+// ClusterEventReq communicates occurrence of a RAS event in the DAOS system.
 message ClusterEventReq {
-	uint64 sequence = 1;	// Sequence identifier for cluster events.
-	oneof event {
-		RASEvent ras = 2;
-	}
+	uint64 sequence = 1;	// Sequence identifier for RAS events.
+	RASEvent event = 2;	// RAS event.
 }
 
-// ClusterEventResp acknowledges receipt of an event notification and an
-// error status.
+// RASEventResp acknowledges receipt of an event notification and an error
+// status. Acknowledgement does not indicate that the event was handled.
 message ClusterEventResp {
-	uint64 sequence = 1;	// Sequence identifier for cluster events.
+	uint64 sequence = 1;	// Sequence identifier for RAS events.
 	int32 status = 2;	// DAOS error code.
 }

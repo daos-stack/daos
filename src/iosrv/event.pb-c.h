@@ -78,8 +78,9 @@ struct  _Mgmt__PoolSvcEventInfo
 
 typedef enum {
   MGMT__RASEVENT__EXTENDED_INFO__NOT_SET = 0,
-  MGMT__RASEVENT__EXTENDED_INFO_RANK_STATE_INFO = 8,
-  MGMT__RASEVENT__EXTENDED_INFO_POOL_SVC_INFO = 9
+  MGMT__RASEVENT__EXTENDED_INFO_STR_INFO = 17,
+  MGMT__RASEVENT__EXTENDED_INFO_RANK_STATE_INFO = 18,
+  MGMT__RASEVENT__EXTENDED_INFO_POOL_SVC_INFO = 19
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__RASEVENT__EXTENDED_INFO)
 } Mgmt__RASEvent__ExtendedInfoCase;
 
@@ -90,7 +91,7 @@ struct  _Mgmt__RASEvent
 {
   ProtobufCMessage base;
   /*
-   * Unique identifier, 64-char.
+   * Unique event identifier, 64-char.
    */
   char *id;
   /*
@@ -110,59 +111,89 @@ struct  _Mgmt__RASEvent
    */
   uint32_t type;
   /*
+   * (optional) Hostname of node involved in event.
+   */
+  char *hostname;
+  /*
    * (optional) DAOS rank involved in event.
    */
   uint32_t rank;
   /*
-   * (optional) Hostname of node involved in event.
+   * (optional) Hardware component involved in event.
    */
-  char *hostname;
+  char *hid;
+  /*
+   * (optional) Process involved in event.
+   */
+  char *pid;
+  /*
+   * (optional) Thread involved in event.
+   */
+  char *tid;
+  /*
+   * (optional) Job involved in event.
+   */
+  char *jobid;
+  /*
+   * (optional) Pool UUID involved in event.
+   */
+  char *puuid;
+  /*
+   * (optional) Container UUID involved in event.
+   */
+  char *cuuid;
+  /*
+   * (optional) Object involved in event.
+   */
+  char *oid;
+  /*
+   * (optional) Recommended automatic action.
+   */
+  char *cop;
   Mgmt__RASEvent__ExtendedInfoCase extended_info_case;
   union {
+    /*
+     * Opaque data blob.
+     */
+    char *str_info;
     Mgmt__RankStateEventInfo *rank_state_info;
     Mgmt__PoolSvcEventInfo *pool_svc_info;
   };
 };
 #define MGMT__RASEVENT__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__rasevent__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, 0, (char *)protobuf_c_empty_string, MGMT__RASEVENT__EXTENDED_INFO__NOT_SET, {0} }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, MGMT__RASEVENT__EXTENDED_INFO__NOT_SET, {0} }
 
-
-typedef enum {
-  MGMT__CLUSTER_EVENT_REQ__EVENT__NOT_SET = 0,
-  MGMT__CLUSTER_EVENT_REQ__EVENT_RAS = 2
-    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__CLUSTER_EVENT_REQ__EVENT)
-} Mgmt__ClusterEventReq__EventCase;
 
 /*
- * ClusterEventReq contains event details, request sequence and extended info.
+ * ClusterEventReq communicates occurrence of a RAS event in the DAOS system.
  */
 struct  _Mgmt__ClusterEventReq
 {
   ProtobufCMessage base;
   /*
-   * Sequence identifier for cluster events.
+   * Sequence identifier for RAS events.
    */
   uint64_t sequence;
-  Mgmt__ClusterEventReq__EventCase event_case;
-  union {
-    Mgmt__RASEvent *ras;
-  };
+  /*
+   * RAS event.
+   */
+  Mgmt__RASEvent *event;
 };
 #define MGMT__CLUSTER_EVENT_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__cluster_event_req__descriptor) \
-    , 0, MGMT__CLUSTER_EVENT_REQ__EVENT__NOT_SET, {0} }
+    , 0, NULL }
 
 
 /*
- * ClusterEventResp acknowledges receipt of an event notification and an
- * error status.
+ * RASEventResp acknowledges receipt of an event notification and an error
+ * status. Acknowledgement does not indicate that the event was handled.
  */
 struct  _Mgmt__ClusterEventResp
 {
   ProtobufCMessage base;
   /*
-   * Sequence identifier for cluster events.
+   * Sequence identifier for RAS events.
    */
   uint64_t sequence;
   /*

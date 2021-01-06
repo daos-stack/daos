@@ -177,9 +177,7 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 
 				pbReq = &mgmtpb.ClusterEventReq{
 					Sequence: 1,
-					Event: &mgmtpb.ClusterEventReq_Ras{
-						Ras: eventPB,
-					},
+					Event:    eventPB,
 				}
 			}
 

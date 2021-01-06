@@ -360,11 +360,11 @@ const ProtobufCMessageDescriptor mgmt__pool_svc_event_info__descriptor =
   (ProtobufCMessageInit) mgmt__pool_svc_event_info__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[9] =
+static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
 {
   {
     "id",
-    1,
+    2,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
@@ -376,7 +376,7 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[9] =
   },
   {
     "timestamp",
-    2,
+    3,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
@@ -388,7 +388,7 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[9] =
   },
   {
     "severity",
-    3,
+    4,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
@@ -400,7 +400,7 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[9] =
   },
   {
     "msg",
-    4,
+    5,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
@@ -412,23 +412,11 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[9] =
   },
   {
     "type",
-    5,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, type),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "rank",
     6,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, rank),
+    offsetof(Mgmt__RASEvent, type),
     NULL,
     NULL,
     0,             /* flags */
@@ -447,8 +435,128 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[9] =
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "rank_state_info",
+    "rank",
     8,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__RASEvent, rank),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "hid",
+    9,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__RASEvent, hid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "pid",
+    10,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__RASEvent, pid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "tid",
+    11,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__RASEvent, tid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "jobid",
+    12,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__RASEvent, jobid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "puuid",
+    13,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__RASEvent, puuid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "cuuid",
+    14,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__RASEvent, cuuid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "oid",
+    15,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__RASEvent, oid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "cop",
+    16,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__RASEvent, cop),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "str_info",
+    17,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    offsetof(Mgmt__RASEvent, extended_info_case),
+    offsetof(Mgmt__RASEvent, str_info),
+    NULL,
+    &protobuf_c_empty_string,
+    0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "rank_state_info",
+    18,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_MESSAGE,
     offsetof(Mgmt__RASEvent, extended_info_case),
@@ -460,7 +568,7 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[9] =
   },
   {
     "pool_svc_info",
-    9,
+    19,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_MESSAGE,
     offsetof(Mgmt__RASEvent, extended_info_case),
@@ -472,20 +580,29 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[9] =
   },
 };
 static const unsigned mgmt__rasevent__field_indices_by_name[] = {
-  6,   /* field[6] = hostname */
+  14,   /* field[14] = cop */
+  12,   /* field[12] = cuuid */
+  7,   /* field[7] = hid */
+  5,   /* field[5] = hostname */
   0,   /* field[0] = id */
+  10,   /* field[10] = jobid */
   3,   /* field[3] = msg */
-  8,   /* field[8] = pool_svc_info */
-  5,   /* field[5] = rank */
-  7,   /* field[7] = rank_state_info */
+  13,   /* field[13] = oid */
+  8,   /* field[8] = pid */
+  17,   /* field[17] = pool_svc_info */
+  11,   /* field[11] = puuid */
+  6,   /* field[6] = rank */
+  16,   /* field[16] = rank_state_info */
   2,   /* field[2] = severity */
+  15,   /* field[15] = str_info */
+  9,   /* field[9] = tid */
   1,   /* field[1] = timestamp */
   4,   /* field[4] = type */
 };
 static const ProtobufCIntRange mgmt__rasevent__number_ranges[1 + 1] =
 {
-  { 1, 0 },
-  { 0, 9 }
+  { 2, 0 },
+  { 0, 18 }
 };
 const ProtobufCMessageDescriptor mgmt__rasevent__descriptor =
 {
@@ -495,7 +612,7 @@ const ProtobufCMessageDescriptor mgmt__rasevent__descriptor =
   "Mgmt__RASEvent",
   "mgmt",
   sizeof(Mgmt__RASEvent),
-  9,
+  18,
   mgmt__rasevent__field_descriptors,
   mgmt__rasevent__field_indices_by_name,
   1,  mgmt__rasevent__number_ranges,
@@ -517,20 +634,20 @@ static const ProtobufCFieldDescriptor mgmt__cluster_event_req__field_descriptors
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "ras",
+    "event",
     2,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_MESSAGE,
-    offsetof(Mgmt__ClusterEventReq, event_case),
-    offsetof(Mgmt__ClusterEventReq, ras),
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__ClusterEventReq, event),
     &mgmt__rasevent__descriptor,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
 static const unsigned mgmt__cluster_event_req__field_indices_by_name[] = {
-  1,   /* field[1] = ras */
+  1,   /* field[1] = event */
   0,   /* field[0] = sequence */
 };
 static const ProtobufCIntRange mgmt__cluster_event_req__number_ranges[1 + 1] =

@@ -44,14 +44,14 @@ type RASExtendedInfo interface {
 }
 
 // NewFromProto creates an Event from given protobuf RASEvent message.
-func NewFromProto(pbEvent *mgmtpb.RASEvent) (*RASEvent, error) {
+func NewFromProto(pbEvt *mgmtpb.RASEvent) (*RASEvent, error) {
 	evt := new(RASEvent)
 
-	switch RASID(pbEvent.Id) {
+	switch RASID(pbEvt.Id) {
 	case RASRankExit, RASPoolSvcReplicasUpdate:
-		return evt, evt.FromProto(pbEvent)
+		return evt, evt.FromProto(pbEvt)
 	default:
-		return nil, errors.Errorf("unsupported event ID: %s", pbEvent.Id)
+		return nil, errors.Errorf("unsupported event ID: %s", pbEvt.Id)
 	}
 }
 
@@ -111,14 +111,22 @@ func (typ RASTypeID) Uint32() uint32 {
 
 // RASEvent describes details of a specific RAS event.
 type RASEvent struct {
-	Timestamp    string          `json:"timestamp"`
-	Msg          string          `json:"msg"`
-	Hostname     string          `json:"hostname"`
-	Rank         uint32          `json:"rank"`
-	ID           RASID           `json:"id"`
-	Severity     RASSeverityID   `json:"severity"`
-	Type         RASTypeID       `json:"type"`
-	ExtendedInfo RASExtendedInfo `json:"extended_info"`
+	ID               RASID           `json:"id"`
+	Timestamp        string          `json:"timestamp"`
+	Severity         RASSeverityID   `json:"severity"`
+	Msg              string          `json:"msg"`
+	Type             RASTypeID       `json:"type"`
+	Hostname         string          `json:"hostname"`
+	Rank             uint32          `json:"rank"`
+	HID              string          `json:"hid"`
+	PID              string          `json:"pid"`
+	TID              string          `json:"tid"`
+	JOBID            string          `json:"jobid"`
+	PUUID            string          `json:"puuid"`
+	CUUID            string          `json:"cuuid"`
+	OID              string          `json:"oid"`
+	ControlOperation string          `json:"cop"`
+	ExtendedInfo     RASExtendedInfo `json:"extended_info"`
 }
 
 // MarshalJSON marshals RASEvent to JSON.
@@ -156,14 +164,17 @@ func (evt *RASEvent) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// GetID returns the event ID.
 func (evt *RASEvent) GetID() RASID {
 	return evt.ID
 }
 
+// GetType returns the event type.
 func (evt *RASEvent) GetType() RASTypeID {
 	return evt.Type
 }
 
+// ToProto returns a protobuf representation of the native event.
 func (evt *RASEvent) ToProto() (*mgmtpb.RASEvent, error) {
 	pbEvt := new(mgmtpb.RASEvent)
 	if err := convert.Types(evt, pbEvt); err != nil {
@@ -185,6 +196,7 @@ func (evt *RASEvent) ToProto() (*mgmtpb.RASEvent, error) {
 	return pbEvt, err
 }
 
+// FromProto initializes a native event from a provided protobuf event.
 func (evt *RASEvent) FromProto(pbEvt *mgmtpb.RASEvent) (err error) {
 	*evt = RASEvent{
 		Timestamp: pbEvt.Timestamp,

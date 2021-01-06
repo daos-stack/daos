@@ -165,19 +165,16 @@ func (ps *PubSub) Reset() {
 // The Event is then published to make available to locally subscribed consumers
 // to act upon.
 func (ps *PubSub) HandleClusterEvent(req *mgmtpb.ClusterEventReq) (*mgmtpb.ClusterEventResp, error) {
-	if req.Sequence < 1 {
+	switch {
+	case req.Sequence < 0:
 		ps.log.Debug("no sequence number in ClusterEventReq")
+	case req == nil:
+		return nil, errors.New("nil ClusterEventReq")
+	case req.Event == nil:
+		return nil, errors.New("nil Event in ClusterEventReq")
 	}
 
-	rasPB := req.GetRas()
-	if rasPB == nil {
-		return nil, errors.Errorf("unexpected event type received, want RAS got %T",
-			req.GetEvent())
-	}
-
-	ps.log.Debugf("proto format ras event received: %+v", rasPB)
-
-	event, err := NewFromProto(rasPB)
+	event, err := NewFromProto(req.Event)
 	if err != nil {
 		return nil, err
 	}

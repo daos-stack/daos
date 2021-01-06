@@ -258,7 +258,7 @@ const _ = grpc.SupportPackageIsVersion6
 type MgmtSvcClient interface {
 	// Join the server described by JoinReq to the system.
 	Join(ctx context.Context, in *JoinReq, opts ...grpc.CallOption) (*JoinResp, error)
-	// ClusterEvent notify MS of a cluster event.
+	// ClusterEvent notify MS of a RAS event in the cluster.
 	ClusterEvent(ctx context.Context, in *ClusterEventReq, opts ...grpc.CallOption) (*ClusterEventResp, error)
 	// LeaderQuery provides a mechanism for clients to discover
 	// the system's current Management Service leader
@@ -568,7 +568,7 @@ func (c *mgmtSvcClient) ContSetOwner(ctx context.Context, in *ContSetOwnerReq, o
 type MgmtSvcServer interface {
 	// Join the server described by JoinReq to the system.
 	Join(context.Context, *JoinReq) (*JoinResp, error)
-	// ClusterEvent notify MS of a cluster event.
+	// ClusterEvent notify MS of a RAS event in the cluster.
 	ClusterEvent(context.Context, *ClusterEventReq) (*ClusterEventResp, error)
 	// LeaderQuery provides a mechanism for clients to discover
 	// the system's current Management Service leader

@@ -59,7 +59,7 @@ func RankStateInfoFromProto(pbInfo *mgmtpb.RASEvent_RankStateInfo) (*RankStateIn
 	return rsi, nil
 }
 
-// PoolSvcInfoToProto converts event info from native to proto format.
+// RankStateInfoToProto converts event info from native to proto format.
 func RankStateInfoToProto(rsi *RankStateInfo) (*mgmtpb.RASEvent_RankStateInfo, error) {
 	pbInfo := &mgmtpb.RASEvent_RankStateInfo{
 		RankStateInfo: &mgmtpb.RankStateEventInfo{
