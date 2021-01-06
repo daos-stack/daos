@@ -4690,9 +4690,11 @@ out:
  *
  * \param[in]	pool_uuid	UUID of the pool
  * \param[in]	ranks		Pool service replicas
+ * \param[in]	handles		List of handles to selectively evict
+ * \param[in]	n_handles	Numeber of items in handles
  * \param[in]	destroy		If true the evict request is a destroy request
  * \param[in]	force		If true and destroy is true request all handles
- * 				be forcibly evicted
+ *				be forcibly evicted
  *
  * \return	0		Success
  *		-DER_BUSY	Open pool handles exist and no force requested
