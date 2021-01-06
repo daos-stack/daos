@@ -723,7 +723,7 @@ class Systemctl(JobManager):
         # return self.job.check_subprocess_status(sub_process)
         return self.check_logs(
             self.job.pattern, self.timestamps["start"], None,
-            self.job.pattern_count, self.job.pattern_timeout)
+            self.job.pattern_count.value, self.job.pattern_timeout.value)
 
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command.

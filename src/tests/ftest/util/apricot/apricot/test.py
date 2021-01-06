@@ -652,11 +652,11 @@ class TestWithServers(TestWithoutServers):
         """Add a new daos server manager object to the server manager list.
 
         Args:
-            group ([type], optional): [description]. Defaults to None.
-            svr_config_file ([type], optional): [description]. Defaults to None.
-            dmg_config_file ([type], optional): [description]. Defaults to None.
-            svr_config_temp ([type], optional): [description]. Defaults to None.
-            dmg_config_temp ([type], optional): [description]. Defaults to None.
+            group (str, optional): [description]. Defaults to None.
+            svr_config_file (str, optional): [description]. Defaults to None.
+            dmg_config_file (str, optional): [description]. Defaults to None.
+            svr_config_temp (str, optional): [description]. Defaults to None.
+            dmg_config_temp (str, optional): [description]. Defaults to None.
         """
         if group is None:
             group = self.server_group
@@ -713,89 +713,44 @@ class TestWithServers(TestWithoutServers):
         if self.start_servers_once:
             # Starting servers for each test variant is enabled.  The servers
             # will still need be started if any server is down.
-            start_servers = not self.check_running(
-                "servers", self.server_managers, True)
+            status = self.check_running("servers", self.server_managers, True)
+            start_servers = status["restart"]
         if start_servers:
             self.log.info("--- STARTING SERVERS ---")
             self._start_manager_list("server", self.server_managers)
         self.log.info("-" * 100)
 
-    def check_running(self, name, manager_list, config_dmg=False):
+    def check_running(self, name, manager_list, prepare_dmg=False):
         """Verify that servers are running on all the expected hosts.
 
         Args:
             name (str): manager name
             manager_list (list): list of SubprocessManager objects to start
+            prepare_dmg (bool, optional): option to prepare the dmg command for
+                each server manager prior to querying the server states. This
+                should be set to True when verifying server states for servers
+                started by other test variants. Defaults to False.
 
         Returns:
-            bool: True if servers are running on all the expected hosts; False
-                otherwise
+            dict: a dictionary of whether or not any of the server states were
+                not 'expected' (which should warrant an error) and whether or
+                the servers require a 'restart' (either due to any unexpected
+                states or because at least one servers was found to no longer
+                be running)
 
         """
-        status = True
-        valid_states = ["started", "joined"]
-
+        status = {"expected": True, "restart": False}
         self.log.info("--- VERIFYING %s RUNNING ---", name.upper())
         for manager in manager_list:
-            self.log.info(
-                "Verifying %s: group=%s, hosts=%s",
-                name, manager.get_config_value("name"),
-                NodeSet.fromlist(manager.hosts))
-
             # Setup the dmg command
-            if config_dmg:
-                manager.setup_dmg_certificates()
-                manager.dmg.hostlist = manager.get_config_value("access_points")
-            try:
-                data = manager.dmg.system_query()
-            except CommandFailure:
-                data = {}
+            if prepare_dmg:
+                manager.prepare_dmg()
 
-            self.log.info(
-                "<SERVER> Verifying the server state on %s",
-                NodeSet.fromlist(self.hostlist_servers))
-            if not data:
-                self.log.info("  No active servers detected")
-                status = False
-
-            # Verify that the expected number of ranks reported information
-            expected = manager.servers_per_host()
-            for rank in sorted(data):
-                # Verify this host's system query information is expected
-                domain = data[rank]["domain"].split(".")
-                host = domain[0].replace("/", "")
-                if host not in expected:
-                    self.log.info(
-                        "  Unexpected host '%s' found in 'dmg system query' - "
-                        "expected hosts: %s", host, ", ".join(expected.keys()))
-                    status = False
-                    continue
-
-                # Verify this expected host's state
-                if data[rank]["state"].lower() in valid_states:
-                    self.log.info(
-                        "  Server rank %s running (%s) on %s",
-                        rank, data[rank]["state"], host)
-                else:
-                    self.log.info(
-                        "  ERROR: Server rank %s not running (%s) on %s",
-                        rank, data[rank]["state"], host)
-                    status = False
-
-                # Decrement the number of servers per host for each server found
-                # and when all servers per host have been found remove the host.
-                expected[host] -= 1
-                if expected[host] == 0:
-                    self.log.info(
-                        "    All expected servers for %s detected", host)
-                    expected.pop(host)
-
-            # Verify all expected hosts were found by 'dmg system query'
-            if expected and data:
-                self.log.info(
-                    "  ERROR: no server status reported for %s",
-                    ", ".join(expected))
-                status = False
+            # Verify the current server states match the expected states
+            manager_status = manager.verify_expected_states()
+            status["expected"] &= manager_status["expected"]
+            if manager_status["restart"]:
+                status["restart"] = True
 
         return status
 
@@ -967,16 +922,16 @@ class TestWithServers(TestWithoutServers):
 
         """
         errors = []
-        servers_running = self.check_running("servers", self.server_managers)
-        if self.start_servers_once and servers_running:
+        status = self.check_running("servers", self.server_managers)
+        if self.start_servers_once and not status["restart"]:
             self.log.info(
                 "Servers are configured to run across multiple test variants, "
                 "not stopping")
         else:
-            if not servers_running:
+            if not status["expected"]:
                 errors.append(
-                    "ERROR: At least one multi-variant server is no longer "
-                    "running; stopping all servers")
+                    "ERROR: At least one multi-variant server was not found in "
+                    "its expected state; stopping all servers")
             self.test_log.info(
                 "Stopping %s group(s) of servers", len(self.server_managers))
             errors.extend(self._stop_managers(self.server_managers, "servers"))
@@ -1163,22 +1118,18 @@ class TestWithServers(TestWithoutServers):
             index (int): Determines which server_managers to use when creating
                 the new server.
         """
-        self.server_managers.append(
-            DaosServerManager(
-                self.server_managers[index].manager.job,
-                self.manager_class,
-                self.server_managers[index].dmg.yaml
-            )
+        self.add_server_manager(
+            self.server_managers[index].manager.job.get_config_value("name"),
+            self.server_managers[index].manager.job.yaml.filename,
+            self.server_managers[index].dmg.yaml.filename,
+            self.server_managers[index].manager.job.yaml.temporary_file,
+            self.server_managers[index].dmg.yaml.temporary_file
         )
-        self.server_managers[-1].manager.assign_environment(
-            EnvironmentVariables({"PATH": None}), True)
-        self.server_managers[-1].hosts = (
-            additional_servers, self.workdir, self.hostfile_servers_slots)
-
-        self.log.info(
-            "Starting %s: group=%s, hosts=%s, config=%s", "server",
-            self.server_managers[-1].get_config_value("name"),
-            self.server_managers[-1].hosts,
-            self.server_managers[-1].get_config_value("filename"))
-        self.server_managers[-1].verify_socket_directory(getuser())
-        self.server_managers[-1].start()
+        self.configure_manager(
+            "server",
+            self.server_managers[-1],
+            additional_servers,
+            self.hostfile_servers_slots,
+            additional_servers
+        )
+        self._start_manager_list("server", [self.server_managers[-1]])

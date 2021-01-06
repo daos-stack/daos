@@ -26,6 +26,8 @@ import os
 import socket
 import time
 
+from ClusterShell.NodeSet import NodeSet
+
 from command_utils_base import \
     CommandFailure, FormattedParameter, YamlParameters, CommandWithParameters, \
     CommonConfig
@@ -311,15 +313,19 @@ class DaosServerManager(SubprocessManager):
 
         Args:
             group (str): [description]
-            certificate_dir (str): [description]
-            binary_dir (str): [description]
-            svr_config_file (str): [description]
-            dmg_config_file (str): [description]
-            svr_config_temp (str, optional): [description]. Defaults to None.
-            dmg_config_temp (str, optional): [description]. Defaults to None.
+            certificate_dir (str): directory in which to copy certificates
+            binary_dir (str): directory from which to run daos_server/dmg
+            svr_config_file (str): daos_server configuration file name and path
+            dmg_config_file (str): dmg configuration file name and path
+            svr_config_temp (str, optional): file name and path used to generate
+                the daos_server configuration file locally and copy it to all
+                the hosts using the config_file specification. Defaults to None.
+            dmg_config_temp (str, optional): file name and path used to generate
+                the dmg command configuration file locally and copy it to all
+                the hosts using the config_file specification. Defaults to None.
             manager (str, optional): the name of the JobManager class used to
                 manage the YamlCommand defined through the "job" attribute.
-                Defaults to "OpenMpi".
+                Defaults to "Orterun".
         """
         server_command = self.get_job(
             group, cert_dir, bin_dir, svr_config_file, svr_config_temp)
@@ -330,6 +336,16 @@ class DaosServerManager(SubprocessManager):
         # to access the daos_servers when they are started
         self.dmg = self.get_dmg(
             group, cert_dir, bin_dir, dmg_config_file, dmg_config_temp)
+
+        # An internal dictionary used to define the expected states of each
+        # server rank when checking their states.  Initially it is empty and
+        # populated after calling start() via _set_expected_states().  It may
+        # also be initialized by _set_expected_states() when calling
+        # update_expected_states() - typically to mark a rank as having been
+        # stopped by a test - if it is empty when the method is called.  This
+        # would be the case if the servers had been started by a previous test
+        # variant.
+        self._expected_states = {}
 
     def servers_per_host(self):
         """Get a dictionary of number of servers running per host name.
@@ -411,11 +427,27 @@ class DaosServerManager(SubprocessManager):
         # Get the values for the dmg parameters
         self.dmg.get_params(test)
 
-    def prepare_dmg_certificates(self):
+    def prepare_dmg(self):
+        """Prepare the dmg command prior to its execution.
+
+        This is only required to be called once and is included as part of
+        calling prepare() and start().
+
+        It should be called idependently when a test variant is using servers
+        started by a previous test variant.
+        """
+        self._prepare_dmg_certificates()
+        self._prepare_dmg_hostlist()
+
+    def _prepare_dmg_certificates(self):
         """Set up dmg certificates."""
         local_host = socket.gethostname().split('.', 1)[0]
         self.dmg.copy_certificates(
             get_log_file("daosCA/certs"), local_host.split())
+
+    def _prepare_dmg_hostlist(self):
+        """Set up the dmg command host list to use the access points."""
+        self.dmg.hostlist = self.get_config_value("access_points")
 
     def prepare(self, storage=True):
         """Prepare to start daos_server.
@@ -435,7 +467,7 @@ class DaosServerManager(SubprocessManager):
         # Copy certificates
         self.manager.job.copy_certificates(
             get_log_file("daosCA/certs"), self._hosts)
-        self.prepare_dmg_certificates()
+        self._prepare_dmg_certificates()
 
         # Prepare dmg for running storage format on all server hosts
         self.dmg.hostlist = self._hosts
@@ -597,7 +629,7 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed("Failed to start servers after format")
 
         # Update the dmg command host list to work with pool create/destroy
-        self.dmg.hostlist = self.get_config_value("access_points")
+        self._prepare_dmg_hostlist()
 
     def reset_storage(self):
         """Reset the server storage.
@@ -662,6 +694,9 @@ class DaosServerManager(SubprocessManager):
 
         # Wait for all the daos_io_servers to start
         self.detect_io_server_start()
+
+        # Define the expected states for each rank
+        self._set_expected_states()
 
         return True
 
@@ -910,3 +945,91 @@ class DaosServerManager(SubprocessManager):
             str(storage[0]), bytes_to_human(storage[0], binary=False),
             str(storage[1]), bytes_to_human(storage[1], binary=False))
         return storage
+
+    def _set_expected_states(self):
+        """Populate the expected state dictionary.
+
+        Each server rank key will reference a dictionary of the following
+        key/value pairs:
+            0:
+                "uuid": 385af2f9-1863-406c-ae94-bffdcd02f379,
+                "domain": /wolf-142.wolf.hpdd.intel.com,
+                "state": Joined
+        """
+        try:
+            self._expected_states = self.dmg.system_query()
+        except CommandFailure:
+            self._expected_states = {}
+
+    def update_expected_states(self, rank, state):
+        """Update the expected state of the specified server rank.
+
+        Args:
+            rank (int): server rank to update
+            state (str): new state to assign as the expected state of this rank
+        """
+        if rank in self._expected_states:
+            self.log.info(
+                "Updating the expected state for rank %s on %s: %s -> %s",
+                rank, self._expected_states["domain"],
+                self._expected_states["state"], state)
+            self._expected_states[rank]["state"] = state
+
+    def verify_expected_states(self):
+        """Verify that the expected server rank states match the current states.
+
+        Returns:
+            dict: a dictionary of whether or not any of the server states were
+                not 'expected' (which should warrant an error) and whether or
+                the servers require a 'restart' (either due to any unexpected
+                states or because at least one servers was found to no longer
+                be running)
+
+        """
+        status = {"expected": True, "restart": False}
+
+        # Get the current state of the servers
+        try:
+            current_states = self.dmg.system_query()
+        except CommandFailure:
+            current_states = {}
+
+        # Verify the expected states match the current states
+        self.log.info(
+            "<SERVER> Verifying server states: group=%s, hosts=%s",
+            self.get_config_value("name"), NodeSet.fromlist(self._hosts))
+        log_format = "  %-4s  %-15s  %-36s  %-14s  %-14s  %s"
+        self.log.info(
+            log_format,
+            "Rank", "Host", "UUID", "Expected State", "Current State", "Result")
+        for rank in sorted(self._expected_states):
+            try:
+                current_rank = current_states.pop(rank)
+            except KeyError:
+                current_rank = {"state": "not detected"}
+                status["expected"] = False
+            domain = self._expected_states[rank]["domain"].split(".")
+            expected = self._expected_states[rank]["state"].lower()
+            current = current_rank["state"].lower()
+            result = "PASS" if expected == current else "FAIL"
+            self.log.info(
+                log_format, rank, domain[0].replace("/", ""),
+                self._expected_states[rank]["uuid"], expected, current, result)
+            status["expected"] &= expected == current
+            if current not in ["started", "joined"]:
+                status["restart"] = True
+
+        # Report any current states that were not expected
+        for rank in sorted(current_states):
+            status["expected"] = False
+            domain = current_states[rank]["domain"].split(".")
+            host = domain[0].replace("/", "")
+            self.log.info(
+                log_format, rank, host, current_states[rank]["uuid"],
+                "not detected", current, "FAIL")
+
+        # Any unexpected state detected warrants a restart of all servers
+        if not status["expected"]:
+            status["restart"] = True
+
+        return status
