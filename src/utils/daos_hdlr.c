@@ -2914,7 +2914,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		if (rc != EEXIST && rc != 0)
 			D_GOTO(out_disconnect, rc);
 		rc = fs_copy(&src_file_dfs, &dst_file_dfs,
-				src_str, src_str_len, dst_str);
+			     src_str, src_str_len, dst_str);
 		if (rc != 0)
 			D_GOTO(out_disconnect, rc);
 	/* TODO: handle POSIX->POSIX case here */
