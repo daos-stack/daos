@@ -2299,9 +2299,9 @@ fs_copy(struct file_dfs *src_file_dfs,
 				d_name, strerror(errno));
 			D_GOTO(out, rc);
 		}
-				
+
 		path_length = snprintf(dst_filename, MAX_FILENAME,
-					"%s/%s", fs_dst_prefix,
+				       "%s/%s", fs_dst_prefix,
 					filename + dfs_prefix_len);
 
 		if (path_length >= MAX_FILENAME) {
