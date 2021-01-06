@@ -64,6 +64,10 @@ class IorSmall(IorTestBase):
         for oclass in obj_class:
             self.ior_cmd.dfs_oclass.update(oclass)
             for api in apis:
+                if (api == "HDF5-VOL" and
+                    transfer_block_size[0] == "1M" and
+                    transfer_block_size[1] == "32M"):
+                        self.cancelForTicket("DAOS-6427")
                 if api == "HDF5-VOL":
                     self.ior_cmd.api.update("HDF5")
                     hdf5_plugin_path = self.params.get(
