@@ -61,26 +61,14 @@
   <build>
     <plugins>
       <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>native-maven-plugin</artifactId>
-        <version>1.0-alpha-9</version>
-        <extensions>true</extensions>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
         <configuration>
-          <javahClassNames>
-            <javahClassName>io.daos.dfs.DaosFsClient</javahClassName>
-            <javahClassName>io.daos.DaosClient</javahClassName>
-          </javahClassNames>
-          <javahOutputDirectory>${project.basedir}/src/main/native/include</javahOutputDirectory>
+          <compilerArgs>
+            <arg>-h</arg>
+            <arg>${project.basedir}/src/main/native/include</arg>
+          </compilerArgs>
         </configuration>
-        <executions>
-          <execution>
-            <id>generate-head</id>
-            <phase>compile</phase>
-            <goals>
-              <goal>javah</goal>
-            </goals>
-          </execution>
-        </executions>
       </plugin>
       <plugin>
         <artifactId>maven-antrun-plugin</artifactId>
