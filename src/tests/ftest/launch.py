@@ -1324,8 +1324,7 @@ def resolve_debuginfo(pkg):
 
 def install_debuginfos():
     """Install debuginfo packages."""
-    install_pkgs = [{'name': 'gdb'},
-                    {'name': 'python-magic'}]
+    install_pkgs = [{'name': 'gdb'}]
 
     cmds = []
 
@@ -1468,28 +1467,26 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
             os.remove(os.path.join(daos_cores_dir, corefile))
         return False
 
-    # here because it's installed in install_debuginfos()
-    import magic    # pylint: disable=import-outside-toplevel,import-error
-
     for corefile in cores:
         if not fnmatch.fnmatch(corefile, 'core.*[0-9]'):
             continue
         corefile_fqpn = os.path.join(daos_cores_dir, corefile)
-        exe_magic = magic.open(magic.NONE)
-        exe_magic.load()
-        exe_type = exe_magic.file(corefile_fqpn)
-        exe_name_end = 0
-        if exe_type:
-            exe_name_start = exe_type.find("execfn: '") + 9
-            if exe_name_start > 8:
-                exe_name_end = exe_type.find("', platform:")
-            else:
-                exe_name_start = exe_type.find("from '") + 6
-                if exe_name_start > 5:
-                    exe_name_end = exe_type[exe_name_start:].find(" ") + \
-                                exe_name_start
-        if exe_name_end:
-            exe_name = exe_type[exe_name_start:exe_name_end]
+        # can't use the file python magic binding here due to:
+        # https://bugs.astron.com/view.php?id=225, fixed in:
+        # https://github.com/file/file/commit/6faf2eba2b8c65fbac7acd36602500d757614d2f
+        # but not available to us until that is in a released version
+        # revert the commit this comment is in to see use python magic instead
+        try:
+            gdb_output = run_command(["gdb", "-c", corefile_fqpn, "-ex",
+                                      "info proc exe", "-ex",
+                                      "quit"])
+
+            last_line = gdb_output.splitlines()[-1]
+            exe_name = last_line[7:last_line[7:].find(" ") + 7]
+        except RuntimeError:
+            exe_name = None
+
+        if exe_name:
             cmd = [
                 "gdb", "-cd={}".format(daos_cores_dir),
                 "-ex", "set pagination off",
@@ -1504,13 +1501,13 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
                 with open(stack_trace_file, "w") as stack_trace:
                     stack_trace.writelines(get_output(cmd))
             except IOError as error:
-                print(
-                    "Error writing {}: {}".format(stack_trace_file, error))
+                print("Error writing {}: {}".format(stack_trace_file, error))
+                return_status = False
         else:
             print(
-                "Unable to determine executable name from: '{}'\nNot "
-                "creating stacktrace".format(exe_type))
-            print("core magic reports: {}".format(exe_type))
+                "Unable to determine executable name from gdb output: '{}'\n"
+                "Not creating stacktrace".format(gdb_output))
+            return_status = False
         print("Removing {}".format(corefile_fqpn))
         os.unlink(corefile_fqpn)
 

@@ -3639,7 +3639,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 			}
 			break;
 		case DAOS_OBJ_RPC_UPDATE:
-			D_ASSERT(!daos_handle_is_valid(obj_auxi->th));
+			D_ASSERT(daos_handle_is_inval(obj_auxi->th));
 
 			obj_rw_csum_destroy(obj, obj_auxi);
 			break;
@@ -3663,7 +3663,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 		case DAOS_OBJ_RPC_PUNCH:
 		case DAOS_OBJ_RPC_PUNCH_DKEYS:
 		case DAOS_OBJ_RPC_PUNCH_AKEYS:
-			D_ASSERT(!daos_handle_is_valid(obj_auxi->th));
+			D_ASSERT(daos_handle_is_inval(obj_auxi->th));
 			break;
 		case DAOS_OBJ_RPC_QUERY_KEY:
 		case DAOS_OBJ_RECX_RPC_ENUMERATE:

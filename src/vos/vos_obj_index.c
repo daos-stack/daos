@@ -366,7 +366,7 @@ oi_iter_fini(struct vos_iterator *iter)
 
 	oiter = iter2oiter(iter);
 
-	if (!daos_handle_is_inval(oiter->oit_hdl)) {
+	if (daos_handle_is_valid(oiter->oit_hdl)) {
 		rc = dbtree_iter_finish(oiter->oit_hdl);
 		if (rc)
 			D_ERROR("oid_iter_fini failed:"DF_RC"\n", DP_RC(rc));
