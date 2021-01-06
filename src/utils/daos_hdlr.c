@@ -2321,7 +2321,7 @@ fs_copy(struct file_dfs *src_file_dfs,
 				D_GOTO(out, rc);
 			}
 			rc = file_open(dst_file_dfs, dst_filename, dst_flags,
-					tmp_mode_file);
+				       tmp_mode_file);
 			if (rc != 0) {
 				D_GOTO(out, rc);
 			}
