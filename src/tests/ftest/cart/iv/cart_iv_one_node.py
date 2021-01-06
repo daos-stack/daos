@@ -35,8 +35,7 @@ import subprocess
 import shlex
 import traceback
 
-from avocado       import Test
-from avocado       import main
+from apricot       import TestWithoutServers
 
 sys.path.append('./util')
 
@@ -98,21 +97,17 @@ def _check_key(key_rank, key_idx, received_key_hex):
 
     return (rank == key_rank) and (idx == key_idx)
 
-class CartIvOneNodeTest(Test):
+class CartIvOneNodeTest(TestWithoutServers):
     """
     Runs basic CaRT tests on one-node
 
-    :avocado: tags=all,cart,pr,iv,one_node
+    :avocado: recursive
     """
     def setUp(self):
         """ Test setup """
         print("Running setup\n")
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
-
-    def tearDown(self):
-        """ Test tear down """
-        print("Run TearDown\n")
 
     def _verify_action(self, action):
         """verify the action"""
@@ -249,7 +244,7 @@ class CartIvOneNodeTest(Test):
         """
         Test CaRT IV
 
-        :avocado: tags=all,cart,pr,iv,one_node
+        :avocado: tags=all,cart,pr,daily_regression,iv,one_node
         """
 
         srvcmd = self.utils.build_cmd(self, self.env, "test_servers")

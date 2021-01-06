@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,7 +82,10 @@ enum drpc_mgmt_method {
 	DRPC_METHOD_MGMT_POOL_EVICT		= 230,
 	DRPC_METHOD_MGMT_DRAIN			= 231,
 	DRPC_METHOD_MGMT_GROUP_UPDATE		= 232,
-	DRPC_METHOD_MGMT_DISCONNECT		= 233,
+	DRPC_METHOD_MGMT_NOTIFY_EXIT		= 233,
+	DRPC_METHOD_MGMT_DEV_IDENTIFY		= 234,
+	DRPC_METHOD_MGMT_NOTIFY_POOL_CONNECT	= 235,
+	DRPC_METHOD_MGMT_NOTIFY_POOL_DISCONNECT	= 236,
 
 	NUM_DRPC_MGMT_METHODS			/* Must be last */
 };

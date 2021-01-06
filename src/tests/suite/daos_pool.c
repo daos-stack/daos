@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -308,8 +308,8 @@ pool_attribute(void **state)
 	WAIT_ON_ASYNC(arg, ev);
 	print_message("Verifying All Names..\n");
 	assert_int_equal(total_size, (name_sizes[0] + name_sizes[1]));
-	assert_string_equal(out_buf, names[0]);
-	assert_string_equal(out_buf + name_sizes[0], names[1]);
+	assert_string_equal(out_buf, names[1]);
+	assert_string_equal(out_buf + name_sizes[1], names[0]);
 
 	print_message("getting pool attributes %ssynchronously ...\n",
 		      arg->async ? "a" : "");
@@ -939,7 +939,7 @@ list_containers_test(void **state)
 
 	/***** Test: retrieve number of containers in pool *****/
 	nconts = nconts_orig = 0xDEF0; /* Junk value (e.g., uninitialized) */
-	assert_false(daos_handle_is_inval(lcarg->tpool.poh));
+	assert_true(daos_handle_is_valid(lcarg->tpool.poh));
 	rc = daos_pool_list_cont(lcarg->tpool.poh, &nconts, NULL /* conts */,
 			NULL /* ev */);
 	print_message("daos_pool_list_cont returned rc=%d\n", rc);

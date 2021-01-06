@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -136,6 +136,8 @@ struct dts_context {
 	/** INPUT: should be initialized by caller */
 	/** optional, pmem file name, only for VOS test */
 	char			*tsc_pmem_file;
+	/** DMG config file */
+	char			*tsc_dmg_conf;
 	/** optional, pool service ranks, only for DAOS test */
 	d_rank_list_t		 tsc_svc;
 	/** MPI rank of caller */

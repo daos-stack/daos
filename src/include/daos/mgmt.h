@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@
 #include <daos/common.h>
 #include <daos/tse.h>
 #include <daos_types.h>
+#include <daos/pool.h>
 
 int dc_mgmt_init(void);
 
@@ -41,8 +42,7 @@ struct cp_arg {
 };
 
 int dc_cp(tse_task_t *task, void *data);
-int dc_mgmt_svc_rip(tse_task_t *task);
-int dc_pool_extend(tse_task_t *task);
+int dc_deprecated(tse_task_t *task);
 int dc_mgmt_profile(char *path, int avg, bool start);
 int dc_mgmt_get_bs_state(tse_task_t *task);
 
@@ -76,5 +76,7 @@ ssize_t dc_mgmt_sys_encode(struct dc_mgmt_sys *sys, void *buf, size_t cap);
 ssize_t dc_mgmt_sys_decode(void *buf, size_t len, struct dc_mgmt_sys **sysp);
 int dc_mgmt_get_pool_svc_ranks(struct dc_mgmt_sys *sys, const uuid_t puuid,
 			       d_rank_list_t **svcranksp);
-int dc_mgmt_disconnect(void);
+int dc_mgmt_notify_pool_connect(struct dc_pool *pool);
+int dc_mgmt_notify_pool_disconnect(struct dc_pool *pool);
+int dc_mgmt_notify_exit(void);
 #endif

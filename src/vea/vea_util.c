@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -141,7 +141,7 @@ vea_dump(struct vea_space_info *vsi, bool transient)
 	else
 		btr_hdl = vsi->vsi_md_free_btr;
 
-	D_ASSERT(!daos_handle_is_inval(btr_hdl));
+	D_ASSERT(daos_handle_is_valid(btr_hdl));
 	rc = dbtree_iter_prepare(btr_hdl, BTR_ITER_EMBEDDED, &ih);
 	if (rc)
 		return rc;
@@ -239,7 +239,7 @@ vea_verify_alloc(struct vea_space_info *vsi, bool transient, uint64_t off,
 	else
 		btr_hdl = vsi->vsi_md_free_btr;
 
-	D_ASSERT(!daos_handle_is_inval(btr_hdl));
+	D_ASSERT(daos_handle_is_valid(btr_hdl));
 	d_iov_set(&key, &vfe.vfe_blk_off, sizeof(vfe.vfe_blk_off));
 repeat:
 	d_iov_set(&key_out, NULL, 0);

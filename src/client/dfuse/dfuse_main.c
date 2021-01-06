@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -540,7 +540,7 @@ out_dfs:
 		d_list_for_each_entry_safe(dfs, dfsn, &dfp->dfp_dfs_list,
 					   dfs_list) {
 			DFUSE_TRA_ERROR(dfs, "DFS left at the end");
-			if (!daos_handle_is_inval(dfs->dfs_coh)) {
+			if (daos_handle_is_valid(dfs->dfs_coh)) {
 				rc = dfs_umount(dfs->dfs_ns);
 				if (rc != 0)
 					DFUSE_TRA_ERROR(dfs,
@@ -559,7 +559,7 @@ out_dfs:
 			D_FREE(dfs);
 		}
 
-		if (!daos_handle_is_inval(dfp->dfp_poh)) {
+		if (daos_handle_is_valid(dfp->dfp_poh)) {
 			rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
 			if (rc != -DER_SUCCESS) {
 				DFUSE_TRA_ERROR(dfp,

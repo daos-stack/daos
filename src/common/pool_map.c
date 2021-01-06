@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1480,6 +1480,8 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 	}
 	if (uuids_out)
 		*uuids_out = uuids;
+	else
+		D_FREE(uuids);
 
 	*map_buf_out = map_buf;
 	return 0;

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,6 +47,7 @@ type (
 	systemJoinFn     func(context.Context, *control.SystemJoinReq) (*control.SystemJoinResp, error)
 	onStorageReadyFn func(context.Context) error
 	onReadyFn        func(context.Context) error
+	onInstanceExitFn func(context.Context, system.Rank, error) error
 )
 
 // IOServerInstance encapsulates control-plane specific configuration
@@ -72,6 +73,7 @@ type IOServerInstance struct {
 	joinSystem        systemJoinFn
 	onStorageReady    []onStorageReadyFn
 	onReady           []onReadyFn
+	onInstanceExit    []onInstanceExitFn
 
 	sync.RWMutex
 	// these must be protected by a mutex in order to
@@ -135,6 +137,12 @@ func (srv *IOServerInstance) OnStorageReady(fns ...onStorageReadyFn) {
 // becomes ready.
 func (srv *IOServerInstance) OnReady(fns ...onReadyFn) {
 	srv.onReady = append(srv.onReady, fns...)
+}
+
+// OnInstanceExit adds a list of callbacks to invoke when the instance
+// runner (process) terminates.
+func (srv *IOServerInstance) OnInstanceExit(fns ...onInstanceExitFn) {
+	srv.onInstanceExit = append(srv.onInstanceExit, fns...)
 }
 
 // LocalState returns local perspective of the current instance state

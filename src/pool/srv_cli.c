@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ dsc_pool_open(uuid_t pool_uuid, uuid_t poh_uuid, unsigned int flags,
 	struct dc_pool	*pool;
 	int		rc = 0;
 
-	if (!daos_handle_is_inval(*ph)) {
+	if (daos_handle_is_valid(*ph)) {
 		pool = dc_hdl2pool(*ph);
 		if (pool != NULL)
 			D_GOTO(out, rc = 0);

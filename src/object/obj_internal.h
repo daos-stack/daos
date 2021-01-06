@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -176,7 +176,9 @@ struct obj_reasb_req {
 	/* only for single-value IO flag */
 					 orr_singv_only:1,
 	/* the flag of IOM re-allocable (used for EC IOM merge) */
-					 orr_iom_realloc:1;
+					 orr_iom_realloc:1,
+	/* iod_size is set by IO reply */
+					 orr_size_set:1;
 };
 
 static inline void
@@ -467,7 +469,7 @@ void obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr);
 int obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
 		  crt_bulk_perm_t bulk_perm, tse_task_t *task,
 		  crt_bulk_t **p_bulks);
-struct daos_oclass_attr *obj_get_oca(struct dc_object *obj, bool force_check);
+struct daos_oclass_attr *obj_get_oca(struct dc_object *obj);
 bool obj_is_ec(struct dc_object *obj);
 int obj_get_replicas(struct dc_object *obj);
 int obj_shard_open(struct dc_object *obj, unsigned int shard,

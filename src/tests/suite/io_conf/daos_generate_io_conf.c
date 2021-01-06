@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -671,6 +671,7 @@ out:
 	if (obj_class && obj_class != default_class)
 		D_FREE(obj_class);
 
-	close(fd);
+	if (fd >= 0)
+		close(fd);
 	return rc;
 }

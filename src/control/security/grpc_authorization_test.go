@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -71,6 +71,7 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/ctl.MgmtCtl/FirmwareQuery":      ComponentAdmin,
 		"/ctl.MgmtCtl/FirmwareUpdate":     ComponentAdmin,
 		"/mgmt.MgmtSvc/Join":              ComponentServer,
+		"/mgmt.MgmtSvc/ClusterEvent":      ComponentServer,
 		"/mgmt.MgmtSvc/LeaderQuery":       ComponentAdmin,
 		"/mgmt.MgmtSvc/PoolCreate":        ComponentAdmin,
 		"/mgmt.MgmtSvc/PoolDestroy":       ComponentAdmin,

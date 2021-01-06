@@ -47,7 +47,7 @@ class RebuildWithIO(TestWithServers):
             single pool, single client performing continuous read/write/verify
             sequence while failure/rebuild is triggered in another process
 
-        :avocado: tags=all,pool,rebuild,pr,medium,rebuildwithio
+        :avocado: tags=all,pool,rebuild,daily_regression,medium,rebuildwithio
         """
         # Get the test params
         pool = TestPool(self.context, self.get_dmg_command())

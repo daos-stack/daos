@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -326,6 +326,12 @@ func TestServer_ConfigValidation(t *testing.T) {
 				return c.WithAccessPoints("1.2.3.4:1234", "5.6.7.8:5678", "1.5.3.8:6247")
 			},
 			nil,
+		},
+		"multiple access points (dupes)": {
+			func(c *Server) *Server {
+				return c.WithAccessPoints("1.2.3.4:1234", "5.6.7.8:5678", "1.2.3.4:1234")
+			},
+			FaultConfigEvenAccessPoints,
 		},
 		"no access points": {
 			func(c *Server) *Server {

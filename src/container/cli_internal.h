@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,6 +76,6 @@ struct dc_cont *dc_cont_alloc(const uuid_t uuid);
 void dc_cont_free(struct dc_cont *);
 void dc_cont_put(struct dc_cont *dc);
 int dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
-		tse_task_t *task);
+		unsigned int opts, tse_task_t *task);
 
 #endif /* __CONTAINER_CLIENT_INTERNAL_H__ */

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ import (
 	"math/rand"
 	"net"
 	"sort"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -370,19 +371,15 @@ func TestSystem_Database_BadApply(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			db0, cleanup0 := TestDatabase(t, log, nil)
-			defer cleanup0()
-
-			defer func() {
-				if r := recover(); r == nil {
-					t.Fatal("expected panic in Apply()")
-				}
-			}()
-
+			db := MockDatabase(t, log)
 			rl := &raft.Log{
 				Data: tc.payload,
 			}
-			(*fsm)(db0).Apply(rl)
+			(*fsm)(db).Apply(rl)
+
+			if !strings.Contains(buf.String(), "SHUTDOWN") {
+				t.Fatal("expected an emergency shutdown, but didn't see one")
+			}
 		})
 	}
 }
@@ -507,11 +504,7 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			db, cleanup := TestDatabase(t, log, &net.TCPAddr{
-				IP:   net.IPv4(127, 0, 0, 1),
-				Port: 8888,
-			})
-			defer cleanup()
+			db := MockDatabase(t, log)
 
 			// setup initial member DB
 			for _, initMember := range tc.startingMembers {
@@ -564,6 +557,36 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expFDTree, db.data.Members.FaultDomains); diff != "" {
 				t.Fatalf("wrong FaultDomainTree in DB (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestSystem_Database_FaultDomainTree(t *testing.T) {
+	for name, tc := range map[string]struct {
+		fdTree *FaultDomainTree
+	}{
+		"nil": {},
+		"actual tree": {
+			fdTree: NewFaultDomainTree(
+				MustCreateFaultDomain("one", "two", "three"),
+				MustCreateFaultDomain("one", "two", "four"),
+				MustCreateFaultDomain("five", "six", "seven"),
+				MustCreateFaultDomain("five", "eight", "nine"),
+			),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			db := MockDatabase(t, log)
+			db.data.Members.FaultDomains = tc.fdTree
+
+			result := db.FaultDomainTree()
+
+			if diff := cmp.Diff(tc.fdTree, result); diff != "" {
+				t.Fatalf("(-want, +got):\n%s\n", diff)
 			}
 		})
 	}

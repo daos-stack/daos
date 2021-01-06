@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -171,7 +171,7 @@ func (h *IOServerHarness) getMSLeaderInstance() (*IOServerInstance, error) {
 // configured instances' processing loops.
 //
 // Run until harness is shutdown.
-func (h *IOServerHarness) Start(ctx context.Context, membership *system.Membership, db *system.Database, cfg *config.Server) error {
+func (h *IOServerHarness) Start(ctx context.Context, db *system.Database, cfg *config.Server) error {
 	if h.isStarted() {
 		return errors.New("can't start: harness already started")
 	}
@@ -198,7 +198,7 @@ func (h *IOServerHarness) Start(ctx context.Context, membership *system.Membersh
 
 	for _, srv := range h.Instances() {
 		// start first time then relinquish control to instance
-		go srv.Run(ctx, membership, cfg)
+		go srv.Run(ctx, cfg.RecreateSuperblocks)
 		srv.startLoop <- true
 	}
 

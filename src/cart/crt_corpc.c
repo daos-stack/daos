@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -776,6 +776,9 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 
 	opc_info = rpc_priv->crp_opc_info;
 	co_ops = opc_info->coi_co_ops;
+
+	if (rpc_priv->crp_fail_hlc)
+		D_GOTO(forward_done, rc = -DER_HLC_SYNC);
 
 	/* Invoke pre-forward callback first if it is registered */
 	if (co_ops && co_ops->co_pre_forward) {

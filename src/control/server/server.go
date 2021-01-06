@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -215,8 +216,6 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	membership := system.NewMembership(log, sysdb)
 	scmProvider := scm.DefaultProvider(log)
 	harness := NewIOServerHarness(log).WithFaultDomain(faultDomain)
-	mgmtSvc := newMgmtSvc(harness, membership, sysdb)
-	var netDevClass uint32
 
 	// Create rpcClient for inter-server communication.
 	cliCfg := control.DefaultConfig()
@@ -224,6 +223,19 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	rpcClient := control.NewClient(
 		control.WithConfig(cliCfg),
 		control.WithClientLogger(log))
+
+	// Create event distributor.
+	eventPubSub := events.NewPubSub(ctx, log)
+	defer eventPubSub.Close()
+
+	// Init management RPC subsystem.
+	mgmtSvc := newMgmtSvc(harness, membership, sysdb, eventPubSub)
+
+	// Forward received events to management service by default.
+	eventForwarder := control.NewEventForwarder(rpcClient, cfg.AccessPoints)
+	eventPubSub.Subscribe(events.RASTypeAny, eventForwarder)
+
+	var netDevClass uint32
 
 	netCtx, err := netdetect.Init(context.Background())
 	if err != nil {
@@ -282,6 +294,8 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		if err := harness.AddInstance(srv); err != nil {
 			return err
 		}
+		// Register callback to publish I/O Server process exit events.
+		srv.OnInstanceExit(publishInstanceExitFn(eventPubSub.Publish, hostname(), srv.Index()))
 
 		if idx == 0 {
 			netDevClass, err = cfg.GetDeviceClassFn(srvCfg.Fabric.Interface)
@@ -388,10 +402,22 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	sysdb.OnLeadershipGained(func(ctx context.Context) error {
 		log.Infof("MS leader running on %s", hostname())
 		mgmtSvc.startJoinLoop(ctx)
+
+		// Stop forwarding events to MS and instead start handling
+		// received forwarded (and local) events.
+		eventPubSub.Reset()
+		eventPubSub.Subscribe(events.RASTypeRankStateChange, membership)
+
 		return nil
 	})
 	sysdb.OnLeadershipLost(func() error {
 		log.Infof("MS leader no longer running on %s", hostname())
+
+		// Stop handling received forwarded (in addition to local)
+		// events and start forwarding events to the new MS leader.
+		eventPubSub.Reset()
+		eventPubSub.Subscribe(events.RASTypeAny, eventForwarder)
+
 		return nil
 	})
 
@@ -400,7 +426,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	}()
 	defer grpcServer.Stop()
 
-	log.Infof("%s (pid %d) listening on %s", build.ControlPlaneName, os.Getpid(), controlAddr)
+	log.Infof("%s v%s (pid %d) listening on %s", build.ControlPlaneName, build.DaosVersion, os.Getpid(), controlAddr)
 
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
@@ -413,5 +439,5 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		shutdown()
 	}()
 
-	return errors.Wrapf(harness.Start(ctx, membership, sysdb, cfg), "%s exited with error", build.DataPlaneName)
+	return errors.Wrapf(harness.Start(ctx, sysdb, cfg), "%s exited with error", build.DataPlaneName)
 }

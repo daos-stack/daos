@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@
 #include <daos/lru.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/bio.h>
+#include <daos_srv/dtx_srv.h>
 
 struct vos_imem_strts {
 	/**
@@ -125,13 +126,30 @@ vos_ts_table_set(struct vos_ts_table *ts_table)
 static inline void
 vos_dth_set(struct dtx_handle *dth)
 {
-	vos_tls_get()->vtl_dth = dth;
+	struct vos_tls		*tls = vos_tls_get();
+	struct dtx_share_peer	*dsp;
+
+	if (dth != NULL && dth != tls->vtl_dth &&
+	    dth->dth_share_tbd_count != 0) {
+		while ((dsp = d_list_pop_entry(&dth->dth_share_tbd_list,
+					       struct dtx_share_peer,
+					       dsp_link)) != NULL)
+			D_FREE(dsp);
+		dth->dth_share_tbd_count = 0;
+	}
+
+	tls->vtl_dth = dth;
 }
 
 static inline struct dtx_handle *
 vos_dth_get(void)
 {
-	return vos_tls_get()->vtl_dth;
+	struct vos_tls	*tls = vos_tls_get();
+
+	if (tls != NULL)
+		return vos_tls_get()->vtl_dth;
+
+	return NULL;
 }
 
 static inline void

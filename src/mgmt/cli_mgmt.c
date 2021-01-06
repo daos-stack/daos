@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,9 +36,11 @@
 #include <daos/drpc.pb-c.h>
 #include <daos/event.h>
 #include <daos/job.h>
+#include <daos/pool.h>
 #include "svc.pb-c.h"
 #include "rpc.h"
 #include <errno.h>
+#include <stdlib.h>
 
 int
 dc_cp(tse_task_t *task, void *data)
@@ -55,63 +57,11 @@ dc_cp(tse_task_t *task, void *data)
 }
 
 int
-dc_mgmt_svc_rip(tse_task_t *task)
+dc_deprecated(tse_task_t *task)
 {
-	daos_svc_rip_t		*args;
-	struct cp_arg		 cp_arg;
-	crt_endpoint_t		 svr_ep;
-	crt_rpc_t		*rpc = NULL;
-	crt_opcode_t		 opc;
-	struct mgmt_svc_rip_in	*rip_in;
-	int			 rc;
-
-	args = dc_task_get_args(task);
-	rc = dc_mgmt_sys_attach(args->grp, &cp_arg.sys);
-	if (rc != 0) {
-		D_ERROR("failed to attach to grp %s, rc "DF_RC".\n",
-			args->grp, DP_RC(rc));
-		rc = -DER_INVAL;
-		goto out_task;
-	}
-
-	svr_ep.ep_grp = cp_arg.sys->sy_group;
-	svr_ep.ep_rank = args->rank;
-	svr_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
-	opc = DAOS_RPC_OPCODE(MGMT_SVC_RIP, DAOS_MGMT_MODULE,
-			      DAOS_MGMT_VERSION);
-	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc);
-	if (rc != 0) {
-		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: "DF_RC".\n",
-			DP_RC(rc));
-		D_GOTO(err_grp, rc);
-	}
-
-	D_ASSERT(rpc != NULL);
-	rip_in = crt_req_get(rpc);
-	D_ASSERT(rip_in != NULL);
-
-	/** fill in request buffer */
-	rip_in->rip_flags = args->force;
-
-	crt_req_addref(rpc);
-	cp_arg.rpc = rpc;
-
-	rc = tse_task_register_comp_cb(task, dc_cp, &cp_arg, sizeof(cp_arg));
-	if (rc != 0)
-		D_GOTO(err_rpc, rc);
-
-	D_DEBUG(DB_MGMT, "killing rank %u\n", args->rank);
-
-	/** send the request */
-	return daos_rpc_send(rpc, task);
-
-err_rpc:
-	crt_req_decref(rpc);
-err_grp:
-	dc_mgmt_sys_detach(cp_arg.sys);
-out_task:
-	tse_task_complete(task, rc);
-	return rc;
+	D_ERROR("This API is deprecated "DF_RC"\n", DP_RC(-DER_NOSYS));
+	tse_task_complete(task, -DER_NOSYS);
+	return -DER_NOSYS;
 }
 
 int
@@ -218,7 +168,6 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 
 	/* Prepare the GetAttachInfo request. */
 	req.sys = (char *)name;
-	req.jobid = dc_jobid;
 	reqb_size = mgmt__get_attach_info_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);
 	if (reqb == NULL) {
@@ -274,6 +223,8 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 			rc = -DER_NOMEM;
 			break;
 		}
+		D_DEBUG(DB_MGMT, "GetAttachInfo psrs[%d]: rank=%u, uri=%s\n",
+			i, p[i].rank, p[i].uri);
 	}
 	if (rc != 0) {
 		for (; i >= 0; i--) {
@@ -441,11 +392,95 @@ cleanup:
 	return rc;
 }
 
+static int send_monitor_request(struct dc_pool *pool, int request_type)
+{
+	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
+	struct drpc		 *ctx;
+	Mgmt__PoolMonitorReq	 req = MGMT__POOL_MONITOR_REQ__INIT;
+	uint8_t			 *reqb;
+	size_t			 reqb_size;
+	char			 pool_uuid[DAOS_UUID_STR_SIZE];
+	char			 pool_hdl_uuid[DAOS_UUID_STR_SIZE];
+	Drpc__Call		 *dreq;
+	Drpc__Response		 *dresp;
+	int			 rc;
+
+	/* Connect to daos_agent. */
+	D_ASSERT(dc_agent_sockpath != NULL);
+	rc = drpc_connect(dc_agent_sockpath, &ctx);
+	if (rc != -DER_SUCCESS) {
+		D_ERROR("failed to connect to %s " DF_RC "\n",
+			dc_agent_sockpath, DP_RC(rc));
+		D_GOTO(out, 0);
+	}
+
+	uuid_unparse(pool->dp_pool, pool_uuid);
+	uuid_unparse(pool->dp_pool_hdl, pool_hdl_uuid);
+	req.pooluuid = pool_uuid;
+	req.poolhandleuuid = pool_hdl_uuid;
+	req.jobid = dc_jobid;
+
+	reqb_size = mgmt__pool_monitor_req__get_packed_size(&req);
+	D_ALLOC(reqb, reqb_size);
+	if (reqb == NULL) {
+		rc = -DER_NOMEM;
+		goto out_ctx;
+	}
+	mgmt__pool_monitor_req__pack(&req, reqb);
+
+	rc = drpc_call_create(ctx, DRPC_MODULE_MGMT,
+			      request_type, &dreq);
+	if (rc != 0) {
+		D_FREE(reqb);
+		goto out_ctx;
+	}
+	dreq->body.len = reqb_size;
+	dreq->body.data = reqb;
+
+	/* Make the call and get the response. */
+	rc = drpc_call(ctx, R_SYNC, dreq, &dresp);
+	if (rc != 0) {
+		D_ERROR("Sending monitor request failed: "DF_RC"\n", DP_RC(rc));
+		goto out_dreq;
+	}
+	if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("Monitor Request unsuccessful: %d\n", dresp->status);
+		rc = -DER_MISC;
+		goto out_dresp;
+	}
+
+out_dresp:
+	drpc_response_free(dresp);
+out_dreq:
+	drpc_call_free(dreq);
+out_ctx:
+	drpc_close(ctx);
+out:
+	return rc;
+}
+
+/*
+ * Send an upcall to the agent to notify it of a pool disconnect.
+ */
+int
+dc_mgmt_notify_pool_disconnect(struct dc_pool *pool) {
+	return send_monitor_request(pool,
+				    DRPC_METHOD_MGMT_NOTIFY_POOL_DISCONNECT);
+}
+
+/*
+ * Send an upcall to the agent to notify it of a successful pool connect.
+ */
+int
+dc_mgmt_notify_pool_connect(struct dc_pool *pool) {
+	return send_monitor_request(pool, DRPC_METHOD_MGMT_NOTIFY_POOL_CONNECT);
+}
+
 /*
  * Send an upcall to the agent to notify it of a clean process shutdown.
  */
 int
-dc_mgmt_disconnect(void)
+dc_mgmt_notify_exit(void)
 {
 	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
 	struct drpc		 *ctx;
@@ -465,7 +500,7 @@ dc_mgmt_disconnect(void)
 	}
 
 	rc = drpc_call_create(ctx, DRPC_MODULE_MGMT,
-			      DRPC_METHOD_MGMT_DISCONNECT, &dreq);
+			      DRPC_METHOD_MGMT_NOTIFY_EXIT, &dreq);
 	if (rc != 0)
 		goto out_ctx;
 
@@ -849,52 +884,84 @@ dc_mgmt_get_pool_svc_ranks(struct dc_mgmt_sys *sys, const uuid_t puuid,
 	struct mgmt_pool_get_svcranks_in       *rpc_in;
 	struct mgmt_pool_get_svcranks_out      *rpc_out;
 	crt_opcode_t				opc;
-	int					rc;
+	int					i;
+	int					idx;
+	crt_context_t				ctx;
+	bool					success = false;
+	int					rc = 0;
 
-	/* TODO: when MS supports multiple replicas search for leader */
-	srv_ep.ep_grp = sys->sy_group;
-	srv_ep.ep_rank = sys->sy_psrs[0].rank;
-	srv_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
+	/* NB: sy_psrs[] may have multiple entries even for single MS replica,
+	 * since there may be multiple ioservers there. Some of which may have
+	 * been stopped or faulted. May need to contact multiple ioservers.
+	 * Assumed: any MS replica ioserver can be contacted, even non-leaders.
+	 */
+	D_ASSERT(sys->sy_npsrs > 0);
+	idx = rand() % sys->sy_npsrs;
+	ctx = daos_get_crt_ctx();
 	opc = DAOS_RPC_OPCODE(MGMT_POOL_GET_SVCRANKS, DAOS_MGMT_MODULE,
 			      DAOS_MGMT_VERSION);
+	srv_ep.ep_grp = sys->sy_group;
+	srv_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
+	for (i = 0 ; i < sys->sy_npsrs; i++) {
+		srv_ep.ep_rank = sys->sy_psrs[idx].rank;
+		rpc = NULL;
+		rc = crt_req_create(ctx, &srv_ep, opc, &rpc);
+		if (rc != 0) {
+			D_ERROR(DF_UUID ": crt_req_create() failed, "
+				DF_RC "\n", DP_UUID(puuid), DP_RC(rc));
+			idx = (idx + 1) % sys->sy_npsrs;
+			continue;
+		}
 
-	rc = crt_req_create(daos_get_crt_ctx(), &srv_ep, opc, &rpc);
-	if (rc != 0) {
-		D_ERROR(DF_UUID ": crt_req_create() failed, "DF_RC "\n",
-			DP_UUID(puuid), DP_RC(rc));
-		return rc;
+		rpc_in = NULL;
+		rpc_in = crt_req_get(rpc);
+		D_ASSERT(rpc_in != NULL);
+		uuid_copy(rpc_in->gsr_puuid, puuid);
+
+		D_DEBUG(DB_MGMT, DF_UUID ": ask rank %u for PS replicas list\n",
+			DP_UUID(puuid), srv_ep.ep_rank);
+		crt_req_addref(rpc);
+		rc = daos_rpc_send_wait(rpc);
+		if (rc != 0) {
+			D_DEBUG(DB_MGMT, DF_UUID ": daos_rpc_send_wait() failed"
+				", " DF_RC "\n", DP_UUID(puuid), DP_RC(rc));
+			crt_req_decref(rpc);
+			idx = (idx + 1) % sys->sy_npsrs;
+			continue;
+		}
+		success = true;
+		break;
 	}
 
-	rpc_in = crt_req_get(rpc);
-	D_ASSERT(rpc_in != NULL);
-	uuid_copy(rpc_in->gsr_puuid, puuid);
-
-	crt_req_addref(rpc);
-	rc = daos_rpc_send_wait(rpc);
-	if (rc != 0) {
-		D_ERROR(DF_UUID ": daos_rpc_send_wait() failed, "DF_RC "\n",
-			DP_UUID(puuid), DP_RC(rc));
-		goto decref;
+	if (!success) {
+		D_ERROR(DF_UUID ": failed to get PS replicas list from %d "
+			"servers, " DF_RC "\n", DP_UUID(puuid), sys->sy_npsrs,
+			DP_RC(rc));
+		return rc;
 	}
 
 	rpc_out = crt_reply_get(rpc);
 	D_ASSERT(rpc_out != NULL);
 	rc = rpc_out->gsr_rc;
 	if (rc != 0) {
-		D_ERROR(DF_UUID ": MGMT_POOL_GET_SVCRANKS rpc failed, "
-			DF_RC "\n", DP_UUID(puuid), DP_RC(rc));
+		D_ERROR(DF_UUID ": MGMT_POOL_GET_SVCRANKS rpc failed to all %d "
+			"ranks, " DF_RC "\n", DP_UUID(puuid), sys->sy_npsrs,
+			DP_RC(rc));
 		goto decref;
 	}
 
+	D_DEBUG(DB_MGMT, DF_UUID ": rank %u returned PS replicas list\n",
+		DP_UUID(puuid), srv_ep.ep_rank);
 	rc = d_rank_list_dup(svcranksp, rpc_out->gsr_ranks);
 	if (rc != 0)
-		D_ERROR(DF_UUID ": d_rank_list_dup() failed, "DF_RC "\n",
+		D_ERROR(DF_UUID ": d_rank_list_dup() failed, " DF_RC "\n",
 			DP_UUID(puuid), DP_RC(rc));
 
 decref:
 	crt_req_decref(rpc);
 	return rc;
 }
+
 /**
  * Initialize management interface
  */

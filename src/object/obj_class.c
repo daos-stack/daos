@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -277,6 +277,19 @@ static struct daos_obj_class daos_obj_classes[] = {
 		},
 	},
 	{
+		.oc_name	= "OBJ_ID_TABLE",
+		.oc_id		= DAOS_OC_OIT,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			/* XXX use 1 replica and 1 groop for simplicity,
+			 * it should be more scalable
+			 */
+			.ca_grp_nr		= 1,
+			.ca_rp_nr		= 1,
+		},
+	},
+	{
 		.oc_name	= "EC_2P1G1",
 		.oc_id		= OC_EC_2P1G1,
 		{
@@ -549,7 +562,7 @@ obj_ec_codec_fini(void)
 		return;
 
 	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
-		if (oc->oc_attr.ca_resil == DAOS_RES_EC)
+		if (DAOS_OC_IS_EC(&oc->oc_attr))
 			ocnr++;
 	}
 	D_ASSERTF(oc_ec_codec_nr == ocnr,
@@ -585,7 +598,7 @@ obj_ec_codec_init()
 
 	ocnr = 0;
 	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
-		if (oc->oc_attr.ca_resil == DAOS_RES_EC)
+		if (DAOS_OC_IS_EC(&oc->oc_attr))
 			ocnr++;
 	}
 	if (ocnr == 0)
@@ -598,7 +611,7 @@ obj_ec_codec_init()
 
 	i = 0;
 	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
-		if (oc->oc_attr.ca_resil != DAOS_RES_EC)
+		if (!DAOS_OC_IS_EC(&oc->oc_attr))
 			continue;
 
 		oc_ec_codecs[i].ec_oc_id = oc->oc_id;

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,8 +30,9 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/common"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
-	"github.com/daos-stack/daos/src/control/server/config"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -75,6 +76,7 @@ func (srv *IOServerInstance) format(ctx context.Context, recreateSBs bool) error
 // performing any required NVMe preparation steps and launching a managed
 // daos_io_server instance.
 func (srv *IOServerInstance) start(ctx context.Context, errChan chan<- error) error {
+	srv.log.Debug("instance start()")
 	if err := srv.bdevClassProvider.GenConfigFile(); err != nil {
 		return errors.Wrap(err, "start failed; unable to generate NVMe configuration for SPDK")
 	}
@@ -131,13 +133,41 @@ func (srv *IOServerInstance) finishStartup(ctx context.Context, ready *srvpb.Not
 	return nil
 }
 
-func (srv *IOServerInstance) exit(exitErr error) {
-	srv.log.Infof("instance %d exited: %s", srv.Index(),
-		ioserver.GetExitStatus(exitErr))
+// publishInstanceExitFn returns onInstanceExitFn which will publish an exit
+// event using the provided publish function.
+func publishInstanceExitFn(publishFn func(events.Event), hostname string, srvIdx uint32) onInstanceExitFn {
+	return func(_ context.Context, rank system.Rank, exitErr error) error {
+		if exitErr == nil {
+			return errors.New("expected non-nil exit error")
+		}
+		publishFn(events.NewRankExitEvent(hostname, srvIdx, rank.Uint32(),
+			common.ExitStatus(exitErr.Error())))
+
+		return nil
+	}
+}
+
+func (srv *IOServerInstance) exit(ctx context.Context, exitErr error) {
+	srvIdx := srv.Index()
+
+	srv.log.Infof("instance %d exited: %s", srvIdx, common.GetExitStatus(exitErr))
+
+	rank, err := srv.GetRank()
+	if err != nil {
+		srv.log.Debugf("instance %d: no rank (%s)", srv.Index(), err)
+	}
 
 	srv._lastErr = exitErr
 	if err := srv.removeSocket(); err != nil {
 		srv.log.Errorf("removing socket file: %s", err)
+	}
+
+	// After we know that the instance has exited, fire off
+	// any callbacks that were waiting for this state.
+	for _, exitFn := range srv.onInstanceExit {
+		if err := exitFn(ctx, rank, exitErr); err != nil {
+			srv.log.Errorf("onExit: %s", err)
+		}
 	}
 }
 
@@ -145,7 +175,7 @@ func (srv *IOServerInstance) exit(exitErr error) {
 // will only return (if no errors are returned during setup) on IO server
 // process exit (triggered by harness shutdown through context cancellation
 // or abnormal IO server process termination).
-func (srv *IOServerInstance) run(ctx context.Context, membership *system.Membership, recreateSBs bool) (err error) {
+func (srv *IOServerInstance) run(ctx context.Context, recreateSBs bool) (err error) {
 	errChan := make(chan error)
 
 	if err = srv.format(ctx, recreateSBs); err != nil {
@@ -166,7 +196,7 @@ func (srv *IOServerInstance) run(ctx context.Context, membership *system.Members
 
 // Run is the processing loop for an IOServerInstance. Starts are triggered by
 // receiving true on instance start channel.
-func (srv *IOServerInstance) Run(ctx context.Context, membership *system.Membership, cfg *config.Server) {
+func (srv *IOServerInstance) Run(ctx context.Context, recreateSBs bool) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -175,7 +205,7 @@ func (srv *IOServerInstance) Run(ctx context.Context, membership *system.Members
 			if !relaunch {
 				return
 			}
-			srv.exit(srv.run(ctx, membership, cfg.RecreateSuperblocks))
+			srv.exit(ctx, srv.run(ctx, recreateSBs))
 		}
 	}
 }

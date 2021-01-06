@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -285,7 +285,7 @@ ik_btr_open_create(void **state)
 	create = tst_fn_val.input;
 	arg = tst_fn_val.optval;
 
-	if (!daos_handle_is_inval(ik_toh)) {
+	if (daos_handle_is_valid(ik_toh)) {
 		fail_msg("Tree has been opened\n");
 	}
 

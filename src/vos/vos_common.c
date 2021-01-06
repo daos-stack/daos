@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -168,6 +168,9 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 	int			 rc;
 	int			 i;
 
+	if (dth->dth_rsrvds == NULL)
+		return 0;
+
 	for (i = 0; i < dth->dth_rsrvd_cnt; i++) {
 		dru = &dth->dth_rsrvds[i];
 		rc = vos_publish_scm(cont, dru->dru_scm, publish);
@@ -216,7 +219,7 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm)
 {
 	int	rc;
 
-	if (!dtx_is_valid_handle(dth))
+	if (dth == NULL)
 		return umem_tx_begin(umm, vos_txd_get());
 
 	if (dth->dth_local_tx_started)

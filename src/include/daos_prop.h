@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -326,11 +326,11 @@ daos_prop_alloc(uint32_t entries_nr);
  * \param[in]	prop	property entries to be freed.
  */
 void
-daos_prop_entries_free(daos_prop_t *prop);
+daos_prop_fini(daos_prop_t *prop);
 
 
 /**
- * Free the DAOS properties.
+ * Free the DAOS properties and the \a prop.
  *
  * \param[in]	prop	properties to be freed.
  */

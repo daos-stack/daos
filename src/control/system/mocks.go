@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -65,8 +65,10 @@ func MockMemberResult(rank Rank, action string, err error, state MemberState) *M
 	return result
 }
 
-func MockMembership(t *testing.T, log logging.Logger) *Membership {
-	return NewMembership(log, MockDatabase(t, log))
+func MockMembership(t *testing.T, log logging.Logger, resolver resolveTCPFn) (*Membership, *Database) {
+	db := MockDatabase(t, log)
+
+	return NewMembership(log, db).WithTCPResolver(resolver), db
 }
 
 type (

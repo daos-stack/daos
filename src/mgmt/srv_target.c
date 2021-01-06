@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -800,7 +800,12 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	rc = d_hash_rec_insert(&pooltgts->dpt_creates_ht, ptrec->dptr_uuid,
 			       sizeof(uuid_t), &ptrec->dptr_hlink, true);
 	ABT_mutex_unlock(pooltgts->dpt_mutex);
-	if (rc) {
+	if (rc == -DER_EXIST) {
+		D_ERROR(DF_UUID": already creating or cleaning up\n",
+			DP_UUID(tc_in->tc_pool_uuid));
+		rc = -DER_AGAIN;
+		goto out_rec;
+	} else if (rc) {
 		D_ERROR(DF_UUID": failed insert dpt_creates_ht: "DF_RC"\n",
 			DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));
 		goto out_rec;

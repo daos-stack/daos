@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,9 +47,9 @@ typedef enum {
 	DAOS_OPC_INVALID	= -1,
 
 	/** Management APIs */
-	DAOS_OPC_SVC_RIP = 0,
-	DAOS_OPC_POOL_EXTEND,
-	DAOS_OPC_POOL_EVICT,
+	/* Starting at 0 will break Application Binary Interface backward
+	 * compatibility */
+	DAOS_OPC_POOL_EVICT = 2,
 	DAOS_OPC_SET_PARAMS,
 	DAOS_OPC_MGMT_GET_BS_STATE,
 
@@ -139,16 +139,6 @@ typedef enum {
 	DAOS_OPC_MAX
 } daos_opc_t;
 
-/** svc rip params */
-typedef struct {
-	/** Process set name of the DAOS servers managing the pool */
-	const char		*grp;
-	/** rank to kill */
-	d_rank_t		rank;
-	/** Abrupt shutdown, no cleanup */
-	bool			force;
-} daos_svc_rip_t;
-
 /** mgmt set params */
 typedef struct {
 	/** Process set name of the DAOS servers managing the pool */
@@ -192,29 +182,17 @@ typedef struct {
 /** pool destroy args */
 typedef struct {
 	/** UUID of the pool to destroy. */
-	const uuid_t		uuid;
+	uuid_t			uuid;
 	/** Process set name of the DAOS servers managing the pool */
 	const char		*grp;
 	/** Force destruction even if there are active connections */
 	int			force;
 } daos_pool_destroy_t;
 
-/** pool extend args */
-typedef struct {
-	/** UUID of the pool to extend. */
-	const uuid_t		uuid;
-	/** Process set name of the DAOS servers managing the pool. */
-	const char		*grp;
-	/**  Optional, only extend the pool to included targets. */
-	d_rank_list_t		*tgts;
-	/** Optional, buffer to store faulty targets on failure. */
-	d_rank_list_t		*failed;
-} daos_pool_extend_t;
-
 /** pool evict args */
 typedef struct {
 	/** UUID of the pool. */
-	const uuid_t		uuid;
+	uuid_t			uuid;
 	/** Process set name of the DAOS servers managing the pool. */
 	const char		*grp;
 	/** list of pool service ranks. */
@@ -224,7 +202,7 @@ typedef struct {
 /** pool connect args */
 typedef struct {
 	/** UUID of the pool. */
-	const uuid_t		uuid;
+	uuid_t			uuid;
 	/** Process set name of the DAOS servers managing the pool. */
 	const char		*grp;
 	/** Pool service replica ranks. */
@@ -246,7 +224,7 @@ typedef struct {
 /** pool target update (add/exclude) args */
 typedef struct {
 	/** UUID of the pool. */
-	const uuid_t		uuid;
+	uuid_t			uuid;
 	/** Process set name of the DAOS servers managing the pool */
 	const char		*grp;
 	/** Pool service replica ranks. */
@@ -340,7 +318,7 @@ typedef struct {
 /** pool add/remove replicas args */
 typedef struct {
 	/** UUID of the pool. */
-	const uuid_t		uuid;
+	uuid_t			uuid;
 	/** Name of DAOS server process set managing the service. */
 	const char		*group;
 	/** List of service ranks. */
@@ -379,7 +357,7 @@ typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
 	/** Container UUID. */
-	const uuid_t		uuid;
+	uuid_t			uuid;
 	/** Optional container properties. */
 	daos_prop_t		*prop;
 } daos_cont_create_t;
@@ -389,7 +367,7 @@ typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
 	/** Container UUID. */
-	const uuid_t		uuid;
+	uuid_t			uuid;
 	/** Open mode, represented by the DAOS_COO_ bits.*/
 	unsigned int		flags;
 	/** Returned container open handle. */
@@ -409,7 +387,7 @@ typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
 	/** Container UUID. */
-	const uuid_t		uuid;
+	uuid_t			uuid;
 	/** Force destroy even if there is outstanding open handles. */
 	int			force;
 } daos_cont_destroy_t;
@@ -556,6 +534,8 @@ typedef struct {
 typedef struct {
 	/** Container open handle. */
 	daos_handle_t		coh;
+	/** bit flags, see enum daos_snapshot_opts */
+	unsigned int		opts;
 	/** Returned epoch of persistent snapshot taken. */
 	daos_epoch_t		*epoch;
 	/** Optional null terminated name for snapshot. */

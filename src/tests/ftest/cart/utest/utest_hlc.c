@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,7 +70,7 @@ test_hlc_get_msg(void **state)
 			time2 = time - 0x100;
 		else
 			time2 = time + (i % 3);
-		rc = crt_hlc_get_msg(time2, &time);
+		rc = crt_hlc_get_msg(time2, &time, NULL);
 		assert_true(rc == 0);
 		assert_true(time2 < time);
 		assert_true(last < time);

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,27 +29,6 @@
 #include <daos_mgmt.h>
 #include "client_internal.h"
 #include "task_internal.h"
-
-int
-daos_mgmt_svc_rip(const char *grp, d_rank_t rank, bool force,
-		  daos_event_t *ev)
-{
-	daos_svc_rip_t		*args;
-	tse_task_t		*task;
-	int			 rc;
-
-	DAOS_API_ARG_ASSERT(*args, SVC_RIP);
-	rc = dc_task_create(dc_mgmt_svc_rip, NULL, ev, &task);
-	if (rc)
-		return rc;
-
-	args = dc_task_get_args(task);
-	args->grp	= grp;
-	args->rank	= rank;
-	args->force	= force;
-
-	return dc_task_schedule(task, true);
-}
 
 int
 daos_debug_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
@@ -173,13 +152,6 @@ daos_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 	uuid_copy((unsigned char *)args->uuid, uuid);
 
 	return dc_task_schedule(task, true);
-}
-
-int
-daos_pool_extend(const uuid_t uuid, const char *grp, d_rank_list_t *tgts,
-		 d_rank_list_t *failed, daos_event_t *ev)
-{
-	return -DER_NOSYS;
 }
 
 int

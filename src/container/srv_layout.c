@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,7 +81,7 @@ struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 		.dpe_val	= DAOS_PROP_CO_CSUM_SV_OFF,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_REDUN_FAC,
-		.dpe_val	= DAOS_PROP_CO_REDUN_RF1,
+		.dpe_val	= DAOS_PROP_CO_REDUN_RF0,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_REDUN_LVL,
 		.dpe_val	= DAOS_PROP_CO_REDUN_RACK,

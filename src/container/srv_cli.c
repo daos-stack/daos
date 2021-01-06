@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -104,13 +104,13 @@ dsc_cont_open(daos_handle_t poh, uuid_t cont_uuid, uuid_t coh_uuid,
 	struct dc_pool	*pool = NULL;
 	int		rc = 0;
 
-	if (!daos_handle_is_inval(*coh)) {
+	if (daos_handle_is_valid(*coh)) {
 		cont = dc_hdl2cont(*coh);
 		if (cont != NULL)
 			D_GOTO(out, rc);
 	}
 
-	D_ASSERT(!daos_handle_is_inval(poh));
+	D_ASSERT(daos_handle_is_valid(poh));
 	pool = dc_hdl2pool(poh);
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);

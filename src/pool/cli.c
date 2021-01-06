@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -422,6 +422,13 @@ pool_connect_cp(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
+	rc = dc_mgmt_notify_pool_connect(pool);
+	if (rc != 0) {
+		D_ERROR("failed to register pool connect with agent: "DF_RC"\n",
+			DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
 	/* add pool to hhash */
 	dc_pool_hdl_link(pool);
 	dc_pool2hdl(pool, arg->hdlp);
@@ -620,6 +627,17 @@ pool_disconnect_cp(tse_task_t *task, void *data)
 		DP_UUID(pool->dp_pool_hdl));
 
 	pl_map_disconnect(pool->dp_pool);
+
+	rc = dc_mgmt_notify_pool_disconnect(pool);
+	if (rc != 0) {
+		/* It's not fatal if we don't notify the agent of the disconnect
+		 * however it isn't ideal. It will try to send the control plane
+		 * a clean up rpc on process termination however it will be noop
+		 * on the server side.
+		 */
+		D_ERROR("failed to notify agent of pool disconnect: "DF_RC"\n",
+			DP_RC(rc));
+	}
 
 	/* remove pool from hhash */
 	dc_pool_hdl_unlink(pool);
@@ -2243,12 +2261,6 @@ out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to del pool attributes: "DF_RC"\n", DP_RC(rc));
 	return rc;
-}
-
-int
-dc_pool_extend(tse_task_t *task)
-{
-	return -DER_NOSYS;
 }
 
 struct pool_svc_stop_arg {

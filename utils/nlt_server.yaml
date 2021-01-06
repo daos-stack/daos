@@ -23,4 +23,4 @@ servers:
   - FI_SOCKETS_CONN_TIMEOUT=2000
   scm_mount: /mnt/daos
   scm_class: ram
-  scm_size: 4
+  scm_size: 32

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,7 +80,7 @@ struct d_fault_attr_t {
 	/**
 	 * the error code to inject. Can be retrieved by d_fault_attr_err_code()
 	 */
-	uint32_t		fa_err_code;
+	int32_t			fa_err_code;
 	/**
 	 * state for nrand48. this allows each injection point has its own
 	 * independent random number sequence.

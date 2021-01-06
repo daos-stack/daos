@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,93 +62,6 @@ crt_proc_struct_rsvc_hint(crt_proc_t proc, struct rsvc_hint *hint)
 		return -DER_HG;
 
 	rc = crt_proc_uint64_t(proc, &hint->sh_term);
-	if (rc != 0)
-		return -DER_HG;
-
-	return 0;
-}
-
-static int
-crt_proc_struct_daos_pool_space(crt_proc_t proc, struct daos_pool_space *ps)
-{
-	int i, rc;
-
-	for (i = 0; i < DAOS_MEDIA_MAX; i++) {
-		rc = crt_proc_uint64_t(proc, &ps->ps_space.s_total[i]);
-		if (rc)
-			return -DER_HG;
-
-		rc = crt_proc_uint64_t(proc, &ps->ps_space.s_free[i]);
-		if (rc)
-			return -DER_HG;
-
-		rc = crt_proc_uint64_t(proc, &ps->ps_free_min[i]);
-		if (rc)
-			return -DER_HG;
-
-		rc = crt_proc_uint64_t(proc, &ps->ps_free_max[i]);
-		if (rc)
-			return -DER_HG;
-
-		rc = crt_proc_uint64_t(proc, &ps->ps_free_mean[i]);
-		if (rc)
-			return -DER_HG;
-	}
-
-	rc = crt_proc_uint32_t(proc, &ps->ps_ntargets);
-	if (rc)
-		return -DER_HG;
-
-	rc = crt_proc_uint32_t(proc, &ps->ps_padding);
-	if (rc)
-		return -DER_HG;
-
-	return 0;
-}
-
-static int
-crt_proc_struct_daos_rebuild_status(crt_proc_t proc,
-				    struct daos_rebuild_status *drs)
-{
-	int rc;
-
-	rc = crt_proc_uint32_t(proc, &drs->rs_version);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint32_t(proc, &drs->rs_seconds);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_int32_t(proc, &drs->rs_errno);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_int32_t(proc, &drs->rs_done);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_int32_t(proc, &drs->rs_padding32);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_int32_t(proc, &drs->rs_fail_rank);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint64_t(proc, &drs->rs_toberb_obj_nr);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint64_t(proc, &drs->rs_obj_nr);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint64_t(proc, &drs->rs_rec_nr);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint64_t(proc, &drs->rs_size);
 	if (rc != 0)
 		return -DER_HG;
 

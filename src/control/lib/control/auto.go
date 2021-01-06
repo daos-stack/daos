@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -145,7 +145,7 @@ func getCPUParams(log logging.Logger, bdevLists [][]string, coresPerNuma int) ([
 }
 
 // ConfigGenerate attempts to automatically detect hardware and generate a DAOS
-// server config file for a set of hosts with homogenous hardware setup.
+// server config file for a set of hosts with homogeneous hardware setup.
 //
 // Returns API response and error.
 func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerateResp, error) {

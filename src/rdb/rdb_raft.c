@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -767,7 +767,7 @@ rdb_raft_cb_recv_installsnapshot(raft_server_t *raft, void *arg,
 	out = container_of(resp, struct rdb_installsnapshot_out, iso_msg);
 
 	/* Is there an existing SLC? */
-	if (!daos_handle_is_inval(*slc)) {
+	if (daos_handle_is_valid(*slc)) {
 		bool destroy = false;
 
 		/* As msg->term == currentTerm and currentTerm >= dlr_term... */
@@ -2288,7 +2288,7 @@ lc:
 err_lc:
 	vos_cont_close(db->d_lc);
 err_slc:
-	if (!daos_handle_is_inval(db->d_slc))
+	if (daos_handle_is_valid(db->d_slc))
 		vos_cont_close(db->d_slc);
 err:
 	return rc;
@@ -2298,7 +2298,7 @@ static void
 rdb_raft_unload_lc(struct rdb *db)
 {
 	rdb_raft_unload_snapshot(db);
-	if (!daos_handle_is_inval(db->d_slc))
+	if (daos_handle_is_valid(db->d_slc))
 		vos_cont_close(db->d_slc);
 	vos_cont_close(db->d_lc);
 }
@@ -2558,6 +2558,10 @@ rdb_raft_resign(struct rdb *db, uint64_t term)
 	struct rdb_raft_state	state;
 	int			rc;
 
+	if (db == NULL) {
+		D_ERROR("db cannot be NULL\n");
+		return;
+	}
 	ABT_mutex_lock(db->d_raft_mutex);
 	if (term != raft_get_current_term(db->d_raft) ||
 	    !raft_is_leader(db->d_raft)) {

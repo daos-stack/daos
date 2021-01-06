@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -961,7 +961,7 @@ rebuild_io_cb(void *arg)
 	test_arg_t	*test_arg = arg;
 	daos_obj_id_t	*oids = test_arg->rebuild_cb_arg;
 
-	if (!daos_handle_is_inval(test_arg->coh))
+	if (daos_handle_is_valid(test_arg->coh))
 		rebuild_io(test_arg, oids, OBJ_NR);
 
 	return 0;
@@ -973,7 +973,7 @@ rebuild_io_post_cb(void *arg)
 	test_arg_t	*test_arg = arg;
 	daos_obj_id_t	*oids = test_arg->rebuild_post_cb_arg;
 
-	if (!daos_handle_is_inval(test_arg->coh))
+	if (daos_handle_is_valid(test_arg->coh))
 		rebuild_io_validate(test_arg, oids, OBJ_NR, true);
 
 	return 0;
@@ -984,7 +984,7 @@ static void
 rebuild_master_failure(void **state)
 {
 	test_arg_t		*arg = *state;
-	daos_obj_id_t		oids[OBJ_NR];
+	daos_obj_id_t		oids[10 * OBJ_NR];
 	daos_pool_info_t	pinfo = {0};
 	daos_pool_info_t	pinfo_new = {0};
 	int			i;
@@ -997,18 +997,18 @@ rebuild_master_failure(void **state)
 	}
 
 	test_get_leader(arg, &ranks_to_kill[0]);
-	for (i = 0; i < OBJ_NR; i++) {
+	for (i = 0; i < 10 * OBJ_NR; i++) {
 		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
 	/* prepare the data */
-	rebuild_io(arg, oids, OBJ_NR);
+	rebuild_io(arg, oids, 10 * OBJ_NR);
 
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], true);
 
 	/* Verify the data */
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_validate(arg, oids, 10 * OBJ_NR, true);
 
 	/* Verify the POOL_QUERY get same rebuild status after leader change */
 	pinfo.pi_bits = DPI_REBUILD_STATUS;

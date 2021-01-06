@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,10 +26,13 @@ package system
 import (
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"math"
 	"sort"
 	"strings"
+
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 const (
@@ -140,6 +143,20 @@ func (f *FaultDomain) MustCreateChild(childLevel string) *FaultDomain {
 		panic(err)
 	}
 	return child
+}
+
+// Uint64 transforms the Fault Domain into an identifying 64-bit integer.
+func (f *FaultDomain) Uint64() uint64 {
+	hasher := fnv.New64a()
+	hasher.Write([]byte(f.String()))
+	return hasher.Sum64()
+}
+
+// Uint32 transforms the Fault Domain into an identifying 32-bit integer.
+func (f *FaultDomain) Uint32() uint32 {
+	hasher := fnv.New32a()
+	hasher.Write([]byte(f.String()))
+	return hasher.Sum32()
 }
 
 // NewFaultDomain creates a FaultDomain from a sequence of strings representing
@@ -380,6 +397,41 @@ func (t *FaultDomainTree) nodeToString(w io.Writer, depth int, fullDomain bool) 
 	for _, c := range t.Children {
 		c.nodeToString(w, depth+1, false)
 	}
+}
+
+// ToProto converts the FaultDomainTree into a list of protobuf structures,
+// in the order of a breadth-first traversal.
+func (t *FaultDomainTree) ToProto() []*mgmtpb.FaultDomain {
+	if t == nil {
+		return nil
+	}
+
+	result := make([]*mgmtpb.FaultDomain, 0)
+
+	queue := make([]*FaultDomainTree, 0)
+	queue = append(queue, t)
+
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+
+		result = append(result, cur.toProtoSingle())
+		for _, child := range cur.Children {
+			queue = append(queue, child)
+		}
+	}
+	return result
+}
+
+func (t *FaultDomainTree) toProtoSingle() *mgmtpb.FaultDomain {
+	result := &mgmtpb.FaultDomain{
+		Domain: t.Domain.String(),
+		Id:     t.Domain.Uint32(),
+	}
+	for _, child := range t.Children {
+		result.Children = append(result.Children, child.Domain.Uint32())
+	}
+	return result
 }
 
 // NewFaultDomainTree creates a FaultDomainTree including all the

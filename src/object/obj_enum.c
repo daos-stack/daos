@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,6 +50,12 @@ fill_recxs(daos_handle_t ih, vos_iter_entry_t *key_ent,
 		return 1;
 	}
 
+	if (arg->eprs_len >= arg->eprs_cap) {
+		D_DEBUG(DB_IO, "eprs_len %d eprs_cap %d\n",
+			arg->eprs_len, arg->eprs_cap);
+		return 1;
+	}
+
 	arg->eprs[arg->eprs_len].epr_lo = key_ent->ie_epoch;
 	arg->eprs[arg->eprs_len].epr_hi = DAOS_EPOCH_MAX;
 	arg->eprs_len++;
@@ -85,7 +91,7 @@ is_sgl_full(struct dss_enum_arg *arg, daos_size_t size)
 	while (arg->sgl_idx < sgl->sg_nr) {
 		d_iov_t *iovs = sgl->sg_iovs;
 
-		if (iovs[arg->sgl_idx].iov_len + size >=
+		if (iovs[arg->sgl_idx].iov_len + size >
 		    iovs[arg->sgl_idx].iov_buf_len) {
 			D_DEBUG(DB_IO, "current %dth iov buf is full"
 				" iov_len %zd size "DF_U64" buf_len %zd\n",

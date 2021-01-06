@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -624,8 +624,8 @@ enum {
 
 	/** The iterator is for purge operation */
 	EVT_ITER_FOR_PURGE	= (1 << 5),
-	/** The iterator is for rebuild scan */
-	EVT_ITER_FOR_REBUILD	= (1 << 6),
+	/** The iterator is for data migration scan */
+	EVT_ITER_FOR_MIGRATION	= (1 << 6),
 };
 
 /**

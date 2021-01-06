@@ -580,7 +580,7 @@ const ProtobufCMessageDescriptor uns__properties__descriptor =
   (ProtobufCMessageInit) uns__properties__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor uns__duns_attribute__field_descriptors[7] =
+static const ProtobufCFieldDescriptor uns__duns_attribute__field_descriptors[9] =
 {
   {
     "puuid",
@@ -643,8 +643,20 @@ static const ProtobufCFieldDescriptor uns__duns_attribute__field_descriptors[7] 
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "on_lustre",
+    "rel_path",
     6,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Uns__DunsAttribute, rel_path),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "on_lustre",
+    7,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_BOOL,
     0,   /* quantifier_offset */
@@ -656,7 +668,7 @@ static const ProtobufCFieldDescriptor uns__duns_attribute__field_descriptors[7] 
   },
   {
     "properties",
-    7,
+    8,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_MESSAGE,
     0,   /* quantifier_offset */
@@ -666,20 +678,34 @@ static const ProtobufCFieldDescriptor uns__duns_attribute__field_descriptors[7] 
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "no_prefix",
+    9,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(Uns__DunsAttribute, no_prefix),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned uns__duns_attribute__field_indices_by_name[] = {
   4,   /* field[4] = chunk_size */
   1,   /* field[1] = cuuid */
   2,   /* field[2] = layout_type */
+  8,   /* field[8] = no_prefix */
   3,   /* field[3] = object_type */
-  5,   /* field[5] = on_lustre */
-  6,   /* field[6] = properties */
+  6,   /* field[6] = on_lustre */
+  7,   /* field[7] = properties */
   0,   /* field[0] = puuid */
+  5,   /* field[5] = rel_path */
 };
 static const ProtobufCIntRange uns__duns_attribute__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 7 }
+  { 0, 9 }
 };
 const ProtobufCMessageDescriptor uns__duns_attribute__descriptor =
 {
@@ -689,7 +715,7 @@ const ProtobufCMessageDescriptor uns__duns_attribute__descriptor =
   "Uns__DunsAttribute",
   "uns",
   sizeof(Uns__DunsAttribute),
-  7,
+  9,
   uns__duns_attribute__field_descriptors,
   uns__duns_attribute__field_indices_by_name,
   1,  uns__duns_attribute__number_ranges,

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,5 +51,8 @@ struct dts_io_credit *dts_credit_take(struct dts_context *tsc);
  * Drain all the inflight I/O credits of @tsc.
  */
 int dts_credit_drain(struct dts_context *tsc);
+
+/** return an unused credit */
+void dts_credit_return(struct dts_context *tsc, struct dts_io_credit *cred);
 
 #endif /* __DTS_COMMON_H__ */

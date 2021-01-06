@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,9 +41,8 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
 	. "github.com/daos-stack/daos/src/control/system"
@@ -113,6 +112,95 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
+		})
+	}
+}
+
+type eventsDispatched struct {
+	rx     []events.Event
+	cancel context.CancelFunc
+}
+
+func (d *eventsDispatched) OnEvent(ctx context.Context, e events.Event) {
+	d.rx = append(d.rx, e)
+	d.cancel()
+}
+
+func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
+	eventRankExit := events.NewRankExitEvent("foo", 0, 0, common.NormalExit)
+
+	for name, tc := range map[string]struct {
+		nilReq        bool
+		zeroSeq       bool
+		event         events.Event
+		expResp       *mgmtpb.ClusterEventResp
+		expDispatched []events.Event
+		expErr        error
+	}{
+		"nil request": {
+			nilReq: true,
+			expErr: errors.New("nil request"),
+		},
+		"invalid sequence number": {
+			zeroSeq: true,
+			expErr:  errors.New("invalid sequence"),
+		},
+		"successful notification": {
+			event: eventRankExit,
+			expResp: &mgmtpb.ClusterEventResp{
+				Sequence: 1,
+			},
+			expDispatched: []events.Event{eventRankExit},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mgmtSvc := newTestMgmtSvc(t, log)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ps := events.NewPubSub(ctx, log)
+			mgmtSvc.events = ps
+
+			dispatched := &eventsDispatched{cancel: cancel}
+			mgmtSvc.events.Subscribe(events.RASTypeRankStateChange, dispatched)
+
+			var pbReq *mgmtpb.ClusterEventReq
+			switch {
+			case tc.nilReq:
+			case tc.zeroSeq:
+				pbReq = &mgmtpb.ClusterEventReq{Sequence: 0}
+			default:
+				eventPB, err := tc.event.ToProto()
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				pbReq = &mgmtpb.ClusterEventReq{
+					Sequence: 1,
+					Event: &mgmtpb.ClusterEventReq_Ras{
+						Ras: eventPB,
+					},
+				}
+			}
+
+			gotResp, gotErr := mgmtSvc.ClusterEvent(context.TODO(), pbReq)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			<-ctx.Done()
+
+			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+
+			common.AssertEqual(t, tc.expDispatched, dispatched.rx,
+				"unexpected events dispatched")
 		})
 	}
 }
@@ -363,7 +451,7 @@ func TestServer_MgmtSvc_StopRanks(t *testing.T) {
 		},
 		"context timeout": { // near-immediate parent context Timeout
 			req:        &mgmtpb.RanksReq{Ranks: "0-3"},
-			ctxTimeout: time.Nanosecond,
+			ctxTimeout: time.Millisecond,
 			expErr:     context.DeadlineExceeded, // parent ctx timeout
 		},
 		"instances started": { // unsuccessful result for kill
@@ -382,7 +470,7 @@ func TestServer_MgmtSvc_StopRanks(t *testing.T) {
 				{Rank: 2, State: msReady, Errored: true},
 			},
 		},
-		"instances stopped": { // successful result for kill
+		"instances already stopped": { // successful result for kill
 			req:              &mgmtpb.RanksReq{Ranks: "0-3"},
 			instancesStopped: true,
 			expResults: []*mgmtpb.RanksResp_RankResult{
@@ -397,7 +485,7 @@ func TestServer_MgmtSvc_StopRanks(t *testing.T) {
 				{Rank: 1, State: msReady, Errored: true},
 			},
 		},
-		"single instance stopped": {
+		"single instance already stopped": {
 			req:              &mgmtpb.RanksReq{Ranks: "1"},
 			instancesStopped: true,
 			expResults: []*mgmtpb.RanksResp_RankResult{
@@ -416,6 +504,22 @@ func TestServer_MgmtSvc_StopRanks(t *testing.T) {
 			}
 
 			svc := newTestMgmtSvcMulti(t, log, tc.ioserverCount, tc.setupAP)
+
+			if tc.ctxTimeout == 0 {
+				tc.ctxTimeout = 500 * time.Millisecond
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), tc.ctxTimeout)
+			defer cancel()
+
+			svc.harness.rankReqTimeout = 50 * time.Millisecond
+
+			ps := events.NewPubSub(ctx, log)
+			defer ps.Close()
+			svc.events = ps
+
+			dispatched := &eventsDispatched{cancel: cancel}
+			svc.events.Subscribe(events.RASTypeRankStateChange, dispatched)
+
 			for i, srv := range svc.harness.instances {
 				if tc.missingSB {
 					srv._superblock = nil
@@ -427,28 +531,36 @@ func TestServer_MgmtSvc_StopRanks(t *testing.T) {
 					trc.Running.SetTrue()
 					srv.ready.SetTrue()
 				}
-				trc.SignalCb = func(idx uint32, sig os.Signal) { signalsSent.Store(idx, sig) }
+				trc.SignalCb = func(idx uint32, sig os.Signal) {
+					signalsSent.Store(idx, sig)
+					// simulate process exit which will call
+					// onInstanceExit handlers.
+					svc.harness.instances[idx].exit(context.TODO(),
+						common.NormalExit)
+				}
 				trc.SignalErr = tc.signalErr
 				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
 				srv.setIndex(uint32(i))
 
 				srv._superblock.Rank = new(Rank)
 				*srv._superblock.Rank = Rank(i + 1)
-			}
 
-			ctx := context.Background()
-			if tc.ctxTimeout != 0 {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithTimeout(ctx, tc.ctxTimeout)
-				defer cancel()
+				srv.OnInstanceExit(
+					func(_ context.Context, _ system.Rank, _ error) error {
+						svc.events.Publish(events.NewRankExitEvent("foo",
+							0, 0, common.NormalExit))
+						return nil
+					})
 			}
-			svc.harness.rankReqTimeout = 50 * time.Millisecond
 
 			gotResp, gotErr := svc.StopRanks(ctx, tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
+
+			<-ctx.Done()
+			common.AssertEqual(t, 0, len(dispatched.rx), "number of events published")
 
 			// RankResult.Msg generation is tested in
 			// TestServer_MgmtSvc_DrespToRankResult unit tests
@@ -467,8 +579,7 @@ func TestServer_MgmtSvc_StopRanks(t *testing.T) {
 				numSignalsSent++
 				return true
 			})
-			common.AssertEqual(t, len(tc.expSignalsSent), numSignalsSent,
-				"number of signals sent")
+			common.AssertEqual(t, len(tc.expSignalsSent), numSignalsSent, "number of signals sent")
 
 			for expKey, expValue := range tc.expSignalsSent {
 				value, found := signalsSent.Load(expKey)
@@ -1005,54 +1116,6 @@ func TestServer_MgmtSvc_getPeerListenAddr(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expAddr, gotAddr); diff != "" {
 				t.Fatalf("unexpected address (-want, +got)\n%s\n", diff)
-			}
-		})
-	}
-}
-
-func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
-	for name, tc := range map[string]struct {
-		mgmtSvc          *mgmtSvc
-		clientNetworkCfg *config.ClientNetworkCfg
-		req              *mgmtpb.GetAttachInfoReq
-		expResp          *mgmtpb.GetAttachInfoResp
-	}{
-		"Server uses verbs + Infiniband": {
-			clientNetworkCfg: &config.ClientNetworkCfg{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: netdetect.Infiniband},
-			req:              &mgmtpb.GetAttachInfoReq{},
-			expResp:          &mgmtpb.GetAttachInfoResp{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: netdetect.Infiniband},
-		},
-		"Server uses sockets + Ethernet": {
-			clientNetworkCfg: &config.ClientNetworkCfg{Provider: "ofi+sockets", CrtCtxShareAddr: 0, CrtTimeout: 5, NetDevClass: netdetect.Ether},
-			req:              &mgmtpb.GetAttachInfoReq{},
-			expResp:          &mgmtpb.GetAttachInfoResp{Provider: "ofi+sockets", CrtCtxShareAddr: 0, CrtTimeout: 5, NetDevClass: netdetect.Ether},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-			harness := NewIOServerHarness(log)
-			srv := newTestIOServer(log, true)
-
-			if err := harness.AddInstance(srv); err != nil {
-				t.Fatal(err)
-			}
-			srv.setDrpcClient(newMockDrpcClient(nil))
-			harness.started.SetTrue()
-
-			cfg := new(mockDrpcClientConfig)
-			rb, _ := proto.Marshal(&mgmtpb.GetAttachInfoResp{})
-			cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, nil)
-			srv.setDrpcClient(newMockDrpcClient(cfg))
-			tc.mgmtSvc = newMgmtSvc(harness, nil, system.MockDatabase(t, log))
-			tc.mgmtSvc.clientNetworkCfg = tc.clientNetworkCfg
-			gotResp, gotErr := tc.mgmtSvc.GetAttachInfo(context.TODO(), tc.req)
-			if gotErr != nil {
-				t.Fatalf("unexpected error: %+v\n", gotErr)
-			}
-
-			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
-				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
 	}

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,8 +42,6 @@
 #define OBJ_REPLICAS	3
 #define DEFAULT_FAIL_TGT 0
 #define REBUILD_POOL_SIZE	(4ULL << 30)
-#define REBUILD_SUBTEST_POOL_SIZE (1ULL << 30)
-#define REBUILD_SMALL_POOL_SIZE (1ULL << 28)
 
 #define DATA_SIZE	(1048576 * 2 + 512)
 static void

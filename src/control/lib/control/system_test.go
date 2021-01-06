@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
@@ -1064,6 +1065,115 @@ func TestControl_SystemReformat(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp, gotResp, defResCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestControl_SystemNotify(t *testing.T) {
+	rasEventRankExit := events.NewRankExitEvent("foo", 0, 0, common.NormalExit)
+
+	for name, tc := range map[string]struct {
+		req     *SystemNotifyReq
+		uErr    error
+		uResp   *UnaryResponse
+		expResp *SystemNotifyResp
+		expErr  error
+	}{
+		"nil req": {
+			req:    nil,
+			expErr: errors.New("nil request"),
+		},
+		"nil event": {
+			req:    &SystemNotifyReq{},
+			expErr: errors.New("nil event in request"),
+		},
+		"zero sequence number": {
+			req:    &SystemNotifyReq{Event: rasEventRankExit},
+			expErr: errors.New("invalid sequence"),
+		},
+		"local failure": {
+			req: &SystemNotifyReq{
+				Event:    rasEventRankExit,
+				Sequence: 1,
+			},
+			uErr:   errors.New("local failed"),
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req: &SystemNotifyReq{
+				Event:    rasEventRankExit,
+				Sequence: 1,
+			},
+			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
+			expErr: errors.New("remote failed"),
+		},
+		"empty response": {
+			req: &SystemNotifyReq{
+				Event:    rasEventRankExit,
+				Sequence: 1,
+			},
+			uResp:   MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.ClusterEventResp{}),
+			expResp: &SystemNotifyResp{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			rpcClient := NewMockInvoker(log, &MockInvokerConfig{
+				UnaryError:    tc.uErr,
+				UnaryResponse: tc.uResp,
+			})
+
+			gotResp, gotErr := SystemNotify(context.TODO(), rpcClient, tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp, defResCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_EventForwarder_OnEvent(t *testing.T) {
+	rasEventRankExit := events.NewRankExitEvent("foo", 0, 0, common.NormalExit)
+
+	for name, tc := range map[string]struct {
+		aps            []string
+		event          events.Event
+		nilClient      bool
+		expInvokeCount int
+		expErr         error
+	}{
+		"nil event": {
+			event: nil,
+		},
+		"missing access points": {
+			event: rasEventRankExit,
+		},
+		"successful forward": {
+			event:          rasEventRankExit,
+			aps:            []string{"192.168.1.1"},
+			expInvokeCount: 1,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mi := NewMockInvoker(log, &MockInvokerConfig{})
+			if tc.nilClient {
+				mi = nil
+			}
+
+			ef := NewEventForwarder(mi, tc.aps)
+			ef.OnEvent(context.TODO(), tc.event)
+
+			common.AssertEqual(t, tc.expInvokeCount, mi.invokeCount,
+				"unexpected number of rpc calls")
 		})
 	}
 }

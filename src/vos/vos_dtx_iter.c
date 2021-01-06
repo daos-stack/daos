@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ dtx_iter_fini(struct vos_iterator *iter)
 
 	D_ASSERT(iter->it_type == VOS_ITER_DTX);
 
-	if (!daos_handle_is_inval(oiter->oit_hdl)) {
+	if (daos_handle_is_valid(oiter->oit_hdl)) {
 		rc = dbtree_iter_finish(oiter->oit_hdl);
 		if (rc != 0)
 			D_ERROR("oid_iter_fini failed: rc = "DF_RC"\n",
@@ -141,9 +141,9 @@ dtx_iter_next(struct vos_iterator *iter)
 		D_ASSERT(rec_iov.iov_len == sizeof(struct vos_dtx_act_ent));
 		dae = (struct vos_dtx_act_ent *)rec_iov.iov_buf;
 
-		/* Skip committable, committed, or aborted ones. */
+		/* Only return prepared ones. */
 		if (!dae->dae_committable && !dae->dae_committed &&
-		    !dae->dae_aborted)
+		    !dae->dae_aborted && dae->dae_dbd != NULL)
 			break;
 	}
 

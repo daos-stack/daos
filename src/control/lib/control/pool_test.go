@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -251,6 +252,45 @@ func TestControl_PoolCreate(t *testing.T) {
 				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
 			},
 			expErr: errors.New("remote failed"),
+		},
+		"non-retryable failure": {
+			req: &PoolCreateReq{},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", drpc.DaosIOError, nil),
+				},
+			},
+			expErr: drpc.DaosIOError,
+		},
+		"create -DER_TIMEDOUT is retried": {
+			req: &PoolCreateReq{},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", drpc.DaosTimedOut, nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolCreateResp{}),
+				},
+			},
+			expResp: &PoolCreateResp{},
+		},
+		"create -DER_GRPVER is retried": {
+			req: &PoolCreateReq{},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", drpc.DaosGroupVersionMismatch, nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolCreateResp{}),
+				},
+			},
+			expResp: &PoolCreateResp{},
+		},
+		"create -DER_AGAIN is retried": {
+			req: &PoolCreateReq{},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", drpc.DaosTryAgain, nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolCreateResp{}),
+				},
+			},
+			expResp: &PoolCreateResp{},
 		},
 		"success": {
 			req: &PoolCreateReq{},

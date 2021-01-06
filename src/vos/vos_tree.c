@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,13 +72,44 @@ iov2rec_bundle(d_iov_t *val_iov)
  * @{
  */
 
+/** Inline key is max of 15 bytes.  The extra byte in the struct is used
+ *  to encode the type (hash or inline) and the length of the inline key.
+ */
+#define KH_INLINE_MAX 15
+
 /**
  * hashed key for the key-btree, it is stored in btr_record::rec_hkey
  */
 struct ktr_hkey {
 	/** murmur64 hash */
-	uint64_t		kh_hash[2];
+	union {
+		/** NB: This assumes little endian.  We already have little
+		 *  endian assumptions with integer keys so this isn't the
+		 *  first violation.  The hkey_gen code will trigger an
+		 *  assertion if this is violated.
+		 */
+		struct {
+			/** Length of key shifted left by 2 bits. */
+			uint32_t	kh_len;
+			/** string32 hash of key */
+			uint32_t	kh_str32;
+			/** Murmur hash of key */
+			uint64_t	kh_murmur64;
+		};
+		struct {
+			/** length shifted left by 2 bits. Low bit means inline
+			 *  key.  An extra bit is reserved for future use.
+			 */
+			char		kh_inline_len;
+			/** Inline key */
+			char		kh_inline[KH_INLINE_MAX];
+		};
+		/** For comparison convenience */
+		uint64_t		kh_hash[2];
+	};
 };
+
+D_CASSERT(sizeof(struct ktr_hkey) == 16);
 
 /**
  * Store a key and its checksum as a durable struct.
@@ -176,11 +207,25 @@ ktr_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 {
 	struct ktr_hkey		*kkey  = (struct ktr_hkey *)hkey;
 
-	kkey->kh_hash[0] = d_hash_murmur64(key_iov->iov_buf, key_iov->iov_len,
-					   VOS_BTR_MUR_SEED);
-	kkey->kh_hash[1] = d_hash_string_u32(key_iov->iov_buf,
-					     key_iov->iov_len);
-	vos_kh_set(kkey->kh_hash[0]);
+	if (key_iov->iov_len <= KH_INLINE_MAX) {
+		kkey->kh_hash[0] = 0;
+		kkey->kh_hash[1] = 0;
+
+		/** Set the lowest bit for inline key */
+		kkey->kh_inline_len = (key_iov->iov_len << 2) | 1;
+		memcpy(&kkey->kh_inline[0], key_iov->iov_buf, key_iov->iov_len);
+		D_ASSERT(kkey->kh_len & 1);
+		return;
+	}
+
+	kkey->kh_murmur64 = d_hash_murmur64(key_iov->iov_buf, key_iov->iov_len,
+					    VOS_BTR_MUR_SEED);
+	kkey->kh_str32 = d_hash_string_u32(key_iov->iov_buf, key_iov->iov_len);
+	/** Lowest bit is clear for hashed key */
+	kkey->kh_len = key_iov->iov_len << 2;
+
+	vos_kh_set(kkey->kh_murmur64);
+	D_ASSERT(!(kkey->kh_inline_len & 1));
 }
 
 /** compare the hashed key */
@@ -190,6 +235,11 @@ ktr_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 	struct ktr_hkey *k1 = (struct ktr_hkey *)&rec->rec_hkey[0];
 	struct ktr_hkey *k2 = (struct ktr_hkey *)hkey;
 
+	/** Since the low bit is set for inline keys, there will never be
+	 *  a conflict between an inline key and a hashed key so we can
+	 *  simply compare as if they are hashed.  Order doesn't matter
+	 *  as long as it's consistent.
+	 */
 	if (k1->kh_hash[0] < k2->kh_hash[0])
 		return BTR_CMP_LT;
 
@@ -1158,7 +1208,7 @@ obj_tree_init(struct vos_object *obj)
 	struct vos_btr_attr *ta	= &vos_btr_attrs[0];
 	int		     rc;
 
-	if (!daos_handle_is_inval(obj->obj_toh))
+	if (daos_handle_is_valid(obj->obj_toh))
 		return 0;
 
 	D_ASSERT(obj->obj_df);
@@ -1199,7 +1249,7 @@ obj_tree_fini(struct vos_object *obj)
 	int	rc = 0;
 
 	/* NB: tree is created inplace, so don't need to destroy */
-	if (!daos_handle_is_inval(obj->obj_toh)) {
+	if (daos_handle_is_valid(obj->obj_toh)) {
 		D_ASSERT(obj->obj_df);
 		rc = dbtree_close(obj->obj_toh);
 		obj->obj_toh = DAOS_HDL_INVAL;

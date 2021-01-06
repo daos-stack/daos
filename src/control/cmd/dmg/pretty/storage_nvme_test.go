@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ func TestPretty_PrintNVMeHealthMap(t *testing.T) {
 		t.Fatal(err)
 	}
 	controllerAwTS.HealthStats.Timestamp = tt
-	ttStr := time.Unix(int64(tt), 0).Format(time.UnixDate)
+	ttStr := getTimestampString(tt)
 
 	for name, tc := range map[string]struct {
 		hsm         control.HostStorageMap

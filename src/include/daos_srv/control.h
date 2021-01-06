@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
  * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
  * The Government's rights to use, modify, reproduce, release, perform, display,
  * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B620873.
+ * provided in Contract No. 8F-30005.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
@@ -42,10 +42,14 @@ enum {
 };
 
 enum bio_dev_state {
-	BIO_DEV_NORMAL  = 0, /* fully functional and in-use */
-	BIO_DEV_FAULTY,      /* evicted device */
-	BIO_DEV_OUT,         /* unplugged device */
-	BIO_DEV_NEW,         /* new device not currently in-use */
+	/* fully functional and in-use */
+	BIO_DEV_NORMAL	= 0,
+	/* evicted device */
+	BIO_DEV_FAULTY,
+	/* unplugged device */
+	BIO_DEV_OUT,
+	/* new device not currently in-use */
+	BIO_DEV_NEW,
 };
 
 /*

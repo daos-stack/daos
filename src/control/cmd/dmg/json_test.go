@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -94,6 +94,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, []string{"--force", "-u", common.MockUUID()}...)
 			case "storage replace nvme":
 				testArgs = append(testArgs, []string{"--old-uuid", common.MockUUID(), "--new-uuid", common.MockUUID()}...)
+			case "storage identify vmd":
+				testArgs = append(testArgs, []string{"--uuid", common.MockUUID()}...)
 			case "pool create":
 				testArgs = append(testArgs, []string{"-s", "1TB"}...)
 			case "pool destroy", "pool evict", "pool query", "pool get-acl":

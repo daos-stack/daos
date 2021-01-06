@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -292,7 +292,7 @@ dc_tx_alloc(daos_handle_t coh, daos_epoch_t epoch, uint64_t flags,
 		return -DER_NO_HDL;
 
 	ph = dc_cont_hdl2pool_hdl(coh);
-	D_ASSERT(!daos_handle_is_inval(ph));
+	D_ASSERT(daos_handle_is_valid(ph));
 
 	D_ALLOC_PTR(tx);
 	if (tx == NULL)
@@ -380,7 +380,7 @@ dc_tx_cleanup_one(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr)
 
 		csummer = dc_cont_hdl2csummer(tx->tx_coh);
 
-		if (dcu->dcu_flags & DRF_CPD_BULK) {
+		if (dcu->dcu_flags & ORF_CPD_BULK) {
 			for (i = 0; i < dcsr->dcsr_nr; i++) {
 				if (dcu->dcu_bulks[i] != CRT_BULK_NULL)
 					crt_bulk_free(dcu->dcu_bulks[i]);
@@ -1040,7 +1040,7 @@ tx_bulk_prepare(struct daos_cpd_sub_req *dcsr, tse_task_t *task)
 	rc = obj_bulk_prep(dcsr->dcsr_sgls, dcsr->dcsr_nr, true,
 			   CRT_BULK_RO, task, &dcu->dcu_bulks);
 	if (rc == 0)
-		dcu->dcu_flags |= ORF_BULK_BIND | DRF_CPD_BULK;
+		dcu->dcu_flags |= ORF_BULK_BIND | ORF_CPD_BULK;
 
 	return rc;
 }
@@ -1060,7 +1060,8 @@ dc_tx_classify_update(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	struct daos_oclass_attr		*oca = NULL;
 	int				 rc = 0;
 
-	if (daos_oclass_is_ec(obj->cob_md.omd_id, &oca)) {
+	oca = obj_get_oca(obj);
+	if (DAOS_OC_IS_EC(oca)) {
 		struct obj_reasb_req	*reasb_req;
 
 		D_ALLOC_PTR(reasb_req);
@@ -1158,7 +1159,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 		leader_dtr = d_list_entry(dtr_list->next, struct dc_tx_rdg,
 					  dtr_link);
 
-	oca = daos_oclass_attr_find(obj->cob_md.omd_id);
+	oca = obj_get_oca(obj);
 	size = sizeof(*dtr) + sizeof(uint32_t) * obj->cob_grp_size;
 	D_ALLOC(dtr, size);
 	if (dtr == NULL)
@@ -1187,7 +1188,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 
 		rc = obj_shard_open(obj, idx, tx->tx_pm_ver, &shard);
 		if (rc == -DER_NONEXIST) {
-			if (oca->ca_resil == DAOS_RES_EC && !all) {
+			if (DAOS_OC_IS_EC(oca) && !all) {
 				if (idx >= start + obj->cob_grp_size -
 							oca->u.ec.e_p)
 					skipped_parity++;
@@ -1341,7 +1342,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	if (read)
 		dtr->dtr_group.drg_flags = DGF_RDONLY;
 
-	if (oca->ca_resil == DAOS_RES_EC && !all) {
+	if (DAOS_OC_IS_EC(oca) && !all) {
 		dtr->dtr_group.drg_redundancy = oca->u.ec.e_p + 1;
 		D_ASSERT(dtr->dtr_group.drg_redundancy <= obj->cob_grp_size);
 	} else {
@@ -1608,8 +1609,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		if (grp_idx < 0)
 			D_GOTO(out, rc = grp_idx);
 
-		i = pl_select_leader(obj->cob_md.omd_id,
-				     grp_idx * obj->cob_grp_size,
+		i = pl_select_leader(obj->cob_md.omd_id, grp_idx,
 				     obj->cob_grp_size, false,
 				     obj_get_shard, obj);
 		if (i < 0)
@@ -1618,7 +1618,27 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		leader_oid.id_pub = obj->cob_md.omd_id;
 		leader_oid.id_shard = i;
 		leader_dtrg_idx = obj_get_shard(obj, i)->po_target;
-		mbs->dm_flags |= DMF_MODIFY_SRDG;
+		if (!obj_is_ec(obj))
+			mbs->dm_flags |= DMF_SRDG_REP;
+
+		/* If there is only one redundancy group to be modified,
+		 * then such redundancy group information should already
+		 * has been at the head position in the dtr_list.
+		 */
+	}
+
+	if (DAOS_FAIL_CHECK(DAOS_DTX_SPEC_LEADER)) {
+		i = dc_tx_leftmost_req(tx, true);
+		dcsr = &tx->tx_req_cache[i];
+		obj = dcsr->dcsr_obj;
+
+		leader_oid.id_pub = obj->cob_md.omd_id;
+		/* Use the shard 0 as the leader for test. The test program
+		 * will guarantee that at least one sub-modification happen
+		 * on the object shard 0.
+		 */
+		leader_oid.id_shard = 0;
+		leader_dtrg_idx = obj_get_shard(obj, 0)->po_target;
 	}
 
 	dcsh->dcsh_xid = tx->tx_id;
@@ -1790,7 +1810,7 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 
 	uuid_copy(oci->oci_pool_uuid, tx->tx_pool->dp_pool);
 	oci->oci_map_ver = tx->tx_pm_ver;
-	oci->oci_flags = DRF_CPD_LEADER | (tx->tx_set_resend ? ORF_RESEND : 0);
+	oci->oci_flags = ORF_CPD_LEADER | (tx->tx_set_resend ? ORF_RESEND : 0);
 
 	oci->oci_sub_heads.ca_arrays = &tx->tx_head;
 	oci->oci_sub_heads.ca_count = 1;

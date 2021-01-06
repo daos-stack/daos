@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2019 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,7 +82,9 @@
 	/** security check */					\
 	ACTION(DB_SEC,	   sec,	    security,       0, arg)	\
 	/** checksum */						\
-	ACTION(DB_CSUM,	   csum,    checksum,	    0, arg)
+	ACTION(DB_CSUM,	   csum,    checksum,	    0, arg)	\
+	/** daos management */					\
+	ACTION(DB_DSMS,	   dsms,    service,	    0, arg)
 
 DAOS_FOREACH_DB(D_LOG_DECLARE_DB, D_NOOP);
 DAOS_FOREACH_LOG_FAC(D_LOG_DECLARE_FAC, DAOS_FOREACH_DB);
@@ -94,7 +96,7 @@ DAOS_FOREACH_LOG_FAC(D_LOG_DECLARE_FAC, DAOS_FOREACH_DB);
 #define DB_NULL		0
 /** XXX Temporary things, should be replaced by debug bits above */
 #define DF_DSMC		DB_ANY
-#define DF_DSMS		DB_ANY
+#define DF_DSMS		DB_DSMS
 #define DF_MISC		DB_ANY
 
 /** initialize the debug system */
