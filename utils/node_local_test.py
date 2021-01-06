@@ -400,6 +400,9 @@ class DaosServer():
                         ready = True
                     if 'format request for already-formatted storage and reformat not specified' in line:
                         cmd = ['storage', 'format', '--reformat']
+                for line in rc.stderr.decode('utf-8').splitlines():
+                    if 'system reformat requires the following' in line:
+                        ready = True
             if ready:
                 break
             if time.time() - start > 20:
@@ -420,7 +423,7 @@ class DaosServer():
 
             if ready:
                 break
-            if time.time() - start > 20:
+            if time.time() - start > 40:
                 raise Exception("Failed to start")
         print('Server started in {:.2f} seconds'.format(time.time() - start))
 
