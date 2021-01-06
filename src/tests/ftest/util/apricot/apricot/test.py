@@ -87,13 +87,14 @@ class Test(avocadoTest):
     """
 
     # Skipping Test Variants:
-    #   If this is populated with a (<ticket>, <param_name>, <param_value>)
-    #   tuple, then setUp() will check each test variant to see if the
+    #   If this list is populated with one or more
+    #       [<ticket>, <param_name>, <param_value>]
+    #   list items, then setUp() will check each test variant to see if the
     #   <param_name> has been assigned <param_value>.  When this is the case the
     #   test variant will be skipped/cancelled for <ticket> before anything else
     #   in setUp() is executed.  If the <param_name> is "test_method_name" then
     #   <param_value> is compared to the name of the test method.
-    CANCEL_FOR_TICKET = ()
+    CANCEL_FOR_TICKET = []
 
     def __init__(self, *args, **kwargs):
         """Initialize a Test object."""

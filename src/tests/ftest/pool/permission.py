@@ -41,12 +41,12 @@ class Permission(TestWithServers):
     """
 
     # Cancel any tests with tickets already assigned
-    CANCEL_FOR_TICKET = (
-        ("DAOS-3442", "mode", 73),
-        ("DAOS-3442", "mode", 146, "perm", 0),
-        ("DAOS-3442", "mode", 146, "perm", 2),
-        ("DAOS-3442", "mode", 292),
-    )
+    CANCEL_FOR_TICKET = [
+        ["DAOS-3442", "mode", 73],
+        ["DAOS-3442", "mode", 146, "perm", 0],
+        ["DAOS-3442", "mode", 146, "perm", 2],
+        ["DAOS-3442", "mode", 292],
+    ]
 
     def test_connectpermission(self):
         """Test ID: DAOS-???.

@@ -40,10 +40,10 @@ class ContainerCreate(TestWithServers):
     """
 
     # Cancel any tests with tickets already assigned
-    CANCEL_FOR_TICKET = (
-        ("DAOS-2434", "rank", 1),
-        ("DAOS-2434", "rank", 2),
-    )
+    CANCEL_FOR_TICKET = [
+        ["DAOS-2434", "rank", 1],
+        ["DAOS-2434", "rank", 2],
+    ]
 
     def add_containers_during_rebuild(self, loop_id, qty, pool1, pool2):
         """Add containers to a pool while rebuild is still in progress.

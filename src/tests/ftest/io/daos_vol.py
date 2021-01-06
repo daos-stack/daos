@@ -33,13 +33,13 @@ class DaosVol(VolTestBase):
     """
 
     # Test variants that should be skipped
-    CANCEL_FOR_TICKET = (
-        ("DAOS-5831", "testname", "h5_partest_t_shapesame"),
-        ("DAOS-5469", "testname", "h5_test_testhdf5"),
-        ("DAOS-6076", "testname", "h5_partest_testphdf5"),
-        ("DAOS-5496", "testname", "h5_partest_t_bigio"),
-        ("DAOS-5647", "testname", "h5vl_test_parallel"),
-    )
+    CANCEL_FOR_TICKET = [
+        ["DAOS-5831", "testname", "h5_partest_t_shapesame"],
+        ["DAOS-5469", "testname", "h5_test_testhdf5"],
+        ["DAOS-6076", "testname", "h5_partest_testphdf5"],
+        ["DAOS-5496", "testname", "h5_partest_t_bigio"],
+        ["DAOS-5647", "testname", "h5vl_test_parallel"],
+    ]
 
     def test_daos_vol_mpich(self):
         """Jira ID: DAOS-3656.
