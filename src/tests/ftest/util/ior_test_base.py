@@ -159,6 +159,7 @@ class IorTestBase(DfuseTestBase):
             if not self.dfuse:
                 self.start_dfuse(
                     self.hostlist_clients, self.pool, self.container)
+            self.ior_cmd.flags.update("-k", append=True)
 
         # setup test file for POSIX or HDF5 with vol connector
         if self.ior_cmd.api.value == "POSIX" or plugin_path:
@@ -174,7 +175,7 @@ class IorTestBase(DfuseTestBase):
                            fail_on_warning=fail_on_warning)
 
         if stop_dfuse:
-            if plugin_path:
+            if self.ior_cmd.api.value == "POSIX" or plugin_path:
                 daos_cmd = DaosCommand(self.bin)
                 daos_cmd.container_destroy(path=test_file)
             self.stop_dfuse()
