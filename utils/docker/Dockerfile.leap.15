@@ -100,7 +100,7 @@ RUN if [ -z "${REPO_GROUP_LEAP15}" ]; then                                      
 RUN zypper --non-interactive install -y ipmctl-devel go1.14 go1.14-race
 
 # libunwind for Argobots
-RUN zypper --non-interactive install libunwind libunwind-devel
+RUN zypper --non-interactive install -y libunwind libunwind-devel
 
 # Add DAOS user
 ENV USER daos

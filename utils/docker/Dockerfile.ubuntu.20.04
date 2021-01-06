@@ -39,7 +39,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
 
 # libunwind for Argobots
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
-                       libunwind libunwind-devel
+                       libunwind8 libunwind-dev
 
 # hack the default shell to bash instead of dash
 RUN rm /bin/sh && ln -s bash /bin/sh
