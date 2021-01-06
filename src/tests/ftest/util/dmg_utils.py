@@ -31,6 +31,35 @@ import json
 
 from dmg_utils_base import DmgCommandBase
 from general_utils import get_numeric_list
+from dmg_utils_params import DmgYamlParameters, DmgTransportCredentials
+
+
+def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None):
+    """Get a dmg command object.
+
+    Args:
+        group (str): daos_server group name
+        cert_dir (str): directory in which to copy certificates
+        bin_dir (str): location of the dmg executable
+        config_file (str): configuration file name and path
+        config_temp (str, optional): file name and path to use to generate the
+            configuration file locally and then copy it to all the hosts using
+            the config_file specification. Defaults to None, which creates and
+            utilizes the file specified by config_file.
+
+    Returns:
+        DmgCommand: the dmg command object
+
+    """
+    transport_config = DmgTransportCredentials(cert_dir)
+    config = DmgYamlParameters(config_file, group, transport_config)
+    command = DmgCommand(bin_dir, config)
+    if config_temp:
+        # Setup the DaosServerCommand to write the config file data to the
+        # temporary file and then copy the file to all the hosts using the
+        # assigned filename
+        command.yaml.temporary_file = config_temp
+    return command
 
 
 class DmgCommand(DmgCommandBase):

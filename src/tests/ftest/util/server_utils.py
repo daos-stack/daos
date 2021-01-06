@@ -33,10 +33,38 @@ from command_utils_base import \
     CommonConfig
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human
-from dmg_utils import DmgCommand
+from dmg_utils import get_dmg_command
 from server_utils_params import \
     DaosServerTransportCredentials, DaosServerYamlParameters
-from dmg_utils_params import DmgTransportCredentials, DmgYamlParameters
+
+
+def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
+    """Get the daos_server command object to manage.
+
+    Args:
+        group (str): daos_server group name
+        cert_dir (str): directory in which to copy certificates
+        bin_dir (str): location of the daos_server executable
+        config_file (str): configuration file name and path
+        config_temp (str, optional): file name and path to use to generate the
+            configuration file locally and then copy it to all the hosts using
+            the config_file specification. Defaults to None, which creates and
+            utilizes the file specified by config_file.
+
+    Returns:
+        DaosServerCommand: the daos_server command object
+
+    """
+    transport_config = DaosServerTransportCredentials(cert_dir)
+    common_config = CommonConfig(group, transport_config)
+    config = DaosServerYamlParameters(config_file, common_config)
+    command = DaosServerCommand(bin_dir, config)
+    if config_temp:
+        # Setup the DaosServerCommand to write the config file data to the
+        # temporary file and then copy the file to all the hosts using the
+        # assigned filename
+        command.yaml.temporary_file = config_temp
+    return command
 
 
 class ServerFailed(Exception):
@@ -327,14 +355,14 @@ class DaosServerManager(SubprocessManager):
                 manage the YamlCommand defined through the "job" attribute.
                 Defaults to "Orterun".
         """
-        server_command = self.get_job(
+        server_command = get_server_command(
             group, cert_dir, bin_dir, svr_config_file, svr_config_temp)
         super(DaosServerManager, self).__init__(server_command, manager)
         self.manager.job.sub_command_override = "start"
 
         # Dmg command to access this group of servers which will be configured
         # to access the daos_servers when they are started
-        self.dmg = self.get_dmg(
+        self.dmg = get_dmg_command(
             group, cert_dir, bin_dir, dmg_config_file, dmg_config_temp)
 
         # An internal dictionary used to define the expected states of each
@@ -359,60 +387,6 @@ class DaosServerManager(SubprocessManager):
         if servers_per_host is None:
             servers_per_host = 1
         return {host: servers_per_host for host in self._hosts}
-
-    @staticmethod
-    def get_job(group, cert_dir, bin_dir, config_file, config_temp=None):
-        """Get the daos_server command object to manage.
-
-        Args:
-            test (str): test name
-            group (str): daos_server group name
-            cert_dir (str): directory in which to copy certificates
-            bin_dir (str): location of the daos_server executable
-            config_file (str): configuration file name and path
-            config_temp (str, optional): file name and path to use to generate
-                the configuration file locally and then copy it to all the hosts
-                using the config_file specification. Defaults to None, which
-                creates and utilizes the file specified by config_file.
-
-        Returns:
-            DaosServerCommand: the daos_server command object
-
-        """
-        transport_config = DaosServerTransportCredentials(cert_dir)
-        common_config = CommonConfig(group, transport_config)
-        config = DaosServerYamlParameters(config_file, common_config)
-        command = DaosServerCommand(bin_dir, config)
-        if config_temp:
-            # Setup the DaosServerCommand to write the config file data to the
-            # temporary file and then copy the file to all the hosts using the
-            # assigned filename
-            command.yaml.temporary_file = config_temp
-        return command
-
-    @staticmethod
-    def get_dmg(group, cert_dir, bin_dir, config_file, config_temp=None):
-        """Get a dmg command object.
-
-        Args:
-            group (str): daos_server group name
-            cert_dir (str): directory in which to copy certificates
-            bin_dir (str): location of the dmg executable
-            work_dir (str): writable location in which to create the config file
-
-        Returns:
-            DmgCommand: the dmg command object
-
-        """
-        transport_config = DmgTransportCredentials(cert_dir)
-        config = DmgYamlParameters(config_file, group, transport_config)
-        command = DmgCommand(bin_dir, config)
-        if config_temp:
-            # Setup the DaosServerCommand to write the config file data to the
-            # temporary file and then copy the file to all the hosts using the
-            # assigned filename
-            command.yaml.temporary_file = config_temp
-        return command
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -598,9 +572,18 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed("Error preparing {} storage".format(dev_type))
 
     def detect_format_ready(self, reformat=False):
-        """Detect when all the daos_servers are ready for storage format."""
+        """Detect when all the daos_servers are ready for storage format.
+
+        Args:
+            reformat (bool, optional): whether or detect reformat (True) or
+                format (False) messages. Defaults to False.
+
+        Raises:
+            ServerFailed: if there was an error starting the servers.
+
+        """
         f_type = "format" if not reformat else "reformat"
-        self.log.info("<SERVER> Waiting for servers to be ready for format")
+        self.log.info("<SERVER> Waiting for servers to be ready for %s", f_type)
         self.manager.job.update_pattern(f_type, len(self._hosts))
         try:
             self.manager.run()
@@ -608,6 +591,9 @@ class DaosServerManager(SubprocessManager):
             self.kill()
             raise ServerFailed(
                 "Failed to start servers before format: {}".format(error))
+
+        # Define the expected states for each rank
+        self._set_expected_states()
 
     def detect_io_server_start(self, host_qty=None):
         """Detect when all the daos_io_servers have started.
@@ -630,6 +616,9 @@ class DaosServerManager(SubprocessManager):
 
         # Update the dmg command host list to work with pool create/destroy
         self._prepare_dmg_hostlist()
+
+        # Define the expected states for each rank
+        self._set_expected_states()
 
     def reset_storage(self):
         """Reset the server storage.
@@ -694,9 +683,6 @@ class DaosServerManager(SubprocessManager):
 
         # Wait for all the daos_io_servers to start
         self.detect_io_server_start()
-
-        # Define the expected states for each rank
-        self._set_expected_states()
 
         return True
 
@@ -947,15 +933,7 @@ class DaosServerManager(SubprocessManager):
         return storage
 
     def _set_expected_states(self):
-        """Populate the expected state dictionary.
-
-        Each server rank key will reference a dictionary of the following
-        key/value pairs:
-            0:
-                "uuid": 385af2f9-1863-406c-ae94-bffdcd02f379,
-                "domain": /wolf-142.wolf.hpdd.intel.com,
-                "state": Joined
-        """
+        """Populate the expected state dictionary."""
         try:
             self._expected_states = self.dmg.system_query()
         except CommandFailure:
@@ -971,8 +949,8 @@ class DaosServerManager(SubprocessManager):
         if rank in self._expected_states:
             self.log.info(
                 "Updating the expected state for rank %s on %s: %s -> %s",
-                rank, self._expected_states["domain"],
-                self._expected_states["state"], state)
+                rank, self._expected_states[rank]["domain"],
+                self._expected_states[rank]["state"], state)
             self._expected_states[rank]["state"] = state
 
     def verify_expected_states(self):
@@ -1002,6 +980,9 @@ class DaosServerManager(SubprocessManager):
         self.log.info(
             log_format,
             "Rank", "Host", "UUID", "Expected State", "Current State", "Result")
+        self.log.info(
+            log_format,
+            "-" * 4, "-" * 15, "-" * 36, "-" * 14, "-" * 14, "-" * 6)
         for rank in sorted(self._expected_states):
             try:
                 current_rank = current_states.pop(rank)
@@ -1023,10 +1004,10 @@ class DaosServerManager(SubprocessManager):
         for rank in sorted(current_states):
             status["expected"] = False
             domain = current_states[rank]["domain"].split(".")
-            host = domain[0].replace("/", "")
             self.log.info(
-                log_format, rank, host, current_states[rank]["uuid"],
-                "not detected", current, "FAIL")
+                log_format, rank, domain[0].replace("/", ""),
+                current_states[rank]["uuid"], "not detected",
+                current_states[rank]["state"].lower(), "FAIL")
 
         # Any unexpected state detected warrants a restart of all servers
         if not status["expected"]:
