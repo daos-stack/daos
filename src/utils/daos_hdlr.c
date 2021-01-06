@@ -2393,7 +2393,7 @@ fs_copy(struct file_dfs *src_file_dfs,
 			 * or src_dirs's parent.
 			 */
 			if ((strcmp(d_name, "..") != 0) &&
-				(strcmp(d_name, ".") != 0)) {
+			    (strcmp(d_name, ".") != 0)) {
 				char path[MAX_FILENAME];
 				char dpath[MAX_FILENAME];
 
