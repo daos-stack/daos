@@ -232,8 +232,7 @@ notify_ras_event(Mgmt__RASEvent *evt)
 		return -DER_INVAL;
 	}
 
-	req.event_case = MGMT__CLUSTER_EVENT_REQ__EVENT_RAS;
-	req.ras = evt;
+	req.event = evt;
 
 	reqb_size = mgmt__cluster_event_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);

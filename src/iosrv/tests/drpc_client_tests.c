@@ -237,10 +237,13 @@ test_drpc_verify_notify_bio_error(void **state)
 }
 
 static void
-verify_notify_pool_svc_update(void)
+verify_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc_reps)
 {
 	Drpc__Call		*call;
 	Mgmt__ClusterEventReq	*req;
+	d_rank_list_t		*reps;
+	uuid_t			 puuid;
+	int			 reps_match;
 
 	call = drpc__call__unpack(NULL, sendmsg_msg_iov_len,
 				  sendmsg_msg_content);
@@ -252,6 +255,16 @@ verify_notify_pool_svc_update(void)
 	req = mgmt__cluster_event_req__unpack(NULL, call->body.len,
 					      call->body.data);
 	assert_non_null(req);
+	assert_int_equal(uuid_parse(req->event->pool_svc_info->pool_uuid,
+				    puuid), 0);
+	assert_int_equal(uuid_compare(puuid, pool_uuid), 0);
+	assert_int_equal(req->event->pool_svc_info->n_svc_reps,
+			 svc_reps->rl_nr);
+	reps = uint32_array_to_rank_list(req->event->pool_svc_info->svc_reps,
+					 svc_reps->rl_nr);
+	reps_match = daos_rank_list_identical(svc_reps, reps);
+	d_rank_list_free(reps);
+	assert_true(reps_match);
 
 	/* Cleanup */
 	mgmt__cluster_event_req__free_unpacked(req, NULL);
@@ -279,12 +292,12 @@ test_drpc_verify_notify_pool_svc_update(void **state)
 	assert_non_null(sendmsg_msg_ptr);
 
 	assert_int_equal(uuid_parse("11111111-1111-1111-1111-111111111111",
-			 pool_uuid), 0);
+				    pool_uuid), 0);
 
 	svc_ranks = uint32_array_to_rank_list(svc_reps, 4);
 	assert_non_null(svc_ranks);
 
-	assert_int_equal(ds_notify_pool_svc_update(pool_uuid, svc_ranks));
+	assert_int_equal(ds_notify_pool_svc_update(pool_uuid, svc_ranks), 0);
 	verify_notify_pool_svc_update(pool_uuid, svc_ranks);
 
 	/* Now let's shut things down... */
