@@ -932,11 +932,11 @@ io_rewritten_array_with_mixed_size(void **state)
 	rc = set_pool_reclaim_strategy(state, aggr_disabled);
 	assert_int_equal(rc, 0);
 	/**
- 	 * set_pool_reclaim_strategy() to disable aggregation
- 	 * assumes all aggregation ULTs on all servers taking
- 	 * effect immediately, this may not be the case.
- 	 * So adding delay so that ULTs finish the round of aggregation.
- 	 */
+	 * set_pool_reclaim_strategy() to disable aggregation
+	 * assumes all aggregation ULTs on all servers taking
+	 * effect immediately, this may not be the case.
+	 * So adding delay so that ULTs finish the round of aggregation.
+	 */
 	sleep(10);
 
 	/* Get the pool info at the beginning */
