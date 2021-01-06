@@ -43,8 +43,11 @@ import (
 )
 
 const (
-	defaultPoolSvcReps       = 1
-	defaultPoolCreateTimeout = 10 * time.Minute // be generous for large pools
+	// PoolCreateTimeout defines the amount of time a pool create
+	// request can take before being timed out.
+	PoolCreateTimeout = 10 * time.Minute // be generous for large pools
+
+	defaultPoolSvcReps = 1
 )
 
 type (
@@ -168,7 +171,7 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 	}
 	// TODO: Set this timeout based on the SCM size, when we have a
 	// better understanding of the relationship.
-	req.SetTimeout(defaultPoolCreateTimeout)
+	req.SetTimeout(PoolCreateTimeout)
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolCreate(ctx, pbReq)
 	})

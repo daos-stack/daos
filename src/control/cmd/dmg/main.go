@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -288,6 +288,10 @@ func main() {
 	)
 
 	if err := parseOpts(os.Args[1:], &opts, ctlInvoker, log); err != nil {
+		if fe, ok := errors.Cause(err).(*flags.Error); ok && fe.Type == flags.ErrHelp {
+			log.Info(fe.Error())
+			os.Exit(0)
+		}
 		exitWithError(log, err)
 	}
 }
