@@ -346,6 +346,7 @@ boolean skip_ftest(String distro) {
     return distro == 'ubuntu20' ||
            skip_stage('func-test') ||
            skip_stage('func-test-vm') ||
+           ! tests_in_stage('vm') ||
            skip_stage('func-test-' + distro)
 }
 
@@ -360,11 +361,35 @@ boolean skip_scan_rpms_centos7() {
            skip_stage('scan-centos-rpms')
 }
 
+boolean tests_in_stage(String size) {
+    String tags = cachedCommitPragma(pragma: 'Test-tag', def_val: 'pr')
+    def newtags = []
+    if (size == "vm") {
+        for (String tag in tags.split(" ")) {
+            newtags.add(tag + ",-hw")
+        }
+        tags += ",-hw"
+    } else {
+        if (size == "medium") {
+            size += ",ib2"
+        }
+        for (String tag in tags.split(" ")) {
+            newtags.add(tag + ",hw," + size) 
+        }
+    }
+    tags = newtags.join(" ")
+    return sh(label: "Get test list for ${size}",
+              script: """cd src/tests/ftest
+                         ./launch.py --list ${tags}""",
+              returnStatus: true) == 0
+}
+
 boolean skip_ftest_hw(String size) {
     return env.DAOS_STACK_CI_HARDWARE_SKIP == 'true' ||
            skip_stage('func-test') ||
            skip_stage('func-hw-test') ||
            skip_stage('func-hw-test-' + size) ||
+           ! tests_in_stage(size) ||
            (env.BRANCH_NAME == 'master' && ! startedByTimer())
 }
 
