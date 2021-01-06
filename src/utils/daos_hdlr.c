@@ -2350,7 +2350,7 @@ fs_copy(struct file_dfs *src_file_dfs,
 						filename);
 					D_GOTO(out, rc = EIO);
 				}
-				size_t bytes_to_write = (size_t) bytes_read;
+				size_t bytes_to_write = (size_t)bytes_read;
 				ssize_t bytes_written;
 
 				bytes_written = file_write(dst_file_dfs,
