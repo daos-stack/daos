@@ -917,8 +917,8 @@ pool_evict_rank(struct pool_svc *svc, d_rank_t rank)
 	pool_svc_get(svc);
 	ult_arg->svc = svc;
 	ult_arg->rank = rank;
-	rc = dss_ult_create(pool_evict_rank_ult, ult_arg, DSS_ULT_MISC,
-			    DSS_TGT_SELF, 0, NULL);
+	rc = dss_ult_create(pool_evict_rank_ult, ult_arg, DSS_XS_SELF,
+			    0, 0, NULL);
 	if (rc) {
 		pool_svc_put(svc);
 		D_FREE_PTR(ult_arg);
@@ -1394,7 +1394,7 @@ ds_pool_start_all(void)
 	int		rc;
 
 	/* Create a ULT to call ds_rsvc_start() in xstream 0. */
-	rc = dss_ult_create(pool_start_all, NULL /* arg */, DSS_ULT_POOL_SRV,
+	rc = dss_ult_create(pool_start_all, NULL /* arg */, DSS_XS_SYS,
 			    0 /* tgt_idx */, 0 /* stack_size */, &thread);
 	if (rc != 0) {
 		D_ERROR("failed to create pool start ULT: "DF_RC"\n",
@@ -5084,7 +5084,7 @@ ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc)
 	uuid_copy(arg.iua_pool_uuid, dpc->spc_uuid);
 	arg.iua_eventual = eventual;
 
-	rc = dss_ult_create(ds_pool_map_refresh_ult, &arg, DSS_ULT_POOL_SRV,
+	rc = dss_ult_create(ds_pool_map_refresh_ult, &arg, DSS_XS_SYS,
 			    0, 0, NULL);
 	if (rc)
 		D_GOTO(out_eventual, rc);
@@ -5112,7 +5112,7 @@ ds_pool_child_map_refresh_async(struct ds_pool_child *dpc)
 	arg->iua_pool_version = dpc->spc_map_version;
 	uuid_copy(arg->iua_pool_uuid, dpc->spc_uuid);
 
-	rc = dss_ult_create(ds_pool_map_refresh_ult, arg, DSS_ULT_POOL_SRV,
+	rc = dss_ult_create(ds_pool_map_refresh_ult, arg, DSS_XS_SYS,
 			    0, 0, NULL);
 	return rc;
 }

@@ -403,8 +403,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	}
 
 	vos_dth_set(dth);
-	rc = vos_ts_set_allocate(&query.qt_ts_set, 0, cflags, nr_akeys,
-				 dth ? &dth->dth_xid : NULL);
+	rc = vos_ts_set_allocate(&query.qt_ts_set, 0, cflags, nr_akeys, dth);
 	if (rc != 0) {
 		D_ERROR("Failed to allocate timestamp set: "DF_RC"\n",
 			DP_RC(rc));
