@@ -338,7 +338,7 @@ class CommandWithParameters(ObjectWithParameters):
         params = []
         for name in self.get_str_param_names():
             value = str(getattr(self, name))
-            if value != "":
+            if value != "" or not isinstance(value, bool):
                 params.append(value)
 
         # Append the path to the command and prepend it with any other
