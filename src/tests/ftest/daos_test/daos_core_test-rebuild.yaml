@@ -114,5 +114,9 @@ daos_tests:
     test_r_27:
       daos_test: r
       test_name: rebuild tests 27
-      args: -s3 -u subtests="27"
+      args: -s6 -u subtests="27"
       test_timeout: 1500
+    test_r_28:
+      daos_test: r
+      test_name: rebuild tests 28
+      args: -s3 -u subtests="28"
