@@ -2329,7 +2329,7 @@ fs_copy(struct file_dfs *src_file_dfs,
 			/* read from source file, then write to dest file */
 			uint64_t file_length = st.st_size;
 			uint64_t total_bytes = 0;
-			uint64_t buf_size = 64*1024*1024;
+			uint64_t buf_size = 64 * 1024 * 1024;
 			void *buf;
 
 			D_ALLOC(buf, buf_size * sizeof(char));
