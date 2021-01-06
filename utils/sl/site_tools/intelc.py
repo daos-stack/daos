@@ -306,7 +306,7 @@ def get_all_compiler_versions():
             m = re.search(r'([0-9]{0,4})(?:_sp\d*)?\.([0-9][0-9.]*)$', d)
             if m:
                 versions.append("%s.%s" % (m.group(1), m.group(2)))
-        intel_one_api_path = os.path.expanduser("~/intel/oneapi")
+        intel_one_api_path = "/opt/intel/oneapi"
         if intel_one_api_path:
             for d in glob.glob("%s/compiler/*" % intel_one_api_path):
                 m = re.search(r'([0-9][0-9.]*)$', d)
@@ -411,7 +411,7 @@ def get_intel_compiler_top(version, abi):
 
         def find_in_intel_one_api_dir(version):
             top = None
-            intel_one_api_path = os.path.expanduser("~/intel/oneapi")
+            intel_one_api_path = "/opt/intel/oneapi"
             for d in glob.glob('%s/compiler/%s' % (intel_one_api_path, version)):
                 if os.path.exists(os.path.join(d, "linux", "bin", "intel64", "icc")) or \
                         os.path.exists(os.path.join(d, "linux", "bin", "ia32", "icc")):
