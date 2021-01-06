@@ -2725,8 +2725,8 @@ fs_copy_parse(char *src,
 		/* check if this copy is from root of DFS cont */
 		*src_str = strdup("/");
 		*src_dfs_path = strdup(src);
-		rc = fs_copy_parse_uuids(src, &src_saveptr, &(fa->src_p_uuid),
-					 &(fa->src_c_uuid), &src_pool,
+		rc = fs_copy_parse_uuids(src, &src_saveptr, &fa->src_p_uuid,
+					 &fa->src_c_uuid, &src_pool,
 					 &src_cont);
 		if (rc != 0 || (src_pool == NULL || src_cont == NULL)) {
 			fprintf(stderr, "failed to parse source DAOS uuids\n");
