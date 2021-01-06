@@ -2530,7 +2530,7 @@ fs_copy_connect(struct file_dfs *src_file_dfs,
 			D_GOTO(err_dst_root, rc);
 		}
 		rc = dfs_mount(fa->dst_poh, fa->dst_coh, O_RDWR,
-				&(dst_file_dfs->dfs));
+			       &dst_file_dfs->dfs);
 		if (rc != 0) {
 			fprintf(stderr, "dfs mount on destination "
 			"failed: %d\n", rc);
