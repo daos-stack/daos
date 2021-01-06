@@ -75,7 +75,6 @@ test_run(void)
 	test_g.t_fault_attr_5000 = d_fault_attr_lookup(5000);
 
 	if (!test_g.t_shut_only) {
-
 		for (i = 0; i < rank_list->rl_nr; i++) {
 			rank = rank_list->rl_ranks[i];
 
@@ -86,8 +85,10 @@ test_run(void)
 		}
 
 		for (i = 0; i < rank_list->rl_nr; i++) {
-			tc_sem_timedwait(&test_g.t_token_to_proceed, 61,
-					 __LINE__);
+			for (tag = 0; tag < test_g.t_srv_ctx_num; tag++) {
+				tc_sem_timedwait(&test_g.t_token_to_proceed, 61,
+						 __LINE__);
+			}
 		}
 	}
 

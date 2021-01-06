@@ -292,7 +292,7 @@ dc_tx_alloc(daos_handle_t coh, daos_epoch_t epoch, uint64_t flags,
 		return -DER_NO_HDL;
 
 	ph = dc_cont_hdl2pool_hdl(coh);
-	D_ASSERT(!daos_handle_is_inval(ph));
+	D_ASSERT(daos_handle_is_valid(ph));
 
 	D_ALLOC_PTR(tx);
 	if (tx == NULL)

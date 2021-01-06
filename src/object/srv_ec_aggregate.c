@@ -640,7 +640,7 @@ agg_encode_full_stripe(struct ec_agg_entry *entry)
 		goto out;
 	}
 	rc = dss_ult_create(agg_encode_full_stripe_ult, &stripe_ud,
-			    DSS_ULT_EC, tid, 0, NULL);
+			    DSS_XS_OFFLOAD, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
 	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
@@ -1193,7 +1193,7 @@ agg_process_partial_stripe(struct ec_agg_entry *entry)
 	}
 	tid = dss_get_module_info()->dmi_tgt_id;
 	rc = dss_ult_create(agg_process_partial_stripe_ult, &stripe_ud,
-			    DSS_ULT_EC, tid, 0, NULL);
+			    DSS_XS_OFFLOAD, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
 	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
@@ -1392,7 +1392,7 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 	}
 	tid = dss_get_module_info()->dmi_tgt_id;
 	rc = dss_ult_create(agg_peer_update_ult, &stripe_ud,
-			    DSS_ULT_EC, tid, 0, NULL);
+			    DSS_XS_OFFLOAD, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
 	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
@@ -1583,7 +1583,7 @@ agg_process_holes(struct ec_agg_entry *entry)
 	}
 	tid = dss_get_module_info()->dmi_tgt_id;
 	rc = dss_ult_create(agg_process_holes_ult, &stripe_ud,
-			    DSS_ULT_EC, tid, 0, NULL);
+			    DSS_XS_OFFLOAD, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
 	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
@@ -2162,7 +2162,7 @@ ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 				 &agg_param.ap_pool_info.api_eventual);
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
-	rc = dss_ult_create(agg_iv_ult, &agg_param, DSS_ULT_POOL_SRV, 0, 0,
+	rc = dss_ult_create(agg_iv_ult, &agg_param, DSS_XS_SYS, 0, 0,
 			    NULL);
 	if (rc)
 		goto out;

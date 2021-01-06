@@ -767,7 +767,7 @@ rdb_raft_cb_recv_installsnapshot(raft_server_t *raft, void *arg,
 	out = container_of(resp, struct rdb_installsnapshot_out, iso_msg);
 
 	/* Is there an existing SLC? */
-	if (!daos_handle_is_inval(*slc)) {
+	if (daos_handle_is_valid(*slc)) {
 		bool destroy = false;
 
 		/* As msg->term == currentTerm and currentTerm >= dlr_term... */
@@ -2288,7 +2288,7 @@ lc:
 err_lc:
 	vos_cont_close(db->d_lc);
 err_slc:
-	if (!daos_handle_is_inval(db->d_slc))
+	if (daos_handle_is_valid(db->d_slc))
 		vos_cont_close(db->d_slc);
 err:
 	return rc;
@@ -2298,7 +2298,7 @@ static void
 rdb_raft_unload_lc(struct rdb *db)
 {
 	rdb_raft_unload_snapshot(db);
-	if (!daos_handle_is_inval(db->d_slc))
+	if (daos_handle_is_valid(db->d_slc))
 		vos_cont_close(db->d_slc);
 	vos_cont_close(db->d_lc);
 }
@@ -2438,19 +2438,17 @@ rdb_raft_start(struct rdb *db)
 	raft_set_election_timeout(db->d_raft, election_timeout);
 	raft_set_request_timeout(db->d_raft, request_timeout);
 
-	rc = dss_ult_create(rdb_recvd, db, DSS_ULT_RDB, DSS_TGT_SELF, 0,
-			    &db->d_recvd);
+	rc = dss_ult_create(rdb_recvd, db, DSS_XS_SELF, 0, 0, &db->d_recvd);
 	if (rc != 0)
 		goto err_lc;
-	rc = dss_ult_create(rdb_timerd, db, DSS_ULT_RDB, DSS_TGT_SELF, 0,
-			    &db->d_timerd);
+	rc = dss_ult_create(rdb_timerd, db, DSS_XS_SELF, 0, 0, &db->d_timerd);
 	if (rc != 0)
 		goto err_recvd;
-	rc = dss_ult_create(rdb_callbackd, db, DSS_ULT_RDB, DSS_TGT_SELF, 0,
+	rc = dss_ult_create(rdb_callbackd, db, DSS_XS_SELF, 0, 0,
 			    &db->d_callbackd);
 	if (rc != 0)
 		goto err_timerd;
-	rc = dss_ult_create(rdb_compactd, db, DSS_ULT_RDB, DSS_TGT_SELF, 0,
+	rc = dss_ult_create(rdb_compactd, db, DSS_XS_SELF, 0, 0,
 			    &db->d_compactd);
 	if (rc != 0)
 		goto err_callbackd;
@@ -2558,21 +2556,24 @@ rdb_raft_resign(struct rdb *db, uint64_t term)
 	struct rdb_raft_state	state;
 	int			rc;
 
-	if (db) {
-		ABT_mutex_lock(db->d_raft_mutex);
-		if (term != raft_get_current_term(db->d_raft) ||
-		    !raft_is_leader(db->d_raft)) {
-			ABT_mutex_unlock(db->d_raft_mutex);
-			return;
-		}
-		D_DEBUG(DB_MD, DF_DB": resigning from term "DF_U64"\n",
-			DP_DB(db), term);
-		rdb_raft_save_state(db, &state);
-		raft_become_follower(db->d_raft);
-		rc = rdb_raft_check_state(db, &state, 0 /* raft_rc */);
-		ABT_mutex_unlock(db->d_raft_mutex);
-		D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
+	if (db == NULL) {
+		D_ERROR("db cannot be NULL\n");
+		return;
 	}
+	ABT_mutex_lock(db->d_raft_mutex);
+	if (term != raft_get_current_term(db->d_raft) ||
+	    !raft_is_leader(db->d_raft)) {
+		ABT_mutex_unlock(db->d_raft_mutex);
+		return;
+	}
+
+	D_DEBUG(DB_MD, DF_DB": resigning from term "DF_U64"\n", DP_DB(db),
+		term);
+	rdb_raft_save_state(db, &state);
+	raft_become_follower(db->d_raft);
+	rc = rdb_raft_check_state(db, &state, 0 /* raft_rc */);
+	ABT_mutex_unlock(db->d_raft_mutex);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 }
 
 /* Call new election (campaign to be leader) by a follower */
