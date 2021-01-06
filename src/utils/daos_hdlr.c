@@ -2316,7 +2316,7 @@ fs_copy(struct file_dfs *src_file_dfs,
 			mode_t tmp_mode_file = S_IRUSR | S_IWUSR;
 
 			rc = file_open(src_file_dfs, filename, src_flags,
-					tmp_mode_file);
+				       tmp_mode_file);
 			if (rc != 0) {
 				D_GOTO(out, rc);
 			}
