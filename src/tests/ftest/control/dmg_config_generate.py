@@ -37,14 +37,6 @@ class ConfigGenerate(TestWithServers):
 
     This test assumes that systems have both nvme and dcpm available.
 
-    On verification and the args are all None, we should see the default values
-    in the yaml file.
-    - For pmems, we should see the number of detected NUMA nodes on the
-    host (2).
-    - For nvme, we should see the number of SSDs that are bound to the
-        NUMA node matching the pmem device (2).
-    - For network class, the most performant should be selected (ib).
-
     :avocado: recursive
     """
 
@@ -94,7 +86,7 @@ class ConfigGenerate(TestWithServers):
         """Verify expected number of ioservers/nvme devices were started.
 
         Args:
-            pmem (str): Minimum number of SCM devices required per storage host
+            pmem (str): Number of SCM devices required per storage host
             nvme (str): Minimum number of NVMe devices required per storage host
             net (str): Network class preferred
         """
@@ -139,7 +131,7 @@ class ConfigGenerate(TestWithServers):
         """Run test.
 
         Args:
-            pmem (str): Minimum number of SCM devices required per storage host
+            pmem (str): Number of SCM devices required per storage host
             nvme (str): Minimum number of NVMe devices required per storage host
             net (str): Network class preferred (default: best-available)
         """
@@ -161,6 +153,14 @@ class ConfigGenerate(TestWithServers):
         Test Description:
         Verify that dmg can generate an accurate configuration file.
 
+        On verification and the args are all None, we should see the default
+        values in the yaml file.
+        - For pmems, we should see the number of detected NUMA nodes on the
+        host (2).
+        - For nvme, we should see the number of SSDs that are bound to the
+        NUMA node matching the pmem device (2).
+        - For network class, the most performant should be selected (ib).
+
         :avocado: tags=all,small,hw,full_regression,config_generate
         :avocado: tags=config_generate_1
         """
@@ -172,6 +172,9 @@ class ConfigGenerate(TestWithServers):
 
         Test Description:
         Verify that dmg can generate an accurate configuration file.
+
+        This test is specifying minimum nvme value, we should see per available
+        server: len(SSDs) >= 1
 
         :avocado: tags=all,small,hw,full_regression,config_generate
         :avocado: tags=config_generate_2
@@ -185,6 +188,9 @@ class ConfigGenerate(TestWithServers):
         Test Description:
         Verify that dmg can generate an accurate configuration file.
 
+        This test is specifying minimum nvme value, we should see per available
+        server: len(SSDs) >= 2
+
         :avocado: tags=all,small,hw,full_regression,config_generate
         :avocado: tags=config_generate_3
         """
@@ -196,6 +202,9 @@ class ConfigGenerate(TestWithServers):
 
         Test Description:
         Verify that dmg can generate an accurate configuration file.
+
+        This test is defining the amount of io servers that will be configured.
+        In this test case, we expect to see 1 io server configuration per host.
 
         :avocado: tags=all,small,hw,full_regression,config_generate
         :avocado: tags=config_generate_4
@@ -209,6 +218,9 @@ class ConfigGenerate(TestWithServers):
         Test Description:
         Verify that dmg can generate an accurate configuration file.
 
+        This test is defining the amount of io servers that will be configured.
+        In this test case, we expect to see 2 io server configurations per host.
+
         :avocado: tags=all,small,hw,full_regression,config_generate
         :avocado: tags=config_generate_4
         """
@@ -220,6 +232,12 @@ class ConfigGenerate(TestWithServers):
 
         Test Description:
         Verify that dmg can generate an accurate configuration file.
+
+        This test is defining the amount of io servers that will be configured
+        and min nvme devices.
+        In this test case, we expect to see 1 io server configuration per host
+        and len(SSDs) >= 1 for each of the io server instances.In addition,
+        each io server instance should be configured to use ethernet.
 
         :avocado: tags=all,small,hw,full_regression,config_generate
         :avocado: tags=config_generate_6
@@ -233,6 +251,12 @@ class ConfigGenerate(TestWithServers):
         Test Description:
         Verify that dmg can generate an accurate configuration file.
 
+        This test is defining the amount of io servers that will be configured
+        and min nvme devices.
+        In this test case, we expect to see 2 io server configuration per host
+        and len(SSDs) >= 2 for each of the io server instances. In addition,
+        each io server instance should be configured to use infiniband.
+
         :avocado: tags=all,small,hw,full_regression,config_generate
         :avocado: tags=config_generate_7
         """
@@ -245,6 +269,10 @@ class ConfigGenerate(TestWithServers):
         Test Description:
         Verify that dmg can generate an accurate configuration file.
 
+        This test is defining the amount of io servers that will be configured
+        and min nvme devices.
+        In this test case, we expect to see 10 io server configuration per host
+        and len(SSDs) >= 10 for each of the io server instances.
         We expect this test to fail since requested storage is not available.
 
         :avocado: tags=all,small,hw,full_regression,config_generate

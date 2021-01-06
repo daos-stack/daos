@@ -925,7 +925,7 @@ class DmgCommand(DmgCommandBase):
         Args:
             access_points (str): Comma separated list of access point addresses.
                 Defaults to None.
-            num_pmem (int): Minimum number of SCM (pmem) devices required per
+            num_pmem (int): Number of SCM (pmem) devices required per
                 storage host in DAOS system. Defaults to None.
             num_nvme (int): Minimum number of NVMe devices required per storage
                 host in DAOS system. Defaults to None.
