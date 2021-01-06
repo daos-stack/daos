@@ -1700,7 +1700,7 @@ write_dfs(struct file_dfs *file_dfs, char *file, void *buf, ssize_t size)
 	sgl.sg_nr_out = 1;
 	d_iov_set(&iov, buf, size);
 	rc = dfs_write(file_dfs->dfs, file_dfs->obj, &sgl,
-		file_dfs->offset, NULL);
+		       file_dfs->offset, NULL);
 	if (rc) {
 		fprintf(stderr, "dfs_write %s failed (%d %s)\n",
 			file, rc, strerror(rc));
