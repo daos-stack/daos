@@ -85,6 +85,7 @@ class DaosServerCommand(YamlCommand):
         self._exe_names.append("daos_io_server")
 
         # Discover mode
+        self.generated_yaml = None
         self.discover_mode = BasicParameter(False, False)
         self.discover_pmem = BasicParameter(None)
         self.discover_nvme = BasicParameter(None)
@@ -616,7 +617,7 @@ class DaosServerManager(SubprocessManager):
         # Start the servers and wait for them to be ready for storage format
         self.detect_start_mode("discover")
 
-        yaml_data = self.dmg.config_generate(
+        self.generated_yaml = self.dmg.config_generate(
             self.get_config_value("access_points"),
             self.manager.job.discover_pmem,
             self.manager.job.discover_nvme,
@@ -629,7 +630,7 @@ class DaosServerManager(SubprocessManager):
 
         self.log.info("<SERVER> Writing generated config yaml")
         self.manager.job.yaml.filename = original_config
-        self.manger.job.yaml.write_yaml(yaml_data)
+        self.manger.job.yaml.write_yaml(self.generated_yaml)
         self.manager.job.config.value = self.manager.job.yaml.filename
 
     def stop(self):
