@@ -1753,7 +1753,7 @@ open_dfs(struct file_dfs *file_dfs, char *file, int flags, mode_t mode)
 		D_GOTO(out, rc = EINVAL);
 	}
 	rc = dfs_open(file_dfs->dfs, parent, name, mode | S_IFREG,
-			flags, 0, 0, NULL, &(file_dfs->obj));
+		      flags, 0, 0, NULL, &file_dfs->obj);
 	if (rc != 0) {
 		fprintf(stderr, "dfs_open %s failed (%d)\n", name, rc);
 	}
