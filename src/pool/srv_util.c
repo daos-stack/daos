@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -322,7 +322,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index, map);
 			target->ta_comp.co_status = PO_COMP_ST_UP;
-			target->ta_comp.co_fseq = ++(*version);
+			++(*version);
 
 			D_PRINT("Target (rank %u idx %u) start reintegration\n",
 				target->ta_comp.co_rank,
