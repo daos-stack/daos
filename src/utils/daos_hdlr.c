@@ -2354,7 +2354,7 @@ fs_copy(struct file_dfs *src_file_dfs,
 				ssize_t bytes_written;
 
 				bytes_written = file_write(dst_file_dfs,
-							dst_filename,
+							   dst_filename,
 							buf, bytes_to_write);
 				if (bytes_written < 0) {
 					fprintf(stderr,
