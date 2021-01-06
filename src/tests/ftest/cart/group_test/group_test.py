@@ -26,8 +26,7 @@ from __future__ import print_function
 
 import sys
 
-from avocado  import Test
-from avocado  import main
+from apricot  import TestWithoutServers
 
 sys.path.append('./util')
 
@@ -35,11 +34,11 @@ sys.path.append('./util')
 # pylint: disable=wrong-import-position
 from cart_utils import CartUtils
 
-class GroupTest(Test):
+class GroupTest(TestWithoutServers):
     """
     Runs GroupTests for primary and secondary resizeable groups
 
-    :avocado: tags=all,cart,pr,group_test,one_node,no_pmix
+    :avocado: recursive
     """
     def setUp(self):
         """ Test setup """
@@ -51,7 +50,7 @@ class GroupTest(Test):
         """
         Test CaRT NoPmix Launcher
 
-        :avocado: tags=all,cart,pr,group_test,one_node
+        :avocado: tags=all,cart,pr,daily_regression,group_test,one_node
         """
 
         srv_cmd = self.utils.build_cmd(self, self.env, "test_servers")

@@ -536,8 +536,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	}
 
 	rc = vos_ts_set_allocate(&ioc->ic_ts_set, vos_flags, cflags, iod_nr,
-				 dtx_is_valid_handle(dth) ?
-				 &dth->dth_xid : NULL);
+				 dth);
 	if (rc != 0)
 		goto error;
 
@@ -1183,7 +1182,7 @@ fetch_value:
 
 	ioc_trim_tail_holes(ioc);
 out:
-	if (!daos_handle_is_inval(toh))
+	if (daos_handle_is_valid(toh))
 		key_tree_release(toh, is_array);
 
 	return vos_dtx_hit_inprogress() ? -DER_INPROGRESS : rc;
@@ -1264,7 +1263,7 @@ fetch_akey:
 		goto out;
 
 out:
-	if (!daos_handle_is_inval(toh))
+	if (daos_handle_is_valid(toh))
 		key_tree_release(toh, false);
 
 	return vos_dtx_hit_inprogress() ? -DER_INPROGRESS : rc;
@@ -1594,7 +1593,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	}
 
 out:
-	if (!daos_handle_is_inval(toh))
+	if (daos_handle_is_valid(toh))
 		key_tree_release(toh, is_array);
 
 	return rc;
@@ -2181,6 +2180,9 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	struct vos_io_context	*ioc;
 	int			 rc;
 
+	if (oid.id_shard % 3 == 1 && DAOS_FAIL_CHECK(DAOS_DTX_FAIL_IO))
+		return -DER_IO;
+
 	D_DEBUG(DB_TRACE, "Prepare IOC for "DF_UOID", iod_nr %d, epc "DF_X64
 		", flags="DF_X64"\n", DP_UOID(oid), iod_nr,
 		dtx_is_valid_handle(dth) ? dth->dth_epoch :  epoch, flags);
@@ -2297,7 +2299,7 @@ vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
 	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
 	int			 i, rc;
 
-	D_ASSERT(!daos_handle_is_inval(ioh));
+	D_ASSERT(daos_handle_is_valid(ioh));
 	D_ASSERT(bsgl != NULL);
 	D_ASSERT(bsgl_dup != NULL);
 
@@ -2345,7 +2347,7 @@ vos_dedup_free_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl)
 	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
 	int			 i;
 
-	D_ASSERT(!daos_handle_is_inval(ioh));
+	D_ASSERT(daos_handle_is_valid(ioh));
 	for (i = 0; i < bsgl->bs_nr_out; i++) {
 		struct bio_iov	*biov = &bsgl->bs_iovs[i];
 		PMEMoid		 oid;

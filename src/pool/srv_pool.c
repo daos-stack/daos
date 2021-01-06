@@ -917,8 +917,8 @@ pool_evict_rank(struct pool_svc *svc, d_rank_t rank)
 	pool_svc_get(svc);
 	ult_arg->svc = svc;
 	ult_arg->rank = rank;
-	rc = dss_ult_create(pool_evict_rank_ult, ult_arg, DSS_ULT_MISC,
-			    DSS_TGT_SELF, 0, NULL);
+	rc = dss_ult_create(pool_evict_rank_ult, ult_arg, DSS_XS_SELF,
+			    0, 0, NULL);
 	if (rc) {
 		pool_svc_put(svc);
 		D_FREE_PTR(ult_arg);
@@ -1394,7 +1394,7 @@ ds_pool_start_all(void)
 	int		rc;
 
 	/* Create a ULT to call ds_rsvc_start() in xstream 0. */
-	rc = dss_ult_create(pool_start_all, NULL /* arg */, DSS_ULT_POOL_SRV,
+	rc = dss_ult_create(pool_start_all, NULL /* arg */, DSS_XS_SYS,
 			    0 /* tgt_idx */, 0 /* stack_size */, &thread);
 	if (rc != 0) {
 		D_ERROR("failed to create pool start ULT: "DF_RC"\n",
@@ -3219,9 +3219,10 @@ rechoose:
 	rc = out->pto_op.po_rc;
 	if (rc != 0) {
 		D_ERROR(DF_UUID": Failed to set targets to %s state: "DF_RC"\n",
+			DP_UUID(pool_uuid),
 			state == PO_COMP_ST_DOWN ? "DOWN" :
 			state == PO_COMP_ST_UP ? "UP" : "UNKNOWN",
-			DP_UUID(pool_uuid), DP_RC(rc));
+			DP_RC(rc));
 		D_GOTO(out_rpc, rc);
 	}
 
@@ -3763,9 +3764,9 @@ out:
 /* Callers are responsible for d_rank_list_free(*replicasp). */
 static int
 ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
-			unsigned int opc, uint32_t *map_version_p,
-			struct rsvc_hint *hint, bool *p_updated,
-			bool evict_rank)
+			unsigned int opc, struct rsvc_hint *hint,
+			bool *p_updated, bool evict_rank,
+			uint32_t *map_version_p, uint32_t *tgt_map_ver)
 {
 	struct pool_svc	       *svc;
 	struct rdb_tx		tx;
@@ -3795,8 +3796,7 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	 * before and after. If the version hasn't changed, we are done.
 	 */
 	map_version_before = pool_map_get_version(map);
-	rc = ds_pool_map_tgts_update(map, tgts, opc, evict_rank);
-
+	rc = ds_pool_map_tgts_update(map, tgts, opc, evict_rank, tgt_map_ver);
 	if (rc != 0)
 		D_GOTO(out_map, rc);
 
@@ -4121,21 +4121,21 @@ int
 ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
 	return ds_pool_update_internal(pool_uuid, list, POOL_EXCLUDE_OUT,
-				       NULL, NULL, NULL, false);
+				       NULL, NULL, false, NULL, NULL);
 }
 
 int
 ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
 	return ds_pool_update_internal(pool_uuid, list, POOL_EXCLUDE,
-				       NULL, NULL, NULL, false);
+				       NULL, NULL, false, NULL, NULL);
 }
 
 int
 ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
 	return ds_pool_update_internal(pool_uuid, list, POOL_ADD_IN,
-				       NULL, NULL, NULL, false);
+				       NULL, NULL, false, NULL, NULL);
 }
 
 /*
@@ -4153,6 +4153,7 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 	struct pool_target_id_list	target_list = { 0 };
 	struct ds_pool			*pool = NULL;
 	daos_prop_t			prop = { 0 };
+	uint32_t			tgt_map_ver = 0;
 	struct daos_prop_entry		*entry;
 	bool				updated;
 	int				rc;
@@ -4164,8 +4165,9 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 		D_GOTO(out, rc);
 
 	/* Update target by target id */
-	rc = ds_pool_update_internal(pool_uuid, &target_list, opc, map_version,
-				     hint, &updated, evict_rank);
+	rc = ds_pool_update_internal(pool_uuid, &target_list, opc, hint,
+				     &updated, evict_rank, map_version,
+				     &tgt_map_ver);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -4209,10 +4211,15 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 		D_GOTO(out, rc);
 	}
 
-	rc = ds_rebuild_schedule(pool_uuid, *map_version, &target_list, op);
-	if (rc != 0) {
-		D_ERROR("rebuild fails rc: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc);
+	D_DEBUG(DF_DSMS, "map ver %u/%u\n", map_version ? *map_version : -1,
+		tgt_map_ver);
+	if (tgt_map_ver != 0) {
+		rc = ds_rebuild_schedule(pool_uuid, tgt_map_ver, &target_list,
+					 op);
+		if (rc != 0) {
+			D_ERROR("rebuild fails rc: "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out, rc);
+		}
 	}
 
 out:
@@ -5066,7 +5073,7 @@ ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc)
 	uuid_copy(arg.iua_pool_uuid, dpc->spc_uuid);
 	arg.iua_eventual = eventual;
 
-	rc = dss_ult_create(ds_pool_map_refresh_ult, &arg, DSS_ULT_POOL_SRV,
+	rc = dss_ult_create(ds_pool_map_refresh_ult, &arg, DSS_XS_SYS,
 			    0, 0, NULL);
 	if (rc)
 		D_GOTO(out_eventual, rc);
@@ -5094,7 +5101,7 @@ ds_pool_child_map_refresh_async(struct ds_pool_child *dpc)
 	arg->iua_pool_version = dpc->spc_map_version;
 	uuid_copy(arg->iua_pool_uuid, dpc->spc_uuid);
 
-	rc = dss_ult_create(ds_pool_map_refresh_ult, arg, DSS_ULT_POOL_SRV,
+	rc = dss_ult_create(ds_pool_map_refresh_ult, arg, DSS_XS_SYS,
 			    0, 0, NULL);
 	return rc;
 }

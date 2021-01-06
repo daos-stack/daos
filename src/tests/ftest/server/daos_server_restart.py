@@ -121,7 +121,8 @@ class DaosServerTest(TestWithServers):
         (5)Verify after DAOS server restarted, it should appear as an empty
            fresh installation.
 
-        :avocado: tags=all,pr,hw,large,server_test,server_reformat,DAOS_5610
+        :avocado: tags=all,daily_regression,hw,large,server_test
+        :avocado: tags=server_reformat,DAOS_5610
         """
 
         self.log.info("(1)Verify daos server pool list after started.")
@@ -153,7 +154,8 @@ class DaosServerTest(TestWithServers):
         (5)Use the cmd line to perform a controlled shutdown when the
            daos cluster is incomplete (i.e. 1 of the 2 servers is down).
 
-        :avocado: tags=all,pr,hw,large,server_test,server_restart,DAOS_5610
+        :avocado: tags=all,daily_regression,hw,large,server_test
+        :avocado: tags=server_restart,DAOS_5610
         """
 
         self.log.info(

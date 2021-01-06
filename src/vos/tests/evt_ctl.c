@@ -147,7 +147,7 @@ ts_open_create(void **state)
 	create = tst_fn_val.input;
 	arg = tst_fn_val.optval;
 
-	if (!daos_handle_is_inval(ts_toh)) {
+	if (daos_handle_is_valid(ts_toh)) {
 		D_PRINT("Tree has been opened\n");
 		fail();
 	}

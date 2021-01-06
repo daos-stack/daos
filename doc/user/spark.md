@@ -6,8 +6,8 @@ assume that the DAOS servers and agents have already been deployed in the enviro
 Otherwise, they can be deployed by following the
 [DAOS Installation Guide](https://daos-stack.github.io/admin/installation/).
 
-!!!note DAOS support for Spark and Hadoop is not available in DAOS 1.0. 
-        It is targeted for the DAOS 1.2 release.
+!!! note DAOS support for Spark and Hadoop is not available in DAOS 1.0. 
+         It is targeted for the DAOS 1.2 release.
 
 ## Build DAOS Hadoop Filesystem
 

@@ -1,4 +1,3 @@
-usr/etc/memcheck-daos-client.supp
 usr/bin/cart_ctl
 usr/bin/self_test
 usr/bin/dmg

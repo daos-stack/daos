@@ -15,6 +15,7 @@ PROTOBUF_C__BEGIN_DECLS
 #endif
 
 
+typedef struct _Mgmt__FaultDomain Mgmt__FaultDomain;
 typedef struct _Mgmt__PoolCreateReq Mgmt__PoolCreateReq;
 typedef struct _Mgmt__PoolCreateResp Mgmt__PoolCreateResp;
 typedef struct _Mgmt__PoolDestroyReq Mgmt__PoolDestroyReq;
@@ -55,6 +56,32 @@ typedef enum _Mgmt__PoolRebuildStatus__State {
 } Mgmt__PoolRebuildStatus__State;
 
 /* --- messages --- */
+
+/*
+ * FaultDomain represents a node in a tree of fault domains. A list of them
+ * is sufficient to reconstruct the tree.
+ */
+struct  _Mgmt__FaultDomain
+{
+  ProtobufCMessage base;
+  /*
+   * full domain string
+   */
+  char *domain;
+  /*
+   * numeric ID
+   */
+  uint32_t id;
+  /*
+   * IDs of children
+   */
+  size_t n_children;
+  uint32_t *children;
+};
+#define MGMT__FAULT_DOMAIN__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__fault_domain__descriptor) \
+    , (char *)protobuf_c_empty_string, 0, 0,NULL }
+
 
 /*
  * PoolCreateReq supplies new pool parameters.
@@ -100,10 +127,15 @@ struct  _Mgmt__PoolCreateReq
    */
   size_t n_acl;
   char **acl;
+  /*
+   * Fault domains in system
+   */
+  size_t n_faultdomains;
+  Mgmt__FaultDomain **faultdomains;
 };
 #define MGMT__POOL_CREATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_req__descriptor) \
-    , 0, 0, 0,NULL, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
+    , 0, 0, 0,NULL, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL }
 
 
 /*
@@ -337,10 +369,15 @@ struct  _Mgmt__PoolExtendReq
    * NVMe size in bytes
    */
   uint64_t nvmebytes;
+  /*
+   * fault domains in system
+   */
+  size_t n_faultdomains;
+  Mgmt__FaultDomain **faultdomains;
 };
 #define MGMT__POOL_EXTEND_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0, 0 }
+    , (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0, 0, 0,NULL }
 
 
 /*
@@ -766,6 +803,25 @@ struct  _Mgmt__PoolSetPropResp
     , 0, MGMT__POOL_SET_PROP_RESP__PROPERTY__NOT_SET, {0}, MGMT__POOL_SET_PROP_RESP__VALUE__NOT_SET, {0} }
 
 
+/* Mgmt__FaultDomain methods */
+void   mgmt__fault_domain__init
+                     (Mgmt__FaultDomain         *message);
+size_t mgmt__fault_domain__get_packed_size
+                     (const Mgmt__FaultDomain   *message);
+size_t mgmt__fault_domain__pack
+                     (const Mgmt__FaultDomain   *message,
+                      uint8_t             *out);
+size_t mgmt__fault_domain__pack_to_buffer
+                     (const Mgmt__FaultDomain   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__FaultDomain *
+       mgmt__fault_domain__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__fault_domain__free_unpacked
+                     (Mgmt__FaultDomain *message,
+                      ProtobufCAllocator *allocator);
 /* Mgmt__PoolCreateReq methods */
 void   mgmt__pool_create_req__init
                      (Mgmt__PoolCreateReq         *message);
@@ -1268,6 +1324,9 @@ void   mgmt__pool_set_prop_resp__free_unpacked
                       ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
+typedef void (*Mgmt__FaultDomain_Closure)
+                 (const Mgmt__FaultDomain *message,
+                  void *closure_data);
 typedef void (*Mgmt__PoolCreateReq_Closure)
                  (const Mgmt__PoolCreateReq *message,
                   void *closure_data);
@@ -1358,6 +1417,7 @@ typedef void (*Mgmt__PoolSetPropResp_Closure)
 
 /* --- descriptors --- */
 
+extern const ProtobufCMessageDescriptor mgmt__fault_domain__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_create_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_create_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_destroy_req__descriptor;

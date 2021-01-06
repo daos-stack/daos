@@ -27,7 +27,7 @@ import copy
 import sys
 
 from storage_estimator.vos_structures import VosObject, AKey, DKey, Container, Containers, VosValue, Overhead, ValType, KeyType
-from storage_estimator.util import CommonBase
+from storage_estimator.util import CommonBase, ObjectClass
 
 
 class FileInfo(object):
@@ -49,15 +49,28 @@ class Entry(object):
 
 
 class AverageFS(CommonBase):
-    def __init__(self):
+    def __init__(self, arg):
         super(AverageFS, self).__init__()
-        self._dfs = DFS()
+
+        if isinstance(arg, DFS):
+            self._dfs = arg
+        elif isinstance(arg, ObjectClass):
+            self._dfs = DFS(arg)
+        else:
+            raise TypeError(
+                'arg must be of type {0} or {1}'.format(
+                    type(DFS), type(ObjectClass)))
 
         self._total_symlinks = 0
         self._avg_symlink_size = 0
+        self._dir_name_size = 0
         self._total_dirs = 0
         self._avg_name_size = 0
         self._total_files = 0
+
+    def set_verbose(self, verbose):
+        self._dfs.set_verbose(verbose)
+        self._verbose = verbose
 
     def set_dfs_inode(self, akey):
         self._dfs.set_dfs_inode(akey)
@@ -83,6 +96,10 @@ class AverageFS(CommonBase):
         self._check_value_type(dirs, int)
         self._total_dirs = dirs
 
+    def set_avg_dir_name_size(self, name_size):
+        self._check_value_type(name_size, int)
+        self._dir_name_size = name_size
+
     def set_avg_name_size(self, name_size):
         self._check_value_type(name_size, int)
         self._avg_name_size = name_size
@@ -92,20 +109,24 @@ class AverageFS(CommonBase):
     def get_dfs(self):
         new_dfs = self._dfs.copy()
         new_dfs = self._calculate_average_dir(new_dfs)
+        self._debug('Gloabal Stripe Stats')
+        new_dfs._all_ec_stats.show()
 
         return new_dfs
 
-    def _calculate_average_sym(self, dfs, oid, avg_name):
-        if self._total_symlinks > 0 and self._total_dirs > 0:
+    def _calculate_average_dir(self, dfs):
+        if self._total_dirs > 0:
+            oid = dfs.create_dir_obj(self._total_dirs)
+            self._debug('Populating directories')
+            avg_name = 'x' * self._avg_name_size
+
+            # add symlinks
             symlink_per_dir = self._total_symlinks // self._total_dirs
-
-            if self._total_symlinks % self._total_dirs:
-                symlink_per_dir += 1
-
+            symlink_per_dir += (self._total_symlinks % self._total_dirs) > 0
             self._debug(
-                'assuming {0} symlinks per directory'.format(symlink_per_dir))
-            self._debug(
-                'assuming average symlink size of {0} bytes'.format(
+                'adding {0} symlinks of name size {1} bytes and size {2} bytes per directory'.format(
+                    symlink_per_dir,
+                    self._avg_name_size,
                     self._avg_symlink_size))
             dfs.add_symlink(
                 oid,
@@ -113,27 +134,20 @@ class AverageFS(CommonBase):
                 self._avg_symlink_size,
                 symlink_per_dir)
 
-        return dfs
+            # add dirs
+            avg_dir_name = 'x' * self._dir_name_size
+            self._debug(
+                'adding 1 directory of name size {0} bytes per directory'.format(
+                    self._dir_name_size))
+            dfs.add_dummy(oid, avg_dir_name)
 
-    def _calculate_average_dir(self, dfs):
-        self._debug('calculating average values')
-
-        if self._total_dirs > 0:
-            oid = dfs.add_obj()
-            dfs.update_object_count(oid, self._total_dirs)
-
-            avg_name = 'x' * self._avg_name_size
-
-            # add symlinks
-            self._calculate_average_sym(dfs, oid, avg_name)
-
-            # add dirs and files
-            remainder_items_per_dir = (
-                self._total_files + self._total_dirs) // self._total_dirs
-            self._debug('assuming {0} files and directories per directory'.format(
-                remainder_items_per_dir))
-            if remainder_items_per_dir > 0:
-                dfs.add_dir(oid, avg_name, remainder_items_per_dir)
+            # add files
+            files_per_dir = self._total_files // self._total_dirs
+            files_per_dir += (self._total_files % self._total_dirs) > 0
+            self._debug(
+                'adding {0} files of name size {1} per directory'.format(
+                    files_per_dir, self._avg_name_size))
+            dfs.add_dummy(oid, avg_name, files_per_dir)
 
         return dfs
 
@@ -142,15 +156,41 @@ class AverageFS(CommonBase):
         self._total_files += count_files
 
 
+class CellStats(CommonBase):
+    def __init__(self, verbose=False):
+        super(CellStats, self).__init__()
+        self.parity = 0
+        self.payload = 0
+        self.set_verbose(verbose)
+
+    def add(self, stats):
+        self.parity += stats.parity
+        self.payload += stats.payload
+
+    def mul(self, mul):
+        self.parity *= mul
+        self.payload *= mul
+
+    def show(self):
+        self._debug('Number of data cells:   {0}'.format(self.payload))
+        self._debug('Number of parity cells: {0}'.format(self.parity))
+
+
 class DFS(CommonBase):
-    def __init__(self):
+    def __init__(self, oclass):
         super(DFS, self).__init__()
         self._objects = []
         self._chunk_size = 1048576
         self._io_size = 131072
+        self._all_ec_stats = CellStats()
+        self._oclass = oclass
 
         self._dkey0 = self._create_default_dkey0()
         self._dfs_inode_akey = self._create_default_inode_akey()
+
+    def set_verbose(self, verbose):
+        self._verbose = verbose
+        self._all_ec_stats.set_verbose(verbose)
 
     def set_io_size(self, io_size):
         self._io_size = io_size
@@ -172,12 +212,14 @@ class DFS(CommonBase):
         return container
 
     def copy(self):
-        new_dfs = DFS()
+        new_dfs = DFS(self._oclass)
         new_dfs._io_size = copy.deepcopy(self._io_size)
         new_dfs._chunk_size = copy.deepcopy(self._chunk_size)
         new_dfs._dkey0 = copy.deepcopy(self._dkey0)
         new_dfs._dfs_inode_akey = copy.deepcopy(self._dfs_inode_akey)
         new_dfs._objects = copy.deepcopy(self._objects)
+        new_dfs._verbose = copy.deepcopy(self._verbose)
+        new_dfs._all_ec_stats = copy.deepcopy(self._all_ec_stats)
 
         return new_dfs
 
@@ -211,8 +253,8 @@ class DFS(CommonBase):
 
         self._objects[oid].add_value(dkey)
 
-    def add_dummy(self, oid, name):
-        self._add_entry(oid, name)
+    def add_dummy(self, oid, name, dkey_count=1):
+        self._add_entry(oid, name, dkey_count)
 
     def add_dir(self, oid, name, dkey_count=1):
         self._add_entry(oid, name, dkey_count)
@@ -223,6 +265,9 @@ class DFS(CommonBase):
 
     def update_object_count(self, oid, count):
         self._objects[oid].set_count(count)
+
+    def show_stats(self):
+        self._all_ec_stats.show()
 
     def _create_default_dkey0(self):
         akey = AKey(
@@ -250,6 +295,7 @@ class DFS(CommonBase):
         self._check_positive_number(size)
         count = size // self._io_size
         remainder = size % self._io_size
+
         akey = AKey(
             key_type=KeyType.INTEGER,
             overhead=Overhead.USER,
@@ -274,36 +320,115 @@ class DFS(CommonBase):
 
         return dkey
 
-    def _add_chunk_size_elements(self, file_object, file_size):
+    def _add_chunk_size_elements(self, file_object, file_size, parity_stats):
         count = file_size // self._chunk_size
+
+        self._debug(
+            'adding {0} chunk(s) of size {1}'.format(
+                count, self._chunk_size))
+
         if count > 0:
+            self._add_parity_cells(
+                file_object,
+                count,
+                self._chunk_size,
+                parity_stats)
+
+            replicas = self._oclass.get_file_replicas()
+            count *= replicas
+
             dkey = self._create_file_dkey(self._chunk_size)
             dkey.set_count(count)
+            parity_stats.payload += count
             file_object.add_value(dkey)
 
-        return file_object
-
-    def _add_chunk_size_remainder(self, file_object, file_size):
+    def _add_chunk_size_remainder(self, file_object, file_size, parity_stats):
+        count = self._oclass.get_file_replicas()
         remainder = file_size % self._chunk_size
-        if remainder > 0:
-            dkey = self._create_file_dkey(remainder)
-            file_object.add_value(dkey)
 
-        return file_object
+        self._debug('adding {0} chunk(s) of size {1}'.format(count, remainder))
+
+        if remainder > 0:
+
+            dkey = self._create_file_dkey(remainder)
+            dkey.set_count(count)
+            file_object.add_value(dkey)
+            parity_stats.payload += count
+            self._add_parity_cells(file_object, count, remainder, parity_stats)
+
+    def _add_parity_cells(self, file_object, count, cell_size, parity_stats):
+        parity = self._oclass.get_file_parity()
+
+        if parity == 0:
+            return
+
+        stripe = self._oclass.get_file_stripe()
+
+        if count % stripe:
+            parity_cells = (count // stripe) * parity + parity
+        else:
+            parity_cells = (count // stripe) * parity
+
+        dkey = self._create_file_dkey(cell_size)
+        dkey.set_count(parity_cells)
+        file_object.add_value(dkey)
+        parity_stats.parity += parity_cells
+
+    def create_dir_obj(self, identical_dirs=1):
+        parity_stats = CellStats(self._verbose)
+        oid = self.add_obj()
+
+        self._debug('adding {0} directory(s)'.format(identical_dirs))
+
+        count = identical_dirs
+        count *= self._oclass.get_dir_replicas()
+        parity_stats.payload = count
+        parity_cells = self._oclass.get_dir_parity()
+        count += parity_cells
+
+        self._objects[oid].set_count(count)
+        self._objects[oid].set_num_of_targets(self._oclass.get_dir_targets())
+
+        parity_stats.parity += parity_cells * identical_dirs
+
+        parity_stats.show()
+        self._all_ec_stats.add(parity_stats)
+
+        return oid
 
     def create_file_obj(self, file_size, identical_files=1):
+        parity_stats = CellStats(self._verbose)
+
+        self._debug(
+            'adding {0} file(s) of size of {1}'.format(
+                identical_files, file_size))
         file_object = VosObject()
-        file_object.add_value(self._dkey0)
+        file_object.set_num_of_targets(self._oclass.get_file_targets())
         file_object.set_count(identical_files)
 
-        file_object = self._add_chunk_size_elements(file_object, file_size)
-        file_object = self._add_chunk_size_remainder(file_object, file_size)
+        self._add_file_dkey0(file_object, parity_stats)
+        self._add_chunk_size_elements(file_object, file_size, parity_stats)
+        self._add_chunk_size_remainder(file_object, file_size, parity_stats)
+
+        parity_stats.mul(identical_files)
+        parity_stats.show()
+        self._all_ec_stats.add(parity_stats)
 
         self._objects.append(file_object)
 
+    def _add_file_dkey0(self, file_object, parity_stats):
+        replicas = self._oclass.get_file_replicas()
+        parity = self._oclass.get_file_parity()
+        count = replicas + parity
+        parity_stats.payload += replicas
+        parity_stats.parity += parity
+        dkey = copy.deepcopy(self._dkey0)
+        dkey.set_count(count)
+        file_object.add_value(dkey)
+
 
 class FileSystemExplorer(CommonBase):
-    def __init__(self, path):
+    def __init__(self, path, oclass):
         super(FileSystemExplorer, self).__init__()
         self._path = path
         self._queue = []
@@ -316,28 +441,24 @@ class FileSystemExplorer(CommonBase):
         self._name_size = 0
 
         self._oid = 0
-        self._dfs = DFS()
-        self._avg = AverageFS()
+        self._dfs = DFS(oclass)
 
     def set_dfs_inode(self, akey):
         self._dfs.set_dfs_inode(akey)
-        self._avg.set_dfs_inode(akey)
 
     def set_io_size(self, io_size):
         self._dfs.set_io_size(io_size)
-        self._avg.set_io_size(io_size)
 
     def set_chunk_size(self, chunk_size):
         self._dfs.set_chunk_size(chunk_size)
-        self._avg.set_chunk_size(chunk_size)
 
     # TODO: Get the D-Key 0 information from the DAOS Array Object
     def set_dfs_file_meta(self, dkey):
         self.dfs.set_dfs_file_meta(dkey)
-        self._avg.set_dfs_file_meta(dkey)
 
     def explore(self):
         self._debug('processing path: {0}'.format(self._path))
+        self._dfs.set_verbose(self._verbose)
         self._traverse_directories()
 
     def print_stats(self):
@@ -377,6 +498,11 @@ class FileSystemExplorer(CommonBase):
         self._info('')
 
     def get_dfs(self):
+        self._debug('Gloabal Stripe Stats')
+        self._dfs._all_ec_stats.show()
+
+        container = self._dfs.get_container()
+
         return self._dfs
 
     def _get_avg_file_name_size(self):
@@ -391,19 +517,72 @@ class FileSystemExplorer(CommonBase):
         return avg_file_name_size
 
     def get_dfs_average(self):
-        self._avg.set_total_symlinks(self._count_sym)
-        self._avg.set_avg_symlink_size(self._sym_size)
-        self._avg.set_total_directories(self._count_dir)
+        averageFS = AverageFS(self._dfs)
+        averageFS.set_verbose(self._verbose)
+        averageFS.set_total_symlinks(self._count_sym)
+        averageFS.set_avg_symlink_size(self._sym_size)
+        averageFS.set_total_directories(self._count_dir)
 
-        self._avg.set_avg_name_size(self._get_avg_file_name_size())
+        averageFS.set_avg_name_size(self._get_avg_file_name_size())
 
         if self._count_files > 0:
             avg_file_size = self._file_size // self._count_files
             self._debug(
                 '  assuming average file size of {0} bytes'.format(avg_file_size))
-            self._avg.add_average_file(self._count_files, avg_file_size)
+            averageFS.add_average_file(self._count_files, avg_file_size)
 
-        return self._avg.get_dfs()
+        dfs = averageFS.get_dfs()
+
+        container = dfs.get_container()
+
+        return dfs
+
+    def _process_stats(self, container):
+        stats = {
+            "objects": 0,
+            "dkeys": 0,
+            "akeys": 0,
+            "values": 0,
+            "dkey_size": 0,
+            "akey_size": 0,
+            "value_size": 0}
+
+        for object in container["objects"]:
+            obj_count = object.get("count", 11)
+            if obj_count == 0:
+                continue
+
+            stats["objects"] += obj_count
+
+            for dkey in object["dkeys"]:
+                dkey_count = dkey.get("count", 1)
+                if dkey_count == 0:
+                    continue
+
+                total_dkeys = obj_count * dkey_count
+                stats["dkey_size"] += dkey.get("size", 0) * total_dkeys
+                stats["dkeys"] += obj_count * dkey_count
+
+                for akey in dkey["akeys"]:
+                    akey_count = akey.get("count", 1)
+                    if akey_count == 0:
+                        continue
+
+                    total_akeys = obj_count * dkey_count * akey_count
+                    stats["akey_size"] += akey.get("size", 0) * total_akeys
+                    stats["akeys"] += total_akeys
+
+                    for value in akey["values"]:
+                        value_count = value.get("count", 1)
+                        if value_count == 0:
+                            continue
+
+                        total_values = obj_count * dkey_count * akey_count * value_count
+                        stats["value_size"] += value.get("size",
+                                                         0) * total_values
+                        stats["values"] += total_akeys
+
+        return stats
 
     def _read_directory_3(self, file_path):
         with os.scandir(file_path) as it:
@@ -505,7 +684,7 @@ class FileSystemExplorer(CommonBase):
 
         while(self._queue):
             file_path = self._queue.pop(0)
-            self._oid = self._dfs.add_obj()
+            self._oid = self._dfs.create_dir_obj()
             self._debug('entering {0}'.format(file_path))
             self._read_directory(file_path)
 
