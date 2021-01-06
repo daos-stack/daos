@@ -2428,7 +2428,7 @@ fs_copy(struct file_dfs *src_file_dfs,
 				 * with the new path.
 				 */
 				rc = fs_copy(src_file_dfs, dst_file_dfs, path,
-						dfs_prefix_len, fs_dst_prefix);
+					     dfs_prefix_len, fs_dst_prefix);
 				if (rc != 0) {
 					fprintf(stderr, "filesystem copy "
 						"failed, %d.\n", rc);
