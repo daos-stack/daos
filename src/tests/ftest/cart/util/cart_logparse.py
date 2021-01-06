@@ -126,7 +126,7 @@ class LogLine():
         try:
             self.level = LOG_LEVELS[fields[4]]
         except KeyError:
-            raise InvalidLogFile(fields[4])
+            print('WARNING: Ignoring malformed line in log:', fields)
 
         self.ts = fields[0]
         self._fields = fields[5:]
@@ -188,7 +188,7 @@ class LogLine():
                 return int(lineno)
             except ValueError:
                 pass
-        raise AttributeError
+        print('WARNING: Ignoring unknown attribute:', attr)
 
     def get_msg(self):
         """Return the message part of a line, stripping up to and
