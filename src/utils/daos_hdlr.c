@@ -2367,7 +2367,7 @@ fs_copy(struct file_dfs *src_file_dfs,
 			if (buf != NULL)
 				D_FREE(buf);
 
-			/* reset offests if there is another file to copy */
+			/* reset offsets if there is another file to copy */
 			src_file_dfs->offset = 0;
 			dst_file_dfs->offset = 0;
 
