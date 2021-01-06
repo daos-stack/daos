@@ -296,7 +296,7 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
-	D_ASSERT(!daos_handle_is_inval(tls->rebuild_tree_hdl));
+	D_ASSERT(daos_handle_is_valid(tls->rebuild_tree_hdl));
 
 	tls->rebuild_pool_obj_count++;
 	val.eph = epoch;

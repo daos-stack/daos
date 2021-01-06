@@ -32,6 +32,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
@@ -213,7 +214,10 @@ func (ur *UnaryResponse) getMSResponse() (proto.Message, error) {
 func convertMSResponse(ur *UnaryResponse, out interface{}) error {
 	msResp, err := ur.getMSResponse()
 	if err != nil {
-		return errors.Wrap(err, "failed to get MS response")
+		if IsConnectionError(err) {
+			return errors.Errorf("unable to contact the %s", build.ManagementServiceName)
+		}
+		return err
 	}
 
 	return convert.Types(msResp, out)
