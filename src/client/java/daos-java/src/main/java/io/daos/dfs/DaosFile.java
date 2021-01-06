@@ -29,6 +29,7 @@ import java.nio.ByteBuffer;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import io.daos.*;
+import io.netty.buffer.ByteBuf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -372,7 +373,7 @@ public class DaosFile {
    * Be note, caller should set <code>buffer</code> indices, like position, limit or marker, by itself based on
    * return value of this method.
    *
-   * @param buffer       Must be instance of {@link DirectBuffer}
+   * @param buffer       Must be direct buffer
    * @param bufferOffset buffer offset
    * @param fileOffset   file offset
    * @param len          expected length in bytes read from file to buffer
@@ -380,7 +381,7 @@ public class DaosFile {
    * @throws IOException
    * {@link DaosIOException}
    */
-  public long read(ByteBuffer buffer, long bufferOffset, long fileOffset, long len) throws IOException {
+  public long read(ByteBuf buffer, long bufferOffset, long fileOffset, long len) throws IOException {
     open(true);
     //no asynchronous for now
     if (len > buffer.capacity() - bufferOffset) {
@@ -388,7 +389,7 @@ public class DaosFile {
                       "bytes from file",
               buffer.capacity(), bufferOffset, len));
     }
-    return client.dfsRead(dfsPtr, objId, ((DirectBuffer) buffer).address() + bufferOffset,
+    return client.dfsRead(dfsPtr, objId, (buffer).memoryAddress() + bufferOffset,
             fileOffset, len);
   }
 
@@ -405,7 +406,7 @@ public class DaosFile {
    * write <code>len</code> bytes to file starting at <code>fileOffset</code> from <code>buffer</code> at
    * <code>bufferOffset</code>.
    *
-   * @param buffer       Must be instance of {@link DirectBuffer}
+   * @param buffer       Must be direct buffer
    * @param bufferOffset buffer offset
    * @param fileOffset   file offset
    * @param len          length in bytes of data to write
@@ -414,14 +415,14 @@ public class DaosFile {
    * @throws IOException
    * {@link DaosIOException}
    */
-  public long write(ByteBuffer buffer, long bufferOffset, long fileOffset, long len) throws IOException {
+  public long write(ByteBuf buffer, long bufferOffset, long fileOffset, long len) throws IOException {
     open(true);
     //no asynchronous for now
     if (len > buffer.capacity() - bufferOffset) {
       throw new IOException(String.format("buffer (%d) has no enough data start at %d for write %d bytes to file",
               buffer.capacity(), bufferOffset, len));
     }
-    return client.dfsWrite(dfsPtr, objId, ((DirectBuffer) buffer).address() + bufferOffset,
+    return client.dfsWrite(dfsPtr, objId, buffer.memoryAddress() + bufferOffset,
             fileOffset, len);
   }
 

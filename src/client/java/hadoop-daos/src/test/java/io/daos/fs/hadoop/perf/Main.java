@@ -28,10 +28,12 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.*;
 
+import io.daos.BufferAllocator;
 import io.daos.dfs.DaosFile;
 import io.daos.dfs.DaosFsClient;
 import io.daos.fs.hadoop.Constants;
 import io.daos.fs.hadoop.DaosConfigFile;
+import io.netty.buffer.ByteBuf;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -507,7 +509,7 @@ public class Main {
 
         DaosFile file = client.getFile(readPath);
         long size;
-        ByteBuffer byteBuffer = ByteBuffer.allocateDirect(readSize);
+        ByteBuf byteBuffer = BufferAllocator.directNettyBuf(readSize);
         if (random) {
           Random rd = new Random();
 

@@ -1,48 +1,37 @@
 package io.daos.fs.hadoop;
 
-import java.nio.ByteBuffer;
+import io.daos.dfs.DaosFile;
+import io.netty.buffer.ByteBuf;
+import org.apache.hadoop.fs.FileSystem;
+
+import java.io.IOException;
 
 public class DaosFileSourceAsync extends DaosFileSource {
 
-  public DaosFileSourceAsync() {
-
+  public DaosFileSourceAsync(DaosFile daosFile, int bufCapacity, long fileLen,
+                             FileSystem.Statistics stats) {
+    super(daosFile, bufCapacity, fileLen, stats);
   }
 
-  public DaosFileSourceAsync(int bufferCapacity) {
-    super();
-  }
-
-  public DaosFileSourceAsync(ByteBuffer buffer) {
-    super();
+  public DaosFileSourceAsync(DaosFile daosFile, ByteBuf buffer, long fileLen,
+                             FileSystem.Statistics stats) {
+    super(daosFile, buffer, fileLen, stats);
   }
 
   @Override
-  public long limit() {
+  public void closeMore() {
+
+  }
+
+  @Override
+  protected long doWrite(long nextWritePos) throws IOException {
     return 0;
   }
 
   @Override
-  public void position(int i) {
-
-  }
-
-  @Override
-  public void get(byte[] buf, int off, int actualLen) {
-
-  }
-
-  @Override
-  public void clear() {
-
-  }
-
-  @Override
-  public void close() {
-
-  }
-
-  @Override
-  public int read(long nextReadPos, int length) {
+  protected int doRead(long nextReadPos, int length) throws IOException {
     return 0;
   }
+
+
 }

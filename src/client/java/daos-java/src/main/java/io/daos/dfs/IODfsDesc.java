@@ -28,5 +28,6 @@ public class IODfsDesc implements DaosEventQueue.Attachment {
   }
 
   public ByteBuf getDescBuffer() {
+    return null;
   }
 }

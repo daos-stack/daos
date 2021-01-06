@@ -1,9 +1,7 @@
 package io.daos.dfs;
 
-import io.daos.Constants;
-import io.daos.DaosIOException;
-import io.daos.DaosObjectType;
-import io.daos.DaosTestBase;
+import io.daos.*;
+import io.netty.buffer.ByteBuf;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -84,10 +82,10 @@ public class DaosFileMultiThreadsIT {
       size += str.length();
     }
     String data = sb.toString();
-    ByteBuffer buffer = ByteBuffer.allocateDirect(size);
+    ByteBuf buffer = BufferAllocator.directNettyBuf(size);
 
     for (int i = 0; i < 24; i++) {
-      buffer.put(data.getBytes());
+      buffer.writeBytes(data.getBytes());
       file.write(buffer, 0, 0, data.length());
       buffer.clear();
     }

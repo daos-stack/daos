@@ -733,7 +733,7 @@ Java_io_daos_dfs_DaosFsClient_dfsRelease(JNIEnv *env,
 JNIEXPORT jlong JNICALL
 Java_io_daos_dfs_DaosFsClient_dfsRead(JNIEnv *env, jobject client,
 		jlong dfsPtr, jlong objId, jlong bufferAddress,
-		jlong fileOffset, jlong len, jint eventNo)
+		jlong fileOffset, jlong len)
 {
 	dfs_t *dfs = *(dfs_t **)&dfsPtr;
 	dfs_obj_t *file = *(dfs_obj_t **)&objId;
@@ -779,7 +779,7 @@ Java_io_daos_dfs_DaosFsClient_dfsRead(JNIEnv *env, jobject client,
 JNIEXPORT jlong JNICALL
 Java_io_daos_dfs_DaosFsClient_dfsWrite(JNIEnv *env, jobject client,
 		jlong dfsPtr, jlong objId, jlong bufferAddress,
-		jlong fileOffset, jlong len, jint eventNo)
+		jlong fileOffset, jlong len)
 {
 	dfs_t *dfs = *(dfs_t **)&dfsPtr;
 	dfs_obj_t *file = *(dfs_obj_t **)&objId;

@@ -2,6 +2,7 @@ package io.daos.dfs;
 
 import com.sun.security.auth.module.UnixSystem;
 import io.daos.*;
+import io.netty.buffer.ByteBuf;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -144,12 +145,12 @@ public class DaosFileIT {
     DaosFile daosFile = client.getFile("/data");
     daosFile.createNewFile();
     int length = 100;
-    ByteBuffer buffer = ByteBuffer.allocateDirect(length);
+    ByteBuf buffer = BufferAllocator.directNettyBuf(length);
     byte[] bytes = new byte[length];
     for (int i = 0; i < length; i++) {
       bytes[i] = (byte) i;
     }
-    buffer.put(bytes);
+    buffer.writeBytes(bytes);
 
     long wl = daosFile.write(buffer, 0, 0, length);
     Assert.assertEquals(length, daosFile.length());
@@ -161,22 +162,22 @@ public class DaosFileIT {
     DaosFile daosFile = client.getFile("/data2");
     daosFile.createNewFile();
     int length = 100;
-    ByteBuffer buffer = ByteBuffer.allocateDirect(length);
+    ByteBuf buffer = BufferAllocator.directNettyBuf(length);
     byte[] bytes = new byte[length];
     for (int i = 0; i < length; i++) {
       bytes[i] = (byte) i;
     }
-    buffer.put(bytes);
+    buffer.writeBytes(bytes);
 
     daosFile.write(buffer, 0, 0, length);
 
     System.out.println(daosFile.length());
 
-    ByteBuffer buffer2 = ByteBuffer.allocateDirect(length + 30);
+    ByteBuf buffer2 = BufferAllocator.directNettyBuf(length + 30);
     long actualLen = daosFile.read(buffer2, 0, 0, length + 30);
     Assert.assertEquals(length, actualLen);
     byte[] bytes2 = new byte[length];
-    buffer2.get(bytes2);
+    buffer2.writeBytes(bytes2);
     Assert.assertTrue(Arrays.equals(bytes, bytes2));
     daosFile.release();
   }
@@ -250,9 +251,9 @@ public class DaosFileIT {
     DaosFile file = client.getFile("/zjf444");
     file.createNewFile();
 
-    ByteBuffer buffer = ByteBuffer.allocateDirect(1024);
+    ByteBuf buffer = BufferAllocator.directNettyBuf(1024);
     String str = "ddddddddddddddddddddddddddddddddddddddddddddddddd";
-    buffer.put(str.getBytes());
+    buffer.writeBytes(str.getBytes());
     file.write(buffer, 0, 0, str.length());
     StatAttributes attributes = file.getStatAttributes();
     Assert.assertEquals(str.length(), (int) attributes.getLength());

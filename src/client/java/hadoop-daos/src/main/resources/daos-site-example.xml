@@ -87,4 +87,12 @@
       Value range is 4k - 2g.
     </description>
   </property>
+  <property>
+    <name>fs.daos.io.async</name>
+    <value>true</value>
+    <description>
+      perform DAOS IO asynchronously. Default is true.
+      Set to false to use synchronous IO.
+    </description>
+  </property>
 </configuration>

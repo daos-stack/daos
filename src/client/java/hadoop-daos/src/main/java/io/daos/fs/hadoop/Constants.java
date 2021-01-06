@@ -50,6 +50,9 @@ public final class Constants {
   // daos container
   public static final String DAOS_CONTAINER_UUID = "fs.daos.container.uuid";
 
+  public static final String DAOS_IO_ASYNC = "fs.daos.io.async";
+  public static final boolean DEFAULT_DAOS_IO_ASYNC = true;
+
   // the minimum and default daos chunk size, maximum size
   public static final String DAOS_CHUNK_SIZE = "fs.daos.chunk.size";
   public static final int DEFAULT_DAOS_CHUNK_SIZE = 1024 * 1024;

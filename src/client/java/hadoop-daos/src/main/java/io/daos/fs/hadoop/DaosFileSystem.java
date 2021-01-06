@@ -169,6 +169,8 @@ public class DaosFileSystem extends FileSystem {
   private String qualifiedUnsWorkPath;
   private String workPath;
 
+  private boolean async = Constants.DEFAULT_DAOS_IO_ASYNC;
+
   static {
     if (ShutdownHookManager.removeHook(DaosClient.FINALIZER)) {
       org.apache.hadoop.util.ShutdownHookManager.get().addShutdownHook(DaosClient.FINALIZER, 0);
@@ -200,6 +202,7 @@ public class DaosFileSystem extends FileSystem {
       uns = false;
       initializeFromConfigFile(name, conf);
     }
+    async = conf.getBoolean(Constants.DAOS_IO_ASYNC, Constants.DEFAULT_DAOS_IO_ASYNC);
   }
 
   /**
@@ -260,7 +263,7 @@ public class DaosFileSystem extends FileSystem {
     return info;
   }
 
-  private void parseUnsConfig(Configuration conf, DunsInfo info) throws IOException {
+  private void parseUnsConfig(Configuration conf, DunsInfo info) {
     if (!"POSIX".equalsIgnoreCase(info.getLayout())) {
       throw new IllegalArgumentException("expect POSIX file system, but " + info.getLayout());
     }
@@ -547,7 +550,8 @@ public class DaosFileSystem extends FileSystem {
     }
 
     return new FSDataInputStream(new DaosInputStream(
-            file, statistics, readBufferSize, bufferSize < minReadSize ? minReadSize : bufferSize));
+            file, statistics, readBufferSize,
+            bufferSize < minReadSize ? minReadSize : bufferSize, async));
   }
 
   @Override
@@ -589,7 +593,8 @@ public class DaosFileSystem extends FileSystem {
             this.chunkSize,
             true);
 
-    return new FSDataOutputStream(new DaosOutputStream(daosFile, key, writeBufferSize, statistics), statistics);
+    return new FSDataOutputStream(new DaosOutputStream(daosFile, writeBufferSize, statistics, async),
+        statistics);
   }
 
   @Override

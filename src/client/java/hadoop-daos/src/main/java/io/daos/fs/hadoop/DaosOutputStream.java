@@ -25,56 +25,48 @@ package io.daos.fs.hadoop;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
 
+import io.daos.BufferAllocator;
 import io.daos.dfs.DaosFile;
 
+import io.netty.buffer.ByteBuf;
 import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import sun.nio.ch.DirectBuffer;
 
 /**
  * The output stream for Daos system.
  */
 public class DaosOutputStream extends OutputStream {
 
-  private long fileOffset;
   private boolean closed;
-  private String path;
   private final DaosFileSource source;
   private final FileSystem.Statistics stats;
 
   private static final Logger LOG = LoggerFactory.getLogger(DaosOutputStream.class);
 
   public DaosOutputStream(DaosFile daosFile,
-                          String path,
                           final int writeBufferSize, FileSystem.Statistics stats, boolean async) {
-    this(daosFile, path, ByteBuffer.allocateDirect(writeBufferSize), stats, async);
+    this(daosFile, BufferAllocator.directNettyBuf(writeBufferSize), stats, async);
   }
 
   /**
    * Constructor with daosFile, file path, direct byte buffer and Hadoop file system statistics.
    * @param daosFile
    * DAOS file object
-   * @param path
-   * file path
    * @param buffer
    * direct byte buffer
    * @param stats
    * Hadoop file system statistics
    */
   public DaosOutputStream(DaosFile daosFile,
-                          String path,
-                          ByteBuffer buffer, FileSystem.Statistics stats, boolean async) {
-    this.path = path;
+                          ByteBuf buffer, FileSystem.Statistics stats, boolean async) {
     this.closed = false;
-    this.source = async ? new DaosFileSourceAsync(daosFile, buffer) :
-        new DaosFileSourceSync(daosFile, buffer);
+    this.source = async ? new DaosFileSourceAsync(daosFile, buffer, 0, stats) :
+        new DaosFileSourceSync(daosFile, buffer, 0, stats);
     this.stats = stats;
-    if (!(buffer instanceof DirectBuffer)) {
-      throw new IllegalArgumentException("need instance of direct buffer, but " + buffer.getClass().getName());
+    if (!buffer.hasMemoryAddress()) {
+      throw new IllegalArgumentException("need direct buffer, but " + buffer.getClass().getName());
     }
   }
 
@@ -106,7 +98,6 @@ public class DaosOutputStream extends OutputStream {
       throw new IndexOutOfBoundsException("requested more bytes than destination buffer size " +
               " : request length = " + len + ", with offset = " + off + ", buffer capacity =" + (buf.length - off));
     }
-
     source.write(buf, off, len);
   }
 
@@ -130,7 +121,6 @@ public class DaosOutputStream extends OutputStream {
       LOG.debug("DaosOutputStream flush");
     }
     checkNotClose();
-
     source.flush();
     super.flush();
   }
