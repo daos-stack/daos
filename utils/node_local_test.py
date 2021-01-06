@@ -399,13 +399,17 @@ class DaosServer():
         while True:
             time.sleep(0.5)
             rc = self.run_dmg(cmd)
+            print(rc)
             ready = False
             if rc.returncode == 1:
                 for line in rc.stdout.decode('utf-8').splitlines():
                     if 'format storage of running instance' in line:
                         ready = True
-                    if 'format request for already-formatted storage and reformat not specified' in line:
+                     if 'format request for already-formatted storage and reformat not specified' in line:
                         cmd = ['storage', 'format', '--reformat']
+                for line in rc.sterr.decode('utf-8').splitlines():
+                    if 'system reformat requires the following' in line:
+                        ready = True
             if ready:
                 break
             if time.time() - start > 20:
