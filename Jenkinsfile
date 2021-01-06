@@ -56,7 +56,8 @@ def skip_stage(String stage, boolean def_val = false) {
 }
 
 boolean quickbuild() {
-    return cachedCommitPragma(pragma: 'Quick-build') == 'true'
+    return cachedCommitPragma(pragma: 'Quick-build') == 'true' ||
+           quick_functional()
 }
 
 def functional_post_always() {
@@ -188,10 +189,13 @@ String daos_packages_version(String distro) {
     String version = cachedCommitPragma(pragma: 'RPM-test-version')
     if (version != "") {
         String dist = ""
-        if (distro == "centos7") {
-            dist = ".el7"
-        } else if (distro == "leap15") {
-            dist = ".suse.lp152"
+        if (version.indexOf('-') > -1) {
+            // only tack on the %{dist} if the release was specified
+            if (distro == "centos7") {
+                dist = ".el7"
+            } else if (distro == "leap15") {
+                dist = ".suse.lp152"
+            }
         }
         return version + dist
     }
@@ -317,7 +321,8 @@ boolean skip_prebuild() {
 
 boolean skip_checkpatch() {
     return skip_stage('checkpatch') ||
-           doc_only_change()
+           doc_only_change() ||
+           quick_functional()
 }
 
 boolean skip_build() {
@@ -329,31 +334,63 @@ boolean skip_build() {
            rpm_test_version() != ''
 }
 
+boolean quick_functional() {
+    return cachedCommitPragma(pragma: 'Quick-Functional') == 'true'
+}
+
 boolean skip_build_rpm(String distro) {
     return target_branch == 'weekly-testing' ||
-           skip_stage('build-' + distro + '-rpm')
+           skip_stage('build-' + distro + '-rpm') ||
+           distro == 'ubuntu20' && quick_functional()
 }
 
 boolean skip_build_on_centos7_gcc() {
-    return skip_stage('build-centos7-gcc')
+    return skip_stage('build-centos7-gcc') ||
+           quick_functional()
 }
 
 boolean skip_ftest(String distro) {
     return distro == 'ubuntu20' ||
            skip_stage('func-test') ||
            skip_stage('func-test-vm') ||
+           ! tests_in_stage('vm') ||
            skip_stage('func-test-' + distro)
 }
 
 boolean skip_test_rpms_centos7() {
     return target_branch == 'weekly-testing' ||
            skip_stage('test') ||
-           skip_stage('test-centos-rpms')
+           skip_stage('test-centos-rpms') ||
+           quick_functional()
 }
 
 boolean skip_scan_rpms_centos7() {
     return target_branch == 'weekly-testing' ||
-           skip_stage('scan-centos-rpms')
+           skip_stage('scan-centos-rpms') ||
+           quick_functional()
+}
+
+boolean tests_in_stage(String size) {
+    String tags = cachedCommitPragma(pragma: 'Test-tag', def_val: 'pr')
+    def newtags = []
+    if (size == "vm") {
+        for (String tag in tags.split(" ")) {
+            newtags.add(tag + ",-hw")
+        }
+        tags += ",-hw"
+    } else {
+        if (size == "medium") {
+            size += ",ib2"
+        }
+        for (String tag in tags.split(" ")) {
+            newtags.add(tag + ",hw," + size) 
+        }
+    }
+    tags = newtags.join(" ")
+    return sh(label: "Get test list for ${size}",
+              script: """cd src/tests/ftest
+                         ./launch.py --list ${tags}""",
+              returnStatus: true) == 0
 }
 
 boolean skip_ftest_hw(String size) {
@@ -361,17 +398,20 @@ boolean skip_ftest_hw(String size) {
            skip_stage('func-test') ||
            skip_stage('func-hw-test') ||
            skip_stage('func-hw-test-' + size) ||
+           ! tests_in_stage(size) ||
            (env.BRANCH_NAME == 'master' && ! startedByTimer())
 }
 
 boolean skip_bandit_check() {
     return cachedCommitPragma(pragma: 'Skip-python-bandit',
-                              def_val: 'true') == 'true'
+                              def_val: 'true') == 'true' ||
+           quick_functional()
 }
 
 boolean skip_build_on_centos7_bullseye() {
     return  env.NO_CI_TESTING == 'true' ||
-            skip_stage('bullseye', true)
+            skip_stage('bullseye', true) ||
+            quick_functional()
 }
 
 boolean skip_build_on_centos7_gcc_debug() {
@@ -397,7 +437,8 @@ boolean skip_build_on_ubuntu_clang() {
 }
 
 boolean skip_build_on_leap15_gcc() {
-    return skip_stage('build-leap15-gcc')
+    return skip_stage('build-leap15-gcc') ||
+            quickbuild()
 }
 
 boolean skip_build_on_leap15_icc() {
@@ -413,6 +454,11 @@ boolean skip_unit_testing_stage() {
             doc_only_change() ||
             skip_build_on_centos7_gcc() ||
             skip_stage('unit-tests')
+}
+
+boolean skip_coverity() {
+    return skip_stage('coverity-test') ||
+           quick_functional()
 }
 
 boolean skip_testing_stage() {
@@ -1230,7 +1276,7 @@ pipeline {
                 stage('Coverity on CentOS 7') {
                     when {
                         beforeAgent true
-                        expression { ! skip_stage('coverity-test') }
+                        expression { ! skip_coverity() }
                     }
                     agent {
                         dockerfile {
