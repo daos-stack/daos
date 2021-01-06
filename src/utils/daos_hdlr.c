@@ -2506,7 +2506,7 @@ fs_copy_connect(struct file_dfs *src_file_dfs,
 			D_GOTO(err_src_root, rc);
 		}
 		rc = dfs_mount(fa->src_poh, fa->src_coh, O_RDWR,
-				&(src_file_dfs->dfs));
+			       &src_file_dfs->dfs);
 		if (rc) {
 			fprintf(stderr, "dfs mount on source failed: %d\n", rc);
 			D_GOTO(err_src_dfs, rc);
