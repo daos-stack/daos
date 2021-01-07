@@ -40,7 +40,8 @@ func connErrToFault(st *status.Status, target string) error {
 	switch {
 	case strings.Contains(st.Message(), "connection refused"):
 		return FaultConnectionRefused(target)
-	case strings.Contains(st.Message(), "connection closed"):
+	case strings.Contains(st.Message(), "connection closed"),
+		strings.Contains(st.Message(), "transport is closing"):
 		return FaultConnectionClosed(target)
 	case strings.Contains(st.Message(), "no route to host"):
 		return FaultConnectionNoRoute(target)

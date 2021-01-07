@@ -281,6 +281,10 @@ func main() {
 	)
 
 	if err := parseOpts(os.Args[1:], &opts, ctlInvoker, log); err != nil {
+		if fe, ok := errors.Cause(err).(*flags.Error); ok && fe.Type == flags.ErrHelp {
+			log.Info(fe.Error())
+			os.Exit(0)
+		}
 		exitWithError(log, err)
 	}
 }

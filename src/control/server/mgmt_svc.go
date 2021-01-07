@@ -120,10 +120,10 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		return nil, err
 	}
 	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, req:%+v\n", *req)
-
 	if svc.clientNetworkCfg == nil {
 		return nil, errors.New("clientNetworkCfg is missing")
 	}
+	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, req:%+v\n", *req)
 
 	var groupMap *system.GroupMap
 	var err error

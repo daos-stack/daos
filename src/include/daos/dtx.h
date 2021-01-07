@@ -177,7 +177,7 @@ daos_dti_copy(struct dtx_id *des, const struct dtx_id *src)
 }
 
 static inline bool
-daos_is_zero_dti(struct dtx_id *dti)
+daos_is_zero_dti(const struct dtx_id *dti)
 {
 	return dti->dti_hlc == 0;
 }

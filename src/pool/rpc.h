@@ -332,7 +332,8 @@ CRT_RPC_DECLARE(pool_exclude_out, DAOS_ISEQ_POOL_TGT_UPDATE,
 #define DAOS_ISEQ_POOL_EVICT	/* input fields */			 \
 	((struct pool_op_in)	(pvi_op)			CRT_VAR) \
 	((uint32_t)		(pvi_pool_destroy)		CRT_VAR) \
-	((uint32_t)		(pvi_pool_destroy_force)	CRT_VAR)
+	((uint32_t)		(pvi_pool_destroy_force)	CRT_VAR) \
+	((uuid_t)		(pvi_hdls)			CRT_ARRAY)
 
 #define DAOS_OSEQ_POOL_EVICT	/* output fields */		 \
 	((struct pool_op_out)	(pvo_op)		CRT_VAR)

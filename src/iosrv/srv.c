@@ -332,7 +332,7 @@ dss_iv_resp_hdlr(crt_context_t *ctx, void *hdlr_arg,
 	struct dss_xstream	*dx = (struct dss_xstream *)arg;
 	int			 rc;
 
-	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_IO], real_rpc_hdlr,
+	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_GENERIC], real_rpc_hdlr,
 			       hdlr_arg, ABT_THREAD_ATTR_NULL, NULL);
 	return dss_abterr2der(rc);
 }
@@ -361,8 +361,8 @@ dss_rpc_hdlr(crt_context_t *ctx, void *hdlr_arg,
 	if (rc == 0)
 		return sched_req_enqueue(dx, &attr, real_rpc_hdlr, rpc);
 
-	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_IO], real_rpc_hdlr, rpc,
-			       ABT_THREAD_ATTR_NULL, NULL);
+	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_GENERIC], real_rpc_hdlr,
+			       rpc, ABT_THREAD_ATTR_NULL, NULL);
 	return dss_abterr2der(rc);
 }
 
@@ -1115,7 +1115,7 @@ dss_acc_offload(struct dss_acc_task *at_args)
 				at_args->at_params,
 				NULL /* user-cb */,
 				NULL /* user-cb args */,
-				DSS_ULT_CHECKSUM, tid,
+				DSS_XS_OFFLOAD, tid,
 				0);
 		break;
 	case DSS_OFFLOAD_ACC:

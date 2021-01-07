@@ -56,10 +56,6 @@ const (
 	raftOpUpdatePoolService
 	raftOpRemovePoolService
 
-	// raftTimeout sets an upper limit for how long an Apply
-	// operation may take (TODO: tuning required?).
-	raftTimeout = 1 * time.Second
-
 	sysDBFile = "daos_system.db"
 )
 
@@ -89,6 +85,9 @@ func (ro raftOp) String() string {
 		"addMember",
 		"updateMember",
 		"removeMember",
+		"addPoolService",
+		"updatePoolService",
+		"removePoolService",
 	}[ro]
 }
 
@@ -125,11 +124,14 @@ func (db *Database) configureRaft() error {
 
 	rc := raft.DefaultConfig()
 	rc.Logger = newHcLogger(db.log)
-	rc.SnapshotThreshold = 16 // arbitrarily low to exercise snapshots
-	//rc.SnapshotInterval = 5 * time.Second
-	rc.HeartbeatTimeout = 250 * time.Millisecond
-	rc.ElectionTimeout = 250 * time.Millisecond
-	rc.LeaderLeaseTimeout = 125 * time.Millisecond
+	// The default threshold is 8192, ehich is way too high for
+	// this use case. Our MS DB shouldn't be particularly high
+	// volume, so set this value to strike a balance between
+	// creating snapshots too frequently and not often enough.
+	rc.SnapshotThreshold = 32
+	rc.HeartbeatTimeout = 2000 * time.Millisecond
+	rc.ElectionTimeout = 2000 * time.Millisecond
+	rc.LeaderLeaseTimeout = 1000 * time.Millisecond
 	rc.LocalID = raft.ServerID(db.serverAddress())
 	rc.NotifyCh = db.raftLeaderNotifyCh
 
@@ -144,6 +146,14 @@ func (db *Database) configureRaft() error {
 		return err
 	}
 
+	// Rank 0 is reserved for the first instance on the bootstrap server.
+	// NB: This is a bit of a hack. It would be better to persist this
+	// as a log entry, but there isn't a safe way to guarantee that it's
+	// the first log applied to the bootstrap instance to be replicated
+	// to peers as they're added. Instead, we just set everyone to start
+	// at rank 1 and increment from there as memberUpdate logs are applied.
+	db.data.NextRank = 1
+
 	r, err := raft.NewRaft(rc, (*fsm)(db), boltDB, boltDB, snaps, db.raftTransport)
 	if err != nil {
 		return err
@@ -154,15 +164,13 @@ func (db *Database) configureRaft() error {
 }
 
 // startRaft is responsible for configuring and starting the raft service
-// on this node. If shouldBootstrap is true, then the service will be started
-// in a special bootstrap mode that does not require a quorum.
-func (db *Database) startRaft(shouldBootstrap bool) error {
-	db.log.Debugf("isBootstrap: %t, shouldBootstrap: %t", db.IsBootstrap(), shouldBootstrap)
+// on this node. If the database is new and the node is designated as the
+// bootstrap instance, then the service will be started in a special bootstrap
+// mode that does not require a quorum.
+func (db *Database) startRaft(newDB bool) error {
+	db.log.Debugf("isBootstrap: %t, newDB: %t", db.IsBootstrap(), newDB)
 
-	if db.IsBootstrap() && shouldBootstrap {
-		// Rank 0 is reserved for the first instance on the bootstrap server.
-		db.data.NextRank = 1
-
+	if db.IsBootstrap() && newDB {
 		db.log.Debugf("bootstrapping MS on %s", db.replicaAddr)
 		bsc := raft.Configuration{
 			Servers: []raft.Server{
@@ -275,7 +283,7 @@ func (db *Database) submitPoolUpdate(op raftOp, ps *PoolService) error {
 // submitRaftUpdate submits the serialized operation to the raft service.
 func (db *Database) submitRaftUpdate(data []byte) error {
 	return db.raft.withReadLock(func(svc raftService) error {
-		return svc.Apply(data, raftTimeout).Error()
+		return svc.Apply(data, 0).Error()
 	})
 }
 

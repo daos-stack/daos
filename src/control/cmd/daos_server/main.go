@@ -170,6 +170,10 @@ func main() {
 			log.Infof("%s (pid %d) shutting down", build.ControlPlaneName, os.Getpid())
 			os.Exit(0)
 		}
+		if fe, ok := errors.Cause(err).(*flags.Error); ok && fe.Type == flags.ErrHelp {
+			log.Info(fe.Error())
+			os.Exit(0)
+		}
 		exitWithError(log, err)
 	}
 }
