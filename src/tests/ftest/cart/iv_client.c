@@ -397,6 +397,25 @@ exit_code:
 	return 0;
 }
 
+/*
+ * The argument arg_timing allows for the caller to specify
+ * when a change in the group version number occurs.
+ * Under normal situations,this value should be zero, which
+ * indicates that the version change should occur at the time
+ * of the call.
+ * However, if this is not zero, then it allows for the change
+ * in version number to occur at some other time, implementer
+ * discression.  Its intension is to allow the change in version
+ * number within a call back function; thus simulating an
+ * asynchronis event requesting a version change while the
+ * system is handling another iv request.
+ * Currently, there are 2 time out values implemented:
+ *    Value    CallBack          Test
+ *      1    iv_test_fetch_iv   Change in version after call to
+ *                              crt_iv_fetch
+ *      2    iv_pre_fetch       Change in version while in function
+ *                              crt_hdlr_if_fetch_aux
+ */
 static int
 test_iv_set_grp_version(char *arg_version, char *arg_timing)
 {

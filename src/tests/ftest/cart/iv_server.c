@@ -52,6 +52,7 @@ static int namespace_attached;
 
 static crt_group_t *grp;
 
+/* See iv_client.c for definition/usage of g_timing */
 static uint32_t		g_grp_version;
 static int		g_timing;
 

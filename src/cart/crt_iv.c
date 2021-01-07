@@ -1242,7 +1242,7 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 	/*
 	 * If version passed in does not match current ivns version,
 	 * then the version has changed during the rpc build process.
-	 * MUST not set (could cause a race):
+	 * MUST not set it to (could cause a race):
 	 *    input->ifi_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver
 	 */
 	local_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
@@ -1255,7 +1255,6 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 	}
 
 	rc = crt_req_send(rpc, handle_response_cb, cb_info);
-
 
 	IV_DBG(iv_key, "crt_req_send() to %d rc=%d\n", dest_node, rc);
 exit:
