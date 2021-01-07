@@ -251,6 +251,7 @@ main(int argc, char **argv)
 			break;
 		case 'A':
 			keys = atoi(optarg);
+			print_message("marj> vos_tests.c 1");
 			nr_failed = run_all_tests(keys, nest_iterators);
 			test_run = true;
 			break;
