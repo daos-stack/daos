@@ -64,12 +64,6 @@ class IorSmall(IorTestBase):
         for oclass in obj_class:
             self.ior_cmd.dfs_oclass.update(oclass)
             for api in apis:
-                # Skip test issue seen while advancing hdf5 vol-daos code
-                # That is still needed due to support for new libdaos v1 API
-                if (api == "HDF5-VOL" and
-                        transfer_block_size[0] == "1M" and
-                        transfer_block_size[1] == "32M"):
-                    self.cancelForTicket("DAOS-6427")
                 if api == "HDF5-VOL":
                     self.ior_cmd.api.update("HDF5")
                     hdf5_plugin_path = self.params.get(
@@ -81,6 +75,11 @@ class IorSmall(IorTestBase):
                     # update transfer and block size
                     self.ior_cmd.transfer_size.update(test[0])
                     self.ior_cmd.block_size.update(test[1])
+                    # Skip test issue seen while advancing hdf5 vol-daos code
+                    # That is still needed due to support for new libdaos v1 API
+                    if (api == "HDF5" and test[0] == "1M" and
+                            test[1] == "32M"):
+                        self.cancelForTicket("DAOS-6427")
                     # run ior
                     try:
                         self.run_ior_with_pool(

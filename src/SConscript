@@ -19,9 +19,9 @@ def generate_daos_version_header(env):
     """Generate daos_version.h from a template file"""
 
     tmpl_hdr_in = os.path.join('include', 'daos_version.h.in')
-    sd = {'@TMPL_MAJOR@': "{}".format(env['API_VERSION_MAJOR']),
-          '@TMPL_MINOR@': "{}".format(env['API_VERSION_MINOR']),
-          '@TMPL_FIX@': "{}".format(env['API_VERSION_FIX']),
+    sd = {'@TMPL_MAJOR@': env['API_VERSION_MAJOR'],
+          '@TMPL_MINOR@': env['API_VERSION_MINOR'],
+          '@TMPL_FIX@': env['API_VERSION_FIX'],
           '@Template for @' : ""}
     out = env.Substfile(tmpl_hdr_in, SUBST_DICT=sd)
     print("generated daos version header file: {}".format(out[0].abspath))
