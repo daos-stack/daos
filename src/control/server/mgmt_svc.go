@@ -126,7 +126,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	}
 	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, req:%+v\n", *req)
 
-	groupMap, replicaRanks, err := svc.sysdb.GroupMapWithReplicaRanks()
+	groupMap, err := svc.sysdb.GroupMap()
 	if err != nil {
 		return nil, err
 	}
@@ -144,9 +144,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	resp.CrtCtxShareAddr = svc.clientNetworkCfg.CrtCtxShareAddr
 	resp.CrtTimeout = svc.clientNetworkCfg.CrtTimeout
 	resp.NetDevClass = svc.clientNetworkCfg.NetDevClass
-	for _, rank := range replicaRanks {
-		resp.MsRanks = append(resp.MsRanks, rank.Uint32())
-	}
+	resp.MsRanks = system.RanksToUint32(groupMap.MSRanks)
 
 	// For resp.RankUris may be large, we make a resp copy with a limited
 	// number of rank URIs, to avoid flooding the debug log.

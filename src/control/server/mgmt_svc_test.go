@@ -25,6 +25,7 @@ package server
 
 import (
 	"context"
+	"sort"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -128,6 +129,11 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			gotResp, gotErr := tc.mgmtSvc.GetAttachInfo(context.TODO(), tc.req)
 			if gotErr != nil {
 				t.Fatalf("unexpected error: %+v\n", gotErr)
+			}
+
+			// Sort the "want" and "got" RankUris slices by rank before comparing them.
+			for _, r := range [][]*mgmtpb.GetAttachInfoResp_RankUri{tc.expResp.RankUris, gotResp.RankUris} {
+				sort.Slice(r, func(i, j int) bool { return r[i].Rank < r[j].Rank })
 			}
 
 			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
