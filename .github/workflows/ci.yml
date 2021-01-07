@@ -16,12 +16,16 @@ jobs:
       fail-fast: false
       matrix:
         distro: [centos.7, leap.15, ubuntu.20.04]
-        compiler: [gcc, clang]
     steps:
-    - uses: actions/checkout@v2
+    - name: Checkout code
+      uses: actions/checkout@v2
       with:
         submodules: true
-    - name: Build Docker image
+    - name: Build ${{ matrix.distro }} Docker image with gcc
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
-                          --build-arg COMPILER=${{ matrix.compiler }}
-                          -t ${{ matrix.distro }}/daos:${{ github.sha }}
+                          --build-arg COMPILER=gcc
+                          -t ${{ matrix.distro }}/gcc/daos:${{ github.sha }}
+    - name: Build ${{ matrix.distro }} Docker image with clang
+      run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg COMPILER=clang
+                          -t ${{ matrix.distro }}/clang/daos:${{ github.sha }}
