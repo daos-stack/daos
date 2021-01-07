@@ -28,39 +28,41 @@
 #ifndef __RAS_H__
 #define __RAS_H__
 
-#define RAS_ID_UNKNOWN_STR "Unknown RAS event"
 #define RAS_SEV_UNKNOWN_STR "Unknown RAS event severity"
 #define RAS_TYPE_UNKNOWN_STR "Unknown RAS event type"
 
-enum ras_event_id {
-	RAS_RANK_EXIT	= 1,
-	RAS_RANK_NO_RESP,
-};
+/**
+ * For each RAS event, define the following:
+ * - Enum symbol to use in the code to identify the RAS event
+ *   No external visibility.
+ * - 64-char string identifier raised as part of the event
+ *   The identifier just be prefixed by component_
+ *   Carried over with the RAS event.
+ * ... more could be added
+ */
+#define RAS_EVENT_LIST						\
+	X(RAS_RANK_STARTED,	"engine_status_started")	\
+	X(RAS_RANK_EXITED,	"engine_status_exited")		\
+	X(RAS_RANK_NO_RESPONSE,	"engine_status_no_response")	\
+	X(RAS_POOL_REP_UPDATE,	"pool_replica_updated")
 
+/** Define RAS event enum */
+typedef enum {
+#define X(a,b) a
+	RAS_EVENT_LIST,
+#undef X
+} ras_event_t;
+
+/** Extract RAS event ID (= 64-char string) from enum */
 static inline char *
-ras_event_id_enum_to_name(enum ras_event_id id)
+ras_event2id(ras_event_t ras)
 {
-	switch (id) {
-	case RAS_RANK_EXIT:
-		return "daos_rank_exited";
-	case RAS_RANK_NO_RESP:
-		return "daos_rank_no_response";
-	}
-
-	return RAS_ID_UNKNOWN_STR;
-}
-
-static inline char *
-ras_event_id_enum_to_msg(enum ras_event_id id)
-{
-	switch (id) {
-	case RAS_RANK_EXIT:
-		return "DAOS rank exited";
-	case RAS_RANK_NO_RESP:
-		return "DAOS rank unresponsive";
-	}
-
-	return RAS_ID_UNKNOWN_STR;
+#define X(a,b) case a: return b;
+	switch (ras) {
+		RAS_EVENT_LIST
+	};
+	return "unknown_unknown";
+#undef X
 }
 
 enum ras_event_sev {
