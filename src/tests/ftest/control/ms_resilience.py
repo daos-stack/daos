@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2021 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -113,48 +113,49 @@ class ManagementServiceResilience(TestWithServers):
         return access_list
 
     def verify_resiliency(self, N):
-        """Verify 2N+1 resiliency up to N = 2"""
+        """Verify 2N+1 resiliency up to N = 2
+
+        This method will launch 2 * N + 1 servers, stop the leader of MS,
+        make sure to remove leader from access_list, verify that a new leader
+        has been elected from the remaining hosts in access_list and verify
+        that MS is stll accessible by creating a new pool.
+        """
         access_list = self.launch_servers((2 * N) + 1)
         leader = self.verify_leader(access_list)
-
-        # Shutdown the servers that is the leader in the MS
         stop_processes([leader], "daos_server")
 
-        # Remove the server that was stopped from the access_list
         access_list = [x for x in access_list if x != leader]
         self.server_managers[-1].dmg.hostlist = access_list[0]
 
-        # Verify that the MS is still accessible
-        # Let's try to make an update by creating a pool on the group
         self.verify_leader(access_list)
         self.update_and_verify(ignore_status=False)
 
     def verify_lost_resiliency(self, N):
-        """Test that even with 2N+1 resiliency lost, reads still work."""
+        """Test that even with 2N+1 resiliency lost, reads still work.
+
+        This method will launch 2 * N + 1 servers, will use a kill_list to
+        shutdown N + 1 access_list hosts, including the MS leader. Stopped
+        hosts will be removed from the access_list and then verify that we can
+        access MS to read by performing a dmg system command. It then tries to
+        unsuccessfully make an update to MS. Lastly, we bring back the killed
+        servers and check that MS is once again available for writing.
+        """
         access_list = self.launch_servers((2 * N) + 1)
         leader = self.verify_leader(access_list)
 
-        # Shutdown N + 1 access_list hosts, including the MS leader
         kill_list = random.sample(access_list, N)
         kill_list.append(leader)
         stop_processes(kill_list, "daos_server")
 
-        # Remove the servers that was stopped from the access_list
         access_list = [x for x in access_list if x not in kill_list]
         self.server_managers[-1].dmg.hostlist = access_list[0]
 
-        # Verify that the MS is still accessible for reading
         self.verify_leader(access_list)
-
-        # Let's try to make an update by creating a pool that should fail.
         self.update_and_verify(ignore_status=True)
 
-        # Restore one of the killed MS replicas
         self.server_managers[-1].hosts = (
             leader, self.workdir, self.hostfile_servers_slots)
         self.start_server_managers()
-
-        # Check that we can make an update by creating a pool
         self.update_and_verify(ignore_status=False)
 
     def test_ms_resilience_1(self):
@@ -169,8 +170,10 @@ class ManagementServiceResilience(TestWithServers):
         continue to make progress. i.e. N=1, a minimum of 3 nodes is needed in
         the cluster and it will tolerate 1 node failure.
 
-        N = [1, 2] servers as access_points where, N = failure tolerance,
+        N = 1 servers as access_points where, N = failure tolerance,
         resilience_num = minimum amount of MS replicas to achieve resiliency.
+        This test case will shutdown 1 server and verify we still have MS
+        resiliency.
 
         :avocado: tags=all,hw,large,full_regression,control,ms_resilience
         :avocado: tags=ms_resilience_N_1
@@ -190,8 +193,10 @@ class ManagementServiceResilience(TestWithServers):
         continue to make progress. i.e. N=1, a minimum of 3 nodes is needed in
         the cluster and it will tolerate 1 node failure.
 
-        N = [1, 2] servers as access_points where, N = failure tolerance,
+        N = 2 servers as access_points where, N = failure tolerance,
         resilience_num = minimum amount of MS replicas to achieve resiliency.
+        This test case will shutdown 1 server and verify we still have MS
+        resiliency.
 
         :avocado: tags=all,hw,large,full_regression,control,ms_resilience
         :avocado: tags=ms_resilience_N_2
@@ -212,8 +217,10 @@ class ManagementServiceResilience(TestWithServers):
         continue to make progress. i.e. N=1, a minimum of 3 nodes is needed in
         the cluster and it will tolerate 1 node failure.
 
-        N = [1, 2] servers as access_points where, N = failure tolerance,
+        N = 1 servers as access_points where, N = failure tolerance,
         resilience_num = minimum amount of MS replicas to achieve resiliency.
+        This test case will shutdown 1 + 1 access_list hosts and check we've
+        lost resiliency.
 
         :avocado: tags=all,hw,large,full_regression,control,ms_resilience
         :avocado: tags=ms_lost_resilience_N_1
@@ -234,8 +241,10 @@ class ManagementServiceResilience(TestWithServers):
         continue to make progress. i.e. N=1, a minimum of 3 nodes is needed in
         the cluster and it will tolerate 1 node failure.
 
-        N = [1, 2] servers as access_points where, N = failure tolerance,
+        N = 2 servers as access_points where, N = failure tolerance,
         resilience_num = minimum amount of MS replicas to achieve resiliency.
+        This test case will shutdown 2 + 1 access_list hosts and check we've
+        lost resiliency.
 
         :avocado: tags=all,hw,large,full_regression,control,ms_resilience
         :avocado: tags=ms_lost_resilience_N_2

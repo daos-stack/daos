@@ -927,6 +927,7 @@ class DmgCommand(DmgCommandBase):
             output = json.loads(self.result.stdout)
             data["leader"] = output["response"]["CurrentLeader"]
             data["replicas"] = output["response"]["Replicas"]
+            data["status"] = output["status"]
         else:
             # Current Leader: 10.7.1.10:10001
             #    Replica Set: 10.7.1.10:10001, 10.7.1.68:10001, 10.7.1.9:10001
