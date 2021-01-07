@@ -35,6 +35,10 @@ class NLTestNoFunction(NLTestFail):
         super().__init__(self)
         self.function = function
 
+class NLTestOpTimeout(NLTestFail):
+    """Used to indicate that an operation timed out"""
+    pass
+
 instance_num = 0
 
 def get_inc_id():
@@ -300,13 +304,14 @@ class DaosServer():
         if self.running:
             self.stop()
 
+    # pylint: disable=no-self-use
     def _check_timing(self, op, start, max_time):
         if time.time() - start > max_time:
-            raise Exception("Failed to {} within {:.2f}s (took {:.2f}s)".format(
-                            op, max_time, elapsed))
+            raise NLTestOpTimeout("Failed to {} within {:.2f}s (took {:.2f}s)".format(
+                op, max_time, elapsed))
 
     def _check_system_state(self, desired):
-        # FIXME: The json returned from the control plane should have
+        # The json returned from the control plane should have
         # string-based states.
         states = {
             "ready": [8],
@@ -460,7 +465,7 @@ class DaosServer():
                 break
             try:
                 self._check_timing("stop", start, max_stop_time)
-            except Exeption as e:
+            except NLTestOpTimeout as e:
                 print('Failed to stop: {}'.format(e))
         print('Server stopped in {:.2f} seconds'.format(time.time() - start))
 
