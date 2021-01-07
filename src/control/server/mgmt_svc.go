@@ -36,6 +36,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/system"
@@ -68,16 +69,18 @@ type mgmtSvc struct {
 	harness          *IOServerHarness
 	membership       *system.Membership // if MS leader, system membership list
 	sysdb            *system.Database
+	events           *events.PubSub
 	clientNetworkCfg *config.ClientNetworkCfg
 	joinReqs         joinReqChan
 }
 
-func newMgmtSvc(h *IOServerHarness, m *system.Membership, s *system.Database) *mgmtSvc {
+func newMgmtSvc(h *IOServerHarness, m *system.Membership, s *system.Database, p *events.PubSub) *mgmtSvc {
 	return &mgmtSvc{
 		log:              h.log,
 		harness:          h,
 		membership:       m,
 		sysdb:            s,
+		events:           p,
 		clientNetworkCfg: new(config.ClientNetworkCfg),
 		joinReqs:         make(joinReqChan),
 	}
@@ -117,10 +120,10 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		return nil, err
 	}
 	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, req:%+v\n", *req)
-
 	if svc.clientNetworkCfg == nil {
 		return nil, errors.New("clientNetworkCfg is missing")
 	}
+	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, req:%+v\n", *req)
 
 	var groupMap *system.GroupMap
 	var err error

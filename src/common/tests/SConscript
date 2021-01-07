@@ -8,7 +8,6 @@ def define_checksum_timing(build, env, prereqs):
     build.test(env, 'checksum_timing', 'checksum_timing.c',
                LIBS=checksum_timing_libs)
 
-
 def scons():
     """Execute build"""
     Import('tenv', 'prereqs')

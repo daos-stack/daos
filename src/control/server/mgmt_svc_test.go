@@ -27,12 +27,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -40,6 +38,9 @@ import (
 )
 
 func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
+	msReplica := system.MockMember(t, 0, system.MemberStateJoined)
+	nonReplica := system.MockMember(t, 1, system.MemberStateJoined)
+
 	for name, tc := range map[string]struct {
 		mgmtSvc          *mgmtSvc
 		clientNetworkCfg *config.ClientNetworkCfg
@@ -47,14 +48,45 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 		expResp          *mgmtpb.GetAttachInfoResp
 	}{
 		"Server uses verbs + Infiniband": {
-			clientNetworkCfg: &config.ClientNetworkCfg{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: netdetect.Infiniband},
-			req:              &mgmtpb.GetAttachInfoReq{},
-			expResp:          &mgmtpb.GetAttachInfoResp{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: netdetect.Infiniband},
+			clientNetworkCfg: &config.ClientNetworkCfg{
+				Provider:        "ofi+verbs",
+				CrtCtxShareAddr: 1,
+				CrtTimeout:      10, NetDevClass: netdetect.Infiniband,
+			},
+			req: &mgmtpb.GetAttachInfoReq{},
+			expResp: &mgmtpb.GetAttachInfoResp{
+				Provider:        "ofi+verbs",
+				CrtCtxShareAddr: 1,
+				CrtTimeout:      10,
+				NetDevClass:     netdetect.Infiniband,
+				Psrs: []*mgmtpb.GetAttachInfoResp_Psr{
+					{
+						Rank: msReplica.Rank.Uint32(),
+						Uri:  msReplica.FabricURI,
+					},
+				},
+			},
 		},
 		"Server uses sockets + Ethernet": {
-			clientNetworkCfg: &config.ClientNetworkCfg{Provider: "ofi+sockets", CrtCtxShareAddr: 0, CrtTimeout: 5, NetDevClass: netdetect.Ether},
-			req:              &mgmtpb.GetAttachInfoReq{},
-			expResp:          &mgmtpb.GetAttachInfoResp{Provider: "ofi+sockets", CrtCtxShareAddr: 0, CrtTimeout: 5, NetDevClass: netdetect.Ether},
+			clientNetworkCfg: &config.ClientNetworkCfg{
+				Provider:        "ofi+sockets",
+				CrtCtxShareAddr: 0,
+				CrtTimeout:      5,
+				NetDevClass:     netdetect.Ether,
+			},
+			req: &mgmtpb.GetAttachInfoReq{},
+			expResp: &mgmtpb.GetAttachInfoResp{
+				Provider:        "ofi+sockets",
+				CrtCtxShareAddr: 0,
+				CrtTimeout:      5,
+				NetDevClass:     netdetect.Ether,
+				Psrs: []*mgmtpb.GetAttachInfoResp_Psr{
+					{
+						Rank: msReplica.Rank.Uint32(),
+						Uri:  msReplica.FabricURI,
+					},
+				},
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -69,11 +101,15 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			srv.setDrpcClient(newMockDrpcClient(nil))
 			harness.started.SetTrue()
 
-			cfg := new(mockDrpcClientConfig)
-			rb, _ := proto.Marshal(&mgmtpb.GetAttachInfoResp{})
-			cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, nil)
-			srv.setDrpcClient(newMockDrpcClient(cfg))
-			tc.mgmtSvc = newMgmtSvc(harness, nil, system.MockDatabase(t, log))
+			db := system.MockDatabaseWithAddr(t, log, msReplica.Addr)
+			m := system.NewMembership(log, db)
+			tc.mgmtSvc = newMgmtSvc(harness, m, db, nil)
+			if _, err := tc.mgmtSvc.membership.Add(msReplica); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := tc.mgmtSvc.membership.Add(nonReplica); err != nil {
+				t.Fatal(err)
+			}
 			tc.mgmtSvc.clientNetworkCfg = tc.clientNetworkCfg
 			gotResp, gotErr := tc.mgmtSvc.GetAttachInfo(context.TODO(), tc.req)
 			if gotErr != nil {

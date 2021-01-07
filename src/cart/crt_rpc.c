@@ -214,6 +214,25 @@ static struct crt_proto_rpc_format crt_fi_rpcs[] = {
 
 #undef X
 
+#define X(a, b, c, d, e) case a: return #a;
+
+/* Helper function to convert internally registered RPC opc to str */
+char
+*crt_opc_to_str(crt_opcode_t opc)
+{
+	if (crt_opc_is_swim(opc))
+		return "SWIM";
+
+	switch (opc) {
+	CRT_INTERNAL_RPCS_LIST
+	CRT_FI_RPCS_LIST
+	default:
+		return "DAOS";
+	}
+}
+
+#undef X
+
 /* CRT RPC related APIs or internal functions */
 int
 crt_internal_rpc_register(void)
