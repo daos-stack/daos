@@ -2772,7 +2772,6 @@ handle_response_internal(void *arg)
 	crt_rpc_t		 *rpc = cb_info->cci_rpc;
 
 	CRT_ENTRY();
-	D_INFO("cb_info %p:  rpc %p:  opc  %d\n", cb_info, rpc, rpc->cr_opc);
 	switch (rpc->cr_opc) {
 	case CRT_OPC_IV_FETCH:
 		handle_ivfetch_response(cb_info);

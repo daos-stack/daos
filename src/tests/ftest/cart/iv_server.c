@@ -669,9 +669,11 @@ iv_pre_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	    crt_generic_cb_t cb_func, void *cb_arg)
 {
 	DBG_ENTRY();
-	/* Test break case:			      */
-	/*  Version change on server while it handles a  */
-	/*  rpc request from another server.	     */
+	/*
+	 * Test break case:
+	 *  Version change on server while it handles a
+	 *  rpc request from another server.
+	 */
 	if (g_timing == 2) {
 		crt_group_version_set(grp, g_grp_version);
 		g_timing = 0;
@@ -1118,8 +1120,10 @@ iv_test_fetch_iv(crt_rpc_t *rpc)
 
 	rc = crt_iv_fetch(g_ivns, 0, &input->key, 0, 0, fetch_done, rpc);
 
-	/* Test break case:				 */
-	/*  Version change while valid request is in flight */
+	/*
+	 * Test break case:
+	 * Version change while valid request is in flight
+	 */
 	if (g_timing == 1) {
 		crt_group_version_set(grp, g_grp_version);
 		g_timing = 0;
@@ -1284,6 +1288,7 @@ int main(int argc, char **argv)
 	assert(rc == 0);
 
 	grp = crt_group_lookup(IV_GRP_NAME);
+	assert(grp != NULL);
 
 	crt_group_version(grp, &version);
 
