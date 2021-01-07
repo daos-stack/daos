@@ -1406,6 +1406,14 @@ ds_pool_start_all(void)
 	return 0;
 }
 
+static int
+stop_one(uuid_t uuid, void *varg)
+{
+	D_DEBUG(DB_MD, DF_UUID": stopping pool\n", DP_UUID(uuid));
+	ds_pool_stop(uuid);
+	return 0;
+}
+
 /*
  * Note that this function is currently called from the main xstream to save
  * one ULT creation.
@@ -1413,11 +1421,17 @@ ds_pool_start_all(void)
 int
 ds_pool_stop_all(void)
 {
-	/*
-	 * TODO: Before returning, release the ds_pool references held by
-	 * ds_pool_start_all.
-	 */
-	return ds_rsvc_stop_all(DS_RSVC_CLASS_POOL);
+	int	rc;
+
+	rc = ds_rsvc_stop_all(DS_RSVC_CLASS_POOL);
+	if (rc)
+		D_ERROR("failed to stop all pool svcs: "DF_RC"\n", DP_RC(rc));
+
+	rc = ds_mgmt_tgt_pool_iterate(stop_one, NULL /* arg */);
+	if (rc != 0)
+		D_ERROR("failed to stop all pools: "DF_RC"\n", DP_RC(rc));
+
+	return rc;
 }
 
 static int
