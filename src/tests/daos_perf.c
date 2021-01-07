@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -225,7 +225,6 @@ stride_buf_op(int opc, char *buf, unsigned offset, int size)
 				 * old version will be fully overwritten
 				 */
 				if (ts_single && opc == STRIDE_BUF_SET) {
-					stride_buf.sb_buf[pos] = 0;
 					continue;
 				}
 				return 0;
@@ -1608,9 +1607,6 @@ The options are as follows:\n\
 	storage space.\n\
 \n\
 -B	Profile performance of both update and fetch.\n\
-\n\
--n	Only run iterate performance test but with nesting iterator\n\
-	enable.  This can only run in vos mode.\n\
 \n\
 -f pathname\n\
 	Full path name of the VOS file.\n\
