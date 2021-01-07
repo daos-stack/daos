@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -609,8 +609,9 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		}
 		close(fd);
 	} else if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
-		struct statfs fs;
-		char *dir, *dirp;
+		struct statfs	fs;
+		char		*dir, *dirp;
+		mode_t		mode = S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH;
 
 		dir = strdup(path);
 		if (dir == NULL) {
@@ -651,11 +652,9 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 
 		/** create a new directory if POSIX/MPI-IO container */
 		if (backend_dfuse)
-			rc = mknod(path,
-				   S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH | S_IFIFO,
-				   0);
+			rc = mknod(path, mode | S_IFIFO, 0);
 		else
-			rc = mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+			rc = mkdir(path, mode);
 		if (rc == -1) {
 			int err = errno;
 
