@@ -626,8 +626,8 @@ daos_eq_create(daos_handle_t *eqh)
 
 	rc = crt_context_create(&eqx->eqx_ctx);
 	if (rc) {
-		D_WARN("Failed to create CART context ("DF_RC"), "
-		       "using the global one.\n", DP_RC(rc));
+		D_WARN("Failed to create CART context; using the global one "
+		       "("DF_RC").\n", DP_RC(rc));
 		eqx->eqx_ctx = daos_eq_ctx;
 	}
 
