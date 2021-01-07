@@ -49,8 +49,7 @@ class DaosCoreBase(TestWithServers):
 
         test_timeout = self.params.get("test_timeout", self.TEST_PATH)
         if test_timeout:
-            self.log.info("Test timeout updated to {timeout}".format(
-                timeout=test_timeout))
+            self.log.info("Test timeout updated to %s", test_timeout)
             self.timeout = test_timeout
 
     def setUp(self):
