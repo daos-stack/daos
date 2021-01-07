@@ -24,6 +24,8 @@ portions thereof marked with this legend must also reproduce the markings.
 
 import os
 import time
+import multiprocessing
+import threading
 from apricot import TestWithServers
 from general_utils import run_command, DaosTestError, get_log_file
 import slurm_utils
@@ -31,10 +33,10 @@ from ClusterShell.NodeSet import NodeSet
 from getpass import getuser
 import socket
 from agent_utils import include_local_host
-
 from soak_utils import DDHHMMSS_format, add_pools, get_remote_logs, \
-    is_harasser, launch_harassers, harasser_completion, create_ior_cmdline, \
-    cleanup_dfuse, create_fio_cmdline, build_job_script, SoakTestError
+    launch_snapshot, launch_exclude_reintegrate, \
+    create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
+    build_job_script, SoakTestError, launch_server_stop_start, get_harassers
 
 
 class SoakTestBase(TestWithServers):
@@ -61,15 +63,15 @@ class SoakTestBase(TestWithServers):
         self.taskspernode = None
         self.soak_results = None
         self.srun_params = None
-        self.test_iteration = None
-        self.h_list = None
-        self.harasser_joblist = None
+        self.harassers = None
         self.harasser_results = None
-        self.harasser_timeout = None
         self.all_failed_jobs = None
         self.username = None
         self.used = None
         self.dfuse = []
+        self.harasser_args = None
+        self.harasser_loop_time = None
+        self.all_failed_harassers = None
 
     def setUp(self):
         """Define test setup to be done."""
@@ -88,6 +90,8 @@ class SoakTestBase(TestWithServers):
         self.local_pass_dir = self.outputsoakdir + "/pass" + str(self.loop)
         self.sharedlog_dir = self.tmp + "/soak"
         self.sharedsoakdir = self.sharedlog_dir + "/pass" + str(self.loop)
+        # Initialize dmg cmd
+        self.dmg_command = self.get_dmg_command()
         # Fail if slurm partition is not defined
         # NOTE: Slurm reservation and partition are created before soak runs.
         # CI uses partition=daos_client and no reservation.
@@ -143,6 +147,8 @@ class SoakTestBase(TestWithServers):
         if self.all_failed_jobs:
             errors.append("SOAK FAILED: The following jobs failed {} ".format(
                 " ,".join(str(j_id) for j_id in self.all_failed_jobs)))
+        if self.all_failed_harassers:
+            errors.extend(self.all_failed_harassers)
         # Check if any dfuse mount points need to be cleaned
         if self.dfuse:
             try:
@@ -154,6 +160,90 @@ class SoakTestBase(TestWithServers):
         if not self.setup_start_agents:
             self.hostlist_clients = [socket.gethostname().split('.', 1)[0]]
         return errors
+
+    def launch_harasser(self, harasser, pool):
+        """Launch any harasser tests if defined in yaml.
+
+        Args:
+            harasser (str): harasser to launch
+            pool (list): list of TestPool obj
+
+        Returns:
+            status_msg(str): pass/fail status message
+
+        """
+        # Init the status message
+        status_msg = None
+        job = None
+        results = multiprocessing.Queue()
+        args = multiprocessing.Queue()
+        # Launch harasser
+        self.log.info("\n<<<Launch harasser %s>>>\n", harasser)
+        if harasser == "snapshot":
+            method = launch_snapshot
+            name = "SNAPSHOT"
+            params = (self, self.pool[0], name)
+            job = threading.Thread(target=method, args=params, name=name)
+        elif harasser == "exclude":
+            method = launch_exclude_reintegrate
+            name = "EXCLUDE"
+            params = (self, pool[1], name, results, args)
+            job = multiprocessing.Process(target=method, args=params, name=name)
+        elif harasser == "reintegrate":
+            method = launch_exclude_reintegrate
+            name = "REINTEGRATE"
+            params = (self, pool[1], name, results, args)
+            job = multiprocessing.Process(target=method, args=params, name=name)
+        elif harasser == "server-stop":
+            method = launch_server_stop_start
+            name = "SVR_STOP"
+            params = (self, pool, name, results, args)
+            job = multiprocessing.Process(target=method, args=params, name=name)
+        elif harasser == "server-reintegrate":
+            method = launch_server_stop_start
+            name = "SVR_REINTEGRATE"
+            params = (self, pool, name, results, args)
+            job = multiprocessing.Process(target=method, args=params, name=name)
+        else:
+            raise SoakTestError(
+                "<<FAILED: Harasser {} is not supported. ".format(
+                    harasser))
+
+        # start harasser
+        job.start()
+        timeout = self.params.get("harasser_to", "/run/soak_harassers/*", 30)
+        # Wait for harasser job to join
+        job.join(timeout)
+        if job.is_alive():
+            self.log.error(
+                "<< ERROR: harasser %s is alive, failed to join>>", job.name)
+            if name not in ["REBUILD", "SNAPSHOT"]:
+                job.terminate()
+                status_msg = "<<FAILED: {} has been terminated.".format(name)
+            raise SoakTestError(
+                "<<FAILED: Soak failed while running {} . ".format(name))
+        if name not in ["REBUILD", "SNAPSHOT"]:
+            self.harasser_results = results.get()
+            self.harasser_args = args.get()
+        # Check if the completed job passed
+        self.log.info("Harasser results: %s", self.harasser_results)
+        self.log.info("Harasser args: %s", self.harasser_args)
+        if not self.harasser_results[name.upper()]:
+            status_msg = "<< HARASSER {} FAILED in pass {} at {}>> ".format(
+                name, self.loop, time.ctime())
+            self.log.error(status_msg)
+        return status_msg
+
+    def harasser_job_done(self, args):
+        """Call this function when a job is done.
+
+        Args:
+            args (list):name   job name of harasser,
+                        status  job completion status
+                        vars:   variables used in harasser
+        """
+        self.harasser_results[args["name"]] = args["status"]
+        self.harasser_args[args["name"]] = args["vars"]
 
     def job_setup(self, job, pool):
         """Create the cmdline needed to launch job.
@@ -194,6 +284,7 @@ class SoakTestBase(TestWithServers):
             # scripts are single cmdline
             scripts = build_job_script(self, commands, job, 1, 1)
             job_cmdlist.extend(scripts)
+
         else:
             raise SoakTestError(
                 "<<FAILED: Job {} is not supported. ".format(
@@ -252,6 +343,13 @@ class SoakTestBase(TestWithServers):
         """
         self.log.info(
             "<<Job Completion - %s >> at %s", self.test_name, time.ctime())
+        harasser_interval = 0
+        failed_harasser_msg = None
+        harasser_timer = time.time()
+        # loop time exists after the first pass; no harassers in the first pass
+        if self.harasser_loop_time and self.harassers:
+            harasser_interval = self.harasser_loop_time / (
+                len(self.harassers) + 3)
         # If there is nothing to do; exit
         if job_id_list:
             # wait for all the jobs to finish
@@ -264,7 +362,19 @@ class SoakTestBase(TestWithServers):
                         time.ctime())
                     for job in job_id_list:
                         _ = slurm_utils.cancel_jobs(int(job))
+
+                # launch harassers if enabled;
+                # one harasser at a time starting on pass2
+                if self.harassers:
+                    if self.loop >= 2 and (
+                            time.time() > harasser_timer + harasser_interval):
+                        harasser = self.harassers.pop(0)
+                        harasser_timer += harasser_interval
+                        failed_harasser_msg = self.launch_harasser(
+                            harasser, self.pool)
                 time.sleep(5)
+            if failed_harasser_msg is not None:
+                self.all_failed_harassers.append(failed_harasser_msg)
             # check for JobStatus = COMPLETED or CANCELLED (i.e. TEST TO)
             for job, result in self.soak_results.items():
                 if result in ["COMPLETED", "CANCELLED"]:
@@ -317,25 +427,19 @@ class SoakTestBase(TestWithServers):
         os.makedirs(local_pass_dir)
         os.makedirs(self.sharedsoakdir)
         # Setup cmdlines for job with specified pool
-        if len(pools) < len(jobs):
-            raise SoakTestError(
-                "<<FAILED: There are not enough pools to run this test>>")
-        for index, job in enumerate(jobs):
-            cmdlist.extend(self.job_setup(job, pools[index]))
+        # if len(pools) < len(jobs):
+        #     raise SoakTestError(
+        #         "<<FAILED: There are not enough pools to run this test>>")
+        # for index, job in enumerate(jobs):
+        #     cmdlist.extend(self.job_setup(job, pools))
+        for job in jobs:
+            cmdlist.extend(self.job_setup(job, pools))
         # Gather the job_ids
         job_id_list = self.job_startup(cmdlist)
         # Initialize the failed_job_list to job_list so that any
         # unexpected failures will clear the squeue in tearDown
         self.failed_job_id_list = job_id_list
-        # launch harassers if defined and enabled
-        if self.h_list and self.loop > 1:
-            self.log.info("<<Harassers are enabled>>")
-            launch_harassers(self, self.h_list, pools)
-            if not harasser_completion(self, self.harasser_timeout):
-                raise SoakTestError("<<FAILED: Harassers failed ")
-            # rebuild can only run once for now
-            if is_harasser(self, "rebuild"):
-                self.h_list.remove("rebuild")
+
         # Wait for jobs to finish and cancel/kill jobs if necessary
         self.failed_job_id_list = self.job_completion(job_id_list)
         # Log the failing job ID
@@ -357,24 +461,27 @@ class SoakTestBase(TestWithServers):
         """
         self.soak_results = {}
         self.pool = []
-        self.harasser_joblist = []
+        self.container = []
         self.harasser_results = {}
-        test_to = self.params.get("test_timeout", test_param)
-        self.job_timeout = self.params.get("job_timeout", test_param)
-        self.harasser_timeout = self.params.get("harasser_timeout", test_param)
-        self.test_name = self.params.get("name", test_param)
-        self.nodesperjob = self.params.get("nodesperjob", test_param)
-        self.test_iteration = self.params.get("iteration", test_param)
+        self.harasser_args = {}
+        run_harasser = False
+        self.all_failed_jobs = []
+        self.all_failed_harassers = []
+        test_to = self.params.get("test_timeout", test_param + "*")
+        self.job_timeout = self.params.get("job_timeout", test_param + "*")
+        self.test_name = self.params.get("name", test_param + "*")
+        self.nodesperjob = self.params.get("nodesperjob", test_param + "*")
         self.taskspernode = self.params.get("taskspernode", test_param + "*")
-        self.h_list = self.params.get("harasserlist", test_param + "*")
+        harassers = self.params.get("harasserlist", test_param + "*")
         job_list = self.params.get("joblist", test_param + "*")
-        pool_list = self.params.get("poollist", test_param + "*")
         rank = self.params.get("rank", "/run/container_reserved/*")
-        if is_harasser(self, "rebuild"):
-            obj_class = "_".join(["OC", str(
-                self.params.get("dfs_oclass", "/run/rebuild/*")[0])])
-        else:
-            obj_class = "OC_SX"
+        obj_class = self.params.get("oclass", "/run/container_reserved/*")
+        if harassers:
+            harasserlist = get_harassers(harassers)
+            self.harassers = harasserlist[:]
+            run_harasser = True
+            self.log.info("<<< Initial harrasser list = %s", " ".join(
+                [harasser for harasser in self.harassers]))
         # Create the reserved pool with data
         # self.pool is a list of all the pools used in soak
         # self.pool[0] will always be the reserved pool
@@ -383,10 +490,10 @@ class SoakTestBase(TestWithServers):
 
         # Create the container and populate with a known data
         # TO-DO: use IOR to write and later read verify the data
-        self.container = self.get_container(
+        resv_cont = self.get_container(
             self.pool[0], "/run/container_reserved/*", True)
-        self.container.write_objects(rank, obj_class)
-        self.all_failed_jobs = []
+        resv_cont.write_objects(rank, obj_class)
+
         # cleanup soak log directories before test on all nodes
         result = slurm_utils.srun(
             NodeSet.fromlist(self.hostlist_clients), "rm -rf {}".format(
@@ -404,6 +511,7 @@ class SoakTestBase(TestWithServers):
                 raise SoakTestError(
                     "<<FAILED: Soak directory {} was not removed {}>>".format(
                         log_dir, error))
+
         # Initialize time
         start_time = time.time()
         self.test_timeout = int(3600 * test_to)
@@ -413,19 +521,28 @@ class SoakTestBase(TestWithServers):
             # Start new pass
             start_loop_time = time.time()
             self.log.info(
-                "<<Soak1 PASS %s: time until done %s>>", self.loop,
+                "<<Soak PASS %s: time until done %s>>", self.loop,
                 DDHHMMSS_format(self.end_time - time.time()))
-            # Create all specified pools
-            add_pools(self, pool_list)
+            # Create pool for jobs
+            add_pools(self, ["pool_jobs"])
             self.log.info(
                 "Current pools: %s",
                 " ".join([pool.uuid for pool in self.pool]))
+            # Initialize if harassers
+            if run_harasser and not self.harassers:
+                self.harasser_results = {}
+                self.harasser_args = {}
+                self.harassers = harasserlist[:]
             try:
-                self.execute_jobs(job_list, self.pool[1:])
+                self.execute_jobs(job_list, self.pool[1])
             except SoakTestError as error:
                 self.fail(error)
-            errors = self.destroy_pools(self.pool[1:])
+            # Check space after jobs done
+            self.pool[1].display_pool_daos_space()
+            errors = self.destroy_containers(self.container)
+            errors.extend(self.destroy_pools(self.pool[1]))
             # remove the test pools from self.pool; preserving reserved pool
+            self.container = []
             self.pool = [self.pool[0]]
             self.log.info(
                 "Current pools: %s",
@@ -436,14 +553,18 @@ class SoakTestBase(TestWithServers):
                 break
             loop_time = time.time() - start_loop_time
             self.log.info(
-                "<<PASS %s completed in %s >>", self.loop, DDHHMMSS_format(
-                    loop_time))
+                "<<PASS %s completed in %s at %s>>", self.loop, DDHHMMSS_format(
+                    loop_time), time.ctime())
+            # Initialize harasser loop time from first pass loop time
+            if self.loop == 1 and self.harassers:
+                self.harasser_loop_time = loop_time
             self.loop += 1
         # TO-DO: use IOR
         self.assertTrue(
-            self.container.read_objects(),
+            resv_cont.read_objects(),
             "Data verification error on reserved pool"
             "after SOAK completed")
+        self.container.append(resv_cont)
         # gather the daos logs from the client nodes
         self.log.info(
             "<<<<SOAK TOTAL TEST TIME = %s>>>", DDHHMMSS_format(

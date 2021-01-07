@@ -24,7 +24,6 @@
 package control
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -56,10 +55,6 @@ func mockHostList(hosts ...string) []string {
 
 func TestControl_getRequestHosts(t *testing.T) {
 	defaultCfg := DefaultConfig()
-	defaultCfg.HostList = mockHostList("a", "b", "c")
-	for i, host := range defaultCfg.HostList {
-		defaultCfg.HostList[i] = fmt.Sprintf("%s:%d", host, defaultCfg.ControlPort)
-	}
 
 	for name, tc := range map[string]struct {
 		cfg    *Config
@@ -98,21 +93,6 @@ func TestControl_getRequestHosts(t *testing.T) {
 			cfg:    defaultCfg,
 			req:    &testTgtChooser{},
 			expOut: mockHostList(defaultCfg.HostList...),
-		},
-		"default config; MS request; empty req list": {
-			cfg: defaultCfg,
-			req: &testTgtChooser{
-				toMS: true,
-			},
-			expOut: mockHostList(defaultCfg.HostList[0]),
-		},
-		"default config; MS request; use req list": {
-			cfg: defaultCfg,
-			req: &testTgtChooser{
-				hostList: defaultCfg.HostList[1:],
-				toMS:     true,
-			},
-			expOut: mockHostList(defaultCfg.HostList[1]),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
