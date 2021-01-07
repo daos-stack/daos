@@ -428,7 +428,7 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 			   daos_epoch_t epoch, uint32_t intent, uint32_t type);
 
 /**
- * Get entry DTX state.
+ * Get local entry DTX state. Only used by VOS aggregation.
  *
  * \param entry		[IN]	DTX local id
  *
