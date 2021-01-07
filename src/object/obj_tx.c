@@ -292,7 +292,7 @@ dc_tx_alloc(daos_handle_t coh, daos_epoch_t epoch, uint64_t flags,
 		return -DER_NO_HDL;
 
 	ph = dc_cont_hdl2pool_hdl(coh);
-	D_ASSERT(!daos_handle_is_inval(ph));
+	D_ASSERT(daos_handle_is_valid(ph));
 
 	D_ALLOC_PTR(tx);
 	if (tx == NULL)
@@ -1060,7 +1060,8 @@ dc_tx_classify_update(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	struct daos_oclass_attr		*oca = NULL;
 	int				 rc = 0;
 
-	if (daos_oclass_is_ec(obj->cob_md.omd_id, &oca)) {
+	oca = obj_get_oca(obj);
+	if (DAOS_OC_IS_EC(oca)) {
 		struct obj_reasb_req	*reasb_req;
 
 		D_ALLOC_PTR(reasb_req);
@@ -1158,7 +1159,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 		leader_dtr = d_list_entry(dtr_list->next, struct dc_tx_rdg,
 					  dtr_link);
 
-	oca = daos_oclass_attr_find(obj->cob_md.omd_id);
+	oca = obj_get_oca(obj);
 	size = sizeof(*dtr) + sizeof(uint32_t) * obj->cob_grp_size;
 	D_ALLOC(dtr, size);
 	if (dtr == NULL)
@@ -1187,7 +1188,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 
 		rc = obj_shard_open(obj, idx, tx->tx_pm_ver, &shard);
 		if (rc == -DER_NONEXIST) {
-			if (oca->ca_resil == DAOS_RES_EC && !all) {
+			if (DAOS_OC_IS_EC(oca) && !all) {
 				if (idx >= start + obj->cob_grp_size -
 							oca->u.ec.e_p)
 					skipped_parity++;
@@ -1341,7 +1342,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	if (read)
 		dtr->dtr_group.drg_flags = DGF_RDONLY;
 
-	if (oca->ca_resil == DAOS_RES_EC && !all) {
+	if (DAOS_OC_IS_EC(oca) && !all) {
 		dtr->dtr_group.drg_redundancy = oca->u.ec.e_p + 1;
 		D_ASSERT(dtr->dtr_group.drg_redundancy <= obj->cob_grp_size);
 	} else {
@@ -1617,7 +1618,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		leader_oid.id_pub = obj->cob_md.omd_id;
 		leader_oid.id_shard = i;
 		leader_dtrg_idx = obj_get_shard(obj, i)->po_target;
-		if (!daos_oclass_is_ec(obj->cob_md.omd_id, NULL))
+		if (!obj_is_ec(obj))
 			mbs->dm_flags |= DMF_SRDG_REP;
 
 		/* If there is only one redundancy group to be modified,

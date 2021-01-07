@@ -133,7 +133,7 @@ pool_hop_free(struct d_ulink *hlink)
 	if (pool->vp_vea_info != NULL)
 		vea_unload(pool->vp_vea_info);
 
-	if (!daos_handle_is_inval(pool->vp_cont_th))
+	if (daos_handle_is_valid(pool->vp_cont_th))
 		dbtree_close(pool->vp_cont_th);
 
 	if (pool->vp_uma.uma_pool)
