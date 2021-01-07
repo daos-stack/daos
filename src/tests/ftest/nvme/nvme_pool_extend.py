@@ -22,14 +22,18 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import time
+import uuid
 import threading
 
 from itertools import product
 from avocado import fail_on
+from apricot import TestWithServers, skipForTicket
 from test_utils_pool import TestPool
+from ior_utils import IorCommand
+from job_manager_utils import Mpirun
 from write_host_file import write_host_file
 from command_utils import CommandFailure
-from osa_utils import OSAUtils
+from mpio_utils import MpioUtils
 
 try:
     # python 3.x
@@ -39,7 +43,7 @@ except ImportError:
     import Queue as queue
 
 
-class NvmePoolExtend(OSAUtils):
+class NvmePoolExtend(TestWithServers):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
@@ -85,6 +89,51 @@ class NvmePoolExtend(OSAUtils):
         """
         data = self.dmg_command.pool_query(self.pool.uuid)
         return int(data["version"])
+
+    def ior_thread(self, pool, oclass, api, test, flags, results):
+        """Start threads and wait until all threads are finished.
+        Args:
+            pool (object): pool
+            oclass (str): IOR object class
+            API (str): IOR API
+            test (list): IOR test sequence
+            flags (str): IOR flags
+            results (queue): queue for returning thread results
+        """
+        processes = self.params.get("slots", "/run/ior/clientslots/*")
+        mpio_util = MpioUtils()
+        if mpio_util.mpich_installed(self.hostlist_clients) is False:
+            self.fail("Exiting Test: Mpich not installed")
+        self.pool = pool
+        # Define the parameters for the ior_runner_thread method
+        ior_cmd = IorCommand()
+        ior_cmd.get_params(self)
+        ior_cmd.set_daos_params(self.server_group, self.pool)
+        ior_cmd.dfs_oclass.update(oclass)
+        ior_cmd.api.update(api)
+        ior_cmd.transfer_size.update(test[0])
+        ior_cmd.block_size.update(test[1])
+        ior_cmd.flags.update(flags)
+        if "-w" in flags:
+            self.container_info["{}{}{}"
+                                .format(oclass,
+                                        api,
+                                        test[0])] = str(uuid.uuid4())
+
+        # Define the job manager for the IOR command
+        manager = Mpirun(ior_cmd, mpitype="mpich")
+        key = "".join([oclass, api, str(test[0])])
+        manager.job.dfs_cont.update(self.container_info[key])
+        env = ior_cmd.get_default_env(str(manager))
+        manager.assign_hosts(self.hostlist_clients, self.workdir, None)
+        manager.assign_processes(processes)
+        manager.assign_environment(env, True)
+
+        # run IOR Command
+        try:
+            manager.run()
+        except CommandFailure as _error:
+            results.put("FAIL")
 
     def run_ior_thread(self, action, oclass, api, test):
         """Start the IOR thread for either writing or
@@ -156,13 +205,17 @@ class NvmePoolExtend(OSAUtils):
                 time.sleep(25)
                 self.log.info("Pool Version at the beginning %s", pver_begin)
                 output = self.dmg_command.pool_extend(self.pool.uuid,
-                                                      "6,7", scm_pool_size,
+                                                      "6, 7", scm_pool_size,
                                                       nvme_pool_size)
                 self.log.info(output)
-                self.is_rebuild_done(3)
-                self.assert_on_rebuild_failure()
+                fail_count = 0
+                while fail_count <= 20:
+                    pver_extend = self.get_pool_version()
+                    time.sleep(15)
+                    fail_count += 1
+                    if pver_extend > pver_begin:
+                        break
 
-                pver_extend = self.get_pool_version()
                 self.log.info("Pool Version after extend %s", pver_extend)
                 # Check pool version incremented after pool extend
                 self.assertTrue(pver_extend > pver_begin,
@@ -174,15 +227,14 @@ class NvmePoolExtend(OSAUtils):
                 display_string = "Pool{} space at the End".format(val)
                 self.pool = pool[val]
                 self.pool.display_pool_daos_space(display_string)
+                pool[val].destroy()
 
                 # Stop the extra node servers (rank 6 and 7)
                 output = self.dmg_command.system_stop(self.pool.uuid,
-                                                      "6,7")
+                                                      "6, 7")
                 self.log.info(output)
-                self.is_rebuild_done(3)
-                self.assert_on_rebuild_failure()
-        pool[val].destroy()
 
+    @skipForTicket("DAOS-5869")
     def test_nvme_pool_extend(self):
         """Test ID: DAOS-2086
         Test Description: NVME Pool Extend
