@@ -100,6 +100,7 @@ smoke:
     joblist:
         - ior_smoke
         - fio_smoke
+        - daos_racer
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -147,6 +148,8 @@ fio_smoke:
     rw:
         - 'rw'
         - 'randrw'
+daos_racer:
+  runtime: 120
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"
     disable_direct_io: True

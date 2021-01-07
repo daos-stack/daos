@@ -36,7 +36,8 @@ from agent_utils import include_local_host
 from soak_utils import DDHHMMSS_format, add_pools, get_remote_logs, \
     launch_snapshot, launch_exclude_reintegrate, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
-    build_job_script, SoakTestError, launch_server_stop_start, get_harassers
+    build_job_script, SoakTestError, launch_server_stop_start, get_harassers, \
+    create_racer_cmdline
 
 
 class SoakTestBase(TestWithServers):
@@ -284,7 +285,11 @@ class SoakTestBase(TestWithServers):
             # scripts are single cmdline
             scripts = build_job_script(self, commands, job, 1, 1)
             job_cmdlist.extend(scripts)
-
+        elif "daos_racer" in job:
+            commands = create_racer_cmdline(self, job, pool)
+            # scripts are single cmdline
+            scripts = build_job_script(self, commands, job, 1, 1)
+            job_cmdlist.extend(scripts)
         else:
             raise SoakTestError(
                 "<<FAILED: Job {} is not supported. ".format(

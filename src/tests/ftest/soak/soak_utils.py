@@ -28,6 +28,7 @@ import random
 import threading
 from ior_utils import IorCommand
 from fio_utils import FioCommand
+from daos_racer_utils import DaosRacerCommand
 from dfuse_utils import Dfuse
 from job_manager_utils import Srun
 from command_utils_base import BasicParameter, CommandFailure
@@ -642,6 +643,42 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         "<<IOR {} cmdlines>>:".format(api))
                     for cmd in sbatch_cmds:
                         self.log.info("%s", cmd)
+    return commands
+
+
+def create_racer_cmdline(self, job_spec, pool):
+    """Create the srun cmdline to run daos_racer.
+
+    Args:
+        self (obj): soak obj
+        job_spec (str): fio job in yaml to run
+        pool (obj):   TestPool obj
+    Returns:
+        cmd(list): list of cmdlines
+
+    """
+    commands = []
+    racer_namespace = "/run/{}".format(job_spec)
+    daos_racer = DaosRacerCommand(
+        self.bin, self.hostlist_clients[0], self.dmg_command)
+    daos_racer.namespace = "{}/*".format(racer_namespace)
+    daos_racer.get_params(self)
+    daos_racer.set_environment(
+        daos_racer.get_environment(self.server_managers[0]))
+    daos_racer.pool_uuid.update(pool.uuid)
+    add_containers(self, pool)
+    daos_racer.cont_uuid.update(self.container[-1].uuid)
+    srun_cmds = []
+    # add fio cmline
+    srun_cmds.append(str(daos_racer.__str__()))
+    srun_cmds.append("status=$?")
+    # add exit code
+    srun_cmds.append("exit $status")
+    log_name = ""
+    commands.append([srun_cmds, log_name])
+    self.log.info("<<DAOS racer cmdlines>>:")
+    for cmd in srun_cmds:
+        self.log.info("%s", cmd)
     return commands
 
 
