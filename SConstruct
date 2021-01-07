@@ -11,8 +11,8 @@ from distutils.spawn import find_executable
 
 SCons.Warnings.warningAsException()
 
-# pylint: disable=undefined-variabl
-# pylint: disable=unused-variabl
+# pylint: disable=undefined-variable
+# pylint: disable=unused-variable
 
 try:
     input = raw_input # pylint: disable=redefined-builtin
