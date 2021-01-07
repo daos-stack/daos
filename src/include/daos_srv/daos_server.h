@@ -441,41 +441,23 @@ struct dss_module {
 };
 
 /**
- * DSS_TGT_SELF indicates scheduling ULT on caller's self XS.
- */
-#define DSS_TGT_SELF	(-1)
-
-/**
  * Stack size used for ULTs with deep stack
  */
 #define DSS_DEEP_STACK_SZ	65536
 
-/** ULT types to determine on which XS to schedule the ULT */
-enum dss_ult_type {
-	/** for dtx_resync */
-	DSS_ULT_DTX_RESYNC = 100,
+enum dss_xs_type {
+	/** current xstream */
+	DSS_XS_SELF	= -1,
+	/** operations needs accessing VOS */
+	DSS_XS_VOS	= 0,
 	/** forward/dispatch IO request for TX coordinator */
-	DSS_ULT_IOFW,
+	DSS_XS_IOFW	= 1,
 	/** EC/checksum/compress computing offload */
-	DSS_ULT_EC,
-	DSS_ULT_CHECKSUM,
-	DSS_ULT_COMPRESS,
-	/** pool service ULT */
-	DSS_ULT_POOL_SRV,
-	/** RDB ULT */
-	DSS_ULT_RDB,
-	/** rebuild ULT such as scanner/puller, status checker etc. */
-	DSS_ULT_REBUILD,
-	/** drpc listener ULT */
-	DSS_ULT_DRPC_LISTENER,
-	/** drpc handler ULT */
-	DSS_ULT_DRPC_HANDLER,
-	/** GC & aggregation ULTs */
-	DSS_ULT_GC,
-	/** miscellaneous ULT */
-	DSS_ULT_MISC,
-	/** I/O ULT */
-	DSS_ULT_IO,
+	DSS_XS_OFFLOAD	= 2,
+	/** pool service, RDB, drpc handler */
+	DSS_XS_SYS	= 3,
+	/** drpc listener */
+	DSS_XS_DRPC	= 4,
 };
 
 int dss_parameters_set(unsigned int key_id, uint64_t value);
@@ -484,12 +466,11 @@ typedef ABT_pool (*dss_abt_pool_choose_cb_t)(crt_rpc_t *rpc, ABT_pool *pools);
 
 void dss_abt_pool_choose_cb_register(unsigned int mod_id,
 				     dss_abt_pool_choose_cb_t cb);
-int dss_ult_create(void (*func)(void *), void *arg, int ult_type, int tgt_id,
+int dss_ult_create(void (*func)(void *), void *arg, int xs_type, int tgt_id,
 		   size_t stack_size, ABT_thread *ult);
 int dss_ult_execute(int (*func)(void *), void *arg, void (*user_cb)(void *),
-		    void *cb_args, int ult_type, int tgt_id, size_t stack_size);
-int dss_ult_create_all(void (*func)(void *), void *arg, int ult_type,
-		       bool main);
+		    void *cb_args, int xs_type, int tgt_id, size_t stack_size);
+int dss_ult_create_all(void (*func)(void *), void *arg, bool main);
 
 struct dss_sleep_ult {
 	ABT_thread	dsu_thread;
@@ -577,16 +558,13 @@ struct dss_coll_args {
  */
 int
 dss_task_collective_reduce(struct dss_coll_ops *ops,
-			   struct dss_coll_args *coll_args, int flag,
-			   int ult_type);
+			   struct dss_coll_args *coll_args, int flag);
 int
 dss_thread_collective_reduce(struct dss_coll_ops *ops,
-			     struct dss_coll_args *coll_args, int flag,
-			     int ult_type);
+			     struct dss_coll_args *coll_args, int flag);
+int dss_task_collective(int (*func)(void *), void *arg, int flag);
+int dss_thread_collective(int (*func)(void *), void *arg, int flag);
 
-int dss_task_collective(int (*func)(void *), void *arg, int flag, int ult_type);
-int dss_thread_collective(int (*func)(void *), void *arg, int flag,
-			  int ult_type);
 struct dss_module *dss_module_get(int mod_id);
 /* Convert Argobots errno to DAOS ones. */
 static inline int

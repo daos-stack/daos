@@ -186,7 +186,7 @@ func (svc *ControlService) SystemQuery(ctx context.Context, req *ctlpb.SystemQue
 		return nil, errors.Errorf("nil %T request", req)
 	}
 
-	if err := svc.sysdb.CheckLeader(); err != nil {
+	if err := svc.sysdb.CheckReplica(); err != nil {
 		return nil, err
 	}
 

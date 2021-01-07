@@ -71,10 +71,7 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 	}
 
 	h.started.SetTrue()
-	mi, err := h.getMSLeaderInstance()
-	if err != nil {
-		t.Fatal(err)
-	}
+	mi := h.instances[0]
 	if mi._superblock == nil {
 		t.Fatal("instance superblock is nil after createSuperblock()")
 	}
