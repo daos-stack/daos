@@ -79,11 +79,15 @@ RUN zypper --non-interactive update;                                         \
            readline-devel sg3_utils which yasm                               \
            python-devel python3-devel valgrind-devel hwloc-devel             \
            openmpi3-devel man fuse3-devel patchelf scons lua-lmod            \
-           libjson-c-devel liblz4-devel python3-distro curl maven
+           libjson-c-devel liblz4-devel python3-distro curl                  \
+           java-1_8_0-openjdk maven
 # Monkey-patch MODULEPATH
 RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then        \
         sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/' /etc/profile.d/lmod.sh; \
     fi
+
+RUN java -version
+
 RUN update-ca-certificates
 RUN zypper --non-interactive install --allow-unsigned-rpm lua-lmod
 
