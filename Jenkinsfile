@@ -243,11 +243,11 @@ String functional_packages(String distro) {
                   "romio-tests " +
                   "testmpio " +
                   "mpi4py-tests " +
-                  "hdf5-mpich2-tests " +
+                  "hdf5-mpich-tests " +
                   "hdf5-openmpi3-tests " +
-                  "hdf5-vol-daos-mpich2-tests " +
+                  "hdf5-vol-daos-mpich-tests " +
                   "hdf5-vol-daos-openmpi3-tests " +
-                  "MACSio-mpich2 " +
+                  "MACSio-mpich " +
                   "MACSio-openmpi3 " +
                   "mpifileutils-mpich "
     if (distro == "leap15") {
