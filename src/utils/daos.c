@@ -50,6 +50,7 @@
 #include "daos_api.h"
 #include "daos_fs.h"
 #include "daos_uns.h"
+#include "daos_fs.h"
 #include "daos_hdlr.h"
 #include "dfuse_ioctl.h"
 
@@ -65,6 +66,13 @@ daos_parse_cmode(const char *string, uint32_t *mode)
 	else
 		return -1;
 	return 0;
+
+static enum fs_op
+filesystem_op_parse(const char *str)
+{
+	if (strcmp(str, "copy") == 0)
+		return FS_COPY;
+	return -1;
 }
 
 static enum cont_op
@@ -554,6 +562,8 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"attr",	required_argument,	NULL,	'a'},
 		{"value",	required_argument,	NULL,	'v'},
 		{"path",	required_argument,	NULL,	'd'},
+		{"src",		required_argument,	NULL,	'S'},
+		{"dst",		required_argument,	NULL,	'D'},
 		{"type",	required_argument,	NULL,	't'},
 		{"mode",	required_argument,	NULL,	'M'},
 		{"oclass",	required_argument,	NULL,	'o'},
@@ -580,10 +590,12 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	char			*cmdname = NULL;
 
 	assert(ap != NULL);
-	ap->p_op = -1;
-	ap->c_op = -1;
-	ap->o_op = -1;
-	ap->mode = 0;
+
+	ap->p_op  = -1;
+	ap->c_op  = -1;
+	ap->o_op  = -1;
+	ap->mode  = 0;
+	ap->fs_op = -1;
 
 	D_STRNDUP(ap->sysname, default_sysname, strlen(default_sysname));
 	if (ap->sysname == NULL)
@@ -594,6 +606,14 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		ap->c_op = cont_op_parse(argv[2]);
 		if (ap->c_op == -1) {
 			fprintf(stderr, "invalid container command: %s\n",
+				argv[2]);
+			return RC_PRINT_HELP;
+		}
+	} else if ((strcmp(argv[1], "filesystem") == 0) ||
+	    (strcmp(argv[1], "fs") == 0)) {
+		ap->fs_op = filesystem_op_parse(argv[2]);
+		if (ap->fs_op == -1) {
+			fprintf(stderr, "invalid filesystem command: %s\n",
 				argv[2]);
 			return RC_PRINT_HELP;
 		}
@@ -682,6 +702,16 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		case 'd':
 			D_STRNDUP(ap->path, optarg, strlen(optarg));
 			if (ap->path == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
+		case 'S':
+			D_STRNDUP(ap->src, optarg, strlen(optarg));
+			if (ap->src == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
+		case 'D':
+			D_STRNDUP(ap->dst, optarg, strlen(optarg));
+			if (ap->dst == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
 		case 't':
@@ -864,6 +894,10 @@ out_free:
 		D_FREE(ap->value_str);
 	if (ap->path != NULL)
 		D_FREE(ap->path);
+	if (ap->src != NULL)
+		D_FREE(ap->src);
+	if (ap->dst != NULL)
+		D_FREE(ap->dst);
 	if (ap->snapname_str != NULL)
 		D_FREE(ap->snapname_str);
 	if (ap->epcrange_str != NULL)
@@ -962,6 +996,31 @@ call_dfuse_ioctl(char *path, struct dfuse_il_reply *reply)
 		return EIO;
 
 	return 0;
+}
+
+static int
+fs_op_hdlr(struct cmd_args_s *ap)
+{
+	int rc = 0;
+	enum fs_op op;
+
+	assert(ap != NULL);
+	op = ap->fs_op;
+
+	switch (op) {
+	case FS_COPY:
+		if (ap->src == NULL || ap->dst == NULL) {
+			fprintf(stderr, "a source and destination path "
+				"must be provided\n");
+		} else {
+			rc = fs_copy_hdlr(ap);
+			assert(rc == 0);
+		}
+		break;
+	default:
+		break;
+	}
+	return rc;
 }
 
 static int
@@ -1254,11 +1313,33 @@ do { \
 	"resources:\n" \
 	"	  pool             pool\n" \
 	"	  container (cont) container\n" \
+	"	  filesystem (fs)  copy to and from a POSIX filesystem\n" \
 	"	  object (obj)     object\n" \
 	"	  version          print command version\n" \
 	"	  help             print this message and exit\n"); \
 	fprintf(stream, "\n"); \
 	fprintf(stream, "use 'daos help RESOURCE' for resource specifics\n"); \
+} while (0)
+
+#define FS_COPY_CMDS_HELP() \
+do { \
+	fprintf(stream, "\n" \
+	" copy to and from POSIX filesystem\n" \
+	" filesystem copy options (copy):\n" \
+	"	--src=daos://<pool/cont> | <path>\n" \
+	"	--dst=daos://<pool/cont> | <path>\n" \
+	"	\t type is daos, only specified if pool/cont used\n"); \
+	fprintf(stream, "\n"); \
+} while (0)
+
+#define ALL_FS_CMDS_HELP() \
+do { \
+	fprintf(stream, "\n" \
+	"container (cont) commands:\n" \
+	"	  copy		copy to/from POSIX filesystem\n"); \
+	fprintf(stream, "\n"); \
+	fprintf(stream, "use 'daos help fs|filesystem COMMAND' " \
+	"		for options\n"); \
 } while (0)
 
 #define ALL_CONT_CMDS_HELP() \
@@ -1315,6 +1396,11 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 
 	if (argc <= 2) {
 		FIRST_LEVEL_HELP();
+	} else if (strcmp(argv[2], "filesystem") == 0 ||
+			strcmp(argv[2], "fs") == 0) {
+		if (argc == 3 || strcmp(argv[3], "copy") == 0) {
+			FS_COPY_CMDS_HELP();
+		}
 	} else if (strcmp(argv[2], "pool") == 0) {
 		fprintf(stream, "\n"
 		"pool commands:\n"
@@ -1493,11 +1579,14 @@ main(int argc, char *argv[])
 		help_hdlr(argc, argv, &dargs);
 		return 2;
 	} else if ((strcmp(argv[1], "container") == 0) ||
-		 (strcmp(argv[1], "cont") == 0))
+		 (strcmp(argv[1], "cont") == 0)) {
 		hdlr = cont_op_hdlr;
-	else if (strcmp(argv[1], "pool") == 0)
+	} else if ((strcmp(argv[1], "filesystem") == 0) ||
+		 (strcmp(argv[1], "fs") == 0)) {
+		hdlr = fs_op_hdlr;
+	} else if (strcmp(argv[1], "pool") == 0) {
 		hdlr = pool_op_hdlr;
-	else if ((strcmp(argv[1], "object") == 0) ||
+	} else if ((strcmp(argv[1], "object") == 0) ||
 		 (strcmp(argv[1], "obj") == 0))
 		hdlr = obj_op_hdlr;
 
