@@ -913,14 +913,29 @@ def get_conts(conf, pool, posix=True):
                     return matched
     return matched
 
-def show_cont(conf, pool):
+def create_cont(conf, pool, posix=False):
     """Create a container and return a container list"""
-    cmd = ['container', 'create', '--pool', pool]
+    if posix:
+        cmd = ['container', 'create', '--pool', pool, '--type', 'POSIX']
+    else:
+        cmd = ['container', 'create', '--pool', pool]
     rc = run_daos_cmd(conf, cmd)
-    assert rc.returncode == 0
     print('rc is {}'.format(rc))
+    assert rc.returncode == 0
+    new_container = rc.stdout.decode().split(' ')[-1].rstrip()
 
     cmd = ['pool', 'list-containers', '--pool', pool]
+    rc = run_daos_cmd(conf, cmd)
+    print('rc is {}'.format(rc))
+    assert rc.returncode == 0
+    containers = rc.stdout.decode().split()
+    containers.remove(new_container)
+    containers.insert(0, new_container)
+    return containers
+
+def destroy_container(conf, pool, container):
+    """Destroy a container"""
+    cmd = ['container', 'destroy', '--pool', pool, '--cont', container]
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
     assert rc.returncode == 0
@@ -968,6 +983,7 @@ class posix_tests():
         self.dfuse = None
         self.fatal_errors = False
 
+    # pylint: disable=no-self-use
     def fail(self):
         """Mark a test method as failed"""
         raise NLTestFail
@@ -1032,11 +1048,10 @@ def run_posix_tests(server, conf, test=None):
     pools = get_pool_list()
     while len(pools) < 1:
         pools = make_pool(server)
+    pool = pools[0]
+    container = create_cont(conf, pool, posix=True)[0]
 
-    # TODO: Update this to new container code once it's landed.
-    container = get_conts(conf, pools[0])
-
-    pt = posix_tests(server, conf, pool=pools[0], container=container[0])
+    pt = posix_tests(server, conf, pool=pool, container=container)
     if test:
         obj = getattr(pt, 'test_{}'.format(test))
         rc = obj()
@@ -1054,7 +1069,7 @@ def run_posix_tests(server, conf, test=None):
             rc = obj()
             print('rc from {} is {}'.format(fn, rc))
 
-    # TODO: Remove container
+    destroy_container(conf, pool, container)
     return pt.fatal_errors
 
 def run_tests(dfuse):
@@ -1513,10 +1528,8 @@ def test_pydaos_kv(server, conf):
 
     pool = pools[0]
 
-    container = show_cont(conf, pool)
+    c_uuid = create_cont(conf, pool)[0]
 
-    print(container)
-    c_uuid = container.split()[-1]
     container = daos.Cont(pool, c_uuid)
 
     kv = container.get_kv_by_name('my_test_kv', create=True)
@@ -1594,7 +1607,10 @@ def test_alloc_fail(server, wf, conf):
 
     # Create at least one container, and record what the output should be when
     # the command works.
-    container = show_cont(conf, pool)
+    create_cont(conf, pool)
+
+    rc = run_daos_cmd(conf, cmd)
+    expected_stdout = rc.stdout.decode('utf-8').strip()
 
     while True:
         print()
@@ -1627,9 +1643,9 @@ def test_alloc_fail(server, wf, conf):
             stderr = rc.stderr.decode('utf-8').strip()
             if not stderr.endswith("Out of memory (-1009)") and \
                'error parsing command line arguments' not in stderr and \
-               stdout != container:
-                print(container)
+               stdout != expected_stdout:
                 print(stdout)
+                print(expected_stdout)
                 wf.add(rc.fi_loc,
                        'NORMAL', "Incorrect stderr '{}'".format(stderr),
                        mtype='Out of memory not reported correctly via stderr')
