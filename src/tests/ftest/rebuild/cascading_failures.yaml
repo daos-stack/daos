@@ -11,12 +11,8 @@ hosts:
 timeout: 360
 server_config:
   name: daos_server
-  servers: !mux
-#skipForTicket DAOS-2799
-#    8_targets:
-#      targets: 8
-    1_target:
-      targets: 1
+  servers:
+    targets: 8
 pool:
   mode: 511
   name: daos_server

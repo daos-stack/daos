@@ -32,6 +32,8 @@ class CascadingFailures(RebuildTestBase):
     :avocado: recursive
     """
 
+    CANCEL_FOR_TICKET = [["DAOS-2799", "targets", 8]]
+
     def __init__(self, *args, **kwargs):
         """Initialize a CascadingFailures object."""
         super(CascadingFailures, self).__init__(*args, **kwargs)

@@ -31,6 +31,8 @@ class ReadArrayTest(RebuildTestBase):
     :avocado: recursive
     """
 
+    CANCEL_FOR_TICKET = [["DAOS-2799", "targets", 8]]
+
     def execute_during_rebuild(self):
         """Read the objects during rebuild."""
         message = "Reading the array objects during rebuild"
