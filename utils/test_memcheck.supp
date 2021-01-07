@@ -11,7 +11,7 @@
    obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:run_ts_tests
-   fun:run_all_tests
+   ...
    fun:main
 }
 {
@@ -114,19 +114,6 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Leak
-   match-leak-kinds:definite
-   fun:malloc
-   fun:vts_alloc_gen_fname
-   fun:io_obj_cache_test
-   obj:/usr/lib64/libcmocka.so.*
-   fun:_cmocka_run_group_tests
-   fun:run_io_test
-   fun:run_all_tests
-   fun:main
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
    match-leak-kinds:reachable
    fun:malloc
    fun:xmalloc
@@ -198,7 +185,7 @@
    obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:run_ts_tests
-   fun:run_all_tests
+   ...
    fun:main
 }
 {
@@ -239,7 +226,7 @@
    obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:run_gc_tests
-   fun:run_all_tests
+   ...
    fun:main
 }
 {
@@ -263,7 +250,7 @@
    fun:dts_ctx_init
    fun:gc_setup
    ...
-   fun:run_all_tests
+   ...
    ...
 }
 {
@@ -372,7 +359,7 @@
    obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:run_pool_test
-   fun:run_all_tests
+   ...
    fun:main
 }
 {
@@ -386,7 +373,7 @@
    obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:run_aggregate_tests
-   fun:run_all_tests
+   ...
    fun:main
 }
 {
@@ -430,7 +417,7 @@
    obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:run_ts_tests
-   fun:run_all_tests
+   ...
    fun:main
 }
 {
