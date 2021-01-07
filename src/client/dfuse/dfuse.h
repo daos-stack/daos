@@ -335,10 +335,10 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define DFUSE_REPLY_ATTR(ie, req, attr)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o dir:%d", \
+		DFUSE_TRA_DEBUG(ie,					\
+				"Returning attr inode %#lx mode %#o",	\
 				(attr)->st_ino,				\
-				(attr)->st_mode,			\
-				S_ISDIR(((attr)->st_mode)));		\
+				(attr)->st_mode);			\
 		__rc = fuse_reply_attr(req, attr,			\
 				(ie)->ie_dfs->dfs_attr_timeout);	\
 		if (__rc != 0)						\
@@ -431,10 +431,9 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(desc,					\
-				"Returning entry inode %#lx mode %#o dir:%d", \
+				"Returning entry inode %#lx mode %#o",	\
 				(entry).attr.st_ino,			\
-				(entry).attr.st_mode,			\
-				S_ISDIR((entry).attr.st_mode));		\
+				(entry).attr.st_mode);			\
 		__rc = fuse_reply_entry(req, &entry);			\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(desc,				\

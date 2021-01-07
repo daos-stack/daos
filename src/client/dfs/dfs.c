@@ -847,7 +847,7 @@ open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
 	if (!exists)
 		return ENOENT;
 
-	/* Check that the opened object is the type thats expected, this could
+	/* Check that the opened object is the type that's expected, this could
 	 * happen for example if dfs_open() is called with S_IFDIR but without
 	 * O_CREATE and a entry of a different type exists already.
 	 */
