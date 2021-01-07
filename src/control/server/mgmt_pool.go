@@ -122,8 +122,6 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
-	resp = new(mgmtpb.PoolCreateResp)
-
 	svc.log.Debugf("MgmtSvc.PoolCreate dispatch, req:%+v\n", req)
 
 	if err := svc.calculateCreateStorage(req); err != nil {
@@ -135,6 +133,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, errors.Wrapf(err, "failed to parse pool UUID %q", req.GetUuid())
 	}
 
+	resp = new(mgmtpb.PoolCreateResp)
 	ps, err := svc.sysdb.FindPoolServiceByUUID(uuid)
 	if ps != nil {
 		svc.log.Debugf("found pool %s state=%s", ps.PoolUUID, ps.State)
@@ -545,7 +544,7 @@ func resolvePoolPropVal(req *mgmtpb.PoolSetPropReq) (*mgmtpb.PoolSetPropReq, err
 }
 
 // PoolSetProp forwards a request to the I/O server to set a pool property.
-func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq) (resp *mgmtpb.PoolSetPropResp, err error) {
+func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq) (*mgmtpb.PoolSetPropResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
@@ -609,7 +608,7 @@ func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq)
 		return nil, err
 	}
 
-	resp = &mgmtpb.PoolSetPropResp{}
+	resp := new(mgmtpb.PoolSetPropResp)
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal PoolSetProp response")
 	}
@@ -665,7 +664,7 @@ func (svc *mgmtSvc) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq) (*mgm
 
 // PoolOverwriteACL forwards a request to the IO server to overwrite a pool's Access Control List
 func (svc *mgmtSvc) PoolOverwriteACL(ctx context.Context, req *mgmtpb.ModifyACLReq) (*mgmtpb.ACLResp, error) {
-	if err := svc.checkReplicaRequest(req); err != nil {
+	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
 	svc.log.Debugf("MgmtSvc.PoolOverwriteACL dispatch, req:%+v\n", req)
@@ -688,7 +687,7 @@ func (svc *mgmtSvc) PoolOverwriteACL(ctx context.Context, req *mgmtpb.ModifyACLR
 // PoolUpdateACL forwards a request to the IO server to add or update entries in
 // a pool's Access Control List
 func (svc *mgmtSvc) PoolUpdateACL(ctx context.Context, req *mgmtpb.ModifyACLReq) (*mgmtpb.ACLResp, error) {
-	if err := svc.checkReplicaRequest(req); err != nil {
+	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
 	svc.log.Debugf("MgmtSvc.PoolUpdateACL dispatch, req:%+v\n", req)
@@ -711,7 +710,7 @@ func (svc *mgmtSvc) PoolUpdateACL(ctx context.Context, req *mgmtpb.ModifyACLReq)
 // PoolDeleteACL forwards a request to the IO server to delete an entry from a
 // pool's Access Control List.
 func (svc *mgmtSvc) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq) (*mgmtpb.ACLResp, error) {
-	if err := svc.checkReplicaRequest(req); err != nil {
+	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
 	svc.log.Debugf("MgmtSvc.PoolDeleteACL dispatch, req:%+v\n", req)
@@ -731,8 +730,7 @@ func (svc *mgmtSvc) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq)
 	return resp, nil
 }
 
-// ListPools forwards a gRPC request to the DAOS IO server to fetch a list of
-// all pools in the system.
+// ListPools returns a set of all pools in the system.
 func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*mgmtpb.ListPoolsResp, error) {
 	if err := svc.checkReplicaRequest(req); err != nil {
 		return nil, err
