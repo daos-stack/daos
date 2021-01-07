@@ -68,7 +68,7 @@ class IorSmall(IorTestBase):
                 # That is still needed due to support for new libdaos v1 API
                 if (api == "HDF5-VOL" and
                         transfer_block_size[0] == "1M" and
-                            transfer_block_size[1] == "32M"):
+                        transfer_block_size[1] == "32M"):
                     self.cancelForTicket("DAOS-6427")
                 if api == "HDF5-VOL":
                     self.ior_cmd.api.update("HDF5")
