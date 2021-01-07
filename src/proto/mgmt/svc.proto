@@ -157,4 +157,5 @@ message PoolMonitorReq {
 	string poolUUID = 1;	// Pool UUID associated with the Pool Handle
 	string poolHandleUUID = 2; // Pool Handle UUID for the connection
 	string jobid = 3;	// Job ID to associate instance with.
+	string sys = 4;		// System Name being connected to.
 }

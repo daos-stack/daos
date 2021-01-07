@@ -448,10 +448,14 @@ struct  _Mgmt__PoolMonitorReq
    * Job ID to associate instance with.
    */
   char *jobid;
+  /*
+   * System Name being connected to.
+   */
+  char *sys;
 };
 #define MGMT__POOL_MONITOR_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_monitor_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 /* Mgmt__DaosResp methods */

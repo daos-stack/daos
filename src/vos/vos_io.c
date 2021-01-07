@@ -536,8 +536,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	}
 
 	rc = vos_ts_set_allocate(&ioc->ic_ts_set, vos_flags, cflags, iod_nr,
-				 dtx_is_valid_handle(dth) ?
-				 &dth->dth_xid : NULL);
+				 dth);
 	if (rc != 0)
 		goto error;
 
