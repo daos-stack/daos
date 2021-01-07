@@ -133,7 +133,7 @@ struct  _Mgmt__RASEvent
   /*
    * (optional) Job involved in event.
    */
-  char *jobid;
+  char *jid;
   /*
    * (optional) Pool UUID involved in event.
    */

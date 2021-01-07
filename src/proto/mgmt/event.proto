@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ message RASEvent {
 	string hid = 9;		// (optional) Hardware component involved in event.
 	string pid = 10;	// (optional) Process involved in event.
 	string tid = 11;	// (optional) Thread involved in event.
-	string jobid = 12;	// (optional) Job involved in event.
+	string jid = 12;	// (optional) Job involved in event.
 	string puuid = 13;	// (optional) Pool UUID involved in event.
 	string cuuid = 14;	// (optional) Container UUID involved in event.
 	string oid = 15;	// (optional) Object involved in event.

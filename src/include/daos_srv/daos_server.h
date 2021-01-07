@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@
 #include <daos_srv/iv.h>
 #include <daos_srv/vos_types.h>
 #include <daos_srv/pool.h>
+#include <daos_srv/ras.h>
 #include <daos_event.h>
 #include <daos_task.h>
 #include <pthread.h>
@@ -831,15 +832,22 @@ enum dss_media_error_type {
 
 void dss_init_state_set(enum dss_init_state state);
 
+/* Notify control-plane of a bio error. */
 int
-notify_bio_error(int media_err_type, int tgt_id);
+ds_notify_bio_error(int media_err_type, int tgt_id);
+
+/* Retrieve current pool service replicas for a given pool UUID. */
 int
-get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
-int
-ds_notify_ras_event(const char *id, enum ras_event_type type,
-		    enum ras_event_sev sev, char *hid, d_rank_t rank, char *jid,
-		    uuid_t puuid, uuid_t cuuid, daos_obj_id_t *oid,
-		    const char *cop, const char *msg, const char *data);
+ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
+
+/* Raise a RAS event and forward to the control-plane. */
+void
+ds_notify_ras_event(char *id, enum ras_event_type type, enum ras_event_sev sev,
+		    char *hid, d_rank_t *rank, char *jid, uuid_t puuid,
+		    uuid_t cuuid, daos_obj_id_t *oid, char *cop, char *msg,
+		    char *data);
+
+/* Notify control-plane of an update to a pool's service replicas. */
 int
 ds_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc);
 

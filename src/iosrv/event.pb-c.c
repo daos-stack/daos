@@ -483,12 +483,12 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "jobid",
+    "jid",
     12,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, jobid),
+    offsetof(Mgmt__RASEvent, jid),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -585,7 +585,7 @@ static const unsigned mgmt__rasevent__field_indices_by_name[] = {
   7,   /* field[7] = hid */
   5,   /* field[5] = hostname */
   0,   /* field[0] = id */
-  10,   /* field[10] = jobid */
+  10,   /* field[10] = jid */
   3,   /* field[3] = msg */
   13,   /* field[13] = oid */
   8,   /* field[8] = pid */

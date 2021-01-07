@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -226,7 +226,7 @@ test_drpc_verify_notify_bio_error(void **state)
 	/* Message was sent */
 	assert_non_null(sendmsg_msg_ptr);
 
-	assert_int_equal(notify_bio_error(MET_WRITE, 0), 0);
+	assert_int_equal(ds_notify_bio_error(MET_WRITE, 0), 0);
 	verify_notify_bio_error();
 
 	/* Now let's shut things down... */

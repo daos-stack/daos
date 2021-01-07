@@ -121,7 +121,7 @@ type RASEvent struct {
 	HID              string          `json:"hid"`
 	PID              string          `json:"pid"`
 	TID              string          `json:"tid"`
-	JOBID            string          `json:"jobid"`
+	JOBID            string          `json:"jid"`
 	PUUID            string          `json:"puuid"`
 	CUUID            string          `json:"cuuid"`
 	OID              string          `json:"oid"`

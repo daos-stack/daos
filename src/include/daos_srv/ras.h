@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,8 @@
 #ifndef __DAOS_RAS_H__
 #define __DAOS_RAS_H__
 
-#define DAOS_RAS_EVENT_STR_MAX_LEN 64
+#define DAOS_RAS_STR_FIELD_SIZE 128
+#define DAOS_RAS_ID_FIELD_SIZE 64
 
 #define RAS_RANK_EXIT "rank_exit"
 #define RAS_RANK_NO_RESP "rank_no_response"
