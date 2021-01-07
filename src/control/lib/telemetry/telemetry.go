@@ -39,10 +39,18 @@ typedef struct timespec tspec;
 import "C"
 
 import (
+	"context"
+	"time"
 	"unsafe"
 
 	"github.com/pkg/errors"
 )
+
+type handle struct {
+	rank  uint32
+	shmem *C.uint64_t
+	root  C.d_tm_node_p
+}
 
 type Counter struct {
 	name  string
@@ -55,21 +63,70 @@ type Gauge struct {
 }
 
 type Timestamp struct {
-	name string
-	ts   string
-	clk  C.time_t
+	handle *handle
+	node   C.d_tm_node_p
+	Name   string
+}
+
+func (t *Timestamp) Value() time.Time {
+	zero := time.Time{}
+	if t.handle == nil && t.node == nil {
+		return zero
+	}
+	var clk C.time_t
+	res := C.d_tm_get_timestamp(&clk, t.handle.shmem, t.node, C.CString(t.Name))
+	if res == C.D_TM_SUCCESS {
+		return time.Unix(int64(clk), 0)
+	}
+	return zero
 }
 
 type Duration struct {
-	name string
-	sec  uint64
-	nsec uint64
+	handle *handle
+	node   C.d_tm_node_p
+	Name   string
+}
+
+func (d *Duration) Value() time.Duration {
+	if d.handle == nil && d.node == nil {
+		return 0
+	}
+	var tms C.tspec
+	res := C.d_tm_get_duration(&tms, d.handle.shmem, d.node, C.CString(d.Name))
+	if res == C.D_TM_SUCCESS {
+		return time.Duration(tms.tv_sec)*time.Second + time.Duration(tms.tv_nsec)
+	}
+	return 0
 }
 
 type Snapshot struct {
 	name string
 	sec  uint64
 	nsec uint64
+}
+
+type telemetryKey string
+
+const (
+	handleKey telemetryKey = "handle"
+)
+
+func Init(rank uint32) (context.Context, error) {
+	shmemRoot := C.d_tm_get_shared_memory(C.int(rank))
+	if shmemRoot == nil {
+		return nil, errors.Errorf("no shared memory segment found for rank: %d", rank)
+	}
+
+	root := C.d_tm_get_root(shmemRoot)
+	if root == nil {
+		return nil, errors.Errorf("no root node found in shared memory segment for rank: %d", rank)
+	}
+	handle := &handle{
+		rank:  rank,
+		shmem: shmemRoot,
+		root:  root,
+	}
+	return context.WithValue(context.Background(), handleKey, handle), nil
 }
 
 func InitTelemetry(rank int) (*C.uint64_t, C.d_tm_node_p, error) {
@@ -100,13 +157,24 @@ func GetCounter(shmemRoot *C.uint64_t, node C.d_tm_node_p, name string) (uint64,
 	return 0, errors.Errorf("error %d", int(res))
 }
 
-func GetTimestamp(shmemRoot *C.uint64_t, node C.d_tm_node_p, name string) (string, C.time_t, error) {
-	var clk C.time_t
-	res := C.d_tm_get_timestamp(&clk, shmemRoot, node, C.CString(name))
-	if res == C.D_TM_SUCCESS {
-		return C.GoString(C.ctime(&clk))[:24], clk, nil
+func getHandle(ctx context.Context) (*handle, error) {
+	handle, ok := ctx.Value(handleKey).(*handle)
+	if !ok {
+		return nil, errors.New("no handle set on context")
 	}
-	return "", 0, errors.Errorf("error %d", int(res))
+	return handle, nil
+}
+
+func GetTimestamp(ctx context.Context, name string) (*Timestamp, error) {
+	hdl, err := getHandle(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Timestamp{
+		handle: hdl,
+		Name:   name,
+	}, nil
 }
 
 func GetTimerSnapshot(shmemRoot *C.uint64_t, node C.d_tm_node_p, name string) (uint64, uint64, error) {
@@ -118,13 +186,16 @@ func GetTimerSnapshot(shmemRoot *C.uint64_t, node C.d_tm_node_p, name string) (u
 	return 0, 0, errors.Errorf("error %d", int(res))
 }
 
-func GetDuration(shmemRoot *C.uint64_t, node C.d_tm_node_p, name string) (uint64, uint64, error) {
-	var tms C.tspec
-	res := C.d_tm_get_duration(&tms, shmemRoot, node, C.CString(name))
-	if res == C.D_TM_SUCCESS {
-		return uint64(tms.tv_sec), uint64(tms.tv_nsec), nil
+func GetDuration(ctx context.Context, name string) (*Duration, error) {
+	hdl, err := getHandle(ctx)
+	if err != nil {
+		return nil, err
 	}
-	return 0, 0, errors.Errorf("error %d", int(res))
+
+	return &Duration{
+		handle: hdl,
+		Name:   name,
+	}, nil
 }
 
 func GetGauge(shmemRoot *C.uint64_t, node C.d_tm_node_p, name string) (uint64, error) {

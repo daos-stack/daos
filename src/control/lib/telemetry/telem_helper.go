@@ -38,6 +38,7 @@ typedef struct timespec tspec;
 */
 import "C"
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -115,38 +116,6 @@ func UpdateGauges(shmemRoot *C.uint64_t, gaugeMap map[C.d_tm_node_p]Gauge) error
 	return nil
 }
 
-func UpdateTimestamps(shmemRoot *C.uint64_t, timestampMap map[C.d_tm_node_p]Timestamp) error {
-	for node, _ := range timestampMap {
-		nodeName := GetNodeName(shmemRoot, node)
-		ts, clk, err := GetTimestamp(shmemRoot, node, "")
-		if err != nil {
-			continue
-		}
-		timestampMap[node] = Timestamp{
-			name: nodeName,
-			ts:   ts,
-			clk:  clk,
-		}
-	}
-	return nil
-}
-
-func UpdateDurations(shmemRoot *C.uint64_t, durationMap map[C.d_tm_node_p]Duration) error {
-	for node, _ := range durationMap {
-		nodeName := GetNodeName(shmemRoot, node)
-		sec, nsec, err := GetDuration(shmemRoot, node, "")
-		if err != nil {
-			continue
-		}
-		durationMap[node] = Duration{
-			name: nodeName,
-			sec:  sec,
-			nsec: nsec,
-		}
-	}
-	return nil
-}
-
 func UpdateSnapshots(shmemRoot *C.uint64_t, snapshotMap map[C.d_tm_node_p]Snapshot) error {
 	for node, _ := range snapshotMap {
 		nodeName := GetNodeName(shmemRoot, node)
@@ -163,7 +132,7 @@ func UpdateSnapshots(shmemRoot *C.uint64_t, snapshotMap map[C.d_tm_node_p]Snapsh
 	return nil
 }
 
-func InitMaps(shmemRoot *C.uint64_t, nl *C.d_tm_nodeList, counterMap map[C.d_tm_node_p]Counter, gaugeMap map[C.d_tm_node_p]Gauge, timestampMap map[C.d_tm_node_p]Timestamp, durationMap map[C.d_tm_node_p]Duration, snapshotMap map[C.d_tm_node_p]Snapshot) error {
+func InitMaps(ctx context.Context, shmemRoot *C.uint64_t, nl *C.d_tm_nodeList, counterMap map[C.d_tm_node_p]Counter, gaugeMap map[C.d_tm_node_p]Gauge, timestampMap map[C.d_tm_node_p]*Timestamp, durationMap map[C.d_tm_node_p]*Duration, snapshotMap map[C.d_tm_node_p]Snapshot) error {
 	if nl == nil {
 		return errors.Errorf("nodelist is uninitialized\n")
 	}
@@ -182,15 +151,11 @@ func InitMaps(shmemRoot *C.uint64_t, nl *C.d_tm_nodeList, counterMap map[C.d_tm_
 				value: val,
 			}
 		case C.D_TM_TIMESTAMP:
-			ts, clk, err := GetTimestamp(shmemRoot, nl.dtnl_node, "")
+			ts, err := GetTimestamp(ctx, nodeName)
 			if err != nil {
 				continue
 			}
-			timestampMap[nl.dtnl_node] = Timestamp{
-				name: nodeName,
-				ts:   ts,
-				clk:  clk,
-			}
+			timestampMap[nl.dtnl_node] = ts
 		case C.D_TM_TIMER_SNAPSHOT | C.D_TM_CLOCK_REALTIME:
 			fallthrough
 		case C.D_TM_TIMER_SNAPSHOT | C.D_TM_CLOCK_PROCESS_CPUTIME:
@@ -210,15 +175,11 @@ func InitMaps(shmemRoot *C.uint64_t, nl *C.d_tm_nodeList, counterMap map[C.d_tm_
 		case C.D_TM_DURATION | C.D_TM_CLOCK_PROCESS_CPUTIME:
 			fallthrough
 		case C.D_TM_DURATION | C.D_TM_CLOCK_THREAD_CPUTIME:
-			sec, nsec, err := GetDuration(shmemRoot, nl.dtnl_node, "")
+			d, err := GetDuration(ctx, nodeName)
 			if err != nil {
 				continue
 			}
-			durationMap[nl.dtnl_node] = Duration{
-				name: nodeName,
-				sec:  sec,
-				nsec: nsec,
-			}
+			durationMap[nl.dtnl_node] = d
 		case C.D_TM_GAUGE:
 			val, err := GetGauge(shmemRoot, nl.dtnl_node, "")
 			if err != nil {
@@ -263,23 +224,13 @@ func PrintNodeList(shmemRoot *C.uint64_t, nl *C.d_tm_nodeList, dirname string, l
 	return nil
 }
 
-func ReadMetrics(shmemRoot *C.uint64_t, counterMap map[C.d_tm_node_p]Counter, gaugeMap map[C.d_tm_node_p]Gauge, timestampMap map[C.d_tm_node_p]Timestamp, durationMap map[C.d_tm_node_p]Duration, snapshotMap map[C.d_tm_node_p]Snapshot) {
+func ReadMetrics(ctx context.Context, shmemRoot *C.uint64_t, counterMap map[C.d_tm_node_p]Counter, gaugeMap map[C.d_tm_node_p]Gauge, snapshotMap map[C.d_tm_node_p]Snapshot) {
 	err := UpdateCounters(shmemRoot, counterMap)
 	if err != nil {
 		fmt.Printf("Error %v", err)
 	}
 
 	err = UpdateGauges(shmemRoot, gaugeMap)
-	if err != nil {
-		fmt.Printf("Error %v", err)
-	}
-
-	err = UpdateTimestamps(shmemRoot, timestampMap)
-	if err != nil {
-		fmt.Printf("Error %v", err)
-	}
-
-	err = UpdateDurations(shmemRoot, durationMap)
 	if err != nil {
 		fmt.Printf("Error %v", err)
 	}
@@ -337,6 +288,11 @@ func ListMetrics(rank int, dirname string, iterations int, filterString string) 
 		fmt.Printf("Failed to init telemetry for rank: %d\n", rank)
 		return err
 	}
+	ctx, err := Init(uint32(rank))
+	if err != nil {
+		fmt.Printf("Failed to init telemetry for rank: %d\n", rank)
+		return err
+	}
 
 	fmt.Printf("DAOS Telemetry & Metrics API version: %d\n", GetAPIVersion())
 
@@ -368,12 +324,12 @@ func ListMetrics(rank int, dirname string, iterations int, filterString string) 
 
 	counterMap := make(map[C.d_tm_node_p]Counter)
 	gaugeMap := make(map[C.d_tm_node_p]Gauge)
-	timestampMap := make(map[C.d_tm_node_p]Timestamp)
-	durationMap := make(map[C.d_tm_node_p]Duration)
+	timestampMap := make(map[C.d_tm_node_p]*Timestamp)
+	durationMap := make(map[C.d_tm_node_p]*Duration)
 	snapshotMap := make(map[C.d_tm_node_p]Snapshot)
 
 	// Initialize maps for each data type with the metrics found in the node list
-	err = InitMaps(shmemRoot, nl, counterMap, gaugeMap, timestampMap, durationMap, snapshotMap)
+	err = InitMaps(ctx, shmemRoot, nl, counterMap, gaugeMap, timestampMap, durationMap, snapshotMap)
 	if err != nil {
 		return err
 	}
@@ -390,7 +346,7 @@ func ListMetrics(rank int, dirname string, iterations int, filterString string) 
 
 		// Iterate through all the nodes stored in all the maps, to read the metrics associated
 		// with each node.  The data is stored in associated map entry.
-		ReadMetrics(shmemRoot, counterMap, gaugeMap, timestampMap, durationMap, snapshotMap)
+		ReadMetrics(ctx, shmemRoot, counterMap, gaugeMap, snapshotMap)
 		fmt.Printf("\nIteration %d/%d\n", i+1, iterations)
 
 		// For the demonstration, print out each of the metrics
@@ -401,7 +357,7 @@ func ListMetrics(rank int, dirname string, iterations int, filterString string) 
 			fmt.Printf("\tGauge: %s = %d\n", gauge.name, gauge.value)
 		}
 		for _, timestamp := range timestampMap {
-			fmt.Printf("\tTimestamp: %s: %s\n", timestamp.name, timestamp.ts)
+			fmt.Printf("\tTimestamp: %s: %s\n", timestamp.Name, timestamp.Value())
 		}
 		for node, duration := range durationMap {
 			var name string
@@ -415,7 +371,7 @@ func ListMetrics(rank int, dirname string, iterations int, filterString string) 
 			default:
 				name = "Duration (Unknown!)"
 			}
-			fmt.Printf("\t%s: %s = %.9fs\n", name, duration.name, float64(duration.sec)+float64(duration.nsec)/1e9)
+			fmt.Printf("\t%s: %s = %s\n", name, duration.Name, duration.Value())
 		}
 		for node, snapshot := range snapshotMap {
 			var name string
