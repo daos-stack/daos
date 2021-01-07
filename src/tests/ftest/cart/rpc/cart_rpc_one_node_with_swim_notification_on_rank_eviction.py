@@ -36,7 +36,7 @@ sys.path.append('./util')
 # pylint: disable=wrong-import-position
 from cart_utils import CartUtils
 
-class CartRpcOneNodeTest(Test):
+class CartRpcOneNodeSwimNotificationOnRankEvictionTest(Test):
     """
     Runs basic CaRT RPC tests
 
