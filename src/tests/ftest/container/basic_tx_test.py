@@ -47,7 +47,7 @@ class BasicTxTest(TestWithServers):
         Not a good test at this point, need to redesign when tx is fully
         working.
 
-        :avocado: tags=all,container,tx,small,smoke,pr,basictx
+        :avocado: tags=all,container,tx,small,smoke,daily_regression,basictx
         """
         # initialize a python pool object then create the underlying
         # daos storage and connect to the pool

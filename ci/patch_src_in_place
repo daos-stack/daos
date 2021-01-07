@@ -1,7 +1,9 @@
 #!/bin/sh
 
+set -x
+
 # shellcheck disable=SC2046,SC2035
-codespell -w --ignore-words-list dedup,nd,uint,ths,ba,creat,te,cas,mapp,pres,crashers,dout,tre,reord,mimick,cloneable,keypair,bject,tread,cancelled,controllerd --builtin clear,rare,informal,names,en-GB_to_en-US --skip *.png,*.PNG,*.pyc,src/rdb/raft/*,src/control/vendor/*,RSA.golden $(git ls-tree --full-tree --name-only HEAD)
+codespell -w --ignore-words-list dedup,nd,uint,ths,ba,creat,te,cas,mapp,pres,crashers,dout,tre,reord,mimick,cloneable,keypair,bject,tread,cancelled,controllerd --builtin clear,rare,informal,names,en-GB_to_en-US --skip *.png,*.PNG,*.pyc,src/rdb/raft/*,src/control/vendor/*,RSA.golden,utils/rpms/* $(git diff --name-only origin/"$CHANGE_TARGET"...)
 
 # The return code of codespell is the number of words it could not correct
 # because of multiple options.  We could report on these but they're rare
@@ -22,7 +24,7 @@ fi
 
 if [ -x $CP ]
 then
-    for FILE in $(git ls-tree --full-tree --name-only HEAD -r src | grep -v -e src/control/vendor -e .go\$ -e pb-c -e debug_setup.h)
+    for FILE in $(git diff --name-only origin/"$CHANGE_TARGET"... | grep "^src" | grep -v -e src/control/vendor -e .go\$ -e pb-c -e debug_setup.h)
     do
 	ignore="$def_ignore"
 	if grep -lq CRT_RPC_DECLARE "$FILE"; then

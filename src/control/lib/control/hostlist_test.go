@@ -24,7 +24,6 @@
 package control
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -54,73 +53,8 @@ func mockHostList(hosts ...string) []string {
 	return hosts
 }
 
-func TestControl_ParseHostList(t *testing.T) {
-	defaultCfg := DefaultConfig()
-
-	for name, tc := range map[string]struct {
-		in     []string
-		expOut []string
-		expErr error
-	}{
-		"host with too many :": {
-			in:     mockHostList("foo::10"),
-			expErr: errors.New("invalid host"),
-		},
-		"host with non-numeric port": {
-			in:     mockHostList("foo:bar"),
-			expErr: errors.New("invalid host"),
-		},
-		"host with just a port": {
-			in:     mockHostList(":42"),
-			expErr: errors.New("invalid host"),
-		},
-		"should append missing port": {
-			in:     mockHostList("foo"),
-			expOut: mockHostList(fmt.Sprintf("foo:%d", defaultCfg.ControlPort)),
-		},
-		"should append missing port (multiple)": {
-			in: mockHostList("foo", "bar:4242", "baz"),
-			expOut: mockHostList(
-				"bar:4242",
-				fmt.Sprintf("baz:%d", defaultCfg.ControlPort),
-				fmt.Sprintf("foo:%d", defaultCfg.ControlPort),
-			),
-		},
-		"should append missing port (ranges)": {
-			in: mockHostList("foo-[1-4]", "bar[2-4]", "baz[8-9]:4242"),
-			expOut: mockHostList(
-				fmt.Sprintf("bar2:%d", defaultCfg.ControlPort),
-				fmt.Sprintf("bar3:%d", defaultCfg.ControlPort),
-				fmt.Sprintf("bar4:%d", defaultCfg.ControlPort),
-				"baz8:4242",
-				"baz9:4242",
-				fmt.Sprintf("foo-1:%d", defaultCfg.ControlPort),
-				fmt.Sprintf("foo-2:%d", defaultCfg.ControlPort),
-				fmt.Sprintf("foo-3:%d", defaultCfg.ControlPort),
-				fmt.Sprintf("foo-4:%d", defaultCfg.ControlPort),
-			),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			gotOut, gotErr := ParseHostList(tc.in, defaultCfg.ControlPort)
-			common.CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
-			if diff := cmp.Diff(tc.expOut, gotOut); diff != "" {
-				t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)
-			}
-		})
-	}
-
-}
-
 func TestControl_getRequestHosts(t *testing.T) {
 	defaultCfg := DefaultConfig()
-	defaultCfg.HostList = mockHostList("a", "b", "c")
-	for i, host := range defaultCfg.HostList {
-		defaultCfg.HostList[i] = fmt.Sprintf("%s:%d", host, defaultCfg.ControlPort)
-	}
 
 	for name, tc := range map[string]struct {
 		cfg    *Config
@@ -159,21 +93,6 @@ func TestControl_getRequestHosts(t *testing.T) {
 			cfg:    defaultCfg,
 			req:    &testTgtChooser{},
 			expOut: mockHostList(defaultCfg.HostList...),
-		},
-		"default config; MS request; empty req list": {
-			cfg: defaultCfg,
-			req: &testTgtChooser{
-				toMS: true,
-			},
-			expOut: mockHostList(defaultCfg.HostList[0]),
-		},
-		"default config; MS request; use req list": {
-			cfg: defaultCfg,
-			req: &testTgtChooser{
-				hostList: defaultCfg.HostList[1:],
-				toMS:     true,
-			},
-			expOut: mockHostList(defaultCfg.HostList[1]),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

@@ -120,7 +120,7 @@ rebuild_pool_tls_destroy(struct rebuild_pool_tls *tls)
 {
 	D_DEBUG(DB_REBUILD, "TLS destroy for "DF_UUID" ver %d\n",
 		DP_UUID(tls->rebuild_pool_uuid), tls->rebuild_pool_ver);
-	if (!daos_handle_is_inval(tls->rebuild_tree_hdl))
+	if (daos_handle_is_valid(tls->rebuild_tree_hdl))
 		obj_tree_destroy(tls->rebuild_tree_hdl);
 	d_list_del(&tls->rebuild_pool_list);
 	D_FREE(tls);
@@ -443,8 +443,7 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 
 	/* let's check scanning status on every thread*/
 	ABT_mutex_lock(rpt->rt_lock);
-	rc = dss_thread_collective(dss_rebuild_check_one, &arg, 0,
-				   DSS_ULT_REBUILD);
+	rc = dss_thread_collective(dss_rebuild_check_one, &arg, 0);
 	if (rc) {
 		ABT_mutex_unlock(rpt->rt_lock);
 		D_GOTO(out, rc);
@@ -851,11 +850,11 @@ rpt_destroy(struct rebuild_tgt_pool_tracker *rpt)
 {
 	D_ASSERT(rpt->rt_refcount == 0);
 	D_ASSERT(d_list_empty(&rpt->rt_list));
-	if (!daos_handle_is_inval(rpt->rt_tobe_rb_root_hdl)) {
+	if (daos_handle_is_valid(rpt->rt_tobe_rb_root_hdl)) {
 		dbtree_destroy(rpt->rt_tobe_rb_root_hdl, NULL);
 		rpt->rt_tobe_rb_root_hdl = DAOS_HDL_INVAL;
 	}
-	if (!daos_handle_is_inval(rpt->rt_rebuilt_root_hdl)) {
+	if (daos_handle_is_valid(rpt->rt_rebuilt_root_hdl)) {
 		rebuilt_btr_destroy(rpt->rt_rebuilt_root_hdl);
 		rpt->rt_rebuilt_root_hdl = DAOS_HDL_INVAL;
 	}
@@ -1234,8 +1233,7 @@ rebuild_ults(void *arg)
 				continue;
 
 			rc = dss_ult_create(rebuild_task_ult, task,
-					    DSS_ULT_REBUILD, DSS_TGT_SELF,
-					    0, NULL);
+					    DSS_XS_SELF, 0, 0, NULL);
 			if (rc == 0) {
 				rebuild_gst.rg_inflight++;
 				/* TODO: This needs to be expanded to select the
@@ -1413,14 +1411,19 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 				  uuid, map_ver, rebuild_op, tgts);
 	d_list_add_tail(&task->dst_list, &rebuild_gst.rg_queue_list);
 
+	D_DEBUG(DB_REBUILD, "rebuild queue "DF_UUID" ver=%u, op=%s",
+		DP_UUID(uuid), map_ver, RB_OP_STR(rebuild_op));
+
 	if (!rebuild_gst.rg_rebuild_running) {
 		rc = ABT_cond_create(&rebuild_gst.rg_stop_cond);
 		if (rc != ABT_SUCCESS)
 			D_GOTO(free, rc = dss_abterr2der(rc));
 
+		D_DEBUG(DB_REBUILD, "rebuild ult "DF_UUID" ver=%u, op=%s",
+			DP_UUID(uuid), map_ver, RB_OP_STR(rebuild_op));
 		rebuild_gst.rg_rebuild_running = 1;
-		rc = dss_ult_create(rebuild_ults, NULL, DSS_ULT_REBUILD,
-				    DSS_TGT_SELF, 0, NULL);
+		rc = dss_ult_create(rebuild_ults, NULL, DSS_XS_SELF,
+				    0, 0, NULL);
 		if (rc) {
 			ABT_cond_free(&rebuild_gst.rg_stop_cond);
 			rebuild_gst.rg_rebuild_running = 0;
@@ -1533,7 +1536,7 @@ rebuild_fini_one(void *arg)
 	if (pool_tls == NULL)
 		return 0;
 
-	if (!daos_handle_is_inval(pool_tls->rebuild_pool_hdl)) {
+	if (daos_handle_is_valid(pool_tls->rebuild_pool_hdl)) {
 		D_DEBUG(DB_REBUILD, "close container/pool "
 			DF_UUID"/"DF_UUID"\n",
 			DP_UUID(rpt->rt_coh_uuid), DP_UUID(rpt->rt_poh_uuid));
@@ -1603,7 +1606,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 		rebuild_pool_tls_destroy(pool_tls);
 
 	/* close the rebuild pool/container on all main XS */
-	rc = dss_task_collective(rebuild_fini_one, rpt, 0, DSS_ULT_REBUILD);
+	rc = dss_task_collective(rebuild_fini_one, rpt, 0);
 
 	rpt_put(rpt);
 	/* No one should access rpt after rebuild_fini_one.
@@ -1699,8 +1702,9 @@ rebuild_tgt_status_check_ult(void *arg)
 		 * the rebuild.
 		 */
 		if (!rpt->rt_global_done) {
-			iv.riv_master_rank =
-				rpt->rt_pool->sp_iv_ns->iv_master_rank;
+			struct ds_iv_ns *ns = rpt->rt_pool->sp_iv_ns;
+
+			iv.riv_master_rank = ns->iv_master_rank;
 			iv.riv_rank = rpt->rt_rank;
 			iv.riv_ver = rpt->rt_rebuild_ver;
 			iv.riv_leader_term = rpt->rt_leader_term;
@@ -1711,9 +1715,9 @@ rebuild_tgt_status_check_ult(void *arg)
 			if (DAOS_FAIL_CHECK(DAOS_REBUILD_TGT_IV_UPDATE_FAIL))
 				rc = -DER_INVAL;
 			else
-				rc = rebuild_iv_update(rpt->rt_pool->sp_iv_ns,
-						   &iv, CRT_IV_SHORTCUT_TO_ROOT,
-						   CRT_IV_SYNC_NONE, false);
+				rc = rebuild_iv_update(ns, &iv,
+						       CRT_IV_SHORTCUT_TO_ROOT,
+						       CRT_IV_SYNC_NONE, false);
 			if (rc == 0) {
 				if (rpt->rt_re_report) {
 					rpt->rt_reported_toberb_objs =
@@ -1727,8 +1731,7 @@ rebuild_tgt_status_check_ult(void *arg)
 				rpt->rt_reported_rec_cnt = status.rec_count;
 				rpt->rt_reported_size = status.size;
 			} else {
-				D_WARN("rebuild tgt iv update failed: %d\n",
-					rc);
+				D_WARN("rebuild iv update failed: %d\n", rc);
 				/* Already finish rebuilt, but it can not
 				 * its rebuild status on the leader, i.e.
 				 * it can not find the IV see crt_iv_hdlr_xx().
@@ -1736,6 +1739,26 @@ rebuild_tgt_status_check_ult(void *arg)
 				 */
 				if (rc == -DER_NONEXIST && !status.rebuilding)
 					rpt->rt_global_done = 1;
+
+				if (rc == -DER_NOTLEADER) {
+					/* If the leader is changed, let's
+					 * check if it needs to abort the
+					 * current rebuild and wait the new
+					 * leader to re-start the rebuild.
+					 */
+					if (iv.riv_master_rank !=
+					    ns->iv_master_rank) {
+						D_DEBUG(DB_REBUILD, "master %u"
+							"-> %u ignore %d\n",
+							iv.riv_master_rank,
+							ns->iv_master_rank, rc);
+					} else {
+						D_DEBUG(DB_REBUILD, "abort"
+							" rebuild "DF_UUID"\n",
+						    DP_UUID(rpt->rt_pool_uuid));
+						rpt->rt_abort = 1;
+					}
+				}
 			}
 		}
 
@@ -1953,7 +1976,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	rpt->rt_rebuild_fence = crt_hlc_get();
-	rc = dss_task_collective(rebuild_prepare_one, rpt, 0, DSS_ULT_REBUILD);
+	rc = dss_task_collective(rebuild_prepare_one, rpt, 0);
 	if (rc) {
 		rpt->rt_rebuild_fence = 0;
 		rebuild_pool_tls_destroy(pool_tls);

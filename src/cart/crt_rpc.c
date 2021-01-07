@@ -208,6 +208,25 @@ static struct crt_proto_rpc_format crt_fi_rpcs[] = {
 
 #undef X
 
+#define X(a, b, c, d, e) case a: return #a;
+
+/* Helper function to convert internally registered RPC opc to str */
+char
+*crt_opc_to_str(crt_opcode_t opc)
+{
+	if (crt_opc_is_swim(opc))
+		return "SWIM";
+
+	switch (opc) {
+	CRT_INTERNAL_RPCS_LIST
+	CRT_FI_RPCS_LIST
+	default:
+		return "DAOS";
+	}
+}
+
+#undef X
+
 /* CRT RPC related APIs or internal functions */
 int
 crt_internal_rpc_register(void)
@@ -423,7 +442,7 @@ int
 crt_req_set_endpoint(crt_rpc_t *req, crt_endpoint_t *tgt_ep)
 {
 	struct crt_rpc_priv	*rpc_priv;
-	struct crt_grp_priv	*grp_priv;
+	struct crt_grp_priv	*grp_priv = NULL;
 	int			 rc = 0;
 
 	if (req == NULL || tgt_ep == NULL) {

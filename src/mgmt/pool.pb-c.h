@@ -227,10 +227,15 @@ struct  _Mgmt__PoolEvictReq
    */
   size_t n_svc_ranks;
   uint32_t *svc_ranks;
+  /*
+   * Optional list of handles to evict
+   */
+  size_t n_handles;
+  char **handles;
 };
 #define MGMT__POOL_EVICT_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_evict_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL }
 
 
 /*

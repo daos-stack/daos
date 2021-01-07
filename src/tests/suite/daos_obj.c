@@ -3740,15 +3740,20 @@ io_pool_map_refresh_trigger(void **state)
 	daos_obj_id_t	oid;
 	struct ioreq	req;
 	d_rank_t	leader;
+	d_rank_t	rank = 1;
 
 	/* needs at lest 2 targets */
 	if (!test_runable(arg, 2))
 		skip();
 
+	/* Choose an rank other than leader */
 	test_get_leader(arg, &leader);
-	D_ASSERT(leader > 0);
+	while (rank == leader)
+		rank = (rank + 1) % arg->srv_nnodes;
+
+	print_message("leader %u rank %u\n", leader, rank);
 	oid = dts_oid_gen(DAOS_OC_R1S_SPEC_RANK, 0, arg->myrank);
-	oid = dts_oid_set_rank(oid, leader - 1);
+	oid = dts_oid_set_rank(oid, rank);
 
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,

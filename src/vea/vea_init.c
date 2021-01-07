@@ -131,12 +131,12 @@ error:
 void
 unload_space_info(struct vea_space_info *vsi)
 {
-	if (!daos_handle_is_inval(vsi->vsi_md_free_btr)) {
+	if (daos_handle_is_valid(vsi->vsi_md_free_btr)) {
 		dbtree_close(vsi->vsi_md_free_btr);
 		vsi->vsi_md_free_btr = DAOS_HDL_INVAL;
 	}
 
-	if (!daos_handle_is_inval(vsi->vsi_md_vec_btr)) {
+	if (daos_handle_is_valid(vsi->vsi_md_vec_btr)) {
 		dbtree_close(vsi->vsi_md_vec_btr);
 		vsi->vsi_md_vec_btr = DAOS_HDL_INVAL;
 	}

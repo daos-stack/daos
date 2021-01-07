@@ -38,6 +38,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
@@ -272,18 +273,18 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				}
 				harness.started.SetTrue()
 
-				tc.mgmtSvc = newMgmtSvc(harness, system.MockMembership(t, log), system.MockDatabase(t, log))
+				ms, db := system.MockMembership(t, log, mockTCPResolver)
+				tc.mgmtSvc = newMgmtSvc(harness, ms, db,
+					events.NewPubSub(context.Background(), log))
 			}
 			tc.mgmtSvc.log = log
 
-			if _, err := tc.mgmtSvc.harness.getMSLeaderInstance(); err == nil {
-				if tc.setupMockDrpc == nil {
-					tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
-						setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
-					}
+			if tc.setupMockDrpc == nil {
+				tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
+					setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
 				}
-				tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
 			}
+			tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
 
 			pcCtx, pcCancel := context.WithTimeout(context.Background(), defaultRetryAfter+10*time.Millisecond)
 			defer pcCancel()
@@ -415,14 +416,12 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if _, err := tc.mgmtSvc.harness.getMSLeaderInstance(); err == nil {
-				if tc.setupMockDrpc == nil {
-					tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
-						setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
-					}
+			if tc.setupMockDrpc == nil {
+				tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
+					setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
 				}
-				tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
 			}
+			tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
 
 			gotResp, gotErr := tc.mgmtSvc.PoolDestroy(context.TODO(), tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
@@ -505,14 +504,12 @@ func TestServer_MgmtSvc_PoolDrain(t *testing.T) {
 			tc.mgmtSvc.log = log
 			addTestPoolService(t, tc.mgmtSvc.sysdb, testPoolService)
 
-			if _, err := tc.mgmtSvc.harness.getMSLeaderInstance(); err == nil {
-				if tc.setupMockDrpc == nil {
-					tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
-						setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
-					}
+			if tc.setupMockDrpc == nil {
+				tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
+					setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
 				}
-				tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
 			}
+			tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
 
 			gotResp, gotErr := tc.mgmtSvc.PoolDrain(context.TODO(), tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
@@ -591,14 +588,12 @@ func TestServer_MgmtSvc_PoolEvict(t *testing.T) {
 			tc.mgmtSvc.log = log
 			addTestPoolService(t, tc.mgmtSvc.sysdb, testPoolService)
 
-			if _, err := tc.mgmtSvc.harness.getMSLeaderInstance(); err == nil {
-				if tc.setupMockDrpc == nil {
-					tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
-						setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
-					}
+			if tc.setupMockDrpc == nil {
+				tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
+					setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
 				}
-				tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
 			}
+			tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
 
 			gotResp, gotErr := tc.mgmtSvc.PoolEvict(context.TODO(), tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
@@ -1094,14 +1089,12 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 			tc.mgmtSvc.log = log
 			addTestPools(t, tc.mgmtSvc.sysdb, mockUUID)
 
-			if _, err := tc.mgmtSvc.harness.getMSLeaderInstance(); err == nil {
-				if tc.setupMockDrpc == nil {
-					tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
-						setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
-					}
+			if tc.setupMockDrpc == nil {
+				tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
+					setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
 				}
-				tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
 			}
+			tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
 
 			gotResp, gotErr := tc.mgmtSvc.PoolQuery(context.TODO(), tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
@@ -1263,7 +1256,7 @@ func TestServer_MgmtSvc_PoolSetProp_Label(t *testing.T) {
 
 func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 	lastCall := func(svc *mgmtSvc) *drpc.Call {
-		mi, _ := svc.harness.getMSLeaderInstance()
+		mi := svc.harness.instances[0]
 		if mi == nil || mi._drpcClient == nil {
 			return nil
 		}

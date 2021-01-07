@@ -99,10 +99,10 @@ ds_pool_child_purge(struct pool_tls *tls)
 	struct ds_pool_child   *n;
 
 	d_list_for_each_entry_safe(child, n, &tls->dt_pool_list, spc_list) {
-		D_ASSERTF(child->spc_ref == 1, DF_UUID": %d\n",
-			  DP_UUID(child->spc_uuid), child->spc_ref);
 		d_list_del_init(&child->spc_list);
 		ds_cont_child_stop_all(child);
+		D_ASSERTF(child->spc_ref == 1, DF_UUID": %d\n",
+			  DP_UUID(child->spc_uuid), child->spc_ref);
 		ds_pool_child_put(child);
 	}
 }
@@ -148,7 +148,7 @@ start_gc_ult(struct ds_pool_child *child)
 	D_ASSERT(child != NULL);
 	D_ASSERT(child->spc_gc_req == NULL);
 
-	rc = dss_ult_create(gc_ult, child, DSS_ULT_GC, DSS_TGT_SELF, 0, &gc);
+	rc = dss_ult_create(gc_ult, child, DSS_XS_SELF, 0, 0, &gc);
 	if (rc) {
 		D_ERROR(DF_UUID"[%d]: Failed to create GC ULT. %d\n",
 			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id, rc);
@@ -373,8 +373,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	collective_arg.pla_pool = pool;
 	collective_arg.pla_uuid = key;
 	collective_arg.pla_map_version = arg->pca_map_version;
-	rc = dss_thread_collective(pool_child_add_one, &collective_arg, 0,
-				   DSS_ULT_IO);
+	rc = dss_thread_collective(pool_child_add_one, &collective_arg, 0);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to add ES pool caches: "DF_RC"\n",
 			DP_UUID(key), DP_RC(rc));
@@ -420,8 +419,7 @@ pool_free_ref(struct daos_llink *llink)
 		D_ERROR(DF_UUID": failed to destroy pool group: %d\n",
 			DP_UUID(pool->sp_uuid), rc);
 
-	rc = dss_thread_collective(pool_child_delete_one, pool->sp_uuid, 0,
-				   DSS_ULT_IO);
+	rc = dss_thread_collective(pool_child_delete_one, pool->sp_uuid, 0);
 	if (rc == -DER_CANCELED)
 		D_DEBUG(DB_MD, DF_UUID": no ESs\n", DP_UUID(pool->sp_uuid));
 	else if (rc != 0)
@@ -592,7 +590,7 @@ ds_pool_start_ec_eph_query_ult(struct ds_pool *pool)
 	ABT_thread		ec_eph_query_ult = ABT_THREAD_NULL;
 	int			rc;
 
-	rc = dss_ult_create(tgt_ec_eph_query_ult, pool, DSS_ULT_POOL_SRV, 0,
+	rc = dss_ult_create(tgt_ec_eph_query_ult, pool, DSS_XS_SYS, 0,
 			    131072, &ec_eph_query_ult);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed create ec eph equery ult: %d\n",
@@ -672,7 +670,7 @@ ds_pool_start(uuid_t uuid)
 	}
 
 	pool = pool_obj(llink);
-	rc = dss_ult_create(pool_fetch_hdls_ult, pool, DSS_ULT_POOL_SRV,
+	rc = dss_ult_create(pool_fetch_hdls_ult, pool, DSS_XS_SYS,
 			    0, 0, NULL);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create fetch ult: %d\n",
@@ -1005,8 +1003,7 @@ pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 		return rc;
 	}
 
-	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0,
-					  DSS_ULT_IO);
+	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
 	if (coll_args.ca_exclude_tgts)
 		D_FREE(coll_args.ca_exclude_tgts);
 	if (rc) {
@@ -1257,8 +1254,7 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			map_version);
 
 		pool->sp_map_version = map_version;
-		rc = dss_task_collective(update_child_map, pool, 0,
-					 DSS_ULT_IO);
+		rc = dss_task_collective(update_child_map, pool, 0);
 		D_ASSERT(rc == 0);
 		update_map = true;
 	}
@@ -1276,7 +1272,7 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 
 		uuid_copy(arg->pool_uuid, pool->sp_uuid);
 		arg->version = pool->sp_map_version;
-		ret = dss_ult_create(dtx_resync_ult, arg, DSS_ULT_POOL_SRV,
+		ret = dss_ult_create(dtx_resync_ult, arg, DSS_XS_SYS,
 				     0, 0, NULL);
 		if (ret) {
 			D_ERROR("dtx_resync_ult failure %d\n", ret);

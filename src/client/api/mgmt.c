@@ -31,27 +31,6 @@
 #include "task_internal.h"
 
 int
-daos_mgmt_svc_rip(const char *grp, d_rank_t rank, bool force,
-		  daos_event_t *ev)
-{
-	daos_svc_rip_t		*args;
-	tse_task_t		*task;
-	int			 rc;
-
-	DAOS_API_ARG_ASSERT(*args, SVC_RIP);
-	rc = dc_task_create(dc_mgmt_svc_rip, NULL, ev, &task);
-	if (rc)
-		return rc;
-
-	args = dc_task_get_args(task);
-	args->grp	= grp;
-	args->rank	= rank;
-	args->force	= force;
-
-	return dc_task_schedule(task, true);
-}
-
-int
 daos_debug_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
 		     uint64_t value, uint64_t value_extra, daos_event_t *ev)
 {
@@ -173,13 +152,6 @@ daos_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 	uuid_copy((unsigned char *)args->uuid, uuid);
 
 	return dc_task_schedule(task, true);
-}
-
-int
-daos_pool_extend(const uuid_t uuid, const char *grp, d_rank_list_t *tgts,
-		 d_rank_list_t *failed, daos_event_t *ev)
-{
-	return -DER_NOSYS;
 }
 
 int

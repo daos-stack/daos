@@ -33,6 +33,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -179,6 +180,7 @@ func (svc *mgmtSvc) StopRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
+
 	if len(req.GetRanks()) == 0 {
 		return nil, errors.New("no ranks specified in request")
 	}
@@ -193,10 +195,17 @@ func (svc *mgmtSvc) StopRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 	if err != nil {
 		return nil, err
 	}
+
+	// don't publish rank exit events whilst performing controlled shutdown
+	svc.events.DisableEventIDs(events.RASRankExit)
+	defer svc.events.EnableEventIDs(events.RASRankExit)
+
 	for _, srv := range instances {
+		svc.log.Debugf("%d: check started", srv.Index())
 		if !srv.isStarted() {
 			continue
 		}
+		svc.log.Debugf("%d: call Stop()", srv.Index())
 		if err := srv.Stop(signal); err != nil {
 			return nil, errors.Wrapf(err, "sending %s", signal)
 		}
@@ -405,6 +414,39 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 	}
 
 	svc.log.Debugf("MgmtSvc.StartRanks dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
+// ClusterEvent management service gRPC handler receives ClusterEvent requests
+// from control-plane instances attempting to notify the MS of a cluster event
+// in the DAOS system.
+//
+// On receipt of the request publish extracted event to make it available to
+// locally subscribed consumers to act upon.
+func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *mgmtpb.ClusterEventReq) (*mgmtpb.ClusterEventResp, error) {
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+	if req.Sequence < 1 {
+		return nil, errors.New("invalid sequence number in request")
+	}
+	svc.log.Debugf("MgmtSvc.ClusterEvent dispatch, req:%#v\n", req)
+
+	rasEventPB := req.GetRas()
+	if rasEventPB == nil {
+		return nil, errors.Errorf("unexpected event type received, want RAS got %T",
+			req.GetEvent())
+	}
+
+	event, err := events.NewFromProto(rasEventPB)
+	if err != nil {
+		return nil, err
+	}
+	svc.events.Publish(event)
+
+	resp := &mgmtpb.ClusterEventResp{Sequence: req.Sequence}
+	svc.log.Debugf("MgmtSvc.ClusterEvent dispatch, resp:%#v\n", resp)
 
 	return resp, nil
 }

@@ -46,7 +46,7 @@ class DmgSystemReformatTest(PoolTestBase):
 
         Test Description: Test dmg system reformat functionality.
 
-        :avocado: tags=all,small,pr,hw,control,sys_reformat,dmg
+        :avocado: tags=all,small,daily_regression,hw,control,sys_reformat,dmg
         """
         # Create pool using 90% of the available SCM capacity
         self.pool = self.get_pool_list(1, None, 0.9)
