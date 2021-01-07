@@ -383,7 +383,7 @@ boolean tests_in_stage(String size) {
             size += ",ib2"
         }
         for (String tag in tags.split(" ")) {
-            newtags.add(tag + ",hw," + size) 
+            newtags.add(tag + ",hw," + size)
         }
     }
     tags = newtags.join(" ")
