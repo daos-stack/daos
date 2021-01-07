@@ -16,9 +16,12 @@ jobs:
       fail-fast: false
       matrix:
         distro: [centos.7, leap.15, ubuntu.20.04]
+        compiler: [gcc, clang]
     steps:
     - uses: actions/checkout@v2
       with:
         submodules: true
     - name: Build Docker image
-      run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }} -t ${{ matrix.distro }}/daos:${{ github.sha }}
+      run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }} \
+                          --build-arg COMPILER=${{ matrix.compiler }} \
+                          -t ${{ matrix.distro }}/daos:${{ github.sha }}
