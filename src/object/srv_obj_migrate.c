@@ -1227,7 +1227,7 @@ migrate_one_ult(void *arg)
 	int			rc;
 
 	if (daos_fail_check(DAOS_REBUILD_TGT_REBUILD_HANG))
-		dss_sleep(daos_fail_value_get() * 1000000);
+		dss_sleep(daos_fail_value_get() * 1000 /* ms */);
 
 	tls = migrate_pool_tls_lookup(mrone->mo_pool_uuid,
 				      mrone->mo_pool_tls_version);
