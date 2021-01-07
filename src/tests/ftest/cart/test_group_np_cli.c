@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,7 +75,6 @@ test_run(void)
 	test_g.t_fault_attr_5000 = d_fault_attr_lookup(5000);
 
 	if (!test_g.t_shut_only) {
-
 		for (i = 0; i < rank_list->rl_nr; i++) {
 			rank = rank_list->rl_ranks[i];
 
@@ -86,8 +85,10 @@ test_run(void)
 		}
 
 		for (i = 0; i < rank_list->rl_nr; i++) {
-			tc_sem_timedwait(&test_g.t_token_to_proceed, 61,
-					 __LINE__);
+			for (tag = 0; tag < test_g.t_srv_ctx_num; tag++) {
+				tc_sem_timedwait(&test_g.t_token_to_proceed, 61,
+						 __LINE__);
+			}
 		}
 	}
 

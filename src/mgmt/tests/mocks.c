@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -371,7 +371,7 @@ int     ds_mgmt_pool_evict_return;
 uuid_t  ds_mgmt_pool_evict_uuid;
 int
 ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-		   const char *group)
+		   uuid_t *handles, size_t n_handles, const char *group)
 {
 	uuid_copy(ds_mgmt_pool_evict_uuid, pool_uuid);
 	return ds_mgmt_pool_evict_return;

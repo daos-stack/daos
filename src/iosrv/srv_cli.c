@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,7 +65,7 @@ dsc_progress_start(void)
 	if (dx->dx_dsc_started)
 		return 0;
 
-	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_REBUILD], dsc_progress,
+	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_GENERIC], dsc_progress,
 			       dx, ABT_THREAD_ATTR_NULL, NULL);
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -419,6 +419,7 @@ static int send_monitor_request(struct dc_pool *pool, int request_type)
 	req.pooluuid = pool_uuid;
 	req.poolhandleuuid = pool_hdl_uuid;
 	req.jobid = dc_jobid;
+	req.sys = pool->dp_sys->sy_name;
 
 	reqb_size = mgmt__pool_monitor_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -67,8 +67,13 @@ func MockMemberResult(rank Rank, action string, err error, state MemberState) *M
 
 func MockMembership(t *testing.T, log logging.Logger, resolver resolveTCPFn) (*Membership, *Database) {
 	db := MockDatabase(t, log)
+	m := NewMembership(log, db)
 
-	return NewMembership(log, db).WithTCPResolver(resolver), db
+	if resolver != nil {
+		return m.WithTCPResolver(resolver), db
+	}
+
+	return m, db
 }
 
 type (
@@ -99,6 +104,10 @@ func (mrs *mockRaftService) Apply(cmd []byte, timeout time.Duration) raft.ApplyF
 }
 
 func (mr *mockRaftService) AddVoter(_ raft.ServerID, _ raft.ServerAddress, _ uint64, _ time.Duration) raft.IndexFuture {
+	return &mockRaftFuture{}
+}
+
+func (mr *mockRaftService) RemoveServer(_ raft.ServerID, _ uint64, _ time.Duration) raft.IndexFuture {
 	return &mockRaftFuture{}
 }
 

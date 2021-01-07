@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -177,7 +177,7 @@ daos_dti_copy(struct dtx_id *des, const struct dtx_id *src)
 }
 
 static inline bool
-daos_is_zero_dti(struct dtx_id *dti)
+daos_is_zero_dti(const struct dtx_id *dti)
 {
 	return dti->dti_hlc == 0;
 }

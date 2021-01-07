@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -838,8 +838,7 @@ update_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 	if (uta == NULL)
 		return -DER_NOMEM;
 
-	rc = dss_ult_create(update_targets_ult, uta, DSS_ULT_MISC,
-			    DSS_TGT_SELF, 0, NULL);
+	rc = dss_ult_create(update_targets_ult, uta, DSS_XS_SELF, 0, 0, NULL);
 	if (rc) {
 		D_ERROR(DF_UUID": Failed to start targets updating ULT. %d\n",
 			DP_UUID(pool_id), rc);

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -442,6 +442,45 @@ struct btr_instance {
 	/** Customized operations for the tree */
 	btr_ops_t			*ti_ops;
 };
+
+/**
+ * Inline data structure for embedding the key bundle and key into an anchor
+ * for serialization.
+ */
+#define	EMBEDDED_KEY_MAX	100
+struct btr_embedded_key {
+	/** Inlined iov key references */
+	uint32_t	ek_size;
+	/** Inlined buffer the key references*/
+	unsigned char	ek_key[EMBEDDED_KEY_MAX];
+};
+
+D_CASSERT(sizeof(struct btr_embedded_key) == DAOS_ANCHOR_BUF_MAX);
+
+static inline void
+embedded_key_encode(d_iov_t *key, daos_anchor_t *anchor)
+{
+	struct btr_embedded_key *embedded =
+		(struct btr_embedded_key *)anchor->da_buf;
+
+	D_ASSERT(key->iov_len <= sizeof(embedded->ek_key));
+
+	memcpy(embedded->ek_key, key->iov_buf, key->iov_len);
+	/** Pointers will have to be set on decode. */
+	embedded->ek_size = key->iov_len;
+}
+
+static inline void
+embedded_key_decode(d_iov_t *key, daos_anchor_t *anchor)
+{
+	struct btr_embedded_key *embedded =
+		(struct btr_embedded_key *)anchor->da_buf;
+
+	/* Fix the pointer first */
+	key->iov_buf = &embedded->ek_key[0];
+	key->iov_len = embedded->ek_size;
+	key->iov_buf_len = embedded->ek_size;
+}
 
 /* Features are passed as 64-bit unsigned integer.   Only the bits below are
  * reserved.   A specific class can define its own bits to customize behavior.

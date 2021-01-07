@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -147,24 +147,6 @@ func (h *IOServerHarness) CallDrpc(ctx context.Context, method drpc.Method, body
 	}
 
 	return
-}
-
-// getMSLeaderInstance returns a managed IO Server instance to be used as a
-// management target and fails if selected instance is not MS Leader.
-func (h *IOServerHarness) getMSLeaderInstance() (*IOServerInstance, error) {
-	if !h.isStarted() {
-		return nil, FaultHarnessNotStarted
-	}
-
-	h.RLock()
-	defer h.RUnlock()
-
-	if len(h.instances) == 0 {
-		return nil, errors.New("harness has no managed instances")
-	}
-
-	// hack for now
-	return h.instances[0], nil
 }
 
 // Start starts harness by setting up and starting dRPC before initiating

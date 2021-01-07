@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,10 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
+
+enum fs_op {
+	FS_COPY
+};
 
 enum cont_op {
 	CONT_CREATE,
@@ -70,6 +74,7 @@ struct cmd_args_s {
 	enum pool_op		p_op;		/* pool sub-command */
 	enum cont_op		c_op;		/* cont sub-command */
 	enum obj_op		o_op;		/* obj sub-command */
+	enum fs_op		fs_op;		/* filesystem sub-command */
 	char			*sysname;	/* --sys-name or --sys */
 	uuid_t			p_uuid;		/* --pool */
 	daos_handle_t		pool;
@@ -83,6 +88,8 @@ struct cmd_args_s {
 
 	/* Container unified namespace (path) related */
 	char			*path;		/* --path cont namespace */
+	char			*src;		/* --src path for fs copy */
+	char			*dst;		/* --dst path for fs copy */
 	daos_cont_layout_t	type;		/* --type cont type */
 	daos_oclass_id_t	oclass;		/* --oclass object class */
 	daos_size_t		chunk_size;	/* --chunk_size of cont objs */
@@ -189,6 +196,9 @@ int pool_autotest_hdlr(struct cmd_args_s *ap);
 /* TODO: implement these pool op functions
  * int pool_stat_hdlr(struct cmd_args_s *ap);
  */
+
+/* filesystem operations */
+int fs_copy_hdlr(struct cmd_args_s *ap);
 
 /* Container operations */
 int cont_create_hdlr(struct cmd_args_s *ap);

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -59,11 +59,13 @@ type (
 		// used to limit the number of retries and/or execute some custom retry
 		// logic on each iteration.
 		onRetry(context.Context, uint) error
-		// retryAfter returns a channel to be waited on in order to pause
-		// a goroutine's execution for some duration. For safety, the
-		// channel should be waited on in a select with a context in order to
-		// avoid blocking a goroutine forever.
-		retryAfter(time.Duration) <-chan time.Time
+		// retryAfter returns a duration to specify how long the caller should
+		// wait before trying the request again. It accepts a default duration
+		// which is returned if the request does not specify its own retry interval.
+		retryAfter(time.Duration) time.Duration
+		// getRetryTimeout returns a duration to specify how long each retry attempt
+		// may take. This should be shorter than any overall per-request Deadline.
+		getRetryTimeout() time.Duration
 	}
 
 	// deadliner defines an interface to be implemented by
@@ -143,9 +145,15 @@ func (r *request) onRetry(_ context.Context, _ uint) error {
 }
 
 // retryAfter implements the retrier interface and always returns
-// a time channel defined by the supplied duration.
-func (r *request) retryAfter(interval time.Duration) <-chan time.Time {
-	return time.After(interval)
+// the supplied retry interval.
+func (r *request) retryAfter(interval time.Duration) time.Duration {
+	return interval
+}
+
+// getRetryTimeout implements the retrier interface and always returns
+// zero.
+func (r *request) getRetryTimeout() time.Duration {
+	return 0
 }
 
 // msRequest is an embeddable struct to implement the targetChooser
@@ -161,6 +169,8 @@ func (r *msRequest) isMSRequest() bool {
 
 // retryableRequest is the default implementation of the retryer interface.
 type retryableRequest struct {
+	// retryTimeout sets an optional timeout for each retry.
+	retryTimeout time.Duration
 	// retryInterval is an optional interval to override the default.
 	retryInterval time.Duration
 	// retryMaxTries is an optional max number of retry attempts.
@@ -173,11 +183,15 @@ type retryableRequest struct {
 	retryFn func(context.Context, uint) error
 }
 
-func (r *retryableRequest) retryAfter(defInterval time.Duration) <-chan time.Time {
+func (r *retryableRequest) getRetryTimeout() time.Duration {
+	return r.retryTimeout
+}
+
+func (r *retryableRequest) retryAfter(defInterval time.Duration) time.Duration {
 	if r.retryInterval > 0 {
-		return time.After(r.retryInterval)
+		return r.retryInterval
 	}
-	return time.After(defInterval)
+	return defInterval
 }
 
 func (r *retryableRequest) canRetry(err error, cur uint) bool {

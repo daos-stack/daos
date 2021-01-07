@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -71,10 +71,7 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 	}
 
 	h.started.SetTrue()
-	mi, err := h.getMSLeaderInstance()
-	if err != nil {
-		t.Fatal(err)
-	}
+	mi := h.instances[0]
 	if mi._superblock == nil {
 		t.Fatal("instance superblock is nil after createSuperblock()")
 	}

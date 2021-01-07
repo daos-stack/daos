@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,7 +40,8 @@ func connErrToFault(st *status.Status, target string) error {
 	switch {
 	case strings.Contains(st.Message(), "connection refused"):
 		return FaultConnectionRefused(target)
-	case strings.Contains(st.Message(), "connection closed"):
+	case strings.Contains(st.Message(), "connection closed"),
+		strings.Contains(st.Message(), "transport is closing"):
 		return FaultConnectionClosed(target)
 	case strings.Contains(st.Message(), "no route to host"):
 		return FaultConnectionNoRoute(target)

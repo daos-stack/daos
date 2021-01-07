@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -425,7 +425,7 @@ agg_encode_full_stripe(struct ec_agg_entry *entry)
 		goto out;
 	}
 	rc = dss_ult_create(agg_encode_full_stripe_ult, &stripe_ud,
-			    DSS_ULT_EC, tid, 0, NULL);
+			    DSS_XS_OFFLOAD, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
 	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);

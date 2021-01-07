@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,43 +26,26 @@ package control
 import "github.com/daos-stack/daos/src/control/common"
 
 // getRequestHosts returns a list of control plane addresses for
-// the request. The logic for determining the list is as follows:
-//
-// 1.  If the request has an explicit hostlist set, use it regardless
-//     of request type. This allows for flexibility and config overrides,
-//     but generally should be used for non-AP requests to specific hosts.
-// 2.  If there is no hostlist set on the request, check the request type
-//     and use the following decision tree:
-// 2a. If the request is destined for an Access Point (DAOS MS Replica),
-//     pick the first host in the configuration's hostlist. By convention
-//     this host will be an AP and the request should succeed. If for some
-//     reason the request fails, a future mechanism will attempt to find
-//     a working AP replica to service the request.
-// 2b. If the request is not destined for an AP, then the request is sent
-//     to the entire hostlist set in the configuration.
-//
-// Will always return at least 1 host, or an error.
+// the request. If the request does not supply its own hostlist,
+// create one from the configuration's hostlist.
 func getRequestHosts(cfg *Config, req targetChooser) (hosts []string, err error) {
-	hosts = req.getHostList()
-	if len(hosts) == 0 {
-		if len(cfg.HostList) == 0 {
-			return nil, FaultConfigEmptyHostList
-		}
-		hosts = cfg.HostList
+	if len(req.getHostList()) == 0 && len(cfg.HostList) == 0 {
+		return nil, FaultConfigEmptyHostList
 	}
-
 	if cfg.ControlPort == 0 {
 		return nil, FaultConfigBadControlPort
 	}
 
-	hosts, err = common.ParseHostList(hosts, cfg.ControlPort)
+	hosts, err = common.ParseHostList(req.getHostList(), cfg.ControlPort)
 	if err != nil {
 		return nil, err
 	}
 
-	if req.isMSRequest() {
-		// pick first host as AP, by convention
-		hosts = hosts[:1]
+	if len(hosts) == 0 {
+		hosts, err = common.ParseHostList(cfg.HostList, cfg.ControlPort)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return hosts, nil

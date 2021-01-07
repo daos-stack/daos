@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -423,8 +423,8 @@ cont_start_agg_ult(struct ds_cont_child *cont)
 	if (cont->sc_agg_req != NULL)
 		return 0;
 
-	rc = dss_ult_create(cont_aggregate_ult, cont, DSS_ULT_GC,
-			    DSS_TGT_SELF, 0, &agg_ult);
+	rc = dss_ult_create(cont_aggregate_ult, cont, DSS_XS_SELF,
+			    0, 0, &agg_ult);
 	if (rc) {
 		D_ERROR(DF_CONT"[%d]: Failed to create aggregation ULT. %d\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
@@ -512,8 +512,8 @@ cont_start_dtx_reindex_ult(struct ds_cont_child *cont)
 
 	ds_cont_child_get(cont);
 	cont->sc_dtx_reindex = 1;
-	rc = dss_ult_create(ds_cont_dtx_reindex_ult, cont,
-			    DSS_ULT_DTX_RESYNC, DSS_TGT_SELF, 0, NULL);
+	rc = dss_ult_create(ds_cont_dtx_reindex_ult, cont, DSS_XS_SELF,
+			    0, 0, NULL);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": Failed to create DTX reindex ULT: rc %d\n",
 			DP_UUID(cont->sc_uuid), rc);
@@ -1107,7 +1107,7 @@ ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
 	uuid_copy(in.tdi_uuid, cont_uuid);
 
 	cont_delete_ec_agg(pool_uuid, cont_uuid);
-	rc = dss_thread_collective(cont_child_destroy_one, &in, 0, DSS_ULT_IO);
+	rc = dss_thread_collective(cont_child_destroy_one, &in, 0);
 	return rc;
 }
 
@@ -1382,8 +1382,8 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 
 		ddra->pool = ds_pool_child_get(hdl->sch_cont->sc_pool);
 		uuid_copy(ddra->co_uuid, cont_uuid);
-		rc = dss_ult_create(ds_dtx_resync, ddra, DSS_ULT_DTX_RESYNC,
-				    DSS_TGT_SELF, 0, NULL);
+		rc = dss_ult_create(ds_dtx_resync, ddra, DSS_XS_SELF,
+				    0, 0, NULL);
 		if (rc != 0) {
 			ds_pool_child_put(hdl->sch_cont->sc_pool);
 			D_FREE(ddra);
@@ -1482,8 +1482,7 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		return rc;
 	}
 
-	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0,
-					  DSS_ULT_IO);
+	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
 	if (coll_args.ca_exclude_tgts)
 		D_FREE(coll_args.ca_exclude_tgts);
 
@@ -1586,7 +1585,7 @@ ds_cont_tgt_force_close(uuid_t cont_uuid)
 	D_DEBUG(DF_DSMS, "Force closing all handles for container "
 		DF_UUID"\n", DP_UUID(cont_uuid));
 
-	rc = dss_thread_collective(cont_close_all, &cont_uuid, 0, DSS_ULT_IO);
+	rc = dss_thread_collective(cont_close_all, &cont_uuid, 0);
 	if (rc != 0)
 		D_ERROR("dss_thread_collective failed: rc="DF_RC, DP_RC(rc));
 	return rc;
@@ -1611,7 +1610,7 @@ ds_cont_tgt_close(uuid_t hdl_uuid)
 	struct coll_close_arg arg;
 
 	uuid_copy(arg.uuid, hdl_uuid);
-	return dss_thread_collective(cont_close_one_hdl, &arg, 0, DSS_ULT_IO);
+	return dss_thread_collective(cont_close_one_hdl, &arg, 0);
 }
 
 struct xstream_cont_query {
@@ -1733,7 +1732,7 @@ ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 	coll_args.ca_func_args		= &coll_args.ca_stream_args;
 
 
-	rc = dss_task_collective_reduce(&coll_ops, &coll_args, 0, DSS_ULT_IO);
+	rc = dss_task_collective_reduce(&coll_ops, &coll_args, 0);
 
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	out->tqo_hae	= MIN(out->tqo_hae, pack_args.xcq_hae);
@@ -1820,8 +1819,7 @@ ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 	args.snapshots = snapshots;
 	D_DEBUG(DB_TRACE, DF_UUID": refreshing snapshots %d\n",
 		DP_UUID(cont_uuid), snap_count);
-	return dss_thread_collective(cont_snap_update_one, &args, 0,
-				     DSS_ULT_IO);
+	return dss_thread_collective(cont_snap_update_one, &args, 0);
 }
 
 void
@@ -1857,8 +1855,8 @@ ds_cont_tgt_snapshots_refresh(uuid_t pool_uuid, uuid_t cont_uuid)
 		return -DER_NOMEM;
 	uuid_copy(args->pool_uuid, pool_uuid);
 	uuid_copy(args->cont_uuid, cont_uuid);
-	rc = dss_ult_create(cont_snapshots_refresh_ult, args,
-			    DSS_ULT_POOL_SRV, 0, 0, NULL);
+	rc = dss_ult_create(cont_snapshots_refresh_ult, args, DSS_XS_SYS,
+			    0, 0, NULL);
 	if (rc != 0)
 		D_FREE(args);
 	return rc;
@@ -1903,8 +1901,7 @@ ds_cont_tgt_snapshot_notify_handler(crt_rpc_t *rpc)
 	args.snap_epoch = in->tsi_epoch;
 	args.snap_opts = in->tsi_opts;
 
-	out->tso_rc = dss_thread_collective(cont_snap_notify_one, &args, 0,
-					    DSS_ULT_IO);
+	out->tso_rc = dss_thread_collective(cont_snap_notify_one, &args, 0);
 	if (out->tso_rc != 0)
 		D_ERROR(DF_CONT": Snapshot notify failed: "DF_RC"\n",
 			DP_CONT(in->tsi_pool_uuid, in->tsi_cont_uuid),
@@ -1950,8 +1947,7 @@ ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
 	if (out->tao_rc != 0)
 		return;
 
-	rc = dss_thread_collective(cont_epoch_aggregate_one, NULL, 0,
-				   DSS_ULT_IO);
+	rc = dss_thread_collective(cont_epoch_aggregate_one, NULL, 0);
 	if (rc != 0)
 		D_ERROR(DF_CONT": Aggregation failed: "DF_RC"\n",
 			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
@@ -2318,8 +2314,7 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 		coll_args.ca_aggregator = pool;
 		coll_args.ca_func_args	= &coll_args.ca_stream_args;
 
-		rc = dss_thread_collective_reduce(&coll_ops, &coll_args,
-						  0, DSS_ULT_IO);
+		rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
 		if (rc) {
 			D_ERROR(DF_UUID": Can not collect min epoch: %d\n",
 				DP_UUID(pool->sp_uuid), rc);

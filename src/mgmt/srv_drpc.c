@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -429,10 +429,14 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__PoolEvictReq	*req = NULL;
 	Mgmt__PoolEvictResp	 resp = MGMT__POOL_EVICT_RESP__INIT;
 	uuid_t			 uuid;
+	uuid_t			*handles;
+	int			 n_handles;
 	d_rank_list_t		*svc_ranks = NULL;
 	uint8_t			*body;
 	size_t			 len;
 	int			 rc;
+	int			 i;
+
 
 	/* Unpack the inner request from the drpc call body */
 	req = mgmt__pool_evict_req__unpack(&alloc.alloc,
@@ -458,13 +462,36 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = ds_mgmt_evict_pool(uuid, svc_ranks, req->sys);
+	if (req->handles) {
+		D_ALLOC(handles, sizeof(uuid_t) * req->n_handles);
+		if (handles == NULL) {
+			d_rank_list_free(svc_ranks);
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+		for (i = 0; i < req->n_handles; i++) {
+			rc = uuid_parse(req->handles[i], handles[i]);
+			if (rc != 0) {
+				D_ERROR("Unable to parse handle UUID %s: "
+				DF_RC "\n", req->uuid, DP_RC(rc));
+				D_GOTO(out_free, rc = -DER_INVAL);
+			}
+		}
+		n_handles = req->n_handles;
+	} else {
+		handles = NULL;
+		n_handles = 0;
+	}
+
+	rc = ds_mgmt_evict_pool(uuid, svc_ranks, handles, n_handles, req->sys);
+
 	if (rc != 0) {
 		D_ERROR("Failed to evict pool connections %s: "DF_RC"\n",
 			req->uuid, DP_RC(rc));
 	}
 
+out_free:
 	d_rank_list_free(svc_ranks);
+	D_FREE(handles);
 
 out:
 	resp.status = rc;

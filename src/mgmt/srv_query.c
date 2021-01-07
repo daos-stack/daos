@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,8 +89,7 @@ int ds_mgmt_get_bs_state(uuid_t bs_uuid, int *bs_state)
 
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
-	/* TODO Add a new DSS_ULT_BIO tag */
-	rc = dss_ult_create(bs_state_query, (void *)bs_state, DSS_ULT_GC,
+	rc = dss_ult_create(bs_state_query, (void *)bs_state, DSS_XS_VOS,
 			    tgt_id, 0, &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
@@ -208,8 +207,7 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
-	/* TODO Add a new DSS_ULT_BIO tag */
-	rc = dss_ult_create(bio_health_query, mbh, DSS_ULT_GC, tgt_id, 0,
+	rc = dss_ult_create(bio_health_query, mbh, DSS_XS_VOS, tgt_id, 0,
 			    &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
@@ -271,7 +269,7 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 	D_INIT_LIST_HEAD(&list_devs_info.dev_list);
 
 	rc = dss_ult_execute(bio_query_dev_list, &list_devs_info, NULL, NULL,
-			     DSS_ULT_GC, 0, 0);
+			     DSS_XS_VOS, 0, 0);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT\n");
 		goto out;
@@ -655,8 +653,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
 
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
-	/* TODO Add a new DSS_ULT_BIO tag */
-	rc = dss_ult_create(bio_faulty_state_set, NULL, DSS_ULT_GC,
+	rc = dss_ult_create(bio_faulty_state_set, NULL, DSS_XS_VOS,
 			    tgt_id, 0, &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
@@ -669,7 +666,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
 	uuid_copy(faulty_info.devid, dev_uuid);
 	/* set the VMD LED to FAULTY state on init xstream */
 	rc = dss_ult_execute(bio_faulty_led_set, &faulty_info, NULL,
-			     NULL, DSS_ULT_GC, 0, 0);
+			     NULL, DSS_XS_VOS, 0, 0);
 	if (rc) {
 		D_ERROR("FAULT LED state not set on device:"DF_UUID"\n",
 			DP_UUID(dev_uuid));
@@ -757,7 +754,7 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid,
 	uuid_copy(replace_dev_info.old_dev, old_dev_uuid);
 	uuid_copy(replace_dev_info.new_dev, new_dev_uuid);
 	rc = dss_ult_execute(bio_storage_dev_replace, &replace_dev_info, NULL,
-			     NULL, DSS_ULT_GC, 0, 0);
+			     NULL, DSS_XS_VOS, 0, 0);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT\n");
 		goto out;
@@ -840,7 +837,7 @@ ds_mgmt_dev_identify(uuid_t dev_uuid, Mgmt__DevIdentifyResp *resp)
 
 	uuid_copy(identify_info.devid, dev_uuid);
 	rc = dss_ult_execute(bio_storage_dev_identify, &identify_info, NULL,
-			     NULL, DSS_ULT_GC, 0, 0);
+			     NULL, DSS_XS_VOS, 0, 0);
 	if (rc != 0)
 		goto out;
 

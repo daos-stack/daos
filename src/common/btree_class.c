@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -228,6 +228,21 @@ nv_key_cmp(struct btr_instance *tins, struct btr_record *rec, d_iov_t *key)
 			key->iov_len));
 }
 
+static void
+nv_key_encode(struct btr_instance *tins, d_iov_t *key,
+	      daos_anchor_t *anchor)
+{
+	if (key)
+		embedded_key_encode(key, anchor);
+}
+
+static void
+nv_key_decode(struct btr_instance *tins, d_iov_t *key,
+	      daos_anchor_t *anchor)
+{
+	embedded_key_decode(key, anchor);
+}
+
 static int
 nv_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
 	       struct btr_record *rec)
@@ -370,6 +385,8 @@ btr_ops_t dbtree_nv_ops = {
 	.to_hkey_gen	= nv_hkey_gen,
 	.to_hkey_size	= nv_hkey_size,
 	.to_key_cmp	= nv_key_cmp,
+	.to_key_encode	= nv_key_encode,
+	.to_key_decode	= nv_key_decode,
 	.to_rec_alloc	= nv_rec_alloc,
 	.to_rec_free	= nv_rec_free,
 	.to_rec_fetch	= nv_rec_fetch,

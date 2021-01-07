@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@ package control
 import (
 	"fmt"
 
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
 )
@@ -47,6 +49,24 @@ var (
 		"specify a non-empty list of DAOS server addresses in configuration ('hostlist' parameter) and retry the client application",
 	)
 )
+
+func IsConnectionError(err error) bool {
+	f, ok := errors.Cause(err).(*fault.Fault)
+	if !ok {
+		return false
+	}
+
+	for _, connCode := range []code.Code{
+		code.ClientConnectionBadHost, code.ClientConnectionClosed,
+		code.ClientConnectionNoRoute, code.ClientConnectionRefused,
+	} {
+		if f.Code == connCode {
+			return true
+		}
+	}
+
+	return false
+}
 
 func FaultConnectionBadHost(srvAddr string) *fault.Fault {
 	return clientFault(

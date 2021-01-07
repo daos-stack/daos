@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -132,7 +132,7 @@ register_dbtree_classes(void)
 		return rc;
 	}
 
-	rc = dbtree_class_register(DBTREE_CLASS_NV, 0 /* feats */,
+	rc = dbtree_class_register(DBTREE_CLASS_NV, BTR_FEAT_DIRECT_KEY,
 				   &dbtree_nv_ops);
 	if (rc != 0) {
 		D_ERROR("failed to register DBTREE_CLASS_NV: "DF_RC"\n",

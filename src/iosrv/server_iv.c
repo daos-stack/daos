@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -506,8 +506,7 @@ ivc_pre_cb(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 {
 	int rc;
 
-	rc = dss_ult_create(cb_func, cb_arg, DSS_ULT_MISC, DSS_TGT_SELF,
-			    0, NULL);
+	rc = dss_ult_create(cb_func, cb_arg, DSS_XS_SELF, 0, 0, NULL);
 	if (rc)
 		D_ERROR("dss_ult_create failed, rc "DF_RC"\n", DP_RC(rc));
 }

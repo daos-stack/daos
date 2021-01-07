@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -558,19 +558,6 @@ struct vos_rec_bundle {
 	/** tree class */
 	enum vos_tree_class	 rb_tclass;
 };
-
-/**
- * Inline data structure for embedding the key bundle and key into an anchor
- * for serialization.
- */
-#define	EMBEDDED_KEY_MAX	80
-struct vos_embedded_key {
-	/** Inlined iov key references */
-	d_iov_t		ek_kiov;
-	/** Inlined buffer the key references*/
-	unsigned char	ek_key[EMBEDDED_KEY_MAX];
-};
-D_CASSERT(sizeof(struct vos_embedded_key) == DAOS_ANCHOR_BUF_MAX);
 
 #define VOS_SIZE_ROUND		8
 

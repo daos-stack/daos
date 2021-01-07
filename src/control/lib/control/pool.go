@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,8 +43,11 @@ import (
 )
 
 const (
-	defaultPoolSvcReps       = 1
-	defaultPoolCreateTimeout = 10 * time.Minute // be generous for large pools
+	// PoolCreateTimeout defines the amount of time a pool create
+	// request can take before being timed out.
+	PoolCreateTimeout = 10 * time.Minute // be generous for large pools
+
+	defaultPoolSvcReps = 1
 )
 
 type (
@@ -168,7 +171,7 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 	}
 	// TODO: Set this timeout based on the SCM size, when we have a
 	// better understanding of the relationship.
-	req.SetTimeout(defaultPoolCreateTimeout)
+	req.SetTimeout(PoolCreateTimeout)
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolCreate(ctx, pbReq)
 	})
@@ -290,8 +293,9 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 type PoolEvictReq struct {
 	msRequest
 	unaryRequest
-	UUID string
-	Sys  string
+	UUID    string
+	Sys     string
+	Handles []string
 }
 
 // PoolEvict performs a pool connection evict operation on a DAOS Management Server instance.
@@ -307,8 +311,9 @@ func PoolEvict(ctx context.Context, rpcClient UnaryInvoker, req *PoolEvictReq) e
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolEvict(ctx, &mgmtpb.PoolEvictReq{
-			Uuid: req.UUID,
-			Sys:  req.Sys,
+			Uuid:    req.UUID,
+			Sys:     req.Sys,
+			Handles: req.Handles,
 		})
 	})
 

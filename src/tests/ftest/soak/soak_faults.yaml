@@ -8,7 +8,7 @@ hosts:
 # servers if a server partition is defined
     # server_partition: daos_server
     client_partition: daos_client
-    client_reservation:
+    # client_reservation: daos-test
 orterun:
     allow_run_as_root: True
 # This timeout must be longer than the test_timeout param (+15minutes)
@@ -34,24 +34,26 @@ server_config:
         bdev_class: nvme
         bdev_list: ["0000:81:00.0","0000:da:00.0"]
 # pool_params - attributes of the pools to create; Currently only create one
-pool_ior:
+pool_jobs:
     mode: 146
     name: daos_server
-    scm_size: 80000000000
-    nvme_size: 200000000000
+    scm_size: 40GB
+    nvme_size: 100GB
     svcn: 1
     control_method: dmg
 pool_reserved:
     mode: 511
     name: daos_server
-    scm_size: 3000000000
-    nvme_size: 50000000000
+    scm_size: 3GB
+    nvme_size: 50GB
     control_method: dmg
 container:
     type: POSIX
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    oclass: RP_2G1
     control_method: daos
 container_reserved:
+    oclass: OC_RP_2G1
     akey_size: 5
     dkey_size: 5
     data_size: 4096
@@ -103,8 +105,6 @@ soak_faults:
         - 1
         - 16
         - 32
-    poollist:
-        - pool_ior
     joblist:
         - ior_faults
 # Commandline parameters
@@ -115,6 +115,9 @@ ior_faults:
     api:
         - DFS
         - MPIIO
+        - POSIX
+        - HDF5
+        - HDF5-VOL
     test_file: daos:testFile
     flags: -v -w -W -r -R
     block_size:
@@ -126,7 +129,13 @@ ior_faults:
         - '1m'
     segment_count: 1
     dfs_oclass:
-        - 'SX'
-    dfs_destroy: True
+        - 'RP_2G1'
+    dfs_dir_oclass:
+        - 'RP_2G1'
+dfuse:
+    mount_dir: "/tmp/daos_dfuse/"
+    disable_direct_io: True
+hdf5_vol:
+    plugin_path: "/usr/lib64/mpich/lib"
 
 

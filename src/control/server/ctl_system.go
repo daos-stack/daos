@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -186,7 +186,7 @@ func (svc *ControlService) SystemQuery(ctx context.Context, req *ctlpb.SystemQue
 		return nil, errors.Errorf("nil %T request", req)
 	}
 
-	if err := svc.sysdb.CheckLeader(); err != nil {
+	if err := svc.sysdb.CheckReplica(); err != nil {
 		return nil, err
 	}
 
