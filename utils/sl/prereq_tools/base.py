@@ -28,13 +28,13 @@
 # pylint: disable=exec-used
 # pylint: disable=too-many-statements
 # pylint: disable=too-many-lines
-# pylint: disable=unused-argument
 from __future__ import absolute_import, division, print_function
 import os
 import traceback
 import hashlib
 import time
 import sys
+import shutil
 from build_info import BuildInfo
 from SCons.Variables import PathVariable
 from SCons.Variables import EnumVariable
@@ -447,7 +447,7 @@ class WebRetriever():
 
         return False
 
-    def get(self, subdir, **kw):
+    def get(self, subdir):
         """Downloads and extracts sources from a url into subdir"""
 
         basename = os.path.basename(self.url)
@@ -1568,8 +1568,8 @@ class _Component():
         if self.__dry_run:
             print('Would empty %s' % path)
         else:
-            subprocess.call(["/bin/rm", "-rf", path])
-            subprocess.call(["/bin/mkdir", path])
+            shutil.rmtree(path)
+            os.mkdir(path)
 
     def _has_changes(self):
         """check for changes"""

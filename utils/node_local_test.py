@@ -1282,8 +1282,7 @@ def run_il_test(server, conf):
 
     pools = get_pool_list()
 
-    # TODO:                              # pylint: disable=fixme
-    # This doesn't work with two pools, partly related to
+    # TODO: This doesn't work with two pools, partly related to
     # DAOS-5109 but there may be other issues.
     while len(pools) < 1:
         pools = make_pool(server)
