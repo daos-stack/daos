@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,6 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include "wrap_cmocka.h"
-#include "gurt/common.h"
 #include "gurt/telemetry_common.h"
 #include "gurt/telemetry_producer.h"
 
@@ -91,7 +90,6 @@ test_gauge(void **state)
 					  "gauge", NULL);
 		assert(rc == D_TM_SUCCESS);
 	}
-
 }
 
 static void
