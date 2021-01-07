@@ -409,7 +409,7 @@ daos_event_launch(struct daos_event *ev)
 		goto out;
 	}
 
-	if (!daos_handle_is_inval(evx->evx_eqh)) {
+	if (daos_handle_is_valid(evx->evx_eqh)) {
 		eqx = daos_eq_lookup(evx->evx_eqh);
 		if (eqx == NULL) {
 			D_ERROR("Can't find eq from handle %"PRIu64"\n",
@@ -471,7 +471,7 @@ daos_event_complete(struct daos_event *ev, int rc)
 	struct daos_event_private	*evx = daos_ev2evx(ev);
 	struct daos_eq_private		*eqx = NULL;
 
-	if (!daos_handle_is_inval(evx->evx_eqh)) {
+	if (daos_handle_is_valid(evx->evx_eqh)) {
 		eqx = daos_eq_lookup(evx->evx_eqh);
 		D_ASSERT(eqx != NULL);
 
@@ -578,7 +578,7 @@ daos_event_test(struct daos_event *ev, int64_t timeout, bool *flag)
 	epa.evx = evx;
 	epa.eqx = NULL;
 
-	if (!daos_handle_is_inval(evx->evx_eqh)) {
+	if (daos_handle_is_valid(evx->evx_eqh)) {
 		epa.eqx = daos_eq_lookup(evx->evx_eqh);
 		if (epa.eqx == NULL) {
 			D_ERROR("Can't find eq from handle %"PRIu64"\n",
@@ -1015,7 +1015,7 @@ daos_event_init(struct daos_event *ev, daos_handle_t eqh,
 		evx->evx_sched	= parent_evx->evx_sched;
 		evx->evx_parent	= parent_evx;
 		parent_evx->evx_nchild++;
-	} else if (!daos_handle_is_inval(eqh)) {
+	} else if (daos_handle_is_valid(eqh)) {
 		/* if there is event queue */
 		evx->evx_eqh = eqh;
 		eqx = daos_eq_lookup(eqh);
@@ -1053,7 +1053,7 @@ daos_event_fini(struct daos_event *ev)
 	struct daos_eq			*eq = NULL;
 	int				 rc = 0;
 
-	if (!daos_handle_is_inval(evx->evx_eqh)) {
+	if (daos_handle_is_valid(evx->evx_eqh)) {
 		eqx = daos_eq_lookup(evx->evx_eqh);
 		if (eqx == NULL)
 			return -DER_NONEXIST;
@@ -1175,7 +1175,7 @@ daos_event_abort(struct daos_event *ev)
 	struct daos_event_private	*evx = daos_ev2evx(ev);
 	struct daos_eq_private		*eqx = NULL;
 
-	if (!daos_handle_is_inval(evx->evx_eqh)) {
+	if (daos_handle_is_valid(evx->evx_eqh)) {
 		eqx = daos_eq_lookup(evx->evx_eqh);
 		if (eqx == NULL) {
 			D_ERROR("Invalid EQ handle %"PRIu64"\n",
