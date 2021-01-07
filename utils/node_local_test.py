@@ -300,8 +300,8 @@ class DaosServer():
         if self.running:
             self.stop()
 
-    def _check_timing(self, op, elapsed, max_time):
-        if elapsed > max_time:
+    def _check_timing(self, op, start, max_time):
+        if time.time() - start > max_time:
             raise Exception("Failed to {} within {:.2f}s (took {:.2f}s)".format(
                             op, max_time, elapsed))
 
@@ -429,7 +429,7 @@ class DaosServer():
                         ready = True
             if ready:
                 break
-            self._check_timing("format", time.time() - start, max_start_time)
+            self._check_timing("format", start, max_start_time)
         print('Format completion in {:.2f} seconds'.format(time.time() - start))
 
         # How wait until the system is up, basically the format to happen.
@@ -437,7 +437,7 @@ class DaosServer():
             time.sleep(0.5)
             if self._check_system_state('ready'):
                 break
-            self._check_timing("start", time.time() - start, max_start_time)
+            self._check_timing("start", start, max_start_time)
         print('Server started in {:.2f} seconds'.format(time.time() - start))
 
     def stop(self):
@@ -453,13 +453,13 @@ class DaosServer():
         assert rc.returncode == 0
 
         start = time.time()
-        max_stop_time = 1
+        max_stop_time = 5
         while True:
             time.sleep(0.5)
             if self._check_system_state('stopped'):
                 break
             try:
-                self._check_timing("stop", time.time() - start, max_stop_time)
+                self._check_timing("stop", start, max_stop_time)
             except Exeption as e:
                 print('Failed to stop: {}'.format(e))
         print('Server stopped in {:.2f} seconds'.format(time.time() - start))
