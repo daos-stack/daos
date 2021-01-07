@@ -2396,7 +2396,7 @@ restart:
 			       obj);
 
 		if (rc) {
-			D_DEBUG(DB_TRACE, "Failed to open file (%d)\n", rc);
+			D_ERROR("Failed to open file (%s)\n", strerror(rc));
 			D_GOTO(out, rc);
 		}
 		break;

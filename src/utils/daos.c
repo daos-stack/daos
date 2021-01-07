@@ -66,6 +66,7 @@ daos_parse_cmode(const char *string, uint32_t *mode)
 	else
 		return -1;
 	return 0;
+}
 
 static enum fs_op
 filesystem_op_parse(const char *str)
