@@ -22,30 +22,24 @@ Any reproduction of computer software, computer software documentation, or
 portions thereof marked with this legend must also reproduce the markings.
 """
 from vol_test_base import VolTestBase
-from general_utils import  get_job_manager_class
+from general_utils import get_job_manager_class
 
 
-# pylint: disable=too-many-ancestors
 class DaosVol(VolTestBase):
+    # pylint: disable=too-many-ancestors,too-few-public-methods
     """Runs HDF5 test suites with daos vol connector.
 
     :avocado: recursive
     """
 
-    def setUp(self):
-        """Set up each test case."""
-        testname = self.params.get("testname")
-        if testname == "h5_partest_t_shapesame":
-            self.cancelForTicket("DAOS-5831")
-        if testname == "h5_test_testhdf5":
-            self.cancelForTicket("DAOS-5469")
-        if testname == "h5_partest_testphdf5":
-            self.cancelForTicket("DAOS-6076")
-        if testname == "h5_partest_t_bigio":
-            self.cancelForTicket("DAOS-5496")
-        if testname == "h5vl_test_parallel":
-            self.cancelForTicket("DAOS-5647")
-        super(DaosVol, self).setUp()
+    # Test variants that should be skipped
+    CANCEL_FOR_TICKET = [
+        ["DAOS-5831", "testname", "h5_partest_t_shapesame"],
+        ["DAOS-5469", "testname", "h5_test_testhdf5"],
+        ["DAOS-6076", "testname", "h5_partest_testphdf5"],
+        ["DAOS-5496", "testname", "h5_partest_t_bigio"],
+        ["DAOS-5647", "testname", "h5vl_test_parallel"],
+    ]
 
     def test_daos_vol_mpich(self):
         """Jira ID: DAOS-3656.
@@ -71,7 +65,8 @@ class DaosVol(VolTestBase):
         """
         self.job_manager = get_job_manager_class("Mpirun", None, False, "mpich")
         self.set_job_manager_timeout()
-        self.run_test("/usr/lib64/mpich/lib", "/usr/lib64/hdf5_vol_daos/mpich/tests")
+        self.run_test(
+            "/usr/lib64/mpich/lib", "/usr/lib64/hdf5_vol_daos/mpich/tests")
 
     def test_daos_vol_openmpi(self):
         """Jira ID: DAOS-3656.
@@ -95,6 +90,9 @@ class DaosVol(VolTestBase):
         :avocado: tags=hdf5,vol
         :avocado: tags=DAOS_5610
         """
-        self.job_manager = get_job_manager_class("Orterun", None, False, "openmpi")
+        self.job_manager = get_job_manager_class(
+            "Orterun", None, False, "openmpi")
         self.set_job_manager_timeout()
-        self.run_test("/usr/lib64/openmpi3/lib", "/usr/lib64/hdf5_vol_daos/openmpi3/tests")
+        self.run_test(
+            "/usr/lib64/openmpi3/lib",
+            "/usr/lib64/hdf5_vol_daos/openmpi3/tests")
