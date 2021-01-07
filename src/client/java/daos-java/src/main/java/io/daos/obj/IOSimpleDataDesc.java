@@ -31,6 +31,8 @@ import io.netty.buffer.ByteBuf;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 
+import static io.daos.Constants.RET_CODE_SUCCEEDED;
+
 /**
  * IO simple description for fetching and updating object records on given dkey. The differences between this class and
  * {@link IODataDesc} are,
@@ -87,8 +89,6 @@ public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
   private boolean released;
 
   private int retCode = Integer.MAX_VALUE;
-
-  public static final int RET_CODE_SUCCEEDED = 0;
 
   /**
    * Create simple description for synchronous or asynchronous update/fetch depending on
@@ -158,6 +158,7 @@ public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
     }
   }
 
+  @Override
   public void setEvent(DaosEventQueue.Event event) {
     this.event = event;
     event.setAttachment(this);

@@ -37,7 +37,11 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Java wrapper of underlying native DAOS event queue which has multiple reusable events. It manages event
  * acquiring and releasing, as well as polls completed events.
- * {@link IOSimpleDataDesc} is associated with each event so that it can be reused along with event.
+ *
+ * The default number of events per EQ can be configured via {@linkplain Constants#CFG_NUMBER_OF_EVENTS_PER_EQ}
+ * in system property or system environment. Or hard-coded value {@linkplain Constants#DEFAULT_NUMBER_OF_EVENTS_PER_EQ}
+ * is used.
+ *
  * One instance per thread.
  */
 @NotThreadSafe
@@ -71,9 +75,27 @@ public class DaosEventQueue {
 
   private static final int DEFAULT_NBR_OF_TIMEDOUT_ERROR = 2 * DEFAULT_NBR_OF_TIMEDOUT_WARN;
 
+  private static int DEFAULT_NBR_OF_EVENTS;
+
   private static final Map<Long, DaosEventQueue> EQ_MAP = new ConcurrentHashMap<>();
 
   private static final Logger log = LoggerFactory.getLogger(DaosEventQueue.class);
+
+  static {
+    String v = System.getProperty(Constants.CFG_NUMBER_OF_EVENTS_PER_EQ);
+    if (v != null) {
+      DEFAULT_NBR_OF_EVENTS = Integer.valueOf(v);
+    } else {
+      v = System.getenv(Constants.CFG_NUMBER_OF_EVENTS_PER_EQ);
+      DEFAULT_NBR_OF_EVENTS = v == null ? Constants.DEFAULT_NUMBER_OF_EVENTS_PER_EQ : Integer.valueOf(v);
+    }
+    if (DEFAULT_NBR_OF_EVENTS <= 0) {
+      log.error("got non-positive number of events per EQ, " + DEFAULT_NBR_OF_EVENTS +
+          ", check your property or env config, " + Constants.CFG_NUMBER_OF_EVENTS_PER_EQ +
+          ". set to default value, " + Constants.DEFAULT_NUMBER_OF_EVENTS_PER_EQ);
+      DEFAULT_NBR_OF_EVENTS = Constants.DEFAULT_NUMBER_OF_EVENTS_PER_EQ;
+    }
+  }
 
   /**
    * constructor without {@link IOSimpleDataDesc} being bound.
@@ -103,10 +125,13 @@ public class DaosEventQueue {
   }
 
   /**
-   * Get EQ without any {@link IOSimpleDataDesc} being bound.
+   * Get EQ without any {@link Attachment} being bound. User should associate it to event by himself.
+   * @see {@link IOSimpleDataDesc} {@link io.daos.dfs.IODfsDesc}
+   *
+   * If <code>nbrOfEvents</code> is <= 0, default value is used.
    *
    * @param nbrOfEvents
-   * how many events created in EQ
+   * how many events created in EQ.
    * @return single {@link DaosEventQueue} instance per thread
    * @throws IOException
    */
@@ -114,6 +139,9 @@ public class DaosEventQueue {
     long tid = Thread.currentThread().getId();
     DaosEventQueue queue = EQ_MAP.get(tid);
     if (queue == null) {
+      if (nbrOfEvents <= 0) {
+        nbrOfEvents = DEFAULT_NBR_OF_EVENTS;
+      }
       queue = new DaosEventQueue(Thread.currentThread().getName(), nbrOfEvents);
       EQ_MAP.put(tid, queue);
     }
@@ -127,11 +155,9 @@ public class DaosEventQueue {
   /**
    * no synchronization due to single thread access.
    *
-   * @param updateOrFetch
-   * event for update or fetch? true for update, false for fetch.
    * @return event
    */
-  public Event acquireEvent(boolean updateOrFetch) {
+  public Event acquireEvent() {
     int idx = nextEventIdx;
     if (nbrOfAcquired == nbrOfEvents) {
       return null;
@@ -160,8 +186,6 @@ public class DaosEventQueue {
    * events. If there is no completed event for more than <code>maxWaitMs</code>, a timeout exception
    * will be thrown.
    *
-   * @param updateOrFetch
-   * true for update, false for fetch.
    * @param maxWaitMs
    * max wait time in millisecond
    * @param completedList
@@ -170,9 +194,9 @@ public class DaosEventQueue {
    * @return event
    * @throws IOException
    */
-  public Event acquireEventBlocking(boolean updateOrFetch, int maxWaitMs, List<Attachment> completedList)
+  public Event acquireEventBlocking(int maxWaitMs, List<Attachment> completedList)
       throws IOException {
-    Event e = acquireEvent(updateOrFetch);
+    Event e = acquireEvent();
     if (e != null) { // for most of cases
       return e;
     }
@@ -192,7 +216,7 @@ public class DaosEventQueue {
         totalWait += wait;
       }
       pollCompleted(completedList, wait);
-      e = acquireEvent(updateOrFetch);
+      e = acquireEvent();
       cnt++;
     }
     return e;
@@ -255,7 +279,7 @@ public class DaosEventQueue {
 
   /**
    * It's just for accessing event without acquiring it for DAOS API calls.
-   * Use {@link #acquireEvent(boolean)} or {@link #acquireEventBlocking(boolean, int, List)} instead for DAOS API calls.
+   * Use {@link #acquireEvent()} or {@link #acquireEventBlocking(int, List)} instead for DAOS API calls.
    *
    * @param idx
    * @return
@@ -356,7 +380,7 @@ public class DaosEventQueue {
   }
 
   /**
-   * Java representer of DAOS event associated to a event queue identified by
+   * Java represent of DAOS event associated to a event queue identified by
    * <code>eqHandle</code>.
    * A {@link Attachment} can be associate to event as a outcome of asynchronous call.
    */
@@ -409,6 +433,13 @@ public class DaosEventQueue {
   }
 
   public interface Attachment {
+    /**
+     * associate this attachment to event.
+     *
+     * @param e
+     */
+    void setEvent(Event e);
+
     /**
      * reuse attachment.
      */

@@ -637,6 +637,23 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
   native void dfsRelease(long objId) throws IOException;
 
   /**
+   * allocate native dfs desc struct.
+   *
+   * @param descMemoryAddress
+   * memory address of desc buffer.
+   * @return handle of native dfs desc
+   */
+  native static long allocateDfsDesc(long descMemoryAddress);
+
+  /**
+   * release native dfs desc struct.
+   *
+   * @param nativeHandle
+   * handle of native dfs desc
+   */
+  native static void releaseDfsDesc(long nativeHandle);
+
+  /**
    * read data from file to buffer.
    *
    * @param dfsPtr

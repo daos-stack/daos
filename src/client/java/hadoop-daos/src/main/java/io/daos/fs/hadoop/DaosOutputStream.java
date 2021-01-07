@@ -62,7 +62,7 @@ public class DaosOutputStream extends OutputStream {
   public DaosOutputStream(DaosFile daosFile,
                           ByteBuf buffer, FileSystem.Statistics stats, boolean async) {
     this.closed = false;
-    this.source = async ? new DaosFileSourceAsync(daosFile, buffer, 0, stats) :
+    this.source = async ? new DaosFileSourceAsync(daosFile, buffer, 0, false, stats) :
         new DaosFileSourceSync(daosFile, buffer, 0, stats);
     this.stats = stats;
     if (!buffer.hasMemoryAddress()) {

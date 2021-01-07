@@ -365,6 +365,10 @@ public class DaosFile {
     return client.dfsGetChunkSize(objId);
   }
 
+  public static IODfsDesc createDfsDesc(ByteBuf dataBuffer, DaosEventQueue eq) {
+    return new IODfsDesc(dataBuffer, eq);
+  }
+
   /**
    * read <code>len</code> of data from file at <code>fileOffset</code> to <code>buffer</code> starting from
    * <code>bufferOffset</code>.
@@ -393,9 +397,9 @@ public class DaosFile {
             fileOffset, len);
   }
 
-  public void readAsync(IODfsDesc desc) throws IOException {
+  public void readAsync(IODfsDesc desc, long offset, long len) throws IOException {
     open(true);
-    desc.encode();
+    desc.encode(offset, len);
     if (log.isDebugEnabled()) {
       log.debug("read file with description: " + desc);
     }
@@ -426,9 +430,9 @@ public class DaosFile {
             fileOffset, len);
   }
 
-  public void writeAsync(IODfsDesc desc) throws IOException {
+  public void writeAsync(IODfsDesc desc, long offset, long len) throws IOException {
     open(true);
-    desc.encode();
+    desc.encode(offset, len);
     if (log.isDebugEnabled()) {
       log.debug("write file with description: " + desc);
     }

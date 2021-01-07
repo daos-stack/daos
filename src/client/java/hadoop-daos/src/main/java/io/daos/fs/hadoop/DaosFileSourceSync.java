@@ -19,11 +19,8 @@ public class DaosFileSourceSync extends DaosFileSource {
   }
 
   @Override
-  public void closeMore() {}
-
-  @Override
-  protected long doWrite(long nextWritePos) throws IOException {
-    return daosFile.write(buffer, 0, nextWritePos, buffer.readableBytes());
+  protected int doWrite(long nextWritePos) throws IOException {
+    return (int)daosFile.write(buffer, 0, nextWritePos, buffer.readableBytes());
   }
 
   @Override

@@ -81,7 +81,7 @@ public abstract class DaosFileSource {
     closeMore();
   }
 
-  protected abstract void closeMore();
+  protected void closeMore() {}
 
   public void write(int b) throws IOException {
     buffer.writeByte(b);
@@ -130,7 +130,7 @@ public abstract class DaosFileSource {
     this.buffer.clear();
   }
 
-  protected abstract long doWrite(long nextWritePos) throws IOException;
+  protected abstract int doWrite(long nextWritePos) throws IOException;
 
   public void flush() throws IOException {
     if (buffer.readableBytes() > 0) {
