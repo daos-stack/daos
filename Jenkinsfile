@@ -237,14 +237,14 @@ String functional_packages(String distro) {
     String pkgs = " openmpi3 hwloc ndctl fio " +
                   "patchutils ior-hpc-daos-1 " +
                   "romio-tests-daos-1 " +
-                  "testmpio-daos-1 " +
-                  "mpi4py-tests-daos-1 " +
-                  "hdf5-mpich2-tests-daos-1 " +
-                  "hdf5-openmpi3-tests-daos-1 " +
+                  "testmpio " +
+                  "mpi4py-tests " +
+                  "hdf5-mpich-tests " +
+                  "hdf5-openmpi3-tests " +
                   "hdf5-vol-daos-mpich2-tests-daos-1 " +
                   "hdf5-vol-daos-openmpi3-tests-daos-1 " +
-                  "MACSio-mpich2-daos-1 " +
-                  "MACSio-openmpi3-daos-1 "
+                  "MACSio-mpich " +
+                  "MACSio-openmpi3 "
     if (distro == "leap15") {
         if (quickbuild()) {
             pkgs += " spdk-tools"
