@@ -961,7 +961,7 @@ rebuild_io_cb(void *arg)
 	test_arg_t	*test_arg = arg;
 	daos_obj_id_t	*oids = test_arg->rebuild_cb_arg;
 
-	if (!daos_handle_is_inval(test_arg->coh))
+	if (daos_handle_is_valid(test_arg->coh))
 		rebuild_io(test_arg, oids, OBJ_NR);
 
 	return 0;
@@ -973,7 +973,7 @@ rebuild_io_post_cb(void *arg)
 	test_arg_t	*test_arg = arg;
 	daos_obj_id_t	*oids = test_arg->rebuild_post_cb_arg;
 
-	if (!daos_handle_is_inval(test_arg->coh))
+	if (daos_handle_is_valid(test_arg->coh))
 		rebuild_io_validate(test_arg, oids, OBJ_NR, true);
 
 	return 0;
