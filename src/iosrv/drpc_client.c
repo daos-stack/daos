@@ -162,8 +162,10 @@ out_dreq:
 }
 
 static int
-init_ras(char *id, uint32_t sev, uint32_t type, char *msg,
-	 Mgmt__RASEvent *evt)
+init_ras(char *id, enum ras_event_sev sev, enum ras_event_type type,
+		    char *hid, d_rank_t rank, char *jid,
+		    uuid_t puuid, uuid_t cuuid, daos_obj_id_t *oid,
+		    const char *cop, const char *msg, Mgmt__RASEvent *evt)
 {
 	struct timeval	 tv;
 	struct tm	*tm;
@@ -173,6 +175,12 @@ init_ras(char *id, uint32_t sev, uint32_t type, char *msg,
 	evt->severity = sev;
 	evt->type = type;
 	evt->msg = msg;
+	evt->hid = hid;
+	evt->jid = jid;
+	evt->oid = oid;
+	evt->cop = cop;
+	evt->puuid = puuid;
+	evt->cuuid = cuuid;
 
 	(void)gettimeofday(&tv, 0);
 	tm = localtime(&tv.tv_sec);
@@ -231,7 +239,6 @@ notify_ras_event(Mgmt__RASEvent *evt)
 		D_ERROR("invalid RAS event\n");
 		return -DER_INVAL;
 	}
-
 	req.event = evt;
 
 	reqb_size = mgmt__cluster_event_req__get_packed_size(&req);
@@ -268,6 +275,41 @@ out:
 }
 
 int
+ds_notify_ras_event(const char *id, enum ras_event_type type,
+		    enum ras_event_sev sev, char *hid, d_rank_t rank, char *jid,
+		    uuid_t puuid, uuid_t cuuid, daos_obj_id_t *oid,
+		    const char *cop, const char *msg, const char *data)
+{
+	Mgmt__RASEvent		 evt = MGMT__RASEVENT__INIT;
+	int			 rc;
+
+	if (dss_drpc_ctx == NULL) {
+		D_ERROR("DRPC not connected\n");
+		return -DER_UNINIT;
+	}
+
+	evt.extended_info_case = MGMT__RASEVENT__EXTENDED_INFO_STR_INFO;
+	evt.pool_svc_info = data;
+
+	rc = init_ras(id, type, sev, hid, rank, jid, puuid, cuuid, oid, cop,
+		      msg, &evt);
+	if (rc != 0) {
+		D_ERROR("failed to populate generic ras event details\n");
+		goto out_svcreps;
+	}
+
+	rc = notify_ras_event(&evt);
+
+	free_ras(&evt);
+out_svcreps:
+	D_FREE(info.svc_reps);
+out_uuid:
+	D_FREE(info.pool_uuid);
+
+	return rc;
+}
+
+int
 ds_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc)
 {
 	Mgmt__RASEvent		 evt = MGMT__RASEVENT__INIT;
@@ -299,8 +341,9 @@ ds_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc)
 	evt.extended_info_case = MGMT__RASEVENT__EXTENDED_INFO_POOL_SVC_INFO;
 	evt.pool_svc_info = &info;
 
-	rc = init_ras("pool_svc_replicas_update", (uint32_t)RAS_SEV_INFO,
-		      (uint32_t)RAS_TYPE_STATE_CHANGE,
+	rc = init_ras(RAS_POOL_SVC_REPS_UPDATE, RAS_SEV_INFO,
+		      RAS_TYPE_STATE_CHANGE, NULL, NULL, NULL, NULL, NULL, NULL,
+		      NULL,
 		      "List of pool service replica ranks has been updated.",
 		      &evt);
 	if (rc != 0) {

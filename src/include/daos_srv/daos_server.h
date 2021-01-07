@@ -836,6 +836,11 @@ notify_bio_error(int media_err_type, int tgt_id);
 int
 get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
 int
+ds_notify_ras_event(const char *id, enum ras_event_type type,
+		    enum ras_event_sev sev, char *hid, d_rank_t rank, char *jid,
+		    uuid_t puuid, uuid_t cuuid, daos_obj_id_t *oid,
+		    const char *cop, const char *msg, const char *data);
+int
 ds_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc);
 
 bool is_container_from_srv(uuid_t pool_uuid, uuid_t coh_uuid);
