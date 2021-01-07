@@ -22,6 +22,6 @@ jobs:
       with:
         submodules: true
     - name: Build Docker image
-      run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }} \
-                          --build-arg COMPILER=${{ matrix.compiler }} \
+      run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg COMPILER=${{ matrix.compiler }}
                           -t ${{ matrix.distro }}/daos:${{ github.sha }}
