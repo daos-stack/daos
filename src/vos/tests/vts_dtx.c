@@ -80,6 +80,7 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_active = 0;
 	dth->dth_dist = 0;
 	dth->dth_for_migration = 0;
+	dth->dth_ignore_uncommitted = 0;
 
 	dth->dth_dti_cos_count = 0;
 	dth->dth_dti_cos = NULL;

@@ -1318,8 +1318,17 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	 * related leader.
 	 */
 
-	if (intent == DAOS_INTENT_DEFAULT || intent == DAOS_INTENT_MIGRATION ||
-	    intent == DAOS_INTENT_IGNORE_NONCOMMITTED) {
+	if (intent == DAOS_INTENT_IGNORE_NONCOMMITTED) {
+		/* For transactional read, has to wait the non-committed
+		 * modification to guarantee the transaction semantics.
+		 */
+		if (dtx_is_valid_handle(dth))
+			return dtx_inprogress(dae, dth, false, 2);
+
+		return ALB_UNAVAILABLE;
+	}
+
+	if (intent == DAOS_INTENT_DEFAULT || intent == DAOS_INTENT_MIGRATION) {
 		if (!(DAE_FLAGS(dae) & DTE_LEADER) ||
 		    DAOS_FAIL_CHECK(DAOS_VOS_NON_LEADER))
 			/* Non-leader or rebuild case, return -DER_INPROGRESS,
@@ -1330,8 +1339,7 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		/* For transactional read, has to wait the non-committed
 		 * modification to guarantee the transaction semantics.
 		 */
-		if (dtx_is_valid_handle(dth) &&
-		    intent != DAOS_INTENT_IGNORE_NONCOMMITTED)
+		if (dtx_is_valid_handle(dth))
 			return dtx_inprogress(dae, dth, false, 2);
 
 		/* For stand-alone read on leader, ignore non-committed DTX. */
@@ -2613,9 +2621,9 @@ vos_dtx_cache_reset(daos_handle_t coh)
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
-	if (!daos_handle_is_inval(cont->vc_dtx_active_hdl))
+	if (daos_handle_is_valid(cont->vc_dtx_active_hdl))
 		dbtree_destroy(cont->vc_dtx_active_hdl, NULL);
-	if (!daos_handle_is_inval(cont->vc_dtx_committed_hdl))
+	if (daos_handle_is_valid(cont->vc_dtx_committed_hdl))
 		dbtree_destroy(cont->vc_dtx_committed_hdl, NULL);
 
 	if (cont->vc_dtx_array)
