@@ -50,11 +50,14 @@ public class IODfsDesc implements DaosEventQueue.Attachment {
 
   protected IODfsDesc(ByteBuf dataBuffer, DaosEventQueue eq) {
     this.dataBuffer = dataBuffer;
-    // dataMemoryAddr + eventGrpHandle + offset + length + event ID + rc + actual len (for read)
-    retOffset = 8 + 8 + 8 + 8 + 2;
+    // nativeHandle + dataMemoryAddr + eventGrpHandle + offset + length + event ID +
+    // rc + actual len (for read)
+    retOffset = 8 + 8 + 8 + 8 + 8 + 2;
     descBufLen =  retOffset + 4 + 4;
     descBuffer = BufferAllocator.objBufWithNativeOrder(descBufLen);
+    descBuffer.writerIndex(8); // skip nativeHandle
     descBuffer.writeLong(dataBuffer.memoryAddress());
+    descBuffer.writeInt(dataBuffer.capacity());
     descBuffer.writeLong(eq.getEqWrapperHdl());
     natveHandle = DaosFsClient.allocateDfsDesc(descBuffer.memoryAddress());
   }
@@ -116,7 +119,7 @@ public class IODfsDesc implements DaosEventQueue.Attachment {
       throw new IllegalStateException("reuse() should be called first");
     }
     descBuffer.readerIndex(0);
-    descBuffer.writerIndex(16); // skip memory address and eq handle
+    descBuffer.writerIndex(24); // skip native handle, memory address and eq handle
     descBuffer.writeLong(offset).writeLong(len);
     descBuffer.writeShort(event.getId());
   }

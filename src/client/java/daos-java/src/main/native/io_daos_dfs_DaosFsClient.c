@@ -716,6 +716,56 @@ Java_io_daos_dfs_DaosFsClient_dfsRelease(JNIEnv *env,
 }
 
 /**
+ * allocate and initialize dfs description.
+ *
+ * \param[in]	env		JNI environment
+ * \param[in]	clientClass	DaosFsClient class
+ * \param[in]	objId		pointer to fs object
+ *
+ * \return  pointer address of dfsDesc
+ */
+JNIEXPORT jlong JNICALL
+Java_io_daos_dfs_DaosFsClient_allocateDfsDesc(JNIEnv *env, jclass clientClass,
+        jlong descBufAddress)
+{
+    uint64_t value64;
+    uint16_t value16;
+    char *desc_buffer = (char *)descBufAddress;
+    dfs_desc_t *desc = (dfs_desc_t *)malloc(
+    		sizeof(dfs_desc_t));
+
+    desc_buffer += 8; /* reserve for handle */
+    memcpy(&value64, desc_buffer, 8);
+    desc_buffer += 8;
+    desc->sgl.sg_iovs = &desc->iov;
+    d_iov_set(&desc->iov, (char *)value64, 0);
+    /* event queue */
+    memcpy(&value64, desc_buffer, 8);
+    desc->eq = (event_queue_wrapper_t *)value64;
+    /* skip offset, length, event id */
+    desc_buffer += 18;
+    desc->ret_buf_address = desc_buffer;
+    /* copy back address */
+    memcpy((char *)descBufAddress, &desc, 8);
+    return *(jlong *)&desc;
+}
+
+/**
+ * release dfs description.
+ *
+ * \param[in]	env		JNI environment
+ * \param[in]	clientClass	DaosFsClient class
+ * \param[in]	descHandle	handle to dfs description
+ */
+JNIEXPORT void JNICALL
+Java_io_daos_dfs_DaosFsClient_releaseDfsDesc(JNIEnv *env, jclass clientClass,
+        jlong descHandle)
+{
+    dfs_desc_t *desc = (dfs_desc_t *)descHandle;
+    free(desc);
+}
+
+/**
  * JNI method to read a file denoted by \a objId, into buffer denoted by
  * \a bufferAddress.
  *
@@ -737,7 +787,7 @@ Java_io_daos_dfs_DaosFsClient_dfsRead(JNIEnv *env, jobject client,
 {
 	dfs_t *dfs = *(dfs_t **)&dfsPtr;
 	dfs_obj_t *file = *(dfs_obj_t **)&objId;
-	char *buf = (char*)bufferAddress;
+	char *buf = (char *)bufferAddress;
 	d_iov_t sg_iov = {0};
 	d_sg_list_t sgl = {
 		.sg_nr = 1,
@@ -759,6 +809,77 @@ Java_io_daos_dfs_DaosFsClient_dfsRead(JNIEnv *env, jobject client,
 		return 0;
 	}
 	return size;
+}
+
+static inline void
+decode_dfs_desc(char *buf, dfs_desc_t **desc_ret, daos_event_t **event_ret,
+        uint64_t *offset_ret)
+{
+    uint64_t value64;
+    uint16_t eid;
+    dfs_desc_t *desc;
+
+    memcpy(&value64, buf, 8);
+    desc = (dfs_desc_t *)value64;
+    *desc_ret = desc;
+    desc->sgl.sg_nr = 1;
+    desc->sgl.sg_nr_out = 0;
+    desc->size = 0;
+    buf += 24; /* skip native handle, data mem address and eq handle */
+    memcpy(offset_ret, buf, 8);
+    buf += 8;
+    memcpy(&value64, buf, 8);
+    buf += 8;
+    desc->iov.iov_len = desc->iov.iov_buf_len = (size_t)value64;
+    /* event */
+    memcpy(&eid, buf, 2);
+    *event_ret = desc->eq->events[eid];
+}
+
+static int
+update_actual_size(void *udata, daos_event_t *ev, int ret)
+{
+	dfs_desc_t *desc = (dfs_desc_t *)udata;
+	char *desc_buffer = desc->ret_buf_address;
+	uint32_t value = (uint32_t)desc->size;
+
+	memcpy(desc_buffer, &ret, 4);
+	desc_buffer += 4;
+	memcpy(desc_buffer, &value, 4);
+}
+
+JNIEXPORT void JNICALL
+Java_io_daos_dfs_DaosFsClient_dfsReadAsync(JNIEnv *env, jobject client,
+        jlong dfsPtr, jlong objId, jlong descBufAddress)
+{
+    dfs_t *dfs = *(dfs_t **)&dfsPtr;
+    dfs_obj_t *file = *(dfs_obj_t **)&objId;
+    char *buf = (char *)descBufAddress;
+    uint64_t offset;
+    uint64_t len;
+    dfs_desc_t *desc;
+    daos_event_t *event;
+    int rc;
+
+    decode_dfs_desc(buf, &desc, &event, &offset, &len);
+    rc = daos_event_register_comp_cb(event,
+    			update_actual_size, desc);
+    if (rc) {
+        char *msg = "Failed to register dfs read callback";
+
+        throw_exception_const_msg_object(env, msg, rc);
+        return;
+    }
+    rc = dfs_read(dfs, file, &desc->sgl, offset, &desc->size, event);
+    if (rc) {
+        char *msg;
+
+        asprintf(&msg,
+            "Failed to read %ld bytes from file starting at %ld",
+            len, offset);
+        throw_exception(env, msg, rc);
+        return 0;
+    }
 }
 
 /**
@@ -798,11 +919,54 @@ Java_io_daos_dfs_DaosFsClient_dfsWrite(JNIEnv *env, jobject client,
 		char *tmp = "Failed to write %ld bytes to file starting at %ld";
 		char *msg = (char *)malloc(strlen(tmp) + 20 + 20);
 
-		sprintf(msg, tmp, len, fileOffset);
+		asprintf(msg, tmp, len, fileOffset);
 		throw_exception(env, msg, rc);
 		return 0;
 	}
 	return len;
+}
+
+static int
+update_ret_code(void *udata, daos_event_t *ev, int ret)
+{
+	dfs_desc_t *desc = (dfs_desc_t *)udata;
+	char *desc_buffer = desc->ret_buf_address;
+
+	memcpy(desc_buffer, &ret, 4);
+}
+
+JNIEXPORT void JNICALL
+Java_io_daos_dfs_DaosFsClient_dfsWriteAsync(JNIEnv *env, jobject client,
+        jlong dfsPtr, jlong objId, jlong descBufAddress)
+{
+    dfs_t *dfs = *(dfs_t **)&dfsPtr;
+    dfs_obj_t *file = *(dfs_obj_t **)&objId;
+    char *buf = (char *)descBufAddress;
+    uint64_t offset;
+    uint64_t len;
+    dfs_desc_t *desc;
+    daos_event_t *event;
+    int rc;
+
+    decode_dfs_desc(buf, &desc, &event, &offset, &len);
+    rc = daos_event_register_comp_cb(event,
+    			update_ret_code, desc);
+    if (rc) {
+        char *msg = "Failed to register dfs write callback";
+
+        throw_exception_const_msg_object(env, msg, rc);
+        return;
+    }
+    rc = dfs_write(dfs, file, &desc->sgl, offset, event);
+    if (rc) {
+        char *msg;
+
+        asprintf(&msg,
+            "Failed to write %ld bytes from file starting at %ld",
+            len, offset);
+        throw_exception(env, msg, rc);
+        return 0;
+    }
 }
 
 /**

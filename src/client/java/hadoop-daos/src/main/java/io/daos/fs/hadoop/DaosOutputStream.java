@@ -52,6 +52,7 @@ public class DaosOutputStream extends OutputStream {
 
   /**
    * Constructor with daosFile, file path, direct byte buffer and Hadoop file system statistics.
+   *
    * @param daosFile
    * DAOS file object
    * @param buffer

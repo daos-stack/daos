@@ -80,6 +80,14 @@ typedef struct {
     data_desc_simple_t **descs;
 } data_desc_simple_grp_t;
 
+typedef struct {
+    d_sg_list_t sgl;
+    d_iov_t iov;
+    event_queue_wrapper_t *eq;
+    uint64_t ret_buf_address;
+    daos_size_t size;
+} dfs_desc_t;
+
 static jint JNI_VERSION = JNI_VERSION_1_8;
 
 static const int READ_DIR_BATCH_SIZE = 10;

@@ -169,7 +169,7 @@ public class DescSimpleMain {
       for (int i = offset; i < end; i++) {
         for (int j = 0; j < maps; j++) {
           compList.clear();
-          e = dq.acquireEventBlocking(true, 1000, compList);
+          e = dq.acquireEventBlocking(1000, compList);
           for (DaosEventQueue.Attachment d : compList) {
             if (!((IOSimpleDataDesc)d).isSucceeded()) {
               throw new IOException("failed " + d);
@@ -339,7 +339,7 @@ public class DescSimpleMain {
           if (idx == 0) {
             // acquire and check
             compList.clear();
-            e = dq.acquireEventBlocking(false, 1000, compList);
+            e = dq.acquireEventBlocking(1000, compList);
             for (DaosEventQueue.Attachment d : compList) {
               desc = (IOSimpleDataDesc) d;
               for (int k = 0; k < desc.getNbrOfAkeysToRequest(); k++) {

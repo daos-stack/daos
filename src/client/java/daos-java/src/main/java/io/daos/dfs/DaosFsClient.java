@@ -639,11 +639,11 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
   /**
    * allocate native dfs desc struct.
    *
-   * @param descMemoryAddress
+   * @param descBufAddress
    * memory address of desc buffer.
    * @return handle of native dfs desc
    */
-  native static long allocateDfsDesc(long descMemoryAddress);
+  native static long allocateDfsDesc(long descBufAddress);
 
   /**
    * release native dfs desc struct.

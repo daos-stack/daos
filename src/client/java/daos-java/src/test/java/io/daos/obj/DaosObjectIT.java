@@ -1338,7 +1338,7 @@ public class DaosObjectIT {
       for (int i = 0; i < reduces; i++) {
         for (int j = 0; j < maps; j++) {
           compList.clear();
-          e = dq.acquireEventBlocking(true, 1000, compList);
+          e = dq.acquireEventBlocking(1000, compList);
           for (DaosEventQueue.Attachment d : compList) {
             Assert.assertTrue(((IOSimpleDataDesc)d).isSucceeded());
           }
@@ -1366,7 +1366,7 @@ public class DaosObjectIT {
         for (int j = 0; j < maps; j++) {
 //          System.out.println(i + "-" +j);
           compList.clear();
-          e = dq.acquireEventBlocking(false, 1000, compList);
+          e = dq.acquireEventBlocking(1000, compList);
           for (DaosEventQueue.Attachment d : compList) {
             Assert.assertEquals(bufLen, ((IOSimpleDataDesc)d).getEntry(0).getActualSize());
           }
