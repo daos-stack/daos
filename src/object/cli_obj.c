@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2205,12 +2205,13 @@ obj_req_get_tgts(struct dc_object *obj, int *shard, daos_key_t *dkey,
 					D_ERROR("Fetch from invalid shard, "
 						"grp size %u, shard cnt %u, "
 						"grp idx %u, given shard %u, "
-						"dkey hash %lu, dkey %s\n",
+						"dkey hash %lu, dkey "
+						DF_KEY"\n",
 						obj->cob_grp_size,
 						obj->cob_shards_nr,
 						rc / obj->cob_grp_size, *shard,
 						dkey_hash,
-						(char *)dkey->iov_buf);
+						DP_KEY(dkey));
 					D_GOTO(out, rc = -DER_INVAL);
 				}
 
