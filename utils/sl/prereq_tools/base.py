@@ -34,7 +34,6 @@ import traceback
 import hashlib
 import time
 import sys
-import shutil
 from build_info import BuildInfo
 from SCons.Variables import PathVariable
 from SCons.Variables import EnumVariable
@@ -1568,7 +1567,7 @@ class _Component():
         if self.__dry_run:
             print('Would empty %s' % path)
         else:
-            shutil.rmtree(path)
+            subprocess.call(["/bin/rm", "-rf", path])
             os.mkdir(path)
 
     def _has_changes(self):
