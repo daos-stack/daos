@@ -43,7 +43,7 @@ free_ras(Mgmt__RASEvent *evt)
 }
 
 static int
-init_ras(char *id, enum ras_event_type type, enum ras_event_sev sev, char *hid,
+init_ras(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hid,
 	 d_rank_t *rank, char *jid, uuid_t *puuid, uuid_t *cuuid,
 	 daos_obj_id_t *oid, char *cop, char *msg, Mgmt__RASEvent *evt)
 {
@@ -56,15 +56,13 @@ init_ras(char *id, enum ras_event_type type, enum ras_event_sev sev, char *hid,
 	int		 rc;
 
 	stream = open_memstream(&buf, &len);
+	if (!stream)
+		return -DER_NOMEM;
 
 	/* populate mandatory RAS fields */
 
-	if (!id) {
-		D_ERROR("missing ID parameter\n");
-		D_GOTO(out_fail, rc = -DER_INVAL);
-	}
-	evt->id = id;
-	D_FPRINTF(stream, " id: [%s]", id);
+	evt->id = (uint32_t)id;
+	D_FPRINTF(stream, " id: [%s]", ras_event2str(id));
 
 	(void)gettimeofday(&tv, 0);
 	tm = localtime(&tv.tv_sec);
@@ -90,8 +88,8 @@ init_ras(char *id, enum ras_event_type type, enum ras_event_sev sev, char *hid,
 
 	evt->type = (uint32_t)type;
 	evt->severity = (uint32_t)sev;
-	D_FPRINTF(stream, " type: [%s] sev: [%s]", ras_event_type2str(type),
-		  ras_event_sev2str(sev));
+	D_FPRINTF(stream, " type: [%s] sev: [%s]", ras_type2str(type),
+		  ras_sev2str(sev));
 
 	if (!msg) {
 		D_ERROR("missing msg parameter\n");
@@ -103,7 +101,7 @@ init_ras(char *id, enum ras_event_type type, enum ras_event_sev sev, char *hid,
 	/* populate optional RAS fields */
 
 	if (hid) {
-		evt->hid = hid;
+		evt->hw_id = hid;
 		D_FPRINTF(stream, " hwid: [%s]", hid);
 	}
 
@@ -113,36 +111,36 @@ init_ras(char *id, enum ras_event_type type, enum ras_event_sev sev, char *hid,
 	}
 
 	if (jid) {
-		evt->jid = jid;
+		evt->job_id = jid;
 		D_FPRINTF(stream, " jobid: [%s]", jid);
 	}
 
 	if (puuid && !uuid_is_null(*puuid)) {
-		D_ALLOC(evt->puuid, DAOS_UUID_STR_SIZE);
-		if (!evt->puuid)
+		D_ALLOC(evt->pool_uuid, DAOS_UUID_STR_SIZE);
+		if (!evt->pool_uuid)
 			D_GOTO(out_fail, rc = -DER_NOMEM);
-		D_ASPRINTF(evt->puuid, DF_UUIDF, DP_UUID(*puuid));
+		D_ASPRINTF(evt->pool_uuid, DF_UUIDF, DP_UUID(*puuid));
 		D_FPRINTF(stream, " puuid: ["DF_UUIDF"]", DP_UUID(*puuid));
 	}
 
 	if (cuuid && !uuid_is_null(*cuuid)) {
-		D_ALLOC(evt->cuuid, DAOS_UUID_STR_SIZE);
-		if (!evt->cuuid)
+		D_ALLOC(evt->cont_uuid, DAOS_UUID_STR_SIZE);
+		if (!evt->cont_uuid)
 			D_GOTO(out_fail, rc = -DER_NOMEM);
-		D_ASPRINTF(evt->cuuid, DF_UUIDF, DP_UUID(*cuuid));
+		D_ASPRINTF(evt->cont_uuid, DF_UUIDF, DP_UUID(*cuuid));
 		D_FPRINTF(stream, " cuuid: ["DF_UUIDF"]", DP_UUID(*cuuid));
 	}
 
 	if (oid) {
-		D_ALLOC(evt->oid, DAOS_RAS_STR_FIELD_SIZE);
-		if (!evt->oid)
+		D_ALLOC(evt->obj_id, DAOS_RAS_STR_FIELD_SIZE);
+		if (!evt->obj_id)
 			D_GOTO(out_fail, rc = -DER_NOMEM);
-		D_ASPRINTF(evt->oid, DF_OID, DP_OID(*oid));
+		D_ASPRINTF(evt->obj_id, DF_OID, DP_OID(*oid));
 		D_FPRINTF(stream, " oid: ["DF_OID"]", DP_OID(*oid));
 	}
 
 	if (cop) {
-		evt->cop = cop;
+		evt->ctl_op = cop;
 		D_FPRINTF(stream, " control_op: [%s]", cop);
 	}
 
@@ -209,10 +207,9 @@ out:
 }
 
 void
-ds_notify_ras_event(char *id, enum ras_event_type type, enum ras_event_sev sev,
-		    char *hid, d_rank_t *rank, char *jid, uuid_t *puuid,
-		    uuid_t *cuuid, daos_obj_id_t *oid, char *cop, char *msg,
-		    char *data)
+ds_notify_ras_event(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hid,
+		    d_rank_t *rank, char *jid, uuid_t *puuid, uuid_t *cuuid,
+		    daos_obj_id_t *oid, char *cop, char *msg, char *data)
 {
 	Mgmt__RASEvent	 evt = MGMT__RASEVENT__INIT;
 	int		 rc;
@@ -243,9 +240,10 @@ ds_notify_ras_event(char *id, enum ras_event_type type, enum ras_event_sev sev,
 int
 ds_notify_pool_svc_update(uuid_t *puuid, d_rank_list_t *svc)
 {
-	Mgmt__RASEvent		 evt = MGMT__RASEVENT__INIT;
-	Mgmt__PoolSvcEventInfo	 info = MGMT__POOL_SVC_EVENT_INFO__INIT;
-	int			 rc;
+	Mgmt__RASEvent				evt = MGMT__RASEVENT__INIT;
+	Mgmt__RASEvent__PoolSvcEventInfo	info = MGMT__RASEVENT__POOL_SVC_EVENT_INFO__INIT;
+	int					rc;
+
 
 	if (dss_drpc_ctx == NULL) {
 		D_ERROR("dRPC not connected\n");
@@ -265,7 +263,7 @@ ds_notify_pool_svc_update(uuid_t *puuid, d_rank_list_t *svc)
 	evt.pool_svc_info = &info;
 
 	/* TODO: add rank to event */
-	rc = init_ras(RAS_POOL_SVC_REPS_UPDATE, RAS_TYPE_STATE_CHANGE,
+	rc = init_ras(RAS_POOL_REPS_UPDATE, RAS_TYPE_STATE_CHANGE,
 		      RAS_SEV_INFO, NULL /* hid */, NULL /* rank */,
 		      NULL /* jid */, puuid, NULL /* cuuid */, NULL /* oid */,
 		      NULL /* cop */,

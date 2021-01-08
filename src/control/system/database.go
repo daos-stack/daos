@@ -880,24 +880,24 @@ func (db *Database) UpdatePoolService(ps *PoolService) error {
 // OnEvent handles events and updates system database accordingly.
 func (db *Database) OnEvent(_ context.Context, evt *events.RASEvent) {
 	switch evt.ID {
-	case events.RASPoolSvcReplicasUpdate:
+	case events.RASPoolRepsUpdate:
 		ei := evt.GetPoolSvcInfo()
 		if ei == nil {
 			db.log.Error("no extended info in PoolSvcReplicasUpdate event received")
 			return
 		}
 		db.log.Debugf("processing RAS event %q for pool %s with info %+v on host %q",
-			evt.Msg, evt.PUUID, ei, evt.Hostname)
+			evt.Msg, evt.PoolUUID, ei, evt.Hostname)
 
-		uuid, err := uuid.Parse(evt.PUUID)
+		uuid, err := uuid.Parse(evt.PoolUUID)
 		if err != nil {
-			db.log.Errorf("failed to parse pool UUID %q: %s", evt.PUUID, err)
+			db.log.Errorf("failed to parse pool UUID %q: %s", evt.PoolUUID, err)
 			return
 		}
 
 		ps, err := db.FindPoolServiceByUUID(uuid)
 		if err != nil {
-			db.log.Errorf("failed to find pool with UUID %q: %s", evt.PUUID, err)
+			db.log.Errorf("failed to find pool with UUID %q: %s", evt.PoolUUID, err)
 			return
 		}
 

@@ -48,29 +48,34 @@ func NewFromProto(pbEvt *mgmtpb.RASEvent) (*RASEvent, error) {
 	evt := new(RASEvent)
 
 	switch RASID(pbEvt.Id) {
-	case RASRankExit, RASPoolSvcReplicasUpdate:
+	case RASRankDown, RASPoolRepsUpdate:
 		return evt, evt.FromProto(pbEvt)
 	default:
-		return nil, errors.Errorf("unsupported event ID: %s", pbEvt.Id)
+		return nil, errors.Errorf("unsupported event ID: %d", pbEvt.Id)
 	}
 }
 
-// RASID describes a given RAS event.
-type RASID string
-
-func (id RASID) String() string {
-	return string(id)
-}
+// RASID identifies a given RAS event.
+type RASID uint32
 
 // RASID constant definitions matching those used when creating events either in
 // the control or data (iosrv) planes.
 const (
-	RASRankExit              RASID = C.RAS_RANK_EXIT
-	RASRankNoResp            RASID = C.RAS_RANK_NO_RESP
-	RASPoolSvcReplicasUpdate RASID = C.RAS_POOL_SVC_REPS_UPDATE
+	RASRankDown       RASID = C.RAS_RANK_DOWN
+	RASRankNoResponse RASID = C.RAS_RANK_NO_RESPONSE
+	RASPoolRepsUpdate RASID = C.RAS_POOL_REPS_UPDATE
 )
 
-// RASTypeID describes the type of a given RAS event.
+func (id RASID) String() string {
+	return C.GoString(C.ras_event2str(C.ras_event_t(id)))
+}
+
+// Uint32 returns uint32 representation of event ID.
+func (id RASID) Uint32() uint32 {
+	return uint32(id)
+}
+
+// RASTypeID identifies the type of a given RAS event.
 type RASTypeID uint32
 
 // RASTypeID constant definitions.
@@ -81,7 +86,7 @@ const (
 )
 
 func (typ RASTypeID) String() string {
-	return C.GoString(C.ras_event_type2str(uint32(typ)))
+	return C.GoString(C.ras_type2str(C.ras_type_t(typ)))
 }
 
 // Uint32 returns uint32 representation of event type.
@@ -89,7 +94,7 @@ func (typ RASTypeID) Uint32() uint32 {
 	return uint32(typ)
 }
 
-// RASSeverityID describes the severity of a given RAS event.
+// RASSeverityID identifies the severity of a given RAS event.
 type RASSeverityID uint32
 
 // RASSeverityID constant definitions.
@@ -101,7 +106,7 @@ const (
 )
 
 func (sev RASSeverityID) String() string {
-	return C.GoString(C.ras_event_sev2str(uint32(sev)))
+	return C.GoString(C.ras_sev2str(C.ras_sev_t(sev)))
 }
 
 // Uint32 returns uint32 representation of event severity.
@@ -118,14 +123,14 @@ type RASEvent struct {
 	Msg          string          `json:"msg"`
 	Hostname     string          `json:"hostname"`
 	Rank         uint32          `json:"rank"`
-	HID          string          `json:"hid"`
-	PID          string          `json:"pid"`
-	TID          string          `json:"tid"`
-	JOBID        string          `json:"jid"`
-	PUUID        string          `json:"puuid"`
-	CUUID        string          `json:"cuuid"`
-	OID          string          `json:"oid"`
-	ControlOp    string          `json:"cop"`
+	HWID         string          `json:"hw_id"`
+	ProcID       string          `json:"proc_id"`
+	ThreadID     string          `json:"thread_id"`
+	JobID        string          `json:"job_id"`
+	PoolUUID     string          `json:"pool_uuid"`
+	ContUUID     string          `json:"cont_uuid"`
+	ObjID        string          `json:"obj_id"`
+	CtlOp        string          `json:"ctl_op"`
 	ExtendedInfo RASExtendedInfo `json:"extended_info"`
 }
 
@@ -133,12 +138,12 @@ type RASEvent struct {
 func (evt *RASEvent) MarshalJSON() ([]byte, error) {
 	type toJSON RASEvent
 	return json.Marshal(&struct {
-		ID       string `json:"id"`
+		ID       uint32 `json:"id"`
 		Severity uint32 `json:"severity"`
 		Type     uint32 `json:"type"`
 		*toJSON
 	}{
-		ID:       evt.ID.String(),
+		ID:       evt.ID.Uint32(),
 		Type:     evt.Type.Uint32(),
 		Severity: evt.Severity.Uint32(),
 		toJSON:   (*toJSON)(evt),
@@ -149,7 +154,7 @@ func (evt *RASEvent) MarshalJSON() ([]byte, error) {
 func (evt *RASEvent) UnmarshalJSON(data []byte) error {
 	type fromJSON RASEvent
 	from := &struct {
-		ID       string `json:"id"`
+		ID       uint32 `json:"id"`
 		Type     uint32 `json:"type"`
 		Severity uint32 `json:"severity"`
 		*fromJSON
@@ -162,16 +167,6 @@ func (evt *RASEvent) UnmarshalJSON(data []byte) error {
 	evt.Severity = RASSeverityID(from.Severity)
 
 	return nil
-}
-
-// GetID returns the event ID.
-func (evt *RASEvent) GetID() RASID {
-	return evt.ID
-}
-
-// GetType returns the event type.
-func (evt *RASEvent) GetType() RASTypeID {
-	return evt.Type
 }
 
 // ToProto returns a protobuf representation of the native event.
@@ -206,14 +201,14 @@ func (evt *RASEvent) FromProto(pbEvt *mgmtpb.RASEvent) (err error) {
 		Msg:       pbEvt.Msg,
 		Hostname:  pbEvt.Hostname,
 		Rank:      pbEvt.Rank,
-		HID:       pbEvt.Hid,
-		PID:       pbEvt.Pid,
-		TID:       pbEvt.Tid,
-		JOBID:     pbEvt.Jid,
-		PUUID:     pbEvt.Puuid,
-		CUUID:     pbEvt.Cuuid,
-		OID:       pbEvt.Oid,
-		ControlOp: pbEvt.Cop,
+		HWID:      pbEvt.HwId,
+		ProcID:    pbEvt.ProcId,
+		ThreadID:  pbEvt.ThreadId,
+		JobID:     pbEvt.JobId,
+		PoolUUID:  pbEvt.PoolUuid,
+		ContUUID:  pbEvt.ContUuid,
+		ObjID:     pbEvt.ObjId,
+		CtlOp:     pbEvt.CtlOp,
 	}
 
 	switch ei := pbEvt.GetExtendedInfo().(type) {

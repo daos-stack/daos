@@ -20,127 +20,23 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
-// RankStateEventInfo defines extended fields for rank state change related events.
-type RankStateEventInfo struct {
-	Instance             uint32   `protobuf:"varint,1,opt,name=instance,proto3" json:"instance,omitempty"`
-	Errored              bool     `protobuf:"varint,2,opt,name=errored,proto3" json:"errored,omitempty"`
-	Error                string   `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
-}
-
-func (m *RankStateEventInfo) Reset()         { *m = RankStateEventInfo{} }
-func (m *RankStateEventInfo) String() string { return proto.CompactTextString(m) }
-func (*RankStateEventInfo) ProtoMessage()    {}
-func (*RankStateEventInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2d17a9d3f0ddf27e, []int{0}
-}
-
-func (m *RankStateEventInfo) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_RankStateEventInfo.Unmarshal(m, b)
-}
-func (m *RankStateEventInfo) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_RankStateEventInfo.Marshal(b, m, deterministic)
-}
-func (m *RankStateEventInfo) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_RankStateEventInfo.Merge(m, src)
-}
-func (m *RankStateEventInfo) XXX_Size() int {
-	return xxx_messageInfo_RankStateEventInfo.Size(m)
-}
-func (m *RankStateEventInfo) XXX_DiscardUnknown() {
-	xxx_messageInfo_RankStateEventInfo.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_RankStateEventInfo proto.InternalMessageInfo
-
-func (m *RankStateEventInfo) GetInstance() uint32 {
-	if m != nil {
-		return m.Instance
-	}
-	return 0
-}
-
-func (m *RankStateEventInfo) GetErrored() bool {
-	if m != nil {
-		return m.Errored
-	}
-	return false
-}
-
-func (m *RankStateEventInfo) GetError() string {
-	if m != nil {
-		return m.Error
-	}
-	return ""
-}
-
-// PoolSvcEventInfo defines extended fields for pool service change events.
-type PoolSvcEventInfo struct {
-	SvcReps              []uint32 `protobuf:"varint,1,rep,packed,name=svc_reps,json=svcReps,proto3" json:"svc_reps,omitempty"`
-	Version              uint64   `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
-}
-
-func (m *PoolSvcEventInfo) Reset()         { *m = PoolSvcEventInfo{} }
-func (m *PoolSvcEventInfo) String() string { return proto.CompactTextString(m) }
-func (*PoolSvcEventInfo) ProtoMessage()    {}
-func (*PoolSvcEventInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2d17a9d3f0ddf27e, []int{1}
-}
-
-func (m *PoolSvcEventInfo) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_PoolSvcEventInfo.Unmarshal(m, b)
-}
-func (m *PoolSvcEventInfo) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_PoolSvcEventInfo.Marshal(b, m, deterministic)
-}
-func (m *PoolSvcEventInfo) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PoolSvcEventInfo.Merge(m, src)
-}
-func (m *PoolSvcEventInfo) XXX_Size() int {
-	return xxx_messageInfo_PoolSvcEventInfo.Size(m)
-}
-func (m *PoolSvcEventInfo) XXX_DiscardUnknown() {
-	xxx_messageInfo_PoolSvcEventInfo.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_PoolSvcEventInfo proto.InternalMessageInfo
-
-func (m *PoolSvcEventInfo) GetSvcReps() []uint32 {
-	if m != nil {
-		return m.SvcReps
-	}
-	return nil
-}
-
-func (m *PoolSvcEventInfo) GetVersion() uint64 {
-	if m != nil {
-		return m.Version
-	}
-	return 0
-}
-
 // RASEvent describes a RAS event in the DAOS system.
 type RASEvent struct {
-	Id        string `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
+	Id        uint32 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Msg       string `protobuf:"bytes,2,opt,name=msg,proto3" json:"msg,omitempty"`
 	Timestamp string `protobuf:"bytes,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	Type      uint32 `protobuf:"varint,4,opt,name=type,proto3" json:"type,omitempty"`
 	Severity  uint32 `protobuf:"varint,5,opt,name=severity,proto3" json:"severity,omitempty"`
-	Msg       string `protobuf:"bytes,6,opt,name=msg,proto3" json:"msg,omitempty"`
-	Hostname  string `protobuf:"bytes,7,opt,name=hostname,proto3" json:"hostname,omitempty"`
-	Rank      uint32 `protobuf:"varint,8,opt,name=rank,proto3" json:"rank,omitempty"`
-	Hid       string `protobuf:"bytes,9,opt,name=hid,proto3" json:"hid,omitempty"`
-	Pid       string `protobuf:"bytes,10,opt,name=pid,proto3" json:"pid,omitempty"`
-	Tid       string `protobuf:"bytes,11,opt,name=tid,proto3" json:"tid,omitempty"`
-	Jid       string `protobuf:"bytes,12,opt,name=jid,proto3" json:"jid,omitempty"`
-	Puuid     string `protobuf:"bytes,13,opt,name=puuid,proto3" json:"puuid,omitempty"`
-	Cuuid     string `protobuf:"bytes,14,opt,name=cuuid,proto3" json:"cuuid,omitempty"`
-	Oid       string `protobuf:"bytes,15,opt,name=oid,proto3" json:"oid,omitempty"`
-	Cop       string `protobuf:"bytes,16,opt,name=cop,proto3" json:"cop,omitempty"`
+	Hostname  string `protobuf:"bytes,6,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	Rank      uint32 `protobuf:"varint,7,opt,name=rank,proto3" json:"rank,omitempty"`
+	HwId      string `protobuf:"bytes,8,opt,name=hw_id,json=hwId,proto3" json:"hw_id,omitempty"`
+	ProcId    string `protobuf:"bytes,9,opt,name=proc_id,json=procId,proto3" json:"proc_id,omitempty"`
+	ThreadId  string `protobuf:"bytes,10,opt,name=thread_id,json=threadId,proto3" json:"thread_id,omitempty"`
+	JobId     string `protobuf:"bytes,11,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	PoolUuid  string `protobuf:"bytes,12,opt,name=pool_uuid,json=poolUuid,proto3" json:"pool_uuid,omitempty"`
+	ContUuid  string `protobuf:"bytes,13,opt,name=cont_uuid,json=contUuid,proto3" json:"cont_uuid,omitempty"`
+	ObjId     string `protobuf:"bytes,14,opt,name=obj_id,json=objId,proto3" json:"obj_id,omitempty"`
+	CtlOp     string `protobuf:"bytes,15,opt,name=ctl_op,json=ctlOp,proto3" json:"ctl_op,omitempty"`
 	// Types that are valid to be assigned to ExtendedInfo:
 	//	*RASEvent_StrInfo
 	//	*RASEvent_RankStateInfo
@@ -155,7 +51,7 @@ func (m *RASEvent) Reset()         { *m = RASEvent{} }
 func (m *RASEvent) String() string { return proto.CompactTextString(m) }
 func (*RASEvent) ProtoMessage()    {}
 func (*RASEvent) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2d17a9d3f0ddf27e, []int{2}
+	return fileDescriptor_2d17a9d3f0ddf27e, []int{0}
 }
 
 func (m *RASEvent) XXX_Unmarshal(b []byte) error {
@@ -176,9 +72,16 @@ func (m *RASEvent) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_RASEvent proto.InternalMessageInfo
 
-func (m *RASEvent) GetId() string {
+func (m *RASEvent) GetId() uint32 {
 	if m != nil {
 		return m.Id
+	}
+	return 0
+}
+
+func (m *RASEvent) GetMsg() string {
+	if m != nil {
+		return m.Msg
 	}
 	return ""
 }
@@ -204,13 +107,6 @@ func (m *RASEvent) GetSeverity() uint32 {
 	return 0
 }
 
-func (m *RASEvent) GetMsg() string {
-	if m != nil {
-		return m.Msg
-	}
-	return ""
-}
-
 func (m *RASEvent) GetHostname() string {
 	if m != nil {
 		return m.Hostname
@@ -225,58 +121,58 @@ func (m *RASEvent) GetRank() uint32 {
 	return 0
 }
 
-func (m *RASEvent) GetHid() string {
+func (m *RASEvent) GetHwId() string {
 	if m != nil {
-		return m.Hid
+		return m.HwId
 	}
 	return ""
 }
 
-func (m *RASEvent) GetPid() string {
+func (m *RASEvent) GetProcId() string {
 	if m != nil {
-		return m.Pid
+		return m.ProcId
 	}
 	return ""
 }
 
-func (m *RASEvent) GetTid() string {
+func (m *RASEvent) GetThreadId() string {
 	if m != nil {
-		return m.Tid
+		return m.ThreadId
 	}
 	return ""
 }
 
-func (m *RASEvent) GetJid() string {
+func (m *RASEvent) GetJobId() string {
 	if m != nil {
-		return m.Jid
+		return m.JobId
 	}
 	return ""
 }
 
-func (m *RASEvent) GetPuuid() string {
+func (m *RASEvent) GetPoolUuid() string {
 	if m != nil {
-		return m.Puuid
+		return m.PoolUuid
 	}
 	return ""
 }
 
-func (m *RASEvent) GetCuuid() string {
+func (m *RASEvent) GetContUuid() string {
 	if m != nil {
-		return m.Cuuid
+		return m.ContUuid
 	}
 	return ""
 }
 
-func (m *RASEvent) GetOid() string {
+func (m *RASEvent) GetObjId() string {
 	if m != nil {
-		return m.Oid
+		return m.ObjId
 	}
 	return ""
 }
 
-func (m *RASEvent) GetCop() string {
+func (m *RASEvent) GetCtlOp() string {
 	if m != nil {
-		return m.Cop
+		return m.CtlOp
 	}
 	return ""
 }
@@ -286,15 +182,15 @@ type isRASEvent_ExtendedInfo interface {
 }
 
 type RASEvent_StrInfo struct {
-	StrInfo string `protobuf:"bytes,17,opt,name=str_info,json=strInfo,proto3,oneof"`
+	StrInfo string `protobuf:"bytes,16,opt,name=str_info,json=strInfo,proto3,oneof"`
 }
 
 type RASEvent_RankStateInfo struct {
-	RankStateInfo *RankStateEventInfo `protobuf:"bytes,18,opt,name=rank_state_info,json=rankStateInfo,proto3,oneof"`
+	RankStateInfo *RASEvent_RankStateEventInfo `protobuf:"bytes,17,opt,name=rank_state_info,json=rankStateInfo,proto3,oneof"`
 }
 
 type RASEvent_PoolSvcInfo struct {
-	PoolSvcInfo *PoolSvcEventInfo `protobuf:"bytes,19,opt,name=pool_svc_info,json=poolSvcInfo,proto3,oneof"`
+	PoolSvcInfo *RASEvent_PoolSvcEventInfo `protobuf:"bytes,18,opt,name=pool_svc_info,json=poolSvcInfo,proto3,oneof"`
 }
 
 func (*RASEvent_StrInfo) isRASEvent_ExtendedInfo() {}
@@ -317,14 +213,14 @@ func (m *RASEvent) GetStrInfo() string {
 	return ""
 }
 
-func (m *RASEvent) GetRankStateInfo() *RankStateEventInfo {
+func (m *RASEvent) GetRankStateInfo() *RASEvent_RankStateEventInfo {
 	if x, ok := m.GetExtendedInfo().(*RASEvent_RankStateInfo); ok {
 		return x.RankStateInfo
 	}
 	return nil
 }
 
-func (m *RASEvent) GetPoolSvcInfo() *PoolSvcEventInfo {
+func (m *RASEvent) GetPoolSvcInfo() *RASEvent_PoolSvcEventInfo {
 	if x, ok := m.GetExtendedInfo().(*RASEvent_PoolSvcInfo); ok {
 		return x.PoolSvcInfo
 	}
@@ -340,6 +236,110 @@ func (*RASEvent) XXX_OneofWrappers() []interface{} {
 	}
 }
 
+// RankStateEventInfo defines extended fields for rank state change events.
+type RASEvent_RankStateEventInfo struct {
+	Instance             uint32   `protobuf:"varint,1,opt,name=instance,proto3" json:"instance,omitempty"`
+	Errored              bool     `protobuf:"varint,2,opt,name=errored,proto3" json:"errored,omitempty"`
+	Error                string   `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *RASEvent_RankStateEventInfo) Reset()         { *m = RASEvent_RankStateEventInfo{} }
+func (m *RASEvent_RankStateEventInfo) String() string { return proto.CompactTextString(m) }
+func (*RASEvent_RankStateEventInfo) ProtoMessage()    {}
+func (*RASEvent_RankStateEventInfo) Descriptor() ([]byte, []int) {
+	return fileDescriptor_2d17a9d3f0ddf27e, []int{0, 0}
+}
+
+func (m *RASEvent_RankStateEventInfo) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_RASEvent_RankStateEventInfo.Unmarshal(m, b)
+}
+func (m *RASEvent_RankStateEventInfo) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_RASEvent_RankStateEventInfo.Marshal(b, m, deterministic)
+}
+func (m *RASEvent_RankStateEventInfo) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RASEvent_RankStateEventInfo.Merge(m, src)
+}
+func (m *RASEvent_RankStateEventInfo) XXX_Size() int {
+	return xxx_messageInfo_RASEvent_RankStateEventInfo.Size(m)
+}
+func (m *RASEvent_RankStateEventInfo) XXX_DiscardUnknown() {
+	xxx_messageInfo_RASEvent_RankStateEventInfo.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_RASEvent_RankStateEventInfo proto.InternalMessageInfo
+
+func (m *RASEvent_RankStateEventInfo) GetInstance() uint32 {
+	if m != nil {
+		return m.Instance
+	}
+	return 0
+}
+
+func (m *RASEvent_RankStateEventInfo) GetErrored() bool {
+	if m != nil {
+		return m.Errored
+	}
+	return false
+}
+
+func (m *RASEvent_RankStateEventInfo) GetError() string {
+	if m != nil {
+		return m.Error
+	}
+	return ""
+}
+
+// PoolSvcEventInfo defines extended fields for pool service change events.
+type RASEvent_PoolSvcEventInfo struct {
+	SvcReps              []uint32 `protobuf:"varint,1,rep,packed,name=svc_reps,json=svcReps,proto3" json:"svc_reps,omitempty"`
+	Version              uint64   `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *RASEvent_PoolSvcEventInfo) Reset()         { *m = RASEvent_PoolSvcEventInfo{} }
+func (m *RASEvent_PoolSvcEventInfo) String() string { return proto.CompactTextString(m) }
+func (*RASEvent_PoolSvcEventInfo) ProtoMessage()    {}
+func (*RASEvent_PoolSvcEventInfo) Descriptor() ([]byte, []int) {
+	return fileDescriptor_2d17a9d3f0ddf27e, []int{0, 1}
+}
+
+func (m *RASEvent_PoolSvcEventInfo) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_RASEvent_PoolSvcEventInfo.Unmarshal(m, b)
+}
+func (m *RASEvent_PoolSvcEventInfo) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_RASEvent_PoolSvcEventInfo.Marshal(b, m, deterministic)
+}
+func (m *RASEvent_PoolSvcEventInfo) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RASEvent_PoolSvcEventInfo.Merge(m, src)
+}
+func (m *RASEvent_PoolSvcEventInfo) XXX_Size() int {
+	return xxx_messageInfo_RASEvent_PoolSvcEventInfo.Size(m)
+}
+func (m *RASEvent_PoolSvcEventInfo) XXX_DiscardUnknown() {
+	xxx_messageInfo_RASEvent_PoolSvcEventInfo.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_RASEvent_PoolSvcEventInfo proto.InternalMessageInfo
+
+func (m *RASEvent_PoolSvcEventInfo) GetSvcReps() []uint32 {
+	if m != nil {
+		return m.SvcReps
+	}
+	return nil
+}
+
+func (m *RASEvent_PoolSvcEventInfo) GetVersion() uint64 {
+	if m != nil {
+		return m.Version
+	}
+	return 0
+}
+
 // ClusterEventReq communicates occurrence of a RAS event in the DAOS system.
 type ClusterEventReq struct {
 	Sequence             uint64    `protobuf:"varint,1,opt,name=sequence,proto3" json:"sequence,omitempty"`
@@ -353,7 +353,7 @@ func (m *ClusterEventReq) Reset()         { *m = ClusterEventReq{} }
 func (m *ClusterEventReq) String() string { return proto.CompactTextString(m) }
 func (*ClusterEventReq) ProtoMessage()    {}
 func (*ClusterEventReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2d17a9d3f0ddf27e, []int{3}
+	return fileDescriptor_2d17a9d3f0ddf27e, []int{1}
 }
 
 func (m *ClusterEventReq) XXX_Unmarshal(b []byte) error {
@@ -402,7 +402,7 @@ func (m *ClusterEventResp) Reset()         { *m = ClusterEventResp{} }
 func (m *ClusterEventResp) String() string { return proto.CompactTextString(m) }
 func (*ClusterEventResp) ProtoMessage()    {}
 func (*ClusterEventResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2d17a9d3f0ddf27e, []int{4}
+	return fileDescriptor_2d17a9d3f0ddf27e, []int{2}
 }
 
 func (m *ClusterEventResp) XXX_Unmarshal(b []byte) error {
@@ -438,9 +438,9 @@ func (m *ClusterEventResp) GetStatus() int32 {
 }
 
 func init() {
-	proto.RegisterType((*RankStateEventInfo)(nil), "mgmt.RankStateEventInfo")
-	proto.RegisterType((*PoolSvcEventInfo)(nil), "mgmt.PoolSvcEventInfo")
 	proto.RegisterType((*RASEvent)(nil), "mgmt.RASEvent")
+	proto.RegisterType((*RASEvent_RankStateEventInfo)(nil), "mgmt.RASEvent.RankStateEventInfo")
+	proto.RegisterType((*RASEvent_PoolSvcEventInfo)(nil), "mgmt.RASEvent.PoolSvcEventInfo")
 	proto.RegisterType((*ClusterEventReq)(nil), "mgmt.ClusterEventReq")
 	proto.RegisterType((*ClusterEventResp)(nil), "mgmt.ClusterEventResp")
 }
@@ -450,35 +450,38 @@ func init() {
 }
 
 var fileDescriptor_2d17a9d3f0ddf27e = []byte{
-	// 479 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x93, 0xcb, 0x6e, 0x13, 0x31,
-	0x14, 0x86, 0x33, 0xb9, 0x4e, 0x4e, 0x98, 0x24, 0x18, 0x54, 0x99, 0xcb, 0x22, 0x8a, 0x58, 0x64,
-	0x95, 0x45, 0xd9, 0xb2, 0xa1, 0x08, 0x08, 0x3b, 0xe4, 0x3c, 0x40, 0x18, 0xc6, 0x6e, 0xe3, 0x36,
-	0x63, 0xbb, 0xb6, 0x33, 0xa2, 0xaf, 0xcd, 0x13, 0x20, 0x9f, 0x93, 0x49, 0x05, 0x48, 0xdd, 0xf9,
-	0xff, 0xc6, 0xfe, 0xe2, 0xcb, 0x1f, 0x98, 0xa8, 0x46, 0x99, 0xb8, 0x76, 0xde, 0x46, 0xcb, 0xfa,
-	0xf5, 0x4d, 0x1d, 0x97, 0x3f, 0x80, 0x89, 0xd2, 0xdc, 0x6d, 0x63, 0x19, 0xd5, 0xe7, 0xf4, 0xf5,
-	0x9b, 0xb9, 0xb6, 0xec, 0x35, 0xe4, 0xda, 0x84, 0x58, 0x9a, 0x4a, 0xf1, 0x6c, 0x91, 0xad, 0x0a,
-	0x71, 0xce, 0x8c, 0xc3, 0x48, 0x79, 0x6f, 0xbd, 0x92, 0xbc, 0xbb, 0xc8, 0x56, 0xb9, 0x68, 0x23,
-	0x7b, 0x09, 0x03, 0x1c, 0xf2, 0xde, 0x22, 0x5b, 0x8d, 0x05, 0x85, 0xe5, 0x57, 0x98, 0x7f, 0xb7,
-	0xf6, 0xb0, 0x6d, 0xaa, 0x47, 0xff, 0x2b, 0xc8, 0x43, 0x53, 0xed, 0xbc, 0x72, 0x81, 0x67, 0x8b,
-	0xde, 0xaa, 0x10, 0xa3, 0xd0, 0x54, 0x42, 0xb9, 0x90, 0xf4, 0x8d, 0xf2, 0x41, 0x5b, 0x83, 0xfa,
-	0xbe, 0x68, 0xe3, 0xf2, 0x77, 0x0f, 0x72, 0xf1, 0x71, 0x8b, 0x16, 0x36, 0x85, 0xae, 0xa6, 0x0d,
-	0x8c, 0x45, 0x57, 0x4b, 0xf6, 0x16, 0xc6, 0x51, 0xd7, 0x2a, 0xc4, 0xb2, 0x76, 0xa7, 0xdf, 0x7f,
-	0x04, 0x8c, 0x41, 0x3f, 0x3e, 0x38, 0xc5, 0xfb, 0x78, 0x16, 0x1c, 0xa7, 0x33, 0x06, 0xd5, 0x28,
-	0xaf, 0xe3, 0x03, 0x1f, 0xd0, 0x19, 0xdb, 0xcc, 0xe6, 0xd0, 0xab, 0xc3, 0x0d, 0x1f, 0xa2, 0x27,
-	0x0d, 0xd3, 0xec, 0xbd, 0x0d, 0xd1, 0x94, 0xb5, 0xe2, 0x23, 0xc4, 0xe7, 0x9c, 0xec, 0xbe, 0x34,
-	0x77, 0x3c, 0x27, 0x7b, 0x1a, 0x27, 0xc3, 0x5e, 0x4b, 0x3e, 0x26, 0xc3, 0x5e, 0xcb, 0x44, 0x9c,
-	0x96, 0x1c, 0x88, 0x38, 0x22, 0x51, 0x4b, 0x3e, 0x21, 0x12, 0x89, 0xdc, 0x6a, 0xc9, 0x9f, 0x11,
-	0xb9, 0xd5, 0x78, 0xa7, 0xee, 0x78, 0xd4, 0x92, 0x17, 0x74, 0xa7, 0x18, 0x12, 0xad, 0x90, 0x4e,
-	0x89, 0x62, 0x48, 0xab, 0xad, 0x96, 0x7c, 0x46, 0xab, 0x2d, 0x91, 0xca, 0x3a, 0x3e, 0x27, 0x52,
-	0x59, 0xc7, 0xde, 0x40, 0x1e, 0xa2, 0xdf, 0x69, 0x73, 0x6d, 0xf9, 0xf3, 0x84, 0x37, 0x1d, 0x31,
-	0x0a, 0xd1, 0xe3, 0xb3, 0x5c, 0xc1, 0x2c, 0x6d, 0x7e, 0x17, 0x52, 0x1b, 0x68, 0x0e, 0x5b, 0x64,
-	0xab, 0xc9, 0x25, 0x5f, 0xa7, 0xb2, 0xac, 0xff, 0x6f, 0xca, 0xa6, 0x23, 0x0a, 0xdf, 0x52, 0x74,
-	0x7c, 0x80, 0xc2, 0x59, 0x7b, 0xd8, 0xa5, 0xf7, 0x45, 0xc3, 0x0b, 0x34, 0x5c, 0x90, 0xe1, 0xdf,
-	0x26, 0x6c, 0x3a, 0x62, 0xe2, 0x88, 0xa5, 0x78, 0x35, 0x83, 0x42, 0xfd, 0x8a, 0xca, 0x48, 0x25,
-	0x71, 0xf5, 0x72, 0x0b, 0xb3, 0x4f, 0x87, 0x63, 0x88, 0xca, 0xe3, 0x1a, 0xa1, 0xee, 0xe9, 0xe1,
-	0xee, 0x8f, 0xaa, 0x2d, 0x67, 0x5f, 0x9c, 0x33, 0x7b, 0x07, 0x03, 0xec, 0x38, 0x36, 0x63, 0x72,
-	0x39, 0x3d, 0xed, 0xfb, 0xd4, 0x1a, 0x41, 0x1f, 0x97, 0x5f, 0x60, 0xfe, 0xb7, 0x34, 0xb8, 0x27,
-	0xad, 0x17, 0x30, 0x4c, 0x57, 0x72, 0x0c, 0xa8, 0x1d, 0x88, 0x53, 0xfa, 0x39, 0xc4, 0x7f, 0xd2,
-	0xfb, 0x3f, 0x01, 0x00, 0x00, 0xff, 0xff, 0x18, 0x7a, 0xad, 0x5a, 0x58, 0x03, 0x00, 0x00,
+	// 518 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x93, 0xc1, 0x72, 0xd3, 0x3e,
+	0x10, 0xc6, 0x9b, 0xc4, 0x76, 0x9c, 0xcd, 0xdf, 0x49, 0xfe, 0x82, 0x82, 0x48, 0x99, 0x21, 0x64,
+	0x38, 0xe4, 0x94, 0x43, 0x79, 0x02, 0x60, 0x0a, 0xcd, 0x70, 0x80, 0x51, 0x86, 0x73, 0x70, 0x6c,
+	0xb5, 0x71, 0x1a, 0x5b, 0xaa, 0x24, 0xbb, 0xf4, 0x71, 0x79, 0x13, 0x66, 0x57, 0x49, 0xa0, 0x65,
+	0x86, 0xdb, 0x7e, 0xdf, 0x27, 0xfd, 0x2c, 0x79, 0x57, 0xd0, 0x97, 0x8d, 0xac, 0xdc, 0x5c, 0x1b,
+	0xe5, 0x14, 0x0b, 0xca, 0xeb, 0xd2, 0x4d, 0x7f, 0x86, 0x10, 0x8b, 0x77, 0xcb, 0x0b, 0x0c, 0xd8,
+	0x00, 0xda, 0x45, 0xce, 0x5b, 0x93, 0xd6, 0x2c, 0x11, 0xed, 0x22, 0x67, 0x23, 0xe8, 0x94, 0xf6,
+	0x9a, 0xb7, 0x27, 0xad, 0x59, 0x4f, 0x60, 0xc9, 0x5e, 0x42, 0xcf, 0x15, 0xa5, 0xb4, 0x2e, 0x2d,
+	0x35, 0xef, 0x90, 0xff, 0xdb, 0x60, 0x0c, 0x02, 0x77, 0xaf, 0x25, 0x0f, 0x88, 0x40, 0x35, 0x1b,
+	0x43, 0x6c, 0x65, 0x23, 0x4d, 0xe1, 0xee, 0x79, 0x48, 0xfe, 0x51, 0x63, 0xb6, 0x51, 0xd6, 0x55,
+	0x69, 0x29, 0x79, 0x44, 0xb0, 0xa3, 0x46, 0x96, 0x49, 0xab, 0x1b, 0xde, 0xf5, 0x2c, 0xac, 0xd9,
+	0x13, 0x08, 0x37, 0x77, 0xab, 0x22, 0xe7, 0x31, 0x2d, 0x0e, 0x36, 0x77, 0x8b, 0x9c, 0x3d, 0x87,
+	0xae, 0x36, 0x2a, 0x43, 0xbb, 0x47, 0x76, 0x84, 0x72, 0x91, 0xb3, 0x33, 0xe8, 0xb9, 0x8d, 0x91,
+	0x69, 0x8e, 0x11, 0x78, 0xbc, 0x37, 0x16, 0x39, 0x3b, 0x85, 0x68, 0xab, 0xd6, 0x98, 0xf4, 0x29,
+	0x09, 0xb7, 0x6a, 0xed, 0xf7, 0x68, 0xa5, 0x76, 0xab, 0xba, 0x2e, 0x72, 0xfe, 0x9f, 0xdf, 0x83,
+	0xc6, 0xb7, 0xba, 0xa0, 0x30, 0x53, 0x95, 0xf3, 0x61, 0xe2, 0x43, 0x34, 0x28, 0x3c, 0x85, 0x48,
+	0xad, 0xb7, 0x08, 0x1c, 0x78, 0xa0, 0x5a, 0x6f, 0xfd, 0x77, 0x32, 0xb7, 0x5b, 0x29, 0xcd, 0x87,
+	0xde, 0xce, 0xdc, 0xee, 0x8b, 0x66, 0x67, 0x10, 0x5b, 0x67, 0x56, 0x45, 0x75, 0xa5, 0xf8, 0x08,
+	0x83, 0xcb, 0x13, 0xd1, 0xb5, 0xce, 0x2c, 0xaa, 0x2b, 0xc5, 0x3e, 0xc3, 0x10, 0xaf, 0xbb, 0xb2,
+	0x2e, 0x75, 0xd2, 0xaf, 0xf9, 0x7f, 0xd2, 0x9a, 0xf5, 0xcf, 0x5f, 0xcf, 0xb1, 0x67, 0xf3, 0x43,
+	0xbf, 0xe6, 0x22, 0xad, 0x6e, 0x96, 0xb8, 0x88, 0x24, 0xee, 0xbd, 0x3c, 0x11, 0x89, 0x39, 0xb8,
+	0x04, 0xbb, 0x80, 0x84, 0x6e, 0x64, 0x9b, 0xcc, 0xa3, 0x18, 0xa1, 0x5e, 0x3d, 0x42, 0x7d, 0x55,
+	0x6a, 0xb7, 0x6c, 0xb2, 0x3f, 0x41, 0x7d, 0xed, 0x3d, 0x94, 0xe3, 0xef, 0xc0, 0xfe, 0xfe, 0x1a,
+	0x36, 0xb0, 0xa8, 0xac, 0x4b, 0xab, 0x4c, 0xee, 0xc7, 0xe6, 0xa8, 0x19, 0x87, 0xae, 0x34, 0x46,
+	0x19, 0x99, 0xd3, 0x00, 0xc5, 0xe2, 0x20, 0xd9, 0x53, 0x08, 0xa9, 0xdc, 0x0f, 0x90, 0x17, 0xe3,
+	0x4f, 0x30, 0x7a, 0x7c, 0x08, 0xf6, 0x02, 0x62, 0x3c, 0xb7, 0x91, 0xda, 0xf2, 0xd6, 0xa4, 0x33,
+	0x4b, 0x44, 0xd7, 0x36, 0x99, 0x90, 0xda, 0x22, 0xbe, 0x91, 0xc6, 0x16, 0xaa, 0x22, 0x7c, 0x20,
+	0x0e, 0xf2, 0xfd, 0x10, 0x12, 0xf9, 0xc3, 0xc9, 0x2a, 0x97, 0x39, 0xdd, 0x78, 0xba, 0x84, 0xe1,
+	0x87, 0x5d, 0x6d, 0x9d, 0x34, 0x44, 0x16, 0xf2, 0xd6, 0x4f, 0xe5, 0x6d, 0x2d, 0x0f, 0x07, 0x0f,
+	0xc4, 0x51, 0xb3, 0x37, 0x10, 0xd2, 0x3b, 0x21, 0x6e, 0xff, 0x7c, 0xf0, 0xf0, 0x4f, 0x09, 0x1f,
+	0x4e, 0x3f, 0xc2, 0xe8, 0x21, 0xd4, 0xea, 0x7f, 0x52, 0x9f, 0x41, 0x84, 0xfd, 0xac, 0x2d, 0x61,
+	0x43, 0xb1, 0x57, 0xeb, 0x88, 0x5e, 0xe3, 0xdb, 0x5f, 0x01, 0x00, 0x00, 0xff, 0xff, 0xbe, 0x9d,
+	0x87, 0x86, 0x9c, 0x03, 0x00, 0x00,
 }

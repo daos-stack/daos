@@ -51,7 +51,7 @@ func (tly *tally) OnEvent(_ context.Context, evt *RASEvent) {
 	tly.Lock()
 	defer tly.Unlock()
 
-	tly.rx = append(tly.rx, evt.GetType().String())
+	tly.rx = append(tly.rx, evt.Type.String())
 	if len(tly.rx) == tly.expectedRx {
 		close(tly.finished)
 	}
@@ -155,7 +155,7 @@ func TestEvents_PubSub_DisableEvent(t *testing.T) {
 
 	ps.Subscribe(RASTypeStateChange, tly1)
 
-	ps.DisableEventIDs(evt1.GetID())
+	ps.DisableEventIDs(evt1.ID)
 
 	ps.Publish(evt1)
 	ps.Publish(evt1)
@@ -163,7 +163,7 @@ func TestEvents_PubSub_DisableEvent(t *testing.T) {
 	<-ctx.Done()
 	common.AssertEqual(t, 0, len(tly1.getRx()), "unexpected number of received events")
 
-	ps.EnableEventIDs(evt1.GetID())
+	ps.EnableEventIDs(evt1.ID)
 
 	ps.Publish(evt1)
 	ps.Publish(evt1)

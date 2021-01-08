@@ -450,7 +450,7 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int) (*RankSet, *hostlist.
 // OnEvent handles events on channel and updates member states accordingly.
 func (m *Membership) OnEvent(_ context.Context, evt *events.RASEvent) {
 	switch evt.ID {
-	case events.RASRankExit:
+	case events.RASRankDown:
 		ei := evt.GetRankStateInfo()
 		if ei == nil {
 			m.log.Error("no extended info in RankExit event received")

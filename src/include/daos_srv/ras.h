@@ -31,19 +31,67 @@
 #define DAOS_RAS_STR_FIELD_SIZE 128
 #define DAOS_RAS_ID_FIELD_SIZE 64
 
-#define RAS_RANK_EXIT "rank_exit"
-#define RAS_RANK_NO_RESP "rank_no_response"
-#define RAS_POOL_SVC_REPS_UPDATE "pool_svc_replicas_update"
+/**
+ * For each RAS event, define the following:
+ * - Enum symbol to use in the code to identify the RAS event
+ *   No external visibility.
+ * - 64-char string identifier raised as part of the event
+ *   The identifier just be prefixed by component_
+ *   Carried over with the RAS event.
+ */
+#define RAS_EVENT_LIST						\
+	X(RAS_RANK_UP,		"engine_status_up")		\
+	X(RAS_RANK_DOWN,	"engine_status_down")		\
+	X(RAS_RANK_NO_RESPONSE,	"engine_status_no_response")	\
+	X(RAS_POOL_REPS_UPDATE,	"pool_replicas_updated")
 
-enum ras_event_sev {
+
+/** Define RAS event enum */
+typedef enum {
+#define X(a,b) a,
+	RAS_EVENT_LIST
+#undef X
+} ras_event_t;
+
+/** Extract RAS event ID (= 64-char string) from enum */
+static inline char *
+ras_event2str(ras_event_t ras) {
+#define X(a,b) case a: return b;
+	switch (ras) {
+		RAS_EVENT_LIST
+	};
+	return "unknown_unknown";
+#undef X
+}
+
+typedef enum {
+	/* ANY is a special case to match all types */
+	RAS_TYPE_ANY	= 0,
+	RAS_TYPE_STATE_CHANGE,
+	RAS_TYPE_INFO,
+} ras_type_t;
+
+static inline char *
+ras_type2str(ras_type_t type)
+{
+	switch (type) {
+	case RAS_TYPE_STATE_CHANGE:
+		return "STATE_CHANGE";
+	case RAS_TYPE_INFO:
+	default:
+		return "INFO";
+	}
+}
+
+typedef enum {
 	RAS_SEV_FATAL	= 1,
 	RAS_SEV_WARN,
 	RAS_SEV_ERROR,
 	RAS_SEV_INFO,
-};
+} ras_sev_t;
 
 static inline char *
-ras_event_sev2str(enum ras_event_sev severity)
+ras_sev2str(ras_sev_t severity)
 {
 	switch (severity) {
 	case RAS_SEV_FATAL:
@@ -58,22 +106,4 @@ ras_event_sev2str(enum ras_event_sev severity)
 	}
 }
 
-enum ras_event_type {
-	/* ANY is a special case to match all types */
-	RAS_TYPE_ANY	= 0,
-	RAS_TYPE_STATE_CHANGE,
-	RAS_TYPE_INFO,
-};
-
-static inline char *
-ras_event_type2str(enum ras_event_type type)
-{
-	switch (type) {
-	case RAS_TYPE_STATE_CHANGE:
-		return "STATE_CHANGE";
-	case RAS_TYPE_INFO:
-	default:
-		return "INFO";
-	}
-}
 #endif /* __DAOS_RAS_H_ */

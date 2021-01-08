@@ -257,7 +257,7 @@ verify_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc_reps)
 	req = mgmt__cluster_event_req__unpack(NULL, call->body.len,
 					      call->body.data);
 	assert_non_null(req);
-	assert_int_equal(uuid_parse(req->event->puuid, puuid), 0);
+	assert_int_equal(uuid_parse(req->event->pool_uuid, puuid), 0);
 	assert_int_equal(uuid_compare(puuid, pool_uuid), 0);
 	assert_int_equal(req->event->pool_svc_info->n_svc_reps,
 			 svc_reps->rl_nr);
@@ -283,15 +283,6 @@ test_drpc_verify_notify_pool_svc_update(void **state)
 
 	assert_int_equal(drpc_init(), 0);
 
-	/* drpc connection created */
-	assert_int_equal(connect_sockfd, socket_return);
-
-	/* socket was left open */
-	assert_int_equal(close_call_count, 0);
-
-	/* Message was sent */
-	assert_non_null(sendmsg_msg_ptr);
-
 	assert_int_equal(uuid_parse("11111111-1111-1111-1111-111111111111",
 				    pool_uuid), 0);
 
@@ -301,19 +292,14 @@ test_drpc_verify_notify_pool_svc_update(void **state)
 	assert_int_equal(ds_notify_pool_svc_update(pool_uuid, svc_ranks), 0);
 	verify_notify_pool_svc_update(pool_uuid, svc_ranks);
 
-	/* Now let's shut things down... */
 	drpc_fini();
-
-	/* socket was closed */
-	assert_int_equal(close_call_count, 1);
 }
 
 static void
-verify_notify_ras_event(char *id, enum ras_event_type type,
-			enum ras_event_sev sev,
+verify_notify_ras_event(ras_event_t id, ras_type_t type, ras_sev_t sev,
 			char *hid, d_rank_t *rank, char *jid, uuid_t *puuid,
-			uuid_t *cuuid, daos_obj_id_t *oid, char *cop, char *msg,
-			char *data)
+			uuid_t *cuuid, daos_obj_id_t *oid, char *cop,
+			char *msg, char *data)
 {
 	Drpc__Call		*call;
 	Mgmt__ClusterEventReq	*req;
@@ -329,9 +315,9 @@ verify_notify_ras_event(char *id, enum ras_event_type type,
 	req = mgmt__cluster_event_req__unpack(NULL, call->body.len,
 					      call->body.data);
 	assert_non_null(req);
-	assert_int_equal(uuid_parse(req->event->puuid, req_puuid), 0);
+	assert_int_equal(uuid_parse(req->event->pool_uuid, req_puuid), 0);
 	assert_int_equal(uuid_compare(req_puuid, *puuid), 0);
-	assert_int_equal(uuid_parse(req->event->cuuid, req_cuuid), 0);
+	assert_int_equal(uuid_parse(req->event->cont_uuid, req_cuuid), 0);
 	assert_int_equal(uuid_compare(req_cuuid, *cuuid), 0);
 
 	/* Cleanup */
@@ -350,38 +336,25 @@ test_drpc_verify_notify_ras_event(void **state)
 
 	assert_int_equal(drpc_init(), 0);
 
-	/* drpc connection created */
-	assert_int_equal(connect_sockfd, socket_return);
-
-	/* socket was left open */
-	assert_int_equal(close_call_count, 0);
-
-	/* Message was sent */
-	assert_non_null(sendmsg_msg_ptr);
-
 	assert_int_equal(uuid_parse("11111111-1111-1111-1111-111111111111",
 				    puuid), 0);
 	assert_int_equal(uuid_parse("22222222-2222-2222-2222-222222222222",
 				    cuuid), 0);
 
-	ds_notify_ras_event(RAS_RANK_NO_RESP, RAS_TYPE_INFO, RAS_SEV_WARN,
+	ds_notify_ras_event(RAS_RANK_NO_RESPONSE, RAS_TYPE_INFO, RAS_SEV_WARN,
 			    "exhwid", &rank, "exjobid", &puuid, &cuuid, &oid,
 			    "exctlop", "Example message for no response",
 			    "{\"people\":[\"bill\",\"steve\",\"bob\"]}");
-	verify_notify_ras_event(RAS_RANK_NO_RESP, RAS_TYPE_INFO, RAS_SEV_WARN,
-				"exhwid", &rank, "exjobid", &puuid, &cuuid,
-				&oid, "exctlop",
+	verify_notify_ras_event(RAS_RANK_NO_RESPONSE, RAS_TYPE_INFO,
+				RAS_SEV_WARN, "exhwid", &rank, "exjobid",
+				&puuid, &cuuid, &oid, "exctlop",
 				"Example message for no response",
 				"{\"people\":[\"bill\",\"steve\",\"bob\"]}");
 
-	/* Now let's shut things down... */
 	drpc_fini();
-
-	/* socket was closed */
-	assert_int_equal(close_call_count, 1);
 }
 
-/* TODO
+/* TODO DAOS-6436:
  * static void
  * test_drpc_verify_notify_ras_min_viable(void **state)
  * static void

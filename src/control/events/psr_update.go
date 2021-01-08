@@ -57,7 +57,9 @@ func PoolSvcInfoFromProto(pbInfo *mgmtpb.RASEvent_PoolSvcInfo) (*PoolSvcInfo, er
 
 // PoolSvcInfoToProto converts event info from native to proto format.
 func PoolSvcInfoToProto(psi *PoolSvcInfo) (*mgmtpb.RASEvent_PoolSvcInfo, error) {
-	pbInfo := &mgmtpb.RASEvent_PoolSvcInfo{PoolSvcInfo: &mgmtpb.PoolSvcEventInfo{}}
+	pbInfo := &mgmtpb.RASEvent_PoolSvcInfo{
+		PoolSvcInfo: &mgmtpb.RASEvent_PoolSvcEventInfo{},
+	}
 
 	return pbInfo, convert.Types(psi, pbInfo.PoolSvcInfo)
 }
@@ -67,10 +69,10 @@ func NewPoolSvcReplicasUpdateEvent(hostname string, rank uint32, poolUUID string
 	return &RASEvent{
 		Timestamp: common.FormatTime(time.Now()),
 		Msg:       "DAOS pool service replica rank list updated",
-		ID:        RASPoolSvcReplicasUpdate,
+		ID:        RASPoolRepsUpdate,
 		Hostname:  hostname,
 		Rank:      rank,
-		PUUID:     poolUUID,
+		PoolUUID:  poolUUID,
 		Type:      RASTypeStateChange,
 		Severity:  RASSeverityError,
 		ExtendedInfo: &PoolSvcInfo{

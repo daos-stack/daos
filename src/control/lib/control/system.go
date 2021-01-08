@@ -244,7 +244,7 @@ func (fwdr *EventForwarder) OnEvent(ctx context.Context, evt *events.RASEvent) {
 		return
 	}
 	fwdr.seq++
-	fwdr.client.Debugf("forwarding %s event to MS (seq: %d)", evt.GetID(), fwdr.seq)
+	fwdr.client.Debugf("forwarding %s event to MS (seq: %d)", evt.ID, fwdr.seq)
 
 	req := &SystemNotifyReq{
 		Sequence: fwdr.seq,

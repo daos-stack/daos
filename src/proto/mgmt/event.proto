@@ -28,40 +28,38 @@
 syntax = "proto3";
 package mgmt;
 
-// RankStateEventInfo defines extended fields for rank state change related events.
-message RankStateEventInfo {
-	uint32 instance = 1;	// Control-plane harness instance index.
-	bool errored = 2;	// Rank in error state.
-	string error = 3;	// Message associated with error.
-}
-
-// PoolSvcEventInfo defines extended fields for pool service change events.
-message PoolSvcEventInfo {
-	repeated uint32 svc_reps = 1;	// Pool service replica ranks.
-	uint64 version = 2;		// Raft leadership term.
-}
-
 // RASEvent describes a RAS event in the DAOS system.
 message RASEvent {
-	string id = 2;		// Unique event identifier, 64-char.
+	uint32 id = 1;		// Unique event identifier, 64-char.
+	string msg = 2;		// Human readable message describing event.
 	string timestamp = 3;	// Fully qualified timestamp (us) incl timezone.
 	uint32 type = 4;	// Event type.
 	uint32 severity = 5;	// Event severity.
-	string msg = 6;		// Human readable message describing event.
-	string hostname = 7;	// (optional) Hostname of node involved in event.
-	uint32 rank = 8;	// (optional) DAOS rank involved in event.
-	string hid = 9;		// (optional) Hardware component involved in event.
-	string pid = 10;	// (optional) Process involved in event.
-	string tid = 11;	// (optional) Thread involved in event.
-	string jid = 12;	// (optional) Job involved in event.
-	string puuid = 13;	// (optional) Pool UUID involved in event.
-	string cuuid = 14;	// (optional) Container UUID involved in event.
-	string oid = 15;	// (optional) Object involved in event.
-	string cop = 16;	// (optional) Recommended automatic action.
+	string hostname = 6;	// (optional) Hostname of node involved in event.
+	uint32 rank = 7;	// (optional) DAOS rank involved in event.
+	string hw_id = 8;	// (optional) Hardware component involved in event.
+	string proc_id = 9;	// (optional) Process involved in event.
+	string thread_id = 10;	// (optional) Thread involved in event.
+	string job_id = 11;	// (optional) Job involved in event.
+	string pool_uuid = 12;	// (optional) Pool UUID involved in event.
+	string cont_uuid = 13;	// (optional) Container UUID involved in event.
+	string obj_id = 14;	// (optional) Object involved in event.
+	string ctl_op = 15;	// (optional) Recommended automatic action.
+	// RankStateEventInfo defines extended fields for rank state change events.
+	message RankStateEventInfo {
+		uint32 instance = 1;	// Control-plane harness instance index.
+		bool errored = 2;	// Rank in error state.
+		string error = 3;	// Message associated with error.
+	}
+	// PoolSvcEventInfo defines extended fields for pool service change events.
+	message PoolSvcEventInfo {
+		repeated uint32 svc_reps = 1;	// Pool service replica ranks.
+		uint64 version = 2;		// Raft leadership term.
+	}
 	oneof extended_info {	// Data specific to a given event ID.
-		string str_info = 17;	// Opaque data blob.
-		RankStateEventInfo rank_state_info = 18;
-		PoolSvcEventInfo pool_svc_info = 19;
+		string str_info = 16;	// Opaque data blob.
+		RankStateEventInfo rank_state_info = 17;
+		PoolSvcEventInfo pool_svc_info = 18;
 	}
 }
 

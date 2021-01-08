@@ -102,12 +102,12 @@ func (ps *PubSub) Publish(event *RASEvent) {
 		return
 	}
 
-	if _, exists := ps.disabledIDs[event.GetID()]; exists {
-		ps.log.Debugf("event %s ignored by filter", event.GetID())
+	if _, exists := ps.disabledIDs[event.ID]; exists {
+		ps.log.Debugf("event %s ignored by filter", event.ID)
 		return
 	}
 
-	ps.log.Debugf("publishing @%s: %s", event.GetType(), event.GetID())
+	ps.log.Debugf("publishing @%s: %s", event.Type, event.ID)
 
 	ps.events <- event
 }
@@ -141,7 +141,7 @@ func (ps *PubSub) eventLoop(ctx context.Context) {
 			for _, hdlr := range ps.handlers[RASTypeAny] {
 				go hdlr.OnEvent(ctx, event)
 			}
-			for _, hdlr := range ps.handlers[event.GetType()] {
+			for _, hdlr := range ps.handlers[event.Type] {
 				go hdlr.OnEvent(ctx, event)
 			}
 		}

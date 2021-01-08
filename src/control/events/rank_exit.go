@@ -62,7 +62,7 @@ func RankStateInfoFromProto(pbInfo *mgmtpb.RASEvent_RankStateInfo) (*RankStateIn
 // RankStateInfoToProto converts event info from native to proto format.
 func RankStateInfoToProto(rsi *RankStateInfo) (*mgmtpb.RASEvent_RankStateInfo, error) {
 	pbInfo := &mgmtpb.RASEvent_RankStateInfo{
-		RankStateInfo: &mgmtpb.RankStateEventInfo{
+		RankStateInfo: &mgmtpb.RASEvent_RankStateEventInfo{
 			Instance: rsi.InstanceIdx,
 		},
 	}
@@ -79,7 +79,7 @@ func NewRankExitEvent(hostname string, instanceIdx uint32, rank uint32, exitErr 
 	return &RASEvent{
 		Timestamp: common.FormatTime(time.Now()),
 		Msg:       "DAOS rank exited unexpectedly",
-		ID:        RASRankExit,
+		ID:        RASRankDown,
 		Hostname:  hostname,
 		Rank:      rank,
 		Type:      RASTypeStateChange,

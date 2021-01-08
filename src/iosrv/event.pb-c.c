@@ -7,95 +7,17 @@
 #endif
 
 #include "event.pb-c.h"
-void   mgmt__rank_state_event_info__init
-                     (Mgmt__RankStateEventInfo         *message)
+void   mgmt__rasevent__rank_state_event_info__init
+                     (Mgmt__RASEvent__RankStateEventInfo         *message)
 {
-  static const Mgmt__RankStateEventInfo init_value = MGMT__RANK_STATE_EVENT_INFO__INIT;
+  static const Mgmt__RASEvent__RankStateEventInfo init_value = MGMT__RASEVENT__RANK_STATE_EVENT_INFO__INIT;
   *message = init_value;
 }
-size_t mgmt__rank_state_event_info__get_packed_size
-                     (const Mgmt__RankStateEventInfo *message)
+void   mgmt__rasevent__pool_svc_event_info__init
+                     (Mgmt__RASEvent__PoolSvcEventInfo         *message)
 {
-  assert(message->base.descriptor == &mgmt__rank_state_event_info__descriptor);
-  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
-}
-size_t mgmt__rank_state_event_info__pack
-                     (const Mgmt__RankStateEventInfo *message,
-                      uint8_t       *out)
-{
-  assert(message->base.descriptor == &mgmt__rank_state_event_info__descriptor);
-  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
-}
-size_t mgmt__rank_state_event_info__pack_to_buffer
-                     (const Mgmt__RankStateEventInfo *message,
-                      ProtobufCBuffer *buffer)
-{
-  assert(message->base.descriptor == &mgmt__rank_state_event_info__descriptor);
-  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
-}
-Mgmt__RankStateEventInfo *
-       mgmt__rank_state_event_info__unpack
-                     (ProtobufCAllocator  *allocator,
-                      size_t               len,
-                      const uint8_t       *data)
-{
-  return (Mgmt__RankStateEventInfo *)
-     protobuf_c_message_unpack (&mgmt__rank_state_event_info__descriptor,
-                                allocator, len, data);
-}
-void   mgmt__rank_state_event_info__free_unpacked
-                     (Mgmt__RankStateEventInfo *message,
-                      ProtobufCAllocator *allocator)
-{
-  if(!message)
-    return;
-  assert(message->base.descriptor == &mgmt__rank_state_event_info__descriptor);
-  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
-}
-void   mgmt__pool_svc_event_info__init
-                     (Mgmt__PoolSvcEventInfo         *message)
-{
-  static const Mgmt__PoolSvcEventInfo init_value = MGMT__POOL_SVC_EVENT_INFO__INIT;
+  static const Mgmt__RASEvent__PoolSvcEventInfo init_value = MGMT__RASEVENT__POOL_SVC_EVENT_INFO__INIT;
   *message = init_value;
-}
-size_t mgmt__pool_svc_event_info__get_packed_size
-                     (const Mgmt__PoolSvcEventInfo *message)
-{
-  assert(message->base.descriptor == &mgmt__pool_svc_event_info__descriptor);
-  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
-}
-size_t mgmt__pool_svc_event_info__pack
-                     (const Mgmt__PoolSvcEventInfo *message,
-                      uint8_t       *out)
-{
-  assert(message->base.descriptor == &mgmt__pool_svc_event_info__descriptor);
-  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
-}
-size_t mgmt__pool_svc_event_info__pack_to_buffer
-                     (const Mgmt__PoolSvcEventInfo *message,
-                      ProtobufCBuffer *buffer)
-{
-  assert(message->base.descriptor == &mgmt__pool_svc_event_info__descriptor);
-  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
-}
-Mgmt__PoolSvcEventInfo *
-       mgmt__pool_svc_event_info__unpack
-                     (ProtobufCAllocator  *allocator,
-                      size_t               len,
-                      const uint8_t       *data)
-{
-  return (Mgmt__PoolSvcEventInfo *)
-     protobuf_c_message_unpack (&mgmt__pool_svc_event_info__descriptor,
-                                allocator, len, data);
-}
-void   mgmt__pool_svc_event_info__free_unpacked
-                     (Mgmt__PoolSvcEventInfo *message,
-                      ProtobufCAllocator *allocator)
-{
-  if(!message)
-    return;
-  assert(message->base.descriptor == &mgmt__pool_svc_event_info__descriptor);
-  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
 void   mgmt__rasevent__init
                      (Mgmt__RASEvent         *message)
@@ -232,7 +154,7 @@ void   mgmt__cluster_event_resp__free_unpacked
   assert(message->base.descriptor == &mgmt__cluster_event_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor mgmt__rank_state_event_info__field_descriptors[3] =
+static const ProtobufCFieldDescriptor mgmt__rasevent__rank_state_event_info__field_descriptors[3] =
 {
   {
     "instance",
@@ -240,7 +162,7 @@ static const ProtobufCFieldDescriptor mgmt__rank_state_event_info__field_descrip
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RankStateEventInfo, instance),
+    offsetof(Mgmt__RASEvent__RankStateEventInfo, instance),
     NULL,
     NULL,
     0,             /* flags */
@@ -252,7 +174,7 @@ static const ProtobufCFieldDescriptor mgmt__rank_state_event_info__field_descrip
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_BOOL,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RankStateEventInfo, errored),
+    offsetof(Mgmt__RASEvent__RankStateEventInfo, errored),
     NULL,
     NULL,
     0,             /* flags */
@@ -264,47 +186,47 @@ static const ProtobufCFieldDescriptor mgmt__rank_state_event_info__field_descrip
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RankStateEventInfo, error),
+    offsetof(Mgmt__RASEvent__RankStateEventInfo, error),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
-static const unsigned mgmt__rank_state_event_info__field_indices_by_name[] = {
+static const unsigned mgmt__rasevent__rank_state_event_info__field_indices_by_name[] = {
   2,   /* field[2] = error */
   1,   /* field[1] = errored */
   0,   /* field[0] = instance */
 };
-static const ProtobufCIntRange mgmt__rank_state_event_info__number_ranges[1 + 1] =
+static const ProtobufCIntRange mgmt__rasevent__rank_state_event_info__number_ranges[1 + 1] =
 {
   { 1, 0 },
   { 0, 3 }
 };
-const ProtobufCMessageDescriptor mgmt__rank_state_event_info__descriptor =
+const ProtobufCMessageDescriptor mgmt__rasevent__rank_state_event_info__descriptor =
 {
   PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "mgmt.RankStateEventInfo",
+  "mgmt.RASEvent.RankStateEventInfo",
   "RankStateEventInfo",
-  "Mgmt__RankStateEventInfo",
+  "Mgmt__RASEvent__RankStateEventInfo",
   "mgmt",
-  sizeof(Mgmt__RankStateEventInfo),
+  sizeof(Mgmt__RASEvent__RankStateEventInfo),
   3,
-  mgmt__rank_state_event_info__field_descriptors,
-  mgmt__rank_state_event_info__field_indices_by_name,
-  1,  mgmt__rank_state_event_info__number_ranges,
-  (ProtobufCMessageInit) mgmt__rank_state_event_info__init,
+  mgmt__rasevent__rank_state_event_info__field_descriptors,
+  mgmt__rasevent__rank_state_event_info__field_indices_by_name,
+  1,  mgmt__rasevent__rank_state_event_info__number_ranges,
+  (ProtobufCMessageInit) mgmt__rasevent__rank_state_event_info__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_svc_event_info__field_descriptors[2] =
+static const ProtobufCFieldDescriptor mgmt__rasevent__pool_svc_event_info__field_descriptors[2] =
 {
   {
     "svc_reps",
     1,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_UINT32,
-    offsetof(Mgmt__PoolSvcEventInfo, n_svc_reps),
-    offsetof(Mgmt__PoolSvcEventInfo, svc_reps),
+    offsetof(Mgmt__RASEvent__PoolSvcEventInfo, n_svc_reps),
+    offsetof(Mgmt__RASEvent__PoolSvcEventInfo, svc_reps),
     NULL,
     NULL,
     0,             /* flags */
@@ -316,46 +238,58 @@ static const ProtobufCFieldDescriptor mgmt__pool_svc_event_info__field_descripto
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolSvcEventInfo, version),
+    offsetof(Mgmt__RASEvent__PoolSvcEventInfo, version),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
-static const unsigned mgmt__pool_svc_event_info__field_indices_by_name[] = {
+static const unsigned mgmt__rasevent__pool_svc_event_info__field_indices_by_name[] = {
   0,   /* field[0] = svc_reps */
   1,   /* field[1] = version */
 };
-static const ProtobufCIntRange mgmt__pool_svc_event_info__number_ranges[1 + 1] =
+static const ProtobufCIntRange mgmt__rasevent__pool_svc_event_info__number_ranges[1 + 1] =
 {
   { 1, 0 },
   { 0, 2 }
 };
-const ProtobufCMessageDescriptor mgmt__pool_svc_event_info__descriptor =
+const ProtobufCMessageDescriptor mgmt__rasevent__pool_svc_event_info__descriptor =
 {
   PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "mgmt.PoolSvcEventInfo",
+  "mgmt.RASEvent.PoolSvcEventInfo",
   "PoolSvcEventInfo",
-  "Mgmt__PoolSvcEventInfo",
+  "Mgmt__RASEvent__PoolSvcEventInfo",
   "mgmt",
-  sizeof(Mgmt__PoolSvcEventInfo),
+  sizeof(Mgmt__RASEvent__PoolSvcEventInfo),
   2,
-  mgmt__pool_svc_event_info__field_descriptors,
-  mgmt__pool_svc_event_info__field_indices_by_name,
-  1,  mgmt__pool_svc_event_info__number_ranges,
-  (ProtobufCMessageInit) mgmt__pool_svc_event_info__init,
+  mgmt__rasevent__pool_svc_event_info__field_descriptors,
+  mgmt__rasevent__pool_svc_event_info__field_indices_by_name,
+  1,  mgmt__rasevent__pool_svc_event_info__number_ranges,
+  (ProtobufCMessageInit) mgmt__rasevent__pool_svc_event_info__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
 {
   {
     "id",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__RASEvent, id),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "msg",
     2,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, id),
+    offsetof(Mgmt__RASEvent, msg),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -398,20 +332,8 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "msg",
-    6,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, msg),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
     "hostname",
-    7,
+    6,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
@@ -423,7 +345,7 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
   },
   {
     "rank",
-    8,
+    7,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
@@ -434,96 +356,96 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "hid",
+    "hw_id",
+    8,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__RASEvent, hw_id),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "proc_id",
     9,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, hid),
+    offsetof(Mgmt__RASEvent, proc_id),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "pid",
+    "thread_id",
     10,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, pid),
+    offsetof(Mgmt__RASEvent, thread_id),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "tid",
+    "job_id",
     11,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, tid),
+    offsetof(Mgmt__RASEvent, job_id),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "jid",
+    "pool_uuid",
     12,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, jid),
+    offsetof(Mgmt__RASEvent, pool_uuid),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "puuid",
+    "cont_uuid",
     13,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, puuid),
+    offsetof(Mgmt__RASEvent, cont_uuid),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "cuuid",
+    "obj_id",
     14,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, cuuid),
+    offsetof(Mgmt__RASEvent, obj_id),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "oid",
+    "ctl_op",
     15,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, oid),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "cop",
-    16,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, cop),
+    offsetof(Mgmt__RASEvent, ctl_op),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -531,7 +453,7 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
   },
   {
     "str_info",
-    17,
+    16,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     offsetof(Mgmt__RASEvent, extended_info_case),
@@ -543,52 +465,52 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
   },
   {
     "rank_state_info",
-    18,
+    17,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_MESSAGE,
     offsetof(Mgmt__RASEvent, extended_info_case),
     offsetof(Mgmt__RASEvent, rank_state_info),
-    &mgmt__rank_state_event_info__descriptor,
+    &mgmt__rasevent__rank_state_event_info__descriptor,
     NULL,
     0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
     "pool_svc_info",
-    19,
+    18,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_MESSAGE,
     offsetof(Mgmt__RASEvent, extended_info_case),
     offsetof(Mgmt__RASEvent, pool_svc_info),
-    &mgmt__pool_svc_event_info__descriptor,
+    &mgmt__rasevent__pool_svc_event_info__descriptor,
     NULL,
     0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
 static const unsigned mgmt__rasevent__field_indices_by_name[] = {
-  14,   /* field[14] = cop */
-  12,   /* field[12] = cuuid */
-  7,   /* field[7] = hid */
+  12,   /* field[12] = cont_uuid */
+  14,   /* field[14] = ctl_op */
   5,   /* field[5] = hostname */
+  7,   /* field[7] = hw_id */
   0,   /* field[0] = id */
-  10,   /* field[10] = jid */
-  4,   /* field[4] = msg */
-  13,   /* field[13] = oid */
-  8,   /* field[8] = pid */
+  10,   /* field[10] = job_id */
+  1,   /* field[1] = msg */
+  13,   /* field[13] = obj_id */
   17,   /* field[17] = pool_svc_info */
-  11,   /* field[11] = puuid */
+  11,   /* field[11] = pool_uuid */
+  8,   /* field[8] = proc_id */
   6,   /* field[6] = rank */
   16,   /* field[16] = rank_state_info */
-  3,   /* field[3] = severity */
+  4,   /* field[4] = severity */
   15,   /* field[15] = str_info */
-  9,   /* field[9] = tid */
-  1,   /* field[1] = timestamp */
-  2,   /* field[2] = type */
+  9,   /* field[9] = thread_id */
+  2,   /* field[2] = timestamp */
+  3,   /* field[3] = type */
 };
 static const ProtobufCIntRange mgmt__rasevent__number_ranges[1 + 1] =
 {
-  { 2, 0 },
+  { 1, 0 },
   { 0, 18 }
 };
 const ProtobufCMessageDescriptor mgmt__rasevent__descriptor =
