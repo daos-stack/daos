@@ -890,31 +890,8 @@ def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False):
     vh.convert_xml()
     return rc
 
-def get_conts(conf, pool, posix=True):
-    """Return a list of all container"""
-
-    cmd = ['pool', 'list-containers', '--pool', pool]
-    rc = run_daos_cmd(conf, cmd)
-    print('rc is {}'.format(rc))
-    if rc.returncode != 0:
-        return []
-
-    containers = rc.stdout.decode('utf-8').splitlines()
-
-    matched = []
-    for container in sorted(containers):
-        cmd = ['container', 'get-prop', '--pool', pool, '--cont', container]
-        rc = run_daos_cmd(conf, cmd)
-        for line in rc.stdout.decode('utf-8').splitlines():
-            (key, value) = line.split(':', maxsplit=1)
-            if key == 'layout type':
-                if not posix or value.strip() == 'POSIX (1)':
-                    matched.append(container)
-                    return matched
-    return matched
-
 def create_cont(conf, pool, posix=False):
-    """Create a container and return a container list"""
+    """Create a container and return the uuid"""
     if posix:
         cmd = ['container', 'create', '--pool', pool, '--type', 'POSIX']
     else:
@@ -922,16 +899,7 @@ def create_cont(conf, pool, posix=False):
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
     assert rc.returncode == 0
-    new_container = rc.stdout.decode().split(' ')[-1].rstrip()
-
-    cmd = ['pool', 'list-containers', '--pool', pool]
-    rc = run_daos_cmd(conf, cmd)
-    print('rc is {}'.format(rc))
-    assert rc.returncode == 0
-    containers = rc.stdout.decode().split()
-    containers.remove(new_container)
-    containers.insert(0, new_container)
-    return containers
+    return rc.stdout.decode().split(' ')[-1].rstrip()
 
 def destroy_container(conf, pool, container):
     """Destroy a container"""
@@ -1049,7 +1017,7 @@ def run_posix_tests(server, conf, test=None):
     while len(pools) < 1:
         pools = make_pool(server)
     pool = pools[0]
-    container = create_cont(conf, pool, posix=True)[0]
+    container = create_cont(conf, pool, posix=True)
 
     pt = posix_tests(server, conf, pool=pool, container=container)
     if test:
@@ -1528,7 +1496,7 @@ def test_pydaos_kv(server, conf):
 
     pool = pools[0]
 
-    c_uuid = create_cont(conf, pool)[0]
+    c_uuid = create_cont(conf, pool)
 
     container = daos.Cont(pool, c_uuid)
 
