@@ -69,12 +69,12 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 		},
 		"wrong system": {
 			req: &mgmtpb.LeaderQueryReq{
-				System: "quack",
+				Sys: "quack",
 			},
-			expErr: errors.New("wrong system"),
+			expErr: FaultWrongSystem("quack", build.DefaultSystemName),
 		},
 		"successful query": {
-			req: &mgmtpb.LeaderQueryReq{System: build.DefaultSystemName},
+			req: &mgmtpb.LeaderQueryReq{Sys: build.DefaultSystemName},
 			expResp: &mgmtpb.LeaderQueryResp{
 				CurrentLeader: localhost.String(),
 				Replicas:      []string{localhost.String()},

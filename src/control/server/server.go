@@ -253,6 +253,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	// Create a closure to be used for joining ioserver instances.
 	joinInstance := func(ctx context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
 		req.SetHostList(cfg.AccessPoints)
+		req.SetSystem(cfg.SystemName)
 		req.ControlAddr = controlAddr
 		return control.SystemJoin(ctx, rpcClient, req)
 	}
