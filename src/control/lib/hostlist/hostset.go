@@ -89,6 +89,13 @@ func (hs *HostSet) DerangedString() string {
 	return hs.list.DerangedString()
 }
 
+// Slice returns a string slice containing the hostnames of
+// every host in the HostSet.
+func (hs *HostSet) Slice() []string {
+	hs.initList()
+	return hs.list.Slice()
+}
+
 // Insert adds a host or list of hosts to the HostSet.
 // Returns the number of non-duplicate hosts successfully added.
 func (hs *HostSet) Insert(stringHosts string) (int, error) {

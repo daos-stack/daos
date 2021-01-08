@@ -40,6 +40,14 @@ class Permission(TestWithServers):
     :avocado: recursive
     """
 
+    # Cancel any tests with tickets already assigned
+    CANCEL_FOR_TICKET = [
+        ["DAOS-3442", "mode", 73],
+        ["DAOS-3442", "mode", 146, "perm", 0],
+        ["DAOS-3442", "mode", 146, "perm", 2],
+        ["DAOS-3442", "mode", 292],
+    ]
+
     def test_connectpermission(self):
         """Test ID: DAOS-???.
 
@@ -53,11 +61,6 @@ class Permission(TestWithServers):
 
         # parameter used for pool connect
         permissions = self.params.get("perm", '/run/createtests/permissions/*')
-
-        if createmode == 73 or \
-           (createmode == 146 and permissions != 1) or \
-           (createmode == 292 and permissions != 3):
-            self.cancelForTicket("DAOS-3442")
 
         if createmode == 73:
             expected_result = RESULT_FAIL
