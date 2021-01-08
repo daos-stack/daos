@@ -9,6 +9,10 @@
  */
 
 #define D_LOGFAC	DD_FAC(client)
+#define ENUM_KEY_BUF		128 /* size of each dkey/akey */
+#define ENUM_LARGE_KEY_BUF	(512 * 1024) /* 512k large key */
+#define ENUM_DESC_NR		5 /* number of keys/records returned by enum */
+#define ENUM_DESC_BUF		512 /* all keys/records returned by enum */
 
 #include <stdio.h>
 #include <dirent.h>
@@ -23,6 +27,7 @@
 #include <daos/rpc.h>
 #include <daos/debug.h>
 #include <daos/object.h>
+#include <hdf5.h>
 
 #include "daos_types.h"
 #include "daos_api.h"
@@ -62,6 +67,74 @@ struct fs_copy_args {
 	daos_handle_t src_coh;
 	daos_handle_t dst_poh;
 	daos_handle_t dst_coh;
+};
+
+/* for oid dataset */
+typedef struct {
+	uint64_t oid_hi;
+	uint64_t oid_low;
+	uint64_t dkey_offset;
+} oid_t;
+
+/* for dkey dataset */
+typedef struct {
+	/* array of vlen structure */
+	hvl_t dkey_val;
+	uint64_t akey_offset;
+} dkey_t;
+
+/* for akey dataset */
+typedef struct {
+	/* array of vlen structure */
+	hvl_t akey_val;
+	uint64_t rec_dset_id;
+} akey_t;
+
+struct hdf5_args {
+	hid_t status;
+	hid_t file;
+	/* OID Data */
+	hid_t oid_memtype;
+	hid_t oid_dspace;
+	hid_t oid_dset;
+	hid_t oid_dtype;
+	/* DKEY Data */
+	hid_t dkey_memtype;
+	hid_t dkey_vtype;
+	hid_t dkey_dspace;
+	hid_t dkey_dset;
+	/* AKEY Data */
+	hid_t akey_memtype;
+	hid_t akey_vtype;
+	hid_t akey_dspace;
+	hid_t akey_dset;
+	/* recx Data */
+	hid_t plist;
+	hid_t rx_dspace;
+	hid_t rx_memspace;
+	hid_t attr_dspace;
+	hid_t rx_dset;
+	hid_t single_dspace;
+	hid_t single_dset;
+	hid_t rx_dtype;
+	hid_t selection_attr;
+	hid_t single_dtype;
+	/* dims for dsets */
+	hsize_t oid_dims[1];
+	hsize_t dkey_dims[1];     
+	hsize_t akey_dims[1];     
+	hsize_t rx_dims[1];
+	hsize_t	mem_dims[1];
+	hsize_t	attr_dims[1];
+	hsize_t rx_chunk_dims[1];
+	hsize_t rx_max_dims[1];
+	hsize_t single_dims[1];
+	/* data for keys */
+	oid_t *oid_data;
+	dkey_t *dkey_data;
+	akey_t *akey_data;
+	dkey_t **dk;
+	akey_t **ak;
 };
 
 static int
@@ -2631,6 +2704,37 @@ file_set_defaults_dfs(struct file_dfs *file_dfs)
 	file_dfs->dfs = NULL;
 }
 
+inline void
+init_hdf5_args(struct hdf5_args *hdf5)
+{
+	hdf5->status = 0;
+	hdf5->file = -1;
+	/* OID Data */
+	hdf5->oid_memtype = 0;
+	hdf5->oid_dspace = 0;
+	hdf5->oid_dset = 0;
+	/* DKEY Data */
+	hdf5->dkey_memtype = 0;
+	hdf5->dkey_vtype = 0;
+	hdf5->dkey_dspace = 0;
+	hdf5->dkey_dset = 0;
+	/* AKEY Data */
+	hdf5->akey_memtype = 0;
+	hdf5->akey_vtype = 0;
+	hdf5->akey_dspace = 0;
+	hdf5->akey_dset = 0;
+	/* dims for dsets */
+	hdf5->oid_dims[0] = 0;
+	hdf5->dkey_dims[0] = 0;     
+	hdf5->akey_dims[0] = 0;     
+	/* data for keys */
+	hdf5->oid_data = NULL;
+	hdf5->dkey_data = NULL;
+	hdf5->akey_data = NULL;
+	hdf5->dk = NULL;
+	hdf5->ak = NULL;
+}
+
 static int
 fs_copy_disconnect(struct fs_copy_args *fa,
 		   struct file_dfs *src_file_dfs,
@@ -2828,6 +2932,1514 @@ out_disconnect:
 	if (rc != 0)
 		fprintf(stderr, "failed to disconnect (%d)\n", rc);
 out:
+	return rc;
+}
+
+static int
+serialize_recx_single(struct hdf5_args *hdf5, 
+		      daos_key_t *dkey,
+		      daos_handle_t *oh,
+		      daos_iod_t *iod)
+{
+	/* if iod_type is single value just fetch iod size from source
+	 * and update in destination object */
+	int         buf_len = (int)(*iod).iod_size;
+	char        buf[buf_len];
+	d_sg_list_t sgl;
+	d_iov_t     iov;
+	int	    rc;
+
+	/* set sgl values */
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs   = &iov;
+	d_iov_set(&iov, buf, buf_len);
+        rc = daos_obj_fetch(*oh, DAOS_TX_NONE, 0, dkey, 1, iod, &sgl,
+			    NULL, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "failed to fetch object: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+	/* write single val record to dataset */
+	H5Dwrite(hdf5->single_dset, hdf5->single_dtype, H5S_ALL,
+		 hdf5->single_dspace, H5P_DEFAULT, sgl.sg_iovs[0].iov_buf);
+	printf("\tSINGLE DSET ID WRITTEN: %d\n", (int)hdf5->single_dset);
+out:
+	return rc;
+}
+
+
+static int
+serialize_recx_array(struct hdf5_args *hdf5,
+		     daos_key_t *dkey,
+		     daos_key_t *akey,
+     		     uint64_t *ak_index,
+		     daos_handle_t *oh,
+		     daos_iod_t *iod)
+{
+	int			rc = 0;
+	int			i = 0;
+	int			attr_num = 0;
+	int			buf_len = 0;
+	int			path_len = 0;
+	int			encode_buf_len;
+	uint32_t		number = 5;
+	size_t			nalloc;
+	daos_anchor_t		recx_anchor = {0}; 
+	daos_epoch_range_t	eprs[5];
+	daos_recx_t		recxs[5];
+	daos_size_t		size = 0;
+	char			attr_name[64];
+	char			number_str[16];
+	char			attr_num_str[16];
+	unsigned char		*encode_buf = NULL;
+	d_sg_list_t		sgl;
+	d_iov_t			iov;
+	hid_t			status = 0;
+
+	while (!daos_anchor_is_eof(&recx_anchor)) {
+		memset(recxs, 0, sizeof(recxs));
+		memset(eprs, 0, sizeof(eprs));
+
+		/* list all recx for this dkey/akey */
+	        number = 5;
+		rc = daos_obj_list_recx(*oh, DAOS_TX_NONE, dkey,
+			akey, &size, &number, recxs, eprs, &recx_anchor,
+			true, NULL);
+		printf("RECX RETURNED: %d\n", (int)number);
+		printf("RECX SIZE: %d\n", (int)size);
+
+		/* if no recx is returned for this dkey/akey move on */
+		if (number == 0) 
+			continue;
+		printf("\n\nNUM RECX RET: %d\n\n", (int)number);
+		for (i = 0; i < number; i++) {
+			buf_len = recxs[i].rx_nr;
+		        char        buf[buf_len];
+
+			memset(&sgl, 0, sizeof(sgl));
+			memset(&iov, 0, sizeof(iov));
+
+			/* set iod values */
+			(*iod).iod_type  = DAOS_IOD_ARRAY;
+			(*iod).iod_size  = 1;
+			(*iod).iod_nr    = 1;
+			(*iod).iod_recxs = &recxs[i];
+
+			/* set sgl values */
+			sgl.sg_nr     = 1;
+			sgl.sg_nr_out = 0;
+			sgl.sg_iovs   = &iov;
+
+			d_iov_set(&iov, buf, buf_len);	
+			printf("\ti: %d iod_size: %d rx_nr:%d, rx_idx:%d\n",
+				i, (int)size, (int)recxs[i].rx_nr,
+				(int)recxs[i].rx_idx);
+			/* fetch recx values from source */
+                        rc = daos_obj_fetch(*oh, DAOS_TX_NONE, 0, dkey, 1, iod,
+				&sgl, NULL, NULL);
+			if (rc != 0) {
+				fprintf(stderr, "failed to fetch object: %d\n",
+					rc);
+			}
+			/* write data to record dset */
+			printf("\n\nTOTAL DIMS SO FAR: %d\n\n",
+			       (int)hdf5->rx_dims[0]);
+			hdf5->mem_dims[0] = recxs[i].rx_nr;
+			hdf5->rx_memspace = H5Screate_simple(1, hdf5->mem_dims,
+							     hdf5->mem_dims);
+			if (hdf5->rx_memspace < 0) {
+				fprintf(stderr, "failed to create rx_memspace "
+				"\n");
+				D_GOTO(out, rc = 1);
+			}
+			/* extend dataset */
+			hdf5->rx_dims[0] += recxs[i].rx_nr;
+			status = H5Dset_extent(hdf5->rx_dset, hdf5->rx_dims);
+			if (status < 0) {
+				fprintf(stderr, "failed to extend  rx dset\n");
+				D_GOTO(out, rc = 1);
+			}
+			printf("RX DIMS: %d\n", (int)hdf5->rx_dims[0]);
+			/* retrieve extended dataspace */
+			hdf5->rx_dspace = H5Dget_space(hdf5->rx_dset);
+			if (hdf5->rx_dspace < 0) {
+				fprintf(stderr, "failed to get rx_dspace\n");
+				D_GOTO(out, rc = 1);
+			}
+			/* TODO: remove debugging printf's and calls */
+			hsize_t dset_size = H5Sget_simple_extent_npoints(hdf5->rx_dspace);
+			printf("DSET_SIZE: %d\n", (int)dset_size);
+			hsize_t start = (hsize_t)recxs[i].rx_idx;
+			hsize_t count = (hsize_t)recxs[i].rx_nr;
+
+			status = H5Sselect_hyperslab(hdf5->rx_dspace,
+						     H5S_SELECT_AND, &start,
+						     NULL, &count, NULL);
+			if (status < 0) {
+				fprintf(stderr, "failed to select hyperslab\n");
+				D_GOTO(out, rc = 1);
+			}
+
+			/* TODO: remove random checking/printing to make sure
+			 * right number of blocks is selected
+			 */
+			hsize_t sel = H5Sget_select_npoints(hdf5->rx_dspace);
+			printf("SEL: %d\n", (int)sel);
+			hsize_t mem_sel = H5Sget_select_npoints(hdf5->rx_memspace);
+			printf("MEM SEL: %d\n", (int)mem_sel);
+			hssize_t nblocks = H5Sget_select_hyper_nblocks(hdf5->rx_dspace);
+			printf("NUM BLOCKS SELECTED: %d\n", (int)nblocks);
+			htri_t valid = H5Sselect_valid(hdf5->rx_dspace);
+			printf("VALID: %d\n", (int)valid);
+
+			hdf5->rx_dtype = H5Tcreate(H5T_OPAQUE, (*iod).iod_size);
+			if (hdf5->rx_dtype < 0) {
+				fprintf(stderr, "failed to create rx_dtype\n");
+				D_GOTO(out, rc = 1);
+			}
+			/* HDF5 should not try to interpret the datatype */
+			status = H5Tset_tag(hdf5->rx_dtype, "Opaque dtype");
+			if (status < 0) {
+				fprintf(stderr, "failed to set dtype tag\n");
+				D_GOTO(out, rc = 1);
+			}
+			status = H5Dwrite(hdf5->rx_dset, hdf5->rx_dtype,
+					  hdf5->rx_memspace, hdf5->rx_dspace,
+					  H5P_DEFAULT, sgl.sg_iovs[0].iov_buf);
+			if (status < 0) {
+				fprintf(stderr, "failed to write to rx_dset\n");
+				D_GOTO(out, rc = 1);
+			}
+			printf("\tRECX DSET ID WRITTEN: %d\n",
+				(int)hdf5->rx_dset);
+			printf("\tRECX DSPACE ID WRITTEN: %d\n",
+				(int)hdf5->rx_dspace);
+			/* get size of buffer needed
+			 * from nalloc
+			 */
+			status = H5Sencode(hdf5->rx_dspace, NULL, &nalloc);
+			if (status < 0) {
+				fprintf(stderr, "failed to get size of buffer "
+					"needed\n");
+				D_GOTO(out, rc = 1);
+			}
+			/* encode dataspace description
+			 * in buffer then store in
+			 * attribute on dataset
+			 */
+			encode_buf = malloc(nalloc * sizeof(unsigned char));
+			status = H5Sencode(hdf5->rx_dspace, encode_buf,
+					   &nalloc);
+			if (status < 0) {
+				fprintf(stderr, "failed to encode dataspace "
+					"buffer\n");
+				D_GOTO(out, rc = 1);
+			}
+			/* created attribute in HDF5 file with encoded
+			 * dataspace for this record extent */
+			memset(attr_name, 64, sizeof(attr_name));
+			memset(number_str, 16, sizeof(number_str));
+			memset(attr_num_str, 16, sizeof(attr_num_str));
+			path_len = snprintf(number_str, 10, "%d",
+					    (int)(*ak_index));
+			if (path_len >= 16) {
+				fprintf(stderr, "number_str too long\n");
+				D_GOTO(out, rc = 1);
+			}
+			path_len = snprintf(attr_num_str, 10, "-%d", attr_num);
+			if (path_len >= 16) {
+				fprintf(stderr, "attr number str too long\n");
+				D_GOTO(out, rc = 1);
+			}
+			path_len = snprintf(attr_name, 64, "%s", "A-");
+			if (path_len >= 64) {
+				fprintf(stderr, "attr name too long\n");
+				D_GOTO(out, rc = 1);
+			}
+			strcat(attr_name, number_str);
+			strcat(attr_name, attr_num_str);
+			printf("\n\nATTR NAME: %s\n\n", attr_name);
+			encode_buf_len = nalloc * sizeof(unsigned char);
+			hdf5->attr_dims[0] = encode_buf_len;
+			hdf5->attr_dspace = H5Screate_simple(1, hdf5->attr_dims,
+						             NULL);
+			if (hdf5->attr_dspace < 0) {
+				fprintf(stderr, "failed to create attribute "
+					"dataspace\n");
+				D_GOTO(out, rc = 1);
+			}
+			hdf5->selection_attr = H5Acreate2(hdf5->rx_dset,
+				        	    	  attr_name,
+						          hdf5->rx_dtype,
+						          hdf5->attr_dspace,
+						          H5P_DEFAULT,
+						          H5P_DEFAULT);
+			if (hdf5->selection_attr < 0) {
+				fprintf(stderr, "failed to create selection "
+					"attribute\n");
+				D_GOTO(out, rc = 1);
+			}	
+			status = H5Awrite(hdf5->selection_attr, hdf5->rx_dtype,
+					  encode_buf);
+			if (status < 0) {
+				fprintf(stderr, "failed to write attribute\n");
+				D_GOTO(out, rc = 1);
+			}
+			status = H5Aclose(hdf5->selection_attr);
+			if (status < 0) {
+				fprintf(stderr, "failed to close attribute\n");
+				D_GOTO(out, rc = 1);
+			}
+			status = H5Sclose(hdf5->rx_memspace);
+			if (status < 0) {
+				fprintf(stderr, "failed to close rx_memspace\n");
+				D_GOTO(out, rc = 1);
+			}
+			if (encode_buf != NULL) 
+				free(encode_buf);
+			attr_num++;
+		}
+	}
+out:
+	return rc;
+}
+
+static int
+init_recx_data(struct hdf5_args *hdf5)
+{
+	int	rc = 0;
+	herr_t	err = 0;
+
+	hdf5->single_dims[0] = 1;
+	hdf5->rx_dims[0] = 0;
+	hdf5->rx_max_dims[0] = H5S_UNLIMITED;
+	hdf5->rx_chunk_dims[0] = 1;
+
+	hdf5->plist = H5Pcreate(H5P_DATASET_CREATE);
+	if (hdf5->plist < 0) {
+		fprintf(stderr, "failed to create prop list\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->rx_dspace = H5Screate_simple(1, hdf5->rx_dims, hdf5->rx_max_dims);
+	if (hdf5->rx_dspace < 0) {
+		fprintf(stderr, "failed to create rx_dspace\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->single_dspace = H5Screate_simple(1, hdf5->single_dims, NULL);
+	if (hdf5->single_dspace < 0) {
+		fprintf(stderr, "failed to create single_dspace\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->rx_dtype = H5Tcreate(H5T_OPAQUE, 1);
+	if (hdf5->rx_dtype < 0) {
+		fprintf(stderr, "failed to create rx_dtype\n");
+		D_GOTO(out, rc = 1);
+	}
+	err = H5Pset_layout(hdf5->plist, H5D_CHUNKED);
+	if (err < 0) {
+		fprintf(stderr, "failed to set property layout\n");
+		D_GOTO(out, rc = 1);
+	}
+	err = H5Pset_chunk(hdf5->plist, 1, hdf5->rx_chunk_dims);
+	if (err < 0) {
+		fprintf(stderr, "failed to set chunk size\n");
+		D_GOTO(out, rc = 1);
+	}
+	err = H5Tset_tag(hdf5->rx_dtype, "Opaque dtype");
+	if (err < 0) {
+		fprintf(stderr, "failed to set recx tag\n");
+		D_GOTO(out, rc = 1);
+	}
+out:
+	return rc;
+}
+
+static int
+serialize_akeys(struct hdf5_args *hdf5,
+		daos_key_t diov,
+		uint64_t *dk_index,
+		uint64_t *ak_index,
+		uint64_t *total_akeys,
+		daos_handle_t *oh)
+{
+	int		rc = 0;
+	herr_t		err = 0;
+	int		j = 0;
+	daos_anchor_t	akey_anchor = {0}; 
+	d_sg_list_t     akey_sgl;
+	d_iov_t         akey_iov;
+	daos_key_desc_t akey_kds[ENUM_DESC_NR] = {0};
+	uint32_t        akey_number = ENUM_DESC_NR;
+	char            akey_enum_buf[ENUM_DESC_BUF] = {0};
+	char 		akey[ENUM_KEY_BUF] = {0};
+	char		*akey_ptr = NULL;
+	daos_key_t	aiov;
+	daos_iod_t	iod;
+	char		rec_name[32];
+	int		path_len = 0;
+	int		size = 0;
+	hvl_t		*akey_val;
+
+	while (!daos_anchor_is_eof(&akey_anchor)) {
+ 		memset(akey_kds, 0, sizeof(akey_kds));
+ 		memset(akey, 0, sizeof(akey));
+ 		memset(akey_enum_buf, 0, sizeof(akey_enum_buf));
+		akey_number = ENUM_DESC_NR;
+
+		akey_sgl.sg_nr     = 1;
+		akey_sgl.sg_nr_out = 0;
+		akey_sgl.sg_iovs   = &akey_iov;
+
+		d_iov_set(&akey_iov, akey_enum_buf, ENUM_DESC_BUF);
+
+		/* get akeys */
+		rc = daos_obj_list_akey(*oh, DAOS_TX_NONE, &diov,
+					&akey_number, akey_kds,
+					&akey_sgl, &akey_anchor, NULL);
+		if (rc != 0) {
+			fprintf(stderr, "failed to list akeys: %d\n", rc);
+			D_GOTO(out, rc);
+		}
+
+		/* if no akeys returned move on */
+		if (akey_number == 0)
+			continue;
+
+		size = (akey_number + *total_akeys) * sizeof(akey_t);
+		*hdf5->ak = realloc(*hdf5->ak, size);
+
+		/* parse out individual akeys based on key length and
+		 * numver of dkeys returned
+		 */
+		(*hdf5->dk)[*dk_index].akey_offset = *ak_index;
+		printf("\n\nWRITE AKEY OFF: %lu\n\n",
+			(*hdf5->dk)[*dk_index].akey_offset);
+		for (akey_ptr = akey_enum_buf, j = 0; j < akey_number; j++) {
+			path_len = snprintf(akey, akey_kds[j].kd_key_len + 1,
+					    "%s", akey_ptr);
+			if (path_len >= ENUM_KEY_BUF) {
+				fprintf(stderr, "akey is too big: %d\n",
+					path_len);
+				D_GOTO(out, rc = 1);
+			}
+ 			memset(&aiov, 0, sizeof(diov));
+			d_iov_set(&aiov, (void*)akey,
+				  akey_kds[j].kd_key_len);
+			printf("\tj:%d akey:%s len:%d\n", j,
+				(char*)aiov.iov_buf,
+				(int)akey_kds[j].kd_key_len);
+			akey_val = &(*hdf5->ak)[*ak_index].akey_val;
+			size = (uint64_t)akey_kds[j].kd_key_len * sizeof(char);
+			akey_val->p = malloc(size);
+			memcpy(akey_val->p, (void*)akey_ptr,
+				(uint64_t)akey_kds[j].kd_key_len);
+			akey_val->len = (uint64_t)akey_kds[j].kd_key_len; 
+			(*hdf5->ak)[*ak_index].rec_dset_id = *ak_index;
+
+			/* set iod values */
+			iod.iod_nr   = 1;
+			iod.iod_type = DAOS_IOD_SINGLE;
+			iod.iod_size = DAOS_REC_ANY;
+			iod.iod_recxs = NULL;
+
+			d_iov_set(&iod.iod_name, (void*)akey, strlen(akey));
+			/* do a fetch (with NULL sgl) of single value type,
+			* and if that returns iod_size == 0, then a single
+			* value does not exist.
+			*/
+			rc = daos_obj_fetch(*oh, DAOS_TX_NONE, 0, &diov,
+					    1, &iod, NULL, NULL, NULL);
+			if (rc != 0) {
+				fprintf(stderr, "failed to fetch object: %d\n",
+					rc);
+				D_GOTO(out, rc);
+			}
+
+			/* if iod_size == 0 then this is a
+			 * DAOS_IOD_ARRAY type
+			 */
+			/* TODO: create a record dset for each
+			 * akey
+			 */
+ 			memset(&rec_name, 32, sizeof(rec_name));
+			path_len = snprintf(rec_name, 32, "%lu", *ak_index);
+			if (path_len > 32) {
+				fprintf(stderr, "rec name too long: %d\n",
+					path_len);
+			}
+			if ((int)iod.iod_size == 0) {
+				hdf5->rx_dset = H5Dcreate(hdf5->file,
+							  rec_name,
+							  hdf5->rx_dtype,
+							  hdf5->rx_dspace,
+							  H5P_DEFAULT,
+							  hdf5->plist,
+							  H5P_DEFAULT);
+				if (hdf5->rx_dset < 0) {
+					fprintf(stderr, "failed to create "
+						"rx_dset\n");
+					D_GOTO(out, rc = 1);
+				}
+				printf("rx dset created: %lu\n",
+					(uint64_t)hdf5->rx_dset);
+				printf("rec dset id: %lu\n",
+					(*hdf5->ak)[*ak_index].rec_dset_id);
+				printf("dset name serialize: %s\n", rec_name);
+				printf("ak index: %d\n", (int)*ak_index);
+				rc = serialize_recx_array(hdf5, &diov, &aiov,
+							  ak_index, oh, &iod);
+				if (rc != 0) {
+					fprintf(stderr, "failed to serialize "
+						"recx array: %d\n", rc);
+					D_GOTO(out, rc);
+				}
+				err = H5Dclose(hdf5->rx_dset);
+				if (err < 0) {
+					fprintf(stderr, "failed to close "
+						"rx_dset\n");
+					D_GOTO(out, rc = 1);
+				}
+			} else {
+				hdf5->single_dtype = H5Tcreate(H5T_OPAQUE,
+							       iod.iod_size);
+				H5Tset_tag(hdf5->single_dtype, "Opaque dtype");
+				hdf5->single_dset = H5Dcreate(hdf5->file,
+							    rec_name,
+							    hdf5->single_dtype,
+							    hdf5->single_dspace,
+							    H5P_DEFAULT,
+							    H5P_DEFAULT,
+							    H5P_DEFAULT);
+				printf("single dset created: %lu\n",
+					(uint64_t)hdf5->single_dset);
+				printf("single dset id: %lu\n",
+					(*hdf5->ak)[*ak_index].rec_dset_id);
+				printf("dset name serialize: %s\n",
+					rec_name);
+				printf("ak index: %d\n",
+					(int)*ak_index);
+				rc = serialize_recx_single(hdf5, &diov, oh,
+							   &iod);
+				if (rc != 0) {
+					fprintf(stderr, "failed to serialize "
+						"recx single: %d\n", rc);
+					D_GOTO(out, rc);
+				}
+				err = H5Dclose(hdf5->single_dset);
+				if (err < 0) {
+					fprintf(stderr, "failed to close "
+						"single_dspace\n");
+					D_GOTO(out, rc = 1);
+				}
+				err = H5Tclose(hdf5->single_dtype);
+				if (err < 0) {
+					fprintf(stderr, "failed to close "
+						"single_dtype\n");
+					D_GOTO(out, rc = 1);
+				}
+			}
+			/* advance to next akey returned */	
+			akey_ptr += akey_kds[j].kd_key_len;
+			(*ak_index)++;
+		}
+		*total_akeys = (*total_akeys) + akey_number;
+	}
+out:
+	return rc;
+}
+
+static int
+serialize_dkeys(struct hdf5_args *hdf5,
+		uint64_t *dk_index,
+		uint64_t *ak_index,
+		uint64_t *total_dkeys,
+		uint64_t *total_akeys,
+		daos_handle_t *oh,
+		int *oid_index)
+{
+	int		rc = 0;
+	herr_t		err = 0;
+	int		i = 0;
+	daos_anchor_t	dkey_anchor = {0}; 
+	d_sg_list_t     dkey_sgl;
+	d_iov_t         dkey_iov;
+	daos_key_desc_t dkey_kds[ENUM_DESC_NR] = {0};
+	uint32_t        dkey_number = ENUM_DESC_NR;
+	char            dkey_enum_buf[ENUM_DESC_BUF] = {0};
+	char 		dkey[ENUM_KEY_BUF] = {0};
+	char		*dkey_ptr;
+	daos_key_t	diov;
+	int		path_len = 0;
+	hvl_t		*dkey_val;
+	int		size = 0;
+
+	rc = init_recx_data(hdf5);
+	hdf5->oid_data[*oid_index].dkey_offset = *dk_index;
+	printf("\n\nWRITE DKEY OFF: %d\n\n",
+		(int)hdf5->oid_data[*oid_index].dkey_offset);
+	while (!daos_anchor_is_eof(&dkey_anchor)) {
+ 		memset(dkey_kds, 0, sizeof(dkey_kds));
+ 		memset(dkey, 0, sizeof(dkey));
+ 		memset(dkey_enum_buf, 0, sizeof(dkey_enum_buf));
+		dkey_number = ENUM_DESC_NR;
+
+                dkey_sgl.sg_nr     = 1;
+	        dkey_sgl.sg_nr_out = 0;
+	        dkey_sgl.sg_iovs   = &dkey_iov;
+
+	        d_iov_set(&dkey_iov, dkey_enum_buf, ENUM_DESC_BUF);
+
+		/* get dkeys */
+		rc = daos_obj_list_dkey(*oh, DAOS_TX_NONE, &dkey_number,
+					dkey_kds, &dkey_sgl, &dkey_anchor,
+					NULL);
+		if (rc != 0) {
+			fprintf(stderr, "failed to list dkeys: %d\n", rc);
+			D_GOTO(out, rc);
+		}
+		/* if no dkeys were returned move on */
+		if (dkey_number == 0)
+			continue;
+		*hdf5->dk = realloc(*hdf5->dk,
+				(dkey_number + *total_dkeys) * sizeof(dkey_t));
+		/* parse out individual dkeys based on key length and
+		 * number of dkeys returned
+		 */
+               	for (dkey_ptr = dkey_enum_buf, i = 0; i < dkey_number; i++) {
+			/* Print enumerated dkeys */
+			path_len = snprintf(dkey, dkey_kds[i].kd_key_len + 1,
+					    "%s", dkey_ptr);
+			if (path_len >= ENUM_KEY_BUF) {
+				fprintf(stderr, "key is too long: %d\n",
+					path_len);
+				D_GOTO(out, rc);
+			}
+ 			memset(&diov, 0, sizeof(diov));
+			d_iov_set(&diov, (void*)dkey, dkey_kds[i].kd_key_len);
+			dkey_val = &(*hdf5->dk)[*dk_index].dkey_val;
+			size = (uint64_t)dkey_kds[i].kd_key_len * sizeof(char);
+			printf("i:%d dkey iov buf:%s len:%lu\n", i,
+				(char*)diov.iov_buf,
+				(uint64_t)dkey_kds[i].kd_key_len);
+			dkey_val->p = malloc(size);
+			memcpy(dkey_val->p, (void*)dkey_ptr,
+				(uint64_t)dkey_kds[i].kd_key_len);
+			dkey_val->len = (uint64_t)dkey_kds[i].kd_key_len; 
+			rc = serialize_akeys(hdf5, diov, dk_index, ak_index,
+					     total_akeys, oh); 
+			if (rc != 0) {
+				fprintf(stderr, "failed to list akeys: %d\n",
+					rc);
+				D_GOTO(out, rc);
+			}
+			dkey_ptr += dkey_kds[i].kd_key_len;
+			(*dk_index)++;
+		}
+		*total_dkeys = (*total_dkeys) + dkey_number;
+	}
+	err = H5Sclose(hdf5->rx_dspace);
+	if (err < 0) {
+		fprintf(stderr, "failed to close rx_dspace\n");
+		D_GOTO(out, rc = 1);
+	}
+	err = H5Sclose(hdf5->single_dspace);
+	if (err < 0) {
+		fprintf(stderr, "failed to close single_dspace\n");
+		D_GOTO(out, rc = 1);
+	}
+	err = H5Tclose(hdf5->rx_dtype);
+	if (err < 0) {
+		fprintf(stderr, "failed to close rx_dtype\n");
+		D_GOTO(out, rc = 1);
+	}
+out:
+	return rc;
+}
+
+static int
+init_hdf5_file(struct hdf5_args *hdf5, char *filename) {
+	int rc = 0;
+	hdf5->file = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT,
+			      H5P_DEFAULT);
+	if (hdf5->file < 0) {
+		fprintf(stderr, "failed to create HDF5 file\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->oid_memtype = H5Tcreate(H5T_COMPOUND, sizeof(oid_t));
+	if (hdf5->oid_memtype < 0) {
+		fprintf(stderr, "failed to create oid memtype HDF5\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->status = H5Tinsert(hdf5->oid_memtype, "OID Hi",
+				HOFFSET(oid_t, oid_hi), H5T_NATIVE_UINT64);
+	if (hdf5->status < 0) {
+		fprintf(stderr, "failed to insert oid hi\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->status = H5Tinsert(hdf5->oid_memtype, "OID Low",
+				HOFFSET(oid_t, oid_low), H5T_NATIVE_UINT64);
+	if (hdf5->status < 0) {
+		fprintf(stderr, "failed to insert oid low\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->status = H5Tinsert(hdf5->oid_memtype, "Dkey Offset",
+				HOFFSET(oid_t, dkey_offset), H5T_NATIVE_UINT64);
+	if (hdf5->status < 0) {
+		fprintf(stderr, "failed to insert dkey offset\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->dkey_memtype = H5Tcreate(H5T_COMPOUND, sizeof(dkey_t));
+	if (hdf5->dkey_memtype < 0) {
+		fprintf(stderr, "failed to create dkey memtype HDF5: %d\n", rc);
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->dkey_vtype = H5Tvlen_create(H5T_NATIVE_CHAR);
+	if (hdf5->dkey_vtype < 0) {
+		fprintf(stderr, "failed to create dkey vtype HDF5: %d\n", rc);
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->status = H5Tinsert(hdf5->dkey_memtype, "Akey Offset",
+		  		HOFFSET(dkey_t, akey_offset),
+				H5T_NATIVE_UINT64);
+	if (hdf5->status < 0) {
+		fprintf(stderr, "failed to insert akey offset\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->status = H5Tinsert(hdf5->dkey_memtype, "Dkey Value",
+				HOFFSET(dkey_t, dkey_val), hdf5->dkey_vtype);
+	if (hdf5->status < 0) {
+		fprintf(stderr, "failed to insert dkey value\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->akey_memtype = H5Tcreate(H5T_COMPOUND, sizeof(akey_t));
+	if (hdf5->akey_memtype < 0) {
+		fprintf(stderr, "failed to create akey memtype HDF5: %d\n", rc);
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->akey_vtype = H5Tvlen_create(H5T_NATIVE_CHAR);
+	if (hdf5->akey_vtype < 0) {
+		fprintf(stderr, "failed to create akey vtype HDF5: %d\n", rc);
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->status = H5Tinsert(hdf5->akey_memtype, "Dataset ID",
+				HOFFSET(akey_t, rec_dset_id),
+				H5T_NATIVE_UINT64);
+	if (hdf5->status < 0) {
+		fprintf(stderr, "failed to insert record dset id\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->status = H5Tinsert(hdf5->akey_memtype, "Akey Value",
+				HOFFSET(akey_t, akey_val), hdf5->akey_vtype);
+	if (hdf5->status < 0) {
+		fprintf(stderr, "failed to insert akey value\n");
+		D_GOTO(out, rc = 1);
+	}
+out:
+	return rc;
+}
+
+int
+cont_serialize_hdlr(struct cmd_args_s *ap)
+{
+	int		rc = 0;
+	int		i = 0;
+	char		*ftype = ".h5";
+	/* TODO: update this  to PATH_MAX, currently using too much
+	 * static memory to use it */
+	int		PMAX = 64;
+	char		filename[PMAX];
+	int		path_len = 0;
+	struct		hdf5_args hdf5;
+	uint64_t	total_dkeys = 0;
+	uint64_t	total_akeys = 0;
+	uint64_t	dk_index = 0;
+	uint64_t	ak_index = 0;
+ 	daos_obj_id_t	oids[OID_ARR_SIZE];
+ 	daos_anchor_t	anchor;
+ 	uint32_t	oids_nr;
+ 	int		num_oids;
+ 	daos_handle_t	toh;
+ 	daos_epoch_t	epoch;
+	uint32_t	total = 0;
+	daos_handle_t	oh;
+
+	/* init HDF5 args */
+	init_hdf5_args(&hdf5);
+
+	path_len = snprintf(filename, PMAX, "%s", DP_UUID(ap->c_uuid));
+	if (path_len >= PMAX) {
+		fprintf(stderr, "filename is too big: %d\n", path_len);
+		D_GOTO(out, rc = 1);
+	}
+	strcat(filename, ftype);
+	printf("Serializing Container "DF_UUIDF" to "DF_UUIDF".h5\n",
+		DP_UUID(ap->c_uuid), DP_UUID(ap->c_uuid));
+
+	/* init HDF5 datatypes in HDF5 file */
+	rc = init_hdf5_file(&hdf5, filename);
+	if (rc != 0) {
+		fprintf(stderr, "failed to init hdf5 file\n");
+		D_GOTO(out, rc);
+	}
+	rc = daos_cont_create_snap_opt(ap->cont, &epoch, NULL,
+					DAOS_SNAP_OPT_CR | DAOS_SNAP_OPT_OIT,
+					NULL);
+	if (rc) {
+		fprintf(stderr, "failed to create snapshot: %d\n", rc);	
+		D_GOTO(out, rc);
+	}
+
+ 	rc = daos_oit_open(ap->cont, epoch, &toh, NULL);
+	if (rc) {
+		fprintf(stderr, "failed to open oit: %d\n", rc);	
+		D_GOTO(out, rc);
+	}
+ 	memset(&anchor, 0, sizeof(anchor));
+	while (1) {
+ 		oids_nr = OID_ARR_SIZE;
+ 		rc = daos_oit_list(toh, oids, &oids_nr, &anchor, NULL);
+		if (rc) {
+			fprintf(stderr, "failed to open oit: %d\n", rc);	
+			D_GOTO(out, rc);
+		}
+		num_oids = (int)oids_nr;
+ 		D_PRINT("returned %d oids\n", num_oids);
+		hdf5.oid_dims[0] = num_oids;
+		hdf5.oid_dspace = H5Screate_simple(1, hdf5.oid_dims, NULL);
+		if (hdf5.oid_dspace < 0) {
+			fprintf(stderr, "failed to create oid dspace: %d\n",
+				rc);
+			D_GOTO(out, rc = 1);
+		}
+		hdf5.oid_dset = H5Dcreate(hdf5.file, "Oid Data",
+					  hdf5.oid_memtype, hdf5.oid_dspace,
+					  H5P_DEFAULT, H5P_DEFAULT,
+					  H5P_DEFAULT);
+		if (hdf5.oid_dset < 0) {
+			fprintf(stderr, "failed to create oid dset: %d\n", rc);
+			D_GOTO(out, rc = 1);
+		}
+
+		total_dkeys = 0;
+		total_akeys = 0;
+		hdf5.oid_data = malloc(num_oids * sizeof(oid_t));
+		hdf5.dkey_data = malloc(sizeof(dkey_t));
+		hdf5.akey_data = malloc(sizeof(akey_t));
+		dk_index = 0;
+		ak_index = 0;
+		hdf5.dk = &(hdf5.dkey_data);
+		hdf5.ak = &(hdf5.akey_data);
+
+		/* list object ID's */
+ 		for (i = 0; i < num_oids; i++) {
+ 			D_PRINT("oid[%d] ="DF_OID"\n", total, DP_OID(oids[i]));
+			/* open DAOS object based on oid[i] to get obj
+			 * handle
+			 */
+			hdf5.oid_data[i].oid_hi = oids[i].hi;
+			hdf5.oid_data[i].oid_low = oids[i].lo;
+			rc = daos_obj_open(ap->cont, oids[i], 0, &oh, NULL);
+			if (rc != 0) {
+				fprintf(stderr, "failed to open object: %d\n",
+					rc);
+					D_GOTO(out, rc);
+			}
+			rc = serialize_dkeys(&hdf5, &dk_index, &ak_index,
+						 &total_dkeys, &total_akeys,
+						 &oh, &i);
+			if (rc != 0) {
+				fprintf(stderr, "failed to serialize keys: %d\n",
+					rc);
+					D_GOTO(out, rc);
+			}
+			/* close source and destination object */
+                       	rc = daos_obj_close(oh, NULL);
+			if (rc != 0) {
+				fprintf(stderr, "failed to close obj: %d\n",
+					rc);
+					D_GOTO(out, rc);
+			}
+ 			total++;
+	        }
+
+	        printf("total dkeys: %lu\n", total_dkeys);
+	        printf("total akeys: %lu\n", total_akeys);
+		hdf5.dkey_dims[0] = total_dkeys;     
+		hdf5.dkey_dspace = H5Screate_simple(1, hdf5.dkey_dims, NULL);
+		if (hdf5.dkey_dspace < 0) {
+			fprintf(stderr, "failed to create dkey dspace: %d\n",
+				rc);
+			D_GOTO(out, rc = 1);
+		}
+		hdf5.dkey_dset = H5Dcreate(hdf5.file, "Dkey Data",
+					   hdf5.dkey_memtype, hdf5.dkey_dspace,
+					   H5P_DEFAULT, H5P_DEFAULT,
+					   H5P_DEFAULT);
+		if (hdf5.dkey_dset < 0) {
+			fprintf(stderr, "failed to create dkey dset: %d\n",
+				rc);
+			D_GOTO(out, rc = 1);
+		}
+		hdf5.akey_dims[0] = total_akeys;     
+		hdf5.akey_dspace = H5Screate_simple(1, hdf5.akey_dims, NULL);
+		if (hdf5.akey_dspace < 0) {
+			fprintf(stderr, "failed to create akey dspace: %d\n",
+				rc);
+			D_GOTO(out, rc = 1);
+		}
+		hdf5.akey_dset = H5Dcreate(hdf5.file, "Akey Data",
+					   hdf5.akey_memtype, hdf5.akey_dspace,
+					   H5P_DEFAULT, H5P_DEFAULT,
+					   H5P_DEFAULT);
+		if (hdf5.akey_dset < 0) {
+			fprintf(stderr, "failed to create akey dspace: %d\n",
+				rc);
+			D_GOTO(out, rc = 1);
+		}
+		hdf5.status = H5Dwrite(hdf5.oid_dset, hdf5.oid_memtype, H5S_ALL,
+					H5S_ALL, H5P_DEFAULT, hdf5.oid_data);
+		if (hdf5.status < 0) {
+			rc = 1;
+			fprintf(stderr, "failed to write oid dset: %d\n", rc);
+			D_GOTO(out, rc = 1);
+		}
+		hdf5.status = H5Dwrite(hdf5.dkey_dset, hdf5.dkey_memtype,
+				       H5S_ALL, H5S_ALL, H5P_DEFAULT,
+				       (*(hdf5.dk)));
+		if (hdf5.status < 0) {
+			rc = 1;
+			fprintf(stderr, "failed to write dkey dset: %d\n", rc);
+			D_GOTO(out, rc = 1);
+		}
+		hdf5.status = H5Dwrite(hdf5.akey_dset, hdf5.akey_memtype,
+				       H5S_ALL, H5S_ALL, H5P_DEFAULT,
+				       (*(hdf5.ak)));
+		if (hdf5.status < 0) {
+			rc = 1;
+			fprintf(stderr, "failed to write akey dset: %d\n", rc);
+			D_GOTO(out, rc = 1);
+		}
+ 
+ 		if (daos_anchor_is_eof(&anchor)) {
+ 			break;
+ 		}
+	}
+
+	/* close object iterator */
+ 	rc = daos_oit_close(toh, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "failed to close oit: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+	daos_epoch_range_t epr;
+	epr.epr_lo = epoch;
+	epr.epr_hi = epoch;
+	rc = daos_cont_destroy_snap(ap->cont, epr, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "failed to destroy snap: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+out:
+	if (hdf5.oid_dset > 0)
+		H5Dclose(hdf5.oid_dset);
+	if (hdf5.dkey_dset > 0)
+		H5Dclose(hdf5.dkey_dset);
+	if (hdf5.akey_dset > 0)
+		H5Dclose(hdf5.akey_dset);
+	if (hdf5.oid_dspace > 0)
+		H5Sclose(hdf5.oid_dspace);
+	if (hdf5.dkey_dspace > 0)
+		H5Sclose(hdf5.dkey_dspace);
+	if (hdf5.akey_dspace > 0)
+		H5Sclose(hdf5.akey_dspace);
+	if (hdf5.oid_memtype > 0)
+		H5Tclose(hdf5.oid_memtype);
+	if (hdf5.dkey_memtype > 0)
+		H5Tclose(hdf5.dkey_memtype);
+	if (hdf5.akey_memtype > 0)
+		H5Tclose(hdf5.akey_memtype);
+	if (hdf5.oid_data != NULL)
+		free(hdf5.oid_data);
+	if (hdf5.dkey_data != NULL)
+		free(hdf5.dkey_data);
+	if (hdf5.akey_data != NULL)
+		free(hdf5.akey_data);
+	return rc;
+}
+
+static int
+hdf5_read_key_data(struct hdf5_args *hdf5)
+{
+	int	rc = 0;
+	hid_t	status = 0;
+	int	oid_ndims = 0;
+	int	dkey_ndims = 0;
+	int	akey_ndims = 0;
+
+	/* read oid data */
+	hdf5->oid_dset = H5Dopen(hdf5->file, "Oid Data", H5P_DEFAULT);
+	if (hdf5->oid_dset < 0) {
+		fprintf(stderr, "failed to open OID dset\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->oid_dspace = H5Dget_space(hdf5->oid_dset);
+	if (hdf5->oid_dspace < 0) {
+		fprintf(stderr, "failed to get oid dspace\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->oid_dtype = H5Dget_type(hdf5->oid_dset);
+	if (hdf5->oid_dtype < 0) {
+		fprintf(stderr, "failed to get oid dtype\n");
+		D_GOTO(out, rc = 1);
+	}
+	oid_ndims = H5Sget_simple_extent_dims(hdf5->oid_dspace, hdf5->oid_dims,
+					      NULL);
+	if (oid_ndims < 0) {
+		fprintf(stderr, "failed get oid dimensions\n");
+		D_GOTO(out, rc = 1);
+	}
+	printf("oid_dims: %d\n", (int)oid_ndims);
+	hdf5->oid_data = malloc(hdf5->oid_dims[0] * sizeof(oid_t));
+	if (hdf5->oid_data == NULL) {
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+	status = H5Dread(hdf5->oid_dset, hdf5->oid_dtype, H5S_ALL, H5S_ALL,
+			H5P_DEFAULT, hdf5->oid_data);
+	if (status < 0) {
+		fprintf(stderr, "failed to read OID data\n");
+		D_GOTO(out, rc = 1);
+	}
+
+	/* read dkey data */
+	hdf5->dkey_dset = H5Dopen(hdf5->file, "Dkey Data", H5P_DEFAULT);
+	if (hdf5->dkey_dset < 0) {
+		fprintf(stderr, "failed to open dkey dset\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->dkey_dspace = H5Dget_space(hdf5->dkey_dset);
+	if (hdf5->dkey_dspace < 0) {
+		fprintf(stderr, "failed to get dkey dspace\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->dkey_vtype = H5Dget_type(hdf5->dkey_dset);
+	if (hdf5->dkey_vtype < 0) {
+		fprintf(stderr, "failed to get dkey vtype\n");
+		D_GOTO(out, rc = 1);
+	}
+	dkey_ndims = H5Sget_simple_extent_dims(hdf5->dkey_dspace,
+						       hdf5->dkey_dims, NULL);
+	if (dkey_ndims < 0) {
+		fprintf(stderr, "failed to get dkey dimensions\n");
+		D_GOTO(out, rc = 1);
+	}
+	printf("dkey_dims: %d\n", (int)dkey_ndims);
+	hdf5->dkey_data = malloc(hdf5->dkey_dims[0] * sizeof(dkey_t));
+	if (hdf5->dkey_data == NULL) {
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+	status = H5Dread(hdf5->dkey_dset, hdf5->dkey_vtype, H5S_ALL, H5S_ALL,
+			 H5P_DEFAULT, hdf5->dkey_data);
+	if (status < 0) {
+		fprintf(stderr, "failed to read Dkey data\n");
+		D_GOTO(out, rc = 1);
+	}
+
+	/* read akey data */
+	hdf5->akey_dset = H5Dopen(hdf5->file, "Akey Data", H5P_DEFAULT);
+	if (hdf5->akey_dset < 0) {
+		fprintf(stderr, "failed to open akey dset\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->akey_dspace = H5Dget_space(hdf5->akey_dset);
+	if (hdf5->akey_dspace < 0) {
+		fprintf(stderr, "failed to get akey dspace\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->akey_vtype = H5Dget_type(hdf5->akey_dset);
+	if (hdf5->akey_vtype < 0) {
+		fprintf(stderr, "failed to get akey vtype\n");
+		D_GOTO(out, rc = 1);
+	}
+	akey_ndims = H5Sget_simple_extent_dims(hdf5->akey_dspace,
+					       hdf5->akey_dims, NULL);
+	if (akey_ndims < 0) {
+		fprintf(stderr, "failed to get akey dimensions\n");
+		D_GOTO(out, rc = 1);
+	}
+	printf("akey_dims: %d\n", (int)akey_ndims);
+	hdf5->akey_data = malloc(hdf5->akey_dims[0] * sizeof(akey_t));
+	if (hdf5->akey_data == NULL) {
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+	status = H5Dread(hdf5->akey_dset, hdf5->akey_vtype, H5S_ALL, H5S_ALL,
+			 H5P_DEFAULT, hdf5->akey_data);
+	if (status < 0) {
+		fprintf(stderr, "failed to read Akey data\n");
+		D_GOTO(out, rc = 1);
+	}
+out:
+	return rc;
+}
+
+static int
+cont_deserialize_recx(struct hdf5_args *hdf5,
+		      daos_handle_t *oh,
+		      daos_key_t diov,
+		      int num_attrs,
+		      uint64_t ak_off,
+		      int k)
+{
+	int			rc = 0;
+	hid_t			status = 0;
+	int			i = 0;
+	ssize_t			attr_len = 0;
+	char			attr_name_buf[124]; 
+	hsize_t			attr_space;
+	hid_t			attr_type;
+	size_t			type_size;
+	unsigned char		*decode_buf;
+	hid_t			rx_range_id;
+	hsize_t			rx_range[64] = {0};
+	uint64_t		recx_len = 0;
+	void			*recx_data = NULL;
+	hssize_t		nblocks_sel;
+	hssize_t		nblocks = 0;
+	d_sg_list_t		sgl;
+	d_iov_t			iov;
+	daos_iod_t		iod;
+	daos_recx_t		recxs;
+	hid_t			aid;
+
+	for (i = 0; i < num_attrs; i++) {
+ 		memset(attr_name_buf, 0, sizeof(attr_name_buf));
+		aid = H5Aopen_idx(hdf5->rx_dset, (unsigned int)i);
+		if (aid < 0) {
+			fprintf(stderr, "failed to get open attr\n");
+			D_GOTO(out, rc = 1);
+		}
+		attr_len = H5Aget_name(aid, 124, attr_name_buf);
+		if (attr_len < 0) {
+			fprintf(stderr, "failed to get attr name\n");
+			D_GOTO(out, rc = 1);
+		}
+		printf("\t\t\t    Attribute Name : %s\n", attr_name_buf);
+		printf("\t\t\t    Attribute Len : %d\n",(int)attr_len);
+		attr_space = H5Aget_storage_size(aid);
+		if (attr_len < 0) {
+			fprintf(stderr, "failed to attr space\n");
+			D_GOTO(out, rc = 1);
+		}
+		attr_type = H5Aget_type(aid);
+		if (attr_type < 0) {
+			fprintf(stderr, "failed to get attr type\n");
+			D_GOTO(out, rc = 1);
+		}
+		type_size = H5Tget_size(attr_type);
+		if (type_size < 0) {
+			fprintf(stderr, "failed to get type size\n");
+			D_GOTO(out, rc = 1);
+		}
+		printf("\t\t\ttype size: %d\n", (int)type_size);
+		printf("\t\t\tattr id: %lu\n", (uint64_t)aid);
+		printf("\t\t\tattr space: %d\n", (int)attr_space);
+		
+		decode_buf = malloc(type_size * attr_space);
+		if (decode_buf == NULL) {
+			D_GOTO(out, -DER_NOMEM);
+		}
+		status = H5Aread(aid, attr_type, decode_buf);
+		if (status < 0) {
+			fprintf(stderr, "failed to read attribute\n");
+			D_GOTO(out, rc = 1);
+		}
+		rx_range_id = H5Sdecode(decode_buf);
+		if (rx_range_id < 0) {
+			fprintf(stderr, "failed to decode attribute buffer\n");
+			D_GOTO(out, rc = 1);
+		}
+ 		memset(rx_range, 0, sizeof(rx_range));
+		nblocks = H5Sget_select_hyper_nblocks(rx_range_id);
+		if (nblocks < 0) {
+			fprintf(stderr, "failed to get hyperslab blocks\n");
+			D_GOTO(out, rc = 1);
+		}
+		status = H5Sget_select_hyper_blocklist(rx_range_id, 0,
+						       nblocks, rx_range);
+		if (status < 0) {
+			fprintf(stderr, "failed to get blocklist\n");
+			D_GOTO(out, rc = 1);
+		}
+		printf("\t\t\tRX IDX: %d\n", (int)rx_range[0]);
+		printf("\t\t\tRX NR: %d\n", (int)rx_range[1]);
+
+		/* read recx data then update */
+		hdf5->rx_dspace = H5Dget_space(hdf5->rx_dset);
+		if (hdf5->rx_dspace < 0) {
+			fprintf(stderr, "failed to get rx_dspace\n");
+			D_GOTO(out, rc = 1);
+		}
+
+		/* TODO: remove these debugging calls */
+		hsize_t dset_size = H5Sget_simple_extent_npoints(hdf5->rx_dspace);
+		printf("DSET_SIZE RX DSPACE: %d\n", (int)dset_size);
+		hsize_t dset_size2 = H5Sget_simple_extent_npoints(rx_range_id);
+		printf("DSET_SIZE RX ID: %d\n", (int)dset_size2);
+
+		hsize_t start = rx_range[0];
+		hsize_t count = (rx_range[1] - rx_range[0]) + 1;
+		status = H5Sselect_hyperslab(hdf5->rx_dspace,
+				    	     H5S_SELECT_AND,
+					     &start, NULL,
+					     &count, NULL);
+		if (status < 0) {
+			fprintf(stderr, "failed to select hyperslab\n");
+			D_GOTO(out, rc = 1);
+		}
+		recx_len = count * 1;
+		recx_data = malloc(recx_len);
+		printf("\t\t\tRECX LEN: %d\n", (int)recx_len);
+		nblocks_sel = H5Sget_select_hyper_nblocks(hdf5->rx_dspace);
+		printf("NUM BLOCKS SELECTED: %d\n", (int)nblocks_sel);
+		hdf5->mem_dims[0] = count;
+		hdf5->rx_memspace = H5Screate_simple(1, hdf5->mem_dims,
+						     hdf5->mem_dims);
+		status = H5Dread(hdf5->rx_dset,
+				 hdf5->rx_dtype,
+				 hdf5->rx_memspace,
+				 hdf5->rx_dspace,
+				 H5P_DEFAULT,
+				 recx_data);
+		if (status < 0) {
+			fprintf(stderr, "failed to read record extent\n");
+				D_GOTO(out, rc = 1);
+		}
+ 		memset(&sgl, 0, sizeof(sgl));
+ 		memset(&iov, 0, sizeof(iov));
+ 		memset(&iod, 0, sizeof(iod));
+ 		memset(&recxs, 0, sizeof(recxs));
+		d_iov_set(&iod.iod_name,
+			  (void*)hdf5->akey_data[ak_off + k].akey_val.p,
+			  hdf5->akey_data[ak_off + k].akey_val.len);
+		/* set iod values */
+		iod.iod_type  = DAOS_IOD_ARRAY;
+		iod.iod_size  = 1;
+		iod.iod_nr    = 1;
+
+		printf("START TO WRITE: %d\n", (int)start);
+		printf("COUNT TO WRITE: %d\n", (int)count);
+		recxs.rx_nr = recx_len;
+		recxs.rx_idx = start;
+		iod.iod_recxs = &recxs;
+
+		/* set sgl values */
+		sgl.sg_nr     = 1;
+		sgl.sg_iovs   = &iov;
+
+		d_iov_set(&iov, recx_data, recx_len);	
+		/* update fetched recx values and place in destination object */
+             	rc = daos_obj_update(*oh, DAOS_TX_NONE, 0, &diov, 1, &iod,
+				     &sgl, NULL);
+		if (rc != 0) {
+			fprintf(stderr, "failed to update object: %d\n", rc);
+			D_GOTO(out, rc);
+		}
+		H5Aclose(aid);
+		D_FREE(recx_data);
+		D_FREE(decode_buf);
+	}
+out:
+	return rc;
+}
+
+static int
+cont_deserialize_keys(struct hdf5_args *hdf5,
+		      uint64_t *total_dkeys_this_oid,
+		      uint64_t *dk_off,
+		      daos_handle_t *oh)
+{
+	int			rc = 0;
+	hid_t			status = 0;
+	int			j = 0;
+        daos_key_t		diov;
+      	char			dkey[ENUM_KEY_BUF] = {0};
+	uint64_t		ak_off = 0;
+	uint64_t		ak_next = 0;
+	uint64_t		total_akeys_this_dkey = 0;
+	int			k = 0;
+        daos_key_t		aiov;
+        char			akey[ENUM_KEY_BUF] = {0};
+	int			rx_ndims;
+	uint64_t		index = 0;
+	int			len = 0;
+	int			num_attrs;
+	size_t			single_tsize;
+	char			*single_data = NULL;
+	d_sg_list_t		sgl;
+	d_iov_t			iov;
+	daos_iod_t		iod;
+	
+	for(j = 0; j < *total_dkeys_this_oid; j++) {
+		memset(&diov, 0, sizeof(diov));
+		memset(dkey, 0, sizeof(dkey));
+		snprintf(dkey,
+			 hdf5->dkey_data[*dk_off + j].dkey_val.len + 1,
+			 "%s",
+			 (char*)(hdf5->dkey_data[*dk_off + j].dkey_val.p));
+		d_iov_set(&diov,
+			  (void*)hdf5->dkey_data[*dk_off + j].dkey_val.p,
+			  hdf5->dkey_data[*dk_off + j].dkey_val.len);
+		printf("\tDKEY VAL: %s\n", (char*)dkey);
+		printf("\tDKEY VAL LEN: %lu\n",
+			hdf5->dkey_data[*dk_off + j].dkey_val.len);
+		ak_off = hdf5->dkey_data[*dk_off + j].akey_offset;
+		ak_next = 0;
+		total_akeys_this_dkey = 0;
+		if (*dk_off + j + 1 < (int)hdf5->dkey_dims[0]) {
+			ak_next = hdf5->dkey_data[(*dk_off + j) + 1].akey_offset;
+			total_akeys_this_dkey = ak_next - ak_off;
+		} else if (*dk_off + j == ((int)hdf5->dkey_dims[0] - 1)) {
+			total_akeys_this_dkey = ((int)hdf5->akey_dims[0]) - ak_off;
+		}
+		printf("\nTOTAL AK THIS DK: %lu\n",
+			total_akeys_this_dkey);
+		for(k = 0; k < total_akeys_this_dkey; k++) {
+			memset(&aiov, 0, sizeof(aiov));
+			memset(akey, 0, sizeof(akey));
+			snprintf(akey,
+				 hdf5->akey_data[ak_off + k].akey_val.len + 1,
+				 "%s",
+				(char*)hdf5->akey_data[ak_off + k].akey_val.p);
+			d_iov_set(&aiov,
+				  (void*)hdf5->akey_data[ak_off + k].akey_val.p,
+				  hdf5->akey_data[ak_off + k].akey_val.len);
+			printf("\t\tAKEY VAL: %s\n", (char*)akey);
+			printf("\t\tAKEY VAL LEN: %lu\n",
+			       hdf5->akey_data[ak_off + k].akey_val.len);
+
+			/* read record data for each akey */
+			index = ak_off + k;
+			len = snprintf(NULL, 0, "%lu", index);
+			char dset_name[len + 1];	
+			snprintf(dset_name, len + 1, "%lu", index);
+			printf("\t\t\tdset name: %s\n", dset_name);
+			hdf5->rx_dset = H5Dopen(hdf5->file, dset_name,
+						H5P_DEFAULT);
+			if (hdf5->rx_dset < 0) {
+				fprintf(stderr,
+					"failed to open rx_dset\n");
+				D_GOTO(out, rc = 1);
+			}
+			printf("\t\t\trx_dset: %lu\n", (uint64_t)hdf5->rx_dset);
+			hdf5->rx_dspace = H5Dget_space(hdf5->rx_dset);
+			if (hdf5->rx_dspace < 0) {
+				fprintf(stderr,
+					"failed to get rx_dspace\n");
+				D_GOTO(out, rc = 1);
+			}
+			printf("\t\t\trx_dspace id: %d\n", (int)hdf5->rx_dspace);
+			hdf5->rx_dtype = H5Dget_type(hdf5->rx_dset);
+			if (hdf5->rx_dtype < 0) {
+				fprintf(stderr,
+					"failed to get rx_dtype\n");
+				D_GOTO(out, rc = 1);
+			}
+			hdf5->plist = H5Dget_create_plist(hdf5->rx_dset);
+			if (hdf5->plist < 0) {
+				fprintf(stderr,
+					"failed to get plist\n");
+				D_GOTO(out, rc = 1);
+			}
+			rx_ndims = H5Sget_simple_extent_dims(hdf5->rx_dspace,
+							     hdf5->rx_dims,
+							     NULL);
+			if (rx_ndims < 0) {
+				fprintf(stderr,
+					"failed to get rx_ndims\n");
+				D_GOTO(out, rc = 1);
+			}
+			printf("\t\t\trx_dims: %d\n", (int)hdf5->rx_dims[0]);
+			num_attrs = H5Aget_num_attrs(hdf5->rx_dset);
+			if (num_attrs < 0) {
+				fprintf(stderr,
+					"failed to get num attrs\n");
+				D_GOTO(out, rc = 1);
+			}
+			printf("\t\t\tnum attrs: %d\n", num_attrs);
+			if (num_attrs > 0) {
+				rc = cont_deserialize_recx(hdf5, oh, diov,
+							   num_attrs, ak_off,
+							   k);
+				if (rc != 0) {
+					fprintf(stderr, "failed to deserialize "
+						"recx\n");
+					D_GOTO(out, rc);
+				}
+			} else {
+				memset(&sgl, 0, sizeof(sgl));
+ 				memset(&iov, 0, sizeof(iov));
+ 				memset(&iod, 0, sizeof(iod));
+				single_tsize = H5Tget_size(hdf5->rx_dtype);
+				single_data = malloc(single_tsize);
+				printf("\t\t\tSINGLE LEN: %d\n", (int)single_tsize);
+				status = H5Dread(hdf5->rx_dset,
+						    hdf5->rx_dtype,
+						    H5S_ALL, hdf5->rx_dspace,
+						    H5P_DEFAULT, single_data);
+				if (status < 0) {
+					fprintf(stderr, "failed to read record\n");
+					D_GOTO(out, rc = 1);
+				}
+				d_iov_set(&iod.iod_name,
+					  (void*)hdf5->akey_data[ak_off + k].akey_val.p,
+					  hdf5->akey_data[ak_off + k].akey_val.len);
+
+				/* set iod values */
+				iod.iod_type  = DAOS_IOD_SINGLE;
+				iod.iod_size  = single_tsize;
+				iod.iod_nr    = 1;
+				iod.iod_recxs = NULL;
+
+				/* set sgl values */
+				sgl.sg_nr     = 1;
+				sgl.sg_iovs   = &iov;
+
+				d_iov_set(&iov, single_data, single_tsize);	
+				/* update fetched recx values and place in destination object */
+                    		rc = daos_obj_update(*oh, DAOS_TX_NONE, 0, &diov, 1, &iod,
+					&sgl, NULL);
+				if (rc != 0) {
+					fprintf(stderr, "failed to update object: %d\n", rc);
+					D_GOTO(out, rc);
+				}
+
+			}
+		 	H5Pclose(hdf5->plist);	
+			H5Tclose(hdf5->rx_dtype);	
+			H5Sclose(hdf5->rx_dspace);	
+			H5Dclose(hdf5->rx_dset);	
+		}
+	}
+out:
+	D_FREE(single_data);
+	return rc;
+}
+
+int
+cont_deserialize_hdlr(struct cmd_args_s *ap)
+{
+	int			rc = 0;
+	int			i = 0;
+	daos_cont_info_t	cont_info;
+	struct			hdf5_args hdf5;
+	daos_obj_id_t		oid;
+	daos_handle_t		oh;
+	uint64_t		dk_off = 0;
+	uint64_t		dk_next = 0;
+	uint64_t		total_dkeys_this_oid = 0;
+
+	/* init HDF5 args */
+	init_hdf5_args(&hdf5);
+
+	printf("\tpool UUID: "DF_UUIDF"\n", DP_UUID(ap->p_uuid));
+	printf("\tcont UUID: "DF_UUIDF"\n", DP_UUID(ap->c_uuid));
+	printf("\th5filename: %s\n", ap->h5filename);
+
+ 	/* check if this is a POSIX container,
+	 * if it is, then the new container will
+	 * need to be created with DFS
+	 */	
+	/* TODO: remove requiring of --type=POSIX for
+	 * POSIX containers, and instead write all 
+	 * container attributes to HDF5 file. That way,
+	 * I can read the cont type when it was serialized
+	 * instead.
+	 */
+	if (ap->type == DAOS_PROP_CO_LAYOUT_POSIX) {
+		dfs_attr_t attr;
+		attr.da_id = 0;
+		attr.da_oclass_id = ap->oclass;
+		attr.da_chunk_size = ap->chunk_size;
+		attr.da_props = ap->props;
+		rc = dfs_cont_create(ap->pool, ap->c_uuid, &attr, NULL, NULL);
+		if (rc != 0) {
+			fprintf(stderr, "failed to create posix "
+			"container: %d\n", rc);
+			D_GOTO(out, rc);
+		}
+	} else {
+		rc = daos_cont_create(ap->pool, ap->c_uuid, ap->props, NULL);
+		if (rc != 0) {
+			fprintf(stderr, "failed to create container: %d\n", rc);
+			D_GOTO(out, rc);
+		}
+	}
+
+	/* print out created cont uuid */
+	fprintf(stdout, "Successfully created container "DF_UUIDF"\n",
+		DP_UUID(ap->c_uuid));
+	rc = daos_cont_open(ap->pool, ap->c_uuid, DAOS_COO_RW, &ap->cont,
+			    &cont_info, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "failed to open container: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	/* open passed in HDF5 file */
+	hdf5.file = H5Fopen(ap->h5filename, H5F_ACC_RDONLY, H5P_DEFAULT);
+	if (hdf5.file < 0) {
+		fprintf(stderr, "failed to open HDF5 file\n");
+		D_GOTO(out, rc = 1);
+	}
+
+	rc = hdf5_read_key_data(&hdf5);
+	if (rc != 0) {
+		fprintf(stderr, "failed to read hdf5 key data: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+	for(i = 0; i < (int)hdf5.oid_dims[0]; i++) {
+		oid.lo = hdf5.oid_data[i].oid_low;
+		oid.hi = hdf5.oid_data[i].oid_hi;
+		printf("oid_data[i].oid_low: %lu\n", hdf5.oid_data[i].oid_low);
+		printf("oid_data[i].oid_hi: %lu\n", hdf5.oid_data[i].oid_hi);
+		rc = daos_obj_open(ap->cont, oid, 0, &oh, NULL);
+		if (rc != 0) {
+			fprintf(stderr, "failed to open object: %d\n", rc);
+			D_GOTO(out, rc);
+		}
+		dk_off = hdf5.oid_data[i].dkey_offset;
+		dk_next = 0;
+		total_dkeys_this_oid = 0;
+		if (i + 1 < (int)hdf5.oid_dims[0]) {
+			dk_next = hdf5.oid_data[i + 1].dkey_offset;
+			total_dkeys_this_oid = dk_next - dk_off;
+		} else if (i == ((int)hdf5.oid_dims[0] - 1)){
+			printf("LAST OID: i: %d\n", i);
+			total_dkeys_this_oid = (int)hdf5.dkey_dims[0] - (dk_off);
+		} 
+		printf("\nTOTAL DK THIS OID: %lu\n", total_dkeys_this_oid);
+		rc = cont_deserialize_keys(&hdf5, &total_dkeys_this_oid, &dk_off,
+					   &oh);
+		if (rc != 0) {
+			fprintf(stderr, "failed to deserialize keys: %d\n", rc);
+			D_GOTO(out, rc);
+		}
+		rc = daos_obj_close(oh, NULL);
+		if (rc != 0) {
+			fprintf(stderr, "failed to close object: %d\n", rc);
+			D_GOTO(out, rc);
+		}
+	}
+out:
+	H5Dclose(hdf5.oid_dset);
+	H5Dclose(hdf5.dkey_dset);
+	H5Dclose(hdf5.akey_dset);
+	H5Sclose(hdf5.oid_dspace);
+	H5Sclose(hdf5.dkey_dspace);
+	H5Sclose(hdf5.akey_dspace);
+	H5Tclose(hdf5.oid_dtype);
+	H5Tclose(hdf5.dkey_vtype);
+	H5Tclose(hdf5.akey_vtype);
 	return rc;
 }
 
