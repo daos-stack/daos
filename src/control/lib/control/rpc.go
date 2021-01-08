@@ -382,6 +382,13 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 				break
 			}
 
+			// One special case here for system startup. If the
+			// request was sent to a MS replica but the DB wasn't
+			// started yet, it's always valid to retry.
+			if system.IsUnavailable(err) {
+				break
+			}
+
 			// Otherwise, we're finished trying.
 			return ur, nil
 		}

@@ -623,11 +623,18 @@ daos_eq_create(daos_handle_t *eqh)
 		return -DER_NOMEM;
 
 	eqx = daos_eq2eqx(eq);
+
+	rc = crt_context_create(&eqx->eqx_ctx);
+	if (rc) {
+		D_WARN("Failed to create CART context; using the global one "
+		       "("DF_RC")\n", DP_RC(rc));
+		eqx->eqx_ctx = daos_eq_ctx;
+	}
+
 	daos_eq_insert(eqx);
-	eqx->eqx_ctx = daos_eq_ctx;
 	daos_eq_handle(eqx, eqh);
 
-	rc = tse_sched_init(&eqx->eqx_sched, NULL, daos_eq_ctx);
+	rc = tse_sched_init(&eqx->eqx_sched, NULL, eqx->eqx_ctx);
 
 	daos_eq_putref(eqx);
 	return rc;
@@ -870,11 +877,7 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 
 	D_MUTEX_UNLOCK(&eqx->eqx_lock);
 
-	/*
-	 * Since we are sharing the same cart context with all EQs, we need to
-	 * flush the tasks for this EQ, which unfortunately means flushing for
-	 * all EQs.
-	 */
+	/** Flush the tasks for this EQ */
 	if (eqx->eqx_ctx != NULL) {
 		rc = crt_context_flush(eqx->eqx_ctx, 0);
 		if (rc != 0) {
@@ -901,7 +904,19 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 	}
 
 	tse_sched_complete(&eqx->eqx_sched, rc, true);
+
+	/** destroy the EQ cart context only if it's not the global one */
+	if (eqx->eqx_ctx != daos_eq_ctx) {
+		rc = crt_context_destroy(eqx->eqx_ctx,
+					 (flags & DAOS_EQ_DESTROY_FORCE));
+		if (rc) {
+			D_ERROR("Failed to destroy CART context for EQ (%d)\n",
+				rc);
+			goto out;
+		}
+	}
 	eqx->eqx_ctx = NULL;
+
 out:
 	D_MUTEX_UNLOCK(&eqx->eqx_lock);
 	if (rc == 0)

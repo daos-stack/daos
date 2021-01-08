@@ -424,9 +424,9 @@ func (cmd *systemListPoolsCmd) Execute(_ []string) error {
 	}
 
 	ctx := context.Background()
-	resp, err := control.ListPools(ctx, cmd.ctlInvoker, &control.ListPoolsReq{
-		System: cmd.config.SystemName,
-	})
+	req := new(control.ListPoolsReq)
+	req.SetSystem(cmd.config.SystemName)
+	resp, err := control.ListPools(ctx, cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(resp, err)

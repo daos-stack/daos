@@ -30,6 +30,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/events"
@@ -51,6 +52,7 @@ func makeBadBytes(count int) (badBytes []byte) {
 
 func newTestListContReq() *mgmtpb.ListContReq {
 	return &mgmtpb.ListContReq{
+		Sys:  build.DefaultSystemName,
 		Uuid: "12345678-1234-1234-1234-123456789abc",
 	}
 }
@@ -159,6 +161,7 @@ func TestListCont_ManyContSuccess(t *testing.T) {
 
 func newTestContSetOwnerReq() *mgmtpb.ContSetOwnerReq {
 	return &mgmtpb.ContSetOwnerReq{
+		Sys:        build.DefaultSystemName,
 		ContUUID:   "contUUID",
 		PoolUUID:   "poolUUID",
 		Owneruser:  "user@",

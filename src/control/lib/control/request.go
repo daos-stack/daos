@@ -27,6 +27,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/pkg/errors"
 )
 
@@ -90,7 +91,22 @@ type (
 // common to all request types.
 type request struct {
 	deadline time.Time
+	Sys      string // DAOS system name
 	HostList []string
+}
+
+// SetSystem sets the request's system name.
+func (r *request) SetSystem(name string) {
+	r.Sys = name
+}
+
+// getSystem returns the system name set for the request, or
+// the default name.
+func (r *request) getSystem() string {
+	if r.Sys == "" {
+		return build.DefaultSystemName
+	}
+	return r.Sys
 }
 
 // getHostList returns the hostlist set for the request, which

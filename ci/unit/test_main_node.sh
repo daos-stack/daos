@@ -50,8 +50,4 @@ if ${NLT:-false}; then
 else
     sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
     IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" utils/run_test.sh
-
-    if [ "$WITH_VALGRIND" == 'memcheck' ]; then
-	mv test_results/unit-test-*.memcheck.xml .
-    fi
 fi

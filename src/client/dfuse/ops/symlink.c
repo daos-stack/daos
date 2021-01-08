@@ -57,7 +57,7 @@ dfuse_cb_symlink(fuse_req_t req, const char *link,
 	if (rc)
 		D_GOTO(err, rc);
 
-	dfuse_reply_entry(fs_handle, ie, NULL, req);
+	dfuse_reply_entry(fs_handle, ie, NULL, true, req);
 
 	return;
 err:
