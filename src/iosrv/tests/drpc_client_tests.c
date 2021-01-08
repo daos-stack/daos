@@ -369,8 +369,9 @@ test_drpc_verify_notify_ras_event(void **state)
 			    "exctlop", "Example message for no response",
 			    "{\"people\":[\"bill\",\"steve\",\"bob\"]}");
 	verify_notify_ras_event(RAS_RANK_NO_RESP, RAS_SEV_WARN, RAS_TYPE_INFO,
-				"exhwid", &rank, "exjobid", &puuid, &cuuid, &oid,
-				"exctlop", "Example message for no response",
+				"exhwid", &rank, "exjobid", &puuid, &cuuid,
+				&oid, "exctlop",
+				"Example message for no response",
 				"{\"people\":[\"bill\",\"steve\",\"bob\"]}");
 
 	/* Now let's shut things down... */

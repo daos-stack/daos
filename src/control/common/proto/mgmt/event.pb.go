@@ -389,7 +389,7 @@ func (m *ClusterEventReq) GetEvent() *RASEvent {
 }
 
 // RASEventResp acknowledges receipt of an event notification and an error
-// status. Acknowledgement does not indicate that the event was handled.
+// status. Acknowledgment does not indicate that the event was handled.
 type ClusterEventResp struct {
 	Sequence             uint64   `protobuf:"varint,1,opt,name=sequence,proto3" json:"sequence,omitempty"`
 	Status               int32    `protobuf:"varint,2,opt,name=status,proto3" json:"status,omitempty"`

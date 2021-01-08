@@ -183,7 +183,7 @@ struct  _Mgmt__ClusterEventReq
 
 /*
  * RASEventResp acknowledges receipt of an event notification and an error
- * status. Acknowledgement does not indicate that the event was handled.
+ * status. Acknowledgment does not indicate that the event was handled.
  */
 struct  _Mgmt__ClusterEventResp
 {

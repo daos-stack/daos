@@ -238,8 +238,6 @@ ds_notify_ras_event(char *id, enum ras_event_type type, enum ras_event_sev sev,
 		D_ERROR("failed to send RAS event: "DF_RC"\n", DP_RC(rc));
 
 	free_ras(&evt);
-
-	return;
 }
 
 int
@@ -283,8 +281,6 @@ ds_notify_pool_svc_update(uuid_t *puuid, d_rank_list_t *svc)
 	free_ras(&evt);
 out_svcreps:
 	D_FREE(info.svc_reps);
-//out_uuid:
-//	D_FREE(info.pool_uuid);
 
 	return rc;
 }

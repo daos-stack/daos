@@ -72,7 +72,7 @@ message ClusterEventReq {
 }
 
 // RASEventResp acknowledges receipt of an event notification and an error
-// status. Acknowledgement does not indicate that the event was handled.
+// status. Acknowledgment does not indicate that the event was handled.
 message ClusterEventResp {
 	uint64 sequence = 1;	// Sequence identifier for RAS events.
 	int32 status = 2;	// DAOS error code.
