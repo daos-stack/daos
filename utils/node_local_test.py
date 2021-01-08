@@ -35,6 +35,10 @@ class NLTestNoFunction(NLTestFail):
         super().__init__(self)
         self.function = function
 
+class NLTestTimeout(NLTestFail):
+    """Used to indicate that an operation timed out"""
+    pass
+
 instance_num = 0
 
 def get_inc_id():
@@ -300,6 +304,31 @@ class DaosServer():
         if self.running:
             self.stop()
 
+    # pylint: disable=no-self-use
+    def _check_timing(self, op, start, max_time):
+        elapsed = time.time() - start
+        if elapsed > max_time:
+            raise NLTestTimeout("{} failed after {:.2f}s (max {:.2f}s)".format(
+                op, elapsed, max_time))
+
+    def _check_system_state(self, desired):
+        # The json returned from the control plane should have
+        # string-based states.
+        states = {
+            "ready": [8],
+            "stopped": [16, 32],
+        }
+
+        rc = self.run_dmg(['system', 'query', '--json'])
+        if rc.returncode == 0:
+            data = json.loads(rc.stdout.decode('utf-8'))
+            members = data['response']['Members']
+            if members is not None:
+                for desired_state in states[desired]:
+                    if members[0]['State'] == desired_state:
+                        return True
+        return False
+
     def start(self):
         """Start a DAOS server"""
 
@@ -388,6 +417,7 @@ class DaosServer():
         # /mnt/daos is mounted but empty.  It will be remounted and formatted
         # /mnt/daos exists and has data in.  It will be used as is.
         start = time.time()
+        max_start_time = 30
 
         cmd = ['storage', 'format']
         while True:
@@ -400,28 +430,20 @@ class DaosServer():
                         ready = True
                     if 'format request for already-formatted storage and reformat not specified' in line:
                         cmd = ['storage', 'format', '--reformat']
+                for line in rc.stderr.decode('utf-8').splitlines():
+                    if 'system reformat requires the following' in line:
+                        ready = True
             if ready:
                 break
-            if time.time() - start > 20:
-                raise Exception("Failed to format")
-
+            self._check_timing("format", start, max_start_time)
         print('Format completion in {:.2f} seconds'.format(time.time() - start))
 
         # How wait until the system is up, basically the format to happen.
         while True:
             time.sleep(0.5)
-            rc = self.run_dmg(['system', 'query'])
-            ready = False
-            if rc.returncode == 0:
-                for line in rc.stdout.decode('utf-8').splitlines():
-                    if line.startswith('status'):
-                        if 'Joined' in line:
-                            ready = True
-
-            if ready:
+            if self._check_system_state('ready'):
                 break
-            if time.time() - start > 20:
-                raise Exception("Failed to start")
+            self._check_timing("start", start, max_start_time)
         print('Server started in {:.2f} seconds'.format(time.time() - start))
 
     def stop(self):
@@ -437,23 +459,15 @@ class DaosServer():
         assert rc.returncode == 0
 
         start = time.time()
+        max_stop_time = 5
         while True:
             time.sleep(0.5)
-            rc = self.run_dmg(['system', 'query'])
-            ready = False
-            if rc.returncode == 0:
-                for line in rc.stdout.decode('utf-8').splitlines():
-                    if line.startswith('status'):
-                        if 'Stopped' in line:
-                            ready = True
-                        if 'Stopping' in line:
-                            ready = True
-
-            if ready:
+            if self._check_system_state('stopped'):
                 break
-            if time.time() - start > 20:
-                print('Failed to stop')
-                break
+            try:
+                self._check_timing("stop", start, max_stop_time)
+            except NLTestTimeout as e:
+                print('Failed to stop: {}'.format(e))
         print('Server stopped in {:.2f} seconds'.format(time.time() - start))
 
         # daos_server does not correctly shutdown daos_io_server yet
@@ -519,6 +533,7 @@ class DaosServer():
         exe_cmd.append('--insecure')
         exe_cmd.extend(cmd)
 
+        print('running {}'.format(exe_cmd))
         return subprocess.run(exe_cmd,
                               stdout=subprocess.PIPE,
                               stderr=subprocess.PIPE)
@@ -902,10 +917,17 @@ def make_pool(daos):
 
     size = int(daos.mb / 4)
 
-    rc = daos.run_dmg(['pool',
-                       'create',
-                       '--scm-size',
-                       '{}M'.format(size)])
+    attempt = 0
+    max_tries = 5
+    while attempt < max_tries:
+        rc = daos.run_dmg(['pool',
+                           'create',
+                           '--scm-size',
+                           '{}M'.format(size)])
+        if rc.returncode == 0:
+            break
+        attempt += 1
+        time.sleep(0.5)
 
     print(rc)
     assert rc.returncode == 0
