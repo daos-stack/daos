@@ -191,6 +191,7 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 #define D_NOTE(fmt, ...)	D_DEBUG(DLOG_NOTE, fmt, ## __VA_ARGS__)
 #define D_WARN(fmt, ...)	D_DEBUG(DLOG_WARN, fmt, ## __VA_ARGS__)
 #define D_ERROR(fmt, ...)	D_DEBUG(DLOG_ERR, fmt, ## __VA_ARGS__)
+#define D_ALERT(fmt, ...)	D_DEBUG(DLOG_ALERT, fmt, ## __VA_ARGS__)
 #define D_CRIT(fmt, ...)	D_DEBUG(DLOG_CRIT, fmt, ## __VA_ARGS__)
 #define D_FATAL(fmt, ...)	D_DEBUG(DLOG_EMERG, fmt, ## __VA_ARGS__)
 #define D_EMIT(fmt, ...)	D_DEBUG(DLOG_EMIT, fmt, ## __VA_ARGS__)
@@ -203,6 +204,8 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 	D_TRACE_DEBUG(DLOG_WARN, ptr, fmt, ## __VA_ARGS__)
 #define D_TRACE_ERROR(ptr, fmt, ...)	\
 	D_TRACE_DEBUG(DLOG_ERR, ptr, fmt, ## __VA_ARGS__)
+#define D_TRACE_ALERT(ptr, fmt, ...)	\
+	D_TRACE_DEBUG(DLOG_ALERT, ptr, fmt, ## __VA_ARGS__)
 #define D_TRACE_CRIT(ptr, fmt, ...)	\
 	D_TRACE_DEBUG(DLOG_CRIT, ptr, fmt, ## __VA_ARGS__)
 #define D_TRACE_FATAL(ptr, fmt, ...)	\

@@ -420,7 +420,6 @@ debug_mask_load_env(void)
 	char	*mask_env;
 
 	mask_env = getenv(DD_MASK_ENV);
-printf(" SAB: mask_load_env: mask_env: %s\n", mask_env);
 	if (mask_env == NULL)
 		return;
 
@@ -442,8 +441,8 @@ d_log_sync_mask(void)
 
 	/* load facility mask environment (D_LOG_MASK) */
 	log_mask = getenv(D_LOG_MASK_ENV);
-printf(" SAB: d_log_sync_mask:  log_mask: %s\n", log_mask);
-	if (log_mask != NULL){
+	if (log_mask != NULL) {
+		/* Prevent checkpatch warning */
 		d_log_setmasks(log_mask, -1);
 	}
 

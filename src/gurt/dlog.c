@@ -172,15 +172,11 @@ static const char *clog_pristr(int pri)
 {
 	int s;
 
-#ifdef ORIG
-	pri = pri & DLOG_PRIMASK;
-	s = (pri >> DLOG_PRISHIFT) & 7;
-#else
 	s = DLOG_PRI(pri);
-	if ( s > (sizeof (norm) / sizeof (char *))){
+	if (s > (sizeof(norm) / sizeof(char *))) {
+		/* prevent checksum warning */
 		s = 0;
 	}
-#endif
 	return norm[s];
 }
 
@@ -550,17 +546,11 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 
 	int fac, lvl, pri;
 	bool flush;
-#if 1
-	 char *b_nopt1hdr;
-#endif
+	char *b_nopt1hdr;
 	char facstore[16], *facstr;
 	struct timeval tv;
 	struct tm *tm;
-#if 1
 	unsigned int hlen_pt1, hlen, mlen, tlen;
-#else
-	unsigned int hlen, mlen, tlen;
-#endif
 	/*
 	 * since we ignore any potential errors in CLOG let's always re-set
 	 * errno to its original value
@@ -632,9 +622,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 		}
 	}
 
-#if 1
 	hlen_pt1 = hlen;	/* save part 1 length */
-#endif
 	if (hlen < sizeof(b)) {
 		if (mst.oflags & DLOG_FLV_FAC)
 			hlen += snprintf(b + hlen, sizeof(b) - hlen,
@@ -682,9 +670,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 			b[tlen] = 0;
 		}
 	}
-#if 1
 	b_nopt1hdr = b + hlen_pt1;
-#endif
 	if (mst.oflags & DLOG_FLV_STDOUT)
 		flags |= DLOG_STDOUT;
 
@@ -708,22 +694,13 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	 * log it to stderr and/or stdout.  skip part one of the header
 	 * if the output channel is a tty
 	 */
-printf(" SAB: d_vlog: flag 0x%x\n",flags);
-#if 0
-	if (flags & DLOG_STDERR) {
-#else
 	if ((flags & DLOG_STDERR) && (pri != DLOG_EMIT)) {
-#endif
 		if (mst.stderr_isatty)
 			fprintf(stderr, "%s", b_nopt1hdr);
 		else
 			fprintf(stderr, "%s", b);
 	}
-#if 0
-	if (flags & DLOG_STDOUT) {
-#else
 	if ((flags & DLOG_STDOUT) &&  (pri != DLOG_EMIT)) {
-#endif
 		if (mst.stderr_isatty)
 			printf("%s", b_nopt1hdr);
 		else
@@ -749,6 +726,7 @@ static int d_log_str2pri(const char *pstr, size_t len)
 
 	/* make sure we have a valid input */
 	if (len == 0 || len > 7) {
+		/* prevent checksum warning */
 		return -1;
 	}
 
@@ -760,7 +738,7 @@ static int d_log_str2pri(const char *pstr, size_t len)
 		/* has trailing space in the array */
 		return DLOG_ERR;
 	if (strncasecmp(pstr, "DEBUG", len) == 0 || \
-		strncasecmp(pstr, "DBUG", len) == 0) {
+	    strncasecmp(pstr, "DBUG", len) == 0) {
 		/* check to see is debug mask bits are set */
 		return d_dbglog_data.dd_mask != 0 ?
 		       d_dbglog_data.dd_mask : DLOG_DBG;
@@ -855,7 +833,9 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 			if (buffer != NULL && rc != -1)
 				logfile = buffer;
 			else
-				D_PRINT_ERR("Failed to append pid to DAOS debug log name, continuing.\n");
+				D_PRINT_ERR("Failed to append pid to "
+					    "DAOS debug log name, "
+					    "continuing.\n");
 		}
 	}
 
@@ -920,7 +900,8 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		if (merge) {
 			if (freopen(mst.log_file, truncate ? "w" : "a",
 				    stderr) == NULL) {
-				fprintf(stderr, "d_log_open: cannot open %s: %s\n",
+				fprintf(stderr, "d_log_open: cannot "
+					"pen %s: %s\n",
 					mst.log_file, strerror(errno));
 				goto error;
 			}
@@ -971,7 +952,9 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	 */
 	rc = atexit(d_log_sync);
 	if (rc != 0)
-		fprintf(stderr, "unable to register flush of log, potential risk to miss last lines if fini method not invoked upon exit\n");
+		fprintf(stderr, "unable to register flush of log,\n"
+			"potential risk to miss last lines if fini method "
+			"not invoked upon exit\n");
 
 	if (buffer)
 		free(buffer);
@@ -1148,7 +1131,6 @@ int d_log_setmasks(char *mstr, int mlen0)
 	unsigned int faclen, prilen;
 	int log_flags;
 
-printf(" \nSAB: setmask: input: %s\n", mstr);
 	/* not open? */
 	if (!d_log_xst.tag)
 		return -1;
@@ -1203,8 +1185,6 @@ printf(" \nSAB: setmask: input: %s\n", mstr);
 		/* parse complete! */
 		/* process priority */
 		prino = d_log_str2pri(pri, prilen);
-printf("\n SAB: facility:: %s:\n", fac);
-printf(" SAB: pri %s, level 0x%0x\n", pri, prino);
 		if (prino == -1) {
 			log_flags = d_log_check(DLOG_ERR);
 
@@ -1216,7 +1196,6 @@ printf(" SAB: pri %s, level 0x%0x\n", pri, prino);
 		}
 		/* process facility */
 		if (fac) {
-printf(" SAB: facility defined: %s\n", fac);
 			clog_lock();
 			/* Search structure to see if it already exists */
 			for (facno = 0; facno < d_log_xst.fac_cnt; facno++) {
@@ -1262,7 +1241,6 @@ printf(" SAB: facility defined: %s\n", fac);
 
 		} /* end if(fac) */
 		else {
-printf(" SAB: facility NOT defined:\n");
 			/* apply to all facilities */
 			for (facno = 0; facno < d_log_xst.fac_cnt; facno++) {
 				tmp = d_log_setlogmask(facno, prino);

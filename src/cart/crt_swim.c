@@ -90,11 +90,11 @@ crt_swim_fault_init(const char *args)
 			s++; /* skip space */
 		if (!strncasecmp(s, "delay=", 6)) {
 			crt_swim_fail_delay = strtoul(s + 6, &end, 0);
-			D_ERROR("*** CRT_SWIM_FAIL_DELAY=%lu\n",
+			D_EMIT("CRT_SWIM_FAIL_DELAY=%lu\n",
 				crt_swim_fail_delay);
 		} else if (!strncasecmp(s, "rank=", 5)) {
 			crt_swim_fail_id = strtoul(s + 5, &end, 0);
-			D_ERROR("*** CRT_SWIM_FAIL_ID=%lu\n", crt_swim_fail_id);
+			D_EMIT("CRT_SWIM_FAIL_ID=%lu\n", crt_swim_fail_id);
 		}
 		s = NULL;
 	}
@@ -217,7 +217,7 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 
 	if (CRT_SWIM_SHOULD_FAIL(d_fa_swim_drop_rpc, self_id)) {
 		rc = d_fa_swim_drop_rpc->fa_err_code;
-		D_ERROR("*** DROP incoming opc %#x with %zu updates "
+		D_EMIT("DROP incoming opc %#x with %zu updates "
 			"%lu <= %lu error: "DF_RC"\n", rpc_req->cr_opc,
 			rpc_swim_input->upds.ca_count, self_id, from_id,
 			DP_RC(rc));
@@ -328,7 +328,7 @@ static int crt_swim_send_message(struct swim_context *ctx, swim_id_t to,
 
 	if (CRT_SWIM_SHOULD_FAIL(d_fa_swim_drop_rpc, self_id)) {
 		rc = d_fa_swim_drop_rpc->fa_err_code;
-		D_ERROR("*** DROP outgoing opc %#x with %zu updates "
+		D_EMIT("DROP outgoing opc %#x with %zu updates "
 			"%lu => %lu error: "DF_RC"\n", opc, nupds,
 			self_id, to, DP_RC(rc));
 		if (!rc)
@@ -550,7 +550,7 @@ static void crt_swim_progress_cb(crt_context_t crt_ctx, void *arg)
 	if (crt_swim_fail_hlc && crt_hlc_get() >= crt_swim_fail_hlc) {
 		crt_swim_should_fail = true;
 		crt_swim_fail_hlc = 0;
-		D_ERROR("*** SWIM id=%lu should fail\n", crt_swim_fail_id);
+		D_EMIT("SWIM id=%lu should fail\n", crt_swim_fail_id);
 	}
 
 	rc = swim_progress(ctx, CRT_SWIM_PROGRESS_TIMEOUT);
@@ -660,7 +660,7 @@ int crt_swim_init(int crt_ctx_idx)
 	/* Search the attr in inject yml first */
 	d_fa_swim_drop_rpc = d_fault_attr_lookup(CRT_SWIM_FAIL_DROP_RPC);
 	if (d_fa_swim_drop_rpc != NULL) {
-		D_ERROR("*** fa_swim_drop_rpc: id=%u/0x%x, "
+		D_EMIT("fa_swim_drop_rpc: id=%u/0x%x, "
 			"interval=%u, max="DF_U64", x=%u, y=%u, args='%s'\n",
 			d_fa_swim_drop_rpc->fa_id,
 			d_fa_swim_drop_rpc->fa_id,

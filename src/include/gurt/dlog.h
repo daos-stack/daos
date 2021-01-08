@@ -87,11 +87,7 @@ typedef uint64_t d_dbug_t;
 #define DLOG_STDERR     0x20000000	/**< always log to stderr */
 #define DLOG_STDOUT     0x10000000	/**< always log to stdout */
 
-#ifdef ORIG
-#define DLOG_PRIMASK    0x07ffff00	/**< priority mask */
-#else
 #define DLOG_PRIMASK    0x0fffff00	/**< priority mask */
-#endif
 #define D_FOREACH_PRIO_MASK(ACTION, arg)				    \
 	ACTION(DLOG_EMIT,  emit,  emit,  0x08000000, arg) /**< emit */	    \
 	ACTION(DLOG_EMERG, fatal, fatal, 0x07000000, arg) /**< emergency */ \
@@ -120,9 +116,9 @@ enum d_log_flag_bits {
 
 #define DLOG_PRISHIFT     24		/**< to get non-debug level */
 #define DLOG_DPRISHIFT    8		/**< to get debug level */
-#define DLOG_PRINDMASK	  0x0f000000	/**< mask for non-debug level bits */
+#define DLOG_PRINDMASK    0x0f000000	/**< mask for non-debug level bits */
 #define DLOG_FACMASK      0x000000ff	/**< facility mask */
-#define DLOG_UNINIT	  0x80000000	/**< Reserve one bit mask cache */
+#define DLOG_UNINIT       0x80000000	/**< Reserve one bit mask cache */
 
 #define DLOG_PRI(flag) ((flag & DLOG_PRINDMASK) >> DLOG_PRISHIFT)
 
