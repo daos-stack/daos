@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -281,7 +281,8 @@ ioil_init(void)
 
 	rc = ioil_initialize_fd_table(rlimit.rlim_max);
 	if (rc != 0) {
-		DFUSE_LOG_ERROR("Could not create fd_table, disabling kernel bypass, rc = " DF_RC,
+		DFUSE_LOG_ERROR("Could not create fd_table, "
+				"disabling kernel bypass, rc = "DF_RC,
 				DP_RC(rc));
 		return;
 	}
@@ -304,7 +305,7 @@ ioil_fini(void)
 	DFUSE_TRA_DOWN(&ioil_iog);
 	vector_destroy(&fd_table);
 
-	/* Tidy up and remaining open connections */
+	/* Tidy up any remaining open connections */
 	d_list_for_each_entry_safe(pool, pnext,
 				   &ioil_iog.iog_pools_head, iop_pools) {
 		d_list_for_each_entry_safe(cont, cnext,

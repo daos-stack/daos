@@ -1601,8 +1601,10 @@ class AllocFailTestRun():
             if self.stdout != self.aft.expected_stdout:
                 self.aft.conf.wf.add(self.fi_loc,
                                      'NORMAL',
-                                     "Incorrect stdout '{}'".format(self.stdout),
-                                     mtype='Out of memory caused zero exit code with incorrect output')
+                                     "Incorrect stdout '{}'".format(
+                                         self.stdout),
+                                     mtype='Out of memory caused zero exit '
+                                     'code with incorrect output')
 
         stderr = self.stderr.decode('utf-8').rstrip()
         if not stderr.endswith("Out of memory (-1009)") and \
@@ -1615,8 +1617,10 @@ class AllocFailTestRun():
                 print()
             self.aft.conf.wf.add(self.fi_loc,
                                  'NORMAL',
-                                 "Incorrect stderr '{}'".format(stderr),
-                                 mtype='Out of memory not reported correctly via stderr')
+                                 "Incorrect stderr '{}'".format(
+                                     stderr),
+                                 mtype='Out of memory not reported '
+                                 'correctly via stderr')
 
 class AllocFailTest():
     """Class to describe fault injection command"""
