@@ -105,11 +105,15 @@ struct  _Mgmt__JoinReq
 {
   ProtobufCMessage base;
   /*
+   * DAOS system name.
+   */
+  char *sys;
+  /*
    * Server UUID.
    */
   char *uuid;
   /*
-   * Server rank desired, if not -1.
+   * Server rank desired, if not MAX_UINT32.
    */
   uint32_t rank;
   /*
@@ -135,7 +139,7 @@ struct  _Mgmt__JoinReq
 };
 #define MGMT__JOIN_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__join_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0 }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0 }
 
 
 struct  _Mgmt__JoinResp
@@ -173,7 +177,7 @@ struct  _Mgmt__LeaderQueryReq
   /*
    * System name.
    */
-  char *system;
+  char *sys;
 };
 #define MGMT__LEADER_QUERY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__leader_query_req__descriptor) \
@@ -429,6 +433,10 @@ struct  _Mgmt__PoolMonitorReq
 {
   ProtobufCMessage base;
   /*
+   * DAOS system identifier
+   */
+  char *sys;
+  /*
    * Pool UUID associated with the Pool Handle
    */
   char *pooluuid;
@@ -440,10 +448,6 @@ struct  _Mgmt__PoolMonitorReq
    * Job ID to associate instance with.
    */
   char *jobid;
-  /*
-   * System Name being connected to.
-   */
-  char *sys;
 };
 #define MGMT__POOL_MONITOR_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_monitor_req__descriptor) \
