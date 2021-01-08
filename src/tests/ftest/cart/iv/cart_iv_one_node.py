@@ -391,6 +391,7 @@ class CartIvOneNodeTest(TestWithoutServers):
             # Not an error:
             #   Used for testing to ensure we donot break something
             #   that should work.
+            #   Version change occurs in iv_test_fetch_iv
             # Need to invalidate on both nodes, stale data.
             {"operation":"update", "rank":1, "key":(1, 42), "value":"beans"},
             {"operation":"set_grp_version", "rank":0, "key":(0, 42), 
@@ -411,6 +412,7 @@ class CartIvOneNodeTest(TestWithoutServers):
             #   the rpc request.
             # Fetch variable from the first server.
             # Tests version-check in crt_hdlr_iv_fetch_aux.
+            # Version change in iv_pre_fetch 
             #
             {"operation":"update", "rank":1, "key":(1, 42), "value":"carrot"},
             {"operation":"set_grp_version", "rank":1, "key":(1, 42), "time":2,
