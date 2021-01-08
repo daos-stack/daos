@@ -1169,21 +1169,28 @@ def rename_logs(avocado_logs_dir, test_file):
             "Error renaming {} to {}: {}".format(
                 test_logs_dir, new_test_logs_dir, error))
 
+    xml_file = os.path.join(new_test_logs_dir, "results.xml")
     try:
-        xml_file = os.path.join(new_test_logs_dir, "results.xml")
         with open(xml_file) as xml_buffer:
             xml_data = xml_buffer.read()
+    except OSError as error:
+        print(
+            "Error updating xml classname for {}, reading {} : {}".format(
+            test_name, xml_file, str(error)))
+        return
+        
+    test_dir = os.path.split(os.path.dirname(test_file))[-1]
+    org_class = "classname=\""
+    new_class = "classname=\"FTEST_{}.".format(test_dir)
+    xml_data = re.sub(org_class, new_class, xml_data)
 
-        file_parts = os.path.split(test_file)
-        c_name = os.path.splitext(os.path.basename(file_parts[0]))[0]
-        org_class = "classname=\""
-        new_class = "classname=\"FTEST_{}.".format(c_name)
-        xml_data = re.sub(org_class, new_class, xml_data)
-
+    try:
         with open(xml_file, "w") as xml_buffer:
             xml_buffer.write(xml_data)
     except OSError as error:
-        print("Error updating classname in {}".format(xml_file))
+        print(
+            "Error updating xml classname for {}, writing {}: {}".format(
+            test_name, xml_file, str(error)))
 
 def check_big_files(avocado_logs_dir, task, test_name, args):
     """Check the contents of the task object, tag big files, create junit xml.
