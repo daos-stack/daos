@@ -53,6 +53,7 @@ class IorSmall(IorTestBase):
         :avocado: tags=DAOS_5610
         """
         results = []
+        cncl_tickets = []
         ior_timeout = self.params.get("ior_timeout", '/run/ior/*')
         flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         apis = self.params.get("ior_api", '/run/ior/iorflags/*')
@@ -77,9 +78,13 @@ class IorSmall(IorTestBase):
                     self.ior_cmd.block_size.update(test[1])
                     # Skip test issue seen while advancing hdf5 vol-daos code
                     # That is still needed due to support for new libdaos v1 API
-                    if (api == "HDF5" and test[0] == "1M" and
+                    if (api == "HDF5-VOL" and test[0] == "1M" and
                             test[1] == "32M"):
-                        self.cancelForTicket("DAOS-6427")
+                        self.log.info(
+                            "** SKIPPING test case: api=%s, transfer_size=%s, "
+                            "block_size=%s for DAOS-6427", api, test[0], test[1])
+                        cncl_tickets.append("DAOS-6427")
+                        continue
                     # run ior
                     try:
                         self.run_ior_with_pool(
@@ -109,3 +114,5 @@ class IorSmall(IorTestBase):
                 errors = True
         if errors:
             self.fail("Test FAILED")
+        if cncl_tickets:
+            self.cancelForTicket(",".join(cncl_tickets))
