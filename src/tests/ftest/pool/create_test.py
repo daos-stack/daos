@@ -25,6 +25,7 @@ import time
 
 from pool_test_base import PoolTestBase
 from server_utils import ServerFailed
+from apricot import skipForTicket
 
 
 class PoolCreateTests(PoolTestBase):
@@ -70,7 +71,8 @@ class PoolCreateTests(PoolTestBase):
             of the servers. Verify that the pool creation takes no longer than
             2 minutes.
 
-        :avocado: tags=all,pr,hw,large,pool,create_max_pool_scm_only
+        :avocado: tags=all,daily_regression,hw,large,pool
+        :avocado: tags=create_max_pool_scm_only
         """
         # Create 1 pool using 90% of the available SCM capacity (no NVMe)
         self.pool = self.get_pool_list(1, 0.9, None)
@@ -84,7 +86,7 @@ class PoolCreateTests(PoolTestBase):
             the SSD capacity on all of the servers.  Verify that pool creation
             takes less than 4 minutes.
 
-        :avocado: tags=all,pr,hw,large,pool,create_max_pool
+        :avocado: tags=all,daily_regression,hw,large,pool,create_max_pool
         """
         # Create 1 pool using 90% of the available capacity
         self.pool = self.get_pool_list(1, 0.9, 0.9)
@@ -99,7 +101,7 @@ class PoolCreateTests(PoolTestBase):
             Restart the system via cmd line tool (dmg).
             Verify that DAOS is ready to accept requests with in 2 minutes.
 
-        :avocado: tags=all,pr,hw,large,pool,create_performance
+        :avocado: tags=all,pr,daily_regression,hw,large,pool,create_performance
         """
         # Create some number of pools each using a equal amount of 60% of the
         # available capacity, e.g. 0.6% for 100 pools.
@@ -151,7 +153,7 @@ class PoolCreateTests(PoolTestBase):
             creating a pool of the same size on across all but the first pool
             succeeds.
 
-        :avocado: tags=all,pr,hw,large,pool,create_no_space
+        :avocado: tags=all,pr,daily_regression,hw,large,pool,create_no_space
         """
         # Define three pools to create:
         #   - one pool using 90% of the available capacity of one server
@@ -201,7 +203,8 @@ class PoolCreateTests(PoolTestBase):
             deleting the successfully created pool to verify that there is not
             any subtle/low capacity space being lost with each failed create.
 
-        :avocado: tags=all,pr,hw,large,pool,create_no_space_loop
+        :avocado: tags=all,pr,daily_regression,hw,large,pool
+        :avocado: tags=create_no_space_loop
         """
         # Define three pools to create:
         #   - one pool using 90% of the available capacity of one server

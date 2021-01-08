@@ -409,7 +409,7 @@ daos_event_launch(struct daos_event *ev)
 		goto out;
 	}
 
-	if (!daos_handle_is_inval(evx->evx_eqh)) {
+	if (daos_handle_is_valid(evx->evx_eqh)) {
 		eqx = daos_eq_lookup(evx->evx_eqh);
 		if (eqx == NULL) {
 			D_ERROR("Can't find eq from handle %"PRIu64"\n",
@@ -471,7 +471,7 @@ daos_event_complete(struct daos_event *ev, int rc)
 	struct daos_event_private	*evx = daos_ev2evx(ev);
 	struct daos_eq_private		*eqx = NULL;
 
-	if (!daos_handle_is_inval(evx->evx_eqh)) {
+	if (daos_handle_is_valid(evx->evx_eqh)) {
 		eqx = daos_eq_lookup(evx->evx_eqh);
 		D_ASSERT(eqx != NULL);
 
@@ -578,7 +578,7 @@ daos_event_test(struct daos_event *ev, int64_t timeout, bool *flag)
 	epa.evx = evx;
 	epa.eqx = NULL;
 
-	if (!daos_handle_is_inval(evx->evx_eqh)) {
+	if (daos_handle_is_valid(evx->evx_eqh)) {
 		epa.eqx = daos_eq_lookup(evx->evx_eqh);
 		if (epa.eqx == NULL) {
 			D_ERROR("Can't find eq from handle %"PRIu64"\n",
@@ -623,11 +623,18 @@ daos_eq_create(daos_handle_t *eqh)
 		return -DER_NOMEM;
 
 	eqx = daos_eq2eqx(eq);
+
+	rc = crt_context_create(&eqx->eqx_ctx);
+	if (rc) {
+		D_WARN("Failed to create CART context; using the global one "
+		       "("DF_RC")\n", DP_RC(rc));
+		eqx->eqx_ctx = daos_eq_ctx;
+	}
+
 	daos_eq_insert(eqx);
-	eqx->eqx_ctx = daos_eq_ctx;
 	daos_eq_handle(eqx, eqh);
 
-	rc = tse_sched_init(&eqx->eqx_sched, NULL, daos_eq_ctx);
+	rc = tse_sched_init(&eqx->eqx_sched, NULL, eqx->eqx_ctx);
 
 	daos_eq_putref(eqx);
 	return rc;
@@ -870,11 +877,7 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 
 	D_MUTEX_UNLOCK(&eqx->eqx_lock);
 
-	/*
-	 * Since we are sharing the same cart context with all EQs, we need to
-	 * flush the tasks for this EQ, which unfortunately means flushing for
-	 * all EQs.
-	 */
+	/** Flush the tasks for this EQ */
 	if (eqx->eqx_ctx != NULL) {
 		rc = crt_context_flush(eqx->eqx_ctx, 0);
 		if (rc != 0) {
@@ -901,7 +904,19 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 	}
 
 	tse_sched_complete(&eqx->eqx_sched, rc, true);
+
+	/** destroy the EQ cart context only if it's not the global one */
+	if (eqx->eqx_ctx != daos_eq_ctx) {
+		rc = crt_context_destroy(eqx->eqx_ctx,
+					 (flags & DAOS_EQ_DESTROY_FORCE));
+		if (rc) {
+			D_ERROR("Failed to destroy CART context for EQ (%d)\n",
+				rc);
+			goto out;
+		}
+	}
 	eqx->eqx_ctx = NULL;
+
 out:
 	D_MUTEX_UNLOCK(&eqx->eqx_lock);
 	if (rc == 0)
@@ -1015,7 +1030,7 @@ daos_event_init(struct daos_event *ev, daos_handle_t eqh,
 		evx->evx_sched	= parent_evx->evx_sched;
 		evx->evx_parent	= parent_evx;
 		parent_evx->evx_nchild++;
-	} else if (!daos_handle_is_inval(eqh)) {
+	} else if (daos_handle_is_valid(eqh)) {
 		/* if there is event queue */
 		evx->evx_eqh = eqh;
 		eqx = daos_eq_lookup(eqh);
@@ -1053,7 +1068,7 @@ daos_event_fini(struct daos_event *ev)
 	struct daos_eq			*eq = NULL;
 	int				 rc = 0;
 
-	if (!daos_handle_is_inval(evx->evx_eqh)) {
+	if (daos_handle_is_valid(evx->evx_eqh)) {
 		eqx = daos_eq_lookup(evx->evx_eqh);
 		if (eqx == NULL)
 			return -DER_NONEXIST;
@@ -1175,7 +1190,7 @@ daos_event_abort(struct daos_event *ev)
 	struct daos_event_private	*evx = daos_ev2evx(ev);
 	struct daos_eq_private		*eqx = NULL;
 
-	if (!daos_handle_is_inval(evx->evx_eqh)) {
+	if (daos_handle_is_valid(evx->evx_eqh)) {
 		eqx = daos_eq_lookup(evx->evx_eqh);
 		if (eqx == NULL) {
 			D_ERROR("Invalid EQ handle %"PRIu64"\n",

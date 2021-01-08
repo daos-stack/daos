@@ -86,7 +86,7 @@ int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 int ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			 const char *group, uint32_t force);
 int ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-		       const char *group);
+		       uuid_t *handles, size_t n_handles, const char *group);
 int ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 				     uint32_t rank,
 				     struct pool_target_id_list *tgt_list,
@@ -134,6 +134,7 @@ int ds_mgmt_get_bs_state(uuid_t bs_uuid, int *bs_state);
 void ds_mgmt_hdlr_get_bs_state(crt_rpc_t *rpc_req);
 int ds_mgmt_dev_replace(uuid_t old_uuid, uuid_t new_uuid,
 			Mgmt__DevReplaceResp *resp);
+int ds_mgmt_dev_identify(uuid_t uuid, Mgmt__DevIdentifyResp *resp);
 
 /** srv_target.c */
 int ds_mgmt_tgt_setup(void);

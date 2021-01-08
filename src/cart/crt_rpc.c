@@ -40,9 +40,9 @@ crt_hdlr_ctl_fi_toggle(crt_rpc_t *rpc_req)
 	out_args = crt_reply_get(rpc_req);
 
 	if (in_args->op)
-		d_fault_inject_enable();
+		rc = d_fault_inject_enable();
 	else
-		d_fault_inject_disable();
+		rc = d_fault_inject_disable();
 
 	out_args->rc = rc;
 	rc = crt_reply_send(rpc_req);
@@ -205,6 +205,25 @@ static struct crt_proto_rpc_format crt_internal_rpcs[] = {
 static struct crt_proto_rpc_format crt_fi_rpcs[] = {
 	CRT_FI_RPCS_LIST
 };
+
+#undef X
+
+#define X(a, b, c, d, e) case a: return #a;
+
+/* Helper function to convert internally registered RPC opc to str */
+char
+*crt_opc_to_str(crt_opcode_t opc)
+{
+	if (crt_opc_is_swim(opc))
+		return "SWIM";
+
+	switch (opc) {
+	CRT_INTERNAL_RPCS_LIST
+	CRT_FI_RPCS_LIST
+	default:
+		return "DAOS";
+	}
+}
 
 #undef X
 
@@ -423,7 +442,7 @@ int
 crt_req_set_endpoint(crt_rpc_t *req, crt_endpoint_t *tgt_ep)
 {
 	struct crt_rpc_priv	*rpc_priv;
-	struct crt_grp_priv	*grp_priv;
+	struct crt_grp_priv	*grp_priv = NULL;
 	int			 rc = 0;
 
 	if (req == NULL || tgt_ep == NULL) {
@@ -561,7 +580,12 @@ crt_issue_uri_lookup_retry(crt_context_t ctx,
 	int		rc;
 
 	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
-	membs = grp_priv_get_membs(grp_priv);
+
+	/* IF PSRs are specified cycle through them, else use members */
+	if (grp_priv->gp_psr_ranks)
+		membs = grp_priv->gp_psr_ranks;
+	else
+		membs = grp_priv_get_membs(grp_priv);
 
 	/* Note: membership can change between uri lookups, but we don't need
 	 * to handle this case, as it should be rare and will result in rank
@@ -593,6 +617,8 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	struct crt_uri_lookup_in	*ul_in;
 	struct crt_grp_priv		*grp_priv;
 	crt_rpc_t			*lookup_rpc;
+	d_rank_list_t			*membs;
+	bool				found;
 	int				rc = 0;
 
 	chained_rpc_priv = cb_info->cci_arg;
@@ -661,6 +687,25 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 		D_GOTO(out, rc);
 	}
 
+	/* After a URI lookup, check if membership list has this rank.
+	 * If not - we discovered a new rank and need to populate it in membs
+	 * list of the group.
+	 */
+	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
+	membs = grp_priv_get_membs(grp_priv);
+	found = d_rank_list_find(membs, ul_in->ul_rank, NULL);
+
+	if (!found) {
+		rc = grp_add_to_membs_list(grp_priv, ul_in->ul_rank);
+		if (rc != 0) {
+			D_ERROR("Failed to add %d to group\n", ul_in->ul_rank);
+			D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
+			D_GOTO(out, rc);
+		}
+	}
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
+
+	/* issue the original RPC */
 	rc = crt_req_send_internal(chained_rpc_priv);
 
 retry:
@@ -722,12 +767,17 @@ crt_client_get_contact_rank(crt_context_t crt_ctx, crt_group_t *grp,
 
 	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
 
-	membs = grp_priv_get_membs(grp_priv);
+	if (grp_priv->gp_psr_ranks)
+		membs = grp_priv->gp_psr_ranks;
+	else
+		membs = grp_priv_get_membs(grp_priv);
 
 	if (!membs || membs->rl_nr == 0) {
+		/* If list is not set, default to legacy psr */
 		contact_rank = grp_priv->gp_psr_rank;
 		*ret_idx = -1;
 	} else {
+		/* Pick random rank from the list */
 		*ret_idx = rand() % membs->rl_nr;
 		contact_rank = membs->rl_ranks[*ret_idx];
 
@@ -1445,6 +1495,10 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
 	self_rank = crt_gdata.cg_grp->gg_primary_grp->gp_self;
+
+	/* If RPC failed HLC epsilon delta check return an error */
+	if (rpc_priv->crp_fail_hlc)
+		D_GOTO(out, rc = -DER_HLC_SYNC);
 
 	if (self_rank == CRT_NO_RANK)
 		skip_check = true;

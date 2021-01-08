@@ -89,8 +89,7 @@ int ds_mgmt_get_bs_state(uuid_t bs_uuid, int *bs_state)
 
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
-	/* TODO Add a new DSS_ULT_BIO tag */
-	rc = dss_ult_create(bs_state_query, (void *)bs_state, DSS_ULT_GC,
+	rc = dss_ult_create(bs_state_query, (void *)bs_state, DSS_XS_VOS,
 			    tgt_id, 0, &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
@@ -208,8 +207,7 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
-	/* TODO Add a new DSS_ULT_BIO tag */
-	rc = dss_ult_create(bio_health_query, mbh, DSS_ULT_GC, tgt_id, 0,
+	rc = dss_ult_create(bio_health_query, mbh, DSS_XS_VOS, tgt_id, 0,
 			    &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
@@ -271,7 +269,7 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 	D_INIT_LIST_HEAD(&list_devs_info.dev_list);
 
 	rc = dss_ult_execute(bio_query_dev_list, &list_devs_info, NULL, NULL,
-			     DSS_ULT_GC, 0, 0);
+			     DSS_XS_VOS, 0, 0);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT\n");
 		goto out;
@@ -291,6 +289,16 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 			break;
 		}
 		mgmt__smd_dev_resp__device__init(resp->devices[i]);
+		/*
+		 * XXX: These fields are initialized as "empty string" by above
+		 * protobuf auto-generated function, to avoid error cleanup
+		 * code mistakenly free the "empty string", let's reset them as
+		 * NULL.
+		 */
+		resp->devices[i]->uuid = NULL;
+		resp->devices[i]->state = NULL;
+		resp->devices[i]->traddr = NULL;
+
 		D_ALLOC(resp->devices[i]->uuid, DAOS_UUID_STR_SIZE);
 		if (resp->devices[i]->uuid == NULL) {
 			rc = -DER_NOMEM;
@@ -414,6 +422,9 @@ ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp)
 			break;
 		}
 		mgmt__smd_pool_resp__pool__init(resp->pools[i]);
+		/* See "empty string" comments in ds_mgmt_smd_list_devs() */
+		resp->pools[i]->uuid = NULL;
+
 		D_ALLOC(resp->pools[i]->uuid, DAOS_UUID_STR_SIZE);
 		if (resp->pools[i]->uuid == NULL) {
 			rc = -DER_NOMEM;
@@ -532,6 +543,40 @@ out:
 	return rc;
 }
 
+struct bio_faulty_dev_info {
+	uuid_t          devid;
+};
+
+static int
+bio_faulty_led_set(void *arg)
+{
+	struct bio_faulty_dev_info *faulty_info = arg;
+	struct dss_module_info	   *info = dss_get_module_info();
+	struct bio_xs_context	   *bxc;
+	int			    rc;
+
+	D_ASSERT(info != NULL);
+	D_DEBUG(DB_MGMT, "BIO health state set on xs:%d, tgt:%d\n",
+		info->dmi_xs_id, info->dmi_tgt_id);
+
+	bxc = info->dmi_nvme_ctxt;
+	if (bxc == NULL) {
+		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
+			info->dmi_xs_id, info->dmi_tgt_id);
+		return -DER_INVAL;
+	}
+
+	/* Set the LED of the VMD device to a FAULT state */
+	rc = bio_set_led_state(bxc, faulty_info->devid, "fault",
+			       false/*reset*/);
+	if (rc != 0)
+		D_ERROR("Error managing LED on device:"DF_UUID"\n",
+			DP_UUID(faulty_info->devid));
+
+	return 0;
+
+}
+
 static void
 bio_faulty_state_set(void *arg)
 {
@@ -560,11 +605,12 @@ bio_faulty_state_set(void *arg)
 int
 ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
 {
-	struct smd_dev_info	*dev_info;
-	ABT_thread		 thread;
-	int			 tgt_id;
-	int			 buflen = 10;
-	int			 rc = 0;
+	struct bio_faulty_dev_info  faulty_info = { 0 };
+	struct smd_dev_info	   *dev_info;
+	ABT_thread		    thread;
+	int			    tgt_id;
+	int			    buflen = 10;
+	int			    rc = 0;
 
 	if (uuid_is_null(dev_uuid))
 		return -DER_INVAL;
@@ -607,8 +653,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
 
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
-	/* TODO Add a new DSS_ULT_BIO tag */
-	rc = dss_ult_create(bio_faulty_state_set, NULL, DSS_ULT_GC,
+	rc = dss_ult_create(bio_faulty_state_set, NULL, DSS_XS_VOS,
 			    tgt_id, 0, &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
@@ -617,6 +662,15 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
 
 	ABT_thread_join(thread);
 	ABT_thread_free(&thread);
+
+	uuid_copy(faulty_info.devid, dev_uuid);
+	/* set the VMD LED to FAULTY state on init xstream */
+	rc = dss_ult_execute(bio_faulty_led_set, &faulty_info, NULL,
+			     NULL, DSS_XS_VOS, 0, 0);
+	if (rc) {
+		D_ERROR("FAULT LED state not set on device:"DF_UUID"\n",
+			DP_UUID(dev_uuid));
+	}
 
 out:
 	dev_info->sdi_state = SMD_DEV_FAULTY;
@@ -700,7 +754,7 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid,
 	uuid_copy(replace_dev_info.old_dev, old_dev_uuid);
 	uuid_copy(replace_dev_info.new_dev, new_dev_uuid);
 	rc = dss_ult_execute(bio_storage_dev_replace, &replace_dev_info, NULL,
-			     NULL, DSS_ULT_GC, 0, 0);
+			     NULL, DSS_XS_VOS, 0, 0);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT\n");
 		goto out;
@@ -716,6 +770,86 @@ out:
 			D_FREE(resp->dev_state);
 		if (resp->new_dev_uuid != NULL)
 			D_FREE(resp->new_dev_uuid);
+	}
+
+	return rc;
+}
+
+struct bio_identify_dev_info {
+	uuid_t		devid;
+};
+
+static int
+bio_storage_dev_identify(void *arg)
+{
+	struct bio_identify_dev_info *identify_info = arg;
+	struct dss_module_info	     *info = dss_get_module_info();
+	struct bio_xs_context	     *bxc;
+	int			      rc;
+
+	D_ASSERT(info != NULL);
+
+	bxc = info->dmi_nvme_ctxt;
+	if (bxc == NULL) {
+		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
+			info->dmi_xs_id, info->dmi_tgt_id);
+		return -DER_INVAL;
+	}
+
+	rc = bio_set_led_state(bxc, identify_info->devid, "identify",
+			       false/*reset*/);
+	if (rc != 0) {
+		D_ERROR("Error managing LED on device:"DF_UUID"\n",
+			DP_UUID(identify_info->devid));
+		return rc;
+	}
+
+	return 0;
+}
+
+
+int
+ds_mgmt_dev_identify(uuid_t dev_uuid, Mgmt__DevIdentifyResp *resp)
+{
+	struct bio_identify_dev_info identify_info = { 0 };
+	int			     buflen = 10;
+	int			     rc = 0;
+
+	if (uuid_is_null(dev_uuid))
+		return -DER_INVAL;
+
+	D_DEBUG(DB_MGMT, "Identifying device:"DF_UUID"\n", DP_UUID(dev_uuid));
+
+	D_ALLOC(resp->dev_uuid, DAOS_UUID_STR_SIZE);
+	if (resp->dev_uuid == NULL) {
+		D_ERROR("Failed to allocate device uuid");
+		rc = -DER_NOMEM;
+		goto out;
+	}
+	uuid_unparse_lower(dev_uuid, resp->dev_uuid);
+
+	D_ALLOC(resp->led_state, buflen);
+	if (resp->led_state == NULL) {
+		D_ERROR("Failed to allocate device led state");
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	uuid_copy(identify_info.devid, dev_uuid);
+	rc = dss_ult_execute(bio_storage_dev_identify, &identify_info, NULL,
+			     NULL, DSS_XS_VOS, 0, 0);
+	if (rc != 0)
+		goto out;
+
+	strcpy(resp->led_state, "IDENTIFY");
+
+out:
+
+	if (rc != 0) {
+		if (resp->led_state != NULL)
+			D_FREE(resp->led_state);
+		if (resp->dev_uuid != NULL)
+			D_FREE(resp->dev_uuid);
 	}
 
 	return rc;

@@ -154,18 +154,14 @@ deflate_compress(void *daos_dc_ctx, uint8_t *src, size_t src_len,
 	int ret = 0;
 	struct deflate_ctx *ctx = daos_dc_ctx;
 
-	ctx->stream.total_in = 0;
-	ctx->stream.total_out = 0;
-	ctx->stream.avail_in = src_len;
+	isal_deflate_reset(&ctx->stream);
+
 	ctx->stream.next_in = src;
-	ctx->stream.avail_out = dst_len;
+	ctx->stream.avail_in = src_len;
 	ctx->stream.next_out = dst;
+	ctx->stream.avail_out = dst_len;
 
 	ret = isal_deflate_stateless(&ctx->stream);
-
-	/* Check if input buffer are all consumed */
-	if (ctx->stream.avail_in)
-		return DC_STATUS_ERR;
 
 	if (ret == COMP_OK) {
 		*produced = ctx->stream.total_out;
@@ -185,18 +181,14 @@ deflate_decompress(void *daos_dc_ctx, uint8_t *src, size_t src_len,
 	int ret = 0;
 	struct deflate_ctx *ctx = daos_dc_ctx;
 
-	ctx->stream.total_in = 0;
-	ctx->stream.total_out = 0;
+	isal_inflate_reset(&ctx->state);
+
 	ctx->state.next_in = src;
 	ctx->state.avail_in = src_len;
 	ctx->state.next_out = dst;
 	ctx->state.avail_out = dst_len;
 
 	ret = isal_inflate(&ctx->state);
-
-	/* Check if input buffer are all consumed */
-	if (ctx->state.avail_in)
-		return DC_STATUS_ERR;
 
 	if (ret == ISAL_DECOMP_OK) {
 		*produced = ctx->state.total_out;

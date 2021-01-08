@@ -1,0 +1,106 @@
+commit 8467f4b41066cb8d2a9993325a1a0f2511c99bd6
+Author: Brian J. Murrell <brian.murrell@intel.com>
+Date:   Mon Dec 7 11:03:59 2020 -0500
+
+    Test: report test phases
+    
+    The avocado test runner mostly "flies blind" when it comes to the
+    individual test phases, that is, it doesn't know if a test is
+    currently being initialized, running its setup, running the test
+    method itself or its teardown.
+    
+    With this, the runner gets access to that information, and can act
+    differently based on this knowledge.  One use case is to allow for
+    different timeouts on different test phases.
+    
+    Signed-off-by: Cleber Rosa <crosa@redhat.com>
+    Co-authored-by: Brian J. Murrell <brian.murrell@intel.com>
+
+diff --git a/avocado/core/test.py b/avocado/core/test.py
+index 4ff4ee03..73241b4e 100644
+--- a/avocado/core/test.py
++++ b/avocado/core/test.py
+@@ -168,6 +168,8 @@ class Test(unittest.TestCase):
+         :param job: The job that this test is part of.
+         :raises: :class:`avocado.core.test.NameNotTestNameError`
+         """
++        self.__phase = 'INIT'
++
+         def record_and_warn(*args, **kwargs):
+             """ Record call to this function and log warning """
+             if not self.__log_warn_used:
+@@ -419,6 +421,15 @@ class Test(unittest.TestCase):
+     def traceback(self):
+         return self.__traceback
+ 
++    @property
++    def phase(self):
++        """
++        The current phase of the test execution
++
++        Possible (string) values are: INIT, SETUP, TEST, TEARDOWN and FINISHED
++        """
++        return self.__phase
++
+     def __str__(self):
+         return str(self.name)
+ 
+@@ -461,7 +472,7 @@ class Test(unittest.TestCase):
+                          'status', 'time_elapsed',
+                          'traceback', 'workdir', 'whiteboard', 'time_start',
+                          'time_end', 'running', 'paused', 'paused_msg',
+-                         'fail_class', 'params', "timeout"]
++                         'fail_class', 'params', "timeout", 'phase']
+         state = {key: getattr(self, key, None) for (key) in preserve_attr}
+         state['class_name'] = self.__class__.__name__
+         state['job_logdir'] = self.job.logdir
+@@ -565,6 +576,7 @@ class Test(unittest.TestCase):
+         skip_test = getattr(testMethod, '__skip_test_decorator__', False)
+         try:
+             if skip_test is False:
++                self.__phase = 'SETUP'
+                 self.setUp()
+         except (exceptions.TestSetupSkip, exceptions.TestSkipError) as details:
+             stacktrace.log_exc_info(sys.exc_info(), logger=LOG_JOB)
+@@ -578,6 +590,7 @@ class Test(unittest.TestCase):
+             raise exceptions.TestSetupFail(details)
+         else:
+             try:
++                self.__phase = 'TEST'
+                 testMethod()
+             except exceptions.TestSetupSkip as details:
+                 stacktrace.log_exc_info(sys.exc_info(), logger=LOG_JOB)
+@@ -605,6 +618,7 @@ class Test(unittest.TestCase):
+         finally:
+             try:
+                 if skip_test is False:
++                    self.__phase = 'TEARDOWN'
+                     self.tearDown()
+             except exceptions.TestSetupSkip as details:
+                 stacktrace.log_exc_info(sys.exc_info(), logger=LOG_JOB)
+@@ -728,6 +742,7 @@ class Test(unittest.TestCase):
+             for e_line in tb_info:
+                 self.log.error(e_line)
+         finally:
++            self.__phase = 'FINISHED'
+             self._tag_end()
+             self._report()
+             self.log.info("")
+diff --git a/selftests/functional/test_basic.py b/selftests/functional/test_basic.py
+index 468b7d57..ed494733 100644
+--- a/selftests/functional/test_basic.py
++++ b/selftests/functional/test_basic.py
+@@ -184,6 +184,13 @@ class RunnerOperationTest(unittest.TestCase):
+         self.assertIn('    data     ' + mapping['data_dir'], result.stdout)
+         self.assertIn('    logs     ' + mapping['logs_dir'], result.stdout)
+ 
++    def test_runner_phases(self):
++        cmd_line = ('%s run --sysinfo=off --job-results-dir %s '
++                    'phases.py' % (AVOCADO, self.tmpdir))
++        result = process.run(cmd_line)
++        expected_rc = exit_codes.AVOCADO_ALL_OK
++        self.assertEqual(result.exit_status, expected_rc,
++                         "Avocado did not return rc %d:\n%s" % (expected_rc, result))
+     def test_runner_all_ok(self):
+         os.chdir(basedir)
+         cmd_line = ('%s run --sysinfo=off --job-results-dir %s '

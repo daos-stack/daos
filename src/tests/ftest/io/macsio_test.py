@@ -33,13 +33,8 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
     :avocado: recursive
     """
 
-    def setUp(self):
-        """Set up each test case."""
-        # Cancel any test using MPICH w/ MACSio due to DAOS-5265
-        mpi_type = self.params.get("job_manager_mpi_type")
-        if mpi_type == "mpich":
-            self.cancelForTicket("DAOS-5265")
-        super(MacsioTest, self).setUp()
+    # Cancel any test using MPICH w/ MACSio due to DAOS-5265
+    CANCEL_FOR_TICKET = [["DAOS-5265", "job_manager_mpi_type", "mpich"]]
 
     def test_macsio(self):
         """JIRA ID: DAOS-3658.
@@ -51,7 +46,7 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
         Use case:
             Six clients and two servers.
 
-        :avocado: tags=all,pr,hw,large,io,macsio,DAOS_5610
+        :avocado: tags=all,daily_regression,hw,large,io,macsio,DAOS_5610
         """
         # Create a pool
         self.add_pool()
@@ -80,7 +75,10 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
         Use case:
             Six clients and two servers.
 
-        :avocado: tags=all,pr,hw,large,io,macsio_daos_vol,DAOS_5610
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=io,macsio_daos_vol
+        :avocado: tags=DAOS_5610
         """
         plugin_path = self.params.get("plugin_path")
 

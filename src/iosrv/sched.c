@@ -524,23 +524,16 @@ static int
 req_kickoff_internal(struct dss_xstream *dx, struct sched_req_attr *attr,
 		     void (*func)(void *), void *arg)
 {
-	ABT_pool	abt_pool;
+	ABT_pool	abt_pool = dx->dx_pools[DSS_POOL_GENERIC];
 	int		rc;
 
 	D_ASSERT(attr && func && arg);
 	switch (attr->sra_type) {
 	case SCHED_REQ_UPDATE:
 	case SCHED_REQ_FETCH:
-		abt_pool = dx->dx_pools[DSS_POOL_IO];
-		break;
 	case SCHED_REQ_GC:
-		abt_pool = dx->dx_pools[DSS_POOL_GC];
-		break;
 	case SCHED_REQ_SCRUB:
-		abt_pool = dx->dx_pools[DSS_POOL_SCRUB];
-		break;
 	case SCHED_REQ_MIGRATE:
-		abt_pool = dx->dx_pools[DSS_POOL_REBUILD];
 		break;
 	default:
 		D_ASSERTF(0, "Invalid req type: %u\n", attr->sra_type);
@@ -1187,13 +1180,10 @@ sched_dump_data(struct sched_data *data)
 	struct sched_cycle	*cycle = &data->sd_cycle;
 
 	D_PRINT("XS(%d): comm:%d main:%d. age_net:%u, age_nvme:%u, "
-		"new_cycle:%d cycle_started:%d total_ults:%u [%u, %u, %u]\n",
+		"new_cycle:%d cycle_started:%d total_ults:%u\n",
 		dx->dx_xs_id, dx->dx_comm, dx->dx_main_xs, cycle->sc_age_net,
 		cycle->sc_age_nvme, cycle->sc_new_cycle,
-		cycle->sc_cycle_started, cycle->sc_ults_tot,
-		cycle->sc_ults_cnt[DSS_POOL_IO],
-		cycle->sc_ults_cnt[DSS_POOL_REBUILD],
-		cycle->sc_ults_cnt[DSS_POOL_GC]);
+		cycle->sc_cycle_started, cycle->sc_ults_tot);
 #endif
 }
 
@@ -1382,7 +1372,7 @@ sched_start_cycle(struct sched_data *data, ABT_pool *pools)
 	struct dss_xstream	*dx = data->sd_dx;
 	struct sched_cycle	*cycle = &data->sd_cycle;
 	size_t			 cnt;
-	int			 i, ret;
+	int			 ret;
 
 	D_ASSERT(cycle->sc_new_cycle == 1);
 	D_ASSERT(cycle->sc_cycle_started == 0);
@@ -1394,20 +1384,16 @@ sched_start_cycle(struct sched_data *data, ABT_pool *pools)
 	wakeup_all(dx);
 	process_all(dx);
 
-	/* Get number of ULTS for each ABT pool */
-	for (i = DSS_POOL_IO; i < DSS_POOL_CNT; i++) {
-		D_ASSERT(cycle->sc_ults_cnt[i] == 0);
-
-		ret = ABT_pool_get_size(pools[i], &cnt);
-		if (ret != ABT_SUCCESS) {
-			D_ERROR("XS(%d) get ABT pool(%d) size error: %d\n",
-				dx->dx_xs_id, i, ret);
-			cnt = 0;
-		}
-
-		cycle->sc_ults_cnt[i] = cnt;
-		cycle->sc_ults_tot += cycle->sc_ults_cnt[i];
+	/* Get number of ULTS in generic ABT pool */
+	D_ASSERT(cycle->sc_ults_cnt[DSS_POOL_GENERIC] == 0);
+	ret = ABT_pool_get_size(pools[DSS_POOL_GENERIC], &cnt);
+	if (ret != ABT_SUCCESS) {
+		D_ERROR("XS(%d) get ABT pool(%d) size error: %d\n",
+			dx->dx_xs_id, DSS_POOL_GENERIC, ret);
+		cnt = 0;
 	}
+	cycle->sc_ults_cnt[DSS_POOL_GENERIC] = cnt;
+	cycle->sc_ults_tot += cycle->sc_ults_cnt[DSS_POOL_GENERIC];
 }
 
 static void
@@ -1420,7 +1406,7 @@ sched_run(ABT_sched sched)
 	ABT_pool		 pool;
 	ABT_unit		 unit;
 	uint32_t		 work_count = 0;
-	int			 i, ret;
+	int			 ret;
 
 	ABT_sched_get_data(sched, (void **)&data);
 	cycle = &data->sd_cycle;
@@ -1449,13 +1435,11 @@ sched_run(ABT_sched sched)
 		if (cycle->sc_ults_tot == 0)
 			goto start_cycle;
 
-		/* Try to pick a ULT from other ABT pools */
-		for (i = DSS_POOL_IO; i < DSS_POOL_CNT; i++) {
-			pool = pools[i];
-			unit = sched_pop_one(data, pool, i);
-			if (unit != ABT_UNIT_NULL)
-				goto execute;
-		}
+		/* Try to pick a ULT from generic ABT pool */
+		pool = pools[DSS_POOL_GENERIC];
+		unit = sched_pop_one(data, pool, DSS_POOL_GENERIC);
+		if (unit != ABT_UNIT_NULL)
+			goto execute;
 
 		/*
 		 * Nothing to be executed? Could be idle helper XS or poll ULT
