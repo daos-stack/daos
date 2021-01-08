@@ -63,6 +63,7 @@ func ContSetOwner(ctx context.Context, rpcClient UnaryInvoker, req *ContSetOwner
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).ContSetOwner(ctx, &mgmtpb.ContSetOwnerReq{
+			Sys:        req.getSystem(),
 			ContUUID:   req.ContUUID,
 			PoolUUID:   req.PoolUUID,
 			Owneruser:  req.User,

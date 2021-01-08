@@ -86,16 +86,27 @@ func newMgmtSvc(h *IOServerHarness, m *system.Membership, s *system.Database, p 
 	}
 }
 
+// checkSystemRequest sanity checks that a request is not nil and
+// has been sent to the correct system.
+func (svc *mgmtSvc) checkSystemRequest(req proto.Message) error {
+	if common.InterfaceIsNil(req) {
+		return errors.New("nil request")
+	}
+	if sReq, ok := req.(interface{ GetSys() string }); ok {
+		if sReq.GetSys() != svc.sysdb.SystemName() {
+			return FaultWrongSystem(sReq.GetSys(), svc.sysdb.SystemName())
+		}
+	}
+	return nil
+}
+
 // checkLeaderRequest performs sanity-checking on a request that must
 // be run on the current MS leader.
 func (svc *mgmtSvc) checkLeaderRequest(req proto.Message) error {
 	if err := svc.sysdb.CheckLeader(); err != nil {
 		return err
 	}
-	if common.InterfaceIsNil(req) {
-		return errors.New("nil request")
-	}
-	return nil
+	return svc.checkSystemRequest(req)
 }
 
 // checkReplicaRequest performs sanity-checking on a request that must
@@ -104,10 +115,7 @@ func (svc *mgmtSvc) checkReplicaRequest(req proto.Message) error {
 	if err := svc.sysdb.CheckReplica(); err != nil {
 		return err
 	}
-	if common.InterfaceIsNil(req) {
-		return errors.New("nil request")
-	}
-	return nil
+	return svc.checkSystemRequest(req)
 }
 
 // GetAttachInfo handles a request to retrieve a map of ranks to fabric URIs, in addition
@@ -119,7 +127,6 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	if err := svc.checkReplicaRequest(req); err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, req:%+v\n", *req)
 	if svc.clientNetworkCfg == nil {
 		return nil, errors.New("clientNetworkCfg is missing")
 	}
@@ -154,16 +161,10 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 
 // LeaderQuery returns the system leader and access point replica details.
 func (svc *mgmtSvc) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq) (*mgmtpb.LeaderQueryResp, error) {
-	if req == nil {
-		return nil, errors.New("nil request")
+	if err := svc.checkSystemRequest(req); err != nil {
+		return nil, err
 	}
-
 	svc.log.Debugf("MgmtSvc.LeaderQuery dispatch, req:%+v\n", req)
-
-	if req.System != svc.sysdb.SystemName() {
-		return nil, errors.Errorf("received leader query for wrong system (local: %q, req: %q)",
-			svc.sysdb.SystemName(), req.System)
-	}
 
 	leaderAddr, replicas, err := svc.sysdb.LeaderQuery()
 	if err != nil {
