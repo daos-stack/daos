@@ -31,6 +31,9 @@
 #define TEST_GROUP_BASE          0x010000000
 #define TEST_GROUP_VER           0
 
+#define MAX_NUM_RANKS		1024
+#define CRT_CTL_MAX_ARG_STR_LEN (1 << 16)
+
 #include <regex.h>
 #include <ctype.h>
 
@@ -50,9 +53,10 @@ struct test_t {
 	bool			 t_save_cfg;
 	bool			 t_use_cfg;
 	bool			 t_register_swim_callback;
-	int 			 t_shutdown_rank;
 	int  			 t_get_swim_status;
 	int  			 t_delete_rank_from_ranklist;
+	d_rank_t			 cg_ranks[MAX_NUM_RANKS];
+	int				 cg_num_ranks;
 	struct t_swim_status t_verify_swim_status;
 	char			*t_cfg_path;
 	uint32_t		 t_hold_time;
@@ -362,13 +366,13 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 	server_ep.ep_tag = tag;
 
 	rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
-			    TEST_OPC_CHECKIN, &rpc_req);
+				TEST_OPC_CHECKIN, &rpc_req);
 	D_ASSERTF(rc == 0 && rpc_req != NULL, "crt_req_create() failed,"
-		  " rc: %d rpc_req: %p\n", rc, rpc_req);
+			" rc: %d rpc_req: %p\n", rc, rpc_req);
 
 	rpc_req_input = crt_req_get(rpc_req);
 	D_ASSERTF(rpc_req_input != NULL, "crt_req_get() failed."
-		  " rpc_req_input: %p\n", rpc_req_input);
+			" rpc_req_input: %p\n", rpc_req_input);
 
 	if (D_SHOULD_FAIL(test_g.t_fault_attr_1000)) {
 		buffer = NULL;
@@ -396,86 +400,148 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 struct t_swim_status
 parse_verify_swim_status_arg (char * source)
 {
-  char * regexString = "([0-9]+)[ ]*=[ ]*(a|d|alive|dead)";
+	char * regexString = "([0-9]+)[ ]*=[ ]*(a|d|alive|dead)";
 
-  struct t_swim_status ss = {-1, '\0'};
+	struct t_swim_status ss = {-1, '\0'};
 
-  size_t maxMatches = 2;
-  size_t maxGroups = 3;
-  
-  regex_t regexCompiled;
-  regmatch_t groupArray[maxGroups];
-  unsigned int m;
-  char * cursor;
+	size_t maxMatches = 2;
+	size_t maxGroups = 3;
+	
+	regex_t regexCompiled;
+	regmatch_t groupArray[maxGroups];
+	unsigned int m;
+	char * cursor;
 
-  if (regcomp(&regexCompiled, regexString, REG_EXTENDED|REG_ICASE)) {
-    printf("Could not compile regular expression.\n");
-    return ss;
-  };
+	if (regcomp(&regexCompiled, regexString, REG_EXTENDED|REG_ICASE)) {
+		printf("Could not compile regular expression.\n");
+		return ss;
+	};
 
-  m = 0;
-  cursor = source;
+	m = 0;
+	cursor = source;
 
-  for (m = 0; m < maxMatches; m ++) {
+	for (m = 0; m < maxMatches; m ++) {
 
-      if (regexec(&regexCompiled, cursor, maxGroups, groupArray, 0)) {
-        break;  // No more matches
-      }
+		if (regexec(&regexCompiled, cursor, maxGroups, groupArray, 0)) {
+			break;	// No more matches
+		}
 
-      unsigned int g = 0;
-      unsigned int offset = 0;
+		unsigned int g = 0;
+		unsigned int offset = 0;
 
-      for (g = 0; g < maxGroups; g++) {
+		for (g = 0; g < maxGroups; g++) {
 
-          if (groupArray[g].rm_so == (size_t)-1) {
-            break;  // No more groups
-          }
+			if (groupArray[g].rm_so == (size_t)-1) {
+				break;	// No more groups
+			}
 
-          if (g == 0) {
-            offset = groupArray[g].rm_eo;
-          }
+			if (g == 0) {
+				offset = groupArray[g].rm_eo;
+			}
 
-          char cursorCopy[strlen(cursor) + 1];
-          strcpy(cursorCopy, cursor);
-          cursorCopy[groupArray[g].rm_eo] = 0;
-          D_DEBUG(DB_TEST,
-               "parse_verify_swim_status_arg, match %u, " 
-               "group %u: [%2u-%2u]: %s\n",
-               m,
-               g,
-               groupArray[g].rm_so,
-               groupArray[g].rm_eo,
-               cursorCopy + groupArray[g].rm_so);
+			char cursorCopy[strlen(cursor) + 1];
+			strcpy(cursorCopy, cursor);
+			cursorCopy[groupArray[g].rm_eo] = 0;
+			D_DEBUG(DB_TEST,
+					 "parse_verify_swim_status_arg, match %u, " 
+					 "group %u: [%2u-%2u]: %s\n",
+					 m,
+					 g,
+					 groupArray[g].rm_so,
+					 groupArray[g].rm_eo,
+					 cursorCopy + groupArray[g].rm_so);
 
-          if (g == 1) {
-            ss.rank = atoi(cursorCopy + groupArray[g].rm_so);
-          }
-          if (g == 2) {
+			if (g == 1) {
+				ss.rank = atoi(cursorCopy + groupArray[g].rm_so);
+			}
+			if (g == 2) {
 
-            char exp_status[8];
-            strcpy(exp_status, cursorCopy + groupArray[g].rm_so);
+				char exp_status[8];
+				strcpy(exp_status, cursorCopy + groupArray[g].rm_so);
 
-            /* "d(ead)?"=1, a(live)?=0 as specified in crt_event_type:
-             *
-             * src/include/cart/api.h
-             * enum crt_event_type {
-             *    CRT_EVT_ALIVE,
-             *    CRT_EVT_DEAD,
-             * };
-             */
-            ss.swim_status = 0;
-            if (tolower(exp_status[0]) == 'd') {
-              ss.swim_status = 1;
-            }
+				/* "d(ead)?"=1, a(live)?=0 as specified in crt_event_type:
+				 *
+				 * src/include/cart/api.h
+				 * enum crt_event_type {
+				 *		CRT_EVT_ALIVE,
+				 *		CRT_EVT_DEAD,
+				 * };
+				 */
+				ss.swim_status = 0;
+				if (tolower(exp_status[0]) == 'd') {
+					ss.swim_status = 1;
+				}
 
-          }
-      }
-      cursor += offset;
-  }
+			}
+		}
+		cursor += offset;
+	}
 
-  regfree(&regexCompiled);
+	regfree(&regexCompiled);
 
-  return ss;
+	return ss;
+}
+
+/* Source: src/utils/ctl/cart_ctl.c */
+static void
+parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
+{
+	char		*token;
+	char		*saveptr;
+	char		*ptr;
+	uint32_t	 num_ranks_l = 0;
+	uint32_t	 index = 0;
+	int		 rstart;
+	int		 rend;
+	int		 i;
+
+	D_ASSERT(ranks != NULL);
+	D_ASSERT(num_ranks != NULL);
+	D_ASSERT(arg_str != NULL);
+	if (strnlen(arg_str, CRT_CTL_MAX_ARG_STR_LEN) >=
+		    CRT_CTL_MAX_ARG_STR_LEN) {
+		D_ERROR("arg string too long.\n");
+		return;
+	}
+
+	if (strcmp(arg_str, "all") == 0) {
+		*num_ranks = -1;
+		return;
+	}
+
+	D_DEBUG(DB_TRACE, "arg_str %s\n", arg_str);
+	token = strtok_r(arg_str, ",", &saveptr);
+	while (token != NULL) {
+		ptr = strchr(token, '-');
+		if (ptr == NULL) {
+			num_ranks_l++;
+			if (num_ranks_l > MAX_NUM_RANKS) {
+				D_ERROR("Too many target ranks.\n");
+				return;
+			}
+			ranks[index] = atoi(token);
+			index++;
+			token = strtok_r(NULL, ",", &saveptr);
+			continue;
+		}
+		if (ptr == token || ptr == token + strlen(token)) {
+			D_ERROR("Invalid rank range.\n");
+			return;
+		}
+		rstart = atoi(token);
+		rend = atoi(ptr + 1);
+		num_ranks_l += (rend - rstart + 1);
+		if (num_ranks_l > MAX_NUM_RANKS) {
+			D_ERROR("Too many target ranks.\n");
+			return;
+		}
+		for (i = rstart; i < rend + 1; i++) {
+			ranks[index] = i;
+			index++;
+		}
+		token = strtok_r(NULL, ",", &saveptr);
+	}
+	*num_ranks = num_ranks_l;
 }
 
 int
@@ -494,10 +560,10 @@ test_parse_args(int argc, char **argv)
 		{"skip_init", no_argument, &test_g.t_skip_init, 1},
 		{"skip_shutdown", no_argument, &test_g.t_skip_shutdown, 1},
 		{"delete_rank_from_ranklist", required_argument, 0, 'd'},
+		{"rank", required_argument, 0, 'r'},
 		{"cfg_path", required_argument, 0, 's'},
 		{"use_cfg", required_argument, 0, 'u'},
 		{"register_swim_callback", required_argument, 0, 'w'},
-		{"shutdown_rank", required_argument, 0, 't'},
 		{"verify_swim_status", required_argument, 0, 'v'},
 		{"get_swim_status", no_argument, 0, 'g'},
 		{0, 0, 0, 0}
@@ -509,7 +575,6 @@ test_parse_args(int argc, char **argv)
   // Options set for SWIM testing
 
   // Default to a non-existent, invalid rank
-	test_g.t_shutdown_rank = -1;
 	test_g.t_delete_rank_from_ranklist = -1;
 	test_g.t_get_swim_status = false;
 
@@ -564,9 +629,6 @@ test_parse_args(int argc, char **argv)
 		case 'u':
 			test_g.t_use_cfg = atoi(optarg);
 			break;
-		case 't':
-			test_g.t_shutdown_rank = atoi(optarg);
-			break;
 		case 'v':
 
       vss = parse_verify_swim_status_arg(optarg);
@@ -579,6 +641,10 @@ test_parse_args(int argc, char **argv)
 			break;
 		case 'd':
 			test_g.t_delete_rank_from_ranklist = atoi(optarg);
+			break;
+		case 'r':
+			parse_rank_string(optarg, test_g.cg_ranks,
+					  &test_g.cg_num_ranks);
 			break;
 		case '?':
 			return 1;
