@@ -99,7 +99,7 @@ class RebuildWidelyStriped(MdtestBase):
 #        threads.append(thread)
 #        thread.daemon = True
         thread.start()
-        time.sleep(5)
+        time.sleep(2)
 
 #        thread.join()
 
