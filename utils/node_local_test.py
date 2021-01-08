@@ -459,7 +459,7 @@ class DaosServer():
         if not self._sp:
             return
         rc = self.run_dmg(['system', 'stop'])
-        assert rc.returncode == 0
+        assert rc.returncode == 0 # nosec
 
         start = time.time()
         max_stop_time = 5
