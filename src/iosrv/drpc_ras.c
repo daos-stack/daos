@@ -143,8 +143,7 @@ init_ras(char *id, enum ras_event_sev sev, enum ras_event_type type, char *hid,
 
 	if (cop) {
 		evt->cop = cop;
-		D_FPRINTF(stream, " cop: [%s]", cop);
-		printf(" control_op: [%s]", cop);
+		D_FPRINTF(stream, " control_op: [%s]", cop);
 	}
 
 	fclose(stream);
@@ -231,7 +230,7 @@ ds_notify_ras_event(char *id, enum ras_event_type type, enum ras_event_sev sev,
 		      msg, &evt);
 	if (rc != 0) {
 		D_ERROR("failed to init RAS event: "DF_RC"\n", DP_RC(rc));
-		goto out;
+		return;
 	}
 
 	rc = send_ras(&evt);
@@ -239,8 +238,6 @@ ds_notify_ras_event(char *id, enum ras_event_type type, enum ras_event_sev sev,
 		D_ERROR("failed to send RAS event: "DF_RC"\n", DP_RC(rc));
 
 	free_ras(&evt);
-out:
-	D_FREE(evt.str_info);
 
 	return;
 }
