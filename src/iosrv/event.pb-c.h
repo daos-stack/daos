@@ -95,6 +95,10 @@ struct  _Mgmt__RASEvent
    */
   char *timestamp;
   /*
+   * Event type.
+   */
+  uint32_t type;
+  /*
    * Event severity.
    */
   uint32_t severity;
@@ -102,10 +106,6 @@ struct  _Mgmt__RASEvent
    * Human readable message describing event.
    */
   char *msg;
-  /*
-   * Event type.
-   */
-  uint32_t type;
   /*
    * (optional) Hostname of node involved in event.
    */
@@ -158,7 +158,7 @@ struct  _Mgmt__RASEvent
 };
 #define MGMT__RASEVENT__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__rasevent__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, MGMT__RASEVENT__EXTENDED_INFO__NOT_SET, {0} }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, MGMT__RASEVENT__EXTENDED_INFO__NOT_SET, {0} }
 
 
 /*

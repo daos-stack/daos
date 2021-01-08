@@ -43,7 +43,7 @@ free_ras(Mgmt__RASEvent *evt)
 }
 
 static int
-init_ras(char *id, enum ras_event_sev sev, enum ras_event_type type, char *hid,
+init_ras(char *id, enum ras_event_type type, enum ras_event_sev sev, char *hid,
 	 d_rank_t *rank, char *jid, uuid_t *puuid, uuid_t *cuuid,
 	 daos_obj_id_t *oid, char *cop, char *msg, Mgmt__RASEvent *evt)
 {
@@ -88,10 +88,10 @@ init_ras(char *id, enum ras_event_sev sev, enum ras_event_type type, char *hid,
 	D_ASPRINTF(evt->hostname, "%s", uts.nodename);
 	D_FPRINTF(stream, " host: [%s]", evt->hostname);
 
-	evt->severity = (uint32_t)sev;
 	evt->type = (uint32_t)type;
-	D_FPRINTF(stream, " sev: [%s] type: [%s]", ras_event_sev2str(sev),
-		  ras_event_type2str(type));
+	evt->severity = (uint32_t)sev;
+	D_FPRINTF(stream, " type: [%s] sev: [%s]", ras_event_type2str(type),
+		  ras_event_sev2str(sev));
 
 	if (!msg) {
 		D_ERROR("missing msg parameter\n");
@@ -226,7 +226,7 @@ ds_notify_ras_event(char *id, enum ras_event_type type, enum ras_event_sev sev,
 	evt.extended_info_case = MGMT__RASEVENT__EXTENDED_INFO_STR_INFO;
 	evt.str_info = data;
 
-	rc = init_ras(id, sev, type, hid, rank, jid, puuid, cuuid, oid, cop,
+	rc = init_ras(id, type, sev, hid, rank, jid, puuid, cuuid, oid, cop,
 		      msg, &evt);
 	if (rc != 0) {
 		D_ERROR("failed to init RAS event: "DF_RC"\n", DP_RC(rc));
@@ -265,8 +265,8 @@ ds_notify_pool_svc_update(uuid_t *puuid, d_rank_list_t *svc)
 	evt.pool_svc_info = &info;
 
 	/* TODO: add rank to event */
-	rc = init_ras(RAS_POOL_SVC_REPS_UPDATE, RAS_SEV_INFO,
-		      RAS_TYPE_STATE_CHANGE, NULL /* hid */, NULL /* rank */,
+	rc = init_ras(RAS_POOL_SVC_REPS_UPDATE, RAS_TYPE_STATE_CHANGE,
+		      RAS_SEV_INFO, NULL /* hid */, NULL /* rank */,
 		      NULL /* jid */, puuid, NULL /* cuuid */, NULL /* oid */,
 		      NULL /* cop */,
 		      "List of pool service replica ranks has been updated.",

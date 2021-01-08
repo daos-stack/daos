@@ -364,11 +364,11 @@ test_drpc_verify_notify_ras_event(void **state)
 	assert_int_equal(uuid_parse("22222222-2222-2222-2222-222222222222",
 				    cuuid), 0);
 
-	ds_notify_ras_event(RAS_RANK_NO_RESP, RAS_SEV_WARN, RAS_TYPE_INFO,
+	ds_notify_ras_event(RAS_RANK_NO_RESP, RAS_TYPE_INFO, RAS_SEV_WARN,
 			    "exhwid", &rank, "exjobid", &puuid, &cuuid, &oid,
 			    "exctlop", "Example message for no response",
 			    "{\"people\":[\"bill\",\"steve\",\"bob\"]}");
-	verify_notify_ras_event(RAS_RANK_NO_RESP, RAS_SEV_WARN, RAS_TYPE_INFO,
+	verify_notify_ras_event(RAS_RANK_NO_RESP, RAS_TYPE_INFO, RAS_SEV_WARN,
 				"exhwid", &rank, "exjobid", &puuid, &cuuid,
 				&oid, "exctlop",
 				"Example message for no response",

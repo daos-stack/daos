@@ -374,8 +374,20 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "severity",
+    "type",
     4,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__RASEvent, type),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "severity",
+    5,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
@@ -387,25 +399,13 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
   },
   {
     "msg",
-    5,
+    6,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
     offsetof(Mgmt__RASEvent, msg),
     NULL,
     &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "type",
-    6,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, type),
-    NULL,
-    NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
@@ -573,18 +573,18 @@ static const unsigned mgmt__rasevent__field_indices_by_name[] = {
   5,   /* field[5] = hostname */
   0,   /* field[0] = id */
   10,   /* field[10] = jid */
-  3,   /* field[3] = msg */
+  4,   /* field[4] = msg */
   13,   /* field[13] = oid */
   8,   /* field[8] = pid */
   17,   /* field[17] = pool_svc_info */
   11,   /* field[11] = puuid */
   6,   /* field[6] = rank */
   16,   /* field[16] = rank_state_info */
-  2,   /* field[2] = severity */
+  3,   /* field[3] = severity */
   15,   /* field[15] = str_info */
   9,   /* field[9] = tid */
   1,   /* field[1] = timestamp */
-  4,   /* field[4] = type */
+  2,   /* field[2] = type */
 };
 static const ProtobufCIntRange mgmt__rasevent__number_ranges[1 + 1] =
 {

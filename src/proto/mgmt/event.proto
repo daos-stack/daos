@@ -45,9 +45,9 @@ message PoolSvcEventInfo {
 message RASEvent {
 	string id = 2;		// Unique event identifier, 64-char.
 	string timestamp = 3;	// Fully qualified timestamp (us) incl timezone.
-	uint32 severity = 4;	// Event severity.
-	string msg = 5;		// Human readable message describing event.
-	uint32 type = 6;	// Event type.
+	uint32 type = 4;	// Event type.
+	uint32 severity = 5;	// Event severity.
+	string msg = 6;		// Human readable message describing event.
 	string hostname = 7;	// (optional) Hostname of node involved in event.
 	uint32 rank = 8;	// (optional) DAOS rank involved in event.
 	string hid = 9;		// (optional) Hardware component involved in event.

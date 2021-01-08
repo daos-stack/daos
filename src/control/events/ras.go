@@ -70,6 +70,25 @@ const (
 	RASPoolSvcReplicasUpdate RASID = C.RAS_POOL_SVC_REPS_UPDATE
 )
 
+// RASTypeID describes the type of a given RAS event.
+type RASTypeID uint32
+
+// RASTypeID constant definitions.
+const (
+	RASTypeAny         RASTypeID = C.RAS_TYPE_ANY
+	RASTypeStateChange RASTypeID = C.RAS_TYPE_STATE_CHANGE
+	RASTypeInfoOnly    RASTypeID = C.RAS_TYPE_INFO
+)
+
+func (typ RASTypeID) String() string {
+	return C.GoString(C.ras_event_type2str(uint32(typ)))
+}
+
+// Uint32 returns uint32 representation of event type.
+func (typ RASTypeID) Uint32() uint32 {
+	return uint32(typ)
+}
+
 // RASSeverityID describes the severity of a given RAS event.
 type RASSeverityID uint32
 
@@ -90,31 +109,12 @@ func (sev RASSeverityID) Uint32() uint32 {
 	return uint32(sev)
 }
 
-// RASTypeID describes the type of a given RAS event.
-type RASTypeID uint32
-
-// RASTypeID constant definitions.
-const (
-	RASTypeAny         RASTypeID = C.RAS_TYPE_ANY
-	RASTypeStateChange RASTypeID = C.RAS_TYPE_STATE_CHANGE
-	RASTypeInfoOnly    RASTypeID = C.RAS_TYPE_INFO
-)
-
-func (typ RASTypeID) String() string {
-	return C.GoString(C.ras_event_type2str(uint32(typ)))
-}
-
-// Uint32 returns uint32 representation of event type.
-func (typ RASTypeID) Uint32() uint32 {
-	return uint32(typ)
-}
-
 // RASEvent describes details of a specific RAS event.
 type RASEvent struct {
 	ID           RASID           `json:"id"`
 	Timestamp    string          `json:"timestamp"`
-	Severity     RASSeverityID   `json:"severity"`
 	Type         RASTypeID       `json:"type"`
+	Severity     RASSeverityID   `json:"severity"`
 	Msg          string          `json:"msg"`
 	Hostname     string          `json:"hostname"`
 	Rank         uint32          `json:"rank"`
@@ -139,8 +139,8 @@ func (evt *RASEvent) MarshalJSON() ([]byte, error) {
 		*toJSON
 	}{
 		ID:       evt.ID.String(),
-		Severity: evt.Severity.Uint32(),
 		Type:     evt.Type.Uint32(),
+		Severity: evt.Severity.Uint32(),
 		toJSON:   (*toJSON)(evt),
 	})
 }
@@ -150,16 +150,16 @@ func (evt *RASEvent) UnmarshalJSON(data []byte) error {
 	type fromJSON RASEvent
 	from := &struct {
 		ID       string `json:"id"`
-		Severity uint32 `json:"severity"`
 		Type     uint32 `json:"type"`
+		Severity uint32 `json:"severity"`
 		*fromJSON
 	}{
 		fromJSON: (*fromJSON)(evt),
 	}
 
 	evt.ID = RASID(from.ID)
-	evt.Severity = RASSeverityID(from.Severity)
 	evt.Type = RASTypeID(from.Type)
+	evt.Severity = RASSeverityID(from.Severity)
 
 	return nil
 }
@@ -201,8 +201,8 @@ func (evt *RASEvent) FromProto(pbEvt *mgmtpb.RASEvent) (err error) {
 	*evt = RASEvent{
 		ID:        RASID(pbEvt.Id),
 		Timestamp: pbEvt.Timestamp,
-		Severity:  RASSeverityID(pbEvt.Severity),
 		Type:      RASTypeID(pbEvt.Type),
+		Severity:  RASSeverityID(pbEvt.Severity),
 		Msg:       pbEvt.Msg,
 		Hostname:  pbEvt.Hostname,
 		Rank:      pbEvt.Rank,
