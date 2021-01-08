@@ -114,6 +114,7 @@ const (
 	ServerScmUnmanaged
 	ServerBdevNotFound
 	ServerIommuDisabled
+	ServerWrongSystem
 	ServerPoolScmTooSmall
 	ServerPoolNvmeTooSmall
 	ServerPoolInvalidRanks

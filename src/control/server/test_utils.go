@@ -160,8 +160,7 @@ func newMockDrpcClient(cfg *mockDrpcClientConfig) *mockDrpcClient {
 // setupMockDrpcClientBytes sets up the dRPC client for the mgmtSvc to return
 // a set of bytes as a response.
 func setupMockDrpcClientBytes(svc *mgmtSvc, respBytes []byte, err error) {
-	mi, _ := svc.harness.getMSLeaderInstance()
-
+	mi := svc.harness.instances[0]
 	cfg := &mockDrpcClientConfig{}
 	cfg.setSendMsgResponse(drpc.Status_SUCCESS, respBytes, err)
 	mi.setDrpcClient(newMockDrpcClient(cfg))
