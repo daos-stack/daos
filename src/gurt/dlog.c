@@ -160,7 +160,7 @@ static int clog_setnfac(int);
 
 /* static arrays for converting between pri's and strings */
 static const char * const norm[] = { "DBUG", "INFO", "NOTE", "WARN", "ERR ",
-				     "CRIT", "ALRT", "EMRG"};
+				     "CRIT", "ALRT", "EMRG", "EMIT"};
 /**
  * clog_pristr: convert priority to 4 byte symbolic name.
  *
@@ -172,8 +172,15 @@ static const char *clog_pristr(int pri)
 {
 	int s;
 
+#ifdef ORIG
 	pri = pri & DLOG_PRIMASK;
 	s = (pri >> DLOG_PRISHIFT) & 7;
+#else
+	s = DLOG_PRI(pri);
+	if ( s > (sizeof (norm) / sizeof (char *))){
+		s = 0;
+	}
+#endif
 	return norm[s];
 }
 
@@ -541,13 +548,19 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	static __thread char b[DLOG_TBSIZ];
 	static uint64_t	last_flush;
 
-	int fac, lvl;
+	int fac, lvl, pri;
 	bool flush;
-	char *b_nopt1hdr;
+#if 1
+	 char *b_nopt1hdr;
+#endif
 	char facstore[16], *facstr;
 	struct timeval tv;
 	struct tm *tm;
+#if 1
 	unsigned int hlen_pt1, hlen, mlen, tlen;
+#else
+	unsigned int hlen, mlen, tlen;
+#endif
 	/*
 	 * since we ignore any potential errors in CLOG let's always re-set
 	 * errno to its original value
@@ -560,6 +573,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 
 	fac = flags & DLOG_FACMASK;
 	lvl = flags & DLOG_PRIMASK;
+	pri = flags & DLOG_PRINDMASK;
 
 	/* Check the facility so we don't crash.   We will just log the message
 	 * in this case but it really is indicative of a usage error as user
@@ -618,7 +632,9 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 		}
 	}
 
+#if 1
 	hlen_pt1 = hlen;	/* save part 1 length */
+#endif
 	if (hlen < sizeof(b)) {
 		if (mst.oflags & DLOG_FLV_FAC)
 			hlen += snprintf(b + hlen, sizeof(b) - hlen,
@@ -666,7 +682,9 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 			b[tlen] = 0;
 		}
 	}
+#if 1
 	b_nopt1hdr = b + hlen_pt1;
+#endif
 	if (mst.oflags & DLOG_FLV_STDOUT)
 		flags |= DLOG_STDOUT;
 
@@ -690,13 +708,22 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	 * log it to stderr and/or stdout.  skip part one of the header
 	 * if the output channel is a tty
 	 */
+printf(" SAB: d_vlog: flag 0x%x\n",flags);
+#if 0
 	if (flags & DLOG_STDERR) {
+#else
+	if ((flags & DLOG_STDERR) && (pri != DLOG_EMIT)) {
+#endif
 		if (mst.stderr_isatty)
 			fprintf(stderr, "%s", b_nopt1hdr);
 		else
 			fprintf(stderr, "%s", b);
 	}
+#if 0
 	if (flags & DLOG_STDOUT) {
+#else
+	if ((flags & DLOG_STDOUT) &&  (pri != DLOG_EMIT)) {
+#endif
 		if (mst.stderr_isatty)
 			printf("%s", b_nopt1hdr);
 		else
@@ -718,6 +745,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 static int d_log_str2pri(const char *pstr, size_t len)
 {
 	int lcv;
+	int size;
 
 	/* make sure we have a valid input */
 	if (len == 0 || len > 7) {
@@ -741,7 +769,8 @@ static int d_log_str2pri(const char *pstr, size_t len)
 	/*
 	 * handle non-debug case
 	 */
-	for (lcv = 1; lcv <= 7; lcv++)
+	size = sizeof(norm) / sizeof(char *);
+	for (lcv = 1; lcv <= size; lcv++)
 		if (strncasecmp(pstr, norm[lcv], len) == 0)
 			return lcv << DLOG_PRISHIFT;
 	/* bogus! */
@@ -1119,6 +1148,7 @@ int d_log_setmasks(char *mstr, int mlen0)
 	unsigned int faclen, prilen;
 	int log_flags;
 
+printf(" \nSAB: setmask: input: %s\n", mstr);
 	/* not open? */
 	if (!d_log_xst.tag)
 		return -1;
@@ -1173,6 +1203,8 @@ int d_log_setmasks(char *mstr, int mlen0)
 		/* parse complete! */
 		/* process priority */
 		prino = d_log_str2pri(pri, prilen);
+printf("\n SAB: facility:: %s:\n", fac);
+printf(" SAB: pri %s, level 0x%0x\n", pri, prino);
 		if (prino == -1) {
 			log_flags = d_log_check(DLOG_ERR);
 
@@ -1184,7 +1216,9 @@ int d_log_setmasks(char *mstr, int mlen0)
 		}
 		/* process facility */
 		if (fac) {
+printf(" SAB: facility defined: %s\n", fac);
 			clog_lock();
+			/* Search structure to see if it already exists */
 			for (facno = 0; facno < d_log_xst.fac_cnt; facno++) {
 				if (d_log_xst.dlog_facs[facno].fac_aname &&
 				    strlen(d_log_xst.dlog_facs[facno].
@@ -1228,6 +1262,7 @@ int d_log_setmasks(char *mstr, int mlen0)
 
 		} /* end if(fac) */
 		else {
+printf(" SAB: facility NOT defined:\n");
 			/* apply to all facilities */
 			for (facno = 0; facno < d_log_xst.fac_cnt; facno++) {
 				tmp = d_log_setlogmask(facno, prino);

@@ -193,6 +193,7 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 #define D_ERROR(fmt, ...)	D_DEBUG(DLOG_ERR, fmt, ## __VA_ARGS__)
 #define D_CRIT(fmt, ...)	D_DEBUG(DLOG_CRIT, fmt, ## __VA_ARGS__)
 #define D_FATAL(fmt, ...)	D_DEBUG(DLOG_EMERG, fmt, ## __VA_ARGS__)
+#define D_EMIT(fmt, ...)	D_DEBUG(DLOG_EMIT, fmt, ## __VA_ARGS__)
 
 #define D_TRACE_INFO(ptr, fmt, ...)	\
 	D_TRACE_DEBUG(DLOG_INFO, ptr, fmt, ## __VA_ARGS__)
@@ -206,6 +207,8 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 	D_TRACE_DEBUG(DLOG_CRIT, ptr, fmt, ## __VA_ARGS__)
 #define D_TRACE_FATAL(ptr, fmt, ...)	\
 	D_TRACE_DEBUG(DLOG_EMERG, ptr, fmt, ## __VA_ARGS__)
+#define D_TRACE_EMIT(ptr, fmt, ...)	\
+	D_TRACE_DEBUG(DLOG_EMIT, ptr, fmt, ## __VA_ARGS__)
 
 #ifdef D_USE_GURT_FAC
 D_FOREACH_GURT_FAC(D_LOG_DECLARE_FAC, D_NOOP)
