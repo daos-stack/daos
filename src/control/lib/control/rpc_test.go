@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -259,6 +259,13 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 		Replicas: replicaHosts,
 	}
 
+	genRpcFn := func(inner func(*int) (proto.Message, error)) func(_ context.Context, _ *grpc.ClientConn) (proto.Message, error) {
+		callCount := 0
+		return func(_ context.Context, _ *grpc.ClientConn) (proto.Message, error) {
+			return inner(&callCount)
+		}
+	}
+
 	for name, tc := range map[string]struct {
 		timeout    time.Duration
 		withCancel *ctxCancel
@@ -330,6 +337,34 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 					},
 					{
 						Addr:    "127.0.0.1:2",
+						Message: defaultMessage,
+					},
+				},
+			},
+		},
+		"request to starting leader retries successfully": {
+			req: &testRequest{
+				HostList: []string{leaderHost},
+				toMS:     true,
+				rpcFn: genRpcFn(func(callCount *int) (proto.Message, error) {
+					*callCount++
+					if *callCount == 1 {
+						return nil, system.ErrRaftUnavail
+					}
+					return defaultMessage, nil
+				}),
+				retryableRequest: retryableRequest{
+					// set a retry function that always returns false
+					// to simulate a request with custom logic
+					retryTestFn: func(_ error, _ uint) bool {
+						return false
+					},
+				},
+			},
+			expResp: &UnaryResponse{
+				Responses: []*HostResponse{
+					{
+						Addr:    leaderHost,
 						Message: defaultMessage,
 					},
 				},

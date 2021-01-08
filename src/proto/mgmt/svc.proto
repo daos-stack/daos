@@ -46,13 +46,14 @@ message GroupUpdateResp {
 }
 
 message JoinReq {
-	string uuid = 1;	// Server UUID.
-	uint32 rank = 2;	// Server rank desired, if not -1.
-	string uri = 3;		// Server CaRT base URI (i.e., for context 0).
-	uint32 nctxs = 4;	// Server CaRT context count.
-	string addr = 5;	// Server management address.
-	string srvFaultDomain = 6; // Fault domain for this instance's server
-	uint32 idx = 7;		// Instance index on server node.
+	string sys = 1;		// DAOS system name.
+	string uuid = 2;	// Server UUID.
+	uint32 rank = 3;	// Server rank desired, if not MAX_UINT32.
+	string uri = 4;		// Server CaRT base URI (i.e., for context 0).
+	uint32 nctxs = 5;	// Server CaRT context count.
+	string addr = 6;	// Server management address.
+	string srvFaultDomain = 7; // Fault domain for this instance's server
+	uint32 idx = 8;		// Instance index on server node.
 }
 
 message JoinResp {
@@ -68,7 +69,7 @@ message JoinResp {
 }
 
 message LeaderQueryReq {
-	string system = 1;	// System name.
+	string sys = 1;		// System name.
 }
 
 message LeaderQueryResp {
@@ -153,8 +154,8 @@ message SetRankReq {
 // SetRankResp is identical to DaosResp.
 
 message PoolMonitorReq {
-	string poolUUID = 1;	// Pool UUID associated with the Pool Handle
-	string poolHandleUUID = 2; // Pool Handle UUID for the connection
-	string jobid = 3;	// Job ID to associate instance with.
-	string sys = 4;		// System Name being connected to.
+	string sys = 1; // DAOS system identifier
+	string poolUUID = 2;	// Pool UUID associated with the Pool Handle
+	string poolHandleUUID = 3; // Pool Handle UUID for the connection
+	string jobid = 4;	// Job ID to associate instance with.
 }
