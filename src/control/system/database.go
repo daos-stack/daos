@@ -42,6 +42,7 @@ import (
 )
 
 const (
+	// CurrentSchemaVersion indicates the current db schema version.
 	CurrentSchemaVersion = 0
 )
 
@@ -383,7 +384,7 @@ func (db *Database) Start(parent context.Context) error {
 // tasks and release any resources.
 func (db *Database) Stop() error {
 	if db.shutdownCb == nil {
-		return errors.New("no shutdown callback set?!")
+		return errors.New("no shutdown callback set")
 	}
 
 	db.shutdownCb()
@@ -885,20 +886,18 @@ func (db *Database) OnEvent(_ context.Context, evt *events.RASEvent) {
 			db.log.Error("no extended info in PoolSvcReplicasUpdate event received")
 			return
 		}
-		db.log.Debugf("processing RAS event %q with info %+v on host %q",
-			evt.Msg, ei, evt.Hostname)
+		db.log.Debugf("processing RAS event %q for pool %s with info %+v on host %q",
+			evt.Msg, evt.PUUID, ei, evt.Hostname)
 
-		uuid, err := uuid.Parse(ei.PoolUUID)
+		uuid, err := uuid.Parse(evt.PUUID)
 		if err != nil {
-			db.log.Errorf("failed to parse pool UUID %q: %s",
-				ei.PoolUUID, err)
+			db.log.Errorf("failed to parse pool UUID %q: %s", evt.PUUID, err)
 			return
 		}
 
 		ps, err := db.FindPoolServiceByUUID(uuid)
 		if err != nil {
-			db.log.Errorf("failed to find pool with UUID %q: %s",
-				ei.PoolUUID, err)
+			db.log.Errorf("failed to find pool with UUID %q: %s", evt.PUUID, err)
 			return
 		}
 

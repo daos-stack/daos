@@ -33,7 +33,6 @@ import (
 
 // PoolSvcInfo describes details of a pool service.
 type PoolSvcInfo struct {
-	PoolUUID       string   `json:"pool_uuid"`
 	SvcReplicas    []uint32 `json:"svc_reps"`
 	RaftLeaderTerm uint64   `json:"version"`
 }
@@ -63,7 +62,7 @@ func PoolSvcInfoToProto(psi *PoolSvcInfo) (*mgmtpb.RASEvent_PoolSvcInfo, error) 
 	return pbInfo, convert.Types(psi, pbInfo.PoolSvcInfo)
 }
 
-// NewPoolSvcRanksUpdateEvent creates a specific PoolSvcRanksUpdate event from given inputs.
+// NewPoolSvcReplicasUpdateEvent creates a specific PoolSvcRanksUpdate event from given inputs.
 func NewPoolSvcReplicasUpdateEvent(hostname string, rank uint32, poolUUID string, svcReplicas []uint32, leaderTerm uint64) *RASEvent {
 	return &RASEvent{
 		Timestamp: common.FormatTime(time.Now()),
@@ -71,10 +70,10 @@ func NewPoolSvcReplicasUpdateEvent(hostname string, rank uint32, poolUUID string
 		ID:        RASPoolSvcReplicasUpdate,
 		Hostname:  hostname,
 		Rank:      rank,
+		PUUID:     poolUUID,
 		Type:      RASTypeStateChange,
 		Severity:  RASSeverityError,
 		ExtendedInfo: &PoolSvcInfo{
-			PoolUUID:       poolUUID,
 			SvcReplicas:    svcReplicas,
 			RaftLeaderTerm: leaderTerm,
 		},

@@ -111,22 +111,22 @@ func (typ RASTypeID) Uint32() uint32 {
 
 // RASEvent describes details of a specific RAS event.
 type RASEvent struct {
-	ID               RASID           `json:"id"`
-	Timestamp        string          `json:"timestamp"`
-	Severity         RASSeverityID   `json:"severity"`
-	Msg              string          `json:"msg"`
-	Type             RASTypeID       `json:"type"`
-	Hostname         string          `json:"hostname"`
-	Rank             uint32          `json:"rank"`
-	HID              string          `json:"hid"`
-	PID              string          `json:"pid"`
-	TID              string          `json:"tid"`
-	JOBID            string          `json:"jid"`
-	PUUID            string          `json:"puuid"`
-	CUUID            string          `json:"cuuid"`
-	OID              string          `json:"oid"`
-	ControlOperation string          `json:"cop"`
-	ExtendedInfo     RASExtendedInfo `json:"extended_info"`
+	ID           RASID           `json:"id"`
+	Timestamp    string          `json:"timestamp"`
+	Severity     RASSeverityID   `json:"severity"`
+	Type         RASTypeID       `json:"type"`
+	Msg          string          `json:"msg"`
+	Hostname     string          `json:"hostname"`
+	Rank         uint32          `json:"rank"`
+	HID          string          `json:"hid"`
+	PID          string          `json:"pid"`
+	TID          string          `json:"tid"`
+	JOBID        string          `json:"jid"`
+	PUUID        string          `json:"puuid"`
+	CUUID        string          `json:"cuuid"`
+	OID          string          `json:"oid"`
+	ControlOp    string          `json:"cop"`
+	ExtendedInfo RASExtendedInfo `json:"extended_info"`
 }
 
 // MarshalJSON marshals RASEvent to JSON.
@@ -199,13 +199,21 @@ func (evt *RASEvent) ToProto() (*mgmtpb.RASEvent, error) {
 // FromProto initializes a native event from a provided protobuf event.
 func (evt *RASEvent) FromProto(pbEvt *mgmtpb.RASEvent) (err error) {
 	*evt = RASEvent{
+		ID:        RASID(pbEvt.Id),
 		Timestamp: pbEvt.Timestamp,
+		Severity:  RASSeverityID(pbEvt.Severity),
+		Type:      RASTypeID(pbEvt.Type),
 		Msg:       pbEvt.Msg,
 		Hostname:  pbEvt.Hostname,
 		Rank:      pbEvt.Rank,
-		ID:        RASID(pbEvt.Id),
-		Severity:  RASSeverityID(pbEvt.Severity),
-		Type:      RASTypeID(pbEvt.Type),
+		HID:       pbEvt.Hid,
+		PID:       pbEvt.Pid,
+		TID:       pbEvt.Tid,
+		JOBID:     pbEvt.Jid,
+		PUUID:     pbEvt.Puuid,
+		CUUID:     pbEvt.Cuuid,
+		OID:       pbEvt.Oid,
+		ControlOp: pbEvt.Cop,
 	}
 
 	switch ei := pbEvt.GetExtendedInfo().(type) {

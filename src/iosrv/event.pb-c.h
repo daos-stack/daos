@@ -58,10 +58,6 @@ struct  _Mgmt__PoolSvcEventInfo
 {
   ProtobufCMessage base;
   /*
-   * Pool UUID.
-   */
-  char *pool_uuid;
-  /*
    * Pool service replica ranks.
    */
   size_t n_svc_reps;
@@ -73,7 +69,7 @@ struct  _Mgmt__PoolSvcEventInfo
 };
 #define MGMT__POOL_SVC_EVENT_INFO__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_svc_event_info__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL, 0 }
+    , 0,NULL, 0 }
 
 
 typedef enum {

@@ -296,23 +296,11 @@ const ProtobufCMessageDescriptor mgmt__rank_state_event_info__descriptor =
   (ProtobufCMessageInit) mgmt__rank_state_event_info__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_svc_event_info__field_descriptors[3] =
+static const ProtobufCFieldDescriptor mgmt__pool_svc_event_info__field_descriptors[2] =
 {
   {
-    "pool_uuid",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolSvcEventInfo, pool_uuid),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
     "svc_reps",
-    2,
+    1,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_UINT32,
     offsetof(Mgmt__PoolSvcEventInfo, n_svc_reps),
@@ -324,7 +312,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_svc_event_info__field_descripto
   },
   {
     "version",
-    3,
+    2,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
@@ -336,14 +324,13 @@ static const ProtobufCFieldDescriptor mgmt__pool_svc_event_info__field_descripto
   },
 };
 static const unsigned mgmt__pool_svc_event_info__field_indices_by_name[] = {
-  0,   /* field[0] = pool_uuid */
-  1,   /* field[1] = svc_reps */
-  2,   /* field[2] = version */
+  0,   /* field[0] = svc_reps */
+  1,   /* field[1] = version */
 };
 static const ProtobufCIntRange mgmt__pool_svc_event_info__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 3 }
+  { 0, 2 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_svc_event_info__descriptor =
 {
@@ -353,7 +340,7 @@ const ProtobufCMessageDescriptor mgmt__pool_svc_event_info__descriptor =
   "Mgmt__PoolSvcEventInfo",
   "mgmt",
   sizeof(Mgmt__PoolSvcEventInfo),
-  3,
+  2,
   mgmt__pool_svc_event_info__field_descriptors,
   mgmt__pool_svc_event_info__field_indices_by_name,
   1,  mgmt__pool_svc_event_info__number_ranges,
