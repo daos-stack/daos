@@ -286,7 +286,7 @@ class Runner():
                 retval = True
             else:
                 print('RUN: %s' % command)
-                if subprocess.call(command, shell=True,       #nosec
+                if subprocess.call(command, shell=True,       # nosec
                                    env=self.env['ENV']) != 0:
                     retval = False
                     break
@@ -446,7 +446,7 @@ class WebRetriever():
 
         return False
 
-    def get(self, subdir):
+    def get(self, subdir, **kw): #pylint: disable=unused-argument
         """Downloads and extracts sources from a url into subdir"""
 
         basename = os.path.basename(self.url)
