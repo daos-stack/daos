@@ -126,12 +126,18 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 		ci_set_null(rbund.rb_csum);
 
 		rc = dbtree_iter_fetch(ih, &kiov, &riov, anchor);
+		if (vos_dtx_continue_detect(rc))
+			goto next;
+
 		if (rc != 0)
 			break;
 
 		rc = check_key(query, rbund.rb_krec);
 		if (rc == 0)
 			break;
+
+		if (vos_dtx_continue_detect(rc))
+			continue;
 
 		if (rc != -DER_NONEXIST)
 			break;
@@ -140,6 +146,7 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 		query->qt_epr = epr;
 		query->qt_punch = punch;
 
+next:
 		if (query->qt_flags & VOS_GET_MAX)
 			rc = dbtree_iter_prev(ih);
 		else
@@ -151,7 +158,7 @@ out:
 	if (rc == 0)
 		rc = fini_rc;
 
-	return rc;
+	return vos_dtx_hit_inprogress() ? -DER_INPROGRESS : rc;
 }
 
 static int
@@ -264,7 +271,7 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 		tclass = VOS_BTR_AKEY;
 	}
 
-	if (!daos_handle_is_inval(*toh)) {
+	if (daos_handle_is_valid(*toh)) {
 		dbtree_close(*toh);
 		*toh = DAOS_HDL_INVAL;
 	}
@@ -517,9 +524,9 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	}
 
 	vos_ilog_fetch_finish(&query.qt_info);
-	if (!daos_handle_is_inval(query.qt_akey_toh))
+	if (daos_handle_is_valid(query.qt_akey_toh))
 		dbtree_close(query.qt_akey_toh);
-	if (!daos_handle_is_inval(query.qt_dkey_toh))
+	if (daos_handle_is_valid(query.qt_dkey_toh))
 		dbtree_close(query.qt_dkey_toh);
 out:
 	if (obj != NULL)

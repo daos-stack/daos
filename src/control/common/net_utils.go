@@ -29,8 +29,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/daos-stack/daos/src/control/build"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/lib/hostlist"
 )
 
 // HasPort checks if addr specifies a port. This only works with IPv4
@@ -109,26 +111,35 @@ func LocalhostCtrlAddr() *net.TCPAddr {
 	}
 }
 
-// ParsePCIAddress returns separated components of BDF format PCI address.
-func ParsePCIAddress(addr string) (dom, bus, dev, fun uint64, err error) {
-	parts := strings.Split(addr, ":")
-	devFunc := strings.Split(parts[len(parts)-1], ".")
-	if len(parts) != 3 || len(devFunc) != 2 {
-		err = errors.Errorf("unexpected pci address bdf format: %q", addr)
+// ParseHostList validates and deduplicates the given list of host
+// strings. Any hosts missing a port will have one added according
+// to the defaultPort parameter.
+func ParseHostList(in []string, defaultPort int) (out []string, err error) {
+	if len(in) == 0 {
 		return
 	}
 
-	if dom, err = strconv.ParseUint(parts[0], 16, 64); err != nil {
-		return
+	var set *hostlist.HostSet
+	set, err = hostlist.CreateSet(strings.Join(in, ","))
+	if err != nil {
+		return nil, err
 	}
-	if bus, err = strconv.ParseUint(parts[1], 16, 32); err != nil {
-		return
-	}
-	if dev, err = strconv.ParseUint(devFunc[0], 16, 32); err != nil {
-		return
-	}
-	if fun, err = strconv.ParseUint(devFunc[1], 16, 32); err != nil {
-		return
+	out = strings.Split(set.DerangedString(), ",")
+
+	for i, host := range out {
+		hostPort := strings.Split(host, ":")
+		switch len(hostPort) {
+		case 1:
+			out[i] = fmt.Sprintf("%s:%d", host, defaultPort)
+		case 2:
+			_, err = strconv.Atoi(hostPort[1])
+		default:
+			err = errors.New("host should conform to hostname[:port]")
+		}
+
+		if err != nil {
+			return nil, errors.Wrapf(err, "invalid host %q", host)
+		}
 	}
 
 	return

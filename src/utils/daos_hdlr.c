@@ -16,7 +16,7 @@
  * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
  * The Government's rights to use, modify, reproduce, release, perform, display,
  * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
+ * provided in Contract No. 8F-30005.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
@@ -156,9 +156,9 @@ pool_decode_props(daos_prop_t *props)
 int
 pool_get_prop_hdlr(struct cmd_args_s *ap)
 {
-	daos_prop_t			*prop_query;
-	int				rc = 0;
-	int				rc2;
+	daos_prop_t	*prop_query;
+	int		rc = 0;
+	int		rc2;
 
 	assert(ap != NULL);
 	assert(ap->p_op == POOL_GET_PROP);
@@ -206,9 +206,9 @@ out:
 int
 pool_set_attr_hdlr(struct cmd_args_s *ap)
 {
-	size_t				value_size;
-	int				rc = 0;
-	int				rc2;
+	size_t	value_size;
+	int	rc = 0;
+	int	rc2;
 
 	assert(ap != NULL);
 	assert(ap->p_op == POOL_SET_ATTR);
@@ -257,8 +257,8 @@ out:
 int
 pool_del_attr_hdlr(struct cmd_args_s *ap)
 {
-	int				rc = 0;
-	int				rc2;
+	int rc = 0;
+	int rc2;
 
 	assert(ap != NULL);
 	assert(ap->p_op == POOL_DEL_ATTR);
@@ -627,7 +627,6 @@ out:
  * all with signatures similar to this:
  * int cont_FN_hdlr(struct cmd_args_s *ap)
  *
- * cont_list_objs_hdlr()
  * int cont_stat_hdlr()
  */
 
@@ -637,10 +636,13 @@ out:
 int
 cont_list_snaps_hdlr(struct cmd_args_s *ap, char *snapname, daos_epoch_t *epoch)
 {
-	daos_epoch_t *epochs = NULL;
-	char **names = NULL;
-	daos_anchor_t anchor;
-	int rc, i, snaps_count, expected_count;
+	daos_epoch_t	*epochs = NULL;
+	char		**names = NULL;
+	daos_anchor_t	anchor;
+	int		rc;
+	int		i;
+	int		snaps_count;
+	int		expected_count;
 
 	/* evaluate size for listing */
 	snaps_count = 0;
@@ -777,8 +779,8 @@ out:
 int
 cont_set_attr_hdlr(struct cmd_args_s *ap)
 {
-	size_t				value_size;
-	int				rc = 0;
+	size_t	value_size;
+	int	rc = 0;
 
 	if (ap->attrname_str == NULL || ap->value_str == NULL) {
 		fprintf(stderr, "both attribute name and value must be provided\n");
@@ -805,7 +807,7 @@ out:
 int
 cont_del_attr_hdlr(struct cmd_args_s *ap)
 {
-	int				rc = 0;
+	int rc = 0;
 
 	if (ap->attrname_str == NULL) {
 		fprintf(stderr, "attribute name must be provided\n");
@@ -886,10 +888,13 @@ out:
 int
 cont_list_attrs_hdlr(struct cmd_args_s *ap)
 {
-	size_t				 size, total_size, expected_size,
-					 cur = 0, len;
-	char				*buf = NULL;
-	int				rc = 0;
+	size_t	size;
+	size_t	total_size;
+	size_t	expected_size;
+	size_t	cur = 0;
+	size_t	len;
+	char	*buf = NULL;
+	int	rc = 0;
 
 	/* evaluate required size to get all attrs */
 	total_size = 0;
@@ -1176,11 +1181,11 @@ cont_decode_props(daos_prop_t *props, daos_prop_t *prop_acl)
 int
 cont_get_prop_hdlr(struct cmd_args_s *ap)
 {
-	daos_prop_t		*prop_query;
-	daos_prop_t		*prop_acl = NULL;
-	int			rc = 0;
-	uint32_t		i;
-	uint32_t		entry_type;
+	daos_prop_t	*prop_query;
+	daos_prop_t	*prop_acl = NULL;
+	int		rc = 0;
+	uint32_t	i;
+	uint32_t	entry_type;
 
 	/*
 	 * Get all props except the ACL first.
@@ -1483,6 +1488,8 @@ cont_query_hdlr(struct cmd_args_s *ap)
 	printf("Latest Persistent Snapshot: %i\n",
 		(int)cont_info.ci_lsnapshot);
 	printf("Highest Aggregated Epoch: "DF_U64"\n", cont_info.ci_hae);
+	printf("Container redundancy factor: %d\n", cont_info.ci_redun_fac);
+
 	/* TODO: list snapshot epoch numbers, including ~80 column wrap. */
 
 	if (ap->oid.hi || ap->oid.lo) {
@@ -1916,6 +1923,53 @@ cont_rollback_hdlr(struct cmd_args_s *ap)
 	}
 
 	fprintf(stdout, "successfully rollback container\n");
+	return rc;
+}
+
+int
+cont_list_objs_hdlr(struct cmd_args_s *ap)
+{
+	static const int	OID_ARR_SIZE = 8;
+	daos_obj_id_t		oids[OID_ARR_SIZE];
+	daos_handle_t		oit;
+	daos_anchor_t		anchor = {0};
+	uint32_t		oids_nr;
+	int			rc, i;
+
+	/* create a snapshot with OIT */
+	rc = daos_cont_create_snap_opt(ap->cont, &ap->epc, NULL,
+				       DAOS_SNAP_OPT_CR | DAOS_SNAP_OPT_OIT,
+				       NULL);
+	if (rc != 0)
+		goto out;
+
+	/* open OIT */
+	rc = daos_oit_open(ap->cont, ap->epc, &oit, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "open of container's OIT failed: "DF_RC"\n",
+			DP_RC(rc));
+		goto out_snap;
+	}
+
+	while (!daos_anchor_is_eof(&anchor)) {
+		oids_nr = OID_ARR_SIZE;
+		rc = daos_oit_list(oit, oids, &oids_nr, &anchor, NULL);
+		if (rc != 0) {
+			fprintf(stderr,
+				"object IDs enumeration failed: "DF_RC"\n",
+				DP_RC(rc));
+			D_GOTO(out_close, rc);
+		}
+
+		for (i = 0; i < oids_nr; i++)
+			D_PRINT(DF_OID"\n", DP_OID(oids[i]));
+	}
+
+out_close:
+	daos_oit_close(oit, NULL);
+out_snap:
+	cont_destroy_snap_hdlr(ap);
+out:
 	return rc;
 }
 

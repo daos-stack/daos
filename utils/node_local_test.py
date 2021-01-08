@@ -358,8 +358,7 @@ class DaosServer():
                                                 server_env['PATH'])
 
         cmd = [daos_server, '--config={}'.format(self._yaml_file.name),
-               'start', '-t' '4', '--insecure', '-d', self.agent_dir,
-               '--recreate-superblocks']
+               'start', '-t' '4', '--insecure', '-d', self.agent_dir]
 
         server_env['DAOS_DISABLE_REQ_FWD'] = '1'
         self._sp = subprocess.Popen(cmd, env=server_env)
@@ -382,8 +381,33 @@ class DaosServer():
         self.conf.agent_dir = self.agent_dir
         self.running = True
 
-        # Use dmg to block until the server is ready to respond to requests.
+        # Configure the storage.  DAOS wants to mount /mnt/daos itself if not
+        # already mounted, so let it do that.
+        # This code supports three modes of operation:
+        # /mnt/daos is not mounted.  It will be mounted and formatted.
+        # /mnt/daos is mounted but empty.  It will be remounted and formatted
+        # /mnt/daos exists and has data in.  It will be used as is.
         start = time.time()
+
+        cmd = ['storage', 'format']
+        while True:
+            time.sleep(0.5)
+            rc = self.run_dmg(cmd)
+            ready = False
+            if rc.returncode == 1:
+                for line in rc.stdout.decode('utf-8').splitlines():
+                    if 'format storage of running instance' in line:
+                        ready = True
+                    if 'format request for already-formatted storage and reformat not specified' in line:
+                        cmd = ['storage', 'format', '--reformat']
+            if ready:
+                break
+            if time.time() - start > 20:
+                raise Exception("Failed to format")
+
+        print('Format completion in {:.2f} seconds'.format(time.time() - start))
+
+        # How wait until the system is up, basically the format to happen.
         while True:
             time.sleep(0.5)
             rc = self.run_dmg(['system', 'query'])
@@ -391,7 +415,7 @@ class DaosServer():
             if rc.returncode == 0:
                 for line in rc.stdout.decode('utf-8').splitlines():
                     if line.startswith('status'):
-                        if 'Ready' in line or 'Joined' in line:
+                        if 'Joined' in line:
                             ready = True
 
             if ready:
@@ -409,6 +433,28 @@ class DaosServer():
 
         if not self._sp:
             return
+        rc = self.run_dmg(['system', 'stop'])
+        assert rc.returncode == 0
+
+        start = time.time()
+        while True:
+            time.sleep(0.5)
+            rc = self.run_dmg(['system', 'query'])
+            ready = False
+            if rc.returncode == 0:
+                for line in rc.stdout.decode('utf-8').splitlines():
+                    if line.startswith('status'):
+                        if 'Stopped' in line:
+                            ready = True
+                        if 'Stopping' in line:
+                            ready = True
+
+            if ready:
+                break
+            if time.time() - start > 20:
+                print('Failed to stop')
+                break
+        print('Server stopped in {:.2f} seconds'.format(time.time() - start))
 
         # daos_server does not correctly shutdown daos_io_server yet
         # so find and kill daos_io_server directly.  This may cause
@@ -458,10 +504,6 @@ class DaosServer():
             except ProcessLookupError:
                 pass
 
-        # Workaround for DAOS-5648
-        if ret == 2:
-            ret = 0
-
         # Show errors from server logs bug suppress memory leaks as the server
         # often segfaults at shutdown.
         if os.path.exists(self._log_file):
@@ -477,7 +519,9 @@ class DaosServer():
         exe_cmd.append('--insecure')
         exe_cmd.extend(cmd)
 
-        return subprocess.run(exe_cmd, stdout=subprocess.PIPE)
+        return subprocess.run(exe_cmd,
+                              stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE)
 
 def il_cmd(dfuse, cmd, check_read=True, check_write=True):
     """Run a command under the interception library
@@ -552,15 +596,11 @@ class ValgrindHelper():
         else:
             cmd.extend(['--leak-check=no'])
 
-        s_arg = '--suppressions='
-        cmd.extend(['{}{}'.format(s_arg,
-                                  os.path.join('src',
-                                               'cart',
-                                               'utils',
-                                               'memcheck-cart.supp')),
-                    '{}{}'.format(s_arg,
-                                  os.path.join('utils',
-                                               'memcheck-daos-client.supp'))])
+        cmd.append('--suppressions={}'.format(
+            os.path.join('src',
+                         'cart',
+                         'utils',
+                         'memcheck-cart.supp')))
 
         cmd.append('--error-exitcode=42')
 
@@ -764,7 +804,11 @@ def import_daos(server, conf):
                                  pydir,
                                  'site-packages'))
 
-    os.environ["DAOS_AGENT_DRPC_DIR"] = server.agent_dir
+    os.environ['DD_MASK'] = 'all'
+    os.environ['DD_SUBSYS'] = 'all'
+    os.environ['D_LOG_MASK'] = 'DEBUG'
+    os.environ['FI_UNIVERSE_SIZE'] = '128'
+    os.environ['DAOS_AGENT_DRPC_DIR'] = server.agent_dir
 
     daos = __import__('pydaos')
     return daos
@@ -904,6 +948,13 @@ def run_tests(dfuse):
     symlink_dest = 'missing_dest'
     os.symlink(symlink_dest, symlink_name)
     assert symlink_dest == os.readlink(symlink_name)
+
+    # DAOS-6238
+    fname = os.path.join(path, 'test_file4')
+    ofd = os.open(fname, os.O_CREAT | os.O_RDONLY | os.O_EXCL)
+    assert_file_size_fd(ofd, 0)
+    os.close(ofd)
+    os.chmod(fname, stat.S_IRUSR)
 
 def stat_and_check(dfuse, pre_stat):
     """Check that dfuse started"""
@@ -1303,6 +1354,11 @@ def run_in_fg(server, conf):
 def test_pydaos_kv(server, conf):
     """Test the KV interface"""
 
+    pydaos_log_file = tempfile.NamedTemporaryFile(prefix='dnt_pydaos_',
+                                                  suffix='.log',
+                                                  delete=False)
+
+    os.environ['D_LOG_FILE'] = pydaos_log_file.name
     daos = import_daos(server, conf)
 
     pools = get_pool_list()
@@ -1359,6 +1415,10 @@ def test_pydaos_kv(server, conf):
     kv = None
     print('Closing container and opening new one')
     kv = container.get_kv_by_name('my_test_kv')
+    kv = None
+    container = None
+    daos._cleanup()
+    log_test(conf, pydaos_log_file.name)
 
 def test_alloc_fail(server, wf, conf):
     """run 'daos' client binary with fault injection

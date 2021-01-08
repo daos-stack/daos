@@ -70,7 +70,8 @@ class DaosAggregationBasic(IorTestBase):
             roughly the same as after the initial run since aggregation has
             reclaimed the overwritten capacity.
 
-        :avocado: tags=all,pr,hw,large,aggregate,daosio,aggregatebasic
+        :avocado: tags=all,pr,daily_regression,hw,large,aggregate,daosio
+        :avocado: tags=aggregatebasic
         :avocado: tags=DAOS_5610
         """
 

@@ -43,6 +43,8 @@
 struct tx_helper {
 	/** Current transaction handle */
 	struct dtx_handle	*th_dth;
+	/** Save the XID to cleanup related TX. */
+	struct dtx_id		 th_saved_xid;
 	/** Number of total ops in current tx */
 	uint32_t		 th_nr_ops;
 	/** Number of write ops in current tx */
@@ -262,6 +264,10 @@ stop_tx(daos_handle_t coh, struct tx_helper *txh, bool success, bool write)
 			if (success && !txh->th_skip_commit) {
 				err = vos_dtx_commit(coh, &xid, 1, NULL);
 				assert(err >= 0);
+			} else {
+				if (!success)
+					txh->th_skip_commit = false;
+				daos_dti_copy(&txh->th_saved_xid, &xid);
 			}
 		}
 	}
@@ -1423,6 +1429,7 @@ uncertainty_check_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 		char		pp[L_COUNT + 1] = "coda";
 		daos_epoch_t	pe = ae - 1;
 
+		D_ASSERT(strlen(wp) <= sizeof(pp) - 1);
 		memcpy(pp, wp, strlen(wp));
 		print_message("  update(%s, "DF_U64") (expect DER_SUCCESS): ",
 			      pp, pe);
@@ -1489,6 +1496,25 @@ out:
 		print_message("FAILED: "DF_CASE"\n",
 			      DP_CASE(i, j, empty, w, wp, we, commit, a, ap, ae,
 				      bound, mvcc_arg->i));
+
+	if (!daos_is_zero_dti(&wtx->th_saved_xid)) {
+		if (wtx->th_skip_commit)
+			vos_dtx_commit(arg->ctx.tc_co_hdl, &wtx->th_saved_xid,
+				       1, NULL);
+		else
+			vos_dtx_abort(arg->ctx.tc_co_hdl, DAOS_EPOCH_MAX,
+				      &wtx->th_saved_xid, 1);
+	}
+
+	if (!daos_is_zero_dti(&atx->th_saved_xid)) {
+		if (atx->th_skip_commit)
+			vos_dtx_commit(arg->ctx.tc_co_hdl, &atx->th_saved_xid,
+				       1, NULL);
+		else
+			vos_dtx_abort(arg->ctx.tc_co_hdl, DAOS_EPOCH_MAX,
+				      &atx->th_saved_xid, 1);
+	}
+
 #undef DP_CASE
 #undef DF_CASE
 	return nfailed;

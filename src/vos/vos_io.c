@@ -634,9 +634,6 @@ bsgl_csums_resize(struct vos_io_context *ioc)
 	struct dcs_csum_info *csums = ioc->ic_biov_csums;
 	uint32_t	 dcb_nr = ioc->ic_biov_csums_nr;
 
-	if (ioc->ic_size_fetch)
-		return 0;
-
 	if (ioc->ic_biov_csums_at == dcb_nr - 1) {
 		struct dcs_csum_info *new_infos;
 		uint32_t	 new_nr = dcb_nr * 2;
@@ -706,6 +703,9 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 
 	rc = dbtree_fetch(toh, BTR_PROBE_LE, DAOS_INTENT_DEFAULT, &kiov, &kiov,
 			  &riov);
+	if (vos_dtx_hit_inprogress())
+		D_GOTO(out, rc = (rc == 0 ? -DER_INPROGRESS : rc));
+
 	if (rc == -DER_NONEXIST) {
 		rbund.rb_rsize = 0;
 		bio_addr_set_hole(&biov.bi_addr, 1);
@@ -825,8 +825,8 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 
 	evt_ent_array_init(&ent_array);
 	rc = evt_find(toh, &filter, &ent_array);
-	if (rc != 0)
-		goto failed;
+	if (rc != 0 || vos_dtx_hit_inprogress())
+		D_GOTO(failed, rc = (rc == 0 ? -DER_INPROGRESS : rc));
 
 	holes = 0;
 	rsize = 0;
@@ -1023,6 +1023,9 @@ stop_check(struct vos_io_context *ioc, uint64_t cond, daos_iod_t *iod, int *rc,
 	if (*rc != -DER_NONEXIST)
 		return true;
 
+	if (vos_dtx_hit_inprogress())
+		return true;
+
 	if (ioc->ic_check_existence)
 		goto check;
 
@@ -1143,12 +1146,19 @@ fetch_value:
 					    &shadow_ep);
 			rc = akey_fetch_recx(toh, &val_epr, &fetch_recx,
 					     shadow_ep, &rsize, ioc);
+
+			if (vos_dtx_continue_detect(rc))
+				continue;
+
 			if (rc != 0) {
-				D_DEBUG(DB_IO, "Failed to fetch index %d: "
-					DF_RC"\n", i, DP_RC(rc));
+				VOS_TX_LOG_FAIL(rc, "Failed to fetch index %d: "
+						DF_RC"\n", i, DP_RC(rc));
 				goto out;
 			}
 		}
+
+		if (vos_dtx_hit_inprogress())
+			continue;
 
 		/*
 		 * Empty tree or all holes, DAOS array API relies on zero
@@ -1168,12 +1178,15 @@ fetch_value:
 		}
 	}
 
+	if (vos_dtx_hit_inprogress())
+		goto out;
+
 	ioc_trim_tail_holes(ioc);
 out:
-	if (!daos_handle_is_inval(toh))
+	if (daos_handle_is_valid(toh))
 		key_tree_release(toh, is_array);
 
-	return rc;
+	return vos_dtx_hit_inprogress() ? -DER_INPROGRESS : rc;
 }
 
 static void
@@ -1239,14 +1252,22 @@ fetch_akey:
 	for (i = 0; i < ioc->ic_iod_nr; i++) {
 		iod_set_cursor(ioc, i);
 		rc = akey_fetch(ioc, toh);
+		if (vos_dtx_continue_detect(rc))
+			continue;
+
 		if (rc != 0)
 			break;
 	}
+
+	/* Add this check to prevent some new added logic after above for(). */
+	if (vos_dtx_hit_inprogress())
+		goto out;
+
 out:
-	if (!daos_handle_is_inval(toh))
+	if (daos_handle_is_valid(toh))
 		key_tree_release(toh, false);
 
-	return rc;
+	return vos_dtx_hit_inprogress() ? -DER_INPROGRESS : rc;
 }
 
 int
@@ -1258,6 +1279,21 @@ vos_fetch_end(daos_handle_t ioh, int err)
 	D_ASSERT(!ioc->ic_update);
 	vos_ioc_destroy(ioc, false);
 	return err;
+}
+
+/** If the object/key doesn't exist, we should augment the set with any missing
+ *  entries
+ */
+static void
+vos_fetch_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int iod_nr,
+		      daos_iod_t *iods)
+{
+	struct vos_akey_data	ad;
+
+	ad.ad_is_iod = true;
+	ad.ad_iods = iods;
+
+	vos_ts_add_missing(ts_set, dkey, iod_nr, &ad);
 }
 
 int
@@ -1323,8 +1359,10 @@ out:
 			rc = -DER_TX_RESTART;
 	}
 
-	if (rc == -DER_NONEXIST || rc == 0)
+	if (rc == -DER_NONEXIST || rc == 0) {
+		vos_fetch_add_missing(ioc->ic_ts_set, dkey, iod_nr, iods);
 		vos_ts_set_update(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
+	}
 
 	if (rc != 0) {
 		daos_recx_ep_list_free(ioc->ic_recx_lists, ioc->ic_iod_nr);
@@ -1554,8 +1592,9 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 		if (rc != 0)
 			goto out;
 	}
+
 out:
-	if (!daos_handle_is_inval(toh))
+	if (daos_handle_is_valid(toh))
 		key_tree_release(toh, is_array);
 
 	return rc;
@@ -1616,6 +1655,7 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey,
 		if (rc != 0)
 			goto out;
 	}
+
 out:
 	if (!subtr_created)
 		return rc;
@@ -2099,6 +2139,38 @@ abort:
 	return err;
 }
 
+static int
+vos_check_akeys(int iod_nr, daos_iod_t *iods)
+{
+	int	i, j;
+
+	if (iod_nr == 0)
+		return 0;
+
+	for (i = 0; i < iod_nr - 1; i++) {
+		for (j = i + 1; j < iod_nr; j++) {
+			if (iods[i].iod_name.iov_len !=
+			    iods[j].iod_name.iov_len)
+				continue;
+
+			if (iods[i].iod_name.iov_buf ==
+			    iods[j].iod_name.iov_buf)
+				return -DER_NO_PERM;
+
+			if (iods[i].iod_name.iov_buf == NULL ||
+			    iods[j].iod_name.iov_buf == NULL)
+				continue;
+
+			if (memcmp(iods[i].iod_name.iov_buf,
+				   iods[j].iod_name.iov_buf,
+				   iods[i].iod_name.iov_len) == 0)
+				return -DER_NO_PERM;
+		}
+	}
+
+	return 0;
+}
+
 int
 vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		 uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
@@ -2109,9 +2181,18 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	struct vos_io_context	*ioc;
 	int			 rc;
 
+	if (oid.id_shard % 3 == 1 && DAOS_FAIL_CHECK(DAOS_DTX_FAIL_IO))
+		return -DER_IO;
+
 	D_DEBUG(DB_TRACE, "Prepare IOC for "DF_UOID", iod_nr %d, epc "DF_X64
 		", flags="DF_X64"\n", DP_UOID(oid), iod_nr,
 		dtx_is_valid_handle(dth) ? dth->dth_epoch :  epoch, flags);
+
+	rc = vos_check_akeys(iod_nr, iods);
+	if (rc != 0) {
+		D_ERROR("Detected duplicate akeys, operation not allowed\n");
+		return rc;
+	}
 
 	rc = vos_ioc_create(coh, oid, false, epoch, iod_nr, iods, iods_csums,
 			    flags, NULL, dedup, dedup_th, dth, &ioc);
@@ -2219,7 +2300,7 @@ vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
 	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
 	int			 i, rc;
 
-	D_ASSERT(!daos_handle_is_inval(ioh));
+	D_ASSERT(daos_handle_is_valid(ioh));
 	D_ASSERT(bsgl != NULL);
 	D_ASSERT(bsgl_dup != NULL);
 
@@ -2267,7 +2348,7 @@ vos_dedup_free_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl)
 	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
 	int			 i;
 
-	D_ASSERT(!daos_handle_is_inval(ioh));
+	D_ASSERT(daos_handle_is_valid(ioh));
 	for (i = 0; i < bsgl->bs_nr_out; i++) {
 		struct bio_iov	*biov = &bsgl->bs_iovs[i];
 		PMEMoid		 oid;

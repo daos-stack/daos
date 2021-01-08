@@ -31,6 +31,17 @@
 #include "vts_io.h"
 #include "vts_array.h"
 
+#ifdef VERBOSE
+#define VERBOSE_PRINT(...)		\
+	do {				\
+		printf(__VA_ARGS__);	\
+		fflush(stdout);		\
+	} while (0)
+#else
+#define VERBOSE_PRINT(...) (void)0
+#endif
+
+
 static int start_epoch = 5;
 #define BUF_SIZE 2000
 static int buf_size = BUF_SIZE;
@@ -307,39 +318,39 @@ array_size_write(void **state)
 	rc = vts_array_reset(&info->pi_aoh, epoch, epoch + 1, 1, 2, 1);
 	epoch += 2;
 
-	memset(info->pi_update_buf, 'x', BUF_SIZE);
+	memset(info->pi_update_buf, 'x', buf_size);
 
 	for (i = 0; i < 5; i++) {
-		for (start_size = BUF_SIZE, punch_size = 0;
+		for (start_size = buf_size, punch_size = 0;
 		     punch_size < start_size;
 		     start_size -= 11, punch_size += 53) {
 			rc = vts_array_write(info->pi_aoh, epoch++, 0,
 					     start_size, info->pi_update_buf);
 			assert_int_equal(rc, 0);
 
-			memcpy(info->pi_fetch_buf, info->pi_fill_buf, BUF_SIZE);
-			rc = vts_array_read(info->pi_aoh, epoch++, 0, BUF_SIZE,
+			memcpy(info->pi_fetch_buf, info->pi_fill_buf, buf_size);
+			rc = vts_array_read(info->pi_aoh, epoch++, 0, buf_size,
 					    info->pi_fetch_buf);
 			assert_int_equal(rc, 0);
 			assert_memory_equal(info->pi_fetch_buf,
 					    info->pi_update_buf, start_size);
 			assert_memory_equal(info->pi_fetch_buf + start_size,
 					    info->pi_fill_buf,
-					    BUF_SIZE - start_size);
+					    buf_size - start_size);
 
 			rc = vts_array_set_size(info->pi_aoh, epoch++,
 						punch_size);
 			assert_int_equal(rc, 0);
 
-			memcpy(info->pi_fetch_buf, info->pi_fill_buf, BUF_SIZE);
-			rc = vts_array_read(info->pi_aoh, epoch++, 0, BUF_SIZE,
+			memcpy(info->pi_fetch_buf, info->pi_fill_buf, buf_size);
+			rc = vts_array_read(info->pi_aoh, epoch++, 0, buf_size,
 					    info->pi_fetch_buf);
 			assert_int_equal(rc, 0);
 			assert_memory_equal(info->pi_fetch_buf,
 					    info->pi_update_buf, punch_size);
 			assert_memory_equal(info->pi_fetch_buf + punch_size,
 					    info->pi_fill_buf,
-					    BUF_SIZE - punch_size);
+					    buf_size - punch_size);
 		}
 
 		rc = vts_array_reset(&info->pi_aoh, epoch, epoch + 1, 1,
@@ -1102,11 +1113,17 @@ cond_akey_punch_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
 	}
 }
 
+#define cond_fetch_op(...)						\
+	do {								\
+		VERBOSE_PRINT("Called cond_fetch_op at %s:%d\n",	\
+			      __FILE__, __LINE__);			\
+		cond_fetch_op_(__VA_ARGS__);				\
+	} while (0)
 static void
-cond_fetch_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
-	      daos_epoch_t epoch, bool use_tx, const char *dkey_str,
-	      const char *akey_str, uint64_t flags, int expected_rc,
-	      d_sg_list_t *sgl, const char *value_str, char fill_char)
+cond_fetch_op_(void **state, daos_handle_t coh, daos_unit_oid_t oid,
+	       daos_epoch_t epoch, bool use_tx, const char *dkey_str,
+	       const char *akey_str, uint64_t flags, int expected_rc,
+	       d_sg_list_t *sgl, const char *value_str, char fill_char)
 {
 	struct dtx_handle	*dth = NULL;
 	char			 dkey_buf[OP_MAX_STRING];
@@ -1146,10 +1163,16 @@ cond_fetch_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
 	assert_int_equal(memcmp(value_buf, read_buf, value_len), 0);
 }
 
+#define cond_updaten_op(...)						\
+	do {								\
+		VERBOSE_PRINT("Called cond_updaten_op at %s:%d\n",	\
+			      __FILE__, __LINE__);			\
+		cond_updaten_op_(__VA_ARGS__);				\
+	} while (0)
 static void
-cond_updaten_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
-	       daos_epoch_t epoch, const char *dkey_str,
-	       uint64_t flags, int expected_rc, d_sg_list_t *sgl, int n, ...)
+cond_updaten_op_(void **state, daos_handle_t coh, daos_unit_oid_t oid,
+		 daos_epoch_t epoch, const char *dkey_str,
+		 uint64_t flags, int expected_rc, d_sg_list_t *sgl, int n, ...)
 {
 	struct dtx_handle	*dth;
 	struct dtx_id		 xid;
@@ -1203,15 +1226,21 @@ cond_updaten_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
 
 }
 
+#define cond_update_op(...)						\
+	do {								\
+		VERBOSE_PRINT("Called cond_update_op at %s:%d\n",	\
+			      __FILE__, __LINE__);			\
+		cond_update_op_(__VA_ARGS__);				\
+	} while (0)
 static void
-cond_update_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
-	       daos_epoch_t epoch, const char *dkey_str, const char *akey_str,
-	       uint64_t flags, int expected_rc, d_sg_list_t *sgl,
-	       const char *value_str)
+cond_update_op_(void **state, daos_handle_t coh, daos_unit_oid_t oid,
+		daos_epoch_t epoch, const char *dkey_str, const char *akey_str,
+		uint64_t flags, int expected_rc, d_sg_list_t *sgl,
+		const char *value_str)
 {
 
-	cond_updaten_op(state, coh, oid, epoch, dkey_str, flags, expected_rc,
-			sgl, 1, akey_str, value_str);
+	cond_updaten_op_(state, coh, oid, epoch, dkey_str, flags, expected_rc,
+			 sgl, 1, akey_str, value_str);
 }
 
 #define MAX_SGL 10
@@ -1324,7 +1353,13 @@ cond_test(void **state)
 	start_epoch = epoch + 1;
 }
 
-#define NUM_OIDS 1000
+/** Making the oid generation deterministic, I get to 304 before I hit a false
+ *  collision on the oid.   This may indicate the hashing needs to be improved
+ *  but for now, it's good enough.  In general, the chance of a single
+ *  collision is very high well before we get close to saturation due
+ *  to the birthday paradox.
+ */
+#define NUM_OIDS 304
 static void
 multiple_oid_cond_test(void **state)
 {
@@ -1342,9 +1377,11 @@ multiple_oid_cond_test(void **state)
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 1;
 
+	reset_oid_stable(0xdeadbeef);
+
 	/** Same dkey/akey, multiple objects */
 	for (i = 0; i < NUM_OIDS; i++) {
-		oid = gen_oid(0);
+		oid = gen_oid_stable(0);
 		cond_update_op(state, arg->ctx.tc_co_hdl, oid,
 			       epoch - 2, "dkey", "akey", 0, 0, &sgl, "foo");
 		cond_update_op(state, arg->ctx.tc_co_hdl, oid,
@@ -1574,11 +1611,6 @@ minor_epoch_punch_sv(void **state)
 	rc = d_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
 
-
-	/* Allocate memory for the scatter-gather list */
-	rc = d_sgl_init(&sgl, 1);
-	assert_int_equal(rc, 0);
-
 	d_iov_set(&sgl.sg_iovs[0], (void *)first, iod.iod_size);
 
 	vts_dtx_begin_ex(&oid, arg->ctx.tc_co_hdl, epoch++, 0, 0, 2, &dth);
@@ -1802,6 +1834,73 @@ minor_epoch_punch_rebuild(void **state)
 	assert_int_equal(rc, 0);
 	assert_memory_equal(buf, expected, strlen(expected));
 	epoch += 2;
+
+	d_sgl_fini(&sgl, false);
+
+	start_epoch = epoch + 1;
+}
+
+#define NUM_RANKS 100
+#define NUM_KEYS 1000
+#define DKEY_NAME "dkey"
+static void
+many_keys(void **state)
+{
+	struct io_test_args	*arg = *state;
+	int			rc = 0;
+	int			i, num_keys = NUM_KEYS;
+	int			rank;
+	daos_key_t		dkey;
+	daos_recx_t		rex;
+	daos_iod_t		iod;
+	d_sg_list_t		sgl;
+	daos_epoch_t		epoch = start_epoch;
+	const char		*w = "x";
+	char			*dkey_buf = DKEY_NAME;
+	char			akey_buf[UPDATE_DKEY_SIZE];
+	daos_unit_oid_t		oid;
+
+	if (DAOS_ON_VALGRIND)
+		num_keys /= 500;
+
+	test_args_reset(arg, VPOOL_10G);
+
+	memset(&rex, 0, sizeof(rex));
+	memset(&iod, 0, sizeof(iod));
+
+	/* set up oid and dkey */
+	oid = gen_oid(0);
+	d_iov_set(&dkey, &dkey_buf[0], sizeof(DKEY_NAME) - 1);
+
+	rc = d_sgl_init(&sgl, 1);
+	assert_int_equal(rc, 0);
+
+	rex.rx_idx = 0;
+	rex.rx_nr = sizeof(w) - 1;
+
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = 1;
+	iod.iod_recxs = &rex;
+	iod.iod_nr = 1;
+
+	d_iov_set(&sgl.sg_iovs[0], (void *)w, rex.rx_nr);
+
+	/** Attempt to create a hash collision */
+	for (rank = 0; rank < NUM_RANKS; rank++) {
+		for (i = 0; i < num_keys; i++) {
+			epoch++;
+			memset(akey_buf, 0, sizeof(akey_buf));
+			sprintf(&akey_buf[0], "file.mdtest.%d.%d", rank,
+				i);
+			d_iov_set(&iod.iod_name, &akey_buf[0],
+				  strlen(akey_buf));
+
+			rc = vos_obj_update(arg->ctx.tc_co_hdl, oid,
+					    epoch, 0, 0, &dkey, 1, &iod,
+					    NULL, &sgl);
+			assert_int_equal(rc, 0);
+		}
+	}
 
 	d_sgl_fini(&sgl, false);
 
@@ -2432,6 +2531,8 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 		vts_dtx_end(dth);
 
 	start_epoch = epoch + 1;
+	d_sgl_fini(&sgl[0], false);
+	d_sgl_fini(&sgl[1], false);
 }
 
 static void
@@ -2484,6 +2585,7 @@ static const struct CMUnitTest punch_model_tests_all[] = {
 		NULL },
 	{ "VOS814: Minor epoch punch rebuild", minor_epoch_punch_rebuild, NULL,
 		NULL },
+	{ "VOS815: Many keys in one tree", many_keys, NULL, NULL },
 };
 
 int

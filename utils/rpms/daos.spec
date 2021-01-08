@@ -9,7 +9,7 @@
 %endif
 
 Name:          daos
-Version:       1.1.2
+Version:       1.1.2.1
 Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
@@ -54,7 +54,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: raft-devel = 0.7.0
+BuildRequires: raft-devel = 0.7.1
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -322,7 +322,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_unitdir}/%{server_svc_name}
 
 %files client
-%{_prefix}/etc/memcheck-daos-client.supp
 %{_bindir}/cart_ctl
 %{_bindir}/self_test
 %{_bindir}/dmg
@@ -411,6 +410,16 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
+
+* Tue Dec 15 2020 Ashley Pittman <ashley.m.pittman@intel.com> 1.1.2.1-2
+- Combine the two memcheck suppressions files.
+
+* Wed Dec 09 2020 Johann Lombardi <johann.lombardi@intel.com> 1.1.2.1-1
+- Version bump up to 1.1.2.1
+
+* Fri Dec 04 2020 Li Wei <wei.g.li@intel.com> 1.1.2-3
+- Require raft-devel 0.7.1 that fixes recent Coverity issues
+
 * Wed Dec 02 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.2-2
 - define scons_args to be BUILD_TYPE=<release|dev>
 - the scons default is BUILD_TYPE=release
