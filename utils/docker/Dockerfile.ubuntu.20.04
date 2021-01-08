@@ -75,13 +75,16 @@ RUN echo -e "<settings>\n\
 # set NOBUILD to disable build
 ARG NOBUILD
 
+# select compiler to use
+ARG COMPILER=gcc
+
 # copy DAOS tree
 WORKDIR /home/daos
 COPY ./ .
 
 # Build DAOS & dependencies
 RUN if [ "x$NOBUILD" = "x" ] ; then \
-    scons --build-deps=yes -j 4 install PREFIX=/opt/daos; fi
+    scons --build-deps=yes -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER; fi
 
 # Set environment variables
 ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
