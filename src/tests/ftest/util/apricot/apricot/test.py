@@ -35,22 +35,17 @@ from getpass import getuser
 from avocado import Test as avocadoTest
 from avocado import skip, TestFail, fail_on
 from avocado.utils.distro import detect
-from ClusterShell.NodeSet import NodeSet
 
 import fault_config_utils
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
-from command_utils_base import \
-    CommandFailure, EnvironmentVariables, CommonConfig
-from agent_utils_params import \
-    DaosAgentTransportCredentials, DaosAgentYamlParameters
-from agent_utils import DaosAgentCommand, DaosAgentManager, include_local_host
-from dmg_utils_params import \
-    DmgYamlParameters, DmgTransportCredentials
-from dmg_utils import DmgCommand
+from command_utils_base import CommandFailure, EnvironmentVariables
+from agent_utils import DaosAgentManager, include_local_host
+from dmg_utils import get_dmg_command
 from daos_utils import DaosCommand
 from server_utils import DaosServerManager
 from general_utils import \
-    get_partition_hosts, stop_processes, get_job_manager_class
+    get_partition_hosts, stop_processes, get_job_manager_class, \
+    get_default_config_file, pcmd
 from logger_utils import TestLogger
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
@@ -365,6 +360,8 @@ class TestWithServers(TestWithoutServers):
         self.agent_managers = []
         self.server_managers = []
         self.start_servers_once = False
+        self.server_manager_class = "Systemctl"
+        self.agent_manager_class = "Systemctl"
         self.setup_start_servers = True
         self.setup_start_agents = True
         self.hostlist_servers = None
@@ -397,6 +394,12 @@ class TestWithServers(TestWithoutServers):
         # Support starting the servers once per test for all test variants
         self.start_servers_once = self.params.get(
             "start_servers_once", "/run/setup/*", self.start_servers_once)
+
+        # Support running servers and agents with different JobManager classes
+        self.server_manager_class = self.params.get(
+            "server_manager_class", "/run/setup/*", self.server_manager_class)
+        self.agent_manager_class = self.params.get(
+            "agent_manager_class", "/run/setup/*", self.agent_manager_class)
 
         # Support configuring the startup of servers and agents by the setup()
         # method from the test yaml file
@@ -473,6 +476,16 @@ class TestWithServers(TestWithoutServers):
             if self.hostlist_clients:
                 hosts.extend(self.hostlist_clients)
             self.stop_leftover_processes(["orterun"], hosts)
+
+            # Ensure write permissions for the daos command log files when
+            # using systemctl
+            if (self.agent_manager_class == "Systemctl" or
+                    self.server_manager_class == "Systemctl"):
+                log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
+                self.log.info(
+                    "Updating file permissions for %s for use with systemctl",
+                    log_dir)
+                pcmd(hosts, "chmod a+rw {}".format(log_dir))
 
         # Start the clients (agents)
         if self.setup_start_agents:
@@ -555,12 +568,14 @@ class TestWithServers(TestWithoutServers):
 
         if isinstance(agent_groups, dict):
             for group, hosts in agent_groups.items():
-                transport = DaosAgentTransportCredentials(self.workdir)
-                # Use the unique agent group name to create a unique yaml file
-                config_file = self.get_config_file(group, "agent")
-                # Setup the access points with the server hosts
-                common_cfg = CommonConfig(group, transport)
-                self.add_agent_manager(config_file, common_cfg)
+                if self.agent_manager_class == "Systemctl":
+                    agent_config_file = get_default_config_file("agent")
+                    agent_config_temp = self.get_config_file(group, "dmg")
+                else:
+                    agent_config_file = self.get_config_file(group, "agent")
+                    agent_config_temp = None
+                self.add_agent_manager(
+                    group, agent_config_file, agent_config_temp)
                 self.configure_manager(
                     "agent",
                     self.agent_managers[-1],
@@ -591,10 +606,17 @@ class TestWithServers(TestWithoutServers):
 
         if isinstance(server_groups, dict):
             for group, hosts in server_groups.items():
-                server_config_file = self.get_config_file(group, "server")
-                server_config_temp = None
-                dmg_config_file = self.get_config_file(group, "dmg")
-                dmg_config_temp = None
+                if self.server_manager_class == "Systemctl":
+                    server_config_file = get_default_config_file("server")
+                    server_config_temp = self.get_config_file(group, "server")
+                    dmg_config_file = get_default_config_file("control")
+                    dmg_config_temp = self.get_config_file(group, "dmg")
+                else:
+                    server_config_file = self.get_config_file(group, "server")
+                    server_config_temp = None
+                    dmg_config_file = self.get_config_file(group, "dmg")
+                    dmg_config_temp = None
+
                 self.add_server_manager(
                     group, server_config_file, dmg_config_file,
                     server_config_temp, dmg_config_temp)
@@ -620,31 +642,30 @@ class TestWithServers(TestWithoutServers):
         filename = "{}_{}_{}.yaml".format(self.config_file_base, name, command)
         return os.path.join(self.tmp, filename)
 
-    def add_agent_manager(self, config_file=None, common_cfg=None, timeout=15):
-        """Add a new daos agent manager object to the agent manager list.
+    def add_agent_manager(self, group=None, config_file=None, config_temp=None):
+        """Add a new daos server manager object to the server manager list.
 
         Args:
-            config_file (str, optional): daos agent config file name. Defaults
-                to None, which will use a default file name.
-            common_cfg (CommonConfig, optional): daos agent config file
-                settings shared between the agent and server. Defaults to None,
-                which uses the class CommonConfig.
-            timeout (int, optional): number of seconds to wait for the daos
-                agent to start before reporting an error. Defaults to 60.
+            group (str, optional): server group name. Defaults to None.
+            config_file (str, optional): [description]. Defaults to None.
+            config_temp (str, optional): [description]. Defaults to None.
         """
-        self.log.info("--- ADDING AGENT MANAGER ---")
-
-        # Setup defaults
+        if group is None:
+            group = self.server_group
         if config_file is None:
-            config_file = self.get_config_file("daos", "agent")
-        if common_cfg is None:
-            agent_transport = DaosAgentTransportCredentials(self.workdir)
-            common_cfg = CommonConfig(self.server_group, agent_transport)
-        # Create an AgentCommand to manage with a new AgentManager object
-        agent_cfg = DaosAgentYamlParameters(config_file, common_cfg)
-        agent_cmd = DaosAgentCommand(self.bin, agent_cfg, timeout)
+            config_file = self.get_config_file(self.server_group, "agent")
+
+        # Define the location of the certificates
+        if self.agent_manager_class == "Systemctl":
+            cert_dir = os.path.join(os.sep, "etc", "daos", "certs")
+        else:
+            cert_dir = self.workdir
+
         self.agent_managers.append(
-            DaosAgentManager(agent_cmd, self.manager_class))
+            DaosAgentManager(
+                group, self.bin, cert_dir, config_file, config_temp,
+                self.agent_manager_class)
+        )
 
     def add_server_manager(self, group=None, svr_config_file=None,
                            dmg_config_file=None, svr_config_temp=None,
@@ -652,7 +673,7 @@ class TestWithServers(TestWithoutServers):
         """Add a new daos server manager object to the server manager list.
 
         Args:
-            group (str, optional): [description]. Defaults to None.
+            group (str, optional): server group name. Defaults to None.
             svr_config_file (str, optional): [description]. Defaults to None.
             dmg_config_file (str, optional): [description]. Defaults to None.
             svr_config_temp (str, optional): [description]. Defaults to None.
@@ -665,12 +686,19 @@ class TestWithServers(TestWithoutServers):
         if dmg_config_file is None:
             dmg_config_file = self.get_config_file(self.server_group, "dmg")
 
-        cert_dir = self.workdir
+        # Define the location of the certificates
+        if self.server_manager_class == "Systemctl":
+            svr_cert_dir = os.path.join(os.sep, "etc", "daos", "certs")
+            dmg_cert_dir = os.path.join(os.sep, "etc", "daos", "certs")
+        else:
+            svr_cert_dir = self.workdir
+            dmg_cert_dir = self.workdir
 
         self.server_managers.append(
             DaosServerManager(
-                group, cert_dir, self.bin, svr_config_file, dmg_config_file,
-                svr_config_temp, dmg_config_temp)
+                group, self.bin, svr_cert_dir, svr_config_file, dmg_cert_dir,
+                dmg_config_file, svr_config_temp, dmg_config_temp,
+                self.server_manager_class)
         )
 
     def configure_manager(self, name, manager, hosts, slots, access_list=None):
@@ -1002,11 +1030,10 @@ class TestWithServers(TestWithoutServers):
             return self.server_managers[index].dmg
 
         dmg_config_file = self.get_config_file("daos", "dmg")
-        dmg_cfg = DmgYamlParameters(
-            dmg_config_file, self.server_group,
-            DmgTransportCredentials(self.workdir))
-        dmg_cfg.hostlist.update(self.hostlist_servers[:1], "dmg.yaml.hostlist")
-        return DmgCommand(self.bin, dmg_cfg)
+        dmg_cmd = get_dmg_command(
+            self.server_group, self.workdir, self.bin, dmg_config_file)
+        dmg_cmd.hostlist = self.hostlist_servers[:1]
+        return dmg_cmd
 
     def get_daos_command(self):
         """Get a DaosCommand object.

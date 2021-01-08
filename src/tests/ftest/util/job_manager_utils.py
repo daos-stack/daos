@@ -25,6 +25,7 @@ from datetime import datetime
 from distutils.spawn import find_executable
 import os
 import re
+import time
 
 from ClusterShell.NodeSet import NodeSet
 
@@ -145,25 +146,41 @@ class JobManager(ExecutableCommand):
         # Get/display the state of the local job manager process
         state = super(JobManager, self).get_subprocess_state(message)
         if self._process is not None and self._hosts:
-            # Display the status of the remote job processes on each host
-            command = "/usr/bin/pgrep -a {}".format(self.job.command_regex)
-            self.log.debug(
-                "%s processes still running remotely%s:", self.command,
-                " {}".format(message) if message else "")
-            self.log.debug("Running (on %s): %s", self._hosts, command)
-            results = pcmd(self._hosts, command, True, 10, None)
-
-            # Add a running state to the list of process states if any remote
-            # process was found to be active.  The pcmd method will return a
-            # dictionary with a single key, e.g. {1: <NodeSet>}, if there are
-            # no remote processes running on any of the hosts.  If this value
-            # is not returned, indicate there are processes running by adding
-            # the "R" state to the process state list.
-            if 1 not in results or len(results) > 1:
+            # Determine if the status of the remote job processes on each host
+            remote_state = self._get_remote_process_state(message)
+            if remote_state:
+                # Add a running state to the list of process states if any
+                # remote process was found to be active.
                 if not state:
                     state = ["?"]
-                state.append("R")
+                state.append(remote_state)
         return state
+
+    def _get_remote_process_state(self, message=None):
+        """Display the state of the processes running on remote hosts.
+
+        Args:
+            message (str, optional): additional text to include in output.
+                Defaults to None.
+
+        Returns:
+            str: a "R" if any remote processes are found to be active otherwise
+                None.
+
+        """
+        # Display the status of the remote job processes on each host
+        command = "/usr/bin/pgrep -a {}".format(self.job.command_regex)
+        self.log.debug(
+            "%s processes still running remotely%s:", self.command,
+            " {}".format(message) if message else "")
+        self.log.debug("Running (on %s): %s", self._hosts, command)
+        results = pcmd(self._hosts, command, True, 10, None)
+
+        # The pcmd method will return a dictionary with a single key, e.g.
+        # {1: <NodeSet>}, if there are no remote processes running on any of the
+        # hosts.  If this value is not returned, indicate there are remote
+        # processes running by returning a "R" state.
+        return "R" if 1 not in results or len(results) > 1 else None
 
 
 class Orterun(JobManager):
@@ -499,6 +516,125 @@ class Systemctl(JobManager):
         """
         return self._systemctl.__str__()
 
+    def run(self):
+        """Start the job's service via the systemctl command.
+
+        Enable the service, start the service, and report the status of the
+        service.  If an error occurs with any of these commands also display
+        the journalctl output for the service.
+
+        Raises:
+            CommandFailure: if unable to enable or start the service
+
+        Returns:
+            dict: a dictionary of return codes keys and accompanying NodeSet
+                values indicating which hosts yielded the return code.
+
+        """
+        # Start the daos_server.service
+        self.service_enable()
+        result = self.service_start()
+        # result = self.service_status()
+
+        # Determine if the command has launched correctly using its
+        # check_subprocess_status() method.
+        if not self.check_subprocess_status(None):
+            msg = "Command '{}' did not launch correctly".format(self)
+            self.log.error(msg)
+            raise CommandFailure(msg)
+
+        return result
+
+    def stop(self):
+        """Stop the job's service via the systemctl command.
+
+        Stop the service, disable the service, and report the status of the
+        service.  If an error occurs with any of these commands also display
+        the journalctl output for the service.
+
+        Raises:
+            CommandFailure: if unable to stop or disable the service
+
+        Returns:
+            dict: a dictionary of return codes keys and accompanying NodeSet
+                values indicating which hosts yielded the return code.
+
+        """
+        self.service_stop()
+        return self.service_disable()
+
+    def wait(self):
+        """Wait for the sub process to complete."""
+        raise NotImplementedError()
+
+    def check_subprocess_status(self, sub_process):
+        """Verify command status when called in a subprocess.
+
+        Args:
+            sub_process (process.SubProcess): subprocess used to run the command
+
+        Returns:
+            bool: whether or not the command progress has been detected
+
+        """
+        # return self.job.check_subprocess_status(sub_process)
+        return self.check_logs(
+            self.job.pattern, self.timestamps["start"], None,
+            self.job.pattern_count, self.job.pattern_timeout.value)
+
+    def assign_hosts(self, hosts, path=None, slots=None):
+        """Assign the hosts to use with the command.
+
+        Set the appropriate command line parameter with the specified value.
+
+        Args:
+            hosts (list): list of hosts to specify on the command line
+            path (str, optional): path to use when specifying the hosts through
+                a hostfile. Defaults to None. Not used.
+            slots (int, optional): number of slots per host to specify in the
+                optional hostfile. Defaults to None. Not used.
+        """
+        self._hosts = NodeSet.fromlist(hosts)
+
+    def assign_environment(self, env_vars, append=False):
+        """Assign or add environment variables to the command.
+
+        Args:
+            env_vars (EnvironmentVariables): the environment variables to use
+                assign or add to the command
+            append (bool): whether to assign (False) or append (True) the
+                specified environment variables
+        """
+        pass
+
+    def assign_environment_default(self, env_vars):
+        """Assign the default environment variables for the command.
+
+        Args:
+            env_vars (EnvironmentVariables): the environment variables to
+                assign as the default
+        """
+        pass
+
+    def get_subprocess_state(self, message=None):
+        """Display the state of the subprocess.
+
+        Args:
+            message (str, optional): additional text to include in output.
+                Defaults to None.
+
+        Returns:
+            list: a list of states for the process found. Any active remote
+                processes will be indicated by a 'R' state at the end of the
+                list.
+
+        """
+        state = None
+        remote_state = self._get_remote_process_state(message)
+        if remote_state:
+            state = [remote_state]
+        return state
+
     def _run_unit_command(self, command):
         """Run the systemctl command.
 
@@ -530,50 +666,92 @@ class Systemctl(JobManager):
                 self.__str__(), NodeSet.fromlist(failed)))
         return result
 
-    def run(self):
-        """Start the job's service via the systemctl command.
+    def _report_unit_command(self, command):
+        """Run the systemctl command and report the log data on an error.
+
+        Args:
+            command (str): systemctl unit command
 
         Raises:
-            CommandFailure: if unable to start
+            CommandFailure: if there is an issue running the command
+
+        Returns:
+            dict: a dictionary of return codes keys and accompanying NodeSet
+                values indicating which hosts yielded the return code.
 
         """
-        return self._run_unit_command("start")
+        try:
+            return self._run_unit_command(command)
+        except CommandFailure as error:
+            self.log.info(error)
+            self.display_log_data(
+                self.get_log_data(self._hosts, self.timestamps[command]))
+            raise CommandFailure(error)
 
-    def enable(self):
+    def service_enable(self):
         """Enable the job's service via the systemctl command.
 
         Raises:
             CommandFailure: if unable to enable
 
-        """
-        return self._run_unit_command("enable")
+        Returns:
+            dict: a dictionary of return codes keys and accompanying NodeSet
+                values indicating which hosts yielded the return code.
 
-    def disable(self):
+        """
+        return self._report_unit_command("enable")
+
+    def service_disable(self):
         """Disable the job's service via the systemctl command.
 
         Raises:
             CommandFailure: if unable to disable
 
-        """
-        return self._run_unit_command("disable")
+        Returns:
+            dict: a dictionary of return codes keys and accompanying NodeSet
+                values indicating which hosts yielded the return code.
 
-    def stop(self):
+        """
+        return self._report_unit_command("disable")
+
+    def service_start(self):
+        """Start the job's service via the systemctl command.
+
+        Raises:
+            CommandFailure: if unable to start
+
+        Returns:
+            dict: a dictionary of return codes keys and accompanying NodeSet
+                values indicating which hosts yielded the return code.
+
+        """
+        return self._report_unit_command("start")
+
+    def service_stop(self):
         """Stop the job's service via the systemctl command.
 
         Raises:
             CommandFailure: if unable to stop
 
-        """
-        return self._run_unit_command("stop")
+        Returns:
+            dict: a dictionary of return codes keys and accompanying NodeSet
+                values indicating which hosts yielded the return code.
 
-    def status(self):
+        """
+        return self._report_unit_command("stop")
+
+    def service_status(self):
         """Get the status of the job's service via the systemctl command.
 
         Raises:
             CommandFailure: if unable to get the status
 
+        Returns:
+            dict: a dictionary of return codes keys and accompanying NodeSet
+                values indicating which hosts yielded the return code.
+
         """
-        return self._run_unit_command("status")
+        return self._report_unit_command("status")
 
     def get_log_data(self, hosts, since, until=None, timeout=60):
         """Gather log output for the command running on each host.
@@ -602,21 +780,19 @@ class Systemctl(JobManager):
             dict: log output per host
 
         """
-        self.log.info(
-            "Gathering %s log data on %s from %s%s",
-            self.job.service.value, str(hosts), since,
-            " ".join(("", "to", until)) if until else "")
-
         # Setup the journalctl command to capture all unit activity from the
         # specified start date to now or a specified end date
         #   --output=json?
         command = [
+            "sudo",
             "journalctl",
-            "--unit={}".format(self.job.service.value),
-            "--since={}".format(since),
+            "--unit={}".format(self._systemctl.service.value),
+            "--since=\"{}\"".format(since),
         ]
         if until:
-            command.append("--until={}".format(until))
+            command.append("--until=\"{}\"".format(until))
+        self.log.info(
+            "Gathering log data on %s: %s", str(hosts), " ".join(command))
 
         # Gather the log information per host
         task = run_task(hosts, " ".join(command), timeout)
@@ -670,16 +846,44 @@ class Systemctl(JobManager):
         if not status:
             raise CommandFailure(
                 "Error(s) detected gathering {} log data on {}".format(
-                    self.job.service.value, NodeSet.fromlist(hosts)))
+                    self._systemctl.service.value, NodeSet.fromlist(hosts)))
 
         # Return the successful command output per set of hosts
         return log_data
 
-    def check_logs(self, search, since, until, quantity=1, timeout=60):
+    def display_log_data(self, log_data):
+        """Display the journalctl log data.
+
+        Args:
+            log_data (dict): dictionary of journalctl log output.
+        """
+        self.log.info("Journalctl output:")
+        for line in self.str_log_data(log_data).split("\n"):
+            self.log.info(line)
+
+    @staticmethod
+    def str_log_data(log_data):
+        """Get the journalctl log data as a string.
+
+        Args:
+            log_data (dict): dictionary of journalctl log output.
+
+        Returns:
+            str: the journalctl log data
+
+        """
+        data = []
+        for node_set in sorted(log_data):
+            data.append("  {}:".format(node_set))
+            for line in log_data[node_set]:
+                data.append("    {}".format(line))
+        return "\n".join(data)
+
+    def check_logs(self, pattern, since, until, quantity=1, timeout=60):
         """Check the command logs on each host for a specified string.
 
         Args:
-            search (str): regular expression to search for in the logs
+            pattern (str): regular expression to search for in the logs
             since (str): search log entries from this date.
             until (str, optional): search log entries up to this date. Defaults
                 to None, in which case it is not utilized.
@@ -692,87 +896,57 @@ class Systemctl(JobManager):
                 host
 
         """
-        status = True
         self.log.info(
             "Searching for '%s' in '%s' output on %s",
-            search, self._systemctl, self._hosts)
-        log_data = self.get_log_data(self._hosts, since, until, timeout)
-        for host in sorted(log_data):
-            match = re.findall(search, log_data[host])
-            if not match:
-                self.log.info("  %s: '%s' not found in log", host, search)
-                status = False
-            else:
-                self.log.info(
-                    "  %s: %s/%s '%s' patterns found in log",
-                    host, len(match), quantity, search)
-                if len(match) < quantity:
-                    status = False
-        return status
+            pattern, self._systemctl, self._hosts)
 
-    def check_subprocess_status(self, sub_process):
-        """Verify command status when called in a subprocess.
+        log_data = None
+        complete = False
+        timed_out = False
+        start = time.time()
 
-        Args:
-            sub_process (process.SubProcess): subprocess used to run the command
+        # Search for patterns in the subprocess output until:
+        #   - the expected number of pattern matches are detected (success)
+        #   - the time out is reached (failure)
+        while not complete and not timed_out:
+            detected = 0
+            log_data = self.get_log_data(self._hosts, since, until, timeout)
+            for node_set in sorted(log_data):
+                match = re.findall(pattern, "\n".join(log_data[node_set]))
+                detected += len(match) if match else 0
 
-        Returns:
-            bool: whether or not the command progress has been detected
+            complete = detected == quantity
+            timed_out = time.time() - start > timeout
 
-        """
-        # return self.job.check_subprocess_status(sub_process)
-        return self.check_logs(
-            self.job.pattern, self.timestamps["start"], None,
-            self.job.pattern_count.value, self.job.pattern_timeout.value)
+        # Summarize results
+        msg = "{}/{} '{}' messages detected in".format(
+            detected, quantity, pattern)
+        runtime = "{}/{} seconds".format(time.time() - start, timeout)
 
-    def assign_hosts(self, hosts, path=None, slots=None):
-        """Assign the hosts to use with the command.
+        if not complete:
+            # Report the error / timeout
+            reason = "ERROR detected"
+            details = ""
+            if timed_out:
+                reason = "TIMEOUT detected, exceeded {} seconds".format(timeout)
+                runtime = "{} seconds".format(time.time() - start)
+            if log_data:
+                details = ":\n{}".format(self.str_log_data(log_data))
+            self.log.info("%s - %s %s%s", reason, msg, runtime, details)
+            if timed_out:
+                self.log.debug(
+                    "If needed the %s second timeout can be adjusted via "
+                    "the 'pattern_timeout' test yaml parameter under %s",
+                    timeout, self.namespace)
 
-        Set the appropriate command line parameter with the specified value.
+            # # Stop the timed out process
+            # if timed_out:
+            #     self.stop()
+        else:
+            # Report the successful start
+            # self.display_log_data(log_data)
+            self.log.info(
+                "%s subprocess startup detected - %s %s",
+                self._command, msg, runtime)
 
-        Args:
-            hosts (list): list of hosts to specify on the command line
-            path (str, optional): path to use when specifying the hosts through
-                a hostfile. Defaults to None. Not used.
-            slots (int, optional): number of slots per host to specify in the
-                optional hostfile. Defaults to None. Not used.
-        """
-        self._hosts = NodeSet.fromlist(hosts)
-
-    def assign_environment(self, env_vars, append=False):
-        """Assign or add environment variables to the command.
-
-        Args:
-            env_vars (EnvironmentVariables): the environment variables to use
-                assign or add to the command
-            append (bool): whether to assign (False) or append (True) the
-                specified environment variables
-        """
-        pass
-
-    def assign_environment_default(self, env_vars):
-        """Assign the default environment variables for the command.
-
-        Args:
-            env_vars (EnvironmentVariables): the environment variables to
-                assign as the default
-        """
-        pass
-
-    def get_subprocess_state(self, message=None):
-        """Display the state of the subprocess.
-
-        Args:
-            message (str, optional): additional text to include in output.
-                Defaults to None.
-
-        Returns:
-            list: a list of states for the process found. If the local job
-                manager command is running its state will be the first in the
-                list. Additional states in the list can typically indicate that
-                remote processes were also found to be active.  Active remote
-                processes will be indicated by a 'R' state at the end of the
-                list.
-
-        """
-        return []
+        return complete

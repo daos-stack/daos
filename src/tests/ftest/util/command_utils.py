@@ -23,6 +23,7 @@
 """
 # pylint: disable=too-many-lines
 from logging import getLogger
+from getpass import getuser
 import re
 import time
 import signal
@@ -35,7 +36,7 @@ from command_utils_base import \
     CommandWithParameters, YamlParameters, EnvironmentVariables, LogParameter
 from general_utils import check_file_exists, stop_processes, get_log_file, \
     run_command, DaosTestError, get_job_manager_class, create_directory, \
-    distribute_files
+    distribute_files, change_file_owner
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -702,6 +703,9 @@ class YamlCommand(SubProcessCommand):
         self.temporary_file = None
         self.temporary_file_hosts = None
 
+        # Owner of the certificate files
+        self.certificate_owner = getuser()
+
     @property
     def service_name(self):
         """Get the systemctl service name for this command.
@@ -738,7 +742,7 @@ class YamlCommand(SubProcessCommand):
         """
         if isinstance(self.yaml, YamlParameters):
             self.yaml.create_yaml(self.temporary_file)
-            self.copy_configuration()
+            self.copy_configuration(self.temporary_file is not None)
 
     def set_config_value(self, name, value):
         """Set the yaml configuration parameter value.
@@ -816,27 +820,33 @@ class YamlCommand(SubProcessCommand):
                         self.log.debug("  %s -> %s", src_file, dst_file)
                         result = distribute_files(
                             hosts, src_file, dst_file, mkdir=False,
-                            verbose=False, raise_exception=False)
+                            verbose=False, raise_exception=False, sudo=True,
+                            owner=self.certificate_owner)
                         if result.exit_status != 0:
                             self.log.info(
-                                "    WARNING: %s copy failed on %s",
-                                dst_file, hosts)
+                                "    WARNING: %s copy failed on %s:\n      %s",
+                                dst_file, hosts, result)
                     names.add(name)
             yaml = yaml.other_params
 
         # debug to list copy of cert files
-        self.log.debug("Copied certificates for %s:", self._command)
-        result = run_command(
-            "clush -S -v -w {} /usr/bin/ls -la {}".format(
-                ",".join(hosts), " ".join(names)), verbose=False)
-        for line in result.stdout.splitlines():
-            self.log.debug("  %s", line)
+        if names:
+            self.log.debug("Copied certificates for %s:", self._command)
+            result = run_command(
+                "sudo clush -S -v -w {} /usr/bin/ls -la {}".format(
+                    ",".join(hosts), " ".join(names)), verbose=False)
+            for line in result.stdout.splitlines():
+                self.log.debug("  %s", line)
 
-    def copy_configuration(self):
+    def copy_configuration(self, sudo=False):
         """Copy the yaml configuration file to the hosts.
 
         If defined self.temporary_file is copied to each self.hosts using the
         path/file specified by the YamlParameters.filename.
+
+        Args:
+            sudo (bool, optional): whether to run the command via sudo. Defaults
+                to False.
 
         Raises:
             CommandFailure: if there is an error copying the configuration file
@@ -844,14 +854,54 @@ class YamlCommand(SubProcessCommand):
         """
         if isinstance(self.yaml, YamlParameters):
             if self.temporary_file and self.temporary_file_hosts:
+                self.log.info(
+                    "Copying %s yaml configuration file to %s on %s",
+                    self.temporary_file, self.yaml.filename,
+                    self.temporary_file_hosts)
                 try:
                     distribute_files(
                         self.temporary_file_hosts, self.temporary_file,
-                        self.yaml.filename, verbose=False)
+                        self.yaml.filename, verbose=False, sudo=sudo)
                 except DaosTestError as error:
                     raise CommandFailure(
                         "ERROR: Copying yaml configuration file to {}: "
                         "{}".format(self.temporary_file_hosts, error))
+
+    def verify_socket_directory(self, user, hosts):
+        """Verify the domain socket directory is present and owned by this user.
+
+        Args:
+            user (str): user to verify has ownership of the directory
+
+        Raises:
+            CommandFailure: if the socket directory does not exist or is not
+                owned by the user and could not be created
+
+        """
+        if isinstance(self.yaml, YamlParameters):
+            directory = self.get_user_file()
+            status, nodes = check_file_exists(hosts, directory, user)
+            if not status:
+                self.log.info(
+                    "%s: creating socket directory %s for user %s on %s",
+                    self.command, directory, user, nodes)
+                try:
+                    create_directory(nodes, directory, sudo=True)
+                    change_file_owner(nodes, directory, user, sudo=True)
+                except DaosTestError as error:
+                    raise CommandFailure(
+                        "{}: error setting up missing socket directory {} for "
+                        "user {} on {}:\n{}".format(
+                            self.command, directory, user, nodes, error))
+
+    def get_user_file(self):
+        """Get the file defined in the yaml file that must be owned by the user.
+
+        Returns:
+            str: file defined in the yaml file that must be owned by the user
+
+        """
+        return self.get_config_value("socket_dir")
 
 
 class SubprocessManager(object):
@@ -873,6 +923,9 @@ class SubprocessManager(object):
 
         # Define the list of hosts that will execute the daos command
         self._hosts = []
+
+        # The socket directory verification is not required with systemctl
+        self._verify_socket_dir = manager != "Systemctl"
 
     def __str__(self):
         """Get the complete manager command string.
@@ -976,13 +1029,8 @@ class SubprocessManager(object):
                 owned by the user
 
         """
-        if self._hosts and hasattr(self.manager.job, "yaml"):
-            directory = self.get_user_file()
-            status, nodes = check_file_exists(self._hosts, directory, user)
-            if not status:
-                raise CommandFailure(
-                    "{}: Server missing socket directory {} for user {}".format(
-                        nodes, directory, user))
+        if self._hosts and self._verify_socket_dir:
+            self.manager.job.verify_socket_directory(user, self._hosts)
 
     def set_config_value(self, name, value):
         """Set the yaml configuration parameter value.
@@ -1016,15 +1064,6 @@ class SubprocessManager(object):
             value = self.manager.job.get_config_value(name)
         return value
 
-    def get_user_file(self):
-        """Get the file defined in the yaml file that must be owned by the user.
-
-        Returns:
-            str: file defined in the yaml file that must be owned by the user
-
-        """
-        return self.get_config_value("socket_dir")
-
 
 class SystemctlCommand(ExecutableCommand):
     # pylint: disable=too-few-public-methods
@@ -1034,6 +1073,7 @@ class SystemctlCommand(ExecutableCommand):
         """Create a SystemctlCommand object."""
         super(SystemctlCommand, self).__init__(
             "/run/systemctl/*", "systemctl", subprocess=False)
+        self.sudo = True
 
         self.unit_command = BasicParameter(None)
         self.service = BasicParameter(None)

@@ -180,8 +180,10 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
         if error.result.interrupted:
             msg = "Timeout detected running '{}' with a {}s timeout".format(
                 command, timeout)
+        elif verbose:
+            msg = "Error occurred running '{}': {}".format(command, error)
         else:
-            msg = "Error occurred running '{}': {}".format(
+            msg = "Error occurred running '{}':\n  {}".format(
                 command, error.result)
 
     if msg is not None:
@@ -762,7 +764,7 @@ def convert_string(item):
 
 
 def create_directory(hosts, directory, timeout=10, verbose=True,
-                     raise_exception=True):
+                     raise_exception=True, sudo=False):
     """Create the specified directory on the specified hosts.
 
     Args:
@@ -773,6 +775,8 @@ def create_directory(hosts, directory, timeout=10, verbose=True,
             stdout/stderr. Defaults to True.
         raise_exception (bool, optional): whether to raise an exception if the
             command returns a non-zero exit status. Defaults to True.
+        sudo (bool, optional): whether to run the command via sudo. Defaults to
+            False.
 
     Raises:
         DaosTestError: if there is an error running the command
@@ -792,12 +796,53 @@ def create_directory(hosts, directory, timeout=10, verbose=True,
     """
     hosts = convert_string(hosts)
     return run_command(
-        "clush -S -v -w {} /usr/bin/mkdir -p {}".format(hosts, directory),
+        "{}clush -S -v -w {} /usr/bin/mkdir -p {}".format(
+            "sudo " if sudo else "", hosts, directory),
+        timeout=timeout, verbose=verbose, raise_exception=raise_exception)
+
+
+def change_file_owner(hosts, filename, owner, timeout=10, verbose=True,
+                      raise_exception=True, sudo=False):
+    """Create the specified directory on the specified hosts.
+
+    Args:
+        hosts (list): hosts on which to create the directory
+        filename (str): the file for which to change ownership
+        owner (str): new owner of the file
+        timeout (int, optional): command timeout. Defaults to 10 seconds.
+        verbose (bool, optional): whether to log the command run and
+            stdout/stderr. Defaults to True.
+        raise_exception (bool, optional): whether to raise an exception if the
+            command returns a non-zero exit status. Defaults to True.
+        sudo (bool, optional): whether to run the command via sudo. Defaults to
+            False.
+
+    Raises:
+        DaosTestError: if there is an error running the command
+
+    Returns:
+        CmdResult: an avocado.utils.process CmdResult object containing the
+            result of the command execution.  A CmdResult object has the
+            following properties:
+                command         - command string
+                exit_status     - exit_status of the command
+                stdout          - the stdout
+                stderr          - the stderr
+                duration        - command execution time
+                interrupted     - whether the command completed within timeout
+                pid             - command's pid
+
+    """
+    hosts = convert_string(hosts)
+    return run_command(
+        "{0}clush -S -v -w {1} chown {2}:{2} {3}".format(
+            "sudo " if sudo else "", hosts, owner, filename),
         timeout=timeout, verbose=verbose, raise_exception=raise_exception)
 
 
 def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
-                     verbose=True, raise_exception=True, sudo=False):
+                     verbose=True, raise_exception=True, sudo=False,
+                     owner=None):
     """Copy the source to the destination on each of the specified hosts.
 
     Optionally (by default) ensure the destination directory exists on each of
@@ -817,6 +862,8 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
             command returns a non-zero exit status. Defaults to True.
         sudo (bool, optional): whether to run the command via sudo. Defaults to
             False.
+        owner (str, optional): if specified the owner to assign as the owner of
+            the copied file. Defaults to None.
 
     Raises:
         DaosTestError: if there is an error running the command
@@ -843,4 +890,22 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
             "{}clush -S -v -w {} --copy {} --dest {}".format(
                 "sudo " if sudo else "", hosts, source, destination),
             timeout=timeout, verbose=verbose, raise_exception=raise_exception)
+        if owner is not None and result.exit_status == 0:
+            change_file_owner(
+                hosts, destination, owner, timeout=timeout, verbose=verbose,
+                raise_exception=raise_exception, sudo=sudo)
     return result
+
+
+def get_default_config_file(name):
+    """Get the default config file.
+
+    Args:
+        name (str): daos component name, e.g. server, agent, control
+
+    Returns:
+        str: the default config file
+
+    """
+    file_name = "".join(["daos_", name, ".yml"])
+    return os.path.join(os.sep, "etc", "daos", file_name)

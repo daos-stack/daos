@@ -58,7 +58,7 @@ def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None):
         # Setup the DaosServerCommand to write the config file data to the
         # temporary file and then copy the file to all the hosts using the
         # assigned filename
-        command.yaml.temporary_file = config_temp
+        command.temporary_file = config_temp
     return command
 
 
