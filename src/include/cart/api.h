@@ -1871,6 +1871,17 @@ int crt_group_view_destroy(crt_group_t *grp);
 int crt_group_psr_set(crt_group_t *grp, d_rank_t rank);
 
 /**
+ * Specify list of ranks to be a PSRs for the provided group
+ *
+ * \param[in] grp               Group handle
+ * \param[in] rank_list         Ranks to set as PSRs
+ *
+ * \return                      DER_SUCCESS on success, negative value
+ *                              on failure.
+ */
+int crt_group_psrs_set(crt_group_t *grp, d_rank_list_t *rank_list);
+
+/**
  * Add rank to the specified primary group.
  *
  * Passed ctx will be used to determine a provider for which the uri is

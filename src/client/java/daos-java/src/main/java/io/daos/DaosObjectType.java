@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-package io.daos.dfs;
+package io.daos;
 
 /**
  * Type of DAOS object.
@@ -410,4 +410,8 @@ public enum DaosObjectType {
    * Class ID equal or higher than this is reserved.
    */
   OC_RESERVED;
+
+  public String nameWithoutOc() {
+    return name().substring(3);
+  }
 }
