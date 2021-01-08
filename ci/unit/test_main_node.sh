@@ -47,7 +47,6 @@ if ${NLT:-false}; then
     mkdir -p vm_test
     # NLT will mount /mnt/daos itself.
     ./utils/node_local_test.py --output-file=vm_test/nlt-errors.json all
-    rm -rf /mnt/daos/*
     ./utils/node_local_test.py --output-file=vm_test/daos_test-errors.json daos_test
 else
     sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos

@@ -1024,7 +1024,7 @@ def log_test(conf,
              skip_fi=False,
              fi_signal=None,
              check_read=False,
-	     abort_on_warning=True,
+             abort_on_warning=True,
              check_write=False):
     """Run the log checker on filename, logging to stdout"""
 
