@@ -759,8 +759,9 @@ fopen:
 	/** Open the byte array */
 	file->mode = entry->mode;
 	rc = daos_array_open_with_attr(dfs->coh, entry->oid, th, daos_mode, 1,
-		entry->chunk_size ? entry->chunk_size :
-		dfs->attr.da_chunk_size, &file->oh, NULL);
+				       entry->chunk_size ? entry->chunk_size :
+				       dfs->attr.da_chunk_size, &file->oh,
+				       NULL);
 	if (rc != 0) {
 		D_ERROR("daos_array_open_with_attr() failed (%d)\n", rc);
 		return daos_der2errno(rc);
