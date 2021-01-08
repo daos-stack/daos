@@ -988,7 +988,7 @@ class PreReqComponent():
             env = self.__env.Clone()
             self.require(env, comp)
 
-    def modify_prefix(self, comp_def, env):
+    def modify_prefix(self, comp_def):
         """Overwrite the prefix in cases where we may be using the default"""
         if comp_def.package:
             return

@@ -429,7 +429,9 @@ class DaosServer():
                 for line in rc.stdout.decode('utf-8').splitlines():
                     if 'format storage of running instance' in line:
                         ready = True
-                    if 'format request for already-formatted storage and reformat not specified' in line:
+                    format_message = ('format request for already-formatted'
+                                      ' storage and reformat not specified')
+                    if format_massage in line:
                         cmd = ['storage', 'format', '--reformat']
                 for line in rc.stderr.decode('utf-8').splitlines():
                     if 'system reformat requires the following' in line:
