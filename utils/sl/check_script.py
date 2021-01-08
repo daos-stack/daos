@@ -173,7 +173,6 @@ from SCons.Variables import *
 
 def parse_report(log_file):
     """Create the report"""
-    error_count = 0
     log_file.seek(0)
     with open("pylint.log", "a") as pylint:
         for line in log_file.readlines():
@@ -182,10 +181,8 @@ def parse_report(log_file):
             elif re.search("^[WECR]:", line):
                 sys.stdout.write(line[3:])
                 pylint.write(line[3:])
-                error_count += 1
             else:
                 sys.stdout.write(line)
-    return error_count
 
 def create_rc(src_name):
     """Create a temporary rc file with python path set"""
@@ -253,8 +250,7 @@ def check_script(fname, *args, **kw):
 
     if wrap:
         log_file = wrapper.fix_log(log_file, fname)
-    error_count = parse_report(log_file)
-    return error_count
+    parse_report(log_file)
 #pylint: enable=too-many-branches
 
 def main():
@@ -270,34 +266,29 @@ def main():
 
     args = parser.parse_args()
 
-    error_count = 0
-
     pylint3_rc = create_rc("pylint3.rc")
 
     if args.self_check:
-        error_count += check_script("SCons",
-                                    "-d", "too-few-public-methods",
-                                    "-d", "too-many-public-methods",
-                                    "-d", "invalid-name",
-                                    "-d", "unused-argument",
-                                    "-d", "no-self-use")
-        error_count += check_script("prereq_tools",
-                                    "-d", "too-many-lines",
-                                    "-d", "unused-argument")
-        error_count += check_script("components")
-        error_count += check_script("build_info")
-        error_count += check_script("check_script")
+        check_script("SCons",
+                     "-d", "too-few-public-methods",
+                     "-d", "too-many-public-methods",
+                     "-d", "invalid-name",
+                     "-d", "unused-argument",
+                     "-d", "no-self-use")
+        check_script("prereq_tools",
+                     "-d", "too-many-lines",
+                     "-d", "unused-argument")
+        check_script("components")
+        check_script("build_info")
+        check_script("check_script")
 
     if args.fname:
         for fname in args.fname:
             if args.exclude and fname.startswith(args.exclude):
                 continue
-            error_count += check_script(fname, wrap=args.wrap)
+            check_script(fname, wrap=args.wrap)
 
     os.unlink(pylint3_rc)
-
-    if error_count:
-        sys.exit(1)
 
 if __name__ == '__main__':
     main()

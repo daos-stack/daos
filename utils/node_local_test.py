@@ -282,7 +282,7 @@ class DaosServer():
         self._log_file = server_log_file.name
         self.__process_name = 'daos_io_server'
         if self.valgrind:
-            self.__process_name = 'valgrind'
+             self.__process_name = 'valgrind'
 
         socket_dir = '/tmp/dnt_sockets'
         if not os.path.exists(socket_dir):
