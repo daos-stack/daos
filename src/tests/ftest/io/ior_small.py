@@ -81,8 +81,8 @@ class IorSmall(IorTestBase):
                     if (api == "HDF5-VOL" and test[0] == "1M" and
                             test[1] == "32M"):
                         self.log.info(
-                            "** SKIPPING test case: api=%s, transfer_size=%s, "
-                            "block_size=%s for DAOS-6427", api, test[0], test[1])
+                            "** SKIP test case: api=%s (transfer=%s, block=%s) "
+                            "for DAOS-6427", api, test[0], test[1])
                         cncl_tickets.append("DAOS-6427")
                         continue
                     # run ior
