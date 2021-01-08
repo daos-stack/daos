@@ -93,7 +93,9 @@ struct dtx_handle {
 					 /* Distributed transaction. */
 					 dth_dist:1,
 					 /* For data migration. */
-					 dth_for_migration:1;
+					 dth_for_migration:1,
+					 /* Ignore other uncommitted DTXs. */
+					 dth_ignore_uncommitted:1;
 
 	/* The count the DTXs in the dth_dti_cos array. */
 	uint32_t			 dth_dti_cos_count;
@@ -193,12 +195,14 @@ enum dtx_flags {
 	DTX_DIST		= (1 << 2),
 	/** For data migration. */
 	DTX_FOR_MIGRATION	= (1 << 3),
+	/** Ignore other uncommitted DTXs. */
+	DTX_IGNORE_UNCOMMITTED	= (1 << 4),
 };
 
 int
 dtx_sub_init(struct dtx_handle *dth, daos_unit_oid_t *oid, uint64_t dkey_hash);
 int
-dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
+dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 		 struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
 		 uint32_t pm_ver, daos_unit_oid_t *leader_oid,
 		 struct dtx_id *dti_cos, int dti_cos_cnt,
@@ -214,7 +218,7 @@ typedef int (*dtx_sub_func_t)(struct dtx_leader_handle *dlh, void *arg, int idx,
 			      dtx_sub_comp_cb_t comp_cb);
 
 int
-dtx_begin(struct ds_cont_child *cont, struct dtx_id *dti,
+dtx_begin(daos_handle_t coh, struct dtx_id *dti,
 	  struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
 	  uint32_t pm_ver, daos_unit_oid_t *leader_oid,
 	  struct dtx_id *dti_cos, int dti_cos_cnt, uint32_t flags,
@@ -288,7 +292,7 @@ dtx_entry_put(struct dtx_entry *dte)
 }
 
 static inline bool
-dtx_is_valid_handle(struct dtx_handle *dth)
+dtx_is_valid_handle(const struct dtx_handle *dth)
 {
 	return dth != NULL && !daos_is_zero_dti(&dth->dth_xid);
 }

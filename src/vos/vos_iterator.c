@@ -198,7 +198,7 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 		return -DER_NOSYS;
 	}
 
-	if (!daos_handle_is_inval(param->ip_ih)) {
+	if (daos_handle_is_valid(param->ip_ih)) {
 		D_DEBUG(DB_TRACE, "Preparing nested iterator of type %s\n",
 			dict->id_name);
 		/** Nested operations are only used internally so there
@@ -232,9 +232,7 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 		D_ASSERT(!dtx_is_valid_handle(dth));
 		break;
 	}
-	rc = vos_ts_set_allocate(&ts_set, 0, rlevel, 1 /* max akeys */,
-				 dtx_is_valid_handle(dth) ?
-				 &dth->dth_xid : NULL);
+	rc = vos_ts_set_allocate(&ts_set, 0, rlevel, 1 /* max akeys */, dth);
 	if (rc != 0)
 		goto out;
 
@@ -630,6 +628,10 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 	D_ASSERT(anchors != NULL);
 	D_ASSERT(pre_cb || post_cb);
 
+	/* Recursive iteration from container level isn't supported */
+	if (type == VOS_ITER_COUUID && recursive)
+		return -DER_NOSYS;
+
 	anchor = type2anchor(type, anchors);
 
 	old = vos_dth_get();
@@ -651,7 +653,10 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 	}
 
 	iter = vos_hdl2iter(ih);
-	iter->it_ignore_uncommitted = ignore_inprogress ? 1 : 0;
+	if (ignore_inprogress || (dth != NULL && dth->dth_ignore_uncommitted))
+		iter->it_ignore_uncommitted = 1;
+	else
+		iter->it_ignore_uncommitted = 0;
 	read_time = dtx_is_valid_handle(dth) ? dth->dth_epoch : 0 /* unused */;
 probe:
 	if (!daos_anchor_is_zero(anchor))
@@ -687,13 +692,16 @@ probe:
 
 		skipped = false;
 		if (pre_cb) {
+			acts = 0;
 			rc = pre_cb(ih, &iter_ent, type, param, arg, &acts);
 			if (rc != 0)
 				break;
 
 			set_reprobe(type, acts, anchors, param->ip_flags);
 			skipped = (acts & VOS_ITER_CB_SKIP);
-			acts = 0;
+
+			if (acts & VOS_ITER_CB_ABORT)
+				break;
 
 			if (need_reprobe(type, anchors)) {
 				D_ASSERT(!daos_anchor_is_zero(anchor) &&
@@ -742,16 +750,17 @@ probe:
 
 next:
 		if (post_cb) {
+			acts = 0;
 			rc = post_cb(ih, &iter_ent, type, param, arg, &acts);
 			if (rc != 0)
 				break;
 
-			if (!vos_dtx_hit_inprogress()) {
+			if (!vos_dtx_hit_inprogress())
 				set_reprobe(type, acts, anchors,
 					    param->ip_flags);
-				acts = 0;
-			}
 
+			if (acts & VOS_ITER_CB_ABORT)
+				break;
 		}
 
 		if (need_reprobe(type, anchors)) {
@@ -800,7 +809,7 @@ vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
 	struct vos_iter_anchors	 anchors = {0};
 
 	D_ASSERT(type == VOS_ITER_DKEY || type == VOS_ITER_AKEY);
-	D_ASSERT(!daos_handle_is_inval(toh));
+	D_ASSERT(daos_handle_is_valid(toh));
 
 	param.ip_hdl = toh;
 	param.ip_epr = *epr;

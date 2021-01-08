@@ -296,7 +296,7 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
-	D_ASSERT(!daos_handle_is_inval(tls->rebuild_tree_hdl));
+	D_ASSERT(daos_handle_is_valid(tls->rebuild_tree_hdl));
 
 	tls->rebuild_pool_obj_count++;
 	val.eph = epoch;
@@ -590,6 +590,10 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	vos_iter_param_t		param = { 0 };
 	struct vos_iter_anchors		anchor = { 0 };
 	daos_handle_t			coh;
+	struct dtx_handle		dth = { 0 };
+	struct dtx_id			dti = { 0 };
+	struct dtx_epoch		epoch = { 0 };
+	daos_unit_oid_t			oid = { 0 };
 	int				rc;
 
 	if (uuid_compare(arg->co_uuid, entry->ie_couuid) == 0) {
@@ -605,6 +609,10 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return rc;
 	}
 
+	epoch.oe_value = rpt->rt_stable_epoch;
+	rc = dtx_begin(coh, &dti, &epoch, 0, rpt->rt_rebuild_ver,
+		       &oid, NULL, 0, DTX_IGNORE_UNCOMMITTED, NULL, &dth);
+	D_ASSERT(rc == 0);
 	memset(&param, 0, sizeof(param));
 	param.ip_hdl = coh;
 	param.ip_epr.epr_lo = 0;
@@ -612,7 +620,8 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	param.ip_flags = VOS_IT_FOR_MIGRATION;
 	uuid_copy(arg->co_uuid, entry->ie_couuid);
 	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor,
-			 rebuild_obj_scan_cb, NULL, arg, NULL);
+			 rebuild_obj_scan_cb, NULL, arg, &dth);
+	dtx_end(&dth, NULL, rc);
 	vos_cont_close(coh);
 
 	*acts |= VOS_ITER_CB_YIELD;
@@ -657,7 +666,7 @@ rebuild_scanner(void *data)
 	/* Create object tree root */
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
-	rc = dbtree_create(DBTREE_CLASS_NV, 0, 4, &uma, NULL,
+	rc = dbtree_create(DBTREE_CLASS_UV, 0, 4, &uma, NULL,
 			   &tls->rebuild_tree_hdl);
 	if (rc != 0) {
 		D_ERROR("failed to create rebuild tree: "DF_RC"\n", DP_RC(rc));
@@ -665,8 +674,8 @@ rebuild_scanner(void *data)
 	}
 
 	rpt_get(rpt);
-	rc = dss_ult_create(rebuild_objects_send_ult, rpt, DSS_ULT_REBUILD,
-			    DSS_TGT_SELF, 0, &ult_send);
+	rc = dss_ult_create(rebuild_objects_send_ult, rpt, DSS_XS_SELF,
+			    0, 0, &ult_send);
 	if (rc != 0) {
 		rpt_put(rpt);
 		D_GOTO(out, rc);
@@ -719,7 +728,7 @@ rebuild_scan_leader(void *data)
 	while (rpt->rt_pool->sp_dtx_resync_version < rpt->rt_rebuild_ver)
 		ABT_thread_yield();
 
-	rc = dss_thread_collective(rebuild_scanner, rpt, 0, DSS_ULT_REBUILD);
+	rc = dss_thread_collective(rebuild_scanner, rpt, 0);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -727,7 +736,7 @@ rebuild_scan_leader(void *data)
 		DP_UUID(rpt->rt_pool_uuid));
 
 	ABT_mutex_lock(rpt->rt_lock);
-	rc = dss_task_collective(rebuild_scan_done, rpt, 0, DSS_ULT_REBUILD);
+	rc = dss_task_collective(rebuild_scan_done, rpt, 0);
 	ABT_mutex_unlock(rpt->rt_lock);
 	if (rc) {
 		D_ERROR(DF_UUID" send rebuild object list failed:%d\n",
@@ -824,8 +833,8 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 
 	rpt_get(rpt);
-	rc = dss_ult_create(rebuild_tgt_status_check_ult, rpt, DSS_ULT_REBUILD,
-			    DSS_TGT_SELF, 0, NULL);
+	rc = dss_ult_create(rebuild_tgt_status_check_ult, rpt, DSS_XS_SELF,
+			    0, 0, NULL);
 	if (rc) {
 		rpt_put(rpt);
 		D_GOTO(out, rc);
@@ -833,8 +842,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 
 	rpt_get(rpt);
 	/* step-3: start scan leader */
-	rc = dss_ult_create(rebuild_scan_leader, rpt, DSS_ULT_REBUILD,
-			    DSS_TGT_SELF, 0, NULL);
+	rc = dss_ult_create(rebuild_scan_leader, rpt, DSS_XS_SELF, 0, 0, NULL);
 	if (rc != 0) {
 		rpt_put(rpt);
 		D_GOTO(out, rc);
