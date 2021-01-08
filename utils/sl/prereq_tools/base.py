@@ -34,6 +34,7 @@ import traceback
 import hashlib
 import time
 import sys
+import shutil
 from build_info import BuildInfo
 from SCons.Variables import PathVariable
 from SCons.Variables import EnumVariable
@@ -987,7 +988,7 @@ class PreReqComponent():
             env = self.__env.Clone()
             self.require(env, comp)
 
-    def modify_prefix(self, comp_def, env):
+    def modify_prefix(self, comp_def, env): #pylint: disable=unused-argument
         """Overwrite the prefix in cases where we may be using the default"""
         if comp_def.package:
             return
@@ -1567,7 +1568,7 @@ class _Component():
         if self.__dry_run:
             print('Would empty %s' % path)
         else:
-            subprocess.call(["/bin/rm", "-rf", path])
+            shutil.rmtree(path)
             os.mkdir(path)
 
     def _has_changes(self):
