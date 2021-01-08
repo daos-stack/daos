@@ -8,7 +8,7 @@ hosts:
 # servers if a server partition is defined
     # server_partition: daos_server
     client_partition: daos_client
-    client_reservation:
+    # client_reservation: daos-test
 orterun:
     allow_run_as_root: True
 # This timeout must be longer than the test_timeout param (+15minutes)
@@ -44,31 +44,26 @@ dmg:
     transport_config:
       allow_insecure: True
 # pool_params - attributes of the pools to create; Currently only create one
-pool_ior:
+pool_jobs:
     mode: 146
     name: daos_server
-    scm_size: 40000000000
-    nvme_size: 100000000000
-    svcn: 1
-    control_method: dmg
-pool_fio:
-    mode: 146
-    name: daos_server
-    scm_size: 40000000000
-    nvme_size: 100000000000
+    scm_size: 40GB
+    nvme_size: 100GB
     svcn: 1
     control_method: dmg
 pool_reserved:
     mode: 511
     name: daos_server
-    scm_size: 3000000000
-    nvme_size: 50000000000
+    scm_size: 3GB
+    nvme_size: 50GB
     control_method: dmg
 container:
     type: POSIX
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    oclass: SX
     control_method: daos
 container_reserved:
+    oclass: OC_SX
     akey_size: 5
     dkey_size: 5
     data_size: 4096
@@ -99,12 +94,9 @@ smoke:
     # maximum timeout for a single job in test in minutes
     job_timeout: 10
     nodesperjob:
-        - -1
+        - 1
     taskspernode:
         - 1
-    poollist:
-        - pool_ior
-        - pool_fio
     joblist:
         - ior_smoke
         - fio_smoke
@@ -116,6 +108,7 @@ ior_smoke:
     api:
         - DFS
         - MPIIO
+        - POSIX
         - HDF5
         - HDF5-VOL
     test_file: daos:testFile
@@ -130,7 +123,8 @@ ior_smoke:
     segment_count: 1
     dfs_oclass:
         - 'SX'
-    dfs_destroy: True
+    dfs_dir_oclass:
+        - 'SX'
 fio_smoke:
   names:
       - global
