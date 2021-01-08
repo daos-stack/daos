@@ -36,12 +36,6 @@
 static void
 free_ras(Mgmt__RASEvent *evt)
 {
-	if (evt->oid)
-		D_FREE(evt->oid);
-	if (evt->cuuid)
-		D_FREE(evt->cuuid);
-	if (evt->puuid)
-		D_FREE(evt->puuid);
 	if (evt->hostname)
 		D_FREE(evt->hostname);
 	if (evt->timestamp)
@@ -50,7 +44,7 @@ free_ras(Mgmt__RASEvent *evt)
 
 static int
 init_ras(char *id, enum ras_event_sev sev, enum ras_event_type type, char *hid,
-	 d_rank_t *rank, char *jid, uuid_t puuid, uuid_t cuuid,
+	 d_rank_t *rank, char *jid, uuid_t *puuid, uuid_t *cuuid,
 	 daos_obj_id_t *oid, char *cop, char *msg, Mgmt__RASEvent *evt)
 {
 	FILE		*stream;
@@ -123,20 +117,20 @@ init_ras(char *id, enum ras_event_sev sev, enum ras_event_type type, char *hid,
 		D_FPRINTF(stream, " jobid: [%s]", jid);
 	}
 
-	if (!uuid_is_null(puuid)) {
+	if (puuid && !uuid_is_null(*puuid)) {
 		D_ALLOC(evt->puuid, DAOS_UUID_STR_SIZE);
 		if (!evt->puuid)
 			D_GOTO(out_fail, rc = -DER_NOMEM);
-		D_ASPRINTF(evt->puuid, DF_UUIDF, DP_UUID(puuid));
-		D_FPRINTF(stream, " puuid: ["DF_UUIDF"]", DP_UUID(puuid));
+		D_ASPRINTF(evt->puuid, DF_UUIDF, DP_UUID(*puuid));
+		D_FPRINTF(stream, " puuid: ["DF_UUIDF"]", DP_UUID(*puuid));
 	}
 
-	if (!uuid_is_null(cuuid)) {
+	if (cuuid && !uuid_is_null(*cuuid)) {
 		D_ALLOC(evt->cuuid, DAOS_UUID_STR_SIZE);
 		if (!evt->cuuid)
 			D_GOTO(out_fail, rc = -DER_NOMEM);
-		D_ASPRINTF(evt->cuuid, DF_UUIDF, DP_UUID(cuuid));
-		D_FPRINTF(stream, " cuuid: ["DF_UUIDF"]", DP_UUID(cuuid));
+		D_ASPRINTF(evt->cuuid, DF_UUIDF, DP_UUID(*cuuid));
+		D_FPRINTF(stream, " cuuid: ["DF_UUIDF"]", DP_UUID(*cuuid));
 	}
 
 	if (oid) {
@@ -217,8 +211,8 @@ out:
 
 void
 ds_notify_ras_event(char *id, enum ras_event_type type, enum ras_event_sev sev,
-		    char *hid, d_rank_t *rank, char *jid, uuid_t puuid,
-		    uuid_t cuuid, daos_obj_id_t *oid, char *cop, char *msg,
+		    char *hid, d_rank_t *rank, char *jid, uuid_t *puuid,
+		    uuid_t *cuuid, daos_obj_id_t *oid, char *cop, char *msg,
 		    char *data)
 {
 	Mgmt__RASEvent	 evt = MGMT__RASEVENT__INIT;
@@ -252,7 +246,7 @@ out:
 }
 
 int
-ds_notify_pool_svc_update(uuid_t puuid, d_rank_list_t *svc)
+ds_notify_pool_svc_update(uuid_t *puuid, d_rank_list_t *svc)
 {
 	Mgmt__RASEvent		 evt = MGMT__RASEVENT__INIT;
 	Mgmt__PoolSvcEventInfo	 info = MGMT__POOL_SVC_EVENT_INFO__INIT;
@@ -263,21 +257,13 @@ ds_notify_pool_svc_update(uuid_t puuid, d_rank_list_t *svc)
 		return -DER_UNINIT;
 	}
 
-	D_ASSERT(!uuid_is_null(puuid));
-
-	D_ALLOC(info.pool_uuid, DAOS_UUID_STR_SIZE);
-	if (info.pool_uuid == NULL) {
-		D_ERROR("failed to allocate pool uuid\n");
-		return -DER_NOMEM;
-	}
-	uuid_unparse_lower(puuid, info.pool_uuid);
-
+	D_ASSERT(puuid && !uuid_is_null(*puuid));
 	D_ASSERT(svc != NULL && svc->rl_nr > 0);
 
 	rc = rank_list_to_uint32_array(svc, &info.svc_reps, &info.n_svc_reps);
 	if (rc != 0) {
 		D_ERROR("failed to convert svc replicas to proto\n");
-		goto out_uuid;
+		return rc;
 	}
 
 	evt.extended_info_case = MGMT__RASEVENT__EXTENDED_INFO_POOL_SVC_INFO;
@@ -300,8 +286,8 @@ ds_notify_pool_svc_update(uuid_t puuid, d_rank_list_t *svc)
 	free_ras(&evt);
 out_svcreps:
 	D_FREE(info.svc_reps);
-out_uuid:
-	D_FREE(info.pool_uuid);
+//out_uuid:
+//	D_FREE(info.pool_uuid);
 
 	return rc;
 }

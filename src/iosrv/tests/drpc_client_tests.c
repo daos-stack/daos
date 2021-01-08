@@ -255,8 +255,7 @@ verify_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc_reps)
 	req = mgmt__cluster_event_req__unpack(NULL, call->body.len,
 					      call->body.data);
 	assert_non_null(req);
-	assert_int_equal(uuid_parse(req->event->pool_svc_info->pool_uuid,
-				    puuid), 0);
+	assert_int_equal(uuid_parse(req->event->puuid, puuid), 0);
 	assert_int_equal(uuid_compare(puuid, pool_uuid), 0);
 	assert_int_equal(req->event->pool_svc_info->n_svc_reps,
 			 svc_reps->rl_nr);
