@@ -57,11 +57,12 @@ daos_tests:
   num_replicas:
     num_replicas: 1
   Tests: !mux
-    test_r_0-10:
-      daos_test: r
-      test_name: rebuild tests 0-10
-      args: -s3 -u subtests="0-10"
-      test_timeout: 1500
+# Skipped for DAOS-5851
+#    test_r_0-10:
+#      daos_test: r
+#      test_name: rebuild tests 0-10
+#      args: -s3 -u subtests="0-10"
+#      test_timeout: 1500
     test_r_12-15:
       daos_test: r
       test_name: rebuild tests 12-15

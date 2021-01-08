@@ -2438,19 +2438,17 @@ rdb_raft_start(struct rdb *db)
 	raft_set_election_timeout(db->d_raft, election_timeout);
 	raft_set_request_timeout(db->d_raft, request_timeout);
 
-	rc = dss_ult_create(rdb_recvd, db, DSS_ULT_RDB, DSS_TGT_SELF, 0,
-			    &db->d_recvd);
+	rc = dss_ult_create(rdb_recvd, db, DSS_XS_SELF, 0, 0, &db->d_recvd);
 	if (rc != 0)
 		goto err_lc;
-	rc = dss_ult_create(rdb_timerd, db, DSS_ULT_RDB, DSS_TGT_SELF, 0,
-			    &db->d_timerd);
+	rc = dss_ult_create(rdb_timerd, db, DSS_XS_SELF, 0, 0, &db->d_timerd);
 	if (rc != 0)
 		goto err_recvd;
-	rc = dss_ult_create(rdb_callbackd, db, DSS_ULT_RDB, DSS_TGT_SELF, 0,
+	rc = dss_ult_create(rdb_callbackd, db, DSS_XS_SELF, 0, 0,
 			    &db->d_callbackd);
 	if (rc != 0)
 		goto err_timerd;
-	rc = dss_ult_create(rdb_compactd, db, DSS_ULT_RDB, DSS_TGT_SELF, 0,
+	rc = dss_ult_create(rdb_compactd, db, DSS_XS_SELF, 0, 0,
 			    &db->d_compactd);
 	if (rc != 0)
 		goto err_callbackd;
