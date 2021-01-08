@@ -120,7 +120,12 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 	// case, where the system name is not available, we let an empty
 	// system name indicates such, and hence skip the check.
 	if pbReq.Sys != "" && pbReq.Sys != mod.sys {
-		return nil, errors.Errorf("unknown system name %s", pbReq.Sys)
+		mod.log.Errorf("GetAttachInfo: %s: unknown system name", pbReq.Sys)
+		respb, err := proto.Marshal(&mgmtpb.GetAttachInfoResp{Status: int32(drpc.DaosInvalidInput)})
+		if err != nil {
+			return nil, drpc.MarshalingFailure()
+		}
+		return respb, err
 	}
 
 	var err error
@@ -162,7 +167,7 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 	}
 
 	if resp.Provider == "" {
-		return nil, errors.New("GetAttachInfo response contained no provider.")
+		return nil, errors.New("GetAttachInfo response contained no provider")
 	}
 
 	// Scan the local fabric to determine what devices are available that match our provider

@@ -280,7 +280,8 @@ get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *info,
 		goto out_dresp;
 	}
 	if (resp->status != 0) {
-		D_ERROR("GetAttachInfo failed: %d\n", resp->status);
+		D_ERROR("GetAttachInfo(%s) failed: "DF_RC"\n", req.sys,
+			DP_RC(resp->status));
 		rc = resp->status;
 		goto out_resp;
 	}
