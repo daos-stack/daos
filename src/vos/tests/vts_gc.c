@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,11 +49,14 @@ struct gc_test_args {
 static struct gc_test_args	gc_args;
 
 static const int cont_nr	= 4;
-static const int obj_per_cont	= 64;
-static const int dkey_per_obj	= 64;
+#define OBJ_PER_CONT	64
+#define DKEY_PER_OBJ	64
 static const int akey_per_dkey	= 16;
 static const int recx_size	= 4096;
 static const int singv_size	= 16;
+
+static int obj_per_cont = OBJ_PER_CONT;
+static int dkey_per_obj = DKEY_PER_OBJ;
 
 static struct vos_gc_stat	gc_stat;
 
@@ -433,6 +436,11 @@ int
 run_gc_tests(const char *cfg)
 {
 	char	test_name[DTS_CFG_MAX];
+
+	if (DAOS_ON_VALGRIND) {
+		obj_per_cont = 2;
+		dkey_per_obj = 3;
+	}
 
 	dts_create_config(test_name, "Garbage collector %s", cfg);
 	return cmocka_run_group_tests_name(test_name,
