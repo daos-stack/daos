@@ -212,6 +212,8 @@ func MustCreateFaultDomainFromString(domainStr string) *FaultDomain {
 
 type (
 	// FaultDomainTree is a node in a tree of FaultDomain objects.
+	// This tree structure is not thread-safe and callers are expected to
+	// add access synchronization if needed.
 	FaultDomainTree struct {
 		Domain   *FaultDomain
 		ID       uint32
@@ -455,6 +457,22 @@ func (t *FaultDomainTree) toProtoSingle() *mgmtpb.FaultDomain {
 		result.Children = append(result.Children, child.ID)
 	}
 	return result
+}
+
+// Copy creates a copy of the full FaultDomainTree in memory.
+func (t *FaultDomainTree) Copy() *FaultDomainTree {
+	if t == nil {
+		return nil
+	}
+
+	tCopy := NewFaultDomainTree().
+		WithNodeDomain(t.Domain).
+		WithID(t.ID)
+	for _, c := range t.Children {
+		tCopy.Children = append(tCopy.Children, c.Copy())
+	}
+
+	return tCopy
 }
 
 // NewFaultDomainTree creates a FaultDomainTree including all the

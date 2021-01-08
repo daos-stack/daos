@@ -1659,3 +1659,43 @@ func TestSystem_FaultDomainTree_ToProto(t *testing.T) {
 		})
 	}
 }
+
+func verifyTreeDiffMem(t *testing.T, orig, result *FaultDomainTree) {
+	if orig == result {
+		t.Fatalf("original and result node %q point to the same memory", orig.Domain.String())
+	}
+	for i := range orig.Children {
+		verifyTreeDiffMem(t, orig.Children[i], result.Children[i])
+	}
+}
+
+func TestSystem_FaultDomainTree_Copy(t *testing.T) {
+	for name, tc := range map[string]struct {
+		origTree *FaultDomainTree
+	}{
+		"nil": {},
+		"empty tree": {
+			origTree: NewFaultDomainTree(),
+		},
+		"with children": {
+			NewFaultDomainTree(
+				MustCreateFaultDomainFromString("/rack0/pdu0"),
+				MustCreateFaultDomainFromString("/rack0/pdu1"),
+				MustCreateFaultDomainFromString("/rack1/pdu2"),
+				MustCreateFaultDomainFromString("/rack1/pdu3"),
+			),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result := tc.origTree.Copy()
+
+			if diff := cmp.Diff(tc.origTree, result); diff != "" {
+				t.Fatalf("(-want, +got): %s", diff)
+			}
+
+			if tc.origTree != nil {
+				verifyTreeDiffMem(t, tc.origTree, result)
+			}
+		})
+	}
+}
