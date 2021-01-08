@@ -748,7 +748,7 @@ static int d_log_str2pri(const char *pstr, size_t len)
 	 * handle non-debug case
 	 */
 	size = sizeof(norm) / sizeof(char *);
-	for (lcv = 1; lcv <= size; lcv++)
+	for (lcv = 1; lcv < size; lcv++)
 		if (strncasecmp(pstr, norm[lcv], len) == 0)
 			return lcv << DLOG_PRISHIFT;
 	/* bogus! */
