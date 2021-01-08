@@ -226,7 +226,7 @@ ds_notify_ras_event(char *id, enum ras_event_type type, enum ras_event_sev sev,
 	evt.extended_info_case = MGMT__RASEVENT__EXTENDED_INFO_STR_INFO;
 	evt.str_info = data;
 
-	rc = init_ras(id, type, sev, hid, rank, jid, puuid, cuuid, oid, cop,
+	rc = init_ras(id, sev, type, hid, rank, jid, puuid, cuuid, oid, cop,
 		      msg, &evt);
 	if (rc != 0) {
 		D_ERROR("failed to init RAS event: "DF_RC"\n", DP_RC(rc));
