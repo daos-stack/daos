@@ -97,11 +97,23 @@ void   mgmt__cont_set_owner_resp__free_unpacked
   assert(message->base.descriptor == &mgmt__cont_set_owner_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor mgmt__cont_set_owner_req__field_descriptors[5] =
+static const ProtobufCFieldDescriptor mgmt__cont_set_owner_req__field_descriptors[6] =
 {
   {
-    "contUUID",
+    "sys",
     1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__ContSetOwnerReq, sys),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "contUUID",
+    2,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
@@ -113,7 +125,7 @@ static const ProtobufCFieldDescriptor mgmt__cont_set_owner_req__field_descriptor
   },
   {
     "poolUUID",
-    2,
+    3,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
@@ -125,7 +137,7 @@ static const ProtobufCFieldDescriptor mgmt__cont_set_owner_req__field_descriptor
   },
   {
     "owneruser",
-    3,
+    4,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
@@ -137,7 +149,7 @@ static const ProtobufCFieldDescriptor mgmt__cont_set_owner_req__field_descriptor
   },
   {
     "ownergroup",
-    4,
+    5,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
@@ -149,7 +161,7 @@ static const ProtobufCFieldDescriptor mgmt__cont_set_owner_req__field_descriptor
   },
   {
     "svc_ranks",
-    5,
+    6,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_UINT32,
     offsetof(Mgmt__ContSetOwnerReq, n_svc_ranks),
@@ -161,16 +173,17 @@ static const ProtobufCFieldDescriptor mgmt__cont_set_owner_req__field_descriptor
   },
 };
 static const unsigned mgmt__cont_set_owner_req__field_indices_by_name[] = {
-  0,   /* field[0] = contUUID */
-  3,   /* field[3] = ownergroup */
-  2,   /* field[2] = owneruser */
-  1,   /* field[1] = poolUUID */
-  4,   /* field[4] = svc_ranks */
+  1,   /* field[1] = contUUID */
+  4,   /* field[4] = ownergroup */
+  3,   /* field[3] = owneruser */
+  2,   /* field[2] = poolUUID */
+  5,   /* field[5] = svc_ranks */
+  0,   /* field[0] = sys */
 };
 static const ProtobufCIntRange mgmt__cont_set_owner_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 5 }
+  { 0, 6 }
 };
 const ProtobufCMessageDescriptor mgmt__cont_set_owner_req__descriptor =
 {
@@ -180,7 +193,7 @@ const ProtobufCMessageDescriptor mgmt__cont_set_owner_req__descriptor =
   "Mgmt__ContSetOwnerReq",
   "mgmt",
   sizeof(Mgmt__ContSetOwnerReq),
-  5,
+  6,
   mgmt__cont_set_owner_req__field_descriptors,
   mgmt__cont_set_owner_req__field_indices_by_name,
   1,  mgmt__cont_set_owner_req__number_ranges,

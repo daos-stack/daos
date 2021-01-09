@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -316,6 +316,7 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 	pbReq := new(ctlpb.SystemQueryReq)
 	pbReq.Hosts = req.Hosts.String()
 	pbReq.Ranks = req.Ranks.String()
+	pbReq.Sys = req.getSystem()
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewMgmtCtlClient(conn).SystemQuery(ctx, pbReq)
@@ -378,6 +379,7 @@ func SystemStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemStartRe
 	pbReq := new(ctlpb.SystemStartReq)
 	pbReq.Hosts = req.Hosts.String()
 	pbReq.Ranks = req.Ranks.String()
+	pbReq.Sys = req.getSystem()
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewMgmtCtlClient(conn).SystemStart(ctx, pbReq)
@@ -447,6 +449,7 @@ func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq)
 	pbReq.Prep = req.Prep
 	pbReq.Kill = req.Kill
 	pbReq.Force = req.Force
+	pbReq.Sys = req.getSystem()
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewMgmtCtlClient(conn).SystemStop(ctx, pbReq)
@@ -524,6 +527,7 @@ func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, resetReq *Syste
 	}
 
 	pbReq := new(ctlpb.SystemResetFormatReq)
+	pbReq.Sys = resetReq.getSystem()
 
 	resetReq.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewMgmtCtlClient(conn).SystemResetFormat(ctx, pbReq)
@@ -596,7 +600,7 @@ type LeaderQueryResp struct {
 func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryReq) (*LeaderQueryResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).LeaderQuery(ctx, &mgmtpb.LeaderQueryReq{
-			System: req.System,
+			Sys: req.System,
 		})
 	})
 	rpcClient.Debugf("DAOS system leader-query request: %s", req)
@@ -614,7 +618,6 @@ func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryRe
 type ListPoolsReq struct {
 	unaryRequest
 	msRequest
-	System string
 }
 
 // ListPoolsResp contains the status of the request and, if successful, the list
@@ -629,7 +632,7 @@ type ListPoolsResp struct {
 func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (*ListPoolsResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).ListPools(ctx, &mgmtpb.ListPoolsReq{
-			Sys: req.System,
+			Sys: req.getSystem(),
 		})
 	})
 	rpcClient.Debugf("DAOS system list-pools request: %s", req)
