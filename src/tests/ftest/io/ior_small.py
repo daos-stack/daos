@@ -84,6 +84,7 @@ class IorSmall(IorTestBase):
                             "** SKIP test case: api=%s (transfer=%s, block=%s) "
                             "for DAOS-6427", api, test[0], test[1])
                         cncl_tickets.append("DAOS-6427")
+                        results.append(["CANCEL", str(self.ior_cmd)])
                         continue
                     # run ior
                     try:
