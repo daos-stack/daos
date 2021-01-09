@@ -55,21 +55,21 @@ run_test()
 
     ((log_num += 1))
 
-    FILES="${DAOS_BASE}"/test_results/*.xml
-    for f in $FILES
+    FILES="${DAOS_BASE}/test_results/*.xml"
+    for file in $FILES
     do
-        if [ -f "$f" ]; then
-            echo "Processing XML $f"
+        if [ -f "$file" ]; then
+            echo "Processing XML $file"
 
-            SUITE=`grep "testsuite name=" "$f" | \
-                   grep -Po "name=\"\K.*(?=\" time=)"`
+            SUITE=$(grep "testsuite name=" "$file" | \
+                   grep -Po "name=\"\K.*(?=\" time=)")
 
-            CLASS=`grep "<testcase classname" "$f"`
+            CLASS=$(grep "<testcase classname" "$file")
             if [ "$CLASS" == "" ]; then
                 sed -i \
-                "s/case name/case classname=\"${COMP}.${SUITE}\" name/" "$f"
+                "s/case name/case classname=\"${COMP}.${SUITE}\" name/" "$file"
             else
-                sed -i "s/case classname=\"/case classname=\"${COMP}./" "$f"
+                sed -i "s/case classname=\"/case classname=\"${COMP}./" "$file"
             fi
         fi
     done

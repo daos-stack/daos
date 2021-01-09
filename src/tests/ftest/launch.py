@@ -809,6 +809,15 @@ def run_tests(test_files, tag_filter, args):
     avocado_logs_dir = os.path.expanduser(avocado_logs_dir[0])
     print("Avocado logs stored in {}".format(avocado_logs_dir))
 
+    # Remove stale job results, if any, before test run
+    stale_dir = "^job-"
+    logs_dir = avocado_logs_dir + '/'
+    if os.path.isdir(logs_dir):
+        sub_dirs = os.listdir(logs_dir)
+        for folder in sub_dirs:
+            if re.search(stale_dir, folder):
+                rmtree(logs_dir + folder)
+
     # Create the base avocado run command
     command_list = [
         "avocado",
@@ -885,6 +894,13 @@ def run_tests(test_files, tag_filter, args):
                 if not process_the_cores(avocado_logs_dir, test_file["yaml"],
                                          args):
                     return_code |= 256
+
+    test_logs_lnk = os.path.join(avocado_logs_dir, "latest")
+    try:
+        os.remove(test_logs_lnk)
+        print("Removing sym link latest")
+    except OSError as error:
+        print("Failed to remove sym link latest: {}".format(error))
 
     return return_code
 
@@ -1153,10 +1169,8 @@ def rename_logs(avocado_logs_dir, test_file):
         avocado_logs_dir (str): avocado job-results directory
         test_file (str): the test python file
     """
-    #test_name = get_test_category(test_file)
     test_logs_lnk = os.path.join(avocado_logs_dir, "latest")
     test_logs_dir = os.path.realpath(test_logs_lnk)
-    #new_test_logs_dir = "{}-{}".format(test_logs_dir, test_name)
     new_test_logs_dir = os.path.join(avocado_logs_dir, test_file)
     try:
         os.makedirs(new_test_logs_dir)
@@ -1174,23 +1188,19 @@ def rename_logs(avocado_logs_dir, test_file):
         with open(xml_file) as xml_buffer:
             xml_data = xml_buffer.read()
     except OSError as error:
-        print(
-            "Error updating xml classname for {}, reading {} : {}".format(
-            test_name, xml_file, str(error)))
+        print("Error reading {} : {}".format(xml_file, str(error)))
         return
-        
+
     test_dir = os.path.split(os.path.dirname(test_file))[-1]
     org_class = "classname=\""
-    new_class = "classname=\"FTEST_{}.".format(test_dir)
+    new_class = "{}FTEST_{}.".format(org_class, test_dir)
     xml_data = re.sub(org_class, new_class, xml_data)
 
     try:
         with open(xml_file, "w") as xml_buffer:
             xml_buffer.write(xml_data)
     except OSError as error:
-        print(
-            "Error updating xml classname for {}, writing {}: {}".format(
-            test_name, xml_file, str(error)))
+        print("Error writing {}: {}".format(xml_file, str(error)))
 
 def check_big_files(avocado_logs_dir, task, test_name, args):
     """Check the contents of the task object, tag big files, create junit xml.
