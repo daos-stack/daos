@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,7 +34,6 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
-	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -122,16 +121,12 @@ func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err err
 		in.NumSvcReps = defaultPoolSvcReps
 	}
 
-	// ensure we have a system name in the request
-	if in.Sys == "" {
-		in.Sys = build.DefaultSystemName
-	}
-
 	out = new(mgmtpb.PoolCreateReq)
 	if err = convert.Types(in, out); err != nil {
 		return nil, err
 	}
 
+	out.Sys = in.getSystem()
 	out.Uuid = uuid.New().String()
 
 	return
@@ -147,7 +142,6 @@ type (
 		NvmeBytes  uint64
 		Ranks      []system.Rank
 		NumSvcReps uint32
-		Sys        string
 		User       string
 		UserGroup  string
 		ACL        *AccessControlList
@@ -235,6 +229,7 @@ type (
 func PoolResolveID(ctx context.Context, rpcClient UnaryInvoker, req *PoolResolveIDReq) (*PoolResolveIDResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolResolveID(ctx, &mgmtpb.PoolResolveIDReq{
+			Sys:     req.getSystem(),
 			HumanID: req.HumanID,
 		})
 	})
@@ -269,6 +264,7 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolDestroy(ctx, &mgmtpb.PoolDestroyReq{
+			Sys:   req.getSystem(),
 			Uuid:  req.UUID,
 			Force: req.Force,
 		})
@@ -304,15 +300,10 @@ func PoolEvict(ctx context.Context, rpcClient UnaryInvoker, req *PoolEvictReq) e
 		return err
 	}
 
-	// ensure we have a system name in the request
-	if req.Sys == "" {
-		req.Sys = build.DefaultSystemName
-	}
-
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolEvict(ctx, &mgmtpb.PoolEvictReq{
 			Uuid:    req.UUID,
-			Sys:     req.Sys,
+			Sys:     req.getSystem(),
 			Handles: req.Handles,
 		})
 	})
@@ -401,7 +392,10 @@ func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (
 		return nil, err
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).PoolQuery(ctx, &mgmtpb.PoolQueryReq{Uuid: req.UUID})
+		return mgmtpb.NewMgmtSvcClient(conn).PoolQuery(ctx, &mgmtpb.PoolQueryReq{
+			Sys:  req.getSystem(),
+			Uuid: req.UUID,
+		})
 	})
 
 	rpcClient.Debugf("Query DAOS pool request: %v\n", req)
@@ -458,6 +452,7 @@ func PoolSetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolSetPropRe
 	}
 
 	pbReq := &mgmtpb.PoolSetPropReq{
+		Sys:  req.getSystem(),
 		Uuid: req.UUID,
 	}
 	pbReq.SetPropertyName(req.Property)
@@ -528,6 +523,7 @@ func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolExcludeRe
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolExclude(ctx, &mgmtpb.PoolExcludeReq{
+			Sys:       req.getSystem(),
 			Uuid:      req.UUID,
 			Rank:      req.Rank.Uint32(),
 			Targetidx: req.Targetidx,
@@ -570,6 +566,7 @@ func PoolDrain(ctx context.Context, rpcClient UnaryInvoker, req *PoolDrainReq) e
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolDrain(ctx, &mgmtpb.PoolDrainReq{
+			Sys:       req.getSystem(),
 			Uuid:      req.UUID,
 			Rank:      req.Rank.Uint32(),
 			Targetidx: req.Targetidx,
@@ -597,6 +594,7 @@ func genPoolExtendRequest(in *PoolExtendReq) (out *mgmtpb.PoolExtendReq, err err
 	if err = convert.Types(in, out); err != nil {
 		return nil, err
 	}
+	out.Sys = in.getSystem()
 
 	return
 }
@@ -665,6 +663,7 @@ func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReint
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolReintegrate(ctx, &mgmtpb.PoolReintegrateReq{
+			Sys:       req.getSystem(),
 			Uuid:      req.UUID,
 			Rank:      req.Rank.Uint32(),
 			Targetidx: req.Targetidx,

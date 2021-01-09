@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ dfuse_forget_one(struct dfuse_projection_info *fs_handle,
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
-		DFUSE_TRA_WARNING(fs_handle, "Unable to find ref for %lu %lu",
+		DFUSE_TRA_WARNING(fs_handle, "Unable to find ref for %#lx %lu",
 				  ino, nlookup);
 		return;
 	}

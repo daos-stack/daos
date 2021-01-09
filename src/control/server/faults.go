@@ -141,6 +141,14 @@ func FaultBdevNotFound(bdevs []string) *fault.Fault {
 	)
 }
 
+func FaultWrongSystem(reqName, sysName string) *fault.Fault {
+	return serverFault(
+		code.ServerWrongSystem,
+		fmt.Sprintf("request system does not match running system (%s != %s)", reqName, sysName),
+		"retry the request with the correct system name",
+	)
+}
+
 func serverFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{
 		Domain:      "server",
