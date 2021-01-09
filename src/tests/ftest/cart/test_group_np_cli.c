@@ -114,9 +114,10 @@ test_run(void)
 		D_ASSERTF(rc == 0, "crt_proto_register() failed. rc: %d\n",
 				rc);
 
-    /* Process the --rank option, e.g., --rank 1,2-4 */
-    rank_list = uint32_array_to_rank_list((uint32_t *)test_g.cg_ranks,
-        test_g.cg_num_ranks);
+		/* Process the --rank option, e.g., --rank 1,2-4 */
+		if (test_g.cg_num_ranks > -1)
+			rank_list = uint32_array_to_rank_list((uint32_t *)test_g.cg_ranks,
+					test_g.cg_num_ranks);
 
 		rc = tc_wait_for_ranks(test_g.t_crt_ctx[0], grp, rank_list,
 						test_g.t_srv_ctx_num - 1, test_g.t_srv_ctx_num,
@@ -144,8 +145,10 @@ test_run(void)
 		}
 
 		for (i = 0; i < rank_list->rl_nr; i++) {
-			tc_sem_timedwait(&test_g.t_token_to_proceed, 61,
-					 __LINE__);
+			for (tag = 0; tag < test_g.t_srv_ctx_num; tag++) {
+				tc_sem_timedwait(&test_g.t_token_to_proceed, 61,
+						 __LINE__);
+			}
 		}
 	}
 
