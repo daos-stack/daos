@@ -11,9 +11,9 @@ timeout: 240
 server_config:
   name: daos_server
   servers: !mux
-    1target:
+    1_target:
       targets: 1
-    8targets:
+    8_targets:
       targets: 8
 pool:
   mode: 511
