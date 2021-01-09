@@ -449,6 +449,8 @@ class LogIter():
         # latin-1
         self._fd = None
 
+        self.file_corrupt = False
+
         self.bz2 = False
 
         # Force check encoding for smaller files.
@@ -474,6 +476,10 @@ class LogIter():
                     data = self._fd.read(199)
                     lines = data.splitlines()
                     print(lines[-1])
+                    self.file_corrupt = True
+
+                    # This will now work, as the file has been opened in
+                    # latin-1 rather than unicode.
                 self._fd.seek(0)
             else:
                 self._fd = open(fname, 'r', encoding='utf-8')

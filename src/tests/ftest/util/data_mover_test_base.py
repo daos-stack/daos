@@ -67,7 +67,7 @@ class DataMoverTestBase(IorTestBase):
         self.dfuse_hosts = self.agent_managers[0].hosts
 
         # Get the parameters for DataMover
-        self.dm_cmd = DataMover(self.hostlist_clients)
+        self.dm_cmd = DataMover(self.hostlist_clients, self.tmp)
         self.dm_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/datamover/processes/*')
 
@@ -224,6 +224,8 @@ class DataMoverTestBase(IorTestBase):
     @staticmethod
     def svcl_from_pool(pool):
         """Get the string svc for a pool."""
+        if not hasattr(pool, "svc_ranks"):
+            return None
         return ":".join(map(str, pool.svc_ranks))
 
     def set_src_location(self, *args, **kwargs):
