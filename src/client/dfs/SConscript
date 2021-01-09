@@ -37,8 +37,7 @@ def scons():
 
     libraries = ['$LIBS', 'daos_common', 'daos', 'uuid', 'gurt']
 
-    # dummy for testing
-    dfs_src = ['dfs.c', 'dummy.c']
+    dfs_src = ['dfs.c', 'dfs_sys.c']
     dfs = daos_build.library(denv, 'dfs', dfs_src, LIBS=libraries)
     denv.Install('$PREFIX/lib64/', dfs)
 
