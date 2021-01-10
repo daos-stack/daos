@@ -624,8 +624,10 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_NO_UPDATE))
 		return 0;
 
-	if (DAOS_FAIL_CHECK(DAOS_REBUILD_UPDATE_FAIL))
+	if (DAOS_FAIL_CHECK(DAOS_REBUILD_UPDATE_FAIL)) {
+		D_DEBUG(DB_REBUILD, "update failed %d\n", -DER_INVAL);
 		return -DER_INVAL;
+	}
 
 	if (daos_oclass_is_ec(mrone->mo_oid.id_pub, &oca) &&
 	    !obj_shard_is_ec_parity(mrone->mo_oid, &oca))
@@ -644,7 +646,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 
 			iod_csums = mrone->mo_iods_csums == NULL ? NULL
 					: &mrone->mo_iods_csums[start];
-			D_DEBUG(DB_TRACE, "update start %d cnt %d\n",
+			D_DEBUG(DB_REBUILD, "update start %d cnt %d\n",
 				start, iod_cnt);
 			rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 					    mrone->mo_update_epoch,
@@ -670,6 +672,8 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 				    0, &mrone->mo_dkey, iod_cnt,
 				    &mrone->mo_iods[start], iod_csums,
 				    &sgls[start]);
+		if (rc)
+			D_ERROR("obj update failed: %d\n", rc);
 	}
 
 	return rc;

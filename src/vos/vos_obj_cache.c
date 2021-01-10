@@ -240,7 +240,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	create = flags & VOS_OBJ_CREATE;
 	visible_only = flags & VOS_OBJ_VISIBLE;
 
-	D_DEBUG(DB_TRACE, "Try to hold cont="DF_UUID", obj="DF_UOID
+	D_DEBUG(DB_IO, "Try to hold cont="DF_UUID", obj="DF_UOID
 		" create=%s epr="DF_U64"-"DF_U64"\n",
 		DP_UUID(cont->vc_id), DP_UOID(oid),
 		create ? "true" : "false", epr->epr_lo, epr->epr_hi);
@@ -270,7 +270,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	}
 
 	if (obj->obj_df) {
-		D_DEBUG(DB_TRACE, "looking up object ilog");
+		D_DEBUG(DB_IO, "looking up object ilog");
 		tmprc = vos_ilog_ts_add(ts_set, &obj->obj_df->vo_ilog,
 					&oid, sizeof(oid));
 		D_ASSERT(tmprc == 0); /* Non-zero only valid for akey */
@@ -286,7 +286,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	if (!create) {
 		rc = vos_oi_find(cont, oid, &obj->obj_df, ts_set);
 		if (rc == -DER_NONEXIST) {
-			D_DEBUG(DB_TRACE, "non exist oid "DF_UOID"\n",
+			D_DEBUG(DB_IO, "non exist oid "DF_UOID"\n",
 				DP_UOID(oid));
 			goto failed;
 		}
@@ -301,7 +301,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 		goto failed;
 
 	if (!obj->obj_df) {
-		D_DEBUG(DB_TRACE, "nonexistent obj "DF_UOID"\n",
+		D_DEBUG(DB_IO, "nonexistent obj "DF_UOID"\n",
 			DP_UOID(oid));
 		D_GOTO(failed, rc = -DER_NONEXIST);
 	}
@@ -319,7 +319,7 @@ check_object:
 			if (vos_has_uncertainty(ts_set, &obj->obj_ilog_info,
 						epr->epr_hi, bound))
 				rc = -DER_TX_RESTART;
-			D_DEBUG(DB_TRACE, "Object "DF_UOID" not found at "
+			D_DEBUG(DB_IO, "Object "DF_UOID" not found at "
 				DF_U64"\n", DP_UOID(oid), epr->epr_hi);
 			goto failed;
 		}
@@ -327,7 +327,7 @@ check_object:
 		rc = vos_ilog_check(&obj->obj_ilog_info, epr, epr,
 				    visible_only);
 		if (rc != 0) {
-			D_DEBUG(DB_TRACE, "Object "DF_UOID" not visible at "
+			D_DEBUG(DB_IO, "Object "DF_UOID" not visible at "
 				DF_U64"-"DF_U64"\n", DP_UOID(oid), epr->epr_lo,
 				epr->epr_hi);
 			if (!vos_has_uncertainty(ts_set, &obj->obj_ilog_info,
