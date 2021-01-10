@@ -78,17 +78,17 @@ class VosValueTestCase(unittest.TestCase):
         value = VosValue(size=10, aligned="Yes")
         want = {"size": 10, "count": 1, "aligned": "Yes"}
         got = value.dump()
-         assert want == got # nosec
+        assert want == got # nosec
 
         value = VosValue(size=10, aligned="No")
         want = {"size": 10, "count": 1, "aligned": "No"}
         got = value.dump()
-         assert want == got # nosec
+        assert want == got # nosec
 
         value = VosValue(size=10, count=20, aligned="No")
         want = {"size": 10, "count": 20, "aligned": "No"}
         got = value.dump()
-         assert want == got # nosec
+        assert want == got # nosec
 
 
 @pytest.fixture(scope="class")
@@ -737,7 +737,7 @@ class FSTestCase(unittest.TestCase):
 
         want = self.test_data.process_stats(gold_container)
 
-        assert got == want
+        assert got == want # nosec
 
     @pytest.mark.sx
     def test_create_dfs_sx(self):
