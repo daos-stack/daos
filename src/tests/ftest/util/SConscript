@@ -3,7 +3,7 @@ import os
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env')
 
     util_install_dir = '$PREFIX/lib/daos/TESTING/ftest/util'
 
