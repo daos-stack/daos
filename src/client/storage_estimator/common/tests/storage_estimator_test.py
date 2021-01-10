@@ -71,7 +71,7 @@ class VosValueTestCase(unittest.TestCase):
         value = VosValue(size=10)
         want = {"size": 10, "count": 1, "aligned": "Yes"}
         got = value.dump()
-         assert want == got # nosec
+        assert want == got # nosec
 
     @pytest.mark.ut
     def test_constructor(self):
