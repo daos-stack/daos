@@ -112,6 +112,7 @@ void test_shutdown_handler(crt_rpc_t *rpc_req)
 	DBG_PRINT("tier1 test_srver set shutdown flag.\n");
 }
 
+/* The ordering here must match the opcode ordering in test_group_rpc.h */
 static struct crt_proto_rpc_format my_proto_rpc_fmt_test_no_timeout[] = {
 	{
 		.prf_flags	= 0,
@@ -120,6 +121,11 @@ static struct crt_proto_rpc_format my_proto_rpc_fmt_test_no_timeout[] = {
 		.prf_co_ops	= NULL,
 	}, {
 		.prf_flags	= CRT_RPC_FEAT_NO_REPLY,
+		.prf_req_fmt	= NULL,
+		.prf_hdlr	= NULL,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
 		.prf_req_fmt	= NULL,
 		.prf_hdlr	= NULL,
 		.prf_co_ops	= NULL,
