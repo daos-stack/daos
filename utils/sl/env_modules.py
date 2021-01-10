@@ -61,6 +61,9 @@ class _env_module(): # pylint: disable=invalid-name
             proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
         except FileNotFoundError:
             return None, None
+        except OSError as error:
+            if error.errno == errno.ENOENT:
+                return None, None
 
         stdout, stderr = proc.communicate()
 
