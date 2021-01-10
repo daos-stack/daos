@@ -102,6 +102,8 @@ struct crt_grp_priv {
 	 * up to date.
 	 */
 	d_rank_t		 gp_self;
+	/* List of PSR ranks */
+	d_rank_list_t		 *gp_psr_ranks;
 	/* PSR rank in attached group */
 	d_rank_t		 gp_psr_rank;
 	/* PSR phy addr address in attached group */

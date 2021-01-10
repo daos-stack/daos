@@ -158,7 +158,7 @@ destroy_tree(daos_handle_t tree, d_iov_t *key)
 		umem_class_init(&attr.ba_uma, &umm);
 
 		rc_tmp = umem_tx_begin(&umm, NULL);
-		if (rc_tmp != 0 && !daos_handle_is_inval(hdl_tmp)) {
+		if (rc_tmp != 0 && daos_handle_is_valid(hdl_tmp)) {
 			dbtree_close(hdl_tmp);
 			return rc_tmp;
 		}
@@ -169,7 +169,7 @@ destroy_tree(daos_handle_t tree, d_iov_t *key)
 			rc_tmp = dbtree_delete(tree, BTR_PROBE_EQ, key, NULL);
 		}
 
-		if (!daos_handle_is_inval(hdl_tmp))
+		if (daos_handle_is_valid(hdl_tmp))
 			dbtree_close(hdl_tmp);
 
 		if (rc_tmp != 0)
@@ -226,6 +226,21 @@ nv_key_cmp(struct btr_instance *tins, struct btr_record *rec, d_iov_t *key)
 	return dbtree_key_cmp_rc(
 		memcmp((const void *)r->nr_name, (const void *)key->iov_buf,
 			key->iov_len));
+}
+
+static void
+nv_key_encode(struct btr_instance *tins, d_iov_t *key,
+	      daos_anchor_t *anchor)
+{
+	if (key)
+		embedded_key_encode(key, anchor);
+}
+
+static void
+nv_key_decode(struct btr_instance *tins, d_iov_t *key,
+	      daos_anchor_t *anchor)
+{
+	embedded_key_decode(key, anchor);
 }
 
 static int
@@ -370,6 +385,8 @@ btr_ops_t dbtree_nv_ops = {
 	.to_hkey_gen	= nv_hkey_gen,
 	.to_hkey_size	= nv_hkey_size,
 	.to_key_cmp	= nv_key_cmp,
+	.to_key_encode	= nv_key_encode,
+	.to_key_decode	= nv_key_decode,
 	.to_rec_alloc	= nv_rec_alloc,
 	.to_rec_free	= nv_rec_free,
 	.to_rec_fetch	= nv_rec_fetch,

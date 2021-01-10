@@ -134,7 +134,6 @@ test_run(void)
 	test_g.t_fault_attr_5000 = d_fault_attr_lookup(5000);
 
 	if (!test_g.t_shut_only) {
-
 		for (i = 0; i < rank_list->rl_nr; i++) {
 			rank = rank_list->rl_ranks[i];
 

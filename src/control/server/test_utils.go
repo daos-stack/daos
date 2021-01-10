@@ -24,6 +24,7 @@
 package server
 
 import (
+	"context"
 	"net"
 	"sync"
 	"testing"
@@ -33,6 +34,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
@@ -158,8 +160,7 @@ func newMockDrpcClient(cfg *mockDrpcClientConfig) *mockDrpcClient {
 // setupMockDrpcClientBytes sets up the dRPC client for the mgmtSvc to return
 // a set of bytes as a response.
 func setupMockDrpcClientBytes(svc *mgmtSvc, respBytes []byte, err error) {
-	mi, _ := svc.harness.getMSLeaderInstance()
-
+	mi := svc.harness.instances[0]
 	cfg := &mockDrpcClientConfig{}
 	cfg.setSendMsgResponse(drpc.Status_SUCCESS, respBytes, err)
 	mi.setDrpcClient(newMockDrpcClient(cfg))
@@ -186,6 +187,7 @@ func newTestIOServer(log logging.Logger, isAP bool, ioCfg ...*ioserver.Config) *
 		Rank: system.NewRankPtr(0),
 	})
 	srv.ready.SetTrue()
+	srv.OnReady()
 
 	return srv
 }
@@ -211,7 +213,7 @@ func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
 	harness.started.SetTrue()
 
 	ms, db := system.MockMembership(t, log, mockTCPResolver)
-	return newMgmtSvc(harness, ms, db)
+	return newMgmtSvc(harness, ms, db, events.NewPubSub(context.Background(), log))
 }
 
 // newTestMgmtSvcMulti creates a mgmtSvc that contains the requested
@@ -230,7 +232,7 @@ func newTestMgmtSvcMulti(t *testing.T, log logging.Logger, count int, isAP bool)
 	}
 	harness.started.SetTrue()
 
-	return newMgmtSvc(harness, nil, nil)
+	return newMgmtSvc(harness, nil, nil, nil)
 }
 
 // newTestMgmtSvcNonReplica creates a mgmtSvc that is configured to
