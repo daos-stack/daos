@@ -2393,7 +2393,8 @@ restart:
 		}
 		break;
 	case S_IFLNK:
-		rc = open_symlink(dfs, th, parent, flags, value, &entry, len, obj);
+		rc = open_symlink(dfs, th, parent, flags, value, &entry, len,
+				  obj);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open symlink (%d)\n", rc);
 			D_GOTO(out, rc);
