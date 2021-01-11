@@ -41,7 +41,7 @@
 #include "obj_internal.h"
 
 /* This needs to be here to avoid pulling in all of srv_internal.h */
-int ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid);
+int ds_cont_tgt_destroy_this_xstream(uuid_t pool_uuid, uuid_t cont_uuid);
 int ds_cont_tgt_force_close(uuid_t cont_uuid);
 
 #if D_HAS_WARNING(4, "-Wframe-larger-than=")
@@ -2231,7 +2231,8 @@ destroy_existing_container(struct migrate_pool_tls *tls, uuid_t cont_uuid)
 				DP_RC(rc));
 		}
 
-		rc = ds_cont_tgt_destroy(tls->mpt_pool_uuid, cont_uuid);
+		rc = ds_cont_tgt_destroy_this_xstream(tls->mpt_pool_uuid,
+						      cont_uuid);
 		if (rc != 0) {
 			D_ERROR("Migrate failed to destroy container "
 				"prior to reintegration: pool: "DF_UUID

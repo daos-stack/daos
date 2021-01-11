@@ -1097,6 +1097,20 @@ out:
 static void
 cont_delete_ec_agg(uuid_t pool_uuid, uuid_t cont_uuid);
 
+/* Destroys the container, but only on this xstream */
+int
+ds_cont_tgt_destroy_this_xstream(uuid_t pool_uuid, uuid_t cont_uuid)
+{
+	struct cont_tgt_destroy_in in;
+
+	uuid_copy(in.tdi_pool_uuid, pool_uuid);
+	uuid_copy(in.tdi_uuid, cont_uuid);
+
+	cont_delete_ec_agg(pool_uuid, cont_uuid);
+	return cont_child_destroy_one(&in);
+}
+
+/* Destroys the container on all xstreams */
 int
 ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
 {
@@ -1559,36 +1573,24 @@ cont_close_all_cb(d_list_t *rlink, void *arg)
 	return DER_SUCCESS;
 }
 
-/* Called via dss_collective() to close all container handles for this thread */
-static int
-cont_close_all(void *vin)
+/* Forcibly close a container **on the current xstream only** */
+int
+ds_cont_tgt_force_close(uuid_t cont_uuid)
 {
 	struct dsm_tls *tls = dsm_tls_get();
-	uuid_t *cont_uuid = vin;
 	int rc;
 
+	D_DEBUG(DF_DSMS, "Force closing all handles for container "
+		DF_UUID"\n", DP_UUID(cont_uuid));
+
 	rc = d_hash_table_traverse(&tls->dt_cont_hdl_hash, cont_close_all_cb,
-				   cont_uuid);
+				   &cont_uuid);
 	if (rc != 0) {
 		D_ERROR("d_hash_table_traverse failed: rc="DF_RC, DP_RC(rc));
 		return rc;
 	}
 
 	return DER_SUCCESS;
-}
-
-int
-ds_cont_tgt_force_close(uuid_t cont_uuid)
-{
-	int rc;
-
-	D_DEBUG(DF_DSMS, "Force closing all handles for container "
-		DF_UUID"\n", DP_UUID(cont_uuid));
-
-	rc = dss_thread_collective(cont_close_all, &cont_uuid, 0);
-	if (rc != 0)
-		D_ERROR("dss_thread_collective failed: rc="DF_RC, DP_RC(rc));
-	return rc;
 }
 
 struct coll_close_arg {
