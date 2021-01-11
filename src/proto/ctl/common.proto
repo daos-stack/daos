@@ -23,6 +23,8 @@
 syntax = "proto3";
 package ctl;
 
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/ctl";
+
 message EmptyReq {}
 
 message FilePath {

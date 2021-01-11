@@ -4,46 +4,60 @@ This section will be expanded in a future revision.
 
 ## Network Performance
 
-The DAOS CART layer can validate and benchmark network communications in the
-same context as an application and using the same networks/tuning options as
-regular DAOS.
+The DAOS [CaRT][1] layer can validate and benchmark network communications in
+the same context as an application and using the same networks/tuning options
+as regular DAOS.
 
-The CART `self_test` can run against the DAOS servers in a production environment
-in a non-destructive manner. CART `self_test` supports different message sizes,
+The CaRT `self_test` can run against the DAOS servers in a production environment
+in a non-destructive manner. CaRT `self_test` supports different message sizes,
 bulk transfers, multiple targets, and the following test scenarios:
 
 -   **Selftest client to servers** - where `self_test` issues RPCs directly
-    to a list of servers
+    to a list of servers.
 
 -   **Cross-servers** - where `self_test` sends instructions to the different
     servers that will issue cross-server RPCs. This model supports a
     many to many communication model.
 
-Instructions to run CaRT `self_test` with test_group as the target server are as follows.
+### Getting DAOS CaRT self_test
+
+The CaRT `self_test` and its tests are delivered as part of the daos_client
+and daos_tests [distribution packages][2]. It can also be built from scratch.
 
 ```bash
-$ git clone https://github.com/daos-stack/daos.git
+$ git clone --recurse-submodules https://github.com/daos-stack/daos.git
 $ cd daos
-$ git submodule init
-$ git submodule update
 $ scons --build-deps=yes install
-$ cd install/TESTING
+$ cd install
 ```
 
-**Prepare srvhostfile and clihostfile**
+For detailed information, please refer to the [DAOS build documentation][3]
+section.
 
--   srvhostfile contains a list of nodes from which servers will launch
+### Running CaRT self_test
 
--   clihostfile contains node from which `self_test` will launch
+Instructions to run CaRT `self_test` with test_group as the target server are
+as follows.
+
+**Prepare server_hostfile and client_hostfile**
+
+-   **server_hostfile** - contains a list of nodes from which servers will
+    launch.
+
+-   **client_hostfile** - contains a list of nodes from which `self_test` will
+    launch.
 
 The example below uses an Ethernet interface and Sockets provider.
 In the `self_test` commands:
 
--   (client-to-servers) Replace the argument for `--endpoint` accordingly.
+-   **Selftest client to servers** - Replace the argument for `--endpoint`
+    accordingly.
 
--   (cross-servers)     Replace the argument for `--endpoint` and `--master-endpoint` accordingly.
+-   **Cross-servers** - Replace the argument for `--endpoint` and
+    `--master-endpoint` accordingly.
 
--   For example, if you have 8 servers, you would specify `--endpoint 0-7:0` (and `--master-endpoint 0-7:0`)
+For example, if you have 8 servers, you would specify `--endpoint 0-7:0` and
+`--master-endpoint 0-7:0`
 
 The commands below will run `self_test` benchmark using the following message sizes:
 ```bash
@@ -56,53 +70,57 @@ i2048 0      2Kb iovec Input only
 ```
 
 For a full description of `self_test` usage, run:
+
 ```bash
-$ ../bin/self_test --help
+$ ./bin/self_test --help
 ```
 
 **To start test_group server:**
 ```bash
 $ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp -N 1 \
-  --hostfile srvhostfile --output-filename testLogs/ \
-  -x D_LOG_FILE=testLogs/test_group_srv.log -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_MASK=WARN \
-  -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 \
-  -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16 \
-  ../bin/crt_launch -e tests/test_group_np_srv --name self_test_srv_grp --cfg_path=. &
+  --hostfile server_hostfile --output-filename testLogs/ \
+  -x D_LOG_FILE=testLogs/test_group_srv.log -x D_LOG_FILE_APPEND_PID=1 \
+  -x D_LOG_MASK=WARN -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 \
+  -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16 -x CRT_ATTACH_INFO_PATH=. \
+  ./bin/crt_launch -e lib/daos/TESTING/tests/test_group_np_srv \
+  --name self_test_srv_grp --cfg_path=. &
 ```
 
 **To run self_test in client-to-servers mode:**
 ```bash
 $ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp -N 1 \
-  --hostfile clihostfile --output-filename testLogs/ \
-  -x D_LOG_FILE=testLogs/self_test.log -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_MASK=WARN \
-  -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 \
-  -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16  \
-  ../bin/self_test --group-name self_test_srv_grp --endpoint 0-<MAX_SERVER-1>:0 \
-    --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" \
-    --max-inflight-rpcs 16 --repetitions 100 -t -n -p .
+  --hostfile client_hostfile --output-filename testLogs/ \
+  -x D_LOG_FILE=testLogs/self_test.log -x D_LOG_FILE_APPEND_PID=1 \
+  -x D_LOG_MASK=WARN -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 \
+  -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16 \
+  ./bin/self_test --group-name self_test_srv_grp --endpoint 0-<MAX_SERVER-1>:0 \
+  --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" \
+  --max-inflight-rpcs 16 --repetitions 100 -t -n -p .
 ```
 
 **To run self_test in cross-servers mode:**
 ```bash
 $ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp -N 1 \
-  --hostfile clihostfile --output-filename testLogs/ \
-  -x D_LOG_FILE=testLogs/self_test.log -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_MASK=WARN \
-  -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 \
+  --hostfile client_hostfile --output-filename testLogs/ \
+  -x D_LOG_FILE=testLogs/self_test.log -x D_LOG_FILE_APPEND_PID=1 \
+  -x D_LOG_MASK=WARN -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 \
   -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16  \
-  ../bin/self_test --group-name self_test_srv_grp --endpoint 0-<MAX_SERVER-1>:0 --master-endpoint 0-<MAX_SERVER-1>:0 \
-    --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" \
-    --max-inflight-rpcs 16 --repetitions 100 -t -n -p .
+  ./bin/self_test --group-name self_test_srv_grp --endpoint 0-<MAX_SERVER-1>:0 \
+  --master-endpoint 0-<MAX_SERVER-1>:0 \
+  --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" \
+  --max-inflight-rpcs 16 --repetitions 100 -t -n -p .
 ```
 
 **To shutdown test_group server:**
 ```bash
 $ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp  -N 1 \
-  --hostfile clihostfile --output-filename testLogs/ \
+  --hostfile client_hostfile --output-filename testLogs/ \
   -x D_LOG_FILE=testLogs/test_group_cli.log \
   -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_MASK=WARN \
   -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 \
   -x CRT_CTX_SHARE_ADDR=0 \
-  tests/test_group_np_cli --name client-group --attach_to self_test_srv_grp --shut_only --cfg_path=.
+  lib/daos/TESTING/tests/test_group_np_cli --name client-group \
+  --attach_to self_test_srv_grp --shut_only --cfg_path=.
 ```
 
 ## Benchmarking DAOS
@@ -111,7 +129,9 @@ DAOS can be benchmarked using several widely used IO benchmarks like IOR,
 mdtest, and FIO. There are several backends that can be used with those
 benchmarks.
 
-IOR (https://github.com/hpc/ior) with the following backends:
+### ior
+
+IOR (<https://github.com/hpc/ior>) with the following backends:
 
 -   POSIX, MPIIO & HDF5 drivers over dfuse and the interception library.
 
@@ -127,19 +147,29 @@ IOR (https://github.com/hpc/ior) with the following backends:
 -   A custom DAOS plugin, integrating IOR directly with the native DAOS
     array API.
 
+### mdtest
+
 mdtest is released in the same repository as IOR. The corresponding backends that are
 listed above support mdtest, except for the MPI-IO and HDF5 backends that were
 only designed to support IOR.
 
+### FIO
+
 FIO can also be used to benchmark DAOS performance using dfuse and the
 interception library with all the POSIX based engines like sync and libaio. We
 do, however, provide a native DFS engine for FIO similar to what we do for
-IOR. That engine is available on GitHub: https://github.com/daos-stack/dfio
+IOR. That engine is available on GitHub: <https://github.com/daos-stack/dfio>
 
-Finally, DAOS provides a tool called daos_perf which allows benchmarking to the
+### daos_perf
+
+Finally, DAOS provides a tool called `daos_perf` which allows benchmarking to the
 DAOS object API directly or to the internal VOS API, which bypasses the client
 and network stack and reports performance accessing the storage directly using
-VOS.
+VOS. For a full description of `daos_perf` usage, run:
+
+```bash
+$ daos_perf --help
+```
 
 ## Client Performance Tuning
 
@@ -200,5 +230,18 @@ into the configuration problem.
 The default configuration enables the Agent GetAttachInfo cache.  If it is
 desired, the cache may be disabled prior to DAOS Agent startup by setting the
 Agent's environment variable `DAOS_AGENT_DISABLE_CACHE=true`.  The cache is
-loaded only at Agent startup.  If the network configuration changes while the
-Agent is running, it must be restarted to gain visibility to these changes.
+loaded only at Agent startup. The following debug message will be found in the
+Agent's log:
+```
+GetAttachInfo agent caching has been disabled
+```
+
+If the network configuration changes while the Agent is running, it must be
+restarted to gain visibility to these changes. For additional information,
+please refer to the [System Deployment: Agent Startup][4] documentation
+section.
+
+[1]: <https://github.com/daos-stack/daos/tree/master/src/cart> (Collective and RPC Transport)
+[2]: <https://github.com/daos-stack/daos/blob/master/doc/admin/installation.md#distribution-packages> (DAOS distribution packages)
+[3]: <https://github.com/daos-stack/daos/blob/master/doc/admin/installation.md#building-daos--dependencies> (DAOS build documentation)
+[4]: <https://github.com/daos-stack/daos/blob/master/doc/admin/deployment.md#disable-agent-cache-optional> (System Deployment Agent Startup)
