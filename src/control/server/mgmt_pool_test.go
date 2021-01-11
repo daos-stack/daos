@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -386,7 +386,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				harness.started.SetTrue()
 
 				ms, db := system.MockMembership(t, log, mockTCPResolver)
-				tc.mgmtSvc = newMgmtSvc(harness, ms, db,
+				tc.mgmtSvc = newMgmtSvc(harness, ms, db, nil,
 					events.NewPubSub(context.Background(), log))
 			}
 			tc.mgmtSvc.log = log
