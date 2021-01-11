@@ -39,7 +39,8 @@
 
 #include "daos_fs_sys.h"
 
-/* TODO don't name internal fucntions with API prefix */
+/* TODO use DF_RC and DP_RC where possible */
+
 /* TODO Any function that takes a char * should take a len as well,
  * and this applies to public as well as internal interfaces. */
 
@@ -56,11 +57,11 @@ struct dfs_sys {
  * One thing that would work well is if this simply saved two pointers,
  * and two lengths, but into the same allocation, and used the len to
  * control the length of the dir_name string rather than a \0 character. */
-typedef struct dfs_sys_path {
+typedef struct sys_path {
 	char		*dir_name;	/** dirname(path) */
 	char		*name;		/** basename(path) */
 	dfs_obj_t	*parent;	/** dir_name obj */
-} dfs_sys_path_t;
+} sys_path_t;
 
 
 /**
@@ -70,7 +71,7 @@ typedef struct dfs_sys_path {
  * as it turns the containerof into a noop, meaning code that should use it
  * but doesn't will still work.
  * For safety you should put this at a non-zero offset. */
-struct dfs_sys_hash_hdl {
+struct hash_hdl {
 	d_list_t	entry;
 	dfs_obj_t	*obj;
 	char		*name;
@@ -78,32 +79,12 @@ struct dfs_sys_hash_hdl {
 	size_t		num_refs; /* TODO datatype? */
 };
 
-/**
- * Allocate a new dfs_sys_hash_hdl.
- * TODO maybe just do this inline since only called once
- */
-static struct dfs_sys_hash_hdl*
-dfs_sys_hash_hdl_new(void)
-{
-	struct dfs_sys_hash_hdl	*hdl = NULL;
-
-	D_ALLOC_PTR(hdl);
-	if (hdl == NULL)
-		return NULL;
-	hdl->obj = NULL;
-	hdl->name = NULL;
-	hdl->name_len = 0;
-	hdl->num_refs = 0;
-
-	return hdl;
-}
-
 /*
- * Delete a dfs_sys_hash_hdl.
+ * Delete a hash_hdl.
  */
 /* TODO inline? */
 static void
-dfs_sys_hash_hdl_delete(struct dfs_sys_hash_hdl *hdl)
+hash_hdl_free(struct hash_hdl *hdl)
 {
 	if (hdl != NULL) {
 		if (hdl->obj != NULL)
@@ -115,12 +96,12 @@ dfs_sys_hash_hdl_delete(struct dfs_sys_hash_hdl *hdl)
 }
 
 /*
- * Get a dfs_sys_hash_hdl from the d_list_t.
+ * Get a hash_hdl from the d_list_t.
  */
-static inline struct dfs_sys_hash_hdl*
-dfs_sys_hash_hdl_obj(d_list_t *rlink)
+static inline struct hash_hdl*
+hash_hdl_obj(d_list_t *rlink)
 {
-	return container_of(rlink, struct dfs_sys_hash_hdl, entry);
+	return container_of(rlink, struct hash_hdl, entry);
 }
 
 /**
@@ -128,10 +109,10 @@ dfs_sys_hash_hdl_obj(d_list_t *rlink)
  * Simple string comparison of name.
  */
 static bool
-dfs_sys_hash_key_cmp(struct d_hash_table *table, d_list_t *rlink,
-		     const void *key, unsigned int ksize)
+hash_key_cmp(struct d_hash_table *table, d_list_t *rlink,
+	     const void *key, unsigned int ksize)
 {
-	struct dfs_sys_hash_hdl	*hdl = dfs_sys_hash_hdl_obj(rlink);
+	struct hash_hdl	*hdl = hash_hdl_obj(rlink);
 
 	if (hdl->name_len != ksize)
 		return false;
@@ -143,9 +124,9 @@ dfs_sys_hash_key_cmp(struct d_hash_table *table, d_list_t *rlink,
  * Add reference to hash entry.
  */
 static void
-dfs_sys_hash_rec_addref(struct d_hash_table *htable, d_list_t *rlink)
+hash_rec_addref(struct d_hash_table *htable, d_list_t *rlink)
 {
-	struct dfs_sys_hash_hdl *hdl = dfs_sys_hash_hdl_obj(rlink);
+	struct hash_hdl *hdl = hash_hdl_obj(rlink);
 
 	/* TODO use atomics */
 	hdl->num_refs++;
@@ -155,10 +136,10 @@ dfs_sys_hash_rec_addref(struct d_hash_table *htable, d_list_t *rlink)
  * Decrease reference to hash entry.
  */
 static bool
-dfs_sys_hash_rec_decref(struct d_hash_table *htable, d_list_t *rlink)
+hash_rec_decref(struct d_hash_table *htable, d_list_t *rlink)
 {
-	struct dfs_sys_hash_hdl *hdl = dfs_sys_hash_hdl_obj(rlink);
-	bool			no_refs;
+	struct hash_hdl *hdl = hash_hdl_obj(rlink);
+	bool		no_refs;
 
 	D_ASSERT(hdl->num_refs > 0);
 
@@ -172,95 +153,24 @@ dfs_sys_hash_rec_decref(struct d_hash_table *htable, d_list_t *rlink)
  * Free a hash entry.
  */
 static void
-dfs_sys_hash_rec_free(struct d_hash_table *htable, d_list_t *rlink)
+hash_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
-	struct dfs_sys_hash_hdl *hdl = dfs_sys_hash_hdl_obj(rlink);
+	struct hash_hdl *hdl = hash_hdl_obj(rlink);
 
 	/* TODO is the assert necessary? */
 	D_ASSERT(d_hash_rec_unlinked(&hdl->entry));
-	dfs_sys_hash_hdl_delete(hdl);
+	hash_hdl_free(hdl);
 }
 
 /**
  * Operations for the hash table.
  */
-static d_hash_table_ops_t dfs_sys_hash_hdl_ops = {
-	.hop_key_cmp	= dfs_sys_hash_key_cmp,
-	.hop_rec_addref = dfs_sys_hash_rec_addref,
-	.hop_rec_decref	= dfs_sys_hash_rec_decref,
-	.hop_rec_free	= dfs_sys_hash_rec_free
+static d_hash_table_ops_t hash_hdl_ops = {
+	.hop_key_cmp	= hash_key_cmp,
+	.hop_rec_addref = hash_rec_addref,
+	.hop_rec_decref	= hash_rec_decref,
+	.hop_rec_free	= hash_rec_free
 };
-
-
-/**
- * Mount a file system with dfs_mount and optionally initialize the hash.
- */
-int
-dfs_sys_mount(daos_handle_t poh, daos_handle_t coh, int flags, int sys_flags,
-	      dfs_sys_t **_dfs_sys)
-{
-	dfs_sys_t	*dfs_sys;
-	int		rc;
-
-	if (_dfs_sys == NULL)
-		return EINVAL;
-
-	D_ALLOC_PTR(dfs_sys);
-	if (dfs_sys == NULL)
-		return ENOMEM;
-
-	/* Handle sys_flags */
-	dfs_sys->use_cache = !(sys_flags & DFS_SYS_NO_CACHE);
-
-	/* Mount dfs */
-	rc = dfs_mount(poh, coh, flags, &dfs_sys->dfs);
-	if (rc) {
-	D_ERROR("dfs_mount() failed (%d)\n", rc);
-		D_GOTO(err_dfs_sys, rc);
-	}
-
-	/** TODO make this thread safe */
-	/** TODO allow size to be passed in? Default size? */
-	/* Initialize the hash */
-	if (dfs_sys->use_cache) {
-		D_DEBUG(DB_ALL, "DFS_SYS mount with caching.\n");
-		rc = d_hash_table_create(D_HASH_FT_NOLOCK, 16, NULL,
-					 &dfs_sys_hash_hdl_ops,
-					&dfs_sys->dfs_hash);
-		if (rc) {
-			/** TODO error handling */
-			D_GOTO(err_hash, rc);
-		}
-	}
-
-	return rc;
-
-err_hash:
-        dfs_umount(dfs_sys->dfs);
-err_dfs_sys:
-        D_FREE(dfs_sys);
-	return rc;
-}
-
-/**
- * Unmount a file system with dfs_mount and destroy the hash.
- */
-int
-dfs_sys_umount(dfs_sys_t *dfs_sys)
-{
-	int rc;
-
-	rc = d_hash_table_destroy(dfs_sys->dfs_hash, false);
-	if (rc)
-		D_ERROR("d_hash_table_destroy () failed, " DF_RC "\n",
-			DP_RC(rc));
-
-	rc = dfs_umount(dfs_sys->dfs);
-	/** TODO error handling */
-
-	return rc;
-}
-
 
 /**
  * Try to get name from the hash.
@@ -271,11 +181,11 @@ dfs_sys_umount(dfs_sys_t *dfs_sys)
 static int
 hash_lookup(const char *name, dfs_sys_t *dfs_sys, dfs_obj_t **_obj)
 {
-	struct dfs_sys_hash_hdl	*hdl;
-	d_list_t		*rlink;
-	size_t			name_len;
-	mode_t			mode;
-	int			rc;
+	struct hash_hdl	*hdl;
+	d_list_t	*rlink;
+	size_t		name_len;
+	mode_t		mode;
+	int		rc;
 
 	/* If we aren't caching, just call dfs_lookup */
 	if (!dfs_sys->use_cache) {
@@ -296,18 +206,22 @@ hash_lookup(const char *name, dfs_sys_t *dfs_sys, dfs_obj_t **_obj)
 	/* If cached, return it */
 	rlink = d_hash_rec_find(dfs_sys->dfs_hash, name, name_len);
 	if (rlink != NULL) {
-		hdl = dfs_sys_hash_hdl_obj(rlink);
+		hdl = hash_hdl_obj(rlink);
 		D_GOTO(out, rc = 0);
 	}
 
-	/* Not cached, so add it */
-	hdl = dfs_sys_hash_hdl_new();
+	/* Not cached, so create an entry and add it */
+	D_ALLOC_PTR(hdl);
 	if (hdl == NULL)
 		return ENOMEM;
 
+	hdl->name_len = name_len;
 	D_STRNDUP(hdl->name, name, name_len);
 	if (hdl->name == NULL)
 		D_GOTO(err_hdl, ENOMEM);
+
+	/* TODO start at 1 ?? */
+	hdl->num_refs = 0;
 
 	/* Lookup name in dfs */
 	rc = dfs_lookup(dfs_sys->dfs, name, O_RDWR, &hdl->obj, &mode, NULL);
@@ -335,7 +249,7 @@ out:
 	*_obj = hdl->obj;
 	return rc;
 err_hdl:
-	dfs_sys_hash_hdl_delete(hdl);
+	hash_hdl_free(hdl);
 	return rc;
 }
 
@@ -432,7 +346,7 @@ out:
  * Parse path into sys_path->dir_name and sys_path->name.
  */
 static int
-dfs_sys_path_parse(dfs_sys_path_t *sys_path, const char *path)
+sys_path_parse(sys_path_t *sys_path, const char *path)
 {
 	/**
 	 * TODO integrate with parse_filename so there is only one function.
@@ -441,10 +355,10 @@ dfs_sys_path_parse(dfs_sys_path_t *sys_path, const char *path)
 }
 
 /**
- * Free a dfs_sys_path_t.
+ * Free a sys_path_t.
  */
 static void
-dfs_sys_path_free(dfs_sys_path_t *sys_path)
+sys_path_free(sys_path_t *sys_path)
 {
 	/* TODO null chekc */
 	D_FREE(sys_path->dir_name);
@@ -456,22 +370,22 @@ dfs_sys_path_free(dfs_sys_path_t *sys_path)
 }
 
 /**
- * Initialize dfs_sys_path_t.
+ * Initialize sys_path_t.
  */
 /* TODO don't call this "init" */
 static int
-dfs_sys_path_init(dfs_sys_t *dfs_sys, dfs_sys_path_t *sys_path,
-		  const char *path)
+sys_path_init(dfs_sys_t *dfs_sys, sys_path_t *sys_path,
+	      const char *path)
 {
 	int rc;
 
-	rc = dfs_sys_path_parse(sys_path, path);
+	rc = sys_path_parse(sys_path, path);
 	if (rc)
 		return rc;
 
 	rc = hash_lookup(path, dfs_sys, &sys_path->parent);
 	if (rc) {
-		dfs_sys_path_free(sys_path);
+		sys_path_free(sys_path);
 		return rc;
 	}
 
@@ -489,36 +403,102 @@ dfs_sys_path_init(dfs_sys_t *dfs_sys, dfs_sys_path_t *sys_path,
 }
 
 /**
+ * Mount a file system with dfs_mount and optionally initialize the hash.
+ */
+int
+dfs_sys_mount(daos_handle_t poh, daos_handle_t coh, int flags, int sys_flags,
+	      dfs_sys_t **_dfs_sys)
+{
+	dfs_sys_t	*dfs_sys;
+	int		rc;
+
+	if (_dfs_sys == NULL)
+		return EINVAL;
+
+	D_ALLOC_PTR(dfs_sys);
+	if (dfs_sys == NULL)
+		return ENOMEM;
+
+	/* Handle sys_flags */
+	dfs_sys->use_cache = !(sys_flags & DFS_SYS_NO_CACHE);
+
+	/* Mount dfs */
+	rc = dfs_mount(poh, coh, flags, &dfs_sys->dfs);
+	if (rc) {
+	D_ERROR("dfs_mount() failed (%d)\n", rc);
+		D_GOTO(err_dfs_sys, rc);
+	}
+
+	/** TODO make this thread safe */
+	/** TODO allow size to be passed in? Default size? */
+	/* Initialize the hash */
+	if (dfs_sys->use_cache) {
+		D_DEBUG(DB_ALL, "DFS_SYS mount with caching.\n");
+		rc = d_hash_table_create(D_HASH_FT_NOLOCK, 16, NULL,
+					 &hash_hdl_ops,
+					 &dfs_sys->dfs_hash);
+		if (rc) {
+			/** TODO error handling */
+			D_GOTO(err_hash, rc);
+		}
+	}
+
+	return rc;
+
+err_hash:
+	dfs_umount(dfs_sys->dfs);
+err_dfs_sys:
+	D_FREE(dfs_sys);
+	return rc;
+}
+
+/**
+ * Unmount a file system with dfs_mount and destroy the hash.
+ */
+int
+dfs_sys_umount(dfs_sys_t *dfs_sys)
+{
+	int rc;
+
+	if (dfs_sys->use_cache) {
+		rc = d_hash_table_destroy(dfs_sys->dfs_hash, false);
+		if (rc)
+			D_ERROR("d_hash_table_destroy() failed, " DF_RC "\n",
+				DP_RC(rc));
+	}
+
+	rc = dfs_umount(dfs_sys->dfs);
+	if (rc)
+		D_ERROR("dfs_umount() failed, " DF_RC "\n",
+			DP_RC(rc));
+
+	return rc;
+}
+
+/**
  * The calls below here should be as similar as possible to the
  * POSIX versions, but with a dfs_sys_t parameter.
- *
- * TODO Do we want these to set errno and return -1, like POSIX,
- * or do we want them to return errno, like DFS?
  */
 /* TODO just add flags here for symlink? */
 int
 dfs_sys_access(dfs_sys_t *dfs_sys, const char *path, int amode)
 {
 	int		rc;
-	dfs_sys_path_t	sys_path;
+	sys_path_t	sys_path;
 
-	rc = dfs_sys_path_init(dfs_sys, &sys_path, path);
+	rc = sys_path_init(dfs_sys, &sys_path, path);
 	if (rc)
-		D_GOTO(out, rc);
+		return rc;
 
 	rc = dfs_access(dfs_sys->dfs, sys_path.parent, sys_path.name, amode);
 	if (rc) {
 		/* TODO do we want to log errors for the dfs_ calls? */
-		D_ERROR("dfs_access %s failed\n", sys_path.name);
+		D_ERROR("dfs_access() %s failed\n", sys_path.name);
 		D_GOTO(out_free_path, rc);
 	}
 
 out_free_path:
-	dfs_sys_path_free(&sys_path);
-out:
-	/* If we want to set errno, we can do this */
-	// errno = rc;
-	// rc = errno ? 1 : 0;
+	sys_path_free(&sys_path);
 	return rc;
 }
 
@@ -528,20 +508,20 @@ dfs_sys_faccessat(dfs_sys_t *dfs_sys, int dirfd, const char *path, int amode,
 		  int flags)
 {
 	int		rc;
-	dfs_sys_path_t  sys_path;
+	sys_path_t  sys_path;
 	dfs_obj_t	*obj;
 	mode_t		mode;
 	int		lookup_flags = O_RDWR;
 
 	if (dirfd != AT_FDCWD)
-		D_GOTO(out, rc=ENOTSUP);
+		return ENOTSUP;
 
 	if (flags & AT_EACCESS)
-		D_GOTO(out, rc=ENOTSUP);
+		return ENOTSUP;
 
-	rc = dfs_sys_path_init(dfs_sys, &sys_path, path);
+	rc = sys_path_init(dfs_sys, &sys_path, path);
 	if (rc)
-		D_GOTO(out, rc);
+		return rc;
 
 	if (flags & AT_SYMLINK_NOFOLLOW)
 		lookup_flags |= O_NOFOLLOW;
@@ -551,7 +531,7 @@ dfs_sys_faccessat(dfs_sys_t *dfs_sys, int dirfd, const char *path, int amode,
 			    lookup_flags, &obj, &mode, NULL);
 	if (rc) {
 		/* TODO do we want to log errors for the dfs_ calls? */
-		D_ERROR("dfs_lookup_rel %s failed\n", sys_path.name);
+		D_ERROR("dfs_lookup_rel() %s failed\n", sys_path.name);
 		D_GOTO(out_free_path, rc);
 	}
 
@@ -562,15 +542,14 @@ dfs_sys_faccessat(dfs_sys_t *dfs_sys, int dirfd, const char *path, int amode,
 	rc = dfs_access(dfs_sys->dfs, sys_path.parent, sys_path.name, amode);
 	if (rc) {
 		/* TODO do we want to log errors for the dfs_ calls? */
-		D_ERROR("dfs_access %s failed\n", sys_path.name);
+		D_ERROR("dfs_access() %s failed\n", sys_path.name);
 		D_GOTO(out_free_obj, rc);
 	}
 
 out_free_obj:
 	dfs_release(obj);
 out_free_path:
-	dfs_sys_path_free(&sys_path);
-out:
+	sys_path_free(&sys_path);
 	return rc;
 }
 
