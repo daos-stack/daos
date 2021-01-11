@@ -32,6 +32,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
@@ -184,7 +185,18 @@ func (ur *UnaryResponse) getMSResponse() (proto.Message, error) {
 		return nil, errors.New("response did not contain a management service response")
 	}
 
-	msResp := ur.Responses[0]
+	// As we may have sent the request to multiple MS replicas, just pick
+	// through the responses to find the one that succeeded. If none succeeded,
+	// return the error from the last response.
+	var msResp *HostResponse
+	for _, msResp = range ur.Responses {
+		if msResp.Error != nil || msResp.Message == nil {
+			continue
+		}
+
+		break
+	}
+
 	if msResp.Error != nil {
 		return nil, msResp.Error
 	}
@@ -202,7 +214,10 @@ func (ur *UnaryResponse) getMSResponse() (proto.Message, error) {
 func convertMSResponse(ur *UnaryResponse, out interface{}) error {
 	msResp, err := ur.getMSResponse()
 	if err != nil {
-		return errors.Wrap(err, "failed to get MS response")
+		if IsConnectionError(err) {
+			return errors.Errorf("unable to contact the %s", build.ManagementServiceName)
+		}
+		return err
 	}
 
 	return convert.Types(msResp, out)

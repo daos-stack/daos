@@ -11,10 +11,8 @@ hosts:
     - client-F
     - client-G
     - client-H
-
-timeout: 250
+timeout: 450
 pool:
-  #This will create 8G of SCM and 16G of NVMe size of pool.
   scm_size: 8G
 server_config:
   servers_per_host: 2
@@ -24,7 +22,7 @@ server_config:
       pinned_numa_node: 0
       nr_xs_helpers: 1
       fabric_iface: ib0
-      fabric_iface_port: 31416
+      fabric_iface_port: 31317
       log_file: daos_server0.log
       bdev_class: nvme
       bdev_list: ["0000:81:00.0"]
@@ -51,9 +49,14 @@ dmg:
   transport_config:
     allow_insecure: True
 daos_tests:
-  num_clients:
-    num_clients: 32
-  Tests:
-    test_F:
-      daos_test: F
-      test_name: DAOS File System tests
+  Tests: !mux
+    test_u:
+      daos_test: u
+      num_clients: 1
+      test_name: DFS unit tests
+      test_timeout: 250
+    test_p:
+      daos_test: p
+      num_clients: 32
+      test_name: DFS parallel tests
+      test_timeout: 200

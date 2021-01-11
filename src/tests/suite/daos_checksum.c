@@ -34,12 +34,6 @@
 static void
 iov_update_fill(d_iov_t *iov, char *data, uint64_t len_to_fill);
 
-#define assert_success(r) do {\
-	int __rc = (r); \
-	if (__rc != 0) \
-		fail_msg("Not successful!! Error code: " DF_RC, DP_RC(__rc)); \
-	} while (0)
-
 unsigned int
 daos_checksum_test_arg2type(char *str)
 {
@@ -120,7 +114,7 @@ client_clear_fault()
 static void
 server_corrupt_disk(const char *group)
 {
-	int rc = daos_mgmt_set_params(group, -1, DMG_KEY_FAIL_LOC,
+	int rc = daos_debug_set_params(group, -1, DMG_KEY_FAIL_LOC,
 				      DAOS_CSUM_CORRUPT_DISK | DAOS_FAIL_ALWAYS,
 				      0, NULL);
 	assert_int_equal(rc, 0);
@@ -129,7 +123,7 @@ server_corrupt_disk(const char *group)
 static void
 server_clear_fault(const char *group)
 {
-	int rc = daos_mgmt_set_params(group, -1,
+	int rc = daos_debug_set_params(group, -1,
 				      DMG_KEY_FAIL_LOC, 0, 0, NULL);
 	assert_int_equal(rc, 0);
 }
@@ -220,13 +214,13 @@ setup_single_recx_data(struct csum_test_ctx *ctx, char *seed_data,
 	iov_alloc_str(&ctx->dkey, "dkey");
 	iov_alloc_str(&ctx->update_iod.iod_name, "akey");
 
-	rc = daos_sgl_init(&ctx->update_sgl, 1);
+	rc = d_sgl_init(&ctx->update_sgl, 1);
 	if (rc)
 		return;
 	iov_alloc(&ctx->update_sgl.sg_iovs[0], data_bytes);
 	iov_update_fill(ctx->update_sgl.sg_iovs, seed_data, data_bytes);
 
-	daos_sgl_init(&ctx->fetch_sgl, 1);
+	d_sgl_init(&ctx->fetch_sgl, 1);
 	iov_alloc(&ctx->fetch_sgl.sg_iovs[0], data_bytes);
 
 	ctx->recx[0].rx_idx = 0;
@@ -252,13 +246,13 @@ setup_single_value_data(struct csum_test_ctx *ctx, char *seed_data,
 	iov_alloc_str(&ctx->dkey, "dkey");
 	iov_alloc_str(&ctx->update_iod.iod_name, "akey");
 
-	rc = daos_sgl_init(&ctx->update_sgl, 1);
+	rc = d_sgl_init(&ctx->update_sgl, 1);
 	if (rc)
 		return;
 	iov_alloc(&ctx->update_sgl.sg_iovs[0], data_bytes);
 	iov_update_fill(ctx->update_sgl.sg_iovs, seed_data, data_bytes);
 
-	daos_sgl_init(&ctx->fetch_sgl, 1);
+	d_sgl_init(&ctx->fetch_sgl, 1);
 	iov_alloc(&ctx->fetch_sgl.sg_iovs[0], data_bytes);
 
 	ctx->update_iod.iod_size = daos_sgl_buf_size(&ctx->update_sgl);
@@ -399,6 +393,8 @@ io_with_server_side_verify(void **state)
 	daos_oclass_id_t	 oc = dts_csum_oc;
 	int			 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (csum_ec_enabled() && !test_runable(*state, csum_ec_grp_size()))
 		skip();
 
@@ -466,6 +462,8 @@ test_server_data_corruption(void **state)
 	daos_oclass_id_t	 oc = dts_csum_oc;
 	int			 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	setup_from_test_args(&ctx, *state);
 	setup_cont_obj(&ctx, dts_csum_prop_type, false, 1024*8, oc);
 
@@ -496,6 +494,8 @@ test_fetch_array(void **state)
 	daos_oclass_id_t	oc = dts_csum_oc;
 	uint32_t		node_nr;
 	int			rc;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (csum_ec_enabled() && !test_runable(*state, csum_ec_grp_size()))
 		skip();
@@ -596,12 +596,13 @@ test_fetch_array(void **state)
 		cleanup_data(&ctx);
 
 		/** 6. Replicated (complicated data) object with corruption */
-		client_corrupt_on_fetch();
+		daos_fail_loc_set(DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS);
 		setup_multiple_extent_data(&ctx);
 		rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 				     &ctx.update_iod, &ctx.update_sgl, NULL);
 		assert_int_equal(rc, 0);
 
+		client_corrupt_on_fetch();
 		rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 				    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
 		assert_int_equal(rc, 0);
@@ -1259,6 +1260,8 @@ single_value_test(void **state, bool large_buf)
 static void
 single_value(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
+
 	if (csum_ec_enabled() && !test_runable(*state, csum_ec_grp_size()))
 		skip();
 
@@ -1315,6 +1318,8 @@ mix_test(void **state)
 	d_sg_list_t		 fetch_sgls[2] = {0};
 	d_sg_list_t		*fetch_sv_sgl = &fetch_sgls[0];
 	d_sg_list_t		*fetch_array_sgl = &fetch_sgls[1];
+
+	FAULT_INJECTION_REQUIRED();
 
 	setup_from_test_args(&ctx, *state);
 
@@ -1568,7 +1573,7 @@ two_iods_two_recxs(void **state)
 	iov_alloc_str(&ctx.dkey, "dkey");
 
 	/** Setup the first iod/sgl to have multiple recxs */
-	daos_sgl_init(&sgls[0], 1);
+	d_sgl_init(&sgls[0], 1);
 	iov_alloc(&sgls[0].sg_iovs[0], 6);
 	iov_update_fill(&sgls[0].sg_iovs[0], "1", 6);
 
@@ -1583,7 +1588,7 @@ two_iods_two_recxs(void **state)
 	iods[0].iod_type = DAOS_IOD_ARRAY;
 
 	/** setup the second iod/sgl to be a */
-	daos_sgl_init(&sgls[1], 1);
+	d_sgl_init(&sgls[1], 1);
 	iov_alloc(&sgls[1].sg_iovs[0], 6);
 	iov_update_fill(&sgls[1].sg_iovs[0], "2", 6);
 
@@ -1785,7 +1790,7 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 	print_message("Excluding rank %d\n", rank_to_exclude);
 	disabled_nr = disabled_targets(arg);
 	daos_exclude_server(arg->pool.pool_uuid, arg->group,
-			    arg->dmg_config, arg->pool.alive_svc,
+			    arg->dmg_config, NULL /* arg->pool.alive_svc */,
 			    layout1->ol_shards[0]->os_ranks[0]);
 	assert_true(disabled_nr < disabled_targets(arg));
 
@@ -1813,7 +1818,7 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 	assert_success(rc);
 
 	daos_reint_server(arg->pool.pool_uuid, arg->group, arg->dmg_config,
-			  arg->pool.alive_svc, rank_to_exclude);
+			  NULL /* arg->pool.alive_svc */, rank_to_exclude);
 	assert_int_equal(disabled_nr, disabled_targets(arg));
 	/** wait for rebuild */
 	test_rebuild_wait(&arg, 1);
@@ -1907,6 +1912,8 @@ punch_before_insert(void **state)
 static void
 test_update_fetch_a_key(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
+
 	key_csum_fetch_update(state,
 			      DAOS_CSUM_CORRUPT_UPDATE_AKEY,
 			      DAOS_CSUM_CORRUPT_FETCH_AKEY);
@@ -1915,6 +1922,8 @@ test_update_fetch_a_key(void **state)
 static void
 test_update_fetch_d_key(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
+
 	key_csum_fetch_update(state,
 			      DAOS_CSUM_CORRUPT_UPDATE_DKEY,
 			      DAOS_CSUM_CORRUPT_FETCH_DKEY);
@@ -1933,6 +1942,8 @@ test_enumerate_a_key(void **state)
 	daos_key_desc_t		kds[KDS_NR] = {0};
 	d_sg_list_t		sgl = {0};
 	uint32_t		nr = KDS_NR;
+
+	FAULT_INJECTION_REQUIRED();
 
 	setup_from_test_args(&ctx, *state);
 	setup_cont_obj(&ctx, dts_csum_prop_type, false, 1024, oc);
@@ -1985,6 +1996,8 @@ test_enumerate_d_key(void **state)
 	d_sg_list_t		sgl = {0};
 	uint32_t		nr = KDS_NR;
 	uint32_t		key_count = 0;
+
+	FAULT_INJECTION_REQUIRED();
 
 	setup_from_test_args(&ctx, *state);
 	setup_cont_obj(&ctx, dts_csum_prop_type, false, 1024, oc);
@@ -2078,6 +2091,8 @@ test_enumerate_object(void **state)
 	uint32_t		 i;
 	uint32_t		 nr;
 	int			 rc;
+
+	FAULT_INJECTION_REQUIRED();
 
 	memset(kds, 0, enum_nr * sizeof(*kds));
 
@@ -2370,7 +2385,7 @@ run_daos_checksum_test(int rank, int size, int *sub_tests, int sub_tests_size)
 	if (sub_tests_size == 0) {
 		if (getenv("DAOS_CSUM_TEST_ALL_TYPE")) {
 			for (i = DAOS_PROP_CO_CSUM_OFF + 1;
-			     i <= DAOS_PROP_CO_CSUM_SHA512; i++) {
+			     i <= DAOS_PROP_CO_CSUM_ADLER32; i++) {
 				dts_csum_prop_type = i;
 				print_message("Running tests with csum_type: "
 					      "%d\n", i);

@@ -241,7 +241,8 @@ struct vos_dtx_act_ent {
 	int				 dae_rec_cap;
 	unsigned int			 dae_committable:1,
 					 dae_committed:1,
-					 dae_aborted:1;
+					 dae_aborted:1,
+					 dae_maybe_shared:1;
 };
 
 extern struct vos_tls	*standalone_tls;
@@ -278,6 +279,7 @@ do {						\
 #define DAE_EPOCH(dae)		((dae)->dae_base.dae_epoch)
 #define DAE_LID(dae)		((dae)->dae_base.dae_lid)
 #define DAE_FLAGS(dae)		((dae)->dae_base.dae_flags)
+#define DAE_MBS_FLAGS(dae)	((dae)->dae_base.dae_mbs_flags)
 #define DAE_REC_INLINE(dae)	((dae)->dae_base.dae_rec_inline)
 #define DAE_REC_CNT(dae)	((dae)->dae_base.dae_rec_cnt)
 #define DAE_VER(dae)		((dae)->dae_base.dae_ver)
@@ -557,19 +559,6 @@ struct vos_rec_bundle {
 	enum vos_tree_class	 rb_tclass;
 };
 
-/**
- * Inline data structure for embedding the key bundle and key into an anchor
- * for serialization.
- */
-#define	EMBEDDED_KEY_MAX	80
-struct vos_embedded_key {
-	/** Inlined iov key references */
-	d_iov_t		ek_kiov;
-	/** Inlined buffer the key references*/
-	unsigned char	ek_key[EMBEDDED_KEY_MAX];
-};
-D_CASSERT(sizeof(struct vos_embedded_key) == DAOS_ANCHOR_BUF_MAX);
-
 #define VOS_SIZE_ROUND		8
 
 /* size round up */
@@ -784,12 +773,13 @@ struct vos_iterator {
 	struct vos_iter_ops	*it_ops;
 	struct vos_iterator	*it_parent; /* parent iterator */
 	struct vos_ts_set	*it_ts_set;
+	daos_epoch_t		 it_bound;
 	vos_iter_type_t		 it_type;
 	enum vos_iter_state	 it_state;
 	uint32_t		 it_ref_cnt;
 	uint32_t		 it_from_parent:1,
 				 it_for_purge:1,
-				 it_for_rebuild:1,
+				 it_for_migration:1,
 				 it_ignore_uncommitted:1;
 };
 
@@ -982,9 +972,9 @@ void
 key_tree_release(daos_handle_t toh, bool is_array);
 int
 key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
-	       d_iov_t *key_iov, d_iov_t *val_iov, uint64_t flags,
-	       struct vos_ts_set *ts_set, struct vos_ilog_info *parent,
-	       struct vos_ilog_info *info);
+	       daos_epoch_t bound, d_iov_t *key_iov, d_iov_t *val_iov,
+	       uint64_t flags, struct vos_ts_set *ts_set,
+	       struct vos_ilog_info *parent, struct vos_ilog_info *info);
 
 /* vos_io.c */
 daos_size_t
@@ -1041,10 +1031,10 @@ vos_iter_intent(struct vos_iterator *iter)
 {
 	if (iter->it_for_purge)
 		return DAOS_INTENT_PURGE;
-	if (iter->it_for_rebuild)
-		return DAOS_INTENT_REBUILD;
 	if (iter->it_ignore_uncommitted)
 		return DAOS_INTENT_IGNORE_NONCOMMITTED;
+	if (iter->it_for_migration)
+		return DAOS_INTENT_MIGRATION;
 	return DAOS_INTENT_DEFAULT;
 }
 
@@ -1180,6 +1170,64 @@ vos_epc_punched(daos_epoch_t epc, uint16_t minor_epc,
 
 	return false;
 }
+
+static inline bool
+vos_dtx_hit_inprogress(void)
+{
+	struct dtx_handle	*dth = vos_dth_get();
+
+	return dth != NULL && dth->dth_share_tbd_count > 0;
+}
+
+static inline bool
+vos_dtx_continue_detect(int rc)
+{
+	struct dtx_handle	*dth = vos_dth_get();
+
+	/* Continue to detect other potential in-prepared DTX. */
+	return rc == -DER_INPROGRESS && dth != NULL &&
+		dth->dth_share_tbd_count > 0 &&
+		dth->dth_share_tbd_count < DTX_REFRESH_MAX &&
+		dth->dth_share_tbd_scanned < DTX_DETECT_SCAN_MAX;
+}
+
+static inline bool
+vos_has_uncertainty(struct vos_ts_set *ts_set,
+		    const struct vos_ilog_info *info, daos_epoch_t epoch,
+		    daos_epoch_t bound)
+{
+	if (info->ii_uncertain_create)
+		return true;
+
+	return vos_ts_wcheck(ts_set, epoch, bound);
+}
+
+/** For dealing with common routines between punch and update where akeys are
+ *  passed in different structures
+ */
+struct vos_akey_data {
+	union {
+		/** If ad_is_iod is true, array of iods is used for akeys */
+		daos_iod_t	*ad_iods;
+		/** If ad_is_iod is false, it's an array of akeys */
+		daos_key_t	*ad_keys;
+	};
+	/** True if the the field above is an iod array */
+	bool		 ad_is_iod;
+};
+
+/** Add any missing timestamps to the read set when an operation fails due to
+ *  -DER_NONEXST.   This allows for fewer false conflicts on negative
+ *  entries.
+ *
+ *  \param[in]	ts_set	The timestamp set
+ *  \param[in]	dkey	Pointer to the dkey or NULL
+ *  \param[in]	akey_nr	Number of akeys (or 0 if no akeys)
+ *  \param[in]	ad	The actual akeys (either an array of akeys or iods)
+ */
+void
+vos_ts_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int akey_nr,
+		   struct vos_akey_data *ad);
 
 
 #endif /* __VOS_INTERNAL_H__ */

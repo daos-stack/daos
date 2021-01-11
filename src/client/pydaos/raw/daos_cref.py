@@ -135,6 +135,7 @@ class ContInfo(ctypes.Structure):
                 ("es_ghce", ctypes.c_uint64),
                 ("es_glre", ctypes.c_uint64),
                 ("es_ghpce", ctypes.c_uint64),
+                ("ci_redun_fac", ctypes.c_uint32),
                 ("ci_nsnapshots", ctypes.c_uint32),
                 ("ci_snapshots", ctypes.POINTER(ctypes.c_uint64)),
                 ("ci_min_slipped_epoch", ctypes.c_uint64)]

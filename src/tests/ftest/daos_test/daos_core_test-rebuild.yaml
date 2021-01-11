@@ -17,7 +17,7 @@ server_config:
       pinned_numa_node: 0
       nr_xs_helpers: 1
       fabric_iface: ib0
-      fabric_iface_port: 31416
+      fabric_iface_port: 31317
       log_file: daos_server0.log
       # Uncomment when DAOS-4117 is fixed
       # bdev_class: nvme
@@ -27,7 +27,7 @@ server_config:
       scm_mount: /mnt/daos0
       log_mask: DEBUG,MEM=ERR
       env_vars:
-        - DD_MASK=mgmt,io,md,epc,rebuild
+        - DD_MASK=mgmt,io,md,epc,dsms,rebuild
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -42,7 +42,7 @@ server_config:
       scm_mount: /mnt/daos1
       log_mask: DEBUG,MEM=ERR
       env_vars:
-        - DD_MASK=mgmt,io,md,epc,rebuild
+        - DD_MASK=mgmt,io,md,epc,dsms,rebuild
   transport_config:
     allow_insecure: True
 agent_config:

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	d_iov_set(&dkey_iov, dkey, strlen(dkey));
 	d_iov_set(&akey_iov, akey, strlen(akey));
 
-	rc = daos_sgl_init(&sgl, 1);
+	rc = d_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
 
 	if (type == DAOS_IOD_SINGLE)
@@ -90,7 +90,7 @@ update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 				true);
 	assert_int_equal(rc, 0);
 
-	daos_sgl_fini(&sgl, false);
+	d_sgl_fini(&sgl, false);
 	arg->ta_flags &= ~TF_ZERO_COPY;
 }
 
@@ -113,7 +113,7 @@ fetch_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	d_iov_set(&dkey_iov, dkey, strlen(dkey));
 	d_iov_set(&akey_iov, akey, strlen(akey));
 
-	rc = daos_sgl_init(&sgl, 1);
+	rc = d_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
 
 	if (type == DAOS_IOD_SINGLE)
@@ -140,7 +140,7 @@ fetch_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	assert_int_equal(rc, 0);
 	assert_true(iod.iod_size == 0 || iod.iod_size == iod_size);
 
-	daos_sgl_fini(&sgl, false);
+	d_sgl_fini(&sgl, false);
 	arg->ta_flags &= ~TF_ZERO_COPY;
 }
 
@@ -213,8 +213,8 @@ lookup_object(struct io_test_args *arg, daos_unit_oid_t oid)
 	 *  this is only presently used to check existence
 	 */
 	rc = vos_obj_hold(vos_obj_cache_current(),
-			  vos_hdl2cont(arg->ctx.tc_co_hdl), oid, &epr, true,
-			  DAOS_INTENT_DEFAULT, true, &obj, 0);
+			  vos_hdl2cont(arg->ctx.tc_co_hdl), oid, &epr, 0,
+			  VOS_OBJ_VISIBLE, DAOS_INTENT_DEFAULT, &obj, 0);
 	if (rc == 0)
 		vos_obj_release(vos_obj_cache_current(), obj, false);
 	return rc;
@@ -1729,6 +1729,9 @@ fill_cont(struct io_test_args *arg, daos_unit_oid_t oid, char *dkey,
 	daos_recx_t	 recx;
 	uint64_t	 idx_max, nr_max;
 
+	if (DAOS_ON_VALGRIND)
+		size_max = (1UL << 14);
+
 	D_ALLOC(buf_u, size_max);
 	assert_non_null(buf_u);
 
@@ -1783,7 +1786,10 @@ aggregate_14(void **state)
 	fill_size = NVME_FREE(vps) ? : SCM_FREE(vps);
 	assert_true(fill_size > 0);
 
-	if (slow_test) {
+	if (DAOS_ON_VALGRIND) {
+		fill_size = min(fill_size, 1ULL << 18);
+		repeat_cnt = 2;
+	} else if (slow_test) {
 		fill_size = min(fill_size, VPOOL_2G);
 		repeat_cnt = 5;
 	} else {

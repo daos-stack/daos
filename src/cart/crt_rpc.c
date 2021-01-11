@@ -40,9 +40,9 @@ crt_hdlr_ctl_fi_toggle(crt_rpc_t *rpc_req)
 	out_args = crt_reply_get(rpc_req);
 
 	if (in_args->op)
-		d_fault_inject_enable();
+		rc = d_fault_inject_enable();
 	else
-		d_fault_inject_disable();
+		rc = d_fault_inject_disable();
 
 	out_args->rc = rc;
 	rc = crt_reply_send(rpc_req);
@@ -208,6 +208,25 @@ static struct crt_proto_rpc_format crt_fi_rpcs[] = {
 
 #undef X
 
+#define X(a, b, c, d, e) case a: return #a;
+
+/* Helper function to convert internally registered RPC opc to str */
+char
+*crt_opc_to_str(crt_opcode_t opc)
+{
+	if (crt_opc_is_swim(opc))
+		return "SWIM";
+
+	switch (opc) {
+	CRT_INTERNAL_RPCS_LIST
+	CRT_FI_RPCS_LIST
+	default:
+		return "DAOS";
+	}
+}
+
+#undef X
+
 /* CRT RPC related APIs or internal functions */
 int
 crt_internal_rpc_register(void)
@@ -223,7 +242,8 @@ crt_internal_rpc_register(void)
 
 	rc = crt_proto_register_internal(&cpf);
 	if (rc != 0) {
-		D_ERROR("crt_proto_register_internal() failed. rc %d\n", rc);
+		D_ERROR("crt_proto_register_internal() failed, " DF_RC "\n",
+			DP_RC(rc));
 		return rc;
 	}
 
@@ -235,7 +255,7 @@ crt_internal_rpc_register(void)
 
 	rc = crt_proto_register(&cpf);
 	if (rc != 0)
-		D_ERROR("crt_proto_register() failed. rc %d\n", rc);
+		D_ERROR("crt_proto_register() failed, " DF_RC "\n", DP_RC(rc));
 
 	return rc;
 }
@@ -348,7 +368,8 @@ crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 
 	rc = crt_rpc_priv_alloc(opc, &rpc_priv, forward);
 	if (rc != 0) {
-		D_ERROR("crt_rpc_priv_alloc, rc: %d, opc: %#x.\n", rc, opc);
+		D_ERROR("crt_rpc_priv_alloc(%#x) failed, " DF_RC "\n",
+			opc, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -367,7 +388,8 @@ crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, false /* srv_flag */);
 	if (rc != 0) {
 		RPC_ERROR(rpc_priv,
-			  "crt_rpc_priv_init, rc: %d, opc: %#x\n", rc, opc);
+			  "crt_rpc_priv_init(%#x) failed, " DF_RC "\n",
+			  opc, DP_RC(rc));
 		crt_rpc_priv_free(rpc_priv);
 		D_GOTO(out, rc);
 	}
@@ -402,8 +424,8 @@ crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	rc = crt_req_create_internal(crt_ctx, tgt_ep, opc, false /* forward */,
 				     req);
 	if (rc != 0) {
-		D_ERROR("crt_req_create_internal failed, opc: %#x, rc: %d.\n",
-			opc, rc);
+		D_ERROR("crt_req_create_internal(%#x) failed, " DF_RC "\n",
+			opc, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 	D_ASSERT(*req != NULL);
@@ -420,7 +442,7 @@ int
 crt_req_set_endpoint(crt_rpc_t *req, crt_endpoint_t *tgt_ep)
 {
 	struct crt_rpc_priv	*rpc_priv;
-	struct crt_grp_priv	*grp_priv;
+	struct crt_grp_priv	*grp_priv = NULL;
 	int			 rc = 0;
 
 	if (req == NULL || tgt_ep == NULL) {
@@ -544,6 +566,43 @@ crt_issue_uri_lookup(crt_context_t ctx, crt_group_t *group,
 		     d_rank_t query_rank, uint32_t query_tag,
 		     struct crt_rpc_priv *chained_rpc);
 
+#define MAX_URI_LOOKUP_RETRIES 10
+
+static int
+crt_issue_uri_lookup_retry(crt_context_t ctx,
+			   struct crt_grp_priv *grp_priv,
+			   d_rank_t query_rank, uint32_t query_tag,
+			   struct crt_rpc_priv *rpc_priv)
+{
+
+	d_rank_list_t	*membs;
+	d_rank_t	contact_rank;
+	int		rc;
+
+	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
+	membs = grp_priv_get_membs(grp_priv);
+
+	/* Note: membership can change between uri lookups, but we don't need
+	 * to handle this case, as it should be rare and will result in rank
+	 * being either repeated or skipped
+	 */
+	if (!membs || membs->rl_nr <= 1 || rpc_priv->crp_ul_idx == -1) {
+		contact_rank = grp_priv->gp_psr_rank;
+	} else {
+		rpc_priv->crp_ul_idx = (rpc_priv->crp_ul_idx + 1) %
+				       membs->rl_nr;
+		contact_rank = membs->rl_ranks[rpc_priv->crp_ul_idx];
+	}
+
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
+
+	rc = crt_issue_uri_lookup(ctx, &grp_priv->gp_pub,
+				  contact_rank, 0,
+				  query_rank, query_tag,
+				  rpc_priv);
+	return rc;
+}
+
 static void
 uri_lookup_cb(const struct crt_cb_info *cb_info)
 {
@@ -553,11 +612,15 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	struct crt_uri_lookup_in	*ul_in;
 	struct crt_grp_priv		*grp_priv;
 	crt_rpc_t			*lookup_rpc;
+	d_rank_list_t			*membs;
+	bool				found;
 	int				rc = 0;
 
 	chained_rpc_priv = cb_info->cci_arg;
 	lookup_rpc  = cb_info->cci_rpc;
+	grp_priv = chained_rpc_priv->crp_grp_priv;
 
+	ul_in = crt_req_get(lookup_rpc);
 	if (cb_info->cci_rc != 0) {
 		RPC_ERROR(chained_rpc_priv,
 			  "URI_LOOKUP rpc completed with rc=%d\n",
@@ -565,7 +628,6 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 		D_GOTO(retry, rc = cb_info->cci_rc);
 	}
 
-	ul_in = crt_req_get(lookup_rpc);
 	ul_out = crt_reply_get(lookup_rpc);
 
 	if (ul_out->ul_rc != 0) {
@@ -574,10 +636,9 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 		D_GOTO(retry, rc = ul_out->ul_rc);
 	}
 
-	grp_priv = chained_rpc_priv->crp_grp_priv;
 	ctx = lookup_rpc->cr_ctx;
 
-	rc = crt_grp_lc_uri_insert(grp_priv, ctx->cc_idx, ul_in->ul_rank,
+	rc = crt_grp_lc_uri_insert(grp_priv, ul_in->ul_rank,
 				   ul_out->ul_tag, ul_out->ul_uri);
 	if (rc != 0) {
 		RPC_ERROR(chained_rpc_priv,
@@ -593,29 +654,69 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	 * If requested tag does not match returned tag, issue URI
 	 * request directly to the rank:tag=0 server
 	 */
+	char *fill_uri = NULL;
+
 	if (ul_in->ul_tag != ul_out->ul_tag) {
-		rc = crt_issue_uri_lookup(lookup_rpc->cr_ctx,
-					  lookup_rpc->cr_ep.ep_grp,
-					  ul_in->ul_rank, 0,
-					  ul_in->ul_rank, ul_in->ul_tag,
-					  chained_rpc_priv);
-		D_GOTO(out, rc);
+		if (crt_provider_is_contig_ep(ctx->provider) == false) {
+			rc = crt_issue_uri_lookup(lookup_rpc->cr_ctx,
+						  lookup_rpc->cr_ep.ep_grp,
+						  ul_in->ul_rank, 0,
+						  ul_in->ul_rank, ul_in->ul_tag,
+						  chained_rpc_priv);
+			D_GOTO(out, rc);
+		} else {
+			/* Sanity check; if provider supports contiguous eps,
+			 * any successful lookup should return proper tag
+			 */
+			D_ERROR("Should never get here\n");
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+	} else {
+		fill_uri = ul_out->ul_uri;
 	}
 
-	rc = crt_req_fill_tgt_uri(chained_rpc_priv, ul_out->ul_uri);
+	rc = crt_req_fill_tgt_uri(chained_rpc_priv, fill_uri);
 	if (rc != 0) {
 		RPC_ERROR(chained_rpc_priv,
 			  "crt_req_fill_tgt_uri() failed; rc=%d\n", rc);
 		D_GOTO(out, rc);
 	}
 
+	/* After a URI lookup, check if membership list has this rank.
+	 * If not - we discovered a new rank and need to populate it in membs
+	 * list of the group.
+	 */
+	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
+	membs = grp_priv_get_membs(grp_priv);
+	found = d_rank_list_find(membs, ul_in->ul_rank, NULL);
+
+	if (!found) {
+		rc = grp_add_to_membs_list(grp_priv, ul_in->ul_rank);
+		if (rc != 0) {
+			D_ERROR("Failed to add %d to group\n", ul_in->ul_rank);
+			D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
+			D_GOTO(out, rc);
+		}
+	}
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
+
+	/* issue the original RPC */
 	rc = crt_req_send_internal(chained_rpc_priv);
+
 retry:
-	/* TODO: add retry logic for CART-688 */
+
 	if (rc != 0) {
-		RPC_ERROR(chained_rpc_priv,
-			  "URI LOOKUP retry logic not implemented yet\n");
-		D_GOTO(out, rc);
+		if (chained_rpc_priv->crp_ul_retry++ < MAX_URI_LOOKUP_RETRIES) {
+			rc = crt_issue_uri_lookup_retry(lookup_rpc->cr_ctx,
+							grp_priv,
+							ul_in->ul_rank,
+							ul_in->ul_tag,
+							chained_rpc_priv);
+			D_GOTO(out, rc);
+		} else {
+			D_ERROR("URI lookups exceeded %d retries\n",
+				chained_rpc_priv->crp_ul_retry);
+		}
 	}
 
 out:
@@ -637,12 +738,14 @@ out:
  */
 static d_rank_t
 crt_client_get_contact_rank(crt_context_t crt_ctx, crt_group_t *grp,
-			    d_rank_t query_rank, uint32_t query_tag)
+			    d_rank_t query_rank, uint32_t query_tag,
+			    int *ret_idx)
 {
 	struct crt_grp_priv	*grp_priv;
 	d_rank_t		contact_rank = CRT_NO_RANK;
 	char			*cached_uri = NULL;
 	struct crt_context	*ctx;
+	d_rank_list_t		*membs;
 
 	grp_priv = crt_grp_pub2priv(grp);
 	ctx = crt_ctx;
@@ -651,13 +754,26 @@ crt_client_get_contact_rank(crt_context_t crt_ctx, crt_group_t *grp,
 	if (query_tag != 0) {
 		crt_grp_lc_lookup(grp_priv, ctx->cc_idx,
 				  query_rank, 0, &cached_uri, NULL);
-		if (cached_uri != NULL)
+		if (cached_uri != NULL) {
+			*ret_idx = -1;
 			D_GOTO(out, contact_rank = query_rank);
+		}
 	}
 
 	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
-	/* TODO: Add logic for CART-688 */
-	contact_rank = grp_priv->gp_psr_rank;
+
+	membs = grp_priv_get_membs(grp_priv);
+
+	if (!membs || membs->rl_nr == 0) {
+		contact_rank = grp_priv->gp_psr_rank;
+		*ret_idx = -1;
+	} else {
+		*ret_idx = rand() % membs->rl_nr;
+		contact_rank = membs->rl_ranks[*ret_idx];
+
+		D_DEBUG(DB_ALL, "URI lookup rank chosen: %d\n", contact_rank);
+	}
+
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
 out:
@@ -670,6 +786,7 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 	crt_endpoint_t	*tgt_ep;
 	crt_context_t	ctx;
 	crt_group_t	*grp;
+	int		ret_idx;
 	int		rc;
 
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
@@ -682,11 +799,16 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 
 		lookup_rank = crt_client_get_contact_rank(ctx, grp,
 							  tgt_ep->ep_rank,
-							  tgt_ep->ep_tag);
+							  tgt_ep->ep_tag,
+							  &ret_idx);
 		if (lookup_rank == CRT_NO_RANK) {
 			D_ERROR("Failed to rank for uri lookups\n");
 			D_GOTO(out, rc = -DER_NONEXIST);
 		}
+
+		/* Save index from membership list */
+		rpc_priv->crp_ul_retry = 0;
+		rpc_priv->crp_ul_idx = ret_idx;
 
 		rc = crt_issue_uri_lookup(ctx, grp, lookup_rank, 0,
 					  tgt_ep->ep_rank, tgt_ep->ep_tag,
@@ -824,7 +946,7 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 				D_GOTO(out, rc);
 			}
 
-			rc = crt_grp_lc_uri_insert(grp_priv, ctx->cc_idx,
+			rc = crt_grp_lc_uri_insert(grp_priv,
 						   tgt_ep->ep_rank,
 						   tgt_ep->ep_tag, base_addr);
 			if (rc != 0)
@@ -839,8 +961,9 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 	if (base_addr != NULL && rpc_priv->crp_hg_addr == NULL) {
 		rc = crt_req_fill_tgt_uri(rpc_priv, base_addr);
 		if (rc != 0)
-			D_ERROR("crt_req_fill_tgt_uri failed, "
-				"opc: %#x rc %d\n", req->cr_opc, rc);
+			RPC_ERROR(rpc_priv,
+				  "crt_req_fill_tgt_uri() failed, " DF_RC "\n",
+				  DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -861,7 +984,7 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 				D_GOTO(out, rc = -DER_NOMEM);
 
 			base_addr = uri;
-			rc = crt_grp_lc_uri_insert(grp_priv, ctx->cc_idx,
+			rc = crt_grp_lc_uri_insert(grp_priv,
 						   tgt_ep->ep_rank, 0, uri);
 			if (rc != 0) {
 				D_ERROR("crt_grp_lc_uri_insert() failed, "
@@ -986,8 +1109,9 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 		rpc_priv->crp_hg_addr = NULL;
 		rc = crt_req_ep_lc_lookup(rpc_priv, &uri_exists);
 		if (rc != 0) {
-			D_ERROR("crt_grp_ep_lc_lookup() failed, rc %d, "
-				"opc: %#x.\n", rc, req->cr_opc);
+			RPC_ERROR(rpc_priv,
+				  "crt_grp_ep_lc_lookup() failed, " DF_RC "\n",
+				  DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 
@@ -1080,8 +1204,9 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 	if (rpc_priv->crp_coll) {
 		rc = crt_corpc_req_hdlr(rpc_priv);
 		if (rc != 0)
-			D_ERROR("crt_corpc_req_hdlr failed, "
-				"rc: %d,opc: %#x.\n", rc, req->cr_opc);
+			RPC_ERROR(rpc_priv,
+				  "crt_corpc_req_hdlr() failed, " DF_RC "\n",
+				  DP_RC(rc));
 		D_GOTO(out, rc);
 	} else {
 		if (!rpc_priv->crp_have_ep) {
@@ -1098,17 +1223,18 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 		/* tracked in crt_ep_inflight::epi_req_q */
 		rc = crt_req_send_internal(rpc_priv);
 		if (rc != 0) {
-			D_ERROR("crt_req_send_internal() failed, "
-				"rc %d, opc: %#x\n",
-				rc, rpc_priv->crp_pub.cr_opc);
+			RPC_ERROR(rpc_priv,
+				  "crt_req_send_internal() failed, " DF_RC "\n",
+				  DP_RC(rc));
 			crt_context_req_untrack(rpc_priv);
 		}
 	} else if (rc == CRT_REQ_TRACK_IN_WAITQ) {
 		/* queued in crt_hg_context::dhc_req_q */
 		rc = 0;
 	} else {
-		D_ERROR("crt_req_track failed, rc: %d, opc: %#x.\n",
-			rc, rpc_priv->crp_pub.cr_opc);
+		RPC_ERROR(rpc_priv,
+			  "crt_context_req_track() failed, " DF_RC "\n",
+			  DP_RC(rc));
 	}
 
 out:
@@ -1359,6 +1485,10 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
 	self_rank = crt_gdata.cg_grp->gg_primary_grp->gp_self;
+
+	/* If RPC failed HLC epsilon delta check return an error */
+	if (rpc_priv->crp_fail_hlc)
+		D_GOTO(out, rc = -DER_HLC_SYNC);
 
 	if (self_rank == CRT_NO_RANK)
 		skip_check = true;

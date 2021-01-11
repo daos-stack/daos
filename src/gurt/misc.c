@@ -77,7 +77,7 @@ d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src)
 
 	rc = d_rank_list_dup(dst, src);
 	if (rc != 0) {
-		D_ERROR("d_rank_list_dup failed, rc: %d.\n", rc);
+		D_ERROR("d_rank_list_dup() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, 0);
 	}
 
@@ -490,39 +490,6 @@ rank_list_to_uint32_array(d_rank_list_t *rl, uint32_t **ints, size_t *len)
 	return 0;
 }
 
-/**
- * Initialize a scatter/gather list, create an array to store @nr iovecs.
- */
-int
-d_sgl_init(d_sg_list_t *sgl, unsigned int nr)
-{
-	memset(sgl, 0, sizeof(*sgl));
-
-	sgl->sg_nr = sgl->sg_nr_out = nr;
-	D_ALLOC_ARRAY(sgl->sg_iovs, nr);
-
-	return sgl->sg_iovs == NULL ? -DER_NOMEM : 0;
-}
-
-/**
- * Finalise a scatter/gather list, it can also free iovecs if @free_iovs
- * is true.
- */
-void
-d_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
-{
-	int	i;
-
-	if (sgl->sg_iovs == NULL)
-		return;
-
-	for (i = 0; free_iovs && i < sgl->sg_nr; i++)
-		D_FREE(sgl->sg_iovs[i].iov_buf);
-
-	D_FREE(sgl->sg_iovs);
-	memset(sgl, 0, sizeof(*sgl));
-}
-
 static inline bool
 dis_integer_str(char *str)
 {
@@ -597,7 +564,7 @@ void d_getenv_int(const char *env, unsigned *int_val)
 	}
 
 	value = atoi(env_val);
-	D_DEBUG(DB_TRACE, "d_getenv_int(), get ENV %s as %d.\n", env, value);
+	D_DEBUG(DB_TRACE, "get ENV %s as %d.\n", env, value);
 	*int_val = value;
 }
 
@@ -684,4 +651,99 @@ d_free_string(struct d_string_buffer_t *buf)
 		buf->str_size = 0;
 		buf->buf_size = 0;
 	}
+}
+
+/**
+ * Initialize \a seq. The backoff sequence will be generated using an
+ * exponential backoff algorithm. The first \a nzeros backoffs will be zero;
+ * each of the rest will be a random number in [0, x], where x is initially \a
+ * next and multiplied with \a factor for each subsequent backoff. (See
+ * d_backoff_seq_next.) For example, with
+ *
+ *   nzeros = 1,
+ *   factor = 4,
+ *   next = 16, and
+ *   max = 1 << 20,
+ *
+ * the caller shall get:
+ *
+ *   Backoff	Range
+ *         1	[0,       0]
+ *         2	[0,      16]
+ *         3	[0,      64]
+ *         4	[0,     128]
+ *       ...	...
+ *        10	[0, 1048576]
+ *        11	[0, 1048576]
+ *       ...	...
+ *
+ * \param[in]	seq	backoff sequence
+ * \param[in]	nzeros	number of initial zero backoffs
+ * \param[in]	factor	backoff factor
+ * \param[in]	next	next backoff after all initial zero backoffs
+ * \param[in]	max	maximum backoff
+ */
+int
+d_backoff_seq_init(struct d_backoff_seq *seq, uint8_t nzeros, uint16_t factor,
+		   uint32_t next, uint32_t max)
+{
+	if (seq == NULL || factor == 0 || next == 0 || max == 0 || next > max)
+		return -DER_INVAL;
+
+	seq->bos_flags = 0;
+	seq->bos_nzeros = nzeros;
+	seq->bos_factor = factor;
+	seq->bos_next = next;
+	seq->bos_max = max;
+	return 0;
+}
+
+/**
+ * Finalize \a seq. This offers a clear way to reset a d_backoff_seq object
+ * (with potentially different parameters):
+ *
+ *   d_backoff_seq_fini(&seq);
+ *   rc = d_backoff_seq_init(&seq, ...);
+ *
+ * \param[in]	seq	backoff sequence
+ */
+void
+d_backoff_seq_fini(struct d_backoff_seq *seq)
+{
+	/* Don't need to do anything at the moment. */
+}
+
+/**
+ * Compute and return next backoff in \a seq.
+ *
+ * \param[in]	seq	backoff sequence
+ */
+uint32_t
+d_backoff_seq_next(struct d_backoff_seq *seq)
+{
+	uint32_t next;
+
+	/* Have we not outputted all the initial zeros yet? */
+	if (seq->bos_nzeros != 0) {
+		seq->bos_nzeros--;
+		return 0;
+	}
+
+	/* Save seq->bos_next in next. */
+	next = seq->bos_next;
+
+	/* Update seq->bos_next. */
+	if (seq->bos_next < seq->bos_max) {
+		seq->bos_next *= seq->bos_factor;
+		/*
+		 * If the new value overflows or is greater than the maximum,
+		 * set it to the maximum.
+		 */
+		if (seq->bos_next / seq->bos_factor != next ||
+		    seq->bos_next > seq->bos_max)
+			seq->bos_next = seq->bos_max;
+	}
+
+	/* Return a random backoff in [0, next]. */
+	return (next * ((double)rand() / RAND_MAX));
 }

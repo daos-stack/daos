@@ -31,16 +31,12 @@
  *
  * DSS_POOL_NET_POLL	Network poll ULT
  * DSS_POOL_NVME_POLL	NVMe poll ULT
- * DSS_POOL_IO		Update/Fetch/Punch, enumeration RPC handler ULTs
- * DSS_POOL_REBUILD	Rebuild/Reint scan & pull ULTs
- * DSS_POOL_GC		Space reclaiming ULTs like GC or aggregation
+ * DSS_POOL_GENERIC	All other ULTS
  */
 enum {
 	DSS_POOL_NET_POLL	= 0,
 	DSS_POOL_NVME_POLL,
-	DSS_POOL_IO,
-	DSS_POOL_REBUILD,
-	DSS_POOL_GC,
+	DSS_POOL_GENERIC,
 	DSS_POOL_CNT,
 };
 
@@ -138,8 +134,6 @@ struct dss_thread_local_storage *dss_tls_init(int tag);
 void ds_iv_init(void);
 void ds_iv_fini(void);
 
-/** To schedule ULT on caller's self XS */
-#define DSS_XS_SELF		(-1)
 /** Total number of XS */
 #define DSS_XS_NR_TOTAL						\
 	(dss_sys_xs_nr + dss_tgt_nr + dss_tgt_offload_xs_nr)

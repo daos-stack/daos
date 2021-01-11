@@ -26,7 +26,7 @@ package mgmt;
 
 import "pool.proto";
 import "cont.proto";
-import "srv.proto";
+import "svc.proto";
 import "storage_query.proto"; // storage query req/resp BIO data and SMD device list
 import "acl.proto"; // ACL-related requests
 
@@ -55,15 +55,20 @@ message RanksResp {
 // these requests will be processed on a host that is a member of the management
 // service.
 //
-// All MgmtSvc RPCs will be forwarded over dRPC to be handled in data plane.
+// MgmtSvc RPCs will be forwarded over dRPC to be handled in data plane or
+// forwarded over gRPC to be handled by the management service.
 service MgmtSvc {
 	// Join the server described by JoinReq to the system.
 	rpc Join(JoinReq) returns (JoinResp) {}
+	// ClusterEvent notify MS of a cluster event.
+	rpc ClusterEvent(ClusterEventReq) returns (ClusterEventResp) {}
 	// LeaderQuery provides a mechanism for clients to discover
 	// the system's current Management Service leader
 	rpc LeaderQuery(LeaderQueryReq) returns (LeaderQueryResp) {}
 	// Create a DAOS pool allocated across a number of ranks
 	rpc PoolCreate(PoolCreateReq) returns (PoolCreateResp) {}
+	// Resolve a user-friendly DAOS pool id to a UUID.
+	rpc PoolResolveID(PoolResolveIDReq) returns (PoolResolveIDResp) {}
 	// Destroy a DAOS pool allocated across a number of ranks.
 	rpc PoolDestroy(PoolDestroyReq) returns (PoolDestroyResp) {}
 	// Evict a DAOS pool's connections.

@@ -160,7 +160,10 @@ struct crt_rpc_priv {
 	struct crt_hg_hdl	*crp_hdl_reuse; /* reused hg_hdl */
 	crt_phy_addr_t		crp_tgt_uri; /* target uri address */
 	crt_rpc_t		*crp_ul_req; /* uri lookup request */
+
 	uint32_t		crp_ul_retry; /* uri lookup retry counter */
+
+	int			crp_ul_idx; /* index last tried */
 
 	struct crt_grp_priv	*crp_grp_priv; /* group private pointer */
 	/*
@@ -186,7 +189,9 @@ struct crt_rpc_priv {
 				/* RPC is tracked by the context */
 				crp_ctx_tracked:1,
 				/* 1 if RPC is successfully put on the wire */
-				crp_on_wire:1;
+				crp_on_wire:1,
+				/* 1 if RPC fails HLC epsilon check */
+				crp_fail_hlc:1;
 	uint32_t		crp_refcount;
 	struct crt_opc_info	*crp_opc_info;
 	/* corpc info, only valid when (crp_coll == 1) */
@@ -298,7 +303,15 @@ enum {
 	CRT_FI_RPCS_LIST
 };
 
+#define CRT_OPC_SWIM_PROTO	0xFE000000U
+
 #undef X
+
+static inline bool
+crt_opc_is_swim(crt_opcode_t opc)
+{
+	return ((opc & CRT_PROTO_BASEOPC_MASK) == CRT_OPC_SWIM_PROTO);
+}
 
 #define CRT_SEQ_GRP_CACHE					 \
 	((d_rank_t)		(gc_rank)		CRT_VAR) \
@@ -616,20 +629,21 @@ crt_req_timedout(struct crt_rpc_priv *rpc_priv)
 static inline uint64_t
 crt_set_timeout(struct crt_rpc_priv *rpc_priv)
 {
-	uint32_t	timeout_sec;
 	uint64_t	sec_diff;
 
 	D_ASSERT(rpc_priv != NULL);
 
-	timeout_sec = rpc_priv->crp_timeout_sec > 0 ?
-		      rpc_priv->crp_timeout_sec : crt_gdata.cg_timeout;
+	if (rpc_priv->crp_timeout_sec == 0)
+		rpc_priv->crp_timeout_sec = crt_gdata.cg_timeout;
 
-	sec_diff = d_timeus_secdiff(timeout_sec);
+	sec_diff = d_timeus_secdiff(rpc_priv->crp_timeout_sec);
 	rpc_priv->crp_timeout_ts = sec_diff;
 
 	return sec_diff;
 }
 
+/* Convert opcode to string. Only returns string for internal RPCs */
+char *crt_opc_to_str(crt_opcode_t opc);
 
 /* crt_corpc.c */
 int crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv);

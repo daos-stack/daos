@@ -298,7 +298,7 @@ func (hl *HostList) RangedString() string {
 
 		if open {
 			if next != nil && hr.within(next) {
-				bld.WriteString(",")
+				bld.WriteString(innerRangeSeparator)
 				continue
 			} else {
 				open = false
@@ -334,6 +334,12 @@ func (hl *HostList) DerangedString() string {
 	}
 
 	return bld.String()
+}
+
+// Slice returns a string slice containing the hostnames of every
+// host in the HostList.
+func (hl *HostList) Slice() []string {
+	return strings.Split(hl.DerangedString(), ",")
 }
 
 // Push adds a string representation of hostnames to this HostList.

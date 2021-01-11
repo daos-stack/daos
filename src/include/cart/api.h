@@ -454,14 +454,19 @@ uint64_t
 crt_hlc_get(void);
 
 /**
- * Sync HLC with remote message and return current HLC timestamp.
+ * Sync HLC with remote message and get current HLC timestamp.
  *
  * \param[in] msg              remote HLC timestamp
+ * \param[out] hlc_out         HLC timestamp
+ * \param[out] offset          Returned observed clock offset.
  *
- * \return                     HLC timestamp
+ * \return                     DER_SUCCESS on success or error
+ *                             on failure
+ * \retval -DER_HLC_SYNC       \a msg is too much higher than the local
+ *                             physical clock
  */
-uint64_t
-crt_hlc_get_msg(uint64_t msg);
+int
+crt_hlc_get_msg(uint64_t msg, uint64_t *hlc_out, uint64_t *offset);
 
 /**
  * Return the second timestamp of hlc.

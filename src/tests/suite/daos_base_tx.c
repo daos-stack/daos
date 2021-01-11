@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ static void
 dtx_set_fail_loc(test_arg_t *arg, uint64_t fail_loc)
 {
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				     fail_loc, 0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 }
@@ -196,6 +196,7 @@ dtx_io_test_fail(void **state, uint64_t fail_loc)
 static void
 dtx_3(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
 	print_message("failed to update/punch on leader\n");
 	dtx_io_test_fail(state, DAOS_DTX_LEADER_ERROR | DAOS_FAIL_ALWAYS);
 }
@@ -203,6 +204,7 @@ dtx_3(void **state)
 static void
 dtx_4(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
 	print_message("failed to update/punch on non-leader\n");
 	dtx_io_test_fail(state, DAOS_DTX_NONLEADER_ERROR | DAOS_FAIL_ALWAYS);
 }
@@ -577,6 +579,7 @@ dtx_15(void **state)
 static void
 dtx_16(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
 	test_arg_t	*arg = *state;
 	char		*update_buf;
 	const char	*dkey = dts_dtx_dkey;

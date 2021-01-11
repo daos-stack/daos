@@ -1,0 +1,33 @@
+hosts:
+    test_servers:
+        - server-A
+    test_clients:
+        - server-B
+timeout: 300
+server_config:
+    name: daos_server
+pool:
+    mode: 146
+    name: daos_server
+    scm_size: 1G
+    control_method: dmg
+container:
+    type: POSIX
+    control_method: daos
+ior:
+    api: 'DFS'
+    client_processes:
+        np: 1
+    test_file: "testFile"
+    copy_procs:
+        flags_write:
+            - "-v -w -k"
+        flags_read:
+            - "-v -r -R"
+    block_size: '100M'
+    signature: 5
+datamover:
+    blocksize: '8MB'
+    chunksize: '4MB'
+    copy_procs:
+        processes: [3, 7, 16]

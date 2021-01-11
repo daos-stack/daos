@@ -26,9 +26,9 @@
  */
 #define D_LOGFAC	DD_FAC(hg)
 
+#include "crt_internal.h"
 #include <gurt/mem.h>
 
-#include "crt_internal.h"
 
 #define CRT_PROC_NULL (NULL)
 #define CRT_PROC_TYPE_FUNC(type)				\
@@ -356,6 +356,29 @@ out:
 	return rc;
 }
 
+static double next_hlc_sync_err_report;
+
+/*
+ * Report an HLC synchronization error with a simple 1h-per-message rate
+ * limitation. Not thread-safe, but the consequence is not too harmful.
+ */
+#define REPORT_HLC_SYNC_ERR(fmt, ...)					\
+do {									\
+	struct timespec	rhse_ts;					\
+	double		rhse_now;					\
+	int		rhse_rc;					\
+									\
+	rhse_rc = d_gettime(&rhse_ts);					\
+	if (rhse_rc != 0)						\
+		break;							\
+	rhse_now = d_time2s(rhse_ts);					\
+									\
+	if (rhse_now >= next_hlc_sync_err_report) {			\
+		D_CRIT(fmt, ## __VA_ARGS__);				\
+		next_hlc_sync_err_report = rhse_now + 3600 /* 1h */;	\
+	}								\
+} while (0)
+
 /* For unpacking only the common header to know about the CRT opc */
 int
 crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
@@ -377,6 +400,7 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 	hg_class_t		*hg_class;
 	struct crt_context	*ctx;
 	struct crt_hg_context	*hg_ctx;
+	uint64_t		clock_offset;
 	hg_proc_t		hg_proc = HG_PROC_NULL;
 
 	/* Get extra input buffer; if it's null, get regular input buffer */
@@ -412,9 +436,24 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 		D_ERROR("crt_proc_common_hdr failed rc: %d.\n", rc);
 		D_GOTO(out, rc);
 	}
-	/* Clients never decode requests. */
+
+	/* Sync the HLC. Clients never decode requests. */
 	D_ASSERT(crt_is_service());
-	(void)crt_hlc_get_msg(rpc_priv->crp_req_hdr.cch_hlc);
+	rc = crt_hlc_get_msg(rpc_priv->crp_req_hdr.cch_hlc, NULL /* hlc_out */,
+			     &clock_offset);
+	if (rc != 0) {
+		REPORT_HLC_SYNC_ERR("failed to sync HLC for request: opc=%x ts="
+				    DF_U64" offset="DF_U64" from=%u\n",
+				    rpc_priv->crp_req_hdr.cch_opc,
+				    rpc_priv->crp_req_hdr.cch_hlc,
+				    clock_offset,
+				    rpc_priv->crp_req_hdr.cch_src_rank);
+		/* Fail all but SWIM requests. */
+		if (!crt_opc_is_swim(rpc_priv->crp_req_hdr.cch_opc))
+			rpc_priv->crp_fail_hlc = 1;
+		rc = 0;
+	}
+
 	rpc_priv->crp_flags = rpc_priv->crp_req_hdr.cch_flags;
 	if (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL) {
 		rc = crt_proc_corpc_hdr(hg_proc, &rpc_priv->crp_coreq_hdr);
@@ -632,12 +671,33 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 			D_GOTO(out, rc);
 		}
 		if (proc_op == CRT_PROC_DECODE) {
-			uint64_t t = rpc_priv->crp_reply_hdr.cch_hlc;
+			struct crt_common_hdr *hdr = &rpc_priv->crp_reply_hdr;
 
-			if (crt_is_service())
-				crt_hlc_get_msg(t);
-			else
-				crt_hlct_sync(t);
+			if (crt_is_service()) {
+				uint64_t clock_offset;
+
+				rc = crt_hlc_get_msg(hdr->cch_hlc,
+						     NULL /* hlc_out */,
+						     &clock_offset);
+				if (rc != 0) {
+					REPORT_HLC_SYNC_ERR("failed to sync "
+							    "HLC for reply: "
+							    "opc=%x ts="DF_U64
+							    " offset="DF_U64
+							    " from=%u\n",
+							    hdr->cch_opc,
+							    hdr->cch_hlc,
+							    clock_offset,
+							    hdr->cch_dst_rank);
+					/* Fail all but SWIM replies. */
+					if (!crt_opc_is_swim(hdr->cch_opc))
+						rpc_priv->crp_fail_hlc = 1;
+
+					rc = 0;
+				}
+			} else {
+				crt_hlct_sync(hdr->cch_hlc);
+			}
 		}
 		if (rpc_priv->crp_reply_hdr.cch_rc != 0) {
 			RPC_ERROR(rpc_priv,

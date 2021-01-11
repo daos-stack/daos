@@ -26,11 +26,22 @@
 #define D_LOGFAC	DD_FAC(swim)
 #define CRT_USE_GURT_FAC
 
+#include <ctype.h>
 #include "crt_internal.h"
 #include "swim/swim_internal.h"
 
-#define CRT_OPC_SWIM_PROTO	0xFE000000U
 #define CRT_OPC_SWIM_VERSION	0
+#define CRT_SWIM_FAIL_BASE	((CRT_OPC_SWIM_PROTO >> 16) | \
+				 (CRT_OPC_SWIM_VERSION << 4))
+#define CRT_SWIM_FAIL_DROP_RPC	(CRT_SWIM_FAIL_BASE | 0x1)	/* id: 65025 */
+
+/**
+ * use this macro to determine if a fault should be injected at
+ * a specific place
+ */
+#define CRT_SWIM_SHOULD_FAIL(fa, id)				\
+	(crt_swim_should_fail && (crt_swim_fail_id == id) &&	\
+	 D_SHOULD_FAIL(fa))
 
 #define crt_proc_swim_id_t	crt_proc_uint64_t
 
@@ -45,13 +56,7 @@ static inline int
 crt_proc_struct_swim_member_update(crt_proc_t proc,
 				   struct swim_member_update *data)
 {
-	int rc;
-
-	rc = crt_proc_memcpy(proc, data, sizeof(*data));
-	if (rc != 0)
-		return -DER_HG;
-
-	return 0;
+	return crt_proc_memcpy(proc, data, sizeof(*data));
 }
 
 /* One way RPC */
@@ -62,7 +67,40 @@ CRT_RPC_DEFINE(crt_rpc_swim,  CRT_ISEQ_RPC_SWIM, /* empty */)
 CRT_RPC_DECLARE(crt_rpc_swim_wack, CRT_ISEQ_RPC_SWIM, CRT_OSEQ_RPC_SWIM)
 CRT_RPC_DEFINE(crt_rpc_swim_wack,  CRT_ISEQ_RPC_SWIM, CRT_OSEQ_RPC_SWIM)
 
-uint32_t crt_swim_rpc_timeout;
+uint32_t	 crt_swim_rpc_timeout;
+static bool	 crt_swim_should_fail;
+static uint64_t	 crt_swim_fail_delay;
+static uint64_t	 crt_swim_fail_hlc;
+static swim_id_t crt_swim_fail_id;
+
+static struct d_fault_attr_t *d_fa_swim_drop_rpc;
+
+static void
+crt_swim_fault_init(const char *args)
+{
+	char	*s, *s_saved, *end, *save_ptr = NULL;
+
+	D_STRNDUP(s_saved, args, strlen(args));
+	s = s_saved;
+	if (s == NULL)
+		return;
+
+	while ((s = strtok_r(s, ",", &save_ptr)) != NULL) {
+		while (isspace(*s))
+			s++; /* skip space */
+		if (!strncasecmp(s, "delay=", 6)) {
+			crt_swim_fail_delay = strtoul(s + 6, &end, 0);
+			D_ERROR("*** CRT_SWIM_FAIL_DELAY=%lu\n",
+				crt_swim_fail_delay);
+		} else if (!strncasecmp(s, "rank=", 5)) {
+			crt_swim_fail_id = strtoul(s + 5, &end, 0);
+			D_ERROR("*** CRT_SWIM_FAIL_ID=%lu\n", crt_swim_fail_id);
+		}
+		s = NULL;
+	}
+
+	D_FREE(s_saved);
+}
 
 static inline uint32_t
 crt_swim_rpc_timeout_default(void)
@@ -106,79 +144,111 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 	struct swim_context	*ctx = csm->csm_ctx;
 	struct crt_rpc_swim_in	*rpc_swim_input = crt_req_get(rpc_req);
 	struct crt_rpc_swim_wack_out *rpc_swim_output = crt_reply_get(rpc_req);
+	struct crt_swim_target	*cst;
 	swim_id_t		 self_id = swim_self_get(ctx);
+	swim_id_t		 from_id = rpc_swim_input->src;
 	uint64_t		 max_delay = swim_ping_timeout_get() / 2;
-	uint64_t		 delay;
 	uint64_t		 hlc = crt_hlc_get();
-	int			 rc = -ENOTCONN;
+	uint32_t		 rcv_delay = 0;
+	uint32_t		 snd_delay = 0;
+	int			 rc;
+	int			 i;
 
 	D_ASSERT(crt_is_service());
 
 	D_TRACE_DEBUG(DB_TRACE, rpc_req,
 		"incoming opc %#x with %zu updates %lu <= %lu\n",
 		rpc_req->cr_opc, rpc_swim_input->upds.ca_count,
-		self_id, rpc_swim_input->src);
+		self_id, from_id);
 
 	rpc_priv = container_of(rpc_req, struct crt_rpc_priv, crp_pub);
-	delay = (hlc - rpc_priv->crp_req_hdr.cch_hlc) / NSEC_PER_MSEC;
-	csm->csm_msg_count++;
 
-	if (csm->csm_hlc) {
-		csm->csm_avg_delay = (csm->csm_avg_delay + delay) / 2;
+	if (self_id == SWIM_ID_INVALID)
+		D_GOTO(out, rc = -DER_UNINIT);
+	/*
+	 * crt_hg_unpack_header may have failed to synchronize the HLC with
+	 * this request.
+	 */
+	if (hlc > rpc_priv->crp_req_hdr.cch_hlc)
+		rcv_delay = (hlc - rpc_priv->crp_req_hdr.cch_hlc)
+			  / NSEC_PER_MSEC;
 
-		D_TRACE_DEBUG(DB_TRACE, rpc_req,
-			      "%lu. delay: %lu ms, avg: %lu ms, max: %lu ms\n",
-			      csm->csm_msg_count, delay, csm->csm_avg_delay,
-			      max_delay);
+	/* Update all piggybacked members with remote delays */
+	D_SPIN_LOCK(&csm->csm_lock);
+	for (i = 0; i < rpc_swim_input->upds.ca_count; i++) {
+		struct swim_member_state *state;
+		swim_id_t id;
 
-		if (delay > max_delay) {
-			swim_net_glitch_update(ctx, delay);
-			if (csm->csm_avg_delay > max_delay) {
-				delay = swim_ping_timeout_get() + max_delay;
-				swim_ping_timeout_set(delay);
-				D_ERROR("%lu: increase ping timeout to "
-					"%lu ms\n", ctx->sc_self, delay);
+		state = &rpc_swim_input->upds.ca_arrays[i].smu_state;
+		id = rpc_swim_input->upds.ca_arrays[i].smu_id;
 
-				/* according protocol period requirement */
-				delay *= 3;
-				if (delay > swim_period_get()) {
-					swim_period_set(delay);
-					/* according protocol requirement */
-					delay *= 3;
-					swim_suspect_timeout_set(delay);
+		D_CIRCLEQ_FOREACH(cst, &csm->csm_head, cst_link) {
+			if (cst->cst_id == id) {
+				uint32_t l = cst->cst_state.sms_delay;
+
+				if (id == from_id) {
+					l = l ? (l + rcv_delay) / 2 : rcv_delay;
+					snd_delay = l;
+				} else {
+					uint32_t r = state->sms_delay;
+
+					l = l ? (l + r) / 2 : r;
 				}
+				cst->cst_state.sms_delay = l;
+
+				if (crt_swim_fail_delay &&
+				    crt_swim_fail_id == id) {
+					crt_swim_fail_hlc = hlc
+							  - l * NSEC_PER_MSEC
+							  + crt_swim_fail_delay
+							  * NSEC_PER_SEC;
+					crt_swim_fail_delay = 0;
+				}
+				break;
 			}
 		}
-	} else {
-		csm->csm_avg_delay = delay;
 	}
-	csm->csm_hlc = hlc;
+	D_SPIN_UNLOCK(&csm->csm_lock);
 
-	if (self_id != SWIM_ID_INVALID) {
-		rc = swim_parse_message(ctx, rpc_swim_input->src,
+	if (rcv_delay > max_delay)
+		swim_net_glitch_update(ctx, self_id, rcv_delay - max_delay);
+	else if (snd_delay > max_delay)
+		swim_net_glitch_update(ctx, from_id, snd_delay - max_delay);
+
+	if (CRT_SWIM_SHOULD_FAIL(d_fa_swim_drop_rpc, self_id)) {
+		rc = d_fa_swim_drop_rpc->fa_err_code;
+		D_ERROR("*** DROP incoming opc %#x with %zu updates "
+			"%lu <= %lu error: "DF_RC"\n", rpc_req->cr_opc,
+			rpc_swim_input->upds.ca_count, self_id, from_id,
+			DP_RC(rc));
+	} else {
+		rc = swim_parse_message(ctx, from_id,
 					rpc_swim_input->upds.ca_arrays,
 					rpc_swim_input->upds.ca_count);
-		if (rc == -ESHUTDOWN) {
-			if (grp_priv->gp_size > 1)
-				D_ERROR("SWIM shutdown\n");
-			swim_self_set(ctx, SWIM_ID_INVALID);
-		} else if (rc) {
-			D_ERROR("swim_parse_message() failed rc=%d\n", rc);
-		}
+	}
+	if (rc == -ESHUTDOWN) {
+		if (grp_priv->gp_size > 1)
+			D_ERROR("SWIM shutdown\n");
+		swim_self_set(ctx, SWIM_ID_INVALID);
+	} else if (rc) {
+		D_ERROR("swim_parse_message() failed: %s (%d)\n",
+			strerror(rc), rc);
 	}
 
-	if (rpc_req->cr_opc & 0xFFFF) { /* RPC with acknowledge? */
-		D_TRACE_DEBUG(DB_TRACE, rpc_req,
-			"reply to opc %#x with %zu updates %lu <= %lu rc=%d\n",
-			rpc_req->cr_opc, rpc_swim_input->upds.ca_count,
-			self_id, rpc_swim_input->src, rc);
+out:
+	if (rpc_priv->crp_opc_info->coi_no_reply)
+		return;
 
-		rpc_swim_output->rc = rc;
-		rc = crt_reply_send(rpc_req);
-		if (rc)
-			D_ERROR("send reply %d failed: rc=%d\n",
-				rpc_swim_output->rc, rc);
-	}
+	D_TRACE_DEBUG(DB_TRACE, rpc_req,
+		      "reply to opc %#x with %zu updates %lu <= %lu rc=%d\n",
+		      rpc_req->cr_opc, rpc_swim_input->upds.ca_count,
+		      self_id, from_id, rc);
+
+	rpc_swim_output->rc = rc;
+	rc = crt_reply_send(rpc_req);
+	if (rc)
+		D_ERROR("send reply %d failed "DF_RC"\n",
+			rpc_swim_output->rc, DP_RC(rc));
 }
 
 static int crt_swim_get_member_state(struct swim_context *ctx, swim_id_t id,
@@ -188,35 +258,51 @@ static int crt_swim_set_member_state(struct swim_context *ctx, swim_id_t id,
 
 static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 {
+	struct crt_rpc_priv	*rpc_priv = NULL;
 	struct swim_context	*ctx = cb_info->cci_arg;
 	crt_rpc_t		*rpc_req = cb_info->cci_rpc;
 	struct crt_rpc_swim_in	*rpc_swim_input = crt_req_get(rpc_req);
 	struct swim_member_state id_state;
+	swim_id_t		 self_id = swim_self_get(ctx);
 	swim_id_t		 id = rpc_req->cr_ep.ep_rank;
-	int			 rc;
+	int			 rc = 0;
 
 	D_TRACE_DEBUG(DB_TRACE, rpc_req,
-		"complete opc %#x with %zu updates %lu => %lu rc=%d\n",
-		rpc_req->cr_opc, rpc_swim_input->upds.ca_count,
-		rpc_swim_input->src, id, cb_info->cci_rc);
+		      "complete opc %#x with %zu updates %lu => %lu "DF_RC"\n",
+		      rpc_req->cr_opc, rpc_swim_input->upds.ca_count,
+		      rpc_swim_input->src, id, DP_RC(cb_info->cci_rc));
+
+	rpc_priv = container_of(rpc_req, struct crt_rpc_priv, crp_pub);
+
+	if (rpc_priv->crp_opc_info->coi_no_reply)
+		D_GOTO(out, rc);
+
+	if (cb_info->cci_rc == -DER_UNREG) /* protocol not registered */
+		D_GOTO(out, rc);
 
 	/* check for RPC with acknowledge a return code of request */
-	if (cb_info->cci_rc && (rpc_req->cr_opc & 0xFFFF)) {
-		if (cb_info->cci_rc == -DER_UNREG) /* protocol not registered */
-			goto out;
+	if (cb_info->cci_rc) {
 		rc = crt_swim_get_member_state(ctx, id, &id_state);
 		if (!rc) {
 			D_TRACE_ERROR(rpc_req,
-				"member {%lu %c %lu} => {%lu D %lu}",
-				id, SWIM_STATUS_CHARS[id_state.sms_status],
-				id_state.sms_incarnation,
-				id, (id_state.sms_incarnation + 1));
+				      "member {%lu %c %lu} => {%lu D %lu}", id,
+				      SWIM_STATUS_CHARS[id_state.sms_status],
+				      id_state.sms_incarnation, id,
+				      (id_state.sms_incarnation + 1));
 			id_state.sms_incarnation++;
 			id_state.sms_status = SWIM_MEMBER_DEAD;
 			crt_swim_set_member_state(ctx, id, &id_state);
 		}
+		D_GOTO(out, rc);
 	}
+
 out:
+	if (crt_swim_fail_delay && crt_swim_fail_id == self_id) {
+		crt_swim_fail_hlc = crt_hlc_get()
+				  + crt_swim_fail_delay * NSEC_PER_SEC;
+		crt_swim_fail_delay = 0;
+	}
+
 	D_FREE(rpc_swim_input->upds.ca_arrays);
 }
 
@@ -230,9 +316,25 @@ static int crt_swim_send_message(struct swim_context *ctx, swim_id_t to,
 	crt_rpc_t		*rpc_req;
 	crt_endpoint_t		 ep;
 	crt_opcode_t		 opc;
+	swim_id_t		 self_id = swim_self_get(ctx);
 	int			 opc_idx = 0;
 	int			 ctx_idx = csm->csm_crt_ctx_idx;
 	int			 rc;
+
+	if (nupds > 0 && upds[0].smu_state.sms_status == SWIM_MEMBER_INACTIVE)
+		opc_idx = 1;
+
+	opc = CRT_PROTO_OPC(CRT_OPC_SWIM_PROTO, CRT_OPC_SWIM_VERSION, opc_idx);
+
+	if (CRT_SWIM_SHOULD_FAIL(d_fa_swim_drop_rpc, self_id)) {
+		rc = d_fa_swim_drop_rpc->fa_err_code;
+		D_ERROR("*** DROP outgoing opc %#x with %zu updates "
+			"%lu => %lu error: "DF_RC"\n", opc, nupds,
+			self_id, to, DP_RC(rc));
+		if (!rc)
+			D_FREE(upds);
+		D_GOTO(out, rc);
+	}
 
 	crt_ctx = crt_context_lookup(ctx_idx);
 	if (crt_ctx == CRT_CONTEXT_NULL) {
@@ -244,13 +346,9 @@ static int crt_swim_send_message(struct swim_context *ctx, swim_id_t to,
 	ep.ep_rank = (d_rank_t)to;
 	ep.ep_tag  = ctx_idx;
 
-	if (nupds > 0 && upds[0].smu_state.sms_status == SWIM_MEMBER_INACTIVE)
-		opc_idx = 1;
-
-	opc = CRT_PROTO_OPC(CRT_OPC_SWIM_PROTO, CRT_OPC_SWIM_VERSION, opc_idx);
 	rc = crt_req_create(crt_ctx, &ep, opc, &rpc_req);
 	if (rc) {
-		D_ERROR("crt_req_create() failed rc=%d\n", rc);
+		D_ERROR("crt_req_create() failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -258,24 +356,26 @@ static int crt_swim_send_message(struct swim_context *ctx, swim_id_t to,
 		rc = crt_req_set_timeout(rpc_req, crt_swim_rpc_timeout);
 		if (rc) {
 			D_TRACE_ERROR(rpc_req,
-				"crt_req_set_timeout() failed rc=%d\n", rc);
+				      "crt_req_set_timeout() failed "DF_RC"\n",
+				      DP_RC(rc));
 			crt_req_decref(rpc_req);
 			D_GOTO(out, rc);
 		}
 	}
 
 	rpc_swim_input = crt_req_get(rpc_req);
-	rpc_swim_input->src = swim_self_get(ctx);
+	rpc_swim_input->src = self_id;
 	rpc_swim_input->upds.ca_arrays = upds;
 	rpc_swim_input->upds.ca_count  = nupds;
 
 	D_TRACE_DEBUG(DB_TRACE, rpc_req,
 		"sending opc %#x with %zu updates %lu => %lu\n",
-		opc, nupds, swim_self_get(ctx), to);
+		opc, nupds, self_id, to);
 
 	rc = crt_req_send(rpc_req, crt_swim_cli_cb, ctx);
 	if (rc) {
-		D_TRACE_ERROR(rpc_req, "crt_req_send() failed rc=%d\n", rc);
+		D_TRACE_ERROR(rpc_req, "crt_req_send() failed "DF_RC"\n",
+			      DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 out:
@@ -355,10 +455,11 @@ out:
 static void
 crt_swim_notify_rank_state(d_rank_t rank, struct swim_member_state *state)
 {
-	struct crt_event_cb_priv *cb_priv;
-	enum crt_event_type	 cb_type;
+	struct crt_event_cb_priv *cbs_event;
 	crt_event_cb		 cb_func;
-	void			*cb_arg;
+	void			*cb_args;
+	enum crt_event_type	 cb_type;
+	size_t			 i, cbs_size;
 
 	D_ASSERT(state != NULL);
 	switch (state->sms_status) {
@@ -373,14 +474,16 @@ crt_swim_notify_rank_state(d_rank_t rank, struct swim_member_state *state)
 	}
 
 	/* walk the global list to execute the user callbacks */
-	D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_event_rwlock);
-	d_list_for_each_entry(cb_priv, &crt_plugin_gdata.cpg_event_cbs,
-			      cecp_link) {
-		cb_func = cb_priv->cecp_func;
-		cb_arg  = cb_priv->cecp_args;
-		cb_func(rank, CRT_EVS_SWIM, cb_type, cb_arg);
+	cbs_size = crt_plugin_gdata.cpg_event_size;
+	cbs_event = crt_plugin_gdata.cpg_event_cbs;
+
+	for (i = 0; i < cbs_size; i++) {
+		cb_func = cbs_event[i].cecp_func;
+		cb_args = cbs_event[i].cecp_args;
+		/* check for and execute event callbacks here */
+		if (cb_func != NULL)
+			cb_func(rank, CRT_EVS_SWIM, cb_type, cb_args);
 	}
-	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 }
 
 static int crt_swim_get_member_state(struct swim_context *ctx,
@@ -414,6 +517,9 @@ static int crt_swim_set_member_state(struct swim_context *ctx,
 	struct crt_swim_target	*cst;
 	int			 rc = -DER_NONEXIST;
 
+	if (state->sms_status == SWIM_MEMBER_SUSPECT)
+		state->sms_delay += swim_ping_timeout_get();
+
 	D_SPIN_LOCK(&csm->csm_lock);
 	D_CIRCLEQ_FOREACH(cst, &csm->csm_head, cst_link) {
 		if (cst->cst_id == id) {
@@ -441,13 +547,20 @@ static void crt_swim_progress_cb(crt_context_t crt_ctx, void *arg)
 	if (self_id == SWIM_ID_INVALID)
 		return;
 
+	if (crt_swim_fail_hlc && crt_hlc_get() >= crt_swim_fail_hlc) {
+		crt_swim_should_fail = true;
+		crt_swim_fail_hlc = 0;
+		D_ERROR("*** SWIM id=%lu should fail\n", crt_swim_fail_id);
+	}
+
 	rc = swim_progress(ctx, CRT_SWIM_PROGRESS_TIMEOUT);
 	if (rc == -ESHUTDOWN) {
 		if (grp_priv->gp_size > 1)
 			D_ERROR("SWIM shutdown\n");
 		swim_self_set(ctx, SWIM_ID_INVALID);
 	} else if (rc && rc != -ETIMEDOUT) {
-		D_ERROR("swim_progress() failed rc=%d\n", rc);
+		D_ERROR("swim_progress() failed: %s (%d)\n",
+			strerror(rc), rc);
 	}
 }
 
@@ -489,7 +602,6 @@ int crt_swim_init(int crt_ctx_idx)
 	d_rank_t		 self = grp_priv->gp_self;
 	int			 i, rc;
 
-
 	if (crt_gdata.cg_swim_inited) {
 		D_ERROR("Swim already initialized\n");
 		D_GOTO(out, rc = -DER_ALREADY);
@@ -515,7 +627,8 @@ int crt_swim_init(int crt_ctx_idx)
 			rc = crt_swim_rank_add(grp_priv,
 					grp_membs->rl_ranks[i]);
 			if (rc && rc != -DER_ALREADY) {
-				D_ERROR("crt_swim_rank_add() failed=%d\n", rc);
+				D_ERROR("crt_swim_rank_add() failed "DF_RC"\n",
+					DP_RC(rc));
 				D_GOTO(cleanup, rc);
 			}
 		}
@@ -525,16 +638,40 @@ int crt_swim_init(int crt_ctx_idx)
 
 	rc = crt_proto_register(&crt_swim_proto_fmt);
 	if (rc) {
-		D_ERROR("crt_proto_register() failed=%d\n", rc);
+		D_ERROR("crt_proto_register() failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(cleanup, rc);
 	}
 
 	rc = crt_register_progress_cb(crt_swim_progress_cb, crt_ctx_idx, NULL);
 	if (rc) {
-		D_ERROR("crt_register_progress_cb() failed=%d\n", rc);
+		D_ERROR("crt_register_progress_cb() failed "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(cleanup, rc);
 	}
 
+	if (!d_fault_inject_is_enabled())
+		D_GOTO(out, rc);
+
+	crt_swim_should_fail = false; /* disabled by default */
+	crt_swim_fail_hlc = 0;
+	crt_swim_fail_delay = 10;
+	crt_swim_fail_id = SWIM_ID_INVALID;
+
+	/* Search the attr in inject yml first */
+	d_fa_swim_drop_rpc = d_fault_attr_lookup(CRT_SWIM_FAIL_DROP_RPC);
+	if (d_fa_swim_drop_rpc != NULL) {
+		D_ERROR("*** fa_swim_drop_rpc: id=%u/0x%x, "
+			"interval=%u, max="DF_U64", x=%u, y=%u, args='%s'\n",
+			d_fa_swim_drop_rpc->fa_id,
+			d_fa_swim_drop_rpc->fa_id,
+			d_fa_swim_drop_rpc->fa_interval,
+			d_fa_swim_drop_rpc->fa_max_faults,
+			d_fa_swim_drop_rpc->fa_probability_x,
+			d_fa_swim_drop_rpc->fa_probability_y,
+			d_fa_swim_drop_rpc->fa_argument);
+		if (d_fa_swim_drop_rpc->fa_argument != NULL)
+			crt_swim_fault_init(d_fa_swim_drop_rpc->fa_argument);
+	}
 	D_GOTO(out, rc);
 
 cleanup:
@@ -588,15 +725,15 @@ int crt_swim_enable(struct crt_grp_priv *grp_priv, int crt_ctx_idx)
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		if (rc)
-			D_ERROR("crt_unregister_progress_cb() failed: rc=%d\n",
-				rc);
+			D_ERROR("crt_unregister_progress_cb() failed "DF_RC"\n",
+				DP_RC(rc));
 	}
 	if (old_ctx_idx != crt_ctx_idx) {
 		rc = crt_register_progress_cb(crt_swim_progress_cb,
 					      crt_ctx_idx, NULL);
 		if (rc)
-			D_ERROR("crt_register_progress_cb() failed: rc=%d\n",
-				rc);
+			D_ERROR("crt_register_progress_cb() failed "DF_RC"\n",
+				DP_RC(rc));
 	}
 
 out:
@@ -632,8 +769,8 @@ int crt_swim_disable(struct crt_grp_priv *grp_priv, int crt_ctx_idx)
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		if (rc)
-			D_ERROR("crt_unregister_progress_cb() failed: rc=%d\n",
-				rc);
+			D_ERROR("crt_unregister_progress_cb() failed "DF_RC"\n",
+				DP_RC(rc));
 	}
 
 out:

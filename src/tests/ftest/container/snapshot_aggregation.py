@@ -60,7 +60,8 @@ class SnapshotAggregation(IorTestBase):
             the writes and confirm that deleting the snapshot reduces the pool
             capacity by half.
 
-        :avocado: tags=all,pr,hw,large,container,snapshot,snapshot_aggregation
+        :avocado: tags=all,pr,daily_regression,hw,large,container,snapshot
+        :avocado: tags=snapshot_aggregation
         """
         self.dmg = self.get_dmg_command()
         daos = DaosCommand(self.bin)
@@ -123,7 +124,7 @@ class SnapshotAggregation(IorTestBase):
 
         # Delete the snapshot.
         daos.container_destroy_snap(
-            pool=self.pool.uuid, svc=self.pool.svc_ranks,
+            pool=self.pool.uuid,
             cont=self.container.uuid, epc=self.container.epoch)
 
         # Wait for aggregation to start and finish.

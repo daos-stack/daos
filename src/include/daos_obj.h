@@ -239,7 +239,7 @@ typedef struct {
 	 * Number of entries in the \a iod_recxs for arrays,
 	 * should be 1 if single value.
 	 */
-	unsigned int		iod_nr;
+	uint32_t		iod_nr;
 	/*
 	 * Array of extents, where each extent defines the index of the first
 	 * record in the extent and the number of records to access. If the
@@ -349,7 +349,7 @@ typedef struct {
  * \param[in]	cid	Class Identifier
  * \param[in]	args	Reserved.
  */
-static inline int
+static inline void
 daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
 		     daos_oclass_id_t cid, uint32_t args)
 {
@@ -370,8 +370,6 @@ daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
 	hdr |= ((uint64_t)ofeats << OID_FMT_FEAT_SHIFT);
 	hdr |= ((uint64_t)cid << OID_FMT_CLASS_SHIFT);
 	oid->hi |= hdr;
-
-	return 0;
 }
 
 /**
@@ -899,6 +897,63 @@ daos_obj_anchor_split(daos_handle_t oh, uint32_t *nr, daos_anchor_t *anchors);
  */
 int
 daos_obj_anchor_set(daos_handle_t oh, uint32_t index, daos_anchor_t *anchor);
+
+/**
+ * Open Object Index Table (OIT) of an container
+ *
+ * \param[in]	coh	Container open handle.
+ * \param[in]	epoch	epoch of a snapshot
+ * \param[out]	oh	Returned OIT open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_INVAL	Invalid parameter
+ */
+int
+daos_oit_open(daos_handle_t coh, daos_epoch_t epoch,
+	      daos_handle_t *oh, daos_event_t *ev);
+
+/**
+ * Close an opened Object Index Table (OIT).
+ *
+ * \param[in]	oh	OIT open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ */
+int
+daos_oit_close(daos_handle_t oh, daos_event_t *ev);
+
+/**
+ * Enumerate object IDs snapshotted by the Object Index Table (OIT)
+ *
+ * \param[in]	oh	OIT open handle.
+ * \param[out]	oids	Returned OIDs
+ * \param[out]	oids_nr	Number of returned OIDs
+ * \param[in,out]
+ *		anchor	Hash anchor for the next call, it should be set to
+ *			zeroes for the first call, it should not be changed
+ *			by caller between calls.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ */
+int
+daos_oit_list(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
+	      daos_anchor_t *anchor, daos_event_t *ev);
 
 #if defined(__cplusplus)
 }

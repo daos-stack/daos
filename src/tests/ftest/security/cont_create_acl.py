@@ -46,7 +46,8 @@ class CreateContainterACLTest(ContSecurityTestBase):
                file passed.
             7. Remove all files created
 
-        :avocado: tags=all,pr,security,container_acl,cont_create_acl
+        :avocado: tags=all,daily_regression,security,container_acl
+        :avocado: tags=cont_create_acl
         """
         acl_args = {"tmp_dir": self.tmp,
                     "user": self.current_user,
@@ -68,7 +69,6 @@ class CreateContainterACLTest(ContSecurityTestBase):
             self.fail("    An expected container could not be created")
 
         cont_acl = self.get_container_acl_list(self.pool_uuid,
-                                               self.pool_svc,
                                                self.container_uuid)
         if not self.compare_acl_lists(cont_acl, expected_acl):
             self.fail("    ACL permissions mismatch:\n\t \
@@ -99,7 +99,6 @@ class CreateContainterACLTest(ContSecurityTestBase):
             self.fail("    An expected container could not be created")
 
         cont_acl = self.get_container_acl_list(self.pool_uuid,
-                                               self.pool_svc,
                                                self.container_uuid,
                                                True)
         if not self.compare_acl_lists(cont_acl, expected_acl):

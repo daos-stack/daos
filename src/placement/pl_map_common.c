@@ -40,7 +40,8 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
 
 	d_list_t                *tmp;
 
-	D_DEBUG(DB_PL, "fnew: %u", f_new->fs_shard_idx);
+	D_DEBUG(DB_PL, "fnew: %u/%d/%u/%u", f_new->fs_shard_idx,
+		f_new->fs_tgt_id, f_new->fs_fseq, f_new->fs_status);
 
 	/* All failed shards are sorted by fseq in ascending order */
 	d_list_for_each_prev(tmp, remap_list) {
@@ -196,13 +197,12 @@ int
 remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 		struct daos_obj_shard_md *shard_md, uint32_t r_ver,
 		uint32_t *tgt_id, uint32_t *shard_idx,
-		unsigned int array_size, int myrank, int *idx,
+		unsigned int array_size, int *idx,
 		struct pl_obj_layout *layout, d_list_t *remap_list,
 		bool fill_addition)
 {
 	struct failed_shard     *f_shard;
 	struct pl_obj_shard     *l_shard;
-	int                     rc = 0;
 
 	d_list_for_each_entry(f_shard, remap_list, fs_list) {
 		l_shard = &layout->ol_shards[f_shard->fs_shard_idx];
@@ -210,9 +210,15 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 		if (f_shard->fs_fseq > r_ver)
 			break;
 
+		/**
+		 * NB: due to colrelocation, the data on healthy
+		 * shard might need move to, so let's include
+		 * UPIN status here as well.
+		 */
 		if (f_shard->fs_status == PO_COMP_ST_DOWN ||
 		    f_shard->fs_status == PO_COMP_ST_UP ||
 		    f_shard->fs_status == PO_COMP_ST_DRAIN ||
+		    f_shard->fs_status == PO_COMP_ST_UPIN ||
 		    fill_addition == true) {
 			/*
 			 * Target id is used for rw, but rank is used
@@ -220,21 +226,26 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 			 */
 			if (l_shard->po_shard != -1) {
 				D_ASSERT(f_shard->fs_tgt_id != -1);
-				D_ASSERT(*idx < array_size);
+				if (*idx >= array_size)
+					/*
+					 * Not enough space for this layout in
+					 * the buffer provided by the caller
+					 */
+					return -DER_REC2BIG;
 				tgt_id[*idx] = f_shard->fs_tgt_id;
 				shard_idx[*idx] = l_shard->po_shard;
 				(*idx)++;
 			}
-		} else if (f_shard->fs_tgt_id != -1) {
-			rc = -DER_ALREADY;
-			D_ERROR(""DF_OID" rebuild is done for "
-				"fseq:%d(status:%d)? rbd_ver:%d rc %d\n",
-				DP_OID(md->omd_id), f_shard->fs_fseq,
-				f_shard->fs_status, r_ver, rc);
+		} else {
+			D_DEBUG(DB_REBUILD, ""DF_OID" skip id %u idx %u"
+				"fseq:%d(status:%d)? rbd_ver:%d\n",
+				DP_OID(md->omd_id), f_shard->fs_tgt_id,
+				f_shard->fs_shard_idx, f_shard->fs_fseq,
+				f_shard->fs_status, r_ver);
 		}
 	}
 
-	return rc;
+	return 0;
 }
 
 void
@@ -273,8 +284,13 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		 * one, then it can't be a valid spare, let's skip it
 		 * and try next spare on the ring.
 		 */
-		if (spare_tgt->ta_comp.co_fseq < f_shard->fs_fseq)
+		if (spare_tgt->ta_comp.co_fseq < f_shard->fs_fseq) {
+			D_DEBUG(DB_PL, "spare tgt %u co fs_seq %u"
+				" shard f_seq %u\n", spare_tgt->ta_comp.co_id,
+				spare_tgt->ta_comp.co_fseq,
+				f_shard->fs_fseq);
 			return; /* try next spare */
+		}
 		/*
 		 * If both failed target and spare target are down, then
 		 * add the spare target to the fail list for remap, and
@@ -305,6 +321,9 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 			if (f_shard->fs_fseq < f_tmp->fs_fseq)
 				(*current) = &f_shard->fs_list;
 		}
+		D_DEBUG(DB_PL, "spare_tgt %u status %u f_seq %u try next.\n",
+			spare_tgt->ta_comp.co_id, spare_tgt->ta_comp.co_status,
+			spare_tgt->ta_comp.co_fseq);
 		return; /* try next spare */
 	}
 next_fail:

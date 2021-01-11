@@ -16,7 +16,7 @@
  * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
  * The Government's rights to use, modify, reproduce, release, perform, display,
  * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B620873.
+ * provided in Contract No. 8F-30005.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
@@ -40,6 +40,37 @@ enum {
 	/* Device is marked as FAULTY */
 	NVME_DEV_FL_FAULTY	= 0x4,
 };
+
+enum bio_dev_state {
+	/* fully functional and in-use */
+	BIO_DEV_NORMAL	= 0,
+	/* evicted device */
+	BIO_DEV_FAULTY,
+	/* unplugged device */
+	BIO_DEV_OUT,
+	/* new device not currently in-use */
+	BIO_DEV_NEW,
+};
+
+/*
+ * Convert device state to human-readable string
+ *
+ * \param [IN]  state   Device state
+ *
+ * \return              Static string representing enum value
+ */
+static inline char *
+bio_dev_state_enum_to_str(enum bio_dev_state state)
+{
+	switch (state) {
+	case BIO_DEV_NORMAL: return "NORMAL";
+	case BIO_DEV_FAULTY: return "EVICTED";
+	case BIO_DEV_OUT:    return "UNPLUGGED";
+	case BIO_DEV_NEW:    return "NEW";
+	}
+
+	return "Undefined state";
+}
 
 #define HEALTH_STAT_STR_LEN 128
 

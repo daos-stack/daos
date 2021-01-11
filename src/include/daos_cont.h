@@ -62,6 +62,8 @@ typedef struct {
 	uuid_t			ci_uuid;
 	/** Epoch of latest persistent snapshot */
 	daos_epoch_t		ci_lsnapshot;
+	/** Redundancy factor */
+	uint32_t		ci_redun_fac;
 	/** Number of snapshots */
 	uint32_t		ci_nsnapshots;
 	/** Epochs of returns snapshots */
@@ -560,6 +562,32 @@ daos_cont_subscribe(daos_handle_t coh, daos_epoch_t *epoch, daos_event_t *ev);
 int
 daos_cont_create_snap(daos_handle_t coh, daos_epoch_t *epoch, char *name,
 		      daos_event_t *ev);
+
+enum daos_snapshot_opts {
+	/** create snapshot */
+	DAOS_SNAP_OPT_CR	= (1 << 0),
+	/** create OI table for a snapshot */
+	DAOS_SNAP_OPT_OIT	= (1 << 1),
+};
+
+/**
+ * Advanced snapshot function, it can do different things based bits set
+ * in \a opts:
+ * - DAOS_SNAP_OPT_CR
+ *   create a snapshot at the current epoch and return it.
+ * - DAOS_SNAP_OPT_OIT
+ *   create object ID table (OIT) for the snapshot
+ *
+ * \param[in]	coh	Container handle
+ * \param[out]	epoch	returned epoch of persistent snapshot taken.
+ * \param[in]	name	Optional null terminated name for snapshot.
+ * \param[in]	opts	Bit flags, see daos_snapshot_opts
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ */
+int
+daos_cont_create_snap_opt(daos_handle_t coh, daos_epoch_t *epoch, char *name,
+			  enum daos_snapshot_opts opts, daos_event_t *ev);
 
 /**
  * List all the snapshots of a container and optionally retrieve the snapshot

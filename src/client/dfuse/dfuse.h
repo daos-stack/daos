@@ -46,6 +46,7 @@ struct dfuse_info {
 	char				*di_group;
 	char				*di_mountpoint;
 	d_rank_list_t			*di_svcl;
+	uint32_t			di_thread_count;
 	bool				di_threaded;
 	bool				di_foreground;
 	bool				di_direct_io;
@@ -68,8 +69,6 @@ struct dfuse_projection_info {
 	uint32_t			dpi_max_write;
 	/** Hash table of open inodes, this matches kernel ref counts */
 	struct d_hash_table		dpi_iet;
-	/** Hash table of all known/seen inodes */
-	struct d_hash_table		dpi_irt;
 	/** Next available inode number */
 	ATOMIC uint64_t			dpi_ino_next;
 	/* Event queue for async events */
@@ -190,6 +189,7 @@ struct dfuse_dfs {
 	daos_handle_t		dfs_coh;
 	daos_cont_info_t	dfs_co_info;
 	ino_t			dfs_root;
+	ino_t			dfs_ino;
 	double			dfs_attr_timeout;
 	/* List of dfuse_dfs entries in the dfuse_pool */
 	d_list_t		dfs_list;
@@ -275,6 +275,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 		LOG_MODE((HANDLE), _flag, O_PATH);			\
 		LOG_MODE((HANDLE), _flag, O_SYNC);			\
 		LOG_MODE((HANDLE), _flag, O_TRUNC);			\
+		LOG_MODE((HANDLE), _flag, O_NOFOLLOW);			\
 		if (_flag)						\
 			DFUSE_TRA_ERROR(HANDLE, "Flags 0%o", _flag);	\
 	} while (0)
@@ -332,7 +333,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define DFUSE_REPLY_ATTR(ie, req, attr)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(ie, "Returning attr mode %#x dir:%d",	\
+		DFUSE_TRA_DEBUG(ie, "Returning attr mode %#o dir:%d",	\
 				(attr)->st_mode,			\
 				S_ISDIR(((attr)->st_mode)));		\
 		__rc = fuse_reply_attr(req, attr,			\
@@ -343,13 +344,13 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_READLINK(req, path)					\
+#define DFUSE_REPLY_READLINK(ie, req, path)				\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(req, "Returning path '%s'", path);	\
+		DFUSE_TRA_DEBUG(ie, "Returning target '%s'", path);	\
 		__rc = fuse_reply_readlink(req, path);			\
 		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(req,				\
+			DFUSE_TRA_ERROR(ie,				\
 					"fuse_reply_readlink returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
@@ -427,7 +428,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(desc,					\
-				"Returning entry inode %li mode %#x dir:%d", \
+				"Returning entry inode %#lx mode %#o dir:%d", \
 				(entry).attr.st_ino,			\
 				(entry).attr.st_mode,			\
 				S_ISDIR((entry).attr.st_mode));		\
@@ -479,6 +480,11 @@ struct dfuse_inode_entry {
 
 	dfs_obj_t		*ie_obj;
 
+	/** DAOS object ID of the dfs object.  Used for uniquely identifying
+	 * files
+	 */
+	daos_obj_id_t		ie_oid;
+
 	/** The name of the entry, relative to the parent.
 	 * This would have been valid when the inode was first observed
 	 * however may be incorrect at any point after that.  It may not
@@ -519,36 +525,33 @@ struct dfuse_inode_entry {
 	bool			ie_root;
 };
 
-/**
- * Inode record.
+/* Generate the inode to use for this dfs object.  This is generating a single
+ * 64 bit number from three 64 bit numbers so will not be perfect but does
+ * avoid most conflicts.
  *
- * Describes all inodes observed by the system since start, including all inodes
- * known by the kernel, and all inodes that have been in the past.
- *
- * This is needed to be able to generate 64 bit inode numbers from 128 bit DAOS
- * objects, to support multiple containers/pools within a filesystem and to
- * provide consistent inode numbering for the same file over time, even if the
- * kernel cache is dropped, for example because of memory pressure.
+ * Take the sequence parts of both the hi and lo object id and put them in
+ * different parts of the inode, then or in the inode number of the root
+ * of this dfs object, to avoid conflicts across containers.
  */
-struct dfuse_inode_record_id {
-	struct dfuse_dfs	*irid_dfs;
-	daos_obj_id_t		irid_oid;
-};
+static inline int
+dfuse_compute_inode(struct dfuse_dfs *dfs,
+		    daos_obj_id_t *oid,
+		    ino_t *_ino)
+{
+	uint64_t hi;
 
-struct dfuse_inode_record {
-	struct dfuse_inode_record_id	ir_id;
-	d_list_t			ir_htl;
-	ino_t				ir_ino;
+	hi = (oid->hi & (-1ULL >> 32)) | (dfs->dfs_root << 48);
+
+	*_ino = hi ^ (oid->lo << 32);
+	return 0;
 };
 
 /* dfuse_inode.c */
 
-int
-dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
-		   struct dfuse_dfs *dfs,
-		   daos_obj_id_t *oid,
-		   ino_t *_ino);
-
+/* This should probably be replaced with a entry pointer in the dfs which
+ * would improve lookup speed when accessing containers/pools, however needs
+ * thorough testing with respect to ref counting
+ */
 int
 dfuse_check_for_inode(struct dfuse_projection_info *fs_handle,
 		      struct dfuse_dfs *dfs,

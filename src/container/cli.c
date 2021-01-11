@@ -456,13 +456,14 @@ dc_cont_alloc(const uuid_t uuid)
 	return dc;
 }
 
-static void
+static int
 dc_cont_props_init(struct dc_cont *cont)
 {
 	uint32_t	csum_type = cont->dc_props.dcp_csum_type;
 	uint32_t	compress_type = cont->dc_props.dcp_compress_type;
 	uint32_t	encrypt_type = cont->dc_props.dcp_encrypt_type;
 	bool		dedup_only = false;
+	int		rc;
 
 	cont->dc_props.dcp_compress_enabled =
 			daos_cont_compress_prop_is_enabled(compress_type);
@@ -475,13 +476,15 @@ dc_cont_props_init(struct dc_cont *cont)
 	}
 
 	if (!daos_cont_csum_prop_is_enabled(csum_type))
-		return;
+		return 0;
 
-	daos_csummer_init_with_type(&cont->dc_csummer, csum_type,
+	rc = daos_csummer_init_with_type(&cont->dc_csummer, csum_type,
 				    cont->dc_props.dcp_chunksize, 0);
 
 	if (dedup_only)
 		dedup_configure_csummer(cont->dc_csummer, &cont->dc_props);
+
+	return rc;
 }
 
 struct cont_open_args {
@@ -540,7 +543,9 @@ cont_open_complete(tse_task_t *task, void *data)
 	cont->dc_pool_hdl = arg->hdl;
 
 	daos_props_2cont_props(out->coo_prop, &cont->dc_props);
-	rc = daos_csummer_init_with_props(&cont->dc_csummer, out->coo_prop);
+	rc = dc_cont_props_init(cont);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
@@ -555,6 +560,7 @@ cont_open_complete(tse_task_t *task, void *data)
 		D_GOTO(out, rc = 0);
 
 	uuid_copy(arg->coa_info->ci_uuid, cont->dc_uuid);
+	arg->coa_info->ci_redun_fac = cont->dc_props.dcp_redun_fac;
 
 	/* TODO */
 	arg->coa_info->ci_nsnapshots = 0;
@@ -629,7 +635,8 @@ dc_cont_open(tse_task_t *task)
 	in->coi_prop_bits	= DAOS_CO_QUERY_PROP_CSUM |
 				  DAOS_CO_QUERY_PROP_CSUM_CHUNK |
 				  DAOS_CO_QUERY_PROP_DEDUP |
-				  DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD;
+				  DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD |
+				  DAOS_CO_QUERY_PROP_REDUN_FAC;
 	arg.coa_pool		= pool;
 	arg.coa_info		= args->info;
 	arg.rpc			= rpc;
@@ -883,6 +890,8 @@ cont_query_complete(tse_task_t *task, void *data)
 	uuid_copy(arg->cqa_info->ci_uuid, cont->dc_uuid);
 
 	arg->cqa_info->ci_hae = out->cqo_hae;
+	arg->cqa_info->ci_redun_fac = cont->dc_props.dcp_redun_fac;
+
 	/* TODO */
 	arg->cqa_info->ci_nsnapshots = 0;
 	arg->cqa_info->ci_snapshots = NULL;
@@ -934,6 +943,7 @@ cont_query_bits(daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_DEDUP_THRESHOLD:
 			bits |= DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD;
+			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			bits |= DAOS_CO_QUERY_PROP_REDUN_FAC;
 			break;
@@ -1619,6 +1629,7 @@ struct dc_cont_glob {
 	uint32_t	dcg_compress_type;
 	uint32_t	dcg_csum_chunksize;
 	uint32_t        dcg_dedup_th;
+	uint32_t	dcg_redun_fac;
 	uint32_t	dcg_csum_srv_verify:1,
 			dcg_dedup_enabled:1,
 			dcg_dedup_verify:1;
@@ -1693,6 +1704,7 @@ dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 	cont_glob->dcg_dedup_th		= cont->dc_props.dcp_dedup_size;
 	cont_glob->dcg_compress_type	= cont->dc_props.dcp_compress_type;
 	cont_glob->dcg_encrypt_type	= cont->dc_props.dcp_encrypt_type;
+	cont_glob->dcg_redun_fac	= cont->dc_props.dcp_redun_fac;
 
 	dc_pool_put(pool);
 out_cont:
@@ -1776,7 +1788,10 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	cont->dc_props.dcp_dedup_verify  = cont_glob->dcg_dedup_verify;
 	cont->dc_props.dcp_compress_type = cont_glob->dcg_compress_type;
 	cont->dc_props.dcp_encrypt_type	 = cont_glob->dcg_encrypt_type;
-	dc_cont_props_init(cont);
+	cont->dc_props.dcp_redun_fac	 = cont_glob->dcg_redun_fac;
+	rc = dc_cont_props_init(cont);
+	if (rc != 0)
+		D_GOTO(out_cont, rc);
 
 	dc_cont_hdl_link(cont);
 	dc_cont2hdl(cont, coh);
@@ -1819,7 +1834,7 @@ dc_cont_global2local(daos_handle_t poh, d_iov_t glob, daos_handle_t *coh)
 		D_ASSERT(cont_glob->dcg_magic == DC_CONT_GLOB_MAGIC);
 
 	} else if (cont_glob->dcg_magic != DC_CONT_GLOB_MAGIC) {
-		D_ERROR("Bad hgh_magic: 0x%x.\n", cont_glob->dcg_magic);
+		D_ERROR("Bad hgh_magic: %#x.\n", cont_glob->dcg_magic);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -2333,16 +2348,18 @@ cont_epoch_op_req_complete(tse_task_t *task, void *data)
 
 int
 dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
-	    tse_task_t *task)
+	    unsigned int opts, tse_task_t *task)
 {
 	struct cont_epoch_op_in	*in;
 	struct epoch_op_arg	 arg;
 	int			 rc;
 
-	/* Check incoming arguments. */
+	/* Check incoming arguments. For CONT_SNAP_CREATE, epoch is out only. */
 	D_ASSERT(epoch != NULL);
-	if (*epoch >= DAOS_EPOCH_MAX)
-		D_GOTO(out, rc = -DER_OVERFLOW);
+	if (opc != CONT_SNAP_CREATE) {
+		if (*epoch >= DAOS_EPOCH_MAX)
+			D_GOTO(out, rc = -DER_OVERFLOW);
+	}
 
 	rc = cont_req_prepare(coh, opc, daos_task2ctx(task), &arg.eoa_req);
 	if (rc != 0)
@@ -2354,7 +2371,9 @@ dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 		DP_UUID(arg.eoa_req.cra_cont->dc_cont_hdl), *epoch);
 
 	in = crt_req_get(arg.eoa_req.cra_rpc);
-	in->cei_epoch = *epoch;
+	if (opc != CONT_SNAP_CREATE)
+		in->cei_epoch = *epoch;
+	in->cei_opts  = opts;
 
 	arg.eoa_epoch = epoch;
 
@@ -2392,7 +2411,8 @@ dc_cont_aggregate(tse_task_t *task)
 		return -DER_INVAL;
 	}
 
-	return dc_epoch_op(args->coh, CONT_EPOCH_AGGREGATE, &args->epoch, task);
+	return dc_epoch_op(args->coh, CONT_EPOCH_AGGREGATE, &args->epoch,
+			   0, task);
 }
 
 int
@@ -2419,6 +2439,11 @@ dc_cont_create_snap(tse_task_t *task)
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
+	if (!(args->opts & DAOS_SNAP_OPT_CR)) {
+		D_ERROR("Specified snapshot is not supported\n");
+		return -DER_NOSYS;
+	}
+
 	if (args->name != NULL) {
 		D_ERROR("Named Snapshots not yet supported\n");
 		tse_task_complete(task, -DER_NOSYS);
@@ -2430,8 +2455,8 @@ dc_cont_create_snap(tse_task_t *task)
 		return -DER_INVAL;
 	}
 
-	*args->epoch = crt_hlc_get();
-	return dc_epoch_op(args->coh, CONT_SNAP_CREATE, args->epoch, task);
+	return dc_epoch_op(args->coh, CONT_SNAP_CREATE, args->epoch,
+			   args->opts, task);
 }
 
 int
@@ -2455,7 +2480,7 @@ dc_cont_destroy_snap(tse_task_t *task)
 	}
 
 	return dc_epoch_op(args->coh, CONT_SNAP_DESTROY, &args->epr.epr_lo,
-			   task);
+			   0, task);
 
 err:
 	tse_task_complete(task, -DER_INVAL);
@@ -2651,6 +2676,23 @@ dc_cont_hdl2pool_hdl(daos_handle_t coh)
 	dc_cont_put(dc);
 	return ph;
 }
+
+int
+dc_cont_hdl2redunfac(daos_handle_t coh)
+{
+	struct dc_cont	*dc;
+	int		 rc;
+
+	dc = dc_hdl2cont(coh);
+	if (dc == NULL)
+		return -DER_NO_HDL;
+
+	rc = dc->dc_props.dcp_redun_fac;
+	dc_cont_put(dc);
+
+	return rc;
+}
+
 struct daos_csummer *
 dc_cont_hdl2csummer(daos_handle_t coh)
 {

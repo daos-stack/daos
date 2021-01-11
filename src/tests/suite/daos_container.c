@@ -172,8 +172,8 @@ co_attribute(void **state)
 	WAIT_ON_ASYNC(arg, ev);
 	print_message("Verifying All Names..\n");
 	assert_int_equal(total_size, (name_sizes[0] + name_sizes[1]));
-	assert_string_equal(out_buf, names[0]);
-	assert_string_equal(out_buf + name_sizes[0], names[1]);
+	assert_string_equal(out_buf, names[1]);
+	assert_string_equal(out_buf + name_sizes[1], names[0]);
 
 	print_message("getting container attributes %ssynchronously ...\n",
 		      arg->async ? "a" : "");
@@ -229,7 +229,7 @@ ace_has_permissions(struct daos_ace *ace, uint64_t exp_perms)
 	}
 
 	if (ace->dae_allow_perms != exp_perms) {
-		print_message("ACE had perms: 0x%lx (expected: 0x%lx)\n",
+		print_message("ACE had perms: %#lx (expected: %#lx)\n",
 			      ace->dae_allow_perms, exp_perms);
 		daos_ace_dump(ace, 0);
 		return false;
@@ -344,7 +344,7 @@ co_properties(void **state)
 	if (arg->myrank == 0) {
 		rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
 		assert_int_equal(rc, 0);
-		rc = daos_mgmt_set_params(arg->group, info.pi_leader,
+		rc = daos_debug_set_params(arg->group, info.pi_leader,
 			DMG_KEY_FAIL_LOC, DAOS_FORCE_PROP_VERIFY, 0, NULL);
 		assert_int_equal(rc, 0);
 	}
@@ -421,7 +421,7 @@ co_properties(void **state)
 	D_FREE(exp_owner_grp);
 
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -456,7 +456,7 @@ co_op_retry(void **state)
 	print_message("success\n");
 
 	print_message("setting DAOS_CONT_QUERY_FAIL_CORPC ... ");
-	rc = daos_mgmt_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
+	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
 				  DAOS_CONT_QUERY_FAIL_CORPC | DAOS_FAIL_ONCE,
 				  0, NULL);
 	assert_int_equal(rc, 0);
@@ -468,7 +468,7 @@ co_op_retry(void **state)
 	print_message("success\n");
 
 	print_message("setting DAOS_CONT_CLOSE_FAIL_CORPC ... ");
-	rc = daos_mgmt_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
+	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
 				  DAOS_CONT_CLOSE_FAIL_CORPC | DAOS_FAIL_ONCE,
 				  0, NULL);
 	assert_int_equal(rc, 0);
@@ -480,7 +480,7 @@ co_op_retry(void **state)
 	print_message("success\n");
 
 	print_message("setting DAOS_CONT_DESTROY_FAIL_CORPC ... ");
-	rc = daos_mgmt_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
+	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
 				  DAOS_CONT_DESTROY_FAIL_CORPC | DAOS_FAIL_ONCE,
 				  0, NULL);
 	assert_int_equal(rc, 0);
@@ -636,7 +636,7 @@ co_acl(void **state)
 	if (arg->myrank == 0) {
 		rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
 		assert_int_equal(rc, 0);
-		rc = daos_mgmt_set_params(arg->group, info.pi_leader,
+		rc = daos_debug_set_params(arg->group, info.pi_leader,
 			DMG_KEY_FAIL_LOC, DAOS_FORCE_PROP_VERIFY, 0, NULL);
 		assert_int_equal(rc, 0);
 	}
@@ -721,7 +721,7 @@ co_acl(void **state)
 
 	/* Clean up */
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -2055,6 +2055,8 @@ co_open_fail_destroy(void **state)
 	daos_cont_info_t info;
 	int		 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (arg->myrank != 0)
 		return;
 
@@ -2066,7 +2068,7 @@ co_open_fail_destroy(void **state)
 	print_message("success\n");
 
 	print_message("setting DAOS_CONT_OPEN_FAIL ... ");
-	rc = daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+	rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				  DAOS_CONT_OPEN_FAIL | DAOS_FAIL_ONCE,
 				  0, NULL);
 	assert_int_equal(rc, 0);

@@ -199,8 +199,8 @@ int main(void)
 		}
 
 		sleep(2);
-		rc = tc_wait_for_ranks(g_main_ctx, grp, rank_list, 0,
-				1, 10, 100.0);
+		rc = tc_wait_for_ranks(g_main_ctx, grp, rank_list,
+				       0, 1, 10, 100.0);
 		if (rc != 0) {
 			D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
 			assert(0);
@@ -208,9 +208,7 @@ int main(void)
 
 		d_rank_list_free(rank_list);
 		rank_list = NULL;
-	}
 
-	if (my_rank == 0) {
 		DBG_PRINT("Rank 0 sending CORPC call\n");
 		rc = crt_corpc_req_create(g_main_ctx, NULL, &excluded_membs,
 			CRT_PROTO_OPC(TEST_CORPC_PREFWD_BASE,

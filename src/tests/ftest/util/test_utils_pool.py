@@ -22,16 +22,16 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import os
-from time import sleep
+from time import sleep, time
 import ctypes
 
 from test_utils_base import TestDaosApiBase
 
 from avocado import fail_on
 from command_utils import BasicParameter, CommandFailure
-from pydaos.raw import (DaosApiError, DaosServer, DaosPool, c_uuid_to_str,
-                        daos_cref)
-from general_utils import check_pool_files, DaosTestError, run_command
+from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
+from general_utils import (check_pool_files, DaosTestError, run_command,
+                           convert_list)
 from env_modules import load_mpi
 
 
@@ -64,14 +64,16 @@ class TestPool(TestDaosApiBase):
         self.target_list = BasicParameter(None)
         self.scm_size = BasicParameter(None)
         self.nvme_size = BasicParameter(None)
-        self.prop_name = BasicParameter(None)      # name of property to be set
-        self.prop_value = BasicParameter(None)     # value of property
+        self.prop_name = BasicParameter(None)       # name of property to be set
+        self.prop_value = BasicParameter(None)      # value of property
+        self.rebuild_timeout = BasicParameter(None)
 
         self.pool = None
         self.uuid = None
         self.info = None
         self.svc_ranks = None
         self.connected = False
+
         self.dmg = dmg_command
         self.query_data = []
 
@@ -120,28 +122,31 @@ class TestPool(TestDaosApiBase):
                 "Error: control method {} not supported for create()".format(
                     self.control_method.value))
 
-        elif self.control_method.value == self.USE_DMG and self.dmg:
-            # Create a pool with the dmg command
+        if self.control_method.value == self.USE_DMG and self.dmg:
+            # Create a pool with the dmg command and store its CmdResult
             self._log_method("dmg.pool_create", kwargs)
             data = self.dmg.pool_create(**kwargs)
+            if self.dmg.result.exit_status == 0:
+                # Populate the empty DaosPool object with the properties of the
+                # pool created with dmg pool create.
+                if self.name.value:
+                    self.pool.group = ctypes.create_string_buffer(
+                        self.name.value)
 
-            # Populate the empty DaosPool object with the properties of the pool
-            # created with dmg pool create.
-            if self.name.value:
-                self.pool.group = ctypes.create_string_buffer(self.name.value)
+                # Convert the string of service replicas from the dmg command
+                # output into an ctype array for the DaosPool object using the
+                # same technique used in DaosPool.create().
+                service_replicas = [
+                    int(value) for value in data["svc"].split(",")]
+                rank_t = ctypes.c_uint * len(service_replicas)
+                rank = rank_t(*list([svc for svc in service_replicas]))
+                rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
+                self.pool.svc = daos_cref.RankList(
+                    rl_ranks, len(service_replicas))
 
-            # Convert the string of service replicas from the dmg command output
-            # into an ctype array for the DaosPool object using the same
-            # technique used in DaosPool.create().
-            service_replicas = [int(value) for value in data["svc"].split(",")]
-            rank_t = ctypes.c_uint * len(service_replicas)
-            rank = rank_t(*list([svc for svc in service_replicas]))
-            rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
-            self.pool.svc = daos_cref.RankList(rl_ranks, len(service_replicas))
-
-            # Set UUID and attached to the DaosPool object
-            self.pool.set_uuid_str(data["uuid"])
-            self.pool.attached = 1
+                # Set UUID and attached to the DaosPool object
+                self.pool.set_uuid_str(data["uuid"])
+                self.pool.attached = 1
 
         elif self.control_method.value == self.USE_DMG:
             self.log.error("Error: Undefined dmg command")
@@ -152,10 +157,11 @@ class TestPool(TestDaosApiBase):
                 self.control_method.value)
 
         # Set the TestPool attributes for the created pool
-        self.svc_ranks = [
-            int(self.pool.svc.rl_ranks[index])
-            for index in range(self.pool.svc.rl_nr)]
-        self.uuid = self.pool.get_uuid_str()
+        if self.pool.attached:
+            self.svc_ranks = [
+                int(self.pool.svc.rl_ranks[index])
+                for index in range(self.pool.svc.rl_nr)]
+            self.uuid = self.pool.get_uuid_str()
 
     @fail_on(DaosApiError)
     def connect(self, permission=2):
@@ -253,9 +259,9 @@ class TestPool(TestDaosApiBase):
 
         Args:
             prop_name (str, optional): pool property name. Defaults to
-                None.
+                None, which uses the TestPool.prop_name.value
             prop_value (str, optional): value to be set for the property.
-                Defaults to None.
+                Defaults to None, which uses the TestPool.prop_value.value
 
         Returns:
             None
@@ -265,13 +271,12 @@ class TestPool(TestDaosApiBase):
             self.log.info("Set-prop for Pool: %s", self.uuid)
 
             if self.control_method.value == self.USE_DMG and self.dmg:
-                # set-prop for given pool using dmg
-                if prop_name is not None and prop_value is not None:
-                    self.dmg.pool_set_prop(self.uuid, prop_name,
-                                           prop_value)
-                else:
-                    self.dmg.pool_set_prop(self.uuid, self.prop_name,
-                                           self.prop_value)
+                # If specific values are not provided, use the class values
+                if prop_name is None:
+                    prop_name = self.prop_name.value
+                if prop_value is None:
+                    prop_value = self.prop_value.value
+                self.dmg.pool_set_prop(self.uuid, prop_name, prop_value)
 
             elif self.control_method.value == self.USE_DMG:
                 self.log.error("Error: Undefined dmg command")
@@ -463,8 +468,22 @@ class TestPool(TestDaosApiBase):
             bool: True if pool rebuild is complete; False otherwise
 
         """
-        self.display_pool_rebuild_status()
-        return self.info.pi_rebuild_st.rs_done == 1
+        status = False
+        if self.control_method.value == self.USE_API:
+            self.display_pool_rebuild_status()
+            status = self.info.pi_rebuild_st.rs_done == 1
+        elif self.control_method.value == self.USE_DMG and self.dmg:
+            self.set_query_data()
+            self.log.info(
+                "Pool %s query data: %s\n", self.uuid, self.query_data)
+            status = self.query_data["rebuild"]["status"] == "done"
+        elif self.control_method.value == self.USE_DMG:
+            self.log.error("Error: Undefined dmg command")
+        else:
+            self.log.error(
+                "Error: Undefined control_method: %s",
+                self.control_method.value)
+        return status
 
     def wait_for_rebuild(self, to_start, interval=1):
         """Wait for the rebuild to start or end.
@@ -473,61 +492,101 @@ class TestPool(TestDaosApiBase):
             to_start (bool): whether to wait for rebuild to start or end
             interval (int): number of seconds to wait in between rebuild
                 completion checks
+
+        Raises:
+            TimeoutError:  if rebuild time is specified and exceeded while
+                waiting for rebuild to start or end
+
         """
         self.log.info(
-            "Waiting for rebuild to %s ...",
-            "start" if to_start else "complete")
+            "Waiting for rebuild to %s%s ...",
+            "start" if to_start else "complete",
+            " with a {} second timeout".format(self.rebuild_timeout.value)
+            if self.rebuild_timeout.value is not None else "")
+
+        start = time()
         while self.rebuild_complete() == to_start:
             self.log.info(
                 "  Rebuild %s ...",
                 "has not yet started" if to_start else "in progress")
+            self.set_query_data()
+            if self.rebuild_timeout.value is not None:
+                if time() - start > self.rebuild_timeout.value:
+                    raise DaosTestError(
+                        "TIMEOUT detected after {} seconds while for waiting "
+                        "for rebuild to {}".format(
+                            self.rebuild_timeout.value,
+                            "start" if to_start else "complete"))
             sleep(interval)
+
         self.log.info(
             "Rebuild %s detected", "start" if to_start else "completion")
 
     @fail_on(DaosApiError)
+    @fail_on(CommandFailure)
     def start_rebuild(self, ranks, daos_log):
-        """Kill the specific server ranks using this pool.
+        """Kill/Stop the specific server ranks using this pool.
 
         Args:
             ranks (list): a list of daos server ranks (int) to kill
             daos_log (DaosLog): object for logging messages
 
         Returns:
-            bool: True if the server ranks have been killed and the ranks have
-            been excluded from the pool; False if the pool is undefined
+            bool: True if the server ranks have been killed/stopped and the
+                ranks have been excluded from the pool; False otherwise.
 
         """
+        status = False
         msg = "Killing DAOS ranks {} from server group {}".format(
             ranks, self.name.value)
         self.log.info(msg)
         daos_log.info(msg)
-        for rank in ranks:
-            server = DaosServer(self.context, self.name.value, rank)
-            self._call_method(server.kill, {"force": 1})
-        return self.exclude(ranks, daos_log)
+
+        if self.control_method.value == self.USE_DMG and self.dmg:
+            # Stop desired ranks using dmg
+            self.dmg.system_stop(ranks=convert_list(value=ranks))
+            status = True
+
+        elif self.control_method.value == self.USE_DMG:
+            self.log.error("Error: Undefined dmg command")
+
+        else:
+            self.log.error(
+                "Error: Unsupported control_method: %s",
+                self.control_method.value)
+
+        return status
 
     @fail_on(DaosApiError)
-    def exclude(self, ranks, daos_log):
+    @fail_on(CommandFailure)
+    def exclude(self, ranks, daos_log=None, tgt_idx=None):
         """Manually exclude a rank from this pool.
 
         Args:
             ranks (list): a list daos server ranks (int) to exclude
             daos_log (DaosLog): object for logging messages
+            tgt_idx (string): str of targets to exclude on ranks ex: "1,2"
 
         Returns:
             bool: True if the ranks were excluded from the pool; False if the
                 pool is undefined
 
         """
-        if self.pool:
+        status = False
+        if self.control_method.value == self.USE_API:
             msg = "Excluding server ranks {} from pool {}".format(
                 ranks, self.uuid)
             self.log.info(msg)
-            daos_log.info(msg)
+            if daos_log is not None:
+                daos_log.info(msg)
             self._call_method(self.pool.exclude, {"rank_list": ranks})
-            return True
-        return False
+            status = True
+
+        elif self.control_method.value == self.USE_DMG and self.dmg:
+            self.dmg.pool_exclude(self.uuid, ranks, tgt_idx)
+            status = True
+
+        return status
 
     def check_files(self, hosts):
         """Check if pool files exist on the specified list of hosts.
@@ -560,7 +619,6 @@ class TestPool(TestDaosApiBase):
         self.log.info("Writing %s bytes to pool %s", size, self.uuid)
         env = {
             "DAOS_POOL": self.uuid,
-            "DAOS_SVCL": "1",
             "PYTHONPATH": os.getenv("PYTHONPATH", "")
         }
         if not load_mpi("openmpi"):
@@ -702,3 +760,44 @@ class TestPool(TestDaosApiBase):
                 self.query_data = self.dmg.pool_query(self.pool.get_uuid_str())
             else:
                 self.log.error("Error: Undefined dmg command")
+
+    @fail_on(CommandFailure)
+    def reintegrate(self, rank, tgt_idx=None):
+        """Use dmg to reintegrate the rank and targets into this pool.
+
+        Only supported with the dmg control method.
+        Args:
+            rank (str): daos server rank to reintegrate
+            tgt_idx (string): str of targets to reintegrate on ranks ex: "1,2"
+
+        Returns:
+            bool: True if the rank was reintegrated into the pool; False if the
+            reintegrate failed
+
+        """
+        status = False
+        self.dmg.pool_reintegrate(self.uuid, rank, tgt_idx)
+        status = True
+
+        return status
+
+    @fail_on(CommandFailure)
+    def drain(self, rank, tgt_idx=None):
+        """Use dmg to drain the rank and targets from this pool.
+
+        Only supported with the dmg control method.
+        Args:
+            rank (str): daos server rank to drain
+            tgt_idx (string): str of targets to drain on ranks ex: "1,2"
+
+        Returns:
+            bool: True if the rank was drained from the pool; False if the
+            reintegrate failed
+
+        """
+        status = False
+
+        self.dmg.pool_drain(self.uuid, rank, tgt_idx)
+        status = True
+
+        return status
