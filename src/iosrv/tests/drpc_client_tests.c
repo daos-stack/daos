@@ -358,9 +358,9 @@ test_drpc_verify_notify_ras_event(void **state)
 			    &cuuid, &oid, "exctlop",
 			    "{\"people\":[\"bill\",\"steve\",\"bob\"]}");
 	verify_notify_ras_event(RAS_RANK_NO_RESPONSE,
-				"Example message for no response", RAS_TYPE_INFO,
-				RAS_SEV_WARN, "exhwid", &rank, "exjobid", &puuid,
-				&cuuid, &oid, "exctlop",
+				"Example message for no response",
+				RAS_TYPE_INFO, RAS_SEV_WARN, "exhwid", &rank,
+				"exjobid", &puuid, &cuuid, &oid, "exctlop",
 				"{\"people\":[\"bill\",\"steve\",\"bob\"]}");
 
 	drpc_fini();
