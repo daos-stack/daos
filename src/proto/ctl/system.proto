@@ -52,9 +52,10 @@ message RankResult {
 
 // SystemStopReq supplies system shutdown parameters.
 message SystemStopReq {
-	bool prep = 1; // indicates that the prep stage should be performed
-	bool kill = 2; // indicates that the kill stage should be performed
-	bool force = 3;
+	string sys = 1; // DAOS system name
+	bool prep = 2; // indicates that the prep stage should be performed
+	bool kill = 3; // indicates that the kill stage should be performed
+	bool force = 4;
 	string ranks = 5; // rankset to query
 	string hosts = 6; // hostset to query
 }
@@ -69,6 +70,7 @@ message SystemStopResp {
 
 // SystemResetFormatReq supplies system reset format parameters.
 message SystemResetFormatReq {
+	string sys = 1; // DAOS system name
 	string ranks = 2; // rankset to query
 	string hosts = 3; // hostset to query
 }
@@ -83,6 +85,7 @@ message SystemResetFormatResp {
 
 // SystemStartReq supplies system restart parameters.
 message SystemStartReq {
+	string sys = 1; // DAOS system name
 	string ranks = 2; // rankset to query
 	string hosts = 3; // hostset to query
 }
@@ -97,6 +100,7 @@ message SystemStartResp {
 
 // SystemQueryReq supplies system query parameters.
 message SystemQueryReq {
+	string sys = 1; // DAOS system name
 	string ranks = 2; // rankset to query
 	string hosts = 3; // hostset to query
 }

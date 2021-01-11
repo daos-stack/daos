@@ -47,9 +47,6 @@ import sun.nio.ch.DirectBuffer;
  * <p>
  * The internal buffer and buffer copy may be eliminated later for performance after bench-mark on some workloads.
  *
- * <p>
- * There is a construct parameter <code>preLoadSize</code> for pre-reading more data into the internal buffer for
- * caching purpose.
  */
 public class DaosInputStream extends FSInputStream {
 
@@ -57,8 +54,7 @@ public class DaosInputStream extends FSInputStream {
   private final FileSystem.Statistics stats;
   private final long fileLen;
   private final int bufferCapacity;
-  private final int preLoadSize;
-  private final boolean bufferedReadEnabled;
+  private final int readSize;
 
   private ByteBuffer buffer;
 
@@ -71,12 +67,6 @@ public class DaosInputStream extends FSInputStream {
 
   private static final Logger LOG = LoggerFactory.getLogger(DaosInputStream.class);
 
-  public DaosInputStream(DaosFile daosFile,
-                         FileSystem.Statistics stats,
-                         int bufferCap, int preLoadSize) throws IOException {
-    this(daosFile, stats, ByteBuffer.allocateDirect(bufferCap), preLoadSize);
-  }
-
   /**
    * Constructor with daosFile, Hadoop file system statistics, direct byte buffer, preload size and
    * enabling buffered read.
@@ -84,31 +74,43 @@ public class DaosInputStream extends FSInputStream {
    * DAOS file object
    * @param stats
    * Hadoop file system statistics
-   * @param buffer
-   * direct byte buffer
-   * @param preLoadSize
-   * preload size
+   * @param bufferCap
+   * buffer capacity
+   * @param readSize
+   * size of data to read at each DAOS call.
+   * It overrides bufferCap if it's bigger than bufferCap.
    * @throws IOException
    * DaosIOException
    */
-  public DaosInputStream(DaosFile daosFile,
+  protected DaosInputStream(DaosFile daosFile,
                          FileSystem.Statistics stats,
-                         ByteBuffer buffer, int preLoadSize) throws IOException {
+                         int bufferCap, int readSize) throws IOException {
     this.daosFile = daosFile;
     this.stats = stats;
-    this.buffer = buffer;
+    this.bufferCapacity = readSize > bufferCap ? readSize : bufferCap;
+    this.readSize = readSize;
+    this.buffer = ByteBuffer.allocateDirect(bufferCapacity);
+    this.buffer.limit(0);
+    this.fileLen = daosFile.length();
+  }
+
+  protected DaosInputStream(DaosFile daosFile,
+                            FileSystem.Statistics stats,
+                            ByteBuffer buffer, int readSize) throws IOException {
     if (!(buffer instanceof DirectBuffer)) {
       throw new IllegalArgumentException("Buffer must be instance of DirectBuffer. " + buffer.getClass().getName());
     }
+    this.daosFile = daosFile;
+    this.stats = stats;
+    this.buffer = buffer;
+    this.bufferCapacity = buffer.capacity();
+    if (bufferCapacity < readSize) {
+      throw new IllegalArgumentException("buffer capacity " + bufferCapacity +
+        " should be bigger than readSize " + readSize);
+    }
+    this.readSize = readSize;
     this.buffer.limit(0);
     this.fileLen = daosFile.length();
-    this.bufferCapacity = buffer.capacity();
-    this.preLoadSize = preLoadSize;
-    this.bufferedReadEnabled = preLoadSize > 0;
-    if (bufferCapacity < preLoadSize) {
-      throw new IllegalArgumentException("preLoadSize " + preLoadSize +
-              " should be not greater than buffer capacity " + bufferCapacity);
-    }
   }
 
   @Override
@@ -265,9 +267,7 @@ public class DaosInputStream extends FSInputStream {
     buffer.clear();
 
     length = Math.min(length, bufferCapacity);
-    if (bufferedReadEnabled) {
-      length = Math.max(length, preLoadSize);
-    }
+    length = Math.max(length, readSize);
 
     long currentTime = 0;
     if (LOG.isDebugEnabled()) {
@@ -321,5 +321,9 @@ public class DaosInputStream extends FSInputStream {
 
   public ByteBuffer getBuffer() {
     return buffer;
+  }
+
+  public int getReadSize() {
+    return readSize;
   }
 }

@@ -97,20 +97,22 @@ building those tests.
 
 ### DAOS Source Code
 
-To check out the DAOS source code, run the following command:
+The DAOS repository is hosted on [GitHub](https://github.com/daos-stack/daos).
+
+To checkout the latest stable version, simply run:
 
 ```bash
-$ git clone https://github.com/daos-stack/daos.git
+$ git clone --recurse-submodules -b v1.0.1 https://github.com/daos-stack/daos.git
+```
+
+For the current development version, then run:
+
+```bash
+$ git clone --recurse-submodules https://github.com/daos-stack/daos.git
 ```
 
 This command clones the DAOS git repository (path referred as ${daospath}
-below). Then initialize the submodules with:
-
-```bash
-$ cd ${daospath}
-$ git submodule init
-$ git submodule update
-```
+below) and initializes all the submodules automatically.
 
 ### Building DAOS & Dependencies
 
@@ -167,19 +169,29 @@ container. A minimum of 5GB of DRAM and 16GB of disk space will be required.
 On Mac, please make sure that the Docker settings under
 "Preferences/{Disk, Memory}" are configured accordingly.
 
-### Building from GitHub
+### Building a Docker Image
 
 To build the Docker image directly from GitHub, run the following command:
 
 ```bash
-$ docker build https://github.com/daos-stack/daos.git#master:utils/docker \
-        -f Dockerfile.centos.7 -t daos
+$ docker build https://github.com/daos-stack/daos.git#master \
+        -f utils/docker/Dockerfile.centos.7 -t daos
+```
+
+or from a local tree:
+
+```bash
+$ docker build  . -f utils/docker/Dockerfile.centos.7 -t daos
 ```
 
 This creates a CentOS 7 image, fetches the latest DAOS version from GitHub,
 builds it, and installs it in the image.
 For Ubuntu and other Linux distributions, replace Dockerfile.centos.7 with
 Dockerfile.ubuntu.20.04 and the appropriate version of interest.
+`master` should be replaced by the relevant release tag (e.g. v1.0.1) to
+build a stable version.
+
+### Simple Docker Setup
 
 Once the image created, one can start a container that will eventually run
 the DAOS service:
@@ -187,9 +199,6 @@ the DAOS service:
 ```bash
 $ docker run -it -d --privileged --cap-add=ALL --name server -v /dev:/dev daos
 ```
-
-!!! note
-    Please make sure that the uio_pci_generic module is loaded.
 
 !!! note
     If you want to be more selective with the devices that are exported to the
@@ -202,36 +211,6 @@ $ docker run -it -d --privileged --cap-add=ALL --name server -v /dev:/dev daos
     If Docker is being run on a non-Linux system (e.g., OSX), -v /dev:/dev
     should be removed from the command line.
 
-### Building from a Local Tree
-
-To build from a local tree stored on the host, a volume must be created to share
-the source tree with the Docker container. To do so, execute the following
-command to create a docker image without checking out the DAOS source tree:
-
-```bash
-$ docker build -t daos -f utils/docker/Dockerfile.centos.7 --build-arg NOBUILD=1 .
-```
-
-Then create a container that can access the local DAOS source tree:
-
-```bash
-$ docker run -it -d --privileged --cap-add=ALL --name server \
-        -v ${daospath}:/home/daos/daos:Z -v /dev:/dev daos
-```
-
-${daospath} should be replaced with the full path to your DAOS source tree.
-Regarding the /dev export as volume, the same comments as in the previous
-section apply.
-
-Then execute the following command to build and install DAOS in the
-container:
-
-```bash
-$ docker exec server scons --build-deps=yes install PREFIX=/usr/local
-```
-
-### Simple Docker Setup
-
 The `daos_server_local.yml` configuration file sets up a simple local DAOS
 system with a single server instance running in the container. By default, it
 uses 4GB of DRAM to emulate persistent memory and 16GB of bulk storage under
@@ -243,6 +222,9 @@ The DAOS service can be started in the docker container as follows:
 $ docker exec server daos_server start \
         -o /home/daos/daos/utils/config/examples/daos_server_local.yml
 ```
+
+!!! note
+    Please make sure that the uio_pci_generic module is loaded on the host.
 
 Once started, the DAOS server waits for the administrator to format the system.
 This can be triggered in a different shell, using the following command:

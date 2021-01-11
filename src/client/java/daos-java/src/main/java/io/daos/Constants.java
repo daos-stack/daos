@@ -21,7 +21,9 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-package io.daos.dfs;
+package io.daos;
+
+import java.nio.ByteOrder;
 
 /**
  * value constants.
@@ -29,6 +31,26 @@ package io.daos.dfs;
 public final class Constants {
 
   private Constants() {}
+
+  public static final ByteOrder DEFAULT_ORDER = ByteOrder.nativeOrder();
+
+  public static final String KEY_CHARSET = "UTF-8";
+
+  public static final int KEY_LIST_BATCH_SIZE_DEFAULT = 128;
+
+  public static final int ENCODED_LENGTH_KEY = 2;
+
+  public static final int ENCODED_LENGTH_EXTENT = 4;
+
+  public static final int KEY_LIST_LEN_DEFAULT = 64;
+
+  public static final byte KEY_LIST_CODE_NOT_STARTED = (byte)0;
+  public static final byte KEY_LIST_CODE_IN_USE = (byte)1;
+  public static final byte KEY_LIST_CODE_ANCHOR_END = (byte)2;
+  public static final byte KEY_LIST_CODE_KEY2BIG = (byte)3;
+  public static final byte KEY_LIST_CODE_REACH_LIMIT = (byte)4;
+
+  public static final int KEY_LIST_MAX_BUF_PER_CALL = 64 * 1024;
 
   public static final String POOL_DEFAULT_SERVER_GROUP = "daos_server";
   public static final String POOL_DEFAULT_RANKS = "0";
@@ -47,21 +69,25 @@ public final class Constants {
 
   public static final int ERROR_CODE_NOT_EXIST = 2;
   public static final int ERROR_CODE_FILE_EXIST = 17;
+  public static final int ERROR_CODE_ILLEGAL_ARG = -1003;
+  public static final int ERROR_CODE_REC2BIG = -2013;
 
   public static final String ERROR_NAME_PREFIX = "CUSTOM_ERR";
 
   public static final int CUSTOM_ERROR_BASE = -1000000;
 
   public static final ErrorCode CUSTOM_ERR_NO_POOL_SIZE =
-          new ErrorCode(-1000001, "scm size and nvme size no greater than 0");
+      new ErrorCode(-1000001, "scm size and nvme size no greater than 0");
   public static final ErrorCode CUSTOM_ERR_INCORRECT_SVC_REPLICS =
-          new ErrorCode(-1000002, "failed to parse service replics string");
+      new ErrorCode(-1000002, "failed to parse service replics string");
   public static final ErrorCode CUSTOM_ERR_BUF_ALLOC_FAILED =
-          new ErrorCode(-1000003, "malloc or realloc buffer failed");
+      new ErrorCode(-1000003, "malloc or realloc buffer failed");
   public static final ErrorCode CUSTOM_ERR_TOO_LONG_VALUE =
-          new ErrorCode(-1000004, "value length greater than expected");
+      new ErrorCode(-1000004, "value length greater than expected");
   public static final ErrorCode CUSTOM_ERR_UNS_INVALID =
-          new ErrorCode(-1000005, "invalid argument in UNS");
+      new ErrorCode(-1000005, "invalid argument in UNS");
+  public static final ErrorCode CUSTOM_ERR_OBJECT_INVALID_ARG =
+      new ErrorCode(-1000006, "invalid argument in object");
 
   public static final int FILE_NAME_LEN_MAX = 255;
   public static final int FILE_PATH_LEN_MAX = 4096;

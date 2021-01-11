@@ -208,6 +208,25 @@ static struct crt_proto_rpc_format crt_fi_rpcs[] = {
 
 #undef X
 
+#define X(a, b, c, d, e) case a: return #a;
+
+/* Helper function to convert internally registered RPC opc to str */
+char
+*crt_opc_to_str(crt_opcode_t opc)
+{
+	if (crt_opc_is_swim(opc))
+		return "SWIM";
+
+	switch (opc) {
+	CRT_INTERNAL_RPCS_LIST
+	CRT_FI_RPCS_LIST
+	default:
+		return "DAOS";
+	}
+}
+
+#undef X
+
 /* CRT RPC related APIs or internal functions */
 int
 crt_internal_rpc_register(void)
@@ -423,7 +442,7 @@ int
 crt_req_set_endpoint(crt_rpc_t *req, crt_endpoint_t *tgt_ep)
 {
 	struct crt_rpc_priv	*rpc_priv;
-	struct crt_grp_priv	*grp_priv;
+	struct crt_grp_priv	*grp_priv = NULL;
 	int			 rc = 0;
 
 	if (req == NULL || tgt_ep == NULL) {
@@ -561,7 +580,12 @@ crt_issue_uri_lookup_retry(crt_context_t ctx,
 	int		rc;
 
 	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
-	membs = grp_priv_get_membs(grp_priv);
+
+	/* IF PSRs are specified cycle through them, else use members */
+	if (grp_priv->gp_psr_ranks)
+		membs = grp_priv->gp_psr_ranks;
+	else
+		membs = grp_priv_get_membs(grp_priv);
 
 	/* Note: membership can change between uri lookups, but we don't need
 	 * to handle this case, as it should be rare and will result in rank
@@ -743,12 +767,17 @@ crt_client_get_contact_rank(crt_context_t crt_ctx, crt_group_t *grp,
 
 	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
 
-	membs = grp_priv_get_membs(grp_priv);
+	if (grp_priv->gp_psr_ranks)
+		membs = grp_priv->gp_psr_ranks;
+	else
+		membs = grp_priv_get_membs(grp_priv);
 
 	if (!membs || membs->rl_nr == 0) {
+		/* If list is not set, default to legacy psr */
 		contact_rank = grp_priv->gp_psr_rank;
 		*ret_idx = -1;
 	} else {
+		/* Pick random rank from the list */
 		*ret_idx = rand() % membs->rl_nr;
 		contact_rank = membs->rl_ranks[*ret_idx];
 
