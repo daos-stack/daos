@@ -37,14 +37,14 @@ message FaultDomain {
 
 // PoolCreateReq supplies new pool parameters.
 message PoolCreateReq {
-	uint64 scmbytes = 1; // SCM size in bytes
-	uint64 nvmebytes = 2; // NVMe size in bytes
-	repeated uint32 ranks = 3; // target ranks
-	uint32 numsvcreps = 4; // desired number of pool service replicas
-	string user = 5; // formatted user e.g. "bob@"
-	string usergroup = 6; // formatted group e.g. "builders@"
-	string uuid = 7; // UUID for new pool, generated on the client
-	string sys = 8; // DAOS system identifier
+	string sys = 1; // DAOS system identifier
+	uint64 scmbytes = 2; // SCM size in bytes
+	uint64 nvmebytes = 3; // NVMe size in bytes
+	repeated uint32 ranks = 4; // target ranks
+	uint32 numsvcreps = 5; // desired number of pool service replicas
+	string user = 6; // formatted user e.g. "bob@"
+	string usergroup = 7; // formatted group e.g. "builders@"
+	string uuid = 8; // UUID for new pool, generated on the client
 	repeated string acl = 9; // Access Control Entries in short string format
 	repeated FaultDomain faultDomains = 10; // Fault domains in system
 }
@@ -58,8 +58,8 @@ message PoolCreateResp {
 
 // PoolDestroyReq supplies pool identifier and force flag.
 message PoolDestroyReq {
-	string uuid = 1; // uuid of pool to destroy
-	string sys = 2; // DAOS system identifier
+	string sys = 1; // DAOS system identifier
+	string uuid = 2; // uuid of pool to destroy
 	bool force = 3; // destroy regardless of active connections
 	repeated uint32 svc_ranks = 4; // List of pool service ranks
 }
@@ -71,8 +71,8 @@ message PoolDestroyResp {
 
 // PoolEvictReq supplies pool identifier.
 message PoolEvictReq {
-	string uuid = 1; // uuid of pool to evict
-	string sys = 2; // DAOS system identifier
+	string sys = 1; // DAOS system identifier
+	string uuid = 2; // uuid of pool to evict
 	repeated uint32 svc_ranks = 3; // List of pool service ranks
 	repeated string handles = 4; // Optional list of handles to evict
 }
@@ -84,10 +84,11 @@ message PoolEvictResp {
 
 // PoolExcludeReq supplies pool identifier, rank, and target_idxs.
 message PoolExcludeReq {
-	string uuid = 1; // uuid of pool to add target up to
-	uint32 rank = 2; // target to move to the up state
-	repeated uint32 targetidx = 3; // target ranks
-	repeated uint32 svc_ranks = 4; // List of pool service ranks
+	string sys = 1; // DAOS system identifier
+	string uuid = 2; // uuid of pool to add target up to
+	uint32 rank = 3; // target to move to the up state
+	repeated uint32 targetidx = 4; // target ranks
+	repeated uint32 svc_ranks = 5; // List of pool service ranks
 }
 
 // PoolExcludeResp returns resultant state of Exclude operation.
@@ -97,10 +98,11 @@ message PoolExcludeResp {
 
 // PoolDrainReq supplies pool identifier, rank, and target_idxs.
 message PoolDrainReq {
-	string uuid = 1; // uuid of pool to add target up to
-	uint32 rank = 2; // rank to move to the up state
-	repeated uint32 targetidx = 3; // rank targets
-	repeated uint32 svc_ranks = 4; // List of pool service ranks
+	string sys = 1; // DAOS system identifier
+	string uuid = 2; // uuid of pool to add target up to
+	uint32 rank = 3; // rank to move to the up state
+	repeated uint32 targetidx = 4; // rank targets
+	repeated uint32 svc_ranks = 5; // List of pool service ranks
 }
 
 // PoolDrainResp returns resultant state of Drain operation.
@@ -110,12 +112,13 @@ message PoolDrainResp {
 
 // PoolExtendReq supplies pool identifier and rank list.
 message PoolExtendReq {
-	string uuid = 1; // uuid of pool to add target up to
-	repeated uint32 ranks = 2; // ranks
-	repeated uint32 svc_ranks = 3; // List of pool service ranks
-	uint64 scmbytes = 4; // SCM size in bytes
-	uint64 nvmebytes = 5; // NVMe size in bytes
-	repeated FaultDomain faultDomains = 6; // fault domains in system
+	string sys = 1; // DAOS system identifier
+	string uuid = 2; // uuid of pool to add target up to
+	repeated uint32 ranks = 3; // ranks
+	repeated uint32 svc_ranks = 4; // List of pool service ranks
+	uint64 scmbytes = 5; // SCM size in bytes
+	uint64 nvmebytes = 6; // NVMe size in bytes
+	repeated FaultDomain faultDomains = 7; // fault domains in system
 }
 
 // PoolExtendResp returns resultant state of Extend operation.
@@ -125,10 +128,11 @@ message PoolExtendResp {
 
 // PoolReintegrateReq supplies pool identifier, rank, and target_idxs.
 message PoolReintegrateReq {
-	string uuid = 1; // uuid of pool to add target up to
-	uint32 rank = 2; // target to move to the up state
-	repeated uint32 targetidx = 3; // target ranks
-	repeated uint32 svc_ranks = 4; // List of pool service ranks
+	string sys = 1; // DAOS system identifier
+	string uuid = 2; // uuid of pool to add target up to
+	uint32 rank = 3; // target to move to the up state
+	repeated uint32 targetidx = 4; // target ranks
+	repeated uint32 svc_ranks = 5; // List of pool service ranks
 }
 
 // PoolReintegrateResp returns resultant state of Reintegrate operation.
@@ -154,7 +158,8 @@ message ListPoolsResp {
 // PoolResolveIDReq contains the parameters to resolve a user-friendly pool ID
 // to a UUID for use in API requests.
 message PoolResolveIDReq {
-	string humanID = 1; // Unique pool identifier
+	string sys = 1; // DAOS system identifier
+	string humanID = 2; // Unique pool identifier
 }
 
 // PoolResolveIDResp returns the pool UUID resolved from the request parameters.
@@ -166,8 +171,9 @@ message PoolResolveIDResp {
 // Initial implementation differs from C API
 // (numContainers not provided in request - get whole list)
 message ListContReq {
-	string uuid = 1; // uuid of pool
-	repeated uint32 svc_ranks = 2; // List of pool service ranks
+	string sys = 1; // DAOS system identifier
+	string uuid = 2; // uuid of pool
+	repeated uint32 svc_ranks = 3; // List of pool service ranks
 }
 
 message ListContResp {
@@ -180,8 +186,9 @@ message ListContResp {
 
 // PoolQueryReq represents a pool query request.
 message PoolQueryReq {
-	string uuid = 1;
-	repeated uint32 svc_ranks = 2; // List of pool service ranks
+	string sys = 1; // DAOS system identifier
+	string uuid = 2;
+	repeated uint32 svc_ranks = 3; // List of pool service ranks
 }
 
 // StorageUsageStats represents usage statistics for a storage subsystem.
@@ -223,16 +230,17 @@ message PoolQueryResp {
 
 // PoolSetPropReq represents a request to set a pool property.
 message PoolSetPropReq {
-	string uuid = 1; // uuid of pool to modify
+	string sys = 1; // DAOS system identifier
+	string uuid = 2; // uuid of pool to modify
 	oneof property {
-		string name = 2;   // pool property name
-		uint32 number = 3; // pool property enum
+		string name = 3;   // pool property name
+		uint32 number = 4; // pool property enum
 	}
 	oneof value {
-		string strval = 4; // pool property string value
-		uint64 numval = 5; // pool property numeric value
+		string strval = 5; // pool property string value
+		uint64 numval = 6; // pool property numeric value
 	}
-	repeated uint32 svc_ranks = 6; // List of pool service ranks
+	repeated uint32 svc_ranks = 7; // List of pool service ranks
 }
 
 // PoolSetPropResp represents the result of setting a property.
