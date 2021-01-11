@@ -805,6 +805,8 @@ querymaxd_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	}
 	assert_true(test_ptr[0] == 0);
 
+	assert_true(1 == 0);
+
 	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, NULL,
 			NULL, DAOS_GET_DKEY | DAOS_GET_MAX, mvcc_arg->i, path);
 }
