@@ -767,7 +767,6 @@ fopen:
 		return daos_der2errno(rc);
 	}
 
-
 	if (flags & O_TRUNC) {
 		rc = daos_array_set_size(file->oh, th, 0, NULL);
 		if (rc) {
@@ -2350,8 +2349,6 @@ dfs_open2(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 
 	if (stbuf) {
 		if (!(flags & O_CREAT))
-			return ENOTSUP;
-		if (!S_ISREG(mode) && !S_ISDIR(mode))
 			return ENOTSUP;
 	}
 
