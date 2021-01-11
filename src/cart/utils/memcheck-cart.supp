@@ -197,3 +197,11 @@
    fun:crt_hg_ctx_init
    ...
 }
+{
+   tcp memcheck
+   Memcheck:Param
+   ...
+   fun:process_tx_entry
+   ...
+   fun:HG_Core_progress
+}
