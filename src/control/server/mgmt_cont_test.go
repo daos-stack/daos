@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/events"
@@ -51,6 +52,7 @@ func makeBadBytes(count int) (badBytes []byte) {
 
 func newTestListContReq() *mgmtpb.ListContReq {
 	return &mgmtpb.ListContReq{
+		Sys:  build.DefaultSystemName,
 		Uuid: "12345678-1234-1234-1234-123456789abc",
 	}
 }
@@ -60,7 +62,7 @@ func TestListCont_NoMS(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)
 
 	ms, db := system.MockMembership(t, log, mockTCPResolver)
-	svc := newMgmtSvc(NewIOServerHarness(log), ms, db,
+	svc := newMgmtSvc(NewIOServerHarness(log), ms, db, nil,
 		events.NewPubSub(context.Background(), log))
 
 	resp, err := svc.ListContainers(context.TODO(), newTestListContReq())
@@ -159,6 +161,7 @@ func TestListCont_ManyContSuccess(t *testing.T) {
 
 func newTestContSetOwnerReq() *mgmtpb.ContSetOwnerReq {
 	return &mgmtpb.ContSetOwnerReq{
+		Sys:        build.DefaultSystemName,
 		ContUUID:   "contUUID",
 		PoolUUID:   "poolUUID",
 		Owneruser:  "user@",
@@ -171,7 +174,7 @@ func TestContSetOwner_NoMS(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)
 
 	ms, db := system.MockMembership(t, log, mockTCPResolver)
-	svc := newMgmtSvc(NewIOServerHarness(log), ms, db,
+	svc := newMgmtSvc(NewIOServerHarness(log), ms, db, nil,
 		events.NewPubSub(context.Background(), log))
 
 	resp, err := svc.ContSetOwner(context.TODO(), newTestContSetOwnerReq())
