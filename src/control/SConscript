@@ -49,6 +49,7 @@ def is_release_build(benv):
     return benv.get("BUILD_TYPE") == "release"
 
 def get_build_flags(benv):
+    """Return string of build flags"""
     flags = ""
     if not is_release_build(benv):
         # enable race detector for non-release builds
@@ -96,8 +97,8 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
         denv['ENV']['GOCACHE'] = os.environ['GOCACHE']
     denv.Command(build_bin, src + gurt_lib,
                  'cd %s; %s build -mod vendor -v %s %s %s -o %s %s' %
-                 (gosrc, GO_BIN, go_ldflags(), get_build_flags(denv), get_build_tags(denv),
-                  build_bin, install_src))
+                 (gosrc, GO_BIN, go_ldflags(), get_build_flags(denv),
+                  get_build_tags(denv), build_bin, install_src))
     # Use the intermediate build location in order to play nicely
     # with --install-sandbox.
     denv.InstallAs(install_bin, build_bin)

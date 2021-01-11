@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -551,6 +551,7 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 		return ENOENT;
 
 	switch (entry.mode & S_IFMT) {
+	case S_IFIFO:
 	case S_IFDIR:
 		size = sizeof(entry);
 		break;
@@ -846,8 +847,15 @@ open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
 	if (!exists)
 		return ENOENT;
 
-	if (!S_ISDIR(entry.mode))
+	/* Check that the opened object is the type that's expected, this could
+	 * happen for example if dfs_open() is called with S_IFDIR but without
+	 * O_CREATE and a entry of a different type exists already.
+	 */
+	if ((S_ISDIR(dir->mode) && !S_ISDIR(entry.mode)))
 		return ENOTDIR;
+
+	if ((S_ISFIFO(dir->mode) && !S_ISFIFO(entry.mode)))
+		return EINVAL;
 
 	rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &dir->oh, NULL);
 	if (rc) {
@@ -1266,7 +1274,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	dfs->root.parent_oid.lo = RESERVED_LO;
 	dfs->root.parent_oid.hi = SB_HI;
 	daos_obj_generate_id(&dfs->root.parent_oid, 0, OC_RP_XSF, 0);
-	rc = open_dir(dfs, DAOS_TX_NONE, dfs->super_oh, amode, 0,
+	rc = open_dir(dfs, DAOS_TX_NONE, dfs->super_oh, amode | S_IFDIR, 0,
 		      1, &dfs->root);
 	if (rc) {
 		D_ERROR("Failed to open root object (%d)\n", rc);
@@ -1972,12 +1980,12 @@ dfs_lookup_loop:
 			break;
 		}
 
-		if (!S_ISDIR(entry.mode)) {
+		if (!S_ISDIR(entry.mode) && (!S_ISFIFO(entry.mode))) {
 			D_ERROR("Invalid entry type in path.\n");
 			D_GOTO(err_obj, rc = EINVAL);
 		}
 
-		/* open the directory object */
+		/* open the directory/fifo object */
 		rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &obj->oh,
 				   NULL);
 		if (rc) {
@@ -2220,7 +2228,8 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	obj->mode = entry.mode;
 
 	/** if entry is a file, open the array object and return */
-	if (S_ISREG(entry.mode)) {
+	switch (entry.mode & S_IFMT) {
+	case S_IFREG:
 		rc = daos_array_open_with_attr(dfs->coh, entry.oid,
 			DAOS_TX_NONE, daos_mode, 1, entry.chunk_size ?
 			entry.chunk_size : dfs->attr.da_chunk_size, &obj->oh,
@@ -2246,7 +2255,8 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 			stbuf->st_size = size;
 			stbuf->st_blocks = (stbuf->st_size + (1 << 9) - 1) >> 9;
 		}
-	} else if (S_ISLNK(entry.mode)) {
+		break;
+	case S_IFLNK:
 		/* Create a truncated version of the string */
 		D_STRNDUP(obj->value, entry.value, entry.value_len + 1);
 		if (obj->value == NULL)
@@ -2254,7 +2264,9 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		D_FREE(entry.value);
 		if (stbuf)
 			stbuf->st_size = entry.value_len;
-	} else if (S_ISDIR(entry.mode)) {
+		break;
+	case S_IFIFO:
+	case S_IFDIR:
 		rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &obj->oh,
 				   NULL);
 		if (rc) {
@@ -2263,7 +2275,8 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		}
 		if (stbuf)
 			stbuf->st_size = sizeof(entry);
-	} else {
+		break;
+	default:
 		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
 		D_GOTO(err_obj, rc = EINVAL);
 	}
@@ -2345,6 +2358,7 @@ restart:
 			D_GOTO(out, rc);
 		}
 		break;
+	case S_IFIFO:
 	case S_IFDIR:
 		rc = open_dir(dfs, th, parent->oh, flags, cid, len, obj);
 		if (rc) {
@@ -2407,6 +2421,7 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 		return ENOMEM;
 
 	switch (obj->mode & S_IFMT) {
+	case S_IFIFO:
 	case S_IFDIR:
 		rc = daos_obj_open(dfs->coh, obj->oid, daos_mode,
 				   &new_obj->oh, NULL);
@@ -2627,14 +2642,21 @@ dfs_release(dfs_obj_t *obj)
 	if (obj == NULL)
 		return EINVAL;
 
-	if (S_ISDIR(obj->mode))
+	switch (obj->mode & S_IFMT) {
+	case S_IFIFO:
+	case S_IFDIR:
 		rc = daos_obj_close(obj->oh, NULL);
-	else if (S_ISREG(obj->mode))
+		break;
+	case S_IFREG:
 		rc = daos_array_close(obj->oh, NULL);
-	else if (S_ISLNK(obj->mode))
+		break;
+	case S_IFLNK:
 		D_FREE(obj->value);
-	else
-		D_ASSERT(0);
+		break;
+	default:
+		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
+		rc = EINVAL;
+	}
 
 	if (rc) {
 		D_ERROR("daos_obj_close() failed, " DF_RC "\n", DP_RC(rc));
@@ -3044,7 +3066,6 @@ out:
 int
 dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 {
-	uid_t			euid;
 	daos_handle_t		oh;
 	daos_handle_t		th = DAOS_TX_NONE;
 	bool			exists;
@@ -3080,11 +3101,6 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 			return rc;
 		oh = parent->oh;
 	}
-
-	euid = geteuid();
-	/** only root or owner can change mode */
-	if (euid != 0 && dfs->uid != euid)
-		return EPERM;
 
 	/** sticky bit, set-user-id and set-group-id, not supported yet */
 	if (mode & S_ISVTX || mode & S_ISGID || mode & S_ISUID) {
@@ -3155,7 +3171,6 @@ int
 dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 {
 	daos_handle_t		th = DAOS_TX_NONE;
-	uid_t			euid;
 	daos_key_t		dkey;
 	daos_handle_t		oh;
 	d_sg_list_t		sgl;
@@ -3173,11 +3188,6 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	if (dfs->amode != O_RDWR)
 		return EPERM;
 	if ((obj->flags & O_ACCMODE) == O_RDONLY)
-		return EPERM;
-
-	euid = geteuid();
-	/** only root or owner can change mode */
-	if (euid != 0 && dfs->uid != euid)
 		return EPERM;
 
 	/** Open parent object and fetch entry of obj from it */
