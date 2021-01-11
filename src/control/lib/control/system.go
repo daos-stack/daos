@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/dustin/go-humanize/english"
 	"github.com/golang/protobuf/proto"
@@ -41,6 +42,17 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/system"
+)
+
+const (
+	// SystemJoinTimeout defines the overall amount of time a system join attempt
+	// can take. It should be an extremely generous value, in order to
+	// accommodate (re)joins during leadership upheaval and other scenarios
+	// that are expected to eventually resolve.
+	SystemJoinTimeout = 1 * time.Hour // effectively "forever", just keep retrying
+	// SystemJoinRetryTimeout defines the amount of time a retry attempt can take. It
+	// should be set low in order to ensure that individual join attempts retry quickly.
+	SystemJoinRetryTimeout = 10 * time.Second
 )
 
 type sysRequest struct {
@@ -88,6 +100,7 @@ func (resp *sysResponse) DisplayAbsentHostsRanks() string {
 type SystemJoinReq struct {
 	unaryRequest
 	msRequest
+	retryableRequest
 	ControlAddr *net.TCPAddr
 	UUID        string
 	Rank        system.Rank
@@ -129,8 +142,16 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).Join(ctx, pbReq)
 	})
+	req.SetTimeout(SystemJoinTimeout)
+	req.retryTimeout = SystemJoinRetryTimeout
+	req.retryTestFn = func(err error, _ uint) bool {
+		switch {
+		case IsConnectionError(err), system.IsUnavailable(err):
+			return true
+		}
+		return false
+	}
 	rpcClient.Debugf("DAOS system join request: %+v", pbReq)
-	rpcClient.Debugf("DAOS system join req hosts: %+v", req.HostList)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
@@ -138,7 +159,13 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 	}
 
 	resp := new(SystemJoinResp)
-	return resp, convertMSResponse(ur, resp)
+	if err := convertMSResponse(ur, resp); err != nil {
+		rpcClient.Debugf("DAOS system join failed: %s", err)
+		return nil, err
+	}
+
+	rpcClient.Debugf("DAOS system join response: %+v", resp)
+	return resp, nil
 }
 
 // SystemNotifyReq contains the inputs for the system notify request.
@@ -289,6 +316,7 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 	pbReq := new(ctlpb.SystemQueryReq)
 	pbReq.Hosts = req.Hosts.String()
 	pbReq.Ranks = req.Ranks.String()
+	pbReq.Sys = req.getSystem()
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewMgmtCtlClient(conn).SystemQuery(ctx, pbReq)
@@ -351,6 +379,7 @@ func SystemStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemStartRe
 	pbReq := new(ctlpb.SystemStartReq)
 	pbReq.Hosts = req.Hosts.String()
 	pbReq.Ranks = req.Ranks.String()
+	pbReq.Sys = req.getSystem()
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewMgmtCtlClient(conn).SystemStart(ctx, pbReq)
@@ -420,6 +449,7 @@ func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq)
 	pbReq.Prep = req.Prep
 	pbReq.Kill = req.Kill
 	pbReq.Force = req.Force
+	pbReq.Sys = req.getSystem()
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewMgmtCtlClient(conn).SystemStop(ctx, pbReq)
@@ -497,6 +527,7 @@ func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, resetReq *Syste
 	}
 
 	pbReq := new(ctlpb.SystemResetFormatReq)
+	pbReq.Sys = resetReq.getSystem()
 
 	resetReq.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewMgmtCtlClient(conn).SystemResetFormat(ctx, pbReq)
@@ -569,7 +600,7 @@ type LeaderQueryResp struct {
 func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryReq) (*LeaderQueryResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).LeaderQuery(ctx, &mgmtpb.LeaderQueryReq{
-			System: req.System,
+			Sys: req.System,
 		})
 	})
 	rpcClient.Debugf("DAOS system leader-query request: %s", req)
@@ -587,7 +618,6 @@ func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryRe
 type ListPoolsReq struct {
 	unaryRequest
 	msRequest
-	System string
 }
 
 // ListPoolsResp contains the status of the request and, if successful, the list
@@ -602,7 +632,7 @@ type ListPoolsResp struct {
 func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (*ListPoolsResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).ListPools(ctx, &mgmtpb.ListPoolsReq{
-			Sys: req.System,
+			Sys: req.getSystem(),
 		})
 	})
 	rpcClient.Debugf("DAOS system list-pools request: %s", req)

@@ -162,8 +162,8 @@ tree_cache_create_internal(daos_handle_t toh, unsigned int tree_class,
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
 
-	rc = dbtree_create_inplace(tree_class, 0, 32, &uma, broot,
-				   &root.root_hdl);
+	rc = dbtree_create_inplace(tree_class, BTR_FEAT_DIRECT_KEY, 32,
+				   &uma, broot, &root.root_hdl);
 	if (rc) {
 		D_ERROR("failed to create rebuild tree: "DF_RC"\n", DP_RC(rc));
 		D_FREE(broot);
@@ -183,7 +183,7 @@ tree_cache_create_internal(daos_handle_t toh, unsigned int tree_class,
 	*rootp = val_iov.iov_buf;
 	D_ASSERT(*rootp != NULL);
 out:
-	if (rc < 0 && !daos_handle_is_inval(root.root_hdl))
+	if (rc < 0 && daos_handle_is_valid(root.root_hdl))
 		dbtree_destroy(root.root_hdl, NULL);
 	return rc;
 }
@@ -310,9 +310,9 @@ migrate_pool_tls_destroy(struct migrate_pool_tls *tls)
 					     true /* force */);
 	if (tls->mpt_done_eventual)
 		ABT_eventual_free(&tls->mpt_done_eventual);
-	if (!daos_handle_is_inval(tls->mpt_root_hdl))
+	if (daos_handle_is_valid(tls->mpt_root_hdl))
 		obj_tree_destroy(tls->mpt_root_hdl);
-	if (!daos_handle_is_inval(tls->mpt_migrated_root_hdl))
+	if (daos_handle_is_valid(tls->mpt_migrated_root_hdl))
 		obj_tree_destroy(tls->mpt_migrated_root_hdl);
 	d_list_del(&tls->mpt_list);
 	D_FREE(tls);
@@ -493,8 +493,7 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, int version,
 	arg.clear_conts = clear_conts;
 	arg.max_eph = max_eph;
 	arg.svc_list = (d_rank_list_t *)entry->dpe_val_ptr;
-	rc = dss_task_collective(migrate_pool_tls_create_one, &arg, 0,
-				 DSS_ULT_REBUILD);
+	rc = dss_task_collective(migrate_pool_tls_create_one, &arg, 0);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create migrate tls: %d\n",
 			DP_UUID(pool->sp_uuid), rc);
@@ -1784,7 +1783,7 @@ migrate_start_ult(struct enum_unpack_arg *unpack_arg)
 			mrone->mo_iod_num);
 
 		d_list_del_init(&mrone->mo_list);
-		rc = dss_ult_create(migrate_one_ult, mrone, DSS_ULT_REBUILD,
+		rc = dss_ult_create(migrate_one_ult, mrone, DSS_XS_VOS,
 				    arg->tgt_idx, MIGRATE_STACK_SIZE, NULL);
 		if (rc) {
 			migrate_one_destroy(mrone);
@@ -2009,8 +2008,7 @@ ds_migrate_abort(uuid_t pool_uuid, unsigned int version)
 
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	arg.version = version;
-	rc = dss_thread_collective(migrate_fini_one_ult, &arg, 0,
-				   DSS_ULT_REBUILD);
+	rc = dss_thread_collective(migrate_fini_one_ult, &arg, 0);
 	if (rc)
 		D_ERROR("migrate abort: %d\n", rc);
 
@@ -2020,8 +2018,7 @@ ds_migrate_abort(uuid_t pool_uuid, unsigned int version)
 static int
 migrate_obj_punch(struct iter_obj_arg *arg)
 {
-	return dss_task_collective(migrate_obj_punch_one, arg, 0,
-				   DSS_ULT_REBUILD);
+	return dss_task_collective(migrate_obj_punch_one, arg, 0);
 }
 
 /**
@@ -2117,7 +2114,7 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, unsigned int shard,
 	}
 
 	/* Let's iterate the object on different xstream */
-	rc = dss_ult_create(migrate_obj_ult, obj_arg, DSS_ULT_REBUILD,
+	rc = dss_ult_create(migrate_obj_ult, obj_arg, DSS_XS_VOS,
 			    oid.id_pub.lo % dss_tgt_nr, MIGRATE_STACK_SIZE,
 			    NULL);
 	if (rc == 0) {
@@ -2434,7 +2431,7 @@ migrate_init_object_tree(struct migrate_pool_tls *tls)
 		/* migrate tree root init */
 		memset(&uma, 0, sizeof(uma));
 		uma.uma_id = UMEM_CLASS_VMEM;
-		rc = dbtree_create_inplace(DBTREE_CLASS_NV, 0, 4, &uma,
+		rc = dbtree_create_inplace(DBTREE_CLASS_UV, 0, 4, &uma,
 					   &tls->mpt_root,
 					   &tls->mpt_root_hdl);
 		if (rc != 0) {
@@ -2447,7 +2444,7 @@ migrate_init_object_tree(struct migrate_pool_tls *tls)
 		/* migrate tree root init */
 		memset(&uma, 0, sizeof(uma));
 		uma.uma_id = UMEM_CLASS_VMEM;
-		rc = dbtree_create_inplace(DBTREE_CLASS_NV, 0, 4, &uma,
+		rc = dbtree_create_inplace(DBTREE_CLASS_UV, 0, 4, &uma,
 					   &tls->mpt_migrated_root,
 					   &tls->mpt_migrated_root_hdl);
 		if (rc != 0) {
@@ -2603,8 +2600,8 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 	if (!pool_tls->mpt_ult_running) {
 		pool_tls->mpt_ult_running = 1;
 		migrate_pool_tls_get(pool_tls);
-		rc = dss_ult_create(migrate_ult, pool_tls, DSS_ULT_REBUILD,
-				    DSS_TGT_SELF, 0, NULL);
+		rc = dss_ult_create(migrate_ult, pool_tls, DSS_XS_SELF,
+				    0, 0, NULL);
 		if (rc) {
 			pool_tls->mpt_ult_running = 0;
 			migrate_pool_tls_put(pool_tls);
@@ -2677,7 +2674,7 @@ ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver,
 	if (rc != ABT_SUCCESS)
 		D_GOTO(out, rc);
 
-	rc = dss_thread_collective(migrate_check_one, &arg, 0, DSS_ULT_REBUILD);
+	rc = dss_thread_collective(migrate_check_one, &arg, 0);
 	if (rc)
 		D_GOTO(out, rc);
 

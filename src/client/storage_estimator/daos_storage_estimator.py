@@ -7,14 +7,14 @@ import sys
 from storage_estimator.dfs_sb import get_dfs_example, print_daos_version, get_dfs_inode_akey
 from storage_estimator.parse_csv import ProcessCSV
 from storage_estimator.explorer import FileSystemExplorer
-from storage_estimator.util import ProcessBase
+from storage_estimator.util import Common, ProcessBase
 
 tool_description = '''DAOS estimation tool
 This CLI is able to estimate the SCM/NVMe ratios
 '''
 
 
-class CreateExample(ProcessBase):
+class CreateExample(Common):
     def __init__(self, args):
         super(CreateExample, self).__init__(args)
 
@@ -49,7 +49,7 @@ class ProcessFS(ProcessBase):
 
     def _get_estimate_from_fs(self):
         inode_akey = get_dfs_inode_akey()
-        fse = FileSystemExplorer(args.path[0])
+        fse = FileSystemExplorer(args.path[0], self._oclass)
         fse.set_verbose(args.verbose)
         fse.set_io_size(self.get_io_size())
         fse.set_chunk_size(self.get_chunk_size())
@@ -71,7 +71,7 @@ def process_fs(args):
         sys.exit(-1)
 
 
-class ProcessYAML(ProcessBase):
+class ProcessYAML(Common):
     def __init__(self, args):
         super(ProcessYAML, self).__init__(args)
 
@@ -153,6 +153,18 @@ explore.add_argument(
     action='store_true',
     help='Explain what is being done')
 explore.add_argument(
+    '-t',
+    '--dir_oclass',
+    type=str,
+    help='Predefined object classes. It describes schema of data distribution & protection for directories.',
+    default='S1')
+explore.add_argument(
+    '-r',
+    '--file_oclass',
+    type=str,
+    help='Predefined object classes. It describes schema of data distribution & protection for files.',
+    default='SX')
+explore.add_argument(
     '-x',
     '--average',
     action='store_true',
@@ -167,7 +179,7 @@ explore.add_argument(
     '-c',
     '--chunk_size',
     type=str,
-    help='Chunk size. Must be multiple of I/O size',
+    help='Array chunk size/stripe size for regular files. Must be multiple of I/O size',
     default='1MiB')
 explore.add_argument(
     '-s',
@@ -262,7 +274,7 @@ csv_file.add_argument(
     '--chunk_size',
     dest='chunk_size',
     type=str,
-    help='Array chunk size. Must be multiple of I/O size',
+    help='Array chunk size/stripe size for regular files. Must be multiple of I/O size',
     default='1MiB')
 csv_file.add_argument(
     '-s',
@@ -289,6 +301,18 @@ csv_file.add_argument(
     help='Explain what is being done')
 csv_file.add_argument('-a', '--alloc_overhead', type=int,
                       help='Vos alloc overhead', default=16)
+csv_file.add_argument(
+    '-t',
+    '--dir_oclass',
+    type=str,
+    help='Predefined object classes. It describes schema of data distribution & protection for directories.',
+    default='S1')
+csv_file.add_argument(
+    '-r',
+    '--file_oclass',
+    type=str,
+    help='Predefined object classes. It describes schema of data distribution & protection for files.',
+    default='SX')
 csv_file.add_argument(
     '-m',
     '--meta',
