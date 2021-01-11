@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,8 +32,7 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_inode_entry	*ie;
 	int				rc;
 
-	DFUSE_TRA_INFO(parent,
-		       "Parent:%lu '%s'", parent->ie_stat.st_ino, name);
+	DFUSE_TRA_INFO(parent, "Parent:%lu '%s'", parent->ie_stat.st_ino, name);
 
 	D_ALLOC_PTR(ie);
 	if (!ie)
@@ -53,6 +52,7 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_name[NAME_MAX] = '\0';
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
+	ie->ie_truncated = false;
 	atomic_store_relaxed(&ie->ie_ref, 1);
 
 	rc = ie_set_uid(ie, req);
@@ -73,7 +73,7 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
 release:
 	dfs_release(ie->ie_obj);
 err:
-	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+	DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	D_FREE(ie);
 }
 

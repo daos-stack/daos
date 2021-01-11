@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -124,13 +124,13 @@ struct dfuse_inode_ops {
 	void (*create)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name, mode_t mode,
 		       struct fuse_file_info *fi);
-	void (*mknod)(fuse_req_t req, struct dfuse_inode_entry *parent,
-		      const char *name, mode_t mode);
 	void (*getattr)(fuse_req_t req, struct dfuse_inode_entry *inode);
 	void (*setattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			struct stat *attr, int to_set);
 	void (*lookup)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name);
+	void (*mknod)(fuse_req_t req, struct dfuse_inode_entry *parent,
+		      const char *name, mode_t mode);
 	void (*mkdir)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		      const char *name, mode_t mode);
 	void (*opendir)(fuse_req_t req, struct dfuse_inode_entry *inode,
@@ -362,10 +362,10 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define DFUSE_REPLY_ATTR(ie, req, attr)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o dir:%d",	\
+		DFUSE_TRA_DEBUG(ie,					\
+				"Returning attr inode %#lx mode %#o",	\
 				(attr)->st_ino,				\
-				(attr)->st_mode,			\
-				S_ISDIR(((attr)->st_mode)));		\
+				(attr)->st_mode);			\
 		__rc = fuse_reply_attr(req, attr,			\
 				(ie)->ie_dfs->dfs_attr_timeout);	\
 		if (__rc != 0)						\
@@ -458,10 +458,9 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(desc,					\
-				"Returning entry inode %#lx mode %#o dir:%d", \
+				"Returning entry inode %#lx mode %#o",	\
 				(entry).attr.st_ino,			\
-				(entry).attr.st_mode,			\
-				S_ISDIR((entry).attr.st_mode));		\
+				(entry).attr.st_mode);			\
 		__rc = fuse_reply_entry(req, &entry);			\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(desc,				\
@@ -498,7 +497,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
  * Inode handle.
  *
  * Describes any entry in the projection that the kernel knows about, may
- * be a directory, file,  symbolic link or anything else.
+ * be a directory, file, symbolic link or anything else.
  */
 
 struct dfuse_inode_entry {

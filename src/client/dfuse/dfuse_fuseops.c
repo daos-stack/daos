@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -678,12 +678,12 @@ dfuse_fuse_destroy(void *userdata)
 /* dfuse ops that are used for accessing single-user dfs mounts */
 struct dfuse_inode_ops dfuse_dfs_ops = {
 	.lookup		= dfuse_cb_lookup,
+	.mknod		= dfuse_cb_mknod,
 	.opendir	= dfuse_cb_opendir,
 	.releasedir	= dfuse_cb_releasedir,
 	.getattr	= dfuse_cb_getattr,
 	.unlink		= dfuse_cb_unlink,
 	.create		= dfuse_cb_create,
-	.mknod		= dfuse_cb_mknod,
 	.rename		= dfuse_cb_rename,
 	.symlink	= dfuse_cb_symlink,
 	.setxattr	= dfuse_cb_setxattr,

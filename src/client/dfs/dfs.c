@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -855,12 +855,15 @@ open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
 	if (!exists)
 		return ENOENT;
 
-	/* Check that the opened object is a directory, this might be because
-	 * it's a FIFO which is expected, or because the type has been changed
-	 * from another client since it was created.
+	/* Check that the opened object is the type that's expected, this could
+	 * happen for example if dfs_open() is called with S_IFDIR but without
+	 * O_CREATE and a entry of a different type exists already.
 	 */
-	if ((S_ISDIR(dir->mode) && !S_ISDIR(entry->mode)))
+	if ((S_ISDIR(dir->mode) && !S_ISDIR(entry.mode)))
 		return ENOTDIR;
+
+	if ((S_ISFIFO(dir->mode) && !S_ISFIFO(entry.mode)))
+		return EINVAL;
 
 	rc = daos_obj_open(dfs->coh, entry->oid, daos_mode, &dir->oh, NULL);
 	if (rc) {

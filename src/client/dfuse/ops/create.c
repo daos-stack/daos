@@ -34,7 +34,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct fuse_file_info	        fi_out = {0};
 	int rc;
 
-	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent->ie_stat.st_ino,
+	DFUSE_TRA_INFO(parent, "Parent:%lu '%s'", parent->ie_stat.st_ino,
 		       name);
 
 	/* O_LARGEFILE should always be set on 64 bit systems, and in fact is
@@ -42,7 +42,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	 * would otherwise be using and check that is set.
 	 */
 	if (!(fi->flags & LARGEFILE)) {
-		DFUSE_TRA_INFO(fs_handle, "O_LARGEFILE required 0%o",
+		DFUSE_TRA_INFO(parent, "O_LARGEFILE required 0%o",
 			       fi->flags);
 		D_GOTO(err, rc = ENOTSUP);
 	}
@@ -50,14 +50,14 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	/* Check for flags that do not make sense in this context.
 	 */
 	if (fi->flags & DFUSE_UNSUPPORTED_CREATE_FLAGS) {
-		DFUSE_TRA_INFO(fs_handle, "unsupported flag requested 0%o",
+		DFUSE_TRA_INFO(parent, "unsupported flag requested 0%o",
 			       fi->flags);
 		D_GOTO(err, rc = ENOTSUP);
 	}
 
 	/* Check that only the flag for a regular file is specified */
-	if ((mode & S_IFMT) != S_IFREG) {
-		DFUSE_TRA_INFO(fs_handle,
+	if (!S_ISREG(mode)) {
+		DFUSE_TRA_INFO(parent,
 			       "unsupported mode requested 0%o",
 			       mode);
 		D_GOTO(err, rc = ENOTSUP);
@@ -127,7 +127,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 release1:
 	dfs_release(oh->doh_obj);
 err:
-	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+	DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	D_FREE(oh);
 	D_FREE(ie);
 }

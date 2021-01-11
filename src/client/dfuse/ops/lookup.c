@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,11 +57,6 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		rc = dfuse_get_uid(ie);
 		if (rc)
 			D_GOTO(out_decref, rc);
-	}
-
-	if (ie->ie_stat.st_ino == 0) {
-		DFUSE_TRA_ERROR(ie, "Inode is zero");
-		D_GOTO(out_err, rc = EIO);
 	}
 
 	entry.attr = ie->ie_stat;
