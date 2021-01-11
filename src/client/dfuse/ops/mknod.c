@@ -43,7 +43,7 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
 	DFUSE_TRA_DEBUG(ie, "file '%s' mode 0%o", name, mode);
 
 	rc = dfs_open2(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
-		       mode, O_CREAT | O_RDWR,
+		       mode, O_CREAT | O_EXCL | O_RDWR,
 		       0, 0, NULL, &ie->ie_stat, &ie->ie_obj);
 	if (rc)
 		D_GOTO(err, rc);
@@ -58,6 +58,8 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
 	rc = ie_set_uid(ie, req);
 	if (rc)
 		D_GOTO(release, rc);
+
+	LOG_MODES(ie, mode);
 
 	LOG_MODES(ie, mode);
 

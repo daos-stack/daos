@@ -283,16 +283,11 @@ df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 
 	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (parent_inode->ie_dfs->dfs_ops->mknod) {
-		parent_inode->ie_dfs->dfs_ops->mknod(req, parent_inode,
-						     name, mode | S_IFDIR);
-	} else {
-		if (!parent_inode->ie_dfs->dfs_ops->mkdir)
-			D_GOTO(decref, rc = ENOTSUP);
+	if (!parent_inode->ie_dfs->dfs_ops->mknod)
+		D_GOTO(decref, rc = ENOTSUP);
 
-		parent_inode->ie_dfs->dfs_ops->mkdir(req, parent_inode,
-						     name, mode);
-	}
+	parent_inode->ie_dfs->dfs_ops->mknod(req, parent_inode, name,
+					     mode | S_IFDIR);
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	return;
@@ -739,7 +734,7 @@ struct dfuse_inode_ops dfuse_login_ops = {
 
 struct dfuse_inode_ops dfuse_cont_ops = {
 	.lookup		= dfuse_cont_lookup,
-	.mkdir		= dfuse_cont_mkdir,
+	.mknod		= dfuse_cont_mknod,
 	.statfs		= dfuse_cb_statfs,
 };
 

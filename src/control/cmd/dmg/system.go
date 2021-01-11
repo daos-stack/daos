@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -424,9 +424,9 @@ func (cmd *systemListPoolsCmd) Execute(_ []string) error {
 	}
 
 	ctx := context.Background()
-	resp, err := control.ListPools(ctx, cmd.ctlInvoker, &control.ListPoolsReq{
-		System: cmd.config.SystemName,
-	})
+	req := new(control.ListPoolsReq)
+	req.SetSystem(cmd.config.SystemName)
+	resp, err := control.ListPools(ctx, cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(resp, err)

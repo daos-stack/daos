@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,10 +53,11 @@ func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
 	}
 
 	ctx := context.Background()
-	resp, err := control.GetAttachInfo(ctx, cmd.ctlInvoker, &control.GetAttachInfoReq{
-		System:   cmd.cfg.SystemName,
+	req := &control.GetAttachInfoReq{
 		AllRanks: true,
-	})
+	}
+	req.SetSystem(cmd.cfg.SystemName)
+	resp, err := control.GetAttachInfo(ctx, cmd.ctlInvoker, req)
 	if err != nil {
 		return errors.Wrap(err, "GetAttachInfo failed")
 	}

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -723,6 +723,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		}
 		close(fd);
 	} else if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
+		mode_t		mode = S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH;
 
 		unlink_flag = AT_REMOVEDIR;
 
@@ -742,12 +743,9 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 
 		/** create a new directory if POSIX/MPI-IO container */
 		if (backend_dfuse)
-			rc = mknodat(dfd, spart,
-				     S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH | S_IFIFO,
-				     0);
+			rc = mknodat(dfd, spart, mode | S_IFIFO, 0);
 		else
-			rc = mkdirat(dfd, spart,
-				     S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+			rc = mkdirat(dfd, spart, mode);
 		if (rc == -1) {
 			int err = errno;
 
@@ -767,8 +765,8 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		strcpy(oclass, "UNKNOWN");
 	daos_unparse_ctype(attrp->da_type, type);
 
-	/* create container with specified container uuid (try_multiple=0)
-	 * or a generated random container uuid (try_multiple!=0).
+	/* create container with specified container uuid (try_multiple)
+	 * or a generated random container uuid (!try_multiple).
 	 */
 	if (!uuid_is_null(attrp->da_cuuid)) {
 		try_multiple = false;

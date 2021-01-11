@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -102,6 +102,8 @@ struct crt_grp_priv {
 	 * up to date.
 	 */
 	d_rank_t		 gp_self;
+	/* List of PSR ranks */
+	d_rank_list_t		 *gp_psr_ranks;
 	/* PSR rank in attached group */
 	d_rank_t		 gp_psr_rank;
 	/* PSR phy addr address in attached group */

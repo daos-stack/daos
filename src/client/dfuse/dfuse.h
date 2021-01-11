@@ -131,8 +131,6 @@ struct dfuse_inode_ops {
 		       const char *name);
 	void (*mknod)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		      const char *name, mode_t mode);
-	void (*mkdir)(fuse_req_t req, struct dfuse_inode_entry *parent,
-		      const char *name, mode_t mode);
 	void (*opendir)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			struct fuse_file_info *fi);
 	void (*releasedir)(fuse_req_t req, struct dfuse_inode_entry *inode,
@@ -711,7 +709,7 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		  const char *name);
 
 void
-dfuse_cont_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
+dfuse_cont_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
 		 const char *name, mode_t mode);
 
 /* dfuse_pool.c */

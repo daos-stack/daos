@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -138,6 +138,14 @@ func FaultBdevNotFound(bdevs []string) *fault.Fault {
 		code.ServerBdevNotFound,
 		fmt.Sprintf("NVMe SSD%s %v not found", common.Pluralise("", len(bdevs)), bdevs),
 		fmt.Sprintf("check SSD%s %v that are specified in server config exist", common.Pluralise("", len(bdevs)), bdevs),
+	)
+}
+
+func FaultWrongSystem(reqName, sysName string) *fault.Fault {
+	return serverFault(
+		code.ServerWrongSystem,
+		fmt.Sprintf("request system does not match running system (%s != %s)", reqName, sysName),
+		"retry the request with the correct system name",
 	)
 }
 

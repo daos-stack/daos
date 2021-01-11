@@ -35,6 +35,7 @@ import (
 	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -118,6 +119,7 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 			defer cancel()
 
 			req := &mgmtpb.PoolCreateReq{
+				Sys:      build.DefaultSystemName,
 				Uuid:     common.MockUUID(0),
 				Scmbytes: ioserver.ScmMinBytesPerTarget,
 			}
@@ -149,6 +151,10 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 	}{
 		"nil request": {
 			expErr: errors.New("nil request"),
+		},
+		"wrong system": {
+			req:    &mgmtpb.PoolCreateReq{Uuid: mockUUID, Sys: "bad"},
+			expErr: FaultWrongSystem("bad", build.DefaultSystemName),
 		},
 		"missing superblock": {
 			mgmtSvc:     missingSB,
@@ -286,6 +292,10 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			}
 			tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
 
+			if tc.req != nil && tc.req.Sys == "" {
+				tc.req.Sys = build.DefaultSystemName
+			}
+
 			pcCtx, pcCancel := context.WithTimeout(context.Background(), defaultRetryAfter+10*time.Millisecond)
 			defer pcCancel()
 			gotResp, gotErr := tc.mgmtSvc.PoolCreate(pcCtx, tc.req)
@@ -325,6 +335,7 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 	}
 
 	req := &mgmtpb.PoolCreateReq{
+		Sys:          build.DefaultSystemName,
 		Uuid:         common.MockUUID(),
 		Scmbytes:     100 * humanize.GiByte,
 		Nvmebytes:    10 * humanize.TByte,
@@ -370,6 +381,10 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 	}{
 		"nil request": {
 			expErr: errors.New("nil request"),
+		},
+		"wrong system": {
+			req:    &mgmtpb.PoolDestroyReq{Uuid: mockUUID, Sys: "bad"},
+			expErr: FaultWrongSystem("bad", build.DefaultSystemName),
 		},
 		"missing superblock": {
 			mgmtSvc: missingSB,
@@ -423,6 +438,10 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			}
 			tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
 
+			if tc.req != nil && tc.req.Sys == "" {
+				tc.req.Sys = build.DefaultSystemName
+			}
+
 			gotResp, gotErr := tc.mgmtSvc.PoolDestroy(context.TODO(), tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
@@ -456,6 +475,10 @@ func TestServer_MgmtSvc_PoolDrain(t *testing.T) {
 	}{
 		"nil request": {
 			expErr: errors.New("nil request"),
+		},
+		"wrong system": {
+			req:    &mgmtpb.PoolDrainReq{Uuid: mockUUID, Sys: "bad"},
+			expErr: FaultWrongSystem("bad", build.DefaultSystemName),
 		},
 		"missing superblock": {
 			mgmtSvc: missingSB,
@@ -511,6 +534,10 @@ func TestServer_MgmtSvc_PoolDrain(t *testing.T) {
 			}
 			tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
 
+			if tc.req != nil && tc.req.Sys == "" {
+				tc.req.Sys = build.DefaultSystemName
+			}
+
 			gotResp, gotErr := tc.mgmtSvc.PoolDrain(context.TODO(), tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
@@ -545,22 +572,26 @@ func TestServer_MgmtSvc_PoolEvict(t *testing.T) {
 		"nil request": {
 			expErr: errors.New("nil request"),
 		},
+		"wrong system": {
+			req:    &mgmtpb.PoolEvictReq{Uuid: mockUUID, Sys: "bad"},
+			expErr: FaultWrongSystem("bad", build.DefaultSystemName),
+		},
 		"missing superblock": {
 			mgmtSvc: missingSB,
-			req:     &mgmtpb.PoolEvictReq{Uuid: mockUUID, Sys: "daos"},
+			req:     &mgmtpb.PoolEvictReq{Uuid: mockUUID},
 			expErr:  errors.New("not an access point"),
 		},
 		"not access point": {
 			mgmtSvc: notAP,
-			req:     &mgmtpb.PoolEvictReq{Uuid: mockUUID, Sys: "daos"},
+			req:     &mgmtpb.PoolEvictReq{Uuid: mockUUID},
 			expErr:  errors.New("not an access point"),
 		},
 		"dRPC send fails": {
-			req:    &mgmtpb.PoolEvictReq{Uuid: mockUUID, Sys: "daos"},
+			req:    &mgmtpb.PoolEvictReq{Uuid: mockUUID},
 			expErr: errors.New("send failure"),
 		},
 		"garbage resp": {
-			req: &mgmtpb.PoolEvictReq{Uuid: mockUUID, Sys: "daos"},
+			req: &mgmtpb.PoolEvictReq{Uuid: mockUUID},
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
 				// dRPC call returns junk in the message body
 				badBytes := makeBadBytes(42)
@@ -570,11 +601,11 @@ func TestServer_MgmtSvc_PoolEvict(t *testing.T) {
 			expErr: errors.New("unmarshal"),
 		},
 		"missing uuid": {
-			req:    &mgmtpb.PoolEvictReq{Sys: "daos"},
+			req:    &mgmtpb.PoolEvictReq{},
 			expErr: errors.New("invalid UUID"),
 		},
 		"successful evicted": {
-			req:     &mgmtpb.PoolEvictReq{Uuid: mockUUID, Sys: "daos"},
+			req:     &mgmtpb.PoolEvictReq{Uuid: mockUUID},
 			expResp: &mgmtpb.PoolEvictResp{},
 		},
 	} {
@@ -595,6 +626,10 @@ func TestServer_MgmtSvc_PoolEvict(t *testing.T) {
 			}
 			tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
 
+			if tc.req != nil && tc.req.Sys == "" {
+				tc.req.Sys = build.DefaultSystemName
+			}
+
 			gotResp, gotErr := tc.mgmtSvc.PoolEvict(context.TODO(), tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
@@ -610,7 +645,7 @@ func TestServer_MgmtSvc_PoolEvict(t *testing.T) {
 
 func newTestListPoolsReq() *mgmtpb.ListPoolsReq {
 	return &mgmtpb.ListPoolsReq{
-		Sys: "daos",
+		Sys: build.DefaultSystemName,
 	}
 }
 
@@ -679,6 +714,7 @@ func TestListPools_Success(t *testing.T) {
 
 func newTestGetACLReq() *mgmtpb.GetACLReq {
 	return &mgmtpb.GetACLReq{
+		Sys:  build.DefaultSystemName,
 		Uuid: mockUUID,
 	}
 }
@@ -763,6 +799,7 @@ func TestPoolGetACL_BadDrpcResp(t *testing.T) {
 
 func newTestModifyACLReq() *mgmtpb.ModifyACLReq {
 	return &mgmtpb.ModifyACLReq{
+		Sys:  build.DefaultSystemName,
 		Uuid: mockUUID,
 		ACL: []string{
 			"A::OWNER@:rw",
@@ -928,6 +965,7 @@ func TestPoolUpdateACL_Success(t *testing.T) {
 
 func newTestDeleteACLReq() *mgmtpb.DeleteACLReq {
 	return &mgmtpb.DeleteACLReq{
+		Sys:       build.DefaultSystemName,
 		Uuid:      mockUUID,
 		Principal: "u:user@",
 	}
@@ -1038,6 +1076,10 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 		"nil request": {
 			expErr: errors.New("nil request"),
 		},
+		"wrong system": {
+			req:    &mgmtpb.PoolQueryReq{Uuid: mockUUID, Sys: "bad"},
+			expErr: FaultWrongSystem("bad", build.DefaultSystemName),
+		},
 		"missing superblock": {
 			mgmtSvc: missingSB,
 			req: &mgmtpb.PoolQueryReq{
@@ -1096,6 +1138,10 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 			}
 			tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
 
+			if tc.req != nil && tc.req.Sys == "" {
+				tc.req.Sys = build.DefaultSystemName
+			}
+
 			gotResp, gotErr := tc.mgmtSvc.PoolQuery(context.TODO(), tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
@@ -1119,6 +1165,10 @@ func TestServer_MgmtSvc_PoolResolveID(t *testing.T) {
 	}{
 		"nil request": {
 			expErr: errors.New("nil request"),
+		},
+		"wrong system": {
+			req:    &mgmtpb.PoolResolveIDReq{Sys: "bad"},
+			expErr: FaultWrongSystem("bad", build.DefaultSystemName),
 		},
 		"empty request": {
 			req:    &mgmtpb.PoolResolveIDReq{},
@@ -1152,6 +1202,10 @@ func TestServer_MgmtSvc_PoolResolveID(t *testing.T) {
 			ps.PoolLabel = defaultLabel
 			if err := ms.sysdb.UpdatePoolService(ps); err != nil {
 				t.Fatal(err)
+			}
+
+			if tc.req != nil && tc.req.Sys == "" {
+				tc.req.Sys = build.DefaultSystemName
 			}
 
 			gotResp, gotErr := ms.PoolResolveID(context.TODO(), tc.req)
@@ -1236,6 +1290,10 @@ func TestServer_MgmtSvc_PoolSetProp_Label(t *testing.T) {
 			if req.Uuid == "" {
 				req.Uuid = mockUUID
 			}
+			if req.Sys == "" {
+				req.Sys = build.DefaultSystemName
+			}
+
 			_, gotErr := ms.PoolSetProp(context.TODO(), req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
@@ -1271,6 +1329,10 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 		expResp       *mgmtpb.PoolSetPropResp
 		expErr        error
 	}{
+		"wrong system": {
+			req:    &mgmtpb.PoolSetPropReq{Uuid: mockUUID, Sys: "bad"},
+			expErr: FaultWrongSystem("bad", build.DefaultSystemName),
+		},
 		"garbage resp": {
 			req: propWithStrVal(propWithName(new(mgmtpb.PoolSetPropReq), "reclaim"), "disabled"),
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
@@ -1524,6 +1586,9 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 
 			if tc.req.GetUuid() == "" {
 				tc.req.Uuid = mockUUID
+			}
+			if tc.req != nil && tc.req.Sys == "" {
+				tc.req.Sys = build.DefaultSystemName
 			}
 			gotResp, gotErr := ms.PoolSetProp(context.TODO(), tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)

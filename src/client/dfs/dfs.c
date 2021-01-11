@@ -859,10 +859,10 @@ open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
 	 * happen for example if dfs_open() is called with S_IFDIR but without
 	 * O_CREATE and a entry of a different type exists already.
 	 */
-	if ((S_ISDIR(dir->mode) && !S_ISDIR(entry.mode)))
+	if ((S_ISDIR(dir->mode) && !S_ISDIR(entry->mode)))
 		return ENOTDIR;
 
-	if ((S_ISFIFO(dir->mode) && !S_ISFIFO(entry.mode)))
+	if ((S_ISFIFO(dir->mode) && !S_ISFIFO(entry->mode)))
 		return EINVAL;
 
 	rc = daos_obj_open(dfs->coh, entry->oid, daos_mode, &dir->oh, NULL);
@@ -1283,8 +1283,8 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	dfs->root.parent_oid.lo = RESERVED_LO;
 	dfs->root.parent_oid.hi = SB_HI;
 	daos_obj_generate_id(&dfs->root.parent_oid, 0, OC_RP_XSF, 0);
-	rc = open_dir(dfs, DAOS_TX_NONE, dfs->super_oh, amode, 0, &root_dir,
-		      1, &dfs->root);
+	rc = open_dir(dfs, DAOS_TX_NONE, dfs->super_oh, amode | S_IFDIR, 0,
+		      &root_dir, 1, &dfs->root);
 	if (rc) {
 		D_ERROR("Failed to open root object (%d)\n", rc);
 		D_GOTO(err_super, rc);
@@ -2000,7 +2000,7 @@ dfs_lookup_loop:
 			D_GOTO(err_obj, rc = EINVAL);
 		}
 
-		/* open the directory object */
+		/* open the directory/fifo object */
 		rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &obj->oh,
 				   NULL);
 		if (rc) {

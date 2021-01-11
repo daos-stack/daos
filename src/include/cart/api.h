@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1869,6 +1869,17 @@ int crt_group_view_destroy(crt_group_t *grp);
  *                              on failure.
  */
 int crt_group_psr_set(crt_group_t *grp, d_rank_t rank);
+
+/**
+ * Specify list of ranks to be a PSRs for the provided group
+ *
+ * \param[in] grp               Group handle
+ * \param[in] rank_list         Ranks to set as PSRs
+ *
+ * \return                      DER_SUCCESS on success, negative value
+ *                              on failure.
+ */
+int crt_group_psrs_set(crt_group_t *grp, d_rank_list_t *rank_list);
 
 /**
  * Add rank to the specified primary group.

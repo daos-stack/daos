@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -132,9 +132,10 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 
 	req := &control.PoolCreateReq{
 		ScmBytes: scmBytes, NvmeBytes: nvmeBytes, Ranks: ranks,
-		NumSvcReps: cmd.NumSvcReps, Sys: cmd.Sys,
-		User: cmd.UserName, UserGroup: cmd.GroupName, ACL: acl,
+		NumSvcReps: cmd.NumSvcReps,
+		User:       cmd.UserName, UserGroup: cmd.GroupName, ACL: acl,
 	}
+	req.SetSystem(cmd.Sys)
 
 	ctx := context.Background()
 	resp, err := control.PoolCreate(ctx, cmd.ctlInvoker, req)
@@ -234,7 +235,8 @@ func (cmd *PoolEvictCmd) Execute(args []string) error {
 		return err
 	}
 
-	req := &control.PoolEvictReq{UUID: cmd.UUID, Sys: cmd.Sys}
+	req := &control.PoolEvictReq{UUID: cmd.UUID}
+	req.SetSystem(cmd.Sys)
 
 	ctx := context.Background()
 	err := control.PoolEvict(ctx, cmd.ctlInvoker, req)

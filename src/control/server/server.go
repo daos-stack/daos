@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -253,6 +253,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	// Create a closure to be used for joining ioserver instances.
 	joinInstance := func(ctx context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
 		req.SetHostList(cfg.AccessPoints)
+		req.SetSystem(cfg.SystemName)
 		req.ControlAddr = controlAddr
 		return control.SystemJoin(ctx, rpcClient, req)
 	}

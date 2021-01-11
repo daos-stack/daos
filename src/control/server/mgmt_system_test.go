@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -69,12 +69,12 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 		},
 		"wrong system": {
 			req: &mgmtpb.LeaderQueryReq{
-				System: "quack",
+				Sys: "quack",
 			},
-			expErr: errors.New("wrong system"),
+			expErr: FaultWrongSystem("quack", build.DefaultSystemName),
 		},
 		"successful query": {
-			req: &mgmtpb.LeaderQueryReq{System: build.DefaultSystemName},
+			req: &mgmtpb.LeaderQueryReq{Sys: build.DefaultSystemName},
 			expResp: &mgmtpb.LeaderQueryResp{
 				CurrentLeader: localhost.String(),
 				Replicas:      []string{localhost.String()},
