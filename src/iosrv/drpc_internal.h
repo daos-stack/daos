@@ -34,6 +34,7 @@
 
 #include <daos/drpc.h>
 #include <gurt/list.h>
+#include <daos_srv/ras.h>
 
 /**
  * Path to the Unix Domain Socket used by the dRPC listener thread

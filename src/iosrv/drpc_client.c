@@ -30,7 +30,6 @@
 #include <daos_types.h>
 #include <daos/drpc.h>
 #include <daos/drpc_modules.h>
-#include <daos_srv/daos_server.h>
 #include "srv.pb-c.h"
 #include "srv_internal.h"
 #include "drpc_internal.h"

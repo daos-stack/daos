@@ -209,7 +209,7 @@ out:
 void
 ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 		    char *hid, d_rank_t *rank, char *jid, uuid_t *puuid,
-		     uuid_t *cuuid, daos_obj_id_t *oid, char *cop, char *data)
+		    uuid_t *cuuid, daos_obj_id_t *oid, char *cop, char *data)
 {
 	Shared__RASEvent	 evt = SHARED__RASEVENT__INIT;
 	int		 rc;
@@ -240,28 +240,27 @@ ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 int
 ds_notify_pool_svc_update(uuid_t *puuid, d_rank_list_t *svc)
 {
-	Shared__RASEvent			 evt = SHARED__RASEVENT__INIT;
-	Shared__RASEvent__PoolSvcEventInfo	*info = NULL;
-	int					 rc;
-
-	shared__rasevent__pool_svc_event_info__init(info);
+	Shared__RASEvent			evt = SHARED__RASEVENT__INIT;
+	Shared__RASEvent__PoolSvcEventInfo	info = \
+		SHARED__RASEVENT__POOL_SVC_EVENT_INFO__INIT;
+	int					rc;
 
 	if (dss_drpc_ctx == NULL) {
 		D_ERROR("dRPC not connected\n");
 		return -DER_UNINIT;
 	}
 
-	D_ASSERT(puuid && !uuid_is_null(*puuid));
-	D_ASSERT(svc != NULL && svc->rl_nr > 0);
+	D_ASSERT((puuid) && !uuid_is_null(*puuid));
+	D_ASSERT((svc) && svc->rl_nr > 0);
 
-	rc = rank_list_to_uint32_array(svc, &info->svc_reps, &info->n_svc_reps);
+	rc = rank_list_to_uint32_array(svc, &info.svc_reps, &info.n_svc_reps);
 	if (rc != 0) {
 		D_ERROR("failed to convert svc replicas to proto\n");
 		return rc;
 	}
 
 	evt.extended_info_case = SHARED__RASEVENT__EXTENDED_INFO_POOL_SVC_INFO;
-	evt.pool_svc_info = info;
+	evt.pool_svc_info = &info;
 
 	/* TODO: add rank to event */
 	rc = init_ras(RAS_POOL_REPS_UPDATE,
@@ -278,7 +277,7 @@ ds_notify_pool_svc_update(uuid_t *puuid, d_rank_list_t *svc)
 
 	free_ras(&evt);
 out_svcreps:
-	D_FREE(info->svc_reps);
+	D_FREE(info.svc_reps);
 
 	return rc;
 }

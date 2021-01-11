@@ -239,7 +239,7 @@ test_drpc_verify_notify_bio_error(void **state)
 }
 
 static void
-verify_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc_reps)
+verify_notify_pool_svc_update(uuid_t *pool_uuid, d_rank_list_t *svc_reps)
 {
 	Drpc__Call		*call;
 	Shared__ClusterEventReq	*req;
@@ -258,7 +258,7 @@ verify_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc_reps)
 						call->body.data);
 	assert_non_null(req);
 	assert_int_equal(uuid_parse(req->event->pool_uuid, puuid), 0);
-	assert_int_equal(uuid_compare(puuid, pool_uuid), 0);
+	assert_int_equal(uuid_compare(puuid, *pool_uuid), 0);
 	assert_int_equal(req->event->pool_svc_info->n_svc_reps,
 			 svc_reps->rl_nr);
 	reps = uint32_array_to_rank_list(req->event->pool_svc_info->svc_reps,
@@ -289,17 +289,17 @@ test_drpc_verify_notify_pool_svc_update(void **state)
 	svc_ranks = uint32_array_to_rank_list(svc_reps, 4);
 	assert_non_null(svc_ranks);
 
-	assert_int_equal(ds_notify_pool_svc_update(pool_uuid, svc_ranks), 0);
-	verify_notify_pool_svc_update(pool_uuid, svc_ranks);
+	assert_int_equal(ds_notify_pool_svc_update(&pool_uuid, svc_ranks), 0);
+	verify_notify_pool_svc_update(&pool_uuid, svc_ranks);
 
 	drpc_fini();
 }
 
 static void
-verify_notify_ras_event(ras_event_t id, ras_type_t type, ras_sev_t sev,
-			char *hid, d_rank_t *rank, char *jid, uuid_t *puuid,
-			uuid_t *cuuid, daos_obj_id_t *oid, char *cop,
-			char *msg, char *data)
+verify_notify_ras_event(ras_event_t id, char *msg, ras_type_t type,
+			ras_sev_t sev, char *hid, d_rank_t *rank, char *jid,
+			uuid_t *puuid, uuid_t *cuuid, daos_obj_id_t *oid,
+			char *cop, char *data)
 {
 	Drpc__Call		*call;
 	Shared__ClusterEventReq	*req;
@@ -315,10 +315,21 @@ verify_notify_ras_event(ras_event_t id, ras_type_t type, ras_sev_t sev,
 	req = shared__cluster_event_req__unpack(NULL, call->body.len,
 						call->body.data);
 	assert_non_null(req);
+
+	assert_int_equal((uint32_t)req->event->id, (uint32_t)id);
+	assert_string_equal(req->event->msg, msg);
+	assert_int_equal((uint32_t)req->event->type, (uint32_t)type);
+	assert_int_equal((uint32_t)req->event->severity, (uint32_t)sev);
+	assert_string_equal(req->event->hw_id, hid);
+	assert_int_equal((uint32_t)req->event->rank, (uint32_t)*rank);
+	assert_string_equal(req->event->job_id, jid);
 	assert_int_equal(uuid_parse(req->event->pool_uuid, req_puuid), 0);
 	assert_int_equal(uuid_compare(req_puuid, *puuid), 0);
 	assert_int_equal(uuid_parse(req->event->cont_uuid, req_cuuid), 0);
 	assert_int_equal(uuid_compare(req_cuuid, *cuuid), 0);
+	assert_string_equal(req->event->obj_id, "1.1");
+	assert_string_equal(req->event->ctl_op, cop);
+	assert_string_equal(req->event->str_info, data);
 
 	/* Cleanup */
 	shared__cluster_event_req__free_unpacked(req, NULL);
@@ -346,10 +357,10 @@ test_drpc_verify_notify_ras_event(void **state)
 			    RAS_SEV_WARN, "exhwid", &rank, "exjobid", &puuid,
 			    &cuuid, &oid, "exctlop",
 			    "{\"people\":[\"bill\",\"steve\",\"bob\"]}");
-	verify_notify_ras_event(RAS_RANK_NO_RESPONSE, RAS_TYPE_INFO,
-				RAS_SEV_WARN, "exhwid", &rank, "exjobid",
-				&puuid, &cuuid, &oid, "exctlop",
-				"Example message for no response",
+	verify_notify_ras_event(RAS_RANK_NO_RESPONSE,
+				"Example message for no response", RAS_TYPE_INFO,
+				RAS_SEV_WARN, "exhwid", &rank, "exjobid", &puuid,
+				&cuuid, &oid, "exctlop",
 				"{\"people\":[\"bill\",\"steve\",\"bob\"]}");
 
 	drpc_fini();
