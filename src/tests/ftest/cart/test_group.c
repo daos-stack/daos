@@ -111,10 +111,10 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 	/* CaRT internally already allocated the input/output buffer */
 	e_req = crt_req_get(rpc_req);
 	D_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
-
-	printf("tier1 test_server recv'd checkin, opc: %#x.\n",
+ 
+	D_DEBUG(DB_TEST, "tier1 test_server recv'd checkin, opc: %#x.\n",
 	       rpc_req->cr_opc);
-	printf("tier1 checkin input - age: %d, name: %s, days: %d, "
+	D_DEBUG(DB_TEST, "tier1 checkin input - age: %d, name: %s, days: %d, "
 	       "bool_val %d.\n",
 	       e_req->age, e_req->name, e_req->days, e_req->bool_val);
 
@@ -134,7 +134,7 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 
-	printf("tier1 test_srver sent checkin reply, ret: %d, room_no: %d.\n",
+	D_DEBUG(DB_TEST, "tier1 test_srver sent checkin reply, ret: %d, room_no: %d.\n",
 	       e_reply->ret, e_reply->room_no);
 }
 
@@ -149,9 +149,9 @@ test_ping_delay_handler(crt_rpc_t *rpc_req)
 	p_req = crt_req_get(rpc_req);
 	D_ASSERTF(p_req != NULL, "crt_req_get() failed. p_req: %p\n", p_req);
 
-	printf("tier1 test_server recv'd checkin, opc: %#x.\n",
+	D_DEBUG(DB_TEST, "tier1 test_server recv'd checkin, opc: %#x.\n",
 	       rpc_req->cr_opc);
-	printf("tier1 checkin input - age: %d, name: %s, days: %d, "
+	D_DEBUG(DB_TEST, "tier1 checkin input - age: %d, name: %s, days: %d, "
 	       "delay: %u.\n",
 	       p_req->age, p_req->name, p_req->days, p_req->delay);
 
@@ -166,7 +166,7 @@ test_ping_delay_handler(crt_rpc_t *rpc_req)
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 
-	printf("tier1 test_srver sent checkin reply, ret: %d, room_no: %d.\n",
+	D_DEBUG(DB_TEST, "tier1 test_srver sent checkin reply, ret: %d, room_no: %d.\n",
 	       p_reply->ret, p_reply->room_no);
 }
 
@@ -196,7 +196,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 			D_FREE(rpc_req_input->name);
 			break;
 		}
-		printf("%s checkin result - ret: %d, room_no: %d, "
+		D_DEBUG(DB_TEST, "%s checkin result - ret: %d, room_no: %d, "
 		       "bool_val %d.\n",
 		       rpc_req_input->name, rpc_req_output->ret,
 		       rpc_req_output->room_no, rpc_req_output->bool_val);
@@ -217,7 +217,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 			D_FREE(rpc_req_input->name);
 			break;
 		}
-		printf("%s swim status result - status: %d.\n",
+		D_DEBUG(DB_TEST, "%s swim status result - status: %d.\n",
 		       rpc_req_input->rank, rpc_req_output->status);
 		D_FREE(rpc_req_input->rank);
 		sem_post(&test_g.t_token_to_proceed);
@@ -260,23 +260,23 @@ static void *progress_thread(void *arg)
 			break;
 	} while (!dead);
 
-	printf("progress_thread: rc: %d, test_srv.do_shutdown: %d.\n",
+	D_DEBUG(DB_TEST, "progress_thread: rc: %d, test_srv.do_shutdown: %d.\n",
 	       rc, test_g.t_shutdown);
-	printf("progress_thread: progress thread exit ...\n");
+	D_DEBUG(DB_TEST, "progress_thread: progress thread exit ...\n");
 
 	pthread_exit(NULL);
 }
 
 void test_shutdown_handler(crt_rpc_t *rpc_req)
 {
-	printf("tier1 test_srver received shutdown request, opc: %#x.\n",
+	D_DEBUG(DB_TEST, "tier1 test_srver received shutdown request, opc: %#x.\n",
 	       rpc_req->cr_opc);
 
 	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
 	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
 
 	test_g.t_shutdown = 1;
-	printf("tier1 test_srver set shutdown flag.\n");
+	D_DEBUG(DB_TEST, "tier1 test_srver set shutdown flag.\n");
 }
 
 static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group1[] = {
