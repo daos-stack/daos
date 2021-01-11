@@ -206,8 +206,8 @@
                   <arg value="-I/usr/local/"/>
                   <arg value="-I${java-home}/include/"/>
                   <arg value="-I${java-home}/include/linux/"/>
-                  <arg value="-I${daos.install.path}/include/"/>
-                  <arg value="-I${daos.install.path}/prereq/dev/protobufc/include/"/>
+                  <arg value="-I${sl-prefix}/include/"/>
+                  <arg value="-I${sl-protobufc-prefix}/include/"/>
                   <arg value="-I${project.basedir}/src/main/native/include/"/>
                   <arg value="${project.basedir}/src/main/native/io_daos_dfs_DaosFsClient.c"/>
                   <arg value="-o${native.build.path}/io_daos_dfs_DaosFsClient.o"/>
