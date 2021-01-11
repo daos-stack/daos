@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -121,7 +121,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 
 			db := system.MockDatabaseWithAddr(t, log, msReplica.Addr)
 			m := system.NewMembership(log, db)
-			tc.mgmtSvc = newMgmtSvc(harness, m, db, nil)
+			tc.mgmtSvc = newMgmtSvc(harness, m, db, nil, nil)
 			if _, err := tc.mgmtSvc.membership.Add(msReplica); err != nil {
 				t.Fatal(err)
 			}
