@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -182,7 +182,7 @@ func FirmwareQuery(ctx context.Context, rpcClient UnaryInvoker, req *FirmwareQue
 	}
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewMgmtCtlClient(conn).FirmwareQuery(ctx, &ctlpb.FirmwareQueryReq{
+		return ctlpb.NewCtlSvcClient(conn).FirmwareQuery(ctx, &ctlpb.FirmwareQueryReq{
 			QueryScm:    req.SCM,
 			QueryNvme:   req.NVMe,
 			DeviceIDs:   req.Devices,
@@ -375,7 +375,7 @@ func FirmwareUpdate(ctx context.Context, rpcClient UnaryInvoker, req *FirmwareUp
 		return nil, err
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewMgmtCtlClient(conn).FirmwareUpdate(ctx, &ctlpb.FirmwareUpdateReq{
+		return ctlpb.NewCtlSvcClient(conn).FirmwareUpdate(ctx, &ctlpb.FirmwareUpdateReq{
 			FirmwarePath: req.FirmwarePath,
 			Type:         pbType,
 			DeviceIDs:    req.Devices,

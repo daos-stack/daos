@@ -79,11 +79,16 @@ RUN zypper --non-interactive update;                                         \
            readline-devel sg3_utils which yasm                               \
            python-devel python3-devel valgrind-devel hwloc-devel             \
            openmpi3-devel man fuse3-devel patchelf scons lua-lmod            \
-           libjson-c-devel liblz4-devel python3-distro curl maven
+           libjson-c-devel liblz4-devel python3-distro curl                  \
+           java-1_8_0-openjdk-devel maven
 # Monkey-patch MODULEPATH
 RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then        \
         sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/' /etc/profile.d/lmod.sh; \
     fi
+
+RUN which java
+RUN java -version
+
 RUN update-ca-certificates
 RUN zypper --non-interactive install --allow-unsigned-rpm lua-lmod
 
@@ -189,11 +194,10 @@ ENV FI_SOCKETS_MAX_CONN_RETRY=1
 RUN if [ "x$NOBUILD" = "x" ] ; then \
     cp -r utils/config/examples /opt/daos; fi
 
-# Build java HDFS bindings
-# Currently disabled since it is failing
+# Build java and hadoop bindings
 RUN if [ "x$NOBUILD" = "x" ] ; then \
     pushd src/client/java && \
-#    mvn clean install -T 1C -DskipITs -Ddaos.install.path=/opt/daos && \
+    mvn clean install -T 1C -DskipITs -Ddaos.install.path=/opt/daos && \
     popd; fi
 
 # Remove local copy
