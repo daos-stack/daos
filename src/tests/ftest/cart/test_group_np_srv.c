@@ -39,23 +39,23 @@ typedef void
 (*crt_event_cb) (d_rank_t rank, enum crt_event_source src,
    enum crt_event_type type, void *arg);
 
-// Callback to process a SWIM message
+/* Callback to process a SWIM message */
 static void
 swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
        enum crt_event_type type, void *arg)
 {
 
-		// Example output for SWIM CRT_EVT_DEAD on rank #2:
-		//   rank = 2, crt_event_source = 1, crt_event_type = 1
-
-		/* enum crt_event_type {
-		 * 	CRT_EVT_ALIVE,
-		 * 	CRT_EVT_DEAD,
-		 * };
-		 * enum crt_event_source {
-		 * 	CRT_EVS_UNKNOWN,
-		 * 	CRT_EVS_SWIM,
-		 * };
+		/* Example output for SWIM CRT_EVT_DEAD on rank #2:
+		 *   rank = 2, crt_event_source = 1, crt_event_type = 1
+		 *
+		 * 		enum crt_event_type {
+		 * 			CRT_EVT_ALIVE,
+		 * 			CRT_EVT_DEAD,
+		 * 		};
+		 * 		enum crt_event_source {
+		 * 			CRT_EVS_UNKNOWN,
+		 * 			CRT_EVS_SWIM,
+		 * 		};
 		 */
 
 		D_DEBUG(DB_TEST, "Cart callback event: "
@@ -71,7 +71,7 @@ swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		return;
 }
 
-// Dummy, unused variable to satisfy crt_register_event_cb
+/* Dummy, unused variable to satisfy crt_register_event_cb */
 int a = 1234567;
 
 void
@@ -85,7 +85,7 @@ test_run(d_rank_t my_rank)
 	tc_srv_start_basic(test_g.t_local_group_name, &test_g.t_crt_ctx[0],
 			   &test_g.t_tid[0], &grp, &grp_size, NULL);
 
-  // Register event callback after CaRT has initialized
+  /* Register event callback after CaRT has initialized */
 	if (test_g.t_register_swim_callback) {
 		crt_register_event_cb(swim_crt_event_cb, &a);
 	}

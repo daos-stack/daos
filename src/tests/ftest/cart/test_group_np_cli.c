@@ -55,7 +55,7 @@ void
 send_rpc_swim_check(crt_endpoint_t server_ep, crt_rpc_t* rpc_req) {
 
 	struct test_swim_status_in	*rpc_req_input;
-	//struct test_swim_status_out	*rpc_req_output;
+	/*struct test_swim_status_out	*rpc_req_output; */
 
 	int rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
 					CRT_PROTO_OPC(TEST_GROUP_BASE,
@@ -68,7 +68,7 @@ send_rpc_swim_check(crt_endpoint_t server_ep, crt_rpc_t* rpc_req) {
 	D_ASSERTF(rpc_req_input != NULL, "crt_req_get() failed."
 			" rpc_req_input: %p\n", rpc_req_input);
 
-	// Set rank and expected swim status based on CLI options
+	/* Set rank and expected swim status based on CLI options */
 	rpc_req_input->rank = test_g.t_verify_swim_status.rank;
 	rpc_req_input->exp_status = test_g.t_verify_swim_status.swim_status;
 
@@ -156,10 +156,10 @@ test_run(void)
 
 	server_ep.ep_grp = grp;
 
-	// Shutdown one particular rank
+	/* Shutdown one particular rank */
 	if (test_g.t_verify_swim_status.rank >= 0) {
 
-		// Check swim status on all (remaining) ranks
+		/* Check swim status on all (remaining) ranks */
 		for (i = 0; i < rank_list->rl_nr; i++) {
 			rank = rank_list->rl_ranks[i];
 			server_ep.ep_rank = rank;
@@ -169,7 +169,7 @@ test_run(void)
 		DBG_PRINT("Skipping shutdown stage.\n");
 	} else if (! test_g.t_skip_shutdown) {
 
-		// Shutdown all ranks
+		/* Shutdown all ranks */
 		for (i = 0; i < rank_list->rl_nr; i++) {
 			rank = rank_list->rl_ranks[i];
 			server_ep.ep_rank = rank;

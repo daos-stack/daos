@@ -138,7 +138,7 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 		   room_no: %d.\n", e_reply->ret, e_reply->room_no);
 }
 
-// Keep a table of whether each rank is alive (0) or dead (1)
+/* Keep a table of whether each rank is alive (0) or dead (1) */
 static int swim_status_by_rank[256];
 
 static void
@@ -164,7 +164,7 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 
 	e_reply = crt_reply_get(rpc_req);
 
-  // If we got past the previous assert, then we've succeeded
+  /* If we got past the previous assert, then we've succeeded */
 	e_reply->bool_val = true;
   D_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
 		  e_reply);
@@ -423,7 +423,7 @@ parse_verify_swim_status_arg (char * source)
 	for (m = 0; m < maxMatches; m ++) {
 
 		if (regexec(&regexCompiled, cursor, maxGroups, groupArray, 0)) {
-			break;	// No more matches
+			break;	/* No more matches */
 		}
 
 		unsigned int g = 0;
@@ -432,7 +432,7 @@ parse_verify_swim_status_arg (char * source)
 		for (g = 0; g < maxGroups; g++) {
 
 			if (groupArray[g].rm_so == (size_t)-1) {
-				break;	// No more groups
+				break;	/* No more groups */
 			}
 
 			if (g == 0) {
@@ -573,13 +573,12 @@ test_parse_args(int argc, char **argv)
 	test_g.t_use_cfg = true;
 	test_g.t_register_swim_callback = false;
 
-  // Options set for SWIM testing
-
-  // Default to a non-existent, invalid rank
+  /* SWIM testing options */
+  /* Default to a non-existent, invalid rank */
 	test_g.t_delete_rank_from_ranklist = -1;
 	test_g.t_get_swim_status = false;
 
-  // Default value: non-existent rank with status "alive"
+  /* Default value: non-existent rank with status "alive" */
 	test_g.t_verify_swim_status = (struct t_swim_status){ -1, 0 };
 
   struct t_swim_status vss;
