@@ -2042,7 +2042,7 @@ re_fetch:
 		rc = dtx_end(&dth, ioc.ioc_coc, rc);
 
 		if (rc == -DER_INPROGRESS && dth.dth_local_retry) {
-			if (++retry > 10)
+			if (++retry > 5)
 				D_GOTO(out, rc = -DER_TX_BUSY);
 
 			/* XXX: Currently, we commit the distributed transaction
@@ -2440,7 +2440,7 @@ re_pack:
 		rc = rc_tmp;
 
 	if (rc == -DER_INPROGRESS && dth.dth_local_retry) {
-		if (++retry > 10)
+		if (++retry > 5)
 			D_GOTO(out, rc = -DER_TX_BUSY);
 
 		/* XXX: Currently, we commit the distributed transaction
@@ -3131,7 +3131,7 @@ re_query:
 
 out:
 	if (rc == -DER_INPROGRESS && dth.dth_local_retry) {
-		if (++retry > 10)
+		if (++retry > 5)
 			D_GOTO(failed, rc = -DER_TX_BUSY);
 
 		/* XXX: Currently, we commit the distributed transaction
