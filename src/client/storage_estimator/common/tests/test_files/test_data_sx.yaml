@@ -1,8 +1,10 @@
 ---
 # Sample conflig file DFS files and directories
 #
-# Chunk size = 1MiB
-# I/O size   = 128KiB
+# Chunk size  = 1MiB
+# I/O size    = 128KiB
+# DIR OClass  = S1
+# File OClass = SX
 #
 # .
 # +-- data

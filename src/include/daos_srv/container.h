@@ -239,7 +239,7 @@ struct csum_recalc_args {
 	daos_size_t		 cra_seg_size;  /* size of coalesced entry */
 	unsigned int		 cra_seg_cnt;   /* # of read segments */
 	unsigned int		 cra_buf_len;	/* length of read buffer */
-	int			 cra_tgt_id;	/* used to log error */
+	int			 cra_tgt_id;	/* VOS target ID */
 	int			 cra_rc;	/* return code */
 	ABT_eventual		 csum_eventual;
 };
