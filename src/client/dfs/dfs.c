@@ -2358,7 +2358,7 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 			stbuf->st_size = size;
 			stbuf->st_blocks = (stbuf->st_size + (1 << 9) - 1) >> 9;
 		}
-        break;
+		break;
 	case S_IFLNK:
 		if (flags & O_NOFOLLOW) {
 			/* Create a truncated version of the string */
