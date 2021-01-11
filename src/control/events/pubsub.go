@@ -29,9 +29,8 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/logging"
-
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 // Handler defines an interface to be implemented by event receivers.
@@ -164,7 +163,7 @@ func (ps *PubSub) Reset() {
 // converts to concrete event type that implements the Event interface.
 // The Event is then published to make available to locally subscribed consumers
 // to act upon.
-func (ps *PubSub) HandleClusterEvent(req *mgmtpb.ClusterEventReq) (*mgmtpb.ClusterEventResp, error) {
+func (ps *PubSub) HandleClusterEvent(req *sharedpb.ClusterEventReq) (*sharedpb.ClusterEventResp, error) {
 	switch {
 	case req.Sequence < 0:
 		ps.log.Debug("no sequence number in ClusterEventReq")
@@ -180,5 +179,5 @@ func (ps *PubSub) HandleClusterEvent(req *mgmtpb.ClusterEventReq) (*mgmtpb.Clust
 	}
 	ps.Publish(event)
 
-	return &mgmtpb.ClusterEventResp{Sequence: req.Sequence}, nil
+	return &sharedpb.ClusterEventResp{Sequence: req.Sequence}, nil
 }

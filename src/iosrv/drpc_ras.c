@@ -34,7 +34,7 @@
 #include "drpc_internal.h"
 
 static void
-free_ras(Mgmt__RASEvent *evt)
+free_ras(Shared__RASEvent *evt)
 {
 	if (evt->hostname)
 		D_FREE(evt->hostname);
@@ -43,9 +43,9 @@ free_ras(Mgmt__RASEvent *evt)
 }
 
 static int
-init_ras(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hid,
+init_ras(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev, char *hid,
 	 d_rank_t *rank, char *jid, uuid_t *puuid, uuid_t *cuuid,
-	 daos_obj_id_t *oid, char *cop, char *msg, Mgmt__RASEvent *evt)
+	 daos_obj_id_t *oid, char *cop, Shared__RASEvent *evt)
 {
 	FILE		*stream;
 	char		*buf;
@@ -74,7 +74,7 @@ init_ras(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hid,
 			   "%04d/%02d/%02d-%02d:%02d:%02d.%02ld",
 			   tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
 			   tm->tm_hour, tm->tm_min, tm->tm_sec,
-			   (long int)tv.tv_usec / 10000);
+			   (long)tv.tv_usec / 10000);
 		D_FPRINTF(stream, " ts: [%s]", evt->timestamp);
 	}
 
@@ -158,9 +158,9 @@ out_fail:
 }
 
 static int
-send_ras(Mgmt__RASEvent *evt)
+send_ras(Shared__RASEvent *evt)
 {
-	Mgmt__ClusterEventReq	 req = MGMT__CLUSTER_EVENT_REQ__INIT;
+	Shared__ClusterEventReq	 req = SHARED__CLUSTER_EVENT_REQ__INIT;
 	uint8_t			*reqb;
 	size_t			 reqb_size;
 	Drpc__Call		*dreq;
@@ -173,14 +173,14 @@ send_ras(Mgmt__RASEvent *evt)
 	}
 	req.event = evt;
 
-	reqb_size = mgmt__cluster_event_req__get_packed_size(&req);
+	reqb_size = shared__cluster_event_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);
 	if (reqb == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	mgmt__cluster_event_req__pack(&req, reqb);
-	rc = drpc_call_create(dss_drpc_ctx, DRPC_MODULE_MGMT,
-			      DRPC_METHOD_MGMT_CLUSTER_EVENT, &dreq);
+	shared__cluster_event_req__pack(&req, reqb);
+	rc = drpc_call_create(dss_drpc_ctx, DRPC_MODULE_SRV,
+			      DRPC_METHOD_SRV_CLUSTER_EVENT, &dreq);
 	if (rc != 0) {
 		D_FREE(reqb);
 		goto out;
@@ -207,11 +207,11 @@ out:
 }
 
 void
-ds_notify_ras_event(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hid,
-		    d_rank_t *rank, char *jid, uuid_t *puuid, uuid_t *cuuid,
-		    daos_obj_id_t *oid, char *cop, char *msg, char *data)
+ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
+		    char *hid, d_rank_t *rank, char *jid, uuid_t *puuid,
+		     uuid_t *cuuid, daos_obj_id_t *oid, char *cop, char *data)
 {
-	Mgmt__RASEvent	 evt = MGMT__RASEVENT__INIT;
+	Shared__RASEvent	 evt = SHARED__RASEVENT__INIT;
 	int		 rc;
 
 	if (dss_drpc_ctx == NULL) {
@@ -220,11 +220,11 @@ ds_notify_ras_event(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hid,
 	}
 
 	/* use opaque blob oneof case for extended info for passthrough event */
-	evt.extended_info_case = MGMT__RASEVENT__EXTENDED_INFO_STR_INFO;
+	evt.extended_info_case = SHARED__RASEVENT__EXTENDED_INFO_STR_INFO;
 	evt.str_info = data;
 
-	rc = init_ras(id, type, sev, hid, rank, jid, puuid, cuuid, oid, cop,
-		      msg, &evt);
+	rc = init_ras(id, msg, type, sev, hid, rank, jid, puuid, cuuid, oid,
+		      cop, &evt);
 	if (rc != 0) {
 		D_ERROR("failed to init RAS event: "DF_RC"\n", DP_RC(rc));
 		return;
@@ -240,10 +240,11 @@ ds_notify_ras_event(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hid,
 int
 ds_notify_pool_svc_update(uuid_t *puuid, d_rank_list_t *svc)
 {
-	Mgmt__RASEvent				evt = MGMT__RASEVENT__INIT;
-	Mgmt__RASEvent__PoolSvcEventInfo	info = MGMT__RASEVENT__POOL_SVC_EVENT_INFO__INIT;
-	int					rc;
+	Shared__RASEvent			 evt = SHARED__RASEVENT__INIT;
+	Shared__RASEvent__PoolSvcEventInfo	*info = NULL;
+	int					 rc;
 
+	shared__rasevent__pool_svc_event_info__init(info);
 
 	if (dss_drpc_ctx == NULL) {
 		D_ERROR("dRPC not connected\n");
@@ -253,22 +254,21 @@ ds_notify_pool_svc_update(uuid_t *puuid, d_rank_list_t *svc)
 	D_ASSERT(puuid && !uuid_is_null(*puuid));
 	D_ASSERT(svc != NULL && svc->rl_nr > 0);
 
-	rc = rank_list_to_uint32_array(svc, &info.svc_reps, &info.n_svc_reps);
+	rc = rank_list_to_uint32_array(svc, &info->svc_reps, &info->n_svc_reps);
 	if (rc != 0) {
 		D_ERROR("failed to convert svc replicas to proto\n");
 		return rc;
 	}
 
-	evt.extended_info_case = MGMT__RASEVENT__EXTENDED_INFO_POOL_SVC_INFO;
-	evt.pool_svc_info = &info;
+	evt.extended_info_case = SHARED__RASEVENT__EXTENDED_INFO_POOL_SVC_INFO;
+	evt.pool_svc_info = info;
 
 	/* TODO: add rank to event */
-	rc = init_ras(RAS_POOL_REPS_UPDATE, RAS_TYPE_STATE_CHANGE,
-		      RAS_SEV_INFO, NULL /* hid */, NULL /* rank */,
-		      NULL /* jid */, puuid, NULL /* cuuid */, NULL /* oid */,
-		      NULL /* cop */,
+	rc = init_ras(RAS_POOL_REPS_UPDATE,
 		      "List of pool service replica ranks has been updated.",
-		      &evt);
+		      RAS_TYPE_STATE_CHANGE, RAS_SEV_INFO, NULL /* hid */,
+		      NULL /* rank */, NULL /* jid */, puuid, NULL /* cuuid */,
+		      NULL /* oid */, NULL /* cop */, &evt);
 	if (rc != 0) {
 		D_ERROR("failed to populate generic RAS event details\n");
 		goto out_svcreps;
@@ -278,7 +278,7 @@ ds_notify_pool_svc_update(uuid_t *puuid, d_rank_list_t *svc)
 
 	free_ras(&evt);
 out_svcreps:
-	D_FREE(info.svc_reps);
+	D_FREE(info->svc_reps);
 
 	return rc;
 }

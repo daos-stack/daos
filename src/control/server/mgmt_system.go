@@ -38,6 +38,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -696,6 +697,9 @@ func (svc *mgmtSvc) SystemResetFormat(ctx context.Context, pbReq *mgmtpb.SystemR
 		Hosts:  pbReq.GetHosts(),
 		Ranks:  pbReq.GetRanks(),
 	}, false)
+	if err != nil {
+		return nil, err
+	}
 
 	pbResp := &mgmtpb.SystemResetFormatResp{
 		Absentranks: fanResp.AbsentRanks.String(),
@@ -716,7 +720,7 @@ func (svc *mgmtSvc) SystemResetFormat(ctx context.Context, pbReq *mgmtpb.SystemR
 // ClusterEvent management service gRPC handler receives ClusterEvent requests
 // from control-plane instances attempting to notify the MS of a cluster event
 // in the DAOS system (this handler should only get called on the MS leader).
-func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *mgmtpb.ClusterEventReq) (*mgmtpb.ClusterEventResp, error) {
+func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *sharedpb.ClusterEventReq) (*sharedpb.ClusterEventResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}

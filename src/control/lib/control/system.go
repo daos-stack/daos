@@ -179,7 +179,7 @@ type SystemNotifyReq struct {
 
 // toClusterEventReq converts the system notify request to a cluster event
 // request. Resolve control address to a hostname if possible.
-func (req *SystemNotifyReq) toClusterEventReq() (*mgmtpb.ClusterEventReq, error) {
+func (req *SystemNotifyReq) toClusterEventReq() (*sharedpb.ClusterEventReq, error) {
 	if req.Event == nil {
 		return nil, errors.New("nil event in request")
 	}
@@ -189,7 +189,7 @@ func (req *SystemNotifyReq) toClusterEventReq() (*mgmtpb.ClusterEventReq, error)
 		return nil, errors.Wrap(err, "convert event to proto")
 	}
 
-	return &mgmtpb.ClusterEventReq{Sequence: req.Sequence, Event: pbRASEvent}, nil
+	return &sharedpb.ClusterEventReq{Sequence: req.Sequence, Event: pbRASEvent}, nil
 }
 
 // SystemNotifyResp contains the request response.

@@ -3761,7 +3761,7 @@ replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
 	 * Send event to control-plane over dRPC to indicate change in pool
 	 * service replica ranks.
 	 */
-	rc = ds_notify_pool_svc_update(svc->ps_uuid, replicas);
+	rc = ds_notify_pool_svc_update(&svc->ps_uuid, replicas);
 	if (rc != 0) {
 		D_DEBUG(DB_MGMT, DF_UUID": replica update notify failure: "
 			""DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));

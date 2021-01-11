@@ -26,7 +26,9 @@
 // TODO: find a way to sensibly share definitions in duplicate file srv/event.
 
 syntax = "proto3";
-package mgmt;
+package shared;
+
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/shared";
 
 // RASEvent describes a RAS event in the DAOS system.
 message RASEvent {

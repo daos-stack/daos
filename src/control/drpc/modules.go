@@ -155,7 +155,6 @@ func (m MgmtMethod) String() string {
 		MethodPoolQuery:       "PoolQuery",
 		MethodPoolSetProp:     "PoolSetProp",
 		MethodListPools:       "ListPools",
-		MethodClusterEvent:    "ClusterEvent",
 	}[m]; ok {
 		return s
 	}
@@ -215,8 +214,6 @@ const (
 	MethodPoolGetACL MgmtMethod = C.DRPC_METHOD_MGMT_POOL_GET_ACL
 	// MethodListPools is a ModuleMgmt method
 	MethodListPools MgmtMethod = C.DRPC_METHOD_MGMT_LIST_POOLS
-	// MethodClusterEvent is a ModuleMgmt method
-	MethodClusterEvent MgmtMethod = C.DRPC_METHOD_MGMT_CLUSTER_EVENT
 	// MethodPoolOverwriteACL is a ModuleMgmt method
 	MethodPoolOverwriteACL MgmtMethod = C.DRPC_METHOD_MGMT_POOL_OVERWRITE_ACL
 	// MethodPoolUpdateACL is a ModuleMgmt method
@@ -261,8 +258,9 @@ func (m srvMethod) ID() int32 {
 
 func (m srvMethod) String() string {
 	if s, ok := map[srvMethod]string{
-		MethodNotifyReady: "notify ready",
-		MethodBIOError:    "block i/o error",
+		MethodNotifyReady:  "notify ready",
+		MethodBIOError:     "block i/o error",
+		MethodClusterEvent: "cluster event",
 	}[m]; ok {
 		return s
 	}
@@ -288,6 +286,8 @@ const (
 	MethodBIOError srvMethod = C.DRPC_METHOD_SRV_BIO_ERR
 	// MethodGetPoolServiceRanks requests the service ranks for a pool
 	MethodGetPoolServiceRanks srvMethod = C.DRPC_METHOD_SRV_GET_POOL_SVC
+	// MethodClusterEvent notifies of a cluster event in the iosrv.
+	MethodClusterEvent srvMethod = C.DRPC_METHOD_SRV_CLUSTER_EVENT
 )
 
 type securityMethod int32

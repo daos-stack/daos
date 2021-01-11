@@ -150,8 +150,8 @@ func drpcServerSetup(ctx context.Context, req *drpcServerSetupReq) error {
 
 	// Create and add our modules
 	drpcServer.RegisterRPCModule(NewSecurityModule(req.log, req.tc))
-	drpcServer.RegisterRPCModule(newMgmtModule(req.log, req.events))
-	drpcServer.RegisterRPCModule(newSrvModule(req.log, req.sysdb, req.iosrvs))
+	drpcServer.RegisterRPCModule(newMgmtModule())
+	drpcServer.RegisterRPCModule(newSrvModule(req.log, req.sysdb, req.iosrvs, req.events))
 
 	if err := drpcServer.Start(); err != nil {
 		return errors.Wrapf(err, "unable to start socket server on %s", sockPath)

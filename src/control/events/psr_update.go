@@ -28,7 +28,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 )
 
 // PoolSvcInfo describes details of a pool service.
@@ -49,16 +49,16 @@ func (evt *RASEvent) GetPoolSvcInfo() *PoolSvcInfo {
 }
 
 // PoolSvcInfoFromProto converts event info from proto to native format.
-func PoolSvcInfoFromProto(pbInfo *mgmtpb.RASEvent_PoolSvcInfo) (*PoolSvcInfo, error) {
+func PoolSvcInfoFromProto(pbInfo *sharedpb.RASEvent_PoolSvcInfo) (*PoolSvcInfo, error) {
 	psi := new(PoolSvcInfo)
 
 	return psi, convert.Types(pbInfo.PoolSvcInfo, psi)
 }
 
 // PoolSvcInfoToProto converts event info from native to proto format.
-func PoolSvcInfoToProto(psi *PoolSvcInfo) (*mgmtpb.RASEvent_PoolSvcInfo, error) {
-	pbInfo := &mgmtpb.RASEvent_PoolSvcInfo{
-		PoolSvcInfo: &mgmtpb.RASEvent_PoolSvcEventInfo{},
+func PoolSvcInfoToProto(psi *PoolSvcInfo) (*sharedpb.RASEvent_PoolSvcInfo, error) {
+	pbInfo := &sharedpb.RASEvent_PoolSvcInfo{
+		PoolSvcInfo: &sharedpb.RASEvent_PoolSvcEventInfo{},
 	}
 
 	return pbInfo, convert.Types(psi, pbInfo.PoolSvcInfo)

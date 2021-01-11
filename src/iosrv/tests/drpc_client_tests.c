@@ -242,7 +242,7 @@ static void
 verify_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc_reps)
 {
 	Drpc__Call		*call;
-	Mgmt__ClusterEventReq	*req;
+	Shared__ClusterEventReq	*req;
 	d_rank_list_t		*reps;
 	uuid_t			 puuid;
 	int			 reps_match;
@@ -250,12 +250,12 @@ verify_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc_reps)
 	call = drpc__call__unpack(NULL, sendmsg_msg_iov_len,
 				  sendmsg_msg_content);
 	assert_non_null(call);
-	assert_int_equal(call->module, DRPC_MODULE_MGMT);
-	assert_int_equal(call->method, DRPC_METHOD_MGMT_CLUSTER_EVENT);
+	assert_int_equal(call->module, DRPC_MODULE_SRV);
+	assert_int_equal(call->method, DRPC_METHOD_SRV_CLUSTER_EVENT);
 
 	/* Verify payload contents */
-	req = mgmt__cluster_event_req__unpack(NULL, call->body.len,
-					      call->body.data);
+	req = shared__cluster_event_req__unpack(NULL, call->body.len,
+						call->body.data);
 	assert_non_null(req);
 	assert_int_equal(uuid_parse(req->event->pool_uuid, puuid), 0);
 	assert_int_equal(uuid_compare(puuid, pool_uuid), 0);
@@ -268,7 +268,7 @@ verify_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc_reps)
 	assert_true(reps_match);
 
 	/* Cleanup */
-	mgmt__cluster_event_req__free_unpacked(req, NULL);
+	shared__cluster_event_req__free_unpacked(req, NULL);
 	drpc__call__free_unpacked(call, NULL);
 }
 
@@ -302,18 +302,18 @@ verify_notify_ras_event(ras_event_t id, ras_type_t type, ras_sev_t sev,
 			char *msg, char *data)
 {
 	Drpc__Call		*call;
-	Mgmt__ClusterEventReq	*req;
+	Shared__ClusterEventReq	*req;
 	uuid_t			 req_puuid, req_cuuid;
 
 	call = drpc__call__unpack(NULL, sendmsg_msg_iov_len,
 				  sendmsg_msg_content);
 	assert_non_null(call);
-	assert_int_equal(call->module, DRPC_MODULE_MGMT);
-	assert_int_equal(call->method, DRPC_METHOD_MGMT_CLUSTER_EVENT);
+	assert_int_equal(call->module, DRPC_MODULE_SRV);
+	assert_int_equal(call->method, DRPC_METHOD_SRV_CLUSTER_EVENT);
 
 	/* Verify payload contents */
-	req = mgmt__cluster_event_req__unpack(NULL, call->body.len,
-					      call->body.data);
+	req = shared__cluster_event_req__unpack(NULL, call->body.len,
+						call->body.data);
 	assert_non_null(req);
 	assert_int_equal(uuid_parse(req->event->pool_uuid, req_puuid), 0);
 	assert_int_equal(uuid_compare(req_puuid, *puuid), 0);
@@ -321,7 +321,7 @@ verify_notify_ras_event(ras_event_t id, ras_type_t type, ras_sev_t sev,
 	assert_int_equal(uuid_compare(req_cuuid, *cuuid), 0);
 
 	/* Cleanup */
-	mgmt__cluster_event_req__free_unpacked(req, NULL);
+	shared__cluster_event_req__free_unpacked(req, NULL);
 	drpc__call__free_unpacked(call, NULL);
 }
 
@@ -341,9 +341,10 @@ test_drpc_verify_notify_ras_event(void **state)
 	assert_int_equal(uuid_parse("22222222-2222-2222-2222-222222222222",
 				    cuuid), 0);
 
-	ds_notify_ras_event(RAS_RANK_NO_RESPONSE, RAS_TYPE_INFO, RAS_SEV_WARN,
-			    "exhwid", &rank, "exjobid", &puuid, &cuuid, &oid,
-			    "exctlop", "Example message for no response",
+	ds_notify_ras_event(RAS_RANK_NO_RESPONSE,
+			    "Example message for no response", RAS_TYPE_INFO,
+			    RAS_SEV_WARN, "exhwid", &rank, "exjobid", &puuid,
+			    &cuuid, &oid, "exctlop",
 			    "{\"people\":[\"bill\",\"steve\",\"bob\"]}");
 	verify_notify_ras_event(RAS_RANK_NO_RESPONSE, RAS_TYPE_INFO,
 				RAS_SEV_WARN, "exhwid", &rank, "exjobid",
@@ -354,12 +355,13 @@ test_drpc_verify_notify_ras_event(void **state)
 	drpc_fini();
 }
 
-/* TODO DAOS-6436:
+/**
+ * TODO DAOS-6436:
  * static void
  * test_drpc_verify_notify_ras_min_viable(void **state)
  * static void
  * test_drpc_verify_notify_ras_incomplete(void **state)
-*/
+ */
 
 /* Convenience macros for unit tests */
 #define UTEST(x)	cmocka_unit_test_setup_teardown(x,	\

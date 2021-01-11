@@ -196,8 +196,8 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 	}
 
 	// don't publish rank exit events whilst performing controlled shutdown
-	svc.events.DisableEventIDs(events.RASRankExit)
-	defer svc.events.EnableEventIDs(events.RASRankExit)
+	svc.events.DisableEventIDs(events.RASRankDown)
+	defer svc.events.EnableEventIDs(events.RASRankDown)
 
 	for _, srv := range instances {
 		svc.log.Debugf("%d: check started", srv.Index())

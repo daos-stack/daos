@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/daos-stack/daos/src/control/common"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 )
 
 // RankStateInfo describes details of a rank's state.
@@ -48,7 +48,7 @@ func (evt *RASEvent) GetRankStateInfo() *RankStateInfo {
 }
 
 // RankStateInfoFromProto converts event info from proto to native format.
-func RankStateInfoFromProto(pbInfo *mgmtpb.RASEvent_RankStateInfo) (*RankStateInfo, error) {
+func RankStateInfoFromProto(pbInfo *sharedpb.RASEvent_RankStateInfo) (*RankStateInfo, error) {
 	rsi := &RankStateInfo{
 		InstanceIdx: pbInfo.RankStateInfo.GetInstance(),
 	}
@@ -60,9 +60,9 @@ func RankStateInfoFromProto(pbInfo *mgmtpb.RASEvent_RankStateInfo) (*RankStateIn
 }
 
 // RankStateInfoToProto converts event info from native to proto format.
-func RankStateInfoToProto(rsi *RankStateInfo) (*mgmtpb.RASEvent_RankStateInfo, error) {
-	pbInfo := &mgmtpb.RASEvent_RankStateInfo{
-		RankStateInfo: &mgmtpb.RASEvent_RankStateEventInfo{
+func RankStateInfoToProto(rsi *RankStateInfo) (*sharedpb.RASEvent_RankStateInfo, error) {
+	pbInfo := &sharedpb.RASEvent_RankStateInfo{
+		RankStateInfo: &sharedpb.RASEvent_RankStateEventInfo{
 			Instance: rsi.InstanceIdx,
 		},
 	}

@@ -7,154 +7,154 @@
 #endif
 
 #include "event.pb-c.h"
-void   mgmt__rasevent__rank_state_event_info__init
-                     (Mgmt__RASEvent__RankStateEventInfo         *message)
+void   shared__rasevent__rank_state_event_info__init
+                     (Shared__RASEvent__RankStateEventInfo         *message)
 {
-  static const Mgmt__RASEvent__RankStateEventInfo init_value = MGMT__RASEVENT__RANK_STATE_EVENT_INFO__INIT;
+  static const Shared__RASEvent__RankStateEventInfo init_value = SHARED__RASEVENT__RANK_STATE_EVENT_INFO__INIT;
   *message = init_value;
 }
-void   mgmt__rasevent__pool_svc_event_info__init
-                     (Mgmt__RASEvent__PoolSvcEventInfo         *message)
+void   shared__rasevent__pool_svc_event_info__init
+                     (Shared__RASEvent__PoolSvcEventInfo         *message)
 {
-  static const Mgmt__RASEvent__PoolSvcEventInfo init_value = MGMT__RASEVENT__POOL_SVC_EVENT_INFO__INIT;
+  static const Shared__RASEvent__PoolSvcEventInfo init_value = SHARED__RASEVENT__POOL_SVC_EVENT_INFO__INIT;
   *message = init_value;
 }
-void   mgmt__rasevent__init
-                     (Mgmt__RASEvent         *message)
+void   shared__rasevent__init
+                     (Shared__RASEvent         *message)
 {
-  static const Mgmt__RASEvent init_value = MGMT__RASEVENT__INIT;
+  static const Shared__RASEvent init_value = SHARED__RASEVENT__INIT;
   *message = init_value;
 }
-size_t mgmt__rasevent__get_packed_size
-                     (const Mgmt__RASEvent *message)
+size_t shared__rasevent__get_packed_size
+                     (const Shared__RASEvent *message)
 {
-  assert(message->base.descriptor == &mgmt__rasevent__descriptor);
+  assert(message->base.descriptor == &shared__rasevent__descriptor);
   return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
 }
-size_t mgmt__rasevent__pack
-                     (const Mgmt__RASEvent *message,
+size_t shared__rasevent__pack
+                     (const Shared__RASEvent *message,
                       uint8_t       *out)
 {
-  assert(message->base.descriptor == &mgmt__rasevent__descriptor);
+  assert(message->base.descriptor == &shared__rasevent__descriptor);
   return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
 }
-size_t mgmt__rasevent__pack_to_buffer
-                     (const Mgmt__RASEvent *message,
+size_t shared__rasevent__pack_to_buffer
+                     (const Shared__RASEvent *message,
                       ProtobufCBuffer *buffer)
 {
-  assert(message->base.descriptor == &mgmt__rasevent__descriptor);
+  assert(message->base.descriptor == &shared__rasevent__descriptor);
   return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
 }
-Mgmt__RASEvent *
-       mgmt__rasevent__unpack
+Shared__RASEvent *
+       shared__rasevent__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data)
 {
-  return (Mgmt__RASEvent *)
-     protobuf_c_message_unpack (&mgmt__rasevent__descriptor,
+  return (Shared__RASEvent *)
+     protobuf_c_message_unpack (&shared__rasevent__descriptor,
                                 allocator, len, data);
 }
-void   mgmt__rasevent__free_unpacked
-                     (Mgmt__RASEvent *message,
+void   shared__rasevent__free_unpacked
+                     (Shared__RASEvent *message,
                       ProtobufCAllocator *allocator)
 {
   if(!message)
     return;
-  assert(message->base.descriptor == &mgmt__rasevent__descriptor);
+  assert(message->base.descriptor == &shared__rasevent__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-void   mgmt__cluster_event_req__init
-                     (Mgmt__ClusterEventReq         *message)
+void   shared__cluster_event_req__init
+                     (Shared__ClusterEventReq         *message)
 {
-  static const Mgmt__ClusterEventReq init_value = MGMT__CLUSTER_EVENT_REQ__INIT;
+  static const Shared__ClusterEventReq init_value = SHARED__CLUSTER_EVENT_REQ__INIT;
   *message = init_value;
 }
-size_t mgmt__cluster_event_req__get_packed_size
-                     (const Mgmt__ClusterEventReq *message)
+size_t shared__cluster_event_req__get_packed_size
+                     (const Shared__ClusterEventReq *message)
 {
-  assert(message->base.descriptor == &mgmt__cluster_event_req__descriptor);
+  assert(message->base.descriptor == &shared__cluster_event_req__descriptor);
   return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
 }
-size_t mgmt__cluster_event_req__pack
-                     (const Mgmt__ClusterEventReq *message,
+size_t shared__cluster_event_req__pack
+                     (const Shared__ClusterEventReq *message,
                       uint8_t       *out)
 {
-  assert(message->base.descriptor == &mgmt__cluster_event_req__descriptor);
+  assert(message->base.descriptor == &shared__cluster_event_req__descriptor);
   return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
 }
-size_t mgmt__cluster_event_req__pack_to_buffer
-                     (const Mgmt__ClusterEventReq *message,
+size_t shared__cluster_event_req__pack_to_buffer
+                     (const Shared__ClusterEventReq *message,
                       ProtobufCBuffer *buffer)
 {
-  assert(message->base.descriptor == &mgmt__cluster_event_req__descriptor);
+  assert(message->base.descriptor == &shared__cluster_event_req__descriptor);
   return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
 }
-Mgmt__ClusterEventReq *
-       mgmt__cluster_event_req__unpack
+Shared__ClusterEventReq *
+       shared__cluster_event_req__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data)
 {
-  return (Mgmt__ClusterEventReq *)
-     protobuf_c_message_unpack (&mgmt__cluster_event_req__descriptor,
+  return (Shared__ClusterEventReq *)
+     protobuf_c_message_unpack (&shared__cluster_event_req__descriptor,
                                 allocator, len, data);
 }
-void   mgmt__cluster_event_req__free_unpacked
-                     (Mgmt__ClusterEventReq *message,
+void   shared__cluster_event_req__free_unpacked
+                     (Shared__ClusterEventReq *message,
                       ProtobufCAllocator *allocator)
 {
   if(!message)
     return;
-  assert(message->base.descriptor == &mgmt__cluster_event_req__descriptor);
+  assert(message->base.descriptor == &shared__cluster_event_req__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-void   mgmt__cluster_event_resp__init
-                     (Mgmt__ClusterEventResp         *message)
+void   shared__cluster_event_resp__init
+                     (Shared__ClusterEventResp         *message)
 {
-  static const Mgmt__ClusterEventResp init_value = MGMT__CLUSTER_EVENT_RESP__INIT;
+  static const Shared__ClusterEventResp init_value = SHARED__CLUSTER_EVENT_RESP__INIT;
   *message = init_value;
 }
-size_t mgmt__cluster_event_resp__get_packed_size
-                     (const Mgmt__ClusterEventResp *message)
+size_t shared__cluster_event_resp__get_packed_size
+                     (const Shared__ClusterEventResp *message)
 {
-  assert(message->base.descriptor == &mgmt__cluster_event_resp__descriptor);
+  assert(message->base.descriptor == &shared__cluster_event_resp__descriptor);
   return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
 }
-size_t mgmt__cluster_event_resp__pack
-                     (const Mgmt__ClusterEventResp *message,
+size_t shared__cluster_event_resp__pack
+                     (const Shared__ClusterEventResp *message,
                       uint8_t       *out)
 {
-  assert(message->base.descriptor == &mgmt__cluster_event_resp__descriptor);
+  assert(message->base.descriptor == &shared__cluster_event_resp__descriptor);
   return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
 }
-size_t mgmt__cluster_event_resp__pack_to_buffer
-                     (const Mgmt__ClusterEventResp *message,
+size_t shared__cluster_event_resp__pack_to_buffer
+                     (const Shared__ClusterEventResp *message,
                       ProtobufCBuffer *buffer)
 {
-  assert(message->base.descriptor == &mgmt__cluster_event_resp__descriptor);
+  assert(message->base.descriptor == &shared__cluster_event_resp__descriptor);
   return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
 }
-Mgmt__ClusterEventResp *
-       mgmt__cluster_event_resp__unpack
+Shared__ClusterEventResp *
+       shared__cluster_event_resp__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data)
 {
-  return (Mgmt__ClusterEventResp *)
-     protobuf_c_message_unpack (&mgmt__cluster_event_resp__descriptor,
+  return (Shared__ClusterEventResp *)
+     protobuf_c_message_unpack (&shared__cluster_event_resp__descriptor,
                                 allocator, len, data);
 }
-void   mgmt__cluster_event_resp__free_unpacked
-                     (Mgmt__ClusterEventResp *message,
+void   shared__cluster_event_resp__free_unpacked
+                     (Shared__ClusterEventResp *message,
                       ProtobufCAllocator *allocator)
 {
   if(!message)
     return;
-  assert(message->base.descriptor == &mgmt__cluster_event_resp__descriptor);
+  assert(message->base.descriptor == &shared__cluster_event_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor mgmt__rasevent__rank_state_event_info__field_descriptors[3] =
+static const ProtobufCFieldDescriptor shared__rasevent__rank_state_event_info__field_descriptors[3] =
 {
   {
     "instance",
@@ -162,7 +162,7 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__rank_state_event_info__fie
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent__RankStateEventInfo, instance),
+    offsetof(Shared__RASEvent__RankStateEventInfo, instance),
     NULL,
     NULL,
     0,             /* flags */
@@ -174,7 +174,7 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__rank_state_event_info__fie
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_BOOL,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent__RankStateEventInfo, errored),
+    offsetof(Shared__RASEvent__RankStateEventInfo, errored),
     NULL,
     NULL,
     0,             /* flags */
@@ -186,47 +186,47 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__rank_state_event_info__fie
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent__RankStateEventInfo, error),
+    offsetof(Shared__RASEvent__RankStateEventInfo, error),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
-static const unsigned mgmt__rasevent__rank_state_event_info__field_indices_by_name[] = {
+static const unsigned shared__rasevent__rank_state_event_info__field_indices_by_name[] = {
   2,   /* field[2] = error */
   1,   /* field[1] = errored */
   0,   /* field[0] = instance */
 };
-static const ProtobufCIntRange mgmt__rasevent__rank_state_event_info__number_ranges[1 + 1] =
+static const ProtobufCIntRange shared__rasevent__rank_state_event_info__number_ranges[1 + 1] =
 {
   { 1, 0 },
   { 0, 3 }
 };
-const ProtobufCMessageDescriptor mgmt__rasevent__rank_state_event_info__descriptor =
+const ProtobufCMessageDescriptor shared__rasevent__rank_state_event_info__descriptor =
 {
   PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "mgmt.RASEvent.RankStateEventInfo",
+  "shared.RASEvent.RankStateEventInfo",
   "RankStateEventInfo",
-  "Mgmt__RASEvent__RankStateEventInfo",
-  "mgmt",
-  sizeof(Mgmt__RASEvent__RankStateEventInfo),
+  "Shared__RASEvent__RankStateEventInfo",
+  "shared",
+  sizeof(Shared__RASEvent__RankStateEventInfo),
   3,
-  mgmt__rasevent__rank_state_event_info__field_descriptors,
-  mgmt__rasevent__rank_state_event_info__field_indices_by_name,
-  1,  mgmt__rasevent__rank_state_event_info__number_ranges,
-  (ProtobufCMessageInit) mgmt__rasevent__rank_state_event_info__init,
+  shared__rasevent__rank_state_event_info__field_descriptors,
+  shared__rasevent__rank_state_event_info__field_indices_by_name,
+  1,  shared__rasevent__rank_state_event_info__number_ranges,
+  (ProtobufCMessageInit) shared__rasevent__rank_state_event_info__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__rasevent__pool_svc_event_info__field_descriptors[2] =
+static const ProtobufCFieldDescriptor shared__rasevent__pool_svc_event_info__field_descriptors[2] =
 {
   {
     "svc_reps",
     1,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_UINT32,
-    offsetof(Mgmt__RASEvent__PoolSvcEventInfo, n_svc_reps),
-    offsetof(Mgmt__RASEvent__PoolSvcEventInfo, svc_reps),
+    offsetof(Shared__RASEvent__PoolSvcEventInfo, n_svc_reps),
+    offsetof(Shared__RASEvent__PoolSvcEventInfo, svc_reps),
     NULL,
     NULL,
     0,             /* flags */
@@ -238,38 +238,38 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__pool_svc_event_info__field
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent__PoolSvcEventInfo, version),
+    offsetof(Shared__RASEvent__PoolSvcEventInfo, version),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
-static const unsigned mgmt__rasevent__pool_svc_event_info__field_indices_by_name[] = {
+static const unsigned shared__rasevent__pool_svc_event_info__field_indices_by_name[] = {
   0,   /* field[0] = svc_reps */
   1,   /* field[1] = version */
 };
-static const ProtobufCIntRange mgmt__rasevent__pool_svc_event_info__number_ranges[1 + 1] =
+static const ProtobufCIntRange shared__rasevent__pool_svc_event_info__number_ranges[1 + 1] =
 {
   { 1, 0 },
   { 0, 2 }
 };
-const ProtobufCMessageDescriptor mgmt__rasevent__pool_svc_event_info__descriptor =
+const ProtobufCMessageDescriptor shared__rasevent__pool_svc_event_info__descriptor =
 {
   PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "mgmt.RASEvent.PoolSvcEventInfo",
+  "shared.RASEvent.PoolSvcEventInfo",
   "PoolSvcEventInfo",
-  "Mgmt__RASEvent__PoolSvcEventInfo",
-  "mgmt",
-  sizeof(Mgmt__RASEvent__PoolSvcEventInfo),
+  "Shared__RASEvent__PoolSvcEventInfo",
+  "shared",
+  sizeof(Shared__RASEvent__PoolSvcEventInfo),
   2,
-  mgmt__rasevent__pool_svc_event_info__field_descriptors,
-  mgmt__rasevent__pool_svc_event_info__field_indices_by_name,
-  1,  mgmt__rasevent__pool_svc_event_info__number_ranges,
-  (ProtobufCMessageInit) mgmt__rasevent__pool_svc_event_info__init,
+  shared__rasevent__pool_svc_event_info__field_descriptors,
+  shared__rasevent__pool_svc_event_info__field_indices_by_name,
+  1,  shared__rasevent__pool_svc_event_info__number_ranges,
+  (ProtobufCMessageInit) shared__rasevent__pool_svc_event_info__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
+static const ProtobufCFieldDescriptor shared__rasevent__field_descriptors[18] =
 {
   {
     "id",
@@ -277,7 +277,7 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, id),
+    offsetof(Shared__RASEvent, id),
     NULL,
     NULL,
     0,             /* flags */
@@ -289,7 +289,7 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, msg),
+    offsetof(Shared__RASEvent, msg),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -301,7 +301,7 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, timestamp),
+    offsetof(Shared__RASEvent, timestamp),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -313,7 +313,7 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, type),
+    offsetof(Shared__RASEvent, type),
     NULL,
     NULL,
     0,             /* flags */
@@ -325,7 +325,7 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, severity),
+    offsetof(Shared__RASEvent, severity),
     NULL,
     NULL,
     0,             /* flags */
@@ -337,7 +337,7 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, hostname),
+    offsetof(Shared__RASEvent, hostname),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -349,7 +349,7 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, rank),
+    offsetof(Shared__RASEvent, rank),
     NULL,
     NULL,
     0,             /* flags */
@@ -361,7 +361,7 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, hw_id),
+    offsetof(Shared__RASEvent, hw_id),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -373,7 +373,7 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, proc_id),
+    offsetof(Shared__RASEvent, proc_id),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -385,7 +385,7 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, thread_id),
+    offsetof(Shared__RASEvent, thread_id),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -397,7 +397,7 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, job_id),
+    offsetof(Shared__RASEvent, job_id),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -409,7 +409,7 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, pool_uuid),
+    offsetof(Shared__RASEvent, pool_uuid),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -421,7 +421,7 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, cont_uuid),
+    offsetof(Shared__RASEvent, cont_uuid),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -433,7 +433,7 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, obj_id),
+    offsetof(Shared__RASEvent, obj_id),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -445,7 +445,7 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__RASEvent, ctl_op),
+    offsetof(Shared__RASEvent, ctl_op),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -456,8 +456,8 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
     16,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
-    offsetof(Mgmt__RASEvent, extended_info_case),
-    offsetof(Mgmt__RASEvent, str_info),
+    offsetof(Shared__RASEvent, extended_info_case),
+    offsetof(Shared__RASEvent, str_info),
     NULL,
     &protobuf_c_empty_string,
     0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
@@ -468,9 +468,9 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
     17,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_MESSAGE,
-    offsetof(Mgmt__RASEvent, extended_info_case),
-    offsetof(Mgmt__RASEvent, rank_state_info),
-    &mgmt__rasevent__rank_state_event_info__descriptor,
+    offsetof(Shared__RASEvent, extended_info_case),
+    offsetof(Shared__RASEvent, rank_state_info),
+    &shared__rasevent__rank_state_event_info__descriptor,
     NULL,
     0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
@@ -480,15 +480,15 @@ static const ProtobufCFieldDescriptor mgmt__rasevent__field_descriptors[18] =
     18,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_MESSAGE,
-    offsetof(Mgmt__RASEvent, extended_info_case),
-    offsetof(Mgmt__RASEvent, pool_svc_info),
-    &mgmt__rasevent__pool_svc_event_info__descriptor,
+    offsetof(Shared__RASEvent, extended_info_case),
+    offsetof(Shared__RASEvent, pool_svc_info),
+    &shared__rasevent__pool_svc_event_info__descriptor,
     NULL,
     0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
-static const unsigned mgmt__rasevent__field_indices_by_name[] = {
+static const unsigned shared__rasevent__field_indices_by_name[] = {
   12,   /* field[12] = cont_uuid */
   14,   /* field[14] = ctl_op */
   5,   /* field[5] = hostname */
@@ -508,27 +508,27 @@ static const unsigned mgmt__rasevent__field_indices_by_name[] = {
   2,   /* field[2] = timestamp */
   3,   /* field[3] = type */
 };
-static const ProtobufCIntRange mgmt__rasevent__number_ranges[1 + 1] =
+static const ProtobufCIntRange shared__rasevent__number_ranges[1 + 1] =
 {
   { 1, 0 },
   { 0, 18 }
 };
-const ProtobufCMessageDescriptor mgmt__rasevent__descriptor =
+const ProtobufCMessageDescriptor shared__rasevent__descriptor =
 {
   PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "mgmt.RASEvent",
+  "shared.RASEvent",
   "RASEvent",
-  "Mgmt__RASEvent",
-  "mgmt",
-  sizeof(Mgmt__RASEvent),
+  "Shared__RASEvent",
+  "shared",
+  sizeof(Shared__RASEvent),
   18,
-  mgmt__rasevent__field_descriptors,
-  mgmt__rasevent__field_indices_by_name,
-  1,  mgmt__rasevent__number_ranges,
-  (ProtobufCMessageInit) mgmt__rasevent__init,
+  shared__rasevent__field_descriptors,
+  shared__rasevent__field_indices_by_name,
+  1,  shared__rasevent__number_ranges,
+  (ProtobufCMessageInit) shared__rasevent__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__cluster_event_req__field_descriptors[2] =
+static const ProtobufCFieldDescriptor shared__cluster_event_req__field_descriptors[2] =
 {
   {
     "sequence",
@@ -536,7 +536,7 @@ static const ProtobufCFieldDescriptor mgmt__cluster_event_req__field_descriptors
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__ClusterEventReq, sequence),
+    offsetof(Shared__ClusterEventReq, sequence),
     NULL,
     NULL,
     0,             /* flags */
@@ -548,38 +548,38 @@ static const ProtobufCFieldDescriptor mgmt__cluster_event_req__field_descriptors
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_MESSAGE,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__ClusterEventReq, event),
-    &mgmt__rasevent__descriptor,
+    offsetof(Shared__ClusterEventReq, event),
+    &shared__rasevent__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
-static const unsigned mgmt__cluster_event_req__field_indices_by_name[] = {
+static const unsigned shared__cluster_event_req__field_indices_by_name[] = {
   1,   /* field[1] = event */
   0,   /* field[0] = sequence */
 };
-static const ProtobufCIntRange mgmt__cluster_event_req__number_ranges[1 + 1] =
+static const ProtobufCIntRange shared__cluster_event_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
   { 0, 2 }
 };
-const ProtobufCMessageDescriptor mgmt__cluster_event_req__descriptor =
+const ProtobufCMessageDescriptor shared__cluster_event_req__descriptor =
 {
   PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "mgmt.ClusterEventReq",
+  "shared.ClusterEventReq",
   "ClusterEventReq",
-  "Mgmt__ClusterEventReq",
-  "mgmt",
-  sizeof(Mgmt__ClusterEventReq),
+  "Shared__ClusterEventReq",
+  "shared",
+  sizeof(Shared__ClusterEventReq),
   2,
-  mgmt__cluster_event_req__field_descriptors,
-  mgmt__cluster_event_req__field_indices_by_name,
-  1,  mgmt__cluster_event_req__number_ranges,
-  (ProtobufCMessageInit) mgmt__cluster_event_req__init,
+  shared__cluster_event_req__field_descriptors,
+  shared__cluster_event_req__field_indices_by_name,
+  1,  shared__cluster_event_req__number_ranges,
+  (ProtobufCMessageInit) shared__cluster_event_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__cluster_event_resp__field_descriptors[2] =
+static const ProtobufCFieldDescriptor shared__cluster_event_resp__field_descriptors[2] =
 {
   {
     "sequence",
@@ -587,7 +587,7 @@ static const ProtobufCFieldDescriptor mgmt__cluster_event_resp__field_descriptor
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__ClusterEventResp, sequence),
+    offsetof(Shared__ClusterEventResp, sequence),
     NULL,
     NULL,
     0,             /* flags */
@@ -599,34 +599,34 @@ static const ProtobufCFieldDescriptor mgmt__cluster_event_resp__field_descriptor
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_INT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__ClusterEventResp, status),
+    offsetof(Shared__ClusterEventResp, status),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
-static const unsigned mgmt__cluster_event_resp__field_indices_by_name[] = {
+static const unsigned shared__cluster_event_resp__field_indices_by_name[] = {
   0,   /* field[0] = sequence */
   1,   /* field[1] = status */
 };
-static const ProtobufCIntRange mgmt__cluster_event_resp__number_ranges[1 + 1] =
+static const ProtobufCIntRange shared__cluster_event_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
   { 0, 2 }
 };
-const ProtobufCMessageDescriptor mgmt__cluster_event_resp__descriptor =
+const ProtobufCMessageDescriptor shared__cluster_event_resp__descriptor =
 {
   PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "mgmt.ClusterEventResp",
+  "shared.ClusterEventResp",
   "ClusterEventResp",
-  "Mgmt__ClusterEventResp",
-  "mgmt",
-  sizeof(Mgmt__ClusterEventResp),
+  "Shared__ClusterEventResp",
+  "shared",
+  sizeof(Shared__ClusterEventResp),
   2,
-  mgmt__cluster_event_resp__field_descriptors,
-  mgmt__cluster_event_resp__field_indices_by_name,
-  1,  mgmt__cluster_event_resp__number_ranges,
-  (ProtobufCMessageInit) mgmt__cluster_event_resp__init,
+  shared__cluster_event_resp__field_descriptors,
+  shared__cluster_event_resp__field_indices_by_name,
+  1,  shared__cluster_event_resp__number_ranges,
+  (ProtobufCMessageInit) shared__cluster_event_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };

@@ -1113,7 +1113,7 @@ func TestControl_SystemNotify(t *testing.T) {
 				Event:    rasEventRankExit,
 				Sequence: 1,
 			},
-			uResp:   MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.ClusterEventResp{}),
+			uResp:   MockMSResponse("10.0.0.1:10001", nil, &sharedpb.ClusterEventResp{}),
 			expResp: &SystemNotifyResp{},
 		},
 	} {

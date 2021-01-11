@@ -15,11 +15,11 @@ PROTOBUF_C__BEGIN_DECLS
 #endif
 
 
-typedef struct _Mgmt__RASEvent Mgmt__RASEvent;
-typedef struct _Mgmt__RASEvent__RankStateEventInfo Mgmt__RASEvent__RankStateEventInfo;
-typedef struct _Mgmt__RASEvent__PoolSvcEventInfo Mgmt__RASEvent__PoolSvcEventInfo;
-typedef struct _Mgmt__ClusterEventReq Mgmt__ClusterEventReq;
-typedef struct _Mgmt__ClusterEventResp Mgmt__ClusterEventResp;
+typedef struct _Shared__RASEvent Shared__RASEvent;
+typedef struct _Shared__RASEvent__RankStateEventInfo Shared__RASEvent__RankStateEventInfo;
+typedef struct _Shared__RASEvent__PoolSvcEventInfo Shared__RASEvent__PoolSvcEventInfo;
+typedef struct _Shared__ClusterEventReq Shared__ClusterEventReq;
+typedef struct _Shared__ClusterEventResp Shared__ClusterEventResp;
 
 
 /* --- enums --- */
@@ -30,7 +30,7 @@ typedef struct _Mgmt__ClusterEventResp Mgmt__ClusterEventResp;
 /*
  * RankStateEventInfo defines extended fields for rank state change events.
  */
-struct  _Mgmt__RASEvent__RankStateEventInfo
+struct  _Shared__RASEvent__RankStateEventInfo
 {
   ProtobufCMessage base;
   /*
@@ -46,15 +46,15 @@ struct  _Mgmt__RASEvent__RankStateEventInfo
    */
   char *error;
 };
-#define MGMT__RASEVENT__RANK_STATE_EVENT_INFO__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__rasevent__rank_state_event_info__descriptor) \
+#define SHARED__RASEVENT__RANK_STATE_EVENT_INFO__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&shared__rasevent__rank_state_event_info__descriptor) \
     , 0, 0, (char *)protobuf_c_empty_string }
 
 
 /*
  * PoolSvcEventInfo defines extended fields for pool service change events.
  */
-struct  _Mgmt__RASEvent__PoolSvcEventInfo
+struct  _Shared__RASEvent__PoolSvcEventInfo
 {
   ProtobufCMessage base;
   /*
@@ -67,23 +67,23 @@ struct  _Mgmt__RASEvent__PoolSvcEventInfo
    */
   uint64_t version;
 };
-#define MGMT__RASEVENT__POOL_SVC_EVENT_INFO__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__rasevent__pool_svc_event_info__descriptor) \
+#define SHARED__RASEVENT__POOL_SVC_EVENT_INFO__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&shared__rasevent__pool_svc_event_info__descriptor) \
     , 0,NULL, 0 }
 
 
 typedef enum {
-  MGMT__RASEVENT__EXTENDED_INFO__NOT_SET = 0,
-  MGMT__RASEVENT__EXTENDED_INFO_STR_INFO = 16,
-  MGMT__RASEVENT__EXTENDED_INFO_RANK_STATE_INFO = 17,
-  MGMT__RASEVENT__EXTENDED_INFO_POOL_SVC_INFO = 18
-    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__RASEVENT__EXTENDED_INFO)
-} Mgmt__RASEvent__ExtendedInfoCase;
+  SHARED__RASEVENT__EXTENDED_INFO__NOT_SET = 0,
+  SHARED__RASEVENT__EXTENDED_INFO_STR_INFO = 16,
+  SHARED__RASEVENT__EXTENDED_INFO_RANK_STATE_INFO = 17,
+  SHARED__RASEVENT__EXTENDED_INFO_POOL_SVC_INFO = 18
+    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(SHARED__RASEVENT__EXTENDED_INFO)
+} Shared__RASEvent__ExtendedInfoCase;
 
 /*
  * RASEvent describes a RAS event in the DAOS system.
  */
-struct  _Mgmt__RASEvent
+struct  _Shared__RASEvent
 {
   ProtobufCMessage base;
   /*
@@ -146,25 +146,25 @@ struct  _Mgmt__RASEvent
    * (optional) Recommended automatic action.
    */
   char *ctl_op;
-  Mgmt__RASEvent__ExtendedInfoCase extended_info_case;
+  Shared__RASEvent__ExtendedInfoCase extended_info_case;
   union {
     /*
      * Opaque data blob.
      */
     char *str_info;
-    Mgmt__RASEvent__RankStateEventInfo *rank_state_info;
-    Mgmt__RASEvent__PoolSvcEventInfo *pool_svc_info;
+    Shared__RASEvent__RankStateEventInfo *rank_state_info;
+    Shared__RASEvent__PoolSvcEventInfo *pool_svc_info;
   };
 };
-#define MGMT__RASEVENT__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__rasevent__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, MGMT__RASEVENT__EXTENDED_INFO__NOT_SET, {0} }
+#define SHARED__RASEVENT__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&shared__rasevent__descriptor) \
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, SHARED__RASEVENT__EXTENDED_INFO__NOT_SET, {0} }
 
 
 /*
  * ClusterEventReq communicates occurrence of a RAS event in the DAOS system.
  */
-struct  _Mgmt__ClusterEventReq
+struct  _Shared__ClusterEventReq
 {
   ProtobufCMessage base;
   /*
@@ -174,10 +174,10 @@ struct  _Mgmt__ClusterEventReq
   /*
    * RAS event.
    */
-  Mgmt__RASEvent *event;
+  Shared__RASEvent *event;
 };
-#define MGMT__CLUSTER_EVENT_REQ__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__cluster_event_req__descriptor) \
+#define SHARED__CLUSTER_EVENT_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&shared__cluster_event_req__descriptor) \
     , 0, NULL }
 
 
@@ -185,7 +185,7 @@ struct  _Mgmt__ClusterEventReq
  * RASEventResp acknowledges receipt of an event notification and an error
  * status. Acknowledgment does not indicate that the event was handled.
  */
-struct  _Mgmt__ClusterEventResp
+struct  _Shared__ClusterEventResp
 {
   ProtobufCMessage base;
   /*
@@ -197,90 +197,90 @@ struct  _Mgmt__ClusterEventResp
    */
   int32_t status;
 };
-#define MGMT__CLUSTER_EVENT_RESP__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__cluster_event_resp__descriptor) \
+#define SHARED__CLUSTER_EVENT_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&shared__cluster_event_resp__descriptor) \
     , 0, 0 }
 
 
-/* Mgmt__RASEvent__RankStateEventInfo methods */
-void   mgmt__rasevent__rank_state_event_info__init
-                     (Mgmt__RASEvent__RankStateEventInfo         *message);
-/* Mgmt__RASEvent__PoolSvcEventInfo methods */
-void   mgmt__rasevent__pool_svc_event_info__init
-                     (Mgmt__RASEvent__PoolSvcEventInfo         *message);
-/* Mgmt__RASEvent methods */
-void   mgmt__rasevent__init
-                     (Mgmt__RASEvent         *message);
-size_t mgmt__rasevent__get_packed_size
-                     (const Mgmt__RASEvent   *message);
-size_t mgmt__rasevent__pack
-                     (const Mgmt__RASEvent   *message,
+/* Shared__RASEvent__RankStateEventInfo methods */
+void   shared__rasevent__rank_state_event_info__init
+                     (Shared__RASEvent__RankStateEventInfo         *message);
+/* Shared__RASEvent__PoolSvcEventInfo methods */
+void   shared__rasevent__pool_svc_event_info__init
+                     (Shared__RASEvent__PoolSvcEventInfo         *message);
+/* Shared__RASEvent methods */
+void   shared__rasevent__init
+                     (Shared__RASEvent         *message);
+size_t shared__rasevent__get_packed_size
+                     (const Shared__RASEvent   *message);
+size_t shared__rasevent__pack
+                     (const Shared__RASEvent   *message,
                       uint8_t             *out);
-size_t mgmt__rasevent__pack_to_buffer
-                     (const Mgmt__RASEvent   *message,
+size_t shared__rasevent__pack_to_buffer
+                     (const Shared__RASEvent   *message,
                       ProtobufCBuffer     *buffer);
-Mgmt__RASEvent *
-       mgmt__rasevent__unpack
+Shared__RASEvent *
+       shared__rasevent__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data);
-void   mgmt__rasevent__free_unpacked
-                     (Mgmt__RASEvent *message,
+void   shared__rasevent__free_unpacked
+                     (Shared__RASEvent *message,
                       ProtobufCAllocator *allocator);
-/* Mgmt__ClusterEventReq methods */
-void   mgmt__cluster_event_req__init
-                     (Mgmt__ClusterEventReq         *message);
-size_t mgmt__cluster_event_req__get_packed_size
-                     (const Mgmt__ClusterEventReq   *message);
-size_t mgmt__cluster_event_req__pack
-                     (const Mgmt__ClusterEventReq   *message,
+/* Shared__ClusterEventReq methods */
+void   shared__cluster_event_req__init
+                     (Shared__ClusterEventReq         *message);
+size_t shared__cluster_event_req__get_packed_size
+                     (const Shared__ClusterEventReq   *message);
+size_t shared__cluster_event_req__pack
+                     (const Shared__ClusterEventReq   *message,
                       uint8_t             *out);
-size_t mgmt__cluster_event_req__pack_to_buffer
-                     (const Mgmt__ClusterEventReq   *message,
+size_t shared__cluster_event_req__pack_to_buffer
+                     (const Shared__ClusterEventReq   *message,
                       ProtobufCBuffer     *buffer);
-Mgmt__ClusterEventReq *
-       mgmt__cluster_event_req__unpack
+Shared__ClusterEventReq *
+       shared__cluster_event_req__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data);
-void   mgmt__cluster_event_req__free_unpacked
-                     (Mgmt__ClusterEventReq *message,
+void   shared__cluster_event_req__free_unpacked
+                     (Shared__ClusterEventReq *message,
                       ProtobufCAllocator *allocator);
-/* Mgmt__ClusterEventResp methods */
-void   mgmt__cluster_event_resp__init
-                     (Mgmt__ClusterEventResp         *message);
-size_t mgmt__cluster_event_resp__get_packed_size
-                     (const Mgmt__ClusterEventResp   *message);
-size_t mgmt__cluster_event_resp__pack
-                     (const Mgmt__ClusterEventResp   *message,
+/* Shared__ClusterEventResp methods */
+void   shared__cluster_event_resp__init
+                     (Shared__ClusterEventResp         *message);
+size_t shared__cluster_event_resp__get_packed_size
+                     (const Shared__ClusterEventResp   *message);
+size_t shared__cluster_event_resp__pack
+                     (const Shared__ClusterEventResp   *message,
                       uint8_t             *out);
-size_t mgmt__cluster_event_resp__pack_to_buffer
-                     (const Mgmt__ClusterEventResp   *message,
+size_t shared__cluster_event_resp__pack_to_buffer
+                     (const Shared__ClusterEventResp   *message,
                       ProtobufCBuffer     *buffer);
-Mgmt__ClusterEventResp *
-       mgmt__cluster_event_resp__unpack
+Shared__ClusterEventResp *
+       shared__cluster_event_resp__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data);
-void   mgmt__cluster_event_resp__free_unpacked
-                     (Mgmt__ClusterEventResp *message,
+void   shared__cluster_event_resp__free_unpacked
+                     (Shared__ClusterEventResp *message,
                       ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
-typedef void (*Mgmt__RASEvent__RankStateEventInfo_Closure)
-                 (const Mgmt__RASEvent__RankStateEventInfo *message,
+typedef void (*Shared__RASEvent__RankStateEventInfo_Closure)
+                 (const Shared__RASEvent__RankStateEventInfo *message,
                   void *closure_data);
-typedef void (*Mgmt__RASEvent__PoolSvcEventInfo_Closure)
-                 (const Mgmt__RASEvent__PoolSvcEventInfo *message,
+typedef void (*Shared__RASEvent__PoolSvcEventInfo_Closure)
+                 (const Shared__RASEvent__PoolSvcEventInfo *message,
                   void *closure_data);
-typedef void (*Mgmt__RASEvent_Closure)
-                 (const Mgmt__RASEvent *message,
+typedef void (*Shared__RASEvent_Closure)
+                 (const Shared__RASEvent *message,
                   void *closure_data);
-typedef void (*Mgmt__ClusterEventReq_Closure)
-                 (const Mgmt__ClusterEventReq *message,
+typedef void (*Shared__ClusterEventReq_Closure)
+                 (const Shared__ClusterEventReq *message,
                   void *closure_data);
-typedef void (*Mgmt__ClusterEventResp_Closure)
-                 (const Mgmt__ClusterEventResp *message,
+typedef void (*Shared__ClusterEventResp_Closure)
+                 (const Shared__ClusterEventResp *message,
                   void *closure_data);
 
 /* --- services --- */
@@ -288,11 +288,11 @@ typedef void (*Mgmt__ClusterEventResp_Closure)
 
 /* --- descriptors --- */
 
-extern const ProtobufCMessageDescriptor mgmt__rasevent__descriptor;
-extern const ProtobufCMessageDescriptor mgmt__rasevent__rank_state_event_info__descriptor;
-extern const ProtobufCMessageDescriptor mgmt__rasevent__pool_svc_event_info__descriptor;
-extern const ProtobufCMessageDescriptor mgmt__cluster_event_req__descriptor;
-extern const ProtobufCMessageDescriptor mgmt__cluster_event_resp__descriptor;
+extern const ProtobufCMessageDescriptor shared__rasevent__descriptor;
+extern const ProtobufCMessageDescriptor shared__rasevent__rank_state_event_info__descriptor;
+extern const ProtobufCMessageDescriptor shared__rasevent__pool_svc_event_info__descriptor;
+extern const ProtobufCMessageDescriptor shared__cluster_event_req__descriptor;
+extern const ProtobufCMessageDescriptor shared__cluster_event_resp__descriptor;
 
 PROTOBUF_C__END_DECLS
 

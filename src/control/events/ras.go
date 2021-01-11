@@ -35,7 +35,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 )
 
 // RASExtendedInfo provides extended information for an event.
@@ -44,7 +44,7 @@ type RASExtendedInfo interface {
 }
 
 // NewFromProto creates an Event from given protobuf RASEvent message.
-func NewFromProto(pbEvt *mgmtpb.RASEvent) (*RASEvent, error) {
+func NewFromProto(pbEvt *sharedpb.RASEvent) (*RASEvent, error) {
 	evt := new(RASEvent)
 
 	switch RASID(pbEvt.Id) {
@@ -170,8 +170,8 @@ func (evt *RASEvent) UnmarshalJSON(data []byte) error {
 }
 
 // ToProto returns a protobuf representation of the native event.
-func (evt *RASEvent) ToProto() (*mgmtpb.RASEvent, error) {
-	pbEvt := new(mgmtpb.RASEvent)
+func (evt *RASEvent) ToProto() (*sharedpb.RASEvent, error) {
+	pbEvt := new(sharedpb.RASEvent)
 	if err := convert.Types(evt, pbEvt); err != nil {
 		return nil, errors.Wrapf(err, "converting %T->%T", evt, pbEvt)
 	}
@@ -192,7 +192,7 @@ func (evt *RASEvent) ToProto() (*mgmtpb.RASEvent, error) {
 }
 
 // FromProto initializes a native event from a provided protobuf event.
-func (evt *RASEvent) FromProto(pbEvt *mgmtpb.RASEvent) (err error) {
+func (evt *RASEvent) FromProto(pbEvt *sharedpb.RASEvent) (err error) {
 	*evt = RASEvent{
 		ID:        RASID(pbEvt.Id),
 		Timestamp: pbEvt.Timestamp,
@@ -212,9 +212,9 @@ func (evt *RASEvent) FromProto(pbEvt *mgmtpb.RASEvent) (err error) {
 	}
 
 	switch ei := pbEvt.GetExtendedInfo().(type) {
-	case *mgmtpb.RASEvent_RankStateInfo:
+	case *sharedpb.RASEvent_RankStateInfo:
 		evt.ExtendedInfo, err = RankStateInfoFromProto(ei)
-	case *mgmtpb.RASEvent_PoolSvcInfo:
+	case *sharedpb.RASEvent_PoolSvcInfo:
 		evt.ExtendedInfo, err = PoolSvcInfoFromProto(ei)
 	}
 

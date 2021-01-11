@@ -27,6 +27,7 @@ import (
 	"context"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -120,7 +121,7 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 		nilReq        bool
 		zeroSeq       bool
 		event         *events.RASEvent
-		expResp       *mgmtpb.ClusterEventResp
+		expResp       *sharedpb.ClusterEventResp
 		expDispatched []*events.RASEvent
 		expErr        error
 	}{
@@ -130,7 +131,7 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 		},
 		"successful notification": {
 			event: eventRankExit,
-			expResp: &mgmtpb.ClusterEventResp{
+			expResp: &sharedpb.ClusterEventResp{
 				Sequence: 1,
 			},
 			expDispatched: []*events.RASEvent{eventRankExit},
@@ -151,18 +152,18 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			dispatched := &eventsDispatched{cancel: cancel}
 			mgmtSvc.events.Subscribe(events.RASTypeStateChange, dispatched)
 
-			var pbReq *mgmtpb.ClusterEventReq
+			var pbReq *sharedpb.ClusterEventReq
 			switch {
 			case tc.nilReq:
 			case tc.zeroSeq:
-				pbReq = &mgmtpb.ClusterEventReq{Sequence: 0}
+				pbReq = &sharedpb.ClusterEventReq{Sequence: 0}
 			default:
 				eventPB, err := tc.event.ToProto()
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				pbReq = &mgmtpb.ClusterEventReq{
+				pbReq = &sharedpb.ClusterEventReq{
 					Sequence: 1,
 					Event:    eventPB,
 				}
@@ -787,7 +788,7 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 			svc := newTestMgmtSvc(t, log)
 			svc.membership = svc.membership.WithTCPResolver(mockResolver)
 
-			ctx, cancel := context.WithTimeout(context.Background(), tc.ctxTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 			defer cancel()
 
 			ps := events.NewPubSub(ctx, log)

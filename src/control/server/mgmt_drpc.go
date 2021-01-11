@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
@@ -37,43 +37,17 @@ import (
 )
 
 // mgmtModule represents the daos_server mgmt dRPC module. It sends dRPCs to
-// the daos_io_server iosrv module (src/iosrv).
-type mgmtModule struct {
-	log    logging.Logger
-	events *events.PubSub
-}
+// the daos_io_server iosrv module (src/iosrv) but doesn't receive.
+type mgmtModule struct{}
 
-// newMgmtModule creates a new management module with an events PubSub
-// reference.
-func newMgmtModule(log logging.Logger, events *events.PubSub) *mgmtModule {
-	return &mgmtModule{
-		log:    log,
-		events: events,
-	}
+// newMgmtModule creates a new management module and returns its reference.
+func newMgmtModule() *mgmtModule {
+	return &mgmtModule{}
 }
 
 // HandleCall is the handler for calls to the mgmtModule
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
-	switch method {
-	case drpc.MethodClusterEvent:
-		return mod.handleClusterEvent(req)
-	default:
-		return nil, drpc.UnknownMethodFailure()
-	}
-}
-
-func (mod *mgmtModule) handleClusterEvent(reqb []byte) ([]byte, error) {
-	req := new(mgmtpb.ClusterEventReq)
-	if err := proto.Unmarshal(reqb, req); err != nil {
-		return nil, drpc.UnmarshalingPayloadFailure()
-	}
-
-	resp, err := mod.events.HandleClusterEvent(req)
-	if err != nil {
-		return nil, errors.Wrapf(err, "handle cluster event %+v", req)
-	}
-
-	return proto.Marshal(resp)
+	return nil, drpc.UnknownMethodFailure()
 }
 
 // ID will return Mgmt module ID
@@ -87,15 +61,17 @@ type srvModule struct {
 	log    logging.Logger
 	sysdb  *system.Database
 	iosrvs []*IOServerInstance
+	events *events.PubSub
 }
 
-// newSrvModule creates a new srv module references to the system database and
-// resident IOServerInstances.
-func newSrvModule(log logging.Logger, sysdb *system.Database, iosrvs []*IOServerInstance) *srvModule {
+// newSrvModule creates a new srv module references to the system database,
+// resident IOServerInstances and event publish subscribe reference.
+func newSrvModule(log logging.Logger, sysdb *system.Database, iosrvs []*IOServerInstance, events *events.PubSub) *srvModule {
 	return &srvModule{
 		log:    log,
 		sysdb:  sysdb,
 		iosrvs: iosrvs,
+		events: events,
 	}
 }
 
@@ -108,11 +84,14 @@ func (mod *srvModule) HandleCall(session *drpc.Session, method drpc.Method, req 
 		return nil, mod.handleBioErr(req)
 	case drpc.MethodGetPoolServiceRanks:
 		return mod.handleGetPoolServiceRanks(req)
+	case drpc.MethodClusterEvent:
+		return mod.handleClusterEvent(req)
 	default:
 		return nil, drpc.UnknownMethodFailure()
 	}
 }
 
+// ID will return SRV module ID
 func (mod *srvModule) ID() drpc.ModuleID {
 	return drpc.ModuleSrv
 }
@@ -185,4 +164,18 @@ func (mod *srvModule) handleBioErr(reqb []byte) error {
 	mod.iosrvs[req.InstanceIdx].BioErrorNotify(req)
 
 	return nil
+}
+
+func (mod *srvModule) handleClusterEvent(reqb []byte) ([]byte, error) {
+	req := new(sharedpb.ClusterEventReq)
+	if err := proto.Unmarshal(reqb, req); err != nil {
+		return nil, drpc.UnmarshalingPayloadFailure()
+	}
+
+	resp, err := mod.events.HandleClusterEvent(req)
+	if err != nil {
+		return nil, errors.Wrapf(err, "handle cluster event %+v", req)
+	}
+
+	return proto.Marshal(resp)
 }

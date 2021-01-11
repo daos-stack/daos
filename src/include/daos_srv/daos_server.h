@@ -840,16 +840,6 @@ ds_notify_bio_error(int media_err_type, int tgt_id);
 int
 ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
 
-/* Raise a RAS event and forward to the control-plane. */
-void
-ds_notify_ras_event(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hid,
-		    d_rank_t *rank, char *jid, uuid_t *puuid, uuid_t *cuuid,
-		    daos_obj_id_t *oid, char *cop, char *msg, char *data);
-
-/* Notify control-plane of an update to a pool's service replicas. */
-int
-ds_notify_pool_svc_update(uuid_t pool_uuid, d_rank_list_t *svc);
-
 bool is_container_from_srv(uuid_t pool_uuid, uuid_t coh_uuid);
 bool is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid);
 #endif /* __DSS_API_H__ */

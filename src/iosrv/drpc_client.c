@@ -250,9 +250,8 @@ drpc_init(void)
 	int	 rc;
 
 	D_ASPRINTF(path, "%s/%s", dss_socket_dir, "daos_server.sock");
-	if (path == NULL) {
+	if (path == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	}
 
 	D_ASSERT(dss_drpc_ctx == NULL);
 	rc = drpc_connect(path, &dss_drpc_ctx);
