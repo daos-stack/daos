@@ -36,6 +36,8 @@
 #include "daos.h"
 #include "daos_fs.h"
 
+#include "dfs_internal.h"
+
 /** D-key name of SB metadata */
 #define SB_DKEY		"DFS_SB_METADATA"
 
