@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,12 +31,18 @@ dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie)
 	int		rc;
 
 	rc = dfs_ostat(ie->ie_dfs->dfs_ns, ie->ie_obj, &stat);
-	if (rc)
+	if (rc != 0)
 		D_GOTO(err, rc);
+
+	if (S_ISFIFO(stat.st_mode)) {
+		stat.st_mode &= ~S_IFIFO;
+		stat.st_mode |= S_IFDIR;
+	}
 
 	/* Copy the inode number from the inode struct, to avoid having to
 	 * recompute it each time.
 	 */
+
 	stat.st_ino = ie->ie_stat.st_ino;
 	DFUSE_REPLY_ATTR(ie, req, &stat);
 

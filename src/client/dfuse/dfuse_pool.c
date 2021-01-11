@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -199,7 +199,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_stat.st_ino = dfs->dfs_ino;
 	dfs->dfs_ops = &dfuse_cont_ops;
 
-	dfuse_reply_entry(fs_handle, ie, NULL, req);
+	dfuse_reply_entry(fs_handle, ie, NULL, true, req);
 
 	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 	return;

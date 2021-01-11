@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -379,6 +379,13 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 				if err := req.onRetry(tryCtx, try); err != nil {
 					return ur, nil
 				}
+				break
+			}
+
+			// One special case here for system startup. If the
+			// request was sent to a MS replica but the DB wasn't
+			// started yet, it's always valid to retry.
+			if system.IsUnavailable(err) {
 				break
 			}
 

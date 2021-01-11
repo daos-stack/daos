@@ -158,10 +158,10 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 
 	// Ask the MS for _all_ info, regardless of pbReq.AllRanks, so that the
 	// cache can serve future "pbReq.AllRanks == true" requests.
-	resp, err := control.GetAttachInfo(ctx, mod.ctlInvoker, &control.GetAttachInfoReq{
-		System:   pbReq.Sys,
-		AllRanks: true,
-	})
+	req := new(control.GetAttachInfoReq)
+	req.SetSystem(pbReq.GetSys())
+	req.AllRanks = true
+	resp, err := control.GetAttachInfo(ctx, mod.ctlInvoker, req)
 	if err != nil {
 		return nil, errors.Wrapf(err, "GetAttachInfo %+v", pbReq)
 	}

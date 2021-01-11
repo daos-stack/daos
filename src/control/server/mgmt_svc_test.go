@@ -30,6 +30,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
@@ -55,6 +56,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				CrtTimeout:      10, NetDevClass: netdetect.Infiniband,
 			},
 			req: &mgmtpb.GetAttachInfoReq{
+				Sys:      build.DefaultSystemName,
 				AllRanks: true,
 			},
 			expResp: &mgmtpb.GetAttachInfoResp{
@@ -83,6 +85,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				NetDevClass:     netdetect.Ether,
 			},
 			req: &mgmtpb.GetAttachInfoReq{
+				Sys:      build.DefaultSystemName,
 				AllRanks: true,
 			},
 			expResp: &mgmtpb.GetAttachInfoResp{
