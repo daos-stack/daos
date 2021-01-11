@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -179,11 +179,10 @@ daos_fail_init(void)
 
 	rc = d_fault_inject_init();
 	if (rc != 0 && rc != -DER_NOSYS)
-		D_GOTO(out, rc);
+		return rc;
 
 	/* Log, but no not propagate error on registering the fault as this
-	 * leads to incorrect reference counts in daos_debug_init() and
-	 * resulting resource leaks.
+	 * leads to deadlocks.
 	 */
 	rc = d_fault_attr_set(DAOS_FAIL_UNIT_TEST_GROUP, attr);
 	if (rc != 0)
@@ -191,7 +190,6 @@ daos_fail_init(void)
 			DP_RC(rc));
 	rc = 0;
 
-out:
 	return rc;
 }
 

@@ -1292,7 +1292,7 @@ dc_obj_open(tse_task_t *task)
 
 	obj = obj_alloc();
 	if (obj == NULL)
-		D_GOTO(err, rc = -DER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	obj->cob_coh  = args->coh;
 	obj->cob_mode = args->mode;
@@ -1325,7 +1325,7 @@ dc_obj_open(tse_task_t *task)
 	obj_hdl_link(obj);
 	*args->oh = obj_ptr2hdl(obj);
 	obj_decref(obj);
-err:
+out:
 	tse_task_complete(task, rc);
 	return rc;
 
