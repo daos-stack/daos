@@ -61,7 +61,7 @@ class ContainerCopy(MdtestBase, IorTestBase):
         # param for dcp processes
         processes = self.params.get("processes", "/run/datamover/*")
 
-        dcp = DataMover(self.hostlist_clients)
+        dcp = DataMover(self.hostlist_clients, self.tmp)
         dcp.get_params(self)
         # update dest path
         if update_dest:
