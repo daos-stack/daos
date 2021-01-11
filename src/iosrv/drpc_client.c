@@ -107,8 +107,6 @@ ds_notify_bio_error(int media_err_type, int tgt_id)
 		D_ERROR("dRPC not connected\n");
 		return -DER_INVAL;
 	}
-
-	/* TODO: How does this get freed on error? */
 	rc = crt_self_uri_get(0 /* tag */, &bioerr_req.uri);
 	if (rc != 0)
 		return rc;
@@ -127,14 +125,14 @@ ds_notify_bio_error(int media_err_type, int tgt_id)
 	req_size = srv__bio_error_req__get_packed_size(&bioerr_req);
 	D_ALLOC(req, req_size);
 	if (req == NULL)
-		return -DER_NOMEM;
+		D_GOTO(out_uri, rc = -DER_NOMEM);
 
 	srv__bio_error_req__pack(&bioerr_req, req);
 	rc = drpc_call_create(dss_drpc_ctx, DRPC_MODULE_SRV,
 			      DRPC_METHOD_SRV_BIO_ERR, &dreq);
 	if (rc != 0) {
 		D_FREE(req);
-		return rc;
+		goto out_uri;
 	}
 
 	dreq->body.len = req_size;
@@ -153,6 +151,8 @@ ds_notify_bio_error(int media_err_type, int tgt_id)
 
 out_dreq:
 	drpc_call_free(dreq);
+out_uri:
+	D_FREE(bioerr_req.uri);
 
 	return rc;
 }

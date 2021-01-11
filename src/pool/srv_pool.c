@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -3758,14 +3758,13 @@ replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
 	}
 
 	/*
-	 * Send event to control-plane over dRPC to indicate change in pool
-	 * service replica ranks.
+	 * Send RAS event to control-plane over dRPC to indicate change in pool
+	 * service replicas.
 	 */
 	rc = ds_notify_pool_svc_update(&svc->ps_uuid, replicas);
-	if (rc != 0) {
+	if (rc != 0)
 		D_DEBUG(DB_MGMT, DF_UUID": replica update notify failure: "
-			""DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
-	}
+			DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
 
 	d_rank_list_free(replicas);
 out:

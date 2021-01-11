@@ -36,6 +36,12 @@
 static void
 free_ras(Shared__RASEvent *evt)
 {
+	if (evt->obj_id)
+		D_FREE(evt->obj_id);
+	if (evt->pool_uuid)
+		D_FREE(evt->pool_uuid);
+	if (evt->cont_uuid)
+		D_FREE(evt->cont_uuid);
 	if (evt->hostname)
 		D_FREE(evt->hostname);
 	if (evt->timestamp)
@@ -48,18 +54,32 @@ init_ras(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev, char *hid,
 	 daos_obj_id_t *oid, char *cop, Shared__RASEvent *evt)
 {
 	FILE		*stream;
-	char		*buf;
+	char		*buf = NULL;
 	size_t		 len;
 	struct timeval	 tv;
 	struct tm	*tm;
 	struct utsname	 uts;
 	int		 rc;
 
+	evt->timestamp = NULL;
+	evt->hostname = NULL;
+	evt->msg = NULL;
+	/* max value indicates nil rank */
+	evt->rank = UINT32_MAX;
+	evt->hw_id = NULL;
+	evt->proc_id = NULL;
+	evt->thread_id = NULL;
+	evt->job_id = NULL;
+	evt->pool_uuid = NULL;
+	evt->cont_uuid = NULL;
+	evt->obj_id = NULL;
+	evt->ctl_op = NULL;
+
 	stream = open_memstream(&buf, &len);
 	if (!stream)
 		return -DER_NOMEM;
 
-	/* populate mandatory RAS fields */
+	/* Populate mandatory RAS fields. */
 
 	evt->id = (uint32_t)id;
 	D_FPRINTF(stream, " id: [%s]", ras_event2str(id));
@@ -67,9 +87,6 @@ init_ras(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev, char *hid,
 	(void)gettimeofday(&tv, 0);
 	tm = localtime(&tv.tv_sec);
 	if (tm) {
-		D_ALLOC(evt->timestamp, DAOS_RAS_STR_FIELD_SIZE);
-		if (!evt->timestamp)
-			D_GOTO(out_fail, rc = -DER_NOMEM);
 		D_ASPRINTF(evt->timestamp,
 			   "%04d/%02d/%02d-%02d:%02d:%02d.%02ld",
 			   tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
@@ -79,9 +96,6 @@ init_ras(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev, char *hid,
 	}
 
 	/** XXX: nodename should be fetched only once and not on every call */
-	D_ALLOC(evt->hostname, DAOS_RAS_STR_FIELD_SIZE);
-	if (!evt->hostname)
-		D_GOTO(out_fail, rc = -DER_NOMEM);
 	(void)uname(&uts);
 	D_ASPRINTF(evt->hostname, "%s", uts.nodename);
 	D_FPRINTF(stream, " host: [%s]", evt->hostname);
@@ -91,52 +105,43 @@ init_ras(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev, char *hid,
 	D_FPRINTF(stream, " type: [%s] sev: [%s]", ras_type2str(type),
 		  ras_sev2str(sev));
 
-	if (!msg) {
+	if (!msg || strnlen(msg, DAOS_RAS_STR_FIELD_SIZE) == 0) {
 		D_ERROR("missing msg parameter\n");
 		D_GOTO(out_fail, rc = -DER_INVAL);
 	}
 	evt->msg = msg;
-	D_FPRINTF(stream, " msg: [%s]", msg);
+	D_FPRINTF(stream, " msg: [%s]", evt->msg);
 
-	/* populate optional RAS fields */
+	/* Populate optional RAS fields. */
 
 	if (hid) {
 		evt->hw_id = hid;
-		D_FPRINTF(stream, " hwid: [%s]", hid);
+		D_FPRINTF(stream, " hwid: [%s]", evt->hw_id);
 	}
 
 	if (rank) {
 		evt->rank = (uint32_t)*rank;
-		D_FPRINTF(stream, " rank: [%u]", *rank);
+		D_FPRINTF(stream, " rank: [%u]", evt->rank);
 	}
 
 	if (jid) {
 		evt->job_id = jid;
-		D_FPRINTF(stream, " jobid: [%s]", jid);
+		D_FPRINTF(stream, " jobid: [%s]", evt->job_id);
 	}
 
 	if (puuid && !uuid_is_null(*puuid)) {
-		D_ALLOC(evt->pool_uuid, DAOS_UUID_STR_SIZE);
-		if (!evt->pool_uuid)
-			D_GOTO(out_fail, rc = -DER_NOMEM);
 		D_ASPRINTF(evt->pool_uuid, DF_UUIDF, DP_UUID(*puuid));
-		D_FPRINTF(stream, " puuid: ["DF_UUIDF"]", DP_UUID(*puuid));
+		D_FPRINTF(stream, " puuid: [%s]", evt->pool_uuid);
 	}
 
 	if (cuuid && !uuid_is_null(*cuuid)) {
-		D_ALLOC(evt->cont_uuid, DAOS_UUID_STR_SIZE);
-		if (!evt->cont_uuid)
-			D_GOTO(out_fail, rc = -DER_NOMEM);
 		D_ASPRINTF(evt->cont_uuid, DF_UUIDF, DP_UUID(*cuuid));
-		D_FPRINTF(stream, " cuuid: ["DF_UUIDF"]", DP_UUID(*cuuid));
+		D_FPRINTF(stream, " cuuid: [%s]", evt->cont_uuid);
 	}
 
 	if (oid) {
-		D_ALLOC(evt->obj_id, DAOS_RAS_STR_FIELD_SIZE);
-		if (!evt->obj_id)
-			D_GOTO(out_fail, rc = -DER_NOMEM);
 		D_ASPRINTF(evt->obj_id, DF_OID, DP_OID(*oid));
-		D_FPRINTF(stream, " oid: ["DF_OID"]", DP_OID(*oid));
+		D_FPRINTF(stream, " oid: [%s]", evt->obj_id);
 	}
 
 	if (cop) {
@@ -146,13 +151,13 @@ init_ras(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev, char *hid,
 
 	fclose(stream);
 	D_DEBUG(DB_MGMT, "&&& RAS EVENT%s", buf);
-	free(buf);
+	D_FREE(buf);
 
 	return 0;
 out_fail:
-	free_ras(evt);
 	fclose(stream);
-	free(buf);
+	D_FREE(buf);
+	free_ras(evt);
 
 	return rc;
 }
@@ -203,6 +208,7 @@ out_dreq:
 	/* This also frees reqb via dreq->body.data. */
 	drpc_call_free(dreq);
 out:
+	free_ras(evt);
 	return rc;
 }
 
@@ -222,11 +228,13 @@ ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 	/* use opaque blob oneof case for extended info for passthrough event */
 	evt.extended_info_case = SHARED__RASEVENT__EXTENDED_INFO_STR_INFO;
 	evt.str_info = data;
+	D_DEBUG(DB_MGMT, "&&& RAS EVENT OPT DATA: %s", evt.str_info);
 
 	rc = init_ras(id, msg, type, sev, hid, rank, jid, puuid, cuuid, oid,
 		      cop, &evt);
 	if (rc != 0) {
 		D_ERROR("failed to init RAS event: "DF_RC"\n", DP_RC(rc));
+		free_ras(&evt);
 		return;
 	}
 
@@ -250,8 +258,14 @@ ds_notify_pool_svc_update(uuid_t *puuid, d_rank_list_t *svc)
 		return -DER_UNINIT;
 	}
 
-	D_ASSERT((puuid) && !uuid_is_null(*puuid));
-	D_ASSERT((svc) && svc->rl_nr > 0);
+	if (!puuid || uuid_is_null(*puuid)) {
+		D_ERROR("invalid pool\n");
+		return -DER_INVAL;
+	}
+	if (!svc || svc->rl_nr == 0) {
+		D_ERROR("invalid service replicas\n");
+		return -DER_INVAL;
+	}
 
 	rc = rank_list_to_uint32_array(svc, &info.svc_reps, &info.n_svc_reps);
 	if (rc != 0) {
