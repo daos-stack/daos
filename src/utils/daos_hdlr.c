@@ -1607,6 +1607,7 @@ parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name)
 	char	*f2 = NULL;
 	char	*fname = NULL;
 	char	*cont_name = NULL;
+	int	path_len = strlen(path) + 1;
 	int	rc = 0;
 
 	if (path == NULL || _obj_name == NULL || _cont_name == NULL)
@@ -1619,13 +1620,13 @@ parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name)
 		*_obj_name = NULL;
 		return 0;
 	}
-	D_STRNDUP(f1, path, strlen(path) + 1);
+	D_STRNDUP(f1, path, path_len);
 	if (f1 == NULL) {
 		rc = -ENOMEM;
 		goto out;
 	}
 
-	D_STRNDUP(f2, path, strlen(path) + 1);
+	D_STRNDUP(f2, path, path_len);
 	if (f2 == NULL) {
 		rc = -ENOMEM;
 		goto out;
@@ -2691,7 +2692,8 @@ fs_copy_parse(struct file_dfs *file_dfs,
 		if (strncmp(arg, "/", 1) == 0) {
 			fprintf(stderr, "cannot parse daos arg type "
 				"format, please use:\n"
-				"\t--<src | dst>=daos://<pool/cont>\n");
+				"\t--<src | dst>=daos://<pool/cont>"
+				"[/<path>]\n");
 			D_GOTO(out, rc = EINVAL);
 		}
 	} else {
@@ -2745,7 +2747,8 @@ fs_copy_parse(struct file_dfs *file_dfs,
 		}
 	} else {
 		fprintf(stderr, "cannot parse arg format, please use:\n"
-				"--<src | dst>=<daos>://<pool/cont> | <path>\n"
+				"--<src | dst>=<daos>://<pool/cont>"
+				"[/<path>] | <path>\n"
 				"\ttype is daos, only specified if pool/cont "
 				"used\n");
 		D_GOTO(out, rc = EINVAL);
