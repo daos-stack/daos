@@ -24,6 +24,8 @@
 syntax = "proto3";
 package mgmt;
 
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/mgmt";
+
 // Access Control List related protobuf structures
 
 // Response to ACL-related requests includes the command status and current ACL
@@ -36,21 +38,24 @@ message ACLResp {
 
 // Request to fetch an ACL
 message GetACLReq {
-	string uuid = 1; // Target UUID
-	repeated uint32 svc_ranks = 2; // List of pool service ranks
+	string sys = 1; // DAOS system identifier
+	string uuid = 2; // Target UUID
+	repeated uint32 svc_ranks = 3; // List of pool service ranks
 }
 
 // Request to modify an ACL
 // Results depend on the specific modification command.
 message ModifyACLReq {
-	string uuid = 1; // Target UUID
-	repeated string ACL = 2; // List of ACEs to overwrite ACL with
-	repeated uint32 svc_ranks = 3; // List of pool service ranks
+	string sys = 1; // DAOS system identifier
+	string uuid = 2; // Target UUID
+	repeated string ACL = 3; // List of ACEs to overwrite ACL with
+	repeated uint32 svc_ranks = 4; // List of pool service ranks
 }
 
 // Delete a principal's entry from the ACL
 message DeleteACLReq {
-	string uuid = 1; // Target UUID
-	string principal = 2; // Principal whose entry is to be deleted
-	repeated uint32 svc_ranks = 3; // List of pool service ranks
+	string sys = 1; // DAOS system identifier
+	string uuid = 2; // Target UUID
+	string principal = 3; // Principal whose entry is to be deleted
+	repeated uint32 svc_ranks = 4; // List of pool service ranks
 }

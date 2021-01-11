@@ -155,8 +155,8 @@ func TestSecurity_AllRpcsAreAuthorized(t *testing.T) {
 			prefix:  "/mgmt.MgmtSvc/",
 		},
 		"ctl rpcs": {
-			service: (*ctlpb.MgmtCtlServer)(nil),
-			prefix:  "/ctl.MgmtCtl/",
+			service: (*ctlpb.CtlSvcServer)(nil),
+			prefix:  "/ctl.CtlSvc/",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -192,8 +192,8 @@ func TestSecurity_AuthorizedRpcsAreValid(t *testing.T) {
 			prefix:  "/mgmt.MgmtSvc/",
 		},
 		"ctl rpcs": {
-			service: (*ctlpb.MgmtCtlServer)(nil),
-			prefix:  "/ctl.MgmtCtl/",
+			service: (*ctlpb.CtlSvcServer)(nil),
+			prefix:  "/ctl.CtlSvc/",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
