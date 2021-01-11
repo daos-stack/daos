@@ -39,6 +39,7 @@
 This provides consistency checking for CaRT log files.
 """
 
+import sys
 import time
 import argparse
 HAVE_TABULATE = True
@@ -806,9 +807,16 @@ def run():
     args = parser.parse_args()
     try:
         log_iter = cart_logparse.LogIter(args.file)
-    except IsADirectoryError:
-        print('Log tracing on directory not possible')
-        return
+    except UnicodeDecodeError:
+        # If there is a unicode error in the log file then retry with checks
+        # enabled which should both report the error and run in latin-1 so
+        # perform the log parsing anyway.  The check for log_iter.file_corrupt
+        # later on will ensure that this error does not get logged, then
+        # ignored.
+        # The only possible danger here is the file is simply too big to check
+        # the encoding on, in which case this second attempt would fail with
+        # an out-of-memory error.
+        log_iter = cart_logparse.LogIter(args.file, check_encoding=True)
     test_iter = LogTest(log_iter)
     if args.dfuse:
         test_iter.check_dfuse_io()
@@ -819,6 +827,8 @@ def run():
             print('Errors in log file, ignoring')
         except NotAllFreed:
             print('Memory leaks, ignoring')
+    if log_iter.file_corrupt:
+        sys.exit(1)
 
 if __name__ == '__main__':
     run()
