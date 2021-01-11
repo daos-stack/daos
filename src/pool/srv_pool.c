@@ -687,18 +687,20 @@ int
 ds_pool_svc_destroy(const uuid_t pool_uuid)
 {
 	d_iov_t		psid;
-	d_rank_list_t	excluded = { 0 };
+	d_rank_list_t	included = { 0 };
 	int		rc;
 
 	ds_rebuild_leader_stop(pool_uuid, -1);
-	rc = ds_pool_get_ranks(pool_uuid, MAP_RANKS_DOWN, &excluded);
+	rc = ds_pool_get_ranks(pool_uuid, MAP_RANKS_UP, &included);
 	if (rc)
 		return rc;
 
+	D_DEBUG(DB_MD, DF_UUID ": send rsvc dist stop to %u UP ranks:\n",
+		DP_UUID(pool_uuid), included.rl_nr);
 	d_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
-	rc = ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, NULL /* ranks */,
-			       &excluded, true /* destroy */);
-	map_ranks_fini(&excluded);
+	rc = ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, &included /* ranks */,
+			       NULL /* excluded */, true /* destroy */);
+	map_ranks_fini(&included);
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to destroy pool service: "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));

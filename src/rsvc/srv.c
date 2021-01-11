@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1219,7 +1219,7 @@ ds_rsvc_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
  * XXX excluded and ranks are a bit duplicate here, since this function only
  * suppose to send RPC to @ranks list, but cart does not have such interface
  * for collective RPC, so we have to use both ranks and exclued for the moment,
- * and it should be simplied once cart can provide rank list collective RPC.
+ * and it should be simplified once cart can provide rank list collective RPC.
  *
  * \param[in]	class		replicated service class
  * \param[in]	id		replicated service ID

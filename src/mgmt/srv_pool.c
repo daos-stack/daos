@@ -89,18 +89,20 @@ fini_ranks:
 static int
 ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid)
 {
-	d_rank_list_t			excluded = { 0 };
+	d_rank_list_t			included = { 0 };
 	int				rc;
 
-	rc = ds_pool_get_ranks(pool_uuid, MAP_RANKS_DOWN, &excluded);
+	rc = ds_pool_get_ranks(pool_uuid, MAP_RANKS_UP, &included);
 	if (rc)
 		return rc;
 
-	rc = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, &excluded, false);
+	D_DEBUG(DB_MD, DF_UUID ": send tgt destroy to %u UP ranks:\n",
+		DP_UUID(pool_uuid), included.rl_nr);
+	rc = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, &included, true);
 	if (rc)
 		D_GOTO(fini_ranks, rc);
 fini_ranks:
-	map_ranks_fini(&excluded);
+	map_ranks_fini(&included);
 	return rc;
 }
 
