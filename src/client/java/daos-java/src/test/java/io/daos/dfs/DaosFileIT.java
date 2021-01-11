@@ -12,7 +12,9 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 public class DaosFileIT {
 
@@ -175,10 +177,71 @@ public class DaosFileIT {
 
     ByteBuf buffer2 = BufferAllocator.directNettyBuf(length + 30);
     long actualLen = daosFile.read(buffer2, 0, 0, length + 30);
+    buffer2.writerIndex((int)actualLen);
     Assert.assertEquals(length, actualLen);
     byte[] bytes2 = new byte[length];
-    buffer2.writeBytes(bytes2);
+    buffer2.readBytes(bytes2);
     Assert.assertTrue(Arrays.equals(bytes, bytes2));
+    daosFile.release();
+  }
+
+  @Test
+  public void testWriteFileAsync() throws Exception {
+    DaosFile daosFile = client.getFile("/data_async1");
+    daosFile.createNewFile();
+    int length = 100;
+    ByteBuf buffer = BufferAllocator.directNettyBuf(length);
+    byte[] bytes = new byte[length];
+    for (int i = 0; i < length; i++) {
+      bytes[i] = (byte) i;
+    }
+    buffer.writeBytes(bytes);
+
+    DaosEventQueue eq = DaosEventQueue.getInstance(-1);
+    IODfsDesc desc = DaosFile.createDfsDesc(buffer, eq);
+    desc.setEvent(eq.acquireEvent());
+    daosFile.writeAsync(desc, 0, length);
+    List<DaosEventQueue.Attachment> completed = new ArrayList<>();
+    eq.pollCompleted(completed, 1, 100);
+    Assert.assertTrue(desc.isSucceeded());
+    Assert.assertEquals(desc, completed.get(0));
+    Assert.assertEquals(length, daosFile.length());
+    desc.release();
+    daosFile.release();
+  }
+
+  @Test
+  public void testReadFileAsync() throws Exception {
+    DaosFile daosFile = client.getFile("/data_async2");
+    daosFile.createNewFile();
+    int length = 100;
+    ByteBuf buffer = BufferAllocator.directNettyBuf(length);
+    byte[] bytes = new byte[length];
+    for (int i = 0; i < length; i++) {
+      bytes[i] = (byte) i;
+    }
+    buffer.writeBytes(bytes);
+
+    daosFile.write(buffer, 0, 0, length);
+    buffer.release();
+
+    System.out.println(daosFile.length());
+
+    ByteBuf buffer2 = BufferAllocator.directNettyBuf(length + 30);
+    DaosEventQueue eq = DaosEventQueue.getInstance(-1);
+    IODfsDesc desc = DaosFile.createDfsDesc(buffer2, eq);
+    desc.setReadOrWrite(true);
+    desc.setEvent(eq.acquireEvent());
+    daosFile.readAsync(desc, 0, length + 30);
+    List<DaosEventQueue.Attachment> completed = new ArrayList<>();
+    eq.pollCompleted(completed, 1, 100);
+    Assert.assertEquals(desc, completed.get(0));
+    Assert.assertTrue(desc.isSucceeded());
+    Assert.assertEquals(length, desc.getActualLength());
+    byte[] bytes2 = new byte[length];
+    buffer2.readBytes(bytes2);
+    Assert.assertTrue(Arrays.equals(bytes, bytes2));
+    buffer2.release();
     daosFile.release();
   }
 
@@ -338,5 +401,6 @@ public class DaosFileIT {
     if (client != null) {
       client.close();
     }
+    DaosEventQueue.destroy(Thread.currentThread().getId(), DaosEventQueue.getInstance(-1));
   }
 }

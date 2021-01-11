@@ -365,6 +365,19 @@ public class DaosEventQueue {
     }
   }
 
+  public static void destroy(long id, DaosEventQueue eq) throws IOException {
+    long tid = Thread.currentThread().getId();
+    if (id != tid) {
+      throw new UnsupportedOperationException("Cannot destroy EQ belongs to other thread, id: " + id);
+    }
+    DaosEventQueue teq = EQ_MAP.get(id);
+    if (teq != eq) {
+      throw new IllegalArgumentException("given EQ is not same as EQ of current thread");
+    }
+    eq.release();
+    EQ_MAP.remove(id);
+  }
+
   /**
    * destroy all event queues. It's should be called when JVM is shutting down.
    */
@@ -397,7 +410,7 @@ public class DaosEventQueue {
       this.available = true;
     }
 
-    public int getId() {
+    public short getId() {
       return id;
     }
 

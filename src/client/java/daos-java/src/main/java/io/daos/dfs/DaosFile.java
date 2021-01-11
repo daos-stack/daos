@@ -365,6 +365,15 @@ public class DaosFile {
     return client.dfsGetChunkSize(objId);
   }
 
+  /**
+   * create DFS description.
+   *
+   * @param dataBuffer
+   * dataBuffer to hold data for DFS read/write
+   * @param eq
+   * DaosEventQueue
+   * @return IODfsDesc
+   */
   public static IODfsDesc createDfsDesc(ByteBuf dataBuffer, DaosEventQueue eq) {
     return new IODfsDesc(dataBuffer, eq);
   }

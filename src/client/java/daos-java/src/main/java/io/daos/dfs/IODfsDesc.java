@@ -57,7 +57,6 @@ public class IODfsDesc implements DaosEventQueue.Attachment {
     descBuffer = BufferAllocator.objBufWithNativeOrder(descBufLen);
     descBuffer.writerIndex(8); // skip nativeHandle
     descBuffer.writeLong(dataBuffer.memoryAddress());
-    descBuffer.writeInt(dataBuffer.capacity());
     descBuffer.writeLong(eq.getEqWrapperHdl());
     natveHandle = DaosFsClient.allocateDfsDesc(descBuffer.memoryAddress());
   }
@@ -121,6 +120,9 @@ public class IODfsDesc implements DaosEventQueue.Attachment {
     descBuffer.readerIndex(0);
     descBuffer.writerIndex(24); // skip native handle, memory address and eq handle
     descBuffer.writeLong(offset).writeLong(len);
+    if (event == null) {
+      throw new IllegalStateException("event is not set");
+    }
     descBuffer.writeShort(event.getId());
   }
 
