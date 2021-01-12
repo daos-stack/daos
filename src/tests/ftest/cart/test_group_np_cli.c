@@ -113,7 +113,7 @@ test_run(void)
 		/* register RPCs */
 		rc = crt_proto_register(&my_proto_fmt_test_group2);
 		D_ASSERTF(rc == 0, "crt_proto_register() failed. rc: %d\n",
-				rc);
+			  rc);
 
 		/* Process the --rank option, e.g., --rank 1,2-4 */
 		if (test_g.cg_num_ranks > -1)
