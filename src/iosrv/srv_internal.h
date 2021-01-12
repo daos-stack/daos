@@ -77,6 +77,8 @@ struct dss_xstream {
 	bool			dx_dsc_started;	/* DSC progress ULT started */
 };
 
+#define DSS_HOSTNAME_MAX_LEN	255
+
 /** Server node topology */
 extern hwloc_topology_t	dss_topo;
 /** core depth of the topology */

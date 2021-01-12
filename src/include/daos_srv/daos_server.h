@@ -44,25 +44,28 @@
 #include <daos/checksum.h>
 
 /** number of target (XS set) per server */
-extern unsigned int	dss_tgt_nr;
+extern unsigned int	 dss_tgt_nr;
+
+/** Server node hostname */
+extern char	         dss_hostname[];
 
 /** Storage path (hack) */
-extern const char      *dss_storage_path;
+extern const char	*dss_storage_path;
 
 /** NVMe config file */
-extern const char      *dss_nvme_conf;
+extern const char	*dss_nvme_conf;
 
 /** Socket Directory */
-extern const char      *dss_socket_dir;
+extern const char	*dss_socket_dir;
 
 /** NVMe shm_id for enabling SPDK multi-process mode */
-extern int		dss_nvme_shm_id;
+extern int		 dss_nvme_shm_id;
 
 /** NVMe mem_size for SPDK memory allocation when using primary mode */
-extern int		dss_nvme_mem_size;
+extern int		 dss_nvme_mem_size;
 
 /** IO server instance index */
-extern unsigned int	dss_instance_idx;
+extern unsigned int	 dss_instance_idx;
 
 /**
  * Stackable Module API

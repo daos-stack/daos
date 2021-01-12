@@ -59,6 +59,9 @@ static unsigned int	nr_threads;
 /** DAOS system name (corresponds to crt group ID) */
 static char	       *daos_sysname = DAOS_DEFAULT_SYS_NAME;
 
+/** Storage node hostname */
+char		        dss_hostname[DSS_HOSTNAME_MAX_LEN];
+
 /** Storage path (hack) */
 const char	       *dss_storage_path = "/mnt/daos";
 
@@ -464,7 +467,6 @@ server_init(int argc, char *argv[])
 	uint64_t	bound;
 	int64_t		diff;
 	unsigned int	ctx_nr;
-	char		hostname[256] = { 0 };
 	int		rc;
 
 	bound = crt_hlc_epsilon_get_bound(crt_hlc_get());
@@ -603,11 +605,12 @@ server_init(int argc, char *argv[])
 	dss_xstreams_open_barrier();
 	D_INFO("Service fully up\n");
 
-	gethostname(hostname, 255);
+	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
+
 	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
 		"with %u target, %d helper XS, firstcore %d, host %s.\n",
 		DAOS_VERSION, getpid(), dss_self_rank(), dss_tgt_nr,
-		dss_tgt_offload_xs_nr, dss_core_offset, hostname);
+		dss_tgt_offload_xs_nr, dss_core_offset, dss_hostname);
 
 	if (numa_obj)
 		D_PRINT("Using NUMA node: %d", dss_numa_node);
