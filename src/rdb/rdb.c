@@ -48,7 +48,8 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 {
 	daos_handle_t	pool;
 	daos_handle_t	mc;
-	d_iov_t	value;
+	d_iov_t		value;
+	uint32_t	version = RDB_LAYOUT_VERSION;
 	int		rc;
 
 	D_DEBUG(DB_MD, DF_UUID": creating db %s with %u replicas\n",
@@ -77,11 +78,12 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 		goto out_mc_hdl;
 
 	/*
-	 * Mark this replica as fully initialized by storing its UUID.
-	 * rdb_start() checks this attribute when starting a DB.
+	 * Mark this replica as fully initialized by storing its layout
+	 * version. rdb_start() checks this attribute when starting a DB.
 	 */
-	d_iov_set(&value, (void *)uuid, sizeof(uuid_t));
-	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_uuid, &value);
+	d_iov_set(&value, &version, sizeof(version));
+	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_version,
+			   &value);
 
 out_mc_hdl:
 	vos_cont_close(mc);
@@ -226,7 +228,7 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 {
 	struct rdb	       *db;
 	d_iov_t			value;
-	uuid_t			uuid_persist;
+	uint32_t		version;
 	int			rc;
 	struct vos_pool_space	vps;
 	uint64_t		rdb_extra_sys[DAOS_MEDIA_MAX];
@@ -323,14 +325,25 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 	}
 
 	/* Check if this replica is fully initialized. See rdb_create(). */
-	d_iov_set(&value, uuid_persist, sizeof(uuid_t));
-	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_uuid, &value);
+	d_iov_set(&value, &version, sizeof(version));
+	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_version, &value);
 	if (rc == -DER_NONEXIST) {
-		D_ERROR(DF_DB": not fully initialized\n", DP_DB(db));
+		D_ERROR(DF_DB": layout invalid or not fully initialized\n",
+			DP_DB(db));
+		rc = -DER_DF_INVAL;
 		goto err_mc;
 	} else if (rc != 0) {
-		D_ERROR(DF_DB": failed to look up UUID: "DF_RC"\n", DP_DB(db),
-			DP_RC(rc));
+		D_ERROR(DF_DB": failed to look up layout version: "DF_RC"\n",
+			DP_DB(db), DP_RC(rc));
+		goto err_mc;
+	}
+
+	/* Check if the layout version is compatible. */
+	if (version < RDB_LAYOUT_VERSION_LOW || version > RDB_LAYOUT_VERSION) {
+		D_ERROR(DF_DB": incompatible layout version: %u not in [%u, %u]"
+			"\n", DP_DB(db), version, RDB_LAYOUT_VERSION_LOW,
+			RDB_LAYOUT_VERSION);
+		rc = -DER_DF_INCOMPT;
 		goto err_mc;
 	}
 

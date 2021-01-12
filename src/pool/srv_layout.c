@@ -1,5 +1,5 @@
-/**
- * (C) Copyright 2017-2020 Intel Corporation.
+/*
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,13 +23,15 @@
 /**
  * ds_pool: Pool Server Storage Layout Definitions
  */
-#define D_LOGFAC	DD_FAC(pool)
+
+#define D_LOGFAC DD_FAC(pool)
 
 #include <daos_srv/rdb.h>
 #include <daos_srv/security.h>
 #include "srv_layout.h"
 
 /** Root KVS */
+RDB_STRING_KEY(ds_pool_prop_, version);
 RDB_STRING_KEY(ds_pool_prop_, map_version);
 RDB_STRING_KEY(ds_pool_prop_, map_buffer);
 RDB_STRING_KEY(ds_pool_prop_, map_uuids);

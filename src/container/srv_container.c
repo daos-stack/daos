@@ -199,10 +199,39 @@ ds_cont_svc_fini(struct cont_svc **svcp)
 static int cont_svc_ec_agg_leader_start(struct cont_svc *svc);
 static void cont_svc_ec_agg_leader_stop(struct cont_svc *svc);
 
-void
+int
 ds_cont_svc_step_up(struct cont_svc *svc)
 {
-	int rc;
+	struct rdb_tx	tx;
+	d_iov_t		value;
+	uint32_t	version;
+	int		rc;
+
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0)
+		goto out;
+	ABT_rwlock_rdlock(svc->cs_lock);
+
+	/* Check the layout version. */
+	d_iov_set(&value, &version, sizeof(version));
+	rc = rdb_tx_lookup(&tx, &svc->cs_root, &ds_cont_prop_version, &value);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to look up layout version: "DF_RC"\n",
+			DP_UUID(svc->cs_pool_uuid), DP_RC(rc));
+		goto out_lock;
+	}
+	if (version < DS_CONT_MD_VERSION_LOW || version > DS_CONT_MD_VERSION) {
+		D_ERROR(DF_UUID": incompatible layout version: %u not in "
+			"[%u, %u]\n", DP_UUID(svc->cs_pool_uuid), version,
+			DS_CONT_MD_VERSION_LOW, DS_CONT_MD_VERSION);
+		rc = -DER_DF_INCOMPT;
+	}
+
+out_lock:
+	ABT_rwlock_unlock(svc->cs_lock);
+	rdb_tx_end(&tx);
+	if (rc != 0)
+		goto out;
 
 	D_ASSERT(svc->cs_pool == NULL);
 	svc->cs_pool = ds_pool_lookup(svc->cs_pool_uuid);
@@ -210,8 +239,11 @@ ds_cont_svc_step_up(struct cont_svc *svc)
 
 	rc = cont_svc_ec_agg_leader_start(svc);
 	if (rc != 0)
-		D_ERROR(DF_UUID" start ec agg leader failed: %d\n",
-			DP_UUID(svc->cs_pool_uuid), rc);
+		D_ERROR(DF_UUID": start ec agg leader failed: "DF_RC"\n",
+			DP_UUID(svc->cs_pool_uuid), DP_RC(rc));
+
+out:
+	return rc;
 }
 
 void
@@ -282,8 +314,18 @@ int
 ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 		      const uuid_t pool_uuid)
 {
+	d_iov_t			value;
+	uint32_t		version = DS_CONT_MD_VERSION;
 	struct rdb_kvs_attr	attr;
 	int			rc;
+
+	d_iov_set(&value, &version, sizeof(version));
+	rc = rdb_tx_update(tx, kvs, &ds_cont_prop_version, &value);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to initialize layout version: %d\n",
+			DP_UUID(pool_uuid), rc);
+		return rc;
+	}
 
 	attr.dsa_class = RDB_KVS_GENERIC;
 	attr.dsa_order = 16;

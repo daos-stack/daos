@@ -47,7 +47,7 @@ int ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 int ds_cont_svc_init(struct cont_svc **svcp, const uuid_t pool_uuid,
 		     uint64_t id, struct ds_rsvc *rsvc);
 void ds_cont_svc_fini(struct cont_svc **svcp);
-void ds_cont_svc_step_up(struct cont_svc *svc);
+int ds_cont_svc_step_up(struct cont_svc *svc);
 void ds_cont_svc_step_down(struct cont_svc *svc);
 
 int ds_cont_svc_set_prop(uuid_t pool_uuid, uuid_t cont_uuid,

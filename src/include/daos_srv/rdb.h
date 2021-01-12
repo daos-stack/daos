@@ -1,5 +1,5 @@
-/**
- * (C) Copyright 2017-2020 Intel Corporation.
+/*
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
+ * \file
+ *
  * rdb: Replicated Database
  *
  * An RDB database comprises a hierarchy of key-value stores (KVSs), much like
@@ -149,7 +151,6 @@ struct rdb_cbs {
 };
 
 /** Database methods */
-void rdb_get_uuid(struct rdb *db, uuid_t uuid);
 int rdb_create(const char *path, const uuid_t uuid, size_t size,
 	       const d_rank_list_t *replicas);
 int rdb_destroy(const char *path, const uuid_t uuid);
@@ -161,6 +162,7 @@ int rdb_campaign(struct rdb *db);
 bool rdb_is_leader(struct rdb *db, uint64_t *term);
 int rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank);
 int rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp);
+void rdb_get_uuid(struct rdb *db, uuid_t uuid);
 int rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas);
 int rdb_remove_replicas(struct rdb *db, d_rank_list_t *replicas);
 
@@ -192,7 +194,7 @@ int rdb_path_push(rdb_path_t *path, const d_iov_t *key);
  */
 #define RDB_STRING_KEY(prefix, name)					\
 static char	prefix ## name ## _buf[] = #name;			\
-d_iov_t	prefix ## name = {					\
+d_iov_t		prefix ## name = {					\
 	.iov_buf	= prefix ## name ## _buf,			\
 	.iov_buf_len	= sizeof(prefix ## name ## _buf),		\
 	.iov_len	= sizeof(prefix ## name ## _buf)		\

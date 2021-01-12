@@ -39,6 +39,8 @@
  *         Handle index KVS (GENERIC)
  *       ... (more container property KVSs)
  *     Container handle KVS (GENERIC)
+ *
+ * The version of the whole layout is stored in ds_cont_prop_version.
  */
 
 #ifndef __CONTAINER_SRV_LAYOUT_H__
@@ -46,11 +48,20 @@
 
 #include <daos_types.h>
 
+/* Default layout version */
+#define DS_CONT_MD_VERSION 1
+
+/* Lowest compatible layout version */
+#define DS_CONT_MD_VERSION_LOW 1
+
 /*
  * Root KVS (RDB_KVS_GENERIC)
  *
  * All keys are strings. Value types are specified for each key below.
+ *
+ * ds_cont_prop_version stores the version of the whole layout.
  */
+extern d_iov_t ds_cont_prop_version;		/* uint32_t */
 extern d_iov_t ds_cont_prop_conts;		/* container KVS */
 extern d_iov_t ds_cont_prop_cont_handles;	/* container handle KVS */
 
