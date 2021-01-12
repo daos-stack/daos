@@ -74,6 +74,7 @@ public class DaosClient implements ForceCloseable {
       public void run() {
         try {
           closeAll();
+          DaosEventQueue.destroyAll();
           daosSafeFinalize();
           log.info("daos finalized");
           ShutdownHookManager.removeHook(this);

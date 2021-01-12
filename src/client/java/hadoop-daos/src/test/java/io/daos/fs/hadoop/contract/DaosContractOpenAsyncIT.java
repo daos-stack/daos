@@ -20,14 +20,15 @@ package io.daos.fs.hadoop.contract;
 
 import io.daos.fs.hadoop.DaosFSFactory;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.contract.AbstractContractMkdirTest;
+import org.apache.hadoop.fs.contract.AbstractContractOpenTest;
 import org.apache.hadoop.fs.contract.AbstractFSContract;
 
-public class DaosContractMkdirIT extends AbstractContractMkdirTest {
+public class DaosContractOpenAsyncIT extends AbstractContractOpenTest {
+
   @Override
   protected AbstractFSContract createContract(Configuration configuration) {
     configuration.addResource("daos-site.xml");
-    DaosFSFactory.config(configuration);
+    DaosFSFactory.config(configuration, true);
     return new DaosContractIT(configuration);
   }
 }

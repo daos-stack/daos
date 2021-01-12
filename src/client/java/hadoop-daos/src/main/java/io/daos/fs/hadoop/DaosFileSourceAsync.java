@@ -56,6 +56,7 @@ public class DaosFileSourceAsync extends DaosFileSource {
   @Override
   protected int doWrite(long nextWritePos) throws IOException {
     DaosEventQueue.Event event = eq.acquireEvent();
+    desc.reuse();
     desc.setEvent(event);
     int len = buffer.readableBytes();
     daosFile.writeAsync(desc, nextWritePos, len);
@@ -66,6 +67,7 @@ public class DaosFileSourceAsync extends DaosFileSource {
   @Override
   protected int doRead(long nextReadPos, int length) throws IOException {
     DaosEventQueue.Event event = eq.acquireEvent();
+    desc.reuse();
     desc.setEvent(event);
     daosFile.readAsync(desc, nextReadPos, length);
     waitForCompletion(length, SPEED_DENOMINATOR_READ);

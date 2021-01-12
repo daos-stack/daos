@@ -134,4 +134,8 @@ public class DaosOutputStream extends OutputStream {
       throw new IOException("Stream is closed!");
     }
   }
+
+  public DaosFileSource getSource() {
+    return source;
+  }
 }

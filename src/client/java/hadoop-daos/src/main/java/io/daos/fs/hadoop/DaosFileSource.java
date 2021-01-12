@@ -39,6 +39,8 @@ public abstract class DaosFileSource {
   protected final long fileLen;
 
   protected final ByteBuf buffer;
+  
+  private final boolean selfManagedBuf;
 
   protected final int bufCapacity;
 
@@ -57,6 +59,7 @@ public abstract class DaosFileSource {
                            FileSystem.Statistics stats) {
     this.daosFile = daosFile;
     this.buffer = BufferAllocator.directNettyBuf(bufCapacity);
+    selfManagedBuf = true;
     this.bufCapacity = buffer.capacity();
     this.fileLen = fileLen;
     this.stats = stats;
@@ -66,6 +69,7 @@ public abstract class DaosFileSource {
                            FileSystem.Statistics stats) {
     this.daosFile = daosFile;
     this.buffer = buffer;
+    selfManagedBuf = false;
     this.bufCapacity = buffer.capacity();
     this.fileLen = fileLen;
     this.stats = stats;
@@ -77,7 +81,9 @@ public abstract class DaosFileSource {
 
   public void close() {
     this.daosFile.release();
-    buffer.release();
+    if (selfManagedBuf) {
+      buffer.release();
+    }
     closeMore();
   }
 

@@ -29,18 +29,27 @@ import java.io.IOException;
  *
  */
 public class DaosFSFactory {
-  public final static String defaultPoolId = "96c03ef7-5e00-43b7-9353-2d0b02cfef3e";
-  public final static String defaultContId = "8e728c78-50e4-45bb-b401-ad79b2aabfa7";
+  public final static String defaultPoolId = "f6b87ce6-6ce5-478f-8631-58bdcf49b3c1";
+  public final static String defaultContId = "4aa9b4d7-88d5-4e21-9942-2d1d263ff370";
   public final static String pooluuid = System.getProperty("pool_id", defaultPoolId);
   public final static String contuuid = System.getProperty("cont_id", defaultContId);
   public final static String svc = "0";
 
   private static FileSystem createFS() throws IOException {
     Configuration conf = new Configuration();
+    config(conf);
+    return DaosHadoopTestUtils.createTestFileSystem(conf);
+  }
+
+  public static void config(Configuration conf) {
+    config(conf, false);
+  }
+
+  public static void config(Configuration conf, boolean async) {
     conf.set(Constants.DAOS_POOL_UUID, pooluuid);
     conf.set(Constants.DAOS_CONTAINER_UUID, contuuid);
     conf.set(Constants.DAOS_POOL_SVC, svc);
-    return DaosHadoopTestUtils.createTestFileSystem(conf);
+    conf.set(Constants.DAOS_IO_ASYNC, String.valueOf(async));
   }
 
   public synchronized static FileSystem getFS() throws IOException {
