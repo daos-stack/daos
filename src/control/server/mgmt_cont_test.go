@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,7 +62,7 @@ func TestListCont_NoMS(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)
 
 	ms, db := system.MockMembership(t, log, mockTCPResolver)
-	svc := newMgmtSvc(NewIOServerHarness(log), ms, db,
+	svc := newMgmtSvc(NewIOServerHarness(log), ms, db, nil,
 		events.NewPubSub(context.Background(), log))
 
 	resp, err := svc.ListContainers(context.TODO(), newTestListContReq())
@@ -174,7 +174,7 @@ func TestContSetOwner_NoMS(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)
 
 	ms, db := system.MockMembership(t, log, mockTCPResolver)
-	svc := newMgmtSvc(NewIOServerHarness(log), ms, db,
+	svc := newMgmtSvc(NewIOServerHarness(log), ms, db, nil,
 		events.NewPubSub(context.Background(), log))
 
 	resp, err := svc.ContSetOwner(context.TODO(), newTestContSetOwnerReq())
