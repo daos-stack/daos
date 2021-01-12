@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -870,7 +870,7 @@ get_rank_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid,
 	daos_obj_layout_get(arg->coh, oid, &layout);
 	grp_idx = shard / layout->ol_shards[0]->os_replica_nr;
 	idx = shard % layout->ol_shards[0]->os_replica_nr;
-	rank = layout->ol_shards[grp_idx]->os_ranks[idx];
+	rank = layout->ol_shards[grp_idx]->os_shard_loc[idx].sd_rank;
 
 	print_message("idx %u grp %u rank %d\n", idx, grp_idx, rank);
 	daos_obj_layout_free(layout);

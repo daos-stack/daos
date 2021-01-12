@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -285,6 +285,12 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 			PoolLabel: fmt.Sprintf("pool%04d", i),
 			State:     PoolServiceStateReady,
 			Replicas:  <-replicas,
+			Storage: &PoolServiceStorage{
+				CreationRankStr: fmt.Sprintf("[0-%d]", maxRanks),
+				CurrentRankStr:  fmt.Sprintf("[0-%d]", maxRanks),
+				ScmPerRank:      1,
+				NVMePerRank:     2,
+			},
 		}
 		data, err := createRaftUpdate(raftOpAddPoolService, ps)
 		if err != nil {
@@ -313,8 +319,9 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 	}
 
 	cmpOpts := []cmp.Option{
-		cmpopts.IgnoreUnexported(dbData{}, Member{}),
+		cmpopts.IgnoreUnexported(dbData{}, Member{}, PoolServiceStorage{}),
 		cmpopts.IgnoreFields(dbData{}, "RWMutex"),
+		cmpopts.IgnoreFields(PoolServiceStorage{}, "Mutex"),
 	}
 	if diff := cmp.Diff(db0.data, db1.data, cmpOpts...); diff != "" {
 		t.Fatalf("db differs after restore (-want, +got):\n%s\n", diff)
