@@ -221,7 +221,6 @@ class DataMoverTestBase(IorTestBase):
             return join(prefix, daos_dir)
         return join("/", daos_dir)
 
-    @staticmethod
     def set_src_location(self, *args, **kwargs):
         """Shorthand for set_location("src", ...)."""
         self.set_location("src", *args, **kwargs)
