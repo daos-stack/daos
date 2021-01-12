@@ -1277,7 +1277,7 @@ rebuild_kill_rank_during_rebuild(void **state)
 	new_arg->rebuild_cb = rebuild_destroy_pool_cb;
 
 	daos_exclude_target(arg->pool.pool_uuid, arg->group, arg->dmg_config,
-			    NULL /* svc */, ranks_to_kill[0], -1);
+			    ranks_to_kill[0], -1);
 
 	sleep(2);
 	daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
