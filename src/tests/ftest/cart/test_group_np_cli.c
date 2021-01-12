@@ -60,9 +60,9 @@ send_rpc_swim_check(crt_endpoint_t server_ep, crt_rpc_t *rpc_req)
 
 	int rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
 					CRT_PROTO_OPC(TEST_GROUP_BASE,
-					TEST_GROUP_VER, 2), &rpc_req);
+						      TEST_GROUP_VER, 2), &rpc_req);
 	D_ASSERTF(rc == 0 && rpc_req != NULL,
-			"crt_req_create() failed. "
+		  "crt_req_create() failed. "
 			"rc: %d, rpc_req: %p\n", rc, rpc_req);
 
 	rpc_req_input = crt_req_get(rpc_req);
