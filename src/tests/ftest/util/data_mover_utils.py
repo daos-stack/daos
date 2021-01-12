@@ -142,17 +142,26 @@ class Dcp(DcpCommand):
         # Compatibility option
         self.has_src_pool = False
 
-        # TODO this get_version() is now run for EVERY dcp run
-        self.exit_status_exception = False
-        self.get_version()
-        self.exit_status_exception = True
+    def set_compatibility(self, has_src_pool):
+        """Set compatibility options.
 
-    def get_version(self):
-        """Checks which version of dcp is available."""
+        Args:
+            has_src_pool (bool): Whether dcp has the --daos-src-pool option
+
+        """
+        self.has_src_pool = has_src_pool
+        self.log.info("set_compatibility: has_src_pool=%s\n",
+                      str(self.has_src_pool))
+
+    def query_compatibility(self):
+        """Query for compatibility options and set class variables."""
         self.print_usage.update(True)
+        self.exit_status_exception = False
         result = self.run(self.tmp, 1)
-        if "--daos-src-pool" in result.stdout:
-            self.has_src_pool = True
+        self.exit_status_exception = True
+        self.has_src_pool = ("--daos-src-pool" in result.stdout)
+        self.log.info("query_compatibility: has_src_pool=%s\n",
+                      str(self.has_src_pool))
 
     def run(self, tmp, processes):
         # pylint: disable=arguments-differ

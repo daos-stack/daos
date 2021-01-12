@@ -80,6 +80,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # List of daos test paths to keep track of
         self.daos_test_paths = []
 
+        # Keep track of dcp compatibility options
+        self.dcp_has_src_pool = False
+
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
@@ -102,6 +105,12 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         tool = self.params.get("tool", "/run/datamover/*")
         if tool:
             self.set_tool(tool)
+
+        # Get and save dcp compatibility options
+        self.dcp_cmd = Dcp(self.hostlist_clients, self.tmp)
+        self.dcp_cmd.get_params(self)
+        self.dcp_cmd.query_compatibility()
+        self.dcp_has_src_pool = self.dcp_cmd.has_src_pool
 
     def pre_tear_down(self):
         """Tear down steps to run before tearDown().
@@ -368,6 +377,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # First, initialize a new dcp command
         self.dcp_cmd = Dcp(self.hostlist_clients, self.tmp)
         self.dcp_cmd.get_params(self)
+
+        # Set the compatibility options
+        self.dcp_cmd.set_compatibility(self.dcp_has_src_pool)
 
         # Set the source params
         if src_type == "POSIX":

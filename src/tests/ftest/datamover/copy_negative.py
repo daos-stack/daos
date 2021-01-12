@@ -273,7 +273,6 @@ class CopyNegativeTest(DataMoverTestBase):
             expected_rc=1,
             expected_output=self.MFU_ERR_INVAL_ARG)
 
-    # TODO why is dmg pool destroy failing now?
     def test_copy_error_check_dcp(self):
         """Jira ID: DAOS-5515
         Test Description:
