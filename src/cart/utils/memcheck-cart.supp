@@ -200,6 +200,7 @@
 {
    tcp memcheck
    Memcheck:Param
+   msgsend(iov_buf)
    fun:tcpx_send_msg
    fun:process_tx_entry
    ...
