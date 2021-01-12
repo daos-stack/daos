@@ -81,7 +81,7 @@ struct test_t test_g = { .t_hold_time = 0,
 	((bool)			(bool_val)		CRT_VAR)
 
 /* output fields */
-#define CRT_OSEQ_TEST_PING_CHECK 				 \
+#define CRT_OSEQ_TEST_PING_CHECK				 \
 	((int32_t)		(ret)			CRT_VAR) \
 	((uint32_t)		(room_no)		CRT_VAR) \
 	((uint32_t)		(bool_val)		CRT_VAR)
@@ -89,21 +89,21 @@ struct test_t test_g = { .t_hold_time = 0,
 CRT_RPC_DECLARE(test_ping_check,
 		CRT_ISEQ_TEST_PING_CHECK, CRT_OSEQ_TEST_PING_CHECK)
 CRT_RPC_DEFINE(test_ping_check,
-		CRT_ISEQ_TEST_PING_CHECK, CRT_OSEQ_TEST_PING_CHECK)
+	       CRT_ISEQ_TEST_PING_CHECK, CRT_OSEQ_TEST_PING_CHECK)
 
 /* input fields */
-#define CRT_ISEQ_TEST_SWIM_STATUS  				 \
+#define CRT_ISEQ_TEST_SWIM_STATUS				 \
 	((uint32_t)		(rank)			CRT_VAR) \
 	((uint32_t)		(exp_status)		CRT_VAR)
 
 /* output fields */
-#define CRT_OSEQ_TEST_SWIM_STATUS 				 \
+#define CRT_OSEQ_TEST_SWIM_STATUS				 \
 	((uint32_t)		(bool_val)		CRT_VAR)
 
 CRT_RPC_DECLARE(test_swim_status,
 		CRT_ISEQ_TEST_SWIM_STATUS, CRT_OSEQ_TEST_SWIM_STATUS)
 CRT_RPC_DEFINE(test_swim_status,
-		CRT_ISEQ_TEST_SWIM_STATUS, CRT_OSEQ_TEST_SWIM_STATUS)
+	       CRT_ISEQ_TEST_SWIM_STATUS, CRT_OSEQ_TEST_SWIM_STATUS)
 
 static void
 test_checkin_handler(crt_rpc_t *rpc_req)
@@ -117,14 +117,14 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 	D_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
 
 	DBG_PRINT("tier1 test_server recv'd checkin, opc: %#x.\n",
-			 rpc_req->cr_opc);
+		  rpc_req->cr_opc);
 	DBG_PRINT("tier1 checkin input - age: %d, name: %s, days: %d, "
 			"bool_val %d.\n", e_req->age, e_req->name, e_req->days,
 			 e_req->bool_val);
 
 	e_reply = crt_reply_get(rpc_req);
 	D_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
-			e_reply);
+		  e_reply);
 	e_reply->ret = 0;
 	e_reply->room_no = test_g.t_roomno++;
 	e_reply->bool_val = e_req->bool_val;
@@ -157,21 +157,21 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 	D_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
 
 	DBG_PRINT("tier1 test_server recv'd swim_status, opc: %#x.\n",
-			 rpc_req->cr_opc);
+		  rpc_req->cr_opc);
 	DBG_PRINT("tier1 swim_status input - rank: %d, exp_status: %d.\n",
-			 e_req->rank, e_req->exp_status);
+		  e_req->rank, e_req->exp_status);
 
 	D_ASSERTF(swim_status_by_rank[e_req->rank] == e_req->exp_status,
-			 "Unexpected SWIM status.\n");
+		  "Unexpected SWIM status.\n");
 	DBG_PRINT("Rank [%d] is in SWIM state [%d], as expected.\n",
-			 e_req->rank, e_req->exp_status);
+		  e_req->rank, e_req->exp_status);
 
 	e_reply = crt_reply_get(rpc_req);
 
 	/* If we got past the previous assert, then we've succeeded */
 	e_reply->bool_val = true;
 	D_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
-			e_reply);
+		  e_reply);
 
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
