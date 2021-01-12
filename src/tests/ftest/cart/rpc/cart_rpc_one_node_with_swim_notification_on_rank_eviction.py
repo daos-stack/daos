@@ -51,6 +51,11 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(Test):
     def tearDown(self):
         """ Test tear down """
         print("Run TearDown\n")
+    
+    def _launch_cmd_at_index(self, index, srv_rtn):
+        clicmd = self.utils.build_cmd(
+            self, self.env, "test_clients", index=index)
+        self.utils.launch_test(self, clicmd, srv_rtn)
 
     def test_cart_rpc(self):
         """
@@ -77,10 +82,28 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(Test):
             time.sleep(10)
 
         cli_arg = self.params.get("test_clients_arg", '/run/tests/*/')
-        for index in range(len(cli_arg)):
-            clicmd = self.utils.build_cmd(
-                self, self.env, "test_clients", index=index)
-            self.utils.launch_test(self, clicmd, srv_rtn)
+
+        # - "--name client_group --attach_to tg_srv_grp --init_only"
+        self._launch_cmd_at_index(0, srv_rtn)
+
+        # - "--name client_group --attach_to tg_srv_grp --rank 2   --shut_only --holdtime 5"
+        self._launch_cmd_at_index(1, srv_rtn)
+
+        # Wait a bit for swim status to propogate to all servers
+        time.sleep(10)
+
+        # - "--name client_group --attach_to tg_srv_grp --rank 0,1 --verify_swim_status 'rank2=dead'"
+        self._launch_cmd_at_index(2, srv_rtn)
+
+        # - "--name client_group --attach_to tg_srv_grp --rank 0,1 --verify_swim_status 'rank1=alive'"
+        self._launch_cmd_at_index(3, srv_rtn)
+
+        # - "--name client_group --attach_to tg_srv_grp --rank 0,1 --verify_swim_status 'rank0=alive'"
+        self._launch_cmd_at_index(4, srv_rtn)
+
+        # - "--name client_group --attach_to tg_srv_grp --rank 0,1 --shut_only"
+        self._launch_cmd_at_index(5, srv_rtn)
+
 
 if __name__ == "__main__":
     main()
