@@ -35,6 +35,14 @@
 #include <gurt/hash.h>
 #include "fi.h"
 
+/**
+ * global switch for fault injection. zero globally turns off fault injection,
+ * non-zero turns on fault injection
+ */
+unsigned int			d_fault_inject;
+unsigned int			d_fault_config_file;
+struct d_fault_attr_t		*d_fault_attr_mem;
+
 #if FAULT_INJECTION
 
 static struct d_fault_attr *
@@ -107,12 +115,9 @@ struct d_fi_gdata_t {
  * global switch for fault injection. zero globally turns off fault injection,
  * non-zero turns on fault injection
  */
-unsigned int			d_fault_inject;
-unsigned int			d_fault_config_file;
 static uint32_t			d_fault_inject_seed;
 static struct d_fi_gdata_t	d_fi_gdata;
 static pthread_once_t		d_fi_gdata_init_once = PTHREAD_ONCE_INIT;
-struct d_fault_attr_t		*d_fault_attr_mem;
 
 static inline int
 fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in, bool take_lock)
