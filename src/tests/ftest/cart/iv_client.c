@@ -307,7 +307,7 @@ test_iv_fetch(struct iv_key_struct *key, FILE *log_file)
 	DBG_PRINT("Attempting fetch for key[%d:%d]\n", key->rank, key->key_id);
 
 	rc = prepare_rpc_request(g_crt_ctx, RPC_TEST_FETCH_IV, &g_server_ep,
-				(void **)&input, &rpc_req);
+				 (void **)&input, &rpc_req);
 	assert(rc == 0);
 
 	/* Create a temporary buffer to store the result of the fetch */
@@ -332,7 +332,7 @@ test_iv_fetch(struct iv_key_struct *key, FILE *log_file)
 			  key->key_id);
 	else
 		DBG_PRINT("Fetch of key=[%d:%d] NOT FOUND; rc = %ld\n",
-			 key->rank, key->key_id, output->rc);
+			  key->rank, key->key_id, output->rc);
 
 	print_result_as_json(output->rc, &output->key, output->size, &sg_list,
 			     log_file);
@@ -437,7 +437,7 @@ test_iv_set_grp_version(char *arg_version, char *arg_timing)
 		version = strtol(arg_version, NULL, 16);
 
 	DBG_PRINT("Attempting to set group version to 0x%08x: %d\n",
-		 version,  version);
+		  version,  version);
 
 	/* decode timing for changing version */
 	if (arg_timing != NULL) {
@@ -458,10 +458,10 @@ test_iv_set_grp_version(char *arg_version, char *arg_timing)
 	/* Check of valid output */
 	if (output->rc == 0)
 		DBG_PRINT("Grp Set Version PASSED 0x%x : %d\n",
-			 version, version);
+			  version, version);
 	else
 		DBG_PRINT("Grp Set Version FAILED 0x%x : %d\n",
-			 version, version);
+			  version, version);
 
 	rc = crt_req_decref(rpc_req);
 
@@ -488,10 +488,10 @@ test_iv_get_grp_version()
 	version = output->version;
 	if (output->rc != 0)
 		DBG_PRINT("Grp Get Version FAILED: rc %d\n",
-			 output->rc);
+			  output->rc);
 	else
 		DBG_PRINT("Grp Get Version PASSED 0x%08x : %d\n",
-			 version, version);
+			  version, version);
 
 	rc = crt_req_decref(rpc_req);
 	assert(rc == 0);
@@ -542,9 +542,11 @@ int main(int argc, char **argv)
 	int			 c;
 	int			 attach_retries_left;
 
+#if 0
 	DBG_PRINT("\t*******************\n");
 	DBG_PRINT("\t***Client MAIN ****\n");
 	DBG_PRINT("\t*******************\n");
+#endif
 
 	while ((c = getopt(argc, argv, "k:o:r:s:v:x:l:m:")) != -1) {
 		switch (c) {
@@ -656,7 +658,7 @@ int main(int argc, char **argv)
 			break;
 
 		printf("attach failed (rc=%d). retries left %d\n",
-		      rc, attach_retries_left);
+		       rc, attach_retries_left);
 		sleep(1);
 	}
 	assert(rc == 0);
@@ -677,19 +679,19 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	if (cur_op == OP_FETCH)
+	if (cur_op == OP_FETCH) {
 		test_iv_fetch(&iv_key, log_file);
-	else if (cur_op == OP_UPDATE)
+	} else if (cur_op == OP_UPDATE) {
 		test_iv_update(&iv_key, arg_value, arg_value_is_hex, arg_sync);
-	else if (cur_op == OP_INVALIDATE)
+	} else if (cur_op == OP_INVALIDATE) {
 		test_iv_invalidate(&iv_key, arg_sync);
-	else if (cur_op == OP_SHUTDOWN)
+	} else if (cur_op == OP_SHUTDOWN) {
 		test_iv_shutdown();
-	else if (cur_op == OP_SET_GRP_VERSION)
+	} else if (cur_op == OP_SET_GRP_VERSION) {
 		test_iv_set_grp_version(arg_value, arg_time);
-	else if (cur_op == OP_GET_GRP_VERSION)
+	} else if (cur_op == OP_GET_GRP_VERSION) {
 		test_iv_get_grp_version();
-	else {
+	} else {
 		print_usage("Unsupported operation");
 		return -1;
 	}

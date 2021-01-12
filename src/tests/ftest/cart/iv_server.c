@@ -345,7 +345,7 @@ print_key_value(char *hdr, crt_iv_key_t *iv_key, d_sg_list_t *iv_value)
 
 	if (iv_key == NULL) {
 		rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex, "%s",
-			     "key=NULL");
+			      "key=NULL");
 		if (rc > 0) {
 			/* Avoid checkpatch warning */
 			rindex += rc;
@@ -354,15 +354,15 @@ print_key_value(char *hdr, crt_iv_key_t *iv_key, d_sg_list_t *iv_value)
 		key_struct = (struct iv_key_struct *)iv_key->iov_buf;
 		if (key_struct == NULL) {
 			rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
-				     "%s", "key=EMPTY");
+				      "%s", "key=EMPTY");
 			if (rc > 0) {
 				/* Avoid checkpatch warning */
 				rindex += rc;
 			}
 		} else {
 			rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
-				"key=[%d:%d]", key_struct->rank,
-				key_struct->key_id);
+				      "key=[%d:%d]", key_struct->rank,
+				      key_struct->key_id);
 			if (rc > 0) {
 				/* Avoid checkpatch warning */
 				rindex += rc;
@@ -371,13 +371,13 @@ print_key_value(char *hdr, crt_iv_key_t *iv_key, d_sg_list_t *iv_value)
 	}
 
 	rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
-		"%s", " ");
+		      "%s", " ");
 	if (rc > 0)
 		rindex += rc;
 
 	if (iv_value == NULL) {
 		rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
-			     "%s", "value=NULL");
+			      "%s", "value=NULL");
 		if (rc > 0) {
 			/* Avoid checkpatch warning */
 			rindex += rc;
@@ -388,14 +388,14 @@ print_key_value(char *hdr, crt_iv_key_t *iv_key, d_sg_list_t *iv_value)
 
 		if (value_struct == NULL) {
 			rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
-				     "%s", "value=EMPTY");
+				      "%s", "value=EMPTY");
 			if (rc > 0) {
 				/* Avoid checkpatch warning */
 				rindex += rc;
 			}
 		} else {
 			rc = snprintf(&buffer[rindex], MAX_BUF_SIZE - rindex,
-				     "value='%s'", value_struct->data);
+				      "value='%s'", value_struct->data);
 			if (rc > 0) {
 				/* Avoid checkpatch warning */
 				rindex += rc;
@@ -667,7 +667,7 @@ iv_pre_common(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 static void
 iv_pre_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
-	    crt_generic_cb_t cb_func, void *cb_arg)
+	     crt_generic_cb_t cb_func, void *cb_arg)
 {
 	DBG_ENTRY();
 	/*
@@ -718,7 +718,8 @@ init_iv(void)
 		iv_class.ivc_ops = &g_ivc_ops;
 
 		rc = crt_iv_namespace_create(g_main_ctx, NULL, tree_topo,
-					    &iv_class, 1, MY_IVNS_ID, &g_ivns);
+					     &iv_class, 1,
+					     MY_IVNS_ID, &g_ivns);
 		assert(rc == 0);
 
 		namespace_attached = 1;
@@ -784,8 +785,8 @@ iv_set_ivns(crt_rpc_t *rpc)
 
 	/* Don't get back ivns handle as we don't need it */
 	rc = crt_iv_namespace_create(g_main_ctx, NULL,
-				    crt_tree_topo(CRT_TREE_KNOMIAL, 2),
-				    &iv_class, 1, MY_IVNS_ID, &g_ivns);
+				     crt_tree_topo(CRT_TREE_KNOMIAL, 2),
+				     &iv_class, 1, MY_IVNS_ID, &g_ivns);
 	assert(rc == 0);
 
 	output->rc = 0;
@@ -1167,10 +1168,10 @@ invalidate_done(crt_iv_namespace_t ivns, uint32_t class_id,
 
 	if (invalidate_rc != 0) {
 		DBG_PRINT("Invalidate: Key = [%d,%d] Failed\n",
-			 key_struct->rank, key_struct->key_id);
+			  key_struct->rank, key_struct->key_id);
 	} else {
 		DBG_PRINT("Invalidate: Key = [%d,%d] PASSED\n",
-			 key_struct->rank, key_struct->key_id);
+			  key_struct->rank, key_struct->key_id);
 	}
 
 	output->rc = invalidate_rc;
@@ -1313,7 +1314,7 @@ int main(int argc, char **argv)
 	}
 
 	rc = tc_load_group_from_file(grp_cfg_file, g_main_ctx, grp, my_rank,
-				    true);
+				     true);
 	if (rc != 0) {
 		D_ERROR("Failed to load group file %s\n", grp_cfg_file);
 		assert(0);

@@ -290,7 +290,7 @@ struct crt_rpc_priv {
 /* CRT internal opcode definitions, must be 0xFF00xxxx.*/
 enum {
 	__FIRST_INTERNAL  = CRT_PROTO_OPC(CRT_OPC_INTERNAL_BASE,
-					CRT_PROTO_INTERNAL_VERSION, 0) - 1,
+					  CRT_PROTO_INTERNAL_VERSION, 0) - 1,
 	CRT_INTERNAL_RPCS_LIST
 };
 
@@ -299,14 +299,13 @@ enum {
 /* CRT internal opcode definitions, must be 0xFF00xxxx.*/
 enum {
 	__FIRST_FI  = CRT_PROTO_OPC(CRT_OPC_FI_BASE,
-				CRT_PROTO_FI_VERSION, 0) - 1,
+				    CRT_PROTO_FI_VERSION, 0) - 1,
 	CRT_FI_RPCS_LIST
 };
 
 #define CRT_OPC_SWIM_PROTO	0xFE000000U
 
 #undef X
-
 
 static inline bool
 crt_opc_is_swim(crt_opcode_t opc)
@@ -594,7 +593,6 @@ CRT_RPC_DECLARE(crt_ctl_log_add_msg, CRT_ISEQ_CTL_LOG_ADD_MSG,
 	} while (0)
 
 void crt_req_destroy(struct crt_rpc_priv *rpc_priv);
-
 
 static inline bool
 crt_rpc_cb_customized(struct crt_context *crt_ctx,
