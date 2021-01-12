@@ -37,7 +37,7 @@
 #include "test_group_np_common.h"
 
 
-void
+static void
 send_rpc_shutdown(crt_endpoint_t server_ep, crt_rpc_t* rpc_req) {
 	int rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
 					CRT_PROTO_OPC(TEST_GROUP_BASE,
@@ -51,7 +51,7 @@ send_rpc_shutdown(crt_endpoint_t server_ep, crt_rpc_t* rpc_req) {
 	tc_sem_timedwait(&test_g.t_token_to_proceed, 61, __LINE__);
 }
 
-void
+static void
 send_rpc_swim_check(crt_endpoint_t server_ep, crt_rpc_t* rpc_req) {
 
 	struct test_swim_status_in	*rpc_req_input;
