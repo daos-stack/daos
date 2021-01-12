@@ -59,7 +59,7 @@ dc_cp(tse_task_t *task, void *data)
 int
 dc_deprecated(tse_task_t *task)
 {
-	D_ERROR("This API is deprecated "DF_RC"\n", DP_RC(-DER_NOSYS));
+	D_ERROR("This API is deprecated\n");
 	tse_task_complete(task, -DER_NOSYS);
 	return -DER_NOSYS;
 }
@@ -419,6 +419,7 @@ static int send_monitor_request(struct dc_pool *pool, int request_type)
 	req.pooluuid = pool_uuid;
 	req.poolhandleuuid = pool_hdl_uuid;
 	req.jobid = dc_jobid;
+	req.sys = pool->dp_sys->sy_name;
 
 	reqb_size = mgmt__pool_monitor_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);

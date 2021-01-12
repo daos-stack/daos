@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -160,8 +160,7 @@ func newMockDrpcClient(cfg *mockDrpcClientConfig) *mockDrpcClient {
 // setupMockDrpcClientBytes sets up the dRPC client for the mgmtSvc to return
 // a set of bytes as a response.
 func setupMockDrpcClientBytes(svc *mgmtSvc, respBytes []byte, err error) {
-	mi, _ := svc.harness.getMSLeaderInstance()
-
+	mi := svc.harness.instances[0]
 	cfg := &mockDrpcClientConfig{}
 	cfg.setSendMsgResponse(drpc.Status_SUCCESS, respBytes, err)
 	mi.setDrpcClient(newMockDrpcClient(cfg))
@@ -214,7 +213,7 @@ func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
 	harness.started.SetTrue()
 
 	ms, db := system.MockMembership(t, log, mockTCPResolver)
-	return newMgmtSvc(harness, ms, db, events.NewPubSub(context.Background(), log))
+	return newMgmtSvc(harness, ms, db, nil, events.NewPubSub(context.Background(), log))
 }
 
 // newTestMgmtSvcMulti creates a mgmtSvc that contains the requested
@@ -233,7 +232,10 @@ func newTestMgmtSvcMulti(t *testing.T, log logging.Logger, count int, isAP bool)
 	}
 	harness.started.SetTrue()
 
-	return newMgmtSvc(harness, nil, nil, nil)
+	svc := newTestMgmtSvc(t, log)
+	svc.harness = harness
+
+	return svc
 }
 
 // newTestMgmtSvcNonReplica creates a mgmtSvc that is configured to
