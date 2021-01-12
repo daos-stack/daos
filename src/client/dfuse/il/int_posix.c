@@ -267,7 +267,10 @@ ioil_init(void)
 
 	D_INIT_LIST_HEAD(&ioil_iog.iog_pools_head);
 
-	daos_debug_init(DAOS_LOG_DEFAULT);
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
+	if (rc) {
+		ioil_iog.iog_no_daos = true;
+	}
 
 	DFUSE_TRA_ROOT(&ioil_iog, "il");
 

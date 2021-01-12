@@ -185,9 +185,11 @@ daos_fail_init(void)
 	 * leads to deadlocks.
 	 */
 	rc = d_fault_attr_set(DAOS_FAIL_UNIT_TEST_GROUP, attr);
-	if (rc != 0)
-		D_ERROR("Failed to set fault attr, " DF_RC "\n",
+	if (rc != 0) {
+		D_ERROR("Failed to set fault attr, "DF_RC"\n",
 			DP_RC(rc));
+		d_fault_inject_fini();
+	}
 	rc = 0;
 
 	return rc;

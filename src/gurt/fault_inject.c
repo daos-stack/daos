@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,14 +34,6 @@
 #include <gurt/common.h>
 #include <gurt/hash.h>
 #include "fi.h"
-
-/**
- * global switch for fault injection. zero globally turns off fault injection,
- * non-zero turns on fault injection
- */
-unsigned int			d_fault_inject;
-unsigned int			d_fault_config_file;
-struct d_fault_attr_t *d_fault_attr_mem;
 
 #if FAULT_INJECTION
 
@@ -120,7 +112,7 @@ unsigned int			d_fault_config_file;
 static uint32_t			d_fault_inject_seed;
 static struct d_fi_gdata_t	d_fi_gdata;
 static pthread_once_t		d_fi_gdata_init_once = PTHREAD_ONCE_INIT;
-
+struct d_fault_attr_t		*d_fault_attr_mem;
 
 static inline int
 fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in, bool take_lock)
@@ -589,6 +581,7 @@ d_fault_inject_fini()
 	D_RWLOCK_UNLOCK(&d_fi_gdata.dfg_rwlock);
 	d_fi_gdata_destroy();
 	d_fi_gdata_init_once = PTHREAD_ONCE_INIT;
+	d_fault_inject = 0;
 
 	D_DEBUG(DB_ALL, "Finalized.\n");
 
