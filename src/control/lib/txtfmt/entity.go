@@ -29,6 +29,10 @@ import (
 	"text/tabwriter"
 )
 
+const (
+	defEntityRowIndent = 2
+)
+
 // EntityFormatter can be used for neatly displaying attributes
 // of a single entity.
 type EntityFormatter struct {
@@ -57,9 +61,10 @@ func (f *EntityFormatter) formatHeader() {
 func (f *EntityFormatter) Format(table []TableRow) string {
 	f.formatHeader()
 
+	iw := NewIndentWriter(f.writer, WithPadCount(defEntityRowIndent))
 	for _, row := range table {
 		for key, val := range row {
-			fmt.Fprintf(f.writer, "%s\t%s%s\t\n", key, f.Separator, val)
+			fmt.Fprintf(iw, "%s\t%s%s\t\n", key, f.Separator, val)
 		}
 	}
 
@@ -99,6 +104,6 @@ func GetEntityPadding(table []TableRow) (padding int) {
 // FormatEntity returns a formatted string from the supplied entity title
 // and table of attributes.
 func FormatEntity(title string, attrs []TableRow) string {
-	f := NewEntityFormatter(title, GetEntityPadding(attrs))
+	f := NewEntityFormatter(title, GetEntityPadding(attrs)+defEntityRowIndent)
 	return f.Format(attrs)
 }
