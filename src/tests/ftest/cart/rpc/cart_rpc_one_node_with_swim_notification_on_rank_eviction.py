@@ -51,7 +51,6 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(Test):
     def tearDown(self):
         """ Test tear down """
         print("Run TearDown\n")
-    
     def _launch_cmd_at_index(self, index, srv_rtn):
         clicmd = self.utils.build_cmd(
             self, self.env, "test_clients", index=index)
@@ -89,7 +88,7 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(Test):
         # --rank 2   --shut_only --holdtime 5"
         self._launch_cmd_at_index(1, srv_rtn)
 
-        # Wait a bit for swim status to propogate to all servers
+        # Wait a bit for swim status to propagate to all servers
         time.sleep(10)
 
         # --rank 0,1 --verify_swim_status 'rank2=dead'"

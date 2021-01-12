@@ -177,7 +177,7 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 
 	DBG_PRINT("tier1 test_srver sent swim_status reply, e_reply->bool_val: %d.\n",
-			e_reply->bool_val);
+		  e_reply->bool_val);
 }
 
 static void
@@ -192,14 +192,14 @@ test_ping_delay_handler(crt_rpc_t *rpc_req)
 	D_ASSERTF(p_req != NULL, "crt_req_get() failed. p_req: %p\n", p_req);
 
 	DBG_PRINT("tier1 test_server recv'd checkin, opc: %#x.\n",
-			rpc_req->cr_opc);
+		  rpc_req->cr_opc);
 	DBG_PRINT("tier1 checkin input - age: %d, name: %s, days: %d, "
 			"delay: %u.\n", p_req->age, p_req->name, p_req->days,
 			 p_req->delay);
 
 	p_reply = crt_reply_get(rpc_req);
 	D_ASSERTF(p_reply != NULL, "crt_reply_get() failed. p_reply: %p\n",
-			p_reply);
+		  p_reply);
 	p_reply->ret = 0;
 	p_reply->room_no = test_g.t_roomno++;
 
@@ -282,7 +282,7 @@ static void
 test_shutdown_handler(crt_rpc_t *rpc_req)
 {
 	DBG_PRINT("tier1 test_srver received shutdown request, opc: %#x.\n",
-			 rpc_req->cr_opc);
+		  rpc_req->cr_opc);
 
 	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
 	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
@@ -364,7 +364,7 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 	server_ep.ep_tag = tag;
 
 	rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
-				TEST_OPC_CHECKIN, &rpc_req);
+			    TEST_OPC_CHECKIN, &rpc_req);
 	D_ASSERTF(rc == 0 && rpc_req != NULL, "crt_req_create() failed,"
 			" rc: %d rpc_req: %p\n", rc, rpc_req);
 
@@ -396,7 +396,7 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 }
 
 static struct t_swim_status
-parse_verify_swim_status_arg (char *source)
+parse_verify_swim_status_arg(char *source)
 {
 	char *regexString = "([0-9]+)[ ]*=[ ]*(a|d|alive|dead)";
 
@@ -405,12 +405,12 @@ parse_verify_swim_status_arg (char *source)
 	size_t maxMatches = 2;
 	size_t maxGroups  = 3;
 
-	unsigned int 	 m;
+	unsigned int	 m;
 	regex_t		 regexCompiled;
 	regmatch_t	 groupArray[maxGroups];
-	char  		*cursor;
+	char		*cursor;
 
-	if (regcomp(&regexCompiled, regexString, REG_EXTENDED|REG_ICASE)) {
+	if (regcomp(&regexCompiled, regexString, REG_EXTENDED | REG_ICASE)) {
 		printf("Could not compile regular expression.\n");
 		return ss;
 	};
@@ -442,7 +442,7 @@ parse_verify_swim_status_arg (char *source)
 			strcpy(cursorCopy, cursor);
 			cursorCopy[groupArray[g].rm_eo] = 0;
 			D_DEBUG(DB_TEST,
-					 "parse_verify_swim_status_arg, match %u, "
+				"parse_verify_swim_status_arg, match %u, "
 					 "group %u: [%2u-%2u]: %s\n",
 					 m,
 					 g,
