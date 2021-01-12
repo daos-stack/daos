@@ -200,15 +200,12 @@ class Test(avocadoTest):
             ticket (object): the ticket (str) or group of tickets (list)
                 that cause this test case to be cancelled.
         """
-        # pylint: disable=invalid-name
         verb = "is"
         if isinstance(ticket, list):
             if len(ticket) > 1:
                 ticket[-1] = " ".join(["and", ticket[-1]])
-                ticket = ", ".join(ticket)
                 verb = "are"
-            else:
-                ticket = ", ".join(ticket)
+            ticket = ", ".join(ticket)
         return self.cancel("Skipping until {} {} fixed.".format(ticket, verb))
     # pylint: enable=invalid-name
 
@@ -252,9 +249,16 @@ class Test(avocadoTest):
     def tearDown(self):
         """Tear down after each test case."""
         self.report_timeout()
+        super(Test, self).tearDown()
+
+        # Fail the test if any errors occurred during tear down
+        if self._teardown_errors:
+            self.fail("Errors detected during teardown:\n - {}".format(
+                "\n - ".join(self._teardown_errors)))
+
+        # Cancel the test if any part of the test was skipped due to ticket
         if self.teardown_cancel:
             self.cancelForTicket(self.teardown_cancel)
-        super(Test, self).tearDown()
 
 
 class TestWithoutServers(Test):
@@ -343,10 +347,6 @@ class TestWithoutServers(Test):
     def tearDown(self):
         """Tear down after each test case."""
         self.report_timeout()
-        # Fail the test if any errors occurred during tear down
-        if self._teardown_errors:
-            self.fail("Errors detected during teardown:\n - {}".format(
-                "\n - ".join(self._teardown_errors)))
 
         if self.fault_file:
             try:
