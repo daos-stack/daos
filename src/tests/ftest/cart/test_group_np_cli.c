@@ -102,7 +102,7 @@ test_run(void)
 		}
 
 		tc_cli_start_basic(test_g.t_local_group_name,
-					 test_g.t_remote_group_name,
+				   test_g.t_remote_group_name,
 					 &grp, &rank_list, &test_g.t_crt_ctx[0],
 					 &test_g.t_tid[0], test_g.t_srv_ctx_num,
 					 test_g.t_use_cfg, NULL);
