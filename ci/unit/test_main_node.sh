@@ -42,8 +42,6 @@ else
     export CMOCKA_XML_FILE="${DAOS_BASE}/test_results/%g_${WITH_VALGRIND}.xml"
 fi
 
-export DAOS_BASE
-
 cd "$DAOS_BASE"
 if ${NLT:-false}; then
     mkdir -p vm_test
@@ -51,5 +49,6 @@ if ${NLT:-false}; then
     ./utils/node_local_test.py --output-file=vm_test/nlt-errors.json all
 else
     sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
-    IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" utils/run_test.sh
+    IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" \
+        DAOS_BASE="$DAOS_BASE" utils/run_test.sh
 fi

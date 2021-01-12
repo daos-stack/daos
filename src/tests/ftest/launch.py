@@ -810,13 +810,8 @@ def run_tests(test_files, tag_filter, args):
     print("Avocado logs stored in {}".format(avocado_logs_dir))
 
     # Remove stale job results, if any, before test run
-    stale_dir = "^job-"
-    logs_dir = avocado_logs_dir + '/'
-    if os.path.isdir(logs_dir):
-        sub_dirs = os.listdir(logs_dir)
-        for folder in sub_dirs:
-            if re.search(stale_dir, folder):
-                rmtree(logs_dir + folder)
+    if os.path.isdir(avocado_logs_dir):
+        rmtree(avocado_logs_dir)
 
     # Create the base avocado run command
     command_list = [
@@ -894,13 +889,6 @@ def run_tests(test_files, tag_filter, args):
                 if not process_the_cores(avocado_logs_dir, test_file["yaml"],
                                          args):
                     return_code |= 256
-
-    test_logs_lnk = os.path.join(avocado_logs_dir, "latest")
-    try:
-        os.remove(test_logs_lnk)
-        print("Removing sym link latest")
-    except OSError as error:
-        print("Failed to remove sym link latest: {}".format(error))
 
     return return_code
 
