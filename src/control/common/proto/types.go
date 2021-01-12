@@ -271,8 +271,8 @@ func AccessControlListFromPB(pbACL *mgmtpb.ACLResp) *common.AccessControlList {
 func PoolDiscoveriesFromPB(pbPools []*mgmtpb.ListPoolsResp_Pool) []*common.PoolDiscovery {
 	pools := make([]*common.PoolDiscovery, 0, len(pbPools))
 	for _, pbPool := range pbPools {
-		svcReps := make([]uint32, 0, len(pbPool.Svcreps))
-		svcReps = append(svcReps, pbPool.Svcreps...)
+		svcReps := make([]uint32, 0, len(pbPool.SvcReps))
+		svcReps = append(svcReps, pbPool.SvcReps...)
 
 		pools = append(pools, &common.PoolDiscovery{
 			UUID:        pbPool.Uuid,
