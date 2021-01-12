@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -183,7 +183,7 @@ type (
 // containing results for all host scan operations.
 func NetworkScan(ctx context.Context, rpcClient UnaryInvoker, req *NetworkScanReq) (*NetworkScanResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewMgmtCtlClient(conn).NetworkScan(ctx, &ctlpb.NetworkScanReq{
+		return ctlpb.NewCtlSvcClient(conn).NetworkScan(ctx, &ctlpb.NetworkScanReq{
 			Provider: req.Provider,
 		})
 	})

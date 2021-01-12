@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,8 +49,7 @@ typedef enum {
 	/** Management APIs */
 	/* Starting at 0 will break Application Binary Interface backward
 	 * compatibility */
-	DAOS_OPC_POOL_EVICT = 2,
-	DAOS_OPC_SET_PARAMS,
+	DAOS_OPC_SET_PARAMS = 3,
 	DAOS_OPC_MGMT_GET_BS_STATE,
 
 	/** Pool APIs */
@@ -189,14 +188,6 @@ typedef struct {
 	int			force;
 } daos_pool_destroy_t;
 
-/** pool evict args */
-typedef struct {
-	/** UUID of the pool. */
-	uuid_t			uuid;
-	/** Process set name of the DAOS servers managing the pool. */
-	const char		*grp;
-} daos_pool_evict_t;
-
 /** pool connect args */
 typedef struct {
 	/** UUID of the pool. */
@@ -211,7 +202,7 @@ typedef struct {
 	daos_pool_info_t	*info;
 } daos_pool_connect_t;
 
-/** poo disconnect args */
+/** pool disconnect args */
 typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;

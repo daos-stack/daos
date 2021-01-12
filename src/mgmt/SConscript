@@ -12,7 +12,7 @@ def scons():
     prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
 
     pb = denv.SharedObject(['acl.pb-c.c', 'pool.pb-c.c', 'svc.pb-c.c',
-                            'storage_query.pb-c.c', 'cont.pb-c.c'])
+                            'smd.pb-c.c', 'cont.pb-c.c'])
     common = denv.SharedObject(['rpc.c']) + pb
     # Management server module
     mgmt_srv = daos_build.library(denv, 'mgmt',

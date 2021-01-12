@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -274,26 +274,3 @@ daos_pool_stop_svc(daos_handle_t poh, daos_event_t *ev)
 
 	return dc_task_schedule(task, true);
 }
-
-int
-daos_pool_evict(const uuid_t uuid, const char *grp, daos_event_t *ev)
-{
-	daos_pool_evict_t       *args;
-	tse_task_t              *task;
-	int                      rc;
-
-	DAOS_API_ARG_ASSERT(*args, POOL_EVICT);
-	if (!daos_uuid_valid(uuid))
-		return -DER_INVAL;
-
-	rc = dc_task_create(dc_pool_evict, NULL, ev, &task);
-	if (rc)
-		return rc;
-
-	args = dc_task_get_args(task);
-	args->grp       = grp;
-	uuid_copy((unsigned char *)args->uuid, uuid);
-
-	return dc_task_schedule(task, true);
-}
-

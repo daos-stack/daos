@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ const struct daos_task_api dc_funcs[] = {
 	/** Management */
 	{dc_deprecated, 0},
 	{dc_deprecated, 0},
-	{dc_pool_evict, sizeof(daos_pool_evict_t)},
+	{dc_deprecated, 0},
 	{dc_debug_set_params, sizeof(daos_set_params_t)},
 	{dc_mgmt_get_bs_state, sizeof(daos_mgmt_get_bs_state_t)},
 

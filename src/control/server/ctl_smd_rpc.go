@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -45,7 +45,7 @@ func queryRank(reqRank uint32, srvRank system.Rank) bool {
 	return rr.Equals(srvRank)
 }
 
-func (svc *mgmtSvc) querySmdDevices(ctx context.Context, req *mgmtpb.SmdQueryReq, resp *mgmtpb.SmdQueryResp) error {
+func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQueryReq, resp *ctlpb.SmdQueryResp) error {
 	for _, srv := range svc.harness.Instances() {
 		if !srv.isReady() {
 			svc.log.Debugf("skipping not-ready instance")
@@ -60,10 +60,10 @@ func (svc *mgmtSvc) querySmdDevices(ctx context.Context, req *mgmtpb.SmdQueryReq
 			continue
 		}
 
-		rResp := new(mgmtpb.SmdQueryResp_RankResp)
+		rResp := new(ctlpb.SmdQueryResp_RankResp)
 		rResp.Rank = srvRank.Uint32()
 
-		listDevsResp, err := srv.listSmdDevices(ctx, new(mgmtpb.SmdDevReq))
+		listDevsResp, err := srv.listSmdDevices(ctx, new(ctlpb.SmdDevReq))
 		if err != nil {
 			return errors.Wrapf(err, "rank %d", srvRank)
 		}
@@ -77,7 +77,7 @@ func (svc *mgmtSvc) querySmdDevices(ctx context.Context, req *mgmtpb.SmdQueryReq
 			found := false
 			for _, dev := range rResp.Devices {
 				if dev.Uuid == req.Uuid {
-					rResp.Devices = []*mgmtpb.SmdQueryResp_Device{dev}
+					rResp.Devices = []*ctlpb.SmdQueryResp_Device{dev}
 					found = true
 					break
 				}
@@ -97,7 +97,7 @@ func (svc *mgmtSvc) querySmdDevices(ctx context.Context, req *mgmtpb.SmdQueryReq
 			for _, dev := range rResp.Devices {
 				for _, tgtId := range dev.TgtIds {
 					if int32(reqTgtId) == tgtId {
-						rResp.Devices = []*mgmtpb.SmdQueryResp_Device{dev}
+						rResp.Devices = []*ctlpb.SmdQueryResp_Device{dev}
 						found = true
 						break
 					}
@@ -113,7 +113,7 @@ func (svc *mgmtSvc) querySmdDevices(ctx context.Context, req *mgmtpb.SmdQueryReq
 		}
 
 		for _, dev := range rResp.Devices {
-			health, err := srv.getBioHealth(ctx, &mgmtpb.BioHealthReq{
+			health, err := srv.getBioHealth(ctx, &ctlpb.BioHealthReq{
 				DevUuid: dev.Uuid,
 			})
 			if err != nil {
@@ -125,7 +125,7 @@ func (svc *mgmtSvc) querySmdDevices(ctx context.Context, req *mgmtpb.SmdQueryReq
 	return nil
 }
 
-func (svc *mgmtSvc) querySmdPools(ctx context.Context, req *mgmtpb.SmdQueryReq, resp *mgmtpb.SmdQueryResp) error {
+func (svc *ControlService) querySmdPools(ctx context.Context, req *ctlpb.SmdQueryReq, resp *ctlpb.SmdQueryResp) error {
 	for _, srv := range svc.harness.Instances() {
 		if !srv.isReady() {
 			svc.log.Debugf("skipping not-ready instance")
@@ -140,15 +140,15 @@ func (svc *mgmtSvc) querySmdPools(ctx context.Context, req *mgmtpb.SmdQueryReq, 
 			continue
 		}
 
-		rResp := new(mgmtpb.SmdQueryResp_RankResp)
+		rResp := new(ctlpb.SmdQueryResp_RankResp)
 		rResp.Rank = srvRank.Uint32()
 
-		dresp, err := srv.CallDrpc(ctx, drpc.MethodSmdPools, new(mgmtpb.SmdPoolReq))
+		dresp, err := srv.CallDrpc(ctx, drpc.MethodSmdPools, new(ctlpb.SmdPoolReq))
 		if err != nil {
 			return err
 		}
 
-		rankDevResp := new(mgmtpb.SmdPoolResp)
+		rankDevResp := new(ctlpb.SmdPoolResp)
 		if err = proto.Unmarshal(dresp.Body, rankDevResp); err != nil {
 			return errors.Wrap(err, "unmarshal SmdListPools response")
 		}
@@ -166,7 +166,7 @@ func (svc *mgmtSvc) querySmdPools(ctx context.Context, req *mgmtpb.SmdQueryReq, 
 			found := false
 			for _, pool := range rResp.Pools {
 				if pool.Uuid == req.Uuid {
-					rResp.Pools = []*mgmtpb.SmdQueryResp_Pool{pool}
+					rResp.Pools = []*ctlpb.SmdQueryResp_Pool{pool}
 					found = true
 					break
 				}
@@ -180,13 +180,13 @@ func (svc *mgmtSvc) querySmdPools(ctx context.Context, req *mgmtpb.SmdQueryReq, 
 	return nil
 }
 
-func (svc *mgmtSvc) smdQueryDevice(ctx context.Context, req *mgmtpb.SmdQueryReq) (system.Rank, *mgmtpb.SmdQueryResp_Device, error) {
+func (svc *ControlService) smdQueryDevice(ctx context.Context, req *ctlpb.SmdQueryReq) (system.Rank, *ctlpb.SmdQueryResp_Device, error) {
 	rank := system.NilRank
 	if req.Uuid == "" {
 		return rank, nil, errors.New("empty UUID in device query")
 	}
 
-	resp := new(mgmtpb.SmdQueryResp)
+	resp := new(ctlpb.SmdQueryResp)
 	if err := svc.querySmdDevices(ctx, req, resp); err != nil {
 		return rank, nil, err
 	}
@@ -206,7 +206,7 @@ func (svc *mgmtSvc) smdQueryDevice(ctx context.Context, req *mgmtpb.SmdQueryReq)
 	return rank, nil, nil
 }
 
-func (svc *mgmtSvc) smdSetFaulty(ctx context.Context, req *mgmtpb.SmdQueryReq) (*mgmtpb.SmdQueryResp, error) {
+func (svc *ControlService) smdSetFaulty(ctx context.Context, req *ctlpb.SmdQueryReq) (*ctlpb.SmdQueryResp, error) {
 	req.Rank = uint32(system.NilRank)
 	rank, device, err := svc.smdQueryDevice(ctx, req)
 	if err != nil {
@@ -226,14 +226,14 @@ func (svc *mgmtSvc) smdSetFaulty(ctx context.Context, req *mgmtpb.SmdQueryReq) (
 
 	svc.log.Debugf("calling set-faulty on rank %d for %s", rank, req.Uuid)
 
-	dresp, err := srvs[0].CallDrpc(ctx, drpc.MethodSetFaultyState, &mgmtpb.DevStateReq{
+	dresp, err := srvs[0].CallDrpc(ctx, drpc.MethodSetFaultyState, &ctlpb.DevStateReq{
 		DevUuid: req.Uuid,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	dsr := &mgmtpb.DevStateResp{}
+	dsr := &ctlpb.DevStateResp{}
 	if err = proto.Unmarshal(dresp.Body, dsr); err != nil {
 		return nil, errors.Wrap(err, "unmarshal StorageSetFaulty response")
 	}
@@ -242,11 +242,11 @@ func (svc *mgmtSvc) smdSetFaulty(ctx context.Context, req *mgmtpb.SmdQueryReq) (
 		return nil, errors.Wrap(drpc.DaosStatus(dsr.Status), "smdSetFaulty failed")
 	}
 
-	return &mgmtpb.SmdQueryResp{
-		Ranks: []*mgmtpb.SmdQueryResp_RankResp{
+	return &ctlpb.SmdQueryResp{
+		Ranks: []*ctlpb.SmdQueryResp_RankResp{
 			{
 				Rank: rank.Uint32(),
-				Devices: []*mgmtpb.SmdQueryResp_Device{
+				Devices: []*ctlpb.SmdQueryResp_Device{
 					{
 						Uuid:  dsr.DevUuid,
 						State: dsr.DevState,
@@ -257,7 +257,7 @@ func (svc *mgmtSvc) smdSetFaulty(ctx context.Context, req *mgmtpb.SmdQueryReq) (
 	}, nil
 }
 
-func (svc *mgmtSvc) smdReplace(ctx context.Context, req *mgmtpb.SmdQueryReq) (*mgmtpb.SmdQueryResp, error) {
+func (svc *ControlService) smdReplace(ctx context.Context, req *ctlpb.SmdQueryReq) (*ctlpb.SmdQueryResp, error) {
 	req.Rank = uint32(system.NilRank)
 	rank, device, err := svc.smdQueryDevice(ctx, req)
 	if err != nil {
@@ -277,7 +277,7 @@ func (svc *mgmtSvc) smdReplace(ctx context.Context, req *mgmtpb.SmdQueryReq) (*m
 
 	svc.log.Debugf("calling storage replace on rank %d for %s", rank, req.Uuid)
 
-	dresp, err := srvs[0].CallDrpc(ctx, drpc.MethodReplaceStorage, &mgmtpb.DevReplaceReq{
+	dresp, err := srvs[0].CallDrpc(ctx, drpc.MethodReplaceStorage, &ctlpb.DevReplaceReq{
 		OldDevUuid: req.Uuid,
 		NewDevUuid: req.ReplaceUUID,
 		NoReint:    req.NoReint,
@@ -286,7 +286,7 @@ func (svc *mgmtSvc) smdReplace(ctx context.Context, req *mgmtpb.SmdQueryReq) (*m
 		return nil, err
 	}
 
-	drr := &mgmtpb.DevReplaceResp{}
+	drr := &ctlpb.DevReplaceResp{}
 	if err = proto.Unmarshal(dresp.Body, drr); err != nil {
 		return nil, errors.Wrap(err, "unmarshal StorageReplace response")
 	}
@@ -295,11 +295,11 @@ func (svc *mgmtSvc) smdReplace(ctx context.Context, req *mgmtpb.SmdQueryReq) (*m
 		return nil, errors.Wrap(drpc.DaosStatus(drr.Status), "smdReplace failed")
 	}
 
-	return &mgmtpb.SmdQueryResp{
-		Ranks: []*mgmtpb.SmdQueryResp_RankResp{
+	return &ctlpb.SmdQueryResp{
+		Ranks: []*ctlpb.SmdQueryResp_RankResp{
 			{
 				Rank: rank.Uint32(),
-				Devices: []*mgmtpb.SmdQueryResp_Device{
+				Devices: []*ctlpb.SmdQueryResp_Device{
 					{
 						Uuid:  drr.NewDevUuid,
 						State: drr.DevState,
@@ -310,7 +310,7 @@ func (svc *mgmtSvc) smdReplace(ctx context.Context, req *mgmtpb.SmdQueryReq) (*m
 	}, nil
 }
 
-func (svc *mgmtSvc) smdIdentify(ctx context.Context, req *mgmtpb.SmdQueryReq) (*mgmtpb.SmdQueryResp, error) {
+func (svc *ControlService) smdIdentify(ctx context.Context, req *ctlpb.SmdQueryReq) (*ctlpb.SmdQueryResp, error) {
 	req.Rank = uint32(system.NilRank)
 	rank, device, err := svc.smdQueryDevice(ctx, req)
 	if err != nil {
@@ -330,14 +330,14 @@ func (svc *mgmtSvc) smdIdentify(ctx context.Context, req *mgmtpb.SmdQueryReq) (*
 
 	svc.log.Debugf("calling storage identify on rank %d for %s", rank, req.Uuid)
 
-	dresp, err := srvs[0].CallDrpc(ctx, drpc.MethodIdentifyStorage, &mgmtpb.DevIdentifyReq{
+	dresp, err := srvs[0].CallDrpc(ctx, drpc.MethodIdentifyStorage, &ctlpb.DevIdentifyReq{
 		DevUuid: req.Uuid,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	drr := &mgmtpb.DevIdentifyResp{}
+	drr := &ctlpb.DevIdentifyResp{}
 	if err = proto.Unmarshal(dresp.Body, drr); err != nil {
 		return nil, errors.Wrap(err, "unmarshal StorageIdentify response")
 	}
@@ -346,11 +346,11 @@ func (svc *mgmtSvc) smdIdentify(ctx context.Context, req *mgmtpb.SmdQueryReq) (*
 		return nil, errors.Wrap(drpc.DaosStatus(drr.Status), "smdIdentify failed")
 	}
 
-	return &mgmtpb.SmdQueryResp{
-		Ranks: []*mgmtpb.SmdQueryResp_RankResp{
+	return &ctlpb.SmdQueryResp{
+		Ranks: []*ctlpb.SmdQueryResp_RankResp{
 			{
 				Rank: rank.Uint32(),
-				Devices: []*mgmtpb.SmdQueryResp_Device{
+				Devices: []*ctlpb.SmdQueryResp_Device{
 					{
 						Uuid:  drr.DevUuid,
 						State: drr.LedState,
@@ -361,7 +361,7 @@ func (svc *mgmtSvc) smdIdentify(ctx context.Context, req *mgmtpb.SmdQueryReq) (*
 	}, nil
 }
 
-func (svc *mgmtSvc) SmdQuery(ctx context.Context, req *mgmtpb.SmdQueryReq) (*mgmtpb.SmdQueryResp, error) {
+func (svc *ControlService) SmdQuery(ctx context.Context, req *ctlpb.SmdQueryReq) (*ctlpb.SmdQueryResp, error) {
 	svc.log.Debugf("MgmtSvc.SmdQuery dispatch, req:%+v\n", *req)
 
 	if !svc.harness.isStarted() {
@@ -390,7 +390,7 @@ func (svc *mgmtSvc) SmdQuery(ctx context.Context, req *mgmtpb.SmdQueryReq) (*mgm
 		return nil, errors.New("Target is invalid without Rank")
 	}
 
-	resp := new(mgmtpb.SmdQueryResp)
+	resp := new(ctlpb.SmdQueryResp)
 	if !req.OmitDevices {
 		if err := svc.querySmdDevices(ctx, req, resp); err != nil {
 			return nil, err
