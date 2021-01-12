@@ -26,6 +26,20 @@ package storage
 import "github.com/pkg/errors"
 
 const (
+	// MinNVMeStorage defines the minimum per-target allocation
+	// that may be requested. Requests with smaller amounts will
+	// be rounded up.
+	MinNVMeStorage = 1 << 30 // 1GiB, from bio_xtream.c
+
+	// MinScmToNVMeRatio defines the minimum-allowable ratio
+	// of SCM to NVMe.
+	MinScmToNVMeRatio = 0.01 // 1%
+	// DefaultScmToNVMeRation defines the default ratio of
+	// SCM to NVMe.
+	DefaultScmToNVMeRatio = 0.06
+)
+
+const (
 	maxScmDeviceLen = 1
 )
 
