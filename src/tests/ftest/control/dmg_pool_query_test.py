@@ -23,6 +23,7 @@
 """
 from __future__ import print_function
 
+from apricot import skipForTicket
 from ior_test_base import IorTestBase
 from test_utils_pool import TestPool
 from control_test_base import ControlTestBase
