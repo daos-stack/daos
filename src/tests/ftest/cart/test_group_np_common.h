@@ -226,14 +226,12 @@ client_cb_common(const struct crt_cb_info *cb_info)
 
 	switch (cb_info->cci_rpc->cr_opc) {
 	case TEST_OPC_CHECKIN:
+
 		test_ping_rpc_req_input = crt_req_get(rpc_req);
-		if (test_ping_rpc_req_input == NULL) {
-			return;
-    }
+		D_ASSERT(test_ping_rpc_req_input != NULL);
 		test_ping_rpc_req_output = crt_reply_get(rpc_req);
-		if (test_ping_rpc_req_output == NULL) {
-			return;
-    }
+		D_ASSERT(test_ping_rpc_req_output != NULL);
+
 		if (cb_info->cci_rc != 0) {
 			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
 				rpc_req->cr_opc, cb_info->cci_rc);
@@ -249,14 +247,12 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		D_ASSERT(test_ping_rpc_req_output->bool_val == true);
 		break;
 	case TEST_OPC_SWIM_STATUS:
+
 		swim_status_rpc_req_input = crt_req_get(rpc_req);
-		if (swim_status_rpc_req_input == NULL) {
-			return;
-    }
+		D_ASSERT(swim_status_rpc_req_input != NULL);
 		swim_status_rpc_req_output = crt_reply_get(rpc_req);
-		if (swim_status_rpc_req_output == NULL) {
-			return;
-    }
+		D_ASSERT(swim_status_rpc_req_output != NULL);
+
 		if (cb_info->cci_rc != 0) {
 			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
 				rpc_req->cr_opc, cb_info->cci_rc);

@@ -206,11 +206,9 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		break;
 	case TEST_OPC_SWIM_STATUS:
 		rpc_req_input = crt_req_get(rpc_req);
-		if (rpc_req_input == NULL)
-			return;
+		D_ASSERT(rpc_req_input != NULL);
 		rpc_req_output = crt_reply_get(rpc_req);
-		if (rpc_req_output == NULL)
-			return;
+		D_ASSERT(rpc_req_output != NULL);
 		if (cb_info->cci_rc != 0) {
 			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
 				rpc_req->cr_opc, cb_info->cci_rc);
