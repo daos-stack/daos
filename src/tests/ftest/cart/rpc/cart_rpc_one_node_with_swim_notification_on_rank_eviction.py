@@ -80,8 +80,6 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(Test):
             # Wait a bit for swim to become 'active' between servers
             time.sleep(10)
 
-        cli_arg = self.params.get("test_clients_arg", '/run/tests/*/')
-
         # --init_only"
         self._launch_cmd_at_index(0, srv_rtn)
 
