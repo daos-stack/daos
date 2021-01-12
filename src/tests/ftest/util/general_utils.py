@@ -29,6 +29,7 @@ import random
 import string
 from getpass import getuser
 from importlib import import_module
+from socket import gethostname
 
 from avocado.utils import process
 from ClusterShell.Task import task_self
@@ -796,8 +797,8 @@ def create_directory(hosts, directory, timeout=10, verbose=True,
     """
     hosts = convert_string(hosts)
     return run_command(
-        "{} -S -v -w {} /usr/bin/mkdir -p {}".format(
-            get_clush_command(sudo), hosts, directory),
+        "{} /usr/bin/mkdir -p {}".format(
+            get_clush_command(hosts, "-S -v", sudo), directory),
         timeout=timeout, verbose=verbose, raise_exception=raise_exception)
 
 
@@ -835,8 +836,8 @@ def change_file_owner(hosts, filename, owner, timeout=10, verbose=True,
     """
     hosts = convert_string(hosts)
     return run_command(
-        "{0} -S -v -w {1} chown {2}:{2} {3}".format(
-            get_clush_command(sudo), hosts, owner, filename),
+        "{0} chown {1}:{1} {2}".format(
+            get_clush_command(hosts, "-S -v", sudo), owner, filename),
         timeout=timeout, verbose=verbose, raise_exception=raise_exception)
 
 
@@ -886,11 +887,17 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
     if mkdir:
         result = create_directory(hosts, os.path.dirname(destination))
     if result is None or result.exit_status == 0:
+        # When "sudo clush ..." works in CI, switch back to this method
+        # result = run_command(
+        #     "{} --copy {} --dest {}".format(
+        #         get_clush_command(hosts, "-S -v", sudo), source, destination),
+        #     timeout=timeout, verbose=verbose, raise_exception=raise_exception)
+        localhost = gethostname().split(".")[0]
         result = run_command(
-            "{} -S -v -w {} --copy {} --dest {}".format(
-                get_clush_command(sudo), hosts, source, destination),
+            "{} scp {}:{} {}".format(
+                get_clush_command(hosts, "-S -v", sudo), localhost, source,
+                destination),
             timeout=timeout, verbose=verbose, raise_exception=raise_exception)
-        print("** RESULT:\n{}".format(str(result)))
         if owner is not None and result.exit_status == 0:
             change_file_owner(
                 hosts, destination, owner, timeout=timeout, verbose=verbose,
@@ -898,10 +905,13 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
     return result
 
 
-def get_clush_command(sudo=False):
+def get_clush_command(hosts, args=None, sudo=False):
     """Get the clush command with optional sudo arguments.
 
     Args:
+        hosts (object): hosts with which to use the clush command
+        args (str, optional): additional clush command line arguments. Defaults
+            to None.
         sudo (bool, optional): if set the clush command will be configured to
             run with sudo privileges. Defaults to False.
 
@@ -909,10 +919,16 @@ def get_clush_command(sudo=False):
         str: the clush command
 
     """
-    command = "clush"
+    command = ["clush", "-w", convert_string(hosts)]
+    if args:
+        command.insert(1, args)
     if sudo:
-        command = "sudo clush -d -o '-o StrictHostKeyChecking=no'"
-    return command
+        # If ever needed, this is how to disable host key checking:
+        # command.extend([-o", "-oStrictHostKeyChecking=no", "sudo"])
+        # When "sudo clush ..." works in CI, switch back to this method
+        # command.insert(0, "sudo")
+        command.append("sudo")
+    return " ".join(command)
 
 
 def get_default_config_file(name):

@@ -833,8 +833,8 @@ class YamlCommand(SubProcessCommand):
         if names:
             self.log.debug("Copied certificates for %s:", self._command)
             result = run_command(
-                "{} -S -v -w {} /usr/bin/ls -la {}".format(
-                    get_clush_command(True), ",".join(hosts), " ".join(names)),
+                "{} /usr/bin/ls -la {}".format(
+                    get_clush_command(hosts, "-S -v", True), " ".join(names)),
                 verbose=False)
             for line in result.stdout.splitlines():
                 self.log.debug("  %s", line)
