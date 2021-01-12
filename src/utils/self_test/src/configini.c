@@ -462,7 +462,7 @@ ConfigRet ConfigReadUnsignedInt(const Config *cfg, const char *section,
 		return ret;
 	}
 
-	*value = (unsigned int) strtoul(kv->value, &p, 10);
+	*value = (unsigned int)strtoul(kv->value, &p, 10);
 	if (*p || (errno == ERANGE))
 		return CONFIG_ERR_INVALID_VALUE;
 
@@ -1298,7 +1298,6 @@ ConfigRet ConfigPrintSectionNames(const Config *cfg, FILE *stream)
 
 	return CONFIG_OK;
 }
-
 
 /**
  * \brief	     ConfigPrintToFile() prints (saves) all cfg content to

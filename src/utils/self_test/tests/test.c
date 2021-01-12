@@ -8,7 +8,6 @@
 
 #include "../src/configini.h"
 
-
 #define LOG_ERR(fmt, ...)	\
 	fprintf(stderr, "[ERROR] <%s:%d> : " fmt "\n",\
 	       __func__, __LINE__, __VA_ARGS__)
@@ -23,7 +22,7 @@
 	do {					\
 		LOG_INFO("%s", \
 			 "\n---------------------------------------------");\
-		LOG_INFO("<TEST: %s>\n", __func__);								\
+		LOG_INFO("<TEST: %s>\n", __func__);\
 	} while (0)
 
 /*
@@ -70,7 +69,7 @@ static void Test2(void)
 	ConfigRemoveKey(cfg, "owner", "title");
 	ConfigRemoveKey(cfg, "database", "file");
 
-	ConfigAddBool  (cfg, "SECT1", "isModified", true);
+	ConfigAddBool(cfg, "SECT1", "isModified", true);
 	ConfigAddString(cfg, "owner", "country", "Turkey");
 
 	ConfigPrintSettings(cfg, stdout);
@@ -144,14 +143,14 @@ static void Test4(void)
 	ConfigReadFloat(cfg, CONFIG_SECTION_FLAT, "degree", &f, 1.5);
 	LOG_INFO("degree = %f", f);
 
-/* 
+/*
  * /////////////////////////////////////////////////////////////////
  */
 
 	ConfigFree(cfg);
 }
 
-int main()
+int main(void)
 {
 	Test1();
 	Test2();

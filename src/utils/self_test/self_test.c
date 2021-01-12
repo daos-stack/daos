@@ -1322,7 +1322,7 @@ static void st_parse_range_str(char *const str, char *const validated_str,
 				 * comma-separated range/value.
 				 */
 				if (sscanf(pch_sub, "%u",
-				           &val[hyphen_count]) != 1) {
+					   &val[hyphen_count]) != 1) {
 					val_valid[0] = 0;
 					val_valid[1] = 0;
 					break;
@@ -1978,7 +1978,6 @@ int main(int argc, char *argv[])
 		{"help", no_argument, 0, 'h'},
 		{0, 0, 0, 0}
 	};
-	extern int			optind;
 
 	g_msg_sizes_str = default_msg_sizes_str;
 	g_rep_count = g_default_rep_count;
@@ -2029,6 +2028,7 @@ int main(int argc, char *argv[])
 			D_GOTO(cleanup, ret = 0);
 		}
 		if (ret < 0) {
+			/* avoid checkpatch warning */
 			goto cleanup;
 		}
 	}
