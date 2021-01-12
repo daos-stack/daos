@@ -184,7 +184,7 @@ test_run(void)
 	} else {
 		rc = crt_group_view_destroy(grp);
 		D_ASSERTF(rc == 0,
-				"crt_group_view_destroy() failed; rc=%d\n", rc);
+			  "crt_group_view_destroy() failed; rc=%d\n", rc);
 	}
 
 	g_shutdown = 1;
