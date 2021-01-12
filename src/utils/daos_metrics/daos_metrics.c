@@ -61,19 +61,22 @@ print_usage(const char *prog_name)
 {
 	printf("Usage: %s [optional arguments]\n"
 	       "\n"
-	       "--rank, r\n"
+	       "--rank, -r\n"
 	       "\tShow telemetry data from this IO Server rank (default 0)\n"
-	       "--path, p\n"
+	       "--path, -p\n"
 	       "\tDisplay metrics at or below the specified path\n"
 	       "\tDefault is root directory\n"
-	       "--iterations, i\n"
+	       "--iterations, -i\n"
 	       "\tSpecifies the number of iterations to show "
 	       "(default continuous)\n"
-	       "--delay, D\n"
+	       "--delay, -D\n"
 	       "\tDelay in seconds between each iteration\n"
-	       "\tDefault is 1 second\n\n"
-	       "Filter the displayed data by specifying one or more filters:\n"
-	       "\tDefault is all filters\n\n"
+	       "\tDefault is 1 second\n"
+	       "--help, -h\n"
+	       "\tThis help text\n\n"
+	       "Customize the displayed data by specifying one or more "
+	       "filters:\n"
+	       "\tDefault is include everything\n\n"
 	       "--counter, -c\n"
 	       "\tInclude counters\n"
 	       "--duration, -d\n"
@@ -147,7 +150,7 @@ main(int argc, char **argv)
 			num_iter = atoi(optarg);
 			break;
 		case 'p':
-			strncpy(dirname, optarg, D_TM_MAX_NAME_LEN);
+			snprintf(dirname, sizeof(dirname), "%s", optarg);
 			break;
 		case 'D':
 			delay = atoi(optarg);
@@ -172,9 +175,16 @@ main(int argc, char **argv)
 	if (!root)
 		goto failure;
 
-	node = d_tm_find_metric(shmem_root, dirname);
-	if (node != NULL)
-		root = node;
+	if (strncmp(dirname, "/", D_TM_MAX_NAME_LEN) != 0) {
+		node = d_tm_find_metric(shmem_root, dirname);
+		if (node != NULL) {
+			root = node;
+		} else {
+			printf("No metrics found at: '%s'\n",
+			       dirname);
+			exit(0);
+		}
+	}
 
 	while ((num_iter == 0) || (iteration < num_iter)) {
 		printf("\nIteration: %d\n", iteration);
