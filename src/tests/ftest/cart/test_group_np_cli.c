@@ -42,9 +42,9 @@ send_rpc_shutdown(crt_endpoint_t server_ep, crt_rpc_t *rpc_req)
 {
 	int rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
 					CRT_PROTO_OPC(TEST_GROUP_BASE,
-					TEST_GROUP_VER, 1), &rpc_req);
+						      TEST_GROUP_VER, 1), &rpc_req);
 	D_ASSERTF(rc == 0 && rpc_req != NULL,
-			"crt_req_create() failed. "
+		  "crt_req_create() failed. "
 			"rc: %d, rpc_req: %p\n", rc, rpc_req);
 	rc = crt_req_send(rpc_req, client_cb_common, NULL);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
@@ -60,9 +60,9 @@ send_rpc_swim_check(crt_endpoint_t server_ep, crt_rpc_t *rpc_req)
 
 	int rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
 					CRT_PROTO_OPC(TEST_GROUP_BASE,
-					TEST_GROUP_VER, 2), &rpc_req);
+						      TEST_GROUP_VER, 2), &rpc_req);
 	D_ASSERTF(rc == 0 && rpc_req != NULL,
-			"crt_req_create() failed. "
+		  "crt_req_create() failed. "
 			"rc: %d, rpc_req: %p\n", rc, rpc_req);
 
 	rpc_req_input = crt_req_get(rpc_req);
@@ -102,7 +102,7 @@ test_run(void)
 		}
 
 		tc_cli_start_basic(test_g.t_local_group_name,
-					 test_g.t_remote_group_name,
+				   test_g.t_remote_group_name,
 					 &grp, &rank_list, &test_g.t_crt_ctx[0],
 					 &test_g.t_tid[0], test_g.t_srv_ctx_num,
 					 test_g.t_use_cfg, NULL);
@@ -113,15 +113,15 @@ test_run(void)
 		/* register RPCs */
 		rc = crt_proto_register(&my_proto_fmt_test_group2);
 		D_ASSERTF(rc == 0, "crt_proto_register() failed. rc: %d\n",
-				rc);
+			  rc);
 
 		/* Process the --rank option, e.g., --rank 1,2-4 */
 		if (test_g.cg_num_ranks > -1)
 			rank_list = uint32_array_to_rank_list((uint32_t *)test_g.cg_ranks,
-					test_g.cg_num_ranks);
+							      test_g.cg_num_ranks);
 
 		rc = tc_wait_for_ranks(test_g.t_crt_ctx[0], grp, rank_list,
-						test_g.t_srv_ctx_num - 1, test_g.t_srv_ctx_num,
+				       test_g.t_srv_ctx_num - 1, test_g.t_srv_ctx_num,
 						5, 150);
 		D_ASSERTF(rc == 0, "wait_for_ranks() failed; rc=%d\n", rc);
 	}
@@ -184,7 +184,7 @@ test_run(void)
 	} else {
 		rc = crt_group_view_destroy(grp);
 		D_ASSERTF(rc == 0,
-				"crt_group_view_destroy() failed; rc=%d\n", rc);
+			  "crt_group_view_destroy() failed; rc=%d\n", rc);
 	}
 
 	g_shutdown = 1;
