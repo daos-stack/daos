@@ -102,8 +102,7 @@ io(enum io_op op, test_arg_t *arg, daos_handle_t coh, daos_obj_id_t oid,
 
 enum epoch_recovery_op {
 	CONT_CLOSE,
-	POOL_DISCONNECT,
-	POOL_EVICT
+	POOL_DISCONNECT
 };
 
 static void
@@ -141,23 +140,13 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	if (op == POOL_EVICT) {
-		if (arg->myrank == 0) {
-			print_message("evicting pool connections\n");
-			rc = daos_pool_evict(arg->pool.pool_uuid, arg->group,
-					     NULL /* svc */, NULL /* ev */);
-			assert_int_equal(rc, 0);
-		}
-		MPI_Barrier(MPI_COMM_WORLD);
-	}
-
 	print_message("closing container\n");
 	rc = daos_cont_close(coh, NULL /* ev */);
 	assert_int_equal(rc, 0);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	if (op == POOL_DISCONNECT || op == POOL_EVICT) {
+	if (op == POOL_DISCONNECT) {
 		print_message("disconnecting from pool\n");
 		rc = daos_pool_disconnect(arg->pool.poh, NULL /* ev */);
 		assert_int_equal(rc, 0);
@@ -201,19 +190,11 @@ pool_disconnect_discard(void **state)
 	epoch_recovery(*state, POOL_DISCONNECT);
 }
 
-static void
-pool_evict_discard(void **state)
-{
-	epoch_recovery(*state, POOL_EVICT);
-}
-
 static const struct CMUnitTest epoch_recovery_tests[] = {
 	{"ERECOV1: container close discards uncommitted data",
 	 cont_close_discard, NULL, test_case_teardown},
 	{"ERECOV2: pool disconnect discards uncommitted data",
-	 pool_disconnect_discard, NULL, test_case_teardown},
-	{"ERECOV3: pool evict discards uncommitted data",
-	 pool_evict_discard, NULL, test_case_teardown}
+	 pool_disconnect_discard, NULL, test_case_teardown}
 };
 
 static int
