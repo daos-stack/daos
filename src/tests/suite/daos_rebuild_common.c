@@ -275,8 +275,9 @@ rebuild_pool_connect_internal(void *data)
 	/** open container */
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
-		rc = daos_cont_open(arg->pool.poh, arg->co_uuid, DAOS_COO_RW,
-		&arg->coh, &arg->co_info, NULL);
+		rc = daos_cont_open(arg->pool.poh, arg->co_uuid,
+				    DAOS_COO_RW | DAOS_COO_FORCE,
+				    &arg->coh, &arg->co_info, NULL);
 		if (rc)
 			print_message("daos_cont_open failed, rc: %d\n", rc);
 

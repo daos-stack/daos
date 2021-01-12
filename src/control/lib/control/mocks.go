@@ -89,7 +89,7 @@ func (mi *MockInvoker) Debugf(fmtStr string, args ...interface{}) {
 }
 
 func (mi *MockInvoker) InvokeUnaryRPC(ctx context.Context, uReq UnaryRequest) (*UnaryResponse, error) {
-	return invokeUnaryRPC(ctx, mi.log, mi, uReq)
+	return invokeUnaryRPC(ctx, mi.log, mi, uReq, nil)
 }
 
 func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryRequest) (HostResponseChan, error) {
