@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1677,8 +1677,13 @@ do_obj_ioc_begin(uint32_t rpc_map_ver, uuid_t pool_uuid,
 		 struct obj_io_context *ioc)
 {
 	struct ds_pool_child *poc;
-	int		      rc;
+	int		      rank, rc;
+	ABT_xstream xs;
 
+	rc = ABT_xstream_self(&xs);
+	D_ASSERT(rc == ABT_SUCCESS);
+	rc = ABT_xstream_get_rank(xs, &rank);
+	D_ASSERT(rc == ABT_SUCCESS);
 	rc = obj_ioc_init(pool_uuid, coh_uuid, cont_uuid, opc, ioc);
 	if (rc)
 		return rc;
@@ -1779,6 +1784,187 @@ orf_to_dtx_epoch_flags(enum obj_rpc_flags orf_flags)
 	return flags;
 }
 
+
+void
+ds_obj_ec_rep_handler(crt_rpc_t *rpc)
+{
+	struct obj_ec_rep_in	*oer = crt_req_get(rpc);
+	struct obj_ec_rep_out	*oero = crt_reply_get(rpc);
+	daos_key_t		*dkey;
+	daos_iod_t		*iod;
+	struct daos_oclass_attr	*oca;
+	struct bio_desc		*biod;
+	daos_recx_t		 recx = { 0 };
+	daos_epoch_range_t	 epoch_range = { 0 };
+	struct obj_io_context	 ioc;
+	daos_handle_t		 ioh = DAOS_HDL_INVAL;
+	int			 rc;
+
+	D_ASSERT(oer != NULL);
+	D_ASSERT(oero != NULL);
+	D_ASSERT(daos_oclass_is_ec(oer->er_oid.id_pub, &oca));
+
+	rc = obj_ioc_begin(oer->er_map_ver, oer->er_pool_uuid, oer->er_coh_uuid,
+			   oer->er_cont_uuid, opc_get(rpc->cr_opc), &ioc);
+
+	if (rc)	{
+		D_ERROR("ioc_begin failed: "DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
+	dkey = (daos_key_t *)&oer->er_dkey;
+	iod = (daos_iod_t *)&oer->er_iod;
+	rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oer->er_oid,
+			      oer->er_epoch, 0, dkey, 1, iod, NULL,
+			      NULL, 0, &ioh, NULL);
+	if (rc) {
+		D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
+			DP_UOID(oer->er_oid), DP_RC(rc));
+		goto out;
+	}
+	biod = vos_ioh2desc(ioh);
+	rc = bio_iod_prep(biod);
+	if (rc) {
+		D_ERROR(DF_UOID" bio_iod_prep failed: "DF_RC".\n",
+			DP_UOID(oer->er_oid), DP_RC(rc));
+		goto out;
+	}
+	rc = obj_bulk_transfer(rpc, CRT_BULK_PUT, false, &oer->er_bulk, NULL,
+			       ioh, NULL, NULL, 1, NULL);
+	if (rc) {
+		D_ERROR(DF_UOID" bulk transfer failed: "DF_RC".\n",
+			DP_UOID(oer->er_oid), DP_RC(rc));
+		goto out;
+	}
+
+	rc = bio_iod_post(biod);
+	if (rc) {
+		D_ERROR(DF_UOID" bio_iod_post failed: "DF_RC".\n",
+			DP_UOID(oer->er_oid), DP_RC(rc));
+		goto out;
+	}
+	rc = vos_update_end(ioh, ioc.ioc_map_ver, dkey, rc, NULL);
+	if (rc) {
+		D_ERROR(DF_UOID" vos_update_end failed: "DF_RC".\n",
+			DP_UOID(oer->er_oid), DP_RC(rc));
+		goto out;
+	}
+	epoch_range.epr_lo = 0ULL;
+	epoch_range.epr_hi = oer->er_epoch;
+	recx.rx_idx = (oer->er_stripenum * oca->u.ec.e_len) | PARITY_INDICATOR;
+	recx.rx_nr = oca->u.ec.e_len;
+	rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oer->er_oid,
+				  &epoch_range, dkey, &iod->iod_name, &recx);
+out:
+	obj_rw_reply(rpc, rc, 0, &ioc);
+	obj_ioc_end(&ioc, rc);
+}
+
+void
+ds_obj_ec_agg_handler(crt_rpc_t *rpc)
+{
+	struct obj_ec_agg_in	*oea = crt_req_get(rpc);
+	struct obj_ec_agg_out	*oeao = crt_reply_get(rpc);
+	daos_key_t		*dkey;
+	struct daos_oclass_attr	*oca;
+	struct bio_desc		*biod;
+	daos_iod_t		 iod = { 0 };
+	daos_recx_t		 recx = { 0 };
+	struct obj_io_context	 ioc;
+	daos_handle_t		 ioh = DAOS_HDL_INVAL;
+	int			 rc;
+
+	D_ASSERT(oea != NULL);
+	D_ASSERT(oeao != NULL);
+	D_ASSERT(daos_oclass_is_ec(oea->ea_oid.id_pub, &oca));
+
+	rc = obj_ioc_begin(oea->ea_map_ver, oea->ea_pool_uuid, oea->ea_coh_uuid,
+			   oea->ea_cont_uuid, opc_get(rpc->cr_opc), &ioc);
+
+	if (rc)	{
+		D_ERROR("ioc_begin failed: "DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
+	dkey = (daos_key_t *)&oea->ea_dkey;
+	iod.iod_name = oea->ea_akey;
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = oea->ea_rsize;
+	iod.iod_nr = 1;
+	if (iod.iod_size) {
+		recx.rx_idx = (oea->ea_stripenum * oca->u.ec.e_len) |
+			PARITY_INDICATOR;
+		recx.rx_nr = oca->u.ec.e_len;
+		iod.iod_recxs = &recx;
+		rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oea->ea_oid,
+				      oea->ea_epoch_range.epr_hi, 0, dkey, 1,
+				      &iod, NULL, NULL, 0, &ioh, NULL);
+		if (rc) {
+			D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
+				DP_UOID(oea->ea_oid), DP_RC(rc));
+			goto out;
+		}
+		biod = vos_ioh2desc(ioh);
+		rc = bio_iod_prep(biod);
+		if (rc) {
+			D_ERROR(DF_UOID" bio_iod_prep failed: "DF_RC".\n",
+				DP_UOID(oea->ea_oid), DP_RC(rc));
+			goto out;
+		}
+		rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &oea->ea_bulk,
+				       NULL, ioh, NULL, NULL, 1, NULL);
+		if (rc) {
+			D_ERROR(DF_UOID" bulk transfer failed: "DF_RC".\n",
+				DP_UOID(oea->ea_oid), DP_RC(rc));
+			goto out;
+		}
+
+		rc = bio_iod_post(biod);
+		if (rc) {
+			D_ERROR(DF_UOID" bio_iod_post failed: "DF_RC".\n",
+				DP_UOID(oea->ea_oid), DP_RC(rc));
+			goto out;
+		}
+		rc = vos_update_end(ioh, ioc.ioc_map_ver, dkey, rc, NULL);
+		if (rc) {
+			D_ERROR(DF_UOID" vos_update_end failed: "DF_RC".\n",
+				DP_UOID(oea->ea_oid), DP_RC(rc));
+			goto out;
+		}
+	}
+	if (oea->ea_remove_nr) {
+		daos_epoch_range_t	epr;
+		int			i;
+
+		for (i = 0; i < oea->ea_remove_nr; i++) {
+			epr.epr_hi = epr.epr_lo =
+				oea->ea_remove_eps.ca_arrays[i];
+			rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl,
+						  oea->ea_oid, &epr, dkey,
+						  &oea->ea_akey,
+						  &oea->
+						  ea_remove_recxs.ca_arrays[i]);
+			if (rc) {
+				D_ERROR(DF_UOID"array_remove failed: "DF_RC"\n",
+					DP_UOID(oea->ea_oid), DP_RC(rc));
+			}
+		}
+
+	} else {
+		recx.rx_idx = oea->ea_stripenum * oca->u.ec.e_len *
+			oca->u.ec.e_k;
+		recx.rx_nr = oca->u.ec.e_k * oca->u.ec.e_len;
+		rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oea->ea_oid,
+					  &oea->ea_epoch_range, dkey,
+					  &oea->ea_akey, &recx);
+		if (rc) {
+			D_ERROR(DF_UOID"array_remove failed: "DF_RC"\n",
+				DP_UOID(oea->ea_oid), DP_RC(rc));
+		}
+	}
+out:
+	obj_rw_reply(rpc, rc, 0, &ioc);
+	obj_ioc_end(&ioc, rc);
+}
+
 void
 ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 {
@@ -1805,7 +1991,6 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 
 	if (DAOS_FAIL_CHECK(DAOS_VC_DIFF_DKEY)) {
 		unsigned char	*buf = dkey->iov_buf;
-
 		buf[0] += orw->orw_oid.id_shard + 1;
 		orw->orw_dkey_hash = obj_dkey2hash(orw->orw_oid.id_pub, dkey);
 	}
