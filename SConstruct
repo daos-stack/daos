@@ -85,14 +85,11 @@ def update_rpm_version(version, tag):
             spec[line_num] = "Release:       {}%{{?relval}}%{{?dist}}\n".\
                              format(release)
         if line == "%changelog\n":
-            rpmdevpackager = find_executable('rpmdev-packager')
-            if not rpmdevpackager:
-                print("No rpmdev-packager found in path.")
-                return False
             try:
                 packager = subprocess.Popen(
-                    rpmdevpackager, stdout=subprocess.PIPE).communicate(
-                    )[0].strip().decode('UTF-8')
+                    'rpmdev-packager',                        # nosec
+                    stdout=subprocess.PIPE).communicate(
+                        )[0].strip().decode('UTF-8')
             except OSError:
                 print("You need to have the rpmdev-packager tool (from the "
                       "rpmdevtools RPM on EL7) in order to make releases.\n\n"
