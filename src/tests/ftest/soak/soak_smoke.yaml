@@ -123,8 +123,8 @@ ior_smoke:
     segment_count: 1
     dfs_oclass:
         - 'SX'
-    dfs_dir_oclass:
-        - 'SX'
+        - 'RP_2G1'
+        - 'RP_2GX'
 fio_smoke:
   names:
       - global

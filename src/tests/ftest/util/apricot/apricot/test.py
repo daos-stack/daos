@@ -152,6 +152,8 @@ class Test(avocadoTest):
         self.log.info("Job-ID: %s", self.job_id)
         self.log.info("Test PID: %s", os.getpid())
         self._timeout_reported = False
+        self.teardown_cancel = []
+        self.teardown_errors = []
 
     def setUp(self):
         """Set up each test case."""
@@ -236,6 +238,8 @@ class Test(avocadoTest):
     def tearDown(self):
         """Tear down after each test case."""
         self.report_timeout()
+        if self.teardown_cancel:
+            self.cancelForTicket(",".join(list(set(self.teardown_cancel))))
         super(Test, self).tearDown()
 
 
@@ -325,10 +329,15 @@ class TestWithoutServers(Test):
     def tearDown(self):
         """Tear down after each test case."""
         self.report_timeout()
-        super(TestWithoutServers, self).tearDown()
 
         if self.fault_file:
-            os.remove(self.fault_file)
+            try:
+                os.remove(self.fault_file)
+            except OSError as error:
+                self.teardown_errors.append(
+                    "Error running inherited teardown(): {}".format(error))
+
+        super(TestWithoutServers, self).tearDown()
 
 
 class TestWithServers(TestWithoutServers):
@@ -731,35 +740,24 @@ class TestWithServers(TestWithoutServers):
         self.report_timeout()
 
         # Tear down any test-specific items
-        errors = self.pre_tear_down()
+        self.teardown_errors = self.pre_tear_down()
 
         # Stop any test jobs that may still be running
-        errors.extend(self.stop_job_managers())
+        self.teardown_errors.extend(self.stop_job_managers())
 
         # Destroy any containers first
-        errors.extend(self.destroy_containers(self.container))
+        self.teardown_errors.extend(self.destroy_containers(self.container))
 
         # Destroy any pools next
-        errors.extend(self.destroy_pools(self.pool))
+        self.teardown_errors.extend(self.destroy_pools(self.pool))
 
         # Stop the agents
-        errors.extend(self.stop_agents())
+        self.teardown_errors.extend(self.stop_agents())
 
         # Stop the servers
-        errors.extend(self.stop_servers())
+        self.teardown_errors.extend(self.stop_servers())
 
-        # Complete tear down actions from the inherited class
-        try:
-            super(TestWithServers, self).tearDown()
-        except OSError as error:
-            errors.append(
-                "Error running inherited teardown(): {}".format(error))
-
-        # Fail the test if any errors occurred during tear down
-        if errors:
-            self.fail(
-                "Errors detected during teardown:\n  - {}".format(
-                    "\n  - ".join(errors)))
+        super(TestWithServers, self).tearDown()
 
     def pre_tear_down(self):
         """Tear down steps to optionally run before tearDown().
