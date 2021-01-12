@@ -106,6 +106,8 @@ struct vts_counter {
 
 daos_epoch_t		gen_rand_epoch(void);
 daos_unit_oid_t		gen_oid(daos_ofeat_t ofeats);
+void			reset_oid_stable(uint32_t seed);
+daos_unit_oid_t		gen_oid_stable(daos_ofeat_t ofeats);
 void			inc_cntr(unsigned long op_flags);
 void			test_args_reset(struct io_test_args *args,
 					uint64_t pool_size);

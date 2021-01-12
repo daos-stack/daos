@@ -35,7 +35,7 @@ class VolTestBase(DfuseTestBase):
     :avocado: recursive
     """
 
-    def run_test(self):
+    def run_test(self, plugin_path, test_repo):
         """Run the HDF5 VOL testsuites.
 
         Raises:
@@ -43,8 +43,6 @@ class VolTestBase(DfuseTestBase):
 
         """
         # initialize test specific variables
-        test_repo = self.params.get("daos_vol_repo")
-        plugin_path = self.params.get("plugin_path")
         # test_list = self.params.get("daos_vol_tests", default=[])
         testname = self.params.get("testname")
         client_processes = self.params.get("client_processes")

@@ -136,6 +136,8 @@ struct dts_context {
 	/** INPUT: should be initialized by caller */
 	/** optional, pmem file name, only for VOS test */
 	char			*tsc_pmem_file;
+	/** DMG config file */
+	char			*tsc_dmg_conf;
 	/** optional, pool service ranks, only for DAOS test */
 	d_rank_list_t		 tsc_svc;
 	/** MPI rank of caller */

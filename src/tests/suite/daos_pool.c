@@ -308,8 +308,8 @@ pool_attribute(void **state)
 	WAIT_ON_ASYNC(arg, ev);
 	print_message("Verifying All Names..\n");
 	assert_int_equal(total_size, (name_sizes[0] + name_sizes[1]));
-	assert_string_equal(out_buf, names[0]);
-	assert_string_equal(out_buf + name_sizes[0], names[1]);
+	assert_string_equal(out_buf, names[1]);
+	assert_string_equal(out_buf + name_sizes[1], names[0]);
 
 	print_message("getting pool attributes %ssynchronously ...\n",
 		      arg->async ? "a" : "");
@@ -507,7 +507,7 @@ pool_properties(void **state)
 	if (arg->myrank == 0) {
 		rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
 		assert_int_equal(rc, 0);
-		rc = daos_mgmt_set_params(arg->group, info.pi_leader,
+		rc = daos_debug_set_params(arg->group, info.pi_leader,
 			DMG_KEY_FAIL_LOC, DAOS_FORCE_PROP_VERIFY, 0, NULL);
 		assert_int_equal(rc, 0);
 	}
@@ -575,7 +575,7 @@ pool_properties(void **state)
 	}
 
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -596,7 +596,7 @@ pool_op_retry(void **state)
 		return;
 
 	print_message("setting DAOS_POOL_CONNECT_FAIL_CORPC ... ");
-	rc = daos_mgmt_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
+	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
 				  DAOS_POOL_CONNECT_FAIL_CORPC | DAOS_FAIL_ONCE,
 				  0, NULL);
 	assert_int_equal(rc, 0);
@@ -613,7 +613,7 @@ pool_op_retry(void **state)
 	print_message("success\n");
 
 	print_message("setting DAOS_POOL_QUERY_FAIL_CORPC ... ");
-	rc = daos_mgmt_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
+	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
 				  DAOS_POOL_QUERY_FAIL_CORPC | DAOS_FAIL_ONCE,
 				  0, NULL);
 	assert_int_equal(rc, 0);
@@ -628,7 +628,7 @@ pool_op_retry(void **state)
 	print_message("success\n");
 
 	print_message("setting DAOS_POOL_DISCONNECT_FAIL_CORPC ... ");
-	rc = daos_mgmt_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
+	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
 				  DAOS_POOL_DISCONNECT_FAIL_CORPC |
 				  DAOS_FAIL_ONCE, 0, NULL);
 	assert_int_equal(rc, 0);
@@ -939,7 +939,7 @@ list_containers_test(void **state)
 
 	/***** Test: retrieve number of containers in pool *****/
 	nconts = nconts_orig = 0xDEF0; /* Junk value (e.g., uninitialized) */
-	assert_false(daos_handle_is_inval(lcarg->tpool.poh));
+	assert_true(daos_handle_is_valid(lcarg->tpool.poh));
 	rc = daos_pool_list_cont(lcarg->tpool.poh, &nconts, NULL /* conts */,
 			NULL /* ev */);
 	print_message("daos_pool_list_cont returned rc=%d\n", rc);
