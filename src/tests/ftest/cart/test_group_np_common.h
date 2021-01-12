@@ -366,11 +366,11 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 	rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
 			    TEST_OPC_CHECKIN, &rpc_req);
 	D_ASSERTF(rc == 0 && rpc_req != NULL, "crt_req_create() failed,"
-			" rc: %d rpc_req: %p\n", rc, rpc_req);
+		  " rc: %d rpc_req: %p\n", rc, rpc_req);
 
 	rpc_req_input = crt_req_get(rpc_req);
 	D_ASSERTF(rpc_req_input != NULL, "crt_req_get() failed."
-			" rpc_req_input: %p\n", rpc_req_input);
+ 		  " rpc_req_input: %p\n", rpc_req_input);
 
 	if (D_SHOULD_FAIL(test_g.t_fault_attr_1000)) {
 		buffer = NULL;
@@ -380,7 +380,7 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 	}
 
 	D_ASSERTF(buffer != NULL, "Cannot allocate memory.\n");
-	snprintf(buffer,	256, "Guest %d", rank);
+	snprintf(buffer, 256, "Guest %d", rank);
 	rpc_req_input->name = buffer;
 	rpc_req_input->age = 21;
 	rpc_req_input->days = 7;
@@ -456,6 +456,7 @@ parse_verify_swim_status_arg(char *source)
 			if (g == 2) {
 
 				char exp_status[8];
+
 				strcpy(exp_status, cursorCopy + groupArray[g].rm_so);
 
 				/* "d(ead)?"=1, a(live)?=0 as specified in crt_event_type:
