@@ -56,7 +56,7 @@ ior:
   client_processes:
     np: 2
   test_file: /testFile
-  repetitions: 1
+  repetitions: 70
   dfs_destroy: False
   iorflags:
     ior_flags:

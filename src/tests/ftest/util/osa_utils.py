@@ -204,6 +204,7 @@ class OSAUtils(IorTestBase):
         ior_cmd.get_params(self)
         ior_cmd.set_daos_params(self.server_group, self.pool)
         ior_cmd.dfs_oclass.update(oclass)
+        ior_cmd.dir_oclass.update(oclass)
         ior_cmd.api.update(api)
         ior_cmd.transfer_size.update(test[2])
         ior_cmd.block_size.update(test[3])
