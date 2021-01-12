@@ -342,7 +342,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             src_path (str): posix-style source path.
                 For containers, this is relative to the container root.
             src_pool (TestPool, optional): the source pool.
-                Alternatively, this can the pool uuid.
+                Alternatively, this be can the pool uuid.
             src_cont (TestContainer, optional): the source container.
                 Alternatively, this can be the container uuid.
             dst_type (str): how to interpret the dst params.
@@ -350,7 +350,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             dst_path (str): posix-style destination path.
                 For containers, this is relative to the container root.
             dst_pool (TestPool, optional): the destination pool.
-                Alternatively, this can the pool uuid.
+                Alternatively, this be can the pool uuid.
             dst_cont (TestContainer, optional): the destination container.
                 Alternatively, this can be the container uuid.
 
