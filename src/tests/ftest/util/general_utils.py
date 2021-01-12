@@ -796,8 +796,8 @@ def create_directory(hosts, directory, timeout=10, verbose=True,
     """
     hosts = convert_string(hosts)
     return run_command(
-        "{}clush -S -v -w {} /usr/bin/mkdir -p {}".format(
-            "sudo " if sudo else "", hosts, directory),
+        "{} -S -v -w {} /usr/bin/mkdir -p {}".format(
+            get_clush_command(sudo), hosts, directory),
         timeout=timeout, verbose=verbose, raise_exception=raise_exception)
 
 
@@ -835,8 +835,8 @@ def change_file_owner(hosts, filename, owner, timeout=10, verbose=True,
     """
     hosts = convert_string(hosts)
     return run_command(
-        "{0}clush -S -v -w {1} chown {2}:{2} {3}".format(
-            "sudo " if sudo else "", hosts, owner, filename),
+        "{0} -S -v -w {1} chown {2}:{2} {3}".format(
+            get_clush_command(sudo), hosts, owner, filename),
         timeout=timeout, verbose=verbose, raise_exception=raise_exception)
 
 
@@ -887,14 +887,32 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
         result = create_directory(hosts, os.path.dirname(destination))
     if result is None or result.exit_status == 0:
         result = run_command(
-            "{}clush -S -v -w {} --copy {} --dest {}".format(
-                "sudo " if sudo else "", hosts, source, destination),
+            "{} -S -v -w {} --copy {} --dest {}".format(
+                get_clush_command(sudo), hosts, source, destination),
             timeout=timeout, verbose=verbose, raise_exception=raise_exception)
+        print("** RESULT:\n{}".format(str(result)))
         if owner is not None and result.exit_status == 0:
             change_file_owner(
                 hosts, destination, owner, timeout=timeout, verbose=verbose,
                 raise_exception=raise_exception, sudo=sudo)
     return result
+
+
+def get_clush_command(sudo=False):
+    """Get the clush command with optional sudo arguments.
+
+    Args:
+        sudo (bool, optional): if set the clush command will be configured to
+            run with sudo privileges. Defaults to False.
+
+    Returns:
+        str: the clush command
+
+    """
+    command = "clush"
+    if sudo:
+        command = "sudo clush -d -o '-o StrictHostKeyChecking=no'"
+    return command
 
 
 def get_default_config_file(name):

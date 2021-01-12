@@ -36,7 +36,7 @@ from command_utils_base import \
     CommandWithParameters, YamlParameters, EnvironmentVariables, LogParameter
 from general_utils import check_file_exists, stop_processes, get_log_file, \
     run_command, DaosTestError, get_job_manager_class, create_directory, \
-    distribute_files, change_file_owner
+    distribute_files, change_file_owner, get_clush_command
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -833,8 +833,9 @@ class YamlCommand(SubProcessCommand):
         if names:
             self.log.debug("Copied certificates for %s:", self._command)
             result = run_command(
-                "sudo clush -S -v -w {} /usr/bin/ls -la {}".format(
-                    ",".join(hosts), " ".join(names)), verbose=False)
+                "{} -S -v -w {} /usr/bin/ls -la {}".format(
+                    get_clush_command(True), ",".join(hosts), " ".join(names)),
+                verbose=False)
             for line in result.stdout.splitlines():
                 self.log.debug("  %s", line)
 
