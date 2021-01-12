@@ -118,10 +118,10 @@ test_run(void)
 		/* Process the --rank option, e.g., --rank 1,2-4 */
 		if (test_g.cg_num_ranks > -1)
 			rank_list = uint32_array_to_rank_list((uint32_t *)test_g.cg_ranks,
-					test_g.cg_num_ranks);
+							      test_g.cg_num_ranks);
 
 		rc = tc_wait_for_ranks(test_g.t_crt_ctx[0], grp, rank_list,
-						test_g.t_srv_ctx_num - 1, test_g.t_srv_ctx_num,
+				       test_g.t_srv_ctx_num - 1, test_g.t_srv_ctx_num,
 						5, 150);
 		D_ASSERTF(rc == 0, "wait_for_ranks() failed; rc=%d\n", rc);
 	}
