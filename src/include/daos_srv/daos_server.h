@@ -46,9 +46,6 @@
 /** number of target (XS set) per server */
 extern unsigned int	 dss_tgt_nr;
 
-/** Server node hostname */
-extern char	         dss_hostname[];
-
 /** Storage path (hack) */
 extern const char	*dss_storage_path;
 

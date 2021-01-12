@@ -43,6 +43,7 @@
  */
 const char	*dss_socket_dir = "/my/fake/path";
 char		*drpc_listener_socket_path = "/fake/listener.sock";
+char		 dss_hostname[DSS_HOSTNAME_MAX_LEN] = "foo-host";
 
 /* DAOS internal globals - arbitrary values okay */
 uint32_t	dss_tgt_offload_xs_nr = 3;
@@ -59,6 +60,12 @@ crt_self_uri_get(int tag, char **uri)
 		D_STRNDUP(*uri, crt_self_uri_get_uri,
 			  strlen(crt_self_uri_get_uri));
 	return crt_self_uri_get_return;
+}
+static uint32_t	mock_self_rank = 1;
+d_rank_t
+dss_self_rank(void)
+{
+	return (d_rank_t)mock_self_rank;
 }
 
 /*
@@ -211,7 +218,6 @@ verify_notify_bio_error(void)
 static void
 test_drpc_verify_notify_bio_error(void **state)
 {
-
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
 	assert_int_equal(drpc_init(), 0);
 
@@ -253,6 +259,10 @@ verify_notify_pool_svc_update(uuid_t *pool_uuid, d_rank_list_t *svc_reps)
 	req = shared__cluster_event_req__unpack(NULL, call->body.len,
 						call->body.data);
 	assert_non_null(req);
+
+	assert_string_equal(req->event->hostname, dss_hostname);
+	/* populated by mock dss_self_rank */
+	assert_int_equal(req->event->rank, mock_self_rank);
 	assert_int_equal(uuid_parse(req->event->pool_uuid, puuid), 0);
 	assert_int_equal(uuid_compare(puuid, *pool_uuid), 0);
 	assert_int_equal(req->event->pool_svc_info->n_svc_reps,
@@ -372,12 +382,13 @@ verify_notify_ras(ras_event_t id, char *msg, ras_type_t type,
 						call->body.data);
 	assert_non_null(req);
 
+	assert_string_equal(req->event->hostname, dss_hostname);
+	assert_int_equal((uint32_t)req->event->rank, (uint32_t)*rank);
 	assert_int_equal((uint32_t)req->event->id, (uint32_t)id);
 	assert_string_equal(req->event->msg, msg);
 	assert_int_equal((uint32_t)req->event->type, (uint32_t)type);
 	assert_int_equal((uint32_t)req->event->severity, (uint32_t)sev);
 	assert_string_equal(req->event->hw_id, hid);
-	assert_int_equal((uint32_t)req->event->rank, (uint32_t)*rank);
 	assert_string_equal(req->event->job_id, jid);
 	assert_int_equal(uuid_parse(req->event->pool_uuid, req_puuid), 0);
 	assert_int_equal(uuid_compare(req_puuid, *puuid), 0);
@@ -437,12 +448,14 @@ verify_notify_ras_min_viable(ras_event_t id, char *msg, ras_type_t type,
 						call->body.data);
 	assert_non_null(req);
 
+	assert_string_equal(req->event->hostname, dss_hostname);
+	/* populated by mock dss_self_rank */
+	assert_int_equal(req->event->rank, mock_self_rank);
 	assert_int_equal((uint32_t)req->event->id, (uint32_t)id);
 	assert_string_equal(req->event->msg, msg);
 	assert_int_equal((uint32_t)req->event->type, (uint32_t)type);
 	assert_int_equal((uint32_t)req->event->severity, (uint32_t)sev);
 	assert_string_equal(req->event->hw_id, "");
-	assert_int_equal(req->event->rank, UINT32_MAX);
 	assert_string_equal(req->event->job_id, "");
 	assert_string_equal(req->event->pool_uuid, "");
 	assert_string_equal(req->event->cont_uuid, "");
