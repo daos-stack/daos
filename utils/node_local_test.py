@@ -587,9 +587,10 @@ class ValgrindHelper():
     Jenkins in locating the source code.
     """
 
-    def __init__(self, logid=None):
+    def __init__(self, conf, logid=None):
 
         # Set this to False to disable valgrind, which will run faster.
+        self.conf = conf
         self.use_valgrind = True
         self.full_check = True
         self._xml_file = None
@@ -616,11 +617,17 @@ class ValgrindHelper():
         else:
             cmd.extend(['--leak-check=no'])
 
-        cmd.append('--suppressions={}'.format(
-            os.path.join('src',
-                         'cart',
-                         'utils',
-                         'memcheck-cart.supp')))
+        src_suppression_file = os.path.join('src',
+                                            'cart',
+                                            'utils',
+                                            'memcheck-cart.supp')
+        if os.path.exists(src_suppression_file):
+            cmd.append('--suppressions={}'.format(src_suppression_file))
+        else:
+            cmd.append('--suppressions={}'.format(
+                os.path.join(self.conf['PREFIX'],
+                             'etc',
+                             'memcheck-cart.supp')))
 
         cmd.append('--error-exitcode=42')
 
@@ -686,7 +693,7 @@ class DFuse():
         if self.conf.args.dtx == 'yes':
             my_env['DFS_USE_DTX'] = '1'
 
-        self.valgrind = ValgrindHelper(v_hint)
+        self.valgrind = ValgrindHelper(self.conf, v_hint)
         if self.conf.args.memcheck == 'no':
             self.valgrind.use_valgrind = False
 
@@ -840,7 +847,7 @@ def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False):
 
     Enable logging, and valgrind for the command.
     """
-    vh = ValgrindHelper()
+    vh = ValgrindHelper(conf)
 
     if conf.args.memcheck == 'no':
         valgrind = False
@@ -1004,9 +1011,18 @@ lt = None
 
 def setup_log_test(conf):
     """Setup and import the log tracing code"""
+
+    # Try and pick this up from the src tree if possible.
     file_self = os.path.dirname(os.path.abspath(__file__))
     logparse_dir = os.path.join(file_self,
                                 '../src/tests/ftest/cart/util')
+    crt_mod_dir = os.path.realpath(logparse_dir)
+    if crt_mod_dir not in sys.path:
+        sys.path.append(crt_mod_dir)
+
+    # Or back off to the install dir if not.
+    logparse_dir = os.path.join(conf['PREFIX'],
+                                'lib/daos/TESTING/ftest/cart')
     crt_mod_dir = os.path.realpath(logparse_dir)
     if crt_mod_dir not in sys.path:
         sys.path.append(crt_mod_dir)
@@ -1537,7 +1553,6 @@ def main():
 
     parser = argparse.ArgumentParser(
         description='Run DAOS client on local node')
-    parser.add_argument('--output-file', default='nlt-errors.json')
     parser.add_argument('--server-debug', default=None)
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
@@ -1547,7 +1562,7 @@ def main():
 
     conf = load_conf()
 
-    wf = WarningsFactory(args.output_file)
+    wf = WarningsFactory('nlt-errors.json')
 
     conf.set_wf(wf)
     conf.set_args(args)

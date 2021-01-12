@@ -14,29 +14,6 @@ check_environment()
         if [ -z "${SL_PREFIX:-""}" ]; then
                 die "no DAOS development environment (use setup_local.sh ?)"
         fi
-
-}
-
-check_which()
-{
-        cmd=$1
-        if ! command -v "$cmd" >/dev/null 2>&1; then
-                die "$cmd not found in \$PATH (yum install $cmd ?)"
-        fi
-}
-
-check_prereqs()
-{
-        if [ $EUID != 0 ]; then
-                die "this script must be run as root or with sudo"
-        fi
-
-        check_which patchelf
-
-        DA_SRC=$1
-        if ! [ -f "$DA_SRC" ]; then
-                die "$DA_SRC does not exist. did you build it?"
-        fi
 }
 
 check_environment
@@ -55,11 +32,6 @@ echo "This script will install daos_admin for developer builds (not for producti
 echo -n "Installing $DA_SRC -> $DA_DST ... "
 chmod -x "$DA_SRC" || true
 cp "$DA_SRC" "$DA_DST"
-if [ "$SL_PREFIX" != "DAOS_LOC" ]; then
-        rpath=$(patchelf --print-rpath $DA_DST | \
-              sed "s|$SL_PREFIX|$DAOS_LOC|g")
-        patchelf --set-rpath "$rpath" $DA_DST
-fi
 chmod 4755 "$DA_DST"
 echo "Done."
 

@@ -1145,28 +1145,29 @@ pipeline {
                     }
                     post {
                       always {
-                            unitTestPost artifacts: ['unit_test_logs/*'],
-                                         record_issues: false
+                            unitTestPost artifacts: ['unit_test_logs/*']
                         }
                     }
                 }
                 stage('NLT') {
                     when {
                       beforeAgent true
-                      expression { ! skip_stage('nlt') }
+                      expression { ! skip_stage('ci_hdwr1') }
                     }
                     agent {
-                        label 'ci_hdwr1'
+                        label 'ci_vm1'
                     }
                     steps {
                         unitTest timeout_time: 20,
                                  inst_repos: pr_repos(),
+                                 test_script: 'ci/unit/test_nlt.sh',
                                  inst_rpms: unit_packages()
                     }
                     post {
                       always {
                             unitTestPost artifacts: ['nlt_logs/*'],
                                          testResults: 'None',
+					 always_script: 'ci/unit/test_nlt_post.sh',
                                          valgrind_stash: 'centos7-gcc-nlt-memcheck'
                         }
                     }
