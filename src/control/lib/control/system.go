@@ -621,7 +621,7 @@ type ListPoolsReq struct {
 // of pools in the system.
 type ListPoolsResp struct {
 	Status int32
-	Pools  []*common.PoolDiscovery
+	Pools  []*common.PoolDiscovery `json:"pools"`
 }
 
 // ListPools fetches the list of all pools and their service replicas from the

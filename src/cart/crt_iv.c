@@ -1683,7 +1683,8 @@ exit:
 
 		if (put_needed)
 			iv_ops->ivo_on_put(ivns, iv_value, user_priv);
-		D_ERROR("Failed to issue IV fetch; rc = " DF_RC "\n",
+		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
+			"Failed to issue IV fetch; rc = " DF_RC "\n",
 			DP_RC(rc));
 
 		if (cb_info) {

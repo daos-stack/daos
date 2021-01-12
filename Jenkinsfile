@@ -757,8 +757,8 @@ pipeline {
                             filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                '$BUILDARGS_QB_TRUE' +
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
+                                " -t ${sanitized_JOB_NAME}-centos7 " +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                 quick_build_deps('centos7') + '"' +
@@ -1420,8 +1420,8 @@ pipeline {
                             filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                '$BUILDARGS_QB_TRUE' +
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
+                                " -t ${sanitized_JOB_NAME}-centos7 " +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                 quick_build_deps('centos7') + '"' +

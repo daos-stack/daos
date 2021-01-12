@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -754,7 +754,7 @@ func (db *Database) FaultDomainTree() *FaultDomainTree {
 	db.data.RLock()
 	defer db.data.RUnlock()
 
-	return db.data.Members.FaultDomains
+	return db.data.Members.FaultDomains.Copy()
 }
 
 // copyPoolService makes a copy of the supplied PoolService pointer
