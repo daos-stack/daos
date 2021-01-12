@@ -73,14 +73,14 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(Test):
             self.fail("Server did not launch, return code %s" \
                        % procrtn)
 
+            # Wait a bit for swim to become 'active' between servers
+            time.sleep(10)
+
         cli_arg = self.params.get("test_clients_arg", '/run/tests/*/')
         for index in range(len(cli_arg)):
             clicmd = self.utils.build_cmd(
                 self, self.env, "test_clients", index=index)
             self.utils.launch_test(self, clicmd, srv_rtn)
-
-            # Wait for servers to propagate SWIM status
-            time.sleep(10)
 
 if __name__ == "__main__":
     main()

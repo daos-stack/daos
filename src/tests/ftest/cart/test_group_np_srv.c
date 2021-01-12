@@ -67,9 +67,6 @@ swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		return;
 }
 
-/* Dummy, unused variable to satisfy crt_register_event_cb */
-int a = 1234567;
-
 void
 test_run(d_rank_t my_rank)
 {
