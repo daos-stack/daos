@@ -139,7 +139,7 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 }
 
 /* Keep a table of whether each rank is alive (0) or dead (1) */
-static int swim_status_by_rank[256];
+static int swim_status_by_rank[MAX_NUM_RANKS];
 
 static void
 test_swim_status_handler(crt_rpc_t *rpc_req)

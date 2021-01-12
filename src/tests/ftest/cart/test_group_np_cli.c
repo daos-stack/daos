@@ -161,8 +161,7 @@ test_run(void)
 
 		/* Check swim status on all (remaining) ranks */
 		for (i = 0; i < rank_list->rl_nr; i++) {
-			rank = rank_list->rl_ranks[i];
-			server_ep.ep_rank = rank;
+			server_ep.ep_rank = rank_list->rl_ranks[i];
 			send_rpc_swim_check(server_ep, rpc_req);
 		}
 	} else if (test_g.t_skip_shutdown) {
@@ -171,8 +170,7 @@ test_run(void)
 
 		/* Shutdown all ranks */
 		for (i = 0; i < rank_list->rl_nr; i++) {
-			rank = rank_list->rl_ranks[i];
-			server_ep.ep_rank = rank;
+			server_ep.ep_rank = rank_list->rl_ranks[i];
 			send_rpc_shutdown(server_ep, rpc_req);
 		}
 	}
