@@ -391,7 +391,7 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 }
 
-struct t_swim_status
+static struct t_swim_status
 parse_verify_swim_status_arg (char * source)
 {
 	char * regexString = "([0-9]+)[ ]*=[ ]*(a|d|alive|dead)";
