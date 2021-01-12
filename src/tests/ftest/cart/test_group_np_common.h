@@ -399,12 +399,12 @@ parse_verify_swim_status_arg (char * source)
 	struct t_swim_status ss = {-1, '\0'};
 
 	size_t maxMatches = 2;
-	size_t maxGroups = 3;
+	size_t maxGroups	= 3;
 	
-	regex_t regexCompiled;
-	regmatch_t groupArray[maxGroups];
+	regex_t			regexCompiled;
+	regmatch_t	 groupArray[maxGroups];
 	unsigned int m;
-	char * cursor;
+	char *			 cursor;
 
 	if (regcomp(&regexCompiled, regexString, REG_EXTENDED|REG_ICASE)) {
 		printf("Could not compile regular expression.\n");
@@ -626,7 +626,7 @@ test_parse_args(int argc, char **argv)
 		case 'v':
 
 			vss = parse_verify_swim_status_arg(optarg);
-			test_g.t_verify_swim_status.rank = vss.rank;
+			test_g.t_verify_swim_status.rank				= vss.rank;
 			test_g.t_verify_swim_status.swim_status = vss.swim_status;
 
 			break;

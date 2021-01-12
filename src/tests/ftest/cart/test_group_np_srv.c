@@ -38,11 +38,11 @@
 /* Callback to process a SWIM message */
 static void
 swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
-       enum crt_event_type type, void *arg)
+			 enum crt_event_type type, void *arg)
 {
 
 		/* Example output for SWIM CRT_EVT_DEAD on rank #2:
-		 *   rank = 2, crt_event_source = 1, crt_event_type = 1
+		 *	 rank = 2, crt_event_source = 1, crt_event_type = 1
 		 *
 		 * 		enum crt_event_type {
 		 * 			CRT_EVT_ALIVE,
@@ -79,11 +79,11 @@ test_run(d_rank_t my_rank)
 	int			 rc = 0;
 
 	tc_srv_start_basic(test_g.t_local_group_name, &test_g.t_crt_ctx[0],
-			   &test_g.t_tid[0], &grp, &grp_size, NULL);
+				 &test_g.t_tid[0], &grp, &grp_size, NULL);
 
-  /* Register event callback after CaRT has initialized */
+	/* Register event callback after CaRT has initialized */
 	if (test_g.t_register_swim_callback) {
-		crt_register_event_cb(swim_crt_event_cb, &a);
+		crt_register_event_cb(swim_crt_event_cb, NULL);
 	}
 
 	DBG_PRINT("Basic server started, group_size=%d\n", grp_size);
@@ -104,7 +104,7 @@ test_run(d_rank_t my_rank)
 		DBG_PRINT("Context %d created\n", i);
 
 		rc = pthread_create(&test_g.t_tid[i], NULL, tc_progress_fn,
-				    &test_g.t_crt_ctx[i]);
+						&test_g.t_crt_ctx[i]);
 		D_ASSERTF(rc == 0, "pthread_create() failed. rc: %d\n", rc);
 		DBG_PRINT("Progress thread %d started\n", i);
 	}
@@ -113,14 +113,14 @@ test_run(d_rank_t my_rank)
 	if (my_rank == 0) {
 		rc = crt_group_config_save(NULL, true);
 		D_ASSERTF(rc == 0,
-			  "crt_group_config_save() failed. rc: %d\n", rc);
+				"crt_group_config_save() failed. rc: %d\n", rc);
 		DBG_PRINT("Group config file saved\n");
 	}
+
 
 	if (test_g.t_hold) {
 		sleep(test_g.t_hold_time);
 	}
-
 
 	for (i = 0; i < test_g.t_srv_ctx_num; i++) {
 
@@ -137,7 +137,7 @@ test_run(d_rank_t my_rank)
 	if (my_rank == 0) {
 		rc = crt_group_config_remove(NULL);
 		D_ASSERTF(rc == 0,
-			  "crt_group_config_remove() failed. rc: %d\n", rc);
+				"crt_group_config_remove() failed. rc: %d\n", rc);
 	}
 
 	rc = crt_finalize();
