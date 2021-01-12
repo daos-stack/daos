@@ -438,6 +438,7 @@ parse_verify_swim_status_arg (char *source)
 			}
 
 			char cursorCopy[strlen(cursor) + 1];
+
 			strcpy(cursorCopy, cursor);
 			cursorCopy[groupArray[g].rm_eo] = 0;
 			D_DEBUG(DB_TEST,

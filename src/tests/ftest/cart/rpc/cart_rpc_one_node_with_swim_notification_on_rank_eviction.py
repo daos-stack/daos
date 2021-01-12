@@ -83,25 +83,25 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(Test):
 
         cli_arg = self.params.get("test_clients_arg", '/run/tests/*/')
 
-        # - "--name client_group --attach_to tg_srv_grp --init_only"
+        # --init_only"
         self._launch_cmd_at_index(0, srv_rtn)
 
-        # - "--name client_group --attach_to tg_srv_grp --rank 2   --shut_only --holdtime 5"
+        # --rank 2   --shut_only --holdtime 5"
         self._launch_cmd_at_index(1, srv_rtn)
 
         # Wait a bit for swim status to propogate to all servers
         time.sleep(10)
 
-        # - "--name client_group --attach_to tg_srv_grp --rank 0,1 --verify_swim_status 'rank2=dead'"
+        # --rank 0,1 --verify_swim_status 'rank2=dead'"
         self._launch_cmd_at_index(2, srv_rtn)
 
-        # - "--name client_group --attach_to tg_srv_grp --rank 0,1 --verify_swim_status 'rank1=alive'"
+        # --rank 0,1 --verify_swim_status 'rank1=alive'"
         self._launch_cmd_at_index(3, srv_rtn)
 
-        # - "--name client_group --attach_to tg_srv_grp --rank 0,1 --verify_swim_status 'rank0=alive'"
+        # --rank 0,1 --verify_swim_status 'rank0=alive'"
         self._launch_cmd_at_index(4, srv_rtn)
 
-        # - "--name client_group --attach_to tg_srv_grp --rank 0,1 --shut_only"
+        # --rank 0,1 --shut_only"
         self._launch_cmd_at_index(5, srv_rtn)
 
 
