@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ dc_cp(tse_task_t *task, void *data)
 int
 dc_deprecated(tse_task_t *task)
 {
-	D_ERROR("This API is deprecated "DF_RC"\n", DP_RC(-DER_NOSYS));
+	D_ERROR("This API is deprecated\n");
 	tse_task_complete(task, -DER_NOSYS);
 	return -DER_NOSYS;
 }

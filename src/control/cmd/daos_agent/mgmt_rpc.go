@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -148,9 +148,9 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 		return nil, errors.Errorf("unknown system name %s", pbReq.Sys)
 	}
 
-	resp, err := control.GetAttachInfo(ctx, mod.ctlInvoker, &control.GetAttachInfoReq{
-		System: pbReq.Sys,
-	})
+	req := new(control.GetAttachInfoReq)
+	req.SetSystem(pbReq.GetSys())
+	resp, err := control.GetAttachInfo(ctx, mod.ctlInvoker, req)
 	if err != nil {
 		return nil, errors.Wrapf(err, "GetAttachInfo %+v", pbReq)
 	}

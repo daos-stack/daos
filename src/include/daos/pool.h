@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -114,7 +114,6 @@ int dc_pool_exclude(tse_task_t *task);
 int dc_pool_exclude_out(tse_task_t *task);
 int dc_pool_reint(tse_task_t *task);
 int dc_pool_drain(tse_task_t *task);
-int dc_pool_evict(tse_task_t *task);
 int dc_pool_stop_svc(tse_task_t *task);
 int dc_pool_list_cont(tse_task_t *task);
 
