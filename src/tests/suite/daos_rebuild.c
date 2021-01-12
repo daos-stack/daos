@@ -915,7 +915,8 @@ rebuild_multiple_tgts(void **state)
 		/* kill 2 ranks at the same time */
 		D_ASSERT(layout->ol_shards[0]->os_replica_nr > 2);
 		for (i = 0; i < 3; i++) {
-			d_rank_t rank = layout->ol_shards[0]->os_ranks[i];
+			d_rank_t rank =
+				layout->ol_shards[0]->os_shard_loc[i].sd_rank;
 
 			if (rank != leader) {
 				exclude_ranks[fail_cnt] = rank;
@@ -1118,7 +1119,7 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 	/* Kill one replica and start rebuild */
 	shard = layout->ol_shards[0];
 	daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
-			 arg->pool.alive_svc, shard->os_ranks[0]);
+			 arg->pool.alive_svc, shard->os_shard_loc[0].sd_rank);
 
 	/* Sleep 10 seconds after it scan finish and hang before rebuild */
 	print_message("sleep 10 seconds to wait scan to be finished \n");
@@ -1128,9 +1129,10 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 	/* NB: we can not kill rank 0, otherwise the following set_params
 	 * will fail and also pool destroy will not work.
 	 */
-	if (shard->os_ranks[1] != 0)
+	if (shard->os_shard_loc[1].sd_rank != 0)
 		daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
-				 arg->pool.alive_svc, shard->os_ranks[1]);
+				 arg->pool.alive_svc,
+				 shard->os_shard_loc[1].sd_rank);
 
 	/* Continue rebuild */
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
@@ -1174,7 +1176,8 @@ rebuild_fail_all_replicas(void **state)
 		int j;
 
 		for (j = 0; j < layout->ol_shards[i]->os_replica_nr; j++) {
-			d_rank_t rank = layout->ol_shards[i]->os_ranks[j];
+			d_rank_t rank =
+				layout->ol_shards[i]->os_shard_loc[j].sd_rank;
 
 			daos_kill_server(arg, arg->pool.pool_uuid,
 					 arg->group, arg->pool.alive_svc,
