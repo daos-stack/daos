@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1410,7 +1410,7 @@ daos_obj_layout_alloc(struct daos_obj_layout **layout, uint32_t grp_nr,
 	for (i = 0; i < grp_nr; i++) {
 		D_ALLOC((*layout)->ol_shards[i],
 			sizeof(struct daos_obj_shard) +
-			grp_size * sizeof(uint32_t));
+			grp_size * sizeof(struct daos_shard_loc));
 		if ((*layout)->ol_shards[i] == NULL)
 			D_GOTO(free, rc = -DER_NOMEM);
 
@@ -1471,7 +1471,9 @@ dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout)
 			if (rc != 0)
 				D_GOTO(out, rc);
 
-			shard->os_ranks[j] = tgt->ta_comp.co_rank;
+			shard->os_shard_loc[j].sd_rank = tgt->ta_comp.co_rank;
+			shard->os_shard_loc[j].sd_tgt_idx =
+							tgt->ta_comp.co_index;
 		}
 	}
 	*p_layout = layout;
@@ -2205,12 +2207,13 @@ obj_req_get_tgts(struct dc_object *obj, int *shard, daos_key_t *dkey,
 					D_ERROR("Fetch from invalid shard, "
 						"grp size %u, shard cnt %u, "
 						"grp idx %u, given shard %u, "
-						"dkey hash %lu, dkey %s\n",
+						"dkey hash %lu, dkey "
+						DF_KEY"\n",
 						obj->cob_grp_size,
 						obj->cob_shards_nr,
 						rc / obj->cob_grp_size, *shard,
 						dkey_hash,
-						(char *)dkey->iov_buf);
+						DP_KEY(dkey));
 					D_GOTO(out, rc = -DER_INVAL);
 				}
 

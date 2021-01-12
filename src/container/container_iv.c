@@ -722,9 +722,9 @@ cont_iv_update(void *ns, int class_id, uuid_t key_uuid,
 	civ_key->class_id = class_id;
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
 	if (rc)
-		D_ERROR(DF_UUID" iv update failed "DF_RC"\n", DP_UUID(key_uuid),
-			DP_RC(rc));
-
+		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
+			 DF_UUID" iv update failed "DF_RC"\n",
+			 DP_UUID(key_uuid), DP_RC(rc));
 	return rc;
 }
 
