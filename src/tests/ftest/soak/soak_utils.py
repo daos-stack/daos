@@ -552,8 +552,8 @@ def cleanup_dfuse(self):
                 self.hostlist_clients), "{}".format(
                     ";".join(cmd)), self.srun_params)
     except slurm_utils.SlurmFailed as error:
-        self.log.info(
-            "<<FAILED: Dfuse directories not deleted %s >>", error)
+        raise SoakTestError(
+            "<<FAILED: Dfuse directories not deleted {} >>".format(error))
 
 
 def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
@@ -588,18 +588,20 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 for o_type in oclass_list:
                     # Cancel for ticket DAOS-6095
                     cancel_api_6095 = ["HDF5-VOL", "HDF5", "POSIX"]
-                    if api in cancel_api_6095:
-                        if t_size == "4k" and o_type in ["RP_2G1", 'RP_2GX']:
-                            self.teardown_cancel.append("DAOS-6095")
-                            self.log.info(
-                                "<<<Cancel for ticket {}: IOR -a {} "
-                                "with -t {} and -o {}>>>".format(
-                                    self.teardown_cancel[-1], api, t_size,
-                                    o_type))
-                            continue
-                    # Cancel for ticket DAOS 6308
+                    if api in cancel_api_6095 and t_size == "4k" and (
+                            o_type in ["RP_2G1", 'RP_2GX']):
+                        self.teardown_cancel.append("DAOS-6095")
+                        self.teardown_cancel = list(set(self.teardown_cancel))
+                        self.log.info(
+                            "<<<Cancel for ticket {}: IOR -a {} "
+                            "with -t {} and -o {}>>>".format(
+                                self.teardown_cancel[-1], api, t_size,
+                                o_type))
+                        continue
+                    # Cancel for ticket DAOS-6308
                     if api == "MPIIO" and o_type == "RP_2GX":
                         self.teardown_cancel.append("DAOS-6308")
+                        self.teardown_cancel = list(set(self.teardown_cancel))
                         self.log.info(
                             "<<<Cancel for ticket {}: IOR -a {} and "
                             "-o {}>>>".format(

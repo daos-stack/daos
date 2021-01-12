@@ -153,7 +153,7 @@ class Test(avocadoTest):
         self.log.info("Test PID: %s", os.getpid())
         self._timeout_reported = False
         self.teardown_cancel = []
-        self.teardown_errors = []
+        self._teardown_errors = []
 
     def setUp(self):
         """Set up each test case."""
@@ -194,8 +194,22 @@ class Test(avocadoTest):
 
     # pylint: disable=invalid-name
     def cancelForTicket(self, ticket):
-        """Skip a test due to a ticket needing to be completed."""
-        return self.cancel("Skipping until {} is fixed.".format(ticket))
+        """Skip a test due to a ticket needing to be completed.
+
+        Args:
+            ticket (object): the ticket (str) or group of tickets (list)
+                that cause this test case to be cancelled.
+        """
+        # pylint: disable=invalid-name
+        verb = "is"
+        if isinstance(ticket, list):
+            if len(ticket) > 1:
+                ticket[-1] = " ".join(["and", ticket[-1]])
+                ticket = ", ".join(ticket)
+                verb = "are"
+            else:
+                ticket = ", ".join(ticket)
+        return self.cancel("Skipping until {} {} fixed.".format(ticket, verb))
     # pylint: enable=invalid-name
 
     def get_test_name(self):
@@ -239,7 +253,7 @@ class Test(avocadoTest):
         """Tear down after each test case."""
         self.report_timeout()
         if self.teardown_cancel:
-            self.cancelForTicket(",".join(list(set(self.teardown_cancel))))
+            self.cancelForTicket(self.teardown_cancel)
         super(Test, self).tearDown()
 
 
@@ -329,12 +343,16 @@ class TestWithoutServers(Test):
     def tearDown(self):
         """Tear down after each test case."""
         self.report_timeout()
+        # Fail the test if any errors occurred during tear down
+        if self._teardown_errors:
+            self.fail("Errors detected during teardown:\n - {}".format(
+                "\n - ".join(self._teardown_errors)))
 
         if self.fault_file:
             try:
                 os.remove(self.fault_file)
             except OSError as error:
-                self.teardown_errors.append(
+                self._teardown_errors.append(
                     "Error running inherited teardown(): {}".format(error))
 
         super(TestWithoutServers, self).tearDown()
@@ -740,22 +758,22 @@ class TestWithServers(TestWithoutServers):
         self.report_timeout()
 
         # Tear down any test-specific items
-        self.teardown_errors = self.pre_tear_down()
+        self._teardown_errors = self.pre_tear_down()
 
         # Stop any test jobs that may still be running
-        self.teardown_errors.extend(self.stop_job_managers())
+        self._teardown_errors.extend(self.stop_job_managers())
 
         # Destroy any containers first
-        self.teardown_errors.extend(self.destroy_containers(self.container))
+        self._teardown_errors.extend(self.destroy_containers(self.container))
 
         # Destroy any pools next
-        self.teardown_errors.extend(self.destroy_pools(self.pool))
+        self._teardown_errors.extend(self.destroy_pools(self.pool))
 
         # Stop the agents
-        self.teardown_errors.extend(self.stop_agents())
+        self._teardown_errors.extend(self.stop_agents())
 
         # Stop the servers
-        self.teardown_errors.extend(self.stop_servers())
+        self._teardown_errors.extend(self.stop_servers())
 
         super(TestWithServers, self).tearDown()
 
