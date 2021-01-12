@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
@@ -53,7 +54,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				CrtCtxShareAddr: 1,
 				CrtTimeout:      10, NetDevClass: netdetect.Infiniband,
 			},
-			req: &mgmtpb.GetAttachInfoReq{},
+			req: &mgmtpb.GetAttachInfoReq{Sys: build.DefaultSystemName},
 			expResp: &mgmtpb.GetAttachInfoResp{
 				Provider:        "ofi+verbs",
 				CrtCtxShareAddr: 1,
@@ -74,7 +75,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				CrtTimeout:      5,
 				NetDevClass:     netdetect.Ether,
 			},
-			req: &mgmtpb.GetAttachInfoReq{},
+			req: &mgmtpb.GetAttachInfoReq{Sys: build.DefaultSystemName},
 			expResp: &mgmtpb.GetAttachInfoResp{
 				Provider:        "ofi+sockets",
 				CrtCtxShareAddr: 0,
@@ -103,7 +104,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 
 			db := system.MockDatabaseWithAddr(t, log, msReplica.Addr)
 			m := system.NewMembership(log, db)
-			tc.mgmtSvc = newMgmtSvc(harness, m, db, nil)
+			tc.mgmtSvc = newMgmtSvc(harness, m, db, nil, nil)
 			if _, err := tc.mgmtSvc.membership.Add(msReplica); err != nil {
 				t.Fatal(err)
 			}

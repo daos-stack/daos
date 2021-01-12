@@ -2041,7 +2041,7 @@ static void
 test_get_rebuild_cont_capas(void **state)
 {
 	assert_int_equal(ds_sec_get_rebuild_cont_capabilities(),
-			 CONT_CAPA_READ_DATA);
+			 CONT_CAPA_READ_DATA | CONT_CAPA_WRITE_DATA);
 }
 
 static void
