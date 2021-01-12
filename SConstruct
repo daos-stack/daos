@@ -7,7 +7,6 @@ import time
 import errno
 import SCons.Warnings
 from SCons.Script import BUILD_TARGETS
-from distutils.spawn import find_executable
 
 SCons.Warnings.warningAsException()
 
