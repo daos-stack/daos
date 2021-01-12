@@ -53,11 +53,11 @@ struct test_t {
 	bool			 t_save_cfg;
 	bool			 t_use_cfg;
 	bool			 t_register_swim_callback;
-	int				 t_get_swim_status;
-	int				 t_delete_rank_from_ranklist;
-	d_rank_t			 cg_ranks[MAX_NUM_RANKS];
-	int				 cg_num_ranks;
-	struct t_swim_status t_verify_swim_status;
+	int			 t_get_swim_status;
+	int			 t_delete_rank_from_ranklist;
+	d_rank_t		 cg_ranks[MAX_NUM_RANKS];
+	int			 cg_num_ranks;
+	struct			 t_swim_status t_verify_swim_status;
 	char			*t_cfg_path;
 	uint32_t		 t_hold_time;
 	unsigned int		 t_srv_ctx_num;
@@ -73,13 +73,15 @@ struct test_t test_g = { .t_hold_time = 0,
 			 .t_srv_ctx_num = 1,
 			 .t_roomno = 1082 };
 
-#define CRT_ISEQ_TEST_PING_CHECK /* input fields */		 \
+/* input fields */
+#define CRT_ISEQ_TEST_PING_CHECK				 \
 	((uint32_t)		(age)			CRT_VAR) \
 	((uint32_t)		(days)			CRT_VAR) \
 	((d_string_t)		(name)			CRT_VAR) \
 	((bool)			(bool_val)		CRT_VAR)
 
-#define CRT_OSEQ_TEST_PING_CHECK /* output fields */		 \
+/* output fields */
+#define CRT_OSEQ_TEST_PING_CHECK 				 \
 	((int32_t)		(ret)			CRT_VAR) \
 	((uint32_t)		(room_no)		CRT_VAR) \
 	((uint32_t)		(bool_val)		CRT_VAR)
@@ -89,12 +91,14 @@ CRT_RPC_DECLARE(test_ping_check,
 CRT_RPC_DEFINE(test_ping_check,
 		CRT_ISEQ_TEST_PING_CHECK, CRT_OSEQ_TEST_PING_CHECK)
 
-#define CRT_ISEQ_TEST_SWIM_STATUS /* input fields */		 \
+/* input fields */
+#define CRT_ISEQ_TEST_SWIM_STATUS  				 \
 	((uint32_t)		(rank)			CRT_VAR) \
-	((uint32_t)		(exp_status)			CRT_VAR)
+	((uint32_t)		(exp_status)		CRT_VAR)
 
-#define CRT_OSEQ_TEST_SWIM_STATUS /* output fields */		 \
-	((uint32_t)		(bool_val)			CRT_VAR)
+/* output fields */
+#define CRT_OSEQ_TEST_SWIM_STATUS 				 \
+	((uint32_t)		(bool_val)		CRT_VAR)
 
 CRT_RPC_DECLARE(test_swim_status,
 		CRT_ISEQ_TEST_SWIM_STATUS, CRT_OSEQ_TEST_SWIM_STATUS)
@@ -392,19 +396,19 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 }
 
 static struct t_swim_status
-parse_verify_swim_status_arg (char * source)
+parse_verify_swim_status_arg (char *source)
 {
-	char * regexString = "([0-9]+)[ ]*=[ ]*(a|d|alive|dead)";
+	char *regexString = "([0-9]+)[ ]*=[ ]*(a|d|alive|dead)";
 
 	struct t_swim_status ss = {-1, '\0'};
 
 	size_t maxMatches = 2;
-	size_t maxGroups	= 3;
-	
-	regex_t			regexCompiled;
+	size_t maxGroups  = 3;
+
+	unsigned int 	 m;
+	regex_t		 regexCompiled;
 	regmatch_t	 groupArray[maxGroups];
-	unsigned int m;
-	char *			 cursor;
+	char  		*cursor;
 
 	if (regcomp(&regexCompiled, regexString, REG_EXTENDED|REG_ICASE)) {
 		printf("Could not compile regular expression.\n");
@@ -414,7 +418,7 @@ parse_verify_swim_status_arg (char * source)
 	m = 0;
 	cursor = source;
 
-	for (m = 0; m < maxMatches; m ++) {
+	for (m = 0; m < maxMatches; m++) {
 
 		if (regexec(&regexCompiled, cursor, maxGroups, groupArray, 0)) {
 			break;	/* No more matches */
@@ -437,7 +441,7 @@ parse_verify_swim_status_arg (char * source)
 			strcpy(cursorCopy, cursor);
 			cursorCopy[groupArray[g].rm_eo] = 0;
 			D_DEBUG(DB_TEST,
-					 "parse_verify_swim_status_arg, match %u, " 
+					 "parse_verify_swim_status_arg, match %u, "
 					 "group %u: [%2u-%2u]: %s\n",
 					 m,
 					 g,

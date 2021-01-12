@@ -38,7 +38,8 @@
 
 
 static void
-send_rpc_shutdown(crt_endpoint_t server_ep, crt_rpc_t* rpc_req) {
+send_rpc_shutdown(crt_endpoint_t server_ep, crt_rpc_t *rpc_req)
+{
 	int rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
 					CRT_PROTO_OPC(TEST_GROUP_BASE,
 					TEST_GROUP_VER, 1), &rpc_req);
@@ -52,8 +53,8 @@ send_rpc_shutdown(crt_endpoint_t server_ep, crt_rpc_t* rpc_req) {
 }
 
 static void
-send_rpc_swim_check(crt_endpoint_t server_ep, crt_rpc_t* rpc_req) {
-
+send_rpc_swim_check(crt_endpoint_t server_ep, crt_rpc_t *rpc_req)
+{
 	struct test_swim_status_in	*rpc_req_input;
 	/*struct test_swim_status_out	*rpc_req_output; */
 
@@ -166,7 +167,7 @@ test_run(void)
 		}
 	} else if (test_g.t_skip_shutdown) {
 		DBG_PRINT("Skipping shutdown stage.\n");
-	} else if (! test_g.t_skip_shutdown) {
+	} else if (!test_g.t_skip_shutdown) {
 
 		/* Shutdown all ranks */
 		for (i = 0; i < rank_list->rl_nr; i++) {
