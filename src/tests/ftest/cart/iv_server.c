@@ -879,7 +879,7 @@ fetch_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	d_list_for_each_entry(entry, &g_kv_pair_head, link) {
 		if (keys_equal(iv_key, &entry->key) == true) {
 			rc = crt_bulk_create(g_main_ctx, &entry->value,
-					    perms, &bulk_hdl);
+					     perms, &bulk_hdl);
 			found = true;
 			break;
 		}

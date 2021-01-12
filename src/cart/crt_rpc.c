@@ -177,13 +177,13 @@ CRT_RPC_DEFINE(crt_ctl_get_pid,       CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_PID)
 CRT_RPC_DEFINE(crt_proto_query, CRT_ISEQ_PROTO_QUERY, CRT_OSEQ_PROTO_QUERY)
 
 CRT_RPC_DEFINE(crt_ctl_fi_attr_set, CRT_ISEQ_CTL_FI_ATTR_SET,
-		CRT_OSEQ_CTL_FI_ATTR_SET)
+	       CRT_OSEQ_CTL_FI_ATTR_SET)
 CRT_RPC_DEFINE(crt_ctl_fi_toggle, CRT_ISEQ_CTL_FI_TOGGLE,
 	       CRT_OSEQ_CTL_FI_TOGGLE)
 
 CRT_RPC_DEFINE(crt_ctl_log_set, CRT_ISEQ_CTL_LOG_SET, CRT_OSEQ_CTL_LOG_SET)
 CRT_RPC_DEFINE(crt_ctl_log_add_msg, CRT_ISEQ_CTL_LOG_ADD_MSG,
-		CRT_OSEQ_CTL_LOG_ADD_MSG)
+	       CRT_OSEQ_CTL_LOG_ADD_MSG)
 
 /* Define for crt_internal_rpcs[] array population below.
  * See CRT_INTERNAL_RPCS_LIST macro definition
@@ -277,7 +277,7 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 	if (opc_info->coi_crf != NULL &&
 	    (opc_info->coi_crf->crf_size_in > CRT_MAX_INPUT_SIZE ||
 	     opc_info->coi_crf->crf_size_out > CRT_MAX_OUTPUT_SIZE)) {
-		D_ERROR("opc: %#x, input_size "DF_U64" or output_size "
+		D_ERROR("opc: %#x, input_size " DF_U64 " or output_size "
 			DF_U64 " too large.\n",
 			opc, opc_info->coi_crf->crf_size_in,
 			opc_info->coi_crf->crf_size_out);

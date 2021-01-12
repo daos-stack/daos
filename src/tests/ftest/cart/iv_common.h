@@ -112,7 +112,7 @@ enum {
 	RPC_TEST_UPDATE_IV = CRT_PROTO_OPC(TEST_IV_BASE, TEST_IV_VER, 1),
 	/* Client issues invalidate call */
 	RPC_TEST_INVALIDATE_IV = CRT_PROTO_OPC(TEST_IV_BASE,
-					      TEST_IV_VER, 2),
+					       TEST_IV_VER, 2),
 	/* Send global ivns */
 	RPC_SET_IVNS = CRT_PROTO_OPC(TEST_IV_BASE, TEST_IV_VER, 3),
 	/* Request server shutdown */

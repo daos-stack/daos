@@ -542,11 +542,9 @@ int main(int argc, char **argv)
 	int			 c;
 	int			 attach_retries_left;
 
-#if 0
 	DBG_PRINT("\t*******************\n");
 	DBG_PRINT("\t***Client MAIN ****\n");
 	DBG_PRINT("\t*******************\n");
-#endif
 
 	while ((c = getopt(argc, argv, "k:o:r:s:v:x:l:m:")) != -1) {
 		switch (c) {

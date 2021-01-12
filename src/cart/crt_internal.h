@@ -71,7 +71,6 @@
 
 extern uint32_t crt_swim_rpc_timeout;
 
-#undef CRT_DEBUG_TRACE
 #ifdef CRT_DEBUG_TRACE
 #	define CRT_ENTRY()					\
 		D_DEBUG(DB_TRACE, ">>>> Entered %s: %d\n", __func__, __LINE__)

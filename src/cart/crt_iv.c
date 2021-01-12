@@ -1645,7 +1645,7 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 		return -DER_NONEXIST;
 	}
 
-	/* Get group name space interal operations */
+	/* Get group name space internal operations */
 	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
 	if (iv_ops == NULL) {
 		D_ERROR("Failed to get iv_ops for class_id = %d\n", class_id);
