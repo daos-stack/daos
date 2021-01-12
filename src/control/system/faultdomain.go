@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -131,8 +131,11 @@ func (f *FaultDomain) NewChild(childLevel string) (*FaultDomain, error) {
 	if f == nil {
 		return NewFaultDomain(childLevel)
 	}
-	childDomains := append(f.Domains, childLevel)
-	return NewFaultDomain(childDomains...)
+	// childDomains := append(f.Domains, childLevel)
+	// return NewFaultDomain(childDomains...)
+	childDomains := make([]string, len(f.Domains))
+	copy(childDomains, f.Domains)
+	return NewFaultDomain(append(childDomains, childLevel)...)
 }
 
 // MustCreateChild creates a child fault domain. If that is not possible, it

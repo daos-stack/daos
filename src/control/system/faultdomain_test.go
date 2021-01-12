@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1553,4 +1553,63 @@ func TestSystem_FaultDomainTree_ToProto(t *testing.T) {
 			}
 		})
 	}
+}
+
+func testVerifyTreeStructure(t *testing.T, tree *FaultDomainTree, level int, expNumChildrenByLevel []int) {
+	// Walk the tree to verify results
+	common.AssertEqual(t, len(tree.Children), expNumChildrenByLevel[level],
+		fmt.Sprintf("mismatch at level %d, %q", level, tree.Domain))
+	for _, c := range tree.Children {
+		testVerifyTreeStructure(t, c, level+1, expNumChildrenByLevel)
+	}
+}
+
+func TestSystem_FaultDomainTree_iterative_building(t *testing.T) {
+	mustAddDomain := func(t *FaultDomainTree, d *FaultDomain) {
+		if err := t.AddDomain(d); err != nil {
+			panic(err)
+		}
+	}
+
+	fmtNode := func(prefix string, idx int) string {
+		return fmt.Sprintf("%s%02d", prefix, idx)
+	}
+
+	numPdus := 4
+	racksPerPdu := 8
+	serversPerRack := 8
+	ranksPerServer := 2
+
+	curRack := 0
+	curServer := 0
+	curRank := 0
+
+	tree := NewFaultDomainTree()
+	for p := 0; p < numPdus; p++ {
+		pdu := tree.Domain.MustCreateChild(fmtNode("pdu", p))
+		mustAddDomain(tree, pdu)
+		for pr := 0; pr < racksPerPdu; pr++ {
+			rack := pdu.MustCreateChild(fmtNode("rack", curRack))
+			mustAddDomain(tree, rack)
+			curRack++
+			for rs := 0; rs < serversPerRack; rs++ {
+				srv := rack.MustCreateChild(fmtNode("server", curServer))
+				mustAddDomain(tree, srv)
+				curServer++
+				for sr := 0; sr < ranksPerServer; sr++ {
+					rank := srv.MustCreateChild(fmtNode("rank", curRank))
+					mustAddDomain(tree, rank)
+					curRank++
+				}
+			}
+		}
+	}
+
+	testVerifyTreeStructure(t, tree, 0, []int{
+		numPdus,
+		racksPerPdu,
+		serversPerRack,
+		ranksPerServer,
+		0,
+	})
 }
