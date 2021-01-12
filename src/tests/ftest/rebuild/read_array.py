@@ -26,10 +26,13 @@ from rebuild_test_base import RebuildTestBase
 
 
 class ReadArrayTest(RebuildTestBase):
+    # pylint: disable=too-many-ancestors
     """Run rebuild tests with DAOS servers and clients.
 
     :avocado: recursive
     """
+
+    CANCEL_FOR_TICKET = [["DAOS-2799", "targets", 8]]
 
     def execute_during_rebuild(self):
         """Read the objects during rebuild."""
@@ -40,7 +43,7 @@ class ReadArrayTest(RebuildTestBase):
             self.pool.read_data_during_rebuild(self.container),
             "Error reading data during rebuild")
 
-    @skipForTicket("DAOS-2676")
+    @skipForTicket("DAOS-6450")
     def test_read_array_during_rebuild(self):
         """Jira ID: DAOS-691.
 
